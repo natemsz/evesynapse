@@ -1,17 +1,18 @@
 package app
 
 // Hermetic tests for Next-1 (search & findability): the Items DB
-// global search and its market-only filter semantics, the shared
-// suggestion feed behind every autocomplete box, the top banner
-// search (items / own characters / warmed pilots), the widget
-// markup on each consumer page, and the daily wallet-history
-// sampler's one-row-per-day rule. The transport must stay silent
-// throughout: every read here is local.
+// global search and its published-only filter semantics, the
+// shared suggestion feed behind every autocomplete box, the top
+// banner search (items / own characters / warmed pilots), the
+// widget markup on each consumer page, and the daily
+// wallet-history sampler's one-row-per-day rule. The transport
+// must stay silent throughout: every read here is local.
 
 import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"io/fs"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -27,14 +28,15 @@ import (
 // seedNext1SDE plants the type fixture the search tests share:
 // two tradeable Tritaniums, an unpublished tradeable draft, a
 // published non-market relic-to-be, an unpublished non-market
-// one, a second category, and a skill wearing a Tritanium name.
+// one, a second category, a skill wearing a Tritanium name, and
+// a category whose only type is unpublished.
 func seedNext1SDE(t *testing.T, conn *sql.DB) {
 	t.Helper()
 	ctx := context.Background()
 	stmts := []string{
-		`INSERT INTO sde_categories (category_id, name) VALUES (900, 'Fixture Category'), (901, 'Far Category')`,
+		`INSERT INTO sde_categories (category_id, name) VALUES (900, 'Fixture Category'), (901, 'Far Category'), (902, 'Hidden Category')`,
 		`INSERT INTO sde_groups (group_id, name, category_id) VALUES
-		   (910, 'Fixture Minerals', 900), (920, 'Fixture Ores', 900), (930, 'Far Group', 901)`,
+		   (910, 'Fixture Minerals', 900), (920, 'Fixture Ores', 900), (930, 'Far Group', 901), (940, 'Hidden Group', 902)`,
 		`INSERT INTO sde_types (type_id, name, group_id, market_group_id, published) VALUES
 		   (34, 'Tritanium', 910, 5, 1),
 		   (35, 'Tritanium Alloy', 910, 5, 1),
@@ -42,6 +44,7 @@ func seedNext1SDE(t *testing.T, conn *sql.DB) {
 		   (37, 'Secret Tritanium', 910, 0, 1),
 		   (41, 'Lost Tritanium Relic', 920, 0, 0),
 		   (42, 'Tritanium of Elsewhere', 930, 5, 1),
+		   (43, 'Hidden Relic', 940, 0, 0),
 		   (1001, 'Tritanium Skill', 910, 5, 1)`,
 		`INSERT INTO sde_skill_meta (type_id, rank, primary_attr, secondary_attr) VALUES (1001, 1, 165, 166)`,
 		`INSERT INTO sde_blueprints (blueprint_type_id, product_type_id) VALUES (5000, 35), (5001, 38)`,
@@ -53,7 +56,7 @@ func seedNext1SDE(t *testing.T, conn *sql.DB) {
 	}
 }
 
-func TestItemsGlobalSearchAndMarketOnly(t *testing.T) {
+func TestItemsGlobalSearchAndPublishedOnly(t *testing.T) {
 	transport := &countingTransport{}
 	app, conn, q := buildCorpTestApp(t, transport)
 	ctx := context.Background()
@@ -78,23 +81,40 @@ func TestItemsGlobalSearchAndMarketOnly(t *testing.T) {
 		}
 	}
 
-	// Market-only: unpublished and market-group-less types are
-	// excluded, published tradeable ones stay.
+	// Published-only: the SDE published flag alone decides.
+	// Unpublished types drop out; Secret Tritanium stays — it
+	// is published even though it has no market group, which
+	// the old marketable criterion used to exclude.
+	code, body = getPage(t, app, cookie, "/items/?q=tritanium&published=1")
+	if code != http.StatusOK {
+		t.Fatalf("GET search published-only: status %d", code)
+	}
+	for _, name := range []string{"Tritanium Alloy", "Secret Tritanium", "Tritanium of Elsewhere", "Tritanium Skill"} {
+		if !strings.Contains(body, name) {
+			t.Errorf("published-only search missing %q", name)
+		}
+	}
+	for _, name := range []string{"Tritanium Draft", "Lost Tritanium Relic"} {
+		if strings.Contains(body, name) {
+			t.Errorf("published-only search must exclude %q", name)
+		}
+	}
+	// The control itself carries the published wording now.
+	if !strings.Contains(body, "Published items only") || !strings.Contains(body, `name="published"`) {
+		t.Error("search page: published-only control missing or mislabeled")
+	}
+	if strings.Contains(body, "Market items only") {
+		t.Error("search page still labels the switch Market items only")
+	}
+
+	// A link shared before the rename (market=1) filters the
+	// same way under the new meaning.
 	code, body = getPage(t, app, cookie, "/items/?q=tritanium&market=1")
 	if code != http.StatusOK {
-		t.Fatalf("GET search market-only: status %d", code)
+		t.Fatalf("GET search legacy market: status %d", code)
 	}
-	// (The skill stays: its fixture type carries a market group,
-	// as skill books do.)
-	for _, name := range []string{"Tritanium Alloy", "Tritanium of Elsewhere", "Tritanium Skill"} {
-		if !strings.Contains(body, name) {
-			t.Errorf("market-only search missing %q", name)
-		}
-	}
-	for _, name := range []string{"Tritanium Draft", "Secret Tritanium", "Lost Tritanium Relic"} {
-		if strings.Contains(body, name) {
-			t.Errorf("market-only search must exclude %q", name)
-		}
+	if !strings.Contains(body, "Secret Tritanium") || strings.Contains(body, "Tritanium Draft") {
+		t.Error("legacy market=1 link should filter by published, like published=1")
 	}
 
 	// Category and group narrowing ride the same parameters.
@@ -113,25 +133,99 @@ func TestItemsGlobalSearchAndMarketOnly(t *testing.T) {
 		t.Error("group=920 should keep only the relic")
 	}
 
-	// The group browse page honors the same toggle: unpublished
-	// types vanish from the listing when it is on.
-	code, body = getPage(t, app, cookie, "/items/group/910/?market=1")
+	// The browse tree renders every branch with BOTH counts, so
+	// the switch can prune in place without a reload: the
+	// fixture category holds 6 types, 4 of them published; the
+	// far category 1 of 1; the hidden category 0 of 1.
+	code, body = getPage(t, app, cookie, "/items/")
 	if code != http.StatusOK {
-		t.Fatalf("GET group market-only: status %d", code)
+		t.Fatalf("GET categories: status %d", code)
 	}
-	if strings.Contains(body, "Tritanium Draft") || strings.Contains(body, "Secret Tritanium") {
-		t.Error("group listing with market=1 must exclude unpublished and non-market types")
+	for _, want := range []string{`data-pubcount="4"`, `data-pubcount="1"`, `data-pubcount="0"`, `data-total="6" data-pub="4"`, "data-published-toggle"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("categories page missing %s", want)
+		}
 	}
+	// Landed with the switch on (a shared link): branches with
+	// no published types start hidden; mixed branches stay.
+	code, body = getPage(t, app, cookie, "/items/?published=1")
+	if code != http.StatusOK {
+		t.Fatalf("GET categories published: status %d", code)
+	}
+	if !strings.Contains(body, `data-pubcount="0" hidden`) {
+		t.Error("categories with published=1: unpublished-only category should start hidden")
+	}
+	if strings.Contains(body, `data-pubcount="4" hidden`) || strings.Contains(body, `data-pubcount="1" hidden`) {
+		t.Error("categories with published=1: branches with published types must stay visible")
+	}
+
+	// Category page: the same counts ride on the group rows —
+	// the mixed group at 4, the unpublished-only group at 0.
+	code, body = getPage(t, app, cookie, "/items/category/900/")
+	if code != http.StatusOK {
+		t.Fatalf("GET category: status %d", code)
+	}
+	if !strings.Contains(body, `data-pubcount="4"`) || !strings.Contains(body, `data-pubcount="0"`) {
+		t.Error("category page: group rows missing their published counts")
+	}
+	code, body = getPage(t, app, cookie, "/items/category/900/?published=1")
+	if code != http.StatusOK {
+		t.Fatalf("GET category published: status %d", code)
+	}
+	if !strings.Contains(body, `data-pubcount="0" hidden`) {
+		t.Error("category with published=1: unpublished-only group should start hidden")
+	}
+
+	// The group page no longer drops rows server-side at all:
+	// every type renders with its published flag, and with the
+	// switch on the unpublished rows merely start hidden, so
+	// the client can restore them without a reload.
 	code, body = getPage(t, app, cookie, "/items/group/910/")
 	if code != http.StatusOK {
 		t.Fatalf("GET group plain: status %d", code)
 	}
-	if !strings.Contains(body, "Tritanium Draft") {
-		t.Error("group listing without the toggle keeps unpublished types (existing browse behavior)")
+	if !strings.Contains(body, "Tritanium Draft") || !strings.Contains(body, `data-published="0"`) {
+		t.Error("group listing keeps unpublished types, flagged unpublished")
+	}
+	if strings.Contains(body, `data-published="0" hidden`) {
+		t.Error("group listing without the switch: nothing starts hidden")
+	}
+	code, body = getPage(t, app, cookie, "/items/group/910/?published=1")
+	if code != http.StatusOK {
+		t.Fatalf("GET group published: status %d", code)
+	}
+	if !strings.Contains(body, "Tritanium Draft") || !strings.Contains(body, `data-published="0" hidden`) {
+		t.Error("group listing with published=1: unpublished rows render, starting hidden")
+	}
+	if !strings.Contains(body, "Secret Tritanium") {
+		t.Error("group listing with published=1: published marketless type must stay")
 	}
 
 	if got := transport.calls.Load(); got != 0 {
 		t.Fatalf("handlers made %d outbound calls, want 0", got)
+	}
+}
+
+// TestItemsPublishedToggleWiring pins the in-place half of the
+// published-only switch: the app.js handler that prunes the
+// rendered tree, and the display rule that keeps a hidden table
+// row hidden.
+func TestItemsPublishedToggleWiring(t *testing.T) {
+	appJS, err := fs.ReadFile(staticFS, "static/app.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"data-published-toggle", `querySelectorAll("tr[data-pubcount]")`, `querySelectorAll("tr[data-published]")`} {
+		if !strings.Contains(string(appJS), want) {
+			t.Errorf("app.js: in-place published filter missing %s", want)
+		}
+	}
+	bg, err := fs.ReadFile(staticFS, "static/bg.css")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(bg), ".tw tr[hidden]") {
+		t.Error("bg.css: hidden tree rows need the display rule")
 	}
 }
 

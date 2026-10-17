@@ -5,6 +5,7 @@ import (
 	"evesynapse/internal/htmlsanitize"
 	"html/template"
 	"net/http"
+	"net/url"
 	"strconv"
 	"time"
 
@@ -25,11 +26,16 @@ import (
 // itemsTypesPerPage paginates a group's type list.
 const itemsTypesPerPage = 100
 
-// itemCategoryRow is one category with its total type count.
+// itemCategoryRow is one category with its total type count
+// and its published type count: the browse tree renders both,
+// so the published-only switch can prune the listing in place.
 type itemCategoryRow struct {
 	ID    int64
 	Name  string
 	Types string // formatted count
+
+	Published      int64  // published types under this category
+	PublishedTypes string // formatted published count
 }
 
 // itemGroupRow is one group with its type count.
@@ -37,13 +43,17 @@ type itemGroupRow struct {
 	ID    int64
 	Name  string
 	Types string // formatted count
+
+	Published      int64  // published types in this group
+	PublishedTypes string // formatted published count
 }
 
 // itemTypeRow is one type in a group listing.
 type itemTypeRow struct {
-	ID       int64
-	Name     string
-	OnMarket bool
+	ID        int64
+	Name      string
+	OnMarket  bool
+	Published bool
 }
 
 // itemSearchRow is one global-search hit: the type plus where
@@ -56,6 +66,7 @@ type itemSearchRow struct {
 	CategoryID   int64
 	CategoryName string
 	OnMarket     bool
+	Published    bool
 }
 
 // itemSearchSection is one Category › Group heading with the matching
@@ -108,11 +119,11 @@ type itemsView struct {
 	PrevPage   int
 	NextPage   int
 
-	// Global search state (Mode "search", also the group page's
-	// market-only toggle): shareable through GET parameters,
-	// exactly like the planner's plan URLs.
+	// Global search state (Mode "search", also the browse
+	// tree's published-only toggle): shareable through GET
+	// parameters, exactly like the planner's plan URLs.
 	SearchQuery    string
-	MarketOnly     bool
+	PublishedOnly  bool
 	CategoryID     int64
 	GroupID        int64
 	SearchResults  []itemSearchRow
@@ -216,11 +227,21 @@ func (app *Application) itemsPageData(r *http.Request) pageData {
 // category with the number of types under it. With any search
 // parameter present it renders the global search instead — the
 // two share the URL the way the planner shares its plan URLs.
+// publishedOnlyParam reads the published-only switch from a
+// request: published=1 today; market=1 is still accepted from
+// links shared before the rename (it filtered on marketability
+// then; the switch means published-only now).
+func publishedOnlyParam(q url.Values) bool {
+	return q.Get("published") == "1" || q.Get("market") == "1"
+}
+
 func (app *Application) handleItems(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
-	// Market=1 alone filters the browse tree; it only
-	// joins a flat search when there's a non-empty query or an
-	// explicit category/group pick.
+	// A bare published=1 is the browse tree's own switch state
+	// (the tree prunes itself in place; the parameter only
+	// records the state for links). It joins a flat search
+	// only alongside a non-empty query or an explicit
+	// category/group pick.
 	if q.Get("q") != "" || q.Get("category") != "" || q.Get("group") != "" {
 		app.handleItemsSearch(w, r)
 		return
@@ -228,20 +249,9 @@ func (app *Application) handleItems(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	data := app.itemsPageData(r)
 	view := &itemsView{Mode: "categories"}
-	view.MarketOnly = q.Get("market") == "1"
+	view.PublishedOnly = publishedOnlyParam(q)
 
-	var rows []db.ListSDECategoriesWithCountsFilteredRow
-	var err error
-	if view.MarketOnly {
-		rows, err = app.queries.ListSDECategoriesWithCountsFiltered(ctx, 1)
-	} else {
-		var unfiltered []db.ListSDECategoriesWithCountsRow
-		unfiltered, err = app.queries.ListSDECategoriesWithCounts(ctx)
-		// Normalize to the filtered row type for the shared loop.
-		for _, row := range unfiltered {
-			rows = append(rows, db.ListSDECategoriesWithCountsFilteredRow(row))
-		}
-	}
+	rows, err := app.queries.ListSDECategoriesWithCounts(ctx)
 	if err != nil {
 		logging.Errorf("items: list categories: %v", err)
 		data.Error = "Item database unavailable right now — check the server log."
@@ -249,6 +259,7 @@ func (app *Application) handleItems(w http.ResponseWriter, r *http.Request) {
 		for _, row := range rows {
 			view.Categories = append(view.Categories, itemCategoryRow{
 				ID: row.CategoryID, Name: row.Name, Types: esi.FormatInt(row.TypeCount),
+				Published: row.PublishedCount, PublishedTypes: esi.FormatInt(row.PublishedCount),
 			})
 		}
 	}
@@ -259,11 +270,11 @@ func (app *Application) handleItems(w http.ResponseWriter, r *http.Request) {
 
 // handleItemsSearch renders the global item search: a name
 // substring over the whole local type table, narrowable to
-// market items only (market group + published — everything
-// else, unpublished types included, drops out) and to one
-// category or group of the browse tree. Every control is a
-// plain GET parameter, so a search is a shareable link and the
-// form works untouched without JavaScript.
+// published items only (the SDE published flag — unpublished
+// types drop out, marketable or not) and to one category or
+// group of the browse tree. Every control is a plain GET
+// parameter, so a search is a shareable link and the form
+// works untouched without JavaScript.
 func (app *Application) handleItemsSearch(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	data := app.itemsPageData(r)
@@ -271,7 +282,7 @@ func (app *Application) handleItemsSearch(w http.ResponseWriter, r *http.Request
 	q := r.URL.Query()
 
 	view.SearchQuery = q.Get("q")
-	view.MarketOnly = q.Get("market") == "1"
+	view.PublishedOnly = publishedOnlyParam(q)
 	if id, err := strconv.ParseInt(q.Get("category"), 10, 64); err == nil && id > 0 {
 		if _, err := app.queries.GetSDECategory(ctx, id); err == nil {
 			view.CategoryID = id
@@ -309,12 +320,12 @@ func (app *Application) handleItemsSearch(w http.ResponseWriter, r *http.Request
 		}
 	}
 
-	marketOnly := int64(0)
-	if view.MarketOnly {
-		marketOnly = 1
+	publishedOnly := int64(0)
+	if view.PublishedOnly {
+		publishedOnly = 1
 	}
 	total, err := app.queries.CountSDETypesFiltered(ctx, db.CountSDETypesFilteredParams{
-		Q: view.SearchQuery, MarketOnly: marketOnly, CategoryID: view.CategoryID, GroupID: view.GroupID,
+		Q: view.SearchQuery, PublishedOnly: publishedOnly, CategoryID: view.CategoryID, GroupID: view.GroupID,
 	})
 	if err != nil {
 		logging.Errorf("items: count search %q: %v", view.SearchQuery, err)
@@ -337,7 +348,7 @@ func (app *Application) handleItemsSearch(w http.ResponseWriter, r *http.Request
 	view.NextPage = view.Page + 1
 
 	rows, err := app.queries.SearchSDETypesFiltered(ctx, db.SearchSDETypesFilteredParams{
-		Q: view.SearchQuery, MarketOnly: marketOnly, CategoryID: view.CategoryID, GroupID: view.GroupID,
+		Q: view.SearchQuery, PublishedOnly: publishedOnly, CategoryID: view.CategoryID, GroupID: view.GroupID,
 		Lim: itemsTypesPerPage, Off: int64((view.Page - 1) * itemsTypesPerPage),
 	})
 	if err != nil {
@@ -349,7 +360,7 @@ func (app *Application) handleItemsSearch(w http.ResponseWriter, r *http.Request
 				ID: row.TypeID, Name: row.Name,
 				GroupID: row.GroupID, GroupName: row.GroupName,
 				CategoryID: row.CategoryID, CategoryName: row.CategoryName,
-				OnMarket: row.MarketGroupID > 0,
+				OnMarket: row.MarketGroupID > 0, Published: row.Published > 0,
 			})
 		}
 		view.SearchSections = groupSearchRows(view.SearchResults)
@@ -376,21 +387,9 @@ func (app *Application) handleItemsCategory(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	view.Category = &itemCategoryRow{ID: cat.CategoryID, Name: cat.Name}
-	view.MarketOnly = r.URL.Query().Get("market") == "1"
+	view.PublishedOnly = publishedOnlyParam(r.URL.Query())
 
-	var grows []db.ListSDEGroupsInCategoryFilteredRow
-	var gerr error
-	if view.MarketOnly {
-		grows, gerr = app.queries.ListSDEGroupsInCategoryFiltered(ctx, db.ListSDEGroupsInCategoryFilteredParams{
-			CategoryID: categoryID, MarketOnly: 1,
-		})
-	} else {
-		var unfiltered []db.ListSDEGroupsInCategoryRow
-		unfiltered, gerr = app.queries.ListSDEGroupsInCategory(ctx, categoryID)
-		for _, row := range unfiltered {
-			grows = append(grows, db.ListSDEGroupsInCategoryFilteredRow(row))
-		}
-	}
+	grows, gerr := app.queries.ListSDEGroupsInCategory(ctx, categoryID)
 	if gerr != nil {
 		logging.Errorf("items: list groups of category %d: %v", categoryID, gerr)
 		data.Error = "Item database unavailable right now — check the server log."
@@ -398,6 +397,7 @@ func (app *Application) handleItemsCategory(w http.ResponseWriter, r *http.Reque
 		for _, row := range grows {
 			view.Groups = append(view.Groups, itemGroupRow{
 				ID: row.GroupID, Name: row.Name, Types: esi.FormatInt(row.TypeCount),
+				Published: row.PublishedCount, PublishedTypes: esi.FormatInt(row.PublishedCount),
 			})
 		}
 	}
@@ -430,17 +430,13 @@ func (app *Application) handleItemsGroup(w http.ResponseWriter, r *http.Request)
 
 	q := r.URL.Query()
 	view.Query = q.Get("q")
-	view.MarketOnly = q.Get("market") == "1"
+	view.PublishedOnly = publishedOnlyParam(q)
 	if p, err := strconv.Atoi(q.Get("page")); err == nil && p > 1 {
 		view.Page = p
 	}
 
-	marketOnly := int64(0)
-	if view.MarketOnly {
-		marketOnly = 1
-	}
-	total, err := app.queries.CountSDETypesInGroupFiltered(ctx,
-		db.CountSDETypesInGroupFilteredParams{GroupID: groupID, Lower: view.Query, MarketOnly: marketOnly})
+	total, err := app.queries.CountSDETypesInGroup(ctx,
+		db.CountSDETypesInGroupParams{GroupID: groupID, Lower: view.Query})
 	if err != nil {
 		logging.Errorf("items: count types of group %d: %v", groupID, err)
 		data.Error = "Item database unavailable right now — check the server log."
@@ -463,11 +459,10 @@ func (app *Application) handleItemsGroup(w http.ResponseWriter, r *http.Request)
 
 	rows, err := app.queries.ListSDETypesInGroup(ctx,
 		db.ListSDETypesInGroupParams{
-			GroupID:    groupID,
-			Lower:      view.Query,
-			MarketOnly: marketOnly,
-			RowLimit:   int64(itemsTypesPerPage),
-			RowOffset:  int64((view.Page - 1) * itemsTypesPerPage),
+			GroupID:   groupID,
+			Lower:     view.Query,
+			RowLimit:  int64(itemsTypesPerPage),
+			RowOffset: int64((view.Page - 1) * itemsTypesPerPage),
 		})
 	if err != nil {
 		logging.Errorf("items: list types of group %d: %v", groupID, err)
@@ -475,7 +470,7 @@ func (app *Application) handleItemsGroup(w http.ResponseWriter, r *http.Request)
 	} else {
 		for _, row := range rows {
 			view.Types = append(view.Types, itemTypeRow{
-				ID: row.TypeID, Name: row.Name, OnMarket: row.MarketGroupID > 0,
+				ID: row.TypeID, Name: row.Name, OnMarket: row.MarketGroupID > 0, Published: row.Published > 0,
 			})
 		}
 	}

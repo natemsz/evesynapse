@@ -446,6 +446,11 @@ html[data-theme="light"] #main-content > .section-subtabs a.active {
   }
 }
 
+/* Item browser tree: the published-only switch hides rows with
+   the hidden attribute; a table row's own display value would
+   otherwise win over the UA's [hidden] rule in some engines. */
+.tw tr[hidden] { display: none; }
+
 /* Item page lead (the description placement mock): the icon sits
    in a framed 128px tile and the description in its own sub-card
    beside it, under the item name and above the facts table. These

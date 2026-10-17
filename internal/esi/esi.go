@@ -1031,6 +1031,72 @@ type ContractItem struct {
 // ContractItems is GET /characters/{id}/contracts/{id}/items/.
 type ContractItems []ContractItem
 
+// PublicContract is one entry of GET /contracts/public/{region}/:
+// the public route's shape — no status, no assignee, nothing
+// about a viewer, because there is none.
+type PublicContract struct {
+	ContractID          int64   `json:"contract_id"`
+	IssuerID            int64   `json:"issuer_id"`
+	IssuerCorporationID int64   `json:"issuer_corporation_id"`
+	Type                string  `json:"type"` // item_exchange|auction|courier
+	Title               string  `json:"title"`
+	ForCorporation      bool    `json:"for_corporation"`
+	Price               float64 `json:"price"`
+	Reward              float64 `json:"reward"`
+	Buyout              float64 `json:"buyout"`
+	Collateral          float64 `json:"collateral"`
+	Volume              float64 `json:"volume"` // m3
+	StartLocationID     int64   `json:"start_location_id"`
+	EndLocationID       int64   `json:"end_location_id"`
+	DateIssued          string  `json:"date_issued"`  // RFC3339
+	DateExpired         string  `json:"date_expired"` // RFC3339
+	DaysToComplete      int64   `json:"days_to_complete"`
+}
+
+// PublicContractItem is one entry of GET
+// /contracts/public/items/{contract_id}/. ItemID is set only for
+// singleton (unpackaged, unique) items. The blueprint fields are
+// pointers because absence is the signal: an original carries
+// ME/TE with no runs and no copy flag; a copy adds both; a
+// non-blueprint carries none of them.
+type PublicContractItem struct {
+	RecordID           int64  `json:"record_id"`
+	TypeID             int64  `json:"type_id"`
+	ItemID             int64  `json:"item_id"`
+	Quantity           int64  `json:"quantity"`
+	IsIncluded         bool   `json:"is_included"`
+	IsBlueprintCopy    bool   `json:"is_blueprint_copy"`
+	Runs               *int64 `json:"runs"`
+	MaterialEfficiency *int64 `json:"material_efficiency"`
+	TimeEfficiency     *int64 `json:"time_efficiency"`
+}
+
+// PublicContractBid is one entry of GET
+// /contracts/public/bids/{contract_id}/. Bidders are anonymous
+// on the public route: an amount and a time, nothing else.
+type PublicContractBid struct {
+	BidID   int64   `json:"bid_id"`
+	Amount  float64 `json:"amount"`
+	DateBid string  `json:"date_bid"` // RFC3339
+}
+
+// DynamicItem is GET /dogma/dynamic/items/{type}/{item}/: one
+// abyssal (mutaplasmid-rolled) item instance — its mutator, the
+// type it was rolled from, and its complete attribute set at
+// its rolled values. Non-dynamic items answer 404.
+type DynamicItem struct {
+	CreatedBy       int64                  `json:"created_by"`
+	MutatorTypeID   int64                  `json:"mutator_type_id"`
+	SourceTypeID    int64                  `json:"source_type_id"`
+	DogmaAttributes []DynamicItemAttribute `json:"dogma_attributes"`
+}
+
+// DynamicItemAttribute is one rolled attribute of a DynamicItem.
+type DynamicItemAttribute struct {
+	AttributeID int64   `json:"attribute_id"`
+	Value       float64 `json:"value"`
+}
+
 // IndustryJob is one entry of GET /characters/{id}/industry/jobs/
 // (fetched with include_completed=true).
 type IndustryJob struct {

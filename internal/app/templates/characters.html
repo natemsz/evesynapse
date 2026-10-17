@@ -1,7 +1,7 @@
 {{define "title"}}Characters{{end}}
 {{define "pagetitle"}}<h1><span class="gt">Characters</span></h1>{{end}}
+{{define "pagetabs"}}{{template "sectiontabs" .}}{{end}}
 {{define "content"}}
-{{template "sectiontabs" .}}
 <p>Every character linked to your account. Their data stays up to date in the background. Tags are your own labels for telling alts apart; EVE doesn't say which characters share a game account.</p>
 
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}

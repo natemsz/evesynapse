@@ -1,7 +1,7 @@
 {{define "title"}}Discord Servers{{end}}
 {{define "pagetitle"}}<h1><span class="gt">Discord Servers</span></h1>{{end}}
+{{define "pagetabs"}}{{template "sectiontabs" .}}{{end}}
 {{define "content"}}
-{{template "sectiontabs" .}}
 
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
 

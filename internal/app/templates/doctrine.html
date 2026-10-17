@@ -1,8 +1,8 @@
 {{define "title"}}{{if .Doctrine}}{{.Doctrine.Name}}{{else}}Doctrine{{end}}{{end}}
 {{define "pagetitle"}}{{with .Doctrine}}<h1><span class="gt">{{.Name}}</span></h1>{{end}}{{end}}
+{{define "pagetabs"}}{{template "sectiontabs" $}}{{end}}
 {{define "content"}}
 {{with .Doctrine}}
-{{template "sectiontabs" $}}
 <section class="card page-card">
 
 <p><small><a href="/doctrines/?corporation={{.CorpID}}">Doctrines</a> · {{.Corporation}}{{if .Category}} · <a href="/doctrines/?corporation={{.CorpID}}&amp;category={{.Category}}">{{.Category}}</a>{{end}}</small></p>

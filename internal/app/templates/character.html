@@ -1,7 +1,7 @@
 {{define "title"}}Character{{end}}
 {{define "pagetitle"}}<h1><span class="gt">Character</span></h1>{{end}}
+{{define "pagetabs"}}{{template "sectiontabs" .}}{{end}}
 {{define "content"}}
-{{template "sectiontabs" .}}
 
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
 

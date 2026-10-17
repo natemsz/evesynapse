@@ -162,6 +162,7 @@
 <div class="page-shell">
 <main id="main-content">
 {{template "pagetitle" .}}
+{{template "pagetabs" .}}
   <div class="page-body">
 {{if .Notice}}<p class="notice" role="status">{{.Notice}}</p>{{end}}
 {{template "content" .}}
@@ -194,4 +195,5 @@
 {{end}}
 
 {{define "pagetitle"}}{{end}}
+{{define "pagetabs"}}{{end}}
 

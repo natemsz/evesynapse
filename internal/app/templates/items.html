@@ -146,11 +146,12 @@
 </div>
 {{end}}
 
+</section>
+
 {{if $d.HistoryView}}
 <h3>Price history — {{$d.HistoryView.RegionName}}</h3>
 {{template "history-section" $d.HistoryView}}
 {{end}}
-
 
 {{if $d.UsedIn}}
 <h3>Used in</h3>
@@ -166,7 +167,6 @@
 </div>
 {{if $d.UsedInMore}}<p class="hint">Showing the first 50; bulk materials feed many more.</p>{{end}}
 {{end}}
-</section>
 {{end}}
 
 {{end}}

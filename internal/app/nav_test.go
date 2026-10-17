@@ -27,6 +27,11 @@ func TestSectionTabs(t *testing.T) {
 		t.Fatalf("GET /market/ideas/: status %d", code)
 	}
 	tabs := sectionTabsBlock(t, body)
+	// The strip renders above the glass, not inside it: the nav
+	// precedes .page-body in the document.
+	if tabsAt, bodyAt := strings.Index(body, `<nav class="section-tabs"`), strings.Index(body, `<div class="page-body">`); tabsAt < 0 || bodyAt < 0 || tabsAt > bodyAt {
+		t.Error("section tabs render inside .page-body; they belong above the glass, under the title")
+	}
 	for _, e := range sectionNav["market"] {
 		if !strings.Contains(tabs, `href="`+e.Href+`"`) {
 			t.Errorf("market tabs miss %s", e.Href)

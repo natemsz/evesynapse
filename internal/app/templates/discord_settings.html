@@ -1,13 +1,14 @@
 {{/* The Discord module's parts of the notification settings page, rendered
-     by the module (settings.go) and placed by core: the box inside the
-     settings form, and the account section below it. */}}
-{{define "discord-notify-channel"}}{{if and .Linked .HasBot}}
-<p class="notify-deliver"><input type="hidden" name="discord_shown" value="1"><label><input type="checkbox" name="discord_dm" value="1"{{if .DM}} checked{{end}}> Also send these to me on Discord, as direct messages <small>({{.Name}})</small></label></p>
-{{if .DMProblem}}<p class="err">{{.DMProblem}}</p>{{end}}
+     by the module (settings.go) and placed by core: word inside the
+     settings form when the last direct message failed (the switch
+     itself is the channels list's own box, at the top of the page),
+     and the account section below the form. */}}
+{{define "discord-notify-channel"}}{{if and .Linked .HasBot .DMProblem}}
+<p class="err">{{.DMProblem}}</p>
 {{end}}{{end}}
 
 {{define "discord-notify-account"}}{{if or .CanLink .Linked}}
-<h2>Discord</h2>
+<h2 id="discord">Discord</h2>
 {{if .Linked}}
 <p>Connected as <strong>{{.Name}}</strong>.{{if .HasBot}} <small>In Discord servers that use EveSynapse, your roles follow your characters' corporations.</small>{{end}}</p>
 {{if .HasBot}}

@@ -40,8 +40,12 @@ func (app *mod) settingsViewFor(r *http.Request, userID int64) discordSettingsVi
 	return view
 }
 
-// settingsChannel is the "also send these to me on Discord" box inside
-// the settings form.
+// settingsChannel is what the module says inside the settings form:
+// word when the last direct message failed, so the person it concerns
+// sees it on this page and not only in the server's log. The switch
+// itself is the channels list's box at the top of the page — one
+// switch, one place — and settingsSave below stores its answer, as
+// it did when the box was rendered here.
 func settingsChannel(ctx context.Context, deps module.Deps, r *http.Request, userID int64) template.HTML {
 	view := newMod(deps).settingsViewFor(r, userID)
 	return fragment(deps, "discord-notify-channel", view)
@@ -62,9 +66,9 @@ func fragment(deps module.Deps, define string, data discordSettingsView) templat
 	return html
 }
 
-// settingsSave stores the box inside the form. The form says whether it
-// showed the box (discord_shown): a box left unticked is "off", but a
-// form that never had the box must not switch anything off.
+// settingsSave stores the channels box's answer. The form says whether
+// it showed the box (discord_shown): a box left unticked is "off", but
+// a form that never had the box must not switch anything off.
 func settingsSave(ctx context.Context, deps module.Deps, userID int64, form url.Values) error {
 	if form.Get("discord_shown") != "1" {
 		return nil

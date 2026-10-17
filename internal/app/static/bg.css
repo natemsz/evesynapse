@@ -189,9 +189,6 @@ html[data-theme="light"] .btn.btn-quiet {
 .spread-v { font-weight: 700; }
 .spread-bar { display: flex; gap: 3px; margin-top: 0.15rem; }
 .spread-bar span { height: 4px; flex: 1; border-radius: 2px; background: rgba(255, 255, 255, 0.10); }
-.kpi.sp-red .spread-v { color: var(--danger); }
-.kpi.sp-red { border-color: rgba(255, 77, 77, 0.40); }
-.kpi.sp-red .spread-bar span.on { background: var(--danger); }
 .kpi.sp-white .spread-v { color: var(--text-bright); }
 .kpi.sp-white { border-color: rgba(255, 255, 255, 0.35); }
 .kpi.sp-white .spread-bar span.on { background: #ffffff; }
@@ -205,20 +202,17 @@ html[data-theme="light"] .btn.btn-quiet {
 .kpi.sp-blue { border-color: rgba(169, 214, 255, 0.45); }
 .kpi.sp-blue .spread-bar span.on { background: #a9d6ff; }
 
-/* Item page lead: the type icon beside the description card,
-   at the top of the item card instead of below the history. */
-.item-lead { display: flex; gap: 1rem; align-items: stretch; margin: 0.6rem 0 1.1rem; }
-.item-art {
-  flex: 0 0 auto; width: 128px; height: 128px; border-radius: 0.5rem;
-  border: 1px solid rgba(255, 110, 0, 0.22); background: rgba(0, 0, 0, 0.35);
-  display: flex; align-items: center; justify-content: center; overflow: hidden;
+/* Price chart on wide screens: the chart SVG scales with its
+   container, so axis type sized in its units balloons on large
+   monitors — step it down at desktop widths (the small-screen
+   rule in style.css, 15 units under 560px, is untouched). The
+   gridlines move from near-black to a warm sand so they read
+   against the glass; volume lines stay a step dimmer. */
+.chart-gridline { stroke: rgba(232, 195, 154, 0.25); }
+.volume-gridline { stroke: rgba(232, 195, 154, 0.16); }
+@media (min-width: 1200px) {
+  .pchart text { font-size: 7px; }
 }
-.item-art img { width: 128px; height: 128px; display: block; }
-.item-desc {
-  flex: 1 1 auto; min-width: 0; border-radius: 0.5rem; padding: 0.75rem 1rem 0.85rem;
-  background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 110, 0, 0.14);
-}
-.item-desc .k { display: block; font-size: 0.7rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); margin-bottom: 0.4rem; }
-@media (max-width: 40rem) {
-  .item-lead { flex-wrap: wrap; }
+@media (min-width: 1700px) {
+  .pchart text { font-size: 6px; }
 }

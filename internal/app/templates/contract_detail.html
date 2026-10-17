@@ -1,0 +1,124 @@
+{{define "title"}}Contract{{end}}
+{{define "pagetitle"}}<h1><span class="gt">Contract</span></h1>{{end}}
+{{define "pagetabs"}}{{template "sectiontabs" .}}{{end}}
+{{define "content"}}
+
+{{if .ContractDetail}}
+{{$d := .ContractDetail}}
+{{if $d.Found}}
+
+<p><small><a href="/contracts/search/">← Contract search</a></small></p>
+<h2>{{$d.TypeLabel}}{{if $d.Title}} — {{$d.Title}}{{end}}</h2>
+
+{{if $d.ViewInGame.Visible}}
+{{if $d.ViewInGame.Enabled}}
+<form method="post" action="/ui/openwindow/contract/{{$d.ContractID}}">
+  <button class="btn" type="submit">View in game</button>
+</form>
+{{else}}
+<p><button class="btn" type="button" disabled>View in game</button>
+<small>{{$d.ViewInGame.Note}}{{if $d.ViewInGame.Relink}} <a href="{{$d.ViewInGame.Relink}}">Sign in again</a> to enable it.{{end}}</small></p>
+{{end}}
+{{end}}
+
+<div class="tw">
+<table>
+  <tbody>
+    <tr><th>{{if eq $d.TypeLabel "Courier"}}Reward{{else}}{{$d.PriceLabel}}{{end}}</th><td><strong>{{$d.Price}} ISK</strong>{{if $d.Buyout}}<br><small>Buyout {{$d.Buyout}} ISK</small>{{end}}{{if $d.DealNote}}<br><small>{{if $d.IsDeal}}<strong>{{$d.DealNote}}</strong>{{else}}{{$d.DealNote}}{{end}}</small>{{end}}</td></tr>
+    {{if eq $d.TypeLabel "Auction"}}<tr><th>Bids</th><td>{{if $d.TopBid}}Top bid <strong>{{$d.TopBid}} ISK</strong> · {{$d.BidCount}} bid{{if ne $d.BidCount 1}}s{{end}}{{else}}No bids yet{{end}}</td></tr>{{end}}
+    {{if $d.HasRoute}}<tr><th>Route</th><td>{{placeLink $d.Location}} → {{placeLink $d.Dropoff}}</td></tr>
+    <tr><th>Collateral</th><td>{{$d.Collateral}} ISK</td></tr>
+    <tr><th>Volume</th><td>{{$d.Volume}}</td></tr>
+    <tr><th>Days to complete</th><td>{{$d.Days}}</td></tr>{{end}}
+    {{if not $d.HasRoute}}<tr><th>Location</th><td>{{placeLink $d.Location}}</td></tr>{{end}}
+    <tr><th>Region</th><td>{{$d.RegionName}}</td></tr>
+    <tr><th>Issuer</th><td>{{charLink $.ViewerChars $d.IssuerID $d.IssuerName}}{{if $d.HasCorp}}<br><small>for</small> {{corpLink $d.CorpID $d.CorpName}}{{end}}</td></tr>
+    <tr><th>Issued</th><td>{{$d.IssuedNote}}</td></tr>
+    <tr><th>Expires</th><td>{{$d.ExpiresNote}}</td></tr>
+    <tr><th>Seen</th><td><small>{{$d.LastSeenNote}}</small></td></tr>
+  </tbody>
+</table>
+</div>
+
+{{if $d.StateNote}}<p><small>{{$d.StateNote}}</small></p>{{end}}
+
+{{if $d.Offered}}
+<h3>Offered</h3>
+<div class="tw">
+<table>
+  <thead><tr><th>Item</th><th>Qty</th><th>Per unit</th><th>Line value</th><th>Priced from</th></tr></thead>
+  <tbody>
+  {{range $d.Offered}}
+    <tr>
+      <td>{{itemLink .TypeID .Name}}{{if .Note}}<br><small>{{.Note}}</small>{{end}}</td>
+      <td>{{.Qty}}</td>
+      <td>{{if .UnitPrice}}{{.UnitPrice}} ISK{{else}}—{{end}}</td>
+      <td>{{if .LineValue}}<strong>{{.LineValue}} ISK</strong>{{else}}—{{end}}</td>
+      <td>{{.TierLabel}}{{if .TierNote}}<br><small>{{.TierNote}}</small>{{end}}</td>
+    </tr>
+    {{if .Abyssal}}<tr><td colspan="5">
+      <small>Mutated from {{itemLink .Abyssal.SourceTypeID .Abyssal.SourceName}} with {{.Abyssal.MutatorName}}. Rolls:</small>
+      <table>
+        <thead><tr><th>Attribute</th><th>Rolled</th><th>Source base</th><th>Against base</th></tr></thead>
+        <tbody>
+        {{range .Abyssal.Rolls}}<tr><td>{{.Name}}</td><td>{{.Value}}</td><td>{{if .HasBase}}{{.Base}}{{else}}—{{end}}</td><td>{{if .Delta}}{{.Delta}}{{else}}—{{end}}</td></tr>{{end}}
+        </tbody>
+      </table>
+      {{if .Abyssal.ContextPrice}}<small>The unmutated module prices at {{.Abyssal.ContextPrice}} ISK ({{.Abyssal.ContextTier}}) — shown for context; a mutated module's worth turns on its rolls, and this contract's value above does not count it.</small>{{end}}
+    </td></tr>{{end}}
+  {{end}}
+  </tbody>
+</table>
+</div>
+{{end}}
+
+{{if $d.HasWanted}}
+<h3>Wanted in exchange</h3>
+<div class="tw">
+<table>
+  <thead><tr><th>Item</th><th>Qty</th><th>Per unit</th><th>Line value</th><th>Priced from</th></tr></thead>
+  <tbody>
+  {{range $d.Wanted}}
+    <tr>
+      <td>{{itemLink .TypeID .Name}}{{if .Note}}<br><small>{{.Note}}</small>{{end}}</td>
+      <td>{{.Qty}}</td>
+      <td>{{if .UnitPrice}}{{.UnitPrice}} ISK{{else}}—{{end}}</td>
+      <td>{{if .LineValue}}<strong>{{.LineValue}} ISK</strong>{{else}}—{{end}}</td>
+      <td>{{.TierLabel}}{{if .TierNote}}<br><small>{{.TierNote}}</small>{{end}}</td>
+    </tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+{{end}}
+
+{{if $d.AppraisedNote}}
+<h3>Our appraisal</h3>
+<p>
+  {{if $d.OfferedValue}}Offered side appraises at <strong>{{$d.OfferedValue}} ISK</strong>. {{end}}
+  {{if $d.WantValue}}Wanted side appraises at <strong>{{$d.WantValue}} ISK</strong>. {{end}}
+  {{if $d.CoverageNote}}<small>{{$d.CoverageNote}}.</small> {{end}}
+  {{if $d.TierMix}}<small>Priced from: {{$d.TierMix}}.</small> {{end}}
+  <small>{{$d.AppraisedNote}}. Our own swept prices and stored estimates come first; an outside aggregate is used only where neither reaches, is named where it is used, and is never older than two days. The game's guide average is never used.</small>
+</p>
+{{end}}
+
+{{if $d.Bids}}
+<h3>Bids</h3>
+<div class="tw">
+<table>
+  <thead><tr><th>Amount</th><th>Placed</th></tr></thead>
+  <tbody>
+  {{range $d.Bids}}<tr><td>{{.Amount}} ISK</td><td>{{.When}}</td></tr>{{end}}
+  </tbody>
+</table>
+</div>
+<p><small>Bids are public in the game; bidder names are not published, so none are shown.</small></p>
+{{end}}
+
+{{else}}
+<p>That contract is not in our stored corpus — it may have finished, been deleted, or not been swept yet. <a href="/contracts/search/">Back to the search</a>.</p>
+{{end}}
+
+{{end}}
+{{end}}

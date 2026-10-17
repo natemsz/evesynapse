@@ -519,6 +519,11 @@ SELECT region_id, type_id, median_sell, fivepct_sell, median_buy, fivepct_buy, s
 FROM market_stats_fallback
 WHERE type_id = $1
 ORDER BY region_id;
+-- name: ListMarketStatsFallbackForTypes :many
+SELECT region_id, type_id, median_sell, fivepct_sell, median_buy, fivepct_buy, sell_orders, buy_orders, sell_volume, buy_volume, source, orderset_id, source_asof, fetched_at
+FROM market_stats_fallback
+WHERE region_id = $1 AND type_id = ANY($2::bigint[])
+ORDER BY type_id;
 -- name: GetMarketStatsFallbackMeta :one
 SELECT id, orderset_id, fetched_at, row_count FROM market_stats_fallback_meta
 WHERE id = 1;

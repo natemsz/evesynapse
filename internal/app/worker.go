@@ -656,6 +656,14 @@ func (c *cycleState) refreshPublicData(ctx context.Context, characters []db.Char
 		return app.refreshPublicContracts(ctx, contractAllowance)
 	})
 
+	// Contract appraisal (schema 056): prices the due slice of
+	// stored contract lines from stored pricing inputs alone
+	// (appraisal.go), so the search pages only ever read
+	// finished numbers.
+	c.pass("appraising public contracts", func() (int, bool) {
+		return app.appraisePublicContracts(ctx), false
+	})
+
 	// Module jobs that follow the market pass (Trade Ideas' model
 	// refresh, for one): it starts beside the cycle and returns at once,
 	// so the cycle never waits on it.

@@ -1,0 +1,161 @@
+{{define "title"}}Contract Search{{end}}
+{{define "pagetitle"}}<h1><span class="gt">Contract Search</span></h1>{{end}}
+{{define "pagetabs"}}{{template "sectiontabs" .}}{{end}}
+{{define "content"}}
+
+{{if .ContractSearch}}
+{{$s := .ContractSearch}}
+<p><small>Every public contract our sweepers can see, across every region, priced against our own numbers. Values come from our swept Forge typicals first, then our stored estimates, then a labeled outside aggregate — never the game's guide average. A contract only earns its deal mark when every offered line is priced.</small></p>
+
+<form method="get" action="/contracts/search/">
+  <label><small>Item (offered or wanted)</small>
+    <input type="text" name="q_item" value="{{$s.Echo.q_item}}" size="28" placeholder="e.g. PLEX, Ishtar, Damage Control II">
+  </label>
+  <label><small>On which side</small>
+    <select name="item_dir">
+      <option value="either"{{if eq $s.Filters.ItemDir "either"}} selected{{end}}>Either side</option>
+      <option value="offered"{{if eq $s.Filters.ItemDir "offered"}} selected{{end}}>Offered</option>
+      <option value="wanted"{{if eq $s.Filters.ItemDir "wanted"}} selected{{end}}>Wanted in exchange</option>
+    </select>
+  </label>
+  <label><small>Title contains</small>
+    <input type="text" name="q_title" value="{{$s.Echo.q_title}}" size="20">
+  </label>
+  <label><small>Issuer (pilot or corporation)</small>
+    <input type="text" name="q_issuer" value="{{$s.Echo.q_issuer}}" size="20">
+  </label>
+  <label><small>Issued by</small>
+    <select name="for_corp">
+      <option value=""{{if eq $s.Filters.ForCorp -1}} selected{{end}}>Anyone</option>
+      <option value="0"{{if eq $s.Filters.ForCorp 0}} selected{{end}}>Pilots</option>
+      <option value="1"{{if eq $s.Filters.ForCorp 1}} selected{{end}}>Corporations</option>
+    </select>
+  </label>
+  <fieldset>
+    <legend><small>Contract type</small></legend>
+    <label><input type="checkbox" name="type" value="item_exchange"{{if index $s.TypeSet "item_exchange"}} checked{{end}}> Item exchange</label>
+    <label><input type="checkbox" name="type" value="auction"{{if index $s.TypeSet "auction"}} checked{{end}}> Auction</label>
+    <label><input type="checkbox" name="type" value="courier"{{if index $s.TypeSet "courier"}} checked{{end}}> Courier</label>
+    <label><input type="checkbox" name="deals" value="1"{{if $s.Filters.DealsOnly}} checked{{end}}> Deals only (asking at most 85% of our value)</label>
+  </fieldset>
+  <label><small>Regions</small>
+    <select name="region" multiple size="5">
+      {{range $s.Regions}}<option value="{{.ID}}"{{if .Selected}} selected{{end}}>{{.Name}}</option>{{end}}
+    </select>
+  </label>
+  <label><small>Location (station, structure or system)</small>
+    <input type="text" name="place" value="{{$s.Echo.place}}" size="22">
+  </label>
+  <label><small>Price at least (ISK)</small>
+    <input type="text" name="price_min" value="{{$s.Echo.price_min}}" size="10" placeholder="e.g. 100m">
+  </label>
+  <label><small>Price at most (ISK)</small>
+    <input type="text" name="price_max" value="{{$s.Echo.price_max}}" size="10" placeholder="e.g. 2b">
+  </label>
+  <label><small>Auction buyout at least (ISK)</small>
+    <input type="text" name="buyout_min" value="{{$s.Echo.buyout_min}}" size="10">
+  </label>
+  <fieldset>
+    <legend><small>Blueprints</small></legend>
+    <label><small>Kind</small>
+      <select name="bp">
+        <option value="any"{{if eq $s.Filters.BPMode "any"}} selected{{end}}>Any contract</option>
+        <option value="bpo"{{if eq $s.Filters.BPMode "bpo"}} selected{{end}}>Has an original (BPO)</option>
+        <option value="bpc"{{if eq $s.Filters.BPMode "bpc"}} selected{{end}}>Has a copy (BPC)</option>
+      </select>
+    </label>
+    <label><small>Min ME</small>
+      <input type="number" name="me_min" min="0" max="10" value="{{$s.Echo.me_min}}" size="3">
+    </label>
+    <label><small>Min TE</small>
+      <input type="number" name="te_min" min="0" max="20" value="{{$s.Echo.te_min}}" size="3">
+    </label>
+    <label><small>Min runs (copies)</small>
+      <input type="number" name="runs_min" min="0" value="{{$s.Echo.runs_min}}" size="4">
+    </label>
+  </fieldset>
+  <fieldset>
+    <legend><small>Couriers</small></legend>
+    <label><small>Deliver to (station, structure or system)</small>
+      <input type="text" name="place_end" value="{{$s.Echo.place_end}}" size="22">
+    </label>
+    <label><small>Reward at least (ISK)</small>
+      <input type="text" name="reward_min" value="{{$s.Echo.reward_min}}" size="10">
+    </label>
+    <label><small>Reward at most (ISK)</small>
+      <input type="text" name="reward_max" value="{{$s.Echo.reward_max}}" size="10">
+    </label>
+    <label><small>Collateral at most (ISK)</small>
+      <input type="text" name="collateral_max" value="{{$s.Echo.collateral_max}}" size="10">
+    </label>
+    <label><small>Volume at least (m3)</small>
+      <input type="text" name="volume_min" value="{{$s.Echo.volume_min}}" size="8">
+    </label>
+    <label><small>Volume at most (m3)</small>
+      <input type="text" name="volume_max" value="{{$s.Echo.volume_max}}" size="8">
+    </label>
+    <label><small>Days to complete at most</small>
+      <input type="number" name="days_max" min="0" value="{{$s.Echo.days_max}}" size="3">
+    </label>
+  </fieldset>
+  <label><small>Issued within</small>
+    <select name="issued_hrs">
+      <option value=""{{if eq $s.Filters.IssuedHrs -1}} selected{{end}}>Any time</option>
+      <option value="24"{{if eq $s.Filters.IssuedHrs 24}} selected{{end}}>24 hours</option>
+      <option value="72"{{if eq $s.Filters.IssuedHrs 72}} selected{{end}}>3 days</option>
+      <option value="168"{{if eq $s.Filters.IssuedHrs 168}} selected{{end}}>7 days</option>
+    </select>
+  </label>
+  <label><small>Expiring within</small>
+    <select name="expiring_hrs">
+      <option value=""{{if eq $s.Filters.ExpiringHrs -1}} selected{{end}}>Any time</option>
+      <option value="24"{{if eq $s.Filters.ExpiringHrs 24}} selected{{end}}>24 hours</option>
+      <option value="72"{{if eq $s.Filters.ExpiringHrs 72}} selected{{end}}>3 days</option>
+      <option value="168"{{if eq $s.Filters.ExpiringHrs 168}} selected{{end}}>7 days</option>
+    </select>
+  </label>
+  <label><small>Sort by</small>
+    <select name="sort">
+      {{range $s.Sorts}}<option value="{{.Key}}"{{if eq $s.Filters.Sort .Key}} selected{{end}}>{{.Label}}</option>{{end}}
+    </select>
+  </label>
+  <button class="btn" type="submit">Search</button>
+  <a href="/contracts/search/">Clear filters</a>
+</form>
+
+<p><small>{{$s.TotalText}} contract{{if ne $s.Total 1}}s{{end}} match · Page {{$s.Page}} of {{$s.Pages}}</small></p>
+
+{{if $s.Rows}}
+<div class="tw">
+<table>
+  <thead><tr><th>Contract</th><th>Contents</th><th>{{"Price / Reward"}}</th><th>Our value</th><th>Location</th><th>Issuer</th><th>Expires</th></tr></thead>
+  <tbody>
+  {{range $s.Rows}}
+    <tr>
+      <td><a href="/contracts/search/{{.ContractID}}/">{{.TypeLabel}}</a>{{if .Title}}<br><small>{{.Title}}</small>{{end}}<br><small>{{.RegionName}} · issued {{.IssuedAgo}}</small></td>
+      <td>
+        {{range .Offered}}{{.Name}} ×{{.Qty}}{{if .Note}} <small>({{.Note}})</small>{{end}}<br>{{end}}
+        {{if gt .MoreOffer 0}}<small>…and {{.MoreOffer}} more</small><br>{{end}}
+        {{if .Wanted}}<small>Wants:</small><br>{{range .Wanted}}{{.Name}} ×{{.Qty}}{{if .Note}} <small>({{.Note}})</small>{{end}}<br>{{end}}{{if gt .MoreWant 0}}<small>…and {{.MoreWant}} more</small><br>{{end}}{{end}}
+        {{if .Courier}}<small>Cargo is private — the game does not publish courier contents.</small>{{end}}
+      </td>
+      <td><small>{{.PriceLabel}}</small><br><strong>{{.Price}} ISK</strong>{{if .PriceNote}}<br><small>{{.PriceNote}}</small>{{end}}{{if .Courier}}<br><small>Collateral {{.Collateral}} ISK · {{.Volume}}</small>{{end}}</td>
+      <td>{{if .Value}}<strong>{{.Value}} ISK</strong>{{if .ValueNote}}<br><small>{{if .IsDeal}}<strong>{{.ValueNote}}</strong>{{else}}{{.ValueNote}}{{end}}</small>{{end}}{{else}}<small>Not appraised yet</small>{{end}}</td>
+      <td>{{placeLink .Location}}{{if .HasRoute}}<br><small>to</small> {{placeLink .Dropoff}}{{end}}</td>
+      <td>{{if .IssuerCorp}}{{corpLink .IssuerID .IssuerName}}{{else}}{{charLink $.ViewerChars .IssuerID .IssuerName}}{{end}}</td>
+      <td>{{.ExpiresIn}}</td>
+    </tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+<p>
+  {{if $s.PrevURL}}<a href="{{$s.PrevURL}}">← Newer page</a>{{end}}
+  {{if $s.NextURL}}<a href="{{$s.NextURL}}">Next page →</a>{{end}}
+</p>
+{{else}}
+<p>No public contracts match those filters right now. Our sweepers cover every region on the game's own cadence, so newly listed contracts appear within the hour.</p>
+{{end}}
+
+{{end}}
+{{end}}

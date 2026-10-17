@@ -333,6 +333,62 @@ func OrderRangeLabel(r string) string {
 	}
 }
 
+// Appraisal price tiers: which step of the house price order
+// spoke for a line. The strings are stored on priced rows, so
+// they are data, not display text; pages word them for readers.
+const (
+	// AppraisalTierTypical: our own swept Forge typical sell.
+	AppraisalTierTypical = "typical"
+	// AppraisalTierEstimate: the stored true-value estimated sell.
+	AppraisalTierEstimate = "estimate"
+	// AppraisalTierFallback: the labeled Fuzzwork aggregate,
+	// inside its hard expiry, with its as-of stamp.
+	AppraisalTierFallback = "fallback"
+	// AppraisalTierUnpriced: no tier could price the line.
+	AppraisalTierUnpriced = "unpriced"
+)
+
+// AppraisalLine is one line handed to the appraisal core: a
+// type, a quantity, the singleton item id when the line is one
+// unique item (0 otherwise), and which side of an exchange it
+// sits on. The core API carries no contract fields by design:
+// callers pass lines in, totals come out.
+type AppraisalLine struct {
+	TypeID   int64
+	Quantity int64
+	ItemID   int64
+	Included bool // false: the want side of an exchange
+}
+
+// AppraisedLine is one line after pricing: the unit price its
+// tier gave (0 when unpriced), the line value, the tier, and
+// when that tier's figure was current.
+type AppraisedLine struct {
+	TypeID    int64
+	Quantity  int64
+	ItemID    int64
+	Included  bool
+	UnitPrice float64
+	LineValue float64
+	Tier      string
+	AsOf      time.Time
+	Priced    bool
+}
+
+// Appraisal is a priced line list: the lines, the offered and
+// wanted totals, and the priced-line coverage of each side (a
+// total over 7 of 9 lines says so, here and wherever it is
+// stored onward).
+type Appraisal struct {
+	Lines         []AppraisedLine
+	OfferedValue  float64
+	WantValue     float64
+	PricedOffered int
+	OfferedLines  int
+	PricedWanted  int
+	WantedLines   int
+}
+
 // FetchGate is the library seam between the fetch pipeline and a module
 // that can answer a fetch from elsewhere (the swarm). Core asks every
 // registered gate before it spends ESI on a name, record, structure or
@@ -900,6 +956,16 @@ type Deps interface {
 	// PostESI posts JSON to an authenticated game API path and decodes
 	// the answer into out; a refusal is an *esi.StatusError.
 	PostESI(ctx context.Context, token, path string, body, out any) error
+	// PostESINoContent posts with a token where success is a bare
+	// 2xx with no body to decode (the /ui/openwindow/ routes
+	// answer 204); a refusal is an *esi.StatusError.
+	PostESINoContent(ctx context.Context, token, path string, body any) error
+	// AppraiseLines prices a line list against the house price
+	// order from stored data only (own swept Forge typicals,
+	// then the stored true-value estimated sell, then the
+	// labeled Fuzzwork fallback inside its expiry, else
+	// unpriced). No ESI, no guide average, ever.
+	AppraiseLines(ctx context.Context, lines []AppraisalLine) (Appraisal, error)
 	// RefreshSnapshot fetches and stores one snapshot of a character now.
 	RefreshSnapshot(ctx context.Context, ch db.Character, kind string) error
 

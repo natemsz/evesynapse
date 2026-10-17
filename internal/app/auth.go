@@ -116,14 +116,14 @@ const (
 )
 
 // eveScopes is the single source of truth for the scopes requested at
-// login: the full read ESI scope set plus two write scopes. The list is
+// login: the full read ESI scope set plus the deliberate write
+// exceptions below. The list is
 // generated from the OAuth2 scope catalog in CCP's ESI OpenAPI document
 // (GET https://esi.evetech.net/meta/openapi.json →
 // components.securitySchemes), minus every mutating scope — anything
 // whose name contains write_, send_, respond_, organize_, manage_ or
-// open_window (4 scopes excluded:
-// write_contacts, write_fleet,
-// open_window, write_waypoint; esi-planets.manage_planets.v1
+// open_window (3 scopes excluded: write_contacts, write_fleet,
+// write_waypoint; esi-planets.manage_planets.v1
 // is the one deliberate manage exception — see below). The user's
 // developer-portal application has the same scopes enabled, so
 // SSO grants exactly what is requested here. Already-linked
@@ -134,6 +134,15 @@ const (
 // (POST /characters/{id}/fittings/). Characters linked before this
 // scope was added get a 403 on that endpoint, which the handler
 // reports as "please sign in again" instead of failing silently.
+//
+// One deliberate exception: esi-ui.open_window.v1 IS requested,
+// powering the contract pages' "View in game" button (POST
+// /ui/openwindow/contract/). It moves the player's own client
+// window and nothing else — no game state changes hands — and
+// the developer-portal application has it enabled. Characters
+// linked before this scope was added hold no grant for it,
+// which the handler reports as "sign in again to enable View in
+// game" instead of failing silently.
 //
 // One deliberate exception: esi-planets.manage_planets.v1
 // IS requested. CCP publishes no read scope for planetary industry —
@@ -213,6 +222,7 @@ var eveScopes = []string{
 	"esi-search.search_structures.v1",
 	"esi-skills.read_skillqueue.v1",
 	"esi-skills.read_skills.v1",
+	"esi-ui.open_window.v1",
 	"esi-universe.read_structures.v1",
 	"esi-wallet.read_character_wallet.v1",
 	"esi-wallet.read_corporation_wallets.v1",

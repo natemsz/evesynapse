@@ -1,5 +1,7 @@
 // Package contracts is the Contracts module: the character contracts page: courier, item and auction contracts. It reads the
-// snapshots core keeps fetched; the fetch itself is core's.
+// snapshots core keeps fetched; the fetch itself is core's. It also
+// carries the public contract search and detail pages over the
+// stored public corpus core sweeps and appraises (search.go).
 package contracts
 
 import (
@@ -23,7 +25,9 @@ var Module = module.Module{
 	Scopes: []module.Scope{
 		{Scope: "esi-contracts.read_character_contracts.v1", Unlocks: "Courier, item and auction contracts."},
 	},
-	EnhanceScopes:  []module.Scope{},
+	EnhanceScopes: []module.Scope{
+		{Scope: "esi-ui.open_window.v1", Unlocks: "Open a contract in the game client from its page."},
+	},
 	Snapshots:      []string{esi.SnapContracts},
 	BriefingTopics: []module.BriefingTopicDecl{{ID: "contracts", Title: "Contract deadlines"}},
 	Activities:     []string{"market"},
@@ -31,6 +35,7 @@ var Module = module.Module{
 		Section: "market",
 		Entries: []module.NavEntry{
 			{Href: "/contracts/", Label: "Contracts", Pages: []string{"contracts.html"}, After: "/orders/"},
+			{Href: "/contracts/search/", Label: "Contract Search", Pages: []string{"contract_search.html", "contract_detail.html"}, After: "/contracts/"},
 		},
 	}},
 	Routes: func(r chi.Router, deps module.Deps) {
@@ -39,9 +44,20 @@ var Module = module.Module{
 		}
 		auth := r.With(deps.RequireAuth())
 		auth.Get("/contracts/", h((*mod).handleContracts))
+		// The public search and detail pages read the stored
+		// corpus only, so they ride the anonymous gate like the
+		// other public market surfaces.
+		anon := r.With(deps.AnonPages())
+		anon.Get("/contracts/search/", h((*mod).handleContractSearch))
+		anon.Get("/contracts/search/{contractID}/", h((*mod).handleContractDetail))
+		// View in game acts as one of the reader's characters,
+		// so it is signed-in only.
+		auth.Post("/ui/openwindow/contract/{contractID}", h((*mod).handleOpenContractInGame))
 	},
 	Pages: []module.Page{
 		{Template: "contracts.html", Section: "market"},
+		{Template: "contract_search.html", Section: "market"},
+		{Template: "contract_detail.html", Section: "market"},
 	},
 }
 
@@ -50,6 +66,8 @@ type PageData struct {
 	module.ShellData
 	Contracts      *contractsView
 	ContractsChars []module.CharLink
+	ContractSearch *searchView
+	ContractDetail *detailView
 }
 
 // Shell returns the embedded ShellData pointer for render.

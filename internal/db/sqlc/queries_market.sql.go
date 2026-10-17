@@ -1864,6 +1864,56 @@ func (q *Queries) ListMarketStatsFallbackByType(ctx context.Context, typeID int6
 	return items, nil
 }
 
+const listMarketStatsFallbackForTypes = `-- name: ListMarketStatsFallbackForTypes :many
+SELECT region_id, type_id, median_sell, fivepct_sell, median_buy, fivepct_buy, sell_orders, buy_orders, sell_volume, buy_volume, source, orderset_id, source_asof, fetched_at
+FROM market_stats_fallback
+WHERE region_id = $1 AND type_id = ANY($2::bigint[])
+ORDER BY type_id
+`
+
+type ListMarketStatsFallbackForTypesParams struct {
+	RegionID int64   `json:"region_id"`
+	Column2  []int64 `json:"column_2"`
+}
+
+func (q *Queries) ListMarketStatsFallbackForTypes(ctx context.Context, arg ListMarketStatsFallbackForTypesParams) ([]MarketStatsFallback, error) {
+	rows, err := q.db.QueryContext(ctx, listMarketStatsFallbackForTypes, arg.RegionID, pq.Array(arg.Column2))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []MarketStatsFallback
+	for rows.Next() {
+		var i MarketStatsFallback
+		if err := rows.Scan(
+			&i.RegionID,
+			&i.TypeID,
+			&i.MedianSell,
+			&i.FivepctSell,
+			&i.MedianBuy,
+			&i.FivepctBuy,
+			&i.SellOrders,
+			&i.BuyOrders,
+			&i.SellVolume,
+			&i.BuyVolume,
+			&i.Source,
+			&i.OrdersetID,
+			&i.SourceAsof,
+			&i.FetchedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listMarketSweepStationAggregates = `-- name: ListMarketSweepStationAggregates :many
 SELECT location_id, type_id, is_buy_order,
        CAST(MIN(price) AS DOUBLE PRECISION) AS min_price, CAST(MAX(price) AS DOUBLE PRECISION) AS max_price,

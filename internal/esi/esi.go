@@ -1868,6 +1868,19 @@ func (c *Client) PostJSONAuthed(ctx context.Context, accessToken, path string, p
 	return decodeESI(http.MethodPost, path, body, out)
 }
 
+// PostAuthedNoContent is the authenticated-write path for
+// endpoints that answer a bare success with no body (the
+// /ui/openwindow/ routes answer 204 No Content): any 2xx is
+// success, and a 403 surfaces as StatusError so callers can
+// tell a missing scope from a bad request. Kept separate from
+// PostJSONAuthed, whose callers are promised a 201 with a body
+// shape they may decode.
+func (c *Client) PostAuthedNoContent(ctx context.Context, accessToken, path string, payload any) error {
+	_, _, err := c.request(ctx, http.MethodPost, accessToken, path, payload,
+		http.StatusOK, http.StatusCreated, http.StatusAccepted, http.StatusNoContent)
+	return err
+}
+
 // PutJSONAuthed is the PUT counterpart of PostJSONAuthed (Issue 26:
 // PUT /characters/{id}/mail/{mail_id}/ to mark mail read). Any 2xx
 // is success; a 403 surfaces as StatusError so callers can tell a

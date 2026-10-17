@@ -158,7 +158,7 @@ func TestModuleNavKeepsItsPlace(t *testing.T) {
 	// The whole pilot and market menus, in the order they had before the modules.
 	for section, want := range map[string][]string{
 		"pilot":  {"/character/", "/characters/", "/skills/plans", "/assets/", "/wallet/", "/mail/", "/calendar/", "/contacts/", "/killmails/"},
-		"market": {"/market/", "/market/scanner/", "/market/ideas/", "/market/tradefinder/", "/market/leaderboard/", "/market/restock/", "/orders/", "/contracts/"},
+		"market": {"/market/", "/market/scanner/", "/market/ideas/", "/market/tradefinder/", "/market/leaderboard/", "/market/restock/", "/orders/", "/contracts/", "/contracts/search/"},
 	} {
 		var got []string
 		for _, e := range sectionNav[section] {

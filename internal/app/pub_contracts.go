@@ -162,11 +162,7 @@ func (app *Application) advancePublicContractRegion(ctx context.Context, regionI
 			RegionID: regionID, NextPage: 1, TotalPages: 0,
 			Cycle: state.Cycle, UpdatedAt: time.Now().UTC(),
 		}
-		if err := app.queries.UpsertPublicContractSweepState(ctx, db.UpsertPublicContractSweepStateParams{
-			RegionID: state.RegionID, NextPage: state.NextPage,
-			TotalPages: state.TotalPages, Cycle: state.Cycle,
-			UpdatedAt: state.UpdatedAt,
-		}); err != nil {
+		if err := app.queries.UpsertPublicContractSweepState(ctx, db.UpsertPublicContractSweepStateParams(state)); err != nil {
 			logging.Errorf("worker: public contracts: start sweep %d: %v", regionID, err)
 			return 0, false
 		}

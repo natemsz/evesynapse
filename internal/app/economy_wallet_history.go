@@ -77,6 +77,9 @@ func (app *Application) sampleWalletHistory(ctx context.Context, ch db.Character
 func (app *Application) characterNetWorth(ctx context.Context, characterID int64, balance float64, prices map[int64]esi.MarketPrice) (float64, bool) {
 	total := balance
 	valued := false
+	// The same price order as the home widget's (buildNetWorth):
+	// average, then the true-value estimated sell, then adjusted.
+	trueValues := app.storedTrueValues(ctx)
 
 	if snap, err := app.queries.GetSnapshot(ctx, db.GetSnapshotParams{
 		CharacterID: characterID, Kind: esi.SnapAssets,
@@ -84,15 +87,8 @@ func (app *Application) characterNetWorth(ctx context.Context, characterID int64
 		var assets []esi.Asset
 		if json.Unmarshal([]byte(snap.Payload), &assets) == nil {
 			for _, a := range assets {
-				p, ok := prices[a.TypeID]
+				price, ok := pickValuationPrice(prices[a.TypeID], estSellOf(trueValues, a.TypeID))
 				if !ok {
-					continue
-				}
-				price := p.AveragePrice
-				if price <= 0 {
-					price = p.AdjustedPrice
-				}
-				if price <= 0 {
 					continue
 				}
 				total += float64(a.Quantity) * price

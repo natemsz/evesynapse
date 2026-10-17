@@ -972,6 +972,10 @@ func (app *Application) buildNetWorth(ctx context.Context, userID int64, bundles
 	// — the card always has prices to work with once the worker
 	// has run, instead of waiting on Market activity.
 	prices := app.valuationPrices(ctx)
+	// True values (truevalue.go): the middle tier for types
+	// the guide cannot price -- a contract-traded hull in a
+	// hangar values at its estimated sell, not CCP's fossil.
+	trueValues := app.storedTrueValues(ctx)
 	w := &netWorthWidget{}
 
 	// The estimate is only as fresh as its stalest input.
@@ -1000,15 +1004,8 @@ func (app *Application) buildNetWorth(ctx context.Context, userID int64, bundles
 				if prices == nil {
 					continue
 				}
-				p, ok := prices[a.TypeID]
+				price, ok := pickValuationPrice(prices[a.TypeID], estSellOf(trueValues, a.TypeID))
 				if !ok {
-					continue
-				}
-				price := p.AveragePrice
-				if price <= 0 {
-					price = p.AdjustedPrice
-				}
-				if price <= 0 {
 					continue
 				}
 				assetSum += float64(a.Quantity) * price

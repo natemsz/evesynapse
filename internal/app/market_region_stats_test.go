@@ -487,3 +487,56 @@ func TestRegionSweepStoresAvgDailyVolume(t *testing.T) {
 		t.Fatalf("stored avg %v disagrees with render-time historyWindow %v", got, want)
 	}
 }
+
+// The hub sweep cadence is 30 minutes (owner ruling
+// 2026-10-17): a region whose stored stats are 45 minutes old
+// is due again -- under the old hourly gate it was not -- and
+// one 15 minutes old is not. The constant itself is pinned so
+// a silent drift back fails here first.
+func TestRegionSweepGateIsThirtyMinutes(t *testing.T) {
+	if regionSweepGate != 30*time.Minute {
+		t.Fatalf("regionSweepGate = %v, want 30m", regionSweepGate)
+	}
+
+	transport := &pagedBookTransport{books: map[int64][][]esi.MarketOrder{}}
+	app, _, q := buildCorpTestApp(t, transport)
+	ctx := context.Background()
+
+	stamp := func(at time.Time) {
+		t.Helper()
+		if err := q.UpsertMarketFetchState(ctx, db.UpsertMarketFetchStateParams{
+			Kind: regionSweepKind(10000002), State: fetchStateOK, AttemptedAt: at,
+		}); err != nil {
+			t.Fatalf("stamp Forge sweep record: %v", err)
+		}
+	}
+
+	// Every other hub is fresh; only The Forge's age is in play.
+	for _, region := range marketRegions {
+		if region.ID != 10000002 {
+			markRegionFresh(t, q, region.ID)
+		}
+	}
+	transport.books[10000002] = [][]esi.MarketOrder{
+		{{OrderID: 1, TypeID: 34, IsBuyOrder: false, Price: 5.0, VolumeRemain: 100}},
+	}
+
+	// 15 minutes old: inside the gate, nothing is fetched.
+	stamp(time.Now().UTC().Add(-15 * time.Minute))
+	if _, limited := app.sweepRegionStats(ctx, &fetchBudget{left: 1000}); limited {
+		t.Fatal("sweep hit the error limit on a healthy stub")
+	}
+	if pages := transport.pagesFor(10000002); len(pages) != 0 {
+		t.Fatalf("15-minute-old stats were re-swept: fetched pages %v", pages)
+	}
+
+	// 45 minutes old: past the 30-minute gate (under the old
+	// hourly gate this still waited), the sweep runs.
+	stamp(time.Now().UTC().Add(-45 * time.Minute))
+	if _, limited := app.sweepRegionStats(ctx, &fetchBudget{left: 1000}); limited {
+		t.Fatal("sweep hit the error limit on a healthy stub")
+	}
+	if pages := transport.pagesFor(10000002); len(pages) == 0 {
+		t.Fatal("45-minute-old stats were not re-swept under the 30-minute gate")
+	}
+}

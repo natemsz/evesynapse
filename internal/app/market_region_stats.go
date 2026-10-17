@@ -43,7 +43,7 @@ import (
 const (
 	// regionSweepGate is how stale a region's stored stats may
 	// get before the worker sweeps that region again.
-	regionSweepGate = time.Hour
+	regionSweepGate = 30 * time.Minute
 	// maxRegionSweepPagesPerCycle bounds how many whole-book
 	// pages one worker cycle may advance EACH region's sweep
 	// by -- the whole-book cousin of maxBookFetchesPerCycle. At

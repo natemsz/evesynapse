@@ -3090,6 +3090,7 @@ func (c *Client) StorePlaceName(id int64, name string) {
 // (authenticated; needs esi-universe.read_structures.v1).
 type UniverseStructure struct {
 	Name          string `json:"name"`
+	OwnerID       int64  `json:"owner_id"`
 	SolarSystemID int64  `json:"solar_system_id"`
 	TypeID        int64  `json:"type_id"`
 }

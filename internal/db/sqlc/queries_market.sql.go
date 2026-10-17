@@ -695,8 +695,11 @@ WHERE structure_id = $1
 // Structure context (schema 028): owner/system/type facts the
 // corporation structure snapshots report, persisted as the
 // snapshots are processed so the structure page renders from one
-// small row. Latest snapshot wins; names are NOT stored here (they
-// live in structure_names under provenance rules).
+// small row. A successful per-structure lookup writes the same
+// facts from its own payload, so structures no snapshot covers
+// still gain context. Both writers are ESI truth; the fresher
+// write wins. Names are NOT stored here (they live in
+// structure_names under provenance rules).
 // ---------------------------------------------------------------------
 func (q *Queries) GetStructureContext(ctx context.Context, structureID int64) (StructureContext, error) {
 	row := q.db.QueryRowContext(ctx, getStructureContext, structureID)
@@ -725,6 +728,10 @@ WHERE structure_id = $1
 // authenticated-only). 'resolved' rows re-check after 30 days
 // (structures can be renamed); 'missing' rows (403/404: private or
 // gone) re-check after 24 hours; 'pending' rows are always due.
+// A 'resolved' row with no structure_context row is also due, so
+// a name the character lookup resolved picks up the owner/system/
+// type facts that lookup carries without waiting out the rename
+// window.
 // The worker tries every eligible linked character before a
 // negative answer is cached, and 'source' (schema 023) records the
 // name's provenance so ESI truth outranks any lower-trust tier.
@@ -2626,6 +2633,7 @@ SELECT structure_id
 FROM structure_names
 WHERE state = 'pending'
    OR (state = 'resolved' AND (resolved_at IS NULL OR resolved_at < $1::timestamptz))
+   OR (state = 'resolved' AND NOT EXISTS (SELECT 1 FROM structure_context WHERE structure_context.structure_id = structure_names.structure_id))
    OR (state = 'missing' AND (resolved_at IS NULL OR resolved_at < $2::timestamptz))
 ORDER BY CASE state WHEN 'pending' THEN 0 ELSE 1 END, structure_id
 LIMIT $3::bigint

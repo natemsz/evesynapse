@@ -17,8 +17,9 @@ import (
 // name links to. There is no public ESI record for a structure, so the
 // page renders what this instance knows: the resolved name
 // (structure_names, via the tiered resolution in structures.go) and the
-// context that corporation structure snapshots reported
-// (structure_context: owning corporation, solar system, type). A first
+// context the instance has recorded (structure_context: owning
+// corporation, solar system, type — reported by corporation structure
+// snapshots and by successful per-structure lookups alike). A first
 // visit notes the want and shows a loading state that fills itself in
 // once the worker lands the name. A structure nobody can name stays
 // pending, and a settled 'missing' answer says the name is not

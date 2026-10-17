@@ -1,1 +1,3447 @@
-file://%20evesynapse%20progressive%20enhancements.%20everything%20here%20only%20ever//%20*adds*%20behavior:%20with%20JavaScript%20disabled%20the%20pages%20render%20and//%20work%20exactly%20as%20before%20(the%20nav%20is%20%3Cdetails%3E-driven,%20the%20market//%20form%20submits,%20panels%20are%20simply%20unfolded).(function%20()%20%7B%20%20%22use%20strict%22;%20%20//%20---%20Content-ready%20bus%20--------------------------------------%20%20//%20The%20persistent%20shell%20(swap.js)%20replaces%20#main-content%20without%20%20//%20a%20page%20load.%20Page%20widgets%20subscribe%20through%20EveSynapseContent%20%20//%20and%20initialize%20the%20fresh%20markup;%20the%20same%20initializer%20runs%20%20//%20once%20for%20the%20first%20paint.%20Shell-level%20code%20(sidebar,%20top%20bar,%20%20//%20palette,%20notifications)%20binds%20once%20and%20never%20re-runs.%20A%20widget%20%20//%20that%20binds%20document-level%20listeners%20or%20timers%20must%20guard%20them%20%20//%20itself:%20element%20bindings%20are%20safe%20(old%20nodes%20are%20discarded%20%20//%20with%20the%20swap),%20global%20ones%20are%20not.%20%20window.EveSynapseContent%20=%20{%20%20%20%20onReady:%20function%20(fn)%20{%20%20%20%20%20%20document.addEventListener(%22evesynapse:content-ready%22,%20function%20(ev)%20{%20%20%20%20%20%20%20%20fn((ev.detail%20&&%20ev.detail.root)%20||%20document);%20%20%20%20%20%20});%20%20%20%20}%20%20};%20%20function%20onContentReady(fn)%20{%20%20%20%20window.EveSynapseContent.onReady(fn);%20%20}%20%20//%20---%20Modal%20dialogs%20---------------------------------------------%20%20//%20One%20implementation%20behind%20every%20pop-up%20%E2%80%94%20add%20a%20module,%20the%20fit%20%20//%20picker,%20the%20planner's%20ME%20and%20settings%20dialogs,%20quick%20jump:%20a%20%20//%20.modal-backdrop%20around%20a%20.modal,%20opened%20and%20closed%20through%20%20//%20EveSynapseModal.%20open()%20shows%20the%20backdrop%20in%20the%20browser's%20top%20%20//%20layer%20(a%20manual%20popover),%20so%20its%20blur%20covers%20the%20whole%20page%20%E2%80%94%20%20//%20top%20bar%20and%20sidebar%20included%20%E2%80%94%20whatever%20stacking%20the%20content%20%20//%20sits%20in,%20without%20moving%20the%20dialog%20out%20of%20its%20form.%20It%20%20//%20remembers%20the%20focus%20to%20give%20back%20and%20moves%20focus%20in;%20close()%20%20//%20hides%20it%20and%20gives%20the%20focus%20back.%20A%20click%20on%20the%20backdrop%20%20//%20itself,%20on%20any%20[data-close-modal]%20inside,%20or%20Escape%20closes%20the%20%20//%20topmost%20one;%20opts.onClose%20runs%20on%20every%20close,%20however%20it%20came.%20%20var%20modalStack%20=%20[];%20%20function%20modalIndex(el)%20{%20%20%20%20for%20(var%20i%20=%20modalStack.length%20-%201;%20i%20%3E=%200;%20i--)%20if%20(modalStack[i].el%20===%20el)%20return%20i;%20%20%20%20return%20-1;%20%20}%20%20function%20topLayer(el,%20show)%20{%20%20%20%20if%20(!el.showPopover)%20return;%20%20%20%20if%20(!el.hasAttribute(%22popover%22))%20el.setAttribute(%22popover%22,%20%22manual%22);%20%20%20%20try%20{%20%20%20%20%20%20if%20(show)%20el.showPopover();%20else%20el.hidePopover();%20%20%20%20}%20catch%20(err)%20{%20/*%20already%20in%20that%20state%20*/%20}%20%20}%20%20var%20EveSynapseModal%20=%20window.EveSynapseModal%20=%20{%20%20%20%20open:%20function%20(el,%20opts)%20{%20%20%20%20%20%20if%20(!el%20||%20modalIndex(el)%20%3E=%200)%20return;%20%20%20%20%20%20opts%20=%20opts%20||%20{};%20%20%20%20%20%20modalStack.push({%20el:%20el,%20back:%20document.activeElement,%20onClose:%20opts.onClose%20});%20%20%20%20%20%20el.hidden%20=%20false;%20%20%20%20%20%20topLayer(el,%20true);%20%20%20%20%20%20document.documentElement.classList.add(%22modal-open%22);%20%20%20%20%20%20if%20(opts.focus%20!==%20false)%20{%20%20%20%20%20%20%20%20var%20first%20=%20el.querySelector(%22[autofocus],%20input:not([type=hidden]),%20select,%20textarea,%20.modal-item,%20button:not([data-close-modal])%22)%20||%20%20%20%20%20%20%20%20%20%20el.querySelector(%22[data-close-modal],%20button%22);%20%20%20%20%20%20%20%20if%20(first%20&&%20first.focus)%20first.focus({%20preventScroll:%20true%20});%20%20%20%20%20%20}%20%20%20%20},%20%20%20%20close:%20function%20(el)%20{%20%20%20%20%20%20if%20(!el)%20return;%20%20%20%20%20%20var%20i%20=%20modalIndex(el);%20%20%20%20%20%20el.hidden%20=%20true;%20%20%20%20%20%20topLayer(el,%20false);%20%20%20%20%20%20if%20(i%20%3C%200)%20return;%20%20%20%20%20%20var%20entry%20=%20modalStack.splice(i,%201)[0];%20%20%20%20%20%20if%20(!modalStack.length)%20document.documentElement.classList.remove(%22modal-open%22);%20%20%20%20%20%20if%20(entry.onClose)%20entry.onClose();%20%20%20%20%20%20if%20(entry.back%20&&%20entry.back.focus%20&&%20document.contains(entry.back))%20entry.back.focus({%20preventScroll:%20true%20});%20%20%20%20},%20%20%20%20isOpen:%20function%20(el)%20{%20return%20modalIndex(el)%20%3E=%200;%20}%20%20};%20%20document.addEventListener(%22click%22,%20function%20(ev)%20{%20%20%20%20var%20t%20=%20ev.target;%20%20%20%20if%20(!t%20||%20!t.classList)%20return;%20%20%20%20if%20(t.classList.contains(%22modal-backdrop%22))%20{%20EveSynapseModal.close(t);%20return;%20}%20%20%20%20var%20closer%20=%20t.closest%20&&%20t.closest(%22[data-close-modal]%22);%20%20%20%20var%20box%20=%20closer%20&&%20closer.closest(%22.modal-backdrop%22);%20%20%20%20if%20(box)%20EveSynapseModal.close(box);%20%20});%20%20document.addEventListener(%22keydown%22,%20function%20(ev)%20{%20%20%20%20if%20(ev.key%20!==%20%22Escape%22%20||%20!modalStack.length%20||%20ev.defaultPrevented)%20return;%20%20%20%20ev.preventDefault();%20%20%20%20EveSynapseModal.close(modalStack[modalStack.length%20-%201].el);%20%20});%20%20//%20A%20dialog%20in%20content%20that%20is%20being%20swapped%20out%20closes%20with%20it.%20%20document.addEventListener(%22evesynapse:content-will-swap%22,%20function%20()%20{%20%20%20%20var%20main%20=%20document.getElementById(%22main-content%22);%20%20%20%20for%20(var%20i%20=%20modalStack.length%20-%201;%20i%20%3E=%200;%20i--)%20{%20%20%20%20%20%20if%20(main%20&&%20main.contains(modalStack[i].el))%20EveSynapseModal.close(modalStack[i].el);%20%20%20%20}%20%20});%20%20//%20---%20Section%20tabs%20--------------------------------------------%20%20//%20Below%20the%20fit%20width%20the%20tab%20strip%20(and%20a%20grouped%20section's%20%20//%20sub-row)%20is%20a%20sideways-scrolling%20rail;%20start%20with%20the%20current%20%20//%20page's%20tab%20in%20view%20rather%20than%20off%20the%20right%20edge.%20%20function%20revealSectionTab(root)%20{%20%20%20%20var%20strips%20=%20root.querySelectorAll(%22.section-tabs,%20.section-subtabs%22);%20%20%20%20for%20(var%20i%20=%200;%20i%20%3C%20strips.length;%20i++)%20{%20%20%20%20%20%20var%20strip%20=%20strips[i],%20on%20=%20strip.querySelector(%22a.active%22);%20%20%20%20%20%20if%20(!on%20||%20strip.scrollWidth%20%3C=%20strip.clientWidth)%20continue;%20%20%20%20%20%20strip.scrollLeft%20=%20on.offsetLeft%20-%20strip.offsetLeft%20-%20(strip.clientWidth%20-%20on.offsetWidth)%20/%202;%20%20%20%20}%20%20}%20%20onContentReady(revealSectionTab);%20%20revealSectionTab(document);%20%20//%20---%20Collapsible%20sections%20-----------------------------------%20%20//%20Folding%20lives%20at%20the%20smallest%20sensible%20unit%20on%20each%20page:%20%20//%20%20%20-%20.foldable%20sections%20(the%20h2/h3%20blocks%20inside%20a%20page%20panel)%20%20//%20%20%20%20%20fold%20independently,%20section%20by%20section;%20%20//%20%20%20-%20.card%20widgets%20fold%20whole%20(Home%20widgets,%20Sync%20cards);%20%20//%20%20%20-%20the%20page%20.panel%20itself%20folds%20whole%20only%20when%20it%20wraps%20no%20%20//%20%20%20%20%20.foldable%20section%20and%20no%20cards%20%E2%80%94%20single-block%20pages%20like%20%20//%20%20%20%20%20Killmails%20or%20Wars,%20where%20the%20whole%20window%20IS%20the%20section.%20%20//%20Sections%20marked%20data-fold=%22closed%22%20start%20folded;%20that%20state%20%20//%20is%20applied%20here,%20on%20load,%20so%20with%20JavaScript%20disabled%20every%20%20//%20section%20is%20simply%20visible%20%E2%80%94%20folding%20is%20pure%20enhancement%20and%20%20//%20nothing%20is%20ever%20hidden%20in%20the%20raw%20markup.%20%20function%20setFolded(container,%20btn,%20folded)%20{%20%20%20%20container.classList.toggle(%22folded%22,%20folded);%20%20%20%20btn.textContent%20=%20folded%20?%20%22+%22%20:%20%22%E2%80%93%22;%20//%20+%20when%20folded,%20en%20dash%20to%20fold%20%20%20%20btn.setAttribute(%22aria-expanded%22,%20folded%20?%20%22false%22%20:%20%22true%22);%20%20%20%20btn.setAttribute(%22aria-label%22,%20folded%20?%20%22Expand%20section%22%20:%20%22Collapse%20section%22);%20%20}%20%20function%20addFold(container,%20heading)%20{%20%20%20%20if%20(!container%20||%20!heading)%20return;%20%20%20%20if%20(heading.querySelector(%22:scope%20%3E%20.foldbtn%22))%20return;%20%20%20%20var%20btn%20=%20document.createElement(%22button%22);%20%20%20%20btn.type%20=%20%22button%22;%20%20%20%20btn.className%20=%20%22foldbtn%22;%20%20%20%20btn.addEventListener(%22click%22,%20function%20()%20{%20%20%20%20%20%20setFolded(container,%20btn,%20!container.classList.contains(%22folded%22));%20%20%20%20});%20%20%20%20heading.appendChild(btn);%20%20%20%20container.classList.add(%22has-fold%22);%20%20%20%20setFolded(container,%20btn,%20container.getAttribute(%22data-fold%22)%20===%20%22closed%22);%20%20}%20%20//%20Fold%20buttons%20are%20added%20per%20node,%20so%20re-running%20over%20fresh%20%20//%20swapped%20markup%20is%20safe;%20the%20old%20nodes%20(and%20their%20buttons)%20%20//%20are%20discarded%20with%20the%20swap.%20%20function%20initFolds(root)%20{%20%20%20%20var%20foldables%20=%20root.querySelectorAll(%22.foldable%22);%20%20%20%20for%20(var%20i%20=%200;%20i%20%3C%20foldables.length;%20i++)%20{%20%20%20%20%20%20//%20data-fold=%22never%22:%20keep%20the%20foldable%20section%20styling%20but%20%20%20%20%20%20//%20don't%20offer%20a%20fold%20button%20(Issue%2017).%20%20%20%20%20%20if%20(foldables[i].getAttribute(%22data-fold%22)%20===%20%22never%22)%20continue;%20%20%20%20%20%20addFold(foldables[i],%20foldables[i].querySelector(%22:scope%20%3E%20h2,%20:scope%20%3E%20h3%22));%20%20%20%20}%20%20%20%20var%20cards%20=%20root.querySelectorAll(%22.card%22);%20%20%20%20for%20(var%20j%20=%200;%20j%20%3C%20cards.length;%20j++)%20{%20%20%20%20%20%20//%20Home%20modules%20expand%20instead%20of%20folding%20(see%20Expanders).%20%20%20%20%20%20if%20(cards[j].closest(%22.home-grid%22))%20continue;%20%20%20%20%20%20//%20data-fold=%22never%22%20on%20a%20card:%20one%20window%20that%20is%20the%20page%20(the%20%20%20%20%20%20//%20sign-up%20question),%20nothing%20to%20fold.%20%20%20%20%20%20if%20(cards[j].getAttribute(%22data-fold%22)%20===%20%22never%22)%20continue;%20%20%20%20%20%20addFold(cards[j],%20cards[j].querySelector(%22:scope%20%3E%20h2,%20:scope%20%3E%20h3%22));%20%20%20%20}%20%20}%20%20onContentReady(initFolds);%20%20initFolds(document);%20%20//%20---%20Confirmed%20forms%20------------------------------------------%20%20//%20A%20form%20carrying%20data-confirm%20asks%20before%20it%20submits%20(CSP%20rules%20%20//%20out%20inline%20handlers).%20Delegated,%20so%20swapped%20pages%20need%20nothing.%20%20document.addEventListener(%22submit%22,%20function%20(ev)%20{%20%20%20%20var%20form%20=%20ev.target;%20%20%20%20var%20q%20=%20form%20&&%20form.getAttribute%20?%20form.getAttribute(%22data-confirm%22)%20:%20null;%20%20%20%20if%20(q%20&&%20!window.confirm(q))%20ev.preventDefault();%20%20},%20true);%20%20//%20---%20Tabs%20----------------------------------------------------%20%20//%20A%20[data-tabs]%20tablist%20renders%20hidden,%20its%20panels%20all%20showing%20%20//%20under%20their%20own%20headings:%20that%20is%20the%20page%20without%20JavaScript.%20%20//%20Here%20the%20list%20appears,%20one%20panel%20shows%20at%20a%20time,%20and%20the%20%20//%20container%20gets%20.tabs-on%20so%20the%20CSS%20can%20drop%20the%20per-panel%20%20//%20headings%20the%20tabs%20now%20carry.%20Arrow%20keys%20move%20along%20the%20list;%20a%20%20//%20URL%20hash%20naming%20a%20panel%20opens%20it.%20%20function%20initTabs(root)%20{%20%20%20%20var%20lists%20=%20root.querySelectorAll(%22[data-tabs]%22);%20%20%20%20for%20(var%20i%20=%200;%20i%20%3C%20lists.length;%20i++)%20setupTabs(lists[i]);%20%20}%20%20function%20setupTabs(list)%20{%20%20%20%20if%20(list.getAttribute(%22data-tabs-ready%22))%20return;%20%20%20%20list.setAttribute(%22data-tabs-ready%22,%20%221%22);%20%20%20%20var%20tabs%20=%20Array.prototype.slice.call(list.querySelectorAll('[role=%22tab%22]'));%20%20%20%20if%20(!tabs.length)%20return;%20%20%20%20function%20panelOf(tab)%20{%20return%20document.getElementById(tab.getAttribute(%22aria-controls%22));%20}%20%20%20%20function%20select(tab,%20focus)%20{%20%20%20%20%20%20tabs.forEach(function%20(t)%20{%20%20%20%20%20%20%20%20var%20on%20=%20t%20===%20tab;%20%20%20%20%20%20%20%20t.setAttribute(%22aria-selected%22,%20on%20?%20%22true%22%20:%20%22false%22);%20%20%20%20%20%20%20%20t.tabIndex%20=%20on%20?%200%20:%20-1;%20%20%20%20%20%20%20%20var%20p%20=%20panelOf(t);%20%20%20%20%20%20%20%20if%20(p)%20p.hidden%20=%20!on;%20%20%20%20%20%20});%20%20%20%20%20%20if%20(focus)%20tab.focus();%20%20%20%20}%20%20%20%20tabs.forEach(function%20(t,%20n)%20{%20%20%20%20%20%20t.addEventListener(%22click%22,%20function%20()%20{%20select(t,%20false);%20});%20%20%20%20%20%20t.addEventListener(%22keydown%22,%20function%20(ev)%20{%20%20%20%20%20%20%20%20var%20k%20=%20ev.key,%20to%20=%20-1;%20%20%20%20%20%20%20%20if%20(k%20===%20%22ArrowRight%22)%20to%20=%20(n%20+%201)%20%%20tabs.length;%20%20%20%20%20%20%20%20else%20if%20(k%20===%20%22ArrowLeft%22)%20to%20=%20(n%20-%201%20+%20tabs.length)%20%%20tabs.length;%20%20%20%20%20%20%20%20else%20if%20(k%20===%20%22Home%22)%20to%20=%200;%20%20%20%20%20%20%20%20else%20if%20(k%20===%20%22End%22)%20to%20=%20tabs.length%20-%201;%20%20%20%20%20%20%20%20if%20(to%20%3C%200)%20return;%20%20%20%20%20%20%20%20ev.preventDefault();%20%20%20%20%20%20%20%20select(tabs[to],%20true);%20%20%20%20%20%20});%20%20%20%20});%20%20%20%20var%20start%20=%20tabs[0];%20%20%20%20var%20hash%20=%20window.location.hash%20?%20window.location.hash.slice(1)%20:%20%22%22;%20%20%20%20tabs.forEach(function%20(t)%20{%20%20%20%20%20%20if%20(t.getAttribute(%22aria-controls%22)%20===%20hash)%20start%20=%20t;%20%20%20%20});%20%20%20%20list.hidden%20=%20false;%20%20%20%20if%20(list.parentElement)%20list.parentElement.classList.add(%22tabs-on%22);%20%20%20%20select(start,%20false);%20%20}%20%20onContentReady(initTabs);%20%20initTabs(document);%20%20//%20---%20Expanders%20-------------------------------------------------%20%20//%20One%20mechanism%20for%20every%20summary/detail%20pair.%20A%20detail%20block%20%20//%20carries%20data-wmore;%20its%20control%20carries%20data-expand%20naming%20the%20%20//%20block's%20id.%20Home%20modules%20get%20theirs%20here:%20a%20module%20whose%20markup%20%20//%20has%20a%20detail%20block%20rests%20on%20its%20summary,%20with%20a%20More/Less%20%20//%20toggle%20in%20its%20heading,%20and%20takes%20its%20whole%20grid%20row%20while%20%20//%20open.%20Table%20rows%20with%20a%20detail%20row%20of%20their%20own%20(the%20fleet%20%20//%20overview)%20render%20their%20control%20server-side%20and%20use%20the%20same%20%20//%20switch.%20Without%20JavaScript%20nothing%20is%20hidden:%20every%20detail%20%20//%20block%20simply%20renders%20open.%20Which%20modules%20are%20open%20is%20a%20%20//%20per-browser%20convenience,%20remembered%20in%20localStorage.%20%20var%20EXPANDED_KEY%20=%20%22evesynapse.home.expanded%22;%20%20function%20readExpanded()%20{%20%20%20%20try%20{%20%20%20%20%20%20var%20v%20=%20JSON.parse(window.localStorage.getItem(EXPANDED_KEY)%20||%20%22[]%22);%20%20%20%20%20%20return%20Array.isArray(v)%20?%20v%20:%20[];%20%20%20%20}%20catch%20(e)%20{%20return%20[];%20}%20%20}%20%20function%20rememberExpanded(id,%20open)%20{%20%20%20%20var%20ids%20=%20readExpanded().filter(function%20(x)%20{%20return%20x%20!==%20id;%20});%20%20%20%20if%20(open)%20ids.push(id);%20%20%20%20try%20{%20window.localStorage.setItem(EXPANDED_KEY,%20JSON.stringify(ids));%20}%20catch%20(e)%20{%20/*%20private%20mode%20*/%20}%20%20}%20%20var%20expandSeq%20=%200;%20%20function%20setExpanded(ctrl,%20panels,%20open)%20{%20%20%20%20for%20(var%20p%20=%200;%20p%20%3C%20panels.length;%20p++)%20panels[p].hidden%20=%20!open;%20%20%20%20ctrl.setAttribute(%22aria-expanded%22,%20open%20?%20%22true%22%20:%20%22false%22);%20%20%20%20if%20(ctrl.classList.contains(%22cardexpand%22))%20{%20%20%20%20%20%20ctrl.textContent%20=%20open%20?%20%22Less%22%20:%20%22More%22;%20%20%20%20}%20%20%20%20var%20owner%20=%20ctrl.getAttribute(%22data-expand-owner%22);%20%20%20%20var%20ownerEl%20=%20owner%20?%20document.getElementById(owner)%20:%20null;%20%20%20%20if%20(ownerEl)%20ownerEl.classList.toggle(%22expanded%22,%20open);%20%20%20%20var%20card%20=%20ctrl.closest(%22.card[data-widget]%22);%20%20%20%20if%20(card%20&&%20ctrl.classList.contains(%22cardexpand%22))%20{%20%20%20%20%20%20card.classList.toggle(%22expanded%22,%20open);%20%20%20%20%20%20rememberExpanded(card.getAttribute(%22data-widget%22),%20open);%20%20%20%20}%20%20}%20%20function%20bindExpander(ctrl,%20panels,%20open)%20{%20%20%20%20if%20(ctrl.hasAttribute(%22data-expand-bound%22))%20return;%20%20%20%20ctrl.setAttribute(%22data-expand-bound%22,%20%221%22);%20%20%20%20var%20ids%20=%20[];%20%20%20%20for%20(var%20p%20=%200;%20p%20%3C%20panels.length;%20p++)%20{%20%20%20%20%20%20if%20(!panels[p].id)%20panels[p].id%20=%20%22wmore-%22%20+%20(++expandSeq);%20%20%20%20%20%20ids.push(panels[p].id);%20%20%20%20}%20%20%20%20ctrl.setAttribute(%22aria-controls%22,%20ids.join(%22%20%22));%20%20%20%20setExpanded(ctrl,%20panels,%20open);%20%20%20%20ctrl.addEventListener(%22click%22,%20function%20(ev)%20{%20%20%20%20%20%20ev.stopPropagation();%20%20%20%20%20%20setExpanded(ctrl,%20panels,%20panels[0].hidden);%20%20%20%20});%20%20}%20%20function%20initExpanders(root)%20{%20%20%20%20//%20Customize%20shows%20every%20module%20whole:%20it%20is%20about%20arranging.%20%20%20%20var%20grid%20=%20root.querySelector%20?%20root.querySelector(%22.home-grid:not(.home-custom)%22)%20:%20null;%20%20%20%20var%20remembered%20=%20readExpanded();%20%20%20%20if%20(grid)%20{%20%20%20%20%20%20var%20cards%20=%20grid.querySelectorAll(%22.card[data-widget]%22);%20%20%20%20%20%20for%20(var%20i%20=%200;%20i%20%3C%20cards.length;%20i++)%20{%20%20%20%20%20%20%20%20var%20card%20=%20cards[i];%20%20%20%20%20%20%20%20//%20Every%20detail%20block%20in%20the%20module:%20whole%20blocks,%20and%20the%20%20%20%20%20%20%20%20//%20rows%20or%20items%20past%20the%20summary,%20each%20marked%20on%20its%20own.%20%20%20%20%20%20%20%20var%20panels%20=%20card.querySelectorAll(%22[data-wmore]%22);%20%20%20%20%20%20%20%20var%20heading%20=%20card.querySelector(%22:scope%20%3E%20h2,%20:scope%20%3E%20h3%22);%20%20%20%20%20%20%20%20if%20(!panels.length%20||%20!heading%20||%20heading.querySelector(%22.cardexpand%22))%20continue;%20%20%20%20%20%20%20%20var%20btn%20=%20document.createElement(%22button%22);%20%20%20%20%20%20%20%20btn.type%20=%20%22button%22;%20%20%20%20%20%20%20%20btn.className%20=%20%22cardexpand%22;%20%20%20%20%20%20%20%20heading.appendChild(btn);%20%20%20%20%20%20%20%20card.classList.add(%22has-expand%22);%20%20%20%20%20%20%20%20bindExpander(btn,%20panels,%20remembered.indexOf(card.getAttribute(%22data-widget%22))%20!==%20-1);%20%20%20%20%20%20}%20%20%20%20}%20%20%20%20var%20ctrls%20=%20root.querySelectorAll%20?%20root.querySelectorAll(%22[data-expand]%22)%20:%20[];%20%20%20%20for%20(var%20j%20=%200;%20j%20%3C%20ctrls.length;%20j++)%20{%20%20%20%20%20%20var%20target%20=%20document.getElementById(ctrls[j].getAttribute(%22data-expand%22));%20%20%20%20%20%20if%20(target)%20bindExpander(ctrls[j],%20[target],%20false);%20%20%20%20}%20%20}%20%20onContentReady(initExpanders);%20%20initExpanders(document);%20%20//%20---%20Nav:%20Escape%20folds%20an%20open%20branch%20back%20up%20-----------------%20%20document.addEventListener(%22keydown%22,%20function%20(ev)%20{%20%20%20%20if%20(ev.key%20!==%20%22Escape%22)%20return;%20%20%20%20//%20(The%20character%20switcher%20in%20the%20top%20bar%20closes%20itself,%20with%20its%20%20%20%20//%20motion:%20see%20the%20end%20of%20this%20file.)%20%20%20%20var%20open%20=%20document.querySelectorAll(%22details.branch[open]:not(.topbar-switcher)%22);%20%20%20%20for%20(var%20i%20=%200;%20i%20%3C%20open.length;%20i++)%20open[i].removeAttribute(%22open%22);%20%20});%20%20//%20---%20Live%20countdowns%20---------------------------------------%20%20//%20Any%20element%20carrying%20data-finish%20(RFC3339)%20counts%20down%20to%20%20//%20that%20moment%20(home%20fleet%20widget,%20character%20page%20training%20%20//%20line).%20Without%20JS%20the%20server-rendered%20remainder%20stays.%20%20//%20One%20ticker%20at%20a%20time:%20the%20will-swap%20event%20stops%20it%20before%20%20//%20the%20old%20nodes%20go%20away,%20and%20the%20ready%20event%20starts%20it%20for%20the%20%20//%20fresh%20ones.%20A%20ticking-over-detached-nodes%20interval%20would%20%20//%20otherwise%20pile%20up%20behind%20every%20swap.%20%20var%20countdownTimer%20=%20null;%20%20function%20fmtLeft(ms)%20{%20%20%20%20if%20(ms%20%3C=%200)%20return%20%22done%22;%20%20%20%20var%20s%20=%20Math.floor(ms%20/%201000);%20%20%20%20var%20d%20=%20Math.floor(s%20/%2086400),%20h%20=%20Math.floor((s%20%%2086400)%20/%203600),%20%20%20%20%20%20%20%20m%20=%20Math.floor((s%20%%203600)%20/%2060),%20sec%20=%20s%20%%2060;%20%20%20%20if%20(d%20%3E%200)%20return%20%22in%20%22%20+%20d%20+%20%22d%20%22%20+%20h%20+%20%22h%20%22%20+%20m%20+%20%22m%22;%20%20%20%20if%20(h%20%3E%200)%20return%20%22in%20%22%20+%20h%20+%20%22h%20%22%20+%20m%20+%20%22m%22;%20%20%20%20if%20(m%20%3E%200)%20return%20%22in%20%22%20+%20m%20+%20%22m%20%22%20+%20sec%20+%20%22s%22;%20%20%20%20return%20%22in%20%22%20+%20sec%20+%20%22s%22;%20%20}%20%20function%20stopCountdowns()%20{%20%20%20%20if%20(countdownTimer%20!==%20null)%20{%20%20%20%20%20%20window.clearInterval(countdownTimer);%20%20%20%20%20%20countdownTimer%20=%20null;%20%20%20%20}%20%20}%20%20function%20initCountdowns(root)%20{%20%20%20%20var%20countdowns%20=%20root.querySelectorAll(%22[data-finish]%22);%20%20%20%20if%20(!countdowns.length)%20return;%20%20%20%20var%20tickCountdowns%20=%20function%20()%20{%20%20%20%20%20%20for%20(var%20i%20=%200;%20i%20%3C%20countdowns.length;%20i++)%20{%20%20%20%20%20%20%20%20var%20t%20=%20Date.parse(countdowns[i].getAttribute(%22data-finish%22));%20%20%20%20%20%20%20%20if%20(!isNaN(t))%20countdowns[i].textContent%20=%20fmtLeft(t%20-%20Date.now());%20%20%20%20%20%20}%20%20%20%20};%20%20%20%20tickCountdowns();%20%20%20%20stopCountdowns();%20%20%20%20countdownTimer%20=%20window.setInterval(tickCountdowns,%201000);%20%20}%20%20document.addEventListener(%22evesynapse:content-will-swap%22,%20stopCountdowns);%20%20onContentReady(initCountdowns);%20%20initCountdowns(document);%20%20//%20---%20Fleet%20filter%20(home%20overview)%20---------------------------%20%20//%20The%20fleet%20table%20renders%20every%20character%20server-side;%20this%20%20//%20just%20hides%20rows%20that%20don't%20match%20the%20typed%20text%20or%20the%20%20//%20active%20chip:%20All,%20a%20tag,%20or%20Not%20training.%20A%20row's%20detail%20row%20%20//%20goes%20with%20it,%20and%20a%20click%20anywhere%20on%20a%20row%20(not%20on%20a%20link)%20%20//%20opens%20its%20detail,%20like%20its%20chevron.%20No%20JS:%20the%20full%20list%20is%20%20//%20simply%20visible,%20details%20and%20all.%20%20function%20initFleetFilter(root)%20{%20%20%20%20var%20fleetFilter%20=%20root.querySelector(%22#fleet-filter%22);%20%20%20%20var%20fleetRows%20=%20root.querySelectorAll(%22.fleet-row%22);%20%20%20%20if%20(!fleetFilter%20||%20!fleetRows.length)%20return;%20%20%20%20var%20noMatch%20=%20root.querySelector(%22.fleet-nomatch%22);%20%20%20%20var%20shownEl%20=%20root.querySelector(%22[data-fleet-shown]%22);%20%20%20%20var%20chips%20=%20root.querySelectorAll(%22.fleet-tools%20.chip%22);%20%20%20%20var%20activeTag%20=%20%22%22;%20%20%20%20var%20idleOnly%20=%20false;%20%20%20%20var%20detailOf%20=%20function%20(row)%20{%20%20%20%20%20%20var%20btn%20=%20row.querySelector(%22[data-expand]%22);%20%20%20%20%20%20return%20btn%20?%20document.getElementById(btn.getAttribute(%22data-expand%22))%20:%20null;%20%20%20%20};%20%20%20%20var%20applyFleetFilter%20=%20function%20()%20{%20%20%20%20%20%20var%20q%20=%20fleetFilter.value.trim().toLowerCase();%20%20%20%20%20%20var%20shown%20=%200;%20%20%20%20%20%20for%20(var%20i%20=%200;%20i%20%3C%20fleetRows.length;%20i++)%20{%20%20%20%20%20%20%20%20var%20hay%20=%20fleetRows[i].getAttribute(%22data-search%22)%20||%20%22%22;%20%20%20%20%20%20%20%20var%20ok%20=%20(!q%20||%20hay.indexOf(q)%20!==%20-1)%20&&%20(!activeTag%20||%20hay.indexOf(activeTag)%20!==%20-1)%20&&%20%20%20%20%20%20%20%20%20%20(!idleOnly%20||%20fleetRows[i].hasAttribute(%22data-idle%22));%20%20%20%20%20%20%20%20fleetRows[i].style.display%20=%20ok%20?%20%22%22%20:%20%22none%22;%20%20%20%20%20%20%20%20var%20detail%20=%20detailOf(fleetRows[i]);%20%20%20%20%20%20%20%20if%20(detail)%20detail.style.display%20=%20ok%20?%20%22%22%20:%20%22none%22;%20%20%20%20%20%20%20%20if%20(ok)%20shown++;%20%20%20%20%20%20}%20%20%20%20%20%20if%20(noMatch)%20noMatch.hidden%20=%20shown%20%3E%200;%20%20%20%20%20%20if%20(shownEl)%20shownEl.textContent%20=%20String(shown);%20%20%20%20};%20%20%20%20var%20pick%20=%20function%20(chip)%20{%20%20%20%20%20%20activeTag%20=%20(chip.getAttribute(%22data-tag%22)%20||%20%22%22).toLowerCase();%20%20%20%20%20%20idleOnly%20=%20chip.hasAttribute(%22data-idle-chip%22);%20%20%20%20%20%20for%20(var%20j%20=%200;%20j%20%3C%20chips.length;%20j++)%20{%20%20%20%20%20%20%20%20var%20on%20=%20chips[j]%20===%20chip;%20%20%20%20%20%20%20%20chips[j].classList.toggle(%22on%22,%20on);%20%20%20%20%20%20%20%20chips[j].setAttribute(%22aria-pressed%22,%20on%20?%20%22true%22%20:%20%22false%22);%20%20%20%20%20%20}%20%20%20%20%20%20applyFleetFilter();%20%20%20%20};%20%20%20%20fleetFilter.addEventListener(%22input%22,%20applyFleetFilter);%20%20%20%20for%20(var%20c%20=%200;%20c%20%3C%20chips.length;%20c++)%20{%20%20%20%20%20%20chips[c].addEventListener(%22click%22,%20function%20()%20{%20%20%20%20%20%20%20%20//%20A%20second%20press%20on%20the%20active%20chip%20goes%20back%20to%20All.%20%20%20%20%20%20%20%20if%20(this.classList.contains(%22on%22)%20&&%20chips[0]%20!==%20this)%20pick(chips[0]);%20%20%20%20%20%20%20%20else%20pick(this);%20%20%20%20%20%20});%20%20%20%20}%20%20%20%20for%20(var%20r%20=%200;%20r%20%3C%20fleetRows.length;%20r++)%20{%20%20%20%20%20%20fleetRows[r].addEventListener(%22click%22,%20function%20(ev)%20{%20%20%20%20%20%20%20%20if%20(ev.target.closest(%22a,%20button,%20input,%20select%22))%20return;%20%20%20%20%20%20%20%20var%20btn%20=%20this.querySelector(%22[data-expand]%22);%20%20%20%20%20%20%20%20if%20(btn)%20btn.click();%20%20%20%20%20%20});%20%20%20%20}%20%20%20%20//%20The%20KPI%20band's%20idle%20count%20(%22N%20idle%20%E2%80%94%20show%20them%22)%20is%20a%20link%20to%20%20%20%20//%20the%20Characters%20page;%20with%20the%20Fleet%20Overview%20on%20the%20page%20it%20%20%20%20//%20filters%20the%20fleet%20to%20the%20idle%20pilots%20and%20brings%20the%20module%20into%20%20%20%20//%20view%20instead.%20%20%20%20var%20idleLink%20=%20root.querySelector(%22[data-fleet-idle]%22);%20%20%20%20var%20idleChip%20=%20root.querySelector(%22.fleet-tools%20[data-idle-chip]%22);%20%20%20%20var%20fleetCard%20=%20fleetFilter.closest(%22.card%22);%20%20%20%20if%20(idleLink%20&&%20idleChip%20&&%20fleetCard)%20{%20%20%20%20%20%20idleLink.addEventListener(%22click%22,%20function%20(ev)%20{%20%20%20%20%20%20%20%20ev.preventDefault();%20%20%20%20%20%20%20%20if%20(!idleChip.classList.contains(%22on%22))%20pick(idleChip);%20%20%20%20%20%20%20%20fleetCard.scrollIntoView({%20block:%20%22start%22,%20behavior:%20%22smooth%22%20});%20%20%20%20%20%20});%20%20%20%20}%20%20}%20%20onContentReady(initFleetFilter);%20%20initFleetFilter(document);%20%20//%20---%20Briefing%20severity%20tabs%20------------------------------------%20%20//%20All%20/%20Critical%20/%20Warning%20/%20Info%20swap%20which%20cards%20show;%20the%20%20//%20module's%20More/Less%20still%20decides%20how%20far%20down%20the%20list%20goes.%20%20function%20initBriefTabs(root)%20{%20%20%20%20var%20tabs%20=%20root.querySelectorAll(%22[data-brief]%22);%20%20%20%20if%20(!tabs.length)%20return;%20%20%20%20var%20cards%20=%20root.querySelectorAll(%22.brief-card%22);%20%20%20%20for%20(var%20i%20=%200;%20i%20%3C%20tabs.length;%20i++)%20{%20%20%20%20%20%20tabs[i].addEventListener(%22click%22,%20function%20()%20{%20%20%20%20%20%20%20%20var%20sev%20=%20this.getAttribute(%22data-brief%22);%20%20%20%20%20%20%20%20for%20(var%20j%20=%200;%20j%20%3C%20tabs.length;%20j++)%20{%20%20%20%20%20%20%20%20%20%20var%20on%20=%20tabs[j]%20===%20this;%20%20%20%20%20%20%20%20%20%20tabs[j].classList.toggle(%22on%22,%20on);%20%20%20%20%20%20%20%20%20%20tabs[j].setAttribute(%22aria-pressed%22,%20on%20?%20%22true%22%20:%20%22false%22);%20%20%20%20%20%20%20%20}%20%20%20%20%20%20%20%20for%20(var%20k%20=%200;%20k%20%3C%20cards.length;%20k++)%20{%20%20%20%20%20%20%20%20%20%20cards[k].classList.toggle(%22brief-off%22,%20sev%20!==%20%22all%22%20&&%20cards[k].getAttribute(%22data-sev%22)%20!==%20sev);%20%20%20%20%20%20%20%20}%20%20%20%20%20%20});%20%20%20%20}%20%20}%20%20onContentReady(initBriefTabs);%20%20initBriefTabs(document);%20%20//%20---%20Widget%20settings%20(orders%20scope%20picker)%20------------------%20%20//%20A%20change%20applies%20at%20once:%20the%20form%20IS%20the%20plain%20submit%20(the%20%20//%20no-JS%20path),%20this%20just%20skips%20the%20button%20press.%20In%20customize%20%20//%20mode%20the%20page%20reloads%20so%20the%20live%20card%20re-renders%20in%20place.%20%20function%20initScopeForms(root)%20{%20%20%20%20var%20scopeForms%20=%20root.querySelectorAll(%22form.widget-scope%22);%20%20%20%20for%20(var%20s%20=%200;%20s%20%3C%20scopeForms.length;%20s++)%20{%20%20%20%20%20%20scopeForms[s].addEventListener(%22change%22,%20function%20()%20{%20%20%20%20%20%20%20%20this.submit();%20%20%20%20%20%20});%20%20%20%20}%20%20}%20%20onContentReady(initScopeForms);%20%20initScopeForms(document);%20%20//%20The%20size%20picker's%20outside-click%20close%20binds%20once%20and%20reads%20the%20%20//%20current%20grid%20each%20time;%20binding%20it%20per%20grid%20would%20pile%20a%20dead%20%20//%20handler%20behind%20every%20swapped%20customize%20view.%20%20var%20homePickCloseBound%20=%20false;%20%20//%20Card%20control%20glyphs:%20one%20stroke%20family,%20drawn%20at%20one%20size%20and%20%20//%20centered%20in%20identical%20square%20buttons.%20%20var%20CARD_ICONS%20=%20{%20%20%20%20move:%20'%3Cpath%20d=%22M12%203v18M3%2012h18%22/%3E%3Cpath%20d=%22m9%206%203-3%203%203M9%2018l3%203%203-3M6%209l-3%203%203%203M18%209l3%203-3%203%22/%3E',%20%20%20%20size:%20'%3Cpath%20d=%22M14%204h6v6M10%2020H4v-6M20%204l-6.5%206.5M4%2020l6.5-6.5%22/%3E',%20%20%20%20remove:%20'%3Cpath%20d=%22M6%206l12%2012M18%206%206%2018%22/%3E'%20%20};%20%20function%20cardIcon(name)%20{%20%20%20%20return%20'%3Csvg%20class=%22cardicon%22%20viewBox=%220%200%2024%2024%22%20aria-hidden=%22true%22%20focusable=%22false%22%3E'%20+%20%20%20%20%20%20'%3Cg%20fill=%22none%22%20stroke=%22currentColor%22%20stroke-width=%222.2%22%20stroke-linecap=%22round%22%20stroke-linejoin=%22round%22%3E'%20+%20%20%20%20%20%20CARD_ICONS[name]%20+%20%22%3C/g%3E%3C/svg%3E%22;%20%20}%20%20//%20---%20Home%20customize:%20drag,%20resize,%20remove,%20add%20module%20--------%20%20//%20Layered%20over%20the%20plain%20customize%20forms,%20never%20replacing%20them:%20%20//%20this%20runs%20only%20on%20the%20customize%20view%20(the%20data-customize%20grid)%20%20//%20and%20stores%20through%20the%20same%20/home/layout%20endpoint%20%E2%80%94%20a%20drag%20%20//%20saves%20once,%20on%20drop,%20and%20the%20server%20stays%20the%20normalizer%20of%20%20//%20whatever%20order%20it%20is%20handed.%20The%20grid%20itself%20is%20solved,%20not%20%20//%20stretched:%20the%20mirror%20solver%20below%20recomputes%20every%20module's%20%20//%20span%20live%20so%20the%20arrangement%20under%20the%20finger%20is%20the%20final%20%20//%20one.%20Without%20JS%20the%20up/down,%20half/full%20and%20add/remove%20forms%20%20//%20in%20the%20module%20list%20do%20the%20same%20job.%20%20//%20Keyboard:%20\%20on%20the%20Overview%20opens%20Customize,%20and%20in%20Customize%20%20//%20finishes%20it%20(every%20change%20already%20saved,%20so%20it%20is%20Done).%20Bound%20%20//%20once,%20reading%20the%20current%20page%20each%20time.%20Typing%20in%20a%20field,%20%20//%20modifier%20chords%20and%20a%20drag%20in%20progress%20are%20left%20alone.%20%20document.addEventListener(%22keydown%22,%20function%20(ev)%20{%20%20%20%20if%20(ev.ctrlKey%20||%20ev.metaKey%20||%20ev.altKey%20||%20ev.defaultPrevented)%20return;%20%20%20%20var%20t%20=%20ev.target;%20%20%20%20if%20(t%20&&%20(t.isContentEditable%20||%20/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)))%20return;%20%20%20%20var%20grid%20=%20document.querySelector(%22.grid.home-grid%22);%20%20%20%20if%20(!grid)%20return;%20%20%20%20var%20custom%20=%20grid.classList.contains(%22home-custom%22);%20%20%20%20var%20go%20=%20function%20(href)%20{%20%20%20%20%20%20//%20Through%20a%20real%20link%20when%20the%20page%20has%20one,%20so%20the%20shell's%20%20%20%20%20%20//%20swap%20navigation%20handles%20it;%20a%20plain%20navigation%20otherwise.%20%20%20%20%20%20var%20link%20=%20document.querySelector('.home-bar%20a[href=%22'%20+%20href%20+%20'%22]');%20%20%20%20%20%20if%20(link)%20link.click();%20else%20window.location.assign(href);%20%20%20%20};%20%20%20%20if%20(ev.key%20!==%20%22\\%22%20||%20document.body.classList.contains(%22drag-active%22))%20return;%20%20%20%20ev.preventDefault();%20%20%20%20go(custom%20?%20%22/%22%20:%20%22/?customize=1%22);%20%20});%20%20function%20initHomeGrid(root)%20{%20%20%20%20var%20homeGrid%20=%20root.querySelector(%22#home-grid%22);%20%20%20%20if%20(homeGrid%20&&%20homeGrid.getAttribute(%22data-customize%22)%20===%20%221%22%20&&%20window.fetch)%20{%20%20%20%20%20%20initHomeCustomize(homeGrid);%20%20%20%20}%20%20}%20%20onContentReady(initHomeGrid);%20%20initHomeGrid(document);%20%20function%20initHomeCustomize(grid)%20{%20%20%20%20var%20modal%20=%20document.getElementById(%22add-module-modal%22);%20%20%20%20grid.classList.add(%22has-controls%22);%20%20%20%20function%20postLayout(params)%20{%20%20%20%20%20%20var%20body%20=%20new%20URLSearchParams();%20%20%20%20%20%20for%20(var%20key%20in%20params)%20body.set(key,%20params[key]);%20%20%20%20%20%20return%20fetch(%22/home/layout%22,%20{%20%20%20%20%20%20%20%20method:%20%22POST%22,%20%20%20%20%20%20%20%20headers:%20{%20%22X-Requested-With%22:%20%22XMLHttpRequest%22%20},%20%20%20%20%20%20%20%20body:%20body%20%20%20%20%20%20}).then(function%20(resp)%20{%20return%20resp.ok;%20},%20function%20()%20{%20return%20false;%20});%20%20%20%20}%20%20%20%20function%20moduleCards()%20{%20%20%20%20%20%20return%20grid.querySelectorAll(%22:scope%20%3E%20.card[data-widget]%22);%20%20%20%20}%20%20%20%20function%20widgetIDs()%20{%20%20%20%20%20%20var%20ids%20=%20[];%20%20%20%20%20%20var%20cards%20=%20moduleCards();%20%20%20%20%20%20for%20(var%20i%20=%200;%20i%20%3C%20cards.length;%20i++)%20ids.push(cards[i].getAttribute(%22data-widget%22));%20%20%20%20%20%20return%20ids;%20%20%20%20}%20%20%20%20//%20---%20motion%20--------------------------------------------------%20%20%20%20//%20Every%20rearrangement%20goes%20through%20flip():%20measure%20where%20each%20%20%20%20//%20module%20is%20drawn%20right%20now%20(mid-animation%20included),%20stop%20%20%20%20//%20whatever%20it%20was%20doing,%20apply%20the%20change,%20measure%20the%20new%20%20%20%20//%20layout,%20and%20play%20each%20module%20from%20where%20it%20was%20drawn%20to%20its%20%20%20%20//%20new%20cell.%20Moves%20are%20translate-only%20%E2%80%94%20scaling%20a%20module%20to%20%20%20%20//%20fake%20its%20size%20change%20squashes%20its%20text%20%E2%80%94%20and%20every%20module%20%20%20%20//%20runs%20at%20most%20one%20animation,%20cancelled%20before%20the%20next%20change%20%20%20%20//%20is%20measured,%20so%20overlapping%20changes%20never%20fight,%20jump%20back%20or%20%20%20%20//%20replay.%20The%20measured%20layout%20(page%20coordinates,%20no%20transforms)%20%20%20%20//%20is%20kept%20for%20the%20drag's%20hit-testing,%20so%20decisions%20follow%20where%20%20%20%20//%20modules%20are%20going,%20not%20where%20an%20animation%20happens%20to%20be.%20%20%20%20var%20reducedMotion%20=%20window.matchMedia%20&&%20%20%20%20%20%20window.matchMedia(%22(prefers-reduced-motion:%20reduce)%22).matches;%20%20%20%20var%20canAnimate%20=%20!reducedMotion%20&&%20!!Element.prototype.animate;%20%20%20%20var%20MOVE_MS%20=%20260;%20%20%20%20var%20EASE%20=%20%22cubic-bezier(0.2,%200,%200,%201)%22;%20%20%20%20var%20layout%20=%20new%20Map();%20%20%20%20function%20movers()%20{%20%20%20%20%20%20return%20grid.querySelectorAll(%22:scope%20%3E%20.card:not(.dragging)%22);%20%20%20%20}%20%20%20%20function%20stopMotion(el)%20{%20%20%20%20%20%20if%20(el._motion)%20{%20el._motion.cancel();%20el._motion%20=%20null;%20}%20%20%20%20}%20%20%20%20function%20pageBox(r)%20{%20%20%20%20%20%20var%20sx%20=%20window.scrollX,%20sy%20=%20window.scrollY;%20%20%20%20%20%20return%20{%20l:%20r.left%20+%20sx,%20t:%20r.top%20+%20sy,%20r:%20r.right%20+%20sx,%20b:%20r.bottom%20+%20sy%20};%20%20%20%20}%20%20%20%20function%20measure()%20{%20%20%20%20%20%20layout%20=%20new%20Map();%20%20%20%20%20%20var%20els%20=%20movers();%20%20%20%20%20%20for%20(var%20i%20=%200;%20i%20%3C%20els.length;%20i++)%20{%20%20%20%20%20%20%20%20//%20A%20running%20move%20is%20a%20transform;%20the%20box%20under%20it%20is%20the%20%20%20%20%20%20%20%20//%20layout.%20Strip%20the%20move%20to%20read%20it.%20%20%20%20%20%20%20%20var%20el%20=%20els[i],%20r%20=%20el.getBoundingClientRect(),%20b%20=%20pageBox(r);%20%20%20%20%20%20%20%20if%20(el._motion)%20{%20%20%20%20%20%20%20%20%20%20var%20m%20=%20new%20DOMMatrixReadOnly(window.getComputedStyle(el).transform);%20%20%20%20%20%20%20%20%20%20b%20=%20{%20l:%20b.l%20-%20m.m41,%20t:%20b.t%20-%20m.m42,%20r:%20b.r%20-%20m.m41,%20b:%20b.b%20-%20m.m42%20};%20%20%20%20%20%20%20%20}%20%20%20%20%20%20%20%20layout.set(el,%20b);%20%20%20%20%20%20}%20%20%20%20}%20%20%20%20function%20flip(mutate,%20still)%20{%20%20%20%20%20%20var%20before%20=%20new%20Map();%20%20%20%20%20%20var%20els%20=%20movers();%20%20%20%20%20%20for%20(var%20i%20=%200;%20i%20%3C%20els.length;%20i++)%20before.set(els[i],%20els[i].getBoundingClientRect());%20%20%20%20%20%20for%20(var%20j%20=%200;%20j%20%3C%20els.length;%20j++)%20stopMotion(els[j]);%20%20%20%20%20%20mutate();%20%20%20%20%20%20var%20now%20=%20movers();%20%20%20%20%20%20layout%20=%20new%20Map();%20%20%20%20%20%20for%20(var%20k%20=%200;%20k%20%3C%20now.length;%20k++)%20{%20%20%20%20%20%20%20%20var%20el%20=%20now[k],%20r%20=%20el.getBoundingClientRect(),%20was%20=%20before.get(el);%20%20%20%20%20%20%20%20layout.set(el,%20pageBox(r));%20%20%20%20%20%20%20%20if%20(!canAnimate%20||%20el%20===%20still)%20continue;%20%20%20%20%20%20%20%20if%20(!was)%20{%20%20%20%20%20%20%20%20%20%20//%20Arriving:%20a%20soft%20fade%20and%20rise%20into%20its%20cell.%20%20%20%20%20%20%20%20%20%20el._motion%20=%20el.animate([%20%20%20%20%20%20%20%20%20%20%20%20{%20opacity:%200,%20transform:%20%22translateY(10px)%20scale(0.98)%22%20},%20%20%20%20%20%20%20%20%20%20%20%20{%20opacity:%201,%20transform:%20%22none%22%20}%20%20%20%20%20%20%20%20%20%20],%20{%20duration:%20MOVE_MS,%20easing:%20EASE%20});%20%20%20%20%20%20%20%20}%20else%20{%20%20%20%20%20%20%20%20%20%20var%20dx%20=%20was.left%20-%20r.left,%20dy%20=%20was.top%20-%20r.top;%20%20%20%20%20%20%20%20%20%20if%20(Math.abs(dx)%20%3C%200.5%20&&%20Math.abs(dy)%20%3C%200.5)%20continue;%20%20%20%20%20%20%20%20%20%20el._motion%20=%20el.animate([%20%20%20%20%20%20%20%20%20%20%20%20{%20transform:%20%22translate(%22%20+%20dx%20+%20%22px,%22%20+%20dy%20+%20%22px)%22%20},%20%20%20%20%20%20%20%20%20%20%20%20{%20transform:%20%22none%22%20}%20%20%20%20%20%20%20%20%20%20],%20{%20duration:%20MOVE_MS,%20easing:%20EASE%20});%20%20%20%20%20%20%20%20}%20%20%20%20%20%20%20%20el._motion.onfinish%20=%20(function%20(e,%20a)%20{%20%20%20%20%20%20%20%20%20%20return%20function%20()%20{%20if%20(e._motion%20===%20a)%20e._motion%20=%20null;%20};%20%20%20%20%20%20%20%20})(el,%20el._motion);%20%20%20%20%20%20}%20%20%20%20}%20%20%20%20//%20A%20module%20leaving:%20fade%20it%20down,%20then%20close%20the%20gap.%20%20%20%20function%20removeCard(card)%20{%20%20%20%20%20%20var%20gone%20=%20false;%20%20%20%20%20%20var%20go%20=%20function%20()%20{%20%20%20%20%20%20%20%20if%20(gone)%20return;%20%20%20%20%20%20%20%20gone%20=%20true;%20%20%20%20%20%20%20%20flip(function%20()%20{%20card.remove();%20});%20%20%20%20%20%20};%20%20%20%20%20%20if%20(!canAnimate)%20{%20go();%20return;%20}%20%20%20%20%20%20stopMotion(card);%20%20%20%20%20%20card.style.pointerEvents%20=%20%22none%22;%20%20%20%20%20%20card.animate([%20%20%20%20%20%20%20%20{%20opacity:%201,%20transform:%20%22none%22%20},%20%20%20%20%20%20%20%20{%20opacity:%200,%20transform:%20%22scale(0.96)%22%20}%20%20%20%20%20%20],%20{%20duration:%20160,%20easing:%20%22ease-in%22,%20fill:%20%22forwards%22%20}).onfinish%20=%20go;%20%20%20%20%20%20//%20A%20page%20whose%20animations%20are%20paused%20still%20loses%20the%20card.%20%20%20%20%20%20window.setTimeout(go,%20220);%20%20%20%20}%20%20%20%20//%20A%20brief%20red%20pulse%20on%20whatever%20refused%20a%20change.%20%20%20%20function%20refuse(el)%20{%20%20%20%20%20%20el.classList.remove(%22refused%22);%20%20%20%20%20%20void%20el.offsetWidth;%20%20%20%20%20%20el.classList.add(%22refused%22);%20%20%20%20%20%20window.setTimeout(function%20()%20{%20el.classList.remove(%22refused%22);%20},%20650);%20%20%20%20}%20%20%20%20//%20---%20sizes%20---------------------------------------------------%20%20%20%20//%20A%20module's%20size%20is%20its%20gw/gh%20classes%20(grid%20cells%20across%20and%20%20%20%20//%20down,%201-3);%20the%20CSS%20lays%20the%20grid%20out%20from%20them%20and%20every%20cell%20%20%20%20//%20is%20a%20fixed%20size,%20so%20a%20module%20is%20exactly%20as%20big%20as%20its%20cells.%20%20%20%20//%20Some%20modules%20have%20a%20floor%20(data-minw%20/%20data-minh):%20asked%20for%20%20%20%20//%20less,%20the%20cells%20blink%20red%20and%20the%20module%20keeps%20its%20size.%20%20%20%20function%20sizeOf(el)%20{%20%20%20%20%20%20return%20{%20%20%20%20%20%20%20%20w:%20parseInt(el.getAttribute(%22data-gw%22),%2010)%20||%201,%20%20%20%20%20%20%20%20h:%20parseInt(el.getAttribute(%22data-gh%22),%2010)%20||%201%20%20%20%20%20%20};%20%20%20%20}%20%20%20%20function%20minOf(el)%20{%20%20%20%20%20%20return%20{%20%20%20%20%20%20%20%20w:%20parseInt(el.getAttribute(%22data-minw%22),%2010)%20||%201,%20%20%20%20%20%20%20%20h:%20parseInt(el.getAttribute(%22data-minh%22),%2010)%20||%201%20%20%20%20%20%20};%20%20%20%20}%20%20%20%20function%20sizeCard(el,%20w,%20h)%20{%20%20%20%20%20%20[%22gw1%22,%20%22gw2%22,%20%22gw3%22,%20%22gh1%22,%20%22gh2%22,%20%22gh3%22].forEach(function%20(c)%20{%20el.classList.remove(c);%20});%20%20%20%20%20%20el.classList.add(%22gw%22%20+%20w);%20%20%20%20%20%20el.classList.add(%22gh%22%20+%20h);%20%20%20%20%20%20el.setAttribute(%22data-gw%22,%20String(w));%20%20%20%20%20%20el.setAttribute(%22data-gh%22,%20String(h));%20%20%20%20}%20%20%20%20//%20One%20resize,%20wherever%20it%20came%20from%20(picker%20or%20grip):%20apply%20it%20at%20%20%20%20//%20once,%20save%20it,%20and%20put%20the%20old%20size%20back%20if%20the%20save%20fails.%20%20%20%20function%20resizeCard(card,%20w,%20h)%20{%20%20%20%20%20%20var%20was%20=%20sizeOf(card);%20%20%20%20%20%20if%20(was.w%20===%20w%20&&%20was.h%20===%20h)%20return;%20%20%20%20%20%20flip(function%20()%20{%20sizeCard(card,%20w,%20h);%20});%20%20%20%20%20%20postLayout({%20action:%20%22size%22,%20widget:%20card.getAttribute(%22data-widget%22),%20w:%20w,%20h:%20h%20}).then(function%20(ok)%20{%20%20%20%20%20%20%20%20if%20(!ok)%20flip(function%20()%20{%20sizeCard(card,%20was.w,%20was.h);%20});%20%20%20%20%20%20});%20%20%20%20}%20%20%20%20function%20saveOrder()%20{%20%20%20%20%20%20return%20postLayout({%20action:%20%22order%22,%20ids:%20widgetIDs().join(%22,%22)%20});%20%20%20%20}%20%20%20%20//%20Give%20one%20card%20its%20move%20handle,%20resize%20toggle%20and%20%C3%97%20button.%20%20%20%20//%20Cards%20added%20from%20the%20pop-up%20pass%20through%20here%20too.%20%20%20%20function%20enhanceCard(card)%20{%20%20%20%20%20%20var%20heading%20=%20card.querySelector(%22:scope%20%3E%20h2,%20:scope%20%3E%20h3%22);%20%20%20%20%20%20if%20(!heading%20||%20card.querySelector(%22.draghandle%22))%20return;%20%20%20%20%20%20var%20id%20=%20card.getAttribute(%22data-widget%22);%20%20%20%20%20%20var%20title%20=%20heading.textContent.trim();%20%20%20%20%20%20var%20handle%20=%20document.createElement(%22button%22);%20%20%20%20%20%20handle.type%20=%20%22button%22;%20%20%20%20%20%20handle.className%20=%20%22cardbtn%20draghandle%22;%20%20%20%20%20%20handle.innerHTML%20=%20cardIcon(%22move%22);%20%20%20%20%20%20handle.title%20=%20%22Drag%20to%20move%22;%20%20%20%20%20%20handle.setAttribute(%22aria-label%22,%20%22Move%20%22%20+%20title%20+%20%22%20(drag,%20or%20use%20the%20arrow%20keys)%22);%20%20%20%20%20%20heading.insertBefore(handle,%20heading.firstChild);%20%20%20%20%20%20handle.addEventListener(%22pointerdown%22,%20function%20(ev)%20{%20startDrag(ev,%20card,%20handle);%20});%20%20%20%20%20%20handle.addEventListener(%22keydown%22,%20function%20(ev)%20{%20keyMove(ev,%20card,%20handle);%20});%20%20%20%20%20%20//%20The%20card's%20own%20controls%20sit%20in%20its%20top-right%20corner:%20the%20%20%20%20%20%20//%20size%20picker%20(a%203x3%20grid%20of%20cells,%20the%20way%20a%20table%20size%20is%20%20%20%20%20%20//%20picked)%20and%20remove.%20The%20grip%20in%20the%20bottom-right%20corner%20%20%20%20%20%20//%20resizes%20by%20dragging,%20snapping%20to%20whole%20cells.%20%20%20%20%20%20var%20ctl%20=%20document.createElement(%22div%22);%20%20%20%20%20%20ctl.className%20=%20%22cardctl%22;%20%20%20%20%20%20var%20sizeBtn%20=%20document.createElement(%22button%22);%20%20%20%20%20%20sizeBtn.type%20=%20%22button%22;%20%20%20%20%20%20sizeBtn.className%20=%20%22cardbtn%20cardsize%22;%20%20%20%20%20%20sizeBtn.innerHTML%20=%20cardIcon(%22size%22);%20%20%20%20%20%20sizeBtn.title%20=%20%22Resize%22;%20%20%20%20%20%20sizeBtn.setAttribute(%22aria-haspopup%22,%20%22true%22);%20%20%20%20%20%20sizeBtn.setAttribute(%22aria-expanded%22,%20%22false%22);%20%20%20%20%20%20sizeBtn.setAttribute(%22aria-label%22,%20%22Resize%20%22%20+%20title);%20%20%20%20%20%20var%20picker%20=%20document.createElement(%22div%22);%20%20%20%20%20%20picker.className%20=%20%22sizepick%22;%20%20%20%20%20%20picker.hidden%20=%20true;%20%20%20%20%20%20picker.setAttribute(%22role%22,%20%22group%22);%20%20%20%20%20%20picker.setAttribute(%22aria-label%22,%20%22Size%20of%20%22%20+%20title%20+%20%22,%20in%20grid%20cells%22);%20%20%20%20%20%20var%20cells%20=%20[];%20%20%20%20%20%20for%20(var%20ph%20=%201;%20ph%20%3C=%203;%20ph++)%20{%20%20%20%20%20%20%20%20for%20(var%20pw%20=%201;%20pw%20%3C=%203;%20pw++)%20{%20%20%20%20%20%20%20%20%20%20(function%20(w,%20h)%20{%20%20%20%20%20%20%20%20%20%20%20%20var%20cell%20=%20document.createElement(%22button%22);%20%20%20%20%20%20%20%20%20%20%20%20cell.type%20=%20%22button%22;%20%20%20%20%20%20%20%20%20%20%20%20cell.className%20=%20%22sizecell%22;%20%20%20%20%20%20%20%20%20%20%20%20cell.setAttribute(%22data-gw%22,%20String(w));%20%20%20%20%20%20%20%20%20%20%20%20cell.setAttribute(%22data-gh%22,%20String(h));%20%20%20%20%20%20%20%20%20%20%20%20cell.setAttribute(%22aria-label%22,%20w%20+%20%22%20wide%20by%20%22%20+%20h%20+%20%22%20tall%22);%20%20%20%20%20%20%20%20%20%20%20%20cell.title%20=%20w%20+%20%22%20%C3%97%20%22%20+%20h;%20%20%20%20%20%20%20%20%20%20%20%20cell.addEventListener(%22mouseenter%22,%20function%20()%20{%20paintPicker(w,%20h);%20});%20%20%20%20%20%20%20%20%20%20%20%20cell.addEventListener(%22focus%22,%20function%20()%20{%20paintPicker(w,%20h);%20});%20%20%20%20%20%20%20%20%20%20%20%20cell.addEventListener(%22click%22,%20function%20()%20{%20%20%20%20%20%20%20%20%20%20%20%20%20%20var%20min%20=%20minOf(card);%20%20%20%20%20%20%20%20%20%20%20%20%20%20if%20(w%20%3C%20min.w%20||%20h%20%3C%20min.h)%20{%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20//%20Under%20the%20module's%20floor:%20blink%20what%20was%20asked%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20//%20for,%20then%20show%20the%20size%20it%20keeps.%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20paintPicker(w,%20h);%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20cells.forEach(function%20(c)%20{%20if%20(c.classList.contains(%22on%22))%20refuse(c);%20});%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20window.setTimeout(function%20()%20{%20var%20s%20=%20sizeOf(card);%20paintPicker(s.w,%20s.h);%20},%20650);%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20return;%20%20%20%20%20%20%20%20%20%20%20%20%20%20}%20%20%20%20%20%20%20%20%20%20%20%20%20%20resizeCard(card,%20w,%20h);%20%20%20%20%20%20%20%20%20%20%20%20%20%20closePicker();%20%20%20%20%20%20%20%20%20%20%20%20});%20%20%20%20%20%20%20%20%20%20%20%20cells.push(cell);%20%20%20%20%20%20%20%20%20%20%20%20picker.appendChild(cell);%20%20%20%20%20%20%20%20%20%20})(pw,%20ph);%20%20%20%20%20%20%20%20}%20%20%20%20%20%20}%20%20%20%20%20%20function%20paintPicker(w,%20h)%20{%20%20%20%20%20%20%20%20var%20min%20=%20minOf(card);%20%20%20%20%20%20%20%20cells.forEach(function%20(c)%20{%20%20%20%20%20%20%20%20%20%20var%20cw%20=%20+c.getAttribute(%22data-gw%22),%20ch%20=%20+c.getAttribute(%22data-gh%22);%20%20%20%20%20%20%20%20%20%20c.classList.toggle(%22on%22,%20cw%20%3C=%20w%20&&%20ch%20%3C=%20h);%20%20%20%20%20%20%20%20%20%20c.classList.toggle(%22floor%22,%20cw%20%3C=%20min.w%20&&%20ch%20%3C=%20min.h);%20%20%20%20%20%20%20%20});%20%20%20%20%20%20}%20%20%20%20%20%20function%20closePicker()%20{%20%20%20%20%20%20%20%20picker.hidden%20=%20true;%20%20%20%20%20%20%20%20sizeBtn.setAttribute(%22aria-expanded%22,%20%22false%22);%20%20%20%20%20%20}%20%20%20%20%20%20picker.addEventListener(%22mouseleave%22,%20function%20()%20{%20var%20s%20=%20sizeOf(card);%20paintPicker(s.w,%20s.h);%20});%20%20%20%20%20%20sizeBtn.addEventListener(%22click%22,%20function%20()%20{%20%20%20%20%20%20%20%20var%20open%20=%20picker.hidden;%20%20%20%20%20%20%20%20var%20others%20=%20grid.querySelectorAll(%22.sizepick%22);%20%20%20%20%20%20%20%20for%20(var%20o%20=%200;%20o%20%3C%20others.length;%20o++)%20others[o].hidden%20=%20true;%20%20%20%20%20%20%20%20picker.hidden%20=%20!open;%20%20%20%20%20%20%20%20sizeBtn.setAttribute(%22aria-expanded%22,%20open%20?%20%22true%22%20:%20%22false%22);%20%20%20%20%20%20%20%20if%20(open)%20{%20%20%20%20%20%20%20%20%20%20var%20s%20=%20sizeOf(card);%20%20%20%20%20%20%20%20%20%20paintPicker(s.w,%20s.h);%20%20%20%20%20%20%20%20%20%20cells[(s.h%20-%201)%20*%203%20+%20(s.w%20-%201)].focus();%20%20%20%20%20%20%20%20}%20%20%20%20%20%20});%20%20%20%20%20%20picker.addEventListener(%22keydown%22,%20function%20(ev)%20{%20%20%20%20%20%20%20%20//%20Escape%20closes%20the%20picker%20only;%20it%20does%20not%20also%20leave%20Customize.%20%20%20%20%20%20%20%20if%20(ev.key%20===%20%22Escape%22)%20{%20ev.preventDefault();%20closePicker();%20sizeBtn.focus();%20}%20%20%20%20%20%20});%20%20%20%20%20%20var%20remove%20=%20document.createElement(%22button%22);%20%20%20%20%20%20remove.type%20=%20%22button%22;%20%20%20%20%20%20remove.className%20=%20%22cardbtn%20cardremove%22;%20%20%20%20%20%20remove.innerHTML%20=%20cardIcon(%22remove%22);%20%20%20%20%20%20remove.title%20=%20%22Remove%22;%20%20%20%20%20%20remove.setAttribute(%22aria-label%22,%20%22Remove%20%22%20+%20title%20+%20%22%20from%20your%20home%22);%20%20%20%20%20%20remove.addEventListener(%22click%22,%20function%20()%20{%20%20%20%20%20%20%20%20remove.disabled%20=%20true;%20%20%20%20%20%20%20%20postLayout({%20action:%20%22toggle%22,%20widget:%20id%20}).then(function%20(ok)%20{%20%20%20%20%20%20%20%20%20%20if%20(ok)%20removeCard(card);%20%20%20%20%20%20%20%20%20%20else%20remove.disabled%20=%20false;%20%20%20%20%20%20%20%20});%20%20%20%20%20%20});%20%20%20%20%20%20ctl.appendChild(sizeBtn);%20%20%20%20%20%20ctl.appendChild(remove);%20%20%20%20%20%20ctl.appendChild(picker);%20%20%20%20%20%20card.appendChild(ctl);%20%20%20%20%20%20var%20grip%20=%20document.createElement(%22span%22);%20%20%20%20%20%20grip.className%20=%20%22cardgrip%22;%20%20%20%20%20%20grip.setAttribute(%22aria-hidden%22,%20%22true%22);%20%20%20%20%20%20grip.addEventListener(%22pointerdown%22,%20function%20(ev)%20{%20startResize(ev,%20card,%20grip);%20});%20%20%20%20%20%20card.appendChild(grip);%20%20%20%20}%20%20%20%20//%20Keyboard%20move:%20the%20arrow%20keys%20on%20a%20module's%20move%20handle%20step%20it%20%20%20%20//%20one%20place%20earlier%20or%20later%20and%20save.%20%20%20%20function%20keyMove(ev,%20card,%20handle)%20{%20%20%20%20%20%20var%20back%20=%20ev.key%20===%20%22ArrowUp%22%20||%20ev.key%20===%20%22ArrowLeft%22;%20%20%20%20%20%20var%20fwd%20=%20ev.key%20===%20%22ArrowDown%22%20||%20ev.key%20===%20%22ArrowRight%22;%20%20%20%20%20%20if%20(!back%20&&%20!fwd)%20return;%20%20%20%20%20%20ev.preventDefault();%20%20%20%20%20%20var%20all%20=%20Array.prototype.slice.call(moduleCards());%20%20%20%20%20%20var%20i%20=%20all.indexOf(card),%20j%20=%20back%20?%20i%20-%201%20:%20i%20+%201;%20%20%20%20%20%20if%20(j%20%3C%200%20||%20j%20%3E=%20all.length)%20return;%20%20%20%20%20%20flip(function%20()%20{%20%20%20%20%20%20%20%20grid.insertBefore(card,%20back%20?%20all[j]%20:%20all[j].nextSibling);%20%20%20%20%20%20});%20%20%20%20%20%20handle.focus();%20%20%20%20%20%20saveOrder();%20%20%20%20}%20%20%20%20//%20---%20grip%20resize%20---------------------------------------------%20%20%20%20//%20The%20grip%20drags%20a%20frame%20that%20follows%20the%20pointer%20exactly;%20the%20%20%20%20//%20module%20underneath%20snaps%20to%20whole%20cells%20as%20the%20frame%20crosses%20%20%20%20//%20into%20them%20(with%20a%20little%20hysteresis,%20so%20a%20boundary%20never%20%20%20%20//%20flickers),%20and%20the%20modules%20after%20it%20glide%20out%20of%20the%20way.%20A%20%20%20%20//%20module%20grows%20only%20rightwards%20to%20the%20grid's%20edge%20from%20the%20%20%20%20//%20column%20it%20starts%20in,%20so%20resizing%20never%20makes%20it%20jump%20rows.%20%20%20%20//%20Dragged%20below%20the%20module's%20floor,%20the%20frame%20turns%20red%20and%20the%20%20%20%20//%20module%20stays%20at%20its%20floor.%20%20%20%20function%20startResize(ev,%20card,%20grip)%20{%20%20%20%20%20%20if%20(ev.pointerType%20===%20%22mouse%22%20&&%20ev.button%20!==%200)%20return;%20%20%20%20%20%20ev.preventDefault();%20%20%20%20%20%20stopMotion(card);%20%20%20%20%20%20var%20start%20=%20sizeOf(card),%20cur%20=%20start,%20min%20=%20minOf(card);%20%20%20%20%20%20var%20r0%20=%20card.getBoundingClientRect();%20%20%20%20%20%20var%20gcs%20=%20window.getComputedStyle(grid);%20%20%20%20%20%20var%20gapX%20=%20parseFloat(gcs.columnGap)%20||%200,%20gapY%20=%20parseFloat(gcs.rowGap)%20||%200;%20%20%20%20%20%20var%20cellW%20=%20(r0.width%20-%20(start.w%20-%201)%20*%20gapX)%20/%20start.w%20+%20gapX;%20%20%20%20%20%20//%20A%20row%20is%20the%20grid's%20row%20floor%20(--home-row):%20modules%20can%20stand%20%20%20%20%20%20//%20taller%20than%20their%20cells%20when%20their%20content%20needs%20it,%20so%20the%20%20%20%20%20%20//%20card's%20own%20height%20is%20not%20the%20measure.%20%20%20%20%20%20var%20rowPx%20=%20parseFloat(gcs.getPropertyValue(%22--home-row%22))%20*%20%20%20%20%20%20%20%20parseFloat(window.getComputedStyle(document.documentElement).fontSize);%20%20%20%20%20%20var%20cellH%20=%20(rowPx%20||%20176)%20+%20gapY;%20%20%20%20%20%20var%20cols%20=%20(gcs.gridTemplateColumns%20||%20%22%22).split(%22%20%22).filter(Boolean).length%20||%201;%20%20%20%20%20%20var%20gridLeft%20=%20grid.getBoundingClientRect().left;%20%20%20%20%20%20var%20colStart%20=%20Math.round((r0.left%20-%20gridLeft)%20/%20cellW);%20%20%20%20%20%20var%20maxW%20=%20Math.max(1,%20Math.min(3,%20cols%20-%20colStart));%20%20%20%20%20%20var%20lastX%20=%20ev.clientX,%20lastY%20=%20ev.clientY,%20under%20=%20false;%20%20%20%20%20%20var%20startY%20=%20ev.clientY;%20%20%20%20%20%20var%20frame%20=%20document.createElement(%22div%22);%20%20%20%20%20%20frame.className%20=%20%22resize-frame%22;%20%20%20%20%20%20document.body.appendChild(frame);%20%20%20%20%20%20try%20{%20grip.setPointerCapture(ev.pointerId);%20}%20catch%20(err)%20{%20/*%20nicety%20*/%20}%20%20%20%20%20%20card.classList.add(%22resizing%22);%20%20%20%20%20%20document.body.classList.add(%22resize-active%22);%20%20%20%20%20%20function%20snap(raw,%20was,%20hi)%20{%20%20%20%20%20%20%20%20var%20n%20=%20Math.round(raw);%20%20%20%20%20%20%20%20if%20(n%20!==%20was%20&&%20Math.abs(raw%20-%20was)%20%3C%200.62)%20n%20=%20was;%20%20%20%20%20%20%20%20return%20Math.max(1,%20Math.min(hi,%20n));%20%20%20%20%20%20}%20%20%20%20%20%20//%20Runs%20on%20every%20pointer%20move,%20straight%20from%20the%20event:%20the%20%20%20%20%20%20//%20frame%20tracks%20the%20pointer%20with%20no%20frame%20of%20lag.%20%20%20%20%20%20function%20frameTick()%20{%20%20%20%20%20%20%20%20var%20r%20=%20card.getBoundingClientRect();%20%20%20%20%20%20%20%20//%20Width%20from%20the%20pointer's%20offset%20(a%20module%20is%20exactly%20its%20%20%20%20%20%20%20%20//%20columns%20wide).%20Height%20from%20how%20far%20the%20pointer%20has%20moved%20%20%20%20%20%20%20%20//%20since%20the%20press,%20added%20to%20the%20rows%20the%20module%20had:%20a%20module%20%20%20%20%20%20%20%20//%20standing%20taller%20than%20its%20rows%20(its%20content%20needs%20the%20room)%20%20%20%20%20%20%20%20//%20must%20not%20jump%20to%20that%20height%20the%20moment%20the%20grip%20is%20taken.%20%20%20%20%20%20%20%20var%20relX%20=%20lastX%20-%20r.left;%20%20%20%20%20%20%20%20var%20relY%20=%20start.h%20*%20cellH%20-%20gapY%20+%20(lastY%20-%20startY);%20%20%20%20%20%20%20%20var%20w%20=%20snap((relX%20+%20gapX)%20/%20cellW,%20cur.w,%20maxW);%20%20%20%20%20%20%20%20var%20h%20=%20snap((relY%20+%20gapY)%20/%20cellH,%20cur.h,%203);%20%20%20%20%20%20%20%20under%20=%20w%20%3C%20min.w%20||%20h%20%3C%20min.h;%20%20%20%20%20%20%20%20frame.classList.toggle(%22under%22,%20under);%20%20%20%20%20%20%20%20frame.style.left%20=%20r.left%20+%20%22px%22;%20%20%20%20%20%20%20%20frame.style.top%20=%20r.top%20+%20%22px%22;%20%20%20%20%20%20%20%20frame.style.width%20=%20Math.max(cellW%20*%200.5,%20Math.min(relX,%20maxW%20*%20cellW%20-%20gapX))%20+%20%22px%22;%20%20%20%20%20%20%20%20frame.style.height%20=%20Math.max(cellH%20*%200.5,%20Math.min(relY,%203%20*%20cellH%20-%20gapY))%20+%20%22px%22;%20%20%20%20%20%20%20%20w%20=%20Math.max(w,%20min.w);%20%20%20%20%20%20%20%20h%20=%20Math.max(h,%20min.h);%20%20%20%20%20%20%20%20if%20(w%20!==%20cur.w%20||%20h%20!==%20cur.h)%20{%20%20%20%20%20%20%20%20%20%20cur%20=%20{%20w:%20w,%20h:%20h%20};%20%20%20%20%20%20%20%20%20%20flip(function%20()%20{%20sizeCard(card,%20w,%20h);%20},%20card);%20%20%20%20%20%20%20%20}%20%20%20%20%20%20}%20%20%20%20%20%20function%20onMove(e)%20{%20%20%20%20%20%20%20%20lastX%20=%20e.clientX;%20%20%20%20%20%20%20%20lastY%20=%20e.clientY;%20%20%20%20%20%20%20%20frameTick();%20%20%20%20%20%20}%20%20%20%20%20%20function%20onUp()%20{%20%20%20%20%20%20%20%20grip.removeEventListener(%22pointermove%22,%20onMove);%20%20%20%20%20%20%20%20grip.removeEventListener(%22pointerup%22,%20onUp);%20%20%20%20%20%20%20%20grip.removeEventListener(%22pointercancel%22,%20onUp);%20%20%20%20%20%20%20%20card.classList.remove(%22resizing%22);%20%20%20%20%20%20%20%20document.body.classList.remove(%22resize-active%22);%20%20%20%20%20%20%20%20frame.remove();%20%20%20%20%20%20%20%20if%20(under)%20refuse(card);%20%20%20%20%20%20%20%20if%20(cur.w%20===%20start.w%20&&%20cur.h%20===%20start.h)%20return;%20%20%20%20%20%20%20%20//%20The%20module%20already%20stands%20at%20its%20new%20size;%20save%20it,%20and%20a%20%20%20%20%20%20%20%20//%20failed%20save%20puts%20back%20the%20size%20it%20started%20at.%20%20%20%20%20%20%20%20postLayout({%20action:%20%22size%22,%20widget:%20card.getAttribute(%22data-widget%22),%20w:%20cur.w,%20h:%20cur.h%20}).then(function%20(ok)%20{%20%20%20%20%20%20%20%20%20%20if%20(!ok)%20flip(function%20()%20{%20sizeCard(card,%20start.w,%20start.h);%20});%20%20%20%20%20%20%20%20});%20%20%20%20%20%20}%20%20%20%20%20%20grip.addEventListener(%22pointermove%22,%20onMove);%20%20%20%20%20%20grip.addEventListener(%22pointerup%22,%20onUp);%20%20%20%20%20%20grip.addEventListener(%22pointercancel%22,%20onUp);%20%20%20%20%20%20frameTick();%20%20%20%20}%20%20%20%20//%20---%20dragging%20--------------------------------------------------%20%20%20%20//%20Lifting%20a%20card%20puts%20a%20glowing%20slot%20into%20its%20place,%20with%20its%20%20%20%20//%20size,%20and%20takes%20the%20card%20out%20of%20the%20grid%20(position:%20fixed)%20at%20%20%20%20//%20exactly%20the%20spot%20it%20occupied%20%E2%80%94%20nothing%20under%20the%20pointer%20moves%20%20%20%20//%20at%20lift-off.%20The%20card%20then%20follows%20the%20pointer%20by%20transform%20%20%20%20//%20alone,%20so%20it%20tracks%20without%20lag.%20The%20slot%20moves%20when%20the%20%20%20%20//%20pointer%20is%20over%20another%20module:%20before%20it%20if%20the%20pointer%20is%20in%20%20%20%20//%20that%20module's%20first%20half%20(left%20half%20within%20the%20same%20row,%20top%20%20%20%20//%20half%20across%20rows),%20after%20it%20otherwise;%20the%20module%20the%20slot%20%20%20%20//%20just%20passed%20is%20ignored%20until%20the%20pointer%20leaves%20it,%20so%20a%20%20%20%20//%20boundary%20never%20flip-flops.%20Past%20the%20last%20module%20the%20slot%20goes%20%20%20%20//%20to%20the%20end.%20Holding%20the%20card%20near%20a%20viewport%20edge%20scrolls%20the%20%20%20%20//%20page.%20On%20drop%20the%20card%20glides%20into%20the%20slot%20and%20takes%20its%20%20%20%20//%20place;%20Escape%20or%20a%20cancelled%20pointer%20puts%20everything%20back.%20%20%20%20//%20The%20grid%20child%20beside%20el%20(dir%20-1%20before,%201%20after),%20skipping%20%20%20%20//%20text%20and%20the%20lifted%20card,%20which%20sits%20out%20of%20the%20flow.%20%20%20%20function%20sibling(el,%20dir)%20{%20%20%20%20%20%20var%20n%20=%20dir%20%3C%200%20?%20el.previousElementSibling%20:%20el.nextElementSibling;%20%20%20%20%20%20while%20(n%20&&%20n.classList.contains(%22dragging%22))%20n%20=%20dir%20%3C%200%20?%20n.previousElementSibling%20:%20n.nextElementSibling;%20%20%20%20%20%20return%20n;%20%20%20%20}%20%20%20%20function%20inside(b,%20x,%20y)%20{%20%20%20%20%20%20return%20!!b%20&&%20x%20%3E=%20b.l%20&&%20x%20%3C=%20b.r%20&&%20y%20%3E=%20b.t%20&&%20y%20%3C=%20b.b;%20%20%20%20}%20%20%20%20function%20startDrag(ev,%20card,%20handle)%20{%20%20%20%20%20%20if%20(ev.pointerType%20===%20%22mouse%22%20&&%20ev.button%20!==%200)%20return;%20%20%20%20%20%20ev.preventDefault();%20%20%20%20%20%20var%20startX%20=%20ev.clientX,%20startY%20=%20ev.clientY;%20%20%20%20%20%20var%20lastX%20=%20startX,%20lastY%20=%20startY;%20%20%20%20%20%20var%20lifted%20=%20false,%20slot%20=%20null,%20origin%20=%20null,%20savedNodes%20=%20null;%20%20%20%20%20%20var%20raf%20=%200,%20lock%20=%20null,%20holdUntil%20=%200,%20dirty%20=%20true;%20%20%20%20%20%20try%20{%20handle.setPointerCapture(ev.pointerId);%20}%20catch%20(err)%20{%20/*%20nicety%20*/%20}%20%20%20%20%20%20function%20lift()%20{%20%20%20%20%20%20%20%20lifted%20=%20true;%20%20%20%20%20%20%20%20savedNodes%20=%20Array.prototype.slice.call(moduleCards());%20%20%20%20%20%20%20%20var%20open%20=%20grid.querySelectorAll(%22.sizepick:not([hidden])%22);%20%20%20%20%20%20%20%20for%20(var%20i%20=%200;%20i%20%3C%20open.length;%20i++)%20open[i].hidden%20=%20true;%20%20%20%20%20%20%20%20stopMotion(card);%20%20%20%20%20%20%20%20origin%20=%20card.getBoundingClientRect();%20%20%20%20%20%20%20%20slot%20=%20document.createElement(%22div%22);%20%20%20%20%20%20%20%20slot.className%20=%20%22card%20drag-placeholder%22;%20%20%20%20%20%20%20%20slot.setAttribute(%22aria-hidden%22,%20%22true%22);%20%20%20%20%20%20%20%20var%20s%20=%20sizeOf(card);%20%20%20%20%20%20%20%20sizeCard(slot,%20s.w,%20s.h);%20%20%20%20%20%20%20%20grid.insertBefore(slot,%20card);%20%20%20%20%20%20%20%20card.style.left%20=%20origin.left%20+%20%22px%22;%20%20%20%20%20%20%20%20card.style.top%20=%20origin.top%20+%20%22px%22;%20%20%20%20%20%20%20%20card.style.width%20=%20origin.width%20+%20%22px%22;%20%20%20%20%20%20%20%20card.style.height%20=%20origin.height%20+%20%22px%22;%20%20%20%20%20%20%20%20card.style.transformOrigin%20=%20(startX%20-%20origin.left)%20+%20%22px%20%22%20+%20(startY%20-%20origin.top)%20+%20%22px%22;%20%20%20%20%20%20%20%20card.classList.add(%22dragging%22);%20%20%20%20%20%20%20%20//%20A%20grouped%20ancestor%20(the%20view-transition%20name%20on%20%3Cmain%3E,%20or%20%20%20%20%20%20%20%20//%20any%20transform/filter%20on%20a%20wrapper)%20is%20the%20containing%20block%20%20%20%20%20%20%20%20//%20for%20a%20fixed%20element,%20so%20viewport%20coordinates%20land%20offset%20%20%20%20%20%20%20%20//%20by%20that%20ancestor's%20origin.%20Measure%20the%20miss%20and%20correct%20%20%20%20%20%20%20%20//%20it:%20the%20card%20stays%20exactly%20under%20the%20pointer%20either%20way.%20%20%20%20%20%20%20%20var%20placed%20=%20card.getBoundingClientRect();%20%20%20%20%20%20%20%20var%20missX%20=%20placed.left%20-%20origin.left,%20missY%20=%20placed.top%20-%20origin.top;%20%20%20%20%20%20%20%20if%20(missX%20||%20missY)%20{%20%20%20%20%20%20%20%20%20%20card.style.left%20=%20(origin.left%20-%20missX)%20+%20%22px%22;%20%20%20%20%20%20%20%20%20%20card.style.top%20=%20(origin.top%20-%20missY)%20+%20%22px%22;%20%20%20%20%20%20%20%20}%20%20%20%20%20%20%20%20document.body.classList.add(%22drag-active%22);%20%20%20%20%20%20%20%20measure();%20%20%20%20%20%20%20%20raf%20=%20requestAnimationFrame(tick);%20%20%20%20%20%20}%20%20%20%20%20%20//%20The%20card%20is%20placed%20on%20every%20pointer%20move,%20straight%20from%20the%20%20%20%20%20%20//%20event%20(a%20transform:%20no%20layout),%20so%20it%20never%20trails%20the%20%20%20%20%20%20//%20pointer%20by%20a%20frame.%20%20%20%20%20%20function%20follow()%20{%20%20%20%20%20%20%20%20card.style.transform%20=%20%22translate3d(%22%20+%20(lastX%20-%20startX)%20+%20%22px,%22%20+%20(lastY%20-%20startY)%20+%20%22px,0)%22;%20%20%20%20%20%20}%20%20%20%20%20%20//%20The%20frame%20loop%20only%20scrolls:%20the%20closer%20the%20pointer%20rides%20to%20%20%20%20%20%20//%20a%20viewport%20edge,%20the%20faster%20the%20page%20rolls%20under%20it.%20%20%20%20%20%20function%20tick()%20{%20%20%20%20%20%20%20%20raf%20=%200;%20%20%20%20%20%20%20%20if%20(!lifted)%20return;%20%20%20%20%20%20%20%20var%20edge%20=%2072,%20speed%20=%200;%20%20%20%20%20%20%20%20if%20(lastY%20%3C%20edge)%20speed%20=%20-Math.min(16,%20Math.ceil((edge%20-%20lastY)%20/%204));%20%20%20%20%20%20%20%20else%20if%20(lastY%20%3E%20window.innerHeight%20-%20edge)%20speed%20=%20Math.min(16,%20Math.ceil((lastY%20-%20(window.innerHeight%20-%20edge))%20/%204));%20%20%20%20%20%20%20%20if%20(speed)%20{%20window.scrollBy(0,%20speed);%20dirty%20=%20true;%20}%20%20%20%20%20%20%20%20if%20(dirty)%20retarget();%20%20%20%20%20%20%20%20raf%20=%20requestAnimationFrame(tick);%20%20%20%20%20%20}%20%20%20%20%20%20function%20retarget()%20{%20%20%20%20%20%20%20%20if%20(!lifted%20||%20performance.now()%20%3C%20holdUntil)%20return;%20%20%20%20%20%20%20%20dirty%20=%20false;%20%20%20%20%20%20%20%20var%20px%20=%20lastX%20+%20window.scrollX,%20py%20=%20lastY%20+%20window.scrollY;%20%20%20%20%20%20%20%20if%20(lock%20&&%20!inside(layout.get(lock),%20px,%20py))%20lock%20=%20null;%20%20%20%20%20%20%20%20var%20sb%20=%20layout.get(slot);%20%20%20%20%20%20%20%20if%20(inside(sb,%20px,%20py))%20{%20lock%20=%20null;%20return;%20}%20%20%20%20%20%20%20%20var%20kids%20=%20Array.prototype.slice.call(movers());%20%20%20%20%20%20%20%20var%20target%20=%20null,%20bottom%20=%200;%20%20%20%20%20%20%20%20for%20(var%20i%20=%200;%20i%20%3C%20kids.length;%20i++)%20{%20%20%20%20%20%20%20%20%20%20var%20b%20=%20layout.get(kids[i]);%20%20%20%20%20%20%20%20%20%20if%20(b%20&&%20b.b%20%3E%20bottom)%20bottom%20=%20b.b;%20%20%20%20%20%20%20%20%20%20if%20(kids[i]%20!==%20slot%20&&%20!target%20&&%20inside(b,%20px,%20py))%20target%20=%20kids[i];%20%20%20%20%20%20%20%20}%20%20%20%20%20%20%20%20if%20(!target)%20{%20%20%20%20%20%20%20%20%20%20if%20(py%20%3E%20bottom%20&&%20kids[kids.length%20-%201]%20!==%20slot)%20moveSlot(null,%20null);%20%20%20%20%20%20%20%20%20%20return;%20%20%20%20%20%20%20%20}%20%20%20%20%20%20%20%20if%20(target%20===%20lock)%20return;%20%20%20%20%20%20%20%20var%20tb%20=%20layout.get(target);%20%20%20%20%20%20%20%20var%20sameRow%20=%20sb%20&&%20sb.t%20%3C%20tb.b%20&&%20tb.t%20%3C%20sb.b;%20%20%20%20%20%20%20%20var%20first%20=%20sameRow%20?%20px%20%3C%20(tb.l%20+%20tb.r)%20/%202%20:%20py%20%3C%20(tb.t%20+%20tb.b)%20/%202;%20%20%20%20%20%20%20%20//%20Already%20on%20that%20side%20of%20it:%20nothing%20to%20do.%20%20%20%20%20%20%20%20if%20((first%20?%20sibling(target,%20-1)%20:%20sibling(target,%201))%20===%20slot)%20return;%20%20%20%20%20%20%20%20moveSlot(first%20?%20target%20:%20target.nextSibling,%20target);%20%20%20%20%20%20}%20%20%20%20%20%20function%20moveSlot(ref,%20passed)%20{%20%20%20%20%20%20%20%20flip(function%20()%20{%20grid.insertBefore(slot,%20ref);%20});%20%20%20%20%20%20%20%20lock%20=%20passed;%20%20%20%20%20%20%20%20//%20Let%20the%20hop's%20layout%20settle%20under%20the%20pointer%20before%20the%20%20%20%20%20%20%20%20//%20next%20decision.%20%20%20%20%20%20%20%20holdUntil%20=%20performance.now()%20+%2090;%20%20%20%20%20%20%20%20dirty%20=%20true;%20%20%20%20%20%20}%20%20%20%20%20%20function%20onMove(e)%20{%20%20%20%20%20%20%20%20lastX%20=%20e.clientX;%20%20%20%20%20%20%20%20lastY%20=%20e.clientY;%20%20%20%20%20%20%20%20dirty%20=%20true;%20%20%20%20%20%20%20%20if%20(!lifted%20&&%20Math.abs(lastX%20-%20startX)%20+%20Math.abs(lastY%20-%20startY)%20%3E=%205)%20lift();%20%20%20%20%20%20%20%20if%20(lifted)%20{%20follow();%20retarget();%20}%20%20%20%20%20%20}%20%20%20%20%20%20function%20onKey(e)%20{%20%20%20%20%20%20%20%20if%20(e.key%20===%20%22Escape%22)%20{%20e.preventDefault();%20onCancel();%20}%20%20%20%20%20%20}%20%20%20%20%20%20function%20detach()%20{%20%20%20%20%20%20%20%20handle.removeEventListener(%22pointermove%22,%20onMove);%20%20%20%20%20%20%20%20handle.removeEventListener(%22pointerup%22,%20onUp);%20%20%20%20%20%20%20%20handle.removeEventListener(%22pointercancel%22,%20onCancel);%20%20%20%20%20%20%20%20document.removeEventListener(%22keydown%22,%20onKey,%20true);%20%20%20%20%20%20%20%20if%20(raf)%20cancelAnimationFrame(raf);%20%20%20%20%20%20%20%20raf%20=%200;%20%20%20%20%20%20}%20%20%20%20%20%20//%20Every%20exit%20path%20ends%20here:%20no%20slot,%20no%20lifted%20card,%20no%20%20%20%20%20%20//%20inline%20style%20survives%20a%20drag.%20%20%20%20%20%20function%20settle()%20{%20%20%20%20%20%20%20%20if%20(slot%20&&%20slot.parentNode)%20grid.replaceChild(card,%20slot);%20%20%20%20%20%20%20%20slot%20=%20null;%20%20%20%20%20%20%20%20card.classList.remove(%22dragging%22);%20%20%20%20%20%20%20%20card.style.left%20=%20card.style.top%20=%20card.style.width%20=%20card.style.height%20=%20%22%22;%20%20%20%20%20%20%20%20card.style.transform%20=%20card.style.transformOrigin%20=%20%22%22;%20%20%20%20%20%20%20%20document.body.classList.remove(%22drag-active%22);%20%20%20%20%20%20%20%20lifted%20=%20false;%20%20%20%20%20%20}%20%20%20%20%20%20//%20Glide%20the%20lifted%20card%20onto%20the%20slot's%20cell,%20then%20let%20it%20take%20%20%20%20%20%20//%20the%20slot's%20place.%20%20%20%20%20%20function%20landThen(done)%20{%20%20%20%20%20%20%20%20var%20b%20=%20layout.get(slot);%20%20%20%20%20%20%20%20if%20(!canAnimate%20||%20!b)%20{%20done();%20return;%20}%20%20%20%20%20%20%20%20var%20dx%20=%20b.l%20-%20window.scrollX%20-%20origin.left,%20dy%20=%20b.t%20-%20window.scrollY%20-%20origin.top;%20%20%20%20%20%20%20%20var%20a%20=%20card.animate([%20%20%20%20%20%20%20%20%20%20{%20transform:%20card.style.transform%20||%20%22none%22%20},%20%20%20%20%20%20%20%20%20%20{%20transform:%20%22translate3d(%22%20+%20dx%20+%20%22px,%22%20+%20dy%20+%20%22px,0)%22%20}%20%20%20%20%20%20%20%20],%20{%20duration:%20200,%20easing:%20EASE,%20fill:%20%22forwards%22%20});%20%20%20%20%20%20%20%20card.classList.add(%22landing%22);%20%20%20%20%20%20%20%20//%20Whichever%20comes%20first:%20the%20glide's%20end,%20or%20a%20timer%20for%20a%20%20%20%20%20%20%20%20//%20page%20whose%20animations%20are%20paused%20(a%20hidden%20tab).%20%20%20%20%20%20%20%20var%20finished%20=%20false;%20%20%20%20%20%20%20%20var%20finish%20=%20function%20()%20{%20%20%20%20%20%20%20%20%20%20if%20(finished)%20return;%20%20%20%20%20%20%20%20%20%20finished%20=%20true;%20%20%20%20%20%20%20%20%20%20card.classList.remove(%22landing%22);%20%20%20%20%20%20%20%20%20%20done();%20%20%20%20%20%20%20%20%20%20a.cancel();%20%20%20%20%20%20%20%20};%20%20%20%20%20%20%20%20a.onfinish%20=%20finish;%20%20%20%20%20%20%20%20window.setTimeout(finish,%20260);%20%20%20%20%20%20}%20%20%20%20%20%20function%20onUp()%20{%20%20%20%20%20%20%20%20detach();%20%20%20%20%20%20%20%20if%20(!lifted)%20return;%20%20%20%20%20%20%20%20lifted%20=%20false;%20%20%20%20%20%20%20%20landThen(function%20()%20{%20%20%20%20%20%20%20%20%20%20settle();%20%20%20%20%20%20%20%20%20%20var%20moved%20=%20moduleCards();%20%20%20%20%20%20%20%20%20%20var%20changed%20=%20moved.length%20!==%20savedNodes.length;%20%20%20%20%20%20%20%20%20%20for%20(var%20i%20=%200;%20!changed%20&&%20i%20%3C%20moved.length;%20i++)%20changed%20=%20moved[i]%20!==%20savedNodes[i];%20%20%20%20%20%20%20%20%20%20if%20(!changed)%20return;%20%20%20%20%20%20%20%20%20%20saveOrder().then(function%20(ok)%20{%20%20%20%20%20%20%20%20%20%20%20%20if%20(!ok)%20flip(function%20()%20{%20for%20(var%20j%20=%200;%20j%20%3C%20savedNodes.length;%20j++)%20grid.appendChild(savedNodes[j]);%20});%20%20%20%20%20%20%20%20%20%20});%20%20%20%20%20%20%20%20});%20%20%20%20%20%20}%20%20%20%20%20%20function%20onCancel()%20{%20%20%20%20%20%20%20%20detach();%20%20%20%20%20%20%20%20if%20(!lifted)%20return;%20%20%20%20%20%20%20%20lifted%20=%20false;%20%20%20%20%20%20%20%20//%20Back%20to%20where%20it%20started:%20the%20slot%20returns%20to%20the%20card's%20%20%20%20%20%20%20%20//%20old%20place,%20the%20card%20lands%20there.%20%20%20%20%20%20%20%20var%20at%20=%20savedNodes.indexOf(card);%20%20%20%20%20%20%20%20var%20next%20=%20savedNodes[at%20+%201]%20||%20null;%20%20%20%20%20%20%20%20flip(function%20()%20{%20grid.insertBefore(slot,%20next);%20});%20%20%20%20%20%20%20%20landThen(settle);%20%20%20%20%20%20}%20%20%20%20%20%20handle.addEventListener(%22pointermove%22,%20onMove);%20%20%20%20%20%20handle.addEventListener(%22pointerup%22,%20onUp);%20%20%20%20%20%20handle.addEventListener(%22pointercancel%22,%20onCancel);%20%20%20%20%20%20document.addEventListener(%22keydown%22,%20onKey,%20true);%20%20%20%20}%20%20%20%20function%20addModule(id,%20btn)%20{%20%20%20%20%20%20btn.disabled%20=%20true;%20%20%20%20%20%20postLayout({%20action:%20%22toggle%22,%20widget:%20id%20}).then(function%20(ok)%20{%20%20%20%20%20%20%20%20if%20(!ok)%20{%20btn.disabled%20=%20false;%20return;%20}%20%20%20%20%20%20%20%20//%20Widget%20markup%20is%20server-rendered;%20lift%20the%20new%20card%20%20%20%20%20%20%20%20//%20out%20of%20a%20fresh%20copy%20of%20this%20page%20rather%20than%20rebuilding%20%20%20%20%20%20%20%20//%20it%20client-side.%20If%20anything%20about%20that%20fails,%20a%20reload%20%20%20%20%20%20%20%20//%20lands%20in%20the%20same%20place%20%E2%80%94%20the%20add%20already%20saved.%20%20%20%20%20%20%20%20fetch(%22/?customize=1%22,%20{%20headers:%20{%20%22Accept%22:%20%22text/html%22%20}%20}).then(function%20(resp)%20{%20%20%20%20%20%20%20%20%20%20return%20resp.ok%20?%20resp.text()%20:%20%22%22;%20%20%20%20%20%20%20%20}).then(function%20(html)%20{%20%20%20%20%20%20%20%20%20%20var%20doc%20=%20new%20DOMParser().parseFromString(html,%20%22text/html%22);%20%20%20%20%20%20%20%20%20%20var%20fresh%20=%20doc.querySelector('.card[data-widget=%22'%20+%20id%20+%20'%22]');%20%20%20%20%20%20%20%20%20%20if%20(!fresh)%20{%20window.location.reload();%20return;%20}%20%20%20%20%20%20%20%20%20%20var%20node%20=%20document.importNode(fresh,%20true);%20%20%20%20%20%20%20%20%20%20//%20Never%20two%20cards%20for%20one%20module:%20if%20a%20stale%20copy%20is%20%20%20%20%20%20%20%20%20%20//%20somehow%20still%20in%20the%20grid,%20it%20goes%20before%20the%20fresh%20%20%20%20%20%20%20%20%20%20//%20one%20lands.%20%20%20%20%20%20%20%20%20%20var%20stale%20=%20grid.querySelector('.card[data-widget=%22'%20+%20id%20+%20'%22]');%20%20%20%20%20%20%20%20%20%20if%20(stale)%20stale.remove();%20%20%20%20%20%20%20%20%20%20enhanceCard(node);%20%20%20%20%20%20%20%20%20%20window.EveSynapseModal.close(modal);%20%20%20%20%20%20%20%20%20%20flip(function%20()%20{%20grid.appendChild(node);%20});%20%20%20%20%20%20%20%20%20%20node.scrollIntoView({%20behavior:%20reducedMotion%20?%20%22auto%22%20:%20%22smooth%22,%20block:%20%22nearest%22%20});%20%20%20%20%20%20%20%20},%20function%20()%20{%20window.location.reload();%20});%20%20%20%20%20%20});%20%20%20%20}%20%20%20%20var%20cards%20=%20moduleCards();%20%20%20%20for%20(var%20i%20=%200;%20i%20%3C%20cards.length;%20i++)%20enhanceCard(cards[i]);%20%20%20%20//%20A%20size%20picker%20closes%20on%20a%20click%20anywhere%20outside%20its%20card's%20%20%20%20//%20controls.%20Bound%20once;%20it%20reads%20the%20current%20grid%20each%20time.%20%20%20%20if%20(!homePickCloseBound)%20{%20%20%20%20%20%20homePickCloseBound%20=%20true;%20%20%20%20%20%20document.addEventListener(%22click%22,%20function%20(ev)%20{%20%20%20%20%20%20%20%20if%20(ev.target.closest%20&&%20ev.target.closest(%22.cardctl%22))%20return;%20%20%20%20%20%20%20%20var%20open%20=%20document.querySelectorAll(%22.sizepick:not([hidden])%22);%20%20%20%20%20%20%20%20for%20(var%20p%20=%200;%20p%20%3C%20open.length;%20p++)%20{%20%20%20%20%20%20%20%20%20%20open[p].hidden%20=%20true;%20%20%20%20%20%20%20%20%20%20var%20btn%20=%20open[p].parentNode.querySelector(%22.cardsize%22);%20%20%20%20%20%20%20%20%20%20if%20(btn)%20btn.setAttribute(%22aria-expanded%22,%20%22false%22);%20%20%20%20%20%20%20%20}%20%20%20%20%20%20});%20%20%20%20}%20%20%20%20//%20Add-module%20pop-up.%20The%20full%20catalog%20is%20rendered%20into%20it;%20%20%20%20//%20each%20open%20re-filters%20against%20what%20is%20on%20the%20home%20right%20now,%20%20%20%20//%20so%20removes%20and%20adds%20are%20reflected%20immediately.%20Opening,%20%20%20%20//%20closing,%20Escape%20and%20the%20backdrop%20are%20the%20shared%20modal's.%20%20%20%20var%20addBtn%20=%20document.getElementById(%22add-module-btn%22);%20%20%20%20if%20(addBtn%20&&%20modal)%20{%20%20%20%20%20%20var%20emptyNote%20=%20modal.querySelector(%22.modal-empty%22);%20%20%20%20%20%20var%20addItems%20=%20modal.querySelectorAll(%22[data-add-widget]%22);%20%20%20%20%20%20var%20openAdd%20=%20function%20()%20{%20%20%20%20%20%20%20%20var%20onHome%20=%20{};%20%20%20%20%20%20%20%20var%20ids%20=%20widgetIDs();%20%20%20%20%20%20%20%20for%20(var%20i%20=%200;%20i%20%3C%20ids.length;%20i++)%20onHome[ids[i]]%20=%20true;%20%20%20%20%20%20%20%20var%20available%20=%200;%20%20%20%20%20%20%20%20for%20(var%20j%20=%200;%20j%20%3C%20addItems.length;%20j++)%20{%20%20%20%20%20%20%20%20%20%20var%20off%20=%20!!onHome[addItems[j].getAttribute(%22data-add-widget%22)];%20%20%20%20%20%20%20%20%20%20addItems[j].parentElement.hidden%20=%20off;%20%20%20%20%20%20%20%20%20%20addItems[j].disabled%20=%20false;%20%20%20%20%20%20%20%20%20%20if%20(!off)%20available++;%20%20%20%20%20%20%20%20}%20%20%20%20%20%20%20%20if%20(emptyNote)%20emptyNote.hidden%20=%20available%20%3E%200;%20%20%20%20%20%20%20%20window.EveSynapseModal.open(modal);%20%20%20%20%20%20};%20%20%20%20%20%20addBtn.addEventListener(%22click%22,%20function%20(ev)%20{%20%20%20%20%20%20%20%20ev.preventDefault();%20%20%20%20%20%20%20%20var%20menu%20=%20addBtn.closest(%22details%22);%20%20%20%20%20%20%20%20if%20(menu)%20menu.open%20=%20false;%20%20%20%20%20%20%20%20openAdd();%20%20%20%20%20%20});%20%20%20%20%20%20//%20The%20Overview%20menu's%20%22Add%20a%20module%22%20lands%20here%20from%20the%20home%20%20%20%20%20%20//%20with%20?add=1:%20open%20the%20pop-up%20straight%20away.%20%20%20%20%20%20if%20(/[?&]add=1\b/.test(window.location.search))%20openAdd();%20%20%20%20%20%20for%20(var%20a%20=%200;%20a%20%3C%20addItems.length;%20a++)%20{%20%20%20%20%20%20%20%20addItems[a].addEventListener(%22click%22,%20function%20()%20{%20%20%20%20%20%20%20%20%20%20addModule(this.getAttribute(%22data-add-widget%22),%20this);%20%20%20%20%20%20%20%20});%20%20%20%20%20%20}%20%20%20%20}%20%20}%20%20//%20---%20Search%20suggestions%20-------------------------------------%20%20//%20One%20autocomplete%20widget%20behind%20every%20search%20box:%20the%20market%20%20//%20and%20watchlist%20finders,%20the%20planner,%20the%20skill-plan%20add%20box,%20%20//%20the%20Items%20DB%20search,%20and%20the%20banner's%20global%20search.%20Each%20%20//%20box%20names%20its%20feed%20(a%20pool%20of%20the%20one%20suggestion%20endpoint)%20%20//%20and%20what%20a%20pick%20does;%20without%20one%20of%20them%20the%20plain%20form%20%20//%20still%20submits%20exactly%20as%20before.%20%20//%20hitLabel%20fills%20a%20result's%20type%20line:%20a%20system's%20security%20status%20%20//%20in%20its%20color,%20then%20the%20label%20text.%20%20function%20hitLabel(el,%20it)%20{%20%20%20%20if%20(it.sec)%20{%20%20%20%20%20%20var%20sec%20=%20document.createElement(%22span%22);%20%20%20%20%20%20sec.className%20=%20%22sec%20sec-%22%20+%20(it.secTier%20||%200);%20%20%20%20%20%20sec.textContent%20=%20it.sec;%20%20%20%20%20%20el.appendChild(sec);%20%20%20%20}%20%20%20%20el.appendChild(document.createTextNode(it.label%20||%20%22%22));%20%20}%20%20window.EveSynapseHitLabel%20=%20hitLabel;%20%20function%20attachSuggest(input,%20list,%20endpoint,%20onPick)%20{%20%20%20%20if%20(!input%20||%20!list%20||%20!window.fetch)%20return;%20%20%20%20var%20items%20=%20[];%20%20%20%20var%20selected%20=%20-1;%20%20%20%20var%20timer%20=%20null;%20%20%20%20var%20retryTimer%20=%20null;%20%20%20%20var%20pendingRetries%20=%200;%20%20%20%20var%20lastQuery%20=%20%22%22;%20%20%20%20function%20isPending(it)%20{%20%20%20%20%20%20return%20!!(it%20&&%20it.kind%20===%20%22pilot-pending%22);%20%20%20%20}%20%20%20%20function%20firstSelectable()%20{%20%20%20%20%20%20for%20(var%20i%20=%200;%20i%20%3C%20items.length;%20i++)%20{%20%20%20%20%20%20%20%20if%20(!isPending(items[i]))%20return%20i;%20%20%20%20%20%20}%20%20%20%20%20%20return%20-1;%20%20%20%20}%20%20%20%20function%20nextSelectable(from,%20delta)%20{%20%20%20%20%20%20if%20(!items.length)%20return%20-1;%20%20%20%20%20%20var%20idx%20=%20from;%20%20%20%20%20%20for%20(var%20step%20=%200;%20step%20%3C%20items.length;%20step++)%20{%20%20%20%20%20%20%20%20idx%20=%20(idx%20+%20delta%20+%20items.length)%20%%20items.length;%20%20%20%20%20%20%20%20if%20(!isPending(items[idx]))%20return%20idx;%20%20%20%20%20%20}%20%20%20%20%20%20return%20-1;%20%20%20%20}%20%20%20%20function%20close()%20{%20%20%20%20%20%20if%20(retryTimer)%20window.clearTimeout(retryTimer);%20%20%20%20%20%20retryTimer%20=%20null;%20%20%20%20%20%20list.hidden%20=%20true;%20%20%20%20%20%20items%20=%20[];%20%20%20%20%20%20selected%20=%20-1;%20%20%20%20%20%20input.setAttribute(%22aria-expanded%22,%20%22false%22);%20%20%20%20%20%20input.removeAttribute(%22aria-activedescendant%22);%20%20%20%20}%20%20%20%20function%20paint()%20{%20%20%20%20%20%20list.innerHTML%20=%20%22%22;%20%20%20%20%20%20items.forEach(function%20(it,%20idx)%20{%20%20%20%20%20%20%20%20var%20li%20=%20document.createElement(%22li%22);%20%20%20%20%20%20%20%20li.id%20=%20list.id%20+%20%22-%22%20+%20idx;%20%20%20%20%20%20%20%20li.setAttribute(%22role%22,%20%22option%22);%20%20%20%20%20%20%20%20var%20name%20=%20document.createElement(%22span%22);%20%20%20%20%20%20%20%20name.textContent%20=%20it.name;%20%20%20%20%20%20%20%20li.appendChild(name);%20%20%20%20%20%20%20%20if%20(it.label)%20{%20%20%20%20%20%20%20%20%20%20var%20lab%20=%20document.createElement(%22span%22);%20%20%20%20%20%20%20%20%20%20lab.className%20=%20%22sug-label%22;%20%20%20%20%20%20%20%20%20%20hitLabel(lab,%20it);%20%20%20%20%20%20%20%20%20%20li.appendChild(lab);%20%20%20%20%20%20%20%20}%20%20%20%20%20%20%20%20if%20(idx%20===%20selected)%20{%20%20%20%20%20%20%20%20%20%20li.className%20=%20%22sel%22;%20%20%20%20%20%20%20%20%20%20input.setAttribute(%22aria-activedescendant%22,%20li.id);%20%20%20%20%20%20%20%20}%20%20%20%20%20%20%20%20if%20(isPending(it))%20{%20%20%20%20%20%20%20%20%20%20//%20A%20name%20search%20still%20warming:%20shown,%20never%20a%20pick.%20%20%20%20%20%20%20%20%20%20li.className%20=%20(li.className%20?%20li.className%20+%20%22%20%22%20:%20%22%22)%20+%20%22pending%22;%20%20%20%20%20%20%20%20%20%20li.setAttribute(%22aria-disabled%22,%20%22true%22);%20%20%20%20%20%20%20%20%20%20list.appendChild(li);%20%20%20%20%20%20%20%20%20%20return;%20%20%20%20%20%20%20%20}%20%20%20%20%20%20%20%20//%20mousedown,%20not%20click:%20it%20fires%20before%20the%20input's%20blur,%20%20%20%20%20%20%20%20//%20so%20the%20pick%20lands%20before%20anything%20can%20close%20the%20list.%20%20%20%20%20%20%20%20li.addEventListener(%22mousedown%22,%20function%20(ev)%20{%20%20%20%20%20%20%20%20%20%20ev.preventDefault();%20%20%20%20%20%20%20%20%20%20pick(idx);%20%20%20%20%20%20%20%20});%20%20%20%20%20%20%20%20//%20Touch:%20tap%20selects%20without%20stealing%20the%20scroll.%20%20%20%20%20%20%20%20li.addEventListener(%22touchstart%22,%20function%20(ev)%20{%20%20%20%20%20%20%20%20%20%20ev.preventDefault();%20%20%20%20%20%20%20%20%20%20pick(idx);%20%20%20%20%20%20%20%20},%20{%20passive:%20false%20});%20%20%20%20%20%20%20%20list.appendChild(li);%20%20%20%20%20%20});%20%20%20%20%20%20list.hidden%20=%20items.length%20===%200;%20%20%20%20%20%20input.setAttribute(%22aria-expanded%22,%20items.length%20?%20%22true%22%20:%20%22false%22);%20%20%20%20}%20%20%20%20function%20pick(idx)%20{%20%20%20%20%20%20var%20it%20=%20items[idx];%20%20%20%20%20%20if%20(!it%20||%20isPending(it))%20return;%20%20%20%20%20%20close();%20%20%20%20%20%20onPick(it,%20input);%20%20%20%20}%20%20%20%20function%20query(q)%20{%20%20%20%20%20%20fetch(endpoint(q),%20{%20%20%20%20%20%20%20%20cache:%20%22no-store%22,%20%20%20%20%20%20%20%20headers:%20{%20%22Accept%22:%20%22application/json%22%20}%20%20%20%20%20%20}).then(function%20(resp)%20{%20%20%20%20%20%20%20%20return%20resp.ok%20?%20resp.json()%20:%20[];%20%20%20%20%20%20}).then(function%20(rows)%20{%20%20%20%20%20%20%20%20if%20(input.value.trim()%20!==%20q)%20return;%20//%20typed%20past%20this%20result%20%20%20%20%20%20%20%20items%20=%20Array.isArray(rows)%20?%20rows%20:%20[];%20%20%20%20%20%20%20%20selected%20=%20firstSelectable();%20%20%20%20%20%20%20%20paint();%20%20%20%20%20%20%20%20//%20A%20pilot-name%20search%20still%20warming%20re-asks%20on%20a%20short%20%20%20%20%20%20%20%20//%20fuse;%20the%20same%20query%20returns%20the%20real%20suggestion%20once%20%20%20%20%20%20%20%20//%20the%20record%20lands.%20Bounded,%20and%20only%20while%20this%20exact%20%20%20%20%20%20%20%20//%20text%20is%20still%20in%20the%20box.%20%20%20%20%20%20%20%20if%20(retryTimer)%20window.clearTimeout(retryTimer);%20%20%20%20%20%20%20%20retryTimer%20=%20null;%20%20%20%20%20%20%20%20var%20hasPending%20=%20false;%20%20%20%20%20%20%20%20for%20(var%20i%20=%200;%20i%20%3C%20items.length;%20i++)%20{%20%20%20%20%20%20%20%20%20%20if%20(isPending(items[i]))%20{%20hasPending%20=%20true;%20break;%20}%20%20%20%20%20%20%20%20}%20%20%20%20%20%20%20%20if%20(hasPending%20&&%20pendingRetries%20%3C%208)%20{%20%20%20%20%20%20%20%20%20%20pendingRetries++;%20%20%20%20%20%20%20%20%20%20retryTimer%20=%20window.setTimeout(function%20()%20{%20query(q);%20},%202500);%20%20%20%20%20%20%20%20}%20else%20if%20(!hasPending)%20{%20%20%20%20%20%20%20%20%20%20pendingRetries%20=%200;%20%20%20%20%20%20%20%20}%20%20%20%20%20%20}).catch(function%20()%20{%20close();%20});%20%20%20%20}%20%20%20%20input.addEventListener(%22input%22,%20function%20()%20{%20%20%20%20%20%20var%20q%20=%20input.value.trim();%20%20%20%20%20%20if%20(q%20===%20lastQuery)%20return;%20%20%20%20%20%20lastQuery%20=%20q;%20%20%20%20%20%20if%20(timer)%20window.clearTimeout(timer);%20%20%20%20%20%20if%20(retryTimer)%20window.clearTimeout(retryTimer);%20%20%20%20%20%20retryTimer%20=%20null;%20%20%20%20%20%20pendingRetries%20=%200;%20%20%20%20%20%20if%20(q.length%20%3C%202)%20{%20close();%20return;%20}%20%20%20%20%20%20timer%20=%20window.setTimeout(function%20()%20{%20query(q);%20},%20150);%20%20%20%20});%20%20%20%20input.addEventListener(%22keydown%22,%20function%20(ev)%20{%20%20%20%20%20%20if%20(list.hidden)%20return;%20%20%20%20%20%20if%20(ev.key%20===%20%22ArrowDown%22%20||%20ev.key%20===%20%22ArrowUp%22)%20{%20%20%20%20%20%20%20%20ev.preventDefault();%20%20%20%20%20%20%20%20if%20(!items.length)%20return;%20%20%20%20%20%20%20%20selected%20=%20nextSelectable(selected,%20ev.key%20===%20%22ArrowDown%22%20?%201%20:%20-1);%20%20%20%20%20%20%20%20paint();%20%20%20%20%20%20}%20else%20if%20(ev.key%20===%20%22Enter%22)%20{%20%20%20%20%20%20%20%20if%20(selected%20%3E=%200)%20{%20%20%20%20%20%20%20%20%20%20ev.preventDefault();%20%20%20%20%20%20%20%20%20%20pick(selected);%20%20%20%20%20%20%20%20}%20%20%20%20%20%20%20%20//%20No%20selection:%20let%20the%20form%20submit%20as%20it%20always%20has.%20%20%20%20%20%20}%20else%20if%20(ev.key%20===%20%22Escape%22)%20{%20%20%20%20%20%20%20%20close();%20%20%20%20%20%20}%20%20%20%20});%20%20%20%20input.addEventListener(%22blur%22,%20function%20()%20{%20%20%20%20%20%20//%20Let%20a%20mousedown%20pick%20win%20the%20race,%20then%20close.%20%20%20%20%20%20window.setTimeout(close,%20120);%20%20%20%20});%20%20%20%20var%20form%20=%20input.form;%20%20%20%20if%20(form)%20form.addEventListener(%22submit%22,%20function%20()%20{%20close();%20});%20%20}%20%20function%20suggestURL(base,%20pool)%20{%20%20%20%20return%20function%20(q)%20{%20%20%20%20%20%20return%20base%20+%20%22?q=%22%20+%20encodeURIComponent(q)%20+%20(pool%20?%20%22&pool=%22%20+%20pool%20:%20%22%22);%20%20%20%20};%20%20}%20%20//%20Page%20search%20boxes%20re-attach%20over%20fresh%20swapped%20markup;%20%20//%20each%20attachSuggest%20binds%20the%20input%20in%20front%20of%20it,%20and%20the%20old%20%20//%20inputs%20leave%20with%20the%20old%20page.%20The%20banner%20search%20below%20lives%20%20//%20in%20the%20shell%20and%20binds%20exactly%20once.%20%20function%20initPageSuggest(root)%20{%20%20%20%20//%20Market:%20a%20pick%20jumps%20straight%20to%20that%20item's%20market%20page,%20%20%20%20//%20keeping%20the%20region%20the%20page%20is%20showing.%20%20%20%20(function%20()%20{%20%20%20%20%20%20var%20regionField%20=%20root.querySelector(%22#market-region%22);%20%20%20%20%20%20attachSuggest(%20%20%20%20%20%20%20%20root.querySelector(%22#market-q%22),%20%20%20%20%20%20%20%20root.querySelector(%22#market-suggest%22),%20%20%20%20%20%20%20%20suggestURL(%22/market/suggest%22,%20null),%20%20%20%20%20%20%20%20function%20(it)%20{%20%20%20%20%20%20%20%20%20%20var%20url%20=%20%22/market/?type=%22%20+%20encodeURIComponent(it.id);%20%20%20%20%20%20%20%20%20%20if%20(regionField%20&&%20regionField.value)%20{%20%20%20%20%20%20%20%20%20%20%20%20url%20+=%20%22&region=%22%20+%20encodeURIComponent(regionField.value);%20%20%20%20%20%20%20%20%20%20}%20%20%20%20%20%20%20%20%20%20window.location.href%20=%20url;%20%20%20%20%20%20%20%20});%20%20%20%20})();%20%20%20%20//%20Assets:%20suggestions%20come%20from%20what%20the%20account%20actually%20owns%20%20%20%20//%20(each%20says%20whose%20it%20is),%20narrowed%20to%20the%20acting%20character%20when%20%20%20%20//%20the%20box%20is%20ticked.%20A%20pick%20fills%20the%20box%20and%20runs%20the%20search.%20%20%20%20(function%20()%20{%20%20%20%20%20%20var%20only%20=%20root.querySelector(%22#assets-only%22);%20%20%20%20%20%20attachSuggest(%20%20%20%20%20%20%20%20root.querySelector(%22#assets-q%22),%20%20%20%20%20%20%20%20root.querySelector(%22#assets-suggest%22),%20%20%20%20%20%20%20%20function%20(q)%20{%20%20%20%20%20%20%20%20%20%20return%20%22/assets/suggest?q=%22%20+%20encodeURIComponent(q)%20+%20(only%20&&%20only.checked%20?%20%22&only=1%22%20:%20%22%22);%20%20%20%20%20%20%20%20},%20%20%20%20%20%20%20%20function%20(it,%20input)%20{%20%20%20%20%20%20%20%20%20%20input.value%20=%20it.name;%20%20%20%20%20%20%20%20%20%20if%20(input.form)%20input.form.submit();%20%20%20%20%20%20%20%20});%20%20%20%20})();%20%20%20%20//%20Sync%20and%20Admin%20(administrators):%20find%20one%20character%20among%20all%20of%20%20%20%20//%20them.%20A%20pick%20goes%20straight%20to%20that%20character's%20data,%20or%20to%20the%20%20%20%20//%20account%20it%20belongs%20to;%20typing%20a%20name%20and%20pressing%20Enter%20does%20the%20%20%20%20//%20same%20through%20the%20plain%20form.%20%20%20%20attachSuggest(%20%20%20%20%20%20root.querySelector(%22#sync-character-q%22),%20%20%20%20%20%20root.querySelector(%22#sync-character-suggest%22),%20%20%20%20%20%20suggestURL(%22/admin/suggest%22,%20null),%20%20%20%20%20%20function%20(it)%20{%20window.location.href%20=%20%22/sync/?character=%22%20+%20encodeURIComponent(it.id);%20});%20%20%20%20attachSuggest(%20%20%20%20%20%20root.querySelector(%22#admin-q%22),%20%20%20%20%20%20root.querySelector(%22#admin-suggest%22),%20%20%20%20%20%20suggestURL(%22/admin/suggest%22,%20null),%20%20%20%20%20%20function%20(it)%20{%20window.location.href%20=%20%22/admin/?q=%22%20+%20encodeURIComponent(it.id);%20});%20%20%20%20//%20Search%20boxes%20that%20name%20their%20own%20feed%20(data-suggest):%20the%20%20%20%20//%20doctrine%20pages%20and%20the%20fit%20browsers.%20A%20suggestion%20that%20is%20a%20%20%20%20//%20link%20is%20followed;%20any%20other%20fills%20the%20box,%20and%20where%20the%20box%20%20%20%20//%20names%20a%20hidden%20field%20(data-suggest-target)%20that%20takes%20what%20%20%20%20//%20was%20picked,%20until%20the%20box%20is%20typed%20in%20again.%20%20%20%20Array.prototype.forEach.call(root.querySelectorAll(%22input[data-suggest]%22),%20function%20(input)%20{%20%20%20%20%20%20var%20base%20=%20input.getAttribute(%22data-suggest%22);%20%20%20%20%20%20var%20target%20=%20document.getElementById(input.getAttribute(%22data-suggest-target%22)%20||%20%22%22);%20%20%20%20%20%20if%20(target)%20input.addEventListener(%22input%22,%20function%20()%20{%20target.value%20=%20%22%22;%20});%20%20%20%20%20%20attachSuggest(input,%20document.getElementById(input.getAttribute(%22aria-controls%22)),%20%20%20%20%20%20%20%20function%20(q)%20{%20return%20base%20+%20(base.indexOf(%22?%22)%20===%20-1%20?%20%22?%22%20:%20%22&%22)%20+%20%22q=%22%20+%20encodeURIComponent(q);%20},%20%20%20%20%20%20%20%20function%20(it,%20input)%20{%20%20%20%20%20%20%20%20%20%20if%20(it.url)%20{%20window.location.href%20=%20it.url;%20return;%20}%20%20%20%20%20%20%20%20%20%20input.value%20=%20it.name;%20%20%20%20%20%20%20%20%20%20if%20(target)%20target.value%20=%20it.value%20||%20it.id;%20%20%20%20%20%20%20%20});%20%20%20%20});%20%20%20%20//%20Watchlist%20finder:%20a%20pick%20watches%20that%20exact%20item%20at%20once%20(the%20%20%20%20//%20same%20post%20the%20Watch%20buttons%20make);%20the%20keyword%20matches%20only%20list%20%20%20%20//%20when%20the%20box%20is%20submitted%20without%20a%20pick.%20%20%20%20(function%20()%20{%20%20%20%20%20%20var%20input%20=%20root.querySelector(%22#watch-q%22);%20%20%20%20%20%20attachSuggest(input,%20root.querySelector(%22#watch-suggest%22),%20%20%20%20%20%20%20%20suggestURL(%22/items/search.json%22,%20%22market%22),%20%20%20%20%20%20%20%20function%20(it,%20input)%20{%20%20%20%20%20%20%20%20%20%20input.value%20=%20it.name;%20%20%20%20%20%20%20%20%20%20var%20form%20=%20document.createElement(%22form%22);%20%20%20%20%20%20%20%20%20%20form.method%20=%20%22post%22;%20%20%20%20%20%20%20%20%20%20form.action%20=%20%22/market/watch%22;%20%20%20%20%20%20%20%20%20%20form.hidden%20=%20true;%20%20%20%20%20%20%20%20%20%20var%20fields%20=%20{%20%20%20%20%20%20%20%20%20%20%20%20action:%20%22add%22,%20type:%20String(it.id),%20%20%20%20%20%20%20%20%20%20%20%20region:%20input.getAttribute(%22data-watch-region%22)%20||%20%22%22,%20%20%20%20%20%20%20%20%20%20%20%20threshold:%20%225%22,%20next:%20%22/market/%22%20%20%20%20%20%20%20%20%20%20};%20%20%20%20%20%20%20%20%20%20Object.keys(fields).forEach(function%20(name)%20{%20%20%20%20%20%20%20%20%20%20%20%20var%20field%20=%20document.createElement(%22input%22);%20%20%20%20%20%20%20%20%20%20%20%20field.type%20=%20%22hidden%22;%20%20%20%20%20%20%20%20%20%20%20%20field.name%20=%20name;%20%20%20%20%20%20%20%20%20%20%20%20field.value%20=%20fields[name];%20%20%20%20%20%20%20%20%20%20%20%20form.appendChild(field);%20%20%20%20%20%20%20%20%20%20});%20%20%20%20%20%20%20%20%20%20document.body.appendChild(form);%20%20%20%20%20%20%20%20%20%20form.submit();%20%20%20%20%20%20%20%20});%20%20%20%20})();%20%20%20%20//%20Planner:%20a%20pick%20opens%20that%20product's%20plan.%20%20%20%20attachSuggest(%20%20%20%20%20%20root.querySelector(%22#planner-q%22),%20%20%20%20%20%20root.querySelector(%22#planner-suggest%22),%20%20%20%20%20%20suggestURL(%22/items/search.json%22,%20%22planner%22),%20%20%20%20%20%20function%20(it)%20{%20%20%20%20%20%20%20%20window.location.href%20=%20%22/planner/?product=%22%20+%20encodeURIComponent(it.id);%20%20%20%20%20%20});%20%20%20%20//%20Skill-plan%20add%20box:%20a%20pick%20fills%20the%20exact%20skill%20name%20and%20%20%20%20//%20runs%20the%20search,%20which%20offers%20the%20level%20picker%20as%20usual.%20%20%20%20(function%20()%20{%20%20%20%20%20%20var%20input%20=%20root.querySelector(%22#skill-q%22);%20%20%20%20%20%20attachSuggest(input,%20root.querySelector(%22#skill-suggest%22),%20%20%20%20%20%20%20%20suggestURL(%22/items/search.json%22,%20%22skills%22),%20%20%20%20%20%20%20%20function%20(it,%20input)%20{%20%20%20%20%20%20%20%20%20%20input.value%20=%20it.name;%20%20%20%20%20%20%20%20%20%20if%20(input.form)%20input.form.submit();%20%20%20%20%20%20%20%20});%20%20%20%20})();%20%20%20%20//%20Items%20DB%20search:%20a%20pick%20opens%20the%20item's%20details%20page.%20%20%20%20attachSuggest(%20%20%20%20%20%20root.querySelector(%22#items-q%22),%20%20%20%20%20%20root.querySelector(%22#items-suggest%22),%20%20%20%20%20%20suggestURL(%22/items/search.json%22,%20%22all%22),%20%20%20%20%20%20function%20(it)%20{%20%20%20%20%20%20%20%20window.location.href%20=%20%22/items/type/%22%20+%20encodeURIComponent(it.id)%20+%20%22/%22;%20%20%20%20%20%20});%20%20}%20%20onContentReady(initPageSuggest);%20%20initPageSuggest(document);%20%20//%20Banner%20global%20search:%20items,%20your%20characters,%20systems,%20regions,%20%20//%20pilots%20and%20organizations%20the%20app%20already%20knows,%20each%20to%20its%20own%20%20//%20page.%20%20attachSuggest(%20%20%20%20document.getElementById(%22topbar-q%22),%20%20%20%20document.getElementById(%22topbar-suggest%22),%20%20%20%20function%20(q)%20{%20return%20%22/search.json?q=%22%20+%20encodeURIComponent(q);%20},%20%20%20%20function%20(it)%20{%20%20%20%20%20%20var%20url;%20%20%20%20%20%20if%20(it.kind%20===%20%22character%22)%20{%20%20%20%20%20%20%20%20url%20=%20%22/character/?character=%22%20+%20encodeURIComponent(it.id);%20%20%20%20%20%20}%20else%20if%20(it.kind%20===%20%22pilot%22)%20{%20%20%20%20%20%20%20%20url%20=%20%22/pilot/?character=%22%20+%20encodeURIComponent(it.id);%20%20%20%20%20%20}%20else%20if%20(it.kind%20===%20%22corporation%22)%20{%20%20%20%20%20%20%20%20url%20=%20%22/corporation/?corporation=%22%20+%20encodeURIComponent(it.id);%20%20%20%20%20%20}%20else%20if%20(it.kind%20===%20%22alliance%22)%20{%20%20%20%20%20%20%20%20url%20=%20%22/alliance/?alliance=%22%20+%20encodeURIComponent(it.id);%20%20%20%20%20%20}%20else%20if%20(it.kind%20===%20%22system%22)%20{%20%20%20%20%20%20%20%20url%20=%20%22/system/?system=%22%20+%20encodeURIComponent(it.id);%20%20%20%20%20%20}%20else%20if%20(it.kind%20===%20%22region%22)%20{%20%20%20%20%20%20%20%20url%20=%20%22/region/?region=%22%20+%20encodeURIComponent(it.id);%20%20%20%20%20%20}%20else%20{%20%20%20%20%20%20%20%20url%20=%20%22/items/type/%22%20+%20encodeURIComponent(it.id)%20+%20%22/%22;%20%20%20%20%20%20}%20%20%20%20%20%20window.location.href%20=%20url;%20%20%20%20});})();//%20Live%20regions:%20a%20section%20rendered%20while%20its%20data%20is%20still//%20warming%20polls%20its%20fragment%20endpoint%20and%20swaps%20itself%20in%20when//%20the%20state%20leaves%20pending.%20The%20server%20renders%20the%20section%20again//%20from%20stored%20rows%20only;%20polling%20stops%20as%20soon%20as%20the%20returned//%20fragment%20settles.%20It%20never%20gives%20up%20while%20the%20fragment%20keeps//%20answering%20pending:%20a%20fast%20cadence%20at%20first,%20then%20a%20slower//%20steady%20one,%20so%20a%20slow%20first%20warm%20(a%20cold%20worker%20catching%20up//%20after%20a%20restart)%20still%20fills%20the%20page%20in%20on%20its%20own%20instead//%20of%20stranding%20the%20pending%20copy%20until%20a%20manual%20refresh.%20When//%20the%20tab%20becomes%20visible%20again%20the%20next%20poll%20happens%20at%20once//%20instead%20of%20whenever%20a%20throttled%20timer%20gets%20round%20to%20it.(function%20()%20{%20%20if%20(!window.fetch)%20return;%20%20var%20kicks%20=%20[];%20%20//%20Arm%20the%20pending%20regions%20in%20fresh%20markup.%20Old%20regions%20leave%20%20//%20with%20the%20swap%20(their%20polls%20notice%20the%20detach%20and%20stop),%20and%20%20//%20the%20kick%20list%20resets%20so%20visibility%20wakes%20only%20live%20ones.%20%20function%20armRegions(root)%20{%20%20%20%20var%20regions%20=%20root.querySelectorAll(%22[data-live-region]%22);%20%20%20%20for%20(var%20i%20=%200;%20i%20%3C%20regions.length;%20i++)%20{%20%20%20%20%20%20arm(regions[i]);%20%20%20%20}%20%20}%20%20window.EveSynapseContent.onReady(armRegions);%20%20document.addEventListener(%22evesynapse:content-will-swap%22,%20function%20()%20{%20%20%20%20kicks%20=%20[];%20%20});%20%20function%20arm(region)%20{%20%20%20%20var%20url%20=%20region.getAttribute(%22data-poll-url%22);%20%20%20%20if%20(!url)%20return;%20%20%20%20var%20polls%20=%200;%20%20%20%20var%20timer%20=%20null;%20%20%20%20var%20stopped%20=%20false;%20%20%20%20function%20stop()%20{%20%20%20%20%20%20stopped%20=%20true;%20%20%20%20%20%20if%20(timer%20!==%20null)%20{%20%20%20%20%20%20%20%20window.clearTimeout(timer);%20%20%20%20%20%20%20%20timer%20=%20null;%20%20%20%20%20%20}%20%20%20%20}%20%20%20%20function%20schedule()%20{%20%20%20%20%20%20if%20(stopped)%20return;%20%20%20%20%20%20//%20~1.5s%20while%20the%20wait%20is%20young%20(the%20first%20minute%20or%20%20%20%20%20%20//%20so),%20then%20a%20steady%20~5s%20for%20as%20long%20as%20it%20takes.%20%20%20%20%20%20timer%20=%20window.setTimeout(poll,%20polls%20%3C%2040%20?%201500%20:%205000);%20%20%20%20}%20%20%20%20function%20poll()%20{%20%20%20%20%20%20timer%20=%20null;%20%20%20%20%20%20if%20(stopped)%20return;%20%20%20%20%20%20if%20(!document.contains(region))%20{%20%20%20%20%20%20%20%20stop();%20%20%20%20%20%20%20%20return;%20%20%20%20%20%20}%20%20%20%20%20%20polls%20+=%201;%20%20%20%20%20%20window.fetch(url,%20{%20%20%20%20%20%20%20%20credentials:%20%22same-origin%22,%20%20%20%20%20%20%20%20headers:%20{%20%22X-Requested-With%22:%20%22XMLHttpRequest%22%20}%20%20%20%20%20%20}).then(function%20(resp)%20{%20%20%20%20%20%20%20%20return%20resp.text();%20%20%20%20%20%20}).then(function%20(html)%20{%20%20%20%20%20%20%20%20var%20probe%20=%20document.createElement(%22div%22);%20%20%20%20%20%20%20%20probe.innerHTML%20=%20html;%20%20%20%20%20%20%20%20var%20fresh%20=%20probe.querySelector(%22[data-poll-state]%22);%20%20%20%20%20%20%20%20if%20(!fresh)%20{%20%20%20%20%20%20%20%20%20%20//%20Not%20a%20fragment%20(a%20redirect%20to%20a%20full%20page,%20an%20%20%20%20%20%20%20%20%20%20//%20error):%20stop%20polling%20and%20let%20a%20reload%20show%20it.%20%20%20%20%20%20%20%20%20%20stop();%20%20%20%20%20%20%20%20%20%20window.location.reload();%20%20%20%20%20%20%20%20%20%20return;%20%20%20%20%20%20%20%20}%20%20%20%20%20%20%20%20var%20state%20=%20fresh.getAttribute(%22data-poll-state%22);%20%20%20%20%20%20%20%20if%20(state%20!==%20%22pending%22%20&&%20state%20!==%20%22loading%22)%20{%20%20%20%20%20%20%20%20%20%20stop();%20%20%20%20%20%20%20%20%20%20//%20The%20page%20title%20renders%20above%20the%20panel%20(base.html's%20%20%20%20%20%20%20%20%20%20//%20pagetitle%20block),%20outside%20this%20region,%20so%20a%20title%20%20%20%20%20%20%20%20%20%20//%20that%20depended%20on%20the%20loaded%20record%20would%20never%20catch%20%20%20%20%20%20%20%20%20%20//%20up.%20The%20fragment%20carries%20it%20as%20data-title-text;%20sync%20%20%20%20%20%20%20%20%20%20//%20the%20heading%20before%20the%20region%20itself%20is%20replaced.%20%20%20%20%20%20%20%20%20%20var%20titleText%20=%20fresh.getAttribute(%22data-title-text%22);%20%20%20%20%20%20%20%20%20%20if%20(titleText)%20{%20%20%20%20%20%20%20%20%20%20%20%20var%20h1%20=%20document.querySelector(%22#main-content%20%3E%20h1%22);%20%20%20%20%20%20%20%20%20%20%20%20if%20(h1)%20{%20%20%20%20%20%20%20%20%20%20%20%20%20%20var%20gt%20=%20h1.querySelector(%22.gt%22);%20%20%20%20%20%20%20%20%20%20%20%20%20%20(gt%20||%20h1).textContent%20=%20titleText;%20%20%20%20%20%20%20%20%20%20%20%20}%20%20%20%20%20%20%20%20%20%20}%20%20%20%20%20%20%20%20%20%20region.outerHTML%20=%20html;%20%20%20%20%20%20%20%20}%20else%20{%20%20%20%20%20%20%20%20%20%20schedule();%20%20%20%20%20%20%20%20}%20%20%20%20%20%20}).catch(function%20()%20{%20%20%20%20%20%20%20%20//%20A%20failed%20poll%20is%20not%20news;%20the%20next%20one%20is%20already%20%20%20%20%20%20%20%20//%20scheduled%20and%20retries%20at%20the%20same%20cadence.%20%20%20%20%20%20%20%20schedule();%20%20%20%20%20%20});%20%20%20%20}%20%20%20%20kicks.push(function%20()%20{%20%20%20%20%20%20if%20(stopped)%20return;%20%20%20%20%20%20if%20(timer%20!==%20null)%20{%20%20%20%20%20%20%20%20window.clearTimeout(timer);%20%20%20%20%20%20%20%20timer%20=%20null;%20%20%20%20%20%20}%20%20%20%20%20%20poll();%20%20%20%20});%20%20%20%20schedule();%20%20}%20%20armRegions(document);%20%20document.addEventListener(%22visibilitychange%22,%20function%20()%20{%20%20%20%20if%20(document.visibilityState%20!==%20%22visible%22)%20return;%20%20%20%20for%20(var%20i%20=%200;%20i%20%3C%20kicks.length;%20i++)%20{%20%20%20%20%20%20kicks[i]();%20%20%20%20}%20%20});})();//%20---%20Market%20history%20chart:%20day-point%20tooltips%20---------------//%20Hover%20(mouse)%20or%20focus%20(keyboard)%20follows%20the%20point;%20a%20tap//%20pins%20the%20tip%20so%20it%20can%20be%20read,%20and%20the%20next%20tap%20%E2%80%94%20the%20same//%20point%20again,%20or%20anywhere%20else%20%E2%80%94%20lets%20it%20go.%20Pressing%20and//%20dragging%20across%20the%20chart%20scrubs%20to%20the%20nearest%20recorded%20day//%20while%20the%20tip%20follows%20the%20pointer.%20Delegation%20on%20document//%20throughout,%20so%20the%20live-region%20fragment%20swap%20that%20replaces//%20the%20chart%20body%20keeps%20working%20untouched.(function%20()%20{%20%20var%20pinned%20=%20null;%20//%20the%20.cdot%20holding%20the%20tip%20open%20by%20tap%20%20var%20scrub%20=%20null;%20//%20active%20pointer%20drag%20across%20a%20chart%20%20var%20suppressClickChart%20=%20null;%20%20var%20suppressClickUntil%20=%200;%20%20function%20tipOf(dot)%20{%20%20%20%20var%20chart%20=%20dot.closest%20?%20dot.closest(%22.pchart%22)%20:%20null;%20%20%20%20return%20chart%20?%20chart.querySelector(%22.ctip%22)%20:%20null;%20%20}%20%20function%20fill(tip,%20dot)%20{%20%20%20%20tip.innerHTML%20=%20%22%22;%20%20%20%20var%20date%20=%20document.createElement(%22div%22);%20%20%20%20date.className%20=%20%22ctip-date%22;%20%20%20%20date.textContent%20=%20dot.getAttribute(%22data-date%22);%20%20%20%20tip.appendChild(date);%20%20%20%20var%20rows%20=%20[];%20%20%20%20//%20Balance%20charts%20carry%20one%20figure;%20the%20Net%20worth%20chart%20breaks%20%20%20%20//%20its%20total%20into%20ISK%20and%20assets;%20market%20history%20dots%20carry%20the%20%20%20%20//%20full%20day.%20Render%20whichever%20the%20dot%20brought.%20%20%20%20var%20balance%20=%20dot.getAttribute(%22data-balance%22);%20%20%20%20if%20(dot.getAttribute(%22data-isk%22)%20!==%20null)%20{%20%20%20%20%20%20rows.push([%22ISK%22,%20dot.getAttribute(%22data-isk%22)%20+%20%22%20ISK%22]);%20%20%20%20%20%20rows.push([%22Assets%20&%20orders%22,%20dot.getAttribute(%22data-assets%22)%20+%20%22%20ISK%22]);%20%20%20%20%20%20rows.push([%22Total%22,%20balance%20+%20%22%20ISK%22]);%20%20%20%20}%20else%20if%20(balance)%20{%20%20%20%20%20%20rows.push([%22Balance%22,%20balance%20+%20%22%20ISK%22]);%20%20%20%20}%20%20%20%20if%20(dot.getAttribute(%22data-avg%22))%20{%20%20%20%20%20%20rows.push([%22Average%22,%20dot.getAttribute(%22data-avg%22)%20+%20%22%20ISK%22]);%20%20%20%20%20%20rows.push([%22High%22,%20dot.getAttribute(%22data-high%22)%20+%20%22%20ISK%22]);%20%20%20%20%20%20rows.push([%22Low%22,%20dot.getAttribute(%22data-low%22)%20+%20%22%20ISK%22]);%20%20%20%20%20%20rows.push([%22Volume%22,%20dot.getAttribute(%22data-vol%22)]);%20%20%20%20}%20%20%20%20for%20(var%20i%20=%200;%20i%20%3C%20rows.length;%20i++)%20{%20%20%20%20%20%20var%20line%20=%20document.createElement(%22div%22);%20%20%20%20%20%20line.textContent%20=%20rows[i][0]%20+%20%22:%20%22%20+%20rows[i][1];%20%20%20%20%20%20tip.appendChild(line);%20%20%20%20}%20%20}%20%20function%20markSelected(dot)%20{%20%20%20%20var%20chart%20=%20dot.closest%20?%20dot.closest(%22.pchart%22)%20:%20null;%20%20%20%20if%20(!chart)%20return;%20%20%20%20var%20selected%20=%20chart.querySelectorAll(%22.cdot.is-selected%22);%20%20%20%20for%20(var%20i%20=%200;%20i%20%3C%20selected.length;%20i++)%20{%20%20%20%20%20%20if%20(selected[i]%20!==%20dot)%20selected[i].classList.remove(%22is-selected%22);%20%20%20%20}%20%20%20%20dot.classList.add(%22is-selected%22);%20%20}%20%20function%20show(dot,%20clientX)%20{%20%20%20%20var%20tip%20=%20tipOf(dot);%20%20%20%20if%20(!tip)%20return;%20%20%20%20markSelected(dot);%20%20%20%20fill(tip,%20dot);%20%20%20%20tip.hidden%20=%20false;%20%20%20%20var%20chart%20=%20tip.parentElement;%20%20%20%20var%20crect%20=%20chart.getBoundingClientRect();%20%20%20%20var%20drect%20=%20dot.getBoundingClientRect();%20%20%20%20var%20left%20=%20(typeof%20clientX%20===%20%22number%22)%20%20%20%20%20%20?%20clientX%20-%20crect.left%20%20%20%20%20%20:%20drect.left%20-%20crect.left%20+%20drect.width%20/%202;%20%20%20%20var%20half%20=%20tip.offsetWidth%20/%202;%20%20%20%20if%20(left%20%3C%20half)%20left%20=%20half;%20%20%20%20if%20(left%20%3E%20crect.width%20-%20half)%20left%20=%20crect.width%20-%20half;%20%20%20%20tip.style.left%20=%20left%20+%20%22px%22;%20%20%20%20tip.style.top%20=%20(drect.top%20-%20crect.top)%20+%20%22px%22;%20%20}%20%20function%20hide(dot)%20{%20%20%20%20var%20tip%20=%20tipOf(dot);%20%20%20%20if%20(tip)%20tip.hidden%20=%20true;%20%20%20%20if%20(dot)%20dot.classList.remove(%22is-selected%22);%20%20}%20%20function%20asDot(ev)%20{%20%20%20%20var%20t%20=%20ev.target;%20%20%20%20return%20t%20&&%20t.closest%20?%20t.closest(%22.cdot%22)%20:%20null;%20%20}%20%20function%20chartOf(target)%20{%20%20%20%20return%20target%20&&%20target.closest%20?%20target.closest(%22.pchart%22)%20:%20null;%20%20}%20%20function%20nearestDot(chart,%20clientX)%20{%20%20%20%20var%20dots%20=%20chart.querySelectorAll(%22.cdot%22);%20%20%20%20var%20best%20=%20null;%20%20%20%20var%20bestDistance%20=%20Infinity;%20%20%20%20for%20(var%20i%20=%200;%20i%20%3C%20dots.length;%20i++)%20{%20%20%20%20%20%20var%20rect%20=%20dots[i].getBoundingClientRect();%20%20%20%20%20%20var%20distance%20=%20Math.abs(clientX%20-%20(rect.left%20+%20rect.width%20/%202));%20%20%20%20%20%20if%20(distance%20%3C%20bestDistance)%20{%20%20%20%20%20%20%20%20bestDistance%20=%20distance;%20%20%20%20%20%20%20%20best%20=%20dots[i];%20%20%20%20%20%20}%20%20%20%20}%20%20%20%20return%20best;%20%20}%20%20document.addEventListener(%22pointerdown%22,%20function%20(ev)%20{%20%20%20%20if%20(ev.button%20!==%20undefined%20&&%20ev.button%20!==%200)%20return;%20%20%20%20var%20chart%20=%20chartOf(ev.target);%20%20%20%20if%20(!chart%20||%20!chart.hasAttribute(%22data-chart-scrub%22))%20return;%20%20%20%20if%20(!ev.target%20||%20!ev.target.closest%20||%20!ev.target.closest(%22svg%22))%20return;%20%20%20%20var%20dot%20=%20nearestDot(chart,%20ev.clientX);%20%20%20%20if%20(!dot)%20return;%20%20%20%20scrub%20=%20{%20chart:%20chart,%20pointerId:%20ev.pointerId,%20dot:%20dot,%20moved:%20false%20};%20%20%20%20show(dot,%20ev.clientX);%20%20});%20%20document.addEventListener(%22pointermove%22,%20function%20(ev)%20{%20%20%20%20if%20(!scrub%20||%20ev.pointerId%20!==%20scrub.pointerId)%20return;%20%20%20%20var%20dot%20=%20nearestDot(scrub.chart,%20ev.clientX);%20%20%20%20if%20(!dot)%20return;%20%20%20%20scrub.moved%20=%20true;%20%20%20%20scrub.dot%20=%20dot;%20%20%20%20show(dot,%20ev.clientX);%20%20});%20%20function%20endScrub(ev)%20{%20%20%20%20if%20(!scrub%20||%20ev.pointerId%20!==%20scrub.pointerId)%20return;%20%20%20%20if%20(scrub.moved%20&&%20ev.type%20!==%20%22pointercancel%22)%20{%20%20%20%20%20%20if%20(pinned%20&&%20pinned%20!==%20scrub.dot)%20hide(pinned);%20%20%20%20%20%20pinned%20=%20scrub.dot;%20%20%20%20%20%20show(scrub.dot,%20ev.clientX);%20%20%20%20%20%20suppressClickChart%20=%20scrub.chart;%20%20%20%20%20%20suppressClickUntil%20=%20Date.now()%20+%20500;%20%20%20%20}%20%20%20%20scrub%20=%20null;%20%20}%20%20document.addEventListener(%22pointerup%22,%20endScrub);%20%20document.addEventListener(%22pointercancel%22,%20endScrub);%20%20document.addEventListener(%22mouseover%22,%20function%20(ev)%20{%20%20%20%20var%20dot%20=%20asDot(ev);%20%20%20%20if%20(dot%20&&%20pinned%20!==%20dot)%20show(dot);%20%20});%20%20document.addEventListener(%22mouseout%22,%20function%20(ev)%20{%20%20%20%20var%20dot%20=%20asDot(ev);%20%20%20%20if%20(dot%20&&%20pinned%20!==%20dot)%20hide(dot);%20%20});%20%20document.addEventListener(%22focusin%22,%20function%20(ev)%20{%20%20%20%20var%20dot%20=%20asDot(ev);%20%20%20%20if%20(dot)%20show(dot);%20%20});%20%20document.addEventListener(%22focusout%22,%20function%20(ev)%20{%20%20%20%20var%20dot%20=%20asDot(ev);%20%20%20%20if%20(dot%20&&%20pinned%20!==%20dot)%20hide(dot);%20%20});%20%20document.addEventListener(%22click%22,%20function%20(ev)%20{%20%20%20%20var%20clickChart%20=%20chartOf(ev.target);%20%20%20%20if%20(clickChart%20&&%20clickChart%20===%20suppressClickChart%20&&%20Date.now()%20%3C=%20suppressClickUntil)%20{%20%20%20%20%20%20suppressClickChart%20=%20null;%20%20%20%20%20%20return;%20%20%20%20}%20%20%20%20var%20dot%20=%20asDot(ev);%20%20%20%20if%20(dot)%20{%20%20%20%20%20%20if%20(pinned%20===%20dot)%20{%20%20%20%20%20%20%20%20pinned%20=%20null;%20%20%20%20%20%20%20%20hide(dot);%20%20%20%20%20%20}%20else%20{%20%20%20%20%20%20%20%20if%20(pinned)%20hide(pinned);%20%20%20%20%20%20%20%20pinned%20=%20dot;%20%20%20%20%20%20%20%20show(dot);%20%20%20%20%20%20}%20%20%20%20}%20else%20if%20(pinned)%20{%20%20%20%20%20%20hide(pinned);%20%20%20%20%20%20pinned%20=%20null;%20%20%20%20}%20%20});%20%20document.addEventListener(%22keydown%22,%20function%20(ev)%20{%20%20%20%20if%20(ev.key%20===%20%22Escape%22%20&&%20pinned)%20{%20%20%20%20%20%20hide(pinned);%20%20%20%20%20%20pinned%20=%20null;%20%20%20%20}%20%20});})();//%20Page-sync%20indicator:%20while%20this%20page%20still%20has%20data%20on%20the//%20way%20(names,%20descriptions,%20price%20history%20it%20asked%20for),%20the//%20top%20banner%20shows%20a%20small%20ember%20ring%20with%20the%20count.%20It%20polls//%20a%20cache-only%20status%20endpoint%20%E2%80%94%20never%20the%20data%20itself%20%E2%80%94%20and//%20hides%20the%20moment%20the%20page%20has%20everything.%20Polling%20never//%20gives%20up%20while%20the%20page%20is%20still%20waiting:%20fast%20at%20first,//%20then%20a%20slower%20steady%20cadence%20for%20as%20long%20as%20the%20status%20says//%20pending,%20so%20the%20ring%20never%20sits%20spinning%20over%20a%20page%20nobody//%20is%20checking%20on%20any%20more%20(a%20cold%20worker%20can%20take%20minutes%20to//%20warm%20a%20first%20name;%20the%20page%20still%20fills%20itself%20in).%20A%20tab//%20coming%20back%20to%20the%20front%20re-checks%20immediately.%20Background//%20sync%20in%20general%20is%20not%20reported%20here.(function%20()%20{%20%20var%20indicator%20=%20document.getElementById(%22page-sync-indicator%22);%20%20if%20(!indicator%20||%20!window.fetch)%20return;%20%20var%20label%20=%20indicator.querySelector(%22[data-page-sync-label]%22);%20%20//%20The%20poll%20in%20flight,%20if%20any.%20A%20swap%20stops%20it%20(the%20URL%20it%20asks%20%20//%20about%20belongs%20to%20the%20old%20page)%20and%20starts%20one%20for%20the%20new%20%20//%20page;%20the%20visibility%20handler%20below%20always%20wakes%20the%20current.%20%20var%20active%20=%20null;%20%20function%20unresolvedRegions()%20{%20%20%20%20return%20document.querySelectorAll(%20%20%20%20%20%20%22[data-live-region][data-poll-state='pending'],%20[data-live-region][data-poll-state='loading']%22%20%20%20%20).length;%20%20}%20%20function%20show(pending)%20{%20%20%20%20indicator.hidden%20=%20false;%20%20%20%20if%20(label)%20{%20%20%20%20%20%20label.textContent%20=%20pending%20%3E%200%20%20%20%20%20%20%20%20?%20%22Loading%20page%20data%20%C2%B7%20%22%20+%20pending%20%20%20%20%20%20%20%20:%20%22Loading%20page%20data%E2%80%A6%22;%20%20%20%20}%20%20}%20%20function%20stopPageSync()%20{%20%20%20%20if%20(active)%20{%20%20%20%20%20%20active.stopped%20=%20true;%20%20%20%20%20%20if%20(active.timer%20!==%20null)%20window.clearTimeout(active.timer);%20%20%20%20%20%20active%20=%20null;%20%20%20%20}%20%20}%20%20function%20startPageSync()%20{%20%20%20%20stopPageSync();%20%20%20%20var%20job%20=%20{%20%20%20%20%20%20page:%20window.location.pathname%20+%20window.location.search,%20%20%20%20%20%20polls:%200,%20%20%20%20%20%20timer:%20null,%20%20%20%20%20%20stopped:%20false%20%20%20%20};%20%20%20%20active%20=%20job;%20%20%20%20function%20schedule()%20{%20%20%20%20%20%20if%20(job.stopped)%20return;%20%20%20%20%20%20//%20~1.5s%20for%20the%20first%20couple%20of%20minutes,%20then%20a%20steady%20%20%20%20%20%20//%20~5s%20while%20the%20page%20is%20still%20waiting.%20%20%20%20%20%20job.timer%20=%20window.setTimeout(poll,%20job.polls%20%3C=%2080%20?%201500%20:%205000);%20%20%20%20}%20%20%20%20function%20poll()%20{%20%20%20%20%20%20job.timer%20=%20null;%20%20%20%20%20%20if%20(job.stopped)%20return;%20%20%20%20%20%20job.polls%20+=%201;%20%20%20%20%20%20window.fetch(%22/sync/page-status?page=%22%20+%20encodeURIComponent(job.page),%20{%20%20%20%20%20%20%20%20credentials:%20%22same-origin%22,%20%20%20%20%20%20%20%20headers:%20{%20%22X-Requested-With%22:%20%22XMLHttpRequest%22%20}%20%20%20%20%20%20}).then(function%20(resp)%20{%20%20%20%20%20%20%20%20return%20resp.json();%20%20%20%20%20%20}).then(function%20(status)%20{%20%20%20%20%20%20%20%20var%20pending%20=%20status%20&&%20typeof%20status.pending%20===%20%22number%22%20?%20status.pending%20:%200;%20%20%20%20%20%20%20%20if%20(pending%20%3E%200%20||%20unresolvedRegions()%20%3E%200)%20{%20%20%20%20%20%20%20%20%20%20show(pending);%20%20%20%20%20%20%20%20%20%20schedule();%20%20%20%20%20%20%20%20}%20else%20{%20%20%20%20%20%20%20%20%20%20indicator.hidden%20=%20true;%20%20%20%20%20%20%20%20%20%20if%20(active%20===%20job)%20active%20=%20null;%20%20%20%20%20%20%20%20%20%20job.stopped%20=%20true;%20%20%20%20%20%20%20%20}%20%20%20%20%20%20}).catch(function%20()%20{%20%20%20%20%20%20%20%20//%20A%20failed%20status%20poll%20is%20not%20news;%20the%20next%20one%20retries%20%20%20%20%20%20%20%20//%20at%20the%20same%20cadence.%20%20%20%20%20%20%20%20schedule();%20%20%20%20%20%20});%20%20%20%20}%20%20%20%20job.kick%20=%20function%20()%20{%20%20%20%20%20%20if%20(job.stopped)%20return;%20%20%20%20%20%20if%20(job.timer%20!==%20null)%20{%20%20%20%20%20%20%20%20window.clearTimeout(job.timer);%20%20%20%20%20%20%20%20job.timer%20=%20null;%20%20%20%20%20%20}%20%20%20%20%20%20poll();%20%20%20%20};%20%20%20%20schedule();%20%20}%20%20document.addEventListener(%22visibilitychange%22,%20function%20()%20{%20%20%20%20if%20(document.visibilityState%20!==%20%22visible%22%20||%20!active)%20return;%20%20%20%20active.kick();%20%20});%20%20document.addEventListener(%22evesynapse:content-will-swap%22,%20stopPageSync);%20%20document.addEventListener(%22evesynapse:content-ready%22,%20startPageSync);%20%20startPageSync();})();//%20Navigation%20state:%20the%20wide%20sidebar%20can%20be%20expanded,%20collapsed//%20to%20an%20icon%20rail,%20or%20hidden%20entirely;%20the%20choice%20persists%20in//%20local%20storage.%20On%20small%20screens%20the%20same%20sidebar%20is%20an//%20off-canvas%20drawer%20driven%20by%20the%20checkbox%20in%20the%20page%20markup,//%20so%20it%20still%20opens%20and%20closes%20with%20scripts%20disabled.(function%20()%20{%20%20%22use%20strict%22;%20%20var%20root%20=%20document.documentElement;%20%20var%20sidebar%20=%20document.getElementById(%22site-nav%22);%20%20var%20drawerToggle%20=%20document.getElementById(%22nav-drawer-toggle%22);%20%20var%20hamburger%20=%20document.querySelector(%22.nav-hamburger%22);%20%20var%20collapseButton%20=%20document.getElementById(%22nav-collapse%22);%20%20var%20hideButton%20=%20document.getElementById(%22nav-hide%22);%20%20var%20reopenButton%20=%20document.getElementById(%22nav-reopen%22);%20%20var%20drawerClose%20=%20document.querySelector(%22.nav-drawer-close%22);%20%20var%20expandAllButton%20=%20document.getElementById(%22nav-expand-all%22);%20%20var%20categoryBranches%20=%20sidebar%20?%20sidebar.querySelectorAll(%22.sidenav%20details.branch%22)%20:%20[];%20%20var%20drawerQuery%20=%20window.matchMedia%20?%20window.matchMedia(%22(max-width:%20860px)%22)%20:%20{%20matches:%20false%20};%20%20var%20storageKey%20=%20%22evesynapse-nav%22;%20%20function%20currentState()%20{%20%20%20%20return%20root.getAttribute(%22data-nav%22)%20||%20%22expanded%22;%20%20}%20%20function%20storeState(state)%20{%20%20%20%20try%20{%20%20%20%20%20%20window.localStorage.setItem(storageKey,%20state);%20%20%20%20}%20catch%20(e)%20{%20/*%20private%20mode:%20this%20page%20still%20works%20*/%20}%20%20%20%20//%20Also%20in%20a%20cookie,%20so%20the%20server%20renders%20the%20saved%20layout%20on%20%20%20%20//%20the%20next%20page%20load%20and%20it%20never%20paints%20the%20default%20first%20(see%20%20%20%20//%20ui_navstate.go).%20Without%20storage,%20a%20cookie%20alone%20still%20keeps%20it.%20%20%20%20document.cookie%20=%20storageKey%20+%20%22=%22%20+%20state%20+%20%22;%20path=/;%20max-age=31536000;%20samesite=lax%22%20+%20%20%20%20%20%20(window.location.protocol%20===%20%22https:%22%20?%20%22;%20secure%22%20:%20%22%22);%20%20}%20%20function%20allCategoriesOpen()%20{%20%20%20%20if%20(!categoryBranches.length)%20{%20%20%20%20%20%20return%20false;%20%20%20%20}%20%20%20%20for%20(var%20i%20=%200;%20i%20%3C%20categoryBranches.length;%20i++)%20{%20%20%20%20%20%20if%20(!categoryBranches[i].open)%20{%20%20%20%20%20%20%20%20return%20false;%20%20%20%20%20%20}%20%20%20%20}%20%20%20%20return%20true;%20%20}%20%20function%20syncExpandAllButton()%20{%20%20%20%20if%20(!expandAllButton)%20{%20%20%20%20%20%20return;%20%20%20%20}%20%20%20%20var%20allOpen%20=%20allCategoriesOpen();%20%20%20%20expandAllButton.setAttribute(%22aria-expanded%22,%20allOpen%20?%20%22true%22%20:%20%22false%22);%20%20%20%20expandAllButton.setAttribute(%22aria-label%22,%20allOpen%20?%20%22Collapse%20all%20navigation%20categories%22%20:%20%22Expand%20all%20navigation%20categories%22);%20%20%20%20expandAllButton.setAttribute(%22title%22,%20allOpen%20?%20%22Collapse%20all%20navigation%20categories%22%20:%20%22Expand%20all%20navigation%20categories%22);%20%20}%20%20//%20The%20category%20of%20the%20page%20being%20shown%20stays%20open%20while%20the%20menu%20%20//%20shows%20its%20labels.%20%20function%20openActiveCategory()%20{%20%20%20%20var%20active%20=%20sidebar%20?%20sidebar.querySelector(%22.sidenav%20details.branch.active%22)%20:%20null;%20%20%20%20if%20(active)%20active.open%20=%20true;%20%20}%20%20function%20closeCategoryBranches(except)%20{%20%20%20%20for%20(var%20i%20=%200;%20i%20%3C%20categoryBranches.length;%20i++)%20{%20%20%20%20%20%20if%20(categoryBranches[i]%20!==%20except)%20{%20%20%20%20%20%20%20%20categoryBranches[i].open%20=%20false;%20%20%20%20%20%20}%20%20%20%20}%20%20}%20%20function%20railActive()%20{%20%20%20%20return%20currentState()%20===%20%22rail%22%20&&%20!drawerQuery.matches;%20%20}%20%20function%20syncNavigationControls()%20{%20%20%20%20var%20drawerOpen%20=%20!!(drawerToggle%20&&%20drawerToggle.checked%20&&%20drawerQuery.matches);%20%20%20%20if%20(hamburger)%20{%20%20%20%20%20%20hamburger.setAttribute(%22aria-expanded%22,%20drawerOpen%20?%20%22true%22%20:%20%22false%22);%20%20%20%20}%20%20%20%20if%20(reopenButton)%20{%20%20%20%20%20%20reopenButton.setAttribute(%22aria-expanded%22,%20currentState()%20===%20%22hidden%22%20?%20%22false%22%20:%20%22true%22);%20%20%20%20}%20%20%20%20if%20(collapseButton)%20{%20%20%20%20%20%20var%20rail%20=%20currentState()%20===%20%22rail%22;%20%20%20%20%20%20collapseButton.setAttribute(%22aria-label%22,%20rail%20?%20%22Expand%20navigation%22%20:%20%22Collapse%20navigation%22);%20%20%20%20%20%20collapseButton.setAttribute(%22title%22,%20rail%20?%20%22Expand%20navigation%22%20:%20%22Collapse%20navigation%22);%20%20%20%20}%20%20%20%20syncExpandAllButton();%20%20}%20%20function%20applyNavigationState(state)%20{%20%20%20%20if%20(state%20===%20%22rail%22)%20{%20%20%20%20%20%20//%20Arrive%20in%20the%20rail%20clean:%20categories%20opened%20in%20the%20%20%20%20%20%20//%20wide%20sidebar%20keep%20their%20%3Cdetails%20open%3E%20state%20across%20%20%20%20%20%20//%20the%20switch,%20and%20each%20one%20would%20paint%20its%20own%20tall%20%20%20%20%20%20//%20flyout%20in%20the%20rail%20column%20%E2%80%94%20a%20merged%20stack%20under%20a%20%20%20%20%20%20//%20row%20of%20lit-up%20icons.%20Fold%20them%20all;%20from%20here%20the%20%20%20%20%20%20//%20rail%20opens%20one%20flyout%20at%20a%20time.%20%20%20%20%20%20closeCategoryBranches(null);%20%20%20%20}%20%20%20%20if%20(state%20===%20%22expanded%22)%20{%20%20%20%20%20%20root.removeAttribute(%22data-nav%22);%20%20%20%20%20%20openActiveCategory();%20%20%20%20}%20else%20{%20%20%20%20%20%20root.setAttribute(%22data-nav%22,%20state);%20%20%20%20}%20%20%20%20storeState(state);%20%20%20%20syncNavigationControls();%20%20}%20%20function%20closeDrawer(returnFocus)%20{%20%20%20%20if%20(drawerToggle%20&&%20drawerToggle.checked)%20{%20%20%20%20%20%20drawerToggle.checked%20=%20false;%20%20%20%20%20%20drawerToggle.dispatchEvent(new%20Event(%22change%22,%20{%20bubbles:%20true%20}));%20%20%20%20}%20%20%20%20if%20(returnFocus%20&&%20hamburger)%20{%20%20%20%20%20%20hamburger.focus();%20%20%20%20}%20%20}%20%20if%20(expandAllButton)%20{%20%20%20%20expandAllButton.addEventListener(%22click%22,%20function%20()%20{%20%20%20%20%20%20var%20shouldOpen%20=%20!allCategoriesOpen();%20%20%20%20%20%20for%20(var%20i%20=%200;%20i%20%3C%20categoryBranches.length;%20i++)%20{%20%20%20%20%20%20%20%20categoryBranches[i].open%20=%20shouldOpen;%20%20%20%20%20%20}%20%20%20%20%20%20syncExpandAllButton();%20%20%20%20});%20%20}%20%20for%20(var%20categoryIndex%20=%200;%20categoryIndex%20%3C%20categoryBranches.length;%20categoryIndex++)%20{%20%20%20%20categoryBranches[categoryIndex].addEventListener(%22toggle%22,%20function%20(event)%20{%20%20%20%20%20%20//%20In%20the%20rail%20one%20flyout%20at%20a%20time:%20opening%20a%20category%20%20%20%20%20%20//%20folds%20whichever%20flyout%20is%20already%20out.%20The%20wide%20and%20%20%20%20%20%20//%20drawer%20presentations%20keep%20their%20many-open%20behavior.%20%20%20%20%20%20if%20(event.target.open%20&&%20railActive())%20{%20%20%20%20%20%20%20%20closeCategoryBranches(event.target);%20%20%20%20%20%20}%20%20%20%20%20%20syncExpandAllButton();%20%20%20%20});%20%20}%20%20if%20(collapseButton)%20{%20%20%20%20collapseButton.addEventListener(%22click%22,%20function%20()%20{%20%20%20%20%20%20applyNavigationState(currentState()%20===%20%22rail%22%20?%20%22expanded%22%20:%20%22rail%22);%20%20%20%20});%20%20}%20%20if%20(hideButton)%20{%20%20%20%20hideButton.addEventListener(%22click%22,%20function%20()%20{%20%20%20%20%20%20applyNavigationState(%22hidden%22);%20%20%20%20});%20%20}%20%20if%20(reopenButton)%20{%20%20%20%20reopenButton.addEventListener(%22click%22,%20function%20()%20{%20%20%20%20%20%20applyNavigationState(%22expanded%22);%20%20%20%20%20%20reopenButton.setAttribute(%22aria-expanded%22,%20%22true%22);%20%20%20%20});%20%20}%20%20if%20(drawerToggle)%20{%20%20%20%20drawerToggle.addEventListener(%22change%22,%20syncNavigationControls);%20%20}%20%20if%20(hamburger)%20{%20%20%20%20hamburger.addEventListener(%22keydown%22,%20function%20(e)%20{%20%20%20%20%20%20if%20(e.key%20===%20%22Enter%22%20||%20e.key%20===%20%22%20%22)%20{%20%20%20%20%20%20%20%20e.preventDefault();%20%20%20%20%20%20%20%20hamburger.click();%20%20%20%20%20%20}%20%20%20%20});%20%20}%20%20if%20(drawerClose)%20{%20%20%20%20drawerClose.addEventListener(%22keydown%22,%20function%20(e)%20{%20%20%20%20%20%20if%20(e.key%20===%20%22Enter%22%20||%20e.key%20===%20%22%20%22)%20{%20%20%20%20%20%20%20%20e.preventDefault();%20%20%20%20%20%20%20%20drawerClose.click();%20%20%20%20%20%20}%20%20%20%20});%20%20}%20%20if%20(sidebar)%20{%20%20%20%20sidebar.addEventListener(%22click%22,%20function%20(e)%20{%20%20%20%20%20%20if%20(!drawerQuery.matches%20||%20!drawerToggle%20||%20!drawerToggle.checked)%20{%20%20%20%20%20%20%20%20return;%20%20%20%20%20%20}%20%20%20%20%20%20var%20link%20=%20e.target%20&&%20e.target.closest%20?%20e.target.closest(%22a%22)%20:%20null;%20%20%20%20%20%20if%20(link)%20{%20%20%20%20%20%20%20%20closeDrawer(false);%20%20%20%20%20%20}%20%20%20%20});%20%20}%20%20document.addEventListener(%22click%22,%20function%20(e)%20{%20%20%20%20//%20Rail%20flyouts%20dismiss%20on%20an%20outside%20click,%20like%20the%20%20%20%20//%20drawer%20does;%20a%20click%20inside%20the%20open%20category%20(its%20%20%20%20//%20summary,%20its%20menu)%20is%20the%20category's%20own%20business.%20%20%20%20if%20(!railActive()%20||%20!sidebar)%20{%20%20%20%20%20%20return;%20%20%20%20}%20%20%20%20var%20openBranch%20=%20sidebar.querySelector(%22.sidenav%20details.branch[open]%22);%20%20%20%20if%20(!openBranch)%20return;%20%20%20%20//%20A%20link%20chosen%20in%20the%20flyout%20closes%20it%20at%20once:%20the%20page%20swap%20%20%20%20//%20that%20follows%20paints%20the%20new%20content%20over%20anything%20still%20out,%20%20%20%20//%20which%20left%20the%20flyout%20half%20covered%20behind%20the%20panel.%20%20%20%20var%20link%20=%20e.target.closest%20&&%20e.target.closest(%22.menu%20a%22);%20%20%20%20if%20(!openBranch.contains(e.target)%20||%20(link%20&&%20openBranch.contains(link)))%20{%20%20%20%20%20%20closeCategoryBranches(null);%20%20%20%20}%20%20});%20%20//%20However%20a%20page%20swap%20starts%20(a%20link,%20Back,%20a%20shortcut),%20no%20rail%20%20//%20flyout%20stays%20out%20over%20the%20incoming%20page.%20%20document.addEventListener(%22evesynapse:content-will-swap%22,%20function%20()%20{%20%20%20%20if%20(railActive())%20closeCategoryBranches(null);%20%20});%20%20document.addEventListener(%22keydown%22,%20function%20(e)%20{%20%20%20%20if%20(e.key%20===%20%22Escape%22%20&&%20drawerQuery.matches)%20{%20%20%20%20%20%20closeDrawer(true);%20%20%20%20}%20%20});%20%20function%20handleDrawerBreakpoint(event)%20{%20%20%20%20//%20Entering%20small%20screens%20always%20starts%20with%20the%20drawer%20%20%20%20//%20closed;%20leaving%20them%20must%20not%20leave%20it%20hanging%20open%20either.%20%20%20%20closeDrawer(false);%20%20%20%20if%20(railActive())%20{%20%20%20%20%20%20closeCategoryBranches(null);%20%20%20%20}%20else%20{%20%20%20%20%20%20openActiveCategory();%20%20%20%20}%20%20%20%20syncNavigationControls();%20%20}%20%20if%20(drawerQuery.addEventListener)%20{%20%20%20%20drawerQuery.addEventListener(%22change%22,%20handleDrawerBreakpoint);%20%20}%20else%20if%20(drawerQuery.addListener)%20{%20%20%20%20drawerQuery.addListener(handleDrawerBreakpoint);%20%20}%20%20//%20The%20drawer%20starts%20closed%20on%20small%20screens,%20period:%20a%20%20//%20restored%20or%20stale%20checkbox%20state%20must%20not%20pop%20it%20open.%20%20if%20(drawerQuery.matches)%20{%20%20%20%20closeDrawer(false);%20%20}%20%20//%20A%20page%20that%20loads%20straight%20into%20the%20rail%20(the%20saved%20choice%20%20//%20the%20head%20script%20applied,%20a%20restored%20page)%20starts%20with%20%20//%20every%20category%20folded%20too%20%E2%80%94%20no%20flyout%20stack%20waiting%20under%20%20//%20the%20icons.%20%20if%20(railActive())%20{%20%20%20%20closeCategoryBranches(null);%20%20}%20else%20{%20%20%20%20openActiveCategory();%20%20}%20%20syncNavigationControls();%20%20//%20Enable%20width/visibility%20transitions%20only%20after%20the%20%20//%20state%20the%20head%20script%20restored%20has%20had%20frames%20to%20land:%20%20//%20user%20toggles%20glide,%20but%20a%20refresh%20or%20navigation%20into%20a%20%20//%20saved%20rail/hidden%20state%20opens%20already%20settled.%20%20function%20enableNavMotion()%20{%20%20%20%20root.classList.add(%22nav-motion-ready%22);%20%20}%20%20if%20(window.requestAnimationFrame)%20{%20%20%20%20window.requestAnimationFrame(function%20()%20{%20%20%20%20%20%20window.requestAnimationFrame(enableNavMotion);%20%20%20%20});%20%20}%20else%20{%20%20%20%20window.setTimeout(enableNavMotion,%200);%20%20}})();//%20---%20Quick%20jump%20(Ctrl+K)%20--------------------------------------//%20A%20keyboard-first%20palette%20over%20the%20same%20pool%20the%20banner%20search//%20serves%20(/search.json):%20your%20characters,%20items,%20corporations,//%20alliances%20and%20known%20pilots,%20each%20jumping%20to%20the%20page%20it%20links//%20to%20everywhere%20else.%20The%20app's%20own%20pages%20ride%20along%20as%20a%20static//%20group,%20so%20the%20palette%20is%20useful%20before%20a%20single%20letter%20is//%20typed.%20Everything%20renders%20from%20text%20nodes;%20nothing%20here%20makes//%20a%20request%20the%20banner%20search%20wouldn't.(function%20()%20{%20%20%22use%20strict%22;%20%20var%20overlay%20=%20document.getElementById(%22quickjump%22);%20%20var%20input%20=%20document.getElementById(%22quickjump-q%22);%20%20var%20list%20=%20document.getElementById(%22quickjump-results%22);%20%20var%20openBtn%20=%20document.getElementById(%22quickjump-open%22);%20%20if%20(!overlay%20||%20!input%20||%20!list%20||%20!window.fetch)%20return;%20%20//%20The%20palette's%20page%20group:%20every%20destination%20the%20sidebar%20%20//%20offers,%20in%20sidebar%20order.%20A%20test%20pins%20this%20list%20against%20%20//%20base.html's%20nav,%20so%20a%20new%20page%20joins%20both%20or%20neither.%20%20var%20quickJumpPages%20=%20[%20%20%20%20{%20name:%20%22Home%22,%20url:%20%22/%22%20},%20%20%20%20{%20name:%20%22Overview%22,%20url:%20%22/character/%22%20},%20%20%20%20{%20name:%20%22Characters%22,%20url:%20%22/characters/%22%20},%20%20%20%20{%20name:%20%22Skill%20Plans%22,%20url:%20%22/skills/plans%22%20},%20%20%20%20{%20name:%20%22Ship%20Workbench%22,%20url:%20%22/fittings/%22%20},%20%20%20%20{%20name:%20%22My%20Loadouts%22,%20url:%20%22/fittings/saved/%22%20},%20%20%20%20{%20name:%20%22Public%20Loadouts%20Browser%22,%20url:%20%22/fittings/public/%22%20},%20%20%20%20{%20name:%20%22Killmails%22,%20url:%20%22/killmails/%22%20},%20%20%20%20{%20name:%20%22Mail%22,%20url:%20%22/mail/%22%20},%20%20%20%20{%20name:%20%22Calendar%22,%20url:%20%22/calendar/%22%20},%20%20%20%20{%20name:%20%22Contacts%22,%20url:%20%22/contacts/%22%20},%20%20%20%20{%20name:%20%22Assets%22,%20url:%20%22/assets/%22%20},%20%20%20%20{%20name:%20%22Industry%22,%20url:%20%22/industry/%22%20},%20%20%20%20{%20name:%20%22Build%20Planner%22,%20url:%20%22/planner/%22%20},%20%20%20%20{%20name:%20%22Planetary%20Industry%22,%20url:%20%22/planets/%22%20},%20%20%20%20{%20name:%20%22PI%20Planner%22,%20url:%20%22/industry/pi/%22%20},%20%20%20%20{%20name:%20%22Market%22,%20url:%20%22/market/%22%20},%20%20%20%20{%20name:%20%22Spread%20Scanner%22,%20url:%20%22/market/scanner/%22%20},%20%20%20%20{%20name:%20%22Trade%20Ideas%22,%20url:%20%22/market/ideas/%22%20},%20%20%20%20{%20name:%20%22Tradefinder%22,%20url:%20%22/market/tradefinder/%22%20},%20%20%20%20{%20name:%20%22Top%20Stations%22,%20url:%20%22/market/leaderboard/%22%20},%20%20%20%20{%20name:%20%22Restock%20Planner%22,%20url:%20%22/market/restock/%22%20},%20%20%20%20{%20name:%20%22Item%20Browser%22,%20url:%20%22/items/%22%20},%20%20%20%20{%20name:%20%22Wallet%22,%20url:%20%22/wallet/%22%20},%20%20%20%20{%20name:%20%22Orders%22,%20url:%20%22/orders/%22%20},%20%20%20%20{%20name:%20%22Contracts%22,%20url:%20%22/contracts/%22%20},%20%20%20%20{%20name:%20%22Corporation%20Overview%22,%20url:%20%22/corporations/%22%20},%20%20%20%20{%20name:%20%22Corporation%20Members%22,%20url:%20%22/corporations/members/%22%20},%20%20%20%20{%20name:%20%22Corporation%20Wallets%22,%20url:%20%22/corporations/wallets/%22%20},%20%20%20%20{%20name:%20%22Corporation%20Orders%22,%20url:%20%22/corporations/orders/%22%20},%20%20%20%20{%20name:%20%22Corporation%20Assets%22,%20url:%20%22/corporations/assets/%22%20},%20%20%20%20{%20name:%20%22Corporation%20Structures%22,%20url:%20%22/corporations/structures/%22%20},%20%20%20%20{%20name:%20%22Corporation%20Killmails%22,%20url:%20%22/corporations/killmails/%22%20},%20%20%20%20{%20name:%20%22Doctrines%22,%20url:%20%22/doctrines/%22%20},%20%20%20%20{%20name:%20%22Corporate%20Loadouts%22,%20url:%20%22/doctrines/fits/%22%20},%20%20%20%20{%20name:%20%22Ship%20Replacement%20(SRP)%22,%20url:%20%22/srp/%22%20},%20%20%20%20{%20name:%20%22Discord%20Server%22,%20url:%20%22/discord/servers%22%20},%20%20%20%20{%20name:%20%22Groups%22,%20url:%20%22/groups/%22%20},%20%20%20%20{%20name:%20%22Corporation%20Settings%22,%20url:%20%22/corporations/settings/%22%20},%20%20%20%20{%20name:%20%22Wars%22,%20url:%20%22/intel/wars/%22%20},%20%20%20%20{%20name:%20%22Incursions%22,%20url:%20%22/intel/incursions/%22%20},%20%20%20%20{%20name:%20%22Faction%20Warfare%22,%20url:%20%22/intel/fw/%22%20},%20%20%20%20{%20name:%20%22Sync%22,%20url:%20%22/sync/%22%20},%20%20%20%20{%20name:%20%22Admin%22,%20url:%20%22/admin/%22%20}%20%20];%20%20//%20Sync%20and%20Admin%20are%20for%20administrators:%20the%20menu%20only%20has%20them%20for%20%20//%20one%20(base.html),%20and%20the%20palette%20offers%20them%20on%20the%20same%20terms.%20%20//%20The%20server%20refuses%20the%20pages%20to%20anyone%20else%20either%20way.%20%20var%20adminOnlyPages%20=%20{%20%22/sync/%22:%20true,%20%22/admin/%22:%20true%20};%20%20var%20isAdmin%20=%20!!document.querySelector(%22.sidenav-utility%22);%20%20//%20Result%20groups,%20in%20display%20order;%20server%20hits%20carry%20these%20%20//%20kinds%20already,%20pages%20are%20matched%20locally.%20%20var%20quickJumpGroups%20=%20[%20%20%20%20[%22page%22,%20%22Pages%22],%20%20%20%20[%22character%22,%20%22Characters%22],%20%20%20%20[%22item%22,%20%22Items%22],%20%20%20%20[%22system%22,%20%22Systems%22],%20%20%20%20[%22region%22,%20%22Regions%22],%20%20%20%20[%22corporation%22,%20%22Corporations%22],%20%20%20%20[%22alliance%22,%20%22Alliances%22],%20%20%20%20[%22pilot%22,%20%22Pilots%22]%20%20];%20%20function%20jumpURL(hit)%20{%20%20%20%20switch%20(hit.kind)%20{%20%20%20%20%20%20case%20%22page%22:%20return%20hit.url;%20%20%20%20%20%20case%20%22character%22:%20return%20%22/character/?character=%22%20+%20encodeURIComponent(hit.id);%20%20%20%20%20%20case%20%22pilot%22:%20return%20%22/pilot/?character=%22%20+%20encodeURIComponent(hit.id);%20%20%20%20%20%20case%20%22corporation%22:%20return%20%22/corporation/?corporation=%22%20+%20encodeURIComponent(hit.id);%20%20%20%20%20%20case%20%22alliance%22:%20return%20%22/alliance/?alliance=%22%20+%20encodeURIComponent(hit.id);%20%20%20%20%20%20case%20%22system%22:%20return%20%22/system/?system=%22%20+%20encodeURIComponent(hit.id);%20%20%20%20%20%20case%20%22region%22:%20return%20%22/region/?region=%22%20+%20encodeURIComponent(hit.id);%20%20%20%20%20%20default:%20return%20%22/market/?type=%22%20+%20encodeURIComponent(hit.id);%20%20%20%20}%20%20}%20%20var%20entries%20=%20[];%20%20%20//%20flat,%20selectable%20rows%20in%20display%20order%20%20var%20selected%20=%20-1;%20%20var%20timer%20=%20null;%20%20var%20querySerial%20=%200;%20%20function%20isOpen()%20{%20return%20!overlay.hidden;%20}%20%20function%20paint(groups)%20{%20%20%20%20list.innerHTML%20=%20%22%22;%20%20%20%20entries%20=%20[];%20%20%20%20selected%20=%20-1;%20%20%20%20for%20(var%20g%20=%200;%20g%20%3C%20groups.length;%20g++)%20{%20%20%20%20%20%20var%20hits%20=%20groups[g].hits;%20%20%20%20%20%20if%20(!hits.length)%20continue;%20%20%20%20%20%20var%20head%20=%20document.createElement(%22li%22);%20%20%20%20%20%20head.className%20=%20%22qj-group%22;%20%20%20%20%20%20head.setAttribute(%22role%22,%20%22presentation%22);%20%20%20%20%20%20head.textContent%20=%20groups[g].label;%20%20%20%20%20%20list.appendChild(head);%20%20%20%20%20%20for%20(var%20i%20=%200;%20i%20%3C%20hits.length;%20i++)%20{%20%20%20%20%20%20%20%20(function%20(hit)%20{%20%20%20%20%20%20%20%20%20%20var%20li%20=%20document.createElement(%22li%22);%20%20%20%20%20%20%20%20%20%20li.setAttribute(%22role%22,%20%22option%22);%20%20%20%20%20%20%20%20%20%20li.id%20=%20%22quickjump-result-%22%20+%20entries.length;%20%20%20%20%20%20%20%20%20%20var%20name%20=%20document.createElement(%22span%22);%20%20%20%20%20%20%20%20%20%20name.textContent%20=%20hit.name;%20%20%20%20%20%20%20%20%20%20li.appendChild(name);%20%20%20%20%20%20%20%20%20%20if%20(hit.label)%20{%20%20%20%20%20%20%20%20%20%20%20%20var%20lab%20=%20document.createElement(%22span%22);%20%20%20%20%20%20%20%20%20%20%20%20lab.className%20=%20%22qj-label%22;%20%20%20%20%20%20%20%20%20%20%20%20if%20(window.EveSynapseHitLabel)%20window.EveSynapseHitLabel(lab,%20hit);%20%20%20%20%20%20%20%20%20%20%20%20else%20lab.textContent%20=%20hit.label;%20%20%20%20%20%20%20%20%20%20%20%20li.appendChild(lab);%20%20%20%20%20%20%20%20%20%20}%20%20%20%20%20%20%20%20%20%20if%20(hit.kind%20===%20%22pilot-pending%22)%20{%20%20%20%20%20%20%20%20%20%20%20%20li.className%20=%20%22qj-pending%22;%20%20%20%20%20%20%20%20%20%20%20%20li.setAttribute(%22aria-disabled%22,%20%22true%22);%20%20%20%20%20%20%20%20%20%20%20%20list.appendChild(li);%20%20%20%20%20%20%20%20%20%20%20%20return;%20%20%20%20%20%20%20%20%20%20}%20%20%20%20%20%20%20%20%20%20var%20idx%20=%20entries.length;%20%20%20%20%20%20%20%20%20%20entries.push({%20url:%20jumpURL(hit),%20el:%20li%20});%20%20%20%20%20%20%20%20%20%20li.addEventListener(%22mousedown%22,%20function%20(ev)%20{%20%20%20%20%20%20%20%20%20%20%20%20ev.preventDefault();%20%20%20%20%20%20%20%20%20%20%20%20go(idx);%20%20%20%20%20%20%20%20%20%20});%20%20%20%20%20%20%20%20%20%20li.addEventListener(%22mousemove%22,%20function%20()%20{%20select(idx);%20});%20%20%20%20%20%20%20%20%20%20list.appendChild(li);%20%20%20%20%20%20%20%20})(hits[i]);%20%20%20%20%20%20}%20%20%20%20}%20%20%20%20if%20(entries.length)%20select(0);%20%20}%20%20function%20select(idx)%20{%20%20%20%20if%20(idx%20===%20selected)%20return;%20%20%20%20if%20(entries[selected])%20entries[selected].el.classList.remove(%22sel%22);%20%20%20%20selected%20=%20idx;%20%20%20%20if%20(entries[selected])%20{%20%20%20%20%20%20entries[selected].el.classList.add(%22sel%22);%20%20%20%20%20%20input.setAttribute(%22aria-activedescendant%22,%20entries[selected].el.id);%20%20%20%20%20%20if%20(entries[selected].el.scrollIntoView)%20{%20%20%20%20%20%20%20%20entries[selected].el.scrollIntoView({%20block:%20%22nearest%22%20});%20%20%20%20%20%20}%20%20%20%20}%20else%20{%20%20%20%20%20%20input.removeAttribute(%22aria-activedescendant%22);%20%20%20%20}%20%20}%20%20function%20go(idx)%20{%20%20%20%20var%20entry%20=%20entries[idx];%20%20%20%20if%20(!entry)%20return;%20%20%20%20closePalette();%20%20%20%20window.location.href%20=%20entry.url;%20%20}%20%20function%20pageHits(q)%20{%20%20%20%20var%20out%20=%20[];%20%20%20%20for%20(var%20i%20=%200;%20i%20%3C%20quickJumpPages.length;%20i++)%20{%20%20%20%20%20%20if%20(adminOnlyPages[quickJumpPages[i].url]%20&&%20!isAdmin)%20continue;%20%20%20%20%20%20if%20(!q%20||%20quickJumpPages[i].name.toLowerCase().indexOf(q)%20!==%20-1)%20{%20%20%20%20%20%20%20%20out.push({%20%20%20%20%20%20%20%20%20%20kind:%20%22page%22,%20name:%20quickJumpPages[i].name,%20%20%20%20%20%20%20%20%20%20url:%20quickJumpPages[i].url,%20label:%20quickJumpPages[i].url%20%20%20%20%20%20%20%20});%20%20%20%20%20%20}%20%20%20%20}%20%20%20%20return%20out;%20%20}%20%20function%20render(hits,%20q)%20{%20%20%20%20var%20groups%20=%20[{%20label:%20%22Pages%22,%20hits:%20pageHits(q)%20}];%20%20%20%20var%20byKind%20=%20{};%20%20%20%20for%20(var%20i%20=%200;%20i%20%3C%20hits.length;%20i++)%20{%20%20%20%20%20%20(byKind[hits[i].kind]%20=%20byKind[hits[i].kind]%20||%20[]).push(hits[i]);%20%20%20%20}%20%20%20%20for%20(var%20g%20=%201;%20g%20%3C%20quickJumpGroups.length;%20g++)%20{%20%20%20%20%20%20var%20kind%20=%20quickJumpGroups[g][0];%20%20%20%20%20%20var%20rows%20=%20byKind[kind]%20||%20[];%20%20%20%20%20%20if%20(kind%20===%20%22pilot%22%20&&%20byKind[%22pilot-pending%22])%20{%20%20%20%20%20%20%20%20rows%20=%20rows.concat(byKind[%22pilot-pending%22]);%20%20%20%20%20%20}%20%20%20%20%20%20groups.push({%20label:%20quickJumpGroups[g][1],%20hits:%20rows%20});%20%20%20%20}%20%20%20%20paint(groups);%20%20}%20%20function%20ask(q)%20{%20%20%20%20var%20serial%20=%20++querySerial;%20%20%20%20render([],%20q);%20//%20page%20matches%20land%20instantly%20%20%20%20if%20(q.length%20%3C%202)%20return;%20%20%20%20window.fetch(%22/search.json?q=%22%20+%20encodeURIComponent(q),%20{%20%20%20%20%20%20cache:%20%22no-store%22,%20%20%20%20%20%20headers:%20{%20%22Accept%22:%20%22application/json%22%20}%20%20%20%20}).then(function%20(resp)%20{%20%20%20%20%20%20return%20resp.ok%20?%20resp.json()%20:%20[];%20%20%20%20}).then(function%20(rows)%20{%20%20%20%20%20%20if%20(serial%20!==%20querySerial)%20return;%20//%20typed%20past%20this%20answer%20%20%20%20%20%20render(Array.isArray(rows)%20?%20rows%20:%20[],%20q);%20%20%20%20}).catch(function%20()%20{%20/*%20page%20matches%20already%20stand%20*/%20});%20%20}%20%20//%20The%20palette%20is%20one%20of%20the%20shared%20modals%20(EveSynapseModal):%20%20//%20the%20backdrop,%20Escape-from-anywhere%20and%20the%20focus%20hand-back%20are%20%20//%20the%20shared%20ones;%20paletteClosed%20is%20what%20the%20palette%20adds.%20%20function%20openPalette()%20{%20%20%20%20if%20(isOpen())%20return;%20%20%20%20document.body.classList.add(%22quickjump-open%22);%20%20%20%20input.value%20=%20%22%22;%20%20%20%20ask(%22%22);%20%20%20%20window.EveSynapseModal.open(overlay,%20{%20focus:%20false,%20onClose:%20paletteClosed%20});%20%20%20%20input.focus();%20%20%20%20input.select();%20%20}%20%20function%20paletteClosed()%20{%20%20%20%20document.body.classList.remove(%22quickjump-open%22);%20%20%20%20querySerial++;%20//%20an%20answer%20in%20flight%20no%20longer%20matters%20%20%20%20if%20(timer)%20window.clearTimeout(timer);%20%20%20%20timer%20=%20null;%20%20}%20%20function%20closePalette()%20{%20%20%20%20if%20(!isOpen())%20return;%20%20%20%20window.EveSynapseModal.close(overlay);%20%20}%20%20if%20(openBtn)%20{%20%20%20%20openBtn.addEventListener(%22click%22,%20function%20()%20{%20%20%20%20%20%20if%20(isOpen())%20closePalette();%20else%20openPalette();%20%20%20%20});%20%20}%20%20//%20Ctrl+K%20/%20Cmd+K%20from%20anywhere%20%E2%80%94%20including%20inside%20a%20form%20%20//%20field,%20which%20is%20the%20point%20%E2%80%94%20opens%20or%20closes%20the%20palette.%20%20//%20Plain%20typing%20never%20does;%20the%20modifiers%20are%20the%20trigger.%20%20document.addEventListener(%22keydown%22,%20function%20(ev)%20{%20%20%20%20if%20((ev.ctrlKey%20||%20ev.metaKey)%20&&%20!ev.altKey%20&&%20%20%20%20%20%20%20%20(ev.key%20===%20%22k%22%20||%20ev.key%20===%20%22K%22))%20{%20%20%20%20%20%20ev.preventDefault();%20%20%20%20%20%20if%20(isOpen())%20closePalette();%20else%20openPalette();%20%20%20%20}%20%20});%20%20input.addEventListener(%22input%22,%20function%20()%20{%20%20%20%20var%20q%20=%20input.value.trim().toLowerCase();%20%20%20%20if%20(timer)%20window.clearTimeout(timer);%20%20%20%20timer%20=%20window.setTimeout(function%20()%20{%20ask(q);%20},%20150);%20%20});%20%20input.addEventListener(%22keydown%22,%20function%20(ev)%20{%20%20%20%20if%20(ev.key%20===%20%22ArrowDown%22%20||%20ev.key%20===%20%22ArrowUp%22)%20{%20%20%20%20%20%20ev.preventDefault();%20%20%20%20%20%20if%20(!entries.length)%20return;%20%20%20%20%20%20var%20delta%20=%20ev.key%20===%20%22ArrowDown%22%20?%201%20:%20-1;%20%20%20%20%20%20select((selected%20+%20delta%20+%20entries.length)%20%%20entries.length);%20%20%20%20}%20else%20if%20(ev.key%20===%20%22Enter%22)%20{%20%20%20%20%20%20if%20(selected%20%3E=%200)%20{%20%20%20%20%20%20%20%20ev.preventDefault();%20%20%20%20%20%20%20%20go(selected);%20%20%20%20%20%20}%20%20%20%20}%20else%20if%20(ev.key%20===%20%22Escape%22)%20{%20%20%20%20%20%20ev.preventDefault();%20%20%20%20%20%20ev.stopPropagation();%20%20%20%20%20%20closePalette();%20%20%20%20}%20%20});})();//%20---%20Theme%20toggle%20(dark/light/factions)%20------------------------------//%20A%20stored%20choice%20in%20localStorage%20wins%20and%20is%20written%20onto//%20document.documentElement.dataset.theme;%20with%20no%20stored//%20choice%20the%20attribute%20stays%20unset%20so%20the%20stylesheet's//%20prefers-color-scheme%20media%20query%20applies.%20The%20button%20only//%20renders%20while%20logged%20in%20(see%20base.html),%20so%20everything%20here//%20is%20guarded:%20no%20button,%20no%20work.//%20Simple%20dark/light%20toggle%20(faction%20themes%20deferred).(function%20()%20{%20%20%22use%20strict%22;%20%20var%20btn%20=%20document.getElementById(%22theme-toggle%22);%20%20if%20(!btn)%20return;%20%20var%20root%20=%20document.documentElement;%20%20var%20storageKey%20=%20%22evesynapse-theme%22;%20%20function%20readSaved()%20{%20%20%20%20try%20{%20%20%20%20%20%20var%20v%20=%20window.localStorage.getItem(storageKey);%20%20%20%20%20%20return%20(v%20===%20%22dark%22%20||%20v%20===%20%22light%22)%20?%20v%20:%20%22%22;%20%20%20%20}%20catch%20(e)%20{%20return%20%22%22;%20}%20%20}%20%20function%20save(theme)%20{%20%20%20%20try%20{%20%20%20%20%20%20window.localStorage.setItem(storageKey,%20theme);%20%20%20%20}%20catch%20(e)%20{%20/*%20private%20mode:%20the%20click%20still%20works%20this%20visit%20*/%20}%20%20}%20%20//%20The%20theme%20in%20effect%20right%20now:%20a%20manually%20set%20attribute%20%20//%20wins;%20otherwise%20dark%20is%20the%20default,%20whatever%20the%20OS%20prefers.%20%20//%20Icon%20visibility%20is%20CSS-driven%20(html[data-theme]%20selectors).%20%20function%20effective()%20{%20%20%20%20var%20attr%20=%20root.getAttribute(%22data-theme%22);%20%20%20%20if%20(attr%20===%20%22dark%22%20||%20attr%20===%20%22light%22)%20return%20attr;%20%20%20%20return%20%22dark%22;%20%20}%20%20var%20saved%20=%20readSaved();%20%20if%20(saved)%20root.setAttribute(%22data-theme%22,%20saved);%20%20btn.addEventListener(%22click%22,%20function%20()%20{%20%20%20%20var%20next%20=%20effective()%20===%20%22dark%22%20?%20%22light%22%20:%20%22dark%22;%20%20%20%20root.setAttribute(%22data-theme%22,%20next);%20%20%20%20save(next);%20%20});})();//%20Character%20selector%20dropdown%20with%20search/filter.(function()%20{%20%20//%20Live%20selectors:%20the%20outside-click%20handler%20below%20is%20bound%20once%20%20//%20and%20walks%20these,%20so%20swaps%20never%20pile%20handlers.%20Detached%20roots%20%20//%20prune%20themselves%20on%20the%20next%20click%20or%20swap.%20%20var%20liveSelectors%20=%20[];%20%20var%20outsideBound%20=%20false;%20%20function%20pruneSelectors()%20{%20%20%20%20liveSelectors%20=%20liveSelectors.filter(function%20(s)%20{%20%20%20%20%20%20return%20document.contains(s.root);%20%20%20%20});%20%20}%20%20function%20armOutsideClick()%20{%20%20%20%20if%20(outsideBound)%20return;%20%20%20%20outsideBound%20=%20true;%20%20%20%20document.addEventListener('click',%20function%20(e)%20{%20%20%20%20%20%20pruneSelectors();%20%20%20%20%20%20liveSelectors.forEach(function%20(s)%20{%20%20%20%20%20%20%20%20if%20(!s.root.contains(e.target))%20{%20%20%20%20%20%20%20%20%20%20s.dropdown.hidden%20=%20true;%20%20%20%20%20%20%20%20%20%20//%20Restore%20active%20name%20if%20input%20was%20cleared.%20%20%20%20%20%20%20%20%20%20if%20(!s.input.value%20&&%20s.active)%20s.input.value%20=%20s.active.getAttribute('data-name')%20||%20'';%20%20%20%20%20%20%20%20}%20%20%20%20%20%20});%20%20%20%20});%20%20}%20%20function%20initCharselector(root)%20{%20%20%20%20var%20input%20=%20root.querySelector('.charselector-input');%20%20%20%20var%20dropdown%20=%20root.querySelector('.charselector-dropdown');%20%20%20%20if%20(!input%20||%20!dropdown)%20return;%20%20%20%20if%20(root.getAttribute('data-charselector-live')%20===%20'1')%20return;%20%20%20%20root.setAttribute('data-charselector-live',%20'1');%20%20%20%20var%20options%20=%20Array.prototype.slice.call(root.querySelectorAll('.charselector-option'));%20%20%20%20//%20Show%20active%20character%20name%20in%20the%20input%20initially.%20%20%20%20var%20active%20=%20root.querySelector('.charselector-option.active');%20%20%20%20if%20(active)%20input.value%20=%20active.getAttribute('data-name')%20||%20'';%20%20%20%20function%20filter()%20{%20%20%20%20%20%20var%20q%20=%20input.value.toLowerCase().trim();%20%20%20%20%20%20options.forEach(function(opt)%20{%20%20%20%20%20%20%20%20var%20name%20=%20(opt.getAttribute('data-name')%20||%20'').toLowerCase();%20%20%20%20%20%20%20%20var%20tags%20=%20(opt.getAttribute('data-tags')%20||%20'').toLowerCase();%20%20%20%20%20%20%20%20var%20match%20=%20!q%20||%20name.indexOf(q)%20!==%20-1%20||%20tags.indexOf(q)%20!==%20-1;%20%20%20%20%20%20%20%20opt.hidden%20=%20!match;%20%20%20%20%20%20});%20%20%20%20}%20%20%20%20input.addEventListener('focus',%20function()%20{%20%20%20%20%20%20input.value%20=%20'';%20%20%20%20%20%20filter();%20%20%20%20%20%20dropdown.hidden%20=%20false;%20%20%20%20});%20%20%20%20input.addEventListener('input',%20function()%20{%20%20%20%20%20%20filter();%20%20%20%20%20%20dropdown.hidden%20=%20false;%20%20%20%20});%20%20%20%20//%20Close%20on%20Escape.%20%20%20%20input.addEventListener('keydown',%20function(e)%20{%20%20%20%20%20%20if%20(e.key%20===%20'Escape')%20{%20%20%20%20%20%20%20%20dropdown.hidden%20=%20true;%20%20%20%20%20%20%20%20input.blur();%20%20%20%20%20%20}%20%20%20%20});%20%20%20%20liveSelectors.push({%20root:%20root,%20input:%20input,%20dropdown:%20dropdown,%20active:%20active%20});%20%20%20%20armOutsideClick();%20%20}%20%20function%20initCharselectors(scope)%20{%20%20%20%20var%20roots%20=%20scope.querySelectorAll('[data-charselector]');%20%20%20%20for%20(var%20i%20=%200;%20i%20%3C%20roots.length;%20i++)%20initCharselector(roots[i]);%20%20}%20%20window.EveSynapseContent.onReady(initCharselectors);%20%20document.addEventListener('evesynapse:content-will-swap',%20pruneSelectors);%20%20initCharselectors(document);%20%20//%20---%20CSV%20export%20links%20---------------------------------------%20%20//%20Market/planner%20pages%20carry%20an%20%22Export%20CSV%22%20link%20whose%20href%20is%20%20//%20the%20current%20URL%20plus%20format=csv,%20set%20here.%20The%20address%20bar%20%20//%20already%20shows%20the%20new%20page%20when%20this%20runs%20after%20a%20swap.%20%20function%20initCSVExport(root)%20{%20%20%20%20var%20csvExportLink%20=%20root.querySelector(%22#csv-export%22);%20%20%20%20if%20(csvExportLink)%20{%20%20%20%20%20%20csvExportLink.href%20=%20window.location.pathname%20+%20window.location.search%20+%20%20%20%20%20%20%20%20(window.location.search%20?%20%22&%22%20:%20%22?%22)%20+%20%22format=csv%22;%20%20%20%20}%20%20}%20%20//%20---%20Client-side%20table%20filters%20------------------------------%20%20//%20Industry%20search%20boxes%20filter%20their%20table's%20rows%20by%20a%20%20//%20data-search%20attribute:%20%20//%20%20%20%3Cinput%20data-table-filter=%22bp-table%22%20data-row-class=%22bp-row%22%20%20//%20%20%20%20%20%20%20%20%20%20data-header-class=%22bp-cat-header%22%3E%20%20//%20Rows%20whose%20data-search%20misses%20hide;%20category%20headers%20with%20no%20%20//%20visible%20rows%20hide%20with%20them.%20data-header-class%20is%20optional.%20%20function%20initTableFilters(root)%20{%20%20%20%20var%20tableFilterBoxes%20=%20root.querySelectorAll(%22input[data-table-filter]%22);%20%20%20%20for%20(var%20filterIndex%20=%200;%20filterIndex%20%3C%20tableFilterBoxes.length;%20filterIndex++)%20{%20%20%20%20%20%20(function%20(filterInput)%20{%20%20%20%20%20%20var%20table%20=%20document.getElementById(filterInput.getAttribute(%22data-table-filter%22));%20%20%20%20%20%20if%20(!table)%20return;%20%20%20%20%20%20var%20rowClass%20=%20filterInput.getAttribute(%22data-row-class%22)%20||%20%22%22;%20%20%20%20%20%20if%20(!rowClass)%20return;%20%20%20%20%20%20var%20headerClass%20=%20filterInput.getAttribute(%22data-header-class%22)%20||%20%22%22;%20%20%20%20%20%20filterInput.addEventListener(%22input%22,%20function%20()%20{%20%20%20%20%20%20%20%20var%20q%20=%20filterInput.value.toLowerCase();%20%20%20%20%20%20%20%20table.querySelectorAll(%22.%22%20+%20rowClass).forEach(function%20(r)%20{%20%20%20%20%20%20%20%20%20%20var%20match%20=%20!q%20||%20(r.getAttribute(%22data-search%22)%20||%20%22%22).toLowerCase().indexOf(q)%20%3E=%200;%20%20%20%20%20%20%20%20%20%20r.style.display%20=%20match%20?%20%22%22%20:%20%22none%22;%20%20%20%20%20%20%20%20});%20%20%20%20%20%20%20%20if%20(!headerClass)%20return;%20%20%20%20%20%20%20%20table.querySelectorAll(%22.%22%20+%20headerClass).forEach(function%20(h)%20{%20%20%20%20%20%20%20%20%20%20var%20next%20=%20h.nextElementSibling;%20%20%20%20%20%20%20%20%20%20var%20hasVisible%20=%20false;%20%20%20%20%20%20%20%20%20%20while%20(next%20&&%20!next.classList.contains(headerClass))%20{%20%20%20%20%20%20%20%20%20%20%20%20if%20(next.style.display%20!==%20%22none%22)%20{%20hasVisible%20=%20true;%20break;%20}%20%20%20%20%20%20%20%20%20%20%20%20next%20=%20next.nextElementSibling;%20%20%20%20%20%20%20%20%20%20}%20%20%20%20%20%20%20%20%20%20h.style.display%20=%20hasVisible%20?%20%22%22%20:%20%22none%22;%20%20%20%20%20%20%20%20});%20%20%20%20%20%20});%20%20%20%20%20%20})(tableFilterBoxes[filterIndex]);%20%20%20%20}%20%20}%20%20function%20initContentWidgets(root)%20{%20%20%20%20initCSVExport(root);%20%20%20%20initTableFilters(root);%20%20}%20%20window.EveSynapseContent.onReady(initContentWidgets);%20%20initContentWidgets(document);%20%20//%20---%20Auto-refresh%20pages%20-------------------------------------%20%20//%20The%20Sync%20page%20refreshes%20itself%20every%20few%20seconds%20%20//%20(body[data-autorefresh])%20in%20place:%20the%20page%20is%20fetched%20again%20and%20%20//%20only%20its%20content%20is%20swapped,%20so%20the%20reader%20keeps%20their%20scroll%20%20//%20position%20(a%20full%20reload%20went%20back%20to%20the%20top).%20With%20JavaScript%20%20//%20off,%20a%20%3Cnoscript%3E%20meta-refresh%20does%20the%20same.%20The%20refresh%20waits%20%20//%20out%20typing%20in%20a%20field%20and%20hidden%20tabs,%20and%20never%20runs%20for%20readers%20%20//%20who%20asked%20for%20reduced%20motion%20%E2%80%94%20they%20get%20the%20page%20as%20it%20loaded,%20%20//%20plus%20the%20Sync%20page's%20own%20manual%20controls.%20A%20swap%20away%20stops%20the%20chain:%20%20//%20without%20this%20the%20old%20page's%20timer%20would%20reload%20the%20new%20one.%20%20//%20(Swaps%20onto%20an%20auto-refresh%20page%20fall%20back%20to%20a%20full%20load,%20so%20%20//%20the%20chain%20only%20ever%20starts%20here,%20on%20first%20paint.)%20%20var%20autoRefreshStopped%20=%20false;%20%20document.addEventListener(%22evesynapse:content-will-swap%22,%20function%20()%20{%20%20%20%20autoRefreshStopped%20=%20true;%20%20});%20%20//%20refreshInPlace%20fetches%20this%20page%20again%20and%20swaps%20its%20main%20%20//%20content,%20leaving%20the%20scroll%20position%20alone,%20then%20lets%20the%20content%20%20//%20widgets%20set%20up%20the%20fresh%20markup.%20Anything%20unexpected%20is%20skipped%20%20//%20until%20the%20next%20tick%20rather%20than%20reloading.%20%20function%20refreshInPlace()%20{%20%20%20%20if%20(!window.fetch%20||%20!window.DOMParser)%20{%20%20%20%20%20%20window.location.reload();%20%20%20%20%20%20return%20Promise.resolve();%20%20%20%20}%20%20%20%20var%20url%20=%20window.location.pathname%20+%20window.location.search;%20%20%20%20return%20window.fetch(url,%20{%20credentials:%20%22same-origin%22,%20cache:%20%22no-store%22%20})%20%20%20%20%20%20.then(function%20(resp)%20{%20return%20resp.ok%20&&%20!resp.redirected%20?%20resp.text()%20:%20%22%22;%20})%20%20%20%20%20%20.then(function%20(html)%20{%20%20%20%20%20%20%20%20if%20(!html%20||%20autoRefreshStopped)%20return;%20%20%20%20%20%20%20%20var%20active%20=%20document.activeElement;%20%20%20%20%20%20%20%20if%20(active%20&&%20/^(INPUT|TEXTAREA|SELECT)$/.test(active.tagName%20||%20%22%22))%20return;%20%20%20%20%20%20%20%20var%20next%20=%20new%20DOMParser().parseFromString(html,%20%22text/html%22).getElementById(%22main-content%22);%20%20%20%20%20%20%20%20var%20main%20=%20document.getElementById(%22main-content%22);%20%20%20%20%20%20%20%20if%20(!next%20||%20!main)%20return;%20%20%20%20%20%20%20%20main.innerHTML%20=%20next.innerHTML;%20%20%20%20%20%20%20%20document.dispatchEvent(new%20CustomEvent(%22evesynapse:content-ready%22,%20{%20%20%20%20%20%20%20%20%20%20detail:%20{%20root:%20main,%20url:%20url%20}%20%20%20%20%20%20%20%20}));%20%20%20%20%20%20});%20%20}%20%20(function%20()%20{%20%20%20%20var%20autoRefreshSeconds%20=%20parseInt(document.body.getAttribute(%22data-autorefresh%22)%20||%20%22%22,%2010);%20%20%20%20if%20(autoRefreshSeconds%20%3E%200%20&&%20%20%20%20%20%20%20%20!(window.matchMedia%20&&%20window.matchMedia(%22(prefers-reduced-motion:%20reduce)%22).matches))%20{%20%20%20%20%20%20(function%20scheduleRefresh()%20{%20%20%20%20%20%20%20%20window.setTimeout(function%20()%20{%20%20%20%20%20%20%20%20%20%20if%20(autoRefreshStopped)%20return;%20%20%20%20%20%20%20%20%20%20var%20active%20=%20document.activeElement;%20%20%20%20%20%20%20%20%20%20var%20typing%20=%20active%20&&%20/^(INPUT|TEXTAREA|SELECT)$/.test(active.tagName%20||%20%22%22);%20%20%20%20%20%20%20%20%20%20if%20(!typing%20&&%20!document.hidden)%20{%20%20%20%20%20%20%20%20%20%20%20%20refreshInPlace().then(scheduleRefresh,%20scheduleRefresh);%20%20%20%20%20%20%20%20%20%20%20%20return;%20%20%20%20%20%20%20%20%20%20}%20%20%20%20%20%20%20%20%20%20scheduleRefresh();%20%20%20%20%20%20%20%20},%20autoRefreshSeconds%20*%201000);%20%20%20%20%20%20})();%20%20%20%20}%20%20})();%20%20//%20---%20Sortable%20tables%20------------------------------------------%20%20//%20Any%20table%20under%20the%20page%20content%20sorts%20by%20a%20header%20click:%20again%20%20//%20reverses.%20A%20column%20whose%20cells%20all%20read%20as%20numbers%20(ISK,%20counts,%20%20//%20percentages,%20%221.2B%22)%20sorts%20numerically,%20else%20as%20text.%20A%20row's%20%20//%20detail%20rows%20(rows%20that%20are%20one%20wide%20cell,%20like%20the%20fleet%20table's)%20%20//%20move%20with%20it,%20and%20in%20a%20capped%20widget%20the%20rows%20past%20the%20cap%20%20//%20(data-wmore)%20are%20re-marked%20by%20position.%20data-nosort%20opts%20a%20table%20%20//%20out;%20empty%20headers%20do%20nothing.%20%20function%20sortKey(cell)%20{%20%20%20%20var%20raw%20=%20(cell%20?%20(cell.getAttribute(%22data-sort%22)%20||%20cell.textContent)%20:%20%22%22).trim();%20%20%20%20var%20m%20=%20raw.replace(/ISK|,|\s|%|\+|%C3%97/g,%20%22%22).replace(/^[%E2%88%92%E2%80%93]/,%20%22-%22).match(/^(-?\d+(?:\.\d+)?)([KMBT]?)$/i);%20%20%20%20if%20(m)%20{%20%20%20%20%20%20var%20mult%20=%20{%20%22%22:%201,%20k:%201e3,%20m:%201e6,%20b:%201e9,%20t:%201e12%20}[m[2].toLowerCase()];%20%20%20%20%20%20return%20{%20num:%20parseFloat(m[1])%20*%20mult,%20text:%20raw%20};%20%20%20%20}%20%20%20%20return%20{%20num:%20null,%20text:%20raw.toLowerCase()%20};%20%20}%20%20document.addEventListener(%22click%22,%20function%20(ev)%20{%20%20%20%20var%20th%20=%20ev.target%20&&%20ev.target.closest%20?%20ev.target.closest(%22#main-content%20table%20%3E%20thead%20th%22)%20:%20null;%20%20%20%20if%20(!th%20||%20ev.target.closest(%22a,%20button,%20input,%20select%22))%20return;%20%20%20%20var%20table%20=%20th.closest(%22table%22);%20%20%20%20if%20(!table%20||%20table.hasAttribute(%22data-nosort%22)%20||%20!th.textContent.trim())%20return;%20%20%20%20var%20body%20=%20table.tBodies[0];%20%20%20%20if%20(!body%20||%20body.rows.length%20%3C%202)%20return;%20%20%20%20var%20col%20=%20th.cellIndex;%20%20%20%20//%20Rows%20with%20their%20attached%20detail%20rows.%20%20%20%20var%20groups%20=%20[];%20%20%20%20Array.prototype.forEach.call(body.rows,%20function%20(row)%20{%20%20%20%20%20%20var%20single%20=%20row.cells.length%20===%201%20&&%20row.cells[0].colSpan%20%3E%201;%20%20%20%20%20%20if%20(single%20&&%20groups.length)%20groups[groups.length%20-%201].push(row);%20%20%20%20%20%20else%20groups.push([row]);%20%20%20%20});%20%20%20%20var%20dir%20=%20th.getAttribute(%22aria-sort%22)%20===%20%22ascending%22%20?%20-1%20:%201;%20%20%20%20var%20keys%20=%20groups.map(function%20(g)%20{%20return%20sortKey(g[0].cells[col]);%20});%20%20%20%20var%20numeric%20=%20keys.every(function%20(k)%20{%20return%20k.num%20!==%20null%20||%20k.text%20===%20%22%22%20||%20k.text%20===%20%22%E2%80%94%22;%20});%20%20%20%20var%20order%20=%20groups.map(function%20(g,%20i)%20{%20return%20i;%20});%20%20%20%20order.sort(function%20(a,%20b)%20{%20%20%20%20%20%20var%20ka%20=%20keys[a],%20kb%20=%20keys[b],%20r;%20%20%20%20%20%20if%20(numeric)%20{%20%20%20%20%20%20%20%20var%20na%20=%20ka.num%20===%20null%20?%20-Infinity%20:%20ka.num,%20nb%20=%20kb.num%20===%20null%20?%20-Infinity%20:%20kb.num;%20%20%20%20%20%20%20%20r%20=%20na%20-%20nb;%20%20%20%20%20%20}%20else%20{%20%20%20%20%20%20%20%20r%20=%20ka.text%20%3C%20kb.text%20?%20-1%20:%20ka.text%20%3E%20kb.text%20?%201%20:%200;%20%20%20%20%20%20}%20%20%20%20%20%20return%20r%20*%20dir%20||%20a%20-%20b;%20%20%20%20});%20%20%20%20var%20capped%20=%20body.querySelectorAll(%22tr[data-wmore]%22).length;%20%20%20%20var%20heads%20=%20[];%20%20%20%20order.forEach(function%20(i)%20{%20%20%20%20%20%20groups[i].forEach(function%20(row)%20{%20body.appendChild(row);%20});%20%20%20%20%20%20heads.push(groups[i][0]);%20%20%20%20});%20%20%20%20if%20(capped)%20{%20%20%20%20%20%20heads.forEach(function%20(row,%20i)%20{%20%20%20%20%20%20%20%20if%20(i%20%3E=%20heads.length%20-%20capped)%20row.setAttribute(%22data-wmore%22,%20%22%22);%20%20%20%20%20%20%20%20else%20row.removeAttribute(%22data-wmore%22);%20%20%20%20%20%20});%20%20%20%20}%20%20%20%20Array.prototype.forEach.call(th.parentNode.cells,%20function%20(c)%20{%20c.removeAttribute(%22aria-sort%22);%20});%20%20%20%20th.setAttribute(%22aria-sort%22,%20dir%20===%201%20?%20%22ascending%22%20:%20%22descending%22);%20%20});%20%20//%20---%20Filters%20that%20apply%20as%20they%20change%20-----------------------%20%20//%20A%20control%20marked%20data-autosubmit%20(the%20Item%20Database's%20%22Market%20%20//%20items%20only%22%20box%20and%20its%20category%20and%20group%20pickers)%20submits%20its%20%20//%20form%20the%20moment%20it%20changes,%20so%20a%20filter%20applies%20at%20once%20and%20the%20%20//%20result%20keeps%20its%20Category%20%E2%80%BA%20Group%20layout;%20the%20form's%20own%20button%20%20//%20stays%20for%20readers%20without%20JavaScript.%20Picking%20a%20different%20%20//%20category%20clears%20the%20group%20first:%20the%20old%20group%20would%20otherwise%20%20//%20pull%20the%20category%20back.%20%20document.addEventListener(%22change%22,%20function%20(ev)%20{%20%20%20%20var%20control%20=%20ev.target%20&&%20ev.target.closest%20?%20ev.target.closest(%22[data-autosubmit]%22)%20:%20null;%20%20%20%20if%20(!control%20||%20!control.form)%20return;%20%20%20%20if%20(control.name%20===%20%22category%22%20&&%20control.form.elements.group)%20{%20%20%20%20%20%20control.form.elements.group.value%20=%20%22%22;%20%20%20%20}%20%20%20%20if%20(control.form.requestSubmit)%20control.form.requestSubmit();%20%20%20%20else%20control.form.submit();%20%20});%20%20//%20---%20Buttons%20that%20navigate%20-----------------------------------%20%20//%20%3Cbutton%20data-href=%22/path%22%3E%20goes%20to%20that%20path%20on%20click%20(the%20content%20%20//%20security%20policy%20allows%20no%20inline%20handlers).%20Only%20same-site%20paths%20count.%20%20document.addEventListener(%22click%22,%20function%20(ev)%20{%20%20%20%20var%20button%20=%20ev.target%20&&%20ev.target.closest%20?%20ev.target.closest(%22button[data-href]%22)%20:%20null;%20%20%20%20if%20(!button)%20return;%20%20%20%20var%20href%20=%20button.getAttribute(%22data-href%22)%20||%20%22%22;%20%20%20%20if%20(href.charAt(0)%20===%20%22/%22%20&&%20href.charAt(1)%20!==%20%22/%22)%20window.location.href%20=%20href;%20%20});%20%20//%20---%20Skill%20planner:%20move%20and%20remove%20in%20place%20-------------------%20%20//%20A%20move%20or%20remove%20button%20in%20the%20plan%20table%20posts%20its%20form%20with%20%20//%20fetch%20and%20swaps%20the%20returned%20table%20(#plan-body)%20into%20the%20page,%20so%20%20//%20the%20search%20box,%20results%20and%20scroll%20position%20stay%20where%20they%20are.%20%20//%20The%20server%20answers%20with%20the%20reason%20in%20data-message%20when%20it%20refuses%20%20//%20a%20move%20(a%20prerequisite%20is%20in%20the%20way);%20that%20is%20read%20out%20through%20the%20%20//%20status%20region%20above%20the%20table.%20Without%20JavaScript%20the%20same%20forms%20%20//%20post%20normally%20and%20come%20back%20to%20the%20page%20with%20the%20reason%20flashed.%20%20document.addEventListener(%22submit%22,%20function%20(ev)%20{%20%20%20%20var%20form%20=%20ev.target;%20%20%20%20if%20(!window.fetch%20||%20!form%20||%20!form.matches%20||%20!form.matches(%22.plan-move-form,%20.plan-remove-form%22))%20return;%20%20%20%20var%20editor%20=%20form.closest(%22[data-plan-editor]%22);%20%20%20%20var%20body%20=%20form.closest(%22[data-plan-body]%22);%20%20%20%20if%20(!editor%20||%20!body)%20return;%20%20%20%20ev.preventDefault();%20%20%20%20var%20data%20=%20new%20URLSearchParams(new%20FormData(form));%20%20%20%20var%20dir%20=%20ev.submitter%20&&%20ev.submitter.name%20===%20%22dir%22%20?%20ev.submitter.value%20:%20%22%22;%20%20%20%20if%20(dir)%20data.set(%22dir%22,%20dir);%20%20%20%20var%20row%20=%20form.closest(%22tr%22);%20%20%20%20var%20skill%20=%20row%20?%20row.getAttribute(%22data-skill%22)%20:%20%22%22;%20%20%20%20var%20removing%20=%20form.classList.contains(%22plan-remove-form%22);%20%20%20%20window.fetch(form.action,%20{%20%20%20%20%20%20method:%20%22POST%22,%20%20%20%20%20%20credentials:%20%22same-origin%22,%20%20%20%20%20%20headers:%20{%20%20%20%20%20%20%20%20%22X-Requested-With%22:%20%22XMLHttpRequest%22,%20%20%20%20%20%20%20%20%22Content-Type%22:%20%22application/x-www-form-urlencoded%22%20%20%20%20%20%20},%20%20%20%20%20%20body:%20data.toString()%20%20%20%20}).then(function%20(resp)%20{%20%20%20%20%20%20return%20resp.text();%20%20%20%20}).then(function%20(html)%20{%20%20%20%20%20%20var%20probe%20=%20document.createElement(%22div%22);%20%20%20%20%20%20probe.innerHTML%20=%20html;%20%20%20%20%20%20var%20fresh%20=%20probe.querySelector(%22[data-plan-body]%22);%20%20%20%20%20%20if%20(!fresh)%20{%20%20%20%20%20%20%20%20//%20Not%20the%20table%20(signed%20out,%20an%20error):%20let%20the%20page%20show%20it.%20%20%20%20%20%20%20%20window.location.reload();%20%20%20%20%20%20%20%20return;%20%20%20%20%20%20}%20%20%20%20%20%20var%20live%20=%20editor.querySelector(%22.plan-live%22);%20%20%20%20%20%20var%20message%20=%20fresh.getAttribute(%22data-message%22)%20||%20%22%22;%20%20%20%20%20%20if%20(live)%20{%20%20%20%20%20%20%20%20live.textContent%20=%20%22%22;%20%20%20%20%20%20%20%20if%20(message)%20{%20%20%20%20%20%20%20%20%20%20var%20note%20=%20document.createElement(%22p%22);%20%20%20%20%20%20%20%20%20%20note.className%20=%20%22notice%22;%20%20%20%20%20%20%20%20%20%20note.textContent%20=%20message;%20%20%20%20%20%20%20%20%20%20live.appendChild(note);%20%20%20%20%20%20%20%20}%20%20%20%20%20%20}%20%20%20%20%20%20body.replaceWith(fresh);%20%20%20%20%20%20//%20Keep%20the%20keyboard%20where%20it%20was:%20the%20same%20button%20on%20the%20same%20%20%20%20%20%20//%20skill,%20else%20the%20other%20move%20button;%20after%20a%20remove,%20the%20table.%20%20%20%20%20%20var%20target%20=%20null;%20%20%20%20%20%20if%20(!removing%20&&%20skill)%20{%20%20%20%20%20%20%20%20var%20next%20=%20fresh.querySelector(%22tr[data-skill='%22%20+%20skill%20+%20%22']%22);%20%20%20%20%20%20%20%20if%20(next)%20{%20%20%20%20%20%20%20%20%20%20target%20=%20next.querySelector(%22button[name='dir'][value='%22%20+%20dir%20+%20%22']:not([aria-disabled='true'])%22)%20||%20%20%20%20%20%20%20%20%20%20%20%20next.querySelector(%22button[name='dir']:not([aria-disabled='true'])%22)%20||%20%20%20%20%20%20%20%20%20%20%20%20next.querySelector(%22button[name='dir']%22);%20%20%20%20%20%20%20%20}%20%20%20%20%20%20}%20%20%20%20%20%20(target%20||%20fresh).focus();%20%20%20%20}).catch(function%20()%20{%20%20%20%20%20%20//%20The%20request%20itself%20failed:%20fall%20back%20to%20the%20plain%20post.%20%20%20%20%20%20form.submit();%20%20%20%20});%20%20});%20%20//%20---%20Skill%20planner:%20find%20and%20delete%20saved%20plans%20----------------%20%20//%20The%20search%20above%20the%20list%20of%20plans%20narrows%20it%20as%20you%20type%20(Enter%20%20//%20opens%20the%20first%20match,%20the%20arrow%20keys%20walk%20the%20list,%20Escape%20clears%20%20//%20it);%20without%20JavaScript%20the%20same%20search%20is%20a%20form%20that%20reloads%20the%20%20//%20page%20with%20?pq=.%20The%20delete%20button%20on%20a%20row%20asks%20in%20place%20%E2%80%94%20the%20row%20%20//%20turns%20into%20%22Delete%20this%20plan?%20[Delete]%20[Keep]%22%20%E2%80%94%20where%20a%20plain%20link%20%20//%20goes%20to%20the%20page's%20own%20confirmation.%20%20function%20initPlanPicker(root)%20{%20%20%20%20var%20picker%20=%20root.querySelector(%22[data-plan-picker]%22);%20%20%20%20if%20(!picker%20||%20picker.getAttribute(%22data-plan-live%22)%20===%20%221%22)%20return;%20%20%20%20picker.setAttribute(%22data-plan-live%22,%20%221%22);%20%20%20%20var%20input%20=%20picker.querySelector(%22[data-plan-filter]%22);%20%20%20%20var%20items%20=%20Array.prototype.slice.call(picker.querySelectorAll(%22.plan-item%22));%20%20%20%20var%20none%20=%20picker.querySelector(%22.plan-none%22);%20%20%20%20function%20shown()%20{%20%20%20%20%20%20return%20items.filter(function%20(li)%20{%20return%20!li.hidden;%20});%20%20%20%20}%20%20%20%20function%20filter()%20{%20%20%20%20%20%20var%20q%20=%20input.value.trim().toLowerCase();%20%20%20%20%20%20items.forEach(function%20(li)%20{%20%20%20%20%20%20%20%20li.hidden%20=%20q%20!==%20%22%22%20&&%20(li.getAttribute(%22data-name%22)%20||%20%22%22).toLowerCase().indexOf(q)%20===%20-1;%20%20%20%20%20%20});%20%20%20%20%20%20if%20(none)%20none.hidden%20=%20shown().length%20%3E%200;%20%20%20%20}%20%20%20%20function%20openLink(li)%20{%20%20%20%20%20%20return%20li.querySelector(%22.plan-open%22);%20%20%20%20}%20%20%20%20if%20(input)%20{%20%20%20%20%20%20input.addEventListener(%22input%22,%20filter);%20%20%20%20%20%20input.addEventListener(%22keydown%22,%20function%20(ev)%20{%20%20%20%20%20%20%20%20var%20rows%20=%20shown();%20%20%20%20%20%20%20%20if%20(ev.key%20===%20%22ArrowDown%22%20&&%20rows.length)%20{%20%20%20%20%20%20%20%20%20%20ev.preventDefault();%20%20%20%20%20%20%20%20%20%20openLink(rows[0]).focus();%20%20%20%20%20%20%20%20}%20else%20if%20(ev.key%20===%20%22Escape%22%20&&%20input.value%20!==%20%22%22)%20{%20%20%20%20%20%20%20%20%20%20ev.preventDefault();%20%20%20%20%20%20%20%20%20%20input.value%20=%20%22%22;%20%20%20%20%20%20%20%20%20%20filter();%20%20%20%20%20%20%20%20}%20else%20if%20(ev.key%20===%20%22Enter%22%20&&%20input.value.trim()%20!==%20%22%22%20&&%20rows.length)%20{%20%20%20%20%20%20%20%20%20%20ev.preventDefault();%20%20%20%20%20%20%20%20%20%20window.location.href%20=%20openLink(rows[0]).href;%20%20%20%20%20%20%20%20}%20%20%20%20%20%20});%20%20%20%20%20%20if%20(input.value%20!==%20%22%22)%20filter();%20%20%20%20}%20%20%20%20picker.addEventListener(%22keydown%22,%20function%20(ev)%20{%20%20%20%20%20%20var%20link%20=%20ev.target%20&&%20ev.target.closest%20?%20ev.target.closest(%22.plan-open%22)%20:%20null;%20%20%20%20%20%20if%20(link%20&&%20(ev.key%20===%20%22ArrowDown%22%20||%20ev.key%20===%20%22ArrowUp%22))%20{%20%20%20%20%20%20%20%20var%20rows%20=%20shown();%20%20%20%20%20%20%20%20var%20at%20=%20rows.indexOf(link.closest(%22.plan-item%22));%20%20%20%20%20%20%20%20var%20next%20=%20rows[at%20+%20(ev.key%20===%20%22ArrowDown%22%20?%201%20:%20-1)];%20%20%20%20%20%20%20%20ev.preventDefault();%20%20%20%20%20%20%20%20if%20(next)%20openLink(next).focus();%20%20%20%20%20%20%20%20else%20if%20(ev.key%20===%20%22ArrowUp%22%20&&%20input)%20input.focus();%20%20%20%20%20%20}%20else%20if%20(ev.key%20===%20%22Escape%22%20&&%20ev.target.closest%20&&%20ev.target.closest(%22.plan-confirm%22))%20{%20%20%20%20%20%20%20%20var%20keep%20=%20ev.target.closest(%22.plan-item%22).querySelector(%22[data-plan-keep]%22);%20%20%20%20%20%20%20%20if%20(keep)%20keep.click();%20%20%20%20%20%20}%20%20%20%20});%20%20%20%20picker.addEventListener(%22click%22,%20function%20(ev)%20{%20%20%20%20%20%20var%20target%20=%20ev.target%20&&%20ev.target.closest%20?%20ev.target%20:%20null;%20%20%20%20%20%20if%20(!target)%20return;%20%20%20%20%20%20var%20del%20=%20target.closest(%22[data-plan-delete]%22);%20%20%20%20%20%20if%20(del)%20{%20%20%20%20%20%20%20%20var%20row%20=%20del.closest(%22.plan-item%22);%20%20%20%20%20%20%20%20var%20form%20=%20row%20&&%20row.querySelector(%22.plan-confirm%22);%20%20%20%20%20%20%20%20if%20(!form)%20return;%20%20%20%20%20%20%20%20ev.preventDefault();%20%20%20%20%20%20%20%20row.classList.add(%22is-confirming%22);%20%20%20%20%20%20%20%20form.hidden%20=%20false;%20%20%20%20%20%20%20%20form.querySelector(%22button[type='submit']%22).focus();%20%20%20%20%20%20%20%20return;%20%20%20%20%20%20}%20%20%20%20%20%20var%20keepBtn%20=%20target.closest(%22[data-plan-keep]%22);%20%20%20%20%20%20if%20(keepBtn)%20{%20%20%20%20%20%20%20%20var%20li%20=%20keepBtn.closest(%22.plan-item%22);%20%20%20%20%20%20%20%20li.classList.remove(%22is-confirming%22);%20%20%20%20%20%20%20%20li.querySelector(%22.plan-confirm%22).hidden%20=%20true;%20%20%20%20%20%20%20%20li.querySelector(%22[data-plan-delete]%22).focus();%20%20%20%20%20%20}%20%20%20%20});%20%20}%20%20window.EveSynapseContent.onReady(initPlanPicker);%20%20initPlanPicker(document);%20%20//%20---%20Data-driven%20geometry%20------------------------------------%20%20//%20The%20content%20security%20policy%20forbids%20inline%20style%20attributes,%20so%20%20//%20per-element%20numbers%20ride%20data-*%20attributes%20and%20are%20applied%20here%20%20//%20through%20the%20CSSOM%20(which%20the%20policy%20allows):%20%20//%20%20%20data-w%20%20%20%20%20%20%20%20%20fill%20width%20of%20a%20bar,%20percent%20%20//%20%20%20data-left%20%20%20%20%20%20absolute%20position%20from%20the%20left,%20percent%20%20//%20%20%20data-top%20%20%20%20%20%20%20absolute%20position%20from%20the%20top,%20percent%20%20//%20%20%20data-rot%20%20%20%20%20%20%20rotation%20in%20degrees;%20an%20element%20with%20data-rot%20%20//%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20(the%20fitting%20separators)%20is%20also%20centered%20on%20%20//%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20its%20left/top%20point,%20i.e.%20%20//%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20transform:%20translate(-50%,-50%)%20rotate(%3Cn%3Edeg)%20%20//%20%20%20data-pad-left%20%20left%20padding%20(indent),%20px%20%20//%20applyGeometry%20is%20the%20rule%20for%20one%20element;%20the%20code%20below%20only%20%20//%20finds%20elements:%20at%20load,%20and%20again%20for%20markup%20injected%20later%20%20//%20(fit.js%20swaps%20whole%20server-rendered%20fragments%20into%20the%20page).%20%20//%20A%20missing,%20empty,%20or%20non-numeric%20value%20sets%20nothing%20(never%20%20//%20%22NaNpx%22).%20Widths%20clamp%20to%200%E2%80%93100:%20a%20bar%20over%20capacity%20arrives%20as%20%20//%20e.g.%20123.4%20and%20its%20track%20hides%20the%20overflow%20anyway.%20Positions%20%20//%20pass%20through%20as%20sent,%20as%20the%20inline%20styles%20did.%20%20function%20geometryNumber(el,%20name)%20{%20%20%20%20var%20raw%20=%20el.getAttribute(name);%20%20%20%20if%20(raw%20===%20null%20||%20raw.trim()%20===%20%22%22)%20return%20null;%20%20%20%20var%20n%20=%20Number(raw);%20%20%20%20return%20isFinite(n)%20?%20n%20:%20null;%20%20}%20%20function%20applyGeometry(el)%20{%20%20%20%20var%20w%20=%20geometryNumber(el,%20%22data-w%22);%20%20%20%20if%20(w%20!==%20null)%20el.style.width%20=%20Math.min(Math.max(w,%200),%20100)%20+%20%22%%22;%20%20%20%20var%20left%20=%20geometryNumber(el,%20%22data-left%22);%20%20%20%20if%20(left%20!==%20null)%20el.style.left%20=%20left%20+%20%22%%22;%20%20%20%20var%20top%20=%20geometryNumber(el,%20%22data-top%22);%20%20%20%20if%20(top%20!==%20null)%20el.style.top%20=%20top%20+%20%22%%22;%20%20%20%20var%20rot%20=%20geometryNumber(el,%20%22data-rot%22);%20%20%20%20if%20(rot%20!==%20null)%20el.style.transform%20=%20%22translate(-50%,-50%)%20rotate(%22%20+%20rot%20+%20%22deg)%22;%20%20%20%20var%20pad%20=%20geometryNumber(el,%20%22data-pad-left%22);%20%20%20%20if%20(pad%20!==%20null%20&&%20pad%20%3E=%200)%20el.style.paddingLeft%20=%20pad%20+%20%22px%22;%20%20}%20%20var%20GEOMETRY_SELECTOR%20=%20%22[data-w],[data-left],[data-top],[data-rot],[data-pad-left]%22;%20%20function%20applyDataGeometry(root)%20{%20%20%20%20if%20(!root%20||%20root.nodeType%20!==%201)%20return;%20%20%20%20if%20(root.matches(GEOMETRY_SELECTOR))%20applyGeometry(root);%20%20%20%20root.querySelectorAll(GEOMETRY_SELECTOR).forEach(applyGeometry);%20%20}%20%20applyDataGeometry(document.body);%20%20if%20(window.MutationObserver)%20{%20%20%20%20new%20MutationObserver(function%20(records)%20{%20%20%20%20%20%20records.forEach(function%20(record)%20{%20%20%20%20%20%20%20%20record.addedNodes.forEach(applyDataGeometry);%20%20%20%20%20%20});%20%20%20%20}).observe(document.body,%20{%20childList:%20true,%20subtree:%20true%20});%20%20}})();//%20The%20notification%20list%20in%20the%20top%20bar:%20it%20closes%20on%20a%20click%20or%20tap//%20anywhere%20else%20and%20on%20Escape,%20and%20opens%20and%20closes%20with%20the//%20navigation's%20motion%20(the%20CSS%20transition%20on%20.notify.is-open).%20The//%20%3Cdetails%3E%20works%20without%20this;%20this%20only%20adds%20the%20closing%20and%20the//%20motion,%20and%20keeps%20the%20icon%20up%20to%20date%20while%20the%20page%20is%20open.(function%20()%20{%20%20%22use%20strict%22;%20%20var%20menu%20=%20document.getElementById(%22notify-menu%22);%20%20if%20(!menu)%20return;%20%20var%20waiting%20=%20null;%20//%20an%20update%20held%20back%20while%20the%20list%20is%20open%20%20function%20show(html,%20unread)%20{%20%20%20%20//%20The%20icon%20is%20rebuilt,%20so%20a%20reader%20who%20had%20tabbed%20to%20it%20is%20put%20%20%20%20//%20back%20on%20it.%20%20%20%20var%20focused%20=%20document.activeElement%20&&%20menu.contains(document.activeElement);%20%20%20%20menu.innerHTML%20=%20html;%20%20%20%20menu.classList.toggle(%22has-unread%22,%20unread%20%3E%200);%20%20%20%20var%20summary%20=%20menu.querySelector(%22summary%22);%20%20%20%20if%20(focused%20&&%20summary)%20summary.focus();%20%20}%20%20var%20closing%20=%20null;%20%20//%20As%20long%20as%20the%20transition%20in%20style.css,%20or%20no%20wait%20at%20all%20for%20a%20%20//%20reader%20who%20asked%20for%20less%20motion.%20%20var%20still%20=%20window.matchMedia%20&&%20window.matchMedia(%22(prefers-reduced-motion:%20reduce)%22).matches;%20%20var%20motion%20=%20still%20?%200%20:%20180;%20%20function%20open()%20{%20%20%20%20window.clearTimeout(closing);%20%20%20%20closing%20=%20null;%20%20%20%20menu.open%20=%20true;%20%20%20%20//%20Reading%20the%20width%20makes%20the%20browser%20lay%20the%20list%20out%20in%20its%20%20%20%20//%20starting%20state%20first,%20so%20the%20transition%20has%20something%20to%20run%20%20%20%20//%20from.%20%20%20%20void%20menu.offsetWidth;%20%20%20%20menu.classList.add(%22is-open%22);%20%20}%20%20function%20close()%20{%20%20%20%20if%20(!menu.open%20||%20closing)%20return;%20%20%20%20menu.classList.remove(%22is-open%22);%20%20%20%20closing%20=%20window.setTimeout(function%20()%20{%20%20%20%20%20%20closing%20=%20null;%20%20%20%20%20%20menu.open%20=%20false;%20%20%20%20%20%20//%20An%20update%20that%20arrived%20while%20the%20list%20was%20open%20goes%20in%20now.%20%20%20%20%20%20if%20(waiting)%20{%20%20%20%20%20%20%20%20show(waiting.html,%20waiting.unread);%20%20%20%20%20%20%20%20waiting%20=%20null;%20%20%20%20%20%20}%20%20%20%20},%20motion);%20%20}%20%20//%20The%20icon's%20contents%20are%20replaced%20when%20they%20change%20(below),%20so%20%20//%20the%20click%20is%20caught%20on%20the%20%3Cdetails%3E,%20which%20stays.%20%20menu.addEventListener(%22click%22,%20function%20(ev)%20{%20%20%20%20if%20(!ev.target.closest%20||%20!ev.target.closest(%22summary%22))%20return;%20%20%20%20ev.preventDefault();%20%20%20%20if%20(menu.open%20&&%20!closing)%20{%20close();%20}%20else%20{%20open();%20}%20%20});%20%20document.addEventListener(%22click%22,%20function%20(ev)%20{%20%20%20%20if%20(!menu.contains(ev.target))%20close();%20%20});%20%20//%20A%20swap%20replaces%20the%20page%20under%20an%20open%20list:%20fold%20it%20away%20%20//%20through%20the%20same%20path%20as%20an%20outside%20click.%20%20document.addEventListener(%22evesynapse:content-will-swap%22,%20function%20()%20{%20%20%20%20close();%20%20});%20%20document.addEventListener(%22keydown%22,%20function%20(ev)%20{%20%20%20%20if%20(ev.key%20!==%20%22Escape%22%20||%20!menu.open)%20return;%20%20%20%20close();%20%20%20%20menu.querySelector(%22summary%22).focus();%20%20});%20%20//%20---%20The%20live%20icon%20---------------------------------------------%20%20//%20Every%20data-poll%20seconds%20(NOTIFY_POLL_SECONDS%20on%20the%20server)%20the%20%20//%20page%20asks%20whether%20the%20icon%20has%20changed,%20and%20swaps%20its%20contents%20%20//%20in%20when%20it%20has,%20so%20a%20new%20notification%20shows%20without%20a%20reload.%20%20//%20It%20only%20asks%20while%20the%20page%20is%20on%20screen,%20checks%20at%20once%20when%20%20//%20the%20page%20comes%20back%20into%20view%20or%20a%20push%20arrives,%20and%20leaves%20the%20%20//%20list%20alone%20while%20it%20is%20open%20under%20the%20reader's%20pointer.%20%20var%20every%20=%20parseInt(menu.getAttribute(%22data-poll%22),%2010);%20%20if%20(!(every%20%3E%200)%20||%20!window.fetch)%20return;%20%20var%20etag%20=%20%22%22;%20%20var%20timer%20=%20null;%20%20var%20asking%20=%20false;%20%20var%20stopped%20=%20false;%20%20function%20check()%20{%20%20%20%20if%20(stopped%20||%20asking%20||%20document.hidden)%20return;%20%20%20%20asking%20=%20true;%20%20%20%20var%20headers%20=%20{};%20%20%20%20if%20(etag)%20headers[%22If-None-Match%22]%20=%20etag;%20%20%20%20window.fetch(%22/notifications/badge%22,%20{%20credentials:%20%22same-origin%22,%20headers:%20headers,%20cache:%20%22no-store%22%20}).then(function%20(res)%20{%20%20%20%20%20%20//%20Anything%20that%20is%20not%20the%20icon%20(the%20sign-in%20page%20after%20the%20%20%20%20%20%20//%20session%20ended,%20an%20error%20page)%20ends%20the%20checks:%20the%20next%20%20%20%20%20%20//%20page%20load%20starts%20them%20again.%20%20%20%20%20%20if%20(res.status%20!==%20304%20&&%20!(res.ok%20&&%20res.headers.get(%22X-Notify-Badge%22)%20===%20%221%22))%20{%20%20%20%20%20%20%20%20stopped%20=%20true;%20%20%20%20%20%20%20%20return;%20%20%20%20%20%20}%20%20%20%20%20%20if%20(res.status%20===%20304)%20return;%20%20%20%20%20%20var%20unread%20=%20parseInt(res.headers.get(%22X-Notify-Unread%22),%2010)%20||%200;%20%20%20%20%20%20var%20tag%20=%20res.headers.get(%22ETag%22)%20||%20%22%22;%20%20%20%20%20%20return%20res.text().then(function%20(html)%20{%20%20%20%20%20%20%20%20etag%20=%20tag;%20%20%20%20%20%20%20%20if%20(menu.open)%20{%20%20%20%20%20%20%20%20%20%20waiting%20=%20{%20html:%20html,%20unread:%20unread%20};%20%20%20%20%20%20%20%20}%20else%20{%20%20%20%20%20%20%20%20%20%20show(html,%20unread);%20%20%20%20%20%20%20%20}%20%20%20%20%20%20});%20%20%20%20}).catch(function%20()%20{%20%20%20%20%20%20//%20Offline%20or%20a%20dropped%20request:%20try%20again%20at%20the%20next%20turn.%20%20%20%20}).then(function%20()%20{%20asking%20=%20false;%20});%20%20}%20%20function%20schedule()%20{%20%20%20%20window.clearInterval(timer);%20%20%20%20timer%20=%20window.setInterval(check,%20every%20*%201000);%20%20}%20%20schedule();%20%20document.addEventListener(%22visibilitychange%22,%20function%20()%20{%20%20%20%20if%20(!document.hidden)%20{%20check();%20schedule();%20}%20%20});%20%20if%20(navigator.serviceWorker)%20{%20%20%20%20navigator.serviceWorker.addEventListener(%22message%22,%20function%20(ev)%20{%20%20%20%20%20%20if%20(ev.data%20&&%20ev.data.push%20===%20%22received%22)%20check();%20%20%20%20});%20%20}})();//%20Notification%20settings:%20under%20each%20kind,%20the%20characters%20it%20is%20on%20for//%20(a%20[data-checkselector]:%20the%20character%20selector's%20look,%20with%20a%20tick//%20box%20per%20character).%20The%20field%20shows%20the%20count%20and%20filters%20the%20list//%20as%20you%20type;%20the%20list%20stays%20open%20while%20boxes%20are%20ticked%20and%20closes//%20on%20a%20click%20elsewhere%20or%20Escape.%20The%20boxes%20are%20ordinary%20form%20fields,//%20so%20saving%20works%20the%20same%20with%20or%20without%20this.(function%20()%20{%20%20%22use%20strict%22;%20%20var%20selectors%20=%20Array.prototype.slice.call(document.querySelectorAll(%22[data-checkselector]%22));%20%20if%20(!selectors.length)%20return;%20%20selectors.forEach(function%20(root)%20{%20%20%20%20var%20input%20=%20root.querySelector(%22.charselector-input%22);%20%20%20%20var%20dropdown%20=%20root.querySelector(%22.charselector-dropdown%22);%20%20%20%20var%20options%20=%20Array.prototype.slice.call(root.querySelectorAll(%22.charselector-option%22));%20%20%20%20var%20boxes%20=%20Array.prototype.slice.call(root.querySelectorAll('input[type=%22checkbox%22]'));%20%20%20%20if%20(!input%20||%20!dropdown)%20return;%20%20%20%20function%20summarize()%20{%20%20%20%20%20%20var%20on%20=%20boxes.filter(function%20(box)%20{%20return%20box.checked;%20}).length;%20%20%20%20%20%20//%20A%20list%20to%20pick%20additions%20from%20says%20how%20many%20are%20picked.%20%20%20%20%20%20if%20(root.getAttribute(%22data-summary%22)%20===%20%22add%22)%20{%20%20%20%20%20%20%20%20input.placeholder%20=%20on%20?%20on%20+%20%22%20picked:%20press%20Add%22%20:%20%22Add%20characters%E2%80%A6%22;%20%20%20%20%20%20%20%20return;%20%20%20%20%20%20}%20%20%20%20%20%20var%20total%20=%20options.length;%20%20%20%20%20%20var%20text%20=%20%22On%20for%20%22%20+%20on%20+%20%22%20of%20%22%20+%20total%20+%20(total%20===%201%20?%20%22%20character%22%20:%20%22%20characters%22);%20%20%20%20%20%20if%20(boxes.length%20%3C%20total)%20{%20%20%20%20%20%20%20%20text%20=%20boxes.length%20?%20text%20+%20%22%20(%22%20+%20(total%20-%20boxes.length)%20+%20%22%20without%20access)%22%20%20%20%20%20%20%20%20%20%20:%20%22No%20access%20granted%20on%20%22%20+%20total%20+%20(total%20===%201%20?%20%22%20character%22%20:%20%22%20characters%22);%20%20%20%20%20%20}%20%20%20%20%20%20input.placeholder%20=%20text;%20%20%20%20}%20%20%20%20function%20filter()%20{%20%20%20%20%20%20var%20q%20=%20input.value.toLowerCase().trim();%20%20%20%20%20%20options.forEach(function%20(option)%20{%20%20%20%20%20%20%20%20var%20name%20=%20(option.getAttribute(%22data-name%22)%20||%20%22%22).toLowerCase();%20%20%20%20%20%20%20%20option.hidden%20=%20!!q%20&&%20name.indexOf(q)%20===%20-1;%20%20%20%20%20%20});%20%20%20%20}%20%20%20%20function%20close()%20{%20%20%20%20%20%20if%20(dropdown.hidden)%20return;%20%20%20%20%20%20dropdown.hidden%20=%20true;%20%20%20%20%20%20input.value%20=%20%22%22;%20%20%20%20%20%20filter();%20%20%20%20}%20%20%20%20function%20open()%20{%20%20%20%20%20%20//%20One%20list%20at%20a%20time.%20%20%20%20%20%20selectors.forEach(function%20(other)%20{%20if%20(other%20!==%20root%20&&%20other.closeList)%20other.closeList();%20});%20%20%20%20%20%20dropdown.hidden%20=%20false;%20%20%20%20}%20%20%20%20root.closeList%20=%20close;%20%20%20%20input.addEventListener(%22focus%22,%20open);%20%20%20%20input.addEventListener(%22click%22,%20open);%20%20%20%20input.addEventListener(%22input%22,%20function%20()%20{%20filter();%20dropdown.hidden%20=%20false;%20});%20%20%20%20root.addEventListener(%22change%22,%20summarize);%20%20%20%20root.addEventListener(%22keydown%22,%20function%20(ev)%20{%20%20%20%20%20%20if%20(ev.key%20===%20%22Escape%22)%20{%20close();%20input.blur();%20}%20%20%20%20%20%20//%20Enter%20in%20the%20search%20field%20would%20send%20the%20whole%20form.%20%20%20%20%20%20if%20(ev.key%20===%20%22Enter%22%20&&%20ev.target%20===%20input)%20ev.preventDefault();%20%20%20%20});%20%20%20%20summarize();%20%20});%20%20document.addEventListener(%22click%22,%20function%20(ev)%20{%20%20%20%20selectors.forEach(function%20(root)%20{%20%20%20%20%20%20if%20(!root.contains(ev.target)%20&&%20root.closeList)%20root.closeList();%20%20%20%20});%20%20});})();//%20The%20character%20switcher%20in%20the%20top%20bar:%20like%20the%20notification%20list,//%20it%20closes%20on%20a%20click%20or%20tap%20anywhere%20else%20and%20on%20Escape,%20and%20opens//%20and%20closes%20with%20the%20navigation's%20motion%20(the%20CSS%20transition%20on//%20.topbar-switcher.is-open).%20The%20%3Cdetails%3E%20works%20without%20this.(function%20()%20{%20%20%22use%20strict%22;%20%20var%20switcher%20=%20document.querySelector(%22details.topbar-switcher%22);%20%20if%20(!switcher)%20return;%20%20var%20summary%20=%20switcher.querySelector(%22summary%22);%20%20var%20closing%20=%20null;%20%20var%20still%20=%20window.matchMedia%20&&%20window.matchMedia(%22(prefers-reduced-motion:%20reduce)%22).matches;%20%20var%20motion%20=%20still%20?%200%20:%20180;%20//%20as%20long%20as%20the%20transition%20in%20style.css%20%20function%20open()%20{%20%20%20%20window.clearTimeout(closing);%20%20%20%20closing%20=%20null;%20%20%20%20switcher.open%20=%20true;%20%20%20%20void%20switcher.offsetWidth;%20//%20lay%20it%20out%20closed%20first,%20so%20there%20is%20something%20to%20move%20from%20%20%20%20switcher.classList.add(%22is-open%22);%20%20}%20%20function%20close()%20{%20%20%20%20if%20(!switcher.open%20||%20closing)%20return;%20%20%20%20switcher.classList.remove(%22is-open%22);%20%20%20%20closing%20=%20window.setTimeout(function%20()%20{%20%20%20%20%20%20closing%20=%20null;%20%20%20%20%20%20switcher.open%20=%20false;%20%20%20%20},%20motion);%20%20}%20%20summary.addEventListener(%22click%22,%20function%20(ev)%20{%20%20%20%20ev.preventDefault();%20%20%20%20if%20(switcher.open%20&&%20!closing)%20{%20close();%20}%20else%20{%20open();%20}%20%20});%20%20document.addEventListener(%22click%22,%20function%20(ev)%20{%20%20%20%20if%20(!switcher.contains(ev.target))%20close();%20%20});%20%20//%20A%20swap%20replaces%20the%20page%20under%20an%20open%20switcher:%20fold%20it%20%20//%20away%20through%20the%20same%20path%20as%20an%20outside%20click.%20%20document.addEventListener(%22evesynapse:content-will-swap%22,%20function%20()%20{%20%20%20%20close();%20%20});%20%20document.addEventListener(%22keydown%22,%20function%20(ev)%20{%20%20%20%20if%20(ev.key%20!==%20%22Escape%22%20||%20!switcher.open)%20return;%20%20%20%20close();%20%20%20%20summary.focus();%20%20});})();//%20%22Install%20app%22%20in%20the%20sidebar.%20A%20browser%20that%20can%20install%20the%20site%20as//%20an%20app%20(Chrome%20and%20Edge,%20on%20Android%20and%20on%20a%20computer)%20says%20so%20with//%20a%20beforeinstallprompt%20event,%20and%20otherwise%20keeps%20the%20offer%20behind//%20its%20own%20menu%20where%20few%20people%20find%20it.%20The%20event%20is%20held,%20the%20link//%20is%20shown,%20and%20a%20click%20opens%20the%20browser's%20own%20install%20dialog.//%20Nothing%20is%20offered%20unasked:%20the%20link%20only%20sits%20there%20until%20it%20is//%20clicked.%20Where%20there%20is%20no%20such%20event%20(Safari,%20Firefox)%20or%20the%20app//%20is%20already%20installed,%20the%20link%20is%20never%20shown.(function%20()%20{%20%20%22use%20strict%22;%20%20var%20btn%20=%20document.getElementById(%22install-app%22);%20%20if%20(!btn)%20return;%20%20var%20offer%20=%20null;%20%20window.addEventListener(%22beforeinstallprompt%22,%20function%20(e)%20{%20%20%20%20e.preventDefault();%20//%20no%20banner%20of%20the%20browser's%20own;%20ours%20is%20the%20link%20%20%20%20offer%20=%20e;%20%20%20%20btn.hidden%20=%20false;%20%20});%20%20btn.addEventListener(%22click%22,%20function%20()%20{%20%20%20%20if%20(!offer)%20return;%20%20%20%20var%20held%20=%20offer;%20%20%20%20offer%20=%20null;%20//%20an%20offer%20can%20be%20used%20once;%20the%20browser%20sends%20another%20if%20it%20is%20declined%20%20%20%20btn.hidden%20=%20true;%20%20%20%20held.prompt();%20%20});%20%20window.addEventListener(%22appinstalled%22,%20function%20()%20{%20%20%20%20offer%20=%20null;%20%20%20%20btn.hidden%20=%20true;%20%20});})();//%20Copy%20buttons:%20[data-copy]%20copies%20its%20data-copy-text,%20or%20the//%20text%20of%20[data-copy-from];%20the%20label%20flips%20to%20Copied%20briefly.//%20Server-rendered%20share%20blocks%20use%20it%20so%20no%20page%20needs%20its%20own//%20clipboard%20code.(function%20()%20{%20%20%22use%20strict%22;%20%20function%20flash(btn)%20{%20%20%20%20var%20prior%20=%20btn.textContent;%20%20%20%20btn.textContent%20=%20%22Copied%22;%20%20%20%20setTimeout(function%20()%20{%20btn.textContent%20=%20prior;%20},%201500);%20%20}%20%20document.addEventListener(%22click%22,%20function%20(ev)%20{%20%20%20%20var%20btn%20=%20ev.target%20&&%20ev.target.closest%20?%20ev.target.closest(%22[data-copy]%22)%20:%20null;%20%20%20%20if%20(!btn)%20return;%20%20%20%20var%20text%20=%20btn.getAttribute(%22data-copy-text%22)%20||%20%22%22;%20%20%20%20var%20from%20=%20btn.getAttribute(%22data-copy-from%22);%20%20%20%20if%20(from)%20{%20%20%20%20%20%20var%20el%20=%20document.getElementById(from);%20%20%20%20%20%20if%20(el)%20text%20=%20el.textContent%20||%20%22%22;%20%20%20%20}%20%20%20%20if%20(!text)%20return;%20%20%20%20function%20done(ok)%20{%20if%20(ok)%20flash(btn);%20}%20%20%20%20if%20(navigator.clipboard%20&&%20navigator.clipboard.writeText)%20{%20%20%20%20%20%20navigator.clipboard.writeText(text).then(function%20()%20{%20done(true);%20},%20function%20()%20{%20done(false);%20});%20%20%20%20}%20else%20{%20%20%20%20%20%20var%20ta%20=%20document.createElement(%22textarea%22);%20%20%20%20%20%20ta.value%20=%20text;%20%20%20%20%20%20document.body.appendChild(ta);%20%20%20%20%20%20ta.select();%20%20%20%20%20%20try%20{%20done(document.execCommand(%22copy%22));%20}%20catch%20(e)%20{%20done(false);%20}%20%20%20%20%20%20document.body.removeChild(ta);%20%20%20%20}%20%20});})();//%20The%20sign-up%20chooser%20(/auth/link):%20select%20all,%20tick%20every%20extra%20without//%20leaving%20the%20place%20on%20the%20page,%20and%20a%20live%20count%20of%20the%20permissions.(function%20()%20{%20%20%22use%20strict%22;%20%20function%20recount(form)%20{%20%20%20%20var%20countEl%20=%20document.querySelector(%22[data-lk-count]%22);%20%20%20%20if%20(!form%20||%20!countEl)%20return;%20%20%20%20var%20req%20=%20{},%20all%20=%20{};%20%20%20%20var%20feats%20=%20form.querySelectorAll('input[name=%22feature%22]');%20%20%20%20for%20(var%20i%20=%200;%20i%20%3C%20feats.length;%20i++)%20{%20%20%20%20%20%20if%20(!feats[i].checked)%20continue;%20%20%20%20%20%20var%20sc%20=%20(feats[i].getAttribute(%22data-scopes%22)%20||%20%22%22).split(/s+/);%20%20%20%20%20%20for%20(var%20j%20=%200;%20j%20%3C%20sc.length;%20j++)%20if%20(sc[j])%20{%20req[sc[j]]%20=%20true;%20all[sc[j]]%20=%20true;%20}%20%20%20%20}%20%20%20%20var%20extras%20=%20form.querySelectorAll('input[name=%22enhance%22]');%20%20%20%20for%20(var%20k%20=%200;%20k%20%3C%20extras.length;%20k++)%20if%20(extras[k].checked)%20all[extras[k].value]%20=%20true;%20%20%20%20var%20n%20=%20Object.keys(all).length;%20%20%20%20countEl.textContent%20=%20String(n);%20%20%20%20var%20reqEl%20=%20document.querySelector(%22[data-lk-required]%22);%20%20%20%20if%20(reqEl)%20reqEl.textContent%20=%20String(Object.keys(req).length);%20%20}%20%20document.addEventListener(%22click%22,%20function%20(ev)%20{%20%20%20%20var%20t%20=%20ev.target%20&&%20ev.target.closest%20?%20ev.target.closest(%22[data-tick-all],[data-select-all]%22)%20:%20null;%20%20%20%20if%20(!t)%20return;%20%20%20%20ev.preventDefault();%20%20%20%20if%20(t.hasAttribute(%22data-select-all%22))%20{%20%20%20%20%20%20var%20cards%20=%20document.querySelectorAll(%22.lk-cards%20input[type=checkbox]%22);%20%20%20%20%20%20var%20every%20=%20true;%20%20%20%20%20%20for%20(var%20i%20=%200;%20i%20%3C%20cards.length;%20i++)%20if%20(!cards[i].checked)%20every%20=%20false;%20%20%20%20%20%20for%20(var%20j%20=%200;%20j%20%3C%20cards.length;%20j++)%20cards[j].checked%20=%20!every;%20%20%20%20%20%20return;%20%20%20%20}%20%20%20%20var%20form%20=%20t.closest(%22form%22);%20%20%20%20if%20(!form)%20return;%20%20%20%20var%20boxes%20=%20form.querySelectorAll('input[name=%22enhance%22]');%20%20%20%20var%20allOn%20=%20true;%20%20%20%20for%20(var%20a%20=%200;%20a%20%3C%20boxes.length;%20a++)%20if%20(!boxes[a].checked)%20allOn%20=%20false;%20%20%20%20for%20(var%20b%20=%200;%20b%20%3C%20boxes.length;%20b++)%20boxes[b].checked%20=%20!allOn;%20%20%20%20recount(form);%20%20});%20%20document.addEventListener(%22change%22,%20function%20(ev)%20{%20%20%20%20var%20form%20=%20ev.target%20&&%20ev.target.closest%20?%20ev.target.closest(%22[data-lk-form]%22)%20:%20null;%20%20%20%20if%20(form)%20recount(form);%20%20});})();
+// EveSynapse progressive enhancements. Everything here only ever
+// *adds* behavior: with JavaScript disabled the pages render and
+// work exactly as before (the nav is <details>-driven, the market
+// form submits, panels are simply unfolded).
+(function () {
+  "use strict";
+
+  // --- Content-ready bus --------------------------------------
+  // The persistent shell (swap.js) replaces #main-content without
+  // a page load. Page widgets subscribe through EveSynapseContent
+  // and initialize the fresh markup; the same initializer runs
+  // once for the first paint. Shell-level code (sidebar, top bar,
+  // palette, notifications) binds once and never re-runs. A widget
+  // that binds document-level listeners or timers must guard them
+  // itself: element bindings are safe (old nodes are discarded
+  // with the swap), global ones are not.
+  window.EveSynapseContent = {
+    onReady: function (fn) {
+      document.addEventListener("evesynapse:content-ready", function (ev) {
+        fn((ev.detail && ev.detail.root) || document);
+      });
+    }
+  };
+  function onContentReady(fn) {
+    window.EveSynapseContent.onReady(fn);
+  }
+
+  // --- Modal dialogs ---------------------------------------------
+  // One implementation behind every pop-up — add a module, the fit
+  // picker, the planner's ME and settings dialogs, quick jump: a
+  // .modal-backdrop around a .modal, opened and closed through
+  // EveSynapseModal. open() shows the backdrop in the browser's top
+  // layer (a manual popover), so its blur covers the whole page —
+  // top bar and sidebar included — whatever stacking the content
+  // sits in, without moving the dialog out of its form. It
+  // remembers the focus to give back and moves focus in; close()
+  // hides it and gives the focus back. A click on the backdrop
+  // itself, on any [data-close-modal] inside, or Escape closes the
+  // topmost one; opts.onClose runs on every close, however it came.
+  var modalStack = [];
+  function modalIndex(el) {
+    for (var i = modalStack.length - 1; i >= 0; i--) if (modalStack[i].el === el) return i;
+    return -1;
+  }
+  function topLayer(el, show) {
+    if (!el.showPopover) return;
+    if (!el.hasAttribute("popover")) el.setAttribute("popover", "manual");
+    try {
+      if (show) el.showPopover(); else el.hidePopover();
+    } catch (err) { /* already in that state */ }
+  }
+  var EveSynapseModal = window.EveSynapseModal = {
+    open: function (el, opts) {
+      if (!el || modalIndex(el) >= 0) return;
+      opts = opts || {};
+      modalStack.push({ el: el, back: document.activeElement, onClose: opts.onClose });
+      el.hidden = false;
+      topLayer(el, true);
+      document.documentElement.classList.add("modal-open");
+      if (opts.focus !== false) {
+        var first = el.querySelector("[autofocus], input:not([type=hidden]), select, textarea, .modal-item, button:not([data-close-modal])") ||
+          el.querySelector("[data-close-modal], button");
+        if (first && first.focus) first.focus({ preventScroll: true });
+      }
+    },
+    close: function (el) {
+      if (!el) return;
+      var i = modalIndex(el);
+      el.hidden = true;
+      topLayer(el, false);
+      if (i < 0) return;
+      var entry = modalStack.splice(i, 1)[0];
+      if (!modalStack.length) document.documentElement.classList.remove("modal-open");
+      if (entry.onClose) entry.onClose();
+      if (entry.back && entry.back.focus && document.contains(entry.back)) entry.back.focus({ preventScroll: true });
+    },
+    isOpen: function (el) { return modalIndex(el) >= 0; }
+  };
+  document.addEventListener("click", function (ev) {
+    var t = ev.target;
+    if (!t || !t.classList) return;
+    if (t.classList.contains("modal-backdrop")) { EveSynapseModal.close(t); return; }
+    var closer = t.closest && t.closest("[data-close-modal]");
+    var box = closer && closer.closest(".modal-backdrop");
+    if (box) EveSynapseModal.close(box);
+  });
+  document.addEventListener("keydown", function (ev) {
+    if (ev.key !== "Escape" || !modalStack.length || ev.defaultPrevented) return;
+    ev.preventDefault();
+    EveSynapseModal.close(modalStack[modalStack.length - 1].el);
+  });
+  // A dialog in content that is being swapped out closes with it.
+  document.addEventListener("evesynapse:content-will-swap", function () {
+    var main = document.getElementById("main-content");
+    for (var i = modalStack.length - 1; i >= 0; i--) {
+      if (main && main.contains(modalStack[i].el)) EveSynapseModal.close(modalStack[i].el);
+    }
+  });
+
+  // --- Section tabs --------------------------------------------
+  // Below the fit width the tab strip (and a grouped section's
+  // sub-row) is a sideways-scrolling rail; start with the current
+  // page's tab in view rather than off the right edge.
+  function revealSectionTab(root) {
+    var strips = root.querySelectorAll(".section-tabs, .section-subtabs");
+    for (var i = 0; i < strips.length; i++) {
+      var strip = strips[i], on = strip.querySelector("a.active");
+      if (!on || strip.scrollWidth <= strip.clientWidth) continue;
+      strip.scrollLeft = on.offsetLeft - strip.offsetLeft - (strip.clientWidth - on.offsetWidth) / 2;
+    }
+  }
+  onContentReady(revealSectionTab);
+  revealSectionTab(document);
+
+  // --- Collapsible sections -----------------------------------
+  // Folding lives at the smallest sensible unit on each page:
+  //   - .foldable sections (the h2/h3 blocks inside a page panel)
+  //     fold independently, section by section;
+  //   - .card widgets fold whole (Home widgets, Sync cards);
+  //   - the page .panel itself folds whole only when it wraps no
+  //     .foldable section and no cards — single-block pages like
+  //     Killmails or Wars, where the whole window IS the section.
+  // Sections marked data-fold="closed" start folded; that state
+  // is applied here, on load, so with JavaScript disabled every
+  // section is simply visible — folding is pure enhancement and
+  // nothing is ever hidden in the raw markup.
+  function setFolded(container, btn, folded) {
+    container.classList.toggle("folded", folded);
+    btn.textContent = folded ? "+" : "–"; // + when folded, en dash to fold
+    btn.setAttribute("aria-expanded", folded ? "false" : "true");
+    btn.setAttribute("aria-label", folded ? "Expand section" : "Collapse section");
+  }
+
+  function addFold(container, heading) {
+    if (!container || !heading) return;
+    if (heading.querySelector(":scope > .foldbtn")) return;
+    var btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "foldbtn";
+    btn.addEventListener("click", function () {
+      setFolded(container, btn, !container.classList.contains("folded"));
+    });
+    heading.appendChild(btn);
+    container.classList.add("has-fold");
+    setFolded(container, btn, container.getAttribute("data-fold") === "closed");
+  }
+
+  // Fold buttons are added per node, so re-running over fresh
+  // swapped markup is safe; the old nodes (and their buttons)
+  // are discarded with the swap.
+  function initFolds(root) {
+    var foldables = root.querySelectorAll(".foldable");
+    for (var i = 0; i < foldables.length; i++) {
+      // data-fold="never": keep the foldable section styling but
+      // don't offer a fold button (Issue 17).
+      if (foldables[i].getAttribute("data-fold") === "never") continue;
+      addFold(foldables[i], foldables[i].querySelector(":scope > h2, :scope > h3"));
+    }
+
+    var cards = root.querySelectorAll(".card");
+    for (var j = 0; j < cards.length; j++) {
+      // Home modules expand instead of folding (see Expanders).
+      if (cards[j].closest(".home-grid")) continue;
+      // data-fold="never" on a card: one window that is the page (the
+      // sign-up question), nothing to fold.
+      if (cards[j].getAttribute("data-fold") === "never") continue;
+      addFold(cards[j], cards[j].querySelector(":scope > h2, :scope > h3"));
+    }
+  }
+  onContentReady(initFolds);
+  initFolds(document);
+
+  // --- Confirmed forms ------------------------------------------
+  // A form carrying data-confirm asks before it submits (CSP rules
+  // out inline handlers). Delegated, so swapped pages need nothing.
+  document.addEventListener("submit", function (ev) {
+    var form = ev.target;
+    var q = form && form.getAttribute ? form.getAttribute("data-confirm") : null;
+    if (q && !window.confirm(q)) ev.preventDefault();
+  }, true);
+
+  // --- Tabs ----------------------------------------------------
+  // A [data-tabs] tablist renders hidden, its panels all showing
+  // under their own headings: that is the page without JavaScript.
+  // Here the list appears, one panel shows at a time, and the
+  // container gets .tabs-on so the CSS can drop the per-panel
+  // headings the tabs now carry. Arrow keys move along the list; a
+  // URL hash naming a panel opens it.
+  function initTabs(root) {
+    var lists = root.querySelectorAll("[data-tabs]");
+    for (var i = 0; i < lists.length; i++) setupTabs(lists[i]);
+  }
+  function setupTabs(list) {
+    if (list.getAttribute("data-tabs-ready")) return;
+    list.setAttribute("data-tabs-ready", "1");
+    var tabs = Array.prototype.slice.call(list.querySelectorAll('[role="tab"]'));
+    if (!tabs.length) return;
+    function panelOf(tab) { return document.getElementById(tab.getAttribute("aria-controls")); }
+    function select(tab, focus) {
+      tabs.forEach(function (t) {
+        var on = t === tab;
+        t.setAttribute("aria-selected", on ? "true" : "false");
+        t.tabIndex = on ? 0 : -1;
+        var p = panelOf(t);
+        if (p) p.hidden = !on;
+      });
+      if (focus) tab.focus();
+    }
+    tabs.forEach(function (t, n) {
+      t.addEventListener("click", function () { select(t, false); });
+      t.addEventListener("keydown", function (ev) {
+        var k = ev.key, to = -1;
+        if (k === "ArrowRight") to = (n + 1) % tabs.length;
+        else if (k === "ArrowLeft") to = (n - 1 + tabs.length) % tabs.length;
+        else if (k === "Home") to = 0;
+        else if (k === "End") to = tabs.length - 1;
+        if (to < 0) return;
+        ev.preventDefault();
+        select(tabs[to], true);
+      });
+    });
+    var start = tabs[0];
+    var hash = window.location.hash ? window.location.hash.slice(1) : "";
+    tabs.forEach(function (t) {
+      if (t.getAttribute("aria-controls") === hash) start = t;
+    });
+    list.hidden = false;
+    if (list.parentElement) list.parentElement.classList.add("tabs-on");
+    select(start, false);
+  }
+  onContentReady(initTabs);
+  initTabs(document);
+
+  // --- Expanders -------------------------------------------------
+  // One mechanism for every summary/detail pair. A detail block
+  // carries data-wmore; its control carries data-expand naming the
+  // block's id. Home modules get theirs here: a module whose markup
+  // has a detail block rests on its summary, with a More/Less
+  // toggle in its heading, and takes its whole grid row while
+  // open. Table rows with a detail row of their own (the fleet
+  // overview) render their control server-side and use the same
+  // switch. Without JavaScript nothing is hidden: every detail
+  // block simply renders open. Which modules are open is a
+  // per-browser convenience, remembered in localStorage.
+  var EXPANDED_KEY = "evesynapse.home.expanded";
+  function readExpanded() {
+    try {
+      var v = JSON.parse(window.localStorage.getItem(EXPANDED_KEY) || "[]");
+      return Array.isArray(v) ? v : [];
+    } catch (e) { return []; }
+  }
+  function rememberExpanded(id, open) {
+    var ids = readExpanded().filter(function (x) { return x !== id; });
+    if (open) ids.push(id);
+    try { window.localStorage.setItem(EXPANDED_KEY, JSON.stringify(ids)); } catch (e) { /* private mode */ }
+  }
+  var expandSeq = 0;
+  function setExpanded(ctrl, panels, open) {
+    for (var p = 0; p < panels.length; p++) panels[p].hidden = !open;
+    ctrl.setAttribute("aria-expanded", open ? "true" : "false");
+    if (ctrl.classList.contains("cardexpand")) {
+      ctrl.textContent = open ? "Less" : "More";
+    }
+    var owner = ctrl.getAttribute("data-expand-owner");
+    var ownerEl = owner ? document.getElementById(owner) : null;
+    if (ownerEl) ownerEl.classList.toggle("expanded", open);
+    var card = ctrl.closest(".card[data-widget]");
+    if (card && ctrl.classList.contains("cardexpand")) {
+      card.classList.toggle("expanded", open);
+      rememberExpanded(card.getAttribute("data-widget"), open);
+    }
+  }
+  function bindExpander(ctrl, panels, open) {
+    if (ctrl.hasAttribute("data-expand-bound")) return;
+    ctrl.setAttribute("data-expand-bound", "1");
+    var ids = [];
+    for (var p = 0; p < panels.length; p++) {
+      if (!panels[p].id) panels[p].id = "wmore-" + (++expandSeq);
+      ids.push(panels[p].id);
+    }
+    ctrl.setAttribute("aria-controls", ids.join(" "));
+    setExpanded(ctrl, panels, open);
+    ctrl.addEventListener("click", function (ev) {
+      ev.stopPropagation();
+      setExpanded(ctrl, panels, panels[0].hidden);
+    });
+  }
+  function initExpanders(root) {
+    // Customize shows every module whole: it is about arranging.
+    var grid = root.querySelector ? root.querySelector(".home-grid:not(.home-custom)") : null;
+    var remembered = readExpanded();
+    if (grid) {
+      var cards = grid.querySelectorAll(".card[data-widget]");
+      for (var i = 0; i < cards.length; i++) {
+        var card = cards[i];
+        // Every detail block in the module: whole blocks, and the
+        // rows or items past the summary, each marked on its own.
+        var panels = card.querySelectorAll("[data-wmore]");
+        var heading = card.querySelector(":scope > h2, :scope > h3");
+        if (!panels.length || !heading || heading.querySelector(".cardexpand")) continue;
+        var btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "cardexpand";
+        heading.appendChild(btn);
+        card.classList.add("has-expand");
+        bindExpander(btn, panels, remembered.indexOf(card.getAttribute("data-widget")) !== -1);
+      }
+    }
+    var ctrls = root.querySelectorAll ? root.querySelectorAll("[data-expand]") : [];
+    for (var j = 0; j < ctrls.length; j++) {
+      var target = document.getElementById(ctrls[j].getAttribute("data-expand"));
+      if (target) bindExpander(ctrls[j], [target], false);
+    }
+  }
+  onContentReady(initExpanders);
+  initExpanders(document);
+
+  // --- Nav: Escape folds an open branch back up -----------------
+  document.addEventListener("keydown", function (ev) {
+    if (ev.key !== "Escape") return;
+    // (The character switcher in the top bar closes itself, with its
+    // motion: see the end of this file.)
+    var open = document.querySelectorAll("details.branch[open]:not(.topbar-switcher)");
+    for (var i = 0; i < open.length; i++) open[i].removeAttribute("open");
+  });
+
+  // --- Live countdowns ---------------------------------------
+  // Any element carrying data-finish (RFC3339) counts down to
+  // that moment (home fleet widget, character page training
+  // line). Without JS the server-rendered remainder stays.
+  // One ticker at a time: the will-swap event stops it before
+  // the old nodes go away, and the ready event starts it for the
+  // fresh ones. A ticking-over-detached-nodes interval would
+  // otherwise pile up behind every swap.
+  var countdownTimer = null;
+  function fmtLeft(ms) {
+    if (ms <= 0) return "done";
+    var s = Math.floor(ms / 1000);
+    var d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600),
+        m = Math.floor((s % 3600) / 60), sec = s % 60;
+    if (d > 0) return "in " + d + "d " + h + "h " + m + "m";
+    if (h > 0) return "in " + h + "h " + m + "m";
+    if (m > 0) return "in " + m + "m " + sec + "s";
+    return "in " + sec + "s";
+  }
+  function stopCountdowns() {
+    if (countdownTimer !== null) {
+      window.clearInterval(countdownTimer);
+      countdownTimer = null;
+    }
+  }
+  function initCountdowns(root) {
+    var countdowns = root.querySelectorAll("[data-finish]");
+    if (!countdowns.length) return;
+    var tickCountdowns = function () {
+      for (var i = 0; i < countdowns.length; i++) {
+        var t = Date.parse(countdowns[i].getAttribute("data-finish"));
+        if (!isNaN(t)) countdowns[i].textContent = fmtLeft(t - Date.now());
+      }
+    };
+    tickCountdowns();
+    stopCountdowns();
+    countdownTimer = window.setInterval(tickCountdowns, 1000);
+  }
+  document.addEventListener("evesynapse:content-will-swap", stopCountdowns);
+  onContentReady(initCountdowns);
+  initCountdowns(document);
+
+  // --- Fleet filter (home overview) ---------------------------
+  // The fleet table renders every character server-side; this
+  // just hides rows that don't match the typed text or the
+  // active chip: All, a tag, or Not training. A row's detail row
+  // goes with it, and a click anywhere on a row (not on a link)
+  // opens its detail, like its chevron. No JS: the full list is
+  // simply visible, details and all.
+  function initFleetFilter(root) {
+    var fleetFilter = root.querySelector("#fleet-filter");
+    var fleetRows = root.querySelectorAll(".fleet-row");
+    if (!fleetFilter || !fleetRows.length) return;
+    var noMatch = root.querySelector(".fleet-nomatch");
+    var shownEl = root.querySelector("[data-fleet-shown]");
+    var chips = root.querySelectorAll(".fleet-tools .chip");
+    var activeTag = "";
+    var idleOnly = false;
+    var detailOf = function (row) {
+      var btn = row.querySelector("[data-expand]");
+      return btn ? document.getElementById(btn.getAttribute("data-expand")) : null;
+    };
+    var applyFleetFilter = function () {
+      var q = fleetFilter.value.trim().toLowerCase();
+      var shown = 0;
+      for (var i = 0; i < fleetRows.length; i++) {
+        var hay = fleetRows[i].getAttribute("data-search") || "";
+        var ok = (!q || hay.indexOf(q) !== -1) && (!activeTag || hay.indexOf(activeTag) !== -1) &&
+          (!idleOnly || fleetRows[i].hasAttribute("data-idle"));
+        fleetRows[i].style.display = ok ? "" : "none";
+        var detail = detailOf(fleetRows[i]);
+        if (detail) detail.style.display = ok ? "" : "none";
+        if (ok) shown++;
+      }
+      if (noMatch) noMatch.hidden = shown > 0;
+      if (shownEl) shownEl.textContent = String(shown);
+    };
+    var pick = function (chip) {
+      activeTag = (chip.getAttribute("data-tag") || "").toLowerCase();
+      idleOnly = chip.hasAttribute("data-idle-chip");
+      for (var j = 0; j < chips.length; j++) {
+        var on = chips[j] === chip;
+        chips[j].classList.toggle("on", on);
+        chips[j].setAttribute("aria-pressed", on ? "true" : "false");
+      }
+      applyFleetFilter();
+    };
+    fleetFilter.addEventListener("input", applyFleetFilter);
+    for (var c = 0; c < chips.length; c++) {
+      chips[c].addEventListener("click", function () {
+        // A second press on the active chip goes back to All.
+        if (this.classList.contains("on") && chips[0] !== this) pick(chips[0]);
+        else pick(this);
+      });
+    }
+    for (var r = 0; r < fleetRows.length; r++) {
+      fleetRows[r].addEventListener("click", function (ev) {
+        if (ev.target.closest("a, button, input, select")) return;
+        var btn = this.querySelector("[data-expand]");
+        if (btn) btn.click();
+      });
+    }
+    // The KPI band's idle count ("N idle — show them") is a link to
+    // the Characters page; with the Fleet Overview on the page it
+    // filters the fleet to the idle pilots and brings the module into
+    // view instead.
+    var idleLink = root.querySelector("[data-fleet-idle]");
+    var idleChip = root.querySelector(".fleet-tools [data-idle-chip]");
+    var fleetCard = fleetFilter.closest(".card");
+    if (idleLink && idleChip && fleetCard) {
+      idleLink.addEventListener("click", function (ev) {
+        ev.preventDefault();
+        if (!idleChip.classList.contains("on")) pick(idleChip);
+        fleetCard.scrollIntoView({ block: "start", behavior: "smooth" });
+      });
+    }
+  }
+  onContentReady(initFleetFilter);
+  initFleetFilter(document);
+
+  // --- Briefing severity tabs ------------------------------------
+  // All / Critical / Warning / Info swap which cards show; the
+  // module's More/Less still decides how far down the list goes.
+  function initBriefTabs(root) {
+    var tabs = root.querySelectorAll("[data-brief]");
+    if (!tabs.length) return;
+    var cards = root.querySelectorAll(".brief-card");
+    for (var i = 0; i < tabs.length; i++) {
+      tabs[i].addEventListener("click", function () {
+        var sev = this.getAttribute("data-brief");
+        for (var j = 0; j < tabs.length; j++) {
+          var on = tabs[j] === this;
+          tabs[j].classList.toggle("on", on);
+          tabs[j].setAttribute("aria-pressed", on ? "true" : "false");
+        }
+        for (var k = 0; k < cards.length; k++) {
+          cards[k].classList.toggle("brief-off", sev !== "all" && cards[k].getAttribute("data-sev") !== sev);
+        }
+      });
+    }
+  }
+  onContentReady(initBriefTabs);
+  initBriefTabs(document);
+
+  // --- Widget settings (orders scope picker) ------------------
+  // A change applies at once: the form IS the plain submit (the
+  // no-JS path), this just skips the button press. In customize
+  // mode the page reloads so the live card re-renders in place.
+  function initScopeForms(root) {
+    var scopeForms = root.querySelectorAll("form.widget-scope");
+    for (var s = 0; s < scopeForms.length; s++) {
+      scopeForms[s].addEventListener("change", function () {
+        this.submit();
+      });
+    }
+  }
+  onContentReady(initScopeForms);
+  initScopeForms(document);
+
+  // The size picker's outside-click close binds once and reads the
+  // current grid each time; binding it per grid would pile a dead
+  // handler behind every swapped customize view.
+  var homePickCloseBound = false;
+
+  // Card control glyphs: one stroke family, drawn at one size and
+  // centered in identical square buttons.
+  var CARD_ICONS = {
+    move: '<path d="M12 3v18M3 12h18"/><path d="m9 6 3-3 3 3M9 18l3 3 3-3M6 9l-3 3 3 3M18 9l3 3-3 3"/>',
+    size: '<path d="M14 4h6v6M10 20H4v-6M20 4l-6.5 6.5M4 20l6.5-6.5"/>',
+    remove: '<path d="M6 6l12 12M18 6 6 18"/>'
+  };
+  function cardIcon(name) {
+    return '<svg class="cardicon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">' +
+      '<g fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">' +
+      CARD_ICONS[name] + "</g></svg>";
+  }
+
+  // --- Home customize: drag, resize, remove, add module --------
+  // Layered over the plain customize forms, never replacing them:
+  // this runs only on the customize view (the data-customize grid)
+  // and stores through the same /home/layout endpoint — a drag
+  // saves once, on drop, and the server stays the normalizer of
+  // whatever order it is handed. The grid itself is solved, not
+  // stretched: the mirror solver below recomputes every module's
+  // span live so the arrangement under the finger is the final
+  // one. Without JS the up/down, half/full and add/remove forms
+  // in the module list do the same job.
+  // Keyboard: \ on the Overview opens Customize, and in Customize
+  // finishes it (every change already saved, so it is Done). Bound
+  // once, reading the current page each time. Typing in a field,
+  // modifier chords and a drag in progress are left alone.
+  document.addEventListener("keydown", function (ev) {
+    if (ev.ctrlKey || ev.metaKey || ev.altKey || ev.defaultPrevented) return;
+    var t = ev.target;
+    if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
+    var grid = document.querySelector(".grid.home-grid");
+    if (!grid) return;
+    var custom = grid.classList.contains("home-custom");
+    var go = function (href) {
+      // Through a real link when the page has one, so the shell's
+      // swap navigation handles it; a plain navigation otherwise.
+      var link = document.querySelector('.home-bar a[href="' + href + '"]');
+      if (link) link.click(); else window.location.assign(href);
+    };
+    if (ev.key !== "\\" || document.body.classList.contains("drag-active")) return;
+    ev.preventDefault();
+    go(custom ? "/" : "/?customize=1");
+  });
+
+  function initHomeGrid(root) {
+    var homeGrid = root.querySelector("#home-grid");
+    if (homeGrid && homeGrid.getAttribute("data-customize") === "1" && window.fetch) {
+      initHomeCustomize(homeGrid);
+    }
+  }
+  onContentReady(initHomeGrid);
+  initHomeGrid(document);
+
+  function initHomeCustomize(grid) {
+    var modal = document.getElementById("add-module-modal");
+    grid.classList.add("has-controls");
+
+    function postLayout(params) {
+      var body = new URLSearchParams();
+      for (var key in params) body.set(key, params[key]);
+      return fetch("/home/layout", {
+        method: "POST",
+        headers: { "X-Requested-With": "XMLHttpRequest" },
+        body: body
+      }).then(function (resp) { return resp.ok; }, function () { return false; });
+    }
+
+    function moduleCards() {
+      return grid.querySelectorAll(":scope > .card[data-widget]");
+    }
+    function widgetIDs() {
+      var ids = [];
+      var cards = moduleCards();
+      for (var i = 0; i < cards.length; i++) ids.push(cards[i].getAttribute("data-widget"));
+      return ids;
+    }
+
+    // --- motion --------------------------------------------------
+    // Every rearrangement goes through flip(): measure where each
+    // module is drawn right now (mid-animation included), stop
+    // whatever it was doing, apply the change, measure the new
+    // layout, and play each module from where it was drawn to its
+    // new cell. Moves are translate-only — scaling a module to
+    // fake its size change squashes its text — and every module
+    // runs at most one animation, cancelled before the next change
+    // is measured, so overlapping changes never fight, jump back or
+    // replay. The measured layout (page coordinates, no transforms)
+    // is kept for the drag's hit-testing, so decisions follow where
+    // modules are going, not where an animation happens to be.
+    var reducedMotion = window.matchMedia &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    var canAnimate = !reducedMotion && !!Element.prototype.animate;
+    var MOVE_MS = 260;
+    var EASE = "cubic-bezier(0.2, 0, 0, 1)";
+    var layout = new Map();
+
+    function movers() {
+      return grid.querySelectorAll(":scope > .card:not(.dragging)");
+    }
+    function stopMotion(el) {
+      if (el._motion) { el._motion.cancel(); el._motion = null; }
+    }
+    function pageBox(r) {
+      var sx = window.scrollX, sy = window.scrollY;
+      return { l: r.left + sx, t: r.top + sy, r: r.right + sx, b: r.bottom + sy };
+    }
+    function measure() {
+      layout = new Map();
+      var els = movers();
+      for (var i = 0; i < els.length; i++) {
+        // A running move is a transform; the box under it is the
+        // layout. Strip the move to read it.
+        var el = els[i], r = el.getBoundingClientRect(), b = pageBox(r);
+        if (el._motion) {
+          var m = new DOMMatrixReadOnly(window.getComputedStyle(el).transform);
+          b = { l: b.l - m.m41, t: b.t - m.m42, r: b.r - m.m41, b: b.b - m.m42 };
+        }
+        layout.set(el, b);
+      }
+    }
+    function flip(mutate, still) {
+      var before = new Map();
+      var els = movers();
+      for (var i = 0; i < els.length; i++) before.set(els[i], els[i].getBoundingClientRect());
+      for (var j = 0; j < els.length; j++) stopMotion(els[j]);
+      mutate();
+      var now = movers();
+      layout = new Map();
+      for (var k = 0; k < now.length; k++) {
+        var el = now[k], r = el.getBoundingClientRect(), was = before.get(el);
+        layout.set(el, pageBox(r));
+        if (!canAnimate || el === still) continue;
+        if (!was) {
+          // Arriving: a soft fade and rise into its cell.
+          el._motion = el.animate([
+            { opacity: 0, transform: "translateY(10px) scale(0.98)" },
+            { opacity: 1, transform: "none" }
+          ], { duration: MOVE_MS, easing: EASE });
+        } else {
+          var dx = was.left - r.left, dy = was.top - r.top;
+          if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) continue;
+          el._motion = el.animate([
+            { transform: "translate(" + dx + "px," + dy + "px)" },
+            { transform: "none" }
+          ], { duration: MOVE_MS, easing: EASE });
+        }
+        el._motion.onfinish = (function (e, a) {
+          return function () { if (e._motion === a) e._motion = null; };
+        })(el, el._motion);
+      }
+    }
+    // A module leaving: fade it down, then close the gap.
+    function removeCard(card) {
+      var gone = false;
+      var go = function () {
+        if (gone) return;
+        gone = true;
+        flip(function () { card.remove(); });
+      };
+      if (!canAnimate) { go(); return; }
+      stopMotion(card);
+      card.style.pointerEvents = "none";
+      card.animate([
+        { opacity: 1, transform: "none" },
+        { opacity: 0, transform: "scale(0.96)" }
+      ], { duration: 160, easing: "ease-in", fill: "forwards" }).onfinish = go;
+      // A page whose animations are paused still loses the card.
+      window.setTimeout(go, 220);
+    }
+    // A brief red pulse on whatever refused a change.
+    function refuse(el) {
+      el.classList.remove("refused");
+      void el.offsetWidth;
+      el.classList.add("refused");
+      window.setTimeout(function () { el.classList.remove("refused"); }, 650);
+    }
+
+    // --- sizes ---------------------------------------------------
+    // A module's size is its gw/gh classes (grid cells across and
+    // down, 1-3); the CSS lays the grid out from them and every cell
+    // is a fixed size, so a module is exactly as big as its cells.
+    // Some modules have a floor (data-minw / data-minh): asked for
+    // less, the cells blink red and the module keeps its size.
+    function sizeOf(el) {
+      return {
+        w: parseInt(el.getAttribute("data-gw"), 10) || 1,
+        h: parseInt(el.getAttribute("data-gh"), 10) || 1
+      };
+    }
+    function minOf(el) {
+      return {
+        w: parseInt(el.getAttribute("data-minw"), 10) || 1,
+        h: parseInt(el.getAttribute("data-minh"), 10) || 1
+      };
+    }
+    function sizeCard(el, w, h) {
+      ["gw1", "gw2", "gw3", "gh1", "gh2", "gh3"].forEach(function (c) { el.classList.remove(c); });
+      el.classList.add("gw" + w);
+      el.classList.add("gh" + h);
+      el.setAttribute("data-gw", String(w));
+      el.setAttribute("data-gh", String(h));
+    }
+    // One resize, wherever it came from (picker or grip): apply it at
+    // once, save it, and put the old size back if the save fails.
+    function resizeCard(card, w, h) {
+      var was = sizeOf(card);
+      if (was.w === w && was.h === h) return;
+      flip(function () { sizeCard(card, w, h); });
+      postLayout({ action: "size", widget: card.getAttribute("data-widget"), w: w, h: h }).then(function (ok) {
+        if (!ok) flip(function () { sizeCard(card, was.w, was.h); });
+      });
+    }
+    function saveOrder() {
+      return postLayout({ action: "order", ids: widgetIDs().join(",") });
+    }
+
+    // Give one card its move handle, resize toggle and × button.
+    // Cards added from the pop-up pass through here too.
+    function enhanceCard(card) {
+      var heading = card.querySelector(":scope > h2, :scope > h3");
+      if (!heading || card.querySelector(".draghandle")) return;
+      var id = card.getAttribute("data-widget");
+      var title = heading.textContent.trim();
+
+      var handle = document.createElement("button");
+      handle.type = "button";
+      handle.className = "cardbtn draghandle";
+      handle.innerHTML = cardIcon("move");
+      handle.title = "Drag to move";
+      handle.setAttribute("aria-label", "Move " + title + " (drag, or use the arrow keys)");
+      heading.insertBefore(handle, heading.firstChild);
+      handle.addEventListener("pointerdown", function (ev) { startDrag(ev, card, handle); });
+      handle.addEventListener("keydown", function (ev) { keyMove(ev, card, handle); });
+
+      // The card's own controls sit in its top-right corner: the
+      // size picker (a 3x3 grid of cells, the way a table size is
+      // picked) and remove. The grip in the bottom-right corner
+      // resizes by dragging, snapping to whole cells.
+      var ctl = document.createElement("div");
+      ctl.className = "cardctl";
+      var sizeBtn = document.createElement("button");
+      sizeBtn.type = "button";
+      sizeBtn.className = "cardbtn cardsize";
+      sizeBtn.innerHTML = cardIcon("size");
+      sizeBtn.title = "Resize";
+      sizeBtn.setAttribute("aria-haspopup", "true");
+      sizeBtn.setAttribute("aria-expanded", "false");
+      sizeBtn.setAttribute("aria-label", "Resize " + title);
+      var picker = document.createElement("div");
+      picker.className = "sizepick";
+      picker.hidden = true;
+      picker.setAttribute("role", "group");
+      picker.setAttribute("aria-label", "Size of " + title + ", in grid cells");
+      var cells = [];
+      for (var ph = 1; ph <= 3; ph++) {
+        for (var pw = 1; pw <= 3; pw++) {
+          (function (w, h) {
+            var cell = document.createElement("button");
+            cell.type = "button";
+            cell.className = "sizecell";
+            cell.setAttribute("data-gw", String(w));
+            cell.setAttribute("data-gh", String(h));
+            cell.setAttribute("aria-label", w + " wide by " + h + " tall");
+            cell.title = w + " × " + h;
+            cell.addEventListener("mouseenter", function () { paintPicker(w, h); });
+            cell.addEventListener("focus", function () { paintPicker(w, h); });
+            cell.addEventListener("click", function () {
+              var min = minOf(card);
+              if (w < min.w || h < min.h) {
+                // Under the module's floor: blink what was asked
+                // for, then show the size it keeps.
+                paintPicker(w, h);
+                cells.forEach(function (c) { if (c.classList.contains("on")) refuse(c); });
+                window.setTimeout(function () { var s = sizeOf(card); paintPicker(s.w, s.h); }, 650);
+                return;
+              }
+              resizeCard(card, w, h);
+              closePicker();
+            });
+            cells.push(cell);
+            picker.appendChild(cell);
+          })(pw, ph);
+        }
+      }
+      function paintPicker(w, h) {
+        var min = minOf(card);
+        cells.forEach(function (c) {
+          var cw = +c.getAttribute("data-gw"), ch = +c.getAttribute("data-gh");
+          c.classList.toggle("on", cw <= w && ch <= h);
+          c.classList.toggle("floor", cw <= min.w && ch <= min.h);
+        });
+      }
+      function closePicker() {
+        picker.hidden = true;
+        sizeBtn.setAttribute("aria-expanded", "false");
+      }
+      picker.addEventListener("mouseleave", function () { var s = sizeOf(card); paintPicker(s.w, s.h); });
+      sizeBtn.addEventListener("click", function () {
+        var open = picker.hidden;
+        var others = grid.querySelectorAll(".sizepick");
+        for (var o = 0; o < others.length; o++) others[o].hidden = true;
+        picker.hidden = !open;
+        sizeBtn.setAttribute("aria-expanded", open ? "true" : "false");
+        if (open) {
+          var s = sizeOf(card);
+          paintPicker(s.w, s.h);
+          cells[(s.h - 1) * 3 + (s.w - 1)].focus();
+        }
+      });
+      picker.addEventListener("keydown", function (ev) {
+        // Escape closes the picker only; it does not also leave Customize.
+        if (ev.key === "Escape") { ev.preventDefault(); closePicker(); sizeBtn.focus(); }
+      });
+
+      var remove = document.createElement("button");
+      remove.type = "button";
+      remove.className = "cardbtn cardremove";
+      remove.innerHTML = cardIcon("remove");
+      remove.title = "Remove";
+      remove.setAttribute("aria-label", "Remove " + title + " from your home");
+      remove.addEventListener("click", function () {
+        remove.disabled = true;
+        postLayout({ action: "toggle", widget: id }).then(function (ok) {
+          if (ok) removeCard(card);
+          else remove.disabled = false;
+        });
+      });
+      ctl.appendChild(sizeBtn);
+      ctl.appendChild(remove);
+      ctl.appendChild(picker);
+      card.appendChild(ctl);
+
+      var grip = document.createElement("span");
+      grip.className = "cardgrip";
+      grip.setAttribute("aria-hidden", "true");
+      grip.addEventListener("pointerdown", function (ev) { startResize(ev, card, grip); });
+      card.appendChild(grip);
+    }
+
+    // Keyboard move: the arrow keys on a module's move handle step it
+    // one place earlier or later and save.
+    function keyMove(ev, card, handle) {
+      var back = ev.key === "ArrowUp" || ev.key === "ArrowLeft";
+      var fwd = ev.key === "ArrowDown" || ev.key === "ArrowRight";
+      if (!back && !fwd) return;
+      ev.preventDefault();
+      var all = Array.prototype.slice.call(moduleCards());
+      var i = all.indexOf(card), j = back ? i - 1 : i + 1;
+      if (j < 0 || j >= all.length) return;
+      flip(function () {
+        grid.insertBefore(card, back ? all[j] : all[j].nextSibling);
+      });
+      handle.focus();
+      saveOrder();
+    }
+
+    // --- grip resize ---------------------------------------------
+    // The grip drags a frame that follows the pointer exactly; the
+    // module underneath snaps to whole cells as the frame crosses
+    // into them (with a little hysteresis, so a boundary never
+    // flickers), and the modules after it glide out of the way. A
+    // module grows only rightwards to the grid's edge from the
+    // column it starts in, so resizing never makes it jump rows.
+    // Dragged below the module's floor, the frame turns red and the
+    // module stays at its floor.
+    function startResize(ev, card, grip) {
+      if (ev.pointerType === "mouse" && ev.button !== 0) return;
+      ev.preventDefault();
+      stopMotion(card);
+      var start = sizeOf(card), cur = start, min = minOf(card);
+      var r0 = card.getBoundingClientRect();
+      var gcs = window.getComputedStyle(grid);
+      var gapX = parseFloat(gcs.columnGap) || 0, gapY = parseFloat(gcs.rowGap) || 0;
+      var cellW = (r0.width - (start.w - 1) * gapX) / start.w + gapX;
+      // A row is the grid's row floor (--home-row): modules can stand
+      // taller than their cells when their content needs it, so the
+      // card's own height is not the measure.
+      var rowPx = parseFloat(gcs.getPropertyValue("--home-row")) *
+        parseFloat(window.getComputedStyle(document.documentElement).fontSize);
+      var cellH = (rowPx || 176) + gapY;
+      var cols = (gcs.gridTemplateColumns || "").split(" ").filter(Boolean).length || 1;
+      var gridLeft = grid.getBoundingClientRect().left;
+      var colStart = Math.round((r0.left - gridLeft) / cellW);
+      var maxW = Math.max(1, Math.min(3, cols - colStart));
+      var lastX = ev.clientX, lastY = ev.clientY, under = false;
+      var startY = ev.clientY;
+
+      var frame = document.createElement("div");
+      frame.className = "resize-frame";
+      document.body.appendChild(frame);
+      try { grip.setPointerCapture(ev.pointerId); } catch (err) { /* nicety */ }
+      card.classList.add("resizing");
+      document.body.classList.add("resize-active");
+
+      function snap(raw, was, hi) {
+        var n = Math.round(raw);
+        if (n !== was && Math.abs(raw - was) < 0.62) n = was;
+        return Math.max(1, Math.min(hi, n));
+      }
+      // Runs on every pointer move, straight from the event: the
+      // frame tracks the pointer with no frame of lag.
+      function frameTick() {
+        var r = card.getBoundingClientRect();
+        // Width from the pointer's offset (a module is exactly its
+        // columns wide). Height from how far the pointer has moved
+        // since the press, added to the rows the module had: a module
+        // standing taller than its rows (its content needs the room)
+        // must not jump to that height the moment the grip is taken.
+        var relX = lastX - r.left;
+        var relY = start.h * cellH - gapY + (lastY - startY);
+        var w = snap((relX + gapX) / cellW, cur.w, maxW);
+        var h = snap((relY + gapY) / cellH, cur.h, 3);
+        under = w < min.w || h < min.h;
+        frame.classList.toggle("under", under);
+        frame.style.left = r.left + "px";
+        frame.style.top = r.top + "px";
+        frame.style.width = Math.max(cellW * 0.5, Math.min(relX, maxW * cellW - gapX)) + "px";
+        frame.style.height = Math.max(cellH * 0.5, Math.min(relY, 3 * cellH - gapY)) + "px";
+        w = Math.max(w, min.w);
+        h = Math.max(h, min.h);
+        if (w !== cur.w || h !== cur.h) {
+          cur = { w: w, h: h };
+          flip(function () { sizeCard(card, w, h); }, card);
+        }
+      }
+      function onMove(e) {
+        lastX = e.clientX;
+        lastY = e.clientY;
+        frameTick();
+      }
+      function onUp() {
+        grip.removeEventListener("pointermove", onMove);
+        grip.removeEventListener("pointerup", onUp);
+        grip.removeEventListener("pointercancel", onUp);
+        card.classList.remove("resizing");
+        document.body.classList.remove("resize-active");
+        frame.remove();
+        if (under) refuse(card);
+        if (cur.w === start.w && cur.h === start.h) return;
+        // The module already stands at its new size; save it, and a
+        // failed save puts back the size it started at.
+        postLayout({ action: "size", widget: card.getAttribute("data-widget"), w: cur.w, h: cur.h }).then(function (ok) {
+          if (!ok) flip(function () { sizeCard(card, start.w, start.h); });
+        });
+      }
+      grip.addEventListener("pointermove", onMove);
+      grip.addEventListener("pointerup", onUp);
+      grip.addEventListener("pointercancel", onUp);
+      frameTick();
+    }
+
+    // --- dragging --------------------------------------------------
+    // Lifting a card puts a glowing slot into its place, with its
+    // size, and takes the card out of the grid (position: fixed) at
+    // exactly the spot it occupied — nothing under the pointer moves
+    // at lift-off. The card then follows the pointer by transform
+    // alone, so it tracks without lag. The slot moves when the
+    // pointer is over another module: before it if the pointer is in
+    // that module's first half (left half within the same row, top
+    // half across rows), after it otherwise; the module the slot
+    // just passed is ignored until the pointer leaves it, so a
+    // boundary never flip-flops. Past the last module the slot goes
+    // to the end. Holding the card near a viewport edge scrolls the
+    // page. On drop the card glides into the slot and takes its
+    // place; Escape or a cancelled pointer puts everything back.
+    // The grid child beside el (dir -1 before, 1 after), skipping
+    // text and the lifted card, which sits out of the flow.
+    function sibling(el, dir) {
+      var n = dir < 0 ? el.previousElementSibling : el.nextElementSibling;
+      while (n && n.classList.contains("dragging")) n = dir < 0 ? n.previousElementSibling : n.nextElementSibling;
+      return n;
+    }
+    function inside(b, x, y) {
+      return !!b && x >= b.l && x <= b.r && y >= b.t && y <= b.b;
+    }
+
+    function startDrag(ev, card, handle) {
+      if (ev.pointerType === "mouse" && ev.button !== 0) return;
+      ev.preventDefault();
+
+      var startX = ev.clientX, startY = ev.clientY;
+      var lastX = startX, lastY = startY;
+      var lifted = false, slot = null, origin = null, savedNodes = null;
+      var raf = 0, lock = null, holdUntil = 0, dirty = true;
+
+      try { handle.setPointerCapture(ev.pointerId); } catch (err) { /* nicety */ }
+
+      function lift() {
+        lifted = true;
+        savedNodes = Array.prototype.slice.call(moduleCards());
+        var open = grid.querySelectorAll(".sizepick:not([hidden])");
+        for (var i = 0; i < open.length; i++) open[i].hidden = true;
+        stopMotion(card);
+        origin = card.getBoundingClientRect();
+        slot = document.createElement("div");
+        slot.className = "card drag-placeholder";
+        slot.setAttribute("aria-hidden", "true");
+        var s = sizeOf(card);
+        sizeCard(slot, s.w, s.h);
+        grid.insertBefore(slot, card);
+        card.style.left = origin.left + "px";
+        card.style.top = origin.top + "px";
+        card.style.width = origin.width + "px";
+        card.style.height = origin.height + "px";
+        card.style.transformOrigin = (startX - origin.left) + "px " + (startY - origin.top) + "px";
+        card.classList.add("dragging");
+        // A grouped ancestor (the view-transition name on <main>, or
+        // any transform/filter on a wrapper) is the containing block
+        // for a fixed element, so viewport coordinates land offset
+        // by that ancestor's origin. Measure the miss and correct
+        // it: the card stays exactly under the pointer either way.
+        var placed = card.getBoundingClientRect();
+        var missX = placed.left - origin.left, missY = placed.top - origin.top;
+        if (missX || missY) {
+          card.style.left = (origin.left - missX) + "px";
+          card.style.top = (origin.top - missY) + "px";
+        }
+        document.body.classList.add("drag-active");
+        measure();
+        raf = requestAnimationFrame(tick);
+      }
+
+      // The card is placed on every pointer move, straight from the
+      // event (a transform: no layout), so it never trails the
+      // pointer by a frame.
+      function follow() {
+        card.style.transform = "translate3d(" + (lastX - startX) + "px," + (lastY - startY) + "px,0)";
+      }
+
+      // The frame loop only scrolls: the closer the pointer rides to
+      // a viewport edge, the faster the page rolls under it.
+      function tick() {
+        raf = 0;
+        if (!lifted) return;
+        var edge = 72, speed = 0;
+        if (lastY < edge) speed = -Math.min(16, Math.ceil((edge - lastY) / 4));
+        else if (lastY > window.innerHeight - edge) speed = Math.min(16, Math.ceil((lastY - (window.innerHeight - edge)) / 4));
+        if (speed) { window.scrollBy(0, speed); dirty = true; }
+        if (dirty) retarget();
+        raf = requestAnimationFrame(tick);
+      }
+
+      function retarget() {
+        if (!lifted || performance.now() < holdUntil) return;
+        dirty = false;
+        var px = lastX + window.scrollX, py = lastY + window.scrollY;
+        if (lock && !inside(layout.get(lock), px, py)) lock = null;
+        var sb = layout.get(slot);
+        if (inside(sb, px, py)) { lock = null; return; }
+        var kids = Array.prototype.slice.call(movers());
+        var target = null, bottom = 0;
+        for (var i = 0; i < kids.length; i++) {
+          var b = layout.get(kids[i]);
+          if (b && b.b > bottom) bottom = b.b;
+          if (kids[i] !== slot && !target && inside(b, px, py)) target = kids[i];
+        }
+        if (!target) {
+          if (py > bottom && kids[kids.length - 1] !== slot) moveSlot(null, null);
+          return;
+        }
+        if (target === lock) return;
+        var tb = layout.get(target);
+        var sameRow = sb && sb.t < tb.b && tb.t < sb.b;
+        var first = sameRow ? px < (tb.l + tb.r) / 2 : py < (tb.t + tb.b) / 2;
+        // Already on that side of it: nothing to do.
+        if ((first ? sibling(target, -1) : sibling(target, 1)) === slot) return;
+        moveSlot(first ? target : target.nextSibling, target);
+      }
+
+      function moveSlot(ref, passed) {
+        flip(function () { grid.insertBefore(slot, ref); });
+        lock = passed;
+        // Let the hop's layout settle under the pointer before the
+        // next decision.
+        holdUntil = performance.now() + 90;
+        dirty = true;
+      }
+
+      function onMove(e) {
+        lastX = e.clientX;
+        lastY = e.clientY;
+        dirty = true;
+        if (!lifted && Math.abs(lastX - startX) + Math.abs(lastY - startY) >= 5) lift();
+        if (lifted) { follow(); retarget(); }
+      }
+
+      function onKey(e) {
+        if (e.key === "Escape") { e.preventDefault(); onCancel(); }
+      }
+
+      function detach() {
+        handle.removeEventListener("pointermove", onMove);
+        handle.removeEventListener("pointerup", onUp);
+        handle.removeEventListener("pointercancel", onCancel);
+        document.removeEventListener("keydown", onKey, true);
+        if (raf) cancelAnimationFrame(raf);
+        raf = 0;
+      }
+
+      // Every exit path ends here: no slot, no lifted card, no
+      // inline style survives a drag.
+      function settle() {
+        if (slot && slot.parentNode) grid.replaceChild(card, slot);
+        slot = null;
+        card.classList.remove("dragging");
+        card.style.left = card.style.top = card.style.width = card.style.height = "";
+        card.style.transform = card.style.transformOrigin = "";
+        document.body.classList.remove("drag-active");
+        lifted = false;
+      }
+
+      // Glide the lifted card onto the slot's cell, then let it take
+      // the slot's place.
+      function landThen(done) {
+        var b = layout.get(slot);
+        if (!canAnimate || !b) { done(); return; }
+        var dx = b.l - window.scrollX - origin.left, dy = b.t - window.scrollY - origin.top;
+        var a = card.animate([
+          { transform: card.style.transform || "none" },
+          { transform: "translate3d(" + dx + "px," + dy + "px,0)" }
+        ], { duration: 200, easing: EASE, fill: "forwards" });
+        card.classList.add("landing");
+        // Whichever comes first: the glide's end, or a timer for a
+        // page whose animations are paused (a hidden tab).
+        var finished = false;
+        var finish = function () {
+          if (finished) return;
+          finished = true;
+          card.classList.remove("landing");
+          done();
+          a.cancel();
+        };
+        a.onfinish = finish;
+        window.setTimeout(finish, 260);
+      }
+
+      function onUp() {
+        detach();
+        if (!lifted) return;
+        lifted = false;
+        landThen(function () {
+          settle();
+          var moved = moduleCards();
+          var changed = moved.length !== savedNodes.length;
+          for (var i = 0; !changed && i < moved.length; i++) changed = moved[i] !== savedNodes[i];
+          if (!changed) return;
+          saveOrder().then(function (ok) {
+            if (!ok) flip(function () { for (var j = 0; j < savedNodes.length; j++) grid.appendChild(savedNodes[j]); });
+          });
+        });
+      }
+
+      function onCancel() {
+        detach();
+        if (!lifted) return;
+        lifted = false;
+        // Back to where it started: the slot returns to the card's
+        // old place, the card lands there.
+        var at = savedNodes.indexOf(card);
+        var next = savedNodes[at + 1] || null;
+        flip(function () { grid.insertBefore(slot, next); });
+        landThen(settle);
+      }
+
+      handle.addEventListener("pointermove", onMove);
+      handle.addEventListener("pointerup", onUp);
+      handle.addEventListener("pointercancel", onCancel);
+      document.addEventListener("keydown", onKey, true);
+    }
+
+    function addModule(id, btn) {
+      btn.disabled = true;
+      postLayout({ action: "toggle", widget: id }).then(function (ok) {
+        if (!ok) { btn.disabled = false; return; }
+        // Widget markup is server-rendered; lift the new card
+        // out of a fresh copy of this page rather than rebuilding
+        // it client-side. If anything about that fails, a reload
+        // lands in the same place — the add already saved.
+        fetch("/?customize=1", { headers: { "Accept": "text/html" } }).then(function (resp) {
+          return resp.ok ? resp.text() : "";
+        }).then(function (html) {
+          var doc = new DOMParser().parseFromString(html, "text/html");
+          var fresh = doc.querySelector('.card[data-widget="' + id + '"]');
+          if (!fresh) { window.location.reload(); return; }
+          var node = document.importNode(fresh, true);
+          // Never two cards for one module: if a stale copy is
+          // somehow still in the grid, it goes before the fresh
+          // one lands.
+          var stale = grid.querySelector('.card[data-widget="' + id + '"]');
+          if (stale) stale.remove();
+          enhanceCard(node);
+          window.EveSynapseModal.close(modal);
+          flip(function () { grid.appendChild(node); });
+          node.scrollIntoView({ behavior: reducedMotion ? "auto" : "smooth", block: "nearest" });
+        }, function () { window.location.reload(); });
+      });
+    }
+
+    var cards = moduleCards();
+    for (var i = 0; i < cards.length; i++) enhanceCard(cards[i]);
+    // A size picker closes on a click anywhere outside its card's
+    // controls. Bound once; it reads the current grid each time.
+    if (!homePickCloseBound) {
+      homePickCloseBound = true;
+      document.addEventListener("click", function (ev) {
+        if (ev.target.closest && ev.target.closest(".cardctl")) return;
+        var open = document.querySelectorAll(".sizepick:not([hidden])");
+        for (var p = 0; p < open.length; p++) {
+          open[p].hidden = true;
+          var btn = open[p].parentNode.querySelector(".cardsize");
+          if (btn) btn.setAttribute("aria-expanded", "false");
+        }
+      });
+    }
+
+    // Add-module pop-up. The full catalog is rendered into it;
+    // each open re-filters against what is on the home right now,
+    // so removes and adds are reflected immediately. Opening,
+    // closing, Escape and the backdrop are the shared modal's.
+    var addBtn = document.getElementById("add-module-btn");
+    if (addBtn && modal) {
+      var emptyNote = modal.querySelector(".modal-empty");
+      var addItems = modal.querySelectorAll("[data-add-widget]");
+      var openAdd = function () {
+        var onHome = {};
+        var ids = widgetIDs();
+        for (var i = 0; i < ids.length; i++) onHome[ids[i]] = true;
+        var available = 0;
+        for (var j = 0; j < addItems.length; j++) {
+          var off = !!onHome[addItems[j].getAttribute("data-add-widget")];
+          addItems[j].parentElement.hidden = off;
+          addItems[j].disabled = false;
+          if (!off) available++;
+        }
+        if (emptyNote) emptyNote.hidden = available > 0;
+        window.EveSynapseModal.open(modal);
+      };
+      addBtn.addEventListener("click", function (ev) {
+        ev.preventDefault();
+        var menu = addBtn.closest("details");
+        if (menu) menu.open = false;
+        openAdd();
+      });
+      // The Overview menu's "Add a module" lands here from the home
+      // with ?add=1: open the pop-up straight away.
+      if (/[?&]add=1\b/.test(window.location.search)) openAdd();
+      for (var a = 0; a < addItems.length; a++) {
+        addItems[a].addEventListener("click", function () {
+          addModule(this.getAttribute("data-add-widget"), this);
+        });
+      }
+    }
+  }
+
+  // --- Search suggestions -------------------------------------
+  // One autocomplete widget behind every search box: the market
+  // and watchlist finders, the planner, the skill-plan add box,
+  // the Items DB search, and the banner's global search. Each
+  // box names its feed (a pool of the one suggestion endpoint)
+  // and what a pick does; without one of them the plain form
+  // still submits exactly as before.
+  // hitLabel fills a result's type line: a system's security status
+  // in its color, then the label text.
+  function hitLabel(el, it) {
+    if (it.sec) {
+      var sec = document.createElement("span");
+      sec.className = "sec sec-" + (it.secTier || 0);
+      sec.textContent = it.sec;
+      el.appendChild(sec);
+    }
+    el.appendChild(document.createTextNode(it.label || ""));
+  }
+  window.EveSynapseHitLabel = hitLabel;
+
+  function attachSuggest(input, list, endpoint, onPick) {
+    if (!input || !list || !window.fetch) return;
+    var items = [];
+    var selected = -1;
+    var timer = null;
+    var retryTimer = null;
+    var pendingRetries = 0;
+    var lastQuery = "";
+
+    function isPending(it) {
+      return !!(it && it.kind === "pilot-pending");
+    }
+    function firstSelectable() {
+      for (var i = 0; i < items.length; i++) {
+        if (!isPending(items[i])) return i;
+      }
+      return -1;
+    }
+    function nextSelectable(from, delta) {
+      if (!items.length) return -1;
+      var idx = from;
+      for (var step = 0; step < items.length; step++) {
+        idx = (idx + delta + items.length) % items.length;
+        if (!isPending(items[idx])) return idx;
+      }
+      return -1;
+    }
+
+    function close() {
+      if (retryTimer) window.clearTimeout(retryTimer);
+      retryTimer = null;
+      list.hidden = true;
+      items = [];
+      selected = -1;
+      input.setAttribute("aria-expanded", "false");
+      input.removeAttribute("aria-activedescendant");
+    }
+
+    function paint() {
+      list.innerHTML = "";
+      items.forEach(function (it, idx) {
+        var li = document.createElement("li");
+        li.id = list.id + "-" + idx;
+        li.setAttribute("role", "option");
+        var name = document.createElement("span");
+        name.textContent = it.name;
+        li.appendChild(name);
+        if (it.label) {
+          var lab = document.createElement("span");
+          lab.className = "sug-label";
+          hitLabel(lab, it);
+          li.appendChild(lab);
+        }
+        if (idx === selected) {
+          li.className = "sel";
+          input.setAttribute("aria-activedescendant", li.id);
+        }
+        if (isPending(it)) {
+          // A name search still warming: shown, never a pick.
+          li.className = (li.className ? li.className + " " : "") + "pending";
+          li.setAttribute("aria-disabled", "true");
+          list.appendChild(li);
+          return;
+        }
+        // mousedown, not click: it fires before the input's blur,
+        // so the pick lands before anything can close the list.
+        li.addEventListener("mousedown", function (ev) {
+          ev.preventDefault();
+          pick(idx);
+        });
+        // Touch: tap selects without stealing the scroll.
+        li.addEventListener("touchstart", function (ev) {
+          ev.preventDefault();
+          pick(idx);
+        }, { passive: false });
+        list.appendChild(li);
+      });
+      list.hidden = items.length === 0;
+      input.setAttribute("aria-expanded", items.length ? "true" : "false");
+    }
+
+    function pick(idx) {
+      var it = items[idx];
+      if (!it || isPending(it)) return;
+      close();
+      onPick(it, input);
+    }
+
+    function query(q) {
+      fetch(endpoint(q), {
+        cache: "no-store",
+        headers: { "Accept": "application/json" }
+      }).then(function (resp) {
+        return resp.ok ? resp.json() : [];
+      }).then(function (rows) {
+        if (input.value.trim() !== q) return; // typed past this result
+        items = Array.isArray(rows) ? rows : [];
+        selected = firstSelectable();
+        paint();
+        // A pilot-name search still warming re-asks on a short
+        // fuse; the same query returns the real suggestion once
+        // the record lands. Bounded, and only while this exact
+        // text is still in the box.
+        if (retryTimer) window.clearTimeout(retryTimer);
+        retryTimer = null;
+        var hasPending = false;
+        for (var i = 0; i < items.length; i++) {
+          if (isPending(items[i])) { hasPending = true; break; }
+        }
+        if (hasPending && pendingRetries < 8) {
+          pendingRetries++;
+          retryTimer = window.setTimeout(function () { query(q); }, 2500);
+        } else if (!hasPending) {
+          pendingRetries = 0;
+        }
+      }).catch(function () { close(); });
+    }
+
+    input.addEventListener("input", function () {
+      var q = input.value.trim();
+      if (q === lastQuery) return;
+      lastQuery = q;
+      if (timer) window.clearTimeout(timer);
+      if (retryTimer) window.clearTimeout(retryTimer);
+      retryTimer = null;
+      pendingRetries = 0;
+      if (q.length < 2) { close(); return; }
+      timer = window.setTimeout(function () { query(q); }, 150);
+    });
+
+    input.addEventListener("keydown", function (ev) {
+      if (list.hidden) return;
+      if (ev.key === "ArrowDown" || ev.key === "ArrowUp") {
+        ev.preventDefault();
+        if (!items.length) return;
+        selected = nextSelectable(selected, ev.key === "ArrowDown" ? 1 : -1);
+        paint();
+      } else if (ev.key === "Enter") {
+        if (selected >= 0) {
+          ev.preventDefault();
+          pick(selected);
+        }
+        // No selection: let the form submit as it always has.
+      } else if (ev.key === "Escape") {
+        close();
+      }
+    });
+
+    input.addEventListener("blur", function () {
+      // Let a mousedown pick win the race, then close.
+      window.setTimeout(close, 120);
+    });
+    var form = input.form;
+    if (form) form.addEventListener("submit", function () { close(); });
+  }
+
+  function suggestURL(base, pool) {
+    return function (q) {
+      return base + "?q=" + encodeURIComponent(q) + (pool ? "&pool=" + pool : "");
+    };
+  }
+
+  // Page search boxes re-attach over fresh swapped markup;
+  // each attachSuggest binds the input in front of it, and the old
+  // inputs leave with the old page. The banner search below lives
+  // in the shell and binds exactly once.
+  function initPageSuggest(root) {
+    // Market: a pick jumps straight to that item's market page,
+    // keeping the region the page is showing.
+    (function () {
+      var regionField = root.querySelector("#market-region");
+      attachSuggest(
+        root.querySelector("#market-q"),
+        root.querySelector("#market-suggest"),
+        suggestURL("/market/suggest", null),
+        function (it) {
+          var url = "/market/?type=" + encodeURIComponent(it.id);
+          if (regionField && regionField.value) {
+            url += "&region=" + encodeURIComponent(regionField.value);
+          }
+          window.location.href = url;
+        });
+    })();
+
+    // Assets: suggestions come from what the account actually owns
+    // (each says whose it is), narrowed to the acting character when
+    // the box is ticked. A pick fills the box and runs the search.
+    (function () {
+      var only = root.querySelector("#assets-only");
+      attachSuggest(
+        root.querySelector("#assets-q"),
+        root.querySelector("#assets-suggest"),
+        function (q) {
+          return "/assets/suggest?q=" + encodeURIComponent(q) + (only && only.checked ? "&only=1" : "");
+        },
+        function (it, input) {
+          input.value = it.name;
+          if (input.form) input.form.submit();
+        });
+    })();
+
+    // Sync and Admin (administrators): find one character among all of
+    // them. A pick goes straight to that character's data, or to the
+    // account it belongs to; typing a name and pressing Enter does the
+    // same through the plain form.
+    attachSuggest(
+      root.querySelector("#sync-character-q"),
+      root.querySelector("#sync-character-suggest"),
+      suggestURL("/admin/suggest", null),
+      function (it) { window.location.href = "/sync/?character=" + encodeURIComponent(it.id); });
+    attachSuggest(
+      root.querySelector("#admin-q"),
+      root.querySelector("#admin-suggest"),
+      suggestURL("/admin/suggest", null),
+      function (it) { window.location.href = "/admin/?q=" + encodeURIComponent(it.id); });
+
+    // Search boxes that name their own feed (data-suggest): the
+    // doctrine pages and the fit browsers. A suggestion that is a
+    // link is followed; any other fills the box, and where the box
+    // names a hidden field (data-suggest-target) that takes what
+    // was picked, until the box is typed in again.
+    Array.prototype.forEach.call(root.querySelectorAll("input[data-suggest]"), function (input) {
+      var base = input.getAttribute("data-suggest");
+      var target = document.getElementById(input.getAttribute("data-suggest-target") || "");
+      if (target) input.addEventListener("input", function () { target.value = ""; });
+      attachSuggest(input, document.getElementById(input.getAttribute("aria-controls")),
+        function (q) { return base + (base.indexOf("?") === -1 ? "?" : "&") + "q=" + encodeURIComponent(q); },
+        function (it, input) {
+          if (it.url) { window.location.href = it.url; return; }
+          input.value = it.name;
+          if (target) target.value = it.value || it.id;
+        });
+    });
+
+    // Watchlist finder: a pick watches that exact item at once (the
+    // same post the Watch buttons make); the keyword matches only list
+    // when the box is submitted without a pick.
+    (function () {
+      var input = root.querySelector("#watch-q");
+      attachSuggest(input, root.querySelector("#watch-suggest"),
+        suggestURL("/items/search.json", "market"),
+        function (it, input) {
+          input.value = it.name;
+          var form = document.createElement("form");
+          form.method = "post";
+          form.action = "/market/watch";
+          form.hidden = true;
+          var fields = {
+            action: "add", type: String(it.id),
+            region: input.getAttribute("data-watch-region") || "",
+            threshold: "5", next: "/market/"
+          };
+          Object.keys(fields).forEach(function (name) {
+            var field = document.createElement("input");
+            field.type = "hidden";
+            field.name = name;
+            field.value = fields[name];
+            form.appendChild(field);
+          });
+          document.body.appendChild(form);
+          form.submit();
+        });
+    })();
+
+    // Planner: a pick opens that product's plan.
+    attachSuggest(
+      root.querySelector("#planner-q"),
+      root.querySelector("#planner-suggest"),
+      suggestURL("/items/search.json", "planner"),
+      function (it) {
+        window.location.href = "/planner/?product=" + encodeURIComponent(it.id);
+      });
+
+    // Skill-plan add box: a pick fills the exact skill name and
+    // runs the search, which offers the level picker as usual.
+    (function () {
+      var input = root.querySelector("#skill-q");
+      attachSuggest(input, root.querySelector("#skill-suggest"),
+        suggestURL("/items/search.json", "skills"),
+        function (it, input) {
+          input.value = it.name;
+          if (input.form) input.form.submit();
+        });
+    })();
+
+    // Items DB search: a pick opens the item's details page.
+    attachSuggest(
+      root.querySelector("#items-q"),
+      root.querySelector("#items-suggest"),
+      suggestURL("/items/search.json", "all"),
+      function (it) {
+        window.location.href = "/items/type/" + encodeURIComponent(it.id) + "/";
+      });
+  }
+  onContentReady(initPageSuggest);
+  initPageSuggest(document);
+
+  // Banner global search: items, your characters, systems, regions,
+  // pilots and organizations the app already knows, each to its own
+  // page.
+  attachSuggest(
+    document.getElementById("topbar-q"),
+    document.getElementById("topbar-suggest"),
+    function (q) { return "/search.json?q=" + encodeURIComponent(q); },
+    function (it) {
+      var url;
+      if (it.kind === "character") {
+        url = "/character/?character=" + encodeURIComponent(it.id);
+      } else if (it.kind === "pilot") {
+        url = "/pilot/?character=" + encodeURIComponent(it.id);
+      } else if (it.kind === "corporation") {
+        url = "/corporation/?corporation=" + encodeURIComponent(it.id);
+      } else if (it.kind === "alliance") {
+        url = "/alliance/?alliance=" + encodeURIComponent(it.id);
+      } else if (it.kind === "system") {
+        url = "/system/?system=" + encodeURIComponent(it.id);
+      } else if (it.kind === "region") {
+        url = "/region/?region=" + encodeURIComponent(it.id);
+      } else {
+        url = "/items/type/" + encodeURIComponent(it.id) + "/";
+      }
+      window.location.href = url;
+    });
+})();
+
+// Live regions: a section rendered while its data is still
+// warming polls its fragment endpoint and swaps itself in when
+// the state leaves pending. The server renders the section again
+// from stored rows only; polling stops as soon as the returned
+// fragment settles. It never gives up while the fragment keeps
+// answering pending: a fast cadence at first, then a slower
+// steady one, so a slow first warm (a cold worker catching up
+// after a restart) still fills the page in on its own instead
+// of stranding the pending copy until a manual refresh. When
+// the tab becomes visible again the next poll happens at once
+// instead of whenever a throttled timer gets round to it.
+(function () {
+  if (!window.fetch) return;
+  var kicks = [];
+
+  // Arm the pending regions in fresh markup. Old regions leave
+  // with the swap (their polls notice the detach and stop), and
+  // the kick list resets so visibility wakes only live ones.
+  function armRegions(root) {
+    var regions = root.querySelectorAll("[data-live-region]");
+    for (var i = 0; i < regions.length; i++) {
+      arm(regions[i]);
+    }
+  }
+  window.EveSynapseContent.onReady(armRegions);
+  document.addEventListener("evesynapse:content-will-swap", function () {
+    kicks = [];
+  });
+
+  function arm(region) {
+    var url = region.getAttribute("data-poll-url");
+    if (!url) return;
+    var polls = 0;
+    var timer = null;
+    var stopped = false;
+
+    function stop() {
+      stopped = true;
+      if (timer !== null) {
+        window.clearTimeout(timer);
+        timer = null;
+      }
+    }
+    function schedule() {
+      if (stopped) return;
+      // ~1.5s while the wait is young (the first minute or
+      // so), then a steady ~5s for as long as it takes.
+      timer = window.setTimeout(poll, polls < 40 ? 1500 : 5000);
+    }
+    function poll() {
+      timer = null;
+      if (stopped) return;
+      if (!document.contains(region)) {
+        stop();
+        return;
+      }
+      polls += 1;
+      window.fetch(url, {
+        credentials: "same-origin",
+        headers: { "X-Requested-With": "XMLHttpRequest" }
+      }).then(function (resp) {
+        return resp.text();
+      }).then(function (html) {
+        var probe = document.createElement("div");
+        probe.innerHTML = html;
+        var fresh = probe.querySelector("[data-poll-state]");
+        if (!fresh) {
+          // Not a fragment (a redirect to a full page, an
+          // error): stop polling and let a reload show it.
+          stop();
+          window.location.reload();
+          return;
+        }
+        var state = fresh.getAttribute("data-poll-state");
+        if (state !== "pending" && state !== "loading") {
+          stop();
+          // The page title renders above the panel (base.html's
+          // pagetitle block), outside this region, so a title
+          // that depended on the loaded record would never catch
+          // up. The fragment carries it as data-title-text; sync
+          // the heading before the region itself is replaced.
+          var titleText = fresh.getAttribute("data-title-text");
+          if (titleText) {
+            var h1 = document.querySelector("#main-content > h1");
+            if (h1) {
+              var gt = h1.querySelector(".gt");
+              (gt || h1).textContent = titleText;
+            }
+          }
+          region.outerHTML = html;
+        } else {
+          schedule();
+        }
+      }).catch(function () {
+        // A failed poll is not news; the next one is already
+        // scheduled and retries at the same cadence.
+        schedule();
+      });
+    }
+    kicks.push(function () {
+      if (stopped) return;
+      if (timer !== null) {
+        window.clearTimeout(timer);
+        timer = null;
+      }
+      poll();
+    });
+    schedule();
+  }
+
+  armRegions(document);
+  document.addEventListener("visibilitychange", function () {
+    if (document.visibilityState !== "visible") return;
+    for (var i = 0; i < kicks.length; i++) {
+      kicks[i]();
+    }
+  });
+})();
+
+// --- Market history chart: day-point tooltips ---------------
+// Hover (mouse) or focus (keyboard) follows the point; a tap
+// pins the tip so it can be read, and the next tap — the same
+// point again, or anywhere else — lets it go. Pressing and
+// dragging across the chart scrubs to the nearest recorded day
+// while the tip follows the pointer. Delegation on document
+// throughout, so the live-region fragment swap that replaces
+// the chart body keeps working untouched.
+(function () {
+  var pinned = null; // the .cdot holding the tip open by tap
+  var scrub = null; // active pointer drag across a chart
+  var suppressClickChart = null;
+  var suppressClickUntil = 0;
+
+  function tipOf(dot) {
+    var chart = dot.closest ? dot.closest(".pchart") : null;
+    return chart ? chart.querySelector(".ctip") : null;
+  }
+
+  function fill(tip, dot) {
+    tip.innerHTML = "";
+    var date = document.createElement("div");
+    date.className = "ctip-date";
+    date.textContent = dot.getAttribute("data-date");
+    tip.appendChild(date);
+    var rows = [];
+    // Balance charts carry one figure; the Net worth chart breaks
+    // its total into ISK and assets; market history dots carry the
+    // full day. Render whichever the dot brought.
+    var balance = dot.getAttribute("data-balance");
+    if (dot.getAttribute("data-isk") !== null) {
+      rows.push(["ISK", dot.getAttribute("data-isk") + " ISK"]);
+      rows.push(["Assets & orders", dot.getAttribute("data-assets") + " ISK"]);
+      rows.push(["Total", balance + " ISK"]);
+    } else if (balance) {
+      rows.push(["Balance", balance + " ISK"]);
+    }
+    if (dot.getAttribute("data-avg")) {
+      rows.push(["Average", dot.getAttribute("data-avg") + " ISK"]);
+      rows.push(["High", dot.getAttribute("data-high") + " ISK"]);
+      rows.push(["Low", dot.getAttribute("data-low") + " ISK"]);
+      rows.push(["Volume", dot.getAttribute("data-vol")]);
+    }
+    for (var i = 0; i < rows.length; i++) {
+      var line = document.createElement("div");
+      line.textContent = rows[i][0] + ": " + rows[i][1];
+      tip.appendChild(line);
+    }
+  }
+
+  function markSelected(dot) {
+    var chart = dot.closest ? dot.closest(".pchart") : null;
+    if (!chart) return;
+    var selected = chart.querySelectorAll(".cdot.is-selected");
+    for (var i = 0; i < selected.length; i++) {
+      if (selected[i] !== dot) selected[i].classList.remove("is-selected");
+    }
+    dot.classList.add("is-selected");
+  }
+
+  function show(dot, clientX) {
+    var tip = tipOf(dot);
+    if (!tip) return;
+    markSelected(dot);
+    fill(tip, dot);
+    tip.hidden = false;
+    var chart = tip.parentElement;
+    var crect = chart.getBoundingClientRect();
+    var drect = dot.getBoundingClientRect();
+    var left = (typeof clientX === "number")
+      ? clientX - crect.left
+      : drect.left - crect.left + drect.width / 2;
+    var half = tip.offsetWidth / 2;
+    if (left < half) left = half;
+    if (left > crect.width - half) left = crect.width - half;
+    tip.style.left = left + "px";
+    tip.style.top = (drect.top - crect.top) + "px";
+  }
+
+  function hide(dot) {
+    var tip = tipOf(dot);
+    if (tip) tip.hidden = true;
+    if (dot) dot.classList.remove("is-selected");
+  }
+
+  function asDot(ev) {
+    var t = ev.target;
+    return t && t.closest ? t.closest(".cdot") : null;
+  }
+
+  function chartOf(target) {
+    return target && target.closest ? target.closest(".pchart") : null;
+  }
+
+  function nearestDot(chart, clientX) {
+    var dots = chart.querySelectorAll(".cdot");
+    var best = null;
+    var bestDistance = Infinity;
+    for (var i = 0; i < dots.length; i++) {
+      var rect = dots[i].getBoundingClientRect();
+      var distance = Math.abs(clientX - (rect.left + rect.width / 2));
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        best = dots[i];
+      }
+    }
+    return best;
+  }
+
+  document.addEventListener("pointerdown", function (ev) {
+    if (ev.button !== undefined && ev.button !== 0) return;
+    var chart = chartOf(ev.target);
+    if (!chart || !chart.hasAttribute("data-chart-scrub")) return;
+    if (!ev.target || !ev.target.closest || !ev.target.closest("svg")) return;
+    var dot = nearestDot(chart, ev.clientX);
+    if (!dot) return;
+    scrub = { chart: chart, pointerId: ev.pointerId, dot: dot, moved: false };
+    show(dot, ev.clientX);
+  });
+  document.addEventListener("pointermove", function (ev) {
+    if (!scrub || ev.pointerId !== scrub.pointerId) return;
+    var dot = nearestDot(scrub.chart, ev.clientX);
+    if (!dot) return;
+    scrub.moved = true;
+    scrub.dot = dot;
+    show(dot, ev.clientX);
+  });
+  function endScrub(ev) {
+    if (!scrub || ev.pointerId !== scrub.pointerId) return;
+    if (scrub.moved && ev.type !== "pointercancel") {
+      if (pinned && pinned !== scrub.dot) hide(pinned);
+      pinned = scrub.dot;
+      show(scrub.dot, ev.clientX);
+      suppressClickChart = scrub.chart;
+      suppressClickUntil = Date.now() + 500;
+    }
+    scrub = null;
+  }
+  document.addEventListener("pointerup", endScrub);
+  document.addEventListener("pointercancel", endScrub);
+
+  document.addEventListener("mouseover", function (ev) {
+    var dot = asDot(ev);
+    if (dot && pinned !== dot) show(dot);
+  });
+  document.addEventListener("mouseout", function (ev) {
+    var dot = asDot(ev);
+    if (dot && pinned !== dot) hide(dot);
+  });
+  document.addEventListener("focusin", function (ev) {
+    var dot = asDot(ev);
+    if (dot) show(dot);
+  });
+  document.addEventListener("focusout", function (ev) {
+    var dot = asDot(ev);
+    if (dot && pinned !== dot) hide(dot);
+  });
+  document.addEventListener("click", function (ev) {
+    var clickChart = chartOf(ev.target);
+    if (clickChart && clickChart === suppressClickChart && Date.now() <= suppressClickUntil) {
+      suppressClickChart = null;
+      return;
+    }
+    var dot = asDot(ev);
+    if (dot) {
+      if (pinned === dot) {
+        pinned = null;
+        hide(dot);
+      } else {
+        if (pinned) hide(pinned);
+        pinned = dot;
+        show(dot);
+      }
+    } else if (pinned) {
+      hide(pinned);
+      pinned = null;
+    }
+  });
+  document.addEventListener("keydown", function (ev) {
+    if (ev.key === "Escape" && pinned) {
+      hide(pinned);
+      pinned = null;
+    }
+  });
+})();
+
+// Page-sync indicator: while this page still has data on the
+// way (names, descriptions, price history it asked for), the
+// top banner shows a small ember ring with the count. It polls
+// a cache-only status endpoint — never the data itself — and
+// hides the moment the page has everything. Polling never
+// gives up while the page is still waiting: fast at first,
+// then a slower steady cadence for as long as the status says
+// pending, so the ring never sits spinning over a page nobody
+// is checking on any more (a cold worker can take minutes to
+// warm a first name; the page still fills itself in). A tab
+// coming back to the front re-checks immediately. Background
+// sync in general is not reported here.
+(function () {
+  var indicator = document.getElementById("page-sync-indicator");
+  if (!indicator || !window.fetch) return;
+  var label = indicator.querySelector("[data-page-sync-label]");
+  // The poll in flight, if any. A swap stops it (the URL it asks
+  // about belongs to the old page) and starts one for the new
+  // page; the visibility handler below always wakes the current.
+  var active = null;
+
+  function unresolvedRegions() {
+    return document.querySelectorAll(
+      "[data-live-region][data-poll-state='pending'], [data-live-region][data-poll-state='loading']"
+    ).length;
+  }
+
+  function show(pending) {
+    indicator.hidden = false;
+    if (label) {
+      label.textContent = pending > 0
+        ? "Loading page data · " + pending
+        : "Loading page data…";
+    }
+  }
+
+  function stopPageSync() {
+    if (active) {
+      active.stopped = true;
+      if (active.timer !== null) window.clearTimeout(active.timer);
+      active = null;
+    }
+  }
+
+  function startPageSync() {
+    stopPageSync();
+    var job = {
+      page: window.location.pathname + window.location.search,
+      polls: 0,
+      timer: null,
+      stopped: false
+    };
+    active = job;
+    function schedule() {
+      if (job.stopped) return;
+      // ~1.5s for the first couple of minutes, then a steady
+      // ~5s while the page is still waiting.
+      job.timer = window.setTimeout(poll, job.polls <= 80 ? 1500 : 5000);
+    }
+    function poll() {
+      job.timer = null;
+      if (job.stopped) return;
+      job.polls += 1;
+      window.fetch("/sync/page-status?page=" + encodeURIComponent(job.page), {
+        credentials: "same-origin",
+        headers: { "X-Requested-With": "XMLHttpRequest" }
+      }).then(function (resp) {
+        return resp.json();
+      }).then(function (status) {
+        var pending = status && typeof status.pending === "number" ? status.pending : 0;
+        if (pending > 0 || unresolvedRegions() > 0) {
+          show(pending);
+          schedule();
+        } else {
+          indicator.hidden = true;
+          if (active === job) active = null;
+          job.stopped = true;
+        }
+      }).catch(function () {
+        // A failed status poll is not news; the next one retries
+        // at the same cadence.
+        schedule();
+      });
+    }
+    job.kick = function () {
+      if (job.stopped) return;
+      if (job.timer !== null) {
+        window.clearTimeout(job.timer);
+        job.timer = null;
+      }
+      poll();
+    };
+    schedule();
+  }
+
+  document.addEventListener("visibilitychange", function () {
+    if (document.visibilityState !== "visible" || !active) return;
+    active.kick();
+  });
+  document.addEventListener("evesynapse:content-will-swap", stopPageSync);
+  document.addEventListener("evesynapse:content-ready", startPageSync);
+  startPageSync();
+})();
+
+// Navigation state: the wide sidebar can be expanded, collapsed
+// to an icon rail, or hidden entirely; the choice persists in
+// local storage. On small screens the same sidebar is an
+// off-canvas drawer driven by the checkbox in the page markup,
+// so it still opens and closes with scripts disabled.
+(function () {
+  "use strict";
+  var root = document.documentElement;
+  var sidebar = document.getElementById("site-nav");
+  var drawerToggle = document.getElementById("nav-drawer-toggle");
+  var hamburger = document.querySelector(".nav-hamburger");
+  var collapseButton = document.getElementById("nav-collapse");
+  var hideButton = document.getElementById("nav-hide");
+  var reopenButton = document.getElementById("nav-reopen");
+  var drawerClose = document.querySelector(".nav-drawer-close");
+  var expandAllButton = document.getElementById("nav-expand-all");
+  var categoryBranches = sidebar ? sidebar.querySelectorAll(".sidenav details.branch") : [];
+  var drawerQuery = window.matchMedia ? window.matchMedia("(max-width: 860px)") : { matches: false };
+  var storageKey = "evesynapse-nav";
+
+  function currentState() {
+    return root.getAttribute("data-nav") || "expanded";
+  }
+  function storeState(state) {
+    try {
+      window.localStorage.setItem(storageKey, state);
+    } catch (e) { /* private mode: this page still works */ }
+    // Also in a cookie, so the server renders the saved layout on
+    // the next page load and it never paints the default first (see
+    // ui_navstate.go). Without storage, a cookie alone still keeps it.
+    document.cookie = storageKey + "=" + state + "; path=/; max-age=31536000; samesite=lax" +
+      (window.location.protocol === "https:" ? "; secure" : "");
+  }
+  function allCategoriesOpen() {
+    if (!categoryBranches.length) {
+      return false;
+    }
+    for (var i = 0; i < categoryBranches.length; i++) {
+      if (!categoryBranches[i].open) {
+        return false;
+      }
+    }
+    return true;
+  }
+  function syncExpandAllButton() {
+    if (!expandAllButton) {
+      return;
+    }
+    var allOpen = allCategoriesOpen();
+    expandAllButton.setAttribute("aria-expanded", allOpen ? "true" : "false");
+    expandAllButton.setAttribute("aria-label", allOpen ? "Collapse all navigation categories" : "Expand all navigation categories");
+    expandAllButton.setAttribute("title", allOpen ? "Collapse all navigation categories" : "Expand all navigation categories");
+  }
+  // The category of the page being shown stays open while the menu
+  // shows its labels.
+  function openActiveCategory() {
+    var active = sidebar ? sidebar.querySelector(".sidenav details.branch.active") : null;
+    if (active) active.open = true;
+  }
+  function closeCategoryBranches(except) {
+    for (var i = 0; i < categoryBranches.length; i++) {
+      if (categoryBranches[i] !== except) {
+        categoryBranches[i].open = false;
+      }
+    }
+  }
+  function railActive() {
+    return currentState() === "rail" && !drawerQuery.matches;
+  }
+  function syncNavigationControls() {
+    var drawerOpen = !!(drawerToggle && drawerToggle.checked && drawerQuery.matches);
+    if (hamburger) {
+      hamburger.setAttribute("aria-expanded", drawerOpen ? "true" : "false");
+    }
+    if (reopenButton) {
+      reopenButton.setAttribute("aria-expanded", currentState() === "hidden" ? "false" : "true");
+    }
+    if (collapseButton) {
+      var rail = currentState() === "rail";
+      collapseButton.setAttribute("aria-label", rail ? "Expand navigation" : "Collapse navigation");
+      collapseButton.setAttribute("title", rail ? "Expand navigation" : "Collapse navigation");
+    }
+    syncExpandAllButton();
+  }
+  function applyNavigationState(state) {
+    if (state === "rail") {
+      // Arrive in the rail clean: categories opened in the
+      // wide sidebar keep their <details open> state across
+      // the switch, and each one would paint its own tall
+      // flyout in the rail column — a merged stack under a
+      // row of lit-up icons. Fold them all; from here the
+      // rail opens one flyout at a time.
+      closeCategoryBranches(null);
+    }
+    if (state === "expanded") {
+      root.removeAttribute("data-nav");
+      openActiveCategory();
+    } else {
+      root.setAttribute("data-nav", state);
+    }
+    storeState(state);
+    syncNavigationControls();
+  }
+  function closeDrawer(returnFocus) {
+    if (drawerToggle && drawerToggle.checked) {
+      drawerToggle.checked = false;
+      drawerToggle.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+    if (returnFocus && hamburger) {
+      hamburger.focus();
+    }
+  }
+  if (expandAllButton) {
+    expandAllButton.addEventListener("click", function () {
+      var shouldOpen = !allCategoriesOpen();
+      for (var i = 0; i < categoryBranches.length; i++) {
+        categoryBranches[i].open = shouldOpen;
+      }
+      syncExpandAllButton();
+    });
+  }
+  for (var categoryIndex = 0; categoryIndex < categoryBranches.length; categoryIndex++) {
+    categoryBranches[categoryIndex].addEventListener("toggle", function (event) {
+      // In the rail one flyout at a time: opening a category
+      // folds whichever flyout is already out. The wide and
+      // drawer presentations keep their many-open behavior.
+      if (event.target.open && railActive()) {
+        closeCategoryBranches(event.target);
+      }
+      syncExpandAllButton();
+    });
+  }
+  if (collapseButton) {
+    collapseButton.addEventListener("click", function () {
+      applyNavigationState(currentState() === "rail" ? "expanded" : "rail");
+    });
+  }
+  if (hideButton) {
+    hideButton.addEventListener("click", function () {
+      applyNavigationState("hidden");
+    });
+  }
+  if (reopenButton) {
+    reopenButton.addEventListener("click", function () {
+      applyNavigationState("expanded");
+      reopenButton.setAttribute("aria-expanded", "true");
+    });
+  }
+  if (drawerToggle) {
+    drawerToggle.addEventListener("change", syncNavigationControls);
+  }
+  if (hamburger) {
+    hamburger.addEventListener("keydown", function (e) {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        hamburger.click();
+      }
+    });
+  }
+  if (drawerClose) {
+    drawerClose.addEventListener("keydown", function (e) {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        drawerClose.click();
+      }
+    });
+  }
+  if (sidebar) {
+    sidebar.addEventListener("click", function (e) {
+      if (!drawerQuery.matches || !drawerToggle || !drawerToggle.checked) {
+        return;
+      }
+      var link = e.target && e.target.closest ? e.target.closest("a") : null;
+      if (link) {
+        closeDrawer(false);
+      }
+    });
+  }
+  document.addEventListener("click", function (e) {
+    // Rail flyouts dismiss on an outside click, like the
+    // drawer does; a click inside the open category (its
+    // summary, its menu) is the category's own business.
+    if (!railActive() || !sidebar) {
+      return;
+    }
+    var openBranch = sidebar.querySelector(".sidenav details.branch[open]");
+    if (!openBranch) return;
+    // A link chosen in the flyout closes it at once: the page swap
+    // that follows paints the new content over anything still out,
+    // which left the flyout half covered behind the panel.
+    var link = e.target.closest && e.target.closest(".menu a");
+    if (!openBranch.contains(e.target) || (link && openBranch.contains(link))) {
+      closeCategoryBranches(null);
+    }
+  });
+  // However a page swap starts (a link, Back, a shortcut), no rail
+  // flyout stays out over the incoming page.
+  document.addEventListener("evesynapse:content-will-swap", function () {
+    if (railActive()) closeCategoryBranches(null);
+  });
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape" && drawerQuery.matches) {
+      closeDrawer(true);
+    }
+  });
+  function handleDrawerBreakpoint(event) {
+    // Entering small screens always starts with the drawer
+    // closed; leaving them must not leave it hanging open either.
+    closeDrawer(false);
+    if (railActive()) {
+      closeCategoryBranches(null);
+    } else {
+      openActiveCategory();
+    }
+    syncNavigationControls();
+  }
+  if (drawerQuery.addEventListener) {
+    drawerQuery.addEventListener("change", handleDrawerBreakpoint);
+  } else if (drawerQuery.addListener) {
+    drawerQuery.addListener(handleDrawerBreakpoint);
+  }
+  // The drawer starts closed on small screens, period: a
+  // restored or stale checkbox state must not pop it open.
+  if (drawerQuery.matches) {
+    closeDrawer(false);
+  }
+  // A page that loads straight into the rail (the saved choice
+  // the head script applied, a restored page) starts with
+  // every category folded too — no flyout stack waiting under
+  // the icons.
+  if (railActive()) {
+    closeCategoryBranches(null);
+  } else {
+    openActiveCategory();
+  }
+  syncNavigationControls();
+  // Enable width/visibility transitions only after the
+  // state the head script restored has had frames to land:
+  // user toggles glide, but a refresh or navigation into a
+  // saved rail/hidden state opens already settled.
+  function enableNavMotion() {
+    root.classList.add("nav-motion-ready");
+  }
+  if (window.requestAnimationFrame) {
+    window.requestAnimationFrame(function () {
+      window.requestAnimationFrame(enableNavMotion);
+    });
+  } else {
+    window.setTimeout(enableNavMotion, 0);
+  }
+})();
+
+// --- Quick jump (Ctrl+K) --------------------------------------
+// A keyboard-first palette over the same pool the banner search
+// serves (/search.json): your characters, items, corporations,
+// alliances and known pilots, each jumping to the page it links
+// to everywhere else. The app's own pages ride along as a static
+// group, so the palette is useful before a single letter is
+// typed. Everything renders from text nodes; nothing here makes
+// a request the banner search wouldn't.
+(function () {
+  "use strict";
+  var overlay = document.getElementById("quickjump");
+  var input = document.getElementById("quickjump-q");
+  var list = document.getElementById("quickjump-results");
+  var openBtn = document.getElementById("quickjump-open");
+  if (!overlay || !input || !list || !window.fetch) return;
+
+  // The palette's page group: every destination the sidebar
+  // offers, in sidebar order. A test pins this list against
+  // base.html's nav, so a new page joins both or neither.
+  var quickJumpPages = [
+    { name: "Home", url: "/" },
+    { name: "Overview", url: "/character/" },
+    { name: "Characters", url: "/characters/" },
+    { name: "Skill Plans", url: "/skills/plans" },
+    { name: "Ship Workbench", url: "/fittings/" },
+    { name: "My Loadouts", url: "/fittings/saved/" },
+    { name: "Public Loadouts Browser", url: "/fittings/public/" },
+    { name: "Killmails", url: "/killmails/" },
+    { name: "Mail", url: "/mail/" },
+    { name: "Calendar", url: "/calendar/" },
+    { name: "Contacts", url: "/contacts/" },
+    { name: "Assets", url: "/assets/" },
+    { name: "Industry", url: "/industry/" },
+    { name: "Build Planner", url: "/planner/" },
+    { name: "Planetary Industry", url: "/planets/" },
+    { name: "PI Planner", url: "/industry/pi/" },
+    { name: "Market", url: "/market/" },
+    { name: "Spread Scanner", url: "/market/scanner/" },
+    { name: "Trade Ideas", url: "/market/ideas/" },
+    { name: "Tradefinder", url: "/market/tradefinder/" },
+    { name: "Top Stations", url: "/market/leaderboard/" },
+    { name: "Restock Planner", url: "/market/restock/" },
+    { name: "Item Browser", url: "/items/" },
+    { name: "Wallet", url: "/wallet/" },
+    { name: "Orders", url: "/orders/" },
+    { name: "Contracts", url: "/contracts/" },
+    { name: "Corporation Overview", url: "/corporations/" },
+    { name: "Corporation Members", url: "/corporations/members/" },
+    { name: "Corporation Wallets", url: "/corporations/wallets/" },
+    { name: "Corporation Orders", url: "/corporations/orders/" },
+    { name: "Corporation Assets", url: "/corporations/assets/" },
+    { name: "Corporation Structures", url: "/corporations/structures/" },
+    { name: "Corporation Killmails", url: "/corporations/killmails/" },
+    { name: "Doctrines", url: "/doctrines/" },
+    { name: "Corporate Loadouts", url: "/doctrines/fits/" },
+    { name: "Ship Replacement (SRP)", url: "/srp/" },
+    { name: "Discord Server", url: "/discord/servers" },
+    { name: "Groups", url: "/groups/" },
+    { name: "Corporation Settings", url: "/corporations/settings/" },
+    { name: "Wars", url: "/intel/wars/" },
+    { name: "Incursions", url: "/intel/incursions/" },
+    { name: "Faction Warfare", url: "/intel/fw/" },
+    { name: "Sync", url: "/sync/" },
+    { name: "Admin", url: "/admin/" }
+  ];
+
+  // Sync and Admin are for administrators: the menu only has them for
+  // one (base.html), and the palette offers them on the same terms.
+  // The server refuses the pages to anyone else either way.
+  var adminOnlyPages = { "/sync/": true, "/admin/": true };
+  var isAdmin = !!document.querySelector(".sidenav-utility");
+
+  // Result groups, in display order; server hits carry these
+  // kinds already, pages are matched locally.
+  var quickJumpGroups = [
+    ["page", "Pages"],
+    ["character", "Characters"],
+    ["item", "Items"],
+    ["system", "Systems"],
+    ["region", "Regions"],
+    ["corporation", "Corporations"],
+    ["alliance", "Alliances"],
+    ["pilot", "Pilots"]
+  ];
+
+  function jumpURL(hit) {
+    switch (hit.kind) {
+      case "page": return hit.url;
+      case "character": return "/character/?character=" + encodeURIComponent(hit.id);
+      case "pilot": return "/pilot/?character=" + encodeURIComponent(hit.id);
+      case "corporation": return "/corporation/?corporation=" + encodeURIComponent(hit.id);
+      case "alliance": return "/alliance/?alliance=" + encodeURIComponent(hit.id);
+      case "system": return "/system/?system=" + encodeURIComponent(hit.id);
+      case "region": return "/region/?region=" + encodeURIComponent(hit.id);
+      default: return "/market/?type=" + encodeURIComponent(hit.id);
+    }
+  }
+
+  var entries = [];   // flat, selectable rows in display order
+  var selected = -1;
+  var timer = null;
+  var querySerial = 0;
+
+  function isOpen() { return !overlay.hidden; }
+
+  function paint(groups) {
+    list.innerHTML = "";
+    entries = [];
+    selected = -1;
+    for (var g = 0; g < groups.length; g++) {
+      var hits = groups[g].hits;
+      if (!hits.length) continue;
+      var head = document.createElement("li");
+      head.className = "qj-group";
+      head.setAttribute("role", "presentation");
+      head.textContent = groups[g].label;
+      list.appendChild(head);
+      for (var i = 0; i < hits.length; i++) {
+        (function (hit) {
+          var li = document.createElement("li");
+          li.setAttribute("role", "option");
+          li.id = "quickjump-result-" + entries.length;
+          var name = document.createElement("span");
+          name.textContent = hit.name;
+          li.appendChild(name);
+          if (hit.label) {
+            var lab = document.createElement("span");
+            lab.className = "qj-label";
+            if (window.EveSynapseHitLabel) window.EveSynapseHitLabel(lab, hit);
+            else lab.textContent = hit.label;
+            li.appendChild(lab);
+          }
+          if (hit.kind === "pilot-pending") {
+            li.className = "qj-pending";
+            li.setAttribute("aria-disabled", "true");
+            list.appendChild(li);
+            return;
+          }
+          var idx = entries.length;
+          entries.push({ url: jumpURL(hit), el: li });
+          li.addEventListener("mousedown", function (ev) {
+            ev.preventDefault();
+            go(idx);
+          });
+          li.addEventListener("mousemove", function () { select(idx); });
+          list.appendChild(li);
+        })(hits[i]);
+      }
+    }
+    if (entries.length) select(0);
+  }
+
+  function select(idx) {
+    if (idx === selected) return;
+    if (entries[selected]) entries[selected].el.classList.remove("sel");
+    selected = idx;
+    if (entries[selected]) {
+      entries[selected].el.classList.add("sel");
+      input.setAttribute("aria-activedescendant", entries[selected].el.id);
+      if (entries[selected].el.scrollIntoView) {
+        entries[selected].el.scrollIntoView({ block: "nearest" });
+      }
+    } else {
+      input.removeAttribute("aria-activedescendant");
+    }
+  }
+
+  function go(idx) {
+    var entry = entries[idx];
+    if (!entry) return;
+    closePalette();
+    window.location.href = entry.url;
+  }
+
+  function pageHits(q) {
+    var out = [];
+    for (var i = 0; i < quickJumpPages.length; i++) {
+      if (adminOnlyPages[quickJumpPages[i].url] && !isAdmin) continue;
+      if (!q || quickJumpPages[i].name.toLowerCase().indexOf(q) !== -1) {
+        out.push({
+          kind: "page", name: quickJumpPages[i].name,
+          url: quickJumpPages[i].url, label: quickJumpPages[i].url
+        });
+      }
+    }
+    return out;
+  }
+
+  function render(hits, q) {
+    var groups = [{ label: "Pages", hits: pageHits(q) }];
+    var byKind = {};
+    for (var i = 0; i < hits.length; i++) {
+      (byKind[hits[i].kind] = byKind[hits[i].kind] || []).push(hits[i]);
+    }
+    for (var g = 1; g < quickJumpGroups.length; g++) {
+      var kind = quickJumpGroups[g][0];
+      var rows = byKind[kind] || [];
+      if (kind === "pilot" && byKind["pilot-pending"]) {
+        rows = rows.concat(byKind["pilot-pending"]);
+      }
+      groups.push({ label: quickJumpGroups[g][1], hits: rows });
+    }
+    paint(groups);
+  }
+
+  function ask(q) {
+    var serial = ++querySerial;
+    render([], q); // page matches land instantly
+    if (q.length < 2) return;
+    window.fetch("/search.json?q=" + encodeURIComponent(q), {
+      cache: "no-store",
+      headers: { "Accept": "application/json" }
+    }).then(function (resp) {
+      return resp.ok ? resp.json() : [];
+    }).then(function (rows) {
+      if (serial !== querySerial) return; // typed past this answer
+      render(Array.isArray(rows) ? rows : [], q);
+    }).catch(function () { /* page matches already stand */ });
+  }
+
+  // The palette is one of the shared modals (EveSynapseModal):
+  // the backdrop, Escape-from-anywhere and the focus hand-back are
+  // the shared ones; paletteClosed is what the palette adds.
+  function openPalette() {
+    if (isOpen()) return;
+    document.body.classList.add("quickjump-open");
+    input.value = "";
+    ask("");
+    window.EveSynapseModal.open(overlay, { focus: false, onClose: paletteClosed });
+    input.focus();
+    input.select();
+  }
+
+  function paletteClosed() {
+    document.body.classList.remove("quickjump-open");
+    querySerial++; // an answer in flight no longer matters
+    if (timer) window.clearTimeout(timer);
+    timer = null;
+  }
+
+  function closePalette() {
+    if (!isOpen()) return;
+    window.EveSynapseModal.close(overlay);
+  }
+
+  if (openBtn) {
+    openBtn.addEventListener("click", function () {
+      if (isOpen()) closePalette(); else openPalette();
+    });
+  }
+
+  // Ctrl+K / Cmd+K from anywhere — including inside a form
+  // field, which is the point — opens or closes the palette.
+  // Plain typing never does; the modifiers are the trigger.
+  document.addEventListener("keydown", function (ev) {
+    if ((ev.ctrlKey || ev.metaKey) && !ev.altKey &&
+        (ev.key === "k" || ev.key === "K")) {
+      ev.preventDefault();
+      if (isOpen()) closePalette(); else openPalette();
+    }
+  });
+
+  input.addEventListener("input", function () {
+    var q = input.value.trim().toLowerCase();
+    if (timer) window.clearTimeout(timer);
+    timer = window.setTimeout(function () { ask(q); }, 150);
+  });
+
+  input.addEventListener("keydown", function (ev) {
+    if (ev.key === "ArrowDown" || ev.key === "ArrowUp") {
+      ev.preventDefault();
+      if (!entries.length) return;
+      var delta = ev.key === "ArrowDown" ? 1 : -1;
+      select((selected + delta + entries.length) % entries.length);
+    } else if (ev.key === "Enter") {
+      if (selected >= 0) {
+        ev.preventDefault();
+        go(selected);
+      }
+    } else if (ev.key === "Escape") {
+      ev.preventDefault();
+      ev.stopPropagation();
+      closePalette();
+    }
+  });
+
+})();
+
+
+// --- Theme toggle (dark/light/factions) ------------------------------
+// A stored choice in localStorage wins and is written onto
+// document.documentElement.dataset.theme; with no stored
+// choice the attribute stays unset so the stylesheet's
+// prefers-color-scheme media query applies. The button only
+// renders while logged in (see base.html), so everything here
+// is guarded: no button, no work.
+// Simple dark/light toggle (faction themes deferred).
+(function () {
+  "use strict";
+  var btn = document.getElementById("theme-toggle");
+  if (!btn) return;
+  var root = document.documentElement;
+  var storageKey = "evesynapse-theme";
+
+  function readSaved() {
+    try {
+      var v = window.localStorage.getItem(storageKey);
+      return (v === "dark" || v === "light") ? v : "";
+    } catch (e) { return ""; }
+  }
+  function save(theme) {
+    try {
+      window.localStorage.setItem(storageKey, theme);
+    } catch (e) { /* private mode: the click still works this visit */ }
+  }
+  // The theme in effect right now: a manually set attribute
+  // wins; otherwise dark is the default, whatever the OS prefers.
+  // Icon visibility is CSS-driven (html[data-theme] selectors).
+  function effective() {
+    var attr = root.getAttribute("data-theme");
+    if (attr === "dark" || attr === "light") return attr;
+    return "dark";
+  }
+
+  var saved = readSaved();
+  if (saved) root.setAttribute("data-theme", saved);
+
+  btn.addEventListener("click", function () {
+    var next = effective() === "dark" ? "light" : "dark";
+    root.setAttribute("data-theme", next);
+    save(next);
+  });
+})();
+
+// Character selector dropdown with search/filter.
+(function() {
+  // Live selectors: the outside-click handler below is bound once
+  // and walks these, so swaps never pile handlers. Detached roots
+  // prune themselves on the next click or swap.
+  var liveSelectors = [];
+  var outsideBound = false;
+  function pruneSelectors() {
+    liveSelectors = liveSelectors.filter(function (s) {
+      return document.contains(s.root);
+    });
+  }
+  function armOutsideClick() {
+    if (outsideBound) return;
+    outsideBound = true;
+    document.addEventListener('click', function (e) {
+      pruneSelectors();
+      liveSelectors.forEach(function (s) {
+        if (!s.root.contains(e.target)) {
+          s.dropdown.hidden = true;
+          // Restore active name if input was cleared.
+          if (!s.input.value && s.active) s.input.value = s.active.getAttribute('data-name') || '';
+        }
+      });
+    });
+  }
+  function initCharselector(root) {
+    var input = root.querySelector('.charselector-input');
+    var dropdown = root.querySelector('.charselector-dropdown');
+    if (!input || !dropdown) return;
+    if (root.getAttribute('data-charselector-live') === '1') return;
+    root.setAttribute('data-charselector-live', '1');
+    var options = Array.prototype.slice.call(root.querySelectorAll('.charselector-option'));
+
+    // Show active character name in the input initially.
+    var active = root.querySelector('.charselector-option.active');
+    if (active) input.value = active.getAttribute('data-name') || '';
+
+    function filter() {
+      var q = input.value.toLowerCase().trim();
+      options.forEach(function(opt) {
+        var name = (opt.getAttribute('data-name') || '').toLowerCase();
+        var tags = (opt.getAttribute('data-tags') || '').toLowerCase();
+        var match = !q || name.indexOf(q) !== -1 || tags.indexOf(q) !== -1;
+        opt.hidden = !match;
+      });
+    }
+
+    input.addEventListener('focus', function() {
+      input.value = '';
+      filter();
+      dropdown.hidden = false;
+    });
+    input.addEventListener('input', function() {
+      filter();
+      dropdown.hidden = false;
+    });
+    // Close on Escape.
+    input.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') {
+        dropdown.hidden = true;
+        input.blur();
+      }
+    });
+    liveSelectors.push({ root: root, input: input, dropdown: dropdown, active: active });
+    armOutsideClick();
+  }
+  function initCharselectors(scope) {
+    var roots = scope.querySelectorAll('[data-charselector]');
+    for (var i = 0; i < roots.length; i++) initCharselector(roots[i]);
+  }
+  window.EveSynapseContent.onReady(initCharselectors);
+  document.addEventListener('evesynapse:content-will-swap', pruneSelectors);
+  initCharselectors(document);
+
+  // --- CSV export links ---------------------------------------
+  // Market/planner pages carry an "Export CSV" link whose href is
+  // the current URL plus format=csv, set here. The address bar
+  // already shows the new page when this runs after a swap.
+  function initCSVExport(root) {
+    var csvExportLink = root.querySelector("#csv-export");
+    if (csvExportLink) {
+      csvExportLink.href = window.location.pathname + window.location.search +
+        (window.location.search ? "&" : "?") + "format=csv";
+    }
+  }
+
+  // --- Client-side table filters ------------------------------
+  // Industry search boxes filter their table's rows by a
+  // data-search attribute:
+  //   <input data-table-filter="bp-table" data-row-class="bp-row"
+  //          data-header-class="bp-cat-header">
+  // Rows whose data-search misses hide; category headers with no
+  // visible rows hide with them. data-header-class is optional.
+  function initTableFilters(root) {
+    var tableFilterBoxes = root.querySelectorAll("input[data-table-filter]");
+    for (var filterIndex = 0; filterIndex < tableFilterBoxes.length; filterIndex++) {
+      (function (filterInput) {
+      var table = document.getElementById(filterInput.getAttribute("data-table-filter"));
+      if (!table) return;
+      var rowClass = filterInput.getAttribute("data-row-class") || "";
+      if (!rowClass) return;
+      var headerClass = filterInput.getAttribute("data-header-class") || "";
+      filterInput.addEventListener("input", function () {
+        var q = filterInput.value.toLowerCase();
+        table.querySelectorAll("." + rowClass).forEach(function (r) {
+          var match = !q || (r.getAttribute("data-search") || "").toLowerCase().indexOf(q) >= 0;
+          r.style.display = match ? "" : "none";
+        });
+        if (!headerClass) return;
+        table.querySelectorAll("." + headerClass).forEach(function (h) {
+          var next = h.nextElementSibling;
+          var hasVisible = false;
+          while (next && !next.classList.contains(headerClass)) {
+            if (next.style.display !== "none") { hasVisible = true; break; }
+            next = next.nextElementSibling;
+          }
+          h.style.display = hasVisible ? "" : "none";
+        });
+      });
+      })(tableFilterBoxes[filterIndex]);
+    }
+  }
+  function initContentWidgets(root) {
+    initCSVExport(root);
+    initTableFilters(root);
+  }
+  window.EveSynapseContent.onReady(initContentWidgets);
+  initContentWidgets(document);
+
+  // --- Auto-refresh pages -------------------------------------
+  // The Sync page refreshes itself every few seconds
+  // (body[data-autorefresh]) in place: the page is fetched again and
+  // only its content is swapped, so the reader keeps their scroll
+  // position (a full reload went back to the top). With JavaScript
+  // off, a <noscript> meta-refresh does the same. The refresh waits
+  // out typing in a field and hidden tabs, and never runs for readers
+  // who asked for reduced motion — they get the page as it loaded,
+  // plus the Sync page's own manual controls. A swap away stops the chain:
+  // without this the old page's timer would reload the new one.
+  // (Swaps onto an auto-refresh page fall back to a full load, so
+  // the chain only ever starts here, on first paint.)
+  var autoRefreshStopped = false;
+  document.addEventListener("evesynapse:content-will-swap", function () {
+    autoRefreshStopped = true;
+  });
+  // refreshInPlace fetches this page again and swaps its main
+  // content, leaving the scroll position alone, then lets the content
+  // widgets set up the fresh markup. Anything unexpected is skipped
+  // until the next tick rather than reloading.
+  function refreshInPlace() {
+    if (!window.fetch || !window.DOMParser) {
+      window.location.reload();
+      return Promise.resolve();
+    }
+    var url = window.location.pathname + window.location.search;
+    return window.fetch(url, { credentials: "same-origin", cache: "no-store" })
+      .then(function (resp) { return resp.ok && !resp.redirected ? resp.text() : ""; })
+      .then(function (html) {
+        if (!html || autoRefreshStopped) return;
+        var active = document.activeElement;
+        if (active && /^(INPUT|TEXTAREA|SELECT)$/.test(active.tagName || "")) return;
+        var next = new DOMParser().parseFromString(html, "text/html").getElementById("main-content");
+        var main = document.getElementById("main-content");
+        if (!next || !main) return;
+        main.innerHTML = next.innerHTML;
+        document.dispatchEvent(new CustomEvent("evesynapse:content-ready", {
+          detail: { root: main, url: url }
+        }));
+      });
+  }
+  (function () {
+    var autoRefreshSeconds = parseInt(document.body.getAttribute("data-autorefresh") || "", 10);
+    if (autoRefreshSeconds > 0 &&
+        !(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches)) {
+      (function scheduleRefresh() {
+        window.setTimeout(function () {
+          if (autoRefreshStopped) return;
+          var active = document.activeElement;
+          var typing = active && /^(INPUT|TEXTAREA|SELECT)$/.test(active.tagName || "");
+          if (!typing && !document.hidden) {
+            refreshInPlace().then(scheduleRefresh, scheduleRefresh);
+            return;
+          }
+          scheduleRefresh();
+        }, autoRefreshSeconds * 1000);
+      })();
+    }
+  })();
+
+
+  // --- Sortable tables ------------------------------------------
+  // Any table under the page content sorts by a header click: again
+  // reverses. A column whose cells all read as numbers (ISK, counts,
+  // percentages, "1.2B") sorts numerically, else as text. A row's
+  // detail rows (rows that are one wide cell, like the fleet table's)
+  // move with it, and in a capped widget the rows past the cap
+  // (data-wmore) are re-marked by position. data-nosort opts a table
+  // out; empty headers do nothing.
+  function sortKey(cell) {
+    var raw = (cell ? (cell.getAttribute("data-sort") || cell.textContent) : "").trim();
+    var m = raw.replace(/ISK|,|\s|%|\+|×/g, "").replace(/^[−–]/, "-").match(/^(-?\d+(?:\.\d+)?)([KMBT]?)$/i);
+    if (m) {
+      var mult = { "": 1, k: 1e3, m: 1e6, b: 1e9, t: 1e12 }[m[2].toLowerCase()];
+      return { num: parseFloat(m[1]) * mult, text: raw };
+    }
+    return { num: null, text: raw.toLowerCase() };
+  }
+  document.addEventListener("click", function (ev) {
+    var th = ev.target && ev.target.closest ? ev.target.closest("#main-content table > thead th") : null;
+    if (!th || ev.target.closest("a, button, input, select")) return;
+    var table = th.closest("table");
+    if (!table || table.hasAttribute("data-nosort") || !th.textContent.trim()) return;
+    var body = table.tBodies[0];
+    if (!body || body.rows.length < 2) return;
+    var col = th.cellIndex;
+    // Rows with their attached detail rows.
+    var groups = [];
+    Array.prototype.forEach.call(body.rows, function (row) {
+      var single = row.cells.length === 1 && row.cells[0].colSpan > 1;
+      if (single && groups.length) groups[groups.length - 1].push(row);
+      else groups.push([row]);
+    });
+    var dir = th.getAttribute("aria-sort") === "ascending" ? -1 : 1;
+    var keys = groups.map(function (g) { return sortKey(g[0].cells[col]); });
+    var numeric = keys.every(function (k) { return k.num !== null || k.text === "" || k.text === "—"; });
+    var order = groups.map(function (g, i) { return i; });
+    order.sort(function (a, b) {
+      var ka = keys[a], kb = keys[b], r;
+      if (numeric) {
+        var na = ka.num === null ? -Infinity : ka.num, nb = kb.num === null ? -Infinity : kb.num;
+        r = na - nb;
+      } else {
+        r = ka.text < kb.text ? -1 : ka.text > kb.text ? 1 : 0;
+      }
+      return r * dir || a - b;
+    });
+    var capped = body.querySelectorAll("tr[data-wmore]").length;
+    var heads = [];
+    order.forEach(function (i) {
+      groups[i].forEach(function (row) { body.appendChild(row); });
+      heads.push(groups[i][0]);
+    });
+    if (capped) {
+      heads.forEach(function (row, i) {
+        if (i >= heads.length - capped) row.setAttribute("data-wmore", "");
+        else row.removeAttribute("data-wmore");
+      });
+    }
+    Array.prototype.forEach.call(th.parentNode.cells, function (c) { c.removeAttribute("aria-sort"); });
+    th.setAttribute("aria-sort", dir === 1 ? "ascending" : "descending");
+  });
+
+  // --- Filters that apply as they change -----------------------
+  // A control marked data-autosubmit (the Item Database's "Market
+  // items only" box and its category and group pickers) submits its
+  // form the moment it changes, so a filter applies at once and the
+  // result keeps its Category › Group layout; the form's own button
+  // stays for readers without JavaScript. Picking a different
+  // category clears the group first: the old group would otherwise
+  // pull the category back.
+  document.addEventListener("change", function (ev) {
+    var control = ev.target && ev.target.closest ? ev.target.closest("[data-autosubmit]") : null;
+    if (!control || !control.form) return;
+    if (control.name === "category" && control.form.elements.group) {
+      control.form.elements.group.value = "";
+    }
+    if (control.form.requestSubmit) control.form.requestSubmit();
+    else control.form.submit();
+  });
+
+  // --- Buttons that navigate -----------------------------------
+  // <button data-href="/path"> goes to that path on click (the content
+  // security policy allows no inline handlers). Only same-site paths count.
+  document.addEventListener("click", function (ev) {
+    var button = ev.target && ev.target.closest ? ev.target.closest("button[data-href]") : null;
+    if (!button) return;
+    var href = button.getAttribute("data-href") || "";
+    if (href.charAt(0) === "/" && href.charAt(1) !== "/") window.location.href = href;
+  });
+
+  // --- Skill planner: move and remove in place -------------------
+  // A move or remove button in the plan table posts its form with
+  // fetch and swaps the returned table (#plan-body) into the page, so
+  // the search box, results and scroll position stay where they are.
+  // The server answers with the reason in data-message when it refuses
+  // a move (a prerequisite is in the way); that is read out through the
+  // status region above the table. Without JavaScript the same forms
+  // post normally and come back to the page with the reason flashed.
+  document.addEventListener("submit", function (ev) {
+    var form = ev.target;
+    if (!window.fetch || !form || !form.matches || !form.matches(".plan-move-form, .plan-remove-form")) return;
+    var editor = form.closest("[data-plan-editor]");
+    var body = form.closest("[data-plan-body]");
+    if (!editor || !body) return;
+    ev.preventDefault();
+
+    var data = new URLSearchParams(new FormData(form));
+    var dir = ev.submitter && ev.submitter.name === "dir" ? ev.submitter.value : "";
+    if (dir) data.set("dir", dir);
+    var row = form.closest("tr");
+    var skill = row ? row.getAttribute("data-skill") : "";
+    var removing = form.classList.contains("plan-remove-form");
+
+    window.fetch(form.action, {
+      method: "POST",
+      credentials: "same-origin",
+      headers: {
+        "X-Requested-With": "XMLHttpRequest",
+        "Content-Type": "application/x-www-form-urlencoded"
+      },
+      body: data.toString()
+    }).then(function (resp) {
+      return resp.text();
+    }).then(function (html) {
+      var probe = document.createElement("div");
+      probe.innerHTML = html;
+      var fresh = probe.querySelector("[data-plan-body]");
+      if (!fresh) {
+        // Not the table (signed out, an error): let the page show it.
+        window.location.reload();
+        return;
+      }
+      var live = editor.querySelector(".plan-live");
+      var message = fresh.getAttribute("data-message") || "";
+      if (live) {
+        live.textContent = "";
+        if (message) {
+          var note = document.createElement("p");
+          note.className = "notice";
+          note.textContent = message;
+          live.appendChild(note);
+        }
+      }
+      body.replaceWith(fresh);
+      // Keep the keyboard where it was: the same button on the same
+      // skill, else the other move button; after a remove, the table.
+      var target = null;
+      if (!removing && skill) {
+        var next = fresh.querySelector("tr[data-skill='" + skill + "']");
+        if (next) {
+          target = next.querySelector("button[name='dir'][value='" + dir + "']:not([aria-disabled='true'])") ||
+            next.querySelector("button[name='dir']:not([aria-disabled='true'])") ||
+            next.querySelector("button[name='dir']");
+        }
+      }
+      (target || fresh).focus();
+    }).catch(function () {
+      // The request itself failed: fall back to the plain post.
+      form.submit();
+    });
+  });
+
+  // --- Skill planner: find and delete saved plans ----------------
+  // The search above the list of plans narrows it as you type (Enter
+  // opens the first match, the arrow keys walk the list, Escape clears
+  // it); without JavaScript the same search is a form that reloads the
+  // page with ?pq=. The delete button on a row asks in place — the row
+  // turns into "Delete this plan? [Delete] [Keep]" — where a plain link
+  // goes to the page's own confirmation.
+  function initPlanPicker(root) {
+    var picker = root.querySelector("[data-plan-picker]");
+    if (!picker || picker.getAttribute("data-plan-live") === "1") return;
+    picker.setAttribute("data-plan-live", "1");
+    var input = picker.querySelector("[data-plan-filter]");
+    var items = Array.prototype.slice.call(picker.querySelectorAll(".plan-item"));
+    var none = picker.querySelector(".plan-none");
+
+    function shown() {
+      return items.filter(function (li) { return !li.hidden; });
+    }
+    function filter() {
+      var q = input.value.trim().toLowerCase();
+      items.forEach(function (li) {
+        li.hidden = q !== "" && (li.getAttribute("data-name") || "").toLowerCase().indexOf(q) === -1;
+      });
+      if (none) none.hidden = shown().length > 0;
+    }
+    function openLink(li) {
+      return li.querySelector(".plan-open");
+    }
+
+    if (input) {
+      input.addEventListener("input", filter);
+      input.addEventListener("keydown", function (ev) {
+        var rows = shown();
+        if (ev.key === "ArrowDown" && rows.length) {
+          ev.preventDefault();
+          openLink(rows[0]).focus();
+        } else if (ev.key === "Escape" && input.value !== "") {
+          ev.preventDefault();
+          input.value = "";
+          filter();
+        } else if (ev.key === "Enter" && input.value.trim() !== "" && rows.length) {
+          ev.preventDefault();
+          window.location.href = openLink(rows[0]).href;
+        }
+      });
+      if (input.value !== "") filter();
+    }
+
+    picker.addEventListener("keydown", function (ev) {
+      var link = ev.target && ev.target.closest ? ev.target.closest(".plan-open") : null;
+      if (link && (ev.key === "ArrowDown" || ev.key === "ArrowUp")) {
+        var rows = shown();
+        var at = rows.indexOf(link.closest(".plan-item"));
+        var next = rows[at + (ev.key === "ArrowDown" ? 1 : -1)];
+        ev.preventDefault();
+        if (next) openLink(next).focus();
+        else if (ev.key === "ArrowUp" && input) input.focus();
+      } else if (ev.key === "Escape" && ev.target.closest && ev.target.closest(".plan-confirm")) {
+        var keep = ev.target.closest(".plan-item").querySelector("[data-plan-keep]");
+        if (keep) keep.click();
+      }
+    });
+
+    picker.addEventListener("click", function (ev) {
+      var target = ev.target && ev.target.closest ? ev.target : null;
+      if (!target) return;
+      var del = target.closest("[data-plan-delete]");
+      if (del) {
+        var row = del.closest(".plan-item");
+        var form = row && row.querySelector(".plan-confirm");
+        if (!form) return;
+        ev.preventDefault();
+        row.classList.add("is-confirming");
+        form.hidden = false;
+        form.querySelector("button[type='submit']").focus();
+        return;
+      }
+      var keepBtn = target.closest("[data-plan-keep]");
+      if (keepBtn) {
+        var li = keepBtn.closest(".plan-item");
+        li.classList.remove("is-confirming");
+        li.querySelector(".plan-confirm").hidden = true;
+        li.querySelector("[data-plan-delete]").focus();
+      }
+    });
+  }
+  window.EveSynapseContent.onReady(initPlanPicker);
+  initPlanPicker(document);
+
+  // --- Data-driven geometry ------------------------------------
+  // The content security policy forbids inline style attributes, so
+  // per-element numbers ride data-* attributes and are applied here
+  // through the CSSOM (which the policy allows):
+  //   data-w         fill width of a bar, percent
+  //   data-left      absolute position from the left, percent
+  //   data-top       absolute position from the top, percent
+  //   data-rot       rotation in degrees; an element with data-rot
+  //                  (the fitting separators) is also centered on
+  //                  its left/top point, i.e.
+  //                  transform: translate(-50%,-50%) rotate(<n>deg)
+  //   data-pad-left  left padding (indent), px
+  // applyGeometry is the rule for one element; the code below only
+  // finds elements: at load, and again for markup injected later
+  // (fit.js swaps whole server-rendered fragments into the page).
+  // A missing, empty, or non-numeric value sets nothing (never
+  // "NaNpx"). Widths clamp to 0–100: a bar over capacity arrives as
+  // e.g. 123.4 and its track hides the overflow anyway. Positions
+  // pass through as sent, as the inline styles did.
+  function geometryNumber(el, name) {
+    var raw = el.getAttribute(name);
+    if (raw === null || raw.trim() === "") return null;
+    var n = Number(raw);
+    return isFinite(n) ? n : null;
+  }
+
+  function applyGeometry(el) {
+    var w = geometryNumber(el, "data-w");
+    if (w !== null) el.style.width = Math.min(Math.max(w, 0), 100) + "%";
+    var left = geometryNumber(el, "data-left");
+    if (left !== null) el.style.left = left + "%";
+    var top = geometryNumber(el, "data-top");
+    if (top !== null) el.style.top = top + "%";
+    var rot = geometryNumber(el, "data-rot");
+    if (rot !== null) el.style.transform = "translate(-50%,-50%) rotate(" + rot + "deg)";
+    var pad = geometryNumber(el, "data-pad-left");
+    if (pad !== null && pad >= 0) el.style.paddingLeft = pad + "px";
+  }
+
+  var GEOMETRY_SELECTOR = "[data-w],[data-left],[data-top],[data-rot],[data-pad-left]";
+
+  function applyDataGeometry(root) {
+    if (!root || root.nodeType !== 1) return;
+    if (root.matches(GEOMETRY_SELECTOR)) applyGeometry(root);
+    root.querySelectorAll(GEOMETRY_SELECTOR).forEach(applyGeometry);
+  }
+
+  applyDataGeometry(document.body);
+  if (window.MutationObserver) {
+    new MutationObserver(function (records) {
+      records.forEach(function (record) {
+        record.addedNodes.forEach(applyDataGeometry);
+      });
+    }).observe(document.body, { childList: true, subtree: true });
+  }
+})();
+
+// The notification list in the top bar: it closes on a click or tap
+// anywhere else and on Escape, and opens and closes with the
+// navigation's motion (the CSS transition on .notify.is-open). The
+// <details> works without this; this only adds the closing and the
+// motion, and keeps the icon up to date while the page is open.
+(function () {
+  "use strict";
+  var menu = document.getElementById("notify-menu");
+  if (!menu) return;
+  var waiting = null; // an update held back while the list is open
+  function show(html, unread) {
+    // The icon is rebuilt, so a reader who had tabbed to it is put
+    // back on it.
+    var focused = document.activeElement && menu.contains(document.activeElement);
+    menu.innerHTML = html;
+    menu.classList.toggle("has-unread", unread > 0);
+    var summary = menu.querySelector("summary");
+    if (focused && summary) summary.focus();
+  }
+  var closing = null;
+  // As long as the transition in style.css, or no wait at all for a
+  // reader who asked for less motion.
+  var still = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var motion = still ? 0 : 180;
+
+  function open() {
+    window.clearTimeout(closing);
+    closing = null;
+    menu.open = true;
+    // Reading the width makes the browser lay the list out in its
+    // starting state first, so the transition has something to run
+    // from.
+    void menu.offsetWidth;
+    menu.classList.add("is-open");
+  }
+
+  function close() {
+    if (!menu.open || closing) return;
+    menu.classList.remove("is-open");
+    closing = window.setTimeout(function () {
+      closing = null;
+      menu.open = false;
+      // An update that arrived while the list was open goes in now.
+      if (waiting) {
+        show(waiting.html, waiting.unread);
+        waiting = null;
+      }
+    }, motion);
+  }
+
+  // The icon's contents are replaced when they change (below), so
+  // the click is caught on the <details>, which stays.
+  menu.addEventListener("click", function (ev) {
+    if (!ev.target.closest || !ev.target.closest("summary")) return;
+    ev.preventDefault();
+    if (menu.open && !closing) { close(); } else { open(); }
+  });
+  document.addEventListener("click", function (ev) {
+    if (!menu.contains(ev.target)) close();
+  });
+  // A swap replaces the page under an open list: fold it away
+  // through the same path as an outside click.
+  document.addEventListener("evesynapse:content-will-swap", function () {
+    close();
+  });
+  document.addEventListener("keydown", function (ev) {
+    if (ev.key !== "Escape" || !menu.open) return;
+    close();
+    menu.querySelector("summary").focus();
+  });
+
+  // --- The live icon ---------------------------------------------
+  // Every data-poll seconds (NOTIFY_POLL_SECONDS on the server) the
+  // page asks whether the icon has changed, and swaps its contents
+  // in when it has, so a new notification shows without a reload.
+  // It only asks while the page is on screen, checks at once when
+  // the page comes back into view or a push arrives, and leaves the
+  // list alone while it is open under the reader's pointer.
+  var every = parseInt(menu.getAttribute("data-poll"), 10);
+  if (!(every > 0) || !window.fetch) return;
+  var etag = "";
+  var timer = null;
+  var asking = false;
+  var stopped = false;
+  function check() {
+    if (stopped || asking || document.hidden) return;
+    asking = true;
+    var headers = {};
+    if (etag) headers["If-None-Match"] = etag;
+    window.fetch("/notifications/badge", { credentials: "same-origin", headers: headers, cache: "no-store" }).then(function (res) {
+      // Anything that is not the icon (the sign-in page after the
+      // session ended, an error page) ends the checks: the next
+      // page load starts them again.
+      if (res.status !== 304 && !(res.ok && res.headers.get("X-Notify-Badge") === "1")) {
+        stopped = true;
+        return;
+      }
+      if (res.status === 304) return;
+      var unread = parseInt(res.headers.get("X-Notify-Unread"), 10) || 0;
+      var tag = res.headers.get("ETag") || "";
+      return res.text().then(function (html) {
+        etag = tag;
+        if (menu.open) {
+          waiting = { html: html, unread: unread };
+        } else {
+          show(html, unread);
+        }
+      });
+    }).catch(function () {
+      // Offline or a dropped request: try again at the next turn.
+    }).then(function () { asking = false; });
+  }
+
+  function schedule() {
+    window.clearInterval(timer);
+    timer = window.setInterval(check, every * 1000);
+  }
+
+  schedule();
+  document.addEventListener("visibilitychange", function () {
+    if (!document.hidden) { check(); schedule(); }
+  });
+  if (navigator.serviceWorker) {
+    navigator.serviceWorker.addEventListener("message", function (ev) {
+      if (ev.data && ev.data.push === "received") check();
+    });
+  }
+})();
+
+// Notification settings: under each kind, the characters it is on for
+// (a [data-checkselector]: the character selector's look, with a tick
+// box per character). The field shows the count and filters the list
+// as you type; the list stays open while boxes are ticked and closes
+// on a click elsewhere or Escape. The boxes are ordinary form fields,
+// so saving works the same with or without this.
+(function () {
+  "use strict";
+  var selectors = Array.prototype.slice.call(document.querySelectorAll("[data-checkselector]"));
+  if (!selectors.length) return;
+
+  selectors.forEach(function (root) {
+    var input = root.querySelector(".charselector-input");
+    var dropdown = root.querySelector(".charselector-dropdown");
+    var options = Array.prototype.slice.call(root.querySelectorAll(".charselector-option"));
+    var boxes = Array.prototype.slice.call(root.querySelectorAll('input[type="checkbox"]'));
+    if (!input || !dropdown) return;
+
+    function summarize() {
+      var on = boxes.filter(function (box) { return box.checked; }).length;
+      // A list to pick additions from says how many are picked.
+      if (root.getAttribute("data-summary") === "add") {
+        input.placeholder = on ? on + " picked: press Add" : "Add characters…";
+        return;
+      }
+      var total = options.length;
+      var text = "On for " + on + " of " + total + (total === 1 ? " character" : " characters");
+      if (boxes.length < total) {
+        text = boxes.length ? text + " (" + (total - boxes.length) + " without access)"
+          : "No access granted on " + total + (total === 1 ? " character" : " characters");
+      }
+      input.placeholder = text;
+    }
+
+    function filter() {
+      var q = input.value.toLowerCase().trim();
+      options.forEach(function (option) {
+        var name = (option.getAttribute("data-name") || "").toLowerCase();
+        option.hidden = !!q && name.indexOf(q) === -1;
+      });
+    }
+
+    function close() {
+      if (dropdown.hidden) return;
+      dropdown.hidden = true;
+      input.value = "";
+      filter();
+    }
+
+    function open() {
+      // One list at a time.
+      selectors.forEach(function (other) { if (other !== root && other.closeList) other.closeList(); });
+      dropdown.hidden = false;
+    }
+
+    root.closeList = close;
+    input.addEventListener("focus", open);
+    input.addEventListener("click", open);
+    input.addEventListener("input", function () { filter(); dropdown.hidden = false; });
+    root.addEventListener("change", summarize);
+    root.addEventListener("keydown", function (ev) {
+      if (ev.key === "Escape") { close(); input.blur(); }
+      // Enter in the search field would send the whole form.
+      if (ev.key === "Enter" && ev.target === input) ev.preventDefault();
+    });
+    summarize();
+  });
+
+  document.addEventListener("click", function (ev) {
+    selectors.forEach(function (root) {
+      if (!root.contains(ev.target) && root.closeList) root.closeList();
+    });
+  });
+})();
+
+// The character switcher in the top bar: like the notification list,
+// it closes on a click or tap anywhere else and on Escape, and opens
+// and closes with the navigation's motion (the CSS transition on
+// .topbar-switcher.is-open). The <details> works without this.
+(function () {
+  "use strict";
+  var switcher = document.querySelector("details.topbar-switcher");
+  if (!switcher) return;
+  var summary = switcher.querySelector("summary");
+  var closing = null;
+  var still = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var motion = still ? 0 : 180; // as long as the transition in style.css
+
+  function open() {
+    window.clearTimeout(closing);
+    closing = null;
+    switcher.open = true;
+    void switcher.offsetWidth; // lay it out closed first, so there is something to move from
+    switcher.classList.add("is-open");
+  }
+  function close() {
+    if (!switcher.open || closing) return;
+    switcher.classList.remove("is-open");
+    closing = window.setTimeout(function () {
+      closing = null;
+      switcher.open = false;
+    }, motion);
+  }
+
+  summary.addEventListener("click", function (ev) {
+    ev.preventDefault();
+    if (switcher.open && !closing) { close(); } else { open(); }
+  });
+  document.addEventListener("click", function (ev) {
+    if (!switcher.contains(ev.target)) close();
+  });
+  // A swap replaces the page under an open switcher: fold it
+  // away through the same path as an outside click.
+  document.addEventListener("evesynapse:content-will-swap", function () {
+    close();
+  });
+  document.addEventListener("keydown", function (ev) {
+    if (ev.key !== "Escape" || !switcher.open) return;
+    close();
+    summary.focus();
+  });
+})();
+
+// "Install app" in the sidebar. A browser that can install the site as
+// an app (Chrome and Edge, on Android and on a computer) says so with
+// a beforeinstallprompt event, and otherwise keeps the offer behind
+// its own menu where few people find it. The event is held, the link
+// is shown, and a click opens the browser's own install dialog.
+// Nothing is offered unasked: the link only sits there until it is
+// clicked. Where there is no such event (Safari, Firefox) or the app
+// is already installed, the link is never shown.
+(function () {
+  "use strict";
+  var btn = document.getElementById("install-app");
+  if (!btn) return;
+  var offer = null;
+  window.addEventListener("beforeinstallprompt", function (e) {
+    e.preventDefault(); // no banner of the browser's own; ours is the link
+    offer = e;
+    btn.hidden = false;
+  });
+  btn.addEventListener("click", function () {
+    if (!offer) return;
+    var held = offer;
+    offer = null; // an offer can be used once; the browser sends another if it is declined
+    btn.hidden = true;
+    held.prompt();
+  });
+  window.addEventListener("appinstalled", function () {
+    offer = null;
+    btn.hidden = true;
+  });
+})();
+
+// Copy buttons: [data-copy] copies its data-copy-text, or the
+// text of [data-copy-from]; the label flips to Copied briefly.
+// Server-rendered share blocks use it so no page needs its own
+// clipboard code.
+(function () {
+  "use strict";
+  function flash(btn) {
+    var prior = btn.textContent;
+    btn.textContent = "Copied";
+    setTimeout(function () { btn.textContent = prior; }, 1500);
+  }
+  document.addEventListener("click", function (ev) {
+    var btn = ev.target && ev.target.closest ? ev.target.closest("[data-copy]") : null;
+    if (!btn) return;
+    var text = btn.getAttribute("data-copy-text") || "";
+    var from = btn.getAttribute("data-copy-from");
+    if (from) {
+      var el = document.getElementById(from);
+      if (el) text = el.textContent || "";
+    }
+    if (!text) return;
+    function done(ok) { if (ok) flash(btn); }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () { done(true); }, function () { done(false); });
+    } else {
+      var ta = document.createElement("textarea");
+      ta.value = text;
+      document.body.appendChild(ta);
+      ta.select();
+      try { done(document.execCommand("copy")); } catch (e) { done(false); }
+      document.body.removeChild(ta);
+    }
+  });
+})();
+
+// The sign-up chooser (/auth/link): select all, tick every extra without
+// leaving the place on the page, and a live count of the permissions.
+(function () {
+  "use strict";
+  function recount(form) {
+    var countEl = document.querySelector("[data-lk-count]");
+    if (!form || !countEl) return;
+    var req = {}, all = {};
+    var feats = form.querySelectorAll('input[name="feature"]');
+    for (var i = 0; i < feats.length; i++) {
+      if (!feats[i].checked) continue;
+      var sc = (feats[i].getAttribute("data-scopes") || "").split(/s+/);
+      for (var j = 0; j < sc.length; j++) if (sc[j]) { req[sc[j]] = true; all[sc[j]] = true; }
+    }
+    var extras = form.querySelectorAll('input[name="enhance"]');
+    for (var k = 0; k < extras.length; k++) if (extras[k].checked) all[extras[k].value] = true;
+    var n = Object.keys(all).length;
+    countEl.textContent = String(n);
+    var reqEl = document.querySelector("[data-lk-required]");
+    if (reqEl) reqEl.textContent = String(Object.keys(req).length);
+  }
+  document.addEventListener("click", function (ev) {
+    var t = ev.target && ev.target.closest ? ev.target.closest("[data-tick-all],[data-select-all]") : null;
+    if (!t) return;
+    ev.preventDefault();
+    if (t.hasAttribute("data-select-all")) {
+      var cards = document.querySelectorAll(".lk-cards input[type=checkbox]");
+      var every = true;
+      for (var i = 0; i < cards.length; i++) if (!cards[i].checked) every = false;
+      for (var j = 0; j < cards.length; j++) cards[j].checked = !every;
+      return;
+    }
+    var form = t.closest("form");
+    if (!form) return;
+    var boxes = form.querySelectorAll('input[name="enhance"]');
+    var allOn = true;
+    for (var a = 0; a < boxes.length; a++) if (!boxes[a].checked) allOn = false;
+    for (var b = 0; b < boxes.length; b++) boxes[b].checked = !allOn;
+    recount(form);
+  });
+  document.addEventListener("change", function (ev) {
+    var form = ev.target && ev.target.closest ? ev.target.closest("[data-lk-form]") : null;
+    if (form) recount(form);
+  });
+})();

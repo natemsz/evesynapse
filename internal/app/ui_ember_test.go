@@ -76,6 +76,35 @@ func TestEmberGlassAndSkyRules(t *testing.T) {
 	if !strings.Contains(base, `<div class="page-body">`) || strings.Contains(base, `<div class="panel">`) {
 		t.Error("base.html must wrap content in .page-body, not an enclosing .panel")
 	}
+	// The section tab nav renders outside the glass with the title:
+	// base.html invokes each page's pagetabs block between the
+	// pagetitle and .page-body, and carries an empty default.
+	if !strings.Contains(base, "{{template \"pagetitle\" .}}\n{{template \"pagetabs\" .}}\n  <div class=\"page-body\">") ||
+		!strings.Contains(base, "{{define \"pagetabs\"}}{{end}}") {
+		t.Error("base.html lost the pagetabs invocation above .page-body or its empty default")
+	}
+	// The tabs are actual folder tabs on the panel's top edge, and
+	// hover is the owner's spec: background removed, saturate(1.5),
+	// 150ms. The active tab's only orange is its top stripe.
+	for _, want := range []string{
+		"#main-content > .section-tabs a.active",
+		"border-top: 3px solid var(--accent);",
+		"border-bottom: none;",
+		"#main-content > .section-tabs a:hover",
+		"filter: saturate(1.5);",
+		"transition: background-color 150ms ease, border-color 150ms ease, filter 150ms ease;",
+		"#main-content:has(> .section-tabs) > .page-body { margin-top: 0; }",
+		// A tabbed panel squares its top corners: the rounded
+		// corner curves away under the tab row and notches the
+		// active tab's merge into the panel.
+		"#main-content:has(> .section-tabs) > .page-body { border-top-left-radius: 0; border-top-right-radius: 0; }",
+		".item-lead { display: flex;",
+		".item-desc {",
+	} {
+		if !strings.Contains(bg, want) {
+			t.Errorf("bg.css is missing the tab/item-lead rule %q", want)
+		}
+	}
 	if !strings.Contains(style, ".page-body { padding: 1.25rem 1.25rem 1.5rem; }") ||
 		!strings.Contains(style, ".tw { overflow-x: auto;") ||
 		!strings.Contains(style, ".card .tw, .panel .tw, .foldable .tw { background: none;") ||

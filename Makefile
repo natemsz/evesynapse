@@ -29,6 +29,7 @@ assets: ## Decode the fonts/wallpaper from ci-assets/ into the embedded asset di
 	mkdir -p internal/app/static/fonts
 	for f in ci-assets/fonts/*.b64; do base64 -d "$$f" > "internal/app/static/fonts/$$(basename "$${f%.b64}")"; done
 	ls ci-assets/bg.jpg.b64.part-* | sort -V | xargs cat | base64 -d > internal/app/static/bg.jpg
+	ls ci-assets/bg-thumb.jpg.b64.part-* | sort -V | xargs cat | base64 -d > internal/app/static/bg-thumb.jpg
 	ls ci-assets/bg-4k.jpg.b64.part-* | sort -V | xargs cat | base64 -d > internal/app/static/bg-4k.jpg
 	ls ci-assets/bg-uhd.jpg.b64.part-* | sort -V | xargs cat | base64 -d > internal/app/static/bg-uhd.jpg
 	ls ci-assets/bg.jxl.b64.part-* | sort -V | xargs cat | base64 -d > internal/app/static/bg.jxl

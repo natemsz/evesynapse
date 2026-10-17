@@ -55,6 +55,25 @@ func (q *Queries) DeleteGuidePrices(ctx context.Context) error {
 	return err
 }
 
+const deleteMarketBookOrdersByRegion = `-- name: DeleteMarketBookOrdersByRegion :exec
+DELETE FROM market_book_orders
+WHERE region_id = $1
+`
+
+// ---------------------------------------------------------------------
+// Stored book (schema 050): the top orders per side a completed
+// sweep keeps, so the Market page can show an order book to
+// visitors who never fetch (anonymous readers among them). The
+// sweep completion transaction replaces a region's rows whole,
+// exactly like the region stats distilled beside them; figures
+// over the whole book (best, typical, depth) stay on
+// market_region_stats, these rows are only the displayed top.
+// ---------------------------------------------------------------------
+func (q *Queries) DeleteMarketBookOrdersByRegion(ctx context.Context, regionID int64) error {
+	_, err := q.db.ExecContext(ctx, deleteMarketBookOrdersByRegion, regionID)
+	return err
+}
+
 const deleteMarketRegionStatsByRegion = `-- name: DeleteMarketRegionStatsByRegion :exec
 DELETE FROM market_region_stats
 WHERE region_id = $1
@@ -318,6 +337,39 @@ func (q *Queries) GetMarketFetchState(ctx context.Context, kind string) (MarketF
 	return i, err
 }
 
+const getMarketRegionStat = `-- name: GetMarketRegionStat :one
+SELECT region_id, type_id, best_sell, typical_sell, sell_band, best_buy, typical_buy, buy_band, sell_orders, buy_orders, sell_volume, buy_volume, updated_at, avg_daily_volume
+FROM market_region_stats
+WHERE region_id = $1 AND type_id = $2
+`
+
+type GetMarketRegionStatParams struct {
+	RegionID int64 `json:"region_id"`
+	TypeID   int64 `json:"type_id"`
+}
+
+func (q *Queries) GetMarketRegionStat(ctx context.Context, arg GetMarketRegionStatParams) (MarketRegionStat, error) {
+	row := q.db.QueryRowContext(ctx, getMarketRegionStat, arg.RegionID, arg.TypeID)
+	var i MarketRegionStat
+	err := row.Scan(
+		&i.RegionID,
+		&i.TypeID,
+		&i.BestSell,
+		&i.TypicalSell,
+		&i.SellBand,
+		&i.BestBuy,
+		&i.TypicalBuy,
+		&i.BuyBand,
+		&i.SellOrders,
+		&i.BuyOrders,
+		&i.SellVolume,
+		&i.BuyVolume,
+		&i.UpdatedAt,
+		&i.AvgDailyVolume,
+	)
+	return i, err
+}
+
 const getMarketRegionStatsStamp = `-- name: GetMarketRegionStatsStamp :one
 SELECT MAX(updated_at) AS stamp, COUNT(*) AS row_count
 FROM market_region_stats WHERE region_id = $1
@@ -550,6 +602,25 @@ func (q *Queries) GetPlanetName(ctx context.Context, planetID int64) (PlanetName
 	return i, err
 }
 
+const getSiteSetting = `-- name: GetSiteSetting :one
+SELECT key, value, updated_at
+FROM site_settings
+WHERE key = $1
+`
+
+// ---------------------------------------------------------------------
+// Site settings (schema 050): live operator switches, one row
+// per key, flipped from the Admin page without a restart. An
+// environment variable may carry the boot default; the stored
+// row wins once it exists.
+// ---------------------------------------------------------------------
+func (q *Queries) GetSiteSetting(ctx context.Context, key string) (SiteSetting, error) {
+	row := q.db.QueryRowContext(ctx, getSiteSetting, key)
+	var i SiteSetting
+	err := row.Scan(&i.Key, &i.Value, &i.UpdatedAt)
+	return i, err
+}
+
 const getStructureContext = `-- name: GetStructureContext :one
 SELECT structure_id, owner_corporation_id, system_id, type_id, updated_at
 FROM structure_context
@@ -632,9 +703,41 @@ func (q *Queries) GetWatchlistEntry(ctx context.Context, arg GetWatchlistEntryPa
 	return i, err
 }
 
+const insertMarketBookOrder = `-- name: InsertMarketBookOrder :exec
+INSERT INTO market_book_orders (region_id, type_id, is_buy_order, rank, price, volume_remain, location_id, system_id, updated_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+`
+
+type InsertMarketBookOrderParams struct {
+	RegionID     int64     `json:"region_id"`
+	TypeID       int64     `json:"type_id"`
+	IsBuyOrder   int64     `json:"is_buy_order"`
+	Rank         int64     `json:"rank"`
+	Price        float64   `json:"price"`
+	VolumeRemain int64     `json:"volume_remain"`
+	LocationID   int64     `json:"location_id"`
+	SystemID     int64     `json:"system_id"`
+	UpdatedAt    time.Time `json:"updated_at"`
+}
+
+func (q *Queries) InsertMarketBookOrder(ctx context.Context, arg InsertMarketBookOrderParams) error {
+	_, err := q.db.ExecContext(ctx, insertMarketBookOrder,
+		arg.RegionID,
+		arg.TypeID,
+		arg.IsBuyOrder,
+		arg.Rank,
+		arg.Price,
+		arg.VolumeRemain,
+		arg.LocationID,
+		arg.SystemID,
+		arg.UpdatedAt,
+	)
+	return err
+}
+
 const insertMarketSweepOrder = `-- name: InsertMarketSweepOrder :exec
-INSERT INTO market_sweep_orders (region_id, type_id, is_buy_order, price, volume_remain, location_id)
-VALUES ($1, $2, $3, $4, $5, $6)
+INSERT INTO market_sweep_orders (region_id, type_id, is_buy_order, price, volume_remain, location_id, system_id)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
 `
 
 type InsertMarketSweepOrderParams struct {
@@ -644,6 +747,7 @@ type InsertMarketSweepOrderParams struct {
 	Price        float64 `json:"price"`
 	VolumeRemain int64   `json:"volume_remain"`
 	LocationID   int64   `json:"location_id"`
+	SystemID     int64   `json:"system_id"`
 }
 
 func (q *Queries) InsertMarketSweepOrder(ctx context.Context, arg InsertMarketSweepOrderParams) error {
@@ -654,6 +758,7 @@ func (q *Queries) InsertMarketSweepOrder(ctx context.Context, arg InsertMarketSw
 		arg.Price,
 		arg.VolumeRemain,
 		arg.LocationID,
+		arg.SystemID,
 	)
 	return err
 }
@@ -838,134 +943,6 @@ func (q *Queries) ListBestBuyStations(ctx context.Context, arg ListBestBuyStatio
 		return nil, err
 	}
 	return items, nil
-}
-
-const listTradefinderPendingRoutes = `-- name: ListTradefinderPendingRoutes :many
-SELECT o.type_id,
-       o.typical_sell AS origin_typical_sell,
-       d.typical_sell AS dest_typical_sell
-FROM market_region_stats o
-JOIN market_region_stats d ON d.region_id = $1 AND d.type_id = o.type_id
-WHERE o.region_id = $2
-  AND o.typical_sell > 0 AND d.typical_sell > o.typical_sell
-  AND ($3::bigint = 1 OR d.typical_sell <= o.typical_sell * 10)
-  AND (d.typical_sell - o.typical_sell) / o.typical_sell * 100 >= $4
-  AND d.avg_daily_volume = 0
-  AND o.sell_volume > 0
-  AND o.updated_at >= $5 AND d.updated_at >= $5
-ORDER BY (d.typical_sell - o.typical_sell) * o.sell_volume::double precision DESC, o.type_id
-LIMIT $6::bigint
-`
-
-type ListTradefinderPendingRoutesParams struct {
-	DestRegion     int64     `json:"dest_region"`
-	OriginRegion   int64     `json:"origin_region"`
-	IncludeLowball int64     `json:"include_lowball"`
-	MinMargin      float64   `json:"min_margin"`
-	Cutoff         time.Time `json:"cutoff"`
-	RowCap         int64     `json:"row_cap"`
-}
-
-type ListTradefinderPendingRoutesRow struct {
-	TypeID            int64   `json:"type_id"`
-	OriginTypicalSell float64 `json:"origin_typical_sell"`
-	DestTypicalSell   float64 `json:"dest_typical_sell"`
-}
-
-// Routes that pass every price rule but have no sold-per-day
-// figure at the destination yet (no recorded history there): the
-// tradefinder lists them apart and queues their history, ranked
-// by margin times the origin's stock on sale as a rough potential.
-func (q *Queries) ListTradefinderPendingRoutes(ctx context.Context, arg ListTradefinderPendingRoutesParams) ([]ListTradefinderPendingRoutesRow, error) {
-	rows, err := q.db.QueryContext(ctx, listTradefinderPendingRoutes,
-		arg.DestRegion,
-		arg.OriginRegion,
-		arg.IncludeLowball,
-		arg.MinMargin,
-		arg.Cutoff,
-		arg.RowCap,
-	)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []ListTradefinderPendingRoutesRow
-	for rows.Next() {
-		var i ListTradefinderPendingRoutesRow
-		if err := rows.Scan(&i.TypeID, &i.OriginTypicalSell, &i.DestTypicalSell); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const refreshMarketRegionStatAvgVolume = `-- name: RefreshMarketRegionStatAvgVolume :exec
-UPDATE market_region_stats SET avg_daily_volume = COALESCE((
-    SELECT CAST(AVG(h.volume) AS DOUBLE PRECISION)
-    FROM market_history h
-    WHERE h.region_id = $1 AND h.type_id = $2
-      AND h.date >= (
-          SELECT to_char(MAX(m.date)::date - INTERVAL '6 days', 'YYYY-MM-DD')
-          FROM market_history m
-          WHERE m.region_id = $1 AND m.type_id = $2
-      )
-), 0)
-WHERE region_id = $1 AND type_id = $2
-`
-
-type RefreshMarketRegionStatAvgVolumeParams struct {
-	RegionID int64 `json:"region_id"`
-	TypeID   int64 `json:"type_id"`
-}
-
-// Recomputes one region stat's sold-per-day figure from its stored
-// history (the same seven-day window ListMarketAvgDailyVolumes uses)
-// right after a history fetch, so the figure doesn't wait for the
-// region's next sweep.
-func (q *Queries) RefreshMarketRegionStatAvgVolume(ctx context.Context, arg RefreshMarketRegionStatAvgVolumeParams) error {
-	_, err := q.db.ExecContext(ctx, refreshMarketRegionStatAvgVolume, arg.RegionID, arg.TypeID)
-	return err
-}
-
-const refreshMarketRegionStatAvgVolumes = `-- name: RefreshMarketRegionStatAvgVolumes :execrows
-UPDATE market_region_stats s SET avg_daily_volume = v.avg_daily_volume
-FROM (
-    SELECT h.type_id, CAST(AVG(h.volume) AS DOUBLE PRECISION) AS avg_daily_volume
-    FROM market_history h
-    JOIN (
-        SELECT m.type_id, to_char(MAX(m.date)::date - INTERVAL '6 days', 'YYYY-MM-DD') AS window_start
-        FROM market_history m
-        WHERE m.region_id = $1 AND m.type_id = ANY($2::bigint[])
-        GROUP BY m.type_id
-    ) w ON w.type_id = h.type_id
-    WHERE h.region_id = $1 AND h.type_id = ANY($2::bigint[]) AND h.date >= w.window_start
-    GROUP BY h.type_id
-) v
-WHERE s.region_id = $1 AND s.type_id = v.type_id AND s.avg_daily_volume <> v.avg_daily_volume
-`
-
-type RefreshMarketRegionStatAvgVolumesParams struct {
-	RegionID int64   `json:"region_id"`
-	TypeIds  []int64 `json:"type_ids"`
-}
-
-// RefreshMarketRegionStatAvgVolume for several types of one region in
-// one statement, touching only rows whose figure changed: the
-// tradefinder's self-heal for pending routes whose history is stored
-// but whose sold-per-day figure has not caught up.
-func (q *Queries) RefreshMarketRegionStatAvgVolumes(ctx context.Context, arg RefreshMarketRegionStatAvgVolumesParams) (int64, error) {
-	result, err := q.db.ExecContext(ctx, refreshMarketRegionStatAvgVolumes, arg.RegionID, pq.Array(arg.TypeIds))
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected()
 }
 
 const listCheapestSellStations = `-- name: ListCheapestSellStations :many
@@ -1279,6 +1256,51 @@ func (q *Queries) ListMarketAvgDailyVolumes(ctx context.Context, regionID int64)
 	for rows.Next() {
 		var i ListMarketAvgDailyVolumesRow
 		if err := rows.Scan(&i.TypeID, &i.AvgDailyVolume); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listMarketBookOrders = `-- name: ListMarketBookOrders :many
+SELECT region_id, type_id, is_buy_order, rank, price, volume_remain, location_id, system_id, updated_at
+FROM market_book_orders
+WHERE region_id = $1 AND type_id = $2
+ORDER BY is_buy_order, rank
+`
+
+type ListMarketBookOrdersParams struct {
+	RegionID int64 `json:"region_id"`
+	TypeID   int64 `json:"type_id"`
+}
+
+func (q *Queries) ListMarketBookOrders(ctx context.Context, arg ListMarketBookOrdersParams) ([]MarketBookOrder, error) {
+	rows, err := q.db.QueryContext(ctx, listMarketBookOrders, arg.RegionID, arg.TypeID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []MarketBookOrder
+	for rows.Next() {
+		var i MarketBookOrder
+		if err := rows.Scan(
+			&i.RegionID,
+			&i.TypeID,
+			&i.IsBuyOrder,
+			&i.Rank,
+			&i.Price,
+			&i.VolumeRemain,
+			&i.LocationID,
+			&i.SystemID,
+			&i.UpdatedAt,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -1772,7 +1794,7 @@ func (q *Queries) ListMarketSweepTypeIDs(ctx context.Context, regionID int64) ([
 }
 
 const listMarketSweepTypeOrders = `-- name: ListMarketSweepTypeOrders :many
-SELECT is_buy_order, price, volume_remain
+SELECT is_buy_order, price, volume_remain, location_id, system_id
 FROM market_sweep_orders
 WHERE region_id = $1 AND type_id = $2
 ORDER BY is_buy_order, price
@@ -1787,6 +1809,8 @@ type ListMarketSweepTypeOrdersRow struct {
 	IsBuyOrder   int64   `json:"is_buy_order"`
 	Price        float64 `json:"price"`
 	VolumeRemain int64   `json:"volume_remain"`
+	LocationID   int64   `json:"location_id"`
+	SystemID     int64   `json:"system_id"`
 }
 
 func (q *Queries) ListMarketSweepTypeOrders(ctx context.Context, arg ListMarketSweepTypeOrdersParams) ([]ListMarketSweepTypeOrdersRow, error) {
@@ -1798,7 +1822,13 @@ func (q *Queries) ListMarketSweepTypeOrders(ctx context.Context, arg ListMarketS
 	var items []ListMarketSweepTypeOrdersRow
 	for rows.Next() {
 		var i ListMarketSweepTypeOrdersRow
-		if err := rows.Scan(&i.IsBuyOrder, &i.Price, &i.VolumeRemain); err != nil {
+		if err := rows.Scan(
+			&i.IsBuyOrder,
+			&i.Price,
+			&i.VolumeRemain,
+			&i.LocationID,
+			&i.SystemID,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -2415,6 +2445,72 @@ func (q *Queries) ListStructureResolutions(ctx context.Context, arg ListStructur
 	return items, nil
 }
 
+const listTradefinderPendingRoutes = `-- name: ListTradefinderPendingRoutes :many
+SELECT o.type_id,
+       o.typical_sell AS origin_typical_sell,
+       d.typical_sell AS dest_typical_sell
+FROM market_region_stats o
+JOIN market_region_stats d ON d.region_id = $1 AND d.type_id = o.type_id
+WHERE o.region_id = $2
+  AND o.typical_sell > 0 AND d.typical_sell > o.typical_sell
+  AND ($3::bigint = 1 OR d.typical_sell <= o.typical_sell * 10)
+  AND (d.typical_sell - o.typical_sell) / o.typical_sell * 100 >= $4
+  AND d.avg_daily_volume = 0
+  AND o.sell_volume > 0
+  AND o.updated_at >= $5 AND d.updated_at >= $5
+ORDER BY (d.typical_sell - o.typical_sell) * o.sell_volume::double precision DESC, o.type_id
+LIMIT $6::bigint
+`
+
+type ListTradefinderPendingRoutesParams struct {
+	DestRegion     int64     `json:"dest_region"`
+	OriginRegion   int64     `json:"origin_region"`
+	IncludeLowball int64     `json:"include_lowball"`
+	MinMargin      float64   `json:"min_margin"`
+	Cutoff         time.Time `json:"cutoff"`
+	RowCap         int64     `json:"row_cap"`
+}
+
+type ListTradefinderPendingRoutesRow struct {
+	TypeID            int64   `json:"type_id"`
+	OriginTypicalSell float64 `json:"origin_typical_sell"`
+	DestTypicalSell   float64 `json:"dest_typical_sell"`
+}
+
+// Routes that pass every price rule but have no sold-per-day
+// figure at the destination yet (no recorded history there): the
+// tradefinder lists them apart and queues their history, ranked
+// by margin times the origin's stock on sale as a rough potential.
+func (q *Queries) ListTradefinderPendingRoutes(ctx context.Context, arg ListTradefinderPendingRoutesParams) ([]ListTradefinderPendingRoutesRow, error) {
+	rows, err := q.db.QueryContext(ctx, listTradefinderPendingRoutes,
+		arg.DestRegion,
+		arg.OriginRegion,
+		arg.IncludeLowball,
+		arg.MinMargin,
+		arg.Cutoff,
+		arg.RowCap,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListTradefinderPendingRoutesRow
+	for rows.Next() {
+		var i ListTradefinderPendingRoutesRow
+		if err := rows.Scan(&i.TypeID, &i.OriginTypicalSell, &i.DestTypicalSell); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listTradefinderRoutes = `-- name: ListTradefinderRoutes :many
 SELECT type_id, origin_typical_sell, dest_typical_sell, dest_daily_volume, origin_sell_volume
 FROM (
@@ -2575,6 +2671,68 @@ type PruneOldOrderLifecycleParams struct {
 func (q *Queries) PruneOldOrderLifecycle(ctx context.Context, arg PruneOldOrderLifecycleParams) error {
 	_, err := q.db.ExecContext(ctx, pruneOldOrderLifecycle, arg.ClosedBefore, arg.RowLimit)
 	return err
+}
+
+const refreshMarketRegionStatAvgVolume = `-- name: RefreshMarketRegionStatAvgVolume :exec
+UPDATE market_region_stats SET avg_daily_volume = COALESCE((
+    SELECT CAST(AVG(h.volume) AS DOUBLE PRECISION)
+    FROM market_history h
+    WHERE h.region_id = $1 AND h.type_id = $2
+      AND h.date >= (
+          SELECT to_char(MAX(m.date)::date - INTERVAL '6 days', 'YYYY-MM-DD')
+          FROM market_history m
+          WHERE m.region_id = $1 AND m.type_id = $2
+      )
+), 0)
+WHERE region_id = $1 AND type_id = $2
+`
+
+type RefreshMarketRegionStatAvgVolumeParams struct {
+	RegionID int64 `json:"region_id"`
+	TypeID   int64 `json:"type_id"`
+}
+
+// Recomputes one region stat's sold-per-day figure from its stored
+// history (the same seven-day window ListMarketAvgDailyVolumes uses)
+// right after a history fetch, so the figure doesn't wait for the
+// region's next sweep.
+func (q *Queries) RefreshMarketRegionStatAvgVolume(ctx context.Context, arg RefreshMarketRegionStatAvgVolumeParams) error {
+	_, err := q.db.ExecContext(ctx, refreshMarketRegionStatAvgVolume, arg.RegionID, arg.TypeID)
+	return err
+}
+
+const refreshMarketRegionStatAvgVolumes = `-- name: RefreshMarketRegionStatAvgVolumes :execrows
+UPDATE market_region_stats s SET avg_daily_volume = v.avg_daily_volume
+FROM (
+    SELECT h.type_id, CAST(AVG(h.volume) AS DOUBLE PRECISION) AS avg_daily_volume
+    FROM market_history h
+    JOIN (
+        SELECT m.type_id, to_char(MAX(m.date)::date - INTERVAL '6 days', 'YYYY-MM-DD') AS window_start
+        FROM market_history m
+        WHERE m.region_id = $1 AND m.type_id = ANY($2::bigint[])
+        GROUP BY m.type_id
+    ) w ON w.type_id = h.type_id
+    WHERE h.region_id = $1 AND h.type_id = ANY($2::bigint[]) AND h.date >= w.window_start
+    GROUP BY h.type_id
+) v
+WHERE s.region_id = $1 AND s.type_id = v.type_id AND s.avg_daily_volume <> v.avg_daily_volume
+`
+
+type RefreshMarketRegionStatAvgVolumesParams struct {
+	RegionID int64   `json:"region_id"`
+	TypeIds  []int64 `json:"type_ids"`
+}
+
+// RefreshMarketRegionStatAvgVolume for several types of one region in
+// one statement, touching only rows whose figure changed: the
+// tradefinder's self-heal for pending routes whose history is stored
+// but whose sold-per-day figure has not caught up.
+func (q *Queries) RefreshMarketRegionStatAvgVolumes(ctx context.Context, arg RefreshMarketRegionStatAvgVolumesParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, refreshMarketRegionStatAvgVolumes, arg.RegionID, pq.Array(arg.TypeIds))
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }
 
 const setAllianceRecord = `-- name: SetAllianceRecord :exec
@@ -3445,6 +3603,25 @@ func (q *Queries) UpsertRestockTarget(ctx context.Context, arg UpsertRestockTarg
 		arg.TargetQty,
 		arg.MinMarginPct,
 	)
+	return err
+}
+
+const upsertSiteSetting = `-- name: UpsertSiteSetting :exec
+INSERT INTO site_settings (key, value, updated_at)
+VALUES ($1, $2, $3)
+ON CONFLICT (key) DO UPDATE SET
+    value      = excluded.value,
+    updated_at = excluded.updated_at
+`
+
+type UpsertSiteSettingParams struct {
+	Key       string    `json:"key"`
+	Value     string    `json:"value"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+func (q *Queries) UpsertSiteSetting(ctx context.Context, arg UpsertSiteSettingParams) error {
+	_, err := q.db.ExecContext(ctx, upsertSiteSetting, arg.Key, arg.Value, arg.UpdatedAt)
 	return err
 }
 

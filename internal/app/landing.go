@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 	"net/http"
+	"strings"
 
 	"evesynapse/internal/app/module"
 	db "evesynapse/internal/db/sqlc"
@@ -81,6 +82,28 @@ func formatISKShort(v float64) string {
 	}
 }
 
+// landingWatched is the strip's watched set — name, market
+// region, type ID — in display order. ONE list drives both the
+// pricing query and the history-want queue in buildLanding, so
+// the two can never drift apart. They once did: the query
+// rebuilt its set from type_names, a sparse name cache that
+// fills lazily (search hits, character warming, the swarm),
+// while the queue used these triples. History flowed for all
+// three items and the strip still starved, because the cache
+// simply had no rows for them (2026-10-16, after two fixes
+// whose tests seeded the cache and so could not see it).
+type landingWatchedItem struct {
+	name     string
+	regionID int64
+	typeID   int64
+}
+
+var landingWatched = []landingWatchedItem{
+	{"PLEX", globalMarketRegion, 44992},
+	{"Large Skill Injector", defaultMarketRegion, 40520},
+	{"Small Skill Injector", defaultMarketRegion, 45635},
+}
+
 // buildLanding assembles the strip from stored rows. Any source
 // that errors or is empty simply leaves its card to the template's
 // evergreen fallback; the page itself never fails on data.
@@ -99,57 +122,74 @@ func (app *Application) buildLanding(ctx context.Context) landingData {
 	// behind the freshest type in its region. An item with fewer
 	// than two stored days drops out — and queues a history want
 	// below so the worker fetches it for a later visit.
+	//
+	// The watched set is the hardcoded landingWatched list,
+	// never a table lookup: display names resolve from sde_types
+	// (the complete local catalog) by type ID, with the list's
+	// own name as fallback. type_names is deliberately NOT used
+	// — it is a sparse, lazily-warmed cache, not the catalog.
+	var watchedRows []string
+	var watchedArgs []any
+	for i, w := range landingWatched {
+		base := i * 3
+		watchedRows = append(watchedRows, fmt.Sprintf(
+			"($%d::bigint, $%d::bigint, $%d::text)", base+1, base+2, base+3))
+		watchedArgs = append(watchedArgs, w.typeID, w.regionID, w.name)
+	}
 	rows, err := app.db.QueryContext(ctx, `
 		WITH watched AS (
-		  SELECT type_id, name,
-		         CASE WHEN name = 'PLEX' THEN 19000001 ELSE 10000002 END AS region_id
-		  FROM type_names
-		  WHERE name IN ('PLEX', 'Large Skill Injector', 'Small Skill Injector')
+		  SELECT v.type_id, v.region_id, COALESCE(s.name, v.name) AS name
+		  FROM (VALUES `+strings.Join(watchedRows, ", ")+`) AS v(type_id, region_id, name)
+		  LEFT JOIN sde_types s ON s.type_id = v.type_id
 		), ranked AS (
 		  SELECT w.type_id, w.name, h.average,
 		         ROW_NUMBER() OVER (PARTITION BY w.type_id ORDER BY h.date DESC) AS rn
 		  FROM watched w
 		  JOIN market_history h ON h.type_id = w.type_id AND h.region_id = w.region_id
 		)
-		SELECT cur.name, cur.average,
+		SELECT cur.type_id, cur.name, cur.average,
 		       ((cur.average - old.average) / old.average * 100) AS pct_change
 		FROM ranked cur
 		JOIN ranked old ON old.type_id = cur.type_id AND old.rn = 2
-		WHERE cur.rn = 1 AND old.average > 0
-		ORDER BY CASE cur.name
-		  WHEN 'PLEX' THEN 0 WHEN 'Large Skill Injector' THEN 1 ELSE 2 END`)
-	if err == nil {
+		WHERE cur.rn = 1 AND old.average > 0`, watchedArgs...)
+	priced := map[int64]landingMover{}
+	if err != nil {
+		// The page never fails on data, but a broken strip query
+		// must not be invisible either: the 2026-10-16 empty
+		// strip hid behind this silence through two "fixes".
+		logging.Errorf("landing: strip pricing query: %v", err)
+	} else {
 		defer rows.Close()
 		for rows.Next() {
+			var typeID int64
 			var name string
 			var price, pct float64
-			if err := rows.Scan(&name, &price, &pct); err != nil {
+			if err := rows.Scan(&typeID, &name, &price, &pct); err != nil {
+				logging.Errorf("landing: strip pricing scan: %v", err)
 				continue
 			}
-			data.Movers = append(data.Movers, landingMover{
+			priced[typeID] = landingMover{
 				Name:  name,
 				Price: formatISKShort(price),
 				Pct:   fmt.Sprintf("%.1f%%", math.Abs(pct)),
 				Up:    pct >= 0,
-			})
+			}
+		}
+		if err := rows.Err(); err != nil {
+			logging.Errorf("landing: strip pricing rows: %v", err)
+		}
+		// Display order is the watched list's, not the query's.
+		for _, w := range landingWatched {
+			if m, ok := priced[w.typeID]; ok {
+				data.Movers = append(data.Movers, m)
+			}
 		}
 	}
 
 	// Queue a history want for any watched item the strip could
 	// not price, so its market history starts (or keeps) flowing.
-	found := map[string]bool{}
-	for _, m := range data.Movers {
-		found[m.Name] = true
-	}
-	for _, w := range []struct {
-		name             string
-		regionID, typeID int64
-	}{
-		{"PLEX", globalMarketRegion, 44992},
-		{"Large Skill Injector", defaultMarketRegion, 40520},
-		{"Small Skill Injector", defaultMarketRegion, 45635},
-	} {
-		if !found[w.name] {
+	for _, w := range landingWatched {
+		if _, ok := priced[w.typeID]; !ok {
 			app.QueueHistoryWant(ctx, w.regionID, w.typeID)
 		}
 	}

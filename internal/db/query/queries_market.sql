@@ -483,6 +483,10 @@ ON CONFLICT (region_id, type_id) DO UPDATE SET
     buy_volume   = excluded.buy_volume,
     avg_daily_volume = excluded.avg_daily_volume,
     updated_at   = excluded.updated_at;
+-- name: GetMarketRegionStat :one
+SELECT region_id, type_id, best_sell, typical_sell, sell_band, best_buy, typical_buy, buy_band, sell_orders, buy_orders, sell_volume, buy_volume, updated_at, avg_daily_volume
+FROM market_region_stats
+WHERE region_id = $1 AND type_id = $2;
 -- name: ListMarketRegionStatsByType :many
 SELECT region_id, type_id, best_sell, typical_sell, sell_band, best_buy, typical_buy, buy_band, sell_orders, buy_orders, sell_volume, buy_volume, updated_at, avg_daily_volume
 FROM market_region_stats
@@ -780,8 +784,8 @@ WHERE region_id = $4;
 DELETE FROM market_sweep_state
 WHERE region_id = $1;
 -- name: InsertMarketSweepOrder :exec
-INSERT INTO market_sweep_orders (region_id, type_id, is_buy_order, price, volume_remain, location_id)
-VALUES ($1, $2, $3, $4, $5, $6);
+INSERT INTO market_sweep_orders (region_id, type_id, is_buy_order, price, volume_remain, location_id, system_id)
+VALUES ($1, $2, $3, $4, $5, $6, $7);
 -- name: DeleteMarketSweepOrdersByRegion :exec
 DELETE FROM market_sweep_orders
 WHERE region_id = $1;
@@ -791,10 +795,48 @@ FROM market_sweep_orders
 WHERE region_id = $1
 ORDER BY type_id;
 -- name: ListMarketSweepTypeOrders :many
-SELECT is_buy_order, price, volume_remain
+SELECT is_buy_order, price, volume_remain, location_id, system_id
 FROM market_sweep_orders
 WHERE region_id = $1 AND type_id = $2
 ORDER BY is_buy_order, price;
+
+-- ---------------------------------------------------------------------
+-- Stored book (schema 050): the top orders per side a completed
+-- sweep keeps, so the Market page can show an order book to
+-- visitors who never fetch (anonymous readers among them). The
+-- sweep completion transaction replaces a region's rows whole,
+-- exactly like the region stats distilled beside them; figures
+-- over the whole book (best, typical, depth) stay on
+-- market_region_stats, these rows are only the displayed top.
+-- ---------------------------------------------------------------------
+-- name: DeleteMarketBookOrdersByRegion :exec
+DELETE FROM market_book_orders
+WHERE region_id = $1;
+-- name: InsertMarketBookOrder :exec
+INSERT INTO market_book_orders (region_id, type_id, is_buy_order, rank, price, volume_remain, location_id, system_id, updated_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9);
+-- name: ListMarketBookOrders :many
+SELECT region_id, type_id, is_buy_order, rank, price, volume_remain, location_id, system_id, updated_at
+FROM market_book_orders
+WHERE region_id = $1 AND type_id = $2
+ORDER BY is_buy_order, rank;
+
+-- ---------------------------------------------------------------------
+-- Site settings (schema 050): live operator switches, one row
+-- per key, flipped from the Admin page without a restart. An
+-- environment variable may carry the boot default; the stored
+-- row wins once it exists.
+-- ---------------------------------------------------------------------
+-- name: GetSiteSetting :one
+SELECT key, value, updated_at
+FROM site_settings
+WHERE key = $1;
+-- name: UpsertSiteSetting :exec
+INSERT INTO site_settings (key, value, updated_at)
+VALUES ($1, $2, $3)
+ON CONFLICT (key) DO UPDATE SET
+    value      = excluded.value,
+    updated_at = excluded.updated_at;
 -- name: ListMarketSweepStationAggregates :many
 SELECT location_id, type_id, is_buy_order,
        CAST(MIN(price) AS DOUBLE PRECISION) AS min_price, CAST(MAX(price) AS DOUBLE PRECISION) AS max_price,

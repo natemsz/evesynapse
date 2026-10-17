@@ -26,8 +26,10 @@
   // Prefetch skips more than clicks do: the auto-refresh page
   // always falls back to a full load, so rendering it ahead of
   // time is a wasted server render. Clicks on it still work
-  // through the normal fallback.
-  var PREFETCH_DENY_PREFIX = ["/sync/"];
+  // through the normal fallback. The character switch is here
+  // too: it changes who the session acts as, so it must never
+  // run speculatively on a hover.
+  var PREFETCH_DENY_PREFIX = ["/sync/", "/characters/switch"];
 
   // Scripts the shell always carries. A fetched page that needs
   // anything else (fit.js, plan.js, push.js) loads whole when the

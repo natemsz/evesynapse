@@ -231,8 +231,7 @@ func (app *Application) handleCharacterSwitch(w http.ResponseWriter, r *http.Req
 	characterID, _ := strconv.ParseInt(r.URL.Query().Get("character"), 10, 64)
 	if userID != 0 && characterID != 0 {
 		if ch, err := app.queries.GetCharacter(ctx, characterID); err == nil && ch.UserID == userID {
-			putSessionCharID(app.sessions, ctx, characterID)
-			app.sessions.Put(ctx, sessionCharacterName, ch.Name)
+			app.pinSessionCharacter(ctx, characterID, ch.Name)
 		}
 	}
 	target := "/"

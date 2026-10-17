@@ -1,11 +1,10 @@
 {{define "title"}}{{if and .Region .Region.Name}}{{.Region.Name}}{{else}}Region{{end}}{{end}}
+{{define "pagetitle"}}{{if .Region}}{{if eq .Region.State "missing"}}<h1><span class="gt">Region</span></h1>{{else}}<h1 class="h-with-action"><span class="gt">{{.Region.Name}}</span>{{with dotlanRegionURL .Region.Name}}<a class="h-action" href="{{.}}" target="_blank" rel="noopener noreferrer" title="Open {{$.Region.Name}} on Dotlan"><svg viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="url(#nav-glyph-gradient)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4.5h5.5V10"/><path d="M19.5 4.5 11 13"/><path d="M18 14v4.5a1 1 0 0 1-1 1H6.5a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1H11"/></g></svg>Dotlan</a>{{end}}</h1>{{end}}{{end}}{{end}}
 {{define "content"}}
 {{if .Region}}
 {{if eq .Region.State "missing"}}
-<h1><span class="gt">Region</span></h1>
 <p><small>This region isn't in the star map data yet. It will show up after the next star map update.</small></p>
 {{else}}
-<h1 class="h-with-action"><span class="gt">{{.Region.Name}}</span>{{with dotlanRegionURL .Region.Name}}<a class="h-action" href="{{.}}" target="_blank" rel="noopener noreferrer" title="Open {{$.Region.Name}} on Dotlan"><svg viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="url(#nav-glyph-gradient)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4.5h5.5V10"/><path d="M19.5 4.5 11 13"/><path d="M18 14v4.5a1 1 0 0 1-1 1H6.5a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1H11"/></g></svg>Dotlan</a>{{end}}</h1>
 
 {{if .Region.Systems}}
 <p>{{len .Region.Systems}} systems{{if .Region.High}} · {{.Region.High}} high-sec{{end}}{{if .Region.Low}} · {{.Region.Low}} low-sec{{end}}{{if .Region.Null}} · {{.Region.Null}} null-sec{{end}}</p>

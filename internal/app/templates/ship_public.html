@@ -1,9 +1,9 @@
 {{define "title"}}{{with .PublicShip}}{{.Detail.Name}}{{else}}Ship{{end}}{{end}}
+{{define "pagetitle"}}{{with .PublicShip}}{{$d := .Detail}}<h1><span class="gt">{{$d.Name}}</span></h1>{{end}}{{end}}
 {{define "content"}}
 {{with .PublicShip}}
 {{$d := .Detail}}
 {{if moduleOn "publicfits"}}<p><small><a href="/fittings/public/">Public fits</a></small></p>{{end}}
-<h1><span class="gt">{{$d.Name}}</span></h1>
 
 <div class="tw">
 <table>

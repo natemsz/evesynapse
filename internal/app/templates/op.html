@@ -1,7 +1,7 @@
 {{define "title"}}{{.Op.Title}}{{end}}
+{{define "pagetitle"}}{{with .Op}}<h1><span class="gt">{{.Title}}</span></h1>{{end}}{{end}}
 {{define "content"}}
 {{with .Op}}
-<h1><span class="gt">{{.Title}}</span></h1>
 
 {{if .Cancelled}}<p class="err">This op was cancelled.</p>{{end}}
 

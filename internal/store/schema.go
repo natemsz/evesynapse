@@ -280,6 +280,14 @@ var pgTrueValuesSchema string
 //go:embed schema_pg/052_true_value_evidence.sql
 var pgTrueValueEvidenceSchema string
 
+// Step 053: station-grain typical (median) prices on
+// market_station_stats, distilled by the same sweeps that
+// already compute them at region grain, so the spread scanner
+// can price typical against typical instead of best extremes.
+//
+//go:embed schema_pg/053_station_typicals.sql
+var pgStationTypicalsSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -361,6 +369,7 @@ func schemaSteps() []schemaStep {
 		{50, "market_book_snapshot", pgMarketBookSnapshotSchema, ""},
 		{51, "true_values", pgTrueValuesSchema, ""},
 		{52, "true_value_evidence", pgTrueValueEvidenceSchema, ""},
+		{53, "station_typicals", pgStationTypicalsSchema, ""},
 	}
 }
 

@@ -547,19 +547,21 @@ ORDER BY day;
 DELETE FROM market_station_stats
 WHERE region_id = $1;
 -- name: UpsertMarketStationStat :exec
-INSERT INTO market_station_stats (location_id, region_id, type_id, best_sell, best_buy, sell_orders, buy_orders, sell_volume, buy_volume, updated_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+INSERT INTO market_station_stats (location_id, region_id, type_id, best_sell, best_buy, typical_sell, typical_buy, sell_orders, buy_orders, sell_volume, buy_volume, updated_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 ON CONFLICT (location_id, type_id) DO UPDATE SET
-    region_id   = excluded.region_id,
-    best_sell   = excluded.best_sell,
-    best_buy    = excluded.best_buy,
-    sell_orders = excluded.sell_orders,
-    buy_orders  = excluded.buy_orders,
-    sell_volume = excluded.sell_volume,
-    buy_volume  = excluded.buy_volume,
-    updated_at  = excluded.updated_at;
+    region_id    = excluded.region_id,
+    best_sell    = excluded.best_sell,
+    best_buy     = excluded.best_buy,
+    typical_sell = excluded.typical_sell,
+    typical_buy  = excluded.typical_buy,
+    sell_orders  = excluded.sell_orders,
+    buy_orders   = excluded.buy_orders,
+    sell_volume  = excluded.sell_volume,
+    buy_volume   = excluded.buy_volume,
+    updated_at   = excluded.updated_at;
 -- name: ListMarketStationStatsByRegion :many
-SELECT location_id, region_id, type_id, best_sell, best_buy, sell_orders, buy_orders, sell_volume, buy_volume, updated_at
+SELECT location_id, region_id, type_id, best_sell, best_buy, sell_orders, buy_orders, sell_volume, buy_volume, updated_at, typical_sell, typical_buy
 FROM market_station_stats
 WHERE region_id = $1
 ORDER BY location_id, type_id;
@@ -567,24 +569,37 @@ ORDER BY location_id, type_id;
 -- The spread scanner's opportunities, computed and ranked in SQL:
 -- one bounded read of at most scannerRowCap rows instead of
 -- pulling every stored station row for the region into Go.
--- Mirrors the old Go filter exactly: real buy above zero, sell
--- above the buy, spread floor, daily-volume floor, and the
--- tradeable size as the least of what trades, what sellers
--- hold, and what buyers want.
-SELECT type_id, location_id, best_sell, best_buy, sell_volume, buy_volume, daily_volume
+-- The spread is priced typical against typical -- the station's
+-- stored median per side (schema 053), the same basis the
+-- tradefinder routes on -- never the best extremes, which at
+-- station grain can be whatever two orders are alone there.
+-- A row also needs a book with some depth on both sides (three
+-- or more orders a side) and must pass the tradefinder's
+-- long-shot cross-check against the region's own typicals when
+-- the region has them: a station typical sell more than ten
+-- times the region's, or a typical buy under a tenth of it, is
+-- a price nobody pays, not an opportunity. Then the usual
+-- spread floor, daily-volume floor, and the tradeable size as
+-- the least of what trades, what sellers hold, and what buyers
+-- want.
+SELECT type_id, location_id, typical_sell, typical_buy, sell_volume, buy_volume, daily_volume
 FROM (
-    SELECT ss.type_id, ss.location_id, ss.best_sell, ss.best_buy,
+    SELECT ss.type_id, ss.location_id, ss.typical_sell, ss.typical_buy,
            ss.sell_volume, ss.buy_volume,
            COALESCE(rs.avg_daily_volume, 0) AS daily_volume,
-           (ss.best_sell - ss.best_buy) * LEAST(COALESCE(rs.avg_daily_volume, 0), ss.sell_volume::double precision, ss.buy_volume::double precision) AS profit
+           (ss.typical_sell - ss.typical_buy) * LEAST(COALESCE(rs.avg_daily_volume, 0), ss.sell_volume::double precision, ss.buy_volume::double precision) AS profit
     FROM market_station_stats ss
     LEFT JOIN market_region_stats rs ON rs.region_id = ss.region_id AND rs.type_id = ss.type_id
     WHERE ss.region_id = $1
-      AND ss.best_buy > 0
-      AND ss.best_sell > ss.best_buy
-      AND (ss.best_sell - ss.best_buy) / ss.best_buy * 100 >= sqlc.arg(min_spread)
+      AND ss.typical_buy > 0
+      AND ss.typical_sell > ss.typical_buy
+      AND ss.sell_orders >= 3
+      AND ss.buy_orders >= 3
+      AND (ss.typical_sell - ss.typical_buy) / ss.typical_buy * 100 >= sqlc.arg(min_spread)
       AND COALESCE(rs.avg_daily_volume, 0) >= sqlc.arg(min_volume)::bigint
       AND LEAST(COALESCE(rs.avg_daily_volume, 0), ss.sell_volume::double precision, ss.buy_volume::double precision) > 0
+      AND (COALESCE(rs.typical_sell, 0) <= 0 OR ss.typical_sell <= rs.typical_sell * 10)
+      AND (COALESCE(rs.typical_buy, 0) <= 0 OR ss.typical_buy * 10 >= rs.typical_buy)
 ) ranked
 ORDER BY profit DESC, type_id, location_id
 LIMIT sqlc.arg(row_cap)::bigint;

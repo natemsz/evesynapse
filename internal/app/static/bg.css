@@ -549,7 +549,14 @@ html[data-theme="light"] #main-content > .section-subtabs a.active {
   z-index: 40;
   width: min(24rem, calc(100vw - 2rem));
   padding: 0.9rem 1rem 0.8rem;
-  background: var(--glass);
+  /* Deeper than --glass: the header's own backdrop-filter makes
+     it a backdrop root, and this card hangs below the header's
+     box, outside that root's backdrop image — the blur declared
+     below samples nothing here (measured: page text behind the
+     card stays at full sharpness). Legibility comes from the
+     paint instead; the blur stays for the day the card's
+     ancestry changes. */
+  background: color-mix(in srgb, var(--panel) 93%, transparent);
   -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(0.9);
   backdrop-filter: blur(var(--glass-blur)) saturate(0.9);
   border: 1px solid var(--glass-edge);

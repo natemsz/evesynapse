@@ -179,11 +179,13 @@ type marketItem struct {
 
 // spreadBand names the spread card's color band for a spread
 // percentage, banded on the value as displayed (one decimal):
-// at or under 1% white, through 3% a soft pastel green, through
-// 5% a fuller green, beyond that a legible light baby blue. A
-// crossed book (negative spread) reads white.
+// a crossed book (negative spread) reads red, at or under 1%
+// white, through 3% a soft pastel green, through 5% a fuller
+// green, beyond that a legible light baby blue.
 func spreadBand(pct float64) string {
 	switch rounded := math.Round(pct*10) / 10; {
+	case rounded < 0:
+		return "red"
 	case rounded <= 1:
 		return "white"
 	case rounded <= 3:

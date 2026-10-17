@@ -44,7 +44,7 @@
     <div class="kpi sp-{{$item.SpreadBand}}">
       <span class="kpi-k">Spread</span>
       <span class="kpi-v spread-v">{{$item.Spread}}</span>
-      <span class="spread-bar" aria-hidden="true"><span{{if eq $item.SpreadBand "white"}} class="on"{{end}}></span><span{{if eq $item.SpreadBand "pastel"}} class="on"{{end}}></span><span{{if eq $item.SpreadBand "green"}} class="on"{{end}}></span><span{{if eq $item.SpreadBand "blue"}} class="on"{{end}}></span></span>
+      <span class="spread-bar" aria-hidden="true"><span{{if or (eq $item.SpreadBand "white") (eq $item.SpreadBand "red")}} class="on"{{end}}></span><span{{if eq $item.SpreadBand "pastel"}} class="on"{{end}}></span><span{{if eq $item.SpreadBand "green"}} class="on"{{end}}></span><span{{if eq $item.SpreadBand "blue"}} class="on"{{end}}></span></span>
       <span class="kpi-sub">Between best buy and best sell</span>
     </div>
     {{end}}

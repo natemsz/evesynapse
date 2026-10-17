@@ -1086,16 +1086,16 @@ function wireStatic() {
 // search, click to fill. The system box submits the picked NAME
 // (the server resolves names as before); the market box fills
 // a hidden field with the region id, "guide" for the pinned
-// cluster-average row.
+// Jita market row.
 function wirePlaces() {
   wirePlace("system-q", "system-suggest", "system", null, function (item, input) {
     input.value = item.name;
   });
   wirePlace("market-q", "market-suggest", "region",
-    { id: "guide", name: "Cluster average", label: "guide prices" },
+    { id: "guide", name: "Jita market", label: "Jita sell prices" },
     function (item, input) {
       input.value = item.id === "guide" ? "" : item.name;
-      input.placeholder = item.id === "guide" ? "Cluster average" : "Search regions";
+      input.placeholder = item.id === "guide" ? "Jita market" : "Search regions";
       var hidden = document.getElementById("market-value");
       if (hidden) hidden.value = item.id;
     });

@@ -258,10 +258,30 @@ func seedTritanium(t *testing.T, q *db.Queries, characterID, qty int64) {
 	})
 }
 
-func seedPlannerPrices(app *Application) {
+func seedPlannerPrices(t *testing.T, app *Application) {
+	t.Helper()
 	app.prices[34] = esi.MarketPrice{TypeID: 34, AveragePrice: 5}
 	app.prices[1001] = esi.MarketPrice{TypeID: 1001, AveragePrice: 1000}
 	app.prices[1002] = esi.MarketPrice{TypeID: 1002, AveragePrice: 100}
+	// The guide still bases job fees; plan prices resolve from
+	// the stored house sources, so the same figures are planted
+	// as Forge typical sells.
+	seedPlannerTypicals(t, app, map[int64]float64{34: 5, 1001: 1000, 1002: 100})
+}
+
+// seedPlannerTypicals plants Forge region-stat rows whose
+// typical sell carries the fixture price: the planner's first
+// price source.
+func seedPlannerTypicals(t *testing.T, app *Application, typicals map[int64]float64) {
+	t.Helper()
+	ctx := context.Background()
+	for id, typical := range typicals {
+		if _, err := app.db.ExecContext(ctx,
+			`INSERT INTO market_region_stats (region_id, type_id, typical_sell, updated_at) VALUES (10000002, $1, $2, '2026-10-16T00:00:00Z')`,
+			id, typical); err != nil {
+			t.Fatalf("seed typical %d: %v", id, err)
+		}
+	}
 }
 
 func TestPlannerJudgeCharacterBuildable(t *testing.T) {
@@ -269,7 +289,7 @@ func TestPlannerJudgeCharacterBuildable(t *testing.T) {
 	seedCharSkills(t, q, fixtureCharA, 5)
 	seedTritanium(t, q, fixtureCharA, 15)
 	seedTritanium(t, q, fixtureCharB, 1000) // must NOT count under char A's scope
-	seedPlannerPrices(app)
+	seedPlannerPrices(t, app)
 
 	path := fmt.Sprintf("/planner/?product=1001&runs=1&judge=char:%d", fixtureCharA)
 	code, body := getPage(t, app, cookie, path)
@@ -297,7 +317,7 @@ func TestPlannerJudgeCharacterBuildable(t *testing.T) {
 func TestPlannerJudgeCharacterShortSkill(t *testing.T) {
 	app, q, cookie := plannerScopeApp(t)
 	seedCharSkills(t, q, fixtureCharA, 3) // root wants I, the component wants IV
-	seedPlannerPrices(app)
+	seedPlannerPrices(t, app)
 
 	path := fmt.Sprintf("/planner/?product=1001&runs=1&judge=char:%d", fixtureCharA)
 	_, body := getPage(t, app, cookie, path)
@@ -313,7 +333,7 @@ func TestPlannerJudgeCharacterShortSkill(t *testing.T) {
 
 func TestPlannerJudgeCharacterNoSkillsYet(t *testing.T) {
 	app, _, cookie := plannerScopeApp(t)
-	seedPlannerPrices(app)
+	seedPlannerPrices(t, app)
 
 	path := fmt.Sprintf("/planner/?product=1001&runs=1&judge=char:%d", fixtureCharA)
 	_, body := getPage(t, app, cookie, path)
@@ -336,7 +356,7 @@ func TestPlannerJudgeTagBestOfAndCombinedStock(t *testing.T) {
 	seedCharSkills(t, q, fixtureCharB, 5) // the tag's best covers IV
 	seedTritanium(t, q, fixtureCharA, 15)
 	seedTritanium(t, q, fixtureCharB, 10) // combined 25 ≥ 20 needed
-	seedPlannerPrices(app)
+	seedPlannerPrices(t, app)
 
 	path := "/planner/?product=1001&runs=1&judge=tag:indy"
 	_, body := getPage(t, app, cookie, path)
@@ -356,7 +376,7 @@ func TestPlannerJudgeTagNobodyHasIt(t *testing.T) {
 	setCharTags(t, app, fixtureCharA, "indy")
 	setCharTags(t, app, fixtureCharB, "indy")
 	seedCharSkills(t, q, fixtureCharA, 1) // B has no snapshot at all
-	seedPlannerPrices(app)
+	seedPlannerPrices(t, app)
 
 	path := "/planner/?product=1001&runs=1&judge=tag:indy"
 	_, body := getPage(t, app, cookie, path)
@@ -396,7 +416,7 @@ func TestPlannerMESummaryCollapsed(t *testing.T) {
 	seedSnapshot(t, q, fixtureCharA, esi.SnapBlueprints, esi.Blueprints{
 		{ItemID: 1, TypeID: 2002, Quantity: -1, MaterialEfficiency: 8, TimeEfficiency: 12, Runs: -1},
 	})
-	seedPlannerPrices(app)
+	seedPlannerPrices(t, app)
 
 	_, body := getPage(t, app, cookie, "/planner/?product=1001&runs=1")
 	mustContain(t, "/planner/ (me summary)", body,
@@ -427,7 +447,7 @@ func TestPlannerMESummaryCollapsed(t *testing.T) {
 // resolved system name, never a raw ID.
 func TestPlannerSettingsModal(t *testing.T) {
 	app, _, cookie := plannerScopeApp(t)
-	seedPlannerPrices(app)
+	seedPlannerPrices(t, app)
 	if _, err := app.db.ExecContext(context.Background(),
 		`INSERT INTO sde_systems (system_id, name, region_id, security) VALUES (30000142, 'Jita', 10000002, 0.9)`); err != nil {
 		t.Fatalf("seed system: %v", err)
@@ -580,7 +600,7 @@ func TestPlannerPrefetchMatchesLazy(t *testing.T) {
 func TestPlannerCapitalJSONFirstLoad(t *testing.T) {
 	app, _, cookie := plannerScopeApp(t)
 	seedCapSDE(t, app)
-	seedPlannerPrices(app)
+	seedPlannerPrices(t, app)
 
 	code, body := getPage(t, app, cookie, "/planner/?product=10001&judge=&format=json")
 	if code != http.StatusOK {
@@ -622,7 +642,7 @@ func TestPlannerDefaultScopeIsActiveCharacter(t *testing.T) {
 	seedSnapshot(t, q, fixtureCharA, esi.SnapBlueprints, esi.Blueprints{
 		{ItemID: 1, TypeID: 2002, Quantity: -1, MaterialEfficiency: 8, TimeEfficiency: 12, Runs: -1},
 	})
-	seedPlannerPrices(app)
+	seedPlannerPrices(t, app)
 
 	_, body := getPage(t, app, cookie, "/planner/?product=1001&runs=1")
 	mustContain(t, "/planner/ (default scope)", body,
@@ -652,7 +672,7 @@ func TestPlannerExplicitGeneralScope(t *testing.T) {
 	seedSnapshot(t, q, fixtureCharA, esi.SnapBlueprints, esi.Blueprints{
 		{ItemID: 1, TypeID: 2002, Quantity: -1, MaterialEfficiency: 8, TimeEfficiency: 12, Runs: -1},
 	})
-	seedPlannerPrices(app)
+	seedPlannerPrices(t, app)
 
 	_, body := getPage(t, app, cookie, "/planner/?product=1001&runs=1&judge=")
 	mustContain(t, "/planner/ (general)", body,

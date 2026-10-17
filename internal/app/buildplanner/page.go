@@ -55,7 +55,7 @@ type planView struct {
 	Payload        template.JS // plan JSON for the interactive tabs; "" when none
 	Meta           *planPayload
 	Market         string // "jita" | "guide"
-	MarketName     string // "Jita 4-4 sell" | "Cluster average"
+	MarketName     string // "Jita 4-4 sell" | "Jita market"
 	SystemName     string
 	IndexLine      string
 	SlotsLine      string
@@ -396,10 +396,13 @@ func (app *planner) buildPlanView(ctx context.Context, q url.Values, productID i
 	// it: a region needs only the type IDs of the blueprint
 	// closure, which the warm above already holds. Every figure
 	// on the page, in the CSV and in the plan data then comes from
-	// the one result. Job fees are charged on adjusted prices,
-	// whatever the market.
+	// the one result. Plan prices resolve from the stored house
+	// sources (planPriceMap); job fees are charged on adjusted
+	// prices, whatever the market, so the fee base still comes
+	// from the guide.
 	guide := app.deps.ValuationPrices(ctx)
-	prices, market, marketName, pricesNote := app.planMarket(ctx, q, src.closureTypes(productID), guide)
+	closure := src.closureTypes(productID)
+	prices, market, marketName, pricesNote := app.planMarket(ctx, q, closure, app.planPriceMap(ctx, closure))
 	adjusted := planAdjustedMap(guide)
 	systemID, systemName, costIndex, indexKnown := app.planBuildSystem(ctx, q.Get("system"))
 
@@ -570,9 +573,9 @@ func (app *planner) buildPlanView(ctx context.Context, q url.Values, productID i
 	buyTotal := root.LineCost
 	if !root.CostComplete || res.UnpricedLines > 0 {
 		missing := res.UnpricedLines
-		view.PricesNote = fmt.Sprintf("Unit prices are each item's average market price across the cluster; %d shopping item(s) have no price data, so totals are partial.", missing)
+		view.PricesNote = fmt.Sprintf("Unit prices are Jita sell prices, with the stored estimated sell for contract-only items; %d shopping item(s) have no price data, so totals are partial.", missing)
 	} else {
-		view.PricesNote = "Unit prices are each item's average market price across the cluster (adjusted price where no average exists)."
+		view.PricesNote = "Unit prices are Jita sell prices, with the stored estimated sell for contract-only items."
 		view.ShoppingTotal = isk(buyTotal)
 	}
 

@@ -82,3 +82,9 @@ ORDER BY type_id, vanished_at;
 DELETE FROM true_value_contract_observations
 WHERE (vanished_at IS NULL AND expires_at < $1)
    OR (vanished_at IS NOT NULL AND vanished_at < $2);
+
+-- name: ListTrueValuesForTypes :many
+SELECT type_id, build_cost, est_sell, sell_samples, computed_at, profile_version, sell_source
+FROM true_values
+WHERE type_id = ANY($1::bigint[])
+ORDER BY type_id;

@@ -195,6 +195,7 @@ func TestPlannerRendersFromLocalData(t *testing.T) {
 	app.prices[34] = esi.MarketPrice{TypeID: 34, AveragePrice: 5}
 	app.prices[1001] = esi.MarketPrice{TypeID: 1001, AveragePrice: 1000}
 	app.prices[1002] = esi.MarketPrice{TypeID: 1002, AveragePrice: 500}
+	seedPlannerTypicals(t, app, map[int64]float64{34: 5, 1001: 1000, 1002: 500})
 	if err := q.UpsertIndustryCostIndex(ctx, db.UpsertIndustryCostIndexParams{
 		SolarSystemID: 30000142, Activity: "manufacturing", CostIndex: 0.064,
 	}); err != nil {
@@ -275,6 +276,7 @@ func TestPlannerJSONPayload(t *testing.T) {
 	app.prices[34] = esi.MarketPrice{TypeID: 34, AveragePrice: 5}
 	app.prices[1001] = esi.MarketPrice{TypeID: 1001, AveragePrice: 1000}
 	app.prices[1002] = esi.MarketPrice{TypeID: 1002, AveragePrice: 500}
+	seedPlannerTypicals(t, app, map[int64]float64{34: 5, 1001: 1000, 1002: 500})
 	if err := q.UpsertIndustryCostIndex(ctx, db.UpsertIndustryCostIndexParams{
 		SolarSystemID: 30000142, Activity: "manufacturing", CostIndex: 0.064,
 	}); err != nil {
@@ -410,12 +412,12 @@ func TestPlannerJitaMarket(t *testing.T) {
 		t.Fatalf("planner jita json decodes: %v", err)
 	}
 	// Five mineral at 6 ISK Forge sell; the finished hull at
-	// 1,100. The component has no Forge row, so it layers over
-	// its guide price instead of going unpriced.
+	// 1,100. The component has no Forge row and no stored price,
+	// so it stays unpriced and the plan builds it.
 	if p.Optimized.Landed != 3000 || p.Optimized.Value != 110000 {
 		t.Errorf("jita landed/value = %v/%v, want 3000/110000", p.Optimized.Landed, p.Optimized.Value)
 	}
-	if p.Market != "10000002" || !strings.Contains(p.PricesNote, "The Forge sell rows as of") || !strings.Contains(p.PricesNote, "cluster average elsewhere") {
+	if p.Market != "10000002" || !strings.Contains(p.PricesNote, "The Forge sell rows as of") || !strings.Contains(p.PricesNote, "Jita market elsewhere") {
 		t.Errorf("market/note = %q/%q, want region id + layered note", p.Market, p.PricesNote)
 	}
 	code, body = getPage(t, app, cookie, "/planner/?product=1001&runs=1&market=jita")
@@ -468,6 +470,7 @@ func TestPlannerRegionWithoutRowsFallsBackToGuide(t *testing.T) {
 	app.prices[34] = esi.MarketPrice{TypeID: 34, AveragePrice: 5}
 	app.prices[1001] = esi.MarketPrice{TypeID: 1001, AveragePrice: 1000}
 	app.prices[1002] = esi.MarketPrice{TypeID: 1002, AveragePrice: 500}
+	seedPlannerTypicals(t, app, map[int64]float64{34: 5, 1001: 1000, 1002: 500})
 	if err := q.UpsertIndustryCostIndex(ctx, db.UpsertIndustryCostIndexParams{
 		SolarSystemID: 30000142, Activity: "manufacturing", CostIndex: 0.064,
 	}); err != nil {
@@ -486,10 +489,10 @@ func TestPlannerRegionWithoutRowsFallsBackToGuide(t *testing.T) {
 	if p.Market != "10000043" {
 		t.Errorf("market = %q, want the picked region id", p.Market)
 	}
-	if !strings.Contains(p.PricesNote, "no sell rows on file yet; cluster average shown.") {
-		t.Errorf("prices note = %q, want the guide fallback note", p.PricesNote)
+	if !strings.Contains(p.PricesNote, "no sell rows on file yet; Jita market shown.") {
+		t.Errorf("prices note = %q, want the fallback note", p.PricesNote)
 	}
-	// Same totals as the plain guide plan: 142.16 landed
+	// Same totals as the plain Jita-market plan: 142.16 landed
 	// (25.00 materials + 117.16 fees), 1,000.00 value.
 	if p.Optimized.Landed != 14216 || p.Optimized.Value != 100000 || !p.Optimized.Known {
 		t.Errorf("fallback landed/value/known = %v/%v/%v, want 14216/100000/true",
@@ -537,6 +540,7 @@ func TestPlannerStructureBonuses(t *testing.T) {
 	app.prices[34] = esi.MarketPrice{TypeID: 34, AveragePrice: 5}
 	app.prices[1001] = esi.MarketPrice{TypeID: 1001, AveragePrice: 1000}
 	app.prices[1002] = esi.MarketPrice{TypeID: 1002, AveragePrice: 500}
+	seedPlannerTypicals(t, app, map[int64]float64{34: 5, 1001: 1000, 1002: 500})
 	if err := q.UpsertIndustryCostIndex(ctx, db.UpsertIndustryCostIndexParams{
 		SolarSystemID: 30000142, Activity: "manufacturing", CostIndex: 0.064,
 	}); err != nil {

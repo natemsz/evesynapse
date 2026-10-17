@@ -497,6 +497,10 @@ SELECT region_id, type_id, best_sell, typical_sell, sell_band, best_buy, typical
 FROM market_region_stats
 WHERE region_id = $1
 ORDER BY type_id;
+-- name: ListMarketRegionStatsForTypes :many
+SELECT region_id, type_id, best_sell, typical_sell, sell_band, best_buy, typical_buy, buy_band, sell_orders, buy_orders, sell_volume, buy_volume, updated_at, avg_daily_volume
+FROM market_region_stats
+WHERE region_id = $1 AND type_id = ANY($2::bigint[]);
 -- name: ListMarketAvgDailyVolumes :many
 -- The sold-per-day figure the sweep stores on each region stat:
 -- the mean recorded daily volume over the seven calendar days

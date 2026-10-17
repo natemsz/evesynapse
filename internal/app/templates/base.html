@@ -144,6 +144,7 @@
     {{with .Notify}}<details class="notify{{if .Unread}} has-unread{{end}}" id="notify-menu"{{if $.NotifyPoll}} data-poll="{{$.NotifyPoll}}"{{end}}>
 {{template "notify-bell" .}}
     </details>{{end}}
+    {{if .NotifyPrompt}}{{template "notify-prompt" .NotifyPrompt}}{{end}}
     <div class="topbar-character">
       {{range .Switcher}}{{if .Active}}<img class="portrait topbar-portrait" src="{{.PortraitURL}}" alt="" width="32" height="32">{{end}}{{end}}      <span class="topbar-character-name">{{.CharacterName}}</span>
       {{if .Switcher}}

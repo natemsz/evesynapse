@@ -9,6 +9,12 @@
 <p><small>Choose what EveSynapse tells you about, and for which of your characters. Notifications show in the top bar; what you switch off is not shown, and switching it back on starts from then, not from what you missed.</small></p>
 
 <form method="post" action="/notifications/settings">
+<input type="hidden" name="channels_shown" value="1">
+<p><small>Where they reach you:</small></p>
+<p class="notify-channels">
+  <label><input type="checkbox" name="channel_inapp" value="1"{{if .InApp}} checked{{end}}> In EveSynapse <small>— the bell at the top of the page</small></label>
+  {{if .PushConfigured}}<label><input type="checkbox" name="channel_desktop" value="1"{{if .Desktop}} checked{{end}}> In my browsers <small>— each browser is switched on under Browser notifications, below</small></label>{{end}}
+</p>
 <div class="tw notify-settings-wrap">
 <table class="notify-settings">
   <thead>

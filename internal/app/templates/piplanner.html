@@ -94,7 +94,7 @@
 
 <h3>Suggested colonies</h3>
 {{range .PIPlanner.Colonies}}
-<section class="foldable" data-fold="never">
+<section class="foldable pi-colony" data-fold="never">
   <h4>{{.Title}} <small>· {{.Planet}} · {{.CPU}} · {{if .Fits}}fits{{else}}over budget: split the colony or upgrade the command center{{end}}</small></h4>
   <p><small>{{.Detail}}</small></p>
   <ul>{{range .Breakdown}}<li><small>{{.}}</small></li>{{end}}</ul>

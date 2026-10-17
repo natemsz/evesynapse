@@ -125,6 +125,8 @@
     <tr><th>Market</th><td>{{if $d.OnMarket}}Traded on the market{{else}}Not traded on the market{{end}}</td></tr>
     {{if $d.AveragePrice}}<tr><th>Average price</th><td>{{$d.AveragePrice}} ISK</td></tr>{{end}}
     {{if $d.AdjustedPrice}}<tr><th>Adjusted price</th><td>{{$d.AdjustedPrice}} ISK</td></tr>{{end}}
+    {{if $d.BuildCost}}<tr><th>Build cost</th><td>{{$d.BuildCost}} ISK</td></tr>{{end}}
+    {{if $d.EstimatedSell}}<tr><th>Estimated sell</th><td>{{$d.EstimatedSell}} ISK ({{$d.EstimatedSellNote}})</td></tr>{{end}}
   </tbody>
 </table>
 </div>

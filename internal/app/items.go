@@ -136,6 +136,16 @@ type itemTypeDetail struct {
 	AveragePrice  string // guide prices, "" when unknown
 	AdjustedPrice string
 
+	// The worker's true value (truevalue.go), present only
+	// for types the market cannot price: the build cost and
+	// the estimated sell with its basis in plain words. When
+	// an estimated sell exists and the guide has no average,
+	// it replaces the adjusted price as the page's price --
+	// CCP's number for such a type is a fossil.
+	BuildCost         string // "" when no true value is stored
+	EstimatedSell     string // "" when no true value is stored
+	EstimatedSellNote string // "from N public contracts" | "anchored to build cost"
+
 	HasDescription     bool
 	Description        template.HTML // sanitized like mail bodies
 	DescriptionPending bool          // asked for; fills in on a coming sync cycle
@@ -636,6 +646,22 @@ func (app *Application) buildItemTypeDetail(ctx context.Context, t db.SdeType) *
 		}
 		if p.AdjustedPrice > 0 {
 			detail.AdjustedPrice = esi.FormatISK(p.AdjustedPrice)
+		}
+	}
+
+	// True value: the stored bottom-up price, shown for the
+	// types it exists for (the worker stores an estimated
+	// sell only where the market cannot price the type).
+	// Without a guide average it is the price of record, so
+	// the adjusted row steps aside rather than posing as one.
+	if tv, ok := app.storedTrueValues(ctx)[typeID]; ok && tv.EstSell.Valid && tv.EstSell.Float64 > 0 {
+		if tv.BuildCost > 0 {
+			detail.BuildCost = esi.FormatISK(tv.BuildCost)
+		}
+		detail.EstimatedSell = esi.FormatISK(tv.EstSell.Float64)
+		detail.EstimatedSellNote = trueValueBasis(tv)
+		if detail.AveragePrice == "" {
+			detail.AdjustedPrice = ""
 		}
 	}
 

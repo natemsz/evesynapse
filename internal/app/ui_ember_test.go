@@ -106,6 +106,22 @@ func TestEmberGlassAndSkyRules(t *testing.T) {
 			t.Errorf("bg.css is missing the tab/item-lead rule %q", want)
 		}
 	}
+	// Below the corporation strip's wrap point (1,740px viewport)
+	// the folder strip falls back to pills inside the glass: the
+	// row takes the panel's glass and joins it with no seam, the
+	// pills wrap across rows, and the active pill carries the
+	// accent fill and edge instead of the stripe.
+	for _, want := range []string{
+		"@media (max-width: 1739px) {",
+		"#main-content:has(> .section-tabs) > .page-body { border-top: none; }",
+		"padding: 0.85rem 1.25rem 0.9rem;",
+		"border-top: 1px solid rgba(255, 106, 0, 0.40);",
+		"border-bottom: 1px solid rgba(255, 106, 0, 0.40);",
+	} {
+		if !strings.Contains(bg, want) {
+			t.Errorf("bg.css is missing the mobile tab fallback rule %q", want)
+		}
+	}
 	if !strings.Contains(style, ".page-body { padding: 1.25rem 1.25rem 1.5rem; }") ||
 		!strings.Contains(style, ".tw { overflow-x: auto;") ||
 		!strings.Contains(style, ".card .tw, .panel .tw, .foldable .tw { background: none;") ||

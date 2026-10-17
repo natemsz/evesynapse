@@ -309,15 +309,47 @@ html[data-theme="light"] #main-content > .section-tabs a.active {
   border-left-color: var(--glass-edge);
   border-right-color: var(--glass-edge);
 }
-@media (max-width: 719px) {
+@media (max-width: 1739px) {
+  /* Below the fit width, the folder strip gives up its silhouette
+     and falls back to the old in-body pills. The width is the
+     corporation strip's wrap point, not a phone size: it is the
+     widest strip in the app at 1,369px of tabs and stops fitting
+     on one line under a ~1,705px viewport, so the fallback
+     engages at any window size below 1,740px rather than letting
+     a wrapped row of folder tabs hang off the panel. The row
+     takes the panel's own glass — same fill, blur and edge,
+     joined to the panel with no seam — so the pills sit inside
+     the glass at the top of the panel and wrap across rows. The
+     active pill trades the folder stripe for the accent fill and
+     edge the site's other pills use. Above this width the folder
+     tabs are untouched. */
   #main-content > .section-tabs {
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    scrollbar-width: thin;
-    padding-bottom: 0.2rem;
-    margin-top: 0.45rem;
+    flex-wrap: wrap;
+    overflow-x: visible;
+    gap: 0.4rem;
+    margin: 1rem 1.25rem 0;
+    padding: 0.85rem 1.25rem 0.9rem;
+    background: var(--glass);
+    -webkit-backdrop-filter: blur(25px) saturate(0.9);
+    backdrop-filter: blur(25px) saturate(0.9);
+    border: 1px solid var(--glass-edge);
+    border-bottom: none;
+    border-radius: var(--r-lg) var(--r-lg) 0 0;
   }
-  #main-content > .section-tabs a { flex: none; }
+  #main-content:has(> .section-tabs) > .page-body { border-top: none; }
+  #main-content > .section-tabs a {
+    flex: none;
+    border-radius: var(--r-sm);
+    padding: 0.5rem 0.85rem;
+  }
+  #main-content > .section-tabs a.active {
+    background: rgba(255, 106, 0, 0.20);
+    border-top: 1px solid rgba(255, 106, 0, 0.40);
+    border-bottom: 1px solid rgba(255, 106, 0, 0.40);
+    border-left-color: rgba(255, 106, 0, 0.40);
+    border-right-color: rgba(255, 106, 0, 0.40);
+    padding-top: 0.5rem;
+  }
 }
 
 /* Item page lead (the description placement mock): the icon sits

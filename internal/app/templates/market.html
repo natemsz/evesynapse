@@ -89,7 +89,7 @@
         {{if .HasData}}
         <td>{{if .TypicalSell}}{{.TypicalSell}} ISK{{else}}—{{end}}</td>
         <td>{{if .TypicalBuy}}{{.TypicalBuy}} ISK{{else}}—{{end}}</td>
-        <td><small>{{.Age}}</small></td>
+        <td><small>{{if .Source}}{{.Source}} · {{end}}{{.Age}}</small></td>
         {{else}}
         <td colspan="3"><small>No data yet</small></td>
         {{end}}

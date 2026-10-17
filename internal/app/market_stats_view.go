@@ -14,33 +14,46 @@ import (
 )
 
 // marketRegionStatRow is one hub row of the item page's regions
-// strip, built from stored sweep stats only.
+// strip, built from stored stats only: our sweep's row, or the
+// fallback mirror's where the swap in market_fallback.go picks
+// it (Source names it, in that case).
 type marketRegionStatRow struct {
 	RegionID    int64
 	RegionName  string
 	Active      bool   // the region the page is currently showing
-	HasData     bool   // a sweep has covered this type in this region
+	HasData     bool   // a stored row speaks for this type in this region
 	TypicalSell string // esi.FormatISK, "" when no sell orders
 	TypicalBuy  string // esi.FormatISK, "" when no buy orders
 	Age         string // "12 minutes ago", "" when HasData is false
+	Source      string // fallbackSourceLabel on fallback rows, "" on our own
 }
 
 // attachRegionStats fills an item view's hub-regions strip from
-// market_region_stats. Pure database read -- the strip never
-// triggers a fetch; regions the worker has not swept yet render
-// as "no data yet".
+// the stored region stats, our own and the fallback mirror's,
+// picked between per region by the swap (resolvedRegionTypicals).
+// Pure database read -- the strip never triggers a fetch;
+// regions no stored row speaks for render as "no data yet".
 func (app *Application) attachRegionStats(ctx context.Context, item *marketItem) {
 	if item == nil {
 		return
 	}
-	byRegion := make(map[int64]db.MarketRegionStat)
+	ownByRegion := make(map[int64]*db.MarketRegionStat)
 	if rows, err := app.queries.ListMarketRegionStatsByType(ctx, item.TypeID); err != nil {
 		logging.Errorf("market: region stats for type %d: %v", item.TypeID, err)
 	} else {
-		for _, row := range rows {
-			byRegion[row.RegionID] = row
+		for i := range rows {
+			ownByRegion[rows[i].RegionID] = &rows[i]
 		}
 	}
+	fallbackByRegion := make(map[int64]*db.MarketStatsFallback)
+	if rows, err := app.queries.ListMarketStatsFallbackByType(ctx, item.TypeID); err != nil {
+		logging.Errorf("market: fallback stats for type %d: %v", item.TypeID, err)
+	} else {
+		for i := range rows {
+			fallbackByRegion[rows[i].RegionID] = &rows[i]
+		}
+	}
+	now := time.Now()
 	item.RegionStats = item.RegionStats[:0]
 	for _, region := range marketRegions {
 		row := marketRegionStatRow{
@@ -48,15 +61,18 @@ func (app *Application) attachRegionStats(ctx context.Context, item *marketItem)
 			RegionName: region.Name,
 			Active:     region.ID == item.RegionID,
 		}
-		if stat, ok := byRegion[region.ID]; ok {
+		if res, ok := resolvedRegionTypicals(ownByRegion[region.ID], fallbackByRegion[region.ID], now); ok {
 			row.HasData = true
-			if stat.TypicalSell > 0 {
-				row.TypicalSell = esi.FormatISK(stat.TypicalSell)
+			if res.TypicalSell > 0 {
+				row.TypicalSell = esi.FormatISK(res.TypicalSell)
 			}
-			if stat.TypicalBuy > 0 {
-				row.TypicalBuy = esi.FormatISK(stat.TypicalBuy)
+			if res.TypicalBuy > 0 {
+				row.TypicalBuy = esi.FormatISK(res.TypicalBuy)
 			}
-			row.Age = ageText(time.Now(), stat.UpdatedAt)
+			row.Age = ageText(now, res.AsOf)
+			if res.Fallback {
+				row.Source = fallbackSourceLabel
+			}
 		}
 		item.RegionStats = append(item.RegionStats, row)
 	}

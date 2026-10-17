@@ -117,6 +117,20 @@ func (q *Queries) DeleteMarketStationStatsByRegion(ctx context.Context, regionID
 	return err
 }
 
+const deleteMarketStatsFallback = `-- name: DeleteMarketStatsFallback :exec
+DELETE FROM market_stats_fallback
+`
+
+// Fallback stats (schema 054): the Fuzzwork aggregate mirror.
+// One wholesale replacement per orderset inside one
+// transaction (delete, then insert), the guide-prices pattern;
+// readers pick between this table and market_region_stats at
+// read time and never see a half-written snapshot.
+func (q *Queries) DeleteMarketStatsFallback(ctx context.Context) error {
+	_, err := q.db.ExecContext(ctx, deleteMarketStatsFallback)
+	return err
+}
+
 const deleteMarketSweepOrdersByRegion = `-- name: DeleteMarketSweepOrdersByRegion :exec
 DELETE FROM market_sweep_orders
 WHERE region_id = $1
@@ -418,6 +432,56 @@ func (q *Queries) GetMarketStationStatsStamp(ctx context.Context, regionID int64
 	row := q.db.QueryRowContext(ctx, getMarketStationStatsStamp, regionID)
 	var i GetMarketStationStatsStampRow
 	err := row.Scan(&i.Stamp, &i.RowCount)
+	return i, err
+}
+
+const getMarketStatsFallback = `-- name: GetMarketStatsFallback :one
+SELECT region_id, type_id, median_sell, fivepct_sell, median_buy, fivepct_buy, sell_orders, buy_orders, sell_volume, buy_volume, source, orderset_id, source_asof, fetched_at
+FROM market_stats_fallback
+WHERE region_id = $1 AND type_id = $2
+`
+
+type GetMarketStatsFallbackParams struct {
+	RegionID int64 `json:"region_id"`
+	TypeID   int64 `json:"type_id"`
+}
+
+func (q *Queries) GetMarketStatsFallback(ctx context.Context, arg GetMarketStatsFallbackParams) (MarketStatsFallback, error) {
+	row := q.db.QueryRowContext(ctx, getMarketStatsFallback, arg.RegionID, arg.TypeID)
+	var i MarketStatsFallback
+	err := row.Scan(
+		&i.RegionID,
+		&i.TypeID,
+		&i.MedianSell,
+		&i.FivepctSell,
+		&i.MedianBuy,
+		&i.FivepctBuy,
+		&i.SellOrders,
+		&i.BuyOrders,
+		&i.SellVolume,
+		&i.BuyVolume,
+		&i.Source,
+		&i.OrdersetID,
+		&i.SourceAsof,
+		&i.FetchedAt,
+	)
+	return i, err
+}
+
+const getMarketStatsFallbackMeta = `-- name: GetMarketStatsFallbackMeta :one
+SELECT id, orderset_id, fetched_at, row_count FROM market_stats_fallback_meta
+WHERE id = 1
+`
+
+func (q *Queries) GetMarketStatsFallbackMeta(ctx context.Context) (MarketStatsFallbackMetum, error) {
+	row := q.db.QueryRowContext(ctx, getMarketStatsFallbackMeta)
+	var i MarketStatsFallbackMetum
+	err := row.Scan(
+		&i.ID,
+		&i.OrdersetID,
+		&i.FetchedAt,
+		&i.RowCount,
+	)
 	return i, err
 }
 
@@ -731,6 +795,48 @@ func (q *Queries) InsertMarketBookOrder(ctx context.Context, arg InsertMarketBoo
 		arg.LocationID,
 		arg.SystemID,
 		arg.UpdatedAt,
+	)
+	return err
+}
+
+const insertMarketStatsFallback = `-- name: InsertMarketStatsFallback :exec
+INSERT INTO market_stats_fallback (region_id, type_id, median_sell, fivepct_sell, median_buy, fivepct_buy, sell_orders, buy_orders, sell_volume, buy_volume, source, orderset_id, source_asof, fetched_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+`
+
+type InsertMarketStatsFallbackParams struct {
+	RegionID    int64     `json:"region_id"`
+	TypeID      int64     `json:"type_id"`
+	MedianSell  float64   `json:"median_sell"`
+	FivepctSell float64   `json:"fivepct_sell"`
+	MedianBuy   float64   `json:"median_buy"`
+	FivepctBuy  float64   `json:"fivepct_buy"`
+	SellOrders  int64     `json:"sell_orders"`
+	BuyOrders   int64     `json:"buy_orders"`
+	SellVolume  float64   `json:"sell_volume"`
+	BuyVolume   float64   `json:"buy_volume"`
+	Source      string    `json:"source"`
+	OrdersetID  int64     `json:"orderset_id"`
+	SourceAsof  time.Time `json:"source_asof"`
+	FetchedAt   time.Time `json:"fetched_at"`
+}
+
+func (q *Queries) InsertMarketStatsFallback(ctx context.Context, arg InsertMarketStatsFallbackParams) error {
+	_, err := q.db.ExecContext(ctx, insertMarketStatsFallback,
+		arg.RegionID,
+		arg.TypeID,
+		arg.MedianSell,
+		arg.FivepctSell,
+		arg.MedianBuy,
+		arg.FivepctBuy,
+		arg.SellOrders,
+		arg.BuyOrders,
+		arg.SellVolume,
+		arg.BuyVolume,
+		arg.Source,
+		arg.OrdersetID,
+		arg.SourceAsof,
+		arg.FetchedAt,
 	)
 	return err
 }
@@ -1692,6 +1798,51 @@ func (q *Queries) ListMarketStationStatsByRegion(ctx context.Context, regionID i
 			&i.UpdatedAt,
 			&i.TypicalSell,
 			&i.TypicalBuy,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listMarketStatsFallbackByType = `-- name: ListMarketStatsFallbackByType :many
+SELECT region_id, type_id, median_sell, fivepct_sell, median_buy, fivepct_buy, sell_orders, buy_orders, sell_volume, buy_volume, source, orderset_id, source_asof, fetched_at
+FROM market_stats_fallback
+WHERE type_id = $1
+ORDER BY region_id
+`
+
+func (q *Queries) ListMarketStatsFallbackByType(ctx context.Context, typeID int64) ([]MarketStatsFallback, error) {
+	rows, err := q.db.QueryContext(ctx, listMarketStatsFallbackByType, typeID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []MarketStatsFallback
+	for rows.Next() {
+		var i MarketStatsFallback
+		if err := rows.Scan(
+			&i.RegionID,
+			&i.TypeID,
+			&i.MedianSell,
+			&i.FivepctSell,
+			&i.MedianBuy,
+			&i.FivepctBuy,
+			&i.SellOrders,
+			&i.BuyOrders,
+			&i.SellVolume,
+			&i.BuyVolume,
+			&i.Source,
+			&i.OrdersetID,
+			&i.SourceAsof,
+			&i.FetchedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -3473,6 +3624,26 @@ func (q *Queries) UpsertMarketStationStat(ctx context.Context, arg UpsertMarketS
 		arg.BuyVolume,
 		arg.UpdatedAt,
 	)
+	return err
+}
+
+const upsertMarketStatsFallbackMeta = `-- name: UpsertMarketStatsFallbackMeta :exec
+INSERT INTO market_stats_fallback_meta (id, orderset_id, fetched_at, row_count)
+VALUES (1, $1, $2, $3)
+ON CONFLICT (id) DO UPDATE SET
+    orderset_id = excluded.orderset_id,
+    fetched_at  = excluded.fetched_at,
+    row_count   = excluded.row_count
+`
+
+type UpsertMarketStatsFallbackMetaParams struct {
+	OrdersetID int64        `json:"orderset_id"`
+	FetchedAt  sql.NullTime `json:"fetched_at"`
+	RowCount   int64        `json:"row_count"`
+}
+
+func (q *Queries) UpsertMarketStatsFallbackMeta(ctx context.Context, arg UpsertMarketStatsFallbackMetaParams) error {
+	_, err := q.db.ExecContext(ctx, upsertMarketStatsFallbackMeta, arg.OrdersetID, arg.FetchedAt, arg.RowCount)
 	return err
 }
 

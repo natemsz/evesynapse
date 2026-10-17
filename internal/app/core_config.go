@@ -88,6 +88,7 @@ type Config struct {
 	eveCallbackURL  string         // OAuth2 redirect URI registered with CCP
 	devLogin        bool           // DEV_LOGIN=1: register the /dev-login route
 	sdeBaseURL      string         // EVE SDE CSV dump base URL (Fuzzwork by default)
+	fuzzworkBaseURL string         // Fuzzwork market aggregate base URL (fallback prices)
 	adminCharIDs    map[int64]bool // EVE_ADMIN_CHARACTER_IDS (comma-separated)
 	tokenKey        string         // TOKEN_ENCRYPTION_KEY: encrypts stored EVE tokens ("" = stored as they are)
 	signUp          signUpPolicy   // EVE_ALLOWED_*_IDS: who may create an account (empty = anyone)
@@ -191,6 +192,25 @@ func (c Config) publicHostIsLocal() bool {
 // under /dump/latest/csv/.
 const defaultSDEBaseURL = "https://www.fuzzwork.co.uk/dump/latest/csv/"
 
+// defaultFuzzworkBaseURL is Fuzzwork's market aggregate service:
+// the orderset poll and the bulk aggregate CSV the fallback
+// price mirror reads.
+const defaultFuzzworkBaseURL = "https://market.fuzzwork.co.uk/"
+
+// FuzzworkBaseURL returns the base URL the fallback price
+// mirror polls and downloads from, always with a trailing
+// slash.
+func (c Config) FuzzworkBaseURL() string {
+	base := c.fuzzworkBaseURL
+	if base == "" {
+		base = defaultFuzzworkBaseURL
+	}
+	if !strings.HasSuffix(base, "/") {
+		base += "/"
+	}
+	return base
+}
+
 // SDEBaseURL returns the base URL the SDE importer downloads the
 // CSV tables from, always with a trailing slash.
 func (c Config) SDEBaseURL() string {
@@ -236,6 +256,7 @@ func LoadConfig() (Config, error) {
 		eveCallbackURL:      getenvDefault("EVE_CALLBACK_URL", "http://localhost:8080/auth/callback"),
 		devLogin:            os.Getenv("DEV_LOGIN") == "1",
 		sdeBaseURL:          getenvDefault("EVE_SDE_BASE_URL", defaultSDEBaseURL),
+		fuzzworkBaseURL:     getenvDefault("EVE_FUZZWORK_BASE_URL", defaultFuzzworkBaseURL),
 		adminCharIDs:        parseAdminCharIDs(os.Getenv("EVE_ADMIN_CHARACTER_IDS")),
 		tokenKey:            os.Getenv("TOKEN_ENCRYPTION_KEY"),
 		signUp:              loadSignUpPolicy(os.Getenv),

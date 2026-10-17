@@ -288,6 +288,13 @@ var pgTrueValueEvidenceSchema string
 //go:embed schema_pg/053_station_typicals.sql
 var pgStationTypicalsSchema string
 
+// Step 054: the Fuzzwork fallback stats in their own table
+// (never the sweep tables), with provenance per row, and the
+// mirror's bookkeeping row.
+//
+//go:embed schema_pg/054_market_stats_fallback.sql
+var pgMarketStatsFallbackSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -370,6 +377,7 @@ func schemaSteps() []schemaStep {
 		{51, "true_values", pgTrueValuesSchema, ""},
 		{52, "true_value_evidence", pgTrueValueEvidenceSchema, ""},
 		{53, "station_typicals", pgStationTypicalsSchema, ""},
+		{54, "market_stats_fallback", pgMarketStatsFallbackSchema, ""},
 	}
 }
 

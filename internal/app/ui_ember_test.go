@@ -22,9 +22,9 @@ func TestEmberGlassAndSkyRules(t *testing.T) {
 	style, bg, plan, link := read("style.css"), read("bg.css"), read("plan.css"), read("link.css")
 
 	for _, want := range []string{
-		"--glass: color-mix(in srgb, var(--panel) 83%, transparent)",
+		"--glass: color-mix(in srgb, var(--panel) 78%, transparent)",
 		"--glass-edge: color-mix(in srgb, var(--accent) 24%, transparent)",
-		"--glass-blur: 47px",
+		"--glass-blur: 42px",
 		"-webkit-backdrop-filter: blur(var(--glass-blur)) saturate(0.9)",
 		"backdrop-filter: blur(var(--glass-blur)) saturate(0.9)",
 		".brief-card:hover, .brief-card:focus-within",

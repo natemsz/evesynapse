@@ -387,3 +387,19 @@ html[data-theme="light"] #main-content > .section-tabs a.active {
 .fit-charge-opt:hover { border-color: rgba(255, 130, 20, 0.5); }
 .fit-charge-opt.on { border-color: var(--accent); background: rgba(255, 110, 0, 0.14); }
 .fit-charge-unload { color: var(--muted); }
+
+/* Characters page: the active character's row. In style.css the
+   row's tint is a translucent amber (tbody tr.yours td), but a
+   later same-specificity rule repaints every cell the flat
+   #2a2015, and the pinned first cell carries that same solid
+   as its own rule — so the active row reads as an opaque muddy
+   band and the name cell reads untinted. Here the whole row,
+   name cell included, takes one ember tint instead:
+   translucent, so the glass and the sky still show through,
+   warm and saturated enough that the row is unmistakably the
+   active one. The pinned cell stays translucent too: content
+   scrolling under it while the table scrolls sideways is the
+   accepted trade. Scoped to the characters table — the wars
+   table's own .yours rows keep the style.css treatment. */
+.chars-table tbody tr.yours td { background: rgba(255, 110, 0, 0.16); }
+.chars-table tbody tr.yours td:first-child { background: rgba(255, 110, 0, 0.16); }

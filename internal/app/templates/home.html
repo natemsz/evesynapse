@@ -1,7 +1,7 @@
 {{define "title"}}{{if .LoggedIn}}Home{{else}}EVE Online Fleet, Market & Fitting Tools{{end}}{{end}}
+{{define "pagetitle"}}{{if .LoggedIn}}<h1><span class="gt">Overview</span></h1>{{else}}<h1><span class="gt">Welcome</span></h1>{{end}}{{end}}
 {{define "content"}}
 {{if .LoggedIn}}
-<h1><span class="gt">Overview</span></h1>
 
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
 
@@ -503,7 +503,6 @@
 {{end}}
 
 {{else}}
-<h1><span class="gt">Welcome</span></h1>
 <p>An EVE Online companion for your characters, the market, fitting and intel.</p>
 {{if .ServerStatus}}<p><small>Tranquility: {{.ServerStatus.Players}} players online</small></p>{{end}}
 

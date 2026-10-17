@@ -1,9 +1,9 @@
 {{define "title"}}{{with .PublicFit}}{{.Card.Name}}{{else}}Public Fit{{end}}{{end}}
+{{define "pagetitle"}}{{with .PublicFit}}<h1><span class="gt">{{.Card.Name}}</span></h1>{{end}}{{end}}
 {{define "content"}}
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
 
 {{with .PublicFit}}
-<h1><span class="gt">{{.Card.Name}}</span></h1>
 <p class="browse-back"><a href="/fittings/public/">← Public fits</a></p>
 <section class="card page-card">
 <div class="fit-pubhead">

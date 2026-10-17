@@ -47,7 +47,13 @@
       <span class="kpi-k">Spread</span>
       <span class="kpi-v spread-v">{{$item.Spread}}</span>
       <span class="spread-bar" aria-hidden="true"><span{{if or (eq $item.SpreadBand "white") (eq $item.SpreadBand "red")}} class="on"{{end}}></span><span{{if eq $item.SpreadBand "pastel"}} class="on"{{end}}></span><span{{if eq $item.SpreadBand "green"}} class="on"{{end}}></span><span{{if eq $item.SpreadBand "blue"}} class="on"{{end}}></span></span>
-      <span class="kpi-sub">Between best buy and best sell</span>
+      <span class="kpi-sub">Between typical buy and typical sell</span>
+    </div>
+    {{else if $item.SpreadThin}}
+    <div class="kpi">
+      <span class="kpi-k">Spread</span>
+      <span class="kpi-v">Thin book</span>
+      <span class="kpi-sub">{{$item.SpreadThin}}</span>
     </div>
     {{end}}
     {{end}}

@@ -130,8 +130,9 @@ type marketItem struct {
 	BestBuy           string // esi.FormatISK, "" when no buy orders
 	BestSellLoc       placeRef
 	BestBuyLoc        placeRef
-	Spread            string // "12.3%", "" unless both sides exist
+	Spread            string // "12.3%", "" unless both sides exist and the book is deep enough
 	SpreadBand        string // color band for the spread card: white|pastel|green|blue
+	SpreadThin        string // thin-book note for the spread card when a side is too shallow to quote, "" otherwise
 	SellOrders        int
 	BuyOrders         int
 	SellVolume        string // esi.FormatInt of summed volume_remain
@@ -187,6 +188,32 @@ type marketItem struct {
 	// a region never triggers a fetch. Empty until the item view
 	// is built with a type.
 	RegionStats []marketRegionStatRow
+}
+
+// spreadBookDepth is the deepest thin book, per side, whose
+// spread the item page still refuses to quote: at this many
+// orders or fewer, a side's median is one order's price, so
+// the spread card names the thin book instead (see loadMarketItem).
+const spreadBookDepth = 3
+
+// thinBookNote words the spread card's thin-book state: which
+// side is too shallow to quote a spread from, and by how much.
+func thinBookNote(sellOrders, buyOrders int) string {
+	orders := func(n int, side string) string {
+		if n == 1 {
+			return "only 1 " + side + " order"
+		}
+		return fmt.Sprintf("only %d %s orders", n, side)
+	}
+	switch {
+	case sellOrders <= spreadBookDepth && buyOrders <= spreadBookDepth:
+		return "Too few orders to quote a spread: " +
+			orders(sellOrders, "sell") + " and " + orders(buyOrders, "buy") + "."
+	case sellOrders <= spreadBookDepth:
+		return "Too few orders to quote a spread: " + orders(sellOrders, "sell") + "."
+	default:
+		return "Too few orders to quote a spread: " + orders(buyOrders, "buy") + "."
+	}
 }
 
 // spreadBand names the spread card's color band for a spread
@@ -883,32 +910,51 @@ func (app *Application) loadMarketItem(ctx context.Context, typeID, regionID int
 		item.BestBuy = esi.FormatISK(buys[0].Price)
 		item.BestBuyLoc = app.orderPlace(ctx, buys[0].LocationID, buys[0].SystemID)
 	}
-	if len(sells) > 0 && len(buys) > 0 && buys[0].Price > 0 {
-		pct := (sells[0].Price - buys[0].Price) / buys[0].Price * 100
-		item.Spread = fmt.Sprintf("%.1f%%", pct)
-		item.SpreadBand = spreadBand(pct)
-	}
-
+	// The typicals come first: the spread below is priced from
+	// them, so the card never quotes a gap the book's own median
+	// orders do not support.
+	var typicalSell, typicalBuy float64
 	if fromSnapshot != nil {
 		// The sweep's own whole-book figures: summarizing the
 		// top few stored orders would invent a median the full
 		// book never had.
-		if fromSnapshot.TypicalSell > 0 {
-			item.TypicalSell = esi.FormatISK(fromSnapshot.TypicalSell)
+		typicalSell, typicalBuy = fromSnapshot.TypicalSell, fromSnapshot.TypicalBuy
+		if typicalSell > 0 {
+			item.TypicalSell = esi.FormatISK(typicalSell)
 			item.SellBand = esi.FormatISK(fromSnapshot.SellBand)
 		}
-		if fromSnapshot.TypicalBuy > 0 {
-			item.TypicalBuy = esi.FormatISK(fromSnapshot.TypicalBuy)
+		if typicalBuy > 0 {
+			item.TypicalBuy = esi.FormatISK(typicalBuy)
 			item.BuyBand = esi.FormatISK(fromSnapshot.BuyBand)
 		}
 	} else {
 		if stats, ok := summarizeBook(sells); ok {
+			typicalSell = stats.Median
 			item.TypicalSell = esi.FormatISK(stats.Median)
 			item.SellBand = esi.FormatISK(stats.High90)
 		}
 		if stats, ok := summarizeBook(buys); ok {
+			typicalBuy = stats.Median
 			item.TypicalBuy = esi.FormatISK(stats.Median)
 			item.BuyBand = esi.FormatISK(stats.Low90)
+		}
+	}
+
+	// The spread card: typical against typical, and only from a
+	// book deep enough for a median to mean anything. At three
+	// or fewer orders a side the "typical" is still one order's
+	// price wearing a median's clothes, so the card names the
+	// thin book instead of printing a percentage the extremes
+	// manufactured (one hopeful ask over a deep bid side used
+	// to read as a 2000% spread).
+	if item.SellOrders > 0 && item.BuyOrders > 0 {
+		switch {
+		case item.SellOrders <= spreadBookDepth || item.BuyOrders <= spreadBookDepth:
+			item.SpreadThin = thinBookNote(item.SellOrders, item.BuyOrders)
+		case typicalBuy > 0:
+			pct := (typicalSell - typicalBuy) / typicalBuy * 100
+			item.Spread = fmt.Sprintf("%.1f%%", pct)
+			item.SpreadBand = spreadBand(pct)
 		}
 	}
 

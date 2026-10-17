@@ -32,6 +32,15 @@
 </section>
 
 <section class="card spanall">
+<h2>Anonymous market access</h2>
+<p>Anonymous visitors {{if .AnonMarketOff}}currently get <strong>no order book</strong> on the Market page (the live book loads for signed-in visitors only) and their market views queue no wants{{else}}currently get the Market page's <strong>stored order book</strong> from the latest region sweep, and their market views may queue <strong>market wants only</strong> (price history){{end}}. Signed-in visitors are never affected.</p>
+<p><small>{{if .AnonMarketStored}}This state is the saved setting, flipped from this page.{{else}}This state is the MARKET_ANON boot default; flipping it here saves the setting, which then wins over the environment.{{end}} Flipping takes effect immediately, with no restart -- turn it off here if anonymous market traffic is loading the server.</small></p>
+<form method="post" action="/admin/market-anon" class="lookup-form">
+  {{if .AnonMarketOff}}<input type="hidden" name="state" value="on"><button type="submit">Turn anonymous market access on</button>{{else}}<input type="hidden" name="state" value="off"><button type="submit" class="btn btn-danger">Turn anonymous market access off</button>{{end}}
+</form>
+</section>
+
+<section class="card spanall">
 <h2>Find an account</h2>
 <p><small>Type a character's name or id to see the account it belongs to.</small></p>
 <form method="get" action="/admin/" class="lookup-form">

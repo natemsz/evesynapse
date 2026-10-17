@@ -357,7 +357,7 @@ func (app *Application) notifyIndustryEvents(ctx context.Context, c *notifyColle
 			Kind: notifyIndustry, CharacterID: id, Source: src,
 			Key:   fmt.Sprintf("industry|%d|%d", id, j.JobID),
 			Title: fmt.Sprintf("%s: the %s job has finished", b.ch.Name, app.typeNameOrID(ctx, nameID)),
-			URL:   fmt.Sprintf("/industry/?character=%d", id),
+			URL:   fmt.Sprintf("/industry/jobs/?character=%d", id),
 		})
 	}
 }

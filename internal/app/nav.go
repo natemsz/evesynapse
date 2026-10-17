@@ -98,8 +98,10 @@ var sectionNav = map[string][]navEntry{
 	},
 	"fitting": {},
 	"industry": {
-		{"/industry/", "Industry", []string{"industry.html"}},
-		{"/planets/", "Planetary Industry", []string{"planets.html"}},
+		{"/industry/", "Blueprints", []string{"industry.html"}},
+		{"/industry/jobs/", "My Jobs", []string{"industry_jobs.html"}},
+		{"/industry/mining/", "Mining Ledger", []string{"industry_mining.html"}},
+		{"/planets/", "My Colonies", []string{"planets.html"}},
 	},
 	"market": {
 		{"/market/", "Market", []string{"market.html"}},

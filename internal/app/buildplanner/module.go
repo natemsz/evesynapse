@@ -35,7 +35,7 @@ var Module = module.Module{
 	Nav: []module.NavSection{{
 		Section: "industry",
 		Entries: []module.NavEntry{
-			{Href: "/planner/", Label: "Build Planner", Pages: []string{"planner.html"}, After: "/industry/"},
+			{Href: "/planner/", Label: "Build Planner", Pages: []string{"planner.html"}, After: "/industry/mining/"},
 		},
 	}},
 	Routes: func(r chi.Router, deps module.Deps) {

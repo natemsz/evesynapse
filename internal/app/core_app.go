@@ -655,10 +655,12 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	// a session use them too (throttled per address; a build plan
 	// can be large, so the planner shares the simulator's tighter
 	// allowance). A signed-in visitor also gets their own characters'
-	// stock, blueprints, skills and colonies. The Industry overview
-	// stays signed-in only.
+	// stock, blueprints, skills and colonies. The Industry pages
+	// (Blueprints, My Jobs, Mining Ledger) stay signed-in only.
 	r.Route("/industry", func(r chi.Router) {
 		r.With(app.requireAuth).Get("/", app.handleIndustry)
+		r.With(app.requireAuth).Get("/jobs/", app.handleIndustryJobs)
+		r.With(app.requireAuth).Get("/mining/", app.handleIndustryMining)
 	})
 
 	r.Route("/sync", func(r chi.Router) {

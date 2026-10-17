@@ -141,13 +141,39 @@ func TestEconomyPagesRenderFromSnapshots(t *testing.T) {
 		"Fixture Deal", "item exchange", "outstanding", "Member One",
 		`<a href="/items/type/34/">Tritanium</a> × 100`, "BPO", "courier", "Courier:")
 
+	// The single Industry page is three pages now: Blueprints keeps
+	// the root route; jobs and the mining ledger moved to their own.
 	code, body = getPage(t, app, cookie, "/industry/?character=90000001")
 	if code != http.StatusOK {
-		t.Fatalf("industry page: status %d", code)
+		t.Fatalf("blueprints page: status %d", code)
 	}
 	mustContain(t, "/industry/", body,
-		"Manufacturing", "Fixture Blueprint", "Rifter", "active",
-		"BPO", "∞", "10%", "BPC", "Veldspar", "Jita", "12,345.67")
+		"Fixture Blueprint", "BPO", "∞", "10%", "BPC")
+	for _, gone := range []string{"<th>Activity</th>", "mining-table", "Veldspar", "12,345.67",
+		"No industry jobs in the latest snapshot", "No mining entries in the latest snapshot"} {
+		if strings.Contains(body, gone) {
+			t.Errorf("/industry/ still renders %q from a block that moved out", gone)
+		}
+	}
+
+	code, body = getPage(t, app, cookie, "/industry/jobs/?character=90000001")
+	if code != http.StatusOK {
+		t.Fatalf("jobs page: status %d", code)
+	}
+	mustContain(t, "/industry/jobs/", body,
+		"Manufacturing", "Fixture Blueprint", "Rifter", "active", "12,345.67")
+	if strings.Contains(body, "bp-table") || strings.Contains(body, "mining-table") {
+		t.Error("/industry/jobs/ renders another page's block")
+	}
+
+	code, body = getPage(t, app, cookie, "/industry/mining/?character=90000001")
+	if code != http.StatusOK {
+		t.Fatalf("mining page: status %d", code)
+	}
+	mustContain(t, "/industry/mining/", body, "Veldspar", "mining-table")
+	if strings.Contains(body, "bp-table") || strings.Contains(body, "<th>Activity</th>") {
+		t.Error("/industry/mining/ renders another page's block")
+	}
 
 	// Character B: the 403 explains itself; unwarmed items note.
 	code, body = getPage(t, app, cookie, "/wallet/?character=90000002")
@@ -168,6 +194,13 @@ func TestEconomyPagesRenderFromSnapshots(t *testing.T) {
 		t.Fatalf("industry page (B): status %d", code)
 	}
 	mustContain(t, "/industry/ (B)", body, "Still syncing")
+
+	for _, path := range []string{"/industry/jobs/", "/industry/mining/"} {
+		code, _ = getPage(t, app, cookie, path+"?character=90000002")
+		if code != http.StatusOK {
+			t.Fatalf("%s (B): status %d", path, code)
+		}
+	}
 
 	if got := transport.calls.Load(); got != 0 {
 		t.Fatalf("handlers made %d outbound calls, want 0", got)

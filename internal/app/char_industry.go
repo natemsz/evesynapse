@@ -12,10 +12,11 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// Industry page: industry jobs (active plus the last 90 days of
-// completed, via include_completed), blueprint library, and the
-// recent mining ledger. Sections degrade independently and render
-// from snapshots only.
+// The Industry pages: Blueprints (/industry/, the blueprint
+// library), My Jobs (/industry/jobs/, active jobs plus the last 90
+// days of completed, via include_completed), and Mining Ledger
+// (/industry/mining/, the recent mining ledger). Each page fills
+// only its own section and renders from snapshots only.
 // ---------------------------------------------------------------------------
 
 // industryActivityNames labels ESI industry activity IDs (the RAM
@@ -79,7 +80,8 @@ type miningRow struct {
 	System placeRef
 }
 
-// industryView is the Industry page body.
+// industryView is the shared body of the three Industry pages:
+// each handler fills only its own section's fields.
 type industryView struct {
 	CharacterName string
 	Jobs          econSectionState
@@ -96,6 +98,8 @@ type industryView struct {
 // maxIndustryRows caps each section table (corp-ledger precedent).
 const maxIndustryRows = 100
 
+// handleIndustry is the Blueprints page: the blueprint library
+// alone at the section's root route.
 func (app *Application) handleIndustry(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	data := app.page(ctx)
@@ -116,11 +120,63 @@ func (app *Application) handleIndustry(w http.ResponseWriter, r *http.Request) {
 	view := &industryView{CharacterName: active.Name}
 	data.Industry = view
 
-	app.fillIndustryJobs(ctx, active.CharacterID, view)
 	app.fillBlueprints(ctx, active.CharacterID, view)
-	app.fillMining(ctx, active.CharacterID, view)
 
 	app.render(ctx, w, http.StatusOK, "industry.html", data)
+}
+
+// handleIndustryJobs is the My Jobs page: the character's industry
+// jobs alone.
+func (app *Application) handleIndustryJobs(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	data := app.page(ctx)
+
+	_, active, links, err := app.pickCharacter(ctx, r, "/industry/jobs/")
+	if err != nil {
+		logging.Errorf("industry jobs: list characters: %v", err)
+		data.Error = "Could not load industry data; check the server log."
+		app.render(ctx, w, http.StatusOK, "industry_jobs.html", data)
+		return
+	}
+	if links == nil {
+		app.render(ctx, w, http.StatusOK, "industry_jobs.html", data)
+		return
+	}
+	data.IndustryChars = links
+
+	view := &industryView{CharacterName: active.Name}
+	data.Industry = view
+
+	app.fillIndustryJobs(ctx, active.CharacterID, view)
+
+	app.render(ctx, w, http.StatusOK, "industry_jobs.html", data)
+}
+
+// handleIndustryMining is the Mining Ledger page: the character's
+// mining ledger alone.
+func (app *Application) handleIndustryMining(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	data := app.page(ctx)
+
+	_, active, links, err := app.pickCharacter(ctx, r, "/industry/mining/")
+	if err != nil {
+		logging.Errorf("industry mining: list characters: %v", err)
+		data.Error = "Could not load industry data; check the server log."
+		app.render(ctx, w, http.StatusOK, "industry_mining.html", data)
+		return
+	}
+	if links == nil {
+		app.render(ctx, w, http.StatusOK, "industry_mining.html", data)
+		return
+	}
+	data.IndustryChars = links
+
+	view := &industryView{CharacterName: active.Name}
+	data.Industry = view
+
+	app.fillMining(ctx, active.CharacterID, view)
+
+	app.render(ctx, w, http.StatusOK, "industry_mining.html", data)
 }
 
 func (app *Application) fillIndustryJobs(ctx context.Context, characterID int64, view *industryView) {

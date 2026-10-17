@@ -338,11 +338,26 @@ func TestPlaceLinkStragglers(t *testing.T) {
 	stationLink := `<a href="/station/?station=60003760">Jita 4 - Moon 4 - Caldari Navy Assembly Plant</a>`
 	systemLink := `<a href="/system/?system=30000142">Jita</a>`
 
+	// Blueprint locations live on the Blueprints page; job
+	// facilities moved to My Jobs and mining systems to Mining
+	// Ledger when the one Industry page split into three.
 	code, body := getPage(t, app, cookie, "/industry/?character=90000001")
 	if code != http.StatusOK {
 		t.Fatalf("GET /industry/: status %d", code)
 	}
-	mustContain(t, "/industry/", body, stationLink, systemLink, "System #39999999")
+	mustContain(t, "/industry/", body, stationLink)
+
+	code, body = getPage(t, app, cookie, "/industry/jobs/?character=90000001")
+	if code != http.StatusOK {
+		t.Fatalf("GET /industry/jobs/: status %d", code)
+	}
+	mustContain(t, "/industry/jobs/", body, stationLink)
+
+	code, body = getPage(t, app, cookie, "/industry/mining/?character=90000001")
+	if code != http.StatusOK {
+		t.Fatalf("GET /industry/mining/: status %d", code)
+	}
+	mustContain(t, "/industry/mining/", body, systemLink, "System #39999999")
 	if strings.Contains(body, `<a href="/system/?system=39999999">`) {
 		t.Error("unknown mining system rendered as a link")
 	}

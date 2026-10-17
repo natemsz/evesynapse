@@ -80,9 +80,12 @@ test("deniedTarget covers the full-navigation pages", function () {
   assert.equal(swap.deniedTarget("/plannersham/"), false);
 });
 
-test("deniedPrefetch skips the auto-refresh page only", function () {
+test("deniedPrefetch skips the auto-refresh page and the character switch", function () {
   assert.equal(swap.deniedPrefetch("/sync/"), true);
   assert.equal(swap.deniedPrefetch("/sync/?character=1"), true);
+  assert.equal(swap.deniedPrefetch("/characters/switch"), true);
+  assert.equal(swap.deniedPrefetch("/characters/switch?character=1"), true);
+  assert.equal(swap.deniedPrefetch("/characters/"), false);
   assert.equal(swap.deniedPrefetch("/market/"), false);
   assert.equal(swap.deniedPrefetch("/planner/"), false);
 });

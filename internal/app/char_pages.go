@@ -54,9 +54,9 @@ func (app *Application) pickCharacter(ctx context.Context, r *http.Request, path
 	if want, _ := strconv.ParseInt(r.URL.Query().Get("character"), 10, 64); want != 0 && pick(want) {
 		// An explicit pick becomes the session's acting
 		// character, so the header switcher and every other
-		// page agree on who is being viewed.
-		putSessionCharID(app.sessions, ctx, active.CharacterID)
-		app.sessions.Put(ctx, sessionCharacterName, active.Name)
+		// page agree on who is being viewed. A hover prefetch
+		// renders the pick without moving the pin.
+		app.pinSessionCharacter(ctx, active.CharacterID, active.Name)
 	} else if sid := sessionCharID(app.sessions, ctx); sid == 0 || !pick(sid) {
 		active = characters[0]
 	}

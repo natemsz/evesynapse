@@ -61,6 +61,21 @@ func putSessionCharID(sm *scs.SessionManager, ctx context.Context, id int64) {
 	sm.Put(ctx, sessionCharacterID, id)
 }
 
+// pinSessionCharacter makes id/name the session's acting
+// character — except on a hover prefetch. A prefetch changes
+// nothing a view would (core_prefetch.go): it still renders the
+// requested character's page for the swap cache, but the acting
+// character only moves when the pilot actually opens the page.
+// Every per-character page and the header switcher pin through
+// here so the guard cannot be forgotten at one call site.
+func (app *Application) pinSessionCharacter(ctx context.Context, id int64, name string) {
+	if isPrefetch(ctx) {
+		return
+	}
+	putSessionCharID(app.sessions, ctx, id)
+	app.sessions.Put(ctx, sessionCharacterName, name)
+}
+
 // sessionLifetime is how long a sign-in lasts. The session slides
 // (see slideSession), so the 30 days only run out after a month
 // away, not a day after signing in.

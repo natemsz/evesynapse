@@ -133,7 +133,7 @@ func TestMarketPageHonestPrices(t *testing.T) {
 		"9 in 10 sell orders at or under 8.00 ISK",
 		"Typical buy <b>4.00</b>",
 		"9 in 10 buy orders at or over 3.00 ISK",
-		`class="kpi sp-white"`,
+		`class="kpi sp-red"`,
 		"-99.2%",
 		`kpi-k">Average price`,
 		"5.90 <small>ISK</small>",
@@ -147,7 +147,8 @@ func TestSpreadBand(t *testing.T) {
 		pct  float64
 		want string
 	}{
-		{-99.2, "white"}, // crossed book
+		{-99.2, "red"}, // crossed book
+		{-0.1, "red"},
 		{0, "white"},
 		{0.4, "white"},
 		{1.0, "white"},

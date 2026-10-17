@@ -189,6 +189,9 @@ html[data-theme="light"] .btn.btn-quiet {
 .spread-v { font-weight: 700; }
 .spread-bar { display: flex; gap: 3px; margin-top: 0.15rem; }
 .spread-bar span { height: 4px; flex: 1; border-radius: 2px; background: rgba(255, 255, 255, 0.10); }
+.kpi.sp-red .spread-v { color: var(--danger); }
+.kpi.sp-red { border-color: rgba(255, 77, 77, 0.40); }
+.kpi.sp-red .spread-bar span.on { background: var(--danger); }
 .kpi.sp-white .spread-v { color: var(--text-bright); }
 .kpi.sp-white { border-color: rgba(255, 255, 255, 0.35); }
 .kpi.sp-white .spread-bar span.on { background: #ffffff; }

@@ -236,3 +236,36 @@ func TestEmberGlassAndSkyRules(t *testing.T) {
 		t.Error("the KPI sparkline is not gated on its points being present")
 	}
 }
+
+// TestCharactersActiveRowTint pins the Characters page's active-row
+// treatment: one translucent ember tint over every cell of the
+// active character's row, the pinned name cell included. In
+// style.css the row's translucent tint is overridden by a later
+// solid #2a2015 and the name cell carries that solid as its own
+// rule, so the active row read as an opaque muddy band with a
+// dark name cell; the fix lives in bg.css (which loads after
+// style.css), scoped by the table's own class so no other table's
+// .yours rows change. If either rule drops out, the row silently
+// goes back to mud — this says so instead.
+func TestCharactersActiveRowTint(t *testing.T) {
+	raw, err := fs.ReadFile(staticFS, "static/bg.css")
+	if err != nil {
+		t.Fatalf("read bg.css: %v", err)
+	}
+	bg := string(raw)
+	for _, want := range []string{
+		".chars-table tbody tr.yours td { background: rgba(255, 110, 0, 0.16); }",
+		".chars-table tbody tr.yours td:first-child { background: rgba(255, 110, 0, 0.16); }",
+	} {
+		if !strings.Contains(bg, want) {
+			t.Errorf("bg.css is missing the characters active-row rule %q", want)
+		}
+	}
+	tpl, err := fs.ReadFile(templatesFS, "templates/characters.html")
+	if err != nil {
+		t.Fatalf("read characters.html: %v", err)
+	}
+	if !strings.Contains(string(tpl), `<table class="chars-table">`) {
+		t.Error("characters.html lost the chars-table scope class; the bg.css active-row tint has nothing to land on")
+	}
+}

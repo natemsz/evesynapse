@@ -4310,6 +4310,9 @@ html[data-theme="light"] .btn.btn-discord:hover { color: #fff; }
    in full. */
 .tw.notify-settings-wrap { overflow: visible; }
 table.notify-settings td { vertical-align: middle; }
+/* The settings form saves everything above it, so its Save closes the
+   form from the right end of its row. */
+.notify-save { justify-content: flex-end; }
 .checkselector { margin: 0; max-width: 22rem; }
 .checkselector .charselector-option { display: flex; align-items: center; gap: 0.5rem; cursor: pointer; }
 .checkselector .charselector-option input { flex: none; margin: 0; }

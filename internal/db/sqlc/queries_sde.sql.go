@@ -607,6 +607,60 @@ func (q *Queries) ListAllTypeNames(ctx context.Context) ([]TypeName, error) {
 	return items, nil
 }
 
+const listFitResourceImplants = `-- name: ListFitResourceImplants :many
+SELECT DISTINCT t.type_id, t.name, slot.value::bigint AS slot, mod.modified_attr AS resource_attr, bonus.value AS bonus
+FROM sde_types t
+JOIN sde_type_attributes slot ON slot.type_id = t.type_id AND slot.attribute_id = 331
+JOIN sde_type_effects te ON te.type_id = t.type_id
+JOIN sde_effect_modifiers mod ON mod.effect_id = te.effect_id AND mod.modified_attr IN (48, 11)
+JOIN sde_type_attributes bonus ON bonus.type_id = t.type_id AND bonus.attribute_id = mod.modifying_attr
+WHERE t.published = 1 AND t.market_group_id > 0
+ORDER BY mod.modified_attr, bonus.value, t.type_id
+`
+
+type ListFitResourceImplantsRow struct {
+	TypeID       int64   `json:"type_id"`
+	Name         string  `json:"name"`
+	Slot         int64   `json:"slot"`
+	ResourceAttr int64   `json:"resource_attr"`
+	Bonus        float64 `json:"bonus"`
+}
+
+// ListFitResourceImplants: hardwirings that raise a ship's CPU
+// or powergrid output -- the implant solver's ladder. A candidate
+// is an implant type (slot from attribute 331) carrying an effect
+// whose modifier lands on cpuOutput (48) or powerOutput (11); the
+// bonus is the implant's own value of the modifier's attribute
+// (the ladder percent for the output families).
+func (q *Queries) ListFitResourceImplants(ctx context.Context) ([]ListFitResourceImplantsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listFitResourceImplants)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListFitResourceImplantsRow
+	for rows.Next() {
+		var i ListFitResourceImplantsRow
+		if err := rows.Scan(
+			&i.TypeID,
+			&i.Name,
+			&i.Slot,
+			&i.ResourceAttr,
+			&i.Bonus,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listFitChargeTypes = `-- name: ListFitChargeTypes :many
 SELECT t.type_id, t.name
 FROM sde_types t

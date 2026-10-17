@@ -196,6 +196,82 @@ var FitTipUI = (function () {
   return { build: build, place: place };
 })();
 
+// --- drone gauges ------------------------------------------------
+// The Drones card carries a micro-stat header: active bandwidth
+// used / the ship's bandwidth, and bay volume used / capacity.
+// The numbers already ride the workbench in the stats panel's
+// "Drone bandwidth" / "Drone bay" rows ("25 / 50 Mbit/s"), which
+// the server formats; the gauges parse the pair back out and
+// restyle it as bars at the top of the drone group. Shared by the
+// editor (re-applied after every re-render) and read-only
+// workbenches (applied once on load).
+var FitGauges = (function () {
+  function parsePair(text) {
+    var m = /([\d,]+(?:\.\d+)?)\s*\/\s*([\d,]+(?:\.\d+)?)/.exec(text || "");
+    if (!m) return null;
+    return {
+      used: parseFloat(m[1].replace(/,/g, "")),
+      max: parseFloat(m[2].replace(/,/g, "")),
+      text: (text || "").replace(/\s+/g, " ").trim()
+    };
+  }
+  function statPair(wb, label) {
+    var dts = wb.querySelectorAll(".fit-stats dt");
+    for (var i = 0; i < dts.length; i++) {
+      if ((dts[i].textContent || "").replace(/\s+/g, " ").trim() !== label) continue;
+      var wrap = dts[i].parentNode;
+      if (!wrap || !wrap.children) return null;
+      for (var j = 0; j < wrap.children.length; j++) {
+        if (wrap.children[j].tagName === "DD") {
+          return parsePair(wrap.children[j].textContent || "");
+        }
+      }
+      return null;
+    }
+    return null;
+  }
+  function gaugeRow(label, pair) {
+    var row = document.createElement("div");
+    row.className = "fit-bar-row fit-gauge-row" + (pair.used > pair.max ? " over" : " good");
+    var lab = document.createElement("span");
+    lab.className = "fit-bar-label";
+    lab.textContent = label;
+    row.appendChild(lab);
+    var bar = document.createElement("span");
+    bar.className = "fit-bar";
+    var fill = document.createElement("span");
+    var pct = pair.max > 0 ? Math.min(100, (pair.used / pair.max) * 100) : 0;
+    fill.setAttribute("data-w", pct.toFixed(1));
+    bar.appendChild(fill);
+    row.appendChild(bar);
+    var nums = document.createElement("span");
+    nums.className = "fit-bar-nums";
+    nums.textContent = pair.text;
+    row.appendChild(nums);
+    return row;
+  }
+  function apply(wb) {
+    if (!wb || !wb.querySelector) return;
+    var group = wb.querySelector('.fit-group[data-fit-group="drone"]');
+    if (!group) return;
+    var old = group.querySelector(".fit-drone-gauges");
+    if (old && old.parentNode) old.parentNode.removeChild(old);
+    var bw = statPair(wb, "Drone bandwidth");
+    var bay = statPair(wb, "Drone bay");
+    if (!bw && !bay) return;
+    var box = document.createElement("div");
+    box.className = "fit-drone-gauges";
+    if (bw) box.appendChild(gaugeRow("Bandwidth", bw));
+    if (bay) box.appendChild(gaugeRow("Bay", bay));
+    var h4 = group.querySelector("h4");
+    if (h4 && h4.nextSibling) group.insertBefore(box, h4.nextSibling);
+    else if (h4) group.appendChild(box);
+    else if (group.firstChild) group.insertBefore(box, group.firstChild);
+    else group.appendChild(box);
+  }
+  return { apply: apply, parsePair: parsePair };
+})();
+
 (function () {
   var editor = document.getElementById("fit-editor");
   if (!editor || !window.fetch) return;
@@ -308,6 +384,8 @@ var FitTipUI = (function () {
       }
       reanchorTip();
       syncFold();
+      syncDroneGauges();
+      syncChargeButtons();
       syncFilterUI();
       syncSubsystemUI();
       syncUndoButtons();
@@ -564,6 +642,25 @@ var FitTipUI = (function () {
       // click on the slot (only the border used to respond).
       var ammoClear = t.closest("[data-fit-ammo-clear]");
       if (ammoClear) { setCharge(ammoClear.getAttribute("data-fit-ammo-clear"), 0); return; }
+      var chargeBtn = t.closest("[data-fit-charge-for]");
+      if (chargeBtn) { toggleChargeDrawer(chargeBtn); return; }
+      var chargePick = t.closest("[data-fit-charge-pick]");
+      if (chargePick) {
+        var drawerEl = t.closest("[data-fit-drawer-for]");
+        if (drawerEl) {
+          setCharge(drawerEl.getAttribute("data-fit-drawer-for"),
+            parseInt(chargePick.getAttribute("data-fit-charge-pick"), 10) || 0);
+        }
+        return;
+      }
+      var solveBtn = t.closest("[data-fit-solve]");
+      if (solveBtn) {
+        var solveWrap = solveBtn.closest(".fit-solve");
+        var solveOut = solveWrap ? solveWrap.querySelector("[data-fit-solve-out]") : null;
+        if (solveOut) runSolve(solveOut);
+        return;
+      }
+      if (t.closest("[data-fit-solve-apply]")) { applySolvePicks(); return; }
       var fold = t.closest("[data-fit-fold]");
       if (fold) { foldOpen[fold.closest(".fit-group").getAttribute("data-fit-group")] = !fold.closest(".fit-group").classList.contains("open"); syncFold(); return; }
       var impReset = t.closest("[data-fit-imp-reset]");
@@ -661,6 +758,8 @@ var FitTipUI = (function () {
   });
   syncFilterUI();
   syncSubsystemUI();
+  syncDroneGauges();
+  syncChargeButtons();
   // Populate the clone dropdown for the initially-selected pilot
   // (Issue 19); pilot changes refresh it via the change handler.
   refreshCloneOptions();
@@ -988,6 +1087,210 @@ var FitTipUI = (function () {
     if (id > 0) state.charges[weapon] = id;
     else delete state.charges[weapon];
     pendingFlash = { type: "charge", id: weapon };
+    markDirty();
+    simulate();
+  }
+  // --- drone gauges: the shared FitGauges pass, on this editor's
+  // workbench.
+  function syncDroneGauges() {
+    FitGauges.apply(workbench());
+  }
+  // --- inline charge drawer --------------------------------------
+  // A fitted module that takes charges (it has an ammunition row)
+  // grows a small charge button on its slot-row chip; the button
+  // expands a drawer in place listing the charges it can load.
+  // Picking one writes through setCharge, the same path the
+  // ammunition section's search uses, so the fit document and the
+  // engine see no difference. The drawer lives in the DOM the
+  // workbench re-renders, so any re-render closes it.
+  function syncChargeButtons() {
+    var inputs = editor.querySelectorAll("[data-fit-ammo-for]");
+    if (!inputs.length) return;
+    var byWeapon = {};
+    for (var i = 0; i < inputs.length; i++) {
+      byWeapon[inputs[i].getAttribute("data-fit-ammo-for")] = inputs[i];
+    }
+    var chips = editor.querySelectorAll(".fit-chip[data-fit-rowtype]");
+    for (var j = 0; j < chips.length; j++) {
+      var chip = chips[j];
+      var wid = chip.getAttribute("data-fit-rowtype");
+      var input = byWeapon[wid];
+      if (!input) continue;
+      // Slot rows only: bay chips (drones, cargo) take no charges,
+      // and the ammunition section's own chips hold the input.
+      if (!chip.closest || !chip.closest(".fit-slots")) continue;
+      if (chip.querySelector("[data-fit-charge-for]")) continue;
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "fit-chip-btn fit-charge-btn";
+      btn.setAttribute("data-fit-charge-for", wid);
+      var loaded = (state.charges || {})[wid];
+      if (loaded) {
+        var img = document.createElement("img");
+        img.src = "https://images.evetech.net/types/" + loaded + "/icon?size=32";
+        img.alt = "";
+        img.setAttribute("draggable", "false");
+        btn.appendChild(img);
+        btn.title = "Change charge (loaded: " + (input.value || "charge") + ")";
+      } else {
+        btn.textContent = "charge";
+        btn.title = "Load a charge";
+        btn.classList.add("fit-charge-btn-empty");
+      }
+      chip.appendChild(btn);
+    }
+  }
+  var chargeDrawerFor = "";
+  function closeChargeDrawer() {
+    var d = editor.querySelector(".fit-charge-drawer");
+    if (d && d.parentNode) d.parentNode.removeChild(d);
+    chargeDrawerFor = "";
+  }
+  function toggleChargeDrawer(btn) {
+    var weapon = btn.getAttribute("data-fit-charge-for") || "";
+    var chip = btn.closest ? btn.closest(".fit-chip") : null;
+    if (!chip || !weapon) return;
+    if (chargeDrawerFor === weapon) { closeChargeDrawer(); return; }
+    closeChargeDrawer();
+    chargeDrawerFor = weapon;
+    var drawer = document.createElement("div");
+    drawer.className = "fit-charge-drawer";
+    drawer.setAttribute("data-fit-drawer-for", weapon);
+    var head = document.createElement("div");
+    head.className = "fit-charge-drawer-head";
+    head.textContent = "Charges — " + (chip.getAttribute("data-tip-name") || "module");
+    drawer.appendChild(head);
+    var list = document.createElement("div");
+    list.className = "fit-charge-list";
+    list.textContent = "Loading…";
+    drawer.appendChild(list);
+    var parent = chip.parentNode;
+    if (parent) {
+      if (chip.nextSibling) parent.insertBefore(drawer, chip.nextSibling);
+      else parent.appendChild(drawer);
+    }
+    fetch("/fittings/picker.json?family=charge&weapon=" + encodeURIComponent(weapon) + "&q=", {
+      headers: { "Accept": "application/json" }
+    }).then(function (resp) {
+      return resp.ok ? resp.json() : null;
+    }).then(function (rows) {
+      fillChargeDrawer(drawer, weapon, rows);
+    }).catch(function () { fillChargeDrawer(drawer, weapon, null); });
+  }
+  function fillChargeDrawer(drawer, weapon, rows) {
+    var list = drawer.querySelector(".fit-charge-list");
+    if (!list) return; // the drawer closed while loading
+    list.textContent = "";
+    var loaded = (state.charges || {})[weapon];
+    if (!rows || !rows.length) {
+      list.textContent = "No charges fit this module.";
+      return;
+    }
+    rows.forEach(function (row) {
+      var b = document.createElement("button");
+      b.type = "button";
+      b.className = "fit-charge-opt" + (String(row.id) === String(loaded || 0) ? " on" : "");
+      b.setAttribute("data-fit-charge-pick", row.id);
+      var img = document.createElement("img");
+      img.src = "https://images.evetech.net/types/" + row.id + "/icon?size=32";
+      img.alt = "";
+      img.setAttribute("draggable", "false");
+      b.appendChild(img);
+      var nm = document.createElement("span");
+      nm.textContent = row.name;
+      b.appendChild(nm);
+      list.appendChild(b);
+    });
+    if (loaded) {
+      var un = document.createElement("button");
+      un.type = "button";
+      un.className = "fit-charge-opt fit-charge-unload";
+      un.setAttribute("data-fit-charge-pick", "0");
+      un.textContent = "Unload";
+      list.appendChild(un);
+    }
+  }
+  // --- implant solver --------------------------------------------
+  // The Doesn't-fit ribbon's button asks the server which
+  // hardwiring makes the fit legal; the answer renders in place,
+  // and Apply writes the picks into the document's implant
+  // overrides — a simulation overlay on the clone, cleared by the
+  // same reset the implant chips already carry.
+  var solvePicks = null;
+  function fmtISK(v) {
+    var s = String(Math.round(v));
+    var out = "";
+    while (s.length > 3) {
+      out = "," + s.slice(-3) + out;
+      s = s.slice(0, -3);
+    }
+    return s + out + " ISK";
+  }
+  function runSolve(out) {
+    solvePicks = null;
+    out.hidden = false;
+    out.textContent = "Checking the implant ladder…";
+    var payload = {
+      name: state.name,
+      shipTypeId: state.shipTypeId,
+      items: state.items,
+      charges: state.charges,
+      implants: state.implants || {},
+      pilot: pilotID(),
+      clone: cloneID()
+    };
+    fetch("/fittings/solve-implants/", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Accept": "application/json" },
+      body: JSON.stringify(payload)
+    }).then(function (resp) {
+      return resp.ok ? resp.json() : null;
+    }).then(function (data) {
+      out.textContent = "";
+      if (!data || !data.ok) {
+        out.textContent = (data && data.error) || "Couldn't check implants just now.";
+        return;
+      }
+      if (!data.solved) {
+        out.textContent = data.note || "No implant makes this fit legal.";
+        return;
+      }
+      solvePicks = data.picks || [];
+      solvePicks.forEach(function (p) {
+        var line = document.createElement("div");
+        line.className = "fit-solve-pick";
+        var nm = document.createElement("strong");
+        nm.textContent = p.name;
+        line.appendChild(nm);
+        var detail = " — slot " + p.slot + " · +" + p.bonus + "% " + p.resource;
+        if (p.priceKnown) detail += " · " + fmtISK(p.price);
+        if (p.replacesName) detail += " · replaces your " + p.replacesName + " in this simulation";
+        var detailEl = document.createElement("span");
+        detailEl.textContent = detail;
+        line.appendChild(detailEl);
+        out.appendChild(line);
+      });
+      var apply = document.createElement("button");
+      apply.type = "button";
+      apply.className = "fit-solve-apply";
+      apply.setAttribute("data-fit-solve-apply", "1");
+      apply.textContent = solvePicks.length > 1 ? "Apply both implants" : "Apply implant";
+      out.appendChild(apply);
+      var note = document.createElement("div");
+      note.className = "fit-solve-note";
+      note.textContent = "Simulation only — your clone isn't changed.";
+      out.appendChild(note);
+    }).catch(function () {
+      out.textContent = "Couldn't check implants just now.";
+    });
+  }
+  function applySolvePicks() {
+    if (!solvePicks || !solvePicks.length) return;
+    pushHistory();
+    state.implants = state.implants || {};
+    solvePicks.forEach(function (p) { state.implants[p.slot] = p.typeId; });
+    solvePicks = null;
+    pendingFlash = { type: "group", family: "implant" };
     markDirty();
     simulate();
   }
@@ -1934,6 +2237,10 @@ var FitTipUI = (function () {
   var tipEl = null;
   var hoverEl = null;
   var closeTimer = null;
+  // Drone gauges on every workbench already on the page (the
+  // editor re-applies its own after each re-render).
+  var gaugeWbs = document.querySelectorAll(".fit-wb");
+  for (var gi = 0; gi < gaugeWbs.length; gi++) FitGauges.apply(gaugeWbs[gi]);
   function closeTip() {
     if (tipEl && tipEl.parentNode) tipEl.parentNode.removeChild(tipEl);
     tipEl = null;

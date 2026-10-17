@@ -563,3 +563,189 @@ test("a ring tooltip covers no module, in the editor and on a public fit", funct
   env.dispatch(ro.querySelector('.fit-vslot[data-tip-name="Beta Blaster"]'), "mouseover");
   check(ro, "Beta Blaster", "public fit");
 });
+
+// ---------------------------------------------------------------------
+// Fitting polish (2026-10-16): drone gauges, the inline charge
+// drawer, and the implant solver, on the editor harness above.
+// The features use insertBefore/nextSibling, which the shared
+// EEl stub predates; both are standard DOM, added here.
+EEl.prototype.insertBefore = function (c, ref) {
+  if (c.parentNode) c.parentNode.removeChild(c);
+  const i = ref ? this.children.indexOf(ref) : -1;
+  c.parentNode = this;
+  if (i < 0) this.children.push(c); else this.children.splice(i, 0, c);
+  return c;
+};
+Object.defineProperty(EEl.prototype, "nextSibling", {
+  get: function () {
+    if (!this.parentNode) return null;
+    const sibs = this.parentNode.children;
+    const i = sibs.indexOf(this);
+    return i >= 0 && i + 1 < sibs.length ? sibs[i + 1] : null;
+  },
+});
+
+// polishExtend dresses a fixture workbench the way the real
+// template does for these features: the stats panel's drone
+// rows, the Doesn't-fit ribbon with the solver action, a slot
+// row chip for the charge-taking module 100 with its ammunition
+// input, and a Drones card.
+function polishExtend(env, wb) {
+  const mk = function (tag, cls, attrs, text) {
+    const el = new EEl(tag, env);
+    if (cls) el.className = cls;
+    if (attrs) for (const k of Object.keys(attrs)) el.setAttribute(k, attrs[k]);
+    if (text != null) el.textContent = text;
+    return el;
+  };
+  const stats = mk("section", "fit-stats");
+  const dl = mk("dl", "fit-kv");
+  [["Drone bandwidth", "25 / 50 Mbit/s"], ["Drone bay", "75 / 100 m³"]].forEach(function (pair) {
+    const wrap = mk("div");
+    wrap.appendChild(mk("dt", "", null, pair[0]));
+    wrap.appendChild(mk("dd", "", null, pair[1]));
+    dl.appendChild(wrap);
+  });
+  stats.appendChild(dl);
+  wb.appendChild(stats);
+
+  const problems = mk("div", "fit-problems");
+  const solve = mk("div", "fit-solve");
+  solve.appendChild(mk("button", "fit-solve-btn", { "data-fit-solve": "" }, "Simulate implants to fit"));
+  const out = mk("div", "fit-solve-out", { "data-fit-solve-out": "" });
+  out.hidden = true;
+  solve.appendChild(out);
+  problems.appendChild(solve);
+  wb.appendChild(problems);
+
+  const slots = mk("div", "fit-slots");
+  const high = mk("div", "fit-group", { "data-fit-group": "high" });
+  high.appendChild(mk("h4", "", null, "High power"));
+  const chips = mk("div", "fit-chips");
+  const chip = mk("span", "fit-chip st-active", { "data-fit-rowtype": "100", "data-tip-name": "Alpha Blaster" });
+  chip.appendChild(mk("button", "fit-chip-name", { "data-fit-dec": "100" }, "Alpha Blaster"));
+  chips.appendChild(chip);
+  high.appendChild(chips);
+  slots.appendChild(high);
+  wb.appendChild(slots);
+
+  const droneGroup = mk("div", "fit-group", { "data-fit-group": "drone" });
+  droneGroup.appendChild(mk("h4", "", null, "Drones"));
+  droneGroup.appendChild(mk("div", "fit-chips"));
+  wb.appendChild(droneGroup);
+
+  const ammo = mk("div", "fit-imp");
+  ammo.appendChild(mk("input", "fit-search-input", {
+    "data-fit-search": "", "data-fit-ammo-for": "100",
+    "data-fit-ammo-ids": "4001,4002", "data-fit-ammo-weapon": "Alpha Blaster",
+  }));
+  wb.appendChild(ammo);
+  return wb;
+}
+
+// polishFetch replaces the harness fetch with a recording one:
+// picker and solver calls answer at once; simulate calls queue
+// on env.sims like the harness's own.
+function polishFetch(env, records, solveJSON) {
+  global.fetch = function (url, opts) {
+    const u = String(url);
+    records.push({ url: u, body: opts && opts.body ? String(opts.body) : "" });
+    if (u.indexOf("/fittings/picker.json") === 0) {
+      return Promise.resolve({
+        ok: true,
+        json() {
+          return Promise.resolve([
+            { id: 4001, name: "Fixture Charge S" },
+            { id: 4002, name: "Fixture Charge L" },
+          ]);
+        },
+      });
+    }
+    if (u.indexOf("/fittings/solve-implants/") === 0) {
+      return Promise.resolve({ ok: true, json() { return Promise.resolve(solveJSON); } });
+    }
+    if (u.indexOf("/fittings/simulate/") === 0) {
+      return new Promise(function (resolve) {
+        env.sims.push(function () {
+          resolve({ ok: true, text() { return Promise.resolve("SIM"); } });
+        });
+      });
+    }
+    return Promise.resolve({ ok: true, json() { return Promise.resolve([]); }, text() { return Promise.resolve(""); } });
+  };
+}
+
+// polishEnv builds the editor, points every re-render at an
+// extended workbench, installs the recording fetch, and releases
+// the initial simulate so the sync passes run on the real DOM.
+async function polishEnv(solveJSON) {
+  const env = makeEditorEnv();
+  env.html.SIM = function () { return polishExtend(env, buildWorkbench(env, false)); };
+  const records = [];
+  polishFetch(env, records, solveJSON);
+  while (env.sims.length) env.sims.shift()();
+  await delay(25);
+  return { env: env, records: records };
+}
+
+test("fitting polish: drone gauges land on the Drones card", async function () {
+  const { env } = await polishEnv({ ok: true, solved: false, note: "" });
+  const dg = env.wb().querySelector('.fit-group[data-fit-group="drone"]');
+  assert.ok(dg, "drone group present");
+  const box = dg.querySelector(".fit-drone-gauges");
+  assert.ok(box, "gauges injected into the Drones card");
+  const rows = box.querySelectorAll(".fit-gauge-row");
+  assert.equal(rows.length, 2, "bandwidth and bay rows");
+  assert.equal(rows[0].querySelector(".fit-bar-nums").textContent, "25 / 50 Mbit/s");
+  assert.equal(rows[0].querySelector("[data-w]").getAttribute("data-w"), "50.0");
+  assert.equal(rows[1].querySelector(".fit-bar-nums").textContent, "75 / 100 m³");
+  assert.equal(rows[1].querySelector("[data-w]").getAttribute("data-w"), "75.0");
+});
+
+test("fitting polish: the charge drawer swaps charges from the slot row", async function () {
+  const { env, records } = await polishEnv({ ok: true, solved: false, note: "" });
+  const chip = env.wb().querySelector('.fit-chip[data-fit-rowtype="100"]');
+  assert.ok(chip, "slot chip present");
+  const btn = chip.querySelector("[data-fit-charge-for]");
+  assert.ok(btn, "slot chip grew a charge button");
+  assert.equal(btn.getAttribute("data-fit-charge-for"), "100");
+  env.dispatch(btn, "click");
+  await delay(25);
+  const drawer = env.wb().querySelector('[data-fit-drawer-for="100"]');
+  assert.ok(drawer, "the drawer opened in place");
+  const picks = drawer.querySelectorAll("[data-fit-charge-pick]");
+  assert.equal(picks.length, 2, "both charges the module can load");
+  env.dispatch(picks[1], "click");
+  const sim = records.filter(function (r) { return r.url.indexOf("/fittings/simulate/") === 0; }).pop();
+  assert.ok(sim, "the pick posted a simulate");
+  const body = JSON.parse(sim.body);
+  assert.equal(String(body.charges["100"]), "4002",
+    "the pick wrote the charge through the document, not a side channel");
+});
+
+test("fitting polish: the implant solver previews and applies its pick", async function () {
+  const solveJSON = {
+    ok: true, solved: true,
+    picks: [{ slot: 6, typeId: 7104, name: "Fixture Gnome CP-604", resource: "CPU", bonus: 4, price: 1234567, priceKnown: true }],
+  };
+  const { env, records } = await polishEnv(solveJSON);
+  const btn = env.wb().querySelector("[data-fit-solve]");
+  assert.ok(btn, "solver button in the ribbon");
+  env.dispatch(btn, "click");
+  await delay(25);
+  assert.ok(records.some(function (r) { return r.url.indexOf("/fittings/solve-implants/") === 0; }),
+    "the button posted to the solver endpoint");
+  const out = env.wb().querySelector("[data-fit-solve-out]");
+  assert.ok(out.textContent.indexOf("Fixture Gnome CP-604") >= 0,
+    "the pick is named in place: " + out.textContent);
+  assert.ok(out.textContent.indexOf("1,234,567 ISK") >= 0,
+    "the pick is priced in place: " + out.textContent);
+  const apply = out.querySelector("[data-fit-solve-apply]");
+  assert.ok(apply, "an Apply action is offered");
+  env.dispatch(apply, "click");
+  const sim = records.filter(function (r) { return r.url.indexOf("/fittings/simulate/") === 0; }).pop();
+  assert.ok(sim, "Apply re-simulated");
+  const body = JSON.parse(sim.body);
+  assert.equal(String(body.implants["6"]), "7104",
+    "Apply wrote the pick as a document implant override (the simulation overlay)");
+});

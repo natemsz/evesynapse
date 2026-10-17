@@ -18,22 +18,53 @@
 {{if .Market.Item}}
   {{$item := .Market.Item}}
   <h2>{{$item.Name}}</h2>
-  <p><small><a href="/items/type/{{$item.TypeID}}/">Item details</a></small></p>
-  <p><small>Average price: {{if $item.AveragePrice}}{{$item.AveragePrice}} ISK{{else}}—{{end}} · Adjusted price: {{if $item.AdjustedPrice}}{{$item.AdjustedPrice}} ISK{{else}}—{{end}}</small></p>
-  <p>{{range $i, $r := $item.Regions}}{{if $i}} · {{end}}{{if $r.Active}}<strong>{{$r.Name}}</strong>{{else}}<a href="/market/?type={{$item.TypeID}}&region={{$r.ID}}">{{$r.Name}}</a>{{end}}{{end}}</p>
+  <p><a class="btn btn-quiet" href="/items/type/{{$item.TypeID}}/"><svg class="glyph" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="url(#nav-glyph-gradient)" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V5"/><path d="M4 19h16"/><path d="M7 15.5 11 10l3 2.6 4.2-5.4"/><path d="M18.2 7.2h-3M18.2 7.2v3"/></g></svg>Item details</a></p>
+  <nav class="region-pills" aria-label="Region">
+    {{range $item.Regions}}<a href="/market/?type={{$item.TypeID}}&region={{.ID}}"{{if .Active}} class="active" aria-current="page"{{end}}>{{.Name}}</a>{{end}}
+  </nav>
 
   {{if $item.BookPending}}
   <p class="notice"><small>The live order book loads for signed-in visitors. The hub prices below come from the latest region sweep.{{if $.SSOConfigured}} <a href="/auth/eve">Sign in with EVE</a> for the full book, price alerts and your own orders.{{end}}</small></p>
-  {{else}}
-  <p>Best sell: <strong>{{if $item.BestSell}}{{$item.BestSell}} ISK{{else}}—{{end}}</strong>{{if $item.BestSellLoc.Name}} ({{placeLink $item.BestSellLoc}}){{end}}<br>
-  Best buy: <strong>{{if $item.BestBuy}}{{$item.BestBuy}} ISK{{else}}—{{end}}</strong>{{if $item.BestBuyLoc.Name}} ({{placeLink $item.BestBuyLoc}}){{end}}{{if $item.Spread}}<br>
-  Spread: {{$item.Spread}}{{end}}{{if $item.TypicalSell}}<br>
-  Typical sell: <strong>{{$item.TypicalSell}} ISK</strong> · 9 in 10 sell orders at or under {{$item.SellBand}} ISK{{end}}{{if $item.TypicalBuy}}<br>
-  Typical buy: <strong>{{$item.TypicalBuy}} ISK</strong> · 9 in 10 buy orders at or over {{$item.BuyBand}} ISK{{end}}</p>
   {{end}}
+  <div class="kpis mkt-kpis">
+    {{if not $item.BookPending}}
+    <div class="kpi">
+      <span class="kpi-k">Best sell</span>
+      <span class="kpi-v">{{if $item.BestSell}}{{$item.BestSell}} <small>ISK</small>{{else}}—{{end}}</span>
+      {{if $item.BestSellLoc.Name}}<span class="kpi-sub place">{{placeLink $item.BestSellLoc}}</span>{{end}}
+      {{if $item.TypicalSell}}<span class="typical">Typical sell <b>{{$item.TypicalSell}}</b> · 9 in 10 sell orders at or under {{$item.SellBand}} ISK</span>{{end}}
+    </div>
+    <div class="kpi">
+      <span class="kpi-k">Best buy</span>
+      <span class="kpi-v">{{if $item.BestBuy}}{{$item.BestBuy}} <small>ISK</small>{{else}}—{{end}}</span>
+      {{if $item.BestBuyLoc.Name}}<span class="kpi-sub place">{{placeLink $item.BestBuyLoc}}</span>{{end}}
+      {{if $item.TypicalBuy}}<span class="typical">Typical buy <b>{{$item.TypicalBuy}}</b> · 9 in 10 buy orders at or over {{$item.BuyBand}} ISK</span>{{end}}
+    </div>
+    {{if $item.Spread}}
+    <div class="kpi sp-{{$item.SpreadBand}}">
+      <span class="kpi-k">Spread</span>
+      <span class="kpi-v spread-v">{{$item.Spread}}</span>
+      <span class="spread-bar" aria-hidden="true"><span{{if eq $item.SpreadBand "white"}} class="on"{{end}}></span><span{{if eq $item.SpreadBand "pastel"}} class="on"{{end}}></span><span{{if eq $item.SpreadBand "green"}} class="on"{{end}}></span><span{{if eq $item.SpreadBand "blue"}} class="on"{{end}}></span></span>
+      <span class="kpi-sub">Between best buy and best sell</span>
+    </div>
+    {{end}}
+    {{end}}
+    <div class="kpi">
+      <span class="kpi-k">Average price</span>
+      <span class="kpi-v">{{if $item.AveragePrice}}{{$item.AveragePrice}} <small>ISK</small>{{else}}—{{end}}</span>
+      {{if $item.AvgSparkPoints}}<span class="kpi-sub">Daily average · last 30 days</span>
+      <svg class="kpi-spark" viewBox="0 0 100 28" preserveAspectRatio="none" aria-hidden="true" focusable="false"><polygon class="kpi-spark-area" points="{{$item.AvgSparkArea}}"/><polyline class="kpi-spark-line" points="{{$item.AvgSparkPoints}}"/></svg>{{end}}
+    </div>
+    <div class="kpi">
+      <span class="kpi-k">Adjusted price</span>
+      <span class="kpi-v">{{if $item.AdjustedPrice}}{{$item.AdjustedPrice}} <small>ISK</small>{{else}}—{{end}}</span>
+      <span class="kpi-sub">Industry &amp; insurance reference</span>
+    </div>
+  </div>
 
   {{if $item.RegionStats}}
-  <p><small>Typical prices across the hub regions:</small></p>
+  <section class="foldable">
+  <h3>Typical prices across the hub regions</h3>
   <div class="tw">
   <table>
     <thead><tr><th>Region</th><th>Typical sell</th><th>Typical buy</th><th>Updated</th></tr></thead>
@@ -53,6 +84,7 @@
     </tbody>
   </table>
   </div>
+  </section>
   {{end}}
 
   <section class="foldable">

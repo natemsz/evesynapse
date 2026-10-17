@@ -170,3 +170,28 @@ func TestBuildTraderStats(t *testing.T) {
 		t.Fatalf("margin without a book = %q", stats.MarginPct)
 	}
 }
+
+func TestSparkline(t *testing.T) {
+	rows := []db.MarketHistory{
+		{Date: "2026-10-13", Average: 5},
+		{Date: "2026-10-14", Average: 7},
+		{Date: "2026-10-15", Average: 6},
+	}
+	points, area, ok := Sparkline(rows)
+	if !ok {
+		t.Fatal("Sparkline: ok = false for three usable rows")
+	}
+	if !strings.HasPrefix(points, "0.0,25.0") || !strings.Contains(points, "50.0,3.0") || !strings.HasSuffix(points, "100.0,14.0") {
+		t.Errorf("Sparkline points = %q, want the low at left, peak mid, close right", points)
+	}
+	if !strings.HasSuffix(area, "100,28 0,28") {
+		t.Errorf("Sparkline area = %q, want it closed along the bottom", area)
+	}
+	if _, _, ok := Sparkline(rows[:1]); ok {
+		t.Error("Sparkline: ok = true for a single row")
+	}
+	flat, _, ok := Sparkline([]db.MarketHistory{{Average: 5}, {Average: 5}})
+	if !ok || !strings.Contains(flat, "0.0,25.0 100.0,25.0") {
+		t.Errorf("Sparkline flat = %q ok=%v, want a level line", flat, ok)
+	}
+}

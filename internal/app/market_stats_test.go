@@ -122,11 +122,44 @@ func TestMarketPageHonestPrices(t *testing.T) {
 		t.Fatalf("market page: status %d", code)
 	}
 	mustContain(t, "/market/ honest prices", body,
-		"Best sell: <strong>4.00 ISK</strong>",
-		"Best buy: <strong>500.00 ISK</strong>",
-		"Typical sell: <strong>6.25 ISK</strong>",
+		`class="region-pills"`,
+		`class="btn btn-quiet" href="/items/type/34/"`,
+		`class="kpis mkt-kpis"`,
+		`kpi-k">Best sell`,
+		"4.00 <small>ISK</small>",
+		`kpi-k">Best buy`,
+		"500.00 <small>ISK</small>",
+		"Typical sell <b>6.25</b>",
 		"9 in 10 sell orders at or under 8.00 ISK",
-		"Typical buy: <strong>4.00 ISK</strong>",
+		"Typical buy <b>4.00</b>",
 		"9 in 10 buy orders at or over 3.00 ISK",
+		`class="kpi sp-white"`,
+		"-99.2%",
+		`kpi-k">Average price`,
+		"5.90 <small>ISK</small>",
+		`kpi-k">Adjusted price`,
+		"5.00 <small>ISK</small>",
 	)
+}
+
+func TestSpreadBand(t *testing.T) {
+	for _, tc := range []struct {
+		pct  float64
+		want string
+	}{
+		{-99.2, "white"}, // crossed book
+		{0, "white"},
+		{0.4, "white"},
+		{1.0, "white"},
+		{1.1, "pastel"},
+		{3.0, "pastel"},
+		{3.1, "green"},
+		{5.0, "green"},
+		{5.1, "blue"},
+		{12.3, "blue"},
+	} {
+		if got := spreadBand(tc.pct); got != tc.want {
+			t.Errorf("spreadBand(%v) = %q, want %q", tc.pct, got, tc.want)
+		}
+	}
 }

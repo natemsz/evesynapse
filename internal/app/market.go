@@ -119,6 +119,7 @@ type marketItem struct {
 	BestSellLoc   placeRef
 	BestBuyLoc    placeRef
 	Spread        string // "12.3%", "" unless both sides exist
+	SpreadBand    string // color band for the spread card: white|pastel|green|blue
 	SellOrders    int
 	BuyOrders     int
 	SellVolume    string // esi.FormatInt of summed volume_remain
@@ -148,6 +149,12 @@ type marketItem struct {
 	// summary only, no chart), or markethistory.StateChart (enough rows
 	// for the chart). The template renders a deliberate body for
 	// every state; there is no blank state.
+	// AvgSparkPoints/AvgSparkArea draw the Average price card's
+	// sparkline from the last 30 stored history rows (set by
+	// attachHistory); empty until two or more days are stored.
+	AvgSparkPoints string
+	AvgSparkArea   string
+
 	HistoryState   string
 	HistoryPending bool // true only in the pending state
 	Chart          *markethistory.PriceChart
@@ -168,6 +175,24 @@ type marketItem struct {
 	// a region never triggers a fetch. Empty until the item view
 	// is built with a type.
 	RegionStats []marketRegionStatRow
+}
+
+// spreadBand names the spread card's color band for a spread
+// percentage, banded on the value as displayed (one decimal):
+// at or under 1% white, through 3% a soft pastel green, through
+// 5% a fuller green, beyond that a legible light baby blue. A
+// crossed book (negative spread) reads white.
+func spreadBand(pct float64) string {
+	switch rounded := math.Round(pct*10) / 10; {
+	case rounded <= 1:
+		return "white"
+	case rounded <= 3:
+		return "pastel"
+	case rounded <= 5:
+		return "green"
+	default:
+		return "blue"
+	}
 }
 
 // TraderPollURL is the trading snapshot's live-region target:
@@ -547,6 +572,16 @@ func (app *Application) attachHistory(ctx context.Context, item *marketItem, typ
 	if item == nil {
 		return
 	}
+	// The Average price card's sparkline: the last 30 stored
+	// days, from the same rows the chart below is drawn from.
+	sparkRows := rows
+	if len(sparkRows) > 30 {
+		sparkRows = sparkRows[len(sparkRows)-30:]
+	}
+	if points, area, ok := markethistory.Sparkline(sparkRows); ok {
+		item.AvgSparkPoints = points
+		item.AvgSparkArea = area
+	}
 	if len(rows) == 1 {
 		item.HistoryState = markethistory.StateFew
 	} else {
@@ -795,7 +830,9 @@ func (app *Application) loadMarketItem(ctx context.Context, typeID, regionID int
 		item.BestBuyLoc = app.orderPlace(ctx, buys[0].LocationID, buys[0].SystemID)
 	}
 	if len(sells) > 0 && len(buys) > 0 && buys[0].Price > 0 {
-		item.Spread = fmt.Sprintf("%.1f%%", (sells[0].Price-buys[0].Price)/buys[0].Price*100)
+		pct := (sells[0].Price - buys[0].Price) / buys[0].Price * 100
+		item.Spread = fmt.Sprintf("%.1f%%", pct)
+		item.SpreadBand = spreadBand(pct)
 	}
 
 	if stats, ok := summarizeBook(sells); ok {

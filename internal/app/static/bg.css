@@ -163,3 +163,41 @@ html[data-theme="light"] .btn.btn-quiet {
 .page-head .home-bar {
   margin: 0 0 0 auto;
 }
+
+/* Market item header: region pills, KPI cards, spread color bands.
+   The cards reuse .kpis/.kpi from style.css; this is the market
+   header's own vocabulary on top of them. */
+.region-pills { display: flex; flex-wrap: wrap; gap: 0.45rem; margin: 0.9rem 0 1.1rem; }
+.region-pills a {
+  font-family: "Rajdhani", "Inter", sans-serif; font-weight: 600; font-size: 0.82rem;
+  letter-spacing: 0.09em; text-transform: uppercase; text-decoration: none;
+  color: var(--muted); padding: 0.34rem 0.85rem; border-radius: 999px;
+  background: rgba(23, 17, 13, 0.55); border: 1px solid rgba(255, 110, 0, 0.22);
+  -webkit-backdrop-filter: blur(10px) saturate(1.2); backdrop-filter: blur(10px) saturate(1.2);
+  transition: filter 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+.region-pills a:hover { filter: saturate(1.45) brightness(1.07); border-color: rgba(255, 130, 20, 0.45); color: var(--text-bright); }
+.region-pills a.active {
+  color: var(--text-bright); background: rgba(255, 106, 0, 0.20);
+  border-color: rgba(255, 106, 0, 0.40);
+}
+.btn-quiet .glyph { width: 16px; height: 16px; vertical-align: -3px; margin-right: 0.35rem; }
+.mkt-kpis { margin-bottom: 1.25rem; }
+.kpi .place { font-size: 0.78rem; }
+.kpi .typical { font-size: 0.75rem; color: var(--muted); line-height: 1.45; }
+.kpi .typical b { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
+.spread-v { font-weight: 700; }
+.spread-bar { display: flex; gap: 3px; margin-top: 0.15rem; }
+.spread-bar span { height: 4px; flex: 1; border-radius: 2px; background: rgba(255, 255, 255, 0.10); }
+.kpi.sp-white .spread-v { color: var(--text-bright); }
+.kpi.sp-white { border-color: rgba(255, 255, 255, 0.35); }
+.kpi.sp-white .spread-bar span.on { background: #ffffff; }
+.kpi.sp-pastel .spread-v { color: #b7dcb0; }
+.kpi.sp-pastel { border-color: rgba(183, 220, 176, 0.40); }
+.kpi.sp-pastel .spread-bar span.on { background: #b7dcb0; }
+.kpi.sp-green .spread-v { color: #3ecf6e; }
+.kpi.sp-green { border-color: rgba(62, 207, 110, 0.40); }
+.kpi.sp-green .spread-bar span.on { background: #3ecf6e; }
+.kpi.sp-blue .spread-v { color: #a9d6ff; }
+.kpi.sp-blue { border-color: rgba(169, 214, 255, 0.45); }
+.kpi.sp-blue .spread-bar span.on { background: #a9d6ff; }

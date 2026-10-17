@@ -133,11 +133,15 @@ type resolvedTypicals struct {
 	AsOf                    time.Time
 }
 
-// pickRegionTypicals applies the swap order to one (type,
-// region)'s two stored rows (either may be nil). ok is false
-// when neither row may speak: nothing stored, or only a
-// fallback row past its hard expiry.
-func pickRegionTypicals(own *db.MarketRegionStat, fb *db.MarketStatsFallback, now time.Time) (resolvedTypicals, bool) {
+// resolvedRegionTypicals applies the swap order to one
+// (type, region)'s two stored rows (either may be nil). It is
+// the single-pair resolver every consumer goes through: the
+// regions strip reads both tables in batch and resolves each
+// hub row here, and a consumer pricing one pair reads its two
+// rows and resolves the same way. ok is false when neither
+// row may speak: nothing stored, or only a fallback row past
+// its hard expiry.
+func resolvedRegionTypicals(own *db.MarketRegionStat, fb *db.MarketStatsFallback, now time.Time) (resolvedTypicals, bool) {
 	if own != nil && now.Sub(own.UpdatedAt) < fallbackOwnFresh {
 		return resolvedTypicals{
 			TypicalSell: own.TypicalSell, TypicalBuy: own.TypicalBuy,
@@ -166,24 +170,6 @@ func pickRegionTypicals(own *db.MarketRegionStat, fb *db.MarketStatsFallback, no
 		}, true
 	}
 	return resolvedTypicals{}, false
-}
-
-// resolvedRegionTypicals reads both stored rows for one
-// (type, region) and picks between them. Stored reads only.
-func (app *Application) resolvedRegionTypicals(ctx context.Context, regionID, typeID int64) (resolvedTypicals, bool) {
-	var own *db.MarketRegionStat
-	if row, err := app.queries.GetMarketRegionStat(ctx, db.GetMarketRegionStatParams{
-		RegionID: regionID, TypeID: typeID,
-	}); err == nil {
-		own = &row
-	}
-	var fb *db.MarketStatsFallback
-	if row, err := app.queries.GetMarketStatsFallback(ctx, db.GetMarketStatsFallbackParams{
-		RegionID: regionID, TypeID: typeID,
-	}); err == nil {
-		fb = &row
-	}
-	return pickRegionTypicals(own, fb, time.Now())
 }
 
 // refreshFallbackPrices is the worker pass: poll the orderset

@@ -30,7 +30,7 @@ type marketRegionStatRow struct {
 
 // attachRegionStats fills an item view's hub-regions strip from
 // the stored region stats, our own and the fallback mirror's,
-// picked between per region by the swap (pickRegionTypicals).
+// picked between per region by the swap (resolvedRegionTypicals).
 // Pure database read -- the strip never triggers a fetch;
 // regions no stored row speaks for render as "no data yet".
 func (app *Application) attachRegionStats(ctx context.Context, item *marketItem) {
@@ -61,7 +61,7 @@ func (app *Application) attachRegionStats(ctx context.Context, item *marketItem)
 			RegionName: region.Name,
 			Active:     region.ID == item.RegionID,
 		}
-		if res, ok := pickRegionTypicals(ownByRegion[region.ID], fallbackByRegion[region.ID], now); ok {
+		if res, ok := resolvedRegionTypicals(ownByRegion[region.ID], fallbackByRegion[region.ID], now); ok {
 			row.HasData = true
 			if res.TypicalSell > 0 {
 				row.TypicalSell = esi.FormatISK(res.TypicalSell)

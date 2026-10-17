@@ -95,7 +95,7 @@ func TestParseFuzzworkAggregatesMixedOrderset(t *testing.T) {
 	}
 }
 
-func TestPickRegionTypicals(t *testing.T) {
+func TestResolvedRegionTypicals(t *testing.T) {
 	now := time.Date(2026, 10, 17, 12, 0, 0, 0, time.UTC)
 	own := func(age time.Duration, sell float64) *db.MarketRegionStat {
 		return &db.MarketRegionStat{
@@ -128,7 +128,7 @@ func TestPickRegionTypicals(t *testing.T) {
 		{"nothing stored", nil, nil, false, 0, false},
 	}
 	for _, tc := range cases {
-		got, ok := pickRegionTypicals(tc.own, tc.fbRow, now)
+		got, ok := resolvedRegionTypicals(tc.own, tc.fbRow, now)
 		if ok != tc.wantOK {
 			t.Errorf("%s: ok = %v, want %v", tc.name, ok, tc.wantOK)
 			continue

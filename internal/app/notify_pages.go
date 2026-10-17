@@ -233,9 +233,20 @@ type notifySettingsView struct {
 	Rows []notifySettingRow
 	// The delivery channels, the same switches the first-run
 	// prompt offers: InApp always, Desktop when this server can
-	// push (it is part of the push section below then).
+	// push (its per-browser panel sits with the channels now).
 	InApp   bool
 	Desktop bool
+	// Discord direct messages: the switch in the channels list,
+	// naming the linked account. It is the one on the account's
+	// Discord link — the same value the prompt's switch writes, so
+	// the two never disagree about what is stored. The Discord
+	// section below the form connects the account; it carries no
+	// switch of its own. Offered follows discordChannelState:
+	// a link, or an install that offers the linking.
+	DiscordOffered bool
+	DiscordLinked  bool
+	Discord        bool
+	DiscordName    string
 	// Browser push: whether this server offers it, the key a browser
 	// needs to subscribe, and how many browsers the account has
 	// subscribed so far.
@@ -363,6 +374,7 @@ func (app *Application) handleNotificationSettings(w http.ResponseWriter, r *htt
 		InApp:   !prefs.channelOff(notifyChannelInApp),
 		Desktop: !prefs.channelOff(notifyChannelDesktop),
 	}
+	view.DiscordOffered, view.DiscordLinked, view.Discord, view.DiscordName = app.discordChannelState(ctx, userID)
 	if app.push != nil {
 		view.PushConfigured, view.PushKey = true, app.push.PublicKey
 		if n, err := app.queries.CountPushSubscriptionsByUser(ctx, userID); err == nil {

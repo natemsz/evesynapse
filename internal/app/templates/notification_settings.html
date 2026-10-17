@@ -10,11 +10,13 @@
 
 <form method="post" action="/notifications/settings">
 <input type="hidden" name="channels_shown" value="1">
-<p><small>Where they reach you:</small></p>
+<h2>Notification Channels</h2>
 <p class="notify-channels">
   <label><input type="checkbox" name="channel_inapp" value="1"{{if .InApp}} checked{{end}}> In EveSynapse <small>— the bell at the top of the page</small></label>
+  {{if .DiscordOffered}}{{if .DiscordLinked}}<input type="hidden" name="discord_shown" value="1"><label><input type="checkbox" name="discord_dm" value="1"{{if .Discord}} checked{{end}}> On Discord <small>— direct messages to {{.DiscordName}}</small></label>{{else}}<span>On Discord <small>— not connected yet: <a href="#discord">connect it under Discord, below</a></small></span>{{end}}{{end}}
   {{if .PushConfigured}}<label><input type="checkbox" name="channel_desktop" value="1"{{if .Desktop}} checked{{end}}> In my browsers <small>— each browser is switched on under Browser notifications, below</small></label>{{end}}
 </p>
+<h2>Notification Types</h2>
 <div class="tw notify-settings-wrap">
 <table class="notify-settings">
   <thead>
@@ -38,10 +40,6 @@
   </tbody>
 </table>
 </div>
-{{range .ChannelSections}}{{.}}{{end}}
-<button type="submit">Save</button>
-</form>
-
 <h2>Browser notifications</h2>
 {{if .PushConfigured}}
 <p><small>Get the same notifications from your browser while no EveSynapse tab is open. This is per browser: turn it on in each one you want it in. What you switched off above stays off here too.</small></p>
@@ -55,6 +53,9 @@
 {{else}}
 <p><small>Browser notifications are not set up on this server. Notifications still show in the top bar.</small></p>
 {{end}}
+{{range .ChannelSections}}{{.}}{{end}}
+<button type="submit">Save</button>
+</form>
 
 {{range .AccountSections}}{{.}}{{end}}
 

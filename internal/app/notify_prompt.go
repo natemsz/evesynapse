@@ -57,6 +57,24 @@ type notifyPromptView struct {
 	DiscordName    string
 }
 
+// discordChannelState reads the account's Discord link for the
+// channel switches: the prompt card and the settings page show the
+// same row, so they read it the same way. Offered is whether the
+// row is shown at all (the module is built in, and either a link
+// exists or this install offers the linking); Linked, On and Name
+// describe the link when there is one.
+func (app *Application) discordChannelState(ctx context.Context, userID int64) (offered, linked, on bool, name string) {
+	if !app.ModuleEnabled("discord") {
+		return false, false, false, ""
+	}
+	if link, err := app.queries.GetDiscordLink(ctx, userID); err == nil {
+		return true, true, link.DmNotifications, link.Username
+	} else if !errors.Is(err, sql.ErrNoRows) {
+		logging.Errorf("notify: discord link of user %d: %v", userID, err)
+	}
+	return app.cfg.discordClientID != "" && app.cfg.discordClientSecret != "", false, false, ""
+}
+
 // notifyPromptFor builds the card for an account.
 func (app *Application) notifyPromptFor(ctx context.Context, userID int64) *notifyPromptView {
 	prefs := app.notifyPrefsFor(ctx, userID)
@@ -66,17 +84,7 @@ func (app *Application) notifyPromptFor(ctx context.Context, userID int64) *noti
 		DesktopOffered: app.push != nil,
 		Desktop:        !prefs.channelOff(notifyChannelDesktop),
 	}
-	if app.ModuleEnabled("discord") {
-		if link, err := app.queries.GetDiscordLink(ctx, userID); err == nil {
-			view.DiscordOffered, view.DiscordLinked = true, true
-			view.Discord, view.DiscordName = link.DmNotifications, link.Username
-		} else {
-			if !errors.Is(err, sql.ErrNoRows) {
-				logging.Errorf("notify: prompt discord link of user %d: %v", userID, err)
-			}
-			view.DiscordOffered = app.cfg.discordClientID != "" && app.cfg.discordClientSecret != ""
-		}
-	}
+	view.DiscordOffered, view.DiscordLinked, view.Discord, view.DiscordName = app.discordChannelState(ctx, userID)
 	if !view.Answered && !app.sessions.GetBool(ctx, sessionNotifyPromptShown) {
 		app.sessions.Put(ctx, sessionNotifyPromptShown, true)
 		view.AutoOpen = true

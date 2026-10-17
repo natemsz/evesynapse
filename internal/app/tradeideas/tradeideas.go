@@ -233,7 +233,7 @@ func BuildCSV(ctx context.Context, deps module.Deps, limit int) (string, bool) {
 func RenderCSV(rows []ideas.Row) string {
 	var buf bytes.Buffer
 	out := csv.NewWriter(&buf)
-	_ = out.Write([]string{"#", "Item", "Station", "Highest buy price", "Lowest sell price", "Spread %", "Sold per day", "Estimated daily profit"})
+	_ = out.Write([]string{"#", "Item", "Station", "Typical buy price", "Typical sell price", "Spread %", "Sold per day", "Estimated daily profit"})
 	for _, r := range rows {
 		_ = out.Write([]string{fmt.Sprintf("%d", r.N), r.Item, r.Station, r.Buy, r.Sell, r.Spread, r.Sold, r.Profit})
 	}
@@ -291,11 +291,11 @@ func BuildCSVRows(ctx context.Context, deps module.Deps, limit int) ([]ideas.Row
 			N:       i + 1,
 			Item:    tradeIdeasCell(deps.TypeName(ctx, s.TypeID)),
 			Station: tradeIdeasCell(deps.StationRef(ctx, stationMemo, s.LocationID).Name),
-			Buy:     esi.FormatISK(s.BestBuy),
-			Sell:    esi.FormatISK(s.BestSell),
-			Spread:  fmt.Sprintf("%.1f%%", (s.BestSell-s.BestBuy)/s.BestBuy*100),
+			Buy:     esi.FormatISK(s.TypicalBuy),
+			Sell:    esi.FormatISK(s.TypicalSell),
+			Spread:  fmt.Sprintf("%.1f%%", (s.TypicalSell-s.TypicalBuy)/s.TypicalBuy*100),
 			Sold:    esi.FormatInt(int64(math.Round(s.DailyVolume))),
-			Profit:  esi.FormatISK((s.BestSell - s.BestBuy) * size),
+			Profit:  esi.FormatISK((s.TypicalSell - s.TypicalBuy) * size),
 		})
 	}
 	return rows, true

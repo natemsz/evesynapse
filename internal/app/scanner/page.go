@@ -27,8 +27,8 @@ type scannerRow struct {
 	TypeID      int64
 	ItemName    string
 	Station     module.PlaceRef
-	BestBuy     string // esi.FormatISK, highest buy price here
-	BestSell    string // esi.FormatISK, lowest sell price here
+	TypicalBuy  string // esi.FormatISK, median buy price here
+	TypicalSell string // esi.FormatISK, median sell price here
 	SpreadPct   string // "12.3%"
 	DailyVolume string // esi.FormatInt, sold per day in the region
 	DailyProfit string // esi.FormatISK, estimated daily profit
@@ -66,14 +66,14 @@ func (app *page) handleMarketScanner(w http.ResponseWriter, r *http.Request) {
 
 // serveScannerCSV writes the scanner's opportunity rows as a CSV download.
 func (app *page) serveScannerCSV(w http.ResponseWriter, view *scannerView) {
-	header := []string{"Item", "Station", "Highest buy price", "Lowest sell price", "Spread %", "Sold per day", "Estimated daily profit"}
+	header := []string{"Item", "Station", "Typical buy price", "Typical sell price", "Spread %", "Sold per day", "Estimated daily profit"}
 	rows := make([][]string, 0, len(view.Rows))
 	for _, row := range view.Rows {
 		rows = append(rows, []string{
 			row.ItemName,
 			row.Station.Name,
-			row.BestBuy,
-			row.BestSell,
+			row.TypicalBuy,
+			row.TypicalSell,
 			row.SpreadPct,
 			row.DailyVolume,
 			row.DailyProfit,
@@ -91,11 +91,14 @@ func (app *page) serveScannerCSV(w http.ResponseWriter, view *scannerView) {
 // liquidity proxy: the column is labelled "sold per day in
 // <region>" and the profit estimate is capped by what
 // actually trades, what sellers hold, and what buyers want,
-// whichever is smallest. Rows need a real buy above zero, a
-// sell above the buy, enough daily trades, and a wide-enough
-// spread. The filtering, profit math, and ranking all happen
-// in one bounded SQL query (ListScannerOpportunities); Go
-// only formats the displayed rows.
+// whichever is smallest. Rows are priced typical against
+// typical (the sweep's stored station medians), need a book
+// with depth on both sides, must sit within the region's own
+// typical range, and need enough daily trades and a
+// wide-enough spread. The filtering, profit math, and ranking
+// all happen in one bounded SQL query
+// (ListScannerOpportunities); Go only formats the displayed
+// rows.
 func (app *page) buildScannerView(ctx context.Context, q map[string][]string) *scannerView {
 	regionID := app.deps.DefaultMarketRegion()
 	if raw := module.QueryValue(q, "region"); raw != "" {
@@ -180,7 +183,7 @@ func (app *page) buildScannerView(ctx context.Context, q map[string][]string) *s
 	}
 	stationMemo := make(map[int64]module.PlaceRef)
 	for _, s := range opp {
-		spreadPct := (s.BestSell - s.BestBuy) / s.BestBuy * 100
+		spreadPct := (s.TypicalSell - s.TypicalBuy) / s.TypicalBuy * 100
 		vol := s.DailyVolume
 		// The tradeable size is whichever runs out first: what
 		// actually trades each day, what sellers hold here, or
@@ -192,13 +195,13 @@ func (app *page) buildScannerView(ctx context.Context, q map[string][]string) *s
 		if float64(s.BuyVolume) < size {
 			size = float64(s.BuyVolume)
 		}
-		profit := (s.BestSell - s.BestBuy) * size
+		profit := (s.TypicalSell - s.TypicalBuy) * size
 		view.Rows = append(view.Rows, scannerRow{
 			TypeID:      s.TypeID,
 			ItemName:    itemNameFor(s.TypeID),
 			Station:     app.deps.StationRef(ctx, stationMemo, s.LocationID),
-			BestBuy:     esi.FormatISK(s.BestBuy),
-			BestSell:    esi.FormatISK(s.BestSell),
+			TypicalBuy:  esi.FormatISK(s.TypicalBuy),
+			TypicalSell: esi.FormatISK(s.TypicalSell),
 			SpreadPct:   fmt.Sprintf("%.1f%%", spreadPct),
 			DailyVolume: esi.FormatInt(int64(math.Round(vol))),
 			DailyProfit: esi.FormatISK(profit),

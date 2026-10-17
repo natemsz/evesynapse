@@ -263,6 +263,14 @@ var pgTradeIdeasRowsSchema string
 //go:embed schema_pg/050_market_book_snapshot.sql
 var pgMarketBookSnapshotSchema string
 
+// Step 051: true values -- the worker's bottom-up build cost
+// (and, for types with no real market, contract-estimated sell
+// price) per manufacturable type, for the types CCP's adjusted
+// price misprices (see the step file).
+//
+//go:embed schema_pg/051_true_values.sql
+var pgTrueValuesSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -342,6 +350,7 @@ func schemaSteps() []schemaStep {
 		{48, "link_choices", pgLinkChoicesSchema, ""},
 		{49, "trade_ideas_rows", pgTradeIdeasRowsSchema, ""},
 		{50, "market_book_snapshot", pgMarketBookSnapshotSchema, ""},
+		{51, "true_values", pgTrueValuesSchema, ""},
 	}
 }
 

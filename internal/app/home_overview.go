@@ -967,14 +967,12 @@ func (app *Application) buildNetWorth(ctx context.Context, userID int64, bundles
 	var assetsSeen bool
 	var pricedItems, totalItems int
 	var asOf time.Time
-	// Valuation prices: the live guide when a Market visit has
-	// fetched it, else the worker-stored guide (market_guide_prices.go)
-	// — the card always has prices to work with once the worker
-	// has run, instead of waiting on Market activity.
-	prices := app.valuationPrices(ctx)
-	// True values (truevalue.go): the middle tier for types
-	// the guide cannot price -- a contract-traded hull in a
-	// hangar values at its estimated sell, not CCP's fossil.
+	// Valuation prices resolve in the house order (truevalue.go):
+	// The Forge's swept typical sells, then the stored true-value
+	// estimated sell — a contract-traded hull in a hangar values
+	// at its estimated sell, not CCP's fossil. The guide's
+	// average prices nothing.
+	typicals := app.TypicalSells(ctx)
 	trueValues := app.storedTrueValues(ctx)
 	w := &netWorthWidget{}
 
@@ -993,18 +991,16 @@ func (app *Application) buildNetWorth(ctx context.Context, userID int64, bundles
 			walletOK = true
 			noteAsOf(b, esi.SnapWallet)
 		}
-		// Assets price off the guide prices. Every stack counts
-		// toward coverage: priced when the guide knows the type,
-		// skipped when it doesn't (the widget says how
-		// much of the estate the number covers).
+		// Assets price off the house order. Every stack counts
+		// toward coverage: priced when a swept typical or a
+		// stored estimate knows the type, skipped when neither
+		// does (the widget says how much of the estate the
+		// number covers).
 		if b.assetsKnown {
 			assetsSeen = true
 			for _, a := range b.assets {
 				totalItems++
-				if prices == nil {
-					continue
-				}
-				price, ok := pickValuationPrice(prices[a.TypeID], estSellOf(trueValues, a.TypeID))
+				price, ok := pickValuationPrice(typicals[a.TypeID], estSellOf(trueValues, a.TypeID))
 				if !ok {
 					continue
 				}

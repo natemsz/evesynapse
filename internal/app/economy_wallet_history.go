@@ -17,9 +17,9 @@ import (
 //
 // A day's row keeps the latest values seen that day: it is rewritten
 // when the wallet snapshot advances and left alone otherwise. net_worth
-// is filled only when the price guide can value assets the way the home
-// Net worth widget does; otherwise it stays NULL, which must never read
-// as zero.
+// is filled only when the house price sources can value assets the way
+// the home Net worth widget does; otherwise it stays NULL, which must
+// never read as zero.
 // ---------------------------------------------------------------------------
 
 // sampleWalletHistory records (or refreshes) today's wallet
@@ -49,8 +49,12 @@ func (app *Application) sampleWalletHistory(ctx context.Context, ch db.Character
 	}
 
 	netWorth := sql.NullFloat64{}
-	if prices := app.valuationPrices(ctx); prices != nil {
-		if total, ok := app.characterNetWorth(ctx, ch.CharacterID, balance, prices); ok {
+	// Net worth is sampled only when a house price source exists
+	// at all — swept typicals or stored estimated sells — so a
+	// day with no prices leaves net worth unset rather than
+	// storing a bare balance.
+	if typicals := app.TypicalSells(ctx); len(typicals) > 0 || len(app.TrueValues(ctx)) > 0 {
+		if total, ok := app.characterNetWorth(ctx, ch.CharacterID, balance, typicals); ok {
 			netWorth = sql.NullFloat64{Float64: total, Valid: true}
 		}
 	}
@@ -68,17 +72,17 @@ func (app *Application) sampleWalletHistory(ctx context.Context, ch db.Character
 }
 
 // characterNetWorth values one character the way the home Net
-// worth widget does: wallet balance, plus assets at guide
+// worth widget does: wallet balance, plus assets at house
 // prices, plus buy-order escrow. ok=false when the stored data
 // can't support the estimate (no asset or order snapshot, or
-// assets none of the price cache can value) — the caller then
+// assets none of the price sources can value) — the caller then
 // leaves the day's net worth unset rather than storing a
 // balance wearing a net-worth label.
-func (app *Application) characterNetWorth(ctx context.Context, characterID int64, balance float64, prices map[int64]esi.MarketPrice) (float64, bool) {
+func (app *Application) characterNetWorth(ctx context.Context, characterID int64, balance float64, typicals map[int64]float64) (float64, bool) {
 	total := balance
 	valued := false
 	// The same price order as the home widget's (buildNetWorth):
-	// average, then the true-value estimated sell, then adjusted.
+	// the swept Forge typical, then the true-value estimated sell.
 	trueValues := app.storedTrueValues(ctx)
 
 	if snap, err := app.queries.GetSnapshot(ctx, db.GetSnapshotParams{
@@ -87,7 +91,7 @@ func (app *Application) characterNetWorth(ctx context.Context, characterID int64
 		var assets []esi.Asset
 		if json.Unmarshal([]byte(snap.Payload), &assets) == nil {
 			for _, a := range assets {
-				price, ok := pickValuationPrice(prices[a.TypeID], estSellOf(trueValues, a.TypeID))
+				price, ok := pickValuationPrice(typicals[a.TypeID], estSellOf(trueValues, a.TypeID))
 				if !ok {
 					continue
 				}

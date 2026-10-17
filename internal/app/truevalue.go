@@ -7,7 +7,6 @@ import (
 	"time"
 
 	db "evesynapse/internal/db/sqlc"
-	"evesynapse/internal/esi"
 	"evesynapse/internal/logging"
 )
 
@@ -18,14 +17,18 @@ import (
 // by contract instead of on the open market -- it derives from
 // market history that barely exists for them, so an Avatar
 // "adjusts" to ~65B against a ~600B real value -- and it used to
-// be the only fallback behind the market average everywhere a
-// price was needed. True values slot between the two:
+// be the fallback behind the guide average everywhere a price
+// was needed. Prices now resolve in the house order (owner
+// doctrine, 2026-10-17):
 //
-//     market average  ->  true-value estimated sell  ->  adjusted
+//     Forge swept typical sell  ->  true-value estimated sell
+//     ->  unpriced
 //
-// Items with a healthy market never reach the middle tier (the
-// worker stores no estimated sell for them), so their prices
-// render and compute exactly as they always have.
+// The guide's average is banned as a price source outright and
+// the adjusted price survives only as the EIV input to CCP's
+// job-fee formula. Items with a healthy market never reach the
+// estimated-sell tier (the worker stores no estimated sell for
+// them): the swept book prices them directly.
 //
 // The pricing profile is a standard, named here once: build in
 // a T2-rigged Sotiyo in null security (the facility the planner
@@ -114,18 +117,18 @@ func (app *Application) TrueValues(ctx context.Context) map[int64]float64 {
 }
 
 // pickValuationPrice resolves one unit's price in the house
-// order: the market average, then the true-value estimated
-// sell (estSell, 0 when none is stored), then CCP's adjusted
-// price. ok=false when none of the three knows the type.
-func pickValuationPrice(p esi.MarketPrice, estSell float64) (float64, bool) {
-	if p.AveragePrice > 0 {
-		return p.AveragePrice, true
+// order: The Forge's swept typical sell, then the true-value
+// estimated sell (estSell, 0 when none is stored). ok=false
+// when neither knows the type — CCP's guide average is banned
+// as a price source (owner doctrine, 2026-10-17) and the
+// adjusted price survives only as the EIV input to job fees,
+// never as a price.
+func pickValuationPrice(typicalSell, estSell float64) (float64, bool) {
+	if typicalSell > 0 {
+		return typicalSell, true
 	}
 	if estSell > 0 {
 		return estSell, true
-	}
-	if p.AdjustedPrice > 0 {
-		return p.AdjustedPrice, true
 	}
 	return 0, false
 }

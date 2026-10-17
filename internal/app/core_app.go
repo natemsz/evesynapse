@@ -159,6 +159,14 @@ type Application struct {
 	trueValuesLoaded time.Time
 	trueValuePass    tvPassState
 
+	// The Forge's swept typical sells (market_guide_prices.go),
+	// the first tier of the house price order, cached in memory
+	// on the same window as the true values so renders reload
+	// the stats table only a few times an hour.
+	forgeTypicalsMu     sync.Mutex
+	forgeTypicalsCache  map[int64]float64
+	forgeTypicalsLoaded time.Time
+
 	// Character IDs flagged for first-in-line warm-up on the next
 	// worker cycle (fresh SSO logins, Sync-page re-warm requests).
 	// activity is when each account was last seen, which sets how

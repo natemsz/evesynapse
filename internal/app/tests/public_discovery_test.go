@@ -739,6 +739,9 @@ func TestPublicSimulatorAnon(t *testing.T) {
 	}
 }
 
+// The item page's history section is the shared market chart
+// component (templates/historysection.html): the pins below
+// assert its markup, not the retired standalone sparkline.
 func TestPublicItemAndShipPages(t *testing.T) {
 	transport := &apptest.CountingTransport{}
 	rig := apptest.Build(t, transport)

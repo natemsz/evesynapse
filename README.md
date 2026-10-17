@@ -1351,8 +1351,8 @@ govern how data moves:
    with a LIMIT; anything the page needs beyond that belongs in a
    stored table written at ingest time.
 
-Data changes on a known schedule (market sweeps complete hourly;
-character snapshots refresh on their own cadence), so a page that
+Data changes on a known schedule (market sweeps complete every
+30 minutes; character snapshots refresh on their own cadence), so a page that
 re-derives everything per load is doing repeat work for an identical
 answer. Under one user that is a CPU spike; under a hundred it is an
 outage. When in doubt, push the work into the worker and store the

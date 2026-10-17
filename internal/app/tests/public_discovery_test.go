@@ -793,7 +793,10 @@ func TestPublicItemAndShipPages(t *testing.T) {
 		`<div class="pchart" data-chart-scrub="true">`,
 		`stroke="#ffb84d"`,
 		`class="item-lead"`,
-		"https://images.evetech.net/types/587/icon?size=128",
+		// The art tile leads with the type's render; the icon is
+		// named as the fallback for types that have no render.
+		"https://images.evetech.net/types/587/render?size=128",
+		`data-fallback-src="https://images.evetech.net/types/587/icon?size=128"`,
 	)
 	// The description leads the page now, in its card beside the
 	// type icon — it used to sit below the price history.

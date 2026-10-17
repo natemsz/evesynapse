@@ -110,7 +110,7 @@
 <h2>{{$d.Name}}</h2>
 
 <div class="item-lead">
-  <div class="item-art"><img src="https://images.evetech.net/types/{{$d.ID}}/icon?size=128" alt="" loading="lazy"></div>
+  <div class="item-art"><img src="https://images.evetech.net/types/{{$d.ID}}/render?size=128" data-fallback-src="https://images.evetech.net/types/{{$d.ID}}/icon?size=128" alt="" loading="lazy"></div>
   {{if or (eq $d.DescState "ready") (eq $d.DescState "pending")}}<div class="item-desc">
     <span class="k">Description</span>
     {{template "type-description" $d}}

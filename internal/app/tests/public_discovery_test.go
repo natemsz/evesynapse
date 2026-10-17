@@ -786,7 +786,9 @@ func TestPublicItemAndShipPages(t *testing.T) {
 		"The Rifter is a frigate.",
 		"Hub prices",
 		"The Forge", "Domain",
-		`<svg class="spark"`,
+		"Price history — The Forge",
+		`<div class="pchart" data-chart-scrub="true">`,
+		`stroke="#ffb84d"`,
 	)
 	if code, _ := apptest.GetPage(t, rig, nil, "/items/type/999999/"); code != http.StatusSeeOther {
 		t.Errorf("unknown item status = %d, want 303 to the browser", code)

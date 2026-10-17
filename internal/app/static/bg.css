@@ -112,3 +112,54 @@ html[data-theme="light"] .charselector-dropdown {
   width: 20px;
   height: 20px;
 }
+
+/* An open suggestion list lifts main over later siblings so the
+   list clears the footer, but the lift in style.css (z-index 70)
+   also carried main over the sticky top bar (z-index 10): typing
+   in any search slid the whole page over the banner. Five still
+   clears the footer, which paints in the z-auto layer, and the
+   banner stays on top. */
+body:has(main .suggest:not([hidden])) main {
+  z-index: 5;
+}
+
+/* The quiet buttons are pills like the section tabs and chips,
+   but .btn-quiet rested on a transparent fill with no backdrop
+   filter, so the home bar's Link another character and Overview
+   buttons showed the raw nebula while every other pill frosted
+   it. Same recipe as the tabs: warm translucent fill, ember
+   border, light blur. */
+.btn.btn-quiet {
+  background: rgba(23, 17, 13, 0.55);
+  border-color: rgba(255, 110, 0, 0.22);
+  -webkit-backdrop-filter: blur(10px) saturate(1.2);
+  backdrop-filter: blur(10px) saturate(1.2);
+}
+html[data-theme="light"] .btn.btn-quiet {
+  background: rgba(253, 251, 246, 0.72);
+  border-color: #d3c7ae;
+}
+
+/* Quiet-button hover takes the same ember edge the section tabs
+   use, so the pill family shares one hover vocabulary. */
+.btn.btn-quiet:hover {
+  border-color: rgba(255, 130, 20, 0.45);
+}
+
+/* The home header row: the page title and its action bar (Link
+   another character, Overview settings) sit together above the
+   panel, the title left, the bar right — the arrangement the
+   header had before the title moved out on its own. */
+.page-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1rem;
+  margin: 0.25rem 1.25rem 0;
+}
+.page-head > h1 {
+  margin: 0;
+}
+.page-head .home-bar {
+  margin: 0 0 0 auto;
+}

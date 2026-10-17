@@ -81,6 +81,9 @@ func TestLandingAnonymous(t *testing.T) {
 // that order, with color-coded deltas. PLEX prices come from
 // the global market region (19000001), the injectors from The
 // Forge. Nothing else makes the strip, however hard it moved.
+// The Small Injector's seeded days deliberately lag the
+// region's freshest days: each item prices from its OWN two
+// most recent days, not the region-wide latest pair.
 func TestLandingStripFromStoredRows(t *testing.T) {
 	rig := apptest.Build(t, nil)
 	conn := rig.DB()
@@ -92,8 +95,8 @@ func TestLandingStripFromStoredRows(t *testing.T) {
 		   (19000001, 44992, '2026-10-15', 6200000.00, 6300000, 6100000, 110000, 950),
 		   (10000002, 40520, '2026-10-14', 800000000.00, 810000000, 790000000, 5000, 300),
 		   (10000002, 40520, '2026-10-15', 760000000.00, 770000000, 750000000, 5200, 310),
-		   (10000002, 45635, '2026-10-14', 320000000.00, 325000000, 315000000, 8000, 400),
-		   (10000002, 45635, '2026-10-15', 320000000.00, 325000000, 315000000, 8100, 405),
+		   (10000002, 45635, '2026-10-12', 300000000.00, 305000000, 295000000, 8000, 400),
+		   (10000002, 45635, '2026-10-13', 320000000.00, 325000000, 315000000, 8100, 405),
 		   (10000002, 34, '2026-10-14', 4.00, 5, 3, 1000000, 100),
 		   (10000002, 34, '2026-10-15', 400.00, 500, 300, 1200000, 110)`,
 	}

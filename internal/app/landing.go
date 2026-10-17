@@ -89,32 +89,34 @@ func (app *Application) buildLanding(ctx context.Context) landingData {
 
 	// The strip shows three watched items, always the same: PLEX
 	// and the two skill injectors, the prices every pilot checks.
-	// Latest stored day against the day before, each in its own
-	// market: the injectors in The Forge, PLEX on the global
-	// market (region 19000001, where it has traded since 2021;
-	// it has no Forge history at all). An item with no stored
-	// history simply drops out.
+	// Each item is priced from its OWN two most recent stored
+	// days, in its own market: the injectors in The Forge, PLEX
+	// on the global market (region 19000001, where it has traded
+	// since 2021; it has no Forge history at all). Per-item days
+	// matter: history lands on each item's own fetch schedule,
+	// so keying the joins to the region-wide latest dates would
+	// silently drop any item whose stored history runs a day
+	// behind the freshest type in its region. An item with fewer
+	// than two stored days drops out — and queues a history want
+	// below so the worker fetches it for a later visit.
 	rows, err := app.db.QueryContext(ctx, `
-		WITH days AS (
-		  SELECT region_id, MAX(date) AS d FROM market_history
-		  WHERE region_id IN (10000002, 19000001) GROUP BY region_id
-		), prevs AS (
-		  SELECT h.region_id, MAX(h.date) AS d FROM market_history h
-		  JOIN days ON days.region_id = h.region_id AND h.date < days.d
-		  GROUP BY h.region_id
+		WITH watched AS (
+		  SELECT type_id, name,
+		         CASE WHEN name = 'PLEX' THEN 19000001 ELSE 10000002 END AS region_id
+		  FROM type_names
+		  WHERE name IN ('PLEX', 'Large Skill Injector', 'Small Skill Injector')
+		), ranked AS (
+		  SELECT w.type_id, w.name, h.average,
+		         ROW_NUMBER() OVER (PARTITION BY w.type_id ORDER BY h.date DESC) AS rn
+		  FROM watched w
+		  JOIN market_history h ON h.type_id = w.type_id AND h.region_id = w.region_id
 		)
-		SELECT tn.name AS type_name, cur.average AS price,
+		SELECT cur.name, cur.average,
 		       ((cur.average - old.average) / old.average * 100) AS pct_change
-		FROM type_names tn
-		JOIN days ON days.region_id = CASE WHEN tn.name = 'PLEX' THEN 19000001 ELSE 10000002 END
-		JOIN prevs ON prevs.region_id = days.region_id
-		JOIN market_history cur ON cur.type_id = tn.type_id
-		  AND cur.region_id = days.region_id AND cur.date = days.d
-		JOIN market_history old ON old.type_id = tn.type_id
-		  AND old.region_id = days.region_id AND old.date = prevs.d
-		WHERE tn.name IN ('PLEX', 'Large Skill Injector', 'Small Skill Injector')
-		  AND old.average > 0
-		ORDER BY CASE tn.name
+		FROM ranked cur
+		JOIN ranked old ON old.type_id = cur.type_id AND old.rn = 2
+		WHERE cur.rn = 1 AND old.average > 0
+		ORDER BY CASE cur.name
 		  WHEN 'PLEX' THEN 0 WHEN 'Large Skill Injector' THEN 1 ELSE 2 END`)
 	if err == nil {
 		defer rows.Close()
@@ -130,6 +132,25 @@ func (app *Application) buildLanding(ctx context.Context) landingData {
 				Pct:   fmt.Sprintf("%.1f%%", math.Abs(pct)),
 				Up:    pct >= 0,
 			})
+		}
+	}
+
+	// Queue a history want for any watched item the strip could
+	// not price, so its market history starts (or keeps) flowing.
+	found := map[string]bool{}
+	for _, m := range data.Movers {
+		found[m.Name] = true
+	}
+	for _, w := range []struct {
+		name             string
+		regionID, typeID int64
+	}{
+		{"PLEX", globalMarketRegion, 44992},
+		{"Large Skill Injector", defaultMarketRegion, 40520},
+		{"Small Skill Injector", defaultMarketRegion, 45635},
+	} {
+		if !found[w.name] {
+			app.QueueHistoryWant(ctx, w.regionID, w.typeID)
 		}
 	}
 

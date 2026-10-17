@@ -107,6 +107,44 @@ type Stats struct {
 	LastDay string // "2006-01-02"
 }
 
+// Sparkline renders stored daily averages (rows ascending, as
+// the chart builder receives them) as points for the 100x28 KPI
+// sparkline, plus the closed area polygon under the line. Rows
+// without a usable average are skipped; fewer than two usable
+// rows reports ok=false.
+func Sparkline(rows []db.MarketHistory) (points, area string, ok bool) {
+	vals := make([]float64, 0, len(rows))
+	for _, r := range rows {
+		if r.Average > 0 {
+			vals = append(vals, r.Average)
+		}
+	}
+	if len(vals) < 2 {
+		return "", "", false
+	}
+	min, max := vals[0], vals[0]
+	for _, v := range vals[1:] {
+		if v < min {
+			min = v
+		}
+		if v > max {
+			max = v
+		}
+	}
+	span := max - min
+	var b strings.Builder
+	for i, v := range vals {
+		x := float64(i) / float64(len(vals)-1) * 100
+		y := 25.0
+		if span > 0 {
+			y = 25 - (v-min)/span*22
+		}
+		fmt.Fprintf(&b, "%.1f,%.1f ", x, y)
+	}
+	points = strings.TrimSpace(b.String())
+	return points, points + " 100,28 0,28", true
+}
+
 func Summarize(rows []db.MarketHistory) (Stats, bool) {
 	if len(rows) == 0 {
 		return Stats{}, false

@@ -164,3 +164,43 @@ test("isSlowConnection honors save-data and 2g", function () {
   assert.equal(swap.isSlowConnection({ effectiveType: "slow-2g" }), true);
   assert.equal(swap.isSlowConnection({ effectiveType: "4g" }), false);
 });
+
+// Element-shaped stand-in for an <img>: just the surface
+// applyImgFallback touches.
+function fakeImg(attrs, src) {
+  return {
+    attrs: Object.assign({}, attrs),
+    src: src || "",
+    getAttribute: function (name) {
+      return Object.prototype.hasOwnProperty.call(this.attrs, name) ? this.attrs[name] : null;
+    },
+    removeAttribute: function (name) { delete this.attrs[name]; }
+  };
+}
+
+test("applyImgFallback trades the src for the fallback, once", function () {
+  const img = fakeImg(
+    { "data-fallback-src": "https://images.evetech.net/types/34/icon?size=128" },
+    "https://images.evetech.net/types/34/render?size=128");
+  assert.equal(swap.applyImgFallback(img), true);
+  assert.equal(img.src, "https://images.evetech.net/types/34/icon?size=128");
+  // The attribute is gone, so a fallback that also fails cannot
+  // loop: a second call changes nothing.
+  assert.equal(swap.applyImgFallback(img), false);
+  assert.equal(img.src, "https://images.evetech.net/types/34/icon?size=128");
+});
+
+test("applyImgFallback leaves images without a fallback alone", function () {
+  const img = fakeImg({}, "https://images.evetech.net/types/34/icon?size=128");
+  assert.equal(swap.applyImgFallback(img), false);
+  assert.equal(img.src, "https://images.evetech.net/types/34/icon?size=128");
+  assert.equal(swap.applyImgFallback(null), false);
+  assert.equal(swap.applyImgFallback({}), false);
+});
+
+test("imgSettledFailed is only a completed image with no pixels", function () {
+  assert.equal(swap.imgSettledFailed({ complete: true, naturalWidth: 0 }), true);
+  assert.equal(swap.imgSettledFailed({ complete: true, naturalWidth: 128 }), false);
+  assert.equal(swap.imgSettledFailed({ complete: false, naturalWidth: 0 }), false);
+  assert.equal(swap.imgSettledFailed(null), false);
+});

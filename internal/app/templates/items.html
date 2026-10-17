@@ -138,11 +138,10 @@
 </div>
 {{end}}
 
-{{if $d.History}}
-<h3>Price history</h3>
-{{$d.History}}
-<p><small>{{$d.HistoryNote}}</small></p>
-{{else if $d.HistoryNote}}<p class="hint">{{$d.HistoryNote}}</p>{{end}}
+{{if $d.HistoryView}}
+<h3>Price history — {{$d.HistoryView.RegionName}}</h3>
+{{template "history-section" $d.HistoryView}}
+{{end}}
 
 {{template "type-description" $d}}
 

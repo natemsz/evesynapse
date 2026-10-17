@@ -739,6 +739,9 @@ func TestPublicSimulatorAnon(t *testing.T) {
 	}
 }
 
+// The item page's history section is the shared market chart
+// component (templates/historysection.html): the pins below
+// assert its markup, not the retired standalone sparkline.
 func TestPublicItemAndShipPages(t *testing.T) {
 	transport := &apptest.CountingTransport{}
 	rig := apptest.Build(t, transport)
@@ -786,7 +789,9 @@ func TestPublicItemAndShipPages(t *testing.T) {
 		"The Rifter is a frigate.",
 		"Hub prices",
 		"The Forge", "Domain",
-		`<svg class="spark"`,
+		"Price history — The Forge",
+		`<div class="pchart" data-chart-scrub="true">`,
+		`stroke="#ffb84d"`,
 	)
 	if code, _ := apptest.GetPage(t, rig, nil, "/items/type/999999/"); code != http.StatusSeeOther {
 		t.Errorf("unknown item status = %d, want 303 to the browser", code)

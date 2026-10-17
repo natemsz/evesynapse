@@ -1,0 +1,58 @@
+{{/* The price-history section (chart, stats, live pending state),
+     shared by the market item view and the item browser detail page.
+     Rendered with a marketItem as dot. */}}
+{{define "history-section"}}
+<div class="history-body" data-poll-state="{{.HistoryState}}"{{if eq .HistoryState "pending"}} data-live-region data-poll-url="/market/history-fragment?region={{.RegionID}}&amp;type={{.TypeID}}"{{end}}>
+  {{if eq .HistoryState "chart"}}
+  {{if .Chart}}
+  {{$c := .Chart}}
+  <div class="pchart" data-chart-scrub="true">
+  <div class="chart-legend">
+    <span class="legend-item"><span class="legend-swatch legend-price" aria-hidden="true"></span>Average price</span>
+    <span class="legend-item"><span class="legend-swatch legend-volume" aria-hidden="true"></span>Volume</span>
+    <span class="legend-note">Price in ISK · volume in units traded</span>
+  </div>
+  <svg viewBox="0 0 {{$c.Width}} {{$c.Height}}" width="100%" role="img" aria-label="Daily average price and volume, last 90 days">
+    {{range $c.PriceTicks}}<line class="chart-gridline price-gridline {{.Class}}" x1="0" y1="{{.Y}}" x2="{{$c.Width}}" y2="{{.Y}}"/>{{end}}
+    {{range $c.VolumeTicks}}<line class="chart-gridline volume-gridline {{.Class}}" x1="0" y1="{{.Y}}" x2="{{$c.Width}}" y2="{{.Y}}"/>{{end}}
+    {{range $c.Bars}}<rect x="{{.X}}" y="{{.Y}}" width="{{.W}}" height="{{.H}}" fill="#d63c14" fill-opacity="0.55"><title>{{.Title}}</title></rect>{{end}}
+    {{if $c.Points}}<polyline points="{{$c.Points}}" fill="none" stroke="#ffb84d" stroke-width="1.5"/>{{end}}
+    {{range $c.Dots}}<circle cx="{{.X}}" cy="{{.Y}}" r="1.6" fill="#ffb84d"/>{{end}}
+    {{range $c.Dots}}<circle class="cdot" cx="{{.X}}" cy="{{.Y}}" r="9" tabindex="0" aria-label="{{.Title}}" data-date="{{.Date}}" data-avg="{{.Average}}" data-high="{{.Highest}}" data-low="{{.Lowest}}" data-vol="{{.Volume}}"></circle>{{end}}
+    {{range $c.PriceTicks}}<text class="chart-axis-label price-axis {{.Class}}" x="2" y="{{.LabelY}}">{{.Label}}</text>{{end}}
+    {{range $c.VolumeTicks}}<text class="chart-axis-label volume-axis {{.Class}}" x="{{$c.Width}}" y="{{.LabelY}}">{{.Label}}</text>{{end}}
+    {{range $c.DateTicks}}<text class="chart-axis-label chart-date-tick {{.Class}}" x="{{.X}}" y="{{$c.Height}}" text-anchor="{{.Anchor}}">{{.Label}}</text>{{end}}
+  </svg>
+  <div class="ctip" hidden></div>
+  </div>
+  {{if .Stats}}
+  <p><small>{{.Stats.Days}} days of recorded trades in {{.RegionName}}: average {{.Stats.Mean}} ISK · low {{.Stats.Min}} · high {{.Stats.Max}} · latest {{.Stats.Latest}} ({{.Stats.LastDay}}){{if .Change7}} · 7 days {{.Change7}}{{end}}{{if .Change30}} · 30 days {{.Change30}}{{end}}</small></p>
+  {{end}}
+  {{if .HistoryLastDay}}<p><small>Last trades {{.HistoryLastDay}} — this item hasn't traded in {{.RegionName}} recently.</small></p>{{end}}
+  {{if $c.Recent}}
+  <h4>Last recorded days</h4>
+  <div class="tw">
+  <table>
+    <thead><tr><th>Date</th><th>Average</th><th>High</th><th>Low</th><th>Volume</th></tr></thead>
+    <tbody>
+    {{range $c.Recent}}<tr><td>{{.Date}}</td><td>{{.Average}}</td><td>{{.Highest}}</td><td>{{.Lowest}}</td><td>{{.Volume}}</td></tr>{{end}}
+    </tbody>
+  </table>
+  </div>
+  {{end}}
+  {{else}}
+  <p><small>Price history for this item isn't ready yet. Check back soon.</small></p>
+  {{end}}
+  {{else if eq .HistoryState "few"}}
+  {{if .Stats}}
+  <p><small>Only {{.Stats.Days}} {{if eq .Stats.Days 1}}day{{else}}days{{end}} of recorded trades in {{.RegionName}}: not enough history to chart yet. Average {{.Stats.Mean}} ISK · low {{.Stats.Min}} · high {{.Stats.Max}} · latest {{.Stats.Latest}} ({{.Stats.LastDay}}).{{if .HistoryLastDay}} Last trades {{.HistoryLastDay}}.{{end}}</small></p>
+  {{else}}
+  <p><small>Only a little trade history in {{.RegionName}} so far: not enough to chart yet.</small></p>
+  {{end}}
+  {{else if eq .HistoryState "empty"}}
+  <p><small>No trade history in {{.RegionName}} for this item yet.</small></p>
+  {{else}}
+  <p><span class="loading-pulse" aria-hidden="true"></span><small>This item is queued. It'll be ready in a moment.</small></p>
+  {{end}}
+</div>
+{{end}}

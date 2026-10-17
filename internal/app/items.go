@@ -146,11 +146,12 @@ type itemTypeDetail struct {
 	UsedInMore  bool            // more blueprints use it than are listed
 
 	// Market sections, filled by the type-page handler for
-	// market-traded types only: swept hub prices and a history
-	// sparkline, both stored reads like the rest of the page.
+	// market-traded types only: swept hub prices and the price
+	// history section — the same marketItem view the Market page
+	// renders its history from, so both pages chart identically
+	// and warm the same way.
 	Hubs        []publicHubPrice
-	History     template.HTML
-	HistoryNote string
+	HistoryView *marketItem
 }
 
 type itemUsedInRow struct {
@@ -568,10 +569,30 @@ func (app *Application) handleItemType(w http.ResponseWriter, r *http.Request) {
 	if detail.OnMarket {
 		hubs, forge := app.publicTypeMarket(ctx, typeID)
 		detail.Hubs = hubs
-		if forge > 0 {
-			detail.History, detail.HistoryNote = app.publicHistorySparkline(ctx, forge, typeID)
-		} else {
-			detail.HistoryNote = "No price history swept yet."
+		if forge <= 0 {
+			// No swept stats anywhere yet: chart the default
+			// region like the Market page does, so the section
+			// can ask for its history and fill in when it lands.
+			forge = defaultMarketRegion
+		}
+		regionName, _ := marketRegionName(forge)
+		history := &marketItem{
+			TypeID: typeID, RegionID: forge, RegionName: regionName,
+			Anonymous: !data.LoggedIn,
+		}
+		app.attachHistory(ctx, history, typeID, forge, app.userID(ctx))
+		detail.HistoryView = history
+		// The same warming contract as the Market item view:
+		// a signed-in visit whose history is still pending
+		// leaves a page want, and the section's live region
+		// polls the shared fragment until the chart swaps in.
+		// Anonymous renders queue nothing; a signed-in visit
+		// warms what an anonymous one then reads.
+		if data.LoggedIn {
+			app.markGuessHit(ctx, pageWantHistory, typeID, forge)
+			if history.HistoryPending {
+				app.notePageWant(ctx, pageWantHistory, typeID, forge)
+			}
 		}
 	}
 

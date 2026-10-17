@@ -70,7 +70,7 @@ func sparkline(points []float64) template.HTML {
 	const width, height = 600.0, 120.0
 	var b strings.Builder
 	b.WriteString(`<svg class="spark" viewBox="0 0 600 120" role="img" aria-label="Price history">`)
-	b.WriteString(`<polyline fill="none" stroke-width="2" points="`)
+	b.WriteString(`<polyline fill="none" stroke="#ffb84d" stroke-width="2" points="`)
 	span := hi - lo
 	for i, p := range points {
 		x := width * float64(i) / float64(n-1)
@@ -141,7 +141,7 @@ func (app *Application) publicHistorySparkline(ctx context.Context, regionID, ty
 	})
 	if err != nil {
 		logging.Errorf("public item %d: history: %v", typeID, err)
-		return "", ""
+		return "", "No price history swept yet."
 	}
 	if len(rows) == 0 {
 		return "", "No price history swept yet."

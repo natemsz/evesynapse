@@ -116,8 +116,19 @@ func TestHomeOverviewMultiChar(t *testing.T) {
 		t.Fatalf("park charlie: %v", err)
 	}
 
-	// Prices: Tritanium at 5.00 average.
-	app.prices[34] = esi.MarketPrice{AveragePrice: 5}
+	// Prices: The Forge's sweep has Tritanium at a typical
+	// sell of 5.00 (house source; the guide average prices
+	// nothing).
+	if err := q.UpsertMarketRegionStat(ctx, db.UpsertMarketRegionStatParams{
+		RegionID: 10000002, TypeID: 34, TypicalSell: 5, AvgDailyVolume: 1_000_000,
+		UpdatedAt: time.Now().UTC(),
+	}); err != nil {
+		t.Fatalf("seed region stat: %v", err)
+	}
+	// The sweep landing mid-test: the cache window lapses.
+	app.forgeTypicalsMu.Lock()
+	app.forgeTypicalsCache = nil
+	app.forgeTypicalsMu.Unlock()
 
 	cookie := sessionCookie(t, app, user.ID, fixtureCharA, "Fixture Alpha")
 	code, body := getPage(t, app, cookie, "/")

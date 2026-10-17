@@ -614,27 +614,34 @@ type PlanetName struct {
 }
 
 type PubContract struct {
-	ContractID          int64     `json:"contract_id"`
-	RegionID            int64     `json:"region_id"`
-	Type                string    `json:"type"`
-	IssuerID            int64     `json:"issuer_id"`
-	IssuerCorporationID int64     `json:"issuer_corporation_id"`
-	ForCorporation      bool      `json:"for_corporation"`
-	Title               string    `json:"title"`
-	Price               float64   `json:"price"`
-	Buyout              float64   `json:"buyout"`
-	Reward              float64   `json:"reward"`
-	Collateral          float64   `json:"collateral"`
-	Volume              float64   `json:"volume"`
-	StartLocationID     int64     `json:"start_location_id"`
-	EndLocationID       int64     `json:"end_location_id"`
-	DateIssued          time.Time `json:"date_issued"`
-	DateExpired         time.Time `json:"date_expired"`
-	DaysToComplete      int64     `json:"days_to_complete"`
-	ItemsState          string    `json:"items_state"`
-	LastCycle           int64     `json:"last_cycle"`
-	FirstSeen           time.Time `json:"first_seen"`
-	LastSeen            time.Time `json:"last_seen"`
+	ContractID          int64           `json:"contract_id"`
+	RegionID            int64           `json:"region_id"`
+	Type                string          `json:"type"`
+	IssuerID            int64           `json:"issuer_id"`
+	IssuerCorporationID int64           `json:"issuer_corporation_id"`
+	ForCorporation      bool            `json:"for_corporation"`
+	Title               string          `json:"title"`
+	Price               float64         `json:"price"`
+	Buyout              float64         `json:"buyout"`
+	Reward              float64         `json:"reward"`
+	Collateral          float64         `json:"collateral"`
+	Volume              float64         `json:"volume"`
+	StartLocationID     int64           `json:"start_location_id"`
+	EndLocationID       int64           `json:"end_location_id"`
+	DateIssued          time.Time       `json:"date_issued"`
+	DateExpired         time.Time       `json:"date_expired"`
+	DaysToComplete      int64           `json:"days_to_complete"`
+	ItemsState          string          `json:"items_state"`
+	LastCycle           int64           `json:"last_cycle"`
+	FirstSeen           time.Time       `json:"first_seen"`
+	LastSeen            time.Time       `json:"last_seen"`
+	OfferedValue        float64         `json:"offered_value"`
+	WantValue           float64         `json:"want_value"`
+	DealRatio           sql.NullFloat64 `json:"deal_ratio"`
+	PricedLines         int64           `json:"priced_lines"`
+	TotalLines          int64           `json:"total_lines"`
+	TierMix             string          `json:"tier_mix"`
+	PricedAt            sql.NullTime    `json:"priced_at"`
 }
 
 type PubContractBid struct {
@@ -645,16 +652,20 @@ type PubContractBid struct {
 }
 
 type PubContractItem struct {
-	RecordID           int64         `json:"record_id"`
-	ContractID         int64         `json:"contract_id"`
-	TypeID             int64         `json:"type_id"`
-	ItemID             sql.NullInt64 `json:"item_id"`
-	Quantity           int64         `json:"quantity"`
-	IsIncluded         bool          `json:"is_included"`
-	IsBlueprintCopy    bool          `json:"is_blueprint_copy"`
-	Runs               sql.NullInt64 `json:"runs"`
-	MaterialEfficiency sql.NullInt64 `json:"material_efficiency"`
-	TimeEfficiency     sql.NullInt64 `json:"time_efficiency"`
+	RecordID           int64           `json:"record_id"`
+	ContractID         int64           `json:"contract_id"`
+	TypeID             int64           `json:"type_id"`
+	ItemID             sql.NullInt64   `json:"item_id"`
+	Quantity           int64           `json:"quantity"`
+	IsIncluded         bool            `json:"is_included"`
+	IsBlueprintCopy    bool            `json:"is_blueprint_copy"`
+	Runs               sql.NullInt64   `json:"runs"`
+	MaterialEfficiency sql.NullInt64   `json:"material_efficiency"`
+	TimeEfficiency     sql.NullInt64   `json:"time_efficiency"`
+	UnitPrice          sql.NullFloat64 `json:"unit_price"`
+	LineValue          sql.NullFloat64 `json:"line_value"`
+	PriceTier          string          `json:"price_tier"`
+	PriceAsof          sql.NullTime    `json:"price_asof"`
 }
 
 type PubContractSweepState struct {

@@ -86,7 +86,9 @@ SELECT COUNT(*) FROM pub_contracts;
 SELECT contract_id, region_id, type, issuer_id, issuer_corporation_id,
     for_corporation, title, price, buyout, reward, collateral, volume,
     start_location_id, end_location_id, date_issued, date_expired,
-    days_to_complete, items_state, last_cycle, first_seen, last_seen
+    days_to_complete, items_state, last_cycle, first_seen, last_seen,
+    offered_value, want_value, deal_ratio, priced_lines, total_lines,
+    tier_mix, priced_at
 FROM pub_contracts
 WHERE contract_id = $1;
 
@@ -113,7 +115,8 @@ UPDATE pub_contracts SET items_state = $2 WHERE contract_id = $1;
 
 -- name: ListPublicContractItems :many
 SELECT record_id, contract_id, type_id, item_id, quantity, is_included,
-    is_blueprint_copy, runs, material_efficiency, time_efficiency
+    is_blueprint_copy, runs, material_efficiency, time_efficiency,
+    unit_price, line_value, price_tier, price_asof
 FROM pub_contract_items
 WHERE contract_id = $1
 ORDER BY record_id;
@@ -267,6 +270,289 @@ SELECT item_id, contract_id, contract_type, price, region_id,
 FROM abyssal_sightings
 WHERE item_id = $1
 ORDER BY first_seen_at, contract_id;
+
+-- ---------------------------------------------------------------------
+-- Appraisal (schema 056): the core appraisal pass prices stored
+-- lines and stamps the contract's totals; the search and detail
+-- pages read the stored results and never recompute.
+-- ---------------------------------------------------------------------
+
+-- The contracts whose appraisal is due: item list stored, and
+-- either never priced or priced before the cutoff the caller
+-- sets from the pricing inputs' cadence. Oldest appraisal
+-- first, so a capped pass drains the stalest numbers first.
+-- name: ListPublicContractsDueAppraisal :many
+SELECT contract_id FROM pub_contracts
+WHERE items_state = 'stored'
+  AND (priced_at IS NULL OR priced_at < sqlc.arg(cutoff)::timestamptz)
+ORDER BY priced_at ASC NULLS FIRST, contract_id ASC
+LIMIT sqlc.arg(max_rows)::bigint;
+
+-- name: UpdatePublicContractItemAppraisal :exec
+UPDATE pub_contract_items
+SET unit_price = sqlc.narg(unit_price)::double precision,
+    line_value = sqlc.narg(line_value)::double precision,
+    price_tier = sqlc.arg(price_tier)::text,
+    price_asof = sqlc.narg(price_asof)::timestamptz
+WHERE record_id = sqlc.arg(record_id)::bigint;
+
+-- name: UpdatePublicContractAppraisal :exec
+UPDATE pub_contracts
+SET offered_value = sqlc.arg(offered_value)::double precision,
+    want_value = sqlc.arg(want_value)::double precision,
+    deal_ratio = sqlc.narg(deal_ratio)::double precision,
+    priced_lines = sqlc.arg(priced_lines)::bigint,
+    total_lines = sqlc.arg(total_lines)::bigint,
+    tier_mix = sqlc.arg(tier_mix)::text,
+    priced_at = sqlc.arg(priced_at)::timestamptz
+WHERE contract_id = sqlc.arg(contract_id)::bigint;
+
+-- The item rows of a page of search results in one read:
+-- result rows carry no lines of their own, so the page reads
+-- its contracts' lines in a single bounded follow-up.
+-- name: ListPublicContractItemsForContracts :many
+SELECT record_id, contract_id, type_id, item_id, quantity, is_included,
+    is_blueprint_copy, runs, material_efficiency, time_efficiency,
+    unit_price, line_value, price_tier, price_asof
+FROM pub_contract_items
+WHERE contract_id = ANY(sqlc.arg(contract_ids)::bigint[])
+ORDER BY contract_id, record_id;
+
+-- name: ListAbyssalItemsByIDs :many
+SELECT item_id, type_id, source_type_id, mutator_type_id, created_by,
+    attributes, fetched_at, first_seen_at, last_seen_at
+FROM abyssal_items
+WHERE item_id = ANY(sqlc.arg(item_ids)::bigint[])
+ORDER BY item_id;
+
+-- The regions the search can offer: the ones holding live
+-- contracts, with the SDE's name where it is known.
+-- name: ListPublicContractRegions :many
+SELECT DISTINCT c.region_id, COALESCE(r.name, '') AS region_name
+FROM pub_contracts c
+LEFT JOIN sde_regions r ON r.region_id = c.region_id
+ORDER BY c.region_id;
+
+-- ---------------------------------------------------------------------
+-- Search (the contracts module's pages): every filter is a
+-- clause over indexed columns; the sort is chosen by a key the
+-- handler validates, never by raw input. Empty text means the
+-- filter is off; array filters are off when empty; numeric
+-- bands are off below zero.
+-- ---------------------------------------------------------------------
+
+-- name: SearchPublicContracts :many
+SELECT c.contract_id, c.region_id, c.type, c.issuer_id,
+    c.issuer_corporation_id, c.for_corporation, c.title, c.price,
+    c.buyout, c.reward, c.collateral, c.volume,
+    c.start_location_id, c.end_location_id, c.date_issued,
+    c.date_expired, c.days_to_complete, c.items_state,
+    c.last_cycle, c.first_seen, c.last_seen,
+    c.offered_value, c.want_value, c.deal_ratio, c.priced_lines,
+    c.total_lines, c.tier_mix, c.priced_at,
+    (SELECT COALESCE(MAX(b.amount), 0)::double precision FROM pub_contract_bids b
+      WHERE b.contract_id = c.contract_id) AS top_bid,
+    (SELECT COUNT(*) FROM pub_contract_bids b
+      WHERE b.contract_id = c.contract_id) AS bid_count
+FROM pub_contracts c
+WHERE (coalesce(cardinality(sqlc.arg(types)::text[]), 0) = 0
+       OR c.type = ANY(sqlc.arg(types)::text[]))
+  AND (coalesce(cardinality(sqlc.arg(region_ids)::bigint[]), 0) = 0
+       OR c.region_id = ANY(sqlc.arg(region_ids)::bigint[]))
+  AND (sqlc.arg(title_q)::text = ''
+       OR c.title ILIKE '%' || sqlc.arg(title_q)::text || '%')
+  AND (sqlc.arg(item_q)::text = '' OR EXISTS (
+        SELECT 1 FROM pub_contract_items i
+        JOIN sde_types st ON st.type_id = i.type_id
+        WHERE i.contract_id = c.contract_id
+          AND st.name ILIKE '%' || sqlc.arg(item_q)::text || '%'
+          AND (sqlc.arg(item_dir)::text = 'either'
+               OR (sqlc.arg(item_dir)::text = 'offered' AND i.is_included)
+               OR (sqlc.arg(item_dir)::text = 'wanted' AND NOT i.is_included))))
+  AND (sqlc.arg(issuer_q)::text = ''
+       OR c.issuer_id IN (SELECT id FROM entity_names
+                          WHERE kind = 'character'
+                            AND name ILIKE '%' || sqlc.arg(issuer_q)::text || '%')
+       OR c.issuer_corporation_id IN (SELECT id FROM entity_names
+                          WHERE kind = 'corporation'
+                            AND name ILIKE '%' || sqlc.arg(issuer_q)::text || '%'))
+  AND (sqlc.arg(for_corp)::bigint = -1
+       OR c.for_corporation = (sqlc.arg(for_corp)::bigint = 1))
+  AND (sqlc.arg(price_min)::double precision < 0
+       OR c.price >= sqlc.arg(price_min)::double precision)
+  AND (sqlc.arg(price_max)::double precision < 0
+       OR c.price <= sqlc.arg(price_max)::double precision)
+  AND (sqlc.arg(buyout_min)::double precision < 0
+       OR c.buyout >= sqlc.arg(buyout_min)::double precision)
+  AND (sqlc.arg(place_q)::text = ''
+       OR c.start_location_id IN (
+            SELECT station_id FROM sde_stations
+            WHERE name ILIKE '%' || sqlc.arg(place_q)::text || '%'
+            UNION
+            SELECT structure_id FROM structure_names
+            WHERE state = 'resolved'
+              AND name ILIKE '%' || sqlc.arg(place_q)::text || '%'
+            UNION
+            SELECT station_id FROM sde_stations
+            WHERE system_id IN (SELECT system_id FROM sde_systems
+                                WHERE name ILIKE '%' || sqlc.arg(place_q)::text || '%')
+            UNION
+            SELECT structure_id FROM structure_context
+            WHERE system_id IN (SELECT system_id FROM sde_systems
+                                WHERE name ILIKE '%' || sqlc.arg(place_q)::text || '%')))
+  AND (sqlc.arg(place_end_q)::text = ''
+       OR c.end_location_id IN (
+            SELECT station_id FROM sde_stations
+            WHERE name ILIKE '%' || sqlc.arg(place_end_q)::text || '%'
+            UNION
+            SELECT structure_id FROM structure_names
+            WHERE state = 'resolved'
+              AND name ILIKE '%' || sqlc.arg(place_end_q)::text || '%'
+            UNION
+            SELECT station_id FROM sde_stations
+            WHERE system_id IN (SELECT system_id FROM sde_systems
+                                WHERE name ILIKE '%' || sqlc.arg(place_end_q)::text || '%')
+            UNION
+            SELECT structure_id FROM structure_context
+            WHERE system_id IN (SELECT system_id FROM sde_systems
+                                WHERE name ILIKE '%' || sqlc.arg(place_end_q)::text || '%')))
+  AND (sqlc.arg(reward_min)::double precision < 0
+       OR c.reward >= sqlc.arg(reward_min)::double precision)
+  AND (sqlc.arg(reward_max)::double precision < 0
+       OR c.reward <= sqlc.arg(reward_max)::double precision)
+  AND (sqlc.arg(collateral_max)::double precision < 0
+       OR c.collateral <= sqlc.arg(collateral_max)::double precision)
+  AND (sqlc.arg(volume_min)::double precision < 0
+       OR c.volume >= sqlc.arg(volume_min)::double precision)
+  AND (sqlc.arg(volume_max)::double precision < 0
+       OR c.volume <= sqlc.arg(volume_max)::double precision)
+  AND (sqlc.arg(days_max)::bigint < 0
+       OR c.days_to_complete <= sqlc.arg(days_max)::bigint)
+  AND (NOT sqlc.arg(bp_active)::boolean OR EXISTS (
+        SELECT 1 FROM pub_contract_items i
+        WHERE i.contract_id = c.contract_id AND i.is_included
+          AND i.material_efficiency IS NOT NULL
+          AND (sqlc.arg(bp_mode)::text = 'any'
+               OR (sqlc.arg(bp_mode)::text = 'bpo' AND NOT i.is_blueprint_copy)
+               OR (sqlc.arg(bp_mode)::text = 'bpc' AND i.is_blueprint_copy))
+          AND (sqlc.arg(me_min)::bigint < 0
+               OR i.material_efficiency >= sqlc.arg(me_min)::bigint)
+          AND (sqlc.arg(te_min)::bigint < 0
+               OR i.time_efficiency >= sqlc.arg(te_min)::bigint)
+          AND (sqlc.arg(runs_min)::bigint < 0
+               OR COALESCE(i.runs, 0) >= sqlc.arg(runs_min)::bigint)))
+  AND (sqlc.arg(issued_after)::timestamptz IS NULL
+       OR c.date_issued >= sqlc.arg(issued_after)::timestamptz)
+  AND (sqlc.arg(expiring_before)::timestamptz IS NULL
+       OR c.date_expired <= sqlc.arg(expiring_before)::timestamptz)
+  AND (NOT sqlc.arg(deals_only)::boolean
+       OR (c.deal_ratio IS NOT NULL AND c.deal_ratio <= 0.85))
+ORDER BY
+  CASE WHEN sqlc.arg(sort)::text = 'price_asc' THEN c.price END ASC NULLS LAST,
+  CASE WHEN sqlc.arg(sort)::text = 'price_desc' THEN c.price END DESC NULLS LAST,
+  CASE WHEN sqlc.arg(sort)::text = 'value_desc' THEN c.offered_value END DESC NULLS LAST,
+  CASE WHEN sqlc.arg(sort)::text = 'deal_asc' THEN c.deal_ratio END ASC NULLS LAST,
+  CASE WHEN sqlc.arg(sort)::text = 'expiry_asc' THEN c.date_expired END ASC NULLS LAST,
+  CASE WHEN sqlc.arg(sort)::text = 'reward_desc' THEN c.reward END DESC NULLS LAST,
+  CASE WHEN sqlc.arg(sort)::text = 'reward_m3_desc' THEN
+       CASE WHEN c.volume > 0 THEN c.reward / c.volume END END DESC NULLS LAST,
+  c.date_issued DESC, c.contract_id DESC
+LIMIT sqlc.arg(max_rows)::bigint OFFSET sqlc.arg(row_offset)::bigint;
+
+-- name: CountPublicContractsSearch :one
+SELECT COUNT(*) FROM pub_contracts c
+WHERE (coalesce(cardinality(sqlc.arg(types)::text[]), 0) = 0
+       OR c.type = ANY(sqlc.arg(types)::text[]))
+  AND (coalesce(cardinality(sqlc.arg(region_ids)::bigint[]), 0) = 0
+       OR c.region_id = ANY(sqlc.arg(region_ids)::bigint[]))
+  AND (sqlc.arg(title_q)::text = ''
+       OR c.title ILIKE '%' || sqlc.arg(title_q)::text || '%')
+  AND (sqlc.arg(item_q)::text = '' OR EXISTS (
+        SELECT 1 FROM pub_contract_items i
+        JOIN sde_types st ON st.type_id = i.type_id
+        WHERE i.contract_id = c.contract_id
+          AND st.name ILIKE '%' || sqlc.arg(item_q)::text || '%'
+          AND (sqlc.arg(item_dir)::text = 'either'
+               OR (sqlc.arg(item_dir)::text = 'offered' AND i.is_included)
+               OR (sqlc.arg(item_dir)::text = 'wanted' AND NOT i.is_included))))
+  AND (sqlc.arg(issuer_q)::text = ''
+       OR c.issuer_id IN (SELECT id FROM entity_names
+                          WHERE kind = 'character'
+                            AND name ILIKE '%' || sqlc.arg(issuer_q)::text || '%')
+       OR c.issuer_corporation_id IN (SELECT id FROM entity_names
+                          WHERE kind = 'corporation'
+                            AND name ILIKE '%' || sqlc.arg(issuer_q)::text || '%'))
+  AND (sqlc.arg(for_corp)::bigint = -1
+       OR c.for_corporation = (sqlc.arg(for_corp)::bigint = 1))
+  AND (sqlc.arg(price_min)::double precision < 0
+       OR c.price >= sqlc.arg(price_min)::double precision)
+  AND (sqlc.arg(price_max)::double precision < 0
+       OR c.price <= sqlc.arg(price_max)::double precision)
+  AND (sqlc.arg(buyout_min)::double precision < 0
+       OR c.buyout >= sqlc.arg(buyout_min)::double precision)
+  AND (sqlc.arg(place_q)::text = ''
+       OR c.start_location_id IN (
+            SELECT station_id FROM sde_stations
+            WHERE name ILIKE '%' || sqlc.arg(place_q)::text || '%'
+            UNION
+            SELECT structure_id FROM structure_names
+            WHERE state = 'resolved'
+              AND name ILIKE '%' || sqlc.arg(place_q)::text || '%'
+            UNION
+            SELECT station_id FROM sde_stations
+            WHERE system_id IN (SELECT system_id FROM sde_systems
+                                WHERE name ILIKE '%' || sqlc.arg(place_q)::text || '%')
+            UNION
+            SELECT structure_id FROM structure_context
+            WHERE system_id IN (SELECT system_id FROM sde_systems
+                                WHERE name ILIKE '%' || sqlc.arg(place_q)::text || '%')))
+  AND (sqlc.arg(place_end_q)::text = ''
+       OR c.end_location_id IN (
+            SELECT station_id FROM sde_stations
+            WHERE name ILIKE '%' || sqlc.arg(place_end_q)::text || '%'
+            UNION
+            SELECT structure_id FROM structure_names
+            WHERE state = 'resolved'
+              AND name ILIKE '%' || sqlc.arg(place_end_q)::text || '%'
+            UNION
+            SELECT station_id FROM sde_stations
+            WHERE system_id IN (SELECT system_id FROM sde_systems
+                                WHERE name ILIKE '%' || sqlc.arg(place_end_q)::text || '%')
+            UNION
+            SELECT structure_id FROM structure_context
+            WHERE system_id IN (SELECT system_id FROM sde_systems
+                                WHERE name ILIKE '%' || sqlc.arg(place_end_q)::text || '%')))
+  AND (sqlc.arg(reward_min)::double precision < 0
+       OR c.reward >= sqlc.arg(reward_min)::double precision)
+  AND (sqlc.arg(reward_max)::double precision < 0
+       OR c.reward <= sqlc.arg(reward_max)::double precision)
+  AND (sqlc.arg(collateral_max)::double precision < 0
+       OR c.collateral <= sqlc.arg(collateral_max)::double precision)
+  AND (sqlc.arg(volume_min)::double precision < 0
+       OR c.volume >= sqlc.arg(volume_min)::double precision)
+  AND (sqlc.arg(volume_max)::double precision < 0
+       OR c.volume <= sqlc.arg(volume_max)::double precision)
+  AND (sqlc.arg(days_max)::bigint < 0
+       OR c.days_to_complete <= sqlc.arg(days_max)::bigint)
+  AND (NOT sqlc.arg(bp_active)::boolean OR EXISTS (
+        SELECT 1 FROM pub_contract_items i
+        WHERE i.contract_id = c.contract_id AND i.is_included
+          AND i.material_efficiency IS NOT NULL
+          AND (sqlc.arg(bp_mode)::text = 'any'
+               OR (sqlc.arg(bp_mode)::text = 'bpo' AND NOT i.is_blueprint_copy)
+               OR (sqlc.arg(bp_mode)::text = 'bpc' AND i.is_blueprint_copy))
+          AND (sqlc.arg(me_min)::bigint < 0
+               OR i.material_efficiency >= sqlc.arg(me_min)::bigint)
+          AND (sqlc.arg(te_min)::bigint < 0
+               OR i.time_efficiency >= sqlc.arg(te_min)::bigint)
+          AND (sqlc.arg(runs_min)::bigint < 0
+               OR COALESCE(i.runs, 0) >= sqlc.arg(runs_min)::bigint)))
+  AND (sqlc.arg(issued_after)::timestamptz IS NULL
+       OR c.date_issued >= sqlc.arg(issued_after)::timestamptz)
+  AND (sqlc.arg(expiring_before)::timestamptz IS NULL
+       OR c.date_expired <= sqlc.arg(expiring_before)::timestamptz)
+  AND (NOT sqlc.arg(deals_only)::boolean
+       OR (c.deal_ratio IS NOT NULL AND c.deal_ratio <= 0.85));
 
 -- ---------------------------------------------------------------------
 -- Roll ranges (schema 055), kept filled by the SDE importer.

@@ -1124,6 +1124,11 @@ func (app *Application) PostESI(ctx context.Context, token, path string, body, o
 	return app.esi.PostJSONAuthed(ctx, token, path, body, out)
 }
 
+// PostESINoContent is module.Deps.PostESINoContent.
+func (app *Application) PostESINoContent(ctx context.Context, token, path string, body any) error {
+	return app.esi.PostAuthedNoContent(ctx, token, path, body)
+}
+
 func (app *Application) RefreshSnapshot(ctx context.Context, ch db.Character, kind string) error {
 	return app.esi.FetchAndStoreSnapshot(ctx, ch, kind)
 }

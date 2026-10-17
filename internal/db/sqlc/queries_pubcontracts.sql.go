@@ -58,6 +58,165 @@ func (q *Queries) CountPublicContracts(ctx context.Context) (int64, error) {
 	return count, err
 }
 
+const countPublicContractsSearch = `-- name: CountPublicContractsSearch :one
+SELECT COUNT(*) FROM pub_contracts c
+WHERE (coalesce(cardinality($1::text[]), 0) = 0
+       OR c.type = ANY($1::text[]))
+  AND (coalesce(cardinality($2::bigint[]), 0) = 0
+       OR c.region_id = ANY($2::bigint[]))
+  AND ($3::text = ''
+       OR c.title ILIKE '%' || $3::text || '%')
+  AND ($4::text = '' OR EXISTS (
+        SELECT 1 FROM pub_contract_items i
+        JOIN sde_types st ON st.type_id = i.type_id
+        WHERE i.contract_id = c.contract_id
+          AND st.name ILIKE '%' || $4::text || '%'
+          AND ($5::text = 'either'
+               OR ($5::text = 'offered' AND i.is_included)
+               OR ($5::text = 'wanted' AND NOT i.is_included))))
+  AND ($6::text = ''
+       OR c.issuer_id IN (SELECT id FROM entity_names
+                          WHERE kind = 'character'
+                            AND name ILIKE '%' || $6::text || '%')
+       OR c.issuer_corporation_id IN (SELECT id FROM entity_names
+                          WHERE kind = 'corporation'
+                            AND name ILIKE '%' || $6::text || '%'))
+  AND ($7::bigint = -1
+       OR c.for_corporation = ($7::bigint = 1))
+  AND ($8::double precision < 0
+       OR c.price >= $8::double precision)
+  AND ($9::double precision < 0
+       OR c.price <= $9::double precision)
+  AND ($10::double precision < 0
+       OR c.buyout >= $10::double precision)
+  AND ($11::text = ''
+       OR c.start_location_id IN (
+            SELECT station_id FROM sde_stations
+            WHERE name ILIKE '%' || $11::text || '%'
+            UNION
+            SELECT structure_id FROM structure_names
+            WHERE state = 'resolved'
+              AND name ILIKE '%' || $11::text || '%'
+            UNION
+            SELECT station_id FROM sde_stations
+            WHERE system_id IN (SELECT system_id FROM sde_systems
+                                WHERE name ILIKE '%' || $11::text || '%')
+            UNION
+            SELECT structure_id FROM structure_context
+            WHERE system_id IN (SELECT system_id FROM sde_systems
+                                WHERE name ILIKE '%' || $11::text || '%')))
+  AND ($12::text = ''
+       OR c.end_location_id IN (
+            SELECT station_id FROM sde_stations
+            WHERE name ILIKE '%' || $12::text || '%'
+            UNION
+            SELECT structure_id FROM structure_names
+            WHERE state = 'resolved'
+              AND name ILIKE '%' || $12::text || '%'
+            UNION
+            SELECT station_id FROM sde_stations
+            WHERE system_id IN (SELECT system_id FROM sde_systems
+                                WHERE name ILIKE '%' || $12::text || '%')
+            UNION
+            SELECT structure_id FROM structure_context
+            WHERE system_id IN (SELECT system_id FROM sde_systems
+                                WHERE name ILIKE '%' || $12::text || '%')))
+  AND ($13::double precision < 0
+       OR c.reward >= $13::double precision)
+  AND ($14::double precision < 0
+       OR c.reward <= $14::double precision)
+  AND ($15::double precision < 0
+       OR c.collateral <= $15::double precision)
+  AND ($16::double precision < 0
+       OR c.volume >= $16::double precision)
+  AND ($17::double precision < 0
+       OR c.volume <= $17::double precision)
+  AND ($18::bigint < 0
+       OR c.days_to_complete <= $18::bigint)
+  AND (NOT $19::boolean OR EXISTS (
+        SELECT 1 FROM pub_contract_items i
+        WHERE i.contract_id = c.contract_id AND i.is_included
+          AND i.material_efficiency IS NOT NULL
+          AND ($20::text = 'any'
+               OR ($20::text = 'bpo' AND NOT i.is_blueprint_copy)
+               OR ($20::text = 'bpc' AND i.is_blueprint_copy))
+          AND ($21::bigint < 0
+               OR i.material_efficiency >= $21::bigint)
+          AND ($22::bigint < 0
+               OR i.time_efficiency >= $22::bigint)
+          AND ($23::bigint < 0
+               OR COALESCE(i.runs, 0) >= $23::bigint)))
+  AND ($24::timestamptz IS NULL
+       OR c.date_issued >= $24::timestamptz)
+  AND ($25::timestamptz IS NULL
+       OR c.date_expired <= $25::timestamptz)
+  AND (NOT $26::boolean
+       OR (c.deal_ratio IS NOT NULL AND c.deal_ratio <= 0.85))
+`
+
+type CountPublicContractsSearchParams struct {
+	Types          []string  `json:"types"`
+	RegionIds      []int64   `json:"region_ids"`
+	TitleQ         string    `json:"title_q"`
+	ItemQ          string    `json:"item_q"`
+	ItemDir        string    `json:"item_dir"`
+	IssuerQ        string    `json:"issuer_q"`
+	ForCorp        int64     `json:"for_corp"`
+	PriceMin       float64   `json:"price_min"`
+	PriceMax       float64   `json:"price_max"`
+	BuyoutMin      float64   `json:"buyout_min"`
+	PlaceQ         string    `json:"place_q"`
+	PlaceEndQ      string    `json:"place_end_q"`
+	RewardMin      float64   `json:"reward_min"`
+	RewardMax      float64   `json:"reward_max"`
+	CollateralMax  float64   `json:"collateral_max"`
+	VolumeMin      float64   `json:"volume_min"`
+	VolumeMax      float64   `json:"volume_max"`
+	DaysMax        int64     `json:"days_max"`
+	BpActive       bool      `json:"bp_active"`
+	BpMode         string    `json:"bp_mode"`
+	MeMin          int64     `json:"me_min"`
+	TeMin          int64     `json:"te_min"`
+	RunsMin        int64     `json:"runs_min"`
+	IssuedAfter    time.Time `json:"issued_after"`
+	ExpiringBefore time.Time `json:"expiring_before"`
+	DealsOnly      bool      `json:"deals_only"`
+}
+
+func (q *Queries) CountPublicContractsSearch(ctx context.Context, arg CountPublicContractsSearchParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countPublicContractsSearch,
+		pq.Array(arg.Types),
+		pq.Array(arg.RegionIds),
+		arg.TitleQ,
+		arg.ItemQ,
+		arg.ItemDir,
+		arg.IssuerQ,
+		arg.ForCorp,
+		arg.PriceMin,
+		arg.PriceMax,
+		arg.BuyoutMin,
+		arg.PlaceQ,
+		arg.PlaceEndQ,
+		arg.RewardMin,
+		arg.RewardMax,
+		arg.CollateralMax,
+		arg.VolumeMin,
+		arg.VolumeMax,
+		arg.DaysMax,
+		arg.BpActive,
+		arg.BpMode,
+		arg.MeMin,
+		arg.TeMin,
+		arg.RunsMin,
+		arg.IssuedAfter,
+		arg.ExpiringBefore,
+		arg.DealsOnly,
+	)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const deletePublicContractBids = `-- name: DeletePublicContractBids :exec
 DELETE FROM pub_contract_bids WHERE contract_id = $1
 `
@@ -125,7 +284,9 @@ const getPublicContract = `-- name: GetPublicContract :one
 SELECT contract_id, region_id, type, issuer_id, issuer_corporation_id,
     for_corporation, title, price, buyout, reward, collateral, volume,
     start_location_id, end_location_id, date_issued, date_expired,
-    days_to_complete, items_state, last_cycle, first_seen, last_seen
+    days_to_complete, items_state, last_cycle, first_seen, last_seen,
+    offered_value, want_value, deal_ratio, priced_lines, total_lines,
+    tier_mix, priced_at
 FROM pub_contracts
 WHERE contract_id = $1
 `
@@ -155,6 +316,13 @@ func (q *Queries) GetPublicContract(ctx context.Context, contractID int64) (PubC
 		&i.LastCycle,
 		&i.FirstSeen,
 		&i.LastSeen,
+		&i.OfferedValue,
+		&i.WantValue,
+		&i.DealRatio,
+		&i.PricedLines,
+		&i.TotalLines,
+		&i.TierMix,
+		&i.PricedAt,
 	)
 	return i, err
 }
@@ -259,6 +427,47 @@ func (q *Queries) InsertPublicContractItem(ctx context.Context, arg InsertPublic
 		arg.TimeEfficiency,
 	)
 	return err
+}
+
+const listAbyssalItemsByIDs = `-- name: ListAbyssalItemsByIDs :many
+SELECT item_id, type_id, source_type_id, mutator_type_id, created_by,
+    attributes, fetched_at, first_seen_at, last_seen_at
+FROM abyssal_items
+WHERE item_id = ANY($1::bigint[])
+ORDER BY item_id
+`
+
+func (q *Queries) ListAbyssalItemsByIDs(ctx context.Context, itemIds []int64) ([]AbyssalItem, error) {
+	rows, err := q.db.QueryContext(ctx, listAbyssalItemsByIDs, pq.Array(itemIds))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []AbyssalItem
+	for rows.Next() {
+		var i AbyssalItem
+		if err := rows.Scan(
+			&i.ItemID,
+			&i.TypeID,
+			&i.SourceTypeID,
+			&i.MutatorTypeID,
+			&i.CreatedBy,
+			&i.Attributes,
+			&i.FetchedAt,
+			&i.FirstSeenAt,
+			&i.LastSeenAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listAbyssalProbeCandidates = `-- name: ListAbyssalProbeCandidates :many
@@ -498,7 +707,8 @@ func (q *Queries) ListPublicContractBids(ctx context.Context, contractID int64) 
 
 const listPublicContractItems = `-- name: ListPublicContractItems :many
 SELECT record_id, contract_id, type_id, item_id, quantity, is_included,
-    is_blueprint_copy, runs, material_efficiency, time_efficiency
+    is_blueprint_copy, runs, material_efficiency, time_efficiency,
+    unit_price, line_value, price_tier, price_asof
 FROM pub_contract_items
 WHERE contract_id = $1
 ORDER BY record_id
@@ -524,6 +734,60 @@ func (q *Queries) ListPublicContractItems(ctx context.Context, contractID int64)
 			&i.Runs,
 			&i.MaterialEfficiency,
 			&i.TimeEfficiency,
+			&i.UnitPrice,
+			&i.LineValue,
+			&i.PriceTier,
+			&i.PriceAsof,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPublicContractItemsForContracts = `-- name: ListPublicContractItemsForContracts :many
+SELECT record_id, contract_id, type_id, item_id, quantity, is_included,
+    is_blueprint_copy, runs, material_efficiency, time_efficiency,
+    unit_price, line_value, price_tier, price_asof
+FROM pub_contract_items
+WHERE contract_id = ANY($1::bigint[])
+ORDER BY contract_id, record_id
+`
+
+// The item rows of a page of search results in one read:
+// result rows carry no lines of their own, so the page reads
+// its contracts' lines in a single bounded follow-up.
+func (q *Queries) ListPublicContractItemsForContracts(ctx context.Context, contractIds []int64) ([]PubContractItem, error) {
+	rows, err := q.db.QueryContext(ctx, listPublicContractItemsForContracts, pq.Array(contractIds))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []PubContractItem
+	for rows.Next() {
+		var i PubContractItem
+		if err := rows.Scan(
+			&i.RecordID,
+			&i.ContractID,
+			&i.TypeID,
+			&i.ItemID,
+			&i.Quantity,
+			&i.IsIncluded,
+			&i.IsBlueprintCopy,
+			&i.Runs,
+			&i.MaterialEfficiency,
+			&i.TimeEfficiency,
+			&i.UnitPrice,
+			&i.LineValue,
+			&i.PriceTier,
+			&i.PriceAsof,
 		); err != nil {
 			return nil, err
 		}
@@ -557,6 +821,89 @@ type ListPublicContractLiveAuctionsParams struct {
 // ---------------------------------------------------------------------
 func (q *Queries) ListPublicContractLiveAuctions(ctx context.Context, arg ListPublicContractLiveAuctionsParams) ([]int64, error) {
 	rows, err := q.db.QueryContext(ctx, listPublicContractLiveAuctions, arg.DateExpired, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []int64
+	for rows.Next() {
+		var contract_id int64
+		if err := rows.Scan(&contract_id); err != nil {
+			return nil, err
+		}
+		items = append(items, contract_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPublicContractRegions = `-- name: ListPublicContractRegions :many
+SELECT DISTINCT c.region_id, COALESCE(r.name, '') AS region_name
+FROM pub_contracts c
+LEFT JOIN sde_regions r ON r.region_id = c.region_id
+ORDER BY c.region_id
+`
+
+type ListPublicContractRegionsRow struct {
+	RegionID   int64  `json:"region_id"`
+	RegionName string `json:"region_name"`
+}
+
+// The regions the search can offer: the ones holding live
+// contracts, with the SDE's name where it is known.
+func (q *Queries) ListPublicContractRegions(ctx context.Context) ([]ListPublicContractRegionsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listPublicContractRegions)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListPublicContractRegionsRow
+	for rows.Next() {
+		var i ListPublicContractRegionsRow
+		if err := rows.Scan(&i.RegionID, &i.RegionName); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPublicContractsDueAppraisal = `-- name: ListPublicContractsDueAppraisal :many
+
+SELECT contract_id FROM pub_contracts
+WHERE items_state = 'stored'
+  AND (priced_at IS NULL OR priced_at < $1::timestamptz)
+ORDER BY priced_at ASC NULLS FIRST, contract_id ASC
+LIMIT $2::bigint
+`
+
+type ListPublicContractsDueAppraisalParams struct {
+	Cutoff  time.Time `json:"cutoff"`
+	MaxRows int64     `json:"max_rows"`
+}
+
+// ---------------------------------------------------------------------
+// Appraisal (schema 056): the core appraisal pass prices stored
+// lines and stamps the contract's totals; the search and detail
+// pages read the stored results and never recompute.
+// ---------------------------------------------------------------------
+// The contracts whose appraisal is due: item list stored, and
+// either never priced or priced before the cutoff the caller
+// sets from the pricing inputs' cadence. Oldest appraisal
+// first, so a capped pass drains the stalest numbers first.
+func (q *Queries) ListPublicContractsDueAppraisal(ctx context.Context, arg ListPublicContractsDueAppraisalParams) ([]int64, error) {
+	rows, err := q.db.QueryContext(ctx, listPublicContractsDueAppraisal, arg.Cutoff, arg.MaxRows)
 	if err != nil {
 		return nil, err
 	}
@@ -717,6 +1064,282 @@ func (q *Queries) RefreshAbyssalSightingsForRegionCycle(ctx context.Context, arg
 	return err
 }
 
+const searchPublicContracts = `-- name: SearchPublicContracts :many
+
+SELECT c.contract_id, c.region_id, c.type, c.issuer_id,
+    c.issuer_corporation_id, c.for_corporation, c.title, c.price,
+    c.buyout, c.reward, c.collateral, c.volume,
+    c.start_location_id, c.end_location_id, c.date_issued,
+    c.date_expired, c.days_to_complete, c.items_state,
+    c.last_cycle, c.first_seen, c.last_seen,
+    c.offered_value, c.want_value, c.deal_ratio, c.priced_lines,
+    c.total_lines, c.tier_mix, c.priced_at,
+    (SELECT COALESCE(MAX(b.amount), 0)::double precision FROM pub_contract_bids b
+      WHERE b.contract_id = c.contract_id) AS top_bid,
+    (SELECT COUNT(*) FROM pub_contract_bids b
+      WHERE b.contract_id = c.contract_id) AS bid_count
+FROM pub_contracts c
+WHERE (coalesce(cardinality($1::text[]), 0) = 0
+       OR c.type = ANY($1::text[]))
+  AND (coalesce(cardinality($2::bigint[]), 0) = 0
+       OR c.region_id = ANY($2::bigint[]))
+  AND ($3::text = ''
+       OR c.title ILIKE '%' || $3::text || '%')
+  AND ($4::text = '' OR EXISTS (
+        SELECT 1 FROM pub_contract_items i
+        JOIN sde_types st ON st.type_id = i.type_id
+        WHERE i.contract_id = c.contract_id
+          AND st.name ILIKE '%' || $4::text || '%'
+          AND ($5::text = 'either'
+               OR ($5::text = 'offered' AND i.is_included)
+               OR ($5::text = 'wanted' AND NOT i.is_included))))
+  AND ($6::text = ''
+       OR c.issuer_id IN (SELECT id FROM entity_names
+                          WHERE kind = 'character'
+                            AND name ILIKE '%' || $6::text || '%')
+       OR c.issuer_corporation_id IN (SELECT id FROM entity_names
+                          WHERE kind = 'corporation'
+                            AND name ILIKE '%' || $6::text || '%'))
+  AND ($7::bigint = -1
+       OR c.for_corporation = ($7::bigint = 1))
+  AND ($8::double precision < 0
+       OR c.price >= $8::double precision)
+  AND ($9::double precision < 0
+       OR c.price <= $9::double precision)
+  AND ($10::double precision < 0
+       OR c.buyout >= $10::double precision)
+  AND ($11::text = ''
+       OR c.start_location_id IN (
+            SELECT station_id FROM sde_stations
+            WHERE name ILIKE '%' || $11::text || '%'
+            UNION
+            SELECT structure_id FROM structure_names
+            WHERE state = 'resolved'
+              AND name ILIKE '%' || $11::text || '%'
+            UNION
+            SELECT station_id FROM sde_stations
+            WHERE system_id IN (SELECT system_id FROM sde_systems
+                                WHERE name ILIKE '%' || $11::text || '%')
+            UNION
+            SELECT structure_id FROM structure_context
+            WHERE system_id IN (SELECT system_id FROM sde_systems
+                                WHERE name ILIKE '%' || $11::text || '%')))
+  AND ($12::text = ''
+       OR c.end_location_id IN (
+            SELECT station_id FROM sde_stations
+            WHERE name ILIKE '%' || $12::text || '%'
+            UNION
+            SELECT structure_id FROM structure_names
+            WHERE state = 'resolved'
+              AND name ILIKE '%' || $12::text || '%'
+            UNION
+            SELECT station_id FROM sde_stations
+            WHERE system_id IN (SELECT system_id FROM sde_systems
+                                WHERE name ILIKE '%' || $12::text || '%')
+            UNION
+            SELECT structure_id FROM structure_context
+            WHERE system_id IN (SELECT system_id FROM sde_systems
+                                WHERE name ILIKE '%' || $12::text || '%')))
+  AND ($13::double precision < 0
+       OR c.reward >= $13::double precision)
+  AND ($14::double precision < 0
+       OR c.reward <= $14::double precision)
+  AND ($15::double precision < 0
+       OR c.collateral <= $15::double precision)
+  AND ($16::double precision < 0
+       OR c.volume >= $16::double precision)
+  AND ($17::double precision < 0
+       OR c.volume <= $17::double precision)
+  AND ($18::bigint < 0
+       OR c.days_to_complete <= $18::bigint)
+  AND (NOT $19::boolean OR EXISTS (
+        SELECT 1 FROM pub_contract_items i
+        WHERE i.contract_id = c.contract_id AND i.is_included
+          AND i.material_efficiency IS NOT NULL
+          AND ($20::text = 'any'
+               OR ($20::text = 'bpo' AND NOT i.is_blueprint_copy)
+               OR ($20::text = 'bpc' AND i.is_blueprint_copy))
+          AND ($21::bigint < 0
+               OR i.material_efficiency >= $21::bigint)
+          AND ($22::bigint < 0
+               OR i.time_efficiency >= $22::bigint)
+          AND ($23::bigint < 0
+               OR COALESCE(i.runs, 0) >= $23::bigint)))
+  AND ($24::timestamptz IS NULL
+       OR c.date_issued >= $24::timestamptz)
+  AND ($25::timestamptz IS NULL
+       OR c.date_expired <= $25::timestamptz)
+  AND (NOT $26::boolean
+       OR (c.deal_ratio IS NOT NULL AND c.deal_ratio <= 0.85))
+ORDER BY
+  CASE WHEN $27::text = 'price_asc' THEN c.price END ASC NULLS LAST,
+  CASE WHEN $27::text = 'price_desc' THEN c.price END DESC NULLS LAST,
+  CASE WHEN $27::text = 'value_desc' THEN c.offered_value END DESC NULLS LAST,
+  CASE WHEN $27::text = 'deal_asc' THEN c.deal_ratio END ASC NULLS LAST,
+  CASE WHEN $27::text = 'expiry_asc' THEN c.date_expired END ASC NULLS LAST,
+  CASE WHEN $27::text = 'reward_desc' THEN c.reward END DESC NULLS LAST,
+  CASE WHEN $27::text = 'reward_m3_desc' THEN
+       CASE WHEN c.volume > 0 THEN c.reward / c.volume END END DESC NULLS LAST,
+  c.date_issued DESC, c.contract_id DESC
+LIMIT $29::bigint OFFSET $28::bigint
+`
+
+type SearchPublicContractsParams struct {
+	Types          []string  `json:"types"`
+	RegionIds      []int64   `json:"region_ids"`
+	TitleQ         string    `json:"title_q"`
+	ItemQ          string    `json:"item_q"`
+	ItemDir        string    `json:"item_dir"`
+	IssuerQ        string    `json:"issuer_q"`
+	ForCorp        int64     `json:"for_corp"`
+	PriceMin       float64   `json:"price_min"`
+	PriceMax       float64   `json:"price_max"`
+	BuyoutMin      float64   `json:"buyout_min"`
+	PlaceQ         string    `json:"place_q"`
+	PlaceEndQ      string    `json:"place_end_q"`
+	RewardMin      float64   `json:"reward_min"`
+	RewardMax      float64   `json:"reward_max"`
+	CollateralMax  float64   `json:"collateral_max"`
+	VolumeMin      float64   `json:"volume_min"`
+	VolumeMax      float64   `json:"volume_max"`
+	DaysMax        int64     `json:"days_max"`
+	BpActive       bool      `json:"bp_active"`
+	BpMode         string    `json:"bp_mode"`
+	MeMin          int64     `json:"me_min"`
+	TeMin          int64     `json:"te_min"`
+	RunsMin        int64     `json:"runs_min"`
+	IssuedAfter    time.Time `json:"issued_after"`
+	ExpiringBefore time.Time `json:"expiring_before"`
+	DealsOnly      bool      `json:"deals_only"`
+	Sort           string    `json:"sort"`
+	RowOffset      int64     `json:"row_offset"`
+	MaxRows        int64     `json:"max_rows"`
+}
+
+type SearchPublicContractsRow struct {
+	ContractID          int64           `json:"contract_id"`
+	RegionID            int64           `json:"region_id"`
+	Type                string          `json:"type"`
+	IssuerID            int64           `json:"issuer_id"`
+	IssuerCorporationID int64           `json:"issuer_corporation_id"`
+	ForCorporation      bool            `json:"for_corporation"`
+	Title               string          `json:"title"`
+	Price               float64         `json:"price"`
+	Buyout              float64         `json:"buyout"`
+	Reward              float64         `json:"reward"`
+	Collateral          float64         `json:"collateral"`
+	Volume              float64         `json:"volume"`
+	StartLocationID     int64           `json:"start_location_id"`
+	EndLocationID       int64           `json:"end_location_id"`
+	DateIssued          time.Time       `json:"date_issued"`
+	DateExpired         time.Time       `json:"date_expired"`
+	DaysToComplete      int64           `json:"days_to_complete"`
+	ItemsState          string          `json:"items_state"`
+	LastCycle           int64           `json:"last_cycle"`
+	FirstSeen           time.Time       `json:"first_seen"`
+	LastSeen            time.Time       `json:"last_seen"`
+	OfferedValue        float64         `json:"offered_value"`
+	WantValue           float64         `json:"want_value"`
+	DealRatio           sql.NullFloat64 `json:"deal_ratio"`
+	PricedLines         int64           `json:"priced_lines"`
+	TotalLines          int64           `json:"total_lines"`
+	TierMix             string          `json:"tier_mix"`
+	PricedAt            sql.NullTime    `json:"priced_at"`
+	TopBid              float64         `json:"top_bid"`
+	BidCount            int64           `json:"bid_count"`
+}
+
+// ---------------------------------------------------------------------
+// Search (the contracts module's pages): every filter is a
+// clause over indexed columns; the sort is chosen by a key the
+// handler validates, never by raw input. Empty text means the
+// filter is off; array filters are off when empty; numeric
+// bands are off below zero.
+// ---------------------------------------------------------------------
+func (q *Queries) SearchPublicContracts(ctx context.Context, arg SearchPublicContractsParams) ([]SearchPublicContractsRow, error) {
+	rows, err := q.db.QueryContext(ctx, searchPublicContracts,
+		pq.Array(arg.Types),
+		pq.Array(arg.RegionIds),
+		arg.TitleQ,
+		arg.ItemQ,
+		arg.ItemDir,
+		arg.IssuerQ,
+		arg.ForCorp,
+		arg.PriceMin,
+		arg.PriceMax,
+		arg.BuyoutMin,
+		arg.PlaceQ,
+		arg.PlaceEndQ,
+		arg.RewardMin,
+		arg.RewardMax,
+		arg.CollateralMax,
+		arg.VolumeMin,
+		arg.VolumeMax,
+		arg.DaysMax,
+		arg.BpActive,
+		arg.BpMode,
+		arg.MeMin,
+		arg.TeMin,
+		arg.RunsMin,
+		arg.IssuedAfter,
+		arg.ExpiringBefore,
+		arg.DealsOnly,
+		arg.Sort,
+		arg.RowOffset,
+		arg.MaxRows,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SearchPublicContractsRow
+	for rows.Next() {
+		var i SearchPublicContractsRow
+		if err := rows.Scan(
+			&i.ContractID,
+			&i.RegionID,
+			&i.Type,
+			&i.IssuerID,
+			&i.IssuerCorporationID,
+			&i.ForCorporation,
+			&i.Title,
+			&i.Price,
+			&i.Buyout,
+			&i.Reward,
+			&i.Collateral,
+			&i.Volume,
+			&i.StartLocationID,
+			&i.EndLocationID,
+			&i.DateIssued,
+			&i.DateExpired,
+			&i.DaysToComplete,
+			&i.ItemsState,
+			&i.LastCycle,
+			&i.FirstSeen,
+			&i.LastSeen,
+			&i.OfferedValue,
+			&i.WantValue,
+			&i.DealRatio,
+			&i.PricedLines,
+			&i.TotalLines,
+			&i.TierMix,
+			&i.PricedAt,
+			&i.TopBid,
+			&i.BidCount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const setPublicContractItemsState = `-- name: SetPublicContractItemsState :exec
 UPDATE pub_contracts SET items_state = $2 WHERE contract_id = $1
 `
@@ -755,6 +1378,71 @@ type StampAbyssalSightingsDepartedParams struct {
 // bids on it is a different fact from an exit without.
 func (q *Queries) StampAbyssalSightingsDeparted(ctx context.Context, arg StampAbyssalSightingsDepartedParams) error {
 	_, err := q.db.ExecContext(ctx, stampAbyssalSightingsDeparted, arg.DepartedAt, arg.DepartKind, pq.Array(arg.ContractIds))
+	return err
+}
+
+const updatePublicContractAppraisal = `-- name: UpdatePublicContractAppraisal :exec
+UPDATE pub_contracts
+SET offered_value = $1::double precision,
+    want_value = $2::double precision,
+    deal_ratio = $3::double precision,
+    priced_lines = $4::bigint,
+    total_lines = $5::bigint,
+    tier_mix = $6::text,
+    priced_at = $7::timestamptz
+WHERE contract_id = $8::bigint
+`
+
+type UpdatePublicContractAppraisalParams struct {
+	OfferedValue float64         `json:"offered_value"`
+	WantValue    float64         `json:"want_value"`
+	DealRatio    sql.NullFloat64 `json:"deal_ratio"`
+	PricedLines  int64           `json:"priced_lines"`
+	TotalLines   int64           `json:"total_lines"`
+	TierMix      string          `json:"tier_mix"`
+	PricedAt     time.Time       `json:"priced_at"`
+	ContractID   int64           `json:"contract_id"`
+}
+
+func (q *Queries) UpdatePublicContractAppraisal(ctx context.Context, arg UpdatePublicContractAppraisalParams) error {
+	_, err := q.db.ExecContext(ctx, updatePublicContractAppraisal,
+		arg.OfferedValue,
+		arg.WantValue,
+		arg.DealRatio,
+		arg.PricedLines,
+		arg.TotalLines,
+		arg.TierMix,
+		arg.PricedAt,
+		arg.ContractID,
+	)
+	return err
+}
+
+const updatePublicContractItemAppraisal = `-- name: UpdatePublicContractItemAppraisal :exec
+UPDATE pub_contract_items
+SET unit_price = $1::double precision,
+    line_value = $2::double precision,
+    price_tier = $3::text,
+    price_asof = $4::timestamptz
+WHERE record_id = $5::bigint
+`
+
+type UpdatePublicContractItemAppraisalParams struct {
+	UnitPrice sql.NullFloat64 `json:"unit_price"`
+	LineValue sql.NullFloat64 `json:"line_value"`
+	PriceTier string          `json:"price_tier"`
+	PriceAsof sql.NullTime    `json:"price_asof"`
+	RecordID  int64           `json:"record_id"`
+}
+
+func (q *Queries) UpdatePublicContractItemAppraisal(ctx context.Context, arg UpdatePublicContractItemAppraisalParams) error {
+	_, err := q.db.ExecContext(ctx, updatePublicContractItemAppraisal,
+		arg.UnitPrice,
+		arg.LineValue,
+		arg.PriceTier,
+		arg.PriceAsof,
+		arg.RecordID,
+	)
 	return err
 }
 

@@ -44,6 +44,7 @@ func TestPhase2Scopes(t *testing.T) {
 	foundFittingsWrite := false
 	foundOrganizeMail := false
 	foundSendMail := false
+	foundOpenWindow := false
 	for _, s := range eveScopes {
 		if s == "esi-planets.manage_planets.v1" {
 			foundPlanets = true
@@ -57,11 +58,17 @@ func TestPhase2Scopes(t *testing.T) {
 		if s == "esi-mail.send_mail.v1" {
 			foundSendMail = true
 		}
-		for _, banned := range []string{"write_contacts", "write_fleet", "open_window", "write_waypoint"} {
+		if s == "esi-ui.open_window.v1" {
+			foundOpenWindow = true
+		}
+		for _, banned := range []string{"write_contacts", "write_fleet", "write_waypoint"} {
 			if strings.Contains(s, banned) {
 				t.Errorf("eveScopes must stay read-only for contacts/fleet, found %q", s)
 			}
 		}
+	}
+	if !foundOpenWindow {
+		t.Error("eveScopes is missing esi-ui.open_window.v1 (View in game needs it)")
 	}
 	if !foundPlanets {
 		t.Error("eveScopes is missing esi-planets.manage_planets.v1 (colony GETs 403 without it)")

@@ -303,6 +303,13 @@ var pgMarketStatsFallbackSchema string
 //go:embed schema_pg/055_public_contracts.sql
 var pgPublicContractsSchema string
 
+// Step 056: public contract appraisal results -- per-line
+// price, tier and as-of on pub_contract_items, and the
+// totals, coverage, tier mix and deal ratio on pub_contracts.
+//
+//go:embed schema_pg/056_pub_contract_appraisal.sql
+var pgPublicContractAppraisalSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -387,6 +394,7 @@ func schemaSteps() []schemaStep {
 		{53, "station_typicals", pgStationTypicalsSchema, ""},
 		{54, "market_stats_fallback", pgMarketStatsFallbackSchema, ""},
 		{55, "public_contracts", pgPublicContractsSchema, ""},
+		{56, "public_contract_appraisal", pgPublicContractAppraisalSchema, ""},
 	}
 }
 

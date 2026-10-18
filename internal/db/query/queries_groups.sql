@@ -57,6 +57,11 @@ SELECT * FROM discord_channel_access WHERE guild_id = $1 ORDER BY channel_id, ro
 -- name: DeleteDiscordChannelAccessForChannel :exec
 DELETE FROM discord_channel_access WHERE guild_id = sqlc.arg(guild_id) AND channel_id = sqlc.arg(channel_id);
 
+-- A server claimed for a different owner loses the channel access
+-- the previous owner set.
+-- name: DeleteDiscordChannelAccessForGuild :exec
+DELETE FROM discord_channel_access WHERE guild_id = $1;
+
 -- name: InsertDiscordChannelAccess :exec
 INSERT INTO discord_channel_access (guild_id, channel_id, role_id, set_by, set_at)
 VALUES (sqlc.arg(guild_id), sqlc.arg(channel_id), sqlc.arg(role_id), sqlc.arg(set_by), sqlc.arg(set_at))

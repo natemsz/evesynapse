@@ -235,6 +235,22 @@ func (app *mod) discordFinishInstall(w http.ResponseWriter, r *http.Request, use
 		back("The bot was not added to a server.")
 		return
 	}
+	// A server claimed for a different owner than the one on
+	// record starts clean: the recorded owner's role rules,
+	// channel access, auto-join and removals do not carry over
+	// to the new owner. (The guild row's own role and channel
+	// fields are cleared by the upsert itself on an owner
+	// change.) A claim by the same owner changes none of it.
+	if prev, gerr := app.queries.GetDiscordGuild(ctx, guild.ID); gerr == nil &&
+		(prev.OwnerKind != owner.Kind || prev.OwnerID != owner.ID) {
+		if err := app.clearDiscordGuildOwnerSettings(ctx, guild.ID); err != nil {
+			logging.Errorf("discord install: clear server %s on re-claim: %v", guild.ID, err)
+			back("The server could not be saved; check the server log.")
+			return
+		}
+		logging.Infof("discord: server %s (%s) re-claimed from %s to %s; the previous owner's rules were cleared",
+			guild.ID, guild.Name, orgOwner{Kind: prev.OwnerKind, ID: prev.OwnerID}.Key(), owner.Key())
+	}
 	if err := app.queries.UpsertDiscordGuild(ctx, db.UpsertDiscordGuildParams{
 		GuildID: guild.ID, Name: clip(guild.Name, 100), OwnerKind: owner.Kind, OwnerID: owner.ID,
 		AddedBy: userID, AddedAt: time.Now().UTC(),
@@ -245,6 +261,24 @@ func (app *mod) discordFinishInstall(w http.ResponseWriter, r *http.Request, use
 	}
 	logging.Infof("discord: user %d added the bot to server %s (%s) for %s", userID, guild.ID, guild.Name, owner.Key())
 	back("The bot was added to " + guild.Name + ". Choose its roles and channel below.")
+}
+
+// clearDiscordGuildOwnerSettings removes the configuration one
+// owner made for a server: its role rules, its channel access,
+// auto-join and the removals switch. The role grants the bot has
+// already handed out are not touched: they record what was given,
+// and the role sync works from the rules that remain.
+func (app *mod) clearDiscordGuildOwnerSettings(ctx context.Context, guildID string) error {
+	if err := app.queries.DeleteDiscordRoleRulesForGuild(ctx, guildID); err != nil {
+		return err
+	}
+	if err := app.queries.DeleteDiscordChannelAccessForGuild(ctx, guildID); err != nil {
+		return err
+	}
+	if err := app.queries.SetDiscordGuildAutoJoin(ctx, db.SetDiscordGuildAutoJoinParams{GuildID: guildID, AutoJoin: false}); err != nil {
+		return err
+	}
+	return app.queries.SetDiscordGuildKick(ctx, db.SetDiscordGuildKickParams{GuildID: guildID})
 }
 
 // discordBack answers a form on the servers page by sending the

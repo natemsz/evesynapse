@@ -341,6 +341,9 @@ const (
 	AppraisalTierTypical = "typical"
 	// AppraisalTierEstimate: the stored true-value estimated sell.
 	AppraisalTierEstimate = "estimate"
+	// AppraisalTierAbyssal: the stored abyssal estimate of one
+	// mutated item, from its rolls (schema 057).
+	AppraisalTierAbyssal = "abyssal"
 	// AppraisalTierFallback: the labeled Fuzzwork aggregate,
 	// inside its hard expiry, with its as-of stamp.
 	AppraisalTierFallback = "fallback"

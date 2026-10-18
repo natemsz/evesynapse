@@ -75,6 +75,37 @@
     </label>
   </fieldset>
   <fieldset>
+    <legend><small>Abyssal modules</small></legend>
+    <label><small>Module family</small>
+      <select name="family">
+        <option value="">Any family</option>
+        {{range $s.Families}}<option value="{{.Slug}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>{{end}}
+      </select>
+    </label>
+    <label><small>Source module contains</small>
+      <input type="text" name="source_q" value="{{$s.Echo.source_q}}" size="22" placeholder="e.g. Damage Control II">
+    </label>
+    <label><small>Roll score at least (0-100)</small>
+      <input type="number" name="score_min" min="0" max="100" value="{{$s.Echo.score_min}}" size="4">
+    </label>
+    <label><small>Our estimate at least (ISK)</small>
+      <input type="text" name="est_min" value="{{$s.Echo.est_min}}" size="10" placeholder="e.g. 500m">
+    </label>
+    <label><small>Our estimate at most (ISK)</small>
+      <input type="text" name="est_max" value="{{$s.Echo.est_max}}" size="10" placeholder="e.g. 5b">
+    </label>
+    <label><small>One roll, at least this good</small>
+      <select name="attr">
+        <option value="">Any roll</option>
+        {{range $s.AttrOpts}}<option value="{{.Key}}"{{if .Selected}} selected{{end}}>{{.Name}}</option>{{end}}
+      </select>
+    </label>
+    <label><small>Roll position at least (percent)</small>
+      <input type="number" name="attr_min" min="0" max="100" value="{{$s.Echo.attr_min}}" size="4">
+    </label>
+    <p><small>Rolls are scored against the range their mutaplasmid could have produced: 100 is the best roll it can make. Estimates always show their range and what they rest on.</small></p>
+  </fieldset>
+  <fieldset>
     <legend><small>Couriers</small></legend>
     <label><small>Deliver to (station, structure or system)</small>
       <input type="text" name="place_end" value="{{$s.Echo.place_end}}" size="22">
@@ -138,6 +169,11 @@
         {{if gt .MoreOffer 0}}<small>…and {{.MoreOffer}} more</small><br>{{end}}
         {{if .Wanted}}<small>Wants:</small><br>{{range .Wanted}}{{.Name}} ×{{.Qty}}{{if .Note}} <small>({{.Note}})</small>{{end}}<br>{{end}}{{if gt .MoreWant 0}}<small>…and {{.MoreWant}} more</small><br>{{end}}{{end}}
         {{if .Courier}}<small>Cargo is private — the game does not publish courier contents.</small>{{end}}
+        {{with .Abyssal}}<br><small>Mutated from {{itemLink .SourceTypeID .SourceName}} with {{.MutatorName}}</small>
+        {{if .ScoreText}}<br><small>{{.ScoreText}}</small>{{end}}
+        {{range .Bars}}<div><small>{{.Name}} — {{.Pct}}% of its range</small><div class="meter"><span data-w="{{.Pct}}"></span></div></div>{{end}}
+        {{if .Estimate}}<br><small>Our estimate <strong>{{.Estimate}} ISK</strong>{{if .SpreadNote}} — {{.SpreadNote}}{{end}}</small>{{end}}
+        {{if .CapNote}}<br><small>{{.CapNote}}</small>{{end}}{{end}}
       </td>
       <td><small>{{.PriceLabel}}</small><br><strong>{{.Price}} ISK</strong>{{if .PriceNote}}<br><small>{{.PriceNote}}</small>{{end}}{{if .Courier}}<br><small>Collateral {{.Collateral}} ISK · {{.Volume}}</small>{{end}}</td>
       <td>{{if .Value}}<strong>{{.Value}} ISK</strong>{{if .ValueNote}}<br><small>{{if .IsDeal}}<strong>{{.ValueNote}}</strong>{{else}}{{.ValueNote}}{{end}}</small>{{end}}{{else}}<small>Not appraised yet</small>{{end}}</td>

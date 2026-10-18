@@ -1337,7 +1337,7 @@ func (app *Application) marketHealthLine(ctx context.Context, userID int64) stri
 		if entries, err := app.queries.ListWatchlistByUser(ctx, userID); err == nil {
 			moving := 0
 			for _, e := range entries {
-				rows := app.recentHistoryRows(ctx, e.RegionID, e.TypeID, markethistory.ChartRows)
+				rows := app.recentHistoryRows(ctx, marketRegionForType(e.TypeID, e.RegionID), e.TypeID, markethistory.ChartRows)
 				if pct, ok := markethistory.ChangePct(rows, 7); ok && absFloat(pct) >= e.ThresholdPct {
 					moving++
 				}

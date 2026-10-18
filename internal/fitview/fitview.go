@@ -93,10 +93,28 @@ const FitImplantSlots = 10
 // FitAttrImplantness is the dogma attribute naming an implant's slot.
 const FitAttrImplantness = 331
 
+// Bounds that keep a hostile or corrupt fit document from
+// turning into unbounded engine or rendering work: at most 8
+// fitted instances of one type (the widest rack in the game),
+// at most 32 fitted instances across a whole fit (8/8/8 racks
+// plus 3 rigs plus 5 subsystems is the largest real total),
+// and at most 64 per-instance state entries on one line (no
+// real line carries more; consumers read missing entries as
+// the default state).
+const (
+	maxFittedPerLine   = 8
+	maxFittedPerShip   = 32
+	maxFitStateEntries = 64
+)
+
 // SanitizeFitDoc normalizes a fit document arriving from the
 // browser or storage: sane quantities, duplicate lines folded,
-// charges for weapons no longer fitted dropped.
-func SanitizeFitDoc(doc *FitDoc) {
+// charges for weapons no longer fitted dropped. When the
+// caller passes the engine snapshot, fitted-slot lines are
+// also capped at what a hull can actually carry (see the
+// bounds above); drones and cargo keep bulk quantities — a
+// bay or a hold legitimately stacks high.
+func SanitizeFitDoc(doc *FitDoc, snap ...*fit.Snapshot) {
 	if doc == nil {
 		return
 	}
@@ -126,6 +144,28 @@ func SanitizeFitDoc(doc *FitDoc) {
 		}
 	}
 	doc.Items = merged
+	if len(snap) > 0 && snap[0] != nil {
+		fittedTotal := 0
+		kept := merged[:0]
+		for _, it := range merged {
+			switch FitSlotFamilyOf(snap[0], it.TypeID) {
+			case FitFamilyHigh, FitFamilyMedium, FitFamilyLow, FitFamilyRig, FitFamilySubsystem:
+				if it.Qty > maxFittedPerLine {
+					it.Qty = maxFittedPerLine
+				}
+				if fittedTotal+it.Qty > maxFittedPerShip {
+					it.Qty = maxFittedPerShip - fittedTotal
+				}
+				if it.Qty <= 0 {
+					continue // past the ship total: dropped
+				}
+				fittedTotal += it.Qty
+			}
+			kept = append(kept, it)
+		}
+		merged = kept
+		doc.Items = merged
+	}
 	for slot, typeID := range doc.Implants {
 		if slot < 1 || slot > FitImplantSlots || typeID < 0 {
 			delete(doc.Implants, slot)
@@ -142,7 +182,7 @@ func SanitizeFitDoc(doc *FitDoc) {
 		if len(it.States) > it.Qty {
 			it.States = it.States[:it.Qty]
 		}
-		for len(it.States) < it.Qty {
+		for len(it.States) < it.Qty && len(it.States) < maxFitStateEntries {
 			it.States = append(it.States, "")
 		}
 		allDefault := true
@@ -762,7 +802,14 @@ func FitBuildVisual(res *fit.Result, doc *FitDoc, snap *fit.Snapshot, familyOf m
 		if _, ok := FitVisualArcs[fam]; !ok {
 			continue
 		}
-		for i := 0; i < it.Qty; i++ {
+		// The visual places at most a rack's worth of instances
+		// per line and a bounded set per family, whatever the
+		// document claims: it renders slots, not quantities.
+		n := it.Qty
+		if n > 8 {
+			n = 8
+		}
+		for i := 0; i < n && len(fitted[fam]) < 16; i++ {
 			st := ""
 			if i < len(it.States) {
 				st = it.States[i]
@@ -777,6 +824,9 @@ func FitBuildVisual(res *fit.Result, doc *FitDoc, snap *fit.Snapshot, familyOf m
 	maxOf[FitFamilySubsystem] = 0
 	if supportsSubsystems || len(fitted[FitFamilySubsystem]) > 0 {
 		maxOf[FitFamilySubsystem] = len(fitted[FitFamilySubsystem])
+		if maxOf[FitFamilySubsystem] > 8 {
+			maxOf[FitFamilySubsystem] = 8
+		}
 	}
 	rendered := map[string]bool{}
 	for _, fam := range []string{FitFamilyHigh, FitFamilyMedium, FitFamilyLow, FitFamilyRig, FitFamilySubsystem} {
@@ -784,6 +834,9 @@ func FitBuildVisual(res *fit.Result, doc *FitDoc, snap *fit.Snapshot, familyOf m
 		max := maxOf[fam]
 		if max <= 0 {
 			continue
+		}
+		if max > 16 {
+			max = 16
 		}
 		rendered[fam] = true
 		span := arc[1] - arc[0]
@@ -1290,6 +1343,11 @@ func (app *Builder) BuildFitSimView(ctx context.Context, doc *FitDoc, pilotID in
 		return view
 	}
 	view.HasShip = true
+	// Bound the document's fitted quantities now that the
+	// snapshot can classify its lines: every consumer below
+	// (engine inputs, slot groups, the visual) trusts the
+	// counts it is handed.
+	SanitizeFitDoc(doc, snap)
 	view.SupportsSubsystems = app.ShipSupportsSubsystems(ctx, snap, doc.ShipTypeID)
 
 	slots := FitResolveImplantSlots(snap, implantIDs, doc.Implants)
@@ -1530,12 +1588,29 @@ func FitMissingList(ctx context.Context, app *Builder, snap *fit.Snapshot, doc *
 // the document's own lines.
 func FitBuildGroups(res *fit.Result, doc *FitDoc, snap *fit.Snapshot, familyOf map[int64]string, nameOf func(int64) string, supportsSubsystems bool) []FitSlotGroup {
 	chips := map[string][]FitSlotChip{}
+	slotTotals := map[string]int{}
 	for _, it := range doc.Items {
 		fam := familyOf[it.TypeID]
+		// Slot families chip at most a rack's worth per line and
+		// a bounded total per family, whatever the document
+		// claims; bay and cargo lines keep their real counts.
+		qty := it.Qty
+		if _, isSlot := FitVisualArcs[fam]; isSlot {
+			if qty > 8 {
+				qty = 8
+			}
+			if slotTotals[fam]+qty > 16 {
+				qty = 16 - slotTotals[fam]
+			}
+			if qty <= 0 {
+				continue
+			}
+			slotTotals[fam] += qty
+		}
 		// Uniform resolved state across the line's instances;
 		// mixed lines carry "" (no single state to show).
 		st, uniform := "", true
-		for i := 0; i < it.Qty; i++ {
+		for i := 0; i < qty; i++ {
 			s := ""
 			if i < len(it.States) {
 				s = it.States[i]
@@ -1554,13 +1629,16 @@ func FitBuildGroups(res *fit.Result, doc *FitDoc, snap *fit.Snapshot, familyOf m
 			st = ""
 		}
 		lines := FitTipLines(res, snap, doc, it.TypeID, st, FitEffAttrs(res, snap, it.TypeID, st))
-		chips[fam] = append(chips[fam], FitSlotChip{TypeID: it.TypeID, Name: nameOf(it.TypeID), Qty: it.Qty, State: st,
+		chips[fam] = append(chips[fam], FitSlotChip{TypeID: it.TypeID, Name: nameOf(it.TypeID), Qty: qty, State: st,
 			Sub: FitChipSub(lines), TipLines: FitTipLinesString(lines)})
 	}
 	for fam := range chips {
 		sort.Slice(chips[fam], func(i, j int) bool { return chips[fam][i].Name < chips[fam][j].Name })
 	}
 	mk := func(key, label string, used, max int, hasMax bool) FitSlotGroup {
+		if hasMax && max > 8 {
+			max = 8
+		}
 		g := FitSlotGroup{Key: key, Label: label, Used: used, Max: max, HasMax: hasMax, Chips: chips[key]}
 		if hasMax {
 			g.Over = used > max
@@ -2069,18 +2147,39 @@ var (
 // reported as a note, never silently dropped. [empty] slot
 // lines are accepted and ignored.
 func (app *Builder) ParseEFT(ctx context.Context, text string) (*FitDoc, []string) {
+	// The paste is bounded before any line is read: a real fit
+	// is a few dozen lines, so 64 KiB / 500 lines is generous
+	// headroom, and anything past it is not a fit. Name lookups
+	// are memoized per call — a pasted fit repeats its modules
+	// line after line, and each distinct name costs one query.
+	if len(text) > 64<<10 {
+		text = text[:64<<10]
+	}
 	doc := &FitDoc{Charges: map[int64]int64{}}
 	var notes []string
 
+	memo := make(map[string]db.GetSDETypeByNameRow)
+	missed := make(map[string]bool)
 	lookup := func(name string) (int64, bool) {
-		row, err := app.queries.GetSDETypeByName(ctx, name)
-		if err != nil {
+		if row, ok := memo[name]; ok {
+			return row.TypeID, true
+		}
+		if missed[name] {
 			return 0, false
 		}
+		row, err := app.queries.GetSDETypeByName(ctx, name)
+		if err != nil {
+			missed[name] = true
+			return 0, false
+		}
+		memo[name] = row
 		return row.TypeID, true
 	}
 
 	lines := strings.Split(text, "\n")
+	if len(lines) > 500 {
+		lines = lines[:500]
+	}
 	idx := 0
 	for ; idx < len(lines); idx++ {
 		line := strings.TrimSpace(lines[idx])

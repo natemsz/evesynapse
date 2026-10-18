@@ -198,9 +198,9 @@
           <span class="cs-row-meta">{{.RegionName}} · {{.IssuedAgo}}</span>
         </div>
         <div class="cs-contents">
-          {{range .Offered}}<div class="cs-line">{{if .TypeID}}<img class="cs-line-icon" src="https://images.evetech.net/types/{{.TypeID}}/icon?size=32" alt="" width="24" height="24" loading="lazy">{{end}}<span class="cs-line-name">{{.Name}}</span> <span class="cs-qty">× {{.Qty}}</span></div>{{end}}
+          {{range .Offered}}<div class="cs-line">{{if .TypeID}}<img class="cs-line-icon" src="{{.IconURL}}" alt="" width="24" height="24" loading="lazy">{{end}}<span class="cs-line-name">{{.Name}}</span> <span class="cs-qty">× {{.Qty}}</span></div>{{end}}
           {{if gt .MoreOffer 0}}<div class="cs-line muted">+ {{.MoreOffer}} more</div>{{end}}
-          {{if .Wanted}}<div class="cs-line want"><span class="cs-wants">Wants:</span> {{range $i, $w := .Wanted}}{{if $i}}, {{end}}<span class="cs-line-item">{{if $w.TypeID}}<img class="cs-line-icon" src="https://images.evetech.net/types/{{$w.TypeID}}/icon?size=32" alt="" width="24" height="24" loading="lazy">{{end}}{{$w.Name}} <span class="cs-qty">× {{$w.Qty}}</span></span>{{end}}{{if gt .MoreWant 0}} <span class="muted">+ {{.MoreWant}} more</span>{{end}}</div>{{end}}
+          {{if .Wanted}}<div class="cs-line want"><span class="cs-wants">Wants:</span> {{range $i, $w := .Wanted}}{{if $i}}, {{end}}<span class="cs-line-item">{{if $w.TypeID}}<img class="cs-line-icon" src="{{$w.IconURL}}" alt="" width="24" height="24" loading="lazy">{{end}}{{$w.Name}} <span class="cs-qty">× {{$w.Qty}}</span></span>{{end}}{{if gt .MoreWant 0}} <span class="muted">+ {{.MoreWant}} more</span>{{end}}</div>{{end}}
           <div class="cs-chips">
             {{if .BPChip}}<span class="cs-chipinfo bp">{{.BPChip}}</span>{{end}}
             {{with .Abyssal}}<div class="cs-abwrap"><button type="button" class="cs-chipinfo ab cs-abbtn" data-abpop aria-haspopup="true" aria-expanded="false">{{if .HasScore}}Roll Score: {{.Score}} / 100{{if .HasTop}} • Top {{.TopPct}}%{{end}}{{else}}Abyssal rolls{{end}}</button><div class="cs-abpop" role="dialog" aria-label="Mutaplasmid rolls" hidden>
@@ -280,7 +280,7 @@
       <div class="cs-pline">
         <div class="cs-pline-main">
           <span class="cs-side{{if eq .Side "Wanted"}} want{{end}}">{{.Side}}</span>
-          {{if .TypeID}}<img class="cs-pline-icon" src="https://images.evetech.net/types/{{.TypeID}}/icon?size=32" alt="" width="28" height="28" loading="lazy">{{end}}
+          {{if .TypeID}}<img class="cs-pline-icon" src="{{.IconURL}}" alt="" width="28" height="28" loading="lazy">{{end}}
           {{itemLink .TypeID .Name}} <span class="cs-qty">× {{.Qty}}</span>
           {{if .Note}}<span class="cs-chipinfo bp">{{.Note}}</span>{{end}}
           {{if .ItemID}}<span class="muted">Item ID: {{.ItemID}}</span>{{end}}

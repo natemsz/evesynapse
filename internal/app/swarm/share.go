@@ -478,6 +478,22 @@ func CheckSwarmPayload(kind, key, payload string) error {
 		if err := json.Unmarshal([]byte(body.Payload), &probe); err != nil {
 			return fmt.Errorf("swarm: stage %s %s: record body is not JSON", kind, key)
 		}
+		// It must also name the record it claims to be, in
+		// either dialect the app reads — this app's wrapped
+		// shape or a bare ESI record. A body naming nothing
+		// under either dialect is shape, not data: refused
+		// here, it never reaches a spot check that could
+		// only convict its signer for it.
+		switch kind {
+		case SwarmKindCorporation:
+			if _, ok := module.DecodeCorpPayload(body.Payload); !ok {
+				return fmt.Errorf("swarm: stage %s %s: record body names no corporation", kind, key)
+			}
+		case SwarmKindAlliance:
+			if _, ok := module.DecodeAlliancePayload(body.Payload); !ok {
+				return fmt.Errorf("swarm: stage %s %s: record body names no alliance", kind, key)
+			}
+		}
 	case SwarmKindStructure:
 		id, ok := ParseSwarmID(key)
 		if !ok {

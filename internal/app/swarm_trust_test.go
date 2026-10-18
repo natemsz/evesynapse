@@ -957,6 +957,103 @@ func TestSwarmStagingRefusesImpossibleDays(t *testing.T) {
 	}
 }
 
+// TestSwarmVerifyOrgRecordDialects: the corporation and
+// alliance verifiers read the record in either dialect —
+// this app's wrapped shape or a bare ESI record — through
+// the tolerant decoders, and compare the fields actually
+// sent. Matching records pass in both dialects, wrong
+// identity fields fail in both, and a body naming nothing
+// under either dialect is undecidable rather than a lie:
+// it defers, so no shape bug can mint a data verdict.
+func TestSwarmVerifyOrgRecordDialects(t *testing.T) {
+	ctx := context.Background()
+	p := newSwarmPair(t, swarm.SwarmOpen)
+	const corpID = int64(98000001)
+	const allyID = int64(99000001)
+	corpTruth := `{"name":"Fixture Corp","ticker":"FIX","member_count":42,"ceo_id":1,"creator_id":1,"alliance_id":99000001,"home_station_id":60003760,"tax_rate":0.1,"date_founded":"2020-01-01T00:00:00Z","description":"","url":""}`
+	allyTruth := `{"name":"Fixture Alliance","ticker":"FALL","creator_id":1,"creator_corporation_id":98000001,"executor_corporation_id":98000001,"date_founded":"2020-01-01T00:00:00Z"}`
+	p.stubB.corps = map[int64]string{corpID: corpTruth}
+	p.stubB.allies = map[int64]string{allyID: allyTruth}
+	verify := func(kind, key, payload string) swarm.SwarmCheckVerdict {
+		t.Helper()
+		verdict, _, stop := swarm.StateFor(p.b).SwarmVerifyAgainstESI(ctx, &fetchBudget{left: 5}, nil, kind, key, payload)
+		if stop {
+			t.Fatalf("canned ESI reported the error limit")
+		}
+		return verdict
+	}
+	corpKey := fmt.Sprintf("%d", corpID)
+	allyKey := fmt.Sprintf("%d", allyID)
+	for name, tc := range map[string]struct {
+		kind, key, payload string
+		want               swarm.SwarmCheckVerdict
+	}{
+		"corporation bare, true":            {swarm.SwarmKindCorporation, corpKey, orgEntry(t, corpID, corpTruth), swarm.SwarmCheckPass},
+		"corporation wrapped, true":         {swarm.SwarmKindCorporation, corpKey, orgEntry(t, corpID, fmt.Sprintf(`{"corp":%s,"alliance":{"name":"","ticker":""}}`, corpTruth)), swarm.SwarmCheckPass},
+		"corporation bare, wrong name":      {swarm.SwarmKindCorporation, corpKey, orgEntry(t, corpID, strings.Replace(corpTruth, "Fixture Corp", "Liar Corp", 1)), swarm.SwarmCheckFail},
+		"corporation wrapped, wrong ticker": {swarm.SwarmKindCorporation, corpKey, orgEntry(t, corpID, fmt.Sprintf(`{"corp":%s,"alliance":{"name":"","ticker":""}}`, strings.Replace(corpTruth, `"FIX"`, `"LIE"`, 1))), swarm.SwarmCheckFail},
+		"corporation bare, wrong home":      {swarm.SwarmKindCorporation, corpKey, orgEntry(t, corpID, strings.Replace(corpTruth, `"alliance_id":99000001`, `"alliance_id":99000002`, 1)), swarm.SwarmCheckFail},
+		"corporation names nothing":         {swarm.SwarmKindCorporation, corpKey, orgEntry(t, corpID, `{}`), swarm.SwarmCheckDefer},
+		"corporation wrapped empty":         {swarm.SwarmKindCorporation, corpKey, orgEntry(t, corpID, `{"corp":{"name":""}}`), swarm.SwarmCheckDefer},
+		"alliance bare, true":               {swarm.SwarmKindAlliance, allyKey, orgEntry(t, allyID, allyTruth), swarm.SwarmCheckPass},
+		"alliance wrapped, true":            {swarm.SwarmKindAlliance, allyKey, orgEntry(t, allyID, fmt.Sprintf(`{"alliance":%s,"corporations":[]}`, allyTruth)), swarm.SwarmCheckPass},
+		"alliance bare, wrong ticker":       {swarm.SwarmKindAlliance, allyKey, orgEntry(t, allyID, strings.Replace(allyTruth, `"FALL"`, `"LIES"`, 1)), swarm.SwarmCheckFail},
+		"alliance names nothing":            {swarm.SwarmKindAlliance, allyKey, orgEntry(t, allyID, `{}`), swarm.SwarmCheckDefer},
+	} {
+		if got := verify(tc.kind, tc.key, tc.payload); got != tc.want {
+			t.Fatalf("%s: verdict %d, want %d", name, got, tc.want)
+		}
+	}
+}
+
+// TestSwarmStagingRefusesNamelessOrgRecords: a corporation or
+// alliance record body that names nothing under either dialect
+// never stages — the shape gate binds the body to a record
+// shape, not just to JSON. The refusal is the flat shape
+// reject every malformed entry gets: one mark per refusal, no
+// failure streak, and a peer in good standing stays admitted.
+// Bodies naming a record in either dialect stage normally.
+func TestSwarmStagingRefusesNamelessOrgRecords(t *testing.T) {
+	ctx := context.Background()
+	app := swarmTestApp(t)
+	peer := swarmTestPeer(t, app, "peer-1")
+	if err := app.queries.AddSwarmPeerCheck(ctx, db.AddSwarmPeerCheckParams{InstanceID: peer.ID, GoodChecks: 40}); err != nil {
+		t.Fatalf("give the peer a record: %v", err)
+	}
+	now := time.Now().UTC()
+	for name, entry := range map[string]swarm.SwarmSignedEntry{
+		"corporation, empty object":      signedBy(t, peer, swarm.SwarmKindCorporation, "98000001", orgEntry(t, 98000001, `{}`), now),
+		"corporation, wrapped but empty": signedBy(t, peer, swarm.SwarmKindCorporation, "98000001", orgEntry(t, 98000001, `{"corp":{"name":""}}`), now),
+		"corporation, bare but empty":    signedBy(t, peer, swarm.SwarmKindCorporation, "98000001", orgEntry(t, 98000001, `{"name":""}`), now),
+		"alliance, empty object":         signedBy(t, peer, swarm.SwarmKindAlliance, "99000001", orgEntry(t, 99000001, `{}`), now),
+	} {
+		if err := swarm.StateFor(app).StageSwarmEntry(ctx, entry, peer.ID, now); err == nil {
+			t.Fatalf("%s: the entry staged", name)
+		}
+	}
+	if staged := stagedKeys(t, app); len(staged) != 0 {
+		t.Fatalf("staging holds %v, want nothing", staged)
+	}
+	row, err := app.queries.GetSwarmPeer(ctx, peer.ID)
+	if err != nil || row.Excluded {
+		t.Fatalf("peer excluded by shape rejects: %+v err %v", row, err)
+	}
+	if row.BadChecks != 4 {
+		t.Fatalf("signer has %d marks, want one flat shape-reject mark per refusal (4)", row.BadChecks)
+	}
+	bare := signedBy(t, peer, swarm.SwarmKindCorporation, "98000001", orgEntry(t, 98000001, `{"name":"Fixture Corp","ticker":"FIX"}`), now)
+	if err := swarm.StateFor(app).StageSwarmEntry(ctx, bare, peer.ID, now); err != nil {
+		t.Fatalf("a bare record naming its corporation was refused: %v", err)
+	}
+	wrapped := signedBy(t, peer, swarm.SwarmKindAlliance, "99000001", orgEntry(t, 99000001, `{"alliance":{"name":"Fixture Alliance","ticker":"FALL"}}`), now)
+	if err := swarm.StateFor(app).StageSwarmEntry(ctx, wrapped, peer.ID, now); err != nil {
+		t.Fatalf("a wrapped record naming its alliance was refused: %v", err)
+	}
+	if staged := stagedKeys(t, app); len(staged) != 2 {
+		t.Fatalf("staging holds %v, want both honest records", staged)
+	}
+}
+
 // TestSwarmHistoryCheckCoversWholeSpan: the ESI check compares
 // every day in the span the entry and ESI share. A made-up day,
 // a dropped day or a changed figure inside it fails; days

@@ -1046,13 +1046,13 @@ footer .version-number {
    and wrap. Customize mode clears the band for the widget's own
    controls (the move buttons sit at the title's right). */
 .fleet-tags { position: absolute; top: 0; right: 1rem; height: 2.94rem; display: flex; align-items: center; gap: 0.4rem; margin: 0; }
-.fleet-tags-label { font-size: 0.72rem; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-60); margin-right: 0.15rem; }
+.fleet-tags-label { font-size: 0.72rem; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); margin-right: 0.15rem; }
 @media (max-width: 1100px) {
   .fleet-tags { position: static; height: auto; padding-top: 0.1rem; flex-wrap: wrap; }
 }
 .home-custom .fleet-tags { display: none; }
 /* The fleet search row is divided from the pilot table by a rule. */
-.fleet-tools { border-bottom: 1px solid var(--line); padding-bottom: 0.55rem; margin-bottom: 0.7rem; }
+.fleet-tools { border-bottom: 1px solid var(--glass-edge); padding-bottom: 0.55rem; margin-bottom: 0.7rem; }
 /* At a Glance floats: no enclosing panel in normal view — the
    tiles carry the glass themselves over the sky. Customize mode
    brings the container back so the band stays grabbable, and the
@@ -1472,7 +1472,15 @@ td.pos, .pos { color: #28c76f; }
 }
 .linkbtn:hover { color: var(--gold); text-decoration: underline; }
 
-.brief-tabs { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 0.6rem; }
+/* Briefing filters ride in the widget's header band, right-aligned
+   beside the title — the fleet header-tags pattern. Below 1100px
+   they drop into the flow under the title and wrap; customize
+   mode clears the band for the widget's own controls. */
+.brief-tabs { position: absolute; top: 0; right: 1rem; height: 2.94rem; display: flex; align-items: center; gap: 0.4rem; margin: 0; flex-wrap: wrap; }
+@media (max-width: 1100px) {
+  .brief-tabs { position: static; height: auto; padding-top: 0.1rem; }
+}
+.home-custom .brief-tabs { display: none; }
 .chip.sev-critical { border-color: rgba(198, 47, 16, 0.6); }
 .chip.sev-warning { border-color: rgba(255, 106, 26, 0.5); }
 .chip.sev-critical.on { color: #ff7a5c; border-color: #ff7a5c; }

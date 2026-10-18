@@ -20,7 +20,7 @@ func TestDiscordSyncRolesWithoutRules(t *testing.T) {
 	cookie := sessionCookie(t, f.app, f.userID, f.ch.CharacterID, f.ch.Name)
 	f.joinCorp(f.ch.CharacterID, discordCorp, "Director")
 	cookie, _ = f.addServer(cookie, discordCorpOwner, "add-corp")
-	cookie, _ = f.connect(cookie, "alice")
+	f.connect(cookie, "alice")
 	now := notifyT0
 
 	// No rules are ever added to this server. Alice is in it

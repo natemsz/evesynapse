@@ -148,7 +148,7 @@
      the glass and the light theme's solid overrides still win. */
   --glass: color-mix(in srgb, var(--panel) 78%, transparent);
   --glass-edge: color-mix(in srgb, var(--accent) 24%, transparent);
-  --glass-blur: 42px;
+  --glass-blur: 24px;
   --row: rgba(16, 13, 10, 0.55);
   --row-alt: rgba(255, 255, 255, 0.03);
   --row-hover: rgba(255, 140, 50, 0.09);
@@ -735,10 +735,6 @@ tbody tr:hover td, tbody tr:hover th { background: rgba(255, 106, 0, 0.045); }
   z-index: 1;
 }
 .tw thead th:first-child { background: transparent; z-index: 2; }
-.tw tbody td:first-child, .tw tbody th:first-child { background: var(--row); }
-.tw tbody tr:nth-child(even) td:first-child,
-.tw tbody tr:nth-child(even) th:first-child { background: var(--row-alt); }
-.tw tbody tr:hover td:first-child, .tw tbody tr:hover th:first-child { background: var(--row-hover); }
 
 /* --- alerts --- */
 .err {
@@ -813,12 +809,10 @@ img.portrait {
 /* --- form inputs + market search suggestions --- */
 /* Fields share one look and one height (--control-h) with the buttons
    beside them. One control family: text fields, selects and
-   textareas all wear the same surface — the --input-bg paint, the
-   accent-tinted --glass-edge border every panel and card uses, and
-   the pill buttons' blur chain — so a field reads as a tint of the
-   page glass, not a neutral slab pasted onto it. As with the
-   suggestion dropdowns below, legibility comes from the paint;
-   the blur is a bonus where it can sample. */
+   textareas all wear the same surface — the --input-bg paint and the
+   accent-tinted --glass-edge border every panel and card uses — so a
+   field reads as a tint of the page glass, not a neutral slab pasted
+   onto it. */
 input[type="text"], input[type="search"], input[type="number"], select, textarea {
   background: var(--input-bg);
   border: 1px solid var(--glass-edge);
@@ -828,8 +822,6 @@ input[type="text"], input[type="search"], input[type="number"], select, textarea
   min-height: var(--control-h);
   padding: 0.2rem 0.6rem;
   font: inherit;
-  -webkit-backdrop-filter: blur(10px) saturate(1.2);
-  backdrop-filter: blur(10px) saturate(1.2);
 }
 html[data-theme="light"] input[type="text"], html[data-theme="light"] input[type="search"], html[data-theme="light"] input[type="number"], html[data-theme="light"] select, html[data-theme="light"] textarea {
   border-color: #d8cdb8;
@@ -1051,15 +1043,8 @@ footer .version-number {
 .home-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
 .fleet-tools { display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap; }
 .fleet-tools input[type="search"] { background: var(--row); color: var(--text); border: 1px solid #333; padding: 0.4rem 0.6rem; border-radius: var(--r-sm); }
-/* Section tabs: every page of a nav category, under the page title
-   (sectiontabs.html, nav.go). They wrap on wide screens and scroll
-   sideways on phones, the current page scrolled into view. */
-.section-tabs { display: flex; gap: 0.4rem; flex-wrap: wrap; margin: 0.6rem 0 1rem; }
-.section-tabs a { padding: 0.35rem 0.8rem; border: 1px solid var(--border, #333); border-radius: var(--r-sm); text-decoration: none; white-space: nowrap; transition: filter 0.15s ease, border-color 0.15s ease; }
-.section-tabs a:hover { border-color: #555; filter: saturate(1.45) brightness(1.07); }
 /* In-page section anchors land clear of the sticky top bar. */
 .card[id] { scroll-margin-top: 4.5rem; }
-.section-tabs a.active { border-color: var(--accent); color: var(--text-bright); background: var(--row-hover); }
 /* Section tabs, filter chips and strategy tabs read as controls: the
    same Rajdhani capitals as the buttons. */
 .section-tabs a, .chip, .ti-tabs button {
@@ -1067,10 +1052,6 @@ footer .version-number {
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-}
-@media (max-width: 719px) {
-  .section-tabs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: thin; padding-bottom: 0.2rem; margin: 0.4rem 0 0.8rem; }
-  .section-tabs a { flex: none; padding: 0.3rem 0.65rem; font-size: 0.9rem; }
 }
 .chip { border: 1px solid #444; background: var(--row); color: var(--text); border-radius: 999px; padding: 0.15rem 0.7rem; cursor: pointer; font-family: Rajdhani, sans-serif; font-weight: 600; text-transform: uppercase; letter-spacing: 0.07em; font-size: 0.8rem; }
 .chip.on { border-color: var(--accent); color: var(--accent); }
@@ -1659,12 +1640,6 @@ tr.fleet-detail > td { background: #120d09; border-bottom: 1px solid rgba(255, 1
 .pie-s3 { fill: #5eb8ff; background: #5eb8ff; }
 .pie-s4 { fill: #3fce7a; background: #3fce7a; }
 .pie-s5 { fill: #7d6a58; background: #7d6a58; }
-/* Phones: two columns. */
-@media (max-width: 719px) {
-}
-/* Very small screens: one column. */
-@media (max-width: 339px) {
-}
 /* --- market history chart: interactive day points ---------- */
 .pchart { position: relative; }
 .pchart svg {
@@ -2133,6 +2108,8 @@ html[data-nav="hidden"] .sidebar {
   gap: 0.25rem;
   margin-left: auto;
 }
+/* Glyph-only controls and the Menu button have no resting box. The
+   border stays, transparent, so the footprint never shifts. */
 .nav-state-btn,
 .nav-reopen,
 .nav-drawer-close,
@@ -2145,20 +2122,11 @@ html[data-nav="hidden"] .sidebar {
   min-height: 2rem;
   padding: 0.25rem 0.45rem;
   color: var(--gold);
-  background: #0e0e0e;
-  border: 1px solid #4a2408;
+  background: transparent;
+  border: 1px solid transparent;
   border-radius: var(--r-sm);
   cursor: pointer;
   font: inherit;
-}
-/* Glyph-only controls and the Menu button have no resting box. The
-   border stays, transparent, so the footprint never shifts. */
-.nav-state-btn,
-.nav-reopen,
-.nav-drawer-close,
-.nav-expand-btn {
-  background: transparent;
-  border-color: transparent;
 }
 html.js .nav-state-btn { display: inline-flex; }
 html.js .nav-expand-btn { display: inline-flex; }
@@ -3679,33 +3647,6 @@ html[data-theme="light"] {
 html[data-theme="light"] body { background: #f4f1ea; }
 html[data-theme="light"] body::before { display: none; }
 
-/* Faction themes. Each overrides the
-   accent/gold variables; the base dark palette stays. */
-html[data-theme="amarr"] {
-  --accent: #ffd75e;
-  --gold: #e8b923;
-  --text-bright: #fff8e1;
-}
-html[data-theme="caldari"] {
-  --accent: #5eb8ff;
-  --gold: #3a9bdc;
-  --text-bright: #e1f4ff;
-}
-html[data-theme="gallente"] {
-  --accent: #5effa8;
-  --gold: #2ecc71;
-  --text-bright: #e1fff0;
-}
-html[data-theme="minmatar"] {
-  --accent: #ff7a5e;
-  --gold: #d94f2b;
-  --text-bright: #ffe8e1;
-}
-html[data-theme="jove"] {
-  --accent: #c77dff;
-  --gold: #9d4edd;
-  --text-bright: #f3e8ff;
-}
 /* Glass chrome: light paint, same blur recipe. */
 html[data-theme="light"] header {
   background: linear-gradient(to bottom, rgba(247, 243, 235, 0.9), rgba(236, 229, 214, 0.9));
@@ -3738,29 +3679,18 @@ html[data-theme="light"] .panel {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8), 0 2px 14px rgba(0, 0, 0, 0.08);
 }
 html[data-theme="light"] input[type="text"],
-html[data-theme="light"] input[type="search"],
-html[data-theme="light"] .fit-qty,
-html[data-theme="light"] .fit-eft textarea,
-html[data-theme="light"] .fit-tip-state { background: #fffdf9; border-color: #d3c7ae; }
+html[data-theme="light"] input[type="search"] { background: #fffdf9; border-color: #d3c7ae; }
 html[data-theme="light"] .suggest,
-html[data-theme="light"] .branch .menu {
-  background: #fffdf9;
-  border-color: #d3c7ae;
-  box-shadow: 0 10px 24px rgba(90, 70, 40, 0.22);
-}
-html[data-theme="light"] .branch .menu a { color: #5c4a33; }
-html[data-theme="light"] .branch .menu a:hover { background: #f0e7d2; }
-html[data-theme="light"] .branch .menu a.active,
-html[data-theme="light"] .sidebar .branch .menu a.active { background-color: #f0dfbc; }
-html[data-theme="light"] .branch .menu {
-  background: #fdfbf6;
-  border-color: #d9cfba;
-}
+html[data-theme="light"] .branch .menu,
 html[data-theme="light"][data-nav="rail"] .sidebar .branch .menu {
   background: #fdfbf6;
   border-color: #d9cfba;
   box-shadow: 0 10px 24px rgba(90, 70, 40, 0.22);
 }
+html[data-theme="light"] .branch .menu a { color: #5c4a33; }
+html[data-theme="light"] .branch .menu a:hover { background: #f0e7d2; color: #20180e; }
+html[data-theme="light"] .branch .menu a.active,
+html[data-theme="light"] .sidebar .branch .menu a.active { background-color: #f0dfbc; }
 html[data-theme="light"] .sidebar .branch .menu a { border-color: #d3c7ae; }
 html[data-theme="light"] .sidenav a.navlink:hover,
 html[data-theme="light"] .sidebar .branch > summary:hover,
@@ -3769,14 +3699,14 @@ html[data-theme="light"] .sidebar .branch.active > summary,
 html[data-theme="light"] .sidebar .branch[open] > summary { background: #ece3cf; }
 html[data-theme="light"] .nav-state-btn,
 html[data-theme="light"] .nav-reopen,
-html[data-theme="light"] .nav-drawer-close,
-html[data-theme="light"] .nav-expand-btn { background: #fffdf9; border-color: #d9b98a; }
+html[data-theme="light"] .nav-drawer-close { background: #fffdf9; border-color: #d9b98a; }
+html[data-theme="light"] .nav-expand-btn { background: #f1ebdf; border-color: #d9b98a; }
 /* Glyph chips keep a light paint so hover text stays readable. */
 html[data-theme="light"] .foldbtn,
 html[data-theme="light"] .cardremove,
-html[data-theme="light"] .cardsize,
-html[data-theme="light"] .modal-close,
-html[data-theme="light"] .quickjump-btn { background: #fffdf9; border-color: #d3c7ae; }
+html[data-theme="light"] .cardsize { background: #fffdf9; border-color: #d3c7ae; }
+html[data-theme="light"] .modal-close { background: #f1ebdf; border-color: #d3c7ae; color: #5c4a33; }
+html[data-theme="light"] .quickjump-btn { background: #f1ebdf; border-color: #d3c7ae; }
 /* The ember gradient button keeps its dark paint in light mode. */
 html[data-theme="light"] .btn:hover,
 html[data-theme="light"] :where(button:not([class]), input[type="submit"]:not([class]), input[type="button"]:not([class])):hover:not(:disabled) { color: #fff6e6; }
@@ -3791,17 +3721,21 @@ html[data-theme="light"] .tw tbody tr.yours td:first-child { background: #f3e3bd
 html[data-theme="light"] .err { background: rgba(198, 47, 16, 0.08); color: #7a1e08; }
 html[data-theme="light"] .ok { background: rgba(255, 184, 77, 0.2); color: #7a5410; }
 /* Quickjump + fitting bits. */
-html[data-theme="light"] .quickjump-results li.sel { background: #f0dfbc; }
-html[data-theme="light"] .fit-stats { border-color: #ddd2bd; }
+html[data-theme="light"] .quickjump { background: #f4f1ea; }
+html[data-theme="light"] .quickjump-panel { background: #fdfbf6; border-color: #d9cfba; }
+html[data-theme="light"] .quickjump-results li.sel,
+html[data-theme="light"] .suggest li.sel { background: #f0dfbc; }
+html[data-theme="light"] .draghandle { background: #f1ebdf; }
+html[data-theme="light"] .fit-stats,
 html[data-theme="light"] .kpi,
-html[data-theme="light"] .brief-card { border-color: #ddd2bd; }
+html[data-theme="light"] .brief-card,
 html[data-theme="light"] .rowexpand { border-color: #ddd2bd; }
 html[data-theme="light"] tr.fleet-detail > td { background: #f6efe2; border-bottom-color: #ddd2bd; }
 html[data-theme="light"] .pilot .dot { box-shadow: 0 0 0 2px #fffdf9; }
 html[data-theme="light"] .fit-pubrate { border-color: #ddd2bd; border-left-color: var(--accent); }
 html[data-theme="light"] .fit-rateform select { border-color: #d8cdb8; }
 html[data-theme="light"] .fit-chip { border-color: #d3c7ae; }
-html[data-theme="light"] .fit-chip-btn { background: #f0e9d8; border-color: #d3c7ae; }
+html[data-theme="light"] .fit-chip-btn { background: #f1ebdf; border-color: #d9cfba; color: #5c4a33; }
 html[data-theme="light"] .fit-panel,
 html[data-theme="light"] .fit-group,
 html[data-theme="light"] .fit-tile { background: rgba(255, 253, 249, 0.6); border-color: #ddd2bd; }
@@ -3813,40 +3747,24 @@ html[data-theme="light"] .res-kin { color: #5d574f; }
 html[data-theme="light"] .res-exp { color: #94600f; }
 html[data-theme="light"] .fit-problems li { color: #8f2209; }
 html[data-theme="light"] .fit-problems strong { color: #a8280d; }
-html[data-theme="light"] .fit-bar { background: #e7ddc8; border-color: #d3c7ae; }
-html[data-theme="light"] .fit-famchips button { background: #fffdf9; border-color: #d3c7ae; }
-html[data-theme="light"] .fit-famchips button.on { background: #f5e3c2; }
+html[data-theme="light"] .fit-bar { background: #e9e0cf; border-color: #d3c7ae; }
+html[data-theme="light"] .fit-famchips button { background: #f1ebdf; border-color: #d9cfba; color: #5c4a33; }
+html[data-theme="light"] .fit-famchips button.on { background: #e8d5b5; color: #20180e; }
 html[data-theme="light"] .fit-headline { border-color: #d3c7ae; background: rgba(255, 184, 77, 0.1); }
 html[data-theme="light"] .fit-slot-empty { border-color: #c9b992; }
 html[data-theme="light"] .fit-vhist { background: rgba(255, 253, 249, 0.92); }
+html[data-theme="light"] .fit-qty { background: #fdfbf6; border-color: #d3c7ae; }
+html[data-theme="light"] .fit-vship img,
+html[data-theme="light"] .fit-vslot .fit-vammo { background: #f1ebdf; }
+html[data-theme="light"] .fit-tip-state { background: #f1ebdf; border-color: #d9cfba; color: #5c4a33; }
 html[data-theme="light"] .fit-tip-state.on { color: #8a4d0e; }
+html[data-theme="light"] .fit-eft textarea { background: #ffffff; border-color: #d8cdb8; color: #2a241d; }
+html[data-theme="light"] .grid.home-grid > .drag-placeholder { background: radial-gradient(ellipse at 50% 40%, rgba(255, 106, 26, 0.16), rgba(255, 106, 26, 0.04) 70%), #f6eedd; }
 /* Tooltips stay dark floating chips in both themes. */
 html[data-theme="light"] .fit-tip { color: #faf3e6; }
 html[data-theme="light"] .fit-tip-name { color: #fff6e6; }
 html[data-theme="light"] .fit-tip-sub,
 html[data-theme="light"] .fit-tip-stats { color: #b39a7d; }
-
-/* Light counterparts for the remaining hardcoded dark backgrounds. */
-html[data-theme="light"] .branch .menu a:hover { background: #f0e7d2; color: #20180e; }
-html[data-theme="light"] .suggest { background: #fdfbf6; border-color: #d9cfba; }
-html[data-theme="light"] .suggest li.sel { background: #f0dfbc; }
-html[data-theme="light"] .draghandle { background: #f1ebdf; }
-html[data-theme="light"] .modal-close { background: #f1ebdf; color: #5c4a33; }
-html[data-theme="light"] .nav-expand-btn { background: #f1ebdf; }
-html[data-theme="light"] .quickjump { background: #f4f1ea; }
-html[data-theme="light"] .quickjump-panel { background: #fdfbf6; border-color: #d9cfba; }
-html[data-theme="light"] .quickjump-btn { background: #f1ebdf; }
-html[data-theme="light"] .fit-chip-btn { background: #f1ebdf; border-color: #d9cfba; color: #5c4a33; }
-html[data-theme="light"] .fit-qty { background: #fdfbf6; }
-html[data-theme="light"] .fit-bar { background: #e9e0cf; }
-html[data-theme="light"] .fit-vship img { background: #f1ebdf; }
-html[data-theme="light"] .fit-vslot .fit-vammo { background: #f1ebdf; }
-html[data-theme="light"] .fit-tip-state { background: #f1ebdf; border-color: #d9cfba; color: #5c4a33; }
-html[data-theme="light"] .fit-famchips button { background: #f1ebdf; border-color: #d9cfba; color: #5c4a33; }
-html[data-theme="light"] .fit-famchips button.on { background: #e8d5b5; color: #20180e; }
-html[data-theme="light"] .fit-eft textarea { background: #ffffff; border-color: #d8cdb8; color: #2a241d; }
-html[data-theme="light"] .grid.home-grid > .drag-placeholder { background: radial-gradient(ellipse at 50% 40%, rgba(255, 106, 26, 0.16), rgba(255, 106, 26, 0.04) 70%), #f6eedd; }
-html[data-theme="light"] tbody tr.yours td { background-color: #f3e3bd; }
 
 
 /* --- theme toggle + sign out footer --- Icon buttons that stay visible
@@ -4523,18 +4441,8 @@ a.chip:hover { border-color: var(--accent); }
 .browse-sorts { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 0.35rem; }
 .browse-for { margin: 0 0 0.9rem; padding: 0.6rem 0.9rem; border-left: 3px solid var(--accent); background: rgba(255, 106, 26, 0.08); }
 .fit-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(21rem, 1fr)); gap: 0.75rem; }
-.fit-card { position: relative; display: grid; grid-template-columns: auto 1fr; gap: 0.5rem 0.85rem; align-items: start; padding: 0.85rem; border: 1px solid transparent; border-radius: 6px; background: rgba(255, 255, 255, 0.02); }
-/* The card's rim is a filter, not a paint: a masked pseudo-element
-   ring carries the glass blur lifted with brightness and contrast,
-   so the edge reads as filtered backdrop, brighter and punchier
-   than the card body. The border itself stays transparent. */
-.fit-card::before { content: ""; position: absolute; inset: 0; border-radius: inherit; padding: 1px; -webkit-backdrop-filter: blur(var(--glass-blur)) brightness(1.6) contrast(1.12) saturate(0.95); backdrop-filter: blur(var(--glass-blur)) brightness(1.6) contrast(1.12) saturate(0.95); -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); mask-composite: exclude; pointer-events: none; }
-.fit-card:hover::before { -webkit-backdrop-filter: blur(var(--glass-blur)) brightness(1.85) contrast(1.16) saturate(1); backdrop-filter: blur(var(--glass-blur)) brightness(1.85) contrast(1.16) saturate(1); }
-/* Where backdrop-filter is unsupported the rim cannot render:
-   the card falls back to the site's usual glass-edge border. */
-@supports not (backdrop-filter: blur(1px)) {
-  .fit-card { border-color: var(--glass-edge); }
-}
+.fit-card { position: relative; display: grid; grid-template-columns: auto 1fr; gap: 0.5rem 0.85rem; align-items: start; padding: 0.85rem; border: 1px solid var(--glass-edge); border-radius: 6px; background: rgba(255, 255, 255, 0.02); }
+.fit-card:hover { border-color: rgba(255, 130, 20, 0.45); }
 .fit-card-ship { width: 64px; height: 64px; border-radius: var(--r-md); border: 1px solid #2a2a2a; background: #0e0e0e; }
 .fit-card-body { min-width: 0; }
 .fit-card h4 { margin: 0 0 0.2rem; font-size: 1rem; text-transform: none; letter-spacing: 0; overflow-wrap: anywhere; }
@@ -4569,7 +4477,6 @@ html[data-theme="light"] .doctrine-fits li:last-child { border-color: #e3d9c6; }
    rise, opacity/transform only. Browsers without the View
    Transitions API (or readers who asked for less motion) swap
    instantly from swap.js instead, so there is nothing to undo. */
-#main-content { view-transition-name: main-content; }
 ::view-transition-old(root), ::view-transition-new(root) { animation: none; }
 ::view-transition-old(main-content) { animation: es-swap-out 150ms ease-out both; }
 ::view-transition-new(main-content) { animation: es-swap-in 260ms ease-out both; }
@@ -4585,14 +4492,7 @@ html[data-theme="light"] .doctrine-fits li:last-child { border-color: #e3d9c6; }
    is wide (corp members, the home fleet table). Any paint on the
    cell layers OVER the row's own paint (cell backgrounds stack on
    row backgrounds), so even the row color itself double-darkens.
-   The fix is no paint at all: the row shows through exactly.
-   (An earlier cut frosted the pinned cells with a backdrop blur;
-   at rest the blur averages the bright nebula band with the dark
-   space around it and the column reads darker than its row, so
-   the frost went too: no paint, no filter, the cell IS the row.) */
-.tw thead th:first-child {
-  background: transparent;
-}
+   The fix is no paint at all: the row shows through exactly. */
 .tw tbody td:first-child, .tw tbody th:first-child,
 tbody td:first-child, tbody th:first-child {
   background: transparent;
@@ -4605,17 +4505,11 @@ tbody tr:nth-child(even) th:first-child {
   background: rgba(255, 106, 0, 0.045);
 }
 
-/* Pill buttons (section tabs, chips, the trade-ideas tabs),
+/* Pill buttons (chips and the trade-ideas tabs),
    colors taken from the Fleet Overview mockup: a warm dark fill
-   (#17110d family) made translucent, the glass edge for a border
-   (rgba(255, 110, 0, 0.20)), the mockup's hover border
-   (rgba(255, 130, 20, 0.42)), and its active pill (orange at
-   20% fill, 40% border). A light backdrop blur keeps them glass
-   over the sky. Severity chips keep their own border colors
-   (their rules come earlier but are just as specific, so the
-   border-color above must not flatten them: it is set only on
-   the tab-shaped pills, and chips are handled by fill alone). */
-.section-tabs a, .ti-tabs button {
+   (#17110d family) made translucent, the glass edge for a border,
+   and its active pill (orange at 20% fill, 40% border). */
+.ti-tabs button {
   font-family: Rajdhani, sans-serif;
   font-weight: 600;
   text-transform: uppercase;
@@ -4624,18 +4518,11 @@ tbody tr:nth-child(even) th:first-child {
 
   background: rgba(23, 17, 13, 0.55);
   border-color: rgba(255, 110, 0, 0.22);
-  -webkit-backdrop-filter: blur(10px) saturate(1.2);
-  backdrop-filter: blur(10px) saturate(1.2);
 }
 .chip {
   background: rgba(23, 17, 13, 0.55);
-  -webkit-backdrop-filter: blur(10px) saturate(1.2);
-  backdrop-filter: blur(10px) saturate(1.2);
 }
-.section-tabs a:hover, .ti-tabs button:hover {
-  border-color: rgba(255, 130, 20, 0.45);
-}
-.section-tabs a.active, .ti-tabs button.active {
+.ti-tabs button.active {
   background: rgba(255, 106, 0, 0.20);
   border-color: rgba(255, 106, 0, 0.40);
 }

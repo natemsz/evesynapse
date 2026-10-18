@@ -24,7 +24,7 @@ func TestEmberGlassAndSkyRules(t *testing.T) {
 	for _, want := range []string{
 		"--glass: color-mix(in srgb, var(--panel) 78%, transparent)",
 		"--glass-edge: color-mix(in srgb, var(--accent) 24%, transparent)",
-		"--glass-blur: 42px",
+		"--glass-blur: 24px",
 		"-webkit-backdrop-filter: blur(var(--glass-blur)) saturate(0.9)",
 		"backdrop-filter: blur(var(--glass-blur)) saturate(0.9)",
 		".brief-card:hover, .brief-card:focus-within",
@@ -176,10 +176,9 @@ func TestEmberGlassAndSkyRules(t *testing.T) {
 	if i := strings.Index(style, "@media (prefers-reduced-motion: reduce) {\n  .brief-card"); i < 0 {
 		t.Error("the reduced-motion guard for the briefing animation is missing")
 	}
-	if !strings.Contains(bg, "@media (prefers-reduced-motion: reduce)") ||
-		!strings.Contains(bg, "animation: ember-breathe 9s") ||
-		!strings.Contains(bg, "background-position: center;") {
-		t.Error("bg.css lost the breathe, the centered composition, or the motion guard")
+	if !strings.Contains(bg, "background-position: center;") ||
+		strings.Contains(bg, "ember-breathe") {
+		t.Error("bg.css lost the centered composition or regained the infinite breathe animation")
 	}
 	// The blur lives or dies on this override: a standing
 	// view-transition-name makes <main> a backdrop root and every

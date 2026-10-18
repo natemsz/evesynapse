@@ -31,7 +31,6 @@ body::before {
   background-repeat: no-repeat;
   background-size: cover;
   background-position: center;
-  animation: ember-breathe 9s ease-in-out infinite alternate;
 }
 @media (min-width: 1501px), (min-width: 751px) and (min-resolution: 2dppx), (min-width: 751px) and (-webkit-min-device-pixel-ratio: 2) {
   body::before {
@@ -44,13 +43,6 @@ body::before {
     background-image: url("/static/bg-uhd.jpg"), url("/static/bg-thumb.jpg");
     background-image: image-set(url("/static/bg-uhd.jxl") type("image/jxl"), url("/static/bg-uhd.jpg") type("image/jpeg")), url("/static/bg-thumb.jpg");
   }
-}
-@keyframes ember-breathe {
-  from { opacity: 0.97; }
-  to { opacity: 1; }
-}
-@media (prefers-reduced-motion: reduce) {
-  body::before { animation: none; }
 }
 
 /* The standing view-transition-name on #main-content (style.css)
@@ -142,8 +134,6 @@ body:has(main .suggest:not([hidden])) main {
 .btn.btn-quiet {
   background: rgba(23, 17, 13, 0.55);
   border-color: rgba(255, 110, 0, 0.22);
-  -webkit-backdrop-filter: blur(10px) saturate(1.2);
-  backdrop-filter: blur(10px) saturate(1.2);
 }
 html[data-theme="light"] .btn.btn-quiet {
   background: rgba(253, 251, 246, 0.72);

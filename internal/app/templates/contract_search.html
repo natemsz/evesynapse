@@ -1,9 +1,9 @@
 {{define "title"}}Public contracts · EveSynapse{{end}}
 {{define "pagetitle"}}Public contracts{{end}}
+{{define "pagetabs"}}{{template "sectiontabs" .}}{{end}}
 {{define "content"}}
 {{with .ContractSearch}}
 {{$s := .}}
-<h2>Public contracts</h2>
 <p class="muted">Every public contract our sweeps see across New Eden, priced against our swept typicals first, then stored estimates — never the guide average.</p>
 
 <div class="cs-hunts">

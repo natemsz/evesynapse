@@ -11,6 +11,29 @@ import (
 	"time"
 )
 
+func sanitizeCSVCell(s string) string {
+	if s == "" {
+		return s
+	}
+	switch s[0] {
+	case '=', '+', '@', '\t', '\r':
+		return "'" + s
+	case '-':
+		if len(s) == 1 || s[1] < '0' || s[1] > '9' {
+			return "'" + s
+		}
+	}
+	return s
+}
+
+func sanitizeCSVRow(row []string) []string {
+	out := make([]string, len(row))
+	for i, c := range row {
+		out[i] = sanitizeCSVCell(c)
+	}
+	return out
+}
+
 // serveCSV writes rows as a CSV download. filename is the base
 // name without extension; the date is appended for uniqueness.
 func serveCSV(w http.ResponseWriter, filename string, header []string, rows [][]string) {
@@ -21,9 +44,9 @@ func serveCSV(w http.ResponseWriter, filename string, header []string, rows [][]
 	// UTF-8 BOM so Excel opens it correctly.
 	w.Write([]byte("\xef\xbb\xbf"))
 	cw := csv.NewWriter(w)
-	cw.Write(header)
+	cw.Write(sanitizeCSVRow(header))
 	for _, row := range rows {
-		cw.Write(row)
+		cw.Write(sanitizeCSVRow(row))
 	}
 	cw.Flush()
 }

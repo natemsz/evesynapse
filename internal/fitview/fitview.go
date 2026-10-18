@@ -762,7 +762,11 @@ func FitBuildVisual(res *fit.Result, doc *FitDoc, snap *fit.Snapshot, familyOf m
 		if _, ok := FitVisualArcs[fam]; !ok {
 			continue
 		}
-		for i := 0; i < it.Qty; i++ {
+		n := it.Qty
+		if n > 8 {
+			n = 8
+		}
+		for i := 0; i < n && len(fitted[fam]) < 16; i++ {
 			st := ""
 			if i < len(it.States) {
 				st = it.States[i]
@@ -777,6 +781,9 @@ func FitBuildVisual(res *fit.Result, doc *FitDoc, snap *fit.Snapshot, familyOf m
 	maxOf[FitFamilySubsystem] = 0
 	if supportsSubsystems || len(fitted[FitFamilySubsystem]) > 0 {
 		maxOf[FitFamilySubsystem] = len(fitted[FitFamilySubsystem])
+		if maxOf[FitFamilySubsystem] > 8 {
+			maxOf[FitFamilySubsystem] = 8
+		}
 	}
 	rendered := map[string]bool{}
 	for _, fam := range []string{FitFamilyHigh, FitFamilyMedium, FitFamilyLow, FitFamilyRig, FitFamilySubsystem} {
@@ -784,6 +791,9 @@ func FitBuildVisual(res *fit.Result, doc *FitDoc, snap *fit.Snapshot, familyOf m
 		max := maxOf[fam]
 		if max <= 0 {
 			continue
+		}
+		if max > 16 {
+			max = 16
 		}
 		rendered[fam] = true
 		span := arc[1] - arc[0]
@@ -1530,12 +1540,26 @@ func FitMissingList(ctx context.Context, app *Builder, snap *fit.Snapshot, doc *
 // the document's own lines.
 func FitBuildGroups(res *fit.Result, doc *FitDoc, snap *fit.Snapshot, familyOf map[int64]string, nameOf func(int64) string, supportsSubsystems bool) []FitSlotGroup {
 	chips := map[string][]FitSlotChip{}
+	slotTotals := map[string]int{}
 	for _, it := range doc.Items {
 		fam := familyOf[it.TypeID]
+		qty := it.Qty
+		if _, isSlot := FitVisualArcs[fam]; isSlot {
+			if qty > 8 {
+				qty = 8
+			}
+			if slotTotals[fam]+qty > 16 {
+				qty = 16 - slotTotals[fam]
+			}
+			if qty <= 0 {
+				continue
+			}
+			slotTotals[fam] += qty
+		}
 		// Uniform resolved state across the line's instances;
 		// mixed lines carry "" (no single state to show).
 		st, uniform := "", true
-		for i := 0; i < it.Qty; i++ {
+		for i := 0; i < qty; i++ {
 			s := ""
 			if i < len(it.States) {
 				s = it.States[i]
@@ -1554,13 +1578,16 @@ func FitBuildGroups(res *fit.Result, doc *FitDoc, snap *fit.Snapshot, familyOf m
 			st = ""
 		}
 		lines := FitTipLines(res, snap, doc, it.TypeID, st, FitEffAttrs(res, snap, it.TypeID, st))
-		chips[fam] = append(chips[fam], FitSlotChip{TypeID: it.TypeID, Name: nameOf(it.TypeID), Qty: it.Qty, State: st,
+		chips[fam] = append(chips[fam], FitSlotChip{TypeID: it.TypeID, Name: nameOf(it.TypeID), Qty: qty, State: st,
 			Sub: FitChipSub(lines), TipLines: FitTipLinesString(lines)})
 	}
 	for fam := range chips {
 		sort.Slice(chips[fam], func(i, j int) bool { return chips[fam][i].Name < chips[fam][j].Name })
 	}
 	mk := func(key, label string, used, max int, hasMax bool) FitSlotGroup {
+		if hasMax && max > 8 {
+			max = 8
+		}
 		g := FitSlotGroup{Key: key, Label: label, Used: used, Max: max, HasMax: hasMax, Chips: chips[key]}
 		if hasMax {
 			g.Over = used > max
@@ -2069,18 +2096,34 @@ var (
 // reported as a note, never silently dropped. [empty] slot
 // lines are accepted and ignored.
 func (app *Builder) ParseEFT(ctx context.Context, text string) (*FitDoc, []string) {
+	if len(text) > 64<<10 {
+		text = text[:64<<10]
+	}
 	doc := &FitDoc{Charges: map[int64]int64{}}
 	var notes []string
 
+	memo := make(map[string]db.GetSDETypeByNameRow)
+	missed := make(map[string]bool)
 	lookup := func(name string) (int64, bool) {
-		row, err := app.queries.GetSDETypeByName(ctx, name)
-		if err != nil {
+		if row, ok := memo[name]; ok {
+			return row.TypeID, true
+		}
+		if missed[name] {
 			return 0, false
 		}
+		row, err := app.queries.GetSDETypeByName(ctx, name)
+		if err != nil {
+			missed[name] = true
+			return 0, false
+		}
+		memo[name] = row
 		return row.TypeID, true
 	}
 
 	lines := strings.Split(text, "\n")
+	if len(lines) > 500 {
+		lines = lines[:500]
+	}
 	idx := 0
 	for ; idx < len(lines); idx++ {
 		line := strings.TrimSpace(lines[idx])

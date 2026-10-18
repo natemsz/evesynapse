@@ -223,6 +223,31 @@ func (b *tokenBox) openTokens(ch db.Character) (access, refresh string, err erro
 // are re-sealed as v2, so switching encryption on — or the KDF
 // under it — takes effect at the next start rather than a refresh
 // at a time.
+const (
+	discordAccessField  = "discord_access"
+	discordRefreshField = "discord_refresh"
+)
+
+func (b *tokenBox) openDiscordTokens(link db.DiscordLink) (access, refresh string, err error) {
+	if access, err = b.open(link.AccessToken, link.UserID, discordAccessField); err != nil {
+		return "", "", err
+	}
+	if refresh, err = b.open(link.RefreshToken, link.UserID, discordRefreshField); err != nil {
+		return "", "", err
+	}
+	return access, refresh, nil
+}
+
+func (b *tokenBox) sealDiscordTokens(userID int64, access, refresh string) (sealedAccess, sealedRefresh string, err error) {
+	if sealedAccess, err = b.seal(access, userID, discordAccessField); err != nil {
+		return "", "", err
+	}
+	if sealedRefresh, err = b.seal(refresh, userID, discordRefreshField); err != nil {
+		return "", "", err
+	}
+	return sealedAccess, sealedRefresh, nil
+}
+
 func (app *Application) prepareStoredTokens(ctx context.Context) error {
 	characters, err := app.queries.ListAllCharacters(ctx)
 	if err != nil {
@@ -240,6 +265,23 @@ func (app *Application) prepareStoredTokens(ctx context.Context) error {
 		if (ch.AccessToken != "" && !tokenSealedCurrent(ch.AccessToken)) ||
 			(ch.RefreshToken != "" && !tokenSealedCurrent(ch.RefreshToken)) {
 			reseal = append(reseal, ch)
+		}
+	}
+
+	discordLinks, err := app.queries.ListDiscordLinks(ctx)
+	if err != nil {
+		return fmt.Errorf("check stored discord tokens: %w", err)
+	}
+	var resealDiscord []db.DiscordLink
+	for _, link := range discordLinks {
+		if _, _, err := app.tokens.openDiscordTokens(link); err != nil {
+			return fmt.Errorf("discord link of user %d: %w.\n"+
+				"Put back the TOKEN_ENCRYPTION_KEY this database was last run with. If that key is gone for good, clear the stored Discord tokens with\n"+
+				"  UPDATE discord_links SET access_token = '', refresh_token = '', token_expiry = NULL;", link.UserID, err)
+		}
+		if (link.AccessToken != "" && !tokenSealedCurrent(link.AccessToken)) ||
+			(link.RefreshToken != "" && !tokenSealedCurrent(link.RefreshToken)) {
+			resealDiscord = append(resealDiscord, link)
 		}
 	}
 
@@ -277,6 +319,28 @@ func (app *Application) prepareStoredTokens(ctx context.Context) error {
 	}
 	if len(reseal) > 0 {
 		logging.Infof("evesynapse: encrypted the stored EVE tokens of %d character(s) to the current format", len(reseal))
+	}
+
+	for _, link := range resealDiscord {
+		access, refresh, err := app.tokens.openDiscordTokens(link)
+		if err != nil {
+			return err
+		}
+		sealedAccess, sealedRefresh, err := app.tokens.sealDiscordTokens(link.UserID, access, refresh)
+		if err != nil {
+			return fmt.Errorf("discord link of user %d: encrypt stored tokens: %w", link.UserID, err)
+		}
+		if err := app.queries.SetDiscordLinkTokens(ctx, db.SetDiscordLinkTokensParams{
+			AccessToken:  sealedAccess,
+			RefreshToken: sealedRefresh,
+			TokenExpiry:  link.TokenExpiry,
+			UserID:       link.UserID,
+		}); err != nil {
+			return fmt.Errorf("discord link of user %d: store encrypted tokens: %w", link.UserID, err)
+		}
+	}
+	if len(resealDiscord) > 0 {
+		logging.Infof("evesynapse: encrypted the stored Discord tokens of %d account(s) to the current format", len(resealDiscord))
 	}
 	return nil
 }

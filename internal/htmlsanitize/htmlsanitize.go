@@ -237,29 +237,66 @@ func ScanMailTagEnd(s string, from int) int {
 	return -1
 }
 
+func asciiLowerByte(b byte) byte {
+	if b >= 'A' && b <= 'Z' {
+		return b | 0x20
+	}
+	return b
+}
+
+func hasPrefixASCIICase(s, prefix string) bool {
+	if len(s) < len(prefix) {
+		return false
+	}
+	for i := 0; i < len(prefix); i++ {
+		if asciiLowerByte(s[i]) != prefix[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func isCloseTagBoundary(b byte) bool {
+	switch b {
+	case '>', ' ', '\t', '\n', '\r', '/':
+		return true
+	default:
+		return false
+	}
+}
+
 // IndexMailCloseTag locates the close tag for a
 // drop-with-contents element, case-insensitively.
 func IndexMailCloseTag(s string, from int, name string) int {
-	idx := strings.Index(strings.ToLower(s[from:]), "</"+name)
-	if idx < 0 {
-		return -1
+	n := len(name)
+	need := 2 + n + 1 // "</" + name + boundary
+	for i := from; i+need <= len(s); i++ {
+		if s[i] != '<' || s[i+1] != '/' {
+			continue
+		}
+		if !hasPrefixASCIICase(s[i+2:], name) {
+			continue
+		}
+		if !isCloseTagBoundary(s[i+2+n]) {
+			continue
+		}
+		return i
 	}
-	return from + idx
+	return -1
 }
 
 // MailHref extracts and validates the href of an <a> tag's
 // attribute text: only absolute http(s) URLs with a host survive
 // (EVE's showinfo:/javascript:/relative links do not).
 func MailHref(attrs string) (string, bool) {
-	lower := strings.ToLower(attrs)
-	for search := 0; search < len(lower); {
-		idx := strings.Index(lower[search:], "href")
-		if idx < 0 {
-			return "", false
+	for search := 0; search+4 <= len(attrs); {
+		if !hasPrefixASCIICase(attrs[search:], "href") {
+			search++
+			continue
 		}
-		pos := search + idx
+		pos := search
 		// href must start an attribute (preceded by space).
-		if pos > 0 && lower[pos-1] != ' ' && lower[pos-1] != '\t' {
+		if pos > 0 && attrs[pos-1] != ' ' && attrs[pos-1] != '\t' {
 			search = pos + 4
 			continue
 		}

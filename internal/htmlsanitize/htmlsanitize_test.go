@@ -176,3 +176,41 @@ func TestSanitizeMailHTMLAlwaysBalanced(t *testing.T) {
 }
 
 var linkTagPattern = regexp.MustCompile(`^<a href="https?://[^"<>]*" rel="nofollow noopener noreferrer" target="_blank">$`)
+
+func TestSanitizeUTF8AndCloseTagBoundary(t *testing.T) {
+	cases := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{
+			name: "multi-byte UTF-8 inside script does not shift byte offsets or panic",
+			in:   `<p>before</p><script>var s = "ȺȺȺKİ"; alert(1);</script><p>after</p>`,
+			want: `<p>before</p><p>after</p>`,
+		},
+		{
+			name: "multi-byte UTF-8 inside style does not shift byte offsets",
+			in:   `<div><style>/* ȺKİ */ body { display: none; }</style>kept</div>`,
+			want: `<div>kept</div>`,
+		},
+		{
+			name: "multi-byte UTF-8 before href attribute preserves href extraction",
+			in:   `<a title="ȺȺȺKİ" href="https://example.com">link</a>`,
+			want: `<a href="https://example.com" rel="nofollow noopener noreferrer" target="_blank">link</a>`,
+		},
+		{
+			name: "scriptx close tag does not prematurely close script",
+			in:   `<script>var x = "</scriptx>"; alert(1);</script><b>safe</b>`,
+			want: `<b>safe</b>`,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := string(Sanitize(tc.in))
+			if got != tc.want {
+				t.Errorf("Sanitize(%q)\n got %q\nwant %q", tc.in, got, tc.want)
+			}
+			assertWellFormed(t, tc.in, got)
+		})
+	}
+}

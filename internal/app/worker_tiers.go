@@ -302,8 +302,10 @@ func (app *Application) trackActivity(next http.Handler) http.Handler {
 			// The character being looked at: the one selected in the
 			// session, and the one a page is asked for by address.
 			viewed := []int64{sessionCharID(app.sessions, ctx)}
-			if id, err := strconv.ParseInt(r.URL.Query().Get("character"), 10, 64); err == nil {
-				viewed = append(viewed, id)
+			if id, err := strconv.ParseInt(r.URL.Query().Get("character"), 10, 64); err == nil && id > 0 {
+				if ch, cerr := app.queries.GetCharacter(ctx, id); cerr == nil && ch.UserID == userID {
+					viewed = append(viewed, id)
+				}
 			}
 			for _, id := range viewed {
 				if id > 0 && app.activity.noteViewed(id, now) && !app.cfg.workerTiersOff {

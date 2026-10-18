@@ -763,7 +763,7 @@ func (p notifyPrefs) reminderLead() time.Duration {
 // opRecipients picks, per corporation, the character of the account
 // that is told about its ops under kind: the first that has not
 // switched the kind off, else the first.
-func opRecipients(rows []db.ListCharacterCorporationsByUserRow, prefs notifyPrefs, kind string) map[int64]int64 {
+func opRecipients(rows []db.ListWorkingCharacterCorporationsByUserRow, prefs notifyPrefs, kind string) map[int64]int64 {
 	recipient := map[int64]int64{}
 	for _, row := range rows {
 		if row.CorporationID == 0 {
@@ -800,7 +800,7 @@ func opRecipients(rows []db.ListCharacterCorporationsByUserRow, prefs notifyPref
 // off, an event is still recorded as seen, so switching back on starts
 // from then.
 func (app *Application) notifyOpEvents(ctx context.Context, c *notifyCollector, userID int64, prefs notifyPrefs, now time.Time) {
-	rows, err := app.queries.ListCharacterCorporationsByUser(ctx, userID)
+	rows, err := app.queries.ListWorkingCharacterCorporationsByUser(ctx, userID)
 	if err != nil {
 		logging.Errorf("notify: corporations of user %d: %v", userID, err)
 		return

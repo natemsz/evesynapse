@@ -167,7 +167,7 @@ func (app *Application) handleWidgetConfig(w http.ResponseWriter, r *http.Reques
 
 	next := "/"
 	if err := r.ParseForm(); err == nil {
-		if n := r.FormValue("next"); strings.HasPrefix(n, "/") && !strings.HasPrefix(n, "//") {
+		if n := r.FormValue("next"); safeLocalNext(n) {
 			next = n
 		}
 		if r.FormValue("widget") == widgetMarket {

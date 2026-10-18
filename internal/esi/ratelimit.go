@@ -192,15 +192,16 @@ func (c *Client) learnBucket(route string, characterID int64, group string, rema
 		c.rates.routeGroup = map[string]string{}
 		c.rates.buckets = map[bucketKey]bucketState{}
 	}
-	if len(c.rates.routeGroup) < 2000 {
+	if _, ok := c.rates.routeGroup[route]; ok || len(c.rates.routeGroup) < 2000 {
 		c.rates.routeGroup[route] = group
 	}
 	state := bucketState{remaining: remaining, at: now}
 	if tokens, window, ok := parseRateLimit(header.Get("X-Ratelimit-Limit")); ok {
 		state.limit, state.window = tokens, window
 	}
-	if len(c.rates.buckets) < 50000 {
-		c.rates.buckets[bucketKey{group, characterID}] = state
+	key := bucketKey{group, characterID}
+	if _, ok := c.rates.buckets[key]; ok || len(c.rates.buckets) < 50000 {
+		c.rates.buckets[key] = state
 	}
 }
 
@@ -241,8 +242,17 @@ func (c *Client) preflight(ctx context.Context, method, path string, now time.Ti
 	if c.rates.until == nil {
 		c.rates.until = map[int64]time.Time{}
 	}
+	if _, ok := c.rates.until[characterID]; !ok && len(c.rates.until) >= 50000 {
+		for id, u := range c.rates.until {
+			if !u.After(now) {
+				delete(c.rates.until, id)
+			}
+		}
+	}
 	if until := now.Add(wait); until.After(c.rates.until[characterID]) {
-		c.rates.until[characterID] = until
+		if _, ok := c.rates.until[characterID]; ok || len(c.rates.until) < 50000 {
+			c.rates.until[characterID] = until
+		}
 	}
 	return fmt.Errorf("ESI %s %s: %s budget at its reserve: %w (%w)", method, path, group, ErrErrorLimit, ErrRateLimited)
 }
@@ -261,16 +271,33 @@ func (c *Client) noteRateLimited(route string, characterID int64, header http.He
 	if c.rates.until == nil {
 		c.rates.until = map[int64]time.Time{}
 	}
+	if _, ok := c.rates.until[characterID]; !ok && len(c.rates.until) >= 50000 {
+		for id, u := range c.rates.until {
+			if !u.After(now) {
+				delete(c.rates.until, id)
+			}
+		}
+	}
 	if until := now.Add(wait); until.After(c.rates.until[characterID]) {
-		c.rates.until[characterID] = until
+		if _, ok := c.rates.until[characterID]; ok || len(c.rates.until) < 50000 {
+			c.rates.until[characterID] = until
+		}
 	}
 	// The route itself waits out Retry-After too, for this character:
 	// asking again sooner only spends another refusal.
 	if c.rates.routeHold == nil {
 		c.rates.routeHold = map[bucketKey]time.Time{}
 	}
-	if len(c.rates.routeHold) < 50000 {
-		c.rates.routeHold[bucketKey{route, characterID}] = now.Add(wait)
+	key := bucketKey{route, characterID}
+	if _, ok := c.rates.routeHold[key]; !ok && len(c.rates.routeHold) >= 50000 {
+		for k, u := range c.rates.routeHold {
+			if !u.After(now) {
+				delete(c.rates.routeHold, k)
+			}
+		}
+	}
+	if _, ok := c.rates.routeHold[key]; ok || len(c.rates.routeHold) < 50000 {
+		c.rates.routeHold[key] = now.Add(wait)
 	}
 }
 

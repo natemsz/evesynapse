@@ -427,7 +427,7 @@ func (app *Application) handleTopbarSearch(w http.ResponseWriter, r *http.Reques
 	// resolution want and say the search is under way instead of
 	// silently offering nothing.
 	pendingNameSearch := false
-	if ownHitCount == 0 && pilotHitCount == 0 && app.notePilotNameSearch(ctx, q, itemHits) {
+	if userID > 0 && ownHitCount == 0 && pilotHitCount == 0 && app.notePilotNameSearch(ctx, q, itemHits) {
 		pendingNameSearch = true
 		hits = append(hits, searchHit{
 			Kind:  "pilot-pending",

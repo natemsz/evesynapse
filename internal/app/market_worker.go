@@ -13,6 +13,8 @@ import (
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
 	"evesynapse/internal/logging"
+
+	"github.com/lib/pq"
 )
 
 // ---------------------------------------------------------------------------
@@ -850,16 +852,40 @@ func (app *Application) refreshGuidePrices(ctx context.Context) (stored bool, li
 		logging.Errorf("worker: guide prices: clear: %v", err)
 		return false, false
 	}
+	prices := make(map[int64]esi.MarketPrice, len(rows))
+	var validRows []esi.MarketPrice
 	for _, row := range rows {
 		if row.TypeID <= 0 {
 			continue
 		}
-		if err := qtx.UpsertGuidePrice(ctx, db.UpsertGuidePriceParams{
-			TypeID:        row.TypeID,
-			AdjustedPrice: row.AdjustedPrice,
-			AveragePrice:  row.AveragePrice,
-		}); err != nil {
-			logging.Errorf("worker: guide prices: store type %d: %v", row.TypeID, err)
+		if _, seen := prices[row.TypeID]; !seen {
+			validRows = append(validRows, row)
+		}
+		prices[row.TypeID] = row
+	}
+	for start := 0; start < len(validRows); start += sweepBatchSize {
+		end := start + sweepBatchSize
+		if end > len(validRows) {
+			end = len(validRows)
+		}
+		chunk := validRows[start:end]
+		n := len(chunk)
+		typeIDs := make([]int64, n)
+		adjPrices := make([]float64, n)
+		avgPrices := make([]float64, n)
+		for i, row := range chunk {
+			typeIDs[i] = row.TypeID
+			adjPrices[i] = row.AdjustedPrice
+			avgPrices[i] = row.AveragePrice
+		}
+		if _, err := tx.ExecContext(ctx, `
+			INSERT INTO guide_prices (type_id, adjusted_price, average_price)
+			SELECT unnest($1::bigint[]), unnest($2::float8[]), unnest($3::float8[])
+			ON CONFLICT (type_id) DO UPDATE SET
+				adjusted_price = excluded.adjusted_price,
+				average_price  = excluded.average_price
+		`, pq.Array(typeIDs), pq.Array(adjPrices), pq.Array(avgPrices)); err != nil {
+			logging.Errorf("worker: guide prices: store batch: %v", err)
 			return false, false
 		}
 	}
@@ -877,10 +903,6 @@ func (app *Application) refreshGuidePrices(ctx context.Context) (stored bool, li
 
 	// The same payload refreshes the live guide the Market page
 	// reads, so both copies agree until the next window.
-	prices := make(map[int64]esi.MarketPrice, len(rows))
-	for _, row := range rows {
-		prices[row.TypeID] = row
-	}
 	app.pricesMu.Lock()
 	app.prices = prices
 	app.pricesExpiry = cachedUntil

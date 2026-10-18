@@ -36,7 +36,7 @@ func (app *Application) CorpActorFor(ctx context.Context, userID, corp int64) mo
 // UserCorps lists the corporations an account has a character in, in the
 // order of its characters.
 func (app *Application) UserCorps(ctx context.Context, userID int64) []int64 {
-	rows, err := app.queries.ListCharacterCorporationsByUser(ctx, userID)
+	rows, err := app.queries.ListWorkingCharacterCorporationsByUser(ctx, userID)
 	if err != nil {
 		logging.Errorf("corporations of user %d: %v", userID, err)
 		return nil

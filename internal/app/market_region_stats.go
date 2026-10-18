@@ -38,7 +38,11 @@ import (
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
 	"evesynapse/internal/logging"
+
+	"github.com/lib/pq"
 )
+
+const sweepBatchSize = 2000
 
 const (
 	// regionSweepGate is how stale a region's stored stats may
@@ -235,17 +239,33 @@ func (app *Application) stageSweepPage(ctx context.Context, state db.MarketSweep
 	}
 	defer tx.Rollback()
 	qtx := app.queries.WithTx(tx)
-	for i := range orders {
-		o := &orders[i]
-		isBuy := int64(0)
-		if o.IsBuyOrder {
-			isBuy = 1
+	for start := 0; start < len(orders); start += sweepBatchSize {
+		end := start + sweepBatchSize
+		if end > len(orders) {
+			end = len(orders)
 		}
-		if err := qtx.InsertMarketSweepOrder(ctx, db.InsertMarketSweepOrderParams{
-			RegionID: state.RegionID, TypeID: o.TypeID, IsBuyOrder: isBuy,
-			Price: o.Price, VolumeRemain: o.VolumeRemain, LocationID: o.LocationID,
-			SystemID: o.SystemID,
-		}); err != nil {
+		chunk := orders[start:end]
+		typeIDs := make([]int64, len(chunk))
+		isBuys := make([]int64, len(chunk))
+		prices := make([]float64, len(chunk))
+		vols := make([]int64, len(chunk))
+		locIDs := make([]int64, len(chunk))
+		sysIDs := make([]int64, len(chunk))
+		for i := range chunk {
+			o := &chunk[i]
+			typeIDs[i] = o.TypeID
+			if o.IsBuyOrder {
+				isBuys[i] = 1
+			}
+			prices[i] = o.Price
+			vols[i] = o.VolumeRemain
+			locIDs[i] = o.LocationID
+			sysIDs[i] = o.SystemID
+		}
+		if _, err := tx.ExecContext(ctx, `
+			INSERT INTO market_sweep_orders (region_id, type_id, is_buy_order, price, volume_remain, location_id, system_id)
+			SELECT $1, unnest($2::bigint[]), unnest($3::bigint[]), unnest($4::float8[]), unnest($5::bigint[]), unnest($6::bigint[]), unnest($7::bigint[])
+		`, state.RegionID, pq.Array(typeIDs), pq.Array(isBuys), pq.Array(prices), pq.Array(vols), pq.Array(locIDs), pq.Array(sysIDs)); err != nil {
 			return err
 		}
 	}
@@ -314,13 +334,10 @@ func (app *Application) storeRegionSweep(ctx context.Context, regionID int64) (t
 	now := time.Now().UTC()
 	day := now.Format("2006-01-02")
 
-	// Region grain: one type at a time, its staged prices fed
-	// to summarizePrices, so the largest slice held at once is
-	// one type's orders -- never the whole book.
-	typeIDs, err := app.queries.ListMarketSweepTypeIDs(ctx, regionID)
-	if err != nil {
-		return 0, 0, err
-	}
+	// Stream all staged orders for the region ordered by type_id,
+	// is_buy_order, price so each type's book is summarized in one
+	// single sequential read instead of 15,000 per-type queries.
+	var typeIDs []int64
 	type regionTypeStats struct {
 		bestSell, typicalSell, sellBand float64
 		bestBuy, typicalBuy, buyBand    float64
@@ -337,57 +354,36 @@ func (app *Application) storeRegionSweep(ctx context.Context, regionID int64) (t
 		volumeRemain         int64
 		locationID, systemID int64
 	}
-	bookByType := make(map[int64][]bookRow, len(typeIDs))
-	statsByType := make(map[int64]*regionTypeStats, len(typeIDs))
-	// Station typicals are distilled in this same per-type pass:
-	// each type's staged prices, split by place and side, feed
-	// summarizePrices exactly as the region grain's do. The
-	// slices held at once are one type's prices partitioned by
-	// station -- the same memory the region figures already use.
+	bookByType := make(map[int64][]bookRow)
+	statsByType := make(map[int64]*regionTypeStats)
 	type stationSidePrices struct {
 		sells, buys []float64
 	}
 	stationPrices := make(map[stationKey]*stationSidePrices)
-	for _, typeID := range typeIDs {
-		rows, err := app.queries.ListMarketSweepTypeOrders(ctx, db.ListMarketSweepTypeOrdersParams{
-			RegionID: regionID, TypeID: typeID,
-		})
-		if err != nil {
-			return 0, 0, err
+
+	orderRows, err := app.db.QueryContext(ctx, `
+		SELECT type_id, is_buy_order, price, volume_remain, location_id, system_id
+		FROM market_sweep_orders
+		WHERE region_id = $1
+		ORDER BY type_id, is_buy_order, price
+	`, regionID)
+	if err != nil {
+		return 0, 0, err
+	}
+	defer orderRows.Close()
+
+	var (
+		curTypeID             int64
+		hasCurType            bool
+		curSt                 *regionTypeStats
+		sellPrices, buyPrices []float64
+		sells, buys           []bookRow
+	)
+	flushType := func() {
+		if !hasCurType {
+			return
 		}
-		st := &regionTypeStats{}
-		var sellPrices, buyPrices []float64
-		var sells, buys []bookRow
-		for _, row := range rows {
-			br := bookRow{
-				isBuy: row.IsBuyOrder, price: row.Price, volumeRemain: row.VolumeRemain,
-				locationID: row.LocationID, systemID: row.SystemID,
-			}
-			if row.IsBuyOrder == 1 {
-				buyPrices = append(buyPrices, row.Price)
-				st.buyVolume += row.VolumeRemain
-				buys = append(buys, br)
-			} else {
-				sellPrices = append(sellPrices, row.Price)
-				st.sellVolume += row.VolumeRemain
-				sells = append(sells, br)
-			}
-			if row.LocationID > 0 {
-				key := stationKey{LocationID: row.LocationID, TypeID: typeID}
-				sp := stationPrices[key]
-				if sp == nil {
-					sp = &stationSidePrices{}
-					stationPrices[key] = sp
-				}
-				if row.IsBuyOrder == 1 {
-					sp.buys = append(sp.buys, row.Price)
-				} else {
-					sp.sells = append(sp.sells, row.Price)
-				}
-			}
-		}
-		// The staged rows arrive price-ascending per side: the
-		// top sells are the head, the top buys the tail reversed.
+		typeIDs = append(typeIDs, curTypeID)
 		var top []bookRow
 		for i := 0; i < len(sells) && i < topMarketOrders; i++ {
 			sells[i].rank = int64(i)
@@ -398,23 +394,74 @@ func (app *Application) storeRegionSweep(ctx context.Context, regionID int64) (t
 			b.rank = int64(i)
 			top = append(top, b)
 		}
-		bookByType[typeID] = top
-		st.sellOrders = int64(len(sellPrices))
-		st.buyOrders = int64(len(buyPrices))
+		bookByType[curTypeID] = top
+		curSt.sellOrders = int64(len(sellPrices))
+		curSt.buyOrders = int64(len(buyPrices))
 		if len(sellPrices) > 0 {
 			stats := summarizePrices(sellPrices) // sorts in place
-			st.bestSell = sellPrices[0]
-			st.typicalSell = stats.Median
-			st.sellBand = stats.High90 // 9 in 10 sell orders at or under this
+			curSt.bestSell = sellPrices[0]
+			curSt.typicalSell = stats.Median
+			curSt.sellBand = stats.High90
 		}
 		if len(buyPrices) > 0 {
 			stats := summarizePrices(buyPrices) // sorts in place
-			st.bestBuy = buyPrices[len(buyPrices)-1]
-			st.typicalBuy = stats.Median
-			st.buyBand = stats.Low90 // 9 in 10 buy orders at or over this
+			curSt.bestBuy = buyPrices[len(buyPrices)-1]
+			curSt.typicalBuy = stats.Median
+			curSt.buyBand = stats.Low90
 		}
-		statsByType[typeID] = st
+		statsByType[curTypeID] = curSt
 	}
+
+	for orderRows.Next() {
+		var typeID int64
+		var row db.ListMarketSweepTypeOrdersRow
+		if err := orderRows.Scan(&typeID, &row.IsBuyOrder, &row.Price, &row.VolumeRemain, &row.LocationID, &row.SystemID); err != nil {
+			return 0, 0, err
+		}
+		if !hasCurType || typeID != curTypeID {
+			flushType()
+			curTypeID = typeID
+			hasCurType = true
+			curSt = &regionTypeStats{}
+			sellPrices = sellPrices[:0]
+			buyPrices = buyPrices[:0]
+			sells = sells[:0]
+			buys = buys[:0]
+		}
+		br := bookRow{
+			isBuy: row.IsBuyOrder, price: row.Price, volumeRemain: row.VolumeRemain,
+			locationID: row.LocationID, systemID: row.SystemID,
+		}
+		if row.IsBuyOrder == 1 {
+			buyPrices = append(buyPrices, row.Price)
+			curSt.buyVolume += row.VolumeRemain
+			buys = append(buys, br)
+		} else {
+			sellPrices = append(sellPrices, row.Price)
+			curSt.sellVolume += row.VolumeRemain
+			sells = append(sells, br)
+		}
+		if row.LocationID > 0 {
+			key := stationKey{LocationID: row.LocationID, TypeID: typeID}
+			sp := stationPrices[key]
+			if sp == nil {
+				sp = &stationSidePrices{}
+				stationPrices[key] = sp
+			}
+			if row.IsBuyOrder == 1 {
+				sp.buys = append(sp.buys, row.Price)
+			} else {
+				sp.sells = append(sp.sells, row.Price)
+			}
+		}
+	}
+	if err := orderRows.Close(); err != nil {
+		return 0, 0, err
+	}
+	if err := orderRows.Err(); err != nil {
+		return 0, 0, err
+	}
+	flushType()
 
 	// Station grain (P2): the staged book aggregated per place
 	// and type, so the spread scanner never re-reads a book. The
@@ -528,39 +575,126 @@ func (app *Application) storeRegionSweep(ctx context.Context, regionID int64) (t
 	if err := qtx.DeleteMarketStationStatsByRegion(ctx, regionID); err != nil {
 		return 0, 0, err
 	}
-	for _, typeID := range typeIDs {
-		st := statsByType[typeID]
-		if err := qtx.UpsertMarketRegionStat(ctx, db.UpsertMarketRegionStatParams{
-			RegionID: regionID, TypeID: typeID,
-			BestSell: st.bestSell, TypicalSell: st.typicalSell, SellBand: st.sellBand,
-			BestBuy: st.bestBuy, TypicalBuy: st.typicalBuy, BuyBand: st.buyBand,
-			SellOrders: st.sellOrders, BuyOrders: st.buyOrders,
-			SellVolume: st.sellVolume, BuyVolume: st.buyVolume,
-			AvgDailyVolume: avgDailyVolume[typeID],
-			UpdatedAt:      now,
-		}); err != nil {
+	for start := 0; start < len(typeIDs); start += sweepBatchSize {
+		end := start + sweepBatchSize
+		if end > len(typeIDs) {
+			end = len(typeIDs)
+		}
+		chunk := typeIDs[start:end]
+		n := len(chunk)
+		bestSells := make([]float64, n)
+		typSells := make([]float64, n)
+		sellBands := make([]float64, n)
+		bestBuys := make([]float64, n)
+		typBuys := make([]float64, n)
+		buyBands := make([]float64, n)
+		sellOrds := make([]int64, n)
+		buyOrds := make([]int64, n)
+		sellVols := make([]int64, n)
+		buyVols := make([]int64, n)
+		avgVols := make([]float64, n)
+		for i, typeID := range chunk {
+			st := statsByType[typeID]
+			bestSells[i] = st.bestSell
+			typSells[i] = st.typicalSell
+			sellBands[i] = st.sellBand
+			bestBuys[i] = st.bestBuy
+			typBuys[i] = st.typicalBuy
+			buyBands[i] = st.buyBand
+			sellOrds[i] = st.sellOrders
+			buyOrds[i] = st.buyOrders
+			sellVols[i] = st.sellVolume
+			buyVols[i] = st.buyVolume
+			avgVols[i] = avgDailyVolume[typeID]
+		}
+		if _, err := tx.ExecContext(ctx, `
+			INSERT INTO market_region_stats (region_id, type_id, best_sell, typical_sell, sell_band, best_buy, typical_buy, buy_band, sell_orders, buy_orders, sell_volume, buy_volume, avg_daily_volume, updated_at)
+			SELECT $1, unnest($2::bigint[]), unnest($3::float8[]), unnest($4::float8[]), unnest($5::float8[]), unnest($6::float8[]), unnest($7::float8[]), unnest($8::float8[]), unnest($9::bigint[]), unnest($10::bigint[]), unnest($11::bigint[]), unnest($12::bigint[]), unnest($13::float8[]), $14
+			ON CONFLICT (region_id, type_id) DO UPDATE SET
+				best_sell        = excluded.best_sell,
+				typical_sell     = excluded.typical_sell,
+				sell_band        = excluded.sell_band,
+				best_buy         = excluded.best_buy,
+				typical_buy      = excluded.typical_buy,
+				buy_band         = excluded.buy_band,
+				sell_orders      = excluded.sell_orders,
+				buy_orders       = excluded.buy_orders,
+				sell_volume      = excluded.sell_volume,
+				buy_volume       = excluded.buy_volume,
+				avg_daily_volume = excluded.avg_daily_volume,
+				updated_at       = excluded.updated_at
+		`, regionID, pq.Array(chunk), pq.Array(bestSells), pq.Array(typSells), pq.Array(sellBands),
+			pq.Array(bestBuys), pq.Array(typBuys), pq.Array(buyBands), pq.Array(sellOrds),
+			pq.Array(buyOrds), pq.Array(sellVols), pq.Array(buyVols), pq.Array(avgVols), now); err != nil {
 			return 0, 0, err
 		}
-		if err := qtx.UpsertMarketRegionStatDaily(ctx, db.UpsertMarketRegionStatDailyParams{
-			RegionID: regionID, TypeID: typeID, Day: day,
-			BestSell: st.bestSell, TypicalSell: st.typicalSell, SellBand: st.sellBand,
-			BestBuy: st.bestBuy, TypicalBuy: st.typicalBuy, BuyBand: st.buyBand,
-			SellOrders: st.sellOrders, BuyOrders: st.buyOrders,
-			SellVolume: st.sellVolume, BuyVolume: st.buyVolume,
-		}); err != nil {
+		if _, err := tx.ExecContext(ctx, `
+			INSERT INTO market_region_stats_daily (region_id, type_id, day, best_sell, typical_sell, sell_band, best_buy, typical_buy, buy_band, sell_orders, buy_orders, sell_volume, buy_volume)
+			SELECT $1, unnest($2::bigint[]), $3, unnest($4::float8[]), unnest($5::float8[]), unnest($6::float8[]), unnest($7::float8[]), unnest($8::float8[]), unnest($9::float8[]), unnest($10::bigint[]), unnest($11::bigint[]), unnest($12::bigint[]), unnest($13::bigint[])
+			ON CONFLICT (region_id, type_id, day) DO UPDATE SET
+				best_sell    = excluded.best_sell,
+				typical_sell = excluded.typical_sell,
+				sell_band    = excluded.sell_band,
+				best_buy     = excluded.best_buy,
+				typical_buy  = excluded.typical_buy,
+				buy_band     = excluded.buy_band,
+				sell_orders  = excluded.sell_orders,
+				buy_orders   = excluded.buy_orders,
+				sell_volume  = excluded.sell_volume,
+				buy_volume   = excluded.buy_volume
+		`, regionID, pq.Array(chunk), day, pq.Array(bestSells), pq.Array(typSells), pq.Array(sellBands),
+			pq.Array(bestBuys), pq.Array(typBuys), pq.Array(buyBands), pq.Array(sellOrds),
+			pq.Array(buyOrds), pq.Array(sellVols), pq.Array(buyVols)); err != nil {
 			return 0, 0, err
 		}
 	}
-	for _, k := range stationKeys {
-		sacc := stations[k]
-		if err := qtx.UpsertMarketStationStat(ctx, db.UpsertMarketStationStatParams{
-			LocationID: k.LocationID, RegionID: regionID, TypeID: k.TypeID,
-			BestSell: sacc.BestSell, BestBuy: sacc.BestBuy,
-			TypicalSell: sacc.TypicalSell, TypicalBuy: sacc.TypicalBuy,
-			SellOrders: sacc.SellOrders, BuyOrders: sacc.BuyOrders,
-			SellVolume: sacc.SellVolume, BuyVolume: sacc.BuyVolume,
-			UpdatedAt: now,
-		}); err != nil {
+	for start := 0; start < len(stationKeys); start += sweepBatchSize {
+		end := start + sweepBatchSize
+		if end > len(stationKeys) {
+			end = len(stationKeys)
+		}
+		chunk := stationKeys[start:end]
+		n := len(chunk)
+		locIDs := make([]int64, n)
+		sTypeIDs := make([]int64, n)
+		bestSells := make([]float64, n)
+		bestBuys := make([]float64, n)
+		typSells := make([]float64, n)
+		typBuys := make([]float64, n)
+		sellOrds := make([]int64, n)
+		buyOrds := make([]int64, n)
+		sellVols := make([]int64, n)
+		buyVols := make([]int64, n)
+		for i, k := range chunk {
+			sacc := stations[k]
+			locIDs[i] = k.LocationID
+			sTypeIDs[i] = k.TypeID
+			bestSells[i] = sacc.BestSell
+			bestBuys[i] = sacc.BestBuy
+			typSells[i] = sacc.TypicalSell
+			typBuys[i] = sacc.TypicalBuy
+			sellOrds[i] = sacc.SellOrders
+			buyOrds[i] = sacc.BuyOrders
+			sellVols[i] = sacc.SellVolume
+			buyVols[i] = sacc.BuyVolume
+		}
+		if _, err := tx.ExecContext(ctx, `
+			INSERT INTO market_station_stats (location_id, region_id, type_id, best_sell, best_buy, typical_sell, typical_buy, sell_orders, buy_orders, sell_volume, buy_volume, updated_at)
+			SELECT unnest($1::bigint[]), $2, unnest($3::bigint[]), unnest($4::float8[]), unnest($5::float8[]), unnest($6::float8[]), unnest($7::float8[]), unnest($8::bigint[]), unnest($9::bigint[]), unnest($10::bigint[]), unnest($11::bigint[]), $12
+			ON CONFLICT (location_id, type_id) DO UPDATE SET
+				region_id    = excluded.region_id,
+				best_sell    = excluded.best_sell,
+				best_buy     = excluded.best_buy,
+				typical_sell = excluded.typical_sell,
+				typical_buy  = excluded.typical_buy,
+				sell_orders  = excluded.sell_orders,
+				buy_orders   = excluded.buy_orders,
+				sell_volume  = excluded.sell_volume,
+				buy_volume   = excluded.buy_volume,
+				updated_at   = excluded.updated_at
+		`, pq.Array(locIDs), regionID, pq.Array(sTypeIDs), pq.Array(bestSells), pq.Array(bestBuys),
+			pq.Array(typSells), pq.Array(typBuys), pq.Array(sellOrds), pq.Array(buyOrds),
+			pq.Array(sellVols), pq.Array(buyVols), now); err != nil {
 			return 0, 0, err
 		}
 	}
@@ -570,15 +704,44 @@ func (app *Application) storeRegionSweep(ctx context.Context, regionID int64) (t
 	if err := qtx.DeleteMarketBookOrdersByRegion(ctx, regionID); err != nil {
 		return 0, 0, err
 	}
+	type flatBookRow struct {
+		typeID int64
+		br     bookRow
+	}
+	var allBookRows []flatBookRow
 	for _, typeID := range typeIDs {
 		for _, br := range bookByType[typeID] {
-			if err := qtx.InsertMarketBookOrder(ctx, db.InsertMarketBookOrderParams{
-				RegionID: regionID, TypeID: typeID, IsBuyOrder: br.isBuy, Rank: br.rank,
-				Price: br.price, VolumeRemain: br.volumeRemain,
-				LocationID: br.locationID, SystemID: br.systemID, UpdatedAt: now,
-			}); err != nil {
-				return 0, 0, err
-			}
+			allBookRows = append(allBookRows, flatBookRow{typeID: typeID, br: br})
+		}
+	}
+	for start := 0; start < len(allBookRows); start += sweepBatchSize {
+		end := start + sweepBatchSize
+		if end > len(allBookRows) {
+			end = len(allBookRows)
+		}
+		chunk := allBookRows[start:end]
+		n := len(chunk)
+		bTypeIDs := make([]int64, n)
+		bIsBuys := make([]int64, n)
+		bRanks := make([]int64, n)
+		bPrices := make([]float64, n)
+		bVols := make([]int64, n)
+		bLocIDs := make([]int64, n)
+		bSysIDs := make([]int64, n)
+		for i, fb := range chunk {
+			bTypeIDs[i] = fb.typeID
+			bIsBuys[i] = fb.br.isBuy
+			bRanks[i] = fb.br.rank
+			bPrices[i] = fb.br.price
+			bVols[i] = fb.br.volumeRemain
+			bLocIDs[i] = fb.br.locationID
+			bSysIDs[i] = fb.br.systemID
+		}
+		if _, err := tx.ExecContext(ctx, `
+			INSERT INTO market_book_orders (region_id, type_id, is_buy_order, rank, price, volume_remain, location_id, system_id, updated_at)
+			SELECT $1, unnest($2::bigint[]), unnest($3::bigint[]), unnest($4::bigint[]), unnest($5::float8[]), unnest($6::bigint[]), unnest($7::bigint[]), unnest($8::bigint[]), $9
+		`, regionID, pq.Array(bTypeIDs), pq.Array(bIsBuys), pq.Array(bRanks), pq.Array(bPrices), pq.Array(bVols), pq.Array(bLocIDs), pq.Array(bSysIDs), now); err != nil {
+			return 0, 0, err
 		}
 	}
 	if err := qtx.DeleteMarketSweepOrdersByRegion(ctx, regionID); err != nil {

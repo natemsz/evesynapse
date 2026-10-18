@@ -226,7 +226,7 @@ if [ -f "$INSTALL_DIR/.env" ]; then
   if ! grep -q '^TOKEN_ENCRYPTION_KEY=' "$INSTALL_DIR/.env"; then
     echo "NOTE: this install stores its characters' EVE login tokens unencrypted."
     echo "      To encrypt them, add this line to $INSTALL_DIR/.env and restart:"
-    echo "        TOKEN_ENCRYPTION_KEY=$(head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n')"
+    echo "        TOKEN_ENCRYPTION_KEY=\$(head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n')"
     echo "      Keep that value with your backups (see \"Token encryption\" in the README)."
   fi
 else

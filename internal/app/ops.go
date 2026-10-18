@@ -71,7 +71,7 @@ type opMember struct {
 // opMembers lists the account's characters with their corporations,
 // from stored data only.
 func (app *Application) opMembers(ctx context.Context, userID int64) []opMember {
-	rows, err := app.queries.ListCharacterCorporationsByUser(ctx, userID)
+	rows, err := app.queries.ListWorkingCharacterCorporationsByUser(ctx, userID)
 	if err != nil {
 		logging.Errorf("ops: characters of user %d: %v", userID, err)
 		return nil

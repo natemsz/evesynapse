@@ -1,11 +1,13 @@
-/* Public contract search + detail: the redesign's own
-   vocabulary (filter groups, drawer slot, result rows, the
-   expansion panel), built from the house tokens in
-   style.css. Loaded only on the contract pages. Content
-   lays open on the page glass like the rest of the site:
-   no card enclosures, no nested panels — hairlines and
-   space separate sections, and inset strips use the flat
-   3% tint style.css flattens inner panels to. */
+/* Public contract search + detail. Loaded only on the
+   contract pages. The page composes the shared inset
+   components from style.css — .box groups, the .seg
+   segmented control, the full-width .band — all painted
+   from the one --row-alt / --box-edge recipe and the
+   --r-xs small radius; this file carries only what is
+   contract-search-specific: the zone layout, the aligned
+   field grids, and the deals-green state. */
+
+:root { --deal: #28c76f; }
 
 .cs-form input[type="checkbox"],
 .cs-form input[type="range"] { accent-color: var(--accent); }
@@ -17,43 +19,40 @@
 .cs-hunts { display: flex; flex-wrap: wrap; align-items: center; gap: 0.45rem; margin: 0.6rem 0 1rem; }
 .cs-hunts-label { color: var(--gold); font-weight: 600; }
 .cs-hunt {
-  border: 1px solid var(--glass-edge); border-radius: 999px;
+  border: 1px solid var(--box-edge); border-radius: 999px;
   padding: 0.15rem 0.7rem; color: var(--text); text-decoration: none;
-  background: rgba(23, 17, 13, 0.55);
+  background: var(--row-alt);
   font-family: "Rajdhani", "Segoe UI", sans-serif; font-weight: 600;
   text-transform: uppercase; letter-spacing: 0.07em; font-size: 0.8rem;
 }
 .cs-hunt:hover { border-color: var(--accent); color: var(--text-bright); }
 
-/* ---- tier 1: search row ---- */
+/* ---- tier 1: the control band ---- */
 .cs-tier1 { display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: stretch; margin-bottom: 0.7rem; }
 .cs-searchbox {
   display: flex; flex: 1 1 26rem; min-width: 0;
-  border: 1px solid var(--glass-edge); border-radius: 0.5rem;
+  border: 1px solid var(--box-edge); border-radius: var(--r-xs);
   background: var(--input-bg); overflow: hidden;
 }
 .cs-searchbox input[type="search"] { flex: 1; min-width: 0; border: 0; background: transparent; }
-.cs-searchbox select { border: 0; border-left: 1px solid var(--glass-edge); background: transparent; max-width: 9.5rem; }
-.cs-pills { display: flex; gap: 0.4rem; align-items: stretch; }
-.cs-pill {
-  position: relative; display: inline-flex; align-items: center;
-  border: 1px solid var(--glass-edge); border-radius: 999px;
-  padding: 0.2rem 0.65rem; cursor: pointer; background: var(--input-bg);
-  color: var(--muted); font-weight: 600;
-  font-family: "Rajdhani", "Segoe UI", sans-serif;
-  text-transform: uppercase; letter-spacing: 0.06em; font-size: 0.8rem;
-}
+.cs-searchbox select { border: 0; border-left: 1px solid var(--box-edge); background: transparent; max-width: 9.5rem; }
+/* The type selector is the shared .seg segmented control;
+   the checkboxes inside keep the form semantics. A checked
+   segment takes the accent fill, like .seg > .on. */
+.cs-types { flex: none; }
+.cs-pill { position: relative; cursor: pointer; }
 .cs-pill input { position: absolute; opacity: 0; pointer-events: none; }
-/* Checked reads like the site's .chip-list toggles: accent
-   edge, bright text, no fill tint. */
-.cs-pill:has(> input:checked) { color: var(--text-bright); border-color: var(--accent); }
-.cs-pill:has(> input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 1px; }
+.cs-pill:has(> input:checked) { background: var(--accent); color: #16100b; }
+.cs-pill:has(> input:focus-visible) { outline: 2px solid var(--accent); outline-offset: -2px; }
+/* Deals only: its own .box at the band's right, color-coded
+   in the deal green — the edge, a soft glow and the switch
+   all light when it is on, so the filter reads at a glance. */
 .cs-deals {
-  display: inline-flex; align-items: center; gap: 0.5rem; cursor: pointer;
-  border: 1px solid var(--glass-edge); border-radius: 0.5rem;
-  padding: 0.2rem 0.7rem; background: var(--glass); font-weight: 600;
+  position: relative; display: inline-flex; align-items: center; gap: 0.5rem;
+  cursor: pointer; font-weight: 600;
   font-family: "Rajdhani", "Segoe UI", sans-serif;
   text-transform: uppercase; letter-spacing: 0.06em; font-size: 0.8rem;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, color 0.15s ease;
 }
 .cs-deals input { position: absolute; opacity: 0; pointer-events: none; }
 .cs-switch {
@@ -66,27 +65,38 @@
   width: 0.84rem; height: 0.84rem; border-radius: 50%;
   background: var(--text); transition: left 0.15s ease;
 }
-.cs-deals input:checked + .cs-switch { background: var(--accent); }
-.cs-deals input:checked + .cs-switch::after { left: 1.01rem; }
-.cs-deals:has(> input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 1px; }
-
-/* ---- tier 2: filter groups, open on the glass ---- */
-.cs-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); gap: 0.9rem 1.5rem; }
-.cs-card { min-width: 0; }
-.cs-card-wide { grid-column: span 2; }
-.cs-card h3 {
-  margin: 0 0 0.45rem; font-size: 0.78rem; letter-spacing: 0.08em;
-  text-transform: uppercase; color: var(--muted); font-weight: 700;
-  border-bottom: 1px solid rgba(255, 110, 0, 0.15); padding-bottom: 0.3rem;
+.cs-deals:has(> input:checked) {
+  border-color: var(--deal); color: var(--deal);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--deal) 40%, transparent),
+    0 0 16px color-mix(in srgb, var(--deal) 20%, transparent);
 }
-.cs-card input[type="text"], .cs-card input[type="search"], .cs-card select { width: 100%; }
-.cs-card-head { display: flex; justify-content: space-between; align-items: baseline; gap: 0.5rem; }
-.cs-region-quick { font-size: 0.82rem; color: var(--muted); }
+.cs-deals input:checked + .cs-switch { background: var(--deal); }
+.cs-deals input:checked + .cs-switch::after { left: 1.01rem; }
+.cs-deals:has(> input:focus-visible) { outline: 2px solid var(--deal); outline-offset: 1px; }
+
+/* ---- tier 2: the four filter boxes ---- */
+/* Four equal .box groups in one row. Inside a box the
+   fields stack as .cs-field cells: label on one line at a
+   uniform height, control pinned to the cell's bottom, so
+   a row of fields shares one baseline. */
+.cs-filters { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.7rem; }
+.cs-fbox { display: flex; flex-direction: column; gap: 0.55rem; min-width: 0; }
+.cs-fbox > .box-title { margin-bottom: 0; }
+.cs-fbox .cs-field { flex: 1; }
+.cs-field {
+  display: flex; flex-direction: column; justify-content: flex-end;
+  gap: 0.25rem; min-width: 0;
+  font-size: 0.78rem; font-weight: 700; letter-spacing: 0.06em;
+  text-transform: uppercase; color: var(--muted);
+  white-space: nowrap;
+}
+.cs-field input, .cs-field select { width: 100%; margin-top: auto; text-transform: none; letter-spacing: normal; }
+.cs-region-quick { font-size: 0.82rem; color: var(--muted); white-space: nowrap; }
 .cs-region-quick button {
   background: none; border: 0; padding: 0; color: var(--gold);
   cursor: pointer; font: inherit; text-decoration: underline;
 }
-.cs-chips { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-bottom: 0.45rem; min-height: 1.5rem; }
+.cs-chips { display: flex; flex-wrap: wrap; gap: 0.35rem; min-height: 1.5rem; }
 .cs-chips-all { color: var(--muted); font-size: 0.9rem; align-self: center; }
 .cs-chip {
   display: inline-flex; align-items: center; gap: 0.15rem;
@@ -97,46 +107,56 @@
 }
 .cs-chip-x { background: none; border: 0; color: inherit; cursor: pointer; font-size: 1rem; line-height: 1; padding: 0 0.15rem; }
 .cs-region-details { position: relative; }
-.cs-region-details summary { cursor: pointer; color: var(--gold); font-size: 0.9rem; }
+.cs-region-details summary {
+  cursor: pointer; color: var(--text); font-size: 0.92rem;
+  border: 1px solid var(--box-edge); border-radius: var(--r-xs);
+  background: var(--input-bg); padding: 0.32rem 0.6rem; list-style: none;
+}
+.cs-region-details summary::-webkit-details-marker { display: none; }
+.cs-region-details summary::after { content: "▾"; float: right; color: var(--muted); }
 .cs-region-pop {
-  position: absolute; z-index: 40; top: 1.5rem; left: 0;
-  width: min(34rem, 90vw); max-height: 17rem; overflow: auto;
+  position: absolute; z-index: 40; top: 2.2rem; left: 0;
+  width: min(30rem, 90vw); max-height: 18rem; overflow: auto;
   display: grid; grid-template-columns: 1fr 1fr; gap: 0.1rem 1rem;
   background: var(--panel); border: 1px solid var(--glass-edge);
-  border-radius: 0.5rem; padding: 0.6rem 0.8rem;
+  border-radius: var(--r-xs); padding: 0.6rem 0.8rem;
   box-shadow: 0 1rem 2.5rem rgba(0, 0, 0, 0.55);
 }
+.cs-region-search { grid-column: 1 / -1; width: 100%; margin-bottom: 0.35rem; }
 .cs-region-row { display: flex; align-items: center; gap: 0.45rem; padding: 0.14rem 0; cursor: pointer; }
 .cs-region-row small { color: var(--muted); margin-left: auto; }
 .cs-duo { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; }
-.cs-duo label, .cs-field { display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.88rem; color: var(--muted); }
-.cs-duo input { width: 100%; }
-.cs-isk-hint { font-size: 0.78rem; color: var(--muted-2); min-height: 1em; }
-.cs-buyout { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: flex-start; }
-.cs-buyout input { flex: 1 1 12rem; }
+.cs-isk-hint { font-size: 0.78rem; color: var(--muted-2); min-height: 1em; text-transform: none; letter-spacing: normal; font-weight: 400; }
 .cs-cap-chips { display: inline-flex; gap: 0.35rem; }
 .cs-cap-chips button {
-  border: 1px solid var(--glass-edge); background: rgba(23, 17, 13, 0.55);
+  border: 1px solid var(--box-edge); background: var(--row-alt);
   color: var(--text); border-radius: 999px; padding: 0.15rem 0.7rem; cursor: pointer;
   font-family: "Rajdhani", "Segoe UI", sans-serif; font-weight: 600;
   text-transform: uppercase; letter-spacing: 0.07em; font-size: 0.8rem;
 }
 .cs-cap-chips button:hover { border-color: var(--accent); color: var(--text-bright); }
 
-/* ---- tier 3: the drawer slot ---- */
+/* ---- tier 3: the specialized specs band ---- */
+/* The shared .band, bled edge to edge across the page
+   panel: the tab bar and the open spec's fields live in
+   one full-width territory, not another nested panel. */
+.cs-specs {
+  margin: 1rem -1.25rem 0;
+  padding: 0.7rem 1.25rem 0.85rem;
+}
 .cs-drawer-bar {
   display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem 1rem;
-  margin-top: 0.9rem;
 }
 .cs-drawer-label { font-size: 0.78rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
 .cs-tabs { display: flex; flex-wrap: wrap; gap: 0.4rem; }
 .cs-tab {
-  border: 1px solid var(--glass-edge); background: transparent;
-  color: var(--muted); border-radius: 0.5rem; padding: 0.3rem 0.7rem;
+  border: 1px solid var(--box-edge); background: transparent;
+  color: var(--muted); border-radius: var(--r-xs); padding: 0.3rem 0.7rem;
   cursor: pointer; font-family: "Rajdhani", "Segoe UI", sans-serif;
   font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; font-size: 0.85rem;
   display: inline-flex; align-items: center; gap: 0.45rem;
 }
+.cs-tab svg { width: 0.95rem; height: 0.95rem; flex: none; color: var(--accent); }
 .cs-tab:hover { color: var(--text-bright); border-color: var(--accent); }
 .cs-tab .cs-chev::after { content: "▾"; color: var(--muted); }
 /* Active follows the site's tab conventions: the .ti-tabs
@@ -152,7 +172,7 @@
 .cs-clear { color: var(--muted); }
 .cs-clear:hover { color: var(--neg); }
 .cs-drawer {
-  margin-top: 0.6rem; border-top: 1px solid var(--glass-edge);
+  margin-top: 0.6rem; border-top: 1px solid var(--box-edge);
   padding: 0.75rem 0 0;
 }
 .cs-drawer-head { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; }
@@ -167,19 +187,22 @@
 }
 .cs-reset:hover { color: var(--neg); }
 .cs-drawer-grid {
-  display: grid; grid-template-columns: repeat(auto-fit, minmax(13.5rem, 1fr));
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(14.5rem, 1fr));
   gap: 0.6rem 0.9rem; margin-top: 0.65rem;
 }
 .cs-drawer-grid input, .cs-drawer-grid select { width: 100%; }
+.cs-field > .cs-slider-pair { margin-top: auto; }
 .cs-slider-pair { display: flex; align-items: center; gap: 0.6rem; }
 .cs-slider-pair input[type="range"] { flex: 1; width: auto; }
 .cs-slider-pair input[type="number"] { width: 4.6rem; flex: none; }
 
-/* ---- results ---- */
+/* ---- results: their own .box section ---- */
+.cs-results { padding: 0.7rem 0.85rem 0.4rem; margin-top: 1rem; }
 .cs-results-head {
   display: flex; justify-content: space-between; align-items: baseline;
-  gap: 1rem; margin-top: 1.2rem; flex-wrap: wrap;
+  gap: 1rem; flex-wrap: wrap;
 }
+.cs-none { margin: 0.2rem 0 0.6rem; }
 .cs-results-head p { margin: 0; }
 .cs-active { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.55rem; }
 .cs-fchip {
@@ -188,7 +211,7 @@
   background: var(--glass); font-size: 0.88rem;
 }
 .cs-fchip:hover { border-color: var(--neg); color: var(--neg); }
-.cs-fchip.hot { border-color: #28c76f; color: #28c76f; background: color-mix(in srgb, #28c76f 10%, transparent); }
+.cs-fchip.hot { border-color: var(--deal); color: var(--deal); background: color-mix(in srgb, var(--deal) 10%, transparent); }
 .cs-fchip.hot:hover { border-color: var(--neg); color: var(--neg); }
 
 .cs-rows {
@@ -216,9 +239,9 @@
 .cs-type.t-auction { color: var(--gold); }
 .cs-type.t-courier { color: #8fb8d8; }
 .cs-deal {
-  color: #28c76f; border: 1px solid #28c76f; border-radius: 0.35rem;
+  color: var(--deal); border: 1px solid var(--deal); border-radius: var(--r-xs);
   padding: 0 0.4rem; font-size: 0.78rem; font-weight: 700;
-  background: color-mix(in srgb, #28c76f 12%, transparent);
+  background: color-mix(in srgb, var(--deal) 12%, transparent);
 }
 .cs-row-title { font-size: 1.02rem; }
 .cs-row-meta { color: var(--muted); font-size: 0.88rem; }
@@ -228,8 +251,8 @@
 .cs-wants { color: var(--muted); font-weight: 700; font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.05em; }
 .cs-chips { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.25rem; }
 .cs-chipinfo {
-  border: 1px solid var(--glass-edge); border-radius: 0.35rem;
-  padding: 0.05rem 0.45rem; font-size: 0.82rem; background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--glass-edge); border-radius: var(--r-xs);
+  padding: 0.05rem 0.45rem; font-size: 0.82rem; background: var(--row-alt);
 }
 .cs-chipinfo.bp { color: var(--gold); border-color: color-mix(in srgb, var(--gold) 55%, transparent); }
 .cs-chipinfo.ab { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 55%, transparent); font-weight: 600; }
@@ -242,17 +265,17 @@
 .cs-cell-label { font-size: 0.74rem; letter-spacing: 0.07em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
 .cs-cell-value { font-weight: 700; font-size: 1.0rem; white-space: nowrap; }
 .cs-cell-note { color: var(--muted); font-size: 0.87rem; margin-top: 0.15rem; }
-.cs-spread { color: #28c76f; font-weight: 700; margin-top: 0.15rem; }
-.cs-loc .sec-pill { border-radius: 0.35rem; }
+.cs-spread { color: var(--deal); font-weight: 700; margin-top: 0.15rem; }
+.cs-loc .sec-pill { border-radius: var(--r-xs); }
 .cs-place { font-weight: 600; }
 .cs-copy {
-  background: rgba(255, 255, 255, 0.03); border: 1px solid var(--glass-edge);
-  color: var(--muted); border-radius: 0.5rem;
+  background: var(--row-alt); border: 1px solid var(--glass-edge);
+  color: var(--muted); border-radius: var(--r-xs);
   cursor: pointer; line-height: 1;
 }
 .cs-row-main > .cs-copy { width: 2rem; height: 2rem; font-size: 0.95rem; justify-self: end; }
 .cs-copy:hover { color: var(--accent); border-color: var(--accent); }
-.cs-copy.copied { color: #28c76f; border-color: #28c76f; }
+.cs-copy.copied { color: var(--deal); border-color: var(--deal); }
 .cs-pager { display: flex; gap: 1.2rem; margin-top: 0.9rem; }
 
 /* ---- expansion panel ---- */
@@ -266,12 +289,12 @@
 .cs-panel-head a { margin-left: auto; }
 .cs-panel-summary {
   display: flex; flex-wrap: wrap; gap: 0.35rem 1.4rem; margin-top: 0.5rem;
-  border: 1px solid rgba(255, 110, 0, 0.14); border-radius: 0.5rem;
-  background: rgba(255, 255, 255, 0.03); padding: 0.5rem 0.75rem; font-size: 0.94rem;
+  border: 1px solid var(--box-edge); border-radius: var(--r-xs);
+  background: var(--row-alt); padding: 0.5rem 0.75rem; font-size: 0.94rem;
 }
 .cs-panel-summary small { color: var(--muted); }
 .cs-deal-note { color: var(--muted); }
-.cs-deal-note.deal { color: #28c76f; font-weight: 700; }
+.cs-deal-note.deal { color: var(--deal); font-weight: 700; }
 .cs-panel-grid { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 1rem; margin-top: 0.6rem; }
 .cs-panel-grid.solo { grid-template-columns: minmax(0, 1fr); }
 .cs-pline {
@@ -283,14 +306,14 @@
 .cs-side {
   font-size: 0.74rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase;
   color: var(--accent); border: 1px solid color-mix(in srgb, var(--accent) 50%, transparent);
-  border-radius: 0.35rem; padding: 0 0.35rem;
+  border-radius: var(--r-xs); padding: 0 0.35rem;
 }
 .cs-side.want { color: var(--gold); border-color: color-mix(in srgb, var(--gold) 50%, transparent); }
 .cs-pline-value { text-align: right; flex: none; }
 .cs-tier { color: var(--muted); font-size: 0.88rem; }
 .cs-abpanel {
   border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--glass-edge));
-  border-radius: 0.5rem; background: rgba(255, 255, 255, 0.03); padding: 0.6rem 0.75rem;
+  border-radius: var(--r-xs); background: var(--row-alt); padding: 0.6rem 0.75rem;
   margin-bottom: 0.6rem;
 }
 .cs-abpanel-head { display: flex; justify-content: space-between; align-items: baseline; gap: 0.6rem; flex-wrap: wrap; }
@@ -315,28 +338,29 @@
 .cd-fact small { display: block; color: var(--muted); font-size: 0.76rem; letter-spacing: 0.06em; text-transform: uppercase; font-weight: 700; }
 .cd-fact { font-size: 0.98rem; }
 .cd-valueband {
-  border: 1px solid rgba(255, 110, 0, 0.14); border-radius: 0.5rem;
-  background: rgba(255, 255, 255, 0.03); padding: 0.65rem 0.85rem; max-width: 62rem;
+  border: 1px solid var(--box-edge); border-radius: var(--r-xs);
+  background: var(--row-alt); padding: 0.65rem 0.85rem; max-width: 62rem;
   display: flex; flex-wrap: wrap; gap: 0.4rem 1.6rem; align-items: baseline;
 }
 .cd-valueband .cd-big { font-size: 1.25rem; font-weight: 700; }
 .cd-dealbadge {
-  color: #28c76f; border: 1px solid #28c76f; border-radius: 0.35rem;
+  color: var(--deal); border: 1px solid var(--deal); border-radius: var(--r-xs);
   padding: 0.05rem 0.5rem; font-weight: 700;
-  background: color-mix(in srgb, #28c76f 12%, transparent);
+  background: color-mix(in srgb, var(--deal) 12%, transparent);
 }
 .cd-lines td.num, .cd-lines th.num { text-align: right; }
 .cd-abpanel {
   border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--glass-edge));
-  border-radius: 0.5rem; background: rgba(255, 255, 255, 0.03);
+  border-radius: var(--r-xs); background: var(--row-alt);
   padding: 0.6rem 0.8rem; margin: 0.4rem 0; max-width: 46rem;
 }
 .cd-abpanel .cs-roll { grid-template-columns: minmax(0, 1fr) auto 8rem 2.6rem; }
 .cd-abest { font-size: 1.08rem; margin: 0.45rem 0; }
-.cd-facts .sec-pill, .cd-valueband .sec-pill { border-radius: 0.35rem; }
+.cd-facts .sec-pill, .cd-valueband .sec-pill { border-radius: var(--r-xs); }
 
 /* ---- narrow screens ---- */
 @media (max-width: 72rem) {
+  .cs-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .cs-row-main { grid-template-columns: minmax(0, 1fr) 10.5rem 12rem; }
   .cs-loc { grid-column: 1 / -1; }
   .cs-row { position: relative; }
@@ -344,7 +368,15 @@
   .cs-panel-grid { grid-template-columns: minmax(0, 1fr); }
 }
 @media (max-width: 42rem) {
-  .cs-card-wide { grid-column: span 1; }
+  /* The band stacks: search full width, then the type
+     segments and the deals box as full-width rows of their
+     own; the filter boxes and spec fields go one column. */
+  .cs-filters { grid-template-columns: minmax(0, 1fr); }
+  .cs-searchbox { flex-basis: 100%; }
+  .cs-types { width: 100%; }
+  .cs-types > * { flex: 1; justify-content: center; }
+  .cs-deals { width: 100%; justify-content: space-between; }
+  .cs-drawer-grid { grid-template-columns: minmax(0, 1fr); }
   .cs-row-main { grid-template-columns: minmax(0, 1fr) 1fr; }
   .cs-region-pop { position: static; width: auto; grid-template-columns: 1fr; margin-top: 0.4rem; }
   .cs-actions { margin-left: 0; }

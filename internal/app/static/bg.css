@@ -108,6 +108,23 @@ html[data-theme="light"] .charselector-dropdown {
   border-color: #d9cfba;
 }
 
+/* The character switcher's menu (style.css) hangs from the header,
+   whose own backdrop-filter makes the header a backdrop root: the
+   blur the menu declares samples the header's backdrop image, not
+   the page under the menu (the same measurement as the notify
+   prompt below), and its 0.82 paint lets the page text behind the
+   open menu read straight through. It gets the .suggest treatment,
+   verbatim, like the character selector's dropdown above:
+   near-opaque paint does the legibility work, the standard
+   floating blur stays for where it can sample. */
+.switcher .menu {
+  background-color: rgba(13, 10, 8, 0.94);
+  border-color: rgba(255, 110, 0, 0.25);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.65);
+  -webkit-backdrop-filter: blur(25px) saturate(0.9);
+  backdrop-filter: blur(25px) saturate(0.9);
+}
+
 /* My Loadouts: the training-plan action is a skill-book glyph,
    not a text link, so a card's actions row stays one line for
    both fit sources. */
@@ -155,13 +172,20 @@ html[data-theme="light"] .btn.btn-quiet {
 /* The home header row: the page title and its action bar (Link
    another character, Overview settings) sit together above the
    panel, the title left, the bar right — the arrangement the
-   header had before the title moved out on its own. */
+   header had before the title moved out on its own. The left
+   padding repeats .page-body's 1.25rem content inset, so the
+   title's left edge aligns with the panel content under the
+   1640px cap instead of with the panel's outer edge; the top
+   padding gives the title air under the top bar. The row
+   bottom-aligns, so the bar's buttons sit on the title's
+   bottom line instead of floating at its center. */
 .page-head {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
+  align-items: flex-end;
   gap: 0.5rem 1rem;
   margin: 0 max(1.25rem, calc((100% - 1640px) / 2)) 0;
+  padding: 0.625rem 0 0 1.25rem;
 }
 .page-head > h1 {
   margin: 0;

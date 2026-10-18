@@ -1058,6 +1058,12 @@ footer .version-number {
    brings the container back so the band stays grabbable, and the
    tiles return to flat tints over it (one blur layer either way). */
 .card[data-widget="glance"] { background: none; border-color: transparent; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
+/* Normal view only: the band has no container of its own, so the
+   tiles are the surface — they span the full column width, their
+   edges lined up with the panels below, instead of sitting inset
+   inside the card's padding and border. Customize mode keeps the
+   padded container so the band stays a grabbable panel. */
+#main-content .grid.home-grid:not(.home-custom) > .card[data-widget="glance"] { padding-left: 0; padding-right: 0; border-left-width: 0; border-right-width: 0; }
 #main-content .grid.home-grid > .card[data-widget="glance"] > h3:first-child { display: none; }
 .card[data-widget="glance"] .kpi { background: var(--glass); border-color: var(--glass-edge); box-shadow: 0 4px 18px rgba(0, 0, 0, 0.6); -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(0.9); backdrop-filter: blur(var(--glass-blur)) saturate(0.9); }
 .home-custom .card[data-widget="glance"] { background: var(--glass); border-color: var(--glass-edge); box-shadow: 0 4px 18px rgba(0, 0, 0, 0.6); -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(0.9); backdrop-filter: blur(var(--glass-blur)) saturate(0.9); }
@@ -4615,6 +4621,9 @@ html[data-theme="light"] .suggest li:not(.sug-kind):not(.sug-empty):hover, html[
 }
 .page-body:has(.home-grid) {
   margin: 0 max(1.25rem, calc((100% - 1640px) / 2));
+  /* Tighter under the page title than the standard panel inset:
+     the header row sits close above the glance band. */
+  padding-top: 0.8rem;
   background: none;
   border: 0;
   -webkit-backdrop-filter: none;

@@ -30,7 +30,12 @@ type swarmESISStub struct {
 	types   map[int64]string
 	corps   map[int64]string
 	allies  map[int64]string
-	calls   int
+	// contractItems serves /contracts/public/items/{id}/, and
+	// contractStatus forces a status for one contract's route
+	// (a 400 for courier cargo, say) ahead of any body.
+	contractItems  map[int64]string
+	contractStatus map[int64]int
+	calls          int
 }
 
 func (s *swarmESISStub) respond(status int, body string) *http.Response {
@@ -74,6 +79,14 @@ func (s *swarmESISStub) RoundTrip(req *http.Request) (*http.Response, error) {
 			return s.respond(http.StatusOK, body), nil
 		}
 		return s.respond(http.StatusNotFound, `{"error":"no such alliance"}`), nil
+	case strings.HasPrefix(path, "/contracts/public/items/"):
+		if status, ok := s.contractStatus[id]; ok {
+			return s.respond(status, `{"error":"refused"}`), nil
+		}
+		if body, ok := s.contractItems[id]; ok {
+			return s.respond(http.StatusOK, body), nil
+		}
+		return s.respond(http.StatusNotFound, `{"error":"no such contract"}`), nil
 	default:
 		return s.respond(http.StatusNotFound, `{"error":"unknown"}`), nil
 	}

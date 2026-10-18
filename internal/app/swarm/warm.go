@@ -60,7 +60,7 @@ const (
 // SwarmWarmKinds are the kinds a dedicated node can warm for others:
 // every shared kind. A structure name needs a character with docking
 // access, so a node only covers it when its operator says so.
-var SwarmWarmKinds = []string{SwarmKindCorporation, SwarmKindAlliance, SwarmKindTypeName, SwarmKindHistory, SwarmKindStructure}
+var SwarmWarmKinds = []string{SwarmKindCorporation, SwarmKindAlliance, SwarmKindTypeName, SwarmKindHistory, SwarmKindStructure, SwarmKindContract}
 
 // ParseSwarmWarm reads SHARED_CACHE_WARM: "all", or a comma list of
 // shared kinds. Anything else is dropped with a warning.
@@ -277,6 +277,12 @@ func (app *Mod) SwarmNoteDemand(ctx context.Context, kind, key string) {
 	if !app.SwarmSelfWarms(kind) {
 		return
 	}
+	// public_contract deliberately has no case here: the public
+	// contracts route is by region, so a node cannot fetch a
+	// header from a contract ID alone, and its own sweep covers
+	// discovery anyway. What a node can warm is the item list
+	// once its sweep has seen the header — that demand travels
+	// as its own pending queue, like every main's.
 	var err error
 	switch kind {
 	case SwarmKindCorporation, SwarmKindAlliance, SwarmKindTypeName, SwarmKindStructure:

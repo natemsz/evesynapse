@@ -1,7 +1,7 @@
 package swarm
 
 // ---------------------------------------------------------------------------
-// What the swarm shares, and how entries land. Five public kinds,
+// What the swarm shares, and how entries land. Six public kinds,
 // nothing else:
 //
 //   market_history      region/type daily aggregates
@@ -11,6 +11,9 @@ package swarm
 //   structure_name      one player structure's name (the only kind
 //                       fetched with a token; the name itself is
 //                       game data, never account data)
+//   public_contract     one public contract's header and its full
+//                       item list (the contents are the expensive
+//                       fetch: one ESI Call per contract, ever)
 //
 // Two rules keep poison out of the tables. First, an instance
 // serves only what its own worker fetched from ESI and still
@@ -56,13 +59,14 @@ const (
 	SwarmKindCorporation = "corporation_record"
 	SwarmKindAlliance    = "alliance_record"
 	SwarmKindStructure   = "structure_name"
+	SwarmKindContract    = "public_contract"
 )
 
 // ValidSwarmKind reports whether kind is data the swarm carries
 // (not the membership list, which is gossip, not data).
 func ValidSwarmKind(kind string) bool {
 	switch kind {
-	case SwarmKindHistory, SwarmKindTypeName, SwarmKindCorporation, SwarmKindAlliance, SwarmKindStructure:
+	case SwarmKindHistory, SwarmKindTypeName, SwarmKindCorporation, SwarmKindAlliance, SwarmKindStructure, SwarmKindContract:
 		return true
 	default:
 		return false
@@ -118,6 +122,8 @@ func (app *Mod) ServeSwarmKey(ctx context.Context, kind, key string) (payload st
 		return app.ServeSwarmAlliance(ctx, key)
 	case SwarmKindStructure:
 		return app.ServeSwarmStructure(ctx, key)
+	case SwarmKindContract:
+		return app.ServeSwarmContract(ctx, key)
 	default:
 		return "", time.Time{}, false
 	}
@@ -302,6 +308,113 @@ func (app *Mod) ServeSwarmStructure(ctx context.Context, key string) (string, ti
 		return "", time.Time{}, false
 	}
 	return string(raw), row.ResolvedAt.Time, true
+}
+
+// SwarmContractPayload is public_contract on the wire: the
+// header facts as plain values (dates as unix seconds, the way
+// the envelope carries time), then the full item list. The
+// storm node copies this struct field for field — names and
+// order are the protocol.
+type SwarmContractPayload struct {
+	ContractID          int64               `json:"contract_id"`
+	RegionID            int64               `json:"region_id"`
+	Type                string              `json:"type"`
+	IssuerID            int64               `json:"issuer_id"`
+	IssuerCorporationID int64               `json:"issuer_corporation_id"`
+	ForCorporation      bool                `json:"for_corporation"`
+	Title               string              `json:"title"`
+	Price               float64             `json:"price"`
+	Buyout              float64             `json:"buyout"`
+	Reward              float64             `json:"reward"`
+	Collateral          float64             `json:"collateral"`
+	Volume              float64             `json:"volume"`
+	StartLocationID     int64               `json:"start_location_id"`
+	EndLocationID       int64               `json:"end_location_id"`
+	DateIssued          int64               `json:"date_issued"`
+	DateExpired         int64               `json:"date_expired"`
+	DaysToComplete      int64               `json:"days_to_complete"`
+	Items               []SwarmContractItem `json:"items"`
+}
+
+// SwarmContractItem is one line of a contract's item list. A
+// nil ItemID is no singleton ID (the database's NULL, ESI's 0);
+// the blueprint fields are pointers because absence is the
+// signal, exactly as on the ESI route.
+type SwarmContractItem struct {
+	RecordID           int64  `json:"record_id"`
+	TypeID             int64  `json:"type_id"`
+	ItemID             *int64 `json:"item_id"`
+	Quantity           int64  `json:"quantity"`
+	IsIncluded         bool   `json:"is_included"`
+	IsBlueprintCopy    bool   `json:"is_blueprint_copy"`
+	Runs               *int64 `json:"runs"`
+	MaterialEfficiency *int64 `json:"material_efficiency"`
+	TimeEfficiency     *int64 `json:"time_efficiency"`
+}
+
+// MaxSwarmContractItems caps one contract entry's item list:
+// real contracts run to hundreds of lines, and a list past this
+// is a dump, not a contract.
+const MaxSwarmContractItems = 1000
+
+func swarmPtrFromNull(v sql.NullInt64) *int64 {
+	if !v.Valid {
+		return nil
+	}
+	n := v.Int64
+	return &n
+}
+
+func swarmNullFromPtr(v *int64) sql.NullInt64 {
+	if v == nil {
+		return sql.NullInt64{}
+	}
+	return sql.NullInt64{Int64: *v, Valid: true}
+}
+
+func (app *Mod) ServeSwarmContract(ctx context.Context, key string) (string, time.Time, bool) {
+	id, ok := ParseSwarmID(key)
+	if !ok {
+		return "", time.Time{}, false
+	}
+	rec, err := app.Queries.GetPublicContract(ctx, id)
+	if err != nil || rec.ItemsState != "stored" || !rec.DateExpired.After(time.Now()) {
+		return "", time.Time{}, false
+	}
+	// Contract items are immutable once issued, so the header's
+	// own last_seen is the entry's freshness stamp — and the
+	// stamp the provenance check binds to, as for records.
+	if app.SwarmSupplied(ctx, SwarmKindContract, key, timeSet(rec.LastSeen)) {
+		return "", time.Time{}, false
+	}
+	rows, err := app.Queries.ListPublicContractItems(ctx, id)
+	if err != nil {
+		return "", time.Time{}, false
+	}
+	out := SwarmContractPayload{
+		ContractID: rec.ContractID, RegionID: rec.RegionID, Type: rec.Type,
+		IssuerID: rec.IssuerID, IssuerCorporationID: rec.IssuerCorporationID,
+		ForCorporation: rec.ForCorporation, Title: rec.Title,
+		Price: rec.Price, Buyout: rec.Buyout, Reward: rec.Reward,
+		Collateral: rec.Collateral, Volume: rec.Volume,
+		StartLocationID: rec.StartLocationID, EndLocationID: rec.EndLocationID,
+		DateIssued: rec.DateIssued.Unix(), DateExpired: rec.DateExpired.Unix(),
+		DaysToComplete: rec.DaysToComplete,
+		Items:          []SwarmContractItem{},
+	}
+	for _, row := range rows {
+		out.Items = append(out.Items, SwarmContractItem{
+			RecordID: row.RecordID, TypeID: row.TypeID, ItemID: swarmPtrFromNull(row.ItemID),
+			Quantity: row.Quantity, IsIncluded: row.IsIncluded, IsBlueprintCopy: row.IsBlueprintCopy,
+			Runs: swarmPtrFromNull(row.Runs), MaterialEfficiency: swarmPtrFromNull(row.MaterialEfficiency),
+			TimeEfficiency: swarmPtrFromNull(row.TimeEfficiency),
+		})
+	}
+	raw, err := json.Marshal(out)
+	if err != nil {
+		return "", time.Time{}, false
+	}
+	return string(raw), rec.LastSeen, true
 }
 
 // SwarmClockDrift is how far ahead of this clock a signed fetch
@@ -506,6 +619,38 @@ func CheckSwarmPayload(kind, key, payload string) error {
 		if body.StructureID != id || body.Name == "" || len(body.Name) > 256 {
 			return fmt.Errorf("swarm: stage %s %s: payload names another structure", kind, key)
 		}
+	case SwarmKindContract:
+		id, ok := ParseSwarmID(key)
+		if !ok {
+			return fmt.Errorf("swarm: stage %s %s: malformed key", kind, key)
+		}
+		var body SwarmContractPayload
+		if err := dec.Decode(&body); err != nil {
+			return fmt.Errorf("swarm: stage %s %s: unreadable payload", kind, key)
+		}
+		if body.ContractID != id {
+			return fmt.Errorf("swarm: stage %s %s: payload names another contract", kind, key)
+		}
+		switch body.Type {
+		case "item_exchange", "auction", "courier":
+		default:
+			return fmt.Errorf("swarm: stage %s %s: unknown contract type %q", kind, key, body.Type)
+		}
+		if body.RegionID <= 0 || body.IssuerID <= 0 || body.IssuerCorporationID <= 0 ||
+			body.Price < 0 || body.Buyout < 0 || body.Reward < 0 || body.Collateral < 0 || body.Volume < 0 ||
+			body.DaysToComplete < 0 || body.DateExpired <= body.DateIssued ||
+			len(body.Title) > 1024 || len(body.Items) > MaxSwarmContractItems {
+			return fmt.Errorf("swarm: stage %s %s: malformed contract", kind, key)
+		}
+		// Record IDs are the item rows' keys: each appears once,
+		// or one insert would silently swallow another line.
+		seen := make(map[int64]bool, len(body.Items))
+		for _, item := range body.Items {
+			if item.RecordID <= 0 || seen[item.RecordID] || item.TypeID <= 0 || item.Quantity <= 0 {
+				return fmt.Errorf("swarm: stage %s %s: malformed or repeated item row", kind, key)
+			}
+			seen[item.RecordID] = true
+		}
 	default:
 		return fmt.Errorf("swarm: stage %s %s: unknown kind", kind, key)
 	}
@@ -672,6 +817,77 @@ func (app *Mod) ApplySwarmEntry(ctx context.Context, kind, key, payload string, 
 			return fmt.Errorf("swarm: apply %s %s: %w", kind, key, err)
 		}
 		app.AddSwarmCounter(ctx, SwarmCounterAppliedNames, 1)
+	case SwarmKindContract:
+		var body SwarmContractPayload
+		if err := dec.Decode(&body); err != nil {
+			return err
+		}
+		// A contract whose item list is already settled here —
+		// stored by this instance's own drain, or marked
+		// private, gone or parked — takes no writes at all:
+		// the entry is consumed, and the header refresh stays
+		// the instance's own sweep's job, the same precedent as
+		// a structure name a better source already resolved.
+		// Only a pending row (header swept, contents not yet
+		// fetched — the exact gap this kind exists to close)
+		// or no row at all is written.
+		if existing, err := app.Queries.GetPublicContract(ctx, body.ContractID); err == nil {
+			if existing.ItemsState != "pending" {
+				if err := app.Queries.DeleteStagingEntry(ctx, db.DeleteStagingEntryParams{Kind: kind, Key: key}); err != nil {
+					logging.Errorf("swarm: apply %s %s: unstaged: %v", kind, key, err)
+				}
+				return nil
+			}
+		} else if !errors.Is(err, sql.ErrNoRows) {
+			return fmt.Errorf("swarm: apply %s %s: %w", kind, key, err)
+		}
+		// The header lands under the region's current sweep
+		// cycle (0 when the region has no sweep state yet), with
+		// the entry stamp as both first and last seen — the
+		// $19 the upsert writes twice — so the row reads exactly
+		// as old as its source, and the provenance stamp below
+		// compares equal to the last_seen written here.
+		var cycle int64
+		if state, err := app.Queries.GetPublicContractSweepState(ctx, body.RegionID); err == nil {
+			cycle = state.Cycle
+		}
+		if err := app.Queries.UpsertPublicContract(ctx, db.UpsertPublicContractParams{
+			ContractID: body.ContractID, RegionID: body.RegionID, Type: body.Type,
+			IssuerID: body.IssuerID, IssuerCorporationID: body.IssuerCorporationID,
+			ForCorporation: body.ForCorporation, Title: body.Title,
+			Price: body.Price, Buyout: body.Buyout, Reward: body.Reward,
+			Collateral: body.Collateral, Volume: body.Volume,
+			StartLocationID: body.StartLocationID, EndLocationID: body.EndLocationID,
+			DateIssued: time.Unix(body.DateIssued, 0).UTC(), DateExpired: time.Unix(body.DateExpired, 0).UTC(),
+			DaysToComplete: body.DaysToComplete,
+			LastCycle:      cycle, FirstSeen: stamp,
+		}); err != nil {
+			return fmt.Errorf("swarm: apply %s %s: %w", kind, key, err)
+		}
+		for _, item := range body.Items {
+			if err := app.Queries.InsertPublicContractItem(ctx, db.InsertPublicContractItemParams{
+				RecordID: item.RecordID, ContractID: body.ContractID, TypeID: item.TypeID,
+				ItemID: swarmNullFromPtr(item.ItemID), Quantity: item.Quantity,
+				IsIncluded: item.IsIncluded, IsBlueprintCopy: item.IsBlueprintCopy,
+				Runs: swarmNullFromPtr(item.Runs), MaterialEfficiency: swarmNullFromPtr(item.MaterialEfficiency),
+				TimeEfficiency: swarmNullFromPtr(item.TimeEfficiency),
+			}); err != nil {
+				return fmt.Errorf("swarm: apply %s %s: %w", kind, key, err)
+			}
+		}
+		if err := app.Queries.SetPublicContractItemsState(ctx, db.SetPublicContractItemsStateParams{
+			ContractID: body.ContractID, ItemsState: "stored",
+		}); err != nil {
+			return fmt.Errorf("swarm: apply %s %s: %w", kind, key, err)
+		}
+		// As when the drain stores a list itself: a known
+		// abyssal instance on the list opens its sighting now.
+		if err := app.Queries.OpenAbyssalSightingsForContract(ctx, db.OpenAbyssalSightingsForContractParams{
+			ContractID: body.ContractID, LastSeenAt: time.Now().UTC(),
+		}); err != nil {
+			return fmt.Errorf("swarm: apply %s %s: %w", kind, key, err)
+		}
+		app.AddSwarmCounter(ctx, SwarmCounterAppliedContracts, 1)
 	default:
 		return fmt.Errorf("swarm: apply %s %s: unknown kind", kind, key)
 	}
@@ -791,6 +1007,25 @@ func (app *Mod) SwarmRollBackOne(ctx context.Context, row db.SwarmApplied) (took
 			return false, nil
 		}
 		n, err = app.Queries.RollBackSwarmStructure(ctx, db.RollBackSwarmStructureParams{StructureID: id, RowStamp: row.RowStamp.Time})
+	case SwarmKindContract:
+		id, ok := ParseSwarmID(row.Key)
+		if !ok || !row.RowStamp.Valid {
+			return false, nil
+		}
+		// The header delete is stamp-guarded: a row the
+		// instance's own sweep has re-seen since carries a
+		// newer last_seen and is its own now, so nothing is
+		// taken. Bids are the instance's own fetches and stay
+		// either way; the items go explicitly with the header
+		// (no cascade joins them).
+		n, err = app.Queries.DeletePublicContractIfStamped(ctx, db.DeletePublicContractIfStampedParams{ContractID: id, LastSeen: row.RowStamp.Time})
+		if err != nil || n == 0 {
+			return false, err
+		}
+		if err := app.Queries.DeletePublicContractItemsByContracts(ctx, []int64{id}); err != nil {
+			return false, err
+		}
+		return true, nil
 	default:
 		return false, nil
 	}

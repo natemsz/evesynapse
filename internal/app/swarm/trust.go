@@ -105,6 +105,7 @@ const (
 	MaxSwarmHistoryDemand     = 30
 	MaxSwarmOrgDemand         = 10
 	MaxSwarmNameDemand        = 5 // per name kind
+	MaxSwarmContractDemand    = 10
 )
 
 // Staged entries older than this never apply: an entry nobody
@@ -120,10 +121,13 @@ const (
 	SwarmCounterAppliedHistory   = "applied_history"
 	SwarmCounterAppliedNames     = "applied_names"
 	SwarmCounterAppliedRecords   = "applied_records"
+	SwarmCounterAppliedContracts = "applied_contracts"
 	SwarmCounterSpotPassed       = "spot_passed"
 	SwarmCounterSpotFailed       = "spot_failed"
 	SwarmCounterPullsOK          = "pulls_ok"
 	SwarmCounterPullsFailed      = "pulls_failed"
+	SwarmCounterPullsAuthSigned  = "pulls_auth_signed"
+	SwarmCounterPullsAuthLegacy  = "pulls_auth_legacy"
 	SwarmCounterRolledBack       = "rolled_back"
 	SwarmCounterDroppedUnchecked = "dropped_unchecked"
 )
@@ -624,7 +628,8 @@ func (app *Mod) SwarmLearnMembers(ctx context.Context, members []SwarmMember, si
 // peers to serve before the worker spends ESI calls: names
 // first (type names readers found missing, structure names the
 // resolver has due — few, and cheap to carry), then due history
-// pairs, then pending organization records. A pull stages only
+// pairs, then pending organization records, then public
+// contracts whose item lists are still pending. A pull stages only
 // what it asked for, so every kind the swarm carries has to be
 // asked for here. Bounded, like every read that feeds a render
 // or a fetch.
@@ -671,6 +676,17 @@ func (app *Mod) SwarmDemandKeys(ctx context.Context) []SwarmPullKey {
 	} else {
 		for _, id := range ids {
 			keys = append(keys, SwarmPullKey{Kind: SwarmKindAlliance, Key: fmt.Sprintf("%d", id)})
+		}
+	}
+	// Contracts whose headers this instance swept but whose item
+	// lists it has not fetched: the one contract datum worth
+	// asking a peer for, since the header alone cannot be pulled
+	// by ID and is already here.
+	if rows, err := app.Queries.ListPublicContractsPendingItems(ctx, MaxSwarmContractDemand); err != nil {
+		logging.Errorf("swarm: demand contracts: %v", err)
+	} else {
+		for _, row := range rows {
+			keys = append(keys, SwarmPullKey{Kind: SwarmKindContract, Key: fmt.Sprintf("%d", row.ContractID)})
 		}
 	}
 	if len(keys) > MaxSwarmDemandKeys {
@@ -1136,6 +1152,8 @@ func (app *Mod) SwarmVerifyAgainstESI(ctx context.Context, allowance module.Budg
 		verdict, stop = app.SwarmVerifyAlliance(ctx, allowance, key, payload)
 	case SwarmKindStructure:
 		verdict, stop = app.SwarmVerifyStructure(ctx, allowance, characters, key, payload)
+	case SwarmKindContract:
+		verdict, stop = app.SwarmVerifyContract(ctx, allowance, key, payload)
 	default:
 		return SwarmCheckFail, "", false
 	}
@@ -1369,6 +1387,90 @@ func (app *Mod) SwarmVerifyStructure(ctx context.Context, allowance module.Budge
 	}
 	if live.Name != staged.Name {
 		return SwarmCheckFail, false
+	}
+	return SwarmCheckPass, false
+}
+
+// swarmPtrEqual reports whether two optional blueprint figures
+// agree: both absent, or both present with the same value.
+func swarmPtrEqual(a, b *int64) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	return *a == *b
+}
+
+// SwarmVerifyContract checks one staged contract entry against
+// the public items route. Only the items are compared — they
+// are the contents this kind exists to move. The header fields
+// are deliberately not compared: the demanding instance already
+// holds the header from its own sweep (that is what made the
+// contract pending and worth demanding), and the signer's copy
+// of it adds nothing ESI could settle here.
+//
+// The item sets must match exactly. A 404 defers — the contract
+// ended, and an honest entry cannot be convicted by its expiry —
+// while a 400 fails: contents the public route refuses (courier
+// cargo claimed as an item list, say) are not public data, and
+// an entry carrying them is wrong however it was signed.
+func (app *Mod) SwarmVerifyContract(ctx context.Context, allowance module.Budget, key, payload string) (SwarmCheckVerdict, bool) {
+	id, ok := ParseSwarmID(key)
+	if !ok {
+		return SwarmCheckFail, false
+	}
+	var staged SwarmContractPayload
+	if err := DecodeSwarmStrict(strings.NewReader(payload), &staged); err != nil || staged.ContractID != id {
+		return SwarmCheckFail, false
+	}
+	if !app.SwarmTake(allowance) {
+		return SwarmCheckDefer, false
+	}
+	var live []esi.PublicContractItem
+	if err := app.Deps.ESIGet(ctx, fmt.Sprintf("/contracts/public/items/%d/", id), &live); err != nil {
+		if errors.Is(err, esi.ErrErrorLimit) {
+			return SwarmCheckDefer, true
+		}
+		if code, has := esi.StatusCode(err); has {
+			switch code {
+			case 404:
+				return SwarmCheckDefer, false
+			case 400:
+				return SwarmCheckFail, false
+			}
+		}
+		return SwarmCheckDefer, false
+	}
+	if len(live) != len(staged.Items) {
+		return SwarmCheckFail, false
+	}
+	byRecord := make(map[int64]esi.PublicContractItem, len(live))
+	for _, item := range live {
+		byRecord[item.RecordID] = item
+	}
+	if len(byRecord) != len(live) {
+		return SwarmCheckFail, false
+	}
+	for _, item := range staged.Items {
+		got, ok := byRecord[item.RecordID]
+		if !ok {
+			return SwarmCheckFail, false
+		}
+		// ESI's item_id 0 and the wire's null are the same
+		// fact: no singleton ID.
+		if item.ItemID == nil {
+			if got.ItemID != 0 {
+				return SwarmCheckFail, false
+			}
+		} else if *item.ItemID != got.ItemID {
+			return SwarmCheckFail, false
+		}
+		if got.TypeID != item.TypeID || got.Quantity != item.Quantity ||
+			got.IsIncluded != item.IsIncluded || got.IsBlueprintCopy != item.IsBlueprintCopy ||
+			!swarmPtrEqual(got.Runs, item.Runs) ||
+			!swarmPtrEqual(got.MaterialEfficiency, item.MaterialEfficiency) ||
+			!swarmPtrEqual(got.TimeEfficiency, item.TimeEfficiency) {
+			return SwarmCheckFail, false
+		}
 	}
 	return SwarmCheckPass, false
 }

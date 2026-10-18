@@ -43,11 +43,13 @@ import (
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -65,6 +67,48 @@ const (
 // SwarmHTTPTimeout bounds one peer round trip. Peers are few and
 // slow gossip is fine; a hung peer must not hold a worker pass.
 const SwarmHTTPTimeout = 15 * time.Second
+
+// SwarmPullSignatureWindow is how far a signed pull's timestamp
+// may sit from this clock, either way. Pulls are made on demand,
+// never queued for later, so five minutes is drift and delay
+// together with room to spare — and a captured signature is
+// useless outside it.
+const SwarmPullSignatureWindow = 5 * time.Minute
+
+// SwarmPullMessage is the exact byte string a puller signs:
+// "pull\n" + its instance ID + "\n" + the decimal unix timestamp
+// it sends + "\n" + the lowercase hex SHA-256 of the exact
+// request body bytes. The body hash binds the signature to this
+// one request (the keys it asks for), the timestamp bounds its
+// life, and the instance ID is the signer's own — a signature
+// lifted onto another instance's header names another message.
+// The storm node builds the same bytes; changing them is a flag
+// day for every puller and server.
+func SwarmPullMessage(instanceID string, timestamp int64, body []byte) []byte {
+	sum := sha256.Sum256(body)
+	return []byte("pull\n" + instanceID + "\n" + strconv.FormatInt(timestamp, 10) + "\n" + hex.EncodeToString(sum[:]))
+}
+
+// SignSwarmPull signs one pull request body as id at timestamp.
+func SignSwarmPull(id *SwarmIdentity, timestamp int64, body []byte) string {
+	return base64.StdEncoding.EncodeToString(ed25519.Sign(id.Private, SwarmPullMessage(id.ID, timestamp, body)))
+}
+
+// VerifySwarmPullSignature checks one pull signature against
+// the claimed instance's pinned public key. Every failure is
+// false, with no reason given — the caller logs that a signature
+// failed, never which part of it.
+func VerifySwarmPullSignature(publicKey, instanceID string, timestamp int64, body []byte, signature string) bool {
+	pub, err := base64.StdEncoding.DecodeString(publicKey)
+	if err != nil || len(pub) != ed25519.PublicKeySize {
+		return false
+	}
+	sig, err := base64.StdEncoding.DecodeString(signature)
+	if err != nil || len(sig) != ed25519.SignatureSize {
+		return false
+	}
+	return ed25519.Verify(pub, SwarmPullMessage(instanceID, timestamp, body), sig)
+}
 
 // SwarmMember is one instance as the membership list carries it:
 // identity material only, never reputation judgments. URLSig is
@@ -97,6 +141,71 @@ func SwarmAuth(secret string, r *http.Request) bool {
 	want := sha256.Sum256([]byte(secret))
 	got := sha256.Sum256([]byte(strings.TrimSpace(present)))
 	return subtle.ConstantTimeCompare(want[:], got[:]) == 1
+}
+
+// The two ways a pull request proves it may be served. The
+// signed way names the puller and is checked against the key
+// pinned for it here; the legacy way is the shared secret every
+// swarm endpoint still accepts. Signed is the future, bearer is
+// the transition: a puller dual-sends both, and the server takes
+// the signed way when it verifies and the bearer when it does
+// not, so old and new instances pull from each other throughout.
+const (
+	SwarmPullAuthSigned = "signed"
+	SwarmPullAuthLegacy = "legacy"
+)
+
+// swarmPullAuth decides how one pull request is authenticated,
+// over the exact body bytes received. The signed path is valid
+// only when all three headers are present, the claimed instance
+// is a peer this instance knows and has not excluded, the
+// timestamp is inside SwarmPullSignatureWindow of this clock,
+// and the signature verifies under the peer's pinned key.
+//
+// A signature that fails is logged — a peer whose clock or key
+// has drifted should be visible in the log, not mysterious — but
+// it is never anything more: no trust verdict, no shape reject.
+// Authentication is not data, and a broken signature proves a
+// broken peer setup, not a lying one. The request falls back to
+// the bearer check like a pull that never signed at all; only
+// when neither path passes is the pull refused.
+func (app *Mod) swarmPullAuth(r *http.Request, body []byte) string {
+	instance := r.Header.Get("X-Swarm-Instance")
+	stamp := r.Header.Get("X-Swarm-Timestamp")
+	signature := r.Header.Get("X-Swarm-Signature")
+	if instance != "" || stamp != "" || signature != "" {
+		if instance != "" && stamp != "" && signature != "" &&
+			app.verifySwarmPull(r.Context(), instance, stamp, signature, body) {
+			return SwarmPullAuthSigned
+		}
+		logging.Warnf("swarm: pull signature from %s did not verify; falling back to bearer auth", ShortenSwarmID(instance))
+	}
+	if SwarmAuth(app.Cfg.Secret, r) {
+		return SwarmPullAuthLegacy
+	}
+	return ""
+}
+
+// verifySwarmPull checks one signed pull's claims against the
+// peer table: a known, non-excluded instance, a fresh
+// timestamp, a signature under the pinned key.
+func (app *Mod) verifySwarmPull(ctx context.Context, instance, stamp, signature string, body []byte) bool {
+	at, err := strconv.ParseInt(strings.TrimSpace(stamp), 10, 64)
+	if err != nil {
+		return false
+	}
+	diff := time.Now().Unix() - at
+	if diff < 0 {
+		diff = -diff
+	}
+	if diff > int64(SwarmPullSignatureWindow/time.Second) {
+		return false
+	}
+	peer, err := app.Queries.GetSwarmPeer(ctx, instance)
+	if err != nil || peer.Excluded {
+		return false
+	}
+	return VerifySwarmPullSignature(peer.PublicKey, instance, at, body, signature)
 }
 
 // HandleSwarmMembers serves GET /swarm/members: the signed
@@ -259,12 +368,22 @@ func (app *Mod) HandleSwarmPull(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	if !SwarmAuth(app.Cfg.Secret, r) {
+	// The body is read once, before authentication: a signed
+	// pull's signature covers the exact bytes, so the bytes are
+	// what both the check and the decode below consume.
+	defer r.Body.Close()
+	raw, err := io.ReadAll(io.LimitReader(r.Body, MaxSwarmBodyBytes))
+	if err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	auth := app.swarmPullAuth(r, raw)
+	if auth == "" {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
 	var req SwarmPullRequest
-	if err := ReadSwarmJSON(r, &req); err != nil {
+	if err := DecodeSwarmStrict(bytes.NewReader(raw), &req); err != nil {
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
 	}
@@ -290,6 +409,14 @@ func (app *Mod) HandleSwarmPull(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		entries = append(entries, entry)
+	}
+	// Counted here, once per request actually served — never
+	// per key, and a refused pull counts nowhere.
+	switch auth {
+	case SwarmPullAuthSigned:
+		app.AddSwarmCounter(ctx, SwarmCounterPullsAuthSigned, 1)
+	case SwarmPullAuthLegacy:
+		app.AddSwarmCounter(ctx, SwarmCounterPullsAuthLegacy, 1)
 	}
 	WriteSwarmJSON(w, map[string]any{"entries": entries})
 }
@@ -338,6 +465,12 @@ func ValidSwarmBaseURL(raw string) bool {
 type SwarmClient struct {
 	Secret string
 	Http   *http.Client
+	// ID is this instance's signing identity, set when the
+	// client is built for a running instance (module.go). With
+	// it, pulls are signed as well as bearer-authed (dual-send
+	// through the transition); without it — tests and any path
+	// built outside an instance — pulls send the bearer only.
+	ID *SwarmIdentity
 }
 
 // SwarmStrictDecoder decodes swarm JSON strictly: an unknown field
@@ -357,19 +490,31 @@ func DecodeSwarmStrict(r io.Reader, into any) error {
 
 // Call is every outbound swarm request: the address checked before
 // dialing (https, or http on loopback), the secret in the bearer
-// header only, the body (if any) sent as JSON, a non-200 answer an
+// header, the body (if any) sent as JSON, a non-200 answer an
 // error, and the answer size-capped and strictly decoded into into.
 func (c *SwarmClient) Call(ctx context.Context, method, url string, body, into any) error {
-	if !ValidSwarmBaseURL(url) {
-		return fmt.Errorf("swarm: refusing to dial %q (https, or http on loopback, only)", url)
-	}
-	var reader io.Reader
+	var raw []byte
 	if body != nil {
 		var buf bytes.Buffer
 		if err := json.NewEncoder(&buf).Encode(body); err != nil {
 			return fmt.Errorf("swarm: %s %s: %w", method, url, err)
 		}
-		reader = &buf
+		raw = buf.Bytes()
+	}
+	return c.do(ctx, method, url, raw, nil, into)
+}
+
+// do sends one already-marshaled body (nil for none) with the
+// bearer header and any extra headers the caller computed over
+// those exact bytes — a pull signature must cover the bytes that
+// go on the wire, so the marshaling happens once, in the caller.
+func (c *SwarmClient) do(ctx context.Context, method, url string, raw []byte, extra map[string]string, into any) error {
+	if !ValidSwarmBaseURL(url) {
+		return fmt.Errorf("swarm: refusing to dial %q (https, or http on loopback, only)", url)
+	}
+	var reader io.Reader
+	if raw != nil {
+		reader = bytes.NewReader(raw)
 	}
 	req, err := http.NewRequestWithContext(ctx, method, url, reader)
 	if err != nil {
@@ -377,8 +522,11 @@ func (c *SwarmClient) Call(ctx context.Context, method, url string, body, into a
 	}
 	req.Header.Set("Authorization", "Bearer "+c.Secret)
 	req.Header.Set("Accept", "application/json")
-	if body != nil {
+	if raw != nil {
 		req.Header.Set("Content-Type", "application/json")
+	}
+	for name, value := range extra {
+		req.Header.Set(name, value)
 	}
 	resp, err := c.Http.Do(req)
 	if err != nil {
@@ -403,14 +551,35 @@ func (c *SwarmClient) AuthedGET(ctx context.Context, url string, into any) error
 // keys. Verification happens at staging, not here: the caller
 // checks every entry against the signer's pinned key before
 // anything is stored.
+//
+// The request itself is signed when the client carries this
+// instance's identity, and the bearer goes with it either way
+// (dual-send): a peer that verifies signatures takes the signed
+// path, a peer from before signatures takes the bearer, and this
+// instance can pull from both while the swarm transitions. The
+// body is marshaled once, here, because the signature covers
+// the exact bytes sent.
 func (c *SwarmClient) PullEntries(ctx context.Context, baseURL string, keys []SwarmPullKey) ([]SwarmSignedEntry, error) {
 	if len(keys) > MaxSwarmPullKeys {
 		return nil, fmt.Errorf("swarm: %d keys exceeds the pull cap of %d", len(keys), MaxSwarmPullKeys)
 	}
+	raw, err := json.Marshal(SwarmPullRequest{Keys: keys})
+	if err != nil {
+		return nil, fmt.Errorf("swarm: pull: %w", err)
+	}
+	var headers map[string]string
+	if c.ID != nil {
+		at := time.Now().Unix()
+		headers = map[string]string{
+			"X-Swarm-Instance":  c.ID.ID,
+			"X-Swarm-Timestamp": strconv.FormatInt(at, 10),
+			"X-Swarm-Signature": SignSwarmPull(c.ID, at, raw),
+		}
+	}
 	var body struct {
 		Entries []SwarmSignedEntry `json:"entries"`
 	}
-	if err := c.Call(ctx, http.MethodPost, strings.TrimSuffix(baseURL, "/")+"/swarm/pull", SwarmPullRequest{Keys: keys}, &body); err != nil {
+	if err := c.do(ctx, http.MethodPost, strings.TrimSuffix(baseURL, "/")+"/swarm/pull", raw, headers, &body); err != nil {
 		return nil, err
 	}
 	return body.Entries, nil

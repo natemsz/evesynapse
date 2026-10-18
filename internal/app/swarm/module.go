@@ -1,6 +1,6 @@
 // Package swarm is the Shared Cache module: instances of EveSynapse share
 // the public data each has fetched (market history, type names, corporation
-// and alliance records, player structure names) with signed, spot-checked
+// and alliance records, player structure names, public contracts) with signed, spot-checked
 // entries, so a fetch is made once for the whole swarm. It reaches core by
 // three explicit hooks: a FetchGate (core asks before spending ESI, and any
 // gate failure means fetch normally), two worker-cycle jobs that keep the
@@ -32,7 +32,7 @@ import (
 
 // Package swarm is the Shared Cache module: instances of EveSynapse share
 // the public data each has fetched (market history, type names, corporation
-// and alliance records, player structure names) with signed, spot-checked
+// and alliance records, player structure names, public contracts) with signed, spot-checked
 // entries, so a fetch is made once for the whole swarm. It reaches core by
 // three explicit hooks: a FetchGate (core asks before spending ESI, and any
 // gate failure means fetch normally), two worker-cycle jobs that keep the
@@ -238,6 +238,10 @@ func initSwarm(deps module.Deps) error {
 		}
 		st.SwarmID = id
 		st.SwarmCli = NewSwarmClient(cfg.Secret)
+		// The client signs its pulls as this instance: peers
+		// verify that signature against the key they pinned
+		// for it, the one this identity holds.
+		st.SwarmCli.ID = id
 		logging.Infof("evesynapse: shared cache enabled (%s)", cfg.Mode)
 	}
 	return nil

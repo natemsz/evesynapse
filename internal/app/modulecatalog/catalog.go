@@ -6,6 +6,7 @@
 package modulecatalog
 
 import (
+	"evesynapse/internal/app/appraise"
 	"evesynapse/internal/app/buildplanner"
 	"evesynapse/internal/app/calendar"
 	"evesynapse/internal/app/contacts"
@@ -57,6 +58,7 @@ var All = []Entry{
 	{"restock", restock.Module},
 	{"orders", orders.Module},
 	{"contracts", contracts.Module},
+	{"appraise", appraise.Module},
 	{"corpdata", corpdata.Module},
 	{"doctrines", doctrines.Module},
 	{"srp", srp.Module},

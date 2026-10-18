@@ -3,6 +3,7 @@
 package app
 
 import (
+	"evesynapse/internal/app/appraise"
 	"evesynapse/internal/app/buildplanner"
 	"evesynapse/internal/app/calendar"
 	"evesynapse/internal/app/contacts"
@@ -56,6 +57,7 @@ func init() {
 		restock.Module,
 		orders.Module,
 		contracts.Module,
+		appraise.Module,
 		corpdata.Module,
 		doctrines.Module,
 		srp.Module,

@@ -3,10 +3,10 @@ package swarm
 import "testing"
 
 // TestReleaseLibraryStormEntries: the library's storm type
-// resolves and renders end to end. No storm digest is seeded
-// in the shipped library — storm publishes no releases yet —
-// so the test files one the way the first storm release will,
-// and takes it back out.
+// resolves and renders end to end. The test files a synthetic
+// storm entry the way a new storm release's hashes land, and
+// takes it back out; the shipped library also carries the
+// real storm v0.1.0 digests, which the loop below counts.
 func TestReleaseLibraryStormEntries(t *testing.T) {
 	const stormHash = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 	if _, ok := ReleaseLibrary[stormHash]; ok {
@@ -30,13 +30,20 @@ func TestReleaseLibraryStormEntries(t *testing.T) {
 	// resolves as an app build and renders with the plain
 	// release label — the product kinds share one map without
 	// bleeding into each other.
-	checked := 0
+	checked, stormSeeded := 0, 0
 	for sha, entry := range ReleaseLibrary {
 		if sha == stormHash {
 			continue
 		}
+		if entry.Kind == ReleaseStorm {
+			stormSeeded++
+			if got := BuildLabel(sha); got != "Mainline · Storm "+entry.Label {
+				t.Fatalf("storm entry %s… renders %q", sha[:8], got)
+			}
+			continue
+		}
 		if entry.Kind != ReleaseEveSynapse {
-			t.Fatalf("seeded entry %s… is kind %q, want evesynapse until storm cuts a release", sha[:8], entry.Kind)
+			t.Fatalf("seeded entry %s… is kind %q, want evesynapse or storm", sha[:8], entry.Kind)
 		}
 		if got := BuildLabel(sha); got != "Mainline · "+entry.Label {
 			t.Fatalf("app entry %s… renders %q", sha[:8], got)
@@ -45,5 +52,8 @@ func TestReleaseLibraryStormEntries(t *testing.T) {
 	}
 	if checked == 0 {
 		t.Fatal("the shipped library seeded no app entries")
+	}
+	if stormSeeded != 2 {
+		t.Fatalf("shipped library carries %d storm digests, want 2 (storm v0.1.0, both architectures)", stormSeeded)
 	}
 }

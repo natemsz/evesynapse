@@ -113,11 +113,12 @@ type ReleaseBuild struct {
 // reports for each release — every digest verified there,
 // none computed or guessed locally.
 //
-// No storm digests are seeded: the storm repo publishes no
-// releases yet, so no official storm hash exists to record.
-// The storm entry type still stands ready end to end (see
-// ClassifyBuild and BuildLabel); the first storm release adds
-// its hashes here, once, the way app releases do.
+// Storm entries follow the app entries: storm cuts signed
+// releases of its own (tag-triggered workflow there), and each
+// adds its hashes here, once, the way app releases do. The
+// v0.1.0 digests below are from that release's SHA256SUMS,
+// whose signature was verified against the storm repo's
+// committed release-signing.pub before they were recorded.
 //
 // The library grows by hand: each future release adds its
 // hashes here, once, at release time. Official releases
@@ -162,6 +163,9 @@ var ReleaseLibrary = map[string]ReleaseBuild{
 	// v0.5.2.0
 	"f7a3e2163d3f8e58d7d79c7810c5421d1c83c28596c0df6c168e7e440abc99a2": {ReleaseEveSynapse, "v0.5.2.0"}, // amd64
 	"aeb5bfa7d997c778a5944bc2b3c8969b537bb39aecd1e16765970a7fce355d4e": {ReleaseEveSynapse, "v0.5.2.0"}, // arm64
+	// Storm v0.1.0
+	"efab584ee7240a2b4844f5dd4c0fd5a15556e24b600dd91c89ba6c1a3d96f0d2": {ReleaseStorm, "v0.1.0"}, // storm amd64
+	"120e2f4d3f8c4646f2f9b9be0a8fcf7b55c4c137db9c3e688fbfef3bf07a6eaf": {ReleaseStorm, "v0.1.0"}, // storm arm64
 }
 
 // ReleaseFor looks one claim up in the release library: the

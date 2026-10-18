@@ -530,6 +530,16 @@ type searchRow struct {
 	Courier    bool
 	Offered    []searchLine
 	Wanted     []searchLine
+	// The contents cell shows at most five lines,
+	// offered first, then wanted. ShownOffered and
+	// ShownWanted are the visible head; ExtraOffered
+	// and ExtraWanted render in a hidden block the
+	// "(show N more items)" line reveals in place.
+	ShownOffered []searchLine
+	ShownWanted  []searchLine
+	ExtraOffered []searchLine
+	ExtraWanted  []searchLine
+	ExtraCount   int
 	// The contents pill: at most one per row -- the abyssal
 	// pill when a mutated line carries a score, else the
 	// first blueprint line's pill, else the courier pill.
@@ -1081,6 +1091,20 @@ func (app *mod) searchRow(ctx context.Context, memo map[int64]module.PlaceRef, r
 		}
 	}
 
+	// Split the contents at the cell cap: five lines
+	// visible, offered before wanted, the remainder
+	// behind the more-line.
+	const maxCellLines = 5
+	splitLines := func(lines []searchLine, budget int) (head, tail []searchLine) {
+		if len(lines) <= budget {
+			return lines, nil
+		}
+		return lines[:budget], lines[budget:]
+	}
+	out.ShownOffered, out.ExtraOffered = splitLines(out.Offered, maxCellLines)
+	out.ShownWanted, out.ExtraWanted = splitLines(out.Wanted, maxCellLines-len(out.ShownOffered))
+	out.ExtraCount = len(out.ExtraOffered) + len(out.ExtraWanted)
+
 	// The row's mutated-line summary: the first offered
 	// singleton the corpus knows, if any.
 	if abData != nil {
@@ -1569,6 +1593,14 @@ func (app *mod) buildPanelView(ctx context.Context, id int64) (*panelView, bool)
 		return nil, false
 	}
 	out := &panelView{ContractID: id, StateNote: dv.StateNote}
+	// The drawer omits the private-cargo note: the
+	// summary card already sets the courier's reward
+	// against its collateral, so the empty appraisal
+	// card needs no explanation. (The detail page,
+	// which has no summary card, keeps the note.)
+	if row.ItemsState == "private" {
+		out.StateNote = ""
+	}
 	issuerKind := "Pilot"
 	if dv.IssuerCorp {
 		issuerKind = "Corporation"
@@ -1587,13 +1619,14 @@ func (app *mod) buildPanelView(ctx context.Context, id int64) (*panelView, bool)
 			if l.Abyssal != nil && l.Abyssal.HasScore {
 				pl.RollTag = "Roll " + strings.Replace(l.Abyssal.ScoreText, " / ", "/", 1)
 			}
-			// The basis phrase: our own swept typical for a
-			// line priced from the Forge sweep (the abyssal
-			// model's lines included -- the card header
-			// credits the model), the copy corpus and the
-			// stored estimates under their own words, the
-			// outside aggregate named as itself, and an
-			// honest blank where nothing priced the line.
+			// The basis phrase, in plain words: the
+			// typical tier is the typical Jita price, the
+			// abyssal model's lines price as the abyssal
+			// typical (the card header credits the model
+			// too), the copy corpus and the stored
+			// estimates under their own words, the outside
+			// aggregate named as itself, and an honest
+			// blank where nothing priced the line.
 			switch {
 			case !pl.Priced:
 				pl.BasisText = "Not priced"
@@ -1606,8 +1639,10 @@ func (app *mod) buildPanelView(ctx context.Context, id int64) (*panelView, bool)
 				pl.BasisNote = l.TierNote
 			case l.Tier == module.AppraisalTierEstimate:
 				pl.BasisText = "Estimated sell: " + formatShortISK(l.LineValueNum)
+			case l.Tier == module.AppraisalTierAbyssal:
+				pl.BasisText = "Abyssal Typical: " + formatShortISK(l.LineValueNum)
 			default:
-				pl.BasisText = "Swept Forge Typical: " + formatShortISK(l.LineValueNum)
+				pl.BasisText = "Typical Jita Price: " + formatShortISK(l.LineValueNum)
 			}
 			if l.Tier != "" && l.Tier != module.AppraisalTierUnpriced {
 				tiers[l.Tier] = true

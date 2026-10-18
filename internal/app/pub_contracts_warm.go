@@ -6,9 +6,15 @@ package app
 //
 // Item lists are fetched once per contract, ever -- a
 // contract's list is immutable once issued, so the fetch is
-// pure history-keeping. Courier contracts refuse the route
-// (their cargo is private): the refusal is recorded and never
-// retried. Bids refresh for live auctions on the same
+// pure history-keeping. The drain walks newest first, so a
+// fresh contract is appraised within a cycle or two and the
+// cold backlog backfills behind it. A list that keeps failing
+// -- a decode error counts exactly like a fetch error -- is
+// parked after a bounded run of failures (schema 060 keeps the
+// count and the reason on the contract row) instead of being
+// retried on every pass forever. Courier contracts refuse the
+// route (their cargo is private): the refusal is recorded and
+// never retried. Bids refresh for live auctions on the same
 // 30-minute cadence as the list; a bid list is replace-on-
 // read, small enough that nothing cleverer is warranted.
 //
@@ -51,6 +57,14 @@ const (
 	// pass: paced on purpose, because every miss costs ESI
 	// error budget.
 	pubContractProbesPerCycle = 60
+	// pubContractItemsMaxAttempts is the item drain's parking
+	// threshold: a contract whose item list fails this many
+	// times in a row (fetch, decode or store) is parked and
+	// leaves the drain. Decode failures are deterministic --
+	// the same payload fails the same way every pass -- so
+	// the bound is small; three leaves room for a transient
+	// fetch error or two to clear first.
+	pubContractItemsMaxAttempts = 3
 )
 
 // pubContractBidsKind names an auction's bid-refresh row in
@@ -60,8 +74,9 @@ func pubContractBidsKind(contractID int64) string {
 }
 
 // warmPublicContractItems fetches the item lists of contracts
-// whose lists were never fetched, oldest first. One landing
-// (or one definitive refusal) per contract, ever.
+// whose lists were never fetched, newest first. One landing
+// (or one definitive refusal) per contract, ever; a list that
+// keeps failing is parked at pubContractItemsMaxAttempts.
 func (app *Application) warmPublicContractItems(ctx context.Context, allowance *fetchBudget) (stored int, limited bool) {
 	pending, err := app.queries.ListPublicContractsPendingItems(ctx, pubContractItemsPerCycle)
 	if err != nil {
@@ -94,15 +109,22 @@ func (app *Application) warmPublicContractItems(ctx context.Context, allowance *
 					continue
 				}
 			}
-			continue // transient: stays pending, retried next pass
+			// Any other refusal is a failed attempt on the
+			// record: below the threshold the contract stays
+			// pending and is retried next pass; at it, the
+			// note parks it.
+			app.notePublicContractItemsFailure(ctx, pc.ContractID, "fetch: "+err.Error())
+			continue
 		}
 		var items []esi.PublicContractItem
 		if err := json.Unmarshal(body, &items); err != nil {
 			logging.Errorf("worker: public contracts: items %d: decode: %v", pc.ContractID, err)
+			app.notePublicContractItemsFailure(ctx, pc.ContractID, "decode: "+err.Error())
 			continue
 		}
 		if err := app.storePublicContractItems(ctx, pc.ContractID, items); err != nil {
 			logging.Errorf("worker: public contracts: items %d: store: %v", pc.ContractID, err)
+			app.notePublicContractItemsFailure(ctx, pc.ContractID, "store: "+err.Error())
 			continue
 		}
 		stored++
@@ -154,6 +176,26 @@ func (app *Application) setPublicContractItemsState(ctx context.Context, contrac
 		ContractID: contractID, ItemsState: state,
 	}); err != nil {
 		logging.Errorf("worker: public contracts: items state %d: %v", contractID, err)
+	}
+}
+
+// notePublicContractItemsFailure records one failed item-list
+// attempt (schema 060): the counter and the reason land on the
+// contract row, and at pubContractItemsMaxAttempts the row
+// parks itself out of the drain. The parking is visible in
+// the log exactly once per contract: the pass that crosses
+// the threshold.
+func (app *Application) notePublicContractItemsFailure(ctx context.Context, contractID int64, reason string) {
+	if err := app.queries.NotePublicContractItemsFailure(ctx, db.NotePublicContractItemsFailureParams{
+		ContractID: contractID, Reason: reason, MaxAttempts: pubContractItemsMaxAttempts,
+	}); err != nil {
+		logging.Errorf("worker: public contracts: items failure note %d: %v", contractID, err)
+		return
+	}
+	ledger, err := app.queries.GetPublicContractItemsLedger(ctx, contractID)
+	if err == nil && ledger.ItemsState == "parked" && ledger.ItemsAttempts == pubContractItemsMaxAttempts {
+		logging.Errorf("worker: public contracts: items %d: parked after %d failed attempts (last: %s)",
+			contractID, ledger.ItemsAttempts, ledger.ItemsError)
 	}
 }
 

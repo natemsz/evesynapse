@@ -1679,6 +1679,8 @@ func (app *mod) buildDetailView(ctx context.Context, contractID int64) (*detailV
 		v.StateNote = "Courier cargo is private — the game does not publish what a courier contract carries, so there is no contents list to show."
 	case "pending":
 		v.StateNote = "Our sweep has the contract but has not gathered its contents yet."
+	case "parked":
+		v.StateNote = "Our sweep could not read this contract's contents list, so there is no contents list to show."
 	case "gone":
 		v.StateNote = "The contents list is no longer available."
 	}

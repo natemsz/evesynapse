@@ -2129,6 +2129,75 @@
       syncExpandAllButton();
     });
   }
+  // In the rail the flyouts also follow the pointer: hovering a
+  // category brings its flyout up, and the flyout folds when the
+  // pointer leaves — no waiting for a click somewhere else.
+  // Click keeps working too (touch, and the plain toggle); the
+  // one adjustment is that a pointer click on a flyout the
+  // pointer itself opened does not toggle it shut under the
+  // cursor — in the rail, leaving is what closes it. Keyboard
+  // activation (a click with detail 0) keeps the native toggle
+  // in both directions, and Escape still folds a branch (the
+  // handler near the top of this file). The wide sidebar and
+  // the drawer never see any of this: every handler checks
+  // railActive() first, so their menus open and stay by click
+  // exactly as before.
+  var railHoverCloseMs = 150; // crossing the rail→flyout gap must not flicker the flyout shut
+  function cancelRailHoverClose(branch) {
+    if (branch._railHoverTimer) {
+      window.clearTimeout(branch._railHoverTimer);
+      branch._railHoverTimer = null;
+    }
+  }
+  function scheduleRailHoverClose(branch) {
+    cancelRailHoverClose(branch);
+    branch._railHoverTimer = window.setTimeout(function () {
+      branch._railHoverTimer = null;
+      if (!railActive() || !branch.open) {
+        return;
+      }
+      // A keyboard user working the flyout's links keeps it:
+      // focus inside is not the pointer leaving. (Focus resting
+      // on the summary itself is the pointer's own click path,
+      // so the summary does not hold the flyout open.)
+      var summary = branch.querySelector("summary");
+      if (document.activeElement && summary && branch.contains(document.activeElement) &&
+          document.activeElement !== summary) {
+        return;
+      }
+      branch.open = false;
+      syncExpandAllButton();
+    }, railHoverCloseMs);
+  }
+  for (var hoverIndex = 0; hoverIndex < categoryBranches.length; hoverIndex++) {
+    (function (branch) {
+      branch.addEventListener("mouseenter", function () {
+        if (!railActive()) {
+          return;
+        }
+        cancelRailHoverClose(branch);
+        if (!branch.open) {
+          closeCategoryBranches(branch);
+          branch.open = true;
+        }
+      });
+      branch.addEventListener("mouseleave", function () {
+        if (!railActive()) {
+          return;
+        }
+        scheduleRailHoverClose(branch);
+      });
+      branch.addEventListener("click", function (e) {
+        if (!railActive() || e.detail === 0 || !branch.open) {
+          return;
+        }
+        var summary = branch.querySelector("summary");
+        if (summary && (e.target === summary || summary.contains(e.target))) {
+          e.preventDefault();
+        }
+      });
+    })(categoryBranches[hoverIndex]);
+  }
   if (collapseButton) {
     collapseButton.addEventListener("click", function () {
       applyNavigationState(currentState() === "rail" ? "expanded" : "rail");

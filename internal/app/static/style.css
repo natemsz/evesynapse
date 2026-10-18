@@ -1911,6 +1911,7 @@ html[data-theme="light"] .esi-down .esi-label { color: #b91c1c; }
   border-radius: var(--r-sm);
   cursor: pointer;
   text-decoration: none;
+  text-transform: none;
 }
 .menu-pop-body a:hover, .menu-pop-body button:hover { background: var(--row-hover); color: var(--text-bright); }
 .menu-pop-body form { margin: 0; }

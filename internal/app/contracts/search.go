@@ -84,8 +84,17 @@ type searchFilters struct {
 	IssuedHrs   int64 // -1 off
 	ExpiringHrs int64 // -1 off
 	DealsOnly   bool
-	Sort        string
-	Page        int
+	// Abyssal filters (schema 057): all off unless AbActive.
+	AbActive   bool
+	AbFamily   string
+	AbScoreMin float64 // -1 off, else 0..1
+	AbSourceQ  string
+	AbEstMin   float64
+	AbEstMax   float64
+	AbAttrKey  string // attribute id as text, "" off
+	AbAttrMin  float64
+	Sort       string
+	Page       int
 }
 
 var searchSorts = []struct{ Key, Label string }{
@@ -97,6 +106,7 @@ var searchSorts = []struct{ Key, Label string }{
 	{"expiry_asc", "Ending soonest"},
 	{"reward_desc", "Courier reward, high to low"},
 	{"reward_m3_desc", "Courier reward per m3"},
+	{"score_desc", "Abyssal score, high to low"},
 }
 
 func validSort(key string) bool {
@@ -156,6 +166,7 @@ func parseSearchFilters(q url.Values) searchFilters {
 		VolumeMin: -1, VolumeMax: -1, DaysMax: -1,
 		BPMode: "any", MEMin: -1, TEMin: -1, RunsMin: -1,
 		IssuedHrs: -1, ExpiringHrs: -1,
+		AbScoreMin: -1, AbEstMin: -1, AbEstMax: -1,
 		Sort: "newest", Page: 1,
 	}
 	for _, t := range q["type"] {
@@ -208,6 +219,27 @@ func parseSearchFilters(q url.Values) searchFilters {
 	f.IssuedHrs = intOr(q, "issued_hrs", -1)
 	f.ExpiringHrs = intOr(q, "expiring_hrs", -1)
 	f.DealsOnly = q.Get("deals") == "1"
+	// Abyssal filters: family slug, minimum roll score,
+	// source module name, estimate band, and one attribute's
+	// minimum percentile.
+	f.AbFamily = strings.TrimSpace(q.Get("family"))
+	if len(f.AbFamily) > 64 {
+		f.AbFamily = f.AbFamily[:64]
+	}
+	if v := intOr(q, "score_min", -1); v >= 0 && v <= 100 {
+		f.AbScoreMin = float64(v) / 100
+	}
+	f.AbSourceQ = strings.TrimSpace(q.Get("source_q"))
+	f.AbEstMin = iskBand(q, "est_min")
+	f.AbEstMax = iskBand(q, "est_max")
+	if v := intOr(q, "attr", -1); v >= 0 {
+		f.AbAttrKey = strconv.FormatInt(v, 10)
+		if p := intOr(q, "attr_min", -1); p >= 0 && p <= 100 {
+			f.AbAttrMin = float64(p) / 100
+		}
+	}
+	f.AbActive = f.AbFamily != "" || f.AbScoreMin >= 0 || f.AbSourceQ != "" ||
+		f.AbEstMin >= 0 || f.AbEstMax >= 0 || f.AbAttrKey != ""
 	if s := q.Get("sort"); validSort(s) {
 		f.Sort = s
 	}
@@ -240,6 +272,9 @@ func (f searchFilters) params(now time.Time) (sp db.SearchPublicContractsParams,
 		VolumeMin: f.VolumeMin, VolumeMax: f.VolumeMax, DaysMax: f.DaysMax,
 		BpActive: f.BPActive, BpMode: f.BPMode, MeMin: f.MEMin, TeMin: f.TEMin, RunsMin: f.RunsMin,
 		IssuedAfter: issuedAfter, ExpiringBefore: expiringBefore, DealsOnly: f.DealsOnly,
+		AbyssalActive: f.AbActive, AbFamily: f.AbFamily, AbScoreMin: f.AbScoreMin,
+		AbSourceQ: f.AbSourceQ, AbEstMin: f.AbEstMin, AbEstMax: f.AbEstMax,
+		AbAttrKey: f.AbAttrKey, AbAttrMin: f.AbAttrMin,
 		Sort: f.Sort, MaxRows: searchPageSize, RowOffset: int64((f.Page - 1) * searchPageSize),
 	}
 	if sp.Types == nil {
@@ -257,6 +292,9 @@ func (f searchFilters) params(now time.Time) (sp db.SearchPublicContractsParams,
 		VolumeMin: sp.VolumeMin, VolumeMax: sp.VolumeMax, DaysMax: sp.DaysMax,
 		BpActive: sp.BpActive, BpMode: sp.BpMode, MeMin: sp.MeMin, TeMin: sp.TeMin, RunsMin: sp.RunsMin,
 		IssuedAfter: sp.IssuedAfter, ExpiringBefore: sp.ExpiringBefore, DealsOnly: sp.DealsOnly,
+		AbyssalActive: sp.AbyssalActive, AbFamily: sp.AbFamily, AbScoreMin: sp.AbScoreMin,
+		AbSourceQ: sp.AbSourceQ, AbEstMin: sp.AbEstMin, AbEstMax: sp.AbEstMax,
+		AbAttrKey: sp.AbAttrKey, AbAttrMin: sp.AbAttrMin,
 	}
 	return sp, cp
 }
@@ -291,6 +329,8 @@ func tierLabel(tier string) string {
 		return "Our Forge typical"
 	case module.AppraisalTierEstimate:
 		return "Estimated sell"
+	case module.AppraisalTierAbyssal:
+		return "Our abyssal estimate"
 	case module.AppraisalTierFallback:
 		return "Fuzzwork aggregate"
 	}
@@ -383,6 +423,7 @@ type searchRow struct {
 	Location   module.PlaceRef
 	Dropoff    module.PlaceRef
 	HasRoute   bool
+	Abyssal    *rowAbyssal
 	Reward     string
 	Collateral string
 	Volume     string
@@ -400,12 +441,48 @@ type regionOption struct {
 	Selected bool
 }
 
+type familyOption struct {
+	Slug     string
+	Label    string
+	Selected bool
+}
+
+type attrOption struct {
+	Key      string // attribute id as text
+	Name     string
+	Selected bool
+}
+
+// rowAbyssalBar is one primary roll's percentile bar on a
+// search row.
+type rowAbyssalBar struct {
+	Name string
+	Pct  int
+}
+
+// rowAbyssal is a result row's mutated-line summary: where
+// the module came from, how its main rolls landed, and the
+// stored estimate with its spread and basis -- never a bare
+// point.
+type rowAbyssal struct {
+	SourceName   string
+	SourceTypeID int64
+	MutatorName  string
+	ScoreText    string
+	Bars         []rowAbyssalBar
+	Estimate     string
+	SpreadNote   string // "likely L to H · from N listings of this module"
+	CapNote      string // "Held back by: CPU fitting cost"
+}
+
 type searchView struct {
 	Filters   searchFilters
 	Raw       url.Values
 	Echo      map[string]string // first raw value per form field
 	TypeSet   map[string]bool   // checked contract types
 	Regions   []regionOption
+	Families  []familyOption
+	AttrOpts  []attrOption
 	Sorts     []struct{ Key, Label string }
 	Rows      []searchRow
 	Total     int64
@@ -456,6 +533,32 @@ func (app *mod) buildSearchView(ctx context.Context, q url.Values) *searchView {
 		view.Regions = append(view.Regions, regionOption{ID: rr.RegionID, Name: name, Selected: selected[rr.RegionID]})
 	}
 
+	// Abyssal filter options: the families the corpus holds,
+	// and the attributes any family scores.
+	if fams, err := app.queries.ListAbyssalFamilies(ctx); err == nil {
+		for _, fam := range fams {
+			view.Families = append(view.Families, familyOption{
+				Slug: fam, Label: abyssalFamilyLabel(fam), Selected: fam == f.AbFamily,
+			})
+		}
+	}
+	if attrIDs, err := app.queries.ListAbyssalWeightAttributeIDs(ctx); err == nil && len(attrIDs) > 0 {
+		names := map[int64]string{}
+		if rows, err := app.queries.ListSDEAttributeTypesByIDs(ctx, attrIDs); err == nil {
+			for _, row := range rows {
+				names[row.AttributeID] = row.Name
+			}
+		}
+		for _, id := range attrIDs {
+			name := names[id]
+			if name == "" {
+				name = fmt.Sprintf("Attribute #%d", id)
+			}
+			key := strconv.FormatInt(id, 10)
+			view.AttrOpts = append(view.AttrOpts, attrOption{Key: key, Name: name, Selected: key == f.AbAttrKey})
+		}
+	}
+
 	sp, cp := f.params(now)
 	total, err := app.queries.CountPublicContractsSearch(ctx, cp)
 	if err != nil {
@@ -502,15 +605,16 @@ func (app *mod) buildSearchView(ctx context.Context, q url.Values) *searchView {
 	for id := range typeIDs {
 		names[id] = app.deps.TypeNameOrID(ctx, id)
 	}
+	abData := app.pageAbyssalData(ctx, items)
 	memo := map[int64]module.PlaceRef{}
 	for _, row := range rows {
-		view.Rows = append(view.Rows, app.searchRow(ctx, memo, row, byContract[row.ContractID], names, regionNames, now))
+		view.Rows = append(view.Rows, app.searchRow(ctx, memo, row, byContract[row.ContractID], names, regionNames, abData, now))
 	}
 	view.HasRows = len(view.Rows) > 0
 	return view
 }
 
-func (app *mod) searchRow(ctx context.Context, memo map[int64]module.PlaceRef, row db.SearchPublicContractsRow, items []db.PubContractItem, names map[int64]string, regionNames map[int64]string, now time.Time) searchRow {
+func (app *mod) searchRow(ctx context.Context, memo map[int64]module.PlaceRef, row db.SearchPublicContractsRow, items []db.PubContractItem, names map[int64]string, regionNames map[int64]string, abData *pageAbyssalData, now time.Time) searchRow {
 	out := searchRow{
 		ContractID: row.ContractID,
 		Title:      row.Title,
@@ -565,6 +669,20 @@ func (app *mod) searchRow(ctx context.Context, memo map[int64]module.PlaceRef, r
 	out.MoreOffer = offered - len(out.Offered)
 	out.MoreWant = wanted - len(out.Wanted)
 
+	// The row's mutated-line summary: the first offered
+	// singleton the corpus knows, if any.
+	if abData != nil {
+		for _, it := range items {
+			if !it.IsIncluded || !it.ItemID.Valid {
+				continue
+			}
+			if ab, ok := abData.items[it.ItemID.Int64]; ok && ab.Family != "" {
+				out.Abyssal = app.rowAbyssalFor(ctx, ab, abData)
+				break
+			}
+		}
+	}
+
 	switch row.Type {
 	case "courier":
 		out.PriceLabel = "Reward"
@@ -609,6 +727,185 @@ func (app *mod) searchRow(ctx context.Context, memo map[int64]module.PlaceRef, r
 	return out
 }
 
+// --- abyssal display -------------------------------------------------------
+
+// pageAbyssalData is the search page's stored abyssal facts:
+// the page's mutated items, their families' weights (for the
+// primary bars), and attribute names.
+type pageAbyssalData struct {
+	items     map[int64]db.AbyssalItem
+	weights   map[string][]db.AbyssalFamilyWeight
+	attrNames map[int64]string
+}
+
+func (app *mod) pageAbyssalData(ctx context.Context, items []db.PubContractItem) *pageAbyssalData {
+	var ids []int64
+	for _, it := range items {
+		if it.ItemID.Valid {
+			ids = append(ids, it.ItemID.Int64)
+		}
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	rows, err := app.queries.ListAbyssalItemsByIDs(ctx, ids)
+	if err != nil || len(rows) == 0 {
+		return nil
+	}
+	data := &pageAbyssalData{
+		items:     map[int64]db.AbyssalItem{},
+		weights:   map[string][]db.AbyssalFamilyWeight{},
+		attrNames: map[int64]string{},
+	}
+	families := map[string]bool{}
+	for _, row := range rows {
+		data.items[row.ItemID] = row
+		if row.Family != "" {
+			families[row.Family] = true
+		}
+	}
+	if len(families) > 0 {
+		fams := make([]string, 0, len(families))
+		for fam := range families {
+			fams = append(fams, fam)
+		}
+		if wrows, err := app.queries.ListAbyssalFamilyWeightsByFamilies(ctx, fams); err == nil {
+			attrIDs := map[int64]bool{}
+			for _, w := range wrows {
+				data.weights[w.Family] = append(data.weights[w.Family], w)
+				attrIDs[w.AttributeID] = true
+			}
+			for _, row := range rows {
+				if row.CapAttributeID > 0 {
+					attrIDs[row.CapAttributeID] = true
+				}
+			}
+			ids := make([]int64, 0, len(attrIDs))
+			for id := range attrIDs {
+				ids = append(ids, id)
+			}
+			if arows, err := app.queries.ListSDEAttributeTypesByIDs(ctx, ids); err == nil {
+				for _, r := range arows {
+					data.attrNames[r.AttributeID] = r.Name
+				}
+			}
+		}
+	}
+	return data
+}
+
+// rowAbyssalFor words one stored abyssal row for a search
+// result: provenance, score, the primary bars, the estimate
+// with its basis, and the cap when one binds.
+func (app *mod) rowAbyssalFor(ctx context.Context, ab db.AbyssalItem, data *pageAbyssalData) *rowAbyssal {
+	out := &rowAbyssal{
+		SourceName:   app.deps.TypeNameOrID(ctx, ab.SourceTypeID),
+		SourceTypeID: ab.SourceTypeID,
+		MutatorName:  app.deps.TypeNameOrID(ctx, ab.MutatorTypeID),
+	}
+	if ab.Score.Valid {
+		out.ScoreText = fmt.Sprintf("Roll score %d / 100", int(ab.Score.Float64*100+0.5))
+	}
+	// Primary bars: the family's heaviest non-penalty rolls
+	// this item has percentiles for, best three.
+	pcts := parseAbyssalPercentiles(ab.Percentiles)
+	weights := append([]db.AbyssalFamilyWeight(nil), data.weights[ab.Family]...)
+	sort.Slice(weights, func(i, j int) bool {
+		if weights[i].Weight != weights[j].Weight {
+			return weights[i].Weight > weights[j].Weight
+		}
+		return weights[i].AttributeID < weights[j].AttributeID
+	})
+	for _, w := range weights {
+		if w.PenaltyOnly || len(out.Bars) >= 3 {
+			continue
+		}
+		p, ok := pcts[w.AttributeID]
+		if !ok {
+			continue
+		}
+		name := data.attrNames[w.AttributeID]
+		if name == "" {
+			name = fmt.Sprintf("Attribute #%d", w.AttributeID)
+		}
+		out.Bars = append(out.Bars, rowAbyssalBar{Name: name, Pct: int(p*100 + 0.5)})
+	}
+	if ab.EstValue.Valid {
+		out.Estimate = esi.FormatISK(ab.EstValue.Float64)
+		note := abyssalBasisShort(ab)
+		if ab.EstLow.Valid && ab.EstHigh.Valid {
+			note = fmt.Sprintf("likely %s to %s · %s",
+				esi.FormatISK(ab.EstLow.Float64), esi.FormatISK(ab.EstHigh.Float64), note)
+		}
+		out.SpreadNote = note
+	}
+	if ab.CapAttributeID > 0 {
+		out.CapNote = "Held back by: " + capAttrDisplayName(ab.CapAttributeID, data.attrNames[ab.CapAttributeID])
+	}
+	return out
+}
+
+// parseAbyssalPercentiles reads the stored percentile map
+// (attribute id as text -> 0..1).
+func parseAbyssalPercentiles(raw []byte) map[int64]float64 {
+	out := map[int64]float64{}
+	var m map[string]float64
+	if err := json.Unmarshal(raw, &m); err != nil {
+		return out
+	}
+	for k, v := range m {
+		if id, err := strconv.ParseInt(k, 10, 64); err == nil {
+			out[id] = v
+		}
+	}
+	return out
+}
+
+// abyssalFamilyLabel prettifies a family slug for the filter
+// list ("warp_scrambler" -> "Warp Scrambler").
+func abyssalFamilyLabel(slug string) string {
+	parts := strings.Split(slug, "_")
+	for i, p := range parts {
+		if p == "" {
+			continue
+		}
+		parts[i] = strings.ToUpper(p[:1]) + p[1:]
+	}
+	return strings.Join(parts, " ")
+}
+
+// abyssalBasisShort is the estimate's basis in a breath: what
+// the number rests on, never just the number.
+func abyssalBasisShort(ab db.AbyssalItem) string {
+	switch ab.EstBasis {
+	case "corpus":
+		if ab.EstScope == "module" {
+			return fmt.Sprintf("from %d listings of this module", ab.EstComps)
+		}
+		return fmt.Sprintf("from %d listings of similar modules", ab.EstComps)
+	case "curve":
+		return "score curve (few listings)"
+	case "prior":
+		return "base module price and rolls only"
+	}
+	return ""
+}
+
+// capAttrDisplayName: fitting costs get their plain-words
+// names; everything else keeps the SDE's.
+func capAttrDisplayName(attrID int64, sdeName string) string {
+	switch attrID {
+	case 50:
+		return "CPU fitting cost"
+	case 30:
+		return "Powergrid fitting cost"
+	}
+	if sdeName != "" {
+		return sdeName
+	}
+	return fmt.Sprintf("Attribute #%d", attrID)
+}
+
 // --- detail page -----------------------------------------------------------
 
 type detailLine struct {
@@ -630,15 +927,36 @@ type abyssalRoll struct {
 	Delta   string
 	Good    bool
 	HasBase bool
+	Pct     int // percentile in the mutaplasmid's band, 0..100
+	HasPct  bool
+}
+
+type abyssalDerivedRow struct {
+	Label string
+	Value string
+	Pct   int
 }
 
 type abyssalPanel struct {
-	SourceName   string
-	SourceTypeID int64
-	MutatorName  string
-	Rolls        []abyssalRoll
-	ContextPrice string // the source module's own price, context only
-	ContextTier  string
+	SourceName    string
+	SourceTypeID  int64
+	MutatorName   string
+	MutatorTypeID int64
+	Rolls         []abyssalRoll
+	Derived       []abyssalDerivedRow
+	HasScore      bool
+	ScoreText     string // "87 / 100"
+	HasEstimate   bool
+	Estimate      string
+	EstLow        string
+	EstHigh       string
+	BasisLabel    string // what the estimate rests on
+	ScoredNote    string // "Scored 3h ago"
+	CapNote       string // the capping attribute, in plain words
+	Recreation    string // rolling another this good, priced
+	NoEstimate    string // why there is no figure, when there is none
+	ContextPrice  string // the source module's own price, context only
+	ContextTier   string
 }
 
 type bidRow struct {
@@ -914,17 +1232,20 @@ func (app *mod) detailLine(ctx context.Context, it db.PubContractItem, abyssal m
 	return line
 }
 
-// abyssalPanel builds a mutated item's rolls display: every
-// rolled attribute with its value, the source module's base
-// value where the SDE has one, and which way the roll went.
-// No score, no estimate -- the abyssal estimate is a later
-// step; the source module's own price rides along as context
-// only and is never counted in the contract's value.
+// abyssalPanel builds a mutated item's display from its
+// stored row: every rolled attribute with its value, the
+// source module's base value, which way the roll went, and
+// where the roll sits in the band its mutaplasmid could
+// produce -- then the stored score and estimate with their
+// spread, basis and cap, all computed by core's scoring pass
+// and read here as they stand. The source module's own price
+// rides along as context only.
 func (app *mod) abyssalPanel(ctx context.Context, ab db.AbyssalItem) *abyssalPanel {
 	panel := &abyssalPanel{
-		SourceName:   app.deps.TypeNameOrID(ctx, ab.SourceTypeID),
-		SourceTypeID: ab.SourceTypeID,
-		MutatorName:  app.deps.TypeNameOrID(ctx, ab.MutatorTypeID),
+		SourceName:    app.deps.TypeNameOrID(ctx, ab.SourceTypeID),
+		SourceTypeID:  ab.SourceTypeID,
+		MutatorName:   app.deps.TypeNameOrID(ctx, ab.MutatorTypeID),
+		MutatorTypeID: ab.MutatorTypeID,
 	}
 	var rolls []struct {
 		AttributeID int64   `json:"attribute_id"`
@@ -934,9 +1255,12 @@ func (app *mod) abyssalPanel(ctx context.Context, ab db.AbyssalItem) *abyssalPan
 		logging.Errorf("contract detail: abyssal attributes %d: %v", ab.ItemID, err)
 		return panel
 	}
-	attrIDs := make([]int64, 0, len(rolls))
+	attrIDs := make([]int64, 0, len(rolls)+1)
 	for _, rl := range rolls {
 		attrIDs = append(attrIDs, rl.AttributeID)
+	}
+	if ab.CapAttributeID > 0 {
+		attrIDs = append(attrIDs, ab.CapAttributeID)
 	}
 	names := map[int64]db.SdeAttributeType{}
 	if rows, err := app.queries.ListSDEAttributeTypesByIDs(ctx, attrIDs); err == nil {
@@ -950,12 +1274,17 @@ func (app *mod) abyssalPanel(ctx context.Context, ab db.AbyssalItem) *abyssalPan
 			base[row.AttributeID] = row.Value
 		}
 	}
+	pcts := parseAbyssalPercentiles(ab.Percentiles)
 	for _, rl := range rolls {
 		row := abyssalRoll{Value: formatAttrValue(rl.Value)}
 		if at, ok := names[rl.AttributeID]; ok && at.Name != "" {
 			row.Name = at.Name
 		} else {
 			row.Name = fmt.Sprintf("Attribute #%d", rl.AttributeID)
+		}
+		if p, ok := pcts[rl.AttributeID]; ok {
+			row.Pct = int(p*100 + 0.5)
+			row.HasPct = true
 		}
 		if bv, ok := base[rl.AttributeID]; ok {
 			row.HasBase = true
@@ -972,6 +1301,67 @@ func (app *mod) abyssalPanel(ctx context.Context, ab db.AbyssalItem) *abyssalPan
 		}
 		panel.Rolls = append(panel.Rolls, row)
 	}
+	var derived []struct {
+		Label string  `json:"label"`
+		Value float64 `json:"value"`
+		Pct   float64 `json:"pct"`
+	}
+	if err := json.Unmarshal(ab.DerivedStats, &derived); err == nil {
+		for _, d := range derived {
+			panel.Derived = append(panel.Derived, abyssalDerivedRow{
+				Label: d.Label, Value: formatAttrValue(d.Value), Pct: int(d.Pct*100 + 0.5),
+			})
+		}
+	}
+	if ab.Score.Valid {
+		panel.HasScore = true
+		panel.ScoreText = fmt.Sprintf("%d / 100", int(ab.Score.Float64*100+0.5))
+	}
+	if ab.ScoredAt.Valid {
+		panel.ScoredNote = "Scored " + app.deps.AgeText(ab.ScoredAt.Time)
+	}
+	if ab.EstValue.Valid {
+		panel.HasEstimate = true
+		panel.Estimate = esi.FormatISK(ab.EstValue.Float64)
+		if ab.EstLow.Valid {
+			panel.EstLow = esi.FormatISK(ab.EstLow.Float64)
+		}
+		if ab.EstHigh.Valid {
+			panel.EstHigh = esi.FormatISK(ab.EstHigh.Float64)
+		}
+		switch ab.EstBasis {
+		case "corpus":
+			if ab.EstScope == "module" {
+				panel.BasisLabel = fmt.Sprintf("from %d current and recent listings of this module", ab.EstComps)
+			} else {
+				panel.BasisLabel = fmt.Sprintf("from %d current and recent listings of similar modules", ab.EstComps)
+			}
+		case "curve":
+			panel.BasisLabel = "score curve (few listings)"
+		case "prior":
+			panel.BasisLabel = "the base module's price and the rolls alone"
+		}
+	} else if ab.Score.Valid {
+		panel.NoEstimate = "No estimate: the base module has no price of its own and too few listings of its kind exist to price the rolls against, so this item shows its rolls and score without an ISK figure rather than a guess."
+	} else if len(pcts) > 0 {
+		panel.NoEstimate = "Not scored: this family has no scoring weights yet, so the item shows its rolls and where each one sits in its range, with no score and no ISK figure."
+	}
+	if ab.CapAttributeID > 0 {
+		name := ""
+		if at, ok := names[ab.CapAttributeID]; ok {
+			name = at.Name
+		}
+		name = capAttrDisplayName(ab.CapAttributeID, name)
+		if ab.CapKind == "fitting" {
+			panel.CapNote = fmt.Sprintf("Held back by: %s. A fitting cost that far above the base module's makes the module hard to fit at all, so the score and the estimate are capped no matter how well the rest rolled.", name)
+		} else {
+			panel.CapNote = fmt.Sprintf("Held back by: %s. That roll is one this module is bought for, and it landed near the bottom of its range, so the score and the estimate are capped no matter how well the rest rolled.", name)
+		}
+	}
+	if ab.RecreationCost.Valid && ab.RecreationAttempts.Valid {
+		panel.Recreation = fmt.Sprintf("Rolling another this good takes about %s attempts on average -- around %s ISK at current base module and mutaplasmid prices.",
+			formatAttempts(ab.RecreationAttempts.Float64), esi.FormatISK(ab.RecreationCost.Float64))
+	}
 	// Source context: what the unmutated module prices at
 	// through the same house order. Display only.
 	if res, err := app.deps.AppraiseLines(ctx, []module.AppraisalLine{
@@ -981,6 +1371,18 @@ func (app *mod) abyssalPanel(ctx context.Context, ab db.AbyssalItem) *abyssalPan
 		panel.ContextTier = tierLabel(res.Lines[0].Tier)
 	}
 	return panel
+}
+
+// formatAttempts words an expected-attempts figure:
+// whole numbers once they are big, one decimal while small.
+func formatAttempts(v float64) string {
+	if v >= 100 {
+		return esi.FormatInt(int64(v + 0.5))
+	}
+	if v >= 10 {
+		return fmt.Sprintf("%.0f", v)
+	}
+	return fmt.Sprintf("%.1f", v)
 }
 
 func absf(v float64) float64 {

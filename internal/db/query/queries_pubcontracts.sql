@@ -186,7 +186,11 @@ ON CONFLICT (item_id) DO UPDATE SET
 
 -- name: GetAbyssalItem :one
 SELECT item_id, type_id, source_type_id, mutator_type_id, created_by,
-    attributes, fetched_at, first_seen_at, last_seen_at
+    attributes, fetched_at, first_seen_at, last_seen_at,
+    family, score, percentiles, derived_stats,
+    est_value, est_low, est_high, est_basis, est_scope, est_comps,
+    premium_mult, cap_attribute_id, cap_kind,
+    recreation_cost, recreation_attempts, primary_abs, scored_at
 FROM abyssal_items
 WHERE item_id = $1;
 
@@ -320,7 +324,11 @@ ORDER BY contract_id, record_id;
 
 -- name: ListAbyssalItemsByIDs :many
 SELECT item_id, type_id, source_type_id, mutator_type_id, created_by,
-    attributes, fetched_at, first_seen_at, last_seen_at
+    attributes, fetched_at, first_seen_at, last_seen_at,
+    family, score, percentiles, derived_stats,
+    est_value, est_low, est_high, est_basis, est_scope, est_comps,
+    premium_mult, cap_attribute_id, cap_kind,
+    recreation_cost, recreation_attempts, primary_abs, scored_at
 FROM abyssal_items
 WHERE item_id = ANY(sqlc.arg(item_ids)::bigint[])
 ORDER BY item_id;
@@ -445,6 +453,25 @@ WHERE (coalesce(cardinality(sqlc.arg(types)::text[]), 0) = 0
        OR c.date_issued >= sqlc.arg(issued_after)::timestamptz)
   AND (sqlc.arg(expiring_before)::timestamptz IS NULL
        OR c.date_expired <= sqlc.arg(expiring_before)::timestamptz)
+  AND (NOT sqlc.arg(abyssal_active)::boolean OR EXISTS (
+        SELECT 1 FROM pub_contract_items i
+        JOIN abyssal_items a ON a.item_id = i.item_id
+        WHERE i.contract_id = c.contract_id AND i.is_included
+          AND (sqlc.arg(ab_family)::text = ''
+               OR a.family = sqlc.arg(ab_family)::text)
+          AND (sqlc.arg(ab_score_min)::double precision < 0
+               OR a.score >= sqlc.arg(ab_score_min)::double precision)
+          AND (sqlc.arg(ab_source_q)::text = '' OR EXISTS (
+                SELECT 1 FROM sde_types st
+                WHERE st.type_id = a.source_type_id
+                  AND st.name ILIKE '%' || sqlc.arg(ab_source_q)::text || '%'))
+          AND (sqlc.arg(ab_est_min)::double precision < 0
+               OR a.est_value >= sqlc.arg(ab_est_min)::double precision)
+          AND (sqlc.arg(ab_est_max)::double precision < 0
+               OR a.est_value <= sqlc.arg(ab_est_max)::double precision)
+          AND (sqlc.arg(ab_attr_key)::text = ''
+               OR COALESCE((a.percentiles ->> sqlc.arg(ab_attr_key)::text)::double precision, -1)
+                    >= sqlc.arg(ab_attr_min)::double precision)))
   AND (NOT sqlc.arg(deals_only)::boolean
        OR (c.deal_ratio IS NOT NULL AND c.deal_ratio <= 0.85))
 ORDER BY
@@ -456,6 +483,10 @@ ORDER BY
   CASE WHEN sqlc.arg(sort)::text = 'reward_desc' THEN c.reward END DESC NULLS LAST,
   CASE WHEN sqlc.arg(sort)::text = 'reward_m3_desc' THEN
        CASE WHEN c.volume > 0 THEN c.reward / c.volume END END DESC NULLS LAST,
+  CASE WHEN sqlc.arg(sort)::text = 'score_desc' THEN
+       (SELECT MAX(a.score) FROM pub_contract_items i
+        JOIN abyssal_items a ON a.item_id = i.item_id
+        WHERE i.contract_id = c.contract_id AND i.is_included) END DESC NULLS LAST,
   c.date_issued DESC, c.contract_id DESC
 LIMIT sqlc.arg(max_rows)::bigint OFFSET sqlc.arg(row_offset)::bigint;
 
@@ -551,6 +582,25 @@ WHERE (coalesce(cardinality(sqlc.arg(types)::text[]), 0) = 0
        OR c.date_issued >= sqlc.arg(issued_after)::timestamptz)
   AND (sqlc.arg(expiring_before)::timestamptz IS NULL
        OR c.date_expired <= sqlc.arg(expiring_before)::timestamptz)
+  AND (NOT sqlc.arg(abyssal_active)::boolean OR EXISTS (
+        SELECT 1 FROM pub_contract_items i
+        JOIN abyssal_items a ON a.item_id = i.item_id
+        WHERE i.contract_id = c.contract_id AND i.is_included
+          AND (sqlc.arg(ab_family)::text = ''
+               OR a.family = sqlc.arg(ab_family)::text)
+          AND (sqlc.arg(ab_score_min)::double precision < 0
+               OR a.score >= sqlc.arg(ab_score_min)::double precision)
+          AND (sqlc.arg(ab_source_q)::text = '' OR EXISTS (
+                SELECT 1 FROM sde_types st
+                WHERE st.type_id = a.source_type_id
+                  AND st.name ILIKE '%' || sqlc.arg(ab_source_q)::text || '%'))
+          AND (sqlc.arg(ab_est_min)::double precision < 0
+               OR a.est_value >= sqlc.arg(ab_est_min)::double precision)
+          AND (sqlc.arg(ab_est_max)::double precision < 0
+               OR a.est_value <= sqlc.arg(ab_est_max)::double precision)
+          AND (sqlc.arg(ab_attr_key)::text = ''
+               OR COALESCE((a.percentiles ->> sqlc.arg(ab_attr_key)::text)::double precision, -1)
+                    >= sqlc.arg(ab_attr_min)::double precision)))
   AND (NOT sqlc.arg(deals_only)::boolean
        OR (c.deal_ratio IS NOT NULL AND c.deal_ratio <= 0.85));
 
@@ -566,3 +616,96 @@ ORDER BY attribute_id;
 
 -- name: CountAbyssalRanges :one
 SELECT COUNT(*) FROM abyssal_ranges;
+
+-- ---------------------------------------------------------------------
+-- Abyssal scoring (schema 057): the worker pass's reads and its
+-- one stored write per item, the calibration corpus, and the
+-- search page's abyssal option lists. Queries stay ASCII-only
+-- in comments (the sqlc parser's known desync).
+-- ---------------------------------------------------------------------
+
+-- name: ListAllAbyssalFamilyWeights :many
+SELECT family, attribute_id, weight, penalty_only
+FROM abyssal_family_weights
+ORDER BY family, attribute_id;
+
+-- name: ListAbyssalFamilyWeightsByFamilies :many
+SELECT family, attribute_id, weight, penalty_only
+FROM abyssal_family_weights
+WHERE family = ANY(sqlc.arg(families)::text[])
+ORDER BY family, attribute_id;
+
+-- The items whose score or estimate is due: never scored, or
+-- scored before the caller's cutoff. Stalest first.
+-- name: ListAbyssalItemsDueScoring :many
+SELECT item_id, type_id, source_type_id, mutator_type_id, attributes
+FROM abyssal_items
+WHERE scored_at IS NULL
+   OR scored_at < sqlc.arg(cutoff)::timestamptz
+ORDER BY scored_at ASC NULLS FIRST, item_id ASC
+LIMIT sqlc.arg(max_rows)::bigint;
+
+-- The calibration corpus for one family: every scored item of
+-- the family with its most recent exchange listing's ask and
+-- how that listing ended. Auctions carry no comparable ask in
+-- the sighting row (their price is an opening bid), so the
+-- corpus is exchange listings only.
+-- name: ListAbyssalCorpusByGroupNames :many
+SELECT DISTINCT ON (a.item_id)
+    a.item_id, a.source_type_id, a.score, a.est_value, a.primary_abs,
+    s.price, s.departed_at, s.depart_kind,
+    s.first_seen_at, s.last_seen_at, s.date_expired,
+    g.name AS group_name
+FROM abyssal_items a
+JOIN abyssal_sightings s ON s.item_id = a.item_id
+JOIN sde_types t ON t.type_id = a.type_id
+JOIN sde_groups g ON g.group_id = t.group_id
+WHERE g.name = ANY(sqlc.arg(group_names)::text[])
+  AND s.contract_type = 'item_exchange'
+  AND s.price > 0
+ORDER BY a.item_id, s.first_seen_at DESC;
+
+-- The base modules one mutaplasmid has ever been seen applied
+-- to: the recreation path's candidate bases.
+-- name: ListAbyssalSourcesForMutator :many
+SELECT DISTINCT source_type_id FROM abyssal_items
+WHERE mutator_type_id = $1 AND source_type_id > 0
+ORDER BY source_type_id;
+
+-- name: UpdateAbyssalItemEstimate :exec
+UPDATE abyssal_items SET
+    family              = sqlc.arg(family)::text,
+    score               = sqlc.narg(score)::double precision,
+    percentiles         = sqlc.arg(percentiles)::jsonb,
+    derived_stats       = sqlc.arg(derived_stats)::jsonb,
+    est_value           = sqlc.narg(est_value)::double precision,
+    est_low             = sqlc.narg(est_low)::double precision,
+    est_high            = sqlc.narg(est_high)::double precision,
+    est_basis           = sqlc.arg(est_basis)::text,
+    est_scope           = sqlc.arg(est_scope)::text,
+    est_comps           = sqlc.arg(est_comps)::bigint,
+    premium_mult        = sqlc.arg(premium_mult)::double precision,
+    cap_attribute_id    = sqlc.arg(cap_attribute_id)::bigint,
+    cap_kind            = sqlc.arg(cap_kind)::text,
+    recreation_cost     = sqlc.narg(recreation_cost)::double precision,
+    recreation_attempts = sqlc.narg(recreation_attempts)::double precision,
+    primary_abs         = sqlc.narg(primary_abs)::double precision,
+    scored_at           = sqlc.arg(scored_at)::timestamptz
+WHERE item_id = sqlc.arg(item_id)::bigint;
+
+-- A fresh score or estimate makes the contracts holding the
+-- item due for repricing on the next appraisal pass.
+-- name: TouchPublicContractsForItemIDs :exec
+UPDATE pub_contracts SET priced_at = NULL
+WHERE contract_id IN (
+    SELECT contract_id FROM pub_contract_items
+    WHERE item_id = ANY(sqlc.arg(item_ids)::bigint[]));
+
+-- name: ListAbyssalFamilies :many
+SELECT DISTINCT family FROM abyssal_items
+WHERE family <> ''
+ORDER BY family;
+
+-- name: ListAbyssalWeightAttributeIDs :many
+SELECT DISTINCT attribute_id FROM abyssal_family_weights
+ORDER BY attribute_id;

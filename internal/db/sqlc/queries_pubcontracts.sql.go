@@ -150,7 +150,26 @@ WHERE (coalesce(cardinality($1::text[]), 0) = 0
        OR c.date_issued >= $24::timestamptz)
   AND ($25::timestamptz IS NULL
        OR c.date_expired <= $25::timestamptz)
-  AND (NOT $26::boolean
+  AND (NOT $26::boolean OR EXISTS (
+        SELECT 1 FROM pub_contract_items i
+        JOIN abyssal_items a ON a.item_id = i.item_id
+        WHERE i.contract_id = c.contract_id AND i.is_included
+          AND ($27::text = ''
+               OR a.family = $27::text)
+          AND ($28::double precision < 0
+               OR a.score >= $28::double precision)
+          AND ($29::text = '' OR EXISTS (
+                SELECT 1 FROM sde_types st
+                WHERE st.type_id = a.source_type_id
+                  AND st.name ILIKE '%' || $29::text || '%'))
+          AND ($30::double precision < 0
+               OR a.est_value >= $30::double precision)
+          AND ($31::double precision < 0
+               OR a.est_value <= $31::double precision)
+          AND ($32::text = ''
+               OR COALESCE((a.percentiles ->> $32::text)::double precision, -1)
+                    >= $33::double precision)))
+  AND (NOT $34::boolean
        OR (c.deal_ratio IS NOT NULL AND c.deal_ratio <= 0.85))
 `
 
@@ -180,6 +199,14 @@ type CountPublicContractsSearchParams struct {
 	RunsMin        int64     `json:"runs_min"`
 	IssuedAfter    time.Time `json:"issued_after"`
 	ExpiringBefore time.Time `json:"expiring_before"`
+	AbyssalActive  bool      `json:"abyssal_active"`
+	AbFamily       string    `json:"ab_family"`
+	AbScoreMin     float64   `json:"ab_score_min"`
+	AbSourceQ      string    `json:"ab_source_q"`
+	AbEstMin       float64   `json:"ab_est_min"`
+	AbEstMax       float64   `json:"ab_est_max"`
+	AbAttrKey      string    `json:"ab_attr_key"`
+	AbAttrMin      float64   `json:"ab_attr_min"`
 	DealsOnly      bool      `json:"deals_only"`
 }
 
@@ -210,6 +237,14 @@ func (q *Queries) CountPublicContractsSearch(ctx context.Context, arg CountPubli
 		arg.RunsMin,
 		arg.IssuedAfter,
 		arg.ExpiringBefore,
+		arg.AbyssalActive,
+		arg.AbFamily,
+		arg.AbScoreMin,
+		arg.AbSourceQ,
+		arg.AbEstMin,
+		arg.AbEstMax,
+		arg.AbAttrKey,
+		arg.AbAttrMin,
 		arg.DealsOnly,
 	)
 	var count int64
@@ -258,7 +293,11 @@ func (q *Queries) DeletePublicContractsByIDs(ctx context.Context, contractIds []
 
 const getAbyssalItem = `-- name: GetAbyssalItem :one
 SELECT item_id, type_id, source_type_id, mutator_type_id, created_by,
-    attributes, fetched_at, first_seen_at, last_seen_at
+    attributes, fetched_at, first_seen_at, last_seen_at,
+    family, score, percentiles, derived_stats,
+    est_value, est_low, est_high, est_basis, est_scope, est_comps,
+    premium_mult, cap_attribute_id, cap_kind,
+    recreation_cost, recreation_attempts, primary_abs, scored_at
 FROM abyssal_items
 WHERE item_id = $1
 `
@@ -276,6 +315,23 @@ func (q *Queries) GetAbyssalItem(ctx context.Context, itemID int64) (AbyssalItem
 		&i.FetchedAt,
 		&i.FirstSeenAt,
 		&i.LastSeenAt,
+		&i.Family,
+		&i.Score,
+		&i.Percentiles,
+		&i.DerivedStats,
+		&i.EstValue,
+		&i.EstLow,
+		&i.EstHigh,
+		&i.EstBasis,
+		&i.EstScope,
+		&i.EstComps,
+		&i.PremiumMult,
+		&i.CapAttributeID,
+		&i.CapKind,
+		&i.RecreationCost,
+		&i.RecreationAttempts,
+		&i.PrimaryAbs,
+		&i.ScoredAt,
 	)
 	return i, err
 }
@@ -429,9 +485,149 @@ func (q *Queries) InsertPublicContractItem(ctx context.Context, arg InsertPublic
 	return err
 }
 
+const listAbyssalCorpusByGroupNames = `-- name: ListAbyssalCorpusByGroupNames :many
+SELECT DISTINCT ON (a.item_id)
+    a.item_id, a.source_type_id, a.score, a.est_value, a.primary_abs,
+    s.price, s.departed_at, s.depart_kind,
+    s.first_seen_at, s.last_seen_at, s.date_expired,
+    g.name AS group_name
+FROM abyssal_items a
+JOIN abyssal_sightings s ON s.item_id = a.item_id
+JOIN sde_types t ON t.type_id = a.type_id
+JOIN sde_groups g ON g.group_id = t.group_id
+WHERE g.name = ANY($1::text[])
+  AND s.contract_type = 'item_exchange'
+  AND s.price > 0
+ORDER BY a.item_id, s.first_seen_at DESC
+`
+
+type ListAbyssalCorpusByGroupNamesRow struct {
+	ItemID       int64           `json:"item_id"`
+	SourceTypeID int64           `json:"source_type_id"`
+	Score        sql.NullFloat64 `json:"score"`
+	EstValue     sql.NullFloat64 `json:"est_value"`
+	PrimaryAbs   sql.NullFloat64 `json:"primary_abs"`
+	Price        float64         `json:"price"`
+	DepartedAt   sql.NullTime    `json:"departed_at"`
+	DepartKind   sql.NullString  `json:"depart_kind"`
+	FirstSeenAt  time.Time       `json:"first_seen_at"`
+	LastSeenAt   time.Time       `json:"last_seen_at"`
+	DateExpired  sql.NullTime    `json:"date_expired"`
+	GroupName    string          `json:"group_name"`
+}
+
+// The calibration corpus for one family: every scored item of
+// the family with its most recent exchange listing's ask and
+// how that listing ended. Auctions carry no comparable ask in
+// the sighting row (their price is an opening bid), so the
+// corpus is exchange listings only.
+func (q *Queries) ListAbyssalCorpusByGroupNames(ctx context.Context, groupNames []string) ([]ListAbyssalCorpusByGroupNamesRow, error) {
+	rows, err := q.db.QueryContext(ctx, listAbyssalCorpusByGroupNames, pq.Array(groupNames))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListAbyssalCorpusByGroupNamesRow
+	for rows.Next() {
+		var i ListAbyssalCorpusByGroupNamesRow
+		if err := rows.Scan(
+			&i.ItemID,
+			&i.SourceTypeID,
+			&i.Score,
+			&i.EstValue,
+			&i.PrimaryAbs,
+			&i.Price,
+			&i.DepartedAt,
+			&i.DepartKind,
+			&i.FirstSeenAt,
+			&i.LastSeenAt,
+			&i.DateExpired,
+			&i.GroupName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listAbyssalFamilies = `-- name: ListAbyssalFamilies :many
+SELECT DISTINCT family FROM abyssal_items
+WHERE family <> ''
+ORDER BY family
+`
+
+func (q *Queries) ListAbyssalFamilies(ctx context.Context) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, listAbyssalFamilies)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var family string
+		if err := rows.Scan(&family); err != nil {
+			return nil, err
+		}
+		items = append(items, family)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listAbyssalFamilyWeightsByFamilies = `-- name: ListAbyssalFamilyWeightsByFamilies :many
+SELECT family, attribute_id, weight, penalty_only
+FROM abyssal_family_weights
+WHERE family = ANY($1::text[])
+ORDER BY family, attribute_id
+`
+
+func (q *Queries) ListAbyssalFamilyWeightsByFamilies(ctx context.Context, families []string) ([]AbyssalFamilyWeight, error) {
+	rows, err := q.db.QueryContext(ctx, listAbyssalFamilyWeightsByFamilies, pq.Array(families))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []AbyssalFamilyWeight
+	for rows.Next() {
+		var i AbyssalFamilyWeight
+		if err := rows.Scan(
+			&i.Family,
+			&i.AttributeID,
+			&i.Weight,
+			&i.PenaltyOnly,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listAbyssalItemsByIDs = `-- name: ListAbyssalItemsByIDs :many
 SELECT item_id, type_id, source_type_id, mutator_type_id, created_by,
-    attributes, fetched_at, first_seen_at, last_seen_at
+    attributes, fetched_at, first_seen_at, last_seen_at,
+    family, score, percentiles, derived_stats,
+    est_value, est_low, est_high, est_basis, est_scope, est_comps,
+    premium_mult, cap_attribute_id, cap_kind,
+    recreation_cost, recreation_attempts, primary_abs, scored_at
 FROM abyssal_items
 WHERE item_id = ANY($1::bigint[])
 ORDER BY item_id
@@ -456,6 +652,76 @@ func (q *Queries) ListAbyssalItemsByIDs(ctx context.Context, itemIds []int64) ([
 			&i.FetchedAt,
 			&i.FirstSeenAt,
 			&i.LastSeenAt,
+			&i.Family,
+			&i.Score,
+			&i.Percentiles,
+			&i.DerivedStats,
+			&i.EstValue,
+			&i.EstLow,
+			&i.EstHigh,
+			&i.EstBasis,
+			&i.EstScope,
+			&i.EstComps,
+			&i.PremiumMult,
+			&i.CapAttributeID,
+			&i.CapKind,
+			&i.RecreationCost,
+			&i.RecreationAttempts,
+			&i.PrimaryAbs,
+			&i.ScoredAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listAbyssalItemsDueScoring = `-- name: ListAbyssalItemsDueScoring :many
+SELECT item_id, type_id, source_type_id, mutator_type_id, attributes
+FROM abyssal_items
+WHERE scored_at IS NULL
+   OR scored_at < $1::timestamptz
+ORDER BY scored_at ASC NULLS FIRST, item_id ASC
+LIMIT $2::bigint
+`
+
+type ListAbyssalItemsDueScoringParams struct {
+	Cutoff  time.Time `json:"cutoff"`
+	MaxRows int64     `json:"max_rows"`
+}
+
+type ListAbyssalItemsDueScoringRow struct {
+	ItemID        int64           `json:"item_id"`
+	TypeID        int64           `json:"type_id"`
+	SourceTypeID  int64           `json:"source_type_id"`
+	MutatorTypeID int64           `json:"mutator_type_id"`
+	Attributes    json.RawMessage `json:"attributes"`
+}
+
+// The items whose score or estimate is due: never scored, or
+// scored before the caller's cutoff. Stalest first.
+func (q *Queries) ListAbyssalItemsDueScoring(ctx context.Context, arg ListAbyssalItemsDueScoringParams) ([]ListAbyssalItemsDueScoringRow, error) {
+	rows, err := q.db.QueryContext(ctx, listAbyssalItemsDueScoring, arg.Cutoff, arg.MaxRows)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListAbyssalItemsDueScoringRow
+	for rows.Next() {
+		var i ListAbyssalItemsDueScoringRow
+		if err := rows.Scan(
+			&i.ItemID,
+			&i.TypeID,
+			&i.SourceTypeID,
+			&i.MutatorTypeID,
+			&i.Attributes,
 		); err != nil {
 			return nil, err
 		}
@@ -609,6 +875,106 @@ func (q *Queries) ListAbyssalSightingsForItem(ctx context.Context, itemID int64)
 			&i.DepartKind,
 			&i.BidCount,
 			&i.TopBid,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listAbyssalSourcesForMutator = `-- name: ListAbyssalSourcesForMutator :many
+SELECT DISTINCT source_type_id FROM abyssal_items
+WHERE mutator_type_id = $1 AND source_type_id > 0
+ORDER BY source_type_id
+`
+
+// The base modules one mutaplasmid has ever been seen applied
+// to: the recreation path's candidate bases.
+func (q *Queries) ListAbyssalSourcesForMutator(ctx context.Context, mutatorTypeID int64) ([]int64, error) {
+	rows, err := q.db.QueryContext(ctx, listAbyssalSourcesForMutator, mutatorTypeID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []int64
+	for rows.Next() {
+		var source_type_id int64
+		if err := rows.Scan(&source_type_id); err != nil {
+			return nil, err
+		}
+		items = append(items, source_type_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listAbyssalWeightAttributeIDs = `-- name: ListAbyssalWeightAttributeIDs :many
+SELECT DISTINCT attribute_id FROM abyssal_family_weights
+ORDER BY attribute_id
+`
+
+func (q *Queries) ListAbyssalWeightAttributeIDs(ctx context.Context) ([]int64, error) {
+	rows, err := q.db.QueryContext(ctx, listAbyssalWeightAttributeIDs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []int64
+	for rows.Next() {
+		var attribute_id int64
+		if err := rows.Scan(&attribute_id); err != nil {
+			return nil, err
+		}
+		items = append(items, attribute_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listAllAbyssalFamilyWeights = `-- name: ListAllAbyssalFamilyWeights :many
+
+SELECT family, attribute_id, weight, penalty_only
+FROM abyssal_family_weights
+ORDER BY family, attribute_id
+`
+
+// ---------------------------------------------------------------------
+// Abyssal scoring (schema 057): the worker pass's reads and its
+// one stored write per item, the calibration corpus, and the
+// search page's abyssal option lists. Queries stay ASCII-only
+// in comments (the sqlc parser's known desync).
+// ---------------------------------------------------------------------
+func (q *Queries) ListAllAbyssalFamilyWeights(ctx context.Context) ([]AbyssalFamilyWeight, error) {
+	rows, err := q.db.QueryContext(ctx, listAllAbyssalFamilyWeights)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []AbyssalFamilyWeight
+	for rows.Next() {
+		var i AbyssalFamilyWeight
+		if err := rows.Scan(
+			&i.Family,
+			&i.AttributeID,
+			&i.Weight,
+			&i.PenaltyOnly,
 		); err != nil {
 			return nil, err
 		}
@@ -1169,19 +1535,42 @@ WHERE (coalesce(cardinality($1::text[]), 0) = 0
        OR c.date_issued >= $24::timestamptz)
   AND ($25::timestamptz IS NULL
        OR c.date_expired <= $25::timestamptz)
-  AND (NOT $26::boolean
+  AND (NOT $26::boolean OR EXISTS (
+        SELECT 1 FROM pub_contract_items i
+        JOIN abyssal_items a ON a.item_id = i.item_id
+        WHERE i.contract_id = c.contract_id AND i.is_included
+          AND ($27::text = ''
+               OR a.family = $27::text)
+          AND ($28::double precision < 0
+               OR a.score >= $28::double precision)
+          AND ($29::text = '' OR EXISTS (
+                SELECT 1 FROM sde_types st
+                WHERE st.type_id = a.source_type_id
+                  AND st.name ILIKE '%' || $29::text || '%'))
+          AND ($30::double precision < 0
+               OR a.est_value >= $30::double precision)
+          AND ($31::double precision < 0
+               OR a.est_value <= $31::double precision)
+          AND ($32::text = ''
+               OR COALESCE((a.percentiles ->> $32::text)::double precision, -1)
+                    >= $33::double precision)))
+  AND (NOT $34::boolean
        OR (c.deal_ratio IS NOT NULL AND c.deal_ratio <= 0.85))
 ORDER BY
-  CASE WHEN $27::text = 'price_asc' THEN c.price END ASC NULLS LAST,
-  CASE WHEN $27::text = 'price_desc' THEN c.price END DESC NULLS LAST,
-  CASE WHEN $27::text = 'value_desc' THEN c.offered_value END DESC NULLS LAST,
-  CASE WHEN $27::text = 'deal_asc' THEN c.deal_ratio END ASC NULLS LAST,
-  CASE WHEN $27::text = 'expiry_asc' THEN c.date_expired END ASC NULLS LAST,
-  CASE WHEN $27::text = 'reward_desc' THEN c.reward END DESC NULLS LAST,
-  CASE WHEN $27::text = 'reward_m3_desc' THEN
+  CASE WHEN $35::text = 'price_asc' THEN c.price END ASC NULLS LAST,
+  CASE WHEN $35::text = 'price_desc' THEN c.price END DESC NULLS LAST,
+  CASE WHEN $35::text = 'value_desc' THEN c.offered_value END DESC NULLS LAST,
+  CASE WHEN $35::text = 'deal_asc' THEN c.deal_ratio END ASC NULLS LAST,
+  CASE WHEN $35::text = 'expiry_asc' THEN c.date_expired END ASC NULLS LAST,
+  CASE WHEN $35::text = 'reward_desc' THEN c.reward END DESC NULLS LAST,
+  CASE WHEN $35::text = 'reward_m3_desc' THEN
        CASE WHEN c.volume > 0 THEN c.reward / c.volume END END DESC NULLS LAST,
+  CASE WHEN $35::text = 'score_desc' THEN
+       (SELECT MAX(a.score) FROM pub_contract_items i
+        JOIN abyssal_items a ON a.item_id = i.item_id
+        WHERE i.contract_id = c.contract_id AND i.is_included) END DESC NULLS LAST,
   c.date_issued DESC, c.contract_id DESC
-LIMIT $29::bigint OFFSET $28::bigint
+LIMIT $37::bigint OFFSET $36::bigint
 `
 
 type SearchPublicContractsParams struct {
@@ -1210,6 +1599,14 @@ type SearchPublicContractsParams struct {
 	RunsMin        int64     `json:"runs_min"`
 	IssuedAfter    time.Time `json:"issued_after"`
 	ExpiringBefore time.Time `json:"expiring_before"`
+	AbyssalActive  bool      `json:"abyssal_active"`
+	AbFamily       string    `json:"ab_family"`
+	AbScoreMin     float64   `json:"ab_score_min"`
+	AbSourceQ      string    `json:"ab_source_q"`
+	AbEstMin       float64   `json:"ab_est_min"`
+	AbEstMax       float64   `json:"ab_est_max"`
+	AbAttrKey      string    `json:"ab_attr_key"`
+	AbAttrMin      float64   `json:"ab_attr_min"`
 	DealsOnly      bool      `json:"deals_only"`
 	Sort           string    `json:"sort"`
 	RowOffset      int64     `json:"row_offset"`
@@ -1283,6 +1680,14 @@ func (q *Queries) SearchPublicContracts(ctx context.Context, arg SearchPublicCon
 		arg.RunsMin,
 		arg.IssuedAfter,
 		arg.ExpiringBefore,
+		arg.AbyssalActive,
+		arg.AbFamily,
+		arg.AbScoreMin,
+		arg.AbSourceQ,
+		arg.AbEstMin,
+		arg.AbEstMax,
+		arg.AbAttrKey,
+		arg.AbAttrMin,
 		arg.DealsOnly,
 		arg.Sort,
 		arg.RowOffset,
@@ -1378,6 +1783,87 @@ type StampAbyssalSightingsDepartedParams struct {
 // bids on it is a different fact from an exit without.
 func (q *Queries) StampAbyssalSightingsDeparted(ctx context.Context, arg StampAbyssalSightingsDepartedParams) error {
 	_, err := q.db.ExecContext(ctx, stampAbyssalSightingsDeparted, arg.DepartedAt, arg.DepartKind, pq.Array(arg.ContractIds))
+	return err
+}
+
+const touchPublicContractsForItemIDs = `-- name: TouchPublicContractsForItemIDs :exec
+UPDATE pub_contracts SET priced_at = NULL
+WHERE contract_id IN (
+    SELECT contract_id FROM pub_contract_items
+    WHERE item_id = ANY($1::bigint[]))
+`
+
+// A fresh score or estimate makes the contracts holding the
+// item due for repricing on the next appraisal pass.
+func (q *Queries) TouchPublicContractsForItemIDs(ctx context.Context, itemIds []int64) error {
+	_, err := q.db.ExecContext(ctx, touchPublicContractsForItemIDs, pq.Array(itemIds))
+	return err
+}
+
+const updateAbyssalItemEstimate = `-- name: UpdateAbyssalItemEstimate :exec
+UPDATE abyssal_items SET
+    family              = $1::text,
+    score               = $2::double precision,
+    percentiles         = $3::jsonb,
+    derived_stats       = $4::jsonb,
+    est_value           = $5::double precision,
+    est_low             = $6::double precision,
+    est_high            = $7::double precision,
+    est_basis           = $8::text,
+    est_scope           = $9::text,
+    est_comps           = $10::bigint,
+    premium_mult        = $11::double precision,
+    cap_attribute_id    = $12::bigint,
+    cap_kind            = $13::text,
+    recreation_cost     = $14::double precision,
+    recreation_attempts = $15::double precision,
+    primary_abs         = $16::double precision,
+    scored_at           = $17::timestamptz
+WHERE item_id = $18::bigint
+`
+
+type UpdateAbyssalItemEstimateParams struct {
+	Family             string          `json:"family"`
+	Score              sql.NullFloat64 `json:"score"`
+	Percentiles        json.RawMessage `json:"percentiles"`
+	DerivedStats       json.RawMessage `json:"derived_stats"`
+	EstValue           sql.NullFloat64 `json:"est_value"`
+	EstLow             sql.NullFloat64 `json:"est_low"`
+	EstHigh            sql.NullFloat64 `json:"est_high"`
+	EstBasis           string          `json:"est_basis"`
+	EstScope           string          `json:"est_scope"`
+	EstComps           int64           `json:"est_comps"`
+	PremiumMult        float64         `json:"premium_mult"`
+	CapAttributeID     int64           `json:"cap_attribute_id"`
+	CapKind            string          `json:"cap_kind"`
+	RecreationCost     sql.NullFloat64 `json:"recreation_cost"`
+	RecreationAttempts sql.NullFloat64 `json:"recreation_attempts"`
+	PrimaryAbs         sql.NullFloat64 `json:"primary_abs"`
+	ScoredAt           time.Time       `json:"scored_at"`
+	ItemID             int64           `json:"item_id"`
+}
+
+func (q *Queries) UpdateAbyssalItemEstimate(ctx context.Context, arg UpdateAbyssalItemEstimateParams) error {
+	_, err := q.db.ExecContext(ctx, updateAbyssalItemEstimate,
+		arg.Family,
+		arg.Score,
+		arg.Percentiles,
+		arg.DerivedStats,
+		arg.EstValue,
+		arg.EstLow,
+		arg.EstHigh,
+		arg.EstBasis,
+		arg.EstScope,
+		arg.EstComps,
+		arg.PremiumMult,
+		arg.CapAttributeID,
+		arg.CapKind,
+		arg.RecreationCost,
+		arg.RecreationAttempts,
+		arg.PrimaryAbs,
+		arg.ScoredAt,
+		arg.ItemID,
+	)
 	return err
 }
 

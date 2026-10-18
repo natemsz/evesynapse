@@ -310,6 +310,15 @@ var pgPublicContractsSchema string
 //go:embed schema_pg/056_pub_contract_appraisal.sql
 var pgPublicContractAppraisalSchema string
 
+// Step 057: abyssal estimate storage -- the scoring pass's
+// results on abyssal_items (family, score, per-attribute
+// percentiles, the estimate with its spread, basis and cap,
+// and the recreation cross-check), read by the appraisal
+// core and the contract pages.
+//
+//go:embed schema_pg/057_abyssal_estimates.sql
+var pgAbyssalEstimatesSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -395,6 +404,7 @@ func schemaSteps() []schemaStep {
 		{54, "market_stats_fallback", pgMarketStatsFallbackSchema, ""},
 		{55, "public_contracts", pgPublicContractsSchema, ""},
 		{56, "public_contract_appraisal", pgPublicContractAppraisalSchema, ""},
+		{57, "abyssal_estimates", pgAbyssalEstimatesSchema, ""},
 	}
 }
 

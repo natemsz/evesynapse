@@ -18,15 +18,32 @@ type AbyssalFamilyWeight struct {
 }
 
 type AbyssalItem struct {
-	ItemID        int64           `json:"item_id"`
-	TypeID        int64           `json:"type_id"`
-	SourceTypeID  int64           `json:"source_type_id"`
-	MutatorTypeID int64           `json:"mutator_type_id"`
-	CreatedBy     int64           `json:"created_by"`
-	Attributes    json.RawMessage `json:"attributes"`
-	FetchedAt     time.Time       `json:"fetched_at"`
-	FirstSeenAt   time.Time       `json:"first_seen_at"`
-	LastSeenAt    time.Time       `json:"last_seen_at"`
+	ItemID             int64           `json:"item_id"`
+	TypeID             int64           `json:"type_id"`
+	SourceTypeID       int64           `json:"source_type_id"`
+	MutatorTypeID      int64           `json:"mutator_type_id"`
+	CreatedBy          int64           `json:"created_by"`
+	Attributes         json.RawMessage `json:"attributes"`
+	FetchedAt          time.Time       `json:"fetched_at"`
+	FirstSeenAt        time.Time       `json:"first_seen_at"`
+	LastSeenAt         time.Time       `json:"last_seen_at"`
+	Family             string          `json:"family"`
+	Score              sql.NullFloat64 `json:"score"`
+	Percentiles        json.RawMessage `json:"percentiles"`
+	DerivedStats       json.RawMessage `json:"derived_stats"`
+	EstValue           sql.NullFloat64 `json:"est_value"`
+	EstLow             sql.NullFloat64 `json:"est_low"`
+	EstHigh            sql.NullFloat64 `json:"est_high"`
+	EstBasis           string          `json:"est_basis"`
+	EstScope           string          `json:"est_scope"`
+	EstComps           int64           `json:"est_comps"`
+	PremiumMult        float64         `json:"premium_mult"`
+	CapAttributeID     int64           `json:"cap_attribute_id"`
+	CapKind            string          `json:"cap_kind"`
+	RecreationCost     sql.NullFloat64 `json:"recreation_cost"`
+	RecreationAttempts sql.NullFloat64 `json:"recreation_attempts"`
+	PrimaryAbs         sql.NullFloat64 `json:"primary_abs"`
+	ScoredAt           sql.NullTime    `json:"scored_at"`
 }
 
 type AbyssalProbe struct {

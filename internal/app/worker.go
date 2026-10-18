@@ -656,6 +656,13 @@ func (c *cycleState) refreshPublicData(ctx context.Context, characters []db.Char
 		return app.refreshPublicContracts(ctx, contractAllowance)
 	})
 
+	// Abyssal scoring (schema 057): rolls become scores and
+	// stored estimates, so the appraisal pass below can
+	// price mutated lines from them in the same cycle.
+	c.pass("scoring abyssal items", func() (int, bool) {
+		return app.scoreAbyssalItems(ctx), false
+	})
+
 	// Contract appraisal (schema 056): prices the due slice of
 	// stored contract lines from stored pricing inputs alone
 	// (appraisal.go), so the search pages only ever read

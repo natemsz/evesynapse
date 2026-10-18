@@ -22,12 +22,13 @@ package app
 //  5. unpriced -- an honest gap. CCP's guide average is banned
 //     as a price source and is never consulted here.
 //
-// Abyssal (mutaplasmid) lines price through this same order on
-// their mutated type in this build: no market exists for them,
-// so they land unpriced and the contract pages render their
-// rolls with the source module's price as context only -- the
-// abyssal estimate itself is a later step and slots in behind
-// the same line contract.
+// Abyssal (mutaplasmid) lines are the one step ahead of the
+// order: a line carrying a singleton item id with a stored
+// abyssal estimate (schema 057, computed from its rolls by
+// the scoring pass in abyssal.go) prices at that estimate,
+// tier "abyssal". A mutated line without a stored estimate
+// falls through the order on its mutated type -- no market
+// exists for it, so it lands unpriced, an honest gap.
 // ---------------------------------------------------------------------------
 
 import (
@@ -139,13 +140,42 @@ func (app *Application) AppraiseLines(ctx context.Context, lines []module.Apprai
 		fbs[fbRows[i].TypeID] = &fbRows[i]
 	}
 
+	// Stored abyssal estimates for the singleton lines: a
+	// mutated item prices from its rolls, not its type.
+	itemIDs := make([]int64, 0, len(lines))
+	seenItem := make(map[int64]bool, len(lines))
+	for _, ln := range lines {
+		if ln.ItemID > 0 && !seenItem[ln.ItemID] {
+			seenItem[ln.ItemID] = true
+			itemIDs = append(itemIDs, ln.ItemID)
+		}
+	}
+	abyssalByItem := map[int64]*db.AbyssalItem{}
+	if len(itemIDs) > 0 {
+		abRows, err := app.queries.ListAbyssalItemsByIDs(ctx, itemIDs)
+		if err != nil {
+			return out, fmt.Errorf("appraisal: abyssal estimates: %w", err)
+		}
+		for i := range abRows {
+			if abRows[i].EstValue.Valid {
+				abyssalByItem[abRows[i].ItemID] = &abRows[i]
+			}
+		}
+	}
+
 	now := time.Now().UTC()
 	for _, ln := range lines {
 		al := module.AppraisedLine{
 			TypeID: ln.TypeID, Quantity: ln.Quantity, ItemID: ln.ItemID,
 			Included: ln.Included, Tier: module.AppraisalTierUnpriced,
 		}
-		if p := resolveAppraisalPrice(own[ln.TypeID], tvs[ln.TypeID], fbs[ln.TypeID], now); p.ok {
+		if ab, ok := abyssalByItem[ln.ItemID]; ok && ln.ItemID > 0 {
+			al.UnitPrice = ab.EstValue.Float64
+			al.LineValue = al.UnitPrice * float64(ln.Quantity)
+			al.Tier = module.AppraisalTierAbyssal
+			al.AsOf = ab.ScoredAt.Time
+			al.Priced = true
+		} else if p := resolveAppraisalPrice(own[ln.TypeID], tvs[ln.TypeID], fbs[ln.TypeID], now); p.ok {
 			al.UnitPrice, al.LineValue = p.unit, p.unit*float64(ln.Quantity)
 			al.Tier, al.AsOf, al.Priced = p.tier, p.asOf, true
 		}
@@ -179,7 +209,7 @@ func appraisalTierMix(lines []module.AppraisedLine) string {
 		}
 	}
 	var parts []string
-	for _, tier := range []string{module.AppraisalTierTypical, module.AppraisalTierEstimate, module.AppraisalTierFallback} {
+	for _, tier := range []string{module.AppraisalTierTypical, module.AppraisalTierEstimate, module.AppraisalTierAbyssal, module.AppraisalTierFallback} {
 		if n := counts[tier]; n > 0 {
 			parts = append(parts, fmt.Sprintf("%s:%d", tier, n))
 		}

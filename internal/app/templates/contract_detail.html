@@ -57,14 +57,20 @@
       <td>{{.TierLabel}}{{if .TierNote}}<br><small>{{.TierNote}}</small>{{end}}</td>
     </tr>
     {{if .Abyssal}}<tr><td colspan="5">
-      <small>Mutated from {{itemLink .Abyssal.SourceTypeID .Abyssal.SourceName}} with {{.Abyssal.MutatorName}}. Rolls:</small>
+      <small>Mutated from {{itemLink .Abyssal.SourceTypeID .Abyssal.SourceName}} with {{itemLink .Abyssal.MutatorTypeID .Abyssal.MutatorName}}. Rolls:</small>
       <table>
-        <thead><tr><th>Attribute</th><th>Rolled</th><th>Source base</th><th>Against base</th></tr></thead>
+        <thead><tr><th>Attribute</th><th>Rolled</th><th>Source base</th><th>Against base</th><th>Where it sits in its range</th></tr></thead>
         <tbody>
-        {{range .Abyssal.Rolls}}<tr><td>{{.Name}}</td><td>{{.Value}}</td><td>{{if .HasBase}}{{.Base}}{{else}}—{{end}}</td><td>{{if .Delta}}{{.Delta}}{{else}}—{{end}}</td></tr>{{end}}
+        {{range .Abyssal.Rolls}}<tr><td>{{.Name}}</td><td>{{.Value}}</td><td>{{if .HasBase}}{{.Base}}{{else}}—{{end}}</td><td>{{if .Delta}}{{.Delta}}{{else}}—{{end}}</td><td>{{if .HasPct}}<div class="meter"><span data-w="{{.Pct}}"></span></div> {{.Pct}}%{{else}}—{{end}}</td></tr>{{end}}
+        {{range .Abyssal.Derived}}<tr><td>{{.Label}}</td><td>{{.Value}}</td><td>—</td><td>—</td><td><div class="meter"><span data-w="{{.Pct}}"></span></div> {{.Pct}}%</td></tr>{{end}}
         </tbody>
       </table>
-      {{if .Abyssal.ContextPrice}}<small>The unmutated module prices at {{.Abyssal.ContextPrice}} ISK ({{.Abyssal.ContextTier}}) — shown for context; a mutated module's worth turns on its rolls, and this contract's value above does not count it.</small>{{end}}
+      {{if .Abyssal.HasScore}}<small>Roll score: <strong>{{.Abyssal.ScoreText}}</strong>. Each roll is placed in the range its mutaplasmid could have produced, weighted by how much that roll carries this module's value; fitting costs only ever count against it.</small><br>{{end}}
+      {{if .Abyssal.HasEstimate}}<small>Our estimate: <strong>{{.Abyssal.Estimate}} ISK</strong> — likely range {{.Abyssal.EstLow}} to {{.Abyssal.EstHigh}} ISK, {{.Abyssal.BasisLabel}}.{{if .Abyssal.ScoredNote}} {{.Abyssal.ScoredNote}}.{{end}}</small><br>{{end}}
+      {{if .Abyssal.NoEstimate}}<small>{{.Abyssal.NoEstimate}}</small><br>{{end}}
+      {{if .Abyssal.CapNote}}<small>{{.Abyssal.CapNote}}</small><br>{{end}}
+      {{if .Abyssal.Recreation}}<small>{{.Abyssal.Recreation}}</small><br>{{end}}
+      {{if .Abyssal.ContextPrice}}<small>The unmutated module prices at {{.Abyssal.ContextPrice}} ISK ({{.Abyssal.ContextTier}}) — shown for context; the contract's value counts our estimate of the mutated module, not the base module's price.</small>{{end}}
     </td></tr>{{end}}
   {{end}}
   </tbody>

@@ -740,6 +740,12 @@ h3 + .tw > table, h3 + table {
   text-shadow: 0 1px 0 rgba(255, 214, 150, 0.35);
   cursor: pointer;
 }
+/* Compact variant for inline actions beside body text (copy-link buttons). */
+.btn.small {
+  min-height: 0;
+  padding: 0.1rem 0.5rem;
+  font-size: 0.85em;
+}
 .btn:hover,
 :where(button:not([class]), input[type="submit"]:not([class]), input[type="button"]:not([class])):hover:not(:disabled) {
   background: linear-gradient(to bottom, #ff6a1a, #d63c14 60%, #a12808) padding-box,

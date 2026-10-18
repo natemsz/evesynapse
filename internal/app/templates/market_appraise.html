@@ -6,24 +6,28 @@
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
 
 {{with .Appraise}}
-<p><small>Paste a list of items — a fit, a cargo scan, an asset window, a loot haul — and every line is priced from The Forge's swept prices and EveSynapse's own stored estimates. Each price says where it came from and when it was current. Lines that cannot be priced say so; nothing is filled in with a guess. Up to 1,000 lines at a time.</small></p>
-
-<form method="post" action="/market/appraise/">
-  <label><small>Items to appraise</small>
-    <textarea name="items" rows="10" cols="60" placeholder="Tritanium x 1,000,000&#10;Pyerite 250000&#10;[Rifter, My Rifter]&#10;...">{{.Input}}</textarea>
-  </label>
-  <p><button class="btn" type="submit">Appraise</button></p>
-</form>
-<p><small>Plain lists, one item per line, with or without quantities; EFT fits; and copies from the game's asset and cargo windows all work. Blueprint lines can carry their facts in brackets, like <em>Rifter Blueprint (BPC, ME 10, TE 20, 5 runs)</em>. Mutated (abyssal) items cannot be priced from a paste — a paste carries no rolls — so a mutated line prices its base item and says so; the mutated item itself is priced from its rolls in <a href="/contracts/search/">Contract Search</a>.</small></p>
+<section class="box ap-form">
+  <div class="box-head"><h3 class="box-title">Appraise a paste</h3></div>
+  <p class="ap-intro"><small>Paste a list of items — a fit, a cargo scan, an asset window, a loot haul — and every line is priced from The Forge's swept prices and EveSynapse's own stored estimates. Each price says where it came from and when it was current. Lines that cannot be priced say so; nothing is filled in with a guess. Up to 1,000 lines at a time.</small></p>
+  <form method="post" action="/market/appraise/">
+    <div class="ap-field">
+      <label class="ap-label" for="ap-items">Items to appraise</label>
+      <textarea id="ap-items" name="items" rows="10" placeholder="Tritanium x 1,000,000&#10;Pyerite 250000&#10;[Rifter, My Rifter]&#10;...">{{.Input}}</textarea>
+    </div>
+    <p class="ap-actions"><button class="btn" type="submit">Appraise</button></p>
+  </form>
+  <p class="ap-help"><small>Plain lists, one item per line, with or without quantities; EFT fits; and copies from the game's asset and cargo windows all work. Blueprint lines can carry their facts in brackets, like <em>Rifter Blueprint (BPC, ME 10, TE 20, 5 runs)</em>. Mutated (abyssal) items cannot be priced from a paste — a paste carries no rolls — so a mutated line prices its base item and says so; the mutated item itself is priced from its rolls in <a href="/contracts/search/">Contract Search</a>.</small></p>
+</section>
 
 {{with .Result}}
 {{$r := .}}
-{{if $r.Shared}}<p><small>Shared appraisal — priced {{$r.Created}}. Prices are the ones stored when it was run; they are not recomputed here.</small></p>
-{{else if $r.Created}}<p><small>Priced {{$r.Created}}. Share it read-only: <a href="{{$r.ShareURL}}">{{$r.ShareURL}}</a></small></p>
-<form method="post" action="/market/appraise/{{$r.OwnID}}/reprice"><button class="btn" type="submit">Re-price at current prices</button></form>
+<section class="box ap-result">
+{{if $r.Shared}}<p class="ap-meta"><small>Shared appraisal — priced {{$r.Created}}. Prices are the ones stored when it was run; they are not recomputed here.</small></p>
+{{else if $r.Created}}<div class="ap-meta"><small>Priced {{$r.Created}}. Share it read-only:</small> <a href="{{$r.ShareURL}}">{{$r.ShareURL}}</a> <button class="btn small" type="button" data-copy data-copy-text="{{$r.ShareURL}}">Copy link</button>
+<form method="post" action="/market/appraise/{{$r.OwnID}}/reprice"><button class="btn" type="submit">Re-price at current prices</button></form></div>
 {{end}}
 
-<p><strong>Total value: {{$r.TotalValue}} ISK</strong> · Priced {{$r.Priced}} of {{$r.Total}} lines{{if $r.TierMix}} · {{$r.TierMix}}{{end}}{{if $r.BuyValue}}<br><small>Buying those lines at The Forge's typical buy prices comes to {{$r.BuyValue}} ISK (typical buys on {{$r.BuyLines}} of the priced lines).</small>{{end}}</p>
+<p class="ap-coverage">Priced {{$r.Priced}} of {{$r.Total}} lines{{if $r.TierMix}} · {{$r.TierMix}}{{end}}{{if $r.BuyValue}}<br><small>Buying those lines at The Forge's typical buy prices comes to {{$r.BuyValue}} ISK (typical buys on {{$r.BuyLines}} of the priced lines).</small>{{end}}</p>
 
 {{if $r.Lines}}
 <div class="tw">
@@ -44,6 +48,8 @@
 </div>
 {{end}}
 
+<div class="ap-total"><span class="ap-total-label">Total value</span><span class="ap-total-fig">{{$r.TotalValue}} ISK</span></div>
+
 {{if $r.Unresolved}}
 <p><strong>These lines could not be priced:</strong></p>
 <ul>
@@ -61,26 +67,29 @@
 {{end}}
 
 {{range $r.Notes}}<p><small>{{.}}</small></p>{{end}}
+</section>
 {{end}}
 
 {{if .Saved}}
-<h2>Your appraisals</h2>
-<div class="tw">
-<table>
-  <thead><tr><th>Priced at</th><th>Total value</th><th>Coverage</th><th></th><th></th></tr></thead>
-  <tbody>
-  {{range .Saved}}
-    <tr>
-      <td><a href="/market/appraise/?a={{.ID}}">{{.Created}}</a></td>
-      <td>{{.Total}} ISK</td>
-      <td>{{.Priced}} of {{.TotalLn}} lines</td>
-      <td><a href="{{.ShareURL}}">Share</a></td>
-      <td><form method="post" action="/market/appraise/{{.ID}}/reprice"><button class="btn" type="submit">Re-price</button></form></td>
-    </tr>
-  {{end}}
-  </tbody>
-</table>
-</div>
+<section class="box ap-saved">
+  <div class="box-head"><h3 class="box-title">Your appraisals</h3></div>
+  <div class="tw">
+  <table>
+    <thead><tr><th>Priced at</th><th>Total value</th><th>Coverage</th><th></th><th></th></tr></thead>
+    <tbody>
+    {{range .Saved}}
+      <tr>
+        <td><a href="/market/appraise/?a={{.ID}}">{{.Created}}</a></td>
+        <td>{{.Total}} ISK</td>
+        <td>{{.Priced}} of {{.TotalLn}} lines</td>
+        <td><a href="{{.ShareURL}}">Share</a></td>
+        <td><form method="post" action="/market/appraise/{{.ID}}/reprice"><button class="btn" type="submit">Re-price</button></form></td>
+      </tr>
+    {{end}}
+    </tbody>
+  </table>
+  </div>
+</section>
 {{end}}
 
 {{end}}

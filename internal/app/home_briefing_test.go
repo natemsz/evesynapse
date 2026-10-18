@@ -136,6 +136,19 @@ func TestBriefingDigestRules(t *testing.T) {
 		"newest from <a href=\"/pilot/?character=90000111\">Sender One</a>",
 		"<a href=\"/items/type/34/\">Tritanium</a> moved up 8.0% over 7 days",
 		"Since ",
+		// Deep links: every card lands on the character-scoped
+		// page for the thing it warns about — the undercut line
+		// on that character's orders (not the market front page),
+		// skill lines on the sheet's skills section, and the
+		// per-character pages for jobs, planets, contracts,
+		// calendar and mail.
+		"<a href=\"/orders/?character=90000001\">Orders</a>",
+		"<a href=\"/character/?character=90000001#skills\">Skills</a>",
+		"<a href=\"/industry/jobs/?character=90000001\">My Jobs</a>",
+		"<a href=\"/planets/?character=90000001\">Colonies</a>",
+		"<a href=\"/contracts/?character=90000001\">Contracts</a>",
+		"<a href=\"/calendar/?character=90000001\">Calendar</a>",
+		"<a href=\"/mail/?character=90000001\">Mail</a>",
 	)
 	if strings.Contains(section, "Next week") {
 		t.Error("calendar event three days out appears in the briefing")
@@ -508,5 +521,46 @@ func TestBriefingAggregatesAcrossCharacters(t *testing.T) {
 	if len(out) != 1 || !strings.Contains(out[0].html, "15 unread mails") ||
 		!strings.Contains(out[0].html, "and 1 more") || strings.Contains(out[0].html, "Char4") {
 		t.Errorf("five-way mail spread did not fold into one card: %+v", out)
+	}
+}
+
+// Aggregated cards link each character's segment to that
+// character's own destination for the warning — their planets,
+// their unread mail — not to the character sheet.
+func TestBriefingAggregatesDeepLinks(t *testing.T) {
+	mk := func(rule string, count int, name, href string) briefingLine {
+		return briefingLine{html: "detail", Rank: 1, key: rule + name,
+			aggRule: rule, aggCount: count, aggPrefix: "sheet:" + name, aggName: name, aggHref: href}
+	}
+	lines := []briefingLine{
+		mk("pi-stopped", 4, "Alpha", "/planets/?character=11"),
+		mk("pi-stopped", 2, "Bravo", "/planets/?character=22"),
+		mk("pi-stopped", 1, "Charlie", "/planets/?character=33"),
+		mk("mail", 5, "Alpha", "/mail/?character=11"),
+		mk("mail", 6, "Bravo", "/mail/?character=22"),
+		mk("mail", 7, "Charlie", "/mail/?character=33"),
+	}
+	out := aggregateBriefing(lines)
+	if len(out) != 2 {
+		t.Fatalf("aggregated lines = %d, want 2 combined cards: %+v", len(out), out)
+	}
+	joined := ""
+	for _, l := range out {
+		joined += l.html + "\n"
+	}
+	for _, want := range []string{
+		"<a href=\"/planets/?character=11\">Alpha</a> (4)",
+		"<a href=\"/planets/?character=22\">Bravo</a> (2)",
+		"<a href=\"/planets/?character=33\">Charlie</a> (1)",
+		"<a href=\"/mail/?character=11\">Alpha</a> (5)",
+		"<a href=\"/mail/?character=22\">Bravo</a> (6)",
+		"<a href=\"/mail/?character=33\">Charlie</a> (7)",
+	} {
+		if !strings.Contains(joined, want) {
+			t.Errorf("combined cards missing deep segment %q:\n%s", want, joined)
+		}
+	}
+	if strings.Contains(joined, "sheet:") {
+		t.Errorf("combined cards fell back to sheet segments:\n%s", joined)
 	}
 }

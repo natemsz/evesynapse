@@ -26,9 +26,9 @@ var Module = module.Module{
 	EnhanceScopes: []module.Scope{},
 	Activities:    []string{"market"},
 	Nav: []module.NavSection{{
-		Section: "market",
+		Section: "tools",
 		Entries: []module.NavEntry{
-			{Href: "/market/appraise/", Label: "Appraisal", Pages: []string{"market_appraise.html"}, After: "/contracts/search/"},
+			{Href: "/market/appraise/", Label: "Appraisal", Pages: []string{"market_appraise.html"}, After: "/items/"},
 		},
 	}},
 	Routes: func(r chi.Router, deps module.Deps) {
@@ -46,7 +46,7 @@ var Module = module.Module{
 		auth.Post("/market/appraise/{id}/reprice", h((*page).handleAppraiseReprice))
 	},
 	Pages: []module.Page{
-		{Template: "market_appraise.html", Section: "market"},
+		{Template: "market_appraise.html", Section: "tools"},
 	},
 }
 

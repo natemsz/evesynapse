@@ -46,6 +46,8 @@ func TestEmberGlassAndSkyRules(t *testing.T) {
 		// in the widget's header band.
 		"max-width: calc((100% - 1.5rem) / 3);",
 		".fleet-tags { position: absolute;",
+		".brief-tabs { position: absolute;",
+		".fleet-tools { border-bottom: 1px solid var(--glass-edge);",
 	} {
 		if !strings.Contains(style, want) {
 			t.Errorf("style.css is missing the Ember rule %q", want)

@@ -127,6 +127,9 @@
   --r-lg: 0.5rem;
   --r-md: 0.5rem;
   --r-sm: 0.5rem;
+  /* The small-element radius: filter boxes, chips and other
+     minor controls, where the panel radius reads over-round. */
+  --r-xs: 0.35rem;
   color-scheme: dark;
   /* The extra text-tone variables below exist so the light theme can
      re-tone them. */
@@ -148,6 +151,11 @@
      the glass and the light theme's solid overrides still win. */
   --glass: color-mix(in srgb, var(--panel) 78%, transparent);
   --glass-edge: color-mix(in srgb, var(--accent) 24%, transparent);
+  /* The inner-box recipe: inset boxes (.box, .band, inset
+     summaries) paint the flat light tint in --row-alt and
+     edge it with this faint accent hairline, never a dark
+     fill. One token pair restyles every inset box. */
+  --box-edge: color-mix(in srgb, var(--accent) 14%, transparent);
   --glass-blur: 34px;
   --row: rgba(16, 13, 10, 0.55);
   --row-alt: rgba(255, 255, 255, 0.03);
@@ -505,6 +513,55 @@ main {
   -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(0.9);
   backdrop-filter: blur(var(--glass-blur)) saturate(0.9);
   padding: 0.85rem 1rem 1rem;
+}
+/* --- inset components ------------------------------------------
+   The structured-page kit, shared by any page that groups
+   controls into territories: a light inset box, its head row,
+   a segmented control, and a full-width band. Paint comes
+   from the --row-alt / --box-edge recipe and the small
+   radius from --r-xs, so a restyle is a token edit. */
+/* A light inset box: a bordered group sitting on a larger
+   surface (a filter group, a results section, a toggle box). */
+.box {
+  background: var(--row-alt);
+  border: 1px solid var(--box-edge);
+  border-radius: var(--r-xs);
+  padding: 0.7rem 0.85rem;
+}
+/* A box's head row: its title left, its actions right. */
+.box-head {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: 0.75rem; margin-bottom: 0.5rem;
+}
+/* The small-caps label a box or field group carries. */
+.box-title {
+  margin: 0; font-size: 0.78rem; font-weight: 700;
+  letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted);
+}
+/* A segmented control: joined options inside one small box.
+   Items are labels, buttons or links; the current one takes
+   .on (or the consumer's checked state) and the accent fill. */
+.seg {
+  display: inline-flex; align-items: stretch; overflow: hidden;
+  background: var(--row-alt);
+  border: 1px solid var(--box-edge);
+  border-radius: var(--r-xs);
+}
+.seg > * {
+  display: inline-flex; align-items: center; padding: 0.2rem 0.7rem;
+  color: var(--muted); font-family: "Rajdhani", "Segoe UI", sans-serif;
+  font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em;
+  font-size: 0.8rem; white-space: nowrap;
+}
+.seg > * + * { border-left: 1px solid var(--box-edge); }
+.seg > .on { background: var(--accent); color: #16100b; }
+/* A full-width section band: a bordered strip that spans its
+   panel edge to edge (the consumer bleeds it with negative
+   margins), separating one zone of a page from the next
+   without nesting another panel inside the panel. */
+.band {
+  background: var(--row-alt);
+  border-block: 1px solid var(--box-edge);
 }
 /* Darker header bands: a solid ::before behind the heading. Layering
    the ramp over the band on the heading itself hid the text wherever

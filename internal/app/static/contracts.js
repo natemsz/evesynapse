@@ -129,6 +129,21 @@
   });
   renderRegionChips();
 
+  // The region dropdown is a search as well: typing in its
+  // search field narrows the checkbox rows by name.
+  var regionSearch = document.querySelector(".cs-region-search");
+  if (regionSearch) {
+    regionSearch.addEventListener("input", function () {
+      var q = regionSearch.value.trim().toLowerCase();
+      regionBoxes.forEach(function (b) {
+        var row = b.closest(".cs-region-row");
+        if (!row) return;
+        var name = (b.getAttribute("data-region-name") || "").toLowerCase();
+        row.style.display = !q || name.indexOf(q) >= 0 ? "" : "none";
+      });
+    });
+  }
+
   var hubNames = ["The Forge", "Domain", "Sinq Laison", "Heimatar"];
   document.querySelectorAll("[data-region-quick]").forEach(function (btn) {
     btn.addEventListener("click", function () {

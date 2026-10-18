@@ -89,6 +89,13 @@ type briefingLine struct {
 	aggCount  int
 	aggSub    int // secondary tally (planets under a pi-stopped line)
 	aggPrefix string
+	// aggName/aggHref: the character's plain name and the
+	// character-scoped destination for what the rule warns about,
+	// so an aggregated card's per-character segments link to the
+	// thing itself (that character's planets, that character's
+	// unread mail) instead of the character sheet.
+	aggName string
+	aggHref string
 	// count is the card's top-right tally ("5 Pilots",
 	// "3 Pilots / 17 Planets"), set on grouped and collapsed
 	// lines; single-character lines leave it empty.
@@ -397,7 +404,11 @@ func aggregateBriefing(lines []briefingLine) []briefingLine {
 				latest = l.At
 			}
 			if n < 4 {
-				segs = append(segs, fmt.Sprintf("%s (%d)", l.aggPrefix, l.aggCount))
+				seg := l.aggPrefix
+				if l.aggHref != "" {
+					seg = fmt.Sprintf("<a href=\"%s\">%s</a>", l.aggHref, template.HTMLEscapeString(l.aggName))
+				}
+				segs = append(segs, fmt.Sprintf("%s (%d)", seg, l.aggCount))
 			}
 		}
 		if len(idxs) > 4 {
@@ -457,6 +468,7 @@ type briefingBuilder struct {
 // idleLine is one character with nothing training.
 type idleLine struct {
 	id     int64
+	name   string
 	prefix string
 	at     time.Time
 }
@@ -471,7 +483,7 @@ func (bb *briefingBuilder) flushIdle() {
 		names := make([]string, 0, len(bb.idle))
 		latest := time.Time{}
 		for _, l := range bb.idle {
-			names = append(names, l.prefix)
+			names = append(names, fmt.Sprintf("<a href=\"/character/?character=%d#skills\">%s</a>", l.id, template.HTMLEscapeString(l.name)))
 			if l.at.After(latest) {
 				latest = l.at
 			}
@@ -483,7 +495,7 @@ func (bb *briefingBuilder) flushIdle() {
 	}
 	for _, l := range bb.idle {
 		bb.add(briefingKey(l.id, "not-training"), briefingNotTraining, l.at,
-			template.HTML(fmt.Sprintf("%s isn't training — the skill queue is empty. <a href=\"/character/?character=%d\">Skills</a>", l.prefix, l.id)))
+			template.HTML(fmt.Sprintf("%s isn't training — the skill queue is empty. <a href=\"/character/?character=%d#skills\">Skills</a>", l.prefix, l.id)))
 	}
 }
 
@@ -503,14 +515,16 @@ func (bb *briefingBuilder) addCounted(key string, rank int, at time.Time, html t
 
 // addAgg is add for a count-bearing rule: it also records the rule,
 // the count and the character link so the line can take part in
-// cross-character aggregation (see aggregateBriefing).
-func (bb *briefingBuilder) addAgg(key string, rank int, at time.Time, html template.HTML, rule string, count, sub int, prefix string) {
+// cross-character aggregation (see aggregateBriefing). name and
+// href are the character's plain name and the character-scoped
+// destination for the warning, for the aggregated segments.
+func (bb *briefingBuilder) addAgg(key string, rank int, at time.Time, html template.HTML, rule string, count, sub int, prefix, name, href string) {
 	if bb.seen[key] {
 		return
 	}
 	bb.seen[key] = true
 	bb.lines = append(bb.lines, briefingLine{html: string(html), Rank: rank, At: at, key: key,
-		aggRule: rule, aggCount: count, aggSub: sub, aggPrefix: prefix})
+		aggRule: rule, aggCount: count, aggSub: sub, aggPrefix: prefix, aggName: name, aggHref: href})
 }
 
 // linkLines: the standing lines about the link itself (a character
@@ -539,14 +553,14 @@ func (bb *briefingBuilder) skillLines(ctx context.Context, b *charSnaps, prefix 
 		training, finishedAt := queueState(b.queue, now)
 		switch {
 		case !training:
-			bb.idle = append(bb.idle, idleLine{id: b.ch.CharacterID, prefix: prefix, at: finishedAt})
+			bb.idle = append(bb.idle, idleLine{id: b.ch.CharacterID, name: b.ch.Name, prefix: prefix, at: finishedAt})
 		default:
 			if head := queueHead(b.queue, now); head != nil {
 				if finish, ok := parseRFC3339(lastQueueFinish(b.queue)); ok && finish.After(now) && finish.Before(now.Add(briefingAhead)) {
 					skillID := head.SkillID
 					skillName := app.typeNameOrID(ctx, skillID)
 					bb.add(briefingKey(b.ch.CharacterID, "queue-ending"), briefingSkillEnding, finish,
-						template.HTML(fmt.Sprintf("%s finishes %s %s in %s — queue runs dry after that. <a href=\"/character/?character=%d\">Skills</a>",
+						template.HTML(fmt.Sprintf("%s finishes %s %s in %s — queue runs dry after that. <a href=\"/character/?character=%d#skills\">Skills</a>",
 							prefix, string(itemLink(skillID, skillName)), esi.RomanLevel(head.FinishedLevel),
 							humanDuration(time.Until(finish)), b.ch.CharacterID)))
 				}
@@ -593,7 +607,8 @@ func (bb *briefingBuilder) industryLines(ctx context.Context, b *charSnaps, pref
 				line += template.HTML(fmt.Sprintf(" — first up: %s", string(readyItem)))
 			}
 			line += template.HTML(fmt.Sprintf(". <a href=\"/industry/jobs/?character=%d\">My Jobs</a>", b.ch.CharacterID))
-			bb.addAgg(briefingKey(b.ch.CharacterID, "job-ready"), briefingJobReady, readyAt, line, "job-ready", readyN, 0, prefix)
+			bb.addAgg(briefingKey(b.ch.CharacterID, "job-ready"), briefingJobReady, readyAt, line, "job-ready", readyN, 0, prefix,
+				b.ch.Name, fmt.Sprintf("/industry/jobs/?character=%d", b.ch.CharacterID))
 		}
 
 		if b.skillsKnown && len(b.jobs) > 0 {
@@ -640,7 +655,8 @@ func (bb *briefingBuilder) orderLines(ctx context.Context, b *charSnaps, prefix 
 				line += template.HTML(fmt.Sprintf(" — most recently %s", string(expiredItem)))
 			}
 			line += template.HTML(fmt.Sprintf(". <a href=\"/orders/?character=%d\">Orders</a>", b.ch.CharacterID))
-			bb.addAgg(briefingKey(b.ch.CharacterID, "order-expired"), briefingOrderExpired, expiredAt, line, "order-expired", expiredN, 0, prefix)
+			bb.addAgg(briefingKey(b.ch.CharacterID, "order-expired"), briefingOrderExpired, expiredAt, line, "order-expired", expiredN, 0, prefix,
+				b.ch.Name, fmt.Sprintf("/orders/?character=%d", b.ch.CharacterID))
 		}
 	}
 	if b.ordersKnown {
@@ -664,7 +680,8 @@ func (bb *briefingBuilder) orderLines(ctx context.Context, b *charSnaps, prefix 
 				line += template.HTML(fmt.Sprintf(" — soonest: %s in %s", string(expiringItem), humanDuration(time.Until(expiringAt))))
 			}
 			line += template.HTML(fmt.Sprintf(". <a href=\"/orders/?character=%d\">Orders</a>", b.ch.CharacterID))
-			bb.addAgg(briefingKey(b.ch.CharacterID, "order-expiring"), briefingOrderExpiring, expiringAt, line, "order-expiring", expiringN, 0, prefix)
+			bb.addAgg(briefingKey(b.ch.CharacterID, "order-expiring"), briefingOrderExpiring, expiringAt, line, "order-expiring", expiringN, 0, prefix,
+				b.ch.Name, fmt.Sprintf("/orders/?character=%d", b.ch.CharacterID))
 		}
 	}
 }
@@ -708,7 +725,8 @@ func (bb *briefingBuilder) planetLines(ctx context.Context, b *charSnaps, prefix
 			bb.addAgg(briefingKey(b.ch.CharacterID, "pi-stopped"), briefingStoppedExtractor, time.Time{},
 				template.HTML(fmt.Sprintf("%s — %d extractor%s have stopped across %d planet%s. <a href=\"/planets/?character=%d\">Colonies</a>",
 					prefix, stoppedN, pluralSuffix(stoppedN), stoppedPlanets, pluralSuffix(stoppedPlanets), b.ch.CharacterID)),
-				"pi-stopped", stoppedN, stoppedPlanets, prefix)
+				"pi-stopped", stoppedN, stoppedPlanets, prefix,
+				b.ch.Name, fmt.Sprintf("/planets/?character=%d", b.ch.CharacterID))
 		}
 		if dryN > 0 {
 			bb.add(briefingKey(b.ch.CharacterID, "pi-dry"), briefingExtractorDry, dryAt,
@@ -754,7 +772,8 @@ func (bb *briefingBuilder) contractLines(b *charSnaps, prefix string) {
 			bb.addAgg(briefingKey(b.ch.CharacterID, "contract-waiting"), briefingContract, waitingAt,
 				template.HTML(fmt.Sprintf("%s — %d contract%s waiting for your answer. <a href=\"/contracts/?character=%d\">Contracts</a>",
 					prefix, waitingN, pluralSuffix(waitingN), b.ch.CharacterID)),
-				"contract-waiting", waitingN, 0, prefix)
+				"contract-waiting", waitingN, 0, prefix,
+				b.ch.Name, fmt.Sprintf("/contracts/?character=%d", b.ch.CharacterID))
 		}
 	}
 }
@@ -798,7 +817,8 @@ func (bb *briefingBuilder) mailLines(b *charSnaps, prefix string) {
 				}
 			}
 		}
-		bb.addAgg(briefingKey(b.ch.CharacterID, "mail"), briefingMail, time.Time{}, line, "mail", int(b.mailLabels.TotalUnreadCount), 0, prefix)
+		bb.addAgg(briefingKey(b.ch.CharacterID, "mail"), briefingMail, time.Time{}, line, "mail", int(b.mailLabels.TotalUnreadCount), 0, prefix,
+			b.ch.Name, fmt.Sprintf("/mail/?character=%d", b.ch.CharacterID))
 	}
 }
 
@@ -839,10 +859,10 @@ func (app *Application) briefingMarketLines(ctx context.Context, bundles []*char
 		for _, id := range charIDs {
 			ex := example[id]
 			n := perChar[id]
-			line := template.HTML(fmt.Sprintf("%s has %d sell order%s undercut right now — %s is no longer the best price. <a href=\"/market/\">Market</a>",
+			line := template.HTML(fmt.Sprintf("%s has %d sell order%s undercut right now — %s is no longer the best price. <a href=\"/orders/?character=%d\">Orders</a>",
 				string(charLink(viewer, id, names[id])),
 				n, pluralSuffix(n),
-				string(itemLink(ex.TypeID, app.typeNameOrID(ctx, ex.TypeID)))))
+				string(itemLink(ex.TypeID, app.typeNameOrID(ctx, ex.TypeID))), id))
 			lines = append(lines, briefingLine{html: string(line), Rank: briefingUndercut, At: ex.ComputedAt})
 		}
 	}

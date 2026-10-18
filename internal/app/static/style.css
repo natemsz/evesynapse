@@ -563,6 +563,43 @@ main {
   background: var(--row-alt);
   border-block: 1px solid var(--box-edge);
 }
+/* --- appraisal page ----------------------------------------------
+   The paste form and its result sit in .box sections on the page
+   glass; the result's total closes the lines table at its foot,
+   right-aligned under a hairline, the way a receipt totals. */
+.ap-form, .ap-result, .ap-saved { margin-bottom: 1rem; }
+.ap-intro { margin: 0 0 0.7rem; }
+.ap-field { display: flex; flex-direction: column; gap: 0.3rem; }
+.ap-label {
+  font-size: 0.78rem; font-weight: 700; letter-spacing: 0.06em;
+  text-transform: uppercase; color: var(--muted);
+}
+.ap-field textarea {
+  width: 100%; resize: vertical;
+  font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 0.85rem;
+}
+.ap-actions { margin: 0.7rem 0 0; }
+.ap-help { margin: 0.7rem 0 0; }
+.ap-meta {
+  display: flex; flex-wrap: wrap; align-items: center;
+  gap: 0.4rem 0.7rem; margin-bottom: 0.7rem;
+}
+.ap-meta form { margin-left: auto; }
+.ap-meta form button { white-space: nowrap; }
+.ap-coverage { margin: 0 0 0.7rem; }
+.ap-total {
+  display: flex; align-items: baseline; justify-content: flex-end;
+  gap: 1rem; border-top: 1px solid var(--box-edge);
+  margin-top: 0.7rem; padding-top: 0.6rem;
+}
+.ap-total-label {
+  font-size: 0.78rem; font-weight: 700; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--muted);
+}
+.ap-total-fig {
+  font-size: 1.5rem; font-weight: 600; color: var(--text-bright);
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
 /* Darker header bands: a solid ::before behind the heading. Layering
    the ramp over the band on the heading itself hid the text wherever
    the per-layer background clip did not hold. */
@@ -702,6 +739,12 @@ h3 + .tw > table, h3 + table {
   border-radius: var(--r-sm);
   text-shadow: 0 1px 0 rgba(255, 214, 150, 0.35);
   cursor: pointer;
+}
+/* Compact variant for inline actions beside body text (copy-link buttons). */
+.btn.small {
+  min-height: 0;
+  padding: 0.1rem 0.5rem;
+  font-size: 0.85em;
 }
 .btn:hover,
 :where(button:not([class]), input[type="submit"]:not([class]), input[type="button"]:not([class])):hover:not(:disabled) {

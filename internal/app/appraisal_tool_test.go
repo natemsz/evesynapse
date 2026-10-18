@@ -115,6 +115,27 @@ Unknown Item XYZ x 3`}})
 	if n := strings.Count(body, ">Tritanium</a>"); n != 1 {
 		t.Errorf("Tritanium rows = %d, want 1 aggregated row", n)
 	}
+	// The total is a receipt-style block at the foot of the
+	// result: after the lines table, never on the coverage line.
+	totalAt := strings.Index(body, `<div class="ap-total">`)
+	tableAt := strings.Index(body, "</table>")
+	coverageAt := strings.Index(body, "Priced 4 of 6 lines")
+	if totalAt < 0 || tableAt < 0 || totalAt < tableAt {
+		t.Errorf("grand total block missing or not below the lines table (total=%d table=%d)", totalAt, tableAt)
+	}
+	if coverageAt < 0 || coverageAt > totalAt {
+		t.Errorf("coverage line should precede the total block (coverage=%d total=%d)", coverageAt, totalAt)
+	}
+	mustContain(t, "anonymous appraisal total", body,
+		`<span class="ap-total-label">Total value</span><span class="ap-total-fig">163,075.00 ISK</span>`)
+	if strings.Contains(body, "<strong>Total value:") {
+		t.Error("total still rendered on the header line")
+	}
+	// The form rides the shared box kit with its label above the
+	// textarea.
+	mustContain(t, "anonymous appraisal form", body,
+		`<section class="box ap-form">`, `<label class="ap-label" for="ap-items">Items to appraise</label>`,
+		`<section class="box ap-result">`)
 	if tr.calls.Load() != 0 {
 		t.Errorf("the appraisal page reached the network %d times; stored reads only", tr.calls.Load())
 	}
@@ -296,7 +317,8 @@ func TestAppraisalToolSavedShareAndReprice(t *testing.T) {
 	if code != 200 {
 		t.Fatalf("shared appraisal: status %d, want 200", code)
 	}
-	mustContain(t, "shared appraisal", body, "Shared appraisal", "65.00")
+	mustContain(t, "shared appraisal", body, "Shared appraisal", "65.00",
+		`<span class="ap-total-label">Total value</span><span class="ap-total-fig">65.00 ISK</span>`)
 
 	// Another signed-in user cannot open it by id.
 	other, err := q.CreateUser(ctx)
@@ -350,6 +372,16 @@ func TestAppraisalToolPageAndBadShare(t *testing.T) {
 		t.Fatalf("appraisal page: status %d, want 200", code)
 	}
 	mustContain(t, "appraisal page", body, "Appraisal", "Items to appraise", "Contract Search")
+	// Appraisal lives under Tools now: its tab strip is the
+	// Tools strip (Item Browser + Appraisal, itself active), and
+	// the Market strip no longer carries it.
+	tabs := sectionTabsBlock(t, body)
+	mustContain(t, "appraisal tools tabs", tabs,
+		`<a href="/market/appraise/" class="active" aria-current="page">Appraisal</a>`,
+		`<a href="/items/">Item Browser</a>`)
+	if strings.Contains(tabs, "Contract Search") {
+		t.Error("appraisal page still carries the Market tab strip")
+	}
 
 	code, body = getAnon(t, app, "/market/appraise/s/deadbeef/")
 	if code != 404 {

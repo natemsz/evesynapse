@@ -79,6 +79,17 @@ func (q *Queries) DeleteDiscordChannelAccessForChannel(ctx context.Context, arg 
 	return err
 }
 
+const deleteDiscordChannelAccessForGuild = `-- name: DeleteDiscordChannelAccessForGuild :exec
+DELETE FROM discord_channel_access WHERE guild_id = $1
+`
+
+// A server claimed for a different owner loses the channel access
+// the previous owner set.
+func (q *Queries) DeleteDiscordChannelAccessForGuild(ctx context.Context, guildID string) error {
+	_, err := q.db.ExecContext(ctx, deleteDiscordChannelAccessForGuild, guildID)
+	return err
+}
+
 const deleteDiscordNonMemberGrants = `-- name: DeleteDiscordNonMemberGrants :exec
 DELETE FROM discord_role_grants WHERE discord_id = $1 AND NOT is_member AND roles = ''
 `

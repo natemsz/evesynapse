@@ -104,11 +104,13 @@
   <h3>{{.Title}}</h3>
   <div class="card-body">
   {{with .Fleet}}
-  <p class="fleet-tools">
-    <input id="fleet-filter" type="search" placeholder="Filter by name, tag, corporation or system…" size="36">
+  {{if or .Tags .Idle}}<p class="fleet-tags"><span class="fleet-tags-label">Tags:</span>
     <button type="button" class="chip on" data-tag="" aria-pressed="true">All</button>
     {{range .Tags}}<button type="button" class="chip" data-tag="{{.}}" aria-pressed="false">{{.}}</button>{{end}}
     {{if .Idle}}<button type="button" class="chip sev-critical" data-tag="" data-idle-chip aria-pressed="false">Not training ({{.Idle}})</button>{{end}}
+  </p>{{end}}
+  <p class="fleet-tools">
+    <input id="fleet-filter" type="search" placeholder="Filter by name, tag, corporation or system…" size="36">
   </p>
   <div class="tw">
   <table class="fleet-table">

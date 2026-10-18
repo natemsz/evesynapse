@@ -31,7 +31,7 @@ func TestEmberGlassAndSkyRules(t *testing.T) {
 		"transform: translateY(-2px)",
 		"color-mix(in srgb, var(--sev-glow, var(--accent)) 55%, transparent)",
 		"animation: sev-pulse 3.2s ease-in-out infinite;",
-		"--panel: #130e0a;",
+		"--panel: #1a120b;",
 		"--r-lg: 0.5rem;",
 		"--r-md: 0.5rem;",
 		"--r-sm: 0.5rem;",
@@ -41,6 +41,11 @@ func TestEmberGlassAndSkyRules(t *testing.T) {
 		".chip:hover",
 		"tbody td:first-child, tbody th:first-child {\n  background: transparent;",
 		".kpi-spark-line { fill: none; stroke: var(--accent);",
+		// Briefing cards fill their row and cap at a third of
+		// the widget's content width; the fleet tag filters ride
+		// in the widget's header band.
+		"max-width: calc((100% - 1.5rem) / 3);",
+		".fleet-tags { position: absolute;",
 	} {
 		if !strings.Contains(style, want) {
 			t.Errorf("style.css is missing the Ember rule %q", want)
@@ -280,32 +285,51 @@ func TestWallpaperFirstPaintUnderlay(t *testing.T) {
 		t.Fatalf("read bg.css: %v", err)
 	}
 	bg := string(raw)
-	// Six tier declarations (plain + image-set for base/4K/UHD),
-	// each with the thumb as its last layer.
-	if n := strings.Count(bg, `url("/static/bg-thumb.jpg")`); n != 6 {
-		t.Errorf("bg.css carries the first-paint underlay on %d tier declarations, want 6", n)
+	// The interior wears the calm sky: six tier declarations
+	// (plain + image-set for base/4K/UHD), each with the calm
+	// thumb as its last layer.
+	if n := strings.Count(bg, `url("/static/bg-calm-thumb.jpg")`); n != 6 {
+		t.Errorf("bg.css carries the calm first-paint underlay on %d tier declarations, want 6", n)
+	}
+	for _, want := range []string{
+		`background-image: url("/static/bg-calm.jpg"), url("/static/bg-calm-thumb.jpg");`,
+		`background-image: url("/static/bg-calm-4k.jpg"), url("/static/bg-calm-thumb.jpg");`,
+		`background-image: url("/static/bg-calm-uhd.jpg"), url("/static/bg-calm-thumb.jpg");`,
+	} {
+		if !strings.Contains(bg, want) {
+			t.Errorf("bg.css is missing the calm underlay declaration %q", want)
+		}
+	}
+	// The landing keeps the dramatic art: landing.css (linked
+	// only by the landing template, after bg.css) restores the
+	// original tiers with their thumb underlay.
+	landingRaw, err := fs.ReadFile(staticFS, "static/landing.css")
+	if err != nil {
+		t.Fatalf("read landing.css: %v", err)
 	}
 	for _, want := range []string{
 		`background-image: url("/static/bg.jpg"), url("/static/bg-thumb.jpg");`,
 		`background-image: url("/static/bg-4k.jpg"), url("/static/bg-thumb.jpg");`,
 		`background-image: url("/static/bg-uhd.jpg"), url("/static/bg-thumb.jpg");`,
 	} {
-		if !strings.Contains(bg, want) {
-			t.Errorf("bg.css is missing the underlay declaration %q", want)
+		if !strings.Contains(string(landingRaw), want) {
+			t.Errorf("landing.css is missing the dramatic underlay declaration %q", want)
 		}
 	}
-	// The decoded thumbnail must be in the embedded assets (the
-	// Makefile decodes it from ci-assets like every other tier).
-	if _, err := fs.Stat(staticFS, "static/bg-thumb.jpg"); err != nil {
-		t.Errorf("static/bg-thumb.jpg is not embedded: %v", err)
+	// The decoded thumbnails must be in the embedded assets (the
+	// Makefile decodes them from ci-assets like every other tier).
+	for _, name := range []string{"static/bg-thumb.jpg", "static/bg-calm-thumb.jpg", "static/bg-calm-uhd.jxl"} {
+		if _, err := fs.Stat(staticFS, name); err != nil {
+			t.Errorf("%s is not embedded: %v", name, err)
+		}
 	}
 	base, err := fs.ReadFile(templatesFS, "templates/base.html")
 	if err != nil {
 		t.Fatalf("read base.html: %v", err)
 	}
 	for _, want := range []string{
-		`<link rel="preload" as="image" type="image/jxl" fetchpriority="high" href="/static/bg-uhd.jxl"`,
-		`<link rel="preload" as="image" type="image/jxl" fetchpriority="high" href="/static/bg-4k.jxl"`,
+		`<link rel="preload" as="image" type="image/jxl" fetchpriority="high" href="/static/bg-calm-uhd.jxl"`,
+		`<link rel="preload" as="image" type="image/jxl" fetchpriority="high" href="/static/bg-calm-4k.jxl"`,
 	} {
 		if !strings.Contains(string(base), want) {
 			t.Errorf("base.html is missing the wallpaper preload %q", want)

@@ -379,7 +379,7 @@
     if (!fleetFilter || !fleetRows.length) return;
     var noMatch = root.querySelector(".fleet-nomatch");
     var shownEl = root.querySelector("[data-fleet-shown]");
-    var chips = root.querySelectorAll(".fleet-tools .chip");
+    var chips = root.querySelectorAll(".fleet-tags .chip");
     var activeTag = "";
     var idleOnly = false;
     var detailOf = function (row) {
@@ -431,7 +431,7 @@
     // filters the fleet to the idle pilots and brings the module into
     // view instead.
     var idleLink = root.querySelector("[data-fleet-idle]");
-    var idleChip = root.querySelector(".fleet-tools [data-idle-chip]");
+    var idleChip = root.querySelector(".fleet-tags [data-idle-chip]");
     var fleetCard = fleetFilter.closest(".card");
     if (idleLink && idleChip && fleetCard) {
       idleLink.addEventListener("click", function (ev) {

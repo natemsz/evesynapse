@@ -753,14 +753,37 @@ func (app *Application) storeRegionSweep(ctx context.Context, regionID int64) (t
 	if err := qtx.DeleteMarketStationLeaderboardByRegion(ctx, regionID); err != nil {
 		return 0, 0, err
 	}
-	for _, loc := range leaderKeys {
-		acc := leaderAcc[loc]
-		if err := qtx.UpsertMarketStationLeaderboard(ctx, db.UpsertMarketStationLeaderboardParams{
-			RegionID: regionID, LocationID: loc,
-			SellOrders: acc.sellOrders, BuyOrders: acc.buyOrders,
-			SellValue: acc.sellValue, BuyValue: acc.buyValue,
-			UpdatedAt: now,
-		}); err != nil {
+	for start := 0; start < len(leaderKeys); start += sweepBatchSize {
+		end := start + sweepBatchSize
+		if end > len(leaderKeys) {
+			end = len(leaderKeys)
+		}
+		chunk := leaderKeys[start:end]
+		n := len(chunk)
+		locIDs := make([]int64, n)
+		sellOrds := make([]int64, n)
+		buyOrds := make([]int64, n)
+		sellVals := make([]float64, n)
+		buyVals := make([]float64, n)
+		for i, loc := range chunk {
+			acc := leaderAcc[loc]
+			locIDs[i] = loc
+			sellOrds[i] = acc.sellOrders
+			buyOrds[i] = acc.buyOrders
+			sellVals[i] = acc.sellValue
+			buyVals[i] = acc.buyValue
+		}
+		if _, err := tx.ExecContext(ctx, `
+			INSERT INTO market_station_leaderboard (region_id, location_id, sell_orders, buy_orders, sell_value, buy_value, updated_at)
+			SELECT $1, unnest($2::bigint[]), unnest($3::bigint[]), unnest($4::bigint[]), unnest($5::float8[]), unnest($6::float8[]), $7
+			ON CONFLICT (region_id, location_id) DO UPDATE SET
+				sell_orders = excluded.sell_orders,
+				buy_orders  = excluded.buy_orders,
+				sell_value  = excluded.sell_value,
+				buy_value   = excluded.buy_value,
+				updated_at  = excluded.updated_at
+		`, regionID, pq.Array(locIDs), pq.Array(sellOrds), pq.Array(buyOrds),
+			pq.Array(sellVals), pq.Array(buyVals), now); err != nil {
 			return 0, 0, err
 		}
 	}

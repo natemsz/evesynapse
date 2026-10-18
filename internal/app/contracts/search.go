@@ -1196,10 +1196,7 @@ func (app *mod) rowAbyssalFor(ctx context.Context, ab db.AbyssalItem, data *page
 		if !ok {
 			continue
 		}
-		name := data.attrNames[w.AttributeID]
-		if name == "" {
-			name = fmt.Sprintf("Attribute #%d", w.AttributeID)
-		}
+		name := attrDisplayName(w.AttributeID, data.attrNames[w.AttributeID])
 		out.Bars = append(out.Bars, rowAbyssalBar{Name: name, Pct: int(p*100 + 0.5)})
 	}
 	if ab.EstValue.Valid {
@@ -1264,7 +1261,7 @@ func abyssalBasisShort(ab db.AbyssalItem) string {
 }
 
 // capAttrDisplayName: fitting costs get their plain-words
-// names; everything else keeps the SDE's.
+// names; everything else gets its display name.
 func capAttrDisplayName(attrID int64, sdeName string) string {
 	switch attrID {
 	case 50:
@@ -1272,10 +1269,40 @@ func capAttrDisplayName(attrID int64, sdeName string) string {
 	case 30:
 		return "Powergrid fitting cost"
 	}
-	if sdeName != "" {
-		return sdeName
+	return attrDisplayName(attrID, sdeName)
+}
+
+// attrDisplayName words an SDE dogma attribute name for
+// display: camelCase becomes spaced, capitalized words
+// ("damageMultiplier" -> "Damage Multiplier",
+// "capacitorNeed" -> "Capacitor Need"); known abbreviations
+// keep their capitals ("cpu" -> "CPU"). Display only -- the
+// stored name, and everything keyed on it, is untouched.
+func attrDisplayName(attrID int64, sdeName string) string {
+	if sdeName == "" {
+		return fmt.Sprintf("Attribute #%d", attrID)
 	}
-	return fmt.Sprintf("Attribute #%d", attrID)
+	if sdeName == "cpu" {
+		return "CPU"
+	}
+	var b strings.Builder
+	for i, r := range sdeName {
+		if i > 0 && r >= 'A' && r <= 'Z' {
+			b.WriteByte(' ')
+		}
+		b.WriteRune(r)
+	}
+	words := strings.Split(b.String(), " ")
+	for i, w := range words {
+		switch w {
+		case "Em":
+			words[i] = "EM"
+		case "Hp":
+			words[i] = "HP"
+		}
+	}
+	out := strings.Join(words, " ")
+	return strings.ToUpper(out[:1]) + out[1:]
 }
 
 // --- detail page -----------------------------------------------------------
@@ -1798,11 +1825,11 @@ func (app *mod) abyssalPanel(ctx context.Context, ab db.AbyssalItem) *abyssalPan
 	pcts := parseAbyssalPercentiles(ab.Percentiles)
 	for _, rl := range rolls {
 		row := abyssalRoll{Value: formatAttrValue(rl.Value)}
-		if at, ok := names[rl.AttributeID]; ok && at.Name != "" {
-			row.Name = at.Name
-		} else {
-			row.Name = fmt.Sprintf("Attribute #%d", rl.AttributeID)
+		sdeName := ""
+		if at, ok := names[rl.AttributeID]; ok {
+			sdeName = at.Name
 		}
+		row.Name = attrDisplayName(rl.AttributeID, sdeName)
 		if p, ok := pcts[rl.AttributeID]; ok {
 			row.Pct = int(p*100 + 0.5)
 			row.HasPct = true

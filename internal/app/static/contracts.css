@@ -1,20 +1,29 @@
 /* Public contract search + detail: the redesign's own
-   vocabulary (filter cards, drawer slot, result rows, the
+   vocabulary (filter groups, drawer slot, result rows, the
    expansion panel), built from the house tokens in
-   style.css. Loaded only on the contract pages. */
+   style.css. Loaded only on the contract pages. Content
+   lays open on the page glass like the rest of the site:
+   no card enclosures, no nested panels — hairlines and
+   space separate sections, and inset strips use the flat
+   3% tint style.css flattens inner panels to. */
 
 .cs-form input[type="checkbox"],
 .cs-form input[type="range"] { accent-color: var(--accent); }
 
 /* ---- quick hunts ---- */
+/* The hunt links are the shared .chip in everything but
+   name: same chip paint, same Rajdhani capitals the site
+   gives its controls. */
 .cs-hunts { display: flex; flex-wrap: wrap; align-items: center; gap: 0.45rem; margin: 0.6rem 0 1rem; }
 .cs-hunts-label { color: var(--gold); font-weight: 600; }
 .cs-hunt {
   border: 1px solid var(--glass-edge); border-radius: 999px;
-  padding: 0.18rem 0.7rem; color: var(--text); text-decoration: none;
-  background: var(--glass);
+  padding: 0.15rem 0.7rem; color: var(--text); text-decoration: none;
+  background: rgba(23, 17, 13, 0.55);
+  font-family: "Rajdhani", "Segoe UI", sans-serif; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.07em; font-size: 0.8rem;
 }
-.cs-hunt:hover { border-color: var(--accent); color: var(--accent); }
+.cs-hunt:hover { border-color: var(--accent); color: var(--text-bright); }
 
 /* ---- tier 1: search row ---- */
 .cs-tier1 { display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: stretch; margin-bottom: 0.7rem; }
@@ -29,16 +38,22 @@
 .cs-pill {
   position: relative; display: inline-flex; align-items: center;
   border: 1px solid var(--glass-edge); border-radius: 999px;
-  padding: 0.2rem 0.8rem; cursor: pointer; background: var(--glass);
+  padding: 0.2rem 0.65rem; cursor: pointer; background: var(--input-bg);
   color: var(--muted); font-weight: 600;
+  font-family: "Rajdhani", "Segoe UI", sans-serif;
+  text-transform: uppercase; letter-spacing: 0.06em; font-size: 0.8rem;
 }
 .cs-pill input { position: absolute; opacity: 0; pointer-events: none; }
-.cs-pill:has(> input:checked) { color: var(--accent); border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
+/* Checked reads like the site's .chip-list toggles: accent
+   edge, bright text, no fill tint. */
+.cs-pill:has(> input:checked) { color: var(--text-bright); border-color: var(--accent); }
 .cs-pill:has(> input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 1px; }
 .cs-deals {
   display: inline-flex; align-items: center; gap: 0.5rem; cursor: pointer;
   border: 1px solid var(--glass-edge); border-radius: 0.5rem;
-  padding: 0.2rem 0.7rem; background: var(--glass); font-weight: 700; letter-spacing: 0.04em;
+  padding: 0.2rem 0.7rem; background: var(--glass); font-weight: 600;
+  font-family: "Rajdhani", "Segoe UI", sans-serif;
+  text-transform: uppercase; letter-spacing: 0.06em; font-size: 0.8rem;
 }
 .cs-deals input { position: absolute; opacity: 0; pointer-events: none; }
 .cs-switch {
@@ -55,16 +70,14 @@
 .cs-deals input:checked + .cs-switch::after { left: 1.01rem; }
 .cs-deals:has(> input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 1px; }
 
-/* ---- tier 2: filter cards ---- */
-.cs-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); gap: 0.6rem; }
-.cs-card {
-  background: var(--glass); border: 1px solid var(--glass-edge);
-  border-radius: 0.5rem; padding: 0.6rem 0.75rem 0.75rem; min-width: 0;
-}
+/* ---- tier 2: filter groups, open on the glass ---- */
+.cs-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); gap: 0.9rem 1.5rem; }
+.cs-card { min-width: 0; }
 .cs-card-wide { grid-column: span 2; }
 .cs-card h3 {
   margin: 0 0 0.45rem; font-size: 0.78rem; letter-spacing: 0.08em;
   text-transform: uppercase; color: var(--muted); font-weight: 700;
+  border-bottom: 1px solid rgba(255, 110, 0, 0.15); padding-bottom: 0.3rem;
 }
 .cs-card input[type="text"], .cs-card input[type="search"], .cs-card select { width: 100%; }
 .cs-card-head { display: flex; justify-content: space-between; align-items: baseline; gap: 0.5rem; }
@@ -103,10 +116,12 @@
 .cs-buyout input { flex: 1 1 12rem; }
 .cs-cap-chips { display: inline-flex; gap: 0.35rem; }
 .cs-cap-chips button {
-  border: 1px solid var(--glass-edge); background: var(--glass);
-  color: var(--gold); border-radius: 999px; padding: 0.22rem 0.65rem; cursor: pointer; font: inherit;
+  border: 1px solid var(--glass-edge); background: rgba(23, 17, 13, 0.55);
+  color: var(--text); border-radius: 999px; padding: 0.15rem 0.7rem; cursor: pointer;
+  font-family: "Rajdhani", "Segoe UI", sans-serif; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.07em; font-size: 0.8rem;
 }
-.cs-cap-chips button:hover { border-color: var(--accent); color: var(--accent); }
+.cs-cap-chips button:hover { border-color: var(--accent); color: var(--text-bright); }
 
 /* ---- tier 3: the drawer slot ---- */
 .cs-drawer-bar {
@@ -116,13 +131,18 @@
 .cs-drawer-label { font-size: 0.78rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
 .cs-tabs { display: flex; flex-wrap: wrap; gap: 0.4rem; }
 .cs-tab {
-  border: 1px solid var(--glass-edge); background: var(--glass);
-  color: var(--text); border-radius: 0.5rem; padding: 0.35rem 0.8rem;
-  cursor: pointer; font: inherit; font-weight: 600;
+  border: 1px solid var(--glass-edge); background: transparent;
+  color: var(--muted); border-radius: 0.5rem; padding: 0.3rem 0.7rem;
+  cursor: pointer; font-family: "Rajdhani", "Segoe UI", sans-serif;
+  font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; font-size: 0.85rem;
   display: inline-flex; align-items: center; gap: 0.45rem;
 }
+.cs-tab:hover { color: var(--text-bright); border-color: var(--accent); }
 .cs-tab .cs-chev::after { content: "▾"; color: var(--muted); }
-.cs-tab.on { border-color: var(--accent); box-shadow: inset 0 2px 0 var(--accent); }
+/* Active follows the site's tab conventions: the .ti-tabs
+   selected paint (bright text on the row-hover tint) plus
+   the section tabs' accent top stripe. */
+.cs-tab.on { color: var(--text-bright); border-color: var(--accent); background: var(--row-hover); box-shadow: inset 0 2px 0 var(--accent); }
 .cs-tab.on .cs-chev::after { content: "▴"; color: var(--accent); }
 .cs-count {
   background: var(--accent); color: #16100b; border-radius: 999px;
@@ -132,9 +152,8 @@
 .cs-clear { color: var(--muted); }
 .cs-clear:hover { color: var(--neg); }
 .cs-drawer {
-  margin-top: 0.6rem; background: var(--glass);
-  border: 1px solid var(--glass-edge); border-radius: 0.5rem;
-  padding: 0.75rem 0.9rem 0.9rem;
+  margin-top: 0.6rem; border-top: 1px solid var(--glass-edge);
+  padding: 0.75rem 0 0;
 }
 .cs-drawer-head { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; }
 .cs-drawer-head h4 {
@@ -172,13 +191,21 @@
 .cs-fchip.hot { border-color: #28c76f; color: #28c76f; background: color-mix(in srgb, #28c76f 10%, transparent); }
 .cs-fchip.hot:hover { border-color: var(--neg); color: var(--neg); }
 
-.cs-rows { display: flex; flex-direction: column; gap: 0.55rem; margin-top: 0.7rem; }
-.cs-row {
-  background: var(--glass); border: 1px solid var(--glass-edge);
-  border-radius: 0.5rem; padding: 0.65rem 0.8rem; cursor: pointer;
+.cs-rows {
+  display: flex; flex-direction: column; margin-top: 0.7rem;
+  border-top: 1px solid color-mix(in srgb, var(--glass-edge) 55%, transparent);
 }
-.cs-row:hover { border-color: color-mix(in srgb, var(--accent) 55%, var(--glass-edge)); }
-.cs-row.open { border-color: var(--accent); }
+.cs-row {
+  border-bottom: 1px solid color-mix(in srgb, var(--glass-edge) 55%, transparent);
+  padding: 0.65rem 0.2rem; cursor: pointer;
+}
+.cs-row:hover { background: rgba(255, 106, 0, 0.045); }
+.cs-row.open { background: var(--row-hover); box-shadow: inset 3px 0 0 var(--accent); }
+/* While a row is open, its collapsed-state abyssal teaser
+   hides: the expansion's mutaplasmid panel carries the same
+   facts (provenance, score, estimate, cap), so the appraisal
+   opens without a repeated summary block above it. */
+.cs-row.open .cs-row-ab { display: none; }
 .cs-row-main {
   display: grid; gap: 0.4rem 1.1rem; align-items: start;
   grid-template-columns: minmax(0, 1fr) 10.5rem 13rem 14rem 2rem;
@@ -202,7 +229,7 @@
 .cs-chips { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.25rem; }
 .cs-chipinfo {
   border: 1px solid var(--glass-edge); border-radius: 0.35rem;
-  padding: 0.05rem 0.45rem; font-size: 0.82rem; background: var(--panel);
+  padding: 0.05rem 0.45rem; font-size: 0.82rem; background: rgba(255, 255, 255, 0.03);
 }
 .cs-chipinfo.bp { color: var(--gold); border-color: color-mix(in srgb, var(--gold) 55%, transparent); }
 .cs-chipinfo.ab { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 55%, transparent); font-weight: 600; }
@@ -219,7 +246,7 @@
 .cs-loc .sec-pill { border-radius: 0.35rem; }
 .cs-place { font-weight: 600; }
 .cs-copy {
-  background: var(--panel); border: 1px solid var(--glass-edge);
+  background: rgba(255, 255, 255, 0.03); border: 1px solid var(--glass-edge);
   color: var(--muted); border-radius: 0.5rem;
   cursor: pointer; line-height: 1;
 }
@@ -239,8 +266,8 @@
 .cs-panel-head a { margin-left: auto; }
 .cs-panel-summary {
   display: flex; flex-wrap: wrap; gap: 0.35rem 1.4rem; margin-top: 0.5rem;
-  border: 1px solid var(--glass-edge); border-radius: 0.5rem;
-  background: var(--panel); padding: 0.5rem 0.75rem; font-size: 0.94rem;
+  border: 1px solid rgba(255, 110, 0, 0.14); border-radius: 0.5rem;
+  background: rgba(255, 255, 255, 0.03); padding: 0.5rem 0.75rem; font-size: 0.94rem;
 }
 .cs-panel-summary small { color: var(--muted); }
 .cs-deal-note { color: var(--muted); }
@@ -263,7 +290,7 @@
 .cs-tier { color: var(--muted); font-size: 0.88rem; }
 .cs-abpanel {
   border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--glass-edge));
-  border-radius: 0.5rem; background: var(--panel); padding: 0.6rem 0.75rem;
+  border-radius: 0.5rem; background: rgba(255, 255, 255, 0.03); padding: 0.6rem 0.75rem;
   margin-bottom: 0.6rem;
 }
 .cs-abpanel-head { display: flex; justify-content: space-between; align-items: baseline; gap: 0.6rem; flex-wrap: wrap; }
@@ -288,8 +315,8 @@
 .cd-fact small { display: block; color: var(--muted); font-size: 0.76rem; letter-spacing: 0.06em; text-transform: uppercase; font-weight: 700; }
 .cd-fact { font-size: 0.98rem; }
 .cd-valueband {
-  border: 1px solid var(--glass-edge); border-radius: 0.5rem;
-  background: var(--panel); padding: 0.65rem 0.85rem; max-width: 62rem;
+  border: 1px solid rgba(255, 110, 0, 0.14); border-radius: 0.5rem;
+  background: rgba(255, 255, 255, 0.03); padding: 0.65rem 0.85rem; max-width: 62rem;
   display: flex; flex-wrap: wrap; gap: 0.4rem 1.6rem; align-items: baseline;
 }
 .cd-valueband .cd-big { font-size: 1.25rem; font-weight: 700; }
@@ -301,7 +328,7 @@
 .cd-lines td.num, .cd-lines th.num { text-align: right; }
 .cd-abpanel {
   border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--glass-edge));
-  border-radius: 0.5rem; background: var(--panel);
+  border-radius: 0.5rem; background: rgba(255, 255, 255, 0.03);
   padding: 0.6rem 0.8rem; margin: 0.4rem 0; max-width: 46rem;
 }
 .cd-abpanel .cs-roll { grid-template-columns: minmax(0, 1fr) auto 8rem 2.6rem; }
@@ -313,7 +340,7 @@
   .cs-row-main { grid-template-columns: minmax(0, 1fr) 10.5rem 12rem; }
   .cs-loc { grid-column: 1 / -1; }
   .cs-row { position: relative; }
-  .cs-row-main > .cs-copy { position: absolute; top: 0.6rem; right: 0.7rem; }
+  .cs-row-main > .cs-copy { position: absolute; top: 0.6rem; right: 0.2rem; }
   .cs-panel-grid { grid-template-columns: minmax(0, 1fr); }
 }
 @media (max-width: 42rem) {

@@ -177,70 +177,53 @@
   </div>
 </form>
 
-<section class="box cs-results">
-<div class="cs-results-head">
-  <p><strong>{{$s.TotalText}}</strong> contracts found <span class="muted">— click a row to inspect its line-by-line appraisal and mutaplasmid rolls.</span></p>
-  <span class="muted">Page {{$s.Page}} of {{$s.Pages}}</span>
+<div class="cs-countbar">
+  <p class="cs-count"><strong>{{$s.TotalText}}</strong> contracts match • Page {{$s.Page}} of {{$s.Pages}}</p>
+  <p class="cs-counthint">Click any row to inspect line-by-line Forge appraisal &amp; mutaplasmid stats</p>
 </div>
 
+<section class="box cs-results">
 {{if $s.Chips}}<div class="cs-active">{{range $s.Chips}}<a class="cs-fchip{{if .Highlight}} hot{{end}}" href="{{.URL}}">{{.Label}} <span aria-hidden="true">×</span></a>{{end}}</div>{{end}}
 
 {{if $s.Rows}}
-<div class="cs-rows">
+<table class="cs-table" data-nosort>
+  <colgroup><col class="cs-c1"><col class="cs-c2"><col class="cs-c3"><col class="cs-c4"><col class="cs-c5"></colgroup>
+  <thead><tr><th>Contract</th><th>Contents &amp; Specs</th><th>Price / Reward</th><th>Our Value &amp; Spread</th><th>Location</th></tr></thead>
+  <tbody>
 {{range $s.Rows}}
-  <article class="cs-row{{if .IsDeal}} deal{{end}}" data-contract="{{.ContractID}}" tabindex="0" role="button" aria-expanded="false" aria-label="Inspect contract {{.ContractID}}">
-    <div class="cs-row-main">
-      <div class="cs-row-info">
-        <div class="cs-row-head">
-          <span class="cs-type{{if eq .TypeLabel "Item exchange"}} t-exchange{{else if eq .TypeLabel "Auction"}} t-auction{{else}} t-courier{{end}}">{{.TypeLabel}}</span>
-          {{if .IsDeal}}<span class="cs-deal">DEAL −{{.DealPct}}%</span>{{end}}
-          <strong class="cs-row-title">{{if .Title}}{{.Title}}{{else}}{{.TypeLabel}} contract{{end}}</strong>
-          <span class="cs-row-meta">{{.RegionName}} · {{.IssuedAgo}}</span>
-        </div>
-        <div class="cs-contents">
-          {{range .Offered}}<div class="cs-line">{{if .TypeID}}<img class="cs-line-icon" src="{{.IconURL}}" alt="" width="24" height="24" loading="lazy">{{end}}<span class="cs-line-name">{{.Name}}</span> <span class="cs-qty">× {{.Qty}}</span></div>{{end}}
-          {{if gt .MoreOffer 0}}<div class="cs-line muted">+ {{.MoreOffer}} more</div>{{end}}
-          {{if .Wanted}}<div class="cs-line want"><span class="cs-wants">Wants:</span> {{range $i, $w := .Wanted}}{{if $i}}, {{end}}<span class="cs-line-item">{{if $w.TypeID}}<img class="cs-line-icon" src="{{$w.IconURL}}" alt="" width="24" height="24" loading="lazy">{{end}}{{$w.Name}} <span class="cs-qty">× {{$w.Qty}}</span></span>{{end}}{{if gt .MoreWant 0}} <span class="muted">+ {{.MoreWant}} more</span>{{end}}</div>{{end}}
-          <div class="cs-chips">
-            {{if .BPChip}}<span class="cs-chipinfo bp">{{.BPChip}}</span>{{end}}
-            {{with .Abyssal}}<div class="cs-abwrap"><button type="button" class="cs-chipinfo ab cs-abbtn" data-abpop aria-haspopup="true" aria-expanded="false">{{if .HasScore}}Roll Score: {{.Score}} / 100{{if .HasTop}} • Top {{.TopPct}}%{{end}}{{else}}Abyssal rolls{{end}}</button><div class="cs-abpop" role="dialog" aria-label="Mutaplasmid rolls" hidden>
-              <div class="cs-abpop-head"><span>Mutaplasmid rolls</span><button type="button" class="cs-abpop-x" data-abpop-close aria-label="Close mutaplasmid rolls">×</button></div>
-              <div class="muted">Mutated from {{itemLink .SourceTypeID .SourceName}} with {{.MutatorName}}</div>
-              {{if .ScoreText}}<div>{{.ScoreText}}</div>{{end}}
-              {{range .Bars}}<div class="cs-bar"><span class="cs-bar-name">{{.Name}}</span><span class="meter"><span data-w="{{.Pct}}"></span></span><span class="cs-bar-pct">{{.Pct}}%</span></div>{{end}}
-              {{if .Estimate}}<div>Our estimate <strong>{{.Estimate}} ISK</strong>{{if .SpreadNote}} <span class="muted">— {{.SpreadNote}}</span>{{end}}</div>{{end}}
-              {{if .CapNote}}<div class="muted">{{.CapNote}}</div>{{end}}
-            </div></div>{{end}}
-            {{if .Courier}}<span class="cs-chipinfo co">{{.VolumeText}}{{if .IskPerM3}} • {{.IskPerM3}} ISK/m³{{end}}</span>{{end}}
-            {{if and (not .Offered) (not .Wanted) (not .Courier)}}<span class="muted">Contents not fetched yet</span>{{end}}
-            {{if .Courier}}<span class="muted">Cargo is private</span>{{end}}
-          </div>
-        </div>
-      </div>
-      <div class="cs-cell">
+    <tr class="cs-row{{if .IsDeal}} deal{{end}}" data-contract="{{.ContractID}}" tabindex="0" role="button" aria-expanded="false" aria-label="Inspect contract {{.ContractID}}">
+      <td class="cs-c1">
+        <span class="cs-type {{if eq .TypeLabel "Item exchange"}}t-exchange{{else if eq .TypeLabel "Auction"}}t-auction{{else}}t-courier{{end}}">{{.TypeLabel}}</span>{{if .IsDeal}} <span class="cs-deal">↗ Deal -{{.DealPct}}%</span>{{end}}
+        <div class="cs-row-title">{{if .Title}}{{.Title}}{{else}}{{.TypeLabel}} contract{{end}}</div>
+        <div class="cs-row-meta"><span>{{.RegionName}}</span><span>•</span><span>issued {{.IssuedAgo}}</span></div>
+      </td>
+      <td class="cs-c2">
+        {{range .Offered}}<div class="cs-itemline"><span class="cs-line-name">{{.Name}}{{if .BPSuffix}} ({{.BPSuffix}}){{end}}{{if .RollTag}} [{{.RollTag}}]{{end}}</span><span class="cs-qty">×{{.Qty}}</span></div>{{end}}
+        {{range $i, $w := .Wanted}}<div class="cs-itemline">{{if eq $i 0}}<span class="cs-wants">Wants:</span>{{end}}<span class="cs-line-name">{{$w.Name}}{{if $w.BPSuffix}} ({{$w.BPSuffix}}){{end}}{{if $w.RollTag}} [{{$w.RollTag}}]{{end}}</span><span class="cs-qty">×{{$w.Qty}}</span></div>{{end}}
+        {{if .Courier}}<div class="cs-itemline"><span class="cs-line-name">Sealed Plastic Wrap ({{.VolumeText}})</span><span class="cs-qty">×1</span></div>{{end}}
+        {{if and (not .Offered) (not .Wanted) (not .Courier)}}<div class="cs-itemline"><span class="muted">Contents not fetched yet</span></div>{{end}}
+        {{if and .Abyssal (or .Abyssal.HasScore .Abyssal.HasTop)}}<span class="cs-pill ab">▦ Roll Score: {{.Abyssal.Score}}/100{{if .Abyssal.HasTop}} <span>•</span> <span>Top {{.Abyssal.TopPct}}%</span>{{end}}</span>{{else if .BPPillKind}}<span class="cs-pill bp">▦ {{.BPPillKind}} <span>•</span> <span>{{.BPPillSpecs}}</span></span>{{else if .Courier}}<span class="cs-pill co">🚚 {{.VolumeText}}{{if .IskPerM3}} <span>•</span> <span>{{.IskPerM3}} ISK/m³</span>{{end}}</span>{{end}}
+      </td>
+      <td class="cs-c3">
         <div class="cs-cell-label">{{.PriceLabel}}</div>
-        <div class="cs-cell-value">{{.Price}} ISK</div>
-        {{if .PriceNote}}<div class="cs-cell-note">{{.PriceNote}}</div>{{end}}
-      </div>
-      <div class="cs-cell">
-        <div class="cs-cell-label">Our value &amp; spread</div>
-        {{if .Value}}<div class="cs-cell-value">{{.Value}} ISK</div>{{end}}
-        {{if .ValueNote}}<div class="cs-cell-note">{{.ValueNote}}{{if and (gt .PricedLine 0) (eq .PricedLine .TotalLine)}} · priced {{.PricedLine}} of {{.TotalLine}} lines{{end}}</div>
-        {{else if not .Value}}<div class="cs-cell-note">Not appraised yet</div>{{end}}
-        {{if .Spread}}<div class="cs-spread">{{.Spread}} ISK spread</div>{{end}}
-      </div>
-      <div class="cs-cell cs-loc">
-        <div class="cs-place">{{if .SecKnown}}<span class="sec-pill sec-{{.SecTier}}">{{.SecText}}</span> {{end}}{{placeLink .Location}}</div>
-        {{if .HasRoute}}<div class="cs-cell-note">→ {{placeLink .Dropoff}}</div>{{end}}
-        {{if ne .ExpiresIn "—"}}<div class="cs-cell-note">Expires in {{.ExpiresIn}}</div>{{end}}
-        <div class="cs-cell-note">by {{if .IssuerCorp}}{{corpLink .IssuerID .IssuerName}}{{else}}{{charLink $.ViewerChars .IssuerID .IssuerName}}{{end}}</div>
-      </div>
-      <button type="button" class="cs-copy" data-copy="{{.CopyText}}" aria-label="Copy contract link" title="Copy contract link">⧉</button>
-    </div>
-    <div class="cs-panel-slot" hidden></div>
-  </article>
+        <div class="cs-cell-value">{{.Price}}</div>
+        {{if .Buyout}}<div class="cs-psub amber">Buyout: {{.Buyout}}</div>{{else if .Courier}}<div class="cs-psub gray">Collat: {{.Collateral}}</div>{{end}}
+      </td>
+      <td class="cs-c4">
+        {{if .Value}}<div class="cs-cell-value">{{.Value}}</div>{{end}}
+        {{if .PricedText}}<div class="cs-priced">{{.PricedText}}</div>{{else if .ValueNote}}<div class="cs-priced">{{.ValueNote}}</div>{{end}}
+        {{if .Spread}}<div class="cs-spread">{{.Spread}} spread</div>{{end}}
+      </td>
+      <td class="cs-c5">
+        <button type="button" class="cs-copy cs-rowcopy" data-copy="{{.CopyText}}" aria-label="Copy contract link" title="Copy contract link">⧉</button>
+        {{if .SecKnown}}<span class="sec-pill sec-{{.SecTier}}">{{.SecText}}</span> {{end}}<span class="cs-place">{{placeLink .Location}}</span>
+        <div class="cs-expires">{{.ExpiresText}}</div>
+      </td>
+    </tr>
+    <tr class="cs-drow"><td colspan="5"><div class="cs-panel-slot" hidden></div></td></tr>
 {{end}}
-</div>
+  </tbody>
+</table>
 <p class="cs-pager">
   {{if $s.PrevURL}}<a href="{{$s.PrevURL}}">← Newer page</a>{{end}}
   {{if $s.NextURL}}<a href="{{$s.NextURL}}">Next page →</a>{{end}}
@@ -256,70 +239,45 @@
 {{define "contractpanel"}}
 {{with .ContractPanel}}
 <div class="cs-panel">
-  <div class="cs-panel-head">
-    <h4>Line appraisal</h4>
-    <span class="muted">ID: {{.ContractID}} • Issued by {{.IssuerText}}</span>
-    <a href="{{.DetailURL}}">Contract page</a>
-  </div>
-  <div class="cs-panel-summary">
-    <span><small>{{.PriceLabel}}</small> <strong>{{.Price}} ISK</strong></span>
-    {{if .Buyout}}<span><small>Buyout</small> <strong>{{.Buyout}} ISK</strong></span>{{end}}
-    {{if .TopBid}}<span><small>Top bid</small> <strong>{{.TopBid}} ISK</strong> <small>({{.BidCount}} bids)</small></span>{{end}}
-    {{if .Value}}<span><small>Our value</small> <strong>{{.Value}} ISK</strong>{{if .CoverageNote}} <small>{{.CoverageNote}}</small>{{end}}</span>{{end}}
-    {{if .WantValue}}<span><small>Wants</small> <strong>{{.WantValue}} ISK</strong></span>{{end}}
-    {{if .TierMix}}<span><small>Priced from</small> {{.TierMix}}</span>{{end}}
-    {{if .DealNote}}<span class="cs-deal-note{{if .IsDeal}} deal{{end}}">{{.DealNote}}</span>{{end}}
-    {{if .Reward}}<span><small>Collateral</small> <strong>{{.Collateral}} ISK</strong></span>
-    <span><small>Volume</small> <strong>{{.Volume}}</strong></span>
-    <span><small>{{.DaysText}}</small></span>{{end}}
-  </div>
-  <div class="cs-panel-grid{{if not .Abyssals}} solo{{end}}">
-    <div class="cs-panel-lines">
-      {{if .Lines}}
+  <div class="cs-pgrid">
+    <div class="cs-dcard">
+      <div class="cs-dhead">
+        <span class="cs-dhead-t">Contract Line Appraisal{{if .SourceLabel}} ({{.SourceLabel}}){{end}}</span>
+        <span class="cs-dhead-id">ID: {{.ContractID}} • Issued by {{.IssuerText}}</span>
+      </div>
+      {{if .StateNote}}<p class="cs-dnote">{{.StateNote}}</p>{{end}}
       {{range .Lines}}
-      <div class="cs-pline">
-        <div class="cs-pline-main">
-          <span class="cs-side{{if eq .Side "Wanted"}} want{{end}}">{{.Side}}</span>
-          {{if .TypeID}}<img class="cs-pline-icon" src="{{.IconURL}}" alt="" width="28" height="28" loading="lazy">{{end}}
-          {{itemLink .TypeID .Name}} <span class="cs-qty">× {{.Qty}}</span>
-          {{if .Note}}<span class="cs-chipinfo bp">{{.Note}}</span>{{end}}
-          {{if .ItemID}}<span class="muted">Item ID: {{.ItemID}}</span>{{end}}
-        </div>
-        <div class="cs-pline-value">
-          {{if .Priced}}<span class="cs-tier">{{.TierLabel}}</span> <strong>{{.LineValue}} ISK</strong>
-          <div class="muted">{{.UnitPrice}} ISK each{{if .TierNote}} · {{.TierNote}}{{end}}</div>
-          {{else}}<span class="muted">Not priced</span>{{end}}
-        </div>
+      <div class="cs-aline">
+        <span class="cs-aline-l">{{if eq .Side "Wanted"}}<span class="cs-gchip want">Wants</span>{{else if .Group}}<span class="cs-gchip">{{.Group}}</span>{{end}} {{itemLink .TypeID .Name}}{{if .RollTag}} [{{.RollTag}}]{{end}} <span class="cs-aq">×{{.Qty}}</span></span>
+        <span class="cs-tp{{if .BasisAmber}} un{{end}}">{{.BasisText}}{{if .BasisNote}}<span class="cs-tnote">{{.BasisNote}}</span>{{end}}</span>
       </div>
       {{end}}
-      {{else if .StateNote}}<p class="muted">{{.StateNote}}</p>{{end}}
     </div>
-    {{if .Abyssals}}
-    <div class="cs-panel-abs">
-      {{range .Abyssals}}
-      <aside class="cs-abpanel">
-        <div class="cs-abpanel-head"><h4>Mutaplasmid rolls</h4>{{if .Panel.Estimate}}<span class="muted">Est range: {{.Panel.EstLow}} – {{.Panel.EstHigh}} ISK</span>{{end}}</div>
-        <p class="muted">{{.LineName}}{{if .ItemID}} · Item ID: {{.ItemID}}{{end}}<br>Mutated from {{.Panel.SourceName}} with {{.Panel.MutatorName}}.</p>
-        <div class="cs-abwrap"><button type="button" class="btn small cs-abbtn" data-abpop aria-haspopup="true" aria-expanded="false">View rolls &amp; estimate</button><div class="cs-abpop" role="dialog" aria-label="Mutaplasmid rolls" hidden>
-          <div class="cs-abpop-head"><span>Mutaplasmid rolls</span><button type="button" class="cs-abpop-x" data-abpop-close aria-label="Close mutaplasmid rolls">×</button></div>
-          {{range .Panel.Rolls}}<div class="cs-roll"><span class="cs-roll-name">{{.Name}}</span><span class="cs-roll-val">{{.Value}}{{if .Delta}} <span class="{{if .Good}}pos{{else}}neg{{end}}">({{.Delta}})</span>{{end}}</span><span class="meter"><span data-w="{{.Pct}}"></span></span><span class="cs-roll-pct">{{.Pct}}%</span></div>{{end}}
-          {{range .Panel.Derived}}<div class="cs-roll derived"><span class="cs-roll-name">{{.Name}}</span><span class="cs-roll-val">{{.ValueText}}</span><span class="meter"><span data-w="{{.Pct}}"></span></span><span class="cs-roll-pct">{{.Pct}}%</span></div>{{end}}
-          {{if .Panel.ScoreText}}<p>Roll score: <strong>{{.Panel.ScoreText}}</strong></p>{{end}}
-          {{if .Panel.Estimate}}<p class="cs-abest">Our estimate: <strong>{{.Panel.Estimate}} ISK</strong><br><span class="muted">likely range {{.Panel.EstLow}} to {{.Panel.EstHigh}} ISK · {{.Panel.BasisLabel}}</span></p>{{end}}
-          {{if .Panel.NoEstimate}}<p class="muted">{{.Panel.NoEstimate}}</p>{{end}}
-          {{if .Panel.CapNote}}<p>{{.Panel.CapNote}}</p>{{end}}
-          {{if .Panel.ScoredNote}}<p class="muted">{{.Panel.ScoredNote}}</p>{{end}}
-          {{if .Panel.Recreation}}<p class="muted">{{.Panel.Recreation}}</p>{{end}}
-          {{if .Panel.ContextPrice}}<p class="muted">The unmutated module prices at {{.Panel.ContextPrice}} ISK ({{.Panel.ContextTier}}) — shown for context.</p>{{end}}
-        </div></div>
-      </aside>
+    {{if .Telemetry}}
+    <div class="cs-dcard">
+      <div class="cs-dhead">
+        <span class="cs-dhead-t cy">Mutaplasmid Telemetry</span>
+        {{if .Telemetry.EstRange}}<span class="cs-dhead-id">Est Range: {{.Telemetry.EstRange}}</span>{{end}}
+      </div>
+      {{range .Telemetry.Rolls}}
+      <div class="cs-attr">
+        <div class="cs-attr-r"><span class="cs-attr-n">{{.Name}}</span><span class="cs-attr-v {{if .Good}}pos{{else}}neg{{end}}">{{.Figure}}{{if .HasPct}} ({{.Pct}}%){{end}}</span></div>
+        {{if .HasPct}}<div class="cs-telbar"><span data-w="{{.Pct}}"></span></div>{{end}}
+      </div>
       {{end}}
+      <div class="cs-dfoot"><div class="cs-dfoot-in"><span class="cs-dfoot-note">In-game link ready for EVE Notepad</span>
+        <button type="button" class="btn small cs-copy" data-copy="{{.CopyText}}">⧉ Copy Contract Link</button></div></div>
+    </div>
+    {{else}}
+    <div class="cs-dcard">
+      <div class="cs-dhead"><span class="cs-dhead-t dim">Deal Execution Summary</span></div>
+      <div class="cs-srow"><span class="cs-sk">Asking Price:</span><span class="cs-sv">{{.SumAsking}}</span></div>
+      {{if .SumValue}}<div class="cs-srow"><span class="cs-sk">EveSynapse Value:</span><span class="cs-sv">{{.SumValue}}</span></div>{{end}}
+      {{if .SumSpread}}<div class="cs-srow sp"><span class="cs-sk">Estimated Spread:</span><span class="cs-sv">{{.SumSpread}}</span></div>{{end}}
+      <div class="cs-dfoot"><div class="cs-dfoot-in"><span class="cs-dfoot-note">In-game link ready for EVE Notepad</span>
+        <button type="button" class="btn small cs-copy" data-copy="{{.CopyText}}">⧉ Copy Contract Link</button></div></div>
     </div>
     {{end}}
-  </div>
-  <div class="cs-panel-foot">
-    <span class="muted">Link ready for the EVE Notepad</span>
-    <button type="button" class="btn small cs-copy" data-copy="{{.CopyText}}">Copy contract link</button>
   </div>
 </div>
 {{end}}

@@ -129,9 +129,9 @@ func TestContractSearchRollPositionAndQuality(t *testing.T) {
 	}
 	_, body = getAnon(t, app, "/contracts/search/?quality=40")
 	mustContain(t, "unknown quality ignored", body, "Bricked But Pretty")
-	// The row chip carries the score and position figures.
+	// The row pill carries the score and position figures.
 	_, body = getAnon(t, app, "/contracts/search/")
-	mustContain(t, "row abyssal chip", body, "Roll Score: 45 / 100 • Top 20%")
+	mustContain(t, "row abyssal pill", body, "Roll Score: 45/100", "<span>Top 20%</span>")
 }
 
 func TestContractSearchStructure(t *testing.T) {
@@ -177,17 +177,79 @@ func TestContractSearchStructure(t *testing.T) {
 	if !strings.Contains(body, `data-drawer-tab="couriers" aria-expanded="true"><svg`) {
 		t.Error("the open courier tab should carry its icon")
 	}
-	// Result-row content lines carry the item's icon from
-	// the EVE image server, the same per-type icon URL the
-	// fitting pages use (the courier row's lines are its
-	// route, so check an unfiltered render for an exchange
-	// row: Tritanium is type 34).
+	// The results render as one table inside the results
+	// section, its five columns headed per the redesign,
+	// and the content lines carry no item icons.
 	_, plain := getAnon(t, app, "/contracts/search/")
-	mustContain(t, "row item icons", plain,
-		`<img class="cs-line-icon" src="https://images.evetech.net/types/34/icon?size=32"`)
-	i, j := strings.Index(body, `class="box cs-results"`), strings.Index(body, `class="cs-rows"`)
+	mustContain(t, "results table", plain,
+		`<table class="cs-table" data-nosort>`,
+		`<th>Contract</th>`, `<th>Contents &amp; Specs</th>`,
+		`<th>Price / Reward</th>`, `<th>Our Value &amp; Spread</th>`, `<th>Location</th>`)
+	if strings.Contains(plain, "images.evetech.net/types/") {
+		t.Error("result rows still render item icons")
+	}
+	i, j := strings.Index(body, `class="box cs-results"`), strings.Index(body, `class="cs-table"`)
 	if i < 0 || j < 0 || i > j {
-		t.Error("result rows should render inside the results section")
+		t.Error("the results table should render inside the results section")
+	}
+}
+
+// TestContractSearchResultsTable pins the redesigned
+// results rows: the count bar, the fixed-width type slot
+// with its deal badge, every contents line (no caps, no
+// icons), the per-kind price labels and contents pills,
+// and the value column's coverage and spread.
+func TestContractSearchResultsTable(t *testing.T) {
+	tr := &openWindowTransport{}
+	app, conn, _ := buildCorpTestApp(t, tr)
+	seedContractCorpus(t, app, conn)
+
+	_, body := getAnon(t, app, "/contracts/search/")
+	mustContain(t, "count bar", body,
+		`<strong>7</strong> contracts match • Page 1 of 1`,
+		"Click any row to inspect line-by-line Forge appraisal &amp; mutaplasmid stats")
+	// The type label sits in its fixed slot; the deal badge
+	// follows it (7001 appraises at exactly 85% of value).
+	mustContain(t, "type slot and badge", body,
+		`<span class="cs-type t-exchange">Item exchange</span>`,
+		"↗ Deal -15%")
+	// Every contents line renders, with the blueprint
+	// facts in the name and one pill under the items.
+	mustContain(t, "blueprint rows", body,
+		"Test Blueprint (Original • ME 10 / TE 20)",
+		"▦ BPO <span>•</span> <span>ME 10% / TE 20%</span>",
+		"Test Blueprint (Copy • 5 Runs • ME 5 / TE 10)",
+		"▦ BPC <span>•</span> <span>ME 5% / TE 10%</span>")
+	// The auction prices off its standing bid, buyout under.
+	mustContain(t, "auction row", body,
+		"Current Bid", "700.00 ISK", "Buyout: 2000.00 ISK")
+	// The courier: reward and collateral, the sealed wrap
+	// line, and the volume/rate pill (no jump count is
+	// stored, so none renders).
+	mustContain(t, "courier row", body,
+		"Sealed Plastic Wrap (1,000 m³)",
+		"🚚 1,000 m³ <span>•</span> <span>5000 ISK/m³</span>",
+		"Collat: 100.0K ISK")
+	// The value column: our figure, the priced coverage,
+	// and the spread over the ask.
+	mustContain(t, "value column", body,
+		"1000.00 ISK", "priced 1 of 1 lines", "&#43;150.00 ISK spread",
+		"priced 1 of 2 lines")
+	// The expanded row alone carries the accent left bar,
+	// and the type slot's width is the badge alignment pin.
+	rawCSS, err := fs.ReadFile(staticFS, "static/contracts.css")
+	if err != nil {
+		t.Fatal(err)
+	}
+	css := string(rawCSS)
+	if !strings.Contains(css, ".cs-table tbody tr.cs-row.open {\n  background: rgba(34, 22, 14, 0.55);\n  box-shadow: inset 2px 0 0 var(--accent);\n}") {
+		t.Error("contracts.css: the expanded row lost its accent left bar")
+	}
+	if n := strings.Count(css, "inset 2px 0 0"); n != 1 {
+		t.Errorf("contracts.css: the left bar appears %d times, want 1 (expanded rows only)", n)
+	}
+	if !strings.Contains(css, ".cs-type {\n  display: inline-block; width: 6.6rem;") {
+		t.Error("contracts.css: the fixed-width type slot is gone")
 	}
 }
 
@@ -250,18 +312,30 @@ func TestContractPanelFragment(t *testing.T) {
 		t.Fatalf("panel: status %d, want 200", code)
 	}
 	mustContain(t, "panel 7001", body,
-		"Line appraisal", "Tritanium", "Our Forge typical",
+		"Contract Line Appraisal (Forge Sweep)", "Tritanium",
+		"Swept Forge Typical: 1000.00 ISK",
 		"ID: 7001", "Issued by Issuer One (Pilot)",
-		"Copy contract link", "contract:10000002//7001",
-		`<img class="cs-pline-icon" src="https://images.evetech.net/types/34/icon?size=32"`)
+		"Deal Execution Summary", "Asking Price:", "850.00 ISK",
+		"EveSynapse Value:", "Estimated Spread:", "150.00 ISK (15.0%)",
+		"In-game link ready for EVE Notepad",
+		"Copy Contract Link", "contract:10000002//7001")
 	if strings.Contains(body, "<html") || strings.Contains(body, "pagetitle") {
 		t.Error("the panel must be a bare fragment, not a full page")
 	}
+	if strings.Contains(body, "images.evetech.net") {
+		t.Error("the drawer still renders item icons")
+	}
 
-	// The courier panel states the private cargo plainly and
-	// carries the hauling figures.
+	// The courier drawer states the private cargo plainly
+	// and sets the reward against the collateral; collateral
+	// minus reward is not a spread, so none renders.
 	_, body = getAnon(t, app, "/contracts/search/7003/panel")
-	mustContain(t, "panel 7003", body, "private", "100,000.00 ISK", "1,000 m3")
+	mustContain(t, "panel 7003", body,
+		"private", "Contract Line Appraisal (Route Hauling Rate)",
+		"Asking Price:", "5.0M ISK", "EveSynapse Value:", "100.0K ISK")
+	if strings.Contains(body, "Estimated Spread:") {
+		t.Error("the courier drawer renders a spread figure")
+	}
 
 	if code, _ := getAnon(t, app, "/contracts/search/999999/panel"); code != 404 {
 		t.Errorf("unknown panel: status %d, want 404", code)
@@ -277,95 +351,63 @@ func TestContractPanelAbyssal(t *testing.T) {
 	if code != 200 {
 		t.Fatalf("abyssal panel: status %d, want 200", code)
 	}
+	// The drawer: the appraisal card credits the abyssal
+	// model and prices the line from the stored estimate;
+	// the telemetry card carries the stored range and every
+	// roll with its percentile bar, inline.
 	mustContain(t, "panel 8501", body,
-		"Mutaplasmid rolls", "Item ID: 900001",
-		"Roll score: <strong>45 / 100</strong>",
-		"Our estimate: <strong>205,000,000.00 ISK</strong>",
-		"Est range: 180,000,000.00 – 240,000,000.00 ISK",
-		"Held back by: CPU fitting cost")
+		"Contract Line Appraisal (Abyssal Neural Model)",
+		"Abyssal Test Damage", "[Roll 45/100]",
+		"Swept Forge Typical: 205.0M ISK",
+		"Mutaplasmid Telemetry", "Est Range: 180.0M – 240.0M ISK",
+		"Damage Multiplier", "&#43;18.0% (80%)",
+		"Capacitor Need", "CPU", `data-w="80"`, `data-w="2"`)
 }
 
-// TestContractSearchAbyssalPopup pins the mutaplasmid
-// stats presentation: the detail is rendered with the
-// row/panel HTML inside a hidden popup container behind
-// a trigger — never as an inline block in the results
-// flow — and contracts.js wires it with the once-bound
-// document delegation (the copy-button pattern), so it
-// survives the lazy panel fetch and in-page swaps alike.
-func TestContractSearchAbyssalPopup(t *testing.T) {
+// TestContractSearchAbyssalInline pins the mutaplasmid
+// stats presentation after the redesign: the row carries
+// the score pill alone and the rolls render inline in the
+// expansion drawer's telemetry card — the popup the old
+// design opened over the results is retired from the
+// search page entirely, markup, wiring and paint alike.
+// (The contract detail page keeps its own full inline
+// roll readout, as before.)
+func TestContractSearchAbyssalInline(t *testing.T) {
 	tr := &openWindowTransport{}
 	app, conn, _ := buildCorpTestApp(t, tr)
 	seedAbyssalPage(t, conn)
 
-	// The row: the score chip is the trigger, and the
-	// teaser facts (provenance, bars, estimate, cap) live
-	// in the popup, not in the row's flow.
+	// The row: the pill is a plain span, not a trigger,
+	// and no teaser facts ride in the row's flow.
 	_, body := getAnon(t, app, "/contracts/search/")
-	mustContain(t, "row abyssal popup", body,
-		`data-abpop aria-haspopup="true" aria-expanded="false">Roll Score: 45 / 100 • Top 20%</button>`,
-		`<div class="cs-abpop" role="dialog" aria-label="Mutaplasmid rolls" hidden>`,
-		`data-abpop-close`,
-		"Mutated from", "from 8 listings of this module",
-		"Held back by: CPU fitting cost")
-	if strings.Contains(body, "cs-row-ab") {
-		t.Error("the row still renders the inline abyssal block (cs-row-ab)")
+	mustContain(t, "row abyssal pill", body,
+		`<span class="cs-pill ab">▦ Roll Score: 45/100`)
+	for _, gone := range []string{"data-abpop", "cs-abpop", "Mutated from", "Held back by"} {
+		if strings.Contains(body, gone) {
+			t.Errorf("the search page still carries %q", gone)
+		}
 	}
 
-	// The panel fragment: the aside keeps its head and
-	// provenance line; the rolls detail sits in its popup
-	// behind the View rolls trigger.
+	// The panel fragment: telemetry inline, no popup.
 	_, body = getAnon(t, app, "/contracts/search/8501/panel")
-	mustContain(t, "panel abyssal popup", body,
-		`data-abpop aria-haspopup="true" aria-expanded="false">View rolls &amp; estimate</button>`,
-		`<div class="cs-abpop" role="dialog" aria-label="Mutaplasmid rolls" hidden>`,
-		"Roll score: <strong>45 / 100</strong>",
-		"Our estimate: <strong>205,000,000.00 ISK</strong>")
+	mustContain(t, "panel telemetry", body, "Mutaplasmid Telemetry")
+	if strings.Contains(body, "data-abpop") || strings.Contains(body, "cs-abpop") {
+		t.Error("the panel fragment still wires the abyssal popup")
+	}
 
-	// The wiring: one delegated handler pair, the toggle
-	// and close affordances, Esc, and the swap close.
+	// The wiring and the paint hold no popup machinery.
 	rawJS, err := fs.ReadFile(staticFS, "static/contracts.js")
 	if err != nil {
 		t.Fatal(err)
 	}
-	js := string(rawJS)
-	for _, want := range []string{
-		`e.target.closest("[data-abpop]")`,
-		`e.target.closest("[data-abpop-close]")`,
-		`if (e.key === "Escape") closeAbPop();`,
-		`document.addEventListener("evesynapse:content-ready", closeAbPop)`,
-		`pop.hidden = false;`,
-		`sheetQuery = window.matchMedia("(max-width: 42rem)")`,
-		// Containment: the footer is the lowest thing on
-		// the page, so placement measures against it (and
-		// the shell sideways) and flips the popup upward
-		// when downward room runs out.
-		`function containAbPop() {`,
-		`document.querySelector("footer")`,
-		`abPop.classList.add("flip")`,
-		`abPop.closest(".page-shell")`,
-	} {
-		if !strings.Contains(js, want) {
-			t.Errorf("contracts.js missing abyssal popup pin %q", want)
-		}
+	if strings.Contains(string(rawJS), "abpop") || strings.Contains(string(rawJS), "AbPop") {
+		t.Error("contracts.js still carries the abyssal popup wiring")
 	}
-	// The popup paint and the narrow-screen sheet.
 	rawCSS, err := fs.ReadFile(staticFS, "static/contracts.css")
 	if err != nil {
 		t.Fatal(err)
 	}
-	css := string(rawCSS)
-	for _, want := range []string{
-		".cs-abpop {",
-		".cs-abpop[hidden] { display: none; }",
-		".cs-abpop.flip {",
-		".cs-panel-abs .cs-abpop { left: auto; right: 0; }",
-		".cs-abpop.sheet {",
-	} {
-		if !strings.Contains(css, want) {
-			t.Errorf("contracts.css missing abyssal popup pin %q", want)
-		}
-	}
-	if strings.Contains(css, ".cs-row-ab") {
-		t.Error("contracts.css still carries the inline teaser rules (.cs-row-ab)")
+	if strings.Contains(string(rawCSS), "cs-abpop") {
+		t.Error("contracts.css still carries the abyssal popup paint")
 	}
 }

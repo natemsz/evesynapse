@@ -180,10 +180,10 @@ func TestAppraiseLinesBlueprintCopyPricing(t *testing.T) {
 			BlueprintCopy: true, Runs: runs, MaterialEfficiency: 10, TimeEfficiency: 20}
 	}
 	res, err := app.AppraiseLines(ctx, []module.AppraisalLine{
-		copyLine(17481, 10), // prices from its median
-		copyLine(17481, 7),  // no median at 7 runs
-		copyLine(17481, 0),  // unknown runs key no median
-		copyLine(17482, 10), // no median; its type has a typical it must not take
+		copyLine(17481, 10),                          // prices from its median
+		copyLine(17481, 7),                           // no median at 7 runs
+		copyLine(17481, 0),                           // unknown runs key no median
+		copyLine(17482, 10),                          // no median; its type has a typical it must not take
 		{TypeID: 17481, Quantity: 1, Included: true}, // the original itself
 	})
 	if err != nil {

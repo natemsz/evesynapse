@@ -41,12 +41,12 @@
 </section>
 {{end}}
 
-{{if .Mail.LabelChips}}
 <p class="fleet-tools">
-  <a class="chip{{if not .Mail.LabelFilter}} active{{end}}" href="/mail/?character={{.Mail.CharacterID}}">All mail</a>
-  {{range .Mail.LabelChips}}<a class="chip{{if eq $.Mail.LabelFilter .ID}} active{{end}}" href="/mail/?character={{$.Mail.CharacterID}}&amp;label={{.ID}}">{{.Name}}{{if .Unread}} ({{.Unread}}){{end}}</a>{{end}}
+  <a class="chip{{if and (eq .Mail.Box "inbox") (not .Mail.LabelFilter)}} active{{end}}" href="/mail/?character={{.Mail.CharacterID}}&amp;box=inbox">Inbox</a>
+  <a class="chip{{if and (eq .Mail.Box "sent") (not .Mail.LabelFilter)}} active{{end}}" href="/mail/?character={{.Mail.CharacterID}}&amp;box=sent">Sent</a>
+  <a class="chip{{if and (eq .Mail.Box "all") (not .Mail.LabelFilter)}} active{{end}}" href="/mail/?character={{.Mail.CharacterID}}&amp;box=all">All mail</a>
+  {{range .Mail.LabelChips}}<a class="chip{{if eq $.Mail.LabelFilter .ID}} active{{end}}" href="/mail/?character={{$.Mail.CharacterID}}&amp;box={{$.Mail.Box}}&amp;label={{.ID}}">{{.Name}}{{if .Unread}} ({{.Unread}}){{end}}</a>{{end}}
 </p>
-{{end}}
 
 {{if .Mail.Headers.Note}}
 <p><small>{{.Mail.Headers.Note}}</small></p>
@@ -55,17 +55,17 @@
 {{else if .Mail.Rows}}
 <div class="tw">
 <table>
-  <thead><tr><th>Subject</th><th>From</th><th>Date</th><th>Labels</th></tr></thead>
+  <thead><tr><th>Subject</th><th>{{if eq .Mail.Box "sent"}}To{{else}}From{{end}}</th><th>Date</th><th>Labels</th></tr></thead>
   <tbody>
   {{range .Mail.Rows}}
-    <tr><td>{{if .Unread}}<strong><a href="/mail/?character={{$.Mail.CharacterID}}&amp;mail={{.ID}}">{{.Subject}}</a></strong>{{else}}<a href="/mail/?character={{$.Mail.CharacterID}}&amp;mail={{.ID}}">{{.Subject}}</a>{{end}}</td><td>{{charLink $.ViewerChars .FromID .From}}</td><td>{{.Date}}</td><td>{{range $i, $l := .Labels}}{{if $i}}, {{end}}{{$l}}{{end}}</td></tr>
+    <tr><td>{{if .Unread}}<strong><a href="/mail/?character={{$.Mail.CharacterID}}&amp;box={{$.Mail.Box}}&amp;mail={{.ID}}">{{.Subject}}</a></strong>{{else}}<a href="/mail/?character={{$.Mail.CharacterID}}&amp;box={{$.Mail.Box}}&amp;mail={{.ID}}">{{.Subject}}</a>{{end}}</td><td>{{if and .Sent .To (eq $.Mail.Box "sent")}}{{range $i, $t := .To}}{{if $i}}, {{end}}{{if eq $t.Kind "character"}}{{charLink $.ViewerChars $t.ID $t.Name}}{{else if eq $t.Kind "corporation"}}{{corpLink $t.ID $t.Name}}{{else if eq $t.Kind "alliance"}}{{allianceLink $t.ID $t.Name}}{{else}}{{$t.Name}}{{end}}{{end}}{{else}}{{charLink $.ViewerChars .FromID .From}}{{end}}</td><td>{{.Date}}</td><td>{{if .Sent}}<span class="badge wait">SENT</span>{{if .Labels}} {{end}}{{end}}{{range $i, $l := .Labels}}{{if $i}}, {{end}}{{$l}}{{end}}</td></tr>
   {{end}}
   </tbody>
 </table>
 </div>
 <p><small>The 50 most recent mails. Use “Mark as read” on an open mail to clear it in-game too.</small></p>
 {{else}}
-<p><small>No mail in the latest snapshot{{if .Mail.LabelFilter}} with that label{{end}}.</small></p>
+<p><small>No {{if eq .Mail.Box "sent"}}sent {{else if eq .Mail.Box "inbox"}}received {{end}}mail in the latest snapshot{{if .Mail.LabelFilter}} with that label{{end}}.</small></p>
 {{end}}
 {{else}}
 <p>No character to show yet. Link a character first.</p>

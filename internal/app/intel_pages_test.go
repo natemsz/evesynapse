@@ -79,7 +79,8 @@ func TestIntelPagesRenderFromStore(t *testing.T) {
 	// SDE fixtures: systems for incursion staging/affected and
 	// the FW frontier.
 	for _, stmt := range []string{
-		`INSERT INTO sde_systems (system_id, name, region_id, security) VALUES (30000142, 'Jita', 10000002, 0.9), (30000143, 'Perimeter', 10000002, 0.9), (30000144, 'Urlen', 10000002, 0.9)`,
+		`INSERT INTO sde_regions (region_id, name) VALUES (10000002, 'The Forge'), (10000001, 'Domain')`,
+		`INSERT INTO sde_systems (system_id, name, region_id, security) VALUES (30000142, 'Jita', 10000002, 0.9), (30000143, 'Perimeter', 10000002, 0.9), (30000144, 'Urlen', 10000001, 0.9)`,
 	} {
 		if _, err := conn.ExecContext(ctx, stmt); err != nil {
 			t.Fatalf("seed sde: %v", err)
@@ -96,8 +97,8 @@ func TestIntelPagesRenderFromStore(t *testing.T) {
 			StagingSystemID: 30000142, State: "established", Type: "Incursion"},
 	})
 	seedGlobalSnapshot(t, q, esi.GlobalFWSystems, []esi.FWSystem{
-		{SolarSystemID: 30000142, OccupierFactionID: 500002, OwnerFactionID: 500001, Contested: "contested", VictoryPoints: 500000, VictoryPointsThreshold: 1000000},
-		{SolarSystemID: 30000143, OccupierFactionID: 500001, OwnerFactionID: 500002, Contested: "contested", VictoryPoints: 100000, VictoryPointsThreshold: 1000000},
+		{SolarSystemID: 30000142, OccupierFactionID: 500002, OwnerFactionID: 500001, Contested: "contested", VictoryPoints: 100000, VictoryPointsThreshold: 1000000},
+		{SolarSystemID: 30000143, OccupierFactionID: 500001, OwnerFactionID: 500002, Contested: "contested", VictoryPoints: 500000, VictoryPointsThreshold: 1000000},
 		{SolarSystemID: 30000144, OccupierFactionID: 500001, OwnerFactionID: 500001, Contested: "uncontested", VictoryPoints: 0, VictoryPointsThreshold: 1000000},
 	})
 	seedGlobalSnapshot(t, q, esi.GlobalFWStats, []esi.FWStat{
@@ -173,7 +174,20 @@ func TestIntelPagesRenderFromStore(t *testing.T) {
 	}
 	mustContain(t, "/intel/fw/", body,
 		"Caldari State", "Minmatar Republic", "20", "1,200", "42",
-		"Jita", "50%", "10%")
+		"Jita", "50%", "10%",
+		"<th>Region</th>", "The Forge", "Domain")
+
+	// The systems table's default order is region-major (system
+	// name within a region): Domain's Urlen leads, then The
+	// Forge's Jita before Perimeter — even though Perimeter is
+	// the most contested of the three.
+	fwTable := body[strings.Index(body, "Contested systems"):]
+	iUrlen := strings.Index(fwTable, "Urlen")
+	iJita := strings.Index(fwTable, "Jita")
+	iPerimeter := strings.Index(fwTable, "Perimeter")
+	if iUrlen < 0 || iJita < 0 || iPerimeter < 0 || !(iUrlen < iJita && iJita < iPerimeter) {
+		t.Errorf("fw systems order: Urlen %d, Jita %d, Perimeter %d; want region-major (Urlen, Jita, Perimeter)", iUrlen, iJita, iPerimeter)
+	}
 
 	// Home signed in: the Overview bar's ESI pill. The seeded
 	// status is months old — ESI has stopped answering — so the

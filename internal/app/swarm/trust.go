@@ -550,6 +550,12 @@ func (app *Mod) SwarmFlagKeyConflict(ctx context.Context, instanceID, heardFrom 
 // filed under the URL that just answered, and such a row is
 // never relayed.
 //
+// Build claims ride the tuple and are filed with it, under
+// the same rule as the address (the owner's own signed word,
+// newer than the one held) — and there the claim's influence
+// ends: it is display text for the Admin page, and no trust
+// state in this function or anywhere else reads it.
+//
 // Approval follows the mode; exclusion is never touched.
 func (app *Mod) SwarmLearnMembers(ctx context.Context, members []SwarmMember, signer, signerKey, dialURL, source string, now time.Time) error {
 	if signer != "" && signerKey != "" {
@@ -601,6 +607,11 @@ func (app *Mod) SwarmLearnMembers(ctx context.Context, members []SwarmMember, si
 			InstanceID: m.InstanceID, BaseUrl: m.BaseURL, PublicKey: m.PublicKey,
 			Source: source, FirstSeen: now,
 			UrlSig: m.URLSig, UrlIssuedAt: m.IssuedAt, AddressSigned: signed,
+			// The claim rides the tuple for the Admin page's
+			// Build column; the upsert files it only when the
+			// tuple is the owner's own newest signed word, and
+			// no trust field anywhere reads it back.
+			Build: m.Build,
 		})
 		if err != nil {
 			return err

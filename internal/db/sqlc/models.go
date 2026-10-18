@@ -996,6 +996,7 @@ type SwarmPeer struct {
 	UrlIssuedAt   int64        `json:"url_issued_at"`
 	LastPulled    sql.NullTime `json:"last_pulled"`
 	LastServed    sql.NullTime `json:"last_served"`
+	Build         string       `json:"build"`
 }
 
 type SwarmStaging struct {

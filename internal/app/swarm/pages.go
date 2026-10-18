@@ -37,6 +37,7 @@ type SwarmPeerRow struct {
 	Approved    bool
 	Excluded    bool
 	Role        string // Seed, Cache, Seed+Cache: what the peer functions as
+	Build       string // rendered build claim: "Mainline · <release>", "Fork", "—" (build.go)
 	State       string // Approved, Waiting, Excluded (+ auto note)
 	KeyConflict string // "another key was refused on 2026-10-13", empty when none was
 	Trust       string // trust percent
@@ -136,6 +137,11 @@ func (app *Mod) LoadSwarmPeers(ctx context.Context) []SwarmPeerRow {
 				row.Role = "Seed+Cache"
 			}
 		}
+		// The build claim is classified here, at render, and
+		// nowhere else: the class is never stored, and the
+		// stored claim never feeds back into the trust fields
+		// computed above.
+		row.Build = BuildLabel(p.Build)
 		switch {
 		case p.Excluded:
 			row.State = "Excluded"

@@ -44,12 +44,13 @@ UPDATE swarm_identity SET next_gossip_at = $1;
 -- never touched: hearing about an instance must not approve it
 -- or forgive it.
 -- name: UpsertSwarmPeer :execrows
-INSERT INTO swarm_peers (instance_id, base_url, public_key, source, first_seen, last_seen, url_sig, url_issued_at)
-VALUES ($1, $2, $3, $4, $5, $5, sqlc.arg(url_sig), sqlc.arg(url_issued_at))
+INSERT INTO swarm_peers (instance_id, base_url, public_key, source, first_seen, last_seen, url_sig, url_issued_at, build)
+VALUES ($1, $2, $3, $4, $5, $5, sqlc.arg(url_sig), sqlc.arg(url_issued_at), sqlc.arg(build))
 ON CONFLICT (instance_id) DO UPDATE SET
     base_url = CASE WHEN sqlc.arg(address_signed)::boolean AND excluded.url_issued_at > swarm_peers.url_issued_at THEN excluded.base_url ELSE swarm_peers.base_url END,
     url_sig = CASE WHEN sqlc.arg(address_signed)::boolean AND excluded.url_issued_at > swarm_peers.url_issued_at THEN excluded.url_sig ELSE swarm_peers.url_sig END,
     url_issued_at = CASE WHEN sqlc.arg(address_signed)::boolean AND excluded.url_issued_at > swarm_peers.url_issued_at THEN excluded.url_issued_at ELSE swarm_peers.url_issued_at END,
+    build = CASE WHEN sqlc.arg(address_signed)::boolean AND excluded.url_issued_at > swarm_peers.url_issued_at AND excluded.build <> '' THEN excluded.build ELSE swarm_peers.build END,
     last_seen = excluded.last_seen
 WHERE swarm_peers.public_key = excluded.public_key;
 
@@ -61,14 +62,14 @@ UPDATE swarm_peers SET key_conflict_at = $2 WHERE instance_id = $1;
 -- name: GetSwarmPeer :one
 SELECT instance_id, base_url, public_key, source, approved, excluded,
     exclude_note, good_checks, bad_checks, first_seen, last_seen, last_gossip,
-    key_conflict_at, url_sig, url_issued_at, last_pulled, last_served
+    key_conflict_at, url_sig, url_issued_at, last_pulled, last_served, build
 FROM swarm_peers
 WHERE instance_id = $1;
 
 -- name: ListSwarmPeers :many
 SELECT instance_id, base_url, public_key, source, approved, excluded,
     exclude_note, good_checks, bad_checks, first_seen, last_seen, last_gossip,
-    key_conflict_at, url_sig, url_issued_at, last_pulled, last_served
+    key_conflict_at, url_sig, url_issued_at, last_pulled, last_served, build
 FROM swarm_peers
 ORDER BY last_seen DESC
 LIMIT 100;

@@ -954,7 +954,7 @@ func (app *mod) searchRow(ctx context.Context, memo map[int64]module.PlaceRef, r
 		}
 	}
 
-	offered, wanted := 0, 0
+	offered, wanted, pricedWanted := 0, 0, 0
 	for _, it := range items {
 		line := searchLine{Name: names[it.TypeID], Qty: esi.FormatInt(it.Quantity), Note: blueprintNote(it), TypeID: it.TypeID}
 		if it.IsIncluded {
@@ -967,6 +967,9 @@ func (app *mod) searchRow(ctx context.Context, memo map[int64]module.PlaceRef, r
 			}
 		} else {
 			wanted++
+			if it.PriceTier != "" && it.PriceTier != module.AppraisalTierUnpriced {
+				pricedWanted++
+			}
 			if len(out.Wanted) < 3 {
 				out.Wanted = append(out.Wanted, line)
 			}
@@ -1052,8 +1055,22 @@ func (app *mod) searchRow(ctx context.Context, memo map[int64]module.PlaceRef, r
 				out.DealPct = 100 - pct
 			}
 		}
-		if !out.Courier && row.OfferedValue > effPrice {
-			out.Spread = "+" + esi.FormatISK(row.OfferedValue-effPrice)
+		// The spread is the offered value over everything the
+		// buyer hands over: the ask plus, on an exchange, the
+		// valued wanted side -- the same effective cost the
+		// deal ratio judges. A wanted side that is not fully
+		// priced leaves the true cost unknowable, so no spread
+		// shows rather than one that omits real cost.
+		cost, costKnown := effPrice, true
+		if row.Type == "item_exchange" && wanted > 0 {
+			if pricedWanted < wanted {
+				costKnown = false
+			} else {
+				cost += row.WantValue
+			}
+		}
+		if !out.Courier && costKnown && row.OfferedValue > cost {
+			out.Spread = "+" + esi.FormatISK(row.OfferedValue-cost)
 		}
 	}
 	if out.Courier {

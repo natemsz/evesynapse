@@ -327,3 +327,81 @@ func TestOpenContractInGame(t *testing.T) {
 		t.Error("scoped character's POST never reached ESI openwindow")
 	}
 }
+
+// TestContractSearchRowSpreadCountsWants pins the search
+// row's spread to the same effective cost the deal ratio
+// judges: the ask plus the valued wanted side. A row whose
+// wants wash out the value shows no spread, and a row with
+// an unpriced want shows none either -- the old price-only
+// spread called both of them +900.
+func TestContractSearchRowSpreadCountsWants(t *testing.T) {
+	tr := &openWindowTransport{}
+	app, conn, _ := buildCorpTestApp(t, tr)
+	ctx := context.Background()
+	now := time.Now().UTC()
+	exec := func(query string, args ...any) {
+		t.Helper()
+		if _, err := conn.ExecContext(ctx, query, args...); err != nil {
+			t.Fatalf("seed %q: %v", query, err)
+		}
+	}
+	exec(`INSERT INTO sde_regions (region_id, name) VALUES (10000002, 'The Forge')`)
+	exec(`INSERT INTO sde_systems (system_id, name, region_id) VALUES (30000142, 'Jita', 10000002)`)
+	exec(`INSERT INTO sde_stations (station_id, name, system_id) VALUES (60003760, 'Jita IV - Moon 4 - Caldari Navy Assembly Plant', 30000142)`)
+	exec(`INSERT INTO sde_types (type_id, name) VALUES (34, 'Tritanium'), (35, 'Pyerite')`)
+
+	contract := func(id int64, title string, price float64) {
+		t.Helper()
+		exec(`INSERT INTO pub_contracts (contract_id, region_id, type, issuer_id, issuer_corporation_id,
+			title, price, buyout, reward, collateral, volume, start_location_id, end_location_id,
+			date_issued, date_expired, days_to_complete, items_state, last_cycle, first_seen, last_seen)
+			VALUES ($1, 10000002, 'item_exchange', 9001, 9801, $2, $3, 0, 0, 0, 0, 60003760, 0, $4, $5, 1, 'stored', 1, $4, $4)`,
+			id, title, price, now.Add(-time.Hour), now.Add(7*24*time.Hour))
+	}
+	stamp := func(rec, contractID, typeID, qty int64, included bool, unit, line float64, tier string) {
+		t.Helper()
+		exec(`INSERT INTO pub_contract_items (record_id, contract_id, type_id, quantity, is_included,
+			unit_price, line_value, price_tier, price_asof)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+			rec, contractID, typeID, qty, included, unit, line, tier, now)
+	}
+	appraise := func(contractID int64, offered, want float64, ratio sql.NullFloat64) {
+		t.Helper()
+		exec(`UPDATE pub_contracts SET offered_value=$2, want_value=$3, priced_lines=1, total_lines=1,
+			deal_ratio=$4, tier_mix='typical:2', priced_at=$5 WHERE contract_id=$1`,
+			contractID, offered, want, ratio, now)
+	}
+
+	// Offered 1000, ask 100, wants worth 500: the spread is
+	// over the 600 the buyer hands over, not the 100 ask.
+	contract(8001, "Wants Counted", 100)
+	stamp(1, 8001, 34, 10, true, 100, 1000, "typical")
+	stamp(2, 8001, 35, 5, false, 100, 500, "typical")
+	appraise(8001, 1000, 500, sql.NullFloat64{Float64: 0.6, Valid: true})
+
+	// Offered 1000, ask 100, wants worth 900: cost equals
+	// value, so there is no spread to show.
+	contract(8002, "Wants Wash", 100)
+	stamp(3, 8002, 34, 10, true, 100, 1000, "typical")
+	stamp(4, 8002, 35, 9, false, 100, 900, "typical")
+	appraise(8002, 1000, 900, sql.NullFloat64{Float64: 1.0, Valid: true})
+
+	// Offered 1000, ask 100, and a want nobody could price:
+	// the true cost is unknowable, so no spread poses as one.
+	contract(8003, "Wants Unpriced", 100)
+	stamp(5, 8003, 34, 10, true, 100, 1000, "typical")
+	exec(`INSERT INTO pub_contract_items (record_id, contract_id, type_id, quantity, is_included)
+		VALUES (6, 8003, 35, 5, false)`)
+	appraise(8003, 1000, 0, sql.NullFloat64{})
+
+	code, body := getAnon(t, app, "/contracts/search/")
+	if code != 200 {
+		t.Fatalf("anonymous search: status %d, want 200", code)
+	}
+	// (The template escapes the spread's leading + as &#43;.)
+	mustContain(t, "wants spread", body,
+		"Wants Counted", "Wants Wash", "Wants Unpriced", "&#43;400.00 ISK spread")
+	if strings.Contains(body, "&#43;900.00 ISK spread") {
+		t.Error("a wanted side was left out of a row's cost: price-only +900 spread still shows")
+	}
+}

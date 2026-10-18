@@ -217,25 +217,41 @@ func appraisalTierMix(lines []module.AppraisedLine) string {
 	return strings.Join(parts, ",")
 }
 
-// appraisalDealRatio is a contract's asking price over its
-// appraised offered value, and it exists only under full
-// offered-side coverage: a ratio over a partial appraisal
+// appraisalDealRatio is a contract's effective cost over
+// its appraised offered value, and it exists only under full
+// coverage on both sides: a ratio over a partial appraisal
 // would be a lie of precision, so partial coverage stores no
-// ratio and never flags. Exchanges ask their price; auctions
-// ask their buyout (an auction without one has no ask to
-// judge); couriers carry no contents value to judge against.
+// ratio and never flags. The cost is what the buyer hands
+// over. Exchanges ask their price plus the wanted side --
+// the items the buyer must give up, valued through the same
+// pricing order as the offered side -- because the ISK alone
+// is not the price of a barter: a 1-ISK ask wanting 499 PLEX
+// is not a giveaway, and a wanted side that did not fully
+// price leaves the cost unknowable, so it gates exactly like
+// the offered side. Auctions ask their buyout (an auction
+// without one has no ask to judge) and have no wanted side;
+// couriers carry no contents value to judge against.
 func appraisalDealRatio(contract db.PubContract, res module.Appraisal) (float64, bool) {
 	if res.OfferedLines == 0 || res.PricedOffered < res.OfferedLines || res.OfferedValue <= 0 {
 		return 0, false
 	}
-	ask := contract.Price
-	if contract.Type == "auction" {
-		ask = contract.Buyout
+	switch contract.Type {
+	case "item_exchange":
+		if res.PricedWanted < res.WantedLines {
+			return 0, false
+		}
+		cost := contract.Price + res.WantValue
+		if cost <= 0 {
+			return 0, false
+		}
+		return cost / res.OfferedValue, true
+	case "auction":
+		if contract.Buyout <= 0 {
+			return 0, false
+		}
+		return contract.Buyout / res.OfferedValue, true
 	}
-	if ask <= 0 {
-		return 0, false
-	}
-	return ask / res.OfferedValue, true
+	return 0, false
 }
 
 // appraisalDealFlag says whether a stored deal ratio flags:
@@ -277,9 +293,10 @@ func (app *Application) appraisePublicContracts(ctx context.Context) int {
 
 // appraiseOnePublicContract prices one contract's stored lines
 // and stamps the results. The contract row's totals cover the
-// offered side's coverage (priced_lines/total_lines), which is
-// the side the deal ratio judges; the wanted side's coverage
-// lives on its lines, where the detail page reads it.
+// offered side's coverage (priced_lines/total_lines); the
+// wanted side's coverage lives on its lines, where the detail
+// page reads it, and in the Appraisal result the ratio gates
+// on before it will speak.
 func (app *Application) appraiseOnePublicContract(ctx context.Context, contractID int64, now time.Time) error {
 	contract, err := app.queries.GetPublicContract(ctx, contractID)
 	if err != nil {

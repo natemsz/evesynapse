@@ -43,7 +43,7 @@ var Module = module.Module{
 		Entries: []module.NavEntry{
 			{Href: "/corporations/members/", Label: "Members", Pages: []string{"corp_members.html"}, After: "/corporations/"},
 			{Href: "/corporations/wallets/", Label: "Wallets", Pages: []string{"corp_wallets.html"}, After: "/corporations/members/"},
-			{Href: "/corporations/orders/", Label: "Orders", Pages: []string{"corp_orders.html"}, After: "/corporations/wallets/"},
+			{Href: "/corporations/orders/", Label: "My Orders", Pages: []string{"corp_orders.html"}, After: "/corporations/wallets/"},
 			{Href: "/corporations/assets/", Label: "Assets", Pages: []string{"corp_assets.html"}, After: "/corporations/orders/"},
 			{Href: "/corporations/structures/", Label: "Structures", Pages: []string{"corp_structures.html"}, After: "/corporations/assets/"},
 		},

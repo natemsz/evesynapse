@@ -1097,6 +1097,16 @@ func (app *Application) buildWatchlistView(ctx context.Context, userID int64, wa
 		logging.Errorf("market: list watchlist for user %d: %v", userID, err)
 		return view
 	}
+	view.Rows = app.watchlistRows(ctx, entries)
+	return view
+}
+
+// watchlistRows renders stored watchlist entries: latest
+// average, 7/30-day moves, and the moving flag past the user's
+// line. Split from buildWatchlistView so Home's watchlist widget
+// renders the render's shared fetch instead of asking again.
+func (app *Application) watchlistRows(ctx context.Context, entries []db.MarketWatchlist) []watchlistRow {
+	var out []watchlistRow
 	for _, e := range entries {
 		row := watchlistRow{
 			TypeID:    e.TypeID,
@@ -1122,9 +1132,9 @@ func (app *Application) buildWatchlistView(ctx context.Context, userID int64, wa
 		if pct, ok := markethistory.ChangePct(rows, 30); ok {
 			row.Change30 = markethistory.FormatChangePct(pct)
 		}
-		view.Rows = append(view.Rows, row)
+		out = append(out, row)
 	}
-	return view
+	return out
 }
 
 // buildYourOrders assembles the "Your orders" section: every open

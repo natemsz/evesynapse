@@ -256,7 +256,7 @@ func briefingTopicBuiltIn(id string) bool {
 	return false
 }
 
-func (app *Application) buildBriefing(ctx context.Context, bundles []*charSnaps, since, now time.Time) *briefingWidget {
+func (app *Application) buildBriefing(ctx context.Context, bundles []*charSnaps, since, now time.Time, shared *homeMarketShared) *briefingWidget {
 	w := &briefingWidget{SinceLabel: briefingSinceLabel(since)}
 	if len(bundles) == 0 {
 		return w
@@ -305,7 +305,7 @@ func (app *Application) buildBriefing(ctx context.Context, bundles []*charSnaps,
 	// --- Account-level market lines: undercut sell orders and
 	// watched-price moves, from the worker's stored verdicts and
 	// price history (the Needs-attention feed's own sources). ----
-	lines = append(lines, app.briefingMarketLines(ctx, bundles, viewer, names)...)
+	lines = append(lines, app.briefingMarketLines(ctx, bundles, viewer, names, shared)...)
 	lines = aggregateBriefing(lines)
 
 	sort.SliceStable(lines, func(i, j int) bool {
@@ -806,20 +806,20 @@ func (bb *briefingBuilder) mailLines(b *charSnaps, prefix string) {
 // undercut sell orders (one line per character, their worst
 // example named) and watchlist moves past the saved threshold
 // (one per watched item), from stored verdicts and history.
-func (app *Application) briefingMarketLines(ctx context.Context, bundles []*charSnaps, viewer map[int64]bool, names map[int64]string) []briefingLine {
+func (app *Application) briefingMarketLines(ctx context.Context, bundles []*charSnaps, viewer map[int64]bool, names map[int64]string, shared *homeMarketShared) []briefingLine {
 	if len(bundles) == 0 {
 		return nil
 	}
-	userID := bundles[0].ch.UserID
 	var lines []briefingLine
 
-	health, err := app.queries.ListOrderHealthByUser(ctx, userID)
-	if !briefingTopicBuiltIn("orders") {
-		health = nil
+	// The render's shared rows: the same order-health verdicts
+	// and watchlist entries the market and watchlist widgets
+	// read, fetched once for the whole page.
+	var health []db.OrderHealth
+	if briefingTopicBuiltIn("orders") {
+		health = shared.orderHealth(ctx)
 	}
-	if err != nil {
-		logging.Errorf("home: briefing: list order health for user %d: %v", userID, err)
-	} else {
+	if health != nil {
 		perChar := map[int64]int{}
 		example := map[int64]db.OrderHealth{}
 		for _, h := range health {
@@ -847,12 +847,7 @@ func (app *Application) briefingMarketLines(ctx context.Context, bundles []*char
 		}
 	}
 
-	entries, err := app.queries.ListWatchlistByUser(ctx, userID)
-	if err != nil {
-		logging.Errorf("home: briefing: list watchlist for user %d: %v", userID, err)
-		return lines
-	}
-	for _, e := range entries {
+	for _, e := range shared.watchlist(ctx) {
 		rows := app.recentHistoryRows(ctx, marketRegionForType(e.TypeID, e.RegionID), e.TypeID, markethistory.ChartRows)
 		pct, ok := markethistory.ChangePct(rows, 7)
 		if !ok || absFloat(pct) < e.ThresholdPct {

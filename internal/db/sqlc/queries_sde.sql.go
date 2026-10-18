@@ -2139,6 +2139,42 @@ func (q *Queries) ListTypeGroupNames(ctx context.Context, typeIds []int64) ([]Li
 	return items, nil
 }
 
+const listSDETypeCategories = `-- name: ListSDETypeCategories :many
+SELECT t.type_id, g.category_id FROM sde_types t
+JOIN sde_groups g ON g.group_id = t.group_id
+WHERE t.type_id = ANY($1::bigint[])
+`
+
+type ListSDETypeCategoriesRow struct {
+	TypeID     int64 `json:"type_id"`
+	CategoryID int64 `json:"category_id"`
+}
+
+// The SDE category of each of some types, batched: type to
+// group to category in one read.
+func (q *Queries) ListSDETypeCategories(ctx context.Context, typeIds []int64) ([]ListSDETypeCategoriesRow, error) {
+	rows, err := q.db.QueryContext(ctx, listSDETypeCategories, pq.Array(typeIds))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListSDETypeCategoriesRow
+	for rows.Next() {
+		var i ListSDETypeCategoriesRow
+		if err := rows.Scan(&i.TypeID, &i.CategoryID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listTypeNameIDsByIDs = `-- name: ListTypeNameIDsByIDs :many
 SELECT type_id FROM type_names
 WHERE type_id = ANY($1::bigint[])

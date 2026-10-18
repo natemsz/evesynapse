@@ -401,6 +401,47 @@ func countdownText(until time.Time, now time.Time) string {
 	}
 }
 
+// blueprintCategoryID is the SDE category blueprint types
+// live in; reaction formulas are in it too.
+const blueprintCategoryID = 9
+
+// typeIconURL is the image-server URL of one contract line's
+// item picture. Blueprint-category types have no /icon asset
+// on the image server (it answers 400 for them, formulas
+// included): originals serve /bp, copies serve /bpc. Every
+// other type serves /icon.
+func typeIconURL(typeID int64, blueprintClass, copy bool, size int) string {
+	variant := "icon"
+	if blueprintClass {
+		variant = "bp"
+		if copy {
+			variant = "bpc"
+		}
+	}
+	return fmt.Sprintf("https://images.evetech.net/types/%d/%s?size=%d", typeID, variant, size)
+}
+
+// blueprintTypes answers which of the given types sit in the
+// SDE blueprint category, in one batched read. A failed read
+// answers "none" and the lines keep /icon URLs, as before.
+func (app *mod) blueprintTypes(ctx context.Context, typeIDs []int64) map[int64]bool {
+	out := map[int64]bool{}
+	if len(typeIDs) == 0 {
+		return out
+	}
+	rows, err := app.queries.ListSDETypeCategories(ctx, typeIDs)
+	if err != nil {
+		logging.Errorf("contract lines: type categories: %v", err)
+		return out
+	}
+	for _, row := range rows {
+		if row.CategoryID == blueprintCategoryID {
+			out[row.TypeID] = true
+		}
+	}
+	return out
+}
+
 // blueprintNote words a line's blueprint facts, "" for a plain
 // item line.
 func blueprintNote(it db.PubContractItem) string {
@@ -422,10 +463,11 @@ func blueprintNote(it db.PubContractItem) string {
 
 // searchLine is one lead line on a result row.
 type searchLine struct {
-	Name   string
-	Qty    string
-	Note   string // blueprint facts, when any
-	TypeID int64  // EVE type, for the item icon beside the name
+	Name    string
+	Qty     string
+	Note    string // blueprint facts, when any
+	TypeID  int64  // EVE type, for the item icon beside the name
+	IconURL string // the icon beside the name, variant-aware
 }
 
 // searchRow is one result, display-ready.
@@ -666,13 +708,16 @@ func (app *mod) buildSearchView(ctx context.Context, q url.Values) *searchView {
 		typeIDs[it.TypeID] = true
 	}
 	names := map[int64]string{}
+	flatTypeIDs := make([]int64, 0, len(typeIDs))
 	for id := range typeIDs {
 		names[id] = app.deps.TypeNameOrID(ctx, id)
+		flatTypeIDs = append(flatTypeIDs, id)
 	}
+	bpTypes := app.blueprintTypes(ctx, flatTypeIDs)
 	abData := app.pageAbyssalData(ctx, items)
 	memo := map[int64]module.PlaceRef{}
 	for _, row := range rows {
-		view.Rows = append(view.Rows, app.searchRow(ctx, memo, row, byContract[row.ContractID], names, regionNames, abData, now))
+		view.Rows = append(view.Rows, app.searchRow(ctx, memo, row, byContract[row.ContractID], names, bpTypes, regionNames, abData, now))
 	}
 	view.HasRows = len(view.Rows) > 0
 	return view
@@ -902,7 +947,7 @@ func (app *mod) buildSearchFurniture(view *searchView, f searchFilters, q url.Va
 		"type": {"courier"}, "spec": {"couriers"}}.Encode()
 }
 
-func (app *mod) searchRow(ctx context.Context, memo map[int64]module.PlaceRef, row db.SearchPublicContractsRow, items []db.PubContractItem, names map[int64]string, regionNames map[int64]string, abData *pageAbyssalData, now time.Time) searchRow {
+func (app *mod) searchRow(ctx context.Context, memo map[int64]module.PlaceRef, row db.SearchPublicContractsRow, items []db.PubContractItem, names map[int64]string, bpTypes map[int64]bool, regionNames map[int64]string, abData *pageAbyssalData, now time.Time) searchRow {
 	out := searchRow{
 		ContractID: row.ContractID,
 		RegionID:   row.RegionID,
@@ -956,7 +1001,8 @@ func (app *mod) searchRow(ctx context.Context, memo map[int64]module.PlaceRef, r
 
 	offered, wanted, pricedWanted := 0, 0, 0
 	for _, it := range items {
-		line := searchLine{Name: names[it.TypeID], Qty: esi.FormatInt(it.Quantity), Note: blueprintNote(it), TypeID: it.TypeID}
+		line := searchLine{Name: names[it.TypeID], Qty: esi.FormatInt(it.Quantity), Note: blueprintNote(it), TypeID: it.TypeID,
+			IconURL: typeIconURL(it.TypeID, bpTypes[it.TypeID], it.IsBlueprintCopy, 32)}
 		if it.IsIncluded {
 			offered++
 			if line.Note != "" && out.BPChip == "" {
@@ -1332,7 +1378,8 @@ func attrDisplayName(attrID int64, sdeName string) string {
 type detailLine struct {
 	Name      string
 	TypeID    int64
-	ItemID    int64 // the physical item's ID, 0 when the line is not a singleton
+	IconURL   string // the line's item picture, variant-aware
+	ItemID    int64  // the physical item's ID, 0 when the line is not a singleton
 	Qty       string
 	Note      string // blueprint facts
 	UnitPrice string
@@ -1469,6 +1516,7 @@ func (app *mod) handleContractDetail(w http.ResponseWriter, r *http.Request) {
 type panelLine struct {
 	Name      string
 	TypeID    int64
+	IconURL   string
 	ItemID    int64
 	Qty       string
 	Side      string // "Offered" | "Wanted"
@@ -1561,7 +1609,7 @@ func (app *mod) buildPanelView(ctx context.Context, id int64) (*panelView, bool)
 	addLines := func(lines []detailLine, side string) {
 		for _, l := range lines {
 			pl := panelLine{
-				Name: l.Name, TypeID: l.TypeID, ItemID: l.ItemID, Qty: l.Qty,
+				Name: l.Name, TypeID: l.TypeID, IconURL: l.IconURL, ItemID: l.ItemID, Qty: l.Qty,
 				Side: side, Note: l.Note, UnitPrice: l.UnitPrice, LineValue: l.LineValue,
 				TierLabel: l.TierLabel, TierNote: l.TierNote, Abyssal: l.Abyssal,
 				Priced: l.LineValue != "",
@@ -1709,9 +1757,18 @@ func (app *mod) buildDetailView(ctx context.Context, contractID int64) (*detailV
 			}
 		}
 	}
+	itemTypeIDs := make([]int64, 0, len(items))
+	seenType := map[int64]bool{}
+	for _, it := range items {
+		if !seenType[it.TypeID] {
+			seenType[it.TypeID] = true
+			itemTypeIDs = append(itemTypeIDs, it.TypeID)
+		}
+	}
+	bpTypes := app.blueprintTypes(ctx, itemTypeIDs)
 	pricedWanted := 0
 	for _, it := range items {
-		line := app.detailLine(ctx, it, abyssal)
+		line := app.detailLine(ctx, it, abyssal, bpTypes)
 		if it.IsIncluded {
 			v.Offered = append(v.Offered, line)
 		} else {
@@ -1778,12 +1835,13 @@ func (app *mod) buildDetailView(ctx context.Context, contractID int64) (*detailV
 	return v, true
 }
 
-func (app *mod) detailLine(ctx context.Context, it db.PubContractItem, abyssal map[int64]db.AbyssalItem) detailLine {
+func (app *mod) detailLine(ctx context.Context, it db.PubContractItem, abyssal map[int64]db.AbyssalItem, bpTypes map[int64]bool) detailLine {
 	line := detailLine{
-		Name:   app.deps.TypeNameOrID(ctx, it.TypeID),
-		TypeID: it.TypeID,
-		Qty:    esi.FormatInt(it.Quantity),
-		Note:   blueprintNote(it),
+		Name:    app.deps.TypeNameOrID(ctx, it.TypeID),
+		TypeID:  it.TypeID,
+		IconURL: typeIconURL(it.TypeID, bpTypes[it.TypeID], it.IsBlueprintCopy, 32),
+		Qty:     esi.FormatInt(it.Quantity),
+		Note:    blueprintNote(it),
 	}
 	if it.ItemID.Valid {
 		line.ItemID = it.ItemID.Int64

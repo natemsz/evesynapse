@@ -255,6 +255,50 @@ func TestContractDetailPages(t *testing.T) {
 	}
 }
 
+// TestContractSearchBlueprintIcons pins the icon variant rule
+// on the rendered pages: a blueprint line's picture comes
+// from the image server's /bp (original) or /bpc (copy)
+// asset -- blueprint types have no /icon asset -- on the
+// result rows and in the expansion panel alike.
+func TestContractSearchBlueprintIcons(t *testing.T) {
+	tr := &openWindowTransport{}
+	app, conn, _ := buildCorpTestApp(t, tr)
+	seedContractCorpus(t, app, conn)
+
+	// The corpus's Test Blueprint (type 9999) sits in an SDE
+	// group of the blueprint category, as real blueprints do.
+	ctx := context.Background()
+	if _, err := conn.ExecContext(ctx,
+		`INSERT INTO sde_groups (group_id, name, category_id) VALUES (990, 'Test Blueprint Group', 9)`); err != nil {
+		t.Fatalf("seed blueprint group: %v", err)
+	}
+	if _, err := conn.ExecContext(ctx,
+		`UPDATE sde_types SET group_id = 990 WHERE type_id = 9999`); err != nil {
+		t.Fatalf("seed blueprint type group: %v", err)
+	}
+
+	_, body := getAnon(t, app, "/contracts/search/?bp=bpo&me_min=10")
+	mustContain(t, "bpo row icon", body,
+		`<img class="cs-line-icon" src="https://images.evetech.net/types/9999/bp?size=32"`)
+	if strings.Contains(body, "types/9999/icon") {
+		t.Error("a blueprint original still points at the /icon asset")
+	}
+	_, body = getAnon(t, app, "/contracts/search/?bp=bpc&runs_min=3")
+	mustContain(t, "bpc row icon", body,
+		`<img class="cs-line-icon" src="https://images.evetech.net/types/9999/bpc?size=32"`)
+	if strings.Contains(body, "types/9999/icon") {
+		t.Error("a blueprint copy still points at the /icon asset")
+	}
+
+	// The expansion panel follows the same rule.
+	_, body = getAnon(t, app, "/contracts/search/7005/panel")
+	mustContain(t, "bpo panel icon", body,
+		`<img class="cs-pline-icon" src="https://images.evetech.net/types/9999/bp?size=32"`)
+	_, body = getAnon(t, app, "/contracts/search/7006/panel")
+	mustContain(t, "bpc panel icon", body,
+		`<img class="cs-pline-icon" src="https://images.evetech.net/types/9999/bpc?size=32"`)
+}
+
 // TestOpenContractInGame covers the View in game handler:
 // anonymous readers bounce off auth, a character whose grant
 // predates the scope gets the sign-in-again path with no ESI

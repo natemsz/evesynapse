@@ -8,149 +8,9 @@
   "use strict";
 
   function applyMeters(root) {
-    root.querySelectorAll(".meter > span[data-w]").forEach(function (el) {
+    root.querySelectorAll(".meter > span[data-w], .cs-telbar > span[data-w]").forEach(function (el) {
       el.style.width = el.getAttribute("data-w") + "%";
     });
-  }
-
-  // ---- abyssal stats popup -------------------------------------------
-  // The mutaplasmid detail (the row teaser and the panel's
-  // per-line rolls) renders with the row/panel HTML inside
-  // a .cs-abpop container; the script only positions and
-  // toggles it, so the list never reflows around it. One
-  // popup open at a time. The wiring is document-level
-  // delegation, bound once like the copy buttons below:
-  // panel fragments arrive by fetch after init() ran and
-  // an in-page swap replaces the whole DOM — delegation
-  // serves both, and a popup left open across a swap is
-  // closed by the content-ready listener. On a narrow
-  // screen the open popup is lifted to the page root and
-  // becomes a bottom sheet: a fixed box inside the page's
-  // glass would anchor to the glass, not the viewport.
-  // Placement is containment-checked at open time: the
-  // footer is the lowest thing on the page, so a popup
-  // whose downward room runs out at the footer's top edge
-  // (or the viewport's) flips upward from its trigger or
-  // caps its height and scrolls internally, and it is
-  // shifted sideways to stay inside the page shell.
-  var abPop = null;     // the open popup element
-  var abPopBtn = null;  // its trigger
-  var abPopHome = null; // {parent, next} while sheet-lifted
-  var sheetQuery = window.matchMedia("(max-width: 42rem)");
-
-  function resetAbPopPlace() {
-    abPop.classList.remove("flip");
-    abPop.style.maxHeight = "";
-    abPop.style.transform = "";
-  }
-
-  function containAbPop() {
-    resetAbPopPlace();
-    var gap = 8; // px of air between the popup and its bounds
-    var wrap = abPop.parentNode; // .cs-abwrap hugs the trigger
-    var wrapRect = wrap.getBoundingClientRect();
-    var foot = document.querySelector("footer");
-    var footTop = foot ? foot.getBoundingClientRect().top : window.innerHeight;
-    var shell = abPop.closest(".page-shell");
-    var shellRect = shell ? shell.getBoundingClientRect()
-      : { left: 0, right: window.innerWidth };
-    // Vertical: how much room a popup gets below the
-    // trigger before it would cross the footer or the
-    // viewport bottom, and how much above it.
-    var bottomLimit = Math.min(window.innerHeight, footTop) - gap;
-    var below = bottomLimit - (wrapRect.bottom + gap);
-    var above = (wrapRect.top - gap) - gap;
-    var want = Math.min(abPop.scrollHeight, Math.round(window.innerHeight * 0.7));
-    if (want > below && above > below) {
-      abPop.classList.add("flip");
-      abPop.style.maxHeight = Math.max(80, Math.min(want, above)) + "px";
-    } else if (want > below) {
-      abPop.style.maxHeight = Math.max(80, below) + "px";
-    }
-    // Horizontal: shift the laid-out popup back inside
-    // the shell if its anchor pushed it past an edge.
-    var r = abPop.getBoundingClientRect();
-    var dx = 0;
-    if (r.left < shellRect.left + gap) dx = shellRect.left + gap - r.left;
-    else if (r.right > shellRect.right - gap) dx = shellRect.right - gap - r.right;
-    if (dx) abPop.style.transform = "translateX(" + Math.round(dx) + "px)";
-  }
-
-  function placeAbPop() {
-    if (!abPop) return;
-    if (sheetQuery.matches) {
-      if (!abPopHome) {
-        resetAbPopPlace();
-        abPopHome = { parent: abPop.parentNode, next: abPop.nextSibling };
-        document.body.appendChild(abPop);
-        abPop.classList.add("sheet");
-      }
-      return;
-    }
-    if (abPopHome) {
-      abPop.classList.remove("sheet");
-      if (abPopHome.parent) abPopHome.parent.insertBefore(abPop, abPopHome.next);
-      abPopHome = null;
-    }
-    containAbPop();
-  }
-
-  function closeAbPop() {
-    if (!abPop) return;
-    resetAbPopPlace();
-    var pop = abPop;
-    abPop = null;
-    if (abPopBtn) abPopBtn.setAttribute("aria-expanded", "false");
-    abPopBtn = null;
-    pop.hidden = true;
-    if (abPopHome) {
-      pop.classList.remove("sheet");
-      if (abPopHome.parent && abPopHome.parent.isConnected) {
-        abPopHome.parent.insertBefore(pop, abPopHome.next);
-      } else {
-        pop.remove();
-      }
-      abPopHome = null;
-    }
-  }
-
-  function openAbPop(btn) {
-    var wrap = btn.closest(".cs-abwrap");
-    var pop = wrap && wrap.querySelector(".cs-abpop");
-    if (!pop) return;
-    if (abPop === pop) {
-      closeAbPop();
-      return;
-    }
-    closeAbPop();
-    abPop = pop;
-    abPopBtn = btn;
-    pop.hidden = false;
-    btn.setAttribute("aria-expanded", "true");
-    applyMeters(pop);
-    placeAbPop();
-  }
-
-  document.addEventListener("click", function (e) {
-    if (e.target.closest("[data-abpop-close]")) {
-      closeAbPop();
-      return;
-    }
-    var btn = e.target.closest("[data-abpop]");
-    if (btn) {
-      openAbPop(btn);
-      return;
-    }
-    if (abPop && !e.target.closest(".cs-abpop")) closeAbPop();
-  });
-  document.addEventListener("keydown", function (e) {
-    if (e.key === "Escape") closeAbPop();
-  });
-  document.addEventListener("evesynapse:content-ready", closeAbPop);
-  if (sheetQuery.addEventListener) {
-    sheetQuery.addEventListener("change", placeAbPop);
-  } else if (sheetQuery.addListener) {
-    sheetQuery.addListener(placeAbPop);
   }
 
   // ---- copy buttons ------------------------------------------------------
@@ -400,20 +260,23 @@
 
   // ---- results accordion -------------------------------------------------
   // Exactly one row open at a time; clicking the open row
-  // closes it. Panels load lazily, one contract per fetch,
-  // and are cached in the row for the session.
+  // closes it. The expansion lives in the drawer row right
+  // under the data row; panels load lazily, one contract
+  // per fetch, and are cached in the drawer for the session.
   var openRow = null;
+  function drawerSlot(row) {
+    var drawer = row.nextElementSibling;
+    return drawer ? drawer.querySelector(".cs-panel-slot") : null;
+  }
   function closeRow(row) {
-    closeAbPop();
-    var slot = row.querySelector(".cs-panel-slot");
+    var slot = drawerSlot(row);
     if (slot) slot.hidden = true;
     row.classList.remove("open");
     row.setAttribute("aria-expanded", "false");
     if (openRow === row) openRow = null;
   }
   function openRowPanel(row) {
-    closeAbPop();
-    var slot = row.querySelector(".cs-panel-slot");
+    var slot = drawerSlot(row);
     if (!slot) return;
     if (openRow && openRow !== row) closeRow(openRow);
     openRow = row;
@@ -440,7 +303,7 @@
   }
   document.querySelectorAll(".cs-row").forEach(function (row) {
     row.addEventListener("click", function (e) {
-      if (e.target.closest(".cs-panel-slot, .cs-abpop, a, button, input, select, textarea, label")) return;
+      if (e.target.closest("a, button, input, select, textarea, label")) return;
       if (openRow === row) closeRow(row);
       else openRowPanel(row);
     });

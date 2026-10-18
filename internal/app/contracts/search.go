@@ -407,6 +407,68 @@ func countdownText(until time.Time, now time.Time) string {
 	}
 }
 
+// formatShortISK renders an ISK figure the way the results
+// table does: full precision under ten thousand, then the
+// abbreviated magnitudes (2dp billions, 1dp millions and
+// thousands). It is deliberately local to this package --
+// the house formatter (esi.FormatISK, full precision
+// everywhere) keeps serving every other surface.
+func formatShortISK(v float64) string {
+	if v < 10000 {
+		return fmt.Sprintf("%.2f ISK", v)
+	}
+	switch {
+	case v >= 1e9:
+		return fmt.Sprintf("%.2fB ISK", v/1e9)
+	case v >= 1e6:
+		return fmt.Sprintf("%.1fM ISK", v/1e6)
+	default:
+		return fmt.Sprintf("%.1fK ISK", v/1e3)
+	}
+}
+
+// expiryText words the time until expiry for a result row:
+// whole days while a day or more remains, then hours, then
+// minutes -- "Expires in 13 days", "Expires in 5 hours",
+// "Expired" once it has passed.
+func expiryText(until time.Time, now time.Time) string {
+	d := until.Sub(now)
+	if d <= 0 {
+		return "Expired"
+	}
+	switch {
+	case d >= 24*time.Hour:
+		return fmt.Sprintf("Expires in %s", humanize.Plural(int(d/(24*time.Hour)), "day"))
+	case d >= time.Hour:
+		return fmt.Sprintf("Expires in %s", humanize.Plural(int(d/time.Hour), "hour"))
+	default:
+		mins := int(d / time.Minute)
+		if mins < 1 {
+			mins = 1
+		}
+		return fmt.Sprintf("Expires in %s", humanize.Plural(mins, "min"))
+	}
+}
+
+// blueprintSuffix words a line's blueprint facts the way
+// the results table appends them to the item name --
+// "Original • ME 10 / TE 20", "Copy • 50 Runs • ME 10 /
+// TE 20" -- "" for a plain item line.
+func blueprintSuffix(it db.PubContractItem) string {
+	if !it.MaterialEfficiency.Valid {
+		return ""
+	}
+	kind := "Original"
+	if it.IsBlueprintCopy {
+		kind = "Copy"
+	}
+	s := kind + " • "
+	if it.IsBlueprintCopy && it.Runs.Valid && it.Runs.Int64 > 0 {
+		s += fmt.Sprintf("%d Runs • ", it.Runs.Int64)
+	}
+	return s + fmt.Sprintf("ME %d / TE %d", it.MaterialEfficiency.Int64, it.TimeEfficiency.Int64)
+}
+
 // BlueprintCategoryID is the SDE category blueprint types
 // live in; reaction formulas are in it too.
 const BlueprintCategoryID = 9
@@ -425,27 +487,6 @@ func TypeIconURL(typeID int64, blueprintClass, copy bool, size int) string {
 		}
 	}
 	return fmt.Sprintf("https://images.evetech.net/types/%d/%s?size=%d", typeID, variant, size)
-}
-
-// blueprintTypes answers which of the given types sit in the
-// SDE blueprint category, in one batched read. A failed read
-// answers "none" and the lines keep /icon URLs, as before.
-func (app *mod) blueprintTypes(ctx context.Context, typeIDs []int64) map[int64]bool {
-	out := map[int64]bool{}
-	if len(typeIDs) == 0 {
-		return out
-	}
-	rows, err := app.queries.ListSDETypeCategories(ctx, typeIDs)
-	if err != nil {
-		logging.Errorf("contract lines: type categories: %v", err)
-		return out
-	}
-	for _, row := range rows {
-		if row.CategoryID == BlueprintCategoryID {
-			out[row.TypeID] = true
-		}
-	}
-	return out
 }
 
 // blueprintNote words a line's blueprint facts, "" for a plain
@@ -467,13 +508,17 @@ func blueprintNote(it db.PubContractItem) string {
 
 // --- search page -----------------------------------------------------------
 
-// searchLine is one lead line on a result row.
+// searchLine is one contents line on a result row: every
+// line the contract carries, in stored order.
 type searchLine struct {
-	Name    string
-	Qty     string
-	Note    string // blueprint facts, when any
-	TypeID  int64  // EVE type, for the item icon beside the name
-	IconURL string // the icon beside the name, variant-aware
+	Name string
+	Qty  string
+	// BPSuffix is the blueprint facts appended to the name
+	// ("Original • ME 10 / TE 20"), "" for a plain line.
+	BPSuffix string
+	// RollTag is an abyssal line's score tag appended to
+	// the name ("Roll 94/100"), "" for a plain line.
+	RollTag string
 }
 
 // searchRow is one result, display-ready.
@@ -485,40 +530,40 @@ type searchRow struct {
 	Courier    bool
 	Offered    []searchLine
 	Wanted     []searchLine
-	MoreOffer  int
-	MoreWant   int
-	BPChip     string // first blueprint line's facts, for the contents chip
+	// The contents pill: at most one per row -- the abyssal
+	// pill when a mutated line carries a score, else the
+	// first blueprint line's pill, else the courier pill.
+	BPPillKind  string // "BPO" | "BPC", "" when no blueprint line
+	BPPillSpecs string // "ME 10% / TE 20%"
 	// Price block: exchanges show the ask, auctions the
 	// standing bid (or starting price), couriers the reward.
-	PriceLabel string
-	Price      string
-	PriceNote  string
-	Value      string // appraised offered value, "" until appraised
-	ValueNote  string // coverage / deal note
-	IsDeal     bool
-	DealPct    int    // discount percent against our value, when IsDeal
-	Spread     string // "+N" ISK the value beats the ask by, "" when none
-	PricedLine int64
-	TotalLine  int64
-	Location   module.PlaceRef
-	Dropoff    module.PlaceRef
-	HasRoute   bool
-	Abyssal    *rowAbyssal
-	Reward     string
-	Collateral string
-	Volume     string
-	VolumeText string // courier chip: "58,500 m³"
-	IskPerM3   string // courier chip: reward per m3
-	IssuerName string
-	IssuerID   int64
-	IssuerCorp bool
-	RegionName string
-	SecText    string
-	SecTier    int
-	SecKnown   bool
-	ExpiresIn  string
-	IssuedAgo  string
-	CopyText   string // the EVE Notepad contract link
+	PriceLabel  string
+	Price       string
+	Buyout      string // auction buyout, short format, "" when none
+	Value       string // appraised offered value, "" until appraised
+	ValueNote   string // "collateral" / "Not appraised yet"
+	PricedText  string // "priced N of M lines", appraised rows
+	IsDeal      bool
+	DealPct     int    // discount percent against our value, when IsDeal
+	Spread      string // "+N" ISK the value beats the ask by, "" when none
+	PricedLine  int64
+	TotalLine   int64
+	Location    module.PlaceRef
+	Abyssal     *rowAbyssal
+	Reward      string
+	Collateral  string
+	VolumeText  string // courier pill: "58,500 m³"
+	IskPerM3    string // courier pill: reward per m3, no separators
+	IssuerName  string
+	IssuerID    int64
+	IssuerCorp  bool
+	RegionName  string
+	SecText     string
+	SecTier     int
+	SecKnown    bool
+	ExpiresText string
+	IssuedAgo   string
+	CopyText    string // the EVE Notepad contract link
 }
 
 type regionOption struct {
@@ -539,30 +584,15 @@ type attrOption struct {
 	Selected bool
 }
 
-// rowAbyssalBar is one primary roll's percentile bar on a
-// search row.
-type rowAbyssalBar struct {
-	Name string
-	Pct  int
-}
-
-// rowAbyssal is a result row's mutated-line summary: where
-// the module came from, how its main rolls landed, and the
-// stored estimate with its spread and basis -- never a bare
-// point.
+// rowAbyssal is a result row's mutated-line summary for
+// its contents pill: the stored roll score and the primary
+// roll's position. The rolls themselves render inline in
+// the expansion drawer and in full on the contract page.
 type rowAbyssal struct {
-	SourceName   string
-	SourceTypeID int64
-	MutatorName  string
-	ScoreText    string
-	Score        int // roll score 0..100, valid when HasScore
-	HasScore     bool
-	TopPct       int // 100 minus the primary roll's percentile, valid when HasTop
-	HasTop       bool
-	Bars         []rowAbyssalBar
-	Estimate     string
-	SpreadNote   string // "likely L to H · from N listings of this module"
-	CapNote      string // "Held back by: CPU fitting cost"
+	Score    int // roll score 0..100, valid when HasScore
+	HasScore bool
+	TopPct   int // 100 minus the primary roll's percentile, valid when HasTop
+	HasTop   bool
 }
 
 // filterChip is one active-filter pill over the results:
@@ -725,16 +755,13 @@ func (app *mod) buildSearchView(ctx context.Context, q url.Values) *searchView {
 		typeIDs[it.TypeID] = true
 	}
 	names := map[int64]string{}
-	flatTypeIDs := make([]int64, 0, len(typeIDs))
 	for id := range typeIDs {
 		names[id] = app.deps.TypeNameOrID(ctx, id)
-		flatTypeIDs = append(flatTypeIDs, id)
 	}
-	bpTypes := app.blueprintTypes(ctx, flatTypeIDs)
 	abData := app.pageAbyssalData(ctx, items)
 	memo := map[int64]module.PlaceRef{}
 	for _, row := range rows {
-		view.Rows = append(view.Rows, app.searchRow(ctx, memo, row, byContract[row.ContractID], names, bpTypes, regionNames, abData, now))
+		view.Rows = append(view.Rows, app.searchRow(ctx, memo, row, byContract[row.ContractID], names, regionNames, abData, now))
 	}
 	view.HasRows = len(view.Rows) > 0
 	return view
@@ -971,14 +998,14 @@ func (app *mod) buildSearchFurniture(view *searchView, f searchFilters, q url.Va
 		"type": {"courier"}, "spec": {"couriers"}}.Encode()
 }
 
-func (app *mod) searchRow(ctx context.Context, memo map[int64]module.PlaceRef, row db.SearchPublicContractsRow, items []db.PubContractItem, names map[int64]string, bpTypes map[int64]bool, regionNames map[int64]string, abData *pageAbyssalData, now time.Time) searchRow {
+func (app *mod) searchRow(ctx context.Context, memo map[int64]module.PlaceRef, row db.SearchPublicContractsRow, items []db.PubContractItem, names map[int64]string, regionNames map[int64]string, abData *pageAbyssalData, now time.Time) searchRow {
 	out := searchRow{
-		ContractID: row.ContractID,
-		RegionID:   row.RegionID,
-		Title:      row.Title,
-		Location:   app.deps.LinkPlaceMemo(ctx, memo, row.StartLocationID, app.deps.EconLocationTitle(ctx, row.StartLocationID)),
-		ExpiresIn:  countdownText(row.DateExpired, now),
-		IssuedAgo:  app.deps.AgeText(row.DateIssued),
+		ContractID:  row.ContractID,
+		RegionID:    row.RegionID,
+		Title:       row.Title,
+		Location:    app.deps.LinkPlaceMemo(ctx, memo, row.StartLocationID, app.deps.EconLocationTitle(ctx, row.StartLocationID)),
+		ExpiresText: expiryText(row.DateExpired, now),
+		IssuedAgo:   app.deps.AgeText(row.DateIssued),
 	}
 	// The security pill reads the location's system: the
 	// place ref carries it directly for system locations;
@@ -1025,28 +1052,34 @@ func (app *mod) searchRow(ctx context.Context, memo map[int64]module.PlaceRef, r
 
 	offered, wanted, pricedWanted := 0, 0, 0
 	for _, it := range items {
-		line := searchLine{Name: names[it.TypeID], Qty: esi.FormatInt(it.Quantity), Note: blueprintNote(it), TypeID: it.TypeID,
-			IconURL: TypeIconURL(it.TypeID, bpTypes[it.TypeID], it.IsBlueprintCopy, 32)}
+		line := searchLine{Name: names[it.TypeID], Qty: esi.FormatInt(it.Quantity),
+			BPSuffix: blueprintSuffix(it)}
+		// A mutated line carries its roll score in its name,
+		// the way the appraisal drawer shows it.
+		if abData != nil && it.ItemID.Valid {
+			if ab, ok := abData.items[it.ItemID.Int64]; ok && ab.Score.Valid {
+				line.RollTag = fmt.Sprintf("Roll %d/100", int(ab.Score.Float64*100+0.5))
+			}
+		}
 		if it.IsIncluded {
 			offered++
-			if line.Note != "" && out.BPChip == "" {
-				out.BPChip = line.Note
+			if it.MaterialEfficiency.Valid && out.BPPillKind == "" {
+				out.BPPillKind = "BPO"
+				if it.IsBlueprintCopy {
+					out.BPPillKind = "BPC"
+				}
+				out.BPPillSpecs = fmt.Sprintf("ME %d%% / TE %d%%",
+					it.MaterialEfficiency.Int64, it.TimeEfficiency.Int64)
 			}
-			if len(out.Offered) < 3 {
-				out.Offered = append(out.Offered, line)
-			}
+			out.Offered = append(out.Offered, line)
 		} else {
 			wanted++
 			if it.PriceTier != "" && it.PriceTier != module.AppraisalTierUnpriced {
 				pricedWanted++
 			}
-			if len(out.Wanted) < 3 {
-				out.Wanted = append(out.Wanted, line)
-			}
+			out.Wanted = append(out.Wanted, line)
 		}
 	}
-	out.MoreOffer = offered - len(out.Offered)
-	out.MoreWant = wanted - len(out.Wanted)
 
 	// The row's mutated-line summary: the first offered
 	// singleton the corpus knows, if any.
@@ -1069,37 +1102,29 @@ func (app *mod) searchRow(ctx context.Context, memo map[int64]module.PlaceRef, r
 	switch row.Type {
 	case "courier":
 		out.PriceLabel = "Reward"
-		out.Price = esi.FormatISK(row.Reward)
-		out.Reward = esi.FormatISK(row.Reward)
-		out.Collateral = esi.FormatISK(row.Collateral)
-		out.Volume = fmt.Sprintf("%s m3", esi.FormatInt(int64(row.Volume)))
+		out.Price = formatShortISK(row.Reward)
+		out.Reward = formatShortISK(row.Reward)
+		out.Collateral = formatShortISK(row.Collateral)
 		out.VolumeText = fmt.Sprintf("%s m³", esi.FormatInt(int64(row.Volume)))
 		if row.Volume > 0 {
-			out.IskPerM3 = esi.FormatInt(int64(row.Reward/row.Volume + 0.5))
+			out.IskPerM3 = strconv.FormatInt(int64(row.Reward/row.Volume+0.5), 10)
 		}
-		out.Dropoff = app.deps.LinkPlaceMemo(ctx, memo, row.EndLocationID, app.deps.EconLocationTitle(ctx, row.EndLocationID))
-		out.HasRoute = true
 		effPrice = row.Reward
 	case "auction":
-		out.PriceLabel = "Current bid"
 		if row.BidCount > 0 {
-			out.Price = esi.FormatISK(row.TopBid)
+			out.PriceLabel = "Current Bid"
+			out.Price = formatShortISK(row.TopBid)
 			effPrice = row.TopBid
 		} else {
-			out.Price = esi.FormatISK(row.Price)
-			out.PriceNote = "starting price"
-		}
-		notes := []string{}
-		if row.BidCount > 0 {
-			notes = append(notes, humanize.Plural(int(row.BidCount), "bid"))
+			out.PriceLabel = "Starting Price"
+			out.Price = formatShortISK(row.Price)
 		}
 		if row.Buyout > 0 {
-			notes = append(notes, "buyout "+esi.FormatISK(row.Buyout))
+			out.Buyout = formatShortISK(row.Buyout)
 		}
-		out.PriceNote = strings.Join(notes, " · ")
 	default:
 		out.PriceLabel = "Price"
-		out.Price = esi.FormatISK(row.Price)
+		out.Price = formatShortISK(row.Price)
 	}
 
 	if row.PricedAt.Valid && row.TotalLines > 0 {
@@ -1107,19 +1132,12 @@ func (app *mod) searchRow(ctx context.Context, memo map[int64]module.PlaceRef, r
 		// line is priced -- an appraisal that priced nothing
 		// shows its coverage note, not a hollow 0.00.
 		if row.PricedLines > 0 {
-			out.Value = esi.FormatISK(row.OfferedValue)
+			out.Value = formatShortISK(row.OfferedValue)
 		}
 		out.PricedLine, out.TotalLine = row.PricedLines, row.TotalLines
-		switch {
-		case row.PricedLines < row.TotalLines:
-			out.ValueNote = fmt.Sprintf("priced %d of %d lines", row.PricedLines, row.TotalLines)
-		case row.DealRatio.Valid:
+		out.PricedText = fmt.Sprintf("priced %d of %d lines", row.PricedLines, row.TotalLines)
+		if row.PricedLines == row.TotalLines && row.DealRatio.Valid {
 			pct := int(row.DealRatio.Float64*100 + 0.5)
-			if pct > 100 {
-				out.ValueNote = fmt.Sprintf("asking %d%% above value", pct-100)
-			} else {
-				out.ValueNote = fmt.Sprintf("asking %d%% of value", pct)
-			}
 			out.IsDeal = row.DealRatio.Float64 <= 0.85
 			if out.IsDeal {
 				out.DealPct = 100 - pct
@@ -1140,15 +1158,17 @@ func (app *mod) searchRow(ctx context.Context, memo map[int64]module.PlaceRef, r
 			}
 		}
 		if !out.Courier && costKnown && row.OfferedValue > cost {
-			out.Spread = "+" + esi.FormatISK(row.OfferedValue-cost)
+			out.Spread = "+" + formatShortISK(row.OfferedValue-cost)
 		}
 	}
 	if out.Courier {
 		// A courier's cargo is private and never appraised;
 		// the figure in the value column is its collateral,
 		// labeled as itself.
-		out.Value = esi.FormatISK(row.Collateral)
+		out.Value = formatShortISK(row.Collateral)
 		out.ValueNote = "collateral"
+	} else if out.Value == "" && out.PricedText == "" {
+		out.ValueNote = "Not appraised yet"
 	}
 
 	// The EVE Notepad link for the row's copy button.
@@ -1165,12 +1185,11 @@ func (app *mod) searchRow(ctx context.Context, memo map[int64]module.PlaceRef, r
 // --- abyssal display -------------------------------------------------------
 
 // pageAbyssalData is the search page's stored abyssal facts:
-// the page's mutated items, their families' weights (for the
-// primary bars), and attribute names.
+// the page's mutated items and their families' weights
+// (for the pill's primary-roll position).
 type pageAbyssalData struct {
-	items     map[int64]db.AbyssalItem
-	weights   map[string][]db.AbyssalFamilyWeight
-	attrNames map[int64]string
+	items   map[int64]db.AbyssalItem
+	weights map[string][]db.AbyssalFamilyWeight
 }
 
 func (app *mod) pageAbyssalData(ctx context.Context, items []db.PubContractItem) *pageAbyssalData {
@@ -1188,9 +1207,8 @@ func (app *mod) pageAbyssalData(ctx context.Context, items []db.PubContractItem)
 		return nil
 	}
 	data := &pageAbyssalData{
-		items:     map[int64]db.AbyssalItem{},
-		weights:   map[string][]db.AbyssalFamilyWeight{},
-		attrNames: map[int64]string{},
+		items:   map[int64]db.AbyssalItem{},
+		weights: map[string][]db.AbyssalFamilyWeight{},
 	}
 	families := map[string]bool{}
 	for _, row := range rows {
@@ -1205,103 +1223,46 @@ func (app *mod) pageAbyssalData(ctx context.Context, items []db.PubContractItem)
 			fams = append(fams, fam)
 		}
 		if wrows, err := app.queries.ListAbyssalFamilyWeightsByFamilies(ctx, fams); err == nil {
-			attrIDs := map[int64]bool{}
 			for _, w := range wrows {
 				data.weights[w.Family] = append(data.weights[w.Family], w)
-				attrIDs[w.AttributeID] = true
-			}
-			for _, row := range rows {
-				if row.CapAttributeID > 0 {
-					attrIDs[row.CapAttributeID] = true
-				}
-			}
-			ids := make([]int64, 0, len(attrIDs))
-			for id := range attrIDs {
-				ids = append(ids, id)
-			}
-			if arows, err := app.queries.ListSDEAttributeTypesByIDs(ctx, ids); err == nil {
-				for _, r := range arows {
-					data.attrNames[r.AttributeID] = r.Name
-				}
 			}
 		}
 	}
 	return data
 }
 
-// rowAbyssalFor words one stored abyssal row for a search
-// result: provenance, score, the primary bars, the estimate
-// with its basis, and the cap when one binds.
+// rowAbyssalFor reads one stored abyssal row for a search
+// result's pill: the roll score, and the primary roll's
+// position -- the best percentile among the family's
+// heaviest non-penalty rolls, the same rolls the position
+// filter tests.
 func (app *mod) rowAbyssalFor(ctx context.Context, ab db.AbyssalItem, data *pageAbyssalData) *rowAbyssal {
-	out := &rowAbyssal{
-		SourceName:   app.deps.TypeNameOrID(ctx, ab.SourceTypeID),
-		SourceTypeID: ab.SourceTypeID,
-		MutatorName:  app.deps.TypeNameOrID(ctx, ab.MutatorTypeID),
-	}
+	out := &rowAbyssal{}
 	if ab.Score.Valid {
-		out.ScoreText = fmt.Sprintf("Roll score %d / 100", int(ab.Score.Float64*100+0.5))
 		out.Score = int(ab.Score.Float64*100 + 0.5)
 		out.HasScore = true
 	}
-	// Primary bars: the family's heaviest non-penalty rolls
-	// this item has percentiles for, best three.
 	pcts := parseAbyssalPercentiles(ab.Percentiles)
-	// The primary roll's position, for the row chip's "Top
-	// N%": the best percentile among the family's heaviest
-	// non-penalty rolls -- the same rolls the position
-	// filter tests.
-	{
-		maxW := 0.0
+	maxW := 0.0
+	for _, w := range data.weights[ab.Family] {
+		if !w.PenaltyOnly && w.Weight > maxW {
+			maxW = w.Weight
+		}
+	}
+	if maxW > 0 {
+		best := -1.0
 		for _, w := range data.weights[ab.Family] {
-			if !w.PenaltyOnly && w.Weight > maxW {
-				maxW = w.Weight
+			if w.PenaltyOnly || w.Weight != maxW {
+				continue
+			}
+			if p, ok := pcts[w.AttributeID]; ok && p > best {
+				best = p
 			}
 		}
-		if maxW > 0 {
-			best := -1.0
-			for _, w := range data.weights[ab.Family] {
-				if w.PenaltyOnly || w.Weight != maxW {
-					continue
-				}
-				if p, ok := pcts[w.AttributeID]; ok && p > best {
-					best = p
-				}
-			}
-			if best >= 0 {
-				out.TopPct = 100 - int(best*100+0.5)
-				out.HasTop = true
-			}
+		if best >= 0 {
+			out.TopPct = 100 - int(best*100+0.5)
+			out.HasTop = true
 		}
-	}
-	weights := append([]db.AbyssalFamilyWeight(nil), data.weights[ab.Family]...)
-	sort.Slice(weights, func(i, j int) bool {
-		if weights[i].Weight != weights[j].Weight {
-			return weights[i].Weight > weights[j].Weight
-		}
-		return weights[i].AttributeID < weights[j].AttributeID
-	})
-	for _, w := range weights {
-		if w.PenaltyOnly || len(out.Bars) >= 3 {
-			continue
-		}
-		p, ok := pcts[w.AttributeID]
-		if !ok {
-			continue
-		}
-		name := attrDisplayName(w.AttributeID, data.attrNames[w.AttributeID])
-		out.Bars = append(out.Bars, rowAbyssalBar{Name: name, Pct: int(p*100 + 0.5)})
-	}
-	if ab.EstValue.Valid {
-		out.Estimate = esi.FormatISK(ab.EstValue.Float64)
-		note := abyssalBasisShort(ab)
-		if ab.EstLow.Valid && ab.EstHigh.Valid {
-			note = fmt.Sprintf("likely %s to %s · %s",
-				esi.FormatISK(ab.EstLow.Float64), esi.FormatISK(ab.EstHigh.Float64), note)
-		}
-		out.SpreadNote = note
-	}
-	if ab.CapAttributeID > 0 {
-		out.CapNote = "Held back by: " + capAttrDisplayName(ab.CapAttributeID, data.attrNames[ab.CapAttributeID])
 	}
 	return out
 }
@@ -1333,23 +1294,6 @@ func abyssalFamilyLabel(slug string) string {
 		parts[i] = strings.ToUpper(p[:1]) + p[1:]
 	}
 	return strings.Join(parts, " ")
-}
-
-// abyssalBasisShort is the estimate's basis in a breath: what
-// the number rests on, never just the number.
-func abyssalBasisShort(ab db.AbyssalItem) string {
-	switch ab.EstBasis {
-	case "corpus":
-		if ab.EstScope == "module" {
-			return fmt.Sprintf("from %d listings of this module", ab.EstComps)
-		}
-		return fmt.Sprintf("from %d listings of similar modules", ab.EstComps)
-	case "curve":
-		return "score curve (few listings)"
-	case "prior":
-		return "base module price and rolls only"
-	}
-	return ""
 }
 
 // capAttrDisplayName: fitting costs get their plain-words
@@ -1402,15 +1346,22 @@ func attrDisplayName(attrID int64, sdeName string) string {
 type detailLine struct {
 	Name      string
 	TypeID    int64
-	IconURL   string // the line's item picture, variant-aware
-	ItemID    int64  // the physical item's ID, 0 when the line is not a singleton
+	ItemID    int64 // the physical item's ID, 0 when the line is not a singleton
 	Qty       string
+	QtyNum    int64  // the raw quantity, for surfaces that print it unseparated
+	Group     string // the type's SDE group name, for the appraisal drawer's chip
 	Note      string // blueprint facts
 	UnitPrice string
 	LineValue string
-	TierLabel string
-	TierNote  string // provenance as-of, fallback only spoken aloud
-	Abyssal   *abyssalPanel
+	// Tier is the line's stored appraisal tier key and
+	// LineValueNum its stored figure: the expansion drawer
+	// phrases the basis from these, the detail page from
+	// the worded fields above.
+	Tier         string
+	LineValueNum float64
+	TierLabel    string
+	TierNote     string // provenance as-of, fallback only spoken aloud
+	Abyssal      *abyssalPanel
 }
 
 type abyssalRoll struct {
@@ -1443,13 +1394,18 @@ type abyssalPanel struct {
 	Estimate      string
 	EstLow        string
 	EstHigh       string
-	BasisLabel    string // what the estimate rests on
-	ScoredNote    string // "Scored 3h ago"
-	CapNote       string // the capping attribute, in plain words
-	Recreation    string // rolling another this good, priced
-	NoEstimate    string // why there is no figure, when there is none
-	ContextPrice  string // the source module's own price, context only
-	ContextTier   string
+	// The stored range as figures, for surfaces that
+	// format it themselves (the drawer's telemetry head).
+	EstLowNum    float64
+	EstHighNum   float64
+	HasRange     bool
+	BasisLabel   string // what the estimate rests on
+	ScoredNote   string // "Scored 3h ago"
+	CapNote      string // the capping attribute, in plain words
+	Recreation   string // rolling another this good, priced
+	NoEstimate   string // why there is no figure, when there is none
+	ContextPrice string // the source module's own price, context only
+	ContextTier  string
 }
 
 type bidRow struct {
@@ -1486,9 +1442,13 @@ type detailView struct {
 	DealNote   string
 	IsDeal     bool
 
-	TopBid   string
-	BidCount int64
-	Bids     []bidRow
+	TopBid string
+	// TopBidNum is the standing bid as a figure, for the
+	// expansion drawer's summary arithmetic.
+	TopBidNum float64
+	HasTopBid bool
+	BidCount  int64
+	Bids      []bidRow
 
 	Reward     string
 	Collateral string
@@ -1534,62 +1494,69 @@ func (app *mod) handleContractDetail(w http.ResponseWriter, r *http.Request) {
 
 // ---- inline expansion panel ----
 
-// panelLine is one line of the expansion's appraisal: the
-// item, its quantity and side, and what our appraisal says
-// -- with the basis label the figure came from.
+// panelLine is one line of the expansion's appraisal
+// drawer: the item, its quantity and side, its SDE group
+// chip, and the basis phrase the drawer prints at the
+// line's right.
 type panelLine struct {
-	Name      string
-	TypeID    int64
-	IconURL   string
-	ItemID    int64
-	Qty       string
-	Side      string // "Offered" | "Wanted"
-	Note      string // blueprint facts
-	UnitPrice string
-	LineValue string
-	TierLabel string
-	TierNote  string
-	Priced    bool
-	Abyssal   *abyssalPanel
+	Name    string
+	TypeID  int64
+	Qty     string // raw, unseparated, as the drawer prints it
+	Side    string // "Offered" | "Wanted"
+	Group   string // SDE group name for the chip, "" when unknown
+	RollTag string // "Roll 94/100" for a scored abyssal line
+	// BasisText is the line's appraisal phrase ("Swept
+	// Forge Typical: 5.12B ISK", "Outside Aggregate Est:
+	// ...", "Not priced"); BasisAmber marks the phrases
+	// that are not our own swept figures. BasisNote is a
+	// copy-median line's sample basis, "" for other tiers.
+	BasisText  string
+	BasisNote  string
+	BasisAmber bool
+	Priced     bool
+	Abyssal    *abyssalPanel
 }
 
-// panelAbyssal pairs one abyssal line with its rolls panel.
-type panelAbyssal struct {
-	LineName string
-	ItemID   int64
-	Panel    *abyssalPanel
+// telemetryRoll is one mutaplasmid attribute in the
+// drawer's telemetry card: its name, the headline figure
+// (the roll's change against the base module where a base
+// is stored, else the raw value), which way good lies,
+// and where the roll sits in its band.
+type telemetryRoll struct {
+	Name   string
+	Figure string
+	Good   bool
+	Pct    int
+	HasPct bool
+}
+
+// telemetryView is the drawer's mutaplasmid card, bound
+// to the contract's first abyssal line: its stored
+// estimate range and every rolled attribute.
+type telemetryView struct {
+	EstRange string // "180.0M – 240.0M ISK", "" when no range is stored
+	Rolls    []telemetryRoll
 }
 
 // panelView is the row-expansion fragment: the line-by-line
-// appraisal, the mutaplasmid panels for any abyssal lines,
-// and the notepad link. Built from the same stored reads
-// as the detail page -- nothing is computed here that the
-// detail page would not show.
+// appraisal drawer -- the appraisal card, the telemetry or
+// execution-summary card, and the notepad link. Built from
+// the same stored reads as the detail page -- nothing is
+// computed here that the detail page would not show.
 type panelView struct {
-	ContractID   int64
-	Title        string
-	TypeLabel    string
-	IssuerText   string // "Issuer One (Pilot)"
-	StateNote    string
-	Lines        []panelLine
-	Abyssals     []panelAbyssal
-	PriceLabel   string
-	Price        string
-	Buyout       string
-	TopBid       string
-	BidCount     int64
-	Value        string // appraised offered value
-	WantValue    string
-	CoverageNote string
-	TierMix      string
-	DealNote     string
-	IsDeal       bool
-	Reward       string
-	Collateral   string
-	Volume       string
-	DaysText     string
-	CopyText     string
-	DetailURL    string
+	ContractID  int64
+	IssuerText  string // "Issuer One (Pilot)"
+	SourceLabel string // the valuation source the appraisal stands on
+	StateNote   string
+	Lines       []panelLine
+	Telemetry   *telemetryView // nil unless an abyssal line carries rolls
+	// The execution summary (the right card when there is
+	// no telemetry): the effective ask, our value, and the
+	// spread between them where both are honestly known.
+	SumAsking string
+	SumValue  string
+	SumSpread string // "930.0M ISK (16.7%)", "" when not computable
+	CopyText  string
 }
 
 func (app *mod) buildPanelView(ctx context.Context, id int64) (*panelView, bool) {
@@ -1601,53 +1568,119 @@ func (app *mod) buildPanelView(ctx context.Context, id int64) (*panelView, bool)
 	if err != nil {
 		return nil, false
 	}
-	out := &panelView{
-		ContractID:   id,
-		Title:        dv.Title,
-		TypeLabel:    dv.TypeLabel,
-		StateNote:    dv.StateNote,
-		PriceLabel:   dv.PriceLabel,
-		Price:        dv.Price,
-		Buyout:       dv.Buyout,
-		TopBid:       dv.TopBid,
-		BidCount:     dv.BidCount,
-		Value:        dv.OfferedValue,
-		WantValue:    dv.WantValue,
-		CoverageNote: dv.CoverageNote,
-		TierMix:      dv.TierMix,
-		DealNote:     dv.DealNote,
-		IsDeal:       dv.IsDeal,
-		Reward:       dv.Reward,
-		Collateral:   dv.Collateral,
-		Volume:       dv.Volume,
-		DetailURL:    fmt.Sprintf("/contracts/search/%d/", id),
-	}
+	out := &panelView{ContractID: id, StateNote: dv.StateNote}
 	issuerKind := "Pilot"
 	if dv.IssuerCorp {
 		issuerKind = "Corporation"
 	}
 	out.IssuerText = fmt.Sprintf("%s (%s)", dv.IssuerName, issuerKind)
-	if row.Type == "courier" {
-		out.DaysText = humanize.Plural(int(row.DaysToComplete), "day") + " to complete"
-	}
+
+	var firstAbyssal *abyssalPanel
+	tiers := map[string]bool{}
 	addLines := func(lines []detailLine, side string) {
 		for _, l := range lines {
 			pl := panelLine{
-				Name: l.Name, TypeID: l.TypeID, IconURL: l.IconURL, ItemID: l.ItemID, Qty: l.Qty,
-				Side: side, Note: l.Note, UnitPrice: l.UnitPrice, LineValue: l.LineValue,
-				TierLabel: l.TierLabel, TierNote: l.TierNote, Abyssal: l.Abyssal,
+				Name: l.Name, TypeID: l.TypeID, Qty: strconv.FormatInt(l.QtyNum, 10),
+				Side: side, Group: l.Group, Abyssal: l.Abyssal,
 				Priced: l.LineValue != "",
 			}
+			if l.Abyssal != nil && l.Abyssal.HasScore {
+				pl.RollTag = "Roll " + strings.Replace(l.Abyssal.ScoreText, " / ", "/", 1)
+			}
+			// The basis phrase: our own swept typical for a
+			// line priced from the Forge sweep (the abyssal
+			// model's lines included -- the card header
+			// credits the model), the copy corpus and the
+			// stored estimates under their own words, the
+			// outside aggregate named as itself, and an
+			// honest blank where nothing priced the line.
+			switch {
+			case !pl.Priced:
+				pl.BasisText = "Not priced"
+				pl.BasisAmber = true
+			case l.Tier == module.AppraisalTierFallback:
+				pl.BasisText = "Outside Aggregate Est: " + formatShortISK(l.LineValueNum)
+				pl.BasisAmber = true
+			case l.Tier == module.AppraisalTierCopyMedian:
+				pl.BasisText = "Our copy median: " + formatShortISK(l.LineValueNum)
+				pl.BasisNote = l.TierNote
+			case l.Tier == module.AppraisalTierEstimate:
+				pl.BasisText = "Estimated sell: " + formatShortISK(l.LineValueNum)
+			default:
+				pl.BasisText = "Swept Forge Typical: " + formatShortISK(l.LineValueNum)
+			}
+			if l.Tier != "" && l.Tier != module.AppraisalTierUnpriced {
+				tiers[l.Tier] = true
+			}
 			out.Lines = append(out.Lines, pl)
-			if l.Abyssal != nil {
-				out.Abyssals = append(out.Abyssals, panelAbyssal{
-					LineName: l.Name, ItemID: l.ItemID, Panel: l.Abyssal,
-				})
+			if l.Abyssal != nil && firstAbyssal == nil {
+				firstAbyssal = l.Abyssal
 			}
 		}
 	}
 	addLines(dv.Offered, "Offered")
 	addLines(dv.Wanted, "Wanted")
+	out.SourceLabel = drawerSourceLabel(row.Type, tiers)
+
+	// Telemetry for the first abyssal line, when it carries
+	// rolls or a stored estimate range: the same stored
+	// roll data the detail page renders, inline here.
+	if firstAbyssal != nil && (len(firstAbyssal.Rolls) > 0 || firstAbyssal.HasRange) {
+		tv := &telemetryView{}
+		if firstAbyssal.HasRange {
+			low := strings.TrimSuffix(formatShortISK(firstAbyssal.EstLowNum), " ISK")
+			tv.EstRange = low + " – " + formatShortISK(firstAbyssal.EstHighNum)
+		}
+		for _, rl := range firstAbyssal.Rolls {
+			tr := telemetryRoll{Name: rl.Name, Good: rl.Good, Pct: rl.Pct, HasPct: rl.HasPct}
+			tr.Figure = rl.Value
+			if rl.HasBase && rl.Delta != "" {
+				tr.Figure = rl.Delta
+			}
+			tv.Rolls = append(tv.Rolls, tr)
+		}
+		out.Telemetry = tv
+	}
+
+	// The execution summary: the effective ask (the reward
+	// for a courier, the standing bid for an auction, else
+	// the price), our value where one is stored, and the
+	// spread over the full effective cost -- the ask plus a
+	// fully priced wanted side, the same cost the deal
+	// ratio judges. A courier's summary sets its reward
+	// against its collateral and shows no spread: collateral
+	// minus reward is not a deal figure.
+	effAsk := row.Price
+	switch row.Type {
+	case "courier":
+		effAsk = row.Reward
+		out.SumValue = formatShortISK(row.Collateral)
+	case "auction":
+		if dv.HasTopBid {
+			effAsk = dv.TopBidNum
+		}
+	}
+	out.SumAsking = formatShortISK(effAsk)
+	if row.Type != "courier" && row.PricedAt.Valid && row.PricedLines > 0 {
+		out.SumValue = formatShortISK(row.OfferedValue)
+		cost, costKnown := effAsk, true
+		if len(dv.Wanted) > 0 {
+			for _, l := range dv.Wanted {
+				if l.LineValue == "" {
+					costKnown = false
+					break
+				}
+			}
+			if costKnown {
+				cost += row.WantValue
+			}
+		}
+		if costKnown && row.OfferedValue > cost {
+			spread := row.OfferedValue - cost
+			out.SumSpread = fmt.Sprintf("%s (%.1f%%)", formatShortISK(spread), spread/row.OfferedValue*100)
+		}
+	}
+
 	label := row.Title
 	if label == "" {
 		label = dv.TypeLabel
@@ -1656,6 +1689,41 @@ func (app *mod) buildPanelView(ctx context.Context, id int64) (*panelView, bool)
 	out.CopyText = fmt.Sprintf("<url=contract:%d//%d>%s [%d]</url>",
 		row.RegionID, row.ContractID, label, row.ContractID)
 	return out, true
+}
+
+// drawerSourceLabel names the valuation source the drawer
+// header credits, from the tiers the contract's lines were
+// priced under: our own sweep heads the list, then the
+// copy corpus, the abyssal model (credited on its own when
+// no swept typical stands beside it), stored estimates,
+// and the outside aggregate. A courier's appraisal is its
+// hauling rate.
+func drawerSourceLabel(contractType string, tiers map[string]bool) string {
+	if contractType == "courier" {
+		return "Route Hauling Rate"
+	}
+	var parts []string
+	typical := tiers[module.AppraisalTierTypical]
+	if typical {
+		parts = append(parts, "Forge Sweep")
+	}
+	if tiers[module.AppraisalTierCopyMedian] {
+		if len(parts) == 0 && len(tiers) == 1 {
+			parts = append(parts, "Contract History Est.")
+		} else {
+			parts = append(parts, "BPO Index")
+		}
+	}
+	if tiers[module.AppraisalTierAbyssal] && !typical {
+		parts = append(parts, "Abyssal Neural Model")
+	}
+	if tiers[module.AppraisalTierEstimate] {
+		parts = append(parts, "Stored Estimates")
+	}
+	if tiers[module.AppraisalTierFallback] {
+		parts = append(parts, "Outside Aggregate")
+	}
+	return strings.Join(parts, " + ")
 }
 
 // handleContractPanel answers the row expansion: one
@@ -1789,7 +1857,14 @@ func (app *mod) buildDetailView(ctx context.Context, contractID int64) (*detailV
 			itemTypeIDs = append(itemTypeIDs, it.TypeID)
 		}
 	}
-	bpTypes := app.blueprintTypes(ctx, itemTypeIDs)
+	// The SDE group each line's type sits in, in one read:
+	// the appraisal drawer's per-line chip names it.
+	groups := map[int64]string{}
+	if grows, err := app.queries.ListTypeGroupNames(ctx, itemTypeIDs); err == nil {
+		for _, row := range grows {
+			groups[row.TypeID] = row.Name
+		}
+	}
 	// The stored medians behind any copy-priced lines, in one
 	// read, so a copy line's note can say what its price
 	// stands on -- the same basis habit as the abyssal panel.
@@ -1815,7 +1890,7 @@ func (app *mod) buildDetailView(ctx context.Context, contractID int64) (*detailV
 	}
 	pricedWanted := 0
 	for _, it := range items {
-		line := app.detailLine(ctx, it, abyssal, bpTypes, copyMedians)
+		line := app.detailLine(ctx, it, abyssal, copyMedians, groups)
 		if it.IsIncluded {
 			v.Offered = append(v.Offered, line)
 		} else {
@@ -1875,6 +1950,8 @@ func (app *mod) buildDetailView(ctx context.Context, contractID int64) (*detailV
 		}
 		if len(bids) > 0 {
 			v.TopBid = esi.FormatISK(bids[0].Amount)
+			v.TopBidNum = bids[0].Amount
+			v.HasTopBid = true
 		}
 	}
 
@@ -1882,18 +1959,23 @@ func (app *mod) buildDetailView(ctx context.Context, contractID int64) (*detailV
 	return v, true
 }
 
-func (app *mod) detailLine(ctx context.Context, it db.PubContractItem, abyssal map[int64]db.AbyssalItem, bpTypes map[int64]bool, copyMedians map[string]db.BlueprintCopyMedian) detailLine {
+func (app *mod) detailLine(ctx context.Context, it db.PubContractItem, abyssal map[int64]db.AbyssalItem, copyMedians map[string]db.BlueprintCopyMedian, groups map[int64]string) detailLine {
 	line := detailLine{
-		Name:    app.deps.TypeNameOrID(ctx, it.TypeID),
-		TypeID:  it.TypeID,
-		IconURL: TypeIconURL(it.TypeID, bpTypes[it.TypeID], it.IsBlueprintCopy, 32),
-		Qty:     esi.FormatInt(it.Quantity),
-		Note:    blueprintNote(it),
+		Name:   app.deps.TypeNameOrID(ctx, it.TypeID),
+		TypeID: it.TypeID,
+		Qty:    esi.FormatInt(it.Quantity),
+		QtyNum: it.Quantity,
+		Group:  groups[it.TypeID],
+		Note:   blueprintNote(it),
 	}
 	if it.ItemID.Valid {
 		line.ItemID = it.ItemID.Int64
 	}
 	if it.PriceTier != "" {
+		line.Tier = it.PriceTier
+		if it.LineValue.Valid {
+			line.LineValueNum = it.LineValue.Float64
+		}
 		line.TierLabel = tierLabel(it.PriceTier)
 		if it.UnitPrice.Valid {
 			line.UnitPrice = esi.FormatISK(it.UnitPrice.Float64)
@@ -2018,10 +2100,13 @@ func (app *mod) abyssalPanel(ctx context.Context, ab db.AbyssalItem) *abyssalPan
 		panel.Estimate = esi.FormatISK(ab.EstValue.Float64)
 		if ab.EstLow.Valid {
 			panel.EstLow = esi.FormatISK(ab.EstLow.Float64)
+			panel.EstLowNum = ab.EstLow.Float64
 		}
 		if ab.EstHigh.Valid {
 			panel.EstHigh = esi.FormatISK(ab.EstHigh.Float64)
+			panel.EstHighNum = ab.EstHigh.Float64
 		}
+		panel.HasRange = ab.EstLow.Valid && ab.EstHigh.Valid
 		switch ab.EstBasis {
 		case "corpus":
 			if ab.EstScope == "module" {

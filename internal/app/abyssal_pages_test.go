@@ -65,13 +65,19 @@ func TestAbyssalSearchAndDetailPages(t *testing.T) {
 	app, conn, _ := buildCorpTestApp(t, tr)
 	seedAbyssalPage(t, conn)
 
-	// The row carries the estimate with spread and basis,
-	// the cap in plain words, and the primary bar.
+	// The row carries the roll pill and the appraised
+	// value alone; the provenance, estimate basis and cap
+	// render in the expansion drawer and on the contract
+	// page, not in the row's flow.
 	_, body := getAnon(t, app, "/contracts/search/?family=test_damage_thing")
 	mustContain(t, "family search", body,
-		"Bricked But Pretty", "Mutated from", "Test Damage II", "Test Mutaplasmid",
-		"Our estimate", "205,000,000", "from 8 listings of this module",
-		"Held back by: CPU fitting cost", "Roll score 45 / 100", `data-w="80"`)
+		"Bricked But Pretty", "Roll Score: 45/100", "<span>Top 20%</span>",
+		"[Roll 45/100]", "205.0M ISK", "priced 1 of 1 lines")
+	for _, gone := range []string{"Mutated from", "Held back by", "data-abpop", "Our estimate"} {
+		if strings.Contains(body, gone) {
+			t.Errorf("the results row still carries %q", gone)
+		}
+	}
 
 	// A family the item is not in excludes it.
 	_, body = getAnon(t, app, "/contracts/search/?family=warp_scrambler")

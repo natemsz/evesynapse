@@ -234,15 +234,22 @@
 .cs-slider-pair input[type="range"] { flex: 1; width: auto; }
 .cs-slider-pair input[type="number"] { width: 4.6rem; flex: none; }
 
-/* ---- results: their own .box section ---- */
-.cs-results { padding: 0.7rem 0.85rem 0.4rem; margin-top: 1rem; }
-.cs-results-head {
-  display: flex; justify-content: space-between; align-items: baseline;
-  gap: 1rem; flex-wrap: wrap;
+/* ---- results: the count bar over one continuous table ---- */
+/* The count bar sits above the results panel: the match
+   count and page on the left, the inspection hint on the
+   right. The panel itself is one table -- hairline row
+   dividers, a hover tint, and the accent left bar on the
+   expanded row only. */
+.cs-countbar {
+  display: flex; justify-content: space-between; align-items: center;
+  gap: 1rem; flex-wrap: wrap; margin: 1rem 0.15rem 0.6rem;
 }
-.cs-none { margin: 0.2rem 0 0.6rem; }
-.cs-results-head p { margin: 0; }
-.cs-active { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.55rem; }
+.cs-count { margin: 0; font-size: 0.75rem; }
+.cs-count strong { color: var(--text-bright); }
+.cs-counthint { margin: 0; font-size: 0.69rem; color: var(--muted); }
+.cs-results { padding: 0 0 0.4rem; }
+.cs-none { margin: 0; padding: 0.7rem 0.85rem 0.6rem; }
+.cs-active { display: flex; flex-wrap: wrap; gap: 0.35rem; padding: 0.7rem 0.85rem 0; }
 .cs-fchip {
   border: 1px solid var(--glass-edge); border-radius: 999px;
   padding: 0.12rem 0.6rem; color: var(--text); text-decoration: none;
@@ -252,170 +259,198 @@
 .cs-fchip.hot { border-color: var(--deal); color: var(--deal); background: color-mix(in srgb, var(--deal) 10%, transparent); }
 .cs-fchip.hot:hover { border-color: var(--neg); color: var(--neg); }
 
-.cs-rows {
-  display: flex; flex-direction: column; margin-top: 0.7rem;
-  border-top: 1px solid color-mix(in srgb, var(--glass-edge) 55%, transparent);
+.cs-table { width: 100%; border-collapse: collapse; text-align: left; }
+.cs-table col.cs-c1 { width: 24%; }
+.cs-table col.cs-c2 { width: 32%; }
+.cs-table col.cs-c3 { width: 15%; }
+.cs-table col.cs-c4 { width: 15%; }
+.cs-table col.cs-c5 { width: 14%; }
+.cs-table thead tr { background: color-mix(in srgb, var(--panel) 55%, transparent); }
+.cs-table th {
+  padding: 0.75rem; color: var(--muted); font-weight: 500; text-shadow: none;
+  border-bottom: 1px solid color-mix(in srgb, var(--glass-edge) 40%, transparent);
 }
-.cs-row {
-  border-bottom: 1px solid color-mix(in srgb, var(--glass-edge) 55%, transparent);
-  padding: 0.65rem 0.2rem; cursor: pointer;
+.cs-table th:first-child { padding-left: 1rem; }
+.cs-table th:last-child { padding-right: 1rem; }
+.cs-table td { vertical-align: top; padding: 0.875rem 0.75rem; }
+.cs-table td.cs-c1 { padding-left: 1rem; }
+.cs-table td.cs-c5 { padding-right: 1rem; }
+.cs-table tbody tr.cs-row {
+  border-top: 1px solid color-mix(in srgb, var(--glass-edge) 40%, transparent);
+  cursor: pointer;
 }
-.cs-row:hover { background: rgba(255, 106, 0, 0.045); }
-.cs-row.open { background: var(--row-hover); box-shadow: inset 3px 0 0 var(--accent); }
-.cs-row-main {
-  display: grid; gap: 0.4rem 1.1rem; align-items: start;
-  grid-template-columns: minmax(0, 1fr) 10.5rem 13rem 14rem 2rem;
+.cs-table tbody tr.cs-row:first-child { border-top: 0; }
+.cs-table tbody tr.cs-row:hover { background: rgba(30, 20, 13, 0.35); }
+.cs-table tbody tr.cs-row.open {
+  background: rgba(34, 22, 14, 0.55);
+  box-shadow: inset 2px 0 0 var(--accent);
 }
-.cs-row-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.35rem 0.6rem; }
-.cs-type { font-size: 0.8rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; }
+/* The type label sits in a fixed-width slot so the deal
+   badge starts at the same x on every row, however long
+   the type text runs. */
+.cs-type {
+  display: inline-block; width: 6.6rem; vertical-align: middle;
+  font-size: 0.69rem; font-weight: 600; letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
 .cs-type.t-exchange { color: var(--accent); }
-.cs-type.t-auction { color: var(--gold); }
-.cs-type.t-courier { color: #8fb8d8; }
+.cs-type.t-auction { color: #fbbf24; }
+.cs-type.t-courier { color: #34d399; }
 .cs-deal {
-  color: var(--deal); border: 1px solid var(--deal); border-radius: var(--r-xs);
-  padding: 0 0.4rem; font-size: 0.78rem; font-weight: 700;
-  background: color-mix(in srgb, var(--deal) 12%, transparent);
+  display: inline-flex; align-items: center; gap: 0.2rem; vertical-align: middle;
+  padding: 0.1rem 0.4rem; font-size: 0.625rem; font-weight: 700;
+  font-family: "Rajdhani", "Segoe UI", sans-serif;
+  text-transform: uppercase; letter-spacing: 0.04em;
+  color: #6ee7a8; background: rgba(6, 40, 24, 0.55);
+  border: 1px solid rgba(52, 211, 153, 0.5); border-radius: 0.25rem;
 }
-.cs-row-title { font-size: 1.02rem; }
-.cs-row-meta { color: var(--muted); font-size: 0.88rem; }
-.cs-contents { margin-top: 0.3rem; display: flex; flex-direction: column; gap: 0.18rem; }
-.cs-line-name { color: var(--gold); }
-.cs-qty { color: var(--text); font-weight: 600; }
-.cs-wants { color: var(--muted); font-weight: 700; font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.05em; }
-.cs-chips { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.25rem; }
-.cs-chipinfo {
-  border: 1px solid var(--glass-edge); border-radius: var(--r-xs);
-  padding: 0.05rem 0.45rem; font-size: 0.82rem; background: var(--row-alt);
+.cs-row-title {
+  color: var(--text-bright); font-weight: 500; font-size: 0.75rem;
+  margin-top: 0.25rem; white-space: nowrap; overflow: hidden;
+  text-overflow: ellipsis; max-width: 16.25rem;
 }
-.cs-chipinfo.bp { color: var(--gold); border-color: color-mix(in srgb, var(--gold) 55%, transparent); }
-.cs-chipinfo.ab { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 55%, transparent); font-weight: 600; }
-.cs-chipinfo.co { color: #8fb8d8; border-color: color-mix(in srgb, #8fb8d8 45%, transparent); }
-/* Item icons beside content names, the EVE image server's
-   per-type icon at the size the fitting pages use. */
-.cs-line { display: flex; align-items: center; gap: 0.45rem; }
-.cs-line-item { display: inline-flex; align-items: center; gap: 0.35rem; }
-.cs-line-icon, .cs-pline-icon { border-radius: var(--r-xs); flex: none; }
-/* ---- abyssal stats popup ---- */
-/* The mutaplasmid detail (the row's score/bars/estimate
-   and the panel's per-line rolls) opens as a popup over
-   the list instead of expanding inline: the container is
-   rendered with the row/panel HTML and contracts.js only
-   positions and toggles it, so the list never reflows.
-   The paint is the region popover's menu recipe. */
-.cs-abwrap { position: relative; display: inline-flex; }
-.cs-abbtn { cursor: pointer; font: inherit; }
-button.cs-abbtn:hover { border-color: var(--accent); color: var(--text-bright); }
-.cs-abpop {
-  position: absolute; z-index: 60; top: calc(100% + 0.4rem); left: 0;
-  width: min(27rem, calc(100vw - 1.5rem));
-  max-height: 70vh; overflow: auto;
-  display: flex; flex-direction: column; gap: 0.25rem;
-  background: var(--panel); border: 1px solid var(--glass-edge);
-  border-radius: var(--r-xs); padding: 0.6rem 0.75rem;
-  box-shadow: 0 1rem 2.5rem rgba(0, 0, 0, 0.55);
-  font-size: 0.92rem; text-align: left; cursor: default;
+.cs-row-meta {
+  display: flex; gap: 0.4rem; align-items: center; margin-top: 0.25rem;
+  font-size: 0.69rem; color: var(--muted);
 }
-.cs-abpop[hidden] { display: none; }
-/* Flipped by contracts.js when the room below the
-   trigger would run past the footer or the viewport:
-   the popup opens upward from the wrap instead. */
-.cs-abpop.flip { top: auto; bottom: calc(100% + 0.4rem); }
-.cs-abpop-head {
-  display: flex; justify-content: space-between; align-items: center;
-  gap: 1rem; margin-bottom: 0.15rem;
+.cs-itemline { display: flex; align-items: center; gap: 0.5rem; font-size: 0.75rem; margin-bottom: 0.25rem; }
+.cs-itemline:last-child { margin-bottom: 0; }
+.cs-line-name { color: var(--text-bright); font-weight: 500; }
+.cs-qty { color: #ff9848; }
+.cs-wants {
+  color: var(--muted); font-weight: 700; font-size: 0.69rem;
+  text-transform: uppercase; letter-spacing: 0.05em;
 }
-.cs-abpop-head > span {
-  font-size: 0.82rem; font-weight: 700; letter-spacing: 0.07em;
-  text-transform: uppercase; color: var(--accent);
+/* One specialized pill under a row's contents: the
+   abyssal roll score, the first blueprint line's specs,
+   or the courier's volume and rate. */
+.cs-pill {
+  display: inline-flex; align-items: center; gap: 0.5rem; margin-top: 0.5rem;
+  padding: 0.1rem 0.5rem; border-radius: 0.25rem; font-size: 0.69rem;
 }
-.cs-abpop-x {
-  background: none; border: 0; color: var(--muted); cursor: pointer;
-  font-size: 1.05rem; line-height: 1; padding: 0.1rem 0.25rem;
+.cs-pill.ab { background: rgba(8, 47, 73, 0.5); border: 1px solid rgba(34, 211, 238, 0.3); color: #a5f3fc; }
+.cs-pill.bp { background: rgba(69, 26, 3, 0.5); border: 1px solid rgba(245, 158, 11, 0.3); color: #fcd34d; }
+.cs-pill.co { background: rgba(6, 40, 24, 0.5); border: 1px solid rgba(52, 211, 153, 0.3); color: #a7f3d0; }
+.cs-cell-label { font-size: 0.69rem; color: var(--muted); }
+.cs-cell-value {
+  font-weight: 700; font-size: 0.875rem; color: var(--text-bright);
+  white-space: nowrap; margin-top: 0.15rem;
 }
-.cs-abpop-x:hover { color: var(--text-bright); }
-/* In the panel the aside sits in the right-hand column:
-   its popup right-aligns to the wrap so it cannot spill
-   past the panel's edge. */
-.cs-panel-abs .cs-abpop { left: auto; right: 0; }
-/* On a narrow screen contracts.js lifts the open popup
-   to the page root with this class: a bottom sheet
-   across the viewport instead of an anchored popover. */
-.cs-abpop.sheet {
-  position: fixed; left: 0; right: 0; bottom: 0; top: auto;
-  width: auto; max-height: 78vh; overflow: auto; z-index: 200;
-  border-radius: var(--r-xs) var(--r-xs) 0 0;
+.cs-psub { font-size: 0.69rem; margin-top: 0.15rem; }
+.cs-psub.amber { color: #fbbf24; }
+.cs-psub.gray { color: var(--muted); }
+.cs-priced { font-size: 0.69rem; color: var(--muted); margin-top: 0.15rem; }
+.cs-spread { font-size: 0.69rem; color: #34d399; margin-top: 0.15rem; }
+.cs-c5 .sec-pill { margin-left: 0; border-radius: var(--r-xs); }
+.cs-place {
+  display: inline-block; max-width: calc(100% - 62px); vertical-align: bottom;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  font-weight: 500; font-size: 0.75rem;
 }
-.cs-bar { display: flex; align-items: center; gap: 0.55rem; }
-.cs-bar-name { flex: 0 0 11rem; color: var(--muted); font-size: 0.86rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.cs-bar .meter { flex: 0 0 8.5rem; }
-.cs-bar-pct { font-size: 0.86rem; color: var(--muted); }
-.cs-cell-label { font-size: 0.74rem; letter-spacing: 0.07em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
-.cs-cell-value { font-weight: 700; font-size: 1.0rem; white-space: nowrap; }
-.cs-cell-note { color: var(--muted); font-size: 0.87rem; margin-top: 0.15rem; }
-.cs-spread { color: var(--deal); font-weight: 700; margin-top: 0.15rem; }
-.cs-loc .sec-pill { border-radius: var(--r-xs); }
-.cs-place { font-weight: 600; }
+.cs-expires { font-size: 0.69rem; color: var(--muted); margin-top: 0.25rem; }
 .cs-copy {
   background: var(--row-alt); border: 1px solid var(--glass-edge);
   color: var(--muted); border-radius: var(--r-xs);
-  cursor: pointer; line-height: 1;
+  cursor: pointer; line-height: 1; padding: 0.35rem; font-size: 0.69rem;
 }
-.cs-row-main > .cs-copy { width: 2rem; height: 2rem; font-size: 0.95rem; justify-self: end; }
+.cs-rowcopy { float: right; }
 .cs-copy:hover { color: var(--accent); border-color: var(--accent); }
 .cs-copy.copied { color: var(--deal); border-color: var(--deal); }
-.cs-pager { display: flex; gap: 1.2rem; margin-top: 0.9rem; }
+.cs-pager { display: flex; gap: 1.2rem; margin-top: 0.9rem; padding: 0 0.85rem; }
 
-/* ---- expansion panel ---- */
+/* ---- expansion drawer ---- */
+/* The drawer is the table row under the open contract:
+   a tinted band holding two light-glass cards -- the
+   line appraisal and, beside it, the mutaplasmid
+   telemetry or the deal execution summary. */
+.cs-drow > td {
+  padding: 0;
+  border-top: 1px solid color-mix(in srgb, var(--glass-edge) 40%, transparent);
+  background: color-mix(in srgb, var(--panel) 50%, transparent);
+}
 .cs-panel-slot { cursor: default; }
-.cs-panel {
-  border-top: 1px solid var(--glass-edge); margin-top: 0.65rem; padding-top: 0.65rem;
+.cs-panel { padding: 1rem; }
+.cs-panel-loading { padding: 0.4rem 0; margin: 0; }
+.cs-pgrid {
+  display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 1rem;
 }
-.cs-panel-loading { padding: 0.4rem 0; }
-.cs-panel-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.4rem 1rem; }
-.cs-panel-head h4 { margin: 0; font-size: 0.95rem; letter-spacing: 0.05em; text-transform: uppercase; color: var(--gold); }
-.cs-panel-head a { margin-left: auto; }
-.cs-panel-summary {
-  display: flex; flex-wrap: wrap; gap: 0.35rem 1.4rem; margin-top: 0.5rem;
-  border: 1px solid var(--box-edge); border-radius: var(--r-xs);
-  background: var(--row-alt); padding: 0.5rem 0.75rem; font-size: 0.94rem;
+.cs-dcard {
+  background: rgba(255, 242, 226, 0.055);
+  border: 1px solid rgba(255, 190, 130, 0.22);
+  border-radius: 0.375rem; padding: 0.75rem;
+  display: flex; flex-direction: column;
 }
-.cs-panel-summary small { color: var(--muted); }
-.cs-deal-note { color: var(--muted); }
-.cs-deal-note.deal { color: var(--deal); font-weight: 700; }
-.cs-panel-grid { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 1rem; margin-top: 0.6rem; }
-.cs-panel-grid.solo { grid-template-columns: minmax(0, 1fr); }
-.cs-pline {
+.cs-dhead {
+  display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+  margin-bottom: 0.5rem; padding-bottom: 0.4rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--glass-edge) 40%, transparent);
+}
+.cs-dhead-t {
+  font-size: 0.69rem; font-weight: 600; letter-spacing: 0.06em;
+  text-transform: uppercase; color: #ff882e;
+}
+.cs-dhead-t.cy { color: #22d3ee; }
+.cs-dhead-t.dim { color: var(--muted); }
+.cs-dhead-id { font-size: 0.69rem; color: #b39f88; }
+.cs-dnote { margin: 0 0 0.4rem; color: var(--muted); font-size: 0.75rem; }
+.cs-aline {
+  display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+  padding: 0.25rem 0; font-size: 0.75rem;
+  border-bottom: 1px solid rgba(255, 180, 120, 0.05);
+}
+.cs-aline:last-child { border-bottom: 0; }
+.cs-aline-l { min-width: 0; }
+.cs-gchip {
+  padding: 0.1rem 0.4rem; font-size: 0.625rem; border-radius: 0.25rem;
+  background: rgba(255, 240, 220, 0.09); color: #d8c6b2;
+}
+.cs-aq { color: #ff882e; }
+.cs-tp { font-size: 0.69rem; color: #34d399; text-align: right; flex: none; }
+.cs-tp.un { color: #fbbf24; }
+.cs-tnote { display: block; color: var(--muted); font-size: 0.63rem; }
+.cs-srow {
   display: flex; justify-content: space-between; gap: 1rem;
-  padding: 0.4rem 0; border-bottom: 1px solid color-mix(in srgb, var(--glass-edge) 55%, transparent);
+  font-size: 0.75rem; padding: 0.2rem 0;
 }
-.cs-pline:last-child { border-bottom: 0; }
-.cs-pline-main { min-width: 0; display: flex; flex-wrap: wrap; gap: 0.3rem 0.5rem; align-items: center; }
-.cs-side {
-  font-size: 0.74rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase;
-  color: var(--accent); border: 1px solid color-mix(in srgb, var(--accent) 50%, transparent);
-  border-radius: var(--r-xs); padding: 0 0.35rem;
+.cs-sk { color: var(--muted); }
+.cs-sv { color: var(--text-bright); }
+.cs-srow.sp {
+  border-top: 1px solid color-mix(in srgb, var(--glass-edge) 40%, transparent);
+  padding-top: 0.35rem; margin-top: 0.2rem;
 }
-.cs-side.want { color: var(--gold); border-color: color-mix(in srgb, var(--gold) 50%, transparent); }
-.cs-pline-value { text-align: right; flex: none; }
-.cs-tier { color: var(--muted); font-size: 0.88rem; }
-.cs-abpanel {
-  border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--glass-edge));
-  border-radius: var(--r-xs); background: var(--row-alt); padding: 0.6rem 0.75rem;
-  margin-bottom: 0.6rem;
+.cs-srow.sp .cs-sv { color: #34d399; font-weight: 700; }
+.cs-dfoot { margin-top: auto; padding-top: 0.5rem; }
+.cs-dfoot-in {
+  border-top: 1px solid color-mix(in srgb, var(--glass-edge) 40%, transparent);
+  padding-top: 0.5rem; display: flex; align-items: center;
+  justify-content: space-between; gap: 1rem;
 }
-.cs-abpanel-head { display: flex; justify-content: space-between; align-items: baseline; gap: 0.6rem; flex-wrap: wrap; }
-.cs-abpanel-head h4 { margin: 0; font-size: 0.9rem; letter-spacing: 0.05em; text-transform: uppercase; color: var(--accent); }
+.cs-dfoot-note { font-size: 0.625rem; color: var(--muted); }
+/* Telemetry attributes: the name and its figure over a
+   6px band bar filled to the roll's percentile. */
+.cs-attr { margin-bottom: 0.5rem; }
+.cs-attr-r {
+  display: flex; justify-content: space-between; gap: 1rem;
+  font-size: 0.69rem; margin-bottom: 0.15rem;
+}
+.cs-attr-n { color: var(--text); }
+.cs-attr-v { font-weight: 600; }
+.cs-telbar {
+  height: 6px; border-radius: 3px; overflow: hidden;
+  background: rgba(255, 255, 255, 0.10);
+}
+.cs-telbar > span {
+  display: block; height: 100%;
+  background: linear-gradient(90deg, #06b6d4, #34d399);
+}
+/* Roll rows, shared with the contract detail page's
+   inline mutaplasmid panel. */
 .cs-roll {
   display: grid; grid-template-columns: minmax(0, 1fr) auto 6.5rem 2.6rem;
   gap: 0.5rem; align-items: center; padding: 0.14rem 0; font-size: 0.9rem;
 }
 .cs-roll-name { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cs-roll-pct { color: var(--muted); text-align: right; }
-.cs-abest { font-size: 1.0rem; }
-.cs-panel-foot {
-  display: flex; justify-content: space-between; align-items: center;
-  gap: 1rem; margin-top: 0.7rem; flex-wrap: wrap;
-}
 
 /* ---- detail page ---- */
 .cd-facts {
@@ -452,11 +487,11 @@ button.cs-abbtn:hover { border-color: var(--accent); color: var(--text-bright); 
   .cs-drawer-grid > .cs-field { grid-column: span 1; }
   [data-drawer-panel="abyssal"] .cs-drawer-grid > :nth-child(2),
   [data-drawer-panel="couriers"] .cs-drawer-grid > :nth-child(1) { grid-column: span 2; }
-  .cs-row-main { grid-template-columns: minmax(0, 1fr) 10.5rem 12rem; }
-  .cs-loc { grid-column: 1 / -1; }
-  .cs-row { position: relative; }
-  .cs-row-main > .cs-copy { position: absolute; top: 0.6rem; right: 0.2rem; }
-  .cs-panel-grid { grid-template-columns: minmax(0, 1fr); }
+  /* The results table keeps its five columns and scrolls
+     sideways inside its panel rather than crushing them. */
+  .cs-results { overflow-x: auto; }
+  .cs-table { min-width: 46rem; }
+  .cs-pgrid { grid-template-columns: minmax(0, 1fr); }
 }
 @media (max-width: 42rem) {
   /* The band stacks: search full width, then the type
@@ -472,10 +507,7 @@ button.cs-abbtn:hover { border-color: var(--accent); color: var(--text-bright); 
   .cs-drawer-grid > .cs-field,
   [data-drawer-panel="abyssal"] .cs-drawer-grid > :nth-child(2),
   [data-drawer-panel="couriers"] .cs-drawer-grid > :nth-child(1) { grid-column: span 1; }
-  .cs-row-main { grid-template-columns: minmax(0, 1fr) 1fr; }
   .cs-region-pop { position: static; width: auto; grid-template-columns: 1fr; margin-top: 0.4rem; }
   .cs-actions { margin-left: 0; }
-  .cs-bar-name { flex-basis: 7.5rem; }
-  .cs-bar .meter { flex-basis: 6rem; }
   .cs-roll { grid-template-columns: minmax(0, 1fr) auto 4.5rem 2.4rem; }
 }

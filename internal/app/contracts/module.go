@@ -50,6 +50,7 @@ var Module = module.Module{
 		anon := r.With(deps.AnonPages())
 		anon.Get("/contracts/search/", h((*mod).handleContractSearch))
 		anon.Get("/contracts/search/{contractID}/", h((*mod).handleContractDetail))
+		anon.Get("/contracts/search/{contractID}/panel", h((*mod).handleContractPanel))
 		// View in game acts as one of the reader's characters,
 		// so it is signed-in only.
 		auth.Post("/ui/openwindow/contract/{contractID}", h((*mod).handleOpenContractInGame))
@@ -68,6 +69,7 @@ type PageData struct {
 	ContractsChars []module.CharLink
 	ContractSearch *searchView
 	ContractDetail *detailView
+	ContractPanel  *panelView
 }
 
 // Shell returns the embedded ShellData pointer for render.

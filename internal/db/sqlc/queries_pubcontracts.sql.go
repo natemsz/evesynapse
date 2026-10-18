@@ -84,11 +84,13 @@ WHERE (coalesce(cardinality($1::text[]), 0) = 0
   AND ($7::bigint = -1
        OR c.for_corporation = ($7::bigint = 1))
   AND ($8::double precision < 0
-       OR c.price >= $8::double precision)
+       OR (CASE WHEN c.type = 'courier' THEN c.reward ELSE c.price END)
+            >= $8::double precision)
   AND ($9::double precision < 0
-       OR c.price <= $9::double precision)
+       OR (CASE WHEN c.type = 'courier' THEN c.reward ELSE c.price END)
+            <= $9::double precision)
   AND ($10::double precision < 0
-       OR c.buyout >= $10::double precision)
+       OR c.buyout <= $10::double precision)
   AND ($11::text = ''
        OR c.start_location_id IN (
             SELECT station_id FROM sde_stations
@@ -133,43 +135,53 @@ WHERE (coalesce(cardinality($1::text[]), 0) = 0
        OR c.volume <= $17::double precision)
   AND ($18::bigint < 0
        OR c.days_to_complete <= $18::bigint)
-  AND (NOT $19::boolean OR EXISTS (
+  AND (NOT $19::boolean OR c.type = 'courier')
+  AND (NOT $20::boolean OR EXISTS (
         SELECT 1 FROM pub_contract_items i
         WHERE i.contract_id = c.contract_id AND i.is_included
           AND i.material_efficiency IS NOT NULL
-          AND ($20::text = 'any'
-               OR ($20::text = 'bpo' AND NOT i.is_blueprint_copy)
-               OR ($20::text = 'bpc' AND i.is_blueprint_copy))
-          AND ($21::bigint < 0
-               OR i.material_efficiency >= $21::bigint)
+          AND ($21::text = 'any'
+               OR ($21::text = 'bpo' AND NOT i.is_blueprint_copy)
+               OR ($21::text = 'bpc' AND i.is_blueprint_copy))
           AND ($22::bigint < 0
-               OR i.time_efficiency >= $22::bigint)
+               OR i.material_efficiency >= $22::bigint)
           AND ($23::bigint < 0
-               OR COALESCE(i.runs, 0) >= $23::bigint)))
-  AND ($24::timestamptz IS NULL
-       OR c.date_issued >= $24::timestamptz)
+               OR i.time_efficiency >= $23::bigint)
+          AND ($24::bigint < 0
+               OR COALESCE(i.runs, 0) >= $24::bigint)))
   AND ($25::timestamptz IS NULL
-       OR c.date_expired <= $25::timestamptz)
-  AND (NOT $26::boolean OR EXISTS (
+       OR c.date_issued >= $25::timestamptz)
+  AND ($26::timestamptz IS NULL
+       OR c.date_expired <= $26::timestamptz)
+  AND (NOT $27::boolean OR EXISTS (
         SELECT 1 FROM pub_contract_items i
         JOIN abyssal_items a ON a.item_id = i.item_id
         WHERE i.contract_id = c.contract_id AND i.is_included
-          AND ($27::text = ''
-               OR a.family = $27::text)
-          AND ($28::double precision < 0
-               OR a.score >= $28::double precision)
-          AND ($29::text = '' OR EXISTS (
+          AND ($28::text = ''
+               OR a.family = $28::text)
+          AND ($29::double precision < 0
+               OR a.score >= $29::double precision)
+          AND ($30::text = '' OR EXISTS (
                 SELECT 1 FROM sde_types st
                 WHERE st.type_id = a.source_type_id
-                  AND st.name ILIKE '%' || $29::text || '%'))
-          AND ($30::double precision < 0
-               OR a.est_value >= $30::double precision)
+                  AND st.name ILIKE '%' || $30::text || '%'))
           AND ($31::double precision < 0
-               OR a.est_value <= $31::double precision)
-          AND ($32::text = ''
-               OR COALESCE((a.percentiles ->> $32::text)::double precision, -1)
-                    >= $33::double precision)))
-  AND (NOT $34::boolean
+               OR a.est_value >= $31::double precision)
+          AND ($32::double precision < 0
+               OR a.est_value <= $32::double precision)
+          AND ($33::text = ''
+               OR COALESCE((a.percentiles ->> $33::text)::double precision, -1)
+                    >= $34::double precision)
+          AND ($35::double precision < 0
+               OR EXISTS (
+                     SELECT 1 FROM abyssal_family_weights w
+                     WHERE w.family = a.family AND NOT w.penalty_only
+                       AND w.weight = (
+                             SELECT MAX(w2.weight) FROM abyssal_family_weights w2
+                             WHERE w2.family = a.family AND NOT w2.penalty_only)
+                       AND COALESCE((a.percentiles ->> CAST(w.attribute_id AS text))::double precision, -1)
+                             >= $35::double precision))))
+  AND (NOT $36::boolean
        OR (c.deal_ratio IS NOT NULL AND c.deal_ratio <= 0.85))
 `
 
@@ -183,7 +195,7 @@ type CountPublicContractsSearchParams struct {
 	ForCorp        int64     `json:"for_corp"`
 	PriceMin       float64   `json:"price_min"`
 	PriceMax       float64   `json:"price_max"`
-	BuyoutMin      float64   `json:"buyout_min"`
+	BuyoutMax      float64   `json:"buyout_max"`
 	PlaceQ         string    `json:"place_q"`
 	PlaceEndQ      string    `json:"place_end_q"`
 	RewardMin      float64   `json:"reward_min"`
@@ -192,6 +204,7 @@ type CountPublicContractsSearchParams struct {
 	VolumeMin      float64   `json:"volume_min"`
 	VolumeMax      float64   `json:"volume_max"`
 	DaysMax        int64     `json:"days_max"`
+	CourierActive  bool      `json:"courier_active"`
 	BpActive       bool      `json:"bp_active"`
 	BpMode         string    `json:"bp_mode"`
 	MeMin          int64     `json:"me_min"`
@@ -207,6 +220,7 @@ type CountPublicContractsSearchParams struct {
 	AbEstMax       float64   `json:"ab_est_max"`
 	AbAttrKey      string    `json:"ab_attr_key"`
 	AbAttrMin      float64   `json:"ab_attr_min"`
+	AbPosMin       float64   `json:"ab_pos_min"`
 	DealsOnly      bool      `json:"deals_only"`
 }
 
@@ -221,7 +235,7 @@ func (q *Queries) CountPublicContractsSearch(ctx context.Context, arg CountPubli
 		arg.ForCorp,
 		arg.PriceMin,
 		arg.PriceMax,
-		arg.BuyoutMin,
+		arg.BuyoutMax,
 		arg.PlaceQ,
 		arg.PlaceEndQ,
 		arg.RewardMin,
@@ -230,6 +244,7 @@ func (q *Queries) CountPublicContractsSearch(ctx context.Context, arg CountPubli
 		arg.VolumeMin,
 		arg.VolumeMax,
 		arg.DaysMax,
+		arg.CourierActive,
 		arg.BpActive,
 		arg.BpMode,
 		arg.MeMin,
@@ -245,6 +260,7 @@ func (q *Queries) CountPublicContractsSearch(ctx context.Context, arg CountPubli
 		arg.AbEstMax,
 		arg.AbAttrKey,
 		arg.AbAttrMin,
+		arg.AbPosMin,
 		arg.DealsOnly,
 	)
 	var count int64
@@ -1469,11 +1485,13 @@ WHERE (coalesce(cardinality($1::text[]), 0) = 0
   AND ($7::bigint = -1
        OR c.for_corporation = ($7::bigint = 1))
   AND ($8::double precision < 0
-       OR c.price >= $8::double precision)
+       OR (CASE WHEN c.type = 'courier' THEN c.reward ELSE c.price END)
+            >= $8::double precision)
   AND ($9::double precision < 0
-       OR c.price <= $9::double precision)
+       OR (CASE WHEN c.type = 'courier' THEN c.reward ELSE c.price END)
+            <= $9::double precision)
   AND ($10::double precision < 0
-       OR c.buyout >= $10::double precision)
+       OR c.buyout <= $10::double precision)
   AND ($11::text = ''
        OR c.start_location_id IN (
             SELECT station_id FROM sde_stations
@@ -1518,59 +1536,75 @@ WHERE (coalesce(cardinality($1::text[]), 0) = 0
        OR c.volume <= $17::double precision)
   AND ($18::bigint < 0
        OR c.days_to_complete <= $18::bigint)
-  AND (NOT $19::boolean OR EXISTS (
+  AND (NOT $19::boolean OR c.type = 'courier')
+  AND (NOT $20::boolean OR EXISTS (
         SELECT 1 FROM pub_contract_items i
         WHERE i.contract_id = c.contract_id AND i.is_included
           AND i.material_efficiency IS NOT NULL
-          AND ($20::text = 'any'
-               OR ($20::text = 'bpo' AND NOT i.is_blueprint_copy)
-               OR ($20::text = 'bpc' AND i.is_blueprint_copy))
-          AND ($21::bigint < 0
-               OR i.material_efficiency >= $21::bigint)
+          AND ($21::text = 'any'
+               OR ($21::text = 'bpo' AND NOT i.is_blueprint_copy)
+               OR ($21::text = 'bpc' AND i.is_blueprint_copy))
           AND ($22::bigint < 0
-               OR i.time_efficiency >= $22::bigint)
+               OR i.material_efficiency >= $22::bigint)
           AND ($23::bigint < 0
-               OR COALESCE(i.runs, 0) >= $23::bigint)))
-  AND ($24::timestamptz IS NULL
-       OR c.date_issued >= $24::timestamptz)
+               OR i.time_efficiency >= $23::bigint)
+          AND ($24::bigint < 0
+               OR COALESCE(i.runs, 0) >= $24::bigint)))
   AND ($25::timestamptz IS NULL
-       OR c.date_expired <= $25::timestamptz)
-  AND (NOT $26::boolean OR EXISTS (
+       OR c.date_issued >= $25::timestamptz)
+  AND ($26::timestamptz IS NULL
+       OR c.date_expired <= $26::timestamptz)
+  AND (NOT $27::boolean OR EXISTS (
         SELECT 1 FROM pub_contract_items i
         JOIN abyssal_items a ON a.item_id = i.item_id
         WHERE i.contract_id = c.contract_id AND i.is_included
-          AND ($27::text = ''
-               OR a.family = $27::text)
-          AND ($28::double precision < 0
-               OR a.score >= $28::double precision)
-          AND ($29::text = '' OR EXISTS (
+          AND ($28::text = ''
+               OR a.family = $28::text)
+          AND ($29::double precision < 0
+               OR a.score >= $29::double precision)
+          AND ($30::text = '' OR EXISTS (
                 SELECT 1 FROM sde_types st
                 WHERE st.type_id = a.source_type_id
-                  AND st.name ILIKE '%' || $29::text || '%'))
-          AND ($30::double precision < 0
-               OR a.est_value >= $30::double precision)
+                  AND st.name ILIKE '%' || $30::text || '%'))
           AND ($31::double precision < 0
-               OR a.est_value <= $31::double precision)
-          AND ($32::text = ''
-               OR COALESCE((a.percentiles ->> $32::text)::double precision, -1)
-                    >= $33::double precision)))
-  AND (NOT $34::boolean
+               OR a.est_value >= $31::double precision)
+          AND ($32::double precision < 0
+               OR a.est_value <= $32::double precision)
+          AND ($33::text = ''
+               OR COALESCE((a.percentiles ->> $33::text)::double precision, -1)
+                    >= $34::double precision)
+          AND ($35::double precision < 0
+               OR EXISTS (
+                     SELECT 1 FROM abyssal_family_weights w
+                     WHERE w.family = a.family AND NOT w.penalty_only
+                       AND w.weight = (
+                             SELECT MAX(w2.weight) FROM abyssal_family_weights w2
+                             WHERE w2.family = a.family AND NOT w2.penalty_only)
+                       AND COALESCE((a.percentiles ->> CAST(w.attribute_id AS text))::double precision, -1)
+                             >= $35::double precision))))
+  AND (NOT $36::boolean
        OR (c.deal_ratio IS NOT NULL AND c.deal_ratio <= 0.85))
 ORDER BY
-  CASE WHEN $35::text = 'price_asc' THEN c.price END ASC NULLS LAST,
-  CASE WHEN $35::text = 'price_desc' THEN c.price END DESC NULLS LAST,
-  CASE WHEN $35::text = 'value_desc' THEN c.offered_value END DESC NULLS LAST,
-  CASE WHEN $35::text = 'deal_asc' THEN c.deal_ratio END ASC NULLS LAST,
-  CASE WHEN $35::text = 'expiry_asc' THEN c.date_expired END ASC NULLS LAST,
-  CASE WHEN $35::text = 'reward_desc' THEN c.reward END DESC NULLS LAST,
-  CASE WHEN $35::text = 'reward_m3_desc' THEN
+  CASE WHEN $37::text = 'price_asc' THEN
+       CASE WHEN c.type = 'courier' THEN c.reward ELSE c.price END END ASC NULLS LAST,
+  CASE WHEN $37::text = 'price_desc' THEN
+       CASE WHEN c.type = 'courier' THEN c.reward ELSE c.price END END DESC NULLS LAST,
+  CASE WHEN $37::text = 'margin_desc' THEN
+       CASE WHEN c.type = 'courier' THEN c.offered_value - c.reward
+            ELSE c.offered_value - c.price END
+       END DESC NULLS LAST,
+  CASE WHEN $37::text = 'value_desc' THEN c.offered_value END DESC NULLS LAST,
+  CASE WHEN $37::text = 'deal_asc' THEN c.deal_ratio END ASC NULLS LAST,
+  CASE WHEN $37::text = 'expiry_asc' THEN c.date_expired END ASC NULLS LAST,
+  CASE WHEN $37::text = 'reward_desc' THEN c.reward END DESC NULLS LAST,
+  CASE WHEN $37::text = 'reward_m3_desc' THEN
        CASE WHEN c.volume > 0 THEN c.reward / c.volume END END DESC NULLS LAST,
-  CASE WHEN $35::text = 'score_desc' THEN
+  CASE WHEN $37::text = 'score_desc' THEN
        (SELECT MAX(a.score) FROM pub_contract_items i
         JOIN abyssal_items a ON a.item_id = i.item_id
         WHERE i.contract_id = c.contract_id AND i.is_included) END DESC NULLS LAST,
   c.date_issued DESC, c.contract_id DESC
-LIMIT $37::bigint OFFSET $36::bigint
+LIMIT $39::bigint OFFSET $38::bigint
 `
 
 type SearchPublicContractsParams struct {
@@ -1583,7 +1617,7 @@ type SearchPublicContractsParams struct {
 	ForCorp        int64     `json:"for_corp"`
 	PriceMin       float64   `json:"price_min"`
 	PriceMax       float64   `json:"price_max"`
-	BuyoutMin      float64   `json:"buyout_min"`
+	BuyoutMax      float64   `json:"buyout_max"`
 	PlaceQ         string    `json:"place_q"`
 	PlaceEndQ      string    `json:"place_end_q"`
 	RewardMin      float64   `json:"reward_min"`
@@ -1592,6 +1626,7 @@ type SearchPublicContractsParams struct {
 	VolumeMin      float64   `json:"volume_min"`
 	VolumeMax      float64   `json:"volume_max"`
 	DaysMax        int64     `json:"days_max"`
+	CourierActive  bool      `json:"courier_active"`
 	BpActive       bool      `json:"bp_active"`
 	BpMode         string    `json:"bp_mode"`
 	MeMin          int64     `json:"me_min"`
@@ -1607,6 +1642,7 @@ type SearchPublicContractsParams struct {
 	AbEstMax       float64   `json:"ab_est_max"`
 	AbAttrKey      string    `json:"ab_attr_key"`
 	AbAttrMin      float64   `json:"ab_attr_min"`
+	AbPosMin       float64   `json:"ab_pos_min"`
 	DealsOnly      bool      `json:"deals_only"`
 	Sort           string    `json:"sort"`
 	RowOffset      int64     `json:"row_offset"`
@@ -1664,7 +1700,7 @@ func (q *Queries) SearchPublicContracts(ctx context.Context, arg SearchPublicCon
 		arg.ForCorp,
 		arg.PriceMin,
 		arg.PriceMax,
-		arg.BuyoutMin,
+		arg.BuyoutMax,
 		arg.PlaceQ,
 		arg.PlaceEndQ,
 		arg.RewardMin,
@@ -1673,6 +1709,7 @@ func (q *Queries) SearchPublicContracts(ctx context.Context, arg SearchPublicCon
 		arg.VolumeMin,
 		arg.VolumeMax,
 		arg.DaysMax,
+		arg.CourierActive,
 		arg.BpActive,
 		arg.BpMode,
 		arg.MeMin,
@@ -1688,6 +1725,7 @@ func (q *Queries) SearchPublicContracts(ctx context.Context, arg SearchPublicCon
 		arg.AbEstMax,
 		arg.AbAttrKey,
 		arg.AbAttrMin,
+		arg.AbPosMin,
 		arg.DealsOnly,
 		arg.Sort,
 		arg.RowOffset,

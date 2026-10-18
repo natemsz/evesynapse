@@ -203,18 +203,18 @@
           {{if .Wanted}}<div class="cs-line want"><span class="cs-wants">Wants:</span> {{range $i, $w := .Wanted}}{{if $i}}, {{end}}<span class="cs-line-item">{{if $w.TypeID}}<img class="cs-line-icon" src="https://images.evetech.net/types/{{$w.TypeID}}/icon?size=32" alt="" width="24" height="24" loading="lazy">{{end}}{{$w.Name}} <span class="cs-qty">× {{$w.Qty}}</span></span>{{end}}{{if gt .MoreWant 0}} <span class="muted">+ {{.MoreWant}} more</span>{{end}}</div>{{end}}
           <div class="cs-chips">
             {{if .BPChip}}<span class="cs-chipinfo bp">{{.BPChip}}</span>{{end}}
-            {{if .Abyssal}}{{if .Abyssal.HasScore}}<span class="cs-chipinfo ab">Roll Score: {{.Abyssal.Score}} / 100{{if .Abyssal.HasTop}} • Top {{.Abyssal.TopPct}}%{{end}}</span>{{end}}{{end}}
+            {{with .Abyssal}}<div class="cs-abwrap"><button type="button" class="cs-chipinfo ab cs-abbtn" data-abpop aria-haspopup="true" aria-expanded="false">{{if .HasScore}}Roll Score: {{.Score}} / 100{{if .HasTop}} • Top {{.TopPct}}%{{end}}{{else}}Abyssal rolls{{end}}</button><div class="cs-abpop" role="dialog" aria-label="Mutaplasmid rolls" hidden>
+              <div class="cs-abpop-head"><span>Mutaplasmid rolls</span><button type="button" class="cs-abpop-x" data-abpop-close aria-label="Close mutaplasmid rolls">×</button></div>
+              <div class="muted">Mutated from {{itemLink .SourceTypeID .SourceName}} with {{.MutatorName}}</div>
+              {{if .ScoreText}}<div>{{.ScoreText}}</div>{{end}}
+              {{range .Bars}}<div class="cs-bar"><span class="cs-bar-name">{{.Name}}</span><span class="meter"><span data-w="{{.Pct}}"></span></span><span class="cs-bar-pct">{{.Pct}}%</span></div>{{end}}
+              {{if .Estimate}}<div>Our estimate <strong>{{.Estimate}} ISK</strong>{{if .SpreadNote}} <span class="muted">— {{.SpreadNote}}</span>{{end}}</div>{{end}}
+              {{if .CapNote}}<div class="muted">{{.CapNote}}</div>{{end}}
+            </div></div>{{end}}
             {{if .Courier}}<span class="cs-chipinfo co">{{.VolumeText}}{{if .IskPerM3}} • {{.IskPerM3}} ISK/m³{{end}}</span>{{end}}
             {{if and (not .Offered) (not .Wanted) (not .Courier)}}<span class="muted">Contents not fetched yet</span>{{end}}
             {{if .Courier}}<span class="muted">Cargo is private</span>{{end}}
           </div>
-          {{with .Abyssal}}<div class="cs-row-ab">
-            <div class="muted">Mutated from {{itemLink .SourceTypeID .SourceName}} with {{.MutatorName}}</div>
-            {{if .ScoreText}}<div>{{.ScoreText}}</div>{{end}}
-            {{range .Bars}}<div class="cs-bar"><span class="cs-bar-name">{{.Name}}</span><span class="meter"><span data-w="{{.Pct}}"></span></span><span class="cs-bar-pct">{{.Pct}}%</span></div>{{end}}
-            {{if .Estimate}}<div>Our estimate <strong>{{.Estimate}} ISK</strong>{{if .SpreadNote}} <span class="muted">— {{.SpreadNote}}</span>{{end}}</div>{{end}}
-            {{if .CapNote}}<div class="muted">{{.CapNote}}</div>{{end}}
-          </div>{{end}}
         </div>
       </div>
       <div class="cs-cell">
@@ -300,15 +300,18 @@
       <aside class="cs-abpanel">
         <div class="cs-abpanel-head"><h4>Mutaplasmid rolls</h4>{{if .Panel.Estimate}}<span class="muted">Est range: {{.Panel.EstLow}} – {{.Panel.EstHigh}} ISK</span>{{end}}</div>
         <p class="muted">{{.LineName}}{{if .ItemID}} · Item ID: {{.ItemID}}{{end}}<br>Mutated from {{.Panel.SourceName}} with {{.Panel.MutatorName}}.</p>
-        {{range .Panel.Rolls}}<div class="cs-roll"><span class="cs-roll-name">{{.Name}}</span><span class="cs-roll-val">{{.Value}}{{if .Delta}} <span class="{{if .Good}}pos{{else}}neg{{end}}">({{.Delta}})</span>{{end}}</span><span class="meter"><span data-w="{{.Pct}}"></span></span><span class="cs-roll-pct">{{.Pct}}%</span></div>{{end}}
-        {{range .Panel.Derived}}<div class="cs-roll derived"><span class="cs-roll-name">{{.Name}}</span><span class="cs-roll-val">{{.ValueText}}</span><span class="meter"><span data-w="{{.Pct}}"></span></span><span class="cs-roll-pct">{{.Pct}}%</span></div>{{end}}
-        {{if .Panel.ScoreText}}<p>Roll score: <strong>{{.Panel.ScoreText}}</strong></p>{{end}}
-        {{if .Panel.Estimate}}<p class="cs-abest">Our estimate: <strong>{{.Panel.Estimate}} ISK</strong><br><span class="muted">likely range {{.Panel.EstLow}} to {{.Panel.EstHigh}} ISK · {{.Panel.BasisLabel}}</span></p>{{end}}
-        {{if .Panel.NoEstimate}}<p class="muted">{{.Panel.NoEstimate}}</p>{{end}}
-        {{if .Panel.CapNote}}<p>{{.Panel.CapNote}}</p>{{end}}
-        {{if .Panel.ScoredNote}}<p class="muted">{{.Panel.ScoredNote}}</p>{{end}}
-        {{if .Panel.Recreation}}<p class="muted">{{.Panel.Recreation}}</p>{{end}}
-        {{if .Panel.ContextPrice}}<p class="muted">The unmutated module prices at {{.Panel.ContextPrice}} ISK ({{.Panel.ContextTier}}) — shown for context.</p>{{end}}
+        <div class="cs-abwrap"><button type="button" class="btn small cs-abbtn" data-abpop aria-haspopup="true" aria-expanded="false">View rolls &amp; estimate</button><div class="cs-abpop" role="dialog" aria-label="Mutaplasmid rolls" hidden>
+          <div class="cs-abpop-head"><span>Mutaplasmid rolls</span><button type="button" class="cs-abpop-x" data-abpop-close aria-label="Close mutaplasmid rolls">×</button></div>
+          {{range .Panel.Rolls}}<div class="cs-roll"><span class="cs-roll-name">{{.Name}}</span><span class="cs-roll-val">{{.Value}}{{if .Delta}} <span class="{{if .Good}}pos{{else}}neg{{end}}">({{.Delta}})</span>{{end}}</span><span class="meter"><span data-w="{{.Pct}}"></span></span><span class="cs-roll-pct">{{.Pct}}%</span></div>{{end}}
+          {{range .Panel.Derived}}<div class="cs-roll derived"><span class="cs-roll-name">{{.Name}}</span><span class="cs-roll-val">{{.ValueText}}</span><span class="meter"><span data-w="{{.Pct}}"></span></span><span class="cs-roll-pct">{{.Pct}}%</span></div>{{end}}
+          {{if .Panel.ScoreText}}<p>Roll score: <strong>{{.Panel.ScoreText}}</strong></p>{{end}}
+          {{if .Panel.Estimate}}<p class="cs-abest">Our estimate: <strong>{{.Panel.Estimate}} ISK</strong><br><span class="muted">likely range {{.Panel.EstLow}} to {{.Panel.EstHigh}} ISK · {{.Panel.BasisLabel}}</span></p>{{end}}
+          {{if .Panel.NoEstimate}}<p class="muted">{{.Panel.NoEstimate}}</p>{{end}}
+          {{if .Panel.CapNote}}<p>{{.Panel.CapNote}}</p>{{end}}
+          {{if .Panel.ScoredNote}}<p class="muted">{{.Panel.ScoredNote}}</p>{{end}}
+          {{if .Panel.Recreation}}<p class="muted">{{.Panel.Recreation}}</p>{{end}}
+          {{if .Panel.ContextPrice}}<p class="muted">The unmutated module prices at {{.Panel.ContextPrice}} ISK ({{.Panel.ContextTier}}) — shown for context.</p>{{end}}
+        </div></div>
       </aside>
       {{end}}
     </div>

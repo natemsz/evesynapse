@@ -1052,7 +1052,7 @@ footer .version-number {
 }
 .home-custom .fleet-tags { display: none; }
 /* The fleet search row is divided from the pilot table by a rule. */
-.fleet-tools { border-bottom: 1px solid var(--glass-edge); padding-bottom: 0.55rem; margin-bottom: 0.7rem; }
+.fleet-tools { border-bottom: 1px solid var(--glass-edge); padding-bottom: 1.03rem; margin-top: 0.35rem; margin-bottom: 0; }
 /* At a Glance floats: no enclosing panel in normal view — the
    tiles carry the glass themselves over the sky. Customize mode
    brings the container back so the band stays grabbable, and the
@@ -1616,7 +1616,12 @@ html[data-theme="light"] .brief-card:hover, html[data-theme="light"] .brief-card
   .brief-count { font-size: 0.62rem; }
 }
 
-.fleet-table td { vertical-align: top; }
+.fleet-table td { vertical-align: middle; }
+/* The header row's breathing room lives in the cells' own padding,
+   symmetric top and bottom, so the header text centres between the
+   search row's rule above and the header rule below (the search
+   row's bottom margin is zero for the same reason). */
+.fleet-table thead th { padding-top: 0.75rem; padding-bottom: 0.75rem; }
 .fleet-table .num { text-align: right; font-variant-numeric: tabular-nums; }
 .fleet-row { cursor: pointer; }
 .pilot { position: relative; display: inline-block; vertical-align: middle; }

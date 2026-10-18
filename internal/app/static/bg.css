@@ -170,6 +170,8 @@ body:has(main .suggest:not([hidden])) main {
 .btn.btn-quiet {
   background: rgba(23, 17, 13, 0.55);
   border-color: rgba(255, 110, 0, 0.22);
+  -webkit-backdrop-filter: blur(10px) saturate(1.2);
+  backdrop-filter: blur(10px) saturate(1.2);
 }
 html[data-theme="light"] .btn.btn-quiet {
   background: rgba(253, 251, 246, 0.72);

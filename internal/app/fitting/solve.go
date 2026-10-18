@@ -64,6 +64,9 @@ func (app *tool) handleFitSolveImplants(w http.ResponseWriter, r *http.Request) 
 		writeFitJSON(w, map[string]any{"ok": false, "error": "The ship and module data is still downloading — give it a little while and try again."})
 		return
 	}
+	// Bound the document's fitted quantities before the
+	// solver expands it per instance and re-prices trials.
+	fitview.SanitizeFitDoc(doc, snap)
 
 	// The fit's effective implant set (clone plus the document's
 	// overrides) and each implant's slot, the solver's base.

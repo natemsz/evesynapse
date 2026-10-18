@@ -404,6 +404,27 @@ function makeEditorEnv() {
   const picker = new EEl("div", env);
   picker.id = "fit-picker";
   picker.hidden = true;
+  const pickerTitle = new EEl("div", env);
+  pickerTitle.id = "fit-picker-title";
+  picker.appendChild(pickerTitle);
+  const pickerFamily = new EEl("select", env);
+  pickerFamily.id = "fit-picker-family";
+  pickerFamily.options = [{ textContent: "High slots" }, { textContent: "Mid slots" }];
+  pickerFamily.selectedIndex = 0;
+  pickerFamily.value = "high";
+  picker.appendChild(pickerFamily);
+  const pickerQ = new EEl("input", env);
+  pickerQ.id = "fit-picker-q";
+  picker.appendChild(pickerQ);
+  const pickerHint = new EEl("div", env);
+  pickerHint.id = "fit-picker-hint";
+  picker.appendChild(pickerHint);
+  const pickerList = new EEl("ul", env);
+  pickerList.id = "fit-picker-list";
+  picker.appendChild(pickerList);
+  const pickerClose = new EEl("button", env);
+  pickerClose.id = "fit-picker-close";
+  picker.appendChild(pickerClose);
   editor.appendChild(picker);
   editor.appendChild(buildWorkbench(env, false));
   env.html.SIM = function () { return buildWorkbench(env, false); };
@@ -495,6 +516,36 @@ test("an empty slot opens the picker from anywhere on it, not just its border", 
   env.picker.hidden = true;
   env.tap(empty);
   assert.equal(env.picker.hidden, false, "a click on the slot itself still opens it");
+});
+
+// Audit 2.4: the picker rendered its rows through a helper
+// that only existed inside the search suggester's scope, so
+// every non-empty result set threw and the picker stayed
+// empty. The feed answers one module here; the row must
+// render, icon first.
+test("the slot picker renders result rows with their icons", async function () {
+  const env = makeEditorEnv();
+  const baseFetch = global.fetch;
+  global.fetch = function (url) {
+    if (String(url).indexOf("/fittings/picker.json") === 0) {
+      return Promise.resolve({
+        ok: true,
+        json() { return Promise.resolve([{ id: 4242, name: "Fixture Cannon", kind: "module" }]); },
+      });
+    }
+    return baseFetch(url);
+  };
+  const empty = env.wb().querySelector('.fit-vslot[data-fit-add="high"]');
+  env.tap(empty);
+  await delay(20);
+  const list = env.picker.querySelector("#fit-picker-list");
+  assert.equal(list.children.length, 1, "one result row renders");
+  const row = list.children[0];
+  assert.equal(row.getAttribute("data-fit-pick"), "4242");
+  const icons = findByClass(row, "sug-icon");
+  assert.equal(icons.length, 1, "the row leads with its type icon");
+  assert.equal(icons[0].tagName, "IMG");
+  assert.ok(row.textContent.indexOf("Fixture Cannon") >= 0, "the row names the module");
 });
 
 test("moving from one module to the next keeps the next module's tooltip up", async function () {

@@ -150,6 +150,11 @@ func (f *fitting) addItems(items []ItemInput) {
 				qty = 0 // a drone line with no count carries nothing
 			}
 		}
+		// Rack entities (modules, rigs, subsystems) bind their
+		// modifiers once per instance, so an unbounded quantity is
+		// unbounded engine work. No hull fits more than 16 of one
+		// type or 64 rack items in total; anything past that is a
+		// hostile or corrupt document, and the excess is dropped.
 		isRack := kind == entModule || kind == entRig || kind == entSubsystem
 		if isRack {
 			if qty > 16 {
@@ -566,6 +571,10 @@ func (f *fitting) slotsAndHardpoints() {
 		res.TurretHardpoints += int(ent.base[AttrTurretHardPointModifier] * n)
 		res.LauncherHardpoints += int(ent.base[AttrLauncherHardPointModifier] * n)
 	}
+	// Slot counts are bounded by the game's own geometry: no
+	// hull has more than 8 slots of a rack type. Clamp what the
+	// subsystem sum produced so a corrupt count can never make
+	// a fit claim tens of thousands of slots.
 	clampSlots := func(v int) int {
 		if v < 0 {
 			return 0

@@ -853,7 +853,7 @@ func (app *Application) briefingMarketLines(ctx context.Context, bundles []*char
 		return lines
 	}
 	for _, e := range entries {
-		rows := app.recentHistoryRows(ctx, e.RegionID, e.TypeID, markethistory.ChartRows)
+		rows := app.recentHistoryRows(ctx, marketRegionForType(e.TypeID, e.RegionID), e.TypeID, markethistory.ChartRows)
 		pct, ok := markethistory.ChangePct(rows, 7)
 		if !ok || absFloat(pct) < e.ThresholdPct {
 			continue
@@ -861,7 +861,7 @@ func (app *Application) briefingMarketLines(ctx context.Context, bundles []*char
 		line := template.HTML(fmt.Sprintf("%s moved %s over 7 days in %s — past your %s watch. <a href=\"/market/\">Watchlist</a>",
 			string(itemLink(e.TypeID, app.typeNameOrID(ctx, e.TypeID))),
 			markethistory.ChangeDirection(pct),
-			template.HTMLEscapeString(app.marketRegionLabel(ctx, e.RegionID)),
+			template.HTMLEscapeString(app.marketRegionLabel(ctx, marketRegionForType(e.TypeID, e.RegionID))),
 			markethistory.FormatChangePct(e.ThresholdPct)))
 		lines = append(lines, briefingLine{html: string(line), Rank: briefingWatchMove})
 	}

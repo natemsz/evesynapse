@@ -422,9 +422,10 @@ func blueprintNote(it db.PubContractItem) string {
 
 // searchLine is one lead line on a result row.
 type searchLine struct {
-	Name string
-	Qty  string
-	Note string // blueprint facts, when any
+	Name   string
+	Qty    string
+	Note   string // blueprint facts, when any
+	TypeID int64  // EVE type, for the item icon beside the name
 }
 
 // searchRow is one result, display-ready.
@@ -955,7 +956,7 @@ func (app *mod) searchRow(ctx context.Context, memo map[int64]module.PlaceRef, r
 
 	offered, wanted := 0, 0
 	for _, it := range items {
-		line := searchLine{Name: names[it.TypeID], Qty: esi.FormatInt(it.Quantity), Note: blueprintNote(it)}
+		line := searchLine{Name: names[it.TypeID], Qty: esi.FormatInt(it.Quantity), Note: blueprintNote(it), TypeID: it.TypeID}
 		if it.IsIncluded {
 			offered++
 			if line.Note != "" && out.BPChip == "" {
@@ -1041,7 +1042,11 @@ func (app *mod) searchRow(ctx context.Context, memo map[int64]module.PlaceRef, r
 			out.ValueNote = fmt.Sprintf("priced %d of %d lines", row.PricedLines, row.TotalLines)
 		case row.DealRatio.Valid:
 			pct := int(row.DealRatio.Float64*100 + 0.5)
-			out.ValueNote = fmt.Sprintf("asking %d%% of value", pct)
+			if pct > 100 {
+				out.ValueNote = fmt.Sprintf("asking %d%% above value", pct-100)
+			} else {
+				out.ValueNote = fmt.Sprintf("asking %d%% of value", pct)
+			}
 			out.IsDeal = row.DealRatio.Float64 <= 0.85
 			if out.IsDeal {
 				out.DealPct = 100 - pct
@@ -1717,7 +1722,11 @@ func (app *mod) buildDetailView(ctx context.Context, contractID int64) (*detailV
 		v.CoverageNote = strings.Join(cov, " · ")
 		if c.DealRatio.Valid {
 			pct := int(c.DealRatio.Float64*100 + 0.5)
-			v.DealNote = fmt.Sprintf("Asking %d%% of our appraised value", pct)
+			if pct > 100 {
+				v.DealNote = fmt.Sprintf("Asking %d%% above our appraised value", pct-100)
+			} else {
+				v.DealNote = fmt.Sprintf("Asking %d%% of our appraised value", pct)
+			}
 			v.IsDeal = c.DealRatio.Float64 <= 0.85
 		}
 	}

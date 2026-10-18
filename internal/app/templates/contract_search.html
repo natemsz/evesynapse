@@ -1,17 +1,19 @@
 {{define "title"}}Public contracts · EveSynapse{{end}}
-{{define "pagetitle"}}Public contracts{{end}}
+{{define "pagetitle"}}<h1><span class="gt">Public contracts</span></h1>{{end}}
 {{define "pagetabs"}}{{template "sectiontabs" .}}{{end}}
 {{define "content"}}
 {{with .ContractSearch}}
 {{$s := .}}
+<div class="cs-intro">
 <p class="muted">Every public contract our sweeps see across New Eden, priced against our swept typicals first, then stored estimates — never the guide average.</p>
 
 <div class="cs-hunts">
   <span class="cs-hunts-label">Quick hunts:</span>
-  <a class="cs-hunt" href="{{$s.HuntJita}}">Jita Steals (≤85%)</a>
-  <a class="cs-hunt" href="{{$s.HuntAbyssal}}">Abyssal Rolls 75+</a>
-  <a class="cs-hunt" href="{{$s.HuntBlueprint}}">ME 10 Blueprints</a>
-  <a class="cs-hunt" href="{{$s.HuntCourier}}">Highsec Couriers</a>
+  <a class="cs-hunt" href="{{$s.HuntJita}}"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2c1 4-3 5-3 8a3 3 0 0 0 6 0c0-1-.5-2-1-3 2 1 4 3 4 6a6 6 0 0 1-12 0c0-5 5-7 6-11z"/></svg>Jita Steals (≤85%)</a>
+  <a class="cs-hunt" href="{{$s.HuntAbyssal}}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="3.2"/><ellipse cx="12" cy="12" rx="10" ry="4.2" transform="rotate(-24 12 12)"/></svg>Abyssal Rolls 75+</a>
+  <a class="cs-hunt" href="{{$s.HuntBlueprint}}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 3l9 5-9 5-9-5 9-5z"/><path d="M3 13l9 5 9-5" opacity=".6"/></svg>ME 10 Blueprints</a>
+  <a class="cs-hunt" href="{{$s.HuntCourier}}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 7h11v9H3zM14 10h4l3 3v3h-7z"/><circle cx="7" cy="18" r="1.8"/><circle cx="17" cy="18" r="1.8"/></svg>Highsec Couriers</a>
+</div>
 </div>
 
 <form method="get" action="/contracts/search/" class="cs-form" id="cs-form">
@@ -107,7 +109,7 @@
 
   <div class="cs-drawer-slot">
     <section class="cs-drawer" data-drawer-panel="blueprints"{{if ne $s.OpenDrawer "blueprints"}} hidden{{end}}>
-      <div class="cs-drawer-head"><h4>Blueprint research &amp; copy filters</h4><button type="button" class="cs-reset" data-reset-drawer="blueprints">Reset Blueprint Filters</button></div>
+      <div class="cs-drawer-head"><h4><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 3l9 5-9 5-9-5 9-5z"/><path d="M3 13l9 5 9-5" opacity=".6"/></svg>Blueprint research &amp; copy filters</h4><button type="button" class="cs-reset" data-reset-drawer="blueprints">Reset Blueprint Filters</button></div>
       <div class="cs-drawer-grid">
         <label class="cs-field">Blueprint kind
           <select name="bp">
@@ -125,7 +127,7 @@
     </section>
 
     <section class="cs-drawer" data-drawer-panel="abyssal"{{if ne $s.OpenDrawer "abyssal"}} hidden{{end}}>
-      <div class="cs-drawer-head"><h4>Abyssal mutaplasmid roll &amp; valuation filters</h4><button type="button" class="cs-reset" data-reset-drawer="abyssal">Reset Abyssal Filters</button></div>
+      <div class="cs-drawer-head"><h4><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="3.2"/><ellipse cx="12" cy="12" rx="10" ry="4.2" transform="rotate(-24 12 12)"/></svg>Abyssal mutaplasmid roll &amp; valuation filters</h4><button type="button" class="cs-reset" data-reset-drawer="abyssal">Reset Abyssal Filters</button></div>
       <p class="cs-drawer-sub">Rolls are scored 0–100 against their mutaplasmid's theoretical ceiling.</p>
       <div class="cs-drawer-grid">
         <label class="cs-field">Module family
@@ -153,7 +155,7 @@
     </section>
 
     <section class="cs-drawer" data-drawer-panel="couriers"{{if ne $s.OpenDrawer "couriers"}} hidden{{end}}>
-      <div class="cs-drawer-head"><h4>Courier logistic &amp; hauling filters</h4><button type="button" class="cs-reset" data-reset-drawer="couriers">Reset Courier Filters</button></div>
+      <div class="cs-drawer-head"><h4><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 7h11v9H3zM14 10h4l3 3v3h-7z"/><circle cx="7" cy="18" r="1.8"/><circle cx="17" cy="18" r="1.8"/></svg>Courier logistic &amp; hauling filters</h4><button type="button" class="cs-reset" data-reset-drawer="couriers">Reset Courier Filters</button></div>
       <div class="cs-drawer-grid">
         <label class="cs-field">Deliver to
           <input type="text" name="place_end" value="{{$s.Echo.place_end}}" placeholder="Destination station or system"></label>
@@ -196,9 +198,9 @@
           <span class="cs-row-meta">{{.RegionName}} · {{.IssuedAgo}}</span>
         </div>
         <div class="cs-contents">
-          {{range .Offered}}<div class="cs-line"><span class="cs-line-name">{{.Name}}</span> <span class="cs-qty">× {{.Qty}}</span></div>{{end}}
+          {{range .Offered}}<div class="cs-line">{{if .TypeID}}<img class="cs-line-icon" src="https://images.evetech.net/types/{{.TypeID}}/icon?size=32" alt="" width="24" height="24" loading="lazy">{{end}}<span class="cs-line-name">{{.Name}}</span> <span class="cs-qty">× {{.Qty}}</span></div>{{end}}
           {{if gt .MoreOffer 0}}<div class="cs-line muted">+ {{.MoreOffer}} more</div>{{end}}
-          {{if .Wanted}}<div class="cs-line want"><span class="cs-wants">Wants:</span> {{range $i, $w := .Wanted}}{{if $i}}, {{end}}{{$w.Name}} <span class="cs-qty">× {{$w.Qty}}</span>{{end}}{{if gt .MoreWant 0}} <span class="muted">+ {{.MoreWant}} more</span>{{end}}</div>{{end}}
+          {{if .Wanted}}<div class="cs-line want"><span class="cs-wants">Wants:</span> {{range $i, $w := .Wanted}}{{if $i}}, {{end}}<span class="cs-line-item">{{if $w.TypeID}}<img class="cs-line-icon" src="https://images.evetech.net/types/{{$w.TypeID}}/icon?size=32" alt="" width="24" height="24" loading="lazy">{{end}}{{$w.Name}} <span class="cs-qty">× {{$w.Qty}}</span></span>{{end}}{{if gt .MoreWant 0}} <span class="muted">+ {{.MoreWant}} more</span>{{end}}</div>{{end}}
           <div class="cs-chips">
             {{if .BPChip}}<span class="cs-chipinfo bp">{{.BPChip}}</span>{{end}}
             {{if .Abyssal}}{{if .Abyssal.HasScore}}<span class="cs-chipinfo ab">Roll Score: {{.Abyssal.Score}} / 100{{if .Abyssal.HasTop}} • Top {{.Abyssal.TopPct}}%{{end}}</span>{{end}}{{end}}
@@ -278,6 +280,7 @@
       <div class="cs-pline">
         <div class="cs-pline-main">
           <span class="cs-side{{if eq .Side "Wanted"}} want{{end}}">{{.Side}}</span>
+          {{if .TypeID}}<img class="cs-pline-icon" src="https://images.evetech.net/types/{{.TypeID}}/icon?size=32" alt="" width="28" height="28" loading="lazy">{{end}}
           {{itemLink .TypeID .Name}} <span class="cs-qty">× {{.Qty}}</span>
           {{if .Note}}<span class="cs-chipinfo bp">{{.Note}}</span>{{end}}
           {{if .ItemID}}<span class="muted">Item ID: {{.ItemID}}</span>{{end}}

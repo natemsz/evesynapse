@@ -86,57 +86,89 @@ const (
 	BuildFork
 )
 
+// ReleaseKind names which product a release library entry
+// belongs to. The swarm carries two kinds of instance — the
+// EveSynapse app and the Storm warming node — and their
+// release lines are numbered independently, so an entry's
+// label means nothing without the product it belongs to.
+type ReleaseKind string
+
+const (
+	ReleaseEveSynapse ReleaseKind = "evesynapse"
+	ReleaseStorm      ReleaseKind = "storm"
+)
+
+// ReleaseBuild is one library entry: the product the build
+// belongs to and that release's version label.
+type ReleaseBuild struct {
+	Kind  ReleaseKind
+	Label string
+}
+
 // ReleaseLibrary names the known official builds: SHA-256 of
-// a published release binary → that release's version label.
-// The entries below are the official evesynapse binaries
-// (both architectures) of the v0.5.2.x line, seeded from the
-// asset digests the GitHub releases API reports for each
-// release — every digest verified there, none computed or
-// guessed locally.
+// a published release binary → the product and version label
+// of that release. The entries below are the official
+// evesynapse binaries (both architectures) of the v0.5.2.x
+// line, seeded from the asset digests the GitHub releases API
+// reports for each release — every digest verified there,
+// none computed or guessed locally.
 //
-// The library grows by hand: each future release adds its two
+// No storm digests are seeded: the storm repo publishes no
+// releases yet, so no official storm hash exists to record.
+// The storm entry type still stands ready end to end (see
+// ClassifyBuild and BuildLabel); the first storm release adds
+// its hashes here, once, the way app releases do.
+//
+// The library grows by hand: each future release adds its
 // hashes here, once, at release time. Official releases
 // before the v0.5.2.x line are not seeded; a peer running one
 // shows as a fork until its hashes are added. The library
 // decides a display label only — absence is not a verdict
 // about the peer, just a fact about the library.
-var ReleaseLibrary = map[string]string{
+var ReleaseLibrary = map[string]ReleaseBuild{
 	// v0.5.2.11
-	"6ba22b5a89cd1a379529cda12a39c3aba21f7bebba200463856d89564bd1a091": "v0.5.2.11", // amd64
-	"67d304f4e4abcea33e625d3205a20f745cff0a597ff44572f78bf1395392ca3c": "v0.5.2.11", // arm64
+	"6ba22b5a89cd1a379529cda12a39c3aba21f7bebba200463856d89564bd1a091": {ReleaseEveSynapse, "v0.5.2.11"}, // amd64
+	"67d304f4e4abcea33e625d3205a20f745cff0a597ff44572f78bf1395392ca3c": {ReleaseEveSynapse, "v0.5.2.11"}, // arm64
 	// v0.5.2.10
-	"90e1321d7066de809fc143199a2a824b93c1a35e31a6bf45e83826fb4bc555d4": "v0.5.2.10", // amd64
-	"18139b81fb608b686e489762ed1d6d7342358ce4d9bb5f42684c85d1e4e1b734": "v0.5.2.10", // arm64
+	"90e1321d7066de809fc143199a2a824b93c1a35e31a6bf45e83826fb4bc555d4": {ReleaseEveSynapse, "v0.5.2.10"}, // amd64
+	"18139b81fb608b686e489762ed1d6d7342358ce4d9bb5f42684c85d1e4e1b734": {ReleaseEveSynapse, "v0.5.2.10"}, // arm64
 	// v0.5.2.9
-	"79d0ddce5d1cface2f27ef1deb9d3a6863a9d62848b4b107e71bdff30e90a1a5": "v0.5.2.9", // amd64
-	"d89dcb778654bc5d1aeba60bdf175758a756a8d53b21cf13910d95edfa655b86": "v0.5.2.9", // arm64
+	"79d0ddce5d1cface2f27ef1deb9d3a6863a9d62848b4b107e71bdff30e90a1a5": {ReleaseEveSynapse, "v0.5.2.9"}, // amd64
+	"d89dcb778654bc5d1aeba60bdf175758a756a8d53b21cf13910d95edfa655b86": {ReleaseEveSynapse, "v0.5.2.9"}, // arm64
 	// v0.5.2.8
-	"cb6dc4f6c17f67c311a958f0f2d32d25ee42ba7717f0bd52e9c9643a43324665": "v0.5.2.8", // amd64
-	"c339e672c27929acc7ee94f73da0509b19fc27591ccec16f9e4921429a5e086e": "v0.5.2.8", // arm64
+	"cb6dc4f6c17f67c311a958f0f2d32d25ee42ba7717f0bd52e9c9643a43324665": {ReleaseEveSynapse, "v0.5.2.8"}, // amd64
+	"c339e672c27929acc7ee94f73da0509b19fc27591ccec16f9e4921429a5e086e": {ReleaseEveSynapse, "v0.5.2.8"}, // arm64
 	// v0.5.2.7
-	"c7c175a1218f11c64ce2c01ce4085b66783cf7465917423911adcd3fd9779d4a": "v0.5.2.7", // amd64
-	"b13d5c8bfc55a318869d78e8b4e671e6694a361567fe74abac07ee98848d86fd": "v0.5.2.7", // arm64
+	"c7c175a1218f11c64ce2c01ce4085b66783cf7465917423911adcd3fd9779d4a": {ReleaseEveSynapse, "v0.5.2.7"}, // amd64
+	"b13d5c8bfc55a318869d78e8b4e671e6694a361567fe74abac07ee98848d86fd": {ReleaseEveSynapse, "v0.5.2.7"}, // arm64
 	// v0.5.2.6
-	"c591e938616fde56979af84538c9d7799463b714f58a4a1433397de4ce3ec3d9": "v0.5.2.6", // amd64
-	"2c73b7f732de2719f89e3d4133ec02d148c451d5aa0dfdb984ceeb42883e26d8": "v0.5.2.6", // arm64
+	"c591e938616fde56979af84538c9d7799463b714f58a4a1433397de4ce3ec3d9": {ReleaseEveSynapse, "v0.5.2.6"}, // amd64
+	"2c73b7f732de2719f89e3d4133ec02d148c451d5aa0dfdb984ceeb42883e26d8": {ReleaseEveSynapse, "v0.5.2.6"}, // arm64
 	// v0.5.2.5
-	"983b9455a15d0d73ac1a3d4fe2207a9b3c98da3c4aa6e823d3014c95695342e2": "v0.5.2.5", // amd64
-	"04937c1698ee4545bcf8607144b6616bd19226d8d2f1eb0b5061d01f217e9a24": "v0.5.2.5", // arm64
+	"983b9455a15d0d73ac1a3d4fe2207a9b3c98da3c4aa6e823d3014c95695342e2": {ReleaseEveSynapse, "v0.5.2.5"}, // amd64
+	"04937c1698ee4545bcf8607144b6616bd19226d8d2f1eb0b5061d01f217e9a24": {ReleaseEveSynapse, "v0.5.2.5"}, // arm64
 	// v0.5.2.4
-	"7d2108524e5e102f6b3897d7fe218ad9624c04b80094c7f67117140dc45379a7": "v0.5.2.4", // amd64
-	"e44587bb2f4603ca938d0fe2742dbc27721ebaac987cabed918fa5a63c04bc52": "v0.5.2.4", // arm64
+	"7d2108524e5e102f6b3897d7fe218ad9624c04b80094c7f67117140dc45379a7": {ReleaseEveSynapse, "v0.5.2.4"}, // amd64
+	"e44587bb2f4603ca938d0fe2742dbc27721ebaac987cabed918fa5a63c04bc52": {ReleaseEveSynapse, "v0.5.2.4"}, // arm64
 	// v0.5.2.3
-	"b2abc97918dda7fac2e2f5869ad8356f8d69b7733222e8e7f3379cff6b686dc6": "v0.5.2.3", // amd64
-	"841555b4e16adc7a82067c40fb94e3a92b5679114103541eb93149bbc8132412": "v0.5.2.3", // arm64
+	"b2abc97918dda7fac2e2f5869ad8356f8d69b7733222e8e7f3379cff6b686dc6": {ReleaseEveSynapse, "v0.5.2.3"}, // amd64
+	"841555b4e16adc7a82067c40fb94e3a92b5679114103541eb93149bbc8132412": {ReleaseEveSynapse, "v0.5.2.3"}, // arm64
 	// v0.5.2.2
-	"372b382c29df838681310a25705698d8e3555e15cd6739abb1ae383b5a0ef7f8": "v0.5.2.2", // amd64
-	"8ad04cd5b5a36f4a892b88f096b21468885b20088a8c586901f3fc14a5623299": "v0.5.2.2", // arm64
+	"372b382c29df838681310a25705698d8e3555e15cd6739abb1ae383b5a0ef7f8": {ReleaseEveSynapse, "v0.5.2.2"}, // amd64
+	"8ad04cd5b5a36f4a892b88f096b21468885b20088a8c586901f3fc14a5623299": {ReleaseEveSynapse, "v0.5.2.2"}, // arm64
 	// v0.5.2.1
-	"a86313308dca6098a6594f931be9f769a3240f0879752607982e2991ea9da794": "v0.5.2.1", // amd64
-	"0b970754d955496495194077ca264302cfaeace3be1a3e98c8c331d4cd26da64": "v0.5.2.1", // arm64
+	"a86313308dca6098a6594f931be9f769a3240f0879752607982e2991ea9da794": {ReleaseEveSynapse, "v0.5.2.1"}, // amd64
+	"0b970754d955496495194077ca264302cfaeace3be1a3e98c8c331d4cd26da64": {ReleaseEveSynapse, "v0.5.2.1"}, // arm64
 	// v0.5.2.0
-	"f7a3e2163d3f8e58d7d79c7810c5421d1c83c28596c0df6c168e7e440abc99a2": "v0.5.2.0", // amd64
-	"aeb5bfa7d997c778a5944bc2b3c8969b537bb39aecd1e16765970a7fce355d4e": "v0.5.2.0", // arm64
+	"f7a3e2163d3f8e58d7d79c7810c5421d1c83c28596c0df6c168e7e440abc99a2": {ReleaseEveSynapse, "v0.5.2.0"}, // amd64
+	"aeb5bfa7d997c778a5944bc2b3c8969b537bb39aecd1e16765970a7fce355d4e": {ReleaseEveSynapse, "v0.5.2.0"}, // arm64
+}
+
+// ReleaseFor looks one claim up in the release library: the
+// entry it names, and whether it names any.
+func ReleaseFor(claim string) (ReleaseBuild, bool) {
+	rel, ok := ReleaseLibrary[strings.TrimSpace(claim)]
+	return rel, ok
 }
 
 // ClassifyBuild sorts one peer's claim for the Admin page:
@@ -155,15 +187,19 @@ func ClassifyBuild(claim string) BuildClass {
 }
 
 // BuildLabel renders one peer's Build cell: the class and
-// what backs it — "Mainline · v0.5.2.11" for a library hit
-// (the release's label, not the raw hash), "Fork" for a hash
-// no release matches, or "—" when the peer has never made a
-// claim.
+// what backs it — "Mainline · v0.5.2.11" for an app release
+// (the release's label, not the raw hash), "Mainline · Storm
+// v1.0.0" for a storm release, "Fork" for a hash no release
+// matches, or "—" when the peer has never made a claim.
 func BuildLabel(claim string) string {
 	claim = strings.TrimSpace(claim)
 	switch ClassifyBuild(claim) {
 	case BuildMainline:
-		return "Mainline · " + ReleaseLibrary[claim]
+		rel := ReleaseLibrary[claim]
+		if rel.Kind == ReleaseStorm {
+			return "Mainline · Storm " + rel.Label
+		}
+		return "Mainline · " + rel.Label
 	case BuildFork:
 		return "Fork"
 	default:

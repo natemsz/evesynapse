@@ -79,6 +79,28 @@ func TestClassifyBuild(t *testing.T) {
 	}
 }
 
+// TestClassifyBuildStorm: a storm-typed library entry — the
+// kind the first storm release will add — classifies as
+// Mainline and renders with the Storm product named, while an
+// app entry beside it keeps its plain release rendering.
+func TestClassifyBuildStorm(t *testing.T) {
+	const stormHash = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+	if _, ok := swarm.ReleaseLibrary[stormHash]; ok {
+		t.Fatal("fixture hash is already in the library; pick another")
+	}
+	swarm.ReleaseLibrary[stormHash] = swarm.ReleaseBuild{Kind: swarm.ReleaseStorm, Label: "v0.1.0"}
+	defer delete(swarm.ReleaseLibrary, stormHash)
+	if got := swarm.ClassifyBuild(stormHash); got != swarm.BuildMainline {
+		t.Fatalf("storm hash classified %v, want Mainline", got)
+	}
+	if got := swarm.BuildLabel(stormHash); got != "Mainline · Storm v0.1.0" {
+		t.Fatalf("storm label %q, want the storm rendering", got)
+	}
+	if got := swarm.BuildLabel(claimKnownA); got != "Mainline · v0.5.2.10" {
+		t.Fatalf("app label beside a storm entry %q, want the app rendering", got)
+	}
+}
+
 // TestSeedAnnounceCarriesBuild: the heartbeat an instance
 // builds for the seeds seals its own build claim beside the
 // address it signs.

@@ -1,0 +1,75 @@
+name: Update CHANGELOG.md on Release
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update-changelog:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: main
+
+      - name: Generate Release Notes via GitHub API
+        id: generate_notes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG_NAME="${{ github.event.release.tag_name }}"
+          
+          NOTES=$(gh api \
+            --method POST \
+            -H "Accept: application/vnd.github+json" \
+            /repos/${{ github.repository }}/releases/generate-notes \
+            -f tag_name="$TAG_NAME" \
+            --jq '.body')
+
+          {
+            echo "RELEASE_TAG=$TAG_NAME"
+            echo "RELEASE_BODY<<EOF"
+            echo "$NOTES"
+            echo "EOF"
+          } >> "$GITHUB_ENV"
+
+      - name: Prepend Notes to CHANGELOG.md
+        run: |
+          DATE=$(date +'%Y-%m-%d')
+          TEMP_FILE=$(mktemp)
+
+          {
+            echo "## [${RELEASE_TAG}] -${DATE}"
+            echo ""
+            echo "${RELEASE_BODY}"
+            echo ""
+          } > "$TEMP_FILE"
+
+          if [ -f CHANGELOG.md ]; then
+            cat CHANGELOG.md >> "$TEMP_FILE"
+          fi
+
+          mv "$TEMP_FILE" CHANGELOG.md
+
+      - name: Create Pull Request for Review
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "docs(changelog): update for ${{ env.RELEASE_TAG }}"
+          branch: "changelog-${{ env.RELEASE_TAG }}"
+          delete-branch: true
+          title: "docs(changelog): review changelog for ${{ env.RELEASE_TAG }}"
+          body: |
+            Automated changelog generation for release **${{ env.RELEASE_TAG }}**.
+            
+            ### Instructions:
+            1. Review the changes to `CHANGELOG.md` in the Files Changed tab.
+            2. Edit directly if any formatting or text requires adjustment.
+            3. Merge when ready.
+          base: main

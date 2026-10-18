@@ -34,11 +34,12 @@
   <h2>Contested systems</h2>
   <div class="tw">
   <table>
-    <thead><tr><th>System</th><th>Occupier</th><th>Owner</th><th>State</th><th>Contested</th></tr></thead>
+    <thead><tr><th>System</th><th>Region</th><th>Occupier</th><th>Owner</th><th>State</th><th>Contested</th></tr></thead>
     <tbody>
     {{range .IntelFW.Systems}}
       <tr>
         <td>{{placeLink .System}}{{if .SecKnown}}<span class="sec-pill sec-{{.SecTier}}">{{.SecText}}</span>{{end}}</td>
+        <td>{{if .Region}}{{.Region}}{{else}}—{{end}}</td>
         <td>{{.Occupier}}</td>
         <td>{{.Owner}}</td>
         <td>{{.State}}</td>

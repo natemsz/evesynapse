@@ -342,6 +342,7 @@ type fwFactionCard struct {
 // fwSystemRow is one contested-system line.
 type fwSystemRow struct {
 	System   module.PlaceRef
+	Region   string // the system's region name, "" when the SDE has none
 	Occupier string
 	Owner    string
 	State    string // humanized contested label
@@ -431,7 +432,23 @@ func handleFW(deps module.Deps) http.HandlerFunc {
 			}
 			for i := range rows {
 				rows[i].SecText, rows[i].SecTier, rows[i].SecKnown = deps.SystemSecurity(ctx, rows[i].System.SystemID)
+				rows[i].Region, _ = deps.SystemRegion(ctx, rows[i].System.SystemID)
 			}
+			// The table reads region by region (system name within
+			// a region); rows whose region the SDE cannot name sink
+			// below the named ones.
+			sort.SliceStable(rows, func(i, j int) bool {
+				if rows[i].Region != rows[j].Region {
+					if rows[i].Region == "" {
+						return false
+					}
+					if rows[j].Region == "" {
+						return true
+					}
+					return rows[i].Region < rows[j].Region
+				}
+				return rows[i].System.Name < rows[j].System.Name
+			})
 			view.Systems = rows
 		}
 

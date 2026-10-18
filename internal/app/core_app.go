@@ -855,6 +855,20 @@ func (app *Application) SystemSecurity(ctx context.Context, systemID int64) (str
 	return text, tier, true
 }
 
+// SystemRegion resolves a system's region name from the stored
+// SDE rows (the system's region_id, then the region's name).
+func (app *Application) SystemRegion(ctx context.Context, systemID int64) (string, bool) {
+	sys, err := app.queries.GetSDESystem(ctx, systemID)
+	if err != nil || sys.RegionID <= 0 {
+		return "", false
+	}
+	reg, err := app.queries.GetSDERegion(ctx, sys.RegionID)
+	if err != nil || reg.Name == "" {
+		return "", false
+	}
+	return reg.Name, true
+}
+
 func (app *Application) ConstellationName(id int64) (string, bool) {
 	return app.esi.CachedConstellationName(id)
 }

@@ -868,6 +868,10 @@ type Deps interface {
 	// the .sec-pill (the fleet overview's location badge). known is
 	// false when the SDE has no row for the system.
 	SystemSecurity(ctx context.Context, systemID int64) (text string, tier int, known bool)
+	// SystemRegion is a solar system's region name from the stored
+	// SDE (sde_systems joined to sde_regions); known is false when
+	// the SDE has no system row or no name for its region.
+	SystemRegion(ctx context.Context, systemID int64) (name string, known bool)
 	// ConstellationName reads the worker-warmed constellation name cache.
 	ConstellationName(id int64) (string, bool)
 	// FormatFinish writes an ESI timestamp the way pages show times.

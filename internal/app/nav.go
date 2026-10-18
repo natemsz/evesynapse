@@ -169,11 +169,31 @@ type navGroup struct {
 
 // sectionGroups clusters a section's pages for the tab strip
 // and the sidebar menu alike: the two render the same groups, so
-// a page sits under the same heading in both. Only corporation
-// is grouped: at thirteen pages its strip was the widest in the
+// a page sits under the same heading in both. Corporation set
+// the pattern: at thirteen pages its strip was the widest in the
 // app by a third again, and no single row of folder tabs holds
-// it under a very wide window. No page's route changes.
+// it under a very wide window. The other wide sections follow
+// it: pilot, industry and market group the same way, each map
+// claiming every one of the section's pages exactly once
+// (TestSectionGroups pins that, so the runtime's flat fallback
+// stays a safety net). The short sections stay flat: fitting
+// and intel carry three pages apiece and tools two, their
+// strips are a single short row and their pages form no
+// clusters worth a heading. No page's route changes.
 var sectionGroups = map[string][]navGroup{
+	"pilot": {
+		{"Character", []string{"/character/", "/characters/", "/skills/plans", "/killmails/"}},
+		{"Assets & Money", []string{"/assets/", "/wallet/"}},
+		{"Comms", []string{"/mail/", "/calendar/", "/contacts/"}},
+	},
+	"industry": {
+		{"Production", []string{"/industry/", "/industry/jobs/", "/industry/mining/", "/planner/"}},
+		{"Planetary", []string{"/planets/", "/industry/pi/"}},
+	},
+	"market": {
+		{"Market Tools", []string{"/market/", "/market/scanner/", "/market/ideas/", "/market/tradefinder/", "/market/leaderboard/", "/market/restock/", "/contracts/search/"}},
+		{"My Finances", []string{"/orders/", "/contracts/"}},
+	},
 	"corporation": {
 		{"People", []string{"/corporations/", "/corporations/members/", "/groups/", "/corporations/killmails/"}},
 		{"Assets & Money", []string{"/corporations/wallets/", "/corporations/orders/", "/corporations/assets/", "/corporations/structures/"}},

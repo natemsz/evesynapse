@@ -2173,7 +2173,7 @@ const searchAllianceRecordsByName = `-- name: SearchAllianceRecordsByName :many
 SELECT alliance_id, payload
 FROM alliance_records
 WHERE state = 'ready' AND payload != ''
-  AND strpos(lower(payload), lower($1)) > 0
+  AND strpos(lower(COALESCE(payload::jsonb -> 'alliance' ->> 'name', payload::jsonb ->> 'name')), lower($1)) > 0
 ORDER BY alliance_id
 LIMIT 100
 `
@@ -2211,7 +2211,7 @@ const searchCorporationRecordsByName = `-- name: SearchCorporationRecordsByName 
 SELECT corporation_id, payload
 FROM corporation_records
 WHERE state = 'ready' AND payload != ''
-  AND strpos(lower(payload), lower($1)) > 0
+  AND strpos(lower(COALESCE(payload::jsonb -> 'corp' ->> 'name', payload::jsonb ->> 'name')), lower($1)) > 0
 ORDER BY corporation_id
 LIMIT 100
 `
@@ -2290,7 +2290,7 @@ const searchPilotRecordsByName = `-- name: SearchPilotRecordsByName :many
 SELECT character_id, payload
 FROM pilot_records
 WHERE state = 'ready' AND payload != ''
-  AND strpos(lower(payload), lower($1)) > 0
+  AND strpos(lower(payload::jsonb -> 'profile' ->> 'name'), lower($1)) > 0
 ORDER BY character_id
 LIMIT 100
 `

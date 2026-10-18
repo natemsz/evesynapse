@@ -319,6 +319,13 @@ var pgPublicContractAppraisalSchema string
 //go:embed schema_pg/057_abyssal_estimates.sql
 var pgAbyssalEstimatesSchema string
 
+// Step 058: saved appraisals -- the appraisal tool's per-user
+// snapshots (raw paste, its hash, the priced snapshot as shown,
+// and a share token for the read-only public view).
+//
+//go:embed schema_pg/058_user_appraisals.sql
+var pgUserAppraisalsSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -405,6 +412,7 @@ func schemaSteps() []schemaStep {
 		{55, "public_contracts", pgPublicContractsSchema, ""},
 		{56, "public_contract_appraisal", pgPublicContractAppraisalSchema, ""},
 		{57, "abyssal_estimates", pgAbyssalEstimatesSchema, ""},
+		{58, "user_appraisals", pgUserAppraisalsSchema, ""},
 	}
 }
 

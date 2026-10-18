@@ -97,10 +97,16 @@ WHERE contract_id = $1;
 -- list is immutable once issued).
 -- ---------------------------------------------------------------------
 
+-- The item drain walks newest first: a freshly swept contract
+-- gets its contents (and therefore its appraisal) within a
+-- cycle or two, and the cold backlog backfills behind the new
+-- listings in whatever budget is left. Parked rows (schema
+-- 060: repeated fetch or decode failures) are out of the
+-- selection for good.
 -- name: ListPublicContractsPendingItems :many
 SELECT contract_id, type FROM pub_contracts
 WHERE items_state = 'pending'
-ORDER BY first_seen ASC, contract_id ASC
+ORDER BY date_issued DESC, contract_id DESC
 LIMIT $1;
 
 -- name: InsertPublicContractItem :exec
@@ -112,6 +118,29 @@ ON CONFLICT (record_id) DO NOTHING;
 
 -- name: SetPublicContractItemsState :exec
 UPDATE pub_contracts SET items_state = $2 WHERE contract_id = $1;
+
+-- One failed item-list attempt (fetch, decode or store), on
+-- the record: the counter rises, the reason is kept, and the
+-- row parks itself once the counter reaches the drain's
+-- threshold -- the caller passes both, so the policy lives in
+-- one named constant in the warming pass.
+-- name: NotePublicContractItemsFailure :exec
+UPDATE pub_contracts
+SET items_attempts = items_attempts + 1,
+    items_error = LEFT(sqlc.arg(reason)::text, 500),
+    items_state = CASE
+        WHEN items_attempts + 1 >= sqlc.arg(max_attempts)::bigint THEN 'parked'
+        ELSE items_state
+    END
+WHERE contract_id = sqlc.arg(contract_id)::bigint
+  AND items_state = 'pending';
+
+-- The drain's own ledger for a contract: how many attempts
+-- its item list has failed and why the last one did. The test
+-- suite reads it; the columns ride no page query.
+-- name: GetPublicContractItemsLedger :one
+SELECT items_state, items_attempts, items_error FROM pub_contracts
+WHERE contract_id = $1;
 
 -- name: ListPublicContractItems :many
 SELECT record_id, contract_id, type_id, item_id, quantity, is_included,

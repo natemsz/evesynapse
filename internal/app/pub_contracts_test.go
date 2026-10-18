@@ -30,7 +30,8 @@ type pubFixture struct {
 	pages    map[int64][]esi.PublicContract // region -> its whole current list (served one page of 2 per request when long)
 	pageSize int
 	items    map[int64][]esi.PublicContractItem
-	itemsErr map[int64]int // contract -> forced HTTP status on the items route
+	itemsRaw map[int64][]byte // contract -> raw items-route body (wins over items; serves unparseable payloads)
+	itemsErr map[int64]int    // contract -> forced HTTP status on the items route
 	bids     map[int64][]esi.PublicContractBid
 	dynamic  map[int64]esi.DynamicItem // item_id -> dynamic payload (absent = 404)
 
@@ -45,6 +46,7 @@ func newPubFixture() *pubFixture {
 		pages:      map[int64][]esi.PublicContract{},
 		pageSize:   2,
 		items:      map[int64][]esi.PublicContractItem{},
+		itemsRaw:   map[int64][]byte{},
 		itemsErr:   map[int64]int{},
 		bids:       map[int64][]esi.PublicContractBid{},
 		dynamic:    map[int64]esi.DynamicItem{},
@@ -110,6 +112,9 @@ func (f *pubFixture) RoundTrip(req *http.Request) (*http.Response, error) {
 			f.itemsCalls[id]++
 			if status, forced := f.itemsErr[id]; forced {
 				return pubResponse(status, []byte(`{"error":"fixture refusal"}`), 0), nil
+			}
+			if raw, ok := f.itemsRaw[id]; ok {
+				return pubResponse(http.StatusOK, raw, 0), nil
 			}
 			items := f.items[id]
 			if items == nil {
@@ -438,5 +443,174 @@ func TestPubContractRegionOrderHubsFirst(t *testing.T) {
 	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
 	if fmt.Sprint(ids) != fmt.Sprint([]int64{10000001, 10000002, 10000030, 10000042, 10000047}) {
 		t.Fatal("region order lost or duplicated a region")
+	}
+}
+
+// seedPendingContract stores one contract straight in the
+// pending state, as the list sweep leaves it before the item
+// drain runs -- the drain tests seed this way so they exercise
+// the drain alone, not the sweep.
+func seedPendingContract(t *testing.T, app *Application, id, regionID int64, issued time.Time) {
+	t.Helper()
+	ctx := context.Background()
+	if _, err := app.db.ExecContext(ctx, `
+		INSERT INTO pub_contracts (
+			contract_id, region_id, type, issuer_id, issuer_corporation_id,
+			for_corporation, title, price, buyout, reward, collateral, volume,
+			start_location_id, end_location_id, date_issued, date_expired,
+			days_to_complete, items_state, last_cycle, first_seen, last_seen)
+		VALUES ($1, $2, 'item_exchange', 90001, 98001,
+			FALSE, 'fixture', 100, 0, 0, 0, 0,
+			60003760, 60003760, $3, $4,
+			0, 'pending', 1, $5, $5)`,
+		id, regionID, issued, issued.Add(7*24*time.Hour), time.Now().UTC()); err != nil {
+		t.Fatalf("seed pending contract %d: %v", id, err)
+	}
+}
+
+func TestPublicContractItemsDrainNewestFirst(t *testing.T) {
+	fx := newPubFixture()
+	app, _, q := buildCorpTestApp(t, fx)
+	ctx := context.Background()
+	seedPubRegions(t, app, 10000002)
+	now := time.Now().UTC()
+
+	// One pending backlog, three issue times. first_seen is
+	// identical for all three (the sweep stored them in the
+	// same pass), so the order can only come from date_issued.
+	seedPendingContract(t, app, 301, 10000002, now.Add(-72*time.Hour))
+	seedPendingContract(t, app, 302, 10000002, now.Add(-time.Hour))
+	seedPendingContract(t, app, 303, 10000002, now.Add(-24*time.Hour))
+	for _, id := range []int64{301, 302, 303} {
+		fx.items[id] = []esi.PublicContractItem{
+			{RecordID: 3000 + id, TypeID: 34, Quantity: 1, IsIncluded: true},
+		}
+	}
+
+	pending, err := q.ListPublicContractsPendingItems(ctx, 3)
+	if err != nil || len(pending) != 3 {
+		t.Fatalf("pending selection = %d rows, %v; want 3", len(pending), err)
+	}
+	if pending[0].ContractID != 302 || pending[1].ContractID != 303 || pending[2].ContractID != 301 {
+		t.Fatalf("drain order = %d, %d, %d; want newest first 302, 303, 301",
+			pending[0].ContractID, pending[1].ContractID, pending[2].ContractID)
+	}
+
+	// The drain takes the newest first: with room for one, it
+	// is the fresh contract that gets its contents.
+	stored, _ := app.warmPublicContractItems(ctx, &fetchBudget{left: 1})
+	if stored != 1 {
+		t.Fatalf("one-fetch drain stored %d, want 1", stored)
+	}
+	if got, err := q.GetPublicContract(ctx, 302); err != nil || got.ItemsState != "stored" {
+		t.Fatalf("freshest contract state = %q, %v; want stored", got.ItemsState, err)
+	}
+	if got, err := q.GetPublicContract(ctx, 301); err != nil || got.ItemsState != "pending" {
+		t.Fatalf("oldest contract state = %q, %v; want still pending", got.ItemsState, err)
+	}
+}
+
+func TestPublicContractItemsParking(t *testing.T) {
+	fx := newPubFixture()
+	app, _, q := buildCorpTestApp(t, fx)
+	ctx := context.Background()
+	seedPubRegions(t, app, 10000002)
+	now := time.Now().UTC()
+
+	// Three contracts, three fates. 401's payload never
+	// parses (the production poison shape) and it fails every
+	// drain. 402 refuses transiently and recovers just below
+	// the threshold. 403 answers fine until its payload turns
+	// bad mid-test, so its failures start two drains later.
+	seedPendingContract(t, app, 401, 10000002, now.Add(-time.Hour))
+	fx.itemsRaw[401] = []byte(`{"not":"an item list"`)
+	seedPendingContract(t, app, 402, 10000002, now.Add(-2*time.Hour))
+	fx.itemsErr[402] = http.StatusInternalServerError
+	fx.items[402] = []esi.PublicContractItem{
+		{RecordID: 4002, TypeID: 34, Quantity: 1, IsIncluded: true},
+	}
+	seedPendingContract(t, app, 403, 10000002, now.Add(-3*time.Hour))
+	fx.items[403] = []esi.PublicContractItem{
+		{RecordID: 4003, TypeID: 34, Quantity: 1, IsIncluded: true},
+	}
+
+	ledger := func(id int64) (string, int64, string) {
+		row, err := q.GetPublicContractItemsLedger(ctx, id)
+		if err != nil {
+			t.Fatalf("ledger %d: %v", id, err)
+		}
+		return row.ItemsState, row.ItemsAttempts, row.ItemsError
+	}
+	drain := func() {
+		if _, limited := app.warmPublicContractItems(ctx, &fetchBudget{left: pubContractFetchesPerCycle}); limited {
+			t.Fatal("drain cut short by the fixture's error limit")
+		}
+	}
+
+	// Below the threshold the failing pair keeps failing and
+	// stays pending, with the failures on the record; the
+	// healthy contract stores on the first drain.
+	for pass := 1; pass < pubContractItemsMaxAttempts; pass++ {
+		drain()
+		state, attempts, reason := ledger(401)
+		if state != "pending" || attempts != int64(pass) || !strings.Contains(reason, "decode:") {
+			t.Fatalf("401 after %d failures = %q, %d attempts, %q; want pending, %d, a decode reason",
+				pass, state, attempts, reason, pass)
+		}
+		if state, attempts, _ := ledger(402); state != "pending" || attempts != int64(pass) {
+			t.Fatalf("402 after %d failures = %q, %d attempts; want pending, %d", pass, state, attempts, pass)
+		}
+	}
+	if got, err := q.GetPublicContract(ctx, 403); err != nil || got.ItemsState != "stored" {
+		t.Fatalf("403 = %q, %v; want stored while the others fail", got.ItemsState, err)
+	}
+
+	// The threshold drain: 402's route answers again, so it
+	// is stored; 403 re-enters the pending queue (set up
+	// directly -- the sweep's relist paths are covered by the
+	// sweep test) with a payload that no longer parses, so its
+	// failure count starts two drains behind the others; 401
+	// fails once more and parks.
+	delete(fx.itemsErr, 402)
+	if _, err := app.db.ExecContext(ctx,
+		`UPDATE pub_contracts SET items_state = 'pending' WHERE contract_id = 403`); err != nil {
+		t.Fatalf("re-pend 403: %v", err)
+	}
+	fx.itemsRaw[403] = []byte(`{"not":"an item list"`)
+	drain()
+	state, attempts, reason := ledger(401)
+	if state != "parked" || attempts != pubContractItemsMaxAttempts || !strings.Contains(reason, "decode:") {
+		t.Fatalf("401 at threshold = %q, %d attempts, %q; want parked, %d, a decode reason",
+			state, attempts, reason, pubContractItemsMaxAttempts)
+	}
+	if state, attempts, _ := ledger(402); state != "stored" || attempts != int64(pubContractItemsMaxAttempts-1) {
+		t.Fatalf("402 after recovery = %q at %d attempts; want stored, count kept at %d",
+			state, attempts, pubContractItemsMaxAttempts-1)
+	}
+	if state, attempts, _ := ledger(403); state != "pending" || attempts != 1 {
+		t.Fatalf("403 after its first failure = %q, %d attempts; want pending, 1", state, attempts)
+	}
+
+	// Parked means out of the drain: the next drains never
+	// fetch 401 again, while the still-pending 403 is retried
+	// until it too reaches the threshold.
+	drain()
+	_, itemsMid, _, _ := fx.calls()
+	if itemsMid[401] != pubContractItemsMaxAttempts {
+		t.Fatalf("parked contract fetched %d times total, want exactly %d",
+			itemsMid[401], pubContractItemsMaxAttempts)
+	}
+	if state, attempts, _ := ledger(403); state != "pending" || attempts != 2 {
+		t.Fatalf("403 below threshold = %q, %d attempts; want pending, 2 (still retried)", state, attempts)
+	}
+	drain()
+	if state, attempts, _ := ledger(403); state != "parked" || attempts != pubContractItemsMaxAttempts {
+		t.Fatalf("403 at threshold = %q, %d attempts; want parked, %d",
+			state, attempts, pubContractItemsMaxAttempts)
+	}
+	_, itemsEnd, _, _ := fx.calls()
+	if itemsEnd[401] != pubContractItemsMaxAttempts {
+		t.Fatalf("parked contract fetched %d times total, want exactly %d (never again)",
+			itemsEnd[401], pubContractItemsMaxAttempts)
 	}
 }

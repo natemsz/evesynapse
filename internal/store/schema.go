@@ -335,6 +335,15 @@ var pgUserAppraisalsSchema string
 //go:embed schema_pg/059_audit_indexes.sql
 var pgAuditIndexesSchema string
 
+// Step 060: the public-contract item drain's failure
+// bookkeeping -- an attempt counter and the latest failure's
+// reason on pub_contracts, so a listing whose payload never
+// parses can be parked instead of retried forever, and the
+// index the drain's new newest-first walk reads by.
+//
+//go:embed schema_pg/060_pub_contract_items_parking.sql
+var pgPubContractItemsParkingSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -423,6 +432,7 @@ func schemaSteps() []schemaStep {
 		{57, "abyssal_estimates", pgAbyssalEstimatesSchema, ""},
 		{58, "user_appraisals", pgUserAppraisalsSchema, ""},
 		{59, "audit_indexes", pgAuditIndexesSchema, ""},
+		{60, "pub_contract_items_parking", pgPubContractItemsParkingSchema, ""},
 	}
 }
 

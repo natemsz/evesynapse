@@ -399,6 +399,27 @@ func (q *Queries) GetPublicContract(ctx context.Context, contractID int64) (PubC
 	return i, err
 }
 
+const getPublicContractItemsLedger = `-- name: GetPublicContractItemsLedger :one
+SELECT items_state, items_attempts, items_error FROM pub_contracts
+WHERE contract_id = $1
+`
+
+type GetPublicContractItemsLedgerRow struct {
+	ItemsState    string `json:"items_state"`
+	ItemsAttempts int64  `json:"items_attempts"`
+	ItemsError    string `json:"items_error"`
+}
+
+// The drain's own ledger for a contract: how many attempts
+// its item list has failed and why the last one did. The test
+// suite reads it; the columns ride no page query.
+func (q *Queries) GetPublicContractItemsLedger(ctx context.Context, contractID int64) (GetPublicContractItemsLedgerRow, error) {
+	row := q.db.QueryRowContext(ctx, getPublicContractItemsLedger, contractID)
+	var i GetPublicContractItemsLedgerRow
+	err := row.Scan(&i.ItemsState, &i.ItemsAttempts, &i.ItemsError)
+	return i, err
+}
+
 const getPublicContractSweepState = `-- name: GetPublicContractSweepState :one
 SELECT region_id, next_page, total_pages, cycle, updated_at
 FROM pub_contract_sweep_state
@@ -1311,7 +1332,7 @@ const listPublicContractsPendingItems = `-- name: ListPublicContractsPendingItem
 
 SELECT contract_id, type FROM pub_contracts
 WHERE items_state = 'pending'
-ORDER BY first_seen ASC, contract_id ASC
+ORDER BY date_issued DESC, contract_id DESC
 LIMIT $1
 `
 
@@ -1324,6 +1345,12 @@ type ListPublicContractsPendingItemsRow struct {
 // Item lists: fetched once per contract, ever (a contract's
 // list is immutable once issued).
 // ---------------------------------------------------------------------
+// The item drain walks newest first: a freshly swept contract
+// gets its contents (and therefore its appraisal) within a
+// cycle or two, and the cold backlog backfills behind the new
+// listings in whatever budget is left. Parked rows (schema
+// 060: repeated fetch or decode failures) are out of the
+// selection for good.
 func (q *Queries) ListPublicContractsPendingItems(ctx context.Context, limit int32) ([]ListPublicContractsPendingItemsRow, error) {
 	rows, err := q.db.QueryContext(ctx, listPublicContractsPendingItems, limit)
 	if err != nil {
@@ -1379,6 +1406,34 @@ func (q *Queries) ListSDERegionIDs(ctx context.Context) ([]int64, error) {
 		return nil, err
 	}
 	return items, nil
+}
+
+const notePublicContractItemsFailure = `-- name: NotePublicContractItemsFailure :exec
+UPDATE pub_contracts
+SET items_attempts = items_attempts + 1,
+    items_error = LEFT($1::text, 500),
+    items_state = CASE
+        WHEN items_attempts + 1 >= $2::bigint THEN 'parked'
+        ELSE items_state
+    END
+WHERE contract_id = $3::bigint
+  AND items_state = 'pending'
+`
+
+type NotePublicContractItemsFailureParams struct {
+	Reason      string `json:"reason"`
+	MaxAttempts int64  `json:"max_attempts"`
+	ContractID  int64  `json:"contract_id"`
+}
+
+// One failed item-list attempt (fetch, decode or store), on
+// the record: the counter rises, the reason is kept, and the
+// row parks itself once the counter reaches the drain's
+// threshold -- the caller passes both, so the policy lives in
+// one named constant in the warming pass.
+func (q *Queries) NotePublicContractItemsFailure(ctx context.Context, arg NotePublicContractItemsFailureParams) error {
+	_, err := q.db.ExecContext(ctx, notePublicContractItemsFailure, arg.Reason, arg.MaxAttempts, arg.ContractID)
+	return err
 }
 
 const openAbyssalSightingsForContract = `-- name: OpenAbyssalSightingsForContract :exec

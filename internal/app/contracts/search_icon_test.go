@@ -23,8 +23,8 @@ func TestTypeIconURL(t *testing.T) {
 		{"size passes through", 2048, false, false, 64, "https://images.evetech.net/types/2048/icon?size=64"},
 	}
 	for _, c := range cases {
-		if got := typeIconURL(c.typeID, c.blueprint, c.copy, c.size); got != c.want {
-			t.Errorf("%s: typeIconURL(%d, %v, %v, %d) = %q, want %q",
+		if got := TypeIconURL(c.typeID, c.blueprint, c.copy, c.size); got != c.want {
+			t.Errorf("%s: TypeIconURL(%d, %v, %v, %d) = %q, want %q",
 				c.name, c.typeID, c.blueprint, c.copy, c.size, got, c.want)
 		}
 	}

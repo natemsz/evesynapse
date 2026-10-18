@@ -15,6 +15,11 @@ package appraise
 // as a quantity. Nothing is silently dropped: a line with no
 // usable name lands in Bad, a line whose candidates all miss
 // lands in the result's unresolved list with its text intact.
+// A line carrying the game's showinfo item link is the one
+// exception to name-first reading: the link's ids identify a
+// unique item instance (see resolveList), and its candidates
+// exist only as the base-item fallback for when that item's
+// rolls are not on record.
 
 import (
 	"regexp"
@@ -45,6 +50,12 @@ type pasteLine struct {
 	HasTE      bool
 	Runs       int64
 	HasRuns    bool
+	// A showinfo item link (<url=showinfo:TYPE//ITEM>) names
+	// one unique item instance: the type and item ids ride
+	// here, and LinkName is the link's display text.
+	LinkTypeID int64
+	LinkItemID int64
+	LinkName   string
 	Raw        string
 }
 
@@ -59,10 +70,15 @@ var (
 	reQtyPrefix = regexp.MustCompile(`^([\d,]+)\s*[x×]\s*(.+)$`)
 	reQtySuffix = regexp.MustCompile(`^(.+?)\s*[x×]\s*([\d,]+)$`)
 	reCommaQty  = regexp.MustCompile(`^(.+?),\s*([\d,]+)$`)
-	reME        = regexp.MustCompile(`^me[:=]?(\d+)$`)
-	reTE        = regexp.MustCompile(`^te[:=]?(\d+)$`)
-	reRuns      = regexp.MustCompile(`^(\d+)runs?$`)
-	reRunsLabel = regexp.MustCompile(`^runs?[:=]?(\d+)$`)
+	// The game's item-link markup: an item link names one
+	// unique item instance (type id // item id); a type link
+	// names only the type.
+	reShowinfoItem = regexp.MustCompile(`<url=showinfo:(\d+)//(\d+)>([^<]*)</url>`)
+	reShowinfoType = regexp.MustCompile(`<url=showinfo:(\d+)>([^<]*)</url>`)
+	reME           = regexp.MustCompile(`^me[:=]?(\d+)$`)
+	reTE           = regexp.MustCompile(`^te[:=]?(\d+)$`)
+	reRuns         = regexp.MustCompile(`^(\d+)runs?$`)
+	reRunsLabel    = regexp.MustCompile(`^runs?[:=]?(\d+)$`)
 )
 
 // parseQtyToken reads one quantity token ("1,000,000", "500").
@@ -245,10 +261,42 @@ func candidates(name string, qty int64, qtyExplicit bool) []nameCandidate {
 	return out
 }
 
+// linkCandidates builds a linked line's name readings: a
+// link names one unique (usually mutated) item, so when its
+// rolls cannot price it the honest fallback is its base
+// item — the mutation-stripped reading goes first, the name
+// as linked second. Quantity is 1: the link is one item,
+// whatever quantity text surrounds it.
+func linkCandidates(name string) []nameCandidate {
+	if base, ok := mutationBase(name); ok {
+		return []nameCandidate{
+			{Name: base, Qty: 1, AbyssalBase: true},
+			{Name: name, Qty: 1},
+		}
+	}
+	return []nameCandidate{{Name: name, Qty: 1}}
+}
+
 // parseListLine parses one non-EFT line into a pasteLine.
 // ok is false when the line carries no usable name at all.
 func parseListLine(raw string) (pasteLine, bool) {
 	work := strings.TrimSpace(raw)
+	// An item link anywhere in the line makes the line that
+	// one item: quantity text around it does not multiply a
+	// unique instance.
+	if m := reShowinfoItem.FindStringSubmatch(work); m != nil {
+		pl := pasteLine{Raw: raw, LinkName: strings.TrimSpace(m[3])}
+		pl.LinkTypeID, _ = strconv.ParseInt(m[1], 10, 64)
+		pl.LinkItemID, _ = strconv.ParseInt(m[2], 10, 64)
+		if pl.LinkItemID > 0 {
+			pl.Candidates = linkCandidates(pl.LinkName)
+			return pl, true
+		}
+	}
+	// A type link names only a type: unwrap it to its
+	// display text and let the ordinary readings (quantities
+	// around it included) apply.
+	work = reShowinfoType.ReplaceAllString(work, "$2")
 	work, facts := stripAnnotation(work)
 	var pl pasteLine
 	if facts != nil {

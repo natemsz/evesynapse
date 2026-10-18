@@ -173,7 +173,6 @@ html[data-theme="light"] .btn.btn-quiet {
   letter-spacing: 0.09em; text-transform: uppercase; text-decoration: none;
   color: var(--muted); padding: 0.34rem 0.85rem; border-radius: 999px;
   background: rgba(23, 17, 13, 0.55); border: 1px solid rgba(255, 110, 0, 0.22);
-  -webkit-backdrop-filter: blur(10px) saturate(1.2); backdrop-filter: blur(10px) saturate(1.2);
   transition: filter 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
 .region-pills a:hover { filter: saturate(1.45) brightness(1.07); border-color: rgba(255, 130, 20, 0.45); color: var(--text-bright); }

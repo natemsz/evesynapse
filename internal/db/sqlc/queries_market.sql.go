@@ -1337,12 +1337,14 @@ func (q *Queries) ListIndustryCostIndices(ctx context.Context) ([]IndustryCostIn
 const listMarketAvgDailyVolumes = `-- name: ListMarketAvgDailyVolumes :many
 SELECT h.type_id AS type_id, CAST(AVG(h.volume) AS DOUBLE PRECISION) AS avg_daily_volume
 FROM market_history h
+JOIN (
+    SELECT m.type_id, to_char(MAX(m.date)::date - INTERVAL '6 days', 'YYYY-MM-DD') AS window_start
+    FROM market_history m
+    WHERE m.region_id = $1
+    GROUP BY m.type_id
+) w ON w.type_id = h.type_id
 WHERE h.region_id = $1
-  AND h.date >= (
-      SELECT to_char(MAX(m.date)::date - INTERVAL '6 days', 'YYYY-MM-DD')
-      FROM market_history m
-      WHERE m.region_id = h.region_id AND m.type_id = h.type_id
-  )
+  AND h.date >= w.window_start
 GROUP BY h.type_id
 ORDER BY h.type_id
 `

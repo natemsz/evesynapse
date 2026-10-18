@@ -1688,9 +1688,12 @@ func (c *Client) sendOnce(ctx context.Context, method, accessToken, path string,
 	defer resp.Body.Close()
 	c.trackErrorBudget(resp.Header)
 	c.trackRateHeaders(routeOf(method, path), characterFrom(ctx), resp.Header, time.Now())
-	body, err = io.ReadAll(io.LimitReader(resp.Body, 8<<20))
+	body, err = io.ReadAll(io.LimitReader(resp.Body, (8<<20)+1))
 	if err != nil {
 		return nil, nil, 0, fmt.Errorf("ESI %s %s: read body: %w", method, path, err)
+	}
+	if len(body) > 8<<20 {
+		return nil, nil, 0, fmt.Errorf("ESI %s %s: response body exceeds 8 MiB limit", method, path)
 	}
 	if resp.StatusCode == http.StatusTooManyRequests {
 		// One character's budget, not everybody's (ratelimit.go).
@@ -2978,7 +2981,7 @@ func (c *Client) CachedTypeNames(ctx context.Context, ids []int64) map[int64]str
 	for _, id := range todo {
 		if name, ok := c.typeNames[id]; ok {
 			out[id] = name
-		} else {
+		} else if _, missed := c.typeNameMisses[id]; !missed {
 			missing = append(missing, id)
 		}
 	}

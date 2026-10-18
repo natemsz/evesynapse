@@ -27,14 +27,14 @@ LEFT JOIN sde_groups sg ON sg.group_id = st.group_id
 WHERE lf.is_public AND NOT lf.is_draft
   AND (sqlc.arg(sincedays)::int <= 0 OR lf.updated_at >= now() - make_interval(days => sqlc.arg(sincedays)::int))
   AND (sqlc.arg(q)::text = '' OR lf.name ILIKE '%' || sqlc.arg(q)::text || '%'
-    OR tn.name ILIKE '%' || sqlc.arg(q)::text || '%'
+    OR COALESCE(NULLIF(st.name, ''), tn.name, '') ILIKE '%' || sqlc.arg(q)::text || '%'
     OR (SELECT c.name FROM characters c WHERE c.user_id = lf.user_id ORDER BY c.character_id LIMIT 1) ILIKE '%' || sqlc.arg(q)::text || '%')
   AND (sqlc.arg(role)::text = '' OR EXISTS (
         SELECT 1 FROM jsonb_array_elements_text(
             CASE WHEN jsonb_typeof(lf.items_json::jsonb -> 'tags') = 'array' THEN lf.items_json::jsonb -> 'tags' ELSE '[]'::jsonb END) AS t(tag)
         WHERE lower(t.tag) = lower(sqlc.arg(role)::text)))
   AND (sqlc.arg(hull)::text = '' OR sg.name = sqlc.arg(hull)::text)
-  AND (sqlc.arg(hullq)::text = '' OR tn.name ILIKE '%' || sqlc.arg(hullq)::text || '%')
+  AND (sqlc.arg(hullq)::text = '' OR COALESCE(NULLIF(st.name, ''), tn.name, '') ILIKE '%' || sqlc.arg(hullq)::text || '%')
   AND (sqlc.arg(minstars)::float8 <= 0 OR (lf.rating_count > 0 AND lf.rating_sum::float8 / lf.rating_count >= sqlc.arg(minstars)::float8))
   AND (sqlc.arg(include)::bigint <= 0 OR EXISTS (
         SELECT 1 FROM jsonb_array_elements(
@@ -63,7 +63,7 @@ WHERE lf.is_public AND NOT lf.is_draft
 -- name: ListPublicFits :many
 SELECT lf.id, lf.user_id, lf.name, lf.ship_type_id, lf.items_json, lf.updated_at,
        lf.view_count, lf.total_price, lf.rating_count, lf.rating_sum,
-       COALESCE(tn.name, '')::text AS ship_name,
+       COALESCE(NULLIF(st.name, ''), tn.name, '')::text AS ship_name,
        COALESCE(sg.name, '')::text AS hull,
        COALESCE((SELECT c.name FROM characters c WHERE c.user_id = lf.user_id ORDER BY c.character_id LIMIT 1), '')::text AS author_name
 FROM local_fittings lf
@@ -73,14 +73,14 @@ LEFT JOIN sde_groups sg ON sg.group_id = st.group_id
 WHERE lf.is_public AND NOT lf.is_draft
   AND (sqlc.arg(sincedays)::int <= 0 OR lf.updated_at >= now() - make_interval(days => sqlc.arg(sincedays)::int))
   AND (sqlc.arg(q)::text = '' OR lf.name ILIKE '%' || sqlc.arg(q)::text || '%'
-    OR tn.name ILIKE '%' || sqlc.arg(q)::text || '%'
+    OR COALESCE(NULLIF(st.name, ''), tn.name, '') ILIKE '%' || sqlc.arg(q)::text || '%'
     OR (SELECT c.name FROM characters c WHERE c.user_id = lf.user_id ORDER BY c.character_id LIMIT 1) ILIKE '%' || sqlc.arg(q)::text || '%')
   AND (sqlc.arg(role)::text = '' OR EXISTS (
         SELECT 1 FROM jsonb_array_elements_text(
             CASE WHEN jsonb_typeof(lf.items_json::jsonb -> 'tags') = 'array' THEN lf.items_json::jsonb -> 'tags' ELSE '[]'::jsonb END) AS t(tag)
         WHERE lower(t.tag) = lower(sqlc.arg(role)::text)))
   AND (sqlc.arg(hull)::text = '' OR sg.name = sqlc.arg(hull)::text)
-  AND (sqlc.arg(hullq)::text = '' OR tn.name ILIKE '%' || sqlc.arg(hullq)::text || '%')
+  AND (sqlc.arg(hullq)::text = '' OR COALESCE(NULLIF(st.name, ''), tn.name, '') ILIKE '%' || sqlc.arg(hullq)::text || '%')
   AND (sqlc.arg(minstars)::float8 <= 0 OR (lf.rating_count > 0 AND lf.rating_sum::float8 / lf.rating_count >= sqlc.arg(minstars)::float8))
   AND (sqlc.arg(include)::bigint <= 0 OR EXISTS (
         SELECT 1 FROM jsonb_array_elements(
@@ -264,7 +264,7 @@ ORDER BY m.region_id;
 -- name: ListPublicFitsForShip :many
 SELECT lf.id, lf.user_id, lf.name, lf.ship_type_id, lf.items_json, lf.updated_at,
        lf.view_count, lf.total_price, lf.rating_count, lf.rating_sum,
-       COALESCE(tn.name, '')::text AS ship_name,
+       COALESCE(NULLIF(st.name, ''), tn.name, '')::text AS ship_name,
        COALESCE(sg.name, '')::text AS hull,
        COALESCE((SELECT c.name FROM characters c WHERE c.user_id = lf.user_id ORDER BY c.character_id LIMIT 1), '')::text AS author_name
 FROM local_fittings lf

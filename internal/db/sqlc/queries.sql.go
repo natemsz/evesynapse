@@ -52,12 +52,13 @@ func (q *Queries) AdminTotals(ctx context.Context, arg AdminTotalsParams) (Admin
 
 const browsePublicFittings = `-- name: BrowsePublicFittings :many
 SELECT lf.id, lf.user_id, lf.name, lf.ship_type_id, lf.items_json, lf.updated_at,
-       COALESCE(tn.name, '')::text AS ship_name,
+       COALESCE(NULLIF(st.name, ''), tn.name, '')::text AS ship_name,
        COALESCE((SELECT c.name FROM characters c WHERE c.user_id = lf.user_id ORDER BY c.character_id LIMIT 1), '')::text AS author_name
 FROM local_fittings lf
 LEFT JOIN type_names tn ON tn.type_id = lf.ship_type_id
+LEFT JOIN sde_types st ON st.type_id = lf.ship_type_id
 WHERE lf.is_public AND NOT lf.is_draft
-  AND ($1::text = '' OR lf.name ILIKE '%' || $1::text || '%' OR tn.name ILIKE '%' || $1::text || '%')
+  AND ($1::text = '' OR lf.name ILIKE '%' || $1::text || '%' OR COALESCE(NULLIF(st.name, ''), tn.name, '') ILIKE '%' || $1::text || '%')
   AND ($2::text = '' OR EXISTS (
         SELECT 1 FROM jsonb_array_elements_text(
             CASE WHEN jsonb_typeof(lf.items_json::jsonb -> 'tags') = 'array' THEN lf.items_json::jsonb -> 'tags' ELSE '[]'::jsonb END) AS t(tag)
@@ -2003,11 +2004,12 @@ func (q *Queries) NextSkillPlanPosition(ctx context.Context, planID int64) (int6
 
 const searchLocalFittings = `-- name: SearchLocalFittings :many
 SELECT lf.id, lf.user_id, lf.name, lf.ship_type_id, lf.items_json, lf.is_public, lf.is_draft, lf.created_at, lf.updated_at,
-       COALESCE(tn.name, '') AS ship_name
+       COALESCE(NULLIF(st.name, ''), tn.name, '') AS ship_name
 FROM local_fittings lf
 LEFT JOIN type_names tn ON tn.type_id = lf.ship_type_id
+LEFT JOIN sde_types st ON st.type_id = lf.ship_type_id
 WHERE lf.user_id = $1
-  AND ($2::text = '' OR lf.name ILIKE '%' || $2::text || '%' OR tn.name ILIKE '%' || $2::text || '%')
+  AND ($2::text = '' OR lf.name ILIKE '%' || $2::text || '%' OR COALESCE(NULLIF(st.name, ''), tn.name, '') ILIKE '%' || $2::text || '%')
 ORDER BY lf.updated_at DESC, lf.id DESC
 LIMIT 20
 `
@@ -2066,12 +2068,13 @@ func (q *Queries) SearchLocalFittings(ctx context.Context, arg SearchLocalFittin
 
 const searchPublicFittings = `-- name: SearchPublicFittings :many
 SELECT lf.id, lf.name, lf.ship_type_id, lf.items_json, lf.updated_at,
-       COALESCE(tn.name, '') AS ship_name,
+       COALESCE(NULLIF(st.name, ''), tn.name, '') AS ship_name,
        COALESCE((SELECT c.name FROM characters c WHERE c.user_id = lf.user_id ORDER BY c.character_id LIMIT 1), '')::text AS author_name
 FROM local_fittings lf
 LEFT JOIN type_names tn ON tn.type_id = lf.ship_type_id
+LEFT JOIN sde_types st ON st.type_id = lf.ship_type_id
 WHERE lf.is_public AND NOT lf.is_draft AND lf.user_id != $1
-  AND ($2::text = '' OR lf.name ILIKE '%' || $2::text || '%' OR tn.name ILIKE '%' || $2::text || '%')
+  AND ($2::text = '' OR lf.name ILIKE '%' || $2::text || '%' OR COALESCE(NULLIF(st.name, ''), tn.name, '') ILIKE '%' || $2::text || '%')
 ORDER BY lf.updated_at DESC, lf.id DESC
 LIMIT 20
 `

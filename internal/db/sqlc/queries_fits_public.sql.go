@@ -37,14 +37,14 @@ LEFT JOIN sde_groups sg ON sg.group_id = st.group_id
 WHERE lf.is_public AND NOT lf.is_draft
   AND ($1::int <= 0 OR lf.updated_at >= now() - make_interval(days => $1::int))
   AND ($2::text = '' OR lf.name ILIKE '%' || $2::text || '%'
-    OR tn.name ILIKE '%' || $2::text || '%'
+    OR COALESCE(NULLIF(st.name, ''), tn.name, '') ILIKE '%' || $2::text || '%'
     OR (SELECT c.name FROM characters c WHERE c.user_id = lf.user_id ORDER BY c.character_id LIMIT 1) ILIKE '%' || $2::text || '%')
   AND ($3::text = '' OR EXISTS (
         SELECT 1 FROM jsonb_array_elements_text(
             CASE WHEN jsonb_typeof(lf.items_json::jsonb -> 'tags') = 'array' THEN lf.items_json::jsonb -> 'tags' ELSE '[]'::jsonb END) AS t(tag)
         WHERE lower(t.tag) = lower($3::text)))
   AND ($4::text = '' OR sg.name = $4::text)
-  AND ($5::text = '' OR tn.name ILIKE '%' || $5::text || '%')
+  AND ($5::text = '' OR COALESCE(NULLIF(st.name, ''), tn.name, '') ILIKE '%' || $5::text || '%')
   AND ($6::float8 <= 0 OR (lf.rating_count > 0 AND lf.rating_sum::float8 / lf.rating_count >= $6::float8))
   AND ($7::bigint <= 0 OR EXISTS (
         SELECT 1 FROM jsonb_array_elements(
@@ -170,7 +170,7 @@ func (q *Queries) GetPublicFitPage(ctx context.Context, fitID int64) (PublicFitP
 const listPublicFits = `-- name: ListPublicFits :many
 SELECT lf.id, lf.user_id, lf.name, lf.ship_type_id, lf.items_json, lf.updated_at,
        lf.view_count, lf.total_price, lf.rating_count, lf.rating_sum,
-       COALESCE(tn.name, '')::text AS ship_name,
+       COALESCE(NULLIF(st.name, ''), tn.name, '')::text AS ship_name,
        COALESCE(sg.name, '')::text AS hull,
        COALESCE((SELECT c.name FROM characters c WHERE c.user_id = lf.user_id ORDER BY c.character_id LIMIT 1), '')::text AS author_name
 FROM local_fittings lf
@@ -180,14 +180,14 @@ LEFT JOIN sde_groups sg ON sg.group_id = st.group_id
 WHERE lf.is_public AND NOT lf.is_draft
   AND ($1::int <= 0 OR lf.updated_at >= now() - make_interval(days => $1::int))
   AND ($2::text = '' OR lf.name ILIKE '%' || $2::text || '%'
-    OR tn.name ILIKE '%' || $2::text || '%'
+    OR COALESCE(NULLIF(st.name, ''), tn.name, '') ILIKE '%' || $2::text || '%'
     OR (SELECT c.name FROM characters c WHERE c.user_id = lf.user_id ORDER BY c.character_id LIMIT 1) ILIKE '%' || $2::text || '%')
   AND ($3::text = '' OR EXISTS (
         SELECT 1 FROM jsonb_array_elements_text(
             CASE WHEN jsonb_typeof(lf.items_json::jsonb -> 'tags') = 'array' THEN lf.items_json::jsonb -> 'tags' ELSE '[]'::jsonb END) AS t(tag)
         WHERE lower(t.tag) = lower($3::text)))
   AND ($4::text = '' OR sg.name = $4::text)
-  AND ($5::text = '' OR tn.name ILIKE '%' || $5::text || '%')
+  AND ($5::text = '' OR COALESCE(NULLIF(st.name, ''), tn.name, '') ILIKE '%' || $5::text || '%')
   AND ($6::float8 <= 0 OR (lf.rating_count > 0 AND lf.rating_sum::float8 / lf.rating_count >= $6::float8))
   AND ($7::bigint <= 0 OR EXISTS (
         SELECT 1 FROM jsonb_array_elements(
@@ -315,7 +315,7 @@ func (q *Queries) ListPublicFits(ctx context.Context, arg ListPublicFitsParams) 
 const listPublicFitsForShip = `-- name: ListPublicFitsForShip :many
 SELECT lf.id, lf.user_id, lf.name, lf.ship_type_id, lf.items_json, lf.updated_at,
        lf.view_count, lf.total_price, lf.rating_count, lf.rating_sum,
-       COALESCE(tn.name, '')::text AS ship_name,
+       COALESCE(NULLIF(st.name, ''), tn.name, '')::text AS ship_name,
        COALESCE(sg.name, '')::text AS hull,
        COALESCE((SELECT c.name FROM characters c WHERE c.user_id = lf.user_id ORDER BY c.character_id LIMIT 1), '')::text AS author_name
 FROM local_fittings lf

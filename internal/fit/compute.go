@@ -129,6 +129,7 @@ func (f *fitting) shipAttr(attr int64) float64 { return f.ship.get(f.snap, attr)
 // the effect categories its state allows.
 func (f *fitting) addItems(items []ItemInput) {
 	snap := f.snap
+	totalRackInstances := 0
 	for _, it := range items {
 		if it.TypeID == f.shipTypeID {
 			continue
@@ -149,6 +150,19 @@ func (f *fitting) addItems(items []ItemInput) {
 				qty = 0 // a drone line with no count carries nothing
 			}
 		}
+		isRack := kind == entModule || kind == entRig || kind == entSubsystem
+		if isRack {
+			if qty > 16 {
+				qty = 16
+			}
+			if totalRackInstances+qty > 64 {
+				qty = 64 - totalRackInstances
+			}
+			if qty <= 0 {
+				continue
+			}
+			totalRackInstances += qty
+		}
 		state := ""
 		if kind == entModule {
 			state = NormalizeModuleState(snap, it.TypeID, it.State)
@@ -162,6 +176,9 @@ func (f *fitting) addItems(items []ItemInput) {
 		}
 		if ent != nil {
 			ent.instances += qty
+			if isRack && ent.instances > 16 {
+				ent.instances = 16
+			}
 			continue
 		}
 		ent = &entity{
@@ -549,6 +566,19 @@ func (f *fitting) slotsAndHardpoints() {
 		res.TurretHardpoints += int(ent.base[AttrTurretHardPointModifier] * n)
 		res.LauncherHardpoints += int(ent.base[AttrLauncherHardPointModifier] * n)
 	}
+	clampSlots := func(v int) int {
+		if v < 0 {
+			return 0
+		}
+		if v > 8 {
+			return 8
+		}
+		return v
+	}
+	res.HighSlots = clampSlots(res.HighSlots)
+	res.MediumSlots = clampSlots(res.MediumSlots)
+	res.LowSlots = clampSlots(res.LowSlots)
+	res.RigSlots = clampSlots(res.RigSlots)
 	for _, ent := range f.fitted {
 		n := maxInt(ent.instances, 1)
 		switch {

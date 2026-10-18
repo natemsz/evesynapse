@@ -1,191 +1,254 @@
-{{define "title"}}Contract Search{{end}}
-{{define "pagetitle"}}<h1><span class="gt">Contract Search</span></h1>{{end}}
-{{define "pagetabs"}}{{template "sectiontabs" .}}{{end}}
+{{define "title"}}Public contracts · EveSynapse{{end}}
+{{define "pagetitle"}}Public contracts{{end}}
 {{define "content"}}
+{{with .ContractSearch}}
+{{$s := .}}
+<h2>Public contracts</h2>
+<p class="muted">Every public contract our sweeps see across New Eden, priced against our swept typicals first, then stored estimates — never the guide average.</p>
 
-{{if .ContractSearch}}
-{{$s := .ContractSearch}}
-<p><small>Every public contract our sweepers can see, across every region, priced against our own numbers. Values come from our swept Forge typicals first, then our stored estimates, then a labeled outside aggregate — never the game's guide average. A contract only earns its deal mark when every offered line is priced.</small></p>
+<div class="cs-hunts">
+  <span class="cs-hunts-label">Quick hunts:</span>
+  <a class="cs-hunt" href="{{$s.HuntJita}}">Jita Steals (≤85%)</a>
+  <a class="cs-hunt" href="{{$s.HuntAbyssal}}">Abyssal Rolls 75+</a>
+  <a class="cs-hunt" href="{{$s.HuntBlueprint}}">ME 10 Blueprints</a>
+  <a class="cs-hunt" href="{{$s.HuntCourier}}">Highsec Couriers</a>
+</div>
 
-<form method="get" action="/contracts/search/">
-  <label><small>Item (offered or wanted)</small>
-    <input type="text" name="q_item" value="{{$s.Echo.q_item}}" size="28" placeholder="e.g. PLEX, Ishtar, Damage Control II">
-  </label>
-  <label><small>On which side</small>
-    <select name="item_dir">
-      <option value="either"{{if eq $s.Filters.ItemDir "either"}} selected{{end}}>Either side</option>
-      <option value="offered"{{if eq $s.Filters.ItemDir "offered"}} selected{{end}}>Offered</option>
-      <option value="wanted"{{if eq $s.Filters.ItemDir "wanted"}} selected{{end}}>Wanted in exchange</option>
-    </select>
-  </label>
-  <label><small>Title contains</small>
-    <input type="text" name="q_title" value="{{$s.Echo.q_title}}" size="20">
-  </label>
-  <label><small>Issuer (pilot or corporation)</small>
-    <input type="text" name="q_issuer" value="{{$s.Echo.q_issuer}}" size="20">
-  </label>
-  <label><small>Issued by</small>
-    <select name="for_corp">
-      <option value=""{{if eq $s.Filters.ForCorp -1}} selected{{end}}>Anyone</option>
-      <option value="0"{{if eq $s.Filters.ForCorp 0}} selected{{end}}>Pilots</option>
-      <option value="1"{{if eq $s.Filters.ForCorp 1}} selected{{end}}>Corporations</option>
-    </select>
-  </label>
-  <fieldset>
-    <legend><small>Contract type</small></legend>
-    <label><input type="checkbox" name="type" value="item_exchange"{{if index $s.TypeSet "item_exchange"}} checked{{end}}> Item exchange</label>
-    <label><input type="checkbox" name="type" value="auction"{{if index $s.TypeSet "auction"}} checked{{end}}> Auction</label>
-    <label><input type="checkbox" name="type" value="courier"{{if index $s.TypeSet "courier"}} checked{{end}}> Courier</label>
-    <label><input type="checkbox" name="deals" value="1"{{if $s.Filters.DealsOnly}} checked{{end}}> Deals only (asking at most 85% of our value)</label>
-  </fieldset>
-  <label><small>Regions</small>
-    <select name="region" multiple size="5">
-      {{range $s.Regions}}<option value="{{.ID}}"{{if .Selected}} selected{{end}}>{{.Name}}</option>{{end}}
-    </select>
-  </label>
-  <label><small>Location (station, structure or system)</small>
-    <input type="text" name="place" value="{{$s.Echo.place}}" size="22">
-  </label>
-  <label><small>Price at least (ISK)</small>
-    <input type="text" name="price_min" value="{{$s.Echo.price_min}}" size="10" placeholder="e.g. 100m">
-  </label>
-  <label><small>Price at most (ISK)</small>
-    <input type="text" name="price_max" value="{{$s.Echo.price_max}}" size="10" placeholder="e.g. 2b">
-  </label>
-  <label><small>Auction buyout at least (ISK)</small>
-    <input type="text" name="buyout_min" value="{{$s.Echo.buyout_min}}" size="10">
-  </label>
-  <fieldset>
-    <legend><small>Blueprints</small></legend>
-    <label><small>Kind</small>
-      <select name="bp">
-        <option value="any"{{if eq $s.Filters.BPMode "any"}} selected{{end}}>Any contract</option>
-        <option value="bpo"{{if eq $s.Filters.BPMode "bpo"}} selected{{end}}>Has an original (BPO)</option>
-        <option value="bpc"{{if eq $s.Filters.BPMode "bpc"}} selected{{end}}>Has a copy (BPC)</option>
+<form method="get" action="/contracts/search/" class="cs-form" id="cs-form">
+  <div class="cs-tier1">
+    <div class="cs-searchbox">
+      <input type="search" name="q_item" value="{{$s.Echo.q_item}}" placeholder="Search for item name (e.g. Damage Control II, Gila, Rifter)…" aria-label="Item name contains">
+      <select name="item_dir" aria-label="Which side of the contract">
+        <option value="either"{{if eq $s.Filters.ItemDir "either"}} selected{{end}}>Either side</option>
+        <option value="offered"{{if eq $s.Filters.ItemDir "offered"}} selected{{end}}>Offered</option>
+        <option value="wanted"{{if eq $s.Filters.ItemDir "wanted"}} selected{{end}}>Wanted</option>
       </select>
-    </label>
-    <label><small>Min ME</small>
-      <input type="number" name="me_min" min="0" max="10" value="{{$s.Echo.me_min}}" size="3">
-    </label>
-    <label><small>Min TE</small>
-      <input type="number" name="te_min" min="0" max="20" value="{{$s.Echo.te_min}}" size="3">
-    </label>
-    <label><small>Min runs (copies)</small>
-      <input type="number" name="runs_min" min="0" value="{{$s.Echo.runs_min}}" size="4">
-    </label>
-  </fieldset>
-  <fieldset>
-    <legend><small>Abyssal modules</small></legend>
-    <label><small>Module family</small>
-      <select name="family">
-        <option value="">Any family</option>
-        {{range $s.Families}}<option value="{{.Slug}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>{{end}}
+    </div>
+    <div class="cs-pills" role="group" aria-label="Contract types">
+      <label class="cs-pill"><input type="checkbox" name="type" value="item_exchange" class="cs-auto"{{if index $s.TypeSet "item_exchange"}} checked{{end}}> Item Exchange</label>
+      <label class="cs-pill"><input type="checkbox" name="type" value="auction" class="cs-auto"{{if index $s.TypeSet "auction"}} checked{{end}}> Auctions</label>
+      <label class="cs-pill"><input type="checkbox" name="type" value="courier" class="cs-auto"{{if index $s.TypeSet "courier"}} checked{{end}}> Couriers</label>
+    </div>
+    <label class="cs-deals"><input type="checkbox" name="deals" value="1" class="cs-auto"{{if $s.Filters.DealsOnly}} checked{{end}}> <span class="cs-switch" aria-hidden="true"></span> DEALS ONLY</label>
+  </div>
+
+  <div class="cs-cards">
+    <div class="cs-card cs-card-wide">
+      <div class="cs-card-head"><h3>Regions</h3>
+        <span class="cs-region-quick"><button type="button" data-region-quick="jita">Jita</button> · <button type="button" data-region-quick="hubs">4 Hubs</button> · <button type="button" data-region-quick="all">All</button></span>
+      </div>
+      <div class="cs-chips" id="cs-region-chips"></div>
+      <details class="cs-region-details">
+        <summary>Select regions</summary>
+        <div class="cs-region-pop">
+          {{range $s.Regions}}<label class="cs-region-row"><input type="checkbox" name="region" value="{{.ID}}" class="cs-region-cb" data-region-name="{{.Name}}"{{if .Selected}} checked{{end}}> <span>{{.Name}}</span></label>{{end}}
+        </div>
+      </details>
+    </div>
+    <div class="cs-card">
+      <h3>Price / Reward (ISK)</h3>
+      <div class="cs-duo">
+        <label>Min <input type="text" name="price_min" value="{{$s.Echo.price_min}}" inputmode="numeric" placeholder="0" data-isk></label>
+        <label>Max <input type="text" name="price_max" value="{{$s.Echo.price_max}}" inputmode="numeric" placeholder="Any" data-isk></label>
+      </div>
+    </div>
+    <div class="cs-card">
+      <h3>Contract title contains</h3>
+      <input type="text" name="q_title" value="{{$s.Echo.q_title}}" placeholder="e.g. fitted, cheap, bulk…">
+    </div>
+    <div class="cs-card">
+      <h3>Issued within</h3>
+      <select name="issued_hrs">
+        <option value=""{{if eq $s.Filters.IssuedHrs -1}} selected{{end}}>Any time</option>
+        <option value="1"{{if eq $s.Filters.IssuedHrs 1}} selected{{end}}>Last 1 hour</option>
+        <option value="6"{{if eq $s.Filters.IssuedHrs 6}} selected{{end}}>Last 6 hours</option>
       </select>
-    </label>
-    <label><small>Source module contains</small>
-      <input type="text" name="source_q" value="{{$s.Echo.source_q}}" size="22" placeholder="e.g. Damage Control II">
-    </label>
-    <label><small>Roll score at least (0-100)</small>
-      <input type="number" name="score_min" min="0" max="100" value="{{$s.Echo.score_min}}" size="4">
-    </label>
-    <label><small>Our estimate at least (ISK)</small>
-      <input type="text" name="est_min" value="{{$s.Echo.est_min}}" size="10" placeholder="e.g. 500m">
-    </label>
-    <label><small>Our estimate at most (ISK)</small>
-      <input type="text" name="est_max" value="{{$s.Echo.est_max}}" size="10" placeholder="e.g. 5b">
-    </label>
-    <label><small>One roll, at least this good</small>
-      <select name="attr">
-        <option value="">Any roll</option>
-        {{range $s.AttrOpts}}<option value="{{.Key}}"{{if .Selected}} selected{{end}}>{{.Name}}</option>{{end}}
+    </div>
+    <div class="cs-card">
+      <h3>Expiring within</h3>
+      <select name="expiring_hrs">
+        <option value=""{{if eq $s.Filters.ExpiringHrs -1}} selected{{end}}>Any time</option>
+        <option value="72"{{if eq $s.Filters.ExpiringHrs 72}} selected{{end}}>≤ 3 days</option>
+        <option value="168"{{if eq $s.Filters.ExpiringHrs 168}} selected{{end}}>≤ 7 days</option>
       </select>
-    </label>
-    <label><small>Roll position at least (percent)</small>
-      <input type="number" name="attr_min" min="0" max="100" value="{{$s.Echo.attr_min}}" size="4">
-    </label>
-    <p><small>Rolls are scored against the range their mutaplasmid could have produced: 100 is the best roll it can make. Estimates always show their range and what they rest on.</small></p>
-  </fieldset>
-  <fieldset>
-    <legend><small>Couriers</small></legend>
-    <label><small>Deliver to (station, structure or system)</small>
-      <input type="text" name="place_end" value="{{$s.Echo.place_end}}" size="22">
-    </label>
-    <label><small>Reward at least (ISK)</small>
-      <input type="text" name="reward_min" value="{{$s.Echo.reward_min}}" size="10">
-    </label>
-    <label><small>Reward at most (ISK)</small>
-      <input type="text" name="reward_max" value="{{$s.Echo.reward_max}}" size="10">
-    </label>
-    <label><small>Collateral at most (ISK)</small>
-      <input type="text" name="collateral_max" value="{{$s.Echo.collateral_max}}" size="10">
-    </label>
-    <label><small>Volume at least (m3)</small>
-      <input type="text" name="volume_min" value="{{$s.Echo.volume_min}}" size="8">
-    </label>
-    <label><small>Volume at most (m3)</small>
-      <input type="text" name="volume_max" value="{{$s.Echo.volume_max}}" size="8">
-    </label>
-    <label><small>Days to complete at most</small>
-      <input type="number" name="days_max" min="0" value="{{$s.Echo.days_max}}" size="3">
-    </label>
-  </fieldset>
-  <label><small>Issued within</small>
-    <select name="issued_hrs">
-      <option value=""{{if eq $s.Filters.IssuedHrs -1}} selected{{end}}>Any time</option>
-      <option value="24"{{if eq $s.Filters.IssuedHrs 24}} selected{{end}}>24 hours</option>
-      <option value="72"{{if eq $s.Filters.IssuedHrs 72}} selected{{end}}>3 days</option>
-      <option value="168"{{if eq $s.Filters.IssuedHrs 168}} selected{{end}}>7 days</option>
-    </select>
-  </label>
-  <label><small>Expiring within</small>
-    <select name="expiring_hrs">
-      <option value=""{{if eq $s.Filters.ExpiringHrs -1}} selected{{end}}>Any time</option>
-      <option value="24"{{if eq $s.Filters.ExpiringHrs 24}} selected{{end}}>24 hours</option>
-      <option value="72"{{if eq $s.Filters.ExpiringHrs 72}} selected{{end}}>3 days</option>
-      <option value="168"{{if eq $s.Filters.ExpiringHrs 168}} selected{{end}}>7 days</option>
-    </select>
-  </label>
-  <label><small>Sort by</small>
-    <select name="sort">
-      {{range $s.Sorts}}<option value="{{.Key}}"{{if eq $s.Filters.Sort .Key}} selected{{end}}>{{.Label}}</option>{{end}}
-    </select>
-  </label>
-  <button class="btn" type="submit">Search</button>
-  <a href="/contracts/search/">Clear filters</a>
+    </div>
+    <div class="cs-card">
+      <h3>Location (start)</h3>
+      <input type="text" name="place" value="{{$s.Echo.place}}" placeholder="Station, structure or system">
+    </div>
+    <div class="cs-card cs-card-wide">
+      <h3>Buyout cap (ISK)</h3>
+      <div class="cs-buyout">
+        <input type="text" name="buyout_max" value="{{$s.Echo.buyout_max}}" inputmode="numeric" placeholder="Maximum buyout" data-isk>
+        <span class="cs-cap-chips"><button type="button" data-buyout-cap="500000000">≤ 500m</button><button type="button" data-buyout-cap="2000000000">≤ 2b</button><button type="button" data-buyout-cap="5000000000">≤ 5b</button></span>
+      </div>
+    </div>
+    <div class="cs-card">
+      <h3>Issuer name contains</h3>
+      <input type="text" name="q_issuer" value="{{$s.Echo.q_issuer}}" placeholder="Pilot or corp name">
+    </div>
+    <div class="cs-card">
+      <h3>Issued by</h3>
+      <select name="for_corp">
+        <option value=""{{if eq $s.Filters.ForCorp -1}} selected{{end}}>Anyone</option>
+        <option value="0"{{if eq $s.Filters.ForCorp 0}} selected{{end}}>Pilots</option>
+        <option value="1"{{if eq $s.Filters.ForCorp 1}} selected{{end}}>Corporations</option>
+      </select>
+    </div>
+    <div class="cs-card">
+      <h3>Sort results by</h3>
+      <select name="sort">
+        {{range $s.Sorts}}<option value="{{.Key}}"{{if eq $s.Filters.Sort .Key}} selected{{end}}>{{.Label}}</option>{{end}}
+      </select>
+    </div>
+  </div>
+
+  <div class="cs-drawer-bar">
+    <span class="cs-drawer-label">Specialized specs</span>
+    <div class="cs-tabs" role="group" aria-label="Specialized search specs">
+      <button type="button" class="cs-tab{{if eq $s.OpenDrawer "blueprints"}} on{{end}}" data-drawer-tab="blueprints" aria-expanded="{{if eq $s.OpenDrawer "blueprints"}}true{{else}}false{{end}}">Blueprints{{if $s.BPCount}} <span class="cs-count">{{$s.BPCount}}</span>{{end}} <span class="cs-chev" aria-hidden="true"></span></button>
+      <button type="button" class="cs-tab{{if eq $s.OpenDrawer "abyssal"}} on{{end}}" data-drawer-tab="abyssal" aria-expanded="{{if eq $s.OpenDrawer "abyssal"}}true{{else}}false{{end}}">Abyssal Mutaplasmids{{if $s.AbCount}} <span class="cs-count">{{$s.AbCount}}</span>{{end}} <span class="cs-chev" aria-hidden="true"></span></button>
+      <button type="button" class="cs-tab{{if eq $s.OpenDrawer "couriers"}} on{{end}}" data-drawer-tab="couriers" aria-expanded="{{if eq $s.OpenDrawer "couriers"}}true{{else}}false{{end}}">Courier Hauling{{if $s.CourierCount}} <span class="cs-count">{{$s.CourierCount}}</span>{{end}} <span class="cs-chev" aria-hidden="true"></span></button>
+    </div>
+    <span class="cs-actions">
+      <a class="cs-clear" href="/contracts/search/">Clear filters</a>
+      <button class="btn" type="submit">Search contracts</button>
+    </span>
+  </div>
+
+  <div class="cs-drawer-slot">
+    <section class="cs-drawer" data-drawer-panel="blueprints"{{if ne $s.OpenDrawer "blueprints"}} hidden{{end}}>
+      <div class="cs-drawer-head"><h4>Blueprint research &amp; copy filters</h4><button type="button" class="cs-reset" data-reset-drawer="blueprints">Reset Blueprint Filters</button></div>
+      <div class="cs-drawer-grid">
+        <label class="cs-field">Blueprint kind
+          <select name="bp">
+            <option value="any"{{if eq $s.Filters.BPMode "any"}} selected{{end}}>Any blueprint</option>
+            <option value="bpo"{{if eq $s.Filters.BPMode "bpo"}} selected{{end}}>Originals (BPO)</option>
+            <option value="bpc"{{if eq $s.Filters.BPMode "bpc"}} selected{{end}}>Copies (BPC)</option>
+          </select></label>
+        <div class="cs-field">Min material efficiency (ME)
+          <span class="cs-slider-pair"><input type="range" min="0" max="10" step="1" value="{{if ge $s.Filters.MEMin 0}}{{$s.Filters.MEMin}}{{else}}0{{end}}" data-slider-for="cs-me-num" aria-label="Min ME slider"><input type="number" id="cs-me-num" name="me_min" min="0" max="10" value="{{if ge $s.Filters.MEMin 0}}{{$s.Filters.MEMin}}{{end}}" placeholder="Any"></span></div>
+        <div class="cs-field">Min time efficiency (TE)
+          <span class="cs-slider-pair"><input type="range" min="0" max="20" step="1" value="{{if ge $s.Filters.TEMin 0}}{{$s.Filters.TEMin}}{{else}}0{{end}}" data-slider-for="cs-te-num" aria-label="Min TE slider"><input type="number" id="cs-te-num" name="te_min" min="0" max="20" value="{{if ge $s.Filters.TEMin 0}}{{$s.Filters.TEMin}}{{end}}" placeholder="Any"></span></div>
+        <label class="cs-field">Min licensed runs
+          <input type="number" name="runs_min" min="0" value="{{$s.Echo.runs_min}}" placeholder="Any"></label>
+      </div>
+    </section>
+
+    <section class="cs-drawer" data-drawer-panel="abyssal"{{if ne $s.OpenDrawer "abyssal"}} hidden{{end}}>
+      <div class="cs-drawer-head"><h4>Abyssal mutaplasmid roll &amp; valuation filters</h4><button type="button" class="cs-reset" data-reset-drawer="abyssal">Reset Abyssal Filters</button></div>
+      <p class="cs-drawer-sub">Rolls are scored 0–100 against their mutaplasmid's theoretical ceiling.</p>
+      <div class="cs-drawer-grid">
+        <label class="cs-field">Module family
+          <select name="family">
+            <option value="">All families</option>
+            {{range $s.Families}}<option value="{{.Slug}}"{{if eq $s.Filters.AbFamily .Slug}} selected{{end}}>{{.Label}}</option>{{end}}
+          </select></label>
+        <label class="cs-field">Source module contains
+          <input type="text" name="source_q" value="{{$s.Echo.source_q}}" placeholder="Original module name"></label>
+        <label class="cs-field">Min roll score (0–100)
+          <input type="number" name="score_min" min="0" max="100" value="{{$s.Echo.score_min}}" placeholder="Any"></label>
+        <label class="cs-field">Our est. at least (ISK)
+          <input type="text" name="est_min" value="{{$s.Echo.est_min}}" inputmode="numeric" placeholder="0" data-isk></label>
+        <label class="cs-field">Our est. at most (ISK)
+          <input type="text" name="est_max" value="{{$s.Echo.est_max}}" inputmode="numeric" placeholder="Any" data-isk></label>
+        <label class="cs-field">One roll at least
+          <select name="quality">
+            <option value=""{{if eq $s.Filters.AbQuality ""}} selected{{end}}>Any roll quality</option>
+            <option value="75"{{if eq $s.Filters.AbQuality "75"}} selected{{end}}>Solid Roll (75+)</option>
+            <option value="90"{{if eq $s.Filters.AbQuality "90"}} selected{{end}}>God Roll (90+)</option>
+          </select></label>
+        <label class="cs-field">Roll position ≥ (%)
+          <input type="number" name="pos_min" min="0" max="100" value="{{$s.Echo.pos_min}}" placeholder="Any"></label>
+      </div>
+    </section>
+
+    <section class="cs-drawer" data-drawer-panel="couriers"{{if ne $s.OpenDrawer "couriers"}} hidden{{end}}>
+      <div class="cs-drawer-head"><h4>Courier logistic &amp; hauling filters</h4><button type="button" class="cs-reset" data-reset-drawer="couriers">Reset Courier Filters</button></div>
+      <div class="cs-drawer-grid">
+        <label class="cs-field">Deliver to
+          <input type="text" name="place_end" value="{{$s.Echo.place_end}}" placeholder="Destination station or system"></label>
+        <label class="cs-field">Min reward (ISK)
+          <input type="text" name="reward_min" value="{{$s.Echo.reward_min}}" inputmode="numeric" placeholder="0" data-isk></label>
+        <label class="cs-field">Max reward (ISK)
+          <input type="text" name="reward_max" value="{{$s.Echo.reward_max}}" inputmode="numeric" placeholder="Any" data-isk></label>
+        <label class="cs-field">Max collateral (ISK)
+          <input type="text" name="collateral_max" value="{{$s.Echo.collateral_max}}" inputmode="numeric" placeholder="Any" data-isk></label>
+        <label class="cs-field">Min volume (m³)
+          <input type="text" name="volume_min" value="{{$s.Echo.volume_min}}" inputmode="numeric" placeholder="0"></label>
+        <label class="cs-field">Max volume (m³)
+          <input type="text" name="volume_max" value="{{$s.Echo.volume_max}}" inputmode="numeric" placeholder="Any"></label>
+        <label class="cs-field">Max days to complete
+          <input type="number" name="days_max" min="0" value="{{$s.Echo.days_max}}" placeholder="Any"></label>
+      </div>
+    </section>
+  </div>
 </form>
 
-<p><small>{{$s.TotalText}} contract{{if ne $s.Total 1}}s{{end}} match · Page {{$s.Page}} of {{$s.Pages}}</small></p>
+<div class="cs-results-head">
+  <p><strong>{{$s.TotalText}}</strong> contracts found <span class="muted">— click a row to inspect its line-by-line appraisal and mutaplasmid rolls.</span></p>
+  <span class="muted">Page {{$s.Page}} of {{$s.Pages}}</span>
+</div>
+
+{{if $s.Chips}}<div class="cs-active">{{range $s.Chips}}<a class="cs-fchip{{if .Highlight}} hot{{end}}" href="{{.URL}}">{{.Label}} <span aria-hidden="true">×</span></a>{{end}}</div>{{end}}
 
 {{if $s.Rows}}
-<div class="tw">
-<table>
-  <thead><tr><th>Contract</th><th>Contents</th><th>{{"Price / Reward"}}</th><th>Our value</th><th>Location</th><th>Issuer</th><th>Expires</th></tr></thead>
-  <tbody>
-  {{range $s.Rows}}
-    <tr>
-      <td><a href="/contracts/search/{{.ContractID}}/">{{.TypeLabel}}</a>{{if .Title}}<br><small>{{.Title}}</small>{{end}}<br><small>{{.RegionName}} · issued {{.IssuedAgo}}</small></td>
-      <td>
-        {{range .Offered}}{{.Name}} ×{{.Qty}}{{if .Note}} <small>({{.Note}})</small>{{end}}<br>{{end}}
-        {{if gt .MoreOffer 0}}<small>…and {{.MoreOffer}} more</small><br>{{end}}
-        {{if .Wanted}}<small>Wants:</small><br>{{range .Wanted}}{{.Name}} ×{{.Qty}}{{if .Note}} <small>({{.Note}})</small>{{end}}<br>{{end}}{{if gt .MoreWant 0}}<small>…and {{.MoreWant}} more</small><br>{{end}}{{end}}
-        {{if .Courier}}<small>Cargo is private — the game does not publish courier contents.</small>{{end}}
-        {{with .Abyssal}}<br><small>Mutated from {{itemLink .SourceTypeID .SourceName}} with {{.MutatorName}}</small>
-        {{if .ScoreText}}<br><small>{{.ScoreText}}</small>{{end}}
-        {{range .Bars}}<div><small>{{.Name}} — {{.Pct}}% of its range</small><div class="meter"><span data-w="{{.Pct}}"></span></div></div>{{end}}
-        {{if .Estimate}}<br><small>Our estimate <strong>{{.Estimate}} ISK</strong>{{if .SpreadNote}} — {{.SpreadNote}}{{end}}</small>{{end}}
-        {{if .CapNote}}<br><small>{{.CapNote}}</small>{{end}}{{end}}
-      </td>
-      <td><small>{{.PriceLabel}}</small><br><strong>{{.Price}} ISK</strong>{{if .PriceNote}}<br><small>{{.PriceNote}}</small>{{end}}{{if .Courier}}<br><small>Collateral {{.Collateral}} ISK · {{.Volume}}</small>{{end}}</td>
-      <td>{{if .Value}}<strong>{{.Value}} ISK</strong>{{if .ValueNote}}<br><small>{{if .IsDeal}}<strong>{{.ValueNote}}</strong>{{else}}{{.ValueNote}}{{end}}</small>{{end}}{{else}}<small>Not appraised yet</small>{{end}}</td>
-      <td>{{placeLink .Location}}{{if .HasRoute}}<br><small>to</small> {{placeLink .Dropoff}}{{end}}</td>
-      <td>{{if .IssuerCorp}}{{corpLink .IssuerID .IssuerName}}{{else}}{{charLink $.ViewerChars .IssuerID .IssuerName}}{{end}}</td>
-      <td>{{.ExpiresIn}}</td>
-    </tr>
-  {{end}}
-  </tbody>
-</table>
+<div class="cs-rows">
+{{range $s.Rows}}
+  <article class="cs-row{{if .IsDeal}} deal{{end}}" data-contract="{{.ContractID}}" tabindex="0" role="button" aria-expanded="false" aria-label="Inspect contract {{.ContractID}}">
+    <div class="cs-row-main">
+      <div class="cs-row-info">
+        <div class="cs-row-head">
+          <span class="cs-type{{if eq .TypeLabel "Item exchange"}} t-exchange{{else if eq .TypeLabel "Auction"}} t-auction{{else}} t-courier{{end}}">{{.TypeLabel}}</span>
+          {{if .IsDeal}}<span class="cs-deal">DEAL −{{.DealPct}}%</span>{{end}}
+          <strong class="cs-row-title">{{if .Title}}{{.Title}}{{else}}{{.TypeLabel}} contract{{end}}</strong>
+          <span class="cs-row-meta">{{.RegionName}} · {{.IssuedAgo}}</span>
+        </div>
+        <div class="cs-contents">
+          {{range .Offered}}<div class="cs-line"><span class="cs-line-name">{{.Name}}</span> <span class="cs-qty">× {{.Qty}}</span></div>{{end}}
+          {{if gt .MoreOffer 0}}<div class="cs-line muted">+ {{.MoreOffer}} more</div>{{end}}
+          {{if .Wanted}}<div class="cs-line want"><span class="cs-wants">Wants:</span> {{range $i, $w := .Wanted}}{{if $i}}, {{end}}{{$w.Name}} <span class="cs-qty">× {{$w.Qty}}</span>{{end}}{{if gt .MoreWant 0}} <span class="muted">+ {{.MoreWant}} more</span>{{end}}</div>{{end}}
+          <div class="cs-chips">
+            {{if .BPChip}}<span class="cs-chipinfo bp">{{.BPChip}}</span>{{end}}
+            {{if .Abyssal}}{{if .Abyssal.HasScore}}<span class="cs-chipinfo ab">Roll Score: {{.Abyssal.Score}} / 100{{if .Abyssal.HasTop}} • Top {{.Abyssal.TopPct}}%{{end}}</span>{{end}}{{end}}
+            {{if .Courier}}<span class="cs-chipinfo co">{{.VolumeText}}{{if .IskPerM3}} • {{.IskPerM3}} ISK/m³{{end}}</span>{{end}}
+            {{if and (not .Offered) (not .Wanted) (not .Courier)}}<span class="muted">Contents not fetched yet</span>{{end}}
+            {{if .Courier}}<span class="muted">Cargo is private</span>{{end}}
+          </div>
+          {{with .Abyssal}}<div class="cs-row-ab">
+            <div class="muted">Mutated from {{itemLink .SourceTypeID .SourceName}} with {{.MutatorName}}</div>
+            {{if .ScoreText}}<div>{{.ScoreText}}</div>{{end}}
+            {{range .Bars}}<div class="cs-bar"><span class="cs-bar-name">{{.Name}}</span><span class="meter"><span data-w="{{.Pct}}"></span></span><span class="cs-bar-pct">{{.Pct}}%</span></div>{{end}}
+            {{if .Estimate}}<div>Our estimate <strong>{{.Estimate}} ISK</strong>{{if .SpreadNote}} <span class="muted">— {{.SpreadNote}}</span>{{end}}</div>{{end}}
+            {{if .CapNote}}<div class="muted">{{.CapNote}}</div>{{end}}
+          </div>{{end}}
+        </div>
+      </div>
+      <div class="cs-cell">
+        <div class="cs-cell-label">{{.PriceLabel}}</div>
+        <div class="cs-cell-value">{{.Price}} ISK</div>
+        {{if .PriceNote}}<div class="cs-cell-note">{{.PriceNote}}</div>{{end}}
+      </div>
+      <div class="cs-cell">
+        <div class="cs-cell-label">Our value &amp; spread</div>
+        {{if .Value}}<div class="cs-cell-value">{{.Value}} ISK</div>{{end}}
+        {{if .ValueNote}}<div class="cs-cell-note">{{.ValueNote}}{{if and (gt .PricedLine 0) (eq .PricedLine .TotalLine)}} · priced {{.PricedLine}} of {{.TotalLine}} lines{{end}}</div>
+        {{else if not .Value}}<div class="cs-cell-note">Not appraised yet</div>{{end}}
+        {{if .Spread}}<div class="cs-spread">{{.Spread}} ISK spread</div>{{end}}
+      </div>
+      <div class="cs-cell cs-loc">
+        <div class="cs-place">{{if .SecKnown}}<span class="sec-pill sec-{{.SecTier}}">{{.SecText}}</span> {{end}}{{placeLink .Location}}</div>
+        {{if .HasRoute}}<div class="cs-cell-note">→ {{placeLink .Dropoff}}</div>{{end}}
+        {{if ne .ExpiresIn "—"}}<div class="cs-cell-note">Expires in {{.ExpiresIn}}</div>{{end}}
+        <div class="cs-cell-note">by {{if .IssuerCorp}}{{corpLink .IssuerID .IssuerName}}{{else}}{{charLink $.ViewerChars .IssuerID .IssuerName}}{{end}}</div>
+      </div>
+      <button type="button" class="cs-copy" data-copy="{{.CopyText}}" aria-label="Copy contract link" title="Copy contract link">⧉</button>
+    </div>
+    <div class="cs-panel-slot" hidden></div>
+  </article>
+{{end}}
 </div>
-<p>
+<p class="cs-pager">
   {{if $s.PrevURL}}<a href="{{$s.PrevURL}}">← Newer page</a>{{end}}
   {{if $s.NextURL}}<a href="{{$s.NextURL}}">Next page →</a>{{end}}
 </p>
@@ -193,5 +256,73 @@
 <p>No public contracts match those filters right now. Our sweepers cover every region on the game's own cadence, so newly listed contracts appear within the hour.</p>
 {{end}}
 
+{{end}}
+{{end}}
+
+{{define "contractpanel"}}
+{{with .ContractPanel}}
+<div class="cs-panel">
+  <div class="cs-panel-head">
+    <h4>Line appraisal</h4>
+    <span class="muted">ID: {{.ContractID}} • Issued by {{.IssuerText}}</span>
+    <a href="{{.DetailURL}}">Contract page</a>
+  </div>
+  <div class="cs-panel-summary">
+    <span><small>{{.PriceLabel}}</small> <strong>{{.Price}} ISK</strong></span>
+    {{if .Buyout}}<span><small>Buyout</small> <strong>{{.Buyout}} ISK</strong></span>{{end}}
+    {{if .TopBid}}<span><small>Top bid</small> <strong>{{.TopBid}} ISK</strong> <small>({{.BidCount}} bids)</small></span>{{end}}
+    {{if .Value}}<span><small>Our value</small> <strong>{{.Value}} ISK</strong>{{if .CoverageNote}} <small>{{.CoverageNote}}</small>{{end}}</span>{{end}}
+    {{if .WantValue}}<span><small>Wants</small> <strong>{{.WantValue}} ISK</strong></span>{{end}}
+    {{if .TierMix}}<span><small>Priced from</small> {{.TierMix}}</span>{{end}}
+    {{if .DealNote}}<span class="cs-deal-note{{if .IsDeal}} deal{{end}}">{{.DealNote}}</span>{{end}}
+    {{if .Reward}}<span><small>Collateral</small> <strong>{{.Collateral}} ISK</strong></span>
+    <span><small>Volume</small> <strong>{{.Volume}}</strong></span>
+    <span><small>{{.DaysText}}</small></span>{{end}}
+  </div>
+  <div class="cs-panel-grid{{if not .Abyssals}} solo{{end}}">
+    <div class="cs-panel-lines">
+      {{if .Lines}}
+      {{range .Lines}}
+      <div class="cs-pline">
+        <div class="cs-pline-main">
+          <span class="cs-side{{if eq .Side "Wanted"}} want{{end}}">{{.Side}}</span>
+          {{itemLink .TypeID .Name}} <span class="cs-qty">× {{.Qty}}</span>
+          {{if .Note}}<span class="cs-chipinfo bp">{{.Note}}</span>{{end}}
+          {{if .ItemID}}<span class="muted">Item ID: {{.ItemID}}</span>{{end}}
+        </div>
+        <div class="cs-pline-value">
+          {{if .Priced}}<span class="cs-tier">{{.TierLabel}}</span> <strong>{{.LineValue}} ISK</strong>
+          <div class="muted">{{.UnitPrice}} ISK each{{if .TierNote}} · {{.TierNote}}{{end}}</div>
+          {{else}}<span class="muted">Not priced</span>{{end}}
+        </div>
+      </div>
+      {{end}}
+      {{else if .StateNote}}<p class="muted">{{.StateNote}}</p>{{end}}
+    </div>
+    {{if .Abyssals}}
+    <div class="cs-panel-abs">
+      {{range .Abyssals}}
+      <aside class="cs-abpanel">
+        <div class="cs-abpanel-head"><h4>Mutaplasmid rolls</h4>{{if .Panel.Estimate}}<span class="muted">Est range: {{.Panel.EstLow}} – {{.Panel.EstHigh}} ISK</span>{{end}}</div>
+        <p class="muted">{{.LineName}}{{if .ItemID}} · Item ID: {{.ItemID}}{{end}}<br>Mutated from {{.Panel.SourceName}} with {{.Panel.MutatorName}}.</p>
+        {{range .Panel.Rolls}}<div class="cs-roll"><span class="cs-roll-name">{{.Name}}</span><span class="cs-roll-val">{{.Value}}{{if .Delta}} <span class="{{if .Good}}pos{{else}}neg{{end}}">({{.Delta}})</span>{{end}}</span><span class="meter"><span data-w="{{.Pct}}"></span></span><span class="cs-roll-pct">{{.Pct}}%</span></div>{{end}}
+        {{range .Panel.Derived}}<div class="cs-roll derived"><span class="cs-roll-name">{{.Name}}</span><span class="cs-roll-val">{{.ValueText}}</span><span class="meter"><span data-w="{{.Pct}}"></span></span><span class="cs-roll-pct">{{.Pct}}%</span></div>{{end}}
+        {{if .Panel.ScoreText}}<p>Roll score: <strong>{{.Panel.ScoreText}}</strong></p>{{end}}
+        {{if .Panel.Estimate}}<p class="cs-abest">Our estimate: <strong>{{.Panel.Estimate}} ISK</strong><br><span class="muted">likely range {{.Panel.EstLow}} to {{.Panel.EstHigh}} ISK · {{.Panel.BasisLabel}}</span></p>{{end}}
+        {{if .Panel.NoEstimate}}<p class="muted">{{.Panel.NoEstimate}}</p>{{end}}
+        {{if .Panel.CapNote}}<p>{{.Panel.CapNote}}</p>{{end}}
+        {{if .Panel.ScoredNote}}<p class="muted">{{.Panel.ScoredNote}}</p>{{end}}
+        {{if .Panel.Recreation}}<p class="muted">{{.Panel.Recreation}}</p>{{end}}
+        {{if .Panel.ContextPrice}}<p class="muted">The unmutated module prices at {{.Panel.ContextPrice}} ISK ({{.Panel.ContextTier}}) — shown for context.</p>{{end}}
+      </aside>
+      {{end}}
+    </div>
+    {{end}}
+  </div>
+  <div class="cs-panel-foot">
+    <span class="muted">Link ready for the EVE Notepad</span>
+    <button type="button" class="btn small cs-copy" data-copy="{{.CopyText}}">Copy contract link</button>
+  </div>
+</div>
 {{end}}
 {{end}}

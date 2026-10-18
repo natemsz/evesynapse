@@ -58,51 +58,58 @@ const searchPageCap = 40
 // query takes a plain time: zero means "no lower bound" and
 // the far sentinel "no upper bound" (see searchParams).
 type searchFilters struct {
-	Types       []string
-	RegionIDs   []int64
-	TitleQ      string
-	ItemQ       string
-	ItemDir     string // offered | wanted | either
-	IssuerQ     string
-	ForCorp     int64 // -1 any, 0 pilots, 1 corporations
-	PriceMin    float64
-	PriceMax    float64
-	BuyoutMin   float64
-	PlaceQ      string
-	PlaceEndQ   string
-	RewardMin   float64
-	RewardMax   float64
-	CollatMax   float64
-	VolumeMin   float64
-	VolumeMax   float64
-	DaysMax     int64
-	BPActive    bool
-	BPMode      string // any | bpo | bpc
-	MEMin       int64
-	TEMin       int64
-	RunsMin     int64
-	IssuedHrs   int64 // -1 off
-	ExpiringHrs int64 // -1 off
-	DealsOnly   bool
+	Types     []string
+	RegionIDs []int64
+	TitleQ    string
+	ItemQ     string
+	ItemDir   string // offered | wanted | either
+	IssuerQ   string
+	ForCorp   int64 // -1 any, 0 pilots, 1 corporations
+	PriceMin  float64
+	PriceMax  float64
+	BuyoutMax float64
+	PlaceQ    string
+	PlaceEndQ string
+	RewardMin float64
+	RewardMax float64
+	CollatMax float64
+	VolumeMin float64
+	VolumeMax float64
+	DaysMax   int64
+	// CourierActive: any courier-drawer filter is set, which
+	// (as in the mockup's filter model) narrows the search to
+	// courier contracts alone.
+	CourierActive bool
+	BPActive      bool
+	BPMode        string // any | bpo | bpc
+	MEMin         int64
+	TEMin         int64
+	RunsMin       int64
+	IssuedHrs     int64 // -1 off
+	ExpiringHrs   int64 // -1 off
+	DealsOnly     bool
 	// Abyssal filters (schema 057): all off unless AbActive.
 	AbActive   bool
 	AbFamily   string
 	AbScoreMin float64 // -1 off, else 0..1
+	AbQuality  string  // "" | "75" | "90": the "one roll at least" preset, a score floor
 	AbSourceQ  string
 	AbEstMin   float64
 	AbEstMax   float64
-	AbAttrKey  string // attribute id as text, "" off
-	AbAttrMin  float64
+	AbAttrKey  string  // attribute id as text, "" off
+	AbAttrMin  float64 // one named roll's percentile floor (URL-only)
+	AbPosMin   float64 // -1 off, else 0..1: the primary roll's percentile floor
 	Sort       string
 	Page       int
 }
 
 var searchSorts = []struct{ Key, Label string }{
 	{"newest", "Newest first"},
+	{"deal_asc", "Best deal % (discount vs our value)"},
+	{"margin_desc", "Highest net spread (ISK)"},
 	{"price_asc", "Price, low to high"},
 	{"price_desc", "Price, high to low"},
 	{"value_desc", "Appraised value, high to low"},
-	{"deal_asc", "Best deal first"},
 	{"expiry_asc", "Ending soonest"},
 	{"reward_desc", "Courier reward, high to low"},
 	{"reward_m3_desc", "Courier reward per m3"},
@@ -161,12 +168,12 @@ func parseSearchFilters(q url.Values) searchFilters {
 	f := searchFilters{
 		ItemDir:  "either",
 		ForCorp:  -1,
-		PriceMin: -1, PriceMax: -1, BuyoutMin: -1,
+		PriceMin: -1, PriceMax: -1, BuyoutMax: -1,
 		RewardMin: -1, RewardMax: -1, CollatMax: -1,
 		VolumeMin: -1, VolumeMax: -1, DaysMax: -1,
 		BPMode: "any", MEMin: -1, TEMin: -1, RunsMin: -1,
 		IssuedHrs: -1, ExpiringHrs: -1,
-		AbScoreMin: -1, AbEstMin: -1, AbEstMax: -1,
+		AbScoreMin: -1, AbEstMin: -1, AbEstMax: -1, AbPosMin: -1,
 		Sort: "newest", Page: 1,
 	}
 	for _, t := range q["type"] {
@@ -195,7 +202,7 @@ func parseSearchFilters(q url.Values) searchFilters {
 	}
 	f.PriceMin = iskBand(q, "price_min")
 	f.PriceMax = iskBand(q, "price_max")
-	f.BuyoutMin = iskBand(q, "buyout_min")
+	f.BuyoutMax = iskBand(q, "buyout_max")
 	f.PlaceQ = strings.TrimSpace(q.Get("place"))
 	f.PlaceEndQ = strings.TrimSpace(q.Get("place_end"))
 	f.RewardMin = iskBand(q, "reward_min")
@@ -208,6 +215,8 @@ func parseSearchFilters(q url.Values) searchFilters {
 		f.VolumeMax = v
 	}
 	f.DaysMax = intOr(q, "days_max", -1)
+	f.CourierActive = f.PlaceEndQ != "" || f.RewardMin >= 0 || f.RewardMax >= 0 ||
+		f.CollatMax >= 0 || f.VolumeMin >= 0 || f.VolumeMax >= 0 || f.DaysMax >= 0
 	switch q.Get("bp") {
 	case "bpo", "bpc":
 		f.BPMode = q.Get("bp")
@@ -229,6 +238,17 @@ func parseSearchFilters(q url.Values) searchFilters {
 	if v := intOr(q, "score_min", -1); v >= 0 && v <= 100 {
 		f.AbScoreMin = float64(v) / 100
 	}
+	// "One roll at least" is the mockup's quality preset; in
+	// its filter model it tests the roll score itself (Solid
+	// 75+, God Roll 90+), so it folds into the score floor.
+	switch q.Get("quality") {
+	case "75", "90":
+		f.AbQuality = q.Get("quality")
+		preset, _ := strconv.ParseFloat(f.AbQuality, 64)
+		if preset/100 > f.AbScoreMin {
+			f.AbScoreMin = preset / 100
+		}
+	}
 	f.AbSourceQ = strings.TrimSpace(q.Get("source_q"))
 	f.AbEstMin = iskBand(q, "est_min")
 	f.AbEstMax = iskBand(q, "est_max")
@@ -238,8 +258,11 @@ func parseSearchFilters(q url.Values) searchFilters {
 			f.AbAttrMin = float64(p) / 100
 		}
 	}
+	if v := intOr(q, "pos_min", -1); v >= 0 && v <= 100 {
+		f.AbPosMin = float64(v) / 100
+	}
 	f.AbActive = f.AbFamily != "" || f.AbScoreMin >= 0 || f.AbSourceQ != "" ||
-		f.AbEstMin >= 0 || f.AbEstMax >= 0 || f.AbAttrKey != ""
+		f.AbEstMin >= 0 || f.AbEstMax >= 0 || f.AbAttrKey != "" || f.AbPosMin >= 0
 	if s := q.Get("sort"); validSort(s) {
 		f.Sort = s
 	}
@@ -266,15 +289,16 @@ func (f searchFilters) params(now time.Time) (sp db.SearchPublicContractsParams,
 	sp = db.SearchPublicContractsParams{
 		Types: f.Types, RegionIds: f.RegionIDs, TitleQ: f.TitleQ,
 		ItemQ: f.ItemQ, ItemDir: f.ItemDir, IssuerQ: f.IssuerQ, ForCorp: f.ForCorp,
-		PriceMin: f.PriceMin, PriceMax: f.PriceMax, BuyoutMin: f.BuyoutMin,
+		PriceMin: f.PriceMin, PriceMax: f.PriceMax, BuyoutMax: f.BuyoutMax,
 		PlaceQ: f.PlaceQ, PlaceEndQ: f.PlaceEndQ,
 		RewardMin: f.RewardMin, RewardMax: f.RewardMax, CollateralMax: f.CollatMax,
 		VolumeMin: f.VolumeMin, VolumeMax: f.VolumeMax, DaysMax: f.DaysMax,
-		BpActive: f.BPActive, BpMode: f.BPMode, MeMin: f.MEMin, TeMin: f.TEMin, RunsMin: f.RunsMin,
+		CourierActive: f.CourierActive,
+		BpActive:      f.BPActive, BpMode: f.BPMode, MeMin: f.MEMin, TeMin: f.TEMin, RunsMin: f.RunsMin,
 		IssuedAfter: issuedAfter, ExpiringBefore: expiringBefore, DealsOnly: f.DealsOnly,
 		AbyssalActive: f.AbActive, AbFamily: f.AbFamily, AbScoreMin: f.AbScoreMin,
 		AbSourceQ: f.AbSourceQ, AbEstMin: f.AbEstMin, AbEstMax: f.AbEstMax,
-		AbAttrKey: f.AbAttrKey, AbAttrMin: f.AbAttrMin,
+		AbAttrKey: f.AbAttrKey, AbAttrMin: f.AbAttrMin, AbPosMin: f.AbPosMin,
 		Sort: f.Sort, MaxRows: searchPageSize, RowOffset: int64((f.Page - 1) * searchPageSize),
 	}
 	if sp.Types == nil {
@@ -286,15 +310,16 @@ func (f searchFilters) params(now time.Time) (sp db.SearchPublicContractsParams,
 	cp = db.CountPublicContractsSearchParams{
 		Types: sp.Types, RegionIds: sp.RegionIds, TitleQ: sp.TitleQ,
 		ItemQ: sp.ItemQ, ItemDir: sp.ItemDir, IssuerQ: sp.IssuerQ, ForCorp: sp.ForCorp,
-		PriceMin: sp.PriceMin, PriceMax: sp.PriceMax, BuyoutMin: sp.BuyoutMin,
+		PriceMin: sp.PriceMin, PriceMax: sp.PriceMax, BuyoutMax: sp.BuyoutMax,
 		PlaceQ: sp.PlaceQ, PlaceEndQ: sp.PlaceEndQ,
 		RewardMin: sp.RewardMin, RewardMax: sp.RewardMax, CollateralMax: sp.CollateralMax,
 		VolumeMin: sp.VolumeMin, VolumeMax: sp.VolumeMax, DaysMax: sp.DaysMax,
-		BpActive: sp.BpActive, BpMode: sp.BpMode, MeMin: sp.MeMin, TeMin: sp.TeMin, RunsMin: sp.RunsMin,
+		CourierActive: sp.CourierActive,
+		BpActive:      sp.BpActive, BpMode: sp.BpMode, MeMin: sp.MeMin, TeMin: sp.TeMin, RunsMin: sp.RunsMin,
 		IssuedAfter: sp.IssuedAfter, ExpiringBefore: sp.ExpiringBefore, DealsOnly: sp.DealsOnly,
 		AbyssalActive: sp.AbyssalActive, AbFamily: sp.AbFamily, AbScoreMin: sp.AbScoreMin,
 		AbSourceQ: sp.AbSourceQ, AbEstMin: sp.AbEstMin, AbEstMax: sp.AbEstMax,
-		AbAttrKey: sp.AbAttrKey, AbAttrMin: sp.AbAttrMin,
+		AbAttrKey: sp.AbAttrKey, AbAttrMin: sp.AbAttrMin, AbPosMin: sp.AbPosMin,
 	}
 	return sp, cp
 }
@@ -405,6 +430,7 @@ type searchLine struct {
 // searchRow is one result, display-ready.
 type searchRow struct {
 	ContractID int64
+	RegionID   int64
 	TypeLabel  string
 	Title      string
 	Courier    bool
@@ -412,6 +438,7 @@ type searchRow struct {
 	Wanted     []searchLine
 	MoreOffer  int
 	MoreWant   int
+	BPChip     string // first blueprint line's facts, for the contents chip
 	// Price block: exchanges show the ask, auctions the
 	// standing bid (or starting price), couriers the reward.
 	PriceLabel string
@@ -420,6 +447,10 @@ type searchRow struct {
 	Value      string // appraised offered value, "" until appraised
 	ValueNote  string // coverage / deal note
 	IsDeal     bool
+	DealPct    int    // discount percent against our value, when IsDeal
+	Spread     string // "+N" ISK the value beats the ask by, "" when none
+	PricedLine int64
+	TotalLine  int64
 	Location   module.PlaceRef
 	Dropoff    module.PlaceRef
 	HasRoute   bool
@@ -427,12 +458,18 @@ type searchRow struct {
 	Reward     string
 	Collateral string
 	Volume     string
+	VolumeText string // courier chip: "58,500 m³"
+	IskPerM3   string // courier chip: reward per m3
 	IssuerName string
 	IssuerID   int64
 	IssuerCorp bool
 	RegionName string
+	SecText    string
+	SecTier    int
+	SecKnown   bool
 	ExpiresIn  string
 	IssuedAgo  string
+	CopyText   string // the EVE Notepad contract link
 }
 
 type regionOption struct {
@@ -469,10 +506,22 @@ type rowAbyssal struct {
 	SourceTypeID int64
 	MutatorName  string
 	ScoreText    string
+	Score        int // roll score 0..100, valid when HasScore
+	HasScore     bool
+	TopPct       int // 100 minus the primary roll's percentile, valid when HasTop
+	HasTop       bool
 	Bars         []rowAbyssalBar
 	Estimate     string
 	SpreadNote   string // "likely L to H · from N listings of this module"
 	CapNote      string // "Held back by: CPU fitting cost"
+}
+
+// filterChip is one active-filter pill over the results:
+// its label, and the search URL with that one filter removed.
+type filterChip struct {
+	Label     string
+	URL       string
+	Highlight bool
 }
 
 type searchView struct {
@@ -492,6 +541,18 @@ type searchView struct {
 	PrevURL   string
 	NextURL   string
 	HasRows   bool
+	// Redesign furniture: active-filter chips, per-drawer
+	// active counts, the drawer the page opens with, and the
+	// quick-hunt preset URLs.
+	Chips         []filterChip
+	BPCount       int
+	AbCount       int
+	CourierCount  int
+	OpenDrawer    string // "", "blueprints", "abyssal", "couriers"
+	HuntJita      string
+	HuntAbyssal   string
+	HuntBlueprint string
+	HuntCourier   string
 }
 
 func (app *mod) handleContractSearch(w http.ResponseWriter, r *http.Request) {
@@ -559,6 +620,8 @@ func (app *mod) buildSearchView(ctx context.Context, q url.Values) *searchView {
 		}
 	}
 
+	app.buildSearchFurniture(view, f, q, regionNames)
+
 	sp, cp := f.params(now)
 	total, err := app.queries.CountPublicContractsSearch(ctx, cp)
 	if err != nil {
@@ -614,13 +677,252 @@ func (app *mod) buildSearchView(ctx context.Context, q url.Values) *searchView {
 	return view
 }
 
+// dropParamURL rebuilds the search URL without the given
+// parameters (drops: key -> value to remove, "" removes every
+// value of the key), back on page 1.
+func dropParamURL(q url.Values, drops map[string]string) string {
+	next := url.Values{}
+	for k, vs := range q {
+		if k == "page" {
+			continue
+		}
+		for _, v := range vs {
+			if dv, ok := drops[k]; ok && (dv == "" || dv == v) {
+				continue
+			}
+			next.Add(k, v)
+		}
+	}
+	if enc := next.Encode(); enc != "" {
+		return "/contracts/search/?" + enc
+	}
+	return "/contracts/search/"
+}
+
+// buildSearchFurniture fills the redesign's view furniture:
+// active-filter chips, the per-drawer active counts, which
+// drawer (if any) opens with the page, and the quick-hunt
+// preset URLs. Every chip and hunt is a plain GET URL, so
+// each one applies its filters server-side exactly like a
+// form submit.
+func (app *mod) buildSearchFurniture(view *searchView, f searchFilters, q url.Values, regionNames map[int64]string) {
+	add := func(label string, highlight bool, drops map[string]string) {
+		view.Chips = append(view.Chips, filterChip{Label: label, URL: dropParamURL(q, drops), Highlight: highlight})
+	}
+	if f.DealsOnly {
+		add("Deals ≤ 85%", true, map[string]string{"deals": ""})
+	}
+	for _, id := range f.RegionIDs {
+		name := regionNames[id]
+		if name == "" {
+			name = fmt.Sprintf("Region #%d", id)
+		}
+		add("Region: "+name, false, map[string]string{"region": strconv.FormatInt(id, 10)})
+	}
+	typeLabels := map[string]string{"item_exchange": "Item exchange", "auction": "Auction", "courier": "Courier"}
+	for _, t := range f.Types {
+		add("Type: "+typeLabels[t], false, map[string]string{"type": t})
+	}
+	if f.ItemQ != "" {
+		add(fmt.Sprintf("Item: %q", f.ItemQ), false, map[string]string{"q_item": ""})
+	}
+	if f.ItemDir != "either" {
+		label := "Side: Offered"
+		if f.ItemDir == "wanted" {
+			label = "Side: Wanted"
+		}
+		add(label, false, map[string]string{"item_dir": ""})
+	}
+	if f.TitleQ != "" {
+		add(fmt.Sprintf("Title: %q", f.TitleQ), false, map[string]string{"q_title": ""})
+	}
+	if f.IssuerQ != "" {
+		add(fmt.Sprintf("Issuer: %q", f.IssuerQ), false, map[string]string{"q_issuer": ""})
+	}
+	if f.ForCorp == 0 {
+		add("Issued by: Pilots", false, map[string]string{"for_corp": ""})
+	} else if f.ForCorp == 1 {
+		add("Issued by: Corporations", false, map[string]string{"for_corp": ""})
+	}
+	if f.PlaceQ != "" {
+		add(fmt.Sprintf("Location: %q", f.PlaceQ), false, map[string]string{"place": ""})
+	}
+	if f.PriceMin >= 0 {
+		add("Price ≥ "+view.Echo["price_min"], false, map[string]string{"price_min": ""})
+	}
+	if f.PriceMax >= 0 {
+		add("Price ≤ "+view.Echo["price_max"], false, map[string]string{"price_max": ""})
+	}
+	if f.BuyoutMax >= 0 {
+		add("Buyout ≤ "+view.Echo["buyout_max"], false, map[string]string{"buyout_max": ""})
+	}
+	if f.IssuedHrs >= 0 {
+		add(fmt.Sprintf("Issued within %dh", f.IssuedHrs), false, map[string]string{"issued_hrs": ""})
+	}
+	if f.ExpiringHrs >= 0 {
+		add(fmt.Sprintf("Expiring within %dh", f.ExpiringHrs), false, map[string]string{"expiring_hrs": ""})
+	}
+	// Blueprint drawer.
+	if f.BPMode == "bpo" {
+		add("Blueprints: Originals", false, map[string]string{"bp": ""})
+		view.BPCount++
+	} else if f.BPMode == "bpc" {
+		add("Blueprints: Copies", false, map[string]string{"bp": ""})
+		view.BPCount++
+	}
+	if f.MEMin >= 0 {
+		add(fmt.Sprintf("Min ME: %d", f.MEMin), false, map[string]string{"me_min": ""})
+		view.BPCount++
+	}
+	if f.TEMin >= 0 {
+		add(fmt.Sprintf("Min TE: %d", f.TEMin), false, map[string]string{"te_min": ""})
+		view.BPCount++
+	}
+	if f.RunsMin >= 0 {
+		add(fmt.Sprintf("Min runs: %d", f.RunsMin), false, map[string]string{"runs_min": ""})
+		view.BPCount++
+	}
+	// Abyssal drawer.
+	if f.AbFamily != "" {
+		add("Family: "+abyssalFamilyLabel(f.AbFamily), false, map[string]string{"family": ""})
+		view.AbCount++
+	}
+	if f.AbSourceQ != "" {
+		add(fmt.Sprintf("Source: %q", f.AbSourceQ), false, map[string]string{"source_q": ""})
+		view.AbCount++
+	}
+	if raw := view.Echo["score_min"]; raw != "" {
+		add("Roll score ≥ "+raw, false, map[string]string{"score_min": ""})
+		view.AbCount++
+	}
+	if f.AbQuality == "75" {
+		add("One roll at least: Solid (75+)", false, map[string]string{"quality": ""})
+		view.AbCount++
+	} else if f.AbQuality == "90" {
+		add("One roll at least: God Roll (90+)", false, map[string]string{"quality": ""})
+		view.AbCount++
+	}
+	if f.AbEstMin >= 0 {
+		add("Estimate ≥ "+view.Echo["est_min"], false, map[string]string{"est_min": ""})
+		view.AbCount++
+	}
+	if f.AbEstMax >= 0 {
+		add("Estimate ≤ "+view.Echo["est_max"], false, map[string]string{"est_max": ""})
+		view.AbCount++
+	}
+	if raw := view.Echo["pos_min"]; raw != "" {
+		add("Roll position ≥ "+raw+"%", false, map[string]string{"pos_min": ""})
+		view.AbCount++
+	}
+	if f.AbAttrKey != "" {
+		name := f.AbAttrKey
+		for _, ao := range view.AttrOpts {
+			if ao.Key == f.AbAttrKey {
+				name = ao.Name
+			}
+		}
+		add(fmt.Sprintf("Roll: %s ≥ %s%%", name, view.Echo["attr_min"]), false, map[string]string{"attr": "", "attr_min": ""})
+		view.AbCount++
+	}
+	// Courier drawer.
+	if f.PlaceEndQ != "" {
+		add(fmt.Sprintf("Deliver to: %q", f.PlaceEndQ), false, map[string]string{"place_end": ""})
+		view.CourierCount++
+	}
+	if f.RewardMin >= 0 {
+		add("Reward ≥ "+view.Echo["reward_min"], false, map[string]string{"reward_min": ""})
+		view.CourierCount++
+	}
+	if f.RewardMax >= 0 {
+		add("Reward ≤ "+view.Echo["reward_max"], false, map[string]string{"reward_max": ""})
+		view.CourierCount++
+	}
+	if f.CollatMax >= 0 {
+		add("Collateral ≤ "+view.Echo["collateral_max"], false, map[string]string{"collateral_max": ""})
+		view.CourierCount++
+	}
+	if f.VolumeMin >= 0 {
+		add("Volume ≥ "+view.Echo["volume_min"]+" m³", false, map[string]string{"volume_min": ""})
+		view.CourierCount++
+	}
+	if f.VolumeMax >= 0 {
+		add("Volume ≤ "+view.Echo["volume_max"]+" m³", false, map[string]string{"volume_max": ""})
+		view.CourierCount++
+	}
+	if f.DaysMax >= 0 {
+		add(fmt.Sprintf("Days ≤ %d", f.DaysMax), false, map[string]string{"days_max": ""})
+		view.CourierCount++
+	}
+	if f.Sort != "newest" {
+		label := f.Sort
+		for _, s := range searchSorts {
+			if s.Key == f.Sort {
+				label = s.Label
+			}
+		}
+		add("Sort: "+label, false, map[string]string{"sort": ""})
+	}
+
+	// Drawer the page opens with: an explicit spec parameter
+	// (the quick hunts set it), else the first drawer holding
+	// active filters.
+	switch q.Get("spec") {
+	case "blueprints", "abyssal", "couriers":
+		view.OpenDrawer = q.Get("spec")
+	default:
+		switch {
+		case view.BPCount > 0:
+			view.OpenDrawer = "blueprints"
+		case view.AbCount > 0:
+			view.OpenDrawer = "abyssal"
+		case view.CourierCount > 0:
+			view.OpenDrawer = "couriers"
+		}
+	}
+
+	// Quick hunts: presets that set their fields and search
+	// in one action.
+	var forgeID int64
+	for id, name := range regionNames {
+		if name == "The Forge" {
+			forgeID = id
+		}
+	}
+	jita := url.Values{"deals": {"1"}, "sort": {"deal_asc"}}
+	if forgeID > 0 {
+		jita.Set("region", strconv.FormatInt(forgeID, 10))
+	}
+	view.HuntJita = "/contracts/search/?" + jita.Encode()
+	view.HuntAbyssal = "/contracts/search/?" + url.Values{
+		"quality": {"75"}, "spec": {"abyssal"}}.Encode()
+	view.HuntBlueprint = "/contracts/search/?" + url.Values{
+		"me_min": {"10"}, "spec": {"blueprints"}}.Encode()
+	view.HuntCourier = "/contracts/search/?" + url.Values{
+		"type": {"courier"}, "spec": {"couriers"}}.Encode()
+}
+
 func (app *mod) searchRow(ctx context.Context, memo map[int64]module.PlaceRef, row db.SearchPublicContractsRow, items []db.PubContractItem, names map[int64]string, regionNames map[int64]string, abData *pageAbyssalData, now time.Time) searchRow {
 	out := searchRow{
 		ContractID: row.ContractID,
+		RegionID:   row.RegionID,
 		Title:      row.Title,
 		Location:   app.deps.LinkPlaceMemo(ctx, memo, row.StartLocationID, app.deps.EconLocationTitle(ctx, row.StartLocationID)),
 		ExpiresIn:  countdownText(row.DateExpired, now),
 		IssuedAgo:  app.deps.AgeText(row.DateIssued),
+	}
+	// The security pill reads the location's system: the
+	// place ref carries it directly for system locations;
+	// station locations resolve through the station's row.
+	secSystem := out.Location.SystemID
+	if secSystem == 0 && out.Location.StationID > 0 {
+		if st, err := app.queries.GetSDEStation(ctx, out.Location.StationID); err == nil {
+			secSystem = st.SystemID
+		}
+	}
+	if secSystem > 0 {
+		if text, tier, known := app.deps.SystemSecurity(ctx, secSystem); known {
+			out.SecText, out.SecTier, out.SecKnown = text, tier, true
+		}
 	}
 	switch row.Type {
 	case "auction":
@@ -656,6 +958,9 @@ func (app *mod) searchRow(ctx context.Context, memo map[int64]module.PlaceRef, r
 		line := searchLine{Name: names[it.TypeID], Qty: esi.FormatInt(it.Quantity), Note: blueprintNote(it)}
 		if it.IsIncluded {
 			offered++
+			if line.Note != "" && out.BPChip == "" {
+				out.BPChip = line.Note
+			}
 			if len(out.Offered) < 3 {
 				out.Offered = append(out.Offered, line)
 			}
@@ -683,6 +988,10 @@ func (app *mod) searchRow(ctx context.Context, memo map[int64]module.PlaceRef, r
 		}
 	}
 
+	// effPrice is the figure the price column shows, for
+	// the spread below: the reward for a courier, the
+	// standing bid (or start) for an auction, the ask else.
+	effPrice := row.Price
 	switch row.Type {
 	case "courier":
 		out.PriceLabel = "Reward"
@@ -690,12 +999,18 @@ func (app *mod) searchRow(ctx context.Context, memo map[int64]module.PlaceRef, r
 		out.Reward = esi.FormatISK(row.Reward)
 		out.Collateral = esi.FormatISK(row.Collateral)
 		out.Volume = fmt.Sprintf("%s m3", esi.FormatInt(int64(row.Volume)))
+		out.VolumeText = fmt.Sprintf("%s m³", esi.FormatInt(int64(row.Volume)))
+		if row.Volume > 0 {
+			out.IskPerM3 = esi.FormatInt(int64(row.Reward/row.Volume + 0.5))
+		}
 		out.Dropoff = app.deps.LinkPlaceMemo(ctx, memo, row.EndLocationID, app.deps.EconLocationTitle(ctx, row.EndLocationID))
 		out.HasRoute = true
+		effPrice = row.Reward
 	case "auction":
 		out.PriceLabel = "Current bid"
 		if row.BidCount > 0 {
 			out.Price = esi.FormatISK(row.TopBid)
+			effPrice = row.TopBid
 		} else {
 			out.Price = esi.FormatISK(row.Price)
 			out.PriceNote = "starting price"
@@ -714,7 +1029,13 @@ func (app *mod) searchRow(ctx context.Context, memo map[int64]module.PlaceRef, r
 	}
 
 	if row.PricedAt.Valid && row.TotalLines > 0 {
-		out.Value = esi.FormatISK(row.OfferedValue)
+		// The figure itself only renders once at least one
+		// line is priced -- an appraisal that priced nothing
+		// shows its coverage note, not a hollow 0.00.
+		if row.PricedLines > 0 {
+			out.Value = esi.FormatISK(row.OfferedValue)
+		}
+		out.PricedLine, out.TotalLine = row.PricedLines, row.TotalLines
 		switch {
 		case row.PricedLines < row.TotalLines:
 			out.ValueNote = fmt.Sprintf("priced %d of %d lines", row.PricedLines, row.TotalLines)
@@ -722,8 +1043,30 @@ func (app *mod) searchRow(ctx context.Context, memo map[int64]module.PlaceRef, r
 			pct := int(row.DealRatio.Float64*100 + 0.5)
 			out.ValueNote = fmt.Sprintf("asking %d%% of value", pct)
 			out.IsDeal = row.DealRatio.Float64 <= 0.85
+			if out.IsDeal {
+				out.DealPct = 100 - pct
+			}
+		}
+		if !out.Courier && row.OfferedValue > effPrice {
+			out.Spread = "+" + esi.FormatISK(row.OfferedValue-effPrice)
 		}
 	}
+	if out.Courier {
+		// A courier's cargo is private and never appraised;
+		// the figure in the value column is its collateral,
+		// labeled as itself.
+		out.Value = esi.FormatISK(row.Collateral)
+		out.ValueNote = "collateral"
+	}
+
+	// The EVE Notepad link for the row's copy button.
+	label := row.Title
+	if label == "" {
+		label = out.TypeLabel
+	}
+	label = strings.NewReplacer("<", "", ">", "").Replace(label)
+	out.CopyText = fmt.Sprintf("<url=contract:%d//%d>%s [%d]</url>",
+		row.RegionID, row.ContractID, label, row.ContractID)
 	return out
 }
 
@@ -805,10 +1148,39 @@ func (app *mod) rowAbyssalFor(ctx context.Context, ab db.AbyssalItem, data *page
 	}
 	if ab.Score.Valid {
 		out.ScoreText = fmt.Sprintf("Roll score %d / 100", int(ab.Score.Float64*100+0.5))
+		out.Score = int(ab.Score.Float64*100 + 0.5)
+		out.HasScore = true
 	}
 	// Primary bars: the family's heaviest non-penalty rolls
 	// this item has percentiles for, best three.
 	pcts := parseAbyssalPercentiles(ab.Percentiles)
+	// The primary roll's position, for the row chip's "Top
+	// N%": the best percentile among the family's heaviest
+	// non-penalty rolls -- the same rolls the position
+	// filter tests.
+	{
+		maxW := 0.0
+		for _, w := range data.weights[ab.Family] {
+			if !w.PenaltyOnly && w.Weight > maxW {
+				maxW = w.Weight
+			}
+		}
+		if maxW > 0 {
+			best := -1.0
+			for _, w := range data.weights[ab.Family] {
+				if w.PenaltyOnly || w.Weight != maxW {
+					continue
+				}
+				if p, ok := pcts[w.AttributeID]; ok && p > best {
+					best = p
+				}
+			}
+			if best >= 0 {
+				out.TopPct = 100 - int(best*100+0.5)
+				out.HasTop = true
+			}
+		}
+	}
 	weights := append([]db.AbyssalFamilyWeight(nil), data.weights[ab.Family]...)
 	sort.Slice(weights, func(i, j int) bool {
 		if weights[i].Weight != weights[j].Weight {
@@ -911,6 +1283,7 @@ func capAttrDisplayName(attrID int64, sdeName string) string {
 type detailLine struct {
 	Name      string
 	TypeID    int64
+	ItemID    int64 // the physical item's ID, 0 when the line is not a singleton
 	Qty       string
 	Note      string // blueprint facts
 	UnitPrice string
@@ -1037,6 +1410,151 @@ func (app *mod) handleContractDetail(w http.ResponseWriter, r *http.Request) {
 	}
 	data.ContractDetail = view
 	app.deps.Render(ctx, w, http.StatusOK, "contract_detail.html", data)
+}
+
+// ---- inline expansion panel ----
+
+// panelLine is one line of the expansion's appraisal: the
+// item, its quantity and side, and what our appraisal says
+// -- with the basis label the figure came from.
+type panelLine struct {
+	Name      string
+	TypeID    int64
+	ItemID    int64
+	Qty       string
+	Side      string // "Offered" | "Wanted"
+	Note      string // blueprint facts
+	UnitPrice string
+	LineValue string
+	TierLabel string
+	TierNote  string
+	Priced    bool
+	Abyssal   *abyssalPanel
+}
+
+// panelAbyssal pairs one abyssal line with its rolls panel.
+type panelAbyssal struct {
+	LineName string
+	ItemID   int64
+	Panel    *abyssalPanel
+}
+
+// panelView is the row-expansion fragment: the line-by-line
+// appraisal, the mutaplasmid panels for any abyssal lines,
+// and the notepad link. Built from the same stored reads
+// as the detail page -- nothing is computed here that the
+// detail page would not show.
+type panelView struct {
+	ContractID   int64
+	Title        string
+	TypeLabel    string
+	IssuerText   string // "Issuer One (Pilot)"
+	StateNote    string
+	Lines        []panelLine
+	Abyssals     []panelAbyssal
+	PriceLabel   string
+	Price        string
+	Buyout       string
+	TopBid       string
+	BidCount     int64
+	Value        string // appraised offered value
+	WantValue    string
+	CoverageNote string
+	TierMix      string
+	DealNote     string
+	IsDeal       bool
+	Reward       string
+	Collateral   string
+	Volume       string
+	DaysText     string
+	CopyText     string
+	DetailURL    string
+}
+
+func (app *mod) buildPanelView(ctx context.Context, id int64) (*panelView, bool) {
+	dv, ok := app.buildDetailView(ctx, id)
+	if !ok {
+		return nil, false
+	}
+	row, err := app.queries.GetPublicContract(ctx, id)
+	if err != nil {
+		return nil, false
+	}
+	out := &panelView{
+		ContractID:   id,
+		Title:        dv.Title,
+		TypeLabel:    dv.TypeLabel,
+		StateNote:    dv.StateNote,
+		PriceLabel:   dv.PriceLabel,
+		Price:        dv.Price,
+		Buyout:       dv.Buyout,
+		TopBid:       dv.TopBid,
+		BidCount:     dv.BidCount,
+		Value:        dv.OfferedValue,
+		WantValue:    dv.WantValue,
+		CoverageNote: dv.CoverageNote,
+		TierMix:      dv.TierMix,
+		DealNote:     dv.DealNote,
+		IsDeal:       dv.IsDeal,
+		Reward:       dv.Reward,
+		Collateral:   dv.Collateral,
+		Volume:       dv.Volume,
+		DetailURL:    fmt.Sprintf("/contracts/search/%d/", id),
+	}
+	issuerKind := "Pilot"
+	if dv.IssuerCorp {
+		issuerKind = "Corporation"
+	}
+	out.IssuerText = fmt.Sprintf("%s (%s)", dv.IssuerName, issuerKind)
+	if row.Type == "courier" {
+		out.DaysText = humanize.Plural(int(row.DaysToComplete), "day") + " to complete"
+	}
+	addLines := func(lines []detailLine, side string) {
+		for _, l := range lines {
+			pl := panelLine{
+				Name: l.Name, TypeID: l.TypeID, ItemID: l.ItemID, Qty: l.Qty,
+				Side: side, Note: l.Note, UnitPrice: l.UnitPrice, LineValue: l.LineValue,
+				TierLabel: l.TierLabel, TierNote: l.TierNote, Abyssal: l.Abyssal,
+				Priced: l.LineValue != "",
+			}
+			out.Lines = append(out.Lines, pl)
+			if l.Abyssal != nil {
+				out.Abyssals = append(out.Abyssals, panelAbyssal{
+					LineName: l.Name, ItemID: l.ItemID, Panel: l.Abyssal,
+				})
+			}
+		}
+	}
+	addLines(dv.Offered, "Offered")
+	addLines(dv.Wanted, "Wanted")
+	label := row.Title
+	if label == "" {
+		label = dv.TypeLabel
+	}
+	label = strings.NewReplacer("<", "", ">", "").Replace(label)
+	out.CopyText = fmt.Sprintf("<url=contract:%d//%d>%s [%d]</url>",
+		row.RegionID, row.ContractID, label, row.ContractID)
+	return out, true
+}
+
+// handleContractPanel answers the row expansion: one
+// contract's appraisal fragment, rendered without the base
+// layout. Stored reads only, one contract per fetch.
+func (app *mod) handleContractPanel(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	id, err := strconv.ParseInt(chi.URLParam(r, "contractID"), 10, 64)
+	if err != nil || id <= 0 {
+		http.NotFound(w, r)
+		return
+	}
+	view, ok := app.buildPanelView(ctx, id)
+	if !ok {
+		http.NotFound(w, r)
+		return
+	}
+	data := &PageData{ShellData: app.deps.PublicShell(ctx)}
+	data.ContractPanel = view
+	app.deps.RenderFragmentStatus(w, http.StatusOK, "contract_search.html", "contractpanel", data)
 }
 
 func (app *mod) buildDetailView(ctx context.Context, contractID int64) (*detailView, bool) {
@@ -1211,6 +1729,9 @@ func (app *mod) detailLine(ctx context.Context, it db.PubContractItem, abyssal m
 		TypeID: it.TypeID,
 		Qty:    esi.FormatInt(it.Quantity),
 		Note:   blueprintNote(it),
+	}
+	if it.ItemID.Valid {
+		line.ItemID = it.ItemID.Int64
 	}
 	if it.PriceTier != "" {
 		line.TierLabel = tierLabel(it.PriceTier)

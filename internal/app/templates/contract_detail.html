@@ -21,56 +21,61 @@
 {{end}}
 {{end}}
 
-<div class="tw">
-<table>
-  <tbody>
-    <tr><th>{{if eq $d.TypeLabel "Courier"}}Reward{{else}}{{$d.PriceLabel}}{{end}}</th><td><strong>{{$d.Price}} ISK</strong>{{if $d.Buyout}}<br><small>Buyout {{$d.Buyout}} ISK</small>{{end}}{{if $d.DealNote}}<br><small>{{if $d.IsDeal}}<strong>{{$d.DealNote}}</strong>{{else}}{{$d.DealNote}}{{end}}</small>{{end}}</td></tr>
-    {{if eq $d.TypeLabel "Auction"}}<tr><th>Bids</th><td>{{if $d.TopBid}}Top bid <strong>{{$d.TopBid}} ISK</strong> · {{$d.BidCount}} bid{{if ne $d.BidCount 1}}s{{end}}{{else}}No bids yet{{end}}</td></tr>{{end}}
-    {{if $d.HasRoute}}<tr><th>Route</th><td>{{placeLink $d.Location}} → {{placeLink $d.Dropoff}}</td></tr>
-    <tr><th>Collateral</th><td>{{$d.Collateral}} ISK</td></tr>
-    <tr><th>Volume</th><td>{{$d.Volume}}</td></tr>
-    <tr><th>Days to complete</th><td>{{$d.Days}}</td></tr>{{end}}
-    {{if not $d.HasRoute}}<tr><th>Location</th><td>{{placeLink $d.Location}}</td></tr>{{end}}
-    <tr><th>Region</th><td>{{$d.RegionName}}</td></tr>
-    <tr><th>Issuer</th><td>{{charLink $.ViewerChars $d.IssuerID $d.IssuerName}}{{if $d.HasCorp}}<br><small>for</small> {{corpLink $d.CorpID $d.CorpName}}{{end}}</td></tr>
-    <tr><th>Issued</th><td>{{$d.IssuedNote}}</td></tr>
-    <tr><th>Expires</th><td>{{$d.ExpiresNote}}</td></tr>
-    <tr><th>Seen</th><td><small>{{$d.LastSeenNote}}</small></td></tr>
-  </tbody>
-</table>
+<div class="cd-facts">
+  <div class="cd-fact"><small>{{if eq $d.TypeLabel "Courier"}}Reward{{else}}{{$d.PriceLabel}}{{end}}</small><strong>{{$d.Price}} ISK</strong>{{if $d.Buyout}}<br><span class="muted">Buyout {{$d.Buyout}} ISK</span>{{end}}</div>
+  {{if eq $d.TypeLabel "Auction"}}<div class="cd-fact"><small>Bids</small>{{if $d.TopBid}}Top bid <strong>{{$d.TopBid}} ISK</strong> · {{$d.BidCount}} bid{{if ne $d.BidCount 1}}s{{end}}{{else}}No bids yet{{end}}</div>{{end}}
+  {{if $d.HasRoute}}<div class="cd-fact"><small>Route</small>{{placeLink $d.Location}} → {{placeLink $d.Dropoff}}</div>
+  <div class="cd-fact"><small>Collateral</small>{{$d.Collateral}} ISK</div>
+  <div class="cd-fact"><small>Volume</small>{{$d.Volume}}</div>
+  <div class="cd-fact"><small>Days to complete</small>{{$d.Days}}</div>{{end}}
+  {{if not $d.HasRoute}}<div class="cd-fact"><small>Location</small>{{placeLink $d.Location}}</div>{{end}}
+  <div class="cd-fact"><small>Region</small>{{$d.RegionName}}</div>
+  <div class="cd-fact"><small>Issuer</small>{{charLink $.ViewerChars $d.IssuerID $d.IssuerName}}{{if $d.HasCorp}}<br><small>for</small> {{corpLink $d.CorpID $d.CorpName}}{{end}}</div>
+  <div class="cd-fact"><small>Issued</small>{{$d.IssuedNote}}</div>
+  <div class="cd-fact"><small>Expires</small>{{$d.ExpiresNote}}</div>
+  <div class="cd-fact"><small>Seen</small><span class="muted">{{$d.LastSeenNote}}</span></div>
 </div>
+{{if $d.DealNote}}<p>{{if $d.IsDeal}}<span class="cd-dealbadge">{{$d.DealNote}}</span>{{else}}<span class="muted">{{$d.DealNote}}</span>{{end}}</p>{{end}}
 
 {{if $d.StateNote}}<p><small>{{$d.StateNote}}</small></p>{{end}}
 
+{{if $d.AppraisedNote}}
+<div class="cd-valueband">
+  {{if $d.OfferedValue}}<span><small>Our appraisal — offered</small><br><span class="cd-big">{{$d.OfferedValue}} ISK</span></span>{{end}}
+  {{if $d.WantValue}}<span><small>Wanted</small><br><strong>{{$d.WantValue}} ISK</strong></span>{{end}}
+  {{if $d.CoverageNote}}<span class="muted">{{$d.CoverageNote}}</span>{{end}}
+  {{if $d.TierMix}}<span class="muted">Priced from: {{$d.TierMix}}</span>{{end}}
+  <span class="muted">{{$d.AppraisedNote}}. Our own swept prices and stored estimates come first; an outside aggregate is used only where neither reaches, is named where it is used, and is never older than two days. The game's guide average is never used.</span>
+</div>
+{{end}}
+
 {{if $d.Offered}}
 <h3>Offered</h3>
-<div class="tw">
+<div class="tw cd-lines">
 <table>
-  <thead><tr><th>Item</th><th>Qty</th><th>Per unit</th><th>Line value</th><th>Priced from</th></tr></thead>
+  <thead><tr><th>Item</th><th>Qty</th><th class="num">Per unit</th><th class="num">Line value</th><th>Priced from</th></tr></thead>
   <tbody>
   {{range $d.Offered}}
     <tr>
       <td>{{itemLink .TypeID .Name}}{{if .Note}}<br><small>{{.Note}}</small>{{end}}</td>
       <td>{{.Qty}}</td>
-      <td>{{if .UnitPrice}}{{.UnitPrice}} ISK{{else}}—{{end}}</td>
-      <td>{{if .LineValue}}<strong>{{.LineValue}} ISK</strong>{{else}}—{{end}}</td>
+      <td class="num">{{if .UnitPrice}}{{.UnitPrice}} ISK{{else}}—{{end}}</td>
+      <td class="num">{{if .LineValue}}<strong>{{.LineValue}} ISK</strong>{{else}}—{{end}}</td>
       <td>{{.TierLabel}}{{if .TierNote}}<br><small>{{.TierNote}}</small>{{end}}</td>
     </tr>
     {{if .Abyssal}}<tr><td colspan="5">
-      <small>Mutated from {{itemLink .Abyssal.SourceTypeID .Abyssal.SourceName}} with {{itemLink .Abyssal.MutatorTypeID .Abyssal.MutatorName}}. Rolls:</small>
-      <table>
-        <thead><tr><th>Attribute</th><th>Rolled</th><th>Source base</th><th>Against base</th><th>Where it sits in its range</th></tr></thead>
-        <tbody>
-        {{range .Abyssal.Rolls}}<tr><td>{{.Name}}</td><td>{{.Value}}</td><td>{{if .HasBase}}{{.Base}}{{else}}—{{end}}</td><td>{{if .Delta}}{{.Delta}}{{else}}—{{end}}</td><td>{{if .HasPct}}<div class="meter"><span data-w="{{.Pct}}"></span></div> {{.Pct}}%{{else}}—{{end}}</td></tr>{{end}}
-        {{range .Abyssal.Derived}}<tr><td>{{.Label}}</td><td>{{.Value}}</td><td>—</td><td>—</td><td><div class="meter"><span data-w="{{.Pct}}"></span></div> {{.Pct}}%</td></tr>{{end}}
-        </tbody>
-      </table>
-      {{if .Abyssal.HasScore}}<small>Roll score: <strong>{{.Abyssal.ScoreText}}</strong>. Each roll is placed in the range its mutaplasmid could have produced, weighted by how much that roll carries this module's value; fitting costs only ever count against it.</small><br>{{end}}
-      {{if .Abyssal.HasEstimate}}<small>Our estimate: <strong>{{.Abyssal.Estimate}} ISK</strong> — likely range {{.Abyssal.EstLow}} to {{.Abyssal.EstHigh}} ISK, {{.Abyssal.BasisLabel}}.{{if .Abyssal.ScoredNote}} {{.Abyssal.ScoredNote}}.{{end}}</small><br>{{end}}
-      {{if .Abyssal.NoEstimate}}<small>{{.Abyssal.NoEstimate}}</small><br>{{end}}
-      {{if .Abyssal.CapNote}}<small>{{.Abyssal.CapNote}}</small><br>{{end}}
-      {{if .Abyssal.Recreation}}<small>{{.Abyssal.Recreation}}</small><br>{{end}}
-      {{if .Abyssal.ContextPrice}}<small>The unmutated module prices at {{.Abyssal.ContextPrice}} ISK ({{.Abyssal.ContextTier}}) — shown for context; the contract's value counts our estimate of the mutated module, not the base module's price.</small>{{end}}
+      <div class="cd-abpanel">
+      <p>Mutated from {{itemLink .Abyssal.SourceTypeID .Abyssal.SourceName}} with {{itemLink .Abyssal.MutatorTypeID .Abyssal.MutatorName}}.{{if .ItemID}} Item ID: {{.ItemID}}.{{end}} Rolls:</p>
+      {{range .Abyssal.Rolls}}<div class="cs-roll"><span class="cs-roll-name">{{.Name}}</span><span class="cs-roll-val">{{.Value}}{{if .HasBase}} <span class="muted">(base {{.Base}})</span>{{end}}{{if .Delta}} <span class="{{if .Good}}pos{{else}}neg{{end}}">{{.Delta}}</span>{{end}}</span>{{if .HasPct}}<span class="meter"><span data-w="{{.Pct}}"></span></span><span class="cs-roll-pct">{{.Pct}}%</span>{{else}}<span></span><span class="cs-roll-pct">—</span>{{end}}</div>{{end}}
+      {{range .Abyssal.Derived}}<div class="cs-roll derived"><span class="cs-roll-name">{{.Label}}</span><span class="cs-roll-val">{{.Value}}</span><span class="meter"><span data-w="{{.Pct}}"></span></span><span class="cs-roll-pct">{{.Pct}}%</span></div>{{end}}
+      {{if .Abyssal.HasScore}}<p>Roll score: <strong>{{.Abyssal.ScoreText}}</strong>. Each roll is placed in the range its mutaplasmid could have produced, weighted by how much that roll carries this module's value; fitting costs only ever count against it.</p>{{end}}
+      {{if .Abyssal.HasEstimate}}<p class="cd-abest">Our estimate: <strong>{{.Abyssal.Estimate}} ISK</strong> — likely range {{.Abyssal.EstLow}} to {{.Abyssal.EstHigh}} ISK, {{.Abyssal.BasisLabel}}.</p>{{end}}
+      {{if .Abyssal.ScoredNote}}<p class="muted">{{.Abyssal.ScoredNote}}.</p>{{end}}
+      {{if .Abyssal.NoEstimate}}<p class="muted">{{.Abyssal.NoEstimate}}</p>{{end}}
+      {{if .Abyssal.CapNote}}<p>{{.Abyssal.CapNote}}</p>{{end}}
+      {{if .Abyssal.Recreation}}<p class="muted">{{.Abyssal.Recreation}}</p>{{end}}
+      {{if .Abyssal.ContextPrice}}<p class="muted">The unmutated module prices at {{.Abyssal.ContextPrice}} ISK ({{.Abyssal.ContextTier}}) — shown for context; the contract's value counts our estimate of the mutated module, not the base module's price.</p>{{end}}
+      </div>
     </td></tr>{{end}}
   {{end}}
   </tbody>
@@ -80,33 +85,22 @@
 
 {{if $d.HasWanted}}
 <h3>Wanted in exchange</h3>
-<div class="tw">
+<div class="tw cd-lines">
 <table>
-  <thead><tr><th>Item</th><th>Qty</th><th>Per unit</th><th>Line value</th><th>Priced from</th></tr></thead>
+  <thead><tr><th>Item</th><th>Qty</th><th class="num">Per unit</th><th class="num">Line value</th><th>Priced from</th></tr></thead>
   <tbody>
   {{range $d.Wanted}}
     <tr>
       <td>{{itemLink .TypeID .Name}}{{if .Note}}<br><small>{{.Note}}</small>{{end}}</td>
       <td>{{.Qty}}</td>
-      <td>{{if .UnitPrice}}{{.UnitPrice}} ISK{{else}}—{{end}}</td>
-      <td>{{if .LineValue}}<strong>{{.LineValue}} ISK</strong>{{else}}—{{end}}</td>
+      <td class="num">{{if .UnitPrice}}{{.UnitPrice}} ISK{{else}}—{{end}}</td>
+      <td class="num">{{if .LineValue}}<strong>{{.LineValue}} ISK</strong>{{else}}—{{end}}</td>
       <td>{{.TierLabel}}{{if .TierNote}}<br><small>{{.TierNote}}</small>{{end}}</td>
     </tr>
   {{end}}
   </tbody>
 </table>
 </div>
-{{end}}
-
-{{if $d.AppraisedNote}}
-<h3>Our appraisal</h3>
-<p>
-  {{if $d.OfferedValue}}Offered side appraises at <strong>{{$d.OfferedValue}} ISK</strong>. {{end}}
-  {{if $d.WantValue}}Wanted side appraises at <strong>{{$d.WantValue}} ISK</strong>. {{end}}
-  {{if $d.CoverageNote}}<small>{{$d.CoverageNote}}.</small> {{end}}
-  {{if $d.TierMix}}<small>Priced from: {{$d.TierMix}}.</small> {{end}}
-  <small>{{$d.AppraisedNote}}. Our own swept prices and stored estimates come first; an outside aggregate is used only where neither reaches, is named where it is used, and is never older than two days. The game's guide average is never used.</small>
-</p>
 {{end}}
 
 {{if $d.Bids}}

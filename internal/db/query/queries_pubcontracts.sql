@@ -387,11 +387,13 @@ WHERE (coalesce(cardinality(sqlc.arg(types)::text[]), 0) = 0
   AND (sqlc.arg(for_corp)::bigint = -1
        OR c.for_corporation = (sqlc.arg(for_corp)::bigint = 1))
   AND (sqlc.arg(price_min)::double precision < 0
-       OR c.price >= sqlc.arg(price_min)::double precision)
+       OR (CASE WHEN c.type = 'courier' THEN c.reward ELSE c.price END)
+            >= sqlc.arg(price_min)::double precision)
   AND (sqlc.arg(price_max)::double precision < 0
-       OR c.price <= sqlc.arg(price_max)::double precision)
-  AND (sqlc.arg(buyout_min)::double precision < 0
-       OR c.buyout >= sqlc.arg(buyout_min)::double precision)
+       OR (CASE WHEN c.type = 'courier' THEN c.reward ELSE c.price END)
+            <= sqlc.arg(price_max)::double precision)
+  AND (sqlc.arg(buyout_max)::double precision < 0
+       OR c.buyout <= sqlc.arg(buyout_max)::double precision)
   AND (sqlc.arg(place_q)::text = ''
        OR c.start_location_id IN (
             SELECT station_id FROM sde_stations
@@ -436,6 +438,7 @@ WHERE (coalesce(cardinality(sqlc.arg(types)::text[]), 0) = 0
        OR c.volume <= sqlc.arg(volume_max)::double precision)
   AND (sqlc.arg(days_max)::bigint < 0
        OR c.days_to_complete <= sqlc.arg(days_max)::bigint)
+  AND (NOT sqlc.arg(courier_active)::boolean OR c.type = 'courier')
   AND (NOT sqlc.arg(bp_active)::boolean OR EXISTS (
         SELECT 1 FROM pub_contract_items i
         WHERE i.contract_id = c.contract_id AND i.is_included
@@ -471,12 +474,27 @@ WHERE (coalesce(cardinality(sqlc.arg(types)::text[]), 0) = 0
                OR a.est_value <= sqlc.arg(ab_est_max)::double precision)
           AND (sqlc.arg(ab_attr_key)::text = ''
                OR COALESCE((a.percentiles ->> sqlc.arg(ab_attr_key)::text)::double precision, -1)
-                    >= sqlc.arg(ab_attr_min)::double precision)))
+                    >= sqlc.arg(ab_attr_min)::double precision)
+          AND (sqlc.arg(ab_pos_min)::double precision < 0
+               OR EXISTS (
+                     SELECT 1 FROM abyssal_family_weights w
+                     WHERE w.family = a.family AND NOT w.penalty_only
+                       AND w.weight = (
+                             SELECT MAX(w2.weight) FROM abyssal_family_weights w2
+                             WHERE w2.family = a.family AND NOT w2.penalty_only)
+                       AND COALESCE((a.percentiles ->> CAST(w.attribute_id AS text))::double precision, -1)
+                             >= sqlc.arg(ab_pos_min)::double precision))))
   AND (NOT sqlc.arg(deals_only)::boolean
        OR (c.deal_ratio IS NOT NULL AND c.deal_ratio <= 0.85))
 ORDER BY
-  CASE WHEN sqlc.arg(sort)::text = 'price_asc' THEN c.price END ASC NULLS LAST,
-  CASE WHEN sqlc.arg(sort)::text = 'price_desc' THEN c.price END DESC NULLS LAST,
+  CASE WHEN sqlc.arg(sort)::text = 'price_asc' THEN
+       CASE WHEN c.type = 'courier' THEN c.reward ELSE c.price END END ASC NULLS LAST,
+  CASE WHEN sqlc.arg(sort)::text = 'price_desc' THEN
+       CASE WHEN c.type = 'courier' THEN c.reward ELSE c.price END END DESC NULLS LAST,
+  CASE WHEN sqlc.arg(sort)::text = 'margin_desc' THEN
+       CASE WHEN c.type = 'courier' THEN c.offered_value - c.reward
+            ELSE c.offered_value - c.price END
+       END DESC NULLS LAST,
   CASE WHEN sqlc.arg(sort)::text = 'value_desc' THEN c.offered_value END DESC NULLS LAST,
   CASE WHEN sqlc.arg(sort)::text = 'deal_asc' THEN c.deal_ratio END ASC NULLS LAST,
   CASE WHEN sqlc.arg(sort)::text = 'expiry_asc' THEN c.date_expired END ASC NULLS LAST,
@@ -516,11 +534,13 @@ WHERE (coalesce(cardinality(sqlc.arg(types)::text[]), 0) = 0
   AND (sqlc.arg(for_corp)::bigint = -1
        OR c.for_corporation = (sqlc.arg(for_corp)::bigint = 1))
   AND (sqlc.arg(price_min)::double precision < 0
-       OR c.price >= sqlc.arg(price_min)::double precision)
+       OR (CASE WHEN c.type = 'courier' THEN c.reward ELSE c.price END)
+            >= sqlc.arg(price_min)::double precision)
   AND (sqlc.arg(price_max)::double precision < 0
-       OR c.price <= sqlc.arg(price_max)::double precision)
-  AND (sqlc.arg(buyout_min)::double precision < 0
-       OR c.buyout >= sqlc.arg(buyout_min)::double precision)
+       OR (CASE WHEN c.type = 'courier' THEN c.reward ELSE c.price END)
+            <= sqlc.arg(price_max)::double precision)
+  AND (sqlc.arg(buyout_max)::double precision < 0
+       OR c.buyout <= sqlc.arg(buyout_max)::double precision)
   AND (sqlc.arg(place_q)::text = ''
        OR c.start_location_id IN (
             SELECT station_id FROM sde_stations
@@ -565,6 +585,7 @@ WHERE (coalesce(cardinality(sqlc.arg(types)::text[]), 0) = 0
        OR c.volume <= sqlc.arg(volume_max)::double precision)
   AND (sqlc.arg(days_max)::bigint < 0
        OR c.days_to_complete <= sqlc.arg(days_max)::bigint)
+  AND (NOT sqlc.arg(courier_active)::boolean OR c.type = 'courier')
   AND (NOT sqlc.arg(bp_active)::boolean OR EXISTS (
         SELECT 1 FROM pub_contract_items i
         WHERE i.contract_id = c.contract_id AND i.is_included
@@ -600,7 +621,16 @@ WHERE (coalesce(cardinality(sqlc.arg(types)::text[]), 0) = 0
                OR a.est_value <= sqlc.arg(ab_est_max)::double precision)
           AND (sqlc.arg(ab_attr_key)::text = ''
                OR COALESCE((a.percentiles ->> sqlc.arg(ab_attr_key)::text)::double precision, -1)
-                    >= sqlc.arg(ab_attr_min)::double precision)))
+                    >= sqlc.arg(ab_attr_min)::double precision)
+          AND (sqlc.arg(ab_pos_min)::double precision < 0
+               OR EXISTS (
+                     SELECT 1 FROM abyssal_family_weights w
+                     WHERE w.family = a.family AND NOT w.penalty_only
+                       AND w.weight = (
+                             SELECT MAX(w2.weight) FROM abyssal_family_weights w2
+                             WHERE w2.family = a.family AND NOT w2.penalty_only)
+                       AND COALESCE((a.percentiles ->> CAST(w.attribute_id AS text))::double precision, -1)
+                             >= sqlc.arg(ab_pos_min)::double precision))))
   AND (NOT sqlc.arg(deals_only)::boolean
        OR (c.deal_ratio IS NOT NULL AND c.deal_ratio <= 0.85));
 

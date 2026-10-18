@@ -125,6 +125,19 @@ html[data-theme="light"] .charselector-dropdown {
   backdrop-filter: blur(25px) saturate(0.9);
 }
 
+/* The notifications menu hangs from the header too, off the same
+   backdrop root, and its var(--panel) paint is fully opaque where
+   the switcher's menu beside it wears the floating treatment.
+   It gets the same .suggest treatment, verbatim, so the header's
+   dropdowns match. */
+.notify-menu {
+  background-color: rgba(13, 10, 8, 0.94);
+  border-color: rgba(255, 110, 0, 0.25);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.65);
+  -webkit-backdrop-filter: blur(25px) saturate(0.9);
+  backdrop-filter: blur(25px) saturate(0.9);
+}
+
 /* My Loadouts: the training-plan action is a skill-book glyph,
    not a text link, so a card's actions row stays one line for
    both fit sources. */

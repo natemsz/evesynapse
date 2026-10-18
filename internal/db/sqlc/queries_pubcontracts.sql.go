@@ -316,6 +316,28 @@ func (q *Queries) DeletePublicContractsByIDs(ctx context.Context, contractIds []
 	return err
 }
 
+const deletePublicContractIfStamped = `-- name: DeletePublicContractIfStamped :execrows
+DELETE FROM pub_contracts
+WHERE contract_id = $1 AND last_seen = $2
+`
+
+type DeletePublicContractIfStampedParams struct {
+	ContractID int64     `json:"contract_id"`
+	LastSeen   time.Time `json:"last_seen"`
+}
+
+// The swarm rollback's delete: only the row still stamped with
+// the fetch that supplied it goes. A row the instance's own
+// sweep has re-seen since carries a newer last_seen and is its
+// own, so the guarded delete matches nothing and reports 0.
+func (q *Queries) DeletePublicContractIfStamped(ctx context.Context, arg DeletePublicContractIfStampedParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, deletePublicContractIfStamped, arg.ContractID, arg.LastSeen)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const getAbyssalItem = `-- name: GetAbyssalItem :one
 SELECT item_id, type_id, source_type_id, mutator_type_id, created_by,
     attributes, fetched_at, first_seen_at, last_seen_at,

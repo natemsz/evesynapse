@@ -71,6 +71,14 @@ ORDER BY contract_id;
 DELETE FROM pub_contracts
 WHERE contract_id = ANY(sqlc.arg(contract_ids)::bigint[]);
 
+-- The swarm rollback's delete: only the row still stamped with
+-- the fetch that supplied it goes. A row the instance's own
+-- sweep has re-seen since carries a newer last_seen and is its
+-- own, so the guarded delete matches nothing and reports 0.
+-- name: DeletePublicContractIfStamped :execrows
+DELETE FROM pub_contracts
+WHERE contract_id = $1 AND last_seen = $2;
+
 -- name: DeletePublicContractItemsByContracts :exec
 DELETE FROM pub_contract_items
 WHERE contract_id = ANY(sqlc.arg(contract_ids)::bigint[]);

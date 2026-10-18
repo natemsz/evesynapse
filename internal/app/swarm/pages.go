@@ -205,7 +205,7 @@ func (app *Mod) LoadSwarmMetrics(ctx context.Context) *SwarmMetricsView {
 	}
 	view.Status = mode + " — " + humanize.Plural(approved, "peer") + " sharing, " + humanize.Plural(excluded, "peer") + " excluded"
 	counters := app.SwarmCounterMap(ctx)
-	applied := counters[SwarmCounterAppliedHistory] + counters[SwarmCounterAppliedNames] + counters[SwarmCounterAppliedRecords]
+	applied := counters[SwarmCounterAppliedHistory] + counters[SwarmCounterAppliedNames] + counters[SwarmCounterAppliedRecords] + counters[SwarmCounterAppliedContracts]
 	// Every applied entry is one ESI fetch this instance did not
 	// make: the worker settles the fetch state on apply, so the
 	// datum is never fetched twice.

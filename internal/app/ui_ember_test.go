@@ -24,7 +24,7 @@ func TestEmberGlassAndSkyRules(t *testing.T) {
 	for _, want := range []string{
 		"--glass: color-mix(in srgb, var(--panel) 78%, transparent)",
 		"--glass-edge: color-mix(in srgb, var(--accent) 24%, transparent)",
-		"--glass-blur: 24px",
+		"--glass-blur: 34px",
 		"-webkit-backdrop-filter: blur(var(--glass-blur)) saturate(0.9)",
 		"backdrop-filter: blur(var(--glass-blur)) saturate(0.9)",
 		".brief-card:hover, .brief-card:focus-within",

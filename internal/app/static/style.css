@@ -148,7 +148,7 @@
      the glass and the light theme's solid overrides still win. */
   --glass: color-mix(in srgb, var(--panel) 78%, transparent);
   --glass-edge: color-mix(in srgb, var(--accent) 24%, transparent);
-  --glass-blur: 24px;
+  --glass-blur: 34px;
   --row: rgba(16, 13, 10, 0.55);
   --row-alt: rgba(255, 255, 255, 0.03);
   --row-hover: rgba(255, 140, 50, 0.09);

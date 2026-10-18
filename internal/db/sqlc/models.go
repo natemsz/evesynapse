@@ -1071,6 +1071,19 @@ type User struct {
 	LastSeenAt     time.Time    `json:"last_seen_at"`
 }
 
+type UserAppraisal struct {
+	ID          int64           `json:"id"`
+	UserID      int64           `json:"user_id"`
+	CreatedAt   time.Time       `json:"created_at"`
+	InputText   string          `json:"input_text"`
+	InputHash   string          `json:"input_hash"`
+	ShareToken  string          `json:"share_token"`
+	Snapshot    json.RawMessage `json:"snapshot"`
+	TotalValue  float64         `json:"total_value"`
+	PricedLines int64           `json:"priced_lines"`
+	TotalLines  int64           `json:"total_lines"`
+}
+
 type WalletHistory struct {
 	UserID      int64           `json:"user_id"`
 	CharacterID int64           `json:"character_id"`

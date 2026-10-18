@@ -407,16 +407,16 @@ func countdownText(until time.Time, now time.Time) string {
 	}
 }
 
-// blueprintCategoryID is the SDE category blueprint types
+// BlueprintCategoryID is the SDE category blueprint types
 // live in; reaction formulas are in it too.
-const blueprintCategoryID = 9
+const BlueprintCategoryID = 9
 
-// typeIconURL is the image-server URL of one contract line's
+// TypeIconURL is the image-server URL of one contract line's
 // item picture. Blueprint-category types have no /icon asset
 // on the image server (it answers 400 for them, formulas
 // included): originals serve /bp, copies serve /bpc. Every
 // other type serves /icon.
-func typeIconURL(typeID int64, blueprintClass, copy bool, size int) string {
+func TypeIconURL(typeID int64, blueprintClass, copy bool, size int) string {
 	variant := "icon"
 	if blueprintClass {
 		variant = "bp"
@@ -441,7 +441,7 @@ func (app *mod) blueprintTypes(ctx context.Context, typeIDs []int64) map[int64]b
 		return out
 	}
 	for _, row := range rows {
-		if row.CategoryID == blueprintCategoryID {
+		if row.CategoryID == BlueprintCategoryID {
 			out[row.TypeID] = true
 		}
 	}
@@ -1026,7 +1026,7 @@ func (app *mod) searchRow(ctx context.Context, memo map[int64]module.PlaceRef, r
 	offered, wanted, pricedWanted := 0, 0, 0
 	for _, it := range items {
 		line := searchLine{Name: names[it.TypeID], Qty: esi.FormatInt(it.Quantity), Note: blueprintNote(it), TypeID: it.TypeID,
-			IconURL: typeIconURL(it.TypeID, bpTypes[it.TypeID], it.IsBlueprintCopy, 32)}
+			IconURL: TypeIconURL(it.TypeID, bpTypes[it.TypeID], it.IsBlueprintCopy, 32)}
 		if it.IsIncluded {
 			offered++
 			if line.Note != "" && out.BPChip == "" {
@@ -1886,7 +1886,7 @@ func (app *mod) detailLine(ctx context.Context, it db.PubContractItem, abyssal m
 	line := detailLine{
 		Name:    app.deps.TypeNameOrID(ctx, it.TypeID),
 		TypeID:  it.TypeID,
-		IconURL: typeIconURL(it.TypeID, bpTypes[it.TypeID], it.IsBlueprintCopy, 32),
+		IconURL: TypeIconURL(it.TypeID, bpTypes[it.TypeID], it.IsBlueprintCopy, 32),
 		Qty:     esi.FormatInt(it.Quantity),
 		Note:    blueprintNote(it),
 	}

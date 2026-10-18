@@ -11,6 +11,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"evesynapse/internal/app/contracts"
 	"evesynapse/internal/app/module"
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
@@ -143,6 +144,14 @@ type itemTypeDetail struct {
 	Category *itemCategoryRow
 	Group    *itemGroupRow
 	OnMarket bool
+
+	// The page's art: the type's render, with its icon as the
+	// fallback the template wires through data-fallback-src.
+	// Blueprint-category types have neither on the image
+	// server — their art is the /bp image and there is no
+	// fallback (ArtFallback "").
+	ArtURL      string
+	ArtFallback string
 
 	AveragePrice  string // guide prices, "" when unknown
 	AdjustedPrice string
@@ -635,6 +644,18 @@ func (app *Application) buildItemTypeDetail(ctx context.Context, t db.SdeType) *
 		if cat, cerr := app.queries.GetSDECategory(ctx, grp.CategoryID); cerr == nil {
 			detail.Category = &itemCategoryRow{ID: cat.CategoryID, Name: cat.Name}
 		}
+	}
+
+	// Art: the render, falling back to the icon — except the
+	// blueprint category (blueprints, reaction formulas),
+	// which has neither asset and serves /bp instead. The
+	// item page shows the type itself, never a copy, so the
+	// /bpc variant does not apply here.
+	detail.ArtURL = "https://images.evetech.net/types/" + strconv.FormatInt(typeID, 10) + "/render?size=128"
+	detail.ArtFallback = "https://images.evetech.net/types/" + strconv.FormatInt(typeID, 10) + "/icon?size=128"
+	if detail.Category != nil && detail.Category.ID == contracts.BlueprintCategoryID {
+		detail.ArtURL = contracts.TypeIconURL(typeID, true, false, 128)
+		detail.ArtFallback = ""
 	}
 
 	// Description: the local SDE dump first; the worker's

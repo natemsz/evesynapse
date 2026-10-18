@@ -292,7 +292,7 @@ func (q *Queries) GetSwarmNextGossip(ctx context.Context) (sql.NullTime, error) 
 const getSwarmPeer = `-- name: GetSwarmPeer :one
 SELECT instance_id, base_url, public_key, source, approved, excluded,
     exclude_note, good_checks, bad_checks, first_seen, last_seen, last_gossip,
-    key_conflict_at, url_sig, url_issued_at, last_pulled, last_served
+    key_conflict_at, url_sig, url_issued_at, last_pulled, last_served, build
 FROM swarm_peers
 WHERE instance_id = $1
 `
@@ -318,6 +318,7 @@ func (q *Queries) GetSwarmPeer(ctx context.Context, instanceID string) (SwarmPee
 		&i.UrlIssuedAt,
 		&i.LastPulled,
 		&i.LastServed,
+		&i.Build,
 	)
 	return i, err
 }
@@ -435,7 +436,7 @@ func (q *Queries) ListSwarmCorpDemand(ctx context.Context, limit int32) ([]int64
 const listSwarmPeers = `-- name: ListSwarmPeers :many
 SELECT instance_id, base_url, public_key, source, approved, excluded,
     exclude_note, good_checks, bad_checks, first_seen, last_seen, last_gossip,
-    key_conflict_at, url_sig, url_issued_at, last_pulled, last_served
+    key_conflict_at, url_sig, url_issued_at, last_pulled, last_served, build
 FROM swarm_peers
 ORDER BY last_seen DESC
 LIMIT 100
@@ -468,6 +469,7 @@ func (q *Queries) ListSwarmPeers(ctx context.Context) ([]SwarmPeer, error) {
 			&i.UrlIssuedAt,
 			&i.LastPulled,
 			&i.LastServed,
+			&i.Build,
 		); err != nil {
 			return nil, err
 		}
@@ -929,12 +931,13 @@ func (q *Queries) TouchSwarmPeerServed(ctx context.Context, arg TouchSwarmPeerSe
 }
 
 const upsertSwarmPeer = `-- name: UpsertSwarmPeer :execrows
-INSERT INTO swarm_peers (instance_id, base_url, public_key, source, first_seen, last_seen, url_sig, url_issued_at)
-VALUES ($1, $2, $3, $4, $5, $5, $6, $7)
+INSERT INTO swarm_peers (instance_id, base_url, public_key, source, first_seen, last_seen, url_sig, url_issued_at, build)
+VALUES ($1, $2, $3, $4, $5, $5, $6, $7, $9)
 ON CONFLICT (instance_id) DO UPDATE SET
     base_url = CASE WHEN $8::boolean AND excluded.url_issued_at > swarm_peers.url_issued_at THEN excluded.base_url ELSE swarm_peers.base_url END,
     url_sig = CASE WHEN $8::boolean AND excluded.url_issued_at > swarm_peers.url_issued_at THEN excluded.url_sig ELSE swarm_peers.url_sig END,
     url_issued_at = CASE WHEN $8::boolean AND excluded.url_issued_at > swarm_peers.url_issued_at THEN excluded.url_issued_at ELSE swarm_peers.url_issued_at END,
+    build = CASE WHEN $8::boolean AND excluded.url_issued_at > swarm_peers.url_issued_at AND excluded.build <> '' THEN excluded.build ELSE swarm_peers.build END,
     last_seen = excluded.last_seen
 WHERE swarm_peers.public_key = excluded.public_key
 `
@@ -948,6 +951,7 @@ type UpsertSwarmPeerParams struct {
 	UrlSig        string    `json:"url_sig"`
 	UrlIssuedAt   int64     `json:"url_issued_at"`
 	AddressSigned bool      `json:"address_signed"`
+	Build         string    `json:"build"`
 }
 
 // A sighting records a peer once and pins the key it arrived
@@ -974,6 +978,7 @@ func (q *Queries) UpsertSwarmPeer(ctx context.Context, arg UpsertSwarmPeerParams
 		arg.UrlSig,
 		arg.UrlIssuedAt,
 		arg.AddressSigned,
+		arg.Build,
 	)
 	if err != nil {
 		return 0, err

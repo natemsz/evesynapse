@@ -351,6 +351,13 @@ var pgPubContractItemsParkingSchema string
 //go:embed schema_pg/061_blueprint_copy_medians.sql
 var pgBlueprintCopyMediansSchema string
 
+// Step 062: the build each swarm peer last claimed for
+// itself, for the Admin page's Build column. Self-reported
+// display metadata only; the trust model never reads it.
+//
+//go:embed schema_pg/062_swarm_peer_build.sql
+var pgSwarmPeerBuildSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -441,6 +448,7 @@ func schemaSteps() []schemaStep {
 		{59, "audit_indexes", pgAuditIndexesSchema, ""},
 		{60, "pub_contract_items_parking", pgPubContractItemsParkingSchema, ""},
 		{61, "blueprint_copy_medians", pgBlueprintCopyMediansSchema, ""},
+		{62, "swarm_peer_build", pgSwarmPeerBuildSchema, ""},
 	}
 }
 

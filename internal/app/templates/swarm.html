@@ -16,10 +16,10 @@
 {{if .Peers}}
 <div class="tw">
 <table>
-  <thead><tr><th>Instance</th><th>Address</th><th>Found by</th><th>Trust</th><th>Good</th><th>Bad</th><th>State</th><th>Role</th><th></th></tr></thead>
+  <thead><tr><th>Instance</th><th>Address</th><th>Found by</th><th>Trust</th><th>Good</th><th>Bad</th><th>State</th><th>Role</th><th>Build</th><th></th></tr></thead>
   <tbody>
   {{range .Peers}}
-    <tr><td>{{.Display}}</td><td>{{if .ShowAddress}}{{.URL}}{{else}}—{{end}}</td><td>{{.Source}}</td><td>{{.Trust}}</td><td>{{.Good}}</td><td>{{.Bad}}</td><td>{{.State}}{{if .KeyConflict}}<br><small>{{.KeyConflict}}</small>{{end}}</td><td>{{.Role}}</td>
+    <tr><td>{{.Display}}</td><td>{{if .ShowAddress}}{{.URL}}{{else}}—{{end}}</td><td>{{.Source}}</td><td>{{.Trust}}</td><td>{{.Good}}</td><td>{{.Bad}}</td><td>{{.State}}{{if .KeyConflict}}<br><small>{{.KeyConflict}}</small>{{end}}</td><td>{{.Role}}</td><td>{{.Build}}</td>
     <td>{{if .Excluded}}
       <form method="post" action="/admin/swarm/admit"><input type="hidden" name="instance" value="{{.ID}}"><button type="submit">Re-admit</button></form>
       <form method="post" action="/admin/swarm/remove"><input type="hidden" name="instance" value="{{.ID}}"><label>Type {{.Display}} to remove: <input type="text" name="confirm" autocomplete="off" size="16" required></label> <button type="submit">Remove</button></form>
@@ -33,7 +33,7 @@
   </tbody>
 </table>
 </div>
-<p><small>Trust is this instance's own score for each signer: good checks over all checks, starting at 90%. Ten checks under 50% excludes on its own. Excluding never reads from a peer again; re-admitting keeps its history. Reputation never travels between instances, so no peer can talk this one into distrusting another.</small></p>
+<p><small>Trust is this instance's own score for each signer: good checks over all checks, starting at 90%. Ten checks under 50% excludes on its own. Excluding never reads from a peer again; re-admitting keeps its history. Reputation never travels between instances, so no peer can talk this one into distrusting another. Build is the hash of the binary each instance says it runs — Mainline when the hash matches a published release, Fork when it matches none — self-reported for orientation only: it plays no part in trust, which persists across releases.</small></p>
 {{else}}
 <p><small>No other instances heard from yet{{if .Enabled}} — new members arrive through the seeds and gossip{{end}}.</small></p>
 {{end}}

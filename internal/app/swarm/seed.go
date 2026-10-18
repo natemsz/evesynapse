@@ -42,6 +42,12 @@ type SeedAnnouncePayload struct {
 	// tuple the receiver stores and relays verbatim.
 	URLSig   string `json:"url_sig"`
 	IssuedAt int64  `json:"issued_at"`
+	// Build is the sender's self-reported build claim
+	// (build.go): display metadata the receiver files on the
+	// peer row. It is outside the signed address tuple — the
+	// signature beside it covers the address, not the claim —
+	// and nothing anywhere acts on it.
+	Build string `json:"build,omitempty"`
 }
 
 // BuildSeedAnnounce signs this instance's heartbeat. False when
@@ -66,6 +72,7 @@ func (app *Mod) BuildSeedAnnounce(now time.Time) (SwarmSignedEntry, bool) {
 		PublicKey: app.SwarmID.PublicString(),
 		URLSig:    SignSwarmMember(app.SwarmID, origin, now.Unix()),
 		IssuedAt:  now.Unix(),
+		Build:     BuildClaim(),
 	}); err != nil {
 		return SwarmSignedEntry{}, false
 	}

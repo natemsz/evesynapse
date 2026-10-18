@@ -133,6 +133,46 @@ func TestContractSearchRollPositionAndQuality(t *testing.T) {
 	mustContain(t, "row abyssal chip", body, "Roll Score: 45 / 100 • Top 20%")
 }
 
+func TestContractSearchStructure(t *testing.T) {
+	tr := &openWindowTransport{}
+	app, conn, _ := buildCorpTestApp(t, tr)
+	seedContractCorpus(t, app, conn)
+
+	// The structured zones: the control band's segmented
+	// type selector and deals box, the specs band, and the
+	// results in their own section.
+	_, body := getAnon(t, app, "/contracts/search/?deals=1&spec=couriers")
+	mustContain(t, "search structure", body,
+		`<div class="seg cs-types"`,
+		`<label class="box cs-deals">`,
+		`<div class="band cs-specs">`,
+		`<section class="box cs-results">`,
+		`class="cs-region-search"`)
+	// Four equal filter boxes, one per territory.
+	if n := strings.Count(body, `<div class="box cs-fbox">`); n != 4 {
+		t.Errorf("filter boxes: got %d, want 4", n)
+	}
+	// Every filter field survives the restructure.
+	for _, name := range []string{
+		"q_item", "item_dir", "type", "deals", "region", "place",
+		"price_min", "price_max", "buyout_max", "q_title", "q_issuer",
+		"for_corp", "issued_hrs", "expiring_hrs", "sort", "place_end",
+	} {
+		if !strings.Contains(body, `name="`+name+`"`) {
+			t.Errorf("field %q missing after restructure", name)
+		}
+	}
+	// The open spec tab carries its icon, and the result
+	// rows render inside the results section.
+	if !strings.Contains(body, `data-drawer-tab="couriers" aria-expanded="true"><svg`) {
+		t.Error("the open courier tab should carry its icon")
+	}
+	i, j := strings.Index(body, `class="box cs-results"`), strings.Index(body, `class="cs-rows"`)
+	if i < 0 || j < 0 || i > j {
+		t.Error("result rows should render inside the results section")
+	}
+}
+
 func TestContractPanelFragment(t *testing.T) {
 	tr := &openWindowTransport{}
 	app, conn, _ := buildCorpTestApp(t, tr)

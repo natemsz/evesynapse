@@ -262,11 +262,6 @@
 }
 .cs-row:hover { background: rgba(255, 106, 0, 0.045); }
 .cs-row.open { background: var(--row-hover); box-shadow: inset 3px 0 0 var(--accent); }
-/* While a row is open, its collapsed-state abyssal teaser
-   hides: the expansion's mutaplasmid panel carries the same
-   facts (provenance, score, estimate, cap), so the appraisal
-   opens without a repeated summary block above it. */
-.cs-row.open .cs-row-ab { display: none; }
 .cs-row-main {
   display: grid; gap: 0.4rem 1.1rem; align-items: start;
   grid-template-columns: minmax(0, 1fr) 10.5rem 13rem 14rem 2rem;
@@ -300,7 +295,52 @@
 .cs-line { display: flex; align-items: center; gap: 0.45rem; }
 .cs-line-item { display: inline-flex; align-items: center; gap: 0.35rem; }
 .cs-line-icon, .cs-pline-icon { border-radius: var(--r-xs); flex: none; }
-.cs-row-ab { margin-top: 0.45rem; display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.92rem; }
+/* ---- abyssal stats popup ---- */
+/* The mutaplasmid detail (the row's score/bars/estimate
+   and the panel's per-line rolls) opens as a popup over
+   the list instead of expanding inline: the container is
+   rendered with the row/panel HTML and contracts.js only
+   positions and toggles it, so the list never reflows.
+   The paint is the region popover's menu recipe. */
+.cs-abwrap { position: relative; display: inline-flex; }
+.cs-abbtn { cursor: pointer; font: inherit; }
+button.cs-abbtn:hover { border-color: var(--accent); color: var(--text-bright); }
+.cs-abpop {
+  position: absolute; z-index: 60; top: calc(100% + 0.4rem); left: 0;
+  width: min(27rem, calc(100vw - 1.5rem));
+  max-height: 70vh; overflow: auto;
+  display: flex; flex-direction: column; gap: 0.25rem;
+  background: var(--panel); border: 1px solid var(--glass-edge);
+  border-radius: var(--r-xs); padding: 0.6rem 0.75rem;
+  box-shadow: 0 1rem 2.5rem rgba(0, 0, 0, 0.55);
+  font-size: 0.92rem; text-align: left; cursor: default;
+}
+.cs-abpop[hidden] { display: none; }
+.cs-abpop-head {
+  display: flex; justify-content: space-between; align-items: center;
+  gap: 1rem; margin-bottom: 0.15rem;
+}
+.cs-abpop-head > span {
+  font-size: 0.82rem; font-weight: 700; letter-spacing: 0.07em;
+  text-transform: uppercase; color: var(--accent);
+}
+.cs-abpop-x {
+  background: none; border: 0; color: var(--muted); cursor: pointer;
+  font-size: 1.05rem; line-height: 1; padding: 0.1rem 0.25rem;
+}
+.cs-abpop-x:hover { color: var(--text-bright); }
+/* In the panel the aside sits in the right-hand column:
+   its popup right-aligns to the wrap so it cannot spill
+   past the panel's edge. */
+.cs-panel-abs .cs-abpop { left: auto; right: 0; }
+/* On a narrow screen contracts.js lifts the open popup
+   to the page root with this class: a bottom sheet
+   across the viewport instead of an anchored popover. */
+.cs-abpop.sheet {
+  position: fixed; left: 0; right: 0; bottom: 0; top: auto;
+  width: auto; max-height: 78vh; overflow: auto; z-index: 200;
+  border-radius: var(--r-xs) var(--r-xs) 0 0;
+}
 .cs-bar { display: flex; align-items: center; gap: 0.55rem; }
 .cs-bar-name { flex: 0 0 11rem; color: var(--muted); font-size: 0.86rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cs-bar .meter { flex: 0 0 8.5rem; }

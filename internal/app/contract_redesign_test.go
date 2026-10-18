@@ -284,3 +284,79 @@ func TestContractPanelAbyssal(t *testing.T) {
 		"Est range: 180,000,000.00 – 240,000,000.00 ISK",
 		"Held back by: CPU fitting cost")
 }
+
+// TestContractSearchAbyssalPopup pins the mutaplasmid
+// stats presentation: the detail is rendered with the
+// row/panel HTML inside a hidden popup container behind
+// a trigger — never as an inline block in the results
+// flow — and contracts.js wires it with the once-bound
+// document delegation (the copy-button pattern), so it
+// survives the lazy panel fetch and in-page swaps alike.
+func TestContractSearchAbyssalPopup(t *testing.T) {
+	tr := &openWindowTransport{}
+	app, conn, _ := buildCorpTestApp(t, tr)
+	seedAbyssalPage(t, conn)
+
+	// The row: the score chip is the trigger, and the
+	// teaser facts (provenance, bars, estimate, cap) live
+	// in the popup, not in the row's flow.
+	_, body := getAnon(t, app, "/contracts/search/")
+	mustContain(t, "row abyssal popup", body,
+		`data-abpop aria-haspopup="true" aria-expanded="false">Roll Score: 45 / 100 • Top 20%</button>`,
+		`<div class="cs-abpop" role="dialog" aria-label="Mutaplasmid rolls" hidden>`,
+		`data-abpop-close`,
+		"Mutated from", "from 8 listings of this module",
+		"Held back by: CPU fitting cost")
+	if strings.Contains(body, "cs-row-ab") {
+		t.Error("the row still renders the inline abyssal block (cs-row-ab)")
+	}
+
+	// The panel fragment: the aside keeps its head and
+	// provenance line; the rolls detail sits in its popup
+	// behind the View rolls trigger.
+	_, body = getAnon(t, app, "/contracts/search/8501/panel")
+	mustContain(t, "panel abyssal popup", body,
+		`data-abpop aria-haspopup="true" aria-expanded="false">View rolls &amp; estimate</button>`,
+		`<div class="cs-abpop" role="dialog" aria-label="Mutaplasmid rolls" hidden>`,
+		"Roll score: <strong>45 / 100</strong>",
+		"Our estimate: <strong>205,000,000.00 ISK</strong>")
+
+	// The wiring: one delegated handler pair, the toggle
+	// and close affordances, Esc, and the swap close.
+	rawJS, err := fs.ReadFile(staticFS, "static/contracts.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	js := string(rawJS)
+	for _, want := range []string{
+		`e.target.closest("[data-abpop]")`,
+		`e.target.closest("[data-abpop-close]")`,
+		`if (e.key === "Escape") closeAbPop();`,
+		`document.addEventListener("evesynapse:content-ready", closeAbPop)`,
+		`pop.hidden = false;`,
+		`sheetQuery = window.matchMedia("(max-width: 42rem)")`,
+	} {
+		if !strings.Contains(js, want) {
+			t.Errorf("contracts.js missing abyssal popup pin %q", want)
+		}
+	}
+	// The popup paint and the narrow-screen sheet.
+	rawCSS, err := fs.ReadFile(staticFS, "static/contracts.css")
+	if err != nil {
+		t.Fatal(err)
+	}
+	css := string(rawCSS)
+	for _, want := range []string{
+		".cs-abpop {",
+		".cs-abpop[hidden] { display: none; }",
+		".cs-panel-abs .cs-abpop { left: auto; right: 0; }",
+		".cs-abpop.sheet {",
+	} {
+		if !strings.Contains(css, want) {
+			t.Errorf("contracts.css missing abyssal popup pin %q", want)
+		}
+	}
+	if strings.Contains(css, ".cs-row-ab") {
+		t.Error("contracts.css still carries the inline teaser rules (.cs-row-ab)")
+	}
+}

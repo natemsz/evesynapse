@@ -13,6 +13,97 @@
     });
   }
 
+  // ---- abyssal stats popup -------------------------------------------
+  // The mutaplasmid detail (the row teaser and the panel's
+  // per-line rolls) renders with the row/panel HTML inside
+  // a .cs-abpop container; the script only positions and
+  // toggles it, so the list never reflows around it. One
+  // popup open at a time. The wiring is document-level
+  // delegation, bound once like the copy buttons below:
+  // panel fragments arrive by fetch after init() ran and
+  // an in-page swap replaces the whole DOM — delegation
+  // serves both, and a popup left open across a swap is
+  // closed by the content-ready listener. On a narrow
+  // screen the open popup is lifted to the page root and
+  // becomes a bottom sheet: a fixed box inside the page's
+  // glass would anchor to the glass, not the viewport.
+  var abPop = null;     // the open popup element
+  var abPopBtn = null;  // its trigger
+  var abPopHome = null; // {parent, next} while sheet-lifted
+  var sheetQuery = window.matchMedia("(max-width: 42rem)");
+
+  function placeAbPop() {
+    if (!abPop) return;
+    if (sheetQuery.matches) {
+      if (!abPopHome) {
+        abPopHome = { parent: abPop.parentNode, next: abPop.nextSibling };
+        document.body.appendChild(abPop);
+        abPop.classList.add("sheet");
+      }
+    } else if (abPopHome) {
+      abPop.classList.remove("sheet");
+      if (abPopHome.parent) abPopHome.parent.insertBefore(abPop, abPopHome.next);
+      abPopHome = null;
+    }
+  }
+
+  function closeAbPop() {
+    if (!abPop) return;
+    var pop = abPop;
+    abPop = null;
+    if (abPopBtn) abPopBtn.setAttribute("aria-expanded", "false");
+    abPopBtn = null;
+    pop.hidden = true;
+    if (abPopHome) {
+      pop.classList.remove("sheet");
+      if (abPopHome.parent && abPopHome.parent.isConnected) {
+        abPopHome.parent.insertBefore(pop, abPopHome.next);
+      } else {
+        pop.remove();
+      }
+      abPopHome = null;
+    }
+  }
+
+  function openAbPop(btn) {
+    var wrap = btn.closest(".cs-abwrap");
+    var pop = wrap && wrap.querySelector(".cs-abpop");
+    if (!pop) return;
+    if (abPop === pop) {
+      closeAbPop();
+      return;
+    }
+    closeAbPop();
+    abPop = pop;
+    abPopBtn = btn;
+    pop.hidden = false;
+    btn.setAttribute("aria-expanded", "true");
+    applyMeters(pop);
+    placeAbPop();
+  }
+
+  document.addEventListener("click", function (e) {
+    if (e.target.closest("[data-abpop-close]")) {
+      closeAbPop();
+      return;
+    }
+    var btn = e.target.closest("[data-abpop]");
+    if (btn) {
+      openAbPop(btn);
+      return;
+    }
+    if (abPop && !e.target.closest(".cs-abpop")) closeAbPop();
+  });
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape") closeAbPop();
+  });
+  document.addEventListener("evesynapse:content-ready", closeAbPop);
+  if (sheetQuery.addEventListener) {
+    sheetQuery.addEventListener("change", placeAbPop);
+  } else if (sheetQuery.addListener) {
+    sheetQuery.addListener(placeAbPop);
+  }
+
   // ---- copy buttons ------------------------------------------------------
   // Document-level delegation, bound once: it serves the
   // current DOM and any swapped-in DOM alike.
@@ -264,6 +355,7 @@
   // and are cached in the row for the session.
   var openRow = null;
   function closeRow(row) {
+    closeAbPop();
     var slot = row.querySelector(".cs-panel-slot");
     if (slot) slot.hidden = true;
     row.classList.remove("open");
@@ -271,6 +363,7 @@
     if (openRow === row) openRow = null;
   }
   function openRowPanel(row) {
+    closeAbPop();
     var slot = row.querySelector(".cs-panel-slot");
     if (!slot) return;
     if (openRow && openRow !== row) closeRow(openRow);
@@ -298,7 +391,7 @@
   }
   document.querySelectorAll(".cs-row").forEach(function (row) {
     row.addEventListener("click", function (e) {
-      if (e.target.closest(".cs-panel-slot, a, button, input, select, textarea, label")) return;
+      if (e.target.closest(".cs-panel-slot, .cs-abpop, a, button, input, select, textarea, label")) return;
       if (openRow === row) closeRow(row);
       else openRowPanel(row);
     });

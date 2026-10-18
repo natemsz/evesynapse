@@ -919,6 +919,17 @@ input[type="text"], input[type="search"], input[type="number"], select, textarea
   padding: 0.2rem 0.6rem;
   font: inherit;
 }
+/* The open list of a native select is painted by the browser from
+   the <option> elements' own colours, and a browser that falls
+   back to the OS popup surface shows the shared rule's near-white
+   text on that surface's white -- the options carry no paint of
+   their own. Give them the panel surface and the text tone; both
+   variables re-tone under the light theme, so the list follows
+   it. The closed control is untouched. */
+select option, select optgroup {
+  background-color: var(--panel);
+  color: var(--text);
+}
 html[data-theme="light"] input[type="text"], html[data-theme="light"] input[type="search"], html[data-theme="light"] input[type="number"], html[data-theme="light"] select, html[data-theme="light"] textarea {
   border-color: #d8cdb8;
 }

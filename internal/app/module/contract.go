@@ -344,6 +344,12 @@ const (
 	// AppraisalTierAbyssal: the stored abyssal estimate of one
 	// mutated item, from its rolls (schema 057).
 	AppraisalTierAbyssal = "abyssal"
+	// AppraisalTierCopyMedian: the stored median ask of
+	// single-copy contracts for a blueprint copy's type and
+	// runs (schema 061) -- the only tier a copy may price
+	// from, because every type-level price for a blueprint
+	// type is its original's price.
+	AppraisalTierCopyMedian = "copy_median"
 	// AppraisalTierFallback: the labeled Fuzzwork aggregate,
 	// inside its hard expiry, with its as-of stamp.
 	AppraisalTierFallback = "fallback"
@@ -356,11 +362,26 @@ const (
 // unique item (0 otherwise), and which side of an exchange it
 // sits on. The core API carries no contract fields by design:
 // callers pass lines in, totals come out.
+//
+// A blueprint copy line carries its copy facts: the core
+// prices a copy ONLY from the stored copy medians (schema
+// 061), never from the type-level order -- a copy is not its
+// original, and every market price for a blueprint type is
+// the original's. Runs is the copy's remaining runs (0 when
+// the caller does not know them: no median is keyed without
+// runs, so the line stays unpriced). The efficiency figures
+// ride along for the callers that word them; the median
+// lookup keys on type and runs alone.
 type AppraisalLine struct {
 	TypeID   int64
 	Quantity int64
 	ItemID   int64
 	Included bool // false: the want side of an exchange
+
+	BlueprintCopy      bool // the line is a blueprint copy, not an original
+	Runs               int64
+	MaterialEfficiency int64
+	TimeEfficiency     int64
 }
 
 // AppraisedLine is one line after pricing: the unit price its

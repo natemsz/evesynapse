@@ -2210,3 +2210,149 @@ func (q *Queries) UpsertPublicContractSweepState(ctx context.Context, arg Upsert
 	)
 	return err
 }
+
+// ---------------------------------------------------------------------
+// Blueprint copy medians (schema 061): the worker's pass
+// distills the live corpus into one stored median ask per
+// (blueprint type, runs); the appraisal core reads the stored
+// rows and nothing else, and a copy line prices from them or
+// not at all.
+// ---------------------------------------------------------------------
+
+const deleteBlueprintCopyMedians = `-- name: DeleteBlueprintCopyMedians :exec
+DELETE FROM blueprint_copy_medians
+`
+
+func (q *Queries) DeleteBlueprintCopyMedians(ctx context.Context) error {
+	_, err := q.db.ExecContext(ctx, deleteBlueprintCopyMedians)
+	return err
+}
+
+const getBlueprintCopyMediansStamp = `-- name: GetBlueprintCopyMediansStamp :one
+SELECT computed_at FROM blueprint_copy_medians
+ORDER BY computed_at DESC
+LIMIT 1
+`
+
+// The stored rows' as-of: the copy-median pass recomputes at
+// most once per its refresh age, judged by this stamp. No
+// rows yet answers no row, which the caller reads as never.
+func (q *Queries) GetBlueprintCopyMediansStamp(ctx context.Context) (time.Time, error) {
+	row := q.db.QueryRowContext(ctx, getBlueprintCopyMediansStamp)
+	var computed_at time.Time
+	err := row.Scan(&computed_at)
+	return computed_at, err
+}
+
+const insertBlueprintCopyMedian = `-- name: InsertBlueprintCopyMedian :exec
+INSERT INTO blueprint_copy_medians (type_id, runs, median_price, sample_count, computed_at)
+VALUES ($1, $2, $3, $4, $5)
+`
+
+type InsertBlueprintCopyMedianParams struct {
+	TypeID      int64     `json:"type_id"`
+	Runs        int64     `json:"runs"`
+	MedianPrice float64   `json:"median_price"`
+	SampleCount int64     `json:"sample_count"`
+	ComputedAt  time.Time `json:"computed_at"`
+}
+
+func (q *Queries) InsertBlueprintCopyMedian(ctx context.Context, arg InsertBlueprintCopyMedianParams) error {
+	_, err := q.db.ExecContext(ctx, insertBlueprintCopyMedian,
+		arg.TypeID,
+		arg.Runs,
+		arg.MedianPrice,
+		arg.SampleCount,
+		arg.ComputedAt,
+	)
+	return err
+}
+
+const listBlueprintCopyMedianCandidates = `-- name: ListBlueprintCopyMedianCandidates :many
+
+SELECT i.type_id AS type_id, i.runs AS runs,
+    percentile_cont(0.5) WITHIN GROUP (ORDER BY c.price) AS median_price,
+    COUNT(*) AS sample_count
+FROM pub_contract_items i
+JOIN pub_contracts c ON c.contract_id = i.contract_id
+WHERE c.type = 'item_exchange'
+  AND c.price > 0
+  AND i.is_included
+  AND i.is_blueprint_copy
+  AND i.runs IS NOT NULL AND i.runs > 0
+  AND i.quantity = 1
+  AND (SELECT COUNT(*) FROM pub_contract_items x
+       WHERE x.contract_id = i.contract_id) = 1
+GROUP BY i.type_id, i.runs
+HAVING COUNT(*) >= $1::bigint
+`
+
+type ListBlueprintCopyMedianCandidatesRow struct {
+	TypeID      int64         `json:"type_id"`
+	Runs        sql.NullInt64 `json:"runs"`
+	MedianPrice float64       `json:"median_price"`
+	SampleCount int64         `json:"sample_count"`
+}
+
+func (q *Queries) ListBlueprintCopyMedianCandidates(ctx context.Context, minSample int64) ([]ListBlueprintCopyMedianCandidatesRow, error) {
+	rows, err := q.db.QueryContext(ctx, listBlueprintCopyMedianCandidates, minSample)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListBlueprintCopyMedianCandidatesRow
+	for rows.Next() {
+		var i ListBlueprintCopyMedianCandidatesRow
+		if err := rows.Scan(
+			&i.TypeID,
+			&i.Runs,
+			&i.MedianPrice,
+			&i.SampleCount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listBlueprintCopyMediansForTypes = `-- name: ListBlueprintCopyMediansForTypes :many
+SELECT type_id, runs, median_price, sample_count, computed_at
+FROM blueprint_copy_medians
+WHERE type_id = ANY($1::bigint[])
+`
+
+func (q *Queries) ListBlueprintCopyMediansForTypes(ctx context.Context, typeIds []int64) ([]BlueprintCopyMedian, error) {
+	rows, err := q.db.QueryContext(ctx, listBlueprintCopyMediansForTypes, pq.Array(typeIds))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []BlueprintCopyMedian
+	for rows.Next() {
+		var i BlueprintCopyMedian
+		if err := rows.Scan(
+			&i.TypeID,
+			&i.Runs,
+			&i.MedianPrice,
+			&i.SampleCount,
+			&i.ComputedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}

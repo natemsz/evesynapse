@@ -136,7 +136,19 @@ func (app *page) computeAppraisal(ctx context.Context, input string) (*snapshot,
 	agg := aggregateLines(resolved)
 	priceLines := make([]module.AppraisalLine, 0, len(agg))
 	for _, ln := range agg {
-		priceLines = append(priceLines, module.AppraisalLine{TypeID: ln.TypeID, Quantity: ln.Qty, ItemID: ln.ItemID, Included: true})
+		pl := module.AppraisalLine{TypeID: ln.TypeID, Quantity: ln.Qty, ItemID: ln.ItemID, Included: true}
+		if ln.Facts.HasFacts && ln.Facts.Copy {
+			// A pasted copy prices as a copy or not at all:
+			// its facts ride to the core, whose copy branch
+			// never touches the original's type-level prices.
+			// Runs is 0 when the paste stated none, which
+			// keys no stored median.
+			pl.BlueprintCopy = true
+			pl.Runs = ln.Facts.Runs
+			pl.MaterialEfficiency = ln.Facts.ME
+			pl.TimeEfficiency = ln.Facts.TE
+		}
+		priceLines = append(priceLines, pl)
 	}
 	var res module.Appraisal
 	if len(priceLines) > 0 {
@@ -144,6 +156,30 @@ func (app *page) computeAppraisal(ctx context.Context, input string) (*snapshot,
 		res, err = app.deps.AppraiseLines(ctx, priceLines)
 		if err != nil {
 			return nil, err
+		}
+	}
+	// The stored medians behind any copy-priced lines, in one
+	// batched read, so a copy line's note can say what its
+	// price stands on -- the same basis wording habit as the
+	// abyssal estimate's note.
+	copySamples := map[string]int64{}
+	{
+		var copyTypes []int64
+		seenType := map[int64]bool{}
+		for _, ln := range agg {
+			if ln.Facts.HasFacts && ln.Facts.Copy && !seenType[ln.TypeID] {
+				seenType[ln.TypeID] = true
+				copyTypes = append(copyTypes, ln.TypeID)
+			}
+		}
+		if len(copyTypes) > 0 {
+			rows, err := app.queries.ListBlueprintCopyMediansForTypes(ctx, copyTypes)
+			if err != nil {
+				return nil, err
+			}
+			for _, row := range rows {
+				copySamples[fmt.Sprintf("%d/%d", row.TypeID, row.Runs)] = row.SampleCount
+			}
 		}
 	}
 	buys, err := app.typicalBuys(ctx, agg, res)
@@ -155,6 +191,11 @@ func (app *page) computeAppraisal(ctx context.Context, input string) (*snapshot,
 		if i < len(res.Lines) {
 			al := res.Lines[i]
 			sl.UnitPrice, sl.LineValue, sl.Tier, sl.AsOf, sl.Priced = al.UnitPrice, al.LineValue, al.Tier, al.AsOf, al.Priced
+		}
+		if sl.Priced && sl.Tier == module.AppraisalTierCopyMedian {
+			if n, ok := copySamples[fmt.Sprintf("%d/%d", ln.TypeID, ln.Facts.Runs)]; ok {
+				sl.Note += fmt.Sprintf(" · median of %s copy listings", esi.FormatInt(n))
+			}
 		}
 		if sl.Priced {
 			snap.PricedLines++
@@ -393,6 +434,10 @@ type aggLine struct {
 	Name   string
 	Qty    int64
 	Note   string
+	// Facts are the line's parsed blueprint facts, carried
+	// so a copy line reaches the appraisal core AS a copy:
+	// without them it would price at its original's figure.
+	Facts pasteLine
 }
 
 // aggregateLines merges same-type lines that carry the same
@@ -412,7 +457,7 @@ func aggregateLines(resolved []resolvedLine) []aggLine {
 			continue
 		}
 		seen[key] = len(out)
-		out = append(out, aggLine{TypeID: ln.TypeID, ItemID: ln.ItemID, Name: ln.Name, Qty: ln.Qty, Note: note})
+		out = append(out, aggLine{TypeID: ln.TypeID, ItemID: ln.ItemID, Name: ln.Name, Qty: ln.Qty, Note: note, Facts: ln.Facts})
 	}
 	return out
 }
@@ -533,6 +578,8 @@ func tierLabel(tier string) string {
 		return "Estimated sell"
 	case module.AppraisalTierAbyssal:
 		return "Our abyssal estimate"
+	case module.AppraisalTierCopyMedian:
+		return "Our copy median"
 	case module.AppraisalTierFallback:
 		return "Fuzzwork aggregate"
 	}
@@ -617,7 +664,7 @@ func (app *page) buildResult(snap *snapshot) *resultView {
 		v.Lines = append(v.Lines, rl)
 	}
 	var parts []string
-	for _, tier := range []string{module.AppraisalTierTypical, module.AppraisalTierEstimate, module.AppraisalTierAbyssal, module.AppraisalTierFallback} {
+	for _, tier := range []string{module.AppraisalTierTypical, module.AppraisalTierEstimate, module.AppraisalTierAbyssal, module.AppraisalTierCopyMedian, module.AppraisalTierFallback} {
 		if n := counts[tier]; n > 0 {
 			parts = append(parts, fmt.Sprintf("%d × %s", n, tierLabel(tier)))
 		}

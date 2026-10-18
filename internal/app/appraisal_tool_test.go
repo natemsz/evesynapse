@@ -202,12 +202,14 @@ Rifter Blueprint (BPC, ME 10, TE 20, 5 runs)`}})
 	}
 	// The linked item prices from its stored abyssal
 	// estimate (205,000,000), the tritanium at its typical
-	// (100 x 6.50), the blueprint copy at the original's
-	// typical (1,000,000): 206,000,650.00 in all, and the
-	// line carries the estimate's range and basis in the
-	// contract pages' words.
+	// (100 x 6.50): 205,000,650.00 in all, and the line
+	// carries the estimate's range and basis in the contract
+	// pages' words. The blueprint copy prices NOWHERE: no
+	// copy medians are stored in this fixture, and a copy
+	// never takes its original's price (the old behavior
+	// priced this line at the original's 1,000,000 typical).
 	mustContain(t, "abyssal item link", body,
-		"206,000,650.00", "Priced 3 of 3 lines",
+		"205,000,650.00", "Priced 2 of 3 lines",
 		"Our abyssal estimate", "205,000,000.00",
 		"likely 180,000,000.00 to 240,000,000.00", "from 8 listings of this module",
 		"BPC · ME 10 · TE 20 · 5 runs")

@@ -326,6 +326,15 @@ var pgAbyssalEstimatesSchema string
 //go:embed schema_pg/058_user_appraisals.sql
 var pgUserAppraisalsSchema string
 
+// Step 059: the audit's missing indexes -- the fallback stats
+// by type, the contract search's sort/queue/filter indexes,
+// the detail stores by character, the record drains, and a
+// trigram index for entity-name search (with the pg_trgm
+// extension it needs).
+//
+//go:embed schema_pg/059_audit_indexes.sql
+var pgAuditIndexesSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -413,6 +422,7 @@ func schemaSteps() []schemaStep {
 		{56, "public_contract_appraisal", pgPublicContractAppraisalSchema, ""},
 		{57, "abyssal_estimates", pgAbyssalEstimatesSchema, ""},
 		{58, "user_appraisals", pgUserAppraisalsSchema, ""},
+		{59, "audit_indexes", pgAuditIndexesSchema, ""},
 	}
 }
 

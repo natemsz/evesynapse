@@ -16,56 +16,17 @@
 -- match whole, whatever their case. Search matches the author a fit
 -- shows (the account's first character) and no other character of
 -- the account: a visitor must not learn which characters share one.
+-- The filtered total rides the list query as COUNT(*) OVER(), so the
+-- browser pays one round-trip and the filter text lives in one place.
 -- ---------------------------------------------------------------------
-
--- name: CountPublicFits :one
-SELECT COUNT(*)
-FROM local_fittings lf
-LEFT JOIN type_names tn ON tn.type_id = lf.ship_type_id
-LEFT JOIN sde_types st ON st.type_id = lf.ship_type_id
-LEFT JOIN sde_groups sg ON sg.group_id = st.group_id
-WHERE lf.is_public AND NOT lf.is_draft
-  AND (sqlc.arg(sincedays)::int <= 0 OR lf.updated_at >= now() - make_interval(days => sqlc.arg(sincedays)::int))
-  AND (sqlc.arg(q)::text = '' OR lf.name ILIKE '%' || sqlc.arg(q)::text || '%'
-    OR COALESCE(NULLIF(st.name, ''), tn.name, '') ILIKE '%' || sqlc.arg(q)::text || '%'
-    OR (SELECT c.name FROM characters c WHERE c.user_id = lf.user_id ORDER BY c.character_id LIMIT 1) ILIKE '%' || sqlc.arg(q)::text || '%')
-  AND (sqlc.arg(role)::text = '' OR EXISTS (
-        SELECT 1 FROM jsonb_array_elements_text(
-            CASE WHEN jsonb_typeof(lf.items_json::jsonb -> 'tags') = 'array' THEN lf.items_json::jsonb -> 'tags' ELSE '[]'::jsonb END) AS t(tag)
-        WHERE lower(t.tag) = lower(sqlc.arg(role)::text)))
-  AND (sqlc.arg(hull)::text = '' OR sg.name = sqlc.arg(hull)::text)
-  AND (sqlc.arg(hullq)::text = '' OR COALESCE(NULLIF(st.name, ''), tn.name, '') ILIKE '%' || sqlc.arg(hullq)::text || '%')
-  AND (sqlc.arg(minstars)::float8 <= 0 OR (lf.rating_count > 0 AND lf.rating_sum::float8 / lf.rating_count >= sqlc.arg(minstars)::float8))
-  AND (sqlc.arg(include)::bigint <= 0 OR EXISTS (
-        SELECT 1 FROM jsonb_array_elements(
-            CASE WHEN jsonb_typeof(lf.items_json::jsonb -> 'items') = 'array' THEN lf.items_json::jsonb -> 'items' ELSE '[]'::jsonb END) AS it
-        WHERE (it->>'typeId')::bigint = sqlc.arg(include)::bigint))
-  AND (sqlc.arg(exclude)::bigint <= 0 OR NOT EXISTS (
-        SELECT 1 FROM jsonb_array_elements(
-            CASE WHEN jsonb_typeof(lf.items_json::jsonb -> 'items') = 'array' THEN lf.items_json::jsonb -> 'items' ELSE '[]'::jsonb END) AS it
-        WHERE (it->>'typeId')::bigint = sqlc.arg(exclude)::bigint))
-  AND (sqlc.arg(faction)::text != 'none' OR NOT EXISTS (
-        SELECT 1 FROM jsonb_array_elements(
-            CASE WHEN jsonb_typeof(lf.items_json::jsonb -> 'items') = 'array' THEN lf.items_json::jsonb -> 'items' ELSE '[]'::jsonb END) AS it
-        JOIN sde_type_attributes ma ON ma.type_id = (it->>'typeId')::bigint AND ma.attribute_id = 1692 AND ma.value IN (4, 5, 6)))
-  AND (sqlc.arg(maxprice)::float8 <= 0 OR lf.total_price <= 0 OR lf.total_price <= sqlc.arg(maxprice)::float8)
-  AND (sqlc.arg(alpha)::boolean IS NOT TRUE OR (
-        sg.name IN ('Corvette', 'Frigate', 'Destroyer', 'Cruiser', 'Battlecruiser', 'Battleship', 'Industrial', 'Mining Frigate', 'Shuttle')
-        AND NOT EXISTS (
-            SELECT 1 FROM jsonb_array_elements(
-                CASE WHEN jsonb_typeof(lf.items_json::jsonb -> 'items') = 'array' THEN lf.items_json::jsonb -> 'items' ELSE '[]'::jsonb END) AS it
-            JOIN sde_type_attributes ma ON ma.type_id = (it->>'typeId')::bigint AND ma.attribute_id = 1692 AND ma.value = 2)))
-  AND (sqlc.arg(tag)::text = '' OR EXISTS (
-        SELECT 1 FROM jsonb_array_elements_text(
-            CASE WHEN jsonb_typeof(lf.items_json::jsonb -> 'tags') = 'array' THEN lf.items_json::jsonb -> 'tags' ELSE '[]'::jsonb END) AS t(tag)
-        WHERE lower(t.tag) = lower(sqlc.arg(tag)::text)));
 
 -- name: ListPublicFits :many
 SELECT lf.id, lf.user_id, lf.name, lf.ship_type_id, lf.items_json, lf.updated_at,
        lf.view_count, lf.total_price, lf.rating_count, lf.rating_sum,
        COALESCE(NULLIF(st.name, ''), tn.name, '')::text AS ship_name,
        COALESCE(sg.name, '')::text AS hull,
-       COALESCE((SELECT c.name FROM characters c WHERE c.user_id = lf.user_id ORDER BY c.character_id LIMIT 1), '')::text AS author_name
+       COALESCE((SELECT c.name FROM characters c WHERE c.user_id = lf.user_id ORDER BY c.character_id LIMIT 1), '')::text AS author_name,
+       COUNT(*) OVER() AS total_count
 FROM local_fittings lf
 LEFT JOIN type_names tn ON tn.type_id = lf.ship_type_id
 LEFT JOIN sde_types st ON st.type_id = lf.ship_type_id
@@ -266,7 +227,8 @@ SELECT lf.id, lf.user_id, lf.name, lf.ship_type_id, lf.items_json, lf.updated_at
        lf.view_count, lf.total_price, lf.rating_count, lf.rating_sum,
        COALESCE(NULLIF(st.name, ''), tn.name, '')::text AS ship_name,
        COALESCE(sg.name, '')::text AS hull,
-       COALESCE((SELECT c.name FROM characters c WHERE c.user_id = lf.user_id ORDER BY c.character_id LIMIT 1), '')::text AS author_name
+       COALESCE((SELECT c.name FROM characters c WHERE c.user_id = lf.user_id ORDER BY c.character_id LIMIT 1), '')::text AS author_name,
+       COUNT(*) OVER() AS total_count
 FROM local_fittings lf
 LEFT JOIN type_names tn ON tn.type_id = lf.ship_type_id
 LEFT JOIN sde_types st ON st.type_id = lf.ship_type_id

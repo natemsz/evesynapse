@@ -215,7 +215,7 @@ func TestAppraisalToolSavedShareAndReprice(t *testing.T) {
 	if _, err := conn.ExecContext(ctx, `UPDATE market_region_stats SET typical_sell = 10 WHERE type_id = 34`); err != nil {
 		t.Fatalf("move price: %v", err)
 	}
-	code, body = getAnon(t, app, share)
+	_, body = getAnon(t, app, share)
 	mustContain(t, "shared appraisal after price move", body, "65.00")
 
 	repriceURL := "/market/appraise/" + strings.TrimPrefix(loc, "/market/appraise/?a=") + "/reprice"

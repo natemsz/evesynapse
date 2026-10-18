@@ -27,104 +27,6 @@ func (q *Queries) AddFitViews(ctx context.Context, arg AddFitViewsParams) error 
 	return err
 }
 
-const countPublicFits = `-- name: CountPublicFits :one
-
-SELECT COUNT(*)
-FROM local_fittings lf
-LEFT JOIN type_names tn ON tn.type_id = lf.ship_type_id
-LEFT JOIN sde_types st ON st.type_id = lf.ship_type_id
-LEFT JOIN sde_groups sg ON sg.group_id = st.group_id
-WHERE lf.is_public AND NOT lf.is_draft
-  AND ($1::int <= 0 OR lf.updated_at >= now() - make_interval(days => $1::int))
-  AND ($2::text = '' OR lf.name ILIKE '%' || $2::text || '%'
-    OR COALESCE(NULLIF(st.name, ''), tn.name, '') ILIKE '%' || $2::text || '%'
-    OR (SELECT c.name FROM characters c WHERE c.user_id = lf.user_id ORDER BY c.character_id LIMIT 1) ILIKE '%' || $2::text || '%')
-  AND ($3::text = '' OR EXISTS (
-        SELECT 1 FROM jsonb_array_elements_text(
-            CASE WHEN jsonb_typeof(lf.items_json::jsonb -> 'tags') = 'array' THEN lf.items_json::jsonb -> 'tags' ELSE '[]'::jsonb END) AS t(tag)
-        WHERE lower(t.tag) = lower($3::text)))
-  AND ($4::text = '' OR sg.name = $4::text)
-  AND ($5::text = '' OR COALESCE(NULLIF(st.name, ''), tn.name, '') ILIKE '%' || $5::text || '%')
-  AND ($6::float8 <= 0 OR (lf.rating_count > 0 AND lf.rating_sum::float8 / lf.rating_count >= $6::float8))
-  AND ($7::bigint <= 0 OR EXISTS (
-        SELECT 1 FROM jsonb_array_elements(
-            CASE WHEN jsonb_typeof(lf.items_json::jsonb -> 'items') = 'array' THEN lf.items_json::jsonb -> 'items' ELSE '[]'::jsonb END) AS it
-        WHERE (it->>'typeId')::bigint = $7::bigint))
-  AND ($8::bigint <= 0 OR NOT EXISTS (
-        SELECT 1 FROM jsonb_array_elements(
-            CASE WHEN jsonb_typeof(lf.items_json::jsonb -> 'items') = 'array' THEN lf.items_json::jsonb -> 'items' ELSE '[]'::jsonb END) AS it
-        WHERE (it->>'typeId')::bigint = $8::bigint))
-  AND ($9::text != 'none' OR NOT EXISTS (
-        SELECT 1 FROM jsonb_array_elements(
-            CASE WHEN jsonb_typeof(lf.items_json::jsonb -> 'items') = 'array' THEN lf.items_json::jsonb -> 'items' ELSE '[]'::jsonb END) AS it
-        JOIN sde_type_attributes ma ON ma.type_id = (it->>'typeId')::bigint AND ma.attribute_id = 1692 AND ma.value IN (4, 5, 6)))
-  AND ($10::float8 <= 0 OR lf.total_price <= 0 OR lf.total_price <= $10::float8)
-  AND ($11::boolean IS NOT TRUE OR (
-        sg.name IN ('Corvette', 'Frigate', 'Destroyer', 'Cruiser', 'Battlecruiser', 'Battleship', 'Industrial', 'Mining Frigate', 'Shuttle')
-        AND NOT EXISTS (
-            SELECT 1 FROM jsonb_array_elements(
-                CASE WHEN jsonb_typeof(lf.items_json::jsonb -> 'items') = 'array' THEN lf.items_json::jsonb -> 'items' ELSE '[]'::jsonb END) AS it
-            JOIN sde_type_attributes ma ON ma.type_id = (it->>'typeId')::bigint AND ma.attribute_id = 1692 AND ma.value = 2)))
-  AND ($12::text = '' OR EXISTS (
-        SELECT 1 FROM jsonb_array_elements_text(
-            CASE WHEN jsonb_typeof(lf.items_json::jsonb -> 'tags') = 'array' THEN lf.items_json::jsonb -> 'tags' ELSE '[]'::jsonb END) AS t(tag)
-        WHERE lower(t.tag) = lower($12::text)))
-`
-
-type CountPublicFitsParams struct {
-	Sincedays int32   `json:"sincedays"`
-	Q         string  `json:"q"`
-	Role      string  `json:"role"`
-	Hull      string  `json:"hull"`
-	Hullq     string  `json:"hullq"`
-	Minstars  float64 `json:"minstars"`
-	Include   int64   `json:"include"`
-	Exclude   int64   `json:"exclude"`
-	Faction   string  `json:"faction"`
-	Maxprice  float64 `json:"maxprice"`
-	Alpha     bool    `json:"alpha"`
-	Tag       string  `json:"tag"`
-}
-
-// ---------------------------------------------------------------------
-// Public discovery: the anonymous fit browser, ratings and sitemap
-// reads. Every browser filter is a SQL predicate and every page is
-// LIMIT/OFFSET bounded; Go never filters full tables. Every sort
-// spans every public fit; the default is newest first. Age is a
-// filter the visitor picks (sincedays, 0 for any time), never a
-// side effect of the sort. The rank sort is Bayesian (fit average
-// shrunk toward the global mean with weight 5, via public_fit_rank
-// in migrations 033 and 041), so one 5-star vote cannot top the
-// chart. Callers pass the global mean as (SELECT public_fit_mean()),
-// which Postgres computes once per query. Meta groups resolve
-// through dogma attribute 1692 (4 faction, 5 officer, 6 deadspace,
-// 2 tech II), the same source the fitting engine reads. The faction
-// filter is Any or No faction modules; a max price excludes only
-// fits with a known price above the cap (0 means unknown). Tags
-// match whole, whatever their case. Search matches the author a fit
-// shows (the account's first character) and no other character of
-// the account: a visitor must not learn which characters share one.
-// ---------------------------------------------------------------------
-func (q *Queries) CountPublicFits(ctx context.Context, arg CountPublicFitsParams) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countPublicFits,
-		arg.Sincedays,
-		arg.Q,
-		arg.Role,
-		arg.Hull,
-		arg.Hullq,
-		arg.Minstars,
-		arg.Include,
-		arg.Exclude,
-		arg.Faction,
-		arg.Maxprice,
-		arg.Alpha,
-		arg.Tag,
-	)
-	var count int64
-	err := row.Scan(&count)
-	return count, err
-}
-
 const getFitRating = `-- name: GetFitRating :one
 SELECT fit_id, user_id, stars FROM fit_ratings
 WHERE fit_id = $1 AND user_id = $2
@@ -168,11 +70,13 @@ func (q *Queries) GetPublicFitPage(ctx context.Context, fitID int64) (PublicFitP
 }
 
 const listPublicFits = `-- name: ListPublicFits :many
+
 SELECT lf.id, lf.user_id, lf.name, lf.ship_type_id, lf.items_json, lf.updated_at,
        lf.view_count, lf.total_price, lf.rating_count, lf.rating_sum,
        COALESCE(NULLIF(st.name, ''), tn.name, '')::text AS ship_name,
        COALESCE(sg.name, '')::text AS hull,
-       COALESCE((SELECT c.name FROM characters c WHERE c.user_id = lf.user_id ORDER BY c.character_id LIMIT 1), '')::text AS author_name
+       COALESCE((SELECT c.name FROM characters c WHERE c.user_id = lf.user_id ORDER BY c.character_id LIMIT 1), '')::text AS author_name,
+       COUNT(*) OVER() AS total_count
 FROM local_fittings lf
 LEFT JOIN type_names tn ON tn.type_id = lf.ship_type_id
 LEFT JOIN sde_types st ON st.type_id = lf.ship_type_id
@@ -257,8 +161,30 @@ type ListPublicFitsRow struct {
 	ShipName    string    `json:"ship_name"`
 	Hull        string    `json:"hull"`
 	AuthorName  string    `json:"author_name"`
+	TotalCount  int64     `json:"total_count"`
 }
 
+// ---------------------------------------------------------------------
+// Public discovery: the anonymous fit browser, ratings and sitemap
+// reads. Every browser filter is a SQL predicate and every page is
+// LIMIT/OFFSET bounded; Go never filters full tables. Every sort
+// spans every public fit; the default is newest first. Age is a
+// filter the visitor picks (sincedays, 0 for any time), never a
+// side effect of the sort. The rank sort is Bayesian (fit average
+// shrunk toward the global mean with weight 5, via public_fit_rank
+// in migrations 033 and 041), so one 5-star vote cannot top the
+// chart. Callers pass the global mean as (SELECT public_fit_mean()),
+// which Postgres computes once per query. Meta groups resolve
+// through dogma attribute 1692 (4 faction, 5 officer, 6 deadspace,
+// 2 tech II), the same source the fitting engine reads. The faction
+// filter is Any or No faction modules; a max price excludes only
+// fits with a known price above the cap (0 means unknown). Tags
+// match whole, whatever their case. Search matches the author a fit
+// shows (the account's first character) and no other character of
+// the account: a visitor must not learn which characters share one.
+// The filtered total rides the list query as COUNT(*) OVER(), so the
+// browser pays one round-trip and the filter text lives in one place.
+// ---------------------------------------------------------------------
 func (q *Queries) ListPublicFits(ctx context.Context, arg ListPublicFitsParams) ([]ListPublicFitsRow, error) {
 	rows, err := q.db.QueryContext(ctx, listPublicFits,
 		arg.Sincedays,
@@ -298,6 +224,7 @@ func (q *Queries) ListPublicFits(ctx context.Context, arg ListPublicFitsParams) 
 			&i.ShipName,
 			&i.Hull,
 			&i.AuthorName,
+			&i.TotalCount,
 		); err != nil {
 			return nil, err
 		}
@@ -317,7 +244,8 @@ SELECT lf.id, lf.user_id, lf.name, lf.ship_type_id, lf.items_json, lf.updated_at
        lf.view_count, lf.total_price, lf.rating_count, lf.rating_sum,
        COALESCE(NULLIF(st.name, ''), tn.name, '')::text AS ship_name,
        COALESCE(sg.name, '')::text AS hull,
-       COALESCE((SELECT c.name FROM characters c WHERE c.user_id = lf.user_id ORDER BY c.character_id LIMIT 1), '')::text AS author_name
+       COALESCE((SELECT c.name FROM characters c WHERE c.user_id = lf.user_id ORDER BY c.character_id LIMIT 1), '')::text AS author_name,
+       COUNT(*) OVER() AS total_count
 FROM local_fittings lf
 LEFT JOIN type_names tn ON tn.type_id = lf.ship_type_id
 LEFT JOIN sde_types st ON st.type_id = lf.ship_type_id
@@ -347,6 +275,7 @@ type ListPublicFitsForShipRow struct {
 	ShipName    string    `json:"ship_name"`
 	Hull        string    `json:"hull"`
 	AuthorName  string    `json:"author_name"`
+	TotalCount  int64     `json:"total_count"`
 }
 
 func (q *Queries) ListPublicFitsForShip(ctx context.Context, arg ListPublicFitsForShipParams) ([]ListPublicFitsForShipRow, error) {
@@ -372,6 +301,7 @@ func (q *Queries) ListPublicFitsForShip(ctx context.Context, arg ListPublicFitsF
 			&i.ShipName,
 			&i.Hull,
 			&i.AuthorName,
+			&i.TotalCount,
 		); err != nil {
 			return nil, err
 		}

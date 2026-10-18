@@ -346,6 +346,15 @@ func TestPublicFitsBrowser(t *testing.T) {
 	if got := strings.Count(body, "<article"); got < 1 {
 		t.Errorf("page 2 holds %d cards, want the rest", got)
 	}
+	// A page past the end clamps to the last page with the total
+	// intact: the total folded into the list query must reproduce
+	// the old count-first flow even when the requested page itself
+	// returns no rows to read it from.
+	_, body = get("/fittings/public/?sort=new&page=99")
+	if got := strings.Count(body, "<article"); got != 6 {
+		t.Errorf("overshoot page holds %d cards, want the last page's 6", got)
+	}
+	apptest.MustContain(t, "page=99", body, "of 30 fits", "page 2 of 2")
 	if transport.Calls.Load() != 0 {
 		t.Errorf("browser made %d outbound calls", transport.Calls.Load())
 	}

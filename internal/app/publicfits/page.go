@@ -26,8 +26,8 @@ import (
 // ---------------------------------------------------------------------------
 
 const (
-	// publicFitsPerPage bounds every browser page; the count
-	// query beside the list query feeds the page links.
+	// publicFitsPerPage bounds every browser page; the total
+	// riding the list query feeds the page links.
 	publicFitsPerPage = 24
 	// publicFitDefaultSort: every public fit, newest first.
 	publicFitDefaultSort = "new"
@@ -166,8 +166,8 @@ func (app *page) resolveFitModuleType(ctx context.Context, name string) (int64, 
 	return row.TypeID, true
 }
 
-// publicFitListParams renders the filters into the list and count
-// queries' shared shape.
+// listParams renders the filters into the list query's shape; the
+// filtered total rides every returned row (COUNT(*) OVER()).
 func (f publicFitFilters) listParams(limit int64) db.ListPublicFitsParams {
 	return db.ListPublicFitsParams{
 		Sort: f.Sort, Q: f.Q, Role: f.Role, Hull: f.Hull, Hullq: f.HullQ,
@@ -175,15 +175,6 @@ func (f publicFitFilters) listParams(limit int64) db.ListPublicFitsParams {
 		Faction: f.Faction, Maxprice: f.MaxPrice, Alpha: f.Alpha, Tag: f.Tag,
 		Sincedays: int32(f.SinceDays),
 		Rlimit:    limit, Roffset: int64(f.Page-1) * limit,
-	}
-}
-
-func (f publicFitFilters) countParams() db.CountPublicFitsParams {
-	return db.CountPublicFitsParams{
-		Sincedays: int32(f.SinceDays),
-		Q:         f.Q, Role: f.Role, Hull: f.Hull, Hullq: f.HullQ,
-		Minstars: f.MinStars, Include: f.Include, Exclude: f.Exclude,
-		Faction: f.Faction, Maxprice: f.MaxPrice, Alpha: f.Alpha, Tag: f.Tag,
 	}
 }
 
@@ -333,21 +324,11 @@ func (app *page) handlePublicFits(w http.ResponseWriter, r *http.Request) {
 	userID := app.deps.UserID(ctx)
 	filters := app.parsePublicFitFilters(ctx, r.URL.Query())
 
-	total, err := app.queries.CountPublicFits(ctx, filters.countParams())
-	if err != nil {
-		logging.Errorf("public fits: count: %v", err)
-		data.Error = "Could not load public fits; check the server log."
-		app.deps.Render(ctx, w, http.StatusOK, "fittings_public.html", data)
-		return
-	}
-	pages := int((total + publicFitsPerPage - 1) / publicFitsPerPage)
-	if pages < 1 {
-		pages = 1
-	}
-	if filters.Page > pages {
-		filters.Page = pages
-	}
-	page := filters.Page
+	// One query serves the page: the filtered total rides every row
+	// (COUNT(*) OVER()). A page past the end returns no rows to read
+	// the total from, so probe the first page once, then clamp and
+	// list the clamped page — the same page the old count-first flow
+	// rendered for an out-of-range request.
 	rows, err := app.queries.ListPublicFits(ctx, filters.listParams(publicFitsPerPage))
 	if err != nil {
 		logging.Errorf("public fits: list: %v", err)
@@ -355,6 +336,43 @@ func (app *page) handlePublicFits(w http.ResponseWriter, r *http.Request) {
 		app.deps.Render(ctx, w, http.StatusOK, "fittings_public.html", data)
 		return
 	}
+	var total int64
+	var firstPage []db.ListPublicFitsRow
+	if len(rows) > 0 {
+		total = rows[0].TotalCount
+	} else if filters.Page > 1 {
+		probe := filters
+		probe.Page = 1
+		firstPage, err = app.queries.ListPublicFits(ctx, probe.listParams(publicFitsPerPage))
+		if err != nil {
+			logging.Errorf("public fits: list: %v", err)
+			data.Error = "Could not load public fits; check the server log."
+			app.deps.Render(ctx, w, http.StatusOK, "fittings_public.html", data)
+			return
+		}
+		if len(firstPage) > 0 {
+			total = firstPage[0].TotalCount
+		}
+	}
+	pages := int((total + publicFitsPerPage - 1) / publicFitsPerPage)
+	if pages < 1 {
+		pages = 1
+	}
+	if filters.Page > pages {
+		filters.Page = pages
+		if filters.Page == 1 && firstPage != nil {
+			rows = firstPage
+		} else {
+			rows, err = app.queries.ListPublicFits(ctx, filters.listParams(publicFitsPerPage))
+			if err != nil {
+				logging.Errorf("public fits: list: %v", err)
+				data.Error = "Could not load public fits; check the server log."
+				app.deps.Render(ctx, w, http.StatusOK, "fittings_public.html", data)
+				return
+			}
+		}
+	}
+	page := filters.Page
 	cards := make([]module.PublicFitCard, 0, len(rows))
 	for _, row := range rows {
 		cards = append(cards, module.PublicFitCardOf(row, userID))

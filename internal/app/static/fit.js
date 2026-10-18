@@ -826,6 +826,20 @@ var FitGauges = (function () {
     });
   }
 
+  // The type icon a suggestion or picker row leads with. Shared
+  // by the suggester and the module picker — the picker called
+  // it while it was still scoped inside makeSuggester, which
+  // threw on every non-empty picker result set.
+  function suggestIcon(id) {
+    var img = document.createElement("img");
+    img.className = "sug-icon";
+    img.alt = "";
+    img.loading = "lazy";
+    img.draggable = false;
+    img.src = "https://images.evetech.net/types/" + id + "/icon?size=32";
+    return img;
+  }
+
   // One suggestion engine drives both inputs. cfg: family() returns
   // the endpoint family; kinds limits the groups shown (null =
   // whatever the endpoint returned); dropShips strips ship rows
@@ -838,15 +852,6 @@ var FitGauges = (function () {
       if (list) list.hidden = true;
       if (input) input.setAttribute("aria-expanded", "false");
       active = -1;
-    }
-    function icon(id) {
-      var img = document.createElement("img");
-      img.className = "sug-icon";
-      img.alt = "";
-      img.loading = "lazy";
-      img.draggable = false;
-      img.src = "https://images.evetech.net/types/" + id + "/icon?size=32";
-      return img;
     }
     function query(force) {
       if (!input || !list) return;
@@ -889,7 +894,7 @@ var FitGauges = (function () {
         items.forEach(function (it) {
           var li = document.createElement("li");
           li.setAttribute("role", "option");
-          li.appendChild(icon(it.id));
+          li.appendChild(suggestIcon(it.id));
           var name = document.createElement("span");
           name.textContent = it.name;
           li.appendChild(name);

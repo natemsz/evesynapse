@@ -8,6 +8,7 @@ package app
 // expansion panel fragment.
 
 import (
+	"io/fs"
 	"strings"
 	"testing"
 )
@@ -162,14 +163,80 @@ func TestContractSearchStructure(t *testing.T) {
 			t.Errorf("field %q missing after restructure", name)
 		}
 	}
+	// The page title is the styled h1 every other page
+	// renders, not bare text in the page head.
+	mustContain(t, "styled page title", body,
+		`<h1><span class="gt">Public contracts</span></h1>`)
+	// The quick hunts sit in the intro row, each chip
+	// carrying its glyph (the flame shown here).
+	mustContain(t, "intro hunts", body,
+		`<div class="cs-intro">`,
+		`<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2c1 4-3 5-3 8`)
 	// The open spec tab carries its icon, and the result
 	// rows render inside the results section.
 	if !strings.Contains(body, `data-drawer-tab="couriers" aria-expanded="true"><svg`) {
 		t.Error("the open courier tab should carry its icon")
 	}
+	// Result-row content lines carry the item's icon from
+	// the EVE image server, the same per-type icon URL the
+	// fitting pages use (the courier row's lines are its
+	// route, so check an unfiltered render for an exchange
+	// row: Tritanium is type 34).
+	_, plain := getAnon(t, app, "/contracts/search/")
+	mustContain(t, "row item icons", plain,
+		`<img class="cs-line-icon" src="https://images.evetech.net/types/34/icon?size=32"`)
 	i, j := strings.Index(body, `class="box cs-results"`), strings.Index(body, `class="cs-rows"`)
 	if i < 0 || j < 0 || i > j {
 		t.Error("result rows should render inside the results section")
+	}
+}
+
+// TestContractSearchSwapRewiring pins the contracts.js
+// swap contract: an in-page swap replaces the results DOM
+// without re-running the script, so the page wiring must
+// re-run on the shell's content-ready event (guarded by the
+// form's identity, like pi.js) — without it, row expansion
+// and every other wired behavior are dead after any
+// same-page navigation such as a quick-hunt click.
+func TestContractSearchSwapRewiring(t *testing.T) {
+	raw, err := fs.ReadFile(staticFS, "static/contracts.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	js := string(raw)
+	for _, want := range []string{
+		`document.addEventListener("evesynapse:content-ready", init)`,
+		"form === wiredForm",
+	} {
+		if !strings.Contains(js, want) {
+			t.Errorf("contracts.js missing swap re-wiring pin %q", want)
+		}
+	}
+}
+
+// TestContractSearchDrawerGrid pins the spec drawers'
+// deterministic grid in contracts.css: fixed tracks and
+// per-field spans, never the auto-fit rule whose column
+// widths depended on field count — and the deals box's
+// resting green identity.
+func TestContractSearchDrawerGrid(t *testing.T) {
+	raw, err := fs.ReadFile(staticFS, "static/contracts.css")
+	if err != nil {
+		t.Fatal(err)
+	}
+	css := string(raw)
+	for _, want := range []string{
+		"grid-template-columns: repeat(6, minmax(0, 1fr))",
+		".cs-drawer-grid > .cs-field { grid-column: span 2; }",
+		"grid-column: span 4; }",
+		"border-color: color-mix(in srgb, var(--deal) 55%, transparent);",
+	} {
+		if !strings.Contains(css, want) {
+			t.Errorf("contracts.css: missing %q", want)
+		}
+	}
+	if strings.Contains(css, "repeat(auto-fit, minmax(14.5rem, 1fr))") {
+		t.Error("contracts.css: the drawer grid is back on auto-fit tracks")
 	}
 }
 
@@ -185,7 +252,8 @@ func TestContractPanelFragment(t *testing.T) {
 	mustContain(t, "panel 7001", body,
 		"Line appraisal", "Tritanium", "Our Forge typical",
 		"ID: 7001", "Issued by Issuer One (Pilot)",
-		"Copy contract link", "contract:10000002//7001")
+		"Copy contract link", "contract:10000002//7001",
+		`<img class="cs-pline-icon" src="https://images.evetech.net/types/34/icon?size=32"`)
 	if strings.Contains(body, "<html") || strings.Contains(body, "pagetitle") {
 		t.Error("the panel must be a bare fragment, not a full page")
 	}

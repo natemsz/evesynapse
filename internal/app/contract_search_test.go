@@ -234,6 +234,25 @@ func TestContractDetailPages(t *testing.T) {
 	if code, _ := getAnon(t, app, "/contracts/search/999999/"); code != 404 {
 		t.Errorf("unknown contract: status %d, want 404", code)
 	}
+
+	// Over-asking phrasing: past 100% of value the notes name
+	// the excess instead of a share over the whole — the
+	// search row note and the detail note alike. (The 85%
+	// "of value" wording is pinned above.)
+	if _, err := conn.ExecContext(context.Background(),
+		`UPDATE pub_contracts SET deal_ratio=1.54 WHERE contract_id=7001`); err != nil {
+		t.Fatalf("re-ratio 7001: %v", err)
+	}
+	_, body = getAnon(t, app, "/contracts/search/")
+	mustContain(t, "search above value", body, "asking 54% above value")
+	if strings.Contains(body, "asking 154% of value") {
+		t.Error("row note still frames over-asking as a share of value")
+	}
+	_, body = getAnon(t, app, "/contracts/search/7001/")
+	mustContain(t, "detail above value", body, "Asking 54% above our appraised value")
+	if strings.Contains(body, "Asking 154% of our appraised value") {
+		t.Error("detail note still frames over-asking as a share of value")
+	}
 }
 
 // TestOpenContractInGame covers the View in game handler:

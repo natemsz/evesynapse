@@ -7,18 +7,24 @@
    contract-search-specific: the zone layout, the aligned
    field grids, and the deals-green state. */
 
-:root { --deal: #28c76f; }
+:root { --deal: #28c76f; --icon-ember: #ff8c3a; --icon-abyss: #2dd4bf; }
 
 .cs-form input[type="checkbox"],
 .cs-form input[type="range"] { accent-color: var(--accent); }
 
-/* ---- quick hunts ---- */
-/* The hunt links are the shared .chip in everything but
-   name: same chip paint, same Rajdhani capitals the site
-   gives its controls. */
-.cs-hunts { display: flex; flex-wrap: wrap; align-items: center; gap: 0.45rem; margin: 0.6rem 0 1rem; }
+/* ---- intro + quick hunts ---- */
+/* The intro is one flex row: the subtitle on the left,
+   the quick hunts right-aligned beside it, wrapping under
+   the subtitle only when the width forces it. The hunt
+   links are the shared .chip in everything but name: same
+   chip paint, same Rajdhani capitals the site gives its
+   controls, each with its small glyph. */
+.cs-intro { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: 0.6rem 1.5rem; margin-bottom: 1rem; }
+.cs-intro > p { margin: 0; max-width: 32rem; }
+.cs-hunts { display: flex; flex-wrap: wrap; align-items: center; gap: 0.45rem; flex: none; padding-top: 0.1rem; }
 .cs-hunts-label { color: var(--gold); font-weight: 600; }
 .cs-hunt {
+  display: inline-flex; align-items: center; gap: 0.4rem;
   border: 1px solid var(--box-edge); border-radius: 999px;
   padding: 0.15rem 0.7rem; color: var(--text); text-decoration: none;
   background: var(--row-alt);
@@ -26,6 +32,23 @@
   text-transform: uppercase; letter-spacing: 0.07em; font-size: 0.8rem;
 }
 .cs-hunt:hover { border-color: var(--accent); color: var(--text-bright); }
+.cs-hunt svg { width: 0.85rem; height: 0.85rem; flex: none; }
+/* Icon palette: each family glyph carries its own hue
+   across the hunt chips, the spec tabs and the drawer
+   sub-heads — ember for the Jita flame, teal for the
+   abyssal swirl, gold for blueprint layers, deal-green
+   for the courier truck. Recoloring a family is a
+   one-line edit here (or at the two tokens above). */
+.cs-hunt.hunt-flame svg { color: var(--icon-ember); }
+.cs-hunt.hunt-abyss svg,
+.cs-tab[data-drawer-tab="abyssal"] svg,
+.cs-drawer[data-drawer-panel="abyssal"] .cs-drawer-head svg { color: var(--icon-abyss); }
+.cs-hunt.hunt-bp svg,
+.cs-tab[data-drawer-tab="blueprints"] svg,
+.cs-drawer[data-drawer-panel="blueprints"] .cs-drawer-head svg { color: var(--gold); }
+.cs-hunt.hunt-courier svg,
+.cs-tab[data-drawer-tab="couriers"] svg,
+.cs-drawer[data-drawer-panel="couriers"] .cs-drawer-head svg { color: var(--deal); }
 
 /* ---- tier 1: the control band ---- */
 .cs-tier1 { display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: stretch; margin-bottom: 0.7rem; }
@@ -45,19 +68,24 @@
 .cs-pill:has(> input:checked) { background: var(--accent); color: #16100b; }
 .cs-pill:has(> input:focus-visible) { outline: 2px solid var(--accent); outline-offset: -2px; }
 /* Deals only: its own .box at the band's right, color-coded
-   in the deal green — the edge, a soft glow and the switch
-   all light when it is on, so the filter reads at a glance. */
+   in the deal green at rest — green edge, green label, a
+   green-tinted switch — so it reads as a deal filter before
+   it is touched. Switching it on is the step up: the edge
+   goes full strength, the soft glow arrives and the switch
+   fills green. */
 .cs-deals {
   position: relative; display: inline-flex; align-items: center; gap: 0.5rem;
   cursor: pointer; font-weight: 600;
   font-family: "Rajdhani", "Segoe UI", sans-serif;
   text-transform: uppercase; letter-spacing: 0.06em; font-size: 0.8rem;
+  border-color: color-mix(in srgb, var(--deal) 55%, transparent);
+  color: var(--deal);
   transition: border-color 0.15s ease, box-shadow 0.15s ease, color 0.15s ease;
 }
 .cs-deals input { position: absolute; opacity: 0; pointer-events: none; }
 .cs-switch {
   width: 2rem; height: 1.1rem; border-radius: 999px; flex: none;
-  background: color-mix(in srgb, var(--muted) 35%, transparent);
+  background: color-mix(in srgb, var(--deal) 35%, transparent);
   position: relative; transition: background 0.15s ease;
 }
 .cs-switch::after {
@@ -156,7 +184,7 @@
   font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; font-size: 0.85rem;
   display: inline-flex; align-items: center; gap: 0.45rem;
 }
-.cs-tab svg { width: 0.95rem; height: 0.95rem; flex: none; color: var(--accent); }
+.cs-tab svg { width: 0.95rem; height: 0.95rem; flex: none; }
 .cs-tab:hover { color: var(--text-bright); border-color: var(--accent); }
 .cs-tab .cs-chev::after { content: "▾"; color: var(--muted); }
 /* Active follows the site's tab conventions: the .ti-tabs
@@ -179,17 +207,27 @@
 .cs-drawer-head h4 {
   margin: 0; font-size: 0.82rem; letter-spacing: 0.08em;
   text-transform: uppercase; color: var(--gold);
+  display: inline-flex; align-items: center; gap: 0.5rem;
 }
+.cs-drawer-head h4 svg { width: 1.15rem; height: 1.15rem; flex: none; }
 .cs-drawer-sub { margin: 0.3rem 0 0; color: var(--muted); font-size: 0.9rem; }
 .cs-reset {
   background: none; border: 0; padding: 0; cursor: pointer; font: inherit;
   color: var(--muted); text-decoration: underline; white-space: nowrap; font-size: 0.88rem;
 }
 .cs-reset:hover { color: var(--neg); }
+/* Fixed six-column tracks, never auto-fit: every field
+   spans two columns, the two wide text fields (Deliver to,
+   Source module contains) span four, so all three drawers
+   tile on the same column edges and a partial last row
+   keeps the standard cell width instead of stretching. */
 .cs-drawer-grid {
-  display: grid; grid-template-columns: repeat(auto-fit, minmax(14.5rem, 1fr));
+  display: grid; grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 0.6rem 0.9rem; margin-top: 0.65rem;
 }
+.cs-drawer-grid > .cs-field { grid-column: span 2; }
+[data-drawer-panel="abyssal"] .cs-drawer-grid > :nth-child(2),
+[data-drawer-panel="couriers"] .cs-drawer-grid > :nth-child(1) { grid-column: span 4; }
 .cs-drawer-grid input, .cs-drawer-grid select { width: 100%; }
 .cs-field > .cs-slider-pair { margin-top: auto; }
 .cs-slider-pair { display: flex; align-items: center; gap: 0.6rem; }
@@ -257,6 +295,11 @@
 .cs-chipinfo.bp { color: var(--gold); border-color: color-mix(in srgb, var(--gold) 55%, transparent); }
 .cs-chipinfo.ab { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 55%, transparent); font-weight: 600; }
 .cs-chipinfo.co { color: #8fb8d8; border-color: color-mix(in srgb, #8fb8d8 45%, transparent); }
+/* Item icons beside content names, the EVE image server's
+   per-type icon at the size the fitting pages use. */
+.cs-line { display: flex; align-items: center; gap: 0.45rem; }
+.cs-line-item { display: inline-flex; align-items: center; gap: 0.35rem; }
+.cs-line-icon, .cs-pline-icon { border-radius: var(--r-xs); flex: none; }
 .cs-row-ab { margin-top: 0.45rem; display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.92rem; }
 .cs-bar { display: flex; align-items: center; gap: 0.55rem; }
 .cs-bar-name { flex: 0 0 11rem; color: var(--muted); font-size: 0.86rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -302,7 +345,7 @@
   padding: 0.4rem 0; border-bottom: 1px solid color-mix(in srgb, var(--glass-edge) 55%, transparent);
 }
 .cs-pline:last-child { border-bottom: 0; }
-.cs-pline-main { min-width: 0; display: flex; flex-wrap: wrap; gap: 0.3rem 0.5rem; align-items: baseline; }
+.cs-pline-main { min-width: 0; display: flex; flex-wrap: wrap; gap: 0.3rem 0.5rem; align-items: center; }
 .cs-side {
   font-size: 0.74rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase;
   color: var(--accent); border: 1px solid color-mix(in srgb, var(--accent) 50%, transparent);
@@ -361,6 +404,10 @@
 /* ---- narrow screens ---- */
 @media (max-width: 72rem) {
   .cs-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .cs-drawer-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .cs-drawer-grid > .cs-field { grid-column: span 1; }
+  [data-drawer-panel="abyssal"] .cs-drawer-grid > :nth-child(2),
+  [data-drawer-panel="couriers"] .cs-drawer-grid > :nth-child(1) { grid-column: span 2; }
   .cs-row-main { grid-template-columns: minmax(0, 1fr) 10.5rem 12rem; }
   .cs-loc { grid-column: 1 / -1; }
   .cs-row { position: relative; }
@@ -376,7 +423,11 @@
   .cs-types { width: 100%; }
   .cs-types > * { flex: 1; justify-content: center; }
   .cs-deals { width: 100%; justify-content: space-between; }
+  .cs-intro { flex-direction: column; }
   .cs-drawer-grid { grid-template-columns: minmax(0, 1fr); }
+  .cs-drawer-grid > .cs-field,
+  [data-drawer-panel="abyssal"] .cs-drawer-grid > :nth-child(2),
+  [data-drawer-panel="couriers"] .cs-drawer-grid > :nth-child(1) { grid-column: span 1; }
   .cs-row-main { grid-template-columns: minmax(0, 1fr) 1fr; }
   .cs-region-pop { position: static; width: auto; grid-template-columns: 1fr; margin-top: 0.4rem; }
   .cs-actions { margin-left: 0; }

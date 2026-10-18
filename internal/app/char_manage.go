@@ -236,7 +236,12 @@ func (app *Application) handleCharacterSwitch(w http.ResponseWriter, r *http.Req
 	}
 	target := "/"
 	if ref := r.Header.Get("Referer"); ref != "" {
-		if u, err := url.Parse(ref); err == nil && u.Path != "" && !strings.HasPrefix(u.Path, "//") {
+		if u, err := url.Parse(ref); err == nil &&
+			(u.Host == "" || u.Host == r.Host) &&
+			strings.HasPrefix(u.Path, "/") &&
+			!strings.HasPrefix(u.Path, "//") &&
+			!strings.ContainsAny(u.Path, "\\\r\n") &&
+			!strings.ContainsAny(u.RawQuery, "\r\n") {
 			target = u.Path
 			if u.RawQuery != "" {
 				target += "?" + u.RawQuery

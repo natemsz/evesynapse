@@ -320,6 +320,7 @@ func (app *Application) handleEVELogin(w http.ResponseWriter, r *http.Request) {
 		}
 		cfg.Scopes = scopes
 	}
+	app.sessions.PopString(r.Context(), sessionIdentityLogin)
 	app.sessions.Put(r.Context(), sessionOAuthState, state)
 	http.Redirect(w, r, cfg.AuthCodeURL(state), http.StatusFound)
 }
@@ -716,9 +717,8 @@ func publicKeyFromJWK(nB64, eB64 string) (*rsa.PublicKey, error) {
 // makes the four checks the ESI docs require of an EVE JWT:
 // signature (RS256, pinned kid), issuer, expiry, and audience. It
 // returns the character ID, the character name from the `name` claim,
-// the granted scopes (from the `scp` claim, falling back to the
-// requested scopes), and the character owner hash from the `owner`
-// claim (empty when CCP didn't send one).
+// the granted scopes (from the `scp` claim), and the character owner
+// hash from the `owner` claim (empty when CCP didn't send one).
 func (app *Application) verifyAccessToken(ctx context.Context, accessToken string) (characterID int64, characterName, scopes, ownerHash string, err error) {
 	claims := jwt.MapClaims{}
 	_, err = jwt.ParseWithClaims(accessToken, claims, func(t *jwt.Token) (any, error) {
@@ -780,17 +780,19 @@ func (app *Application) verifyAccessToken(ctx context.Context, accessToken strin
 	// the character; it changes when the character is transferred.
 	ownerHash, _ = claims["owner"].(string)
 
-	scopes = strings.Join(app.requestableScopes(), " ")
-	if scp, ok := claims["scp"].([]any); ok && len(scp) > 0 {
+	switch scp := claims["scp"].(type) {
+	case string:
+		scopes = strings.TrimSpace(scp)
+	case []string:
+		scopes = strings.Join(scp, " ")
+	case []any:
 		granted := make([]string, 0, len(scp))
 		for _, s := range scp {
-			if str, ok := s.(string); ok {
+			if str, ok := s.(string); ok && str != "" {
 				granted = append(granted, str)
 			}
 		}
-		if len(granted) > 0 {
-			scopes = strings.Join(granted, " ")
-		}
+		scopes = strings.Join(granted, " ")
 	}
 	return characterID, characterName, scopes, ownerHash, nil
 }

@@ -197,6 +197,7 @@ func (app *Application) handleAdminMarketAnon(w http.ResponseWriter, r *http.Req
 	if off {
 		logging.Warnf("admin: account %d turned anonymous market access OFF", by)
 		back("Anonymous market access is now off: the stored book is not served to anonymous visitors and their market views queue no wants, until you turn it back on here.")
+		return
 	}
 	logging.Warnf("admin: account %d turned anonymous market access ON", by)
 	back("Anonymous market access is now on: anonymous visitors get the stored sweep book and may queue market wants.")

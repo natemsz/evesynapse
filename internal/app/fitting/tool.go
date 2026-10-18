@@ -151,10 +151,13 @@ func (app *tool) handleFitPickerJSON(w http.ResponseWriter, r *http.Request) {
 	query := q.Get("q")
 	meta, _ := strconv.ParseInt(q.Get("meta"), 10, 64)
 	pilotID, _ := strconv.ParseInt(q.Get("pilot"), 10, 64)
-	// Without a session there is no owned pilot to check skills
-	// against, so the usable filter stays off: anonymous answers
-	// are SDE-only either way.
 	usableOnly := q.Get("usable") == "1" && pilotID > 0 && app.deps.UserID(ctx) > 0
+	if pilotID > 0 {
+		if _, owned := app.fitPilotLabel(ctx, app.deps.UserID(ctx), pilotID); !owned {
+			pilotID = 0
+			usableOnly = false
+		}
+	}
 
 	// pilotCanUse answers, for the rows given, whether the pilot can
 	// actually use each: every skill requirement (transitively) met by
@@ -742,13 +745,13 @@ func (app *tool) handleFitMineJSON(w http.ResponseWriter, r *http.Request) {
 	// ESI fittings for the active character
 	// These are the in-game fittings from the character's ESI snapshot.
 	if charID := app.deps.SessionCharacterID(ctx); charID != 0 {
-		if char, err := app.queries.GetCharacter(ctx, charID); err == nil {
+		if char, err := app.queries.GetCharacter(ctx, charID); err == nil && char.UserID == userID {
 			var fittings esi.Fittings
 			if err := app.deps.StoredSnapshot(ctx, char, esi.SnapFittings, &fittings); err == nil {
 				qLower := strings.ToLower(q)
 				for _, f := range fittings {
-					if strings.Contains(strings.ToLower(f.Name), qLower) {
-						shipName := app.deps.TypeNameOrID(ctx, f.ShipTypeID)
+					shipName := app.deps.TypeNameOrID(ctx, f.ShipTypeID)
+					if strings.Contains(strings.ToLower(f.Name), qLower) || strings.Contains(strings.ToLower(shipName), qLower) {
 						out = append(out, fitMineRow{
 							ID:   -f.FittingID, // negative ID marks ESI fit
 							Name: f.Name, ShipName: shipName,

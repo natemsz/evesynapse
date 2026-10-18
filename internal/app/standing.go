@@ -81,16 +81,10 @@ func (app *Application) corpAlliance(ctx context.Context, corpID int64) (allianc
 // manageableOwners lists the corporations and alliances whose servers
 // an account may manage, in the order of its characters.
 func (app *Application) manageableOwners(ctx context.Context, userID int64) []orgOwner {
-	rows, err := app.queries.ListCharacterCorporationsByUser(ctx, userID)
+	rows, err := app.queries.ListWorkingCharacterCorporationsByUser(ctx, userID)
 	if err != nil {
 		logging.Errorf("discord: characters of user %d: %v", userID, err)
 		return nil
-	}
-	working := map[int64]bool{}
-	if characters, cerr := app.queries.ListCharactersByUser(ctx, userID); cerr == nil {
-		for _, ch := range characters {
-			working[ch.CharacterID] = ch.LinkState == "ok"
-		}
 	}
 	seen := map[string]bool{}
 	var out []orgOwner
@@ -101,7 +95,7 @@ func (app *Application) manageableOwners(ctx context.Context, userID int64) []or
 		}
 	}
 	for _, row := range rows {
-		if !working[row.CharacterID] || row.CorporationID == 0 {
+		if row.CorporationID == 0 {
 			continue
 		}
 		var roles esi.CharacterRoles

@@ -48,6 +48,8 @@ import (
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/logging"
+
+	"github.com/lib/pq"
 )
 
 const (
@@ -241,18 +243,43 @@ func (app *Application) refreshFallbackPrices(ctx context.Context) bool {
 		}
 		return keys[i].TypeID < keys[j].TypeID
 	})
-	for _, key := range keys {
-		row := rows[key]
-		if err := qtx.InsertMarketStatsFallback(ctx, db.InsertMarketStatsFallbackParams{
-			RegionID: key.RegionID, TypeID: key.TypeID,
-			MedianSell: row.MedianSell, FivepctSell: row.FivePctSell,
-			MedianBuy: row.MedianBuy, FivepctBuy: row.FivePctBuy,
-			SellOrders: row.SellOrders, BuyOrders: row.BuyOrders,
-			SellVolume: row.SellVolume, BuyVolume: row.BuyVolume,
-			Source: fallbackSource, OrdersetID: fileOrderset,
-			SourceAsof: asof, FetchedAt: now,
-		}); err != nil {
-			logging.Errorf("worker: fallback prices: store %d/%d: %v", key.RegionID, key.TypeID, err)
+	for start := 0; start < len(keys); start += sweepBatchSize {
+		end := start + sweepBatchSize
+		if end > len(keys) {
+			end = len(keys)
+		}
+		chunk := keys[start:end]
+		n := len(chunk)
+		regIDs := make([]int64, n)
+		typeIDs := make([]int64, n)
+		medSells := make([]float64, n)
+		fiveSells := make([]float64, n)
+		medBuys := make([]float64, n)
+		fiveBuys := make([]float64, n)
+		sellOrds := make([]int64, n)
+		buyOrds := make([]int64, n)
+		sellVols := make([]float64, n)
+		buyVols := make([]float64, n)
+		for i, key := range chunk {
+			row := rows[key]
+			regIDs[i] = key.RegionID
+			typeIDs[i] = key.TypeID
+			medSells[i] = row.MedianSell
+			fiveSells[i] = row.FivePctSell
+			medBuys[i] = row.MedianBuy
+			fiveBuys[i] = row.FivePctBuy
+			sellOrds[i] = row.SellOrders
+			buyOrds[i] = row.BuyOrders
+			sellVols[i] = row.SellVolume
+			buyVols[i] = row.BuyVolume
+		}
+		if _, err := tx.ExecContext(ctx, `
+			INSERT INTO market_stats_fallback (region_id, type_id, median_sell, fivepct_sell, median_buy, fivepct_buy, sell_orders, buy_orders, sell_volume, buy_volume, source, orderset_id, source_asof, fetched_at)
+			SELECT unnest($1::bigint[]), unnest($2::bigint[]), unnest($3::float8[]), unnest($4::float8[]), unnest($5::float8[]), unnest($6::float8[]), unnest($7::bigint[]), unnest($8::bigint[]), unnest($9::float8[]), unnest($10::float8[]), $11, $12, $13, $14
+		`, pq.Array(regIDs), pq.Array(typeIDs), pq.Array(medSells), pq.Array(fiveSells),
+			pq.Array(medBuys), pq.Array(fiveBuys), pq.Array(sellOrds), pq.Array(buyOrds),
+			pq.Array(sellVols), pq.Array(buyVols), fallbackSource, fileOrderset, asof, now); err != nil {
+			logging.Errorf("worker: fallback prices: store batch: %v", err)
 			return false
 		}
 	}
@@ -343,12 +370,12 @@ func (app *Application) downloadFuzzworkAggregates(ctx context.Context) (map[fal
 			asof = t.UTC()
 		}
 	}
-	gz, err := gzip.NewReader(resp.Body)
+	gz, err := gzip.NewReader(io.LimitReader(resp.Body, 64<<20))
 	if err != nil {
 		return nil, 0, time.Time{}, fmt.Errorf("aggregate download: gzip: %w", err)
 	}
 	defer gz.Close()
-	rows, orderset, err := parseFuzzworkAggregates(gz)
+	rows, orderset, err := parseFuzzworkAggregates(io.LimitReader(gz, 256<<20))
 	if err != nil {
 		return nil, 0, time.Time{}, err
 	}

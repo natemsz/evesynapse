@@ -716,17 +716,19 @@ func (app *Application) searchTypes(ctx context.Context, query string, localOnly
 // when one exists.
 func (app *Application) marketPrices(ctx context.Context) (map[int64]esi.MarketPrice, error) {
 	app.pricesMu.Lock()
-	defer app.pricesMu.Unlock()
-
 	if len(app.prices) > 0 && time.Now().Before(app.pricesExpiry) {
-		return app.prices, nil
+		prices := app.prices
+		app.pricesMu.Unlock()
+		return prices, nil
 	}
+	stale := app.prices
+	app.pricesMu.Unlock()
 
 	body, header, err := app.esi.FetchRaw(ctx, "", "/markets/prices/")
 	if err != nil {
-		if len(app.prices) > 0 {
+		if len(stale) > 0 {
 			logging.Warnf("market: refresh prices failed (%v); serving stale cache", err)
-			return app.prices, nil
+			return stale, nil
 		}
 		return nil, err
 	}
@@ -745,8 +747,10 @@ func (app *Application) marketPrices(ctx context.Context) (map[int64]esi.MarketP
 			expiry = t
 		}
 	}
+	app.pricesMu.Lock()
 	app.prices = prices
 	app.pricesExpiry = expiry
+	app.pricesMu.Unlock()
 	return prices, nil
 }
 
@@ -1211,7 +1215,7 @@ func (app *Application) handleMarketWatch(w http.ResponseWriter, r *http.Request
 	userID := app.userID(ctx)
 	next := "/market/"
 	if err := r.ParseForm(); err == nil {
-		if n := r.Form.Get("next"); strings.HasPrefix(n, "/") && !strings.HasPrefix(n, "//") {
+		if n := r.Form.Get("next"); strings.HasPrefix(n, "/") && !strings.HasPrefix(n, "//") && !strings.ContainsAny(n, "\\\r\n") {
 			next = n
 		}
 		if userID > 0 {

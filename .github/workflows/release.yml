@@ -261,4 +261,5 @@ jobs:
             dist/latest-arm64.json.sig dist/latest-amd64.json.sig \
             $channel_flag \
             --title "EveSynapse $tag" \
-            --notes "Automated build of EveSynapse $tag. Update with: $how."
+            --notes "Automated build of EveSynapse $tag. Update with: $how." \
+            --generate-notes

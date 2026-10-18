@@ -132,8 +132,7 @@
 </div>
 
 <p>
-{{if $d.OnMarket}}<a href="/market/?type={{$d.ID}}">Orders &amp; price history</a>{{end}}
-{{if $d.BlueprintID}} · <a href="/planner/?product={{$d.ID}}">Plan manufacturing</a>{{end}}
+{{if $d.OnMarket}}<a href="/market/?type={{$d.ID}}">Orders &amp; price history</a> · {{end}}<a href="{{$d.ContractSearchURL}}">Find contracts for this item</a>{{if $d.BlueprintID}} · <a href="/planner/?product={{$d.ID}}">Plan manufacturing</a>{{end}}
 </p>
 
 {{if $d.Hubs}}

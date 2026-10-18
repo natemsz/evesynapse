@@ -74,41 +74,32 @@ WHERE (coalesce(cardinality($1::text[]), 0) = 0
           AND ($5::text = 'either'
                OR ($5::text = 'offered' AND i.is_included)
                OR ($5::text = 'wanted' AND NOT i.is_included))))
-  AND ($6::text = ''
+  AND ($6::bigint <= 0 OR EXISTS (
+        SELECT 1 FROM pub_contract_items i
+        WHERE i.contract_id = c.contract_id
+          AND i.type_id = $6::bigint
+          AND ($5::text = 'either'
+               OR ($5::text = 'offered' AND i.is_included)
+               OR ($5::text = 'wanted' AND NOT i.is_included))))
+  AND ($7::text = ''
        OR c.issuer_id IN (SELECT id FROM entity_names
                           WHERE kind = 'character'
-                            AND name ILIKE '%' || $6::text || '%')
+                            AND name ILIKE '%' || $7::text || '%')
        OR c.issuer_corporation_id IN (SELECT id FROM entity_names
                           WHERE kind = 'corporation'
-                            AND name ILIKE '%' || $6::text || '%'))
-  AND ($7::bigint = -1
-       OR c.for_corporation = ($7::bigint = 1))
-  AND ($8::double precision < 0
-       OR (CASE WHEN c.type = 'courier' THEN c.reward ELSE c.price END)
-            >= $8::double precision)
+                            AND name ILIKE '%' || $7::text || '%'))
+  AND ($8::bigint = -1
+       OR c.for_corporation = ($8::bigint = 1))
   AND ($9::double precision < 0
        OR (CASE WHEN c.type = 'courier' THEN c.reward ELSE c.price END)
-            <= $9::double precision)
+            >= $9::double precision)
   AND ($10::double precision < 0
-       OR c.buyout <= $10::double precision)
-  AND ($11::text = ''
-       OR c.start_location_id IN (
-            SELECT station_id FROM sde_stations
-            WHERE name ILIKE '%' || $11::text || '%'
-            UNION
-            SELECT structure_id FROM structure_names
-            WHERE state = 'resolved'
-              AND name ILIKE '%' || $11::text || '%'
-            UNION
-            SELECT station_id FROM sde_stations
-            WHERE system_id IN (SELECT system_id FROM sde_systems
-                                WHERE name ILIKE '%' || $11::text || '%')
-            UNION
-            SELECT structure_id FROM structure_context
-            WHERE system_id IN (SELECT system_id FROM sde_systems
-                                WHERE name ILIKE '%' || $11::text || '%')))
+       OR (CASE WHEN c.type = 'courier' THEN c.reward ELSE c.price END)
+            <= $10::double precision)
+  AND ($11::double precision < 0
+       OR c.buyout <= $11::double precision)
   AND ($12::text = ''
-       OR c.end_location_id IN (
+       OR c.start_location_id IN (
             SELECT station_id FROM sde_stations
             WHERE name ILIKE '%' || $12::text || '%'
             UNION
@@ -123,56 +114,72 @@ WHERE (coalesce(cardinality($1::text[]), 0) = 0
             SELECT structure_id FROM structure_context
             WHERE system_id IN (SELECT system_id FROM sde_systems
                                 WHERE name ILIKE '%' || $12::text || '%')))
-  AND ($13::double precision < 0
-       OR c.reward >= $13::double precision)
+  AND ($13::text = ''
+       OR c.end_location_id IN (
+            SELECT station_id FROM sde_stations
+            WHERE name ILIKE '%' || $13::text || '%'
+            UNION
+            SELECT structure_id FROM structure_names
+            WHERE state = 'resolved'
+              AND name ILIKE '%' || $13::text || '%'
+            UNION
+            SELECT station_id FROM sde_stations
+            WHERE system_id IN (SELECT system_id FROM sde_systems
+                                WHERE name ILIKE '%' || $13::text || '%')
+            UNION
+            SELECT structure_id FROM structure_context
+            WHERE system_id IN (SELECT system_id FROM sde_systems
+                                WHERE name ILIKE '%' || $13::text || '%')))
   AND ($14::double precision < 0
-       OR c.reward <= $14::double precision)
+       OR c.reward >= $14::double precision)
   AND ($15::double precision < 0
-       OR c.collateral <= $15::double precision)
+       OR c.reward <= $15::double precision)
   AND ($16::double precision < 0
-       OR c.volume >= $16::double precision)
+       OR c.collateral <= $16::double precision)
   AND ($17::double precision < 0
-       OR c.volume <= $17::double precision)
-  AND ($18::bigint < 0
-       OR c.days_to_complete <= $18::bigint)
-  AND (NOT $19::boolean OR c.type = 'courier')
-  AND (NOT $20::boolean OR EXISTS (
+       OR c.volume >= $17::double precision)
+  AND ($18::double precision < 0
+       OR c.volume <= $18::double precision)
+  AND ($19::bigint < 0
+       OR c.days_to_complete <= $19::bigint)
+  AND (NOT $20::boolean OR c.type = 'courier')
+  AND (NOT $21::boolean OR EXISTS (
         SELECT 1 FROM pub_contract_items i
         WHERE i.contract_id = c.contract_id AND i.is_included
           AND i.material_efficiency IS NOT NULL
-          AND ($21::text = 'any'
-               OR ($21::text = 'bpo' AND NOT i.is_blueprint_copy)
-               OR ($21::text = 'bpc' AND i.is_blueprint_copy))
-          AND ($22::bigint < 0
-               OR i.material_efficiency >= $22::bigint)
+          AND ($22::text = 'any'
+               OR ($22::text = 'bpo' AND NOT i.is_blueprint_copy)
+               OR ($22::text = 'bpc' AND i.is_blueprint_copy))
           AND ($23::bigint < 0
-               OR i.time_efficiency >= $23::bigint)
+               OR i.material_efficiency >= $23::bigint)
           AND ($24::bigint < 0
-               OR COALESCE(i.runs, 0) >= $24::bigint)))
-  AND ($25::timestamptz IS NULL
-       OR c.date_issued >= $25::timestamptz)
+               OR i.time_efficiency >= $24::bigint)
+          AND ($25::bigint < 0
+               OR COALESCE(i.runs, 0) >= $25::bigint)))
   AND ($26::timestamptz IS NULL
-       OR c.date_expired <= $26::timestamptz)
-  AND (NOT $27::boolean OR EXISTS (
+       OR c.date_issued >= $26::timestamptz)
+  AND ($27::timestamptz IS NULL
+       OR c.date_expired <= $27::timestamptz)
+  AND (NOT $28::boolean OR EXISTS (
         SELECT 1 FROM pub_contract_items i
         JOIN abyssal_items a ON a.item_id = i.item_id
         WHERE i.contract_id = c.contract_id AND i.is_included
-          AND ($28::text = ''
-               OR a.family = $28::text)
-          AND ($29::double precision < 0
-               OR a.score >= $29::double precision)
-          AND ($30::text = '' OR EXISTS (
+          AND ($29::text = ''
+               OR a.family = $29::text)
+          AND ($30::double precision < 0
+               OR a.score >= $30::double precision)
+          AND ($31::text = '' OR EXISTS (
                 SELECT 1 FROM sde_types st
                 WHERE st.type_id = a.source_type_id
-                  AND st.name ILIKE '%' || $30::text || '%'))
-          AND ($31::double precision < 0
-               OR a.est_value >= $31::double precision)
+                  AND st.name ILIKE '%' || $31::text || '%'))
           AND ($32::double precision < 0
-               OR a.est_value <= $32::double precision)
-          AND ($33::text = ''
-               OR COALESCE((a.percentiles ->> $33::text)::double precision, -1)
-                    >= $34::double precision)
-          AND ($35::double precision < 0
+               OR a.est_value >= $32::double precision)
+          AND ($33::double precision < 0
+               OR a.est_value <= $33::double precision)
+          AND ($34::text = ''
+               OR COALESCE((a.percentiles ->> $34::text)::double precision, -1)
+                    >= $35::double precision)
+          AND ($36::double precision < 0
                OR EXISTS (
                      SELECT 1 FROM abyssal_family_weights w
                      WHERE w.family = a.family AND NOT w.penalty_only
@@ -180,8 +187,8 @@ WHERE (coalesce(cardinality($1::text[]), 0) = 0
                              SELECT MAX(w2.weight) FROM abyssal_family_weights w2
                              WHERE w2.family = a.family AND NOT w2.penalty_only)
                        AND COALESCE((a.percentiles ->> CAST(w.attribute_id AS text))::double precision, -1)
-                             >= $35::double precision))))
-  AND (NOT $36::boolean
+                             >= $36::double precision))))
+  AND (NOT $37::boolean
        OR (c.deal_ratio IS NOT NULL AND c.deal_ratio <= 0.85))
 `
 
@@ -191,6 +198,7 @@ type CountPublicContractsSearchParams struct {
 	TitleQ         string    `json:"title_q"`
 	ItemQ          string    `json:"item_q"`
 	ItemDir        string    `json:"item_dir"`
+	ItemType       int64     `json:"item_type"`
 	IssuerQ        string    `json:"issuer_q"`
 	ForCorp        int64     `json:"for_corp"`
 	PriceMin       float64   `json:"price_min"`
@@ -231,6 +239,7 @@ func (q *Queries) CountPublicContractsSearch(ctx context.Context, arg CountPubli
 		arg.TitleQ,
 		arg.ItemQ,
 		arg.ItemDir,
+		arg.ItemType,
 		arg.IssuerQ,
 		arg.ForCorp,
 		arg.PriceMin,
@@ -1530,41 +1539,32 @@ WHERE (coalesce(cardinality($1::text[]), 0) = 0
           AND ($5::text = 'either'
                OR ($5::text = 'offered' AND i.is_included)
                OR ($5::text = 'wanted' AND NOT i.is_included))))
-  AND ($6::text = ''
+  AND ($6::bigint <= 0 OR EXISTS (
+        SELECT 1 FROM pub_contract_items i
+        WHERE i.contract_id = c.contract_id
+          AND i.type_id = $6::bigint
+          AND ($5::text = 'either'
+               OR ($5::text = 'offered' AND i.is_included)
+               OR ($5::text = 'wanted' AND NOT i.is_included))))
+  AND ($7::text = ''
        OR c.issuer_id IN (SELECT id FROM entity_names
                           WHERE kind = 'character'
-                            AND name ILIKE '%' || $6::text || '%')
+                            AND name ILIKE '%' || $7::text || '%')
        OR c.issuer_corporation_id IN (SELECT id FROM entity_names
                           WHERE kind = 'corporation'
-                            AND name ILIKE '%' || $6::text || '%'))
-  AND ($7::bigint = -1
-       OR c.for_corporation = ($7::bigint = 1))
-  AND ($8::double precision < 0
-       OR (CASE WHEN c.type = 'courier' THEN c.reward ELSE c.price END)
-            >= $8::double precision)
+                            AND name ILIKE '%' || $7::text || '%'))
+  AND ($8::bigint = -1
+       OR c.for_corporation = ($8::bigint = 1))
   AND ($9::double precision < 0
        OR (CASE WHEN c.type = 'courier' THEN c.reward ELSE c.price END)
-            <= $9::double precision)
+            >= $9::double precision)
   AND ($10::double precision < 0
-       OR c.buyout <= $10::double precision)
-  AND ($11::text = ''
-       OR c.start_location_id IN (
-            SELECT station_id FROM sde_stations
-            WHERE name ILIKE '%' || $11::text || '%'
-            UNION
-            SELECT structure_id FROM structure_names
-            WHERE state = 'resolved'
-              AND name ILIKE '%' || $11::text || '%'
-            UNION
-            SELECT station_id FROM sde_stations
-            WHERE system_id IN (SELECT system_id FROM sde_systems
-                                WHERE name ILIKE '%' || $11::text || '%')
-            UNION
-            SELECT structure_id FROM structure_context
-            WHERE system_id IN (SELECT system_id FROM sde_systems
-                                WHERE name ILIKE '%' || $11::text || '%')))
+       OR (CASE WHEN c.type = 'courier' THEN c.reward ELSE c.price END)
+            <= $10::double precision)
+  AND ($11::double precision < 0
+       OR c.buyout <= $11::double precision)
   AND ($12::text = ''
-       OR c.end_location_id IN (
+       OR c.start_location_id IN (
             SELECT station_id FROM sde_stations
             WHERE name ILIKE '%' || $12::text || '%'
             UNION
@@ -1579,56 +1579,72 @@ WHERE (coalesce(cardinality($1::text[]), 0) = 0
             SELECT structure_id FROM structure_context
             WHERE system_id IN (SELECT system_id FROM sde_systems
                                 WHERE name ILIKE '%' || $12::text || '%')))
-  AND ($13::double precision < 0
-       OR c.reward >= $13::double precision)
+  AND ($13::text = ''
+       OR c.end_location_id IN (
+            SELECT station_id FROM sde_stations
+            WHERE name ILIKE '%' || $13::text || '%'
+            UNION
+            SELECT structure_id FROM structure_names
+            WHERE state = 'resolved'
+              AND name ILIKE '%' || $13::text || '%'
+            UNION
+            SELECT station_id FROM sde_stations
+            WHERE system_id IN (SELECT system_id FROM sde_systems
+                                WHERE name ILIKE '%' || $13::text || '%')
+            UNION
+            SELECT structure_id FROM structure_context
+            WHERE system_id IN (SELECT system_id FROM sde_systems
+                                WHERE name ILIKE '%' || $13::text || '%')))
   AND ($14::double precision < 0
-       OR c.reward <= $14::double precision)
+       OR c.reward >= $14::double precision)
   AND ($15::double precision < 0
-       OR c.collateral <= $15::double precision)
+       OR c.reward <= $15::double precision)
   AND ($16::double precision < 0
-       OR c.volume >= $16::double precision)
+       OR c.collateral <= $16::double precision)
   AND ($17::double precision < 0
-       OR c.volume <= $17::double precision)
-  AND ($18::bigint < 0
-       OR c.days_to_complete <= $18::bigint)
-  AND (NOT $19::boolean OR c.type = 'courier')
-  AND (NOT $20::boolean OR EXISTS (
+       OR c.volume >= $17::double precision)
+  AND ($18::double precision < 0
+       OR c.volume <= $18::double precision)
+  AND ($19::bigint < 0
+       OR c.days_to_complete <= $19::bigint)
+  AND (NOT $20::boolean OR c.type = 'courier')
+  AND (NOT $21::boolean OR EXISTS (
         SELECT 1 FROM pub_contract_items i
         WHERE i.contract_id = c.contract_id AND i.is_included
           AND i.material_efficiency IS NOT NULL
-          AND ($21::text = 'any'
-               OR ($21::text = 'bpo' AND NOT i.is_blueprint_copy)
-               OR ($21::text = 'bpc' AND i.is_blueprint_copy))
-          AND ($22::bigint < 0
-               OR i.material_efficiency >= $22::bigint)
+          AND ($22::text = 'any'
+               OR ($22::text = 'bpo' AND NOT i.is_blueprint_copy)
+               OR ($22::text = 'bpc' AND i.is_blueprint_copy))
           AND ($23::bigint < 0
-               OR i.time_efficiency >= $23::bigint)
+               OR i.material_efficiency >= $23::bigint)
           AND ($24::bigint < 0
-               OR COALESCE(i.runs, 0) >= $24::bigint)))
-  AND ($25::timestamptz IS NULL
-       OR c.date_issued >= $25::timestamptz)
+               OR i.time_efficiency >= $24::bigint)
+          AND ($25::bigint < 0
+               OR COALESCE(i.runs, 0) >= $25::bigint)))
   AND ($26::timestamptz IS NULL
-       OR c.date_expired <= $26::timestamptz)
-  AND (NOT $27::boolean OR EXISTS (
+       OR c.date_issued >= $26::timestamptz)
+  AND ($27::timestamptz IS NULL
+       OR c.date_expired <= $27::timestamptz)
+  AND (NOT $28::boolean OR EXISTS (
         SELECT 1 FROM pub_contract_items i
         JOIN abyssal_items a ON a.item_id = i.item_id
         WHERE i.contract_id = c.contract_id AND i.is_included
-          AND ($28::text = ''
-               OR a.family = $28::text)
-          AND ($29::double precision < 0
-               OR a.score >= $29::double precision)
-          AND ($30::text = '' OR EXISTS (
+          AND ($29::text = ''
+               OR a.family = $29::text)
+          AND ($30::double precision < 0
+               OR a.score >= $30::double precision)
+          AND ($31::text = '' OR EXISTS (
                 SELECT 1 FROM sde_types st
                 WHERE st.type_id = a.source_type_id
-                  AND st.name ILIKE '%' || $30::text || '%'))
-          AND ($31::double precision < 0
-               OR a.est_value >= $31::double precision)
+                  AND st.name ILIKE '%' || $31::text || '%'))
           AND ($32::double precision < 0
-               OR a.est_value <= $32::double precision)
-          AND ($33::text = ''
-               OR COALESCE((a.percentiles ->> $33::text)::double precision, -1)
-                    >= $34::double precision)
-          AND ($35::double precision < 0
+               OR a.est_value >= $32::double precision)
+          AND ($33::double precision < 0
+               OR a.est_value <= $33::double precision)
+          AND ($34::text = ''
+               OR COALESCE((a.percentiles ->> $34::text)::double precision, -1)
+                    >= $35::double precision)
+          AND ($36::double precision < 0
                OR EXISTS (
                      SELECT 1 FROM abyssal_family_weights w
                      WHERE w.family = a.family AND NOT w.penalty_only
@@ -1636,30 +1652,30 @@ WHERE (coalesce(cardinality($1::text[]), 0) = 0
                              SELECT MAX(w2.weight) FROM abyssal_family_weights w2
                              WHERE w2.family = a.family AND NOT w2.penalty_only)
                        AND COALESCE((a.percentiles ->> CAST(w.attribute_id AS text))::double precision, -1)
-                             >= $35::double precision))))
-  AND (NOT $36::boolean
+                             >= $36::double precision))))
+  AND (NOT $37::boolean
        OR (c.deal_ratio IS NOT NULL AND c.deal_ratio <= 0.85))
 ORDER BY
-  CASE WHEN $37::text = 'price_asc' THEN
+  CASE WHEN $38::text = 'price_asc' THEN
        CASE WHEN c.type = 'courier' THEN c.reward ELSE c.price END END ASC NULLS LAST,
-  CASE WHEN $37::text = 'price_desc' THEN
+  CASE WHEN $38::text = 'price_desc' THEN
        CASE WHEN c.type = 'courier' THEN c.reward ELSE c.price END END DESC NULLS LAST,
-  CASE WHEN $37::text = 'margin_desc' THEN
+  CASE WHEN $38::text = 'margin_desc' THEN
        CASE WHEN c.type = 'courier' THEN c.offered_value - c.reward
             ELSE c.offered_value - c.price END
        END DESC NULLS LAST,
-  CASE WHEN $37::text = 'value_desc' THEN c.offered_value END DESC NULLS LAST,
-  CASE WHEN $37::text = 'deal_asc' THEN c.deal_ratio END ASC NULLS LAST,
-  CASE WHEN $37::text = 'expiry_asc' THEN c.date_expired END ASC NULLS LAST,
-  CASE WHEN $37::text = 'reward_desc' THEN c.reward END DESC NULLS LAST,
-  CASE WHEN $37::text = 'reward_m3_desc' THEN
+  CASE WHEN $38::text = 'value_desc' THEN c.offered_value END DESC NULLS LAST,
+  CASE WHEN $38::text = 'deal_asc' THEN c.deal_ratio END ASC NULLS LAST,
+  CASE WHEN $38::text = 'expiry_asc' THEN c.date_expired END ASC NULLS LAST,
+  CASE WHEN $38::text = 'reward_desc' THEN c.reward END DESC NULLS LAST,
+  CASE WHEN $38::text = 'reward_m3_desc' THEN
        CASE WHEN c.volume > 0 THEN c.reward / c.volume END END DESC NULLS LAST,
-  CASE WHEN $37::text = 'score_desc' THEN
+  CASE WHEN $38::text = 'score_desc' THEN
        (SELECT MAX(a.score) FROM pub_contract_items i
         JOIN abyssal_items a ON a.item_id = i.item_id
         WHERE i.contract_id = c.contract_id AND i.is_included) END DESC NULLS LAST,
   c.date_issued DESC, c.contract_id DESC
-LIMIT $39::bigint OFFSET $38::bigint
+LIMIT $40::bigint OFFSET $39::bigint
 `
 
 type SearchPublicContractsParams struct {
@@ -1668,6 +1684,7 @@ type SearchPublicContractsParams struct {
 	TitleQ         string    `json:"title_q"`
 	ItemQ          string    `json:"item_q"`
 	ItemDir        string    `json:"item_dir"`
+	ItemType       int64     `json:"item_type"`
 	IssuerQ        string    `json:"issuer_q"`
 	ForCorp        int64     `json:"for_corp"`
 	PriceMin       float64   `json:"price_min"`
@@ -1751,6 +1768,7 @@ func (q *Queries) SearchPublicContracts(ctx context.Context, arg SearchPublicCon
 		arg.TitleQ,
 		arg.ItemQ,
 		arg.ItemDir,
+		arg.ItemType,
 		arg.IssuerQ,
 		arg.ForCorp,
 		arg.PriceMin,

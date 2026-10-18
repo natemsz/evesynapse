@@ -2863,7 +2863,9 @@ FROM sde_types t
 LEFT JOIN sde_groups g ON g.group_id = t.group_id
 LEFT JOIN sde_categories c ON c.category_id = g.category_id
 WHERE strpos(lower(t.name), lower($1)) > 0
-  AND t.published = 1 AND t.market_group_id > 0
+  AND t.published = 1
+  AND (t.market_group_id > 0
+       OR (CAST($2 AS TEXT) = 'all' AND COALESCE(g.category_id, 0) = 9))
   AND (CAST($2 AS TEXT) != 'planner' OR EXISTS (
         SELECT 1 FROM sde_blueprints b WHERE b.product_type_id = t.type_id))
   AND (CAST($2 AS TEXT) != 'skills' OR EXISTS (
@@ -2885,6 +2887,13 @@ type SuggestSDETypesSharedRow struct {
 	CategoryName string `json:"category_name"`
 }
 
+// The suggestion floor: published types with a market group.
+// The broad 'all' pool (top banner, Items DB) also admits
+// published blueprint-category types (category 9: blueprints
+// and reaction formulas): they carry no market group because
+// they change hands through contracts alone, and the floor's
+// promise covers items obtainable through contracts too. The
+// narrower pools keep the market floor alone.
 func (q *Queries) SuggestSDETypesShared(ctx context.Context, arg SuggestSDETypesSharedParams) ([]SuggestSDETypesSharedRow, error) {
 	rows, err := q.db.QueryContext(ctx, suggestSDETypesShared, arg.Q, arg.Pool, arg.Lim)
 	if err != nil {

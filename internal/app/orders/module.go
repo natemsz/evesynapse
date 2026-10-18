@@ -31,7 +31,7 @@ var Module = module.Module{
 	Nav: []module.NavSection{{
 		Section: "market",
 		Entries: []module.NavEntry{
-			{Href: "/orders/", Label: "Orders", Pages: []string{"orders.html"}, After: "/market/restock/"},
+			{Href: "/orders/", Label: "My Orders", Pages: []string{"orders.html"}, After: "/market/restock/"},
 		},
 	}},
 	Routes: func(r chi.Router, deps module.Deps) {

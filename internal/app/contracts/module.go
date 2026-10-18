@@ -34,7 +34,7 @@ var Module = module.Module{
 	Nav: []module.NavSection{{
 		Section: "market",
 		Entries: []module.NavEntry{
-			{Href: "/contracts/", Label: "Contracts", Pages: []string{"contracts.html"}, After: "/orders/"},
+			{Href: "/contracts/", Label: "My Contracts", Pages: []string{"contracts.html"}, After: "/orders/"},
 			{Href: "/contracts/search/", Label: "Contract Search", Pages: []string{"contract_search.html", "contract_detail.html"}, After: "/contracts/"},
 		},
 	}},

@@ -409,3 +409,63 @@ func TestPIPlannerColoniesAndControls(t *testing.T) {
 		t.Error("piplanner.html lost the pi-colony scope class on the suggested colonies")
 	}
 }
+
+// TestSubtabBarSharesPanelGlass pins the subtab slab as one piece
+// of the panel's own glass: the same 1640px column margins as the
+// tab strip and .page-body, the shared --glass-blur (a hardcoded
+// blur of its own makes the slab a different material from the
+// panel it joins borderlessly), no backdrop filter on the pills
+// over the slab's already-blurred glass, and rail-mode end
+// padding that keeps the first and last pills clear of the fade.
+func TestSubtabBarSharesPanelGlass(t *testing.T) {
+	raw, err := fs.ReadFile(staticFS, "static/bg.css")
+	if err != nil {
+		t.Fatalf("read bg.css: %v", err)
+	}
+	bg := string(raw)
+	block := func(selector string, from int) (string, int) {
+		i := strings.Index(bg[from:], selector)
+		if i < 0 {
+			return "", from
+		}
+		start := from + i
+		end := strings.Index(bg[start:], "}")
+		if end < 0 {
+			return "", from
+		}
+		return bg[start : start+end+1], start + end + 1
+	}
+	slab, next := block("#main-content > .section-subtabs {", 0)
+	if slab == "" {
+		t.Fatal("bg.css lost the section-subtabs slab rule")
+	}
+	if !strings.Contains(slab, "margin: 0 max(1.25rem, calc((100% - 1640px) / 2));") {
+		t.Error("the subtab slab no longer shares the 1640px column margins with the tab strip and panel")
+	}
+	if !strings.Contains(slab, "backdrop-filter: blur(var(--glass-blur)) saturate(0.9);") {
+		t.Error("the subtab slab no longer blurs with the panel's shared --glass-blur")
+	}
+	if strings.Contains(slab, "blur(25px)") {
+		t.Error("the subtab slab hardcodes its own blur again; the join to the panel will seam")
+	}
+	rail, _ := block("#main-content > .section-subtabs {", next)
+	if rail == "" {
+		t.Fatal("bg.css lost the railed section-subtabs rule")
+	}
+	if !strings.Contains(rail, "padding: 0.55rem 1.5rem;") ||
+		!strings.Contains(rail, "scroll-padding-inline: 1.5rem;") {
+		t.Error("the railed subtab bar's end pills no longer rest clear of the mask fade")
+	}
+	// Every pill rule (base, light theme, rail) stays free of a
+	// backdrop filter: the slab behind them is already blurred.
+	for from := 0; ; {
+		var pill string
+		pill, from = block("#main-content > .section-subtabs a {", from)
+		if pill == "" {
+			break
+		}
+		if strings.Contains(pill, "backdrop-filter") {
+			t.Errorf("a subtab pill rule carries its own backdrop filter again: %q", pill)
+		}
+	}
+}

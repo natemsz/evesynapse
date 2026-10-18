@@ -262,18 +262,3 @@ jobs:
             $channel_flag \
             --title "EveSynapse $tag" \
             --notes "Automated build of EveSynapse $tag. Update with: $how."
-
-            changelog:
-                categories:
-                    - title: "%F0%9F%9A%80 Features"
-                  labels:
-                    - "feature"
-                    - "enhancement"
-                    - title: "%F0%9F%90%9B Bug Fixes"
-                  labels:
-                    - "fix"
-                    - "bug"
-                    - title: "%F0%9F%A7%B0 Maintenance & Dependencies"
-                  labels:
-                    - "chore"
-                    - "dependencies"

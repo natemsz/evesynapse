@@ -29,11 +29,24 @@ package app
 // tier "abyssal". A mutated line without a stored estimate
 // falls through the order on its mutated type -- no market
 // exists for it, so it lands unpriced, an honest gap.
+//
+// Blueprint copy lines stand outside the order entirely: a
+// copy is not its original, and every type-level figure for
+// a blueprint type -- the swept typical, the fallback
+// median -- is the ORIGINAL's price, because originals are
+// what the market trades. A copy prices only from the
+// stored copy medians (schema 061: the median ask of
+// single-copy contracts for its type and runs, distilled
+// from our own corpus by refreshBlueprintCopyMedians below),
+// tier "copy_median", or it is unpriced. An original
+// blueprint line is an ordinary line: its typical is the
+// right price class and the order applies unchanged.
 // ---------------------------------------------------------------------------
 
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -55,6 +68,12 @@ const appraisalRefreshAge = time.Hour
 // contract_id order instead of holding the worker.
 const appraisalBatchPerCycle = 400
 
+// copyMedianMinSample is the thinnest corpus slice a stored
+// copy median may stand on -- the abyssal corpus's bucket
+// minimum, kept here too: below it a median is an anecdote,
+// and the copy stays unpriced instead.
+const copyMedianMinSample = 5
+
 // dealFlagMaxRatio is the deal flag's line: an asking price at
 // or under this share of the appraised value flags the
 // contract as priced under our numbers.
@@ -68,6 +87,16 @@ type appraisalPrice struct {
 	tier string
 	asOf time.Time
 	ok   bool
+}
+
+// copyMedianKey keys the stored copy medians: a blueprint
+// type and a copy's remaining runs. The medians stratify by
+// runs alone -- the corpus's copy listings are overwhelmingly
+// one efficiency grade, so per-efficiency strata would stand
+// on samples too thin to name a price.
+type copyMedianKey struct {
+	typeID int64
+	runs   int64
 }
 
 // resolveAppraisalPrice applies the house order to one type's
@@ -163,13 +192,48 @@ func (app *Application) AppraiseLines(ctx context.Context, lines []module.Apprai
 		}
 	}
 
+	// Stored copy medians for the blueprint copy lines: a
+	// copy prices from its type-and-runs median or not at
+	// all, so the rows are read once for the copy lines'
+	// distinct types and keyed by (type, runs). A copy row
+	// can never carry runs 0, so a line with unknown runs
+	// simply keys no median and stays unpriced.
+	copyMedians := map[copyMedianKey]*db.BlueprintCopyMedian{}
+	{
+		copyTypes := make([]int64, 0, len(lines))
+		seenCopy := make(map[int64]bool, len(lines))
+		for _, ln := range lines {
+			if ln.BlueprintCopy && !seenCopy[ln.TypeID] {
+				seenCopy[ln.TypeID] = true
+				copyTypes = append(copyTypes, ln.TypeID)
+			}
+		}
+		if len(copyTypes) > 0 {
+			cmRows, err := app.queries.ListBlueprintCopyMediansForTypes(ctx, copyTypes)
+			if err != nil {
+				return out, fmt.Errorf("appraisal: copy medians: %w", err)
+			}
+			for i := range cmRows {
+				copyMedians[copyMedianKey{cmRows[i].TypeID, cmRows[i].Runs}] = &cmRows[i]
+			}
+		}
+	}
+
 	now := time.Now().UTC()
 	for _, ln := range lines {
 		al := module.AppraisedLine{
 			TypeID: ln.TypeID, Quantity: ln.Quantity, ItemID: ln.ItemID,
 			Included: ln.Included, Tier: module.AppraisalTierUnpriced,
 		}
-		if ab, ok := abyssalByItem[ln.ItemID]; ok && ln.ItemID > 0 {
+		if ln.BlueprintCopy {
+			if cm, ok := copyMedians[copyMedianKey{ln.TypeID, ln.Runs}]; ok {
+				al.UnitPrice = cm.MedianPrice
+				al.LineValue = al.UnitPrice * float64(ln.Quantity)
+				al.Tier = module.AppraisalTierCopyMedian
+				al.AsOf = cm.ComputedAt
+				al.Priced = true
+			}
+		} else if ab, ok := abyssalByItem[ln.ItemID]; ok && ln.ItemID > 0 {
 			al.UnitPrice = ab.EstValue.Float64
 			al.LineValue = al.UnitPrice * float64(ln.Quantity)
 			al.Tier = module.AppraisalTierAbyssal
@@ -209,7 +273,7 @@ func appraisalTierMix(lines []module.AppraisedLine) string {
 		}
 	}
 	var parts []string
-	for _, tier := range []string{module.AppraisalTierTypical, module.AppraisalTierEstimate, module.AppraisalTierAbyssal, module.AppraisalTierFallback} {
+	for _, tier := range []string{module.AppraisalTierTypical, module.AppraisalTierEstimate, module.AppraisalTierAbyssal, module.AppraisalTierCopyMedian, module.AppraisalTierFallback} {
 		if n := counts[tier]; n > 0 {
 			parts = append(parts, fmt.Sprintf("%s:%d", tier, n))
 		}
@@ -314,6 +378,20 @@ func (app *Application) appraiseOnePublicContract(ctx context.Context, contractI
 		if it.ItemID.Valid {
 			ln.ItemID = it.ItemID.Int64
 		}
+		if it.IsBlueprintCopy {
+			// The copy facts ride to the core: without them
+			// the line would price at its original's figure.
+			ln.BlueprintCopy = true
+			if it.Runs.Valid {
+				ln.Runs = it.Runs.Int64
+			}
+			if it.MaterialEfficiency.Valid {
+				ln.MaterialEfficiency = it.MaterialEfficiency.Int64
+			}
+			if it.TimeEfficiency.Valid {
+				ln.TimeEfficiency = it.TimeEfficiency.Int64
+			}
+		}
 		lines = append(lines, ln)
 	}
 	res, err := app.AppraiseLines(ctx, lines)
@@ -354,4 +432,76 @@ func (app *Application) appraiseOnePublicContract(ctx context.Context, contractI
 		return fmt.Errorf("store contract appraisal: %w", err)
 	}
 	return tx.Commit()
+}
+
+// refreshBlueprintCopyMedians is the worker pass behind the
+// copy-median tier (schema 061): it recomputes the stored
+// medians from the live corpus at most once per the
+// appraisal refresh age -- the cadence the stored appraisals
+// reprice on, so a fresh median and the values it feeds move
+// together. Returns the number of (type, runs) rows stored,
+// and 0 when the stored rows are still fresh.
+func (app *Application) refreshBlueprintCopyMedians(ctx context.Context) int {
+	stamp, err := app.queries.GetBlueprintCopyMediansStamp(ctx)
+	switch {
+	case err == nil:
+		if time.Since(stamp) < appraisalRefreshAge {
+			return 0
+		}
+	case !errors.Is(err, sql.ErrNoRows):
+		logging.Errorf("worker: copy medians: stamp: %v", err)
+		return 0
+	}
+	n, err := app.recomputeBlueprintCopyMedians(ctx, time.Now().UTC())
+	if err != nil {
+		logging.Errorf("worker: copy medians: %v", err)
+		return 0
+	}
+	return n
+}
+
+// recomputeBlueprintCopyMedians distills the live corpus
+// into the stored medians in one replace-all transaction:
+// single-line item exchanges whose one stored line is an
+// included copy with known runs, asked above zero, grouped
+// by type and runs, at or over the minimum sample (the
+// candidate query carries the shape and the gate). A
+// contract's own ask is one listing among its group's; at
+// the minimum sample the median stands on the group, not on
+// any one listing, so no anti-anchoring machinery rides
+// along. The corpus holds only live contracts (a row leaves
+// when its contract does), so a group that falls under the
+// sample simply stops being stored, and its copies fall back
+// to honestly unpriced on the next reprice.
+func (app *Application) recomputeBlueprintCopyMedians(ctx context.Context, now time.Time) (int, error) {
+	cands, err := app.queries.ListBlueprintCopyMedianCandidates(ctx, copyMedianMinSample)
+	if err != nil {
+		return 0, fmt.Errorf("candidates: %w", err)
+	}
+	tx, err := app.db.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, fmt.Errorf("begin copy median store: %w", err)
+	}
+	defer tx.Rollback()
+	q := db.New(tx)
+	if err := q.DeleteBlueprintCopyMedians(ctx); err != nil {
+		return 0, fmt.Errorf("clear stored medians: %w", err)
+	}
+	stored := 0
+	for _, c := range cands {
+		if !c.Runs.Valid {
+			continue // the candidate query filters runs in; belt and braces
+		}
+		if err := q.InsertBlueprintCopyMedian(ctx, db.InsertBlueprintCopyMedianParams{
+			TypeID: c.TypeID, Runs: c.Runs.Int64, MedianPrice: c.MedianPrice,
+			SampleCount: c.SampleCount, ComputedAt: now,
+		}); err != nil {
+			return 0, fmt.Errorf("store median %d/%d: %w", c.TypeID, c.Runs.Int64, err)
+		}
+		stored++
+	}
+	if err := tx.Commit(); err != nil {
+		return 0, fmt.Errorf("commit copy medians: %w", err)
+	}
+	return stored, nil
 }

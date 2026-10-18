@@ -768,3 +768,55 @@ ORDER BY family;
 -- name: ListAbyssalWeightAttributeIDs :many
 SELECT DISTINCT attribute_id FROM abyssal_family_weights
 ORDER BY attribute_id;
+
+-- ---------------------------------------------------------------------
+-- Blueprint copy medians (schema 061): the worker's pass
+-- distills the live corpus into one stored median ask per
+-- (blueprint type, runs); the appraisal core reads the stored
+-- rows and nothing else, and a copy line prices from them or
+-- not at all.
+-- ---------------------------------------------------------------------
+
+-- The candidate medians over the live corpus: item-exchange
+-- contracts whose ONE stored item row is an included copy
+-- with known runs, asked above zero. A multi-line contract's
+-- price is not a price for its copy, and a wanted copy was
+-- never offered at the contract's price, so both stay out.
+-- The minimum sample is the caller's: groups thinner than it
+-- store nothing.
+-- name: ListBlueprintCopyMedianCandidates :many
+SELECT i.type_id AS type_id, i.runs AS runs,
+    percentile_cont(0.5) WITHIN GROUP (ORDER BY c.price) AS median_price,
+    COUNT(*) AS sample_count
+FROM pub_contract_items i
+JOIN pub_contracts c ON c.contract_id = i.contract_id
+WHERE c.type = 'item_exchange'
+  AND c.price > 0
+  AND i.is_included
+  AND i.is_blueprint_copy
+  AND i.runs IS NOT NULL AND i.runs > 0
+  AND i.quantity = 1
+  AND (SELECT COUNT(*) FROM pub_contract_items x
+       WHERE x.contract_id = i.contract_id) = 1
+GROUP BY i.type_id, i.runs
+HAVING COUNT(*) >= sqlc.arg(min_sample)::bigint;
+
+-- name: DeleteBlueprintCopyMedians :exec
+DELETE FROM blueprint_copy_medians;
+
+-- name: InsertBlueprintCopyMedian :exec
+INSERT INTO blueprint_copy_medians (type_id, runs, median_price, sample_count, computed_at)
+VALUES ($1, $2, $3, $4, $5);
+
+-- The stored rows' as-of: the copy-median pass recomputes at
+-- most once per its refresh age, judged by this stamp. No
+-- rows yet answers no row, which the caller reads as never.
+-- name: GetBlueprintCopyMediansStamp :one
+SELECT computed_at FROM blueprint_copy_medians
+ORDER BY computed_at DESC
+LIMIT 1;
+
+-- name: ListBlueprintCopyMediansForTypes :many
+SELECT type_id, runs, median_price, sample_count, computed_at
+FROM blueprint_copy_medians
+WHERE type_id = ANY(sqlc.arg(type_ids)::bigint[]);

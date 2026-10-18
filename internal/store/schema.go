@@ -344,6 +344,13 @@ var pgAuditIndexesSchema string
 //go:embed schema_pg/060_pub_contract_items_parking.sql
 var pgPubContractItemsParkingSchema string
 
+// Step 061: blueprint copy medians -- the stored per-(type,
+// runs) median ask of single-copy contracts in the public
+// corpus, the one price a blueprint copy may take.
+//
+//go:embed schema_pg/061_blueprint_copy_medians.sql
+var pgBlueprintCopyMediansSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -433,6 +440,7 @@ func schemaSteps() []schemaStep {
 		{58, "user_appraisals", pgUserAppraisalsSchema, ""},
 		{59, "audit_indexes", pgAuditIndexesSchema, ""},
 		{60, "pub_contract_items_parking", pgPubContractItemsParkingSchema, ""},
+		{61, "blueprint_copy_medians", pgBlueprintCopyMediansSchema, ""},
 	}
 }
 

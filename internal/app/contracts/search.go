@@ -356,6 +356,8 @@ func tierLabel(tier string) string {
 		return "Estimated sell"
 	case module.AppraisalTierAbyssal:
 		return "Our abyssal estimate"
+	case module.AppraisalTierCopyMedian:
+		return "Our copy median"
 	case module.AppraisalTierFallback:
 		return "Fuzzwork aggregate"
 	}
@@ -1766,9 +1768,32 @@ func (app *mod) buildDetailView(ctx context.Context, contractID int64) (*detailV
 		}
 	}
 	bpTypes := app.blueprintTypes(ctx, itemTypeIDs)
+	// The stored medians behind any copy-priced lines, in one
+	// read, so a copy line's note can say what its price
+	// stands on -- the same basis habit as the abyssal panel.
+	copyMedians := map[string]db.BlueprintCopyMedian{}
+	{
+		var copyTypeIDs []int64
+		seenCopy := map[int64]bool{}
+		for _, it := range items {
+			if it.PriceTier == module.AppraisalTierCopyMedian && !seenCopy[it.TypeID] {
+				seenCopy[it.TypeID] = true
+				copyTypeIDs = append(copyTypeIDs, it.TypeID)
+			}
+		}
+		if len(copyTypeIDs) > 0 {
+			rows, err := app.queries.ListBlueprintCopyMediansForTypes(ctx, copyTypeIDs)
+			if err != nil {
+				logging.Errorf("contract detail: copy medians %d: %v", contractID, err)
+			}
+			for _, row := range rows {
+				copyMedians[fmt.Sprintf("%d/%d", row.TypeID, row.Runs)] = row
+			}
+		}
+	}
 	pricedWanted := 0
 	for _, it := range items {
-		line := app.detailLine(ctx, it, abyssal, bpTypes)
+		line := app.detailLine(ctx, it, abyssal, bpTypes, copyMedians)
 		if it.IsIncluded {
 			v.Offered = append(v.Offered, line)
 		} else {
@@ -1835,7 +1860,7 @@ func (app *mod) buildDetailView(ctx context.Context, contractID int64) (*detailV
 	return v, true
 }
 
-func (app *mod) detailLine(ctx context.Context, it db.PubContractItem, abyssal map[int64]db.AbyssalItem, bpTypes map[int64]bool) detailLine {
+func (app *mod) detailLine(ctx context.Context, it db.PubContractItem, abyssal map[int64]db.AbyssalItem, bpTypes map[int64]bool, copyMedians map[string]db.BlueprintCopyMedian) detailLine {
 	line := detailLine{
 		Name:    app.deps.TypeNameOrID(ctx, it.TypeID),
 		TypeID:  it.TypeID,
@@ -1856,6 +1881,18 @@ func (app *mod) detailLine(ctx context.Context, it db.PubContractItem, abyssal m
 		}
 		if it.PriceAsof.Valid && !it.PriceAsof.Time.IsZero() {
 			line.TierNote = "as of " + app.deps.AgeText(it.PriceAsof.Time)
+		}
+		if it.PriceTier == module.AppraisalTierCopyMedian && it.Runs.Valid {
+			// The median's basis rides ahead of its as-of:
+			// what the figure stands on, then how fresh.
+			if cm, ok := copyMedians[fmt.Sprintf("%d/%d", it.TypeID, it.Runs.Int64)]; ok {
+				basis := fmt.Sprintf("median of %s copy listings", esi.FormatInt(cm.SampleCount))
+				if line.TierNote != "" {
+					line.TierNote = basis + " · " + line.TierNote
+				} else {
+					line.TierNote = basis
+				}
+			}
 		}
 	}
 	if it.ItemID.Valid {

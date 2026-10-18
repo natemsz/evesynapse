@@ -98,6 +98,14 @@ type AllianceRecord struct {
 	NotedAt    sql.NullTime `json:"noted_at"`
 }
 
+type BlueprintCopyMedian struct {
+	TypeID      int64     `json:"type_id"`
+	Runs        int64     `json:"runs"`
+	MedianPrice float64   `json:"median_price"`
+	SampleCount int64     `json:"sample_count"`
+	ComputedAt  time.Time `json:"computed_at"`
+}
+
 type Character struct {
 	CharacterID  int64        `json:"character_id"`
 	UserID       int64        `json:"user_id"`

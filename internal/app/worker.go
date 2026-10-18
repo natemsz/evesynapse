@@ -672,6 +672,15 @@ func (c *cycleState) refreshPublicData(ctx context.Context, characters []db.Char
 		return app.scoreAbyssalItems(ctx), false
 	})
 
+	// Blueprint copy medians (schema 061): the stored per-
+	// (type, runs) median ask of single-copy contracts, the
+	// one price a blueprint copy may take. Recomputed ahead
+	// of the appraisal pass on its own hourly stamp, from the
+	// stored corpus alone.
+	c.pass("computing blueprint copy medians", func() (int, bool) {
+		return app.refreshBlueprintCopyMedians(ctx), false
+	})
+
 	// Contract appraisal (schema 056): prices the due slice of
 	// stored contract lines from stored pricing inputs alone
 	// (appraisal.go), so the search pages only ever read

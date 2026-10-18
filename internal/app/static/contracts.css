@@ -7,7 +7,7 @@
    contract-search-specific: the zone layout, the aligned
    field grids, and the deals-green state. */
 
-:root { --deal: #28c76f; }
+:root { --deal: #28c76f; --icon-ember: #ff8c3a; --icon-abyss: #2dd4bf; }
 
 .cs-form input[type="checkbox"],
 .cs-form input[type="range"] { accent-color: var(--accent); }
@@ -32,10 +32,23 @@
   text-transform: uppercase; letter-spacing: 0.07em; font-size: 0.8rem;
 }
 .cs-hunt:hover { border-color: var(--accent); color: var(--text-bright); }
-/* The mockup's ember-soft icon tint (#ff8c3a), shared by
-   the hunt glyphs, the spec tab glyphs and the drawer
-   sub-head glyphs. */
-.cs-hunt svg { width: 0.85rem; height: 0.85rem; flex: none; color: #ff8c3a; }
+.cs-hunt svg { width: 0.85rem; height: 0.85rem; flex: none; }
+/* Icon palette: each family glyph carries its own hue
+   across the hunt chips, the spec tabs and the drawer
+   sub-heads — ember for the Jita flame, teal for the
+   abyssal swirl, gold for blueprint layers, deal-green
+   for the courier truck. Recoloring a family is a
+   one-line edit here (or at the two tokens above). */
+.cs-hunt.hunt-flame svg { color: var(--icon-ember); }
+.cs-hunt.hunt-abyss svg,
+.cs-tab[data-drawer-tab="abyssal"] svg,
+.cs-drawer[data-drawer-panel="abyssal"] .cs-drawer-head svg { color: var(--icon-abyss); }
+.cs-hunt.hunt-bp svg,
+.cs-tab[data-drawer-tab="blueprints"] svg,
+.cs-drawer[data-drawer-panel="blueprints"] .cs-drawer-head svg { color: var(--gold); }
+.cs-hunt.hunt-courier svg,
+.cs-tab[data-drawer-tab="couriers"] svg,
+.cs-drawer[data-drawer-panel="couriers"] .cs-drawer-head svg { color: var(--deal); }
 
 /* ---- tier 1: the control band ---- */
 .cs-tier1 { display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: stretch; margin-bottom: 0.7rem; }
@@ -171,7 +184,7 @@
   font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; font-size: 0.85rem;
   display: inline-flex; align-items: center; gap: 0.45rem;
 }
-.cs-tab svg { width: 0.95rem; height: 0.95rem; flex: none; color: #ff8c3a; }
+.cs-tab svg { width: 0.95rem; height: 0.95rem; flex: none; }
 .cs-tab:hover { color: var(--text-bright); border-color: var(--accent); }
 .cs-tab .cs-chev::after { content: "▾"; color: var(--muted); }
 /* Active follows the site's tab conventions: the .ti-tabs
@@ -196,7 +209,7 @@
   text-transform: uppercase; color: var(--gold);
   display: inline-flex; align-items: center; gap: 0.5rem;
 }
-.cs-drawer-head h4 svg { width: 1.15rem; height: 1.15rem; flex: none; color: #ff8c3a; }
+.cs-drawer-head h4 svg { width: 1.15rem; height: 1.15rem; flex: none; }
 .cs-drawer-sub { margin: 0.3rem 0 0; color: var(--muted); font-size: 0.9rem; }
 .cs-reset {
   background: none; border: 0; padding: 0; cursor: pointer; font: inherit;

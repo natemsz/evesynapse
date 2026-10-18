@@ -31,6 +31,8 @@ type mailRow struct {
 	FromID  int64
 	Date    string
 	Unread  bool
+	Sent    bool                // the viewing character sent this mail
+	To      []mailRecipientView // recipients, shown instead of From in the Sent view
 	Labels  []string
 }
 
@@ -61,8 +63,9 @@ type mailView struct {
 	UnreadCount   int64
 	UnreadKnown   bool
 	LabelChips    []mailLabelChip
-	LabelFilter   int64 // 0 = all mail
-	Selected      bool  // a mail is open below the list
+	LabelFilter   int64  // 0 = all labels
+	Box           string // inbox | sent | all — which side of the mailbox the list shows
+	Selected      bool   // a mail is open below the list
 	Detail        *mailDetail
 	DetailID      int64 // open mail's ID, for the mark-as-read form
 	DetailWarming bool  // body snapshot has not warmed yet
@@ -93,6 +96,14 @@ func (app *mod) handleMail(w http.ResponseWriter, r *http.Request) {
 	labelFilter, _ := strconv.ParseInt(r.URL.Query().Get("label"), 10, 64)
 	view.LabelFilter = labelFilter
 
+	// Box view: ESI has no sent folder, so direction is derived
+	// per header below; the landing view is the inbox.
+	box := r.URL.Query().Get("box")
+	if box != "sent" && box != "all" {
+		box = "inbox"
+	}
+	view.Box = box
+
 	// Label set: names for header chips + the total unread count.
 	labelNames := make(map[int64]string)
 	var labels esi.MailLabels
@@ -119,6 +130,21 @@ func (app *mod) handleMail(w http.ResponseWriter, r *http.Request) {
 	view.Headers = app.deps.EconSection(ctx, active.CharacterID, esi.SnapMail, &headers)
 	if view.Headers.Loaded {
 		for _, h := range headers {
+			// A header whose sender is the viewing character is
+			// his own copy of a mail he sent — list mail keeps
+			// one, flagged unread — never incoming mail.
+			sent := h.From == active.CharacterID
+			switch box {
+			case "sent":
+				if !sent {
+					continue
+				}
+			case "all":
+			default: // inbox
+				if sent {
+					continue
+				}
+			}
 			if labelFilter != 0 && !slices.Contains(h.Labels, labelFilter) {
 				continue
 			}
@@ -128,7 +154,13 @@ func (app *mod) handleMail(w http.ResponseWriter, r *http.Request) {
 				From:    app.deps.DisplayCharacter(ctx, h.From),
 				FromID:  h.From,
 				Date:    humanize.Finish(h.Timestamp),
-				Unread:  !h.IsRead,
+				Unread:  !h.IsRead && !sent,
+				Sent:    sent,
+			}
+			if sent {
+				for _, rcpt := range h.Recipients {
+					row.To = append(row.To, app.mailRecipientDisplay(ctx, rcpt, listNames))
+				}
 			}
 			for _, id := range h.Labels {
 				if name, ok := labelNames[id]; ok {
@@ -243,8 +275,8 @@ func (app *mod) handleMailMarkRead(w http.ResponseWriter, r *http.Request) {
 	// list and label counts, so record the change there too, or the
 	// mail keeps showing as unread until the worker's next refresh.
 	app.deps.MarkMailReadLocally(ctx, charID, mailID)
-	// Success: back to the mail view.
-	http.Redirect(w, r, fmt.Sprintf("/mail/?character=%d&mail=%d", charID, mailID), http.StatusSeeOther)
+	// Success: back to the mail view, in the inbox box.
+	http.Redirect(w, r, fmt.Sprintf("/mail/?character=%d&box=inbox&mail=%d", charID, mailID), http.StatusSeeOther)
 }
 
 // mailComposeView is the compose form's view model.

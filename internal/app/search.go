@@ -28,12 +28,16 @@ import (
 // obtain on the market or through contracts. Unpublished and
 // untradeable database rows never surface in a search box; the
 // Items DB explorer keeps its own explicit toggle for digging
-// through those. On top of the floor:
+// through those. The broad pool widens the floor in one place:
+// blueprint-category types (SDE category 9 — blueprints and
+// reaction formulas) carry no market group because they change
+// hands through contracts alone, so 'all' admits their
+// published rows too. On top of the floor:
 //   market  — the floor alone (the Market page's behaviour)
 //   planner — types a blueprint builds
 //   skills  — skill types (the skill-plan add box)
-//   all     — the floor alone, broadly labelled (Items DB,
-//             top banner)
+//   all     — the floor plus contract-only blueprint types,
+//             broadly labelled (Items DB, top banner)
 // ---------------------------------------------------------------------------
 
 const (

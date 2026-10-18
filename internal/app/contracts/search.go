@@ -58,24 +58,25 @@ const searchPageCap = 40
 // query takes a plain time: zero means "no lower bound" and
 // the far sentinel "no upper bound" (see searchParams).
 type searchFilters struct {
-	Types     []string
-	RegionIDs []int64
-	TitleQ    string
-	ItemQ     string
-	ItemDir   string // offered | wanted | either
-	IssuerQ   string
-	ForCorp   int64 // -1 any, 0 pilots, 1 corporations
-	PriceMin  float64
-	PriceMax  float64
-	BuyoutMax float64
-	PlaceQ    string
-	PlaceEndQ string
-	RewardMin float64
-	RewardMax float64
-	CollatMax float64
-	VolumeMin float64
-	VolumeMax float64
-	DaysMax   int64
+	Types      []string
+	RegionIDs  []int64
+	TitleQ     string
+	ItemQ      string
+	ItemTypeID int64  // 0 off, else contracts holding exactly this type (item pages deep-link it)
+	ItemDir    string // offered | wanted | either
+	IssuerQ    string
+	ForCorp    int64 // -1 any, 0 pilots, 1 corporations
+	PriceMin   float64
+	PriceMax   float64
+	BuyoutMax  float64
+	PlaceQ     string
+	PlaceEndQ  string
+	RewardMin  float64
+	RewardMax  float64
+	CollatMax  float64
+	VolumeMin  float64
+	VolumeMax  float64
+	DaysMax    int64
 	// CourierActive: any courier-drawer filter is set, which
 	// (as in the mockup's filter model) narrows the search to
 	// courier contracts alone.
@@ -189,6 +190,9 @@ func parseSearchFilters(q url.Values) searchFilters {
 	}
 	f.TitleQ = strings.TrimSpace(q.Get("q_title"))
 	f.ItemQ = strings.TrimSpace(q.Get("q_item"))
+	if v := intOr(q, "item_type", 0); v > 0 {
+		f.ItemTypeID = v
+	}
 	switch q.Get("item_dir") {
 	case "offered", "wanted":
 		f.ItemDir = q.Get("item_dir")
@@ -288,7 +292,7 @@ func (f searchFilters) params(now time.Time) (sp db.SearchPublicContractsParams,
 	}
 	sp = db.SearchPublicContractsParams{
 		Types: f.Types, RegionIds: f.RegionIDs, TitleQ: f.TitleQ,
-		ItemQ: f.ItemQ, ItemDir: f.ItemDir, IssuerQ: f.IssuerQ, ForCorp: f.ForCorp,
+		ItemQ: f.ItemQ, ItemType: f.ItemTypeID, ItemDir: f.ItemDir, IssuerQ: f.IssuerQ, ForCorp: f.ForCorp,
 		PriceMin: f.PriceMin, PriceMax: f.PriceMax, BuyoutMax: f.BuyoutMax,
 		PlaceQ: f.PlaceQ, PlaceEndQ: f.PlaceEndQ,
 		RewardMin: f.RewardMin, RewardMax: f.RewardMax, CollateralMax: f.CollatMax,
@@ -309,7 +313,7 @@ func (f searchFilters) params(now time.Time) (sp db.SearchPublicContractsParams,
 	}
 	cp = db.CountPublicContractsSearchParams{
 		Types: sp.Types, RegionIds: sp.RegionIds, TitleQ: sp.TitleQ,
-		ItemQ: sp.ItemQ, ItemDir: sp.ItemDir, IssuerQ: sp.IssuerQ, ForCorp: sp.ForCorp,
+		ItemQ: sp.ItemQ, ItemType: sp.ItemType, ItemDir: sp.ItemDir, IssuerQ: sp.IssuerQ, ForCorp: sp.ForCorp,
 		PriceMin: sp.PriceMin, PriceMax: sp.PriceMax, BuyoutMax: sp.BuyoutMax,
 		PlaceQ: sp.PlaceQ, PlaceEndQ: sp.PlaceEndQ,
 		RewardMin: sp.RewardMin, RewardMax: sp.RewardMax, CollateralMax: sp.CollateralMax,
@@ -570,22 +574,23 @@ type filterChip struct {
 }
 
 type searchView struct {
-	Filters   searchFilters
-	Raw       url.Values
-	Echo      map[string]string // first raw value per form field
-	TypeSet   map[string]bool   // checked contract types
-	Regions   []regionOption
-	Families  []familyOption
-	AttrOpts  []attrOption
-	Sorts     []struct{ Key, Label string }
-	Rows      []searchRow
-	Total     int64
-	TotalText string
-	Page      int
-	Pages     int
-	PrevURL   string
-	NextURL   string
-	HasRows   bool
+	Filters      searchFilters
+	ItemTypeName string // resolved name for the item_type filter's chip, "" when unset
+	Raw          url.Values
+	Echo         map[string]string // first raw value per form field
+	TypeSet      map[string]bool   // checked contract types
+	Regions      []regionOption
+	Families     []familyOption
+	AttrOpts     []attrOption
+	Sorts        []struct{ Key, Label string }
+	Rows         []searchRow
+	Total        int64
+	TotalText    string
+	Page         int
+	Pages        int
+	PrevURL      string
+	NextURL      string
+	HasRows      bool
 	// Redesign furniture: active-filter chips, per-drawer
 	// active counts, the drawer the page opens with, and the
 	// quick-hunt preset URLs.
@@ -619,6 +624,16 @@ func (app *mod) buildSearchView(ctx context.Context, q url.Values) *searchView {
 	}
 	for _, t := range f.Types {
 		view.TypeSet[t] = true
+	}
+	if f.ItemTypeID > 0 {
+		// The filter names an SDE type: the SDE row is the
+		// name of record; the shared name cache is the
+		// fallback for a type the local SDE lacks.
+		if t, err := app.queries.GetSDEType(ctx, f.ItemTypeID); err == nil && t.Name != "" {
+			view.ItemTypeName = t.Name
+		} else {
+			view.ItemTypeName = app.deps.TypeNameOrID(ctx, f.ItemTypeID)
+		}
 	}
 
 	regionRows, err := app.queries.ListPublicContractRegions(ctx)
@@ -773,6 +788,13 @@ func (app *mod) buildSearchFurniture(view *searchView, f searchFilters, q url.Va
 	}
 	if f.ItemQ != "" {
 		add(fmt.Sprintf("Item: %q", f.ItemQ), false, map[string]string{"q_item": ""})
+	}
+	if f.ItemTypeID > 0 {
+		name := view.ItemTypeName
+		if name == "" {
+			name = fmt.Sprintf("Type #%d", f.ItemTypeID)
+		}
+		add("Item: "+name, false, map[string]string{"item_type": ""})
 	}
 	if f.ItemDir != "either" {
 		label := "Side: Offered"

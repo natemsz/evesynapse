@@ -238,6 +238,13 @@ WHERE strpos(lower(t.name), lower(@q)) > 0
   AND (CAST(@published_only AS BIGINT) = 0 OR t.published = 1)
   AND (CAST(@category_id AS BIGINT) = 0 OR g.category_id = @category_id)
   AND (CAST(@group_id AS BIGINT) = 0 OR t.group_id = @group_id);
+-- The suggestion floor: published types with a market group.
+-- The broad 'all' pool (top banner, Items DB) also admits
+-- published blueprint-category types (category 9: blueprints
+-- and reaction formulas): they carry no market group because
+-- they change hands through contracts alone, and the floor's
+-- promise covers items obtainable through contracts too. The
+-- narrower pools keep the market floor alone.
 -- name: SuggestSDETypesShared :many
 SELECT t.type_id, t.name,
        COALESCE(g.name, '') AS group_name,
@@ -246,7 +253,9 @@ FROM sde_types t
 LEFT JOIN sde_groups g ON g.group_id = t.group_id
 LEFT JOIN sde_categories c ON c.category_id = g.category_id
 WHERE strpos(lower(t.name), lower(@q)) > 0
-  AND t.published = 1 AND t.market_group_id > 0
+  AND t.published = 1
+  AND (t.market_group_id > 0
+       OR (CAST(@pool AS TEXT) = 'all' AND COALESCE(g.category_id, 0) = 9))
   AND (CAST(@pool AS TEXT) != 'planner' OR EXISTS (
         SELECT 1 FROM sde_blueprints b WHERE b.product_type_id = t.type_id))
   AND (CAST(@pool AS TEXT) != 'skills' OR EXISTS (

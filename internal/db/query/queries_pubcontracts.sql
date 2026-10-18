@@ -406,6 +406,13 @@ WHERE (coalesce(cardinality(sqlc.arg(types)::text[]), 0) = 0
           AND (sqlc.arg(item_dir)::text = 'either'
                OR (sqlc.arg(item_dir)::text = 'offered' AND i.is_included)
                OR (sqlc.arg(item_dir)::text = 'wanted' AND NOT i.is_included))))
+  AND (sqlc.arg(item_type)::bigint <= 0 OR EXISTS (
+        SELECT 1 FROM pub_contract_items i
+        WHERE i.contract_id = c.contract_id
+          AND i.type_id = sqlc.arg(item_type)::bigint
+          AND (sqlc.arg(item_dir)::text = 'either'
+               OR (sqlc.arg(item_dir)::text = 'offered' AND i.is_included)
+               OR (sqlc.arg(item_dir)::text = 'wanted' AND NOT i.is_included))))
   AND (sqlc.arg(issuer_q)::text = ''
        OR c.issuer_id IN (SELECT id FROM entity_names
                           WHERE kind = 'character'
@@ -550,6 +557,13 @@ WHERE (coalesce(cardinality(sqlc.arg(types)::text[]), 0) = 0
         JOIN sde_types st ON st.type_id = i.type_id
         WHERE i.contract_id = c.contract_id
           AND st.name ILIKE '%' || sqlc.arg(item_q)::text || '%'
+          AND (sqlc.arg(item_dir)::text = 'either'
+               OR (sqlc.arg(item_dir)::text = 'offered' AND i.is_included)
+               OR (sqlc.arg(item_dir)::text = 'wanted' AND NOT i.is_included))))
+  AND (sqlc.arg(item_type)::bigint <= 0 OR EXISTS (
+        SELECT 1 FROM pub_contract_items i
+        WHERE i.contract_id = c.contract_id
+          AND i.type_id = sqlc.arg(item_type)::bigint
           AND (sqlc.arg(item_dir)::text = 'either'
                OR (sqlc.arg(item_dir)::text = 'offered' AND i.is_included)
                OR (sqlc.arg(item_dir)::text = 'wanted' AND NOT i.is_included))))

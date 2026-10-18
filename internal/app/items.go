@@ -166,6 +166,13 @@ type itemTypeDetail struct {
 	UsedIn      []itemUsedInRow // blueprints consuming this type, capped
 	UsedInMore  bool            // more blueprints use it than are listed
 
+	// ContractSearchURL is the onward link to Contract Search
+	// filtered to exactly this type: the trade path for types
+	// the market does not carry, and a companion to the market
+	// link for the rest. Every item type can appear in a
+	// contract, so every type page carries it.
+	ContractSearchURL string
+
 	// Market sections, filled by the type-page handler for
 	// market-traded types only: swept hub prices and the price
 	// history section — the same marketItem view the Market page
@@ -543,8 +550,9 @@ func (app *Application) itemDescription(ctx context.Context, typeID int64) (stri
 // are local SDE reads; the description comes from the type_details
 // warm queue (public ESI type payloads), so a first visit notes
 // the want and shows a filling-in state. Onward links:
-// orders & price history on the Market page, and the Industry
-// planner when the item can be built.
+// orders & price history on the Market page, the Industry
+// planner when the item can be built, and Contract Search
+// filtered to this type for every item.
 func (app *Application) handleItemType(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	data := app.itemsPageData(r)
@@ -621,6 +629,7 @@ func (app *Application) buildItemTypeDetail(ctx context.Context, t db.SdeType) *
 		Name:     t.Name,
 		OnMarket: t.MarketGroupID > 0,
 	}
+	detail.ContractSearchURL = "/contracts/search/?item_type=" + idString(typeID)
 	if grp, gerr := app.queries.GetSDEGroup(ctx, t.GroupID); gerr == nil {
 		detail.Group = &itemGroupRow{ID: grp.GroupID, Name: grp.Name}
 		if cat, cerr := app.queries.GetSDECategory(ctx, grp.CategoryID); cerr == nil {

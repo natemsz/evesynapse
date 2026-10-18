@@ -2298,6 +2298,7 @@
     { name: "Orders", url: "/orders/" },
     { name: "Contracts", url: "/contracts/" },
     { name: "Contract Search", url: "/contracts/search/" },
+    { name: "Appraisal", url: "/market/appraise/" },
     { name: "Corporation Overview", url: "/corporations/" },
     { name: "Corporation Members", url: "/corporations/members/" },
     { name: "Corporation Wallets", url: "/corporations/wallets/" },

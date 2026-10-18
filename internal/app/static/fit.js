@@ -678,6 +678,13 @@ var FitGauges = (function () {
         openPicker(add);
         return;
       }
+      // A click anywhere else on a fitted module's row toggles
+      // its tooltip, the same one hover shows; it never removes.
+      // Removal is the stepper's minus button (handled above) or
+      // dragging the ring slot off the display. Form fields
+      // inside a row (the drone count) keep their own behavior.
+      var chipEl = t.closest(".fit-chip[data-tip-name]");
+      if (chipEl && !t.closest("input, select, textarea")) { toggleTip(chipEl); return; }
     }
   });
   editor.addEventListener("change", function (ev) {
@@ -1137,7 +1144,10 @@ var FitGauges = (function () {
         btn.title = "Load a charge";
         btn.classList.add("fit-charge-btn-empty");
       }
-      chip.appendChild(btn);
+      // The button rides at the end of the row's name block,
+      // beside the name it loads charges for.
+      var host = chip.querySelector(".fit-chip-main") || chip;
+      host.appendChild(btn);
     }
   }
   var chargeDrawerFor = "";
@@ -1583,8 +1593,8 @@ var FitGauges = (function () {
   // (never deletes); drag moves between slots. Dropping on an
   // empty highlighted slot moves the module there; on an occupied
   // highlighted slot the two swap. Invalid drops cancel;
-  // drag-off-to-delete still removes (the chip minus buttons stay
-  // the explicit touch path).
+  // drag-off-to-delete still removes (the chip's minus button
+  // stays the explicit touch path).
   //
   // Why Pointer Events and not HTML5 drag-and-drop: mobile
   // browsers never fire dragstart/dragover/drop for touch, so the
@@ -1994,8 +2004,17 @@ var FitGauges = (function () {
   // the tooltip); a tap anywhere else dismisses it. Never deletes
   // or navigates. Keyboard: Enter/Space on a focused slot toggles
   // its tooltip the same way a tap does.
+  // The key a tapped tooltip remembers its anchor by: a ring
+  // slot by its position, a list chip (which has no slot
+  // position) by its group and type.
+  function tipKeyFor(el) {
+    if (el.getAttribute("data-v-index") !== null) return tipToggleKey(el);
+    var g = el.closest ? el.closest(".fit-group") : null;
+    return "chip:" + (g ? g.getAttribute("data-fit-group") || "" : "") + ":" +
+      (el.getAttribute("data-fit-rowtype") || "");
+  }
   function toggleTip(slot) {
-    var key = tipToggleKey(slot);
+    var key = tipKeyFor(slot);
     if (tipEl && tipEl.getAttribute("data-for") === key) {
       closeTip();
     } else {
@@ -2031,8 +2050,14 @@ var FitGauges = (function () {
     ev.preventDefault();
     toggleTip(slot);
   });
+  // A click on a tooltip anchor is the anchor's own business
+  // (a tap toggles it), never a dismissal.
   editor.addEventListener("click", function (ev) {
-    if (tipEl && !(ev.target && ev.target.closest && ev.target.closest(".fit-tip"))) closeTip();
+    if (!tipEl) return;
+    var t = ev.target;
+    if (t && t.closest && t.closest(".fit-tip")) return;
+    if (t && t.closest && t.closest(".fit-vslot[data-tip-name], .fit-chip[data-tip-name]")) return;
+    closeTip();
   });
   document.addEventListener("keydown", function (ev) {
     if (ev.key === "Escape") closeTip();

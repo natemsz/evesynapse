@@ -679,10 +679,24 @@ func (app *mod) corpFitBrowser(ctx context.Context, corp int64, chosen *module.N
 		if err != nil {
 			logging.Errorf("corporate fits: fits of corporation %d: %v", corp, err)
 		}
-		for _, fit := range fits {
+		// The module and charge names behind every card's
+		// search text resolve in one batched lookup, not one
+		// single-type lookup per item per fit.
+		docs := make([]fitview.FitDoc, len(fits))
+		var typeIDs []int64
+		for i, fit := range fits {
+			_ = json.Unmarshal([]byte(fit.ItemsJson), &docs[i])
+			for _, item := range docs[i].Items {
+				typeIDs = append(typeIDs, item.TypeID)
+			}
+			for chargeID := range docs[i].Charges {
+				typeIDs = append(typeIDs, chargeID)
+			}
+		}
+		namesByID := app.deps.CachedTypeNames(ctx, typeIDs)
+		for i, fit := range fits {
 			d := byID[fit.DoctrineID]
-			var doc fitview.FitDoc
-			_ = json.Unmarshal([]byte(fit.ItemsJson), &doc)
+			doc := docs[i]
 			tags := doctrineTagList(d.Tags)
 			for _, tag := range doc.Tags {
 				if !hasTag(tags, tag) {
@@ -691,12 +705,12 @@ func (app *mod) corpFitBrowser(ctx context.Context, corp int64, chosen *module.N
 			}
 			var modNames []string
 			for _, item := range doc.Items {
-				if name := app.deps.CachedTypeNames(ctx, []int64{item.TypeID})[item.TypeID]; name != "" {
+				if name := namesByID[item.TypeID]; name != "" {
 					modNames = append(modNames, name)
 				}
 			}
 			for _, chargeID := range doc.Charges {
-				if name := app.deps.CachedTypeNames(ctx, []int64{chargeID})[chargeID]; name != "" {
+				if name := namesByID[chargeID]; name != "" {
 					modNames = append(modNames, name)
 				}
 			}

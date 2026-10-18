@@ -1476,6 +1476,18 @@ func (app *Application) buildHome(ctx context.Context, customize bool) *homeView
 		briefingSince = app.briefingWindowStart(ctx, userID, now)
 	}
 
+	// The net-worth widget is computed at most once per render:
+	// the glance widget carries the same figures, and the default
+	// layout holds both.
+	var netWorth *netWorthWidget
+	netWorthBuilt := false
+	sharedNetWorth := func() *netWorthWidget {
+		if !netWorthBuilt {
+			netWorth, netWorthBuilt = app.buildNetWorth(ctx, userID, bundles), true
+		}
+		return netWorth
+	}
+
 	for _, item := range layout {
 		def, _ := widgetDefFor(item.ID)
 		gw, gh := widgetSize(item)
@@ -1493,7 +1505,7 @@ func (app *Application) buildHome(ctx context.Context, customize bool) *homeView
 		case widgetFleet:
 			w.Fleet = app.buildFleet(ctx, bundles)
 		case widgetNetWorth:
-			w.NetWorth = app.buildNetWorth(ctx, userID, bundles)
+			w.NetWorth = sharedNetWorth()
 		case widgetIndustry:
 			w.Industry = app.buildIndustry(ctx, bundles)
 		case widgetMarket:
@@ -1513,7 +1525,7 @@ func (app *Application) buildHome(ctx context.Context, customize bool) *homeView
 		case widgetUpkeep:
 			w.Upkeep = app.buildUpkeep(ctx, userID)
 		case widgetGlance:
-			w.Glance = app.buildGlance(ctx, userID, bundles)
+			w.Glance = app.buildGlance(ctx, userID, bundles, sharedNetWorth())
 		}
 		view.Widgets = append(view.Widgets, w)
 	}
@@ -1703,8 +1715,11 @@ type glanceWidget struct {
 	TrainBar string
 }
 
-func (app *Application) buildGlance(ctx context.Context, userID int64, bundles []*charSnaps) *glanceWidget {
-	g := &glanceWidget{NetWorth: app.buildNetWorth(ctx, userID, bundles)}
+// buildGlance assembles the at-a-glance widget around the
+// render's shared net-worth figures (buildHome computes them
+// once for both widgets).
+func (app *Application) buildGlance(ctx context.Context, userID int64, bundles []*charSnaps, netWorth *netWorthWidget) *glanceWidget {
+	g := &glanceWidget{NetWorth: netWorth}
 	now := time.Now()
 	for _, b := range bundles {
 		if !b.queueKnown {

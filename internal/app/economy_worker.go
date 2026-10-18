@@ -119,14 +119,36 @@ const maxContractItemsPerCycle = 100
 // stored and whether ESI's error limit stopped the pass. Deleted
 // contracts are skipped (their item endpoint is gone for good).
 func (app *Application) warmContractItems(ctx context.Context, ch db.Character) (fetched int, limited bool) {
-	snap, err := app.queries.GetSnapshot(ctx, db.GetSnapshotParams{CharacterID: ch.CharacterID, Kind: esi.SnapContracts})
-	if err != nil {
+	payload, ok := app.snapshotPayload(ctx, ch.CharacterID, esi.SnapContracts)
+	if !ok {
 		return 0, false // no contracts list yet; nothing to warm
 	}
 	var contracts esi.Contracts
-	if err := json.Unmarshal([]byte(snap.Payload), &contracts); err != nil {
+	if err := json.Unmarshal([]byte(payload), &contracts); err != nil {
 		logging.Errorf("worker: warm contract items for character %d: decode contracts: %v", ch.CharacterID, err)
 		return 0, false
+	}
+
+	// Which of these contracts already have their item list
+	// stored, read in one query for the whole list instead of a
+	// probe per contract. (Details are keyed by contract, so one
+	// stored by any character's list counts for all of them.)
+	ids := make([]int64, 0, len(contracts))
+	for _, c := range contracts {
+		if c.ContractID > 0 {
+			ids = append(ids, c.ContractID)
+		}
+	}
+	stored := map[int64]bool{}
+	if len(ids) > 0 {
+		storedIDs, err := app.queries.ListContractDetailIDsForContracts(ctx, ids)
+		if err != nil {
+			logging.Errorf("worker: warm contract items for character %d: list stored contract details: %v", ch.CharacterID, err)
+			return 0, false
+		}
+		for _, id := range storedIDs {
+			stored[id] = true
+		}
 	}
 
 	for _, c := range contracts {
@@ -136,11 +158,8 @@ func (app *Application) warmContractItems(ctx context.Context, ch db.Character) 
 		if c.ContractID <= 0 || c.Status == "deleted" {
 			continue
 		}
-		if _, err := app.queries.GetContractDetail(ctx, c.ContractID); err == nil {
+		if stored[c.ContractID] {
 			continue // already stored (by any character's list)
-		} else if !errors.Is(err, sql.ErrNoRows) {
-			logging.Errorf("worker: warm contract items for character %d: read detail %d: %v", ch.CharacterID, c.ContractID, err)
-			continue
 		}
 
 		body, err := app.esi.FetchContractItems(ctx, ch, c.ContractID)
@@ -162,6 +181,7 @@ func (app *Application) warmContractItems(ctx context.Context, ch db.Character) 
 			logging.Errorf("worker: store contract items %d for character %d: %v", c.ContractID, ch.CharacterID, err)
 			continue
 		}
+		stored[c.ContractID] = true
 		fetched++
 	}
 	return fetched, false

@@ -94,6 +94,33 @@ func (app *mod) discordKickPlan(ctx context.Context, guild db.DiscordGuild, now 
 	}
 	exempt := roleSet{}
 	exempt.add(splitRoles(guild.KickExemptRoles)...)
+
+	// The connected accounts are read once for the whole list,
+	// and standings remembered per account, instead of a lookup
+	// of each for every member gone through.
+	links, err := app.queries.ListDiscordLinks(ctx)
+	if err != nil {
+		return kickPlan{}, err
+	}
+	byDiscord := make(map[string]db.DiscordLink, len(links))
+	for _, l := range links {
+		if _, dup := byDiscord[l.DiscordID]; !dup {
+			byDiscord[l.DiscordID] = l
+		}
+	}
+	standings := map[int64]orgStanding{}
+	standing := func(userID int64) (orgStanding, error) {
+		if st, ok := standings[userID]; ok {
+			return st, nil
+		}
+		st, err := app.standingFor(ctx, userID)
+		if err != nil {
+			return orgStanding{}, err
+		}
+		standings[userID] = st
+		return st, nil
+	}
+
 	for _, m := range members {
 		if m.User.Bot || m.User.ID == owner || now.Sub(m.JoinedAt) < kickGrace {
 			continue
@@ -106,8 +133,8 @@ func (app *mod) discordKickPlan(ctx context.Context, guild db.DiscordGuild, now 
 			continue
 		}
 		// Connected, and owed a role here: stays.
-		if link, lerr := app.queries.GetDiscordLinkByDiscordID(ctx, m.User.ID); lerr == nil {
-			st, serr := app.standingFor(ctx, link.UserID)
+		if link, linked := byDiscord[m.User.ID]; linked {
+			st, serr := standing(link.UserID)
 			if serr != nil {
 				return kickPlan{}, serr // not knowing is not a reason to remove
 			}

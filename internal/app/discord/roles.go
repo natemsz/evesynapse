@@ -255,14 +255,31 @@ func (app *mod) discordSyncRoles(ctx context.Context, now time.Time) (changed in
 		logging.Errorf("discord: list links: %v", err)
 		return changed
 	}
+	// Standings are worked out lazily and remembered for the
+	// pass. A server with no rules owes nobody anything whatever
+	// their standing, so its members' standings are only needed
+	// for one who is actually due a sync; and accounts in several
+	// ruled servers share one computation. A failed standing is
+	// remembered too: the failure is logged once, at first need,
+	// and the account is passed over in every server, as it was
+	// when a failed lookup left it out of the standings entirely.
 	standings := map[int64]orgStanding{}
-	for _, link := range links {
-		st, err := app.standingFor(ctx, link.UserID)
-		if err != nil {
-			logging.Errorf("discord: standing of user %d: %v", link.UserID, err)
-			continue
+	standingFailed := map[int64]bool{}
+	standing := func(userID int64) (orgStanding, bool) {
+		if st, ok := standings[userID]; ok {
+			return st, true
 		}
-		standings[link.UserID] = st
+		if standingFailed[userID] {
+			return orgStanding{}, false
+		}
+		st, err := app.standingFor(ctx, userID)
+		if err != nil {
+			logging.Errorf("discord: standing of user %d: %v", userID, err)
+			standingFailed[userID] = true
+			return orgStanding{}, false
+		}
+		standings[userID] = st
+		return st, true
 	}
 	for _, guild := range guilds {
 		rules := rulesBy[guild.GuildID]
@@ -276,22 +293,47 @@ func (app *mod) discordSyncRoles(ctx context.Context, now time.Time) (changed in
 			given[grant.DiscordID] = grant
 		}
 		for _, link := range links {
-			st, known := standings[link.UserID]
-			if !known {
-				continue
-			}
-			wanted := discordWanted(guild, rules, st)
 			grant, looked := given[link.DiscordID]
-			target := strings.Join(wanted, ",")
-			switch {
-			case !looked && target == "":
-				continue // nothing given, nothing owed
-			case looked && now.Sub(grant.CheckedAt) < discordRolesRecheck && (target == grant.Roles || (!grant.IsMember && target == grant.Wanted)):
-				// As it should be and checked recently; or not in the
-				// server when last looked for and owed the same as then,
-				// which is not asked again every minute (the "check my
-				// roles now" button is for someone who has just joined).
-				continue
+			var st orgStanding
+			var wanted []string
+			if len(rules) == 0 {
+				// No rules: the target is empty whatever the
+				// standing, so settled members are settled from
+				// the grant alone; a standing is worked out only
+				// for a member due a sync, which needs it for
+				// the join bookkeeping inside.
+				switch {
+				case !looked:
+					continue // nothing given, nothing owed
+				case now.Sub(grant.CheckedAt) < discordRolesRecheck && (grant.Roles == "" || (!grant.IsMember && grant.Wanted == "")):
+					// Holding nothing and checked recently; or not
+					// in the server when last looked for and owed
+					// nothing then either.
+					continue
+				}
+				known := false
+				st, known = standing(link.UserID)
+				if !known {
+					continue
+				}
+			} else {
+				known := false
+				st, known = standing(link.UserID)
+				if !known {
+					continue
+				}
+				wanted = discordWanted(guild, rules, st)
+				target := strings.Join(wanted, ",")
+				switch {
+				case !looked && target == "":
+					continue // nothing given, nothing owed
+				case looked && now.Sub(grant.CheckedAt) < discordRolesRecheck && (target == grant.Roles || (!grant.IsMember && target == grant.Wanted)):
+					// As it should be and checked recently; or not in the
+					// server when last looked for and owed the same as then,
+					// which is not asked again every minute (the "check my
+					// roles now" button is for someone who has just joined).
+					continue
+				}
 			}
 			if ctx.Err() != nil || budget <= 0 {
 				return changed

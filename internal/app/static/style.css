@@ -1069,7 +1069,7 @@ footer .version-number {
 .home-custom .card[data-widget="glance"] { background: var(--glass); border-color: var(--glass-edge); box-shadow: 0 4px 18px rgba(0, 0, 0, 0.6); -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(0.9); backdrop-filter: blur(var(--glass-blur)) saturate(0.9); }
 #main-content .grid.home-grid.home-custom > .card[data-widget="glance"] > h3:first-child { display: flex; }
 .home-custom .card[data-widget="glance"] .kpi { background: rgba(255, 255, 255, 0.03); border-color: rgba(255, 110, 0, 0.16); box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
-.home-grid { margin-top: 0.55rem; }
+.home-grid { margin-top: 0.3rem; }
 /* Home links read as text, not as links: names in the home
    tables and briefing cards take the surrounding weight and
    color; the hover state keeps the affordance. Bold and ember

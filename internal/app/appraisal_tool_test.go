@@ -138,6 +138,106 @@ Abyssal Damage Control II`}})
 		"150,000.00")
 }
 
+// seedAppraisalAbyssal adds the mutated type and two corpus
+// rows for it: item 900001 with a stored estimate (the same
+// figure the contract pages show for it), and item 900003
+// recorded with its rolls but no estimate yet.
+func seedAppraisalAbyssal(t *testing.T, conn *sql.DB) {
+	t.Helper()
+	ctx := context.Background()
+	now := time.Now().UTC()
+	exec := func(query string, args ...any) {
+		t.Helper()
+		if _, err := conn.ExecContext(ctx, query, args...); err != nil {
+			t.Fatalf("seed %q: %v", query, err)
+		}
+	}
+	exec(`INSERT INTO sde_types (type_id, name) VALUES (60001, 'Abyssal Damage Control II')`)
+	exec(`INSERT INTO abyssal_items (item_id, type_id, source_type_id, mutator_type_id, created_by,
+		attributes, fetched_at, first_seen_at, last_seen_at,
+		family, score, percentiles, derived_stats, est_value, est_low, est_high,
+		est_basis, est_scope, est_comps, premium_mult, scored_at)
+		VALUES (900001, 60001, 30001, 47735, 9001,
+		'[]', $1, $1, $1, 'test_family', 0.9, '{}', '[]',
+		205000000, 180000000, 240000000, 'corpus', 'module', 8, 1, $1)`, now)
+	exec(`INSERT INTO abyssal_items (item_id, type_id, source_type_id, mutator_type_id, created_by,
+		attributes, fetched_at, first_seen_at, last_seen_at,
+		family, score, percentiles, derived_stats, est_basis, est_scope, est_comps, premium_mult)
+		VALUES (900003, 60001, 30001, 47735, 9001,
+		'[]', $1, $1, $1, 'test_family', 0.5, '{}', '[]', '', '', 0, 1)`, now)
+}
+
+func TestAppraisalToolAbyssalItemLink(t *testing.T) {
+	tr := &countingTransport{}
+	app, conn, q := buildCorpTestApp(t, tr)
+	seedAppraisalTool(t, conn, q)
+	seedAppraisalAbyssal(t, conn)
+
+	code, body, _ := postAppraise(t, app, nil, url.Values{"items": {`<url=showinfo:60001//900001>Abyssal Damage Control II</url>
+Tritanium x 100
+Rifter Blueprint (BPC, ME 10, TE 20, 5 runs)`}})
+	if code != 200 {
+		t.Fatalf("abyssal link appraisal: status %d, want 200", code)
+	}
+	// The linked item prices from its stored abyssal
+	// estimate (205,000,000), the tritanium at its typical
+	// (100 x 6.50), the blueprint copy at the original's
+	// typical (1,000,000): 206,000,650.00 in all, and the
+	// line carries the estimate's range and basis in the
+	// contract pages' words.
+	mustContain(t, "abyssal item link", body,
+		"206,000,650.00", "Priced 3 of 3 lines",
+		"Our abyssal estimate", "205,000,000.00",
+		"likely 180,000,000.00 to 240,000,000.00", "from 8 listings of this module",
+		"BPC · ME 10 · TE 20 · 5 runs")
+	if n := strings.Count(body, ">Abyssal Damage Control II</a>"); n != 1 {
+		t.Errorf("abyssal rows = %d, want 1", n)
+	}
+	if tr.calls.Load() != 0 {
+		t.Errorf("the appraisal page reached the network %d times; stored reads only", tr.calls.Load())
+	}
+}
+
+func TestAppraisalToolAbyssalItemLinkUnknown(t *testing.T) {
+	tr := &countingTransport{}
+	app, conn, q := buildCorpTestApp(t, tr)
+	seedAppraisalTool(t, conn, q)
+	seedAppraisalAbyssal(t, conn)
+
+	// Item 900002 is not in the corpus: the line prices its
+	// base item (the damage control's stale typical under
+	// the floor rule) and says its rolls are not on record.
+	code, body, _ := postAppraise(t, app, nil, url.Values{"items": {`<url=showinfo:60001//900002>Abyssal Damage Control II</url>
+Tritanium x 100`}})
+	if code != 200 {
+		t.Fatalf("unknown abyssal link appraisal: status %d, want 200", code)
+	}
+	mustContain(t, "unknown abyssal item link", body,
+		"150,650.00", "150,000.00",
+		"Base item price", "rolls are not in our records")
+	if strings.Contains(body, "Our abyssal estimate") {
+		t.Error("an unrecorded item was priced from an abyssal estimate")
+	}
+}
+
+func TestAppraisalToolAbyssalItemLinkNoEstimate(t *testing.T) {
+	tr := &countingTransport{}
+	app, conn, q := buildCorpTestApp(t, tr)
+	seedAppraisalTool(t, conn, q)
+	seedAppraisalAbyssal(t, conn)
+
+	// Item 900003 is on record with its rolls but no
+	// estimate: the line prices its known base type and
+	// says so.
+	code, body, _ := postAppraise(t, app, nil, url.Values{"items": {`<url=showinfo:60001//900003>Abyssal Damage Control II</url>`}})
+	if code != 200 {
+		t.Fatalf("unestimated abyssal link appraisal: status %d, want 200", code)
+	}
+	mustContain(t, "unestimated abyssal item link", body,
+		"150,000.00", ">Damage Control II</a>",
+		"Base item price", "we hold this item", "no estimate for it yet")
+}
+
 func TestAppraisalToolEFTPaste(t *testing.T) {
 	tr := &countingTransport{}
 	app, conn, q := buildCorpTestApp(t, tr)

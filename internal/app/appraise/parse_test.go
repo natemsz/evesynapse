@@ -3,6 +3,8 @@ package appraise
 import (
 	"strings"
 	"testing"
+
+	db "evesynapse/internal/db/sqlc"
 )
 
 func firstCand(t *testing.T, line string) (pasteLine, nameCandidate) {
@@ -113,6 +115,43 @@ func TestParseAbyssalCandidates(t *testing.T) {
 	}
 }
 
+func TestParseShowinfoItemLink(t *testing.T) {
+	pl, first := firstCand(t, "<url=showinfo:60001//900001>Abyssal Damage Control II</url>")
+	if pl.LinkTypeID != 60001 || pl.LinkItemID != 900001 {
+		t.Errorf("link ids = %d//%d, want 60001//900001", pl.LinkTypeID, pl.LinkItemID)
+	}
+	// The mutation-stripped base reading leads: it is the
+	// fallback price for when the item's rolls are not on
+	// record; the name as linked follows it.
+	if first.Name != "Damage Control II" || first.Qty != 1 || !first.AbyssalBase {
+		t.Errorf("first candidate = %+v, want the stripped base at qty 1", first)
+	}
+	last := pl.Candidates[len(pl.Candidates)-1]
+	if last.Name != "Abyssal Damage Control II" || last.Qty != 1 || last.AbyssalBase {
+		t.Errorf("last candidate = %+v, want the name as linked at qty 1", last)
+	}
+
+	// Quantity text around the link does not multiply a
+	// unique item.
+	pl, first = firstCand(t, "2 x <url=showinfo:60001//900001>Abyssal Damage Control II</url>")
+	if pl.LinkItemID != 900001 || first.Qty != 1 {
+		t.Errorf("quantity-wrapped link first candidate = %+v (item %d), want qty 1 for item 900001", first, pl.LinkItemID)
+	}
+}
+
+func TestParseShowinfoTypeLink(t *testing.T) {
+	// A type link names only the type: it unwraps to its
+	// display text and the ordinary readings apply.
+	pl, first := firstCand(t, "<url=showinfo:34>Tritanium</url>")
+	if pl.LinkItemID != 0 || pl.LinkTypeID != 0 || first.Name != "Tritanium" || first.Qty != 1 {
+		t.Errorf("type link = %+v (ids %d//%d), want a plain Tritanium line", first, pl.LinkTypeID, pl.LinkItemID)
+	}
+	_, first = firstCand(t, "500 x <url=showinfo:34>Tritanium</url>")
+	if first.Name != "Tritanium" || first.Qty != 500 {
+		t.Errorf("quantified type link = %+v, want 500 Tritanium", first)
+	}
+}
+
 func TestParseBadAndTruncation(t *testing.T) {
 	if _, ok := parseListLine("(BPC, ME 10)"); ok {
 		t.Error("an annotation with no item name must not parse")
@@ -152,5 +191,32 @@ func TestAggregateAndNotes(t *testing.T) {
 	note := lineNote(resolvedLine{TypeID: 30001, Name: "Damage Control II", AbyssalBase: true})
 	if !strings.Contains(note, "Base item price") || !strings.Contains(note, "Contract Search") {
 		t.Errorf("abyssal base note = %q", note)
+	}
+}
+
+func TestAggregateKeepsUniqueItemsApart(t *testing.T) {
+	// Two different mutated items of one type, carrying the
+	// same estimate note, stay two lines; the same item
+	// pasted twice still merges with itself.
+	mk := func(itemID int64) resolvedLine {
+		return resolvedLine{TypeID: 60001, Name: "Abyssal Damage Control II", Qty: 1, ItemID: itemID,
+			Abyssal: &db.AbyssalItem{ItemID: itemID, EstBasis: "corpus", EstScope: "module", EstComps: 8}}
+	}
+	agg := aggregateLines([]resolvedLine{mk(900001), mk(900002), mk(900001)})
+	if len(agg) != 2 {
+		t.Fatalf("agg = %+v, want two lines: one per unique item", agg)
+	}
+	if agg[0].ItemID != 900001 || agg[0].Qty != 2 {
+		t.Errorf("first line = %+v, want item 900001 (its duplicate merges with itself)", agg[0])
+	}
+	if agg[1].ItemID != 900002 || agg[1].Qty != 1 {
+		t.Errorf("second line = %+v, want item 900002 at qty 1", agg[1])
+	}
+	if agg[0].Note != "from 8 listings of this module" {
+		t.Errorf("abyssal estimate note = %q", agg[0].Note)
+	}
+	note := lineNote(resolvedLine{TypeID: 30001, Name: "Damage Control II", LinkMiss: true})
+	if note != "Base item price — this item's rolls are not in our records" {
+		t.Errorf("link miss note = %q", note)
 	}
 }

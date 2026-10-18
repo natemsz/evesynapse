@@ -1215,7 +1215,7 @@ func (app *Application) handleMarketWatch(w http.ResponseWriter, r *http.Request
 	userID := app.userID(ctx)
 	next := "/market/"
 	if err := r.ParseForm(); err == nil {
-		if n := r.Form.Get("next"); strings.HasPrefix(n, "/") && !strings.HasPrefix(n, "//") && !strings.ContainsAny(n, "\\\r\n") {
+		if n := r.Form.Get("next"); safeLocalNext(n) {
 			next = n
 		}
 		if userID > 0 {

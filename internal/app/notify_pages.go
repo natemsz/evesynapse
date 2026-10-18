@@ -211,11 +211,29 @@ func (app *Application) markNotificationsRead(ctx context.Context, userID int64,
 	}
 }
 
+// safeLocalNext reports whether n is safe to hand to http.Redirect
+// as an on-site target: a path beginning with a single slash. The
+// second byte matters as much as the first — browsers treat "//"
+// and "/\" as scheme-relative addresses and leave the site — so a
+// backslash is rejected anywhere in the value, and CR/LF would let
+// the value break out of the Location header entirely. Every
+// handler that redirects to a user-supplied "next" goes through
+// here rather than re-checking by hand.
+func safeLocalNext(n string) bool {
+	if !strings.HasPrefix(n, "/") {
+		return false
+	}
+	if len(n) > 1 && (n[1] == '/' || n[1] == '\\') {
+		return false
+	}
+	return !strings.ContainsAny(n, "\\\r\n")
+}
+
 // notifyTarget is where a notification leads. Stored addresses are
 // the app's own paths; anything else falls back to the list, so a
 // stored value can never send the visitor to another site.
 func notifyTarget(url string) string {
-	if strings.HasPrefix(url, "/") && !strings.HasPrefix(url, "//") && !strings.ContainsAny(url, "\\\r\n") {
+	if safeLocalNext(url) {
 		return url
 	}
 	return "/notifications/"

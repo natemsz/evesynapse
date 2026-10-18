@@ -316,6 +316,10 @@ button.cs-abbtn:hover { border-color: var(--accent); color: var(--text-bright); 
   font-size: 0.92rem; text-align: left; cursor: default;
 }
 .cs-abpop[hidden] { display: none; }
+/* Flipped by contracts.js when the room below the
+   trigger would run past the footer or the viewport:
+   the popup opens upward from the wrap instead. */
+.cs-abpop.flip { top: auto; bottom: calc(100% + 0.4rem); }
 .cs-abpop-head {
   display: flex; justify-content: space-between; align-items: center;
   gap: 1rem; margin-bottom: 0.15rem;

@@ -27,28 +27,77 @@
   // screen the open popup is lifted to the page root and
   // becomes a bottom sheet: a fixed box inside the page's
   // glass would anchor to the glass, not the viewport.
+  // Placement is containment-checked at open time: the
+  // footer is the lowest thing on the page, so a popup
+  // whose downward room runs out at the footer's top edge
+  // (or the viewport's) flips upward from its trigger or
+  // caps its height and scrolls internally, and it is
+  // shifted sideways to stay inside the page shell.
   var abPop = null;     // the open popup element
   var abPopBtn = null;  // its trigger
   var abPopHome = null; // {parent, next} while sheet-lifted
   var sheetQuery = window.matchMedia("(max-width: 42rem)");
 
+  function resetAbPopPlace() {
+    abPop.classList.remove("flip");
+    abPop.style.maxHeight = "";
+    abPop.style.transform = "";
+  }
+
+  function containAbPop() {
+    resetAbPopPlace();
+    var gap = 8; // px of air between the popup and its bounds
+    var wrap = abPop.parentNode; // .cs-abwrap hugs the trigger
+    var wrapRect = wrap.getBoundingClientRect();
+    var foot = document.querySelector("footer");
+    var footTop = foot ? foot.getBoundingClientRect().top : window.innerHeight;
+    var shell = abPop.closest(".page-shell");
+    var shellRect = shell ? shell.getBoundingClientRect()
+      : { left: 0, right: window.innerWidth };
+    // Vertical: how much room a popup gets below the
+    // trigger before it would cross the footer or the
+    // viewport bottom, and how much above it.
+    var bottomLimit = Math.min(window.innerHeight, footTop) - gap;
+    var below = bottomLimit - (wrapRect.bottom + gap);
+    var above = (wrapRect.top - gap) - gap;
+    var want = Math.min(abPop.scrollHeight, Math.round(window.innerHeight * 0.7));
+    if (want > below && above > below) {
+      abPop.classList.add("flip");
+      abPop.style.maxHeight = Math.max(80, Math.min(want, above)) + "px";
+    } else if (want > below) {
+      abPop.style.maxHeight = Math.max(80, below) + "px";
+    }
+    // Horizontal: shift the laid-out popup back inside
+    // the shell if its anchor pushed it past an edge.
+    var r = abPop.getBoundingClientRect();
+    var dx = 0;
+    if (r.left < shellRect.left + gap) dx = shellRect.left + gap - r.left;
+    else if (r.right > shellRect.right - gap) dx = shellRect.right - gap - r.right;
+    if (dx) abPop.style.transform = "translateX(" + Math.round(dx) + "px)";
+  }
+
   function placeAbPop() {
     if (!abPop) return;
     if (sheetQuery.matches) {
       if (!abPopHome) {
+        resetAbPopPlace();
         abPopHome = { parent: abPop.parentNode, next: abPop.nextSibling };
         document.body.appendChild(abPop);
         abPop.classList.add("sheet");
       }
-    } else if (abPopHome) {
+      return;
+    }
+    if (abPopHome) {
       abPop.classList.remove("sheet");
       if (abPopHome.parent) abPopHome.parent.insertBefore(abPop, abPopHome.next);
       abPopHome = null;
     }
+    containAbPop();
   }
 
   function closeAbPop() {
     if (!abPop) return;
+    resetAbPopPlace();
     var pop = abPop;
     abPop = null;
     if (abPopBtn) abPopBtn.setAttribute("aria-expanded", "false");

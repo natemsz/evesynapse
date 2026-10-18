@@ -335,6 +335,14 @@ func TestContractSearchAbyssalPopup(t *testing.T) {
 		`document.addEventListener("evesynapse:content-ready", closeAbPop)`,
 		`pop.hidden = false;`,
 		`sheetQuery = window.matchMedia("(max-width: 42rem)")`,
+		// Containment: the footer is the lowest thing on
+		// the page, so placement measures against it (and
+		// the shell sideways) and flips the popup upward
+		// when downward room runs out.
+		`function containAbPop() {`,
+		`document.querySelector("footer")`,
+		`abPop.classList.add("flip")`,
+		`abPop.closest(".page-shell")`,
 	} {
 		if !strings.Contains(js, want) {
 			t.Errorf("contracts.js missing abyssal popup pin %q", want)
@@ -349,6 +357,7 @@ func TestContractSearchAbyssalPopup(t *testing.T) {
 	for _, want := range []string{
 		".cs-abpop {",
 		".cs-abpop[hidden] { display: none; }",
+		".cs-abpop.flip {",
 		".cs-panel-abs .cs-abpop { left: auto; right: 0; }",
 		".cs-abpop.sheet {",
 	} {

@@ -191,6 +191,29 @@ func TestContractSearchStructure(t *testing.T) {
 	}
 }
 
+// TestContractSearchSwapRewiring pins the contracts.js
+// swap contract: an in-page swap replaces the results DOM
+// without re-running the script, so the page wiring must
+// re-run on the shell's content-ready event (guarded by the
+// form's identity, like pi.js) — without it, row expansion
+// and every other wired behavior are dead after any
+// same-page navigation such as a quick-hunt click.
+func TestContractSearchSwapRewiring(t *testing.T) {
+	raw, err := fs.ReadFile(staticFS, "static/contracts.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	js := string(raw)
+	for _, want := range []string{
+		`document.addEventListener("evesynapse:content-ready", init)`,
+		"form === wiredForm",
+	} {
+		if !strings.Contains(js, want) {
+			t.Errorf("contracts.js missing swap re-wiring pin %q", want)
+		}
+	}
+}
+
 // TestContractSearchDrawerGrid pins the spec drawers'
 // deterministic grid in contracts.css: fixed tracks and
 // per-field spans, never the auto-fit rule whose column

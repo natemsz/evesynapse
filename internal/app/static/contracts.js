@@ -6,13 +6,66 @@
 // arranges still submits through the one search form.
 (function () {
   "use strict";
-  var form = document.getElementById("cs-form");
 
   function applyMeters(root) {
     root.querySelectorAll(".meter > span[data-w]").forEach(function (el) {
       el.style.width = el.getAttribute("data-w") + "%";
     });
   }
+
+  // ---- copy buttons ------------------------------------------------------
+  // Document-level delegation, bound once: it serves the
+  // current DOM and any swapped-in DOM alike.
+  document.addEventListener("click", function (e) {
+    var btn = e.target.closest("[data-copy]");
+    if (!btn) return;
+    e.preventDefault();
+    e.stopPropagation();
+    var text = btn.getAttribute("data-copy");
+    function done() {
+      if (btn.dataset.copyBusy) return;
+      btn.dataset.copyBusy = "1";
+      var original = btn.textContent;
+      btn.textContent = btn.classList.contains("cs-copy") && !btn.classList.contains("btn") ? "✓" : "Copied Link!";
+      btn.classList.add("copied");
+      setTimeout(function () {
+        btn.textContent = original;
+        btn.classList.remove("copied");
+        delete btn.dataset.copyBusy;
+      }, 2000);
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done, function () { fallback(); });
+    } else {
+      fallback();
+    }
+    function fallback() {
+      var ta = document.createElement("textarea");
+      ta.value = text;
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand("copy"); } catch (err) { /* clipboard unavailable */ }
+      ta.remove();
+      done();
+    }
+  });
+
+  // ---- page wiring ---------------------------------------------------
+  // Everything below binds to the search page's DOM. An
+  // in-page swap replaces that DOM without re-running this
+  // script, so the wiring re-runs when the shell announces
+  // swapped-in content; the form-identity guard (the same
+  // pattern pi.js boots with) keeps a repeat call for the
+  // same DOM a no-op, and a page without the search form
+  // (the contract detail page loads this script too) wires
+  // nothing.
+  var wiredForm = null;
+  function init() {
+  var form = document.getElementById("cs-form");
+  if (!form || form === wiredForm) return;
+  wiredForm = form;
 
   // ---- drawer slot -------------------------------------------------
   // One slot, three spec sets. The tabs control visibility
@@ -205,43 +258,6 @@
     });
   });
 
-  // ---- copy buttons ------------------------------------------------------
-  document.addEventListener("click", function (e) {
-    var btn = e.target.closest("[data-copy]");
-    if (!btn) return;
-    e.preventDefault();
-    e.stopPropagation();
-    var text = btn.getAttribute("data-copy");
-    function done() {
-      if (btn.dataset.copyBusy) return;
-      btn.dataset.copyBusy = "1";
-      var original = btn.textContent;
-      btn.textContent = btn.classList.contains("cs-copy") && !btn.classList.contains("btn") ? "✓" : "Copied Link!";
-      btn.classList.add("copied");
-      setTimeout(function () {
-        btn.textContent = original;
-        btn.classList.remove("copied");
-        delete btn.dataset.copyBusy;
-      }, 2000);
-    }
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(text).then(done, function () { fallback(); });
-    } else {
-      fallback();
-    }
-    function fallback() {
-      var ta = document.createElement("textarea");
-      ta.value = text;
-      ta.style.position = "fixed";
-      ta.style.opacity = "0";
-      document.body.appendChild(ta);
-      ta.select();
-      try { document.execCommand("copy"); } catch (err) { /* clipboard unavailable */ }
-      ta.remove();
-      done();
-    }
-  });
-
   // ---- results accordion -------------------------------------------------
   // Exactly one row open at a time; clicking the open row
   // closes it. Panels load lazily, one contract per fetch,
@@ -294,4 +310,7 @@
       else openRowPanel(row);
     });
   });
+  }
+  init();
+  document.addEventListener("evesynapse:content-ready", init);
 })();

@@ -88,6 +88,40 @@ func TestAppraisalDealRatioGating(t *testing.T) {
 	if _, ok := appraisalDealRatio(exchange, module.Appraisal{}); ok {
 		t.Error("no offered lines, no ratio")
 	}
+
+	// The wanted side is cost, not decoration: an exchange's
+	// ratio runs over price plus the valued wants, gated on
+	// full wanted coverage exactly like the offered side.
+	withWants := module.Appraisal{OfferedValue: 1000, PricedOffered: 2, OfferedLines: 2,
+		WantValue: 500, PricedWanted: 1, WantedLines: 1}
+	if ratio, ok := appraisalDealRatio(db.PubContract{Type: "item_exchange", Price: 350}, withWants); !ok || ratio != 0.85 {
+		t.Errorf("exchange with priced wants: got %v/%v, want 0.85/true ((350+500)/1000)", ratio, ok)
+	}
+	if ratio, ok := appraisalDealRatio(db.PubContract{Type: "item_exchange", Price: 0}, withWants); !ok || ratio != 0.5 {
+		t.Errorf("wants can carry the whole cost: got %v/%v, want 0.5/true", ratio, ok)
+	}
+	// The owner's case: 1 ISK plus wants worth two and a half
+	// times the contents is no deal at any threshold.
+	barter := module.Appraisal{OfferedValue: 1000, PricedOffered: 1, OfferedLines: 1,
+		WantValue: 2499, PricedWanted: 1, WantedLines: 1}
+	ratio, ok := appraisalDealRatio(db.PubContract{Type: "item_exchange", Price: 1}, barter)
+	if !ok || ratio != 2.5 {
+		t.Errorf("1 ISK + 2499 of wants over 1000 offered: got %v/%v, want 2.5/true", ratio, ok)
+	}
+	if appraisalDealFlag(sql.NullFloat64{Float64: ratio, Valid: ok}) {
+		t.Error("a barter costing 250% of value must never flag as a deal")
+	}
+	// An unpriced wanted line leaves the cost unknowable: no
+	// ratio, however cheap the ISK ask looks.
+	unpricedWant := module.Appraisal{OfferedValue: 1000, PricedOffered: 1, OfferedLines: 1,
+		WantedLines: 1}
+	if _, ok := appraisalDealRatio(db.PubContract{Type: "item_exchange", Price: 1}, unpricedWant); ok {
+		t.Error("an unpriced wanted line must store no ratio")
+	}
+	// A free exchange with no wants still has no cost to judge.
+	if _, ok := appraisalDealRatio(db.PubContract{Type: "item_exchange", Price: 0}, full); ok {
+		t.Error("a zero-cost exchange has no ratio")
+	}
 }
 
 // TestAppraisePublicContractsEndToEnd runs the worker pass
@@ -150,9 +184,15 @@ func TestAppraisePublicContractsEndToEnd(t *testing.T) {
 	item(5, 9103, 1004, 1, true)
 	contract(9104, "item_exchange", 5, 0) // floor-rule line
 	item(6, 9104, 1005, 1, true)
+	contract(9105, "item_exchange", 1, 0) // 1 ISK + priced wants: a real, small deal
+	item(7, 9105, 1001, 10, true)
+	item(8, 9105, 1003, 3, false)
+	contract(9106, "item_exchange", 1, 0) // 1 ISK + an unpriceable want: no ratio
+	item(9, 9106, 1001, 10, true)
+	item(10, 9106, 1006, 1, false)
 
-	if n := app.appraisePublicContracts(ctx); n != 4 {
-		t.Fatalf("appraised %d contracts, want 4", n)
+	if n := app.appraisePublicContracts(ctx); n != 6 {
+		t.Fatalf("appraised %d contracts, want 6", n)
 	}
 
 	c1, err := q.GetPublicContract(ctx, 9101)
@@ -190,6 +230,31 @@ func TestAppraisePublicContractsEndToEnd(t *testing.T) {
 	}
 	if !c3.DealRatio.Valid || c3.DealRatio.Float64 != 0.8 {
 		t.Errorf("9103 ratio = %v, want 0.8 (buyout over fallback value)", c3.DealRatio)
+	}
+
+	// 9105: the cost side is 1 ISK plus 3 x 30 of wanted
+	// estimate -- 91 against 1000 offered, a genuine deal the
+	// old ISK-only math would have read as 0% of value.
+	c5, err := q.GetPublicContract(ctx, 9105)
+	if err != nil {
+		t.Fatalf("read 9105: %v", err)
+	}
+	if c5.OfferedValue != 1000 || c5.WantValue != 90 {
+		t.Errorf("9105 values = %v/%v, want 1000 offered / 90 wanted", c5.OfferedValue, c5.WantValue)
+	}
+	if !c5.DealRatio.Valid || c5.DealRatio.Float64 != 0.091 || !appraisalDealFlag(c5.DealRatio) {
+		t.Errorf("9105 ratio = %v, want a flagged 0.091 ((1+90)/1000)", c5.DealRatio)
+	}
+
+	// 9106: the wanted line prices nowhere, so the contract
+	// stores no ratio -- a 1-ISK ask must not pose as a deal
+	// when part of its price is an item we cannot value.
+	c6, err := q.GetPublicContract(ctx, 9106)
+	if err != nil {
+		t.Fatalf("read 9106: %v", err)
+	}
+	if c6.WantValue != 0 || c6.DealRatio.Valid {
+		t.Errorf("9106 want/ratio = %v/%v, want 0 and no ratio", c6.WantValue, c6.DealRatio)
 	}
 
 	items4, err := q.ListPublicContractItems(ctx, 9104)

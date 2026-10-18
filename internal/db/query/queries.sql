@@ -146,6 +146,10 @@ WHERE contract_id = $1;
 SELECT contract_id FROM contract_details
 WHERE character_id = $1
 ORDER BY contract_id;
+-- name: ListContractDetailIDsForContracts :many
+SELECT contract_id FROM contract_details
+WHERE contract_id = ANY(sqlc.arg(ids)::bigint[])
+ORDER BY contract_id;
 -- name: UpsertContractDetail :exec
 INSERT INTO contract_details (contract_id, character_id, payload, fetched_at)
 VALUES ($1, $2, $3, $4)

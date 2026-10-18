@@ -314,6 +314,29 @@ func (app *Application) pageWantSettled(ctx context.Context, want pageWant) bool
 	return true
 }
 
+// sweepPageWants forgets expired wants in every scope, and any
+// scope left empty. pendingPageWantCount forgets the settled and
+// expired wants of the one scope being polled, but a page nobody
+// looks at again (a closed tab, a view given up on) is never
+// polled again, so without a sweep its wants would be remembered
+// forever. The TTL is the whole test here — settled-checking is
+// the poll's job; the sweep just bounds how long an abandoned
+// want can linger. Called once a worker cycle.
+func (app *Application) sweepPageWants(now time.Time) {
+	app.pageWantMu.Lock()
+	defer app.pageWantMu.Unlock()
+	for scope, set := range app.pageWants {
+		for key, want := range set {
+			if now.Sub(want.NotedAt) > pageWantTTL {
+				delete(set, key)
+			}
+		}
+		if len(set) == 0 {
+			delete(app.pageWants, scope)
+		}
+	}
+}
+
 // pendingPageWantCount counts one page scope's unresolved wants,
 // forgetting settled and expired ones as it goes.
 func (app *Application) pendingPageWantCount(ctx context.Context, scope string) int {

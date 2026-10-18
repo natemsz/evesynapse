@@ -203,6 +203,15 @@ func (app *Application) runWorker(ctx context.Context) {
 
 // refreshCycle performs one pass over all characters. See runWorker.
 func (app *Application) refreshCycle(ctx context.Context) {
+	// The cycle's passes share one read and one decode of each
+	// stored snapshot (core_snapshots.go), however many of them
+	// look at it.
+	ctx = withCycleSnapshotCache(ctx)
+	// Expired page wants nobody is polling for any more go here;
+	// the banner's own count only ever settles the scope it is
+	// asked about (worker_pagewants.go).
+	app.sweepPageWants(time.Now())
+
 	clock := newPhaseClock(time.Now())
 	app.updateWorkerStatus(func(s *workerStatus) {
 		s.LastRunAt = clock.start

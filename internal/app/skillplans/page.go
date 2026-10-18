@@ -324,9 +324,13 @@ func (app *plans) handleSkillPlans(w http.ResponseWriter, r *http.Request) {
 		app.deps.Render(ctx, w, http.StatusOK, "skillplans.html", data)
 		return
 	}
+	// One build environment for the whole page: the plan details
+	// below read the items listed here, share one skill graph, and
+	// load the character's training snapshots once (planBuildEnv).
+	env := newPlanBuildEnv()
 	all := make([]skillPlanSummary, 0, len(plans))
 	for _, p := range plans {
-		items, err := app.queries.ListSkillPlanItems(ctx, p.ID)
+		items, err := env.itemsFor(app, ctx, p.ID)
 		if err != nil {
 			logging.Errorf("skill plans: items for plan %d: %v", p.ID, err)
 		}
@@ -348,7 +352,7 @@ func (app *plans) handleSkillPlans(w http.ResponseWriter, r *http.Request) {
 		selected = &p
 	}
 	if selected != nil {
-		view.Plan = app.buildPlanDetail(ctx, active, *selected, r.URL.Query().Get("confirm") == "delete")
+		view.Plan = app.buildPlanDetailEnv(ctx, env, active, *selected, r.URL.Query().Get("confirm") == "delete")
 	}
 
 	// The picker: every plan with what is left to train in it, narrowed by
@@ -363,7 +367,7 @@ func (app *plans) handleSkillPlans(w http.ResponseWriter, r *http.Request) {
 		case p.Selected:
 			p.Left = planLeft(view.Plan)
 		case i < planListTimedMax:
-			p.Left = planLeft(app.buildPlanDetail(ctx, active, plans[i], false))
+			p.Left = planLeft(app.buildPlanDetailEnv(ctx, env, active, plans[i], false))
 		}
 	}
 	view.PlanTotal = len(all)
@@ -381,8 +385,9 @@ func (app *plans) handleSkillPlans(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			logging.Errorf("skill plans: search %q: %v", view.SearchQuery, err)
 		}
-		searchGraph := newSDESkillGraph(app, ctx)
-		ct, _, trainingLoaded := app.loadCharTraining(ctx, active.CharacterID)
+		searchGraph := env.graphFor(app, ctx)
+		cl := env.charLoad(app, ctx, active.CharacterID)
+		ct, trainingLoaded := cl.ct, cl.loaded
 		for _, hit := range hits {
 			trained := 0
 			if trainingLoaded {
@@ -417,20 +422,111 @@ func planLeft(d *skillPlanDetail) string {
 	return ""
 }
 
+// ---------------------------------------------------------------------------
+// Per-request build environment. One skill plans render computes
+// a detail per plan (the selected plan plus the picker's timed
+// summaries); the reads behind a detail are the same for every
+// plan of the character, so the environment carries them across
+// the details of one request:
+//
+//   - the SDE skill graph, built at most once;
+//   - each plan's items, queried at most once (a failed query is
+//     NOT cached: the caller logs it, and a later detail in the
+//     same request asks again, as the page's own passes each did
+//     before they shared);
+//   - each character's training snapshots, decoded at most once,
+//     and the attributes snapshot probe behind them.
+//
+// Everything cached is a straight read of stored state, so
+// sharing changes only how often the reads repeat, never what a
+// detail computes.
+// ---------------------------------------------------------------------------
+
+type planBuildEnv struct {
+	graph *sdeSkillGraph
+	items map[int64][]db.SkillPlanItem
+	chars map[int64]*planCharLoad
+}
+
+// planCharLoad is one character's training snapshots as
+// loadCharTraining returns them, plus the attributes probe
+// (attrsOK, valid once probed), which buildPlanDetail only makes
+// when the skills snapshot loaded.
+type planCharLoad struct {
+	ct       skillplan.CharTraining
+	rawAttrs esi.Attributes
+	loaded   bool
+	attrsOK  bool
+	probed   bool
+}
+
+func newPlanBuildEnv() *planBuildEnv {
+	return &planBuildEnv{
+		items: make(map[int64][]db.SkillPlanItem),
+		chars: make(map[int64]*planCharLoad),
+	}
+}
+
+func (env *planBuildEnv) graphFor(app *plans, ctx context.Context) *sdeSkillGraph {
+	if env.graph == nil {
+		env.graph = newSDESkillGraph(app, ctx)
+	}
+	return env.graph
+}
+
+func (env *planBuildEnv) itemsFor(app *plans, ctx context.Context, planID int64) ([]db.SkillPlanItem, error) {
+	if items, ok := env.items[planID]; ok {
+		return items, nil
+	}
+	items, err := app.queries.ListSkillPlanItems(ctx, planID)
+	if err != nil {
+		return nil, err
+	}
+	env.items[planID] = items
+	return items, nil
+}
+
+func (env *planBuildEnv) charLoad(app *plans, ctx context.Context, characterID int64) *planCharLoad {
+	if cl, ok := env.chars[characterID]; ok {
+		return cl
+	}
+	ct, rawAttrs, loaded := app.loadCharTraining(ctx, characterID)
+	cl := &planCharLoad{ct: ct, rawAttrs: rawAttrs, loaded: loaded}
+	env.chars[characterID] = cl
+	return cl
+}
+
+// attrsLoaded probes the attributes snapshot at most once per
+// character per request.
+func (env *planBuildEnv) attrsLoaded(app *plans, ctx context.Context, cl *planCharLoad, characterID int64) bool {
+	if !cl.probed {
+		cl.attrsOK = app.characterAttrsLoaded(ctx, characterID)
+		cl.probed = true
+	}
+	return cl.attrsOK
+}
+
 // buildPlanDetail computes one plan against the character's
 // current training state and shapes it for the editor.
 func (app *plans) buildPlanDetail(ctx context.Context, ch db.Character, plan db.SkillPlan, confirmDelete bool) *skillPlanDetail {
+	return app.buildPlanDetailEnv(ctx, newPlanBuildEnv(), ch, plan, confirmDelete)
+}
+
+// buildPlanDetailEnv is buildPlanDetail against a shared
+// per-request environment (see planBuildEnv).
+func (app *plans) buildPlanDetailEnv(ctx context.Context, env *planBuildEnv, ch db.Character, plan db.SkillPlan, confirmDelete bool) *skillPlanDetail {
 	detail := &skillPlanDetail{ID: plan.ID, Name: plan.Name, ConfirmDelete: confirmDelete}
 
-	items, err := app.queries.ListSkillPlanItems(ctx, plan.ID)
+	items, err := env.itemsFor(app, ctx, plan.ID)
 	if err != nil {
 		logging.Errorf("skill plans: items for plan %d: %v", plan.ID, err)
 		return detail
 	}
 
-	graph := newSDESkillGraph(app, ctx)
-	ct, rawAttrs, skillsLoaded := app.loadCharTraining(ctx, ch.CharacterID)
-	attrs, attrsKnown := attrsOrFlat(rawAttrs, skillsLoaded && app.characterAttrsLoaded(ctx, ch.CharacterID))
+	graph := env.graphFor(app, ctx)
+	cl := env.charLoad(app, ctx, ch.CharacterID)
+	ct, rawAttrs, skillsLoaded := cl.ct, cl.rawAttrs, cl.loaded
+	attrs, attrsKnown := attrsOrFlat(rawAttrs, skillsLoaded && env.attrsLoaded(app, ctx, cl, ch.CharacterID))
 
 	targets := make([]skillplan.Target, 0, len(items))
 	for _, item := range items {

@@ -1045,6 +1045,35 @@ func (q *Queries) ListContractDetailIDsByCharacter(ctx context.Context, characte
 	return items, nil
 }
 
+const listContractDetailIDsForContracts = `-- name: ListContractDetailIDsForContracts :many
+SELECT contract_id FROM contract_details
+WHERE contract_id = ANY($1::bigint[])
+ORDER BY contract_id
+`
+
+func (q *Queries) ListContractDetailIDsForContracts(ctx context.Context, ids []int64) ([]int64, error) {
+	rows, err := q.db.QueryContext(ctx, listContractDetailIDsForContracts, pq.Array(ids))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []int64
+	for rows.Next() {
+		var contract_id int64
+		if err := rows.Scan(&contract_id); err != nil {
+			return nil, err
+		}
+		items = append(items, contract_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listCorporationIDsByUser = `-- name: ListCorporationIDsByUser :many
 SELECT DISTINCT cc.corporation_id
 FROM character_corporations cc

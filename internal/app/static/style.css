@@ -152,7 +152,7 @@
   --row: rgba(16, 13, 10, 0.55);
   --row-alt: rgba(255, 255, 255, 0.03);
   --row-hover: rgba(255, 140, 50, 0.09);
-  --input-bg: rgba(12, 9, 6, 0.6);
+  --input-bg: rgba(18, 12, 8, 0.45);
 }
 
 * { box-sizing: border-box; }
@@ -812,21 +812,29 @@ img.portrait {
 
 /* --- form inputs + market search suggestions --- */
 /* Fields share one look and one height (--control-h) with the buttons
-   beside them. */
-input[type="text"], input[type="search"], input[type="number"] {
+   beside them. One control family: text fields, selects and
+   textareas all wear the same surface — the --input-bg paint, the
+   accent-tinted --glass-edge border every panel and card uses, and
+   the pill buttons' blur chain — so a field reads as a tint of the
+   page glass, not a neutral slab pasted onto it. As with the
+   suggestion dropdowns below, legibility comes from the paint;
+   the blur is a bonus where it can sample. */
+input[type="text"], input[type="search"], input[type="number"], select, textarea {
   background: var(--input-bg);
-  border: 1px solid #2a2a2a;
+  border: 1px solid var(--glass-edge);
   border-radius: var(--r-sm);
   color: var(--text);
   box-sizing: border-box;
   min-height: var(--control-h);
   padding: 0.2rem 0.6rem;
   font: inherit;
+  -webkit-backdrop-filter: blur(10px) saturate(1.2);
+  backdrop-filter: blur(10px) saturate(1.2);
 }
-html[data-theme="light"] input[type="text"], html[data-theme="light"] input[type="search"], html[data-theme="light"] input[type="number"] {
+html[data-theme="light"] input[type="text"], html[data-theme="light"] input[type="search"], html[data-theme="light"] input[type="number"], html[data-theme="light"] select, html[data-theme="light"] textarea {
   border-color: #d8cdb8;
 }
-input[type="text"]:focus, input[type="search"]:focus, input[type="number"]:focus {
+input[type="text"]:focus, input[type="search"]:focus, input[type="number"]:focus, select:focus, textarea:focus {
   border-color: var(--accent);
   outline: none;
   box-shadow: 0 0 8px rgba(255, 106, 26, 0.35);
@@ -1123,7 +1131,7 @@ html.js :has(> [data-tabs]:not([data-tabs-ready])) .ti-h { display: none; }
 .widget-scope { display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap; margin: 0 0 0.5rem; }
 .widget-scope select {
   background: var(--input-bg);
-  border: 1px solid #2a2a2a;
+  border: 1px solid var(--glass-edge);
   border-radius: var(--r-sm);
   color: var(--text);
   padding: 0.3rem 0.4rem;
@@ -2865,7 +2873,7 @@ the page sideways. */
 .fit-head .fit-publicchk { display: inline-flex; }
 .fit-head select {
   background: var(--input-bg);
-  border: 1px solid #2a2a2a;
+  border: 1px solid var(--glass-edge);
   border-radius: var(--r-sm);
   color: var(--text);
   padding: 0.42rem 0.6rem;
@@ -2992,8 +3000,8 @@ html[data-theme="light"] .fit-head select {
 .fit-chip-sub { flex-basis: 100%; min-width: 0; font-size: 0.74rem; color: var(--muted); overflow-wrap: anywhere; }
 .fit-qty {
   width: 4.2rem;
-  background: #0e0e0e;
-  border: 1px solid #2a2a2a;
+  background: var(--input-bg);
+  border: 1px solid var(--glass-edge);
   border-radius: var(--r-sm);
   color: var(--text);
   font: inherit;
@@ -3224,7 +3232,7 @@ the rating as a small ember panel rather than a loose form. */
 .fit-rateform label { display: grid; gap: 0.25rem; font-size: 0.8rem; color: var(--muted); }
 .fit-rateform select {
   background: var(--input-bg);
-  border: 1px solid #2a2a2a;
+  border: 1px solid var(--glass-edge);
   border-radius: var(--r-sm);
   color: var(--text);
   padding: 0.38rem 0.55rem;
@@ -3391,16 +3399,13 @@ select.flash { animation: fit-flash 0.7s ease-out; }
 }
 .fit-drag-ghost img { width: 88%; height: 88%; border-radius: 50%; }
 .fit-picker-hint { color: var(--muted); font-size: 0.8rem; }
-/* Module search: sticky above the workbench. */
+/* Module search: sticky above the workbench. The surface is the
+   shared .searchpanel glass (the template carries both classes);
+   only the sticky placement lives here. */
 .fit-modsearch {
   position: sticky;
   top: 4.25rem;
   z-index: 9;
-  background: linear-gradient(to bottom, rgba(21, 21, 21, 0.97), rgba(14, 14, 14, 0.97));
-  border: 1px solid #262626;
-  border-radius: 6px;
-  padding: 0.6rem 0.7rem 0.2rem;
-  margin: 0.8rem 0;
 }
 .fit-modsearchwrap { display: block; width: 100%; }
 .fit-modsearch .fit-searchrow { margin: 0.5rem 0 0.4rem; }
@@ -3420,6 +3425,10 @@ select.flash { animation: fit-flash 0.7s ease-out; }
 }
 .searchpanel .searchwrap { flex: 1 1 100%; max-width: none; }
 html[data-theme="light"] .searchpanel {
+  background: var(--glass);
+  border-color: #d9cfba;
+}
+html[data-theme="light"] .page-body:not(:has(.home-grid)) .fit-modsearch {
   background: var(--glass);
   border-color: #d9cfba;
 }
@@ -3509,8 +3518,6 @@ html[data-theme="light"] .searchpanel {
 .fit-eft { margin-top: 1rem; }
 .fit-eft textarea {
   width: 100%;
-  background: #0e0e0e;
-  border: 1px solid #2a2a2a;
   border-radius: var(--r-sm);
   color: var(--text);
   font: inherit;
@@ -3726,10 +3733,6 @@ html[data-theme="light"][data-nav="rail"] .sidebar .branch .menu {
   background: #fdfbf6;
   border-color: #d9cfba;
   box-shadow: 0 10px 24px rgba(90, 70, 40, 0.22);
-}
-html[data-theme="light"] .fit-modsearch {
-  background: linear-gradient(to bottom, rgba(253, 251, 246, 0.97), rgba(248, 244, 236, 0.97));
-  border-color: #d9cfba;
 }
 html[data-theme="light"] .sidebar .branch .menu a { border-color: #d3c7ae; }
 html[data-theme="light"] .sidenav a.navlink:hover,
@@ -4668,6 +4671,16 @@ html[data-theme="light"] .suggest li:not(.sug-kind):not(.sug-empty):hover, html[
   backdrop-filter: none;
   border-color: rgba(255, 110, 0, 0.14);
   box-shadow: none;
+}
+/* The module search bar is sticky: page content scrolls beneath it, so
+   unlike the other inner panels it keeps the full panel glass. The
+   flattened tint alone lets text and buttons passing under the bar show
+   through the search field unblurred. */
+.page-body:not(:has(.home-grid)) .fit-modsearch {
+  background: linear-gradient(180deg, rgba(255, 122, 26, 0.05), rgba(255, 122, 26, 0) 55%), var(--glass);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(0.9);
+  backdrop-filter: blur(var(--glass-blur)) saturate(0.9);
+  border-color: var(--glass-edge);
 }
 .page-body:not(:has(.home-grid)) .kpis {
   background: none;

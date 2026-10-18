@@ -90,7 +90,7 @@ body::before {
 }
 
 /* The character selector's dropdown (style.css) paints with
-   --input-bg, 60% dark: right for the input resting on a panel,
+   --input-bg: right for the input resting on a panel,
    wrong for the open list floating over page content, where the
    text underneath (a wallet balance, say) bleeds straight
    through and the names turn unreadable. It gets the .suggest

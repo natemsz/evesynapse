@@ -181,6 +181,34 @@ func TestFitSimulateStatsFragment(t *testing.T) {
 		`class="fit-problems"`, "<li>Powergrid over by 10 MW</li>")
 }
 
+// TestFitChipControlsCluster: a fitted module's row carries its
+// name as plain text (clicking it must never remove), with the
+// state and the - / + stepper grouped in the row's right-hand
+// control cluster — exactly one remove and one add per row.
+func TestFitChipControlsCluster(t *testing.T) {
+	app, cookie := fitTestApp(t)
+
+	code, body := postFitJSON(t, app, cookie, "/fittings/simulate/",
+		`{"shipTypeId":1001,"items":[{"typeId":3001,"qty":2}],"charges":{"3001":4001},"pilot":0}`)
+	if code != http.StatusOK {
+		t.Fatalf("simulate status = %d, body %q", code, body)
+	}
+	mustContain(t, "/fittings/simulate/ chip", body,
+		`<span class="fit-chip-main">`,
+		`<span class="fit-chip-name">Fixture Blaster</span>`,
+		`<span class="fit-chip-ctl">`,
+		`<span class="fit-chip-step">`)
+	if strings.Contains(body, `fit-chip-name" data-fit-dec`) {
+		t.Errorf("the module name still carries the remove action:\n%s", body)
+	}
+	if n := strings.Count(body, `data-fit-dec="3001"`); n != 1 {
+		t.Errorf("remove buttons for the blaster row = %d, want exactly 1 (the stepper minus)", n)
+	}
+	if n := strings.Count(body, `data-fit-inc="3001"`); n != 1 {
+		t.Errorf("add buttons for the blaster row = %d, want exactly 1 (the stepper plus)", n)
+	}
+}
+
 // TestFitSimulateMissingSkills: the chosen pilot's unmet
 // requirements are listed with current -> needed levels.
 func TestFitSimulateMissingSkills(t *testing.T) {

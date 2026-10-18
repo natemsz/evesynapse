@@ -2965,16 +2965,43 @@ html[data-theme="light"] .fit-head select {
   padding: 0.15rem 0.4rem;
 }
 .fit-chip:hover { background: var(--row-hover); }
+/* The row's left block: name (truncates before it can push the
+   controls), count, and the drone count field. */
+.fit-chip-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
 .fit-chip-name {
   min-width: 0;
-  text-align: left;
-  background: none;
-  border: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   color: var(--text);
-  font: inherit;
-  cursor: pointer;
-  padding: 0;
 }
+/* The right-hand control cluster, the same width on every row:
+   the module state on its own line, the - / + stepper directly
+   under it, so the buttons form one aligned column down the
+   list. The state line is always reserved (an invisible
+   placeholder when a row has no uniform state) so the stepper
+   never shifts up on stateless rows. */
+.fit-chip-ctl {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.12rem;
+}
+.fit-chip-step { display: flex; gap: 0.25rem; }
+.fit-chip-step .fit-chip-btn {
+  min-width: 1.9rem;
+  min-height: 1.75rem;
+  padding: 0.2rem 0.3rem;
+  text-align: center;
+}
+.fit-chip-state-ph { visibility: hidden; }
 .fit-chip-btn {
   background: #242424;
   border: 1px solid #3a3a3a;
@@ -2986,7 +3013,7 @@ html[data-theme="light"] .fit-head select {
   padding: 0.1rem 0.35rem;
 }
 .fit-chip-qty { color: var(--success); }
-.fit-chip-state { margin-left: auto; padding: 0 0.35rem; border: 1px solid #333; border-radius: var(--r-sm); font-size: 0.68rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.fit-chip-state { margin-left: auto; padding: 0 0.35rem; border: 1px solid #333; border-radius: var(--r-sm); font-size: 0.68rem; line-height: 1.15; min-height: calc(0.68rem * 1.15 + 2px); box-sizing: border-box; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
 .fit-chip.st-active .fit-chip-state { border-color: rgba(255, 184, 77, 0.45); color: var(--success); }
 .fit-chip.st-overheated .fit-chip-state { border-color: var(--accent); color: var(--accent); }
 .fit-chip-sub { flex-basis: 100%; min-width: 0; font-size: 0.74rem; color: var(--muted); overflow-wrap: anywhere; }

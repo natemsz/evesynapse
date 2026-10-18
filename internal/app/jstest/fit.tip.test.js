@@ -623,7 +623,16 @@ function polishExtend(env, wb) {
   high.appendChild(mk("h4", "", null, "High power"));
   const chips = mk("div", "fit-chips");
   const chip = mk("span", "fit-chip st-active", { "data-fit-rowtype": "100", "data-tip-name": "Alpha Blaster" });
-  chip.appendChild(mk("button", "fit-chip-name", { "data-fit-dec": "100" }, "Alpha Blaster"));
+  const chipMain = mk("span", "fit-chip-main");
+  chipMain.appendChild(mk("span", "fit-chip-name", null, "Alpha Blaster"));
+  chip.appendChild(chipMain);
+  const chipCtl = mk("span", "fit-chip-ctl");
+  chipCtl.appendChild(mk("span", "fit-chip-state", null, "active"));
+  const chipStep = mk("span", "fit-chip-step");
+  chipStep.appendChild(mk("button", "fit-chip-btn", { "data-fit-dec": "100" }, "−"));
+  chipStep.appendChild(mk("button", "fit-chip-btn", { "data-fit-inc": "100" }, "+"));
+  chipCtl.appendChild(chipStep);
+  chip.appendChild(chipCtl);
   chips.appendChild(chip);
   high.appendChild(chips);
   slots.appendChild(high);
@@ -721,6 +730,100 @@ test("fitting polish: the charge drawer swaps charges from the slot row", async 
   const body = JSON.parse(sim.body);
   assert.equal(String(body.charges["100"]), "4002",
     "the pick wrote the charge through the document, not a side channel");
+});
+
+// ---------------------------------------------------------------------
+// Module list rows: the name is not a remove button. A click (or
+// hover) on a fitted module's row shows its tooltip; only the
+// row's - / + stepper buttons change the fit.
+
+function chipExtend(env, wb) {
+  const mk = function (tag, cls, attrs, text) {
+    const el = new EEl(tag, env);
+    if (cls) el.className = cls;
+    if (attrs) for (const k of Object.keys(attrs)) el.setAttribute(k, attrs[k]);
+    if (text != null) el.textContent = text;
+    return el;
+  };
+  const slots = mk("div", "fit-slots");
+  const high = mk("div", "fit-group", { "data-fit-group": "high", "data-fit-max": "8" });
+  high.appendChild(mk("h4", "", null, "High power"));
+  const chips = mk("div", "fit-chips");
+  const chip = mk("span", "fit-chip st-active", {
+    "data-fit-rowtype": "100", "data-tip-name": "Alpha Blaster",
+    "data-tip-lines": "DPS|20|good;CPU|15 tf|",
+  });
+  const main = mk("span", "fit-chip-main");
+  main.appendChild(mk("span", "fit-chip-name", null, "Alpha Blaster"));
+  chip.appendChild(main);
+  const ctl = mk("span", "fit-chip-ctl");
+  ctl.appendChild(mk("span", "fit-chip-state", null, "active"));
+  const step = mk("span", "fit-chip-step");
+  step.appendChild(mk("button", "fit-chip-btn", { "data-fit-dec": "100" }, "−"));
+  step.appendChild(mk("button", "fit-chip-btn", { "data-fit-inc": "100" }, "+"));
+  ctl.appendChild(step);
+  chip.appendChild(ctl);
+  chips.appendChild(chip);
+  high.appendChild(chips);
+  slots.appendChild(high);
+  wb.appendChild(slots);
+  return wb;
+}
+
+async function chipEnv() {
+  const env = makeEditorEnv();
+  env.html.SIM = function () { return chipExtend(env, buildWorkbench(env, false)); };
+  const records = [];
+  polishFetch(env, records, { ok: true, solved: false, note: "" });
+  while (env.sims.length) env.sims.shift()();
+  await delay(25);
+  return { env: env, records: records };
+}
+
+function lastSimBody(records) {
+  const sim = records.filter(function (r) { return r.url.indexOf("/fittings/simulate/") === 0; }).pop();
+  assert.ok(sim, "a simulate request was posted");
+  return JSON.parse(sim.body);
+}
+
+test("editor chips: clicking the row shows its tooltip and removes nothing", async function () {
+  const { env, records } = await chipEnv();
+  const chip = env.wb().querySelector('.fit-chip[data-fit-rowtype="100"]');
+  assert.ok(chip, "slot chip present");
+  const name = chip.querySelector(".fit-chip-name");
+  assert.equal(name.getAttribute("data-fit-dec"), null, "the name carries no remove action");
+  const simsBefore = env.sims.length;
+  const recordsBefore = records.length;
+  env.dispatch(name, "click");
+  assert.equal(env.tips().length, 1, "the click shows the row's tooltip");
+  assert.equal(env.tipName(), "Alpha Blaster");
+  assert.equal(env.sims.length, simsBefore, "no simulate fired: the fit is unchanged");
+  assert.equal(records.length, recordsBefore, "no request of any kind fired");
+  env.dispatch(name, "click");
+  assert.equal(env.tips().length, 0, "a second click on the row hides the tooltip");
+  env.dispatch(chip, "mouseover");
+  assert.equal(env.tips().length, 1, "hover shows the tooltip too");
+  assert.equal(env.tipName(), "Alpha Blaster");
+  env.dispatch(chip, "mouseout");
+  await delay(PAST_CLOSE);
+  assert.equal(env.tips().length, 0, "leaving the row closes its tooltip");
+});
+
+test("editor chips: only the stepper buttons change the fit", async function () {
+  const { env, records } = await chipEnv();
+  const chip = env.wb().querySelector('.fit-chip[data-fit-rowtype="100"]');
+  env.dispatch(chip.querySelector("[data-fit-dec]"), "click");
+  await env.release();
+  let body = lastSimBody(records);
+  assert.ok(!body.items.some(function (i) { return i.typeId === 100; }),
+    "the minus button removed the module from the document");
+  const fresh = env.wb().querySelector('.fit-chip[data-fit-rowtype="100"]');
+  env.dispatch(fresh.querySelector("[data-fit-inc]"), "click");
+  await env.release();
+  body = lastSimBody(records);
+  const it = body.items.filter(function (i) { return i.typeId === 100; })[0];
+  assert.ok(it, "the module is in the document");
+  assert.equal(it.qty, 2, "the plus button added another");
 });
 
 test("fitting polish: the implant solver previews and applies its pick", async function () {

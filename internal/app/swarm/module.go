@@ -238,6 +238,10 @@ func initSwarm(deps module.Deps) error {
 		}
 		st.SwarmID = id
 		st.SwarmCli = NewSwarmClient(cfg.Secret)
+		// The client signs its pulls as this instance: peers
+		// verify that signature against the key they pinned
+		// for it, the one this identity holds.
+		st.SwarmCli.ID = id
 		logging.Infof("evesynapse: shared cache enabled (%s)", cfg.Mode)
 	}
 	return nil

@@ -124,6 +124,8 @@ const (
 	SwarmCounterSpotFailed       = "spot_failed"
 	SwarmCounterPullsOK          = "pulls_ok"
 	SwarmCounterPullsFailed      = "pulls_failed"
+	SwarmCounterPullsAuthSigned  = "pulls_auth_signed"
+	SwarmCounterPullsAuthLegacy  = "pulls_auth_legacy"
 	SwarmCounterRolledBack       = "rolled_back"
 	SwarmCounterDroppedUnchecked = "dropped_unchecked"
 )

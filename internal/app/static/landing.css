@@ -132,3 +132,25 @@ body::before { filter: brightness(0.74) saturate(0.97) blur(2px); transform: sca
 @media (prefers-reduced-motion: reduce) {
   * { animation: none !important; transition: none !important; }
 }
+
+/* The landing keeps the original dramatic art: bg.css paints
+   the calm interior sky on body::before, and these tiers (the
+   same declarations bg.css carried before the split) restore
+   the sunrise art here — this sheet loads after bg.css and is
+   linked only by the landing template. */
+body::before {
+  background-image: url("/static/bg.jpg"), url("/static/bg-thumb.jpg");
+  background-image: image-set(url("/static/bg.jxl") type("image/jxl"), url("/static/bg.jpg") type("image/jpeg")), url("/static/bg-thumb.jpg");
+}
+@media (min-width: 1501px), (min-width: 751px) and (min-resolution: 2dppx), (min-width: 751px) and (-webkit-min-device-pixel-ratio: 2) {
+  body::before {
+    background-image: url("/static/bg-4k.jpg"), url("/static/bg-thumb.jpg");
+    background-image: image-set(url("/static/bg-4k.jxl") type("image/jxl"), url("/static/bg-4k.jpg") type("image/jpeg")), url("/static/bg-thumb.jpg");
+  }
+}
+@media (min-width: 3201px), (min-width: 1601px) and (min-resolution: 2dppx), (min-width: 1601px) and (-webkit-min-device-pixel-ratio: 2) {
+  body::before {
+    background-image: url("/static/bg-uhd.jpg"), url("/static/bg-thumb.jpg");
+    background-image: image-set(url("/static/bg-uhd.jxl") type("image/jxl"), url("/static/bg-uhd.jpg") type("image/jpeg")), url("/static/bg-thumb.jpg");
+  }
+}

@@ -249,26 +249,30 @@ ORDER BY CASE WHEN strpos(lower(t.name), lower(@q)) = 1 THEN 0 ELSE 1 END, t.nam
 LIMIT @lim::bigint;
 
 -- Pilot-name search for the top banner: ready records whose
--- stored payload mentions the text; the handler re-checks the
--- pilot's own name field before offering a row, so bios that
--- merely mention a name never produce a hit.
+-- pilot name field mentions the text. The match runs on
+-- the name inside the payload, not the raw payload: a substring
+-- match over the whole JSON fills the LIMIT window with rows
+-- that merely mention common keys and crowds out real name
+-- matches beyond it. The handler still re-checks the name
+-- field for ranking before offering a row.
 -- name: SearchPilotRecordsByName :many
 SELECT character_id, payload
 FROM pilot_records
 WHERE state = 'ready' AND payload != ''
-  AND strpos(lower(payload), lower($1)) > 0
+  AND strpos(lower(payload::jsonb -> 'profile' ->> 'name'), lower($1)) > 0
 ORDER BY character_id
 LIMIT 100;
 
 -- Corporation-name search for the top banner and quick jump:
--- ready records whose stored payload mentions the text; the
--- handler re-checks the corporation's own name field before
--- offering a row, same as the pilot search above.
+-- same posture as the pilot search above, on the corporation's
+-- own name field. Stored payloads come in two shapes (the
+-- wrapped record and a bare ESI corporation shared by a peer),
+-- so the name is read from whichever shape is present.
 -- name: SearchCorporationRecordsByName :many
 SELECT corporation_id, payload
 FROM corporation_records
 WHERE state = 'ready' AND payload != ''
-  AND strpos(lower(payload), lower($1)) > 0
+  AND strpos(lower(COALESCE(payload::jsonb -> 'corp' ->> 'name', payload::jsonb ->> 'name')), lower($1)) > 0
 ORDER BY corporation_id
 LIMIT 100;
 
@@ -277,7 +281,7 @@ LIMIT 100;
 SELECT alliance_id, payload
 FROM alliance_records
 WHERE state = 'ready' AND payload != ''
-  AND strpos(lower(payload), lower($1)) > 0
+  AND strpos(lower(COALESCE(payload::jsonb -> 'alliance' ->> 'name', payload::jsonb ->> 'name')), lower($1)) > 0
 ORDER BY alliance_id
 LIMIT 100;
 

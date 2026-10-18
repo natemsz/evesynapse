@@ -53,12 +53,13 @@ func TestHomeWatchlistGlobalTypeReadsGlobalRegion(t *testing.T) {
 		}
 	}
 
-	if line := app.marketHealthLine(ctx, user.ID); !strings.Contains(line, "watchlist: 1 moving") {
+	shared := &homeMarketShared{app: app, userID: user.ID}
+	if line := app.marketHealthLine(ctx, shared.orderHealth(ctx), shared.watchlist(ctx)); !strings.Contains(line, "watchlist: 1 moving") {
 		t.Fatalf("market health line = %q, want the PLEX watch counted as moving", line)
 	}
 
 	bundles := []*charSnaps{{ch: db.Character{CharacterID: 777, UserID: user.ID, Name: "Fixture"}}}
-	lines := app.briefingMarketLines(ctx, bundles, map[int64]bool{}, map[int64]string{})
+	lines := app.briefingMarketLines(ctx, bundles, map[int64]bool{}, map[int64]string{}, shared)
 	found := false
 	for _, l := range lines {
 		if strings.Contains(l.html, "in Global market") {

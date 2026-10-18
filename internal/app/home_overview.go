@@ -1159,7 +1159,7 @@ func (app *Application) buildIndustry(ctx context.Context, bundles []*charSnaps)
 // rows, or both. The scope picker offers every linked character
 // and every tag in use; a scope that selects nobody (unlinked
 // character, tag no longer carried) renders its quiet line.
-func (app *Application) buildMarket(ctx context.Context, bundles []*charSnaps, cfg ordersWidgetConfig) *marketWidget {
+func (app *Application) buildMarket(ctx context.Context, bundles []*charSnaps, cfg ordersWidgetConfig, shared *homeMarketShared) *marketWidget {
 	now := time.Now()
 	w := &marketWidget{Merge: cfg.Merge}
 
@@ -1295,7 +1295,7 @@ func (app *Application) buildMarket(ctx context.Context, bundles []*charSnaps, c
 	// an account-wide summary, so it only reads under the
 	// all-characters scope it describes.
 	if cfg.ScopeType == scopeAll && len(bundles) > 0 {
-		w.Health = app.marketHealthLine(ctx, bundles[0].ch.UserID)
+		w.Health = app.marketHealthLine(ctx, shared.orderHealth(ctx), shared.watchlist(ctx))
 	}
 	return w
 }
@@ -1303,51 +1303,40 @@ func (app *Application) buildMarket(ctx context.Context, bundles []*charSnaps, c
 // buildWatchlistWidget assembles the Home watchlist module from
 // the same stored rows the Market page renders: latest average,
 // 7/30-day moves, and the moving flag past the user's line.
-func (app *Application) buildWatchlistWidget(ctx context.Context, userID int64) *watchlistWidget {
-	view := app.buildWatchlistView(ctx, userID, "")
-	if view == nil {
-		return &watchlistWidget{}
-	}
-	return &watchlistWidget{Rows: view.Rows}
+func (app *Application) buildWatchlistWidget(ctx context.Context, shared *homeMarketShared) *watchlistWidget {
+	return &watchlistWidget{Rows: app.watchlistRows(ctx, shared.watchlist(ctx))}
 }
 
 // marketHealthLine sums the market widget's one-line health
 // summary for one account: "2 orders undercut · watchlist: 1
-// moving" (either half omitted when quiet).
-func (app *Application) marketHealthLine(ctx context.Context, userID int64) string {
+// moving" (either half omitted when quiet). The rows are the
+// render's shared order-health and watchlist fetches, so the
+// line always agrees with the Briefing and the watchlist widget
+// built beside it.
+func (app *Application) marketHealthLine(ctx context.Context, health []db.OrderHealth, entries []db.MarketWatchlist) string {
 	var parts []string
-	if userID > 0 {
-		if health, err := app.queries.ListOrderHealthByUser(ctx, userID); err == nil {
-			undercut := 0
-			for _, h := range health {
-				if h.Status == "undercut_station" || h.Status == "undercut_region" {
-					undercut++
-				}
-			}
-			if undercut > 0 {
-				noun := "orders"
-				if undercut == 1 {
-					noun = "order"
-				}
-				parts = append(parts, fmt.Sprintf("%d %s undercut", undercut, noun))
-			}
-		} else {
-			logging.Errorf("home: market widget: list order health for user %d: %v", userID, err)
+	undercut := 0
+	for _, h := range health {
+		if h.Status == "undercut_station" || h.Status == "undercut_region" {
+			undercut++
 		}
-		if entries, err := app.queries.ListWatchlistByUser(ctx, userID); err == nil {
-			moving := 0
-			for _, e := range entries {
-				rows := app.recentHistoryRows(ctx, marketRegionForType(e.TypeID, e.RegionID), e.TypeID, markethistory.ChartRows)
-				if pct, ok := markethistory.ChangePct(rows, 7); ok && absFloat(pct) >= e.ThresholdPct {
-					moving++
-				}
-			}
-			if moving > 0 {
-				parts = append(parts, fmt.Sprintf("watchlist: %d moving", moving))
-			}
-		} else {
-			logging.Errorf("home: market widget: list watchlist for user %d: %v", userID, err)
+	}
+	if undercut > 0 {
+		noun := "orders"
+		if undercut == 1 {
+			noun = "order"
 		}
+		parts = append(parts, fmt.Sprintf("%d %s undercut", undercut, noun))
+	}
+	moving := 0
+	for _, e := range entries {
+		rows := app.recentHistoryRows(ctx, marketRegionForType(e.TypeID, e.RegionID), e.TypeID, markethistory.ChartRows)
+		if pct, ok := markethistory.ChangePct(rows, 7); ok && absFloat(pct) >= e.ThresholdPct {
+			moving++
+		}
+	}
+	if moving > 0 {
+		parts = append(parts, fmt.Sprintf("watchlist: %d moving", moving))
 	}
 	return strings.Join(parts, " · ")
 }
@@ -1429,6 +1418,47 @@ func (app *Application) buildPI(ctx context.Context, bundles []*charSnaps) *piWi
 // applied to freshly-decoded snapshot bundles. Customize mode
 // builds the same widgets (they render live under the arrange
 // controls) and adds the catalog state on top.
+// homeMarketShared carries one home render's order-health and
+// watchlist rows. The Briefing, the market widget and the
+// watchlist widget each used to query both tables for themselves,
+// so a default-layout render read them up to three times; here
+// each is fetched at most once, on first use, and a failed fetch
+// reads as no rows for every consumer alike.
+type homeMarketShared struct {
+	app       *Application
+	userID    int64
+	health    []db.OrderHealth
+	healthSet bool
+	watch     []db.MarketWatchlist
+	watchSet  bool
+}
+
+func (s *homeMarketShared) orderHealth(ctx context.Context) []db.OrderHealth {
+	if !s.healthSet {
+		s.healthSet = true
+		rows, err := s.app.queries.ListOrderHealthByUser(ctx, s.userID)
+		if err != nil {
+			logging.Errorf("home: list order health for user %d: %v", s.userID, err)
+		} else {
+			s.health = rows
+		}
+	}
+	return s.health
+}
+
+func (s *homeMarketShared) watchlist(ctx context.Context) []db.MarketWatchlist {
+	if !s.watchSet {
+		s.watchSet = true
+		rows, err := s.app.queries.ListWatchlistByUser(ctx, s.userID)
+		if err != nil {
+			logging.Errorf("home: list watchlist for user %d: %v", s.userID, err)
+		} else {
+			s.watch = rows
+		}
+	}
+	return s.watch
+}
+
 func (app *Application) buildHome(ctx context.Context, customize bool) *homeView {
 	view := &homeView{}
 	userID := app.userID(ctx)
@@ -1488,6 +1518,12 @@ func (app *Application) buildHome(ctx context.Context, customize bool) *homeView
 		return netWorth
 	}
 
+	// The Briefing's market lines, the market widget's health
+	// line and the watchlist widget all read the same two stored
+	// tables; the render fetches each at most once, lazily, so
+	// every reader sees one snapshot of them.
+	marketShared := &homeMarketShared{app: app, userID: userID}
+
 	for _, item := range layout {
 		def, _ := widgetDefFor(item.ID)
 		gw, gh := widgetSize(item)
@@ -1501,7 +1537,7 @@ func (app *Application) buildHome(ctx context.Context, customize bool) *homeView
 		}
 		switch item.ID {
 		case widgetBriefing:
-			w.Briefing = app.buildBriefing(ctx, bundles, briefingSince, now)
+			w.Briefing = app.buildBriefing(ctx, bundles, briefingSince, now, marketShared)
 		case widgetFleet:
 			w.Fleet = app.buildFleet(ctx, bundles)
 		case widgetNetWorth:
@@ -1509,9 +1545,9 @@ func (app *Application) buildHome(ctx context.Context, customize bool) *homeView
 		case widgetIndustry:
 			w.Industry = app.buildIndustry(ctx, bundles)
 		case widgetMarket:
-			w.Market = app.buildMarket(ctx, bundles, app.ordersConfigFor(ctx, userID))
+			w.Market = app.buildMarket(ctx, bundles, app.ordersConfigFor(ctx, userID), marketShared)
 		case widgetWatchlist:
-			w.Watchlist = app.buildWatchlistWidget(ctx, userID)
+			w.Watchlist = app.buildWatchlistWidget(ctx, marketShared)
 		case widgetPI:
 			w.PI = app.buildPI(ctx, bundles)
 		case widgetTradeIdeas:

@@ -587,3 +587,106 @@ func TestWalletHistorySamplerOneRowPerDay(t *testing.T) {
 		t.Fatalf("sampler made %d outbound calls, want 0", got)
 	}
 }
+
+// Audit 2.5: the record name searches used to substring-match
+// the whole JSON payload and take the first 100 by ID, so a
+// query like "pro" (which the payload's own "profile" key
+// matches) filled the window with the lowest IDs and a real
+// name match beyond them never surfaced. The match now runs on
+// the payload's name field: noise payloads that merely mention
+// the text elsewhere no longer crowd out a genuine match.
+func TestTopbarSearchRecordNameWindow(t *testing.T) {
+	transport := &countingTransport{}
+	app, _, q := buildCorpTestApp(t, transport)
+	ctx := context.Background()
+
+	user, err := q.CreateUser(ctx)
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	seedCharacter(t, q, user.ID, fixtureCharA, "Fixture Ceo")
+	cookie := sessionCookie(t, app, user.ID, fixtureCharA, "Fixture Ceo")
+	fetched := mustNullTime("2026-10-01T00:00:00Z")
+
+	// 105 noise pilots whose payloads mention "pro" outside the
+	// name field (their corporation), with IDs below the target.
+	for i := 0; i < 105; i++ {
+		payload, err := json.Marshal(pilotPayload{
+			Profile: esi.Character{Name: "Noise Pilot"},
+			Corp:    esi.Corporation{Name: "Pro Noise Corp"},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := q.SetPilotRecord(ctx, db.SetPilotRecordParams{
+			CharacterID: 91000100 + int64(i), Payload: string(payload),
+			State: pilotStateReady, FetchedAt: fetched,
+		}); err != nil {
+			t.Fatalf("seed noise pilot record: %v", err)
+		}
+	}
+	// The genuine name match, past the old window.
+	target, err := json.Marshal(pilotPayload{Profile: esi.Character{Name: "Pro Target"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := q.SetPilotRecord(ctx, db.SetPilotRecordParams{
+		CharacterID: 91000300, Payload: string(target),
+		State: pilotStateReady, FetchedAt: fetched,
+	}); err != nil {
+		t.Fatalf("seed target pilot record: %v", err)
+	}
+
+	// Both stored corporation shapes: the wrapped record and a
+	// bare ESI corporation as a peer would share it.
+	wrapped, err := json.Marshal(corporationRecordPayload{Corp: esi.Corporation{Name: "Pro Holdings", Ticker: "PROH"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := q.SetCorporationRecord(ctx, db.SetCorporationRecordParams{
+		CorporationID: 92000001, Payload: string(wrapped),
+		State: orgStateReady, FetchedAt: fetched,
+	}); err != nil {
+		t.Fatalf("seed wrapped corp record: %v", err)
+	}
+	bare, err := json.Marshal(esi.Corporation{Name: "Pro Bare", Ticker: "PB"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := q.SetCorporationRecord(ctx, db.SetCorporationRecordParams{
+		CorporationID: 92000002, Payload: string(bare),
+		State: orgStateReady, FetchedAt: fetched,
+	}); err != nil {
+		t.Fatalf("seed bare corp record: %v", err)
+	}
+
+	code, body := getPage(t, app, cookie, "/search.json?q=pro")
+	if code != http.StatusOK {
+		t.Fatalf("GET /search.json: status %d", code)
+	}
+	var hits []searchHit
+	if err := json.Unmarshal([]byte(body), &hits); err != nil {
+		t.Fatalf("decode hits: %v (%q)", err, body)
+	}
+	pilotFound := false
+	corpsFound := map[int64]bool{}
+	for _, h := range hits {
+		if h.Kind == "pilot" {
+			if h.ID >= 91000100 && h.ID < 91000300 {
+				t.Errorf("noise pilot %d surfaced; its name does not match", h.ID)
+			}
+			if h.ID == 91000300 {
+				pilotFound = true
+			}
+		}
+		if h.Kind == "corporation" {
+			corpsFound[h.ID] = true
+		}
+	}
+	if !pilotFound {
+		t.Errorf("pilot hits = %+v, want Pro Target (91000300) among them", hits)
+	}
+	if !corpsFound[92000001] || !corpsFound[92000002] {
+		t.Errorf("corporation hits = %+v, want both the wrapped and bare Pro records", hits)
+	}
+}

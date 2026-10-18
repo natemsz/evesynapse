@@ -514,6 +514,69 @@ func TestSwarmPairCorpRecord(t *testing.T) {
 	}
 }
 
+// TestSwarmPairCorpRecordBareDialect: a peer whose stored
+// record is the bare ESI corporation — the dialect storm
+// serves — is checked on the fields it actually sent. The
+// record matches ESI, so it passes and applies, and its
+// signer earns no mark. Read against the wrapped shape alone
+// it decoded to empty fields and failed every check, which
+// is what exiled storm three times.
+func TestSwarmPairCorpRecordBareDialect(t *testing.T) {
+	p := newSwarmPair(t, swarm.SwarmOpen)
+	ctx := context.Background()
+	const corpID = int64(98000001)
+	truth := `{"name":"Fixture Corp","ticker":"FIX","member_count":42,"ceo_id":1,"creator_id":1,"alliance_id":0,"home_station_id":60003760,"tax_rate":0.1,"date_founded":"2020-01-01T00:00:00Z","description":"","url":""}`
+	p.stubB.corps = map[int64]string{corpID: truth}
+	// A holds the bare ESI object as its record, as storm does.
+	if err := p.a.queries.SetCorporationRecord(ctx, db.SetCorporationRecordParams{
+		CorporationID: corpID, Payload: truth, State: orgStateReady, FetchedAt: timeSet(time.Now().UTC()),
+	}); err != nil {
+		t.Fatalf("seed A: %v", err)
+	}
+	p.pinA(t)
+	p.pullStages(t, []swarm.SwarmPullKey{{Kind: swarm.SwarmKindCorporation, Key: fmt.Sprintf("%d", corpID)}})
+	if got := p.spotRuns(t); got != 1 {
+		t.Fatalf("applied %d, want 1 (a true bare record must pass its check)", got)
+	}
+	rec, err := p.b.queries.GetCorporationRecord(ctx, corpID)
+	if err != nil || rec.State != orgStateReady || !strings.Contains(rec.Payload, "Fixture Corp") {
+		t.Fatalf("B record: %+v err %v", rec, err)
+	}
+	peer, err := p.b.queries.GetSwarmPeer(ctx, "instance-a")
+	if err != nil || peer.BadChecks != 0 {
+		t.Fatalf("an honest bare record cost its signer %d bad checks (err %v), want 0", peer.BadChecks, err)
+	}
+}
+
+// TestSwarmPairCorpRecordBareDialectLie: the same bare dialect
+// carrying a wrong identity still convicts — the tolerant read
+// compares the real fields, so a name ESI does not have fails
+// the check, nothing applies, and the signer takes the mark.
+func TestSwarmPairCorpRecordBareDialectLie(t *testing.T) {
+	p := newSwarmPair(t, swarm.SwarmOpen)
+	ctx := context.Background()
+	const corpID = int64(98000001)
+	p.stubB.corps = map[int64]string{corpID: `{"name":"Fixture Corp","ticker":"FIX","member_count":42,"ceo_id":1,"creator_id":1,"alliance_id":0,"home_station_id":60003760,"tax_rate":0.1,"date_founded":"2020-01-01T00:00:00Z","description":"","url":""}`}
+	lie := `{"name":"Liar Corp","ticker":"FIX","member_count":42,"ceo_id":1,"creator_id":1,"alliance_id":0,"home_station_id":60003760,"tax_rate":0.1,"date_founded":"2020-01-01T00:00:00Z","description":"","url":""}`
+	if err := p.a.queries.SetCorporationRecord(ctx, db.SetCorporationRecordParams{
+		CorporationID: corpID, Payload: lie, State: orgStateReady, FetchedAt: timeSet(time.Now().UTC()),
+	}); err != nil {
+		t.Fatalf("seed A: %v", err)
+	}
+	p.pinA(t)
+	p.pullStages(t, []swarm.SwarmPullKey{{Kind: swarm.SwarmKindCorporation, Key: fmt.Sprintf("%d", corpID)}})
+	if got := p.spotRuns(t); got != 0 {
+		t.Fatalf("applied %d, want 0 (a bare record naming the wrong corporation)", got)
+	}
+	if rec, err := p.b.queries.GetCorporationRecord(ctx, corpID); err == nil && rec.State == orgStateReady {
+		t.Fatalf("the lying record stands on B: %+v", rec)
+	}
+	peer, err := p.b.queries.GetSwarmPeer(ctx, "instance-a")
+	if err != nil || peer.BadChecks < 1 {
+		t.Fatalf("the lie cost its signer %d bad checks (err %v), want at least 1", peer.BadChecks, err)
+	}
+}
+
 // decodeJSON is the tests' fixture reader.
 func decodeJSON(r *strings.Reader, into any) error {
 	return json.NewDecoder(r).Decode(into)

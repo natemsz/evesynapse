@@ -1271,9 +1271,16 @@ func (app *Mod) SwarmVerifyCorporation(ctx context.Context, allowance module.Bud
 	if err := DecodeSwarmStrict(strings.NewReader(payload), &staged); err != nil || staged.ID != id {
 		return SwarmCheckFail, false
 	}
-	var body module.CorporationRecordPayload
-	if err := json.Unmarshal([]byte(staged.Payload), &body); err != nil {
-		return SwarmCheckFail, false
+	// The record travels in either dialect — this app's wrapped
+	// shape or a bare ESI corporation — so it is read through
+	// the same tolerant decoder the apply path uses, and the
+	// fields compared are the ones actually sent. A body naming
+	// no corporation under either dialect is a shape problem,
+	// not a lie ESI can contradict: it waits and drops without
+	// a mark rather than failing its signer.
+	body, ok := module.DecodeCorpPayload(staged.Payload)
+	if !ok {
+		return SwarmCheckDefer, false
 	}
 	if !app.SwarmTake(allowance) {
 		return SwarmCheckDefer, false
@@ -1306,9 +1313,12 @@ func (app *Mod) SwarmVerifyAlliance(ctx context.Context, allowance module.Budget
 	if err := DecodeSwarmStrict(strings.NewReader(payload), &staged); err != nil || staged.ID != id {
 		return SwarmCheckFail, false
 	}
-	var body module.AllianceRecordPayload
-	if err := json.Unmarshal([]byte(staged.Payload), &body); err != nil {
-		return SwarmCheckFail, false
+	// Either dialect, as for corporations: read through the
+	// tolerant decoder, and a body naming no alliance under
+	// either dialect defers rather than fails.
+	body, ok := module.DecodeAlliancePayload(staged.Payload)
+	if !ok {
+		return SwarmCheckDefer, false
 	}
 	if !app.SwarmTake(allowance) {
 		return SwarmCheckDefer, false

@@ -112,7 +112,7 @@ func TestAbyssalSearchAndDetailPages(t *testing.T) {
 		t.Fatalf("detail: status %d", code)
 	}
 	mustContain(t, "abyssal detail", body,
-		"damageMultiplier", "&#43;18.0%", `data-w="80"`, `data-w="2"`,
+		"Damage Multiplier", "Capacitor Need", "CPU", "&#43;18.0%", `data-w="80"`, `data-w="2"`,
 		"Roll score: <strong>45 / 100</strong>",
 		"Our estimate: <strong>205,000,000.00 ISK</strong>",
 		"likely range 180,000,000.00 to 240,000,000.00 ISK",

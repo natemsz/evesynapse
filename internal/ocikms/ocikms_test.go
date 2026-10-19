@@ -57,8 +57,13 @@ func makeIdentityFixture(t *testing.T) *identityFixture {
 	leaf := &x509.Certificate{
 		SerialNumber: big.NewInt(1653),
 		Subject: pkix.Name{
-			CommonName:         "instance:ocid1.instance.oc1.phx.test",
-			OrganizationalUnit: []string{testTenancy},
+			CommonName: "ocid1.instance.oc1.phx.test",
+			OrganizationalUnit: []string{
+				"opc-tenant:" + testTenancy,
+				"opc-instance:ocid1.instance.oc1.phx.test",
+				"opc-compartment:" + testTenancy,
+				"opc-certtype:instance",
+			},
 		},
 		NotBefore: now.Add(-time.Hour),
 		NotAfter:  now.Add(24 * time.Hour),
@@ -386,5 +391,23 @@ func TestNewClientValidationAndDefaults(t *testing.T) {
 	// federation endpoint.
 	if _, err := NewClient(Config{KeyID: testKeyID, CryptoEndpoint: "https://kms.example.internal"}); err == nil {
 		t.Fatal("an endpoint with no readable region was accepted without a federation override")
+	}
+}
+
+// The tenancy extraction reads the certificate shape the metadata
+// service actually serves: the tenancy rides in an "opc-tenant:"
+// OU value, not as a bare OCID.
+func TestTenancyOCIDFromCertShapes(t *testing.T) {
+	mk := func(ous ...string) *x509.Certificate {
+		return &x509.Certificate{Subject: pkix.Name{OrganizationalUnit: ous}}
+	}
+	if got := tenancyOCIDFromCert(mk("opc-tenant:"+testTenancy, "opc-instance:ocid1.instance.oc1.phx.test")); got != testTenancy {
+		t.Errorf("opc-tenant shape: got %q, want %q", got, testTenancy)
+	}
+	if got := tenancyOCIDFromCert(mk(testTenancy)); got != testTenancy {
+		t.Errorf("bare shape: got %q, want %q", got, testTenancy)
+	}
+	if got := tenancyOCIDFromCert(mk("opc-instance:ocid1.instance.oc1.phx.test")); got != "" {
+		t.Errorf("no tenancy: got %q, want empty", got)
 	}
 }

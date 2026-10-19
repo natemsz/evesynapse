@@ -119,6 +119,28 @@ func TestParseDecimalAndVolumeQuantities(t *testing.T) {
 	}
 }
 
+func TestMoonScanLines(t *testing.T) {
+	out, ok := moonScanLines("Tritanium 60%\nPyerite 40%")
+	if !ok || out != "Tritanium x 6000\nPyerite x 4000" {
+		t.Errorf("percent moon scan = %q, %v", out, ok)
+	}
+	out, ok = moonScanLines("Material\tQuantity\nTritanium\t0.6\nPyerite\t0.4")
+	if !ok || out != "Tritanium x 6000\nPyerite x 4000" {
+		t.Errorf("fraction moon scan = %q, %v", out, ok)
+	}
+	// Shares that do not make a whole moon, and ordinary
+	// lists, are not moon scans.
+	if _, ok := moonScanLines("Tritanium 10%\nPyerite 20%"); ok {
+		t.Error("a 30% paste must not read as a moon survey")
+	}
+	if _, ok := moonScanLines("Tritanium x 100\nPyerite 40%"); ok {
+		t.Error("a mixed list must not read as a moon survey")
+	}
+	if _, ok := moonScanLines("Tritanium x 100"); ok {
+		t.Error("a plain list must not read as a moon survey")
+	}
+}
+
 func TestParseTrailingQuantityIsASecondCandidate(t *testing.T) {
 	// No explicit quantity: the name as typed wins precedence,
 	// the trailing-number reading follows it.

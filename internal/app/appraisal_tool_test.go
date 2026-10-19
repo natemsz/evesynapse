@@ -787,6 +787,18 @@ func TestAppraisalToolReprocessAndVolume(t *testing.T) {
 	mustContain(t, "non-reprocessable", body, "Does not reprocess.", "Not reprocessable: Rifter")
 }
 
+func TestAppraisalToolMoonScan(t *testing.T) {
+	tr := &countingTransport{}
+	app, conn, q := buildCorpTestApp(t, tr)
+	seedAppraisalTool(t, conn, q)
+
+	// 60% Tritanium (6,000 x 6.50) and 40% Pyerite
+	// (4,000 x 9.25 estimate) of 10,000 units: 76,000.
+	body, _, _ := postAnonAppraisal(t, app, url.Values{"items": {"Tritanium 60%\nPyerite 40%"}})
+	mustContain(t, "moon scan appraisal", body,
+		"76,000.00", "Moon survey: each ore is appraised at its survey share of 10,000 units")
+}
+
 func TestPublicFitEscapesUserText(t *testing.T) {
 	tr := &countingTransport{}
 	app, conn, q := buildCorpTestApp(t, tr)

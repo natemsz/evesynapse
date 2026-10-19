@@ -46,6 +46,13 @@ type AbyssalItem struct {
 	ScoredAt           sql.NullTime    `json:"scored_at"`
 }
 
+type AbyssalMapping struct {
+	MutatorTypeID    int64  `json:"mutator_type_id"`
+	ApplicableTypeID int64  `json:"applicable_type_id"`
+	ResultingTypeID  int64  `json:"resulting_type_id"`
+	SdeBuild         string `json:"sde_build"`
+}
+
 type AbyssalProbe struct {
 	ItemID    int64     `json:"item_id"`
 	TypeID    int64     `json:"type_id"`
@@ -692,6 +699,8 @@ type PubContract struct {
 	TotalLines          int64           `json:"total_lines"`
 	TierMix             string          `json:"tier_mix"`
 	PricedAt            sql.NullTime    `json:"priced_at"`
+	ItemsAttempts       int64           `json:"items_attempts"`
+	ItemsError          string          `json:"items_error"`
 }
 
 type PubContractBid struct {
@@ -733,6 +742,11 @@ type PublicFitPage struct {
 	Complete     bool            `json:"complete"`
 	BuiltAt      time.Time       `json:"built_at"`
 	Body         json.RawMessage `json:"body"`
+}
+
+type PublicStructure struct {
+	StructureID int64     `json:"structure_id"`
+	RefreshedAt time.Time `json:"refreshed_at"`
 }
 
 type PulseEvent struct {

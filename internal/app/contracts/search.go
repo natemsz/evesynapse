@@ -699,11 +699,11 @@ func (app *mod) handleContractSearch(w http.ResponseWriter, r *http.Request) {
 // rather than a guess.
 func (app *mod) sweepNote(ctx context.Context) string {
 	stats, err := app.queries.GetPublicContractCorpusStats(ctx)
-	if err != nil || !stats.LastSweepAt.Valid || stats.OpenContracts == 0 {
+	if err != nil || stats.LastSweepAt.IsZero() || stats.OpenContracts == 0 {
 		return ""
 	}
 	return fmt.Sprintf("ESI Sweep: %s • %s Public Contracts Indexed",
-		app.deps.AgeText(stats.LastSweepAt.Time), esi.FormatInt(stats.OpenContracts))
+		app.deps.AgeText(stats.LastSweepAt), esi.FormatInt(stats.OpenContracts))
 }
 
 func (app *mod) buildSearchView(ctx context.Context, q url.Values) *searchView {

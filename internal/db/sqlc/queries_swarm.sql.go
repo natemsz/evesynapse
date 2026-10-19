@@ -932,12 +932,12 @@ func (q *Queries) TouchSwarmPeerServed(ctx context.Context, arg TouchSwarmPeerSe
 
 const upsertSwarmPeer = `-- name: UpsertSwarmPeer :execrows
 INSERT INTO swarm_peers (instance_id, base_url, public_key, source, first_seen, last_seen, url_sig, url_issued_at, build)
-VALUES ($1, $2, $3, $4, $5, $5, $6, $7, $9)
+VALUES ($1, $2, $3, $4, $5, $5, $6, $7, $8)
 ON CONFLICT (instance_id) DO UPDATE SET
-    base_url = CASE WHEN $8::boolean AND excluded.url_issued_at > swarm_peers.url_issued_at THEN excluded.base_url ELSE swarm_peers.base_url END,
-    url_sig = CASE WHEN $8::boolean AND excluded.url_issued_at > swarm_peers.url_issued_at THEN excluded.url_sig ELSE swarm_peers.url_sig END,
-    url_issued_at = CASE WHEN $8::boolean AND excluded.url_issued_at > swarm_peers.url_issued_at THEN excluded.url_issued_at ELSE swarm_peers.url_issued_at END,
-    build = CASE WHEN $8::boolean AND excluded.url_issued_at > swarm_peers.url_issued_at AND excluded.build <> '' THEN excluded.build ELSE swarm_peers.build END,
+    base_url = CASE WHEN $9::boolean AND excluded.url_issued_at > swarm_peers.url_issued_at THEN excluded.base_url ELSE swarm_peers.base_url END,
+    url_sig = CASE WHEN $9::boolean AND excluded.url_issued_at > swarm_peers.url_issued_at THEN excluded.url_sig ELSE swarm_peers.url_sig END,
+    url_issued_at = CASE WHEN $9::boolean AND excluded.url_issued_at > swarm_peers.url_issued_at THEN excluded.url_issued_at ELSE swarm_peers.url_issued_at END,
+    build = CASE WHEN $9::boolean AND excluded.url_issued_at > swarm_peers.url_issued_at AND excluded.build <> '' THEN excluded.build ELSE swarm_peers.build END,
     last_seen = excluded.last_seen
 WHERE swarm_peers.public_key = excluded.public_key
 `
@@ -950,8 +950,8 @@ type UpsertSwarmPeerParams struct {
 	FirstSeen     time.Time `json:"first_seen"`
 	UrlSig        string    `json:"url_sig"`
 	UrlIssuedAt   int64     `json:"url_issued_at"`
-	AddressSigned bool      `json:"address_signed"`
 	Build         string    `json:"build"`
+	AddressSigned bool      `json:"address_signed"`
 }
 
 // A sighting records a peer once and pins the key it arrived
@@ -977,8 +977,8 @@ func (q *Queries) UpsertSwarmPeer(ctx context.Context, arg UpsertSwarmPeerParams
 		arg.FirstSeen,
 		arg.UrlSig,
 		arg.UrlIssuedAt,
-		arg.AddressSigned,
 		arg.Build,
+		arg.AddressSigned,
 	)
 	if err != nil {
 		return 0, err

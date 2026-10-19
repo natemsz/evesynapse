@@ -303,42 +303,12 @@ func (q *Queries) CountPublicContractsSearch(ctx context.Context, arg CountPubli
 	return count, err
 }
 
-const getPublicContractCorpusStats = `-- name: GetPublicContractCorpusStats :one
-SELECT COUNT(*) AS open_contracts,
-       (SELECT MAX(updated_at) FROM pub_contract_sweep_state) AS last_sweep_at
-FROM pub_contracts
+const deleteBlueprintCopyMedians = `-- name: DeleteBlueprintCopyMedians :exec
+DELETE FROM blueprint_copy_medians
 `
 
-type GetPublicContractCorpusStatsRow struct {
-	OpenContracts int64        `json:"open_contracts"`
-	LastSweepAt   sql.NullTime `json:"last_sweep_at"`
-}
-
-func (q *Queries) GetPublicContractCorpusStats(ctx context.Context) (GetPublicContractCorpusStatsRow, error) {
-	row := q.db.QueryRowContext(ctx, getPublicContractCorpusStats)
-	var i GetPublicContractCorpusStatsRow
-	err := row.Scan(&i.OpenContracts, &i.LastSweepAt)
-	return i, err
-}
-
-const replacePublicStructures = `-- name: ReplacePublicStructures :exec
-WITH gone AS (
-  DELETE FROM public_structures
-  WHERE NOT (structure_id = ANY($1::bigint[]))
-)
-INSERT INTO public_structures (structure_id, refreshed_at)
-SELECT u, $2::timestamptz
-FROM unnest($1::bigint[]) AS u
-ON CONFLICT (structure_id) DO UPDATE SET refreshed_at = EXCLUDED.refreshed_at
-`
-
-type ReplacePublicStructuresParams struct {
-	Ids         []int64   `json:"ids"`
-	RefreshedAt time.Time `json:"refreshed_at"`
-}
-
-func (q *Queries) ReplacePublicStructures(ctx context.Context, arg ReplacePublicStructuresParams) error {
-	_, err := q.db.ExecContext(ctx, replacePublicStructures, pq.Array(arg.Ids), arg.RefreshedAt)
+func (q *Queries) DeleteBlueprintCopyMedians(ctx context.Context) error {
+	_, err := q.db.ExecContext(ctx, deleteBlueprintCopyMedians)
 	return err
 }
 
@@ -358,26 +328,6 @@ WHERE contract_id = ANY($1::bigint[])
 
 func (q *Queries) DeletePublicContractBidsByContracts(ctx context.Context, contractIds []int64) error {
 	_, err := q.db.ExecContext(ctx, deletePublicContractBidsByContracts, pq.Array(contractIds))
-	return err
-}
-
-const deletePublicContractItemsByContracts = `-- name: DeletePublicContractItemsByContracts :exec
-DELETE FROM pub_contract_items
-WHERE contract_id = ANY($1::bigint[])
-`
-
-func (q *Queries) DeletePublicContractItemsByContracts(ctx context.Context, contractIds []int64) error {
-	_, err := q.db.ExecContext(ctx, deletePublicContractItemsByContracts, pq.Array(contractIds))
-	return err
-}
-
-const deletePublicContractsByIDs = `-- name: DeletePublicContractsByIDs :exec
-DELETE FROM pub_contracts
-WHERE contract_id = ANY($1::bigint[])
-`
-
-func (q *Queries) DeletePublicContractsByIDs(ctx context.Context, contractIds []int64) error {
-	_, err := q.db.ExecContext(ctx, deletePublicContractsByIDs, pq.Array(contractIds))
 	return err
 }
 
@@ -401,6 +351,26 @@ func (q *Queries) DeletePublicContractIfStamped(ctx context.Context, arg DeleteP
 		return 0, err
 	}
 	return result.RowsAffected()
+}
+
+const deletePublicContractItemsByContracts = `-- name: DeletePublicContractItemsByContracts :exec
+DELETE FROM pub_contract_items
+WHERE contract_id = ANY($1::bigint[])
+`
+
+func (q *Queries) DeletePublicContractItemsByContracts(ctx context.Context, contractIds []int64) error {
+	_, err := q.db.ExecContext(ctx, deletePublicContractItemsByContracts, pq.Array(contractIds))
+	return err
+}
+
+const deletePublicContractsByIDs = `-- name: DeletePublicContractsByIDs :exec
+DELETE FROM pub_contracts
+WHERE contract_id = ANY($1::bigint[])
+`
+
+func (q *Queries) DeletePublicContractsByIDs(ctx context.Context, contractIds []int64) error {
+	_, err := q.db.ExecContext(ctx, deletePublicContractsByIDs, pq.Array(contractIds))
+	return err
 }
 
 const getAbyssalItem = `-- name: GetAbyssalItem :one
@@ -448,13 +418,29 @@ func (q *Queries) GetAbyssalItem(ctx context.Context, itemID int64) (AbyssalItem
 	return i, err
 }
 
+const getBlueprintCopyMediansStamp = `-- name: GetBlueprintCopyMediansStamp :one
+SELECT computed_at FROM blueprint_copy_medians
+ORDER BY computed_at DESC
+LIMIT 1
+`
+
+// The stored rows' as-of: the copy-median pass recomputes at
+// most once per its refresh age, judged by this stamp. No
+// rows yet answers no row, which the caller reads as never.
+func (q *Queries) GetBlueprintCopyMediansStamp(ctx context.Context) (time.Time, error) {
+	row := q.db.QueryRowContext(ctx, getBlueprintCopyMediansStamp)
+	var computed_at time.Time
+	err := row.Scan(&computed_at)
+	return computed_at, err
+}
+
 const getPublicContract = `-- name: GetPublicContract :one
 SELECT contract_id, region_id, type, issuer_id, issuer_corporation_id,
     for_corporation, title, price, buyout, reward, collateral, volume,
     start_location_id, end_location_id, date_issued, date_expired,
     days_to_complete, items_state, last_cycle, first_seen, last_seen,
     offered_value, want_value, deal_ratio, priced_lines, total_lines,
-    tier_mix, priced_at
+    tier_mix, priced_at, items_attempts, items_error
 FROM pub_contracts
 WHERE contract_id = $1
 `
@@ -491,7 +477,38 @@ func (q *Queries) GetPublicContract(ctx context.Context, contractID int64) (PubC
 		&i.TotalLines,
 		&i.TierMix,
 		&i.PricedAt,
+		&i.ItemsAttempts,
+		&i.ItemsError,
 	)
+	return i, err
+}
+
+const getPublicContractCorpusStats = `-- name: GetPublicContractCorpusStats :one
+SELECT COUNT(*) AS open_contracts,
+       COALESCE((SELECT MAX(updated_at) FROM pub_contract_sweep_state),
+                '0001-01-01 00:00:00+00'::timestamptz)::timestamptz AS last_sweep_at
+FROM pub_contracts
+`
+
+type GetPublicContractCorpusStatsRow struct {
+	OpenContracts int64     `json:"open_contracts"`
+	LastSweepAt   time.Time `json:"last_sweep_at"`
+}
+
+// The subtab telemetry: the live corpus size (pub_contracts
+// holds only live contracts, so the count is the indexed
+// set) and the freshest sweep stamp across regions. One
+// row, two stored reads -- no corpus aggregation at render
+// beyond the count itself. The stamp expression carries a
+// cast and a coalesce on purpose: the pinned sqlc types a
+// bare MAX() as interface{}, so the cast pins timestamptz,
+// and the coalesce maps the unswept case (no sweep rows,
+// MAX is NULL) to the zero time instead of NULL -- the
+// caller reads IsZero() as "not swept yet".
+func (q *Queries) GetPublicContractCorpusStats(ctx context.Context) (GetPublicContractCorpusStatsRow, error) {
+	row := q.db.QueryRowContext(ctx, getPublicContractCorpusStats)
+	var i GetPublicContractCorpusStatsRow
+	err := row.Scan(&i.OpenContracts, &i.LastSweepAt)
 	return i, err
 }
 
@@ -554,6 +571,30 @@ func (q *Queries) InsertAbyssalProbe(ctx context.Context, arg InsertAbyssalProbe
 		arg.TypeID,
 		arg.IsDynamic,
 		arg.ProbedAt,
+	)
+	return err
+}
+
+const insertBlueprintCopyMedian = `-- name: InsertBlueprintCopyMedian :exec
+INSERT INTO blueprint_copy_medians (type_id, runs, median_price, sample_count, computed_at)
+VALUES ($1, $2, $3, $4, $5)
+`
+
+type InsertBlueprintCopyMedianParams struct {
+	TypeID      int64     `json:"type_id"`
+	Runs        int64     `json:"runs"`
+	MedianPrice float64   `json:"median_price"`
+	SampleCount int64     `json:"sample_count"`
+	ComputedAt  time.Time `json:"computed_at"`
+}
+
+func (q *Queries) InsertBlueprintCopyMedian(ctx context.Context, arg InsertBlueprintCopyMedianParams) error {
+	_, err := q.db.ExecContext(ctx, insertBlueprintCopyMedian,
+		arg.TypeID,
+		arg.Runs,
+		arg.MedianPrice,
+		arg.SampleCount,
+		arg.ComputedAt,
 	)
 	return err
 }
@@ -902,8 +943,14 @@ type ListAbyssalProbeCandidatesRow struct {
 // instance, with its departure recorded when it leaves).
 // ---------------------------------------------------------------------
 // Singleton items on live contracts that no probe has ever
-// touched, oldest listing first. The contract facts ride
-// along so a hit can open its sighting row without a reread.
+// touched and whose type a mutaplasmid can produce (the SDE
+// mappings' resulting types, schema 063): an instance of any
+// other type answers a probe with a 404 by construction, so
+// it never enters the queue. Newest listing first -- the
+// item drain's order -- so a fresh listing is probed within
+// a cycle or two and the cold backlog drains behind it. The
+// contract facts ride along so a hit can open its sighting
+// row without a reread.
 func (q *Queries) ListAbyssalProbeCandidates(ctx context.Context, limit int32) ([]ListAbyssalProbeCandidatesRow, error) {
 	rows, err := q.db.QueryContext(ctx, listAbyssalProbeCandidates, limit)
 	if err != nil {
@@ -1110,6 +1157,109 @@ func (q *Queries) ListAllAbyssalFamilyWeights(ctx context.Context) ([]AbyssalFam
 			&i.AttributeID,
 			&i.Weight,
 			&i.PenaltyOnly,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listBlueprintCopyMedianCandidates = `-- name: ListBlueprintCopyMedianCandidates :many
+
+SELECT i.type_id AS type_id, i.runs AS runs,
+    percentile_cont(0.5) WITHIN GROUP (ORDER BY c.price) AS median_price,
+    COUNT(*) AS sample_count
+FROM pub_contract_items i
+JOIN pub_contracts c ON c.contract_id = i.contract_id
+WHERE c.type = 'item_exchange'
+  AND c.price > 0
+  AND i.is_included
+  AND i.is_blueprint_copy
+  AND i.runs IS NOT NULL AND i.runs > 0
+  AND i.quantity = 1
+  AND (SELECT COUNT(*) FROM pub_contract_items x
+       WHERE x.contract_id = i.contract_id) = 1
+GROUP BY i.type_id, i.runs
+HAVING COUNT(*) >= $1::bigint
+`
+
+type ListBlueprintCopyMedianCandidatesRow struct {
+	TypeID      int64         `json:"type_id"`
+	Runs        sql.NullInt64 `json:"runs"`
+	MedianPrice float64       `json:"median_price"`
+	SampleCount int64         `json:"sample_count"`
+}
+
+// ---------------------------------------------------------------------
+// Blueprint copy medians (schema 061): the worker's pass
+// distills the live corpus into one stored median ask per
+// (blueprint type, runs); the appraisal core reads the stored
+// rows and nothing else, and a copy line prices from them or
+// not at all.
+// ---------------------------------------------------------------------
+// The candidate medians over the live corpus: item-exchange
+// contracts whose ONE stored item row is an included copy
+// with known runs, asked above zero. A multi-line contract's
+// price is not a price for its copy, and a wanted copy was
+// never offered at the contract's price, so both stay out.
+// The minimum sample is the caller's: groups thinner than it
+// store nothing.
+func (q *Queries) ListBlueprintCopyMedianCandidates(ctx context.Context, minSample int64) ([]ListBlueprintCopyMedianCandidatesRow, error) {
+	rows, err := q.db.QueryContext(ctx, listBlueprintCopyMedianCandidates, minSample)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListBlueprintCopyMedianCandidatesRow
+	for rows.Next() {
+		var i ListBlueprintCopyMedianCandidatesRow
+		if err := rows.Scan(
+			&i.TypeID,
+			&i.Runs,
+			&i.MedianPrice,
+			&i.SampleCount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listBlueprintCopyMediansForTypes = `-- name: ListBlueprintCopyMediansForTypes :many
+SELECT type_id, runs, median_price, sample_count, computed_at
+FROM blueprint_copy_medians
+WHERE type_id = ANY($1::bigint[])
+`
+
+func (q *Queries) ListBlueprintCopyMediansForTypes(ctx context.Context, typeIds []int64) ([]BlueprintCopyMedian, error) {
+	rows, err := q.db.QueryContext(ctx, listBlueprintCopyMediansForTypes, pq.Array(typeIds))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []BlueprintCopyMedian
+	for rows.Next() {
+		var i BlueprintCopyMedian
+		if err := rows.Scan(
+			&i.TypeID,
+			&i.Runs,
+			&i.MedianPrice,
+			&i.SampleCount,
+			&i.ComputedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -1596,6 +1746,30 @@ type RefreshAbyssalSightingsForRegionCycleParams struct {
 // row for that listing, straight from the stored tables.
 func (q *Queries) RefreshAbyssalSightingsForRegionCycle(ctx context.Context, arg RefreshAbyssalSightingsForRegionCycleParams) error {
 	_, err := q.db.ExecContext(ctx, refreshAbyssalSightingsForRegionCycle, arg.RegionID, arg.LastCycle, arg.LastSeenAt)
+	return err
+}
+
+const replacePublicStructures = `-- name: ReplacePublicStructures :exec
+WITH gone AS (
+  DELETE FROM public_structures
+  WHERE NOT (structure_id = ANY($2::bigint[]))
+)
+INSERT INTO public_structures (structure_id, refreshed_at)
+SELECT u, $1::timestamptz
+FROM unnest($2::bigint[]) AS u
+ON CONFLICT (structure_id) DO UPDATE SET refreshed_at = EXCLUDED.refreshed_at
+`
+
+type ReplacePublicStructuresParams struct {
+	RefreshedAt time.Time `json:"refreshed_at"`
+	Ids         []int64   `json:"ids"`
+}
+
+// The public structures set (schema 068): one replace per
+// worker refresh of ESI's public structures route. Rows the
+// new list no longer names leave in the same statement.
+func (q *Queries) ReplacePublicStructures(ctx context.Context, arg ReplacePublicStructuresParams) error {
+	_, err := q.db.ExecContext(ctx, replacePublicStructures, arg.RefreshedAt, pq.Array(arg.Ids))
 	return err
 }
 
@@ -2342,150 +2516,4 @@ func (q *Queries) UpsertPublicContractSweepState(ctx context.Context, arg Upsert
 		arg.UpdatedAt,
 	)
 	return err
-}
-
-// ---------------------------------------------------------------------
-// Blueprint copy medians (schema 061): the worker's pass
-// distills the live corpus into one stored median ask per
-// (blueprint type, runs); the appraisal core reads the stored
-// rows and nothing else, and a copy line prices from them or
-// not at all.
-// ---------------------------------------------------------------------
-
-const deleteBlueprintCopyMedians = `-- name: DeleteBlueprintCopyMedians :exec
-DELETE FROM blueprint_copy_medians
-`
-
-func (q *Queries) DeleteBlueprintCopyMedians(ctx context.Context) error {
-	_, err := q.db.ExecContext(ctx, deleteBlueprintCopyMedians)
-	return err
-}
-
-const getBlueprintCopyMediansStamp = `-- name: GetBlueprintCopyMediansStamp :one
-SELECT computed_at FROM blueprint_copy_medians
-ORDER BY computed_at DESC
-LIMIT 1
-`
-
-// The stored rows' as-of: the copy-median pass recomputes at
-// most once per its refresh age, judged by this stamp. No
-// rows yet answers no row, which the caller reads as never.
-func (q *Queries) GetBlueprintCopyMediansStamp(ctx context.Context) (time.Time, error) {
-	row := q.db.QueryRowContext(ctx, getBlueprintCopyMediansStamp)
-	var computed_at time.Time
-	err := row.Scan(&computed_at)
-	return computed_at, err
-}
-
-const insertBlueprintCopyMedian = `-- name: InsertBlueprintCopyMedian :exec
-INSERT INTO blueprint_copy_medians (type_id, runs, median_price, sample_count, computed_at)
-VALUES ($1, $2, $3, $4, $5)
-`
-
-type InsertBlueprintCopyMedianParams struct {
-	TypeID      int64     `json:"type_id"`
-	Runs        int64     `json:"runs"`
-	MedianPrice float64   `json:"median_price"`
-	SampleCount int64     `json:"sample_count"`
-	ComputedAt  time.Time `json:"computed_at"`
-}
-
-func (q *Queries) InsertBlueprintCopyMedian(ctx context.Context, arg InsertBlueprintCopyMedianParams) error {
-	_, err := q.db.ExecContext(ctx, insertBlueprintCopyMedian,
-		arg.TypeID,
-		arg.Runs,
-		arg.MedianPrice,
-		arg.SampleCount,
-		arg.ComputedAt,
-	)
-	return err
-}
-
-const listBlueprintCopyMedianCandidates = `-- name: ListBlueprintCopyMedianCandidates :many
-
-SELECT i.type_id AS type_id, i.runs AS runs,
-    percentile_cont(0.5) WITHIN GROUP (ORDER BY c.price) AS median_price,
-    COUNT(*) AS sample_count
-FROM pub_contract_items i
-JOIN pub_contracts c ON c.contract_id = i.contract_id
-WHERE c.type = 'item_exchange'
-  AND c.price > 0
-  AND i.is_included
-  AND i.is_blueprint_copy
-  AND i.runs IS NOT NULL AND i.runs > 0
-  AND i.quantity = 1
-  AND (SELECT COUNT(*) FROM pub_contract_items x
-       WHERE x.contract_id = i.contract_id) = 1
-GROUP BY i.type_id, i.runs
-HAVING COUNT(*) >= $1::bigint
-`
-
-type ListBlueprintCopyMedianCandidatesRow struct {
-	TypeID      int64         `json:"type_id"`
-	Runs        sql.NullInt64 `json:"runs"`
-	MedianPrice float64       `json:"median_price"`
-	SampleCount int64         `json:"sample_count"`
-}
-
-func (q *Queries) ListBlueprintCopyMedianCandidates(ctx context.Context, minSample int64) ([]ListBlueprintCopyMedianCandidatesRow, error) {
-	rows, err := q.db.QueryContext(ctx, listBlueprintCopyMedianCandidates, minSample)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []ListBlueprintCopyMedianCandidatesRow
-	for rows.Next() {
-		var i ListBlueprintCopyMedianCandidatesRow
-		if err := rows.Scan(
-			&i.TypeID,
-			&i.Runs,
-			&i.MedianPrice,
-			&i.SampleCount,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listBlueprintCopyMediansForTypes = `-- name: ListBlueprintCopyMediansForTypes :many
-SELECT type_id, runs, median_price, sample_count, computed_at
-FROM blueprint_copy_medians
-WHERE type_id = ANY($1::bigint[])
-`
-
-func (q *Queries) ListBlueprintCopyMediansForTypes(ctx context.Context, typeIds []int64) ([]BlueprintCopyMedian, error) {
-	rows, err := q.db.QueryContext(ctx, listBlueprintCopyMediansForTypes, pq.Array(typeIds))
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []BlueprintCopyMedian
-	for rows.Next() {
-		var i BlueprintCopyMedian
-		if err := rows.Scan(
-			&i.TypeID,
-			&i.Runs,
-			&i.MedianPrice,
-			&i.SampleCount,
-			&i.ComputedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
 }

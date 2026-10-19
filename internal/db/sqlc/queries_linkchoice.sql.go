@@ -11,9 +11,13 @@ import (
 )
 
 const getLinkChoice = `-- name: GetLinkChoice :one
+
 SELECT choice FROM account_link_choices WHERE user_id = $1
 `
 
+// What an account chose at sign-up (schema 048): the activities,
+// features and opted-in enhancements, as JSON, so the next character
+// link opens with them preselected.
 func (q *Queries) GetLinkChoice(ctx context.Context, userID int64) (string, error) {
 	row := q.db.QueryRowContext(ctx, getLinkChoice, userID)
 	var choice string

@@ -605,60 +605,6 @@ func (q *Queries) ListAllTypeNames(ctx context.Context) ([]TypeName, error) {
 	return items, nil
 }
 
-const listFitResourceImplants = `-- name: ListFitResourceImplants :many
-SELECT DISTINCT t.type_id, t.name, slot.value::bigint AS slot, mod.modified_attr AS resource_attr, bonus.value AS bonus
-FROM sde_types t
-JOIN sde_type_attributes slot ON slot.type_id = t.type_id AND slot.attribute_id = 331
-JOIN sde_type_effects te ON te.type_id = t.type_id
-JOIN sde_effect_modifiers mod ON mod.effect_id = te.effect_id AND mod.modified_attr IN (48, 11)
-JOIN sde_type_attributes bonus ON bonus.type_id = t.type_id AND bonus.attribute_id = mod.modifying_attr
-WHERE t.published = 1 AND t.market_group_id > 0
-ORDER BY mod.modified_attr, bonus.value, t.type_id
-`
-
-type ListFitResourceImplantsRow struct {
-	TypeID       int64   `json:"type_id"`
-	Name         string  `json:"name"`
-	Slot         int64   `json:"slot"`
-	ResourceAttr int64   `json:"resource_attr"`
-	Bonus        float64 `json:"bonus"`
-}
-
-// ListFitResourceImplants: hardwirings that raise a ship's CPU
-// or powergrid output -- the implant solver's ladder. A candidate
-// is an implant type (slot from attribute 331) carrying an effect
-// whose modifier lands on cpuOutput (48) or powerOutput (11); the
-// bonus is the implant's own value of the modifier's attribute
-// (the ladder percent for the output families).
-func (q *Queries) ListFitResourceImplants(ctx context.Context) ([]ListFitResourceImplantsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listFitResourceImplants)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []ListFitResourceImplantsRow
-	for rows.Next() {
-		var i ListFitResourceImplantsRow
-		if err := rows.Scan(
-			&i.TypeID,
-			&i.Name,
-			&i.Slot,
-			&i.ResourceAttr,
-			&i.Bonus,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const listFitChargeTypes = `-- name: ListFitChargeTypes :many
 SELECT t.type_id, t.name
 FROM sde_types t
@@ -786,6 +732,60 @@ func (q *Queries) ListFitImplantTypes(ctx context.Context, arg ListFitImplantTyp
 	for rows.Next() {
 		var i ListFitImplantTypesRow
 		if err := rows.Scan(&i.TypeID, &i.Name, &i.GroupName); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listFitResourceImplants = `-- name: ListFitResourceImplants :many
+SELECT DISTINCT t.type_id, t.name, slot.value::bigint AS slot, mod.modified_attr AS resource_attr, bonus.value AS bonus
+FROM sde_types t
+JOIN sde_type_attributes slot ON slot.type_id = t.type_id AND slot.attribute_id = 331
+JOIN sde_type_effects te ON te.type_id = t.type_id
+JOIN sde_effect_modifiers mod ON mod.effect_id = te.effect_id AND mod.modified_attr IN (48, 11)
+JOIN sde_type_attributes bonus ON bonus.type_id = t.type_id AND bonus.attribute_id = mod.modifying_attr
+WHERE t.published = 1 AND t.market_group_id > 0
+ORDER BY mod.modified_attr, bonus.value, t.type_id
+`
+
+type ListFitResourceImplantsRow struct {
+	TypeID       int64   `json:"type_id"`
+	Name         string  `json:"name"`
+	Slot         int64   `json:"slot"`
+	ResourceAttr int64   `json:"resource_attr"`
+	Bonus        float64 `json:"bonus"`
+}
+
+// ListFitResourceImplants: hardwirings that raise a ship's CPU
+// or powergrid output -- the implant solver's ladder. A candidate
+// is an implant type (slot from attribute 331) carrying an effect
+// whose modifier lands on cpuOutput (48) or powerOutput (11); the
+// bonus is the implant's own value of the modifier's attribute
+// (the ladder percent for the output families).
+func (q *Queries) ListFitResourceImplants(ctx context.Context) ([]ListFitResourceImplantsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listFitResourceImplants)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListFitResourceImplantsRow
+	for rows.Next() {
+		var i ListFitResourceImplantsRow
+		if err := rows.Scan(
+			&i.TypeID,
+			&i.Name,
+			&i.Slot,
+			&i.ResourceAttr,
+			&i.Bonus,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -1175,7 +1175,12 @@ func (q *Queries) ListSDECategoriesWithCounts(ctx context.Context) ([]ListSDECat
 	var items []ListSDECategoriesWithCountsRow
 	for rows.Next() {
 		var i ListSDECategoriesWithCountsRow
-		if err := rows.Scan(&i.CategoryID, &i.Name, &i.TypeCount, &i.PublishedCount); err != nil {
+		if err := rows.Scan(
+			&i.CategoryID,
+			&i.Name,
+			&i.TypeCount,
+			&i.PublishedCount,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -1329,7 +1334,12 @@ func (q *Queries) ListSDEGroupsInCategory(ctx context.Context, categoryID int64)
 	var items []ListSDEGroupsInCategoryRow
 	for rows.Next() {
 		var i ListSDEGroupsInCategoryRow
-		if err := rows.Scan(&i.GroupID, &i.Name, &i.TypeCount, &i.PublishedCount); err != nil {
+		if err := rows.Scan(
+			&i.GroupID,
+			&i.Name,
+			&i.TypeCount,
+			&i.PublishedCount,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -1583,6 +1593,42 @@ func (q *Queries) ListSDEStationsBySystem(ctx context.Context, systemID int64) (
 	return items, nil
 }
 
+const listSDESystemsByRegion = `-- name: ListSDESystemsByRegion :many
+SELECT system_id, name, security FROM sde_systems
+WHERE region_id = $1
+ORDER BY name
+`
+
+type ListSDESystemsByRegionRow struct {
+	SystemID int64   `json:"system_id"`
+	Name     string  `json:"name"`
+	Security float64 `json:"security"`
+}
+
+// ListSDESystemsByRegion: one region's systems for its page.
+func (q *Queries) ListSDESystemsByRegion(ctx context.Context, regionID int64) ([]ListSDESystemsByRegionRow, error) {
+	rows, err := q.db.QueryContext(ctx, listSDESystemsByRegion, regionID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListSDESystemsByRegionRow
+	for rows.Next() {
+		var i ListSDESystemsByRegionRow
+		if err := rows.Scan(&i.SystemID, &i.Name, &i.Security); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listSDETypeAttributes = `-- name: ListSDETypeAttributes :many
 SELECT attribute_id, value FROM sde_type_attributes
 WHERE type_id = $1
@@ -1638,6 +1684,42 @@ func (q *Queries) ListSDETypeAttributesByIDs(ctx context.Context, typeIds []int6
 	for rows.Next() {
 		var i SdeTypeAttribute
 		if err := rows.Scan(&i.TypeID, &i.AttributeID, &i.Value); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSDETypeCategories = `-- name: ListSDETypeCategories :many
+SELECT t.type_id, g.category_id FROM sde_types t
+JOIN sde_groups g ON g.group_id = t.group_id
+WHERE t.type_id = ANY($1::bigint[])
+`
+
+type ListSDETypeCategoriesRow struct {
+	TypeID     int64 `json:"type_id"`
+	CategoryID int64 `json:"category_id"`
+}
+
+// The SDE category of each of some types, batched: type to
+// group to category in one read.
+func (q *Queries) ListSDETypeCategories(ctx context.Context, typeIds []int64) ([]ListSDETypeCategoriesRow, error) {
+	rows, err := q.db.QueryContext(ctx, listSDETypeCategories, pq.Array(typeIds))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListSDETypeCategoriesRow
+	for rows.Next() {
+		var i ListSDETypeCategoriesRow
+		if err := rows.Scan(&i.TypeID, &i.CategoryID); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -1946,7 +2028,12 @@ func (q *Queries) ListSDETypesInGroup(ctx context.Context, arg ListSDETypesInGro
 	var items []ListSDETypesInGroupRow
 	for rows.Next() {
 		var i ListSDETypesInGroupRow
-		if err := rows.Scan(&i.TypeID, &i.Name, &i.MarketGroupID, &i.Published); err != nil {
+		if err := rows.Scan(
+			&i.TypeID,
+			&i.Name,
+			&i.MarketGroupID,
+			&i.Published,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -2140,42 +2227,6 @@ func (q *Queries) ListTypeGroupNames(ctx context.Context, typeIds []int64) ([]Li
 	return items, nil
 }
 
-const listSDETypeCategories = `-- name: ListSDETypeCategories :many
-SELECT t.type_id, g.category_id FROM sde_types t
-JOIN sde_groups g ON g.group_id = t.group_id
-WHERE t.type_id = ANY($1::bigint[])
-`
-
-type ListSDETypeCategoriesRow struct {
-	TypeID     int64 `json:"type_id"`
-	CategoryID int64 `json:"category_id"`
-}
-
-// The SDE category of each of some types, batched: type to
-// group to category in one read.
-func (q *Queries) ListSDETypeCategories(ctx context.Context, typeIds []int64) ([]ListSDETypeCategoriesRow, error) {
-	rows, err := q.db.QueryContext(ctx, listSDETypeCategories, pq.Array(typeIds))
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []ListSDETypeCategoriesRow
-	for rows.Next() {
-		var i ListSDETypeCategoriesRow
-		if err := rows.Scan(&i.TypeID, &i.CategoryID); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const listTypeNameIDsByIDs = `-- name: ListTypeNameIDsByIDs :many
 SELECT type_id FROM type_names
 WHERE type_id = ANY($1::bigint[])
@@ -2259,9 +2310,10 @@ type SearchCorporationRecordsByNameRow struct {
 }
 
 // Corporation-name search for the top banner and quick jump:
-// ready records whose stored payload mentions the text; the
-// handler re-checks the corporation's own name field before
-// offering a row, same as the pilot search above.
+// same posture as the pilot search above, on the corporation's
+// own name field. Stored payloads come in two shapes (the
+// wrapped record and a bare ESI corporation shared by a peer),
+// so the name is read from whichever shape is present.
 func (q *Queries) SearchCorporationRecordsByName(ctx context.Context, lower string) ([]SearchCorporationRecordsByNameRow, error) {
 	rows, err := q.db.QueryContext(ctx, searchCorporationRecordsByName, lower)
 	if err != nil {
@@ -2338,9 +2390,12 @@ type SearchPilotRecordsByNameRow struct {
 }
 
 // Pilot-name search for the top banner: ready records whose
-// stored payload mentions the text; the handler re-checks the
-// pilot's own name field before offering a row, so bios that
-// merely mention a name never produce a hit.
+// pilot name field mentions the text. The match runs on
+// the name inside the payload, not the raw payload: a substring
+// match over the whole JSON fills the LIMIT window with rows
+// that merely mention common keys and crowds out real name
+// matches beyond it. The handler still re-checks the name
+// field for ranking before offering a row.
 func (q *Queries) SearchPilotRecordsByName(ctx context.Context, lower string) ([]SearchPilotRecordsByNameRow, error) {
 	rows, err := q.db.QueryContext(ctx, searchPilotRecordsByName, lower)
 	if err != nil {
@@ -2424,129 +2479,6 @@ func (q *Queries) SearchSDESkills(ctx context.Context, arg SearchSDESkillsParams
 	for rows.Next() {
 		var i SearchSDESkillsRow
 		if err := rows.Scan(&i.TypeID, &i.Name, &i.Rank); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const suggestSDESystems = `-- name: SuggestSDESystems :many
-SELECT s.system_id, s.name, s.region_id, COALESCE(r.name, '') AS region_name, s.security
-FROM sde_systems s
-LEFT JOIN sde_regions r ON r.region_id = s.region_id
-WHERE strpos(lower(s.name), lower($1::text)) > 0
-ORDER BY CASE WHEN strpos(lower(s.name), lower($1::text)) = 1 THEN 0 ELSE 1 END, s.name
-LIMIT $2::bigint
-`
-
-type SuggestSDESystemsParams struct {
-	Q   string `json:"q"`
-	Lim int64  `json:"lim"`
-}
-
-type SuggestSDESystemsRow struct {
-	SystemID   int64   `json:"system_id"`
-	Name       string  `json:"name"`
-	RegionID   int64   `json:"region_id"`
-	RegionName string  `json:"region_name"`
-	Security   float64 `json:"security"`
-}
-
-// SuggestSDESystems: systems by name for the search boxes, prefix matches first.
-func (q *Queries) SuggestSDESystems(ctx context.Context, arg SuggestSDESystemsParams) ([]SuggestSDESystemsRow, error) {
-	rows, err := q.db.QueryContext(ctx, suggestSDESystems, arg.Q, arg.Lim)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []SuggestSDESystemsRow
-	for rows.Next() {
-		var i SuggestSDESystemsRow
-		if err := rows.Scan(&i.SystemID, &i.Name, &i.RegionID, &i.RegionName, &i.Security); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const suggestSDERegions = `-- name: SuggestSDERegions :many
-SELECT region_id, name FROM sde_regions
-WHERE strpos(lower(name), lower($1::text)) > 0
-ORDER BY CASE WHEN strpos(lower(name), lower($1::text)) = 1 THEN 0 ELSE 1 END, name
-LIMIT $2::bigint
-`
-
-type SuggestSDERegionsParams struct {
-	Q   string `json:"q"`
-	Lim int64  `json:"lim"`
-}
-
-type SuggestSDERegionsRow struct {
-	RegionID int64  `json:"region_id"`
-	Name     string `json:"name"`
-}
-
-// SuggestSDERegions: regions by name for the search boxes, prefix matches first.
-func (q *Queries) SuggestSDERegions(ctx context.Context, arg SuggestSDERegionsParams) ([]SuggestSDERegionsRow, error) {
-	rows, err := q.db.QueryContext(ctx, suggestSDERegions, arg.Q, arg.Lim)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []SuggestSDERegionsRow
-	for rows.Next() {
-		var i SuggestSDERegionsRow
-		if err := rows.Scan(&i.RegionID, &i.Name); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listSDESystemsByRegion = `-- name: ListSDESystemsByRegion :many
-SELECT system_id, name, security FROM sde_systems
-WHERE region_id = $1
-ORDER BY name
-`
-
-type ListSDESystemsByRegionRow struct {
-	SystemID int64   `json:"system_id"`
-	Name     string  `json:"name"`
-	Security float64 `json:"security"`
-}
-
-// ListSDESystemsByRegion: one region's systems for its page.
-func (q *Queries) ListSDESystemsByRegion(ctx context.Context, regionID int64) ([]ListSDESystemsByRegionRow, error) {
-	rows, err := q.db.QueryContext(ctx, listSDESystemsByRegion, regionID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []ListSDESystemsByRegionRow
-	for rows.Next() {
-		var i ListSDESystemsByRegionRow
-		if err := rows.Scan(&i.SystemID, &i.Name, &i.Security); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -2768,6 +2700,42 @@ func (q *Queries) SetTypeDetail(ctx context.Context, arg SetTypeDetailParams) er
 	return err
 }
 
+const suggestSDERegions = `-- name: SuggestSDERegions :many
+SELECT region_id, name FROM sde_regions
+WHERE strpos(lower(name), lower($1::text)) > 0
+ORDER BY CASE WHEN strpos(lower(name), lower($1::text)) = 1 THEN 0 ELSE 1 END, name
+LIMIT $2::bigint
+`
+
+type SuggestSDERegionsParams struct {
+	Q   string `json:"q"`
+	Lim int64  `json:"lim"`
+}
+
+// SuggestSDERegions: regions by name for the search boxes, prefix matches first.
+func (q *Queries) SuggestSDERegions(ctx context.Context, arg SuggestSDERegionsParams) ([]SdeRegion, error) {
+	rows, err := q.db.QueryContext(ctx, suggestSDERegions, arg.Q, arg.Lim)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SdeRegion
+	for rows.Next() {
+		var i SdeRegion
+		if err := rows.Scan(&i.RegionID, &i.Name); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const suggestSDEShips = `-- name: SuggestSDEShips :many
 SELECT t.type_id, t.name, COALESCE(g.name, '') AS group_name
 FROM sde_types t
@@ -2807,6 +2775,58 @@ func (q *Queries) SuggestSDEShips(ctx context.Context, arg SuggestSDEShipsParams
 	for rows.Next() {
 		var i SuggestSDEShipsRow
 		if err := rows.Scan(&i.TypeID, &i.Name, &i.GroupName); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const suggestSDESystems = `-- name: SuggestSDESystems :many
+SELECT s.system_id, s.name, s.region_id, COALESCE(r.name, '') AS region_name, s.security
+FROM sde_systems s
+LEFT JOIN sde_regions r ON r.region_id = s.region_id
+WHERE strpos(lower(s.name), lower($1::text)) > 0
+ORDER BY CASE WHEN strpos(lower(s.name), lower($1::text)) = 1 THEN 0 ELSE 1 END, s.name
+LIMIT $2::bigint
+`
+
+type SuggestSDESystemsParams struct {
+	Q   string `json:"q"`
+	Lim int64  `json:"lim"`
+}
+
+type SuggestSDESystemsRow struct {
+	SystemID   int64   `json:"system_id"`
+	Name       string  `json:"name"`
+	RegionID   int64   `json:"region_id"`
+	RegionName string  `json:"region_name"`
+	Security   float64 `json:"security"`
+}
+
+// SuggestSDESystems: systems by name for the search boxes, prefix matches first.
+func (q *Queries) SuggestSDESystems(ctx context.Context, arg SuggestSDESystemsParams) ([]SuggestSDESystemsRow, error) {
+	rows, err := q.db.QueryContext(ctx, suggestSDESystems, arg.Q, arg.Lim)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SuggestSDESystemsRow
+	for rows.Next() {
+		var i SuggestSDESystemsRow
+		if err := rows.Scan(
+			&i.SystemID,
+			&i.Name,
+			&i.RegionID,
+			&i.RegionName,
+			&i.Security,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

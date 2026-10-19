@@ -21,6 +21,30 @@ jobs:
       - name: Check out the source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
+      # The generated database code (internal/db/sqlc) must match
+      # what the pinned sqlc makes of the schema and query sources.
+      # Schema or query edits that skip the regeneration step fail
+      # here instead of drifting silently until an unrelated change
+      # trips over the diff.
+      - name: Check the generated database code is fresh
+        run: |
+          build="$(mktemp -d)"
+          curl -fsSL -o "$build/sqlc.tar.gz" https://github.com/sqlc-dev/sqlc/releases/download/v1.31.1/sqlc_1.31.1_linux_amd64.tar.gz
+          echo "497ae4fcdfa64c5b0c311ffe4c2bd991e43991e82e5367792ed78bc2dca27354  $build/sqlc.tar.gz" | sha256sum -c -
+          tar -xzf "$build/sqlc.tar.gz" -C "$build" sqlc
+          "$build/sqlc" version
+          "$build/sqlc" generate
+          if ! git diff --exit-code internal/db/sqlc; then
+            echo "internal/db/sqlc is stale: run 'sqlc generate' (sqlc v1.31.1) and commit the result."
+            exit 1
+          fi
+          untracked="$(git ls-files --others --exclude-standard internal/db/sqlc)"
+          if [ -n "$untracked" ]; then
+            echo "sqlc generate produced files that are not committed:"
+            echo "$untracked"
+            exit 1
+          fi
+
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:

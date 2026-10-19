@@ -911,7 +911,7 @@ func (app *page) attachHubStrip(ctx context.Context, snap *snapshot, v *resultVi
 			return
 		}
 		v.HubStrip = append(v.HubStrip, hubTotal{
-			Hub: opt.Name, Total: esi.FormatISK(res.TotalValue), Current: opt.RegionID == basis.RegionID,
+			Hub: opt.Name, Total: esi.FormatISK(res.OfferedValue), Current: opt.RegionID == basis.RegionID,
 		})
 	}
 }

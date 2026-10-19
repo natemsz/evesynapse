@@ -50,6 +50,7 @@ var sdeFileNames = []string{
 	"staStations.csv",
 	"mapSolarSystems.csv",
 	"mapRegions.csv",
+	"invTypeMaterials.csv",
 	"industryBlueprints.csv",
 	"industryActivity.csv",
 	"industryActivityProducts.csv",
@@ -503,6 +504,18 @@ type parsedSDE struct {
 	// row per (mutaplasmid, base type) the mappings dataset
 	// carries. Empty when the dump predates the dataset.
 	dynMappings []sdeDynMappingRow
+
+	// Reprocessing outputs (schema 066): one row per (type,
+	// output material) from invTypeMaterials.
+	reprocessing []sdeReprocessRow
+}
+
+// sdeReprocessRow is one reprocessing output: the quantity of
+// one material one portion of a type yields.
+type sdeReprocessRow struct {
+	typeID         int64
+	materialTypeID int64
+	quantity       int64
 }
 
 // sdeDynRangeRow is one mutaplasmid roll range: the
@@ -613,6 +626,7 @@ type sdeTypeRow struct {
 	mass          float64
 	volume        float64
 	capacity      float64
+	portionSize   int64 // units in one reprocessing portion; 0 when none
 }
 
 type sdeGroupRow struct {
@@ -730,6 +744,8 @@ func parseSDEFile(name string, body io.Reader, parsed *parsedSDE) error {
 	switch name {
 	case "invTypes.csv":
 		parsed.types, err = parseSDETypes(cr, idx)
+	case "invTypeMaterials.csv":
+		err = parseSDETypeMaterials(cr, idx, parsed)
 	case "invGroups.csv":
 		parsed.groups, err = parseSDEGroups(cr, idx)
 	case "invCategories.csv":
@@ -889,10 +905,35 @@ func parseSDETypes(cr *csv.Reader, idx map[string]int) ([]sdeTypeRow, error) {
 			mass:          floatCol("mass"),
 			volume:        floatCol("volume"),
 			capacity:      floatCol("capacity"),
+			portionSize:   csvIDOrZero(rec, idx, "portionSize"),
 		})
 		return nil
 	})
 	return rows, err
+}
+
+// parseSDETypeMaterials reads invTypeMaterials: what one
+// portion of a type reprocesses into (schema 066).
+func parseSDETypeMaterials(cr *csv.Reader, idx map[string]int, parsed *parsedSDE) error {
+	_, err := eachCSVRow(cr, func(rec []string) error {
+		typeID, err := csvID(rec, idx, "typeID")
+		if err != nil {
+			return errSkipRow
+		}
+		matID, err := csvID(rec, idx, "materialTypeID")
+		if err != nil {
+			return errSkipRow
+		}
+		qty := csvIDOrZero(rec, idx, "quantity")
+		if qty <= 0 {
+			return errSkipRow
+		}
+		parsed.reprocessing = append(parsed.reprocessing, sdeReprocessRow{
+			typeID: typeID, materialTypeID: matID, quantity: qty,
+		})
+		return nil
+	})
+	return err
 }
 
 func parseSDEGroups(cr *csv.Reader, idx map[string]int) ([]sdeGroupRow, error) {
@@ -1605,7 +1646,7 @@ func (app *Application) storeSDE(ctx context.Context, base string, parsed *parse
 	}
 	defer tx.Rollback()
 
-	for _, table := range []string{"sde_types", "sde_type_physics", "sde_groups", "sde_categories", "sde_market_groups", "sde_stations", "sde_systems", "sde_regions",
+	for _, table := range []string{"sde_types", "sde_type_physics", "sde_reprocessing", "sde_groups", "sde_categories", "sde_market_groups", "sde_stations", "sde_systems", "sde_regions",
 		"sde_blueprints", "sde_blueprint_materials", "sde_blueprint_skills",
 		"sde_skill_meta", "sde_requirements",
 		"sde_type_attributes", "sde_attribute_types", "sde_effects", "sde_effect_modifiers", "sde_type_effects"} {
@@ -1634,9 +1675,15 @@ func (app *Application) storeSDE(ctx context.Context, base string, parsed *parse
 	}); err != nil {
 		return 0, err
 	}
-	if err := insert("INSERT INTO sde_type_physics (type_id, mass, volume, capacity) VALUES ($1, $2, $3, $4)", len(parsed.types), func(i int) []any {
+	if err := insert("INSERT INTO sde_type_physics (type_id, mass, volume, capacity, portion_size) VALUES ($1, $2, $3, $4, $5)", len(parsed.types), func(i int) []any {
 		r := parsed.types[i]
-		return []any{r.typeID, r.mass, r.volume, r.capacity}
+		return []any{r.typeID, r.mass, r.volume, r.capacity, r.portionSize}
+	}); err != nil {
+		return 0, err
+	}
+	if err := insert("INSERT INTO sde_reprocessing (type_id, material_type_id, quantity) VALUES ($1, $2, $3)", len(parsed.reprocessing), func(i int) []any {
+		r := parsed.reprocessing[i]
+		return []any{r.typeID, r.materialTypeID, r.quantity}
 	}); err != nil {
 		return 0, err
 	}

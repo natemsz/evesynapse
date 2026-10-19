@@ -98,6 +98,17 @@ type AllianceRecord struct {
 	NotedAt    sql.NullTime `json:"noted_at"`
 }
 
+type AppraisalAnonymousOwner struct {
+	ID     int64 `json:"id"`
+	UserID int64 `json:"user_id"`
+}
+
+type AppraisalCookieSecret struct {
+	ID        int64     `json:"id"`
+	Secret    string    `json:"secret"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
 type BlueprintCopyMedian struct {
 	TypeID      int64     `json:"type_id"`
 	Runs        int64     `json:"runs"`
@@ -272,6 +283,17 @@ type FitRating struct {
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
+type FittingAnonymousOwner struct {
+	ID     int64 `json:"id"`
+	UserID int64 `json:"user_id"`
+}
+
+type FittingCookieSecret struct {
+	ID        int64     `json:"id"`
+	Secret    string    `json:"secret"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
 type ForesightTarget struct {
 	ID          int64        `json:"id"`
 	UserID      int64        `json:"user_id"`
@@ -336,19 +358,22 @@ type KillmailDetail struct {
 }
 
 type LocalFitting struct {
-	ID          int64     `json:"id"`
-	UserID      int64     `json:"user_id"`
-	Name        string    `json:"name"`
-	ShipTypeID  int64     `json:"ship_type_id"`
-	ItemsJson   string    `json:"items_json"`
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
-	IsPublic    bool      `json:"is_public"`
-	IsDraft     bool      `json:"is_draft"`
-	ViewCount   int64     `json:"view_count"`
-	TotalPrice  float64   `json:"total_price"`
-	RatingCount int64     `json:"rating_count"`
-	RatingSum   int64     `json:"rating_sum"`
+	ID           int64        `json:"id"`
+	UserID       int64        `json:"user_id"`
+	Name         string       `json:"name"`
+	ShipTypeID   int64        `json:"ship_type_id"`
+	ItemsJson    string       `json:"items_json"`
+	CreatedAt    time.Time    `json:"created_at"`
+	UpdatedAt    time.Time    `json:"updated_at"`
+	IsPublic     bool         `json:"is_public"`
+	IsDraft      bool         `json:"is_draft"`
+	ViewCount    int64        `json:"view_count"`
+	TotalPrice   float64      `json:"total_price"`
+	RatingCount  int64        `json:"rating_count"`
+	RatingSum    int64        `json:"rating_sum"`
+	ShareToken   string       `json:"share_token"`
+	IsAnonymous  bool         `json:"is_anonymous"`
+	LastViewedAt sql.NullTime `json:"last_viewed_at"`
 }
 
 type MarketBookOrder struct {
@@ -819,6 +844,12 @@ type SdeRegion struct {
 	Name     string `json:"name"`
 }
 
+type SdeReprocessing struct {
+	TypeID         int64 `json:"type_id"`
+	MaterialTypeID int64 `json:"material_type_id"`
+	Quantity       int64 `json:"quantity"`
+}
+
 type SdeRequirement struct {
 	TypeID      int64 `json:"type_id"`
 	SkillTypeID int64 `json:"skill_type_id"`
@@ -867,10 +898,11 @@ type SdeTypeEffect struct {
 }
 
 type SdeTypePhysic struct {
-	TypeID   int64   `json:"type_id"`
-	Mass     float64 `json:"mass"`
-	Volume   float64 `json:"volume"`
-	Capacity float64 `json:"capacity"`
+	TypeID      int64   `json:"type_id"`
+	Mass        float64 `json:"mass"`
+	Volume      float64 `json:"volume"`
+	Capacity    float64 `json:"capacity"`
+	PortionSize int64   `json:"portion_size"`
 }
 
 type Session struct {
@@ -1081,16 +1113,28 @@ type User struct {
 }
 
 type UserAppraisal struct {
-	ID          int64           `json:"id"`
-	UserID      int64           `json:"user_id"`
-	CreatedAt   time.Time       `json:"created_at"`
-	InputText   string          `json:"input_text"`
-	InputHash   string          `json:"input_hash"`
-	ShareToken  string          `json:"share_token"`
-	Snapshot    json.RawMessage `json:"snapshot"`
-	TotalValue  float64         `json:"total_value"`
-	PricedLines int64           `json:"priced_lines"`
-	TotalLines  int64           `json:"total_lines"`
+	ID           int64           `json:"id"`
+	UserID       int64           `json:"user_id"`
+	CreatedAt    time.Time       `json:"created_at"`
+	InputText    string          `json:"input_text"`
+	InputHash    string          `json:"input_hash"`
+	ShareToken   string          `json:"share_token"`
+	Snapshot     json.RawMessage `json:"snapshot"`
+	TotalValue   float64         `json:"total_value"`
+	PricedLines  int64           `json:"priced_lines"`
+	TotalLines   int64           `json:"total_lines"`
+	IsAnonymous  bool            `json:"is_anonymous"`
+	LastViewedAt time.Time       `json:"last_viewed_at"`
+}
+
+type UserAppraisalPref struct {
+	UserID     int64     `json:"user_id"`
+	HubRegion  int64     `json:"hub_region"`
+	Mode       string    `json:"mode"`
+	Percent    float64   `json:"percent"`
+	UpdatedAt  time.Time `json:"updated_at"`
+	RefineRate float64   `json:"refine_rate"`
+	PruneOres  bool      `json:"prune_ores"`
 }
 
 type WalletHistory struct {

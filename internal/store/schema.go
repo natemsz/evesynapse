@@ -366,6 +366,32 @@ var pgSwarmPeerBuildSchema string
 //go:embed schema_pg/063_abyssal_mappings.sql
 var pgAbyssalMappingsSchema string
 
+// Step 064: appraisal lifecycle -- anonymous appraisal storage
+// (shared anonymous owner, is_anonymous flag), last-viewed
+// tracking for the 180-day anonymous expiry, and the secret
+// that signs the anonymous-history cookie.
+//
+//go:embed schema_pg/064_appraisal_lifecycle.sql
+var pgAppraisalLifecycleSchema string
+
+// Step 065: remembered appraisal pricing basis per account.
+//
+//go:embed schema_pg/065_appraisal_preferences.sql
+var pgAppraisalPreferencesSchema string
+
+// Step 066: SDE reprocessing outputs, portion sizes, and the
+// remembered refine rate in the appraisal preferences.
+//
+//go:embed schema_pg/066_reprocessing.sql
+var pgReprocessingSchema string
+
+// Step 067: anonymous fit sharing -- share tokens on
+// local_fittings, the shared anonymous fit owner, and the
+// fitting history cookie secret.
+//
+//go:embed schema_pg/067_anonymous_fits.sql
+var pgAnonymousFitsSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -458,6 +484,10 @@ func schemaSteps() []schemaStep {
 		{61, "blueprint_copy_medians", pgBlueprintCopyMediansSchema, ""},
 		{62, "swarm_peer_build", pgSwarmPeerBuildSchema, ""},
 		{63, "abyssal_mappings", pgAbyssalMappingsSchema, ""},
+		{64, "appraisal_lifecycle", pgAppraisalLifecycleSchema, ""},
+		{65, "appraisal_preferences", pgAppraisalPreferencesSchema, ""},
+		{66, "reprocessing", pgReprocessingSchema, ""},
+		{67, "anonymous_fits", pgAnonymousFitsSchema, ""},
 	}
 }
 

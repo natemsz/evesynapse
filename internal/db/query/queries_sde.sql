@@ -493,7 +493,7 @@ SELECT type_id, group_id FROM sde_types
 WHERE type_id = ANY(sqlc.arg(type_ids)::bigint[])
 ORDER BY type_id;
 -- name: ListSDETypePhysicsByIDs :many
-SELECT type_id, mass, volume, capacity FROM sde_type_physics
+SELECT type_id, mass, volume, capacity, portion_size FROM sde_type_physics
 WHERE type_id = ANY(sqlc.arg(type_ids)::bigint[])
 ORDER BY type_id;
 -- name: CountSDETypeAttributes :one

@@ -22,6 +22,7 @@ package appraise
 // rolls are not on record.
 
 import (
+	"fmt"
 	"regexp"
 	"strconv"
 	"strings"
@@ -67,9 +68,14 @@ type pasteResult struct {
 }
 
 var (
-	reQtyPrefix = regexp.MustCompile(`^([\d,]+)\s*[x×]\s*(.+)$`)
-	reQtySuffix = regexp.MustCompile(`^(.+?)\s*[x×]\s*([\d,]+)$`)
-	reCommaQty  = regexp.MustCompile(`^(.+?),\s*([\d,]+)$`)
+	reQtyPrefix = regexp.MustCompile(`^([\d,]+(?:\.\d+)?)\s*[x×]\s*(.+)$`)
+	reQtySuffix = regexp.MustCompile(`^(.+?)\s*[x×]\s*([\d,]+(?:\.\d+)?)$`)
+	reCommaQty  = regexp.MustCompile(`^(.+?),\s*([\d,]+(?:\.\d+)?)$`)
+	// A trailing volume ("1,200 m3", "12.5 m³") is a note
+	// about size, never a quantity: the number in front of
+	// the unit measures the stack's volume, not its count.
+	reVolumeSuffix = regexp.MustCompile(`(?i)[\s,]+[\d,]+(?:\.\d+)?\s*(?:m3|m³|m\^3)\s*$`)
+	reVolumeField  = regexp.MustCompile(`(?i)^[\d,]+(?:\.\d+)?\s*(?:m3|m³|m\^3)$`)
 	// The game's item-link markup: an item link names one
 	// unique item instance (type id // item id); a type link
 	// names only the type.
@@ -82,12 +88,26 @@ var (
 )
 
 // parseQtyToken reads one quantity token ("1,000,000", "500").
-// The ceiling keeps a pasted price column or an item id from
-// becoming an absurd quantity.
+// A decimal token counts only when it is whole: "20.0" is 20,
+// never 200 (the point is not a group separator), and "20.5"
+// is not a quantity at all. The ceiling keeps a pasted price
+// column or an item id from becoming an absurd quantity.
 func parseQtyToken(s string) (int64, bool) {
 	s = strings.ReplaceAll(strings.ReplaceAll(s, ",", ""), " ", "")
 	if s == "" || len(s) > 15 {
 		return 0, false
+	}
+	if i := strings.IndexByte(s, '.'); i >= 0 {
+		whole, frac := s[:i], s[i+1:]
+		if whole == "" || frac == "" {
+			return 0, false
+		}
+		for _, c := range frac {
+			if c != '0' {
+				return 0, false
+			}
+		}
+		s = whole
 	}
 	for _, c := range s {
 		if c < '0' || c > '9' {
@@ -103,12 +123,18 @@ func parseQtyToken(s string) (int64, bool) {
 
 // isNumberToken reports whether a token is all digits and
 // commas — including "000", a thousand group that is not a
-// quantity by itself.
+// quantity by itself. A whole decimal ("20.0") counts too.
 func isNumberToken(s string) bool {
 	s = strings.ReplaceAll(s, ",", "")
 	if s == "" {
 		return false
 	}
+	_, ok := parseQtyToken(s)
+	if ok {
+		return true
+	}
+	// "000" and friends are number-shaped without being a
+	// usable quantity; they still mark a trailing number run.
 	for _, c := range s {
 		if c < '0' || c > '9' {
 			return false
@@ -297,7 +323,12 @@ func parseListLine(raw string) (pasteLine, bool) {
 	// display text and let the ordinary readings (quantities
 	// around it included) apply.
 	work = reShowinfoType.ReplaceAllString(work, "$2")
+	// A trailing volume measures size, not count: drop it
+	// before any quantity reading, so "Tritanium 1,200 m3"
+	// is one Tritanium with a volume note, not 1,200 of them.
+	work = reVolumeSuffix.ReplaceAllString(work, "")
 	work, facts := stripAnnotation(work)
+	work = reVolumeSuffix.ReplaceAllString(work, "")
 	var pl pasteLine
 	if facts != nil {
 		pl = *facts
@@ -313,6 +344,9 @@ func parseListLine(raw string) (pasteLine, bool) {
 		fields := strings.Split(work, "\t")
 		name = strings.TrimSpace(fields[0])
 		for _, f := range fields[1:] {
+			if reVolumeField.MatchString(strings.TrimSpace(f)) {
+				continue // a size column, not a quantity
+			}
 			if n, ok := parseQtyToken(f); ok {
 				qty, explicit = n, true
 				break
@@ -341,6 +375,64 @@ func parseListLine(raw string) (pasteLine, bool) {
 	}
 	pl.Candidates = candidates(name, qty, explicit)
 	return pl, true
+}
+
+var (
+	reMoonPercent  = regexp.MustCompile(`^(.+?)[\s\t]+(\d+(?:\.\d+)?)%$`)
+	reMoonFraction = regexp.MustCompile(`^(.+?)\t(0\.\d+)$`)
+)
+
+// moonScanLines detects a moon survey paste -- every
+// content line an ore name with its survey share, as a
+// percentage ("Veldspar 45.2%") or a tab-separated fraction
+// ("Veldspar\t0.452") -- and rewrites it as an item list
+// appraising each ore at its share of 10,000 units, so the
+// shares price in proportion at whatever basis is selected.
+// ok is false when the paste is not a moon survey.
+func moonScanLines(text string) (string, bool) {
+	var out []string
+	var total float64
+	seen := 0
+	for _, raw := range strings.Split(text, "\n") {
+		line := strings.TrimSpace(strings.TrimSuffix(raw, "\r"))
+		if line == "" || strings.HasPrefix(line, "#") || strings.HasPrefix(line, "//") {
+			continue
+		}
+		if strings.EqualFold(line, "material\tquantity") || strings.EqualFold(line, "material quantity") {
+			continue
+		}
+		var name string
+		var share float64
+		if m := reMoonPercent.FindStringSubmatch(line); m != nil {
+			v, err := strconv.ParseFloat(m[2], 64)
+			if err != nil {
+				return "", false
+			}
+			name, share = strings.TrimSpace(m[1]), v/100
+		} else if m := reMoonFraction.FindStringSubmatch(line); m != nil {
+			v, err := strconv.ParseFloat(m[2], 64)
+			if err != nil {
+				return "", false
+			}
+			name, share = strings.TrimSpace(m[1]), v
+		} else {
+			return "", false
+		}
+		if name == "" || share <= 0 || share > 1 {
+			return "", false
+		}
+		seen++
+		total += share
+		qty := int64(share*10000 + 0.5)
+		if qty < 1 {
+			qty = 1
+		}
+		out = append(out, fmt.Sprintf("%s x %d", name, qty))
+	}
+	if seen == 0 || total < 0.9 || total > 1.1 {
+		return "", false
+	}
+	return strings.Join(out, "\n"), true
 }
 
 // parsePaste parses a whole line-list paste. EFT pastes are

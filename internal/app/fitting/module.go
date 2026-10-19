@@ -7,13 +7,16 @@
 package fitting
 
 import (
+	"context"
 	"net/http"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
 	"evesynapse/internal/app/module"
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/fitview"
+	"evesynapse/internal/logging"
 )
 
 // Module is the Fitting module's registration.
@@ -46,6 +49,8 @@ var Module = module.Module{
 		// Anonymous-safe surfaces: the simulator (All-V without a
 		// session) and the SDE-only picker. Handlers branch on the session.
 		r.With(deps.AnonPages()).Get("/fittings/", h((*tool).handleFittings))
+		r.With(deps.AnonSim()).Post("/fittings/save-anonymous/", h((*tool).handleFitSaveAnonymous))
+		r.With(deps.AnonSim()).Post("/fittings/share/{token}/delete", h((*tool).handleFitDeleteAnonymous))
 		r.With(deps.AnonSim()).Post("/fittings/simulate/", h((*tool).handleFitSimulate))
 		r.With(deps.AnonSim()).Post("/fittings/solve-implants/", h((*tool).handleFitSolveImplants))
 		r.With(deps.AnonPages()).Get("/fittings/picker.json", h((*tool).handleFitPickerJSON))
@@ -60,6 +65,16 @@ var Module = module.Module{
 		auth.Get("/fittings/mine.json", h((*tool).handleFitMineJSON))
 		auth.Post("/fittings/fork/", h((*tool).handleFitFork))
 		auth.Get("/fittings/shopping/{id}/", h((*tool).handleFitShopping))
+	},
+	WorkerJobs: []module.WorkerJob{
+		{Name: "anonymous fit expiry", After: module.AfterMarket, Start: func(ctx context.Context, deps module.Deps) {
+			t := newTool(deps)
+			if n, err := t.pruneExpiredAnonymousFits(ctx, time.Now()); err != nil {
+				logging.Errorf("fittings: anonymous expiry sweep: %v", err)
+			} else if n > 0 {
+				logging.Infof("fittings: expired %d unviewed anonymous fit(s)", n)
+			}
+		}},
 	},
 	Pages: []module.Page{
 		{Template: "fittings.html", Section: "fitting"},

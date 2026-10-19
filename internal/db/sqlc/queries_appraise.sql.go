@@ -8,12 +8,79 @@ package db
 import (
 	"context"
 	"encoding/json"
+	"time"
 
 	"github.com/lib/pq"
 )
 
+const deleteAnonymousAppraisalByToken = `-- name: DeleteAnonymousAppraisalByToken :execrows
+DELETE FROM user_appraisals
+WHERE share_token = $1 AND is_anonymous = true
+`
+
+func (q *Queries) DeleteAnonymousAppraisalByToken(ctx context.Context, shareToken string) (int64, error) {
+	result, err := q.db.ExecContext(ctx, deleteAnonymousAppraisalByToken, shareToken)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const deleteExpiredAnonymousAppraisals = `-- name: DeleteExpiredAnonymousAppraisals :execrows
+DELETE FROM user_appraisals
+WHERE is_anonymous = true AND last_viewed_at < $1
+`
+
+func (q *Queries) DeleteExpiredAnonymousAppraisals(ctx context.Context, lastViewedAt time.Time) (int64, error) {
+	result, err := q.db.ExecContext(ctx, deleteExpiredAnonymousAppraisals, lastViewedAt)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const deleteUserAppraisal = `-- name: DeleteUserAppraisal :execrows
+DELETE FROM user_appraisals
+WHERE id = $1 AND user_id = $2
+`
+
+type DeleteUserAppraisalParams struct {
+	ID     int64 `json:"id"`
+	UserID int64 `json:"user_id"`
+}
+
+func (q *Queries) DeleteUserAppraisal(ctx context.Context, arg DeleteUserAppraisalParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, deleteUserAppraisal, arg.ID, arg.UserID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const getAppraisalAnonymousOwner = `-- name: GetAppraisalAnonymousOwner :one
+SELECT user_id FROM appraisal_anonymous_owner WHERE id = 1
+`
+
+func (q *Queries) GetAppraisalAnonymousOwner(ctx context.Context) (int64, error) {
+	row := q.db.QueryRowContext(ctx, getAppraisalAnonymousOwner)
+	var user_id int64
+	err := row.Scan(&user_id)
+	return user_id, err
+}
+
+const getAppraisalCookieSecret = `-- name: GetAppraisalCookieSecret :one
+SELECT secret FROM appraisal_cookie_secrets WHERE id = 1
+`
+
+func (q *Queries) GetAppraisalCookieSecret(ctx context.Context) (string, error) {
+	row := q.db.QueryRowContext(ctx, getAppraisalCookieSecret)
+	var secret string
+	err := row.Scan(&secret)
+	return secret, err
+}
+
 const getUserAppraisal = `-- name: GetUserAppraisal :one
-SELECT id, user_id, created_at, input_text, input_hash, share_token, snapshot, total_value, priced_lines, total_lines
+SELECT id, user_id, created_at, input_text, input_hash, share_token, snapshot, total_value, priced_lines, total_lines, is_anonymous, last_viewed_at
 FROM user_appraisals
 WHERE id = $1 AND user_id = $2
 `
@@ -37,12 +104,14 @@ func (q *Queries) GetUserAppraisal(ctx context.Context, arg GetUserAppraisalPara
 		&i.TotalValue,
 		&i.PricedLines,
 		&i.TotalLines,
+		&i.IsAnonymous,
+		&i.LastViewedAt,
 	)
 	return i, err
 }
 
 const getUserAppraisalByShareToken = `-- name: GetUserAppraisalByShareToken :one
-SELECT id, user_id, created_at, input_text, input_hash, share_token, snapshot, total_value, priced_lines, total_lines
+SELECT id, user_id, created_at, input_text, input_hash, share_token, snapshot, total_value, priced_lines, total_lines, is_anonymous, last_viewed_at
 FROM user_appraisals
 WHERE share_token = $1
 `
@@ -61,14 +130,58 @@ func (q *Queries) GetUserAppraisalByShareToken(ctx context.Context, shareToken s
 		&i.TotalValue,
 		&i.PricedLines,
 		&i.TotalLines,
+		&i.IsAnonymous,
+		&i.LastViewedAt,
 	)
 	return i, err
 }
 
+const getUserAppraisalPref = `-- name: GetUserAppraisalPref :one
+SELECT user_id, hub_region, mode, percent, updated_at, refine_rate, prune_ores FROM user_appraisal_prefs
+WHERE user_id = $1
+`
+
+func (q *Queries) GetUserAppraisalPref(ctx context.Context, userID int64) (UserAppraisalPref, error) {
+	row := q.db.QueryRowContext(ctx, getUserAppraisalPref, userID)
+	var i UserAppraisalPref
+	err := row.Scan(
+		&i.UserID,
+		&i.HubRegion,
+		&i.Mode,
+		&i.Percent,
+		&i.UpdatedAt,
+		&i.RefineRate,
+		&i.PruneOres,
+	)
+	return i, err
+}
+
+const insertAppraisalAnonymousOwner = `-- name: InsertAppraisalAnonymousOwner :exec
+INSERT INTO appraisal_anonymous_owner (id, user_id)
+VALUES (1, $1)
+ON CONFLICT (id) DO NOTHING
+`
+
+func (q *Queries) InsertAppraisalAnonymousOwner(ctx context.Context, userID int64) error {
+	_, err := q.db.ExecContext(ctx, insertAppraisalAnonymousOwner, userID)
+	return err
+}
+
+const insertAppraisalCookieSecret = `-- name: InsertAppraisalCookieSecret :exec
+INSERT INTO appraisal_cookie_secrets (id, secret)
+VALUES (1, $1)
+ON CONFLICT (id) DO NOTHING
+`
+
+func (q *Queries) InsertAppraisalCookieSecret(ctx context.Context, secret string) error {
+	_, err := q.db.ExecContext(ctx, insertAppraisalCookieSecret, secret)
+	return err
+}
+
 const insertUserAppraisal = `-- name: InsertUserAppraisal :one
 
-INSERT INTO user_appraisals (user_id, input_text, input_hash, share_token, snapshot, total_value, priced_lines, total_lines)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+INSERT INTO user_appraisals (user_id, input_text, input_hash, share_token, snapshot, total_value, priced_lines, total_lines, is_anonymous, last_viewed_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, now())
 RETURNING id
 `
 
@@ -81,11 +194,13 @@ type InsertUserAppraisalParams struct {
 	TotalValue  float64         `json:"total_value"`
 	PricedLines int64           `json:"priced_lines"`
 	TotalLines  int64           `json:"total_lines"`
+	IsAnonymous bool            `json:"is_anonymous"`
 }
 
 // Appraisal tool storage: a signed-in user's saved appraisals
-// (schema 058) and the case-insensitive name lookup the paste
-// parser resolves against.
+// (schema 058), anonymous appraisals under the shared anonymous
+// owner (schema 064), and the case-insensitive name lookup the
+// paste parser resolves against.
 func (q *Queries) InsertUserAppraisal(ctx context.Context, arg InsertUserAppraisalParams) (int64, error) {
 	row := q.db.QueryRowContext(ctx, insertUserAppraisal,
 		arg.UserID,
@@ -96,10 +211,40 @@ func (q *Queries) InsertUserAppraisal(ctx context.Context, arg InsertUserApprais
 		arg.TotalValue,
 		arg.PricedLines,
 		arg.TotalLines,
+		arg.IsAnonymous,
 	)
 	var id int64
 	err := row.Scan(&id)
 	return id, err
+}
+
+const listReprocessingOutputsForTypes = `-- name: ListReprocessingOutputsForTypes :many
+SELECT type_id, material_type_id, quantity FROM sde_reprocessing
+WHERE type_id = ANY($1::bigint[])
+ORDER BY type_id, material_type_id
+`
+
+func (q *Queries) ListReprocessingOutputsForTypes(ctx context.Context, typeIds []int64) ([]SdeReprocessing, error) {
+	rows, err := q.db.QueryContext(ctx, listReprocessingOutputsForTypes, pq.Array(typeIds))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SdeReprocessing
+	for rows.Next() {
+		var i SdeReprocessing
+		if err := rows.Scan(&i.TypeID, &i.MaterialTypeID, &i.Quantity); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listSDETypesByLowerNames = `-- name: ListSDETypesByLowerNames :many
@@ -138,7 +283,7 @@ func (q *Queries) ListSDETypesByLowerNames(ctx context.Context, names []string) 
 }
 
 const listUserAppraisals = `-- name: ListUserAppraisals :many
-SELECT id, user_id, created_at, input_text, input_hash, share_token, snapshot, total_value, priced_lines, total_lines
+SELECT id, user_id, created_at, input_text, input_hash, share_token, snapshot, total_value, priced_lines, total_lines, is_anonymous, last_viewed_at
 FROM user_appraisals
 WHERE user_id = $1
 ORDER BY id DESC
@@ -170,6 +315,8 @@ func (q *Queries) ListUserAppraisals(ctx context.Context, arg ListUserAppraisals
 			&i.TotalValue,
 			&i.PricedLines,
 			&i.TotalLines,
+			&i.IsAnonymous,
+			&i.LastViewedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -182,4 +329,104 @@ func (q *Queries) ListUserAppraisals(ctx context.Context, arg ListUserAppraisals
 		return nil, err
 	}
 	return items, nil
+}
+
+const listUserAppraisalsByShareTokens = `-- name: ListUserAppraisalsByShareTokens :many
+SELECT id, user_id, created_at, input_text, input_hash, share_token, snapshot, total_value, priced_lines, total_lines, is_anonymous, last_viewed_at
+FROM user_appraisals
+WHERE share_token = ANY($1::text[])
+`
+
+func (q *Queries) ListUserAppraisalsByShareTokens(ctx context.Context, tokens []string) ([]UserAppraisal, error) {
+	rows, err := q.db.QueryContext(ctx, listUserAppraisalsByShareTokens, pq.Array(tokens))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []UserAppraisal
+	for rows.Next() {
+		var i UserAppraisal
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.CreatedAt,
+			&i.InputText,
+			&i.InputHash,
+			&i.ShareToken,
+			&i.Snapshot,
+			&i.TotalValue,
+			&i.PricedLines,
+			&i.TotalLines,
+			&i.IsAnonymous,
+			&i.LastViewedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const touchUserAppraisalByToken = `-- name: TouchUserAppraisalByToken :exec
+UPDATE user_appraisals
+SET last_viewed_at = now()
+WHERE share_token = $1 AND is_anonymous = true
+`
+
+func (q *Queries) TouchUserAppraisalByToken(ctx context.Context, shareToken string) error {
+	_, err := q.db.ExecContext(ctx, touchUserAppraisalByToken, shareToken)
+	return err
+}
+
+const upsertUserAppraisalPref = `-- name: UpsertUserAppraisalPref :exec
+INSERT INTO user_appraisal_prefs (user_id, hub_region, mode, percent, updated_at)
+VALUES ($1, $2, $3, $4, now())
+ON CONFLICT (user_id) DO UPDATE SET
+    hub_region = excluded.hub_region,
+    mode       = excluded.mode,
+    percent    = excluded.percent,
+    updated_at = excluded.updated_at
+`
+
+type UpsertUserAppraisalPrefParams struct {
+	UserID    int64   `json:"user_id"`
+	HubRegion int64   `json:"hub_region"`
+	Mode      string  `json:"mode"`
+	Percent   float64 `json:"percent"`
+}
+
+func (q *Queries) UpsertUserAppraisalPref(ctx context.Context, arg UpsertUserAppraisalPrefParams) error {
+	_, err := q.db.ExecContext(ctx, upsertUserAppraisalPref,
+		arg.UserID,
+		arg.HubRegion,
+		arg.Mode,
+		arg.Percent,
+	)
+	return err
+}
+
+const upsertUserAppraisalRefine = `-- name: UpsertUserAppraisalRefine :exec
+INSERT INTO user_appraisal_prefs (user_id, refine_rate, prune_ores, updated_at)
+VALUES ($1, $2, $3, now())
+ON CONFLICT (user_id) DO UPDATE SET
+    refine_rate = excluded.refine_rate,
+    prune_ores  = excluded.prune_ores,
+    updated_at  = excluded.updated_at
+`
+
+type UpsertUserAppraisalRefineParams struct {
+	UserID     int64   `json:"user_id"`
+	RefineRate float64 `json:"refine_rate"`
+	PruneOres  bool    `json:"prune_ores"`
+}
+
+func (q *Queries) UpsertUserAppraisalRefine(ctx context.Context, arg UpsertUserAppraisalRefineParams) error {
+	_, err := q.db.ExecContext(ctx, upsertUserAppraisalRefine, arg.UserID, arg.RefineRate, arg.PruneOres)
+	return err
 }

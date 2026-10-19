@@ -60,6 +60,7 @@ var Module = module.Module{
 		r.With(anon).Get("/fittings/public/", h((*page).handlePublicFits))
 		r.With(anon).Get("/fittings/public/suggest", h((*page).handlePublicFitSuggest))
 		r.With(anon).Get("/fittings/public/fit/{fitID}/", h((*page).handlePublicFitPage))
+		r.With(anon).Get("/fittings/share/{token}/", h((*page).handleSharedFitPage))
 		r.With(deps.RequireAuth()).Post("/fittings/public/fit/{fitID}/rate", h((*page).handlePublicFitRate))
 	},
 	// Pages built ahead of any visit, and the views counted since the

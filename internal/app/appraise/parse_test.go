@@ -43,6 +43,104 @@ func TestParsePlainQuantities(t *testing.T) {
 	}
 }
 
+func TestParseDecimalAndVolumeQuantities(t *testing.T) {
+	// A whole decimal is that whole number, never the point
+	// read as a group separator: "20.0" is 20, not 200.
+	for _, c := range []struct {
+		line string
+		name string
+		qty  int64
+	}{
+		{"Tritanium x 20.0", "Tritanium", 20},
+		{"20.0 x Tritanium", "Tritanium", 20},
+		{"Tritanium\t20.0", "Tritanium", 20},
+	} {
+		_, cand := firstCand(t, c.line)
+		if cand.Name != c.name || cand.Qty != c.qty {
+			t.Errorf("parseListLine(%q) first candidate = {%q, %d}, want {%q, %d}",
+				c.line, cand.Name, cand.Qty, c.name, c.qty)
+		}
+	}
+	// Trailing whole decimals read as a quantity candidate.
+	pl, _ := firstCand(t, "Tritanium 20.0")
+	found := false
+	for _, cand := range pl.Candidates {
+		if cand.Name == "Tritanium" && cand.Qty == 20 {
+			found = true
+		}
+		if cand.Qty == 200 {
+			t.Errorf("parseListLine(\"Tritanium 20.0\") produced qty 200: %+v", pl.Candidates)
+		}
+	}
+	if !found {
+		t.Errorf("parseListLine(\"Tritanium 20.0\") candidates = %+v, want a {Tritanium, 20} reading", pl.Candidates)
+	}
+	// A fractional quantity is not a quantity at all.
+	if n, ok := parseQtyToken("20.5"); ok {
+		t.Errorf("parseQtyToken(\"20.5\") = %d, want not-a-quantity", n)
+	}
+	// A trailing volume is a size note, not a count: the
+	// stack keeps quantity 1 (or its real quantity), and the
+	// volume number never becomes the quantity.
+	for _, c := range []struct {
+		line string
+		name string
+		qty  int64
+	}{
+		{"Tritanium 1,200 m3", "Tritanium", 1},
+		{"Tritanium x 100 12.5 m³", "Tritanium", 100},
+	} {
+		_, cand := firstCand(t, c.line)
+		if cand.Name != c.name || cand.Qty != c.qty {
+			t.Errorf("parseListLine(%q) first candidate = {%q, %d}, want {%q, %d}",
+				c.line, cand.Name, cand.Qty, c.name, c.qty)
+		}
+	}
+	// "Tritanium 100 1,200 m3" reads as 100 Tritanium with a
+	// volume note: a {Tritanium, 100} candidate exists, and
+	// no candidate reads the volume as the quantity.
+	pl, _ = firstCand(t, "Tritanium 100 1,200 m3")
+	found = false
+	for _, cand := range pl.Candidates {
+		if cand.Name == "Tritanium" && cand.Qty == 100 {
+			found = true
+		}
+		if cand.Qty == 1200 {
+			t.Errorf("volume read as quantity in %+v", pl.Candidates)
+		}
+	}
+	if !found {
+		t.Errorf("candidates = %+v, want a {Tritanium, 100} reading", pl.Candidates)
+	}
+	// A tab-separated size column is skipped the same way.
+	_, cand := firstCand(t, "Tritanium\t1,200 m3\tMineral")
+	if cand.Name != "Tritanium" || cand.Qty != 1 {
+		t.Errorf("tab volume line = {%q, %d}, want {Tritanium, 1}", cand.Name, cand.Qty)
+	}
+}
+
+func TestMoonScanLines(t *testing.T) {
+	out, ok := moonScanLines("Tritanium 60%\nPyerite 40%")
+	if !ok || out != "Tritanium x 6000\nPyerite x 4000" {
+		t.Errorf("percent moon scan = %q, %v", out, ok)
+	}
+	out, ok = moonScanLines("Material\tQuantity\nTritanium\t0.6\nPyerite\t0.4")
+	if !ok || out != "Tritanium x 6000\nPyerite x 4000" {
+		t.Errorf("fraction moon scan = %q, %v", out, ok)
+	}
+	// Shares that do not make a whole moon, and ordinary
+	// lists, are not moon scans.
+	if _, ok := moonScanLines("Tritanium 10%\nPyerite 20%"); ok {
+		t.Error("a 30% paste must not read as a moon survey")
+	}
+	if _, ok := moonScanLines("Tritanium x 100\nPyerite 40%"); ok {
+		t.Error("a mixed list must not read as a moon survey")
+	}
+	if _, ok := moonScanLines("Tritanium x 100"); ok {
+		t.Error("a plain list must not read as a moon survey")
+	}
+}
+
 func TestParseTrailingQuantityIsASecondCandidate(t *testing.T) {
 	// No explicit quantity: the name as typed wins precedence,
 	// the trailing-number reading follows it.

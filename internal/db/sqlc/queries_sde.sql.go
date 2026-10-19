@@ -1842,7 +1842,7 @@ func (q *Queries) ListSDETypeIDsByIDs(ctx context.Context, typeIds []int64) ([]i
 }
 
 const listSDETypePhysicsByIDs = `-- name: ListSDETypePhysicsByIDs :many
-SELECT type_id, mass, volume, capacity FROM sde_type_physics
+SELECT type_id, mass, volume, capacity, portion_size FROM sde_type_physics
 WHERE type_id = ANY($1::bigint[])
 ORDER BY type_id
 `
@@ -1861,6 +1861,7 @@ func (q *Queries) ListSDETypePhysicsByIDs(ctx context.Context, typeIds []int64) 
 			&i.Mass,
 			&i.Volume,
 			&i.Capacity,
+			&i.PortionSize,
 		); err != nil {
 			return nil, err
 		}

@@ -3,18 +3,25 @@
 // a loot haul — and get every line priced by the appraisal core
 // (core's house price order over stored data only), with the
 // tier that spoke and its as-of on each line, and coverage next
-// to every total. Signed-in users' appraisals are saved as
-// snapshots (schema 058) and can be shared read-only; anonymous
-// appraisals are computed and shown, never stored.
+// to every total. Appraisals are saved as snapshots (schema
+// 058) and can be shared read-only: signed-in ones under their
+// owner's account, anonymous ones under a shared anonymous
+// owner (schema 064) remembered by a signed history cookie.
+// Anonymous appraisals fall off 180 days after their last view;
+// signed-in ones do not expire. Either creator can delete
+// theirs.
 package appraise
 
 import (
+	"context"
 	"net/http"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
 	"evesynapse/internal/app/module"
 	db "evesynapse/internal/db/sqlc"
+	"evesynapse/internal/logging"
 )
 
 // Module is the Appraisal module's registration.
@@ -41,9 +48,23 @@ var Module = module.Module{
 		// like the fitting tool's POSTs.
 		r.With(deps.AnonPages()).Get("/market/appraise/", h((*page).handleAppraisePage))
 		r.With(deps.AnonPages()).Get("/market/appraise/s/{token}/", h((*page).handleAppraiseShare))
+		r.With(deps.AnonPages()).Get("/market/appraise/s/{token}/reprocess", h((*page).handleAppraiseReprocess))
 		r.With(deps.AnonSim()).Post("/market/appraise/", h((*page).handleAppraiseSubmit))
+		r.With(deps.AnonSim()).Post("/market/appraise/s/{token}/delete", h((*page).handleAppraiseDeleteAnon))
+		r.With(deps.AnonSim()).Post("/market/appraise/s/{token}/reprice", h((*page).handleAppraiseRepriceToken))
 		auth := r.With(deps.RequireAuth())
 		auth.Post("/market/appraise/{id}/reprice", h((*page).handleAppraiseReprice))
+		auth.Post("/market/appraise/{id}/delete", h((*page).handleAppraiseDelete))
+	},
+	WorkerJobs: []module.WorkerJob{
+		{Name: "appraisal expiry", After: module.AfterMarket, Start: func(ctx context.Context, deps module.Deps) {
+			p := newPage(deps)
+			if n, err := p.pruneExpiredAnonymousAppraisals(ctx, time.Now()); err != nil {
+				logging.Errorf("appraisal: expiry sweep: %v", err)
+			} else if n > 0 {
+				logging.Infof("appraisal: expired %d unviewed anonymous appraisal(s)", n)
+			}
+		}},
 	},
 	Pages: []module.Page{
 		{Template: "market_appraise.html", Section: "tools"},

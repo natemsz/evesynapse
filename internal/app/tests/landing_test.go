@@ -52,6 +52,7 @@ func TestLandingAnonymous(t *testing.T) {
 		"Desktop grade fitting, in a browser tab.",
 		"shot-fitting.webp",
 		"ld-browser",
+		`<div class="ld-stars"></div><div class="ld-stars2"></div>`, // the sky's star layers, ahead of the header
 		"evesynapse.app/fittings/",
 		"priced and simulated with its pilot's own skills",
 		"Data in. Decisions out.",

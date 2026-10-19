@@ -302,20 +302,26 @@ func TestWallpaperFirstPaintUnderlay(t *testing.T) {
 			t.Errorf("bg.css is missing the calm underlay declaration %q", want)
 		}
 	}
-	// The landing keeps the dramatic art: landing.css (linked
-	// only by the landing template, after bg.css) restores the
-	// original tiers with their thumb underlay.
+	// The landing keeps the dramatic art at its base tier only:
+	// landing.css (linked only by the landing template, after
+	// bg.css) restores the sunrise art with its thumb underlay
+	// and never escalates to the wide tiers — the art sits
+	// dimmed, blurred, and veiled there (see also
+	// TestLandingMockupFidelity).
 	landingRaw, err := fs.ReadFile(staticFS, "static/landing.css")
 	if err != nil {
 		t.Fatalf("read landing.css: %v", err)
 	}
 	for _, want := range []string{
 		`background-image: url("/static/bg.jpg?v=887a4b499319e152"), url("/static/bg-thumb.jpg?v=c4cb5f59ce6c1ad2");`,
-		`background-image: url("/static/bg-4k.jpg?v=dcfdf6e5d6f27af6"), url("/static/bg-thumb.jpg?v=c4cb5f59ce6c1ad2");`,
-		`background-image: url("/static/bg-uhd.jpg?v=5fd20062e58afd8b"), url("/static/bg-thumb.jpg?v=c4cb5f59ce6c1ad2");`,
 	} {
 		if !strings.Contains(string(landingRaw), want) {
 			t.Errorf("landing.css is missing the dramatic underlay declaration %q", want)
+		}
+	}
+	for _, banned := range []string{"bg-4k", "bg-uhd"} {
+		if strings.Contains(string(landingRaw), banned) {
+			t.Errorf("landing.css escalates to the %s wallpaper tier; the landing ships the base tier only", banned)
 		}
 	}
 	// The decoded thumbnails must be in the embedded assets (the
@@ -336,6 +342,77 @@ func TestWallpaperFirstPaintUnderlay(t *testing.T) {
 		if !strings.Contains(string(base), want) {
 			t.Errorf("base.html is missing the wallpaper preload %q", want)
 		}
+	}
+}
+
+// TestLandingMockupFidelity pins the landing's fidelity to its
+// approved design: the fixed dark veil over the sky (the layer
+// the text reads against), the design's own glass recipe at a
+// 9px backdrop blur instead of the site's full-strength one, the
+// landing dim text tone, the pure-CSS star layers, the JetBrains
+// Mono footer, and the preview's flat KPI/brief treatment. Each
+// of these regressed once already by borrowing site values; if
+// one drops out, the landing quietly stops looking like the
+// approved design — this says so.
+func TestLandingMockupFidelity(t *testing.T) {
+	raw, err := fs.ReadFile(staticFS, "static/landing.css")
+	if err != nil {
+		t.Fatalf("read landing.css: %v", err)
+	}
+	landing := string(raw)
+	for _, want := range []string{
+		// The sky stack: art reseated to the bottom, the dark
+		// veil above it at the slot the site sheet gives the art,
+		// pinning under no pointer.
+		"body::before { z-index: -3; }",
+		"body::after { content: \"\"; position: fixed; inset: 0; z-index: -1; background: linear-gradient(180deg, rgba(7, 5, 4, 0.42), rgba(7, 5, 4, 0.66) 46%, rgba(7, 5, 4, 0.9)); pointer-events: none; }",
+		// The design's glass: dark gradient surface, 9px blur,
+		// ember-tinted edge, 14px radius.
+		".ld-glass { background: linear-gradient(180deg, rgba(12, 8, 6, 0.58), rgba(12, 8, 6, 0) 52%), rgba(19, 14, 10, 0.84); backdrop-filter: blur(9px) saturate(1.15); -webkit-backdrop-filter: blur(9px) saturate(1.15); border: 1px solid rgba(255, 106, 0, 0.16); border-radius: 14px;",
+		// The landing dim tone, defined here and used in place
+		// of the site's warmer muted.
+		":root { --ld-dim: #b9a892; }",
+		".ld-scard p { color: var(--ld-dim);",
+		".ld-footer a { color: var(--ld-dim); }",
+		// The star layers: fixed, between art and veil, the
+		// second one twinkling in reverse.
+		".ld-stars, .ld-stars2 { position: fixed; inset: 0; z-index: -2; pointer-events: none; }",
+		"radial-gradient(1px 1px at 12% 22%, #fff 50%, transparent 51%)",
+		"animation: ld-tw 11s ease-in-out infinite alternate-reverse; }",
+		"@keyframes ld-tw { from { opacity: 0.45; } to { opacity: 0.95; } }",
+		// The footer is JetBrains Mono, like every other
+		// footer on the site.
+		".ld-footer { border-top: 1px solid rgba(255, 255, 255, 0.07); padding: 22px 0 30px; color: var(--faint, #8a7a66); font-size: 13.5px; font-family: \"JetBrains Mono\", monospace; }",
+		// The preview's borrowed markup carries no glass or
+		// backdrop blur of its own inside the landing.
+		".ld-preview .kpis { grid-template-columns: repeat(2, 1fr); gap: 14px; padding: 0; background: none; border: none; border-radius: 0; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }",
+		".ld-preview .brief-card { flex: none; max-width: none; padding: 12px 15px;",
+	} {
+		if !strings.Contains(landing, want) {
+			t.Errorf("landing.css is missing the approved-design declaration %q", want)
+		}
+	}
+	// The site's muted tone stays the site's: no landing rule
+	// reads it anymore.
+	if strings.Contains(landing, "var(--muted)") {
+		t.Error("landing.css still reads the site --muted tone; landing copy uses --ld-dim")
+	}
+	// The landing's glass never reaches for the site's
+	// full-strength blur token.
+	if strings.Contains(landing, "var(--glass-blur)") {
+		t.Error("landing.css still uses the site --glass-blur token; the landing glass is a fixed 9px")
+	}
+	// The star layers are in the template, ahead of the header.
+	tplRaw, err := fs.ReadFile(templatesFS, "templates/landing.html")
+	if err != nil {
+		t.Fatalf("read landing.html: %v", err)
+	}
+	tpl := string(tplRaw)
+	starsAt := strings.Index(tpl, `<div class="ld-stars"></div><div class="ld-stars2"></div>`)
+	if starsAt < 0 {
+		t.Error("landing.html is missing the star layer divs")
+	} else if headerAt := strings.Index(tpl, `<header class="ld-header">`); headerAt < 0 || starsAt > headerAt {
+		t.Error("landing star layers must precede the header")
 	}
 }
 

@@ -215,10 +215,13 @@ func TestContractSearchSortHeaders(t *testing.T) {
 	mustContain(t, "deal header", body,
 		`<a class="cs-sorthead on" href="/contracts/search/?sort=margin_desc"`)
 	// And a header link keeps the rest of the search:
-	// filters and the deal toggle ride along.
-	_, body = getAnon(t, app, "/contracts/search/?deals=1&sort=margin_desc")
-	if !strings.Contains(body, `href="/contracts/search/?deals=1&amp;sort=deal_asc"`) {
-		t.Error("the value header dropped the active deals filter")
+	// the active filters ride along. (Probed with the
+	// multi-item filter rather than deals: no seeded
+	// contract is appraised, so a deals page has no rows
+	// and renders no table to hold the headers.)
+	_, body = getAnon(t, app, "/contracts/search/?exclude_multi=1&sort=margin_desc")
+	if !strings.Contains(body, `href="/contracts/search/?exclude_multi=1&amp;sort=deal_asc"`) {
+		t.Error("the value header dropped the active multi-item filter")
 	}
 }
 

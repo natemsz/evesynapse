@@ -348,12 +348,18 @@ html[data-theme="light"] #main-content > .section-tabs a.active {
    strip: the active group's pages, on a glass slab joined to the
    panel in the same run as the strip — the strip's folder merge
    lands on the slab, and the slab hands the panel its top edge
-   with no seam of its own. The slab is the panel's own glass —
-   same column margins, same background, same --glass-blur — so
-   the joins show no step, and the pills carry no backdrop filter
-   of their own over the slab's already-blurred glass. The pills
-   are the site's quiet pill recipe; the active one takes the
-   accent fill and edge, and hover speaks the tab vocabulary. */
+   with no seam of its own. The slab's top edge is the body's top
+   edge, so the slab keeps its top border: the strip overlaps it
+   by 1px and paints above it (the strip carries z-index 1, the
+   slab none), exactly as the strip sits over the panel's top
+   border on a flat page, so the line runs behind the tabs and
+   the active tab still merges line-free. The slab is the panel's
+   own glass — same column margins, same background, same
+   --glass-blur — so the joins show no step, and the pills carry
+   no backdrop filter of their own over the slab's already-blurred
+   glass. The pills are the site's quiet pill recipe; the active
+   one takes the accent fill and edge, and hover speaks the tab
+   vocabulary. */
 #main-content > .section-subtabs {
   display: flex;
   flex-wrap: wrap;
@@ -361,13 +367,11 @@ html[data-theme="light"] #main-content > .section-tabs a.active {
   margin: 0 max(1.25rem, calc((100% - 1640px) / 2));
   padding: 0.55rem 1.25rem 0.65rem;
   position: relative;
-  z-index: 1;
   background: var(--glass);
   -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(0.9);
   backdrop-filter: blur(var(--glass-blur)) saturate(0.9);
   border: 1px solid var(--glass-edge);
   border-bottom: none;
-  border-top: none;
 }
 #main-content > .section-subtabs a {
   border: 1px solid rgba(255, 110, 0, 0.22);

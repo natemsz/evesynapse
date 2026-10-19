@@ -670,7 +670,13 @@ FROM market_region_stats WHERE region_id = $1;
 -- floor, long-shot routes (destination over ten times the origin)
 -- only on opt-in, the sold-per-day floor, and the movable size as
 -- the lesser of what the destination sells a day and the stock on
--- sale in the origin.
+-- sale in the origin. Each endpoint resolves per type: the
+-- endpoint region's own row, or -- where the region carries no
+-- row for the type -- the type's row on ESI's global market
+-- (global_region), which is that type's own book (PLEX trades
+-- there, not in any hub). A region row always wins over the
+-- global row, and the serving row's own updated_at is what the
+-- freshness rule judges.
 SELECT type_id, origin_typical_sell, dest_typical_sell, dest_daily_volume, origin_sell_volume
 FROM (
     SELECT o.type_id,
@@ -680,8 +686,16 @@ FROM (
            o.sell_volume AS origin_sell_volume,
            (d.typical_sell - o.typical_sell) * LEAST(d.avg_daily_volume, o.sell_volume::double precision) AS profit
     FROM market_region_stats o
-    JOIN market_region_stats d ON d.region_id = sqlc.arg(dest_region) AND d.type_id = o.type_id
-    WHERE o.region_id = sqlc.arg(origin_region)
+    JOIN market_region_stats d
+      ON d.type_id = o.type_id
+     AND d.region_id IN (sqlc.arg(dest_region), sqlc.arg(global_region))
+     AND (d.region_id = sqlc.arg(dest_region)
+          OR NOT EXISTS (SELECT 1 FROM market_region_stats dd
+                         WHERE dd.region_id = sqlc.arg(dest_region) AND dd.type_id = o.type_id))
+    WHERE o.region_id IN (sqlc.arg(origin_region), sqlc.arg(global_region))
+      AND (o.region_id = sqlc.arg(origin_region)
+           OR NOT EXISTS (SELECT 1 FROM market_region_stats oo
+                          WHERE oo.region_id = sqlc.arg(origin_region) AND oo.type_id = o.type_id))
       AND o.typical_sell > 0 AND d.typical_sell > o.typical_sell
       AND (sqlc.arg(include_lowball)::bigint = 1 OR d.typical_sell <= o.typical_sell * 10)
       AND (d.typical_sell - o.typical_sell) / o.typical_sell * 100 >= sqlc.arg(min_margin)
@@ -696,12 +710,22 @@ LIMIT sqlc.arg(row_cap)::bigint;
 -- figure at the destination yet (no recorded history there): the
 -- tradefinder lists them apart and queues their history, ranked
 -- by margin times the origin's stock on sale as a rough potential.
+-- Endpoint rows resolve exactly as in ListTradefinderRoutes: the
+-- endpoint region's own row, else the type's global-market row.
 SELECT o.type_id,
        o.typical_sell AS origin_typical_sell,
        d.typical_sell AS dest_typical_sell
 FROM market_region_stats o
-JOIN market_region_stats d ON d.region_id = sqlc.arg(dest_region) AND d.type_id = o.type_id
-WHERE o.region_id = sqlc.arg(origin_region)
+JOIN market_region_stats d
+  ON d.type_id = o.type_id
+ AND d.region_id IN (sqlc.arg(dest_region), sqlc.arg(global_region))
+ AND (d.region_id = sqlc.arg(dest_region)
+      OR NOT EXISTS (SELECT 1 FROM market_region_stats dd
+                     WHERE dd.region_id = sqlc.arg(dest_region) AND dd.type_id = o.type_id))
+WHERE o.region_id IN (sqlc.arg(origin_region), sqlc.arg(global_region))
+  AND (o.region_id = sqlc.arg(origin_region)
+       OR NOT EXISTS (SELECT 1 FROM market_region_stats oo
+                      WHERE oo.region_id = sqlc.arg(origin_region) AND oo.type_id = o.type_id))
   AND o.typical_sell > 0 AND d.typical_sell > o.typical_sell
   AND (sqlc.arg(include_lowball)::bigint = 1 OR d.typical_sell <= o.typical_sell * 10)
   AND (d.typical_sell - o.typical_sell) / o.typical_sell * 100 >= sqlc.arg(min_margin)

@@ -673,3 +673,109 @@ func TestTrueValueNetWorthFallback(t *testing.T) {
 		t.Errorf("sample net worth = %+v, want 3300.5 (same order as the widget)", rows[0].NetWorth)
 	}
 }
+
+// TestFitPricingGlobalMarketFill: a global-market type (its only
+// swept book is the global region's) prices in fit valuation at
+// its global typical -- in the stored reprice and in the fitting
+// tool's own sum -- and the own-swept global typical beats its
+// stored estimated sell. A type holding both a Forge row and a
+// global row prices from The Forge.
+func TestFitPricingGlobalMarketFill(t *testing.T) {
+	transport := &countingTransport{}
+	app, _, q := buildCorpTestApp(t, transport)
+	ctx := context.Background()
+	user, err := q.CreateUser(ctx)
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	now := time.Now().UTC()
+	seed := func(regionID, typeID int64, typical float64) {
+		t.Helper()
+		if err := q.UpsertMarketRegionStat(ctx, db.UpsertMarketRegionStatParams{
+			RegionID: regionID, TypeID: typeID, TypicalSell: typical, UpdatedAt: now,
+		}); err != nil {
+			t.Fatalf("seed region stat (%d, %d): %v", regionID, typeID, err)
+		}
+	}
+	// 3010, the hull: the global book only.
+	seed(globalMarketRegion, 3010, 7_500_000)
+	// 3007, an item: the global book only, plus an estimated
+	// sell far below it -- the swept global typical must win.
+	seed(globalMarketRegion, 3007, 5_000_000)
+	seedTrueValue(t, q, 3007, 300, 400, 3)
+	// 3008, an item holding both books: The Forge wins.
+	seed(defaultMarketRegion, 3008, 100)
+	seed(globalMarketRegion, 3008, 999)
+
+	saved := now.Add(-48 * time.Hour).Truncate(time.Second)
+	row, err := q.CreateLocalFitting(ctx, db.CreateLocalFittingParams{
+		UserID: user.ID, Name: "Global fixture", ShipTypeID: 3010, IsPublic: true,
+		CreatedAt: saved, UpdatedAt: saved,
+		ItemsJson: `{"name":"Global fixture","shipTypeId":3010,"items":[{"typeId":3007,"qty":2},{"typeId":3008,"qty":3}]}`,
+	})
+	if err != nil {
+		t.Fatalf("create fitting: %v", err)
+	}
+
+	app.repriceFittings(ctx)
+	got, err := q.GetPublicFitting(ctx, row.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := float64(7_500_000 + 2*5_000_000 + 3*100)
+	if got.TotalPrice != want {
+		t.Errorf("repriced fit = %v ISK, want %v (hull and 3007 at their global typicals, 3008 at its Forge typical)", got.TotalPrice, want)
+	}
+
+	doc := &fitview.FitDoc{
+		ShipTypeID: 3010,
+		Items:      []fitview.FitDocItem{{TypeID: 3007, Qty: 2}, {TypeID: 3008, Qty: 3}},
+	}
+	cost := app.FitBuilder().FitCost(ctx, doc)
+	if cost.HullRaw != 7_500_000 || cost.TotalRaw != want {
+		t.Errorf("FitCost hull/total = %v / %v, want 7500000 / %v (the global fill, same as the reprice)", cost.HullRaw, cost.TotalRaw, want)
+	}
+	if cost.Unpriced != 0 {
+		t.Errorf("FitCost unpriced lines = %d, want 0 (every line holds a swept typical)", cost.Unpriced)
+	}
+}
+
+// TestFitPricingGlobalOnlyReprice: with no Forge typical and no
+// estimated sell anywhere in the database, a fit whose types
+// price only from the global book still reprices -- the stored
+// reprice's source guard counts the global book as a price
+// source, not just The Forge's.
+func TestFitPricingGlobalOnlyReprice(t *testing.T) {
+	transport := &countingTransport{}
+	app, _, q := buildCorpTestApp(t, transport)
+	ctx := context.Background()
+	user, err := q.CreateUser(ctx)
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	now := time.Now().UTC()
+	if err := q.UpsertMarketRegionStat(ctx, db.UpsertMarketRegionStatParams{
+		RegionID: globalMarketRegion, TypeID: 3010, TypicalSell: 7_500_000, UpdatedAt: now,
+	}); err != nil {
+		t.Fatalf("seed region stat: %v", err)
+	}
+	saved := now.Add(-48 * time.Hour).Truncate(time.Second)
+	row, err := q.CreateLocalFitting(ctx, db.CreateLocalFittingParams{
+		UserID: user.ID, Name: "Global only fixture", ShipTypeID: 3010, IsPublic: true,
+		CreatedAt: saved, UpdatedAt: saved,
+		ItemsJson: `{"name":"Global only fixture","shipTypeId":3010,"items":[]}`,
+	})
+	if err != nil {
+		t.Fatalf("create fitting: %v", err)
+	}
+	if n := app.repriceFittings(ctx); n != 1 {
+		t.Fatalf("repriced fits = %d, want 1 (the global book alone is a price source)", n)
+	}
+	got, err := q.GetPublicFitting(ctx, row.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.TotalPrice != 7_500_000 {
+		t.Errorf("repriced fit = %v ISK, want 7500000 (the hull at its global typical)", got.TotalPrice)
+	}
+}

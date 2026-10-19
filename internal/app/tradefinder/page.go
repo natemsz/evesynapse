@@ -38,6 +38,10 @@ package tradefinder
 // route priced off a stale book is not a route. Routes out of a
 // degenerate origin buy book (lowballRoute) are hidden unless the
 // viewer opts in: real, but not trade routes.
+// An endpoint region with no stored row for a type reads the
+// type's row on ESI's global market instead -- the global book
+// is that type's own market (PLEX trades there, in no hub) --
+// and a region row always wins where both exist.
 
 import (
 	"context"
@@ -289,6 +293,7 @@ func (app *page) buildTradefinderView(ctx context.Context, q map[string][]string
 	}
 	routes, err := app.queries.ListTradefinderRoutes(ctx, db.ListTradefinderRoutesParams{
 		DestRegion:     destID,
+		GlobalRegion:   app.deps.GlobalMarketRegion(),
 		OriginRegion:   originID,
 		IncludeLowball: lowballParam,
 		MinMargin:      minMargin,
@@ -368,6 +373,7 @@ func (app *page) buildTradefinderView(ctx context.Context, q map[string][]string
 	// listed apart, and their destination history queued.
 	pending, err := app.queries.ListTradefinderPendingRoutes(ctx, db.ListTradefinderPendingRoutesParams{
 		DestRegion:     destID,
+		GlobalRegion:   app.deps.GlobalMarketRegion(),
 		OriginRegion:   originID,
 		IncludeLowball: lowballParam,
 		MinMargin:      minMargin,

@@ -104,8 +104,9 @@ func (app *tool) handleFitShopping(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Price each line in the house order (fitview.FitUnitPrice):
-	// The Forge's swept typical sell, then the stored estimated
-	// sell. The guide's average prices nothing.
+	// the swept typical sell (The Forge's book, the global book
+	// for global-market types), then the stored estimated sell.
+	// The guide's average prices nothing.
 	typicals := app.deps.TypicalSells(ctx)
 	trueValues := app.deps.TrueValues(ctx)
 	view := &shoppingView{FitName: fitName, FitID: fitID}

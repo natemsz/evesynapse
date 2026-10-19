@@ -545,3 +545,74 @@ func TestTradefinderHealsPendingWithStoredHistory(t *testing.T) {
 		t.Fatalf("tradefinder made %d outbound calls, want 0", got)
 	}
 }
+
+// TestTradefinderGlobalMarketFill: an endpoint region with no
+// stored row for a type reads the type's global-market row
+// instead (the global book is that type's own market), and a
+// region row always wins where both exist. A type holding only
+// a global row prices both ends from the same book, so it forms
+// no route at all.
+func TestTradefinderGlobalMarketFill(t *testing.T) {
+	transport := &countingTransport{}
+	app, _, q := buildCorpTestApp(t, transport)
+	ctx := context.Background()
+	seedTradefinderFixture(t, app)
+	if _, err := app.db.ExecContext(ctx, `INSERT INTO sde_types (type_id, name, group_id) VALUES (40, 'Globalium', 18), (41, 'Bothbooks', 18), (42, 'Globex', 18), (43, 'Pendium', 18)`); err != nil {
+		t.Fatalf("seed sde types: %v", err)
+	}
+	now := time.Now().UTC()
+	seeds := []db.UpsertMarketRegionStatParams{
+		// Type 40: no Forge row -- the global book is its origin
+		// book. Margin 150-90=60 (66.7%); units min(25/day, 40
+		// on sale) = 25 -> 1500/day.
+		tfRegionStat(globalMarketRegion, 40, 0, 90, 0, 40, 30, now),
+		tfRegionStat(tfDest, 40, 0, 150, 0, 100, 25, now),
+		// Type 41: both books at the origin -- The Forge row
+		// (100, 10 on sale) wins over the global row (40, 999).
+		// Margin 30 (30.0%); units min(10/day, 10) = 10 -> 300/day.
+		tfRegionStat(tfOrigin, 41, 0, 100, 0, 10, 0, now),
+		tfRegionStat(globalMarketRegion, 41, 0, 40, 0, 999, 0, now),
+		tfRegionStat(tfDest, 41, 0, 130, 0, 100, 10, now),
+		// Type 42: the global book only, at both ends -- the
+		// same book prices both sides, so no route can form.
+		tfRegionStat(globalMarketRegion, 42, 0, 90, 0, 40, 30, now),
+		// Type 43: the origin fills from the global book and the
+		// destination has a price but no sold-per-day figure
+		// yet: a pending route priced from the global row.
+		tfRegionStat(globalMarketRegion, 43, 0, 80, 0, 10, 0, now),
+		tfRegionStat(tfDest, 43, 0, 120, 0, 100, 0, now),
+	}
+	for _, s := range seeds {
+		if err := q.UpsertMarketRegionStat(ctx, s); err != nil {
+			t.Fatalf("seed region stat: %v", err)
+		}
+	}
+
+	view := tradefinder.BuildView(ctx, app, url.Values{})
+	if !view.HasData() {
+		t.Fatalf("tradefinder HasData false, want true (origin %v, dest %v)", view.OriginHasData, view.DestHasData)
+	}
+	if len(view.Rows) != 2 {
+		t.Fatalf("tradefinder rows: %d, want 2 (40 and 41 only): %+v", len(view.Rows), view.Rows)
+	}
+	top := view.Rows[0]
+	if top.TypeID != 40 || top.BuyTypical != esi.FormatISK(90) || top.SellTypical != esi.FormatISK(150) ||
+		top.MarginPct != "66.7%" || top.SoldPerDay != "25" || top.ProfitDay != esi.FormatISK(1500) {
+		t.Fatalf("global-fill route: %+v, want type 40 bought at the global %s, sold at %s, 66.7%%, 25/day, %s/day",
+			top, esi.FormatISK(90), esi.FormatISK(150), esi.FormatISK(1500))
+	}
+	second := view.Rows[1]
+	if second.TypeID != 41 || second.BuyTypical != esi.FormatISK(100) || second.ProfitItem != esi.FormatISK(30) ||
+		second.ProfitDay != esi.FormatISK(300) {
+		t.Fatalf("hub-wins route: %+v, want type 41 bought at The Forge's %s (not the global %s), %s/item, %s/day",
+			second, esi.FormatISK(100), esi.FormatISK(40), esi.FormatISK(30), esi.FormatISK(300))
+	}
+	if len(view.Pending) != 1 || view.Pending[0].TypeID != 43 ||
+		view.Pending[0].BuyTypical != esi.FormatISK(80) || view.Pending[0].SellTypical != esi.FormatISK(120) {
+		t.Fatalf("pending routes: %+v, want only type 43 priced from the global book at %s -> %s",
+			view.Pending, esi.FormatISK(80), esi.FormatISK(120))
+	}
+	if got := transport.calls.Load(); got != 0 {
+		t.Fatalf("tradefinder build made %d outbound calls, want 0", got)
+	}
+}

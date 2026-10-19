@@ -2725,20 +2725,29 @@ SELECT o.type_id,
        o.typical_sell AS origin_typical_sell,
        d.typical_sell AS dest_typical_sell
 FROM market_region_stats o
-JOIN market_region_stats d ON d.region_id = $1 AND d.type_id = o.type_id
-WHERE o.region_id = $2
+JOIN market_region_stats d
+  ON d.type_id = o.type_id
+ AND d.region_id IN ($1, $2)
+ AND (d.region_id = $1
+      OR NOT EXISTS (SELECT 1 FROM market_region_stats dd
+                     WHERE dd.region_id = $1 AND dd.type_id = o.type_id))
+WHERE o.region_id IN ($3, $2)
+  AND (o.region_id = $3
+       OR NOT EXISTS (SELECT 1 FROM market_region_stats oo
+                      WHERE oo.region_id = $3 AND oo.type_id = o.type_id))
   AND o.typical_sell > 0 AND d.typical_sell > o.typical_sell
-  AND ($3::bigint = 1 OR d.typical_sell <= o.typical_sell * 10)
-  AND (d.typical_sell - o.typical_sell) / o.typical_sell * 100 >= $4
+  AND ($4::bigint = 1 OR d.typical_sell <= o.typical_sell * 10)
+  AND (d.typical_sell - o.typical_sell) / o.typical_sell * 100 >= $5
   AND d.avg_daily_volume = 0
   AND o.sell_volume > 0
-  AND o.updated_at >= $5 AND d.updated_at >= $5
+  AND o.updated_at >= $6 AND d.updated_at >= $6
 ORDER BY (d.typical_sell - o.typical_sell) * o.sell_volume::double precision DESC, o.type_id
-LIMIT $6::bigint
+LIMIT $7::bigint
 `
 
 type ListTradefinderPendingRoutesParams struct {
 	DestRegion     int64     `json:"dest_region"`
+	GlobalRegion   int64     `json:"global_region"`
 	OriginRegion   int64     `json:"origin_region"`
 	IncludeLowball int64     `json:"include_lowball"`
 	MinMargin      float64   `json:"min_margin"`
@@ -2756,9 +2765,12 @@ type ListTradefinderPendingRoutesRow struct {
 // figure at the destination yet (no recorded history there): the
 // tradefinder lists them apart and queues their history, ranked
 // by margin times the origin's stock on sale as a rough potential.
+// Endpoint rows resolve exactly as in ListTradefinderRoutes: the
+// endpoint region's own row, else the type's global-market row.
 func (q *Queries) ListTradefinderPendingRoutes(ctx context.Context, arg ListTradefinderPendingRoutesParams) ([]ListTradefinderPendingRoutesRow, error) {
 	rows, err := q.db.QueryContext(ctx, listTradefinderPendingRoutes,
 		arg.DestRegion,
+		arg.GlobalRegion,
 		arg.OriginRegion,
 		arg.IncludeLowball,
 		arg.MinMargin,
@@ -2796,21 +2808,30 @@ FROM (
            o.sell_volume AS origin_sell_volume,
            (d.typical_sell - o.typical_sell) * LEAST(d.avg_daily_volume, o.sell_volume::double precision) AS profit
     FROM market_region_stats o
-    JOIN market_region_stats d ON d.region_id = $1 AND d.type_id = o.type_id
-    WHERE o.region_id = $2
+    JOIN market_region_stats d
+      ON d.type_id = o.type_id
+     AND d.region_id IN ($1, $2)
+     AND (d.region_id = $1
+          OR NOT EXISTS (SELECT 1 FROM market_region_stats dd
+                         WHERE dd.region_id = $1 AND dd.type_id = o.type_id))
+    WHERE o.region_id IN ($3, $2)
+      AND (o.region_id = $3
+           OR NOT EXISTS (SELECT 1 FROM market_region_stats oo
+                          WHERE oo.region_id = $3 AND oo.type_id = o.type_id))
       AND o.typical_sell > 0 AND d.typical_sell > o.typical_sell
-      AND ($3::bigint = 1 OR d.typical_sell <= o.typical_sell * 10)
-      AND (d.typical_sell - o.typical_sell) / o.typical_sell * 100 >= $4
-      AND d.avg_daily_volume >= $5::bigint
+      AND ($4::bigint = 1 OR d.typical_sell <= o.typical_sell * 10)
+      AND (d.typical_sell - o.typical_sell) / o.typical_sell * 100 >= $5
+      AND d.avg_daily_volume >= $6::bigint
       AND LEAST(d.avg_daily_volume, o.sell_volume::double precision) > 0
-      AND o.updated_at >= $6 AND d.updated_at >= $6
+      AND o.updated_at >= $7 AND d.updated_at >= $7
 ) ranked
 ORDER BY profit DESC, type_id
-LIMIT $7::bigint
+LIMIT $8::bigint
 `
 
 type ListTradefinderRoutesParams struct {
 	DestRegion     int64     `json:"dest_region"`
+	GlobalRegion   int64     `json:"global_region"`
 	OriginRegion   int64     `json:"origin_region"`
 	IncludeLowball int64     `json:"include_lowball"`
 	MinMargin      float64   `json:"min_margin"`
@@ -2835,10 +2856,17 @@ type ListTradefinderRoutesRow struct {
 // floor, long-shot routes (destination over ten times the origin)
 // only on opt-in, the sold-per-day floor, and the movable size as
 // the lesser of what the destination sells a day and the stock on
-// sale in the origin.
+// sale in the origin. Each endpoint resolves per type: the
+// endpoint region's own row, or -- where the region carries no
+// row for the type -- the type's row on ESI's global market
+// (global_region), which is that type's own book (PLEX trades
+// there, not in any hub). A region row always wins over the
+// global row, and the serving row's own updated_at is what the
+// freshness rule judges.
 func (q *Queries) ListTradefinderRoutes(ctx context.Context, arg ListTradefinderRoutesParams) ([]ListTradefinderRoutesRow, error) {
 	rows, err := q.db.QueryContext(ctx, listTradefinderRoutes,
 		arg.DestRegion,
+		arg.GlobalRegion,
 		arg.OriginRegion,
 		arg.IncludeLowball,
 		arg.MinMargin,

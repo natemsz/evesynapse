@@ -2419,7 +2419,9 @@ type FitCostView struct {
 }
 
 // FitUnitPrice resolves one unit's price for fit valuation in
-// the house order: The Forge's swept typical sell, then the
+// the house order: the swept typical sell (The Forge's book,
+// with a global-market type's own global book filling in where
+// The Forge carries no row for it), then the
 // stored true-value estimated sell (trueValues, nil when the
 // worker has stored none). A type neither source knows is
 // unpriced — CCP's guide average is banned as a price source
@@ -2496,9 +2498,10 @@ type Env interface {
 	// SnapshotRoleMissing reports that the last fetch of a snapshot
 	// failed because the character was linked without the needed scope.
 	SnapshotRoleMissing(ctx context.Context, characterID int64, kind string) bool
-	// TypicalSells is The Forge's swept typical sell per type
-	// (nil when no sweep has landed yet): fit valuation's
-	// first tier.
+	// TypicalSells is the swept typical sell per type (The
+	// Forge's book, global-market types filled from their own
+	// global book; nil when no sweep has landed yet): fit
+	// valuation's first tier.
 	TypicalSells(ctx context.Context) map[int64]float64
 	// TrueValues is the worker's estimated sell per type for
 	// types the market cannot price (nil when none are

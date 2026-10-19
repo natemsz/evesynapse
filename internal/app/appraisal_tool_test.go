@@ -830,6 +830,18 @@ func TestAppraisalToolExclusionList(t *testing.T) {
 	}
 }
 
+func TestAppraisalToolQuantityMultiplier(t *testing.T) {
+	tr := &countingTransport{}
+	app, conn, q := buildCorpTestApp(t, tr)
+	seedAppraisalTool(t, conn, q)
+
+	// x3 of 10 Tritanium appraises 30 units: 195.00, stated.
+	body, _, _ := postAnonAppraisal(t, app, url.Values{
+		"items": {"Tritanium x 10"}, "multiplier": {"3"},
+	})
+	mustContain(t, "multiplied appraisal", body, "195.00", "Quantities multiplied ×3.")
+}
+
 func TestPublicFitEscapesUserText(t *testing.T) {
 	tr := &countingTransport{}
 	app, conn, q := buildCorpTestApp(t, tr)

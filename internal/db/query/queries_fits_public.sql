@@ -162,6 +162,9 @@ UPDATE local_fittings SET total_price = $1 WHERE id = $2 AND user_id = $3;
 -- stored price sources: the hull plus each item line, each
 -- priced in the house order -- The Forge's swept typical sell
 -- (market_region_stats, region 10000002 = defaultMarketRegion),
+-- filled where The Forge carries no row by the type's own
+-- global-market row (region 19000001: the global book is that
+-- type's own market, PLEX above all, never another hub's),
 -- then the stored true-value estimated sell (schema 051: the
 -- price for types the market cannot price, supercapital hulls
 -- above all) (fitview.FitUnitPrice), the sum FitDocPrice makes
@@ -175,20 +178,22 @@ UPDATE local_fittings lf
 SET total_price = priced.total
 FROM (
   SELECT f.id,
-         (COALESCE((SELECT COALESCE(NULLIF(mrs.typical_sell, 0), tv.est_sell)
+         (COALESCE((SELECT COALESCE(NULLIF(mrs.typical_sell, 0), NULLIF(gmrs.typical_sell, 0), tv.est_sell)
                      FROM (SELECT 1) one
                      LEFT JOIN market_region_stats mrs ON mrs.region_id = 10000002 AND mrs.type_id = f.ship_type_id
+                     LEFT JOIN market_region_stats gmrs ON gmrs.region_id = 19000001 AND gmrs.type_id = f.ship_type_id
                      LEFT JOIN true_values tv ON tv.type_id = f.ship_type_id), 0) +
-          COALESCE((SELECT SUM((it->>'qty')::numeric * COALESCE(NULLIF(mrs.typical_sell, 0), tv.est_sell))
+          COALESCE((SELECT SUM((it->>'qty')::numeric * COALESCE(NULLIF(mrs.typical_sell, 0), NULLIF(gmrs.typical_sell, 0), tv.est_sell))
                     FROM jsonb_array_elements(
                         CASE WHEN jsonb_typeof(f.items_json::jsonb -> 'items') = 'array' THEN f.items_json::jsonb -> 'items' ELSE '[]'::jsonb END) AS it
                     LEFT JOIN market_region_stats mrs ON mrs.region_id = 10000002 AND mrs.type_id = (it->>'typeId')::bigint
+                    LEFT JOIN market_region_stats gmrs ON gmrs.region_id = 19000001 AND gmrs.type_id = (it->>'typeId')::bigint
                     LEFT JOIN true_values tv ON tv.type_id = (it->>'typeId')::bigint), 0))::float8 AS total
   FROM local_fittings f
 ) priced
 WHERE priced.id = lf.id
   AND lf.total_price IS DISTINCT FROM priced.total
-  AND (EXISTS (SELECT 1 FROM market_region_stats WHERE region_id = 10000002 AND typical_sell > 0)
+  AND (EXISTS (SELECT 1 FROM market_region_stats WHERE region_id IN (10000002, 19000001) AND typical_sell > 0)
        OR EXISTS (SELECT 1 FROM true_values WHERE est_sell > 0));
 
 -- name: SitemapTopFits :many

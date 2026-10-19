@@ -894,7 +894,9 @@ func (s *ShellData) Shell() *ShellData {
 type Deps interface {
 	DB() *db.Queries
 	ValuationPrices(ctx context.Context) map[int64]esi.MarketPrice
-	// TypicalSells is The Forge's swept typical sell per type —
+	// TypicalSells is the swept typical sell per type (The
+	// Forge's book, global-market types filled from their own
+	// global book) —
 	// the first tier of the house price order.
 	TypicalSells(ctx context.Context) map[int64]float64
 	// TrueValues is the stored true-value estimated sell per

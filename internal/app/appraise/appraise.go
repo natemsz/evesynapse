@@ -301,7 +301,7 @@ func (app *page) resolveList(ctx context.Context, parsed pasteResult) ([]resolve
 			u := snapUnresolved{Text: pl.Candidates[0].Name, Qty: pl.Candidates[0].Qty,
 				Reason: "That name is not in the item database."}
 			if _, isMutated := mutationBase(pl.Candidates[0].Name); isMutated {
-				u.Reason = "Mutated items price from their rolls in Contract Search; this line's base item could not be named."
+				u.Reason = "This mutated item's base item could not be named."
 			}
 			unresolved = append(unresolved, u)
 			continue
@@ -528,10 +528,10 @@ func lineNote(ln resolvedLine) string {
 	case ln.LinkMiss:
 		parts = append(parts, "Base item price — this item's rolls are not in our records")
 	case ln.AbyssalBase:
-		parts = append(parts, "Base item price — the mutated item itself prices from its rolls in Contract Search")
+		parts = append(parts, "Base item price — this mutated item was pasted without its link, so its own rolls were not priced")
 	default:
 		if _, mutated := mutationBase(ln.Name); mutated {
-			parts = append(parts, "Mutated items price from their rolls in Contract Search")
+			parts = append(parts, "Base item price — this mutated item was pasted without its link, so its own rolls were not priced")
 		}
 	}
 	return strings.Join(parts, " · ")

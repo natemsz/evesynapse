@@ -242,6 +242,18 @@ environment win). Then open <http://localhost:8080>:
   ESI resolution), guide prices, and best/top orders for The Forge,
   Domain, Sinq Laison, Heimatar and Metropolis (requires login; all
   data is public ESI, order books capped at 20 pages)
+- `/market/appraise/` — appraisal: paste a plain item list, an asset
+  or cargo copy, or an EFT fit (the ship, its fitted modules and
+  charges, and the drones and cargo the fit lists), and every line is
+  priced from EveSynapse's own stored prices with its basis and age
+  shown. Blueprint copies written as `Name (BPC, ME n, TE n, n runs)`
+  price from the stored median for that copy, never the original, and
+  a copy with too few listings on record is left unpriced. Mutated
+  (abyssal) items appraise too: a line carrying the item's in-game
+  link prices from that item's stored rolls estimate, and a line
+  without the link, or with no estimate on record, prices its base
+  item and says so (no login required; signed-in appraisals are saved
+  and shareable by link)
 - `/skills/` — full skill sheet: total/unallocated SP, level-V count,
   the complete training queue, and every known skill grouped by
   category with per-group SP subtotals (requires login;

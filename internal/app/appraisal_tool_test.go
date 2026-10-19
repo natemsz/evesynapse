@@ -155,8 +155,11 @@ Abyssal Damage Control II`}})
 	mustContain(t, "blueprint and abyssal lines", body,
 		"BPC · ME 10 · TE 20 · 5 runs",
 		"Blueprint — priced as an original",
-		"Base item price — the mutated item itself prices from its rolls in Contract Search",
+		"Base item price — this mutated item was pasted without its link, so its own rolls were not priced",
 		"150,000.00")
+	if strings.Contains(body, "prices from its rolls in Contract Search") {
+		t.Error("mutated line still implies it cannot be appraised here")
+	}
 }
 
 // seedAppraisalAbyssal adds the mutated type and two corpus
@@ -373,7 +376,9 @@ func TestAppraisalToolPageAndBadShare(t *testing.T) {
 	if code != 200 {
 		t.Fatalf("appraisal page: status %d, want 200", code)
 	}
-	mustContain(t, "appraisal page", body, "Appraisal", "Items to appraise", "Contract Search")
+	mustContain(t, "appraisal page", body, "Appraisal", "Items to appraise",
+		"A pasted EFT fit appraises the ship, its fitted modules and charges, and the drones and cargo the fit lists",
+		"Mutated (abyssal) items appraise too")
 	// Appraisal lives under Tools now: its tab strip is the
 	// Tools strip (Item Browser + Appraisal, itself active), and
 	// the Market strip no longer carries it.

@@ -1081,16 +1081,29 @@ type User struct {
 }
 
 type UserAppraisal struct {
-	ID          int64           `json:"id"`
-	UserID      int64           `json:"user_id"`
-	CreatedAt   time.Time       `json:"created_at"`
-	InputText   string          `json:"input_text"`
-	InputHash   string          `json:"input_hash"`
-	ShareToken  string          `json:"share_token"`
-	Snapshot    json.RawMessage `json:"snapshot"`
-	TotalValue  float64         `json:"total_value"`
-	PricedLines int64           `json:"priced_lines"`
-	TotalLines  int64           `json:"total_lines"`
+	ID           int64           `json:"id"`
+	UserID       int64           `json:"user_id"`
+	CreatedAt    time.Time       `json:"created_at"`
+	InputText    string          `json:"input_text"`
+	InputHash    string          `json:"input_hash"`
+	ShareToken   string          `json:"share_token"`
+	Snapshot     json.RawMessage `json:"snapshot"`
+	TotalValue   float64         `json:"total_value"`
+	PricedLines  int64           `json:"priced_lines"`
+	TotalLines   int64           `json:"total_lines"`
+	IsAnonymous  bool            `json:"is_anonymous"`
+	LastViewedAt time.Time       `json:"last_viewed_at"`
+}
+
+type AppraisalAnonymousOwner struct {
+	ID     int64 `json:"id"`
+	UserID int64 `json:"user_id"`
+}
+
+type AppraisalCookieSecret struct {
+	ID        int64     `json:"id"`
+	Secret    string    `json:"secret"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 type WalletHistory struct {

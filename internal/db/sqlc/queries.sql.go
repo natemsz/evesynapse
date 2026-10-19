@@ -51,7 +51,7 @@ func (q *Queries) AdminTotals(ctx context.Context, arg AdminTotalsParams) (Admin
 }
 
 const browsePublicFittings = `-- name: BrowsePublicFittings :many
-SELECT lf.id, lf.user_id, lf.name, lf.ship_type_id, lf.items_json, lf.updated_at,
+SELECT lf.id, lf.user_id, lf.name, lf.ship_type_id, lf.items_json, lf.updated_at, lf.total_price,
        COALESCE(NULLIF(st.name, ''), tn.name, '')::text AS ship_name,
        COALESCE((SELECT c.name FROM characters c WHERE c.user_id = lf.user_id ORDER BY c.character_id LIMIT 1), '')::text AS author_name
 FROM local_fittings lf
@@ -80,6 +80,7 @@ type BrowsePublicFittingsRow struct {
 	ShipTypeID int64     `json:"ship_type_id"`
 	ItemsJson  string    `json:"items_json"`
 	UpdatedAt  time.Time `json:"updated_at"`
+	TotalPrice float64   `json:"total_price"`
 	ShipName   string    `json:"ship_name"`
 	AuthorName string    `json:"author_name"`
 }
@@ -102,6 +103,7 @@ func (q *Queries) BrowsePublicFittings(ctx context.Context, arg BrowsePublicFitt
 			&i.ShipTypeID,
 			&i.ItemsJson,
 			&i.UpdatedAt,
+			&i.TotalPrice,
 			&i.ShipName,
 			&i.AuthorName,
 		); err != nil {

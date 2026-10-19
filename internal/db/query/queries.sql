@@ -422,7 +422,7 @@ LIMIT 20;
 -- Public fits for the public fits page, an account's own among them. A
 -- tag matches whole, whatever its case.
 -- name: BrowsePublicFittings :many
-SELECT lf.id, lf.user_id, lf.name, lf.ship_type_id, lf.items_json, lf.updated_at,
+SELECT lf.id, lf.user_id, lf.name, lf.ship_type_id, lf.items_json, lf.updated_at, lf.total_price,
        COALESCE(NULLIF(st.name, ''), tn.name, '')::text AS ship_name,
        COALESCE((SELECT c.name FROM characters c WHERE c.user_id = lf.user_id ORDER BY c.character_id LIMIT 1), '')::text AS author_name
 FROM local_fittings lf

@@ -12,7 +12,8 @@ import (
 
 // The anonymous front door is the landing page: hero and heritage
 // copy verbatim, a sign-in link for existing members (plain login,
-// not the sign-up chooser), the stored-data strip, and no
+// not the sign-up chooser), trust and playstyle sections ahead of
+// the alternating feature sections, the stored-data strip, and no
 // em dashes anywhere on the page.
 func TestLandingAnonymous(t *testing.T) {
 	rig := apptest.Build(t, nil)
@@ -37,30 +38,50 @@ func TestLandingAnonymous(t *testing.T) {
 		"BSD-3-Clause-Clear",
 		"© 2026 Synap6.io LLC, dba Synap6",
 		"intellectual property of CCP Games hf",
-		"Ship replacement manager",
-		"Universe Map",
-		"Desktop app grade accuracy and features.",
+		"Ship Replacement",
+		"Your keys, your call.",
+		"Public data, no login",
+		"PKCE on every sign-in",
+		"Revoke on unlink",
+		"Three alts, or a hundred boxed characters.",
+		"Know what your ISK is doing.",
+		"Build with the margin already proven.",
+		"One stack for the whole corporation.",
+		"A hundred pilots, one morning briefing.",
+		"Every pilot. One glance.",
+		"Desktop grade fitting, in a browser tab.",
 		"shot-fitting.webp",
 		"ld-browser",
 		"evesynapse.app/fittings/",
-		"Plans that price themselves.",
-		"shot-planner.webp",
-		"evesynapse.app/planner/",
-		"Building it saves 362 million.",
-		"Every pilot. One glance.",
-		"shot-overview.webp",
-		"evesynapse.app/",
-		"flown by test characters",
-		"An analyst reads every sweep.",
-		"shot-ideas.webp",
-		"evesynapse.app/market/ideas/",
-		"Prices with a memory.",
-		"shot-market.webp",
-		"ninety days of Forge history",
 		"priced and simulated with its pilot's own skills",
+		"Data in. Decisions out.",
+		"Appraisal: paste anything, get a price",
+		"The appraisal tool on the live site.",
+		"evesynapse.app/market/appraise/",
+		"shot-market.webp",
+		"Plans that price themselves.",
+		"87.6M",
+		"449.8M",
+		"Each point integrates with the other.",
+		"Know where New Eden is hot.",
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("landing is missing %q", want)
+		}
+	}
+	// The section order is the restructure's whole point: trust
+	// first, playstyles next, then the feature sections.
+	trustAt := strings.Index(body, "Your keys, your call.")
+	stylesAt := strings.Index(body, "Three alts, or a hundred boxed characters.")
+	fleetAt := strings.Index(body, "Every pilot. One glance.")
+	if !(trustAt >= 0 && trustAt < stylesAt && stylesAt < fleetAt) {
+		t.Error("landing sections out of order: want trust, then playstyles, then the feature sections")
+	}
+	// The tools inventory is audited against the tree: features
+	// that do not exist yet are never claimed on the front door.
+	for _, unbuilt := range []string{"Universe Map", "Route Planner", "Profit Tracking"} {
+		if strings.Contains(body, unbuilt) {
+			t.Errorf("landing claims the unbuilt %q", unbuilt)
 		}
 	}
 	if strings.Contains(body, "—") {

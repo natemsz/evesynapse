@@ -246,19 +246,37 @@ html[data-theme="light"] .btn.btn-quiet {
 .kpi.sp-blue { border-color: rgba(169, 214, 255, 0.45); }
 .kpi.sp-blue .spread-bar span.on { background: #a9d6ff; }
 
-/* Price chart on wide screens: the chart SVG scales with its
-   container, so axis type sized in its units balloons on large
-   monitors — step it down at desktop widths (the small-screen
-   rule in style.css, 15 units under 560px, is untouched). The
-   gridlines move from near-black to a warm sand so they read
-   against the glass; volume lines stay a step dimmer. */
+/* Price chart text: the chart SVG is 720 units wide and scales
+   with its box, and the box is placement-driven, not viewport-
+   driven — a full-width page renders the chart near 1500px
+   while the Home widget squeezes it under 500px — so the axis
+   type is sized by the chart's own width via container queries.
+   Each band steps the units so the rendered labels stay near
+   the UI's small-text floor (~12px): narrow boxes step up,
+   wide boxes step down. (Viewport step-downs were here before;
+   at the same viewport they left the Home chart at 3–4px while
+   the full-width chart read fine.) The base rule in style.css
+   (12 units) is the fallback where container queries are
+   unavailable. The gridlines move from near-black to a warm
+   sand so they read against the glass; volume lines stay a
+   step dimmer. */
 .chart-gridline { stroke: rgba(232, 195, 154, 0.25); }
 .volume-gridline { stroke: rgba(232, 195, 154, 0.16); }
-@media (min-width: 1200px) {
-  .pchart text { font-size: 7px; }
+.pchart { container-type: inline-size; }
+@container (max-width: 360px) {
+  .pchart text { font-size: 27px; }
 }
-@media (min-width: 1700px) {
-  .pchart text { font-size: 6px; }
+@container (min-width: 361px) and (max-width: 520px) {
+  .pchart text { font-size: 21px; }
+}
+@container (min-width: 521px) and (max-width: 800px) {
+  .pchart text { font-size: 15px; }
+}
+@container (min-width: 801px) and (max-width: 1150px) {
+  .pchart text { font-size: 10px; }
+}
+@container (min-width: 1151px) {
+  .pchart text { font-size: 7px; }
 }
 
 /* Home KPI glyphs: the mockup's little Lucide mark in each

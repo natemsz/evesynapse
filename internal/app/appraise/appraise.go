@@ -18,6 +18,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -727,6 +728,7 @@ type resultLine struct {
 	Priced    bool
 	UnitVol   string // unit volume in m³, "" when unknown
 	LineVol   string // line volume in m³, "" when unknown
+	SharePct  int    // line value as a % of the largest line's, for the row's bar
 }
 
 // resultView is a snapshot shaped for the template.
@@ -744,17 +746,25 @@ type resultView struct {
 	Total      int
 	TierMix    string
 	BasisText  string // the pricing basis, worded for the page
-	Multisell  string // "<TypeName> <Price>" lines at this basis, for copying
-	HubStrip   []hubTotal
-	Basis      pricingBasis
-	Hubs       []hubOption // hub choices for the reprice form
-	RepriceURL string      // where the reprice form posts, when offered
-	Created    string      // "Oct 17, 2026, 6:52 PM" for a stored snapshot
-	Shared     bool        // rendered from a share link
-	OwnID      int64       // the signed-in owner's appraisal id, when it is theirs
-	ShareURL   string
-	CanDelete  bool   // the viewer created this appraisal and may delete it
-	DeleteURL  string // where the delete form posts, when CanDelete
+	// The workbench cards' shaping of the same snapshot
+	// figures: no new numbers, only presentation.
+	BasisLabel   string // "The Forge • Typical sell"
+	CompactTotal string // the total, compact ("54.52M")
+	TotalRaw     string // the total ungrouped, for copy actions
+	BuyRaw       string // the buy total ungrouped, for copy actions
+	BuyRatio     string // buy as a % of sell ("80.4%"), "" without both
+	CoverageSub  string // the coverage card's sub-line
+	Multisell    string // "<TypeName> <Price>" lines at this basis, for copying
+	HubStrip     []hubTotal
+	Basis        pricingBasis
+	Hubs         []hubOption // hub choices for the reprice form
+	RepriceURL   string      // where the reprice form posts, when offered
+	Created      string      // "Oct 17, 2026, 6:52 PM" for a stored snapshot
+	Shared       bool        // rendered from a share link
+	OwnID        int64       // the signed-in owner's appraisal id, when it is theirs
+	ShareURL     string
+	CanDelete    bool   // the viewer created this appraisal and may delete it
+	DeleteURL    string // where the delete form posts, when CanDelete
 }
 
 // appraiseView is the page body.
@@ -776,7 +786,9 @@ type savedRow struct {
 	Priced   int64
 	TotalLn  int64
 	ShareURL string
-	Anon     bool // an anonymous appraisal, opened by its share link
+	Anon     bool   // an anonymous appraisal, opened by its share link
+	Basis    string // "The Forge • Typical sell", from the stored snapshot
+	Failed   bool   // totalled 0.00: a paste that priced nothing
 }
 
 // buildResult shapes a snapshot for display. age is the deps'
@@ -804,6 +816,35 @@ func (app *page) buildResult(snap *snapshot) *resultView {
 	}
 	v.Basis = basis
 	v.BasisText = basis.basisText()
+	v.BasisLabel = basis.HubName + " • " + basisModeLong(basis.Mode)
+	v.TotalRaw = strconv.FormatFloat(snap.TotalValue, 'f', 2, 64)
+	v.CompactTotal = formatCompactISK(snap.TotalValue)
+	if snap.BuyLines > 0 && snap.BuyValue > 0 {
+		v.BuyRaw = strconv.FormatFloat(snap.BuyValue, 'f', 2, 64)
+		if snap.TotalValue > 0 {
+			v.BuyRatio = fmt.Sprintf("%.1f%%", 100*snap.BuyValue/snap.TotalValue)
+		}
+	}
+	switch {
+	case snap.TotalLines > 0 && snap.PricedLines == snap.TotalLines:
+		allTypical := true
+		for _, ln := range snap.Lines {
+			if ln.Priced && !isTypicalTier(ln.Tier) {
+				allTypical = false
+			}
+		}
+		if allTypical {
+			v.CoverageSub = "100% " + basis.HubName + " typical verified"
+		} else {
+			v.CoverageSub = "100% priced"
+		}
+	case snap.TotalLines > 0:
+		if n := snap.TotalLines - snap.PricedLines; n == 1 {
+			v.CoverageSub = "1 unpriced line"
+		} else {
+			v.CoverageSub = fmt.Sprintf("%d unpriced lines", n)
+		}
+	}
 	v.Hubs = app.hubOptions(basis.RegionID)
 	var ms []string
 	for _, ln := range snap.Lines {
@@ -812,6 +853,12 @@ func (app *page) buildResult(snap *snapshot) *resultView {
 		}
 	}
 	v.Multisell = strings.Join(ms, "\n")
+	maxLine := 0.0
+	for _, ln := range snap.Lines {
+		if ln.LineValue > maxLine {
+			maxLine = ln.LineValue
+		}
+	}
 	counts := map[string]int{}
 	for _, ln := range snap.Lines {
 		rl := resultLine{
@@ -826,6 +873,13 @@ func (app *page) buildResult(snap *snapshot) *resultView {
 			counts[ln.Tier]++
 			rl.UnitPrice = esi.FormatISK(ln.UnitPrice)
 			rl.LineValue = esi.FormatISK(ln.LineValue)
+			if maxLine > 0 {
+				share := int(math.Round(100 * ln.LineValue / maxLine))
+				if share < 3 {
+					share = 3
+				}
+				rl.SharePct = share
+			}
 			rl.AsOf = ln.AsOf.Format("Jan 2, 3:04 PM")
 			if isTypicalTier(ln.Tier) && time.Since(ln.AsOf) > typicalFreshAge {
 				rl.AsOf += " (" + app.deps.AgeText(ln.AsOf) + ")"
@@ -895,12 +949,29 @@ func (app *page) saveAppraisal(ctx context.Context, userID int64, anonymous bool
 	return id, token, err
 }
 
+// formatCompactISK writes a value the compact way the hero
+// card's sub-line uses: 820.50, 54.52M, 1.74B.
+func formatCompactISK(v float64) string {
+	switch {
+	case v >= 1e9:
+		return fmt.Sprintf("%.2fB", v/1e9)
+	case v >= 1e6:
+		return fmt.Sprintf("%.2fM", v/1e6)
+	case v >= 1e3:
+		return fmt.Sprintf("%.1fK", v/1e3)
+	default:
+		return fmt.Sprintf("%.2f", v)
+	}
+}
+
 // hubTotal is one cell of the hub-comparison strip: the
 // appraisal's total at one hub's typical sell.
 type hubTotal struct {
-	Hub     string
-	Total   string
-	Current bool // the appraisal's own hub
+	Hub      string
+	RegionID int64
+	Total    string
+	Delta    string // signed % against The Forge's total, "" for The Forge itself
+	Current  bool   // the appraisal's own hub
 }
 
 // attachHubStrip prices the snapshot's lines at every hub's
@@ -932,7 +1003,9 @@ func (app *page) attachHubStrip(ctx context.Context, snap *snapshot, v *resultVi
 		})
 	}
 	basis := snap.Basis.basis()
-	for _, opt := range app.hubOptions(basis.RegionID) {
+	options := app.hubOptions(basis.RegionID)
+	raws := make([]float64, len(options))
+	for i, opt := range options {
 		res, err := app.deps.AppraiseLinesWithBasis(ctx, lines, module.AppraisalBasis{
 			RegionID: opt.RegionID, Mode: module.AppraisalModeSell, Percent: 100,
 		})
@@ -940,9 +1013,26 @@ func (app *page) attachHubStrip(ctx context.Context, snap *snapshot, v *resultVi
 			logging.Errorf("appraisal: hub strip %d: %v", opt.RegionID, err)
 			return
 		}
-		v.HubStrip = append(v.HubStrip, hubTotal{
-			Hub: opt.Name, Total: esi.FormatISK(res.OfferedValue + fixed), Current: opt.RegionID == basis.RegionID,
-		})
+		raws[i] = res.OfferedValue + fixed
+	}
+	// Each pill also carries its delta against The Forge's
+	// total, so the comparison reads at a glance; The Forge
+	// itself is the baseline and carries none.
+	base := 0.0
+	for i, opt := range options {
+		if opt.RegionID == app.deps.DefaultMarketRegion() {
+			base = raws[i]
+		}
+	}
+	for i, opt := range options {
+		ht := hubTotal{
+			Hub: opt.Name, RegionID: opt.RegionID, Total: esi.FormatISK(raws[i]),
+			Current: opt.RegionID == basis.RegionID,
+		}
+		if opt.RegionID != app.deps.DefaultMarketRegion() && base > 0 && raws[i] > 0 {
+			ht.Delta = fmt.Sprintf("%+.1f%%", 100*(raws[i]-base)/base)
+		}
+		v.HubStrip = append(v.HubStrip, ht)
 	}
 }
 
@@ -967,6 +1057,28 @@ func (app *page) storedResult(row db.UserAppraisal) (*resultView, error) {
 	return v, nil
 }
 
+// savedBasisText words a stored row's pricing basis for the
+// saved table ("The Forge • Typical sell"), from the snapshot
+// the list query already read — no extra read. Snapshots
+// stored before the basis was kept have none to show.
+func (app *page) savedBasisText(row db.UserAppraisal) string {
+	snap := storedSnapshot(row)
+	if snap == nil || snap.Basis.RegionID == 0 {
+		return ""
+	}
+	b := snap.Basis.basis()
+	if b.HubName == "" {
+		if name, ok := app.deps.MarketRegionName(b.RegionID); ok {
+			b.HubName = name
+		}
+	}
+	text := b.HubName + " • " + basisModeLong(b.Mode)
+	if b.Percent != 0 && b.Percent != 100 {
+		text += " · " + strconv.FormatFloat(b.Percent, 'f', -1, 64) + "%"
+	}
+	return text
+}
+
 func (app *page) savedList(ctx context.Context, userID int64) []savedRow {
 	rows, err := app.queries.ListUserAppraisals(ctx, db.ListUserAppraisalsParams{UserID: userID, Limit: 20})
 	if err != nil {
@@ -979,6 +1091,7 @@ func (app *page) savedList(ctx context.Context, userID int64) []savedRow {
 			ID: row.ID, Created: row.CreatedAt.Format("Jan 2, 2006, 3:04 PM"),
 			Total: esi.FormatISK(row.TotalValue), Priced: row.PricedLines, TotalLn: row.TotalLines,
 			ShareURL: "/market/appraise/s/" + row.ShareToken + "/",
+			Basis:    app.savedBasisText(row), Failed: row.TotalValue == 0,
 		})
 	}
 	return out
@@ -1012,6 +1125,7 @@ func (app *page) anonSavedList(ctx context.Context, tokens []string) []savedRow 
 			ID: row.ID, Created: row.CreatedAt.Format("Jan 2, 2006, 3:04 PM"),
 			Total: esi.FormatISK(row.TotalValue), Priced: row.PricedLines, TotalLn: row.TotalLines,
 			ShareURL: "/market/appraise/s/" + row.ShareToken + "/", Anon: true,
+			Basis: app.savedBasisText(row), Failed: row.TotalValue == 0,
 		})
 	}
 	return out

@@ -171,6 +171,12 @@ Unknown Item XYZ x 3`}})
 	mustContain(t, "anonymous appraisal form", body,
 		`<section class="box ap-form">`, `<label class="ap-label" for="ap-items">Items to appraise</label>`,
 		`<section class="box ap-result">`)
+	// The workbench's telemetry cards carry the same figures:
+	// the hero at the appraisal's basis, the buy total with its
+	// ratio, volume and coverage.
+	mustContain(t, "anonymous appraisal cards", body,
+		"The Forge • Typical sell", "Typical buy value", "Buy/Sell ratio:",
+		"Total cargo volume", "Line coverage", "2 unpriced lines")
 	if tr.calls.Load() != 0 {
 		t.Errorf("the appraisal page reached the network %d times; stored reads only", tr.calls.Load())
 	}
@@ -399,7 +405,13 @@ func TestAppraisalToolPageAndBadShare(t *testing.T) {
 	mustContain(t, "appraisal page", body, "Appraisal", "Items to appraise",
 		"A pasted EFT fit appraises the ship, its fitted modules and charges, and the drones and cargo the fit lists",
 		"Mutated (abyssal) items appraise too",
-		`<textarea id="ap-items" name="items" rows="10" autofocus`, "data-clear-appraise>Clear</button>")
+		`<textarea id="ap-items" name="items" rows="10" autofocus`, "data-clear-appraise>Clear</button>",
+		// The workbench layout: sample loaders in the head, the
+		// format rules behind their toggle, the exclusion
+		// drawer, and the basis controls with percent presets.
+		"Load a sample paste:", `data-ap-sample="haul"`, "Format rules",
+		"Optional: Exclude items", "Valuation hub", "Percent modifier",
+		`data-ap-pct="90"`, "Quantity multiplier", "Appraise paste")
 	// Appraisal lives under Tools now: its tab strip is the
 	// Tools strip (Item Browser + Appraisal, itself active), and
 	// the Market strip no longer carries it.
@@ -518,6 +530,9 @@ func TestAppraisalToolAnonymousStoredHistoryAndDelete(t *testing.T) {
 	// expiry policy in one sentence.
 	_, body = getWithCookies(t, app, cookies, "/market/appraise/")
 	mustContain(t, "anonymous history", body, "Your recent appraisals", "65.00",
+		// The saved table names each appraisal's hub and basis
+		// from its stored snapshot.
+		"The Forge • Typical sell",
 		"Appraisals you make while signed out are kept for 180 days after they were last viewed, then deleted.")
 
 	// A forged cookie (the real token, no valid signature)
@@ -650,19 +665,19 @@ func postAppraiseCookies(t *testing.T, app *Application, cookies []*http.Cookie,
 	return rec.Code, rec.Header()
 }
 
-// withoutHubStrip cuts the hub-comparison paragraph out of a
+// withoutHubStrip cuts the hub-comparison pills out of a
 // rendered appraisal page, for assertions about the appraisal
-// itself rather than the strip's per-hub totals.
+// itself rather than the pills' per-hub totals.
 func withoutHubStrip(body string) string {
-	start := strings.Index(body, `<p class="ap-hubstrip">`)
+	start := strings.Index(body, `<div class="ap-hubs">`)
 	if start < 0 {
 		return body
 	}
-	end := strings.Index(body[start:], "</p>")
+	end := strings.Index(body[start:], "</div>")
 	if end < 0 {
 		return body
 	}
-	return body[:start] + body[start+end+len("</p>"):]
+	return body[:start] + body[start+end+len("</div>"):]
 }
 
 func TestAppraisalToolPricingBasis(t *testing.T) {
@@ -868,7 +883,10 @@ func TestAppraisalToolMultisellExport(t *testing.T) {
 
 	body, _, _ := postAnonAppraisal(t, app, url.Values{"items": {"Tritanium x 10\nPyerite x 10"}})
 	mustContain(t, "multisell export", body,
-		"Copy multi-sell list", "Tritanium 6.50", "Pyerite 9.25")
+		"Copy multi-sell list", "Tritanium 6.50", "Pyerite 9.25",
+		// The export lives in the results panel's second tab,
+		// beside the itemized tab.
+		"Itemized appraisal (2)", `id="ap-panel-multisell"`)
 }
 
 func TestAppraisalToolHubComparisonStrip(t *testing.T) {
@@ -892,6 +910,14 @@ func TestAppraisalToolHubComparisonStrip(t *testing.T) {
 	mustContain(t, "hub strip", body,
 		"At each hub's typical sell:", "The Forge 650.00 ISK", "Domain 1,000.00 ISK",
 		"Sinq Laison", "Heimatar", "Metropolis")
+	// The pills are the strip as re-price controls: each posts
+	// its hub to the appraisal's re-price path, the current hub
+	// is marked, and each total carries its delta against The
+	// Forge (Domain's 1,000 against 650 is +53.8%; the plus
+	// renders as an HTML entity in the source).
+	mustContain(t, "hub pills", body,
+		`name="hub" value="10000043"`, `class="ap-hub on"`,
+		`ap-hub-delta">(&#43;53.8%)`)
 }
 
 func TestAppraisalToolHubStripPricesCopiesAsCopies(t *testing.T) {

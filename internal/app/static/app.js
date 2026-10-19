@@ -3617,6 +3617,114 @@
   });
 })();
 
+// The appraisal workbench's small live behaviors: the sample
+// pastes, the paste box's line count, the percent presets, the
+// exclusion drawer's active badge, and the saved list's
+// failed-paste filter. The samples are static texts: one fills
+// the form exactly as a paste would, nothing is fetched.
+(function () {
+  "use strict";
+  var items = document.getElementById("ap-items");
+  var exclude = document.getElementById("ap-exclude");
+  var samples = {
+    haul: {
+      items: [
+        "Multispectrum Shield Hardener II x2",
+        "Dread Guristas Warp Scrambler x1",
+        "Corpum A-Type Multispectrum Energized Membrane x1",
+        "Pithum A-Type Multispectrum Shield Hardener x1",
+        "Imperial Navy Heat Sink x3",
+        "True Sansha Warp Scrambler x1",
+        "Brokara's Modified Power Diagnostic System x1"
+      ].join("\n"),
+      exclude: ""
+    },
+    eft: {
+      items: [
+        "[Ishtar, C3 Ratting Standard]",
+        "Multispectrum Shield Hardener II x2",
+        "Dread Guristas Warp Scrambler x1",
+        "50MN Quad LiF Restrained Microwarpdrive x1",
+        "Medium Micro Jump Drive x1",
+        "Ishtar Blueprint [BPC, ME 10, TE 20, 5 runs]",
+        "Gravid Damage Control II"
+      ].join("\n"),
+      exclude: "Warp Disruptor II x1"
+    },
+    moon: {
+      items: [
+        "Tritanium x 1,000,000",
+        "Pyerite 250000",
+        "Xenotime 4500",
+        "Monazite 3200",
+        "X-Large Ancillary Shield Booster x2"
+      ].join("\n"),
+      exclude: ""
+    }
+  };
+  function recount() {
+    var el = document.querySelector("[data-ap-linecount]");
+    if (!el || !items) return;
+    var n = 0;
+    items.value.split("\n").forEach(function (line) { if (line.trim() !== "") n++; });
+    el.textContent = n + " / 1,000 lines";
+  }
+  function syncBadge() {
+    var badge = document.querySelector("[data-ap-exclude-badge]");
+    if (badge && exclude) badge.hidden = exclude.value.trim() === "";
+  }
+  function syncPresets() {
+    var pct = document.getElementById("ap-pct");
+    if (!pct) return;
+    document.querySelectorAll("[data-ap-pct]").forEach(function (btn) {
+      btn.classList.toggle("on", btn.getAttribute("data-ap-pct") === pct.value);
+    });
+  }
+  document.addEventListener("click", function (ev) {
+    var t = ev.target && ev.target.closest ? ev.target : null;
+    if (!t || !t.closest) return;
+    var sampleBtn = t.closest("[data-ap-sample]");
+    if (sampleBtn && items) {
+      var s = samples[sampleBtn.getAttribute("data-ap-sample")];
+      if (s) {
+        items.value = s.items;
+        if (exclude) {
+          exclude.value = s.exclude;
+          var drawer = exclude.closest("details");
+          if (drawer && s.exclude) drawer.open = true;
+        }
+        recount();
+        syncBadge();
+        items.focus();
+      }
+      return;
+    }
+    var preset = t.closest("[data-ap-pct]");
+    if (preset) {
+      var pct = document.getElementById("ap-pct");
+      if (pct) {
+        pct.value = preset.getAttribute("data-ap-pct");
+        syncPresets();
+      }
+    }
+  });
+  if (items) items.addEventListener("input", recount);
+  if (exclude) exclude.addEventListener("input", syncBadge);
+  var pctInput = document.getElementById("ap-pct");
+  if (pctInput) pctInput.addEventListener("input", syncPresets);
+  var hideFailed = document.querySelector("[data-ap-hidefailed]");
+  if (hideFailed) {
+    hideFailed.addEventListener("change", function () {
+      document.querySelectorAll("[data-ap-failed]").forEach(function (row) {
+        row.hidden = hideFailed.checked;
+      });
+    });
+  }
+  recount();
+  syncBadge();
+  syncPresets();
+})();
+
 // The sign-up chooser (/auth/link): select all, tick every extra without
 // leaving the place on the page, and a live count of the permissions.
 (function () {

@@ -368,9 +368,9 @@
   color: var(--muted); font-weight: 700; font-size: 0.69rem;
   text-transform: uppercase; letter-spacing: 0.05em;
 }
-/* The contents cap's reveal line: a quiet text button
-   under the fifth line; the lines it reveals ride in
-   .cs-extralines, hidden until the click lands. */
+/* The contents cap's overflow line: a quiet text button
+   under the fifth line; clicking it toggles the row's
+   drawer, where the full contents list. */
 .cs-morelines {
   display: block; background: none; border: 0; padding: 0; cursor: pointer;
   font: inherit; font-size: 0.75rem; color: var(--muted); margin-bottom: 0.25rem;

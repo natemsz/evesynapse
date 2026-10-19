@@ -268,11 +268,16 @@
     var drawer = row.nextElementSibling;
     return drawer ? drawer.querySelector(".cs-panel-slot") : null;
   }
+  function syncMoreToggle(row) {
+    var btn = row.querySelector("[data-more-toggle]");
+    if (btn) btn.setAttribute("aria-expanded", row.getAttribute("aria-expanded"));
+  }
   function closeRow(row) {
     var slot = drawerSlot(row);
     if (slot) slot.hidden = true;
     row.classList.remove("open");
     row.setAttribute("aria-expanded", "false");
+    syncMoreToggle(row);
     if (openRow === row) openRow = null;
   }
   function openRowPanel(row) {
@@ -282,6 +287,7 @@
     openRow = row;
     row.classList.add("open");
     row.setAttribute("aria-expanded", "true");
+    syncMoreToggle(row);
     if (slot.dataset.loaded) {
       slot.hidden = false;
       return;
@@ -315,17 +321,20 @@
       else openRowPanel(row);
     });
   });
-  // The contents cell caps at five lines: the more-line
-  // reveals the hidden remainder in place and goes away.
+  // The contents cell caps at five lines: the "And N
+  // more items" line under the head never reveals lines
+  // in the cell -- it toggles the row's drawer, where
+  // the full contents list, and collapses it again.
   // It is a button, so the row's own click guard already
-  // keeps it from toggling the drawer; stop propagation
-  // anyway so the reveal can never read as a row click.
-  document.querySelectorAll(".cs-morelines").forEach(function (btn) {
+  // keeps the click from double-toggling; it runs the
+  // same open/close pair a row click runs.
+  document.querySelectorAll("[data-more-toggle]").forEach(function (btn) {
     btn.addEventListener("click", function (e) {
       e.stopPropagation();
-      var extra = btn.parentElement.querySelector(".cs-extralines");
-      if (extra) extra.hidden = false;
-      btn.remove();
+      var row = btn.closest(".cs-row");
+      if (!row) return;
+      if (openRow === row) closeRow(row);
+      else openRowPanel(row);
     });
   });
   }

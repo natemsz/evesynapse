@@ -398,7 +398,8 @@ func TestAppraisalToolPageAndBadShare(t *testing.T) {
 	}
 	mustContain(t, "appraisal page", body, "Appraisal", "Items to appraise",
 		"A pasted EFT fit appraises the ship, its fitted modules and charges, and the drones and cargo the fit lists",
-		"Mutated (abyssal) items appraise too")
+		"Mutated (abyssal) items appraise too",
+		`<textarea id="ap-items" name="items" rows="10" autofocus`, "data-clear-appraise>Clear</button>")
 	// Appraisal lives under Tools now: its tab strip is the
 	// Tools strip (Item Browser + Appraisal, itself active), and
 	// the Market strip no longer carries it.

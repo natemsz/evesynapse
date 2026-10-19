@@ -3588,6 +3588,35 @@
   });
 })();
 
+// The appraisal form's Clear button: empties the pastes and
+// puts the basis back to the remembered defaults the page
+// loaded with, then focuses the paste box.
+(function () {
+  "use strict";
+  var items = document.getElementById("ap-items");
+  if (!items || !items.form) return;
+  var form = items.form;
+  var remembered = {};
+  ["hub", "mode", "pct"].forEach(function (name) {
+    var el = form.querySelector('[name="' + name + '"]');
+    if (el) remembered[name] = el.value;
+  });
+  document.addEventListener("click", function (ev) {
+    var btn = ev.target && ev.target.closest ? ev.target.closest("[data-clear-appraise]") : null;
+    if (!btn) return;
+    items.value = "";
+    var exclude = document.getElementById("ap-exclude");
+    if (exclude) exclude.value = "";
+    ["hub", "mode", "pct"].forEach(function (name) {
+      var el = form.querySelector('[name="' + name + '"]');
+      if (el && remembered[name] != null) el.value = remembered[name];
+    });
+    var mult = form.querySelector('[name="multiplier"]');
+    if (mult) mult.value = "1";
+    items.focus();
+  });
+})();
+
 // The sign-up chooser (/auth/link): select all, tick every extra without
 // leaving the place on the page, and a live count of the permissions.
 (function () {

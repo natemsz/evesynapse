@@ -12,7 +12,7 @@
   <form method="post" action="/market/appraise/">
     <div class="ap-field">
       <label class="ap-label" for="ap-items">Items to appraise</label>
-      <textarea id="ap-items" name="items" rows="10" placeholder="Tritanium x 1,000,000&#10;Pyerite 250000&#10;[Rifter, My Rifter]&#10;...">{{.Input}}</textarea>
+      <textarea id="ap-items" name="items" rows="10" autofocus placeholder="Tritanium x 1,000,000&#10;Pyerite 250000&#10;[Rifter, My Rifter]&#10;...">{{.Input}}</textarea>
     </div>
     <div class="ap-field">
       <label class="ap-label" for="ap-exclude">Exclude these items (optional)</label>
@@ -24,7 +24,7 @@
       <label>Percent <input type="number" name="pct" min="50" max="200" step="1" value="{{.Basis.Percent}}"></label>
       <label>Quantity ×<input type="number" name="multiplier" min="1" max="1000" step="1" value="1"></label>
     </small></p>
-    <p class="ap-actions"><button class="btn" type="submit">Appraise</button></p>
+    <p class="ap-actions"><button class="btn" type="submit">Appraise</button> <button class="btn" type="button" data-clear-appraise>Clear</button></p>
   </form>
   <p class="ap-help"><small>Plain lists, one item per line, with or without quantities; copies from the game's asset and cargo windows; and EFT fits all work. A pasted EFT fit appraises the ship, its fitted modules and charges, and the drones and cargo the fit lists. A moon survey paste — ore names with their percentages — appraises each ore at its survey share of 10,000 units. Blueprint lines can carry their facts in brackets, like <em>Rifter Blueprint (BPC, ME 10, TE 20, 5 runs)</em>. A copy prices from the median asking price of copy listings in our contract corpus — never from the original's market price — and a copy with too few listings on record is left unpriced. Mutated (abyssal) items appraise too: when the line carries the item's link from the game, the line prices that item from its stored rolls estimate. A mutated line without its link, or an item with no estimate on record, prices its base item and says so.</small></p>
 </section>

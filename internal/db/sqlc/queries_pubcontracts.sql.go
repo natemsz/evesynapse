@@ -813,7 +813,9 @@ FROM pub_contract_items i
 JOIN pub_contracts c ON c.contract_id = i.contract_id
 LEFT JOIN abyssal_probes p ON p.item_id = i.item_id
 WHERE i.item_id IS NOT NULL AND p.item_id IS NULL
-ORDER BY c.first_seen ASC, i.item_id ASC
+  AND EXISTS (SELECT 1 FROM abyssal_mappings m
+              WHERE m.resulting_type_id = i.type_id)
+ORDER BY c.date_issued DESC, c.contract_id DESC, i.item_id DESC
 LIMIT $1
 `
 

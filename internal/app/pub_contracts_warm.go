@@ -287,11 +287,12 @@ func (app *Application) storePublicContractBids(ctx context.Context, contractID 
 	return tx.Commit()
 }
 
-// warmAbyssalProbes probes singleton items no probe has ever
-// touched, oldest listing first. Every outcome is stored:
-// a dynamic hit opens the instance's corpus row and its
-// sighting for the listing that surfaced it; a 404 is an
-// ordinary module and is never asked about again.
+// warmAbyssalProbes probes singleton items no probe has
+// ever touched whose type a mutaplasmid can produce, newest
+// listing first. Every outcome is stored: a dynamic hit
+// opens the instance's corpus row and its sighting for the
+// listing that surfaced it; a 404 means the instance is
+// gone or was never dynamic, and is never asked about again.
 func (app *Application) warmAbyssalProbes(ctx context.Context, allowance *fetchBudget) (stored int, limited bool) {
 	candidates, err := app.queries.ListAbyssalProbeCandidates(ctx, pubContractProbesPerCycle)
 	if err != nil {

@@ -180,6 +180,23 @@ func seedPubRegions(t *testing.T, app *Application, regionIDs ...int64) {
 	}
 }
 
+// seedAbyssalMappings stores SDE mutaplasmid applicability
+// mappings (schema 063) as (mutator, applicable, resulting)
+// triples: the probe queue admits only instances of the
+// resulting types, so a test that wants an item probed maps
+// its type here first.
+func seedAbyssalMappings(t *testing.T, app *Application, mappings ...[3]int64) {
+	t.Helper()
+	ctx := context.Background()
+	for _, m := range mappings {
+		if _, err := app.db.ExecContext(ctx,
+			`INSERT INTO abyssal_mappings (mutator_type_id, applicable_type_id, resulting_type_id)
+			 VALUES ($1, $2, $3)`, m[0], m[1], m[2]); err != nil {
+			t.Fatalf("seed abyssal mapping %v: %v", m, err)
+		}
+	}
+}
+
 // agePubFetchStates makes every market fetch-state row old
 // enough that the next pass finds every gate due again -- the
 // test's way of moving the 30-minute cadence forward.
@@ -204,6 +221,10 @@ func TestPublicContractsSweepDeathAndItems(t *testing.T) {
 	app, _, q := buildCorpTestApp(t, fx)
 	ctx := context.Background()
 	seedPubRegions(t, app, 10000002, 10000047)
+	seedAbyssalMappings(t, app,
+		[3]int64{2222, 1111, 4242}, // the mutator/source pair fx.dynamic answers for item 9001
+		[3]int64{2223, 1112, 4243}, // and for item 9002
+	)
 	now := time.Now().UTC()
 
 	bpcRuns, bpcME, bpcTE := int64(10), int64(5), int64(8)
@@ -403,12 +424,13 @@ func TestPublicContractProbePlainItemOnce(t *testing.T) {
 	app, _, q := buildCorpTestApp(t, fx)
 	ctx := context.Background()
 	seedPubRegions(t, app, 10000002)
+	seedAbyssalMappings(t, app, [3]int64{2222, 1111, 4242})
 	now := time.Now().UTC()
 
 	c := pubContractJSON(201, 10000002, "item_exchange", 100, now.Add(24*time.Hour))
 	fx.pages[10000002] = []esi.PublicContract{c}
 	fx.items[201] = []esi.PublicContractItem{
-		{RecordID: 2001, TypeID: 606, ItemID: 9100, Quantity: 1, IsIncluded: true}, // an ordinary singleton: 404
+		{RecordID: 2001, TypeID: 4242, ItemID: 9100, Quantity: 1, IsIncluded: true}, // a mutable type, but this instance answers 404
 	}
 	runPubPass(t, app)
 
@@ -418,7 +440,7 @@ func TestPublicContractProbePlainItemOnce(t *testing.T) {
 		t.Fatalf("probe row for 9100: %v", err)
 	}
 	if isDynamic {
-		t.Fatal("ordinary item probed as dynamic")
+		t.Fatal("404 item probed as dynamic")
 	}
 	if n, _ := q.CountAbyssalItems(ctx); n != 0 {
 		t.Fatalf("abyssal items = %d, want 0", n)
@@ -429,6 +451,69 @@ func TestPublicContractProbePlainItemOnce(t *testing.T) {
 	_, _, _, dogma2 := fx.calls()
 	if dogma2[9100] != dogma1[9100] || dogma2[9100] != 1 {
 		t.Fatalf("item 9100 probed %d times, want exactly 1", dogma2[9100])
+	}
+}
+
+// The probe queue admits only instances of types a
+// mutaplasmid can produce (the SDE mappings' resulting
+// types), newest listing first: a non-mutable type is never
+// selected even on the newest contract, an already-probed
+// instance stays out, and the older mutable listing drains
+// behind the newer one.
+func TestAbyssalProbeCandidatesMutableTypesNewestFirst(t *testing.T) {
+	app, _, q := buildCorpTestApp(t, &countingTransport{})
+	ctx := context.Background()
+	seedAbyssalMappings(t, app, [3]int64{2222, 1111, 4242})
+	base := time.Now().UTC()
+
+	seedContract := func(id int64, issued, firstSeen time.Time) {
+		t.Helper()
+		if _, err := app.db.ExecContext(ctx,
+			`INSERT INTO pub_contracts (contract_id, region_id, type, date_issued, date_expired, first_seen, last_seen)
+			 VALUES ($1, 10000002, 'item_exchange', $2, $3, $4, $4)`,
+			id, issued, base.Add(7*24*time.Hour), firstSeen); err != nil {
+			t.Fatalf("seed contract %d: %v", id, err)
+		}
+	}
+	seedItem := func(recordID, contractID, typeID int64, itemID any) {
+		t.Helper()
+		if _, err := app.db.ExecContext(ctx,
+			`INSERT INTO pub_contract_items (record_id, contract_id, type_id, item_id, quantity)
+			 VALUES ($1, $2, $3, $4, 1)`, recordID, contractID, typeID, itemID); err != nil {
+			t.Fatalf("seed item %d: %v", recordID, err)
+		}
+	}
+
+	seedContract(301, base.Add(-3*time.Hour), base.Add(-4*time.Hour))
+	seedItem(1, 301, 4242, 7001) // mutable type, older listing
+	seedContract(302, base.Add(-1*time.Hour), base.Add(-30*time.Minute))
+	seedItem(2, 302, 4242, 7002) // mutable type, newer listing
+	seedItem(3, 302, 4242, nil)  // a stack row: no instance, never a candidate
+	seedContract(303, base.Add(-15*time.Minute), base.Add(-5*time.Hour))
+	seedItem(4, 303, 34, 7003) // Tritanium: newest contract, oldest first_seen, never mutable
+	seedContract(304, base.Add(-2*time.Hour), base.Add(-2*time.Hour))
+	seedItem(5, 304, 4242, 7004) // mutable, but already probed
+	if _, err := app.db.ExecContext(ctx,
+		`INSERT INTO abyssal_probes (item_id, type_id, is_dynamic, probed_at)
+		 VALUES (7004, 4242, true, $1)`, base); err != nil {
+		t.Fatalf("seed probe 7004: %v", err)
+	}
+
+	rows, err := q.ListAbyssalProbeCandidates(ctx, 10)
+	if err != nil {
+		t.Fatalf("candidates: %v", err)
+	}
+	var got []int64
+	for _, r := range rows {
+		got = append(got, r.ItemID.Int64)
+	}
+	if fmt.Sprint(got) != "[7002 7001]" {
+		t.Fatalf("candidates = %v, want [7002 7001] (newest mutable listing first; "+
+			"the Tritanium singleton and the probed instance excluded)", got)
+	}
+	one, err := q.ListAbyssalProbeCandidates(ctx, 1)
+	if err != nil || len(one) != 1 || one[0].ItemID.Int64 != 7002 {
+		t.Fatalf("first candidate = %+v, %v; want item 7002 alone", one, err)
 	}
 }
 

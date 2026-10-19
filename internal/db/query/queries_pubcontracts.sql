@@ -192,8 +192,14 @@ ORDER BY amount DESC, date_bid ASC;
 -- ---------------------------------------------------------------------
 
 -- Singleton items on live contracts that no probe has ever
--- touched, oldest listing first. The contract facts ride
--- along so a hit can open its sighting row without a reread.
+-- touched and whose type a mutaplasmid can produce (the SDE
+-- mappings' resulting types, schema 063): an instance of any
+-- other type answers a probe with a 404 by construction, so
+-- it never enters the queue. Newest listing first -- the
+-- item drain's order -- so a fresh listing is probed within
+-- a cycle or two and the cold backlog drains behind it. The
+-- contract facts ride along so a hit can open its sighting
+-- row without a reread.
 -- name: ListAbyssalProbeCandidates :many
 SELECT i.item_id, i.type_id, i.contract_id,
     c.type, c.price, c.region_id, c.start_location_id,
@@ -202,7 +208,9 @@ FROM pub_contract_items i
 JOIN pub_contracts c ON c.contract_id = i.contract_id
 LEFT JOIN abyssal_probes p ON p.item_id = i.item_id
 WHERE i.item_id IS NOT NULL AND p.item_id IS NULL
-ORDER BY c.first_seen ASC, i.item_id ASC
+  AND EXISTS (SELECT 1 FROM abyssal_mappings m
+              WHERE m.resulting_type_id = i.type_id)
+ORDER BY c.date_issued DESC, c.contract_id DESC, i.item_id DESC
 LIMIT $1;
 
 -- name: InsertAbyssalProbe :exec

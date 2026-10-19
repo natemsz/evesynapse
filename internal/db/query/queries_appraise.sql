@@ -63,8 +63,13 @@ INSERT INTO appraisal_cookie_secrets (id, secret)
 VALUES (1, $1)
 ON CONFLICT (id) DO NOTHING;
 
+-- name: ListReprocessingOutputsForTypes :many
+SELECT type_id, material_type_id, quantity FROM sde_reprocessing
+WHERE type_id = ANY(sqlc.arg(type_ids)::bigint[])
+ORDER BY type_id, material_type_id;
+
 -- name: GetUserAppraisalPref :one
-SELECT user_id, hub_region, mode, percent, updated_at FROM user_appraisal_prefs
+SELECT user_id, hub_region, mode, percent, updated_at, refine_rate, prune_ores FROM user_appraisal_prefs
 WHERE user_id = $1;
 
 -- name: UpsertUserAppraisalPref :exec
@@ -75,6 +80,14 @@ ON CONFLICT (user_id) DO UPDATE SET
     mode       = excluded.mode,
     percent    = excluded.percent,
     updated_at = excluded.updated_at;
+
+-- name: UpsertUserAppraisalRefine :exec
+INSERT INTO user_appraisal_prefs (user_id, refine_rate, prune_ores, updated_at)
+VALUES ($1, $2, $3, now())
+ON CONFLICT (user_id) DO UPDATE SET
+    refine_rate = excluded.refine_rate,
+    prune_ores  = excluded.prune_ores,
+    updated_at  = excluded.updated_at;
 
 -- Pasted names arrive in whatever case the player typed; the
 -- SDE's canonical case comes back with the row.

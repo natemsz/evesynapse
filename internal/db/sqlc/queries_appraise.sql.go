@@ -137,7 +137,7 @@ func (q *Queries) GetUserAppraisalByShareToken(ctx context.Context, shareToken s
 }
 
 const getUserAppraisalPref = `-- name: GetUserAppraisalPref :one
-SELECT user_id, hub_region, mode, percent, updated_at FROM user_appraisal_prefs
+SELECT user_id, hub_region, mode, percent, updated_at, refine_rate, prune_ores FROM user_appraisal_prefs
 WHERE user_id = $1
 `
 
@@ -150,6 +150,8 @@ func (q *Queries) GetUserAppraisalPref(ctx context.Context, userID int64) (UserA
 		&i.Mode,
 		&i.Percent,
 		&i.UpdatedAt,
+		&i.RefineRate,
+		&i.PruneOres,
 	)
 	return i, err
 }
@@ -214,6 +216,35 @@ func (q *Queries) InsertUserAppraisal(ctx context.Context, arg InsertUserApprais
 	var id int64
 	err := row.Scan(&id)
 	return id, err
+}
+
+const listReprocessingOutputsForTypes = `-- name: ListReprocessingOutputsForTypes :many
+SELECT type_id, material_type_id, quantity FROM sde_reprocessing
+WHERE type_id = ANY($1::bigint[])
+ORDER BY type_id, material_type_id
+`
+
+func (q *Queries) ListReprocessingOutputsForTypes(ctx context.Context, typeIds []int64) ([]SdeReprocessing, error) {
+	rows, err := q.db.QueryContext(ctx, listReprocessingOutputsForTypes, pq.Array(typeIds))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SdeReprocessing
+	for rows.Next() {
+		var i SdeReprocessing
+		if err := rows.Scan(&i.TypeID, &i.MaterialTypeID, &i.Quantity); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listSDETypesByLowerNames = `-- name: ListSDETypesByLowerNames :many
@@ -377,5 +408,25 @@ func (q *Queries) UpsertUserAppraisalPref(ctx context.Context, arg UpsertUserApp
 		arg.Mode,
 		arg.Percent,
 	)
+	return err
+}
+
+const upsertUserAppraisalRefine = `-- name: UpsertUserAppraisalRefine :exec
+INSERT INTO user_appraisal_prefs (user_id, refine_rate, prune_ores, updated_at)
+VALUES ($1, $2, $3, now())
+ON CONFLICT (user_id) DO UPDATE SET
+    refine_rate = excluded.refine_rate,
+    prune_ores  = excluded.prune_ores,
+    updated_at  = excluded.updated_at
+`
+
+type UpsertUserAppraisalRefineParams struct {
+	UserID     int64   `json:"user_id"`
+	RefineRate float64 `json:"refine_rate"`
+	PruneOres  bool    `json:"prune_ores"`
+}
+
+func (q *Queries) UpsertUserAppraisalRefine(ctx context.Context, arg UpsertUserAppraisalRefineParams) error {
+	_, err := q.db.ExecContext(ctx, upsertUserAppraisalRefine, arg.UserID, arg.RefineRate, arg.PruneOres)
 	return err
 }

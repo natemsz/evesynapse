@@ -727,6 +727,66 @@ func TestAppraisalToolPricingBasis(t *testing.T) {
 	}
 }
 
+func TestAppraisalToolReprocessAndVolume(t *testing.T) {
+	tr := &countingTransport{}
+	app, conn, q := buildCorpTestApp(t, tr)
+	seedAppraisalTool(t, conn, q)
+	ctx := context.Background()
+	now := time.Now().UTC()
+	// A fake ore: type 12345 "Test Ore", portion 100, volume
+	// 0.1 m3, reprocessing into 700 Tritanium + 300 Pyerite
+	// per portion. Direct price 10 sell at The Forge.
+	exec := func(query string, args ...any) {
+		t.Helper()
+		if _, err := conn.ExecContext(ctx, query, args...); err != nil {
+			t.Fatalf("seed %q: %v", query, err)
+		}
+	}
+	exec(`INSERT INTO sde_types (type_id, name) VALUES (12345, 'Test Ore')`)
+	exec(`INSERT INTO sde_type_physics (type_id, mass, volume, capacity, portion_size) VALUES (12345, 0, 0.1, 0, 100), (34, 0, 0.01, 0, 0)`)
+	exec(`INSERT INTO sde_reprocessing (type_id, material_type_id, quantity) VALUES (12345, 34, 700), (12345, 35, 300)`)
+	exec(`INSERT INTO market_region_stats (region_id, type_id, typical_sell, typical_buy, updated_at) VALUES (10000002, 12345, 10, 0, $1)`, now.Add(-time.Hour))
+
+	// 250 ore direct: 2,500. Volume 25 m3, 100 ISK/m3.
+	body, _, share := postAnonAppraisal(t, app, url.Values{"items": {"Test Ore x 250"}})
+	mustContain(t, "ore appraisal", body,
+		"2,500.00", "25 m³", "0.1 m³ each", "Total volume 25 m³", "100.00 ISK/m³", "Reprocessing view")
+
+	// At perfect refine: 2 full batches -> 1,400 Tritanium
+	// (x6.50) and 600 Pyerite (x9.25 estimate) = 14,650.
+	code, body := getAnon(t, app, share+"reprocess")
+	if code != http.StatusOK {
+		t.Fatalf("reprocess view: status %d, want 200", code)
+	}
+	mustContain(t, "reprocess view", body,
+		"Reprocessing", "Tritanium × 1,400", "Pyerite × 600",
+		"14,650.00", "Total reprocess value", "Perfect refine (max skills)",
+		"Prune leftover ores below one refine batch", "Only full 100-unit batches reprocess")
+
+	// At 50%: half the yield, 7,325.
+	_, body = getAnon(t, app, share+"reprocess?refine=1&rate=50&prune=1")
+	mustContain(t, "reprocess at 50%", body, "7,325.00")
+
+	// Below one batch with prune on: pruned, no yield.
+	body, _, share2 := postAnonAppraisal(t, app, url.Values{"items": {"Test Ore x 50"}})
+	_ = body
+	_, body = getAnon(t, app, share2+"reprocess")
+	mustContain(t, "pruned ore", body, "Below one refine batch — pruned.", "Total reprocess value")
+	if strings.Contains(body, "Tritanium × 350") {
+		t.Error("a pruned stack still yielded")
+	}
+	// With prune off the partial batch counts in proportion:
+	// 350 Tritanium x 6.50 + 150 Pyerite x 9.25 = 3,662.50.
+	_, body = getAnon(t, app, share2+"reprocess?refine=1&rate=100")
+	mustContain(t, "unpruned ore", body, "3,662.50")
+
+	// A non-reprocessable line is listed as such, not dropped.
+	body, _, share3 := postAnonAppraisal(t, app, url.Values{"items": {"Rifter x 1"}})
+	_ = body
+	_, body = getAnon(t, app, share3+"reprocess")
+	mustContain(t, "non-reprocessable", body, "Does not reprocess.", "Not reprocessable: Rifter")
+}
+
 func TestPublicFitEscapesUserText(t *testing.T) {
 	tr := &countingTransport{}
 	app, conn, q := buildCorpTestApp(t, tr)

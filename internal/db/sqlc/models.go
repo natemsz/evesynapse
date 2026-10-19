@@ -830,6 +830,12 @@ type SdeRegion struct {
 	Name     string `json:"name"`
 }
 
+type SdeReprocessing struct {
+	TypeID         int64 `json:"type_id"`
+	MaterialTypeID int64 `json:"material_type_id"`
+	Quantity       int64 `json:"quantity"`
+}
+
 type SdeRequirement struct {
 	TypeID      int64 `json:"type_id"`
 	SkillTypeID int64 `json:"skill_type_id"`
@@ -878,10 +884,11 @@ type SdeTypeEffect struct {
 }
 
 type SdeTypePhysic struct {
-	TypeID   int64   `json:"type_id"`
-	Mass     float64 `json:"mass"`
-	Volume   float64 `json:"volume"`
-	Capacity float64 `json:"capacity"`
+	TypeID      int64   `json:"type_id"`
+	Mass        float64 `json:"mass"`
+	Volume      float64 `json:"volume"`
+	Capacity    float64 `json:"capacity"`
+	PortionSize int64   `json:"portion_size"`
 }
 
 type Session struct {
@@ -1107,11 +1114,13 @@ type UserAppraisal struct {
 }
 
 type UserAppraisalPref struct {
-	UserID    int64     `json:"user_id"`
-	HubRegion int64     `json:"hub_region"`
-	Mode      string    `json:"mode"`
-	Percent   float64   `json:"percent"`
-	UpdatedAt time.Time `json:"updated_at"`
+	UserID     int64     `json:"user_id"`
+	HubRegion  int64     `json:"hub_region"`
+	Mode       string    `json:"mode"`
+	Percent    float64   `json:"percent"`
+	UpdatedAt  time.Time `json:"updated_at"`
+	RefineRate float64   `json:"refine_rate"`
+	PruneOres  bool      `json:"prune_ores"`
 }
 
 type WalletHistory struct {

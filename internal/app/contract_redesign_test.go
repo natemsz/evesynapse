@@ -419,6 +419,104 @@ func TestContractSearchAbyssalInline(t *testing.T) {
 	}
 }
 
+// TestContractPanelUnchangedRollsHidden pins the
+// attributes card's filter: a roll that left its stat at
+// the base module's value is not a mutation and earns no
+// row, while the rolls that moved theirs stay -- and the
+// detail page, out of this change's scope, keeps every
+// roll.
+func TestContractPanelUnchangedRollsHidden(t *testing.T) {
+	tr := &openWindowTransport{}
+	app, conn, _ := buildCorpTestApp(t, tr)
+	seedAbyssalPage(t, conn)
+
+	// The fixture's capacitor roll sits a hair off its
+	// base (10.2 against 10); store the roll at the base
+	// value itself, so the roll changed nothing.
+	ctx := context.Background()
+	if _, err := conn.ExecContext(ctx, `UPDATE abyssal_items SET attributes =
+		'[{"attribute_id":64,"value":2.36},{"attribute_id":6,"value":10},{"attribute_id":50,"value":27.9}]'
+		WHERE item_id = 900001`); err != nil {
+		t.Fatal(err)
+	}
+
+	code, body := getAnon(t, app, "/contracts/search/8501/panel")
+	if code != 200 {
+		t.Fatalf("abyssal panel: status %d, want 200", code)
+	}
+	mustContain(t, "panel unchanged rolls", body,
+		"Mutaplasmid Attributes", "Est Range: 180.0M – 240.0M ISK",
+		"Damage Multiplier", "CPU")
+	if strings.Contains(body, "Capacitor Need") {
+		t.Error("the attributes card still lists a roll that changed nothing")
+	}
+
+	_, body = getAnon(t, app, "/contracts/search/8501/")
+	mustContain(t, "detail unchanged rolls", body, "Capacitor Need")
+}
+
+// TestContractSearchNegativeSpread pins the spread's
+// other direction: a contract whose stored value falls
+// short of its cost shows the shortfall, signed and in
+// the negative tone, in the row's value column and the
+// drawer's summary alike -- while a courier of the same
+// shape stays spread-free, as couriers always are.
+func TestContractSearchNegativeSpread(t *testing.T) {
+	tr := &openWindowTransport{}
+	app, conn, _ := buildCorpTestApp(t, tr)
+	seedContractCorpus(t, app, conn)
+
+	ctx := context.Background()
+	now := time.Now().UTC()
+	exec := func(query string, args ...any) {
+		t.Helper()
+		if _, err := conn.ExecContext(ctx, query, args...); err != nil {
+			t.Fatalf("spread seed %q: %v", query, err)
+		}
+	}
+	contract := func(id int64, typ, title string, price, reward, collateral, volume float64,
+		endLoc int64, state string) {
+		t.Helper()
+		exec(`INSERT INTO pub_contracts (contract_id, region_id, type, issuer_id, issuer_corporation_id,
+			title, price, buyout, reward, collateral, volume, start_location_id, end_location_id,
+			date_issued, date_expired, days_to_complete, items_state, last_cycle, first_seen, last_seen)
+			VALUES ($1, 10000002, $2, 9001, 9801, $3, $4, 0, $5, $6, $7, 60003760, $8, $9, $10, 1, $11, 1, $9, $9)`,
+			id, typ, title, price, reward, collateral, volume, endLoc,
+			now.Add(-time.Hour), now.Add(7*24*time.Hour), state)
+	}
+
+	// Priced at 2000, appraised at 1000: a 1000 shortfall.
+	contract(7021, "item_exchange", "Underwater Lot", 2000, 0, 0, 0, 0, "stored")
+	exec(`INSERT INTO pub_contract_items (record_id, contract_id, type_id, quantity, is_included,
+		unit_price, line_value, price_tier, price_asof)
+		VALUES (201, 7021, 34, 20, true, 50, 1000, 'typical', $1)`, now)
+	exec(`UPDATE pub_contracts SET offered_value=1000, want_value=0, priced_lines=1, total_lines=1,
+		tier_mix='typical:1', priced_at=$1 WHERE contract_id=7021`, now)
+
+	// A courier in the same shape: reward over the
+	// collateral it asks the hauler to risk.
+	contract(7022, "courier", "Heavy Haul Light Pay", 0, 5000, 1000, 1000, 60003761, "private")
+
+	_, body := getAnon(t, app, "/contracts/search/")
+	mustContain(t, "negative spread row", body,
+		"compared against our swept typicals pricing model",
+		"-1000.00 ISK spread")
+	if n := strings.Count(body, `class="cs-spread neg"`); n != 1 {
+		t.Errorf("negative spread rows: got %d, want 1 (the underwater exchange only)", n)
+	}
+
+	_, body = getAnon(t, app, "/contracts/search/7021/panel")
+	mustContain(t, "panel 7021", body,
+		"Estimated Spread:", "-1000.00 ISK (-100.0%)", `cs-srow sp neg`)
+
+	_, body = getAnon(t, app, "/contracts/search/7022/panel")
+	mustContain(t, "panel 7022", body,
+		"Asking Price:", "5000.00 ISK", "EveSynapse Value:", "1000.00 ISK")
+	if strings.Contains(body, "Estimated Spread:") {
+		t.Error("the courier summary renders a spread")
+	}
+}
+
 // TestContractSearchContentsCap pins the contents cell's
 // five-line cap: offered lines first, then wanted, counted
 // together; the remainder renders server-side in the

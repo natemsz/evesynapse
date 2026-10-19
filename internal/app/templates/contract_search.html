@@ -5,7 +5,7 @@
 {{with .ContractSearch}}
 {{$s := .}}
 <div class="cs-intro">
-<p class="muted">Every public contract our sweeps see across New Eden, priced against our swept typicals first, then stored estimates — never the guide average.</p>
+<p class="muted">Every public contract our sweeps see across New Eden, compared against our swept typicals pricing model.</p>
 
 <div class="cs-hunts">
   <span class="cs-hunts-label">Quick hunts:</span>
@@ -217,7 +217,7 @@
       <td class="cs-c4">
         {{if .Value}}<div class="cs-cell-value">{{.Value}}</div>{{end}}
         {{if .PricedText}}<div class="cs-priced">{{.PricedText}}</div>{{else if .ValueNote}}<div class="cs-priced">{{.ValueNote}}</div>{{end}}
-        {{if .Spread}}<div class="cs-spread">{{.Spread}} spread</div>{{end}}
+        {{if .Spread}}<div class="cs-spread{{if .SpreadNeg}} neg{{end}}">{{.Spread}} spread</div>{{end}}
       </td>
       <td class="cs-c5">
         <button type="button" class="cs-copy cs-rowcopy" data-copy="{{.CopyText}}" aria-label="Copy contract link" title="Copy contract link">⧉</button>
@@ -278,7 +278,7 @@
       <div class="cs-dhead"><span class="cs-dhead-t dim">Deal Execution Summary</span></div>
       <div class="cs-srow"><span class="cs-sk">Asking Price:</span><span class="cs-sv">{{.SumAsking}}</span></div>
       {{if .SumValue}}<div class="cs-srow"><span class="cs-sk">EveSynapse Value:</span><span class="cs-sv">{{.SumValue}}</span></div>{{end}}
-      {{if .SumSpread}}<div class="cs-srow sp"><span class="cs-sk">Estimated Spread:</span><span class="cs-sv">{{.SumSpread}}</span></div>{{end}}
+      {{if .SumSpread}}<div class="cs-srow sp{{if .SumSpreadNeg}} neg{{end}}"><span class="cs-sk">Estimated Spread:</span><span class="cs-sv">{{.SumSpread}}</span></div>{{end}}
       <div class="cs-dfoot"><div class="cs-dfoot-in"><span class="cs-dfoot-note">In-game link ready for EVE Notepad</span>
         <button type="button" class="btn small cs-copy" data-copy="{{.CopyText}}">⧉ Copy Contract Link</button></div></div>
     </div>

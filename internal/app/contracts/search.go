@@ -555,7 +555,8 @@ type searchRow struct {
 	PricedText  string // "priced N of M lines", appraised rows
 	IsDeal      bool
 	DealPct     int    // discount percent against our value, when IsDeal
-	Spread      string // "+N" ISK the value beats the ask by, "" when none
+	Spread      string // "+N" ISK the value beats the ask by, "-N" when it falls short, "" when none
+	SpreadNeg   bool   // the spread is a shortfall, painted in the negative tone
 	PricedLine  int64
 	TotalLine   int64
 	Location    module.PlaceRef
@@ -1183,6 +1184,13 @@ func (app *mod) searchRow(ctx context.Context, memo map[int64]module.PlaceRef, r
 		}
 		if !out.Courier && costKnown && row.OfferedValue > cost {
 			out.Spread = "+" + formatShortISK(row.OfferedValue-cost)
+		} else if !out.Courier && costKnown && row.PricedLines > 0 && row.OfferedValue < cost {
+			// A shortfall shows too, in the negative
+			// tone: the value column's honesty runs both
+			// ways. (PricedLines guards the unpriced row,
+			// whose stored value is no figure at all.)
+			out.Spread = "-" + formatShortISK(cost-row.OfferedValue)
+			out.SpreadNeg = true
 		}
 	}
 	if out.Courier {
@@ -1395,6 +1403,10 @@ type abyssalRoll struct {
 	Delta   string
 	Good    bool
 	HasBase bool
+	// Changed is the stored roll's own verdict that it
+	// moved the stat: the rolled value differs from the
+	// base module's, read where both figures are in hand.
+	Changed bool
 	Pct     int // percentile in the mutaplasmid's band, 0..100
 	HasPct  bool
 }
@@ -1577,10 +1589,11 @@ type panelView struct {
 	// The execution summary (the right card when there is
 	// no telemetry): the effective ask, our value, and the
 	// spread between them where both are honestly known.
-	SumAsking string
-	SumValue  string
-	SumSpread string // "930.0M ISK (16.7%)", "" when not computable
-	CopyText  string
+	SumAsking    string
+	SumValue     string
+	SumSpread    string // "930.0M ISK (16.7%)", "" when not computable
+	SumSpreadNeg bool   // the spread is a shortfall, painted in the negative tone
+	CopyText     string
 }
 
 func (app *mod) buildPanelView(ctx context.Context, id int64) (*panelView, bool) {
@@ -1667,6 +1680,13 @@ func (app *mod) buildPanelView(ctx context.Context, id int64) (*panelView, bool)
 			tv.EstRange = low + " – " + formatShortISK(firstAbyssal.EstHighNum)
 		}
 		for _, rl := range firstAbyssal.Rolls {
+			// The attributes card lists only the rolls
+			// that moved their stat: an attribute left at
+			// its base value is not a mutation worth a
+			// row. (The detail page keeps every roll.)
+			if rl.HasBase && !rl.Changed {
+				continue
+			}
 			tr := telemetryRoll{Name: rl.Name, Good: rl.Good, Pct: rl.Pct, HasPct: rl.HasPct}
 			tr.Figure = rl.Value
 			if rl.HasBase && rl.Delta != "" {
@@ -1710,9 +1730,21 @@ func (app *mod) buildPanelView(ctx context.Context, id int64) (*panelView, bool)
 				cost += row.WantValue
 			}
 		}
-		if costKnown && row.OfferedValue > cost {
+		if costKnown && row.OfferedValue != cost {
+			// The spread runs both ways: a value under
+			// the cost is a shortfall, signed and painted
+			// in the negative tone, never quietly dropped.
 			spread := row.OfferedValue - cost
-			out.SumSpread = fmt.Sprintf("%s (%.1f%%)", formatShortISK(spread), spread/row.OfferedValue*100)
+			figure := formatShortISK(spread)
+			if spread < 0 {
+				figure = "-" + formatShortISK(-spread)
+				out.SumSpreadNeg = true
+			}
+			if row.OfferedValue > 0 {
+				out.SumSpread = fmt.Sprintf("%s (%.1f%%)", figure, spread/row.OfferedValue*100)
+			} else {
+				out.SumSpread = figure
+			}
 		}
 	}
 
@@ -2099,6 +2131,7 @@ func (app *mod) abyssalPanel(ctx context.Context, ab db.AbyssalItem) *abyssalPan
 		if bv, ok := base[rl.AttributeID]; ok {
 			row.HasBase = true
 			row.Base = formatAttrValue(bv)
+			row.Changed = rl.Value != bv
 			if bv != 0 {
 				pct := (rl.Value - bv) / absf(bv) * 100
 				row.Delta = fmt.Sprintf("%+.1f%%", pct)

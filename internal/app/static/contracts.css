@@ -64,10 +64,17 @@
    segment takes the accent fill, like .seg > .on. */
 .cs-types { flex: none; }
 /* The shared .seg centers each segment's line box, but
-   the display face's line box is taller than its glyphs
-   and leaves them sitting high; tightening the line box
-   to the glyphs centers the labels in their cells. */
-.cs-types > * { line-height: 1; }
+   the display face's ink rides high in its line box, so
+   the labels read as sitting high in their cells. The
+   tightened line box plus two pixels of padding traded
+   from bottom to top centers the glyphs themselves.
+   (Scoped to the pills: the results' own .cs-pill rule
+   below would otherwise win the padding on a later,
+   equal-specificity shorthand.) */
+.cs-types > .cs-pill {
+  line-height: 1;
+  padding-top: calc(0.1rem + 2px); padding-bottom: calc(0.1rem - 2px);
+}
 .cs-pill { position: relative; cursor: pointer; }
 .cs-pill input { position: absolute; opacity: 0; pointer-events: none; }
 .cs-pill:has(> input:checked) { background: var(--accent); color: #16100b; }

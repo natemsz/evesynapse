@@ -600,10 +600,10 @@ type attrOption struct {
 // roll's position. The rolls themselves render inline in
 // the expansion drawer and in full on the contract page.
 type rowAbyssal struct {
-	Score    int // roll score 0..100, valid when HasScore
-	HasScore bool
-	TopPct   int // 100 minus the primary roll's percentile, valid when HasTop
-	HasTop   bool
+	Score       int // roll score 0..100, valid when HasScore
+	HasScore    bool
+	Position    string // the primary roll's position ("Top 3%" / "Bottom 30%"), valid when HasPosition
+	HasPosition bool
 }
 
 // filterChip is one active-filter pill over the results:
@@ -1265,6 +1265,21 @@ func (app *mod) pageAbyssalData(ctx context.Context, items []db.PubContractItem)
 	return data
 }
 
+// abyssalPositionText words a primary roll's direction-
+// adjusted percentile (0..1, 1 = the best roll its
+// mutaplasmid could produce) as the share of the band the
+// roll sits in. Above the median that share is the elite
+// fraction above the roll ("Top 3%"); at or below the
+// median it is the fraction at or below it ("Bottom
+// 30%") -- a weak roll never gets to wear the word "top".
+func abyssalPositionText(p float64) string {
+	pct := int(p*100 + 0.5)
+	if pct > 50 {
+		return fmt.Sprintf("Top %d%%", 100-pct)
+	}
+	return fmt.Sprintf("Bottom %d%%", pct)
+}
+
 // rowAbyssalFor reads one stored abyssal row for a search
 // result's pill: the roll score, and the primary roll's
 // position -- the best percentile among the family's
@@ -1294,8 +1309,8 @@ func (app *mod) rowAbyssalFor(ctx context.Context, ab db.AbyssalItem, data *page
 			}
 		}
 		if best >= 0 {
-			out.TopPct = 100 - int(best*100+0.5)
-			out.HasTop = true
+			out.Position = abyssalPositionText(best)
+			out.HasPosition = true
 		}
 	}
 	return out

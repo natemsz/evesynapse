@@ -22,6 +22,7 @@ package appraise
 // rolls are not on record.
 
 import (
+	"fmt"
 	"regexp"
 	"strconv"
 	"strings"
@@ -374,6 +375,64 @@ func parseListLine(raw string) (pasteLine, bool) {
 	}
 	pl.Candidates = candidates(name, qty, explicit)
 	return pl, true
+}
+
+var (
+	reMoonPercent  = regexp.MustCompile(`^(.+?)[\s\t]+(\d+(?:\.\d+)?)%$`)
+	reMoonFraction = regexp.MustCompile(`^(.+?)\t(0\.\d+)$`)
+)
+
+// moonScanLines detects a moon survey paste -- every
+// content line an ore name with its survey share, as a
+// percentage ("Veldspar 45.2%") or a tab-separated fraction
+// ("Veldspar\t0.452") -- and rewrites it as an item list
+// appraising each ore at its share of 10,000 units, so the
+// shares price in proportion at whatever basis is selected.
+// ok is false when the paste is not a moon survey.
+func moonScanLines(text string) (string, bool) {
+	var out []string
+	var total float64
+	seen := 0
+	for _, raw := range strings.Split(text, "\n") {
+		line := strings.TrimSpace(strings.TrimSuffix(raw, "\r"))
+		if line == "" || strings.HasPrefix(line, "#") || strings.HasPrefix(line, "//") {
+			continue
+		}
+		if strings.EqualFold(line, "material\tquantity") || strings.EqualFold(line, "material quantity") {
+			continue
+		}
+		var name string
+		var share float64
+		if m := reMoonPercent.FindStringSubmatch(line); m != nil {
+			v, err := strconv.ParseFloat(m[2], 64)
+			if err != nil {
+				return "", false
+			}
+			name, share = strings.TrimSpace(m[1]), v/100
+		} else if m := reMoonFraction.FindStringSubmatch(line); m != nil {
+			v, err := strconv.ParseFloat(m[2], 64)
+			if err != nil {
+				return "", false
+			}
+			name, share = strings.TrimSpace(m[1]), v
+		} else {
+			return "", false
+		}
+		if name == "" || share <= 0 || share > 1 {
+			return "", false
+		}
+		seen++
+		total += share
+		qty := int64(share*10000 + 0.5)
+		if qty < 1 {
+			qty = 1
+		}
+		out = append(out, fmt.Sprintf("%s x %d", name, qty))
+	}
+	if seen == 0 || total < 0.9 || total > 1.1 {
+		return "", false
+	}
+	return strings.Join(out, "\n"), true
 }
 
 // parsePaste parses a whole line-list paste. EFT pastes are

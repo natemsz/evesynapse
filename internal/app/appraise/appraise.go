@@ -114,7 +114,17 @@ type resolvedLine struct {
 func (app *page) computeAppraisal(ctx context.Context, input string, basis pricingBasis) (*snapshot, error) {
 	snap := &snapshot{Basis: basis.snapshot()}
 	var resolved []resolvedLine
-	if first, ok := firstContentLine(input); ok && fitview.EftHeaderRe.MatchString(first) {
+	if moon, ok := moonScanLines(input); ok {
+		parsed := parsePaste(moon)
+		lines, unresolved, err := app.resolveList(ctx, parsed)
+		if err != nil {
+			return nil, err
+		}
+		resolved = lines
+		snap.Unresolved = unresolved
+		snap.Bad = parsed.Bad
+		snap.Notes = append(snap.Notes, "Moon survey: each ore is appraised at its survey share of 10,000 units, so the total is the value of 10,000 units of this moon's ore at the selected basis.")
+	} else if first, ok := firstContentLine(input); ok && fitview.EftHeaderRe.MatchString(first) {
 		lines, unresolved, notes, err := app.resolveEFT(ctx, input)
 		if err != nil {
 			return nil, err

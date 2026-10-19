@@ -81,21 +81,25 @@ type Config struct {
 	discordClientID, discordClientSecret string
 	discordBotToken                      string
 
-	addr            string         // listen address
-	databaseURL     string         // Postgres connection URL (DATABASE_URL)
-	eveClientID     string         // EVE SSO application client ID
-	eveClientSecret string         // EVE SSO application client secret
-	eveCallbackURL  string         // OAuth2 redirect URI registered with CCP
-	eveRevokeURL    string         // EVE SSO token revocation endpoint (EVE_SSO_REVOKE_URL)
-	devLogin        bool           // DEV_LOGIN=1: register the /dev-login route
-	sdeBaseURL      string         // EVE SDE CSV dump base URL (Fuzzwork by default)
-	fuzzworkBaseURL string         // Fuzzwork market aggregate base URL (fallback prices)
-	adminCharIDs    map[int64]bool // EVE_ADMIN_CHARACTER_IDS (comma-separated)
-	tokenKey        string         // TOKEN_ENCRYPTION_KEY: encrypts stored EVE tokens ("" = stored as they are)
-	signUp          signUpPolicy   // EVE_ALLOWED_*_IDS: who may create an account (empty = anyone)
-	esiContact      string         // ESI_CONTACT: how CCP can reach the operator, sent in the User-Agent
-	logLevel        string         // LOG_LEVEL: debug, info (default), warn or error
-	logFormat       string         // LOG_FORMAT: text (default) or json
+	addr              string         // listen address
+	databaseURL       string         // Postgres connection URL (DATABASE_URL)
+	eveClientID       string         // EVE SSO application client ID
+	eveClientSecret   string         // EVE SSO application client secret
+	eveCallbackURL    string         // OAuth2 redirect URI registered with CCP
+	eveRevokeURL      string         // EVE SSO token revocation endpoint (EVE_SSO_REVOKE_URL)
+	devLogin          bool           // DEV_LOGIN=1: register the /dev-login route
+	sdeBaseURL        string         // EVE SDE CSV dump base URL (Fuzzwork by default)
+	fuzzworkBaseURL   string         // Fuzzwork market aggregate base URL (fallback prices)
+	adminCharIDs      map[int64]bool // EVE_ADMIN_CHARACTER_IDS (comma-separated)
+	tokenKey          string         // TOKEN_ENCRYPTION_KEY: encrypts stored EVE tokens ("" = stored as they are)
+	tokenKeyProvider  string         // TOKEN_KEY_PROVIDER: where the token key comes from — env, http or none ("" = derive: a set TOKEN_ENCRYPTION_KEY means env, none set means none)
+	tokenKeyWrapped   string         // TOKEN_KEY_WRAPPED: the token key wrapped by the key service (http provider)
+	tokenKeyUnwrapURL string         // TOKEN_KEY_UNWRAP_URL: the key service's unwrap endpoint (http provider)
+	tokenKeyCred      string         // TOKEN_KEY_UNWRAP_CREDENTIAL: bearer credential for the unwrap endpoint (http provider)
+	signUp            signUpPolicy   // EVE_ALLOWED_*_IDS: who may create an account (empty = anyone)
+	esiContact        string         // ESI_CONTACT: how CCP can reach the operator, sent in the User-Agent
+	logLevel          string         // LOG_LEVEL: debug, info (default), warn or error
+	logFormat         string         // LOG_FORMAT: text (default) or json
 
 	// Trade ideas (tradeideas.go): a model asked about the Forge
 	// spread-scanner rows every so often. Meta's Muse Wonder when
@@ -274,6 +278,10 @@ func LoadConfig() (Config, error) {
 		fuzzworkBaseURL:     getenvDefault("EVE_FUZZWORK_BASE_URL", defaultFuzzworkBaseURL),
 		adminCharIDs:        parseAdminCharIDs(os.Getenv("EVE_ADMIN_CHARACTER_IDS")),
 		tokenKey:            os.Getenv("TOKEN_ENCRYPTION_KEY"),
+		tokenKeyProvider:    os.Getenv("TOKEN_KEY_PROVIDER"),
+		tokenKeyWrapped:     os.Getenv("TOKEN_KEY_WRAPPED"),
+		tokenKeyUnwrapURL:   os.Getenv("TOKEN_KEY_UNWRAP_URL"),
+		tokenKeyCred:        os.Getenv("TOKEN_KEY_UNWRAP_CREDENTIAL"),
 		signUp:              loadSignUpPolicy(os.Getenv),
 		esiContact:          os.Getenv("ESI_CONTACT"),
 		cloudflareAccountID: strings.TrimSpace(os.Getenv("CLOUDFLARE_ACCOUNT_ID")),

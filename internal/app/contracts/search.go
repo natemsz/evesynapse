@@ -532,13 +532,13 @@ type searchRow struct {
 	Wanted     []searchLine
 	// The contents cell shows at most five lines,
 	// offered first, then wanted. ShownOffered and
-	// ShownWanted are the visible head; ExtraOffered
-	// and ExtraWanted render in a hidden block the
-	// "(show N more items)" line reveals in place.
+	// ShownWanted are the visible head; the cell never
+	// renders the remainder -- the "And N more items"
+	// line under the head is a control that toggles
+	// the row's drawer, where the full contents list.
+	// ExtraCount is the number of lines past the cap.
 	ShownOffered []searchLine
 	ShownWanted  []searchLine
-	ExtraOffered []searchLine
-	ExtraWanted  []searchLine
 	ExtraCount   int
 	// The contents pill: at most one per row -- the abyssal
 	// pill when a mutated line carries a score, else the
@@ -1093,18 +1093,20 @@ func (app *mod) searchRow(ctx context.Context, memo map[int64]module.PlaceRef, r
 	}
 
 	// Split the contents at the cell cap: five lines
-	// visible, offered before wanted, the remainder
-	// behind the more-line.
+	// visible, offered before wanted; the rest of the
+	// lines only count toward the more-line -- the
+	// drawer carries the full list, not the cell.
 	const maxCellLines = 5
-	splitLines := func(lines []searchLine, budget int) (head, tail []searchLine) {
+	headLines := func(lines []searchLine, budget int) []searchLine {
 		if len(lines) <= budget {
-			return lines, nil
+			return lines
 		}
-		return lines[:budget], lines[budget:]
+		return lines[:budget]
 	}
-	out.ShownOffered, out.ExtraOffered = splitLines(out.Offered, maxCellLines)
-	out.ShownWanted, out.ExtraWanted = splitLines(out.Wanted, maxCellLines-len(out.ShownOffered))
-	out.ExtraCount = len(out.ExtraOffered) + len(out.ExtraWanted)
+	out.ShownOffered = headLines(out.Offered, maxCellLines)
+	out.ShownWanted = headLines(out.Wanted, maxCellLines-len(out.ShownOffered))
+	out.ExtraCount = len(out.Offered) + len(out.Wanted) -
+		len(out.ShownOffered) - len(out.ShownWanted)
 
 	// The row's mutated-line summary: the first offered
 	// singleton the corpus knows, if any.

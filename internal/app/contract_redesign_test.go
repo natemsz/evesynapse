@@ -574,9 +574,10 @@ func TestContractSearchNegativeSpread(t *testing.T) {
 
 // TestContractSearchContentsCap pins the contents cell's
 // five-line cap: offered lines first, then wanted, counted
-// together; the remainder renders server-side in the
-// hidden block behind the "(show N more items)" line the
-// cell's reveal click unhides.
+// together; the lines past the cap never render in the
+// cell at all -- the "And N more items" line under the
+// head is a drawer toggle (the drawer lists the full
+// contents), not an in-cell reveal.
 func TestContractSearchContentsCap(t *testing.T) {
 	tr := &openWindowTransport{}
 	app, conn, _ := buildCorpTestApp(t, tr)
@@ -621,15 +622,63 @@ func TestContractSearchContentsCap(t *testing.T) {
 
 	_, body := getAnon(t, app, "/contracts/search/")
 	mustContain(t, "contents cap", body,
-		"(show 3 more items)", "(show 2 more items)",
-		`<div class="cs-extralines" hidden>`)
-	if n := strings.Count(body, `<button type="button" class="cs-morelines">`); n != 2 {
-		t.Errorf("more-lines: got %d, want 2 (one per over-cap row)", n)
+		"And 3 more items", "And 2 more items")
+	// The overflow control is a drawer toggle, one per
+	// over-cap row, and nothing of the old in-cell reveal
+	// survives anywhere on the page.
+	if n := strings.Count(body, `<button type="button" class="cs-morelines" data-more-toggle aria-expanded="false">`); n != 2 {
+		t.Errorf("more-toggles: got %d, want 2 (one per over-cap row)", n)
 	}
-	// The hidden lines still render server-side: the
-	// eighth line's quantity (×18, unique to it) is in
-	// the page, inside the hidden block.
-	if !strings.Contains(body, "×18") {
-		t.Error("the eighth contents line did not render in the hidden block")
+	if strings.Contains(body, "cs-extralines") || strings.Contains(body, "(show ") {
+		t.Error("the page still carries the in-cell reveal markup")
+	}
+
+	// Row-scoped checks: the cell renders the five-line
+	// head only. rowChunk slices one result row (plus its
+	// empty drawer row) out of the results table.
+	rowChunk := func(id string) string {
+		t.Helper()
+		start := strings.Index(body, `data-contract="`+id+`"`)
+		if start < 0 {
+			t.Fatalf("row %s not in the results page", id)
+		}
+		rest := body[start:]
+		if next := strings.Index(rest[len(`data-contract="`):], `data-contract="`); next >= 0 {
+			rest = rest[:next+len(`data-contract="`)]
+		}
+		if end := strings.Index(rest, "</tbody>"); end >= 0 {
+			rest = rest[:end]
+		}
+		return rest
+	}
+	// Eight offered lines: quantities x11..x18, the head
+	// stops at x15 and the remainder stays out of the cell
+	// entirely (the drawer panel carries it instead).
+	bulk := rowChunk("7010")
+	if !strings.Contains(bulk, "×15") || !strings.Contains(bulk, "And 3 more items") {
+		t.Error("the bulk row lost its visible head or its more-line")
+	}
+	for _, hiddenQty := range []string{"×16", "×17", "×18"} {
+		if strings.Contains(bulk, hiddenQty) {
+			t.Errorf("the bulk row's cell renders the capped line %s", hiddenQty)
+		}
+	}
+	// The mixed row shares the one budget: three offered
+	// and two wanted show, the last two wanted lines
+	// (x33, x34) stay out of the cell.
+	mixed := rowChunk("7011")
+	if !strings.Contains(mixed, "And 2 more items") {
+		t.Error("the mixed row lost its more-line")
+	}
+	for _, hiddenQty := range []string{"×33", "×34"} {
+		if strings.Contains(mixed, hiddenQty) {
+			t.Errorf("the mixed row's cell renders the capped line %s", hiddenQty)
+		}
+	}
+	// The full contents still live one click away: the
+	// drawer panel for the bulk contract lists all eight.
+	_, panel := getAnon(t, app, "/contracts/search/7010/panel")
+	if !strings.Contains(panel, "×18") {
+		t.Error("the bulk contract's drawer panel lost its eighth line")
 	}
 }

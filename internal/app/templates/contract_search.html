@@ -207,7 +207,7 @@
         </div>{{end}}
         {{if .Courier}}<div class="cs-itemline"><span class="cs-line-name">Sealed Plastic Wrap ({{.VolumeText}})</span><span class="cs-qty">×1</span></div>{{end}}
         {{if and (not .Offered) (not .Wanted) (not .Courier)}}<div class="cs-itemline"><span class="muted">Contents not fetched yet</span></div>{{end}}
-        {{if and .Abyssal (or .Abyssal.HasScore .Abyssal.HasTop)}}<span class="cs-pill ab">▦ Roll Score: {{.Abyssal.Score}}/100{{if .Abyssal.HasTop}} <span>•</span> <span>Top {{.Abyssal.TopPct}}%</span>{{end}}</span>{{else if .BPPillKind}}<span class="cs-pill bp">▦ {{.BPPillKind}} <span>•</span> <span>{{.BPPillSpecs}}</span></span>{{else if .Courier}}<span class="cs-pill co">🚚 {{.VolumeText}}{{if .IskPerM3}} <span>•</span> <span>{{.IskPerM3}} ISK/m³</span>{{end}}</span>{{end}}
+        {{if and .Abyssal (or .Abyssal.HasScore .Abyssal.HasPosition)}}<span class="cs-pill ab">▦ Roll Score: {{.Abyssal.Score}}/100{{if .Abyssal.HasPosition}} <span>•</span> <span>{{.Abyssal.Position}}</span>{{end}}</span>{{else if .BPPillKind}}<span class="cs-pill bp">▦ {{.BPPillKind}} <span>•</span> <span>{{.BPPillSpecs}}</span></span>{{else if .Courier}}<span class="cs-pill co">🚚 {{.VolumeText}}{{if .IskPerM3}} <span>•</span> <span>{{.IskPerM3}} ISK/m³</span>{{end}}</span>{{end}}
       </td>
       <td class="cs-c3">
         <div class="cs-cell-label">{{.PriceLabel}}</div>

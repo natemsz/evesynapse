@@ -106,6 +106,9 @@ func (app *tool) handleFittings(w http.ResponseWriter, r *http.Request) {
 		app.attachFitEditor(ctx, r, data, nil, db.Character{}, nil)
 		if data.FitEditor != nil {
 			data.FitEditor.Anonymous = app.deps.UserID(ctx) == 0
+			if data.FitEditor.Anonymous {
+				data.FitEditor.AnonFits = app.anonFitHistory(ctx, r)
+			}
 		}
 		app.deps.Render(ctx, w, http.StatusOK, "fittings.html", data)
 		return

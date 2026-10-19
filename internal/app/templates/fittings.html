@@ -8,7 +8,12 @@
 {{if .FitEditor}}
 <section class="foldable" id="fit-editor">
 <h3>Build a fitting</h3>
-{{if .FitEditor.Anonymous}}<p class="hint">Fitting with All-V skills. <a href="/auth/link">Sign in with EVE SSO</a> to save fits and use your characters' real skills and inventory.</p>{{end}}
+{{if .FitEditor.Anonymous}}<p class="hint">Fitting with All-V skills. <a href="/auth/link">Sign in with EVE SSO</a> to save fits and use your characters' real skills and inventory.</p>
+<p class="hint"><button type="button" class="btn" id="fit-share-anon">Share this fit by link</button> <span id="fit-share-link"></span></p>
+{{if .FitEditor.AnonFits}}<div class="fit-anonfits"><h4>Your shared fits</h4><ul>
+{{range .FitEditor.AnonFits}}<li><a href="{{.ShareURL}}">{{.Name}}</a> <small>{{.ShipName}} · {{.Updated}}</small> <form method="post" action="{{.DeleteURL}}" class="inline"><button type="submit" class="btn small">Delete</button></form></li>
+{{end}}</ul><p><small>Fits you share while signed out are kept for 180 days after they were last viewed, then deleted.</small></p></div>{{end}}
+{{end}}
 <div class="fit-head searchpanel">
   <span class="searchwrap fit-searchwrap">
     <input type="text" id="fit-ship-search" value="{{.FitEditor.Sim.ShipName}}" placeholder="Search ships…" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="fit-ship-suggest" aria-autocomplete="list">

@@ -147,7 +147,7 @@ ON CONFLICT (fit_id) DO UPDATE SET
 SELECT lf.id, lf.items_json, lf.updated_at
 FROM local_fittings lf
 LEFT JOIN public_fit_pages p ON p.fit_id = lf.id
-WHERE lf.is_public AND NOT lf.is_draft
+WHERE (lf.is_public OR lf.is_anonymous) AND NOT lf.is_draft
   AND (p.fit_id IS NULL
     OR p.fit_updated_at <> lf.updated_at
     OR p.sde_stamp <> sqlc.arg(sde_stamp)::text

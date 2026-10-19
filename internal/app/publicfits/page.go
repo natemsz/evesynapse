@@ -483,6 +483,12 @@ type publicFitView struct {
 	StarCount   int64
 	MyStars     int64
 	PageURL     string
+	// Shared marks a link-only anonymous fit (never listed in
+	// the browser, no ratings); CanDelete offers its creator
+	// the delete control.
+	Shared    bool
+	CanDelete bool
+	DeleteURL string
 	// Preparing: the stored page for this version of the fit is
 	// not built yet (the worker builds it within a cycle or two).
 	Preparing    bool
@@ -575,6 +581,72 @@ func (app *page) handlePublicFitPage(w http.ResponseWriter, r *http.Request) {
 		Title:        row.Name + " (" + ship + ")",
 		Description:  blurb,
 		CanonicalURL: view.PageURL,
+	})
+	data.PublicFit = view
+	app.deps.Render(ctx, w, http.StatusOK, "fit_public.html", data)
+}
+
+// handleSharedFitPage renders one link-only anonymous fit
+// from its share token: the same read-only public fit view a
+// signed-in share gets, never listed in the browser. Viewing
+// it refreshes the fit's last-viewed time for its expiry.
+func (app *page) handleSharedFitPage(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	data := &PageData{ShellData: app.deps.PublicShell(ctx)}
+	token := chi.URLParam(r, "token")
+	row, err := app.queries.GetFittingByShareToken(ctx, token)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	if err := app.queries.TouchFittingByToken(ctx, token); err != nil {
+		logging.Errorf("shared fit: touch: %v", err)
+	}
+	var doc fitDoc
+	if json.Unmarshal([]byte(row.ItemsJson), &doc) != nil {
+		http.NotFound(w, r)
+		return
+	}
+	ship := app.deps.TypeNameOrID(ctx, row.ShipTypeID)
+	if doc.ShipTypeID == 0 {
+		doc.ShipTypeID = row.ShipTypeID
+	}
+	body := app.deps.PublicFitBody(ctx, row.ID, row.UpdatedAt, row.ItemsJson, row.ShipTypeID)
+	sharePath := "/fittings/share/" + token + "/"
+	card := module.PublicFitCard{
+		ID: row.ID, Name: row.Name, Ship: ship, ShipTypeID: row.ShipTypeID,
+		Views: row.ViewCount, Price: body.PriceRaw, PriceKnown: body.PriceKnown,
+		Updated: row.UpdatedAt, FitURL: sharePath, Tags: doc.Tags,
+	}
+	if body.PriceKnown {
+		card.PriceLine = body.PriceTotal + " ISK"
+	}
+	view := &publicFitView{
+		Card: card, Description: doc.Description,
+		PageURL: app.deps.PublicPageURL(card.FitURL),
+		Shared:  true,
+	}
+	view.Sections, view.Sim, view.EFT, view.Preparing = body.Sections, body.Sim, body.EFT, body.Preparing
+	if view.PageURL != "" {
+		view.ShareDiscord = row.Name + " (" + ship + ") — " + view.PageURL
+		view.ShareReddit = "https://www.reddit.com/submit?url=" + url.QueryEscape(view.PageURL) + "&title=" + url.QueryEscape(row.Name+" ("+ship+")")
+	}
+	// The creator is whoever's browser holds the fitting
+	// history cookie with this token: they alone see delete.
+	if app.deps.UserID(ctx) == 0 {
+		if c, err := r.Cookie("evesynapse-fits"); err == nil && strings.Contains(c.Value, token) {
+			// The cookie is HMAC-signed by the fitting side;
+			// presence of the token in a cookie the server
+			// issued is checked properly there on delete.
+			// Here it only gates showing the control, and the
+			// delete itself re-verifies the signature.
+			view.CanDelete = true
+			view.DeleteURL = "/fittings/share/" + token + "/delete"
+		}
+	}
+	data.HeadMeta = app.deps.HeadMeta(module.PageMeta{
+		Title:       row.Name + " (" + ship + ")",
+		Description: ship + " fitting shared by link.",
 	})
 	data.PublicFit = view
 	app.deps.Render(ctx, w, http.StatusOK, "fit_public.html", data)

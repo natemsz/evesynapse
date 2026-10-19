@@ -4,7 +4,7 @@
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
 
 {{with .PublicFit}}
-<p class="browse-back"><a href="/fittings/public/">← Public fits</a></p>
+{{if not .Shared}}<p class="browse-back"><a href="/fittings/public/">← Public fits</a></p>{{end}}
 <section class="card page-card">
 <div class="fit-pubhead">
   <div class="fit-pubmeta">
@@ -14,7 +14,10 @@
   </div>
   <div class="fit-pubrate">
     {{if .StarCount}}<p class="fit-pubstars"><span class="fit-pubstars-num">{{printf "%.1f" .AvgStars}} ★</span> <small>{{.StarCount}} rating{{if ne .StarCount 1}}s{{end}}{{if .MyStars}} · you rated {{.MyStars}}★{{end}}</small></p>{{else}}<p class="fit-pubstars"><small>No ratings yet.</small></p>{{end}}
-    {{if $.LoggedIn}}
+    {{if .Shared}}
+    <p class="hint">Shared by link. Anyone with the link can view this fit; it is not listed in the public browser.</p>
+    {{if .CanDelete}}<form method="post" action="{{.DeleteURL}}"><button type="submit" class="btn">Delete this fit</button></form>{{end}}
+    {{else if $.LoggedIn}}
     <form method="post" action="{{.Card.FitURL}}rate" class="fit-rateform">
       <label>Rate this fit <select name="stars" aria-label="Stars">
         <option value="5">5 ★</option>
@@ -60,7 +63,7 @@
 </p>
 {{if .EFT}}<pre id="fit-eft">{{.EFT}}</pre>{{end}}
 
-{{if .Card.Mine}}<p class="hint">This is your fit. Open it in the <a href="/fittings/?local={{.Card.ID}}#fit-editor">fitting tool</a> to edit it; saving updates this page.</p>{{else}}<p class="hint">Open in the <a href="/fittings/?public={{.Card.ID}}#fit-editor">fitting tool</a> to simulate it with your skills or make your own copy.</p>{{end}}
+{{if .Shared}}<p class="hint">This fit was shared by link and is read-only here.</p>{{else if .Card.Mine}}<p class="hint">This is your fit. Open it in the <a href="/fittings/?local={{.Card.ID}}#fit-editor">fitting tool</a> to edit it; saving updates this page.</p>{{else}}<p class="hint">Open in the <a href="/fittings/?public={{.Card.ID}}#fit-editor">fitting tool</a> to simulate it with your skills or make your own copy.</p>{{end}}
 </section>
 {{end}}
 {{end}}

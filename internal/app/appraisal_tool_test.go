@@ -649,6 +649,21 @@ func postAppraiseCookies(t *testing.T, app *Application, cookies []*http.Cookie,
 	return rec.Code, rec.Header()
 }
 
+// withoutHubStrip cuts the hub-comparison paragraph out of a
+// rendered appraisal page, for assertions about the appraisal
+// itself rather than the strip's per-hub totals.
+func withoutHubStrip(body string) string {
+	start := strings.Index(body, `<p class="ap-hubstrip">`)
+	if start < 0 {
+		return body
+	}
+	end := strings.Index(body[start:], "</p>")
+	if end < 0 {
+		return body
+	}
+	return body[:start] + body[start+end+len("</p>"):]
+}
+
 func TestAppraisalToolPricingBasis(t *testing.T) {
 	tr := &countingTransport{}
 	app, conn, q := buildCorpTestApp(t, tr)
@@ -686,7 +701,10 @@ func TestAppraisalToolPricingBasis(t *testing.T) {
 		"items": {"Tritanium x 100"}, "hub": {"10000030"}, "mode": {"sell"}, "pct": {"100"},
 	})
 	mustContain(t, "unpriced at hub", body, "Not priced", "Priced 0 of 1 lines")
-	if strings.Contains(body, "650.00") {
+	// The hub-comparison strip legitimately prints The
+	// Forge's total for these same lines; the appraisal itself
+	// must not have used it. Judge the page without the strip.
+	if strings.Contains(withoutHubStrip(body), "650.00") {
 		t.Error("a Heimatar appraisal silently used The Forge's price")
 	}
 
@@ -850,6 +868,55 @@ func TestAppraisalToolMultisellExport(t *testing.T) {
 	body, _, _ := postAnonAppraisal(t, app, url.Values{"items": {"Tritanium x 10\nPyerite x 10"}})
 	mustContain(t, "multisell export", body,
 		"Copy multi-sell list", "Tritanium 6.50", "Pyerite 9.25")
+}
+
+func TestAppraisalToolHubComparisonStrip(t *testing.T) {
+	tr := &countingTransport{}
+	app, conn, q := buildCorpTestApp(t, tr)
+	seedAppraisalTool(t, conn, q)
+	ctx := context.Background()
+	if _, err := conn.ExecContext(ctx, `INSERT INTO market_region_stats (region_id, type_id, typical_sell, typical_buy, updated_at)
+		VALUES (10000043, 34, 10, 8, $1)`, time.Now().UTC().Add(-time.Hour)); err != nil {
+		t.Fatalf("seed domain stats: %v", err)
+	}
+
+	// The share page prices the same lines at every hub's
+	// typical sell in one glance: Forge 650, Domain 1,000,
+	// the unswept hubs at no typical (estimate/fallback-free
+	// for Tritanium, so 0 of the typical total shows as 0.00
+	// only where nothing prices -- here the strip still lists
+	// every hub).
+	_, _, share := postAnonAppraisal(t, app, url.Values{"items": {"Tritanium x 100"}})
+	_, body := getAnon(t, app, share)
+	mustContain(t, "hub strip", body,
+		"At each hub's typical sell:", "The Forge 650.00 ISK", "Domain 1,000.00 ISK",
+		"Sinq Laison", "Heimatar", "Metropolis")
+}
+
+func TestAppraisalToolHubStripPricesCopiesAsCopies(t *testing.T) {
+	tr := &countingTransport{}
+	app, conn, q := buildCorpTestApp(t, tr)
+	seedAppraisalTool(t, conn, q)
+	ctx := context.Background()
+	if err := q.InsertBlueprintCopyMedian(ctx, db.InsertBlueprintCopyMedianParams{
+		TypeID: 7001, Runs: 5, MedianPrice: 42_000, SampleCount: 12, ComputedAt: time.Now().UTC().Add(-time.Hour),
+	}); err != nil {
+		t.Fatalf("seed copy median: %v", err)
+	}
+
+	// The strip's Forge cell totals the copy at its median,
+	// never at the original's 1,000,000 typical.
+	_, _, share := postAnonAppraisal(t, app, url.Values{"items": {"Rifter Blueprint (BPC, ME 10, TE 20, 5 runs)"}})
+	_, body := getAnon(t, app, share)
+	mustContain(t, "hub strip copy", body, "The Forge 42,000.00 ISK")
+
+	// A copy with no median stays unpriced in every cell:
+	// its original's typical appears nowhere on the page.
+	_, _, share = postAnonAppraisal(t, app, url.Values{"items": {"Rifter Blueprint (BPC, ME 10, TE 20, 9 runs)"}})
+	_, body = getAnon(t, app, share)
+	if strings.Contains(body, "1,000,000.00") {
+		t.Error("hub strip priced a copy with no median at its original's typical")
+	}
 }
 
 func TestPublicFitEscapesUserText(t *testing.T) {

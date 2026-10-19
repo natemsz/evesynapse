@@ -63,6 +63,14 @@ type snapLine struct {
 	Note       string    `json:"note,omitempty"`
 	UnitVolume float64   `json:"unit_volume"`
 	LineVolume float64   `json:"line_volume"`
+	// The line's pricing identity, kept so a stored snapshot
+	// can be re-priced line-faithfully (the hub-comparison
+	// strip): a copy re-prices as a copy or not at all, an
+	// abyssal line from its item's estimate. Snapshots stored
+	// before these fields existed leave them zero.
+	ItemID int64 `json:"item_id,omitempty"`
+	Copy   bool  `json:"copy,omitempty"`
+	Runs   int64 `json:"runs,omitempty"`
 }
 
 // snapUnresolved is one pasted line no name candidate could
@@ -262,6 +270,11 @@ func (app *page) computeAppraisal(ctx context.Context, input string, basis prici
 	}
 	for i, ln := range agg {
 		sl := snapLine{TypeID: ln.TypeID, Name: ln.Name, Qty: ln.Qty, Tier: module.AppraisalTierUnpriced, Note: ln.Note}
+		sl.ItemID = ln.ItemID
+		if ln.Facts.HasFacts && ln.Facts.Copy {
+			sl.Copy = true
+			sl.Runs = ln.Facts.Runs
+		}
 		sl.UnitVolume = volumes[ln.TypeID]
 		sl.LineVolume = sl.UnitVolume * float64(ln.Qty)
 		snap.TotalVolume += sl.LineVolume
@@ -732,6 +745,7 @@ type resultView struct {
 	TierMix    string
 	BasisText  string // the pricing basis, worded for the page
 	Multisell  string // "<TypeName> <Price>" lines at this basis, for copying
+	HubStrip   []hubTotal
 	Basis      pricingBasis
 	Hubs       []hubOption // hub choices for the reprice form
 	RepriceURL string      // where the reprice form posts, when offered
@@ -881,6 +895,66 @@ func (app *page) saveAppraisal(ctx context.Context, userID int64, anonymous bool
 	return id, token, err
 }
 
+// hubTotal is one cell of the hub-comparison strip: the
+// appraisal's total at one hub's typical sell.
+type hubTotal struct {
+	Hub     string
+	Total   string
+	Current bool // the appraisal's own hub
+}
+
+// attachHubStrip prices the snapshot's lines at every hub's
+// typical sell (stored data only, one batched pass per hub)
+// and attaches the comparison strip to a rendered result.
+// Lines re-price with their pricing identity intact: a copy
+// counts its copy median (or nothing), an abyssal line its
+// item estimate — never the original type's market price.
+func (app *page) attachHubStrip(ctx context.Context, snap *snapshot, v *resultView) {
+	if snap == nil || len(snap.Lines) == 0 {
+		return
+	}
+	lines := make([]module.AppraisalLine, 0, len(snap.Lines))
+	var fixed float64
+	for _, ln := range snap.Lines {
+		// Snapshots stored before the line facts were kept
+		// cannot re-price their copy and abyssal lines (the
+		// core needs the copy's runs, the item's id); those
+		// tiers are basis-independent, so the snapshot's own
+		// value stands at every hub.
+		if !ln.Copy && ln.ItemID == 0 &&
+			(ln.Tier == module.AppraisalTierCopyMedian || ln.Tier == module.AppraisalTierAbyssal) {
+			fixed += ln.LineValue
+			continue
+		}
+		lines = append(lines, module.AppraisalLine{
+			TypeID: ln.TypeID, Quantity: ln.Qty, ItemID: ln.ItemID, Included: true,
+			BlueprintCopy: ln.Copy, Runs: ln.Runs,
+		})
+	}
+	basis := snap.Basis.basis()
+	for _, opt := range app.hubOptions(basis.RegionID) {
+		res, err := app.deps.AppraiseLinesWithBasis(ctx, lines, module.AppraisalBasis{
+			RegionID: opt.RegionID, Mode: module.AppraisalModeSell, Percent: 100,
+		})
+		if err != nil {
+			logging.Errorf("appraisal: hub strip %d: %v", opt.RegionID, err)
+			return
+		}
+		v.HubStrip = append(v.HubStrip, hubTotal{
+			Hub: opt.Name, Total: esi.FormatISK(res.OfferedValue + fixed), Current: opt.RegionID == basis.RegionID,
+		})
+	}
+}
+
+// storedSnapshot decodes a stored row's snapshot.
+func storedSnapshot(row db.UserAppraisal) *snapshot {
+	var snap snapshot
+	if err := json.Unmarshal(row.Snapshot, &snap); err != nil {
+		return nil
+	}
+	return &snap
+}
+
 // storedResult rebuilds a stored row's result view: the
 // snapshot renders verbatim, never repriced.
 func (app *page) storedResult(row db.UserAppraisal) (*resultView, error) {
@@ -961,6 +1035,7 @@ func (app *page) handleAppraisePage(w http.ResponseWriter, r *http.Request) {
 			if id, err := strconv.ParseInt(raw, 10, 64); err == nil && id > 0 {
 				if row, err := app.queries.GetUserAppraisal(ctx, db.GetUserAppraisalParams{ID: id, UserID: userID}); err == nil {
 					if res, err := app.storedResult(row); err == nil {
+						app.attachHubStrip(ctx, storedSnapshot(row), res)
 						res.OwnID = row.ID
 						res.ShareURL = "/market/appraise/s/" + row.ShareToken + "/"
 						res.RepriceURL = "/market/appraise/" + strconv.FormatInt(row.ID, 10) + "/reprice"
@@ -1087,6 +1162,7 @@ func (app *page) handleAppraiseShare(w http.ResponseWriter, r *http.Request) {
 		app.deps.Render(ctx, w, http.StatusInternalServerError, "market_appraise.html", data)
 		return
 	}
+	app.attachHubStrip(ctx, storedSnapshot(row), res)
 	res.Shared = true
 	res.ShareURL = "/market/appraise/s/" + row.ShareToken + "/"
 	res.RepriceURL = "/market/appraise/s/" + row.ShareToken + "/reprice"

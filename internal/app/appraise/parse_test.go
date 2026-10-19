@@ -189,8 +189,11 @@ func TestAggregateAndNotes(t *testing.T) {
 		t.Errorf("bare blueprint note = %q", agg[2].Note)
 	}
 	note := lineNote(resolvedLine{TypeID: 30001, Name: "Damage Control II", AbyssalBase: true})
-	if !strings.Contains(note, "Base item price") || !strings.Contains(note, "Contract Search") {
+	if !strings.Contains(note, "Base item price") || !strings.Contains(note, "without its link") {
 		t.Errorf("abyssal base note = %q", note)
+	}
+	if strings.Contains(note, "Contract Search") {
+		t.Errorf("abyssal base note = %q, must not imply mutated items cannot be appraised here", note)
 	}
 }
 

@@ -4,8 +4,10 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"evesynapse/internal/apptest"
+	db "evesynapse/internal/db/sqlc"
 )
 
 // The anonymous front door is the landing page: hero and heritage
@@ -21,9 +23,13 @@ func TestLandingAnonymous(t *testing.T) {
 	for _, want := range []string{
 		"Greater than the <span class=\"ld-amp\">sum of its parts.</span>",
 		"Rebuilt over <em>4 years</em>. Originating in <em>2013</em>. Built for <em>2026</em>.",
-		"href=\"/auth/login\"", // existing members sign in plainly
-		"href=\"/auth/link\"",  // new members link characters
-		"href=\"/planner/\"",   // the public industry face is the Build Planner
+		"href=\"/auth/login\"",        // existing members sign in plainly
+		"href=\"/auth/link\"",         // new members link characters
+		"href=\"/planner/\"",          // the public industry face is the Build Planner
+		"href=\"/contracts/search/\"", // the public contract search
+		"href=\"/market/appraise/\"",  // the public appraisal tool
+		"Appraisal",
+		"Contract Search",
 		"Fleet Overview",
 		"shown with sample data",
 		"Every tool in the box.",
@@ -68,6 +74,17 @@ func TestLandingAnonymous(t *testing.T) {
 	// No stored rows in the fixture: the strip hides entirely.
 	if strings.Contains(body, "NEW EDEN, RIGHT NOW") {
 		t.Error("strip rendered with no stored data behind it")
+	}
+	// The preview's alert cards are live data or nothing: with
+	// no snapshots stored, no cards render, and the old canned
+	// example alerts never come back.
+	if strings.Contains(body, "ld-brief") {
+		t.Error("alert cards rendered with no stored snapshots behind them")
+	}
+	for _, canned := range []string{"Skill queues empty", "Planetary extractors halted"} {
+		if strings.Contains(body, canned) {
+			t.Errorf("landing still shows the canned example alert %q", canned)
+		}
 	}
 	// The signed-in chrome never leaks onto the landing.
 	if strings.Contains(body, "sidebar") {
@@ -158,6 +175,70 @@ func TestLandingStripFromStoredRows(t *testing.T) {
 	}
 	if !strings.Contains(body, "syncing in the background") {
 		t.Error("landing does not say syncing in the background")
+	}
+}
+
+// With the global snapshots stored, the preview's alert cards
+// carry the live figures from those snapshots (an established
+// incursion with its boss up, the faction warfare front), and
+// the showcased fit is the newest PRICED public fit, showing
+// its stored price: the newer unpriced fit must not take the
+// slot and leave the "priced" claim empty.
+func TestLandingLiveAlertsAndPricedFit(t *testing.T) {
+	rig := apptest.Build(t, nil)
+	q := rig.Queries()
+	ctx := context.Background()
+	seedPublicSDE(t, rig.DB())
+
+	user, err := q.CreateUser(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC()
+	seedPublicFit(t, q, user.ID, "Newest Unpriced", 587, `{"typeId":1238,"qty":1}`, `"pvp"`, now)
+	pricedID := seedPublicFit(t, q, user.ID, "Priced Rifter", 587, `{"typeId":1238,"qty":1}`, `"pvp"`, now.Add(-time.Hour))
+	if _, err := rig.DB().ExecContext(ctx, `UPDATE local_fittings SET total_price = 2160000000 WHERE id = $1`, pricedID); err != nil {
+		t.Fatalf("price fit: %v", err)
+	}
+
+	snapshots := []db.UpsertGlobalSnapshotParams{
+		{Kind: "incursions", Payload: `[{"constellation_id":20000417,"faction_id":500019,"has_boss":true,"infested_solar_systems":[30000142,30000143,30000144],"influence":0.42,"staging_solar_system_id":30000142,"state":"established","type":"scout"}]`, FetchedAt: now, CachedUntil: now.Add(time.Hour), Etag: ""},
+		{Kind: "fw_systems", Payload: `[{"solar_system_id":30000142,"occupier_faction_id":500001,"owner_faction_id":500001,"contested":"contested","victory_points":10,"victory_points_threshold":100},{"solar_system_id":30000143,"occupier_faction_id":500001,"owner_faction_id":500002,"contested":"contested","victory_points":20,"victory_points_threshold":100},{"solar_system_id":30000144,"occupier_faction_id":500002,"owner_faction_id":500002,"contested":"vulnerable","victory_points":90,"victory_points_threshold":100},{"solar_system_id":30000145,"occupier_faction_id":500002,"owner_faction_id":500002,"contested":"uncontested","victory_points":0,"victory_points_threshold":100}]`, FetchedAt: now, CachedUntil: now.Add(time.Hour), Etag: ""},
+	}
+	for _, s := range snapshots {
+		if err := q.UpsertGlobalSnapshot(ctx, s); err != nil {
+			t.Fatalf("seed snapshot %s: %v", s.Kind, err)
+		}
+	}
+
+	code, body := apptest.GetPage(t, rig, nil, "/")
+	if code != 200 {
+		t.Fatalf("anonymous / status = %d", code)
+	}
+	for _, want := range []string{
+		"The alerts beneath it are live, read from stored data",
+		"sev-critical",
+		"Incursion in Constellation #20000417.",
+		"Sansha forces hold 3 systems at 42% influence.",
+		"The final-encounter boss is present.",
+		"Faction warfare.",
+		"2 systems contested and 1 vulnerable across the warzones.",
+		"Priced Rifter",
+		"2,160,000,000.00 ISK",
+		"priced from stored market data",
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("landing is missing live content %q", want)
+		}
+	}
+	for _, banned := range []string{
+		"Skill queues empty", "Planetary extractors halted",
+		"Newest Unpriced",   // the unpriced fit must not take the showcase
+		"Newest public fit", // the priced pick is not the newest fit
+	} {
+		if strings.Contains(body, banned) {
+			t.Errorf("landing unexpectedly shows %q", banned)
+		}
 	}
 }
 

@@ -45,12 +45,24 @@ body::before { filter: brightness(0.74) saturate(0.97) blur(2px); transform: sca
 
 .ld-preview { margin-top: 44px; padding: 20px 22px; }
 .ld-pv-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
-.ld-pv-head h3 { font-size: 19px; }
+.ld-pv-head h2 { font-size: 19px; margin: 1.4rem 0 0.15rem; }
 .ld-pv-head span { color: var(--faint, #8a7a66); font-size: 14px; }
 .ld-bar { display: block; width: 100%; height: 6px; margin-top: 8px; }
 .ld-bar-track { fill: rgba(255, 255, 255, 0.09); }
 .ld-bar-fill { fill: #f97116; }
 .ld-loop-2 { margin-top: 22px; }
+
+/* Accessibility on the landing: in-text links carry an
+   underline so they never rely on color alone (buttons keep the
+   site's plain treatment), and the preview's severity chips sit
+   on a solid dark backing so their labels hold AA contrast over
+   the bright sky behind the glass, with the critical chip's
+   pulse off for the same reason. */
+.ld-main a:not(.ld-btn), .ld-footer a { text-decoration: underline; }
+.ld-preview .brief-card .sev { background: rgba(26, 12, 7, 0.88); animation: none; }
+.ld-preview .brief-card.sev-critical .sev { color: #ffb3ab; }
+.ld-preview .brief-card.sev-warning .sev { color: #ffab5e; }
+.ld-preview .brief-card.sev-info .sev { color: #a9e4ff; }
 
 /* Product screenshots: real captures in a browser chrome frame,
    flat on the sky. The frame says "this is the actual product"
@@ -68,7 +80,7 @@ body::before { filter: brightness(0.74) saturate(0.97) blur(2px); transform: sca
 
 .ld-strip { margin-top: 22px; padding: 18px 22px; }
 .ld-strip-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
-.ld-strip-head h3 { font-size: 18px; letter-spacing: 0.06em; }
+.ld-strip-head h2 { font-size: 18px; letter-spacing: 0.06em; margin: 1.4rem 0 0.15rem; }
 .ld-live { color: var(--success); font-size: 13px; letter-spacing: 0.18em; }
 .ld-strip-note { color: var(--faint, #8a7a66); font-size: 13.5px; margin-left: auto; }
 .ld-strip-grid { display: grid; grid-template-columns: 1.25fr 1fr 1fr; gap: 16px; }

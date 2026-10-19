@@ -32,9 +32,10 @@ jobs:
         id: release_notes
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Via env, never interpolated into the script directly:
+          # a branch/tag name is untrusted input to a shell.
+          TAG_NAME: ${{ github.event.workflow_run.head_branch }}
         run: |
-          TAG_NAME="${{ github.event.workflow_run.head_branch }}"
-
           NOTES=$(gh api \
             -H "Accept: application/vnd.github+json" \
             "/repos/${{ github.repository }}/releases/tags/${TAG_NAME}" \

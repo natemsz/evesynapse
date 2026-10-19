@@ -53,6 +53,13 @@ func run(args []string, stdout, stderr io.Writer) int {
 			return app.RunRefresh(args[1:], cfg, stdout, stderr)
 		case "-push-keys":
 			return app.RunPushKeys(stdout, stderr)
+		case "-wrap-token-key":
+			cfg, err := app.LoadConfig()
+			if err != nil {
+				fmt.Fprintln(stderr, "evesynapse-dev:", err)
+				return 2
+			}
+			return app.RunWrapTokenKey(args[1:], cfg, stdout, stderr)
 		case "-h", "--help", "-help":
 			printUsage(stdout)
 			return 0
@@ -72,6 +79,7 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "  evesynapse-dev -update <url> <checksum> install a downloaded update and restart (a local file needs no checksum)")
 	fmt.Fprintln(w, "  evesynapse-dev -refresh                 refresh all cached data on next start (app must be stopped)")
 	fmt.Fprintln(w, "  evesynapse-dev -push-keys               print a new key pair for browser push, as lines for .env")
+	fmt.Fprintln(w, "  evesynapse-dev -wrap-token-key          wrap TOKEN_ENCRYPTION_KEY with the OCI KMS key; prints TOKEN_KEY_WRAPPED")
 }
 
 // serve mirrors the release entrypoint's serve, plus the dev

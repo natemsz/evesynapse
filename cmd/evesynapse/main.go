@@ -17,6 +17,10 @@
 //	                                   running server onto it
 //	evesynapse -push-keys              print a new key pair for browser
 //	                                   push, as lines to add to .env
+//	evesynapse -wrap-token-key         wrap TOKEN_ENCRYPTION_KEY with
+//	                                   the OCI KMS key (oci token key
+//	                                   provider setup; prints the
+//	                                   TOKEN_KEY_WRAPPED ciphertext)
 //	evesynapse -refresh                mark all cached data out of
 //	                                   date so the next start fetches
 //	                                   fresh copies (server stopped)
@@ -68,6 +72,13 @@ func run(args []string, stdout, stderr io.Writer) int {
 			return app.RunPopulateNames(args[1:], cfg, stdout, stderr)
 		case "-push-keys":
 			return app.RunPushKeys(stdout, stderr)
+		case "-wrap-token-key":
+			cfg, err := app.LoadConfig()
+			if err != nil {
+				fmt.Fprintln(stderr, "evesynapse:", err)
+				return 2
+			}
+			return app.RunWrapTokenKey(args[1:], cfg, stdout, stderr)
 		case "-h", "--help", "-help":
 			printUsage(stdout)
 			return 0
@@ -90,6 +101,7 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "  evesynapse -refresh                 refresh all cached data on next start (app must be stopped)")
 	fmt.Fprintln(w, "  evesynapse -populate-names          store every alliance and reachable corporation name now (safe while running)")
 	fmt.Fprintln(w, "  evesynapse -push-keys               print a new key pair for browser push, as lines for .env")
+	fmt.Fprintln(w, "  evesynapse -wrap-token-key          wrap TOKEN_ENCRYPTION_KEY with the OCI KMS key; prints TOKEN_KEY_WRAPPED")
 }
 
 // serve runs the web app until a termination signal (SIGTERM from

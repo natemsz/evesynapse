@@ -15,15 +15,20 @@ package app
 //          the stored tokens. Any HTTPS endpoint speaking the
 //          two-call protocol works; the reference service is a
 //          Cloudflare Worker (github.com/natemsz/cloudflare-kms).
+//   oci  — the root secret is wrapped by a key in an OCI Vault
+//          (TOKEN_KEY_WRAPPED holds that key's ciphertext) and
+//          unwrapped at startup by KMS Decrypt, authenticated by
+//          the instance's own identity — no cloud credential is
+//          stored on the machine at all (internal/ocikms).
 //   none — no key; tokens are stored unencrypted, as before.
 //
 // With no TOKEN_KEY_PROVIDER set, a configured TOKEN_ENCRYPTION_KEY
 // means env and no key means none, so existing installs behave
 // exactly as they did before providers existed.
 //
-// The http provider never blocks the start: the app serves at once
-// and a background loop retries the unwrap with backoff until it
-// succeeds. Until then the box has no key, so sealed rows report
+// The http and oci providers never block the start: the app
+// serves at once and a background loop retries the unwrap with
+// backoff until it succeeds. Until then the box has no key, so sealed rows report
 // their key missing (errTokenKeyMissing) and everything that does
 // not need a stored token — the public pages included — works as
 // usual. A fetched secret is installed only after it has been shown
@@ -44,14 +49,24 @@ import (
 	"time"
 
 	"evesynapse/internal/logging"
+	"evesynapse/internal/ocikms"
 )
 
 // The TOKEN_KEY_PROVIDER values.
 const (
 	tokenKeyProviderEnv  = "env"
 	tokenKeyProviderHTTP = "http"
+	tokenKeyProviderOCI  = "oci"
 	tokenKeyProviderNone = "none"
 )
+
+// tokenKeyFetchedRemotely reports whether the provider fetches
+// the key over the network at startup (http, oci) rather than
+// reading it from the environment (env) or having none (none).
+// Those providers start locked and unlock in the background.
+func tokenKeyFetchedRemotely(provider string) bool {
+	return provider == tokenKeyProviderHTTP || provider == tokenKeyProviderOCI
+}
 
 // resolveTokenKeyProvider settles which provider the configuration
 // asks for, per the rules in the file header.
@@ -62,10 +77,10 @@ func resolveTokenKeyProvider(cfg Config) (string, error) {
 			return tokenKeyProviderEnv, nil
 		}
 		return tokenKeyProviderNone, nil
-	case tokenKeyProviderEnv, tokenKeyProviderHTTP, tokenKeyProviderNone:
+	case tokenKeyProviderEnv, tokenKeyProviderHTTP, tokenKeyProviderOCI, tokenKeyProviderNone:
 		return p, nil
 	default:
-		return "", fmt.Errorf("TOKEN_KEY_PROVIDER is %q; it must be env, http or none", cfg.tokenKeyProvider)
+		return "", fmt.Errorf("TOKEN_KEY_PROVIDER is %q; it must be env, http, oci or none", cfg.tokenKeyProvider)
 	}
 }
 
@@ -94,6 +109,11 @@ func tokenBoxForConfig(cfg Config) (*tokenBox, string, error) {
 			return nil, "", err
 		}
 		return &tokenBox{}, provider, nil
+	case tokenKeyProviderOCI:
+		if err := validateTokenKeyOCIConfig(cfg); err != nil {
+			return nil, "", err
+		}
+		return &tokenBox{}, provider, nil
 	default: // none
 		return &tokenBox{}, provider, nil
 	}
@@ -116,6 +136,77 @@ func validateTokenKeyHTTPConfig(cfg Config) error {
 		return errors.New("TOKEN_KEY_PROVIDER=http but TOKEN_KEY_UNWRAP_CREDENTIAL is not set")
 	}
 	return nil
+}
+
+// validateTokenKeyOCIConfig names the first missing or malformed
+// piece of the oci provider's configuration.
+func validateTokenKeyOCIConfig(cfg Config) error {
+	if err := validateTokenKeyOCIBase(cfg); err != nil {
+		return err
+	}
+	if strings.TrimSpace(cfg.tokenKeyWrapped) == "" {
+		return errors.New("TOKEN_KEY_PROVIDER=oci but TOKEN_KEY_WRAPPED is not set")
+	}
+	return nil
+}
+
+// validateTokenKeyOCIBase checks the pieces the oci provider's
+// decrypt path and the -wrap-token-key command share: which key,
+// at which endpoint. (The wrap command produces TOKEN_KEY_WRAPPED,
+// so it does not require one.)
+func validateTokenKeyOCIBase(cfg Config) error {
+	if strings.TrimSpace(cfg.tokenKeyOCIKeyID) == "" {
+		return errors.New("TOKEN_KEY_OCI_KEY_ID is not set")
+	}
+	if strings.TrimSpace(cfg.tokenKeyOCIEndpoint) == "" {
+		return errors.New("TOKEN_KEY_OCI_CRYPTO_ENDPOINT is not set")
+	}
+	u, err := url.Parse(strings.TrimSpace(cfg.tokenKeyOCIEndpoint))
+	if err != nil || u.Host == "" || (u.Scheme != "https" && u.Scheme != "http") {
+		return fmt.Errorf("TOKEN_KEY_OCI_CRYPTO_ENDPOINT is %q; it must be the vault's cryptographic endpoint", cfg.tokenKeyOCIEndpoint)
+	}
+	return nil
+}
+
+// ociClientForConfig builds the KMS client the oci provider (and
+// the wrap command) talk to, from the configuration.
+func ociClientForConfig(cfg Config) (*ocikms.Client, error) {
+	return ocikms.NewClient(ocikms.Config{
+		CryptoEndpoint:    strings.TrimSpace(cfg.tokenKeyOCIEndpoint),
+		KeyID:             strings.TrimSpace(cfg.tokenKeyOCIKeyID),
+		MetadataBaseURL:   strings.TrimSpace(cfg.tokenKeyOCIMetadataURL),
+		FederationBaseURL: strings.TrimSpace(cfg.tokenKeyOCIFederationURL),
+	})
+}
+
+// ociDecryptTokenSecret unwraps the stored blob with the vault
+// key, authenticated by the instance's own identity. The secret
+// is only ever returned to the caller: never logged, never
+// written anywhere.
+func ociDecryptTokenSecret(ctx context.Context, cfg Config) (string, error) {
+	client, err := ociClientForConfig(cfg)
+	if err != nil {
+		return "", err
+	}
+	return client.Decrypt(ctx, strings.TrimSpace(cfg.tokenKeyWrapped))
+}
+
+// fetchTokenSecret gets the root secret from the configured
+// remote provider (http or oci). The unlock loop's one door to
+// the network.
+func fetchTokenSecret(ctx context.Context, cfg Config) (string, error) {
+	provider, err := resolveTokenKeyProvider(cfg)
+	if err != nil {
+		return "", err
+	}
+	switch provider {
+	case tokenKeyProviderHTTP:
+		return unwrapTokenSecret(ctx, cfg)
+	case tokenKeyProviderOCI:
+		return ociDecryptTokenSecret(ctx, cfg)
+	default:
+		return "", fmt.Errorf("the %s provider fetches no token key", provider)
+	}
 }
 
 // The unwrap endpoint's wire shapes: the request carries the
@@ -176,8 +267,9 @@ var (
 	tokenKeyRetryMax   = 2 * time.Minute
 )
 
-// startTokenKeyUnlock launches the background unlock for the http
-// provider. ctx is the worker's: Close cancels it.
+// startTokenKeyUnlock launches the background unlock for a
+// provider that fetches its key (http, oci). ctx is the worker's:
+// Close cancels it.
 func (app *Application) startTokenKeyUnlock(ctx context.Context) {
 	go runTokenKeyUnlockLoop(ctx, app.tryTokenKeyUnlock)
 }
@@ -204,24 +296,24 @@ func runTokenKeyUnlockLoop(ctx context.Context, attempt func(context.Context) bo
 	}
 }
 
-// tryTokenKeyUnlock makes one unwrap attempt and reports whether
+// tryTokenKeyUnlock makes one fetch attempt and reports whether
 // the box is unlocked now. Every failure is logged and left to the
 // loop's next attempt; nothing here can fail the running app.
 func (app *Application) tryTokenKeyUnlock(ctx context.Context) bool {
-	secret, err := unwrapTokenSecret(ctx, app.cfg)
+	secret, err := fetchTokenSecret(ctx, app.cfg)
 	if err != nil {
-		logging.Warnf("evesynapse: token key unwrap failed (will retry): %v", err)
+		logging.Warnf("evesynapse: token key fetch failed (will retry): %v", err)
 		return false
 	}
 	candidate, err := newTokenBox(secret)
 	if err != nil {
-		// A short or malformed secret from the endpoint is
+		// A short or malformed secret from the provider is
 		// rejected by the same rule as a short env key.
-		logging.Warnf("evesynapse: the token key unwrap endpoint returned an unusable secret (will retry): %v", err)
+		logging.Warnf("evesynapse: the token key provider returned an unusable secret (will retry): %v", err)
 		return false
 	}
 	if err := app.checkStoredTokensOpen(ctx, candidate); err != nil {
-		logging.Warnf("evesynapse: the unwrapped token key does not open the stored tokens (will retry): %v", err)
+		logging.Warnf("evesynapse: the fetched token key does not open the stored tokens (will retry): %v", err)
 		return false
 	}
 	app.tokens.install(candidate)
@@ -233,7 +325,8 @@ func (app *Application) tryTokenKeyUnlock(ctx context.Context) bool {
 	if err := app.prepareStoredTokens(ctx); err != nil {
 		logging.Warnf("evesynapse: token key unlocked, but the stored-token pass failed: %v", err)
 	}
-	logging.Infof("evesynapse: token encryption key loaded from the unwrap endpoint; stored tokens are unlocked")
+	provider, _ := resolveTokenKeyProvider(app.cfg) // settled at boot; cannot fail here
+	logging.Infof("evesynapse: token encryption key loaded via the %s provider; stored tokens are unlocked", provider)
 	return true
 }
 

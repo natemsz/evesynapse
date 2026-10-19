@@ -33,6 +33,7 @@ func TestResolveTokenKeyProvider(t *testing.T) {
 		{"nothing set", Config{}, tokenKeyProviderNone},
 		{"explicit env", Config{tokenKeyProvider: "env", tokenKey: testTokenKey}, tokenKeyProviderEnv},
 		{"explicit http", Config{tokenKeyProvider: "http"}, tokenKeyProviderHTTP},
+		{"explicit oci", Config{tokenKeyProvider: "oci"}, tokenKeyProviderOCI},
 		{"explicit none beats a key", Config{tokenKeyProvider: "none", tokenKey: testTokenKey}, tokenKeyProviderNone},
 		{"case and space tolerated", Config{tokenKeyProvider: " HTTP "}, tokenKeyProviderHTTP},
 	}
@@ -98,6 +99,36 @@ func TestTokenBoxForConfig(t *testing.T) {
 	box, provider, err = tokenBoxForConfig(httpCfg)
 	if err != nil || provider != tokenKeyProviderHTTP || box.enabled() {
 		t.Fatalf("http: box enabled %v, provider %q, err %v; want a locked box", box.enabled(), provider, err)
+	}
+
+	// oci: the wrapped blob, the key ID and the endpoint are each
+	// named when missing; a complete config yields a locked box.
+	ociCfg := Config{
+		tokenKeyProvider:    "oci",
+		tokenKeyWrapped:     "wrapped-blob",
+		tokenKeyOCIKeyID:    "ocid1.key.oc1.phx.test",
+		tokenKeyOCIEndpoint: "https://vault-crypto.kms.us-phoenix-1.oraclecloud.com",
+	}
+	for field, envName := range map[string]string{
+		"tokenKeyWrapped": "TOKEN_KEY_WRAPPED", "tokenKeyOCIKeyID": "TOKEN_KEY_OCI_KEY_ID",
+		"tokenKeyOCIEndpoint": "TOKEN_KEY_OCI_CRYPTO_ENDPOINT",
+	} {
+		broken := ociCfg
+		switch field {
+		case "tokenKeyWrapped":
+			broken.tokenKeyWrapped = ""
+		case "tokenKeyOCIKeyID":
+			broken.tokenKeyOCIKeyID = ""
+		case "tokenKeyOCIEndpoint":
+			broken.tokenKeyOCIEndpoint = ""
+		}
+		if _, _, err := tokenBoxForConfig(broken); err == nil || !strings.Contains(err.Error(), envName) {
+			t.Fatalf("oci without %s: err = %v", field, err)
+		}
+	}
+	box, provider, err = tokenBoxForConfig(ociCfg)
+	if err != nil || provider != tokenKeyProviderOCI || box.enabled() {
+		t.Fatalf("oci: box enabled %v, provider %q, err %v; want a locked box", box.enabled(), provider, err)
 	}
 }
 

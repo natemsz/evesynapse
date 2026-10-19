@@ -63,17 +63,20 @@
    the checkboxes inside keep the form semantics. A checked
    segment takes the accent fill, like .seg > .on. */
 .cs-types { flex: none; }
-/* The shared .seg centers each segment's line box, but
-   the display face's ink rides high in its line box, so
-   the labels read as sitting high in their cells. The
-   tightened line box plus two pixels of padding traded
-   from bottom to top centers the glyphs themselves.
-   (Scoped to the pills: the results' own .cs-pill rule
-   below would otherwise win the padding on a later,
-   equal-specificity shorthand.) */
+/* The segments share their class name with the results
+   pills further down this file, and that rule's metrics
+   (margin-top, padding, font size) leak onto them: the
+   leaked 0.5rem top margin shoved the segments down in
+   their control, which read as off-center labels that no
+   padding trade could fix. Scoped back to the shared
+   control's own metrics — no top margin, and the .seg
+   padding symmetric top and bottom — the segments fill
+   the control and align-items centers their line boxes
+   on the row's center. */
 .cs-types > .cs-pill {
+  margin-top: 0;
   line-height: 1;
-  padding-top: calc(0.1rem + 2px); padding-bottom: calc(0.1rem - 2px);
+  padding-top: 0.2rem; padding-bottom: 0.2rem;
 }
 .cs-pill { position: relative; cursor: pointer; }
 .cs-pill input { position: absolute; opacity: 0; pointer-events: none; }
@@ -123,6 +126,10 @@
 .cs-fbox { display: flex; flex-direction: column; gap: 0.55rem; min-width: 0; }
 .cs-fbox > .box-title { margin-bottom: 0; }
 .cs-fbox .cs-field { flex: 1; }
+/* The station field keeps natural flow under its label
+   at the top of its box instead of riding the stretched
+   cell's bottom pin. */
+.cs-fbox .cs-field.cs-field-flow { flex: none; }
 .cs-field {
   display: flex; flex-direction: column; justify-content: flex-end;
   gap: 0.25rem; min-width: 0;
@@ -131,11 +138,21 @@
   white-space: nowrap;
 }
 .cs-field input, .cs-field select { width: 100%; margin-top: auto; text-transform: none; letter-spacing: normal; }
-.cs-region-quick { font-size: 0.82rem; color: var(--muted); white-space: nowrap; }
+/* The region quick selectors wear the hunt chips' pill
+   paint on real buttons: transparent row-alt fill, thin
+   edge, full radius, the controls' Rajdhani capitals —
+   and no underline in any state. */
+.cs-region-quick { display: inline-flex; gap: 0.35rem; white-space: nowrap; }
 .cs-region-quick button {
-  background: none; border: 0; padding: 0; color: var(--gold);
-  cursor: pointer; font: inherit; text-decoration: underline;
+  display: inline-flex; align-items: center;
+  border: 1px solid var(--box-edge); border-radius: 999px;
+  padding: 0.15rem 0.7rem; color: var(--text); text-decoration: none;
+  background: var(--row-alt);
+  font-family: "Rajdhani", "Segoe UI", sans-serif; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.07em; font-size: 0.8rem;
+  cursor: pointer;
 }
+.cs-region-quick button:hover { border-color: var(--accent); color: var(--text-bright); }
 .cs-chips { display: flex; flex-wrap: wrap; gap: 0.35rem; min-height: 1.5rem; }
 .cs-chips-all { color: var(--muted); font-size: 0.9rem; align-self: center; }
 .cs-chip {

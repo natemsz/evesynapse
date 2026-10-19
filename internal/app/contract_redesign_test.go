@@ -202,6 +202,61 @@ func TestContractSearchStructure(t *testing.T) {
 // five behind the more-line, no icons), the per-kind
 // price labels and contents pills, and the value
 // column's coverage and spread.
+// TestContractSearchFilterPanelPolish pins the third
+// polish round on the filter panel: the region quick
+// selectors render as pill buttons (the hunt chips' paint,
+// no underline), the kind segments are scoped clear of the
+// results-pill rule whose leaked margin-top shoved them
+// down in their control, and the station field keeps
+// natural flow at the top of its box instead of riding
+// the stretched filter cell's bottom pin.
+func TestContractSearchFilterPanelPolish(t *testing.T) {
+	tr := &openWindowTransport{}
+	app, conn, _ := buildCorpTestApp(t, tr)
+	seedContractCorpus(t, app, conn)
+
+	_, body := getAnon(t, app, "/contracts/search/")
+	// The quick selectors: three pill buttons in a row,
+	// still carrying the data hooks contracts.js drives,
+	// with no middot text separators between them.
+	mustContain(t, "region quick pills", body,
+		`<span class="cs-region-quick"><button type="button" data-region-quick="jita">Jita</button><button type="button" data-region-quick="hubs">4 Hubs</button><button type="button" data-region-quick="all">All</button></span>`)
+	// The station field opts out of the bottom pin.
+	mustContain(t, "station field flow", body,
+		`<label class="cs-field cs-field-flow">Station, structure or system`)
+
+	rawCSS, err := fs.ReadFile(staticFS, "static/contracts.css")
+	if err != nil {
+		t.Fatal(err)
+	}
+	css := string(rawCSS)
+	// The pill paint: the shared chip edge and full radius,
+	// and the segments' scoping rule (no leaked margin, the
+	// old padding trade gone).
+	for _, want := range []string{
+		".cs-region-quick button {\n  display: inline-flex; align-items: center;\n  border: 1px solid var(--box-edge); border-radius: 999px;",
+		".cs-types > .cs-pill {\n  margin-top: 0;",
+		".cs-fbox .cs-field.cs-field-flow { flex: none; }",
+	} {
+		if !strings.Contains(css, want) {
+			t.Errorf("contracts.css: missing %q", want)
+		}
+	}
+	if strings.Contains(css, "0.1rem + 2px") {
+		t.Error("contracts.css: the seg padding trade is back")
+	}
+	// No underline anywhere in the region-quick rules: the
+	// block from the span rule through the hover rule.
+	start := strings.Index(css, ".cs-region-quick {")
+	end := strings.Index(css, ".cs-region-quick button:hover")
+	if start < 0 || end < 0 || end < start {
+		t.Fatal("contracts.css: the region-quick block moved")
+	}
+	if strings.Contains(css[start:end], "underline") {
+		t.Error("contracts.css: the region quick selectors are underlined again")
+	}
+}
+
 func TestContractSearchResultsTable(t *testing.T) {
 	tr := &openWindowTransport{}
 	app, conn, _ := buildCorpTestApp(t, tr)

@@ -102,8 +102,9 @@ type Application struct {
 	tokenLocks keyedLocks
 
 	// tokens seals and opens the EVE SSO tokens stored in the
-	// characters table (auth_tokencrypt.go). Without a
-	// TOKEN_ENCRYPTION_KEY it stores them as they are.
+	// characters table (auth_tokencrypt.go). Its key comes from
+	// the configured provider (auth_tokenkey.go); with no key it
+	// stores tokens as they are.
 	tokens *tokenBox
 
 	// fetchMu serializes the market-history, pilot-record, and
@@ -260,9 +261,14 @@ type Application struct {
 // background worker and the one-shot SSO reachability probe.
 // Call Close to stop the worker and release the database.
 func New(cfg Config) (*Application, error) {
-	tokens, err := newTokenBox(cfg.tokenKey)
+	tokens, tokenKeyProvider, err := tokenBoxForConfig(cfg)
 	if err != nil {
 		return nil, err
+	}
+	if tokenKeyProvider == tokenKeyProviderHTTP && cfg.tokenKey != "" {
+		// The provider wins; the env key stays only as the
+		// operator's way back (TOKEN_KEY_PROVIDER=env).
+		logging.Warnf("evesynapse: TOKEN_ENCRYPTION_KEY is set but TOKEN_KEY_PROVIDER=http, so the env key is ignored")
 	}
 	if cfg.signUp.err != nil {
 		return nil, cfg.signUp.err
@@ -309,7 +315,12 @@ func New(cfg Config) (*Application, error) {
 
 	// Before anything reads a token: check the stored ones open
 	// with the configured key, and encrypt any that predate it.
-	if err := app.prepareStoredTokens(context.Background()); err != nil {
+	// The http provider's key has not arrived yet (it comes from
+	// the network, in the background — see startTokenKeyUnlock),
+	// so its pass runs at unlock instead; the app serves meanwhile.
+	if tokenKeyProvider == tokenKeyProviderHTTP {
+		logging.Infof("evesynapse: the token encryption key comes from the unwrap endpoint; stored tokens unlock when it answers")
+	} else if err := app.prepareStoredTokens(context.Background()); err != nil {
 		dbConn.Close()
 		pool.Close()
 		return nil, err
@@ -338,6 +349,9 @@ func New(cfg Config) (*Application, error) {
 	app.stopWorker = stopWorker
 	app.workerCtx = workerCtx
 	app.startedAt = time.Now()
+	if tokenKeyProvider == tokenKeyProviderHTTP {
+		app.startTokenKeyUnlock(workerCtx)
+	}
 	if !cfg.noWorker {
 		app.workerDone = make(chan struct{})
 		go func() {

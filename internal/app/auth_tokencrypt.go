@@ -33,6 +33,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/logging"
@@ -67,9 +68,35 @@ var (
 // tokenBox seals and opens stored tokens. The zero value (and a
 // nil *tokenBox) has no key: it stores tokens as they are and can
 // only read ones that were never encrypted.
+//
+// A box whose key comes from the http provider (auth_tokenkey.go)
+// starts with no key and gains one when the provider's unlock calls
+// install; the mutex makes that one swap safe against the readers
+// already running.
 type tokenBox struct {
+	mu     sync.Mutex
 	aead   cipher.AEAD // v2 (HKDF): seals everything new
 	legacy cipher.AEAD // v1 (single SHA-256): opens old rows until they re-seal
+}
+
+// keys returns the box's current AEADs; either is nil when the box
+// has no key (yet).
+func (b *tokenBox) keys() (aead, legacy cipher.AEAD) {
+	if b == nil {
+		return nil, nil
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.aead, b.legacy
+}
+
+// install gives the box another box's key, for the rest of the
+// process. Only the key-provider unlock calls it, and only after
+// the new key has been shown to open what is stored.
+func (b *tokenBox) install(other *tokenBox) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.aead, b.legacy = other.aead, other.legacy
 }
 
 // newTokenBox builds the box for the configured key ("" for none).
@@ -117,7 +144,10 @@ const (
 )
 
 // enabled reports whether a key is configured.
-func (b *tokenBox) enabled() bool { return b != nil && b.aead != nil }
+func (b *tokenBox) enabled() bool {
+	aead, _ := b.keys()
+	return aead != nil
+}
 
 func tokenAAD(characterID int64, field string) []byte {
 	return []byte(fmt.Sprintf("character:%d:%s", characterID, field))
@@ -137,14 +167,15 @@ func tokenSealedCurrent(stored string) bool {
 // seal returns the form of a token to store: encrypted when a key
 // is configured, unchanged otherwise. An empty token stays empty.
 func (b *tokenBox) seal(plain string, characterID int64, field string) (string, error) {
-	if !b.enabled() || plain == "" {
+	aead, _ := b.keys()
+	if aead == nil || plain == "" {
 		return plain, nil
 	}
-	nonce := make([]byte, b.aead.NonceSize())
+	nonce := make([]byte, aead.NonceSize())
 	if _, err := rand.Read(nonce); err != nil {
 		return "", err
 	}
-	sealed := b.aead.Seal(nonce, nonce, []byte(plain), tokenAAD(characterID, field))
+	sealed := aead.Seal(nonce, nonce, []byte(plain), tokenAAD(characterID, field))
 	return tokenCipherV2Prefix + base64.RawStdEncoding.EncodeToString(sealed), nil
 }
 
@@ -175,14 +206,12 @@ func (b *tokenBox) open(stored string, characterID int64, field string) (string,
 // aeadFor selects the opener for a stored value by its envelope,
 // or nil when there is no key to open with (or no envelope).
 func (b *tokenBox) aeadFor(stored string) cipher.AEAD {
-	if b == nil {
-		return nil
-	}
+	aead, legacy := b.keys()
 	switch {
 	case strings.HasPrefix(stored, tokenCipherV2Prefix):
-		return b.aead
+		return aead
 	case strings.HasPrefix(stored, tokenCipherPrefix):
-		return b.legacy
+		return legacy
 	default:
 		return nil
 	}

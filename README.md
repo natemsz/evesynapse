@@ -297,6 +297,8 @@ gaps; real environment variables win over the file):
 | `DATABASE_URL` | yes | `postgres://evesynapse@localhost:5432/evesynapse?sslmode=disable` | PostgreSQL connection URL |
 | `ADDR` | no | `:8080` | HTTP listen address |
 | `TOKEN_ENCRYPTION_KEY` | no | — | Encrypts the EVE tokens stored in the database (see "Token encryption") |
+| `TOKEN_KEY_PROVIDER` | no | derived | Where the token key comes from: `env` (the key above; the default when it is set), `http` (fetched from a key service at startup), or `none` (tokens stored unencrypted; the default when no key is set). See "Keeping the key off the machine" |
+| `TOKEN_KEY_WRAPPED`, `TOKEN_KEY_UNWRAP_URL`, `TOKEN_KEY_UNWRAP_CREDENTIAL` | with `http` | — | The wrapped token key, the key service's unwrap endpoint, and the credential the app presents to it (http provider) |
 | `EVE_ADMIN_CHARACTER_IDS` | no | — | Comma-separated EVE character IDs whose accounts may open the Admin and Sync pages. Any character linked to an account makes that whole account an admin's. Empty = nobody. The status belongs to whoever owned the character when it was first seen as an admin: if the character is sold or transferred, its new owner does not get it. To give it to a new owner on purpose, remove the id, restart, add it back and restart |
 | `EVE_ALLOWED_CHARACTER_IDS`, `EVE_ALLOWED_CORPORATION_IDS`, `EVE_ALLOWED_ALLIANCE_IDS` | no | — | Limit who may create an account (see "Who can sign up"). All empty = anyone who can sign in with EVE |
 | `EVESYNAPSE_UPDATE_REPO` | no | `natemsz/evesynapse` | GitHub repo (owner/repo) the updater checks |
@@ -1468,6 +1470,41 @@ Two things to know before switching it on:
 
 Without a key, tokens are stored unencrypted as before and the
 app logs a warning at startup.
+
+### Keeping the key off the machine
+
+The key in `.env` protects the tokens against a stolen copy of
+the database — but it sits on the same machine, so a copy of the
+machine's files (database and `.env` together) opens everything.
+For any instance reachable from the web, the stronger arrangement
+is a key service: the key is wrapped by a KMS, and the app fetches
+it, unwrapped, at startup and keeps it in memory only. Set:
+
+```sh
+TOKEN_KEY_PROVIDER=http
+TOKEN_KEY_WRAPPED=...        # the key, wrapped by the key service
+TOKEN_KEY_UNWRAP_URL=...     # its unwrap endpoint
+TOKEN_KEY_UNWRAP_CREDENTIAL=...   # the credential the app presents
+```
+
+`TOKEN_KEY_PROVIDER` is `env` (the `TOKEN_ENCRYPTION_KEY` above;
+the default when it is set), `http`, or `none` (no key). Any HTTPS
+endpoint speaking the two-call protocol — `POST {"wrapped": …}` →
+`{"secret": …}` to unwrap, `POST {"secret": …}` → `{"wrapped": …}`
+to wrap — can serve, so nothing ties this to one vendor's KMS. A
+complete reference service ships as a Cloudflare Worker you deploy
+to your own account, free, in a few minutes:
+**[natemsz/cloudflare-kms](https://github.com/natemsz/cloudflare-kms)**.
+
+With `http` the app starts and serves at once; the unwrap is
+retried in the background until it succeeds, and until then stored
+tokens report their key missing while everything else — the public
+pages included — keeps working. A fetched key is only used after
+it has been shown to open the stored tokens. Losing the key
+service's wrapping key is the same as losing
+`TOKEN_ENCRYPTION_KEY`: the stored tokens cannot be recovered and
+every character signs in once more — so back the key service's
+configuration up with the rest.
 
 ## Backups
 

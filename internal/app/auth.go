@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/rsa"
+	"crypto/sha256"
 	"crypto/subtle"
 	"database/sql"
 	"encoding/base64"
@@ -34,6 +35,7 @@ const (
 	sessionCharacterID   = "character_id"
 	sessionCharacterName = "character_name"
 	sessionOAuthState    = "oauth_state"
+	sessionOAuthVerifier = "oauth_verifier"
 	sessionIdentityLogin = "identity_login"
 )
 
@@ -262,12 +264,6 @@ func (app *Application) handleEVELogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	state, err := newOAuthState()
-	if err != nil {
-		logging.Errorf("sso: generate state: %v", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		return
-	}
 	cfg := eveOAuthConfig(app.cfg)
 	// A choice from the chooser (/auth/link): the features and extra
 	// permissions by id. The server works the scopes out from the
@@ -321,8 +317,7 @@ func (app *Application) handleEVELogin(w http.ResponseWriter, r *http.Request) {
 		cfg.Scopes = scopes
 	}
 	app.sessions.PopString(r.Context(), sessionIdentityLogin)
-	app.sessions.Put(r.Context(), sessionOAuthState, state)
-	http.Redirect(w, r, cfg.AuthCodeURL(state), http.StatusFound)
+	app.authorizeRedirect(w, r, cfg)
 }
 
 // handleEVELoginIdentity starts the plain login: an EVE SSO round
@@ -339,17 +334,10 @@ func (app *Application) handleEVELoginIdentity(w http.ResponseWriter, r *http.Re
 		fmt.Fprintln(w, "EVE SSO is not configured yet: set EVE_CLIENT_ID / EVE_CLIENT_SECRET (see .env.example).")
 		return
 	}
-	state, err := newOAuthState()
-	if err != nil {
-		logging.Errorf("sso: generate state: %v", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		return
-	}
 	cfg := eveOAuthConfig(app.cfg)
 	cfg.Scopes = nil
-	app.sessions.Put(r.Context(), sessionOAuthState, state)
 	app.sessions.Put(r.Context(), sessionIdentityLogin, "1")
-	http.Redirect(w, r, cfg.AuthCodeURL(state), http.StatusFound)
+	app.authorizeRedirect(w, r, cfg)
 }
 
 // finishIdentityLogin completes a plain login after the callback
@@ -407,6 +395,51 @@ func newOAuthState() (string, error) {
 	return hex.EncodeToString(b), nil
 }
 
+// newPKCEVerifier returns a fresh PKCE code_verifier (RFC 7636):
+// 32 random bytes, base64url-encoded without padding — 43
+// characters, inside the RFC's 43–128 range and drawn from its
+// unreserved set.
+func newPKCEVerifier() (string, error) {
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return base64.RawURLEncoding.EncodeToString(b), nil
+}
+
+// pkceChallenge derives the S256 code_challenge for a verifier:
+// base64url(SHA-256(verifier)), no padding (RFC 7636 §4.2).
+func pkceChallenge(verifier string) string {
+	sum := sha256.Sum256([]byte(verifier))
+	return base64.RawURLEncoding.EncodeToString(sum[:])
+}
+
+// authorizeRedirect starts an SSO round trip for cfg: it stores a
+// fresh single-use state and PKCE verifier in the session and
+// redirects to CCP's authorize page, carrying the state and the
+// verifier's S256 challenge. The callback requires the verifier
+// before it will exchange the code (handleEVECallback), so an
+// authorize redirect that did not start here cannot complete.
+func (app *Application) authorizeRedirect(w http.ResponseWriter, r *http.Request, cfg *oauth2.Config) {
+	state, err := newOAuthState()
+	if err != nil {
+		logging.Errorf("sso: generate state: %v", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+	verifier, err := newPKCEVerifier()
+	if err != nil {
+		logging.Errorf("sso: generate PKCE verifier: %v", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+	app.sessions.Put(r.Context(), sessionOAuthState, state)
+	app.sessions.Put(r.Context(), sessionOAuthVerifier, verifier)
+	http.Redirect(w, r, cfg.AuthCodeURL(state,
+		oauth2.SetAuthURLParam("code_challenge", pkceChallenge(verifier)),
+		oauth2.SetAuthURLParam("code_challenge_method", "S256")), http.StatusFound)
+}
+
 // handleEVECallback completes the flow: state check, code exchange,
 // JWT verification against CCP's JWKS, then account/character
 // persistence and session sign-in. Failures bounce home with a short
@@ -450,11 +483,24 @@ func (app *Application) handleEVECallback(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	// The PKCE verifier is single-use like the state: read it,
+	// clear it, and never exchange without it. A callback whose
+	// session holds no verifier did not start at authorizeRedirect
+	// (or its verifier was already spent).
+	verifier := app.sessions.GetString(ctx, sessionOAuthVerifier)
+	app.sessions.Remove(ctx, sessionOAuthVerifier)
+	if verifier == "" {
+		logging.Warnf("sso callback: missing PKCE verifier")
+		fail("exchange")
+		return
+	}
+
 	// The exchange runs on the shared SSO client (10s timeout),
 	// like the refresh path: the default client would wait forever
 	// on a hung CCP.
 	exchangeCtx := context.WithValue(ctx, oauth2.HTTPClient, loginHTTPClient)
-	token, err := eveOAuthConfig(app.cfg).Exchange(exchangeCtx, code)
+	token, err := eveOAuthConfig(app.cfg).Exchange(exchangeCtx, code,
+		oauth2.SetAuthURLParam("code_verifier", verifier))
 	if err != nil {
 		logging.Warnf("sso callback: token exchange failed: %v", err)
 		fail("exchange")

@@ -1,8 +1,14 @@
 name: Update CHANGELOG.md on Release
 
+# Trigger: workflow_run on the release workflow, NOT "release: published".
+# Releases are published by the build-and-release workflow using
+# GITHUB_TOKEN, and events caused by GITHUB_TOKEN do not start new
+# workflow runs -- the old release trigger therefore never fired.
+# workflow_run is the documented exception and fires regardless.
 on:
-  release:
-    types: [published]
+  workflow_run:
+    workflows: ["build-and-release"]
+    types: [completed]
 
 permissions:
   contents: write
@@ -10,6 +16,10 @@ permissions:
 
 jobs:
   update-changelog:
+    # Only a successful release run: its head branch is the version tag.
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      startsWith(github.event.workflow_run.head_branch, 'v')
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
@@ -18,18 +28,17 @@ jobs:
           fetch-depth: 0
           ref: main
 
-      - name: Generate Release Notes via GitHub API
-        id: generate_notes
+      - name: Fetch the published release notes
+        id: release_notes
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Via env, never interpolated into the script directly:
+          # a branch/tag name is untrusted input to a shell.
+          TAG_NAME: ${{ github.event.workflow_run.head_branch }}
         run: |
-          TAG_NAME="${{ github.event.release.tag_name }}"
-          
           NOTES=$(gh api \
-            --method POST \
             -H "Accept: application/vnd.github+json" \
-            /repos/${{ github.repository }}/releases/generate-notes \
-            -f tag_name="$TAG_NAME" \
+            "/repos/${{ github.repository }}/releases/tags/${TAG_NAME}" \
             --jq '.body')
 
           {
@@ -39,23 +48,30 @@ jobs:
             echo "EOF"
           } >> "$GITHUB_ENV"
 
-      - name: Prepend Notes to CHANGELOG.md
+      - name: Insert notes into CHANGELOG.md
         run: |
           DATE=$(date +'%Y-%m-%d')
-          TEMP_FILE=$(mktemp)
+          SECTION_FILE=$(mktemp)
 
           {
-            echo "## [${RELEASE_TAG}] -${DATE}"
+            echo "## [${RELEASE_TAG}] - ${DATE}"
             echo ""
-            echo "${RELEASE_BODY}"
+            # The release body minus its HTML generator comment.
+            echo "${RELEASE_BODY}" | grep -v '^<!--' || true
             echo ""
-          } > "$TEMP_FILE"
+          } > "$SECTION_FILE"
 
-          if [ -f CHANGELOG.md ]; then
-            cat CHANGELOG.md >> "$TEMP_FILE"
-          fi
+          # Insert the new section after the [Unreleased] block:
+          # immediately before the first existing version section.
+          awk -v sec="$SECTION_FILE" '
+            /^## \[v/ && !done {
+              while ((getline line < sec) > 0) print line
+              done = 1
+            }
+            { print }
+          ' CHANGELOG.md > CHANGELOG.new
 
-          mv "$TEMP_FILE" CHANGELOG.md
+          mv CHANGELOG.new CHANGELOG.md
 
       - name: Create Pull Request for Review
         uses: peter-evans/create-pull-request@v6
@@ -67,7 +83,7 @@ jobs:
           title: "docs(changelog): review changelog for ${{ env.RELEASE_TAG }}"
           body: |
             Automated changelog generation for release **${{ env.RELEASE_TAG }}**.
-            
+
             ### Instructions:
             1. Review the changes to `CHANGELOG.md` in the Files Changed tab.
             2. Edit directly if any formatting or text requires adjustment.

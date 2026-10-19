@@ -27,6 +27,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - No changes recorded for this release window.
 
+## [v0.5.2.12] - 2026-10-18
+
+### Added
+- Automated build of EveSynapse v0.5.2.12. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+### Changed
+- PR #448 — Swarm: signed pull auth (dual-accept) + public contracts as a swarm kind.
+- PR #449 — Admin: peer Build column — release-library lookup of a peer's binary SHA claim.
+
+## [v0.5.2.11] - 2026-10-18
+
+### Added
+- Automated build of EveSynapse v0.5.2.11. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+### Changed
+- PR #446 — Nav: rename corporation Orders to My Orders.
+- PR #447 — Add release-notes category config (.github/release.yml).
+
+## [v0.5.2.10] - 2026-10-18
+
+### Added
+- Automated build of EveSynapse v0.5.2.10. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
 ## [v0.5.2.7] - 2026-10-18
 
 ### Added

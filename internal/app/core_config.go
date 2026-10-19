@@ -86,6 +86,7 @@ type Config struct {
 	eveClientID     string         // EVE SSO application client ID
 	eveClientSecret string         // EVE SSO application client secret
 	eveCallbackURL  string         // OAuth2 redirect URI registered with CCP
+	eveRevokeURL    string         // EVE SSO token revocation endpoint (EVE_SSO_REVOKE_URL)
 	devLogin        bool           // DEV_LOGIN=1: register the /dev-login route
 	sdeBaseURL      string         // EVE SDE CSV dump base URL (Fuzzwork by default)
 	fuzzworkBaseURL string         // Fuzzwork market aggregate base URL (fallback prices)
@@ -197,6 +198,19 @@ const defaultSDEBaseURL = "https://www.fuzzwork.co.uk/dump/latest/csv/"
 // price mirror reads.
 const defaultFuzzworkBaseURL = "https://market.fuzzwork.co.uk/"
 
+// defaultEveRevokeURL is CCP's OAuth2 token revocation endpoint
+// (RFC 7009): unlinking a character can ask CCP to revoke its
+// refresh token there, not just delete the local copy.
+const defaultEveRevokeURL = "https://login.eveonline.com/v2/oauth/revoke"
+
+// EveRevokeURL returns the EVE SSO token-revocation endpoint.
+func (c Config) EveRevokeURL() string {
+	if c.eveRevokeURL != "" {
+		return c.eveRevokeURL
+	}
+	return defaultEveRevokeURL
+}
+
 // FuzzworkBaseURL returns the base URL the fallback price
 // mirror polls and downloads from, always with a trailing
 // slash.
@@ -254,6 +268,7 @@ func LoadConfig() (Config, error) {
 		eveClientID:         os.Getenv("EVE_CLIENT_ID"),
 		eveClientSecret:     os.Getenv("EVE_CLIENT_SECRET"),
 		eveCallbackURL:      getenvDefault("EVE_CALLBACK_URL", "http://localhost:8080/auth/callback"),
+		eveRevokeURL:        getenvDefault("EVE_SSO_REVOKE_URL", defaultEveRevokeURL),
 		devLogin:            os.Getenv("DEV_LOGIN") == "1",
 		sdeBaseURL:          getenvDefault("EVE_SDE_BASE_URL", defaultSDEBaseURL),
 		fuzzworkBaseURL:     getenvDefault("EVE_FUZZWORK_BASE_URL", defaultFuzzworkBaseURL),

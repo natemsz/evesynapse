@@ -10,6 +10,7 @@ package app
 import (
 	"context"
 	"database/sql"
+	"encoding/base64"
 	"fmt"
 	"io"
 	"net/http"
@@ -319,6 +320,190 @@ func TestCharacterUnlinkFlow(t *testing.T) {
 
 	if got := transport.calls.Load(); got != 0 {
 		t.Fatalf("handlers made %d outbound calls, want 0", got)
+	}
+}
+
+// revokeStubTransport stands in for CCP's revocation endpoint:
+// it records what it was sent (and whether the character still
+// existed when the call arrived — the revoke must precede the
+// local delete) and answers with a fixed status.
+type revokeStubTransport struct {
+	mu          sync.Mutex
+	calls       int
+	path        string
+	auth        string
+	contentType string
+	token       string
+	hint        string
+	existedThen bool
+	status      int
+	exists      func() bool
+}
+
+func (s *revokeStubTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	body, _ := io.ReadAll(req.Body)
+	form, _ := url.ParseQuery(string(body))
+	s.mu.Lock()
+	s.calls++
+	s.path = req.URL.Path
+	s.auth = req.Header.Get("Authorization")
+	s.contentType = req.Header.Get("Content-Type")
+	s.token = form.Get("token")
+	s.hint = form.Get("token_type_hint")
+	if s.exists != nil {
+		s.existedThen = s.exists()
+	}
+	s.mu.Unlock()
+	status := s.status
+	if status == 0 {
+		status = http.StatusOK
+	}
+	return &http.Response{
+		StatusCode: status,
+		Header:     make(http.Header),
+		Body:       io.NopCloser(strings.NewReader("")),
+		Request:    req,
+	}, nil
+}
+
+// swapLoginHTTPClient points the SSO HTTP client at a stub
+// transport for the test's duration (the same seam the token
+// encryption tests use).
+func swapLoginHTTPClient(t *testing.T, rt http.RoundTripper) {
+	t.Helper()
+	old := loginHTTPClient
+	loginHTTPClient = &http.Client{Transport: rt}
+	t.Cleanup(func() { loginHTTPClient = old })
+}
+
+// seedUnlinkRevokeFixture builds the unlink-revoke test world:
+// an app whose SSO config points at a stub revoke URL, a user with
+// two characters, and a distinctive refresh token stored on the
+// character the tests unlink.
+func seedUnlinkRevokeFixture(t *testing.T, stub *revokeStubTransport) (*Application, *db.Queries, int64, *http.Cookie) {
+	t.Helper()
+	app, _, q := buildCorpTestApp(t, &countingTransport{})
+	app.cfg.eveClientID = "fixture-client"
+	app.cfg.eveClientSecret = "fixture-secret"
+	app.cfg.eveRevokeURL = "https://sso.invalid/v2/oauth/revoke"
+	ctx := context.Background()
+
+	user, err := q.CreateUser(ctx)
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	seedCharacter(t, q, user.ID, fixtureCharA, "Fixture Ceo")
+	seedCharacter(t, q, user.ID, fixtureCharB, "Second Pilot")
+	if err := q.UpdateCharacterTokens(ctx, db.UpdateCharacterTokensParams{
+		AccessToken:  "access-fixture-A",
+		RefreshToken: "refresh-fixture-A",
+		TokenExpiry:  mustNullTime("2999-01-01T00:00:00Z"),
+		CharacterID:  fixtureCharA,
+	}); err != nil {
+		t.Fatalf("store refresh token: %v", err)
+	}
+	if stub != nil {
+		stub.exists = func() bool {
+			_, err := q.GetCharacter(context.Background(), fixtureCharA)
+			return err == nil
+		}
+		swapLoginHTTPClient(t, stub)
+	}
+	cookie := sessionCookie(t, app, user.ID, fixtureCharA, "Fixture Ceo")
+	return app, q, user.ID, cookie
+}
+
+// TestCharacterUnlinkRevokesTokenWhenChecked: the confirm page
+// offers the revoke option ticked by default, and a checked
+// unlink revokes the character's stored refresh token at CCP —
+// with the app's Basic credentials — before the local delete.
+func TestCharacterUnlinkRevokesTokenWhenChecked(t *testing.T) {
+	stub := &revokeStubTransport{}
+	app, q, _, cookie := seedUnlinkRevokeFixture(t, stub)
+	ctx := context.Background()
+
+	code, body := getPage(t, app, cookie, "/characters/?confirm_unlink="+fmt.Sprint(fixtureCharA))
+	if code != http.StatusOK || !strings.Contains(body, `<input type="checkbox" name="revoke_token" value="1" checked>`) {
+		t.Fatalf("confirm page missing the ticked revoke option (status %d)", code)
+	}
+
+	form := url.Values{
+		"character_id": {fmt.Sprint(fixtureCharA)},
+		"revoke_token": {"1"},
+	}
+	code, _, _ = doReq(t, app, http.MethodPost, "/characters/unlink", form, cookie)
+	if code != http.StatusSeeOther {
+		t.Fatalf("POST unlink: status %d", code)
+	}
+
+	if stub.calls != 1 {
+		t.Fatalf("revoke calls = %d, want 1", stub.calls)
+	}
+	if stub.path != "/v2/oauth/revoke" {
+		t.Fatalf("revoke path = %q, want /v2/oauth/revoke", stub.path)
+	}
+	wantAuth := "Basic " + base64.StdEncoding.EncodeToString([]byte("fixture-client:fixture-secret"))
+	if stub.auth != wantAuth {
+		t.Fatalf("revoke Authorization = %q, want %q", stub.auth, wantAuth)
+	}
+	if stub.contentType != "application/x-www-form-urlencoded" {
+		t.Fatalf("revoke Content-Type = %q", stub.contentType)
+	}
+	if stub.token != "refresh-fixture-A" || stub.hint != "refresh_token" {
+		t.Fatalf("revoke form token = %q hint = %q, want the stored refresh token with the refresh_token hint", stub.token, stub.hint)
+	}
+	if !stub.existedThen {
+		t.Fatal("revoke fired after the local delete; it must precede it")
+	}
+	if _, err := q.GetCharacter(ctx, fixtureCharA); err == nil {
+		t.Fatal("character row survived unlink")
+	}
+	if _, err := q.GetCharacter(ctx, fixtureCharB); err != nil {
+		t.Fatal("other character lost in unlink")
+	}
+}
+
+// TestCharacterUnlinkRevokeFailureStillUnlinks: a failing
+// revocation endpoint (CCP error) never blocks the unlink.
+func TestCharacterUnlinkRevokeFailureStillUnlinks(t *testing.T) {
+	stub := &revokeStubTransport{status: http.StatusInternalServerError}
+	app, q, _, cookie := seedUnlinkRevokeFixture(t, stub)
+	ctx := context.Background()
+
+	form := url.Values{
+		"character_id": {fmt.Sprint(fixtureCharA)},
+		"revoke_token": {"1"},
+	}
+	code, _, _ := doReq(t, app, http.MethodPost, "/characters/unlink", form, cookie)
+	if code != http.StatusSeeOther {
+		t.Fatalf("POST unlink with failing revoke: status %d", code)
+	}
+	if stub.calls != 1 {
+		t.Fatalf("revoke calls = %d, want 1 (attempted, then swallowed)", stub.calls)
+	}
+	if _, err := q.GetCharacter(ctx, fixtureCharA); err == nil {
+		t.Fatal("character row survived unlink after a failed revoke")
+	}
+}
+
+// TestCharacterUnlinkWithoutRevokeOption: with the box unticked
+// (the browser sends no field), no call goes to CCP at all and
+// the unlink is the local delete only, as before.
+func TestCharacterUnlinkWithoutRevokeOption(t *testing.T) {
+	stub := &revokeStubTransport{}
+	app, q, _, cookie := seedUnlinkRevokeFixture(t, stub)
+	ctx := context.Background()
+
+	form := url.Values{"character_id": {fmt.Sprint(fixtureCharA)}}
+	code, _, _ := doReq(t, app, http.MethodPost, "/characters/unlink", form, cookie)
+	if code != http.StatusSeeOther {
+		t.Fatalf("POST unlink: status %d", code)
+	}
+	if stub.calls != 0 {
+		t.Fatalf("revoke calls = %d, want 0 without the option", stub.calls)
+	}
+	if _, err := q.GetCharacter(ctx, fixtureCharA); err == nil {
+		t.Fatal("character row survived unlink")
 	}
 }
 

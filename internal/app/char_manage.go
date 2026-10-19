@@ -290,9 +290,13 @@ func normalizeTags(raw string) string {
 // character row (and with it, by cascade, its snapshots, fetch
 // state, corp mapping and detail stores) is deleted. The confirm
 // step lives on the management page (?confirm_unlink=<id>); this
-// POST is the destructive half. If the character was the acting
-// one, the session falls back to the first remaining character —
-// or to a clean empty state when it was the last one.
+// POST is the destructive half. The confirm form's revoke box
+// (ticked by default) asks for full disconnection as well: the
+// character's refresh token is revoked at CCP before the local
+// delete — best-effort, never blocking the unlink. If the
+// character was the acting one, the session falls back to the
+// first remaining character — or to a clean empty state when it
+// was the last one.
 func (app *Application) handleCharacterUnlink(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	userID := app.userID(ctx)
@@ -308,6 +312,19 @@ func (app *Application) handleCharacterUnlink(w http.ResponseWriter, r *http.Req
 	if characterID == 0 {
 		http.Redirect(w, r, "/characters/", http.StatusSeeOther)
 		return
+	}
+
+	// Full disconnection when the confirm form's revoke box was
+	// ticked: revoke the character's refresh token at CCP before
+	// its local rows go. Only for a character this account owns —
+	// the delete below no-ops on anyone else's, and their token is
+	// never ours to revoke.
+	if _, revoke := r.Form["revoke_token"]; revoke {
+		if ch, err := app.queries.GetCharacter(ctx, characterID); err != nil {
+			logging.Errorf("characters: unlink revoke: load character %d for user %d: %v", characterID, userID, err)
+		} else if ch.UserID == userID {
+			app.revokeCharacterTokenAtCCP(ctx, ch)
+		}
 	}
 
 	if err := app.queries.DeleteCharacter(ctx, db.DeleteCharacterParams{

@@ -15,6 +15,8 @@
 <p>This removes the character from your account and deletes its saved login and all cached data for it (snapshots, wallet/order history views, corp data warmed through it). Data other characters warmed is untouched. This can't be undone, but you can link the character again with EVE sign-in at any time.</p>
 <form method="post" action="/characters/unlink">
   <input type="hidden" name="character_id" value="{{.ConfirmUnlink.ID}}">
+  <p><label><input type="checkbox" name="revoke_token" value="1" checked> Also revoke this character's token with EVE Online (full disconnection)</label><br>
+  <small>Ticked: EVE is asked to revoke the token as well, so the grant ends there too. Unticked: the saved login is only deleted here, and the grant at EVE stays until it expires. If the revocation can't be completed, the unlink still goes ahead.</small></p>
   <button class="btn" type="submit">Unlink {{.ConfirmUnlink.Name}}</button>
   <a class="btn" href="/characters/">Cancel</a>
 </form>

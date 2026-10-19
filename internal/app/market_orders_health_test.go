@@ -223,7 +223,9 @@ func TestKillViewNotesGuidePriceWant(t *testing.T) {
 	}
 	// The killmail system line follows the place-link policy.
 	mustContain(t, "/killmails/", body, `<a href="/system/?system=30000142">Jita</a>`)
-	if strings.Contains(body, "550") {
+	// The would-be value renders as the cell "550.00 ISK"; the bare
+	// digits alone also occur inside the wordmark's outlined paths.
+	if strings.Contains(body, "550.00 ISK") {
 		t.Error("value rendered before any price guide exists")
 	}
 	if _, err := q.GetGuidePriceWant(ctx); err != nil {

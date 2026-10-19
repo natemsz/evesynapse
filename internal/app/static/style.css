@@ -54,15 +54,6 @@
   font-display: swap;
   src: url('/static/fonts/saira-sc-700.woff2') format('woff2');
 }
-/* The wordmark face. font-display: block keeps the brand from flashing
-   in a fallback face; the file is preloaded. */
-@font-face {
-  font-family: 'Pixelify Sans';
-  font-style: normal;
-  font-weight: 600;
-  font-display: block;
-  src: url('/static/fonts/pixelify-sans-semibold.ttf') format('truetype');
-}
 /* The heading face: Rajdhani SemiBold (and Bold), set in capitals.
    SIL Open Font License; self-hosted (font-src 'self'). */
 @font-face {
@@ -265,7 +256,8 @@ h4 { font-size: 0.92rem; }
 }
 @media (forced-colors: active) {
   h2, h3 { background: none; color: CanvasText; text-shadow: none; -webkit-text-fill-color: currentColor; }
-  .wordmark, .wm-eve, .wm-syn span, .wordmark:hover .wm-syn span { color: CanvasText; }
+  .wordmark { color: CanvasText; }
+  .wordmark-svg path { fill: CanvasText; }
 }
 
 /* Secondary text: quieter in colour, nearly the size of the text around
@@ -299,31 +291,32 @@ header .topbar {
   padding-bottom: 0.275rem;
   gap: 1rem;
 }
-/* Pixelify Sans is drawn on an 8-pixel em: at 1rem (16px) and 1.5rem
-   (24px) every design pixel is a whole number of screen pixels (2 and 3)
-   and the 0.125em letter-spacing is exactly one design pixel, so the
-   letters stay crisp. The phone sizes below use 1rem for that reason. */
+/* The wordmark letterforms are inline SVG in the templates, outlined
+   from the Pixelify face, so the brand paints with no font load and
+   no blocking period. The svg is sized in ems off the anchor's
+   font-size: 1.2em is the face's line box (920 units up, 280 down on
+   its 1000-unit em), and the phone size below sets 1rem. */
 .wordmark {
   display: inline-block;
-  font-family: 'Pixelify Sans', monospace;
   font-size: 1.5rem;
-  font-weight: 600;
-  letter-spacing: 0.125em;
   color: var(--text-bright);
 }
-/* SYNAPSE fades from gold to ember one solid colour per letter. A
-   gradient clipped to the text is painted as a mask, which came out a
-   pixel short beside the solid EVE and vanished in WebKit under a
-   transformed ancestor. */
-.wm-syn > span:nth-child(1) { color: #ffc36c; }
-.wm-syn > span:nth-child(2) { color: #ffa551; }
-.wm-syn > span:nth-child(3) { color: #ff8835; }
-.wm-syn > span:nth-child(4) { color: #ff6a1a; }
-.wm-syn > span:nth-child(5) { color: #f35d18; }
-.wm-syn > span:nth-child(6) { color: #e85017; }
-.wm-syn > span:nth-child(7) { color: #dc4315; }
+.wordmark-svg { display: block; height: 1.2em; width: auto; }
+/* EVE is solid white and SYNAPSE steps from gold to ember, one
+   solid colour per letter, as the font text did. (A gradient
+   clipped to the text painted as a mask, which came out a pixel
+   short beside the solid EVE and vanished in WebKit under a
+   transformed ancestor.) */
+.wordmark-svg .p-eve { fill: #ffffff; }
+.wordmark-svg .p-s1 { fill: #ffc36c; }
+.wordmark-svg .p-s2 { fill: #ffa551; }
+.wordmark-svg .p-s3 { fill: #ff8835; }
+.wordmark-svg .p-s4 { fill: #ff6a1a; }
+.wordmark-svg .p-s5 { fill: #f35d18; }
+.wordmark-svg .p-s6 { fill: #e85017; }
+.wordmark-svg .p-s7 { fill: #dc4315; }
 .wordmark:hover { text-decoration: none; }
-.wordmark:hover .wm-syn > span { color: var(--text-bright); }
+.wordmark:hover .wordmark-svg .p-syn { fill: var(--text-bright); }
 header .who {
   margin-left: auto;
   color: var(--muted-2);
@@ -1351,6 +1344,7 @@ footer {
   backdrop-filter: blur(18px);
   border-top: 1px solid #262626;
   color: var(--muted);
+  font-family: "JetBrains Mono", ui-monospace, monospace;
   text-align: center;
   font-size: 0.72rem;
   text-shadow: 1px -1px 0 #000;
@@ -1359,15 +1353,17 @@ footer {
 }
 footer .version {
   color: var(--muted);
-  font-family: 'Pixelify Sans', monospace;
   font-weight: 600;
   font-size: 0.72rem;
   line-height: 1.5;
   word-spacing: 0.175em;
   text-wrap: balance;
 }
+/* The version line once set its text in Pixelify and its number in
+   JetBrains Mono; the two faces' metrics stepped the baseline where
+   they met. One family on the footer (above) and a weight change
+   only keeps the whole line on one baseline. */
 footer .version-number {
-  font-family: "JetBrains Mono", ui-monospace, monospace;
   font-weight: 400;
 }
 
@@ -1379,7 +1375,7 @@ footer .version-number {
   .panel > h1:first-child { margin: -1rem -0.9rem 1rem; padding: 0.55rem 0.9rem; }
   header nav { padding-left: 0.6rem; padding-right: 0.6rem; }
   header .mainnav { gap: 0.15rem; }
-  .wordmark { letter-spacing: 0.125em; font-size: 1rem; }
+  .wordmark { font-size: 1rem; }
   /* On narrow screens an open branch is a full-width bar beneath the
      header: the branch stops being the menu's positioning context, so
      the menu spans the header. */
@@ -2843,9 +2839,6 @@ html[data-nav="rail"] { --nav-axis: calc(2.5rem - 0.5px); }
   html[data-nav="rail"] .wordmark-glyph {
     margin-right: calc(5rem - 1px - var(--nav-axis) - 0.875rem);
   }
-}
-.wordmark .wm-eve {
-  color: #ffffff;
 }
 .topbar-character {
   display: flex;

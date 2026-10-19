@@ -341,7 +341,8 @@ func (app *page) handleAppraiseReprocess(w http.ResponseWriter, r *http.Request)
 	row, err := app.queries.GetUserAppraisalByShareToken(ctx, token)
 	if err != nil {
 		data.Error = "That shared appraisal could not be found."
-		data.Appraise = &appraiseView{SignedIn: data.LoggedIn}
+		basis := app.basisFromValues(app.rememberedBasis(ctx, r, app.deps.UserID(ctx)), r.URL.Query())
+		data.Appraise = app.consoleView(data, basis)
 		app.deps.Render(ctx, w, http.StatusNotFound, "market_appraise.html", data)
 		return
 	}
@@ -349,7 +350,7 @@ func (app *page) handleAppraiseReprocess(w http.ResponseWriter, r *http.Request)
 	if err != nil {
 		logging.Errorf("appraisal: reprocess snapshot: %v", err)
 		data.Error = "That shared appraisal could not be read."
-		data.Appraise = &appraiseView{SignedIn: data.LoggedIn}
+		data.Appraise = app.consoleView(data, app.storedBasis(row))
 		app.deps.Render(ctx, w, http.StatusInternalServerError, "market_appraise.html", data)
 		return
 	}
@@ -362,7 +363,7 @@ func (app *page) handleAppraiseReprocess(w http.ResponseWriter, r *http.Request)
 	if err := json.Unmarshal(row.Snapshot, &snap); err != nil {
 		logging.Errorf("appraisal: reprocess snapshot decode: %v", err)
 		data.Error = "That shared appraisal could not be read."
-		data.Appraise = &appraiseView{SignedIn: data.LoggedIn}
+		data.Appraise = app.consoleView(data, app.storedBasis(row))
 		app.deps.Render(ctx, w, http.StatusInternalServerError, "market_appraise.html", data)
 		return
 	}

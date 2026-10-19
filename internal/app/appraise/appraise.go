@@ -78,6 +78,7 @@ type snapUnresolved struct {
 // snapshot is one appraisal, exactly as computed.
 type snapshot struct {
 	Basis       snapshotBasis    `json:"basis"`
+	ExcludeText string           `json:"exclude_text,omitempty"`
 	Lines       []snapLine       `json:"lines"`
 	Unresolved  []snapUnresolved `json:"unresolved,omitempty"`
 	Bad         []string         `json:"bad,omitempty"`
@@ -110,9 +111,11 @@ type resolvedLine struct {
 }
 
 // computeAppraisal runs the whole flow over one paste under
-// a pricing basis, which the snapshot records.
-func (app *page) computeAppraisal(ctx context.Context, input string, basis pricingBasis) (*snapshot, error) {
-	snap := &snapshot{Basis: basis.snapshot()}
+// a pricing basis, which the snapshot records. A non-empty
+// exclude paste subtracts its items and quantities from the
+// result (list A minus list B).
+func (app *page) computeAppraisal(ctx context.Context, input string, basis pricingBasis, exclude string) (*snapshot, error) {
+	snap := &snapshot{Basis: basis.snapshot(), ExcludeText: exclude}
 	var resolved []resolvedLine
 	if moon, ok := moonScanLines(input); ok {
 		parsed := parsePaste(moon)
@@ -150,6 +153,15 @@ func (app *page) computeAppraisal(ctx context.Context, input string, basis prici
 	}
 
 	agg := aggregateLines(resolved)
+	if strings.TrimSpace(exclude) != "" {
+		var notes []string
+		var err error
+		agg, notes, err = app.subtractExclusions(ctx, agg, exclude)
+		if err != nil {
+			return nil, err
+		}
+		snap.Notes = append(snap.Notes, notes...)
+	}
 	priceLines := make([]module.AppraisalLine, 0, len(agg))
 	for _, ln := range agg {
 		pl := module.AppraisalLine{TypeID: ln.TypeID, Quantity: ln.Qty, ItemID: ln.ItemID, Included: true}
@@ -501,6 +513,47 @@ func aggregateLines(resolved []resolvedLine) []aggLine {
 		out = append(out, aggLine{TypeID: ln.TypeID, ItemID: ln.ItemID, Name: ln.Name, Qty: ln.Qty, Note: note, Facts: ln.Facts})
 	}
 	return out
+}
+
+// subtractExclusions removes an exclusion paste's quantities
+// from the aggregated lines, by type: what remains is the
+// appraisal. Lines reduced to zero go away; exclusion lines
+// that cannot be read are reported, never silently applied.
+func (app *page) subtractExclusions(ctx context.Context, agg []aggLine, exclude string) ([]aggLine, []string, error) {
+	parsed := parsePaste(exclude)
+	resolved, unresolved, err := app.resolveList(ctx, parsed)
+	if err != nil {
+		return nil, nil, err
+	}
+	sub := map[int64]int64{}
+	for _, ln := range aggregateLines(resolved) {
+		sub[ln.TypeID] += ln.Qty
+	}
+	var notes []string
+	if len(unresolved) > 0 || len(parsed.Bad) > 0 {
+		notes = append(notes, fmt.Sprintf("%d exclusion line(s) could not be read and were ignored.", len(unresolved)+len(parsed.Bad)))
+	}
+	var removed int64
+	out := make([]aggLine, 0, len(agg))
+	for _, ln := range agg {
+		if n, ok := sub[ln.TypeID]; ok && n > 0 {
+			if n >= ln.Qty {
+				removed += ln.Qty
+				delete(sub, ln.TypeID)
+				continue
+			}
+			removed += n
+			ln.Qty -= n
+			delete(sub, ln.TypeID)
+		}
+		out = append(out, ln)
+	}
+	if removed > 0 {
+		notes = append(notes, fmt.Sprintf("Excluded %s unit(s) from the second list.", esi.FormatInt(removed)))
+	} else if len(notes) == 0 {
+		notes = append(notes, "Nothing in the second list matched the first.")
+	}
+	return out, notes, nil
 }
 
 // abyssalEstimateNote words a stored abyssal estimate's
@@ -917,7 +970,7 @@ func (app *page) handleAppraiseSubmit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	basis := app.basisFromValues(app.rememberedBasis(ctx, r, userID), r.Form)
-	snap, err := app.computeAppraisal(ctx, input, basis)
+	snap, err := app.computeAppraisal(ctx, input, basis, r.FormValue("exclude"))
 	if err != nil {
 		logging.Errorf("appraisal: compute: %v", err)
 		data := &PageData{ShellData: app.deps.PublicShell(ctx)}
@@ -1069,6 +1122,16 @@ func (app *page) storedBasis(row db.UserAppraisal) pricingBasis {
 	return app.defaultBasis()
 }
 
+// storedExclude reads a stored row's recorded exclusion
+// paste, empty when it had none.
+func (app *page) storedExclude(row db.UserAppraisal) string {
+	var snap snapshot
+	if err := json.Unmarshal(row.Snapshot, &snap); err == nil {
+		return snap.ExcludeText
+	}
+	return ""
+}
+
 // handleAppraiseReprice re-runs one of the owner's saved
 // pastes at current prices, under the basis the form carries
 // (the stored basis when it carries none): a new appraisal
@@ -1088,7 +1151,7 @@ func (app *page) handleAppraiseReprice(w http.ResponseWriter, r *http.Request) {
 	}
 	_ = r.ParseForm()
 	basis := app.basisFromValues(app.storedBasis(row), r.Form)
-	snap, err := app.computeAppraisal(ctx, row.InputText, basis)
+	snap, err := app.computeAppraisal(ctx, row.InputText, basis, app.storedExclude(row))
 	if err != nil {
 		logging.Errorf("appraisal: reprice %d: %v", id, err)
 		http.Redirect(w, r, "/market/appraise/?a="+strconv.FormatInt(id, 10), http.StatusSeeOther)
@@ -1118,7 +1181,7 @@ func (app *page) handleAppraiseRepriceToken(w http.ResponseWriter, r *http.Reque
 	}
 	_ = r.ParseForm()
 	basis := app.basisFromValues(app.storedBasis(row), r.Form)
-	snap, err := app.computeAppraisal(ctx, row.InputText, basis)
+	snap, err := app.computeAppraisal(ctx, row.InputText, basis, app.storedExclude(row))
 	if err != nil {
 		logging.Errorf("appraisal: reprice share: %v", err)
 		http.Redirect(w, r, "/market/appraise/s/"+token+"/", http.StatusSeeOther)

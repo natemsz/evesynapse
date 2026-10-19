@@ -14,6 +14,10 @@
       <label class="ap-label" for="ap-items">Items to appraise</label>
       <textarea id="ap-items" name="items" rows="10" placeholder="Tritanium x 1,000,000&#10;Pyerite 250000&#10;[Rifter, My Rifter]&#10;...">{{.Input}}</textarea>
     </div>
+    <div class="ap-field">
+      <label class="ap-label" for="ap-exclude">Exclude these items (optional)</label>
+      <textarea id="ap-exclude" name="exclude" rows="3" placeholder="Items and quantities to subtract from the list above"></textarea>
+    </div>
     <p class="ap-basis"><small>
       <label>Hub <select name="hub">{{range .Hubs}}<option value="{{.RegionID}}"{{if .Selected}} selected{{end}}>{{.Name}}</option>{{end}}</select></label>
       <label>Mode <select name="mode"><option value="sell"{{if eq .Basis.Mode "sell"}} selected{{end}}>Typical sell</option><option value="buy"{{if eq .Basis.Mode "buy"}} selected{{end}}>Typical buy</option><option value="split"{{if eq .Basis.Mode "split"}} selected{{end}}>Split</option></select></label>

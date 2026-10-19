@@ -799,6 +799,37 @@ func TestAppraisalToolMoonScan(t *testing.T) {
 		"76,000.00", "Moon survey: each ore is appraised at its survey share of 10,000 units")
 }
 
+func TestAppraisalToolExclusionList(t *testing.T) {
+	tr := &countingTransport{}
+	app, conn, q := buildCorpTestApp(t, tr)
+	seedAppraisalTool(t, conn, q)
+
+	// 100 Tritanium minus 40 leaves 60 (390.00); the Pyerite
+	// line is untouched, and the subtraction is stated.
+	body, _, _ := postAnonAppraisal(t, app, url.Values{
+		"items":   {"Tritanium x 100\nPyerite x 10"},
+		"exclude": {"Tritanium x 40"},
+	})
+	mustContain(t, "exclusion appraisal", body,
+		"390.00", "Excluded 40 unit(s) from the second list.")
+	if strings.Contains(body, "650.00") {
+		t.Error("the exclusion was not subtracted from the Tritanium line")
+	}
+
+	// Excluding everything leaves no item lines, which is a
+	// rejection, not an empty stored appraisal.
+	code, body, _ := postAppraise(t, app, nil, url.Values{
+		"items": {"Tritanium x 10"}, "exclude": {"Tritanium x 10"},
+	})
+	if code != http.StatusOK {
+		t.Fatalf("exclude-all: status %d, want 200 with an error", code)
+	}
+	mustContain(t, "exclude-all", body, "no appraisal was saved")
+	if n := appraisalRowCount(t, conn); n != 1 {
+		t.Fatalf("rows = %d, want only the first appraisal stored", n)
+	}
+}
+
 func TestPublicFitEscapesUserText(t *testing.T) {
 	tr := &countingTransport{}
 	app, conn, q := buildCorpTestApp(t, tr)

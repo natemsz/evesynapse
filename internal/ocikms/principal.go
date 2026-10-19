@@ -154,14 +154,25 @@ func splitPEMBlocks(doc []byte) [][]byte {
 // certificate's subject, where the metadata service stamps it as
 // a distinguished-name value.
 func tenancyOCIDFromCert(cert *x509.Certificate) string {
+	// The instance certificate carries the tenancy in an OU value
+	// of the form "opc-tenant:<tenancy OCID>"; that RDN wins. A
+	// bare tenancy OCID in any RDN is the fallback.
+	fallback := ""
 	for _, seq := range cert.Subject.ToRDNSequence() {
 		for _, atv := range seq {
-			if s, ok := atv.Value.(string); ok && strings.HasPrefix(s, "ocid1.tenancy.") {
-				return s
+			s, ok := atv.Value.(string)
+			if !ok {
+				continue
+			}
+			if rest, found := strings.CutPrefix(s, "opc-tenant:"); found {
+				return rest
+			}
+			if strings.HasPrefix(s, "ocid1.tenancy.") {
+				fallback = s
 			}
 		}
 	}
-	return ""
+	return fallback
 }
 
 // The federation endpoint's wire shapes: the certificate material

@@ -290,13 +290,13 @@ func TestWallpaperFirstPaintUnderlay(t *testing.T) {
 	// The interior wears the calm sky: six tier declarations
 	// (plain + image-set for base/4K/UHD), each with the calm
 	// thumb as its last layer.
-	if n := strings.Count(bg, `url("/static/bg-calm-thumb.jpg")`); n != 6 {
+	if n := strings.Count(bg, `url("/static/bg-calm-thumb.jpg?v=80a5dfea56eeb668")`); n != 6 {
 		t.Errorf("bg.css carries the calm first-paint underlay on %d tier declarations, want 6", n)
 	}
 	for _, want := range []string{
-		`background-image: url("/static/bg-calm.jpg"), url("/static/bg-calm-thumb.jpg");`,
-		`background-image: url("/static/bg-calm-4k.jpg"), url("/static/bg-calm-thumb.jpg");`,
-		`background-image: url("/static/bg-calm-uhd.jpg"), url("/static/bg-calm-thumb.jpg");`,
+		`background-image: url("/static/bg-calm.jpg?v=cbb09d21ebe7445e"), url("/static/bg-calm-thumb.jpg?v=80a5dfea56eeb668");`,
+		`background-image: url("/static/bg-calm-4k.jpg?v=0abedfc879b4aacf"), url("/static/bg-calm-thumb.jpg?v=80a5dfea56eeb668");`,
+		`background-image: url("/static/bg-calm-uhd.jpg?v=93ca5b3df15d4dd6"), url("/static/bg-calm-thumb.jpg?v=80a5dfea56eeb668");`,
 	} {
 		if !strings.Contains(bg, want) {
 			t.Errorf("bg.css is missing the calm underlay declaration %q", want)
@@ -310,9 +310,9 @@ func TestWallpaperFirstPaintUnderlay(t *testing.T) {
 		t.Fatalf("read landing.css: %v", err)
 	}
 	for _, want := range []string{
-		`background-image: url("/static/bg.jpg"), url("/static/bg-thumb.jpg");`,
-		`background-image: url("/static/bg-4k.jpg"), url("/static/bg-thumb.jpg");`,
-		`background-image: url("/static/bg-uhd.jpg"), url("/static/bg-thumb.jpg");`,
+		`background-image: url("/static/bg.jpg?v=c57556984356d9b7"), url("/static/bg-thumb.jpg?v=c4cb5f59ce6c1ad2");`,
+		`background-image: url("/static/bg-4k.jpg?v=ecf3a91196acdf76"), url("/static/bg-thumb.jpg?v=c4cb5f59ce6c1ad2");`,
+		`background-image: url("/static/bg-uhd.jpg?v=2a2fc31c60d7682c"), url("/static/bg-thumb.jpg?v=c4cb5f59ce6c1ad2");`,
 	} {
 		if !strings.Contains(string(landingRaw), want) {
 			t.Errorf("landing.css is missing the dramatic underlay declaration %q", want)
@@ -330,8 +330,8 @@ func TestWallpaperFirstPaintUnderlay(t *testing.T) {
 		t.Fatalf("read base.html: %v", err)
 	}
 	for _, want := range []string{
-		`<link rel="preload" as="image" type="image/jxl" fetchpriority="high" href="/static/bg-calm-uhd.jxl"`,
-		`<link rel="preload" as="image" type="image/jxl" fetchpriority="high" href="/static/bg-calm-4k.jxl"`,
+		`<link rel="preload" as="image" type="image/jxl" fetchpriority="high" href="/static/bg-calm-uhd.jxl?v=afdbe38df4d5f595"`,
+		`<link rel="preload" as="image" type="image/jxl" fetchpriority="high" href="/static/bg-calm-4k.jxl?v=e6653b67c49cd641"`,
 	} {
 		if !strings.Contains(string(base), want) {
 			t.Errorf("base.html is missing the wallpaper preload %q", want)

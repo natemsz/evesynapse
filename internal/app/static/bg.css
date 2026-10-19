@@ -32,22 +32,22 @@
    there). The bg-calm-* tiers mirror the dramatic ones tier
    for tier, thumb underlay included. */
 body::before {
-  background-image: url("/static/bg-calm.jpg"), url("/static/bg-calm-thumb.jpg");
-  background-image: image-set(url("/static/bg-calm.jxl") type("image/jxl"), url("/static/bg-calm.jpg") type("image/jpeg")), url("/static/bg-calm-thumb.jpg");
+  background-image: url("/static/bg-calm.jpg?v=cbb09d21ebe7445e"), url("/static/bg-calm-thumb.jpg?v=80a5dfea56eeb668");
+  background-image: image-set(url("/static/bg-calm.jxl?v=9169d69db20dcc2a") type("image/jxl"), url("/static/bg-calm.jpg?v=cbb09d21ebe7445e") type("image/jpeg")), url("/static/bg-calm-thumb.jpg?v=80a5dfea56eeb668");
   background-repeat: no-repeat;
   background-size: cover;
   background-position: center;
 }
 @media (min-width: 1501px), (min-width: 751px) and (min-resolution: 2dppx), (min-width: 751px) and (-webkit-min-device-pixel-ratio: 2) {
   body::before {
-    background-image: url("/static/bg-calm-4k.jpg"), url("/static/bg-calm-thumb.jpg");
-    background-image: image-set(url("/static/bg-calm-4k.jxl") type("image/jxl"), url("/static/bg-calm-4k.jpg") type("image/jpeg")), url("/static/bg-calm-thumb.jpg");
+    background-image: url("/static/bg-calm-4k.jpg?v=0abedfc879b4aacf"), url("/static/bg-calm-thumb.jpg?v=80a5dfea56eeb668");
+    background-image: image-set(url("/static/bg-calm-4k.jxl?v=e6653b67c49cd641") type("image/jxl"), url("/static/bg-calm-4k.jpg?v=0abedfc879b4aacf") type("image/jpeg")), url("/static/bg-calm-thumb.jpg?v=80a5dfea56eeb668");
   }
 }
 @media (min-width: 3201px), (min-width: 1601px) and (min-resolution: 2dppx), (min-width: 1601px) and (-webkit-min-device-pixel-ratio: 2) {
   body::before {
-    background-image: url("/static/bg-calm-uhd.jpg"), url("/static/bg-calm-thumb.jpg");
-    background-image: image-set(url("/static/bg-calm-uhd.jxl") type("image/jxl"), url("/static/bg-calm-uhd.jpg") type("image/jpeg")), url("/static/bg-calm-thumb.jpg");
+    background-image: url("/static/bg-calm-uhd.jpg?v=93ca5b3df15d4dd6"), url("/static/bg-calm-thumb.jpg?v=80a5dfea56eeb668");
+    background-image: image-set(url("/static/bg-calm-uhd.jxl?v=afdbe38df4d5f595") type("image/jxl"), url("/static/bg-calm-uhd.jpg?v=93ca5b3df15d4dd6") type("image/jpeg")), url("/static/bg-calm-thumb.jpg?v=80a5dfea56eeb668");
   }
 }
 

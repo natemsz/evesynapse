@@ -13,12 +13,20 @@ package app
 //     a hash of everything under static/. That URL names exactly
 //     those bytes for good, so it is cached for a year; a new build
 //     with different files produces different URLs.
+//   - Stylesheets cannot carry the build token for the wallpaper
+//     files they reference (their own text is fixed when written),
+//     so those url()s carry the file's own content hash as ?v=
+//     instead — the same hash the file's ETag carries. That URL
+//     likewise names exactly those bytes, so it caches the same
+//     way. TestStaticWallpaperVersionTokens pins the tokens in the
+//     stylesheets and the base template to the files' hashes, so
+//     replacing the art without refreshing a token fails CI
+//     instead of silently un-caching (or, worse, mis-caching) it.
 //   - Fonts never change at a given URL and cache the same way (as
 //     before).
-//   - Anything else (the wallpaper the stylesheet references, the
-//     favicon, an old ?v= left in an open tab) carries an ETag and
-//     is revalidated: one small "not modified" round trip instead
-//     of the whole file.
+//   - Anything else (the favicon, an old ?v= left in an open tab)
+//     carries an ETag and is revalidated: one small "not modified"
+//     round trip instead of the whole file.
 // ---------------------------------------------------------------------------
 
 import (
@@ -90,8 +98,18 @@ func staticHandler() (http.Handler, error) {
 	fileServer := http.FileServer(http.FS(sub))
 	return http.StripPrefix("/static", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		idx := loadStaticIndex()
+		versioned := req.URL.Query().Get("v") == idx.version
+		if !versioned {
+			// A stylesheet's wallpaper url() carries the file's
+			// own content hash (its ETag without the quotes): a
+			// URL naming exactly these bytes, versioned the same
+			// way as the build token above.
+			if etag, ok := idx.etags[req.URL.Path]; ok && req.URL.Query().Get("v") == strings.Trim(etag, `"`) {
+				versioned = true
+			}
+		}
 		switch {
-		case strings.HasPrefix(req.URL.Path, "/fonts/"), req.URL.Query().Get("v") == idx.version:
+		case strings.HasPrefix(req.URL.Path, "/fonts/"), versioned:
 			w.Header().Set("Cache-Control", cacheForever)
 		default:
 			w.Header().Set("Cache-Control", "no-cache")

@@ -151,18 +151,18 @@ body::before { filter: brightness(0.74) saturate(0.97) blur(2px); transform: sca
    the sunrise art here — this sheet loads after bg.css and is
    linked only by the landing template. */
 body::before {
-  background-image: url("/static/bg.jpg"), url("/static/bg-thumb.jpg");
-  background-image: image-set(url("/static/bg.jxl") type("image/jxl"), url("/static/bg.jpg") type("image/jpeg")), url("/static/bg-thumb.jpg");
+  background-image: url("/static/bg.jpg?v=c57556984356d9b7"), url("/static/bg-thumb.jpg?v=c4cb5f59ce6c1ad2");
+  background-image: image-set(url("/static/bg.jxl?v=1d31d7c0ab58ac52") type("image/jxl"), url("/static/bg.jpg?v=c57556984356d9b7") type("image/jpeg")), url("/static/bg-thumb.jpg?v=c4cb5f59ce6c1ad2");
 }
 @media (min-width: 1501px), (min-width: 751px) and (min-resolution: 2dppx), (min-width: 751px) and (-webkit-min-device-pixel-ratio: 2) {
   body::before {
-    background-image: url("/static/bg-4k.jpg"), url("/static/bg-thumb.jpg");
-    background-image: image-set(url("/static/bg-4k.jxl") type("image/jxl"), url("/static/bg-4k.jpg") type("image/jpeg")), url("/static/bg-thumb.jpg");
+    background-image: url("/static/bg-4k.jpg?v=ecf3a91196acdf76"), url("/static/bg-thumb.jpg?v=c4cb5f59ce6c1ad2");
+    background-image: image-set(url("/static/bg-4k.jxl?v=45283f734be28635") type("image/jxl"), url("/static/bg-4k.jpg?v=ecf3a91196acdf76") type("image/jpeg")), url("/static/bg-thumb.jpg?v=c4cb5f59ce6c1ad2");
   }
 }
 @media (min-width: 3201px), (min-width: 1601px) and (min-resolution: 2dppx), (min-width: 1601px) and (-webkit-min-device-pixel-ratio: 2) {
   body::before {
-    background-image: url("/static/bg-uhd.jpg"), url("/static/bg-thumb.jpg");
-    background-image: image-set(url("/static/bg-uhd.jxl") type("image/jxl"), url("/static/bg-uhd.jpg") type("image/jpeg")), url("/static/bg-thumb.jpg");
+    background-image: url("/static/bg-uhd.jpg?v=2a2fc31c60d7682c"), url("/static/bg-thumb.jpg?v=c4cb5f59ce6c1ad2");
+    background-image: image-set(url("/static/bg-uhd.jxl?v=77ce2099523d3d32") type("image/jxl"), url("/static/bg-uhd.jpg?v=2a2fc31c60d7682c") type("image/jpeg")), url("/static/bg-thumb.jpg?v=c4cb5f59ce6c1ad2");
   }
 }

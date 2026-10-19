@@ -67,6 +67,7 @@
 <div class="ap-total"><span class="ap-total-label">Total value</span><span class="ap-total-fig">{{$r.TotalValue}} ISK</span></div>
 {{if $r.TotalVol}}<p><small>Total volume {{$r.TotalVol}} m³{{if $r.ISKPerM3}} · {{$r.ISKPerM3}} ISK/m³{{end}}</small></p>{{end}}
 {{if $r.ShareURL}}<p><small><a href="{{$r.ShareURL}}reprocess">Reprocessing view</a> — what these lines yield reprocessed, valued at this basis.</small></p>{{end}}
+{{if $r.Multisell}}<p><small>Multi-sell format, one <em>name price</em> line per priced item at this basis:</small> <button class="btn small" type="button" data-copy-from="ap-multisell">Copy multi-sell list</button></p><pre id="ap-multisell">{{$r.Multisell}}</pre>{{end}}
 
 {{if $r.Unresolved}}
 <p><strong>These lines could not be priced:</strong></p>

@@ -6,8 +6,10 @@ package app
 
 import (
 	"context"
+	"io/fs"
 	"net/http"
 	"net/http/httptest"
+	"regexp"
 	"strings"
 	"sync"
 	"testing"
@@ -265,6 +267,92 @@ func TestConcurrentRendersShareTemplates(t *testing.T) {
 		}
 		if !strings.Contains(bodies[i], "</html>") || bodies[i] != bodies[0] {
 			t.Fatalf("request %d rendered a different or incomplete page", i)
+		}
+	}
+}
+
+// TestStaticFileHashVersionTokens: a wallpaper URL whose ?v= is
+// the file's own content hash (the form the stylesheets emit)
+// caches forever, like a build-versioned URL; a wrong hash and a
+// missing token both stay on the revalidation path.
+func TestStaticFileHashVersionTokens(t *testing.T) {
+	app, _, _ := buildCorpTestApp(t, &countingTransport{})
+	get := func(path string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		rec := httptest.NewRecorder()
+		app.Handler().ServeHTTP(rec, req)
+		return rec
+	}
+
+	etag := get("/static/bg.jpg").Header().Get("ETag")
+	if etag == "" {
+		t.Fatal("bg.jpg served without an ETag to derive its token from")
+	}
+	hash := strings.Trim(etag, `"`)
+
+	rec := get("/static/bg.jpg?v=" + hash)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("hash-versioned wallpaper: status %d", rec.Code)
+	}
+	if got := rec.Header().Get("Cache-Control"); got != cacheForever {
+		t.Errorf("hash-versioned wallpaper Cache-Control = %q, want %q", got, cacheForever)
+	}
+	for _, path := range []string{"/static/bg.jpg?v=0000000000000000", "/static/bg.jpg"} {
+		rec := get(path)
+		if got := rec.Header().Get("Cache-Control"); got != "no-cache" {
+			t.Errorf("GET %s: Cache-Control = %q, want no-cache", path, got)
+		}
+	}
+	// The token names one file's bytes only: bg.jpg's hash does
+	// not version bg-uhd.jpg.
+	rec = get("/static/bg-uhd.jpg?v=" + hash)
+	if got := rec.Header().Get("Cache-Control"); got != "no-cache" {
+		t.Errorf("cross-file token: Cache-Control = %q, want no-cache", got)
+	}
+}
+
+// wallpaperRef matches a wallpaper reference in a stylesheet or
+// template, with its ?v= token when one is present.
+var wallpaperRef = regexp.MustCompile(`/static/(bg-[^"')?\s]+|bg\.(?:jpg|jxl))(?:\?v=([0-9a-f]+))?`)
+
+// TestStaticWallpaperVersionTokens pins the tokens the
+// stylesheets and the base template put on the wallpaper files
+// to those files' current content hashes. Replacing the art
+// without refreshing a token fails here, with the hash to paste
+// in the message — a stale token would drop the file back to
+// per-view revalidation, and a wrong immutable would be worse.
+func TestStaticWallpaperVersionTokens(t *testing.T) {
+	idx := loadStaticIndex()
+	sources := map[string]string{}
+	for _, name := range []string{"static/bg.css", "static/landing.css", "static/style.css"} {
+		b, err := fs.ReadFile(staticFS, name)
+		if err != nil {
+			t.Fatalf("read %s: %v", name, err)
+		}
+		sources[name] = string(b)
+	}
+	b, err := fs.ReadFile(templatesFS, "templates/base.html")
+	if err != nil {
+		t.Fatalf("read base.html: %v", err)
+	}
+	sources["templates/base.html"] = string(b)
+
+	for src, text := range sources {
+		refs := wallpaperRef.FindAllStringSubmatch(text, -1)
+		if len(refs) == 0 {
+			t.Errorf("%s: no wallpaper references found — the pin has nothing to check", src)
+			continue
+		}
+		for _, m := range refs {
+			name, token := m[1], m[2]
+			etag, ok := idx.etags["/"+name]
+			if !ok {
+				t.Errorf("%s: wallpaper reference %q is not a static file", src, name)
+				continue
+			}
+			if want := strings.Trim(etag, `"`); token != want {
+				t.Errorf("%s: /static/%s token %q, want %q (the file's current content hash)", src, name, token, want)
+			}
 		}
 	}
 }

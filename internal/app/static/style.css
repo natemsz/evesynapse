@@ -186,7 +186,7 @@ body::before {
   inset: 0;
   z-index: -1;
   pointer-events: none;
-  background: url("/static/bg.jpg") no-repeat center;
+  background: url("/static/bg.jpg?v=c57556984356d9b7") no-repeat center;
   background-size: cover;
   transform: translateZ(0);
 }

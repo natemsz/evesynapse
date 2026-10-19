@@ -190,46 +190,69 @@ WHERE (coalesce(cardinality($1::text[]), 0) = 0
                              >= $36::double precision))))
   AND (NOT $37::boolean
        OR (c.deal_ratio IS NOT NULL AND c.deal_ratio <= 0.85))
+  AND (NOT $38::boolean
+       OR c.start_location_id IN (SELECT station_id FROM sde_stations)
+       OR c.start_location_id IN (SELECT structure_id FROM public_structures))
+  AND (NOT $39::boolean
+       OR c.type = 'courier'
+       OR (SELECT COUNT(DISTINCT i.type_id) FROM pub_contract_items i
+           WHERE i.contract_id = c.contract_id AND i.is_included) <= 1)
+  AND ($40::double precision <= -1
+       OR COALESCE((
+            SELECT ROUND(sys.security::numeric, 1)::double precision
+            FROM sde_systems sys
+            WHERE sys.system_id = COALESCE(
+              (SELECT s.system_id FROM sde_stations s
+               WHERE s.station_id = c.start_location_id),
+              (SELECT sc.system_id FROM structure_context sc
+               WHERE sc.structure_id = c.start_location_id),
+              CASE WHEN EXISTS (SELECT 1 FROM sde_systems s2
+                                WHERE s2.system_id = c.start_location_id)
+                   THEN c.start_location_id END)
+       ), -1) >= $40::double precision)
 `
 
 type CountPublicContractsSearchParams struct {
-	Types          []string  `json:"types"`
-	RegionIds      []int64   `json:"region_ids"`
-	TitleQ         string    `json:"title_q"`
-	ItemQ          string    `json:"item_q"`
-	ItemDir        string    `json:"item_dir"`
-	ItemType       int64     `json:"item_type"`
-	IssuerQ        string    `json:"issuer_q"`
-	ForCorp        int64     `json:"for_corp"`
-	PriceMin       float64   `json:"price_min"`
-	PriceMax       float64   `json:"price_max"`
-	BuyoutMax      float64   `json:"buyout_max"`
-	PlaceQ         string    `json:"place_q"`
-	PlaceEndQ      string    `json:"place_end_q"`
-	RewardMin      float64   `json:"reward_min"`
-	RewardMax      float64   `json:"reward_max"`
-	CollateralMax  float64   `json:"collateral_max"`
-	VolumeMin      float64   `json:"volume_min"`
-	VolumeMax      float64   `json:"volume_max"`
-	DaysMax        int64     `json:"days_max"`
-	CourierActive  bool      `json:"courier_active"`
-	BpActive       bool      `json:"bp_active"`
-	BpMode         string    `json:"bp_mode"`
-	MeMin          int64     `json:"me_min"`
-	TeMin          int64     `json:"te_min"`
-	RunsMin        int64     `json:"runs_min"`
-	IssuedAfter    time.Time `json:"issued_after"`
-	ExpiringBefore time.Time `json:"expiring_before"`
-	AbyssalActive  bool      `json:"abyssal_active"`
-	AbFamily       string    `json:"ab_family"`
-	AbScoreMin     float64   `json:"ab_score_min"`
-	AbSourceQ      string    `json:"ab_source_q"`
-	AbEstMin       float64   `json:"ab_est_min"`
-	AbEstMax       float64   `json:"ab_est_max"`
-	AbAttrKey      string    `json:"ab_attr_key"`
-	AbAttrMin      float64   `json:"ab_attr_min"`
-	AbPosMin       float64   `json:"ab_pos_min"`
-	DealsOnly      bool      `json:"deals_only"`
+	Types             []string  `json:"types"`
+	RegionIds         []int64   `json:"region_ids"`
+	TitleQ            string    `json:"title_q"`
+	ItemQ             string    `json:"item_q"`
+	ItemDir           string    `json:"item_dir"`
+	ItemType          int64     `json:"item_type"`
+	IssuerQ           string    `json:"issuer_q"`
+	ForCorp           int64     `json:"for_corp"`
+	PriceMin          float64   `json:"price_min"`
+	PriceMax          float64   `json:"price_max"`
+	BuyoutMax         float64   `json:"buyout_max"`
+	PlaceQ            string    `json:"place_q"`
+	PlaceEndQ         string    `json:"place_end_q"`
+	RewardMin         float64   `json:"reward_min"`
+	RewardMax         float64   `json:"reward_max"`
+	CollateralMax     float64   `json:"collateral_max"`
+	VolumeMin         float64   `json:"volume_min"`
+	VolumeMax         float64   `json:"volume_max"`
+	DaysMax           int64     `json:"days_max"`
+	CourierActive     bool      `json:"courier_active"`
+	BpActive          bool      `json:"bp_active"`
+	BpMode            string    `json:"bp_mode"`
+	MeMin             int64     `json:"me_min"`
+	TeMin             int64     `json:"te_min"`
+	RunsMin           int64     `json:"runs_min"`
+	IssuedAfter       time.Time `json:"issued_after"`
+	ExpiringBefore    time.Time `json:"expiring_before"`
+	AbyssalActive     bool      `json:"abyssal_active"`
+	AbFamily          string    `json:"ab_family"`
+	AbScoreMin        float64   `json:"ab_score_min"`
+	AbSourceQ         string    `json:"ab_source_q"`
+	AbEstMin          float64   `json:"ab_est_min"`
+	AbEstMax          float64   `json:"ab_est_max"`
+	AbAttrKey         string    `json:"ab_attr_key"`
+	AbAttrMin         float64   `json:"ab_attr_min"`
+	AbPosMin          float64   `json:"ab_pos_min"`
+	DealsOnly         bool      `json:"deals_only"`
+	ExcludeUndockable bool      `json:"exclude_undockable"`
+	ExcludeMulti      bool      `json:"exclude_multi"`
+	SecMin            float64   `json:"sec_min"`
 }
 
 func (q *Queries) CountPublicContractsSearch(ctx context.Context, arg CountPublicContractsSearchParams) (int64, error) {
@@ -271,10 +294,52 @@ func (q *Queries) CountPublicContractsSearch(ctx context.Context, arg CountPubli
 		arg.AbAttrMin,
 		arg.AbPosMin,
 		arg.DealsOnly,
+		arg.ExcludeUndockable,
+		arg.ExcludeMulti,
+		arg.SecMin,
 	)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
+}
+
+const getPublicContractCorpusStats = `-- name: GetPublicContractCorpusStats :one
+SELECT COUNT(*) AS open_contracts,
+       (SELECT MAX(updated_at) FROM pub_contract_sweep_state) AS last_sweep_at
+FROM pub_contracts
+`
+
+type GetPublicContractCorpusStatsRow struct {
+	OpenContracts int64        `json:"open_contracts"`
+	LastSweepAt   sql.NullTime `json:"last_sweep_at"`
+}
+
+func (q *Queries) GetPublicContractCorpusStats(ctx context.Context) (GetPublicContractCorpusStatsRow, error) {
+	row := q.db.QueryRowContext(ctx, getPublicContractCorpusStats)
+	var i GetPublicContractCorpusStatsRow
+	err := row.Scan(&i.OpenContracts, &i.LastSweepAt)
+	return i, err
+}
+
+const replacePublicStructures = `-- name: ReplacePublicStructures :exec
+WITH gone AS (
+  DELETE FROM public_structures
+  WHERE NOT (structure_id = ANY($1::bigint[]))
+)
+INSERT INTO public_structures (structure_id, refreshed_at)
+SELECT u, $2::timestamptz
+FROM unnest($1::bigint[]) AS u
+ON CONFLICT (structure_id) DO UPDATE SET refreshed_at = EXCLUDED.refreshed_at
+`
+
+type ReplacePublicStructuresParams struct {
+	Ids         []int64   `json:"ids"`
+	RefreshedAt time.Time `json:"refreshed_at"`
+}
+
+func (q *Queries) ReplacePublicStructures(ctx context.Context, arg ReplacePublicStructuresParams) error {
+	_, err := q.db.ExecContext(ctx, replacePublicStructures, pq.Array(arg.Ids), arg.RefreshedAt)
+	return err
 }
 
 const deletePublicContractBids = `-- name: DeletePublicContractBids :exec
@@ -1679,70 +1744,93 @@ WHERE (coalesce(cardinality($1::text[]), 0) = 0
                              >= $36::double precision))))
   AND (NOT $37::boolean
        OR (c.deal_ratio IS NOT NULL AND c.deal_ratio <= 0.85))
+  AND (NOT $38::boolean
+       OR c.start_location_id IN (SELECT station_id FROM sde_stations)
+       OR c.start_location_id IN (SELECT structure_id FROM public_structures))
+  AND (NOT $39::boolean
+       OR c.type = 'courier'
+       OR (SELECT COUNT(DISTINCT i.type_id) FROM pub_contract_items i
+           WHERE i.contract_id = c.contract_id AND i.is_included) <= 1)
+  AND ($40::double precision <= -1
+       OR COALESCE((
+            SELECT ROUND(sys.security::numeric, 1)::double precision
+            FROM sde_systems sys
+            WHERE sys.system_id = COALESCE(
+              (SELECT s.system_id FROM sde_stations s
+               WHERE s.station_id = c.start_location_id),
+              (SELECT sc.system_id FROM structure_context sc
+               WHERE sc.structure_id = c.start_location_id),
+              CASE WHEN EXISTS (SELECT 1 FROM sde_systems s2
+                                WHERE s2.system_id = c.start_location_id)
+                   THEN c.start_location_id END)
+       ), -1) >= $40::double precision)
 ORDER BY
-  CASE WHEN $38::text = 'price_asc' THEN
+  CASE WHEN $41::text = 'price_asc' THEN
        CASE WHEN c.type = 'courier' THEN c.reward ELSE c.price END END ASC NULLS LAST,
-  CASE WHEN $38::text = 'price_desc' THEN
+  CASE WHEN $41::text = 'price_desc' THEN
        CASE WHEN c.type = 'courier' THEN c.reward ELSE c.price END END DESC NULLS LAST,
-  CASE WHEN $38::text = 'margin_desc' THEN
+  CASE WHEN $41::text = 'margin_desc' THEN
        CASE WHEN c.type = 'courier' THEN c.offered_value - c.reward
             ELSE c.offered_value - c.price END
        END DESC NULLS LAST,
-  CASE WHEN $38::text = 'value_desc' THEN c.offered_value END DESC NULLS LAST,
-  CASE WHEN $38::text = 'deal_asc' THEN c.deal_ratio END ASC NULLS LAST,
-  CASE WHEN $38::text = 'expiry_asc' THEN c.date_expired END ASC NULLS LAST,
-  CASE WHEN $38::text = 'reward_desc' THEN c.reward END DESC NULLS LAST,
-  CASE WHEN $38::text = 'reward_m3_desc' THEN
+  CASE WHEN $41::text = 'value_desc' THEN c.offered_value END DESC NULLS LAST,
+  CASE WHEN $41::text = 'deal_asc' THEN c.deal_ratio END ASC NULLS LAST,
+  CASE WHEN $41::text = 'expiry_asc' THEN c.date_expired END ASC NULLS LAST,
+  CASE WHEN $41::text = 'reward_desc' THEN c.reward END DESC NULLS LAST,
+  CASE WHEN $41::text = 'reward_m3_desc' THEN
        CASE WHEN c.volume > 0 THEN c.reward / c.volume END END DESC NULLS LAST,
-  CASE WHEN $38::text = 'score_desc' THEN
+  CASE WHEN $41::text = 'score_desc' THEN
        (SELECT MAX(a.score) FROM pub_contract_items i
         JOIN abyssal_items a ON a.item_id = i.item_id
         WHERE i.contract_id = c.contract_id AND i.is_included) END DESC NULLS LAST,
   c.date_issued DESC, c.contract_id DESC
-LIMIT $40::bigint OFFSET $39::bigint
+LIMIT $43::bigint OFFSET $42::bigint
 `
 
 type SearchPublicContractsParams struct {
-	Types          []string  `json:"types"`
-	RegionIds      []int64   `json:"region_ids"`
-	TitleQ         string    `json:"title_q"`
-	ItemQ          string    `json:"item_q"`
-	ItemDir        string    `json:"item_dir"`
-	ItemType       int64     `json:"item_type"`
-	IssuerQ        string    `json:"issuer_q"`
-	ForCorp        int64     `json:"for_corp"`
-	PriceMin       float64   `json:"price_min"`
-	PriceMax       float64   `json:"price_max"`
-	BuyoutMax      float64   `json:"buyout_max"`
-	PlaceQ         string    `json:"place_q"`
-	PlaceEndQ      string    `json:"place_end_q"`
-	RewardMin      float64   `json:"reward_min"`
-	RewardMax      float64   `json:"reward_max"`
-	CollateralMax  float64   `json:"collateral_max"`
-	VolumeMin      float64   `json:"volume_min"`
-	VolumeMax      float64   `json:"volume_max"`
-	DaysMax        int64     `json:"days_max"`
-	CourierActive  bool      `json:"courier_active"`
-	BpActive       bool      `json:"bp_active"`
-	BpMode         string    `json:"bp_mode"`
-	MeMin          int64     `json:"me_min"`
-	TeMin          int64     `json:"te_min"`
-	RunsMin        int64     `json:"runs_min"`
-	IssuedAfter    time.Time `json:"issued_after"`
-	ExpiringBefore time.Time `json:"expiring_before"`
-	AbyssalActive  bool      `json:"abyssal_active"`
-	AbFamily       string    `json:"ab_family"`
-	AbScoreMin     float64   `json:"ab_score_min"`
-	AbSourceQ      string    `json:"ab_source_q"`
-	AbEstMin       float64   `json:"ab_est_min"`
-	AbEstMax       float64   `json:"ab_est_max"`
-	AbAttrKey      string    `json:"ab_attr_key"`
-	AbAttrMin      float64   `json:"ab_attr_min"`
-	AbPosMin       float64   `json:"ab_pos_min"`
-	DealsOnly      bool      `json:"deals_only"`
-	Sort           string    `json:"sort"`
-	RowOffset      int64     `json:"row_offset"`
-	MaxRows        int64     `json:"max_rows"`
+	Types             []string  `json:"types"`
+	RegionIds         []int64   `json:"region_ids"`
+	TitleQ            string    `json:"title_q"`
+	ItemQ             string    `json:"item_q"`
+	ItemDir           string    `json:"item_dir"`
+	ItemType          int64     `json:"item_type"`
+	IssuerQ           string    `json:"issuer_q"`
+	ForCorp           int64     `json:"for_corp"`
+	PriceMin          float64   `json:"price_min"`
+	PriceMax          float64   `json:"price_max"`
+	BuyoutMax         float64   `json:"buyout_max"`
+	PlaceQ            string    `json:"place_q"`
+	PlaceEndQ         string    `json:"place_end_q"`
+	RewardMin         float64   `json:"reward_min"`
+	RewardMax         float64   `json:"reward_max"`
+	CollateralMax     float64   `json:"collateral_max"`
+	VolumeMin         float64   `json:"volume_min"`
+	VolumeMax         float64   `json:"volume_max"`
+	DaysMax           int64     `json:"days_max"`
+	CourierActive     bool      `json:"courier_active"`
+	BpActive          bool      `json:"bp_active"`
+	BpMode            string    `json:"bp_mode"`
+	MeMin             int64     `json:"me_min"`
+	TeMin             int64     `json:"te_min"`
+	RunsMin           int64     `json:"runs_min"`
+	IssuedAfter       time.Time `json:"issued_after"`
+	ExpiringBefore    time.Time `json:"expiring_before"`
+	AbyssalActive     bool      `json:"abyssal_active"`
+	AbFamily          string    `json:"ab_family"`
+	AbScoreMin        float64   `json:"ab_score_min"`
+	AbSourceQ         string    `json:"ab_source_q"`
+	AbEstMin          float64   `json:"ab_est_min"`
+	AbEstMax          float64   `json:"ab_est_max"`
+	AbAttrKey         string    `json:"ab_attr_key"`
+	AbAttrMin         float64   `json:"ab_attr_min"`
+	AbPosMin          float64   `json:"ab_pos_min"`
+	DealsOnly         bool      `json:"deals_only"`
+	ExcludeUndockable bool      `json:"exclude_undockable"`
+	ExcludeMulti      bool      `json:"exclude_multi"`
+	SecMin            float64   `json:"sec_min"`
+	Sort              string    `json:"sort"`
+	RowOffset         int64     `json:"row_offset"`
+	MaxRows           int64     `json:"max_rows"`
 }
 
 type SearchPublicContractsRow struct {
@@ -1824,6 +1912,9 @@ func (q *Queries) SearchPublicContracts(ctx context.Context, arg SearchPublicCon
 		arg.AbAttrMin,
 		arg.AbPosMin,
 		arg.DealsOnly,
+		arg.ExcludeUndockable,
+		arg.ExcludeMulti,
+		arg.SecMin,
 		arg.Sort,
 		arg.RowOffset,
 		arg.MaxRows,

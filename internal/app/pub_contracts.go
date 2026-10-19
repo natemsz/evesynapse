@@ -86,6 +86,11 @@ func (app *Application) refreshPublicContracts(ctx context.Context, allowance *f
 	if len(regionIDs) == 0 {
 		return 0, false // no static data yet; the SDE import comes first
 	}
+	structures, ltd := app.refreshPublicStructures(ctx, allowance)
+	stored += structures
+	if ltd {
+		return stored, true
+	}
 	for _, regionID := range pubContractRegionOrder(regionIDs) {
 		pages, ltd := app.advancePublicContractRegion(ctx, regionID, allowance)
 		stored += pages
@@ -110,6 +115,58 @@ func (app *Application) refreshPublicContracts(ctx context.Context, allowance *f
 	probes, ltd := app.warmAbyssalProbes(ctx, allowance)
 	stored += probes
 	return stored, ltd
+}
+
+// publicStructuresKind names the public structures route
+// in market_fetch_state.
+const publicStructuresKind = "pubcontracts_public_structures"
+
+// refreshPublicStructures mirrors ESI's public structures
+// route -- the player structures anyone may dock at --
+// into public_structures (schema 068), one replace per
+// cadence window, stamped. The contract search's
+// un-dockable-citadel filter reads the stored set; nothing
+// fetches at render. A failed or empty fetch leaves the
+// stored set untouched: a torn read must never unpublish
+// every public citadel at once.
+func (app *Application) refreshPublicStructures(ctx context.Context, allowance *fetchBudget) (stored int, limited bool) {
+	if !app.marketFetchDue(ctx, publicStructuresKind, pubContractSweepGate) {
+		return 0, false
+	}
+	if !allowance.Take() {
+		return 0, false
+	}
+	body, _, err := app.esi.FetchRaw(ctx, "", "/universe/structures/")
+	if err != nil {
+		if errors.Is(err, esi.ErrErrorLimit) {
+			return 0, true
+		}
+		app.recordMarketFetch(ctx, publicStructuresKind, marketFetchFailureState(err), "public structures fetch failed")
+		return 0, false
+	}
+	var ids []int64
+	if err := json.Unmarshal(body, &ids); err != nil || len(ids) == 0 {
+		app.recordMarketFetch(ctx, publicStructuresKind, fetchStateError, "public structures decode failed")
+		return 0, false
+	}
+	tx, err := app.db.BeginTx(ctx, nil)
+	if err != nil {
+		logging.Errorf("worker: public structures: begin: %v", err)
+		return 0, false
+	}
+	defer tx.Rollback()
+	if err := db.New(tx).ReplacePublicStructures(ctx, db.ReplacePublicStructuresParams{
+		Ids: ids, RefreshedAt: time.Now().UTC(),
+	}); err != nil {
+		logging.Errorf("worker: public structures: store: %v", err)
+		return 0, false
+	}
+	if err := tx.Commit(); err != nil {
+		logging.Errorf("worker: public structures: commit: %v", err)
+		return 0, false
+	}
+	app.recordMarketFetch(ctx, publicStructuresKind, fetchStateOK, "")
+	return 1, false
 }
 
 // pubContractRegionOrder puts the five market hub regions

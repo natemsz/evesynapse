@@ -538,6 +538,26 @@ WHERE (coalesce(cardinality(sqlc.arg(types)::text[]), 0) = 0
                              >= sqlc.arg(ab_pos_min)::double precision))))
   AND (NOT sqlc.arg(deals_only)::boolean
        OR (c.deal_ratio IS NOT NULL AND c.deal_ratio <= 0.85))
+  AND (NOT sqlc.arg(exclude_undockable)::boolean
+       OR c.start_location_id IN (SELECT station_id FROM sde_stations)
+       OR c.start_location_id IN (SELECT structure_id FROM public_structures))
+  AND (NOT sqlc.arg(exclude_multi)::boolean
+       OR c.type = 'courier'
+       OR (SELECT COUNT(DISTINCT i.type_id) FROM pub_contract_items i
+           WHERE i.contract_id = c.contract_id AND i.is_included) <= 1)
+  AND (sqlc.arg(sec_min)::double precision <= -1
+       OR COALESCE((
+            SELECT ROUND(sys.security::numeric, 1)::double precision
+            FROM sde_systems sys
+            WHERE sys.system_id = COALESCE(
+              (SELECT s.system_id FROM sde_stations s
+               WHERE s.station_id = c.start_location_id),
+              (SELECT sc.system_id FROM structure_context sc
+               WHERE sc.structure_id = c.start_location_id),
+              CASE WHEN EXISTS (SELECT 1 FROM sde_systems s2
+                                WHERE s2.system_id = c.start_location_id)
+                   THEN c.start_location_id END)
+       ), -1) >= sqlc.arg(sec_min)::double precision)
 ORDER BY
   CASE WHEN sqlc.arg(sort)::text = 'price_asc' THEN
        CASE WHEN c.type = 'courier' THEN c.reward ELSE c.price END END ASC NULLS LAST,
@@ -691,7 +711,50 @@ WHERE (coalesce(cardinality(sqlc.arg(types)::text[]), 0) = 0
                        AND COALESCE((a.percentiles ->> CAST(w.attribute_id AS text))::double precision, -1)
                              >= sqlc.arg(ab_pos_min)::double precision))))
   AND (NOT sqlc.arg(deals_only)::boolean
-       OR (c.deal_ratio IS NOT NULL AND c.deal_ratio <= 0.85));
+       OR (c.deal_ratio IS NOT NULL AND c.deal_ratio <= 0.85))
+  AND (NOT sqlc.arg(exclude_undockable)::boolean
+       OR c.start_location_id IN (SELECT station_id FROM sde_stations)
+       OR c.start_location_id IN (SELECT structure_id FROM public_structures))
+  AND (NOT sqlc.arg(exclude_multi)::boolean
+       OR c.type = 'courier'
+       OR (SELECT COUNT(DISTINCT i.type_id) FROM pub_contract_items i
+           WHERE i.contract_id = c.contract_id AND i.is_included) <= 1)
+  AND (sqlc.arg(sec_min)::double precision <= -1
+       OR COALESCE((
+            SELECT ROUND(sys.security::numeric, 1)::double precision
+            FROM sde_systems sys
+            WHERE sys.system_id = COALESCE(
+              (SELECT s.system_id FROM sde_stations s
+               WHERE s.station_id = c.start_location_id),
+              (SELECT sc.system_id FROM structure_context sc
+               WHERE sc.structure_id = c.start_location_id),
+              CASE WHEN EXISTS (SELECT 1 FROM sde_systems s2
+                                WHERE s2.system_id = c.start_location_id)
+                   THEN c.start_location_id END)
+       ), -1) >= sqlc.arg(sec_min)::double precision);
+
+-- The subtab telemetry: the live corpus size (pub_contracts
+-- holds only live contracts, so the count is the indexed
+-- set) and the freshest sweep stamp across regions. One
+-- row, two stored reads -- no corpus aggregation at render
+-- beyond the count itself.
+-- name: GetPublicContractCorpusStats :one
+SELECT COUNT(*) AS open_contracts,
+       (SELECT MAX(updated_at) FROM pub_contract_sweep_state) AS last_sweep_at
+FROM pub_contracts;
+
+-- The public structures set (schema 068): one replace per
+-- worker refresh of ESI's public structures route. Rows the
+-- new list no longer names leave in the same statement.
+-- name: ReplacePublicStructures :exec
+WITH gone AS (
+  DELETE FROM public_structures
+  WHERE NOT (structure_id = ANY(sqlc.arg(ids)::bigint[]))
+)
+INSERT INTO public_structures (structure_id, refreshed_at)
+SELECT u, sqlc.arg(refreshed_at)::timestamptz
+FROM unnest(sqlc.arg(ids)::bigint[]) AS u
+ON CONFLICT (structure_id) DO UPDATE SET refreshed_at = EXCLUDED.refreshed_at;
 
 -- ---------------------------------------------------------------------
 -- Roll ranges (schema 055), kept filled by the SDE importer.

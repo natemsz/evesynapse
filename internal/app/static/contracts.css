@@ -138,6 +138,38 @@
   white-space: nowrap;
 }
 .cs-field input, .cs-field select { width: 100%; margin-top: auto; text-transform: none; letter-spacing: normal; }
+/* The exclusion checkboxes read as plain labelled rows
+   in the field column; the checkbox itself takes the
+   form's accent like every other control here. */
+.cs-checkrow {
+  display: flex; align-items: center; gap: 0.45rem;
+  font-size: 0.86rem; color: var(--text); cursor: pointer;
+}
+.cs-checkrow input { accent-color: var(--accent); flex: none; }
+/* The security floor's track wears the game's own
+   security colours -- the exact hues style.css paints
+   system security with (.sec-0 through .sec-10), laid
+   by rounded tier from the null end (-1.0) to 1.0. */
+.cs-secslider {
+  -webkit-appearance: none; appearance: none;
+  height: 0.45rem; border-radius: 999px;
+  background: linear-gradient(to right,
+    #c0508a 0%, #c0508a 50%, #b33a3a 55%, #d0262c 60%,
+    #ce440f 65%, #dc6d07 70%, #f3fd82 75%, #71e554 80%,
+    #60dba3 85%, #4ecef8 90%, #3a9aeb 95%, #2c74e0 100%);
+}
+.cs-secslider::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none;
+  width: 1rem; height: 1rem; border-radius: 50%;
+  background: #fff4e4; border: 2px solid rgba(22, 13, 6, 0.6);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.55); cursor: pointer;
+}
+.cs-secslider::-moz-range-thumb {
+  width: 0.8rem; height: 0.8rem; border-radius: 50%;
+  background: #fff4e4; border: 2px solid rgba(22, 13, 6, 0.6);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.55); cursor: pointer;
+}
+.cs-secval { flex: none; min-width: 2.2rem; text-align: right; font-variant-numeric: tabular-nums; }
 /* The region quick selectors wear the hunt chips' pill
    paint on real buttons: transparent row-alt fill, thin
    edge, full radius, the controls' Rajdhani capitals —
@@ -319,6 +351,17 @@
 }
 .cs-table th:first-child { padding-left: 1rem; }
 .cs-table th:last-child { padding-right: 1rem; }
+/* The two sortable headers are links in the header's
+   own voice; the chevron carries the state -- muted
+   double arrow at rest, accent arrow on the live sort. */
+.cs-sorthead {
+  color: inherit; text-decoration: none; white-space: nowrap;
+  display: inline-flex; align-items: baseline; gap: 0.35rem;
+}
+.cs-sorthead:hover { color: var(--accent); }
+.cs-sorthead .cs-sortchev { color: var(--muted-2); font-size: 0.85em; }
+.cs-sorthead.on { color: var(--text-bright); }
+.cs-sorthead.on .cs-sortchev { color: var(--accent); }
 .cs-table td { vertical-align: top; padding: 0.875rem 0.75rem; }
 .cs-table td.cs-c1 { padding-left: 1rem; }
 .cs-table td.cs-c5 { padding-right: 1rem; }
@@ -455,6 +498,14 @@
   border-bottom: 1px solid rgba(255, 180, 120, 0.05);
 }
 .cs-aline:last-child { border-bottom: 0; }
+/* The line the reader's item search matched leads the
+   drawer's list under a soft accent wash, bled a touch
+   past the line's own box, with an inset marker bar. */
+.cs-aline.matched {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  box-shadow: inset 3px 0 0 var(--accent);
+  margin: 0 -0.5rem; padding-left: 0.5rem; padding-right: 0.5rem;
+}
 .cs-aline-l { min-width: 0; }
 .cs-gchip {
   padding: 0.1rem 0.4rem; font-size: 0.625rem; border-radius: 0.25rem;

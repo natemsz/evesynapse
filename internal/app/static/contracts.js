@@ -258,6 +258,19 @@
     });
   });
 
+  // ---- security floor readout -------------------------------------------
+  // The floor prints beside its slider with one decimal;
+  // the slider itself is the submitted value, so the
+  // readout is display only.
+  document.querySelectorAll(".cs-secslider").forEach(function (slider) {
+    var pair = slider.closest(".cs-secpair");
+    var out = pair ? pair.querySelector("[data-sec-val]") : null;
+    if (!out) return;
+    slider.addEventListener("input", function () {
+      out.textContent = Number(slider.value).toFixed(1);
+    });
+  });
+
   // ---- results accordion -------------------------------------------------
   // Exactly one row open at a time; clicking the open row
   // closes it. The expansion lives in the drawer row right
@@ -294,7 +307,10 @@
     }
     slot.hidden = false;
     slot.innerHTML = '<p class="muted cs-panel-loading">Loading appraisal…</p>';
-    fetch("/contracts/search/" + row.getAttribute("data-contract") + "/panel", {
+    // The search's own query rides along so the drawer
+    // can pin the line the search matched; the panel
+    // handler reads only the item context out of it.
+    fetch("/contracts/search/" + row.getAttribute("data-contract") + "/panel" + window.location.search, {
       headers: { "X-Requested-With": "fetch" }
     }).then(function (resp) {
       if (!resp.ok) throw new Error("panel failed");

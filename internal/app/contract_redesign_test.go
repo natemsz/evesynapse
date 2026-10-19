@@ -186,7 +186,8 @@ func TestContractSearchStructure(t *testing.T) {
 	mustContain(t, "results table", plain,
 		`<table class="cs-table" data-nosort>`,
 		`<th>Contract</th>`, `<th>Contents &amp; Specs</th>`,
-		`<th>Price / Reward</th>`, `<th>Our Value &amp; Spread</th>`, `<th>Location</th>`)
+		`<th><a class="cs-sorthead" href="/contracts/search/?sort=price_desc" aria-label="Sort by price or reward">Price / Reward <span class="cs-sortchev" aria-hidden="true">↕</span></a></th>`,
+		`<th><a class="cs-sorthead" href="/contracts/search/?sort=margin_desc" aria-label="Sort by our value and spread">Our Value &amp; Spread <span class="cs-sortchev" aria-hidden="true">↕</span></a></th>`, `<th>Location</th>`)
 	if strings.Contains(plain, "images.evetech.net/types/") {
 		t.Error("result rows still render item icons")
 	}

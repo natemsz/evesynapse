@@ -868,7 +868,11 @@ type ShellData struct {
 	NavGroups      map[string][]NavGroup
 	SectionTabs    []NavLink
 	SectionSubTabs []NavLink
-	NavCharacter   int64
+	// SubTabNote is a quiet right-aligned readout a page
+	// may set for its subtab row (today: the contract
+	// search's sweep telemetry). Empty shows nothing.
+	SubTabNote   string
+	NavCharacter int64
 }
 
 // Shell returns a pointer to the embedded ShellData so that

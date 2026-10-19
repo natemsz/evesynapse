@@ -2,6 +2,7 @@ package discord
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -56,8 +57,39 @@ func newClient(f *fake) *Client {
 	}, &http.Client{Transport: f}, "https://discord.test/api")
 }
 
+// The PKCE pair of RFC 7636 appendix B, used wherever a verifier
+// and its challenge are wanted in these tests.
+const (
+	pkceVerifier  = "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"
+	pkceChallenge = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM"
+)
+
+func TestPKCE(t *testing.T) {
+	if got := CodeChallenge(pkceVerifier); got != pkceChallenge {
+		t.Fatalf("challenge %q, want the RFC 7636 vector %q", got, pkceChallenge)
+	}
+	v1, err := NewVerifier()
+	if err != nil {
+		t.Fatal(err)
+	}
+	v2, err := NewVerifier()
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err := base64.RawURLEncoding.DecodeString(v1)
+	if len(v1) != 43 || err != nil || len(raw) != 32 {
+		t.Fatalf("verifier %q: want 43 base64url characters over 32 random bytes", v1)
+	}
+	if v1 == v2 {
+		t.Fatal("two verifiers came out the same")
+	}
+	if CodeChallenge(v1) == v1 {
+		t.Fatal("the challenge is the verifier itself")
+	}
+}
+
 func TestAuthURLAsksForIdentityAndJoining(t *testing.T) {
-	u, err := url.Parse(newClient(&fake{}).AuthURL("state-1"))
+	u, err := url.Parse(newClient(&fake{}).AuthURL("state-1", pkceChallenge))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -65,6 +97,9 @@ func TestAuthURLAsksForIdentityAndJoining(t *testing.T) {
 	if u.Host != "discord.com" || q.Get("scope") != "identify guilds.join" || q.Get("state") != "state-1" ||
 		q.Get("client_id") != "client" || q.Get("redirect_uri") != "https://eve.example/discord/callback" || q.Get("response_type") != "code" {
 		t.Fatalf("sign-in address %s", u)
+	}
+	if q.Get("code_challenge") != pkceChallenge || q.Get("code_challenge_method") != "S256" {
+		t.Fatalf("sign-in address %s: want the PKCE challenge and S256", u)
 	}
 	if strings.Contains(u.String(), "secret") || strings.Contains(u.String(), "bot-token") {
 		t.Fatal("the sign-in address carries a secret")
@@ -76,7 +111,7 @@ func TestIdentifyReadsTheAccountAndNothingElse(t *testing.T) {
 		"POST /api/oauth2/token": {"200", `{"access_token":"user-token","token_type":"Bearer","refresh_token":"user-refresh","expires_in":604800}`},
 		"GET /api/users/@me":     {"200", `{"id":"` + user + `","username":"pilot","global_name":"Pilot One"}`},
 	}}
-	got, token, err := newClient(f).Identify(context.Background(), "the-code")
+	got, token, err := newClient(f).Identify(context.Background(), "the-code", pkceVerifier)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -94,18 +129,30 @@ func TestIdentifyReadsTheAccountAndNothingElse(t *testing.T) {
 	if !strings.HasPrefix(exchange.Auth, "Basic ") || form.Get("code") != "the-code" || form.Get("grant_type") != "authorization_code" {
 		t.Fatalf("exchange %+v", exchange)
 	}
+	if form.Get("code_verifier") != pkceVerifier {
+		t.Fatalf("exchange carries verifier %q, want the one the challenge was made from", form.Get("code_verifier"))
+	}
 	if lookup.Auth != "Bearer user-token" {
 		t.Fatalf("lookup authorised as %q, want the user's own token", lookup.Auth)
 	}
 
 	// An account with no id, or a refused code, is an error.
 	f.answers["GET /api/users/@me"] = [2]string{"200", `{"username":"pilot"}`}
-	if _, _, err := newClient(f).Identify(context.Background(), "c"); err == nil {
+	if _, _, err := newClient(f).Identify(context.Background(), "c", pkceVerifier); err == nil {
 		t.Fatal("an account with no id was accepted")
 	}
 	f.answers["POST /api/oauth2/token"] = [2]string{"400", `{"message":"invalid_grant"}`}
-	if _, _, err := newClient(f).Identify(context.Background(), "c"); !IsStatus(err, 400) {
+	if _, _, err := newClient(f).Identify(context.Background(), "c", pkceVerifier); !IsStatus(err, 400) {
 		t.Fatalf("refused code: %v", err)
+	}
+
+	// No verifier, no exchange: Discord is never asked.
+	none := &fake{answers: f.answers}
+	if _, _, err := newClient(none).Identify(context.Background(), "c", ""); err == nil {
+		t.Fatal("a sign-in with no PKCE verifier was exchanged")
+	}
+	if len(none.calls) != 0 {
+		t.Fatalf("a sign-in with no verifier made %d call(s)", len(none.calls))
 	}
 }
 
@@ -196,7 +243,7 @@ func TestInstall(t *testing.T) {
 		"GET /api/users/@me":     {"200", `{"id":"` + user + `","username":"pilot"}`},
 	}}
 	c := newClient(f)
-	u, err := url.Parse(c.InstallURL("state-2"))
+	u, err := url.Parse(c.InstallURL("state-2", pkceChallenge))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -204,18 +251,25 @@ func TestInstall(t *testing.T) {
 	if q.Get("scope") != "bot identify guilds.join" || q.Get("state") != "state-2" {
 		t.Fatalf("install address %s", u)
 	}
+	if q.Get("code_challenge") != pkceChallenge || q.Get("code_challenge_method") != "S256" {
+		t.Fatalf("install address %s: want the PKCE challenge and S256", u)
+	}
 	// Manage Roles, View Channels, Send Messages, Create Invite, Kick
 	// Members: 1<<28 | 1<<10 | 1<<11 | 1<<0 | 1<<1.
 	if q.Get("permissions") != "268438531" {
 		t.Fatalf("the bot asks for permissions %s, want only roles, sending, adding and removing members (268438531)", q.Get("permissions"))
 	}
-	who, where, err := c.IdentifyInstall(context.Background(), "code")
+	who, where, err := c.IdentifyInstall(context.Background(), "code", pkceVerifier)
 	if err != nil || who.ID != user || where.ID != guild || where.Name != "Home" {
 		t.Fatalf("install identified %+v in %+v, %v", who, where, err)
 	}
+	form, _ := url.ParseQuery(f.calls[0].Body)
+	if form.Get("code_verifier") != pkceVerifier {
+		t.Fatalf("install exchange carries verifier %q, want the one the challenge was made from", form.Get("code_verifier"))
+	}
 	// A plain sign-in adds the bot nowhere.
 	f.answers["POST /api/oauth2/token"] = [2]string{"200", `{"access_token":"user-token"}`}
-	if _, where, err = c.IdentifyInstall(context.Background(), "code"); err != nil || where.ID != "" {
+	if _, where, err = c.IdentifyInstall(context.Background(), "code", pkceVerifier); err != nil || where.ID != "" {
 		t.Fatalf("a plain sign-in reported server %+v, %v", where, err)
 	}
 }

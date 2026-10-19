@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -71,6 +72,11 @@ func (d *fakeDiscord) RoundTrip(req *http.Request) (*http.Response, error) {
 			return respond(200, `{"access_token":"token-for-`+code+`","refresh_token":"refresh-for-`+code+`","expires_in":604800}`)
 		}
 		code := form.Get("code")
+		// A sign-in code is only traded with its PKCE verifier, as
+		// Discord requires since the challenge was sent.
+		if form.Get("code_verifier") == "" {
+			return respond(400, `{"message":"invalid_grant"}`)
+		}
 		if _, ok := d.codes[code]; !ok {
 			return respond(400, `{"message":"invalid_grant"}`)
 		}
@@ -282,6 +288,9 @@ func (f *notifyFixture) roundTrip(cookie *http.Cookie, start string, form url.Va
 	if rec.Code != http.StatusFound || err != nil || to.Host != "discord.com" {
 		f.t.Fatalf("%s: %d to %q, want to be sent to Discord", start, rec.Code, rec.Header().Get("Location"))
 	}
+	if ch := to.Query().Get("code_challenge"); len(ch) != 43 || to.Query().Get("code_challenge_method") != "S256" {
+		f.t.Fatalf("%s: sent to Discord with challenge %q and method %q, want a 43-character S256 challenge", start, ch, to.Query().Get("code_challenge_method"))
+	}
 	for _, c := range rec.Result().Cookies() {
 		if c.Name == cookie.Name {
 			cookie = c
@@ -437,6 +446,58 @@ func TestDiscordConnect(t *testing.T) {
 	// Signed out: nothing.
 	if code, _, _ := doReq(t, f.app, http.MethodGet, "/discord/connect", nil); code != http.StatusSeeOther {
 		t.Fatalf("signed-out connect: %d", code)
+	}
+}
+
+// TestDiscordCallbackWithoutVerifier: a return whose session holds a
+// state but no PKCE verifier (a sign-in started before verifiers were
+// kept, or one whose verifier was already spent) exchanges nothing:
+// Discord is never asked and no account is linked.
+func TestDiscordCallbackWithoutVerifier(t *testing.T) {
+	f := newNotifyFixture(t)
+	fake := f.enableDiscord()
+	cookie := sessionCookie(t, f.app, f.userID, f.ch.CharacterID, f.ch.Name)
+
+	// Start a sign-in and keep the address Discord was to be sent to.
+	req := httptest.NewRequest(http.MethodGet, "/discord/connect", nil)
+	req.AddCookie(cookie)
+	rec := httptest.NewRecorder()
+	f.app.Handler().ServeHTTP(rec, req)
+	to, err := url.Parse(rec.Header().Get("Location"))
+	if rec.Code != http.StatusFound || err != nil || to.Host != "discord.com" {
+		t.Fatalf("connect: %d to %q, want to be sent to Discord", rec.Code, rec.Header().Get("Location"))
+	}
+	for _, c := range rec.Result().Cookies() {
+		if c.Name == cookie.Name {
+			cookie = c
+		}
+	}
+
+	// Take the verifier out of the stored session, leaving the state.
+	ctx, err := f.app.sessions.Load(context.Background(), cookie.Value)
+	if err != nil {
+		t.Fatalf("session load: %v", err)
+	}
+	f.app.sessions.Remove(ctx, "discord_oauth_verifier")
+	token, _, err := f.app.sessions.Commit(ctx)
+	if err != nil {
+		t.Fatalf("session commit: %v", err)
+	}
+	cookie = &http.Cookie{Name: cookie.Name, Value: token, Path: "/"}
+
+	// The return is refused and Discord is never asked.
+	back := httptest.NewRequest(http.MethodGet, "/discord/callback?code=alice&state="+url.QueryEscape(to.Query().Get("state")), nil)
+	back.AddCookie(cookie)
+	rec = httptest.NewRecorder()
+	f.app.Handler().ServeHTTP(rec, back)
+	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/notifications/settings" {
+		t.Fatalf("callback: %d to %q, want the settings page", rec.Code, rec.Header().Get("Location"))
+	}
+	if _, err := f.q.GetDiscordLink(f.ctx, f.userID); err == nil {
+		t.Fatal("a return with no PKCE verifier linked an account")
+	}
+	if fake.asked() != 0 {
+		t.Fatalf("Discord was asked %d time(s) for a return with no verifier", fake.asked())
 	}
 }
 

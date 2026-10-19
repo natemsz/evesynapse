@@ -310,9 +310,9 @@ func TestWallpaperFirstPaintUnderlay(t *testing.T) {
 		t.Fatalf("read landing.css: %v", err)
 	}
 	for _, want := range []string{
-		`background-image: url("/static/bg.jpg?v=c57556984356d9b7"), url("/static/bg-thumb.jpg?v=c4cb5f59ce6c1ad2");`,
-		`background-image: url("/static/bg-4k.jpg?v=ecf3a91196acdf76"), url("/static/bg-thumb.jpg?v=c4cb5f59ce6c1ad2");`,
-		`background-image: url("/static/bg-uhd.jpg?v=2a2fc31c60d7682c"), url("/static/bg-thumb.jpg?v=c4cb5f59ce6c1ad2");`,
+		`background-image: url("/static/bg.jpg?v=887a4b499319e152"), url("/static/bg-thumb.jpg?v=c4cb5f59ce6c1ad2");`,
+		`background-image: url("/static/bg-4k.jpg?v=dcfdf6e5d6f27af6"), url("/static/bg-thumb.jpg?v=c4cb5f59ce6c1ad2");`,
+		`background-image: url("/static/bg-uhd.jpg?v=5fd20062e58afd8b"), url("/static/bg-thumb.jpg?v=c4cb5f59ce6c1ad2");`,
 	} {
 		if !strings.Contains(string(landingRaw), want) {
 			t.Errorf("landing.css is missing the dramatic underlay declaration %q", want)

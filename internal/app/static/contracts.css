@@ -63,6 +63,21 @@
    the checkboxes inside keep the form semantics. A checked
    segment takes the accent fill, like .seg > .on. */
 .cs-types { flex: none; }
+/* The segments share their class name with the results
+   pills further down this file, and that rule's metrics
+   (margin-top, padding, font size) leak onto them: the
+   leaked 0.5rem top margin shoved the segments down in
+   their control, which read as off-center labels that no
+   padding trade could fix. Scoped back to the shared
+   control's own metrics — no top margin, and the .seg
+   padding symmetric top and bottom — the segments fill
+   the control and align-items centers their line boxes
+   on the row's center. */
+.cs-types > .cs-pill {
+  margin-top: 0;
+  line-height: 1;
+  padding-top: 0.2rem; padding-bottom: 0.2rem;
+}
 .cs-pill { position: relative; cursor: pointer; }
 .cs-pill input { position: absolute; opacity: 0; pointer-events: none; }
 .cs-pill:has(> input:checked) { background: var(--accent); color: #16100b; }
@@ -111,6 +126,10 @@
 .cs-fbox { display: flex; flex-direction: column; gap: 0.55rem; min-width: 0; }
 .cs-fbox > .box-title { margin-bottom: 0; }
 .cs-fbox .cs-field { flex: 1; }
+/* The station field keeps natural flow under its label
+   at the top of its box instead of riding the stretched
+   cell's bottom pin. */
+.cs-fbox .cs-field.cs-field-flow { flex: none; }
 .cs-field {
   display: flex; flex-direction: column; justify-content: flex-end;
   gap: 0.25rem; min-width: 0;
@@ -119,11 +138,21 @@
   white-space: nowrap;
 }
 .cs-field input, .cs-field select { width: 100%; margin-top: auto; text-transform: none; letter-spacing: normal; }
-.cs-region-quick { font-size: 0.82rem; color: var(--muted); white-space: nowrap; }
+/* The region quick selectors wear the hunt chips' pill
+   paint on real buttons: transparent row-alt fill, thin
+   edge, full radius, the controls' Rajdhani capitals —
+   and no underline in any state. */
+.cs-region-quick { display: inline-flex; gap: 0.35rem; white-space: nowrap; }
 .cs-region-quick button {
-  background: none; border: 0; padding: 0; color: var(--gold);
-  cursor: pointer; font: inherit; text-decoration: underline;
+  display: inline-flex; align-items: center;
+  border: 1px solid var(--box-edge); border-radius: 999px;
+  padding: 0.15rem 0.7rem; color: var(--text); text-decoration: none;
+  background: var(--row-alt);
+  font-family: "Rajdhani", "Segoe UI", sans-serif; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.07em; font-size: 0.8rem;
+  cursor: pointer;
 }
+.cs-region-quick button:hover { border-color: var(--accent); color: var(--text-bright); }
 .cs-chips { display: flex; flex-wrap: wrap; gap: 0.35rem; min-height: 1.5rem; }
 .cs-chips-all { color: var(--muted); font-size: 0.9rem; align-self: center; }
 .cs-chip {
@@ -234,6 +263,17 @@
 .cs-slider-pair input[type="range"] { flex: 1; width: auto; }
 .cs-slider-pair input[type="number"] { width: 4.6rem; flex: none; }
 
+/* The filter labels speak in the results table's type
+   voice: the box titles, the region quick links, the
+   field labels and the specs band label take .cs-type's
+   face, weight, size, spacing and uppercase treatment.
+   Their colors stay their own. */
+.cs-fbox .box-title, .cs-region-quick, .cs-field, .cs-drawer-label {
+  font-family: "Saira Semi Condensed", "Inter", "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-size: 0.69rem; font-weight: 600; letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
 /* ---- results: the count bar over one continuous table ---- */
 /* The count bar sits above the results panel: the match
    count and page on the left, the inspection hint on the
@@ -245,7 +285,14 @@
   gap: 1rem; flex-wrap: wrap; margin: 1rem 0.15rem 0.6rem;
 }
 .cs-count { margin: 0; font-size: 0.75rem; }
-.cs-count strong { color: var(--text-bright); }
+/* The count itself prints black on its orange pill; the
+   rest of the count line keeps the pill's own color. */
+.cs-count strong { color: #000; }
+/* In the count bar the count rides in its pill at the
+   roomier padding and lighter weight the design calls
+   for, on the squared 8px radius; the spec tabs' count
+   badges keep the shared .cs-count pill above. */
+.cs-countbar .cs-count { padding: 0.25rem 0.52rem; font-weight: 500; border-radius: 8px; }
 .cs-counthint { margin: 0; font-size: 0.69rem; color: var(--muted); }
 .cs-results { padding: 0 0 0.4rem; }
 .cs-none { margin: 0; padding: 0.7rem 0.85rem 0.6rem; }
@@ -321,6 +368,14 @@
   color: var(--muted); font-weight: 700; font-size: 0.69rem;
   text-transform: uppercase; letter-spacing: 0.05em;
 }
+/* The contents cap's reveal line: a quiet text button
+   under the fifth line; the lines it reveals ride in
+   .cs-extralines, hidden until the click lands. */
+.cs-morelines {
+  display: block; background: none; border: 0; padding: 0; cursor: pointer;
+  font: inherit; font-size: 0.75rem; color: var(--muted); margin-bottom: 0.25rem;
+}
+.cs-morelines:hover { color: var(--accent); }
 /* One specialized pill under a row's contents: the
    abyssal roll score, the first blueprint line's specs,
    or the courier's volume and rate. */
@@ -341,6 +396,7 @@
 .cs-psub.gray { color: var(--muted); }
 .cs-priced { font-size: 0.69rem; color: var(--muted); margin-top: 0.15rem; }
 .cs-spread { font-size: 0.69rem; color: #34d399; margin-top: 0.15rem; }
+.cs-spread.neg { color: var(--neg); }
 .cs-c5 .sec-pill { margin-left: 0; border-radius: var(--r-xs); }
 .cs-place {
   display: inline-block; max-width: calc(100% - 62px); vertical-align: bottom;
@@ -391,7 +447,7 @@
 }
 .cs-dhead-t.cy { color: #22d3ee; }
 .cs-dhead-t.dim { color: var(--muted); }
-.cs-dhead-id { font-size: 0.69rem; color: #b39f88; }
+.cs-dhead-id { font-size: 0.69rem; color: var(--muted-2); }
 .cs-dnote { margin: 0 0 0.4rem; color: var(--muted); font-size: 0.75rem; }
 .cs-aline {
   display: flex; align-items: center; justify-content: space-between; gap: 1rem;
@@ -419,6 +475,7 @@
   padding-top: 0.35rem; margin-top: 0.2rem;
 }
 .cs-srow.sp .cs-sv { color: #34d399; font-weight: 700; }
+.cs-srow.sp.neg .cs-sv { color: var(--neg); }
 .cs-dfoot { margin-top: auto; padding-top: 0.5rem; }
 .cs-dfoot-in {
   border-top: 1px solid color-mix(in srgb, var(--glass-edge) 40%, transparent);

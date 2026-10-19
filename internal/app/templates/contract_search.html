@@ -5,7 +5,7 @@
 {{with .ContractSearch}}
 {{$s := .}}
 <div class="cs-intro">
-<p class="muted">Every public contract our sweeps see across New Eden, priced against our swept typicals first, then stored estimates — never the guide average.</p>
+<p class="muted">Every public contract our sweeps see across New Eden, compared against our swept typicals pricing model.</p>
 
 <div class="cs-hunts">
   <span class="cs-hunts-label">Quick hunts:</span>
@@ -37,7 +37,7 @@
   <div class="cs-filters">
     <div class="box cs-fbox">
       <div class="box-head"><h3 class="box-title">Regions</h3>
-        <span class="cs-region-quick"><button type="button" data-region-quick="jita">Jita</button> · <button type="button" data-region-quick="hubs">4 Hubs</button> · <button type="button" data-region-quick="all">All</button></span>
+        <span class="cs-region-quick"><button type="button" data-region-quick="jita">Jita</button><button type="button" data-region-quick="hubs">4 Hubs</button><button type="button" data-region-quick="all">All</button></span>
       </div>
       <details class="cs-region-details">
         <summary>Select regions</summary>
@@ -47,7 +47,7 @@
         </div>
       </details>
       <div class="cs-chips" id="cs-region-chips"></div>
-      <label class="cs-field">Station, structure or system
+      <label class="cs-field cs-field-flow">Station, structure or system
         <input type="text" name="place" value="{{$s.Echo.place}}" placeholder="e.g. Jita IV - Moon 4, Perimeter, Amarr…"></label>
     </div>
     <div class="box cs-fbox">
@@ -190,7 +190,7 @@
   <colgroup><col class="cs-c1"><col class="cs-c2"><col class="cs-c3"><col class="cs-c4"><col class="cs-c5"></colgroup>
   <thead><tr><th>Contract</th><th>Contents &amp; Specs</th><th>Price / Reward</th><th>Our Value &amp; Spread</th><th>Location</th></tr></thead>
   <tbody>
-{{range $s.Rows}}
+{{range $row := $s.Rows}}
     <tr class="cs-row{{if .IsDeal}} deal{{end}}" data-contract="{{.ContractID}}" tabindex="0" role="button" aria-expanded="false" aria-label="Inspect contract {{.ContractID}}">
       <td class="cs-c1">
         <span class="cs-type {{if eq .TypeLabel "Item exchange"}}t-exchange{{else if eq .TypeLabel "Auction"}}t-auction{{else}}t-courier{{end}}">{{.TypeLabel}}</span>{{if .IsDeal}} <span class="cs-deal">↗ Deal -{{.DealPct}}%</span>{{end}}
@@ -198,8 +198,13 @@
         <div class="cs-row-meta"><span>{{.RegionName}}</span><span>•</span><span>issued {{.IssuedAgo}}</span></div>
       </td>
       <td class="cs-c2">
-        {{range .Offered}}<div class="cs-itemline"><span class="cs-line-name">{{.Name}}{{if .BPSuffix}} ({{.BPSuffix}}){{end}}{{if .RollTag}} [{{.RollTag}}]{{end}}</span><span class="cs-qty">×{{.Qty}}</span></div>{{end}}
-        {{range $i, $w := .Wanted}}<div class="cs-itemline">{{if eq $i 0}}<span class="cs-wants">Wants:</span>{{end}}<span class="cs-line-name">{{$w.Name}}{{if $w.BPSuffix}} ({{$w.BPSuffix}}){{end}}{{if $w.RollTag}} [{{$w.RollTag}}]{{end}}</span><span class="cs-qty">×{{$w.Qty}}</span></div>{{end}}
+        {{range .ShownOffered}}<div class="cs-itemline"><span class="cs-line-name">{{.Name}}{{if .BPSuffix}} ({{.BPSuffix}}){{end}}{{if .RollTag}} [{{.RollTag}}]{{end}}</span><span class="cs-qty">×{{.Qty}}</span></div>{{end}}
+        {{range $i, $w := .ShownWanted}}<div class="cs-itemline">{{if eq $i 0}}<span class="cs-wants">Wants:</span>{{end}}<span class="cs-line-name">{{$w.Name}}{{if $w.BPSuffix}} ({{$w.BPSuffix}}){{end}}{{if $w.RollTag}} [{{$w.RollTag}}]{{end}}</span><span class="cs-qty">×{{$w.Qty}}</span></div>{{end}}
+        {{if .ExtraCount}}<button type="button" class="cs-morelines">(show {{.ExtraCount}} more items)</button>
+        <div class="cs-extralines" hidden>
+        {{range .ExtraOffered}}<div class="cs-itemline"><span class="cs-line-name">{{.Name}}{{if .BPSuffix}} ({{.BPSuffix}}){{end}}{{if .RollTag}} [{{.RollTag}}]{{end}}</span><span class="cs-qty">×{{.Qty}}</span></div>{{end}}
+        {{range $i, $w := .ExtraWanted}}<div class="cs-itemline">{{if and (eq $i 0) (not $row.ShownWanted)}}<span class="cs-wants">Wants:</span>{{end}}<span class="cs-line-name">{{$w.Name}}{{if $w.BPSuffix}} ({{$w.BPSuffix}}){{end}}{{if $w.RollTag}} [{{$w.RollTag}}]{{end}}</span><span class="cs-qty">×{{$w.Qty}}</span></div>{{end}}
+        </div>{{end}}
         {{if .Courier}}<div class="cs-itemline"><span class="cs-line-name">Sealed Plastic Wrap ({{.VolumeText}})</span><span class="cs-qty">×1</span></div>{{end}}
         {{if and (not .Offered) (not .Wanted) (not .Courier)}}<div class="cs-itemline"><span class="muted">Contents not fetched yet</span></div>{{end}}
         {{if and .Abyssal (or .Abyssal.HasScore .Abyssal.HasTop)}}<span class="cs-pill ab">▦ Roll Score: {{.Abyssal.Score}}/100{{if .Abyssal.HasTop}} <span>•</span> <span>Top {{.Abyssal.TopPct}}%</span>{{end}}</span>{{else if .BPPillKind}}<span class="cs-pill bp">▦ {{.BPPillKind}} <span>•</span> <span>{{.BPPillSpecs}}</span></span>{{else if .Courier}}<span class="cs-pill co">🚚 {{.VolumeText}}{{if .IskPerM3}} <span>•</span> <span>{{.IskPerM3}} ISK/m³</span>{{end}}</span>{{end}}
@@ -212,7 +217,7 @@
       <td class="cs-c4">
         {{if .Value}}<div class="cs-cell-value">{{.Value}}</div>{{end}}
         {{if .PricedText}}<div class="cs-priced">{{.PricedText}}</div>{{else if .ValueNote}}<div class="cs-priced">{{.ValueNote}}</div>{{end}}
-        {{if .Spread}}<div class="cs-spread">{{.Spread}} spread</div>{{end}}
+        {{if .Spread}}<div class="cs-spread{{if .SpreadNeg}} neg{{end}}">{{.Spread}} spread</div>{{end}}
       </td>
       <td class="cs-c5">
         <button type="button" class="cs-copy cs-rowcopy" data-copy="{{.CopyText}}" aria-label="Copy contract link" title="Copy contract link">⧉</button>
@@ -256,7 +261,7 @@
     {{if .Telemetry}}
     <div class="cs-dcard">
       <div class="cs-dhead">
-        <span class="cs-dhead-t cy">Mutaplasmid Telemetry</span>
+        <span class="cs-dhead-t cy">Mutaplasmid Attributes</span>
         {{if .Telemetry.EstRange}}<span class="cs-dhead-id">Est Range: {{.Telemetry.EstRange}}</span>{{end}}
       </div>
       {{range .Telemetry.Rolls}}
@@ -273,7 +278,7 @@
       <div class="cs-dhead"><span class="cs-dhead-t dim">Deal Execution Summary</span></div>
       <div class="cs-srow"><span class="cs-sk">Asking Price:</span><span class="cs-sv">{{.SumAsking}}</span></div>
       {{if .SumValue}}<div class="cs-srow"><span class="cs-sk">EveSynapse Value:</span><span class="cs-sv">{{.SumValue}}</span></div>{{end}}
-      {{if .SumSpread}}<div class="cs-srow sp"><span class="cs-sk">Estimated Spread:</span><span class="cs-sv">{{.SumSpread}}</span></div>{{end}}
+      {{if .SumSpread}}<div class="cs-srow sp{{if .SumSpreadNeg}} neg{{end}}"><span class="cs-sk">Estimated Spread:</span><span class="cs-sv">{{.SumSpread}}</span></div>{{end}}
       <div class="cs-dfoot"><div class="cs-dfoot-in"><span class="cs-dfoot-note">In-game link ready for EVE Notepad</span>
         <button type="button" class="btn small cs-copy" data-copy="{{.CopyText}}">⧉ Copy Contract Link</button></div></div>
     </div>

@@ -315,6 +315,19 @@
       else openRowPanel(row);
     });
   });
+  // The contents cell caps at five lines: the more-line
+  // reveals the hidden remainder in place and goes away.
+  // It is a button, so the row's own click guard already
+  // keeps it from toggling the drawer; stop propagation
+  // anyway so the reveal can never read as a row click.
+  document.querySelectorAll(".cs-morelines").forEach(function (btn) {
+    btn.addEventListener("click", function (e) {
+      e.stopPropagation();
+      var extra = btn.parentElement.querySelector(".cs-extralines");
+      if (extra) extra.hidden = false;
+      btn.remove();
+    });
+  });
   }
   init();
   document.addEventListener("evesynapse:content-ready", init);

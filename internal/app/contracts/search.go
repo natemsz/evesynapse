@@ -530,6 +530,16 @@ type searchRow struct {
 	Courier    bool
 	Offered    []searchLine
 	Wanted     []searchLine
+	// The contents cell shows at most five lines,
+	// offered first, then wanted. ShownOffered and
+	// ShownWanted are the visible head; ExtraOffered
+	// and ExtraWanted render in a hidden block the
+	// "(show N more items)" line reveals in place.
+	ShownOffered []searchLine
+	ShownWanted  []searchLine
+	ExtraOffered []searchLine
+	ExtraWanted  []searchLine
+	ExtraCount   int
 	// The contents pill: at most one per row -- the abyssal
 	// pill when a mutated line carries a score, else the
 	// first blueprint line's pill, else the courier pill.
@@ -545,7 +555,8 @@ type searchRow struct {
 	PricedText  string // "priced N of M lines", appraised rows
 	IsDeal      bool
 	DealPct     int    // discount percent against our value, when IsDeal
-	Spread      string // "+N" ISK the value beats the ask by, "" when none
+	Spread      string // "+N" ISK the value beats the ask by, "-N" when it falls short, "" when none
+	SpreadNeg   bool   // the spread is a shortfall, painted in the negative tone
 	PricedLine  int64
 	TotalLine   int64
 	Location    module.PlaceRef
@@ -1081,6 +1092,20 @@ func (app *mod) searchRow(ctx context.Context, memo map[int64]module.PlaceRef, r
 		}
 	}
 
+	// Split the contents at the cell cap: five lines
+	// visible, offered before wanted, the remainder
+	// behind the more-line.
+	const maxCellLines = 5
+	splitLines := func(lines []searchLine, budget int) (head, tail []searchLine) {
+		if len(lines) <= budget {
+			return lines, nil
+		}
+		return lines[:budget], lines[budget:]
+	}
+	out.ShownOffered, out.ExtraOffered = splitLines(out.Offered, maxCellLines)
+	out.ShownWanted, out.ExtraWanted = splitLines(out.Wanted, maxCellLines-len(out.ShownOffered))
+	out.ExtraCount = len(out.ExtraOffered) + len(out.ExtraWanted)
+
 	// The row's mutated-line summary: the first offered
 	// singleton the corpus knows, if any.
 	if abData != nil {
@@ -1159,6 +1184,13 @@ func (app *mod) searchRow(ctx context.Context, memo map[int64]module.PlaceRef, r
 		}
 		if !out.Courier && costKnown && row.OfferedValue > cost {
 			out.Spread = "+" + formatShortISK(row.OfferedValue-cost)
+		} else if !out.Courier && costKnown && row.PricedLines > 0 && row.OfferedValue < cost {
+			// A shortfall shows too, in the negative
+			// tone: the value column's honesty runs both
+			// ways. (PricedLines guards the unpriced row,
+			// whose stored value is no figure at all.)
+			out.Spread = "-" + formatShortISK(cost-row.OfferedValue)
+			out.SpreadNeg = true
 		}
 	}
 	if out.Courier {
@@ -1371,6 +1403,10 @@ type abyssalRoll struct {
 	Delta   string
 	Good    bool
 	HasBase bool
+	// Changed is the stored roll's own verdict that it
+	// moved the stat: the rolled value differs from the
+	// base module's, read where both figures are in hand.
+	Changed bool
 	Pct     int // percentile in the mutaplasmid's band, 0..100
 	HasPct  bool
 }
@@ -1553,10 +1589,11 @@ type panelView struct {
 	// The execution summary (the right card when there is
 	// no telemetry): the effective ask, our value, and the
 	// spread between them where both are honestly known.
-	SumAsking string
-	SumValue  string
-	SumSpread string // "930.0M ISK (16.7%)", "" when not computable
-	CopyText  string
+	SumAsking    string
+	SumValue     string
+	SumSpread    string // "930.0M ISK (16.7%)", "" when not computable
+	SumSpreadNeg bool   // the spread is a shortfall, painted in the negative tone
+	CopyText     string
 }
 
 func (app *mod) buildPanelView(ctx context.Context, id int64) (*panelView, bool) {
@@ -1569,6 +1606,14 @@ func (app *mod) buildPanelView(ctx context.Context, id int64) (*panelView, bool)
 		return nil, false
 	}
 	out := &panelView{ContractID: id, StateNote: dv.StateNote}
+	// The drawer omits the private-cargo note: the
+	// summary card already sets the courier's reward
+	// against its collateral, so the empty appraisal
+	// card needs no explanation. (The detail page,
+	// which has no summary card, keeps the note.)
+	if row.ItemsState == "private" {
+		out.StateNote = ""
+	}
 	issuerKind := "Pilot"
 	if dv.IssuerCorp {
 		issuerKind = "Corporation"
@@ -1587,13 +1632,14 @@ func (app *mod) buildPanelView(ctx context.Context, id int64) (*panelView, bool)
 			if l.Abyssal != nil && l.Abyssal.HasScore {
 				pl.RollTag = "Roll " + strings.Replace(l.Abyssal.ScoreText, " / ", "/", 1)
 			}
-			// The basis phrase: our own swept typical for a
-			// line priced from the Forge sweep (the abyssal
-			// model's lines included -- the card header
-			// credits the model), the copy corpus and the
-			// stored estimates under their own words, the
-			// outside aggregate named as itself, and an
-			// honest blank where nothing priced the line.
+			// The basis phrase, in plain words: the
+			// typical tier is the typical Jita price, the
+			// abyssal model's lines price as the abyssal
+			// typical (the card header credits the model
+			// too), the copy corpus and the stored
+			// estimates under their own words, the outside
+			// aggregate named as itself, and an honest
+			// blank where nothing priced the line.
 			switch {
 			case !pl.Priced:
 				pl.BasisText = "Not priced"
@@ -1606,8 +1652,10 @@ func (app *mod) buildPanelView(ctx context.Context, id int64) (*panelView, bool)
 				pl.BasisNote = l.TierNote
 			case l.Tier == module.AppraisalTierEstimate:
 				pl.BasisText = "Estimated sell: " + formatShortISK(l.LineValueNum)
+			case l.Tier == module.AppraisalTierAbyssal:
+				pl.BasisText = "Abyssal Typical: " + formatShortISK(l.LineValueNum)
 			default:
-				pl.BasisText = "Swept Forge Typical: " + formatShortISK(l.LineValueNum)
+				pl.BasisText = "Typical Jita Price: " + formatShortISK(l.LineValueNum)
 			}
 			if l.Tier != "" && l.Tier != module.AppraisalTierUnpriced {
 				tiers[l.Tier] = true
@@ -1632,6 +1680,13 @@ func (app *mod) buildPanelView(ctx context.Context, id int64) (*panelView, bool)
 			tv.EstRange = low + " – " + formatShortISK(firstAbyssal.EstHighNum)
 		}
 		for _, rl := range firstAbyssal.Rolls {
+			// The attributes card lists only the rolls
+			// that moved their stat: an attribute left at
+			// its base value is not a mutation worth a
+			// row. (The detail page keeps every roll.)
+			if rl.HasBase && !rl.Changed {
+				continue
+			}
 			tr := telemetryRoll{Name: rl.Name, Good: rl.Good, Pct: rl.Pct, HasPct: rl.HasPct}
 			tr.Figure = rl.Value
 			if rl.HasBase && rl.Delta != "" {
@@ -1675,9 +1730,21 @@ func (app *mod) buildPanelView(ctx context.Context, id int64) (*panelView, bool)
 				cost += row.WantValue
 			}
 		}
-		if costKnown && row.OfferedValue > cost {
+		if costKnown && row.OfferedValue != cost {
+			// The spread runs both ways: a value under
+			// the cost is a shortfall, signed and painted
+			// in the negative tone, never quietly dropped.
 			spread := row.OfferedValue - cost
-			out.SumSpread = fmt.Sprintf("%s (%.1f%%)", formatShortISK(spread), spread/row.OfferedValue*100)
+			figure := formatShortISK(spread)
+			if spread < 0 {
+				figure = "-" + formatShortISK(-spread)
+				out.SumSpreadNeg = true
+			}
+			if row.OfferedValue > 0 {
+				out.SumSpread = fmt.Sprintf("%s (%.1f%%)", figure, spread/row.OfferedValue*100)
+			} else {
+				out.SumSpread = figure
+			}
 		}
 	}
 
@@ -2064,6 +2131,7 @@ func (app *mod) abyssalPanel(ctx context.Context, ab db.AbyssalItem) *abyssalPan
 		if bv, ok := base[rl.AttributeID]; ok {
 			row.HasBase = true
 			row.Base = formatAttrValue(bv)
+			row.Changed = rl.Value != bv
 			if bv != 0 {
 				pct := (rl.Value - bv) / absf(bv) * 100
 				row.Delta = fmt.Sprintf("%+.1f%%", pct)

@@ -8,9 +8,11 @@ package app
 // expansion panel fragment.
 
 import (
+	"context"
 	"io/fs"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestContractSearchBuyoutCap(t *testing.T) {
@@ -196,9 +198,65 @@ func TestContractSearchStructure(t *testing.T) {
 
 // TestContractSearchResultsTable pins the redesigned
 // results rows: the count bar, the fixed-width type slot
-// with its deal badge, every contents line (no caps, no
-// icons), the per-kind price labels and contents pills,
-// and the value column's coverage and spread.
+// with its deal badge, the contents lines (capped at
+// five behind the more-line, no icons), the per-kind
+// price labels and contents pills, and the value
+// column's coverage and spread.
+// TestContractSearchFilterPanelPolish pins the third
+// polish round on the filter panel: the region quick
+// selectors render as pill buttons (the hunt chips' paint,
+// no underline), the kind segments are scoped clear of the
+// results-pill rule whose leaked margin-top shoved them
+// down in their control, and the station field keeps
+// natural flow at the top of its box instead of riding
+// the stretched filter cell's bottom pin.
+func TestContractSearchFilterPanelPolish(t *testing.T) {
+	tr := &openWindowTransport{}
+	app, conn, _ := buildCorpTestApp(t, tr)
+	seedContractCorpus(t, app, conn)
+
+	_, body := getAnon(t, app, "/contracts/search/")
+	// The quick selectors: three pill buttons in a row,
+	// still carrying the data hooks contracts.js drives,
+	// with no middot text separators between them.
+	mustContain(t, "region quick pills", body,
+		`<span class="cs-region-quick"><button type="button" data-region-quick="jita">Jita</button><button type="button" data-region-quick="hubs">4 Hubs</button><button type="button" data-region-quick="all">All</button></span>`)
+	// The station field opts out of the bottom pin.
+	mustContain(t, "station field flow", body,
+		`<label class="cs-field cs-field-flow">Station, structure or system`)
+
+	rawCSS, err := fs.ReadFile(staticFS, "static/contracts.css")
+	if err != nil {
+		t.Fatal(err)
+	}
+	css := string(rawCSS)
+	// The pill paint: the shared chip edge and full radius,
+	// and the segments' scoping rule (no leaked margin, the
+	// old padding trade gone).
+	for _, want := range []string{
+		".cs-region-quick button {\n  display: inline-flex; align-items: center;\n  border: 1px solid var(--box-edge); border-radius: 999px;",
+		".cs-types > .cs-pill {\n  margin-top: 0;",
+		".cs-fbox .cs-field.cs-field-flow { flex: none; }",
+	} {
+		if !strings.Contains(css, want) {
+			t.Errorf("contracts.css: missing %q", want)
+		}
+	}
+	if strings.Contains(css, "0.1rem + 2px") {
+		t.Error("contracts.css: the seg padding trade is back")
+	}
+	// No underline anywhere in the region-quick rules: the
+	// block from the span rule through the hover rule.
+	start := strings.Index(css, ".cs-region-quick {")
+	end := strings.Index(css, ".cs-region-quick button:hover")
+	if start < 0 || end < 0 || end < start {
+		t.Fatal("contracts.css: the region-quick block moved")
+	}
+	if strings.Contains(css[start:end], "underline") {
+		t.Error("contracts.css: the region quick selectors are underlined again")
+	}
+}
+
 func TestContractSearchResultsTable(t *testing.T) {
 	tr := &openWindowTransport{}
 	app, conn, _ := buildCorpTestApp(t, tr)
@@ -313,7 +371,7 @@ func TestContractPanelFragment(t *testing.T) {
 	}
 	mustContain(t, "panel 7001", body,
 		"Contract Line Appraisal (Forge Sweep)", "Tritanium",
-		"Swept Forge Typical: 1000.00 ISK",
+		"Typical Jita Price: 1000.00 ISK",
 		"ID: 7001", "Issued by Issuer One (Pilot)",
 		"Deal Execution Summary", "Asking Price:", "850.00 ISK",
 		"EveSynapse Value:", "Estimated Spread:", "150.00 ISK (15.0%)",
@@ -326,13 +384,17 @@ func TestContractPanelFragment(t *testing.T) {
 		t.Error("the drawer still renders item icons")
 	}
 
-	// The courier drawer states the private cargo plainly
-	// and sets the reward against the collateral; collateral
-	// minus reward is not a spread, so none renders.
+	// The courier drawer sets the reward against the
+	// collateral and carries no private-cargo note (the
+	// detail page keeps it); collateral minus reward is
+	// not a spread, so none renders.
 	_, body = getAnon(t, app, "/contracts/search/7003/panel")
 	mustContain(t, "panel 7003", body,
-		"private", "Contract Line Appraisal (Route Hauling Rate)",
+		"Contract Line Appraisal (Route Hauling Rate)",
 		"Asking Price:", "5.0M ISK", "EveSynapse Value:", "100.0K ISK")
+	if strings.Contains(body, "Courier cargo is private") {
+		t.Error("the courier drawer still carries the private-cargo note")
+	}
 	if strings.Contains(body, "Estimated Spread:") {
 		t.Error("the courier drawer renders a spread figure")
 	}
@@ -353,13 +415,13 @@ func TestContractPanelAbyssal(t *testing.T) {
 	}
 	// The drawer: the appraisal card credits the abyssal
 	// model and prices the line from the stored estimate;
-	// the telemetry card carries the stored range and every
-	// roll with its percentile bar, inline.
+	// the attributes card carries the stored range and
+	// every roll with its percentile bar, inline.
 	mustContain(t, "panel 8501", body,
 		"Contract Line Appraisal (Abyssal Neural Model)",
 		"Abyssal Test Damage", "[Roll 45/100]",
-		"Swept Forge Typical: 205.0M ISK",
-		"Mutaplasmid Telemetry", "Est Range: 180.0M – 240.0M ISK",
+		"Abyssal Typical: 205.0M ISK",
+		"Mutaplasmid Attributes", "Est Range: 180.0M – 240.0M ISK",
 		"Damage Multiplier", "&#43;18.0% (80%)",
 		"Capacitor Need", "CPU", `data-w="80"`, `data-w="2"`)
 }
@@ -367,7 +429,7 @@ func TestContractPanelAbyssal(t *testing.T) {
 // TestContractSearchAbyssalInline pins the mutaplasmid
 // stats presentation after the redesign: the row carries
 // the score pill alone and the rolls render inline in the
-// expansion drawer's telemetry card — the popup the old
+// expansion drawer's attributes card — the popup the old
 // design opened over the results is retired from the
 // search page entirely, markup, wiring and paint alike.
 // (The contract detail page keeps its own full inline
@@ -388,9 +450,9 @@ func TestContractSearchAbyssalInline(t *testing.T) {
 		}
 	}
 
-	// The panel fragment: telemetry inline, no popup.
+	// The panel fragment: attributes inline, no popup.
 	_, body = getAnon(t, app, "/contracts/search/8501/panel")
-	mustContain(t, "panel telemetry", body, "Mutaplasmid Telemetry")
+	mustContain(t, "panel attributes", body, "Mutaplasmid Attributes")
 	if strings.Contains(body, "data-abpop") || strings.Contains(body, "cs-abpop") {
 		t.Error("the panel fragment still wires the abyssal popup")
 	}
@@ -409,5 +471,165 @@ func TestContractSearchAbyssalInline(t *testing.T) {
 	}
 	if strings.Contains(string(rawCSS), "cs-abpop") {
 		t.Error("contracts.css still carries the abyssal popup paint")
+	}
+}
+
+// TestContractPanelUnchangedRollsHidden pins the
+// attributes card's filter: a roll that left its stat at
+// the base module's value is not a mutation and earns no
+// row, while the rolls that moved theirs stay -- and the
+// detail page, out of this change's scope, keeps every
+// roll.
+func TestContractPanelUnchangedRollsHidden(t *testing.T) {
+	tr := &openWindowTransport{}
+	app, conn, _ := buildCorpTestApp(t, tr)
+	seedAbyssalPage(t, conn)
+
+	// The fixture's capacitor roll sits a hair off its
+	// base (10.2 against 10); store the roll at the base
+	// value itself, so the roll changed nothing.
+	ctx := context.Background()
+	if _, err := conn.ExecContext(ctx, `UPDATE abyssal_items SET attributes =
+		'[{"attribute_id":64,"value":2.36},{"attribute_id":6,"value":10},{"attribute_id":50,"value":27.9}]'
+		WHERE item_id = 900001`); err != nil {
+		t.Fatal(err)
+	}
+
+	code, body := getAnon(t, app, "/contracts/search/8501/panel")
+	if code != 200 {
+		t.Fatalf("abyssal panel: status %d, want 200", code)
+	}
+	mustContain(t, "panel unchanged rolls", body,
+		"Mutaplasmid Attributes", "Est Range: 180.0M – 240.0M ISK",
+		"Damage Multiplier", "CPU")
+	if strings.Contains(body, "Capacitor Need") {
+		t.Error("the attributes card still lists a roll that changed nothing")
+	}
+
+	_, body = getAnon(t, app, "/contracts/search/8501/")
+	mustContain(t, "detail unchanged rolls", body, "Capacitor Need")
+}
+
+// TestContractSearchNegativeSpread pins the spread's
+// other direction: a contract whose stored value falls
+// short of its cost shows the shortfall, signed and in
+// the negative tone, in the row's value column and the
+// drawer's summary alike -- while a courier of the same
+// shape stays spread-free, as couriers always are.
+func TestContractSearchNegativeSpread(t *testing.T) {
+	tr := &openWindowTransport{}
+	app, conn, _ := buildCorpTestApp(t, tr)
+	seedContractCorpus(t, app, conn)
+
+	ctx := context.Background()
+	now := time.Now().UTC()
+	exec := func(query string, args ...any) {
+		t.Helper()
+		if _, err := conn.ExecContext(ctx, query, args...); err != nil {
+			t.Fatalf("spread seed %q: %v", query, err)
+		}
+	}
+	contract := func(id int64, typ, title string, price, reward, collateral, volume float64,
+		endLoc int64, state string) {
+		t.Helper()
+		exec(`INSERT INTO pub_contracts (contract_id, region_id, type, issuer_id, issuer_corporation_id,
+			title, price, buyout, reward, collateral, volume, start_location_id, end_location_id,
+			date_issued, date_expired, days_to_complete, items_state, last_cycle, first_seen, last_seen)
+			VALUES ($1, 10000002, $2, 9001, 9801, $3, $4, 0, $5, $6, $7, 60003760, $8, $9, $10, 1, $11, 1, $9, $9)`,
+			id, typ, title, price, reward, collateral, volume, endLoc,
+			now.Add(-time.Hour), now.Add(7*24*time.Hour), state)
+	}
+
+	// Priced at 2000, appraised at 1000: a 1000 shortfall.
+	contract(7021, "item_exchange", "Underwater Lot", 2000, 0, 0, 0, 0, "stored")
+	exec(`INSERT INTO pub_contract_items (record_id, contract_id, type_id, quantity, is_included,
+		unit_price, line_value, price_tier, price_asof)
+		VALUES (201, 7021, 34, 20, true, 50, 1000, 'typical', $1)`, now)
+	exec(`UPDATE pub_contracts SET offered_value=1000, want_value=0, priced_lines=1, total_lines=1,
+		tier_mix='typical:1', priced_at=$1 WHERE contract_id=7021`, now)
+
+	// A courier in the same shape: reward over the
+	// collateral it asks the hauler to risk.
+	contract(7022, "courier", "Heavy Haul Light Pay", 0, 5000, 1000, 1000, 60003761, "private")
+
+	_, body := getAnon(t, app, "/contracts/search/")
+	mustContain(t, "negative spread row", body,
+		"compared against our swept typicals pricing model",
+		"-1000.00 ISK spread")
+	if n := strings.Count(body, `class="cs-spread neg"`); n != 1 {
+		t.Errorf("negative spread rows: got %d, want 1 (the underwater exchange only)", n)
+	}
+
+	_, body = getAnon(t, app, "/contracts/search/7021/panel")
+	mustContain(t, "panel 7021", body,
+		"Estimated Spread:", "-1000.00 ISK (-100.0%)", `cs-srow sp neg`)
+
+	_, body = getAnon(t, app, "/contracts/search/7022/panel")
+	mustContain(t, "panel 7022", body,
+		"Asking Price:", "5000.00 ISK", "EveSynapse Value:", "1000.00 ISK")
+	if strings.Contains(body, "Estimated Spread:") {
+		t.Error("the courier summary renders a spread")
+	}
+}
+
+// TestContractSearchContentsCap pins the contents cell's
+// five-line cap: offered lines first, then wanted, counted
+// together; the remainder renders server-side in the
+// hidden block behind the "(show N more items)" line the
+// cell's reveal click unhides.
+func TestContractSearchContentsCap(t *testing.T) {
+	tr := &openWindowTransport{}
+	app, conn, _ := buildCorpTestApp(t, tr)
+	seedContractCorpus(t, app, conn)
+
+	ctx := context.Background()
+	now := time.Now().UTC()
+	exec := func(query string, args ...any) {
+		t.Helper()
+		if _, err := conn.ExecContext(ctx, query, args...); err != nil {
+			t.Fatalf("cap seed %q: %v", query, err)
+		}
+	}
+	contract := func(id int64, title string) {
+		t.Helper()
+		exec(`INSERT INTO pub_contracts (contract_id, region_id, type, issuer_id, issuer_corporation_id,
+			title, price, buyout, reward, collateral, volume, start_location_id, end_location_id,
+			date_issued, date_expired, days_to_complete, items_state, last_cycle, first_seen, last_seen)
+			VALUES ($1, 10000002, 'item_exchange', 9001, 9801, $2, 100, 0, 0, 0, 0, 60003760, 0, $3, $4, 1, 'stored', 1, $3, $3)`,
+			id, title, now.Add(-30*time.Minute), now.Add(7*24*time.Hour))
+	}
+	item := func(rec, contractID, typeID, qty int64, included bool) {
+		t.Helper()
+		exec(`INSERT INTO pub_contract_items (record_id, contract_id, type_id, quantity, is_included)
+			VALUES ($1, $2, $3, $4, $5)`, rec, contractID, typeID, qty, included)
+	}
+
+	// Eight offered lines: five show, three ride hidden.
+	contract(7010, "Bulk Haul")
+	for i := int64(0); i < 8; i++ {
+		item(100+i, 7010, 34+i%2, 11+i, true)
+	}
+	// Three offered and four wanted share the one budget
+	// of five: three offered and two wanted show, two hide.
+	contract(7011, "Mixed Swap")
+	for i := int64(0); i < 3; i++ {
+		item(120+i, 7011, 34, 21+i, true)
+	}
+	for i := int64(0); i < 4; i++ {
+		item(130+i, 7011, 35, 31+i, false)
+	}
+
+	_, body := getAnon(t, app, "/contracts/search/")
+	mustContain(t, "contents cap", body,
+		"(show 3 more items)", "(show 2 more items)",
+		`<div class="cs-extralines" hidden>`)
+	if n := strings.Count(body, `<button type="button" class="cs-morelines">`); n != 2 {
+		t.Errorf("more-lines: got %d, want 2 (one per over-cap row)", n)
+	}
+	// The hidden lines still render server-side: the
+	// eighth line's quantity (×18, unique to it) is in
+	// the page, inside the hidden block.
+	if !strings.Contains(body, "×18") {
+		t.Error("the eighth contents line did not render in the hidden block")
 	}
 }

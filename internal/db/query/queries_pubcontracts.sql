@@ -96,7 +96,7 @@ SELECT contract_id, region_id, type, issuer_id, issuer_corporation_id,
     start_location_id, end_location_id, date_issued, date_expired,
     days_to_complete, items_state, last_cycle, first_seen, last_seen,
     offered_value, want_value, deal_ratio, priced_lines, total_lines,
-    tier_mix, priced_at
+    tier_mix, priced_at, items_attempts, items_error
 FROM pub_contracts
 WHERE contract_id = $1;
 
@@ -737,10 +737,16 @@ WHERE (coalesce(cardinality(sqlc.arg(types)::text[]), 0) = 0
 -- holds only live contracts, so the count is the indexed
 -- set) and the freshest sweep stamp across regions. One
 -- row, two stored reads -- no corpus aggregation at render
--- beyond the count itself.
+-- beyond the count itself. The stamp expression carries a
+-- cast and a coalesce on purpose: the pinned sqlc types a
+-- bare MAX() as interface{}, so the cast pins timestamptz,
+-- and the coalesce maps the unswept case (no sweep rows,
+-- MAX is NULL) to the zero time instead of NULL -- the
+-- caller reads IsZero() as "not swept yet".
 -- name: GetPublicContractCorpusStats :one
 SELECT COUNT(*) AS open_contracts,
-       (SELECT MAX(updated_at) FROM pub_contract_sweep_state) AS last_sweep_at
+       COALESCE((SELECT MAX(updated_at) FROM pub_contract_sweep_state),
+                '0001-01-01 00:00:00+00'::timestamptz)::timestamptz AS last_sweep_at
 FROM pub_contracts;
 
 -- The public structures set (schema 068): one replace per

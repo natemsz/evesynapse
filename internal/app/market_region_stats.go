@@ -69,6 +69,22 @@ func regionSweepKind(regionID int64) string {
 	return fmt.Sprintf("sweep_%d", regionID)
 }
 
+// sweptRegions is the fixed set of regions the region-stats
+// sweep covers: the five hub regions, plus ESI's global
+// market region (globalMarketRegion), whose book no hub
+// region carries -- PLEX trades there, essentially alone.
+// A permanent fixture of the worker, never heat- or
+// presence-driven: the global book is one type deep, so
+// sweeping it costs a page or two per cycle. It is NOT part
+// of marketRegions: the global market is not a hub a page
+// offers as a place, only a book the sweep reads.
+var sweptRegions = func() []marketRegionOption {
+	out := make([]marketRegionOption, 0, len(marketRegions)+1)
+	out = append(out, marketRegions...)
+	out = append(out, marketRegionOption{ID: globalMarketRegion, Name: "Global PLEX market"})
+	return out
+}()
+
 // stationKey identifies one (place, type) pair during a sweep.
 type stationKey struct {
 	LocationID int64
@@ -103,7 +119,7 @@ type regionSweepOutcome struct {
 
 // sweepRegionStats is the pass, called from refreshMarketData
 // after the existing history and order-health passes; it spends
-// what is left of the cycle's allowance. Every hub region with a
+// what is left of the cycle's allowance. Every swept region with a
 // sweep in progress resumes it (whatever the freshness gate
 // says), and every region whose stored stats went stale starts
 // one; all of them advance in parallel, each bounded to
@@ -116,9 +132,9 @@ func (app *Application) sweepRegionStats(ctx context.Context, allowance *fetchBu
 	defer app.sweepMu.Unlock()
 
 	var limitHit atomic.Bool
-	outcomes := make([]regionSweepOutcome, len(marketRegions))
+	outcomes := make([]regionSweepOutcome, len(sweptRegions))
 	var wg sync.WaitGroup
-	for i, region := range marketRegions {
+	for i, region := range sweptRegions {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()

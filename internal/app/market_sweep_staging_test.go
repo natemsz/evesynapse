@@ -175,7 +175,7 @@ func TestSweepRestartResumesMidSweep(t *testing.T) {
 	transport := &pagedBookTransport{books: map[int64][][]esi.MarketOrder{}}
 	app, conn, q := buildCorpTestApp(t, transport)
 	ctx := context.Background()
-	for _, region := range marketRegions {
+	for _, region := range sweptRegions {
 		if region.ID != 10000002 {
 			markRegionFresh(t, q, region.ID)
 		}
@@ -241,7 +241,7 @@ func TestSweepTransientErrorKeepsStagedProgress(t *testing.T) {
 	transport := &pagedBookTransport{books: map[int64][][]esi.MarketOrder{}}
 	app, conn, q := buildCorpTestApp(t, transport)
 	ctx := context.Background()
-	for _, region := range marketRegions {
+	for _, region := range sweptRegions {
 		if region.ID != 10000002 {
 			markRegionFresh(t, q, region.ID)
 		}
@@ -305,8 +305,9 @@ func TestSweepConcurrentRegionsBothComplete(t *testing.T) {
 	transport := &pagedBookTransport{books: map[int64][][]esi.MarketOrder{}, delay: 30 * time.Millisecond}
 	app, conn, q := buildCorpTestApp(t, transport)
 	ctx := context.Background()
-	// Only The Forge and Domain are due; the rest are fresh.
-	for _, region := range marketRegions {
+	// Only The Forge and Domain are due; every other swept
+	// region (the global market included) is fresh.
+	for _, region := range sweptRegions {
 		if region.ID != 10000002 && region.ID != 10000043 {
 			markRegionFresh(t, q, region.ID)
 		}

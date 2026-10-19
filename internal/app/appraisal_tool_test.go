@@ -1097,3 +1097,46 @@ func TestPublicFitEscapesUserText(t *testing.T) {
 	}
 	mustContain(t, "escaped fit page", body, "&lt;script&gt;alert(1)&lt;/script&gt;")
 }
+
+// PLEX trades only on ESI's global market, so its stored
+// stat lives at the global region and no hub carries a row:
+// an appraisal at The Forge still prices it -- from the
+// global book, worded as the global market's price, with
+// the typical buy total following the same rule.
+func TestAppraisalToolGlobalMarketPLEX(t *testing.T) {
+	tr := &countingTransport{}
+	app, conn, q := buildCorpTestApp(t, tr)
+	seedAppraisalTool(t, conn, q)
+	ctx := context.Background()
+	now := time.Now().UTC()
+	exec := func(query string, args ...any) {
+		t.Helper()
+		if _, err := conn.ExecContext(ctx, query, args...); err != nil {
+			t.Fatalf("seed %q: %v", query, err)
+		}
+	}
+	exec(`INSERT INTO sde_types (type_id, name) VALUES (44992, 'PLEX')`)
+	exec(`INSERT INTO market_region_stats (region_id, type_id, typical_sell, typical_buy, updated_at) VALUES (19000001, 44992, 5000000, 4900000, $1)`, now.Add(-time.Hour))
+
+	body, _, _ := postAnonAppraisal(t, app, url.Values{"items": {"PLEX x 10"}})
+	mustContain(t, "PLEX appraisal", body,
+		"Priced 1 of 1 lines",
+		"50,000,000.00", // 10 x the global typical sell
+		"49,000,000.00", // 10 x the global typical buy
+		"Our global PLEX market typical",
+		"priced from the global PLEX market",
+		"100% typical verified",
+	)
+	if strings.Contains(body, "Our Forge typical") {
+		t.Error("PLEX line worded as a Forge typical; its book is the global market's")
+	}
+	if strings.Contains(body, "The Forge typical verified") {
+		t.Error("coverage credits The Forge for a global-market price")
+	}
+	if strings.Contains(body, "No typical buys on the priced lines") {
+		t.Error("PLEX buy total missing: typical buys did not follow the global rule")
+	}
+	if tr.calls.Load() != 0 {
+		t.Errorf("the appraisal page reached the network %d times; stored reads only", tr.calls.Load())
+	}
+}

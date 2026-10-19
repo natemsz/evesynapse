@@ -160,6 +160,20 @@ func resolveAppraisalPriceMode(own *db.MarketRegionStat, tv *db.TrueValue, fb *d
 	return appraisalPrice{tier: module.AppraisalTierUnpriced}
 }
 
+// typicalTier reports whether a pricing tier is the swept-
+// typical family -- the tiers that speak from a region row, as
+// opposed to the basis-independent estimate, abyssal, copy-
+// median and fallback tiers.
+func typicalTier(tier string) bool {
+	switch tier {
+	case module.AppraisalTierTypical, module.AppraisalTierTypicalBuy,
+		module.AppraisalTierTypicalSplit, module.AppraisalTierTypicalSplitSell,
+		module.AppraisalTierTypicalSplitBuy:
+		return true
+	}
+	return false
+}
+
 // AppraiseLines prices a line list from stored data only: the
 // three pricing tables are read once per distinct type set,
 // and each line resolves through the house order. It is the
@@ -175,7 +189,13 @@ func (app *Application) AppraiseLines(ctx context.Context, lines []module.Apprai
 // in the chosen mode, and the percent modifier is applied on
 // top of every priced line. A hub with no stored typical for
 // a type never borrows another hub's: the line falls through
-// the remaining tiers for that hub or stays unpriced.
+// the remaining tiers for that hub or stays unpriced. The one
+// exception is not another hub at all: a type whose market
+// lives on ESI's global market (PLEX) has no hub book to
+// borrow -- the global book IS its market at every hub, so a
+// type with no stat at the basis region and a stat at the
+// global region prices from the global row, at the own-swept
+// tier, the row's own updated_at governing its freshness.
 func (app *Application) AppraiseLinesWithBasis(ctx context.Context, lines []module.AppraisalLine, basis module.AppraisalBasis) (module.Appraisal, error) {
 	regionID := basis.RegionID
 	if regionID == 0 {
@@ -222,6 +242,30 @@ func (app *Application) AppraiseLinesWithBasis(ctx context.Context, lines []modu
 	own := make(map[int64]*db.MarketRegionStat, len(ownRows))
 	for i := range ownRows {
 		own[ownRows[i].TypeID] = &ownRows[i]
+	}
+	// The global market serves where the basis region has no
+	// stat at all (see the basis doc above): any requested
+	// type the hub carries no row for reads its global row
+	// instead, so a global-market type prices at every hub
+	// while a type the hub does carry keeps its hub row.
+	if regionID != globalMarketRegion {
+		var missing []int64
+		for _, id := range typeIDs {
+			if _, ok := own[id]; !ok {
+				missing = append(missing, id)
+			}
+		}
+		if len(missing) > 0 {
+			gRows, err := app.queries.ListMarketRegionStatsForTypes(ctx, db.ListMarketRegionStatsForTypesParams{
+				RegionID: globalMarketRegion, Column2: missing,
+			})
+			if err != nil {
+				return out, fmt.Errorf("appraisal: global typicals: %w", err)
+			}
+			for i := range gRows {
+				own[gRows[i].TypeID] = &gRows[i]
+			}
+		}
 	}
 	tvs := make(map[int64]*db.TrueValue, len(tvRows))
 	for i := range tvRows {
@@ -305,6 +349,13 @@ func (app *Application) AppraiseLinesWithBasis(ctx context.Context, lines []modu
 		} else if p := resolveAppraisalPriceMode(own[ln.TypeID], tvs[ln.TypeID], fbs[ln.TypeID], now, mode); p.ok {
 			al.UnitPrice, al.LineValue = p.unit, p.unit*float64(ln.Quantity)
 			al.Tier, al.AsOf, al.Priced = p.tier, p.asOf, true
+			if row := own[ln.TypeID]; row != nil && row.RegionID != regionID && typicalTier(p.tier) {
+				// The price spoke from another region's book
+				// (the global market's, per the fill above):
+				// the line carries that provenance so no
+				// reader words it as the basis hub's price.
+				al.SourceRegionID = row.RegionID
+			}
 		}
 		if al.Priced && pct != 100 {
 			al.UnitPrice *= pct / 100

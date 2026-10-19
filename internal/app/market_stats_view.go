@@ -25,7 +25,7 @@ type marketRegionStatRow struct {
 	TypicalSell string // esi.FormatISK, "" when no sell orders
 	TypicalBuy  string // esi.FormatISK, "" when no buy orders
 	Age         string // "12 minutes ago", "" when HasData is false
-	Source      string // fallbackSourceLabel on fallback rows, "" on our own
+	Source      string // fallbackSourceLabel on fallback rows, "Global PLEX market" on global-book rows, "" on our own
 }
 
 // attachRegionStats fills an item view's hub-regions strip from
@@ -61,7 +61,18 @@ func (app *Application) attachRegionStats(ctx context.Context, item *marketItem)
 			RegionName: region.Name,
 			Active:     region.ID == item.RegionID,
 		}
-		if res, ok := resolvedRegionTypicals(ownByRegion[region.ID], fallbackByRegion[region.ID], now); ok {
+		ownRow := ownByRegion[region.ID]
+		fromGlobal := false
+		if ownRow == nil {
+			// The global market serves where the hub has no
+			// stat: a global-market type's book lives there,
+			// so the hub row quotes that book (and labels it)
+			// instead of reporting no data for the one market
+			// the type trades on.
+			ownRow = ownByRegion[globalMarketRegion]
+			fromGlobal = ownRow != nil
+		}
+		if res, ok := resolvedRegionTypicals(ownRow, fallbackByRegion[region.ID], now); ok {
 			row.HasData = true
 			if res.TypicalSell > 0 {
 				row.TypicalSell = esi.FormatISK(res.TypicalSell)
@@ -72,6 +83,8 @@ func (app *Application) attachRegionStats(ctx context.Context, item *marketItem)
 			row.Age = ageText(now, res.AsOf)
 			if res.Fallback {
 				row.Source = fallbackSourceLabel
+			} else if fromGlobal {
+				row.Source = "Global PLEX market"
 			}
 		}
 		item.RegionStats = append(item.RegionStats, row)

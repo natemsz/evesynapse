@@ -211,8 +211,9 @@ func TestRegionSweepIncrementalPageBudget(t *testing.T) {
 	ctx := context.Background()
 
 	// Aim the sweep at Domain with a book ten pages past what one
-	// cycle may read.
-	for _, region := range marketRegions {
+	// cycle may read: every other swept region (the global market
+	// included) is settled fresh.
+	for _, region := range sweptRegions {
 		if region.ID != 10000043 {
 			markRegionFresh(t, q, region.ID)
 		}
@@ -584,5 +585,68 @@ func TestRegionSweepStoresStationLeaderboard(t *testing.T) {
 	other := byLoc[60003761]
 	if other.SellOrders != 2 || other.BuyOrders != 0 || other.SellValue != 260 || other.BuyValue != 0 {
 		t.Errorf("station 60003761 = %+v, want 2 sells / 0 buys, 260 / 0 open", other)
+	}
+}
+
+// The swept set is the five hubs plus the global market
+// region -- and the global market is not a hub: it must
+// never leak into the regions the pages offer as places.
+func TestSweptRegionsIncludeGlobalMarket(t *testing.T) {
+	seen := map[int64]bool{}
+	for _, r := range sweptRegions {
+		seen[r.ID] = true
+	}
+	for _, hub := range marketRegions {
+		if !seen[hub.ID] {
+			t.Errorf("swept regions missing hub %d", hub.ID)
+		}
+		if hub.ID == globalMarketRegion {
+			t.Errorf("global market region %d listed among the hub regions", hub.ID)
+		}
+	}
+	if !seen[globalMarketRegion] {
+		t.Errorf("swept regions missing the global market region %d", globalMarketRegion)
+	}
+	if len(sweptRegions) != len(marketRegions)+1 {
+		t.Errorf("swept regions = %d, want the hubs plus the global market (%d)", len(sweptRegions), len(marketRegions)+1)
+	}
+}
+
+// A type whose only stored stat sits on the global market
+// (PLEX's shape) fills every hub row of the item page strip
+// from that book, labeled as the global market's figures --
+// not "no data yet" at every hub for the one market the
+// type trades on.
+func TestAttachRegionStatsGlobalMarketFill(t *testing.T) {
+	transport := &countingTransport{}
+	app, _, q := buildCorpTestApp(t, transport)
+	ctx := context.Background()
+	now := time.Now().UTC()
+	if err := q.UpsertMarketRegionStat(ctx, db.UpsertMarketRegionStatParams{
+		RegionID: globalMarketRegion, TypeID: 44992, BestSell: 5100000, TypicalSell: 5000000, SellBand: 5200000,
+		BestBuy: 4800000, TypicalBuy: 4900000, BuyBand: 4700000, SellOrders: 40, BuyOrders: 30,
+		SellVolume: 9000, BuyVolume: 8000, UpdatedAt: now.Add(-20 * time.Minute),
+	}); err != nil {
+		t.Fatalf("seed global stat: %v", err)
+	}
+	item := &marketItem{TypeID: 44992, RegionID: 10000002}
+	app.attachRegionStats(ctx, item)
+	if len(item.RegionStats) != len(marketRegions) {
+		t.Fatalf("ribbon rows: %d, want one per hub region (%d)", len(item.RegionStats), len(marketRegions))
+	}
+	for _, row := range item.RegionStats {
+		if !row.HasData {
+			t.Errorf("hub row %d: no data, want the global book's figures", row.RegionID)
+			continue
+		}
+		if row.TypicalSell != esi.FormatISK(5000000) || row.TypicalBuy != esi.FormatISK(4900000) {
+			t.Errorf("hub row %d: typicals %q/%q, want the global row's", row.RegionID, row.TypicalSell, row.TypicalBuy)
+		}
+		if row.Source != "Global PLEX market" {
+			t.Errorf("hub row %d: source %q, want the global market label", row.RegionID, row.Source)
+		}
+		if row.Age != "20 minutes ago" {
+			t.Errorf("hub row %d: age %q, want the global row's age", row.RegionID, row.Age)
+		}
 	}
 }

@@ -44,11 +44,11 @@ type snapshotBasis struct {
 }
 
 func (b pricingBasis) snapshot() snapshotBasis {
-	return snapshotBasis{RegionID: b.RegionID, HubName: b.HubName, Mode: b.Mode, Percent: b.Percent}
+	return snapshotBasis(b)
 }
 
 func (s snapshotBasis) basis() pricingBasis {
-	b := pricingBasis{RegionID: s.RegionID, HubName: s.HubName, Mode: s.Mode, Percent: s.Percent}
+	b := pricingBasis(s)
 	if b.Mode == "" {
 		b.Mode = module.AppraisalModeSell
 	}

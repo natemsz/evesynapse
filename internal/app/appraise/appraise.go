@@ -586,12 +586,6 @@ func (app *page) typicalBuys(ctx context.Context, agg []aggLine, res module.Appr
 
 // --- display ---------------------------------------------------------------
 
-// tierLabel words a price tier for readers at the default
-// basis: the same words the contract pages use.
-func tierLabel(tier string) string {
-	return tierLabelWithBasis(tier, pricingBasis{HubName: "The Forge", Mode: module.AppraisalModeSell, Percent: 100})
-}
-
 // resultLine is one display row of a rendered snapshot.
 type resultLine struct {
 	TypeID    int64

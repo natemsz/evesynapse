@@ -374,15 +374,20 @@ func (app *page) handleAppraiseReprocess(w http.ResponseWriter, r *http.Request)
 		settings.Prune = r.URL.Query().Has("prune")
 		app.rememberRefine(ctx, w, r, userID, settings)
 	}
+	// The paste console rides along on this view too, with the
+	// appraisal's own basis in its controls, like every other
+	// rendering of the page.
+	view := &appraiseView{SignedIn: data.LoggedIn, Result: res, Basis: res.Basis, Hubs: app.hubOptions(res.Basis.RegionID)}
 	rp, err := app.computeReprocess(ctx, &snap, settings)
 	if err != nil {
 		logging.Errorf("appraisal: reprocess compute: %v", err)
 		data.Error = "That reprocessing view could not be run."
-		data.Appraise = &appraiseView{SignedIn: data.LoggedIn, Result: res}
+		data.Appraise = view
 		app.deps.Render(ctx, w, http.StatusOK, "market_appraise.html", data)
 		return
 	}
 	rp.BackURL = "/market/appraise/s/" + row.ShareToken + "/"
-	data.Appraise = &appraiseView{SignedIn: data.LoggedIn, Result: res, Reprocess: rp}
+	view.Reprocess = rp
+	data.Appraise = view
 	app.deps.Render(ctx, w, http.StatusOK, "market_appraise.html", data)
 }

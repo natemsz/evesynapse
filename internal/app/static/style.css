@@ -564,41 +564,297 @@ main {
   border-block: 1px solid var(--box-edge);
 }
 /* --- appraisal page ----------------------------------------------
-   The paste form and its result sit in .box sections on the page
-   glass; the result's total closes the lines table at its foot,
-   right-aligned under a hairline, the way a receipt totals. */
-.ap-form, .ap-result, .ap-saved { margin-bottom: 1rem; }
-.ap-intro { margin: 0 0 0.7rem; }
-.ap-field { display: flex; flex-direction: column; gap: 0.3rem; }
+   The split workbench: a paste console on the left, and on the
+   right the permalink bar, four telemetry cards, the hub
+   comparison pills and the tabbed results panel; the saved
+   list closes the page. Money figures share one mono size and
+   never wrap mid-figure. No glows: the standard glass .box
+   panels, buttons and segmented control carry the page. */
+.ap-head {
+  display: flex; align-items: flex-end; justify-content: space-between;
+  gap: 1rem; flex-wrap: wrap; margin-bottom: 1rem;
+}
+.ap-intro { margin: 0; max-width: 62rem; }
+.ap-samples { display: flex; align-items: center; gap: 0.45rem; flex-wrap: wrap; }
+.ap-samples-lbl {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 0.72rem; color: var(--muted);
+}
+.ap-samplebtn {
+  font: inherit; font-size: 0.8rem; color: var(--text); cursor: pointer;
+  background: var(--row); border: 1px solid var(--box-edge);
+  border-radius: var(--r-xs); padding: 0.3rem 0.6rem;
+}
+.ap-samplebtn:hover { background: var(--row-hover); }
+.ap-bench {
+  display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 11fr);
+  gap: 1.2rem; align-items: start; margin-bottom: 1rem;
+}
+.ap-bench.solo { grid-template-columns: minmax(0, 1fr); }
+.ap-bench.solo .ap-form { max-width: 64rem; }
+.ap-right { display: flex; flex-direction: column; gap: 0.9rem; min-width: 0; }
 .ap-label {
   font-size: 0.78rem; font-weight: 700; letter-spacing: 0.06em;
   text-transform: uppercase; color: var(--muted);
 }
+.ap-chips {
+  display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center;
+  padding-bottom: 0.7rem; border-bottom: 1px solid var(--box-edge);
+}
+.ap-chip {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.04em;
+  color: var(--muted); background: var(--row);
+  border: 1px solid var(--box-edge); border-radius: var(--r-xs);
+  padding: 0.22rem 0.5rem;
+}
+.ap-chip.cy { color: #7dd3fc; }
+.ap-chip.ro { color: #fda4af; }
+.ap-chip.am { color: #fcd34d; }
+.ap-rules { margin-top: 0.6rem; }
+.ap-rules summary {
+  cursor: pointer; font-size: 0.8rem; font-weight: 600;
+  color: var(--note);
+}
+.ap-help { margin: 0.5rem 0 0; }
+.ap-fld-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 0.6rem; margin: 0.85rem 0 0.35rem;
+}
+.ap-fld-tools { display: inline-flex; align-items: center; gap: 0.6rem; }
+.ap-count {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 0.72rem; color: var(--muted); background: var(--row);
+  border: 1px solid var(--box-edge); border-radius: var(--r-xs);
+  padding: 0.14rem 0.45rem; white-space: nowrap;
+}
+.ap-clearlink {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 0.72rem; color: var(--muted);
+  background: none; border: none; padding: 0; cursor: pointer;
+}
+.ap-clearlink:hover { color: var(--text-bright); }
+.ap-field { display: flex; flex-direction: column; gap: 0.3rem; }
 .ap-field textarea {
   width: 100%; resize: vertical;
   font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 0.85rem;
 }
-.ap-actions { margin: 0.7rem 0 0; }
-.ap-help { margin: 0.7rem 0 0; }
-.ap-meta {
-  display: flex; flex-wrap: wrap; align-items: center;
-  gap: 0.4rem 0.7rem; margin-bottom: 0.7rem;
+.ap-drawer {
+  margin-top: 0.9rem; background: var(--row);
+  border: 1px solid var(--box-edge); border-radius: var(--r-sm);
 }
-.ap-meta form { margin-left: auto; }
-.ap-meta form button { white-space: nowrap; }
-.ap-coverage { margin: 0 0 0.7rem; }
+.ap-drawer summary {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 0.6rem; padding: 0.55rem 0.8rem; cursor: pointer;
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.05em;
+  color: var(--muted); list-style: none;
+}
+.ap-drawer summary::-webkit-details-marker { display: none; }
+.ap-badge {
+  background: var(--accent); color: #16100b; font-weight: 700;
+  border-radius: var(--r-xs); padding: 0.1rem 0.45rem;
+  font-size: 0.66rem; letter-spacing: 0.06em;
+}
+.ap-drawer-body { padding: 0 0.8rem 0.8rem; }
+.ap-params {
+  margin-top: 0.9rem; background: var(--row);
+  border: 1px solid var(--box-edge); border-radius: var(--r-sm);
+  padding: 0.8rem;
+}
+.ap-pgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.8rem; }
+.ap-pfield { display: flex; flex-direction: column; gap: 0.3rem; min-width: 0; }
+.ap-pfield select, .ap-pfield input { width: 100%; }
+.ap-lrow {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 0.5rem; flex-wrap: wrap;
+}
+.ap-presets { display: inline-flex; gap: 0.3rem; }
+.ap-preset {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 0.68rem; color: var(--muted); cursor: pointer;
+  background: var(--row-alt); border: 1px solid var(--box-edge);
+  border-radius: var(--r-xs); padding: 0.14rem 0.45rem;
+}
+.ap-preset.on {
+  background: var(--accent); border-color: var(--accent);
+  color: #16100b; font-weight: 700;
+}
+.ap-actions { display: flex; gap: 0.7rem; margin: 1rem 0 0; }
+.ap-actions .ap-appraise { flex: 1; }
+.ap-linkbar {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 0.8rem; flex-wrap: wrap;
+}
+.ap-linkmain { display: inline-flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+.ap-priced {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 0.74rem; color: var(--muted);
+}
+.ap-sharebox {
+  display: inline-flex; align-items: center; gap: 0.5rem;
+  background: var(--input-bg); border: 1px solid var(--box-edge);
+  border-radius: var(--r-xs); padding: 0.2rem 0.25rem 0.2rem 0.6rem;
+}
+.ap-shareurl {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 0.72rem; color: var(--note); text-decoration: none;
+  white-space: nowrap;
+}
+.ap-linkacts { display: inline-flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+.ap-reprice { display: inline-flex; align-items: center; gap: 0.4rem; }
+.ap-reprice input[type="number"] { width: 4.5rem; }
+.ap-delform { display: inline-flex; }
+.ap-delbtn {
+  font: inherit; color: var(--danger); cursor: pointer;
+  background: var(--row); border: 1px solid var(--box-edge);
+  border-radius: var(--r-xs); padding: 0.35rem 0.5rem;
+  display: inline-flex; align-items: center;
+}
+.ap-delbtn:hover { background: var(--row-hover); }
+.ap-hud { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.8rem; }
+.ap-card { min-width: 0; }
+.ap-card.hero { border-color: color-mix(in srgb, var(--accent) 55%, transparent); }
+.ap-ck {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 0.5rem;
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.05em;
+  color: var(--muted);
+}
+.ap-copybtn {
+  color: var(--muted); background: none; border: none; padding: 0;
+  cursor: pointer; display: inline-flex; align-items: center;
+}
+.ap-copybtn:hover { color: var(--text-bright); }
+.ap-cv {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 1.05rem; font-weight: 700; color: var(--text-bright);
+  white-space: nowrap; margin-top: 0.3rem;
+}
+.ap-cs {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 0.72rem; color: var(--muted); margin-top: 0.3rem;
+  display: flex; justify-content: space-between; gap: 0.5rem;
+}
+.ap-accent { color: var(--success); }
+.ap-pctflag { color: var(--note); }
+.ap-good { color: #6ee7b7; }
+.ap-warn { color: #fcd34d; }
+.ap-coverage { margin: 0; }
+.ap-hubpanel {
+  display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap;
+}
+.ap-hubstrip-label {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.05em;
+  color: var(--muted);
+}
+.ap-hubs { margin-left: auto; display: flex; gap: 0.45rem; flex-wrap: wrap; }
+.ap-hubform { display: inline-flex; }
+.ap-hub {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 0.76rem; white-space: nowrap; cursor: pointer;
+  color: var(--muted); background: var(--row);
+  border: 1px solid var(--box-edge); border-radius: var(--r-xs);
+  padding: 0.32rem 0.6rem;
+}
+.ap-hub:hover { background: var(--row-hover); }
+.ap-hub.on {
+  color: var(--text-bright); border-color: var(--accent);
+  background: var(--row-hover);
+}
+.ap-hub-delta { font-size: 0.66rem; color: var(--muted-2); }
+.ap-reshead {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 0.8rem; flex-wrap: wrap;
+  margin: -0.7rem -0.85rem 0.75rem; padding: 0.55rem 0.85rem;
+  background: var(--row-alt); border-bottom: 1px solid var(--box-edge);
+  border-radius: var(--r-xs) var(--r-xs) 0 0;
+}
+.ap-vtabs > * { background: var(--row-alt); }
+.ap-vtabs > *:hover { background: var(--row-hover); }
+.ap-vtabs > .on, .ap-vtabs > [aria-selected="true"] { background: var(--accent); color: #16100b; }
+.ap-vtabs > .on:hover, .ap-vtabs > [aria-selected="true"]:hover { background: var(--accent); }
+.ap-result th.ap-r, .ap-result td.ap-r,
+.ap-saved td.ap-r, .ap-saved th.ap-r { text-align: right; }
+.ap-num {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 0.84rem; white-space: nowrap;
+}
+/* The results tables lay out fixed inside the panel, so the
+   figures' columns hold their width and the item column
+   takes what is left: no sideways scroll at desktop widths. */
+#ap-panel-items table, .ap-reprocess table { table-layout: fixed; width: 100%; }
+#ap-panel-items th:nth-child(2) { width: 3rem; }
+#ap-panel-items th:nth-child(3) { width: 8rem; }
+#ap-panel-items th:nth-child(4) { width: 8.5rem; }
+#ap-panel-items th:nth-child(5) { width: 5.5rem; }
+#ap-panel-items th:nth-child(6) { width: 9.5rem; }
+#ap-panel-items th:nth-child(7) { width: 6.8rem; }
+.ap-reprocess th:nth-child(2) { width: 3rem; }
+.ap-reprocess th:nth-child(4), .ap-reprocess th:nth-child(5) { width: 9rem; }
+.ap-num.strong { font-weight: 700; color: var(--text-bright); }
+.ap-bar {
+  height: 3px; border-radius: 2px; margin-top: 0.3rem;
+  background: linear-gradient(90deg, #e05500, #ffb84d);
+}
 .ap-total {
   display: flex; align-items: baseline; justify-content: flex-end;
   gap: 1rem; border-top: 1px solid var(--box-edge);
   margin-top: 0.7rem; padding-top: 0.6rem;
+}
+.ap-vol {
+  margin-right: auto;
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 0.8rem; color: var(--muted); white-space: nowrap;
 }
 .ap-total-label {
   font-size: 0.78rem; font-weight: 700; letter-spacing: 0.08em;
   text-transform: uppercase; color: var(--muted);
 }
 .ap-total-fig {
-  font-size: 1.5rem; font-weight: 600; color: var(--text-bright);
-  font-variant-numeric: tabular-nums; white-space: nowrap;
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 1.05rem; font-weight: 700; color: var(--text-bright);
+  white-space: nowrap;
+}
+.ap-saved { margin-bottom: 1rem; }
+.ap-saved-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 0.6rem; flex-wrap: wrap; margin-bottom: 0.5rem;
+}
+.ap-saved-title {
+  margin: 0; font-family: "Rajdhani", "Segoe UI", sans-serif;
+  font-size: 1.05rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.ap-hidefailed {
+  display: inline-flex; align-items: center; gap: 0.45rem;
+  font-size: 0.86rem; color: var(--muted); cursor: pointer;
+}
+.ap-when {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 0.8rem; color: var(--gold);
+}
+.ap-cov {
+  display: inline-block; white-space: nowrap;
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 0.7rem; color: #6ee7b7;
+  border: 1px solid rgba(16, 185, 129, 0.45);
+  background: rgba(2, 44, 34, 0.5);
+  border-radius: var(--r-xs); padding: 0.16rem 0.5rem;
+}
+.ap-cov.part {
+  color: #fcd34d; border-color: rgba(245, 158, 11, 0.45);
+  background: rgba(69, 26, 3, 0.5);
+}
+.ap-inlineform { display: inline-flex; }
+@media (max-width: 1100px) {
+  .ap-bench { grid-template-columns: minmax(0, 1fr); }
+  .ap-hud { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 640px) {
+  .ap-pgrid { grid-template-columns: 1fr; }
 }
 /* Darker header bands: a solid ::before behind the heading. Layering
    the ramp over the band on the heading itself hid the text wherever

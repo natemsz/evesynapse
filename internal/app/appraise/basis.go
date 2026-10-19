@@ -240,6 +240,20 @@ func modeLabel(mode string) string {
 	}
 }
 
+// basisModeLong is the pricing mode's full label, the words
+// the form's basis select uses: the workbench's cards name
+// the basis with them ("The Forge • Typical sell").
+func basisModeLong(mode string) string {
+	switch mode {
+	case module.AppraisalModeBuy:
+		return "Typical buy"
+	case module.AppraisalModeSplit:
+		return "Split"
+	default:
+		return "Typical sell"
+	}
+}
+
 // tierLabelWithBasis words a price tier for readers, naming
 // the hub and mode for the typical family so a price is never
 // ambiguous about its source. The basis-independent tiers

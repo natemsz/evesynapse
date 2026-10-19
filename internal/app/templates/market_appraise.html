@@ -6,141 +6,239 @@
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
 
 {{with .Appraise}}
-<section class="box ap-form">
-  <div class="box-head"><h3 class="box-title">Appraise a paste</h3></div>
+<div class="ap-head">
   <p class="ap-intro"><small>Paste a list of items — a fit, a cargo scan, an asset window, a loot haul — and every line is priced from The Forge's swept prices and EveSynapse's own stored estimates. Each price says where it came from and when it was current. Lines that cannot be priced say so; nothing is filled in with a guess. Up to 1,000 lines at a time.</small></p>
+  <div class="ap-samples">
+    <span class="ap-samples-lbl">Load a sample paste:</span>
+    <button type="button" class="ap-samplebtn" data-ap-sample="haul">Faction &amp; T2 Loot Haul (Default)</button>
+    <button type="button" class="ap-samplebtn" data-ap-sample="eft">[EFT Fit] Ishtar + BPC + Abyssal</button>
+    <button type="button" class="ap-samplebtn" data-ap-sample="moon">Moon Survey + Mineral Batch</button>
+  </div>
+</div>
+
+<div class="ap-bench{{if and (not .Result) (not .Reprocess)}} solo{{end}}">
+<section class="box ap-form">
   <form method="post" action="/market/appraise/">
-    <div class="ap-field">
+    <div class="ap-chips" aria-hidden="true">
+      <span class="ap-chip">Cargo / Assets</span>
+      <span class="ap-chip cy">[EFT Fittings]</span>
+      <span class="ap-chip cy">BPC [ME/TE/Runs]</span>
+      <span class="ap-chip ro">Abyssal Links</span>
+      <span class="ap-chip am">Moon Survey</span>
+    </div>
+    <details class="ap-rules">
+      <summary>Format rules</summary>
+      <p class="ap-help"><small>Plain lists, one item per line, with or without quantities; copies from the game's asset and cargo windows; and EFT fits all work. A pasted EFT fit appraises the ship, its fitted modules and charges, and the drones and cargo the fit lists. A moon survey paste — ore names with their percentages — appraises each ore at its survey share of 10,000 units. Blueprint lines can carry their facts in brackets, like <em>Rifter Blueprint (BPC, ME 10, TE 20, 5 runs)</em>. A copy prices from the median asking price of copy listings in our contract corpus — never from the original's market price — and a copy with too few listings on record is left unpriced. Mutated (abyssal) items appraise too: when the line carries the item's link from the game, the line prices that item from its stored rolls estimate. A mutated line without its link, or an item with no estimate on record, prices its base item and says so.</small></p>
+    </details>
+    <div class="ap-fld-head">
       <label class="ap-label" for="ap-items">Items to appraise</label>
+      <span class="ap-fld-tools"><span class="ap-count" data-ap-linecount>0 / 1,000 lines</span> <button class="ap-clearlink" type="button" data-clear-appraise>✕ Clear</button></span>
+    </div>
+    <div class="ap-field">
       <textarea id="ap-items" name="items" rows="10" autofocus placeholder="Tritanium x 1,000,000&#10;Pyerite 250000&#10;[Rifter, My Rifter]&#10;...">{{.Input}}</textarea>
     </div>
-    <div class="ap-field">
-      <label class="ap-label" for="ap-exclude">Exclude these items (optional)</label>
-      <textarea id="ap-exclude" name="exclude" rows="3" placeholder="Items and quantities to subtract from the list above"></textarea>
+    <details class="ap-drawer">
+      <summary><span>Optional: Exclude items</span><span class="ap-badge" data-ap-exclude-badge hidden>Active</span></summary>
+      <div class="ap-drawer-body">
+        <div class="ap-field">
+          <label class="ap-label" for="ap-exclude">Exclude these items (optional)</label>
+          <textarea id="ap-exclude" name="exclude" rows="3" placeholder="Items and quantities to subtract from the list above"></textarea>
+        </div>
+      </div>
+    </details>
+    <div class="ap-params">
+      <div class="ap-pgrid">
+        <div class="ap-pfield">
+          <label class="ap-label" for="ap-hub">Valuation hub</label>
+          <select id="ap-hub" name="hub">{{range .Hubs}}<option value="{{.RegionID}}"{{if .Selected}} selected{{end}}>{{.Name}}</option>{{end}}</select>
+        </div>
+        <div class="ap-pfield">
+          <label class="ap-label" for="ap-mode">Pricing basis</label>
+          <select id="ap-mode" name="mode"><option value="sell"{{if eq .Basis.Mode "sell"}} selected{{end}}>Typical sell</option><option value="buy"{{if eq .Basis.Mode "buy"}} selected{{end}}>Typical buy</option><option value="split"{{if eq .Basis.Mode "split"}} selected{{end}}>Split</option></select>
+        </div>
+        <div class="ap-pfield">
+          <div class="ap-lrow">
+            <label class="ap-label" for="ap-pct">Percent modifier</label>
+            <span class="ap-presets"><button type="button" class="ap-preset{{if eq .Basis.Percent 85.0}} on{{end}}" data-ap-pct="85">85%</button><button type="button" class="ap-preset{{if eq .Basis.Percent 90.0}} on{{end}}" data-ap-pct="90">90%</button><button type="button" class="ap-preset{{if eq .Basis.Percent 95.0}} on{{end}}" data-ap-pct="95">95%</button><button type="button" class="ap-preset{{if eq .Basis.Percent 100.0}} on{{end}}" data-ap-pct="100">100%</button></span>
+          </div>
+          <input id="ap-pct" type="number" name="pct" min="50" max="200" step="1" value="{{.Basis.Percent}}">
+        </div>
+        <div class="ap-pfield">
+          <label class="ap-label" for="ap-multiplier">Quantity multiplier</label>
+          <input id="ap-multiplier" type="number" name="multiplier" min="1" max="1000" step="1" value="1">
+        </div>
+      </div>
     </div>
-    <p class="ap-basis"><small>
-      <label>Hub <select name="hub">{{range .Hubs}}<option value="{{.RegionID}}"{{if .Selected}} selected{{end}}>{{.Name}}</option>{{end}}</select></label>
-      <label>Mode <select name="mode"><option value="sell"{{if eq .Basis.Mode "sell"}} selected{{end}}>Typical sell</option><option value="buy"{{if eq .Basis.Mode "buy"}} selected{{end}}>Typical buy</option><option value="split"{{if eq .Basis.Mode "split"}} selected{{end}}>Split</option></select></label>
-      <label>Percent <input type="number" name="pct" min="50" max="200" step="1" value="{{.Basis.Percent}}"></label>
-      <label>Quantity ×<input type="number" name="multiplier" min="1" max="1000" step="1" value="1"></label>
-    </small></p>
-    <p class="ap-actions"><button class="btn" type="submit">Appraise</button> <button class="btn" type="button" data-clear-appraise>Clear</button></p>
+    <p class="ap-actions"><button class="btn ap-appraise" type="submit">Appraise paste</button> <button class="btn" type="button" data-clear-appraise>Clear</button></p>
   </form>
-  <p class="ap-help"><small>Plain lists, one item per line, with or without quantities; copies from the game's asset and cargo windows; and EFT fits all work. A pasted EFT fit appraises the ship, its fitted modules and charges, and the drones and cargo the fit lists. A moon survey paste — ore names with their percentages — appraises each ore at its survey share of 10,000 units. Blueprint lines can carry their facts in brackets, like <em>Rifter Blueprint (BPC, ME 10, TE 20, 5 runs)</em>. A copy prices from the median asking price of copy listings in our contract corpus — never from the original's market price — and a copy with too few listings on record is left unpriced. Mutated (abyssal) items appraise too: when the line carries the item's link from the game, the line prices that item from its stored rolls estimate. A mutated line without its link, or an item with no estimate on record, prices its base item and says so.</small></p>
 </section>
 
-{{with .Result}}
-{{$r := .}}
-<section class="box ap-result">
-{{if $r.Shared}}<p class="ap-meta"><small>Shared appraisal — priced {{$r.Created}}. Prices are the ones stored when it was run; they are not recomputed here.</small></p>
-{{else if $r.Created}}<div class="ap-meta"><small>Priced {{$r.Created}}. Share it read-only:</small> <a href="{{$r.ShareURL}}">{{$r.ShareURL}}</a> <button class="btn small" type="button" data-copy data-copy-text="{{$r.ShareURL}}">Copy link</button></div>
-{{end}}
-{{if $r.RepriceURL}}<form method="post" action="{{$r.RepriceURL}}"><small>
-  <label>Hub <select name="hub">{{range $r.Hubs}}<option value="{{.RegionID}}"{{if .Selected}} selected{{end}}>{{.Name}}</option>{{end}}</select></label>
-  <label>Mode <select name="mode"><option value="sell"{{if eq $r.Basis.Mode "sell"}} selected{{end}}>Typical sell</option><option value="buy"{{if eq $r.Basis.Mode "buy"}} selected{{end}}>Typical buy</option><option value="split"{{if eq $r.Basis.Mode "split"}} selected{{end}}>Split</option></select></label>
-  <label>Percent <input type="number" name="pct" min="50" max="200" step="1" value="{{$r.Basis.Percent}}"></label>
-  <button class="btn" type="submit">Re-price as a new appraisal</button></small></form>{{end}}
-{{if $r.CanDelete}}<form method="post" action="{{$r.DeleteURL}}"><button class="btn" type="submit">Delete this appraisal</button></form>{{end}}
-
-<p class="ap-coverage">Priced {{$r.Priced}} of {{$r.Total}} lines{{if $r.TierMix}} · {{$r.TierMix}}{{end}}{{if $r.BasisText}}<br><small>{{$r.BasisText}}</small>{{end}}{{if $r.BuyValue}}<br><small>Buying those lines at {{$r.Basis.HubName}}'s typical buy prices comes to {{$r.BuyValue}} ISK (typical buys on {{$r.BuyLines}} of the priced lines).</small>{{end}}</p>
-{{if $r.HubStrip}}<p class="ap-hubstrip"><small>At each hub's typical sell: {{range $i, $h := $r.HubStrip}}{{if $i}} · {{end}}{{if $h.Current}}<strong>{{$h.Hub}} {{$h.Total}} ISK</strong>{{else}}{{$h.Hub}} {{$h.Total}} ISK{{end}}{{end}}</small></p>{{end}}
-
-{{if $r.Lines}}
-<div class="tw">
-<table>
-  <thead><tr><th>Item</th><th>Qty</th><th>Unit price</th><th>Line total</th><th>Volume</th><th>Basis</th><th>As of</th></tr></thead>
-  <tbody>
-  {{range $r.Lines}}
-    <tr>
-      <td><a href="/market/?type={{.TypeID}}">{{.Name}}</a>{{if .Note}}<br><small>{{.Note}}</small>{{end}}</td>
-      <td>{{.Qty}}</td>
-      {{if .Priced}}<td>{{.UnitPrice}} ISK</td><td>{{.LineValue}} ISK</td>{{else}}<td>—</td><td>—</td>{{end}}
-      <td>{{if .LineVol}}{{.LineVol}} m³{{if .UnitVol}}<br><small>{{.UnitVol}} m³ each</small>{{end}}{{else}}—{{end}}</td>
-      <td>{{.TierLabel}}</td>
-      <td>{{.AsOf}}</td>
-    </tr>
-  {{end}}
-  </tbody>
-</table>
+{{if .Result}}
+{{$r := .Result}}
+<div class="ap-right">
+{{if or $r.Created $r.Shared}}
+<div class="box ap-linkbar">
+  <div class="ap-linkmain">{{if $r.Shared}}<span class="ap-priced">Shared appraisal — priced {{$r.Created}}. Prices are the ones stored when it was run; they are not recomputed here.</span>{{else}}<span class="ap-priced">Priced {{$r.Created}}</span> <span class="ap-sharebox"><a class="ap-shareurl" href="{{$r.ShareURL}}">{{$r.ShareURL}}</a><button class="btn small" type="button" data-copy data-copy-text="{{$r.ShareURL}}">Copy link</button></span>{{end}}</div>
+  <div class="ap-linkacts">
+    {{if $r.RepriceURL}}<form class="ap-reprice" method="post" action="{{$r.RepriceURL}}">
+      <input type="hidden" name="hub" value="{{$r.Basis.RegionID}}">
+      <select name="mode" aria-label="Re-price basis"><option value="sell"{{if eq $r.Basis.Mode "sell"}} selected{{end}}>Typical sell</option><option value="buy"{{if eq $r.Basis.Mode "buy"}} selected{{end}}>Typical buy</option><option value="split"{{if eq $r.Basis.Mode "split"}} selected{{end}}>Split</option></select>
+      <input type="number" name="pct" min="50" max="200" step="1" value="{{$r.Basis.Percent}}" aria-label="Re-price percent">
+      <button class="btn small" type="submit">Re-price as New</button>
+    </form>{{end}}
+    {{if $r.CanDelete}}<form class="ap-delform" method="post" action="{{$r.DeleteURL}}"><button class="ap-delbtn" type="submit" title="Delete this appraisal" aria-label="Delete this appraisal"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg></button></form>{{end}}
+  </div>
 </div>
 {{end}}
 
-<div class="ap-total"><span class="ap-total-label">Total value</span><span class="ap-total-fig">{{$r.TotalValue}} ISK</span></div>
-{{if $r.TotalVol}}<p><small>Total volume {{$r.TotalVol}} m³{{if $r.ISKPerM3}} · {{$r.ISKPerM3}} ISK/m³{{end}}</small></p>{{end}}
-{{if $r.ShareURL}}<p><small><a href="{{$r.ShareURL}}reprocess">Reprocessing view</a> — what these lines yield reprocessed, valued at this basis.</small></p>{{end}}
-{{if $r.Multisell}}<p><small>Multi-sell format, one <em>name price</em> line per priced item at this basis:</small> <button class="btn small" type="button" data-copy-from="ap-multisell">Copy multi-sell list</button></p><pre id="ap-multisell">{{$r.Multisell}}</pre>{{end}}
+<div class="ap-hud">
+  <div class="box ap-card hero">
+    <div class="ap-ck"><span>{{$r.BasisLabel}}</span><button class="ap-copybtn" type="button" data-copy data-copy-text="{{$r.TotalRaw}}" title="Copy total" aria-label="Copy total"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg></button></div>
+    <div class="ap-cv">{{$r.TotalValue}} ISK</div>
+    <div class="ap-cs"><span>{{$r.CompactTotal}} ISK</span>{{if ne $r.Basis.Percent 100.0}}<span class="ap-pctflag">@ {{$r.Basis.Percent}}% basis</span>{{end}}</div>
+  </div>
+  <div class="box ap-card">
+    <div class="ap-ck"><span>Typical buy value</span>{{if $r.BuyRaw}}<button class="ap-copybtn" type="button" data-copy data-copy-text="{{$r.BuyRaw}}" title="Copy buy total" aria-label="Copy buy total"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg></button>{{end}}</div>
+    <div class="ap-cv">{{if $r.BuyValue}}{{$r.BuyValue}} ISK{{else}}—{{end}}</div>
+    <div class="ap-cs">{{if $r.BuyRatio}}Buy/Sell ratio: <span class="ap-accent">{{$r.BuyRatio}}</span>{{else if not $r.BuyValue}}No typical buys on the priced lines{{end}}</div>
+  </div>
+  <div class="box ap-card">
+    <div class="ap-ck"><span>Total cargo volume</span></div>
+    <div class="ap-cv">{{if $r.TotalVol}}{{$r.TotalVol}} m³{{else}}—{{end}}</div>
+    <div class="ap-cs">{{if $r.ISKPerM3}}<span class="ap-accent">{{$r.ISKPerM3}} ISK/m³</span>{{end}}</div>
+  </div>
+  <div class="box ap-card">
+    <div class="ap-ck"><span>Line coverage</span></div>
+    <div class="ap-cv">{{if eq $r.Priced $r.Total}}<span class="ap-good">✓</span>{{else}}<span class="ap-warn">⚠</span>{{end}} {{$r.Priced}} of {{$r.Total}} lines</div>
+    <div class="ap-cs">{{$r.CoverageSub}}</div>
+  </div>
+</div>
 
-{{if $r.Unresolved}}
-<p><strong>These lines could not be priced:</strong></p>
-<ul>
-{{range $r.Unresolved}}
-  <li>{{.Text}}{{if gt .Qty 1}} × {{.Qty}}{{end}} — {{.Reason}}{{if .Suggestion}} Did you mean <em>{{.Suggestion}}</em>?{{end}}</li>
-{{end}}
-</ul>
+<p class="ap-coverage">Priced {{$r.Priced}} of {{$r.Total}} lines{{if $r.TierMix}} · {{$r.TierMix}}{{end}}{{if $r.BasisText}}<br><small>{{$r.BasisText}}</small>{{end}}{{if $r.BuyValue}}<br><small>Buying those lines at {{$r.Basis.HubName}}'s typical buy prices comes to {{$r.BuyValue}} ISK (typical buys on {{$r.BuyLines}} of the priced lines).</small>{{end}}</p>
+
+{{if $r.HubStrip}}
+<div class="box ap-hubpanel">
+  <span class="ap-hubstrip-label">At each hub's typical sell:</span>
+  <div class="ap-hubs">{{range $r.HubStrip}}<form class="ap-hubform" method="post" action="{{$r.RepriceURL}}"><input type="hidden" name="hub" value="{{.RegionID}}"><button class="{{.BtnClass}}" type="submit">{{.Hub}} {{.Total}} ISK{{if .Delta}} <span class="ap-hub-delta">({{.Delta}})</span>{{end}}</button></form>{{end}}</div>
+</div>
 {{end}}
 
-{{if $r.Bad}}
-<p><strong>These lines could not be read:</strong></p>
-<ul>
-{{range $r.Bad}}<li>{{.}}</li>{{end}}
-</ul>
-{{end}}
-
-{{range $r.Notes}}<p><small>{{.}}</small></p>{{end}}
-</section>
-{{end}}
-
-{{with .Reprocess}}
-<section class="box ap-reprocess">
-  <div class="box-head"><h3 class="box-title">Reprocessing</h3></div>
-  <p><small>{{.BasisText}} Yields at a {{.RateText}}% refine rate. <a href="{{.BackURL}}">Back to the appraisal</a></small></p>
-  <form method="get" action="{{.BackURL}}reprocess">
+{{if .Reprocess}}
+{{with $rp := .Reprocess}}
+<section class="box ap-result ap-reprocess">
+  <div class="ap-reshead">
+    <div class="seg ap-vtabs">
+      <a href="{{$rp.BackURL}}">Itemized appraisal</a>
+      <span class="on">Reprocessing view</span>
+      <a href="{{$rp.BackURL}}">Multi-sell export</a>
+    </div>
+  </div>
+  <p><small>{{$rp.BasisText}} Yields at a {{$rp.RateText}}% refine rate. <a href="{{$rp.BackURL}}">Back to the appraisal</a></small></p>
+  <form method="get" action="{{$rp.BackURL}}reprocess">
     <input type="hidden" name="refine" value="1">
     <p><small>
-      <label>Refine rate <input type="number" name="rate" min="1" max="100" step="0.1" value="{{.RateText}}"> %</label>
-      {{range .Presets}}<button class="btn small" type="submit" name="preset" value="{{.Key}}">{{.Label}}</button>{{end}}
-      <label><input type="checkbox" name="prune" value="1"{{if .Prune}} checked{{end}}> Prune leftover ores below one refine batch</label>
+      <label>Refine rate <input type="number" name="rate" min="1" max="100" step="0.1" value="{{$rp.RateText}}"> %</label>
+      {{range $rp.Presets}}<button class="btn small" type="submit" name="preset" value="{{.Key}}">{{.Label}}</button>{{end}}
+      <label><input type="checkbox" name="prune" value="1"{{if $rp.Prune}} checked{{end}}> Prune leftover ores below one refine batch</label>
       <button class="btn small" type="submit">Apply</button>
     </small></p>
   </form>
-  {{if .Lines}}
+  {{if $rp.Lines}}
   <div class="tw">
   <table>
-    <thead><tr><th>Item</th><th>Qty</th><th>Reprocesses into</th><th>Reprocess value</th><th>Direct value</th></tr></thead>
+    <thead><tr><th>Item</th><th>Qty</th><th>Reprocesses into</th><th class="ap-r">Reprocess value</th><th class="ap-r">Direct value</th></tr></thead>
     <tbody>
-    {{range .Lines}}
+    {{range $rp.Lines}}
       <tr>
         <td>{{.Name}}{{if .Note}}<br><small>{{.Note}}</small>{{end}}</td>
         <td>{{.Qty}}</td>
         <td>{{if .Outputs}}{{.Outputs}}{{else}}—{{end}}</td>
-        <td>{{if .ReprocessVal}}{{.ReprocessVal}} ISK{{else}}—{{end}}</td>
-        <td>{{if .DirectVal}}{{.DirectVal}} ISK{{else}}—{{end}}</td>
+        <td class="ap-r">{{if .ReprocessVal}}<span class="ap-num">{{.ReprocessVal}} ISK</span>{{else}}—{{end}}</td>
+        <td class="ap-r">{{if .DirectVal}}<span class="ap-num">{{.DirectVal}} ISK</span>{{else}}—{{end}}</td>
       </tr>
     {{end}}
     </tbody>
   </table>
   </div>
   {{end}}
-  {{if .NonReprocess}}<p><small>Not reprocessable: {{range $i, $n := .NonReprocess}}{{if $i}}, {{end}}{{$n}}{{end}}.</small></p>{{end}}
-  <div class="ap-total"><span class="ap-total-label">Total reprocess value</span><span class="ap-total-fig">{{.TotalReprocess}} ISK</span></div>
-  <p><small>Direct value of the priced lines: {{.TotalDirect}} ISK{{if .TotalVol}} · Total volume {{.TotalVol}} m³{{if .ISKPerM3}} · {{.ISKPerM3}} ISK/m³{{end}}{{end}}</small></p>
+  {{if $rp.NonReprocess}}<p><small>Not reprocessable: {{range $i, $n := $rp.NonReprocess}}{{if $i}}, {{end}}{{$n}}{{end}}.</small></p>{{end}}
+  <div class="ap-total"><span class="ap-total-label">Total reprocess value</span><span class="ap-total-fig">{{$rp.TotalReprocess}} ISK</span></div>
+  <p><small>Direct value of the priced lines: {{$rp.TotalDirect}} ISK{{if $rp.TotalVol}} · Total volume {{$rp.TotalVol}} m³{{if $rp.ISKPerM3}} · {{$rp.ISKPerM3}} ISK/m³{{end}}{{end}}</small></p>
 </section>
 {{end}}
+{{else}}
+<section class="box ap-result">
+  <div class="ap-reshead">
+    <div class="seg ap-vtabs" role="tablist" aria-label="Result views" data-tabs hidden>
+      <button type="button" role="tab" id="ap-tab-items" aria-controls="ap-panel-items" aria-selected="true">Itemized appraisal ({{len $r.Lines}})</button>
+      {{if $r.ShareURL}}<a href="{{$r.ShareURL}}reprocess">Reprocessing view</a>{{end}}
+      <button type="button" role="tab" id="ap-tab-multisell" aria-controls="ap-panel-multisell" aria-selected="false">Multi-sell export</button>
+    </div>
+    {{if $r.Multisell}}<button class="btn small" type="button" data-copy-from="ap-multisell">Copy multi-sell list</button>{{end}}
+  </div>
+  <div id="ap-panel-items" role="tabpanel" aria-labelledby="ap-tab-items">
+  {{if $r.Lines}}
+  <div class="tw">
+  <table>
+    <thead><tr><th>Item</th><th class="ap-r">Qty</th><th class="ap-r">Unit price</th><th class="ap-r">Line total</th><th class="ap-r">Volume</th><th>Basis &amp; freshness</th><th>As of</th></tr></thead>
+    <tbody>
+    {{range $r.Lines}}
+      <tr>
+        <td><a href="/market/?type={{.TypeID}}">{{.Name}}</a>{{if .Note}}<br><small>{{.Note}}</small>{{end}}{{if .SharePct}}<div class="ap-bar" data-w="{{.SharePct}}"></div>{{end}}</td>
+        <td class="ap-r">{{.Qty}}</td>
+        {{if .Priced}}<td class="ap-r"><span class="ap-num">{{.UnitPrice}}</span></td><td class="ap-r"><span class="ap-num strong">{{.LineValue}}</span></td>{{else}}<td class="ap-r">—</td><td class="ap-r">—</td>{{end}}
+        <td class="ap-r">{{if .LineVol}}{{.LineVol}} m³{{if .UnitVol}}<br><small>{{.UnitVol}} m³ each</small>{{end}}{{else}}—{{end}}</td>
+        <td>{{.TierLabel}}</td>
+        <td>{{.AsOf}}</td>
+      </tr>
+    {{end}}
+    </tbody>
+  </table>
+  </div>
+  {{end}}
+  <div class="ap-total">{{if $r.TotalVol}}<span class="ap-vol">Total volume {{$r.TotalVol}} m³{{if $r.ISKPerM3}} · {{$r.ISKPerM3}} ISK/m³{{end}}</span>{{end}}<span class="ap-total-label">Total value</span><span class="ap-total-fig">{{$r.TotalValue}} ISK</span></div>
+  {{if $r.Unresolved}}
+  <p><strong>These lines could not be priced:</strong></p>
+  <ul class="ap-unresolved">
+  {{range $r.Unresolved}}
+    <li>{{.Text}}{{if gt .Qty 1}} × {{.Qty}}{{end}} — {{.Reason}}{{if .Suggestion}} Did you mean <em>{{.Suggestion}}</em>?{{end}}</li>
+  {{end}}
+  </ul>
+  {{end}}
+  {{if $r.Bad}}
+  <p><strong>These lines could not be read:</strong></p>
+  <ul class="ap-bad">
+  {{range $r.Bad}}<li>{{.}}</li>{{end}}
+  </ul>
+  {{end}}
+  {{range $r.Notes}}<p><small>{{.}}</small></p>{{end}}
+  </div>
+  <div id="ap-panel-multisell" role="tabpanel" aria-labelledby="ap-tab-multisell">
+  {{if $r.Multisell}}<p><small>Multi-sell format, one <em>name price</em> line per priced item at this basis:</small> <button class="btn small" type="button" data-copy-from="ap-multisell">Copy multi-sell list</button></p><pre id="ap-multisell">{{$r.Multisell}}</pre>{{else}}<p><small>No priced lines to export.</small></p>{{end}}
+  </div>
+</section>
+{{end}}
+</div>
+{{end}}
+</div>
 
 {{if .Saved}}
 <section class="box ap-saved">
-  <div class="box-head"><h3 class="box-title">{{if .SignedIn}}Your appraisals{{else}}Your recent appraisals{{end}}</h3></div>
+  <div class="ap-saved-head">
+    <h3 class="ap-saved-title">{{if .SignedIn}}Your appraisals{{else}}Your recent appraisals{{end}} ({{len .Saved}} stored)</h3>
+    <label class="ap-hidefailed"><input type="checkbox" data-ap-hidefailed> Hide 0.00 ISK failed pastes</label>
+  </div>
   <div class="tw">
   <table>
-    <thead><tr><th>Priced at</th><th>Total value</th><th>Coverage</th><th></th><th></th></tr></thead>
+    <thead><tr><th>Priced at</th><th>Hub &amp; basis</th><th class="ap-r">Total value</th><th>Coverage</th><th></th></tr></thead>
     <tbody>
     {{range .Saved}}
-      <tr>
-        <td>{{if .Anon}}<a href="{{.ShareURL}}">{{.Created}}</a>{{else}}<a href="/market/appraise/?a={{.ID}}">{{.Created}}</a>{{end}}</td>
-        <td>{{.Total}} ISK</td>
-        <td>{{.Priced}} of {{.TotalLn}} lines</td>
-        <td><a href="{{.ShareURL}}">Share</a></td>
-        <td>{{if not .Anon}}<form method="post" action="/market/appraise/{{.ID}}/reprice"><button class="btn" type="submit">Re-price</button></form>{{end}}</td>
+      <tr{{if .Failed}} data-ap-failed="1"{{end}}>
+        <td>{{if .Anon}}<a class="ap-when" href="{{.ShareURL}}">{{.Created}}</a>{{else}}<a class="ap-when" href="/market/appraise/?a={{.ID}}">{{.Created}}</a>{{end}}</td>
+        <td>{{if .Basis}}{{.Basis}}{{else}}—{{end}}</td>
+        <td class="ap-r"><span class="ap-num strong">{{.Total}} ISK</span></td>
+        <td><span class="ap-cov{{if lt .Priced .TotalLn}} part{{end}}">{{if eq .Priced .TotalLn}}✓ {{end}}{{.Priced}} of {{.TotalLn}} lines priced</span></td>
+        <td class="ap-r"><a class="btn small" href="{{.ShareURL}}">Share</a>{{if not .Anon}} <form class="ap-inlineform" method="post" action="/market/appraise/{{.ID}}/reprice"><button class="btn small" type="submit">Re-price</button></form>{{end}}</td>
       </tr>
     {{end}}
     </tbody>

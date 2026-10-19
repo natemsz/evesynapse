@@ -63,6 +63,14 @@ type snapLine struct {
 	Note       string    `json:"note,omitempty"`
 	UnitVolume float64   `json:"unit_volume"`
 	LineVolume float64   `json:"line_volume"`
+	// The line's pricing identity, kept so a stored snapshot
+	// can be re-priced line-faithfully (the hub-comparison
+	// strip): a copy re-prices as a copy or not at all, an
+	// abyssal line from its item's estimate. Snapshots stored
+	// before these fields existed leave them zero.
+	ItemID int64 `json:"item_id,omitempty"`
+	Copy   bool  `json:"copy,omitempty"`
+	Runs   int64 `json:"runs,omitempty"`
 }
 
 // snapUnresolved is one pasted line no name candidate could
@@ -262,6 +270,11 @@ func (app *page) computeAppraisal(ctx context.Context, input string, basis prici
 	}
 	for i, ln := range agg {
 		sl := snapLine{TypeID: ln.TypeID, Name: ln.Name, Qty: ln.Qty, Tier: module.AppraisalTierUnpriced, Note: ln.Note}
+		sl.ItemID = ln.ItemID
+		if ln.Facts.HasFacts && ln.Facts.Copy {
+			sl.Copy = true
+			sl.Runs = ln.Facts.Runs
+		}
 		sl.UnitVolume = volumes[ln.TypeID]
 		sl.LineVolume = sl.UnitVolume * float64(ln.Qty)
 		snap.TotalVolume += sl.LineVolume
@@ -893,13 +906,30 @@ type hubTotal struct {
 // attachHubStrip prices the snapshot's lines at every hub's
 // typical sell (stored data only, one batched pass per hub)
 // and attaches the comparison strip to a rendered result.
+// Lines re-price with their pricing identity intact: a copy
+// counts its copy median (or nothing), an abyssal line its
+// item estimate — never the original type's market price.
 func (app *page) attachHubStrip(ctx context.Context, snap *snapshot, v *resultView) {
 	if snap == nil || len(snap.Lines) == 0 {
 		return
 	}
 	lines := make([]module.AppraisalLine, 0, len(snap.Lines))
+	var fixed float64
 	for _, ln := range snap.Lines {
-		lines = append(lines, module.AppraisalLine{TypeID: ln.TypeID, Quantity: ln.Qty, Included: true})
+		// Snapshots stored before the line facts were kept
+		// cannot re-price their copy and abyssal lines (the
+		// core needs the copy's runs, the item's id); those
+		// tiers are basis-independent, so the snapshot's own
+		// value stands at every hub.
+		if !ln.Copy && ln.ItemID == 0 &&
+			(ln.Tier == module.AppraisalTierCopyMedian || ln.Tier == module.AppraisalTierAbyssal) {
+			fixed += ln.LineValue
+			continue
+		}
+		lines = append(lines, module.AppraisalLine{
+			TypeID: ln.TypeID, Quantity: ln.Qty, ItemID: ln.ItemID, Included: true,
+			BlueprintCopy: ln.Copy, Runs: ln.Runs,
+		})
 	}
 	basis := snap.Basis.basis()
 	for _, opt := range app.hubOptions(basis.RegionID) {
@@ -911,7 +941,7 @@ func (app *page) attachHubStrip(ctx context.Context, snap *snapshot, v *resultVi
 			return
 		}
 		v.HubStrip = append(v.HubStrip, hubTotal{
-			Hub: opt.Name, Total: esi.FormatISK(res.OfferedValue), Current: opt.RegionID == basis.RegionID,
+			Hub: opt.Name, Total: esi.FormatISK(res.OfferedValue + fixed), Current: opt.RegionID == basis.RegionID,
 		})
 	}
 }

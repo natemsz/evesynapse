@@ -97,8 +97,8 @@ func TestSDERangesStoreAndKeep(t *testing.T) {
 			t.Fatalf("range sde_build = %q, want the file marker", r.SdeBuild)
 		}
 	}
-	if ver, _ := app.sdeMeta(ctx, "sde_import_version"); ver != "9" {
-		t.Fatalf("sde_import_version = %q, want 9", ver)
+	if ver, _ := app.sdeMeta(ctx, "sde_import_version"); ver != "10" {
+		t.Fatalf("sde_import_version = %q, want 10", ver)
 	}
 
 	// An import whose dump lacked the dataset must not wipe

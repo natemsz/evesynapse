@@ -358,6 +358,14 @@ var pgBlueprintCopyMediansSchema string
 //go:embed schema_pg/062_swarm_peer_build.sql
 var pgSwarmPeerBuildSchema string
 
+// Step 063: the SDE's mutaplasmid applicability mappings
+// (which base types a mutaplasmid can be applied to, and the
+// type each becomes). The contract probe queue admits only
+// instances of the resulting types.
+//
+//go:embed schema_pg/063_abyssal_mappings.sql
+var pgAbyssalMappingsSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -449,6 +457,7 @@ func schemaSteps() []schemaStep {
 		{60, "pub_contract_items_parking", pgPubContractItemsParkingSchema, ""},
 		{61, "blueprint_copy_medians", pgBlueprintCopyMediansSchema, ""},
 		{62, "swarm_peer_build", pgSwarmPeerBuildSchema, ""},
+		{63, "abyssal_mappings", pgAbyssalMappingsSchema, ""},
 	}
 }
 

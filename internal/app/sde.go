@@ -81,6 +81,16 @@ const sdeSkillsFileName = "industryActivitySkills.csv"
 // guessed numbers.
 const sdeRangesFileName = "dynamicItemAttributes.csv"
 
+// sdeMappingsFileName is the dump's mutaplasmid applicability
+// dataset: for each mutaplasmid, the base types it can be
+// applied to and the type each becomes (schema 063's
+// abyssal_mappings). Best-effort like the ranges file -- a
+// mirror predating the dataset must not fail the import; the
+// contract probe queue simply admits nobody until a dump
+// carries it, and that absence is a finding, not a fallback
+// to probing every singleton in the corpus.
+const sdeMappingsFileName = "dynamicItemAttributeMappings.csv"
+
 // sdeHTTPClient downloads the dump files. No total timeout (the
 // types table is ~20 MB); each request carries its own context
 // deadline instead. The shared loginHTTPClient's 10s timeout is
@@ -237,11 +247,13 @@ func (app *Application) sdeMaintenance(ctx context.Context) {
 	// and anything before schema 029 lacks the full dogma
 	// attribute/effect set, imports before version 8 lack the
 	// modifier-less effects the fitting engine reads module
-	// states from, and imports before version 9 lack the
-	// mutaplasmid roll ranges, so re-import once (the store
-	// writes the marker when it lands). Retries on later ticks
-	// while an import keeps failing.
-	if ver, _ := app.sdeMeta(ctx, "sde_import_version"); ver != "9" {
+	// states from, imports before version 9 lack the
+	// mutaplasmid roll ranges, and imports before version 10
+	// lack the mutaplasmid applicability mappings, so
+	// re-import once (the store writes the marker when it
+	// lands). Retries on later ticks while an import keeps
+	// failing.
+	if ver, _ := app.sdeMeta(ctx, "sde_import_version"); ver != "10" {
 		logging.Infof("sde: static data predates current columns — re-importing to backfill")
 		app.startSDEImport("schema-029 backfill")
 		return
@@ -389,6 +401,15 @@ func (app *Application) importSDE(ctx context.Context) error {
 	} else {
 		parsed.markers[sdeRangesFileName] = marker
 	}
+	// The mutaplasmid mappings file is best-effort the same
+	// way (see sdeMappingsFileName): its absence leaves the
+	// previous mappings in place and is reported, never
+	// papered over.
+	if marker, err := app.fetchAndParseSDEFile(ctx, base, sdeMappingsFileName, parsed); err != nil {
+		logging.Warnf("sde: optional %s unavailable, keeping previous mutaplasmid mappings: %v", sdeMappingsFileName, err)
+	} else {
+		parsed.markers[sdeMappingsFileName] = marker
+	}
 	parsed.buildIndustryRows()
 	parsed.buildSkillRows()
 
@@ -477,6 +498,11 @@ type parsedSDE struct {
 	// (mutaplasmid, attribute) the dynamic-item dataset
 	// carries. Empty when the dump predates the dataset.
 	dynRanges []sdeDynRangeRow
+
+	// Mutaplasmid applicability mappings (schema 063): one
+	// row per (mutaplasmid, base type) the mappings dataset
+	// carries. Empty when the dump predates the dataset.
+	dynMappings []sdeDynMappingRow
 }
 
 // sdeDynRangeRow is one mutaplasmid roll range: the
@@ -486,6 +512,15 @@ type sdeDynRangeRow struct {
 	attributeID   int64
 	minMult       float64
 	maxMult       float64
+}
+
+// sdeDynMappingRow is one mutaplasmid applicability mapping:
+// a base type the mutator can be applied to, and the type an
+// item of the base type becomes.
+type sdeDynMappingRow struct {
+	mutatorTypeID    int64
+	applicableTypeID int64
+	resultingTypeID  int64
 }
 
 type sdeTypeAttributeRow struct {
@@ -719,6 +754,8 @@ func parseSDEFile(name string, body io.Reader, parsed *parsedSDE) error {
 		err = parseSDEIndustryActivitySkills(cr, idx, parsed)
 	case sdeRangesFileName:
 		err = parseSDEDynRanges(cr, idx, parsed)
+	case sdeMappingsFileName:
+		err = parseSDEDynMappings(cr, idx, parsed)
 	case "dgmTypeAttributes.csv":
 		err = parseSDEDogmaAttributes(cr, idx, parsed)
 	case "dgmAttributeTypes.csv":
@@ -1301,6 +1338,35 @@ func parseSDEDynRanges(cr *csv.Reader, idx map[string]int, parsed *parsedSDE) er
 	return err
 }
 
+// parseSDEDynMappings reads dynamicItemAttributeMappings.csv:
+// for each mutaplasmid type, the base types it can be applied
+// to and the type an item of each base type becomes. The
+// resulting types are the ground truth the contract probe
+// queue admits by (schema 063), so a row with an unparseable
+// id is skipped whole rather than stored half-wrong.
+func parseSDEDynMappings(cr *csv.Reader, idx map[string]int, parsed *parsedSDE) error {
+	_, err := eachCSVRow(cr, func(rec []string) error {
+		typeID, err := csvID(rec, idx, "typeID")
+		if err != nil {
+			return errSkipRow
+		}
+		applicableTypeID, err := csvID(rec, idx, "applicableTypeID")
+		if err != nil {
+			return errSkipRow
+		}
+		resultingTypeID, err := csvID(rec, idx, "resultingTypeID")
+		if err != nil {
+			return errSkipRow
+		}
+		parsed.dynMappings = append(parsed.dynMappings, sdeDynMappingRow{
+			mutatorTypeID: typeID, applicableTypeID: applicableTypeID,
+			resultingTypeID: resultingTypeID,
+		})
+		return nil
+	})
+	return err
+}
+
 // ---------------------------------------------------------------------------
 // Fitting simulator files (schema 029): attribute metadata, the
 // effect set with decoded modifiers, and type -> effect links.
@@ -1693,13 +1759,34 @@ func (app *Application) storeSDE(ctx context.Context, base string, parsed *parse
 		}
 	}
 
+	// The mutaplasmid applicability mappings (schema 063)
+	// replace under the same rule as the ranges above: only
+	// an import that carried the dataset touches the stored
+	// rows.
+	if len(parsed.dynMappings) > 0 {
+		build := parsed.markers[sdeMappingsFileName].lastModified
+		if build == "" {
+			build = parsed.markers[sdeMappingsFileName].etag
+		}
+		if _, err := tx.ExecContext(ctx, "DELETE FROM abyssal_mappings"); err != nil {
+			return 0, fmt.Errorf("clear abyssal_mappings: %w", err)
+		}
+		if err := insert("INSERT INTO abyssal_mappings (mutator_type_id, applicable_type_id, resulting_type_id, sde_build) VALUES ($1, $2, $3, $4)", len(parsed.dynMappings), func(i int) []any {
+			r := parsed.dynMappings[i]
+			return []any{r.mutatorTypeID, r.applicableTypeID, r.resultingTypeID, build}
+		}); err != nil {
+			return 0, err
+		}
+	}
+
 	total := int64(len(parsed.types) + len(parsed.types) + len(parsed.groups) + len(parsed.categories) +
 		len(parsed.marketGroups) +
 		len(parsed.stations) + len(parsed.systems) + len(parsed.regions) +
 		len(parsed.blueprints) + len(parsed.bpMaterials) + len(parsed.bpSkills) +
 		len(parsed.skillMeta) + len(parsed.skillReqs) +
 		len(parsed.typeAttrs) + len(parsed.attrTypes) + len(parsed.effects) +
-		len(parsed.modifiers) + len(parsed.typeEffects) + len(parsed.dynRanges))
+		len(parsed.modifiers) + len(parsed.typeEffects) + len(parsed.dynRanges) +
+		len(parsed.dynMappings))
 	now := time.Now().UTC().Format(time.RFC3339)
 
 	tq := db.New(tx)
@@ -1714,9 +1801,11 @@ func (app *Application) storeSDE(ctx context.Context, base string, parsed *parse
 		// descriptions from 5, the schema-024 market browse
 		// tree from 6, the schema-029 full dogma set from 7,
 		// every effect (not just modifier-bearing ones) from 8,
-		// and the mutaplasmid roll ranges (schema 055) from 9
-		// (sdeMaintenance backfills once when it's behind).
-		{Key: "sde_import_version", Value: "9"},
+		// the mutaplasmid roll ranges (schema 055) from 9, and
+		// the mutaplasmid applicability mappings (schema 063)
+		// from 10 (sdeMaintenance backfills once when it's
+		// behind).
+		{Key: "sde_import_version", Value: "10"},
 	}
 	for name, m := range parsed.markers {
 		meta = append(meta,

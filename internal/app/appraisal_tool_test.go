@@ -430,6 +430,119 @@ func TestAppraisalToolPageAndBadShare(t *testing.T) {
 	mustContain(t, "bad share token", body, "That shared appraisal could not be found.")
 }
 
+// mustHubOptions asserts the paste console's Valuation hub
+// select carries all five hub options, with the given region
+// selected. Every rendering of the page — the form page, a
+// shared snapshot, an error — must offer a populated console,
+// or the next appraisal cannot be run from it.
+func mustHubOptions(t *testing.T, what, body, selected string) {
+	t.Helper()
+	start := strings.Index(body, `<select id="ap-hub" name="hub">`)
+	if start < 0 {
+		t.Fatalf("%s: no Valuation hub select in the page", what)
+	}
+	block := body[start:]
+	if end := strings.Index(block, "</select>"); end >= 0 {
+		block = block[:end]
+	}
+	names := map[string]string{
+		"10000002": "The Forge",
+		"10000043": "Domain",
+		"10000032": "Sinq Laison",
+		"10000030": "Heimatar",
+		"10000042": "Metropolis",
+	}
+	for id, name := range names {
+		want := `<option value="` + id + `">` + name + `</option>`
+		if id == selected {
+			want = `<option value="` + id + `" selected>` + name + `</option>`
+		}
+		if !strings.Contains(block, want) {
+			t.Errorf("%s: hub select is missing %q", what, want)
+		}
+	}
+}
+
+func TestAppraisalToolConsoleHubsOnShareAndErrors(t *testing.T) {
+	tr := &countingTransport{}
+	app, conn, q := buildCorpTestApp(t, tr)
+	seedAppraisalTool(t, conn, q)
+	ctx := context.Background()
+	// Domain prices Tritanium, so an appraisal can be stored
+	// at a non-default hub.
+	if _, err := conn.ExecContext(ctx, `INSERT INTO market_region_stats (region_id, type_id, typical_sell, typical_buy, updated_at)
+		VALUES (10000043, 34, 10, 8, $1)`, time.Now().UTC().Add(-time.Hour)); err != nil {
+		t.Fatalf("seed domain stats: %v", err)
+	}
+
+	// An anonymous appraisal at Domain redirects to its share
+	// page. The console on that page is where a second
+	// appraisal starts, so it must offer every hub, with the
+	// viewed appraisal's own hub selected.
+	body, _, share := postAnonAppraisal(t, app, url.Values{
+		"items": {"Tritanium x 10"}, "hub": {"10000043"},
+	})
+	mustHubOptions(t, "share page console", body, "10000043")
+
+	// The plain share-link view (no cookies) is the same.
+	code, body := getAnon(t, app, share)
+	if code != http.StatusOK {
+		t.Fatalf("shared appraisal: status %d, want 200", code)
+	}
+	mustHubOptions(t, "anon share console", body, "10000043")
+
+	// A bad share token 404s, but the console still renders
+	// populated (default hub selected) beside the error.
+	code, body = getAnon(t, app, "/market/appraise/s/deadbeef/")
+	if code != http.StatusNotFound {
+		t.Fatalf("bad share token: status %d, want 404", code)
+	}
+	mustContain(t, "bad share token", body, "That shared appraisal could not be found.")
+	mustHubOptions(t, "bad share console", body, "10000002")
+
+	// A submit that reads as no item list re-renders with its
+	// error; the console keeps the submitted basis's hub
+	// selected so the paste can be fixed and re-run.
+	code, body, _ = postAppraise(t, app, nil, url.Values{
+		"items": {"prose, no items here"}, "hub": {"10000032"},
+	})
+	if code != http.StatusOK {
+		t.Fatalf("zero-line submit: status %d, want 200 with an error", code)
+	}
+	mustContain(t, "zero-line submit", body, "no appraisal was saved")
+	mustHubOptions(t, "zero-line submit console", body, "10000032")
+
+	// A signed-in user's appraisal at Sinq Laison: the saved
+	// page (?a=) and its share page both show the stored hub
+	// in the console.
+	user, err := q.CreateUser(ctx)
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	cookie := sessionCookie(t, app, user.ID, fixtureCharA, "Fixture")
+	code, _, header := postAppraise(t, app, cookie, url.Values{
+		"items": {"Tritanium x 10"}, "hub": {"10000032"},
+	})
+	if code != http.StatusSeeOther {
+		t.Fatalf("signed-in appraisal: status %d, want 303", code)
+	}
+	loc := header.Get("Location")
+	code, body = getWithCookie(t, app, cookie, loc)
+	if code != http.StatusOK {
+		t.Fatalf("saved appraisal: status %d, want 200", code)
+	}
+	mustHubOptions(t, "saved page console", body, "10000032")
+	rows, err := q.ListUserAppraisals(ctx, db.ListUserAppraisalsParams{UserID: user.ID, Limit: 20})
+	if err != nil || len(rows) != 1 {
+		t.Fatalf("saved rows = %v, %v; want exactly one", rows, err)
+	}
+	code, body = getAnon(t, app, "/market/appraise/s/"+rows[0].ShareToken+"/")
+	if code != http.StatusOK {
+		t.Fatalf("signed share page: status %d, want 200", code)
+	}
+	mustHubOptions(t, "signed share console", body, "10000032")
+}
+
 func appraisalRowCount(t *testing.T, conn *sql.DB) int64 {
 	t.Helper()
 	var n int64

@@ -1137,16 +1137,27 @@ func (app *page) anonSavedList(ctx context.Context, tokens []string) []savedRow 
 
 // --- handlers --------------------------------------------------------------
 
+// consoleView builds the page body with the paste console
+// populated — the basis in its controls and the hub choices
+// for its select — so every rendering of the tool (the form
+// page, a shared snapshot, an error) offers a working console
+// for the next appraisal, not just the form page itself.
+func (app *page) consoleView(data *PageData, basis pricingBasis) *appraiseView {
+	return &appraiseView{
+		SignedIn: data.LoggedIn,
+		Basis:    basis,
+		Hubs:     app.hubOptions(basis.RegionID),
+	}
+}
+
 // handleAppraisePage renders the tool: the paste form, the
 // owner's saved appraisals, and ?a=<id>'s stored result.
 func (app *page) handleAppraisePage(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	data := &PageData{ShellData: app.deps.PublicShell(ctx)}
-	view := &appraiseView{SignedIn: data.LoggedIn}
 	userID := app.deps.UserID(ctx)
 	basis := app.basisFromValues(app.rememberedBasis(ctx, r, userID), r.URL.Query())
-	view.Basis = basis
-	view.Hubs = app.hubOptions(basis.RegionID)
+	view := app.consoleView(data, basis)
 	if userID > 0 {
 		view.Saved = app.savedList(ctx, userID)
 		if raw := r.URL.Query().Get("a"); raw != "" {
@@ -1200,14 +1211,17 @@ func (app *page) handleAppraiseSubmit(w http.ResponseWriter, r *http.Request) {
 		logging.Errorf("appraisal: compute: %v", err)
 		data := &PageData{ShellData: app.deps.PublicShell(ctx)}
 		data.Error = "That appraisal could not be run. Please try again."
-		data.Appraise = &appraiseView{SignedIn: data.LoggedIn, Input: input}
+		view := app.consoleView(data, basis)
+		view.Input = input
+		data.Appraise = view
 		app.deps.Render(ctx, w, http.StatusOK, "market_appraise.html", data)
 		return
 	}
 	if !snapshotHasItemLines(snap) {
 		data := &PageData{ShellData: app.deps.PublicShell(ctx)}
 		data.Error = "Nothing in that paste could be read as an item list, so no appraisal was saved. Paste at least one item, one per line."
-		view := &appraiseView{SignedIn: data.LoggedIn, Input: input}
+		view := app.consoleView(data, basis)
+		view.Input = input
 		if userID > 0 {
 			view.Saved = app.savedList(ctx, userID)
 		} else {
@@ -1223,7 +1237,9 @@ func (app *page) handleAppraiseSubmit(w http.ResponseWriter, r *http.Request) {
 			logging.Errorf("appraisal: save: %v", err)
 			data := &PageData{ShellData: app.deps.PublicShell(ctx)}
 			data.Error = "Your appraisal was priced, but it could not be saved."
-			view := &appraiseView{SignedIn: true, Input: input, Result: app.buildResult(snap)}
+			view := app.consoleView(data, basis)
+			view.Input = input
+			view.Result = app.buildResult(snap)
 			data.Appraise = view
 			app.deps.Render(ctx, w, http.StatusOK, "market_appraise.html", data)
 			return
@@ -1237,7 +1253,10 @@ func (app *page) handleAppraiseSubmit(w http.ResponseWriter, r *http.Request) {
 		logging.Errorf("appraisal: anonymous owner: %v", err)
 		data := &PageData{ShellData: app.deps.PublicShell(ctx)}
 		data.Error = "Your appraisal was priced, but it could not be saved."
-		data.Appraise = &appraiseView{SignedIn: false, Input: input, Result: app.buildResult(snap)}
+		view := app.consoleView(data, basis)
+		view.Input = input
+		view.Result = app.buildResult(snap)
+		data.Appraise = view
 		app.deps.Render(ctx, w, http.StatusOK, "market_appraise.html", data)
 		return
 	}
@@ -1246,7 +1265,10 @@ func (app *page) handleAppraiseSubmit(w http.ResponseWriter, r *http.Request) {
 		logging.Errorf("appraisal: anonymous save: %v", err)
 		data := &PageData{ShellData: app.deps.PublicShell(ctx)}
 		data.Error = "Your appraisal was priced, but it could not be saved."
-		data.Appraise = &appraiseView{SignedIn: false, Input: input, Result: app.buildResult(snap)}
+		view := app.consoleView(data, basis)
+		view.Input = input
+		view.Result = app.buildResult(snap)
+		data.Appraise = view
 		app.deps.Render(ctx, w, http.StatusOK, "market_appraise.html", data)
 		return
 	}
@@ -1264,11 +1286,13 @@ func (app *page) handleAppraiseSubmit(w http.ResponseWriter, r *http.Request) {
 func (app *page) handleAppraiseShare(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	data := &PageData{ShellData: app.deps.PublicShell(ctx)}
+	userID := app.deps.UserID(ctx)
+	basis := app.basisFromValues(app.rememberedBasis(ctx, r, userID), r.URL.Query())
 	token := chi.URLParam(r, "token")
 	row, err := app.queries.GetUserAppraisalByShareToken(ctx, token)
 	if err != nil {
 		data.Error = "That shared appraisal could not be found."
-		data.Appraise = &appraiseView{SignedIn: data.LoggedIn}
+		data.Appraise = app.consoleView(data, basis)
 		app.deps.Render(ctx, w, http.StatusNotFound, "market_appraise.html", data)
 		return
 	}
@@ -1276,7 +1300,7 @@ func (app *page) handleAppraiseShare(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		logging.Errorf("appraisal: share snapshot: %v", err)
 		data.Error = "That shared appraisal could not be read."
-		data.Appraise = &appraiseView{SignedIn: data.LoggedIn}
+		data.Appraise = app.consoleView(data, basis)
 		app.deps.Render(ctx, w, http.StatusInternalServerError, "market_appraise.html", data)
 		return
 	}
@@ -1292,11 +1316,13 @@ func (app *page) handleAppraiseShare(w http.ResponseWriter, r *http.Request) {
 			res.CanDelete = true
 			res.DeleteURL = "/market/appraise/s/" + token + "/delete"
 		}
-	} else if userID := app.deps.UserID(ctx); userID > 0 && row.UserID == userID {
+	} else if userID > 0 && row.UserID == userID {
 		res.CanDelete = true
 		res.DeleteURL = "/market/appraise/" + strconv.FormatInt(row.ID, 10) + "/delete"
 	}
-	data.Appraise = &appraiseView{SignedIn: data.LoggedIn, Result: res}
+	view := app.consoleView(data, app.storedBasis(row))
+	view.Result = res
+	data.Appraise = view
 	app.deps.Render(ctx, w, http.StatusOK, "market_appraise.html", data)
 }
 

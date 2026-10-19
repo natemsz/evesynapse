@@ -1,0 +1,28 @@
+/* --- appraisal page: how-to-paste panel ---------------------------
+   The paste console's instruction block, loaded only by the
+   appraisal page (base.html, NavPage conditional). The text sits
+   at the page's normal size and color: the examples are the
+   point, so literal lines to copy go in the mono face on the
+   standard row surface, the same treatment as the samples strip
+   and the line counter in style.css. */
+.ap-rules summary { font-size: 0.92rem; }
+.ap-howto { margin-top: 0.4rem; max-width: 62rem; }
+.ap-howto h4 { margin: 0.9rem 0 0.2rem; }
+.ap-howto h4:first-child { margin-top: 0.3rem; }
+.ap-howto p { margin: 0.3rem 0; }
+.ap-ex {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 0.85rem; color: var(--text);
+  background: var(--row); border: 1px solid var(--box-edge);
+  border-radius: var(--r-xs); padding: 0.45rem 0.6rem;
+  margin: 0.4rem 0; white-space: pre-wrap;
+}
+.ap-exi {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 0.85rem;
+}
+.ap-honest {
+  margin-top: 0.9rem; padding-top: 0.6rem;
+  border-top: 1px solid var(--box-edge);
+}
+.ap-honest p { margin: 0.25rem 0; }

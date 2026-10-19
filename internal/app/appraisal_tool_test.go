@@ -407,9 +407,12 @@ func TestAppraisalToolPageAndBadShare(t *testing.T) {
 		"Mutated (abyssal) items appraise too",
 		`<textarea id="ap-items" name="items" rows="10" autofocus`, "data-clear-appraise>Clear</button>",
 		// The workbench layout: sample loaders in the head, the
-		// format rules behind their toggle, the exclusion
-		// drawer, and the basis controls with percent presets.
-		"Load a sample paste:", `data-ap-sample="haul"`, "Format rules",
+		// how-to-paste instructions behind their toggle, the
+		// exclusion drawer, and the basis controls with
+		// percent presets.
+		"Load a sample paste:", `data-ap-sample="haul"`, "How to paste &amp; how pricing works",
+		"One item per line", "Or paste straight from the game", "Whole fits work too",
+		"never the in-game guide average", "reported unpriced rather than guessed",
 		"Optional: Exclude items", "Valuation hub", "Percent modifier",
 		`data-ap-pct="90"`, "Quantity multiplier", "Appraise paste")
 	// Appraisal lives under Tools now: its tab strip is the

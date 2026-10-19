@@ -616,7 +616,6 @@ main {
   cursor: pointer; font-size: 0.8rem; font-weight: 600;
   color: var(--note);
 }
-.ap-help { margin: 0.5rem 0 0; }
 .ap-fld-head {
   display: flex; align-items: center; justify-content: space-between;
   gap: 0.6rem; margin: 0.85rem 0 0.35rem;

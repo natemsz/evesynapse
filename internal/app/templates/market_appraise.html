@@ -42,13 +42,14 @@
 {{if $r.Lines}}
 <div class="tw">
 <table>
-  <thead><tr><th>Item</th><th>Qty</th><th>Unit price</th><th>Line total</th><th>Basis</th><th>As of</th></tr></thead>
+  <thead><tr><th>Item</th><th>Qty</th><th>Unit price</th><th>Line total</th><th>Volume</th><th>Basis</th><th>As of</th></tr></thead>
   <tbody>
   {{range $r.Lines}}
     <tr>
       <td><a href="/market/?type={{.TypeID}}">{{.Name}}</a>{{if .Note}}<br><small>{{.Note}}</small>{{end}}</td>
       <td>{{.Qty}}</td>
       {{if .Priced}}<td>{{.UnitPrice}} ISK</td><td>{{.LineValue}} ISK</td>{{else}}<td>—</td><td>—</td>{{end}}
+      <td>{{if .LineVol}}{{.LineVol}} m³{{if .UnitVol}}<br><small>{{.UnitVol}} m³ each</small>{{end}}{{else}}—{{end}}</td>
       <td>{{.TierLabel}}</td>
       <td>{{.AsOf}}</td>
     </tr>
@@ -59,6 +60,8 @@
 {{end}}
 
 <div class="ap-total"><span class="ap-total-label">Total value</span><span class="ap-total-fig">{{$r.TotalValue}} ISK</span></div>
+{{if $r.TotalVol}}<p><small>Total volume {{$r.TotalVol}} m³{{if $r.ISKPerM3}} · {{$r.ISKPerM3}} ISK/m³{{end}}</small></p>{{end}}
+{{if $r.ShareURL}}<p><small><a href="{{$r.ShareURL}}reprocess">Reprocessing view</a> — what these lines yield reprocessed, valued at this basis.</small></p>{{end}}
 
 {{if $r.Unresolved}}
 <p><strong>These lines could not be priced:</strong></p>
@@ -77,6 +80,43 @@
 {{end}}
 
 {{range $r.Notes}}<p><small>{{.}}</small></p>{{end}}
+</section>
+{{end}}
+
+{{with .Reprocess}}
+<section class="box ap-reprocess">
+  <div class="box-head"><h3 class="box-title">Reprocessing</h3></div>
+  <p><small>{{.BasisText}} Yields at a {{.RateText}}% refine rate. <a href="{{.BackURL}}">Back to the appraisal</a></small></p>
+  <form method="get" action="{{.BackURL}}reprocess">
+    <input type="hidden" name="refine" value="1">
+    <p><small>
+      <label>Refine rate <input type="number" name="rate" min="1" max="100" step="0.1" value="{{.RateText}}"> %</label>
+      {{range .Presets}}<button class="btn small" type="submit" name="preset" value="{{.Key}}">{{.Label}}</button>{{end}}
+      <label><input type="checkbox" name="prune" value="1"{{if .Prune}} checked{{end}}> Prune leftover ores below one refine batch</label>
+      <button class="btn small" type="submit">Apply</button>
+    </small></p>
+  </form>
+  {{if .Lines}}
+  <div class="tw">
+  <table>
+    <thead><tr><th>Item</th><th>Qty</th><th>Reprocesses into</th><th>Reprocess value</th><th>Direct value</th></tr></thead>
+    <tbody>
+    {{range .Lines}}
+      <tr>
+        <td>{{.Name}}{{if .Note}}<br><small>{{.Note}}</small>{{end}}</td>
+        <td>{{.Qty}}</td>
+        <td>{{if .Outputs}}{{.Outputs}}{{else}}—{{end}}</td>
+        <td>{{if .ReprocessVal}}{{.ReprocessVal}} ISK{{else}}—{{end}}</td>
+        <td>{{if .DirectVal}}{{.DirectVal}} ISK{{else}}—{{end}}</td>
+      </tr>
+    {{end}}
+    </tbody>
+  </table>
+  </div>
+  {{end}}
+  {{if .NonReprocess}}<p><small>Not reprocessable: {{range $i, $n := .NonReprocess}}{{if $i}}, {{end}}{{$n}}{{end}}.</small></p>{{end}}
+  <div class="ap-total"><span class="ap-total-label">Total reprocess value</span><span class="ap-total-fig">{{.TotalReprocess}} ISK</span></div>
+  <p><small>Direct value of the priced lines: {{.TotalDirect}} ISK{{if .TotalVol}} · Total volume {{.TotalVol}} m³{{if .ISKPerM3}} · {{.ISKPerM3}} ISK/m³{{end}}{{end}}</small></p>
 </section>
 {{end}}
 

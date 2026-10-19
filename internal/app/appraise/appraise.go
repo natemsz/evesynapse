@@ -52,15 +52,17 @@ const suggestionCap = 10
 // snapLine is one priced (or honestly unpriced) line of a
 // snapshot, display-complete: the page renders it verbatim.
 type snapLine struct {
-	TypeID    int64     `json:"type_id"`
-	Name      string    `json:"name"`
-	Qty       int64     `json:"qty"`
-	UnitPrice float64   `json:"unit_price"`
-	LineValue float64   `json:"line_value"`
-	Tier      string    `json:"tier"`
-	AsOf      time.Time `json:"as_of"`
-	Priced    bool      `json:"priced"`
-	Note      string    `json:"note,omitempty"`
+	TypeID     int64     `json:"type_id"`
+	Name       string    `json:"name"`
+	Qty        int64     `json:"qty"`
+	UnitPrice  float64   `json:"unit_price"`
+	LineValue  float64   `json:"line_value"`
+	Tier       string    `json:"tier"`
+	AsOf       time.Time `json:"as_of"`
+	Priced     bool      `json:"priced"`
+	Note       string    `json:"note,omitempty"`
+	UnitVolume float64   `json:"unit_volume"`
+	LineVolume float64   `json:"line_volume"`
 }
 
 // snapUnresolved is one pasted line no name candidate could
@@ -81,6 +83,7 @@ type snapshot struct {
 	Bad         []string         `json:"bad,omitempty"`
 	Notes       []string         `json:"notes,omitempty"`
 	TotalValue  float64          `json:"total_value"`
+	TotalVolume float64          `json:"total_volume"`
 	BuyValue    float64          `json:"buy_value"`
 	BuyLines    int              `json:"buy_lines"`
 	PricedLines int              `json:"priced_lines"`
@@ -185,12 +188,37 @@ func (app *page) computeAppraisal(ctx context.Context, input string, basis prici
 			}
 		}
 	}
+	// Unit volumes from the SDE physics rows, in one batched
+	// read: the line and total volumes ride the snapshot.
+	volumes := map[int64]float64{}
+	{
+		var typeIDs []int64
+		seenVol := map[int64]bool{}
+		for _, ln := range agg {
+			if !seenVol[ln.TypeID] {
+				seenVol[ln.TypeID] = true
+				typeIDs = append(typeIDs, ln.TypeID)
+			}
+		}
+		if len(typeIDs) > 0 {
+			rows, err := app.queries.ListSDETypePhysicsByIDs(ctx, typeIDs)
+			if err != nil {
+				return nil, err
+			}
+			for _, row := range rows {
+				volumes[row.TypeID] = row.Volume
+			}
+		}
+	}
 	buys, err := app.typicalBuys(ctx, agg, res, basis)
 	if err != nil {
 		return nil, err
 	}
 	for i, ln := range agg {
 		sl := snapLine{TypeID: ln.TypeID, Name: ln.Name, Qty: ln.Qty, Tier: module.AppraisalTierUnpriced, Note: ln.Note}
+		sl.UnitVolume = volumes[ln.TypeID]
+		sl.LineVolume = sl.UnitVolume * float64(ln.Qty)
+		snap.TotalVolume += sl.LineVolume
 		if i < len(res.Lines) {
 			al := res.Lines[i]
 			sl.UnitPrice, sl.LineValue, sl.Tier, sl.AsOf, sl.Priced = al.UnitPrice, al.LineValue, al.Tier, al.AsOf, al.Priced
@@ -597,6 +625,8 @@ type resultLine struct {
 	Note      string
 	AsOf      string
 	Priced    bool
+	UnitVol   string // unit volume in m³, "" when unknown
+	LineVol   string // line volume in m³, "" when unknown
 }
 
 // resultView is a snapshot shaped for the template.
@@ -606,6 +636,8 @@ type resultView struct {
 	Bad        []string
 	Notes      []string
 	TotalValue string
+	TotalVol   string // total volume in m³, "" when unknown
+	ISKPerM3   string // total value per m³, "" without a volume
 	BuyValue   string
 	BuyLines   int
 	Priced     int
@@ -625,12 +657,13 @@ type resultView struct {
 
 // appraiseView is the page body.
 type appraiseView struct {
-	Result   *resultView
-	Saved    []savedRow
-	SignedIn bool
-	Input    string
-	Basis    pricingBasis
-	Hubs     []hubOption
+	Result    *resultView
+	Reprocess *reprocessView
+	Saved     []savedRow
+	SignedIn  bool
+	Input     string
+	Basis     pricingBasis
+	Hubs      []hubOption
 }
 
 // savedRow is one entry of the owner's appraisal list.
@@ -655,6 +688,12 @@ func (app *page) buildResult(snap *snapshot) *resultView {
 	if snap.BuyLines > 0 {
 		v.BuyValue = esi.FormatISK(snap.BuyValue)
 	}
+	if snap.TotalVolume > 0 {
+		v.TotalVol = formatVolume(snap.TotalVolume)
+		if snap.TotalValue > 0 {
+			v.ISKPerM3 = esi.FormatISK(snap.TotalValue / snap.TotalVolume)
+		}
+	}
 	basis := snap.Basis.basis()
 	if basis.HubName == "" {
 		if name, ok := app.deps.MarketRegionName(basis.RegionID); ok {
@@ -669,6 +708,10 @@ func (app *page) buildResult(snap *snapshot) *resultView {
 		rl := resultLine{
 			TypeID: ln.TypeID, Name: ln.Name, Qty: esi.FormatInt(ln.Qty),
 			TierLabel: tierLabelWithBasis(ln.Tier, basis), Note: ln.Note, Priced: ln.Priced,
+		}
+		if ln.UnitVolume > 0 {
+			rl.UnitVol = formatVolume(ln.UnitVolume)
+			rl.LineVol = formatVolume(ln.LineVolume)
 		}
 		if ln.Priced {
 			counts[ln.Tier]++

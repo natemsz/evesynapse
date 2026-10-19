@@ -379,6 +379,12 @@ var pgAppraisalLifecycleSchema string
 //go:embed schema_pg/065_appraisal_preferences.sql
 var pgAppraisalPreferencesSchema string
 
+// Step 066: SDE reprocessing outputs, portion sizes, and the
+// remembered refine rate in the appraisal preferences.
+//
+//go:embed schema_pg/066_reprocessing.sql
+var pgReprocessingSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -473,6 +479,7 @@ func schemaSteps() []schemaStep {
 		{63, "abyssal_mappings", pgAbyssalMappingsSchema, ""},
 		{64, "appraisal_lifecycle", pgAppraisalLifecycleSchema, ""},
 		{65, "appraisal_preferences", pgAppraisalPreferencesSchema, ""},
+		{66, "reprocessing", pgReprocessingSchema, ""},
 	}
 }
 

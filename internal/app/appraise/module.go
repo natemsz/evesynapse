@@ -48,6 +48,7 @@ var Module = module.Module{
 		// like the fitting tool's POSTs.
 		r.With(deps.AnonPages()).Get("/market/appraise/", h((*page).handleAppraisePage))
 		r.With(deps.AnonPages()).Get("/market/appraise/s/{token}/", h((*page).handleAppraiseShare))
+		r.With(deps.AnonPages()).Get("/market/appraise/s/{token}/reprocess", h((*page).handleAppraiseReprocess))
 		r.With(deps.AnonSim()).Post("/market/appraise/", h((*page).handleAppraiseSubmit))
 		r.With(deps.AnonSim()).Post("/market/appraise/s/{token}/delete", h((*page).handleAppraiseDeleteAnon))
 		r.With(deps.AnonSim()).Post("/market/appraise/s/{token}/reprice", h((*page).handleAppraiseRepriceToken))

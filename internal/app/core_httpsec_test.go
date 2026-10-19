@@ -229,27 +229,31 @@ func TestSignOutIsAPost(t *testing.T) {
 	}
 }
 
-// TestContentSecurityPolicyAllowsCloudflare: the scripts Cloudflare
-// adds to pages are allowed by name, its inline ones through a nonce
-// that is different on every response, and nothing wider than that.
-func TestContentSecurityPolicyAllowsCloudflare(t *testing.T) {
-	a, b := scriptNonce(), scriptNonce()
-	if a == b || len(a) < 20 {
-		t.Fatalf("nonces %q and %q: want two different values of at least 128 bits", a, b)
+// TestContentSecurityPolicyNamesOnlySelf: the policy allows the
+// app's own origin and nothing else — no Cloudflare hosts (its
+// analytics beacon and Rocket Loader were once allowed by name)
+// and no per-response nonce (once carried for Cloudflare's inline
+// scripts; the app itself never used it). The only third-party
+// names left are CCP's image server and EVE's sign-in host, both
+// load/post targets rather than script sources.
+func TestContentSecurityPolicyNamesOnlySelf(t *testing.T) {
+	want := "default-src 'self'; " +
+		"script-src 'self'; " +
+		"style-src 'self'; " +
+		"img-src 'self' data: https://images.evetech.net; " +
+		"font-src 'self'; " +
+		"connect-src 'self'; " +
+		"object-src 'none'; " +
+		"base-uri 'self'; " +
+		"form-action 'self' https://login.eveonline.com; " +
+		"frame-ancestors 'none'"
+	if csp := contentSecurityPolicy(); csp != want {
+		t.Errorf("Content-Security-Policy:\n got %q\nwant %q", csp, want)
 	}
-	csp := contentSecurityPolicy(a)
-	for _, want := range []string{
-		"script-src 'self' 'nonce-" + a + "' https://static.cloudflareinsights.com https://ajax.cloudflare.com; ",
-		"connect-src 'self' https://cloudflareinsights.com; ",
-		"style-src 'self'; ",
-	} {
-		if !strings.Contains(csp, want) {
-			t.Errorf("Content-Security-Policy %q is missing %q", csp, want)
-		}
-	}
-	for _, banned := range []string{"unsafe-inline", "unsafe-eval", "*", "http://"} {
-		if strings.Contains(csp, banned) {
-			t.Errorf("Content-Security-Policy %q contains %q", csp, banned)
+	for _, banned := range []string{"unsafe-inline", "unsafe-eval", "*", "http://",
+		"cloudflareinsights.com", "ajax.cloudflare.com", "nonce"} {
+		if strings.Contains(contentSecurityPolicy(), banned) {
+			t.Errorf("Content-Security-Policy %q contains %q", contentSecurityPolicy(), banned)
 		}
 	}
 }

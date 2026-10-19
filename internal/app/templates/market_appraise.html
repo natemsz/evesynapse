@@ -26,6 +26,7 @@
 {{else if $r.Created}}<div class="ap-meta"><small>Priced {{$r.Created}}. Share it read-only:</small> <a href="{{$r.ShareURL}}">{{$r.ShareURL}}</a> <button class="btn small" type="button" data-copy data-copy-text="{{$r.ShareURL}}">Copy link</button>
 <form method="post" action="/market/appraise/{{$r.OwnID}}/reprice"><button class="btn" type="submit">Re-price at current prices</button></form></div>
 {{end}}
+{{if $r.CanDelete}}<form method="post" action="{{$r.DeleteURL}}"><button class="btn" type="submit">Delete this appraisal</button></form>{{end}}
 
 <p class="ap-coverage">Priced {{$r.Priced}} of {{$r.Total}} lines{{if $r.TierMix}} · {{$r.TierMix}}{{end}}{{if $r.BuyValue}}<br><small>Buying those lines at The Forge's typical buy prices comes to {{$r.BuyValue}} ISK (typical buys on {{$r.BuyLines}} of the priced lines).</small>{{end}}</p>
 
@@ -72,23 +73,24 @@
 
 {{if .Saved}}
 <section class="box ap-saved">
-  <div class="box-head"><h3 class="box-title">Your appraisals</h3></div>
+  <div class="box-head"><h3 class="box-title">{{if .SignedIn}}Your appraisals{{else}}Your recent appraisals{{end}}</h3></div>
   <div class="tw">
   <table>
     <thead><tr><th>Priced at</th><th>Total value</th><th>Coverage</th><th></th><th></th></tr></thead>
     <tbody>
     {{range .Saved}}
       <tr>
-        <td><a href="/market/appraise/?a={{.ID}}">{{.Created}}</a></td>
+        <td>{{if .Anon}}<a href="{{.ShareURL}}">{{.Created}}</a>{{else}}<a href="/market/appraise/?a={{.ID}}">{{.Created}}</a>{{end}}</td>
         <td>{{.Total}} ISK</td>
         <td>{{.Priced}} of {{.TotalLn}} lines</td>
         <td><a href="{{.ShareURL}}">Share</a></td>
-        <td><form method="post" action="/market/appraise/{{.ID}}/reprice"><button class="btn" type="submit">Re-price</button></form></td>
+        <td>{{if not .Anon}}<form method="post" action="/market/appraise/{{.ID}}/reprice"><button class="btn" type="submit">Re-price</button></form>{{end}}</td>
       </tr>
     {{end}}
     </tbody>
   </table>
   </div>
+  {{if not .SignedIn}}<p><small>Appraisals you make while signed out are kept for 180 days after they were last viewed, then deleted.</small></p>{{end}}
 </section>
 {{end}}
 

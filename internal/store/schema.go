@@ -366,6 +366,14 @@ var pgSwarmPeerBuildSchema string
 //go:embed schema_pg/063_abyssal_mappings.sql
 var pgAbyssalMappingsSchema string
 
+// Step 064: appraisal lifecycle -- anonymous appraisal storage
+// (shared anonymous owner, is_anonymous flag), last-viewed
+// tracking for the 180-day anonymous expiry, and the secret
+// that signs the anonymous-history cookie.
+//
+//go:embed schema_pg/064_appraisal_lifecycle.sql
+var pgAppraisalLifecycleSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -458,6 +466,7 @@ func schemaSteps() []schemaStep {
 		{61, "blueprint_copy_medians", pgBlueprintCopyMediansSchema, ""},
 		{62, "swarm_peer_build", pgSwarmPeerBuildSchema, ""},
 		{63, "abyssal_mappings", pgAbyssalMappingsSchema, ""},
+		{64, "appraisal_lifecycle", pgAppraisalLifecycleSchema, ""},
 	}
 }
 

@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -87,21 +88,55 @@ func getWithCookie(t *testing.T, app *Application, cookie *http.Cookie, path str
 	return rec.Code, string(body)
 }
 
+func headerCookies(header http.Header) []*http.Cookie {
+	return (&http.Response{Header: header}).Cookies()
+}
+
+func getWithCookies(t *testing.T, app *Application, cookies []*http.Cookie, path string) (int, string) {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodGet, path, nil)
+	for _, c := range cookies {
+		req.AddCookie(c)
+	}
+	rec := httptest.NewRecorder()
+	app.Handler().ServeHTTP(rec, req)
+	body, _ := io.ReadAll(rec.Result().Body)
+	return rec.Code, string(body)
+}
+
+// postAnonAppraisal submits an anonymous paste and follows
+// its redirect to the stored share page, carrying the
+// history cookie the submit set.
+func postAnonAppraisal(t *testing.T, app *Application, form url.Values) (string, []*http.Cookie, string) {
+	t.Helper()
+	code, _, header := postAppraise(t, app, nil, form)
+	if code != http.StatusSeeOther {
+		t.Fatalf("anonymous appraisal: status %d, want 303 to the stored result", code)
+	}
+	loc := header.Get("Location")
+	if !strings.HasPrefix(loc, "/market/appraise/s/") {
+		t.Fatalf("anonymous appraisal redirect = %q, want the share page", loc)
+	}
+	cookies := headerCookies(header)
+	code, body := getWithCookies(t, app, cookies, loc)
+	if code != http.StatusOK {
+		t.Fatalf("anonymous appraisal result: status %d, want 200", code)
+	}
+	return body, cookies, loc
+}
+
 func TestAppraisalToolAnonymousPaste(t *testing.T) {
 	tr := &countingTransport{}
 	app, conn, q := buildCorpTestApp(t, tr)
 	seedAppraisalTool(t, conn, q)
 
-	code, body, _ := postAppraise(t, app, nil, url.Values{"items": {`Tritanium x 1,000
+	body, _, _ := postAnonAppraisal(t, app, url.Values{"items": {`Tritanium x 1,000
 Pyerite 100
 Mexallon x 5
 Cap Booster 3200 x 2
 Damage Control II
 Tritanium 500
 Unknown Item XYZ x 3`}})
-	if code != 200 {
-		t.Fatalf("anonymous appraisal: status %d, want 200", code)
-	}
 	// Tritanium aggregates (1,500 x 6.50), Pyerite prices off
 	// its estimate (100 x 9.25), the booster off the fallback
 	// (2 x 1,200), the damage control off its stale typical
@@ -146,12 +181,9 @@ func TestAppraisalToolBlueprintAndAbyssalLines(t *testing.T) {
 	app, conn, q := buildCorpTestApp(t, tr)
 	seedAppraisalTool(t, conn, q)
 
-	code, body, _ := postAppraise(t, app, nil, url.Values{"items": {`Rifter Blueprint (BPC, ME 10, TE 20, 5 runs)
+	body, _, _ := postAnonAppraisal(t, app, url.Values{"items": {`Rifter Blueprint (BPC, ME 10, TE 20, 5 runs)
 Rifter Blueprint
 Abyssal Damage Control II`}})
-	if code != 200 {
-		t.Fatalf("blueprint/abyssal appraisal: status %d, want 200", code)
-	}
 	mustContain(t, "blueprint and abyssal lines", body,
 		"BPC · ME 10 · TE 20 · 5 runs",
 		"Blueprint — priced as an original",
@@ -197,12 +229,9 @@ func TestAppraisalToolAbyssalItemLink(t *testing.T) {
 	seedAppraisalTool(t, conn, q)
 	seedAppraisalAbyssal(t, conn)
 
-	code, body, _ := postAppraise(t, app, nil, url.Values{"items": {`<url=showinfo:60001//900001>Abyssal Damage Control II</url>
+	body, _, _ := postAnonAppraisal(t, app, url.Values{"items": {`<url=showinfo:60001//900001>Abyssal Damage Control II</url>
 Tritanium x 100
 Rifter Blueprint (BPC, ME 10, TE 20, 5 runs)`}})
-	if code != 200 {
-		t.Fatalf("abyssal link appraisal: status %d, want 200", code)
-	}
 	// The linked item prices from its stored abyssal
 	// estimate (205,000,000), the tritanium at its typical
 	// (100 x 6.50): 205,000,650.00 in all, and the line
@@ -233,11 +262,8 @@ func TestAppraisalToolAbyssalItemLinkUnknown(t *testing.T) {
 	// Item 900002 is not in the corpus: the line prices its
 	// base item (the damage control's stale typical under
 	// the floor rule) and says its rolls are not on record.
-	code, body, _ := postAppraise(t, app, nil, url.Values{"items": {`<url=showinfo:60001//900002>Abyssal Damage Control II</url>
+	body, _, _ := postAnonAppraisal(t, app, url.Values{"items": {`<url=showinfo:60001//900002>Abyssal Damage Control II</url>
 Tritanium x 100`}})
-	if code != 200 {
-		t.Fatalf("unknown abyssal link appraisal: status %d, want 200", code)
-	}
 	mustContain(t, "unknown abyssal item link", body,
 		"150,650.00", "150,000.00",
 		"Base item price", "rolls are not in our records")
@@ -255,10 +281,7 @@ func TestAppraisalToolAbyssalItemLinkNoEstimate(t *testing.T) {
 	// Item 900003 is on record with its rolls but no
 	// estimate: the line prices its known base type and
 	// says so.
-	code, body, _ := postAppraise(t, app, nil, url.Values{"items": {`<url=showinfo:60001//900003>Abyssal Damage Control II</url>`}})
-	if code != 200 {
-		t.Fatalf("unestimated abyssal link appraisal: status %d, want 200", code)
-	}
+	body, _, _ := postAnonAppraisal(t, app, url.Values{"items": {`<url=showinfo:60001//900003>Abyssal Damage Control II</url>`}})
 	mustContain(t, "unestimated abyssal item link", body,
 		"150,000.00", ">Damage Control II</a>",
 		"Base item price", "we hold this item", "no estimate for it yet")
@@ -269,15 +292,12 @@ func TestAppraisalToolEFTPaste(t *testing.T) {
 	app, conn, q := buildCorpTestApp(t, tr)
 	seedAppraisalTool(t, conn, q)
 
-	code, body, _ := postAppraise(t, app, nil, url.Values{"items": {`[Rifter, Test Fit]
+	body, _, _ := postAnonAppraisal(t, app, url.Values{"items": {`[Rifter, Test Fit]
 Damage Control II
 1MN Afterburner II
 
 Antimatter Charge S x 100
 Nonexistent Module X`}})
-	if code != 200 {
-		t.Fatalf("eft appraisal: status %d, want 200", code)
-	}
 	// Ship 250,000 + damage control 150,000 + afterburner
 	// 40,000; the charges have no price anywhere, and the
 	// unknown module is reported, never dropped.
@@ -395,4 +415,260 @@ func TestAppraisalToolPageAndBadShare(t *testing.T) {
 		t.Fatalf("bad share token: status %d, want 404", code)
 	}
 	mustContain(t, "bad share token", body, "That shared appraisal could not be found.")
+}
+
+func appraisalRowCount(t *testing.T, conn *sql.DB) int64 {
+	t.Helper()
+	var n int64
+	if err := conn.QueryRowContext(context.Background(), `SELECT COUNT(*) FROM user_appraisals`).Scan(&n); err != nil {
+		t.Fatalf("count appraisals: %v", err)
+	}
+	return n
+}
+
+func postFormCookies(t *testing.T, app *Application, cookies []*http.Cookie, path string) (int, http.Header) {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodPost, path, nil)
+	for _, c := range cookies {
+		req.AddCookie(c)
+	}
+	rec := httptest.NewRecorder()
+	app.Handler().ServeHTTP(rec, req)
+	return rec.Code, rec.Header()
+}
+
+func TestAppraisalToolRejectsZeroLinePaste(t *testing.T) {
+	tr := &countingTransport{}
+	app, conn, q := buildCorpTestApp(t, tr)
+	seedAppraisalTool(t, conn, q)
+	ctx := context.Background()
+
+	for _, paste := range []string{
+		"just some prose about my day",
+		"https://example.com/some/link",
+		"# only a comment\n// another comment",
+	} {
+		code, body, _ := postAppraise(t, app, nil, url.Values{"items": {paste}})
+		if code != http.StatusOK {
+			t.Fatalf("zero-line paste %q: status %d, want 200 with an error", paste, code)
+		}
+		mustContain(t, "zero-line paste", body, "could be read as an item list", "no appraisal was saved")
+	}
+	if n := appraisalRowCount(t, conn); n != 0 {
+		t.Fatalf("zero-line pastes stored %d rows, want none", n)
+	}
+
+	user, err := q.CreateUser(ctx)
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	cookie := sessionCookie(t, app, user.ID, fixtureCharA, "Fixture")
+	code, body, _ := postAppraise(t, app, cookie, url.Values{"items": {"prose, no items here"}})
+	if code != http.StatusOK {
+		t.Fatalf("signed zero-line paste: status %d, want 200 with an error", code)
+	}
+	mustContain(t, "signed zero-line paste", body, "no appraisal was saved")
+	if n := appraisalRowCount(t, conn); n != 0 {
+		t.Fatalf("signed zero-line paste stored %d rows, want none", n)
+	}
+
+	// One resolved line is enough: the rest are reported.
+	body, _, _ = postAnonAppraisal(t, app, url.Values{"items": {"Tritanium x 10\nprose, no items here"}})
+	mustContain(t, "one good line", body, "65.00")
+	if n := appraisalRowCount(t, conn); n != 1 {
+		t.Fatalf("one-good-line paste stored %d rows, want 1", n)
+	}
+}
+
+func TestAppraisalToolAnonymousStoredHistoryAndDelete(t *testing.T) {
+	tr := &countingTransport{}
+	app, conn, q := buildCorpTestApp(t, tr)
+	seedAppraisalTool(t, conn, q)
+
+	code, _, header := postAppraise(t, app, nil, url.Values{"items": {"Tritanium x 10"}})
+	if code != http.StatusSeeOther {
+		t.Fatalf("anonymous appraisal: status %d, want 303", code)
+	}
+	share := header.Get("Location")
+	cookies := headerCookies(header)
+	var history *http.Cookie
+	for _, c := range cookies {
+		if c.Name == "evesynapse-appraisals" {
+			history = c
+		}
+	}
+	if history == nil || !history.HttpOnly {
+		t.Fatalf("history cookie = %v, want an HttpOnly evesynapse-appraisals cookie", history)
+	}
+
+	// The creator sees the result with its delete control;
+	// a stranger with the link does not.
+	code, body := getWithCookies(t, app, cookies, share)
+	if code != http.StatusOK {
+		t.Fatalf("creator result: status %d, want 200", code)
+	}
+	mustContain(t, "creator result", body, "65.00", "Delete this appraisal")
+	_, body = getAnon(t, app, share)
+	if strings.Contains(body, "Delete this appraisal") {
+		t.Error("a stranger's share view offered the delete control")
+	}
+
+	// The appraise page lists it from the cookie, with the
+	// expiry policy in one sentence.
+	_, body = getWithCookies(t, app, cookies, "/market/appraise/")
+	mustContain(t, "anonymous history", body, "Your recent appraisals", "65.00",
+		"Appraisals you make while signed out are kept for 180 days after they were last viewed, then deleted.")
+
+	// A forged cookie (the real token, no valid signature)
+	// shows no history and cannot delete.
+	token := strings.TrimSuffix(strings.TrimPrefix(share, "/market/appraise/s/"), "/")
+	forged := []*http.Cookie{{Name: "evesynapse-appraisals", Value: token}}
+	_, body = getWithCookies(t, app, forged, "/market/appraise/")
+	if strings.Contains(body, "Your recent appraisals") {
+		t.Error("a forged history cookie listed appraisals")
+	}
+	if code, _ := postFormCookies(t, app, forged, share+"delete"); code != http.StatusSeeOther {
+		t.Fatalf("forged delete: status %d, want 303", code)
+	}
+	if code, _ := getAnon(t, app, share); code != http.StatusOK {
+		t.Fatalf("share after forged delete: status %d, want 200 (still there)", code)
+	}
+
+	// The creator deletes it; the link 404s and the history
+	// forgets it.
+	if code, _ := postFormCookies(t, app, cookies, share+"delete"); code != http.StatusSeeOther {
+		t.Fatalf("creator delete: status %d, want 303", code)
+	}
+	if code, _ := getAnon(t, app, share); code != http.StatusNotFound {
+		t.Fatalf("deleted share: status %d, want 404", code)
+	}
+	if n := appraisalRowCount(t, conn); n != 0 {
+		t.Fatalf("rows after delete = %d, want 0", n)
+	}
+}
+
+func TestAppraisalToolSignedDeleteAndExpirySweep(t *testing.T) {
+	tr := &countingTransport{}
+	app, conn, q := buildCorpTestApp(t, tr)
+	seedAppraisalTool(t, conn, q)
+	ctx := context.Background()
+	user, err := q.CreateUser(ctx)
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	cookie := sessionCookie(t, app, user.ID, fixtureCharA, "Fixture")
+
+	code, _, header := postAppraise(t, app, cookie, url.Values{"items": {"Tritanium x 10"}})
+	if code != http.StatusSeeOther {
+		t.Fatalf("signed appraisal: status %d, want 303", code)
+	}
+	loc := header.Get("Location")
+	rows, err := q.ListUserAppraisals(ctx, db.ListUserAppraisalsParams{UserID: user.ID, Limit: 20})
+	if err != nil || len(rows) != 1 {
+		t.Fatalf("saved rows = %v, %v; want one", rows, err)
+	}
+	share := "/market/appraise/s/" + rows[0].ShareToken + "/"
+	del := "/market/appraise/" + strconv.FormatInt(rows[0].ID, 10) + "/delete"
+
+	// Another user cannot delete it.
+	other, err := q.CreateUser(ctx)
+	if err != nil {
+		t.Fatalf("create other user: %v", err)
+	}
+	otherCookie := sessionCookie(t, app, other.ID, fixtureCharB, "Other")
+	postFormCookies(t, app, []*http.Cookie{otherCookie}, del)
+	if code, _ := getAnon(t, app, share); code != http.StatusOK {
+		t.Fatalf("share after foreign delete: status %d, want 200", code)
+	}
+
+	// The owner's result view carries the delete control.
+	_, body := getWithCookie(t, app, cookie, loc)
+	mustContain(t, "owner result", body, "Delete this appraisal")
+
+	// The owner deletes it; the link 404s.
+	postFormCookies(t, app, []*http.Cookie{cookie}, del)
+	if code, _ := getAnon(t, app, share); code != http.StatusNotFound {
+		t.Fatalf("deleted signed share: status %d, want 404", code)
+	}
+
+	// The expiry sweep removes only stale anonymous rows.
+	ownerID, err := func() (int64, error) {
+		u, err := q.CreateUser(ctx)
+		return u.ID, err
+	}()
+	if err != nil {
+		t.Fatalf("create owner: %v", err)
+	}
+	old := time.Now().UTC().Add(-200 * 24 * time.Hour)
+	recent := time.Now().UTC().Add(-10 * 24 * time.Hour)
+	insert := func(anon bool, viewed time.Time, token string) {
+		t.Helper()
+		if _, err := conn.ExecContext(ctx, `INSERT INTO user_appraisals
+			(user_id, input_text, input_hash, share_token, snapshot, total_value, priced_lines, total_lines, is_anonymous, last_viewed_at)
+			VALUES ($1, 'x', 'h', $2, '{}', 1, 1, 1, $3, $4)`, ownerID, token, anon, viewed); err != nil {
+			t.Fatalf("insert appraisal: %v", err)
+		}
+	}
+	insert(true, old, strings.Repeat("a", 48))
+	insert(true, recent, strings.Repeat("b", 48))
+	insert(false, old, strings.Repeat("c", 48))
+	n, err := q.DeleteExpiredAnonymousAppraisals(ctx, time.Now().UTC().Add(-180*24*time.Hour))
+	if err != nil || n != 1 {
+		t.Fatalf("sweep deleted %d rows (%v), want exactly the stale anonymous one", n, err)
+	}
+	if got := appraisalRowCount(t, conn); got != 2 {
+		t.Fatalf("rows after sweep = %d, want the recent anonymous and the signed one", got)
+	}
+}
+
+func TestAppraisalToolEscapesPastedPayloads(t *testing.T) {
+	tr := &countingTransport{}
+	app, conn, q := buildCorpTestApp(t, tr)
+	seedAppraisalTool(t, conn, q)
+
+	body, _, _ := postAnonAppraisal(t, app, url.Values{"items": {
+		"Tritanium x 5\n<script>alert(1)</script> x 2\n<img src=x onerror=alert(2)>",
+	}})
+	for _, raw := range []string{"<script>alert(1)</script>", "<img src=x onerror=alert(2)>"} {
+		if strings.Contains(body, raw) {
+			t.Errorf("appraisal page rendered pasted payload %q unescaped", raw)
+		}
+	}
+	mustContain(t, "escaped paste", body, "&lt;script&gt;alert(1)&lt;/script&gt;", "32.50")
+}
+
+func TestPublicFitEscapesUserText(t *testing.T) {
+	tr := &countingTransport{}
+	app, conn, q := buildCorpTestApp(t, tr)
+	ctx := context.Background()
+	user, err := q.CreateUser(ctx)
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	seedFitUniverse(t, func(stmt string) error {
+		_, err := conn.ExecContext(ctx, stmt)
+		return err
+	})
+	now := time.Now().UTC()
+	payload := `<script>alert(1)</script>`
+	row, err := q.CreateLocalFitting(ctx, db.CreateLocalFittingParams{
+		UserID: user.ID, Name: payload, ShipTypeID: 1001, IsPublic: true,
+		CreatedAt: now, UpdatedAt: now,
+		ItemsJson: `{"name":"` + payload + `","shipTypeId":1001,"description":"<img src=x onerror=alert(2)>","tags":["<b>tag</b>"],` +
+			`"items":[{"typeId":3001,"qty":1}]}`,
+	})
+	if err != nil {
+		t.Fatalf("create fitting: %v", err)
+	}
+	app.refreshPublicFitPages(ctx)
+	code, body := getSwapPage(t, app, nil, publicFitsPath+"fit/"+strconv.FormatInt(row.ID, 10)+"/")
+	if code != http.StatusOK {
+		t.Fatalf("public fit page: status %d, want 200", code)
+	}
+	for _, raw := range []string{"<script>alert(1)</script>", "<img src=x onerror=alert(2)>", "<b>tag</b>"} {
+		if strings.Contains(body, raw) {
+			t.Errorf("public fit page rendered user text %q unescaped", raw)
+		}
+	}
+	mustContain(t, "escaped fit page", body, "&lt;script&gt;alert(1)&lt;/script&gt;")
 }

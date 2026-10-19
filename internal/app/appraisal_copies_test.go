@@ -365,11 +365,8 @@ func TestAppraisalToolBlueprintCopyMedian(t *testing.T) {
 		t.Fatalf("seed copy median: %v", err)
 	}
 
-	code, body, _ := postAppraise(t, app, nil, url.Values{"items": {`Rifter Blueprint (BPC, ME 10, TE 20, 5 runs)
+	body, _, _ := postAnonAppraisal(t, app, url.Values{"items": {`Rifter Blueprint (BPC, ME 10, TE 20, 5 runs)
 Rifter Blueprint`}})
-	if code != 200 {
-		t.Fatalf("copy median appraisal: status %d, want 200", code)
-	}
 	mustContain(t, "paste copy median", body,
 		"Our copy median", "42,000.00",
 		"BPC · ME 10 · TE 20 · 5 runs · median of 12 copy listings",
@@ -379,10 +376,7 @@ Rifter Blueprint`}})
 
 	// No median at 9 runs: the copy is not priced, and its
 	// original's 1,000,000 typical appears nowhere.
-	code, body, _ = postAppraise(t, app, nil, url.Values{"items": {`Rifter Blueprint (BPC, ME 10, TE 20, 9 runs)`}})
-	if code != 200 {
-		t.Fatalf("unpriced copy appraisal: status %d, want 200", code)
-	}
+	body, _, _ = postAnonAppraisal(t, app, url.Values{"items": {`Rifter Blueprint (BPC, ME 10, TE 20, 9 runs)`}})
 	mustContain(t, "paste copy without a median", body,
 		"Not priced", "Priced 0 of 1 lines")
 	// The formatted figure, not the bare digits: the form's

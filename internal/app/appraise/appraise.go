@@ -16,6 +16,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -615,6 +616,8 @@ type resultView struct {
 	Shared     bool   // rendered from a share link
 	OwnID      int64  // the signed-in owner's appraisal id, when it is theirs
 	ShareURL   string
+	CanDelete  bool   // the viewer created this appraisal and may delete it
+	DeleteURL  string // where the delete form posts, when CanDelete
 }
 
 // appraiseView is the page body.
@@ -633,6 +636,7 @@ type savedRow struct {
 	Priced   int64
 	TotalLn  int64
 	ShareURL string
+	Anon     bool // an anonymous appraisal, opened by its share link
 }
 
 // buildResult shapes a snapshot for display. age is the deps'
@@ -675,6 +679,18 @@ func (app *page) buildResult(snap *snapshot) *resultView {
 
 // --- storage ---------------------------------------------------------------
 
+// errNoItemLines is the refusal to store an appraisal whose
+// paste resolved to no item lines at all: prose, a URL, or
+// comment-only text is not an appraisal, and nothing is
+// written for it.
+var errNoItemLines = errors.New("appraisal: paste contained no recognised item lines")
+
+// snapshotHasItemLines reports whether a snapshot carries at
+// least one resolved item line.
+func snapshotHasItemLines(snap *snapshot) bool {
+	return snap != nil && len(snap.Lines) > 0
+}
+
 func inputHash(input string) string {
 	sum := sha256.Sum256([]byte(input))
 	return hex.EncodeToString(sum[:])
@@ -689,21 +705,28 @@ func newShareToken() (string, error) {
 }
 
 // saveAppraisal stores one computed appraisal for its owner
-// and returns the row id.
-func (app *page) saveAppraisal(ctx context.Context, userID int64, input string, snap *snapshot) (int64, error) {
+// and returns the row id and its share token. A snapshot with
+// no resolved item lines is refused here as well as in the
+// handler, so no caller can store an empty appraisal.
+func (app *page) saveAppraisal(ctx context.Context, userID int64, anonymous bool, input string, snap *snapshot) (int64, string, error) {
+	if !snapshotHasItemLines(snap) {
+		return 0, "", errNoItemLines
+	}
 	raw, err := json.Marshal(snap)
 	if err != nil {
-		return 0, err
+		return 0, "", err
 	}
 	token, err := newShareToken()
 	if err != nil {
-		return 0, err
+		return 0, "", err
 	}
-	return app.queries.InsertUserAppraisal(ctx, db.InsertUserAppraisalParams{
+	id, err := app.queries.InsertUserAppraisal(ctx, db.InsertUserAppraisalParams{
 		UserID: userID, InputText: input, InputHash: inputHash(input), ShareToken: token,
 		Snapshot: raw, TotalValue: snap.TotalValue,
 		PricedLines: int64(snap.PricedLines), TotalLines: int64(snap.TotalLines),
+		IsAnonymous: anonymous,
 	})
+	return id, token, err
 }
 
 // storedResult rebuilds a stored row's result view: the
@@ -735,6 +758,39 @@ func (app *page) savedList(ctx context.Context, userID int64) []savedRow {
 	return out
 }
 
+// anonSavedList shapes the cookie's anonymous appraisals in
+// cookie order (newest first), skipping tokens whose rows are
+// gone.
+func (app *page) anonSavedList(ctx context.Context, tokens []string) []savedRow {
+	if len(tokens) == 0 {
+		return nil
+	}
+	rows, err := app.queries.ListUserAppraisalsByShareTokens(ctx, tokens)
+	if err != nil {
+		logging.Errorf("appraisal: list anonymous saved: %v", err)
+		return nil
+	}
+	byToken := make(map[string]db.UserAppraisal, len(rows))
+	for _, row := range rows {
+		if row.IsAnonymous {
+			byToken[row.ShareToken] = row
+		}
+	}
+	out := make([]savedRow, 0, len(tokens))
+	for _, tok := range tokens {
+		row, ok := byToken[tok]
+		if !ok {
+			continue
+		}
+		out = append(out, savedRow{
+			ID: row.ID, Created: row.CreatedAt.Format("Jan 2, 2006, 3:04 PM"),
+			Total: esi.FormatISK(row.TotalValue), Priced: row.PricedLines, TotalLn: row.TotalLines,
+			ShareURL: "/market/appraise/s/" + row.ShareToken + "/", Anon: true,
+		})
+	}
+	return out
+}
+
 // --- handlers --------------------------------------------------------------
 
 // handleAppraisePage renders the tool: the paste form, the
@@ -752,6 +808,8 @@ func (app *page) handleAppraisePage(w http.ResponseWriter, r *http.Request) {
 					if res, err := app.storedResult(row); err == nil {
 						res.OwnID = row.ID
 						res.ShareURL = "/market/appraise/s/" + row.ShareToken + "/"
+						res.CanDelete = true
+						res.DeleteURL = "/market/appraise/" + strconv.FormatInt(row.ID, 10) + "/delete"
 						view.Result = res
 					}
 				}
@@ -760,15 +818,20 @@ func (app *page) handleAppraisePage(w http.ResponseWriter, r *http.Request) {
 				data.Error = "That appraisal could not be found."
 			}
 		}
+	} else {
+		view.Saved = app.anonSavedList(ctx, app.anonTokens(ctx, r))
 	}
 	data.Appraise = view
 	app.deps.Render(ctx, w, http.StatusOK, "market_appraise.html", data)
 }
 
-// handleAppraiseSubmit computes one paste. A signed-in user's
-// appraisal is saved and the page redirects to it, so a reload
-// shows the stored snapshot; an anonymous appraisal renders
-// in place and is not stored.
+// handleAppraiseSubmit computes one paste. A paste that
+// resolves to no item lines is rejected with an error and
+// nothing is stored. Otherwise the appraisal is saved — for
+// a signed-in user under their account, for an anonymous
+// visitor under the anonymous owner with its token remembered
+// in the history cookie — and the page redirects to the
+// stored snapshot, so a reload shows what was saved.
 func (app *page) handleAppraiseSubmit(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	r.Body = http.MaxBytesReader(w, r.Body, maxPasteBytes)
@@ -791,8 +854,21 @@ func (app *page) handleAppraiseSubmit(w http.ResponseWriter, r *http.Request) {
 		app.deps.Render(ctx, w, http.StatusOK, "market_appraise.html", data)
 		return
 	}
+	if !snapshotHasItemLines(snap) {
+		data := &PageData{ShellData: app.deps.PublicShell(ctx)}
+		data.Error = "Nothing in that paste could be read as an item list, so no appraisal was saved. Paste at least one item, one per line."
+		view := &appraiseView{SignedIn: data.LoggedIn, Input: input}
+		if userID > 0 {
+			view.Saved = app.savedList(ctx, userID)
+		} else {
+			view.Saved = app.anonSavedList(ctx, app.anonTokens(ctx, r))
+		}
+		data.Appraise = view
+		app.deps.Render(ctx, w, http.StatusOK, "market_appraise.html", data)
+		return
+	}
 	if userID > 0 {
-		id, err := app.saveAppraisal(ctx, userID, input, snap)
+		id, _, err := app.saveAppraisal(ctx, userID, false, input, snap)
 		if err != nil {
 			logging.Errorf("appraisal: save: %v", err)
 			data := &PageData{ShellData: app.deps.PublicShell(ctx)}
@@ -805,17 +881,39 @@ func (app *page) handleAppraiseSubmit(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/market/appraise/?a="+strconv.FormatInt(id, 10), http.StatusSeeOther)
 		return
 	}
-	data := &PageData{ShellData: app.deps.PublicShell(ctx)}
-	data.Appraise = &appraiseView{SignedIn: false, Input: input, Result: app.buildResult(snap)}
-	app.deps.Render(ctx, w, http.StatusOK, "market_appraise.html", data)
+	ownerID, err := app.anonymousOwnerID(ctx)
+	if err != nil {
+		logging.Errorf("appraisal: anonymous owner: %v", err)
+		data := &PageData{ShellData: app.deps.PublicShell(ctx)}
+		data.Error = "Your appraisal was priced, but it could not be saved."
+		data.Appraise = &appraiseView{SignedIn: false, Input: input, Result: app.buildResult(snap)}
+		app.deps.Render(ctx, w, http.StatusOK, "market_appraise.html", data)
+		return
+	}
+	_, token, err := app.saveAppraisal(ctx, ownerID, true, input, snap)
+	if err != nil {
+		logging.Errorf("appraisal: anonymous save: %v", err)
+		data := &PageData{ShellData: app.deps.PublicShell(ctx)}
+		data.Error = "Your appraisal was priced, but it could not be saved."
+		data.Appraise = &appraiseView{SignedIn: false, Input: input, Result: app.buildResult(snap)}
+		app.deps.Render(ctx, w, http.StatusOK, "market_appraise.html", data)
+		return
+	}
+	app.rememberAnonToken(ctx, w, r, token)
+	http.Redirect(w, r, "/market/appraise/s/"+token+"/", http.StatusSeeOther)
 }
 
 // handleAppraiseShare renders one saved snapshot read-only
 // from its share token: stored values verbatim, no recompute.
+// Viewing an anonymous appraisal refreshes its last-viewed
+// time, which is what its 180-day expiry counts from. Its
+// creator (account owner, or the history-cookie holder for an
+// anonymous appraisal) also gets the delete control.
 func (app *page) handleAppraiseShare(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	data := &PageData{ShellData: app.deps.PublicShell(ctx)}
-	row, err := app.queries.GetUserAppraisalByShareToken(ctx, chi.URLParam(r, "token"))
+	token := chi.URLParam(r, "token")
+	row, err := app.queries.GetUserAppraisalByShareToken(ctx, token)
 	if err != nil {
 		data.Error = "That shared appraisal could not be found."
 		data.Appraise = &appraiseView{SignedIn: data.LoggedIn}
@@ -831,8 +929,51 @@ func (app *page) handleAppraiseShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	res.Shared = true
+	res.ShareURL = "/market/appraise/s/" + row.ShareToken + "/"
+	if row.IsAnonymous {
+		if err := app.queries.TouchUserAppraisalByToken(ctx, token); err != nil {
+			logging.Errorf("appraisal: touch %s: %v", token, err)
+		}
+		if app.hasAnonToken(ctx, r, token) {
+			res.CanDelete = true
+			res.DeleteURL = "/market/appraise/s/" + token + "/delete"
+		}
+	} else if userID := app.deps.UserID(ctx); userID > 0 && row.UserID == userID {
+		res.CanDelete = true
+		res.DeleteURL = "/market/appraise/" + strconv.FormatInt(row.ID, 10) + "/delete"
+	}
 	data.Appraise = &appraiseView{SignedIn: data.LoggedIn, Result: res}
 	app.deps.Render(ctx, w, http.StatusOK, "market_appraise.html", data)
+}
+
+// handleAppraiseDelete deletes one of the signed-in owner's
+// appraisals. Its share link 404s from then on.
+func (app *page) handleAppraiseDelete(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	userID := app.deps.UserID(ctx)
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil || id <= 0 || userID <= 0 {
+		http.Redirect(w, r, "/market/appraise/", http.StatusSeeOther)
+		return
+	}
+	if _, err := app.queries.DeleteUserAppraisal(ctx, db.DeleteUserAppraisalParams{ID: id, UserID: userID}); err != nil {
+		logging.Errorf("appraisal: delete %d: %v", id, err)
+	}
+	http.Redirect(w, r, "/market/appraise/", http.StatusSeeOther)
+}
+
+// handleAppraiseDeleteAnon deletes an anonymous appraisal for
+// the history-cookie holder who created it.
+func (app *page) handleAppraiseDeleteAnon(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	token := chi.URLParam(r, "token")
+	if app.hasAnonToken(ctx, r, token) {
+		if _, err := app.queries.DeleteAnonymousAppraisalByToken(ctx, token); err != nil {
+			logging.Errorf("appraisal: delete anonymous: %v", err)
+		}
+		app.forgetAnonToken(ctx, w, r, token)
+	}
+	http.Redirect(w, r, "/market/appraise/", http.StatusSeeOther)
 }
 
 // handleAppraiseReprice re-runs one of the owner's saved
@@ -857,7 +998,7 @@ func (app *page) handleAppraiseReprice(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/market/appraise/?a="+strconv.FormatInt(id, 10), http.StatusSeeOther)
 		return
 	}
-	newID, err := app.saveAppraisal(ctx, userID, row.InputText, snap)
+	newID, _, err := app.saveAppraisal(ctx, userID, false, row.InputText, snap)
 	if err != nil {
 		logging.Errorf("appraisal: reprice save %d: %v", id, err)
 		http.Redirect(w, r, "/market/appraise/?a="+strconv.FormatInt(id, 10), http.StatusSeeOther)

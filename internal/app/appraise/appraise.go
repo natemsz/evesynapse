@@ -731,6 +731,7 @@ type resultView struct {
 	Total      int
 	TierMix    string
 	BasisText  string // the pricing basis, worded for the page
+	Multisell  string // "<TypeName> <Price>" lines at this basis, for copying
 	Basis      pricingBasis
 	Hubs       []hubOption // hub choices for the reprice form
 	RepriceURL string      // where the reprice form posts, when offered
@@ -790,6 +791,13 @@ func (app *page) buildResult(snap *snapshot) *resultView {
 	v.Basis = basis
 	v.BasisText = basis.basisText()
 	v.Hubs = app.hubOptions(basis.RegionID)
+	var ms []string
+	for _, ln := range snap.Lines {
+		if ln.Priced {
+			ms = append(ms, fmt.Sprintf("%s %s", ln.Name, strconv.FormatFloat(ln.UnitPrice, 'f', 2, 64)))
+		}
+	}
+	v.Multisell = strings.Join(ms, "\n")
 	counts := map[string]int{}
 	for _, ln := range snap.Lines {
 		rl := resultLine{

@@ -842,6 +842,16 @@ func TestAppraisalToolQuantityMultiplier(t *testing.T) {
 	mustContain(t, "multiplied appraisal", body, "195.00", "Quantities multiplied ×3.")
 }
 
+func TestAppraisalToolMultisellExport(t *testing.T) {
+	tr := &countingTransport{}
+	app, conn, q := buildCorpTestApp(t, tr)
+	seedAppraisalTool(t, conn, q)
+
+	body, _, _ := postAnonAppraisal(t, app, url.Values{"items": {"Tritanium x 10\nPyerite x 10"}})
+	mustContain(t, "multisell export", body,
+		"Copy multi-sell list", "Tritanium 6.50", "Pyerite 9.25")
+}
+
 func TestPublicFitEscapesUserText(t *testing.T) {
 	tr := &countingTransport{}
 	app, conn, q := buildCorpTestApp(t, tr)

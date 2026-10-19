@@ -392,6 +392,13 @@ var pgReprocessingSchema string
 //go:embed schema_pg/067_anonymous_fits.sql
 var pgAnonymousFitsSchema string
 
+// Step 068: the public structures set the contract worker
+// mirrors from ESI's public structures route, for the
+// contract search's un-dockable-citadel filter.
+//
+//go:embed schema_pg/068_public_structures.sql
+var pgPublicStructuresSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -488,6 +495,7 @@ func schemaSteps() []schemaStep {
 		{65, "appraisal_preferences", pgAppraisalPreferencesSchema, ""},
 		{66, "reprocessing", pgReprocessingSchema, ""},
 		{67, "anonymous_fits", pgAnonymousFitsSchema, ""},
+		{68, "public_structures", pgPublicStructuresSchema, ""},
 	}
 }
 

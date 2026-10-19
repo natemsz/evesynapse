@@ -411,6 +411,22 @@ html[data-theme="light"] #main-content > .section-tabs a.active {
   color: var(--text-bright);
 }
 #main-content:has(> .section-subtabs) > .page-body { border-top: none; }
+/* A page's quiet readout rides the subtab row's empty
+   right side (the contract search's sweep telemetry):
+   small, muted, one line, with a live-dot in the deal
+   green. It never wraps the tabs -- on the narrow rail
+   below it steps aside entirely. */
+#main-content > .section-subtabs .subtab-note {
+  margin-left: auto;
+  display: inline-flex; align-items: center; gap: 0.45rem;
+  padding: 0.35rem 0.2rem 0.35rem 1rem;
+  color: var(--muted); font-size: 0.82rem; white-space: nowrap;
+}
+#main-content > .section-subtabs .subtab-dot {
+  width: 0.45rem; height: 0.45rem; border-radius: 50%;
+  background: var(--deal); flex: none;
+  box-shadow: 0 0 6px color-mix(in srgb, var(--deal) 65%, transparent);
+}
 html[data-theme="light"] #main-content > .section-subtabs a {
   background: rgba(253, 251, 246, 0.72);
   border-color: #d3c7ae;
@@ -504,6 +520,7 @@ html[data-theme="light"] #main-content > .section-subtabs a.active {
     flex: 0 0 auto;
     white-space: nowrap;
   }
+  #main-content > .section-subtabs .subtab-note { display: none; }
 }
 
 /* Item browser tree: the published-only switch hides rows with

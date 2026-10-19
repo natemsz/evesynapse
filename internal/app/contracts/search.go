@@ -25,6 +25,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"net/http"
 	"net/url"
 	"sort"
@@ -89,6 +90,13 @@ type searchFilters struct {
 	IssuedHrs     int64 // -1 off
 	ExpiringHrs   int64 // -1 off
 	DealsOnly     bool
+	// Exclusion filters: contracts at player structures
+	// outside the stored public set, multi-item offers,
+	// and a minimum start-system security (SecMin is the
+	// floor on the rounded status, -1 off).
+	ExcludeUndockable bool
+	ExcludeMulti      bool
+	SecMin            float64
 	// Abyssal filters (schema 057): all off unless AbActive.
 	AbActive   bool
 	AbFamily   string
@@ -175,7 +183,8 @@ func parseSearchFilters(q url.Values) searchFilters {
 		BPMode: "any", MEMin: -1, TEMin: -1, RunsMin: -1,
 		IssuedHrs: -1, ExpiringHrs: -1,
 		AbScoreMin: -1, AbEstMin: -1, AbEstMax: -1, AbPosMin: -1,
-		Sort: "newest", Page: 1,
+		SecMin: -1,
+		Sort:   "newest", Page: 1,
 	}
 	for _, t := range q["type"] {
 		switch t {
@@ -232,6 +241,19 @@ func parseSearchFilters(q url.Values) searchFilters {
 	f.IssuedHrs = intOr(q, "issued_hrs", -1)
 	f.ExpiringHrs = intOr(q, "expiring_hrs", -1)
 	f.DealsOnly = q.Get("deals") == "1"
+	f.ExcludeUndockable = q.Get("exclude_undockable") == "1"
+	f.ExcludeMulti = q.Get("exclude_multi") == "1"
+	// The security floor steps in tenths across [-1, 1];
+	// anything unparseable or below -0.95 is simply off.
+	if v, err := strconv.ParseFloat(strings.TrimSpace(q.Get("sec_min")), 64); err == nil {
+		v = math.Round(v*10) / 10
+		if v > 1 {
+			v = 1
+		}
+		if v > -1 {
+			f.SecMin = v
+		}
+	}
 	// Abyssal filters: family slug, minimum roll score,
 	// source module name, estimate band, and one attribute's
 	// minimum percentile.
@@ -300,6 +322,7 @@ func (f searchFilters) params(now time.Time) (sp db.SearchPublicContractsParams,
 		CourierActive: f.CourierActive,
 		BpActive:      f.BPActive, BpMode: f.BPMode, MeMin: f.MEMin, TeMin: f.TEMin, RunsMin: f.RunsMin,
 		IssuedAfter: issuedAfter, ExpiringBefore: expiringBefore, DealsOnly: f.DealsOnly,
+		ExcludeUndockable: f.ExcludeUndockable, ExcludeMulti: f.ExcludeMulti, SecMin: f.SecMin,
 		AbyssalActive: f.AbActive, AbFamily: f.AbFamily, AbScoreMin: f.AbScoreMin,
 		AbSourceQ: f.AbSourceQ, AbEstMin: f.AbEstMin, AbEstMax: f.AbEstMax,
 		AbAttrKey: f.AbAttrKey, AbAttrMin: f.AbAttrMin, AbPosMin: f.AbPosMin,
@@ -321,6 +344,7 @@ func (f searchFilters) params(now time.Time) (sp db.SearchPublicContractsParams,
 		CourierActive: sp.CourierActive,
 		BpActive:      sp.BpActive, BpMode: sp.BpMode, MeMin: sp.MeMin, TeMin: sp.TeMin, RunsMin: sp.RunsMin,
 		IssuedAfter: sp.IssuedAfter, ExpiringBefore: sp.ExpiringBefore, DealsOnly: sp.DealsOnly,
+		ExcludeUndockable: sp.ExcludeUndockable, ExcludeMulti: sp.ExcludeMulti, SecMin: sp.SecMin,
 		AbyssalActive: sp.AbyssalActive, AbFamily: sp.AbFamily, AbScoreMin: sp.AbScoreMin,
 		AbSourceQ: sp.AbSourceQ, AbEstMin: sp.AbEstMin, AbEstMax: sp.AbEstMax,
 		AbAttrKey: sp.AbAttrKey, AbAttrMin: sp.AbAttrMin, AbPosMin: sp.AbPosMin,
@@ -635,11 +659,24 @@ type searchView struct {
 	// Redesign furniture: active-filter chips, per-drawer
 	// active counts, the drawer the page opens with, and the
 	// quick-hunt preset URLs.
-	Chips         []filterChip
-	BPCount       int
-	AbCount       int
-	CourierCount  int
-	OpenDrawer    string // "", "blueprints", "abyssal", "couriers"
+	Chips        []filterChip
+	BPCount      int
+	AbCount      int
+	CourierCount int
+	OpenDrawer   string // "", "blueprints", "abyssal", "couriers"
+	// Sortable column headers: each header links at the
+	// current search (page reset) under its own next sort
+	// key, and carries the chevron its state shows -- the
+	// idle double arrow, or the live direction.
+	PriceSortURL string
+	PriceChev    string // "↕" idle, "↓" price_desc, "↑" price_asc
+	PriceSorted  bool
+	ValueSortURL string
+	ValueChev    string // "↕" idle, "↓" while either value sort is live
+	ValueSorted  bool
+	// SecMinText is the security floor as the slider
+	// prints it, one decimal ("-1.0" reads as off).
+	SecMinText    string
 	HuntJita      string
 	HuntAbyssal   string
 	HuntBlueprint string
@@ -650,7 +687,23 @@ func (app *mod) handleContractSearch(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	data := &PageData{ShellData: app.deps.PublicShell(ctx)}
 	data.ContractSearch = app.buildSearchView(ctx, r.URL.Query())
+	data.SubTabNote = app.sweepNote(ctx)
 	app.deps.Render(ctx, w, http.StatusOK, "contract_search.html", data)
+}
+
+// sweepNote words the subtab row's corpus telemetry: the
+// freshest contract sweep stamp and the stored live
+// corpus size -- "ESI Sweep: 12 minutes ago • 48,912
+// Public Contracts Indexed". Stored reads only; a failed
+// read, an unswept corpus or an empty one shows nothing
+// rather than a guess.
+func (app *mod) sweepNote(ctx context.Context) string {
+	stats, err := app.queries.GetPublicContractCorpusStats(ctx)
+	if err != nil || !stats.LastSweepAt.Valid || stats.OpenContracts == 0 {
+		return ""
+	}
+	return fmt.Sprintf("ESI Sweep: %s • %s Public Contracts Indexed",
+		app.deps.AgeText(stats.LastSweepAt.Time), esi.FormatInt(stats.OpenContracts))
 }
 
 func (app *mod) buildSearchView(ctx context.Context, q url.Values) *searchView {
@@ -722,6 +775,46 @@ func (app *mod) buildSearchView(ctx context.Context, q url.Values) *searchView {
 	}
 
 	app.buildSearchFurniture(view, f, q, regionNames)
+
+	// Sortable headers: the price header alternates
+	// direction on the effective price (the ask, or the
+	// reward for a courier -- the same figure the price
+	// sorts already order by); the value header alternates
+	// the metric, net ISK spread then discount percent.
+	// Both ride the one sort parameter, so the URL stays
+	// the only state.
+	sortURL := func(key string) string {
+		next := url.Values{}
+		for k, vs := range q {
+			if k == "page" || k == "sort" {
+				continue
+			}
+			for _, v := range vs {
+				next.Add(k, v)
+			}
+		}
+		next.Set("sort", key)
+		return "/contracts/search/?" + next.Encode()
+	}
+	priceNext := "price_desc"
+	view.PriceChev = "↕"
+	switch f.Sort {
+	case "price_desc":
+		priceNext, view.PriceChev, view.PriceSorted = "price_asc", "↓", true
+	case "price_asc":
+		view.PriceChev, view.PriceSorted = "↑", true
+	}
+	view.PriceSortURL = sortURL(priceNext)
+	valueNext := "margin_desc"
+	view.ValueChev = "↕"
+	switch f.Sort {
+	case "margin_desc":
+		valueNext, view.ValueChev, view.ValueSorted = "deal_asc", "↓", true
+	case "deal_asc":
+		view.ValueChev, view.ValueSorted = "↓", true
+	}
+	view.ValueSortURL = sortURL(valueNext)
+	view.SecMinText = fmt.Sprintf("%.1f", f.SecMin)
 
 	sp, cp := f.params(now)
 	total, err := app.queries.CountPublicContractsSearch(ctx, cp)
@@ -869,6 +962,15 @@ func (app *mod) buildSearchFurniture(view *searchView, f searchFilters, q url.Va
 	}
 	if f.ExpiringHrs >= 0 {
 		add(fmt.Sprintf("Expiring within %dh", f.ExpiringHrs), false, map[string]string{"expiring_hrs": ""})
+	}
+	if f.ExcludeUndockable {
+		add("Exclude: un-dockable citadels", false, map[string]string{"exclude_undockable": ""})
+	}
+	if f.ExcludeMulti {
+		add("Exclude: multi-item contracts", false, map[string]string{"exclude_multi": ""})
+	}
+	if f.SecMin > -1 {
+		add(fmt.Sprintf("Sec ≥ %.1f", f.SecMin), false, map[string]string{"sec_min": ""})
 	}
 	// Blueprint drawer.
 	if f.BPMode == "bpo" {
@@ -1568,6 +1670,10 @@ type panelLine struct {
 	BasisAmber bool
 	Priced     bool
 	Abyssal    *abyssalPanel
+	// Matched marks the line the reader's item search
+	// matched, pinned to the head of the drawer's list
+	// (see pinMatchedLines).
+	Matched bool
 }
 
 // telemetryRoll is one mutaplasmid attribute in the
@@ -1613,7 +1719,63 @@ type panelView struct {
 	CopyText     string
 }
 
-func (app *mod) buildPanelView(ctx context.Context, id int64) (*panelView, bool) {
+// pinSearch is the item context of the search that led
+// to a drawer: the typed item text, an exact type (item
+// pages deep-link it), and the side the search matched.
+// The panel request carries it from the results page's
+// own URL; the pin is decided here, server-side, with
+// the same matching the search SQL runs.
+type pinSearch struct {
+	ItemQ      string
+	ItemTypeID int64
+	ItemDir    string // offered | wanted | either
+}
+
+func (p pinSearch) active() bool { return p.ItemQ != "" || p.ItemTypeID > 0 }
+
+func (p pinSearch) matches(l panelLine) bool {
+	switch p.ItemDir {
+	case "offered":
+		if l.Side != "Offered" {
+			return false
+		}
+	case "wanted":
+		if l.Side != "Wanted" {
+			return false
+		}
+	}
+	if p.ItemTypeID > 0 {
+		return l.TypeID == p.ItemTypeID
+	}
+	return strings.Contains(strings.ToLower(l.Name), strings.ToLower(p.ItemQ))
+}
+
+// pinMatchedLines moves the lines the item search
+// matched to the head of the drawer's list, marked
+// Matched, every other line keeping its place -- the
+// reader sees why this contract surfaced before anything
+// else inside it. No item context, or no match, returns
+// the list exactly as built.
+func pinMatchedLines(lines []panelLine, pin pinSearch) []panelLine {
+	if !pin.active() {
+		return lines
+	}
+	var head, tail []panelLine
+	for _, l := range lines {
+		if pin.matches(l) {
+			l.Matched = true
+			head = append(head, l)
+		} else {
+			tail = append(tail, l)
+		}
+	}
+	if len(head) == 0 {
+		return lines
+	}
+	return append(head, tail...)
+}
+
+func (app *mod) buildPanelView(ctx context.Context, id int64, pin pinSearch) (*panelView, bool) {
 	dv, ok := app.buildDetailView(ctx, id)
 	if !ok {
 		return nil, false
@@ -1685,6 +1847,7 @@ func (app *mod) buildPanelView(ctx context.Context, id int64) (*panelView, bool)
 	}
 	addLines(dv.Offered, "Offered")
 	addLines(dv.Wanted, "Wanted")
+	out.Lines = pinMatchedLines(out.Lines, pin)
 	out.SourceLabel = drawerSourceLabel(row.Type, tiers)
 
 	// Telemetry for the first abyssal line, when it carries
@@ -1820,7 +1983,19 @@ func (app *mod) handleContractPanel(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	view, ok := app.buildPanelView(ctx, id)
+	// The search context rides the panel request from the
+	// results page's URL, so the drawer can pin the line
+	// the search matched (see pinMatchedLines).
+	q := r.URL.Query()
+	pin := pinSearch{ItemQ: strings.TrimSpace(q.Get("q_item")), ItemDir: "either"}
+	if v, err := strconv.ParseInt(strings.TrimSpace(q.Get("item_type")), 10, 64); err == nil && v > 0 {
+		pin.ItemTypeID = v
+	}
+	switch q.Get("item_dir") {
+	case "offered", "wanted":
+		pin.ItemDir = q.Get("item_dir")
+	}
+	view, ok := app.buildPanelView(ctx, id, pin)
 	if !ok {
 		http.NotFound(w, r)
 		return

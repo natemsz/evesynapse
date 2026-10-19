@@ -74,7 +74,7 @@
         </select></label>
     </div>
     <div class="box cs-fbox">
-      <h3 class="box-title">Issued, Expiring &amp; Sort</h3>
+      <h3 class="box-title">Issued, Expiring &amp; Filters</h3>
       <label class="cs-field">Issued within
         <select name="issued_hrs">
           <option value=""{{if eq $s.Filters.IssuedHrs -1}} selected{{end}}>Any time</option>
@@ -87,10 +87,11 @@
           <option value="72"{{if eq $s.Filters.ExpiringHrs 72}} selected{{end}}>≤ 3 days</option>
           <option value="168"{{if eq $s.Filters.ExpiringHrs 168}} selected{{end}}>≤ 7 days</option>
         </select></label>
-      <label class="cs-field">Sort results by
-        <select name="sort">
-          {{range $s.Sorts}}<option value="{{.Key}}"{{if eq $s.Filters.Sort .Key}} selected{{end}}>{{.Label}}</option>{{end}}
-        </select></label>
+      <label class="cs-checkrow"><input type="checkbox" name="exclude_undockable" value="1" class="cs-auto"{{if $s.Filters.ExcludeUndockable}} checked{{end}}> Exclude Un-Dockable Citadels</label>
+      <label class="cs-checkrow"><input type="checkbox" name="exclude_multi" value="1" class="cs-auto"{{if $s.Filters.ExcludeMulti}} checked{{end}}> Exclude Multi-Item Contracts</label>
+      <label class="cs-field">Minimum sec status
+        <span class="cs-slider-pair cs-secpair"><input type="range" name="sec_min" min="-1" max="1" step="0.1" value="{{$s.SecMinText}}" class="cs-secslider" aria-label="Minimum security status"><span class="cs-secval" data-sec-val>{{$s.SecMinText}}</span></span></label>
+      <input type="hidden" name="sort" value="{{$s.Filters.Sort}}">
     </div>
   </div>
   <div class="band cs-specs">
@@ -188,7 +189,7 @@
 {{if $s.Rows}}
 <table class="cs-table" data-nosort>
   <colgroup><col class="cs-c1"><col class="cs-c2"><col class="cs-c3"><col class="cs-c4"><col class="cs-c5"></colgroup>
-  <thead><tr><th>Contract</th><th>Contents &amp; Specs</th><th>Price / Reward</th><th>Our Value &amp; Spread</th><th>Location</th></tr></thead>
+  <thead><tr><th>Contract</th><th>Contents &amp; Specs</th><th><a class="cs-sorthead{{if $s.PriceSorted}} on{{end}}" href="{{$s.PriceSortURL}}" aria-label="Sort by price or reward">Price / Reward <span class="cs-sortchev" aria-hidden="true">{{$s.PriceChev}}</span></a></th><th><a class="cs-sorthead{{if $s.ValueSorted}} on{{end}}" href="{{$s.ValueSortURL}}" aria-label="Sort by our value and spread">Our Value &amp; Spread <span class="cs-sortchev" aria-hidden="true">{{$s.ValueChev}}</span></a></th><th>Location</th></tr></thead>
   <tbody>
 {{range $s.Rows}}
     <tr class="cs-row{{if .IsDeal}} deal{{end}}" data-contract="{{.ContractID}}" tabindex="0" role="button" aria-expanded="false" aria-label="Inspect contract {{.ContractID}}">
@@ -248,7 +249,7 @@
       </div>
       {{if .StateNote}}<p class="cs-dnote">{{.StateNote}}</p>{{end}}
       {{range .Lines}}
-      <div class="cs-aline">
+      <div class="cs-aline{{if .Matched}} matched{{end}}">
         <span class="cs-aline-l">{{if eq .Side "Wanted"}}<span class="cs-gchip want">Wants</span>{{else if .Group}}<span class="cs-gchip">{{.Group}}</span>{{end}} {{itemLink .TypeID .Name}}{{if .RollTag}} [{{.RollTag}}]{{end}} <span class="cs-aq">×{{.Qty}}</span></span>
         <span class="cs-tp{{if .BasisAmber}} un{{end}}">{{.BasisText}}{{if .BasisNote}}<span class="cs-tnote">{{.BasisNote}}</span>{{end}}</span>
       </div>

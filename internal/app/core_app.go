@@ -265,10 +265,10 @@ func New(cfg Config) (*Application, error) {
 	if err != nil {
 		return nil, err
 	}
-	if tokenKeyProvider == tokenKeyProviderHTTP && cfg.tokenKey != "" {
+	if tokenKeyFetchedRemotely(tokenKeyProvider) && cfg.tokenKey != "" {
 		// The provider wins; the env key stays only as the
 		// operator's way back (TOKEN_KEY_PROVIDER=env).
-		logging.Warnf("evesynapse: TOKEN_ENCRYPTION_KEY is set but TOKEN_KEY_PROVIDER=http, so the env key is ignored")
+		logging.Warnf("evesynapse: TOKEN_ENCRYPTION_KEY is set but TOKEN_KEY_PROVIDER=%s, so the env key is ignored", tokenKeyProvider)
 	}
 	if cfg.signUp.err != nil {
 		return nil, cfg.signUp.err
@@ -315,11 +315,11 @@ func New(cfg Config) (*Application, error) {
 
 	// Before anything reads a token: check the stored ones open
 	// with the configured key, and encrypt any that predate it.
-	// The http provider's key has not arrived yet (it comes from
+	// A remote provider's key has not arrived yet (it comes from
 	// the network, in the background — see startTokenKeyUnlock),
 	// so its pass runs at unlock instead; the app serves meanwhile.
-	if tokenKeyProvider == tokenKeyProviderHTTP {
-		logging.Infof("evesynapse: the token encryption key comes from the unwrap endpoint; stored tokens unlock when it answers")
+	if tokenKeyFetchedRemotely(tokenKeyProvider) {
+		logging.Infof("evesynapse: the token encryption key comes from the %s provider; stored tokens unlock when it answers", tokenKeyProvider)
 	} else if err := app.prepareStoredTokens(context.Background()); err != nil {
 		dbConn.Close()
 		pool.Close()
@@ -349,7 +349,7 @@ func New(cfg Config) (*Application, error) {
 	app.stopWorker = stopWorker
 	app.workerCtx = workerCtx
 	app.startedAt = time.Now()
-	if tokenKeyProvider == tokenKeyProviderHTTP {
+	if tokenKeyFetchedRemotely(tokenKeyProvider) {
 		app.startTokenKeyUnlock(workerCtx)
 	}
 	if !cfg.noWorker {

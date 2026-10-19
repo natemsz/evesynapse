@@ -297,8 +297,9 @@ gaps; real environment variables win over the file):
 | `DATABASE_URL` | yes | `postgres://evesynapse@localhost:5432/evesynapse?sslmode=disable` | PostgreSQL connection URL |
 | `ADDR` | no | `:8080` | HTTP listen address |
 | `TOKEN_ENCRYPTION_KEY` | no | — | Encrypts the EVE tokens stored in the database (see "Token encryption") |
-| `TOKEN_KEY_PROVIDER` | no | derived | Where the token key comes from: `env` (the key above; the default when it is set), `http` (fetched from a key service at startup), or `none` (tokens stored unencrypted; the default when no key is set). See "Keeping the key off the machine" |
+| `TOKEN_KEY_PROVIDER` | no | derived | Where the token key comes from: `env` (the key above; the default when it is set), `http` (fetched from a key service at startup), `oci` (unwrapped by OCI KMS at startup), or `none` (tokens stored unencrypted; the default when no key is set). See "Keeping the key off the machine" |
 | `TOKEN_KEY_WRAPPED`, `TOKEN_KEY_UNWRAP_URL`, `TOKEN_KEY_UNWRAP_CREDENTIAL` | with `http` | — | The wrapped token key, the key service's unwrap endpoint, and the credential the app presents to it (http provider) |
+| `TOKEN_KEY_OCI_KEY_ID`, `TOKEN_KEY_OCI_CRYPTO_ENDPOINT` | with `oci` | — | The OCI Vault key that wrapped the token key (in `TOKEN_KEY_WRAPPED`) and the vault's cryptographic endpoint (oci provider) |
 | `EVE_ADMIN_CHARACTER_IDS` | no | — | Comma-separated EVE character IDs whose accounts may open the Admin and Sync pages. Any character linked to an account makes that whole account an admin's. Empty = nobody. The status belongs to whoever owned the character when it was first seen as an admin: if the character is sold or transferred, its new owner does not get it. To give it to a new owner on purpose, remove the id, restart, add it back and restart |
 | `EVE_ALLOWED_CHARACTER_IDS`, `EVE_ALLOWED_CORPORATION_IDS`, `EVE_ALLOWED_ALLIANCE_IDS` | no | — | Limit who may create an account (see "Who can sign up"). All empty = anyone who can sign in with EVE |
 | `EVESYNAPSE_UPDATE_REPO` | no | `natemsz/evesynapse` | GitHub repo (owner/repo) the updater checks |
@@ -1488,13 +1489,40 @@ TOKEN_KEY_UNWRAP_CREDENTIAL=...   # the credential the app presents
 ```
 
 `TOKEN_KEY_PROVIDER` is `env` (the `TOKEN_ENCRYPTION_KEY` above;
-the default when it is set), `http`, or `none` (no key). Any HTTPS
+the default when it is set), `http`, `oci`, or `none` (no key). Any HTTPS
 endpoint speaking the two-call protocol — `POST {"wrapped": …}` →
 `{"secret": …}` to unwrap, `POST {"secret": …}` → `{"wrapped": …}`
 to wrap — can serve, so nothing ties this to one vendor's KMS. A
 complete reference service ships as a Cloudflare Worker you deploy
 to your own account, free, in a few minutes:
 **[natemsz/cloudflare-kms](https://github.com/natemsz/cloudflare-kms)**.
+
+On Oracle Cloud there is a second shape, `TOKEN_KEY_PROVIDER=oci`:
+the key is wrapped by a master key in an OCI Vault — create it
+with HSM protection, so the key cannot be exported — and the app
+unwraps it at startup with a KMS Decrypt call authenticated by
+the instance's own identity (an *instance principal*). Nothing
+cloud-shaped is stored on the machine at all: no credential, no
+key, only the ciphertext and the key's address. OCI authorizes
+the call through IAM: put the instance in a dynamic group and
+give that group one policy statement scoped to the single key,
+`Allow dynamic-group <group> to use keys in compartment
+<compartment> where target.key.id = '<key OCID>'`. Set:
+
+```sh
+TOKEN_KEY_PROVIDER=oci
+TOKEN_KEY_WRAPPED=...          # the key, wrapped by the vault key
+TOKEN_KEY_OCI_KEY_ID=...       # the vault key's OCID
+TOKEN_KEY_OCI_CRYPTO_ENDPOINT=...   # the vault's cryptographic endpoint
+```
+
+Produce `TOKEN_KEY_WRAPPED` once, on the instance, while
+`TOKEN_ENCRYPTION_KEY` is still set: `evesynapse -wrap-token-key`
+prints it (the wrap itself is an instance-principal call, so it
+only works there). Then remove `TOKEN_ENCRYPTION_KEY` and
+restart. The `oci` provider starts and unlocks exactly like
+`http`: serving at once, retrying in the background, installing
+the key only after it opens the stored tokens.
 
 With `http` the app starts and serves at once; the unwrap is
 retried in the background until it succeeds, and until then stored

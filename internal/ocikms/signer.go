@@ -1,0 +1,69 @@
+package ocikms
+
+// Request signing per Oracle's HTTP signing specification (the
+// "Signature" authorization scheme every OCI service API expects).
+// Only what the KMS calls need is implemented: POSTs with a JSON
+// body, signed over (request-target), host, date, content-length,
+// content-type and x-content-sha256, under a keyId of
+// "ST$<security token>" when the caller is an instance principal.
+
+import (
+	"crypto"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/sha256"
+	"encoding/base64"
+	"fmt"
+	"net/http"
+	"strings"
+	"time"
+)
+
+// signingHeaders is the signed-header list for a POST with a body,
+// in the order the signing string is built.
+var postSigningHeaders = []string{
+	"(request-target)", "host", "date",
+	"content-length", "content-type", "x-content-sha256",
+}
+
+// signRequest stamps req with the Date and x-content-sha256
+// headers and an Authorization signature made with key under
+// keyID. now is the signing instant (a parameter so tests can pin
+// it). body is the exact request body; it must match what req
+// sends.
+func signRequest(req *http.Request, body []byte, keyID string, key *rsa.PrivateKey, now time.Time) error {
+	date := now.UTC().Format(http.TimeFormat)
+	req.Header.Set("Date", date)
+
+	sum := sha256.Sum256(body)
+	contentSHA := base64.StdEncoding.EncodeToString(sum[:])
+	req.Header.Set("x-content-sha256", contentSHA)
+
+	values := map[string]string{
+		"(request-target)": strings.ToLower(req.Method) + " " + req.URL.EscapedPath(),
+		"host":             req.URL.Host,
+		"date":             date,
+		"content-length":   fmt.Sprint(req.ContentLength),
+		"content-type":     req.Header.Get("Content-Type"),
+		"x-content-sha256": contentSHA,
+	}
+	var signing strings.Builder
+	for i, name := range postSigningHeaders {
+		if i > 0 {
+			signing.WriteByte('\n')
+		}
+		signing.WriteString(name)
+		signing.WriteString(": ")
+		signing.WriteString(values[name])
+	}
+
+	digest := sha256.Sum256([]byte(signing.String()))
+	sig, err := rsa.SignPKCS1v15(rand.Reader, key, crypto.SHA256, digest[:])
+	if err != nil {
+		return fmt.Errorf("sign the request: %w", err)
+	}
+	req.Header.Set("Authorization", fmt.Sprintf(
+		`Signature version="1",keyId=%q,algorithm="rsa-sha256",headers=%q,signature=%q`,
+		keyID, strings.Join(postSigningHeaders, " "), base64.StdEncoding.EncodeToString(sig)))
+	return nil
+}

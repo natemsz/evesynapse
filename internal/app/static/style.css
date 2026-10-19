@@ -1819,7 +1819,7 @@ tr.fleet-detail > td { background: #120d09; border-bottom: 1px solid rgba(255, 1
   color: var(--note);
   font-family: "Rajdhani", sans-serif;
   font-weight: 600;
-  font-size: 0.92em;
+  font-size: 0.95em;
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
@@ -1839,7 +1839,7 @@ tr.fleet-detail > td { background: #120d09; border-bottom: 1px solid rgba(255, 1
 .legend-note { margin-left: auto; color: #9d8668; }
 .pchart text {
   font-family: "JetBrains Mono", ui-monospace, monospace;
-  font-size: 10px;
+  font-size: 12px;
 }
 .chart-gridline { stroke: #241708; stroke-width: 1; }
 .volume-gridline { stroke: #2a1408; stroke-dasharray: 3 3; }
@@ -1878,7 +1878,7 @@ tr.fleet-detail > td { background: #120d09; border-bottom: 1px solid rgba(255, 1
   border: 1px solid #4a2408;
   border-radius: var(--r-sm);
   padding: 0.35rem 0.55rem;
-  font-size: 0.85em;
+  font-size: 0.95em;
   line-height: 1.45;
   white-space: nowrap;
   transform: translate(-50%, -115%);
@@ -2824,7 +2824,6 @@ tbody tr.yours td { background-color: #2a2015; }
 }
 @media (max-width: 560px) {
   .pchart .tick-mid { display: none; }
-  .pchart text { font-size: 15px; }
   .legend-note { flex-basis: 100%; margin-left: 0; }
   .grid { gap: 0.65rem; }
   .card { padding: 0.75rem 0.8rem 0.9rem; }

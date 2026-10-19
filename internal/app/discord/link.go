@@ -8,6 +8,7 @@ import (
 	"time"
 
 	db "evesynapse/internal/db/sqlc"
+	dc "evesynapse/internal/discord"
 	"evesynapse/internal/logging"
 )
 
@@ -26,6 +27,10 @@ import (
 
 // sessionDiscordState holds the sign-in's single-use state value.
 const sessionDiscordState = "discord_oauth_state"
+
+// sessionDiscordVerifier holds the sign-in's single-use PKCE
+// verifier: stored when the sign-in starts, spent when it returns.
+const sessionDiscordVerifier = "discord_oauth_verifier"
 
 // discordCanLink reports whether "Connect Discord" is offered.
 func (app *mod) discordCanLink() bool {
@@ -61,8 +66,15 @@ func (app *mod) handleDiscordConnect(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
+	verifier, err := dc.NewVerifier()
+	if err != nil {
+		logging.Errorf("discord: generate PKCE verifier: %v", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
 	app.sessions.Put(r.Context(), sessionDiscordState, state)
-	http.Redirect(w, r, app.discord.AuthURL(state), http.StatusFound)
+	app.sessions.Put(r.Context(), sessionDiscordVerifier, verifier)
+	http.Redirect(w, r, app.discord.AuthURL(state, dc.CodeChallenge(verifier)), http.StatusFound)
 }
 
 func (app *mod) handleDiscordCallback(w http.ResponseWriter, r *http.Request) {
@@ -97,13 +109,23 @@ func (app *mod) handleDiscordCallback(w http.ResponseWriter, r *http.Request) {
 		back("Discord was not connected.")
 		return
 	}
+	// The PKCE verifier is single-use like the state: read it, clear
+	// it, and never exchange a code without it. A return whose
+	// session holds none did not start at the connect or install
+	// handlers (or its verifier was already spent).
+	verifier := app.sessions.PopString(ctx, sessionDiscordVerifier)
+	if verifier == "" {
+		logging.Warnf("discord callback: missing PKCE verifier")
+		back("Connecting Discord did not complete. Please try again.")
+		return
+	}
 	// A director coming back from adding the bot to a server
 	// (discord_servers.go) lands here too.
 	if owner != "" {
-		app.discordFinishInstall(w, r, userID, owner, code)
+		app.discordFinishInstall(w, r, userID, owner, code, verifier)
 		return
 	}
-	account, token, err := app.discord.Identify(ctx, code)
+	account, token, err := app.discord.Identify(ctx, code, verifier)
 	if err != nil {
 		logging.Errorf("discord callback: identify for user %d: %v", userID, err)
 		back("Discord could not confirm the account. Please try again.")

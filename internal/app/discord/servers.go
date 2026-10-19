@@ -209,15 +209,22 @@ func (app *mod) handleDiscordServerAdd(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
+	verifier, err := dc.NewVerifier()
+	if err != nil {
+		logging.Errorf("discord: generate PKCE verifier: %v", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
 	app.sessions.Put(ctx, sessionDiscordState, state)
+	app.sessions.Put(ctx, sessionDiscordVerifier, verifier)
 	app.sessions.Put(ctx, sessionDiscordInstall, owner.Key())
-	http.Redirect(w, r, app.discord.InstallURL(state), http.StatusFound)
+	http.Redirect(w, r, app.discord.InstallURL(state, dc.CodeChallenge(verifier)), http.StatusFound)
 }
 
 // discordFinishInstall is the return from Discord after the bot was
 // added to a server: the server is recorded as the owner's. The
 // account's right to manage that owner is checked again here.
-func (app *mod) discordFinishInstall(w http.ResponseWriter, r *http.Request, userID int64, ownerKey, code string) {
+func (app *mod) discordFinishInstall(w http.ResponseWriter, r *http.Request, userID int64, ownerKey, code, verifier string) {
 	ctx := r.Context()
 	back := app.flashBack(w, r, standing.Address(discordServersPath, ownerKey))
 	owner, ok := standing.ParseOwner(ownerKey)
@@ -225,7 +232,7 @@ func (app *mod) discordFinishInstall(w http.ResponseWriter, r *http.Request, use
 		back("Only a director can add the bot for that corporation or alliance.")
 		return
 	}
-	_, guild, err := app.discord.IdentifyInstall(ctx, code)
+	_, guild, err := app.discord.IdentifyInstall(ctx, code, verifier)
 	if err != nil {
 		logging.Errorf("discord install: user %d: %v", userID, err)
 		back("Discord could not confirm that the bot was added. Please try again.")

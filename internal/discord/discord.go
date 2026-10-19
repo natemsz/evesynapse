@@ -20,6 +20,9 @@ package discord
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -111,11 +114,33 @@ func IsStatus(err error, status int) bool {
 	return errors.As(err, &se) && se.Status == status
 }
 
+// NewVerifier returns a fresh PKCE code_verifier (RFC 7636): 32
+// random bytes, base64url-encoded without padding — 43 characters,
+// inside the RFC's 43-128 range and drawn from its unreserved set.
+// The verifier never leaves the server; only its challenge (see
+// CodeChallenge) goes in the sign-in address, and the verifier is
+// sent once, with the code, when the sign-in comes back.
+func NewVerifier() (string, error) {
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return base64.RawURLEncoding.EncodeToString(b), nil
+}
+
+// CodeChallenge derives the S256 code_challenge for a verifier:
+// base64url(SHA-256(verifier)), no padding (RFC 7636 section 4.2).
+func CodeChallenge(verifier string) string {
+	sum := sha256.Sum256([]byte(verifier))
+	return base64.RawURLEncoding.EncodeToString(sum[:])
+}
+
 // AuthURL is where to send a user to connect their Discord account.
 // Two things are asked for: "identify", the account's id and name, and
 // "guilds.join", so that the bot may add the account to a server it is
-// in (Discord words it "join servers for you").
-func (c *Client) AuthURL(state string) string {
+// in (Discord words it "join servers for you"). challenge is the PKCE
+// challenge of the verifier the caller keeps for the return.
+func (c *Client) AuthURL(state, challenge string) string {
 	q := url.Values{}
 	q.Set("client_id", c.cfg.ClientID)
 	q.Set("response_type", "code")
@@ -123,6 +148,8 @@ func (c *Client) AuthURL(state string) string {
 	q.Set("scope", "identify guilds.join")
 	q.Set("state", state)
 	q.Set("prompt", "consent")
+	q.Set("code_challenge", challenge)
+	q.Set("code_challenge_method", "S256")
 	return authorizeURL + "?" + q.Encode()
 }
 
@@ -157,8 +184,9 @@ const botPermissions = 1<<28 | 1<<10 | 1<<11 | 1<<0 | 1<<1
 
 // InstallURL is where to send someone to add the bot to a server of
 // theirs. Discord only lets a person who may manage a server add a bot
-// to it, and shows them the permissions asked for.
-func (c *Client) InstallURL(state string) string {
+// to it, and shows them the permissions asked for. challenge is the
+// PKCE challenge, as in AuthURL.
+func (c *Client) InstallURL(state, challenge string) string {
 	q := url.Values{}
 	q.Set("client_id", c.cfg.ClientID)
 	q.Set("response_type", "code")
@@ -166,6 +194,8 @@ func (c *Client) InstallURL(state string) string {
 	q.Set("scope", "bot identify guilds.join")
 	q.Set("permissions", strconv.Itoa(botPermissions))
 	q.Set("state", state)
+	q.Set("code_challenge", challenge)
+	q.Set("code_challenge_method", "S256")
 	return authorizeURL + "?" + q.Encode()
 }
 
@@ -179,9 +209,11 @@ type Token struct {
 }
 
 // Identify finishes a sign-in: it trades the code Discord sent back
-// for a token and reads whose account it is.
-func (c *Client) Identify(ctx context.Context, code string) (User, Token, error) {
-	user, _, token, err := c.identify(ctx, code)
+// for a token and reads whose account it is. verifier is the PKCE
+// verifier whose challenge went in the sign-in address; without it
+// the code is never exchanged.
+func (c *Client) Identify(ctx context.Context, code, verifier string) (User, Token, error) {
+	user, _, token, err := c.identify(ctx, code, verifier)
 	return user, token, err
 }
 
@@ -189,18 +221,22 @@ func (c *Client) Identify(ctx context.Context, code string) (User, Token, error)
 // reports the server the bot was just added to, as Discord itself
 // states it in its answer (never as the browser claims it). The
 // server is empty when the sign-in added the bot nowhere.
-func (c *Client) IdentifyInstall(ctx context.Context, code string) (User, Guild, error) {
-	user, guild, _, err := c.identify(ctx, code)
+func (c *Client) IdentifyInstall(ctx context.Context, code, verifier string) (User, Guild, error) {
+	user, guild, _, err := c.identify(ctx, code, verifier)
 	if err == nil && guild.ID != "" && !ValidID(guild.ID) {
 		return User{}, Guild{}, errors.New("discord: the sign-in returned a server with no id")
 	}
 	return user, guild, err
 }
 
-func (c *Client) identify(ctx context.Context, code string) (User, Guild, Token, error) {
+func (c *Client) identify(ctx context.Context, code, verifier string) (User, Guild, Token, error) {
+	if verifier == "" {
+		return User{}, Guild{}, Token{}, errors.New("discord: the sign-in has no PKCE verifier")
+	}
 	form := url.Values{}
 	form.Set("grant_type", "authorization_code")
 	form.Set("code", code)
+	form.Set("code_verifier", verifier)
 	form.Set("redirect_uri", c.cfg.RedirectURL)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/oauth2/token", strings.NewReader(form.Encode()))
 	if err != nil {

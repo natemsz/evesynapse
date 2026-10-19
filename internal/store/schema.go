@@ -385,6 +385,13 @@ var pgAppraisalPreferencesSchema string
 //go:embed schema_pg/066_reprocessing.sql
 var pgReprocessingSchema string
 
+// Step 067: anonymous fit sharing -- share tokens on
+// local_fittings, the shared anonymous fit owner, and the
+// fitting history cookie secret.
+//
+//go:embed schema_pg/067_anonymous_fits.sql
+var pgAnonymousFitsSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -480,6 +487,7 @@ func schemaSteps() []schemaStep {
 		{64, "appraisal_lifecycle", pgAppraisalLifecycleSchema, ""},
 		{65, "appraisal_preferences", pgAppraisalPreferencesSchema, ""},
 		{66, "reprocessing", pgReprocessingSchema, ""},
+		{67, "anonymous_fits", pgAnonymousFitsSchema, ""},
 	}
 }
 

@@ -2189,6 +2189,44 @@ var FitGauges = (function () {
       }).catch(function () {});
     });
   }
+  var shareAnonBtn = document.getElementById("fit-share-anon");
+  if (shareAnonBtn) {
+    shareAnonBtn.addEventListener("click", function () {
+      if (!state.shipTypeId) return;
+      state.name = nameInput ? nameInput.value : state.name;
+      var linkEl = document.getElementById("fit-share-link");
+      fetch("/fittings/save-anonymous/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Accept": "application/json" },
+        body: JSON.stringify({
+          name: state.name,
+          description: descInput ? descInput.value : "",
+          tags: tagsInput ? tagsInput.value : "",
+          fit: {
+            name: state.name,
+            shipTypeId: state.shipTypeId,
+            items: state.items,
+            charges: state.charges,
+            implants: state.implants || {}
+          }
+        })
+      }).then(function (resp) {
+        return resp.ok ? resp.json() : null;
+      }).then(function (row) {
+        if (row && row.shareUrl && linkEl) {
+          var a = document.createElement("a");
+          a.href = row.shareUrl;
+          a.textContent = row.shareUrl;
+          linkEl.textContent = "Share link: ";
+          linkEl.appendChild(a);
+        } else if (linkEl) {
+          linkEl.textContent = "That fit could not be shared.";
+        }
+      }).catch(function () {
+        if (linkEl) linkEl.textContent = "That fit could not be shared.";
+      });
+    });
+  }
   if (exportBtn) {
     exportBtn.addEventListener("click", function () {
       state.name = nameInput ? nameInput.value : state.name;

@@ -283,6 +283,17 @@ type FitRating struct {
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
+type FittingAnonymousOwner struct {
+	ID     int64 `json:"id"`
+	UserID int64 `json:"user_id"`
+}
+
+type FittingCookieSecret struct {
+	ID        int64     `json:"id"`
+	Secret    string    `json:"secret"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
 type ForesightTarget struct {
 	ID          int64        `json:"id"`
 	UserID      int64        `json:"user_id"`
@@ -347,19 +358,22 @@ type KillmailDetail struct {
 }
 
 type LocalFitting struct {
-	ID          int64     `json:"id"`
-	UserID      int64     `json:"user_id"`
-	Name        string    `json:"name"`
-	ShipTypeID  int64     `json:"ship_type_id"`
-	ItemsJson   string    `json:"items_json"`
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
-	IsPublic    bool      `json:"is_public"`
-	IsDraft     bool      `json:"is_draft"`
-	ViewCount   int64     `json:"view_count"`
-	TotalPrice  float64   `json:"total_price"`
-	RatingCount int64     `json:"rating_count"`
-	RatingSum   int64     `json:"rating_sum"`
+	ID           int64        `json:"id"`
+	UserID       int64        `json:"user_id"`
+	Name         string       `json:"name"`
+	ShipTypeID   int64        `json:"ship_type_id"`
+	ItemsJson    string       `json:"items_json"`
+	CreatedAt    time.Time    `json:"created_at"`
+	UpdatedAt    time.Time    `json:"updated_at"`
+	IsPublic     bool         `json:"is_public"`
+	IsDraft      bool         `json:"is_draft"`
+	ViewCount    int64        `json:"view_count"`
+	TotalPrice   float64      `json:"total_price"`
+	RatingCount  int64        `json:"rating_count"`
+	RatingSum    int64        `json:"rating_sum"`
+	ShareToken   string       `json:"share_token"`
+	IsAnonymous  bool         `json:"is_anonymous"`
+	LastViewedAt sql.NullTime `json:"last_viewed_at"`
 }
 
 type MarketBookOrder struct {

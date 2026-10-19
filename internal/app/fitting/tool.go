@@ -40,6 +40,9 @@ type fitEditorView struct {
 	// Anonymous serves the editor without a session: All-V
 	// skills, no pilots, no save controls, and a sign-in note.
 	Anonymous bool
+	// AnonFits is the anonymous creator's shared fits, from
+	// their history cookie.
+	AnonFits []anonFitEntry
 }
 
 // localFitEntry is one saved fit for the your-fits list.

@@ -43,6 +43,7 @@
 {{if $r.CanDelete}}<form method="post" action="{{$r.DeleteURL}}"><button class="btn" type="submit">Delete this appraisal</button></form>{{end}}
 
 <p class="ap-coverage">Priced {{$r.Priced}} of {{$r.Total}} lines{{if $r.TierMix}} · {{$r.TierMix}}{{end}}{{if $r.BasisText}}<br><small>{{$r.BasisText}}</small>{{end}}{{if $r.BuyValue}}<br><small>Buying those lines at {{$r.Basis.HubName}}'s typical buy prices comes to {{$r.BuyValue}} ISK (typical buys on {{$r.BuyLines}} of the priced lines).</small>{{end}}</p>
+{{if $r.HubStrip}}<p class="ap-hubstrip"><small>At each hub's typical sell: {{range $i, $h := $r.HubStrip}}{{if $i}} · {{end}}{{if $h.Current}}<strong>{{$h.Hub}} {{$h.Total}} ISK</strong>{{else}}{{$h.Hub}} {{$h.Total}} ISK{{end}}{{end}}</small></p>{{end}}
 
 {{if $r.Lines}}
 <div class="tw">

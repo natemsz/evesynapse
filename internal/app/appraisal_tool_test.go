@@ -852,6 +852,29 @@ func TestAppraisalToolMultisellExport(t *testing.T) {
 		"Copy multi-sell list", "Tritanium 6.50", "Pyerite 9.25")
 }
 
+func TestAppraisalToolHubComparisonStrip(t *testing.T) {
+	tr := &countingTransport{}
+	app, conn, q := buildCorpTestApp(t, tr)
+	seedAppraisalTool(t, conn, q)
+	ctx := context.Background()
+	if _, err := conn.ExecContext(ctx, `INSERT INTO market_region_stats (region_id, type_id, typical_sell, typical_buy, updated_at)
+		VALUES (10000043, 34, 10, 8, $1)`, time.Now().UTC().Add(-time.Hour)); err != nil {
+		t.Fatalf("seed domain stats: %v", err)
+	}
+
+	// The share page prices the same lines at every hub's
+	// typical sell in one glance: Forge 650, Domain 1,000,
+	// the unswept hubs at no typical (estimate/fallback-free
+	// for Tritanium, so 0 of the typical total shows as 0.00
+	// only where nothing prices -- here the strip still lists
+	// every hub).
+	_, _, share := postAnonAppraisal(t, app, url.Values{"items": {"Tritanium x 100"}})
+	_, body := getAnon(t, app, share)
+	mustContain(t, "hub strip", body,
+		"At each hub's typical sell:", "The Forge 650.00 ISK", "Domain 1,000.00 ISK",
+		"Sinq Laison", "Heimatar", "Metropolis")
+}
+
 func TestPublicFitEscapesUserText(t *testing.T) {
 	tr := &countingTransport{}
 	app, conn, q := buildCorpTestApp(t, tr)

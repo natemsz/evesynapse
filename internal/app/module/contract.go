@@ -355,7 +355,32 @@ const (
 	AppraisalTierFallback = "fallback"
 	// AppraisalTierUnpriced: no tier could price the line.
 	AppraisalTierUnpriced = "unpriced"
+	// The typical tiers of the other pricing modes: the same
+	// swept region row read on its buy side, or split between
+	// the two sides (naming the one side when only it exists).
+	AppraisalTierTypicalBuy       = "typical_buy"
+	AppraisalTierTypicalSplit     = "typical_split"
+	AppraisalTierTypicalSplitSell = "typical_split_sell"
+	AppraisalTierTypicalSplitBuy  = "typical_split_buy"
 )
+
+// Appraisal pricing modes for AppraisalBasis.
+const (
+	AppraisalModeSell  = "sell"
+	AppraisalModeBuy   = "buy"
+	AppraisalModeSplit = "split"
+)
+
+// AppraisalBasis is a user-selected pricing basis: the hub
+// region whose swept typicals speak first, the side of those
+// typicals (or split between them), and a percent modifier
+// applied on top of the selected price. The zero value is the
+// house default: the default region, typical sell, 100%.
+type AppraisalBasis struct {
+	RegionID int64   // hub region; 0 means the default region
+	Mode     string  // AppraisalModeSell, Buy or Split; "" means sell
+	Percent  float64 // 100 means no modifier
+}
 
 // AppraisalLine is one line handed to the appraisal core: a
 // type, a quantity, the singleton item id when the line is one
@@ -994,6 +1019,13 @@ type Deps interface {
 	// labeled Fuzzwork fallback inside its expiry, else
 	// unpriced). No ESI, no guide average, ever.
 	AppraiseLines(ctx context.Context, lines []AppraisalLine) (Appraisal, error)
+	// AppraiseLinesWithBasis prices like AppraiseLines under a
+	// user-selected basis: the hub region's stored typicals in
+	// the chosen mode, with the percent modifier applied on
+	// top. Copy-median and abyssal-estimate lines keep their
+	// basis independence; only the percent modifier reaches
+	// them. Stored reads only, like AppraiseLines.
+	AppraiseLinesWithBasis(ctx context.Context, lines []AppraisalLine, basis AppraisalBasis) (Appraisal, error)
 	// RefreshSnapshot fetches and stores one snapshot of a character now.
 	RefreshSnapshot(ctx context.Context, ch db.Character, kind string) error
 

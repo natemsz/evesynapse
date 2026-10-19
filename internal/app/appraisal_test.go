@@ -62,6 +62,38 @@ func TestResolveAppraisalPriceOrder(t *testing.T) {
 	}
 }
 
+func TestResolveAppraisalPriceModes(t *testing.T) {
+	now := time.Date(2026, 10, 17, 12, 0, 0, 0, time.UTC)
+	both := &db.MarketRegionStat{TypeID: 1, TypicalSell: 100, TypicalBuy: 80, UpdatedAt: now.Add(-time.Hour)}
+	sellOnly := &db.MarketRegionStat{TypeID: 1, TypicalSell: 100, UpdatedAt: now.Add(-time.Hour)}
+	buyOnly := &db.MarketRegionStat{TypeID: 1, TypicalBuy: 80, UpdatedAt: now.Add(-time.Hour)}
+	staleBoth := &db.MarketRegionStat{TypeID: 1, TypicalSell: 100, TypicalBuy: 80, UpdatedAt: now.Add(-10 * 24 * time.Hour)}
+
+	cases := []struct {
+		name     string
+		own      *db.MarketRegionStat
+		mode     string
+		wantTier string
+		wantUnit float64
+		wantOK   bool
+	}{
+		{"buy reads the buy side", both, module.AppraisalModeBuy, module.AppraisalTierTypicalBuy, 80, true},
+		{"buy never falls back to the sell side", sellOnly, module.AppraisalModeBuy, module.AppraisalTierUnpriced, 0, false},
+		{"split midpoints both sides", both, module.AppraisalModeSplit, module.AppraisalTierTypicalSplit, 90, true},
+		{"split uses the sell side alone and says so", sellOnly, module.AppraisalModeSplit, module.AppraisalTierTypicalSplitSell, 100, true},
+		{"split uses the buy side alone and says so", buyOnly, module.AppraisalModeSplit, module.AppraisalTierTypicalSplitBuy, 80, true},
+		{"stale buy floors as buy, not sell", staleBoth, module.AppraisalModeBuy, module.AppraisalTierTypicalBuy, 80, true},
+		{"sell is unchanged", both, module.AppraisalModeSell, module.AppraisalTierTypical, 100, true},
+	}
+	for _, tc := range cases {
+		got := resolveAppraisalPriceMode(tc.own, nil, nil, now, tc.mode)
+		if got.tier != tc.wantTier || got.unit != tc.wantUnit || got.ok != tc.wantOK {
+			t.Errorf("%s: got {%s %v %v}, want {%s %v %v}",
+				tc.name, got.tier, got.unit, got.ok, tc.wantTier, tc.wantUnit, tc.wantOK)
+		}
+	}
+}
+
 func TestAppraisalDealRatioGating(t *testing.T) {
 	full := module.Appraisal{OfferedValue: 1000, PricedOffered: 2, OfferedLines: 2}
 	partial := module.Appraisal{OfferedValue: 1000, PricedOffered: 1, OfferedLines: 2}

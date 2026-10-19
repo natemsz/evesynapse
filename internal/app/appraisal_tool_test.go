@@ -637,6 +637,96 @@ func TestAppraisalToolEscapesPastedPayloads(t *testing.T) {
 	mustContain(t, "escaped paste", body, "&lt;script&gt;alert(1)&lt;/script&gt;", "32.50")
 }
 
+func postAppraiseCookies(t *testing.T, app *Application, cookies []*http.Cookie, form url.Values) (int, http.Header) {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodPost, "/market/appraise/", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	for _, c := range cookies {
+		req.AddCookie(c)
+	}
+	rec := httptest.NewRecorder()
+	app.Handler().ServeHTTP(rec, req)
+	return rec.Code, rec.Header()
+}
+
+func TestAppraisalToolPricingBasis(t *testing.T) {
+	tr := &countingTransport{}
+	app, conn, q := buildCorpTestApp(t, tr)
+	seedAppraisalTool(t, conn, q)
+	ctx := context.Background()
+	now := time.Now().UTC()
+	// Domain: Tritanium typical sell 10, buy 8, fresh.
+	if _, err := conn.ExecContext(ctx, `INSERT INTO market_region_stats (region_id, type_id, typical_sell, typical_buy, updated_at)
+		VALUES (10000043, 34, 10, 8, $1)`, now.Add(-time.Hour)); err != nil {
+		t.Fatalf("seed domain stats: %v", err)
+	}
+
+	// Split at Domain is the 9.00 midpoint; at 90% the unit
+	// is 8.10, so 100 Tritanium appraise to 810.00 under the
+	// Domain split label, with the basis stated on the page.
+	body, cookies, share := postAnonAppraisal(t, app, url.Values{
+		"items": {"Tritanium x 100"}, "hub": {"10000043"}, "mode": {"split"}, "pct": {"90"},
+	})
+	mustContain(t, "domain split appraisal", body,
+		"810.00", "Our Domain typical (split)", "Priced from Domain typical split prices at 90%.")
+
+	// The remembered basis (basis cookie) drives a second
+	// appraisal that names no basis at all.
+	code, header := postAppraiseCookies(t, app, cookies, url.Values{"items": {"Tritanium x 100"}})
+	if code != http.StatusSeeOther {
+		t.Fatalf("remembered-basis appraisal: status %d, want 303", code)
+	}
+	_, body = getWithCookies(t, app, headerCookies(header), header.Get("Location"))
+	mustContain(t, "remembered basis", body, "810.00", "Our Domain typical (split)")
+
+	// A hub with no stored typical for the type does not
+	// borrow The Forge's: Heimatar has no Tritanium row, no
+	// estimate and no fallback, so the line is unpriced there.
+	body, _, _ = postAnonAppraisal(t, app, url.Values{
+		"items": {"Tritanium x 100"}, "hub": {"10000030"}, "mode": {"sell"}, "pct": {"100"},
+	})
+	mustContain(t, "unpriced at hub", body, "Not priced", "Priced 0 of 1 lines")
+	if strings.Contains(body, "650.00") {
+		t.Error("a Heimatar appraisal silently used The Forge's price")
+	}
+
+	// URL parameters pre-select the form for a linked preset.
+	code, body = getAnon(t, app, "/market/appraise/?hub=Domain&mode=buy&pct=110")
+	if code != http.StatusOK {
+		t.Fatalf("preset page: status %d, want 200", code)
+	}
+	mustContain(t, "preset form", body,
+		`<option value="10000043" selected>Domain</option>`,
+		`<option value="buy" selected>Typical buy</option>`, `value="110"`)
+
+	// Repricing the Domain appraisal at The Forge sell 100%
+	// makes a new appraisal beside the original, which keeps
+	// its own basis and total.
+	req := httptest.NewRequest(http.MethodPost, share+"reprice", strings.NewReader(url.Values{
+		"hub": {"10000002"}, "mode": {"sell"}, "pct": {"100"},
+	}.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	for _, c := range cookies {
+		req.AddCookie(c)
+	}
+	rec := httptest.NewRecorder()
+	app.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("reprice: status %d, want 303", rec.Code)
+	}
+	newShare := rec.Header().Get("Location")
+	if newShare == share || !strings.HasPrefix(newShare, "/market/appraise/s/") {
+		t.Fatalf("reprice redirect = %q, want a new share page", newShare)
+	}
+	_, body = getAnon(t, app, newShare)
+	mustContain(t, "repriced at forge", body, "650.00", "Our Forge typical (sell)")
+	_, body = getAnon(t, app, share)
+	mustContain(t, "original after reprice", body, "810.00", "Our Domain typical (split)")
+	if n := appraisalRowCount(t, conn); n < 3 {
+		t.Fatalf("rows = %d, want the originals and the reprice stored separately", n)
+	}
+}
+
 func TestPublicFitEscapesUserText(t *testing.T) {
 	tr := &countingTransport{}
 	app, conn, q := buildCorpTestApp(t, tr)

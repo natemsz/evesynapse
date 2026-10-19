@@ -75,6 +75,7 @@ type snapUnresolved struct {
 
 // snapshot is one appraisal, exactly as computed.
 type snapshot struct {
+	Basis       snapshotBasis    `json:"basis"`
 	Lines       []snapLine       `json:"lines"`
 	Unresolved  []snapUnresolved `json:"unresolved,omitempty"`
 	Bad         []string         `json:"bad,omitempty"`
@@ -105,9 +106,10 @@ type resolvedLine struct {
 	Facts      pasteLine
 }
 
-// computeAppraisal runs the whole flow over one paste.
-func (app *page) computeAppraisal(ctx context.Context, input string) (*snapshot, error) {
-	snap := &snapshot{}
+// computeAppraisal runs the whole flow over one paste under
+// a pricing basis, which the snapshot records.
+func (app *page) computeAppraisal(ctx context.Context, input string, basis pricingBasis) (*snapshot, error) {
+	snap := &snapshot{Basis: basis.snapshot()}
 	var resolved []resolvedLine
 	if first, ok := firstContentLine(input); ok && fitview.EftHeaderRe.MatchString(first) {
 		lines, unresolved, notes, err := app.resolveEFT(ctx, input)
@@ -154,7 +156,7 @@ func (app *page) computeAppraisal(ctx context.Context, input string) (*snapshot,
 	var res module.Appraisal
 	if len(priceLines) > 0 {
 		var err error
-		res, err = app.deps.AppraiseLines(ctx, priceLines)
+		res, err = app.deps.AppraiseLinesWithBasis(ctx, priceLines, basis.toModule())
 		if err != nil {
 			return nil, err
 		}
@@ -183,7 +185,7 @@ func (app *page) computeAppraisal(ctx context.Context, input string) (*snapshot,
 			}
 		}
 	}
-	buys, err := app.typicalBuys(ctx, agg, res)
+	buys, err := app.typicalBuys(ctx, agg, res, basis)
 	if err != nil {
 		return nil, err
 	}
@@ -201,7 +203,7 @@ func (app *page) computeAppraisal(ctx context.Context, input string) (*snapshot,
 		if sl.Priced {
 			snap.PricedLines++
 			snap.TotalValue += sl.LineValue
-			if b, ok := buys[ln.TypeID]; ok && sl.Tier == module.AppraisalTierTypical {
+			if b, ok := buys[ln.TypeID]; ok && isTypicalTier(sl.Tier) {
 				snap.BuyValue += b * float64(ln.Qty)
 				snap.BuyLines++
 			}
@@ -538,14 +540,25 @@ func lineNote(ln resolvedLine) string {
 	return strings.Join(parts, " · ")
 }
 
-// typicalBuys reads the stored Forge typical buys for the
-// priced set in one batched lookup, for the buy total.
-func (app *page) typicalBuys(ctx context.Context, agg []aggLine, res module.Appraisal) (map[int64]float64, error) {
+// isTypicalTier reports whether a tier is one of the swept
+// typical family, in any mode.
+func isTypicalTier(tier string) bool {
+	switch tier {
+	case module.AppraisalTierTypical, module.AppraisalTierTypicalBuy,
+		module.AppraisalTierTypicalSplit, module.AppraisalTierTypicalSplitSell, module.AppraisalTierTypicalSplitBuy:
+		return true
+	}
+	return false
+}
+
+// typicalBuys reads the stored typical buys at the basis hub
+// for the priced set in one batched lookup, for the buy total.
+func (app *page) typicalBuys(ctx context.Context, agg []aggLine, res module.Appraisal, basis pricingBasis) (map[int64]float64, error) {
 	out := map[int64]float64{}
 	var typeIDs []int64
 	seen := map[int64]bool{}
 	for i, ln := range agg {
-		if i < len(res.Lines) && res.Lines[i].Priced && res.Lines[i].Tier == module.AppraisalTierTypical && !seen[ln.TypeID] {
+		if i < len(res.Lines) && res.Lines[i].Priced && isTypicalTier(res.Lines[i].Tier) && !seen[ln.TypeID] {
 			seen[ln.TypeID] = true
 			typeIDs = append(typeIDs, ln.TypeID)
 		}
@@ -553,8 +566,12 @@ func (app *page) typicalBuys(ctx context.Context, agg []aggLine, res module.Appr
 	if len(typeIDs) == 0 {
 		return out, nil
 	}
+	regionID := basis.RegionID
+	if regionID == 0 {
+		regionID = app.deps.DefaultMarketRegion()
+	}
 	rows, err := app.queries.ListMarketRegionStatsForTypes(ctx, db.ListMarketRegionStatsForTypesParams{
-		RegionID: app.deps.DefaultMarketRegion(), Column2: typeIDs,
+		RegionID: regionID, Column2: typeIDs,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("appraisal: typical buys: %w", err)
@@ -568,24 +585,6 @@ func (app *page) typicalBuys(ctx context.Context, agg []aggLine, res module.Appr
 }
 
 // --- display ---------------------------------------------------------------
-
-// tierLabel words a price tier for readers: the same words
-// the contract pages use.
-func tierLabel(tier string) string {
-	switch tier {
-	case module.AppraisalTierTypical:
-		return "Our Forge typical"
-	case module.AppraisalTierEstimate:
-		return "Estimated sell"
-	case module.AppraisalTierAbyssal:
-		return "Our abyssal estimate"
-	case module.AppraisalTierCopyMedian:
-		return "Our copy median"
-	case module.AppraisalTierFallback:
-		return "Fuzzwork aggregate"
-	}
-	return "Not priced"
-}
 
 // resultLine is one display row of a rendered snapshot.
 type resultLine struct {
@@ -612,9 +611,13 @@ type resultView struct {
 	Priced     int
 	Total      int
 	TierMix    string
-	Created    string // "Oct 17, 2026, 6:52 PM" for a stored snapshot
-	Shared     bool   // rendered from a share link
-	OwnID      int64  // the signed-in owner's appraisal id, when it is theirs
+	BasisText  string // the pricing basis, worded for the page
+	Basis      pricingBasis
+	Hubs       []hubOption // hub choices for the reprice form
+	RepriceURL string      // where the reprice form posts, when offered
+	Created    string      // "Oct 17, 2026, 6:52 PM" for a stored snapshot
+	Shared     bool        // rendered from a share link
+	OwnID      int64       // the signed-in owner's appraisal id, when it is theirs
 	ShareURL   string
 	CanDelete  bool   // the viewer created this appraisal and may delete it
 	DeleteURL  string // where the delete form posts, when CanDelete
@@ -626,6 +629,8 @@ type appraiseView struct {
 	Saved    []savedRow
 	SignedIn bool
 	Input    string
+	Basis    pricingBasis
+	Hubs     []hubOption
 }
 
 // savedRow is one entry of the owner's appraisal list.
@@ -650,27 +655,36 @@ func (app *page) buildResult(snap *snapshot) *resultView {
 	if snap.BuyLines > 0 {
 		v.BuyValue = esi.FormatISK(snap.BuyValue)
 	}
+	basis := snap.Basis.basis()
+	if basis.HubName == "" {
+		if name, ok := app.deps.MarketRegionName(basis.RegionID); ok {
+			basis.HubName = name
+		}
+	}
+	v.Basis = basis
+	v.BasisText = basis.basisText()
+	v.Hubs = app.hubOptions(basis.RegionID)
 	counts := map[string]int{}
 	for _, ln := range snap.Lines {
 		rl := resultLine{
 			TypeID: ln.TypeID, Name: ln.Name, Qty: esi.FormatInt(ln.Qty),
-			TierLabel: tierLabel(ln.Tier), Note: ln.Note, Priced: ln.Priced,
+			TierLabel: tierLabelWithBasis(ln.Tier, basis), Note: ln.Note, Priced: ln.Priced,
 		}
 		if ln.Priced {
 			counts[ln.Tier]++
 			rl.UnitPrice = esi.FormatISK(ln.UnitPrice)
 			rl.LineValue = esi.FormatISK(ln.LineValue)
 			rl.AsOf = ln.AsOf.Format("Jan 2, 3:04 PM")
-			if ln.Tier == module.AppraisalTierTypical && time.Since(ln.AsOf) > typicalFreshAge {
+			if isTypicalTier(ln.Tier) && time.Since(ln.AsOf) > typicalFreshAge {
 				rl.AsOf += " (" + app.deps.AgeText(ln.AsOf) + ")"
 			}
 		}
 		v.Lines = append(v.Lines, rl)
 	}
 	var parts []string
-	for _, tier := range []string{module.AppraisalTierTypical, module.AppraisalTierEstimate, module.AppraisalTierAbyssal, module.AppraisalTierCopyMedian, module.AppraisalTierFallback} {
+	for _, tier := range []string{module.AppraisalTierTypical, module.AppraisalTierTypicalBuy, module.AppraisalTierTypicalSplit, module.AppraisalTierTypicalSplitSell, module.AppraisalTierTypicalSplitBuy, module.AppraisalTierEstimate, module.AppraisalTierAbyssal, module.AppraisalTierCopyMedian, module.AppraisalTierFallback} {
 		if n := counts[tier]; n > 0 {
-			parts = append(parts, fmt.Sprintf("%d × %s", n, tierLabel(tier)))
+			parts = append(parts, fmt.Sprintf("%d × %s", n, tierLabelWithBasis(tier, basis)))
 		}
 	}
 	v.TierMix = strings.Join(parts, ", ")
@@ -800,6 +814,9 @@ func (app *page) handleAppraisePage(w http.ResponseWriter, r *http.Request) {
 	data := &PageData{ShellData: app.deps.PublicShell(ctx)}
 	view := &appraiseView{SignedIn: data.LoggedIn}
 	userID := app.deps.UserID(ctx)
+	basis := app.basisFromValues(app.rememberedBasis(ctx, r, userID), r.URL.Query())
+	view.Basis = basis
+	view.Hubs = app.hubOptions(basis.RegionID)
 	if userID > 0 {
 		view.Saved = app.savedList(ctx, userID)
 		if raw := r.URL.Query().Get("a"); raw != "" {
@@ -808,6 +825,7 @@ func (app *page) handleAppraisePage(w http.ResponseWriter, r *http.Request) {
 					if res, err := app.storedResult(row); err == nil {
 						res.OwnID = row.ID
 						res.ShareURL = "/market/appraise/s/" + row.ShareToken + "/"
+						res.RepriceURL = "/market/appraise/" + strconv.FormatInt(row.ID, 10) + "/reprice"
 						res.CanDelete = true
 						res.DeleteURL = "/market/appraise/" + strconv.FormatInt(row.ID, 10) + "/delete"
 						view.Result = res
@@ -845,7 +863,8 @@ func (app *page) handleAppraiseSubmit(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/market/appraise/", http.StatusSeeOther)
 		return
 	}
-	snap, err := app.computeAppraisal(ctx, input)
+	basis := app.basisFromValues(app.rememberedBasis(ctx, r, userID), r.Form)
+	snap, err := app.computeAppraisal(ctx, input, basis)
 	if err != nil {
 		logging.Errorf("appraisal: compute: %v", err)
 		data := &PageData{ShellData: app.deps.PublicShell(ctx)}
@@ -878,6 +897,7 @@ func (app *page) handleAppraiseSubmit(w http.ResponseWriter, r *http.Request) {
 			app.deps.Render(ctx, w, http.StatusOK, "market_appraise.html", data)
 			return
 		}
+		app.rememberBasis(ctx, w, r, userID, basis)
 		http.Redirect(w, r, "/market/appraise/?a="+strconv.FormatInt(id, 10), http.StatusSeeOther)
 		return
 	}
@@ -899,6 +919,7 @@ func (app *page) handleAppraiseSubmit(w http.ResponseWriter, r *http.Request) {
 		app.deps.Render(ctx, w, http.StatusOK, "market_appraise.html", data)
 		return
 	}
+	app.rememberBasis(ctx, w, r, 0, basis)
 	app.rememberAnonToken(ctx, w, r, token)
 	http.Redirect(w, r, "/market/appraise/s/"+token+"/", http.StatusSeeOther)
 }
@@ -930,6 +951,7 @@ func (app *page) handleAppraiseShare(w http.ResponseWriter, r *http.Request) {
 	}
 	res.Shared = true
 	res.ShareURL = "/market/appraise/s/" + row.ShareToken + "/"
+	res.RepriceURL = "/market/appraise/s/" + row.ShareToken + "/reprice"
 	if row.IsAnonymous {
 		if err := app.queries.TouchUserAppraisalByToken(ctx, token); err != nil {
 			logging.Errorf("appraisal: touch %s: %v", token, err)
@@ -976,9 +998,28 @@ func (app *page) handleAppraiseDeleteAnon(w http.ResponseWriter, r *http.Request
 	http.Redirect(w, r, "/market/appraise/", http.StatusSeeOther)
 }
 
+// storedBasis reads a stored row's recorded basis, default
+// when its snapshot predates basis recording.
+func (app *page) storedBasis(row db.UserAppraisal) pricingBasis {
+	var snap snapshot
+	if err := json.Unmarshal(row.Snapshot, &snap); err == nil {
+		b := snap.Basis.basis()
+		if b.HubName == "" {
+			if name, ok := app.deps.MarketRegionName(b.RegionID); ok {
+				b.HubName = name
+			}
+		}
+		if b.RegionID != 0 {
+			return b
+		}
+	}
+	return app.defaultBasis()
+}
+
 // handleAppraiseReprice re-runs one of the owner's saved
-// pastes at current prices: a new appraisal beside the old
-// one, which is never mutated.
+// pastes at current prices, under the basis the form carries
+// (the stored basis when it carries none): a new appraisal
+// beside the old one, which is never mutated.
 func (app *page) handleAppraiseReprice(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	userID := app.deps.UserID(ctx)
@@ -992,7 +1033,9 @@ func (app *page) handleAppraiseReprice(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/market/appraise/", http.StatusSeeOther)
 		return
 	}
-	snap, err := app.computeAppraisal(ctx, row.InputText)
+	_ = r.ParseForm()
+	basis := app.basisFromValues(app.storedBasis(row), r.Form)
+	snap, err := app.computeAppraisal(ctx, row.InputText, basis)
 	if err != nil {
 		logging.Errorf("appraisal: reprice %d: %v", id, err)
 		http.Redirect(w, r, "/market/appraise/?a="+strconv.FormatInt(id, 10), http.StatusSeeOther)
@@ -1004,5 +1047,54 @@ func (app *page) handleAppraiseReprice(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/market/appraise/?a="+strconv.FormatInt(id, 10), http.StatusSeeOther)
 		return
 	}
+	app.rememberBasis(ctx, w, r, userID, basis)
 	http.Redirect(w, r, "/market/appraise/?a="+strconv.FormatInt(newID, 10), http.StatusSeeOther)
+}
+
+// handleAppraiseRepriceToken re-runs a shared appraisal's
+// paste under the form's basis as a new appraisal owned by
+// whoever asked (their account, or the anonymous owner with
+// the history cookie updated). The original is never mutated.
+func (app *page) handleAppraiseRepriceToken(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	token := chi.URLParam(r, "token")
+	row, err := app.queries.GetUserAppraisalByShareToken(ctx, token)
+	if err != nil {
+		http.Redirect(w, r, "/market/appraise/", http.StatusSeeOther)
+		return
+	}
+	_ = r.ParseForm()
+	basis := app.basisFromValues(app.storedBasis(row), r.Form)
+	snap, err := app.computeAppraisal(ctx, row.InputText, basis)
+	if err != nil {
+		logging.Errorf("appraisal: reprice share: %v", err)
+		http.Redirect(w, r, "/market/appraise/s/"+token+"/", http.StatusSeeOther)
+		return
+	}
+	userID := app.deps.UserID(ctx)
+	if userID > 0 {
+		newID, _, err := app.saveAppraisal(ctx, userID, false, row.InputText, snap)
+		if err != nil {
+			logging.Errorf("appraisal: reprice share save: %v", err)
+			http.Redirect(w, r, "/market/appraise/s/"+token+"/", http.StatusSeeOther)
+			return
+		}
+		app.rememberBasis(ctx, w, r, userID, basis)
+		http.Redirect(w, r, "/market/appraise/?a="+strconv.FormatInt(newID, 10), http.StatusSeeOther)
+		return
+	}
+	ownerID, err := app.anonymousOwnerID(ctx)
+	if err != nil {
+		http.Redirect(w, r, "/market/appraise/s/"+token+"/", http.StatusSeeOther)
+		return
+	}
+	_, newToken, err := app.saveAppraisal(ctx, ownerID, true, row.InputText, snap)
+	if err != nil {
+		logging.Errorf("appraisal: reprice share save: %v", err)
+		http.Redirect(w, r, "/market/appraise/s/"+token+"/", http.StatusSeeOther)
+		return
+	}
+	app.rememberBasis(ctx, w, r, 0, basis)
+	app.rememberAnonToken(ctx, w, r, newToken)
+	http.Redirect(w, r, "/market/appraise/s/"+newToken+"/", http.StatusSeeOther)
 }

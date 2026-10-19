@@ -136,6 +136,24 @@ func (q *Queries) GetUserAppraisalByShareToken(ctx context.Context, shareToken s
 	return i, err
 }
 
+const getUserAppraisalPref = `-- name: GetUserAppraisalPref :one
+SELECT user_id, hub_region, mode, percent, updated_at FROM user_appraisal_prefs
+WHERE user_id = $1
+`
+
+func (q *Queries) GetUserAppraisalPref(ctx context.Context, userID int64) (UserAppraisalPref, error) {
+	row := q.db.QueryRowContext(ctx, getUserAppraisalPref, userID)
+	var i UserAppraisalPref
+	err := row.Scan(
+		&i.UserID,
+		&i.HubRegion,
+		&i.Mode,
+		&i.Percent,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const insertAppraisalAnonymousOwner = `-- name: InsertAppraisalAnonymousOwner :exec
 INSERT INTO appraisal_anonymous_owner (id, user_id)
 VALUES (1, $1)
@@ -332,5 +350,32 @@ WHERE share_token = $1 AND is_anonymous = true
 
 func (q *Queries) TouchUserAppraisalByToken(ctx context.Context, shareToken string) error {
 	_, err := q.db.ExecContext(ctx, touchUserAppraisalByToken, shareToken)
+	return err
+}
+
+const upsertUserAppraisalPref = `-- name: UpsertUserAppraisalPref :exec
+INSERT INTO user_appraisal_prefs (user_id, hub_region, mode, percent, updated_at)
+VALUES ($1, $2, $3, $4, now())
+ON CONFLICT (user_id) DO UPDATE SET
+    hub_region = excluded.hub_region,
+    mode       = excluded.mode,
+    percent    = excluded.percent,
+    updated_at = excluded.updated_at
+`
+
+type UpsertUserAppraisalPrefParams struct {
+	UserID    int64   `json:"user_id"`
+	HubRegion int64   `json:"hub_region"`
+	Mode      string  `json:"mode"`
+	Percent   float64 `json:"percent"`
+}
+
+func (q *Queries) UpsertUserAppraisalPref(ctx context.Context, arg UpsertUserAppraisalPrefParams) error {
+	_, err := q.db.ExecContext(ctx, upsertUserAppraisalPref,
+		arg.UserID,
+		arg.HubRegion,
+		arg.Mode,
+		arg.Percent,
+	)
 	return err
 }

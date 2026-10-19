@@ -50,6 +50,7 @@ var Module = module.Module{
 		r.With(deps.AnonPages()).Get("/market/appraise/s/{token}/", h((*page).handleAppraiseShare))
 		r.With(deps.AnonSim()).Post("/market/appraise/", h((*page).handleAppraiseSubmit))
 		r.With(deps.AnonSim()).Post("/market/appraise/s/{token}/delete", h((*page).handleAppraiseDeleteAnon))
+		r.With(deps.AnonSim()).Post("/market/appraise/s/{token}/reprice", h((*page).handleAppraiseRepriceToken))
 		auth := r.With(deps.RequireAuth())
 		auth.Post("/market/appraise/{id}/reprice", h((*page).handleAppraiseReprice))
 		auth.Post("/market/appraise/{id}/delete", h((*page).handleAppraiseDelete))

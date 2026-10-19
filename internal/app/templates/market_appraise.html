@@ -14,6 +14,11 @@
       <label class="ap-label" for="ap-items">Items to appraise</label>
       <textarea id="ap-items" name="items" rows="10" placeholder="Tritanium x 1,000,000&#10;Pyerite 250000&#10;[Rifter, My Rifter]&#10;...">{{.Input}}</textarea>
     </div>
+    <p class="ap-basis"><small>
+      <label>Hub <select name="hub">{{range .Hubs}}<option value="{{.RegionID}}"{{if .Selected}} selected{{end}}>{{.Name}}</option>{{end}}</select></label>
+      <label>Mode <select name="mode"><option value="sell"{{if eq .Basis.Mode "sell"}} selected{{end}}>Typical sell</option><option value="buy"{{if eq .Basis.Mode "buy"}} selected{{end}}>Typical buy</option><option value="split"{{if eq .Basis.Mode "split"}} selected{{end}}>Split</option></select></label>
+      <label>Percent <input type="number" name="pct" min="50" max="200" step="1" value="{{.Basis.Percent}}"></label>
+    </small></p>
     <p class="ap-actions"><button class="btn" type="submit">Appraise</button></p>
   </form>
   <p class="ap-help"><small>Plain lists, one item per line, with or without quantities; copies from the game's asset and cargo windows; and EFT fits all work. A pasted EFT fit appraises the ship, its fitted modules and charges, and the drones and cargo the fit lists. Blueprint lines can carry their facts in brackets, like <em>Rifter Blueprint (BPC, ME 10, TE 20, 5 runs)</em>. A copy prices from the median asking price of copy listings in our contract corpus — never from the original's market price — and a copy with too few listings on record is left unpriced. Mutated (abyssal) items appraise too: when the line carries the item's link from the game, the line prices that item from its stored rolls estimate. A mutated line without its link, or an item with no estimate on record, prices its base item and says so.</small></p>
@@ -23,12 +28,16 @@
 {{$r := .}}
 <section class="box ap-result">
 {{if $r.Shared}}<p class="ap-meta"><small>Shared appraisal — priced {{$r.Created}}. Prices are the ones stored when it was run; they are not recomputed here.</small></p>
-{{else if $r.Created}}<div class="ap-meta"><small>Priced {{$r.Created}}. Share it read-only:</small> <a href="{{$r.ShareURL}}">{{$r.ShareURL}}</a> <button class="btn small" type="button" data-copy data-copy-text="{{$r.ShareURL}}">Copy link</button>
-<form method="post" action="/market/appraise/{{$r.OwnID}}/reprice"><button class="btn" type="submit">Re-price at current prices</button></form></div>
+{{else if $r.Created}}<div class="ap-meta"><small>Priced {{$r.Created}}. Share it read-only:</small> <a href="{{$r.ShareURL}}">{{$r.ShareURL}}</a> <button class="btn small" type="button" data-copy data-copy-text="{{$r.ShareURL}}">Copy link</button></div>
 {{end}}
+{{if $r.RepriceURL}}<form method="post" action="{{$r.RepriceURL}}"><small>
+  <label>Hub <select name="hub">{{range $r.Hubs}}<option value="{{.RegionID}}"{{if .Selected}} selected{{end}}>{{.Name}}</option>{{end}}</select></label>
+  <label>Mode <select name="mode"><option value="sell"{{if eq $r.Basis.Mode "sell"}} selected{{end}}>Typical sell</option><option value="buy"{{if eq $r.Basis.Mode "buy"}} selected{{end}}>Typical buy</option><option value="split"{{if eq $r.Basis.Mode "split"}} selected{{end}}>Split</option></select></label>
+  <label>Percent <input type="number" name="pct" min="50" max="200" step="1" value="{{$r.Basis.Percent}}"></label>
+  <button class="btn" type="submit">Re-price as a new appraisal</button></small></form>{{end}}
 {{if $r.CanDelete}}<form method="post" action="{{$r.DeleteURL}}"><button class="btn" type="submit">Delete this appraisal</button></form>{{end}}
 
-<p class="ap-coverage">Priced {{$r.Priced}} of {{$r.Total}} lines{{if $r.TierMix}} · {{$r.TierMix}}{{end}}{{if $r.BuyValue}}<br><small>Buying those lines at The Forge's typical buy prices comes to {{$r.BuyValue}} ISK (typical buys on {{$r.BuyLines}} of the priced lines).</small>{{end}}</p>
+<p class="ap-coverage">Priced {{$r.Priced}} of {{$r.Total}} lines{{if $r.TierMix}} · {{$r.TierMix}}{{end}}{{if $r.BasisText}}<br><small>{{$r.BasisText}}</small>{{end}}{{if $r.BuyValue}}<br><small>Buying those lines at {{$r.Basis.HubName}}'s typical buy prices comes to {{$r.BuyValue}} ISK (typical buys on {{$r.BuyLines}} of the priced lines).</small>{{end}}</p>
 
 {{if $r.Lines}}
 <div class="tw">

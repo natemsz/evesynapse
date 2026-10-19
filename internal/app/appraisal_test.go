@@ -304,3 +304,65 @@ func TestAppraisePublicContractsEndToEnd(t *testing.T) {
 		t.Errorf("second pass appraised %d, want 0 (nothing due)", n)
 	}
 }
+
+// The global market rule: a type with no stat at the basis
+// region and a stat at ESI's global market region prices
+// from the global row at the own-swept tier (its own
+// updated_at governing freshness, floor rule included),
+// while a type the hub carries keeps its hub row -- the
+// global book is a type's own market, never a borrowed hub.
+func TestAppraiseLinesWithBasisGlobalMarket(t *testing.T) {
+	app, conn, _ := buildCorpTestApp(t, roundTripperFunc(func(*http.Request) (*http.Response, error) {
+		return &http.Response{StatusCode: 404, Body: http.NoBody, Header: make(http.Header)}, nil
+	}))
+	ctx := context.Background()
+	now := time.Now().UTC()
+	exec := func(query string, args ...any) {
+		t.Helper()
+		if _, err := conn.ExecContext(ctx, query, args...); err != nil {
+			t.Fatalf("seed %q: %v", query, err)
+		}
+	}
+	// 2001: a stat only on the global market.
+	exec(`INSERT INTO market_region_stats (region_id, type_id, typical_sell, typical_buy, updated_at) VALUES (19000001, 2001, 500, 450, $1)`, now.Add(-time.Hour))
+	// 2002: stats at The Forge AND the global market; the
+	// hub's own row speaks.
+	exec(`INSERT INTO market_region_stats (region_id, type_id, typical_sell, typical_buy, updated_at) VALUES (10000002, 2002, 700, 600, $1), (19000001, 2002, 999, 888, $1)`, now.Add(-time.Hour))
+	// 2003: a long-stale global stat and nothing else; the
+	// floor rule still prices it, as a typical, with its age.
+	exec(`INSERT INTO market_region_stats (region_id, type_id, typical_sell, typical_buy, updated_at) VALUES (19000001, 2003, 300, 0, $1)`, now.Add(-10*24*time.Hour))
+	// 2004: no stat anywhere (and no estimate or fallback).
+	res, err := app.AppraiseLinesWithBasis(ctx, []module.AppraisalLine{
+		{TypeID: 2001, Quantity: 2, Included: true},
+		{TypeID: 2002, Quantity: 1, Included: true},
+		{TypeID: 2003, Quantity: 3, Included: true},
+		{TypeID: 2004, Quantity: 1, Included: true},
+	}, module.AppraisalBasis{RegionID: 10000002, Mode: module.AppraisalModeSell, Percent: 100})
+	if err != nil {
+		t.Fatalf("appraise: %v", err)
+	}
+	if len(res.Lines) != 4 {
+		t.Fatalf("lines = %d, want 4", len(res.Lines))
+	}
+	globalOnly := res.Lines[0]
+	if !globalOnly.Priced || globalOnly.Tier != module.AppraisalTierTypical || globalOnly.UnitPrice != 500 {
+		t.Errorf("global-only line: %+v, want priced typical at 500", globalOnly)
+	}
+	if globalOnly.SourceRegionID != 19000001 {
+		t.Errorf("global-only line source region = %d, want the global market 19000001", globalOnly.SourceRegionID)
+	}
+	if d := globalOnly.AsOf.Sub(now.Add(-time.Hour)); d < -2*time.Second || d > 2*time.Second {
+		t.Errorf("global-only line as-of = %v, want the global row's updated_at", globalOnly.AsOf)
+	}
+	hubOwn := res.Lines[1]
+	if !hubOwn.Priced || hubOwn.UnitPrice != 700 || hubOwn.SourceRegionID != 0 {
+		t.Errorf("hub-and-global line: %+v, want priced at the hub's 700 with no foreign source", hubOwn)
+	}
+	staleGlobal := res.Lines[2]
+	if !staleGlobal.Priced || staleGlobal.Tier != module.AppraisalTierTypical || staleGlobal.UnitPrice != 300 || staleGlobal.SourceRegionID != 19000001 {
+		t.Errorf("stale global line: %+v, want priced typical at 300 under the floor rule, sourced globally", staleGlobal)
+	}
+	if res.Lines[3].Priced {
+		t.Errorf("stat-less line priced: %+v, want an honest gap", res.Lines[3])
+	}
+}

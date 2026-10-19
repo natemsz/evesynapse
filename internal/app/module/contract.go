@@ -422,6 +422,14 @@ type AppraisedLine struct {
 	Tier      string
 	AsOf      time.Time
 	Priced    bool
+	// SourceRegionID is the region whose swept book spoke
+	// for a typical-tier price when it differs from the
+	// pricing basis's region: a global-market type (PLEX)
+	// priced at a hub speaks from the global market's book,
+	// and readers word its provenance from this, never from
+	// the hub's name. Zero when the basis region's own book
+	// (or a basis-independent tier) spoke.
+	SourceRegionID int64
 }
 
 // Appraisal is a priced line list: the lines, the offered and
@@ -987,6 +995,10 @@ type Deps interface {
 	// names any region the market knows.
 	MarketRegions() []RegionOption
 	DefaultMarketRegion() int64
+	// GlobalMarketRegion is ESI's global market region, the
+	// one market that is not a place: global-market types
+	// (PLEX) trade there instead of in any hub region.
+	GlobalMarketRegion() int64
 	MarketRegionName(id int64) (string, bool)
 	// QueueHistoryWant asks the worker for a type's price history in a
 	// region at the page-want priority; nothing is fetched here.

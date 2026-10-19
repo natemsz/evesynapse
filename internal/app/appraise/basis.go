@@ -286,6 +286,31 @@ func tierLabelWithBasis(tier string, b pricingBasis) string {
 	return "Not priced"
 }
 
+// tierLabelForLine words one priced line's tier: a typical
+// that spoke from a book other than the basis hub's -- the
+// global market's, the only other book the pricing core ever
+// speaks from -- names that market instead of the hub, so a
+// line's stated source is never a hub the type does not
+// trade in. Every other line words as tierLabelWithBasis.
+func tierLabelForLine(tier string, b pricingBasis, sourceRegionID int64) string {
+	if sourceRegionID == 0 || sourceRegionID == b.RegionID || !isTypicalTier(tier) {
+		return tierLabelWithBasis(tier, b)
+	}
+	switch tier {
+	case module.AppraisalTierTypical:
+		return "Our global PLEX market typical (sell)"
+	case module.AppraisalTierTypicalBuy:
+		return "Our global PLEX market typical (buy)"
+	case module.AppraisalTierTypicalSplit:
+		return "Our global PLEX market typical (split)"
+	case module.AppraisalTierTypicalSplitSell:
+		return "Our global PLEX market typical (split, sell side only)"
+	case module.AppraisalTierTypicalSplitBuy:
+		return "Our global PLEX market typical (split, buy side only)"
+	}
+	return tierLabelWithBasis(tier, b)
+}
+
 // basisText words the whole basis for the share page: hub,
 // mode, and the modifier when one is set.
 func (b pricingBasis) basisText() string {

@@ -72,6 +72,13 @@ type snapLine struct {
 	ItemID int64 `json:"item_id,omitempty"`
 	Copy   bool  `json:"copy,omitempty"`
 	Runs   int64 `json:"runs,omitempty"`
+	// SourceRegion is the region whose swept book spoke for
+	// the line's typical price when it was not the pricing
+	// basis's region -- the global market's book for a
+	// global-market type. It words the line's provenance;
+	// zero means the basis region's own book (or a
+	// basis-independent tier) spoke.
+	SourceRegion int64 `json:"source_region,omitempty"`
 }
 
 // snapUnresolved is one pasted line no name candidate could
@@ -282,6 +289,7 @@ func (app *page) computeAppraisal(ctx context.Context, input string, basis prici
 		if i < len(res.Lines) {
 			al := res.Lines[i]
 			sl.UnitPrice, sl.LineValue, sl.Tier, sl.AsOf, sl.Priced = al.UnitPrice, al.LineValue, al.Tier, al.AsOf, al.Priced
+			sl.SourceRegion = al.SourceRegionID
 		}
 		if sl.Priced && sl.Tier == module.AppraisalTierCopyMedian {
 			if n, ok := copySamples[fmt.Sprintf("%d/%d", ln.TypeID, ln.Facts.Runs)]; ok {
@@ -705,9 +713,36 @@ func (app *page) typicalBuys(ctx context.Context, agg []aggLine, res module.Appr
 	if err != nil {
 		return nil, fmt.Errorf("appraisal: typical buys: %w", err)
 	}
+	hadRow := make(map[int64]bool, len(rows))
 	for _, row := range rows {
+		hadRow[row.TypeID] = true
 		if row.TypicalBuy > 0 {
 			out[row.TypeID] = row.TypicalBuy
+		}
+	}
+	// A type the hub carries no row for may still trade on
+	// the global market (PLEX): its global row's typical buy
+	// completes the buy total the core priced its sell side
+	// from, under the same rule the core applies.
+	if globalID := app.deps.GlobalMarketRegion(); globalID != 0 && globalID != regionID {
+		var missing []int64
+		for _, id := range typeIDs {
+			if !hadRow[id] {
+				missing = append(missing, id)
+			}
+		}
+		if len(missing) > 0 {
+			gRows, err := app.queries.ListMarketRegionStatsForTypes(ctx, db.ListMarketRegionStatsForTypesParams{
+				RegionID: globalID, Column2: missing,
+			})
+			if err != nil {
+				return nil, fmt.Errorf("appraisal: global typical buys: %w", err)
+			}
+			for _, row := range gRows {
+				if row.TypicalBuy > 0 {
+					out[row.TypeID] = row.TypicalBuy
+				}
+			}
 		}
 	}
 	return out, nil
@@ -815,7 +850,22 @@ func (app *page) buildResult(snap *snapshot) *resultView {
 		}
 	}
 	v.Basis = basis
+	// A priced line whose book is not the basis hub's (the
+	// global market's, for a global-market type) changes what
+	// the result may claim: the basis sentence gains the
+	// global-market sentence, and the coverage and tier words
+	// below never credit the hub for the global book's lines.
+	globalPriced := false
+	for _, ln := range snap.Lines {
+		if ln.Priced && ln.SourceRegion != 0 && ln.SourceRegion != basis.RegionID {
+			globalPriced = true
+			break
+		}
+	}
 	v.BasisText = basis.basisText()
+	if globalPriced {
+		v.BasisText += " PLEX lines are priced from the global PLEX market, the one market PLEX trades on."
+	}
 	v.BasisLabel = basis.HubName + " • " + basisModeLong(basis.Mode)
 	v.TotalRaw = strconv.FormatFloat(snap.TotalValue, 'f', 2, 64)
 	v.CompactTotal = formatCompactISK(snap.TotalValue)
@@ -833,7 +883,9 @@ func (app *page) buildResult(snap *snapshot) *resultView {
 				allTypical = false
 			}
 		}
-		if allTypical {
+		if allTypical && globalPriced {
+			v.CoverageSub = "100% typical verified"
+		} else if allTypical {
 			v.CoverageSub = "100% " + basis.HubName + " typical verified"
 		} else {
 			v.CoverageSub = "100% priced"
@@ -860,10 +912,11 @@ func (app *page) buildResult(snap *snapshot) *resultView {
 		}
 	}
 	counts := map[string]int{}
+	globalCounts := map[string]int{}
 	for _, ln := range snap.Lines {
 		rl := resultLine{
 			TypeID: ln.TypeID, Name: ln.Name, Qty: esi.FormatInt(ln.Qty),
-			TierLabel: tierLabelWithBasis(ln.Tier, basis), Note: ln.Note, Priced: ln.Priced,
+			TierLabel: tierLabelForLine(ln.Tier, basis, ln.SourceRegion), Note: ln.Note, Priced: ln.Priced,
 		}
 		if ln.UnitVolume > 0 {
 			rl.UnitVol = formatVolume(ln.UnitVolume)
@@ -871,6 +924,9 @@ func (app *page) buildResult(snap *snapshot) *resultView {
 		}
 		if ln.Priced {
 			counts[ln.Tier]++
+			if ln.SourceRegion != 0 && ln.SourceRegion != basis.RegionID {
+				globalCounts[ln.Tier]++
+			}
 			rl.UnitPrice = esi.FormatISK(ln.UnitPrice)
 			rl.LineValue = esi.FormatISK(ln.LineValue)
 			if maxLine > 0 {
@@ -889,8 +945,11 @@ func (app *page) buildResult(snap *snapshot) *resultView {
 	}
 	var parts []string
 	for _, tier := range []string{module.AppraisalTierTypical, module.AppraisalTierTypicalBuy, module.AppraisalTierTypicalSplit, module.AppraisalTierTypicalSplitSell, module.AppraisalTierTypicalSplitBuy, module.AppraisalTierEstimate, module.AppraisalTierAbyssal, module.AppraisalTierCopyMedian, module.AppraisalTierFallback} {
-		if n := counts[tier]; n > 0 {
+		if n := counts[tier] - globalCounts[tier]; n > 0 {
 			parts = append(parts, fmt.Sprintf("%d × %s", n, tierLabelWithBasis(tier, basis)))
+		}
+		if n := globalCounts[tier]; n > 0 {
+			parts = append(parts, fmt.Sprintf("%d × %s", n, tierLabelForLine(tier, basis, app.deps.GlobalMarketRegion())))
 		}
 	}
 	v.TierMix = strings.Join(parts, ", ")

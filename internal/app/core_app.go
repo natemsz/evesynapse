@@ -1074,6 +1074,8 @@ func (app *Application) MarketRegions() []module.RegionOption {
 
 func (app *Application) DefaultMarketRegion() int64 { return defaultMarketRegion }
 
+func (app *Application) GlobalMarketRegion() int64 { return globalMarketRegion }
+
 func (app *Application) MarketRegionName(id int64) (string, bool) { return marketRegionName(id) }
 
 func (app *Application) QueueHistoryWant(ctx context.Context, regionID, typeID int64) error {

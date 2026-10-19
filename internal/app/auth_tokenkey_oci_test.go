@@ -54,8 +54,13 @@ func buildOCIFakes(t *testing.T) *ociFakes {
 	leaf := &x509.Certificate{
 		SerialNumber: big.NewInt(777),
 		Subject: pkix.Name{
-			CommonName:         "instance:ocid1.instance.oc1.phx.test",
-			OrganizationalUnit: []string{"ocid1.tenancy.oc1..aaaa"},
+			CommonName: "ocid1.instance.oc1.phx.test",
+			OrganizationalUnit: []string{
+				"opc-tenant:ocid1.tenancy.oc1..aaaa",
+				"opc-instance:ocid1.instance.oc1.phx.test",
+				"opc-compartment:ocid1.tenancy.oc1..aaaa",
+				"opc-certtype:instance",
+			},
 		},
 		NotBefore: now.Add(-time.Hour),
 		NotAfter:  now.Add(24 * time.Hour),

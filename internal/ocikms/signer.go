@@ -26,12 +26,27 @@ var postSigningHeaders = []string{
 	"content-length", "content-type", "x-content-sha256",
 }
 
+// federationSigningHeaders is the signed-header list for the
+// federation exchange. It differs from a normal service call: the
+// federation endpoint does not sign the host header (Oracle's own
+// client notes the same quirk), and date leads.
+var federationSigningHeaders = []string{
+	"date", "(request-target)",
+	"content-length", "content-type", "x-content-sha256",
+}
+
 // signRequest stamps req with the Date and x-content-sha256
 // headers and an Authorization signature made with key under
 // keyID. now is the signing instant (a parameter so tests can pin
 // it). body is the exact request body; it must match what req
 // sends.
 func signRequest(req *http.Request, body []byte, keyID string, key *rsa.PrivateKey, now time.Time) error {
+	return signRequestWithHeaders(req, body, keyID, key, now, postSigningHeaders)
+}
+
+// signRequestWithHeaders is signRequest over a caller-chosen
+// signed-header list.
+func signRequestWithHeaders(req *http.Request, body []byte, keyID string, key *rsa.PrivateKey, now time.Time, headers []string) error {
 	date := now.UTC().Format(http.TimeFormat)
 	req.Header.Set("Date", date)
 
@@ -48,7 +63,7 @@ func signRequest(req *http.Request, body []byte, keyID string, key *rsa.PrivateK
 		"x-content-sha256": contentSHA,
 	}
 	var signing strings.Builder
-	for i, name := range postSigningHeaders {
+	for i, name := range headers {
 		if i > 0 {
 			signing.WriteByte('\n')
 		}
@@ -64,6 +79,6 @@ func signRequest(req *http.Request, body []byte, keyID string, key *rsa.PrivateK
 	}
 	req.Header.Set("Authorization", fmt.Sprintf(
 		`Signature version="1",keyId=%q,algorithm="rsa-sha256",headers=%q,signature=%q`,
-		keyID, strings.Join(postSigningHeaders, " "), base64.StdEncoding.EncodeToString(sig)))
+		keyID, strings.Join(headers, " "), base64.StdEncoding.EncodeToString(sig)))
 	return nil
 }

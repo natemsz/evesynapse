@@ -14,6 +14,7 @@ package ocikms
 import (
 	"bytes"
 	"context"
+	"crypto/rsa"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -51,10 +52,11 @@ type Client struct {
 	httpClient *http.Client
 	federation *federationClient
 
-	mu       sync.Mutex
-	identity *instanceIdentity
-	token    string
-	tokenExp time.Time
+	mu         sync.Mutex
+	identity   *instanceIdentity
+	token      string
+	tokenExp   time.Time
+	sessionKey *rsa.PrivateKey // the ephemeral key the live token is bound to
 }
 
 // NewClient settles the configuration's defaults and checks the
@@ -110,14 +112,15 @@ func regionFromCryptoEndpoint(host string) string {
 // dies mid-flight.
 const tokenRefreshMargin = 2 * time.Minute
 
-// securityToken returns a live security token, fetching the
-// instance identity and exchanging it when there is no cached
-// token still comfortably valid.
-func (c *Client) securityToken(ctx context.Context) (string, *instanceIdentity, error) {
+// securityToken returns a live security token and the session
+// key it is bound to, fetching the instance identity and
+// exchanging it when there is no cached token still comfortably
+// valid.
+func (c *Client) securityToken(ctx context.Context) (string, *rsa.PrivateKey, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.token != "" && time.Until(c.tokenExp) > tokenRefreshMargin {
-		return c.token, c.identity, nil
+		return c.token, c.sessionKey, nil
 	}
 	if c.identity == nil {
 		id, err := c.federation.fetchIdentity(ctx)
@@ -126,7 +129,7 @@ func (c *Client) securityToken(ctx context.Context) (string, *instanceIdentity, 
 		}
 		c.identity = id
 	}
-	token, err := c.federation.exchange(ctx, c.identity)
+	token, sessionKey, err := c.federation.exchange(ctx, c.identity)
 	if err != nil {
 		// The identity material may have rotated under us; drop
 		// it so the next attempt re-reads it.
@@ -134,8 +137,9 @@ func (c *Client) securityToken(ctx context.Context) (string, *instanceIdentity, 
 		return "", nil, err
 	}
 	c.token = token
+	c.sessionKey = sessionKey
 	c.tokenExp = tokenExpiry(token, time.Now())
-	return token, c.identity, nil
+	return token, sessionKey, nil
 }
 
 // The KMS wire shapes: plaintext and ciphertext both travel as
@@ -192,7 +196,7 @@ func (c *Client) Decrypt(ctx context.Context, ciphertext string) (string, error)
 
 // call makes one signed KMS request and decodes its JSON answer.
 func (c *Client) call(ctx context.Context, path string, payload, answer any) error {
-	token, id, err := c.securityToken(ctx)
+	token, sessionKey, err := c.securityToken(ctx)
 	if err != nil {
 		return err
 	}
@@ -205,7 +209,7 @@ func (c *Client) call(ctx context.Context, path string, payload, answer any) err
 		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	if err := signRequest(req, body, "ST$"+token, id.privateKey, time.Now()); err != nil {
+	if err := signRequest(req, body, "ST$"+token, sessionKey, time.Now()); err != nil {
 		return err
 	}
 	resp, err := c.httpClient.Do(req)

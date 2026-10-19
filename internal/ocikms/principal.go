@@ -9,11 +9,15 @@ package ocikms
 //     metadata service (169.254.169.254/opc/v2/identity/), which
 //     only processes on the instance itself can read.
 //  2. The leaf certificate is presented to the region's federation
-//     endpoint (POST /v1/x509/<tenancy OCID>); the tenancy is read
-//     out of the certificate itself. The endpoint answers with a
-//     short-lived security token (a JWT, good for about an hour).
-//  3. API calls are signed with the instance key under the keyId
-//     "ST$<token>" (see signer.go).
+//     endpoint (POST /v1/x509), signed with the instance key under
+//     a keyId of "<tenancy>/fed-x509-sha256/<leaf fingerprint>";
+//     the tenancy is read out of the certificate itself. The
+//     request carries a fresh ephemeral session public key, and
+//     the endpoint answers with a short-lived security token (a
+//     JWT, good for about an hour) bound to that session key.
+//  3. API calls are signed with the session key under the keyId
+//     "ST$<token>" (see signer.go). The instance key itself never
+//     signs a service call.
 //
 // No credential is ever stored: the certificate and key exist only
 // in this process's memory, and the token is cached only until it
@@ -22,7 +26,9 @@ package ocikms
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"crypto/rsa"
+	"crypto/sha256"
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
@@ -176,60 +182,94 @@ func tenancyOCIDFromCert(cert *x509.Certificate) string {
 }
 
 // The federation endpoint's wire shapes: the certificate material
-// travels as base64 of its PEM text; the answer is the token.
+// travels as the base64 of its DER bytes — a PEM with its header,
+// footer and line breaks removed — and the answer is the token.
 type federationRequest struct {
 	Certificate              string   `json:"certificate"`
 	IntermediateCertificates []string `json:"intermediateCertificates"`
 	PublicKey                string   `json:"publicKey"`
+	FingerprintAlgorithm     string   `json:"fingerprintAlgorithm"`
 }
 
 type federationResponse struct {
 	Token string `json:"token"`
 }
 
-// exchange presents id to the federation endpoint and returns the
-// security token it issues.
-func (f *federationClient) exchange(ctx context.Context, id *instanceIdentity) (string, error) {
-	pubDER, err := x509.MarshalPKIXPublicKey(&id.privateKey.PublicKey)
-	if err != nil {
-		return "", fmt.Errorf("marshal the instance public key: %w", err)
+// pemToBase64DER reduces a PEM document to the base64 of the DER
+// bytes of its first block: the encoding the federation endpoint
+// expects for certificates and public keys alike.
+func pemToBase64DER(pemBytes []byte) (string, error) {
+	block, _ := pem.Decode(pemBytes)
+	if block == nil {
+		return "", errors.New("not a PEM document")
 	}
-	pubPEM := pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: pubDER})
-	b64 := base64.StdEncoding.EncodeToString
+	return base64.StdEncoding.EncodeToString(block.Bytes), nil
+}
+
+// certFingerprint is the leaf certificate's SHA-256 fingerprint
+// in OCI's colon-separated hex form; it names the signing key in
+// the federation request's keyId.
+func certFingerprint(cert *x509.Certificate) string {
+	sum := sha256.Sum256(cert.Raw)
+	return strings.ReplaceAll(fmt.Sprintf("% x", sum), " ", ":")
+}
+
+// exchange presents id to the federation endpoint and returns the
+// security token it issues together with the ephemeral session
+// key the token is bound to. The request is signed with the
+// instance key; the token it buys is spent with the session key.
+func (f *federationClient) exchange(ctx context.Context, id *instanceIdentity) (string, *rsa.PrivateKey, error) {
+	sessionKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		return "", nil, fmt.Errorf("generate the session key: %w", err)
+	}
+	sessionPubDER, err := x509.MarshalPKIXPublicKey(&sessionKey.PublicKey)
+	if err != nil {
+		return "", nil, fmt.Errorf("marshal the session public key: %w", err)
+	}
 	payload := federationRequest{
-		Certificate: b64(id.leafPEM),
-		PublicKey:   b64(pubPEM),
+		Certificate:          base64.StdEncoding.EncodeToString(id.leafCert.Raw),
+		PublicKey:            base64.StdEncoding.EncodeToString(sessionPubDER),
+		FingerprintAlgorithm: "SHA256",
 	}
 	for _, inter := range id.intermediates {
-		payload.IntermediateCertificates = append(payload.IntermediateCertificates, b64(inter))
+		b64, err := pemToBase64DER(inter)
+		if err != nil {
+			return "", nil, fmt.Errorf("encode an intermediate certificate: %w", err)
+		}
+		payload.IntermediateCertificates = append(payload.IntermediateCertificates, b64)
 	}
 	body, err := json.Marshal(payload)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
-	url := strings.TrimRight(f.federationBase, "/") + "/v1/x509/" + id.tenancyOCID
+	url := strings.TrimRight(f.federationBase, "/") + "/v1/x509"
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
+	keyID := id.tenancyOCID + "/fed-x509-sha256/" + certFingerprint(id.leafCert)
+	if err := signRequestWithHeaders(req, body, keyID, id.privateKey, time.Now(), federationSigningHeaders); err != nil {
+		return "", nil, err
+	}
 	resp, err := f.httpClient.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("call the federation endpoint: %w", err)
+		return "", nil, fmt.Errorf("call the federation endpoint: %w", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 4096))
-		return "", fmt.Errorf("the federation endpoint answered HTTP %d", resp.StatusCode)
+		detail, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		return "", nil, fmt.Errorf("the federation endpoint answered HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(detail)))
 	}
 	var answer federationResponse
 	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&answer); err != nil {
-		return "", fmt.Errorf("read the federation answer: %w", err)
+		return "", nil, fmt.Errorf("read the federation answer: %w", err)
 	}
 	if answer.Token == "" {
-		return "", errors.New("the federation endpoint returned no token")
+		return "", nil, errors.New("the federation endpoint returned no token")
 	}
-	return answer.Token, nil
+	return answer.Token, sessionKey, nil
 }
 
 // tokenExpiry reads the exp claim out of a security token (a JWT

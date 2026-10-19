@@ -16,6 +16,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Placeholder section for upcoming changes.
 
+## [v0.5.2.13] - 2026-10-18
+
+### Added
+- Automated build of EveSynapse v0.5.2.13. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+### Changed
+- PR #450 — Contract search: results as the five-column table with inline appraisal/telemetry drawers.
+
+### Fixed
+- No changes recorded for this release window.
+
 ## [v0.5.2.7] - 2026-10-18
 
 ### Added

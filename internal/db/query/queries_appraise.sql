@@ -63,6 +63,19 @@ INSERT INTO appraisal_cookie_secrets (id, secret)
 VALUES (1, $1)
 ON CONFLICT (id) DO NOTHING;
 
+-- name: GetUserAppraisalPref :one
+SELECT user_id, hub_region, mode, percent, updated_at FROM user_appraisal_prefs
+WHERE user_id = $1;
+
+-- name: UpsertUserAppraisalPref :exec
+INSERT INTO user_appraisal_prefs (user_id, hub_region, mode, percent, updated_at)
+VALUES ($1, $2, $3, $4, now())
+ON CONFLICT (user_id) DO UPDATE SET
+    hub_region = excluded.hub_region,
+    mode       = excluded.mode,
+    percent    = excluded.percent,
+    updated_at = excluded.updated_at;
+
 -- Pasted names arrive in whatever case the player typed; the
 -- SDE's canonical case comes back with the row.
 -- name: ListSDETypesByLowerNames :many

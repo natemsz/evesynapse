@@ -98,6 +98,17 @@ type AllianceRecord struct {
 	NotedAt    sql.NullTime `json:"noted_at"`
 }
 
+type AppraisalAnonymousOwner struct {
+	ID     int64 `json:"id"`
+	UserID int64 `json:"user_id"`
+}
+
+type AppraisalCookieSecret struct {
+	ID        int64     `json:"id"`
+	Secret    string    `json:"secret"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
 type BlueprintCopyMedian struct {
 	TypeID      int64     `json:"type_id"`
 	Runs        int64     `json:"runs"`
@@ -1095,15 +1106,12 @@ type UserAppraisal struct {
 	LastViewedAt time.Time       `json:"last_viewed_at"`
 }
 
-type AppraisalAnonymousOwner struct {
-	ID     int64 `json:"id"`
-	UserID int64 `json:"user_id"`
-}
-
-type AppraisalCookieSecret struct {
-	ID        int64     `json:"id"`
-	Secret    string    `json:"secret"`
-	CreatedAt time.Time `json:"created_at"`
+type UserAppraisalPref struct {
+	UserID    int64     `json:"user_id"`
+	HubRegion int64     `json:"hub_region"`
+	Mode      string    `json:"mode"`
+	Percent   float64   `json:"percent"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 type WalletHistory struct {

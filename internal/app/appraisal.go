@@ -103,8 +103,47 @@ type copyMedianKey struct {
 // three stored rows (any may be nil). Pure, so the order and
 // the floor rule are testable without a database.
 func resolveAppraisalPrice(own *db.MarketRegionStat, tv *db.TrueValue, fb *db.MarketStatsFallback, now time.Time) appraisalPrice {
-	if own != nil && own.TypicalSell > 0 && now.Sub(own.UpdatedAt) < fallbackOwnFresh {
-		return appraisalPrice{unit: own.TypicalSell, tier: module.AppraisalTierTypical, asOf: own.UpdatedAt, ok: true}
+	return resolveAppraisalPriceMode(own, tv, fb, now, module.AppraisalModeSell)
+}
+
+// typicalForMode reads one swept region row in a pricing
+// mode: its sell side, its buy side, or split between them.
+// A split with only one side uses that side and says so in
+// its tier. ok is false when the row has no usable side.
+func typicalForMode(own *db.MarketRegionStat, mode string) (appraisalPrice, bool) {
+	if own == nil {
+		return appraisalPrice{}, false
+	}
+	switch mode {
+	case module.AppraisalModeBuy:
+		if own.TypicalBuy > 0 {
+			return appraisalPrice{unit: own.TypicalBuy, tier: module.AppraisalTierTypicalBuy, asOf: own.UpdatedAt, ok: true}, true
+		}
+	case module.AppraisalModeSplit:
+		switch {
+		case own.TypicalSell > 0 && own.TypicalBuy > 0:
+			return appraisalPrice{unit: (own.TypicalSell + own.TypicalBuy) / 2, tier: module.AppraisalTierTypicalSplit, asOf: own.UpdatedAt, ok: true}, true
+		case own.TypicalSell > 0:
+			return appraisalPrice{unit: own.TypicalSell, tier: module.AppraisalTierTypicalSplitSell, asOf: own.UpdatedAt, ok: true}, true
+		case own.TypicalBuy > 0:
+			return appraisalPrice{unit: own.TypicalBuy, tier: module.AppraisalTierTypicalSplitBuy, asOf: own.UpdatedAt, ok: true}, true
+		}
+	default: // sell
+		if own.TypicalSell > 0 {
+			return appraisalPrice{unit: own.TypicalSell, tier: module.AppraisalTierTypical, asOf: own.UpdatedAt, ok: true}, true
+		}
+	}
+	return appraisalPrice{}, false
+}
+
+// resolveAppraisalPriceMode is resolveAppraisalPrice in a
+// pricing mode: the hub row speaks in that mode while fresh,
+// then the basis-independent estimate and fallback tiers,
+// then the hub row again however old (the floor rule, in the
+// same mode -- a buy price never floors to a sell figure).
+func resolveAppraisalPriceMode(own *db.MarketRegionStat, tv *db.TrueValue, fb *db.MarketStatsFallback, now time.Time, mode string) appraisalPrice {
+	if p, ok := typicalForMode(own, mode); ok && now.Sub(own.UpdatedAt) < fallbackOwnFresh {
+		return p
 	}
 	if tv != nil && tv.EstSell.Valid && tv.EstSell.Float64 > 0 {
 		return appraisalPrice{unit: tv.EstSell.Float64, tier: module.AppraisalTierEstimate, asOf: tv.ComputedAt, ok: true}
@@ -112,11 +151,11 @@ func resolveAppraisalPrice(own *db.MarketRegionStat, tv *db.TrueValue, fb *db.Ma
 	if fb != nil && fb.MedianSell > 0 && now.Sub(fb.SourceAsof) < fallbackHardExpiry {
 		return appraisalPrice{unit: fb.MedianSell, tier: module.AppraisalTierFallback, asOf: fb.SourceAsof, ok: true}
 	}
-	if own != nil && own.TypicalSell > 0 {
+	if p, ok := typicalForMode(own, mode); ok {
 		// The floor rule: our own row, however old, still
 		// speaks when the fallback cannot -- and its as-of
 		// travels with it, so no reader mistakes it for fresh.
-		return appraisalPrice{unit: own.TypicalSell, tier: module.AppraisalTierTypical, asOf: own.UpdatedAt, ok: true}
+		return p
 	}
 	return appraisalPrice{tier: module.AppraisalTierUnpriced}
 }
@@ -128,6 +167,30 @@ func resolveAppraisalPrice(own *db.MarketRegionStat, tv *db.TrueValue, fb *db.Ma
 // appraisal tool) consumes; the worker's contract pass calls
 // it too.
 func (app *Application) AppraiseLines(ctx context.Context, lines []module.AppraisalLine) (module.Appraisal, error) {
+	return app.AppraiseLinesWithBasis(ctx, lines, module.AppraisalBasis{})
+}
+
+// AppraiseLinesWithBasis is AppraiseLines under a
+// user-selected basis: the hub region's stored typicals speak
+// in the chosen mode, and the percent modifier is applied on
+// top of every priced line. A hub with no stored typical for
+// a type never borrows another hub's: the line falls through
+// the remaining tiers for that hub or stays unpriced.
+func (app *Application) AppraiseLinesWithBasis(ctx context.Context, lines []module.AppraisalLine, basis module.AppraisalBasis) (module.Appraisal, error) {
+	regionID := basis.RegionID
+	if regionID == 0 {
+		regionID = defaultMarketRegion
+	}
+	mode := basis.Mode
+	switch mode {
+	case module.AppraisalModeBuy, module.AppraisalModeSplit:
+	default:
+		mode = module.AppraisalModeSell
+	}
+	pct := basis.Percent
+	if pct == 0 {
+		pct = 100
+	}
 	out := module.Appraisal{Lines: make([]module.AppraisedLine, 0, len(lines))}
 	if len(lines) == 0 {
 		return out, nil
@@ -141,7 +204,7 @@ func (app *Application) AppraiseLines(ctx context.Context, lines []module.Apprai
 		}
 	}
 	ownRows, err := app.queries.ListMarketRegionStatsForTypes(ctx, db.ListMarketRegionStatsForTypesParams{
-		RegionID: defaultMarketRegion, Column2: typeIDs,
+		RegionID: regionID, Column2: typeIDs,
 	})
 	if err != nil {
 		return out, fmt.Errorf("appraisal: forge typicals: %w", err)
@@ -151,7 +214,7 @@ func (app *Application) AppraiseLines(ctx context.Context, lines []module.Apprai
 		return out, fmt.Errorf("appraisal: true values: %w", err)
 	}
 	fbRows, err := app.queries.ListMarketStatsFallbackForTypes(ctx, db.ListMarketStatsFallbackForTypesParams{
-		RegionID: defaultMarketRegion, Column2: typeIDs,
+		RegionID: regionID, Column2: typeIDs,
 	})
 	if err != nil {
 		return out, fmt.Errorf("appraisal: fallback: %w", err)
@@ -239,9 +302,13 @@ func (app *Application) AppraiseLines(ctx context.Context, lines []module.Apprai
 			al.Tier = module.AppraisalTierAbyssal
 			al.AsOf = ab.ScoredAt.Time
 			al.Priced = true
-		} else if p := resolveAppraisalPrice(own[ln.TypeID], tvs[ln.TypeID], fbs[ln.TypeID], now); p.ok {
+		} else if p := resolveAppraisalPriceMode(own[ln.TypeID], tvs[ln.TypeID], fbs[ln.TypeID], now, mode); p.ok {
 			al.UnitPrice, al.LineValue = p.unit, p.unit*float64(ln.Quantity)
 			al.Tier, al.AsOf, al.Priced = p.tier, p.asOf, true
+		}
+		if al.Priced && pct != 100 {
+			al.UnitPrice *= pct / 100
+			al.LineValue = al.UnitPrice * float64(ln.Quantity)
 		}
 		if ln.Included {
 			out.OfferedLines++
@@ -273,7 +340,7 @@ func appraisalTierMix(lines []module.AppraisedLine) string {
 		}
 	}
 	var parts []string
-	for _, tier := range []string{module.AppraisalTierTypical, module.AppraisalTierEstimate, module.AppraisalTierAbyssal, module.AppraisalTierCopyMedian, module.AppraisalTierFallback} {
+	for _, tier := range []string{module.AppraisalTierTypical, module.AppraisalTierTypicalBuy, module.AppraisalTierTypicalSplit, module.AppraisalTierTypicalSplitSell, module.AppraisalTierTypicalSplitBuy, module.AppraisalTierEstimate, module.AppraisalTierAbyssal, module.AppraisalTierCopyMedian, module.AppraisalTierFallback} {
 		if n := counts[tier]; n > 0 {
 			parts = append(parts, fmt.Sprintf("%s:%d", tier, n))
 		}

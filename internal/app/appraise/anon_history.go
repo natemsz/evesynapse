@@ -67,22 +67,36 @@ func (app *page) anonHistorySecret(ctx context.Context) ([]byte, error) {
 	return []byte(stored), nil
 }
 
-func signAnonTokens(secret []byte, tokens []string) string {
-	payload := strings.Join(tokens, ".")
+// signValue signs one payload: payload + "." + HMAC hex.
+func signValue(secret []byte, payload string) string {
 	mac := hmac.New(sha256.New, secret)
 	mac.Write([]byte(payload))
 	return payload + "." + hex.EncodeToString(mac.Sum(nil))
 }
 
-func verifyAnonTokens(secret []byte, value string) []string {
+// verifySignedValue returns a signed value's payload when
+// its signature checks out.
+func verifySignedValue(secret []byte, value string) (string, bool) {
 	i := strings.LastIndex(value, ".")
 	if i < 0 {
-		return nil
+		return "", false
 	}
 	payload, sig := value[:i], value[i+1:]
 	mac := hmac.New(sha256.New, secret)
 	mac.Write([]byte(payload))
 	if !hmac.Equal([]byte(hex.EncodeToString(mac.Sum(nil))), []byte(sig)) {
+		return "", false
+	}
+	return payload, true
+}
+
+func signAnonTokens(secret []byte, tokens []string) string {
+	return signValue(secret, strings.Join(tokens, "."))
+}
+
+func verifyAnonTokens(secret []byte, value string) []string {
+	payload, ok := verifySignedValue(secret, value)
+	if !ok {
 		return nil
 	}
 	var out []string

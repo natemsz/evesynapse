@@ -22,6 +22,7 @@
       <label>Hub <select name="hub">{{range .Hubs}}<option value="{{.RegionID}}"{{if .Selected}} selected{{end}}>{{.Name}}</option>{{end}}</select></label>
       <label>Mode <select name="mode"><option value="sell"{{if eq .Basis.Mode "sell"}} selected{{end}}>Typical sell</option><option value="buy"{{if eq .Basis.Mode "buy"}} selected{{end}}>Typical buy</option><option value="split"{{if eq .Basis.Mode "split"}} selected{{end}}>Split</option></select></label>
       <label>Percent <input type="number" name="pct" min="50" max="200" step="1" value="{{.Basis.Percent}}"></label>
+      <label>Quantity ×<input type="number" name="multiplier" min="1" max="1000" step="1" value="1"></label>
     </small></p>
     <p class="ap-actions"><button class="btn" type="submit">Appraise</button></p>
   </form>

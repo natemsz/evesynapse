@@ -79,6 +79,7 @@ type snapUnresolved struct {
 type snapshot struct {
 	Basis       snapshotBasis    `json:"basis"`
 	ExcludeText string           `json:"exclude_text,omitempty"`
+	Multiplier  int64            `json:"multiplier,omitempty"`
 	Lines       []snapLine       `json:"lines"`
 	Unresolved  []snapUnresolved `json:"unresolved,omitempty"`
 	Bad         []string         `json:"bad,omitempty"`
@@ -110,12 +111,29 @@ type resolvedLine struct {
 	Facts      pasteLine
 }
 
+// parseMultiplier reads the quantity multiplier, clamped to
+// a sane range: at least 1, at most 1000.
+func parseMultiplier(raw string) int64 {
+	n, err := strconv.ParseInt(strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(raw), "×")), 10, 64)
+	if err != nil || n < 1 {
+		return 1
+	}
+	if n > 1000 {
+		return 1000
+	}
+	return n
+}
+
 // computeAppraisal runs the whole flow over one paste under
 // a pricing basis, which the snapshot records. A non-empty
 // exclude paste subtracts its items and quantities from the
-// result (list A minus list B).
-func (app *page) computeAppraisal(ctx context.Context, input string, basis pricingBasis, exclude string) (*snapshot, error) {
-	snap := &snapshot{Basis: basis.snapshot(), ExcludeText: exclude}
+// result (list A minus list B), and a multiplier above one
+// appraises that many copies of what remains.
+func (app *page) computeAppraisal(ctx context.Context, input string, basis pricingBasis, exclude string, multiplier int64) (*snapshot, error) {
+	if multiplier < 1 {
+		multiplier = 1
+	}
+	snap := &snapshot{Basis: basis.snapshot(), ExcludeText: exclude, Multiplier: multiplier}
 	var resolved []resolvedLine
 	if moon, ok := moonScanLines(input); ok {
 		parsed := parsePaste(moon)
@@ -153,6 +171,12 @@ func (app *page) computeAppraisal(ctx context.Context, input string, basis prici
 	}
 
 	agg := aggregateLines(resolved)
+	if multiplier > 1 {
+		for i := range agg {
+			agg[i].Qty *= multiplier
+		}
+		snap.Notes = append(snap.Notes, fmt.Sprintf("Quantities multiplied ×%s.", esi.FormatInt(multiplier)))
+	}
 	if strings.TrimSpace(exclude) != "" {
 		var notes []string
 		var err error
@@ -970,7 +994,7 @@ func (app *page) handleAppraiseSubmit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	basis := app.basisFromValues(app.rememberedBasis(ctx, r, userID), r.Form)
-	snap, err := app.computeAppraisal(ctx, input, basis, r.FormValue("exclude"))
+	snap, err := app.computeAppraisal(ctx, input, basis, r.FormValue("exclude"), parseMultiplier(r.FormValue("multiplier")))
 	if err != nil {
 		logging.Errorf("appraisal: compute: %v", err)
 		data := &PageData{ShellData: app.deps.PublicShell(ctx)}
@@ -1132,6 +1156,16 @@ func (app *page) storedExclude(row db.UserAppraisal) string {
 	return ""
 }
 
+// storedMultiplier reads a stored row's recorded quantity
+// multiplier, 1 when it had none.
+func (app *page) storedMultiplier(row db.UserAppraisal) int64 {
+	var snap snapshot
+	if err := json.Unmarshal(row.Snapshot, &snap); err == nil && snap.Multiplier > 1 {
+		return snap.Multiplier
+	}
+	return 1
+}
+
 // handleAppraiseReprice re-runs one of the owner's saved
 // pastes at current prices, under the basis the form carries
 // (the stored basis when it carries none): a new appraisal
@@ -1151,7 +1185,7 @@ func (app *page) handleAppraiseReprice(w http.ResponseWriter, r *http.Request) {
 	}
 	_ = r.ParseForm()
 	basis := app.basisFromValues(app.storedBasis(row), r.Form)
-	snap, err := app.computeAppraisal(ctx, row.InputText, basis, app.storedExclude(row))
+	snap, err := app.computeAppraisal(ctx, row.InputText, basis, app.storedExclude(row), app.storedMultiplier(row))
 	if err != nil {
 		logging.Errorf("appraisal: reprice %d: %v", id, err)
 		http.Redirect(w, r, "/market/appraise/?a="+strconv.FormatInt(id, 10), http.StatusSeeOther)
@@ -1181,7 +1215,7 @@ func (app *page) handleAppraiseRepriceToken(w http.ResponseWriter, r *http.Reque
 	}
 	_ = r.ParseForm()
 	basis := app.basisFromValues(app.storedBasis(row), r.Form)
-	snap, err := app.computeAppraisal(ctx, row.InputText, basis, app.storedExclude(row))
+	snap, err := app.computeAppraisal(ctx, row.InputText, basis, app.storedExclude(row), app.storedMultiplier(row))
 	if err != nil {
 		logging.Errorf("appraisal: reprice share: %v", err)
 		http.Redirect(w, r, "/market/appraise/s/"+token+"/", http.StatusSeeOther)

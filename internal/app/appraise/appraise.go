@@ -972,6 +972,7 @@ type hubTotal struct {
 	Total    string
 	Delta    string // signed % against The Forge's total, "" for The Forge itself
 	Current  bool   // the appraisal's own hub
+	BtnClass string // the pill's full class list: "ap-hub", or "ap-hub on" when Current
 }
 
 // attachHubStrip prices the snapshot's lines at every hub's
@@ -1027,7 +1028,10 @@ func (app *page) attachHubStrip(ctx context.Context, snap *snapshot, v *resultVi
 	for i, opt := range options {
 		ht := hubTotal{
 			Hub: opt.Name, RegionID: opt.RegionID, Total: esi.FormatISK(raws[i]),
-			Current: opt.RegionID == basis.RegionID,
+			Current: opt.RegionID == basis.RegionID, BtnClass: "ap-hub",
+		}
+		if ht.Current {
+			ht.BtnClass = "ap-hub on"
 		}
 		if opt.RegionID != app.deps.DefaultMarketRegion() && base > 0 && raws[i] > 0 {
 			ht.Delta = fmt.Sprintf("%+.1f%%", 100*(raws[i]-base)/base)

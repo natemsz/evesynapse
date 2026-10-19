@@ -119,7 +119,7 @@
 {{if $r.HubStrip}}
 <div class="box ap-hubpanel">
   <span class="ap-hubstrip-label">At each hub's typical sell:</span>
-  <div class="ap-hubs">{{range $r.HubStrip}}<form class="ap-hubform" method="post" action="{{$r.RepriceURL}}"><input type="hidden" name="hub" value="{{.RegionID}}"><button class="ap-hub{{if .Current}} on{{end}}" type="submit">{{.Hub}} {{.Total}} ISK{{if .Delta}} <span class="ap-hub-delta">({{.Delta}})</span>{{end}}</button></form>{{end}}</div>
+  <div class="ap-hubs">{{range $r.HubStrip}}<form class="ap-hubform" method="post" action="{{$r.RepriceURL}}"><input type="hidden" name="hub" value="{{.RegionID}}"><button class="{{.BtnClass}}" type="submit">{{.Hub}} {{.Total}} ISK{{if .Delta}} <span class="ap-hub-delta">({{.Delta}})</span>{{end}}</button></form>{{end}}</div>
 </div>
 {{end}}
 
@@ -184,7 +184,7 @@
     <tbody>
     {{range $r.Lines}}
       <tr>
-        <td><a href="/market/?type={{.TypeID}}">{{.Name}}</a>{{if .Note}}<br><small>{{.Note}}</small>{{end}}{{if .SharePct}}<div class="ap-bar" style="width:{{.SharePct}}%"></div>{{end}}</td>
+        <td><a href="/market/?type={{.TypeID}}">{{.Name}}</a>{{if .Note}}<br><small>{{.Note}}</small>{{end}}{{if .SharePct}}<div class="ap-bar" data-w="{{.SharePct}}"></div>{{end}}</td>
         <td class="ap-r">{{.Qty}}</td>
         {{if .Priced}}<td class="ap-r"><span class="ap-num">{{.UnitPrice}}</span></td><td class="ap-r"><span class="ap-num strong">{{.LineValue}}</span></td>{{else}}<td class="ap-r">—</td><td class="ap-r">—</td>{{end}}
         <td class="ap-r">{{if .LineVol}}{{.LineVol}} m³{{if .UnitVol}}<br><small>{{.UnitVol}} m³ each</small>{{end}}{{else}}—{{end}}</td>

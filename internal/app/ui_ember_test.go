@@ -448,6 +448,21 @@ func TestSubtabBarSharesPanelGlass(t *testing.T) {
 	if strings.Contains(slab, "blur(25px)") {
 		t.Error("the subtab slab hardcodes its own blur again; the join to the panel will seam")
 	}
+	// The slab's top edge is the page body's top edge on a grouped
+	// page: the slab must keep its top border (suppressing it leaves
+	// the whole glass unit open at the top — the panel's own top
+	// border is given up at the seam), and the tab strip must paint
+	// above the slab (the strip carries z-index 1) so the border
+	// line passes behind the tabs and the active tab still merges.
+	if strings.Contains(slab, "border-top: none") {
+		t.Error("the subtab slab suppresses its top border again; a grouped page's glass unit has no top border line")
+	}
+	if !strings.Contains(slab, "border: 1px solid var(--glass-edge);") {
+		t.Error("the subtab slab lost the shared glass-edge border that closes the unit's outline")
+	}
+	if strings.Contains(slab, "z-index") {
+		t.Error("the subtab slab asserts its own stacking again; it would paint over the tab strip's merge row")
+	}
 	rail, _ := block("#main-content > .section-subtabs {", next)
 	if rail == "" {
 		t.Fatal("bg.css lost the railed section-subtabs rule")

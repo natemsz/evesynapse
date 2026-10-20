@@ -201,8 +201,22 @@
     }
   }
 
+  // In the phone band (phone.css) every strip is a sideways-
+  // scrolling row instead: all tabs stay in the row, the More
+  // wrapper stays hidden, and nothing is measured.
+  var phoneBandQuery = window.matchMedia ? window.matchMedia("(max-width: 45rem)") : null;
+
   function layoutTabStrip(st) {
-    var strip = st.strip, cs = window.getComputedStyle(strip);
+    var strip = st.strip, i;
+    if (phoneBandQuery && phoneBandQuery.matches) {
+      for (i = 0; i < st.tabs.length; i++) strip.insertBefore(st.tabs[i], st.wrap);
+      st.wrap.hidden = true;
+      strip.classList.remove("has-more");
+      st.wrap.classList.remove("has-active");
+      if (st.open) setTabMoreOpen(st, false);
+      return;
+    }
+    var cs = window.getComputedStyle(strip);
     var gap = parseFloat(cs.columnGap) || parseFloat(cs.gap) || 0;
     var avail = strip.clientWidth -
       (parseFloat(cs.paddingLeft) || 0) - (parseFloat(cs.paddingRight) || 0);
@@ -213,7 +227,7 @@
       if (child === st.wrap || child.tagName === "A" || child.hidden) continue;
       avail -= child.offsetWidth + gap;
     }
-    var i, labels = [];
+    var labels = [];
     // Folded tabs have no layout box, so their width is the last
     // one measured in the row; visible tabs re-measure each pass.
     for (i = 0; i < st.tabs.length; i++) {
@@ -309,6 +323,17 @@
   onContentReady(initTabOverflow);
   initTabOverflow(document);
   window.addEventListener("resize", queueTabLayouts);
+  // Crossing into or out of the phone band re-lays every strip
+  // (folded tabs return to the row) and brings the current tab
+  // back into view on the scrolling rows.
+  if (phoneBandQuery && phoneBandQuery.addEventListener) {
+    phoneBandQuery.addEventListener("change", function () {
+      queueTabLayouts();
+      if (window.requestAnimationFrame) {
+        window.requestAnimationFrame(function () { revealSectionTab(document); });
+      }
+    });
+  }
   // Tab widths ride on the display font; once it lands, measure
   // again so a fold decided against fallback-font widths settles.
   if (document.fonts && document.fonts.ready) {
@@ -492,6 +517,135 @@
     syncPhoneBar();
   }
   initPhoneBar();
+
+  // --- Phone sheets ---------------------------------------------
+  // A block marked data-sheet renders inline everywhere except the
+  // phone band, where it becomes a bottom sheet: hidden in the page
+  // flow, raised over a backdrop by any button carrying
+  // data-sheet-open="<its id>" (rendered hidden; shown here only in
+  // the band). The block keeps its place in the DOM, so a sheet
+  // holding form fields still submits with its form. JS injects
+  // the sheet's head (data-sheet-title and a close button) once;
+  // anything inside marked .sheet-only shows only in sheet mode.
+  // The sheet rises in the browser's top layer (an auto popover,
+  // as the modal uses a manual one), so no stacking context or
+  // blurred ancestor can trap it, and a tap outside or Escape
+  // dismisses it natively; engines without popovers get a fixed
+  // sheet over a backdrop element instead. The close button and
+  // any [data-sheet-close] close it; a swap closes whatever is
+  // open. Without JS the block renders inline, as off the band.
+  var sheetQuery = window.matchMedia ? window.matchMedia("(max-width: 45rem)") : null;
+  var sheetBackdrop = null, openSheet = null, sheetOpener = null;
+  var sheetPopovers = typeof HTMLElement !== "undefined" &&
+    Object.prototype.hasOwnProperty.call(HTMLElement.prototype, "popover");
+
+  function sheetTriggers(sheet) {
+    return sheet.id ? document.querySelectorAll('[data-sheet-open="' + sheet.id + '"]') : [];
+  }
+
+  function closePhoneSheet(refocus) {
+    if (!openSheet) return;
+    var sheet = openSheet;
+    openSheet = null;
+    sheet.classList.remove("open");
+    if (sheetPopovers && sheet.matches(":popover-open")) sheet.hidePopover();
+    if (sheetBackdrop) sheetBackdrop.hidden = true;
+    document.documentElement.classList.remove("sheet-lock");
+    var t = sheetTriggers(sheet);
+    for (var i = 0; i < t.length; i++) t[i].setAttribute("aria-expanded", "false");
+    if (refocus && sheetOpener && sheetOpener.focus) sheetOpener.focus({ preventScroll: true });
+    sheetOpener = null;
+  }
+
+  function openPhoneSheet(sheet, opener) {
+    if (!sheet.classList.contains("as-sheet")) return;
+    closePhoneSheet(false);
+    if (!sheetPopovers && !sheetBackdrop) {
+      sheetBackdrop = document.createElement("div");
+      sheetBackdrop.className = "sheet-backdrop";
+      sheetBackdrop.hidden = true;
+      sheetBackdrop.addEventListener("click", function () { closePhoneSheet(true); });
+      document.body.appendChild(sheetBackdrop);
+    }
+    openSheet = sheet;
+    sheetOpener = opener || null;
+    sheet.classList.add("open");
+    if (sheetPopovers) sheet.showPopover();
+    else sheetBackdrop.hidden = false;
+    document.documentElement.classList.add("sheet-lock");
+    var t = sheetTriggers(sheet);
+    for (var i = 0; i < t.length; i++) t[i].setAttribute("aria-expanded", "true");
+    var close = sheet.querySelector(".sheet-close");
+    if (close) close.focus({ preventScroll: true });
+  }
+
+  function layoutPhoneSheets(root) {
+    var on = !!(sheetQuery && sheetQuery.matches);
+    var sheets = (root || document).querySelectorAll("[data-sheet]"), i, j;
+    for (i = 0; i < sheets.length; i++) {
+      var sheet = sheets[i];
+      if (!sheet.querySelector(":scope > .sheet-head")) {
+        var head = document.createElement("div");
+        head.className = "sheet-head";
+        var h = document.createElement("h2");
+        h.textContent = sheet.getAttribute("data-sheet-title") || "";
+        var x = document.createElement("button");
+        x.type = "button";
+        x.className = "sheet-close";
+        x.setAttribute("aria-label", "Close " + (h.textContent || "sheet").toLowerCase());
+        x.setAttribute("data-sheet-close", "");
+        x.textContent = "×";
+        head.appendChild(h);
+        head.appendChild(x);
+        sheet.insertBefore(head, sheet.firstChild);
+      }
+      sheet.classList.toggle("as-sheet", on);
+      if (sheetPopovers) {
+        if (on) sheet.setAttribute("popover", "auto");
+        else sheet.removeAttribute("popover");
+        if (!sheet._sheetToggle) {
+          // A light dismiss (tap outside, Escape) closes the
+          // popover on its own; bring the rest of the state along.
+          sheet._sheetToggle = true;
+          sheet.addEventListener("toggle", function (ev) {
+            if (ev.newState === "closed" && openSheet === ev.target) closePhoneSheet(false);
+          });
+        }
+      }
+      if (on) {
+        sheet.setAttribute("role", "dialog");
+        sheet.setAttribute("aria-modal", "true");
+        if (sheet.getAttribute("data-sheet-title")) sheet.setAttribute("aria-label", sheet.getAttribute("data-sheet-title"));
+      } else {
+        sheet.removeAttribute("role");
+        sheet.removeAttribute("aria-modal");
+        if (openSheet === sheet) closePhoneSheet(false);
+      }
+      var t = sheetTriggers(sheet);
+      for (j = 0; j < t.length; j++) {
+        t[j].hidden = !on;
+        t[j].setAttribute("aria-controls", sheet.id);
+        t[j].setAttribute("aria-expanded", openSheet === sheet ? "true" : "false");
+      }
+    }
+  }
+
+  document.addEventListener("click", function (ev) {
+    var el = ev.target && ev.target.closest ? ev.target.closest("[data-sheet-open], [data-sheet-close]") : null;
+    if (!el) return;
+    if (el.hasAttribute("data-sheet-close")) { closePhoneSheet(true); return; }
+    var sheet = document.getElementById(el.getAttribute("data-sheet-open"));
+    if (sheet) openPhoneSheet(sheet, el);
+  });
+  document.addEventListener("keydown", function (ev) {
+    if (ev.key === "Escape" && openSheet) closePhoneSheet(true);
+  });
+  document.addEventListener("evesynapse:content-will-swap", function () { closePhoneSheet(false); });
+  onContentReady(layoutPhoneSheets);
+  layoutPhoneSheets(document);
+  if (sheetQuery && sheetQuery.addEventListener) {
+    sheetQuery.addEventListener("change", function () { layoutPhoneSheets(document); });
+  }
 
   // --- Collapsible sections -----------------------------------
   // Folding lives at the smallest sensible unit on each page:
@@ -880,6 +1034,82 @@
     return '<svg class="cardicon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">' +
       '<g fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">' +
       CARD_ICONS[name] + "</g></svg>";
+  }
+
+  // --- Home grid: two-across fill -------------------------------
+  // Between the phone band and the desktop's three columns the
+  // home grid runs two across, and module widths drawn for three
+  // columns leave holes: a one-column module ahead of a wide one
+  // (which must start a new row), or last on the page, stands
+  // alone beside an empty cell. Rather than reorder anything (the
+  // grid never backfills, so Customize stays honest), the module
+  // left alone on its row widens to fill it (.gfill). Desktop's
+  // three columns are what Customize draws and are left as drawn;
+  // the phone's one column has nothing to fill.
+  //
+  // Pure: given each module's column span in page order and the
+  // column count, the indexes of the modules that close a row
+  // short — each widens to finish its row.
+  function homeFillPlan(spans, cols) {
+    var fill = [], used = 0, last = -1;
+    for (var i = 0; i < spans.length; i++) {
+      var s = Math.min(spans[i], cols);
+      if (used > 0 && used + s > cols) {
+        fill.push(last);
+        used = 0;
+      }
+      used += s;
+      last = i;
+      if (used >= cols) used = 0;
+    }
+    if (used > 0 && last >= 0) fill.push(last);
+    return fill;
+  }
+
+  if (typeof module !== "undefined" && module.exports) {
+    module.exports.homeFillPlan = homeFillPlan;
+  }
+
+  var homeTwoUp = window.matchMedia ? window.matchMedia("(min-width: 45.0625rem) and (max-width: 70rem)") : null;
+
+  function layoutHomeFill(grid) {
+    var cards = [], spans = [], i;
+    for (i = 0; i < grid.children.length; i++) {
+      var c = grid.children[i];
+      if (!c.classList.contains("card") || c.classList.contains("dragging")) continue;
+      cards.push(c);
+      spans.push(c.classList.contains("gw2") || c.classList.contains("gw3") ? 2 : 1);
+    }
+    var on = {};
+    if (homeTwoUp && homeTwoUp.matches) {
+      var plan = homeFillPlan(spans, 2);
+      for (i = 0; i < plan.length; i++) on[plan[i]] = true;
+    }
+    for (i = 0; i < cards.length; i++) {
+      // Write only on change, so the observer below settles.
+      if (cards[i].classList.contains("gfill") !== !!on[i]) cards[i].classList.toggle("gfill", !!on[i]);
+    }
+  }
+
+  function initHomeFill(root) {
+    var grids = (root || document).querySelectorAll(".grid.home-grid");
+    for (var i = 0; i < grids.length; i++) {
+      var grid = grids[i];
+      layoutHomeFill(grid);
+      if (grid._fillObserver || !window.MutationObserver) continue;
+      // Customize moves, resizes, adds and removes modules in
+      // place; follow it. Observers on swapped-out grids die with
+      // their nodes.
+      grid._fillObserver = new MutationObserver(function (g) {
+        return function () { layoutHomeFill(g); };
+      }(grid));
+      grid._fillObserver.observe(grid, { childList: true, subtree: false, attributes: true, attributeFilter: ["class"] });
+    }
+  }
+  onContentReady(initHomeFill);
+  initHomeFill(document);
+  if (homeTwoUp && homeTwoUp.addEventListener) {
+    homeTwoUp.addEventListener("change", function () { initHomeFill(document); });
   }
 
   // --- Home customize: drag, resize, remove, add module --------
@@ -3297,6 +3527,163 @@
     }
     Array.prototype.forEach.call(th.parentNode.cells, function (c) { c.removeAttribute("aria-sort"); });
     th.setAttribute("aria-sort", dir === 1 ? "ascending" : "descending");
+  });
+
+  // --- Table cards (phone band) ---------------------------------
+  // In the phone band (phone.css) a data table that would scroll
+  // sideways reads as a list of cards instead: each row a card,
+  // its first cell the card's title, every other cell a figure
+  // under its column's label. The labels come from the table's
+  // own header row (copied onto the cells as data-label), so no
+  // template carries a second copy of them. The switch is
+  // measured, like the tab strips: a table whose columns fit the
+  // screen stays a table. data-cards="on" on a table forces
+  // cards, data-cards="off" keeps the sideways scroll (an order
+  // book, a calendar: grids whose point is comparing columns).
+  // Sortable tables keep their sort: the hidden header row is
+  // driven from a compact Sort picker above the cards, which
+  // clicks the header the desktop reader would (the one sort
+  // implementation, above). A header cell marked .opt (the
+  // site's low-priority column mark, as in the home modules)
+  // keeps its column off the cards. Without JS, or off the band,
+  // tables render exactly as before.
+  var cardsBandQuery = window.matchMedia ? window.matchMedia("(max-width: 45rem)") : null;
+
+  // Pure: the label for each column index of a header row, with
+  // colspans expanded so a cell's index finds its header.
+  function cardLabels(headTexts, spans) {
+    var out = [], i, j;
+    for (i = 0; i < headTexts.length; i++) {
+      for (j = 0; j < (spans[i] || 1); j++) out.push(headTexts[i]);
+    }
+    return out;
+  }
+
+  if (typeof module !== "undefined" && module.exports) {
+    module.exports.cardLabels = cardLabels;
+  }
+
+  // A cell holding nothing but controls (a remove button, move
+  // arrows, a one-button form) is a card action, not a figure:
+  // it takes no label and sits on the card's action row.
+  function isControlCell(cell) {
+    var kids = cell.childNodes, any = false;
+    for (var k = 0; k < kids.length; k++) {
+      var n = kids[k];
+      if (n.nodeType === 3) { if (n.textContent.trim()) return false; continue; }
+      if (n.nodeType !== 1) continue;
+      if (!n.matches("form, button, input, select, a.btn, .btn")) return false;
+      any = true;
+    }
+    return any;
+  }
+
+  function labelCardCells(table) {
+    var head = table.tHead && table.tHead.rows.length ? table.tHead.rows[table.tHead.rows.length - 1] : null;
+    if (!head) return false;
+    var texts = [], spans = [], opts = [], i, r, c;
+    for (i = 0; i < head.cells.length; i++) {
+      texts.push(head.cells[i].textContent.trim());
+      spans.push(head.cells[i].colSpan);
+      opts.push(head.cells[i].classList.contains("opt") ? "1" : "");
+    }
+    var labels = cardLabels(texts, spans), optional = cardLabels(opts, spans);
+    for (r = 0; r < table.tBodies.length; r++) {
+      var rows = table.tBodies[r].rows;
+      for (i = 0; i < rows.length; i++) {
+        var idx = 0;
+        for (c = 0; c < rows[i].cells.length; c++) {
+          var cell = rows[i].cells[c];
+          var ctl = cell.colSpan === 1 && isControlCell(cell);
+          cell.classList.toggle("card-ctl", ctl);
+          if (labels[idx] && cell.colSpan === 1 && !ctl) cell.setAttribute("data-label", labels[idx]);
+          // A column the header marks .opt (the site's "first to
+          // go when narrow" mark) stays off the card.
+          if (optional[idx] && cell.colSpan === 1) cell.classList.add("opt");
+          idx += cell.colSpan;
+        }
+      }
+    }
+    return true;
+  }
+
+  function cardSortPicker(table) {
+    var prev = table.previousElementSibling;
+    if (prev && prev.classList.contains("cards-sort")) return prev;
+    // A short list needs no sort; the picker earns its row at four.
+    if (table.hasAttribute("data-nosort") || !table.tBodies[0] || table.tBodies[0].rows.length < 4) return null;
+    var head = table.tHead.rows[table.tHead.rows.length - 1];
+    var label = document.createElement("label");
+    label.className = "cards-sort";
+    var cap = document.createElement("small");
+    cap.textContent = "Sort";
+    var sel = document.createElement("select");
+    var none = document.createElement("option");
+    none.value = ""; none.textContent = "As listed";
+    sel.appendChild(none);
+    for (var i = 0; i < head.cells.length; i++) {
+      var t = head.cells[i].textContent.trim();
+      if (!t) continue;
+      ["ascending", "descending"].forEach(function (dir) {
+        var o = document.createElement("option");
+        o.value = i + ":" + dir;
+        o.textContent = t + (dir === "ascending" ? " ↑" : " ↓");
+        sel.appendChild(o);
+      });
+    }
+    sel.addEventListener("change", function () {
+      if (!sel.value) return;
+      var parts = sel.value.split(":"), th = head.cells[+parts[0]];
+      for (var n = 0; n < 2 && th.getAttribute("aria-sort") !== parts[1]; n++) th.click();
+    });
+    label.appendChild(cap);
+    label.appendChild(sel);
+    // The picker sits outside the table's scroll wrapper.
+    var anchor = table.parentNode && table.parentNode.classList.contains("tw") ? table.parentNode : table;
+    anchor.parentNode.insertBefore(label, anchor);
+    return label;
+  }
+
+  function layoutTableCards(root) {
+    var tables = (root || document).querySelectorAll("#main-content table, table");
+    var on = cardsBandQuery && cardsBandQuery.matches, i;
+    var measure = [];
+    for (i = 0; i < tables.length; i++) {
+      var t = tables[i], mode = t.getAttribute("data-cards");
+      if (!t.closest("#main-content") || !t.tHead || mode === "off") continue;
+      var picker = t.parentNode && t.parentNode.classList.contains("tw") ? t.parentNode.previousElementSibling : t.previousElementSibling;
+      if (!on) {
+        t.classList.remove("cards-on");
+        if (picker && picker.classList.contains("cards-sort")) picker.hidden = true;
+        continue;
+      }
+      if (mode === "on") { measure.push([t, true]); continue; }
+      t.classList.remove("cards-on");
+      measure.push([t, null]);
+    }
+    // Read every width first, then write: one layout pass.
+    for (i = 0; i < measure.length; i++) {
+      if (measure[i][1] === null) {
+        var box = measure[i][0].parentNode;
+        measure[i][1] = measure[i][0].scrollWidth > box.clientWidth + 1;
+      }
+    }
+    for (i = 0; i < measure.length; i++) {
+      var table = measure[i][0];
+      if (!measure[i][1] || !labelCardCells(table)) continue;
+      table.classList.add("cards-on");
+      var p = cardSortPicker(table);
+      if (p) p.hidden = false;
+    }
+  }
+  window.EveSynapseContent.onReady(layoutTableCards);
+  layoutTableCards(document);
+  if (cardsBandQuery && cardsBandQuery.addEventListener) {
+    cardsBandQuery.addEventListener("change", function () { layoutTableCards(document); });
+  }
+  // A phone turning on its side may now fit a table it could not.
+  window.addEventListener("orientationchange", function () {
+    if (window.requestAnimationFrame) window.requestAnimationFrame(function () { layoutTableCards(document); });
   });
 
   // --- Filters that apply as they change -----------------------

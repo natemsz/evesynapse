@@ -290,7 +290,7 @@ proportional bar under the text, colored by the decision. */
 .plan-fill { background: var(--plan-build); height: 100%; }
 .plan-buy .plan-fill, .plan-fill.plan-buy { background: var(--plan-buy); }
 .plan-node small, .plan-cols small { color: var(--muted); }
-#plan-inspector { position: sticky; top: calc(3.75rem + 1px + 0.6rem); }
+#plan-inspector { position: sticky; top: calc(var(--sticky-top) + 1px + 0.6rem); }
 #plan-inspector h4, #plan-hubsplit h4 { margin: 0 0 0.4rem; }
 .plan-buytable th.num, .plan-buytable td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .plan-buytable tfoot td { font-weight: 700; border-top: 2px solid #262626; }
@@ -397,3 +397,48 @@ html[data-theme="light"] #pi-wrap .pi-colony { background: #fdfbf6; border-color
 /* The planner search sits in the shared panel: its row needs no
    margin of its own inside it. */
 .searchpanel .plan-searchrow { margin: 0; }
+
+/* --- phones (mobile pass 4) ------------------------------------------
+   Build planner: the product search keeps field and button on one
+   row, the view tabs scroll as one row instead of wrapping to two,
+   and the inspector, which sits under the tree in the one-column
+   layout, stops being sticky.
+   PI planner: the controls stack through the shared labelled-form
+   rule (phone.css); the planet
+   checks become two columns of finger-sized rows; the production
+   map swipes through its tiers two columns at a time, snapping to
+   a column edge. The materials table reads as cards through the
+   shared table contract (Per hour and Volume are its .opt
+   columns). */
+@media (max-width: 45rem) {
+  .plan-searchrow { flex-wrap: nowrap; align-items: center; }
+  .plan-searchwrap { flex: 1 1 auto; min-width: 0; }
+  .plan-tabs {
+    flex-wrap: nowrap; overflow-x: auto;
+    overscroll-behavior-x: contain; scrollbar-width: none;
+  }
+  .plan-tabs::-webkit-scrollbar { display: none; }
+  .plan-tabs > * { flex: none; }
+  #plan-inspector { position: static; }
+
+  #pi-wrap .pi-controls { padding: 0.8rem 0.75rem 0.9rem; }
+  #pi-form .pi-controls > p { margin: 0 0 0.7rem; }
+  .pi-planets {
+    display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0 0.5rem; padding: 0.5rem 0.6rem 0.6rem;
+  }
+  .pi-planets > small { grid-column: 1 / -1; margin-top: 0.3rem; }
+  .pi-planet {
+    display: flex; align-items: center; gap: 0.45rem;
+    min-height: 2.5rem; margin: 0; white-space: normal;
+  }
+  .pi-graph {
+    gap: 0.5rem;
+    scroll-snap-type: x mandatory;
+    overscroll-behavior-x: contain;
+    margin: 0 -0.7rem; padding: 0 0.7rem 0.5rem;
+    scroll-padding-left: 0.7rem;
+  }
+  .pi-col { flex: 0 0 calc(50% - 0.6rem); min-width: 0; scroll-snap-align: start; }
+  .pi-node { min-height: 2.5rem; }
+}

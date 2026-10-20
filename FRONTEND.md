@@ -280,6 +280,54 @@ reduced-motion readers, and dies on swap-away — swaps *onto*
 an auto-refresh page fall back to a full load, so the chain
 only ever starts on first paint. Sync is the worked example.
 
+### Tables on phones
+
+A data table with a header row needs nothing to work on a
+phone. In the phone band, app.js measures each one: a table
+whose columns fit stays a table, and a table that would scroll
+sideways reads as cards. Each row becomes a card, its first cell
+the title and every other cell a figure under its column's label.
+The labels are copied from the header row (`data-label`), so no
+template carries them twice, and a sortable table keeps a Sort
+picker that drives the header-click sort. Three levers on the
+markup:
+
+- `class="opt"` on a header cell keeps that column off the
+  cards (the same low-priority mark the home modules use).
+- `data-cards="on"` forces cards; `data-cards="off"` keeps a
+  table and lets its text columns wrap. Use "off" for grids whose
+  point is comparing columns: order books, price history, the
+  calendar.
+- Key/value tables (`th` + `td` rows, no header row) wrap their
+  values on phones on their own.
+
+### Phone sheets
+
+A block of secondary controls (filters, options) that should
+step aside on a phone carries `data-sheet` (with an `id` and a
+`data-sheet-title`), and its trigger is a button with
+`data-sheet-open="<id>"` rendered `hidden`. Off the phone band
+the block renders inline and the trigger stays hidden. In the
+band, app.js turns the block into a bottom sheet in the top
+layer (an auto popover). It stays in place in the DOM, so a
+sheet of form fields still submits with its form. JS adds the
+sheet's head and close button. Anything inside marked
+`.sheet-only` shows only in sheet mode, and a `.sheet-foot`
+rides the sheet's bottom edge: put the submit there. Contract
+search's filters are the worked example.
+
+### Phone and touch styles
+
+`phone.css` is the touch and phone layer. base.html links it
+last behind a media attribute, so mouse desktops never block on
+it. It is split into bands (touch, phone, short landscape),
+each with its own query. Shared phone treatment goes there, in
+the band it belongs to. A page with substantial phone styles
+keeps them in its own sheet inside the same 45rem query.
+Sticky in-page bars offset from `--sticky-top`, never a literal
+header height. On short landscape screens the top bar scrolls
+away, and the token follows it.
+
 ### Geometry through data attributes
 
 CSP forbids inline `style`, so per-element numbers ride

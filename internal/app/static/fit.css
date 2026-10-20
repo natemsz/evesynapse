@@ -59,7 +59,7 @@
     background: var(--row-alt);
     border: 1px solid var(--box-edge);
     border-radius: var(--r-md);
-    position: sticky; top: 3.9rem; z-index: 9;
+    position: sticky; top: calc(var(--sticky-top) + 0.15rem); z-index: 9;
     margin-bottom: 0.7rem;
   }
   .fit-mtabs > button {

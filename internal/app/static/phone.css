@@ -1,0 +1,463 @@
+/* EveSynapse — the touch and phone layer (mobile pass 4).
+
+   base.html links this sheet last, behind a media attribute
+   ((max-width: 45rem), (hover: none), (pointer: coarse)), so a
+   desktop with a mouse never blocks first paint on it: the
+   browser still fetches it, at idle priority, and applies none of
+   it. Everything here layers over style.css with the same tokens
+   (--glass, --glass-edge, --accent, --r-*): no new colors, no new
+   surfaces, only how the existing ones sit on a touch screen.
+
+   Four bands, each its own block below, each gated by its own
+   query (the link's media only decides whether the file loads):
+
+     touch       (hover: none), (pointer: coarse)
+                 phones, tablets, foldables at any size: tap
+                 targets, field sizing, press feedback, safe
+                 areas, the blur budget
+     phone       (max-width: 45rem) — the canon phone band
+                 (style.css's head): flatter surfaces, swipeable
+                 tab rows, stacked forms, sheets
+     short       (max-height: 30rem) and (orientation: landscape)
+                 and (pointer: coarse) — phones on their side:
+                 the chrome scrolls away so height goes to content
+     phone+short (max-width: 45rem) and the short query — the
+                 bottom bar slims to a single-line row
+
+   A new feature that needs phone treatment adds its rules to the
+   block of the band it belongs to, using these tokens; a page
+   with substantial phone styles keeps them in its own sheet
+   inside the same 45rem query (fit.css, contracts.css). */
+
+/* --- touch ---------------------------------------------------------- */
+@media (hover: none), (pointer: coarse) {
+  :root {
+    /* One control height for touch: buttons and fields share
+       --control-h (style.css), so rows of them still line up. */
+    --control-h: 2.5rem;
+    /* The blur budget: on touch hardware a backdrop-filter on
+       every scrolled card re-samples the sky each frame. Content
+       surfaces drop their blur and take a deeper paint instead
+       (the nebula still reads through at the edges); the fixed
+       chrome — top bar, bottom bar, sheets, menus — keeps its
+       glass, which is where the blur is seen. The light theme
+       sets its own solid --glass and keeps it. */
+    --glass: color-mix(in srgb, var(--panel) 88%, transparent);
+    -webkit-tap-highlight-color: transparent;
+  }
+  .page-body, .card, .panel, .foldable, .kpi, .tw, .searchpanel,
+  .brief-card, footer,
+  #main-content > .section-tabs a,
+  #main-content > .section-tabs a.active,
+  #main-content > .section-subtabs,
+  .btn.btn-quiet {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  /* Text fields at 16px: iOS zooms the page into any focused
+     field set smaller, and never zooms back out. */
+  input[type="text"], input[type="search"], input[type="number"],
+  input[type="email"], input[type="url"], input[type="password"],
+  input[type="tel"], select, textarea {
+    font-size: max(16px, 1em);
+  }
+
+  /* No double-tap-zoom wait on controls; a tap is a tap. */
+  a, button, summary, label, select, input, .btn { touch-action: manipulation; }
+
+  /* Press feedback: hover never fires on touch, so controls
+     answer the finger directly — a brief dip in scale and a lift
+     in brightness, the same on every control family. */
+  .btn, .chip, .seg > *, .phone-bar-item, .phone-sheet-action,
+  .phone-sheet-section, .phone-sheet-groups a, .foldbtn,
+  #main-content > .section-tabs a, #main-content > .section-subtabs a {
+    transition: transform 90ms ease, filter 90ms ease, background-color 150ms ease, border-color 150ms ease;
+  }
+  .btn:active, .chip:active, .seg > *:active, .phone-bar-item:active,
+  .phone-sheet-action:active, .phone-sheet-section:active,
+  .phone-sheet-groups a:active, .foldbtn:active,
+  #main-content > .section-tabs a:active, #main-content > .section-subtabs a:active {
+    transform: scale(0.96);
+    filter: brightness(1.18);
+  }
+  /* A tapped table row keeps the hover wash until the next tap
+     elsewhere ("sticky hover"); on touch the wash stays off. */
+  tbody tr:hover td, tbody tr:hover th { background: transparent; }
+
+  /* The fold toggle meets the touch floor. */
+  .foldbtn { width: 2.25rem; height: 2.25rem; }
+
+  /* Safe areas (viewport-fit=cover): the installed app draws
+     under the status bar and around the notch; the top bar pads
+     itself clear, and sideways content clears a landscape notch.
+     The bottom bar already pads for the home indicator. */
+  header { padding-top: env(safe-area-inset-top, 0px); }
+  header nav {
+    padding-left: max(1rem, env(safe-area-inset-left, 0px));
+    padding-right: max(1rem, env(safe-area-inset-right, 0px));
+  }
+  .page-shell {
+    padding-left: env(safe-area-inset-left, 0px);
+    padding-right: env(safe-area-inset-right, 0px);
+  }
+}
+@media ((hover: none), (pointer: coarse)) and (min-width: 861px) {
+  body { padding-top: calc(3.75rem + 1px + env(safe-area-inset-top, 0px)); }
+}
+@media ((hover: none), (pointer: coarse)) and (prefers-reduced-motion: reduce) {
+  .btn:active, .chip:active, .seg > *:active, .phone-bar-item:active,
+  .phone-sheet-action:active, .phone-sheet-section:active,
+  .phone-sheet-groups a:active, .foldbtn:active,
+  #main-content > .section-tabs a:active, #main-content > .section-subtabs a:active {
+    transform: none;
+  }
+}
+
+/* --- phone ---------------------------------------------------------- */
+@media (max-width: 45rem) {
+  /* Reading size: the condensed body face at 12.5px (style.css's
+     small-screen block) reads small held at arm's length. */
+  body { font-size: 14px; }
+
+  /* Flatter surfaces: one glass sheet per page, close to the
+     screen edge, instead of a frame inside a margin inside a
+     frame. The sections inside keep their whisper fills and
+     hairlines, on tighter insets. */
+  #main-content > h1 { margin: 0.2rem 0.85rem 0; font-size: 1.45rem; }
+  .page-body {
+    margin: 0.6rem 0.4rem 0.75rem;
+    padding: 0.85rem 0.7rem 1rem;
+  }
+  .page-body:has(.home-grid) { margin: 0 0.4rem; padding-left: 0; padding-right: 0; }
+  .foldable { padding: 0.75rem 0.7rem 0.8rem; margin-bottom: 0.85rem; }
+  .panel { padding: 0.85rem 0.7rem 1rem; }
+  .page-body > .panel { margin-bottom: 0.85rem; }
+  th, td { padding: 0.45rem 0.5rem; }
+
+  /* Section tabs: one swipeable row. The folder strip and the
+     sub-row both scroll sideways instead of wrapping or folding
+     into More (app.js stands its measuring down in this band and
+     scrolls the current tab into view); the right edge fades so a
+     row that continues says so. */
+  #main-content > .section-tabs,
+  #main-content > .section-subtabs {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x proximity;
+    scrollbar-width: none;
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 1.5rem), transparent);
+    mask-image: linear-gradient(to right, #000 calc(100% - 1.5rem), transparent);
+  }
+  #main-content > .section-tabs::-webkit-scrollbar,
+  #main-content > .section-subtabs::-webkit-scrollbar { display: none; }
+  #main-content > .section-tabs { margin: 0.5rem 0.4rem -1px; padding-right: 1.5rem; }
+  #main-content > .section-subtabs { margin: 0 0.4rem; padding: 0.5rem 1.5rem 0.55rem 0.7rem; }
+  #main-content > .section-tabs a,
+  #main-content > .section-subtabs a {
+    flex: none;
+    scroll-snap-align: start;
+    white-space: nowrap;
+  }
+  #main-content > .section-tabs a { padding: 0.55rem 0.95rem; }
+  #main-content > .section-tabs a.active { padding-top: calc(0.55rem - 2px); }
+  #main-content > .section-tabs .tabs-more,
+  #main-content > .section-subtabs .tabs-more { display: none; }
+  #main-content:has(> .section-tabs) > .page-body,
+  #main-content:has(> .section-subtabs) > .page-body { margin-top: 0; }
+
+  /* Swipe rows: a row of chips or pills that would wrap into a
+     ragged block scrolls sideways as one line instead, edge to
+     edge with the page glass, its right edge fading. New chip
+     rows take .swipe-row; existing rows join the list. */
+  .swipe-row, .region-pills, .browse-sorts {
+    display: flex;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x proximity;
+    scrollbar-width: none;
+    margin-left: -0.7rem; margin-right: -0.7rem;
+    padding: 0.1rem 1.5rem 0.2rem 0.7rem;
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 1.5rem), transparent);
+    mask-image: linear-gradient(to right, #000 calc(100% - 1.5rem), transparent);
+  }
+  .swipe-row::-webkit-scrollbar, .region-pills::-webkit-scrollbar, .browse-sorts::-webkit-scrollbar { display: none; }
+  :is(.swipe-row, .region-pills, .browse-sorts) > * { flex: none; scroll-snap-align: start; }
+  .browse-sorts { align-items: center; gap: 0.4rem; white-space: nowrap; }
+
+  /* Table filter boxes span the column on a phone. */
+  input[data-table-filter] { width: 100%; max-width: none; }
+
+  /* A search panel (field + button) holds one row. */
+  form.searchpanel { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
+  form.searchpanel > .searchwrap { flex: 1 1 12rem; width: auto; min-width: 0; }
+  /* With its filters in a sheet, the panel's inline clear stands down
+     for the sheet's own footer. */
+  form.searchpanel:has(> .as-sheet) > a { display: none; }
+  form.searchpanel > .searchwrap > input { width: 100%; }
+
+  /* The market item's figures: best sell and best buy (the
+     cards carrying their typical-price line) across the full
+     width, the short figures two-up, a lone last one full. */
+  .mkt-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.55rem; }
+  .mkt-kpis > .kpi:has(.typical), .mkt-kpis > .kpi:last-child:nth-child(odd) { grid-column: 1 / -1; }
+
+  /* Labelled forms (a <label> wrapping its caption, bare text or
+     <small>, and its field — the site's form idiom), whether the
+     labels sit in the form or in one of its <p> rows: each field
+     stacks its caption over it and the fields share the row
+     two-up; the submit takes the full width under them, where a
+     thumb finds it. Checkbox and radio labels keep their line. */
+  #main-content :is(form, form p, form [data-sheet]):has(> label > :is(input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]), select, textarea)) {
+    display: flex; flex-wrap: wrap; align-items: flex-end;
+    gap: 0.6rem 0.7rem;
+  }
+  #main-content :is(form, form p, form [data-sheet]) > label:has(> :is(input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]), select, textarea)) {
+    display: flex; flex-direction: column; align-items: stretch; gap: 0.25rem;
+    flex: 1 1 8.5rem; min-width: 0; margin: 0;
+    white-space: normal;
+  }
+  #main-content :is(form, form p, form [data-sheet]) > label > :is(input, select, textarea) { width: 100%; }
+  #main-content :is(form, form p, form [data-sheet]):has(> label > :is(input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]), select, textarea)) > :is(.btn, button)[type="submit"] { flex: 1 1 100%; }
+
+  /* Key/value tables (a tbody of th + td rows, no thead) wrap
+     their values in the column instead of widening the table
+     past the screen. */
+  .tw table:not(:has(thead)) { width: 100%; }
+  .tw table:not(:has(thead)) td { white-space: normal; overflow-wrap: anywhere; }
+  .tw table:not(:has(thead)) th { width: 34%; }
+
+  /* Table cards (app.js "Table cards"): a table that would scroll
+     sideways reads as cards — the first cell titles the card, the
+     rest sit two-up under their column labels, a one-cell row
+     (a detail drawer, a group heading) spans the card. Hidden
+     rows stay hidden; the pinned first column unpins. */
+  #main-content table.cards-on { width: 100%; min-width: 0; margin-bottom: 0.6rem; }
+  #main-content table.cards-on > thead { display: none; }
+  #main-content table.cards-on > tbody { display: block; }
+  #main-content table.cards-on > tbody > tr:not([hidden]) {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.35rem 0.9rem;
+    padding: 0.7rem 0.15rem;
+    border-bottom: 1px solid var(--box-edge);
+  }
+  #main-content table.cards-on > tbody > tr > :is(td, th) {
+    display: block;
+    position: static;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    background: none;
+    text-align: left;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  #main-content table.cards-on > tbody > tr > :is(td, th):first-child,
+  #main-content table.cards-on > tbody > tr > :is(td, th)[colspan] {
+    grid-column: 1 / -1;
+  }
+  #main-content table.cards-on > tbody > tr > :is(td, th):first-child {
+    font-size: 1.05em;
+    font-weight: 600;
+    color: var(--text-bright);
+  }
+  #main-content table.cards-on > tbody > tr > td[data-label]:not(:first-child)::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 0.1rem;
+    color: var(--muted);
+    font-size: 0.68rem;
+    font-weight: 500;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  #main-content table.cards-on > tbody > tr > td:is(:empty, .opt) { display: none; }
+  /* Action-only cells (app.js marks them .card-ctl) gather on the
+     card's bottom row, the last one at the right edge; when the
+     row leads with one (move arrows), the next cell titles the
+     card instead. */
+  #main-content table.cards-on > tbody > tr > td.card-ctl {
+    order: 99; width: auto;
+    grid-column: auto; justify-self: start;
+    font-size: inherit; font-weight: inherit;
+  }
+  #main-content table.cards-on > tbody > tr > td.card-ctl:last-child { justify-self: end; }
+  #main-content table.cards-on > tbody > tr > td.card-ctl:first-child + td {
+    grid-column: 1 / -1;
+    font-size: 1.05em; font-weight: 600; color: var(--text-bright);
+  }
+  #main-content table.cards-on > tbody > tr > td.card-ctl:first-child + td::before { display: none; }
+  /* data-cards="off": the table stays a table and fits by
+     wrapping its text columns instead (an order book: price,
+     volume, and the station wrapping under its own column). */
+  .tw table[data-cards="off"]:not(.cal) { width: 100%; }
+  .tw table[data-cards="off"]:not(.cal) td { white-space: normal; overflow-wrap: anywhere; }
+  .cards-sort {
+    display: flex; align-items: center; gap: 0.5rem;
+    margin: 0 0 0.3rem;
+  }
+  .cards-sort[hidden] { display: none; }
+  .cards-sort > small { color: var(--muted); }
+  .cards-sort > select { flex: 1 1 auto; min-width: 0; }
+
+  /* Phone sheets (app.js "Phone sheets"): a data-sheet block
+     leaves the page flow and rises from the bottom edge when its
+     trigger is tapped — the sections sheet's glass, head and
+     reach. It scrolls inside itself; the page behind holds still. */
+  /* A closed sheet is out of the page whatever else styles the
+     block (the labelled-form rule lays a sheet of fields out as a
+     flex row): the closed state always wins. */
+  .as-sheet:not(.open) { display: none !important; }
+  .as-sheet > :is(.sheet-head, .sheet-foot) { flex: 1 1 100%; }
+  .as-sheet.open {
+    display: block;
+    position: fixed; inset: auto 0 0 0; z-index: 99;
+    width: auto; height: auto;
+    max-width: none;
+    max-height: 85vh;
+    max-height: 85dvh;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    margin: 0;
+    padding: 0 0.85rem calc(0.9rem + env(safe-area-inset-bottom, 0px));
+    color: var(--text);
+    border: 0;
+    background: linear-gradient(rgba(21, 21, 21, 0.96), rgba(17, 17, 17, 0.98)) padding-box;
+    border-top: 1px solid var(--glass-edge);
+    border-radius: var(--r-lg) var(--r-lg) 0 0;
+    box-shadow: 0 -12px 36px rgba(0, 0, 0, 0.6);
+    animation: sheet-rise 180ms ease-out;
+  }
+  html[data-theme="light"] .as-sheet.open { background: var(--panel); }
+  .as-sheet.open > .sheet-head {
+    display: flex; align-items: center; justify-content: space-between;
+    position: sticky; top: 0; z-index: 2;
+    margin: 0 -0.85rem 0.6rem;
+    padding: 0.75rem 0.85rem 0.55rem;
+    background: inherit;
+    border-bottom: 1px solid var(--box-edge);
+  }
+  .as-sheet.open > .sheet-head h2 { margin: 0; font-size: 1.05rem; }
+  .sheet-close {
+    min-width: 2.5rem; min-height: 2.5rem;
+    color: var(--gold);
+    background: transparent;
+    border: 1px solid transparent; border-radius: var(--r-sm);
+    font-size: 1.5rem; line-height: 1;
+    cursor: pointer;
+  }
+  .as-sheet.open .sheet-only { display: revert; }
+  /* A sheet's own actions ride its bottom edge while its body
+     scrolls; the in-flow copies of them stand down. */
+  .as-sheet.open > .sheet-foot {
+    display: flex; align-items: center; justify-content: flex-end; gap: 1rem;
+    position: sticky; bottom: calc(-0.9rem - env(safe-area-inset-bottom, 0px)); z-index: 2;
+    margin: 0.8rem -0.85rem calc(-0.9rem - env(safe-area-inset-bottom, 0px));
+    padding: 0.65rem 0.85rem calc(0.75rem + env(safe-area-inset-bottom, 0px));
+    background: inherit;
+    border-top: 1px solid var(--box-edge);
+  }
+  .as-sheet.open > .sheet-foot .btn { flex: 1 1 auto; }
+  .as-sheet::backdrop { background: rgba(0, 0, 0, 0.66); }
+  .sheet-backdrop:not([hidden]) {
+    display: block;
+    position: fixed; inset: 0; z-index: 98;
+    background: rgba(0, 0, 0, 0.66);
+  }
+  html.sheet-lock, html.sheet-lock body { overflow: hidden; }
+  /* A fixed sheet inside a blurred surface would take that surface
+     as its frame; the page glass gives up its blur while one is up. */
+  .page-body:has(.as-sheet.open) { -webkit-backdrop-filter: none; backdrop-filter: none; }
+  [data-sheet-open][hidden] { display: none; }
+
+  /* A heading's trailing metadata (<h3>Name <small>· facts</small>)
+     drops to its own line under the name, in running-text case,
+     so the heading stays one short line beside its fold button. */
+  #main-content :is(h2, h3, h4) > small {
+    display: block;
+    margin-top: 0.2rem;
+    font-family: inherit;
+    font-size: 0.78rem; font-weight: 400;
+    letter-spacing: 0; text-transform: none;
+    color: var(--muted);
+  }
+
+  /* The calendar month grid reads as an agenda: seven columns
+     cannot fit a phone, so only today and the days carrying ops
+     or events show, one row each — the weekday over the date on
+     the left, the day's entries stacked on the right. The
+     upcoming list under it is unchanged. */
+  .cal-wrap { overflow: visible; }
+  table.cal, table.cal > tbody, table.cal > tbody > tr { display: block; min-width: 0; }
+  table.cal > thead { display: none; }
+  table.cal td.cal-day { display: none; }
+  table.cal td.cal-day:not(.cal-out):is(.cal-today, :has(.cal-entry)) {
+    display: grid;
+    grid-template-columns: 3.2rem minmax(0, 1fr) auto;
+    align-items: start;
+    gap: 0.3rem 0.6rem;
+    height: auto;
+    padding: 0.6rem 0.2rem;
+    border: 0;
+    border-bottom: 1px solid var(--box-edge);
+  }
+  table.cal .cal-num { grid-column: 1; grid-row: 1 / span 20; font-size: 1.35rem; line-height: 1.1; text-align: center; }
+  table.cal .cal-num::before {
+    content: attr(data-wd);
+    display: block;
+    font-size: 0.66rem; letter-spacing: 0.08em; text-transform: uppercase;
+  }
+  table.cal .cal-entry { grid-column: 2; margin: 0; white-space: normal; }
+  table.cal .cal-add {
+    grid-column: 3; grid-row: 1;
+    position: static; opacity: 1;
+    min-width: 2.5rem; min-height: 2.5rem;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+
+  /* The footer: the same lines, set compact. */
+  footer { margin-top: 1rem; padding: 1rem 0.9rem 1.1rem; font-size: 0.66rem; }
+  footer p { margin: 0.35rem 0; }
+  footer br { display: none; }
+
+  /* The first-run notification prompt is a bottom sheet over the
+     bar, where the thumb is, instead of a card hanging off the
+     top bar across the page title. */
+  .notify-prompt {
+    position: fixed;
+    top: auto; left: 0.4rem; right: 0.4rem;
+    bottom: calc(var(--phone-bar-h, 0px) + env(safe-area-inset-bottom, 0px) + 0.4rem);
+    width: auto;
+    z-index: 95;
+    background: color-mix(in srgb, var(--panel) 97%, transparent);
+  }
+}
+
+@keyframes sheet-rise { from { transform: translateY(1.5rem); opacity: 0.4; } }
+@media (prefers-reduced-motion: reduce) { .as-sheet.open { animation: none; } }
+
+/* --- short (phones on their side) ----------------------------------- */
+@media (max-height: 30rem) and (orientation: landscape) and (pointer: coarse) {
+  /* The top bar scrolls away with the page: on a 400px-tall
+     screen a sticky bar is a sixth of it. Sticky in-page bars
+     park at the top edge instead (--sticky-top). */
+  :root { --sticky-top: env(safe-area-inset-top, 0px); }
+  header { position: absolute; left: 0; right: 0; }
+  #main-content > h1 { margin-top: 0; font-size: 1.35rem; }
+  /* One in-page nav row: where a sub-row carries the pages, the
+     folder strip above it stands down (the sidebar rail holds the
+     sections). */
+  #main-content:has(> .section-subtabs) > .section-tabs { display: none; }
+  .page-body { margin-top: 0.5rem; }
+}
+@media (max-height: 30rem) and (orientation: landscape) and (pointer: coarse) and (max-width: 860px) {
+  header { position: relative; }
+}
+@media (max-width: 45rem) and (max-height: 30rem) and (orientation: landscape) {
+  :root { --phone-bar-h: 2.7rem; }
+  .phone-bar-item { flex-direction: row; gap: 0.4rem; min-height: 2.3rem; }
+  .phone-bar-icon { width: 1.2rem; height: 1.2rem; }
+}

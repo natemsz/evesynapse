@@ -141,6 +141,9 @@
   if (form) {
     form.querySelectorAll(".cs-auto").forEach(function (el) {
       el.addEventListener("change", function () {
+        // Inside the phone filters sheet the reader is still
+        // choosing; the sheet's own submit applies them together.
+        if (el.closest(".as-sheet")) return;
         form.requestSubmit();
       });
     });

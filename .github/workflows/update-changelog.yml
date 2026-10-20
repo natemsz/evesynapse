@@ -23,7 +23,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
           ref: main
@@ -74,7 +74,7 @@ jobs:
           mv CHANGELOG.new CHANGELOG.md
 
       - name: Create Pull Request for Review
-        uses: peter-evans/create-pull-request@v6
+        uses: peter-evans/create-pull-request@v8
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           commit-message: "docs(changelog): update for ${{ env.RELEASE_TAG }}"

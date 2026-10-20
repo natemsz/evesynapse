@@ -30,13 +30,13 @@
   {{if .Error}}<p class="ld-error">{{.Error}}</p>{{end}}
   <div class="ld-hero">
     <div class="ld-kicker">EVE Online Companion</div>
-    <h1>Greater than the <span class="ld-amp">sum of its parts.</span></h1>
-    <p class="ld-sub">EveSynapse doesn't just display your EVE data. <b>It turns it into insight.</b> Your characters, the market, fitting, industry, and your corporation, each feeding the others in one fast dashboard.</p>
+    <h1>Stop alt-tabbing between <span class="ld-amp">five different tools.</span></h1>
+    <p class="ld-sub">Fits run on your real skills. Paste anything and get a price. Build plans check your hangars first. One morning briefing covers every alt.</p>
     <div class="ld-ctas">
       <a class="ld-btn ld-btn-ember" href="/auth/link">Link your characters, free</a>
-      <a class="ld-btn ld-btn-ghost" href="#tools">Use the tools, no account needed</a>
+      <a class="ld-btn ld-btn-ghost" href="/market/appraise/">Try it now, no login needed</a>
     </div>
-    <div class="ld-cta-note">Scope-minimal EVE SSO · tokens encrypted at rest · open source</div>
+    <div class="ld-cta-note">Only the scopes you pick · Key held in a hardware vault · Open source</div>
 
     {{if .HasStrip}}
     <div class="ld-glass ld-strip">
@@ -64,7 +64,7 @@
       <div class="ld-glass ld-tcard"><h3>You pick the scopes</h3><p>Choose the features you want; the EVE login asks for exactly those scopes, and no more.</p></div>
       <div class="ld-glass ld-tcard"><h3>Encrypted at rest</h3><p>Refresh tokens are sealed with AES-256-GCM, the current standard for encryption at rest. Reading your data never means trusting us with the keys to it.</p></div>
       <div class="ld-glass ld-tcard"><h3>Public data, no login</h3><p>Tools using public data require no login at all to use: the fitting simulator, planners, market and intel tools are open to everyone. Sign in only when you want your own characters in the picture.</p></div>
-      <div class="ld-glass ld-tcard"><h3>Or run it yourself</h3><p>Open source, one setup script, your own ESI application and your own data. Self-hosting is a supported path, not a hack.</p></div>
+      <div class="ld-glass ld-tcard"><h3>Or run it yourself</h3><p>Open source, one setup script, your own ESI application and your own data. The public site runs the same build you can download.</p></div>
     </div>
     <div class="ld-glass ld-tcard ld-tcard-wide"><h3>PKCE on every sign-in</h3><p>The EVE login flow is PKCE-protected: the sign-in code can only be exchanged by the browser that asked for it, so an intercepted code is worthless to anyone else.</p></div>
     <div class="ld-glass ld-tcard ld-tcard-wide"><h3>Revoke on unlink</h3><p>When you unlink a character, you can fully revoke its token with EVE itself, right in the unlink flow. Deleting our copy is the floor; killing the token at the source is your call.</p></div>
@@ -105,8 +105,7 @@
       </div>
     </div>
     <div class="ld-stats">
-      <div class="ld-glass ld-stat"><b>0</b><span>JavaScript frameworks, ever</span></div>
-      <div class="ld-glass ld-stat"><b>1,000</b><span>concurrent pilots on one small server, the design target</span></div>
+      <div class="ld-glass ld-stat"><b>400</b><span>concurrent pilots on one small server, load-tested</span></div>
       <div class="ld-glass ld-stat"><b>23</b><span>feature modules, each one feeding the others</span></div>
     </div>
     <div class="ld-cta-repeat">
@@ -120,10 +119,6 @@
       <div class="ld-eyebrow">Fleet Home</div>
       <h2>Every pilot. One glance.</h2>
       <p class="ld-lede">The home page reads every character you link and puts what matters on one screen: the fleet's worth, a briefing that names what needs doing, and every pilot's training and wallet under it.</p>
-      <div class="ld-blurbs">
-        <div class="ld-blurb"><h3>A briefing, not a dashboard dump</h3><p>Every character digested into one prioritized briefing: empty skill queues, halted extractors, expiring orders, unread mail that matters. Critical first, noise never.</p></div>
-        <div class="ld-blurb"><h3>The whole fleet, priced</h3><p>Net worth, liquid ISK and hangar value roll up across every pilot, priced from stored market data and refreshed by the background workers.</p></div>
-      </div>
     </div>
     <div class="ld-feat-vis">
       <div class="ld-glass ld-preview">
@@ -154,11 +149,11 @@
     </div>
     <div class="ld-feat-txt">
       <div class="ld-eyebrow">Market</div>
-      <h2>Data in. Decisions out.</h2>
+      <h2>Know what it's worth, and what to do next.</h2>
       <p class="ld-lede">Most tools stop at showing you numbers. EveSynapse reads them for you, and tells you what they're worth doing about.</p>
       <div class="ld-blurbs">
         <div class="ld-blurb"><h3>Appraisal: paste anything, get a price</h3><p>A cargo scan, a contract, a whole hangar, a fit off a killmail. One box works out what it is and prices it in the region you pick, with the source on every line. The tool runs with no account, and every result gets a link you can share.</p></div>
-        <div class="ld-blurb"><h3>Trade ideas, not price lists</h3><p>The market engine watches every hub sweep and an AI analyst reads the result: what to trade, what to build, and why, grounded in your region's real order books.</p></div>
+        <div class="ld-blurb"><h3>Trade ideas, with the reasoning shown</h3><p>The market engine watches every hub sweep and an AI analyst reads the result: what to trade, what to build, and why, grounded in your region's real order books.</p></div>
         <div class="ld-blurb"><h3>Scanner and Tradefinder</h3><p>The spread scanner digs through every hub's order books and ranks the margins. Tradefinder routes between regions and prices both ends of the haul before you undock.</p></div>
       </div>
     </div>
@@ -201,7 +196,7 @@
     <div class="ld-feat-txt">
       <div class="ld-eyebrow">Fitting</div>
       <h2>Desktop grade fitting, in a browser tab.</h2>
-      <p class="ld-lede">This is the fitting simulator exactly as pilots use it. A real fit, run through its pilot's actual skills and implants, every module priced from stored market data. Hover a module and the math is right there, because it is calculated, not drawn.</p>
+      <p class="ld-lede">This is the fitting simulator exactly as pilots use it. A real fit, run through its pilot's actual skills and implants, every module priced from stored market data. Hover a module and the math is right there, calculated on the spot from the fit in front of you.</p>
       <div class="ld-blurbs">
         <div class="ld-blurb"><h3>Saved loadouts and public fits</h3><p>Your fits live next to your skill plans. Publish one and the community flies the same numbers you do, priced at the hub you pick.</p></div>
         <div class="ld-blurb"><h3>Save to EVE</h3><p>When a fit is right, push it into the game from the simulator. Corp doctrines start life here too, as ordinary fits a director promotes.</p></div>
@@ -212,11 +207,11 @@
   <section class="ld-feat">
     <div class="ld-feat-txt">
       <div class="ld-eyebrow">Corporation</div>
-      <h2>Each point integrates with the other.</h2>
+      <h2>Greater than the sum of its parts.</h2>
       <p class="ld-lede">Run the whole corporation stack on shared parts, or let the same loop work quietly for one pilot.</p>
       <div class="ld-blurbs">
-        <div class="ld-blurb"><h3>The solo loop runs at the same depth</h3><p>Briefing, market, industry and fitting, chained the same way for a single pilot: the briefing ranks your day, the market tools point at the next trade, plans check your hangars, and fits price themselves as you build them.</p></div>
-        <div class="ld-blurb"><h3>One system, one login</h3><p>Flying solo, the same loop runs smaller. Nothing here is a separate app with a separate login. It is one system that knows itself.</p></div>
+        <div class="ld-blurb"><h3>The solo loop runs at the same depth</h3><p>A single pilot gets the same machinery: market tools that point at the next trade, plans that check your hangars first, and fits that price themselves as you build them.</p></div>
+        <div class="ld-blurb"><h3>One system, one login</h3><p>Nothing here is a separate app with a separate login: doctrines, fits, payouts and roles all read the same groups and the same stored data.</p></div>
       </div>
     </div>
     <div class="ld-feat-vis">
@@ -304,6 +299,7 @@
   </section>
 
   <div class="ld-heritage">
+    <p>Built by one pilot. EveSynapse began in 2013 as one player's answer to his own alt-tabbing, and it is still built that way: every tool on this page earned its place in one person's daily flying before it was offered to anyone else, and the build running this site is the same build you can run yourself.</p>
     <div class="ld-h-line">Rebuilt over <em>4 years</em>. Originating in <em>2013</em>. Built for <em>2026</em>.</div>
   </div>
   <div class="ld-finalcta">

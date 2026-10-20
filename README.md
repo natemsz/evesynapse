@@ -1506,10 +1506,15 @@ unwraps it at startup with a KMS Decrypt call authenticated by
 the instance's own identity (an *instance principal*). Nothing
 cloud-shaped is stored on the machine at all: no credential, no
 key, only the ciphertext and the key's address. OCI authorizes
-the call through IAM: put the instance in a dynamic group and
-give that group one policy statement scoped to the single key,
-`Allow dynamic-group <group> to use keys in compartment
-<compartment> where target.key.id = '<key OCID>'`. Set:
+the call through IAM: put the instance in a dynamic group (its
+matching rule is `instance.id = '<the instance OCID>'`) and give
+that group this policy statement:
+`Allow dynamic-group <group> to use keys in tenancy`.
+Keep it in that plain form: a statement narrowed with a
+`where target.key.id = ...` condition looks tighter but is not
+honored on the vault's cryptographic endpoint — calls against it
+are refused — and scoping by compartment only helps if the key
+itself (not just its vault) lives in that compartment. Set:
 
 ```sh
 TOKEN_KEY_PROVIDER=oci
@@ -1554,6 +1559,31 @@ not landed yet stays off and recovers when it does.
 `SHARED_CACHE_SECRET` is the deliberate exception: it stays in
 `.env`, because it is a proof shared with other swarm operators
 by design, and moving it would buy nothing.
+#### Moving an existing install to a key service
+
+An install already running on `TOKEN_ENCRYPTION_KEY` moves over
+without touching the stored tokens — the key itself never
+changes, only how it is delivered:
+
+1. Back `.env` up.
+2. Wrap the current key. With `oci`, run
+   `evesynapse -wrap-token-key` on the instance (with the `oci`
+   settings below in place; the command prints only the
+   ciphertext). With `http`, post the key to your key service's
+   wrap endpoint once.
+3. Put the complete set into `.env` together: the provider, the
+   wrapped blob, and that provider's settings — while keeping
+   `TOKEN_ENCRYPTION_KEY` for the moment. Never leave a
+   half-written provider in `.env` across a restart: an app that
+   is told to use a provider whose settings are incomplete
+   refuses to start, by design.
+4. Restart. The log shows `token encryption key loaded via the
+   <provider> provider; stored tokens are unlocked`.
+5. Remove `TOKEN_ENCRYPTION_KEY` from `.env` and restart again;
+   the same line must appear. The plaintext key now exists
+   nowhere on the machine.
+6. Rollback at any point: restore the backed-up `.env` and
+   restart.
 
 ## Backups
 

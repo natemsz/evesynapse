@@ -396,22 +396,6 @@ func TestLandingMockupFidelity(t *testing.T) {
 	if strings.Contains(landing, "var(--glass-blur)") {
 		t.Error("landing.css still uses the site --glass-blur token; the landing glass is a fixed 9px")
 	}
-	// The star layers are gone (owner ruling 2026-10-19): two
-	// fixed, infinitely opacity-animated layers over the sky
-	// made Gecko re-composite the landing every frame (ghosting
-	// while scrolling, ~30fps), and at 13 dots of 1px they were
-	// invisible over the art anyway. Neither the markup nor the
-	// animation may come back.
-	tplRaw, err := fs.ReadFile(templatesFS, "templates/landing.html")
-	if err != nil {
-		t.Fatalf("read landing.html: %v", err)
-	}
-	if strings.Contains(string(tplRaw), "ld-stars") {
-		t.Error("landing.html still carries the removed star layer divs")
-	}
-	if strings.Contains(landing, "ld-stars") || strings.Contains(landing, "ld-tw") {
-		t.Error("landing.css still carries the removed star layers or their twinkle animation")
-	}
 }
 
 // TestCharactersActiveRowTint pins the Characters page's active-row

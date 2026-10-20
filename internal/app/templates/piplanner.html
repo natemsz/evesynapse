@@ -17,16 +17,15 @@
 <form method="get" action="/industry/pi/" id="pi-form">
   <div class="pi-controls card">
     <p>
-      <label>Product
+      <label><small>Product</small>
         <select name="product" id="pi-product">
           {{range .PIPlanner.Targets}}<option value="{{.}}"{{if eq . $.PIPlanner.Target}} selected{{end}}>{{.}}</option>{{end}}
         </select>
       </label>
-      <label>Make <input type="number" name="amount" value="{{.PIPlanner.AmountStr}}" min="1" max="100000" size="7"> units</label>
-      <label>Per 24h window</label>
+      <label><small>Units per 24h window</small> <input type="number" name="amount" value="{{.PIPlanner.AmountStr}}" min="1" max="100000" size="7" inputmode="numeric"></label>
     </p>
     <p>
-      <label>Command Center
+      <label><small>Command Center</small>
         <select name="cc">
           <option value="0"{{if eq .PIPlanner.CCLevel 0}} selected{{end}}>Level 0 — Basic</option>
           <option value="1"{{if eq .PIPlanner.CCLevel 1}} selected{{end}}>Level 1</option>
@@ -36,9 +35,9 @@
           <option value="5"{{if eq .PIPlanner.CCLevel 5}} selected{{end}}>Level 5 — Elite</option>
         </select>
       </label>
-      <label>Heads / ECU <input type="number" name="heads" value="{{.PIPlanner.Heads}}" min="1" max="10" size="3"></label>
-      <label>ECU yield <input type="number" name="yield" value="{{.PIPlanner.Yield}}" min="100" step="100" size="7"> R0/hr</label>
-      <label>POCO tax <input type="number" name="tax" value="{{.PIPlanner.TaxStr}}" min="0" max="100" step="0.5" size="4"> %</label>
+      <label><small>Heads per ECU</small> <input type="number" inputmode="numeric" name="heads" value="{{.PIPlanner.Heads}}" min="1" max="10" size="3"></label>
+      <label><small>ECU yield, R0/hr</small> <input type="number" inputmode="numeric" name="yield" value="{{.PIPlanner.Yield}}" min="100" step="100" size="7"></label>
+      <label><small>POCO tax, %</small> <input type="number" inputmode="decimal" name="tax" value="{{.PIPlanner.TaxStr}}" min="0" max="100" step="0.5" size="4"></label>
       <button type="submit">Recalculate</button>
     </p>
     <fieldset class="pi-planets">
@@ -82,7 +81,7 @@
 
 <div class="tw">
 <table>
-  <thead><tr><th>Material</th><th>Tier</th><th>Needed (batch)</th><th>Per hour</th><th>Factories</th><th>Facility</th><th>Volume</th><th>Unit price</th><th>Line value</th></tr></thead>
+  <thead><tr><th>Material</th><th>Tier</th><th>Needed (batch)</th><th class="opt">Per hour</th><th>Factories</th><th>Facility</th><th class="opt">Volume</th><th>Unit price</th><th>Line value</th></tr></thead>
   <tbody>
   {{range .PIPlanner.Lines}}
     <tr><td>{{.Name}}</td><td>{{.Tier}}</td><td>{{.Needed}}</td><td>{{.PerHour}}</td><td>{{.Factories}}</td><td>{{.Facility}}</td><td>{{.Volume}}</td><td>{{.Price}}</td><td>{{.Value}}</td></tr>

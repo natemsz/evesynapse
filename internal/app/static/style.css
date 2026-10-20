@@ -4879,6 +4879,22 @@ html[data-theme="light"] .doctrine-fits li:last-child { border-color: #e3d9c6; }
 .fit-card h5 { margin: 0.6rem 0 0.2rem; font-size: 0.75rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
 .fit-card-items { list-style: none; margin: 0; padding: 0; }
 .fit-card-items li { padding: 0.1rem 0; overflow-wrap: anywhere; }
+/* My Loadouts: the Modules and cargo lists open as a floating
+   preview over the page instead of expanding the card in place.
+   The wrapper is the positioning anchor; the panel is taken out
+   of flow, so the card and the page keep their height. Groups
+   lay out side by side and wrap, using the horizontal space. */
+.loadout-preview { position: relative; grid-column: 1 / -1; }
+.loadout-preview-btn { background: none; border: 0; padding: 0; font: inherit; color: var(--muted); cursor: pointer; }
+.loadout-preview-btn::before { content: "▸"; display: inline-block; margin-right: 0.35rem; transition: transform 0.12s ease; }
+.loadout-preview-btn[aria-expanded="true"]::before { transform: rotate(90deg); }
+.loadout-preview-btn:hover { color: var(--text); }
+.loadout-preview-panel { position: absolute; top: calc(100% + 0.4rem); left: 0; z-index: 60; width: max-content; max-width: min(60rem, calc(100vw - 2rem)); max-height: min(70vh, 34rem); overflow: auto; padding: 0.7rem 0.9rem; background: var(--panel); border: 1px solid var(--glass-edge); border-radius: 6px; box-shadow: 0 10px 28px rgba(0, 0, 0, 0.55); }
+.loadout-preview-panel.flip-up { top: auto; bottom: calc(100% + 0.4rem); }
+.loadout-preview-panel.align-right { left: auto; right: 0; }
+.loadout-preview-cols { display: flex; flex-wrap: wrap; gap: 0.25rem 1.75rem; }
+.loadout-preview-group { flex: 0 1 15rem; min-width: 11rem; }
+.loadout-preview-group h5 { margin-top: 0; }
 /* Persistent shell: only the main content takes part in the swap
    transition — the top bar and nav are the same live chrome on
    both pages, so snapshotting the whole document (root) made the

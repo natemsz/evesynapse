@@ -39,16 +39,22 @@
       <p class="fit-card-line">{{itemLink .ShipTypeID .ShipType}} <small>EVE account</small></p>
       {{end}}
     </div>
-    <details class="doctrine-eft">
-      <summary>Modules and cargo</summary>
-      {{range .Groups}}
-      <h5>{{.Label}}</h5>
-      <ul class="fit-card-items">
-        {{range .Items}}<li>{{itemLink .TypeID .Name}} <small>×{{.Quantity}}</small></li>
-        {{end}}
-      </ul>
-      {{end}}
-    </details>
+    <div class="loadout-preview">
+      <button type="button" class="loadout-preview-btn" aria-expanded="false">Modules and cargo</button>
+      <div class="loadout-preview-panel" role="group" aria-label="Modules and cargo for {{.Name}}" hidden>
+        <div class="loadout-preview-cols">
+          {{range .Groups}}
+          <div class="loadout-preview-group">
+            <h5>{{.Label}}</h5>
+            <ul class="fit-card-items">
+              {{range .Items}}<li>{{itemLink .TypeID .Name}} <small>×{{.Quantity}}</small></li>
+              {{end}}
+            </ul>
+          </div>
+          {{end}}
+        </div>
+      </div>
+    </div>
     <div class="fit-card-actions">
       {{if eq .Source "local"}}
       <a class="btn" href="/fittings/?local={{.LocalID}}#fit-editor">Open in fitting tool</a>

@@ -2293,6 +2293,108 @@ var FitGauges = (function () {
   if (exc) exc.addEventListener("input", apply);
 })();
 
+// --- My Loadouts: Modules and cargo preview -----------------
+// Each saved-fit card renders its grouped item lists in a hidden
+// panel; the trigger button opens it as a floating preview over
+// the page instead of expanding the card in place. Handlers are
+// delegated from the document so content swaps can't detach
+// them. One preview at a time: a click pins it open, a second
+// click (or an outside click, or Escape) closes it, and on fine
+// pointers hovering a card opens its preview unpinned after a
+// short delay.
+(function () {
+  var seq = 0;
+  var openWrap = null;
+  var openPinned = false;
+  var openTimer = null;
+  var closeTimer = null;
+  var finePointer = !!(window.matchMedia && window.matchMedia("(hover: hover) and (pointer: fine)").matches);
+
+  function parts(wrap) {
+    return {
+      btn: wrap.querySelector(".loadout-preview-btn"),
+      panel: wrap.querySelector(".loadout-preview-panel")
+    };
+  }
+  function clearTimers() {
+    if (openTimer) { clearTimeout(openTimer); openTimer = null; }
+    if (closeTimer) { clearTimeout(closeTimer); closeTimer = null; }
+  }
+  function place(panel) {
+    panel.classList.remove("flip-up");
+    panel.classList.remove("align-right");
+    var r = panel.getBoundingClientRect();
+    if (r.bottom > window.innerHeight - 8) panel.classList.add("flip-up");
+    if (r.right > window.innerWidth - 8) panel.classList.add("align-right");
+  }
+  function open(wrap, pinned) {
+    if (openWrap && openWrap !== wrap) close();
+    var p = parts(wrap);
+    if (!p.btn || !p.panel) return;
+    if (!p.panel.id) {
+      seq++;
+      p.panel.id = "loadout-preview-panel-" + seq;
+      p.btn.setAttribute("aria-controls", p.panel.id);
+    }
+    p.panel.hidden = false;
+    p.btn.setAttribute("aria-expanded", "true");
+    place(p.panel);
+    openWrap = wrap;
+    openPinned = pinned;
+  }
+  function close() {
+    clearTimers();
+    if (!openWrap) return;
+    var p = parts(openWrap);
+    if (p.panel) p.panel.hidden = true;
+    if (p.btn) p.btn.setAttribute("aria-expanded", "false");
+    openWrap = null;
+    openPinned = false;
+  }
+  function wrapOf(el) {
+    return el && el.closest ? el.closest(".loadout-preview") : null;
+  }
+  document.addEventListener("click", function (ev) {
+    var btn = ev.target && ev.target.closest ? ev.target.closest(".loadout-preview-btn") : null;
+    var wrap = wrapOf(ev.target);
+    if (btn && wrap) {
+      clearTimers();
+      if (openWrap === wrap) {
+        if (openPinned) close();
+        else openPinned = true; // a hover-opened preview pins on click
+      } else {
+        open(wrap, true);
+      }
+      return;
+    }
+    if (openWrap && !wrap) close();
+  });
+  document.addEventListener("keydown", function (ev) {
+    if (ev.key !== "Escape" || !openWrap) return;
+    var btn = parts(openWrap).btn;
+    close();
+    if (btn && btn.focus) btn.focus();
+  });
+  if (finePointer) {
+    document.addEventListener("pointerover", function (ev) {
+      var wrap = wrapOf(ev.target);
+      if (!wrap || wrap === openWrap) return;
+      if (ev.relatedTarget && wrap.contains(ev.relatedTarget)) return;
+      clearTimers();
+      openTimer = setTimeout(function () { openTimer = null; open(wrap, false); }, 200);
+    });
+    document.addEventListener("pointerout", function (ev) {
+      var wrap = wrapOf(ev.target);
+      if (!wrap) return;
+      if (ev.relatedTarget && wrap.contains(ev.relatedTarget)) return;
+      if (openTimer) { clearTimeout(openTimer); openTimer = null; }
+      if (openWrap === wrap && !openPinned) {
+        closeTimer = setTimeout(function () { closeTimer = null; close(); }, 250);
+      }
+    });
+  }
+})();
+
 // --- read-only workbench tooltips ---------------------------
 // A public fit's page renders the same workbench without the
 // editor, and the editor block above bails when there is no

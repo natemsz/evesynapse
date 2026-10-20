@@ -233,6 +233,15 @@ func TestFitToolOpensLibraryFits(t *testing.T) {
 	_, body := getPage(t, app, cookie, doctrineURL(made[0].ID))
 	mustContain(t, "doctrine page", body, "[Fixture Frigate, Pasted Boat]", "Fixture Blaster", "Keep this doctrine")
 
+	// The doctrine page keeps its in-place EFT details block: the
+	// My Loadouts preview popover does not reach this page.
+	mustContain(t, "doctrine page", body,
+		`<details class="doctrine-eft">`,
+		`<summary>Fit as text, to import in game</summary>`)
+	if strings.Contains(body, "loadout-preview") {
+		t.Errorf("doctrine page grew the loadouts preview popover")
+	}
+
 	// An in-game fit of one of the account's characters is found and added too.
 	seedSnapshot(t, q, fixtureCharA, esi.SnapFittings, esi.Fittings{{
 		FittingID: 42, Name: "Ingame Boat", ShipTypeID: fitShipID,

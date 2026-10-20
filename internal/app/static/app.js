@@ -3725,6 +3725,146 @@
   syncPresets();
 })();
 
+// The appraisal bench on phones (mobile pass 2): a segmented
+// switch flips the bench between the paste form and the result
+// (the CSS one-pane rules live under the phone breakpoint and
+// key off .ap-switched + the bench's data-ap-view, which the
+// server sets to the result after an appraisal, so a run lands
+// on the valuation). The switch and the bottom dock render
+// hidden; without JavaScript the page keeps them hidden and the
+// bench stays stacked, as before. The dock only re-surfaces
+// actions the result already offers. The paste button is a
+// progressive enhancement on top of the same form: where the
+// browser allows clipboard reads it appears; everywhere else
+// it stays hidden and nothing changes.
+(function () {
+  "use strict";
+  var bench = document.querySelector(".ap-bench[data-ap-view]");
+  var switchEl = document.querySelector("[data-ap-switch]");
+  var dock = document.querySelector("[data-ap-dock]");
+  if (bench && switchEl) {
+    function setView(view, toForm) {
+      bench.setAttribute("data-ap-view", view);
+      switchEl.querySelectorAll("[data-ap-view-btn]").forEach(function (b) {
+        var on = b.getAttribute("data-ap-view-btn") === view;
+        b.classList.toggle("on", on);
+        b.setAttribute("aria-selected", on ? "true" : "false");
+      });
+      if (toForm) {
+        bench.scrollIntoView({ block: "start" });
+        var items = document.getElementById("ap-items");
+        if (items) items.focus({ preventScroll: true });
+      }
+    }
+    function parkSwitch() {
+      var header = document.querySelector("header");
+      if (header) switchEl.style.top = header.offsetHeight + "px";
+    }
+    bench.classList.add("ap-switched");
+    switchEl.hidden = false;
+    if (dock) dock.hidden = false;
+    parkSwitch();
+    window.addEventListener("resize", parkSwitch);
+    document.addEventListener("click", function (ev) {
+      var t = ev.target && ev.target.closest ? ev.target : null;
+      if (!t || !t.closest) return;
+      var vb = t.closest("[data-ap-view-btn]");
+      if (vb) {
+        setView(vb.getAttribute("data-ap-view-btn"), vb.hasAttribute("data-ap-dock-edit"));
+        return;
+      }
+      if (t.closest("[data-ap-sample]") && bench.getAttribute("data-ap-view") !== "input") {
+        setView("input", false);
+      }
+    });
+    setView(bench.getAttribute("data-ap-view") || "result", false);
+  }
+  var itemsBox = document.getElementById("ap-items");
+  var pasteBtn = document.querySelector("[data-ap-paste]");
+  if (pasteBtn && itemsBox && navigator.clipboard && navigator.clipboard.readText && window.isSecureContext) {
+    pasteBtn.hidden = false;
+    pasteBtn.addEventListener("click", function () {
+      navigator.clipboard.readText().then(function (text) {
+        if (!text) return;
+        itemsBox.value = text;
+        itemsBox.dispatchEvent(new Event("input", { bubbles: true }));
+        itemsBox.focus();
+      }, function () { /* permission denied or empty: stay silent */ });
+    });
+  }
+})();
+
+// Compact figures on phones (mobile pass 2): where a wide exact
+// figure cannot fit its narrow card, the headline shows the
+// compact form and the exact figure moves to a small line
+// beneath it — the same treatment the appraisal hero card gets
+// in CSS from its server-rendered pair. Two surfaces carry
+// figures with no compact form in the markup: the appraisal
+// buy card (its raw total rides the copy button) and the home
+// KPI band (the owner's clipped liquid-wallets figure). The
+// compact format mirrors formatCompactISK in the appraisal
+// handler exactly; the exact figure always stays on the card,
+// and leaving the phone widths restores the original figures.
+(function () {
+  "use strict";
+  if (!window.matchMedia) return;
+  var mq = window.matchMedia("(max-width: 45rem)");
+  var undos = [];
+  function compactISK(v) {
+    if (v >= 1e9) return (v / 1e9).toFixed(2) + "B";
+    if (v >= 1e6) return (v / 1e6).toFixed(2) + "M";
+    if (v >= 1e3) return (v / 1e3).toFixed(1) + "K";
+    return v.toFixed(2);
+  }
+  function exactLine(cls, text) {
+    var line = document.createElement("div");
+    line.className = cls;
+    line.setAttribute("data-ap-exactline", "");
+    line.textContent = text;
+    return line;
+  }
+  function apply() {
+    var buy = document.querySelector("[data-ap-buy-raw]");
+    if (buy) {
+      var raw = parseFloat(buy.getAttribute("data-ap-buy-raw"));
+      var cv = buy.querySelector(".ap-cv");
+      if (cv && isFinite(raw) && raw >= 1e3) {
+        var orig = cv.textContent;
+        var line = exactLine("ap-cs", orig);
+        cv.textContent = compactISK(raw) + " ISK";
+        cv.parentNode.insertBefore(line, cv.nextSibling);
+        undos.push(function () {
+          cv.textContent = orig;
+          line.parentNode.removeChild(line);
+        });
+      }
+    }
+    document.querySelectorAll(".home-grid .kpi-v").forEach(function (v) {
+      var node = v.firstChild;
+      if (!node || node.nodeType !== 3) return;
+      var m = /^\s*([\d,]+(?:\.\d+)?)\s*$/.exec(node.textContent);
+      if (!m) return;
+      var num = parseFloat(m[1].replace(/,/g, ""));
+      if (!isFinite(num) || num < 1e6) return;
+      var origText = node.textContent;
+      var line = exactLine("kpi-exact", m[1] + " ISK");
+      node.textContent = compactISK(num) + " ";
+      v.parentNode.insertBefore(line, v.nextSibling);
+      undos.push(function () {
+        node.textContent = origText;
+        line.parentNode.removeChild(line);
+      });
+    });
+  }
+  function sync() {
+    while (undos.length) undos.pop()();
+    if (mq.matches) apply();
+  }
+  if (mq.addEventListener) mq.addEventListener("change", sync);
+  else if (mq.addListener) mq.addListener(sync);
+  sync();
+})();
+
 // The sign-up chooser (/auth/link): select all, tick every extra without
 // leaving the place on the page, and a live count of the permissions.
 (function () {

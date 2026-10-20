@@ -866,11 +866,113 @@ main {
   .ap-pgrid { grid-template-columns: 1fr; }
 }
 @media (max-width: 45rem) {
-  /* Phone widths: the fixed-layout result tables hold their
-     column widths and scroll sideways inside their .tw wrapper
-     instead of crushing the item column until the quantity
-     figures land on top of the item names. */
-  #ap-panel-items table, .ap-reprocess table { min-width: 42rem; }
+  /* Phone widths: the fixed-layout reprocess table holds its
+     column widths and scrolls sideways inside its .tw wrapper
+     instead of crushing its columns. The itemized table gets
+     the stacked-card treatment in the pass-2 block below. */
+  .ap-reprocess table { min-width: 42rem; }
+}
+/* --- appraisal on phones (mobile pass 2) -------------------------
+   Phone widths turn the appraisal bench into a native-feeling
+   two-view surface: a sticky segmented switch (Paste Input /
+   Valuation, wired in app.js — both render hidden and stay
+   display:none until it unhides them, so without JavaScript the
+   page is the stacked bench it always was), the summary cards
+   as a compact 2x2 grid whose hero leads with its compact
+   figure, the itemized results as stacked cards, and a fixed
+   bottom dock re-surfacing actions the page already has. */
+.ap-switch, .ap-dock { display: none; }
+@media (max-width: 45rem) {
+  .ap-switch:not([hidden]) {
+    display: flex; position: sticky; top: 3.75rem; z-index: 30;
+    width: 100%; margin-bottom: 0.9rem;
+  }
+  .ap-switch > * { flex: 1 1 0; justify-content: center; }
+  .ap-bench { scroll-margin-top: 8.5rem; }
+  .ap-bench.ap-switched[data-ap-view="input"] > .ap-right { display: none; }
+  .ap-bench.ap-switched[data-ap-view="result"] > .ap-form { display: none; }
+  /* The sample pastes become one swipeable strip. */
+  .ap-samples { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 0.3rem; }
+  .ap-samples > * { flex: none; }
+  /* The summary grid stays two across; the hero card leads with
+     its compact figure and demotes the exact figure beneath it
+     (both are already in the markup). The clamp keeps every
+     card's exact figure inside its half-width cell. */
+  .ap-hud { gap: 0.6rem; }
+  .ap-hud .ap-cv { font-size: clamp(0.68rem, 3.4vw, 1.05rem); }
+  .ap-card.hero { display: flex; flex-direction: column; }
+  .ap-card.hero .ap-cs { display: contents; }
+  .ap-card.hero .ap-cs > span:first-child {
+    order: 1; margin-top: 0.3rem;
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+    font-size: 1.05rem; font-weight: 700; color: var(--text-bright);
+  }
+  .ap-card.hero .ap-cv {
+    order: 2; font-size: 0.72rem; font-weight: 400; color: var(--muted);
+  }
+  .ap-card.hero .ap-pctflag { order: 3; margin-top: 0.3rem; }
+  /* The itemized results as stacked cards: the name (with its
+     note and value-share bar) heads the card; the figures sit
+     under their column labels; basis and as-of close it. */
+  #ap-panel-items .tw { overflow-x: visible; }
+  #ap-panel-items table {
+    display: block; width: 100%; min-width: 0; table-layout: auto;
+  }
+  #ap-panel-items thead { display: none; }
+  #ap-panel-items tbody { display: block; }
+  #ap-panel-items tr {
+    display: grid; grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "name name"
+      "qty total"
+      "vol unit"
+      "tier asof";
+    gap: 0.3rem 0.8rem; align-items: baseline;
+    background: var(--row); border: 1px solid var(--box-edge);
+    border-radius: var(--r-sm); padding: 0.55rem 0.7rem;
+    margin-bottom: 0.5rem;
+  }
+  #ap-panel-items td {
+    display: block; position: static; padding: 0;
+    border: none; background: transparent; text-align: left;
+  }
+  #ap-panel-items td:nth-child(1) { grid-area: name; }
+  #ap-panel-items td:nth-child(2) { grid-area: qty; }
+  #ap-panel-items td:nth-child(3) { grid-area: unit; text-align: right; }
+  #ap-panel-items td:nth-child(4) { grid-area: total; text-align: right; }
+  #ap-panel-items td:nth-child(5) { grid-area: vol; }
+  #ap-panel-items td:nth-child(6) { grid-area: tier; font-size: 0.8rem; }
+  #ap-panel-items td:nth-child(7) {
+    grid-area: asof; text-align: right; font-size: 0.8rem; color: var(--muted);
+  }
+  #ap-panel-items td[data-th]::before {
+    content: attr(data-th); display: block;
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+    font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.05em;
+    color: var(--muted); margin-bottom: 0.1rem;
+  }
+  #ap-panel-items td:nth-child(6)::before,
+  #ap-panel-items td:nth-child(7)::before { display: none; }
+  .ap-total { flex-wrap: wrap; row-gap: 0.3rem; }
+  /* The bottom action dock: fixed, thumb-zone, only the actions
+     the result already offers (edit the paste, copy the
+     multi-sell list, copy the share link). */
+  .ap-dock:not([hidden]) {
+    display: flex; gap: 0.5rem;
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 40;
+    padding: 0.5rem 0.7rem calc(0.5rem + env(safe-area-inset-bottom, 0px));
+    background: linear-gradient(to top, rgba(24, 24, 24, 0.94), rgba(11, 11, 11, 0.94));
+    border-top: 1px solid var(--box-edge);
+  }
+  .ap-dock .btn { flex: 1 1 0; }
+  .page-body:has(.ap-dock:not([hidden])) { padding-bottom: 4.25rem; }
+  /* Home KPI rider: the exact figure line the compact swap in
+     app.js sets under a compacted headline figure. */
+  .kpi-exact {
+    display: block;
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+    font-size: 0.72rem; color: var(--muted);
+  }
 }
 /* Darker header bands: a solid ::before behind the heading. Layering
    the ramp over the band on the heading itself hid the text wherever

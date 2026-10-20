@@ -118,21 +118,104 @@ func TestCoarsePointerTapFloor(t *testing.T) {
 // TestAppraisalBandLayout pins the appraisal half of the
 // intermediate-band fix: the summary cards keep a 13rem floor so
 // a nowrap figure can never spill into its neighbour, and at
-// phone widths the fixed result tables scroll inside their
-// wrapper instead of crushing the item column.
+// phone widths the fixed-layout reprocess table scrolls inside
+// its wrapper instead of crushing its columns (the itemized
+// table's phone treatment is pinned by the pass-2 test below).
 func TestAppraisalBandLayout(t *testing.T) {
 	css := readStatic(t, "style.css")
 	if !strings.Contains(css, ".ap-hud { display: grid; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));") {
 		t.Error(".ap-hud lost its 13rem card floor; summary figures can collide again")
 	}
-	block := mediaBlock(t, css, "@media (max-width: 45rem) {\n  /* Phone widths: the fixed-layout result tables")
-	if !strings.Contains(block, "#ap-panel-items table, .ap-reprocess table { min-width: 42rem; }") {
-		t.Error("the phone block no longer holds the result tables at 42rem inside their wrapper")
+	block := mediaBlock(t, css, "@media (max-width: 45rem) {\n  /* Phone widths: the fixed-layout reprocess table")
+	if !strings.Contains(block, ".ap-reprocess table { min-width: 42rem; }") {
+		t.Error("the phone block no longer holds the reprocess table at 42rem inside its wrapper")
 	}
 	band := mediaBlock(t, css, "@media (max-width: 70rem) {\n  .ap-bench")
 	if !strings.Contains(band, ".ap-bench { grid-template-columns: minmax(0, 1fr); }") ||
 		!strings.Contains(band, ".ap-hud { grid-template-columns: repeat(2, 1fr); }") {
 		t.Error("the intermediate band no longer stacks the appraisal bench / pairs the summary cards")
+	}
+}
+
+// TestAppraisalPhoneTreatment pins mobile pass 2's appraisal
+// surface: the segmented Paste Input / Valuation switch (sticky,
+// JS-unhidden, one pane at a time under the phone breakpoint),
+// the hero card's compact-first figure order, the itemized
+// results as stacked cards under their column labels, the
+// swipeable samples strip, the paste-from-clipboard hook, and
+// the bottom dock re-surfacing existing actions only.
+func TestAppraisalPhoneTreatment(t *testing.T) {
+	css := readStatic(t, "style.css")
+	if !strings.Contains(css, ".ap-switch, .ap-dock { display: none; }") {
+		t.Error("the switch and dock are not display:none until app.js unhides them")
+	}
+	block := mediaBlock(t, css, "@media (max-width: 45rem) {\n  .ap-switch:not([hidden])")
+	for _, want := range []string{
+		".ap-switch:not([hidden])",
+		"position: sticky;",
+		`.ap-bench.ap-switched[data-ap-view="input"] > .ap-right { display: none; }`,
+		`.ap-bench.ap-switched[data-ap-view="result"] > .ap-form { display: none; }`,
+		".ap-samples { flex-wrap: nowrap; overflow-x: auto;",
+		".ap-card.hero .ap-cs { display: contents; }",
+		".ap-card.hero .ap-cv {",
+		"#ap-panel-items thead { display: none; }",
+		"#ap-panel-items td[data-th]::before",
+		"content: attr(data-th);",
+		".ap-dock:not([hidden])",
+		".page-body:has(.ap-dock:not([hidden]))",
+		".kpi-exact {",
+	} {
+		if !strings.Contains(block, want) {
+			t.Errorf("the appraisal phone block is missing %q", want)
+		}
+	}
+
+	rawTpl, err := fs.ReadFile(templatesFS, "templates/market_appraise.html")
+	if err != nil {
+		t.Fatalf("read market_appraise.html: %v", err)
+	}
+	tpl := string(rawTpl)
+	for _, want := range []string{
+		`data-ap-switch hidden`,
+		"1. Paste Input",
+		"2. Valuation",
+		`data-ap-view="result"`,
+		`data-ap-paste hidden`,
+		"Paste from clipboard",
+		`data-ap-buy-raw="{{$r.BuyRaw}}"`,
+		`data-th="Qty"`,
+		`data-th="Unit price"`,
+		`data-th="Line total"`,
+		`data-th="Volume"`,
+		`data-ap-dock hidden`,
+		"Edit paste",
+		`data-ap-dock-edit`,
+	} {
+		if !strings.Contains(tpl, want) {
+			t.Errorf("market_appraise.html is missing the pass-2 hook %q", want)
+		}
+	}
+	// The dock's copy actions are the page's existing ones, on the
+	// shared copy hooks — and nothing else: no invented actions.
+	dock := tpl[strings.Index(tpl, "ap-dock"):]
+	if !strings.Contains(dock, `data-copy-from="ap-multisell"`) || !strings.Contains(dock, `data-copy data-copy-text="{{$r.ShareURL}}"`) {
+		t.Error("the dock lost the existing copy actions it re-surfaces")
+	}
+
+	js := readStatic(t, "app.js")
+	for _, want := range []string{
+		"data-ap-view-btn",
+		"navigator.clipboard.readText",
+		`window.matchMedia("(max-width: 45rem)")`,
+		"[data-ap-buy-raw]",
+		".home-grid .kpi-v",
+		`(v / 1e9).toFixed(2) + "B"`,
+		`(v / 1e6).toFixed(2) + "M"`,
+		`(v / 1e3).toFixed(1) + "K"`,
+	} {
+		if !strings.Contains(js, want) {
+			t.Errorf("app.js is missing the pass-2 behavior %q", want)
+		}
 	}
 }
 

@@ -23,6 +23,41 @@ retunes, and the root carries fit-ro for the read-only tooltips. */}}
 {{end}}
 </div>
 {{end}}
+{{if and (not .ReadOnly) .HasShip}}
+{{/* Phone-only chrome (fit.css shows it at phone widths, never
+     above them): a compact ship header and the view tab bar.
+     Both live inside the fragment so a re-simulation re-renders
+     them with the fit; fit.js owns which view is current. */}}
+<div class="fit-mhead">
+  <div class="fit-mhead-id">
+    <span class="fit-mhead-name">{{if .FitName}}{{.FitName}}{{else}}{{.ShipName}}{{end}}</span>
+    <span class="fit-mhead-ship">{{.ShipName}}</span>
+  </div>
+  {{with .Stats}}
+  <div class="fit-mhead-nums">
+    <span class="fit-mchip"><strong>{{.TotalDPS}}</strong><span>DPS</span></span>
+    <span class="fit-mchip"><strong>{{.EHPOmni}}</strong><span>EHP</span></span>
+  </div>
+  <div class="fit-mhead-bars">
+    <div class="fit-bar-row{{if .CPU.Over}} over{{else}} good{{end}}">
+      <span class="fit-bar-label">CPU</span>
+      <span class="fit-bar"><span data-w="{{printf "%.1f" .CPU.Pct}}"></span></span>
+      <span class="fit-bar-nums">{{.CPU.Used}} / {{.CPU.Max}}</span>
+    </div>
+    <div class="fit-bar-row{{if .Powergrid.Over}} over{{else}} good{{end}}">
+      <span class="fit-bar-label">Powergrid</span>
+      <span class="fit-bar"><span data-w="{{printf "%.1f" .Powergrid.Pct}}"></span></span>
+      <span class="fit-bar-nums">{{.Powergrid.Used}} / {{.Powergrid.Max}}</span>
+    </div>
+  </div>
+  {{end}}
+</div>
+<div class="fit-mtabs" role="tablist" aria-label="Fitting views">
+  <button type="button" role="tab" data-fit-view="racks" aria-selected="false">Slot Racks</button>
+  <button type="button" role="tab" data-fit-view="stats" aria-selected="false">Resists &amp; Cap</button>
+  <button type="button" role="tab" data-fit-view="radial" aria-selected="true">Radial</button>
+</div>
+{{end}}
 {{if .HasShip}}
 {{if .Visual}}
 <div class="fit-center">
@@ -246,7 +281,7 @@ retunes, and the root carries fit-ro for the read-only tooltips. */}}
       <h4><span>{{.Label}}</span>{{if .HasMax}} <small class="fit-count{{if .Over}} fit-over{{end}}">{{.Used}}/{{.Max}}{{if .Over}} — doesn't fit{{end}}</small>{{end}}</h4>
       <div class="fit-chips">
         {{range .Chips}}
-        <span class="fit-chip{{if .State}} st-{{.State}}{{end}}" data-fit-rowtype="{{.TypeID}}" data-tip-name="{{.Name}}" data-tip-lines="{{.TipLines}}">
+        <span class="fit-chip{{if .State}} st-{{.State}}{{end}}" data-fit-rowtype="{{.TypeID}}" data-tip-name="{{.Name}}" data-tip-lines="{{.TipLines}}"{{if and (not $group.ReadOnly) .StatesCSV}} data-fit-states="{{.StatesCSV}}" data-fit-state="{{.State}}"{{end}}>
           {{if $group.ReadOnly}}<span class="fit-chip-name">{{.Name}}</span>
           {{if gt .Qty 1}}<span class="fit-chip-qty">×{{.Qty}}</span>{{end}}
           {{if .State}}<span class="fit-chip-state">{{.State}}</span>{{end}}

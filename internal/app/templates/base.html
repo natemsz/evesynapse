@@ -29,6 +29,7 @@
 {{if or (eq .NavPage "home.html") (eq .NavPage "market_tradeideas.html") (eq .NavPage "link.html")}}<link rel="stylesheet" href="/static/tradeideas.css?v={{.AssetVersion}}">{{end}}
 {{if eq .NavPage "link.html"}}<link rel="stylesheet" href="/static/link.css?v={{.AssetVersion}}">{{end}}
 {{if eq .NavPage "market_appraise.html"}}<link rel="stylesheet" href="/static/appraisal.css?v={{.AssetVersion}}">{{end}}
+{{if eq .NavPage "fittings.html"}}<link rel="stylesheet" href="/static/fit.css?v={{.AssetVersion}}">{{end}}
 </head>
 <body{{if .AutoRefresh}} data-autorefresh="5"{{end}}>
 <a class="skip-link" href="#main-content">Skip to main content</a>

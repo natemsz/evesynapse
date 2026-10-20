@@ -312,6 +312,65 @@ func TestContractSearchResultsTable(t *testing.T) {
 	}
 }
 
+// TestContractSearchCardRows pins the fields the phone
+// card form (contracts.css, 45rem) is built from: each row
+// of the one result set carries its card face in the row
+// markup itself -- an exchange shows issuer, deal badge,
+// our value under its "Our value" label, the priced
+// coverage and the spread; a courier shows reward,
+// collateral under its own label, the sealed wrap and its
+// volume, and no appraised value, coverage or spread at
+// all (its cargo is private and never appraised).
+func TestContractSearchCardRows(t *testing.T) {
+	tr := &openWindowTransport{}
+	app, conn, _ := buildCorpTestApp(t, tr)
+	seedContractCorpus(t, app, conn)
+
+	_, body := getAnon(t, app, "/contracts/search/")
+	row := func(id string) string {
+		t.Helper()
+		start := strings.Index(body, `data-contract="`+id+`"`)
+		if start < 0 {
+			t.Fatalf("row %s missing from the results", id)
+		}
+		rest := body[start:]
+		if next := strings.Index(rest[1:], `data-contract="`); next >= 0 {
+			rest = rest[:next+1]
+		} else if end := strings.Index(rest, "</tbody>"); end >= 0 {
+			rest = rest[:end]
+		}
+		return rest
+	}
+
+	exchange := row("7001")
+	mustContain(t, "exchange card face", exchange,
+		"Cheap Tritanium",
+		`<div class="cs-row-issuer">Issuer One</div>`,
+		"↗ Deal -15%",
+		`data-th="Our value"`,
+		"1000.00 ISK", "priced 1 of 1 lines", "&#43;150.00 ISK spread",
+		"Jita IV - Moon 4")
+
+	courier := row("7003")
+	mustContain(t, "courier card face", courier,
+		"Move My Stuff",
+		`<div class="cs-row-issuer">Issuer One</div>`,
+		`data-th="Collateral"`,
+		"Reward", "5.0M ISK", "Collat: 100.0K ISK",
+		"Sealed Plastic Wrap (1,000 m³)",
+		"🚚 1,000 m³ <span>•</span> <span>5000 ISK/m³</span>",
+		"collateral")
+	// The spread element renders only with a spread figure,
+	// and the coverage only as a text node ("priced N of M
+	// lines"); the cs-priced class itself is expected here --
+	// it carries the collateral note.
+	for _, banned := range []string{`class="cs-spread`, ">priced ", `data-th="Our value"`} {
+		if strings.Contains(courier, banned) {
+			t.Errorf("courier card face carries %q; couriers have no appraised value, coverage or spread", banned)
+		}
+	}
+}
+
 // TestContractSearchSwapRewiring pins the contracts.js
 // swap contract: an in-page swap replaces the results DOM
 // without re-running the script, so the page wiring must

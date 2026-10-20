@@ -219,6 +219,64 @@ func TestAppraisalPhoneTreatment(t *testing.T) {
 	}
 }
 
+// TestContractsPhoneCards pins mobile pass 2's contracts
+// surface: at phone widths the results table renders as a
+// card list (the row markup restyled in contracts.css, the
+// appraisal item's pure-CSS pattern) — the contract cell as
+// the card head with the issuer line the form adds, contents
+// under it, price and value side by side under their labels,
+// location as the foot, the drawer as a band under its card;
+// the header keeps only its two sort links. Between phone
+// and desktop widths the table keeps its scrolling form, and
+// the desktop row never shows the issuer line.
+func TestContractsPhoneCards(t *testing.T) {
+	css := readStatic(t, "contracts.css")
+	if !strings.Contains(css, ".cs-row-issuer { display: none; }") {
+		t.Error("the issuer line is not held back from the desktop row")
+	}
+	block := mediaBlock(t, css, "@media (max-width: 45rem)")
+	for _, want := range []string{
+		".cs-results { overflow-x: visible; }",
+		".cs-table { display: block; min-width: 0; }",
+		".cs-table th { display: none;",
+		".cs-table th:nth-child(3), .cs-table th:nth-child(4) { display: block; }",
+		"grid-template-areas: \"head head\" \"contents contents\" \"price value\" \"foot foot\";",
+		".cs-table td.cs-c1 { grid-area: head;",
+		".cs-table td.cs-c2 { grid-area: contents;",
+		".cs-table td.cs-c3 { grid-area: price;",
+		".cs-table td.cs-c4 { grid-area: value;",
+		".cs-table td.cs-c5 {",
+		"content: attr(data-th);",
+		".cs-row-issuer {",
+		"display: block;",
+		".cs-table tbody tr.cs-drow:has(.cs-panel-slot[hidden]) { display: none; }",
+	} {
+		if !strings.Contains(block, want) {
+			t.Errorf("the contracts phone block is missing %q", want)
+		}
+	}
+	// The mid band is unchanged: the table keeps its five
+	// columns and scrolls inside its panel there.
+	mid := mediaBlock(t, css, "@media (max-width: 72rem)")
+	if !strings.Contains(mid, ".cs-table { min-width: 46rem; }") {
+		t.Error("the mid band lost the scrolling table form")
+	}
+
+	rawTpl, err := fs.ReadFile(templatesFS, "templates/contract_search.html")
+	if err != nil {
+		t.Fatalf("read contract_search.html: %v", err)
+	}
+	tpl := string(rawTpl)
+	for _, want := range []string{
+		`<div class="cs-row-issuer">{{.IssuerName}}</div>`,
+		`<td class="cs-c4" data-th="{{if .Courier}}Collateral{{else}}Our value{{end}}">`,
+	} {
+		if !strings.Contains(tpl, want) {
+			t.Errorf("contract_search.html is missing the card hook %q", want)
+		}
+	}
+}
+
 // TestLandingTotalsWrap pins the landing planner card's totals
 // row: at small widths the three figures wrap as a left-aligned
 // group rather than stretching across the card.

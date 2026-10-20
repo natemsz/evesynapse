@@ -5272,9 +5272,8 @@ html[data-theme="light"] .suggest li:not(.sug-kind):not(.sug-empty):hover, html[
   .phone-sheet:not([hidden]) {
     display: flex; flex-direction: column;
     position: fixed; left: 0; right: 0; bottom: 0; z-index: 99;
-    max-height: min(78vh, 40rem);
-    max-height: min(78dvh, 40rem);
-    overflow-y: auto;
+    max-height: min(66vh, 40rem);
+    max-height: min(66dvh, 40rem);
     padding: 0.8rem 1rem calc(1rem + env(safe-area-inset-bottom, 0px));
     background: linear-gradient(rgba(21, 21, 21, 0.94), rgba(17, 17, 17, 0.97)) padding-box;
     -webkit-backdrop-filter: blur(18px);
@@ -5283,6 +5282,7 @@ html[data-theme="light"] .suggest li:not(.sug-kind):not(.sug-empty):hover, html[
     border-radius: var(--r-lg) var(--r-lg) 0 0;
   }
   .phone-sheet-head {
+    flex: none;
     display: flex; align-items: center; justify-content: space-between;
     margin-bottom: 0.3rem;
   }
@@ -5295,25 +5295,31 @@ html[data-theme="light"] .suggest li:not(.sug-kind):not(.sug-empty):hover, html[
     border: 1px solid transparent; border-radius: var(--r-sm);
     cursor: pointer;
   }
-  .phone-sheet-list { list-style: none; margin: 0; padding: 0; }
-  .phone-sheet-row { border-top: 1px solid #262626; padding: 0.4rem 0; }
+  .phone-sheet-list {
+    list-style: none; margin: 0; padding: 0;
+    flex: 1 1 auto; min-height: 0; overflow-y: auto;
+  }
+  .phone-sheet-row {
+    display: flex; align-items: center; flex-wrap: wrap;
+    column-gap: 0.6rem;
+    border-top: 1px solid #262626; padding: 0.4rem 0;
+  }
   .phone-sheet-row:first-child { border-top: 0; }
   .phone-sheet-section {
     display: block;
     padding: 0.35rem 0.55rem;
-    border-radius: var(--r-sm);
+    border-left: 3px solid transparent;
     font-family: "Rajdhani", sans-serif; font-weight: 600;
     font-size: 1rem; letter-spacing: 0.04em; text-transform: uppercase;
     color: var(--text);
     text-decoration: none;
   }
   .phone-sheet-section.active {
+    border-left-color: var(--accent);
     color: var(--text-bright);
-    background: rgba(255, 106, 0, 0.16);
   }
   .phone-sheet-groups {
     display: flex; flex-wrap: wrap; gap: 0.35rem;
-    padding: 0.2rem 0.55rem 0.35rem;
   }
   .phone-sheet-groups a {
     border: 1px solid rgba(255, 110, 0, 0.22);
@@ -5330,6 +5336,7 @@ html[data-theme="light"] .suggest li:not(.sug-kind):not(.sug-empty):hover, html[
     color: var(--text-bright);
   }
   .phone-sheet-account {
+    flex: none;
     border-top: 1px solid #262626;
     margin-top: 0.4rem; padding-top: 0.6rem;
   }

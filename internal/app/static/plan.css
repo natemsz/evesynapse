@@ -290,7 +290,7 @@ proportional bar under the text, colored by the decision. */
 .plan-fill { background: var(--plan-build); height: 100%; }
 .plan-buy .plan-fill, .plan-fill.plan-buy { background: var(--plan-buy); }
 .plan-node small, .plan-cols small { color: var(--muted); }
-#plan-inspector { position: sticky; top: calc(3.75rem + 1px + 0.6rem); }
+#plan-inspector { position: sticky; top: calc(var(--sticky-top) + 1px + 0.6rem); }
 #plan-inspector h4, #plan-hubsplit h4 { margin: 0 0 0.4rem; }
 .plan-buytable th.num, .plan-buytable td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .plan-buytable tfoot td { font-weight: 700; border-top: 2px solid #262626; }

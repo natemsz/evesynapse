@@ -201,8 +201,22 @@
     }
   }
 
+  // In the phone band (phone.css) every strip is a sideways-
+  // scrolling row instead: all tabs stay in the row, the More
+  // wrapper stays hidden, and nothing is measured.
+  var phoneBandQuery = window.matchMedia ? window.matchMedia("(max-width: 45rem)") : null;
+
   function layoutTabStrip(st) {
-    var strip = st.strip, cs = window.getComputedStyle(strip);
+    var strip = st.strip, i;
+    if (phoneBandQuery && phoneBandQuery.matches) {
+      for (i = 0; i < st.tabs.length; i++) strip.insertBefore(st.tabs[i], st.wrap);
+      st.wrap.hidden = true;
+      strip.classList.remove("has-more");
+      st.wrap.classList.remove("has-active");
+      if (st.open) setTabMoreOpen(st, false);
+      return;
+    }
+    var cs = window.getComputedStyle(strip);
     var gap = parseFloat(cs.columnGap) || parseFloat(cs.gap) || 0;
     var avail = strip.clientWidth -
       (parseFloat(cs.paddingLeft) || 0) - (parseFloat(cs.paddingRight) || 0);
@@ -213,7 +227,7 @@
       if (child === st.wrap || child.tagName === "A" || child.hidden) continue;
       avail -= child.offsetWidth + gap;
     }
-    var i, labels = [];
+    var labels = [];
     // Folded tabs have no layout box, so their width is the last
     // one measured in the row; visible tabs re-measure each pass.
     for (i = 0; i < st.tabs.length; i++) {
@@ -309,6 +323,17 @@
   onContentReady(initTabOverflow);
   initTabOverflow(document);
   window.addEventListener("resize", queueTabLayouts);
+  // Crossing into or out of the phone band re-lays every strip
+  // (folded tabs return to the row) and brings the current tab
+  // back into view on the scrolling rows.
+  if (phoneBandQuery && phoneBandQuery.addEventListener) {
+    phoneBandQuery.addEventListener("change", function () {
+      queueTabLayouts();
+      if (window.requestAnimationFrame) {
+        window.requestAnimationFrame(function () { revealSectionTab(document); });
+      }
+    });
+  }
   // Tab widths ride on the display font; once it lands, measure
   // again so a fold decided against fallback-font widths settles.
   if (document.fonts && document.fonts.ready) {

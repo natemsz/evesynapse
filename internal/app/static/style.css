@@ -165,6 +165,11 @@
   --row-alt: rgba(255, 255, 255, 0.03);
   --row-hover: rgba(255, 140, 50, 0.09);
   --input-bg: rgba(18, 12, 8, 0.45);
+  /* Where sticky in-page bars park: the top bar's bottom edge.
+     Every sticky element offsets from this one token, so a layout
+     that changes the bar (phone.css: the short-screen band lets it
+     scroll away; the notch inset pads it) moves them all. */
+  --sticky-top: calc(3.75rem + env(safe-area-inset-top, 0px));
 }
 
 * { box-sizing: border-box; }
@@ -884,7 +889,7 @@ main {
 .ap-switch, .ap-dock { display: none; }
 @media (max-width: 45rem) {
   .ap-switch:not([hidden]) {
-    display: flex; position: sticky; top: 3.75rem; z-index: 30;
+    display: flex; position: sticky; top: var(--sticky-top); z-index: 30;
     width: 100%; margin-bottom: 0.9rem;
   }
   .ap-switch > * { flex: 1 1 0; justify-content: center; }
@@ -3951,7 +3956,7 @@ select.flash { animation: fit-flash 0.7s ease-out; }
    only the sticky placement lives here. */
 .fit-modsearch {
   position: sticky;
-  top: 4.25rem;
+  top: calc(var(--sticky-top) + 0.5rem);
   z-index: 9;
 }
 .fit-modsearchwrap { display: block; width: 100%; }
@@ -3989,7 +3994,7 @@ html[data-theme="light"] .page-body:not(:has(.home-grid)) .fit-modsearch {
 .fit-notice.err { border-color: var(--danger); background: rgba(198, 47, 16, 0.08); }
 @media (max-width: 480px) {
   .fit-vship { width: 44%; }
-  .fit-modsearch { top: 3.9rem; }
+  .fit-modsearch { top: calc(var(--sticky-top) + 0.15rem); }
 }
 /* Unified search row: family chips + filters. */
 .fit-searchwrap { flex: 2 1 20rem; }

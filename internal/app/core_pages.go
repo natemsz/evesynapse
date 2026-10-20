@@ -215,6 +215,9 @@ func (app *Application) fillShell(ctx context.Context, shell *module.ShellData, 
 			shell.IsAdmin = app.adminAmong(characters)
 		}
 	}
+	if shell.LoggedIn && shell.SheetSwitcher == nil {
+		shell.SheetSwitcher, shell.SheetMoreCount = sheetSwitcherCap(shell.Switcher)
+	}
 	if shell.LoggedIn && shell.Notify == nil {
 		shell.Notify = app.notifyBadgeFor(ctx, app.userID(ctx))
 	}

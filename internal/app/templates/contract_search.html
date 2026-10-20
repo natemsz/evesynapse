@@ -196,6 +196,7 @@
       <td class="cs-c1">
         <span class="cs-type {{if eq .TypeLabel "Item exchange"}}t-exchange{{else if eq .TypeLabel "Auction"}}t-auction{{else}}t-courier{{end}}">{{.TypeLabel}}</span>{{if .IsDeal}} <span class="cs-deal">↗ Deal -{{.DealPct}}%</span>{{end}}
         <div class="cs-row-title">{{if .Title}}{{.Title}}{{else}}{{.TypeLabel}} contract{{end}}</div>
+        <div class="cs-row-issuer">{{.IssuerName}}</div>
         <div class="cs-row-meta"><span>{{.RegionName}}</span><span>•</span><span>issued {{.IssuedAgo}}</span></div>
       </td>
       <td class="cs-c2">
@@ -211,7 +212,7 @@
         <div class="cs-cell-value">{{.Price}}</div>
         {{if .Buyout}}<div class="cs-psub amber">Buyout: {{.Buyout}}</div>{{else if .Courier}}<div class="cs-psub gray">Collat: {{.Collateral}}</div>{{end}}
       </td>
-      <td class="cs-c4">
+      <td class="cs-c4" data-th="{{if .Courier}}Collateral{{else}}Our value{{end}}">
         {{if .Value}}<div class="cs-cell-value">{{.Value}}</div>{{end}}
         {{if .PricedText}}<div class="cs-priced">{{.PricedText}}</div>{{else if .ValueNote}}<div class="cs-priced">{{.ValueNote}}</div>{{end}}
         {{if .Spread}}<div class="cs-spread{{if .SpreadNeg}} neg{{end}}">{{.Spread}} spread</div>{{end}}

@@ -100,10 +100,30 @@ type Config struct {
 	tokenKeyOCIEndpoint      string         // TOKEN_KEY_OCI_CRYPTO_ENDPOINT: the vault's cryptographic endpoint (oci provider)
 	tokenKeyOCIMetadataURL   string         // TOKEN_KEY_OCI_METADATA_URL: the instance metadata base (oci provider; "" = the link-local default — an override for tests)
 	tokenKeyOCIFederationURL string         // TOKEN_KEY_OCI_FEDERATION_URL: the region federation endpoint (oci provider; "" = derived from the crypto endpoint)
-	signUp                   signUpPolicy   // EVE_ALLOWED_*_IDS: who may create an account (empty = anyone)
-	esiContact               string         // ESI_CONTACT: how CCP can reach the operator, sent in the User-Agent
-	logLevel                 string         // LOG_LEVEL: debug, info (default), warn or error
-	logFormat                string         // LOG_FORMAT: text (default) or json
+	tokenKeyOCISecretsURL    string         // TOKEN_KEY_OCI_SECRETS_URL: the OCI Secrets service base (oci provider; "" = derived from the crypto endpoint's region — an override for tests)
+
+	// The working credentials' external sources (auth_credentials.go):
+	// for each of EVE_CLIENT_SECRET, DISCORD_CLIENT_SECRET,
+	// DISCORD_BOT_TOKEN and MODEL_API_KEY, either the OCI secret
+	// holding it (<name>_OCI_SECRET_ID, oci provider) or its value
+	// wrapped by the key service (<name>_WRAPPED, http provider).
+	// Both empty means the credential is its plain env value, as
+	// always. creds is where a fetched value lands at startup; the
+	// accessors (EVEClientSecret and its siblings) read it ahead of
+	// the plain fields below.
+	creds                      *credentialStore
+	eveClientSecretOCIID       string
+	eveClientSecretWrapped     string
+	discordClientSecretOCIID   string
+	discordClientSecretWrapped string
+	discordBotTokenOCIID       string
+	discordBotTokenWrapped     string
+	metaAIKeyOCIID             string
+	metaAIKeyWrapped           string
+	signUp                     signUpPolicy // EVE_ALLOWED_*_IDS: who may create an account (empty = anyone)
+	esiContact                 string       // ESI_CONTACT: how CCP can reach the operator, sent in the User-Agent
+	logLevel                   string       // LOG_LEVEL: debug, info (default), warn or error
+	logFormat                  string       // LOG_FORMAT: text (default) or json
 
 	// Trade ideas (tradeideas.go): a model asked about the Forge
 	// spread-scanner rows every so often. Meta's Muse Wonder when
@@ -125,17 +145,51 @@ type Config struct {
 // can run: a Meta API key, or both the Cloudflare account ID (the
 // URL) and token (the Authorization header).
 func (c Config) TradeIdeasConfigured() bool {
-	return c.metaAIKey != "" || (c.cloudflareAccountID != "" && c.cloudflareAuthToken != "")
+	return c.MetaAIKey() != "" || (c.cloudflareAccountID != "" && c.cloudflareAuthToken != "")
 }
 
 // tradeIdeasUsesMeta reports whether the refresh asks Muse Wonder
 // (MODEL_API_KEY set) rather than Gemma.
-func (c Config) tradeIdeasUsesMeta() bool { return c.metaAIKey != "" }
+func (c Config) tradeIdeasUsesMeta() bool { return c.MetaAIKey() != "" }
 
 // SSOConfigured reports whether EVE SSO can run: it needs both the
 // client ID (login redirect) and the secret (token exchange).
 func (c Config) SSOConfigured() bool {
-	return c.eveClientID != "" && c.eveClientSecret != ""
+	return c.eveClientID != "" && c.EVEClientSecret() != ""
+}
+
+// The working credentials in force. Each accessor returns the
+// value fetched from the credential's external source once one
+// has landed (auth_credentials.go); until then — and for a
+// credential with no external source — it is the plain env value
+// the field has always held. Callers must read through these, not
+// the fields, so a credential that arrives after boot takes
+// effect without a restart.
+func (c Config) EVEClientSecret() string { return c.credential(credEVEClientSecret, c.eveClientSecret) }
+
+// DiscordClientSecret returns the Discord OAuth client secret in
+// force (see EVEClientSecret).
+func (c Config) DiscordClientSecret() string {
+	return c.credential(credDiscordClientSecret, c.discordClientSecret)
+}
+
+// DiscordBotToken returns the Discord bot token in force (see
+// EVEClientSecret).
+func (c Config) DiscordBotToken() string { return c.credential(credDiscordBotToken, c.discordBotToken) }
+
+// MetaAIKey returns the MODEL_API_KEY in force (see
+// EVEClientSecret).
+func (c Config) MetaAIKey() string { return c.credential(credModelAPIKey, c.metaAIKey) }
+
+// credential resolves one working credential: the fetched value
+// when the store holds one, else the plain env value.
+func (c Config) credential(name, plain string) string {
+	if c.creds != nil {
+		if v, ok := c.creds.get(name); ok {
+			return v
+		}
+	}
+	return plain
 }
 
 // Addr returns the configured HTTP listen address.
@@ -260,49 +314,59 @@ func LoadConfig() (Config, error) {
 		logging.Warnf("evesynapse: NOTIFY_POLL_SECONDS=%q is not a whole number of seconds; using %d", os.Getenv("NOTIFY_POLL_SECONDS"), notifyPoll)
 	}
 	return Config{
-		notifyPoll:               notifyPoll,
-		workerTiersOff:           strings.EqualFold(strings.TrimSpace(os.Getenv("WORKER_TIERS")), "off"),
-		workerFetches:            parseWorkerFetches(os.Getenv("WORKER_FETCHES_PER_CYCLE")),
-		workerLanes:              parseWorkerLanes(os.Getenv("WORKER_LANES")),
-		foresightOff:             strings.EqualFold(strings.TrimSpace(os.Getenv("FORESIGHT")), "off"),
-		anonMarketOff:            strings.EqualFold(strings.TrimSpace(os.Getenv("MARKET_ANON")), "off"),
-		foresightFetches:         parseForesightFetches(os.Getenv("FORESIGHT_FETCHES_PER_CYCLE")),
-		dbConns:                  parseDBConns(os.Getenv("DB_MAX_CONNS")),
-		discordClientID:          os.Getenv("DISCORD_CLIENT_ID"),
-		discordClientSecret:      os.Getenv("DISCORD_CLIENT_SECRET"),
-		discordBotToken:          os.Getenv("DISCORD_BOT_TOKEN"),
-		addr:                     getenvDefault("ADDR", ":8080"),
-		databaseURL:              getenvDefault("DATABASE_URL", "postgres://evesynapse@localhost:5432/evesynapse?sslmode=disable"),
-		eveClientID:              os.Getenv("EVE_CLIENT_ID"),
-		eveClientSecret:          os.Getenv("EVE_CLIENT_SECRET"),
-		eveCallbackURL:           getenvDefault("EVE_CALLBACK_URL", "http://localhost:8080/auth/callback"),
-		eveRevokeURL:             getenvDefault("EVE_SSO_REVOKE_URL", defaultEveRevokeURL),
-		devLogin:                 os.Getenv("DEV_LOGIN") == "1",
-		sdeBaseURL:               getenvDefault("EVE_SDE_BASE_URL", defaultSDEBaseURL),
-		fuzzworkBaseURL:          getenvDefault("EVE_FUZZWORK_BASE_URL", defaultFuzzworkBaseURL),
-		adminCharIDs:             parseAdminCharIDs(os.Getenv("EVE_ADMIN_CHARACTER_IDS")),
-		tokenKey:                 os.Getenv("TOKEN_ENCRYPTION_KEY"),
-		tokenKeyProvider:         os.Getenv("TOKEN_KEY_PROVIDER"),
-		tokenKeyWrapped:          os.Getenv("TOKEN_KEY_WRAPPED"),
-		tokenKeyUnwrapURL:        os.Getenv("TOKEN_KEY_UNWRAP_URL"),
-		tokenKeyCred:             os.Getenv("TOKEN_KEY_UNWRAP_CREDENTIAL"),
-		tokenKeyOCIKeyID:         os.Getenv("TOKEN_KEY_OCI_KEY_ID"),
-		tokenKeyOCIEndpoint:      os.Getenv("TOKEN_KEY_OCI_CRYPTO_ENDPOINT"),
-		tokenKeyOCIMetadataURL:   os.Getenv("TOKEN_KEY_OCI_METADATA_URL"),
-		tokenKeyOCIFederationURL: os.Getenv("TOKEN_KEY_OCI_FEDERATION_URL"),
-		signUp:                   loadSignUpPolicy(os.Getenv),
-		esiContact:               os.Getenv("ESI_CONTACT"),
-		cloudflareAccountID:      strings.TrimSpace(os.Getenv("CLOUDFLARE_ACCOUNT_ID")),
-		cloudflareAuthToken:      strings.TrimSpace(os.Getenv("CLOUDFLARE_AUTH_TOKEN")),
-		metaAIKey:                strings.TrimSpace(os.Getenv("MODEL_API_KEY")),
-		logLevel:                 os.Getenv("LOG_LEVEL"),
-		logFormat:                os.Getenv("LOG_FORMAT"),
-		pushPublicKey:            os.Getenv("VAPID_PUBLIC_KEY"),
-		pushPrivateKey:           os.Getenv("VAPID_PRIVATE_KEY"),
-		pushSubject:              os.Getenv("VAPID_SUBJECT"),
-		androidPackage:           strings.TrimSpace(os.Getenv("ANDROID_APP_PACKAGE")),
-		androidFingerprints:      parseAndroidFingerprints(os.Getenv("ANDROID_APP_FINGERPRINTS")),
-		opsManagerRoles:          parseRoleList(os.Getenv("OPS_MANAGER_ROLES")),
+		notifyPoll:                 notifyPoll,
+		workerTiersOff:             strings.EqualFold(strings.TrimSpace(os.Getenv("WORKER_TIERS")), "off"),
+		workerFetches:              parseWorkerFetches(os.Getenv("WORKER_FETCHES_PER_CYCLE")),
+		workerLanes:                parseWorkerLanes(os.Getenv("WORKER_LANES")),
+		foresightOff:               strings.EqualFold(strings.TrimSpace(os.Getenv("FORESIGHT")), "off"),
+		anonMarketOff:              strings.EqualFold(strings.TrimSpace(os.Getenv("MARKET_ANON")), "off"),
+		foresightFetches:           parseForesightFetches(os.Getenv("FORESIGHT_FETCHES_PER_CYCLE")),
+		dbConns:                    parseDBConns(os.Getenv("DB_MAX_CONNS")),
+		discordClientID:            os.Getenv("DISCORD_CLIENT_ID"),
+		discordClientSecret:        os.Getenv("DISCORD_CLIENT_SECRET"),
+		discordBotToken:            os.Getenv("DISCORD_BOT_TOKEN"),
+		addr:                       getenvDefault("ADDR", ":8080"),
+		databaseURL:                getenvDefault("DATABASE_URL", "postgres://evesynapse@localhost:5432/evesynapse?sslmode=disable"),
+		eveClientID:                os.Getenv("EVE_CLIENT_ID"),
+		eveClientSecret:            os.Getenv("EVE_CLIENT_SECRET"),
+		eveCallbackURL:             getenvDefault("EVE_CALLBACK_URL", "http://localhost:8080/auth/callback"),
+		eveRevokeURL:               getenvDefault("EVE_SSO_REVOKE_URL", defaultEveRevokeURL),
+		devLogin:                   os.Getenv("DEV_LOGIN") == "1",
+		sdeBaseURL:                 getenvDefault("EVE_SDE_BASE_URL", defaultSDEBaseURL),
+		fuzzworkBaseURL:            getenvDefault("EVE_FUZZWORK_BASE_URL", defaultFuzzworkBaseURL),
+		adminCharIDs:               parseAdminCharIDs(os.Getenv("EVE_ADMIN_CHARACTER_IDS")),
+		tokenKey:                   os.Getenv("TOKEN_ENCRYPTION_KEY"),
+		tokenKeyProvider:           os.Getenv("TOKEN_KEY_PROVIDER"),
+		tokenKeyWrapped:            os.Getenv("TOKEN_KEY_WRAPPED"),
+		tokenKeyUnwrapURL:          os.Getenv("TOKEN_KEY_UNWRAP_URL"),
+		tokenKeyCred:               os.Getenv("TOKEN_KEY_UNWRAP_CREDENTIAL"),
+		tokenKeyOCIKeyID:           os.Getenv("TOKEN_KEY_OCI_KEY_ID"),
+		tokenKeyOCIEndpoint:        os.Getenv("TOKEN_KEY_OCI_CRYPTO_ENDPOINT"),
+		tokenKeyOCIMetadataURL:     os.Getenv("TOKEN_KEY_OCI_METADATA_URL"),
+		tokenKeyOCIFederationURL:   os.Getenv("TOKEN_KEY_OCI_FEDERATION_URL"),
+		tokenKeyOCISecretsURL:      os.Getenv("TOKEN_KEY_OCI_SECRETS_URL"),
+		creds:                      newCredentialStore(),
+		eveClientSecretOCIID:       os.Getenv("EVE_CLIENT_SECRET_OCI_SECRET_ID"),
+		eveClientSecretWrapped:     os.Getenv("EVE_CLIENT_SECRET_WRAPPED"),
+		discordClientSecretOCIID:   os.Getenv("DISCORD_CLIENT_SECRET_OCI_SECRET_ID"),
+		discordClientSecretWrapped: os.Getenv("DISCORD_CLIENT_SECRET_WRAPPED"),
+		discordBotTokenOCIID:       os.Getenv("DISCORD_BOT_TOKEN_OCI_SECRET_ID"),
+		discordBotTokenWrapped:     os.Getenv("DISCORD_BOT_TOKEN_WRAPPED"),
+		metaAIKeyOCIID:             os.Getenv("MODEL_API_KEY_OCI_SECRET_ID"),
+		metaAIKeyWrapped:           os.Getenv("MODEL_API_KEY_WRAPPED"),
+		signUp:                     loadSignUpPolicy(os.Getenv),
+		esiContact:                 os.Getenv("ESI_CONTACT"),
+		cloudflareAccountID:        strings.TrimSpace(os.Getenv("CLOUDFLARE_ACCOUNT_ID")),
+		cloudflareAuthToken:        strings.TrimSpace(os.Getenv("CLOUDFLARE_AUTH_TOKEN")),
+		metaAIKey:                  strings.TrimSpace(os.Getenv("MODEL_API_KEY")),
+		logLevel:                   os.Getenv("LOG_LEVEL"),
+		logFormat:                  os.Getenv("LOG_FORMAT"),
+		pushPublicKey:              os.Getenv("VAPID_PUBLIC_KEY"),
+		pushPrivateKey:             os.Getenv("VAPID_PRIVATE_KEY"),
+		pushSubject:                os.Getenv("VAPID_SUBJECT"),
+		androidPackage:             strings.TrimSpace(os.Getenv("ANDROID_APP_PACKAGE")),
+		androidFingerprints:        parseAndroidFingerprints(os.Getenv("ANDROID_APP_FINGERPRINTS")),
+		opsManagerRoles:            parseRoleList(os.Getenv("OPS_MANAGER_ROLES")),
 	}, nil
 }
 

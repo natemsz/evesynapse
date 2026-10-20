@@ -176,6 +176,7 @@ func ociClientForConfig(cfg Config) (*ocikms.Client, error) {
 		KeyID:             strings.TrimSpace(cfg.tokenKeyOCIKeyID),
 		MetadataBaseURL:   strings.TrimSpace(cfg.tokenKeyOCIMetadataURL),
 		FederationBaseURL: strings.TrimSpace(cfg.tokenKeyOCIFederationURL),
+		SecretsBaseURL:    strings.TrimSpace(cfg.tokenKeyOCISecretsURL),
 	})
 }
 
@@ -229,7 +230,16 @@ var tokenKeyHTTPClient = &http.Client{Timeout: 10 * time.Second}
 // returned to the caller: it is never logged and never written
 // anywhere.
 func unwrapTokenSecret(ctx context.Context, cfg Config) (string, error) {
-	body, err := json.Marshal(tokenUnwrapRequest{Wrapped: strings.TrimSpace(cfg.tokenKeyWrapped)})
+	return unwrapViaKeyService(ctx, cfg, cfg.tokenKeyWrapped)
+}
+
+// unwrapViaKeyService asks the configured endpoint to unwrap one
+// blob — the token key's or a working credential's (phase 2,
+// auth_credentials.go); the protocol is the same two-call shape
+// for any small secret. The answer is only ever returned to the
+// caller: never logged, never written anywhere.
+func unwrapViaKeyService(ctx context.Context, cfg Config, wrapped string) (string, error) {
+	body, err := json.Marshal(tokenUnwrapRequest{Wrapped: strings.TrimSpace(wrapped)})
 	if err != nil {
 		return "", err
 	}
@@ -241,19 +251,19 @@ func unwrapTokenSecret(ctx context.Context, cfg Config) (string, error) {
 	req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(cfg.tokenKeyCred))
 	resp, err := tokenKeyHTTPClient.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("call the token key unwrap endpoint: %w", err)
+		return "", fmt.Errorf("call the key service unwrap endpoint: %w", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 4096))
-		return "", fmt.Errorf("the token key unwrap endpoint answered HTTP %d", resp.StatusCode)
+		return "", fmt.Errorf("the key service unwrap endpoint answered HTTP %d", resp.StatusCode)
 	}
 	var answer tokenUnwrapResponse
 	if err := json.NewDecoder(io.LimitReader(resp.Body, 65536)).Decode(&answer); err != nil {
-		return "", fmt.Errorf("read the token key unwrap answer: %w", err)
+		return "", fmt.Errorf("read the key service unwrap answer: %w", err)
 	}
 	if strings.TrimSpace(answer.Secret) == "" {
-		return "", errors.New("the token key unwrap endpoint returned no secret")
+		return "", errors.New("the key service unwrap endpoint returned no secret")
 	}
 	return answer.Secret, nil
 }

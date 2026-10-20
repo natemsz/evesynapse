@@ -265,6 +265,12 @@ func New(cfg Config) (*Application, error) {
 	if err != nil {
 		return nil, err
 	}
+	if err := validateCredentialSources(cfg); err != nil {
+		return nil, err
+	}
+	if cfg.creds == nil {
+		cfg.creds = newCredentialStore()
+	}
 	if tokenKeyFetchedRemotely(tokenKeyProvider) && cfg.tokenKey != "" {
 		// The provider wins; the env key stays only as the
 		// operator's way back (TOKEN_KEY_PROVIDER=env).
@@ -351,6 +357,12 @@ func New(cfg Config) (*Application, error) {
 	app.startedAt = time.Now()
 	if tokenKeyFetchedRemotely(tokenKeyProvider) {
 		app.startTokenKeyUnlock(workerCtx)
+	}
+	// The working credentials' external sources resolve the
+	// same way (auth_credentials.go): in the background, each
+	// taking effect through the Config accessors as it lands.
+	if hasExternalCredentials(cfg) {
+		app.startCredentialResolution(workerCtx)
 	}
 	if !cfg.noWorker {
 		app.workerDone = make(chan struct{})
@@ -895,7 +907,7 @@ func (app *Application) WarDetailWindow() int { return maxWarsShown }
 
 func (app *Application) ModelConfig() module.ModelConfig {
 	return module.ModelConfig{
-		MetaKey:             app.cfg.metaAIKey,
+		MetaKey:             app.cfg.MetaAIKey(),
 		CloudflareAccountID: app.cfg.cloudflareAccountID,
 		CloudflareToken:     app.cfg.cloudflareAuthToken,
 		HTTP:                app.tradeIdeasHTTP,
@@ -974,8 +986,8 @@ func (app *Application) OpenToken(sealed string, userID int64, field string) (st
 func (app *Application) DiscordConfig() module.DiscordConfig {
 	return module.DiscordConfig{
 		ClientID:     app.cfg.discordClientID,
-		ClientSecret: app.cfg.discordClientSecret,
-		BotToken:     app.cfg.discordBotToken,
+		ClientSecret: app.cfg.DiscordClientSecret(),
+		BotToken:     app.cfg.DiscordBotToken(),
 		HTTP:         app.discordHTTP,
 		BaseURL:      app.discordBase,
 	}

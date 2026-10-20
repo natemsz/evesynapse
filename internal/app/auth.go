@@ -242,7 +242,7 @@ var loginHTTPClient = &http.Client{Timeout: 10 * time.Second}
 func eveOAuthConfig(cfg Config) *oauth2.Config {
 	return &oauth2.Config{
 		ClientID:     cfg.eveClientID,
-		ClientSecret: cfg.eveClientSecret,
+		ClientSecret: cfg.EVEClientSecret(),
 		RedirectURL:  cfg.eveCallbackURL,
 		Scopes:       eveScopes,
 		Endpoint: oauth2.Endpoint{

@@ -245,51 +245,9 @@
 
 {{define "contractpanel"}}
 {{with .ContractPanel}}
-{{$p := .}}
 <div class="cs-panel">
   <div class="cs-pgrid">
-    <div class="cs-dcard">
-      <div class="cs-dhead">
-        <span class="cs-dhead-t">Contract Line Appraisal{{if .SourceLabel}} ({{.SourceLabel}}){{end}}</span>
-        <span class="cs-dhead-id">ID: {{.ContractID}} • Issued by {{.IssuerText}}</span>
-      </div>
-      {{if .StateNote}}<p class="cs-dnote">{{.StateNote}}</p>{{end}}
-      {{range .Lines}}
-      <div class="cs-aline{{if .Matched}} matched{{end}}">
-        <span class="cs-aline-l">{{if eq .Side "Wanted"}}<span class="cs-gchip want">Wants</span>{{else if .Group}}<span class="cs-gchip">{{.Group}}</span>{{end}} {{itemLink .TypeID .Name}}{{if and .RollTag .AbItemID}} <button type="button" class="cs-rolltag" data-ab-pick="{{.AbItemID}}" aria-controls="cs-tel-{{$p.ContractID}}-{{.AbItemID}}" aria-pressed="false">[{{.RollTag}}]</button>{{else if .RollTag}} [{{.RollTag}}]{{end}} <span class="cs-aq">×{{.Qty}}</span></span>
-        <span class="cs-tp{{if .BasisAmber}} un{{end}}">{{if .AbTier}}{{template "abyssal-howto" .BasisText}}{{else}}{{.BasisText}}{{end}}{{if .BasisNote}}<span class="cs-tnote">{{.BasisNote}}</span>{{end}}</span>
-      </div>
-      {{end}}
-    </div>
-    {{if .Telemetry}}
-    {{range .Telemetry}}
-    <div class="cs-dcard cs-tel" id="cs-tel-{{$p.ContractID}}-{{.ItemID}}" data-ab-tel="{{.ItemID}}">
-      <div class="cs-dhead">
-        <span class="cs-dhead-t cy">Mutaplasmid Attributes</span>
-        {{if .EstRange}}<span class="cs-dhead-id">Est Range: {{.EstRange}}</span>{{end}}
-      </div>
-      {{if gt (len $p.Telemetry) 1}}<p class="cs-tel-name">{{.Name}}{{if .RollTag}} · {{.RollTag}}{{end}}</p>{{end}}
-      {{range .Rolls}}
-      <div class="cs-attr">
-        <div class="cs-attr-r"><span class="cs-attr-n">{{.Name}}</span><span class="cs-attr-v {{if .Good}}pos{{else}}neg{{end}}">{{.Figure}}{{if .HasPct}} ({{.Pct}}%){{end}}</span></div>
-        {{if .HasPct}}<div class="cs-telbar"><span data-w="{{.Pct}}"></span></div>{{end}}
-      </div>
-      {{end}}
-      {{if .ItemID}}<div class="cs-tel-id"><span>Item ID <code>{{.ItemID}}</code></span><button type="button" class="btn small cs-copy" data-copy="{{.ItemID}}" aria-label="Copy item ID {{.ItemID}}">⧉ Copy ID</button></div>{{end}}
-      <div class="cs-dfoot"><div class="cs-dfoot-in"><a class="cs-dfoot-full" href="/contracts/search/{{$p.ContractID}}/">Full contract page →</a>
-        <button type="button" class="btn small cs-copy" data-copy="{{$p.CopyText}}">⧉ Copy Contract Link</button></div></div>
-    </div>
-    {{end}}
-    {{else}}
-    <div class="cs-dcard">
-      <div class="cs-dhead"><span class="cs-dhead-t dim">Deal Execution Summary</span></div>
-      <div class="cs-srow"><span class="cs-sk">Asking Price:</span><span class="cs-sv">{{.SumAsking}}</span></div>
-      {{if .SumValue}}<div class="cs-srow"><span class="cs-sk">EveSynapse Value:</span><span class="cs-sv">{{.SumValue}}</span></div>{{end}}
-      {{if .SumSpread}}<div class="cs-srow sp{{if .SumSpreadNeg}} neg{{end}}"><span class="cs-sk">Estimated Spread:</span><span class="cs-sv">{{.SumSpread}}</span></div>{{end}}
-      <div class="cs-dfoot"><div class="cs-dfoot-in"><a class="cs-dfoot-full" href="/contracts/search/{{.ContractID}}/">Full contract page →</a>
-        <button type="button" class="btn small cs-copy" data-copy="{{.CopyText}}">⧉ Copy Contract Link</button></div></div>
-    </div>
-    {{end}}
+{{template "contract-cards" .}}
   </div>
 </div>
 {{end}}

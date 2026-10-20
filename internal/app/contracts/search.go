@@ -2395,13 +2395,13 @@ func (app *mod) abyssalPanel(ctx context.Context, ab db.AbyssalItem) *abyssalPan
 	}
 	if ab.EstValue.Valid {
 		panel.HasEstimate = true
-		panel.Estimate = esi.FormatISK(ab.EstValue.Float64)
+		panel.Estimate = strings.TrimSuffix(formatShortISK(ab.EstValue.Float64), " ISK")
 		if ab.EstLow.Valid {
-			panel.EstLow = esi.FormatISK(ab.EstLow.Float64)
+			panel.EstLow = strings.TrimSuffix(formatShortISK(ab.EstLow.Float64), " ISK")
 			panel.EstLowNum = ab.EstLow.Float64
 		}
 		if ab.EstHigh.Valid {
-			panel.EstHigh = esi.FormatISK(ab.EstHigh.Float64)
+			panel.EstHigh = strings.TrimSuffix(formatShortISK(ab.EstHigh.Float64), " ISK")
 			panel.EstHighNum = ab.EstHigh.Float64
 		}
 		panel.HasRange = ab.EstLow.Valid && ab.EstHigh.Valid

@@ -61,6 +61,37 @@
   // same DOM a no-op, and a page without the search form
   // (the contract detail page loads this script too) wires
   // nothing.
+  // ---- abyssal telemetry picker ----------------------------------
+  // A contract with several abyssal lines carries one telemetry
+  // card per line (all shown without JS). With JS one shows at a
+  // time: the first, until a line's roll tag picks another. The
+  // drawer and the contract page share it (data-ab-scope).
+  function showAbTel(scope, id) {
+    scope.querySelectorAll("[data-ab-tel]").forEach(function (c) {
+      c.hidden = c.getAttribute("data-ab-tel") !== id;
+    });
+    scope.querySelectorAll("[data-ab-pick]").forEach(function (b) {
+      var on = b.getAttribute("data-ab-pick") === id;
+      b.setAttribute("aria-pressed", on ? "true" : "false");
+      var line = b.closest(".cs-aline");
+      if (line) line.classList.toggle("ab-on", on);
+    });
+  }
+  function initAbPick(root) {
+    var cards = root ? root.querySelectorAll("[data-ab-tel]") : [];
+    if (cards.length < 2) return;
+    showAbTel(root, cards[0].getAttribute("data-ab-tel"));
+  }
+  document.addEventListener("click", function (e) {
+    var b = e.target.closest ? e.target.closest("[data-ab-pick]") : null;
+    if (!b) return;
+    var scope = b.closest(".cs-panel, [data-ab-scope]");
+    if (!scope) return;
+    e.preventDefault();
+    showAbTel(scope, b.getAttribute("data-ab-pick"));
+  });
+  document.querySelectorAll("[data-ab-scope]").forEach(initAbPick);
+
   var wiredForm = null;
   function init() {
   var form = document.getElementById("cs-form");
@@ -327,37 +358,6 @@
       slot.innerHTML = '<p class="muted cs-panel-loading">Could not load the appraisal — the contract page carries the same detail.</p>';
     });
   }
-  // ---- abyssal telemetry picker ----------------------------------
-  // A contract with several abyssal lines carries one telemetry
-  // card per line (all shown without JS). With JS one shows at a
-  // time: the first, until a line's roll tag picks another. The
-  // drawer and the contract page share it (data-ab-scope).
-  function showAbTel(scope, id) {
-    scope.querySelectorAll("[data-ab-tel]").forEach(function (c) {
-      c.hidden = c.getAttribute("data-ab-tel") !== id;
-    });
-    scope.querySelectorAll("[data-ab-pick]").forEach(function (b) {
-      var on = b.getAttribute("data-ab-pick") === id;
-      b.setAttribute("aria-pressed", on ? "true" : "false");
-      var line = b.closest(".cs-aline");
-      if (line) line.classList.toggle("ab-on", on);
-    });
-  }
-  function initAbPick(root) {
-    var cards = root ? root.querySelectorAll("[data-ab-tel]") : [];
-    if (cards.length < 2) return;
-    showAbTel(root, cards[0].getAttribute("data-ab-tel"));
-  }
-  document.addEventListener("click", function (e) {
-    var b = e.target.closest ? e.target.closest("[data-ab-pick]") : null;
-    if (!b) return;
-    var scope = b.closest(".cs-panel, [data-ab-scope]");
-    if (!scope) return;
-    e.preventDefault();
-    showAbTel(scope, b.getAttribute("data-ab-pick"));
-  });
-  document.querySelectorAll("[data-ab-scope]").forEach(initAbPick);
-
   document.querySelectorAll(".cs-row").forEach(function (row) {
     row.addEventListener("click", function (e) {
       if (e.target.closest("a, button, input, select, textarea, label")) return;

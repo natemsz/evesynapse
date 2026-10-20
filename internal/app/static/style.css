@@ -1569,7 +1569,7 @@ footer .version-number {
 .card[id] { scroll-margin-top: 4.5rem; }
 /* Section tabs, filter chips and strategy tabs read as controls: the
    same Rajdhani capitals as the buttons. */
-.section-tabs a, .chip, .ti-tabs button {
+.section-tabs a, .section-tabs .tabs-more-btn, .chip, .ti-tabs button {
   font-family: "Rajdhani", "Segoe UI", sans-serif;
   font-weight: 600;
   text-transform: uppercase;

@@ -41,7 +41,7 @@ func (app *Application) revokeCharacterTokenAtCCP(ctx context.Context, ch db.Cha
 		return
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.SetBasicAuth(app.cfg.eveClientID, app.cfg.eveClientSecret)
+	req.SetBasicAuth(app.cfg.eveClientID, app.cfg.EVEClientSecret())
 
 	resp, err := loginHTTPClient.Do(req)
 	if err != nil {

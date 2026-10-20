@@ -35,6 +35,14 @@ var federationSigningHeaders = []string{
 	"content-length", "content-type", "x-content-sha256",
 }
 
+// getSigningHeaders is the signed-header list for a bodyless GET
+// (the Secrets read): with no body there is nothing to length,
+// type or hash, so the signature covers the target, the host and
+// the date.
+var getSigningHeaders = []string{
+	"(request-target)", "host", "date",
+}
+
 // signRequest stamps req with the Date and x-content-sha256
 // headers and an Authorization signature made with key under
 // keyID. now is the signing instant (a parameter so tests can pin

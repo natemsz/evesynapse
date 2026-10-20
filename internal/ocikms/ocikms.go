@@ -8,7 +8,8 @@
 // about an hour at a time (see principal.go).
 //
 // The implementation is standard library only. It covers exactly
-// the two KMS operations the token key needs and nothing else.
+// the two KMS operations the token key needs, plus one Secrets
+// read (secrets.go) the working credentials are fetched with.
 package ocikms
 
 import (
@@ -38,6 +39,7 @@ type Config struct {
 	KeyID             string
 	MetadataBaseURL   string // default http://169.254.169.254
 	FederationBaseURL string // default https://auth.<region>.oraclecloud.com, the region read from CryptoEndpoint
+	SecretsBaseURL    string // default https://secrets.vaults.<region>.oci.oraclecloud.com, the region read from CryptoEndpoint
 	HTTPClient        *http.Client
 }
 
@@ -48,9 +50,10 @@ const defaultMetadataBase = "http://169.254.169.254"
 // when it nears expiry; the identity itself is re-read only if a
 // token exchange fails with it.
 type Client struct {
-	cfg        Config
-	httpClient *http.Client
-	federation *federationClient
+	cfg         Config
+	httpClient  *http.Client
+	federation  *federationClient
+	secretsBase string // the Secrets service base URL; "" when no region could be read and none was configured
 
 	mu         sync.Mutex
 	identity   *instanceIdentity
@@ -74,20 +77,25 @@ func NewClient(cfg Config) (*Client, error) {
 	if strings.TrimSpace(cfg.MetadataBaseURL) == "" {
 		cfg.MetadataBaseURL = defaultMetadataBase
 	}
+	region := regionFromCryptoEndpoint(u.Host)
 	if strings.TrimSpace(cfg.FederationBaseURL) == "" {
-		region := regionFromCryptoEndpoint(u.Host)
 		if region == "" {
 			return nil, fmt.Errorf("ocikms: cannot read the region from the cryptographic endpoint %q; set the federation endpoint explicitly", cfg.CryptoEndpoint)
 		}
 		cfg.FederationBaseURL = "https://auth." + region + ".oraclecloud.com"
+	}
+	secretsBase := strings.TrimRight(strings.TrimSpace(cfg.SecretsBaseURL), "/")
+	if secretsBase == "" && region != "" {
+		secretsBase = "https://secrets.vaults." + region + ".oci.oraclecloud.com"
 	}
 	httpClient := cfg.HTTPClient
 	if httpClient == nil {
 		httpClient = &http.Client{Timeout: 15 * time.Second}
 	}
 	return &Client{
-		cfg:        cfg,
-		httpClient: httpClient,
+		cfg:         cfg,
+		httpClient:  httpClient,
+		secretsBase: secretsBase,
 		federation: &federationClient{
 			httpClient:     httpClient,
 			metadataBase:   cfg.MetadataBaseURL,

@@ -72,7 +72,7 @@ func (app *Application) discordChannelState(ctx context.Context, userID int64) (
 	} else if !errors.Is(err, sql.ErrNoRows) {
 		logging.Errorf("notify: discord link of user %d: %v", userID, err)
 	}
-	return app.cfg.discordClientID != "" && app.cfg.discordClientSecret != "", false, false, ""
+	return app.cfg.discordClientID != "" && app.cfg.DiscordClientSecret() != "", false, false, ""
 }
 
 // notifyPromptFor builds the card for an account.

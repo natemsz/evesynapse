@@ -300,6 +300,8 @@ gaps; real environment variables win over the file):
 | `TOKEN_KEY_PROVIDER` | no | derived | Where the token key comes from: `env` (the key above; the default when it is set), `http` (fetched from a key service at startup), `oci` (unwrapped by OCI KMS at startup), or `none` (tokens stored unencrypted; the default when no key is set). See "Keeping the key off the machine" |
 | `TOKEN_KEY_WRAPPED`, `TOKEN_KEY_UNWRAP_URL`, `TOKEN_KEY_UNWRAP_CREDENTIAL` | with `http` | — | The wrapped token key, the key service's unwrap endpoint, and the credential the app presents to it (http provider) |
 | `TOKEN_KEY_OCI_KEY_ID`, `TOKEN_KEY_OCI_CRYPTO_ENDPOINT` | with `oci` | — | The OCI Vault key that wrapped the token key (in `TOKEN_KEY_WRAPPED`) and the vault's cryptographic endpoint (oci provider) |
+| `EVE_CLIENT_SECRET_OCI_SECRET_ID`, `DISCORD_CLIENT_SECRET_OCI_SECRET_ID`, `DISCORD_BOT_TOKEN_OCI_SECRET_ID`, `MODEL_API_KEY_OCI_SECRET_ID` | with `oci` | — | The OCI Secrets OCID each working credential is read from at startup instead of sitting in `.env` (oci provider). The plain variable can stay until the fetched value is seen to land, then come out |
+| `EVE_CLIENT_SECRET_WRAPPED`, `DISCORD_CLIENT_SECRET_WRAPPED`, `DISCORD_BOT_TOKEN_WRAPPED`, `MODEL_API_KEY_WRAPPED` | with `http` | — | Each working credential wrapped by the key service, unwrapped at startup through the same endpoint as the token key (http provider) |
 | `EVE_ADMIN_CHARACTER_IDS` | no | — | Comma-separated EVE character IDs whose accounts may open the Admin and Sync pages. Any character linked to an account makes that whole account an admin's. Empty = nobody. The status belongs to whoever owned the character when it was first seen as an admin: if the character is sold or transferred, its new owner does not get it. To give it to a new owner on purpose, remove the id, restart, add it back and restart |
 | `EVE_ALLOWED_CHARACTER_IDS`, `EVE_ALLOWED_CORPORATION_IDS`, `EVE_ALLOWED_ALLIANCE_IDS` | no | — | Limit who may create an account (see "Who can sign up"). All empty = anyone who can sign in with EVE |
 | `EVESYNAPSE_UPDATE_REPO` | no | `natemsz/evesynapse` | GitHub repo (owner/repo) the updater checks |
@@ -1539,6 +1541,24 @@ service's wrapping key is the same as losing
 every character signs in once more — so back the key service's
 configuration up with the rest.
 
+The four working credentials — `EVE_CLIENT_SECRET`,
+`DISCORD_CLIENT_SECRET`, `DISCORD_BOT_TOKEN` and `MODEL_API_KEY` —
+can come off the machine the same way. With the `oci` provider,
+put each in OCI Secrets (in the same vault; the dynamic group
+needs a `read secret-bundles` policy statement alongside the key
+one) and name its OCID in `<name>_OCI_SECRET_ID`: the app reads
+it at startup with the instance's identity and holds it in memory
+only. With the `http` provider, wrap each once with the key
+service's wrap call and store the ciphertext in `<name>_WRAPPED`;
+it is unwrapped through the same endpoint as the token key. Each
+credential moves independently: while a fetch is still to land,
+the plain value (when one is set) serves, so add the external
+source, watch the startup log name the credential as loaded, and
+then take the plain value out. A feature whose credential has
+not landed yet stays off and recovers when it does.
+`SHARED_CACHE_SECRET` is the deliberate exception: it stays in
+`.env`, because it is a proof shared with other swarm operators
+by design, and moving it would buy nothing.
 #### Moving an existing install to a key service
 
 An install already running on `TOKEN_ENCRYPTION_KEY` moves over

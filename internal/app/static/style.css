@@ -1720,9 +1720,29 @@ html[data-theme="light"] .widget-scope select {
    places, so the page keeps the layout Customize set. */
 /* Customize shows each module as the page shows it: summary only. */
 .home-custom [data-wmore] { display: none; }
+/* Two across (between the phone band and 70rem): module sizes are
+   drawn for three columns, so here rows take their content's
+   height instead of the three-column floor (a module drawn two rows
+   tall for a narrow third of the page holds far less at half the
+   page; its height still sets how many rows its lists show), the
+   two modules sharing a row stretch to match, and a module left
+   alone on its row widens to fill it (app.js, .gfill) instead of
+   leaving an empty cell beside it. */
 @media (max-width: 70rem) {
-  .grid.home-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .grid.home-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-rows: auto; }
   .grid.home-grid > .gw3 { grid-column: span 2; }
+  .grid.home-grid > :is(.gh2, .gh3) { grid-row: auto; }
+  .grid.home-grid > .card.gfill { grid-column: 1 / -1; }
+  /* The fleet is the one module that scrolls inside itself: it
+     keeps a ceiling (its drawn height plus one row, as its rows
+     wrap taller at two across), so a long roster scrolls in the
+     card rather than running the page long. */
+  .grid.home-grid > .card[data-widget="fleet"] { max-height: calc(2 * var(--home-row) + 1rem); }
+  .grid.home-grid > .card[data-widget="fleet"].gh2 { max-height: calc(3 * var(--home-row) + 2rem); }
+  .grid.home-grid > .card[data-widget="fleet"].gh3 { max-height: calc(4 * var(--home-row) + 3rem); }
+}
+@media (max-width: 45rem) {
+  .grid.home-grid > .card[data-widget="fleet"] { max-height: none; }
 }
 /* Phones: one column, every module its natural height; the summary
    shows first and More opens the rest. */
@@ -2030,6 +2050,13 @@ ul.brief-cards {
   font-size: 0.95rem;
   transition: transform 160ms ease, box-shadow 160ms ease;
 }
+/* The cap follows how many tiles a row can actually hold at the
+   22rem floor: a third where three fit, a half where two do, the
+   full width where one does. A fixed third under a 22rem floor
+   left tiles at 22rem with dead space beside them whenever the
+   module was narrower than three tiles. */
+@container (max-width: 67.5rem) { .brief-card { max-width: calc((100% - 0.75rem) / 2); } }
+@container (max-width: 44.75rem) { .brief-card { max-width: none; } }
 
 /* Briefing card head: the severity chip at the left, and at the
    right the category glyph with the card's tally — the digest

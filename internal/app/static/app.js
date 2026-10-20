@@ -1036,6 +1036,82 @@
       CARD_ICONS[name] + "</g></svg>";
   }
 
+  // --- Home grid: two-across fill -------------------------------
+  // Between the phone band and the desktop's three columns the
+  // home grid runs two across, and module widths drawn for three
+  // columns leave holes: a one-column module ahead of a wide one
+  // (which must start a new row), or last on the page, stands
+  // alone beside an empty cell. Rather than reorder anything (the
+  // grid never backfills, so Customize stays honest), the module
+  // left alone on its row widens to fill it (.gfill). Desktop's
+  // three columns are what Customize draws and are left as drawn;
+  // the phone's one column has nothing to fill.
+  //
+  // Pure: given each module's column span in page order and the
+  // column count, the indexes of the modules that close a row
+  // short — each widens to finish its row.
+  function homeFillPlan(spans, cols) {
+    var fill = [], used = 0, last = -1;
+    for (var i = 0; i < spans.length; i++) {
+      var s = Math.min(spans[i], cols);
+      if (used > 0 && used + s > cols) {
+        fill.push(last);
+        used = 0;
+      }
+      used += s;
+      last = i;
+      if (used >= cols) used = 0;
+    }
+    if (used > 0 && last >= 0) fill.push(last);
+    return fill;
+  }
+
+  if (typeof module !== "undefined" && module.exports) {
+    module.exports.homeFillPlan = homeFillPlan;
+  }
+
+  var homeTwoUp = window.matchMedia ? window.matchMedia("(min-width: 45.0625rem) and (max-width: 70rem)") : null;
+
+  function layoutHomeFill(grid) {
+    var cards = [], spans = [], i;
+    for (i = 0; i < grid.children.length; i++) {
+      var c = grid.children[i];
+      if (!c.classList.contains("card") || c.classList.contains("dragging")) continue;
+      cards.push(c);
+      spans.push(c.classList.contains("gw2") || c.classList.contains("gw3") ? 2 : 1);
+    }
+    var on = {};
+    if (homeTwoUp && homeTwoUp.matches) {
+      var plan = homeFillPlan(spans, 2);
+      for (i = 0; i < plan.length; i++) on[plan[i]] = true;
+    }
+    for (i = 0; i < cards.length; i++) {
+      // Write only on change, so the observer below settles.
+      if (cards[i].classList.contains("gfill") !== !!on[i]) cards[i].classList.toggle("gfill", !!on[i]);
+    }
+  }
+
+  function initHomeFill(root) {
+    var grids = (root || document).querySelectorAll(".grid.home-grid");
+    for (var i = 0; i < grids.length; i++) {
+      var grid = grids[i];
+      layoutHomeFill(grid);
+      if (grid._fillObserver || !window.MutationObserver) continue;
+      // Customize moves, resizes, adds and removes modules in
+      // place; follow it. Observers on swapped-out grids die with
+      // their nodes.
+      grid._fillObserver = new MutationObserver(function (g) {
+        return function () { layoutHomeFill(g); };
+      }(grid));
+      grid._fillObserver.observe(grid, { childList: true, subtree: false, attributes: true, attributeFilter: ["class"] });
+    }
+  }
+  onContentReady(initHomeFill);
+  initHomeFill(document);
+  if (homeTwoUp && homeTwoUp.addEventListener) {
+    homeTwoUp.addEventListener("change", function () { initHomeFill(document); });
+  }
+
   // --- Home customize: drag, resize, remove, add module --------
   // Layered over the plain customize forms, never replacing them:
   // this runs only on the customize view (the data-customize grid)

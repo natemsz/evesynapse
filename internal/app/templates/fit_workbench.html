@@ -25,9 +25,18 @@ retunes, and the root carries fit-ro for the read-only tooltips. */}}
 {{end}}
 {{if and (not .ReadOnly) .HasShip}}
 {{/* Phone-only chrome (fit.css shows it at phone widths, never
-     above them): a compact ship header and the view tab bar.
-     Both live inside the fragment so a re-simulation re-renders
-     them with the fit; fit.js owns which view is current. */}}
+     above them): the view tab bar first, then a compact ship
+     header. Both live inside the fragment so a re-simulation
+     re-renders them with the fit; fit.js owns which view is
+     current. The tab bar's last button toggles the page's
+     module search panel (it lives outside the fragment, so a
+     re-render can never take it with the old workbench). */}}
+<div class="fit-mtabs" role="tablist" aria-label="Fitting views">
+  <button type="button" role="tab" data-fit-view="racks" aria-selected="false">Slot Racks</button>
+  <button type="button" role="tab" data-fit-view="stats" aria-selected="false">Resists &amp; Cap</button>
+  <button type="button" role="tab" data-fit-view="radial" aria-selected="true">Radial</button>
+  <button type="button" class="fit-msearch-btn" data-fit-search-btn aria-expanded="false" aria-controls="fit-modsearch" aria-label="Search modules" title="Search modules"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5 L21 21"/></svg></button>
+</div>
 <div class="fit-mhead">
   <div class="fit-mhead-id">
     <span class="fit-mhead-name">{{if .FitName}}{{.FitName}}{{else}}{{.ShipName}}{{end}}</span>
@@ -51,11 +60,6 @@ retunes, and the root carries fit-ro for the read-only tooltips. */}}
     </div>
   </div>
   {{end}}
-</div>
-<div class="fit-mtabs" role="tablist" aria-label="Fitting views">
-  <button type="button" role="tab" data-fit-view="racks" aria-selected="false">Slot Racks</button>
-  <button type="button" role="tab" data-fit-view="stats" aria-selected="false">Resists &amp; Cap</button>
-  <button type="button" role="tab" data-fit-view="radial" aria-selected="true">Radial</button>
 </div>
 {{end}}
 {{if .HasShip}}

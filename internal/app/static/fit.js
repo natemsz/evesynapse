@@ -210,8 +210,7 @@ var FitPhoneViews = (function () {
       center: view === "radial",
       slots: view === "racks",
       bays: view === "racks",
-      stats: view === "stats",
-      search: view !== "stats"
+      stats: view === "stats"
     };
   }
   function nextState(validCSV, current) {
@@ -668,6 +667,8 @@ var FitGauges = (function () {
     if (wb && wb.contains(t)) {
       if (t.closest("[data-fit-undo]")) { undo(); return; }
       if (t.closest("[data-fit-redo]")) { redo(); return; }
+      var searchBtn = t.closest("[data-fit-search-btn]");
+      if (searchBtn) { setSearchOpen(!searchOpen); return; }
       var viewBtn = t.closest("[data-fit-view]");
       if (viewBtn) { setFitView(viewBtn.getAttribute("data-fit-view")); return; }
       // Resolve the control from the nearest carrier, never the raw
@@ -1042,19 +1043,25 @@ var FitGauges = (function () {
     family: function () { return modFamily; },
     dropShips: true,
     pick: function (it) {
-      var kind = it.kind || "";
-      if (kind === "charge") { pickCharge(it); return; }
-      if (kind === "high" || kind === "medium" || kind === "low" ||
-          kind === "rig" || kind === "subsystem" || kind === "drone") {
-        if (checkRestricted(it.id, it.name)) return;
-        addItem(it.id, 1);
-        return;
-      }
-      // Anything else (e.g. cargo items): jump the picker to it.
-      if (modInput) modInput.value = it.name;
-      openPicker("any", it.name);
+      pickModule(it);
+      // A pick ends the phone search: the panel closes over the
+      // updated workbench (a no-op above the band).
+      setSearchOpen(false, false);
     }
   });
+  function pickModule(it) {
+    var kind = it.kind || "";
+    if (kind === "charge") { pickCharge(it); return; }
+    if (kind === "high" || kind === "medium" || kind === "low" ||
+        kind === "rig" || kind === "subsystem" || kind === "drone") {
+      if (checkRestricted(it.id, it.name)) return;
+      addItem(it.id, 1);
+      return;
+    }
+    // Anything else (e.g. cargo items): jump the picker to it.
+    if (modInput) modInput.value = it.name;
+    openPicker("any", it.name);
+  }
 
   if (famChips) {
     famChips.addEventListener("click", function (ev) {
@@ -1083,6 +1090,9 @@ var FitGauges = (function () {
   // filter state restores automatically.
   var modSearchReturnFam = null;
   function focusModuleSearch(fam) {
+    // On the phone the search lives behind its toggle: open the
+    // panel so the field being focused is actually on screen.
+    if (phoneOn()) setSearchOpen(true, false);
     if (modSearchReturnFam === null) modSearchReturnFam = modFamily;
     if (modInput) modInput.value = "";
     setFamChip(fam);
@@ -2128,15 +2138,58 @@ var FitGauges = (function () {
   // lives here, not in the fragment, and is re-applied after every
   // simulate swap like the other view syncs. Off the band nothing
   // is hidden and the tab bar is display:none, so the desktop
-  // workbench is untouched. The module search belongs to the
-  // racks and radial views: on the phone it parks inside the
-  // fragment, under the tab bar (a swap drops it with the old
-  // fragment; the post-swap call parks it again), the stats view
-  // hides it, and off the phone it goes back to its home slot in
-  // front of the workbench.
+  // workbench is untouched.
+  //
+  // The module search keeps its home slot in the page, outside
+  // the fragment: a simulate swap replaces the workbench whole,
+  // so nothing the page owns may live inside it. On the phone the
+  // tab bar's search button collapses it into a popup panel (the
+  // .fit-collapsible rules in fit.css): the open state lives
+  // here, the panel node never moves, and applyFitView re-syncs
+  // the freshly rendered button after every swap.
   var phoneMQ = window.matchMedia ? window.matchMedia("(max-width: 45rem)") : null;
   var fitView = "radial";
+  var searchOpen = false;
   function phoneOn() { return !!(phoneMQ && phoneMQ.matches); }
+  function searchButton() {
+    var wb = workbench();
+    return wb ? wb.querySelector("[data-fit-search-btn]") : null;
+  }
+  function syncSearchChrome() {
+    var ms = document.getElementById("fit-modsearch");
+    if (!ms) return;
+    var btn = searchButton();
+    if (phoneOn() && btn) {
+      ms.classList.add("fit-collapsible");
+      ms.classList.toggle("open", searchOpen);
+      btn.setAttribute("aria-expanded", searchOpen ? "true" : "false");
+      btn.classList.toggle("on", searchOpen);
+    } else {
+      // Above the band, or no tab bar to toggle it (no ship
+      // picked yet): the search is the plain in-flow panel it is
+      // on desktop, always reachable.
+      ms.classList.remove("fit-collapsible");
+      ms.classList.remove("open");
+      if (btn) {
+        btn.setAttribute("aria-expanded", "false");
+        btn.classList.remove("on");
+      }
+    }
+  }
+  function setSearchOpen(open, focus) {
+    searchOpen = !!open;
+    syncSearchChrome();
+    if (searchOpen) {
+      // The panel pins to the page body (see fit.css): when it
+      // opens from the tab bar pinned deep in the page, bring it
+      // on screen before focus goes into the field.
+      var ms = document.getElementById("fit-modsearch");
+      if (ms && ms.scrollIntoView) ms.scrollIntoView({ block: "start" });
+      if (focus !== false && modInput) {
+        try { modInput.focus({ preventScroll: true }); } catch (e) { modInput.focus(); }
+      }
+    }
+  }
   function applyFitView() {
     var wb = workbench();
     if (!wb) return;
@@ -2153,18 +2206,7 @@ var FitGauges = (function () {
       tabs[i].classList.toggle("on", !!active);
       tabs[i].setAttribute("aria-selected", active ? "true" : "false");
     }
-    var ms = document.getElementById("fit-modsearch");
-    if (!ms) return;
-    var bar = wb.querySelector(".fit-mtabs");
-    if (on && bar) {
-      if (ms.parentNode !== wb || ms.previousSibling !== bar) {
-        wb.insertBefore(ms, bar.nextSibling);
-      }
-      ms.classList.toggle("fv-off", !show.search);
-    } else {
-      if (ms.parentNode !== editor) editor.insertBefore(ms, wb);
-      ms.classList.remove("fv-off");
-    }
+    syncSearchChrome();
   }
   function setFitView(view) {
     if (view !== "racks" && view !== "stats" && view !== "radial") return;
@@ -2173,6 +2215,45 @@ var FitGauges = (function () {
   }
   if (phoneMQ && phoneMQ.addEventListener) {
     phoneMQ.addEventListener("change", applyFitView);
+  }
+  // The search panel's own close button (page markup, never
+  // re-rendered): close and hand focus back to the tab bar's
+  // search button.
+  var msPanel = document.getElementById("fit-modsearch");
+  var msClose = msPanel ? msPanel.querySelector("[data-fit-search-close]") : null;
+  if (msClose) {
+    msClose.addEventListener("click", function () {
+      setSearchOpen(false, false);
+      var btn = searchButton();
+      if (btn) btn.focus();
+    });
+  }
+  // Escape closes the search panel; the suggestion list takes
+  // the first Escape (its own handler closes it), so while the
+  // list is open this leaves the key alone. Capture phase: this
+  // reads the list state before the input's handler runs.
+  document.addEventListener("keydown", function (ev) {
+    if (ev.key !== "Escape" || !searchOpen) return;
+    if (modList && !modList.hidden) return;
+    setSearchOpen(false, false);
+    var btn = searchButton();
+    if (btn) btn.focus();
+  }, true);
+
+  // --- phone toolbar fold ---------------------------------------
+  // The fit head's secondary controls (pilot, clone, fit name,
+  // the public flag, Save to EVE) fold behind its Fit details
+  // toggle at phone width. fit.css hides them only while the
+  // editor carries fit-armed, which is added here — without JS
+  // the toggle never renders and nothing is ever hidden.
+  var headEl = editor.querySelector(".fit-head");
+  var headToggle = editor.querySelector("[data-fit-head-toggle]");
+  if (headEl && headToggle) {
+    editor.classList.add("fit-armed");
+    headToggle.addEventListener("click", function () {
+      var open = headEl.classList.toggle("fit-open");
+      headToggle.setAttribute("aria-expanded", open ? "true" : "false");
+    });
   }
   editor.addEventListener("keydown", function (ev) {
     if (ev.key !== "Enter" && ev.key !== " ") return;

@@ -120,7 +120,7 @@ func TestPublicFitPageTooltips(t *testing.T) {
 	// 15 tf, PG 10 MW.
 	mustContain(t, "public fit tooltips", body,
 		`data-tip-lines="DPS|20|;Volley|100|;CPU|15 tf|;PG|10 MW|"`)
-	for _, editorOnly := range []string{"data-tip-states", "data-tip-key", "data-fit-states", "fit-mhead", "fit-mtabs"} {
+	for _, editorOnly := range []string{"data-tip-states", "data-tip-key", "data-fit-states", "fit-mhead", "fit-mtabs", "data-fit-search-btn"} {
 		if strings.Contains(body, editorOnly) {
 			t.Errorf("public fit page carries editor-only %q", editorOnly)
 		}

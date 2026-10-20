@@ -32,8 +32,10 @@
       <label class="cs-pill"><input type="checkbox" name="type" value="courier" class="cs-auto"{{if index $s.TypeSet "courier"}} checked{{end}}> Couriers</label>
     </div>
     <label class="box cs-deals"><input type="checkbox" name="deals" value="1" class="cs-auto"{{if $s.Filters.DealsOnly}} checked{{end}}> DEALS ONLY <span class="cs-switch" aria-hidden="true"></span></label>
+    <button type="button" class="btn btn-quiet cs-more-btn" data-sheet-open="cs-more" hidden>Filters{{with $s.Chips}} <span class="cs-count">{{len .}}</span>{{end}}</button>
   </div>
 
+  <div class="cs-more" id="cs-more" data-sheet data-sheet-title="Filters">
   <div class="cs-filters">
     <div class="box cs-fbox">
       <div class="box-head"><h3 class="box-title">Regions</h3>
@@ -176,6 +178,8 @@
     </section>
   </div>
   </div>
+  <div class="sheet-foot sheet-only"><a class="cs-clear" href="/contracts/search/">Clear filters</a><button class="btn" type="submit">Show results</button></div>
+  </div>
 </form>
 
 <div class="cs-countbar">
@@ -187,7 +191,7 @@
 {{if $s.Chips}}<div class="cs-active">{{range $s.Chips}}<a class="cs-fchip{{if .Highlight}} hot{{end}}" href="{{.URL}}">{{.Label}} <span aria-hidden="true">×</span></a>{{end}}</div>{{end}}
 
 {{if $s.Rows}}
-<table class="cs-table" data-nosort>
+<table class="cs-table" data-nosort data-cards="off">
   <colgroup><col class="cs-c1"><col class="cs-c2"><col class="cs-c3"><col class="cs-c4"><col class="cs-c5"></colgroup>
   <thead><tr><th>Contract</th><th>Contents &amp; Specs</th><th><a class="cs-sorthead{{if $s.PriceSorted}} on{{end}}" href="{{$s.PriceSortURL}}" aria-label="Sort by price or reward">Price / Reward <span class="cs-sortchev" aria-hidden="true">{{$s.PriceChev}}</span></a></th><th><a class="cs-sorthead{{if $s.ValueSorted}} on{{end}}" href="{{$s.ValueSortURL}}" aria-label="Sort by our value and spread">Our Value &amp; Spread <span class="cs-sortchev" aria-hidden="true">{{$s.ValueChev}}</span></a></th><th>Location</th></tr></thead>
   <tbody>

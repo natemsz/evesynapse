@@ -249,6 +249,72 @@
   .cards-sort > small { color: var(--muted); }
   .cards-sort > select { flex: 1 1 auto; min-width: 0; }
 
+  /* Phone sheets (app.js "Phone sheets"): a data-sheet block
+     leaves the page flow and rises from the bottom edge when its
+     trigger is tapped — the sections sheet's glass, head and
+     reach. It scrolls inside itself; the page behind holds still. */
+  .as-sheet:not(.open) { display: none; }
+  .as-sheet.open {
+    display: block;
+    position: fixed; inset: auto 0 0 0; z-index: 99;
+    width: auto; height: auto;
+    max-width: none;
+    max-height: 85vh;
+    max-height: 85dvh;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    margin: 0;
+    padding: 0 0.85rem calc(0.9rem + env(safe-area-inset-bottom, 0px));
+    color: var(--text);
+    border: 0;
+    background: linear-gradient(rgba(21, 21, 21, 0.96), rgba(17, 17, 17, 0.98)) padding-box;
+    border-top: 1px solid var(--glass-edge);
+    border-radius: var(--r-lg) var(--r-lg) 0 0;
+    box-shadow: 0 -12px 36px rgba(0, 0, 0, 0.6);
+    animation: sheet-rise 180ms ease-out;
+  }
+  html[data-theme="light"] .as-sheet.open { background: var(--panel); }
+  .as-sheet.open > .sheet-head {
+    display: flex; align-items: center; justify-content: space-between;
+    position: sticky; top: 0; z-index: 2;
+    margin: 0 -0.85rem 0.6rem;
+    padding: 0.75rem 0.85rem 0.55rem;
+    background: inherit;
+    border-bottom: 1px solid var(--box-edge);
+  }
+  .as-sheet.open > .sheet-head h2 { margin: 0; font-size: 1.05rem; }
+  .sheet-close {
+    min-width: 2.5rem; min-height: 2.5rem;
+    color: var(--gold);
+    background: transparent;
+    border: 1px solid transparent; border-radius: var(--r-sm);
+    font-size: 1.5rem; line-height: 1;
+    cursor: pointer;
+  }
+  .as-sheet.open .sheet-only { display: revert; }
+  /* A sheet's own actions ride its bottom edge while its body
+     scrolls; the in-flow copies of them stand down. */
+  .as-sheet.open > .sheet-foot {
+    display: flex; align-items: center; justify-content: flex-end; gap: 1rem;
+    position: sticky; bottom: calc(-0.9rem - env(safe-area-inset-bottom, 0px)); z-index: 2;
+    margin: 0.8rem -0.85rem calc(-0.9rem - env(safe-area-inset-bottom, 0px));
+    padding: 0.65rem 0.85rem calc(0.75rem + env(safe-area-inset-bottom, 0px));
+    background: inherit;
+    border-top: 1px solid var(--box-edge);
+  }
+  .as-sheet.open > .sheet-foot .btn { flex: 1 1 auto; }
+  .as-sheet::backdrop { background: rgba(0, 0, 0, 0.66); }
+  .sheet-backdrop:not([hidden]) {
+    display: block;
+    position: fixed; inset: 0; z-index: 98;
+    background: rgba(0, 0, 0, 0.66);
+  }
+  html.sheet-lock, html.sheet-lock body { overflow: hidden; }
+  /* A fixed sheet inside a blurred surface would take that surface
+     as its frame; the page glass gives up its blur while one is up. */
+  .page-body:has(.as-sheet.open) { -webkit-backdrop-filter: none; backdrop-filter: none; }
+  [data-sheet-open][hidden] { display: none; }
+
   /* The footer: the same lines, set compact. */
   footer { margin-top: 1rem; padding: 1rem 0.9rem 1.1rem; font-size: 0.66rem; }
   footer p { margin: 0.35rem 0; }
@@ -266,6 +332,9 @@
     background: color-mix(in srgb, var(--panel) 97%, transparent);
   }
 }
+
+@keyframes sheet-rise { from { transform: translateY(1.5rem); opacity: 0.4; } }
+@media (prefers-reduced-motion: reduce) { .as-sheet.open { animation: none; } }
 
 /* --- short (phones on their side) ----------------------------------- */
 @media (max-height: 30rem) and (orientation: landscape) and (pointer: coarse) {

@@ -301,6 +301,21 @@ markup:
 - Key/value tables (`th` + `td` rows, no header row) wrap their
   values on phones on their own.
 
+### Phone sheets
+
+A block of secondary controls (filters, options) that should
+step aside on a phone carries `data-sheet` (with an `id` and a
+`data-sheet-title`), and its trigger is a button with
+`data-sheet-open="<id>"` rendered `hidden`. Off the phone band
+the block renders inline and the trigger stays hidden. In the
+band, app.js turns the block into a bottom sheet in the top
+layer (an auto popover). It stays in place in the DOM, so a
+sheet of form fields still submits with its form. JS adds the
+sheet's head and close button. Anything inside marked
+`.sheet-only` shows only in sheet mode, and a `.sheet-foot`
+rides the sheet's bottom edge: put the submit there. Contract
+search's filters are the worked example.
+
 ### Phone and touch styles
 
 `phone.css` is the touch and phone layer. base.html links it

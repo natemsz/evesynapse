@@ -5231,6 +5231,10 @@ html[data-theme="light"] .suggest li:not(.sug-kind):not(.sug-empty):hover, html[
    bar's height is one custom property so the page's bottom
    clearance and the appraisal dock's offset (above) share it. */
 .phone-bar, .phone-sheet, .phone-sheet-backdrop { display: none; }
+/* Phone sheets (app.js "Phone sheets"): the injected head, the
+   sheet-only parts and the backdrop exist only in the phone band
+   (phone.css); everywhere else a data-sheet block is inline. */
+.sheet-head, .sheet-only, .sheet-backdrop { display: none; }
 @media (max-width: 45rem) {
   :root { --phone-bar-h: 3.6rem; }
   .nav-hamburger { display: none; }

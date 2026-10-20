@@ -518,6 +518,135 @@
   }
   initPhoneBar();
 
+  // --- Phone sheets ---------------------------------------------
+  // A block marked data-sheet renders inline everywhere except the
+  // phone band, where it becomes a bottom sheet: hidden in the page
+  // flow, raised over a backdrop by any button carrying
+  // data-sheet-open="<its id>" (rendered hidden; shown here only in
+  // the band). The block keeps its place in the DOM, so a sheet
+  // holding form fields still submits with its form. JS injects
+  // the sheet's head (data-sheet-title and a close button) once;
+  // anything inside marked .sheet-only shows only in sheet mode.
+  // The sheet rises in the browser's top layer (an auto popover,
+  // as the modal uses a manual one), so no stacking context or
+  // blurred ancestor can trap it, and a tap outside or Escape
+  // dismisses it natively; engines without popovers get a fixed
+  // sheet over a backdrop element instead. The close button and
+  // any [data-sheet-close] close it; a swap closes whatever is
+  // open. Without JS the block renders inline, as off the band.
+  var sheetQuery = window.matchMedia ? window.matchMedia("(max-width: 45rem)") : null;
+  var sheetBackdrop = null, openSheet = null, sheetOpener = null;
+  var sheetPopovers = typeof HTMLElement !== "undefined" &&
+    Object.prototype.hasOwnProperty.call(HTMLElement.prototype, "popover");
+
+  function sheetTriggers(sheet) {
+    return sheet.id ? document.querySelectorAll('[data-sheet-open="' + sheet.id + '"]') : [];
+  }
+
+  function closePhoneSheet(refocus) {
+    if (!openSheet) return;
+    var sheet = openSheet;
+    openSheet = null;
+    sheet.classList.remove("open");
+    if (sheetPopovers && sheet.matches(":popover-open")) sheet.hidePopover();
+    if (sheetBackdrop) sheetBackdrop.hidden = true;
+    document.documentElement.classList.remove("sheet-lock");
+    var t = sheetTriggers(sheet);
+    for (var i = 0; i < t.length; i++) t[i].setAttribute("aria-expanded", "false");
+    if (refocus && sheetOpener && sheetOpener.focus) sheetOpener.focus({ preventScroll: true });
+    sheetOpener = null;
+  }
+
+  function openPhoneSheet(sheet, opener) {
+    if (!sheet.classList.contains("as-sheet")) return;
+    closePhoneSheet(false);
+    if (!sheetPopovers && !sheetBackdrop) {
+      sheetBackdrop = document.createElement("div");
+      sheetBackdrop.className = "sheet-backdrop";
+      sheetBackdrop.hidden = true;
+      sheetBackdrop.addEventListener("click", function () { closePhoneSheet(true); });
+      document.body.appendChild(sheetBackdrop);
+    }
+    openSheet = sheet;
+    sheetOpener = opener || null;
+    sheet.classList.add("open");
+    if (sheetPopovers) sheet.showPopover();
+    else sheetBackdrop.hidden = false;
+    document.documentElement.classList.add("sheet-lock");
+    var t = sheetTriggers(sheet);
+    for (var i = 0; i < t.length; i++) t[i].setAttribute("aria-expanded", "true");
+    var close = sheet.querySelector(".sheet-close");
+    if (close) close.focus({ preventScroll: true });
+  }
+
+  function layoutPhoneSheets(root) {
+    var on = !!(sheetQuery && sheetQuery.matches);
+    var sheets = (root || document).querySelectorAll("[data-sheet]"), i, j;
+    for (i = 0; i < sheets.length; i++) {
+      var sheet = sheets[i];
+      if (!sheet.querySelector(":scope > .sheet-head")) {
+        var head = document.createElement("div");
+        head.className = "sheet-head";
+        var h = document.createElement("h2");
+        h.textContent = sheet.getAttribute("data-sheet-title") || "";
+        var x = document.createElement("button");
+        x.type = "button";
+        x.className = "sheet-close";
+        x.setAttribute("aria-label", "Close " + (h.textContent || "sheet").toLowerCase());
+        x.setAttribute("data-sheet-close", "");
+        x.textContent = "×";
+        head.appendChild(h);
+        head.appendChild(x);
+        sheet.insertBefore(head, sheet.firstChild);
+      }
+      sheet.classList.toggle("as-sheet", on);
+      if (sheetPopovers) {
+        if (on) sheet.setAttribute("popover", "auto");
+        else sheet.removeAttribute("popover");
+        if (!sheet._sheetToggle) {
+          // A light dismiss (tap outside, Escape) closes the
+          // popover on its own; bring the rest of the state along.
+          sheet._sheetToggle = true;
+          sheet.addEventListener("toggle", function (ev) {
+            if (ev.newState === "closed" && openSheet === ev.target) closePhoneSheet(false);
+          });
+        }
+      }
+      if (on) {
+        sheet.setAttribute("role", "dialog");
+        sheet.setAttribute("aria-modal", "true");
+        if (sheet.getAttribute("data-sheet-title")) sheet.setAttribute("aria-label", sheet.getAttribute("data-sheet-title"));
+      } else {
+        sheet.removeAttribute("role");
+        sheet.removeAttribute("aria-modal");
+        if (openSheet === sheet) closePhoneSheet(false);
+      }
+      var t = sheetTriggers(sheet);
+      for (j = 0; j < t.length; j++) {
+        t[j].hidden = !on;
+        t[j].setAttribute("aria-controls", sheet.id);
+        t[j].setAttribute("aria-expanded", openSheet === sheet ? "true" : "false");
+      }
+    }
+  }
+
+  document.addEventListener("click", function (ev) {
+    var el = ev.target && ev.target.closest ? ev.target.closest("[data-sheet-open], [data-sheet-close]") : null;
+    if (!el) return;
+    if (el.hasAttribute("data-sheet-close")) { closePhoneSheet(true); return; }
+    var sheet = document.getElementById(el.getAttribute("data-sheet-open"));
+    if (sheet) openPhoneSheet(sheet, el);
+  });
+  document.addEventListener("keydown", function (ev) {
+    if (ev.key === "Escape" && openSheet) closePhoneSheet(true);
+  });
+  document.addEventListener("evesynapse:content-will-swap", function () { closePhoneSheet(false); });
+  onContentReady(layoutPhoneSheets);
+  layoutPhoneSheets(document);
+  if (sheetQuery && sheetQuery.addEventListener) {
+    sheetQuery.addEventListener("change", function () { layoutPhoneSheets(document); });
+  }
+
   // --- Collapsible sections -----------------------------------
   // Folding lives at the smallest sensible unit on each page:
   //   - .foldable sections (the h2/h3 blocks inside a page panel)

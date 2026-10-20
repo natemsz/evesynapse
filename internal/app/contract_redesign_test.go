@@ -184,7 +184,7 @@ func TestContractSearchStructure(t *testing.T) {
 	// and the content lines carry no item icons.
 	_, plain := getAnon(t, app, "/contracts/search/")
 	mustContain(t, "results table", plain,
-		`<table class="cs-table" data-nosort>`,
+		`<table class="cs-table" data-nosort data-cards="off">`,
 		`<th>Contract</th>`, `<th>Contents &amp; Specs</th>`,
 		`<th><a class="cs-sorthead" href="/contracts/search/?sort=price_desc" aria-label="Sort by price or reward">Price / Reward <span class="cs-sortchev" aria-hidden="true">↕</span></a></th>`,
 		`<th><a class="cs-sorthead" href="/contracts/search/?sort=margin_desc" aria-label="Sort by our value and spread">Our Value &amp; Spread <span class="cs-sortchev" aria-hidden="true">↕</span></a></th>`, `<th>Location</th>`)

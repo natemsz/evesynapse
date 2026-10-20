@@ -684,6 +684,24 @@
   .cs-table tbody tr.cs-drow { display: block; margin: -0.25rem 0 0.6rem; }
   .cs-table tbody tr.cs-drow:has(.cs-panel-slot[hidden]) { display: none; }
   .cs-drow > td { display: block; }
+  /* Above the results: the quick hunts as one swipeable strip,
+     and the deals switch sharing its row with the Filters
+     button, which raises every other filter as a sheet
+     (data-sheet, app.js) so the results lead the page. In the
+     sheet, its sticky footer carries Clear and the submit. */
+  .cs-intro { min-width: 0; }
+  .cs-hunts {
+    max-width: 100%; min-width: 0;
+    flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none;
+    overscroll-behavior-x: contain;
+  }
+  .cs-hunts::-webkit-scrollbar { display: none; }
+  .cs-hunts > * { flex: none; }
+  .cs-deals { width: auto; flex: 1 1 auto; }
+  .cs-more-btn { flex: none; align-self: stretch; }
+  .cs-more-btn .cs-count { margin-left: 0.35rem; }
+  .as-sheet.open .cs-actions { display: none; }
+  .as-sheet.open .cs-filters { margin-bottom: 0.4rem; }
 }
 
 /* ---- touch targets ----

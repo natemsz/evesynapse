@@ -168,6 +168,11 @@ func (app *Application) storePublicContractItems(ctx context.Context, contractID
 	}); err != nil {
 		return fmt.Errorf("open sightings %d: %w", contractID, err)
 	}
+	if err := q.StampAbyssalSightingAttribution(ctx, db.StampAbyssalSightingAttributionParams{
+		ContractID: sql.NullInt64{Int64: contractID, Valid: true},
+	}); err != nil {
+		return fmt.Errorf("stamp sightings %d: %w", contractID, err)
+	}
 	return tx.Commit()
 }
 
@@ -378,6 +383,13 @@ func (app *Application) storeAbyssalProbeHit(ctx context.Context, cand db.ListAb
 		FirstSeenAt: cand.FirstSeen, LastSeenAt: now,
 	}); err != nil {
 		return fmt.Errorf("open sighting: %w", err)
+	}
+	// A newly known abyssal also changes its contract-mates'
+	// attribution: restamp every sighting on the contract.
+	if err := q.StampAbyssalSightingAttribution(ctx, db.StampAbyssalSightingAttributionParams{
+		ContractID: sql.NullInt64{Int64: cand.ContractID, Valid: true},
+	}); err != nil {
+		return fmt.Errorf("stamp sightings: %w", err)
 	}
 	return tx.Commit()
 }

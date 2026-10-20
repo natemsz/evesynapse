@@ -44,6 +44,10 @@ type AbyssalItem struct {
 	RecreationAttempts sql.NullFloat64 `json:"recreation_attempts"`
 	PrimaryAbs         sql.NullFloat64 `json:"primary_abs"`
 	ScoredAt           sql.NullTime    `json:"scored_at"`
+	LadderValue        sql.NullFloat64 `json:"ladder_value"`
+	LadderLoTypeID     int64           `json:"ladder_lo_type_id"`
+	LadderHiTypeID     int64           `json:"ladder_hi_type_id"`
+	MarketCalib        float64         `json:"market_calib"`
 }
 
 type AbyssalMapping struct {
@@ -69,19 +73,25 @@ type AbyssalRange struct {
 }
 
 type AbyssalSighting struct {
-	ItemID       int64           `json:"item_id"`
-	ContractID   int64           `json:"contract_id"`
-	ContractType string          `json:"contract_type"`
-	Price        float64         `json:"price"`
-	RegionID     int64           `json:"region_id"`
-	LocationID   int64           `json:"location_id"`
-	DateExpired  sql.NullTime    `json:"date_expired"`
-	FirstSeenAt  time.Time       `json:"first_seen_at"`
-	LastSeenAt   time.Time       `json:"last_seen_at"`
-	DepartedAt   sql.NullTime    `json:"departed_at"`
-	DepartKind   sql.NullString  `json:"depart_kind"`
-	BidCount     sql.NullInt64   `json:"bid_count"`
-	TopBid       sql.NullFloat64 `json:"top_bid"`
+	ItemID        int64           `json:"item_id"`
+	ContractID    int64           `json:"contract_id"`
+	ContractType  string          `json:"contract_type"`
+	Price         float64         `json:"price"`
+	RegionID      int64           `json:"region_id"`
+	LocationID    int64           `json:"location_id"`
+	DateExpired   sql.NullTime    `json:"date_expired"`
+	FirstSeenAt   time.Time       `json:"first_seen_at"`
+	LastSeenAt    time.Time       `json:"last_seen_at"`
+	DepartedAt    sql.NullTime    `json:"departed_at"`
+	DepartKind    sql.NullString  `json:"depart_kind"`
+	BidCount      sql.NullInt64   `json:"bid_count"`
+	TopBid        sql.NullFloat64 `json:"top_bid"`
+	IssuerID      sql.NullInt64   `json:"issuer_id"`
+	AbyssalLines  sql.NullInt64   `json:"abyssal_lines"`
+	WantedLines   sql.NullInt64   `json:"wanted_lines"`
+	OtherLines    sql.NullInt64   `json:"other_lines"`
+	OtherUnpriced sql.NullInt64   `json:"other_unpriced"`
+	OtherValue    sql.NullFloat64 `json:"other_value"`
 }
 
 type AccountLinkChoice struct {

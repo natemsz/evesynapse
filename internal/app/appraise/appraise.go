@@ -608,6 +608,8 @@ func (app *page) subtractExclusions(ctx context.Context, agg []aggLine, exclude 
 func abyssalEstimateNote(ab *db.AbyssalItem) string {
 	basis := ""
 	switch ab.EstBasis {
+	case "ladder":
+		basis = "placed on its module ladder"
 	case "corpus":
 		if ab.EstScope == "module" {
 			basis = fmt.Sprintf("from %d listings of this module", ab.EstComps)

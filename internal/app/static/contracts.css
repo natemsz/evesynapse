@@ -564,33 +564,55 @@
 .cs-roll-name { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cs-roll-pct { color: var(--muted); text-align: right; }
 
-/* ---- detail page ---- */
-.cd-facts {
-  display: grid; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
-  gap: 0.5rem 1.2rem; max-width: 62rem; margin: 0.7rem 0;
+/* ---- contract page ----
+   Built from the drawer's own cards (templates/contractcards.html,
+   rendered Full): a head card with the three figures that decide
+   a contract, the appraisal and mutaplasmid cards, then the quiet
+   details. Emphasis is spent once per block: labels stay muted
+   and regular, one figure per column carries the weight. */
+.cd-page { display: flex; flex-direction: column; gap: 0.9rem; max-width: 72rem; }
+.cd-back { margin: 0; font-size: 0.85rem; }
+.cd-hero-tags { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
+.cd-title { margin: 0.35rem 0 0.15rem; }
+.cd-sub { margin: 0 0 0.8rem; color: var(--muted); font-size: 0.88rem; }
+.cd-figs {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: 0.6rem 1.4rem;
+  padding: 0.7rem 0 0.2rem; border-top: 1px solid var(--box-edge);
 }
-.cd-fact small { display: block; color: var(--muted); font-size: 0.76rem; letter-spacing: 0.06em; text-transform: uppercase; font-weight: 700; }
-.cd-fact { font-size: 0.98rem; }
-.cd-valueband {
-  border: 1px solid var(--box-edge); border-radius: var(--r-xs);
-  background: var(--row-alt); padding: 0.65rem 0.85rem; max-width: 62rem;
-  display: flex; flex-wrap: wrap; gap: 0.4rem 1.6rem; align-items: baseline;
-}
-.cd-valueband .cd-big { font-size: 1.25rem; font-weight: 700; }
+.cd-fig { display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; }
+.cd-figsub { font-size: 0.78rem; color: var(--muted); }
+.cd-spread { color: var(--deal); }
+.cd-spread.neg { color: var(--neg, #ff4d4d); }
+.cd-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.8rem; }
+.cd-actions form { margin: 0; }
+.cd-note { margin: 0.6rem 0 0; color: var(--muted); font-size: 0.82rem; }
 .cd-dealbadge {
   color: var(--deal); border: 1px solid var(--deal); border-radius: var(--r-xs);
-  padding: 0.05rem 0.5rem; font-weight: 700;
+  padding: 0.05rem 0.5rem; font-size: 0.8rem; font-weight: 600;
   background: color-mix(in srgb, var(--deal) 12%, transparent);
 }
-.cd-lines td.num, .cd-lines th.num { text-align: right; }
-.cd-abpanel {
-  border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--glass-edge));
-  border-radius: var(--r-xs); background: var(--row-alt);
-  padding: 0.6rem 0.8rem; margin: 0.4rem 0; max-width: 46rem;
+.cd-dealnote { color: var(--muted); font-size: 0.82rem; }
+.cd-cards { margin: 0; }
+.cd-kv {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+  gap: 0.55rem 1.4rem; margin: 0.2rem 0 0;
 }
-.cd-abpanel .cs-roll { grid-template-columns: minmax(0, 1fr) auto 8rem 2.6rem; }
-.cd-abest { font-size: 1.08rem; margin: 0.45rem 0; }
-.cd-facts .sec-pill, .cd-valueband .sec-pill { border-radius: var(--r-xs); }
+.cd-kv > div { min-width: 0; }
+.cd-kv dt { color: var(--muted); font-size: 0.76rem; }
+.cd-kv dd { margin: 0.1rem 0 0; overflow-wrap: anywhere; }
+.cd-kv .sec-pill { border-radius: var(--r-xs); }
+/* The Full mutaplasmid card's words under its rolls. */
+.cd-abnotes {
+  margin-top: 0.7rem; padding-top: 0.6rem;
+  border-top: 1px solid var(--box-edge);
+  font-size: 0.86rem;
+}
+.cd-abnotes p { margin: 0.35rem 0; }
+.cd-abfrom { color: var(--muted); }
+.cd-abest strong { color: var(--text-bright); }
+.cd-abbasis { display: block; color: var(--muted); font-size: 0.8rem; }
+.cd-abcap { color: var(--gold); }
 
 /* ---- narrow screens ---- */
 @media (max-width: 72rem) {
@@ -622,6 +644,71 @@
   .cs-region-pop { position: static; width: auto; grid-template-columns: 1fr; margin-top: 0.4rem; }
   .cs-actions { margin-left: 0; }
   .cs-roll { grid-template-columns: minmax(0, 1fr) auto 4.5rem 2.4rem; }
+}
+
+/* ---- abyssal lines: picker, item ID, full page ----
+   A contract with several abyssal lines carries a telemetry card
+   per line; a line's roll tag picks which one shows
+   (contracts.js). Each card offers its item's ID to copy, and
+   the drawer's foot links the contract's full page. */
+.cs-rolltag {
+  font: inherit; color: var(--gold);
+  background: none; border: 0; padding: 0;
+  border-bottom: 1px dotted currentColor;
+  cursor: pointer;
+}
+.cs-rolltag[aria-pressed="true"] { color: var(--text-bright); border-bottom-style: solid; }
+.cs-aline.ab-on { box-shadow: inset 3px 0 0 var(--accent); }
+.cs-tel[hidden] { display: none; }
+.cs-tel-name { margin: 0 0 0.55rem; font-weight: 600; color: var(--text-bright); }
+.cs-tel-id {
+  display: flex; align-items: center; justify-content: space-between; gap: 0.6rem;
+  margin-top: 0.6rem; padding-top: 0.5rem;
+  border-top: 1px solid var(--box-edge);
+  color: var(--muted); font-size: 0.82rem;
+}
+.cs-tel-id code { font-family: "JetBrains Mono", ui-monospace, monospace; color: var(--text); }
+.cs-dfoot-full { font-size: 0.82rem; }
+
+/* ---- the abyssal pricing explainer ----
+   One wording (templates/abyssalhowto.html) wherever an abyssal
+   estimate is named: a dotted label that opens on hover or focus
+   (a tap focuses it on a touch screen). */
+.ab-howto {
+  position: relative;
+  color: inherit;
+  border-bottom: 1px dotted currentColor;
+  cursor: help;
+  outline-offset: 2px;
+}
+.cs-drawer-sub .ab-howto { color: var(--gold); }
+.ab-howto-tip {
+  display: none;
+  position: absolute; z-index: 50;
+  left: 0; top: calc(100% + 6px);
+  width: min(26rem, 80vw);
+  padding: 0.75rem 0.85rem;
+  background: color-mix(in srgb, var(--panel) 97%, transparent);
+  border: 1px solid var(--glass-edge);
+  border-radius: var(--r-md);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55);
+  color: var(--text);
+  font-size: 0.82rem; font-weight: 400; line-height: 1.45;
+  letter-spacing: 0; text-transform: none; text-align: left;
+  white-space: normal;
+  cursor: auto;
+}
+.cs-tp .ab-howto-tip, .cd-tier .ab-howto-tip { left: auto; right: 0; }
+.ab-howto:hover > .ab-howto-tip,
+.ab-howto:focus > .ab-howto-tip,
+.ab-howto:focus-within > .ab-howto-tip { display: block; }
+.ab-howto-tip strong { display: block; margin-bottom: 0.35rem; color: var(--text-bright); }
+.ab-howto-step { display: block; margin: 0.3rem 0; }
+.ab-howto-math {
+  display: block; margin-top: 0.5rem; padding-top: 0.4rem;
+  border-top: 1px solid var(--box-edge);
+  font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 0.76rem;
+  color: var(--gold);
 }
 
 /* ---- phone form: the results become cards ----
@@ -684,6 +771,13 @@
   .cs-table tbody tr.cs-drow { display: block; margin: -0.25rem 0 0.6rem; }
   .cs-table tbody tr.cs-drow:has(.cs-panel-slot[hidden]) { display: none; }
   .cs-drow > td { display: block; }
+  /* The abyssal pricing explainer docks above the bottom bar. */
+  .ab-howto-tip, .cs-tp .ab-howto-tip, .cd-tier .ab-howto-tip {
+    position: fixed; z-index: 95;
+    left: 0.5rem; right: 0.5rem; top: auto;
+    bottom: calc(var(--phone-bar-h, 0px) + env(safe-area-inset-bottom, 0px) + 0.5rem);
+    width: auto; max-height: 60vh; overflow-y: auto;
+  }
   /* Above the results: the quick hunts as one swipeable strip,
      and the deals switch sharing its row with the Filters
      button, which raises every other filter as a sheet

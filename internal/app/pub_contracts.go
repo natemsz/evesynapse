@@ -415,5 +415,12 @@ func completePublicContractRegionTx(ctx context.Context, q *db.Queries, regionID
 	}); err != nil {
 		return fmt.Errorf("refresh sightings %d: %w", regionID, err)
 	}
+	// Attribution rides every sighting write (schema 069): what
+	// else shares each listing's contract, while it is stored.
+	if err := q.StampAbyssalSightingAttribution(ctx, db.StampAbyssalSightingAttributionParams{
+		RegionID: sql.NullInt64{Int64: regionID, Valid: true}, Cycle: sql.NullInt64{Int64: cycle, Valid: true},
+	}); err != nil {
+		return fmt.Errorf("stamp sightings %d: %w", regionID, err)
+	}
 	return nil
 }

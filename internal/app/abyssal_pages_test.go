@@ -112,16 +112,19 @@ func TestAbyssalSearchAndDetailPages(t *testing.T) {
 
 	// Detail: rolls with percentile bars and signed deltas,
 	// the estimate with spread and basis, the cap sentence,
-	// and the abyssal tier label on the line.
+	// and the abyssal tier label on the line. The page is
+	// built from the drawer's cards (contractcards.html,
+	// rendered Full), so its figures carry the drawer's
+	// short form and its score/estimate wording.
 	code, body := getAnon(t, app, "/contracts/search/8501/")
 	if code != 200 {
 		t.Fatalf("detail: status %d", code)
 	}
 	mustContain(t, "abyssal detail", body,
 		"Damage Multiplier", "Capacitor Need", "CPU", "&#43;18.0%", `data-w="80"`, `data-w="2"`,
-		"Roll score: <strong>45 / 100</strong>",
-		"Our estimate: <strong>205,000,000.00 ISK</strong>",
-		"likely range 180,000,000.00 to 240,000,000.00 ISK",
+		"Roll score <strong>45 / 100</strong>",
+		"Our estimate", "<strong>205.0M ISK</strong>",
+		"likely 180.0M – 240.0M ISK",
 		"from 8 current and recent listings of this module",
 		"Held back by: CPU fitting cost",
 		"Our abyssal estimate")

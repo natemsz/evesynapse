@@ -6,115 +6,70 @@
 {{if .ContractDetail}}
 {{$d := .ContractDetail}}
 {{if $d.Found}}
+<div class="cd-page" data-ab-scope>
+<p class="cd-back"><a href="/contracts/search/">← Contract search</a></p>
 
-<p><small><a href="/contracts/search/">← Contract search</a></small></p>
-<h2>{{$d.TypeLabel}}{{if $d.Title}} — {{$d.Title}}{{end}}</h2>
+{{/* The head: what it is, who and where, and the three figures
+     that decide it -- the ask, our value, the spread. */}}
+<section class="cs-dcard cd-hero">
+  <div class="cd-hero-tags">
+    <span class="cs-type {{if eq $d.TypeLabel "Item exchange"}}t-exchange{{else if eq $d.TypeLabel "Auction"}}t-auction{{else}}t-courier{{end}}">{{$d.TypeLabel}}</span>
+    {{if $d.DealNote}}{{if $d.IsDeal}}<span class="cd-dealbadge">{{$d.DealNote}}</span>{{else}}<span class="cd-dealnote">{{$d.DealNote}}</span>{{end}}{{end}}
+  </div>
+  <h2 class="cd-title">{{if $d.Title}}{{$d.Title}}{{else}}{{$d.TypeLabel}} contract{{end}}</h2>
+  <p class="cd-sub">{{charLink $.ViewerChars $d.IssuerID $d.IssuerName}}{{if $d.HasCorp}} for {{corpLink $d.CorpID $d.CorpName}}{{end}} · {{$d.RegionName}} · issued {{$d.IssuedNote}}</p>
+  <div class="cd-figs">
+    <div class="cd-fig"><span class="cs-cell-label">{{if eq $d.TypeLabel "Courier"}}Reward{{else}}{{$d.PriceLabel}}{{end}}</span><span class="cs-cell-value">{{$d.Price}} ISK</span>{{if $d.Buyout}}<span class="cd-figsub">Buyout {{$d.Buyout}} ISK</span>{{end}}{{if $d.TopBid}}<span class="cd-figsub">Top bid {{$d.TopBid}} ISK · {{$d.BidCount}} bid{{if ne $d.BidCount 1}}s{{end}}</span>{{end}}</div>
+    {{with $d.Panel}}{{if .SumValue}}<div class="cd-fig"><span class="cs-cell-label">{{if eq $d.TypeLabel "Courier"}}Collateral{{else}}Our value{{end}}</span><span class="cs-cell-value">{{.SumValue}}</span>{{if $d.CoverageNote}}<span class="cd-figsub">{{$d.CoverageNote}}</span>{{end}}</div>{{end}}
+    {{if .SumSpread}}<div class="cd-fig"><span class="cs-cell-label">Spread</span><span class="cs-cell-value cd-spread{{if .SumSpreadNeg}} neg{{end}}">{{.SumSpread}}</span></div>{{end}}{{end}}
+  </div>
+  <div class="cd-actions">
+    {{if $d.ViewInGame.Visible}}{{if $d.ViewInGame.Enabled}}
+    <form method="post" action="/ui/openwindow/contract/{{$d.ContractID}}"><button class="btn" type="submit">View in game</button></form>
+    {{else}}
+    <button class="btn" type="button" disabled>View in game</button>
+    {{end}}{{end}}
+    {{with $d.Panel}}<button type="button" class="btn btn-quiet cs-copy" data-copy="{{.CopyText}}">⧉ Copy contract link</button>{{end}}
+  </div>
+  {{if and $d.ViewInGame.Visible (not $d.ViewInGame.Enabled)}}<p class="cd-note">{{$d.ViewInGame.Note}}{{if $d.ViewInGame.Relink}} <a href="{{$d.ViewInGame.Relink}}">Sign in again</a> to enable it.{{end}}</p>{{end}}
+</section>
 
-{{if $d.ViewInGame.Visible}}
-{{if $d.ViewInGame.Enabled}}
-<form method="post" action="/ui/openwindow/contract/{{$d.ContractID}}">
-  <button class="btn" type="submit">View in game</button>
-</form>
-{{else}}
-<p><button class="btn" type="button" disabled>View in game</button>
-<small>{{$d.ViewInGame.Note}}{{if $d.ViewInGame.Relink}} <a href="{{$d.ViewInGame.Relink}}">Sign in again</a> to enable it.{{end}}</small></p>
-{{end}}
-{{end}}
+{{if $d.StateNote}}<p class="cd-note">{{$d.StateNote}}</p>{{end}}
 
-<div class="cd-facts">
-  <div class="cd-fact"><small>{{if eq $d.TypeLabel "Courier"}}Reward{{else}}{{$d.PriceLabel}}{{end}}</small><strong>{{$d.Price}} ISK</strong>{{if $d.Buyout}}<br><span class="muted">Buyout {{$d.Buyout}} ISK</span>{{end}}</div>
-  {{if eq $d.TypeLabel "Auction"}}<div class="cd-fact"><small>Bids</small>{{if $d.TopBid}}Top bid <strong>{{$d.TopBid}} ISK</strong> · {{$d.BidCount}} bid{{if ne $d.BidCount 1}}s{{end}}{{else}}No bids yet{{end}}</div>{{end}}
-  {{if $d.HasRoute}}<div class="cd-fact"><small>Route</small>{{placeLink $d.Location}} → {{placeLink $d.Dropoff}}</div>
-  <div class="cd-fact"><small>Collateral</small>{{$d.Collateral}} ISK</div>
-  <div class="cd-fact"><small>Volume</small>{{$d.Volume}}</div>
-  <div class="cd-fact"><small>Days to complete</small>{{$d.Days}}</div>{{end}}
-  {{if not $d.HasRoute}}<div class="cd-fact"><small>Location</small>{{placeLink $d.Location}}</div>{{end}}
-  <div class="cd-fact"><small>Region</small>{{$d.RegionName}}</div>
-  <div class="cd-fact"><small>Issuer</small>{{charLink $.ViewerChars $d.IssuerID $d.IssuerName}}{{if $d.HasCorp}}<br><small>for</small> {{corpLink $d.CorpID $d.CorpName}}{{end}}</div>
-  <div class="cd-fact"><small>Issued</small>{{$d.IssuedNote}}</div>
-  <div class="cd-fact"><small>Expires</small>{{$d.ExpiresNote}}</div>
-  <div class="cd-fact"><small>Seen</small><span class="muted">{{$d.LastSeenNote}}</span></div>
+{{with $d.Panel}}{{if .Lines}}
+<div class="cs-pgrid cd-cards">
+{{template "contract-cards" .}}
 </div>
-{{if $d.DealNote}}<p>{{if $d.IsDeal}}<span class="cd-dealbadge">{{$d.DealNote}}</span>{{else}}<span class="muted">{{$d.DealNote}}</span>{{end}}</p>{{end}}
+{{end}}{{end}}
 
-{{if $d.StateNote}}<p><small>{{$d.StateNote}}</small></p>{{end}}
-
-{{if $d.AppraisedNote}}
-<div class="cd-valueband">
-  {{if $d.OfferedValue}}<span><small>Our appraisal — offered</small><br><span class="cd-big">{{$d.OfferedValue}} ISK</span></span>{{end}}
-  {{if $d.WantValue}}<span><small>Wanted</small><br><strong>{{$d.WantValue}} ISK</strong></span>{{end}}
-  {{if $d.CoverageNote}}<span class="muted">{{$d.CoverageNote}}</span>{{end}}
-  {{if $d.TierMix}}<span class="muted">Priced from: {{$d.TierMix}}</span>{{end}}
-  <span class="muted">{{$d.AppraisedNote}}. Our own swept prices and stored estimates come first; an outside aggregate is used only where neither reaches, is named where it is used, and is never older than two days. The game's guide average is never used.</span>
-</div>
-{{end}}
-
-{{if $d.Offered}}
-<h3>Offered</h3>
-<div class="tw cd-lines">
-<table>
-  <thead><tr><th>Item</th><th>Qty</th><th class="num">Per unit</th><th class="num">Line value</th><th>Priced from</th></tr></thead>
-  <tbody>
-  {{range $d.Offered}}
-    <tr>
-      <td>{{itemLink .TypeID .Name}}{{if .Note}}<br><small>{{.Note}}</small>{{end}}</td>
-      <td>{{.Qty}}</td>
-      <td class="num">{{if .UnitPrice}}{{.UnitPrice}} ISK{{else}}—{{end}}</td>
-      <td class="num">{{if .LineValue}}<strong>{{.LineValue}} ISK</strong>{{else}}—{{end}}</td>
-      <td>{{.TierLabel}}{{if .TierNote}}<br><small>{{.TierNote}}</small>{{end}}</td>
-    </tr>
-    {{if .Abyssal}}<tr><td colspan="5">
-      <div class="cd-abpanel">
-      <p>Mutated from {{itemLink .Abyssal.SourceTypeID .Abyssal.SourceName}} with {{itemLink .Abyssal.MutatorTypeID .Abyssal.MutatorName}}.{{if .ItemID}} Item ID: {{.ItemID}}.{{end}} Rolls:</p>
-      {{range .Abyssal.Rolls}}<div class="cs-roll"><span class="cs-roll-name">{{.Name}}</span><span class="cs-roll-val">{{.Value}}{{if .HasBase}} <span class="muted">(base {{.Base}})</span>{{end}}{{if .Delta}} <span class="{{if .Good}}pos{{else}}neg{{end}}">{{.Delta}}</span>{{end}}</span>{{if .HasPct}}<span class="meter"><span data-w="{{.Pct}}"></span></span><span class="cs-roll-pct">{{.Pct}}%</span>{{else}}<span></span><span class="cs-roll-pct">—</span>{{end}}</div>{{end}}
-      {{range .Abyssal.Derived}}<div class="cs-roll derived"><span class="cs-roll-name">{{.Label}}</span><span class="cs-roll-val">{{.Value}}</span><span class="meter"><span data-w="{{.Pct}}"></span></span><span class="cs-roll-pct">{{.Pct}}%</span></div>{{end}}
-      {{if .Abyssal.HasScore}}<p>Roll score: <strong>{{.Abyssal.ScoreText}}</strong>. Each roll is placed in the range its mutaplasmid could have produced, weighted by how much that roll carries this module's value; fitting costs only ever count against it.</p>{{end}}
-      {{if .Abyssal.HasEstimate}}<p class="cd-abest">Our estimate: <strong>{{.Abyssal.Estimate}} ISK</strong> — likely range {{.Abyssal.EstLow}} to {{.Abyssal.EstHigh}} ISK, {{.Abyssal.BasisLabel}}.</p>{{end}}
-      {{if .Abyssal.ScoredNote}}<p class="muted">{{.Abyssal.ScoredNote}}.</p>{{end}}
-      {{if .Abyssal.NoEstimate}}<p class="muted">{{.Abyssal.NoEstimate}}</p>{{end}}
-      {{if .Abyssal.CapNote}}<p>{{.Abyssal.CapNote}}</p>{{end}}
-      {{if .Abyssal.Recreation}}<p class="muted">{{.Abyssal.Recreation}}</p>{{end}}
-      {{if .Abyssal.ContextPrice}}<p class="muted">The unmutated module prices at {{.Abyssal.ContextPrice}} ISK ({{.Abyssal.ContextTier}}) — shown for context; the contract's value counts our estimate of the mutated module, not the base module's price.</p>{{end}}
-      </div>
-    </td></tr>{{end}}
-  {{end}}
-  </tbody>
-</table>
-</div>
-{{end}}
-
-{{if $d.HasWanted}}
-<h3>Wanted in exchange</h3>
-<div class="tw cd-lines">
-<table>
-  <thead><tr><th>Item</th><th>Qty</th><th class="num">Per unit</th><th class="num">Line value</th><th>Priced from</th></tr></thead>
-  <tbody>
-  {{range $d.Wanted}}
-    <tr>
-      <td>{{itemLink .TypeID .Name}}{{if .Note}}<br><small>{{.Note}}</small>{{end}}</td>
-      <td>{{.Qty}}</td>
-      <td class="num">{{if .UnitPrice}}{{.UnitPrice}} ISK{{else}}—{{end}}</td>
-      <td class="num">{{if .LineValue}}<strong>{{.LineValue}} ISK</strong>{{else}}—{{end}}</td>
-      <td>{{.TierLabel}}{{if .TierNote}}<br><small>{{.TierNote}}</small>{{end}}</td>
-    </tr>
-  {{end}}
-  </tbody>
-</table>
-</div>
-{{end}}
+<section class="cs-dcard cd-detailcard">
+  <div class="cs-dhead"><span class="cs-dhead-t dim">Contract details</span><span class="cs-dhead-id">ID {{$d.ContractID}}</span></div>
+  <dl class="cd-kv">
+    {{if $d.HasRoute}}
+    <div><dt>Route</dt><dd>{{placeLink $d.Location}} → {{placeLink $d.Dropoff}}</dd></div>
+    <div><dt>Collateral</dt><dd>{{$d.Collateral}} ISK</dd></div>
+    <div><dt>Volume</dt><dd>{{$d.Volume}}</dd></div>
+    <div><dt>Days to complete</dt><dd>{{$d.Days}}</dd></div>
+    {{else}}
+    <div><dt>Location</dt><dd>{{placeLink $d.Location}}</dd></div>
+    {{end}}
+    <div><dt>Region</dt><dd>{{$d.RegionName}}</dd></div>
+    <div><dt>Issuer</dt><dd>{{charLink $.ViewerChars $d.IssuerID $d.IssuerName}}{{if $d.HasCorp}} for {{corpLink $d.CorpID $d.CorpName}}{{end}}</dd></div>
+    <div><dt>Issued</dt><dd>{{$d.IssuedNote}}</dd></div>
+    <div><dt>Expires</dt><dd>{{$d.ExpiresNote}}</dd></div>
+    <div><dt>Seen</dt><dd>{{$d.LastSeenNote}}</dd></div>
+  </dl>
+  {{if $d.AppraisedNote}}<p class="cd-note">{{if $d.TierMix}}Priced from: {{$d.TierMix}}. {{end}}{{$d.AppraisedNote}}. Our own swept prices and stored estimates come first; an outside aggregate is used only where neither reaches, is named where it is used, and is never older than two days. The game's guide average is never used.</p>{{end}}
+</section>
 
 {{if $d.Bids}}
-<h3>Bids</h3>
-<div class="tw">
-<table>
-  <thead><tr><th>Amount</th><th>Placed</th></tr></thead>
-  <tbody>
-  {{range $d.Bids}}<tr><td>{{.Amount}} ISK</td><td>{{.When}}</td></tr>{{end}}
-  </tbody>
-</table>
-</div>
-<p><small>Bids are public in the game; bidder names are not published, so none are shown.</small></p>
+<section class="cs-dcard cd-bidcard">
+  <div class="cs-dhead"><span class="cs-dhead-t dim">Bids</span><span class="cs-dhead-id">{{len $d.Bids}} placed</span></div>
+  {{range $d.Bids}}<div class="cs-srow"><span class="cs-sk">{{.When}}</span><span class="cs-sv">{{.Amount}} ISK</span></div>{{end}}
+  <p class="cd-note">Bids are public in the game; bidder names are not published, so none are shown.</p>
+</section>
 {{end}}
+</div>
 
 {{else}}
 <p>That contract is not in our stored corpus — it may have finished, been deleted, or not been swept yet. <a href="/contracts/search/">Back to the search</a>.</p>

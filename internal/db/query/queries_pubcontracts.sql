@@ -235,7 +235,8 @@ SELECT item_id, type_id, source_type_id, mutator_type_id, created_by,
     family, score, percentiles, derived_stats,
     est_value, est_low, est_high, est_basis, est_scope, est_comps,
     premium_mult, cap_attribute_id, cap_kind,
-    recreation_cost, recreation_attempts, primary_abs, scored_at
+    recreation_cost, recreation_attempts, primary_abs, scored_at,
+    ladder_value, ladder_lo_type_id, ladder_hi_type_id, market_calib
 FROM abyssal_items
 WHERE item_id = $1;
 
@@ -300,6 +301,38 @@ ON CONFLICT (item_id, contract_id) DO UPDATE SET
 -- state (an auction's rows in pub_contract_bids, counted
 -- before the completion step deletes them): an exit with
 -- bids on it is a different fact from an exit without.
+-- Attribution (schema 069): what else shared each sighting's
+-- contract and who listed it, read from the stored contract and
+-- stamped onto the sighting, which outlives the contract rows.
+-- Run beside every sighting write: for one contract
+-- (contract_id) or a region's completed sweep (region_id with
+-- cycle). Line values are the appraisal pass's; an unpriced
+-- other line is counted, so the corpus can refuse a residual it
+-- cannot compute.
+-- name: StampAbyssalSightingAttribution :exec
+UPDATE abyssal_sightings s SET
+    issuer_id      = c.issuer_id,
+    abyssal_lines  = m.abyssal_lines,
+    wanted_lines   = m.wanted_lines,
+    other_lines    = m.other_lines,
+    other_unpriced = m.other_unpriced,
+    other_value    = m.other_value
+FROM pub_contracts c,
+LATERAL (
+    SELECT
+        COUNT(*) FILTER (WHERE i.is_included AND a.item_id IS NOT NULL) AS abyssal_lines,
+        COUNT(*) FILTER (WHERE NOT i.is_included) AS wanted_lines,
+        COUNT(*) FILTER (WHERE i.is_included AND a.item_id IS NULL) AS other_lines,
+        COUNT(*) FILTER (WHERE i.is_included AND a.item_id IS NULL AND i.line_value IS NULL) AS other_unpriced,
+        COALESCE(SUM(i.line_value) FILTER (WHERE i.is_included AND a.item_id IS NULL), 0)::double precision AS other_value
+    FROM pub_contract_items i
+    LEFT JOIN abyssal_items a ON a.item_id = i.item_id
+    WHERE i.contract_id = c.contract_id
+) m
+WHERE c.contract_id = s.contract_id
+  AND (c.contract_id = sqlc.narg(contract_id)::bigint
+       OR (c.region_id = sqlc.narg(region_id)::bigint AND c.last_cycle = sqlc.narg(cycle)::bigint));
+
 -- name: StampAbyssalSightingsDeparted :exec
 UPDATE abyssal_sightings s
 SET departed_at = sqlc.arg(departed_at)::timestamptz,
@@ -373,7 +406,8 @@ SELECT item_id, type_id, source_type_id, mutator_type_id, created_by,
     family, score, percentiles, derived_stats,
     est_value, est_low, est_high, est_basis, est_scope, est_comps,
     premium_mult, cap_attribute_id, cap_kind,
-    recreation_cost, recreation_attempts, primary_abs, scored_at
+    recreation_cost, recreation_attempts, primary_abs, scored_at,
+    ladder_value, ladder_lo_type_id, ladder_hi_type_id, market_calib
 FROM abyssal_items
 WHERE item_id = ANY(sqlc.arg(item_ids)::bigint[])
 ORDER BY item_id;
@@ -811,9 +845,12 @@ LIMIT sqlc.arg(max_rows)::bigint;
 -- name: ListAbyssalCorpusByGroupNames :many
 SELECT DISTINCT ON (a.item_id)
     a.item_id, a.source_type_id, a.score, a.est_value, a.primary_abs,
+    a.ladder_value,
     s.price, s.departed_at, s.depart_kind,
     s.first_seen_at, s.last_seen_at, s.date_expired,
-    g.name AS group_name
+    g.name AS group_name,
+    s.issuer_id, s.abyssal_lines, s.wanted_lines, s.other_lines,
+    s.other_unpriced, s.other_value
 FROM abyssal_items a
 JOIN abyssal_sightings s ON s.item_id = a.item_id
 JOIN sde_types t ON t.type_id = a.type_id
@@ -825,6 +862,19 @@ ORDER BY a.item_id, s.first_seen_at DESC;
 
 -- The base modules one mutaplasmid has ever been seen applied
 -- to: the recreation path's candidate bases.
+-- The ladder candidates for abyssal sources: every published,
+-- market-listed type in each source module's SDE group (the
+-- family's ordinary modules; mutated types are not on the
+-- market, so they never appear).
+-- name: ListAbyssalLadderTypes :many
+SELECT src.type_id AS source_type_id, t.type_id, t.name
+FROM sde_types src
+JOIN sde_types t ON t.group_id = src.group_id
+WHERE src.type_id = ANY(sqlc.arg(source_ids)::bigint[])
+  AND src.group_id > 0
+  AND t.published = 1 AND t.market_group_id > 0
+ORDER BY src.type_id, t.type_id;
+
 -- name: ListAbyssalSourcesForMutator :many
 SELECT DISTINCT source_type_id FROM abyssal_items
 WHERE mutator_type_id = $1 AND source_type_id > 0
@@ -848,6 +898,10 @@ UPDATE abyssal_items SET
     recreation_cost     = sqlc.narg(recreation_cost)::double precision,
     recreation_attempts = sqlc.narg(recreation_attempts)::double precision,
     primary_abs         = sqlc.narg(primary_abs)::double precision,
+    ladder_value        = sqlc.narg(ladder_value)::double precision,
+    ladder_lo_type_id   = sqlc.arg(ladder_lo_type_id)::bigint,
+    ladder_hi_type_id   = sqlc.arg(ladder_hi_type_id)::bigint,
+    market_calib        = sqlc.arg(market_calib)::double precision,
     scored_at           = sqlc.arg(scored_at)::timestamptz
 WHERE item_id = sqlc.arg(item_id)::bigint;
 

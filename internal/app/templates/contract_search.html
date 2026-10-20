@@ -131,7 +131,7 @@
 
     <section class="cs-drawer" data-drawer-panel="abyssal"{{if ne $s.OpenDrawer "abyssal"}} hidden{{end}}>
       <div class="cs-drawer-head"><h4><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="3.2"/><ellipse cx="12" cy="12" rx="10" ry="4.2" transform="rotate(-24 12 12)"/></svg>Abyssal mutaplasmid roll &amp; valuation filters</h4><button type="button" class="cs-reset" data-reset-drawer="abyssal">Reset Abyssal Filters</button></div>
-      <p class="cs-drawer-sub">Rolls are scored 0–100 against their mutaplasmid's theoretical ceiling.</p>
+      <p class="cs-drawer-sub">Rolls are scored 0–100 against their mutaplasmid's theoretical ceiling. {{template "abyssal-howto" "How does EveSynapse price Abyssal modules?"}}</p>
       <div class="cs-drawer-grid">
         <label class="cs-field">Module family
           <select name="family">
@@ -199,7 +199,7 @@
     <tr class="cs-row{{if .IsDeal}} deal{{end}}" data-contract="{{.ContractID}}" tabindex="0" role="button" aria-expanded="false" aria-label="Inspect contract {{.ContractID}}">
       <td class="cs-c1">
         <span class="cs-type {{if eq .TypeLabel "Item exchange"}}t-exchange{{else if eq .TypeLabel "Auction"}}t-auction{{else}}t-courier{{end}}">{{.TypeLabel}}</span>{{if .IsDeal}} <span class="cs-deal">↗ Deal -{{.DealPct}}%</span>{{end}}
-        <div class="cs-row-title">{{if .Title}}{{.Title}}{{else}}{{.TypeLabel}} contract{{end}}</div>
+        <div class="cs-row-title"><a href="/contracts/search/{{.ContractID}}/">{{if .Title}}{{.Title}}{{else}}{{.TypeLabel}} contract{{end}}</a></div>
         <div class="cs-row-issuer">{{.IssuerName}}</div>
         <div class="cs-row-meta"><span>{{.RegionName}}</span><span>•</span><span>issued {{.IssuedAgo}}</span></div>
       </td>
@@ -247,44 +247,7 @@
 {{with .ContractPanel}}
 <div class="cs-panel">
   <div class="cs-pgrid">
-    <div class="cs-dcard">
-      <div class="cs-dhead">
-        <span class="cs-dhead-t">Contract Line Appraisal{{if .SourceLabel}} ({{.SourceLabel}}){{end}}</span>
-        <span class="cs-dhead-id">ID: {{.ContractID}} • Issued by {{.IssuerText}}</span>
-      </div>
-      {{if .StateNote}}<p class="cs-dnote">{{.StateNote}}</p>{{end}}
-      {{range .Lines}}
-      <div class="cs-aline{{if .Matched}} matched{{end}}">
-        <span class="cs-aline-l">{{if eq .Side "Wanted"}}<span class="cs-gchip want">Wants</span>{{else if .Group}}<span class="cs-gchip">{{.Group}}</span>{{end}} {{itemLink .TypeID .Name}}{{if .RollTag}} [{{.RollTag}}]{{end}} <span class="cs-aq">×{{.Qty}}</span></span>
-        <span class="cs-tp{{if .BasisAmber}} un{{end}}">{{.BasisText}}{{if .BasisNote}}<span class="cs-tnote">{{.BasisNote}}</span>{{end}}</span>
-      </div>
-      {{end}}
-    </div>
-    {{if .Telemetry}}
-    <div class="cs-dcard">
-      <div class="cs-dhead">
-        <span class="cs-dhead-t cy">Mutaplasmid Attributes</span>
-        {{if .Telemetry.EstRange}}<span class="cs-dhead-id">Est Range: {{.Telemetry.EstRange}}</span>{{end}}
-      </div>
-      {{range .Telemetry.Rolls}}
-      <div class="cs-attr">
-        <div class="cs-attr-r"><span class="cs-attr-n">{{.Name}}</span><span class="cs-attr-v {{if .Good}}pos{{else}}neg{{end}}">{{.Figure}}{{if .HasPct}} ({{.Pct}}%){{end}}</span></div>
-        {{if .HasPct}}<div class="cs-telbar"><span data-w="{{.Pct}}"></span></div>{{end}}
-      </div>
-      {{end}}
-      <div class="cs-dfoot"><div class="cs-dfoot-in"><span class="cs-dfoot-note">In-game link ready for EVE Notepad</span>
-        <button type="button" class="btn small cs-copy" data-copy="{{.CopyText}}">⧉ Copy Contract Link</button></div></div>
-    </div>
-    {{else}}
-    <div class="cs-dcard">
-      <div class="cs-dhead"><span class="cs-dhead-t dim">Deal Execution Summary</span></div>
-      <div class="cs-srow"><span class="cs-sk">Asking Price:</span><span class="cs-sv">{{.SumAsking}}</span></div>
-      {{if .SumValue}}<div class="cs-srow"><span class="cs-sk">EveSynapse Value:</span><span class="cs-sv">{{.SumValue}}</span></div>{{end}}
-      {{if .SumSpread}}<div class="cs-srow sp{{if .SumSpreadNeg}} neg{{end}}"><span class="cs-sk">Estimated Spread:</span><span class="cs-sv">{{.SumSpread}}</span></div>{{end}}
-      <div class="cs-dfoot"><div class="cs-dfoot-in"><span class="cs-dfoot-note">In-game link ready for EVE Notepad</span>
-        <button type="button" class="btn small cs-copy" data-copy="{{.CopyText}}">⧉ Copy Contract Link</button></div></div>
-    </div>
-    {{end}}
+{{template "contract-cards" .}}
   </div>
 </div>
 {{end}}

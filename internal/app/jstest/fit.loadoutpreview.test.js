@@ -74,7 +74,7 @@ class El {
     })(this);
     return found;
   }
-  getBoundingClientRect() { return this.rect; }
+  getBoundingClientRect() { return typeof this.rect === "function" ? this.rect() : this.rect; }
   focus() { this.focused = true; }
   addEventListener() {}
 }
@@ -95,6 +95,7 @@ function makeCard() {
 
 function makeEnv(finePointer) {
   const listeners = {};
+  const winListeners = {};
   const a = makeCard();
   const b = makeCard();
   const outside = new El("div");
@@ -121,7 +122,10 @@ function makeEnv(finePointer) {
     }, extra || {});
     (listeners[type] || []).slice().forEach(function (fn) { fn(ev); });
   }
-  return { doc, fire, a, b, outside, finePointer: !!finePointer };
+  function fireWindow(type) {
+    (winListeners[type] || []).slice().forEach(function (fn) { fn({ type: type }); });
+  }
+  return { doc, fire, fireWindow, winListeners, a, b, outside, finePointer: !!finePointer };
 }
 
 function loadFitJS(env) {
@@ -130,6 +134,10 @@ function loadFitJS(env) {
   global.innerWidth = 1024;
   global.innerHeight = 768;
   global.matchMedia = function () { return { matches: env.finePointer }; };
+  global.addEventListener = function (type, fn) {
+    (env.winListeners[type] = env.winListeners[type] || []).push(fn);
+  };
+  global.removeEventListener = function () {};
   const path = require.resolve("../static/fit.js");
   delete require.cache[path];
   require(path);
@@ -200,6 +208,65 @@ test("hover opens unpinned on fine pointers; leaving closes; click pins", async 
   assert.equal(env.a.panel.hidden, false, "click pinned the hover-opened preview open");
   env.fire("click", env.a.btn);
   assert.equal(env.a.panel.hidden, true, "second click closes the pinned preview");
+});
+
+// Models the geometry of the right-hand card in a two-column
+// grid: the wrapper spans the given viewport range and the panel
+// is geo.width wide. The rect follows the panel's CSS the way a
+// browser resolves it — left:0 by default, right:0 under
+// align-right, and an inline left wins over both.
+function modelRightCard(env, geo) {
+  const panel = env.b.panel;
+  env.b.wrap.rect = {
+    left: geo.wrapLeft, top: 100, right: geo.wrapRight, bottom: 130,
+    width: geo.wrapRight - geo.wrapLeft, height: 30,
+  };
+  panel.rect = function () {
+    let left;
+    if (panel.style.left) left = geo.wrapLeft + parseFloat(panel.style.left);
+    else if (panel.classList.contains("align-right")) left = geo.wrapRight - geo.width;
+    else left = geo.wrapLeft;
+    return { left: left, top: 140, right: left + geo.width, bottom: 440, width: geo.width, height: 300 };
+  };
+  return panel;
+}
+
+test("a right-aligned panel wider than its anchor space is shifted back on screen", function () {
+  const env = makeEnv(false);
+  loadFitJS(env);
+  // Wrapper at viewport x 140..900 in the 1024-wide stub
+  // viewport; the panel is 950 wide. Default placement overflows
+  // the right edge (140 + 950), so the panel right-aligns to the
+  // wrapper's right edge, which would leave its left edge at
+  // -50 — off screen — without the correction.
+  const panel = modelRightCard(env, { wrapLeft: 140, wrapRight: 900, width: 950 });
+  env.fire("click", env.b.btn);
+  assert.equal(panel.hidden, false);
+  assert.ok(panel.classList.contains("align-right"), "panel right-aligns when the default placement overflows");
+  assert.equal(panel.style.left, "-132px", "inline left shifts the panel back inside the viewport");
+  assert.equal(panel.getBoundingClientRect().left, 8, "left edge lands on the viewport margin");
+  assert.ok(panel.getBoundingClientRect().right <= 1024 - 8, "right edge still fits after the shift");
+  env.fire("click", env.b.btn);
+  assert.equal(panel.hidden, true, "second click closes");
+  assert.equal(panel.style.left, "", "closing clears the inline correction");
+});
+
+test("resizing the window re-places an open preview from scratch", function () {
+  const env = makeEnv(false);
+  loadFitJS(env);
+  const geo = { wrapLeft: 140, wrapRight: 900, width: 950 };
+  const panel = modelRightCard(env, geo);
+  env.fire("click", env.b.btn);
+  assert.equal(panel.style.left, "-132px", "correction applied at the narrow width");
+  // The window widens and the card moves right with the layout;
+  // the stale correction must go and placement recomputed.
+  global.innerWidth = 1600;
+  geo.wrapLeft = 700;
+  geo.wrapRight = 1500;
+  env.fireWindow("resize");
+  assert.equal(panel.hidden, false, "preview stays open across the resize");
+  assert.equal(panel.style.left, "", "stale inline correction cleared on re-place");
+  assert.equal(panel.getBoundingClientRect().left, 550, "panel right-aligns to the moved wrapper");
 });
 
 test("no hover wiring without a fine pointer", async function () {

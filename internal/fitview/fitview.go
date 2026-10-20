@@ -248,13 +248,17 @@ func FitFamilyFitted(family string) bool {
 // FitSlotChip is one fitted item line in the slot grid. State
 // is the uniform resolved state when every instance shares one
 // ("" when mixed or stateless) — for the state visuals.
+// StatesCSV is the comma-joined list of states the line's
+// modules may take (slot families only; "" for stateless kinds),
+// for the phone racks' tap-to-cycle.
 type FitSlotChip struct {
-	TypeID   int64
-	Name     string
-	Qty      int
-	State    string
-	Sub      string // the first stats from the tooltip, one line under the name
-	TipLines string // serialized FitTipLine rows for the tooltip
+	TypeID    int64
+	Name      string
+	Qty       int
+	State     string
+	Sub       string // the first stats from the tooltip, one line under the name
+	TipLines  string // serialized FitTipLine rows for the tooltip
+	StatesCSV string
 }
 
 // FitSlotGroup is one row of the slot grid.
@@ -1629,8 +1633,17 @@ func FitBuildGroups(res *fit.Result, doc *FitDoc, snap *fit.Snapshot, familyOf m
 			st = ""
 		}
 		lines := FitTipLines(res, snap, doc, it.TypeID, st, FitEffAttrs(res, snap, it.TypeID, st))
-		chips[fam] = append(chips[fam], FitSlotChip{TypeID: it.TypeID, Name: nameOf(it.TypeID), Qty: qty, State: st,
-			Sub: FitChipSub(lines), TipLines: FitTipLinesString(lines)})
+		chip := FitSlotChip{TypeID: it.TypeID, Name: nameOf(it.TypeID), Qty: qty, State: st,
+			Sub: FitChipSub(lines), TipLines: FitTipLinesString(lines)}
+		// The states a fitted line may take, for the phone racks'
+		// tap-to-cycle; bay and cargo lines are not fitted, so
+		// they carry none.
+		if _, isSlot := FitVisualArcs[fam]; isSlot && snap != nil {
+			if vs := fit.ModuleValidStates(snap, it.TypeID); len(vs) > 0 {
+				chip.StatesCSV = strings.Join(vs, ",")
+			}
+		}
+		chips[fam] = append(chips[fam], chip)
 	}
 	for fam := range chips {
 		sort.Slice(chips[fam], func(i, j int) bool { return chips[fam][i].Name < chips[fam][j].Name })

@@ -196,6 +196,36 @@ var FitTipUI = (function () {
   return { build: build, place: place };
 })();
 
+// --- phone views -------------------------------------------------
+// Pure decisions for the fitting tool's phone layout (the editor
+// below wires them to the DOM): which workbench sections each
+// view shows, and the next state in the racks' tap-to-cycle. The
+// cycle walks the states the module itself allows, in engagement
+// order (online, active, overheated, offline); a line whose
+// instances disagree ("" = mixed) enters at the first state.
+var FitPhoneViews = (function () {
+  var ORDER = ["online", "active", "overheated", "offline"];
+  function sections(view) {
+    return {
+      center: view === "radial",
+      slots: view === "racks",
+      bays: view === "racks",
+      stats: view === "stats",
+      search: view !== "stats"
+    };
+  }
+  function nextState(validCSV, current) {
+    var valid = (validCSV || "").split(",").filter(function (s) { return !!s; });
+    var order = ORDER.filter(function (s) { return valid.indexOf(s) >= 0; });
+    if (!order.length) return "";
+    return order[(order.indexOf(current || "") + 1) % order.length];
+  }
+  return { sections: sections, nextState: nextState };
+})();
+if (typeof module !== "undefined" && module.exports) {
+  module.exports = { FitPhoneViews: FitPhoneViews };
+}
+
 // --- drone gauges ------------------------------------------------
 // The Drones card carries a micro-stat header: active bandwidth
 // used / the ship's bandwidth, and bay volume used / capacity.
@@ -389,6 +419,7 @@ var FitGauges = (function () {
       syncFilterUI();
       syncSubsystemUI();
       syncUndoButtons();
+      applyFitView();
       runPendingFlash();
       simDone();
     }).catch(function () { simDone(); /* the static copy stays honest */ });
@@ -637,6 +668,8 @@ var FitGauges = (function () {
     if (wb && wb.contains(t)) {
       if (t.closest("[data-fit-undo]")) { undo(); return; }
       if (t.closest("[data-fit-redo]")) { redo(); return; }
+      var viewBtn = t.closest("[data-fit-view]");
+      if (viewBtn) { setFitView(viewBtn.getAttribute("data-fit-view")); return; }
       // Resolve the control from the nearest carrier, never the raw
       // target: a click on a slot's inner glyph must count as a
       // click on the slot (only the border used to respond).
@@ -676,6 +709,16 @@ var FitGauges = (function () {
       if (add) {
         if (add === "drone") { focusModuleSearch("drone"); return; }
         openPicker(add);
+        return;
+      }
+      // On the phone, in Slot Racks, a tap on a fitted module's
+      // card cycles its state; the card's own controls (the
+      // steppers above, form fields) keep their behavior, and
+      // the state pill is part of the card, not a control.
+      var cycChip = t.closest(".fit-chip[data-fit-states]");
+      if (cycChip && phoneOn() && fitView === "racks" &&
+          !t.closest("button, input, select, textarea, a")) {
+        cycleChipState(cycChip);
         return;
       }
       // A click anywhere else on a fitted module's row toggles
@@ -2027,26 +2070,109 @@ var FitGauges = (function () {
       if (tipEl) tipEl.setAttribute("data-for", key);
     }
   }
-  // Sets one module instance's state (tipKey is "typeID:ordinal"
-  // from the slot) and re-simulates through the coalesced path.
-  // Undo history covers it like any other edit.
-  function setModuleState(tipKey, newState) {
-    var parts = (tipKey || "").split(":");
-    var typeID = parseInt(parts[0], 10) || 0;
-    var ordinal = parseInt(parts[1], 10) || 0;
-    if (!typeID || ordinal < 0) return;
+  // Commits a state change for one fitted line's instances:
+  // one history entry, one re-simulation through the coalesced
+  // path. The tooltip's state buttons (setModuleState) and the
+  // phone racks' tap-to-cycle both end here.
+  function commitModuleStates(typeID, ordinals, newState) {
     var i = findItem(typeID);
     if (i < 0) return;
     normItems();
     var it = state.items[i];
-    if (ordinal >= it.states.length || it.states[ordinal] === newState) return;
+    var todo = [];
+    for (var k = 0; k < ordinals.length; k++) {
+      var o = ordinals[k];
+      if (o >= 0 && o < it.states.length && it.states[o] !== newState) todo.push(o);
+    }
+    if (!todo.length) return;
     pushHistory();
-    it.states[ordinal] = newState;
+    for (var j = 0; j < todo.length; j++) it.states[todo[j]] = newState;
     markDirty();
     // The re-render re-anchors whichever tooltip is open by then
     // (reanchorTip), so a pointer that moved on is never left
     // with this module's tooltip stuck on screen.
     simulate();
+  }
+  // Sets one module instance's state (tipKey is "typeID:ordinal"
+  // from the slot). Undo history covers it like any other edit.
+  function setModuleState(tipKey, newState) {
+    var parts = (tipKey || "").split(":");
+    var typeID = parseInt(parts[0], 10) || 0;
+    var ordinal = parseInt(parts[1], 10) || 0;
+    if (!typeID || ordinal < 0) return;
+    commitModuleStates(typeID, [ordinal], newState);
+  }
+  // Phone Slot Racks: tapping a module's card cycles the whole
+  // line to the next state the module allows (the card shows one
+  // state for the line), through the same commit the desktop
+  // tooltip's state buttons use.
+  function cycleChipState(chip) {
+    var typeID = parseInt(chip.getAttribute("data-fit-rowtype"), 10) || 0;
+    if (!typeID) return;
+    var next = FitPhoneViews.nextState(chip.getAttribute("data-fit-states"),
+      chip.getAttribute("data-fit-state"));
+    if (!next) return;
+    var i = findItem(typeID);
+    if (i < 0) return;
+    normItems();
+    var ordinals = [];
+    for (var o = 0; o < state.items[i].states.length; o++) ordinals.push(o);
+    commitModuleStates(typeID, ordinals, next);
+  }
+
+  // --- phone views ------------------------------------------------
+  // At phone width (the shared 45rem band) the workbench is three
+  // views under the tab bar the fragment renders: Slot Racks (the
+  // slot and bay lists), Resists & Cap (the stats column) and the
+  // Radial, which is where opening a fit lands. The current view
+  // lives here, not in the fragment, and is re-applied after every
+  // simulate swap like the other view syncs. Off the band nothing
+  // is hidden and the tab bar is display:none, so the desktop
+  // workbench is untouched. The module search belongs to the
+  // racks and radial views: on the phone it parks inside the
+  // fragment, under the tab bar (a swap drops it with the old
+  // fragment; the post-swap call parks it again), the stats view
+  // hides it, and off the phone it goes back to its home slot in
+  // front of the workbench.
+  var phoneMQ = window.matchMedia ? window.matchMedia("(max-width: 45rem)") : null;
+  var fitView = "radial";
+  function phoneOn() { return !!(phoneMQ && phoneMQ.matches); }
+  function applyFitView() {
+    var wb = workbench();
+    if (!wb) return;
+    var on = phoneOn();
+    var show = FitPhoneViews.sections(fitView);
+    function vis(el, want) { if (el) el.classList.toggle("fv-off", on && !want); }
+    vis(wb.querySelector(".fit-center"), show.center);
+    vis(wb.querySelector(".fit-slots"), show.slots);
+    vis(wb.querySelector(".fit-bays"), show.bays);
+    vis(wb.querySelector(".fit-stats"), show.stats);
+    var tabs = wb.querySelectorAll("[data-fit-view]");
+    for (var i = 0; i < tabs.length; i++) {
+      var active = on && tabs[i].getAttribute("data-fit-view") === fitView;
+      tabs[i].classList.toggle("on", !!active);
+      tabs[i].setAttribute("aria-selected", active ? "true" : "false");
+    }
+    var ms = document.getElementById("fit-modsearch");
+    if (!ms) return;
+    var bar = wb.querySelector(".fit-mtabs");
+    if (on && bar) {
+      if (ms.parentNode !== wb || ms.previousSibling !== bar) {
+        wb.insertBefore(ms, bar.nextSibling);
+      }
+      ms.classList.toggle("fv-off", !show.search);
+    } else {
+      if (ms.parentNode !== editor) editor.insertBefore(ms, wb);
+      ms.classList.remove("fv-off");
+    }
+  }
+  function setFitView(view) {
+    if (view !== "racks" && view !== "stats" && view !== "radial") return;
+    fitView = view;
+    applyFitView();
+  }
+  if (phoneMQ && phoneMQ.addEventListener) {
+    phoneMQ.addEventListener("change", applyFitView);
   }
   editor.addEventListener("keydown", function (ev) {
     if (ev.key !== "Enter" && ev.key !== " ") return;
@@ -2251,6 +2377,9 @@ var FitGauges = (function () {
       }).catch(function () {});
     });
   }
+  // Last, so the phone view state above is initialized: land on
+  // the current view (the Radial, on a fresh page).
+  applyFitView();
 })();
 
 // --- ESI fittings list: client-side search + sort ----------------

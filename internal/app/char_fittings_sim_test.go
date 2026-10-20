@@ -511,6 +511,15 @@ func TestFitSimulateModuleStates(t *testing.T) {
 		`data-tip-states="offline,online,active,overheated"`,
 		`data-tip-state="active"`,
 		`data-tip-key="3003:0"`,
+		// The fitted line's chip carries the same states for the
+		// phone racks' tap-to-cycle, and the fragment carries the
+		// phone header and view tabs.
+		`data-fit-states="offline,online,active,overheated"`,
+		`data-fit-state="active"`,
+		`<div class="fit-mhead">`,
+		`data-fit-view="racks"`,
+		`data-fit-view="stats"`,
+		`data-fit-view="radial"`,
 		"<strong>Armor</strong> <small>460 HP ")
 	if strings.Contains(body, "Heating a module") {
 		t.Errorf("heat note still shown for a modeled overload effect")

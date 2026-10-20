@@ -287,3 +287,61 @@ func TestLandingTotalsWrap(t *testing.T) {
 		t.Error("the landing small-width block no longer groups the planner totals on wrap")
 	}
 }
+
+// TestFittingPhoneViews pins the fitting tool's phone layout:
+// the workbench fragment carries the ship header and the three
+// view tabs for the editor (never the read-only workbench), the
+// phone rules live in fit.css inside the shared 45rem band and
+// the sheet loads only on the fitting page, fitted chips carry
+// their cyclable states for the editor, and fit.js holds the
+// view state with the Radial as the landing view.
+func TestFittingPhoneViews(t *testing.T) {
+	rawTpl, err := fs.ReadFile(templatesFS, "templates/fit_workbench.html")
+	if err != nil {
+		t.Fatalf("read fit_workbench.html: %v", err)
+	}
+	tpl := string(rawTpl)
+	for _, want := range []string{
+		`{{if and (not .ReadOnly) .HasShip}}`,
+		`<div class="fit-mhead">`,
+		`data-fit-view="racks" aria-selected="false">Slot Racks</button>`,
+		`data-fit-view="stats" aria-selected="false">Resists &amp; Cap</button>`,
+		`data-fit-view="radial" aria-selected="true">Radial</button>`,
+		`{{if and (not $group.ReadOnly) .StatesCSV}} data-fit-states="{{.StatesCSV}}" data-fit-state="{{.State}}"{{end}}`,
+	} {
+		if !strings.Contains(tpl, want) {
+			t.Errorf("fit_workbench.html is missing the phone hook %q", want)
+		}
+	}
+
+	css := readStatic(t, "fit.css")
+	if !strings.Contains(css, ".fit-mhead, .fit-mtabs { display: none; }") {
+		t.Error("fit.css no longer keeps the phone chrome hidden above the band")
+	}
+	block := mediaBlock(t, css, "@media (max-width: 45rem)")
+	for _, want := range []string{".fit-mhead {", ".fit-mtabs {", ".fit-wb .fv-off", ".fit-wb > .fit-modsearch"} {
+		if !strings.Contains(block, want) {
+			t.Errorf("the fit.css phone block is missing %q", want)
+		}
+	}
+
+	rawBase, err := fs.ReadFile(templatesFS, "templates/base.html")
+	if err != nil {
+		t.Fatalf("read base.html: %v", err)
+	}
+	if !strings.Contains(string(rawBase),
+		`{{if eq .NavPage "fittings.html"}}<link rel="stylesheet" href="/static/fit.css?v={{.AssetVersion}}">{{end}}`) {
+		t.Error("base.html no longer loads fit.css on the fitting page")
+	}
+
+	js := readStatic(t, "fit.js")
+	for _, want := range []string{
+		`window.matchMedia("(max-width: 45rem)")`,
+		`var fitView = "radial";`,
+		`FitPhoneViews.sections(fitView)`,
+	} {
+		if !strings.Contains(js, want) {
+			t.Errorf("fit.js is missing the phone-view wiring %q", want)
+		}
+	}
+}

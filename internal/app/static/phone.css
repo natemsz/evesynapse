@@ -190,6 +190,65 @@
   .tw table:not(:has(thead)) td { white-space: normal; overflow-wrap: anywhere; }
   .tw table:not(:has(thead)) th { width: 34%; }
 
+  /* Table cards (app.js "Table cards"): a table that would scroll
+     sideways reads as cards — the first cell titles the card, the
+     rest sit two-up under their column labels, a one-cell row
+     (a detail drawer, a group heading) spans the card. Hidden
+     rows stay hidden; the pinned first column unpins. */
+  #main-content table.cards-on { width: 100%; min-width: 0; margin-bottom: 0.6rem; }
+  #main-content table.cards-on > thead { display: none; }
+  #main-content table.cards-on > tbody { display: block; }
+  #main-content table.cards-on > tbody > tr:not([hidden]) {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.35rem 0.9rem;
+    padding: 0.7rem 0.15rem;
+    border-bottom: 1px solid var(--box-edge);
+  }
+  #main-content table.cards-on > tbody > tr > :is(td, th) {
+    display: block;
+    position: static;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    background: none;
+    text-align: left;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  #main-content table.cards-on > tbody > tr > :is(td, th):first-child,
+  #main-content table.cards-on > tbody > tr > :is(td, th)[colspan] {
+    grid-column: 1 / -1;
+  }
+  #main-content table.cards-on > tbody > tr > :is(td, th):first-child {
+    font-size: 1.05em;
+    font-weight: 600;
+    color: var(--text-bright);
+  }
+  #main-content table.cards-on > tbody > tr > td[data-label]:not(:first-child)::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 0.1rem;
+    color: var(--muted);
+    font-size: 0.68rem;
+    font-weight: 500;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  #main-content table.cards-on > tbody > tr > td:is(:empty, .opt) { display: none; }
+  /* data-cards="off": the table stays a table and fits by
+     wrapping its text columns instead (an order book: price,
+     volume, and the station wrapping under its own column). */
+  .tw table[data-cards="off"]:not(.cal) { width: 100%; }
+  .tw table[data-cards="off"]:not(.cal) td { white-space: normal; overflow-wrap: anywhere; }
+  .cards-sort {
+    display: flex; align-items: center; gap: 0.5rem;
+    margin: 0 0 0.3rem;
+  }
+  .cards-sort[hidden] { display: none; }
+  .cards-sort > small { color: var(--muted); }
+  .cards-sort > select { flex: 1 1 auto; min-width: 0; }
+
   /* The footer: the same lines, set compact. */
   footer { margin-top: 1rem; padding: 1rem 0.9rem 1.1rem; font-size: 0.66rem; }
   footer p { margin: 0.35rem 0; }

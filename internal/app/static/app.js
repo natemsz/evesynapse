@@ -3324,6 +3324,145 @@
     th.setAttribute("aria-sort", dir === 1 ? "ascending" : "descending");
   });
 
+  // --- Table cards (phone band) ---------------------------------
+  // In the phone band (phone.css) a data table that would scroll
+  // sideways reads as a list of cards instead: each row a card,
+  // its first cell the card's title, every other cell a figure
+  // under its column's label. The labels come from the table's
+  // own header row (copied onto the cells as data-label), so no
+  // template carries a second copy of them. The switch is
+  // measured, like the tab strips: a table whose columns fit the
+  // screen stays a table. data-cards="on" on a table forces
+  // cards, data-cards="off" keeps the sideways scroll (an order
+  // book, a calendar: grids whose point is comparing columns).
+  // Sortable tables keep their sort: the hidden header row is
+  // driven from a compact Sort picker above the cards, which
+  // clicks the header the desktop reader would (the one sort
+  // implementation, above). A header cell marked .opt (the
+  // site's low-priority column mark, as in the home modules)
+  // keeps its column off the cards. Without JS, or off the band,
+  // tables render exactly as before.
+  var cardsBandQuery = window.matchMedia ? window.matchMedia("(max-width: 45rem)") : null;
+
+  // Pure: the label for each column index of a header row, with
+  // colspans expanded so a cell's index finds its header.
+  function cardLabels(headTexts, spans) {
+    var out = [], i, j;
+    for (i = 0; i < headTexts.length; i++) {
+      for (j = 0; j < (spans[i] || 1); j++) out.push(headTexts[i]);
+    }
+    return out;
+  }
+
+  if (typeof module !== "undefined" && module.exports) {
+    module.exports.cardLabels = cardLabels;
+  }
+
+  function labelCardCells(table) {
+    var head = table.tHead && table.tHead.rows.length ? table.tHead.rows[table.tHead.rows.length - 1] : null;
+    if (!head) return false;
+    var texts = [], spans = [], opts = [], i, r, c;
+    for (i = 0; i < head.cells.length; i++) {
+      texts.push(head.cells[i].textContent.trim());
+      spans.push(head.cells[i].colSpan);
+      opts.push(head.cells[i].classList.contains("opt") ? "1" : "");
+    }
+    var labels = cardLabels(texts, spans), optional = cardLabels(opts, spans);
+    for (r = 0; r < table.tBodies.length; r++) {
+      var rows = table.tBodies[r].rows;
+      for (i = 0; i < rows.length; i++) {
+        var idx = 0;
+        for (c = 0; c < rows[i].cells.length; c++) {
+          var cell = rows[i].cells[c];
+          if (labels[idx] && cell.colSpan === 1) cell.setAttribute("data-label", labels[idx]);
+          // A column the header marks .opt (the site's "first to
+          // go when narrow" mark) stays off the card.
+          if (optional[idx] && cell.colSpan === 1) cell.classList.add("opt");
+          idx += cell.colSpan;
+        }
+      }
+    }
+    return true;
+  }
+
+  function cardSortPicker(table) {
+    var prev = table.previousElementSibling;
+    if (prev && prev.classList.contains("cards-sort")) return prev;
+    if (table.hasAttribute("data-nosort") || !table.tBodies[0] || table.tBodies[0].rows.length < 2) return null;
+    var head = table.tHead.rows[table.tHead.rows.length - 1];
+    var label = document.createElement("label");
+    label.className = "cards-sort";
+    var cap = document.createElement("small");
+    cap.textContent = "Sort";
+    var sel = document.createElement("select");
+    var none = document.createElement("option");
+    none.value = ""; none.textContent = "As listed";
+    sel.appendChild(none);
+    for (var i = 0; i < head.cells.length; i++) {
+      var t = head.cells[i].textContent.trim();
+      if (!t) continue;
+      ["ascending", "descending"].forEach(function (dir) {
+        var o = document.createElement("option");
+        o.value = i + ":" + dir;
+        o.textContent = t + (dir === "ascending" ? " ↑" : " ↓");
+        sel.appendChild(o);
+      });
+    }
+    sel.addEventListener("change", function () {
+      if (!sel.value) return;
+      var parts = sel.value.split(":"), th = head.cells[+parts[0]];
+      for (var n = 0; n < 2 && th.getAttribute("aria-sort") !== parts[1]; n++) th.click();
+    });
+    label.appendChild(cap);
+    label.appendChild(sel);
+    // The picker sits outside the table's scroll wrapper.
+    var anchor = table.parentNode && table.parentNode.classList.contains("tw") ? table.parentNode : table;
+    anchor.parentNode.insertBefore(label, anchor);
+    return label;
+  }
+
+  function layoutTableCards(root) {
+    var tables = (root || document).querySelectorAll("#main-content table, table");
+    var on = cardsBandQuery && cardsBandQuery.matches, i;
+    var measure = [];
+    for (i = 0; i < tables.length; i++) {
+      var t = tables[i], mode = t.getAttribute("data-cards");
+      if (!t.closest("#main-content") || !t.tHead || mode === "off") continue;
+      var picker = t.parentNode && t.parentNode.classList.contains("tw") ? t.parentNode.previousElementSibling : t.previousElementSibling;
+      if (!on) {
+        t.classList.remove("cards-on");
+        if (picker && picker.classList.contains("cards-sort")) picker.hidden = true;
+        continue;
+      }
+      if (mode === "on") { measure.push([t, true]); continue; }
+      t.classList.remove("cards-on");
+      measure.push([t, null]);
+    }
+    // Read every width first, then write: one layout pass.
+    for (i = 0; i < measure.length; i++) {
+      if (measure[i][1] === null) {
+        var box = measure[i][0].parentNode;
+        measure[i][1] = measure[i][0].scrollWidth > box.clientWidth + 1;
+      }
+    }
+    for (i = 0; i < measure.length; i++) {
+      var table = measure[i][0];
+      if (!measure[i][1] || !labelCardCells(table)) continue;
+      table.classList.add("cards-on");
+      var p = cardSortPicker(table);
+      if (p) p.hidden = false;
+    }
+  }
+  window.EveSynapseContent.onReady(layoutTableCards);
+  layoutTableCards(document);
+  if (cardsBandQuery && cardsBandQuery.addEventListener) {
+    cardsBandQuery.addEventListener("change", function () { layoutTableCards(document); });
+  }
+  // A phone turning on its side may now fit a table it could not.
+  window.addEventListener("orientationchange", function () {
+    if (window.requestAnimationFrame) window.requestAnimationFrame(function () { layoutTableCards(document); });
+  });
+
   // --- Filters that apply as they change -----------------------
   // A control marked data-autosubmit (the Item Database search's
   // category and group pickers and its published-only box) submits

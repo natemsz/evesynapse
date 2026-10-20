@@ -32,7 +32,7 @@
   {{if $c.Recent}}
   <h4>Last recorded days</h4>
   <div class="tw">
-  <table>
+  <table data-cards="off">
     <thead><tr><th>Date</th><th>Average</th><th>High</th><th>Low</th><th>Volume</th></tr></thead>
     <tbody>
     {{range $c.Recent}}<tr><td>{{.Date}}</td><td>{{.Average}}</td><td>{{.Highest}}</td><td>{{.Lowest}}</td><td>{{.Volume}}</td></tr>{{end}}

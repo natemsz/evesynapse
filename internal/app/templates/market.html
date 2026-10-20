@@ -146,7 +146,7 @@
   <section class="foldable">
   <h3>Sell orders — {{$item.RegionName}}</h3>
   <div class="tw">
-  <table>
+  <table data-cards="off">
     <thead><tr><th>Price</th><th>Volume</th><th>Location</th></tr></thead>
     <tbody>
     {{range $item.Sells}}
@@ -163,7 +163,7 @@
   <section class="foldable">
   <h3>Buy orders — {{$item.RegionName}}</h3>
   <div class="tw">
-  <table>
+  <table data-cards="off">
     <thead><tr><th>Price</th><th>Volume</th><th>Location</th></tr></thead>
     <tbody>
     {{range $item.Buys}}

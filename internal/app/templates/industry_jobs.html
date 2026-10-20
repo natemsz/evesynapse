@@ -19,7 +19,7 @@
 {{else if .Industry.JobRows}}
 <div class="tw">
 <table>
-  <thead><tr><th>Activity</th><th>Blueprint</th><th>Product</th><th>Installer</th><th>Facility</th><th>Runs</th><th>Status</th><th>Ends</th><th>Cost</th></tr></thead>
+  <thead><tr><th>Activity</th><th>Blueprint</th><th>Product</th><th class="opt">Installer</th><th>Facility</th><th>Runs</th><th>Status</th><th>Ends</th><th>Cost</th></tr></thead>
   <tbody>
   {{range .Industry.JobRows}}
     <tr><td>{{.Activity}}</td><td>{{itemLink .BlueprintTypeID .Blueprint}}</td><td>{{if .Product}}{{itemLink .ProductTypeID .Product}}{{end}}</td><td>{{charLink $.ViewerChars .InstallerID .Installer}}</td><td>{{placeLink .Facility}}</td><td>{{.Runs}}</td><td>{{.Status}}</td><td>{{.Ends}}</td><td>{{.Cost}} ISK</td></tr>

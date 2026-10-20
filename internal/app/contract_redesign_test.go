@@ -435,7 +435,7 @@ func TestContractPanelFragment(t *testing.T) {
 		"ID: 7001", "Issued by Issuer One (Pilot)",
 		"Deal Execution Summary", "Asking Price:", "850.00 ISK",
 		"EveSynapse Value:", "Estimated Spread:", "150.00 ISK (15.0%)",
-		"In-game link ready for EVE Notepad",
+		"Full contract page",
 		"Copy Contract Link", "contract:10000002//7001")
 	if strings.Contains(body, "<html") || strings.Contains(body, "pagetitle") {
 		t.Error("the panel must be a bare fragment, not a full page")

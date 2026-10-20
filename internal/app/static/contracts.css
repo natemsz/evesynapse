@@ -624,6 +624,71 @@
   .cs-roll { grid-template-columns: minmax(0, 1fr) auto 4.5rem 2.4rem; }
 }
 
+/* ---- abyssal lines: picker, item ID, full page ----
+   A contract with several abyssal lines carries a telemetry card
+   per line; a line's roll tag picks which one shows
+   (contracts.js). Each card offers its item's ID to copy, and
+   the drawer's foot links the contract's full page. */
+.cs-rolltag {
+  font: inherit; color: var(--gold);
+  background: none; border: 0; padding: 0;
+  border-bottom: 1px dotted currentColor;
+  cursor: pointer;
+}
+.cs-rolltag[aria-pressed="true"] { color: var(--text-bright); border-bottom-style: solid; }
+.cs-aline.ab-on { box-shadow: inset 3px 0 0 var(--accent); }
+.cs-tel[hidden] { display: none; }
+.cs-tel-name { margin: 0 0 0.55rem; font-weight: 600; color: var(--text-bright); }
+.cs-tel-id {
+  display: flex; align-items: center; justify-content: space-between; gap: 0.6rem;
+  margin-top: 0.6rem; padding-top: 0.5rem;
+  border-top: 1px solid var(--box-edge);
+  color: var(--muted); font-size: 0.82rem;
+}
+.cs-tel-id code { font-family: "JetBrains Mono", ui-monospace, monospace; color: var(--text); }
+.cs-dfoot-full { font-size: 0.82rem; }
+
+/* ---- the abyssal pricing explainer ----
+   One wording (templates/abyssalhowto.html) wherever an abyssal
+   estimate is named: a dotted label that opens on hover or focus
+   (a tap focuses it on a touch screen). */
+.ab-howto {
+  position: relative;
+  color: inherit;
+  border-bottom: 1px dotted currentColor;
+  cursor: help;
+  outline-offset: 2px;
+}
+.cs-drawer-sub .ab-howto { color: var(--gold); }
+.ab-howto-tip {
+  display: none;
+  position: absolute; z-index: 50;
+  left: 0; top: calc(100% + 6px);
+  width: min(26rem, 80vw);
+  padding: 0.75rem 0.85rem;
+  background: color-mix(in srgb, var(--panel) 97%, transparent);
+  border: 1px solid var(--glass-edge);
+  border-radius: var(--r-md);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55);
+  color: var(--text);
+  font-size: 0.82rem; font-weight: 400; line-height: 1.45;
+  letter-spacing: 0; text-transform: none; text-align: left;
+  white-space: normal;
+  cursor: auto;
+}
+.cs-tp .ab-howto-tip, .cd-tier .ab-howto-tip { left: auto; right: 0; }
+.ab-howto:hover > .ab-howto-tip,
+.ab-howto:focus > .ab-howto-tip,
+.ab-howto:focus-within > .ab-howto-tip { display: block; }
+.ab-howto-tip strong { display: block; margin-bottom: 0.35rem; color: var(--text-bright); }
+.ab-howto-step { display: block; margin: 0.3rem 0; }
+.ab-howto-math {
+  display: block; margin-top: 0.5rem; padding-top: 0.4rem;
+  border-top: 1px solid var(--box-edge);
+  font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 0.76rem;
+  color: var(--gold);
+}
+
 /* ---- phone form: the results become cards ----
    At phone widths the five-column table gives up its
    columns: each row renders as a card in the one panel --
@@ -684,6 +749,13 @@
   .cs-table tbody tr.cs-drow { display: block; margin: -0.25rem 0 0.6rem; }
   .cs-table tbody tr.cs-drow:has(.cs-panel-slot[hidden]) { display: none; }
   .cs-drow > td { display: block; }
+  /* The abyssal pricing explainer docks above the bottom bar. */
+  .ab-howto-tip, .cs-tp .ab-howto-tip, .cd-tier .ab-howto-tip {
+    position: fixed; z-index: 95;
+    left: 0.5rem; right: 0.5rem; top: auto;
+    bottom: calc(var(--phone-bar-h, 0px) + env(safe-area-inset-bottom, 0px) + 0.5rem);
+    width: auto; max-height: 60vh; overflow-y: auto;
+  }
   /* Above the results: the quick hunts as one swipeable strip,
      and the deals switch sharing its row with the Filters
      button, which raises every other filter as a sheet

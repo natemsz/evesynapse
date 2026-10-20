@@ -1576,6 +1576,10 @@ type viewInGameState struct {
 }
 
 type detailView struct {
+	// Panel is the appraisal cards the drawer shows, in their
+	// full form, for the contract page.
+	Panel *panelView
+
 	Found      bool
 	ContractID int64
 	TypeLabel  string
@@ -1643,6 +1647,9 @@ func (app *mod) handleContractDetail(w http.ResponseWriter, r *http.Request) {
 		app.deps.Render(ctx, w, http.StatusNotFound, "contract_detail.html", data)
 		return
 	}
+	if row, err := app.queries.GetPublicContract(ctx, id); err == nil {
+		view.Panel = app.panelFromDetail(view, row, pinSearch{}, true)
+	}
 	data.ContractDetail = view
 	app.deps.Render(ctx, w, http.StatusOK, "contract_detail.html", data)
 }
@@ -1660,6 +1667,12 @@ type panelLine struct {
 	Side    string // "Offered" | "Wanted"
 	Group   string // SDE group name for the chip, "" when unknown
 	RollTag string // "Roll 94/100" for a scored abyssal line
+	// AbItemID is an abyssal line's item ID when the drawer
+	// carries a telemetry card for it: the roll tag picks it.
+	AbItemID int64
+	// AbTier marks a line priced at the abyssal tier, whose
+	// basis phrase carries the pricing explainer.
+	AbTier bool
 	// BasisText is the line's appraisal phrase ("Swept
 	// Forge Typical: 5.12B ISK", "Outside Aggregate Est:
 	// ...", "Not priced"); BasisAmber marks the phrases
@@ -1689,12 +1702,21 @@ type telemetryRoll struct {
 	HasPct bool
 }
 
-// telemetryView is the drawer's mutaplasmid card, bound
-// to the contract's first abyssal line: its stored
-// estimate range and every rolled attribute.
+// telemetryView is one abyssal line's mutaplasmid card in
+// the drawer: the item it belongs to, its stored estimate
+// range and every rolled attribute that moved. A contract
+// carries one per abyssal line; the line's roll tag picks
+// which one shows.
 type telemetryView struct {
+	ItemID   int64  // the physical item ID, 0 when unknown
+	Name     string // the mutated module's name
+	RollTag  string // "Roll 86/100", "" when unscored
 	EstRange string // "180.0M – 240.0M ISK", "" when no range is stored
 	Rolls    []telemetryRoll
+	// Full is the contract page's card: every roll (not only
+	// the ones that moved) and the stored panel's words.
+	Full  bool
+	Panel *abyssalPanel
 }
 
 // panelView is the row-expansion fragment: the line-by-line
@@ -1708,7 +1730,10 @@ type panelView struct {
 	SourceLabel string // the valuation source the appraisal stands on
 	StateNote   string
 	Lines       []panelLine
-	Telemetry   *telemetryView // nil unless an abyssal line carries rolls
+	Telemetry   []telemetryView // one per abyssal line that carries rolls or a range
+	// Full marks the contract page's use of the cards (every
+	// roll and the estimate's words on each telemetry card).
+	Full bool
 	// The execution summary (the right card when there is
 	// no telemetry): the effective ask, our value, and the
 	// spread between them where both are honestly known.
@@ -1784,7 +1809,15 @@ func (app *mod) buildPanelView(ctx context.Context, id int64, pin pinSearch) (*p
 	if err != nil {
 		return nil, false
 	}
-	out := &panelView{ContractID: id, StateNote: dv.StateNote}
+	return app.panelFromDetail(dv, row, pin, false), true
+}
+
+// panelFromDetail builds the appraisal cards from a built
+// detail view: the drawer's (full false) and the contract
+// page's (full true, every roll and the estimate's words).
+func (app *mod) panelFromDetail(dv *detailView, row db.PubContract, pin pinSearch, full bool) *panelView {
+	id := dv.ContractID
+	out := &panelView{ContractID: id, StateNote: dv.StateNote, Full: full}
 	// The drawer omits the private-cargo note: the
 	// summary card already sets the courier's reward
 	// against its collateral, so the empty appraisal
@@ -1799,7 +1832,6 @@ func (app *mod) buildPanelView(ctx context.Context, id int64, pin pinSearch) (*p
 	}
 	out.IssuerText = fmt.Sprintf("%s (%s)", dv.IssuerName, issuerKind)
 
-	var firstAbyssal *abyssalPanel
 	tiers := map[string]bool{}
 	addLines := func(lines []detailLine, side string) {
 		for _, l := range lines {
@@ -1811,6 +1843,13 @@ func (app *mod) buildPanelView(ctx context.Context, id int64, pin pinSearch) (*p
 			if l.Abyssal != nil && l.Abyssal.HasScore {
 				pl.RollTag = "Roll " + strings.Replace(l.Abyssal.ScoreText, " / ", "/", 1)
 			}
+			// Each abyssal line with rolls or a range gets its
+			// own telemetry card, in line order.
+			if a := l.Abyssal; a != nil && (len(a.Rolls) > 0 || a.HasRange) {
+				out.Telemetry = append(out.Telemetry, telemetryCard(l, pl.RollTag, full))
+				pl.AbItemID = l.ItemID
+			}
+			pl.AbTier = l.Tier == module.AppraisalTierAbyssal
 			// The basis phrase, in plain words: the
 			// typical tier is the typical Jita price, the
 			// abyssal model's lines price as the abyssal
@@ -1840,42 +1879,12 @@ func (app *mod) buildPanelView(ctx context.Context, id int64, pin pinSearch) (*p
 				tiers[l.Tier] = true
 			}
 			out.Lines = append(out.Lines, pl)
-			if l.Abyssal != nil && firstAbyssal == nil {
-				firstAbyssal = l.Abyssal
-			}
 		}
 	}
 	addLines(dv.Offered, "Offered")
 	addLines(dv.Wanted, "Wanted")
 	out.Lines = pinMatchedLines(out.Lines, pin)
 	out.SourceLabel = drawerSourceLabel(row.Type, tiers)
-
-	// Telemetry for the first abyssal line, when it carries
-	// rolls or a stored estimate range: the same stored
-	// roll data the detail page renders, inline here.
-	if firstAbyssal != nil && (len(firstAbyssal.Rolls) > 0 || firstAbyssal.HasRange) {
-		tv := &telemetryView{}
-		if firstAbyssal.HasRange {
-			low := strings.TrimSuffix(formatShortISK(firstAbyssal.EstLowNum), " ISK")
-			tv.EstRange = low + " – " + formatShortISK(firstAbyssal.EstHighNum)
-		}
-		for _, rl := range firstAbyssal.Rolls {
-			// The attributes card lists only the rolls
-			// that moved their stat: an attribute left at
-			// its base value is not a mutation worth a
-			// row. (The detail page keeps every roll.)
-			if rl.HasBase && !rl.Changed {
-				continue
-			}
-			tr := telemetryRoll{Name: rl.Name, Good: rl.Good, Pct: rl.Pct, HasPct: rl.HasPct}
-			tr.Figure = rl.Value
-			if rl.HasBase && rl.Delta != "" {
-				tr.Figure = rl.Delta
-			}
-			tv.Rolls = append(tv.Rolls, tr)
-		}
-		out.Telemetry = tv
-	}
 
 	// The execution summary: the effective ask (the reward
 	// for a courier, the standing bid for an auction, else
@@ -1935,7 +1944,36 @@ func (app *mod) buildPanelView(ctx context.Context, id int64, pin pinSearch) (*p
 	label = strings.NewReplacer("<", "", ">", "").Replace(label)
 	out.CopyText = fmt.Sprintf("<url=contract:%d//%d>%s [%d]</url>",
 		row.RegionID, row.ContractID, label, row.ContractID)
-	return out, true
+	return out
+}
+
+// telemetryCard builds one abyssal line's mutaplasmid card:
+// the same stored roll data the detail page renders, keeping
+// only the rolls that moved their stat (an attribute left at
+// its base value is not a mutation worth a row; the detail
+// page keeps every roll).
+func telemetryCard(l detailLine, rollTag string, full bool) telemetryView {
+	a := l.Abyssal
+	tv := telemetryView{ItemID: l.ItemID, Name: l.Name, RollTag: rollTag, Full: full}
+	if full {
+		tv.Panel = a
+	}
+	if a.HasRange {
+		low := strings.TrimSuffix(formatShortISK(a.EstLowNum), " ISK")
+		tv.EstRange = low + " – " + formatShortISK(a.EstHighNum)
+	}
+	for _, rl := range a.Rolls {
+		if rl.HasBase && !rl.Changed && !full {
+			continue
+		}
+		tr := telemetryRoll{Name: rl.Name, Good: rl.Good, Pct: rl.Pct, HasPct: rl.HasPct}
+		tr.Figure = rl.Value
+		if rl.HasBase && rl.Delta != "" {
+			tr.Figure = rl.Delta
+		}
+		tv.Rolls = append(tv.Rolls, tr)
+	}
+	return tv
 }
 
 // drawerSourceLabel names the valuation source the drawer

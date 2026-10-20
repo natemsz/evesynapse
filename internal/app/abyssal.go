@@ -20,33 +20,38 @@ package app
 // caps the score whatever the rest rolled, and the cap and
 // the attribute that set it are stored with the estimate.
 //
-// The estimate is anchored on absolute performance, never on
-// provenance. The comparable set is the family's corpus
-// bucketed by score band: items are priced against listings
-// with a matching performance profile, whatever module they
-// were mutated from. A provenance premium is applied only
-// when stat-matched corpus data actually measures one (the
-// median ask of the item's own source module against the
-// rest of the band, shrunk by sample size); unmeasured, it is
-// one, exactly. When the bucket is too thin the estimate
-// falls back to the source module's own price run through
-// the score curve, with a bounded per-family correction
-// fitted from whatever listings exist; the correction is the
-// only place asking prices touch that path, and it is
-// clamped. Calibration weights exit dynamics over ask
-// levels: a listing that left before its term counts more
-// than one still sitting, and one that sat out its full term
-// counts least, because disappearance is never read as a
-// sale. An item's own ask is never an input to its estimate:
-// the corpus a score is priced against excludes the item
-// itself, and a listing priced suspiciously close to our own
-// stored estimate is down-weighted, because a seller may be
-// anchoring on us.
+// The estimate prices the item, not the market's opinion of
+// it. Every family has a ladder of ordinary modules -- Tech II,
+// faction, deadspace, officer: the source module's SDE group,
+// its size class -- whose stats are fixed game data and whose
+// prices come from markets far deeper than abyssal contracts.
+// The item and every rung are placed on one performance index
+// (the scorer's weighted positions and fitting drag, measured
+// against the item's own source base and bands, unclamped), and
+// the item is priced between the rungs it falls between. Where
+// it falls is a fact of its absolute stats, so identical stats
+// mutated from different sources price the same. Recreation
+// cost -- the expected attempts to roll at least this profile
+// again, times the cheapest reachable base module plus the
+// mutaplasmid -- caps the figure: nobody needs to pay more than
+// making one. With no priced ladder, the source module's price
+// run through the score curve speaks instead, with a bounded
+// correction fitted from listings.
 //
-// Recreation cost is stored beside the estimate as a
-// cross-check, never blended into it: the expected attempts
-// to roll at least this item's profile again, times the
-// cheapest reachable base module plus the mutaplasmid.
+// Contract listings never set a figure. They are asks, not
+// sales, and a thin family's are easy to move, so they only
+// nudge one per-family factor, clamped to [0.8, 1.25] and
+// shrunk toward no correction until enough clean listings have
+// spoken (abyssalMarketCalibration). Clean means: a listing's
+// price is attributed to the item (bundles of abyssals and
+// exchanges are refused, small priced passengers subtracted --
+// schema 069), weighted by how it left the market (leaving
+// early counts more than sitting out its term, and
+// disappearance is never read as a sale), by recency and by how
+// long it has sat live, with each seller's say growing only as
+// the square root of what they list; and a listing priced
+// suspiciously close to our own estimate is down-weighted. An
+// item's own ask is never an input to its estimate.
 //
 // Estimates are honest about absence. No ranges, no score.
 // No score, or nothing to anchor on (no corpus bucket and no
@@ -76,9 +81,6 @@ const (
 	// cadence the appraisal pass reprices contracts on, so a
 	// growing corpus improves estimates within the hour.
 	abyssalRescoreAge = time.Hour
-	// abyssalCorpusMin is the bucket size under which a
-	// family band is "too thin" and the curve speaks instead.
-	abyssalCorpusMin = 5
 )
 
 // abyssalBandRef is the multiplier-band width at which an
@@ -486,21 +488,33 @@ func abyssalDerivedStat(in abyssalScoringInputs) (abyssalDerived, int64, bool) {
 // ---------------------------------------------------------------------
 
 // abyssalComp is one corpus comparable: a scored item of the
-// family, its most recent exchange listing's ask, the ask's
-// source module price (for the curve correction), and the
-// weight exit dynamics gave it. The item being estimated is
-// never among its own comps: callers exclude it, and the
-// contamination test holds that line.
+// family, its attributed ask, its source module price (for the
+// curve correction), its uncalibrated ladder figure (for the
+// market calibration), and its prior weight. The item being
+// estimated is never among its own comps: callers exclude it.
 type abyssalComp struct {
-	ItemID         int64
-	SourceTypeID   int64
-	Score          float64
-	Ask            float64
-	SourceTypical  float64
+	ItemID        int64
+	SourceTypeID  int64
+	Score         float64
+	Ask           float64
+	SourceTypical float64
+	// LadderValue is the comp's own uncalibrated ladder figure
+	// from its last scoring; 0 when it has none.
+	LadderValue float64
+	// DynamicsWeight is the comp's prior say: exit dynamics,
+	// recency, attribution and the seller's share (compsFor).
 	DynamicsWeight float64
-	// PrimaryAbs is the comp's absolute primary figure; 0
-	// when unknown (then no stat matching applies to it).
-	PrimaryAbs float64
+	PrimaryAbs     float64
+}
+
+// abyssalRung is one ordinary module on an item's ladder: its
+// type, our price for it, and its performance index measured
+// exactly as the item's is (abyssalLadderIndex, against the
+// item's own source base and mutaplasmid bands).
+type abyssalRung struct {
+	TypeID int64
+	Price  float64
+	Index  float64
 }
 
 // abyssalEstimateInput is the estimator's whole world.
@@ -508,39 +522,35 @@ type abyssalEstimateInput struct {
 	Score         float64
 	SourceTypical float64 // the item's own source module price; 0 = none
 	SourceTypeID  int64
-	// PrimaryAbs is the item's absolute primary figure;
-	// comps whose own figure sits outside a factor of 2.5 of
-	// it are not comparables (a small shield booster's rolls
-	// say nothing about an extra-large one's price).
-	PrimaryAbs float64
+	PrimaryAbs    float64
+	// Index is the item's ladder index; HasIndex is false when
+	// the family scores nothing the item rolled.
+	Index    float64
+	HasIndex bool
+	Rungs    []abyssalRung // priced, same size class
+	// Recreation is the expected cost to roll another at
+	// least this good; 0 when unknown. It caps the figure.
+	Recreation float64
 	Comps      []abyssalComp // same family, the item itself excluded
 }
 
 // abyssalEstimate is one stored estimate.
 type abyssalEstimate struct {
-	OK          bool
-	Value       float64
-	Low         float64
-	High        float64
-	Basis       string // "corpus", "curve" or "prior"
-	Scope       string // "module" or "family" for the corpus basis
-	Comps       int    // listings the figure rests on
+	OK    bool
+	Value float64
+	Low   float64
+	High  float64
+	// Basis: "ladder", "curve" or "prior". Scope, for the
+	// ladder: "between" two rungs, "above" the top rung,
+	// "below" the bottom one, or "single" (one priced rung).
+	Basis       string
+	Scope       string
+	Comps       int // ladder: priced rungs; curve: listings
 	PremiumMult float64
-}
-
-// abyssalBandCount is the fixed score-band grid the corpus
-// calibration is fitted on. Band medians are monotonized, so
-// the corpus path upholds the same fairness property as the
-// curve: a better score never prices lower out of the same
-// corpus.
-const abyssalBandCount = 5
-
-func abyssalBandOf(score float64) int {
-	b := int(clamp01Abyssal(score) * abyssalBandCount)
-	if b >= abyssalBandCount {
-		b = abyssalBandCount - 1
-	}
-	return b
+	LadderValue float64 // the uncalibrated ladder figure
+	LadderLo    int64   // the rung just below (0: none)
+	LadderHi    int64   // the rung just above (0: none)
+	Calib       float64 // the bounded market factor applied
 }
 
 type weightedValue struct {
@@ -574,132 +584,308 @@ func abyssalWeightedQuantile(vals []weightedValue, q float64) float64 {
 	return sorted[len(sorted)-1].v
 }
 
-type abyssalBandStat struct {
-	median, q1, q3 float64
-	n              int
+// ---------------------------------------------------------------------
+// The ladder. An abyssal module is priced as an item, not by
+// what other abyssals were listed for: every family has a
+// ladder of ordinary modules (Tech II, faction, deadspace,
+// officer -- the same SDE group as the source module, the same
+// size class), whose stats are fixed game data and whose prices
+// come from markets far deeper than abyssal contracts. The item
+// and every rung are placed on one performance index -- the
+// family's weighted roll positions, measured against the item's
+// own source base and mutaplasmid bands, unclamped so a rung
+// beyond the band still ranks above one inside it -- and the
+// item is priced between the rungs it falls between, in log
+// space (rung prices made non-decreasing in index first, so a
+// better module never prices lower). Past the top rung the
+// ladder's last step extends; below the bottom rung, its first.
+// Because the item and the rungs are measured against the same
+// base, where the item falls between two rungs is a fact of its
+// absolute stats: identical stats from a different source
+// module land in the same place.
+//
+// Recreation cost (rolling another at least this good, at base
+// module and mutaplasmid prices) caps the figure: nobody needs
+// to pay more than making one. Contract listings never set the
+// figure; cleaned of bundles, exchanges, stale and one-seller
+// floods, they nudge one bounded per-family factor, learned
+// slowly (abyssalMarketCalibration).
+//
+// The range is the ladder's own uncertainty where the item sits
+// -- tight next to a rung, widest midway across a big price gap,
+// wider still past the ends -- plus the calibration's.
+// ---------------------------------------------------------------------
+
+const (
+	abyssalCalibMin     = 0.8  // the market factor's floor
+	abyssalCalibMax     = 1.25 // and its ceiling
+	abyssalCalibPrior   = 20.0 // effective listings the factor needs to move halfway
+	abyssalRungRatioMin = 0.55 // size class: a rung's primary figure against the source base's
+	abyssalRungRatioMax = 1.8
+	abyssalQuartileZ    = 0.6745
+	// abyssalLadderStep is the log-price step per index unit
+	// used past the ends when the ladder has a single rung or a
+	// flat end: about the curve's own steepness at mid-range.
+	abyssalLadderStep = 2.0
+)
+
+// abyssalLadderIndex is the performance index of a set of
+// attribute values (an item's rolls, or a rung's base stats)
+// against the item's source base and mutaplasmid bands: the
+// scorer's weighted positions and fitting drag, unclamped and
+// without caps. ok is false when the family scores none of the
+// attributes present.
+func abyssalLadderIndex(in abyssalScoringInputs, vals map[int64]float64) (float64, bool) {
+	if len(in.Weights) == 0 {
+		return 0, false
+	}
+	pos := func(id int64, v float64) (float64, bool) {
+		rng, ok := in.Ranges[id]
+		if !ok {
+			return 0, false
+		}
+		base := in.Base[id]
+		span := rng.MaxMult - rng.MinMult
+		if base == 0 || span <= 0 {
+			return 0, false
+		}
+		p := (v/base - rng.MinMult) / span
+		hg := true
+		if h, ok := in.HighGood[id]; ok {
+			hg = h
+		}
+		if !hg {
+			p = 1 - p
+		}
+		return p, true
+	}
+	// The derived families score amount per second, not amount.
+	derived := map[int64]float64{}
+	if amountAttr, ok := abyssalDerivedFamilies[in.Family]; ok {
+		amount, okA := vals[amountAttr]
+		dur, okD := vals[abyssalDurationAttr]
+		baseA, baseD := in.Base[amountAttr], in.Base[abyssalDurationAttr]
+		rngA, okRA := in.Ranges[amountAttr]
+		rngD, okRD := in.Ranges[abyssalDurationAttr]
+		if okA && okD && okRA && okRD && baseA != 0 && baseD != 0 && dur > 0 {
+			perSec := func(a, d float64) float64 { return a / (d / 1000) }
+			worst := perSec(baseA*rngA.MinMult, baseD*rngD.MaxMult)
+			best := perSec(baseA*rngA.MaxMult, baseD*rngD.MinMult)
+			if best > worst {
+				derived[amountAttr] = (perSec(amount, dur) - worst) / (best - worst)
+			}
+		}
+	}
+	var sumW, sumWV, drag, penW float64
+	for _, w := range in.Weights {
+		v, ok := vals[w.AttributeID]
+		if !ok {
+			continue
+		}
+		p, ok := pos(w.AttributeID, v)
+		if !ok {
+			continue
+		}
+		if dp, ok := derived[w.AttributeID]; ok {
+			p = dp
+		}
+		rng := in.Ranges[w.AttributeID]
+		ew := w.Weight * abyssalBandScale(rng)
+		if w.PenaltyOnly {
+			hg := true
+			if h, ok := in.HighGood[w.AttributeID]; ok {
+				hg = h
+			}
+			if d := abyssalBasePercentile(rng, hg) - p; d > 0 {
+				drag += ew * d
+			}
+			penW += ew
+			continue
+		}
+		sumW += ew
+		sumWV += ew * p
+	}
+	if sumW <= 0 {
+		return 0, false
+	}
+	return sumWV/sumW - drag/(sumW+penW), true
 }
 
-// abyssalBandStats buckets comps onto the band grid, fills
-// empty bands from their neighbours (log-space interpolation,
-// flat past the edges) and monotonizes the medians.
-func abyssalBandStats(comps []abyssalComp) ([abyssalBandCount]abyssalBandStat, int) {
-	var stats [abyssalBandCount]abyssalBandStat
-	var per [abyssalBandCount][]weightedValue
-	total := 0
+// abyssalPrimaryFigure is the size-class figure of a set of
+// values: amount per second for the derived families, else the
+// family's highest-weight primary attribute. 0 when absent.
+func abyssalPrimaryFigure(in abyssalScoringInputs, vals map[int64]float64) float64 {
+	if amountAttr, ok := abyssalDerivedFamilies[in.Family]; ok {
+		a, d := vals[amountAttr], vals[abyssalDurationAttr]
+		if a > 0 && d > 0 {
+			return a / (d / 1000)
+		}
+		return 0
+	}
+	best, bestW := 0.0, 0.0
+	for _, w := range in.Weights {
+		if w.PenaltyOnly || w.Weight <= bestW {
+			continue
+		}
+		if v, ok := vals[w.AttributeID]; ok {
+			best, bestW = math.Abs(v), w.Weight
+		}
+	}
+	return best
+}
+
+// abyssalSameSize reports whether a rung belongs to the item's
+// size class: its primary figure within a band of the source
+// module's own.
+func abyssalSameSize(in abyssalScoringInputs, rung map[int64]float64) bool {
+	src := abyssalPrimaryFigure(in, in.Base)
+	r := abyssalPrimaryFigure(in, rung)
+	if src <= 0 || r <= 0 {
+		return false
+	}
+	ratio := r / src
+	return ratio >= abyssalRungRatioMin && ratio <= abyssalRungRatioMax
+}
+
+// abyssalLadderPrice prices an index on a ladder: the log price
+// and its log-space uncertainty, the rungs either side, and
+// where the index fell. ok is false with no priced rung.
+func abyssalLadderPrice(index float64, rungs []abyssalRung) (logV, sd float64, lo, hi int64, scope string, ok bool) {
+	rs := make([]abyssalRung, 0, len(rungs))
+	for _, r := range rungs {
+		if r.Price > 0 {
+			rs = append(rs, r)
+		}
+	}
+	if len(rs) == 0 {
+		return 0, 0, 0, 0, "", false
+	}
+	sort.Slice(rs, func(i, j int) bool {
+		if rs[i].Index != rs[j].Index {
+			return rs[i].Index < rs[j].Index
+		}
+		return rs[i].Price < rs[j].Price
+	})
+	// A better module never prices lower: pool adjacent
+	// violators over log price in index order.
+	logs := make([]float64, len(rs))
+	ones := make([]float64, len(rs))
+	for i, r := range rs {
+		logs[i], ones[i] = math.Log(r.Price), 1
+	}
+	mono := abyssalIsotonic(logs, ones)
+	if len(rs) == 1 {
+		d := index - rs[0].Index
+		logV = mono[0] + abyssalLadderStep*d
+		sd = 0.3 + 0.5*math.Abs(abyssalLadderStep*d)
+		if d >= 0 {
+			return logV, sd, rs[0].TypeID, 0, "single", true
+		}
+		return logV, sd, 0, rs[0].TypeID, "single", true
+	}
+	stepAt := func(i, j int) float64 {
+		di := rs[j].Index - rs[i].Index
+		if di <= 1e-9 {
+			return abyssalLadderStep
+		}
+		s := (mono[j] - mono[i]) / di
+		if s < 0.25*abyssalLadderStep {
+			s = 0.25 * abyssalLadderStep // a flat end still climbs
+		}
+		return s
+	}
+	last := len(rs) - 1
+	switch {
+	case index <= rs[0].Index:
+		d := rs[0].Index - index
+		logV = mono[0] - stepAt(0, 1)*d
+		return logV, 0.12 + 0.6*stepAt(0, 1)*d, 0, rs[0].TypeID, "below", true
+	case index >= rs[last].Index:
+		d := index - rs[last].Index
+		logV = mono[last] + stepAt(last-1, last)*d
+		return logV, 0.12 + 0.6*stepAt(last-1, last)*d, rs[last].TypeID, 0, "above", true
+	}
+	for i := 1; i <= last; i++ {
+		if index <= rs[i].Index {
+			a, b := i-1, i
+			span := rs[b].Index - rs[a].Index
+			f := 0.0
+			if span > 1e-9 {
+				f = (index - rs[a].Index) / span
+			}
+			logV = mono[a] + (mono[b]-mono[a])*f
+			gap := mono[b] - mono[a]
+			// Tight beside a rung, widest midway across a gap.
+			sd = 0.08 + 0.5*gap*2*math.Min(f, 1-f)
+			return logV, sd, rs[a].TypeID, rs[b].TypeID, "between", true
+		}
+	}
+	return mono[last], 0.12, rs[last].TypeID, 0, "above", true
+}
+
+// abyssalIsotonic pools adjacent violators: the weighted
+// non-decreasing sequence closest to vals.
+func abyssalIsotonic(vals, weights []float64) []float64 {
+	type block struct {
+		v, w float64
+		n    int
+	}
+	var st []block
+	for i := range vals {
+		st = append(st, block{vals[i], weights[i], 1})
+		for len(st) > 1 && st[len(st)-2].v > st[len(st)-1].v {
+			a, b := st[len(st)-2], st[len(st)-1]
+			w := a.w + b.w
+			st = append(st[:len(st)-2], block{(a.v*a.w + b.v*b.w) / w, w, a.n + b.n})
+		}
+	}
+	out := make([]float64, 0, len(vals))
+	for _, b := range st {
+		for k := 0; k < b.n; k++ {
+			out = append(out, b.v)
+		}
+	}
+	return out
+}
+
+// abyssalMarketCalibration is the family's bounded market
+// factor: the weighted median of clean listings' asks over their
+// own ladder figures, in log space, shrunk toward no correction
+// until abyssalCalibPrior effective listings have spoken, and
+// clamped to [abyssalCalibMin, abyssalCalibMax]. A median cannot
+// be dragged by a few bait or joke asks, and the clamp means no
+// amount of listing can move a figure more than a quarter. Also
+// returns the effective listings and the factor's log-space
+// uncertainty.
+func abyssalMarketCalibration(comps []abyssalComp) (factor, nEff, sd float64) {
+	var logs []weightedValue
+	sw, sw2 := 0.0, 0.0
 	for _, c := range comps {
-		if c.Ask <= 0 {
+		if c.Ask <= 0 || c.LadderValue <= 0 {
 			continue
 		}
 		w := c.DynamicsWeight
 		if w <= 0 {
 			w = 1
 		}
-		b := abyssalBandOf(c.Score)
-		per[b] = append(per[b], weightedValue{v: c.Ask, w: w})
-		total++
+		logs = append(logs, weightedValue{v: math.Log(c.Ask / c.LadderValue), w: w})
+		sw += w
+		sw2 += w * w
 	}
-	filled := make([]bool, abyssalBandCount)
-	for b := 0; b < abyssalBandCount; b++ {
-		if len(per[b]) == 0 {
-			continue
-		}
-		filled[b] = true
-		stats[b].n = len(per[b])
-		stats[b].median = abyssalWeightedQuantile(per[b], 0.5)
-		stats[b].q1 = abyssalWeightedQuantile(per[b], 0.25)
-		stats[b].q3 = abyssalWeightedQuantile(per[b], 0.75)
+	if len(logs) == 0 || sw2 <= 0 {
+		return 1, 0, 0.2
 	}
-	// Fill empty bands between (or beyond) filled ones.
-	for b := 0; b < abyssalBandCount; b++ {
-		if filled[b] {
-			continue
-		}
-		lo, hi := -1, -1
-		for k := b - 1; k >= 0; k-- {
-			if filled[k] {
-				lo = k
-				break
-			}
-		}
-		for k := b + 1; k < abyssalBandCount; k++ {
-			if filled[k] {
-				hi = k
-				break
-			}
-		}
-		switch {
-		case lo >= 0 && hi >= 0:
-			f := float64(b-lo) / float64(hi-lo)
-			stats[b].median = math.Exp(math.Log(stats[lo].median)*(1-f) + math.Log(stats[hi].median)*f)
-		case lo >= 0:
-			stats[b].median = stats[lo].median
-		case hi >= 0:
-			stats[b].median = stats[hi].median
-		}
-		stats[b].q1 = stats[b].median * 0.75
-		stats[b].q3 = stats[b].median * 1.35
-	}
-	// Monotonize: a higher band never prices below a lower
-	// one out of the same corpus.
-	for b := 1; b < abyssalBandCount; b++ {
-		if stats[b].median < stats[b-1].median {
-			stats[b].median = stats[b-1].median
-		}
-		if stats[b].q1 > stats[b].median {
-			stats[b].q1 = stats[b].median
-		}
-		if stats[b].q3 < stats[b].median {
-			stats[b].q3 = stats[b].median
-		}
-	}
-	return stats, total
-}
-
-// abyssalProvenancePremium measures, inside the item's own
-// band, whether the item's source module trades above or
-// below the rest of the band at matched performance. It
-// returns 1 (no premium) unless both sides of the comparison
-// have at least two listings; a measured ratio is shrunk
-// toward 1 by sample size and clamped.
-func abyssalProvenancePremium(in abyssalEstimateInput) float64 {
-	band := abyssalBandOf(in.Score)
-	var same, other []weightedValue
-	for _, c := range in.Comps {
-		if c.Ask <= 0 || abyssalBandOf(c.Score) != band {
-			continue
-		}
-		w := c.DynamicsWeight
-		if w <= 0 {
-			w = 1
-		}
-		if c.SourceTypeID == in.SourceTypeID && in.SourceTypeID > 0 {
-			same = append(same, weightedValue{v: c.Ask, w: w})
-		} else {
-			other = append(other, weightedValue{v: c.Ask, w: w})
-		}
-	}
-	if len(same) < 2 || len(other) < 2 {
-		return 1
-	}
-	raw := abyssalWeightedQuantile(same, 0.5) / abyssalWeightedQuantile(other, 0.5)
-	n := len(same)
-	if len(other) < n {
-		n = len(other)
-	}
-	premium := 1 + (raw-1)*float64(n)/(float64(n)+6)
-	if premium < 0.85 {
-		premium = 0.85
-	}
-	if premium > 1.4 {
-		premium = 1.4
-	}
-	return premium
+	nEff = sw * sw / sw2
+	med := abyssalWeightedQuantile(logs, 0.5)
+	shrunk := med * nEff / (nEff + abyssalCalibPrior)
+	shrunk = math.Min(math.Max(shrunk, math.Log(abyssalCalibMin)), math.Log(abyssalCalibMax))
+	return math.Exp(shrunk), nEff, 0.2 / math.Sqrt(1+nEff/4)
 }
 
 // abyssalCurveCorrection fits the bounded per-family
-// correction: the dynamics-weighted median ratio of observed
-// asks to what the curve predicts for each comp's own score
-// and source price, clamped to [0.7, 1.4]. Returns the
+// correction for the curve fallback: the weighted median ratio
+// of observed asks to what the curve predicts for each comp's
+// own score and source price, clamped to [0.7, 1.4]. Returns the
 // correction and how many comps carried a usable ratio.
 func abyssalCurveCorrection(comps []abyssalComp) (float64, int) {
 	var ratios []weightedValue
@@ -721,105 +907,55 @@ func abyssalCurveCorrection(comps []abyssalComp) (float64, int) {
 		return 1, 0
 	}
 	corr := abyssalWeightedQuantile(ratios, 0.5)
-	if corr < 0.7 {
-		corr = 0.7
-	}
-	if corr > 1.4 {
-		corr = 1.4
-	}
-	return corr, len(ratios)
+	return math.Min(math.Max(corr, 0.7), 1.4), len(ratios)
 }
 
-// estimateAbyssal is the pure estimator. Anchors in order:
-// a corpus band (module scope when the item's own source
-// module fills one, family scope otherwise), then the score
-// curve over the source price with its bounded correction,
-// then the source price alone as a labeled prior. No anchor,
-// no estimate.
+// estimateAbyssal is the pure estimator. Anchors in order: the
+// item's place on its family's ladder of ordinary modules, then
+// the score curve over the source module's price, then the
+// source price alone as a labeled prior. No anchor, no estimate.
 func estimateAbyssal(in abyssalEstimateInput) abyssalEstimate {
-	est := abyssalEstimate{PremiumMult: 1}
+	est := abyssalEstimate{PremiumMult: 1, Calib: 1}
 	usable := make([]abyssalComp, 0, len(in.Comps))
 	for _, c := range in.Comps {
-		if c.Ask <= 0 {
-			continue
+		if c.Ask > 0 {
+			usable = append(usable, c)
 		}
-		if in.PrimaryAbs > 0 && c.PrimaryAbs > 0 {
-			if r := c.PrimaryAbs / in.PrimaryAbs; r < 0.4 || r > 2.5 {
-				continue
-			}
-		}
-		usable = append(usable, c)
 	}
 
-	// Corpus: module scope first (listings of this module),
-	// then the family's whole bucket. Scope is decided inside
-	// the item's own score band — the only band the corpus
-	// path ever reads — so a source with many listings at
-	// other scores cannot claim module scope here.
-	var sameSource []abyssalComp
-	if in.SourceTypeID > 0 {
-		band := abyssalBandOf(in.Score)
-		for _, c := range usable {
-			if c.SourceTypeID == in.SourceTypeID && abyssalBandOf(c.Score) == band {
-				sameSource = append(sameSource, c)
-			}
-		}
-	}
-	scopeComps := usable
-	scope := "family"
-	if len(sameSource) >= abyssalCorpusMin {
-		scopeComps = sameSource
-		scope = "module"
-	}
-	if len(scopeComps) >= abyssalCorpusMin {
-		stats, _ := abyssalBandStats(scopeComps)
-		band := stats[abyssalBandOf(in.Score)]
-		if band.median > 0 {
-			premium := 1.0
-			if scope == "family" {
-				premium = abyssalProvenancePremium(in)
-			}
-			value := band.median * premium
-			low, high := band.q1*premium, band.q3*premium
-			if band.n < 3 {
-				low, high = value*0.75, value*1.35
-			}
-			// A bucket drawn entirely from one other source
-			// module carries that module's market with it.
-			// When the bucket has no listing of the item's own
-			// source and only one source at all, meet the
-			// curve prior halfway (in log space) rather than
-			// import another tier's price level whole.
-			if scope == "family" && len(sameSource) == 0 && in.SourceTypical > 0 {
-				sources := map[int64]bool{}
-				for _, c := range scopeComps {
-					sources[c.SourceTypeID] = true
+	if in.HasIndex {
+		if logV, sd, lo, hi, scope, ok := abyssalLadderPrice(in.Index, in.Rungs); ok {
+			factor, _, sdCal := abyssalMarketCalibration(usable)
+			ladder := math.Exp(logV)
+			value := ladder * factor
+			total := math.Sqrt(sd*sd + sdCal*sdCal)
+			half := abyssalQuartileZ * total
+			low, high := value*math.Exp(-half), value*math.Exp(half)
+			// Nobody needs to pay more than making one.
+			if in.Recreation > 0 {
+				if value > in.Recreation {
+					value = in.Recreation
 				}
-				if len(sources) == 1 {
-					corr, _ := abyssalCurveCorrection(usable)
-					prior := in.SourceTypical * abyssalCurveMult(in.Score) * corr
-					if prior > 0 {
-						value = math.Sqrt(value * prior)
-						if prior < low {
-							low = prior * 0.8
-						}
-						if prior*1.25 > high {
-							high = prior * 1.25
-						}
-					}
+				if high > in.Recreation {
+					high = math.Max(in.Recreation, value)
+				}
+				if low > value {
+					low = value
 				}
 			}
-			if low > value {
-				low = value
-			}
-			if high < value {
-				high = value
+			priced := 0
+			for _, r := range in.Rungs {
+				if r.Price > 0 {
+					priced++
+				}
 			}
 			est.OK = true
 			est.Value, est.Low, est.High = value, low, high
-			est.Basis, est.Scope = "corpus", scope
-			est.Comps = len(scopeComps)
-			est.PremiumMult = premium
+			est.Basis, est.Scope = "ladder", scope
+			est.Comps = priced
+			est.LadderValue = ladder
+			est.LadderLo, est.LadderHi = lo, hi
+			est.Calib = factor
 			return est
 		}
 	}
@@ -961,6 +1097,82 @@ func abyssalSightingWeight(departed bool, departKind string) float64 {
 		return 1.25
 	}
 	return 0.6
+}
+
+// abyssalAttribution is what a sighting's contract held
+// besides the item (schema 069), stamped while it was stored.
+type abyssalAttribution struct {
+	Price         float64
+	Stamped       bool // false: stamped before schema 069, contract gone
+	AbyssalLines  int64
+	WantedLines   int64
+	OtherLines    int64
+	OtherUnpriced int64
+	OtherValue    float64
+}
+
+// abyssalUnstampedWeight is the say of a sighting whose
+// contract mix was never recorded: it may be a bundle.
+const abyssalUnstampedWeight = 0.35
+
+// abyssalAttributedAsk is the price a sighting says the item
+// itself asked, and the say that attribution earns. A contract
+// is the item's own ask when the item is all it offers. Other
+// offered lines are subtracted at their appraised value when
+// every one is priced and together they are a small part of the
+// price (a bundle priced mostly by its passengers says little
+// about the item). Two or more abyssal items, or anything
+// wanted in exchange, cannot be split without guessing -- or
+// without pricing items by our own estimates, which would feed
+// the model its own output -- so those sightings are left out.
+func abyssalAttributedAsk(a abyssalAttribution) (ask, weight float64, ok bool) {
+	if a.Price <= 0 {
+		return 0, 0, false
+	}
+	if !a.Stamped {
+		return a.Price, abyssalUnstampedWeight, true
+	}
+	if a.AbyssalLines > 1 || a.WantedLines > 0 {
+		return 0, 0, false
+	}
+	if a.OtherLines == 0 {
+		return a.Price, 1, true
+	}
+	if a.OtherUnpriced > 0 || a.OtherValue > 0.25*a.Price {
+		return 0, 0, false
+	}
+	// The subtraction is an estimate itself; the residual
+	// speaks a little more quietly the bigger it was.
+	return a.Price - a.OtherValue, 1 - a.OtherValue/a.Price, true
+}
+
+// abyssalAgeHalfLife: a sighting's say halves every 30 days
+// since it was last on the market, so the corpus follows the
+// market's drift while a thin family keeps its history.
+const abyssalAgeHalfLife = 30 * 24 * time.Hour
+
+// abyssalAgeWeight is a sighting's recency and staleness: its
+// say decays with time since it was last seen (or left), never
+// below a tenth; a listing still live after more than ten days
+// is evidence its ask is above what clears, and loses say as it
+// sits (to a floor of 0.35 at two months).
+func abyssalAgeWeight(departed sql.NullTime, firstSeen, lastSeen, now time.Time) float64 {
+	ref := lastSeen
+	if departed.Valid {
+		ref = departed.Time
+	}
+	age := now.Sub(ref)
+	if age < 0 {
+		age = 0
+	}
+	w := math.Max(0.1, math.Pow(0.5, float64(age)/float64(abyssalAgeHalfLife)))
+	if !departed.Valid {
+		sat := lastSeen.Sub(firstSeen).Hours() / 24
+		if sat > 10 {
+			w *= math.Max(0.35, 1-(sat-10)/50)
+		}
+	}
+	return w
 }
 
 type abyssalRollKV struct {
@@ -1115,11 +1327,43 @@ func (app *Application) scoreAbyssalItems(ctx context.Context) int {
 		}
 	}
 
+	// Each due source module's ladder: the ordinary modules of
+	// its SDE group, with their base stats.
+	ladderBySource := map[int64][]int64{}
+	{
+		srcSet := map[int64]bool{}
+		for _, it := range due {
+			if it.SourceTypeID > 0 {
+				srcSet[it.SourceTypeID] = true
+			}
+		}
+		ids := make([]int64, 0, len(srcSet))
+		for id := range srcSet {
+			ids = append(ids, id)
+		}
+		if len(ids) > 0 {
+			rows, err := q.ListAbyssalLadderTypes(ctx, ids)
+			if err != nil {
+				logging.Errorf("worker: abyssal scoring: ladder: %v", err)
+			}
+			for _, r := range rows {
+				ladderBySource[r.SourceTypeID] = append(ladderBySource[r.SourceTypeID], r.TypeID)
+				baseFor(r.TypeID)
+			}
+		}
+	}
+
 	// Prices for everything the math can anchor on: due
-	// items' sources and mutators, recreation candidate
-	// bases, and corpus comps' sources (the correction's
-	// denominators). One AppraiseLines call, house order.
+	// items' sources and mutators, their ladders' rungs,
+	// recreation candidate bases, and corpus comps' sources
+	// (the curve correction's denominators). One
+	// AppraiseLines call, house order.
 	priceTypes := map[int64]bool{}
+	for _, rungs := range ladderBySource {
+		for _, t := range rungs {
+			priceTypes[t] = true
+		}
+	}
 	for _, it := range due {
 		priceTypes[it.SourceTypeID] = true
 		priceTypes[it.MutatorTypeID] = true
@@ -1191,6 +1435,18 @@ func (app *Application) scoreAbyssalItems(ctx context.Context) int {
 		}
 	}
 
+	// How many of each family's comps each seller lists.
+	sellerCount := map[string]map[int64]int{}
+	for fam, rows := range corpusByFamily {
+		m := map[int64]int{}
+		for _, r := range rows {
+			if r.IssuerID.Valid {
+				m[r.IssuerID.Int64]++
+			}
+		}
+		sellerCount[fam] = m
+	}
+
 	compsFor := func(family string, selfID int64) []abyssalComp {
 		rows := corpusByFamily[family]
 		comps := make([]abyssalComp, 0, len(rows))
@@ -1205,11 +1461,31 @@ func (app *Application) scoreAbyssalItems(ctx context.Context) int {
 				}
 				score = r.Score.Float64
 			}
-			w := abyssalSightingWeight(r.DepartedAt.Valid, r.DepartKind.String)
+			ask, attrW, ok := abyssalAttributedAsk(abyssalAttribution{
+				Price:         r.Price,
+				Stamped:       r.AbyssalLines.Valid,
+				AbyssalLines:  r.AbyssalLines.Int64,
+				WantedLines:   r.WantedLines.Int64,
+				OtherLines:    r.OtherLines.Int64,
+				OtherUnpriced: r.OtherUnpriced.Int64,
+				OtherValue:    r.OtherValue.Float64,
+			})
+			if !ok {
+				continue // the contract cannot say what this item asked
+			}
+			w := abyssalSightingWeight(r.DepartedAt.Valid, r.DepartKind.String) * attrW
+			w *= abyssalAgeWeight(r.DepartedAt, r.FirstSeenAt, r.LastSeenAt, now)
+			// One seller's listings share one voice that grows
+			// only with the square root of how many they list.
+			if r.IssuerID.Valid {
+				if n := sellerCount[family][r.IssuerID.Int64]; n > 1 {
+					w /= math.Sqrt(float64(n))
+				}
+			}
 			// A listing hugging our own stored estimate may
 			// be anchored on it; halve its say.
 			if r.EstValue.Valid && r.EstValue.Float64 > 0 {
-				if d := math.Abs(r.Price-r.EstValue.Float64) / r.EstValue.Float64; d < 0.02 {
+				if d := math.Abs(ask-r.EstValue.Float64) / r.EstValue.Float64; d < 0.02 {
 					w *= 0.5
 				}
 			}
@@ -1217,8 +1493,9 @@ func (app *Application) scoreAbyssalItems(ctx context.Context) int {
 				ItemID:         r.ItemID,
 				SourceTypeID:   r.SourceTypeID,
 				Score:          score,
-				Ask:            r.Price,
+				Ask:            ask,
 				SourceTypical:  priceByType[r.SourceTypeID],
+				LadderValue:    r.LadderValue.Float64,
 				DynamicsWeight: w,
 				PrimaryAbs:     r.PrimaryAbs.Float64,
 			})
@@ -1238,6 +1515,7 @@ func (app *Application) scoreAbyssalItems(ctx context.Context) int {
 			CapAttributeID: sc.CapAttributeID,
 			CapKind:        sc.CapKind,
 			PrimaryAbs:     sql.NullFloat64{Float64: sc.PrimaryAbs, Valid: sc.HasScore && sc.PrimaryAbs > 0},
+			MarketCalib:    1,
 			ScoredAt:       now,
 		}
 		pcts := make(map[string]float64, len(sc.Percentiles))
@@ -1255,24 +1533,9 @@ func (app *Application) scoreAbyssalItems(ctx context.Context) int {
 		}
 		if sc.HasScore {
 			params.Score = sql.NullFloat64{Float64: sc.Score, Valid: true}
-			est := estimateAbyssal(abyssalEstimateInput{
-				Score:         sc.Score,
-				SourceTypical: priceByType[it.SourceTypeID],
-				SourceTypeID:  it.SourceTypeID,
-				PrimaryAbs:    sc.PrimaryAbs,
-				Comps:         compsFor(family, it.ItemID),
-			})
-			if est.OK {
-				params.EstValue = sql.NullFloat64{Float64: est.Value, Valid: true}
-				params.EstLow = sql.NullFloat64{Float64: est.Low, Valid: true}
-				params.EstHigh = sql.NullFloat64{Float64: est.High, Valid: true}
-				params.EstBasis = est.Basis
-				params.EstScope = est.Scope
-				params.EstComps = int64(est.Comps)
-				params.PremiumMult = est.PremiumMult
-			}
-			// Recreation: the cheapest reachable base among
-			// every source this mutaplasmid has been seen on.
+			// Recreation first: it caps the estimate. The
+			// cheapest reachable base among every source this
+			// mutaplasmid has been seen on.
 			cands := make([]abyssalBaseCandidate, 0, 8)
 			for _, src := range sourcesFor(it.MutatorTypeID) {
 				cands = append(cands, abyssalBaseCandidate{
@@ -1281,9 +1544,51 @@ func (app *Application) scoreAbyssalItems(ctx context.Context) int {
 					Base:         baseFor(src),
 				})
 			}
+			recreation := 0.0
 			if cost, attempts, ok := abyssalRecreationCost(sc, in, rolls, cands, priceByType[it.MutatorTypeID]); ok {
+				recreation = cost
 				params.RecreationCost = sql.NullFloat64{Float64: cost, Valid: true}
 				params.RecreationAttempts = sql.NullFloat64{Float64: attempts, Valid: true}
+			}
+			// The item's ladder: its family's ordinary modules
+			// of its size class, each indexed exactly as the
+			// item is, against the item's own base and bands.
+			index, hasIndex := abyssalLadderIndex(in, rolls)
+			var rungs []abyssalRung
+			for _, t := range ladderBySource[it.SourceTypeID] {
+				vals := baseFor(t)
+				if !abyssalSameSize(in, vals) {
+					continue
+				}
+				if ri, ok := abyssalLadderIndex(in, vals); ok {
+					rungs = append(rungs, abyssalRung{TypeID: t, Price: priceByType[t], Index: ri})
+				}
+			}
+			est := estimateAbyssal(abyssalEstimateInput{
+				Score:         sc.Score,
+				SourceTypical: priceByType[it.SourceTypeID],
+				SourceTypeID:  it.SourceTypeID,
+				PrimaryAbs:    sc.PrimaryAbs,
+				Index:         index,
+				HasIndex:      hasIndex,
+				Rungs:         rungs,
+				Recreation:    recreation,
+				Comps:         compsFor(family, it.ItemID),
+			})
+			params.MarketCalib = 1
+			if est.OK {
+				params.EstValue = sql.NullFloat64{Float64: est.Value, Valid: true}
+				params.EstLow = sql.NullFloat64{Float64: est.Low, Valid: true}
+				params.EstHigh = sql.NullFloat64{Float64: est.High, Valid: true}
+				params.EstBasis = est.Basis
+				params.EstScope = est.Scope
+				params.EstComps = int64(est.Comps)
+				params.PremiumMult = est.PremiumMult
+				params.MarketCalib = est.Calib
+				if est.LadderValue > 0 {
+					params.LadderValue = sql.NullFloat64{Float64: est.LadderValue, Valid: true}
+				}
+				params.LadderLoTypeID, params.LadderHiTypeID = est.LadderLo, est.LadderHi
 			}
 		}
 		if err := q.UpdateAbyssalItemEstimate(ctx, params); err != nil {

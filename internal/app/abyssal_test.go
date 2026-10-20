@@ -154,29 +154,28 @@ func TestAbyssalMonotonicity(t *testing.T) {
 	}
 }
 
-// TestAbyssalCorpusPathMonotone sweeps the corpus path the
-// same way: over one fixed corpus, a better score never
-// prices lower (band medians are monotonized by design).
-func TestAbyssalCorpusPathMonotone(t *testing.T) {
-	var comps []abyssalComp
-	for i := 0; i < 40; i++ {
-		s := float64(i) / 39
-		ask := 100e6 * abyssalCurveMult(s) * (1 + 0.04*math.Sin(float64(i)*2.7))
-		comps = append(comps, abyssalComp{
-			ItemID: int64(1000 + i), SourceTypeID: 7, Score: s,
-			Ask: ask, SourceTypical: 100e6, DynamicsWeight: 1,
-		})
+// TestAbyssalLadderMonotone sweeps the ladder: over one fixed
+// ladder, a higher performance index never prices lower, even
+// when the rungs' own prices are out of order (a cheap faction
+// module out-performing a dear deadspace one).
+func TestAbyssalLadderMonotone(t *testing.T) {
+	rungs := []abyssalRung{
+		{TypeID: 1, Price: 10e6, Index: 0.3},
+		{TypeID: 2, Price: 80e6, Index: 0.55},
+		{TypeID: 3, Price: 60e6, Index: 0.7}, // out of order
+		{TypeID: 4, Price: 900e6, Index: 1.1},
 	}
 	prev := 0.0
-	for s := 0.0; s <= 1.0001; s += 0.02 {
-		est := estimateAbyssal(abyssalEstimateInput{
-			Score: math.Min(s, 1), SourceTypeID: 7, Comps: comps,
-		})
-		if !est.OK || est.Basis != "corpus" {
-			t.Fatalf("score %v: corpus path must speak (got %+v)", s, est)
+	for idx := -0.2; idx <= 1.5; idx += 0.02 {
+		est := estimateAbyssal(abyssalEstimateInput{Score: 0.5, Index: idx, HasIndex: true, Rungs: rungs})
+		if !est.OK || est.Basis != "ladder" {
+			t.Fatalf("index %v: the ladder must speak (got %+v)", idx, est)
 		}
 		if est.Value < prev-1e-6 {
-			t.Errorf("corpus estimate fell as score rose: at %v, %v < %v", s, est.Value, prev)
+			t.Errorf("ladder estimate fell as performance rose: at %v, %v < %v", idx, est.Value, prev)
+		}
+		if est.Low >= est.Value || est.High <= est.Value {
+			t.Errorf("index %v: an estimate never ships as a bare point: %+v", idx, est)
 		}
 		prev = est.Value
 	}
@@ -249,60 +248,49 @@ func TestAbyssalNoEstimateGaps(t *testing.T) {
 }
 
 // TestAbyssalPerformanceNotProvenance: two items with the
-// same score from different source tiers draw the same
-// corpus price; a premium appears only when stat-matched
-// data measures one, and then it is reported as a component.
+// same absolute stats, mutated from different source tiers,
+// land in the same place on their ladder and price the same:
+// the price is the item's performance among ordinary modules,
+// never what it was made from.
 func TestAbyssalPerformanceNotProvenance(t *testing.T) {
-	build := func(premium float64) []abyssalComp {
-		var comps []abyssalComp
-		id := int64(2000)
-		// Band 4 (scores 0.8-1.0): three listings per source,
-		// source B's carrying the premium under test.
-		for i := 0; i < 3; i++ {
-			comps = append(comps, abyssalComp{ItemID: id, SourceTypeID: 11, Score: 0.85,
-				Ask: 500e6, SourceTypical: 100e6, DynamicsWeight: 1})
-			id++
-			comps = append(comps, abyssalComp{ItemID: id, SourceTypeID: 22, Score: 0.85,
-				Ask: 500e6 * premium, SourceTypical: 900e6, DynamicsWeight: 1})
-			id++
+	ladder := map[int64]map[int64]float64{
+		1: {64: 2.0, 6: 10, 50: 20},  // Tech II, 100m
+		2: {64: 2.3, 6: 9.5, 50: 20}, // faction, 300m
+		3: {64: 2.6, 6: 9, 50: 22},   // officer, 2b
+	}
+	prices := map[int64]float64{1: 100e6, 2: 300e6, 3: 2e9}
+	rolls := map[int64]float64{64: 2.45, 6: 9.3, 50: 21}
+	priceFrom := func(source int64) abyssalEstimate {
+		in := testFamilyInputs(nil)
+		in.Base = ladder[source]
+		in.Rolls = rolls
+		idx, ok := abyssalLadderIndex(in, rolls)
+		if !ok {
+			t.Fatalf("source %d: no index", source)
 		}
-		// Lower bands keep the bucket honest.
-		for i := 0; i < 6; i++ {
-			comps = append(comps, abyssalComp{ItemID: id, SourceTypeID: 11, Score: 0.3,
-				Ask: 120e6, SourceTypical: 100e6, DynamicsWeight: 1})
-			id++
+		var rungs []abyssalRung
+		for id, vals := range ladder {
+			ri, ok := abyssalLadderIndex(in, vals)
+			if !ok {
+				t.Fatalf("rung %d: no index", id)
+			}
+			rungs = append(rungs, abyssalRung{TypeID: id, Price: prices[id], Index: ri})
 		}
-		return comps
+		return estimateAbyssal(abyssalEstimateInput{Score: 0.7, SourceTypical: prices[source],
+			Index: idx, HasIndex: true, Rungs: rungs})
 	}
-	// No measured premium: identical stats, wildly different
-	// source prices -- identical estimates.
-	comps := build(1.0)
-	a := estimateAbyssal(abyssalEstimateInput{Score: 0.85, SourceTypical: 100e6, SourceTypeID: 11, Comps: comps})
-	b := estimateAbyssal(abyssalEstimateInput{Score: 0.85, SourceTypical: 900e6, SourceTypeID: 22, Comps: comps})
-	if !a.OK || !b.OK || a.Basis != "corpus" {
-		t.Fatalf("corpus path must speak: %+v / %+v", a, b)
+	a, b := priceFrom(1), priceFrom(2)
+	if !a.OK || !b.OK || a.Basis != "ladder" || a.Scope != "between" {
+		t.Fatalf("ladder must speak between rungs: %+v / %+v", a, b)
 	}
-	if math.Abs(a.Value-b.Value)/a.Value > 0.001 {
-		t.Errorf("same stats, different tiers: %v vs %v, want within tolerance", a.Value, b.Value)
+	if a.LadderLo != 2 || a.LadderHi != 3 || b.LadderLo != 2 || b.LadderHi != 3 {
+		t.Errorf("between faction and officer: %+v / %+v", a, b)
 	}
-	if a.PremiumMult != 1 || b.PremiumMult != 1 {
-		t.Errorf("unmeasured premium must be exactly 1: %v / %v", a.PremiumMult, b.PremiumMult)
+	if d := math.Abs(a.Value-b.Value) / a.Value; d > 0.05 {
+		t.Errorf("same stats, different tiers: %v vs %v (%.1f%% apart)", a.Value, b.Value, d*100)
 	}
-	// A measured premium: source B trades 30% above source A
-	// at matched stats. Both estimates move, each by its own
-	// reported component.
-	comps = build(1.3)
-	a = estimateAbyssal(abyssalEstimateInput{Score: 0.85, SourceTypical: 100e6, SourceTypeID: 11, Comps: comps})
-	b = estimateAbyssal(abyssalEstimateInput{Score: 0.85, SourceTypical: 900e6, SourceTypeID: 22, Comps: comps})
-	if a.PremiumMult >= 1 || b.PremiumMult <= 1 {
-		t.Errorf("measured premium must land on both sides: A %v, B %v", a.PremiumMult, b.PremiumMult)
-	}
-	if !(a.Value < b.Value) {
-		t.Errorf("the premium must be the difference: A %v, B %v", a.Value, b.Value)
-	}
-	// And it is bounded: shrink 3/(3+6) of the raw 30%.
-	if b.PremiumMult > 1.11 {
-		t.Errorf("premium %v exceeds the shrunk bound for n=3", b.PremiumMult)
+	if a.Value <= prices[2] || a.Value >= prices[3] {
+		t.Errorf("value %v must sit between its rungs", a.Value)
 	}
 }
 
@@ -409,20 +397,26 @@ func TestAbyssalScoringPassEndToEnd(t *testing.T) {
 		}
 	}
 	exec(`INSERT INTO sde_groups (group_id, name, category_id) VALUES (501, 'Test Damage Thing', 7)`)
-	exec(`INSERT INTO sde_types (type_id, name, group_id) VALUES
-		(60001, 'Abyssal Test Damage', 501), (30001, 'Test Damage II', 501),
-		(47735, 'Test Mutaplasmid', 501)`)
+	// The ladder: the group's market-listed modules (the
+	// mutated type and the mutaplasmid are not on the market).
+	exec(`INSERT INTO sde_types (type_id, name, group_id, market_group_id) VALUES
+		(60001, 'Abyssal Test Damage', 501, 0), (30001, 'Test Damage II', 501, 9),
+		(30010, 'Faction Test Damage', 501, 9), (30011, 'Officer Test Damage', 501, 9),
+		(47735, 'Test Mutaplasmid', 501, 0)`)
 	exec(`INSERT INTO sde_attribute_types (attribute_id, name, stackable, high_is_good, unit_id, default_value) VALUES
 		(64, 'damageMultiplier', 1, 1, 0, 0), (6, 'capacitorNeed', 1, 0, 0, 0), (50, 'cpu', 1, 0, 0, 0)`)
 	exec(`INSERT INTO sde_type_attributes (type_id, attribute_id, value) VALUES
-		(30001, 64, 2.0), (30001, 6, 10), (30001, 50, 20)`)
+		(30001, 64, 2.0), (30001, 6, 10), (30001, 50, 20),
+		(30010, 64, 2.3), (30010, 6, 9.5), (30010, 50, 20),
+		(30011, 64, 2.6), (30011, 6, 9), (30011, 50, 22)`)
 	exec(`INSERT INTO abyssal_family_weights (family, attribute_id, weight, penalty_only) VALUES
 		('test_damage_thing', 64, 1.0, false), ('test_damage_thing', 6, 0.25, false),
 		('test_damage_thing', 50, 0.5, true)`)
 	exec(`INSERT INTO abyssal_ranges (mutator_type_id, attribute_id, min_mult, max_mult) VALUES
 		(47735, 64, 0.90, 1.25), (47735, 6, 0.90, 1.20), (47735, 50, 0.85, 1.40)`)
 	exec(`INSERT INTO market_region_stats (region_id, type_id, typical_sell, updated_at) VALUES
-		(10000002, 30001, 100000000, $1), (10000002, 47735, 5000000, $1)`, now.Add(-time.Hour))
+		(10000002, 30001, 100000000, $1), (10000002, 47735, 5000000, $1),
+		(10000002, 30010, 300000000, $1), (10000002, 30011, 2000000000, $1)`, now.Add(-time.Hour))
 
 	rollsJSON := func(p64, p6, p50 float64) string {
 		r64 := abyssalRange{MinMult: 0.90, MaxMult: 1.25}
@@ -493,14 +487,21 @@ func TestAbyssalScoringPassEndToEnd(t *testing.T) {
 	if !ab.EstValue.Valid {
 		t.Fatalf("no estimate stored: %+v", ab)
 	}
-	if ab.EstBasis != "corpus" || ab.EstScope != "module" {
-		t.Errorf("basis = %q/%q, want corpus/module", ab.EstBasis, ab.EstScope)
+	// The item rolled 2.36 damage: past the faction rung
+	// (2.3), short of the officer (2.6). It prices on that
+	// step of the ladder; its own 150m ask, and the cheap
+	// listings around it, never set the figure.
+	if ab.EstBasis != "ladder" || ab.EstScope != "between" {
+		t.Errorf("basis = %q/%q, want ladder/between", ab.EstBasis, ab.EstScope)
 	}
-	// The corpus median is ~205m; the item's own 150m ask is
-	// excluded, so the estimate sits at the corpus level,
-	// not dragged toward the ask.
-	if ab.EstValue.Float64 < 180e6 || ab.EstValue.Float64 > 235e6 {
-		t.Errorf("estimate = %v, want the corpus level (~205m), not the own ask (150m)", ab.EstValue.Float64)
+	if ab.LadderLoTypeID != 30010 || ab.LadderHiTypeID != 30011 {
+		t.Errorf("rungs = %d/%d, want faction 30010 below and officer 30011 above", ab.LadderLoTypeID, ab.LadderHiTypeID)
+	}
+	if ab.EstValue.Float64 <= 300e6 || ab.EstValue.Float64 >= 2e9 {
+		t.Errorf("estimate = %v, want between the faction (300m) and officer (2b) rungs", ab.EstValue.Float64)
+	}
+	if ab.MarketCalib < abyssalCalibMin || ab.MarketCalib > abyssalCalibMax {
+		t.Errorf("market factor %v outside its bounds", ab.MarketCalib)
 	}
 	if !ab.EstLow.Valid || !ab.EstHigh.Valid || ab.EstLow.Float64 > ab.EstValue.Float64 || ab.EstHigh.Float64 < ab.EstValue.Float64 {
 		t.Errorf("spread must bracket the estimate: %+v", ab)
@@ -559,37 +560,19 @@ func mustAbyssalJSON(t *testing.T, v any) string {
 	return string(b)
 }
 
-// TestAbyssalStatMatchedBucketing: corpus comparables must
-// match the item's absolute primary performance within a
-// factor of 2.5. A medium shield booster's estimate must not
-// be set by extra-large boosters in the same family.
-func TestAbyssalStatMatchedBucketing(t *testing.T) {
-	var comps []abyssalComp
-	for i := 0; i < 5; i++ {
-		comps = append(comps, abyssalComp{ItemID: int64(100 + i), SourceTypeID: 999,
-			Score: 0.5, Ask: 50e6, SourceTypical: 40e6, DynamicsWeight: 1, PrimaryAbs: 100})
+// TestAbyssalLadderSizeClass: a ladder holds only the item's
+// size class. A medium shield booster is never priced against
+// extra-large ones that share its SDE group.
+func TestAbyssalLadderSizeClass(t *testing.T) {
+	in := testFamilyInputs(nil)
+	in.Base = map[int64]float64{64: 2.0, 6: 10, 50: 20}
+	if !abyssalSameSize(in, map[int64]float64{64: 2.6, 6: 9, 50: 22}) {
+		t.Error("an officer variant of the same size must stay on the ladder")
 	}
-	for i := 0; i < 5; i++ {
-		comps = append(comps, abyssalComp{ItemID: int64(200 + i), SourceTypeID: 888,
-			Score: 0.5, Ask: 2e9, SourceTypical: 40e6, DynamicsWeight: 1, PrimaryAbs: 5000})
+	if abyssalSameSize(in, map[int64]float64{64: 8.0, 6: 40, 50: 80}) {
+		t.Error("a module four times the size must be off the ladder")
 	}
-	est := estimateAbyssal(abyssalEstimateInput{
-		Score: 0.5, SourceTypical: 40e6, SourceTypeID: 999, PrimaryAbs: 100, Comps: comps,
-	})
-	if !est.OK || est.Basis != "corpus" {
-		t.Fatalf("estimate = %+v, want a corpus estimate", est)
-	}
-	if est.Value > 200e6 {
-		t.Fatalf("value %.0f priced off the mismatched size class, want near 50m", est.Value)
-	}
-
-	// With only mismatched comps left, the estimator falls
-	// back to the uncorrected prior instead of borrowing
-	// their level or their calibration.
-	est2 := estimateAbyssal(abyssalEstimateInput{
-		Score: 0.5, SourceTypical: 40e6, SourceTypeID: 999, PrimaryAbs: 100, Comps: comps[5:],
-	})
-	if !est2.OK || est2.Basis != "prior" {
-		t.Fatalf("mismatched-only estimate = %+v, want the prior fallback", est2)
+	if abyssalSameSize(in, map[int64]float64{6: 10}) {
+		t.Error("a type without the primary figure cannot be placed")
 	}
 }

@@ -887,6 +887,11 @@ func (app *Mod) ApplySwarmEntry(ctx context.Context, kind, key, payload string, 
 		}); err != nil {
 			return fmt.Errorf("swarm: apply %s %s: %w", kind, key, err)
 		}
+		if err := app.Queries.StampAbyssalSightingAttribution(ctx, db.StampAbyssalSightingAttributionParams{
+			ContractID: sql.NullInt64{Int64: body.ContractID, Valid: true},
+		}); err != nil {
+			return fmt.Errorf("swarm: apply %s %s: %w", kind, key, err)
+		}
 		app.AddSwarmCounter(ctx, SwarmCounterAppliedContracts, 1)
 	default:
 		return fmt.Errorf("swarm: apply %s %s: unknown kind", kind, key)

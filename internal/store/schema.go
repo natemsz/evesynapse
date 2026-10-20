@@ -399,6 +399,14 @@ var pgAnonymousFitsSchema string
 //go:embed schema_pg/068_public_structures.sql
 var pgPublicStructuresSchema string
 
+// Step 069: abyssal sighting attribution -- what else shared a
+// listing's contract and who listed it, stamped onto the sighting
+// so the abyssal calibration corpus can attribute a contract's
+// price to the item, and backfilled where the contract is stored.
+//
+//go:embed schema_pg/069_abyssal_attribution.sql
+var pgAbyssalAttributionSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -496,6 +504,7 @@ func schemaSteps() []schemaStep {
 		{66, "reprocessing", pgReprocessingSchema, ""},
 		{67, "anonymous_fits", pgAnonymousFitsSchema, ""},
 		{68, "public_structures", pgPublicStructuresSchema, ""},
+		{69, "abyssal_attribution", pgAbyssalAttributionSchema, ""},
 	}
 }
 

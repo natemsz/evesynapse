@@ -379,7 +379,8 @@ SELECT item_id, type_id, source_type_id, mutator_type_id, created_by,
     family, score, percentiles, derived_stats,
     est_value, est_low, est_high, est_basis, est_scope, est_comps,
     premium_mult, cap_attribute_id, cap_kind,
-    recreation_cost, recreation_attempts, primary_abs, scored_at
+    recreation_cost, recreation_attempts, primary_abs, scored_at,
+    ladder_value, ladder_lo_type_id, ladder_hi_type_id, market_calib
 FROM abyssal_items
 WHERE item_id = $1
 `
@@ -414,6 +415,10 @@ func (q *Queries) GetAbyssalItem(ctx context.Context, itemID int64) (AbyssalItem
 		&i.RecreationAttempts,
 		&i.PrimaryAbs,
 		&i.ScoredAt,
+		&i.LadderValue,
+		&i.LadderLoTypeID,
+		&i.LadderHiTypeID,
+		&i.MarketCalib,
 	)
 	return i, err
 }
@@ -662,9 +667,12 @@ func (q *Queries) InsertPublicContractItem(ctx context.Context, arg InsertPublic
 const listAbyssalCorpusByGroupNames = `-- name: ListAbyssalCorpusByGroupNames :many
 SELECT DISTINCT ON (a.item_id)
     a.item_id, a.source_type_id, a.score, a.est_value, a.primary_abs,
+    a.ladder_value,
     s.price, s.departed_at, s.depart_kind,
     s.first_seen_at, s.last_seen_at, s.date_expired,
-    g.name AS group_name
+    g.name AS group_name,
+    s.issuer_id, s.abyssal_lines, s.wanted_lines, s.other_lines,
+    s.other_unpriced, s.other_value
 FROM abyssal_items a
 JOIN abyssal_sightings s ON s.item_id = a.item_id
 JOIN sde_types t ON t.type_id = a.type_id
@@ -676,18 +684,25 @@ ORDER BY a.item_id, s.first_seen_at DESC
 `
 
 type ListAbyssalCorpusByGroupNamesRow struct {
-	ItemID       int64           `json:"item_id"`
-	SourceTypeID int64           `json:"source_type_id"`
-	Score        sql.NullFloat64 `json:"score"`
-	EstValue     sql.NullFloat64 `json:"est_value"`
-	PrimaryAbs   sql.NullFloat64 `json:"primary_abs"`
-	Price        float64         `json:"price"`
-	DepartedAt   sql.NullTime    `json:"departed_at"`
-	DepartKind   sql.NullString  `json:"depart_kind"`
-	FirstSeenAt  time.Time       `json:"first_seen_at"`
-	LastSeenAt   time.Time       `json:"last_seen_at"`
-	DateExpired  sql.NullTime    `json:"date_expired"`
-	GroupName    string          `json:"group_name"`
+	ItemID        int64           `json:"item_id"`
+	SourceTypeID  int64           `json:"source_type_id"`
+	Score         sql.NullFloat64 `json:"score"`
+	EstValue      sql.NullFloat64 `json:"est_value"`
+	PrimaryAbs    sql.NullFloat64 `json:"primary_abs"`
+	LadderValue   sql.NullFloat64 `json:"ladder_value"`
+	Price         float64         `json:"price"`
+	DepartedAt    sql.NullTime    `json:"departed_at"`
+	DepartKind    sql.NullString  `json:"depart_kind"`
+	FirstSeenAt   time.Time       `json:"first_seen_at"`
+	LastSeenAt    time.Time       `json:"last_seen_at"`
+	DateExpired   sql.NullTime    `json:"date_expired"`
+	GroupName     string          `json:"group_name"`
+	IssuerID      sql.NullInt64   `json:"issuer_id"`
+	AbyssalLines  sql.NullInt64   `json:"abyssal_lines"`
+	WantedLines   sql.NullInt64   `json:"wanted_lines"`
+	OtherLines    sql.NullInt64   `json:"other_lines"`
+	OtherUnpriced sql.NullInt64   `json:"other_unpriced"`
+	OtherValue    sql.NullFloat64 `json:"other_value"`
 }
 
 // The calibration corpus for one family: every scored item of
@@ -710,6 +725,7 @@ func (q *Queries) ListAbyssalCorpusByGroupNames(ctx context.Context, groupNames 
 			&i.Score,
 			&i.EstValue,
 			&i.PrimaryAbs,
+			&i.LadderValue,
 			&i.Price,
 			&i.DepartedAt,
 			&i.DepartKind,
@@ -717,6 +733,12 @@ func (q *Queries) ListAbyssalCorpusByGroupNames(ctx context.Context, groupNames 
 			&i.LastSeenAt,
 			&i.DateExpired,
 			&i.GroupName,
+			&i.IssuerID,
+			&i.AbyssalLines,
+			&i.WantedLines,
+			&i.OtherLines,
+			&i.OtherUnpriced,
+			&i.OtherValue,
 		); err != nil {
 			return nil, err
 		}
@@ -801,7 +823,8 @@ SELECT item_id, type_id, source_type_id, mutator_type_id, created_by,
     family, score, percentiles, derived_stats,
     est_value, est_low, est_high, est_basis, est_scope, est_comps,
     premium_mult, cap_attribute_id, cap_kind,
-    recreation_cost, recreation_attempts, primary_abs, scored_at
+    recreation_cost, recreation_attempts, primary_abs, scored_at,
+    ladder_value, ladder_lo_type_id, ladder_hi_type_id, market_calib
 FROM abyssal_items
 WHERE item_id = ANY($1::bigint[])
 ORDER BY item_id
@@ -843,6 +866,10 @@ func (q *Queries) ListAbyssalItemsByIDs(ctx context.Context, itemIds []int64) ([
 			&i.RecreationAttempts,
 			&i.PrimaryAbs,
 			&i.ScoredAt,
+			&i.LadderValue,
+			&i.LadderLoTypeID,
+			&i.LadderHiTypeID,
+			&i.MarketCalib,
 		); err != nil {
 			return nil, err
 		}
@@ -897,6 +924,51 @@ func (q *Queries) ListAbyssalItemsDueScoring(ctx context.Context, arg ListAbyssa
 			&i.MutatorTypeID,
 			&i.Attributes,
 		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listAbyssalLadderTypes = `-- name: ListAbyssalLadderTypes :many
+SELECT src.type_id AS source_type_id, t.type_id, t.name
+FROM sde_types src
+JOIN sde_types t ON t.group_id = src.group_id
+WHERE src.type_id = ANY($1::bigint[])
+  AND src.group_id > 0
+  AND t.published = 1 AND t.market_group_id > 0
+ORDER BY src.type_id, t.type_id
+`
+
+type ListAbyssalLadderTypesRow struct {
+	SourceTypeID int64  `json:"source_type_id"`
+	TypeID       int64  `json:"type_id"`
+	Name         string `json:"name"`
+}
+
+// The base modules one mutaplasmid has ever been seen applied
+// to: the recreation path's candidate bases.
+// The ladder candidates for abyssal sources: every published,
+// market-listed type in each source module's SDE group (the
+// family's ordinary modules; mutated types are not on the
+// market, so they never appear).
+func (q *Queries) ListAbyssalLadderTypes(ctx context.Context, sourceIds []int64) ([]ListAbyssalLadderTypesRow, error) {
+	rows, err := q.db.QueryContext(ctx, listAbyssalLadderTypes, pq.Array(sourceIds))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListAbyssalLadderTypesRow
+	for rows.Next() {
+		var i ListAbyssalLadderTypesRow
+		if err := rows.Scan(&i.SourceTypeID, &i.TypeID, &i.Name); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -1034,15 +1106,31 @@ WHERE item_id = $1
 ORDER BY first_seen_at, contract_id
 `
 
-func (q *Queries) ListAbyssalSightingsForItem(ctx context.Context, itemID int64) ([]AbyssalSighting, error) {
+type ListAbyssalSightingsForItemRow struct {
+	ItemID       int64           `json:"item_id"`
+	ContractID   int64           `json:"contract_id"`
+	ContractType string          `json:"contract_type"`
+	Price        float64         `json:"price"`
+	RegionID     int64           `json:"region_id"`
+	LocationID   int64           `json:"location_id"`
+	DateExpired  sql.NullTime    `json:"date_expired"`
+	FirstSeenAt  time.Time       `json:"first_seen_at"`
+	LastSeenAt   time.Time       `json:"last_seen_at"`
+	DepartedAt   sql.NullTime    `json:"departed_at"`
+	DepartKind   sql.NullString  `json:"depart_kind"`
+	BidCount     sql.NullInt64   `json:"bid_count"`
+	TopBid       sql.NullFloat64 `json:"top_bid"`
+}
+
+func (q *Queries) ListAbyssalSightingsForItem(ctx context.Context, itemID int64) ([]ListAbyssalSightingsForItemRow, error) {
 	rows, err := q.db.QueryContext(ctx, listAbyssalSightingsForItem, itemID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []AbyssalSighting
+	var items []ListAbyssalSightingsForItemRow
 	for rows.Next() {
-		var i AbyssalSighting
+		var i ListAbyssalSightingsForItemRow
 		if err := rows.Scan(
 			&i.ItemID,
 			&i.ContractID,
@@ -1077,8 +1165,6 @@ WHERE mutator_type_id = $1 AND source_type_id > 0
 ORDER BY source_type_id
 `
 
-// The base modules one mutaplasmid has ever been seen applied
-// to: the recreation path's candidate bases.
 func (q *Queries) ListAbyssalSourcesForMutator(ctx context.Context, mutatorTypeID int64) ([]int64, error) {
 	rows, err := q.db.QueryContext(ctx, listAbyssalSourcesForMutator, mutatorTypeID)
 	if err != nil {
@@ -2159,6 +2245,54 @@ func (q *Queries) SetPublicContractItemsState(ctx context.Context, arg SetPublic
 	return err
 }
 
+const stampAbyssalSightingAttribution = `-- name: StampAbyssalSightingAttribution :exec
+UPDATE abyssal_sightings s SET
+    issuer_id      = c.issuer_id,
+    abyssal_lines  = m.abyssal_lines,
+    wanted_lines   = m.wanted_lines,
+    other_lines    = m.other_lines,
+    other_unpriced = m.other_unpriced,
+    other_value    = m.other_value
+FROM pub_contracts c,
+LATERAL (
+    SELECT
+        COUNT(*) FILTER (WHERE i.is_included AND a.item_id IS NOT NULL) AS abyssal_lines,
+        COUNT(*) FILTER (WHERE NOT i.is_included) AS wanted_lines,
+        COUNT(*) FILTER (WHERE i.is_included AND a.item_id IS NULL) AS other_lines,
+        COUNT(*) FILTER (WHERE i.is_included AND a.item_id IS NULL AND i.line_value IS NULL) AS other_unpriced,
+        COALESCE(SUM(i.line_value) FILTER (WHERE i.is_included AND a.item_id IS NULL), 0)::double precision AS other_value
+    FROM pub_contract_items i
+    LEFT JOIN abyssal_items a ON a.item_id = i.item_id
+    WHERE i.contract_id = c.contract_id
+) m
+WHERE c.contract_id = s.contract_id
+  AND (c.contract_id = $1::bigint
+       OR (c.region_id = $2::bigint AND c.last_cycle = $3::bigint))
+`
+
+type StampAbyssalSightingAttributionParams struct {
+	ContractID sql.NullInt64 `json:"contract_id"`
+	RegionID   sql.NullInt64 `json:"region_id"`
+	Cycle      sql.NullInt64 `json:"cycle"`
+}
+
+// The departure stamp also snapshots the listing's bid
+// state (an auction's rows in pub_contract_bids, counted
+// before the completion step deletes them): an exit with
+// bids on it is a different fact from an exit without.
+// Attribution (schema 069): what else shared each sighting's
+// contract and who listed it, read from the stored contract and
+// stamped onto the sighting, which outlives the contract rows.
+// Run beside every sighting write: for one contract
+// (contract_id) or a region's completed sweep (region_id with
+// cycle). Line values are the appraisal pass's; an unpriced
+// other line is counted, so the corpus can refuse a residual it
+// cannot compute.
+func (q *Queries) StampAbyssalSightingAttribution(ctx context.Context, arg StampAbyssalSightingAttributionParams) error {
+	_, err := q.db.ExecContext(ctx, stampAbyssalSightingAttribution, arg.ContractID, arg.RegionID, arg.Cycle)
+	return err
+}
+
 const stampAbyssalSightingsDeparted = `-- name: StampAbyssalSightingsDeparted :exec
 UPDATE abyssal_sightings s
 SET departed_at = $1::timestamptz,
@@ -2177,10 +2311,6 @@ type StampAbyssalSightingsDepartedParams struct {
 	ContractIds []int64   `json:"contract_ids"`
 }
 
-// The departure stamp also snapshots the listing's bid
-// state (an auction's rows in pub_contract_bids, counted
-// before the completion step deletes them): an exit with
-// bids on it is a different fact from an exit without.
 func (q *Queries) StampAbyssalSightingsDeparted(ctx context.Context, arg StampAbyssalSightingsDepartedParams) error {
 	_, err := q.db.ExecContext(ctx, stampAbyssalSightingsDeparted, arg.DepartedAt, arg.DepartKind, pq.Array(arg.ContractIds))
 	return err
@@ -2218,8 +2348,12 @@ UPDATE abyssal_items SET
     recreation_cost     = $14::double precision,
     recreation_attempts = $15::double precision,
     primary_abs         = $16::double precision,
-    scored_at           = $17::timestamptz
-WHERE item_id = $18::bigint
+    ladder_value        = $17::double precision,
+    ladder_lo_type_id   = $18::bigint,
+    ladder_hi_type_id   = $19::bigint,
+    market_calib        = $20::double precision,
+    scored_at           = $21::timestamptz
+WHERE item_id = $22::bigint
 `
 
 type UpdateAbyssalItemEstimateParams struct {
@@ -2239,6 +2373,10 @@ type UpdateAbyssalItemEstimateParams struct {
 	RecreationCost     sql.NullFloat64 `json:"recreation_cost"`
 	RecreationAttempts sql.NullFloat64 `json:"recreation_attempts"`
 	PrimaryAbs         sql.NullFloat64 `json:"primary_abs"`
+	LadderValue        sql.NullFloat64 `json:"ladder_value"`
+	LadderLoTypeID     int64           `json:"ladder_lo_type_id"`
+	LadderHiTypeID     int64           `json:"ladder_hi_type_id"`
+	MarketCalib        float64         `json:"market_calib"`
 	ScoredAt           time.Time       `json:"scored_at"`
 	ItemID             int64           `json:"item_id"`
 }
@@ -2261,6 +2399,10 @@ func (q *Queries) UpdateAbyssalItemEstimate(ctx context.Context, arg UpdateAbyss
 		arg.RecreationCost,
 		arg.RecreationAttempts,
 		arg.PrimaryAbs,
+		arg.LadderValue,
+		arg.LadderLoTypeID,
+		arg.LadderHiTypeID,
+		arg.MarketCalib,
 		arg.ScoredAt,
 		arg.ItemID,
 	)

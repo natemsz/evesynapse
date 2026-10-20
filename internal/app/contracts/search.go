@@ -2368,6 +2368,8 @@ func (app *mod) abyssalPanel(ctx context.Context, ab db.AbyssalItem) *abyssalPan
 		}
 		panel.HasRange = ab.EstLow.Valid && ab.EstHigh.Valid
 		switch ab.EstBasis {
+		case "ladder":
+			panel.BasisLabel = app.ladderBasisLabel(ctx, ab)
 		case "corpus":
 			if ab.EstScope == "module" {
 				panel.BasisLabel = fmt.Sprintf("from %d current and recent listings of this module", ab.EstComps)
@@ -2409,6 +2411,34 @@ func (app *mod) abyssalPanel(ctx context.Context, ab db.AbyssalItem) *abyssalPan
 		panel.ContextTier = tierLabel(res.Lines[0].Tier)
 	}
 	return panel
+}
+
+// ladderBasisLabel words a ladder estimate: where the item sits
+// among its family's ordinary modules, by name, and the market
+// factor when listings moved it.
+func (app *mod) ladderBasisLabel(ctx context.Context, ab db.AbyssalItem) string {
+	name := func(id int64) string { return app.deps.TypeNameOrID(ctx, id) }
+	var out string
+	switch {
+	case ab.EstScope == "between" && ab.LadderLoTypeID > 0 && ab.LadderHiTypeID > 0:
+		out = fmt.Sprintf("placed between %s and %s on the ladder of ordinary modules", name(ab.LadderLoTypeID), name(ab.LadderHiTypeID))
+	case ab.EstScope == "above" && ab.LadderLoTypeID > 0:
+		out = fmt.Sprintf("above %s, the strongest ordinary module of its kind", name(ab.LadderLoTypeID))
+	case ab.EstScope == "below" && ab.LadderHiTypeID > 0:
+		out = fmt.Sprintf("below %s, the weakest ordinary module of its kind", name(ab.LadderHiTypeID))
+	case ab.LadderLoTypeID > 0 || ab.LadderHiTypeID > 0:
+		id := ab.LadderLoTypeID
+		if id == 0 {
+			id = ab.LadderHiTypeID
+		}
+		out = fmt.Sprintf("measured against %s, the only priced module of its kind", name(id))
+	default:
+		out = "placed on the ladder of ordinary modules"
+	}
+	if math.Abs(ab.MarketCalib-1) >= 0.01 {
+		out += fmt.Sprintf("; clean contract listings adjust it ×%.2f", ab.MarketCalib)
+	}
+	return out
 }
 
 // formatAttempts words an expected-attempts figure:

@@ -340,8 +340,10 @@ func TestContractDetailCopyMedianLabel(t *testing.T) {
 		tier_mix='copy_median:1', priced_at=$1 WHERE contract_id=7006`, now)
 
 	_, body := getAnon(t, app, "/contracts/search/7006/")
+	// The detail page renders the drawer's cards, whose
+	// figures use the short form (42,000 -> "42.0K ISK").
 	mustContain(t, "detail copy median", body,
-		"Our copy median", "median of 12 copy listings", "42,000.00")
+		"Our copy median", "median of 12 copy listings", "42.0K ISK")
 	_, body = getAnon(t, app, "/contracts/search/7006/panel")
 	mustContain(t, "panel copy median", body,
 		"Our copy median", "median of 12 copy listings")

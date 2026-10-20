@@ -91,6 +91,13 @@
     showAbTel(scope, b.getAttribute("data-ab-pick"));
   });
   document.querySelectorAll("[data-ab-scope]").forEach(initAbPick);
+  // A swapped-in page (swap.js) never re-runs this script, so
+  // its cards arrive visible all at once; collapse them to the
+  // first when the shell announces the new content, the same
+  // moment init() re-wires the search form below.
+  document.addEventListener("evesynapse:content-ready", function () {
+    document.querySelectorAll("[data-ab-scope]").forEach(initAbPick);
+  });
 
   var wiredForm = null;
   function init() {

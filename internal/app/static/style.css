@@ -1102,6 +1102,10 @@ h3 + .tw > table, h3 + table {
   -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(0.9);
   backdrop-filter: blur(var(--glass-blur)) saturate(0.9); }
 .foldable.has-fold > h2:first-child, .foldable.has-fold > h3:first-child { padding-right: 2.2rem; position: relative; }
+/* Any heading carrying a fold button is that button's frame, so
+   the button centers on its own heading — not on a card whose
+   heading follows an intro paragraph. */
+:is(h2, h3, h4):has(> .foldbtn) { position: relative; padding-right: 2.6rem; }
 
 /* --- buttons --- A plain <button> or submit/button <input> with no
    class gets this look through :where(), which adds no specificity, so

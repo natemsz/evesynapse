@@ -403,8 +403,8 @@ html[data-theme="light"] #pi-wrap .pi-colony { background: #fdfbf6; border-color
    row, the view tabs scroll as one row instead of wrapping to two,
    and the inspector, which sits under the tree in the one-column
    layout, stops being sticky.
-   PI planner: each control stacks its caption over its field, two
-   to a row, with Recalculate full width under them; the planet
+   PI planner: the controls stack through the shared labelled-form
+   rule (phone.css); the planet
    checks become two columns of finger-sized rows; the production
    map swipes through its tiers two columns at a time, snapping to
    a column edge. The materials table reads as cards through the
@@ -422,17 +422,7 @@ html[data-theme="light"] #pi-wrap .pi-colony { background: #fdfbf6; border-color
   #plan-inspector { position: static; }
 
   #pi-wrap .pi-controls { padding: 0.8rem 0.75rem 0.9rem; }
-  #pi-form .pi-controls > p {
-    display: flex; flex-wrap: wrap; align-items: flex-end;
-    gap: 0.6rem 0.7rem; margin: 0 0 0.7rem;
-  }
-  #pi-form .pi-controls > p > label {
-    display: flex; flex-direction: column; gap: 0.25rem;
-    flex: 1 1 8.5rem; min-width: 0;
-    margin: 0; white-space: normal;
-  }
-  #pi-form .pi-controls > p > label > :is(input, select) { width: 100%; }
-  #pi-form .pi-controls > p > button[type="submit"] { flex: 1 1 100%; }
+  #pi-form .pi-controls > p { margin: 0 0 0.7rem; }
   .pi-planets {
     display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 0 0.5rem; padding: 0.5rem 0.6rem 0.6rem;

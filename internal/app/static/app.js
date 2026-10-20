@@ -3487,6 +3487,21 @@
     module.exports.cardLabels = cardLabels;
   }
 
+  // A cell holding nothing but controls (a remove button, move
+  // arrows, a one-button form) is a card action, not a figure:
+  // it takes no label and sits on the card's action row.
+  function isControlCell(cell) {
+    var kids = cell.childNodes, any = false;
+    for (var k = 0; k < kids.length; k++) {
+      var n = kids[k];
+      if (n.nodeType === 3) { if (n.textContent.trim()) return false; continue; }
+      if (n.nodeType !== 1) continue;
+      if (!n.matches("form, button, input, select, a.btn, .btn")) return false;
+      any = true;
+    }
+    return any;
+  }
+
   function labelCardCells(table) {
     var head = table.tHead && table.tHead.rows.length ? table.tHead.rows[table.tHead.rows.length - 1] : null;
     if (!head) return false;
@@ -3503,7 +3518,9 @@
         var idx = 0;
         for (c = 0; c < rows[i].cells.length; c++) {
           var cell = rows[i].cells[c];
-          if (labels[idx] && cell.colSpan === 1) cell.setAttribute("data-label", labels[idx]);
+          var ctl = cell.colSpan === 1 && isControlCell(cell);
+          cell.classList.toggle("card-ctl", ctl);
+          if (labels[idx] && cell.colSpan === 1 && !ctl) cell.setAttribute("data-label", labels[idx]);
           // A column the header marks .opt (the site's "first to
           // go when narrow" mark) stays off the card.
           if (optional[idx] && cell.colSpan === 1) cell.classList.add("opt");
@@ -3517,7 +3534,8 @@
   function cardSortPicker(table) {
     var prev = table.previousElementSibling;
     if (prev && prev.classList.contains("cards-sort")) return prev;
-    if (table.hasAttribute("data-nosort") || !table.tBodies[0] || table.tBodies[0].rows.length < 2) return null;
+    // A short list needs no sort; the picker earns its row at four.
+    if (table.hasAttribute("data-nosort") || !table.tBodies[0] || table.tBodies[0].rows.length < 4) return null;
     var head = table.tHead.rows[table.tHead.rows.length - 1];
     var label = document.createElement("label");
     label.className = "cards-sort";

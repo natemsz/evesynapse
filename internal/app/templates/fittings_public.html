@@ -16,6 +16,8 @@
     <input type="search" name="q" id="fit-browse-q" value="{{.Filters.Q}}" placeholder="Search fits, ships and authors…" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="fit-browse-suggest" aria-autocomplete="list" aria-label="Search fits" data-suggest="{{.SuggestURL}}">
     <ul class="suggest" id="fit-browse-suggest" role="listbox" hidden></ul>
   </span>
+  <button type="button" class="btn btn-quiet" data-sheet-open="fit-filters" hidden>Filters</button>
+  <div class="lookup-more" id="fit-filters" data-sheet data-sheet-title="Filters">
   <label>Role <select name="role">
     <option value="">Any role</option>
     {{range .Roles}}<option value="{{.}}"{{if eq $.PublicFits.Filters.Role .}} selected{{end}}>{{.}}</option>{{end}}
@@ -43,6 +45,8 @@
   </select></label>
   <label>Max price <input type="text" name="maxprice" value="{{if gt $.PublicFits.Filters.MaxPrice 0.0}}{{$.PublicFits.Filters.MaxPrice}}{{end}}" placeholder="ISK" size="10" inputmode="decimal"></label>
   <label><input type="checkbox" name="alpha" value="1"{{if .Filters.Alpha}} checked{{end}}> Alpha-friendly</label>
+  <div class="sheet-foot sheet-only"><a href="{{.FirstURL}}">Clear all</a><button class="btn" type="submit">Show fits</button></div>
+  </div>
   <button type="submit">Search</button>
   <a href="{{.FirstURL}}">Clear all</a>
 </form>

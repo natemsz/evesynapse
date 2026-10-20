@@ -171,7 +171,7 @@
      ragged block scrolls sideways as one line instead, edge to
      edge with the page glass, its right edge fading. New chip
      rows take .swipe-row; existing rows join the list. */
-  .swipe-row, .region-pills {
+  .swipe-row, .region-pills, .browse-sorts {
     display: flex;
     flex-wrap: nowrap;
     overflow-x: auto;
@@ -183,12 +183,19 @@
     -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 1.5rem), transparent);
     mask-image: linear-gradient(to right, #000 calc(100% - 1.5rem), transparent);
   }
-  .swipe-row::-webkit-scrollbar, .region-pills::-webkit-scrollbar { display: none; }
-  .swipe-row > *, .region-pills > * { flex: none; scroll-snap-align: start; }
+  .swipe-row::-webkit-scrollbar, .region-pills::-webkit-scrollbar, .browse-sorts::-webkit-scrollbar { display: none; }
+  :is(.swipe-row, .region-pills, .browse-sorts) > * { flex: none; scroll-snap-align: start; }
+  .browse-sorts { align-items: center; gap: 0.4rem; white-space: nowrap; }
+
+  /* Table filter boxes span the column on a phone. */
+  input[data-table-filter] { width: 100%; max-width: none; }
 
   /* A search panel (field + button) holds one row. */
-  form.searchpanel { display: flex; align-items: center; gap: 0.5rem; }
-  form.searchpanel > .searchwrap { flex: 1 1 auto; width: auto; min-width: 0; }
+  form.searchpanel { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
+  form.searchpanel > .searchwrap { flex: 1 1 12rem; width: auto; min-width: 0; }
+  /* With its filters in a sheet, the panel's inline clear stands down
+     for the sheet's own footer. */
+  form.searchpanel:has(> .as-sheet) > a { display: none; }
   form.searchpanel > .searchwrap > input { width: 100%; }
 
   /* The market item's figures: best sell and best buy (the
@@ -197,21 +204,23 @@
   .mkt-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.55rem; }
   .mkt-kpis > .kpi:has(.typical), .mkt-kpis > .kpi:last-child:nth-child(odd) { grid-column: 1 / -1; }
 
-  /* Labelled filter forms (a <label> holding its <small> caption
-     and its field, the site's form idiom): each field stacks its
-     caption over it and the fields share the row two-up; the
-     submit button takes the full width under them, where a thumb
-     finds it. */
-  #main-content form:has(> label > small) {
+  /* Labelled forms (a <label> wrapping its caption, bare text or
+     <small>, and its field — the site's form idiom), whether the
+     labels sit in the form or in one of its <p> rows: each field
+     stacks its caption over it and the fields share the row
+     two-up; the submit takes the full width under them, where a
+     thumb finds it. Checkbox and radio labels keep their line. */
+  #main-content :is(form, form p, form [data-sheet]):has(> label > :is(input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]), select, textarea)) {
     display: flex; flex-wrap: wrap; align-items: flex-end;
     gap: 0.6rem 0.7rem;
   }
-  #main-content form > label:has(> small) {
-    display: flex; flex-direction: column; gap: 0.25rem;
-    flex: 1 1 8.5rem; min-width: 0;
+  #main-content :is(form, form p, form [data-sheet]) > label:has(> :is(input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]), select, textarea)) {
+    display: flex; flex-direction: column; align-items: stretch; gap: 0.25rem;
+    flex: 1 1 8.5rem; min-width: 0; margin: 0;
+    white-space: normal;
   }
-  #main-content form > label:has(> small) > :is(input, select) { width: 100%; }
-  #main-content form:has(> label > small) > .btn[type="submit"] { flex: 1 1 100%; }
+  #main-content :is(form, form p, form [data-sheet]) > label > :is(input, select, textarea) { width: 100%; }
+  #main-content :is(form, form p, form [data-sheet]):has(> label > :is(input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]), select, textarea)) > :is(.btn, button)[type="submit"] { flex: 1 1 100%; }
 
   /* Key/value tables (a tbody of th + td rows, no thead) wrap
      their values in the column instead of widening the table
@@ -266,6 +275,21 @@
     text-transform: uppercase;
   }
   #main-content table.cards-on > tbody > tr > td:is(:empty, .opt) { display: none; }
+  /* Action-only cells (app.js marks them .card-ctl) gather on the
+     card's bottom row, the last one at the right edge; when the
+     row leads with one (move arrows), the next cell titles the
+     card instead. */
+  #main-content table.cards-on > tbody > tr > td.card-ctl {
+    order: 99; width: auto;
+    grid-column: auto; justify-self: start;
+    font-size: inherit; font-weight: inherit;
+  }
+  #main-content table.cards-on > tbody > tr > td.card-ctl:last-child { justify-self: end; }
+  #main-content table.cards-on > tbody > tr > td.card-ctl:first-child + td {
+    grid-column: 1 / -1;
+    font-size: 1.05em; font-weight: 600; color: var(--text-bright);
+  }
+  #main-content table.cards-on > tbody > tr > td.card-ctl:first-child + td::before { display: none; }
   /* data-cards="off": the table stays a table and fits by
      wrapping its text columns instead (an order book: price,
      volume, and the station wrapping under its own column). */
@@ -283,7 +307,11 @@
      leaves the page flow and rises from the bottom edge when its
      trigger is tapped — the sections sheet's glass, head and
      reach. It scrolls inside itself; the page behind holds still. */
-  .as-sheet:not(.open) { display: none; }
+  /* A closed sheet is out of the page whatever else styles the
+     block (the labelled-form rule lays a sheet of fields out as a
+     flex row): the closed state always wins. */
+  .as-sheet:not(.open) { display: none !important; }
+  .as-sheet > :is(.sheet-head, .sheet-foot) { flex: 1 1 100%; }
   .as-sheet.open {
     display: block;
     position: fixed; inset: auto 0 0 0; z-index: 99;
@@ -344,6 +372,51 @@
      as its frame; the page glass gives up its blur while one is up. */
   .page-body:has(.as-sheet.open) { -webkit-backdrop-filter: none; backdrop-filter: none; }
   [data-sheet-open][hidden] { display: none; }
+
+  /* A heading's trailing metadata (<h3>Name <small>· facts</small>)
+     drops to its own line under the name, in running-text case,
+     so the heading stays one short line beside its fold button. */
+  #main-content :is(h2, h3, h4) > small {
+    display: block;
+    margin-top: 0.2rem;
+    font-family: inherit;
+    font-size: 0.78rem; font-weight: 400;
+    letter-spacing: 0; text-transform: none;
+    color: var(--muted);
+  }
+
+  /* The calendar month grid reads as an agenda: seven columns
+     cannot fit a phone, so only today and the days carrying ops
+     or events show, one row each — the weekday over the date on
+     the left, the day's entries stacked on the right. The
+     upcoming list under it is unchanged. */
+  .cal-wrap { overflow: visible; }
+  table.cal, table.cal > tbody, table.cal > tbody > tr { display: block; min-width: 0; }
+  table.cal > thead { display: none; }
+  table.cal td.cal-day { display: none; }
+  table.cal td.cal-day:not(.cal-out):is(.cal-today, :has(.cal-entry)) {
+    display: grid;
+    grid-template-columns: 3.2rem minmax(0, 1fr) auto;
+    align-items: start;
+    gap: 0.3rem 0.6rem;
+    height: auto;
+    padding: 0.6rem 0.2rem;
+    border: 0;
+    border-bottom: 1px solid var(--box-edge);
+  }
+  table.cal .cal-num { grid-column: 1; grid-row: 1 / span 20; font-size: 1.35rem; line-height: 1.1; text-align: center; }
+  table.cal .cal-num::before {
+    content: attr(data-wd);
+    display: block;
+    font-size: 0.66rem; letter-spacing: 0.08em; text-transform: uppercase;
+  }
+  table.cal .cal-entry { grid-column: 2; margin: 0; white-space: normal; }
+  table.cal .cal-add {
+    grid-column: 3; grid-row: 1;
+    position: static; opacity: 1;
+    min-width: 2.5rem; min-height: 2.5rem;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
 
   /* The footer: the same lines, set compact. */
   footer { margin-top: 1rem; padding: 1rem 0.9rem 1.1rem; font-size: 0.66rem; }

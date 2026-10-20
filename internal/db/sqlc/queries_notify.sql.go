@@ -234,6 +234,64 @@ func (q *Queries) ListPushSubscriptionsByUser(ctx context.Context, userID int64)
 	return items, nil
 }
 
+const listRecentSkillNotifications = `-- name: ListRecentSkillNotifications :many
+SELECT id, user_id, character_id, kind, title, url, created_at, read_at FROM notifications
+WHERE user_id = $1 AND character_id = $2 AND kind = $3
+  AND (read_at IS NULL OR read_at >= $4)
+ORDER BY created_at DESC, id DESC
+LIMIT $5
+`
+
+type ListRecentSkillNotificationsParams struct {
+	UserID      int64        `json:"user_id"`
+	CharacterID int64        `json:"character_id"`
+	Kind        string       `json:"kind"`
+	ReadSince   sql.NullTime `json:"read_since"`
+	RowLimit    int32        `json:"row_limit"`
+}
+
+// The character sheet's trained-since-last-visit banner: this
+// pilot's skill rows that are unread, or were read within the
+// caller's window. Following a notification's link marks the
+// kind read on the way in, so a just-read row still counts.
+func (q *Queries) ListRecentSkillNotifications(ctx context.Context, arg ListRecentSkillNotificationsParams) ([]Notification, error) {
+	rows, err := q.db.QueryContext(ctx, listRecentSkillNotifications,
+		arg.UserID,
+		arg.CharacterID,
+		arg.Kind,
+		arg.ReadSince,
+		arg.RowLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Notification
+	for rows.Next() {
+		var i Notification
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.CharacterID,
+			&i.Kind,
+			&i.Title,
+			&i.Url,
+			&i.CreatedAt,
+			&i.ReadAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listUnreadNotificationSummary = `-- name: ListUnreadNotificationSummary :many
 SELECT DISTINCT ON (kind) kind, title, url,
        (COUNT(*) OVER (PARTITION BY kind))::bigint AS unread

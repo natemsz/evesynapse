@@ -51,6 +51,17 @@ WHERE user_id = $1
 ORDER BY id DESC
 LIMIT $2;
 
+-- The character sheet's trained-since-last-visit banner: this
+-- pilot's skill rows that are unread, or were read within the
+-- caller's window. Following a notification's link marks the
+-- kind read on the way in, so a just-read row still counts.
+-- name: ListRecentSkillNotifications :many
+SELECT id, user_id, character_id, kind, title, url, created_at, read_at FROM notifications
+WHERE user_id = sqlc.arg(user_id) AND character_id = sqlc.arg(character_id) AND kind = sqlc.arg(kind)
+  AND (read_at IS NULL OR read_at >= sqlc.arg(read_since))
+ORDER BY created_at DESC, id DESC
+LIMIT sqlc.arg(row_limit);
+
 -- name: MarkNotificationsRead :exec
 UPDATE notifications SET read_at = sqlc.arg(read_at)
 WHERE user_id = sqlc.arg(user_id) AND read_at IS NULL;

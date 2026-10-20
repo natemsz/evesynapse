@@ -10,6 +10,8 @@
 {{if .CharacterPage}}
   {{if .CharacterPage.Loaded}}
 
+  {{if .CharacterPage.TrainedBanner}}<p class="notice" role="status">Trained since your last visit: {{.CharacterPage.TrainedBanner}}</p>{{end}}
+
   {{if .CharacterPage.IdentityKnown}}
   <div class="panel char-head">
   <h2 class="char-hero"><img class="portrait" src="{{.CharacterPage.PortraitURL}}" alt=""><span class="char-name">{{.CharacterPage.CharacterName}}</span></h2>

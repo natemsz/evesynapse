@@ -16,7 +16,13 @@
   </div>
 </div>
 
-<div class="ap-bench{{if and (not .Result) (not .Reprocess)}} solo{{end}}">
+{{if .Result}}
+<div class="seg ap-switch" role="tablist" aria-label="Appraisal views" data-ap-switch hidden>
+  <button type="button" role="tab" data-ap-view-btn="input" aria-selected="false">1. Paste Input</button>
+  <button type="button" role="tab" data-ap-view-btn="result" aria-selected="true">2. Valuation</button>
+</div>
+{{end}}
+<div class="ap-bench{{if and (not .Result) (not .Reprocess)}} solo{{end}}"{{if .Result}} data-ap-view="result"{{end}}>
 <section class="box ap-form">
   <form method="post" action="/market/appraise/">
     <div class="ap-chips" aria-hidden="true">
@@ -51,7 +57,7 @@ Pyerite 250000</pre>
     </details>
     <div class="ap-fld-head">
       <label class="ap-label" for="ap-items">Items to appraise</label>
-      <span class="ap-fld-tools"><span class="ap-count" data-ap-linecount>0 / 1,000 lines</span> <button class="ap-clearlink" type="button" data-clear-appraise>✕ Clear</button></span>
+      <span class="ap-fld-tools"><span class="ap-count" data-ap-linecount>0 / 1,000 lines</span> <button class="ap-clearlink" type="button" data-ap-paste hidden>Paste from clipboard</button> <button class="ap-clearlink" type="button" data-clear-appraise>✕ Clear</button></span>
     </div>
     <div class="ap-field">
       <textarea id="ap-items" name="items" rows="10" autofocus placeholder="Tritanium x 1,000,000&#10;Pyerite 250000&#10;[Rifter, My Rifter]&#10;...">{{.Input}}</textarea>
@@ -116,7 +122,7 @@ Pyerite 250000</pre>
     <div class="ap-cv">{{$r.TotalValue}} ISK</div>
     <div class="ap-cs"><span>{{$r.CompactTotal}} ISK</span>{{if ne $r.Basis.Percent 100.0}}<span class="ap-pctflag">@ {{$r.Basis.Percent}}% basis</span>{{end}}</div>
   </div>
-  <div class="box ap-card">
+  <div class="box ap-card"{{if $r.BuyRaw}} data-ap-buy-raw="{{$r.BuyRaw}}"{{end}}>
     <div class="ap-ck"><span>Typical buy value</span>{{if $r.BuyRaw}}<button class="ap-copybtn" type="button" data-copy data-copy-text="{{$r.BuyRaw}}" title="Copy buy total" aria-label="Copy buy total"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg></button>{{end}}</div>
     <div class="ap-cv">{{if $r.BuyValue}}{{$r.BuyValue}} ISK{{else}}—{{end}}</div>
     <div class="ap-cs">{{if $r.BuyRatio}}Buy/Sell ratio: <span class="ap-accent">{{$r.BuyRatio}}</span>{{else if not $r.BuyValue}}No typical buys on the priced lines{{end}}</div>
@@ -204,11 +210,11 @@ Pyerite 250000</pre>
     {{range $r.Lines}}
       <tr>
         <td><a href="/market/?type={{.TypeID}}">{{.Name}}</a>{{if .Note}}<br><small>{{.Note}}</small>{{end}}{{if .SharePct}}<div class="ap-bar" data-w="{{.SharePct}}"></div>{{end}}</td>
-        <td class="ap-r">{{.Qty}}</td>
-        {{if .Priced}}<td class="ap-r"><span class="ap-num">{{.UnitPrice}}</span></td><td class="ap-r"><span class="ap-num strong">{{.LineValue}}</span></td>{{else}}<td class="ap-r">—</td><td class="ap-r">—</td>{{end}}
-        <td class="ap-r">{{if .LineVol}}{{.LineVol}} m³{{if .UnitVol}}<br><small>{{.UnitVol}} m³ each</small>{{end}}{{else}}—{{end}}</td>
-        <td>{{.TierLabel}}</td>
-        <td>{{.AsOf}}</td>
+        <td class="ap-r" data-th="Qty">{{.Qty}}</td>
+        {{if .Priced}}<td class="ap-r" data-th="Unit price"><span class="ap-num">{{.UnitPrice}}</span></td><td class="ap-r" data-th="Line total"><span class="ap-num strong">{{.LineValue}}</span></td>{{else}}<td class="ap-r" data-th="Unit price">—</td><td class="ap-r" data-th="Line total">—</td>{{end}}
+        <td class="ap-r" data-th="Volume">{{if .LineVol}}{{.LineVol}} m³{{if .UnitVol}}<br><small>{{.UnitVol}} m³ each</small>{{end}}{{else}}—{{end}}</td>
+        <td data-th="Basis &amp; freshness">{{.TierLabel}}</td>
+        <td data-th="As of">{{.AsOf}}</td>
       </tr>
     {{end}}
     </tbody>
@@ -237,6 +243,11 @@ Pyerite 250000</pre>
   </div>
 </section>
 {{end}}
+<div class="ap-dock" data-ap-dock hidden>
+  <button class="btn small" type="button" data-ap-view-btn="input" data-ap-dock-edit>Edit paste</button>
+  {{if and $r.Multisell (not .Reprocess)}}<button class="btn small" type="button" data-copy-from="ap-multisell">Copy multi-sell</button>{{end}}
+  {{if $r.ShareURL}}<button class="btn small" type="button" data-copy data-copy-text="{{$r.ShareURL}}">Copy link</button>{{end}}
+</div>
 </div>
 {{end}}
 </div>

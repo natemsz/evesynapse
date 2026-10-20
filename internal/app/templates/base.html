@@ -32,6 +32,7 @@
 {{if eq .NavPage "fittings.html"}}<link rel="stylesheet" href="/static/fit.css?v={{.AssetVersion}}">{{end}}
 </head>
 <body{{if .AutoRefresh}} data-autorefresh="5"{{end}}>
+<svg class="svg-defs" width="0" height="0" aria-hidden="true"><defs><linearGradient id="nav-glyph-gradient" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#ffd27a"/><stop offset="0.5" stop-color="#ff6a1a"/><stop offset="1" stop-color="#d63c14"/></linearGradient></defs></svg>
 <a class="skip-link" href="#main-content">Skip to main content</a>
 <input class="nav-drawer-checkbox" type="checkbox" id="nav-drawer-toggle" autocomplete="off" tabindex="-1" aria-hidden="true">
 <aside class="sidebar" id="site-nav">
@@ -47,7 +48,7 @@
     <nav class="sidenav" aria-label="Primary">
       <a class="navlink{{if eq .Section "home"}} active{{end}}" href="/" data-tip="Home"><span class="nav-icon" aria-hidden="true"><svg class="nav-icon-svg nav-icon-home" viewBox="0 0 24 24" aria-hidden="true"><path d="M4.2 11.4 12 4.4l7.8 7M6.6 9.7v9.9h10.8V9.7" fill="none" stroke="url(#nav-glyph-gradient)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="nav-label">Home</span></a>
             <details class="branch{{if eq .Section "pilot"}} active{{end}}"{{if and (eq .Section "pilot") (ne .NavState "rail")}} open{{end}} data-nav-category="pilot">
-        <summary data-tip="Pilot"><span class="nav-icon" aria-hidden="true"><svg class="nav-icon-svg nav-icon-character" viewBox="0 0 24 24" aria-hidden="true"><defs><linearGradient id="nav-glyph-gradient" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#ffd27a"/><stop offset="0.5" stop-color="#ff6a1a"/><stop offset="1" stop-color="#d63c14"/></linearGradient></defs><g fill="url(#nav-glyph-gradient)"><circle cx="12" cy="8.2" r="3.8"/><path d="M3.8 21.2C3.8 16.6 7.4 14.2 12 14.2c4.6 0 8.2 2.4 8.2 7Z"/></g></svg></span><span class="nav-label">Pilot</span></summary>
+        <summary data-tip="Pilot"><span class="nav-icon" aria-hidden="true"><svg class="nav-icon-svg nav-icon-character" viewBox="0 0 24 24" aria-hidden="true"><g fill="url(#nav-glyph-gradient)"><circle cx="12" cy="8.2" r="3.8"/><path d="M3.8 21.2C3.8 16.6 7.4 14.2 12 14.2c4.6 0 8.2 2.4 8.2 7Z"/></g></svg></span><span class="nav-label">Pilot</span></summary>
         <div class="menu">
           {{with index .NavGroups "pilot"}}{{range .}}<p class="nav-group-label">{{.Label}}</p>
           {{range .Links}}<a href="{{.Href}}"{{if .Active}} class="active"{{end}}>{{.Label}}</a>
@@ -188,6 +189,44 @@
   <p class="version"><a href="https://github.com/natemsz/evesynapse" target="_blank" rel="noopener noreferrer">EveSynapse</a> <span class="version-number">{{.Version}}</span> · Made in Seattle, WA by <a href="https://natems.dev" target="_blank" rel="noopener noreferrer">natemsz</a></p>
 </footer>
 </div>
+{{if .BottomNav}}
+<nav class="phone-bar" aria-label="Primary">
+  {{range .BottomNav}}{{if .Sheet}}<button type="button" class="phone-bar-item{{if .Active}} active{{end}}" id="phone-sections-btn" data-section="sections" aria-haspopup="dialog" aria-expanded="false" aria-controls="phone-sheet"><svg class="phone-bar-icon" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="url(#nav-glyph-gradient)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></g></svg><span>{{.Label}}</span></button>{{else}}<a class="phone-bar-item{{if .Active}} active{{end}}" href="{{.Href}}" data-section="{{.Section}}"{{if .Active}} aria-current="page"{{end}}><svg class="phone-bar-icon" viewBox="0 0 24 24" aria-hidden="true">{{if eq .Section "home"}}<path d="M4.2 11.4 12 4.4l7.8 7M6.6 9.7v9.9h10.8V9.7" fill="none" stroke="url(#nav-glyph-gradient)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>{{else if eq .Section "pilot"}}<g fill="url(#nav-glyph-gradient)"><circle cx="12" cy="8.2" r="3.8"/><path d="M3.8 21.2C3.8 16.6 7.4 14.2 12 14.2c4.6 0 8.2 2.4 8.2 7Z"/></g>{{else if eq .Section "industry"}}<g fill="none" stroke="url(#nav-glyph-gradient)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18M5 21V10l4 3v-3l4 3V7l4 3v11"/></g>{{else if eq .Section "market"}}<g fill="url(#nav-glyph-gradient)"><rect x="3.5" y="15" width="4.2" height="5" rx="1"/><rect x="9.9" y="11" width="4.2" height="9" rx="1"/><rect x="16.3" y="7" width="4.2" height="13" rx="1"/></g><path d="M3 12.2 8.6 8.2 14 9.8 20.6 4.4" fill="none" stroke="url(#nav-glyph-gradient)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>{{end}}</svg><span>{{.Label}}</span></a>{{end}}{{end}}
+</nav>
+<div class="phone-sheet-backdrop" id="phone-sheet-backdrop" hidden></div>
+<section class="phone-sheet" id="phone-sheet" role="dialog" aria-modal="true" aria-labelledby="phone-sheet-title" hidden>
+  <div class="phone-sheet-head">
+    <h2 id="phone-sheet-title">Sections</h2>
+    <button type="button" class="phone-sheet-close" id="phone-sheet-close" aria-label="Close sections"><svg class="nav-control-svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7l10 10M17 7L7 17" fill="none" stroke="url(#nav-glyph-gradient)" stroke-width="2.2" stroke-linecap="round"/></svg></button>
+  </div>
+  <ul class="phone-sheet-list">
+    {{range .BottomSections}}<li class="phone-sheet-row"><a class="phone-sheet-section{{if .Active}} active{{end}}" href="{{.Href}}" data-section="{{.Section}}"{{if .Active}} aria-current="page"{{end}}>{{.Label}}</a>{{with .Groups}}<span class="phone-sheet-groups">{{range .}}<a href="{{.Href}}"{{if .Active}} class="active"{{end}}>{{.Label}}</a>{{end}}</span>{{end}}</li>
+    {{end}}
+  </ul>
+  <div class="phone-sheet-account">
+    {{if .LoggedIn}}
+    <p class="phone-sheet-who">Signed in{{if .CharacterName}} as {{.CharacterName}}{{end}}</p>
+    {{if .Switcher}}<ul class="phone-sheet-switch">
+      {{range .Switcher}}<li><a href="/characters/switch?character={{.ID}}"{{if .Active}} class="active"{{end}}><img class="portrait" src="{{.PortraitURL}}" alt="" width="24" height="24"> {{.Name}}{{if .Tags}} <small>· {{.Tags}}</small>{{end}}{{if .Relink}} <small>· re-link needed</small>{{end}}</a></li>
+      {{end}}<li><a href="/characters/">Manage Characters</a></li>
+    </ul>{{end}}
+    {{if .IsAdmin}}<ul class="phone-sheet-switch">
+      <li><a href="/sync/">Sync</a></li>
+      <li><a href="/admin/">Admin</a></li>
+    </ul>{{end}}
+    <div class="phone-sheet-actions">
+      <button type="button" class="phone-sheet-action" data-install-app hidden>Install App</button>
+      <button type="button" class="phone-sheet-action" data-theme-toggle>Theme</button>
+      <form class="sidebar-signout-form" method="post" action="/auth/logout"><button class="phone-sheet-action" type="submit">Sign Out</button></form>
+    </div>
+    {{else}}
+    <div class="phone-sheet-actions">
+      <a class="phone-sheet-action" href="/auth/login">Sign In</a>
+    </div>
+    {{end}}
+  </div>
+</section>
+{{end}}
 <script src="/static/app.js?v={{.AssetVersion}}" defer></script>
 <script src="/static/swap.js?v={{.AssetVersion}}" defer></script>
 {{if eq .Section "fitting"}}<script src="/static/fit.js?v={{.AssetVersion}}" defer></script>{{end}}

@@ -86,6 +86,7 @@ jobs:
           internal/app/jstest/fit.loadoutpreview.test.js
           internal/app/jstest/fit.phoneviews.test.js
           internal/app/jstest/tabs.more.test.js
+          internal/app/jstest/phonebar.test.js
 
   # The same suite under the race detector, as its own job so the
   # plain run above stays fast.

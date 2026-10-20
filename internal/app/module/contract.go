@@ -849,6 +849,28 @@ type CharLink struct {
 	Tags   string
 }
 
+// BottomNavItem is one slot in the phone bottom bar: a section
+// landing link, or the Sections button (Sheet true, no Href) that
+// opens the sections sheet.
+type BottomNavItem struct {
+	Label   string
+	Href    string
+	Section string
+	Active  bool
+	Sheet   bool
+}
+
+// BottomSection is one row of the phone sections sheet: the
+// section's landing link and, for a grouped section, its group
+// landings under it.
+type BottomSection struct {
+	Label   string
+	Href    string
+	Section string
+	Active  bool
+	Groups  []NavLink
+}
+
 // ShellData holds all the layout, session, nav, and shell state
 // needed by base.html and shared partials.
 type ShellData struct {
@@ -876,6 +898,8 @@ type ShellData struct {
 	NavGroups      map[string][]NavGroup
 	SectionTabs    []NavLink
 	SectionSubTabs []NavLink
+	BottomNav      []BottomNavItem
+	BottomSections []BottomSection
 	// SubTabNote is a quiet right-aligned readout a page
 	// may set for its subtab row (today: the contract
 	// search's sweep telemetry). Empty shows nothing.

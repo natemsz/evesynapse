@@ -154,6 +154,17 @@ by the template): the fit is measured, the active tab never
 folds, and widening restores — so a strip whose tabs fit
 renders exactly as it did without the disclosure.
 
+In the phone band (max-width: 45rem) the shell navigates from
+a fixed bottom bar instead: Home, the `bottomBarSlots` sections
+(nav.go) and a Sections button opening a sheet with every
+section, its groups, the character switcher and the account
+actions — all derived from the same `sectionNav`. Where a page
+keeps its sub-tab row, the folder strip above it stands down,
+so a phone page carries one in-page nav row. The bar and sheet
+live in the shell (base.html); app.js re-marks their active
+section after each swap from the sidebar state swap.js just
+synced.
+
 ### Search boxes
 
 Every search box is the same autocomplete widget over one

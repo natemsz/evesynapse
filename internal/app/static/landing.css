@@ -224,6 +224,9 @@ body::after { content: ""; position: fixed; inset: 0; z-index: -1; background: l
   .ld-feat-vis { order: 2; }
   .ld-brief { grid-template-columns: 1fr; }
   .ld-nav { display: none; }
+  /* The planner card's three totals wrap as a left-aligned
+     group instead of stretching across the card's full width. */
+  .ld-ptotal { justify-content: flex-start; column-gap: 20px; }
 }
 @media (prefers-reduced-motion: reduce) {
   * { animation: none !important; transition: none !important; }

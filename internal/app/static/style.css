@@ -2,6 +2,19 @@
    Molten-orange eclipse palette: ember red and flare gold accents on
    neutral near-black grey containers. Single dependency-free stylesheet. */
 
+/* --- Responsive canon --------------------------------------------------
+   One shared responsive system for every page; new width rules use
+   these breakpoints and no others:
+     30rem (480px)   small phones: the root scale and one-row bars
+     45rem (720px)   phones: grids go one column, wide columns drop
+     860px           the shell: the sidebar becomes the off-canvas
+                     drawer (paired with min-width: 861px rules)
+     70rem (1120px)  the intermediate band's top: multi-column bands
+                     rewrap as whole cards, split layouts stack
+   Older blocks still carry a few off-canon widths (560px, 640px,
+   the feature sheets' own values); they migrate to the canon when
+   their block is next touched, not by flag-day rewrite. */
+
 /* Every face is free (SIL Open Font License) and self-hosted
    (font-src 'self'; ci-assets/fonts holds them and their notices).
    Body text: Saira Semi Condensed, a squared, compact techno sans.
@@ -704,7 +717,11 @@ main {
   display: inline-flex; align-items: center;
 }
 .ap-delbtn:hover { background: var(--row-hover); }
-.ap-hud { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.8rem; }
+/* The summary cards size to their figures: each card keeps at
+   least 13rem, so the nowrap .ap-cv value always fits inside its
+   own card, and the row rewraps as whole cards below that —
+   four across on a wide bench, two across in the band. */
+.ap-hud { display: grid; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); gap: 0.8rem; }
 .ap-card { min-width: 0; }
 .ap-card.hero { border-color: color-mix(in srgb, var(--accent) 55%, transparent); }
 .ap-ck {
@@ -841,12 +858,19 @@ main {
   background: rgba(69, 26, 3, 0.5);
 }
 .ap-inlineform { display: inline-flex; }
-@media (max-width: 1100px) {
+@media (max-width: 70rem) {
   .ap-bench { grid-template-columns: minmax(0, 1fr); }
   .ap-hud { grid-template-columns: repeat(2, 1fr); }
 }
 @media (max-width: 640px) {
   .ap-pgrid { grid-template-columns: 1fr; }
+}
+@media (max-width: 45rem) {
+  /* Phone widths: the fixed-layout result tables hold their
+     column widths and scroll sideways inside their .tw wrapper
+     instead of crushing the item column until the quantity
+     figures land on top of the item names. */
+  #ap-panel-items table, .ap-reprocess table { min-width: 42rem; }
 }
 /* Darker header bands: a solid ::before behind the heading. Layering
    the ramp over the band on the heading itself hid the text wherever
@@ -1302,7 +1326,7 @@ input[type="search"]:not(.topsearch input),
   background-position: 0.55rem center;
   background-size: 1rem 1rem;
 }
-@media (max-width: 720px) {
+@media (max-width: 45rem) {
   .searchwrap.topsearch-wrap { width: min(11rem, 40vw); }
 }
 
@@ -1404,12 +1428,12 @@ footer .version-number {
 /* Fleet header tags: the tag filters ride in the widget's header
    band, right-aligned beside the title — the concept's TAGS line.
    They position against the card, so the markup stays inside the
-   card body. Below 1100px they drop into the flow under the title
+   card body. Below 70rem they drop into the flow under the title
    and wrap. Customize mode clears the band for the widget's own
    controls (the move buttons sit at the title's right). */
 .fleet-tags { position: absolute; top: 0; right: 1rem; height: 2.94rem; display: flex; align-items: center; gap: 0.4rem; margin: 0; }
 .fleet-tags-label { font-size: 0.72rem; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); margin-right: 0.15rem; }
-@media (max-width: 1100px) {
+@media (max-width: 70rem) {
   .fleet-tags { position: static; height: auto; padding-top: 0.1rem; flex-wrap: wrap; }
 }
 .home-custom .fleet-tags { display: none; }
@@ -1581,13 +1605,13 @@ html[data-theme="light"] .widget-scope select {
    places, so the page keeps the layout Customize set. */
 /* Customize shows each module as the page shows it: summary only. */
 .home-custom [data-wmore] { display: none; }
-@media (max-width: 1099px) {
+@media (max-width: 70rem) {
   .grid.home-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .grid.home-grid > .gw3 { grid-column: span 2; }
 }
 /* Phones: one column, every module its natural height; the summary
    shows first and More opens the rest. */
-@media (max-width: 719px) {
+@media (max-width: 45rem) {
   .grid.home-grid { grid-template-columns: minmax(0, 1fr); grid-auto-rows: auto; }
   .grid.home-grid > .card { grid-column: auto; grid-row: auto; }
   /* Sizes only apply on wider screens, so there is nothing to resize. */
@@ -1694,7 +1718,7 @@ html[data-theme="light"] .widget-scope select {
   opacity: 0.75;
 }
 .cardgrip:hover, .card.resizing .cardgrip { opacity: 1; }
-@media (max-width: 719px) { .cardgrip { display: none; } }
+@media (max-width: 45rem) { .cardgrip { display: none; } }
 
 /* The lifted card: out of the grid, fixed to the viewport where it
    was, following the pointer by transform. Ember border and glow. */
@@ -1814,7 +1838,11 @@ td.pos, .pos { color: #28c76f; }
   font-weight: 600;
   color: var(--text-bright);
   font-variant-numeric: tabular-nums;
-  overflow-wrap: anywhere;
+  /* A figure wraps at its spaces only (value, unit, trend are
+     separate units): it never breaks inside the number itself.
+     Bands that cannot fit the figure rewrap as whole cards
+     instead — see the 70rem rule below. */
+  overflow-wrap: normal;
 }
 .kpis-small .kpi-v { font-size: 1rem; overflow-wrap: normal; white-space: nowrap; }
 .kpi-v small { font-size: 0.7rem; color: var(--accent); font-weight: 400; }
@@ -1830,6 +1858,13 @@ td.pos, .pos { color: #28c76f; }
 .kpi-spark { display: block; width: 100%; height: 28px; margin-top: 0.25rem; }
 .kpi-spark-line { fill: none; stroke: var(--accent); stroke-width: 1.5; }
 .kpi-spark-area { fill: color-mix(in srgb, var(--accent) 18%, transparent); stroke: none; }
+/* The intermediate band: the glance card spans the home grid's
+   two columns here, wide enough that four auto-fit tiles still
+   squeeze each figure onto two lines. Rewrap as whole cards,
+   two across, so every figure keeps its full width. */
+@media (max-width: 70rem) {
+  .home-grid .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
 .linkbtn {
   padding: 0;
   font: inherit;
@@ -1841,11 +1876,11 @@ td.pos, .pos { color: #28c76f; }
 .linkbtn:hover { color: var(--gold); text-decoration: underline; }
 
 /* Briefing filters ride in the widget's header band, right-aligned
-   beside the title — the fleet header-tags pattern. Below 1100px
+   beside the title — the fleet header-tags pattern. Below 70rem
    they drop into the flow under the title and wrap; customize
    mode clears the band for the widget's own controls. */
 .brief-tabs { position: absolute; top: 0; right: 1rem; height: 2.94rem; display: flex; align-items: center; gap: 0.4rem; margin: 0; flex-wrap: wrap; }
-@media (max-width: 1100px) {
+@media (max-width: 70rem) {
   .brief-tabs { position: static; height: auto; padding-top: 0.1rem; }
 }
 .home-custom .brief-tabs { display: none; }
@@ -2200,7 +2235,7 @@ tr.fleet-detail > td { background: #120d09; border-bottom: 1px solid rgba(255, 1
 @media (prefers-reduced-motion: reduce) {
   .esi-dot::after { animation: none !important; }
 }
-@media (max-width: 719px) {
+@media (max-width: 45rem) {
   .esi-pill .esi-tq { display: none; }
 }
 /* Motion and blur discipline (Ember Nebula): every animation this
@@ -2213,7 +2248,7 @@ tr.fleet-detail > td { background: #120d09; border-bottom: 1px solid rgba(255, 1
   .brief-card .sev { animation: none; }
   .brief-card:hover, .brief-card:focus-within { transform: none; }
 }
-@media (max-width: 719px) {
+@media (max-width: 45rem) {
   /* The fleet overview's Location column costs more width than a
      phone has. */
   .fleet-table .opt2 { display: none; }
@@ -3067,7 +3102,7 @@ tbody tr.yours td { background-color: #2a2015; }
     background: rgba(255, 106, 26, 0.25);
   }
 }
-@media (max-width: 719px) {
+@media (max-width: 45rem) {
   .fleet-tools input[type="search"] { max-width: 100%; }
 }
 @media (max-width: 560px) {
@@ -3221,7 +3256,7 @@ tbody tr.yours td { background-color: #2a2015; }
   color: var(--muted-2);
 }
 body.quickjump-open { overflow: hidden; }
-@media (max-width: 720px) {
+@media (max-width: 45rem) {
   .quickjump-panel { margin-top: 4vh; }
   .quickjump-results { max-height: 60vh; }
   .quickjump-btn { margin-left: 0.35rem; }
@@ -4864,7 +4899,7 @@ a.chip:hover { border-color: var(--accent); }
 html[data-theme="light"] .facets { border-color: #d8cdb8; background: rgba(0, 0, 0, 0.02); }
 html[data-theme="light"] .fit-card { background: rgba(0, 0, 0, 0.02); }
 html[data-theme="light"] .fit-card-ship { border-color: #d8cdb8; background: #f1ebdf; }
-@media (max-width: 720px) {
+@media (max-width: 45rem) {
   .facet { flex-direction: column; gap: 0.25rem; }
   .facet-title { flex: none; }
   .facet-chips { flex-wrap: nowrap; overflow-x: auto; max-width: 100%; padding-bottom: 0.2rem; }
@@ -5052,4 +5087,16 @@ html[data-theme="light"] .suggest li:not(.sug-kind):not(.sug-empty):hover, html[
   box-shadow: none;
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
+}
+
+/* --- Touch targets -------------------------------------------------------
+   On coarse pointers (phones, tablets) the shared small controls
+   grow to a 2.5rem floor so a fingertip lands on them first try:
+   the briefing and filter chips, segmented controls, the
+   appraisal presets, hub strip and sample buttons, and small
+   buttons. The rule lives entirely inside the coarse-pointer
+   query — fine pointers keep the compact metrics untouched. */
+@media (hover: none), (pointer: coarse) {
+  .chip, .seg > *, .ap-preset, .ap-hub, .ap-samplebtn, .btn.small { min-height: 2.5rem; }
+  .chip, .ap-preset, .ap-hub, .ap-samplebtn { display: inline-flex; align-items: center; justify-content: center; }
 }

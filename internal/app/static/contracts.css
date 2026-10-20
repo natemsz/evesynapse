@@ -619,3 +619,17 @@
   .cs-actions { margin-left: 0; }
   .cs-roll { grid-template-columns: minmax(0, 1fr) auto 4.5rem 2.4rem; }
 }
+
+/* ---- touch targets ----
+   The coarse-pointer floor from the shared system (style.css):
+   this page's own controls — the hunt chips, spec tabs, active
+   filter chips, the deals switch, the region and capital quick
+   buttons, the row copy button and the pager links — grow to
+   the same 2.5rem so a fingertip lands on them first try.
+   Fine pointers keep the compact metrics untouched. */
+@media (hover: none), (pointer: coarse) {
+  .cs-hunt, .cs-tab, .cs-fchip, .cs-deals, .cs-region-quick button,
+  .cs-cap-chips button, .cs-pager a { min-height: 2.5rem; }
+  .cs-fchip, .cs-pager a { display: inline-flex; align-items: center; }
+  .cs-copy { min-width: 2.5rem; min-height: 2.5rem; }
+}

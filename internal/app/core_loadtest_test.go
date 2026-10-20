@@ -613,14 +613,18 @@ func seedLoadFixture(t *testing.T, conn *sql.DB, q *db.Queries) {
 			typeID := loadTypeBase + int64((i*13+c)%loadTypeCount)
 			first := now.Add(-time.Duration(20+i) * 24 * time.Hour).Format(time.RFC3339)
 			last := now.Add(-time.Duration(i) * 24 * time.Hour).Format(time.RFC3339)
-			closedAt, kind := last, "filled"
+			closedAt, kind := "'"+last+"'", "filled"
 			if i >= 40 {
-				closedAt, kind = "", ""
+				// An open order, in the production writer's own
+				// shape (UpsertOrderLifecycle): closed_at NULL,
+				// close_kind ''. The '' this used to interpolate
+				// for closed_at is not a valid timestamptz.
+				closedAt, kind = "NULL", ""
 			} else if i%3 == 0 {
 				kind = "ended"
 			}
 			lifeRows = append(lifeRows, fmt.Sprintf(
-				"(%d, %d, %d, %d, %d, %d, %.2f, %d, %d, '%s', '%s', '%s', '%s', %d, %d)",
+				"(%d, %d, %d, %d, %d, %d, %.2f, %d, %d, '%s', '%s', %s, '%s', %d, %d)",
 				charID, int64(7000000+c*1000+i), typeID, loadStationA, loadForge, i%2,
 				100+float64(i)*2.3, 1000, 0, first, last, closedAt, kind, i%5, 0))
 		}
@@ -689,6 +693,9 @@ func writeLoadReport(t *testing.T, results []loadStageResult, stubCalls int64) {
 		reportName = "loadtest-2026-10-04.md"
 	}
 	path := filepath.Join(home, "workspace", "evesynapse", "logs", reportName)
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatalf("create report dir: %v", err)
+	}
 	if err := os.WriteFile(path, []byte(b.String()), 0o644); err != nil {
 		t.Fatalf("write report: %v", err)
 	}

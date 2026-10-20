@@ -29,6 +29,8 @@ func TestLandingAnonymous(t *testing.T) {
 		"Key held in a hardware vault",
 		"Built by one pilot.",
 		"concurrent pilots on one small server, load-tested",
+		"pilots kept fully current, sync load-tested",
+		"rosters of 12 to 2,400 pilots driven through the real sync cycle",
 		"Rebuilt over <em>4 years</em>. Originating in <em>2013</em>. Built for <em>2026</em>.",
 		"href=\"/auth/login\"",        // existing members sign in plainly
 		"href=\"/auth/link\"",         // new members link characters

@@ -167,6 +167,36 @@
   #main-content:has(> .section-tabs) > .page-body,
   #main-content:has(> .section-subtabs) > .page-body { margin-top: 0; }
 
+  /* Swipe rows: a row of chips or pills that would wrap into a
+     ragged block scrolls sideways as one line instead, edge to
+     edge with the page glass, its right edge fading. New chip
+     rows take .swipe-row; existing rows join the list. */
+  .swipe-row, .region-pills {
+    display: flex;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x proximity;
+    scrollbar-width: none;
+    margin-left: -0.7rem; margin-right: -0.7rem;
+    padding: 0.1rem 1.5rem 0.2rem 0.7rem;
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 1.5rem), transparent);
+    mask-image: linear-gradient(to right, #000 calc(100% - 1.5rem), transparent);
+  }
+  .swipe-row::-webkit-scrollbar, .region-pills::-webkit-scrollbar { display: none; }
+  .swipe-row > *, .region-pills > * { flex: none; scroll-snap-align: start; }
+
+  /* A search panel (field + button) holds one row. */
+  form.searchpanel { display: flex; align-items: center; gap: 0.5rem; }
+  form.searchpanel > .searchwrap { flex: 1 1 auto; width: auto; min-width: 0; }
+  form.searchpanel > .searchwrap > input { width: 100%; }
+
+  /* The market item's figures: best sell and best buy (the
+     cards carrying their typical-price line) across the full
+     width, the short figures two-up, a lone last one full. */
+  .mkt-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.55rem; }
+  .mkt-kpis > .kpi:has(.typical), .mkt-kpis > .kpi:last-child:nth-child(odd) { grid-column: 1 / -1; }
+
   /* Labelled filter forms (a <label> holding its <small> caption
      and its field, the site's form idiom): each field stacks its
      caption over it and the fields share the row two-up; the

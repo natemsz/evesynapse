@@ -525,6 +525,15 @@ html[data-theme="light"] #main-content > .section-subtabs a.active {
   border-radius: 0.5rem;
 }
 #main-content .tabs-more-panel[hidden] { display: none; }
+/* The wrapper gets the same guard as its panel: it is a flex
+   item carrying an author display of its own (the measuring
+   state below puts one on it), and in some engines that display
+   wins over the UA's [hidden] rule — the failure the item
+   tree's .tw tr[hidden] guard exists for — leaving a visible
+   More button whose panel is empty and whose tap does nothing.
+   The measuring state is carved out: measuring a hidden
+   wrapper is the one moment it must lay out. */
+#main-content .tabs-more[hidden]:not(.tabs-more-measuring) { display: none; }
 #main-content > .section-tabs .tabs-more-panel a,
 #main-content > .section-subtabs .tabs-more-panel a {
   display: block;
@@ -856,4 +865,13 @@ html.js .notify-prompt.is-open { opacity: 1; transform: none; }
 .notify-channels label { cursor: pointer; }
 @media (max-width: 860px) {
   .notify-prompt { left: 0.5rem; right: 0.5rem; width: auto; }
+}
+
+/* Phones get one in-page nav row: where a sub-row remains under
+   the folder strip to carry the active group's pages, the strip
+   stands down — the bottom bar and its sections sheet carry the
+   sections and the groups between them. A strip with no
+   sub-row under it is its section's only row and stays. */
+@media (max-width: 45rem) {
+  #main-content:has(> .section-subtabs) > .section-tabs { display: none; }
 }

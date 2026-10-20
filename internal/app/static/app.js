@@ -341,6 +341,158 @@
     }
   });
 
+  // --- Phone bottom bar ----------------------------------------
+  // The phone band's bottom bar and sections sheet (base.html)
+  // live in the shell, outside the swapped content, so they bind
+  // once here. What changes across swaps is which section is
+  // current: swap.js has just re-marked the sidebar when
+  // content-ready fires, and syncPhoneBar reads the current
+  // section back off it, so the bar, the sheet and the sidebar
+  // can never disagree. Without the bar (a shell-less render)
+  // nothing here runs.
+  //
+  // Pure: given the current section key and the section keys the
+  // bar and the sheet carry, say which bar slot is active (""
+  // for none) and whether the Sections button carries the mark
+  // instead — the current section lives only in the sheet, the
+  // same reflection the tab strip's More button gives a folded
+  // active tab.
+  function phoneSectionState(section, barSections, sheetSections) {
+    var i;
+    for (i = 0; i < barSections.length; i++) {
+      if (barSections[i] === section) {
+        return { bar: section, sectionsButton: false };
+      }
+    }
+    for (i = 0; i < sheetSections.length; i++) {
+      if (sheetSections[i] === section) {
+        return { bar: "", sectionsButton: true };
+      }
+    }
+    return { bar: "", sectionsButton: false };
+  }
+
+  if (typeof module !== "undefined" && module.exports) {
+    module.exports.phoneSectionState = phoneSectionState;
+  }
+
+  var phoneBar = null; // { btn, sheet, backdrop, closeBtn } once bound
+
+  function setPhoneSheetOpen(open, refocus) {
+    if (!phoneBar) return;
+    phoneBar.sheet.hidden = !open;
+    phoneBar.backdrop.hidden = !open;
+    phoneBar.btn.setAttribute("aria-expanded", open ? "true" : "false");
+    if (open) {
+      if (phoneBar.closeBtn && phoneBar.closeBtn.focus) {
+        phoneBar.closeBtn.focus({ preventScroll: true });
+      }
+    } else if (refocus && phoneBar.btn.focus) {
+      phoneBar.btn.focus({ preventScroll: true });
+    }
+  }
+
+  function phoneBarSections(sel) {
+    var out = [], els = document.querySelectorAll(sel), i;
+    for (i = 0; i < els.length; i++) out.push(els[i].getAttribute("data-section"));
+    return out;
+  }
+
+  // The current section, read off the sidebar's synced state:
+  // the marked branch's category, or the marked top-level link's
+  // own section (Home, and the admin utility pair).
+  function phoneCurrentSection() {
+    var branches = document.querySelectorAll(".sidenav details.branch"), i;
+    for (i = 0; i < branches.length; i++) {
+      if (branches[i].classList.contains("active")) {
+        return branches[i].getAttribute("data-nav-category") || "";
+      }
+    }
+    var on = document.querySelector(".sidenav a.navlink.active");
+    if (on) {
+      var href = on.getAttribute("href") || "";
+      if (href === "/") return "home";
+      if (href.indexOf("/sync") === 0) return "sync";
+      if (href.indexOf("/admin") === 0) return "admin";
+    }
+    return "";
+  }
+
+  function markPhoneActive(el, on) {
+    el.classList.toggle("active", on);
+    if (el.tagName === "A") {
+      if (on) el.setAttribute("aria-current", "page");
+      else el.removeAttribute("aria-current");
+    }
+  }
+
+  function syncPhoneBar() {
+    var section = phoneCurrentSection();
+    var state = phoneSectionState(
+      section,
+      phoneBarSections(".phone-bar-item[data-section]"),
+      phoneBarSections(".phone-sheet-section[data-section]"));
+    var i, els = document.querySelectorAll(".phone-bar-item[data-section]");
+    for (i = 0; i < els.length; i++) {
+      var key = els[i].getAttribute("data-section");
+      markPhoneActive(els[i], key === state.bar || (key === "sections" && state.sectionsButton));
+    }
+    els = document.querySelectorAll(".phone-sheet-section[data-section]");
+    for (i = 0; i < els.length; i++) {
+      markPhoneActive(els[i], els[i].getAttribute("data-section") === section);
+    }
+    // A grouped section's group rows mark the group the sidebar
+    // marks: the current page's own menu link.
+    var page = document.querySelector(".sidenav .menu a.active");
+    var pageHref = page ? page.getAttribute("href") : null;
+    els = document.querySelectorAll(".phone-sheet-groups a");
+    for (i = 0; i < els.length; i++) {
+      els[i].classList.toggle("active", !!pageHref && els[i].getAttribute("href") === pageHref);
+    }
+  }
+
+  function initPhoneBar() {
+    var btn = document.getElementById("phone-sections-btn");
+    var sheet = document.getElementById("phone-sheet");
+    var backdrop = document.getElementById("phone-sheet-backdrop");
+    if (!btn || !sheet || !backdrop) return;
+    phoneBar = {
+      btn: btn, sheet: sheet, backdrop: backdrop,
+      closeBtn: document.getElementById("phone-sheet-close")
+    };
+    btn.addEventListener("click", function () {
+      setPhoneSheetOpen(sheet.hidden, false);
+    });
+    if (phoneBar.closeBtn) {
+      phoneBar.closeBtn.addEventListener("click", function () {
+        setPhoneSheetOpen(false, true);
+      });
+    }
+    backdrop.addEventListener("click", function () {
+      setPhoneSheetOpen(false, true);
+    });
+    // Choosing anything in the sheet navigates; the sheet's work
+    // is done, so it closes behind the tap.
+    sheet.addEventListener("click", function (ev) {
+      var el = ev.target;
+      while (el && el !== sheet) {
+        if (el.tagName === "A" || el.tagName === "BUTTON" || el.tagName === "FORM") {
+          setPhoneSheetOpen(false, false);
+          return;
+        }
+        el = el.parentNode;
+      }
+    });
+    document.addEventListener("keydown", function (ev) {
+      if (ev.key === "Escape" && phoneBar && !phoneBar.sheet.hidden) {
+        setPhoneSheetOpen(false, true);
+      }
+    });
+    onContentReady(syncPhoneBar);
+    syncPhoneBar();
+  }
+  initPhoneBar();
+
   // --- Collapsible sections -----------------------------------
   // Folding lives at the smallest sensible unit on each page:
   //   - .foldable sections (the h2/h3 blocks inside a page panel)
@@ -2850,8 +3002,15 @@
 // Simple dark/light toggle (faction themes deferred).
 (function () {
   "use strict";
-  var btn = document.getElementById("theme-toggle");
-  if (!btn) return;
+  // The sidebar's toggle, plus any other the shell renders (the
+  // phone sections sheet carries one): every toggle flips the
+  // same theme.
+  var btns = [];
+  var byId = document.getElementById("theme-toggle");
+  if (byId) btns.push(byId);
+  var extras = document.querySelectorAll("[data-theme-toggle]");
+  for (var i = 0; i < extras.length; i++) btns.push(extras[i]);
+  if (!btns.length) return;
   var root = document.documentElement;
   var storageKey = "evesynapse-theme";
 
@@ -2878,10 +3037,12 @@
   var saved = readSaved();
   if (saved) root.setAttribute("data-theme", saved);
 
-  btn.addEventListener("click", function () {
-    var next = effective() === "dark" ? "light" : "dark";
-    root.setAttribute("data-theme", next);
-    save(next);
+  btns.forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      var next = effective() === "dark" ? "light" : "dark";
+      root.setAttribute("data-theme", next);
+      save(next);
+    });
   });
 })();
 
@@ -3761,24 +3922,36 @@
 // is already installed, the link is never shown.
 (function () {
   "use strict";
-  var btn = document.getElementById("install-app");
-  if (!btn) return;
+  // The sidebar's offer, plus any other the shell renders (the
+  // phone sections sheet carries one): the held offer drives
+  // them all.
+  var btns = [];
+  var byId = document.getElementById("install-app");
+  if (byId) btns.push(byId);
+  var extras = document.querySelectorAll("[data-install-app]");
+  for (var i = 0; i < extras.length; i++) btns.push(extras[i]);
+  if (!btns.length) return;
   var offer = null;
+  function showAll(hidden) {
+    btns.forEach(function (btn) { btn.hidden = hidden; });
+  }
   window.addEventListener("beforeinstallprompt", function (e) {
     e.preventDefault(); // no banner of the browser's own; ours is the link
     offer = e;
-    btn.hidden = false;
+    showAll(false);
   });
-  btn.addEventListener("click", function () {
-    if (!offer) return;
-    var held = offer;
-    offer = null; // an offer can be used once; the browser sends another if it is declined
-    btn.hidden = true;
-    held.prompt();
+  btns.forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      if (!offer) return;
+      var held = offer;
+      offer = null; // an offer can be used once; the browser sends another if it is declined
+      showAll(true);
+      held.prompt();
+    });
   });
   window.addEventListener("appinstalled", function () {
     offer = null;
-    btn.hidden = true;
+    showAll(true);
   });
 })();
 

@@ -311,3 +311,135 @@ func baseHref(href string) string {
 	}
 	return href
 }
+
+// ---------------------------------------------------------------------------
+// The phone bottom bar and its sections sheet: the primary nav
+// restated for the phone band. The bar's fixed slots and the
+// sheet's section order are the two lists below — one line each
+// to change — and every destination derives from the same
+// sectionNav the sidebar renders, so the three can never
+// disagree. A section's landing is its first nav page.
+// ---------------------------------------------------------------------------
+
+// bottomBarSlots is the bottom bar's fixed section slots, in bar
+// order, between Home and the Sections button.
+var bottomBarSlots = []struct{ section, label string }{
+	{"pilot", "Pilots"},
+	{"industry", "Industry"},
+	{"market", "Market"},
+}
+
+// bottomSheetSections is the sections sheet's rows, in sheet
+// order: every primary section.
+var bottomSheetSections = []struct{ section, label string }{
+	{"pilot", "Pilot"},
+	{"fitting", "Fitting"},
+	{"industry", "Industry"},
+	{"market", "Market"},
+	{"corporation", "Corporation"},
+	{"intel", "Intel"},
+	{"tools", "Tools"},
+}
+
+// sectionLanding is a section's landing href: its first nav
+// page's path. Empty when the section has no pages (a module
+// that is not compiled in).
+func sectionLanding(links map[string][]navLink, section string) string {
+	ls := links[section]
+	if len(ls) == 0 {
+		return ""
+	}
+	return baseHref(ls[0].Href)
+}
+
+// sectionGroupTabs is a grouped section's group tabs without the
+// tab strip's active-page requirement: each group's first page
+// in nav order, labelled by the group. Ungrouped sections, and
+// group maps that do not cover the section exactly, return nil
+// (the sheet then carries the section's landing alone).
+func sectionGroupTabs(links map[string][]navLink, section string) []navLink {
+	groups, grouped := sectionGroups[section]
+	tabs := links[section]
+	if !grouped || len(tabs) == 0 {
+		return nil
+	}
+	member := make(map[string]int, len(tabs))
+	for gi, g := range groups {
+		for _, h := range g.Hrefs {
+			member[h] = gi
+		}
+	}
+	buckets := make([][]navLink, len(groups))
+	for _, t := range tabs {
+		gi, ok := member[baseHref(t.Href)]
+		if !ok {
+			return nil
+		}
+		buckets[gi] = append(buckets[gi], t)
+	}
+	var out []navLink
+	for gi, g := range groups {
+		if len(buckets[gi]) == 0 {
+			continue
+		}
+		gt := navLink{Href: baseHref(buckets[gi][0].Href), Label: g.Label}
+		for _, p := range buckets[gi] {
+			if p.Active {
+				gt.Active = true
+			}
+		}
+		out = append(out, gt)
+	}
+	if len(out) < 2 {
+		return nil
+	}
+	return out
+}
+
+// bottomNavFor builds the phone bar's slots and the sheet's
+// section rows for one page. The bar marks the current section
+// when it has a slot; when the current section lives only in the
+// sheet, the Sections button carries the mark instead, the same
+// reflection the tab strip's More button gives a folded active
+// tab. The sheet marks its section and, in a grouped section,
+// the group the current page sits in.
+func bottomNavFor(links map[string][]navLink, section string) ([]module.BottomNavItem, []module.BottomSection) {
+	bar := []module.BottomNavItem{
+		{Label: "Home", Href: "/", Section: "home", Active: section == "home"},
+	}
+	barSections := map[string]bool{"home": true}
+	for _, slot := range bottomBarSlots {
+		landing := sectionLanding(links, slot.section)
+		if landing == "" {
+			continue
+		}
+		bar = append(bar, module.BottomNavItem{
+			Label: slot.label, Href: landing, Section: slot.section,
+			Active: section == slot.section,
+		})
+		barSections[slot.section] = true
+	}
+	var sheet []module.BottomSection
+	sheetSections := map[string]bool{}
+	for _, row := range bottomSheetSections {
+		landing := sectionLanding(links, row.section)
+		if landing == "" {
+			continue
+		}
+		bs := module.BottomSection{
+			Label: row.label, Href: landing, Section: row.section,
+			Active: section == row.section,
+		}
+		sheetSections[row.section] = true
+		for _, g := range sectionGroupTabs(links, row.section) {
+			if g.Href == landing {
+				continue // the section row itself is this group's landing
+			}
+			bs.Groups = append(bs.Groups, g)
+		}
+		sheet = append(sheet, bs)
+	}
+	sectionsActive := section != "" && !barSections[section] && sheetSections[section]
+	bar = append(bar, module.BottomNavItem{Label: "Sections", Section: "sections", Sheet: true, Active: sectionsActive})
+	return bar, sheet
+}

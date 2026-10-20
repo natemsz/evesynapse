@@ -956,16 +956,20 @@ main {
   .ap-total { flex-wrap: wrap; row-gap: 0.3rem; }
   /* The bottom action dock: fixed, thumb-zone, only the actions
      the result already offers (edit the paste, copy the
-     multi-sell list, copy the share link). */
+     multi-sell list, copy the share link). It floats over the
+     phone bottom bar (mobile pass 3), so its rest position and
+     the room the page makes for it both grow by the bar's
+     height. */
   .ap-dock:not([hidden]) {
     display: flex; gap: 0.5rem;
-    position: fixed; left: 0; right: 0; bottom: 0; z-index: 40;
+    position: fixed; left: 0; right: 0; z-index: 40;
+    bottom: calc(var(--phone-bar-h, 0px) + env(safe-area-inset-bottom, 0px));
     padding: 0.5rem 0.7rem calc(0.5rem + env(safe-area-inset-bottom, 0px));
     background: linear-gradient(to top, rgba(24, 24, 24, 0.94), rgba(11, 11, 11, 0.94));
     border-top: 1px solid var(--box-edge);
   }
   .ap-dock .btn { flex: 1 1 0; }
-  .page-body:has(.ap-dock:not([hidden])) { padding-bottom: 4.25rem; }
+  .page-body:has(.ap-dock:not([hidden])) { padding-bottom: calc(4.25rem + var(--phone-bar-h, 0px) + env(safe-area-inset-bottom, 0px)); }
   /* Home KPI rider: the exact figure line the compact swap in
      app.js sets under a compacted headline figure. */
   .kpi-exact {
@@ -5201,4 +5205,160 @@ html[data-theme="light"] .suggest li:not(.sug-kind):not(.sug-empty):hover, html[
 @media (hover: none), (pointer: coarse) {
   .chip, .seg > *, .ap-preset, .ap-hub, .ap-samplebtn, .btn.small { min-height: 2.5rem; }
   .chip, .ap-preset, .ap-hub, .ap-samplebtn { display: inline-flex; align-items: center; justify-content: center; }
+}
+
+/* The shared SVG defs (the nav glyph gradient) render once at
+   body level, out of the layout: glyph references must resolve
+   in every shell state, and a def inside the sidebar stops
+   painting whenever the sidebar is display:none. */
+.svg-defs { position: absolute; }
+
+/* --- the phone shell: bottom bar and sections sheet ------------
+   (mobile pass 3) In the phone band the shell's navigation is a
+   fixed bottom bar in the sidebar's glass — Home, the primary
+   sections, and a Sections button opening a bottom sheet with
+   every section, its groups, the character switcher and the
+   account actions — while the hamburger, the off-canvas drawer
+   and the reopen button stand down: everything they reached
+   lives in the bar, the sheet, the top bar (search, quick jump,
+   notifications) or the page's own sub-tab row. Outside the band
+   none of it renders and the shell is exactly as it was. The
+   bar's height is one custom property so the page's bottom
+   clearance and the appraisal dock's offset (above) share it. */
+.phone-bar, .phone-sheet, .phone-sheet-backdrop { display: none; }
+@media (max-width: 45rem) {
+  :root { --phone-bar-h: 3.6rem; }
+  .nav-hamburger { display: none; }
+  #nav-reopen { display: none; }
+  #site-nav { display: none; }
+  .nav-backdrop { display: none; }
+  .page-shell {
+    padding-bottom: calc(var(--phone-bar-h) + env(safe-area-inset-bottom, 0px) + 0.75rem);
+  }
+  .phone-bar {
+    display: flex;
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 90;
+    height: calc(var(--phone-bar-h) + env(safe-area-inset-bottom, 0px));
+    padding: 0.3rem 0.4rem env(safe-area-inset-bottom, 0px);
+    background: linear-gradient(rgba(21, 21, 21, 0.82), rgba(17, 17, 17, 0.9)) padding-box;
+    -webkit-backdrop-filter: blur(18px);
+    backdrop-filter: blur(18px);
+    border-top: 1px solid #262626;
+  }
+  .phone-bar-item {
+    flex: 1 1 0;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 0.12rem;
+    min-height: 2.9rem;
+    padding: 0.25rem 0.1rem;
+    color: var(--muted);
+    background: transparent;
+    border: 0; border-radius: var(--r-sm);
+    font-family: "Rajdhani", sans-serif; font-weight: 600;
+    font-size: 0.72rem; letter-spacing: 0.05em; text-transform: uppercase;
+    text-decoration: none;
+    cursor: pointer;
+  }
+  .phone-bar-icon { width: 1.4rem; height: 1.4rem; }
+  .phone-bar-item.active {
+    color: var(--text-bright);
+    background: rgba(255, 106, 0, 0.16);
+  }
+  .phone-sheet-backdrop:not([hidden]) {
+    display: block;
+    position: fixed; inset: 0; z-index: 98;
+    background: rgba(0, 0, 0, 0.66);
+  }
+  .phone-sheet:not([hidden]) {
+    display: flex; flex-direction: column;
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 99;
+    max-height: min(66vh, 40rem);
+    max-height: min(66dvh, 40rem);
+    padding: 0.8rem 1rem calc(1rem + env(safe-area-inset-bottom, 0px));
+    background: linear-gradient(rgba(21, 21, 21, 0.94), rgba(17, 17, 17, 0.97)) padding-box;
+    -webkit-backdrop-filter: blur(18px);
+    backdrop-filter: blur(18px);
+    border-top: 1px solid var(--glass-edge);
+    border-radius: var(--r-lg) var(--r-lg) 0 0;
+  }
+  .phone-sheet-head {
+    flex: none;
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 0.3rem;
+  }
+  .phone-sheet-head h2 { margin: 0; font-size: 1.05rem; }
+  .phone-sheet-close {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 2.2rem; min-height: 2.2rem;
+    color: var(--gold);
+    background: transparent;
+    border: 1px solid transparent; border-radius: var(--r-sm);
+    cursor: pointer;
+  }
+  .phone-sheet-list {
+    list-style: none; margin: 0; padding: 0;
+    flex: 1 1 auto; min-height: 0; overflow-y: auto;
+  }
+  .phone-sheet-row {
+    display: flex; align-items: center; flex-wrap: wrap;
+    column-gap: 0.6rem;
+    border-top: 1px solid #262626; padding: 0.4rem 0;
+  }
+  .phone-sheet-row:first-child { border-top: 0; }
+  .phone-sheet-section {
+    display: block;
+    padding: 0.35rem 0.55rem;
+    border-left: 3px solid transparent;
+    font-family: "Rajdhani", sans-serif; font-weight: 600;
+    font-size: 1rem; letter-spacing: 0.04em; text-transform: uppercase;
+    color: var(--text);
+    text-decoration: none;
+  }
+  .phone-sheet-section.active {
+    border-left-color: var(--accent);
+    color: var(--text-bright);
+  }
+  .phone-sheet-groups {
+    display: flex; flex-wrap: wrap; gap: 0.35rem;
+  }
+  .phone-sheet-groups a {
+    border: 1px solid rgba(255, 110, 0, 0.22);
+    border-radius: var(--r-sm);
+    background: rgba(23, 17, 13, 0.55);
+    padding: 0.3rem 0.7rem;
+    font-size: 0.9rem;
+    color: var(--text);
+    text-decoration: none;
+  }
+  .phone-sheet-groups a.active {
+    background: rgba(255, 106, 0, 0.20);
+    border-color: rgba(255, 106, 0, 0.40);
+    color: var(--text-bright);
+  }
+  .phone-sheet-account {
+    flex: none;
+    border-top: 1px solid #262626;
+    margin-top: 0.4rem; padding-top: 0.6rem;
+  }
+  .phone-sheet-who { color: var(--muted); margin: 0 0 0.4rem; }
+  .phone-sheet-switch { list-style: none; margin: 0 0 0.5rem; padding: 0; }
+  .phone-sheet-switch a {
+    display: flex; align-items: center; gap: 0.5rem;
+    padding: 0.4rem 0.2rem;
+    color: var(--text);
+    text-decoration: none;
+  }
+  .phone-sheet-switch a.active { color: var(--text-bright); }
+  .phone-sheet-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+  .phone-sheet-action {
+    flex: 1 1 auto;
+    display: inline-flex; align-items: center; justify-content: center;
+    padding: 0.55rem 0.8rem;
+    border: 1px solid rgba(255, 110, 0, 0.22); border-radius: var(--r-sm);
+    background: rgba(23, 17, 13, 0.55);
+    color: var(--text);
+    font: inherit;
+    text-align: center; text-decoration: none;
+    cursor: pointer;
+  }
 }

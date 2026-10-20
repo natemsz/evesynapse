@@ -60,7 +60,16 @@ func signRequestWithHeaders(req *http.Request, body []byte, keyID string, key *r
 
 	sum := sha256.Sum256(body)
 	contentSHA := base64.StdEncoding.EncodeToString(sum[:])
-	req.Header.Set("x-content-sha256", contentSHA)
+	// The body hash header travels only with a request that has a
+	// body. A bodyless GET carrying x-content-sha256 (the hash of
+	// nothing) is rejected by the Vault Secrets service's
+	// signature verification (HTTP 401 NotAuthenticated, proven
+	// live 2026-10-19), while the same header on the KMS POSTs —
+	// where it is also in the signed set — is required. Oracle's
+	// SDK likewise hashes, and sends, only for body methods.
+	if len(body) > 0 {
+		req.Header.Set("x-content-sha256", contentSHA)
+	}
 
 	values := map[string]string{
 		"(request-target)": strings.ToLower(req.Method) + " " + req.URL.EscapedPath(),

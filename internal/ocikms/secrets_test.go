@@ -37,12 +37,14 @@ type fakeSecrets struct {
 	calls       atomic.Int64
 	lastPath    atomic.Value // string
 	lastKeyID   atomic.Value // string
+	lastBodySHA atomic.Value // bool: the GET carried x-content-sha256
 }
 
 func (f *fakeSecrets) handler(t *testing.T) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		f.calls.Add(1)
 		f.lastPath.Store(r.URL.Path)
+		f.lastBodySHA.Store(r.Header.Get("x-content-sha256") != "")
 		if r.Method != http.MethodGet {
 			t.Errorf("secrets method = %q; want GET", r.Method)
 		}
@@ -146,6 +148,12 @@ func TestGetSecretAgainstFakes(t *testing.T) {
 	}
 	if keyID, _ := s.secrets.lastKeyID.Load().(string); !strings.HasPrefix(keyID, "ST$") || strings.Count(keyID, ".") != 2 {
 		t.Fatalf("signature keyId = %q; want ST$ plus the federation JWT", keyID)
+	}
+	// The real Secrets service rejects a bodyless GET that
+	// carries an x-content-sha256 header (401 NotAuthenticated,
+	// proven live 2026-10-19): the header must not be sent.
+	if had, _ := s.secrets.lastBodySHA.Load().(bool); had {
+		t.Fatalf("the secrets GET carried x-content-sha256; the real service refuses it")
 	}
 	// The security token is shared with the KMS calls: one
 	// federation exchange covers the read.

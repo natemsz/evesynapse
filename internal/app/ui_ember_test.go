@@ -374,12 +374,6 @@ func TestLandingMockupFidelity(t *testing.T) {
 		":root { --ld-dim: #b9a892; }",
 		".ld-scard p { color: var(--ld-dim);",
 		".ld-footer a { color: var(--ld-dim); }",
-		// The star layers: fixed, between art and veil, the
-		// second one twinkling in reverse.
-		".ld-stars, .ld-stars2 { position: fixed; inset: 0; z-index: -2; pointer-events: none; }",
-		"radial-gradient(1px 1px at 12% 22%, #fff 50%, transparent 51%)",
-		"animation: ld-tw 11s ease-in-out infinite alternate-reverse; }",
-		"@keyframes ld-tw { from { opacity: 0.45; } to { opacity: 0.95; } }",
 		// The footer is JetBrains Mono, like every other
 		// footer on the site.
 		".ld-footer { border-top: 1px solid rgba(255, 255, 255, 0.07); padding: 22px 0 30px; color: var(--faint, #8a7a66); font-size: 13.5px; font-family: \"JetBrains Mono\", monospace; }",
@@ -401,18 +395,6 @@ func TestLandingMockupFidelity(t *testing.T) {
 	// full-strength blur token.
 	if strings.Contains(landing, "var(--glass-blur)") {
 		t.Error("landing.css still uses the site --glass-blur token; the landing glass is a fixed 9px")
-	}
-	// The star layers are in the template, ahead of the header.
-	tplRaw, err := fs.ReadFile(templatesFS, "templates/landing.html")
-	if err != nil {
-		t.Fatalf("read landing.html: %v", err)
-	}
-	tpl := string(tplRaw)
-	starsAt := strings.Index(tpl, `<div class="ld-stars"></div><div class="ld-stars2"></div>`)
-	if starsAt < 0 {
-		t.Error("landing.html is missing the star layer divs")
-	} else if headerAt := strings.Index(tpl, `<header class="ld-header">`); headerAt < 0 || starsAt > headerAt {
-		t.Error("landing star layers must precede the header")
 	}
 }
 

@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -142,6 +143,12 @@ type characterView struct {
 	Loaded        bool
 	Warming       bool
 
+	// Skills that finished training, as the notification store
+	// last announced them: "Mechanics V" entries, oldest first,
+	// pre-joined for the banner at the top of the sheet. "" when
+	// nothing finished since the last visit.
+	TrainedBanner string
+
 	// Status (online snapshot).
 	OnlineKnown bool
 	Online      bool
@@ -268,6 +275,7 @@ func (app *Application) fillCharacterView(ctx context.Context, ch db.Character, 
 	app.fillCharacterWallet(ctx, ch, view)
 	trainedByID := app.fillCharacterSkills(ctx, ch, view, userID)
 	app.fillCharacterQueue(ctx, ch, view, trainedByID)
+	app.fillCharacterTrained(ctx, ch, view, userID)
 	app.fillCharacterPI(ctx, ch, view)
 	app.fillCharacterLoaded(ctx, ch, view)
 }
@@ -575,6 +583,65 @@ func (app *Application) fillCharacterQueue(ctx context.Context, ch db.Character,
 			}
 		}
 	}
+}
+
+// trainedBannerWindow is how long a skill notification that was
+// just marked read still counts as news on the sheet. Following
+// the notification's link marks its kind read during the redirect,
+// so the arrival itself would fall outside an unread-only rule.
+const trainedBannerWindow = 10 * time.Minute
+
+// fillCharacterTrained: the "trained since your last visit"
+// banner. Its rows are the notification store's skill events for
+// this pilot: unread ones, plus ones read within the window (the
+// click-through that brought the visitor here just marked them).
+// The queue view leaves finished entries out on purpose; this is
+// where they are announced.
+func (app *Application) fillCharacterTrained(ctx context.Context, ch db.Character, view *characterView, userID int64) {
+	rows, err := app.queries.ListRecentSkillNotifications(ctx, db.ListRecentSkillNotificationsParams{
+		UserID: userID, CharacterID: ch.CharacterID, Kind: notifySkill,
+		ReadSince: sql.NullTime{Time: time.Now().UTC().Add(-trainedBannerWindow), Valid: true}, RowLimit: 10,
+	})
+	if err != nil {
+		logging.Errorf("character: trained banner for %d: %v", ch.CharacterID, err)
+		return
+	}
+	// Rows arrive newest first; the banner reads in the order the
+	// skills finished, so walk them backwards. The same finish
+	// announced twice (re-announced after ageing out) shows once.
+	seen := map[string]bool{}
+	entries := make([]string, 0, len(rows))
+	for i := len(rows) - 1; i >= 0; i-- {
+		entry, ok := trainedEntry(ch.Name, rows[i].Title)
+		if !ok || seen[entry] {
+			continue
+		}
+		seen[entry] = true
+		entries = append(entries, entry)
+	}
+	view.TrainedBanner = strings.Join(entries, " · ")
+}
+
+// trainedEntry reads one skill notification's title, in the
+// producer's pinned format "<char> finished training <skill>
+// <level>" (notifySkillEvents), and returns the banner's
+// "<skill> <level>". Anything else is not a skill event's title.
+func trainedEntry(charName, title string) (string, bool) {
+	rest, ok := strings.CutPrefix(title, charName+" finished training ")
+	if !ok {
+		return "", false
+	}
+	// The remainder is "<skill> <level>": the skill may contain
+	// spaces, the level never does.
+	i := strings.LastIndexByte(rest, ' ')
+	if i <= 0 || i == len(rest)-1 {
+		return "", false
+	}
+	switch rest[i+1:] {
+	case "I", "II", "III", "IV", "V":
+		return rest, true
+	}
+	return "", false
 }
 
 // fillCharacterPI: the planetary industry summary.

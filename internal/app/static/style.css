@@ -1477,8 +1477,11 @@ tbody tr.yours td { background: rgba(255, 184, 77, 0.10); }
 /* --- footer --- */
 footer {
   /* Glass, as on the top bar and sidebar; the paint alone is the
-     no-blur fallback. */
+     no-blur fallback. Over it, a star tile: a small compressed
+     raster (a crop of the master wallpaper's own star field),
+     static and repeating. */
   background: rgba(11, 11, 11, 0.85);
+  background-image: url("/static/stars-tile.webp?v=7ccb18e9f09425b8");
   -webkit-backdrop-filter: blur(18px);
   backdrop-filter: blur(18px);
   border-top: 1px solid #262626;
@@ -2966,7 +2969,20 @@ html[data-nav="rail"] .sidebar .branch .menu a { white-space: nowrap; }
     box-shadow: none;
   }
 }
-.page-shell { min-width: 0; }
+/* The shell is a column as tall as its grid row (the sidebar's
+   height): main grows into the slack, so on a page shorter than
+   the viewport the footer rests on the bottom edge instead of
+   ending with the content and leaving a band of wallpaper below
+   it. Main's bottom margin goes: in a flex column margins no
+   longer collapse, and the footer's own margin-top stays the one
+   gap above it. */
+.page-shell {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+.page-shell > main { flex: 1 0 auto; margin-bottom: 0; }
 .topbar { min-height: 3.75rem; }
 .wordmark-glyph {
   display: inline-block;
@@ -3081,6 +3097,10 @@ tbody tr.yours td { background-color: #2a2015; }
 }
 @media (max-width: 860px) {
   body { display: block; padding-top: 0; }
+  /* Block shell here, not the grid: the column's floor is the
+     viewport under the in-flow top bar, so the footer still
+     rests on the bottom edge of short pages. */
+  .page-shell { min-height: calc(100vh - 3.75rem); min-height: calc(100dvh - 3.75rem); }
   html[data-nav="hidden"] .sidebar {
     display: block;
     overflow: visible;

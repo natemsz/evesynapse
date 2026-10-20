@@ -16,8 +16,8 @@ body { display: block; padding-top: 0; }
    words stop fighting the sun. */
 body::before { filter: brightness(0.74) saturate(0.97) blur(2px); transform: scale(1.03); }
 
-/* The sky stack, back to front: the art (body::before), the star
-   layers, then a fixed dark veil (body::after) under all content.
+/* The sky stack, back to front: the art (body::before), then a
+   fixed dark veil (body::after) under all content.
    The site sheet parks body::before at z-index -1; the landing
    re-seats the stack so the veil can take that slot and deepen
    toward the foot of the page. The veil is what the approved
@@ -25,10 +25,6 @@ body::before { filter: brightness(0.74) saturate(0.97) blur(2px); transform: sca
    the raw brightened sky. */
 body::before { z-index: -3; }
 body::after { content: ""; position: fixed; inset: 0; z-index: -1; background: linear-gradient(180deg, rgba(7, 5, 4, 0.42), rgba(7, 5, 4, 0.66) 46%, rgba(7, 5, 4, 0.9)); pointer-events: none; }
-.ld-stars, .ld-stars2 { position: fixed; inset: 0; z-index: -2; pointer-events: none; }
-.ld-stars { background-image: radial-gradient(1px 1px at 12% 22%, #fff 50%, transparent 51%), radial-gradient(1px 1px at 34% 8%, #ffe9d0 50%, transparent 51%), radial-gradient(1.5px 1.5px at 57% 18%, #fff 50%, transparent 51%), radial-gradient(1px 1px at 71% 30%, #fff 50%, transparent 51%), radial-gradient(1px 1px at 86% 12%, #ffd9ae 50%, transparent 51%), radial-gradient(1.5px 1.5px at 93% 38%, #fff 50%, transparent 51%), radial-gradient(1px 1px at 44% 36%, #fff 50%, transparent 51%), radial-gradient(1px 1px at 5% 44%, #fff 50%, transparent 51%); animation: ld-tw 7s ease-in-out infinite alternate; }
-.ld-stars2 { background-image: radial-gradient(1px 1px at 22% 55%, #fff 50%, transparent 51%), radial-gradient(1px 1px at 63% 48%, #ffe9d0 50%, transparent 51%), radial-gradient(1px 1px at 79% 62%, #fff 50%, transparent 51%), radial-gradient(1.5px 1.5px at 41% 66%, #fff 50%, transparent 51%), radial-gradient(1px 1px at 90% 74%, #fff 50%, transparent 51%); opacity: 0.55; animation: ld-tw 11s ease-in-out infinite alternate-reverse; }
-@keyframes ld-tw { from { opacity: 0.45; } to { opacity: 0.95; } }
 
 /* The design zeroes heading and paragraph margins and re-adds
    only the ones it wants; the site sheet and the UA sheet leave

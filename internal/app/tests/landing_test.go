@@ -24,10 +24,11 @@ func TestLandingAnonymous(t *testing.T) {
 	for _, want := range []string{
 		"Stop alt-tabbing between <span class=\"ld-amp\">five different tools.</span>",
 		"Fits run on your real skills.",
-		"Try it now, no login needed",
 		"Only the scopes you pick",
 		"Key held in a hardware vault",
-		"Built by one pilot.",
+		"stored off-server, on secure hardware",
+		"EveSynapse is free to use forever.",
+		"No donation pop-ups.",
 		"concurrent pilots on one small server, load-tested",
 		"pilots kept fully current, sync load-tested",
 		"rosters of 12 to 2,400 pilots driven through the real sync cycle",
@@ -57,7 +58,8 @@ func TestLandingAnonymous(t *testing.T) {
 		"Build with the margin already proven.",
 		"One stack for the whole corporation.",
 		"A hundred pilots, one morning briefing.",
-		"Every pilot. One glance.",
+		"Every pilot, at a glance.",
+		"fully customizable dashboard",
 		"Desktop grade fitting, in a browser tab.",
 		"shot-fitting.webp",
 		"ld-browser",
@@ -82,7 +84,7 @@ func TestLandingAnonymous(t *testing.T) {
 	// first, playstyles next, then the feature sections.
 	trustAt := strings.Index(body, "Your keys, your call.")
 	stylesAt := strings.Index(body, "Three alts, or a hundred boxed characters.")
-	fleetAt := strings.Index(body, "Every pilot. One glance.")
+	fleetAt := strings.Index(body, "Every pilot, at a glance.")
 	if !(trustAt >= 0 && trustAt < stylesAt && stylesAt < fleetAt) {
 		t.Error("landing sections out of order: want trust, then playstyles, then the feature sections")
 	}

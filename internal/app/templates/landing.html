@@ -33,7 +33,7 @@
     <p class="ld-sub">Fits run on your real skills. Paste anything and get a price. Build plans check your hangars first. One morning briefing covers every alt.</p>
     <div class="ld-ctas">
       <a class="ld-btn ld-btn-ember" href="/auth/link">Link your characters, free</a>
-      <a class="ld-btn ld-btn-ghost" href="/market/appraise/">Try it now, no login needed</a>
+      {{/* Try-it button hidden until the demo character profile exists for it to open. */}}
     </div>
     <div class="ld-cta-note">Only the scopes you pick · Key held in a hardware vault · Open source</div>
 
@@ -61,7 +61,7 @@
     <p class="ld-lede">Prices on this site come from EveSynapse's own swept market data, and every price shows where it came from. The same care runs through the whole app: you stay in charge of your characters and your data.</p>
     <div class="ld-trust">
       <div class="ld-glass ld-tcard"><h3>You pick the scopes</h3><p>Choose the features you want; the EVE login asks for exactly those scopes, and no more.</p></div>
-      <div class="ld-glass ld-tcard"><h3>Encrypted at rest</h3><p>Refresh tokens are sealed with AES-256-GCM, the current standard for encryption at rest. Reading your data never means trusting us with the keys to it.</p></div>
+      <div class="ld-glass ld-tcard"><h3>Encrypted at rest</h3><p>Refresh tokens are sealed with AES-256-GCM, the current standard for encryption at rest. The encryption keys are stored off-server, on secure hardware. Reading your data never means trusting us with the keys to it.</p></div>
       <div class="ld-glass ld-tcard"><h3>Public data, no login</h3><p>Tools using public data require no login at all to use: the fitting simulator, planners, market and intel tools are open to everyone. Sign in only when you want your own characters in the picture.</p></div>
       <div class="ld-glass ld-tcard"><h3>Or run it yourself</h3><p>Open source, one setup script, your own ESI application and your own data. The public site runs the same build you can download.</p></div>
     </div>
@@ -105,10 +105,10 @@
     </div>
     <div class="ld-stats">
       <div class="ld-glass ld-stat"><b>400</b><span>concurrent pilots on one small server, load-tested</span></div>
-      <div class="ld-glass ld-stat"><b>2,400</b><span>pilots kept fully current, sync load-tested</span></div>
+      <div class="ld-glass ld-stat"><b>2,400+</b><span>pilots kept fully current, sync load-tested</span></div>
       <div class="ld-glass ld-stat"><b>23</b><span>feature modules, each one feeding the others</span></div>
     </div>
-    <p class="ld-stat-note">How the sync number was measured: rosters of 12 to 2,400 pilots driven through the real sync cycle against a local ESI stub. Every starting backlog cleared, and a pilot coming due was fresh again within one cycle. Run on a Core 2 Duo laptop with 8 GB of RAM.</p>
+    <p class="ld-stat-note">How the sync number was measured: rosters of 12 to 2,400 pilots driven through the real sync cycle against a local ESI stub. Every starting backlog cleared, and a pilot coming due was fresh again within one cycle. Run on a Core 2 Duo laptop with 8 GB of RAM. The test's largest roster was its stopping point; the production server is far stronger hardware than the laptop.</p>
     <div class="ld-cta-repeat">
       <a class="ld-btn ld-btn-ember ld-btn-lg" href="/auth/link">Link your characters, free</a>
       <span class="ld-why">Set up once. Every character you link joins the same briefing.</span>
@@ -118,8 +118,8 @@
   <section class="ld-feat">
     <div class="ld-feat-txt">
       <div class="ld-eyebrow">Fleet Home</div>
-      <h2>Every pilot. One glance.</h2>
-      <p class="ld-lede">The home page reads every character you link and puts what matters on one screen: the fleet's worth, a briefing that names what needs doing, and every pilot's training and wallet under it.</p>
+      <h2>Every pilot, at a glance.</h2>
+      <p class="ld-lede">The home page is a fully customizable dashboard: add or remove widgets, resize each one to show more or less detail, and arrange the page however suits your playstyle. Underneath, it reads every character you link and puts what matters on one screen: the fleet's worth, a briefing that names what needs doing, and every pilot's training and wallet.</p>
     </div>
     <div class="ld-feat-vis">
       <div class="ld-glass ld-preview">
@@ -164,7 +164,7 @@
     <div class="ld-feat-txt">
       <div class="ld-eyebrow">Industry</div>
       <h2>Plans that price themselves.</h2>
-      <p class="ld-lede">The Build Planner reads a blueprint and costs the whole tree before you commit a single ISK: what to build, what to buy, where the bottleneck sits, and what the finished thing earns against the market.</p>
+      <p class="ld-lede">The Build Planner reads a blueprint and costs the whole tree before you commit a single ISK: what to build, what to buy, where the bottleneck sits, and what the finished thing earns against the market. It also calls every component on its own numbers, worth building or worth buying, so the finished plan optimizes your ISK/hr.</p>
       <div class="ld-blurbs">
         <div class="ld-blurb"><h3>Foresight for industry</h3><p>Build and PI planners that price from stored market data, check your hangars for what you already own, and only ever ask you to buy what's missing.</p></div>
         <div class="ld-blurb"><h3>PI and restock, same data</h3><p>The PI Planner follows a chain from extractor to finished goods. The Restock Planner watches your market stock and calls out the lines running low, priced off the same stored sweeps.</p></div>
@@ -300,8 +300,8 @@
   </section>
 
   <div class="ld-heritage">
-    <p>Built by one pilot. EveSynapse began in 2013 as one player's answer to his own alt-tabbing, and it is still built that way: every tool on this page earned its place in one person's daily flying before it was offered to anyone else, and the build running this site is the same build you can run yourself.</p>
     <div class="ld-h-line">Rebuilt over <em>4 years</em>. Originating in <em>2013</em>. Built for <em>2026</em>.</div>
+    <p>EveSynapse is free to use forever. No ads. No trackers. No donation pop-ups. If you find it useful, my only ask is that you share it with your friends.</p>
   </div>
   <div class="ld-finalcta">
     <div class="ld-ctas ld-ctas-center">

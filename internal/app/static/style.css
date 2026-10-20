@@ -5304,8 +5304,14 @@ html[data-theme="light"] .suggest li:not(.sug-kind):not(.sug-empty):hover, html[
   .phone-sheet:not([hidden]) {
     display: flex; flex-direction: column;
     position: fixed; left: 0; right: 0; bottom: 0; z-index: 99;
-    max-height: min(66vh, 40rem);
-    max-height: min(66dvh, 40rem);
+    /* The sheet sizes to its content and never scrolls: the
+       one unbounded input, the character list, is capped to a
+       two-column grid (base.html + sheetSwitcherCap), so the
+       whole menu fits a portrait phone. The 92dvh rail only
+       guards extreme cases (short landscape viewports). */
+    max-height: 92vh;
+    max-height: 92dvh;
+    overflow: hidden;
     padding: 0.8rem 1rem calc(1rem + env(safe-area-inset-bottom, 0px));
     background: linear-gradient(rgba(21, 21, 21, 0.94), rgba(17, 17, 17, 0.97)) padding-box;
     -webkit-backdrop-filter: blur(18px);
@@ -5329,17 +5335,17 @@ html[data-theme="light"] .suggest li:not(.sug-kind):not(.sug-empty):hover, html[
   }
   .phone-sheet-list {
     list-style: none; margin: 0; padding: 0;
-    flex: 1 1 auto; min-height: 0; overflow-y: auto;
+    flex: none;
   }
   .phone-sheet-row {
     display: flex; align-items: center; flex-wrap: wrap;
     column-gap: 0.6rem;
-    border-top: 1px solid #262626; padding: 0.4rem 0;
+    border-top: 1px solid #262626; padding: 0.32rem 0;
   }
   .phone-sheet-row:first-child { border-top: 0; }
   .phone-sheet-section {
     display: block;
-    padding: 0.35rem 0.55rem;
+    padding: 0.3rem 0.55rem;
     border-left: 3px solid transparent;
     font-family: "Rajdhani", sans-serif; font-weight: 600;
     font-size: 1rem; letter-spacing: 0.04em; text-transform: uppercase;
@@ -5373,14 +5379,55 @@ html[data-theme="light"] .suggest li:not(.sug-kind):not(.sug-empty):hover, html[
     margin-top: 0.4rem; padding-top: 0.6rem;
   }
   .phone-sheet-who { color: var(--muted); margin: 0 0 0.4rem; }
-  .phone-sheet-switch { list-style: none; margin: 0 0 0.5rem; padding: 0; }
+  /* The character switcher is a two-column grid of compact
+     cells (portrait, name, its tag line) capped by the model,
+     so eight linked pilots take the room three took as a list. */
+  .phone-sheet-switch {
+    list-style: none; margin: 0 0 0.5rem; padding: 0;
+    display: grid; grid-template-columns: 1fr 1fr; gap: 0.4rem;
+  }
+  .phone-sheet-switch li { min-width: 0; }
   .phone-sheet-switch a {
-    display: flex; align-items: center; gap: 0.5rem;
-    padding: 0.4rem 0.2rem;
+    display: flex; align-items: center; gap: 0.45rem;
+    height: 100%; min-height: 2.75rem;
+    padding: 0.3rem 0.45rem;
+    border: 1px solid rgba(255, 110, 0, 0.16);
+    border-radius: var(--r-sm);
+    background: rgba(23, 17, 13, 0.45);
     color: var(--text);
     text-decoration: none;
   }
-  .phone-sheet-switch a.active { color: var(--text-bright); }
+  .phone-sheet-switch a.active {
+    color: var(--text-bright);
+    border-color: rgba(255, 106, 0, 0.40);
+  }
+  .phone-sheet-pilot {
+    display: flex; flex-direction: column;
+    min-width: 0; line-height: 1.25;
+  }
+  .phone-sheet-pilot-name {
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .phone-sheet-pilot small {
+    color: var(--muted); font-size: 0.78rem;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .phone-sheet-switch a.phone-sheet-more {
+    justify-content: center;
+    font-family: "Rajdhani", sans-serif; font-weight: 600;
+    font-size: 1rem;
+    color: var(--gold);
+  }
+  .phone-sheet-links {
+    list-style: none; margin: 0 0 0.55rem; padding: 0;
+    display: flex; flex-wrap: wrap; gap: 0.2rem 1.1rem;
+  }
+  .phone-sheet-links a {
+    display: inline-block;
+    padding: 0.35rem 0;
+    color: var(--text);
+    text-decoration: none;
+  }
   .phone-sheet-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
   .phone-sheet-action {
     flex: 1 1 auto;

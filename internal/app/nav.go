@@ -443,3 +443,22 @@ func bottomNavFor(links map[string][]navLink, section string) ([]module.BottomNa
 	bar = append(bar, module.BottomNavItem{Label: "Sections", Section: "sections", Sheet: true, Active: sectionsActive})
 	return bar, sheet
 }
+
+// sheetSwitcherCells is the phone sheet's character grid size:
+// two columns of three. The grid is the sheet's one unbounded
+// input — an account can link any number of pilots — so past
+// the cap the grid's last cell is a "+N more" tile to the
+// character management page, and the sheet's account block is
+// one bounded height however many pilots the account carries.
+const sheetSwitcherCells = 6
+
+// sheetSwitcherCap caps the sheet's switcher entries to the
+// grid: every entry when they fit, else the entries that fill
+// all but the last cell, with the count left for the tile.
+func sheetSwitcherCap(entries []switcherEntry) ([]switcherEntry, int) {
+	if len(entries) <= sheetSwitcherCells {
+		return entries, 0
+	}
+	shown := sheetSwitcherCells - 1
+	return entries[:shown], len(entries) - shown
+}

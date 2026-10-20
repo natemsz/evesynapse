@@ -222,3 +222,70 @@ func TestPhoneBottomBarRenders(t *testing.T) {
 		t.Errorf("GET /market/leaderboard/: status %d", code)
 	}
 }
+
+// TestSheetSwitcherCap pins the sheet grid's arithmetic: the
+// grid holds six cells, and past that its last cell is the
+// overflow tile, so shown plus the tile's count is always the
+// account's pilot count.
+func TestSheetSwitcherCap(t *testing.T) {
+	for _, tc := range []struct{ in, shown, more int }{
+		{0, 0, 0}, {3, 3, 0}, {6, 6, 0}, {7, 5, 2}, {8, 5, 3}, {12, 5, 7},
+	} {
+		entries := make([]switcherEntry, tc.in)
+		got, more := sheetSwitcherCap(entries)
+		if len(got) != tc.shown || more != tc.more {
+			t.Errorf("cap(%d) = %d shown, %d more; want %d shown, %d more",
+				tc.in, len(got), more, tc.shown, tc.more)
+		}
+	}
+}
+
+// TestPhoneSheetSwitcherGrid: whatever the account carries,
+// the sheet's character grid shows at most five pilots beside
+// the "+N more" tile; at or under the grid's six cells every
+// pilot shows and there is no tile. The full switcher still
+// rides the page for the sidebar (the sheet is its capped
+// view, not a replacement model).
+func TestPhoneSheetSwitcherGrid(t *testing.T) {
+	transport := &countingTransport{}
+	app, _, q := buildCorpTestApp(t, transport)
+	sheetFor := func(baseID int64, pilots int) string {
+		user, err := q.CreateUser(context.Background())
+		if err != nil {
+			t.Fatalf("create user: %v", err)
+		}
+		for i := 0; i < pilots; i++ {
+			seedCharacter(t, q, user.ID, baseID+int64(i), "Grid Pilot")
+		}
+		cookie := sessionCookie(t, app, user.ID, baseID, "Grid Pilot")
+		_, body := getPage(t, app, cookie, "/market/leaderboard/")
+		return phoneSheetBlock(t, body)
+	}
+
+	sheet := sheetFor(90000200, 8)
+	if n := strings.Count(sheet, `href="/characters/switch?character=`); n != 5 {
+		t.Errorf("8-pilot sheet shows %d switch links, want 5 beside the tile", n)
+	}
+	if !strings.Contains(sheet, `<a class="phone-sheet-more" href="/characters/">+3 more</a>`) {
+		t.Error("8-pilot sheet is missing the +3 more tile to Manage Characters")
+	}
+	if !strings.Contains(sheet, `<a href="/characters/">Manage Characters</a>`) {
+		t.Error("8-pilot sheet is missing the Manage Characters utility link")
+	}
+
+	sheet = sheetFor(90000300, 6)
+	if n := strings.Count(sheet, `href="/characters/switch?character=`); n != 6 {
+		t.Errorf("6-pilot sheet shows %d switch links, want all 6", n)
+	}
+	if strings.Contains(sheet, `phone-sheet-more`) {
+		t.Error("6-pilot sheet should have no overflow tile")
+	}
+
+	sheet = sheetFor(90000400, 3)
+	if n := strings.Count(sheet, `href="/characters/switch?character=`); n != 3 {
+		t.Errorf("3-pilot sheet shows %d switch links, want all 3", n)
+	}
+	if strings.Contains(sheet, `phone-sheet-more`) {
+		t.Error("3-pilot sheet should have no overflow tile")
+	}
+}

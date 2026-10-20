@@ -874,21 +874,28 @@ type BottomSection struct {
 // ShellData holds all the layout, session, nav, and shell state
 // needed by base.html and shared partials.
 type ShellData struct {
-	Version        string
-	AssetVersion   string
-	LoggedIn       bool
-	IsAdmin        bool
-	CharacterName  string
-	SSOConfigured  bool
-	AutoRefresh    bool
-	NavState       string
-	Notice         string
-	Error          string
-	Section        string
-	NavPage        string
-	Scripts        []string
-	HeadMeta       template.HTML
-	Switcher       []SwitcherEntry
+	Version       string
+	AssetVersion  string
+	LoggedIn      bool
+	IsAdmin       bool
+	CharacterName string
+	SSOConfigured bool
+	AutoRefresh   bool
+	NavState      string
+	Notice        string
+	Error         string
+	Section       string
+	NavPage       string
+	Scripts       []string
+	HeadMeta      template.HTML
+	Switcher      []SwitcherEntry
+	// SheetSwitcher is the phone sheet's character grid: the
+	// switcher capped to the grid's cells (nav.go's
+	// sheetSwitcherCap), with the pilots past the cap counted in
+	// SheetMoreCount for the grid's overflow tile. The full
+	// Switcher still feeds the header and sidebar switchers.
+	SheetSwitcher  []SwitcherEntry
+	SheetMoreCount int
 	ViewerChars    map[int64]bool
 	Notify         any
 	NotifyPoll     int

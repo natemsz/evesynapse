@@ -207,14 +207,15 @@
   <div class="phone-sheet-account">
     {{if .LoggedIn}}
     <p class="phone-sheet-who">Signed in{{if .CharacterName}} as {{.CharacterName}}{{end}}</p>
-    {{if .Switcher}}<ul class="phone-sheet-switch">
-      {{range .Switcher}}<li><a href="/characters/switch?character={{.ID}}"{{if .Active}} class="active"{{end}}><img class="portrait" src="{{.PortraitURL}}" alt="" width="24" height="24"> {{.Name}}{{if .Tags}} <small>· {{.Tags}}</small>{{end}}{{if .Relink}} <small>· re-link needed</small>{{end}}</a></li>
-      {{end}}<li><a href="/characters/">Manage Characters</a></li>
+    {{if .SheetSwitcher}}<ul class="phone-sheet-switch">
+      {{range .SheetSwitcher}}<li><a href="/characters/switch?character={{.ID}}"{{if .Active}} class="active"{{end}}><img class="portrait" src="{{.PortraitURL}}" alt="" width="24" height="24"><span class="phone-sheet-pilot"><span class="phone-sheet-pilot-name">{{.Name}}</span>{{if or .Tags .Relink}}<small>{{.Tags}}{{if and .Tags .Relink}} · {{end}}{{if .Relink}}re-link needed{{end}}</small>{{end}}</span></a></li>
+      {{end}}{{if .SheetMoreCount}}<li><a class="phone-sheet-more" href="/characters/">+{{.SheetMoreCount}} more</a></li>{{end}}
     </ul>{{end}}
-    {{if .IsAdmin}}<ul class="phone-sheet-switch">
-      <li><a href="/sync/">Sync</a></li>
-      <li><a href="/admin/">Admin</a></li>
-    </ul>{{end}}
+    <ul class="phone-sheet-links">
+      <li><a href="/characters/">Manage Characters</a></li>
+      {{if .IsAdmin}}<li><a href="/sync/">Sync</a></li>
+      <li><a href="/admin/">Admin</a></li>{{end}}
+    </ul>
     <div class="phone-sheet-actions">
       <button type="button" class="phone-sheet-action" data-install-app hidden>Install App</button>
       <button type="button" class="phone-sheet-action" data-theme-toggle>Theme</button>

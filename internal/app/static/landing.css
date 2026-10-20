@@ -190,6 +190,7 @@ body::after { content: ""; position: fixed; inset: 0; z-index: -1; background: l
 .ld-stat { padding: 12px 18px; font-family: Rajdhani, sans-serif; }
 .ld-stat b { font-size: 21px; color: var(--gold); }
 .ld-stat span { color: var(--ld-dim); font-size: 14.5px; display: block; font-family: "Saira Semi Condensed", sans-serif; }
+.ld-stat-note { color: var(--ld-dim); font-size: 13.5px; margin-top: 10px; max-width: 46rem; }
 
 .ld-tools { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 26px; }
 .ld-tgroup { padding: 18px; }

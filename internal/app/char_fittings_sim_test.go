@@ -517,6 +517,7 @@ func TestFitSimulateModuleStates(t *testing.T) {
 		`data-fit-states="offline,online,active,overheated"`,
 		`data-fit-state="active"`,
 		`<div class="fit-mhead">`,
+		`data-fit-search-btn`,
 		`data-fit-view="racks"`,
 		`data-fit-view="stats"`,
 		`data-fit-view="radial"`,

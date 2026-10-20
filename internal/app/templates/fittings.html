@@ -14,32 +14,33 @@
 {{range .FitEditor.AnonFits}}<li><a href="{{.ShareURL}}">{{.Name}}</a> <small>{{.ShipName}} · {{.Updated}}</small> <form method="post" action="{{.DeleteURL}}" class="inline"><button type="submit" class="btn small">Delete</button></form></li>
 {{end}}</ul><p><small>Fits you share while signed out are kept for 180 days after they were last viewed, then deleted.</small></p></div>{{end}}
 {{end}}
-<div class="fit-head searchpanel">
+<div class="fit-head searchpanel" id="fit-head">
+  <button type="button" class="fit-head-toggle" data-fit-head-toggle aria-expanded="false" aria-controls="fit-head">Fit details</button>
   <span class="searchwrap fit-searchwrap">
     <input type="text" id="fit-ship-search" value="{{.FitEditor.Sim.ShipName}}" placeholder="Search ships…" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="fit-ship-suggest" aria-autocomplete="list">
     <ul class="suggest" id="fit-ship-suggest" role="listbox" hidden></ul>
   </span>
-  <label>Pilot
+  <label class="fit-head-sec">Pilot
     <select id="fit-pilot">
       <option value="0"{{if eq .FitEditor.PilotID 0}} selected{{end}}>All V</option>
       {{range .FitEditor.Pilots}}<option value="{{.ID}}"{{if eq .ID $.FitEditor.PilotID}} selected{{end}}>{{.Name}}</option>{{end}}
     </select>
   </label>
-  <label class="fit-clonepick">Clone
+  <label class="fit-clonepick fit-head-sec">Clone
     <select id="fit-clone"{{if not .FitEditor.Clones}} disabled{{end}} title="Whose implants the numbers are calculated with">
       {{if .FitEditor.Clones}}{{range .FitEditor.Clones}}<option value="{{.ID}}"{{if eq .ID $.FitEditor.CloneID}} selected{{end}}>{{.Name}}{{if .Implants}} ({{.Implants}}){{end}}</option>{{end}}{{else}}<option value="0">Active clone</option>{{end}}
     </select>
   </label>
-  <label>Fit name
+  <label class="fit-head-sec">Fit name
     <input type="text" id="fit-name" value="{{.FitEditor.Sim.FitName}}" placeholder="Name this fit" autocomplete="off">
   </label>
   <input type="hidden" id="fit-local-id" value="{{.FitEditor.LocalID}}">
   <span class="fit-saverow">
   {{if not .FitEditor.Anonymous}}<button type="button" class="btn" id="fit-save" data-fit-local-id="{{.FitEditor.LocalID}}">Save fit</button>{{end}}
-  {{if moduleOn "publicfits"}}<label class="fit-check fit-publicchk"><input type="checkbox" id="fit-public"{{if .FitEditor.IsPublic}} checked{{end}}> Make public</label>{{end}}
+  {{if moduleOn "publicfits"}}<label class="fit-check fit-publicchk fit-head-sec"><input type="checkbox" id="fit-public"{{if .FitEditor.IsPublic}} checked{{end}}> Make public</label>{{end}}
   </span>
   {{if .FitEditor.EVECharID}}
-  <button type="button" class="btn" id="fit-save-eve" data-fit-eve-char="{{.FitEditor.EVECharID}}" title="Save this fit to {{.FitEditor.EVECharName}}'s in-game fittings">Save to EVE</button>
+  <button type="button" class="btn fit-head-sec" id="fit-save-eve" data-fit-eve-char="{{.FitEditor.EVECharID}}" title="Save this fit to {{.FitEditor.EVECharName}}'s in-game fittings">Save to EVE</button>
   {{end}}
   <span class="fit-saved" id="fit-saved-at" hidden></span>
 </div>
@@ -58,6 +59,10 @@
 </ul>
 {{end}}
 <div class="fit-modsearch searchpanel" id="fit-modsearch">
+  <div class="fit-modsearch-bar">
+    <span>Add modules</span>
+    <button type="button" class="fit-modsearch-close" data-fit-search-close aria-label="Close search">×</button>
+  </div>
   <span class="searchwrap fit-modsearchwrap">
     <input type="text" id="fit-mod-search" placeholder="Search modules, drones, rigs…" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="fit-mod-suggest" aria-autocomplete="list">
     <ul class="suggest" id="fit-mod-suggest" role="listbox" hidden></ul>

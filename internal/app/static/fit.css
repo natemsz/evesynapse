@@ -1,13 +1,18 @@
-/* Fitting tool, phone layout: the ship header and view tab bar
-   the workbench fragment renders for the editor, and the card
-   form of the slot racks. Everything here is phone-width; the
-   chrome stays hidden above the band and the desktop workbench
-   never sees these rules. */
+/* Fitting tool, phone layout: the view tab bar and ship header
+   the workbench fragment renders for the editor, the module
+   search as a popup panel behind the tab bar's search button,
+   the fit head's toolbar fold, and the card form of the slot
+   racks. Everything here is phone-width; the chrome stays
+   hidden above the band and the desktop workbench never sees
+   these rules. */
 
-/* The fragment always renders the phone header and tab bar (a
+/* The fragment always renders the phone tab bar and header (a
    re-simulation has to carry them); they exist only at phone
-   widths. */
+   widths. The fit head's details toggle and the search panel's
+   title bar are phone-only too. */
 .fit-mhead, .fit-mtabs { display: none; }
+.fit-head-toggle { display: none; }
+.fit-modsearch-bar { display: none; }
 
 @media (max-width: 45rem) {
   /* fit.js hides the sections outside the current view with
@@ -68,10 +73,63 @@
   .fit-mtabs > button + button { border-left: 1px solid var(--box-edge); }
   .fit-mtabs > button.on { background: var(--accent); color: #16100b; }
 
-  /* The module search parks inside the workbench, under the tab
-     bar, on the racks and radial views; parked, it gives up the
-     sticky placement it has in its home slot. */
-  .fit-wb > .fit-modsearch { position: static; margin: 0 0 0.8rem; z-index: auto; }
+  /* --- tab bar search button --- */
+  .fit-mtabs > .fit-msearch-btn { flex: 0 0 auto; min-width: 2.75rem; padding: 0.55rem 0.6rem; }
+  .fit-mtabs > .fit-msearch-btn svg { width: 1.05rem; height: 1.05rem; display: block; }
+
+  /* --- module search: a popup panel behind the tab bar button ---
+     The panel keeps its home slot in the page and never moves;
+     fit.js marks it collapsible at phone width while a tab bar
+     exists to toggle it. Collapsed it is gone; open it pins
+     under the site header, above the page, with its own title
+     bar and close button. */
+  #fit-modsearch.fit-collapsible { display: none; }
+  #fit-modsearch.fit-collapsible.open {
+    display: block;
+    /* The page body's glass is a backdrop-filter, which makes
+       it the containing block for fixed descendants: the panel
+       pins to the page body just under the site header (beside
+       its home slot, above the workbench), and fit.js scrolls
+       it into view when it opens from the pinned tab bar. */
+    position: fixed; top: 3.9rem; left: 0.6rem; right: 0.6rem;
+    z-index: 60; margin: 0;
+    max-height: calc(100dvh - 4.6rem); overflow-y: auto;
+    scroll-margin-top: 4.2rem;
+  }
+  #fit-modsearch.open .fit-modsearch-bar {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 0.45rem;
+    font-family: "Rajdhani", "Segoe UI", sans-serif; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.05em; font-size: 0.85rem;
+    color: var(--muted);
+  }
+  #fit-modsearch.open .fit-modsearch-close {
+    background: none; border: 0; cursor: pointer; color: var(--text);
+    font-size: 1.3rem; line-height: 1; padding: 0.2rem 0.5rem;
+    min-width: 2.5rem; min-height: 2.5rem;
+  }
+
+  /* --- fit head: an app toolbar, details folded ---
+     Ship search and Save stay on the bar; the secondary
+     controls (pilot, clone, fit name, the public flag, Save to
+     EVE) fold behind the Fit details toggle. fit.js arms the
+     fold by classing the editor; unarmed (no JS) everything
+     shows, as on desktop. */
+  #fit-editor.fit-armed .fit-head-toggle {
+    display: inline-flex; align-items: center; justify-content: center;
+    flex: 1 1 100%; min-height: 2.5rem; padding: 0.45rem 0.6rem;
+    background: none; border: 1px solid var(--box-edge); border-radius: var(--r-sm);
+    color: var(--muted); cursor: pointer;
+    font-family: "Rajdhani", "Segoe UI", sans-serif; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.05em; font-size: 0.85rem;
+  }
+  #fit-editor.fit-armed .fit-head:not(.fit-open) .fit-head-sec { display: none; }
+  #fit-editor .fit-head { row-gap: 0.5rem; }
+  #fit-editor .fit-head .fit-searchwrap { flex: 1 1 9rem; min-width: 0; }
+
+  /* The loadouts panel compacts: its search shares a row with
+     the My Loadouts button instead of taking a row of its own. */
+  #fit-editor .fit-yourfits .fit-yourfitswrap { flex: 1 1 10rem; min-width: 0; }
 
   /* --- slot racks: the fitted lines as cards --- */
   .fit-slots .fit-group, .fit-bays .fit-group { margin-bottom: 1rem; }

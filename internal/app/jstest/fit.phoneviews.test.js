@@ -1,14 +1,16 @@
 "use strict";
 // Fitting tool, phone views: at phone width the workbench is
 // three views (Slot Racks, Resists & Cap, Radial) under a tab
-// bar, opening on the Radial; the module search rides with the
-// racks and radial views; and a fitted module's card in Slot
-// Racks cycles its state line-wide through the states the module
-// allows, committed as one simulate payload. Above the band
-// nothing is hidden and the search stays in its home slot.
-//fit.js self-executes against whatever globals exist when it is
-// required, so each block below rebuilds the globals it needs
-// and requires the file fresh.
+// bar, opening on the Radial; the module search stays in its
+// home slot in the page and collapses into a popup panel
+// behind the tab bar's search button; the fit head's secondary
+// controls fold behind its details toggle; and a fitted
+// module's card in Slot Racks cycles its state line-wide
+// through the states the module allows, committed as one
+// simulate payload. Above the band nothing is hidden or
+// folded. fit.js self-executes against whatever globals exist
+// when it is required, so each block below rebuilds the
+// globals it needs and requires the file fresh.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -265,9 +267,11 @@ function el(doc, tag, cls, attrs) {
   return e;
 }
 
-// A page with the editor open on a fit: the module search in its
-// home slot, the workbench fragment with the phone header + tab
-// bar, and one fitted line of two active launchers.
+// A page with the editor open on a fit: the fit head with its
+// details toggle, the module search in its home slot, the
+// workbench fragment with the tab bar (search button last)
+// ahead of the phone header, and one fitted line of two active
+// launchers.
 function buildPage(doc) {
   const html = el(doc, "html");
   const body = el(doc, "body");
@@ -278,17 +282,29 @@ function buildPage(doc) {
   const editor = el(doc, "section", "", { id: "fit-editor" });
   body.appendChild(editor);
 
+  const head = el(doc, "div", "fit-head searchpanel", { id: "fit-head" });
+  editor.appendChild(head);
+  const headToggle = el(doc, "button", "fit-head-toggle", { "data-fit-head-toggle": "", "aria-expanded": "false" });
+  head.appendChild(headToggle);
+  const pilotWrap = el(doc, "label", "fit-head-sec");
   const pilot = el(doc, "select", "", { id: "fit-pilot" });
   pilot.value = "0";
-  editor.appendChild(pilot);
+  pilotWrap.appendChild(pilot);
+  head.appendChild(pilotWrap);
   const clone = el(doc, "select", "", { id: "fit-clone" });
   clone.value = "0";
   editor.appendChild(clone);
 
   const modsearch = el(doc, "div", "fit-modsearch searchpanel", { id: "fit-modsearch" });
+  const msBar = el(doc, "div", "fit-modsearch-bar");
+  const msClose = el(doc, "button", "fit-modsearch-close", { "data-fit-search-close": "" });
+  msBar.appendChild(msClose);
+  modsearch.appendChild(msBar);
   const modInput = el(doc, "input", "", { id: "fit-mod-search" });
   modsearch.appendChild(modInput);
-  modsearch.appendChild(el(doc, "div", "", { id: "fit-mod-suggest" }));
+  const modList = el(doc, "ul", "suggest", { id: "fit-mod-suggest" });
+  modList.hidden = true;
+  modsearch.appendChild(modList);
   editor.appendChild(modsearch);
 
   const wb = el(doc, "div", "fit-wb");
@@ -301,7 +317,6 @@ function buildPage(doc) {
   }));
   editor.appendChild(wb);
 
-  wb.appendChild(el(doc, "div", "fit-mhead"));
   const tabs = el(doc, "div", "fit-mtabs");
   const tabBtns = {};
   for (const v of ["racks", "stats", "radial"]) {
@@ -310,7 +325,10 @@ function buildPage(doc) {
     tabs.appendChild(b);
     tabBtns[v] = b;
   }
+  const searchBtn = el(doc, "button", "fit-msearch-btn", { "data-fit-search-btn": "", "aria-expanded": "false" });
+  tabs.appendChild(searchBtn);
   wb.appendChild(tabs);
+  wb.appendChild(el(doc, "div", "fit-mhead"));
 
   const center = el(doc, "div", "fit-center");
   wb.appendChild(center);
@@ -333,7 +351,12 @@ function buildPage(doc) {
   const stats = el(doc, "div", "fit-stats");
   cols.appendChild(stats);
 
-  return { editor, modsearch, wb, tabs, tabBtns, center, slots, bays, stats, chip };
+  return { editor, head, headToggle, modsearch, modInput, modList, msClose, wb, tabs, tabBtns, searchBtn, center, slots, bays, stats, chip };
+}
+
+function keydown(doc, key) {
+  const ev = { type: "keydown", key, target: doc.body, preventDefault() {} };
+  for (const fn of (doc._listeners.keydown || []).slice()) fn(ev);
 }
 
 function click(target) {
@@ -413,11 +436,11 @@ test("phone views: section map and state cycle", () => {
   const { FitPhoneViews } = require(fitFile);
 
   assert.deepEqual(FitPhoneViews.sections("radial"),
-    { center: true, slots: false, bays: false, stats: false, search: true });
+    { center: true, slots: false, bays: false, stats: false });
   assert.deepEqual(FitPhoneViews.sections("racks"),
-    { center: false, slots: true, bays: true, stats: false, search: true });
+    { center: false, slots: true, bays: true, stats: false });
   assert.deepEqual(FitPhoneViews.sections("stats"),
-    { center: false, slots: false, bays: false, stats: true, search: false });
+    { center: false, slots: false, bays: false, stats: true });
 
   const all = "offline,online,active,overheated";
   assert.equal(FitPhoneViews.nextState(all, "online"), "active");
@@ -444,28 +467,69 @@ test("phone: opening a fit lands on the Radial", async () => {
   assert.equal(page.tabBtns.radial.classList.contains("on"), true, "radial tab marked");
   assert.equal(page.tabBtns.radial.getAttribute("aria-selected"), "true");
   assert.equal(page.tabBtns.racks.getAttribute("aria-selected"), "false");
-  // The search parks inside the workbench, right under the tabs.
-  assert.equal(page.modsearch.parentNode, page.wb, "search parked in the workbench");
-  assert.equal(page.modsearch.previousSibling, page.tabs, "search sits under the tab bar");
-  assert.equal(page.modsearch.classList.contains("fv-off"), false, "search visible on the radial");
+  // The search never leaves its home slot in the page; on the
+  // phone it starts collapsed behind the tab bar's button.
+  assert.equal(page.modsearch.parentNode, page.editor, "search in its home slot");
+  assert.equal(page.modsearch.classList.contains("fit-collapsible"), true, "search collapsible");
+  assert.equal(page.modsearch.classList.contains("open"), false, "search starts closed");
+  assert.equal(page.searchBtn.getAttribute("aria-expanded"), "false");
 });
 
-test("phone: tabs switch views; the search leaves with the stats view", async () => {
+test("phone: tabs switch views; the search panel is view-independent", async () => {
   const { page } = bootEditor(true);
   await tick();
   click(page.tabBtns.stats);
   assert.equal(page.stats.classList.contains("fv-off"), false, "stats visible");
   assert.equal(page.center.classList.contains("fv-off"), true, "radial hidden");
   assert.equal(page.slots.classList.contains("fv-off"), true, "racks hidden");
-  assert.equal(page.modsearch.classList.contains("fv-off"), true, "search hidden on stats");
   assert.equal(page.tabBtns.stats.classList.contains("on"), true);
+  assert.equal(page.modsearch.parentNode, page.editor, "search stays home on stats");
+  assert.equal(page.modsearch.classList.contains("fit-collapsible"), true, "search still collapsible");
 
   click(page.tabBtns.racks);
   assert.equal(page.slots.classList.contains("fv-off"), false, "racks visible");
   assert.equal(page.bays.classList.contains("fv-off"), false, "bays visible");
   assert.equal(page.stats.classList.contains("fv-off"), true, "stats hidden");
-  assert.equal(page.modsearch.classList.contains("fv-off"), false, "search back on racks");
-  assert.equal(page.modsearch.parentNode, page.wb, "search still parked");
+  assert.equal(page.modsearch.parentNode, page.editor, "search stays home on racks");
+});
+
+test("phone: the search button opens the panel; Escape and its close button close it", async () => {
+  const { doc, page } = bootEditor(true);
+  await tick();
+  let focuses = 0;
+  page.modInput.focus = () => { focuses++; };
+
+  click(page.searchBtn);
+  assert.equal(page.modsearch.classList.contains("open"), true, "panel open");
+  assert.equal(page.searchBtn.getAttribute("aria-expanded"), "true");
+  assert.equal(page.searchBtn.classList.contains("on"), true, "button marked while open");
+  assert.equal(focuses, 1, "opening moves focus into the field");
+
+  keydown(doc, "Escape");
+  assert.equal(page.modsearch.classList.contains("open"), false, "Escape closes the panel");
+  assert.equal(page.searchBtn.getAttribute("aria-expanded"), "false");
+
+  click(page.searchBtn);
+  assert.equal(page.modsearch.classList.contains("open"), true, "panel reopens");
+  click(page.msClose);
+  assert.equal(page.modsearch.classList.contains("open"), false, "the panel's close button closes it");
+
+  click(page.searchBtn);
+  click(page.searchBtn);
+  assert.equal(page.modsearch.classList.contains("open"), false, "the button toggles shut");
+});
+
+test("phone: the fit head's secondary controls fold behind its toggle", async () => {
+  const { page } = bootEditor(true);
+  await tick();
+  assert.equal(page.editor.classList.contains("fit-armed"), true, "the fold is armed");
+  assert.equal(page.head.classList.contains("fit-open"), false, "details start folded");
+  assert.equal(page.headToggle.getAttribute("aria-expanded"), "false");
+  click(page.headToggle);
+  assert.equal(page.head.classList.contains("fit-open"), true, "toggle opens the details");
+  assert.equal(page.headToggle.getAttribute("aria-expanded"), "true");
+  click(page.headToggle);
+  assert.equal(page.head.classList.contains("fit-open"), false, "toggle folds them again");
 });
 
 test("phone: tapping a module card in Slot Racks cycles the whole line", async () => {
@@ -500,15 +564,19 @@ test("desktop widths: no view is hidden and the search stays home", async () => 
     assert.equal(sec.classList.contains("fv-off"), false, "nothing hidden");
   }
   assert.equal(page.modsearch.parentNode, page.editor, "search in its home slot");
+  assert.equal(page.modsearch.classList.contains("fit-collapsible"), false, "search not collapsible on desktop");
   assert.equal(page.tabBtns.radial.classList.contains("on"), false, "no tab marked");
 
-  // Crossing into the band applies the landing view; crossing
-  // back restores everything.
+  // Crossing into the band applies the landing view and arms
+  // the search collapse; crossing back restores everything.
+  // The search node itself never moves.
   setPhone(true);
   assert.equal(page.center.classList.contains("fv-off"), false, "radial lands");
   assert.equal(page.stats.classList.contains("fv-off"), true, "stats hidden");
-  assert.equal(page.modsearch.parentNode, page.wb, "search parked");
+  assert.equal(page.modsearch.parentNode, page.editor, "search still home on the phone");
+  assert.equal(page.modsearch.classList.contains("fit-collapsible"), true, "search collapsible on the phone");
   setPhone(false);
   assert.equal(page.stats.classList.contains("fv-off"), false, "stats restored");
-  assert.equal(page.modsearch.parentNode, page.editor, "search back home");
+  assert.equal(page.modsearch.classList.contains("fit-collapsible"), false, "collapse disarmed off the band");
+  assert.equal(page.modsearch.parentNode, page.editor, "search home throughout");
 });

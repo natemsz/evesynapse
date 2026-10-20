@@ -289,12 +289,17 @@ func TestLandingTotalsWrap(t *testing.T) {
 }
 
 // TestFittingPhoneViews pins the fitting tool's phone layout:
-// the workbench fragment carries the ship header and the three
-// view tabs for the editor (never the read-only workbench), the
-// phone rules live in fit.css inside the shared 45rem band and
-// the sheet loads only on the fitting page, fitted chips carry
-// their cyclable states for the editor, and fit.js holds the
-// view state with the Radial as the landing view.
+// the workbench fragment carries the view tab bar (with the
+// module search toggle) ahead of the ship header for the editor
+// (never the read-only workbench), the phone rules live in
+// fit.css inside the shared 45rem band and the sheet loads only
+// on the fitting page, fitted chips carry their cyclable states
+// for the editor, fit.js holds the view state with the Radial
+// as the landing view, the module search collapses into its
+// popup panel from its home slot in the page (the fragment is
+// swapped on every simulate, so the search must never live
+// inside it), and the fit head's secondary controls carry the
+// fold class its phone toggle hides.
 func TestFittingPhoneViews(t *testing.T) {
 	rawTpl, err := fs.ReadFile(templatesFS, "templates/fit_workbench.html")
 	if err != nil {
@@ -307,11 +312,37 @@ func TestFittingPhoneViews(t *testing.T) {
 		`data-fit-view="racks" aria-selected="false">Slot Racks</button>`,
 		`data-fit-view="stats" aria-selected="false">Resists &amp; Cap</button>`,
 		`data-fit-view="radial" aria-selected="true">Radial</button>`,
+		`data-fit-search-btn`,
 		`{{if and (not $group.ReadOnly) .StatesCSV}} data-fit-states="{{.StatesCSV}}" data-fit-state="{{.State}}"{{end}}`,
 	} {
 		if !strings.Contains(tpl, want) {
 			t.Errorf("fit_workbench.html is missing the phone hook %q", want)
 		}
+	}
+	// The tab bar leads the workbench's phone chrome.
+	if ti, hi := strings.Index(tpl, `<div class="fit-mtabs"`), strings.Index(tpl, `<div class="fit-mhead">`); ti < 0 || hi < 0 || ti > hi {
+		t.Error("the view tab bar no longer leads the ship header in the workbench fragment")
+	}
+
+	rawPage, err := fs.ReadFile(templatesFS, "templates/fittings.html")
+	if err != nil {
+		t.Fatalf("read fittings.html: %v", err)
+	}
+	page := string(rawPage)
+	for _, want := range []string{
+		`data-fit-head-toggle`,
+		`data-fit-search-close`,
+		`<label class="fit-head-sec">Pilot`,
+		`<label class="fit-clonepick fit-head-sec">Clone`,
+		`<label class="fit-head-sec">Fit name`,
+		`id="fit-save-eve" data-fit-eve-char`,
+	} {
+		if !strings.Contains(page, want) {
+			t.Errorf("fittings.html is missing the phone toolbar hook %q", want)
+		}
+	}
+	if n := strings.Count(page, "fit-head-sec"); n < 4 {
+		t.Errorf("fittings.html carries %d fit-head-sec controls, want at least 4 (pilot, clone, name, save-to-EVE)", n)
 	}
 
 	css := readStatic(t, "fit.css")
@@ -319,7 +350,12 @@ func TestFittingPhoneViews(t *testing.T) {
 		t.Error("fit.css no longer keeps the phone chrome hidden above the band")
 	}
 	block := mediaBlock(t, css, "@media (max-width: 45rem)")
-	for _, want := range []string{".fit-mhead {", ".fit-mtabs {", ".fit-wb .fv-off", ".fit-wb > .fit-modsearch"} {
+	for _, want := range []string{
+		".fit-mhead {", ".fit-mtabs {", ".fit-wb .fv-off",
+		"#fit-modsearch.fit-collapsible { display: none; }",
+		"#fit-modsearch.fit-collapsible.open",
+		"#fit-editor.fit-armed .fit-head:not(.fit-open) .fit-head-sec { display: none; }",
+	} {
 		if !strings.Contains(block, want) {
 			t.Errorf("the fit.css phone block is missing %q", want)
 		}
@@ -339,9 +375,19 @@ func TestFittingPhoneViews(t *testing.T) {
 		`window.matchMedia("(max-width: 45rem)")`,
 		`var fitView = "radial";`,
 		`FitPhoneViews.sections(fitView)`,
+		`wb.querySelector("[data-fit-search-btn]")`,
+		`ms.classList.add("fit-collapsible")`,
+		`editor.classList.add("fit-armed")`,
+		`headEl.classList.toggle("fit-open")`,
 	} {
 		if !strings.Contains(js, want) {
 			t.Errorf("fit.js is missing the phone-view wiring %q", want)
+		}
+	}
+	// The search is never moved into the swapped fragment.
+	for _, banned := range []string{`wb.insertBefore(ms,`, `editor.insertBefore(ms, wb)`} {
+		if strings.Contains(js, banned) {
+			t.Errorf("fit.js still relocates the module search (%q)", banned)
 		}
 	}
 }

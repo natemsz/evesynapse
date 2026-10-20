@@ -22,7 +22,13 @@ func TestLandingAnonymous(t *testing.T) {
 		t.Fatalf("anonymous / status = %d", code)
 	}
 	for _, want := range []string{
-		"Greater than the <span class=\"ld-amp\">sum of its parts.</span>",
+		"Stop alt-tabbing between <span class=\"ld-amp\">five different tools.</span>",
+		"Fits run on your real skills.",
+		"Try it now, no login needed",
+		"Only the scopes you pick",
+		"Key held in a hardware vault",
+		"Built by one pilot.",
+		"concurrent pilots on one small server, load-tested",
 		"Rebuilt over <em>4 years</em>. Originating in <em>2013</em>. Built for <em>2026</em>.",
 		"href=\"/auth/login\"",        // existing members sign in plainly
 		"href=\"/auth/link\"",         // new members link characters
@@ -55,7 +61,7 @@ func TestLandingAnonymous(t *testing.T) {
 		`<div class="ld-stars"></div><div class="ld-stars2"></div>`, // the sky's star layers, ahead of the header
 		"evesynapse.app/fittings/",
 		"priced and simulated with its pilot's own skills",
-		"Data in. Decisions out.",
+		"Know what it's worth, and what to do next.",
 		"Appraisal: paste anything, get a price",
 		"The appraisal tool on the live site.",
 		"evesynapse.app/market/appraise/",
@@ -63,7 +69,7 @@ func TestLandingAnonymous(t *testing.T) {
 		"Plans that price themselves.",
 		"87.6M",
 		"449.8M",
-		"Each point integrates with the other.",
+		"Greater than the sum of its parts.",
 		"Know where New Eden is hot.",
 	} {
 		if !strings.Contains(body, want) {
@@ -83,6 +89,13 @@ func TestLandingAnonymous(t *testing.T) {
 	for _, unbuilt := range []string{"Universe Map", "Route Planner", "Profit Tracking"} {
 		if strings.Contains(body, unbuilt) {
 			t.Errorf("landing claims the unbuilt %q", unbuilt)
+		}
+	}
+	// The antithesis slogans the copy pass removed stay removed:
+	// the landing speaks in the playstyle cards' direct voice.
+	for _, tell := range []string{"not a dashboard dump", "Critical first, noise never", "not price lists", "calculated, not drawn", "not a hack", "Data in. Decisions out.", "knows itself", "Each point integrates with the other.", "JavaScript frameworks", "design target", "It turns it into insight"} {
+		if strings.Contains(body, tell) {
+			t.Errorf("landing still carries the removed slogan %q", tell)
 		}
 	}
 	if strings.Contains(body, "—") {

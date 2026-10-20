@@ -6,6 +6,8 @@ package app
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"io/fs"
 	"net/http"
 	"net/http/httptest"
@@ -93,28 +95,141 @@ func TestStaticAssetCaching(t *testing.T) {
 	}
 }
 
-// cssDeclarations returns the declarations of the first top-level
-// rule whose selector is exactly sel (a rule that starts a line,
-// so not one nested in a media query), as property -> value.
-func cssDeclarations(css, sel string) (map[string]string, bool) {
-	start := strings.Index("\n"+css, "\n"+sel+" {")
-	if start < 0 {
-		return nil, false
+// TestStaticServesMinifiedCSS: stylesheets are minified once at
+// index build and served from those bytes. The served form is
+// smaller and comment-free, the ETag still names exactly the
+// bytes served, pinned values survive the minifier's respelling,
+// and the wallpaper references in the served sheets still carry
+// the files' own hash tokens (the handler versions a wallpaper
+// URL by that token).
+func TestStaticServesMinifiedCSS(t *testing.T) {
+	app, _, _ := buildCorpTestApp(t, &countingTransport{})
+	get := func(path string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		rec := httptest.NewRecorder()
+		app.Handler().ServeHTTP(rec, req)
+		return rec
 	}
-	body := css[start+len(sel)+2:]
-	end := strings.Index(body, "}")
-	if end < 0 {
-		return nil, false
+	idx := loadStaticIndex()
+
+	for _, name := range []string{"style.css", "bg.css", "landing.css"} {
+		raw, err := fs.ReadFile(staticFS, "static/"+name)
+		if err != nil {
+			t.Fatalf("read %s: %v", name, err)
+		}
+		rec := get("/static/" + name)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("GET /static/%s: status %d", name, rec.Code)
+		}
+		served := rec.Body.Bytes()
+		if len(served) >= len(raw) {
+			t.Errorf("%s: served %d bytes, want fewer than the %d source bytes", name, len(served), len(raw))
+		}
+		if strings.Contains(string(served), "/*") {
+			t.Errorf("%s: served bytes still carry a comment", name)
+		}
+		if string(served) != string(idx.served["/"+name]) {
+			t.Errorf("%s: served bytes differ from the index bytes the version and ETag hash", name)
+		}
+		sum := sha256.Sum256(served)
+		wantETag := `"` + hex.EncodeToString(sum[:8]) + `"`
+		if got := rec.Header().Get("ETag"); got != wantETag {
+			t.Errorf("%s: ETag = %q, want %q (the hash of the served bytes)", name, got, wantETag)
+		}
 	}
-	out := map[string]string{}
-	for _, decl := range strings.Split(body[:end], ";") {
-		prop, value, ok := strings.Cut(decl, ":")
-		if !ok {
+
+	// Values other tests and the design pin, in the minifier's
+	// spelling: the column cap and font-display on every face.
+	style := get("/static/style.css").Body.String()
+	for _, want := range []string{"max-width:1720px", "font-display:swap"} {
+		if !strings.Contains(style, want) {
+			t.Errorf("served style.css is missing %q", want)
+		}
+	}
+
+	// The wallpaper tokens survive minification in the served
+	// sheets: each reference's ?v= is still the file's hash.
+	for _, name := range []string{"bg.css", "landing.css"} {
+		served := get("/static/" + name).Body.String()
+		refs := wallpaperRef.FindAllStringSubmatch(served, -1)
+		if len(refs) == 0 {
+			t.Errorf("served %s: no wallpaper references found", name)
 			continue
 		}
-		out[strings.TrimSpace(prop)] = strings.TrimSpace(value)
+		for _, m := range refs {
+			etag, ok := idx.etags["/"+m[1]]
+			if !ok {
+				t.Errorf("served %s: wallpaper reference %q is not a static file", name, m[1])
+				continue
+			}
+			if want := strings.Trim(etag, `"`); m[2] != want {
+				t.Errorf("served %s: /static/%s token %q, want %q", name, m[1], m[2], want)
+			}
+		}
 	}
-	return out, true
+}
+
+// cssDeclarations returns the declarations of the first top-level
+// rule whose selector is exactly sel, as property -> value. It
+// scans rules at brace depth zero, so it reads the served
+// (minified) stylesheet as well as a formatted one; an at-rule
+// block such as @media is skipped whole, so a rule nested inside
+// one never matches. The sheets' strings carry no braces, which
+// is all the brace matching assumes.
+func cssDeclarations(css, sel string) (map[string]string, bool) {
+	i := 0
+	for i < len(css) {
+		for i < len(css) && strings.IndexByte(" \t\r\n;", css[i]) >= 0 {
+			i++
+		}
+		if i >= len(css) {
+			break
+		}
+		start := i
+		for i < len(css) && css[i] != '{' && css[i] != ';' {
+			i++
+		}
+		if i >= len(css) {
+			break
+		}
+		if css[i] == ';' { // a statement at-rule, e.g. @import
+			i++
+			continue
+		}
+		prelude := strings.TrimSpace(css[start:i])
+		i++ // consume '{'
+		depth := 1
+		bodyStart := i
+		for i < len(css) && depth > 0 {
+			switch css[i] {
+			case '{':
+				depth++
+				i++
+			case '}':
+				depth--
+				if depth > 0 {
+					i++
+				}
+			default:
+				i++
+			}
+		}
+		body := css[bodyStart:i]
+		i++ // consume '}'
+		if prelude != sel {
+			continue
+		}
+		out := map[string]string{}
+		for _, decl := range strings.Split(body, ";") {
+			prop, value, ok := strings.Cut(decl, ":")
+			if !ok {
+				continue
+			}
+			out[strings.TrimSpace(prop)] = strings.TrimSpace(value)
+		}
+		return out, true
+	}
+	return nil, false
 }
 
 // TestStylesheetMainColumnWidth: the page column and the top bar

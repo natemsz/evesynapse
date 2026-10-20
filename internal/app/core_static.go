@@ -27,9 +27,16 @@ package app
 //   - Anything else (the favicon, an old ?v= left in an open tab)
 //     carries an ETag and is revalidated: one small "not modified"
 //     round trip instead of the whole file.
+//   - Stylesheets are minified once, when the index is built, and
+//     served from the minified bytes held in memory; the source
+//     files stay human-readable. A stylesheet's version input and
+//     ETag hash its minified bytes, so a URL still names exactly
+//     the bytes served. A file the minifier rejects is served as
+//     written rather than not at all.
 // ---------------------------------------------------------------------------
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"io/fs"
@@ -38,6 +45,10 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
+
+	"github.com/tdewolff/minify/v2"
+	"github.com/tdewolff/minify/v2/css"
 )
 
 const cacheForever = "public, max-age=31536000, immutable"
@@ -46,10 +57,30 @@ const cacheForever = "public, max-age=31536000, immutable"
 type staticIndex struct {
 	version string            // changes whenever any file under static/ does
 	etags   map[string]string // "/style.css" -> `"<content hash>"`
+	served  map[string][]byte // "/style.css" -> minified bytes (stylesheets only)
+}
+
+// cssMinifier shrinks stylesheets for delivery. It is built once
+// and only used while the index is built.
+var cssMinifier = func() *minify.M {
+	m := minify.New()
+	m.AddFunc("text/css", css.Minify)
+	return m
+}()
+
+// minifiedCSS returns the delivery bytes for a stylesheet: the
+// minified form, or the source bytes when the minifier cannot
+// handle the file.
+func minifiedCSS(raw []byte) []byte {
+	out, err := cssMinifier.Bytes("text/css", raw)
+	if err != nil {
+		return raw
+	}
+	return out
 }
 
 var loadStaticIndex = sync.OnceValue(func() staticIndex {
-	idx := staticIndex{etags: map[string]string{}}
+	idx := staticIndex{etags: map[string]string{}, served: map[string][]byte{}}
 	var paths []string
 	hashes := map[string][]byte{}
 	_ = fs.WalkDir(staticFS, "static", func(path string, d fs.DirEntry, err error) error {
@@ -60,8 +91,12 @@ var loadStaticIndex = sync.OnceValue(func() staticIndex {
 		if err != nil {
 			return nil
 		}
-		sum := sha256.Sum256(content)
 		name := strings.TrimPrefix(path, "static")
+		if strings.HasSuffix(name, ".css") {
+			content = minifiedCSS(content)
+			idx.served[name] = content
+		}
+		sum := sha256.Sum256(content)
 		paths = append(paths, name)
 		hashes[name] = sum[:]
 		idx.etags[name] = `"` + hex.EncodeToString(sum[:8]) + `"`
@@ -116,6 +151,14 @@ func staticHandler() (http.Handler, error) {
 		}
 		if etag, ok := idx.etags[req.URL.Path]; ok {
 			w.Header().Set("ETag", etag)
+		}
+		if body, ok := idx.served[req.URL.Path]; ok {
+			// A stylesheet: serve the minified bytes the index
+			// hashed, with the same zero-modtime, ETag-driven
+			// revalidation the file server gives the embedded
+			// files (they have no modification time either).
+			http.ServeContent(w, req, req.URL.Path, time.Time{}, bytes.NewReader(body))
+			return
 		}
 		fileServer.ServeHTTP(w, req)
 	})), nil

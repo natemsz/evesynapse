@@ -112,6 +112,235 @@
   onContentReady(revealSectionTab);
   revealSectionTab(document);
 
+  // --- Section tab overflow ------------------------------------
+  // When a tab strip's tabs stop fitting its row, the ones that
+  // don't fit fold into the strip's "More" disclosure (the
+  // template renders it empty and hidden) instead of wrapping to
+  // a second row or scrolling away: the fit is measured, never a
+  // breakpoint, so every strip folds exactly where it runs out
+  // of room. Tabs fold from the end of the row, in order; the
+  // active tab never folds — if the fold reaches it, the nearest
+  // earlier tab folds instead, so the current page's tab is
+  // always in the row. Should the active tab ever be found in
+  // the panel anyway, the More button takes its label and its
+  // active styling until a layout puts it back. Widening the
+  // row restores folded tabs. Without JS nothing changes: the
+  // More element stays hidden and the strips render as before.
+  //
+  // Pure: given each tab's width in row order, the active tab's
+  // index (-1 for none), the row's inner width, the More
+  // button's width and the row's gap, decide which tabs stay
+  // visible and which fold. Row width counts every gap between
+  // visible tabs plus one more before the More button.
+  function planTabFold(widths, active, avail, moreWidth, gap) {
+    var n = widths.length, visible = [], folded = [], i, sum = 0;
+    for (i = 0; i < n; i++) { visible.push(i); sum += widths[i]; }
+    if (n <= 1 || sum + gap * (n - 1) <= avail) {
+      return { visible: visible, folded: folded };
+    }
+    function rowWidth() {
+      var s = 0, j;
+      for (j = 0; j < visible.length; j++) s += widths[visible[j]];
+      return s + gap * visible.length + moreWidth;
+    }
+    while (rowWidth() > avail && visible.length > 1) {
+      var pick = -1;
+      for (i = visible.length - 1; i >= 0; i--) {
+        if (visible[i] !== active) { pick = i; break; }
+      }
+      if (pick < 0) break;
+      folded.push(visible.splice(pick, 1)[0]);
+    }
+    folded.sort(function (a, b) { return a - b; });
+    return { visible: visible, folded: folded };
+  }
+
+  // Pure: what the More button shows once a layout has run.
+  // When the active tab is among the folded, the button carries
+  // its label (and, in the caller, its active styling); in every
+  // other state it reads "More".
+  function tabMoreState(labels, active, folded) {
+    if (active >= 0 && folded.indexOf(active) >= 0) {
+      return { label: labels[active], hasActive: true };
+    }
+    return { label: "More", hasActive: false };
+  }
+
+  if (typeof module !== "undefined" && module.exports) {
+    module.exports = { planTabFold: planTabFold, tabMoreState: tabMoreState };
+  }
+
+  var tabOverflowStrips = [];
+
+  function tabStripParts(strip) {
+    var wrap = null, i, kids = strip.children;
+    for (i = 0; i < kids.length; i++) {
+      if (kids[i].classList && kids[i].classList.contains("tabs-more")) { wrap = kids[i]; break; }
+    }
+    if (!wrap) return null;
+    var btn = null, panel = null;
+    for (i = 0; i < wrap.children.length; i++) {
+      if (wrap.children[i].classList.contains("tabs-more-btn")) btn = wrap.children[i];
+      if (wrap.children[i].classList.contains("tabs-more-panel")) panel = wrap.children[i];
+    }
+    if (!btn || !panel) return null;
+    return { wrap: wrap, btn: btn, panel: panel };
+  }
+
+  function setTabMoreOpen(st, open) {
+    st.open = open;
+    st.panel.hidden = !open;
+    st.btn.setAttribute("aria-expanded", open ? "true" : "false");
+    st.strip.classList.toggle("more-open", open);
+  }
+
+  function closeTabMores(except) {
+    for (var i = 0; i < tabOverflowStrips.length; i++) {
+      var st = tabOverflowStrips[i];
+      if (st !== except && st.open) setTabMoreOpen(st, false);
+    }
+  }
+
+  function layoutTabStrip(st) {
+    var strip = st.strip, cs = window.getComputedStyle(strip);
+    var gap = parseFloat(cs.columnGap) || parseFloat(cs.gap) || 0;
+    var avail = strip.clientWidth -
+      (parseFloat(cs.paddingLeft) || 0) - (parseFloat(cs.paddingRight) || 0);
+    // Anything else sharing the row (the sub-row's note) keeps
+    // its room; only what is left is the tabs' to fit into.
+    for (var c = 0; c < strip.children.length; c++) {
+      var child = strip.children[c];
+      if (child === st.wrap || child.tagName === "A" || child.hidden) continue;
+      avail -= child.offsetWidth + gap;
+    }
+    var i, labels = [];
+    // Folded tabs have no layout box, so their width is the last
+    // one measured in the row; visible tabs re-measure each pass.
+    for (i = 0; i < st.tabs.length; i++) {
+      if (st.tabs[i].parentNode === strip) st.widths[i] = st.tabs[i].offsetWidth;
+      labels.push(st.tabs[i].textContent);
+    }
+    // A hidden More wrapper has no width either; measure it
+    // shown-but-invisible so the fold can reserve its real size.
+    var moreWidth;
+    if (st.wrap.hidden) {
+      st.wrap.classList.add("tabs-more-measuring");
+      moreWidth = st.btn.offsetWidth;
+      st.wrap.classList.remove("tabs-more-measuring");
+    } else {
+      moreWidth = st.btn.offsetWidth;
+    }
+    var plan = planTabFold(st.widths, st.active, avail, moreWidth, gap);
+    var inPanel = {};
+    for (i = 0; i < plan.folded.length; i++) inPanel[plan.folded[i]] = true;
+    // Apply from scratch: visible tabs back into the row in
+    // order (ahead of the More wrapper), folded tabs into the
+    // panel in order. appendChild/insertBefore move the nodes.
+    for (i = 0; i < st.tabs.length; i++) {
+      if (inPanel[i]) st.panel.appendChild(st.tabs[i]);
+      else strip.insertBefore(st.tabs[i], st.wrap);
+    }
+    st.wrap.hidden = plan.folded.length === 0;
+    strip.classList.toggle("has-more", plan.folded.length > 0);
+    var state = tabMoreState(labels, st.active, plan.folded);
+    st.btn.textContent = state.label;
+    st.wrap.classList.toggle("has-active", state.hasActive);
+    if (st.open && plan.folded.length === 0) setTabMoreOpen(st, false);
+  }
+
+  var tabLayoutQueued = false;
+  function queueTabLayouts() {
+    if (tabLayoutQueued) return;
+    tabLayoutQueued = true;
+    var run = function () {
+      tabLayoutQueued = false;
+      for (var i = 0; i < tabOverflowStrips.length; i++) {
+        if (tabOverflowStrips[i].strip.isConnected) layoutTabStrip(tabOverflowStrips[i]);
+      }
+    };
+    if (window.requestAnimationFrame) window.requestAnimationFrame(run);
+    else run();
+  }
+
+  function initTabOverflow(root) {
+    var strips = root.querySelectorAll(".section-tabs, .section-subtabs");
+    for (var i = 0; i < strips.length; i++) {
+      var strip = strips[i];
+      if (strip._tabOverflow) { layoutTabStrip(strip._tabOverflow); continue; }
+      var parts = tabStripParts(strip);
+      if (!parts) continue;
+      var tabs = [], active = -1, j;
+      for (j = 0; j < strip.children.length; j++) {
+        var kid = strip.children[j];
+        if (kid.tagName === "A") {
+          if (kid.classList.contains("active")) active = tabs.length;
+          tabs.push(kid);
+        }
+      }
+      if (tabs.length < 2) continue;
+      var st = {
+        strip: strip, wrap: parts.wrap, btn: parts.btn, panel: parts.panel,
+        tabs: tabs, widths: [], active: active, open: false, ro: null
+      };
+      if (!parts.panel.id) {
+        parts.panel.id = "tabs-more-panel-" + (tabOverflowStrips.length + 1);
+      }
+      parts.btn.setAttribute("aria-controls", parts.panel.id);
+      for (j = 0; j < tabs.length; j++) st.widths.push(tabs[j].offsetWidth);
+      strip._tabOverflow = st;
+      tabOverflowStrips.push(st);
+      parts.btn.addEventListener("click", function (st) {
+        return function () {
+          var opening = !st.open;
+          closeTabMores(st);
+          setTabMoreOpen(st, opening);
+        };
+      }(st));
+      parts.panel.addEventListener("click", function (st) {
+        return function () { setTabMoreOpen(st, false); };
+      }(st));
+      if (window.ResizeObserver) {
+        st.ro = new window.ResizeObserver(queueTabLayouts);
+        st.ro.observe(strip);
+      }
+      layoutTabStrip(st);
+    }
+  }
+  onContentReady(initTabOverflow);
+  initTabOverflow(document);
+  window.addEventListener("resize", queueTabLayouts);
+  // Tab widths ride on the display font; once it lands, measure
+  // again so a fold decided against fallback-font widths settles.
+  if (document.fonts && document.fonts.ready) {
+    document.fonts.ready.then(queueTabLayouts);
+  }
+  // Swapped-out strips give their observers back; their state is
+  // discarded with the old content on the next init.
+  document.addEventListener("evesynapse:content-will-swap", function () {
+    var main = document.getElementById("main-content");
+    for (var i = tabOverflowStrips.length - 1; i >= 0; i--) {
+      var st = tabOverflowStrips[i];
+      if (main && main.contains(st.strip)) {
+        if (st.ro) st.ro.disconnect();
+        tabOverflowStrips.splice(i, 1);
+      }
+    }
+  });
+  // The disclosure closes on any click outside it and on Escape.
+  document.addEventListener("click", function (ev) {
+    for (var i = 0; i < tabOverflowStrips.length; i++) {
+      var st = tabOverflowStrips[i];
+      if (st.open && !st.wrap.contains(ev.target)) setTabMoreOpen(st, false);
+    }
+  });
+  document.addEventListener("keydown", function (ev) {
+    if (ev.key !== "Escape") return;
+    for (var i = 0; i < tabOverflowStrips.length; i++) {
+      var st = tabOverflowStrips[i];
+      if (st.open) { setTabMoreOpen(st, false); st.btn.focus(); }
+    }
+  });
+
   // --- Collapsible sections -----------------------------------
   // Folding lives at the smallest sensible unit on each page:
   //   - .foldable sections (the h2/h3 blocks inside a page panel)

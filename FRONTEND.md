@@ -147,7 +147,12 @@ It renders the current section's links from `sectionNav`
 (nav.go) — the same list the sidebar menus render from — and
 appears only on the section's own pages, only when the section
 has more than one page and one of them is active. Never
-hand-write a tab strip in a page template.
+hand-write a tab strip in a page template. When a strip's tabs
+stop fitting their row, app.js folds the ones that don't fit
+into the strip's More disclosure (rendered empty and hidden
+by the template): the fit is measured, the active tab never
+folds, and widening restores — so a strip whose tabs fit
+renders exactly as it did without the disclosure.
 
 ### Search boxes
 

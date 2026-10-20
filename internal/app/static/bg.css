@@ -436,6 +436,130 @@ html[data-theme="light"] #main-content > .section-subtabs a.active {
   border-color: rgba(255, 106, 0, 0.40);
   color: var(--text-bright);
 }
+
+/* Tab overflow: when a strip's tabs stop fitting the row,
+   app.js folds the ones that don't fit into the strip's More
+   disclosure and the rest stay tabs. The template renders the
+   disclosure empty and hidden on both rows; it appears only
+   once a fold has somewhere to put tabs, so a strip whose tabs
+   fit renders exactly as before. The button speaks the tabs'
+   own language on each row — the folder tab on the strip, the
+   quiet pill on the sub-row — and when the fold ever holds the
+   active tab, the button takes the active treatment (and
+   app.js gives it the tab's label), so the current page is
+   never lost inside the menu. The panel is the panel's own
+   glass, the folded tabs listed as plain rows under it. */
+#main-content > .section-tabs .tabs-more,
+#main-content > .section-subtabs .tabs-more { position: relative; }
+.tabs-more.tabs-more-measuring {
+  display: inline-flex; visibility: hidden; position: absolute;
+}
+.tabs-more-btn { font-family: inherit; font-size: inherit; }
+.tabs-more-btn::after {
+  content: ""; display: inline-block; margin-left: 0.45rem;
+  border: 0.3rem solid transparent; border-top-color: currentColor;
+  border-bottom: none; vertical-align: middle; opacity: 0.75;
+}
+#main-content > .section-tabs .tabs-more-btn {
+  color: inherit;
+  border: 1px solid rgba(255, 110, 0, 0.22);
+  border-radius: 0.5rem 0.5rem 0 0;
+  background: rgba(23, 17, 13, 0.55);
+  -webkit-backdrop-filter: blur(10px) saturate(1.2);
+  backdrop-filter: blur(10px) saturate(1.2);
+  padding: 0.4rem 0.85rem;
+  cursor: pointer;
+  transition: background-color 150ms ease, border-color 150ms ease, filter 150ms ease;
+}
+#main-content > .section-tabs .tabs-more-btn:hover {
+  background: transparent;
+  border-color: rgba(255, 130, 20, 0.45);
+  filter: saturate(1.5);
+}
+#main-content > .section-tabs .tabs-more.has-active .tabs-more-btn {
+  background: var(--glass);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(0.9);
+  backdrop-filter: blur(var(--glass-blur)) saturate(0.9);
+  border-top: 3px solid var(--accent);
+  border-left-color: var(--glass-edge);
+  border-right-color: var(--glass-edge);
+  border-bottom: none;
+  padding-top: calc(0.4rem - 2px);
+  color: var(--text-bright);
+}
+#main-content > .section-subtabs .tabs-more-btn {
+  color: inherit;
+  border: 1px solid rgba(255, 110, 0, 0.22);
+  border-radius: var(--r-sm);
+  background: rgba(23, 17, 13, 0.55);
+  padding: 0.35rem 0.8rem;
+  font-size: 0.92rem;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background-color 150ms ease, border-color 150ms ease, filter 150ms ease;
+}
+#main-content > .section-subtabs .tabs-more-btn:hover {
+  background: transparent;
+  border-color: rgba(255, 130, 20, 0.45);
+  filter: saturate(1.5);
+}
+#main-content > .section-subtabs .tabs-more.has-active .tabs-more-btn {
+  background: rgba(255, 106, 0, 0.20);
+  border-color: rgba(255, 106, 0, 0.40);
+  color: var(--text-bright);
+}
+#main-content .tabs-more-panel {
+  position: absolute;
+  top: calc(100% + 0.35rem);
+  right: 0;
+  z-index: 60;
+  min-width: 11rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.35rem;
+  background: var(--glass);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(0.9);
+  backdrop-filter: blur(var(--glass-blur)) saturate(0.9);
+  border: 1px solid var(--glass-edge);
+  border-radius: 0.5rem;
+}
+#main-content .tabs-more-panel[hidden] { display: none; }
+#main-content > .section-tabs .tabs-more-panel a,
+#main-content > .section-subtabs .tabs-more-panel a {
+  display: block;
+  padding: 0.45rem 0.7rem;
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
+  background: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  white-space: nowrap;
+  text-decoration: none;
+}
+#main-content > .section-tabs .tabs-more-panel a:hover,
+#main-content > .section-subtabs .tabs-more-panel a:hover {
+  background: transparent;
+  border-color: rgba(255, 130, 20, 0.45);
+  filter: saturate(1.5);
+}
+#main-content > .section-tabs .tabs-more-panel a.active,
+#main-content > .section-subtabs .tabs-more-panel a.active {
+  background: rgba(255, 106, 0, 0.20);
+  border-color: rgba(255, 106, 0, 0.40);
+  color: var(--text-bright);
+}
+html[data-theme="light"] #main-content > .section-tabs .tabs-more-btn,
+html[data-theme="light"] #main-content > .section-subtabs .tabs-more-btn {
+  background: rgba(253, 251, 246, 0.72);
+  border-color: #d3c7ae;
+}
+html[data-theme="light"] #main-content > .section-tabs .tabs-more.has-active .tabs-more-btn {
+  background: var(--glass);
+  border-top-color: var(--accent);
+  border-left-color: var(--glass-edge);
+  border-right-color: var(--glass-edge);
+}
 @media (max-width: 1313px) {
   /* Below the fit width, the folder strip becomes a detached
      glass rail: one row of pills on the panel's own glass,
@@ -495,6 +619,35 @@ html[data-theme="light"] #main-content > .section-subtabs a.active {
     border-left-color: rgba(255, 106, 0, 0.40);
     border-right-color: rgba(255, 106, 0, 0.40);
     padding-top: 0.5rem;
+  }
+  /* On the rail the More button is a pill like the tabs it
+     stands in for, with the rail's active fill when the fold
+     holds the active tab. A strip carrying a More no longer
+     needs the scroll fade — its tabs fit by construction — and
+     while the panel is open the strip's clipping lifts so the
+     panel is never cut by the rail it hangs from. */
+  #main-content > .section-tabs .tabs-more-btn {
+    border-radius: var(--r-sm);
+    padding: 0.5rem 0.85rem;
+    white-space: nowrap;
+  }
+  #main-content > .section-tabs .tabs-more.has-active .tabs-more-btn {
+    background: rgba(255, 106, 0, 0.20);
+    border-top: 1px solid rgba(255, 106, 0, 0.40);
+    border-bottom: 1px solid rgba(255, 106, 0, 0.40);
+    border-left-color: rgba(255, 106, 0, 0.40);
+    border-right-color: rgba(255, 106, 0, 0.40);
+    padding-top: 0.5rem;
+    color: var(--text-bright);
+  }
+  #main-content > .section-tabs.has-more,
+  #main-content > .section-subtabs.has-more {
+    -webkit-mask-image: none;
+    mask-image: none;
+  }
+  #main-content > .section-tabs.more-open,
+  #main-content > .section-subtabs.more-open {
+    overflow: visible;
   }
   /* The sub-row rails the same way, under the strip's rail. The
      end padding matches the mask's fade length, so the first and

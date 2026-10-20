@@ -2323,9 +2323,25 @@ var FitGauges = (function () {
   function place(panel) {
     panel.classList.remove("flip-up");
     panel.classList.remove("align-right");
+    panel.style.left = "";
     var r = panel.getBoundingClientRect();
     if (r.bottom > window.innerHeight - 8) panel.classList.add("flip-up");
     if (r.right > window.innerWidth - 8) panel.classList.add("align-right");
+    // Right-aligning anchors the panel to the wrapper's right
+    // edge, so a panel wider than the space from the viewport's
+    // left edge to that anchor hangs off the left side. Measure
+    // again after the flip and shift the panel back inside with
+    // an inline left: its current offset from the wrapper plus
+    // the deficit to the 8px viewport margin. The max-width cap
+    // (100vw - 2rem) leaves room for the shift.
+    r = panel.getBoundingClientRect();
+    if (r.left < 8) {
+      var wrap = panel.closest ? panel.closest(".loadout-preview") : null;
+      if (wrap) {
+        var wr = wrap.getBoundingClientRect();
+        panel.style.left = ((r.left - wr.left) + (8 - r.left)) + "px";
+      }
+    }
   }
   function open(wrap, pinned) {
     if (openWrap && openWrap !== wrap) close();
@@ -2346,7 +2362,10 @@ var FitGauges = (function () {
     clearTimers();
     if (!openWrap) return;
     var p = parts(openWrap);
-    if (p.panel) p.panel.hidden = true;
+    if (p.panel) {
+      p.panel.hidden = true;
+      p.panel.style.left = "";
+    }
     if (p.btn) p.btn.setAttribute("aria-expanded", "false");
     openWrap = null;
     openPinned = false;
@@ -2354,6 +2373,11 @@ var FitGauges = (function () {
   function wrapOf(el) {
     return el && el.closest ? el.closest(".loadout-preview") : null;
   }
+  if (window.addEventListener) window.addEventListener("resize", function () {
+    if (!openWrap) return;
+    var p = parts(openWrap);
+    if (p.panel) place(p.panel);
+  });
   document.addEventListener("click", function (ev) {
     var btn = ev.target && ev.target.closest ? ev.target.closest(".loadout-preview-btn") : null;
     var wrap = wrapOf(ev.target);

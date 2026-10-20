@@ -31,6 +31,7 @@ func TestLandingAnonymous(t *testing.T) {
 		"concurrent pilots on one small server, load-tested",
 		"pilots kept fully current, sync load-tested",
 		"rosters of 12 to 2,400 pilots driven through the real sync cycle",
+		"Run on a Core 2 Duo laptop with 8 GB of RAM",
 		"Rebuilt over <em>4 years</em>. Originating in <em>2013</em>. Built for <em>2026</em>.",
 		"href=\"/auth/login\"",        // existing members sign in plainly
 		"href=\"/auth/link\"",         // new members link characters

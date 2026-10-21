@@ -153,6 +153,10 @@ func secRound(sec float64) (text string, tier int) {
 	return fmt.Sprintf("%.1f", r), int(math.Round(r * 10))
 }
 
+// mapSecTiers is the security color steps, 1.0 down to null: the
+// map's legend, whose swatches the canvas reads its colors from.
+func mapSecTiers() []int { return []int{10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0} }
+
 // secStatus renders a security status in its in-game color.
 func secStatus(sec float64) template.HTML {
 	text, tier := secRound(sec)
@@ -312,6 +316,7 @@ func linkFuncMap() template.FuncMap {
 		"systemLink":      systemLink,
 		"regionLink":      regionLink,
 		"secStatus":       secStatus,
+		"mapSecTiers":     mapSecTiers,
 		"stationLink":     stationLink,
 		"structureLink":   structureLink,
 		"placeLink":       placeLink,

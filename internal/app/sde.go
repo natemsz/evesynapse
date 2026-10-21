@@ -92,6 +92,15 @@ const sdeRangesFileName = "dynamicItemAttributes.csv"
 // to probing every singleton in the corpus.
 const sdeMappingsFileName = "dynamicItemAttributeMappings.csv"
 
+// The universe map's two files (schema 072): constellation names
+// and the stargate graph. Best-effort like the files above: a
+// mirror lacking them leaves the previous rows in place, and the
+// map draws without gates rather than the import failing.
+const (
+	sdeConstellationsFileName = "mapConstellations.csv"
+	sdeJumpsFileName          = "mapSolarSystemJumps.csv"
+)
+
 // sdeHTTPClient downloads the dump files. No total timeout (the
 // types table is ~20 MB); each request carries its own context
 // deadline instead. The shared loginHTTPClient's 10s timeout is
@@ -240,6 +249,9 @@ func (app *Application) sdeMaintenance(ctx context.Context) {
 		app.startSDEImport("initial")
 		return
 	}
+	// The universe map rebuilds when its builder moved on (a no-op
+	// until the SDE carries geometry).
+	app.ensureUniverseMap(ctx)
 	// One-time backfills: databases imported before schema 008
 	// have no market-group/published values, databases stored
 	// before schema 011 lack the planner's industry tables,
@@ -249,12 +261,13 @@ func (app *Application) sdeMaintenance(ctx context.Context) {
 	// attribute/effect set, imports before version 8 lack the
 	// modifier-less effects the fitting engine reads module
 	// states from, imports before version 9 lack the
-	// mutaplasmid roll ranges, and imports before version 10
-	// lack the mutaplasmid applicability mappings, so
-	// re-import once (the store writes the marker when it
-	// lands). Retries on later ticks while an import keeps
-	// failing.
-	if ver, _ := app.sdeMeta(ctx, "sde_import_version"); ver != "10" {
+	// mutaplasmid roll ranges, imports before version 10
+	// lack the mutaplasmid applicability mappings, and
+	// imports before version 11 lack the universe map's
+	// geometry, so re-import once (the store writes the marker
+	// when it lands). Retries on later ticks while an import
+	// keeps failing.
+	if ver, _ := app.sdeMeta(ctx, "sde_import_version"); ver != sdeImportVersion {
 		logging.Infof("sde: static data predates current columns — re-importing to backfill")
 		app.startSDEImport("schema-029 backfill")
 		return
@@ -279,6 +292,10 @@ func (app *Application) sdeMaintenance(ctx context.Context) {
 	}
 	app.startSDECheck("weekly")
 }
+
+// sdeImportVersion is the importer's column-set marker (see
+// sdeMaintenance): an import stored under an older one re-imports.
+const sdeImportVersion = "11"
 
 // sdeMeta reads one sde_meta value ("" when absent).
 func (app *Application) sdeMeta(ctx context.Context, key string) (string, error) {
@@ -411,6 +428,13 @@ func (app *Application) importSDE(ctx context.Context) error {
 	} else {
 		parsed.markers[sdeMappingsFileName] = marker
 	}
+	for _, name := range []string{sdeConstellationsFileName, sdeJumpsFileName} {
+		if marker, err := app.fetchAndParseSDEFile(ctx, base, name, parsed); err != nil {
+			logging.Warnf("sde: optional %s unavailable, keeping the previous map data: %v", name, err)
+		} else {
+			parsed.markers[name] = marker
+		}
+	}
 	parsed.buildIndustryRows()
 	parsed.buildSkillRows()
 
@@ -443,6 +467,10 @@ func (app *Application) importSDE(ctx context.Context) error {
 	total, err := app.storeSDE(ctx, base, parsed)
 	if err != nil {
 		return err
+	}
+	// The universe map is built from what just landed.
+	if err := app.rebuildUniverseMap(ctx); err != nil {
+		logging.Errorf("map: rebuild after import: %v", err)
 	}
 
 	msg := fmt.Sprintf("Imported %s rows from %s", esi.FormatInt(total), base)
@@ -508,6 +536,11 @@ type parsedSDE struct {
 	// Reprocessing outputs (schema 066): one row per (type,
 	// output material) from invTypeMaterials.
 	reprocessing []sdeReprocessRow
+
+	// The universe map (schema 072): constellations and the
+	// stargate graph. Empty when the dump lacks the file.
+	constellations []sdeConstellationRow
+	jumps          []sdeJumpRow
 }
 
 // sdeReprocessRow is one reprocessing output: the quantity of
@@ -660,10 +693,26 @@ type sdeStationRow struct {
 }
 
 type sdeSystemRow struct {
-	systemID int64
-	name     string
-	regionID int64
-	security float64
+	systemID        int64
+	name            string
+	regionID        int64
+	security        float64
+	constellationID int64
+	x, y, z         float64
+	factionID       int64
+	securityClass   string
+}
+
+// sdeConstellationRow is one constellation (schema 072).
+type sdeConstellationRow struct {
+	constellationID int64
+	name            string
+	regionID        int64
+}
+
+// sdeJumpRow is one stargate link, one direction (schema 072).
+type sdeJumpRow struct {
+	from, to int64
 }
 
 type sdeRegionRow struct {
@@ -772,6 +821,10 @@ func parseSDEFile(name string, body io.Reader, parsed *parsedSDE) error {
 		err = parseSDEDynRanges(cr, idx, parsed)
 	case sdeMappingsFileName:
 		err = parseSDEDynMappings(cr, idx, parsed)
+	case sdeConstellationsFileName:
+		err = parseSDEConstellations(cr, idx, parsed)
+	case sdeJumpsFileName:
+		err = parseSDEJumps(cr, idx, parsed)
 	case "dgmTypeAttributes.csv":
 		err = parseSDEDogmaAttributes(cr, idx, parsed)
 	case "dgmAttributeTypes.csv":
@@ -1036,19 +1089,73 @@ func parseSDESystems(cr *csv.Reader, idx map[string]int) ([]sdeSystemRow, error)
 		if err != nil {
 			return err
 		}
-		security := 0.0
-		if raw, ferr := csvField(rec, idx, "security"); ferr == nil {
-			security, _ = strconv.ParseFloat(strings.TrimSpace(raw), 64)
+		class := ""
+		if raw, ferr := csvField(rec, idx, "securityClass"); ferr == nil && raw != "None" {
+			class = strings.TrimSpace(raw)
 		}
 		rows = append(rows, sdeSystemRow{
-			systemID: id,
-			name:     name,
-			regionID: csvIDOrZero(rec, idx, "regionID"),
-			security: security,
+			systemID:        id,
+			name:            name,
+			regionID:        csvIDOrZero(rec, idx, "regionID"),
+			security:        csvFloatOrZero(rec, idx, "security"),
+			constellationID: csvIDOrZero(rec, idx, "constellationID"),
+			x:               csvFloatOrZero(rec, idx, "x"),
+			y:               csvFloatOrZero(rec, idx, "y"),
+			z:               csvFloatOrZero(rec, idx, "z"),
+			factionID:       csvIDOrZero(rec, idx, "factionID"),
+			securityClass:   class,
 		})
 		return nil
 	})
 	return rows, err
+}
+
+// csvFloatOrZero reads a float column, 0 when absent, empty or
+// "None" (the dump's null).
+func csvFloatOrZero(rec []string, idx map[string]int, name string) float64 {
+	raw, err := csvField(rec, idx, name)
+	if err != nil {
+		return 0
+	}
+	v, err := strconv.ParseFloat(strings.TrimSpace(raw), 64)
+	if err != nil {
+		return 0
+	}
+	return v
+}
+
+func parseSDEConstellations(cr *csv.Reader, idx map[string]int, parsed *parsedSDE) error {
+	_, err := eachCSVRow(cr, func(rec []string) error {
+		id, err := csvID(rec, idx, "constellationID")
+		if err != nil {
+			return errSkipRow
+		}
+		name, err := csvField(rec, idx, "constellationName")
+		if err != nil {
+			return err
+		}
+		parsed.constellations = append(parsed.constellations, sdeConstellationRow{
+			constellationID: id, name: name, regionID: csvIDOrZero(rec, idx, "regionID"),
+		})
+		return nil
+	})
+	return err
+}
+
+func parseSDEJumps(cr *csv.Reader, idx map[string]int, parsed *parsedSDE) error {
+	_, err := eachCSVRow(cr, func(rec []string) error {
+		from, err := csvID(rec, idx, "fromSolarSystemID")
+		if err != nil {
+			return errSkipRow
+		}
+		to, err := csvID(rec, idx, "toSolarSystemID")
+		if err != nil {
+			return errSkipRow
+		}
+		parsed.jumps = append(parsed.jumps, sdeJumpRow{from: from, to: to})
+		return nil
+	})
+	return err
 }
 
 func parseSDERegions(cr *csv.Reader, idx map[string]int) ([]sdeRegionRow, error) {
@@ -1711,11 +1818,36 @@ func (app *Application) storeSDE(ctx context.Context, base string, parsed *parse
 	}); err != nil {
 		return 0, err
 	}
-	if err := insert("INSERT INTO sde_systems (system_id, name, region_id, security) VALUES ($1, $2, $3, $4)", len(parsed.systems), func(i int) []any {
+	if err := insert("INSERT INTO sde_systems (system_id, name, region_id, security, constellation_id, x, y, z, faction_id, security_class) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)", len(parsed.systems), func(i int) []any {
 		r := parsed.systems[i]
-		return []any{r.systemID, r.name, r.regionID, r.security}
+		return []any{r.systemID, r.name, r.regionID, r.security, r.constellationID, r.x, r.y, r.z, r.factionID, r.securityClass}
 	}); err != nil {
 		return 0, err
+	}
+	// The map's constellations and stargate graph (schema 072)
+	// replace only when this import carried them, like the
+	// abyssal datasets below.
+	if len(parsed.constellations) > 0 {
+		if _, err := tx.ExecContext(ctx, "DELETE FROM sde_constellations"); err != nil {
+			return 0, fmt.Errorf("clear sde_constellations: %w", err)
+		}
+		if err := insert("INSERT INTO sde_constellations (constellation_id, name, region_id) VALUES ($1, $2, $3)", len(parsed.constellations), func(i int) []any {
+			r := parsed.constellations[i]
+			return []any{r.constellationID, r.name, r.regionID}
+		}); err != nil {
+			return 0, err
+		}
+	}
+	if len(parsed.jumps) > 0 {
+		if _, err := tx.ExecContext(ctx, "DELETE FROM sde_system_jumps"); err != nil {
+			return 0, fmt.Errorf("clear sde_system_jumps: %w", err)
+		}
+		if err := insert("INSERT INTO sde_system_jumps (from_system_id, to_system_id) VALUES ($1, $2) ON CONFLICT DO NOTHING", len(parsed.jumps), func(i int) []any {
+			r := parsed.jumps[i]
+			return []any{r.from, r.to}
+		}); err != nil {
+			return 0, err
+		}
 	}
 	if err := insert("INSERT INTO sde_regions (region_id, name) VALUES ($1, $2)", len(parsed.regions), func(i int) []any {
 		r := parsed.regions[i]
@@ -1850,9 +1982,10 @@ func (app *Application) storeSDE(ctx context.Context, base string, parsed *parse
 		// every effect (not just modifier-bearing ones) from 8,
 		// the mutaplasmid roll ranges (schema 055) from 9, and
 		// the mutaplasmid applicability mappings (schema 063)
-		// from 10 (sdeMaintenance backfills once when it's
-		// behind).
-		{Key: "sde_import_version", Value: "10"},
+		// from 10, and the universe map's geometry and stargate
+		// graph (schema 072) from 11 (sdeMaintenance backfills
+		// once when it's behind).
+		{Key: "sde_import_version", Value: sdeImportVersion},
 	}
 	for name, m := range parsed.markers {
 		meta = append(meta,

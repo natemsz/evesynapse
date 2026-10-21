@@ -264,7 +264,7 @@ func TestSDEImportParsesAndStoresDescriptions(t *testing.T) {
 	if err != nil || row.Description != "A basic mineral." {
 		t.Fatalf("stored type = %+v err=%v, want description", row, err)
 	}
-	if ver, _ := app.sdeMeta(ctx, "sde_import_version"); ver != "10" {
+	if ver, _ := app.sdeMeta(ctx, "sde_import_version"); ver != sdeImportVersion {
 		t.Fatalf("sde_import_version = %q, want 10", ver)
 	}
 	if state, html := app.itemDescription(ctx, 34); state != "ready" || !strings.Contains(string(html), "A basic mineral.") {

@@ -1,0 +1,58 @@
+{{define "title"}}Map{{end}}
+{{define "pagetitle"}}<h1><span class="gt">Map</span></h1>{{end}}
+{{define "content"}}
+{{with .Map}}
+{{/* The universe map. The server renders the frame and a region
+     index that works on its own; map.js draws the canvas from the
+     stored payload (data-src, content-hashed and cached for good)
+     and turns the index into region jumps. The security legend's
+     swatches carry the site's .sec-N colors, which the canvas reads
+     back, so the map is colored exactly like every other security
+     figure on the site, in either theme. */}}
+<div class="map" data-map{{if .Ready}} data-src="{{.PayloadURL}}"{{end}}>
+  <div class="map-bar">
+    <nav class="map-crumbs" aria-label="Map location">
+      <button type="button" class="map-crumb" data-map-universe>New Eden</button>
+      <span class="map-crumb-sep" aria-hidden="true" hidden>›</span>
+      <span class="map-crumb-region" hidden></span>
+    </nav>
+    <div class="map-find">
+      <input type="search" class="map-find-input" placeholder="Find a system or region" aria-label="Find a system or region" autocomplete="off" spellcheck="false" aria-controls="map-find-list" aria-expanded="false" role="combobox" disabled>
+      <ul class="map-find-list" id="map-find-list" role="listbox" hidden></ul>
+    </div>
+    <div class="map-zoom" role="group" aria-label="Zoom">
+      <button type="button" class="btn small" data-map-zoom="in" aria-label="Zoom in" disabled>+</button>
+      <button type="button" class="btn small" data-map-zoom="out" aria-label="Zoom out" disabled>−</button>
+      <button type="button" class="btn small" data-map-zoom="fit" aria-label="Fit to view" disabled>Fit</button>
+    </div>
+  </div>
+  <div class="map-stage">
+    <canvas class="map-canvas" tabindex="0" role="img" aria-label="Star map of New Eden's known space. Drag to pan, scroll or pinch to zoom, select a system for its details."></canvas>
+    <p class="map-status" role="status">{{if .Ready}}Charting New Eden…{{else}}The map is drawn from the static data export, and this server has not imported its star geometry yet. It appears after the next static data update.{{end}}</p>
+    <noscript><p class="map-status">The interactive map needs JavaScript. Every region is listed below.</p></noscript>
+    <div class="map-hint" hidden></div>
+    <aside class="map-card" aria-live="polite" hidden>
+      <button type="button" class="map-card-close" data-map-close aria-label="Close system details">×</button>
+      <h2 class="map-card-name"></h2>
+      <p class="map-card-where"><span class="map-card-sec sec"></span> <span class="map-card-path"></span></p>
+      <p class="map-card-gates muted"></p>
+      <ul class="map-card-links"></ul>
+      <div class="map-card-actions">
+        <a class="btn small" data-map-system-page href="/system/">System page</a>
+        <button type="button" class="btn small" data-map-enter>Tactical view</button>
+      </div>
+    </aside>
+    <ol class="map-legend" aria-label="Security status colors">
+      {{range $t := mapSecTiers}}<li><span class="map-swatch sec sec-{{$t}}" data-tier="{{$t}}"></span><span class="map-legend-v">{{if eq $t 10}}1.0{{else if eq $t 5}}0.5{{else if eq $t 0}}0.0{{end}}</span></li>{{end}}
+    </ol>
+  </div>
+</div>
+
+<details class="map-index"{{if not .Ready}} open{{end}}>
+  <summary>All regions ({{len .Regions}})</summary>
+  <ul class="map-index-list">
+    {{range .Regions}}<li><a href="/region/?region={{.ID}}" data-map-region="{{.ID}}">{{.Name}}</a></li>{{end}}
+  </ul>
+</details>
+{{end}}
+{{end}}

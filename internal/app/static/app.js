@@ -2950,6 +2950,7 @@
   // base.html's nav, so a new page joins both or neither.
   var quickJumpPages = [
     { name: "Home", url: "/" },
+    { name: "Map", url: "/map/" },
     { name: "Overview", url: "/character/" },
     { name: "Characters", url: "/characters/" },
     { name: "Skill Plans", url: "/skills/plans" },

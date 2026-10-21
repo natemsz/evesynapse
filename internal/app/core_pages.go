@@ -73,6 +73,10 @@ type pageData struct {
 	Station *stationPageView
 	Region  *regionPageView
 
+	// The universe map (/map/): the stored payload's URL and the
+	// region index.
+	Map *mapPageView
+
 	// Player structure page (/structure/): the local structure
 	// record.
 	Structure *structurePageView
@@ -131,6 +135,8 @@ func sectionForPage(page string) string {
 		return "tools"
 	case "corporations.html", "corporation.html", "alliance.html", "corp_settings.html":
 		return "corporation"
+	case "map.html":
+		return "map"
 	case "sync.html":
 		return "sync"
 	case "admin.html":

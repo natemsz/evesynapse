@@ -666,6 +666,14 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 		r.Get("/", app.handleStationPage)
 	})
 
+	// The universe map: the page shell and its stored payload
+	// (universe_map.go), public like the place pages it links to.
+	r.Route("/map", func(r chi.Router) {
+		r.Use(anonPages)
+		r.Get("/", app.handleMapPage)
+		r.Get("/universe.json", app.handleUniverseJSON)
+	})
+
 	// Player structure page: what this instance knows about one
 	// Upwell structure (resolved name, owning corporation, system,
 	// type), filled in by the background structure resolution.

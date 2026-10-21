@@ -474,9 +474,16 @@ SELECT system_id, name, region_id, security FROM sde_systems
 WHERE system_id = $1
 `
 
-func (q *Queries) GetSDESystem(ctx context.Context, systemID int64) (SdeSystem, error) {
+type GetSDESystemRow struct {
+	SystemID int64   `json:"system_id"`
+	Name     string  `json:"name"`
+	RegionID int64   `json:"region_id"`
+	Security float64 `json:"security"`
+}
+
+func (q *Queries) GetSDESystem(ctx context.Context, systemID int64) (GetSDESystemRow, error) {
 	row := q.db.QueryRowContext(ctx, getSDESystem, systemID)
-	var i SdeSystem
+	var i GetSDESystemRow
 	err := row.Scan(
 		&i.SystemID,
 		&i.Name,
@@ -491,9 +498,16 @@ SELECT system_id, name, region_id, security FROM sde_systems
 WHERE LOWER(name) = LOWER($1)
 `
 
-func (q *Queries) GetSDESystemByName(ctx context.Context, lower string) (SdeSystem, error) {
+type GetSDESystemByNameRow struct {
+	SystemID int64   `json:"system_id"`
+	Name     string  `json:"name"`
+	RegionID int64   `json:"region_id"`
+	Security float64 `json:"security"`
+}
+
+func (q *Queries) GetSDESystemByName(ctx context.Context, lower string) (GetSDESystemByNameRow, error) {
 	row := q.db.QueryRowContext(ctx, getSDESystemByName, lower)
-	var i SdeSystem
+	var i GetSDESystemByNameRow
 	err := row.Scan(
 		&i.SystemID,
 		&i.Name,

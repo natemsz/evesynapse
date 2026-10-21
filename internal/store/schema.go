@@ -407,6 +407,13 @@ var pgPublicStructuresSchema string
 //go:embed schema_pg/069_abyssal_attribution.sql
 var pgAbyssalAttributionSchema string
 
+// Step 070: the abyssal learned correction -- confirmed sales
+// stamped onto sightings, each family's out-of-sample record,
+// and which market adjustment an item's estimate carries.
+//
+//go:embed schema_pg/070_abyssal_learned.sql
+var pgAbyssalLearnedSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -505,6 +512,7 @@ func schemaSteps() []schemaStep {
 		{67, "anonymous_fits", pgAnonymousFitsSchema, ""},
 		{68, "public_structures", pgPublicStructuresSchema, ""},
 		{69, "abyssal_attribution", pgAbyssalAttributionSchema, ""},
+		{70, "abyssal_learned", pgAbyssalLearnedSchema, ""},
 	}
 }
 

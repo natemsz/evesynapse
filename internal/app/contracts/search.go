@@ -1558,6 +1558,7 @@ type abyssalPanel struct {
 	ScoredNote   string // "Scored 3h ago"
 	CapNote      string // the capping attribute, in plain words
 	Recreation   string // rolling another this good, priced
+	Accuracy     string // the family's backtest, or why there is none yet
 	NoEstimate   string // why there is no figure, when there is none
 	ContextPrice string // the source module's own price, context only
 	ContextTier  string
@@ -2437,8 +2438,11 @@ func (app *mod) abyssalPanel(ctx context.Context, ab db.AbyssalItem) *abyssalPan
 		}
 	}
 	if ab.RecreationCost.Valid && ab.RecreationAttempts.Valid {
-		panel.Recreation = fmt.Sprintf("Rolling another this good takes about %s attempts on average -- around %s ISK at current base module and mutaplasmid prices.",
+		panel.Recreation = fmt.Sprintf("Rolling another this good takes about %s attempts on average on the cheapest base and mutaplasmid -- around %s ISK at current prices, after reselling the misses.",
 			formatAttempts(ab.RecreationAttempts.Float64), esi.FormatISK(ab.RecreationCost.Float64))
+	}
+	if ab.EstValue.Valid && ab.Family != "" {
+		panel.Accuracy = app.abyssalAccuracyNote(ctx, ab.Family)
 	}
 	// Source context: what the unmutated module prices at
 	// through the same house order. Display only.
@@ -2473,10 +2477,37 @@ func (app *mod) ladderBasisLabel(ctx context.Context, ab db.AbyssalItem) string 
 	default:
 		out = "placed on the ladder of ordinary modules"
 	}
-	if math.Abs(ab.MarketCalib-1) >= 0.01 {
+	switch {
+	case ab.MarketBasis == "learned":
+		out += fmt.Sprintf("; a correction learned from this kind's clean listings and sales adjusts it ×%.2f", ab.MarketCalib)
+	case math.Abs(ab.MarketCalib-1) >= 0.01:
 		out += fmt.Sprintf("; clean contract listings adjust it ×%.2f", ab.MarketCalib)
 	}
 	return out
+}
+
+// abyssalAccuracyNote words a family's backtest: how far off the
+// estimate typically was on newer listings it never saw, or that
+// the family is still too thin to test.
+func (app *mod) abyssalAccuracyNote(ctx context.Context, family string) string {
+	fit, err := app.queries.GetAbyssalFamilyFit(ctx, family)
+	if err != nil {
+		return ""
+	}
+	sales := ""
+	if fit.SalesN > 0 {
+		sales = fmt.Sprintf(", %d of them confirmed sales", fit.SalesN)
+	}
+	if !fit.MaeLadder.Valid {
+		return fmt.Sprintf("Accuracy not yet measured: %d clean listings of this kind so far%s. The figure rests on the ladder alone until there are enough to test it on.", fit.Comps, sales)
+	}
+	mae := fit.MaeLadder.Float64
+	how := "ladder and market factor"
+	if fit.UseModel && fit.MaeModel.Valid {
+		mae, how = fit.MaeModel.Float64, "learned correction"
+	}
+	return fmt.Sprintf("Tested on the %d newest of %d clean listings of this kind%s, priced without them: the %s was typically within ±%d%%.",
+		fit.HoldoutN, fit.Comps, sales, how, int((math.Exp(mae)-1)*100+0.5))
 }
 
 // formatAttempts words an expected-attempts figure:

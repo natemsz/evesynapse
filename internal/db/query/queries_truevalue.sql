@@ -54,7 +54,7 @@ ON CONFLICT (contract_id) DO UPDATE SET
     expires_at = EXCLUDED.expires_at;
 
 -- name: ListTVContractObservationsByRegion :many
-SELECT contract_id, region_id, type_id, shape, listed_price, sample_price, first_seen_at, last_seen_at, expires_at, vanished_at
+SELECT contract_id, region_id, type_id, shape, listed_price, sample_price, first_seen_at, last_seen_at, expires_at, vanished_at, sold
 FROM true_value_contract_observations
 WHERE region_id = $1 AND vanished_at IS NULL
 ORDER BY last_seen_at;
@@ -69,12 +69,18 @@ UPDATE true_value_contract_observations
 SET vanished_at = $2
 WHERE contract_id = $1;
 
+-- A watched listing ESI confirmed accepted (schema 070).
+-- name: MarkTVContractObservationSold :exec
+UPDATE true_value_contract_observations
+SET vanished_at = $2, sold = TRUE
+WHERE contract_id = $1;
+
 -- name: DeleteTVContractObservation :exec
 DELETE FROM true_value_contract_observations
 WHERE contract_id = $1;
 
 -- name: ListTVVanishedSamplesSince :many
-SELECT type_id, sample_price, vanished_at
+SELECT type_id, sample_price, vanished_at, sold
 FROM true_value_contract_observations
 WHERE vanished_at IS NOT NULL AND vanished_at >= $1
 ORDER BY type_id, vanished_at;

@@ -10,6 +10,19 @@ import (
 	"time"
 )
 
+type AbyssalFamilyFit struct {
+	Family    string          `json:"family"`
+	Comps     int64           `json:"comps"`
+	NEff      float64         `json:"n_eff"`
+	HoldoutN  int64           `json:"holdout_n"`
+	SalesN    int64           `json:"sales_n"`
+	MaeLadder sql.NullFloat64 `json:"mae_ladder"`
+	MaeModel  sql.NullFloat64 `json:"mae_model"`
+	BiasModel sql.NullFloat64 `json:"bias_model"`
+	UseModel  bool            `json:"use_model"`
+	FittedAt  time.Time       `json:"fitted_at"`
+}
+
 type AbyssalFamilyWeight struct {
 	Family      string  `json:"family"`
 	AttributeID int64   `json:"attribute_id"`
@@ -48,6 +61,7 @@ type AbyssalItem struct {
 	LadderLoTypeID     int64           `json:"ladder_lo_type_id"`
 	LadderHiTypeID     int64           `json:"ladder_hi_type_id"`
 	MarketCalib        float64         `json:"market_calib"`
+	MarketBasis        string          `json:"market_basis"`
 }
 
 type AbyssalMapping struct {
@@ -92,6 +106,8 @@ type AbyssalSighting struct {
 	OtherLines    sql.NullInt64   `json:"other_lines"`
 	OtherUnpriced sql.NullInt64   `json:"other_unpriced"`
 	OtherValue    sql.NullFloat64 `json:"other_value"`
+	SoldAt        sql.NullTime    `json:"sold_at"`
+	SaleProbedAt  sql.NullTime    `json:"sale_probed_at"`
 }
 
 type AccountLinkChoice struct {
@@ -1102,6 +1118,7 @@ type TrueValueContractObservation struct {
 	LastSeenAt  time.Time    `json:"last_seen_at"`
 	ExpiresAt   time.Time    `json:"expires_at"`
 	VanishedAt  sql.NullTime `json:"vanished_at"`
+	Sold        bool         `json:"sold"`
 }
 
 type TypeDetail struct {

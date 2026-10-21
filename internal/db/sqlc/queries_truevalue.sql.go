@@ -45,7 +45,7 @@ func (q *Queries) GetTrueValue(ctx context.Context, typeID int64) (TrueValue, er
 }
 
 const listTVContractObservationsByRegion = `-- name: ListTVContractObservationsByRegion :many
-SELECT contract_id, region_id, type_id, shape, listed_price, sample_price, first_seen_at, last_seen_at, expires_at, vanished_at
+SELECT contract_id, region_id, type_id, shape, listed_price, sample_price, first_seen_at, last_seen_at, expires_at, vanished_at, sold
 FROM true_value_contract_observations
 WHERE region_id = $1 AND vanished_at IS NULL
 ORDER BY last_seen_at
@@ -71,6 +71,7 @@ func (q *Queries) ListTVContractObservationsByRegion(ctx context.Context, region
 			&i.LastSeenAt,
 			&i.ExpiresAt,
 			&i.VanishedAt,
+			&i.Sold,
 		); err != nil {
 			return nil, err
 		}
@@ -86,7 +87,7 @@ func (q *Queries) ListTVContractObservationsByRegion(ctx context.Context, region
 }
 
 const listTVVanishedSamplesSince = `-- name: ListTVVanishedSamplesSince :many
-SELECT type_id, sample_price, vanished_at
+SELECT type_id, sample_price, vanished_at, sold
 FROM true_value_contract_observations
 WHERE vanished_at IS NOT NULL AND vanished_at >= $1
 ORDER BY type_id, vanished_at
@@ -96,6 +97,7 @@ type ListTVVanishedSamplesSinceRow struct {
 	TypeID      int64        `json:"type_id"`
 	SamplePrice float64      `json:"sample_price"`
 	VanishedAt  sql.NullTime `json:"vanished_at"`
+	Sold        bool         `json:"sold"`
 }
 
 func (q *Queries) ListTVVanishedSamplesSince(ctx context.Context, vanishedAt sql.NullTime) ([]ListTVVanishedSamplesSinceRow, error) {
@@ -107,7 +109,12 @@ func (q *Queries) ListTVVanishedSamplesSince(ctx context.Context, vanishedAt sql
 	var items []ListTVVanishedSamplesSinceRow
 	for rows.Next() {
 		var i ListTVVanishedSamplesSinceRow
-		if err := rows.Scan(&i.TypeID, &i.SamplePrice, &i.VanishedAt); err != nil {
+		if err := rows.Scan(
+			&i.TypeID,
+			&i.SamplePrice,
+			&i.VanishedAt,
+			&i.Sold,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -194,6 +201,23 @@ func (q *Queries) ListTrueValuesForTypes(ctx context.Context, dollar_1 []int64) 
 		return nil, err
 	}
 	return items, nil
+}
+
+const markTVContractObservationSold = `-- name: MarkTVContractObservationSold :exec
+UPDATE true_value_contract_observations
+SET vanished_at = $2, sold = TRUE
+WHERE contract_id = $1
+`
+
+type MarkTVContractObservationSoldParams struct {
+	ContractID int64        `json:"contract_id"`
+	VanishedAt sql.NullTime `json:"vanished_at"`
+}
+
+// A watched listing ESI confirmed accepted (schema 070).
+func (q *Queries) MarkTVContractObservationSold(ctx context.Context, arg MarkTVContractObservationSoldParams) error {
+	_, err := q.db.ExecContext(ctx, markTVContractObservationSold, arg.ContractID, arg.VanishedAt)
+	return err
 }
 
 const markTVContractObservationVanished = `-- name: MarkTVContractObservationVanished :exec

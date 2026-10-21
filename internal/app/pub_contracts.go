@@ -114,6 +114,11 @@ func (app *Application) refreshPublicContracts(ctx context.Context, allowance *f
 	}
 	probes, ltd := app.warmAbyssalProbes(ctx, allowance)
 	stored += probes
+	if ltd {
+		return stored, true
+	}
+	sales, ltd := app.probeAbyssalSales(ctx, allowance)
+	stored += sales
 	return stored, ltd
 }
 

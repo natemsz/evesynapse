@@ -233,8 +233,14 @@ func (app *Application) refreshTrueValues(ctx context.Context) {
 	if rows, err := app.queries.ListTVVanishedSamplesSince(ctx, sql.NullTime{Time: time.Now().Add(-tvSampleWindow), Valid: true}); err == nil {
 		for _, row := range rows {
 			if row.VanishedAt.Valid {
+				// A listing ESI confirmed accepted is a recorded
+				// sale (pub_contracts_sales.go), not a likely one.
+				source := tvSampleVanished
+				if row.Sold {
+					source = tvSampleFulfilled
+				}
 				vanished[row.TypeID] = append(vanished[row.TypeID], tvContractSample{
-					price: row.SamplePrice, at: row.VanishedAt.Time, source: tvSampleVanished,
+					price: row.SamplePrice, at: row.VanishedAt.Time, source: source,
 				})
 			}
 		}
@@ -654,11 +660,14 @@ func (app *Application) observeContract(ctx context.Context, c tvPublicContract,
 // watched listings against the public items endpoint (the
 // listing's own endpoint: gone from it means gone from the
 // public market). A listing still there is touched; one that
-// answers 404 vanished -- marked vanished when that happened
-// well before its expiry (the probable tier), deleted when
-// expiry itself is explanation enough. Any other answer is
-// inconclusive and leaves the row for the next crawl. It
-// returns the item fetches spent, against the crawl budget.
+// answers 204 before its expiry was accepted -- a recorded
+// sale (pub_contracts_sales.go); one that answers 404 vanished
+// -- marked vanished when that happened well before its
+// expiry (the probable tier: deleted, or accepted too long ago
+// for ESI to say), deleted when expiry itself is explanation
+// enough. Any other answer is inconclusive and leaves the row
+// for the next crawl. It returns the item fetches spent,
+// against the crawl budget.
 func (app *Application) reconcileContractObservations(ctx context.Context, regionID int64, now time.Time) (spent int) {
 	st := &app.trueValuePass
 	rows, err := app.queries.ListTVContractObservationsByRegion(ctx, regionID)
@@ -671,17 +680,29 @@ func (app *Application) reconcileContractObservations(ctx context.Context, regio
 			break
 		}
 		spent++
-		_, _, err := app.esi.FetchRaw(ctx, "", fmt.Sprintf("/contracts/public/items/%d/", obs.ContractID))
-		if err == nil {
+		exit, err := app.probeContractExit(ctx, obs.ContractID, obs.ExpiresAt, now)
+		if err != nil {
+			break // ESI's error limit: the rest wait for the next crawl
+		}
+		switch exit {
+		case exitLive:
 			if err := app.queries.TouchTVContractObservation(ctx, db.TouchTVContractObservationParams{
 				ContractID: obs.ContractID, LastSeenAt: now,
 			}); err != nil {
 				logging.Errorf("true values: touch observation %d: %v", obs.ContractID, err)
 			}
 			continue
-		}
-		code, hasCode := esi.StatusCode(err)
-		if !hasCode || code != 404 {
+		case exitSold:
+			if err := app.queries.MarkTVContractObservationSold(ctx, db.MarkTVContractObservationSoldParams{
+				ContractID: obs.ContractID, VanishedAt: sql.NullTime{Time: now, Valid: true},
+			}); err != nil {
+				logging.Errorf("true values: mark observation %d sold: %v", obs.ContractID, err)
+				continue
+			}
+			st.samples[obs.TypeID] = dropContractSample(st.samples[obs.TypeID], obs)
+			logging.Infof("true values: contract %d (type %d) accepted before expiry; counted as a recorded sale", obs.ContractID, obs.TypeID)
+			continue
+		case exitUnknown:
 			continue // a transient answer says nothing either way
 		}
 		if tvVanishedBeforeExpiry(now, obs.ExpiresAt) {

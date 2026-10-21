@@ -235,11 +235,12 @@ func TestAbyssalBenchmarkHarness(t *testing.T) {
 					typBySource[o.hit.SourceTypeID] = o.hit.SourceTypical
 				}
 			}
-			var cands []abyssalBaseCandidate
+			var paths []abyssalRecreationPath
 			for src, b := range baseBySource {
-				cands = append(cands, abyssalBaseCandidate{SourceTypeID: src, Typical: typBySource[src], Base: b})
+				paths = append(paths, abyssalRecreationPath{SourceTypeID: src, BaseTypical: typBySource[src], Base: b,
+					MutatorTypical: e.hit.MutatorTypical, Ranges: e.in.Ranges})
 			}
-			if cost, attempts, ok := abyssalRecreationCost(e.sc, e.in, e.rolls, cands, e.hit.MutatorTypical); ok {
+			if cost, attempts, ok := abyssalRecreationCost(e.sc, e.in, e.rolls, paths, nil); ok {
 				res.Recreation, res.Attempts = cost, attempts
 			}
 		}

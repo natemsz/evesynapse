@@ -116,6 +116,50 @@ func TestAbyssalAgeWeight(t *testing.T) {
 	}
 }
 
+// TestAbyssalPerfectRung: the perfect roll closes the ladder from
+// above, so a roll past the officer rung prices by how far past
+// it -- higher for better, never past what a perfect roll costs.
+func TestAbyssalPerfectRung(t *testing.T) {
+	in := testFamilyInputs(map[int64]float64{64: 0.95, 204: 0.5, 6: 0.9, 50: 0.8})
+	ladder := map[int64]map[int64]float64{
+		1: {64: 2.0, 6: 10, 50: 20},
+		2: {64: 2.1, 6: 9.9, 50: 20},
+	}
+	prices := map[int64]float64{1: 100e6, 2: 300e6}
+	var rungs []abyssalRung
+	for id, vals := range ladder {
+		ri, _ := abyssalLadderIndex(in, vals)
+		rungs = append(rungs, abyssalRung{TypeID: id, Price: prices[id], Index: ri})
+	}
+	paths := []abyssalRecreationPath{{SourceTypeID: 1, BaseTypical: 100e6, Base: in.Base,
+		MutatorTypeID: 9, MutatorTypical: 60e6, Ranges: in.Ranges}}
+	pr, ok := abyssalPerfectRung(in, rungs, paths, nil)
+	if !ok || pr.TypeID != abyssalPerfectRungID || pr.Price <= 300e6 {
+		t.Fatalf("the perfect roll must close the ladder above its top rung: %+v ok=%v", pr, ok)
+	}
+	top := math.Max(rungs[0].Index, rungs[1].Index)
+	closed := append(append([]abyssalRung(nil), rungs...), pr)
+	prev := 0.0
+	for idx := top + 0.01; idx < pr.Index; idx += (pr.Index - top) / 20 {
+		logV, _, lo, hi, scope, _ := abyssalLadderPrice(idx, closed)
+		v := math.Exp(logV)
+		if scope != "between" || lo != 2 || hi != abyssalPerfectRungID {
+			t.Fatalf("index %v: %s %d/%d, want between the officer and the perfect roll", idx, scope, lo, hi)
+		}
+		if v < prev || v <= 300e6 || v >= pr.Price {
+			t.Errorf("index %v: %v must climb from the top rung toward the perfect roll", idx, v)
+		}
+		prev = v
+	}
+	// Priced below the top rung, the perfect roll adds nothing
+	// (about a thousand attempts at 11k each here).
+	cheap := []abyssalRecreationPath{{SourceTypeID: 1, BaseTypical: 1e4, Base: in.Base,
+		MutatorTypeID: 9, MutatorTypical: 1e3, Ranges: in.Ranges}}
+	if _, ok := abyssalPerfectRung(in, rungs, cheap, nil); ok {
+		t.Error("a perfect roll cheaper than the top rung must not close the ladder")
+	}
+}
+
 // TestAbyssalLadderEndsBounded: the runaway shape seen in stored
 // figures -- two top rungs at nearly the same index (a vertical
 // fitted step) and an item far past them. Past the top rung the

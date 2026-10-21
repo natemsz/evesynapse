@@ -2462,6 +2462,9 @@ func (app *mod) ladderBasisLabel(ctx context.Context, ab db.AbyssalItem) string 
 	name := func(id int64) string { return app.deps.TypeNameOrID(ctx, id) }
 	var out string
 	switch {
+	case ab.EstScope == "between" && ab.LadderLoTypeID > 0 && ab.LadderHiTypeID == -1:
+		// The perfect-roll rung (abyssal.go, abyssalPerfectRungID).
+		out = fmt.Sprintf("past %s, the strongest ordinary module of its kind, priced toward what a perfect roll would cost to make", name(ab.LadderLoTypeID))
 	case ab.EstScope == "between" && ab.LadderLoTypeID > 0 && ab.LadderHiTypeID > 0:
 		out = fmt.Sprintf("placed between %s and %s on the ladder of ordinary modules", name(ab.LadderLoTypeID), name(ab.LadderHiTypeID))
 	case ab.EstScope == "above" && ab.LadderLoTypeID > 0:

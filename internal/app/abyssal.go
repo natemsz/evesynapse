@@ -618,10 +618,13 @@ func abyssalWeightedQuantile(vals []weightedValue, q float64) float64 {
 // beyond the band still ranks above one inside it -- and the
 // item is priced between the rungs it falls between, in log
 // space (rung prices made non-decreasing in index first, so a
-// better module never prices lower). Past the top rung the item
-// prices at the top rung -- nothing above it says how much more;
-// below the bottom rung the first step extends, to at most a
-// tenth of that rung.
+// better module never prices lower). The ladder is closed from
+// above by the perfect roll -- every stat at its band's good end,
+// priced at what making one would cost (abyssalPerfectRung) -- so
+// an item past the top ordinary rung prices between it and the
+// perfect roll; with no priced perfect roll, the top rung is the
+// price. Below the bottom rung the first step extends, to at most
+// a tenth of that rung.
 // Because the item and the rungs are measured against the same
 // base, where the item falls between two rungs is a fact of its
 // absolute stats: identical stats from a different source
@@ -1019,7 +1022,7 @@ func estimateAbyssal(in abyssalEstimateInput) abyssalEstimate {
 			}
 			priced := 0
 			for _, r := range in.Rungs {
-				if r.Price > 0 {
+				if r.Price > 0 && r.TypeID != abyssalPerfectRungID {
 					priced++
 				}
 			}
@@ -1145,6 +1148,74 @@ func abyssalRecreationCost(sc abyssalScoring, in abyssalScoringInputs, target ma
 		return 0, 0, false
 	}
 	return best, attempts, true
+}
+
+// abyssalPerfectRungID marks the ladder's perfect-roll rung: not
+// a module anyone lists, the best roll the item's mutaplasmid can
+// make on its source base.
+const abyssalPerfectRungID = -1
+
+// abyssalPerfectRoll is the best roll the item's bands allow on
+// its source base: every moved attribute at its band's good end.
+func abyssalPerfectRoll(in abyssalScoringInputs) map[int64]float64 {
+	vals := make(map[int64]float64, len(in.Base))
+	for id, v := range in.Base {
+		vals[id] = v
+	}
+	for id, r := range in.Ranges {
+		b, ok := in.Base[id]
+		if !ok {
+			continue
+		}
+		high := true
+		if hg, ok := in.HighGood[id]; ok {
+			high = hg
+		}
+		if high {
+			vals[id] = b * r.MaxMult
+		} else {
+			vals[id] = b * r.MinMult
+		}
+	}
+	return vals
+}
+
+// abyssalPerfectRung is the ladder's fixed point past the top
+// rung: the perfect roll, at its own index, priced at what making
+// one would cost (the same recreation paths and resale credit as
+// the item's own cap). An item past the top rung then prices
+// between that rung and this one instead of stopping at the top:
+// better rolls price higher, and nothing can pass what a perfect
+// roll costs to make. ok is false when the perfect roll does not
+// sit above the top rung, cannot be priced, or would price below
+// it (the top rung is then the ceiling).
+func abyssalPerfectRung(in abyssalScoringInputs, rungs []abyssalRung, paths []abyssalRecreationPath, residual func(abyssalRecreationPath) float64) (abyssalRung, bool) {
+	// The ladder's top: its highest index, and its dearest price
+	// (the isotonic top end is never dearer than that).
+	topIdx, topPrice := math.Inf(-1), 0.0
+	for _, r := range rungs {
+		if r.Price > 0 {
+			topIdx = math.Max(topIdx, r.Index)
+			topPrice = math.Max(topPrice, r.Price)
+		}
+	}
+	if math.IsInf(topIdx, -1) {
+		return abyssalRung{}, false
+	}
+	perfect := abyssalPerfectRoll(in)
+	idx, ok := abyssalLadderIndex(in, perfect)
+	if !ok || idx <= topIdx+1e-6 {
+		return abyssalRung{}, false
+	}
+	sc := scoreAbyssal(abyssalScoringInputs{
+		Family: in.Family, Rolls: perfect, Ranges: in.Ranges,
+		Base: in.Base, HighGood: in.HighGood, Weights: in.Weights,
+	})
+	cost, _, ok := abyssalRecreationCost(sc, in, perfect, paths, residual)
+	if !ok || cost <= topPrice {
+		return abyssalRung{}, false
+	}
+	return abyssalRung{TypeID: abyssalPerfectRungID, Price: cost, Index: idx}, true
 }
 
 // abyssalTypicalRoll is a path's middle roll: every attribute
@@ -1767,6 +1838,11 @@ func (app *Application) scoreAbyssalItems(ctx context.Context) int {
 				recreation = cost
 				params.RecreationCost = sql.NullFloat64{Float64: cost, Valid: true}
 				params.RecreationAttempts = sql.NullFloat64{Float64: attempts, Valid: true}
+			}
+			// The perfect roll closes the ladder from above, so a
+			// roll past the top rung still prices by how far past.
+			if pr, ok := abyssalPerfectRung(in, rungs, paths, residual); ok {
+				rungs = append(rungs, pr)
 			}
 			// The family's learned correction, where its
 			// backtest earned it a say; the measured error

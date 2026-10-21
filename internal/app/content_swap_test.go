@@ -11,6 +11,8 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"regexp"
+	"strings"
 	"testing"
 )
 
@@ -102,6 +104,51 @@ func TestPagesRenderFullShellNoJS(t *testing.T) {
 	}
 }
 
+var stylesheetHrefRE = regexp.MustCompile(`href="(/static/[^"]+\.css\?v=[^"]+)"`)
+
+func TestFullLoadsCarryEachStylesheetOnce(t *testing.T) {
+	app, _, q := buildCorpTestApp(t, &countingTransport{})
+	ctx := context.Background()
+	user, err := q.CreateUser(ctx)
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	seedCharacter(t, q, user.ID, fixtureCharA, "Fixture Alpha")
+	cookie := sessionCookie(t, app, user.ID, fixtureCharA, "Fixture Alpha")
+	version := staticAssetVersion()
+
+	// The full document is the swap's contract for page assets:
+	// the swap adopts exactly the stylesheet links it carries, so
+	// each one must appear exactly once — and each page must
+	// carry its own sheet.
+	pages := map[string]string{
+		"/intel/kills/":      "/static/killboard.css",
+		"/map/":              "/static/map.css",
+		"/contracts/search/": "/static/contracts.css",
+		"/planner/":          "/static/plan.css",
+	}
+	for path, sheet := range pages {
+		code, body := getSwapPage(t, app, cookie, path)
+		if code != http.StatusOK {
+			t.Errorf("GET %s: status %d, want 200", path, code)
+			continue
+		}
+		seen := map[string]int{}
+		for _, m := range stylesheetHrefRE.FindAllStringSubmatch(body, -1) {
+			seen[m[1]]++
+		}
+		for href, n := range seen {
+			if n != 1 {
+				t.Errorf("GET %s: stylesheet %s linked %d times, want exactly 1", path, href, n)
+			}
+		}
+		own := sheet + "?v=" + version
+		if !strings.Contains(body, `href="`+own+`"`) {
+			t.Errorf("GET %s: its own stylesheet %s is not linked", path, own)
+		}
+	}
+}
+
 func TestSwapExcludedPagesKeepPageScripts(t *testing.T) {
 	app, _, q := buildCorpTestApp(t, &countingTransport{})
 	ctx := context.Background()
@@ -114,9 +161,10 @@ func TestSwapExcludedPagesKeepPageScripts(t *testing.T) {
 	version := staticAssetVersion()
 
 	// The simulator and saved fits always load whole (the swap
-	// denylist names them); the planner swaps only when plan.js is
-	// already loaded, so all three keep their page scripts — and
-	// the shell around them, swap script included.
+	// denylist names them), so their full documents keep fit.js —
+	// and the shell around them, swap script included. The
+	// planner's full document carries plan.js the same way; a
+	// swap adopts it when the shell does not have it yet.
 	for path, script := range map[string]string{
 		"/fittings/":       `src="/static/fit.js?v=` + version + `"`,
 		"/fittings/saved/": `src="/static/fit.js?v=` + version + `"`,

@@ -8,18 +8,25 @@
 //
 // What qualifies for a swap (see shouldSwapClick): an unmodified
 // left-click on a same-origin link with no target/download marker.
-// Pages that need scripts the current shell has not loaded, pages
-// that redirect (an expired session bounces to /), pages without a
-// <main>, and auto-refresh pages always fall back to a full
-// navigation — a failed swap must never strand anyone on stale
-// content.
+// A swap adopts whatever the fetched page carries that the shell
+// lacks — its page stylesheet (the fetched <head> does not survive
+// a <main>-only swap, so its links are re-created in the shell's
+// head and pruned again when a later page does not carry them) and
+// its page scripts (loaded in document order against the
+// swapped-in content, before the content-ready event a full load
+// would follow them with). Pages that redirect (an expired session
+// bounces to /), pages without a <main>, auto-refresh pages, and
+// pages whose assets fail to load always fall back to a full
+// navigation — a failed swap must never strand anyone on stale,
+// half-styled or inert content.
 (function () {
   "use strict";
 
   // Link targets that always load whole: the fitting simulator and
-  // saved fits (fit.js state), the build planner (plan.js state),
-  // the SSO round-trips, and the character switch (the shell's
-  // account area changes identity with it).
+  // saved fits (fit.js holds the editor's state in its one-time
+  // closure and never reboots on content-ready, so a swapped-in
+  // editor would sit inert), the SSO round-trips, and the character
+  // switch (the shell's account area changes identity with it).
   var SWAP_DENY_EXACT = ["/fittings/"];
   var SWAP_DENY_PREFIX = ["/fittings/saved", "/auth/", "/characters/switch"];
 
@@ -31,9 +38,10 @@
   // run speculatively on a hover.
   var PREFETCH_DENY_PREFIX = ["/sync/", "/characters/switch"];
 
-  // Scripts the shell always carries. A fetched page that needs
-  // anything else (fit.js, plan.js, push.js) loads whole when the
-  // current page does not already have it.
+  // Scripts the shell always carries. A fetched page needing
+  // anything else (plan.js, map.js, push.js) has it adopted by the
+  // swap; the shell set is listed so adoption never asks for a
+  // script that is definitionally already running.
   var SHELL_SCRIPTS = ["/static/boot.js", "/static/app.js", "/static/swap.js"];
 
   function normalizePath(path) {
@@ -81,14 +89,16 @@
   }
 
   // Pure: given a fetch outcome, swap or load whole? r is
-  //   { ok, redirected, hasMain, autorefresh, missingScripts }
+  //   { ok, redirected, hasMain, autorefresh }
   // Returns "" when the swap may proceed, else a short reason.
+  // The assets a page needs are not a fallback question: the swap
+  // adopts them, and only an asset that fails to load falls back,
+  // at load time.
   function checkSwapResponse(r) {
     if (!r || !r.ok) return "bad-status";
     if (r.redirected) return "redirected";
     if (!r.hasMain) return "no-main";
     if (r.autorefresh) return "autorefresh";
-    if (r.missingScripts && r.missingScripts.length) return "missing-scripts";
     return "";
   }
 
@@ -127,6 +137,28 @@
       // load. Counting them here failed every swap.
       if (key.indexOf("/cdn-cgi/") === 0) continue;
       if (!seen[key] && out.indexOf(key) === -1) out.push(key);
+    }
+    return out;
+  }
+
+  // Pure: the stylesheets a fetched page carries that the live
+  // document does not. needed entries are { path } objects (or
+  // plain path strings); loaded is a list of hrefs/pathnames in
+  // any form — both sides run through scriptKey, so the versioned
+  // ?v= href and the bare pathname compare equal. Edge-injected
+  // sheets are never a page requirement, mirroring scriptsMissing.
+  function stylesMissing(needed, loaded) {
+    var seen = {};
+    var i;
+    for (i = 0; i < loaded.length; i++) seen[scriptKey(loaded[i])] = true;
+    var out = [];
+    for (i = 0; i < needed.length; i++) {
+      var item = needed[i];
+      var key = scriptKey(item && item.path ? item.path : item);
+      if (!key || key.indexOf("/cdn-cgi/") === 0) continue;
+      if (seen[key]) continue;
+      seen[key] = true;
+      out.push(item);
     }
     return out;
   }
@@ -187,6 +219,7 @@
       checkSwapResponse: checkSwapResponse,
       scriptKey: scriptKey,
       scriptsMissing: scriptsMissing,
+      stylesMissing: stylesMissing,
       bestNavHref: bestNavHref,
       normalizePath: normalizePath,
       isSlowConnection: isSlowConnection,
@@ -289,23 +322,184 @@
 
   var inflight = {}; // url -> true while a prefetch is running
   var navController = null; // AbortController for the live navigation
+  var navSeq = 0; // bumped per navigation; stale swaps stop quietly
 
-  function scriptPathnames(doc) {
+  // A document's external scripts as { path, src }, in document
+  // order: path is the comparison form, src the literal attribute
+  // an adopted <script> must carry (version query included).
+  function pageScripts(doc) {
     var out = [];
+    if (!doc || !doc.querySelectorAll) return out;
     var tags = doc.querySelectorAll("script[src]");
     for (var i = 0; i < tags.length; i++) {
-      out.push(scriptKey(tags[i].getAttribute("src") || ""));
+      var src = (tags[i].getAttribute && tags[i].getAttribute("src")) || tags[i].src || "";
+      var path = scriptKey(src);
+      if (path) out.push({ path: path, src: src });
+    }
+    return out;
+  }
+
+  // A document's stylesheet links as { href, path, media }, in
+  // document order — the page assets a <main>-only swap would
+  // otherwise throw away with the fetched <head>.
+  function pageStyles(doc) {
+    var out = [];
+    if (!doc || !doc.querySelectorAll) return out;
+    var links = doc.querySelectorAll('link[rel="stylesheet"]');
+    for (var i = 0; i < links.length; i++) {
+      var href = (links[i].getAttribute && links[i].getAttribute("href")) || links[i].href || "";
+      var path = scriptKey(href);
+      if (!path || path.indexOf("/cdn-cgi/") === 0) continue;
+      out.push({
+        href: href, path: path,
+        media: (links[i].getAttribute && links[i].getAttribute("media")) || ""
+      });
     }
     return out;
   }
 
   function loadedScriptPathnames() {
+    return pageScripts(document).map(function (s) { return s.path; });
+  }
+
+  // ---------- asset adoption ----------
+
+  // A page asset the shell waits on gets this long; past it the
+  // swap gives up and the browser loads the page in full.
+  var ASSET_LOAD_TIMEOUT_MS = 6000;
+
+  // The stylesheets the document booted with, captured lazily at
+  // the first adoption, while the live document is still the boot
+  // one. Together with the sheets the swap itself adopts, they
+  // mark the links the swap may prune: a link that appears any
+  // other way (an edge injection, another script's doing) is not
+  // the swap's to remove.
+  var bootStylePaths = null;
+  function liveStyleLinks() {
+    var head = document.head;
+    if (!head || !head.querySelectorAll) return [];
+    return head.querySelectorAll('link[rel="stylesheet"]');
+  }
+  function loadedStylePaths() {
     var out = [];
-    var tags = document.querySelectorAll("script[src]");
-    for (var i = 0; i < tags.length; i++) {
-      out.push(scriptKey(tags[i].getAttribute("src") || ""));
+    var links = liveStyleLinks();
+    for (var i = 0; i < links.length; i++) {
+      var href = (links[i].getAttribute && links[i].getAttribute("href")) || links[i].href || "";
+      var p = scriptKey(href);
+      if (p) out.push(p);
     }
     return out;
+  }
+  function ensureBootStyles() {
+    if (!bootStylePaths) bootStylePaths = loadedStylePaths();
+    return bootStylePaths;
+  }
+
+  function loadStylesheet(style) {
+    return new Promise(function (resolve, reject) {
+      var el = document.createElement("link");
+      el.rel = "stylesheet";
+      el.href = style.href;
+      if (style.media) el.media = style.media;
+      el.setAttribute("data-swap-style", style.path);
+      var done = false;
+      var timer = setTimeout(function () {
+        if (!done) { done = true; reject(new Error("stylesheet timeout")); }
+      }, ASSET_LOAD_TIMEOUT_MS);
+      el.onload = function () { if (!done) { done = true; clearTimeout(timer); resolve(); } };
+      el.onerror = function () { if (!done) { done = true; clearTimeout(timer); reject(new Error("stylesheet failed")); } };
+      // Page sheets sit before phone.css in a full load's head;
+      // an adopted sheet takes the same seat, so the cascade
+      // resolves exactly as the server rendered it.
+      var phone = null;
+      var links = liveStyleLinks();
+      for (var i = 0; i < links.length; i++) {
+        var href = (links[i].getAttribute && links[i].getAttribute("href")) || links[i].href || "";
+        if (scriptKey(href) === "/static/phone.css") { phone = links[i]; break; }
+      }
+      if (phone && phone.parentNode) phone.parentNode.insertBefore(el, phone);
+      else document.head.appendChild(el);
+    });
+  }
+
+  // adoptStyles(styles): load every sheet the page carries that
+  // the live document lacks, and wait for them — the swap paints
+  // only once the new page's styles are in, so it never flashes
+  // unstyled. Rejects when a sheet fails or stalls.
+  function adoptStyles(styles) {
+    ensureBootStyles();
+    var missing = stylesMissing(styles || [], loadedStylePaths());
+    if (!missing.length) return Promise.resolve();
+    return Promise.all(missing.map(loadStylesheet));
+  }
+
+  // pruneStyles(styles): drop the sheets the incoming page does
+  // not carry — adopted ones and the boot page's own alike. The
+  // shell's sheets survive every prune because every page's head
+  // lists them; a page sheet (the killboard's, the map's) leaves
+  // with its page, so the shell does not accumulate every sheet
+  // it has ever shown. Runs after the paint, so the outgoing page
+  // keeps its styles through the transition that carries it away.
+  function pruneStyles(styles) {
+    var keep = {};
+    var i, k;
+    var wanted = styles || [];
+    for (i = 0; i < wanted.length; i++) {
+      k = scriptKey(wanted[i] && wanted[i].path ? wanted[i].path : wanted[i]);
+      if (k) keep[k] = true;
+    }
+    var boot = {};
+    var bootPaths = ensureBootStyles();
+    for (i = 0; i < bootPaths.length; i++) boot[bootPaths[i]] = true;
+    var links = liveStyleLinks();
+    for (i = 0; i < links.length; i++) {
+      var adopted = links[i].getAttribute ? links[i].getAttribute("data-swap-style") : null;
+      var href = (links[i].getAttribute && links[i].getAttribute("href")) || links[i].href || "";
+      var path = adopted || scriptKey(href);
+      if (!path || keep[path]) continue;
+      if (adopted || boot[path]) links[i].remove();
+    }
+  }
+
+  function loadScript(item) {
+    return new Promise(function (resolve, reject) {
+      var el = document.createElement("script");
+      el.src = item.src;
+      el.async = false; // run in the order the page lists them
+      var done = false;
+      var timer = setTimeout(function () {
+        if (!done) { done = true; reject(new Error("script timeout")); }
+      }, ASSET_LOAD_TIMEOUT_MS);
+      el.onload = function () { if (!done) { done = true; clearTimeout(timer); resolve(); } };
+      el.onerror = function () { if (!done) { done = true; clearTimeout(timer); reject(new Error("script failed")); } };
+      (document.body || document.head).appendChild(el);
+    });
+  }
+
+  // adoptScripts(scripts): load the page scripts the shell has
+  // not got, one at a time in document order. Runs after the
+  // paint, against the swapped-in content: a page script's
+  // one-time initialization sees its own page, exactly as on a
+  // full load, and the content-ready dispatch that follows it
+  // reboots the ones that listen for it. Rejects when a script
+  // fails or stalls. Scripts are never unloaded — once adopted,
+  // a script stays for the session and scriptsMissing simply
+  // stops asking for it.
+  function adoptScripts(scripts) {
+    var list = scripts || [];
+    var missing = scriptsMissing(
+      list.map(function (s) { return s.path; }),
+      loadedScriptPathnames());
+    if (!missing.length) return Promise.resolve();
+    var byPath = {};
+    for (var i = 0; i < list.length; i++) {
+      if (!byPath[list[i].path]) byPath[list[i].path] = list[i];
+    }
+    var chain = Promise.resolve();
+    missing.forEach(function (path) {
+      chain = chain.then(function () { return loadScript(byPath[path]); });
+    });
+    return chain;
   }
 
   function fetchPage(url, signal, prefetching) {
@@ -338,19 +532,19 @@
         }
         var next = doc.getElementById("main-content");
         var body = doc.body;
-        var missing = scriptsMissing(scriptPathnames(doc), loadedScriptPathnames());
         var reason = checkSwapResponse({
           ok: true,
           redirected: false,
           hasMain: !!next,
-          autorefresh: !!(body && body.getAttribute("data-autorefresh")),
-          missingScripts: missing
+          autorefresh: !!(body && body.getAttribute("data-autorefresh"))
         });
         if (reason) return { reason: reason };
         var titleEl = doc.querySelector("title");
         return {
           main: next.innerHTML,
-          title: titleEl ? titleEl.textContent : ""
+          title: titleEl ? titleEl.textContent : "",
+          styles: pageStyles(doc),
+          scripts: pageScripts(doc)
         };
       });
     });
@@ -412,35 +606,69 @@
         window.scrollTo(0, push);
       }
     };
-    var after = function () {
-      try {
-        main.focus({ preventScroll: true });
-      } catch (e) {
-        main.focus();
+    // applySwapped resolves once the new content is painted and
+    // settled. The content-ready dispatch is not its tail any
+    // more: performSwap fires it after the page's scripts are
+    // adopted, so a page script is listening (or has run) by the
+    // time widgets reboot — the sequence a full load produces.
+    return new Promise(function (resolve) {
+      var after = function () {
+        try {
+          main.focus({ preventScroll: true });
+        } catch (e) {
+          main.focus();
+        }
+        resolve();
+      };
+      if (!reducedMotion && document.startViewTransition) {
+        // The transition name is armed only for the swap itself: a
+        // standing view-transition-name on <main> makes it a backdrop
+        // root, which silently disables backdrop-filter for every
+        // glass surface inside it. While the transition runs the
+        // content is a snapshot anyway, so the name costs nothing
+        // there; the moment it finishes, the name comes off and the
+        // glass blurs again.
+        main.style.viewTransitionName = "main-content";
+        var transition = document.startViewTransition(function () { paint(); });
+        var disarm = function () {
+          main.style.viewTransitionName = "";
+          after();
+        };
+        transition.finished.then(disarm, disarm);
+      } else {
+        paint();
+        after();
       }
+    });
+  }
+
+  // performSwap(url, entry, push, isCurrent) — one complete swap:
+  // adopt the page's stylesheets, paint, adopt its missing
+  // scripts, prune the sheets the new page does not carry, then
+  // fire content-ready. An asset that fails or stalls hands the
+  // navigation to the browser instead of stranding a half-styled
+  // or inert page. isCurrent() reports whether a newer navigation
+  // has superseded this one; a superseded swap stops quietly.
+  function performSwap(url, entry, push, isCurrent) {
+    var current = function () { return !isCurrent || isCurrent(); };
+    return adoptStyles(entry.styles).then(function () {
+      if (!current()) return false;
+      return applySwapped(url, entry, push);
+    }).then(function (painted) {
+      if (painted === false || !current()) return false;
+      return adoptScripts(entry.scripts);
+    }).then(function () {
+      if (!current()) return false;
+      pruneStyles(entry.styles);
       document.dispatchEvent(new CustomEvent("evesynapse:content-ready", {
         detail: { root: main, url: url }
       }));
-    };
-    if (!reducedMotion && document.startViewTransition) {
-      // The transition name is armed only for the swap itself: a
-      // standing view-transition-name on <main> makes it a backdrop
-      // root, which silently disables backdrop-filter for every
-      // glass surface inside it. While the transition runs the
-      // content is a snapshot anyway, so the name costs nothing
-      // there; the moment it finishes, the name comes off and the
-      // glass blurs again.
-      main.style.viewTransitionName = "main-content";
-      var transition = document.startViewTransition(function () { paint(); });
-      var disarm = function () {
-        main.style.viewTransitionName = "";
-        after();
-      };
-      transition.finished.then(disarm, disarm);
-    } else {
-      paint();
-      after();
-    }
+      return true;
+    }).catch(function () {
+      if (!current()) return false;
+      fullNav(url);
+      return false;
+    });
   }
 
   function fullNav(url) {
@@ -460,6 +688,8 @@
   function navigate(url, opts) {
     opts = opts || {};
     if (navController && navController.abort) navController.abort();
+    var mySeq = ++navSeq;
+    var isCurrent = function () { return mySeq === navSeq; };
     var hit = cacheGet(url);
     if (hit) {
       if (hit.prefetched) {
@@ -475,7 +705,7 @@
           window.history.pushState({ esSwap: 1, scroll: 0 }, "", url);
         } catch (e) { /* private mode: the swap still lands */ }
       }
-      applySwapped(url, hit, opts.push === false ? opts.scroll : "top");
+      performSwap(url, hit, opts.push === false ? opts.scroll : "top", isCurrent);
       return;
     }
     var controller = null;
@@ -497,7 +727,7 @@
           window.history.pushState({ esSwap: 1, scroll: 0 }, "", url);
         } catch (e) { /* the swap still lands */ }
       }
-      applySwapped(url, page, opts.push === false ? opts.scroll : "top");
+      performSwap(url, page, opts.push === false ? opts.scroll : "top", isCurrent);
     }).catch(function (err) {
       if (err && err.name === "AbortError") return;
       fullNav(url);
@@ -569,10 +799,13 @@
   document.addEventListener("focusin", prefetchFromEvent);
 
   // Remember where this shell started: popping back past the first
-  // swap restores it from here instead of reloading.
+  // swap restores it from here instead of reloading. Its assets
+  // ride along so the restore prunes and adopts like any swap.
   cachePut(window.location.href, {
     main: main.innerHTML,
-    title: document.title
+    title: document.title,
+    styles: pageStyles(document),
+    scripts: pageScripts(document)
   });
   try {
     window.history.replaceState({ esSwap: 1, scroll: window.scrollY }, "", window.location.href);
@@ -593,7 +826,10 @@
     if (!same) return;
     var hit = cacheGet(url);
     if (hit) {
-      applySwapped(url, hit, scroll);
+      // A cached restore still runs the full swap: the page's
+      // sheet may have been pruned while it was away.
+      var mySeq = ++navSeq;
+      performSwap(url, hit, scroll, function () { return mySeq === navSeq; });
       return;
     }
     navigate(url, { push: false, scroll: scroll });

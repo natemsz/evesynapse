@@ -68,7 +68,7 @@
   </article>
   {{end}}
   </div>
-  {{if .Fittings.Warming}}<p><small>EVE fittings are still syncing. Progress is on the <a href="/sync/">Sync page</a>.</small></p>{{end}}
+  {{if .Fittings.Warming}}<p><small>EVE fittings are still syncing.{{if .IsAdmin}} Progress is on the <a href="/sync/">Sync page</a>.{{end}}</small></p>{{end}}
   {{else}}
   {{if eq .Fittings.Source "public"}}
   <p><small>No public fits yet. Open one of your EveSynapse fits in the fitting tool and turn on Make Public to publish it here.</small></p>
@@ -76,12 +76,12 @@
   <p><small>No EveSynapse fits yet. Build one in the <a href="/fittings/">fitting tool</a> and save it.</small></p>
   {{else if eq .Fittings.Source "eve"}}
   {{if .Fittings.Warming}}
-  <p>Still syncing. Progress is on the <a href="/sync/">Sync page</a>.</p>
+  <p>Still syncing.{{if .IsAdmin}} Progress is on the <a href="/sync/">Sync page</a>.{{end}}</p>
   {{else}}
   <p><small>No saved fittings for this character in EVE.</small></p>
   {{end}}
   {{else if .Fittings.Warming}}
-  <p>Still syncing. Progress is on the <a href="/sync/">Sync page</a>.</p>
+  <p>Still syncing.{{if .IsAdmin}} Progress is on the <a href="/sync/">Sync page</a>.{{end}}</p>
   {{else}}
   <p><small>No loadouts yet. Save a fit in the <a href="/fittings/">fitting tool</a>, or link a character to see its EVE fittings here.</small></p>
   {{end}}

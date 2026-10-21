@@ -13,7 +13,7 @@
 {{if .Contacts.Contacts.Note}}
 <p><small>{{.Contacts.Contacts.Note}}</small></p>
 {{else if .Contacts.Contacts.Warming}}
-<p><small>Still syncing. Progress is on the <a href="/sync/">Sync page</a>.</small></p>
+<p><small>Still syncing.{{if .IsAdmin}} Progress is on the <a href="/sync/">Sync page</a>.{{end}}</small></p>
 {{else if .Contacts.Rows}}
 <div class="tw">
 <table>

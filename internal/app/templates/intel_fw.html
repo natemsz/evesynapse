@@ -7,7 +7,7 @@
 
 {{if .IntelFW}}
   {{if .IntelFW.Warming}}
-  <p>Not loaded yet. The public faction-warfare data is fetched on a regular cycle; progress is on the <a href="/sync/">Sync page</a>.</p>
+  <p>Not loaded yet. The public faction-warfare data is fetched on a regular cycle{{if .IsAdmin}}; progress is on the <a href="/sync/">Sync page</a>{{end}}.</p>
   {{else}}
   {{if .IntelFW.Factions}}
   <div class="tw">

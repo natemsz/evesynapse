@@ -22,7 +22,7 @@
 </table>
 </div>
 {{else}}
-<p><small>No static data yet. The item database fills in when the static data import finishes; progress is on the <a href="/sync/">Sync page</a>.</small></p>
+<p><small>No static data yet. The item database fills in when the static data import finishes{{if .IsAdmin}}; progress is on the <a href="/sync/">Sync page</a>{{end}}.</small></p>
 {{end}}
 {{end}}
 

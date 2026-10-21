@@ -11,7 +11,7 @@
 {{with .SkillPlans}}
 
 {{if .GraphWarming}}
-<p>Skill data is still loading. Plans appear when the static data import finishes; progress is on the <a href="/sync/">Sync page</a>.</p>
+<p>Skill data is still loading. Plans appear when the static data import finishes{{if $.IsAdmin}}; progress is on the <a href="/sync/">Sync page</a>{{end}}.</p>
 {{else}}
 
 {{if .FitPreview}}

@@ -7,7 +7,7 @@
 
 {{if .Planner}}
 {{if .Planner.Warming}}
-<p>The planner's build data isn't loaded yet. It arrives with the static data import; <a href="/sync/">Sync</a> shows progress.</p>
+<p>The planner's build data isn't loaded yet. It arrives with the static data import{{if .IsAdmin}}; <a href="/sync/">Sync</a> shows progress{{end}}.</p>
 {{else}}
 
 <div class="foldable" data-fold="never">

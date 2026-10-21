@@ -1481,7 +1481,7 @@ footer {
      raster (a crop of the master wallpaper's own star field),
      static and repeating. */
   background: rgba(11, 11, 11, 0.85);
-  background-image: url("/static/stars-tile.webp?v=7ccb18e9f09425b8");
+  background-image: url("/static/stars-tile.webp?v=dbb246864ab41384");
   -webkit-backdrop-filter: blur(18px);
   backdrop-filter: blur(18px);
   border-top: 1px solid #262626;

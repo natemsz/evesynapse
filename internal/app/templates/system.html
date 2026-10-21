@@ -5,16 +5,34 @@
 <h1><span class="gt">Solar system</span></h1>
 <p><small>This system isn't in the star map data yet. It will show up after the next star map update.</small></p>
 {{else}}
-<h1 class="h-with-action"><span class="gt">{{.System.Name}}</span>{{with dotlanSystemURL .System.Name}}<a class="h-action" href="{{.}}" target="_blank" rel="noopener noreferrer" title="Open {{$.System.Name}} on Dotlan"><svg viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="url(#nav-glyph-gradient)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4.5h5.5V10"/><path d="M19.5 4.5 11 13"/><path d="M18 14v4.5a1 1 0 0 1-1 1H6.5a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1H11"/></g></svg>Dotlan</a>{{end}}</h1>
+<h1 class="h-with-action"><span class="gt">{{.System.Name}}</span><a class="h-action" href="/map/?system={{.System.SystemID}}" title="Open {{.System.Name}} on the universe map">Map</a></h1>
 
 <div class="tw">
 <table>
   <tbody>
     <tr><th>Security status</th><td>{{secStatus .System.Security}}</td></tr>
-    {{if .System.Region}}<tr><th>Region</th><td>{{regionLink .System.RegionID .System.Region}} · {{dotlanRegion .System.Region}}</td></tr>{{end}}
+    {{if .System.Region}}<tr><th>Region</th><td>{{regionLink .System.RegionID .System.Region}} · <a href="/map/?region={{.System.RegionID}}">Map</a></td></tr>{{end}}
+    {{if .System.SovAllianceID}}<tr><th>Sovereignty</th><td>{{allianceLink .System.SovAllianceID .System.SovAllianceName}}</td></tr>{{else if .System.SovCorpID}}<tr><th>Sovereignty</th><td>{{corpLink .System.SovCorpID .System.SovCorpName}}</td></tr>{{else if .System.SovFactionName}}<tr><th>Sovereignty</th><td>{{.System.SovFactionName}}</td></tr>{{end}}
   </tbody>
 </table>
 </div>
+
+<h2>Activity</h2>
+{{with .System.Activity}}
+<div class="tw">
+<table>
+  <thead><tr><th></th><th>Last hour</th><th>Last 24 hours</th><th>{{.AvgLabel}}</th></tr></thead>
+  <tbody>
+    <tr><th>Ship kills</th><td>{{.ShipKills1h}}</td><td>{{.ShipKills24h}}</td><td>{{.ShipKillsDay}}</td></tr>
+    <tr><th>Pod kills</th><td>{{.PodKills1h}}</td><td>{{.PodKills24h}}</td><td>{{.PodKillsDay}}</td></tr>
+    <tr><th>NPC kills</th><td>{{.NPCKills1h}}</td><td>{{.NPCKills24h}}</td><td>{{.NPCKillsDay}}</td></tr>
+    <tr><th>Jumps</th><td>{{.Jumps1h}}</td><td>{{.Jumps24h}}</td><td>{{.JumpsDay}}</td></tr>
+  </tbody>
+</table>
+</div>
+{{else}}
+<p><small>No activity data collected yet.</small></p>
+{{end}}
 
 {{if .System.Stations}}
 <h2>Stations</h2>

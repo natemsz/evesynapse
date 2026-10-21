@@ -763,6 +763,12 @@ type PilotRecord struct {
 	NotedAt     sql.NullTime `json:"noted_at"`
 }
 
+type PlaceStatsMetum struct {
+	Kind        string    `json:"kind"`
+	FetchedAt   time.Time `json:"fetched_at"`
+	CachedUntil time.Time `json:"cached_until"`
+}
+
 type PlanetName struct {
 	PlanetID   int64        `json:"planet_id"`
 	Name       string       `json:"name"`
@@ -873,6 +879,24 @@ type PushSubscription struct {
 	CreatedAt time.Time    `json:"created_at"`
 	LastOkAt  sql.NullTime `json:"last_ok_at"`
 	Failures  int64        `json:"failures"`
+}
+
+type RegionActivityStat struct {
+	RegionID     int64     `json:"region_id"`
+	ShipKills1h  int64     `json:"ship_kills_1h"`
+	PodKills1h   int64     `json:"pod_kills_1h"`
+	NpcKills1h   int64     `json:"npc_kills_1h"`
+	Jumps1h      int64     `json:"jumps_1h"`
+	ShipKills24h int64     `json:"ship_kills_24h"`
+	PodKills24h  int64     `json:"pod_kills_24h"`
+	NpcKills24h  int64     `json:"npc_kills_24h"`
+	Jumps24h     int64     `json:"jumps_24h"`
+	ShipKillsDay float64   `json:"ship_kills_day"`
+	PodKillsDay  float64   `json:"pod_kills_day"`
+	NpcKillsDay  float64   `json:"npc_kills_day"`
+	JumpsDay     float64   `json:"jumps_day"`
+	HoursCovered int32     `json:"hours_covered"`
+	UpdatedAt    time.Time `json:"updated_at"`
 }
 
 type RestockTarget struct {
@@ -1172,6 +1196,42 @@ type SwarmStaging struct {
 	ReceivedAt time.Time `json:"received_at"`
 	Source     string    `json:"source"`
 	Deferrals  int32     `json:"deferrals"`
+}
+
+type SystemActivityHour struct {
+	SystemID  int64     `json:"system_id"`
+	Hour      time.Time `json:"hour"`
+	ShipKills int64     `json:"ship_kills"`
+	NpcKills  int64     `json:"npc_kills"`
+	PodKills  int64     `json:"pod_kills"`
+	ShipJumps int64     `json:"ship_jumps"`
+}
+
+type SystemActivityStat struct {
+	SystemID     int64     `json:"system_id"`
+	ShipKills1h  int64     `json:"ship_kills_1h"`
+	PodKills1h   int64     `json:"pod_kills_1h"`
+	NpcKills1h   int64     `json:"npc_kills_1h"`
+	Jumps1h      int64     `json:"jumps_1h"`
+	ShipKills24h int64     `json:"ship_kills_24h"`
+	PodKills24h  int64     `json:"pod_kills_24h"`
+	NpcKills24h  int64     `json:"npc_kills_24h"`
+	Jumps24h     int64     `json:"jumps_24h"`
+	ShipKillsDay float64   `json:"ship_kills_day"`
+	PodKillsDay  float64   `json:"pod_kills_day"`
+	NpcKillsDay  float64   `json:"npc_kills_day"`
+	JumpsDay     float64   `json:"jumps_day"`
+	HoursCovered int32     `json:"hours_covered"`
+	UpdatedAt    time.Time `json:"updated_at"`
+}
+
+type SystemSovereignty struct {
+	SystemID      int64     `json:"system_id"`
+	AllianceID    int64     `json:"alliance_id"`
+	CorporationID int64     `json:"corporation_id"`
+	FactionID     int64     `json:"faction_id"`
+	FactionName   string    `json:"faction_name"`
+	UpdatedAt     time.Time `json:"updated_at"`
 }
 
 type TradeIdea struct {

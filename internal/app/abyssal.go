@@ -618,8 +618,10 @@ func abyssalWeightedQuantile(vals []weightedValue, q float64) float64 {
 // beyond the band still ranks above one inside it -- and the
 // item is priced between the rungs it falls between, in log
 // space (rung prices made non-decreasing in index first, so a
-// better module never prices lower). Past the top rung the
-// ladder's last step extends; below the bottom rung, its first.
+// better module never prices lower). Past the top rung the item
+// prices at the top rung -- nothing above it says how much more;
+// below the bottom rung the first step extends, to at most a
+// tenth of that rung.
 // Because the item and the rungs are measured against the same
 // base, where the item falls between two rungs is a fact of its
 // absolute stats: identical stats from a different source
@@ -645,9 +647,23 @@ const (
 	abyssalRungRatioMax = 1.8
 	abyssalQuartileZ    = 0.6745
 	// abyssalLadderStep is the log-price step per index unit
-	// used past the ends when the ladder has a single rung or a
-	// flat end: about the curve's own steepness at mid-range.
+	// used below the bottom rung when the ladder has a single
+	// rung: about the curve's own steepness at mid-range. A
+	// fitted end step is held within [0.25x, 4x] of it, so two
+	// rungs at nearly the same index cannot make a vertical one.
 	abyssalLadderStep = 2.0
+	// abyssalBelowMaxDrop: below the bottom rung the price falls
+	// at most to a tenth of that rung's (log 10).
+	abyssalBelowMaxDrop = 2.302585092994046
+	// abyssalAboveSD is the log uncertainty of an item past the
+	// top rung, which prices at that rung: it is at least that
+	// good, and how much better the ladder cannot say.
+	abyssalAboveSD = 0.25
+	// abyssalLadderSaneMax bounds a stored ladder figure the
+	// corpus will read: nothing the game trades comes near it,
+	// so a figure past it is a pre-clamp extrapolation awaiting
+	// its rescore, and reads as missing.
+	abyssalLadderSaneMax = 1e13
 )
 
 // abyssalLadderIndex is the performance index of a set of
@@ -795,14 +811,19 @@ func abyssalLadderPrice(index float64, rungs []abyssalRung) (logV, sd float64, l
 		logs[i], ones[i] = math.Log(r.Price), 1
 	}
 	mono := abyssalIsotonic(logs, ones)
+	// Below the bottom rung the price falls along the end step,
+	// never past abyssalBelowMaxDrop. Above the top rung it does
+	// not climb at all: with nothing above to interpolate toward,
+	// the top rung is the price (recreation cost and the learned
+	// correction are what can still lift it).
+	drop := func(step, d float64) float64 { return math.Min(step*d, abyssalBelowMaxDrop) }
 	if len(rs) == 1 {
 		d := index - rs[0].Index
-		logV = mono[0] + abyssalLadderStep*d
-		sd = 0.3 + 0.5*math.Abs(abyssalLadderStep*d)
 		if d >= 0 {
-			return logV, sd, rs[0].TypeID, 0, "single", true
+			return mono[0], 0.3, rs[0].TypeID, 0, "single", true
 		}
-		return logV, sd, 0, rs[0].TypeID, "single", true
+		dr := drop(abyssalLadderStep, -d)
+		return mono[0] - dr, 0.3 + 0.5*dr, 0, rs[0].TypeID, "single", true
 	}
 	stepAt := func(i, j int) float64 {
 		di := rs[j].Index - rs[i].Index
@@ -810,21 +831,17 @@ func abyssalLadderPrice(index float64, rungs []abyssalRung) (logV, sd float64, l
 			return abyssalLadderStep
 		}
 		s := (mono[j] - mono[i]) / di
-		if s < 0.25*abyssalLadderStep {
-			s = 0.25 * abyssalLadderStep // a flat end still climbs
-		}
-		return s
+		// A flat end still climbs; near-equal indices never
+		// make a vertical one.
+		return math.Min(math.Max(s, 0.25*abyssalLadderStep), 4*abyssalLadderStep)
 	}
 	last := len(rs) - 1
 	switch {
 	case index <= rs[0].Index:
-		d := rs[0].Index - index
-		logV = mono[0] - stepAt(0, 1)*d
-		return logV, 0.12 + 0.6*stepAt(0, 1)*d, 0, rs[0].TypeID, "below", true
+		dr := drop(stepAt(0, 1), rs[0].Index-index)
+		return mono[0] - dr, 0.12 + 0.6*dr, 0, rs[0].TypeID, "below", true
 	case index >= rs[last].Index:
-		d := index - rs[last].Index
-		logV = mono[last] + stepAt(last-1, last)*d
-		return logV, 0.12 + 0.6*stepAt(last-1, last)*d, rs[last].TypeID, 0, "above", true
+		return mono[last], abyssalAboveSD, rs[last].TypeID, 0, "above", true
 	}
 	for i := 1; i <= last; i++ {
 		if index <= rs[i].Index {
@@ -841,7 +858,19 @@ func abyssalLadderPrice(index float64, rungs []abyssalRung) (logV, sd float64, l
 			return logV, sd, rs[a].TypeID, rs[b].TypeID, "between", true
 		}
 	}
-	return mono[last], 0.12, rs[last].TypeID, 0, "above", true
+	return mono[last], abyssalAboveSD, rs[last].TypeID, 0, "above", true
+}
+
+// abyssalSaneLadder reads a stored ladder figure for the corpus:
+// a non-finite or runaway one (stored before the top-rung clamp,
+// and rewritten by its next rescore) is missing, 0, so neither
+// the market factor nor the learned correction ever trains on it.
+func abyssalSaneLadder(v sql.NullFloat64) float64 {
+	if !v.Valid || math.IsNaN(v.Float64) || math.IsInf(v.Float64, 0) ||
+		v.Float64 <= 0 || v.Float64 > abyssalLadderSaneMax {
+		return 0
+	}
+	return v.Float64
 }
 
 // abyssalIsotonic pools adjacent violators: the weighted
@@ -1607,7 +1636,7 @@ func (app *Application) scoreAbyssalItems(ctx context.Context) int {
 				Score:          score,
 				Ask:            ask,
 				SourceTypical:  priceByType[r.SourceTypeID],
-				LadderValue:    r.LadderValue.Float64,
+				LadderValue:    abyssalSaneLadder(r.LadderValue),
 				DynamicsWeight: w,
 				PrimaryAbs:     r.PrimaryAbs.Float64,
 				Rolls:          r.Attributes,

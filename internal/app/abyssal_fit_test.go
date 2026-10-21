@@ -115,3 +115,43 @@ func TestAbyssalAgeWeight(t *testing.T) {
 		t.Errorf("staleness: new %v, stale %v; want stale lower and floored at 0.35", liveNew, liveStale)
 	}
 }
+
+// TestAbyssalLadderEndsBounded: the runaway shape seen in stored
+// figures -- two top rungs at nearly the same index (a vertical
+// fitted step) and an item far past them. Past the top rung the
+// price is the top rung's; below the bottom it never falls past
+// a tenth of it; a runaway stored figure reads as missing.
+func TestAbyssalLadderEndsBounded(t *testing.T) {
+	rungs := []abyssalRung{
+		{TypeID: 1, Price: 50e6, Index: 0.2},
+		{TypeID: 2, Price: 400e6, Index: 0.5},
+		{TypeID: 3, Price: 900e6, Index: 0.5000001},
+	}
+	for _, idx := range []float64{0.6, 3, 400} {
+		logV, sd, lo, hi, scope, ok := abyssalLadderPrice(idx, rungs)
+		if !ok || scope != "above" || lo != 3 || hi != 0 {
+			t.Fatalf("index %v: %v %v/%v ok=%v", idx, scope, lo, hi, ok)
+		}
+		if v := math.Exp(logV); math.Abs(v-900e6) > 1 || math.IsInf(sd, 0) || sd > 1 {
+			t.Errorf("index %v: above the top rung prices at it: %v (sd %v)", idx, v, sd)
+		}
+	}
+	for _, idx := range []float64{0.1, -50} {
+		logV, sd, _, _, scope, _ := abyssalLadderPrice(idx, rungs)
+		if v := math.Exp(logV); scope != "below" || v < 5e6-1 || v > 50e6 || sd > 2 {
+			t.Errorf("index %v: below the bottom rung %v (sd %v), want within [5m, 50m]", idx, v, sd)
+		}
+	}
+	single := []abyssalRung{{TypeID: 7, Price: 100e6, Index: 0.4}}
+	if logV, _, _, _, _, _ := abyssalLadderPrice(90, single); math.Abs(math.Exp(logV)-100e6) > 1 {
+		t.Errorf("a single rung is the ceiling too: %v", math.Exp(logV))
+	}
+	for _, bad := range []float64{math.Inf(1), math.NaN(), 3.4e174, -5} {
+		if got := abyssalSaneLadder(sql.NullFloat64{Float64: bad, Valid: true}); got != 0 {
+			t.Errorf("stored ladder %v must read as missing, got %v", bad, got)
+		}
+	}
+	if got := abyssalSaneLadder(sql.NullFloat64{Float64: 3e8, Valid: true}); got != 3e8 {
+		t.Errorf("a sane stored ladder passes through: %v", got)
+	}
+}

@@ -7,6 +7,7 @@ package db
 
 import (
 	"context"
+	"database/sql"
 	"time"
 
 	"github.com/lib/pq"
@@ -18,6 +19,17 @@ SELECT COUNT(*) FROM intel_channel_grants WHERE channel_id = $1
 
 func (q *Queries) CountIntelChannelGrants(ctx context.Context, channelID int64) (int64, error) {
 	row := q.db.QueryRowContext(ctx, countIntelChannelGrants, channelID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countIntelTokens = `-- name: CountIntelTokens :one
+SELECT COUNT(*) FROM intel_tokens WHERE user_id = $1
+`
+
+func (q *Queries) CountIntelTokens(ctx context.Context, userID int64) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countIntelTokens, userID)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -45,6 +57,34 @@ func (q *Queries) CreateIntelChannel(ctx context.Context, arg CreateIntelChannel
 		arg.OwnerUserID,
 		arg.Name,
 		arg.Description,
+		arg.CreatedAt,
+	)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
+}
+
+const createIntelToken = `-- name: CreateIntelToken :one
+INSERT INTO intel_tokens (user_id, name, prefix, token_hash, created_at)
+VALUES ($1, $2, $3, $4, $5)
+RETURNING id
+`
+
+type CreateIntelTokenParams struct {
+	UserID    int64     `json:"user_id"`
+	Name      string    `json:"name"`
+	Prefix    string    `json:"prefix"`
+	TokenHash string    `json:"token_hash"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+// Posting tokens (schema 079).
+func (q *Queries) CreateIntelToken(ctx context.Context, arg CreateIntelTokenParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, createIntelToken,
+		arg.UserID,
+		arg.Name,
+		arg.Prefix,
+		arg.TokenHash,
 		arg.CreatedAt,
 	)
 	var id int64
@@ -86,6 +126,23 @@ func (q *Queries) DeleteIntelReport(ctx context.Context, id int64) error {
 	return err
 }
 
+const deleteIntelToken = `-- name: DeleteIntelToken :execrows
+DELETE FROM intel_tokens WHERE id = $1 AND user_id = $2
+`
+
+type DeleteIntelTokenParams struct {
+	ID     int64 `json:"id"`
+	UserID int64 `json:"user_id"`
+}
+
+func (q *Queries) DeleteIntelToken(ctx context.Context, arg DeleteIntelTokenParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, deleteIntelToken, arg.ID, arg.UserID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const getIntelChannel = `-- name: GetIntelChannel :one
 SELECT id, owner_user_id, name, description, created_at FROM intel_channels WHERE id = $1
 `
@@ -117,6 +174,22 @@ func (q *Queries) GetIntelReport(ctx context.Context, id int64) (GetIntelReportR
 	row := q.db.QueryRowContext(ctx, getIntelReport, id)
 	var i GetIntelReportRow
 	err := row.Scan(&i.ID, &i.ChannelID, &i.AuthorUserID)
+	return i, err
+}
+
+const getIntelTokenByHash = `-- name: GetIntelTokenByHash :one
+SELECT id, user_id FROM intel_tokens WHERE token_hash = $1
+`
+
+type GetIntelTokenByHashRow struct {
+	ID     int64 `json:"id"`
+	UserID int64 `json:"user_id"`
+}
+
+func (q *Queries) GetIntelTokenByHash(ctx context.Context, tokenHash string) (GetIntelTokenByHashRow, error) {
+	row := q.db.QueryRowContext(ctx, getIntelTokenByHash, tokenHash)
+	var i GetIntelTokenByHashRow
+	err := row.Scan(&i.ID, &i.UserID)
 	return i, err
 }
 
@@ -164,6 +237,38 @@ func (q *Queries) InsertIntelReport(ctx context.Context, arg InsertIntelReportPa
 	var id int64
 	err := row.Scan(&id)
 	return id, err
+}
+
+const intelReportExists = `-- name: IntelReportExists :one
+SELECT EXISTS (
+    SELECT 1 FROM intel_reports
+    WHERE channel_id = $1 AND seen_at = $2
+      AND system_id = $3 AND reporter = $4 AND text = $5
+)::boolean
+`
+
+type IntelReportExistsParams struct {
+	ChannelID int64     `json:"channel_id"`
+	SeenAt    time.Time `json:"seen_at"`
+	SystemID  int64     `json:"system_id"`
+	Reporter  string    `json:"reporter"`
+	Text      string    `json:"text"`
+}
+
+// Whether a report already stands: pasted and watched chat lines are
+// sent again (a restart, two characters in one channel), and the same
+// sighting is stored once.
+func (q *Queries) IntelReportExists(ctx context.Context, arg IntelReportExistsParams) (bool, error) {
+	row := q.db.QueryRowContext(ctx, intelReportExists,
+		arg.ChannelID,
+		arg.SeenAt,
+		arg.SystemID,
+		arg.Reporter,
+		arg.Text,
+	)
+	var column_1 bool
+	err := row.Scan(&column_1)
+	return column_1, err
 }
 
 const listAccessibleChannels = `-- name: ListAccessibleChannels :many
@@ -350,6 +455,48 @@ func (q *Queries) ListIntelReports(ctx context.Context, arg ListIntelReportsPara
 	return items, nil
 }
 
+const listIntelTokens = `-- name: ListIntelTokens :many
+SELECT id, name, prefix, created_at, last_used_at FROM intel_tokens
+WHERE user_id = $1 ORDER BY created_at DESC, id DESC
+`
+
+type ListIntelTokensRow struct {
+	ID         int64        `json:"id"`
+	Name       string       `json:"name"`
+	Prefix     string       `json:"prefix"`
+	CreatedAt  time.Time    `json:"created_at"`
+	LastUsedAt sql.NullTime `json:"last_used_at"`
+}
+
+func (q *Queries) ListIntelTokens(ctx context.Context, userID int64) ([]ListIntelTokensRow, error) {
+	rows, err := q.db.QueryContext(ctx, listIntelTokens, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListIntelTokensRow
+	for rows.Next() {
+		var i ListIntelTokensRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Prefix,
+			&i.CreatedAt,
+			&i.LastUsedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listRecentIntelReports = `-- name: ListRecentIntelReports :many
 SELECT r.id, r.channel_id, r.system_id, r.reporter, r.text, r.pilots, r.hostiles, r.clear, r.scan_id, r.seen_at
 FROM intel_reports r
@@ -455,6 +602,20 @@ func (q *Queries) PruneIntelReports(ctx context.Context, before time.Time) (int6
 		return 0, err
 	}
 	return result.RowsAffected()
+}
+
+const touchIntelToken = `-- name: TouchIntelToken :exec
+UPDATE intel_tokens SET last_used_at = $1 WHERE id = $2
+`
+
+type TouchIntelTokenParams struct {
+	At sql.NullTime `json:"at"`
+	ID int64        `json:"id"`
+}
+
+func (q *Queries) TouchIntelToken(ctx context.Context, arg TouchIntelTokenParams) error {
+	_, err := q.db.ExecContext(ctx, touchIntelToken, arg.At, arg.ID)
+	return err
 }
 
 const updateIntelChannel = `-- name: UpdateIntelChannel :exec

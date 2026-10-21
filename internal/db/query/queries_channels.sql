@@ -86,6 +86,38 @@ DELETE FROM intel_reports WHERE id = $1;
 -- name: PruneIntelReports :execrows
 DELETE FROM intel_reports WHERE seen_at < sqlc.arg(before)::timestamptz;
 
+-- Whether a report already stands: pasted and watched chat lines are
+-- sent again (a restart, two characters in one channel), and the same
+-- sighting is stored once.
+-- name: IntelReportExists :one
+SELECT EXISTS (
+    SELECT 1 FROM intel_reports
+    WHERE channel_id = sqlc.arg(channel_id) AND seen_at = sqlc.arg(seen_at)
+      AND system_id = sqlc.arg(system_id) AND reporter = sqlc.arg(reporter) AND text = sqlc.arg(text)
+)::boolean;
+
+-- Posting tokens (schema 079).
+-- name: CreateIntelToken :one
+INSERT INTO intel_tokens (user_id, name, prefix, token_hash, created_at)
+VALUES (sqlc.arg(user_id), sqlc.arg(name), sqlc.arg(prefix), sqlc.arg(token_hash), sqlc.arg(created_at))
+RETURNING id;
+
+-- name: ListIntelTokens :many
+SELECT id, name, prefix, created_at, last_used_at FROM intel_tokens
+WHERE user_id = $1 ORDER BY created_at DESC, id DESC;
+
+-- name: GetIntelTokenByHash :one
+SELECT id, user_id FROM intel_tokens WHERE token_hash = $1;
+
+-- name: TouchIntelToken :exec
+UPDATE intel_tokens SET last_used_at = sqlc.arg(at) WHERE id = sqlc.arg(id);
+
+-- name: DeleteIntelToken :execrows
+DELETE FROM intel_tokens WHERE id = sqlc.arg(id) AND user_id = sqlc.arg(user_id);
+
+-- name: CountIntelTokens :one
+SELECT COUNT(*) FROM intel_tokens WHERE user_id = $1;
+
 -- Every system's name: the chat-line reader's dictionary.
 -- name: ListSDESystemNames :many
 SELECT system_id, name FROM sde_systems;

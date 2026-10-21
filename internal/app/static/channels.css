@@ -137,6 +137,19 @@ html[data-theme="light"] .ch { --ch-hostile: #b0302a; --ch-clear: #2f8f46; }
 .ch-stack .btn { align-self: flex-start; }
 .ch-danger { margin-top: 0.9rem; padding-top: 0.8rem; border-top: 1px solid var(--box-edge); }
 
+/* --- The log watcher --- */
+.ch-watch p { margin: 0 0 0.6rem; }
+.ch-dl { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.ch-newtoken { margin: 0.4rem 0 0.8rem; padding: 0.7rem 0.8rem; border: 1px solid var(--ch-clear); border-radius: var(--r-md); background: color-mix(in srgb, var(--ch-clear) 10%, transparent); }
+.ch-config { margin: 0 0 0.5rem; padding: 0.6rem; overflow-x: auto; border-radius: var(--r-xs); background: var(--row-alt); font-size: 0.8rem; user-select: all; }
+.ch-tokens { margin: 0 0 0.7rem; padding: 0; list-style: none; }
+.ch-tokens li { display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem 0.8rem; padding: 0.4rem 0; border-top: 1px solid var(--box-edge); font-size: 0.88rem; }
+.ch-tokens li:first-child { border-top: 0; }
+.ch-token-n { flex: 1; min-width: 10rem; }
+.ch-tokens form { margin: 0 0 0 auto; }
+.ch-token-add { display: flex; align-items: flex-end; gap: 0.6rem; }
+.ch-token-add label { flex: 0 1 16rem; }
+
 /* --- Phones: one column; a report folds to two lines --- */
 @media (max-width: 45rem) {
   .ch-layout { grid-template-columns: minmax(0, 1fr); }

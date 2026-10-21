@@ -261,7 +261,7 @@
     function glideZoom(px, py, factor, dur) {
       wheelZ = null;
       var k = clampK((anim && anim.kind === "zoom" ? Math.exp(anim.l1) : cam.k) * factor);
-      if (still) { setZoomAt(px, py, k); afterZoom(); schedule(); return; }
+      if (still) { setZoomAt(px, py, k); afterZoom(factor > 1 ? 1 : -1); schedule(); return; }
       anim = { kind: "zoom", t0: performance.now(), dur: dur || 260, px: px, py: py,
         l0: Math.log(cam.k), l1: Math.log(k) };
       schedule();
@@ -289,7 +289,7 @@
           var a = anim;
           setZoomAt(a.px, a.py, Math.exp(a.l0 + (a.l1 - a.l0) * e));
           if (t >= 1) anim = null; else more = true;
-          afterZoom();
+          afterZoom(a.l1 > a.l0 ? 1 : -1);
         }
       }
       if (wheelZ) {
@@ -298,7 +298,7 @@
         setZoomAt(wheelZ.px, wheelZ.py, Math.exp(done ? lt : lk + (lt - lk) * 0.3));
         var w = wheelZ;
         if (done) wheelZ = null; else more = true;
-        afterZoom();
+        afterZoom(lt > lk ? 1 : -1);
         if (wheelZ === w && !done) more = true;
       }
       return more;
@@ -308,7 +308,7 @@
       anim = null;
       var base = wheelZ ? wheelZ.k : cam.k;
       var k = clampK(base * factor);
-      if (still) { setZoomAt(px, py, k); afterZoom(); schedule(); return; }
+      if (still) { setZoomAt(px, py, k); afterZoom(factor > 1 ? 1 : -1); schedule(); return; }
       wheelZ = { k: k, px: px, py: py };
       schedule();
     }
@@ -467,7 +467,20 @@
     // anchored to the map, not the screen, and labels claim in a
     // fixed order (best-connected systems first), so panning moves
     // labels and cells together and the same names win every frame.
+    // Zooming moves overlaps every frame, so names placed last frame
+    // claim before new ones (inPlaceFirst): a name holds its place
+    // until one already placed truly covers it, and names stop
+    // blinking in and out as the scale changes.
+    var shownLabels = {};
     function drawLabels(k, ox, oy, r) {
+      var nextShown = {};
+      // Run fn over items (already in priority order) twice: the
+      // names showing last frame first, then the rest.
+      function inPlaceFirst(items, key, fn) {
+        var i;
+        for (i = 0; i < items.length; i++) if (shownLabels[key(items[i])]) fn(items[i]);
+        for (i = 0; i < items.length; i++) if (!shownLabels[key(items[i])]) fn(items[i]);
+      }
       var cell = 12, cols = Math.ceil(cw / cell) + 2, grid = new Uint8Array(cols * (Math.ceil(ch / cell) + 2));
       var gx = ((ox % cell) + cell) % cell, gy = ((oy % cell) + cell) % cell;
       function claim(x, y, w, h) {
@@ -479,11 +492,16 @@
         for (b = y0; b <= y1; b++) for (a = x0; a <= x1; a++) grid[b * cols + a] = 1;
         return true;
       }
-      function label(text, x, y, size, color, weight, force) {
+      function label(text, x, y, size, color, weight, force, key) {
         ctx.font = (weight || "500") + " " + size + "px " + font;
         var w = textWidth(text, size);
         var lx = x - w / 2, ly = y;
-        if (!claim(lx - 2, ly - 2, w + 4, size + 4) && !force) return null;
+        // Geometric hysteresis: a name already showing claims a box
+        // a little inside its text, a newcomer one a little outside,
+        // so two names at the edge of touching don't trade places.
+        var pad = key && shownLabels[key] ? -1 : 3;
+        if (!claim(lx - pad, ly - pad, w + 2 * pad, size + 2 * pad) && !force) return null;
+        if (key) nextShown[key] = 1;
         ctx.lineWidth = 3;
         ctx.strokeStyle = colors.halo;
         ctx.strokeText(text, lx, ly + size * 0.8);
@@ -508,40 +526,45 @@
         // they only thin out, never vanish (regionLabelAlpha),
         // so a zoomed-in region's name is always there to click.
         ctx.globalAlpha = regionLabelAlpha(f);
-        var size = Math.min(12 + f * 0.8, 18);
-        for (i = 0; i < P.regions.length; i++) {
+        var size = Math.min(12 + f * 0.8, 18), regs = [];
+        for (i = 0; i < P.regions.length; i++) if (G.members[i].length) regs.push(i);
+        inPlaceFirst(regs, function (i) { return "R" + i; }, function (i) {
           var rg = P.regions[i];
-          if (!G.members[i].length) continue;
-          var box = label(rg.name.toUpperCase(), rg.x * k + ox, rg.y * k + oy - size / 2, size, colors.region, "600");
+          var box = label(rg.name.toUpperCase(), rg.x * k + ox, rg.y * k + oy - size / 2, size, colors.region, "600", false, "R" + i);
           if (box) labelBoxes.push({ r: i, b: box });
-        }
+        });
         ctx.globalAlpha = 1;
         // System names once the picture opens up.
         if (f > 6) {
+          var vis = [];
           for (var o = 0; o < G.n; o++) {
             i = G.prio[o];
             var sx = S.x[i] * k + ox, sy = S.y[i] * k + oy;
-            if (sx < 0 || sy < 0 || sx > cw || sy > ch) continue;
-            label(S.n[i], sx, sy + r + 3, 11, colors.labelDim);
+            if (sx >= 0 && sy >= 0 && sx <= cw && sy <= ch) vis.push(i);
           }
+          inPlaceFirst(vis, function (i) { return "s" + i; }, function (i) {
+            label(S.n[i], S.x[i] * k + ox, S.y[i] * k + oy + r + 3, 11, colors.labelDim, null, false, "s" + i);
+          });
         }
+        shownLabels = nextShown;
         return;
       }
 
       // Tactical: every system, then the exits.
-      var ms = G.membersPrio[region];
-      for (i = 0; i < ms.length; i++) {
-        s = ms[i];
-        label(S.n[s], S.rx[s] * k + ox, S.ry[s] * k + oy + r + 3, 12, colors.label);
-      }
-      var ex = G.exits[region], seen = {};
+      inPlaceFirst(G.membersPrio[region], function (s) { return "t" + s; }, function (s) {
+        label(S.n[s], S.rx[s] * k + ox, S.ry[s] * k + oy + r + 3, 12, colors.label, null, false, "t" + s);
+      });
+      var ex = G.exits[region], seen = {}, exits = [];
       for (i = 0; i < ex.length; i++) {
-        var to = ex[i][1];
-        if (seen[to]) continue;
-        seen[to] = 1;
-        var g = ghost(ex[i][0], to);
-        label(S.n[to] + " · " + P.regions[S.r[to]].name, g[0] * k + ox, g[1] * k + oy + r + 2, 10.5, colors.labelDim);
+        if (seen[ex[i][1]]) continue;
+        seen[ex[i][1]] = 1;
+        exits.push(ex[i]);
       }
+      inPlaceFirst(exits, function (e) { return "x" + e[1]; }, function (e) {
+        var to = e[1], g = ghost(e[0], to);
+        label(S.n[to] + " · " + P.regions[S.r[to]].name, g[0] * k + ox, g[1] * k + oy + r + 2, 10.5, colors.labelDim, null, false, "x" + to);
+      });
+      shownLabels = nextShown;
     }
 
     // Tactical constellation names: a faint backdrop drawn before
@@ -595,12 +618,15 @@
     // it only under the "Zoom to tactical" preference; clicking
     // the region's name is the default way in. The entry and exit
     // thresholds sit apart, so the views never flicker.
-    function afterZoom() {
+    // dir is the zoom's direction (+1 in, -1 out): each threshold
+    // fires only its own way, so zooming in while a region's fly-in
+    // still sits below the exit scale never throws you back out.
+    function afterZoom(dir) {
       if (mode !== "universe") {
-        if (cam.k < fitK() * 0.7) leaveRegion();
+        if (dir < 0 && cam.k < fitK() * 0.7) leaveRegion();
         return;
       }
-      if (!zoomEntryAllowed(zoomTactical)) return;
+      if (dir <= 0 || !zoomEntryAllowed(zoomTactical)) return;
       var c = toWorld(cw / 2, ch / 2), s = nearestUniverse(c[0], c[1]);
       if (s < 0) return;
       var bb = G.bounds[S.r[s]], ext = Math.max(bb[2] - bb[0], bb[3] - bb[1]) * cam.k;
@@ -817,7 +843,7 @@
         // Fingers track exactly: no easing under a pinch.
         cam.x -= (mid[0] - gesture.mid[0]) / cam.k;
         cam.y -= (mid[1] - gesture.mid[1]) / cam.k;
-        if (gesture.d > 0) { setZoomAt(mid[0], mid[1], cam.k * d / gesture.d); afterZoom(); }
+        if (gesture.d > 0) { setZoomAt(mid[0], mid[1], cam.k * d / gesture.d); afterZoom(d > gesture.d ? 1 : -1); }
         gesture.d = d;
         gesture.mid = mid;
         schedule();

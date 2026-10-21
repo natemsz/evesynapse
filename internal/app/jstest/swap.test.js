@@ -99,16 +99,11 @@ test("fallback: bad status, redirects, missing main, autorefresh", function () {
   assert.equal(
     swap.checkSwapResponse({ ok: true, redirected: false, hasMain: true, autorefresh: true }),
     "autorefresh");
+  // A page carrying assets the shell has not loaded still swaps:
+  // adoption, not the response check, is what handles them.
   assert.equal(
     swap.checkSwapResponse({
-      ok: true, redirected: false, hasMain: true,
-      autorefresh: false, missingScripts: ["/static/fit.js"]
-    }),
-    "missing-scripts");
-  assert.equal(
-    swap.checkSwapResponse({
-      ok: true, redirected: false, hasMain: true,
-      autorefresh: false, missingScripts: []
+      ok: true, redirected: false, hasMain: true, autorefresh: false
     }),
     "");
 });
@@ -148,6 +143,31 @@ test("scriptsMissing ignores edge-injected scripts the live page never carries",
       ["/static/boot.js", "/static/app.js", "/static/swap.js",
        "https://static.cloudflareinsights.com/beacon.min.js/v4bc70e2c01a94c73b74392e4234840661791215815920"]),
     []);
+});
+
+test("stylesMissing diffs the page's sheets against the live document", function () {
+  // The live side arrives as versioned hrefs; the page side as
+  // { path } entries. The version query must not read as a
+  // different sheet, and a sheet listed twice is missing once.
+  assert.deepEqual(
+    swap.stylesMissing(
+      [{ path: "/static/style.css" }, { path: "/static/killboard.css" },
+       { path: "/static/killboard.css" }],
+      ["/static/style.css?v=abc123", "/static/bg.css?v=abc123"]),
+    [{ path: "/static/killboard.css" }]);
+  assert.deepEqual(
+    swap.stylesMissing([{ path: "/static/map.css" }], ["/static/map.css?v=abc123"]),
+    []);
+  assert.deepEqual(swap.stylesMissing([], ["/static/style.css"]), []);
+});
+
+test("stylesMissing ignores edge-injected sheets", function () {
+  assert.deepEqual(
+    swap.stylesMissing(
+      [{ path: "/cdn-cgi/scripts/7d0fa10a/cloudflare-static/rocket-loader.min.css" },
+       { path: "/static/map.css" }],
+      []),
+    [{ path: "/static/map.css" }]);
 });
 
 test("bestNavHref prefers exact matches, then longest prefix", function () {

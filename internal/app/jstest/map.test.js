@@ -181,3 +181,43 @@ test("routes plan shortest first and bend around danger when asked", () => {
     "shortest ignores intel");
   assert.deepStrictEqual(map.routeSummary(G, null, [0, 1, 2], I.prices).reported, [1], "the route names the reported system");
 });
+
+test("jump drives: range, cyno-legal landings, routes and fatigue", () => {
+  // Five systems on a line, 3 LY apart: A (high-sec) B C D (null), E in Pochven.
+  const P = {
+    v: 1,
+    regions: [{ id: 10, name: "Alpha", x: 0, y: 0, w: 1000, h: 1000 }, { id: 10000070, name: "Pochven", x: 0, y: 0, w: 1000, h: 1000 }],
+    cons: [],
+    sys: {
+      id: [201, 202, 203, 204, 205], n: ["A", "B", "C", "D", "E"],
+      x: [0, 10, 20, 30, 40], y: [0, 0, 0, 0, 0],
+      s: [0.9, -0.2, -0.3, -0.4, -0.5], r: [0, 0, 0, 0, 1], c: [-1, -1, -1, -1, -1],
+      rx: [0, 1, 2, 3, 4], ry: [0, 0, 0, 0, 0], f: [0, 0, 0, 0, 0]
+    },
+    gates: [0, 1, 1, 2, 2, 3]
+  };
+  const G = map.prepare(P);
+  const J = map.joinJump(G, {
+    ships: [{ t: 1, n: "Ark", g: "Jump Freighter", r: 5, f: 0.1 }],
+    id: [201, 202, 203, 204, 205], region: [10, 10, 10, 10, 10000070],
+    x: [0, 3, 6, 9, 12], y: [0, 0, 0, 0, 0], z: [0, 0, 0, 0, 0]
+  });
+  assert.strictEqual(map.jumpRange(5, 5), 10, "JDC V doubles the range");
+  assert.strictEqual(map.jumpRange(3.5, 0), 3.5);
+  assert.deepStrictEqual(Array.from(J.dest), [0, 1, 1, 1, 0], "no cyno in high-sec or Pochven");
+  assert.deepStrictEqual(map.jumpNeighbours(J, 0, 6).sort(), [1, 2], "within 6 LY, landable");
+  const hop = (R) => (u) => map.jumpNeighbours(J, u, R);
+  const two = map.planRoute(G, 0, 3, () => 1, hop(6));
+  assert.strictEqual(two.length, 3, "fewest jumps: two (A-B-D and A-C-D tie)");
+  assert.ok(two[0] === 0 && two[2] === 3 && J.dest[two[1]] === 1, "through a cyno-legal system");
+  assert.deepStrictEqual(map.planRoute(G, 0, 3, () => 1, hop(3)), [0, 1, 2, 3], "a shorter range takes more cynos");
+  assert.strictEqual(map.planRoute(G, 0, 4, () => 1, hop(10)), null, "nothing lands in Pochven");
+  // Gates plus a one-way bridge from A to D.
+  const bridged = (u) => (u === 0 ? G.adj[0].concat([3]) : G.adj[u]);
+  assert.deepStrictEqual(map.planRoute(G, 0, 3, () => 1, bridged), [0, 3], "a jump bridge is a shortcut");
+  assert.deepStrictEqual(map.planRoute(G, 3, 0, () => 1, bridged), [3, 2, 1, 0], "and one-way");
+  // Fatigue, by CCP's rules.
+  assert.deepStrictEqual(map.jumpFatigue([5], 1, 0), { fatigue: 60, waits: 0 });
+  assert.deepStrictEqual(map.jumpFatigue([5, 5], 1, 0), { fatigue: 300, waits: 6 }, "capped at 5 hours");
+  assert.deepStrictEqual(map.jumpFatigue([10], 0.1, 0), { fatigue: 20, waits: 0 }, "a jump freighter counts a tenth of the distance");
+});

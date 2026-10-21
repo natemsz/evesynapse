@@ -105,6 +105,7 @@ func hashIntelToken(t string) string {
 // fillAxon adds EveSynapse Axon's part of the channels page: the
 // account's tokens and the downloads.
 func (app *Application) fillAxon(ctx context.Context, v *channelListView, userID int64) {
+	v.SiteAddr = app.cfg.publicOrigin()
 	for _, d := range axonDownloads {
 		v.Downloads = append(v.Downloads, intelDownload{Label: d.Label, URL: axonReleases + d.File})
 	}

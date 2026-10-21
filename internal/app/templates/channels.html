@@ -1,70 +1,109 @@
-{{define "title"}}Intel channels{{end}}
-{{define "pagetitle"}}<h1><span class="gt">Intel channels</span></h1>{{end}}
+{{define "title"}}Intel Channels{{end}}
+{{define "pagetitle"}}<h1><span class="gt">Intel Channels</span></h1>{{end}}
 {{define "pagetabs"}}{{template "sectiontabs" .}}{{end}}
 {{define "content"}}
 {{with .Channels}}
-{{/* The channels an account can read (channels.go), and a box to
-     make one. A visitor gets what a channel is and a way in. */}}
-<div class="ch">
+{{/* Intel channels (channels.go): what a channel is, the reader's
+     channels and a form to make one, then EveSynapse Axon -- set-up
+     steps, plain answers, the paired computers (intel_tokens.go). */}}
+<section class="card page-card" data-fold="never">
+  <p class="lede">An intel channel is where you and your friends share sightings, like “5 hostiles in 1DQ1-A” or “Amamake clear”. Every report shows on the <a href="/map/">map</a> for everyone in the channel for half an hour, and routes avoid those systems.</p>
+  <p class="hint">You can add reports three ways: type them on the channel's page or the map, paste lines from an in-game intel chat, or let <a href="#axon">EveSynapse Axon</a> send them for you while you play.</p>
+
   {{if not .SignedIn}}
-  <section class="ch-panel ch-intro">
-    <h2>Intel, shared and on the map</h2>
-    <p>An intel channel is a live stream of sightings — “five hostiles in 1DQ1-A”, “Amamake clear” — shared with the pilots, corporations, alliances or groups you choose. Report from the map, paste lines straight from an in-game intel chat, or post a scan. Every report lands on the map for everyone in the channel, fading over half an hour, and routes steer around it.</p>
-    <p><a class="btn" href="/auth/login">Sign in with EVE Online</a></p>
-  </section>
+  <p><a class="btn" href="/auth/login">Sign in with EVE Online</a> to make a channel or join one.</p>
   {{else}}
-  {{if .Channels}}<ul class="ch-list" aria-label="Your channels">
+  <h2>Your channels</h2>
+  {{if .Channels}}<ul class="row-list ch-list">
     {{range .Channels}}<li>
-      <a href="/intel/channels/{{.ID}}/">
-        <span class="ch-list-n">{{.Name}}</span>
-        {{if .Description}}<span class="ch-list-d">{{.Description}}</span>{{end}}
-        <span class="ch-list-tags">{{if .Owner}}<span class="ch-tag own">Owner</span>{{else if .CanPost}}<span class="ch-tag">Read and post</span>{{else}}<span class="ch-tag dim">Read only</span>{{end}}</span>
-      </a>
+      <span><a href="/intel/channels/{{.ID}}/"><strong>{{.Name}}</strong></a>{{if .Description}} <small class="muted">{{.Description}}</small>{{end}}</span>
+      <span class="badge {{if .Owner}}demo{{else if .CanPost}}kill{{else}}wait{{end}}">{{if .Owner}}Owner{{else if .CanPost}}Read and post{{else}}Read only{{end}}</span>
     </li>{{end}}
   </ul>
-  {{else}}<p class="ch-empty muted">No channels yet. Make one, or ask a channel's owner to grant you access.</p>{{end}}
+  {{else}}<p class="hint">You're not in any channels yet. Make one below, or ask a channel's owner to give you access.</p>{{end}}
 
-  <form class="ch-panel ch-create" method="post" action="/intel/channels/create">
-    <h2>New channel</h2>
-    <label><span>Name</span><input type="text" name="name" maxlength="60" required placeholder="Delve intel"></label>
-    <label><span>Description <span class="muted">(optional)</span></span><input type="text" name="description" maxlength="200" placeholder="What it covers, who is in it"></label>
-    <button type="submit" class="btn">Create channel</button>
-  </form>
-
-  {{/* EveSynapse Axon (intel_tokens.go): the downloads (each program
-       installs itself), the setup steps, a pairing code shown once,
-       and the account's paired devices. With a device paired, the
-       downloads give way to a link to Axon on this computer. */}}
-  <section class="ch-panel ch-watch" id="axon" aria-labelledby="ch-watch-h">
-    <h2 id="ch-watch-h">EveSynapse Axon</h2>
-    <p>Axon is an <a href="https://github.com/natemsz/axon" rel="noopener">open source</a> tool that runs beside the game and posts your in-game intel channels here as you play: it reads the chat logs EVE writes, so nothing is pasted by hand. Name a site channel the same as the in-game one (or map them in its config), and every line naming a system becomes a report.</p>
-    {{if .Tokens}}<p>Paired with this account: <a href="http://127.0.0.1:47611/open" rel="noopener">Open EveSynapse Axon @ 127.0.0.1:47611</a> on this computer.</p>
-    {{else}}<ol class="ch-steps">
-      <li>Download the file for your computer and run it: it installs Axon and opens it.</li>
-      <li>Make a pairing code below and enter it in Axon.</li>
-    </ol>
-    <p class="ch-dl">{{range .Downloads}}<a class="btn small" href="{{.URL}}" rel="noopener">{{.Label}}</a>{{end}}</p>
-    <p class="muted ch-dl-note">Releases aren't code-signed yet: Windows may warn of an unknown publisher (choose <em>More info</em>, then <em>Run anyway</em>). On a Mac, make the download runnable with <code>chmod +x</code> and run it once from Terminal.</p>{{end}}
-    {{if .PairingCode}}
-    <div class="ch-newtoken" role="status">
-      <p><strong>Your pairing code</strong> — shown this once, good for 10 minutes. Open Axon and enter it under <strong>Pair with EveSynapse</strong>:</p>
-      <pre class="ch-config">{{.PairingCode}}</pre>
-      <p class="muted">Axon trades the code for a credential tied to that computer's own key, so the code alone — or a copied config — cannot post as you. Devices paired before this change must pair again.</p>
+  <form class="op-form setting" method="post" action="/intel/channels/create">
+    <h4>New channel</h4>
+    <div class="form-grid">
+      <label class="field"><span class="field-label">Name</span>
+        <input type="text" name="name" maxlength="60" required placeholder="e.g. Delve Intel"></label>
+      <label class="field"><span class="field-label">What it covers</span>
+        <input type="text" name="description" maxlength="200" placeholder="Optional"></label>
     </div>
-    {{end}}
-    {{if .Tokens}}<ul class="ch-tokens">
-      {{range .Tokens}}<li>
-        <span class="ch-token-n">{{.Name}} <code class="muted">{{.Prefix}}…</code>{{if .Device}}<span class="muted"> · {{.Device}}</span>{{end}}</span>
-        <span class="muted">paired {{.Created}} · used {{.LastUsed}}</span>
-        <form method="post" action="/intel/channels/tokens/{{.ID}}/revoke"><button type="submit" class="btn small">Revoke</button></form>
-      </li>{{end}}
-    </ul>{{end}}
-    <form class="ch-token-add" method="post" action="/intel/channels/pairing">
-      <label><span>Device name</span><input type="text" name="name" maxlength="40" placeholder="Home PC"></label>
-      <button type="submit" class="btn">Make a pairing code</button>
-    </form>
-  </section>
+    <div class="form-actions">
+      <button type="submit">Create channel</button>
+      <span class="field-hint">Only you can see a new channel until you give others access on its page.</span>
+    </div>
+  </form>
   {{end}}
-</div>
+</section>
+
+{{if .SignedIn}}
+<section class="card page-card" id="axon" data-fold="never">
+  <h2>EveSynapse Axon</h2>
+  <p class="lede">Axon is a small program you run on your own computer. EVE already saves your chat to files on your computer. While you play, Axon reads those files for your in-game intel channel and sends each new line here, so sightings show up on the map without anyone typing or pasting them. It is <a href="https://github.com/natemsz/axon" rel="noopener">open source</a>.</p>
+
+  {{if .PairingCode}}
+  <div class="setting ch-code" role="status">
+    <h4>Your pairing code</h4>
+    <p class="ch-code-v">{{.PairingCode}}</p>
+    <p class="hint">Enter it in Axon now, with this site's address{{if .SiteAddr}} (<code>{{.SiteAddr}}</code>){{end}}. It works once and expires in 10 minutes.</p>
+  </div>
+  {{end}}
+
+  <h3>Set it up</h3>
+  <ol class="ch-steps">
+    <li>
+      <strong>Install Axon.</strong> Download the file for your computer and run it. It installs itself and opens Axon's window.
+      {{if not .Tokens}}<div class="ch-dl">{{range .Downloads}}<a class="btn" href="{{.URL}}" rel="noopener">{{.Label}}</a>{{end}}</div>
+      <p class="hint">Axon isn't code-signed yet, so Windows may warn about an unknown publisher: choose <em>More info</em>, then <em>Run anyway</em>. On a Mac, make the download runnable with <code>chmod +x</code> and run it once from Terminal.</p>{{end}}
+    </li>
+    <li>
+      <strong>Pair it with your account.</strong> Make a pairing code below. In Axon, under <em>EveSynapse</em>, enter this site's address{{if .SiteAddr}} (<code>{{.SiteAddr}}</code>){{end}} and the code, then click <em>Pair</em>. That's it. Axon remembers it from then on, and there's nothing for you to copy, save or set up.
+    </li>
+    <li>
+      <strong>Link your in-game channel.</strong> In Axon's channel list, pick your in-game intel channel and the intel channel here it should post to. If both have the same name (say, “Delve Intel” in game and here), Axon links them for you. Axon can post only to channels where you can post.
+    </li>
+    <li>
+      <strong>Start watching, then play.</strong> Click <em>Start watching</em>. Stay in the in-game channel and leave Axon running (on Windows it waits in the system tray). New lines that name a system become reports here within a few seconds.
+    </li>
+  </ol>
+
+  <h3>Questions</h3>
+  <dl class="ch-faq">
+    <dt>What exactly does Axon read?</dt>
+    <dd>Only the chat log files EVE writes to your computer (in <code>Documents\EVE\logs\Chatlogs</code>), and only for the in-game channels you link. Not your screen, the game, or any other files. EVE saves these logs unless chat logging was turned off in its settings.</dd>
+    <dt>What does it send here?</dt>
+    <dd>Each new line from a linked channel, as it appears. A line that names a system becomes a report with the count, “clear”, who said it and when. Lines that name no system, like chatter and questions, are dropped. Nothing from before you started watching is sent.</dd>
+    <dt>Do I need a config file?</dt>
+    <dd>No. Axon saves its own settings. You never need to open, edit or copy anything.</dd>
+    <dt>Do I need to do anything after pairing?</dt>
+    <dd>No. The pairing only works on the computer you paired, so it can't be copied somewhere else. To stop a computer from posting, remove it below.</dd>
+    <dt>Several computers, or several characters?</dt>
+    <dd>Pair each computer once. If two of your characters are in the same in-game channel, each line is still posted only once.</dd>
+  </dl>
+
+  <h3>Paired computers</h3>
+  {{if .Tokens}}<ul class="row-list">
+    {{range .Tokens}}<li>
+      <span><strong>{{.Name}}</strong>{{if .Device}} <small class="muted">{{.Device}}</small>{{end}} <small class="muted">· paired {{.Created}} · last posted {{.LastUsed}}</small></span>
+      <form method="post" action="/intel/channels/tokens/{{.ID}}/revoke" class="inline-form"><button type="submit" class="btn btn-danger">Remove</button></form>
+    </li>{{end}}
+  </ul>
+  <p class="hint">Axon is paired. <a href="http://127.0.0.1:47611/open" rel="noopener">Open Axon on this computer</a>.</p>
+  {{else}}<p class="hint">None yet.</p>{{end}}
+  <form class="op-form setting" method="post" action="/intel/channels/pairing">
+    <h4>Pair a computer</h4>
+    <div class="form-grid">
+      <label class="field"><span class="field-label">Computer name</span>
+        <input type="text" name="name" maxlength="40" placeholder="e.g. Home PC"></label>
+    </div>
+    <div class="form-actions">
+      <button type="submit">Make a pairing code</button>
+      <span class="field-hint">The name is just for this list.</span>
+    </div>
+  </form>
+</section>
+{{end}}
 {{end}}
 {{end}}

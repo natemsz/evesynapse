@@ -62,7 +62,7 @@ func TestIntelTokens(t *testing.T) {
 	req.AddCookie(cookie)
 	rec := httptest.NewRecorder()
 	app.Handler().ServeHTTP(rec, req)
-	m := regexp.MustCompile(`<pre class="ch-config">([0-9A-HJKMNP-TV-Z]{4}-[0-9A-HJKMNP-TV-Z]{4})</pre>`).FindStringSubmatch(rec.Body.String())
+	m := regexp.MustCompile(`<p class="ch-code-v">([0-9A-HJKMNP-TV-Z]{4}-[0-9A-HJKMNP-TV-Z]{4})</p>`).FindStringSubmatch(rec.Body.String())
 	if rec.Code != http.StatusOK || m == nil {
 		t.Fatalf("the pairing code shown once: %d", rec.Code)
 	}
@@ -102,7 +102,7 @@ func TestIntelTokens(t *testing.T) {
 	if rec := pair("XXXX-XXXX", "Test PC", pub); rec.Code != http.StatusUnauthorized {
 		t.Errorf("an invented pairing code works: %d", rec.Code)
 	}
-	if _, body := getPage(t, app, cookie, "/intel/channels/"); !strings.Contains(body, "Open EveSynapse Axon @ "+AxonGUIAddr) || !strings.Contains(body, "Home PC") {
+	if _, body := getPage(t, app, cookie, "/intel/channels/"); !strings.Contains(body, `href="http://`+AxonGUIAddr+`/open"`) || !strings.Contains(body, "Home PC") {
 		t.Errorf("a paired account is offered the Axon link and its device list")
 	}
 

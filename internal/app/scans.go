@@ -739,7 +739,7 @@ func (app *Application) handleScanForm(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	data.Scan = v
-	data.HeadMeta = app.HeadMeta(module.PageMeta{Title: "Scans", Description: "Paste a d-scan, local, fleet composition or probe scan for an instant breakdown and a link to share.", CanonicalPath: "/intel/scan/"})
+	data.HeadMeta = app.HeadMeta(module.PageMeta{Title: "D-Scan Parser", Description: "Paste a d-scan, local, fleet composition or probe scan for an instant breakdown and a link to share.", CanonicalPath: "/intel/scan/"})
 	app.render(ctx, w, http.StatusOK, "scans.html", data)
 }
 

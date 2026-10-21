@@ -6,7 +6,6 @@ import (
 	"html"
 	"html/template"
 	"math"
-	"net/url"
 	"strings"
 )
 
@@ -185,38 +184,6 @@ func stationLink(stationID int64, name string) template.HTML {
 	return template.HTML(fmt.Sprintf(`<a href="/station/?station=%d">%s</a>`, stationID, html.EscapeString(name)))
 }
 
-// dotlanSystemLink and dotlanRegionLink render an external link to
-// the place's Dotlan map page (EVE names use underscores for spaces
-// there). Empty when the name is unresolved.
-func dotlanSystemLink(name string) template.HTML {
-	return dotlanLink("system", name, "Dotlan")
-}
-
-func dotlanRegionLink(name string) template.HTML {
-	return dotlanLink("map", name, "Dotlan")
-}
-
-// dotlanSystemURL is the address of a system's Dotlan page, for a
-// template that draws the link itself; "" when the name is unresolved.
-func dotlanSystemURL(name string) string { return dotlanURL("system", name) }
-
-// dotlanRegionURL is the address of a region's Dotlan map.
-func dotlanRegionURL(name string) string { return dotlanURL("map", name) }
-
-func dotlanURL(kind, name string) string {
-	if name == "" {
-		return ""
-	}
-	return "https://evemaps.dotlan.net/" + kind + "/" + url.PathEscape(strings.ReplaceAll(name, " ", "_"))
-}
-
-func dotlanLink(kind, name, label string) template.HTML {
-	if name == "" {
-		return ""
-	}
-	return template.HTML(fmt.Sprintf(`<a href="%s" target="_blank" rel="noopener noreferrer">%s</a>`, dotlanURL(kind, name), label))
-}
-
 // structureLink renders a player structure's resolved name as a
 // link to the structure page. Plain text when either side is
 // missing — callers pass the id only once resolution has landed,
@@ -305,26 +272,22 @@ func linkFuncMap() template.FuncMap {
 	return template.FuncMap{
 		// moduleOn: whether an optional module is compiled into this
 		// build, for the core links that lead to its pages.
-		"moduleOn":        moduleCompiledIn,
-		"itemLink":        itemLink,
-		"publicItemLink":  publicItemLink,
-		"charLink":        charLink,
-		"killCharLink":    killCharLink,
-		"zkillKillLink":   zkillKillLink,
-		"corpLink":        corpLink,
-		"allianceLink":    allianceLink,
-		"systemLink":      systemLink,
-		"regionLink":      regionLink,
-		"secStatus":       secStatus,
-		"mapSecTiers":     mapSecTiers,
-		"stationLink":     stationLink,
-		"structureLink":   structureLink,
-		"placeLink":       placeLink,
-		"dotlanSystem":    dotlanSystemLink,
-		"dotlanSystemURL": dotlanSystemURL,
-		"dotlanRegion":    dotlanRegionLink,
-		"dotlanRegionURL": dotlanRegionURL,
-		"skillLevel":      skillLevel,
+		"moduleOn":       moduleCompiledIn,
+		"itemLink":       itemLink,
+		"publicItemLink": publicItemLink,
+		"charLink":       charLink,
+		"killCharLink":   killCharLink,
+		"zkillKillLink":  zkillKillLink,
+		"corpLink":       corpLink,
+		"allianceLink":   allianceLink,
+		"systemLink":     systemLink,
+		"regionLink":     regionLink,
+		"secStatus":      secStatus,
+		"mapSecTiers":    mapSecTiers,
+		"stationLink":    stationLink,
+		"structureLink":  structureLink,
+		"placeLink":      placeLink,
+		"skillLevel":     skillLevel,
 		// Not a link: an amount's sign as a class, "neg" or "pos".
 		"signClass": signClass,
 		// Not a link: how a stored time is written out (core_timestamps.go).

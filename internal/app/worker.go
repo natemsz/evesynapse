@@ -339,6 +339,24 @@ func (app *Application) refreshCycle(ctx context.Context) {
 	// mirror costs this cycle nothing.
 	app.refreshFallbackPrices(ctx)
 
+	// Place activity (schema 075): ESI's public hourly per-system
+	// kills/jumps aggregates and the sovereignty map, mirrored
+	// and distilled for the system and region pages. Self-gated
+	// on ESI's cache windows like the mirrors above, so a fresh
+	// collection costs this cycle nothing.
+	if stored, aLimited := app.refreshPlaceActivity(ctx); stored {
+		c.refreshed++
+	} else if aLimited {
+		logging.Warnf("worker: ESI error limit hit collecting place activity; backing off until next cycle")
+		c.limited = true
+	}
+	if stored, sLimited := app.refreshPlaceSovereignty(ctx); stored {
+		c.refreshed++
+	} else if sLimited {
+		logging.Warnf("worker: ESI error limit hit collecting place sovereignty; backing off until next cycle")
+		c.limited = true
+	}
+
 	// The character pass, several characters at a time
 	// (worker_lanes.go).
 	c.refreshCharacters(ctx, eligible)

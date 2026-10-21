@@ -8,8 +8,8 @@ package app
 // Two layouts ride in one payload. The universe view is the true
 // top-down picture: every known-space system at its SDE x and z
 // (z flipped so galactic north is up), scaled into a 0..10000 frame.
-// The region view is the tactical one, DOTLAN's idea computed rather
-// than hand-drawn: each region's systems start from the same true
+// The region view is the tactical one, computed rather than
+// hand-drawn: each region's systems start from the same true
 // positions, fitted to their own 0..1000 frame, then pushed apart
 // until no two crowd each other (a fixed-step relaxation anchored to
 // the true positions, deterministic, so a layout never shifts

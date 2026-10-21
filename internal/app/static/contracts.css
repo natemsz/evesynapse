@@ -158,16 +158,27 @@
     #ce440f 65%, #dc6d07 70%, #f3fd82 75%, #71e554 80%,
     #60dba3 85%, #4ecef8 90%, #3a9aeb 95%, #2c74e0 100%);
 }
-.cs-secslider::-webkit-slider-thumb {
+.cs-secslider::-webkit-slider-thumb,
+.cs-rollslider::-webkit-slider-thumb {
   -webkit-appearance: none; appearance: none;
   width: 1rem; height: 1rem; border-radius: 50%;
   background: #fff4e4; border: 2px solid rgba(22, 13, 6, 0.6);
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.55); cursor: pointer;
 }
-.cs-secslider::-moz-range-thumb {
+.cs-secslider::-moz-range-thumb,
+.cs-rollslider::-moz-range-thumb {
   width: 0.8rem; height: 0.8rem; border-radius: 50%;
   background: #fff4e4; border: 2px solid rgba(22, 13, 6, 0.6);
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.55); cursor: pointer;
+}
+/* The roll band sliders wear the site's ember gradient --
+   the same gold-to-ember ramp the headings take -- on the
+   security slider's pill track, so a band's percentile
+   reads hotter as it climbs. */
+.cs-rollslider {
+  -webkit-appearance: none; appearance: none;
+  height: 0.45rem; border-radius: 999px;
+  background: linear-gradient(to right, #ffd27a 0%, #ff6a1a 50%, #d63c14 100%);
 }
 .cs-secval { flex: none; min-width: 2.2rem; text-align: right; font-variant-numeric: tabular-nums; }
 /* The region quick selectors wear the hunt chips' pill
@@ -303,6 +314,10 @@
   gap: 0.6rem 0.9rem; margin-top: 0.65rem;
 }
 .cs-rollgrid > .cs-field { grid-column: span 2; }
+/* Sliders outside the picked family's set (or carrying no
+   band) render hidden until the family pick swaps them
+   in; the flex field rule would otherwise beat [hidden]. */
+.cs-rollgrid > .cs-field[hidden] { display: none; }
 /* The field's two bound pairs ride together at the cell's
    bottom pin: the gap opens above the first pair only. */
 .cs-rollgrid > .cs-field > .cs-slider-pair { margin-top: 0; }

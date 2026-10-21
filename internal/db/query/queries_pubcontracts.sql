@@ -967,6 +967,25 @@ WHERE a.family = sqlc.arg(family)::text
 GROUP BY r.attribute_id
 ORDER BY weight DESC, r.attribute_id;
 
+-- name: ListAbyssalFamilyRollAttributesAll :many
+-- Every family's rollable attributes in one grouped pass:
+-- the roll slider catalog the search page carries so the
+-- drawer can swap slider sets as families are picked,
+-- without a submit. Same rows as
+-- ListAbyssalFamilyRollAttributes, grouped per family.
+SELECT a.family AS family,
+       r.attribute_id AS attribute_id,
+       COALESCE(MAX(w.weight), 0)::double precision AS weight
+FROM abyssal_items a
+JOIN abyssal_ranges r ON r.mutator_type_id = a.mutator_type_id
+LEFT JOIN abyssal_family_weights w
+  ON w.family = a.family AND w.attribute_id = r.attribute_id
+WHERE a.family <> ''
+  AND a.mutator_type_id <> 0
+  AND r.min_mult <> r.max_mult
+GROUP BY a.family, r.attribute_id
+ORDER BY a.family, weight DESC, r.attribute_id;
+
 -- ---------------------------------------------------------------------
 -- Blueprint copy medians (schema 061): the worker's pass
 -- distills the live corpus into one stored median ask per

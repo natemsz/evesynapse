@@ -170,6 +170,9 @@
           el.value = "";
         }
       });
+      // A cleared abyssal drawer has no family pick and no
+      // bands left: re-derive which roll sliders show.
+      if (btn.getAttribute("data-reset-drawer") === "abyssal") applyRollFamily();
     });
   });
 
@@ -298,6 +301,72 @@
       slider.value = num.value === "" ? (slider.getAttribute("data-slider-rest") || "0") : num.value;
     });
   });
+
+  // ---- roll band family swap ----------------------------------------------
+  // The drawer's band sliders arrive for every rollable
+  // attribute; the server shows the submitted family's set
+  // plus any banded attribute outside it. Picking a family
+  // re-derives that same split in place -- the family's
+  // sliders lead, banded ones stay visible, the rest hide
+  // and disable so nothing stale submits -- with no form
+  // submit, in the desktop drawer and the phone filters
+  // sheet alike (both are this same form). The per-family
+  // attribute lists ride the page as JSON (#cs-roll-catalog).
+  var rollCatalog = {};
+  var rollCatalogEl = document.getElementById("cs-roll-catalog");
+  if (rollCatalogEl) {
+    try {
+      JSON.parse(rollCatalogEl.textContent).forEach(function (g) {
+        rollCatalog[g.family] = g.attrs;
+      });
+    } catch (e) { /* a bad catalog leaves the server split in place */ }
+  }
+  var familySelect = form.querySelector('select[name="family"]');
+  var rollGrid = form.querySelector(".cs-rollgrid");
+  var rollHint = form.querySelector("[data-roll-hint]");
+  function rollFieldBanded(field) {
+    var set = false;
+    field.querySelectorAll('input[type="number"]').forEach(function (n) {
+      if (n.value !== "") set = true;
+    });
+    return set;
+  }
+  function applyRollFamily() {
+    if (!rollGrid || !familySelect) return;
+    var fam = familySelect.value;
+    var order = rollCatalog[fam] || [];
+    var inFamily = {};
+    order.forEach(function (id) { inFamily[id] = true; });
+    var lead = [], extra = [], rest = [];
+    rollGrid.querySelectorAll("[data-roll-field]").forEach(function (field) {
+      var id = Number(field.getAttribute("data-roll-field"));
+      if (inFamily[id]) lead.push(field);
+      else if (rollFieldBanded(field)) extra.push(field);
+      else rest.push(field);
+    });
+    lead.sort(function (a, b) {
+      return order.indexOf(Number(a.getAttribute("data-roll-field"))) -
+        order.indexOf(Number(b.getAttribute("data-roll-field")));
+    });
+    extra.sort(function (a, b) {
+      return Number(a.getAttribute("data-roll-field")) - Number(b.getAttribute("data-roll-field"));
+    });
+    lead.concat(extra).forEach(function (field) {
+      field.hidden = false;
+      field.querySelectorAll("input").forEach(function (i) { i.disabled = false; });
+      rollGrid.appendChild(field);
+    });
+    rest.forEach(function (field) {
+      field.hidden = true;
+      field.querySelectorAll("input").forEach(function (i) { i.disabled = true; });
+      rollGrid.appendChild(field);
+    });
+    if (rollHint) rollHint.hidden = fam !== "";
+  }
+  if (familySelect && rollGrid) {
+    familySelect.addEventListener("change", applyRollFamily);
+    applyRollFamily();
+  }
 
   // ---- security floor readout -------------------------------------------
   // The floor prints beside its slider with one decimal;

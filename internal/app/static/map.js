@@ -3013,6 +3013,97 @@
       if (fullViaAPI) { fullViaAPI = false; setFullClass(false); }
     }
 
+    // --- Screenshot ---
+    // The map as it is drawn, at the screen's full resolution, over
+    // the stage's own background, with the brand in the bottom-right
+    // corner and a caption (layer, place, EVE time) in the bottom-left.
+    // Saved as a PNG; on a phone it goes to the share sheet when the
+    // browser has one for files.
+    var shotBtn = el.querySelector("[data-map-shot]");
+    function loadImage(src) {
+      return new Promise(function (ok, fail) {
+        var img = new Image();
+        img.onload = function () { ok(img); };
+        img.onerror = fail;
+        img.src = src;
+      });
+    }
+    // The wordmark as a self-contained image: its letters' colors come
+    // from the stylesheet, so they are written into the copy.
+    function wordmarkImage() {
+      var svg = el.querySelector(".map-mark .wordmark-svg");
+      if (!svg) return Promise.reject(new Error("no wordmark"));
+      var copy = svg.cloneNode(true);
+      copy.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+      var from = svg.querySelectorAll("path"), to = copy.querySelectorAll("path");
+      for (var i = 0; i < from.length; i++) to[i].setAttribute("fill", getComputedStyle(from[i]).fill);
+      return loadImage("data:image/svg+xml;charset=utf-8," + encodeURIComponent(new XMLSerializer().serializeToString(copy)));
+    }
+    function shotName() {
+      var d = new Date(), p = function (n) { return ("0" + n).slice(-2); };
+      var where = mode === "universe" ? "new-eden" : P.regions[region].name.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+      return "evesynapse-map-" + where + "-" + d.getUTCFullYear() + p(d.getUTCMonth() + 1) + p(d.getUTCDate()) + "-" + p(d.getUTCHours()) + p(d.getUTCMinutes()) + ".png";
+    }
+    function takeShot() {
+      if (!cw || shotBtn.classList.contains("busy")) return;
+      shotBtn.classList.add("busy");
+      draw();
+      var out = root.createElement("canvas");
+      out.width = canvas.width;
+      out.height = canvas.height;
+      var o = out.getContext("2d"), s = dpr;
+      o.fillStyle = getComputedStyle(stage).backgroundColor || "#070504";
+      o.fillRect(0, 0, out.width, out.height);
+      o.drawImage(canvas, 0, 0);
+      var glyph = el.querySelector(".map-mark-glyph");
+      var fonts = root.fonts && root.fonts.load ? root.fonts.load("600 12px Rajdhani").catch(function () {}) : Promise.resolve();
+      Promise.all([loadImage(glyph.src).catch(function () { return null; }), wordmarkImage().catch(function () { return null; }), fonts]).then(function (got) {
+        var logo = got[0], word = got[1], pad = 14 * s, h = 18 * s;
+        // The brand: glyph, wordmark, ".APP", right-aligned.
+        o.save();
+        o.globalAlpha = 0.6;
+        o.font = "600 " + Math.round(h * 0.7) + "px Rajdhani, sans-serif";
+        o.textBaseline = "alphabetic";
+        var tld = ".APP", tw = o.measureText(tld).width;
+        var ww = word ? h * (word.naturalWidth / word.naturalHeight || 5.9) : 0;
+        var x = out.width - pad - tw, base = out.height - pad - h * 0.18;
+        o.fillStyle = colors.label;
+        o.fillText(tld, x, base);
+        x -= ww + 2 * s;
+        if (word) o.drawImage(word, x, out.height - pad - h, ww, h);
+        if (logo) o.drawImage(logo, x - h * 1.35 - 6 * s, out.height - pad - h * 1.3, h * 1.35, h * 1.35);
+        // The caption: what the map shows, where, when.
+        var place = mode === "universe" ? "New Eden" : P.regions[region].name;
+        var what = layer === "security" ? "Security" : LAYER_TITLES[layer] || layer;
+        var d = new Date(), p2 = function (n) { return ("0" + n).slice(-2); };
+        var when = d.getUTCFullYear() + "-" + p2(d.getUTCMonth() + 1) + "-" + p2(d.getUTCDate()) + " " + p2(d.getUTCHours()) + ":" + p2(d.getUTCMinutes()) + " EVE";
+        o.globalAlpha = 0.75;
+        o.font = "500 " + Math.round(12 * s) + "px " + font;
+        o.fillStyle = colors.labelDim;
+        o.fillText(place + " · " + what + " · " + when, pad, out.height - pad);
+        o.restore();
+        return new Promise(function (ok) { out.toBlob(ok, "image/png"); });
+      }).then(function (blob) {
+        if (!blob) throw new Error("no image");
+        var name = shotName();
+        var file = typeof File === "function" ? new File([blob], name, { type: "image/png" }) : null;
+        var coarse = window.matchMedia && window.matchMedia("(pointer: coarse)").matches;
+        if (coarse && file && navigator.canShare && navigator.canShare({ files: [file] })) {
+          return navigator.share({ files: [file], title: "EveSynapse map" }).catch(function () { /* dismissed */ });
+        }
+        var a = root.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = name;
+        root.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(function () { URL.revokeObjectURL(a.href); }, 4000);
+        hint("Screenshot saved.");
+      }).catch(function () {
+        hint("The screenshot could not be made.");
+      }).then(function () { shotBtn.classList.remove("busy"); });
+    }
+
     function onClick(e) {
       var t = e.target;
       var b = t.closest("[data-map-sys]");
@@ -3065,6 +3156,7 @@
       if (t.closest("[data-map-full]")) { toggleFull(); return; }
       if (t.closest("[data-map-data]")) { toggleDataMenu(); return; }
       if (t.closest(".map-data-menu")) return;
+      if (t.closest("[data-map-shot]")) { takeShot(); return; }
       if (t.closest("[data-map-intel]")) {
         intelOn = !intelOn;
         try { localStorage.setItem("evesynapse-map-intel", intelOn ? "1" : "0"); } catch (err) { /* private mode */ }
@@ -3137,7 +3229,7 @@
     readColors();
     statusEl.hidden = true;
     findInput.disabled = false;
-    el.querySelectorAll("[data-map-zoom], [data-map-keys], [data-map-full]").forEach(function (b) { b.disabled = false; });
+    el.querySelectorAll("[data-map-zoom], [data-map-keys], [data-map-full], [data-map-shot]").forEach(function (b) { b.disabled = false; });
     root.addEventListener("fullscreenchange", onFullChange);
     root.addEventListener("webkitfullscreenchange", onFullChange);
     // The layer scale: the map follows the slider as it moves; the

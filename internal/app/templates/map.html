@@ -80,6 +80,14 @@
     <p class="map-status" role="status">{{if .Ready}}Charting New Eden…{{else}}The map is drawn from the static data export, and this server has not imported its star geometry yet. It appears after the next static data update.{{end}}</p>
     <noscript><p class="map-status">The interactive map needs JavaScript. Every region is listed below.</p></noscript>
     <div class="map-hint" hidden></div>
+    {{/* The brand, faint in a corner of the full-screen map (and
+         drawn into every screenshot by map.js), and the screenshot
+         button beside it. */}}
+    <div class="map-mark" aria-hidden="true">
+      <img class="map-mark-glyph" src="/static/logo.svg?v={{$.AssetVersion}}" alt="" width="28" height="28">
+      <span class="map-mark-word">{{template "wordmark-svg"}}<span class="map-mark-tld">.APP</span></span>
+    </div>
+    <button type="button" class="map-shot" data-map-shot aria-label="Save a screenshot of the map" title="Screenshot" disabled><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><circle cx="12" cy="13" r="3.5" fill="none" stroke="currentColor" stroke-width="1.7"/></svg></button>
     {{/* The hover popover (mouse only): the system under the cursor
          and the figures of the layer showing. Filled by map.js. */}}
     <div class="map-tip" role="tooltip" aria-hidden="true" hidden></div>

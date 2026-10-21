@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.5.6.0] - 2026-10-21
+
+Automated build of EveSynapse v0.5.6.0. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+
+## What's Changed
+### 🚀 Features
+* Demo account: shared test-drive pilot with seeded data and write safeguards by @natemsz in https://github.com/natemsz/evesynapse/pull/547
+### Other Changes
+* docs(changelog): review changelog for v0.5.5.4 by @github-actions[bot] in https://github.com/natemsz/evesynapse/pull/546
+* Fix: swapped pages keep their stylesheets and scripts; swap covers the remaining pages by @natemsz in https://github.com/natemsz/evesynapse/pull/548
+* Map: sov territory view, layer scale, full screen; popover and card agree by @natemsz in https://github.com/natemsz/evesynapse/pull/549
+* Intel: scan tool -- d-scan, local, fleet and probe pastes, on the map card by @natemsz in https://github.com/natemsz/evesynapse/pull/550
+* Intel channels: owned, granted streams of intel reports, on the map by @natemsz in https://github.com/natemsz/evesynapse/pull/551
+* Intel channels: posting tokens and API for the desktop log watcher by @natemsz in https://github.com/natemsz/evesynapse/pull/552
+
+
+**Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.5.4...v0.5.6.0
+
 ## [v0.5.5.4] - 2026-10-21
 
 Automated build of EveSynapse v0.5.5.4. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).

@@ -357,7 +357,7 @@ func incursionRank(inc esi.Incursion) int {
 
 func (app *Application) renderLanding(ctx context.Context, w http.ResponseWriter, data landingData) {
 	app.fillShell(ctx, &data.ShellData, "landing.html")
-	ts, err := parsedTemplate(&pageTemplates, "landing", "landing.html")
+	ts, err := parsedTemplate(&pageTemplates, "landing", "landing.html", "templates/wordmark.html")
 	if err != nil {
 		logging.Errorf("parse template landing.html: %v", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)

@@ -24,6 +24,7 @@
       <button type="button" class="btn small" data-map-zoom="in" aria-label="Zoom in" disabled>+</button>
       <button type="button" class="btn small" data-map-zoom="out" aria-label="Zoom out" disabled>−</button>
       <button type="button" class="btn small" data-map-zoom="fit" aria-label="Fit to view" disabled>Fit</button>
+      <button type="button" class="btn small map-full-btn" data-map-full aria-label="Full screen" aria-pressed="false" title="Full screen (Shift F)" disabled><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false"><path d="M2 6V2h4M10 2h4v4M14 10v4h-4M6 14H2v-4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
       <button type="button" class="btn small map-keys-btn" data-map-keys aria-label="Map controls" aria-expanded="false" aria-controls="map-keys" disabled>?</button>
     </div>
     <label class="map-pref" title="When on, zooming deep into a region opens its tactical view. When off, click a region's name instead."><input type="checkbox" data-map-zoom-tactical disabled> Zoom to tactical</label>
@@ -60,11 +61,49 @@
         <div><dt>Zoom out · Esc</dt><dd>Back to New Eden</dd></div>
         <div><dt>Enter</dt><dd>Tactical view of the selected system</dd></div>
         <div><dt>0 · F</dt><dd>Fit</dd></div>
+        <div><dt>Shift F</dt><dd>Full screen</dd></div>
         <div><dt>/</dt><dd>Find</dd></div>
         <div><dt>L · Shift L</dt><dd>Next · previous layer</dd></div>
         <div><dt>R · Shift R</dt><dd>Route to · from the selected system</dd></div>
         <div><dt>?</dt><dd>These controls</dd></div>
       </dl>
+    </section>
+    {{/* The side column: the route planner over the system card.
+         Stacked in one column they share the height and never
+         cover each other; on a phone the column is one sheet
+         rising from the bottom. */}}
+    <div class="map-side">
+    {{/* The route planner, filled by map.js once a route has an
+         end. Routes are planned in the browser from the gates and
+         the live threat layer; the buttons hand one to the game's
+         autopilot (POST /map/route, map_route.go). */}}
+    <section class="map-route" aria-label="Route" hidden>
+      <div class="map-route-head">
+        <h2 class="map-route-title">Route</h2>
+        <button type="button" class="map-card-close" data-route-close aria-label="Clear the route">×</button>
+      </div>
+      <div class="map-route-ends">
+        <span class="map-route-lbl">From</span><span class="map-route-end" data-route-end="from"></span>
+        <button type="button" class="map-route-swap" data-route-swap aria-label="Swap start and destination" title="Swap">⇅</button>
+        <span class="map-route-lbl">To</span><span class="map-route-end" data-route-end="to"></span>
+      </div>
+      <div class="map-route-modes" role="radiogroup" aria-label="Route preference">
+        <button type="button" role="radio" aria-checked="true" data-route-mode="short" title="The fewest jumps">Shortest</button>
+        <button type="button" role="radio" aria-checked="false" data-route-mode="safe" title="High-sec wherever it can, and around trouble">Safer</button>
+        <button type="button" role="radio" aria-checked="false" data-route-mode="calm" title="Few jumps, skirting active threat and gate camps">Avoid danger</button>
+      </div>
+      <p class="map-route-sum" aria-live="polite"></p>
+      <p class="map-route-strip" aria-hidden="true" hidden></p>
+      <ul class="map-route-warn"></ul>
+      <details class="map-route-steps">
+        <summary>Systems</summary>
+        <ol class="map-route-list"></ol>
+      </details>
+      <div class="map-route-actions">
+        <button type="button" class="btn small" data-route-send="dest">Set destination</button>
+        <button type="button" class="btn small" data-route-send="route">Send route</button>
+      </div>
+      <p class="map-route-note muted" aria-live="polite"></p>
     </section>
     <aside class="map-card" aria-live="polite" hidden>
       <button type="button" class="map-card-close" data-map-close aria-label="Close system details">×</button>
@@ -82,35 +121,7 @@
         <button type="button" class="btn small" data-route-set="to">Route to here</button>
       </div>
     </aside>
-    {{/* The route planner, filled by map.js once a route has an
-         end. Routes are planned in the browser from the gates and
-         the live threat layer; the buttons hand one to the game's
-         autopilot (POST /map/route, map_route.go). */}}
-    <section class="map-route" aria-label="Route" hidden>
-      <button type="button" class="map-card-close" data-route-close aria-label="Clear the route">×</button>
-      <h2 class="map-route-title">Route</h2>
-      <p class="map-route-ends">
-        <span class="map-route-end" data-route-end="from"></span>
-        <button type="button" class="map-route-swap" data-route-swap aria-label="Swap start and destination" title="Swap">⇄</button>
-        <span class="map-route-end" data-route-end="to"></span>
-      </p>
-      <div class="map-route-modes" role="radiogroup" aria-label="Route preference">
-        <button type="button" role="radio" aria-checked="true" data-route-mode="short" title="The fewest jumps">Shortest</button>
-        <button type="button" role="radio" aria-checked="false" data-route-mode="safe" title="High-sec wherever it can, and around trouble">Safer</button>
-        <button type="button" role="radio" aria-checked="false" data-route-mode="calm" title="Few jumps, skirting active threat and gate camps">Avoid danger</button>
-      </div>
-      <p class="map-route-sum" aria-live="polite"></p>
-      <ul class="map-route-warn"></ul>
-      <details class="map-route-steps">
-        <summary>Systems</summary>
-        <ol class="map-route-list"></ol>
-      </details>
-      <div class="map-route-actions">
-        <button type="button" class="btn small" data-route-send="dest">Set destination</button>
-        <button type="button" class="btn small" data-route-send="route">Send route</button>
-      </div>
-      <p class="map-route-note muted" aria-live="polite"></p>
-    </section>
+    </div>
     <ol class="map-legend" aria-label="Security status colors">
       {{range $t := mapSecTiers}}<li><span class="map-swatch sec sec-{{$t}}" data-tier="{{$t}}"></span><span class="map-legend-v">{{if eq $t 10}}1.0{{else if eq $t 5}}0.5{{else if eq $t 0}}0.0{{end}}</span></li>{{end}}
     </ol>

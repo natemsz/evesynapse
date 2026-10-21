@@ -801,6 +801,8 @@ html.map-full-open .page-body { -webkit-backdrop-filter: none; backdrop-filter: 
   left: 0;
   z-index: 6;
   width: min(17rem, calc(100vw - 2rem));
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 0.6rem 0.7rem 0.5rem;
   border: 1px solid var(--glass-edge);
   border-radius: var(--r-lg);

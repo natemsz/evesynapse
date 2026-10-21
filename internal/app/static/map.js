@@ -813,7 +813,8 @@
         ctx.fill();
       }
 
-      // Hover and selection rings.
+      // Your data, then hover and selection rings over it.
+      drawData(k, ox, oy, r);
       [hover, sel].forEach(function (s, idx) {
         if (s < 0 || (mode !== "universe" && S.r[s] !== region)) return;
         var hx = wx(s) * k + ox, hy = wy(s) * k + oy;
@@ -823,7 +824,6 @@
         ctx.strokeStyle = idx ? colors.accent : colors.label;
         ctx.stroke();
       });
-      drawData(k, ox, oy, r);
       drawJumpRange(k, ox, oy, r);
       drawIntel(k, ox, oy, r);
       drawRouteEnds(k, ox, oy, r);
@@ -2428,9 +2428,19 @@
       return "rgba(" + c[0] + "," + c[1] + "," + c[2] + "," + a + ")";
     }
     // drawData: the pins, each kind its own shape and place around
-    // the system so several read at once.
+    // the system so several read at once. Every pin is drawn solid
+    // over a dark outline, and the map under the pins fades a little
+    // while any are on, so they stay readable over any layer and
+    // over each other.
     function drawData(k, ox, oy, r) {
       if (!MINE) return;
+      var pins = false;
+      for (var name in dataOn) if (dataOn[name] && !DATA_HEAT[name]) pins = true;
+      if (!pins) return;
+      ctx.fillStyle = colors.halo;
+      ctx.globalAlpha = 0.25;
+      ctx.fillRect(0, 0, cw, ch);
+      ctx.globalAlpha = 1;
       function each(name, fn) {
         if (!dataOn[name]) return;
         var map = MINE[name];
@@ -2442,48 +2452,46 @@
           fn(i, x, y, map[key]);
         }
       }
-      ctx.lineWidth = 1.6;
+      // The current path, outlined and then drawn in its color.
+      function stroke(color, w) {
+        ctx.lineWidth = w + 2.5;
+        ctx.strokeStyle = colors.halo;
+        ctx.stroke();
+        ctx.lineWidth = w;
+        ctx.strokeStyle = color;
+        ctx.stroke();
+      }
+      function fill(color) {
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = colors.halo;
+        ctx.stroke();
+        ctx.fillStyle = color;
+        ctx.fill();
+      }
       each("posted", function (i, x, y) {
-        ctx.setLineDash([3, 3]);
         ctx.beginPath();
         ctx.arc(x, y, r + 13, 0, Math.PI * 2);
-        ctx.strokeStyle = dataRGBA("posted", 0.8);
-        ctx.stroke();
+        ctx.setLineDash([4, 3]);
+        stroke(dataRGBA("posted", 1), 1.8);
         ctx.setLineDash([]);
       });
       each("industry", function (i, x, y, v) {
         ctx.beginPath();
         ctx.arc(x, y, r + 9, 0, Math.PI * 2);
-        ctx.lineWidth = v.ready ? 2.6 : 1.5;
-        ctx.strokeStyle = dataRGBA("industry", 0.9);
-        ctx.stroke();
-        ctx.lineWidth = 1.6;
+        stroke(dataRGBA("industry", 1), v.ready ? 2.8 : 1.8);
       });
       each("clones", function (i, x, y) {
         var s = r + 5;
-        ctx.strokeStyle = dataRGBA("clones", 0.95);
-        ctx.strokeRect(x - s, y - s, 2 * s, 2 * s);
-      });
-      each("market", function (i, x, y) {
         ctx.beginPath();
-        ctx.arc(x + r + 5, y - r - 5, 3.2, 0, Math.PI * 2);
-        ctx.fillStyle = dataRGBA("market", 1);
-        ctx.fill();
-      });
-      each("structures", function (i, x, y, list) {
-        var low = list.some(function (s) { return (s.fuel && s.fuel - Date.now() / 1000 < 3 * 86400) || /reinforce|armor|hull/.test(s.state); });
-        ctx.fillStyle = dataRGBA("structures", 1);
-        ctx.fillRect(x - r - 9, y - r - 9, 6, 6);
-        if (low) {
-          ctx.strokeStyle = colors.camp;
-          ctx.strokeRect(x - r - 10.5, y - r - 10.5, 9, 9);
-        }
+        ctx.rect(x - s, y - s, 2 * s, 2 * s);
+        stroke(dataRGBA("clones", 1), 1.8);
       });
       each("fleet", function (i, x, y, list) {
         ctx.beginPath();
         ctx.arc(x, y, r + 3 + Math.min(6, Math.log(1 + list.length) * 2.5), 0, Math.PI * 2);
-        ctx.fillStyle = dataRGBA("fleet", 0.45);
+        ctx.fillStyle = dataRGBA("fleet", 0.35);
         ctx.fill();
+        stroke(dataRGBA("fleet", 1), 1.6);
       });
       // A watched hostile: a red crosshair.
       each("watched", function (i, x, y) {
@@ -2494,25 +2502,34 @@
         ctx.moveTo(x + s - 3, y); ctx.lineTo(x + s + 4, y);
         ctx.moveTo(x, y - s - 4); ctx.lineTo(x, y - s + 3);
         ctx.moveTo(x, y + s - 3); ctx.lineTo(x, y + s + 4);
-        ctx.lineWidth = 1.8;
-        ctx.strokeStyle = colors.camp;
-        ctx.stroke();
+        stroke(colors.camp, 2);
+      });
+      each("market", function (i, x, y) {
+        ctx.beginPath();
+        ctx.arc(x + r + 5, y - r - 5, 3.6, 0, Math.PI * 2);
+        fill(dataRGBA("market", 1));
+      });
+      each("structures", function (i, x, y, list) {
+        var low = list.some(function (s) { return (s.fuel && s.fuel - Date.now() / 1000 < 3 * 86400) || /reinforce|armor|hull/.test(s.state); });
+        ctx.beginPath();
+        ctx.rect(x - r - 9.5, y - r - 9.5, 7, 7);
+        fill(dataRGBA("structures", 1));
+        if (low) {
+          ctx.beginPath();
+          ctx.rect(x - r - 11.5, y - r - 11.5, 11, 11);
+          stroke(colors.camp, 1.6);
+        }
       });
       each("pilots", function (i, x, y, list) {
         var on = list.some(function (p) { return p.online; }), s = r + 4;
-        ctx.beginPath();
-        ctx.moveTo(x, y - s); ctx.lineTo(x + s, y); ctx.lineTo(x, y + s); ctx.lineTo(x - s, y); ctx.closePath();
-        ctx.fillStyle = dataRGBA("pilots", on ? 0.95 : 0.5);
-        ctx.fill();
-        ctx.lineWidth = 1.2;
-        ctx.strokeStyle = colors.halo;
-        ctx.stroke();
         if (on) {
           ctx.beginPath();
           ctx.arc(x, y, s + 4, 0, Math.PI * 2);
-          ctx.strokeStyle = dataRGBA("pilots", 0.5);
-          ctx.stroke();
+          stroke(dataRGBA("pilots", 0.8), 1.4);
         }
+        ctx.beginPath();
+        ctx.moveTo(x, y - s); ctx.lineTo(x + s, y); ctx.lineTo(x, y + s); ctx.lineTo(x - s, y); ctx.closePath();
+        fill(dataRGBA("pilots", on ? 1 : 0.6));
       });
     }
     // Pilots are named where they are; a fleet's count shows up close.
@@ -2730,6 +2747,12 @@
       var show = open === undefined ? dataMenu.hidden : open;
       dataMenu.hidden = !show;
       dataBtn.setAttribute("aria-expanded", show ? "true" : "false");
+      // The map box clips what spills past it, so the menu is never
+      // taller than the room left below its button; it scrolls instead.
+      if (show) {
+        var room = Math.min(el.getBoundingClientRect().bottom, window.innerHeight) - dataMenu.getBoundingClientRect().top - 8;
+        dataMenu.style.maxHeight = Math.max(160, room) + "px";
+      }
     }
     function onDataOutside(e) {
       if (dataMenu && !dataMenu.hidden && !e.target.closest(".map-data")) toggleDataMenu(false);

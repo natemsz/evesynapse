@@ -165,7 +165,7 @@
         } else if (el.tagName === "SELECT") {
           el.selectedIndex = 0;
         } else if (el.type === "range") {
-          el.value = "0";
+          el.value = el.getAttribute("data-slider-rest") || "0";
         } else {
           el.value = "";
         }
@@ -295,7 +295,7 @@
       num.value = slider.value;
     });
     num.addEventListener("input", function () {
-      slider.value = num.value === "" ? "0" : num.value;
+      slider.value = num.value === "" ? (slider.getAttribute("data-slider-rest") || "0") : num.value;
     });
   });
 

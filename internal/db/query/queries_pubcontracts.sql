@@ -561,6 +561,12 @@ WHERE (coalesce(cardinality(sqlc.arg(types)::text[]), 0) = 0
           AND (sqlc.arg(ab_attr_key)::text = ''
                OR COALESCE((a.percentiles ->> sqlc.arg(ab_attr_key)::text)::double precision, -1)
                     >= sqlc.arg(ab_attr_min)::double precision)
+          AND (sqlc.arg(ab_roll_bands)::jsonb = '{}'::jsonb OR NOT EXISTS (
+                SELECT 1 FROM jsonb_each(sqlc.arg(ab_roll_bands)::jsonb) AS rb(attr_key, band)
+                WHERE COALESCE((a.percentiles ->> rb.attr_key)::double precision, -1)
+                        < (rb.band ->> 0)::double precision
+                   OR COALESCE((a.percentiles ->> rb.attr_key)::double precision, -1)
+                        > (rb.band ->> 1)::double precision))
           AND (sqlc.arg(ab_pos_min)::double precision < 0
                OR EXISTS (
                      SELECT 1 FROM abyssal_family_weights w
@@ -735,6 +741,12 @@ WHERE (coalesce(cardinality(sqlc.arg(types)::text[]), 0) = 0
           AND (sqlc.arg(ab_attr_key)::text = ''
                OR COALESCE((a.percentiles ->> sqlc.arg(ab_attr_key)::text)::double precision, -1)
                     >= sqlc.arg(ab_attr_min)::double precision)
+          AND (sqlc.arg(ab_roll_bands)::jsonb = '{}'::jsonb OR NOT EXISTS (
+                SELECT 1 FROM jsonb_each(sqlc.arg(ab_roll_bands)::jsonb) AS rb(attr_key, band)
+                WHERE COALESCE((a.percentiles ->> rb.attr_key)::double precision, -1)
+                        < (rb.band ->> 0)::double precision
+                   OR COALESCE((a.percentiles ->> rb.attr_key)::double precision, -1)
+                        > (rb.band ->> 1)::double precision))
           AND (sqlc.arg(ab_pos_min)::double precision < 0
                OR EXISTS (
                      SELECT 1 FROM abyssal_family_weights w
@@ -929,6 +941,31 @@ ORDER BY family;
 -- name: ListAbyssalWeightAttributeIDs :many
 SELECT DISTINCT attribute_id FROM abyssal_family_weights
 ORDER BY attribute_id;
+
+-- The attributes any mutaplasmid can actually move: a
+-- range row whose band has width. The roll sliders offer
+-- only these; a band on anything else is ignored.
+-- name: ListAbyssalRollAttributeIDs :many
+SELECT DISTINCT attribute_id FROM abyssal_ranges
+WHERE min_mult <> max_mult
+ORDER BY attribute_id;
+
+-- One family's rollable attributes (schema 055 ranges via
+-- the mutators its stored items carry), heaviest scoring
+-- weight first so the drawer's sliders lead with the rolls
+-- the family is priced on.
+-- name: ListAbyssalFamilyRollAttributes :many
+SELECT r.attribute_id AS attribute_id,
+       COALESCE(MAX(w.weight), 0)::double precision AS weight
+FROM abyssal_items a
+JOIN abyssal_ranges r ON r.mutator_type_id = a.mutator_type_id
+LEFT JOIN abyssal_family_weights w
+  ON w.family = a.family AND w.attribute_id = r.attribute_id
+WHERE a.family = sqlc.arg(family)::text
+  AND a.mutator_type_id <> 0
+  AND r.min_mult <> r.max_mult
+GROUP BY r.attribute_id
+ORDER BY weight DESC, r.attribute_id;
 
 -- ---------------------------------------------------------------------
 -- Blueprint copy medians (schema 061): the worker's pass

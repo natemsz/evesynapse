@@ -17,6 +17,31 @@
   --map-cons: rgba(201, 160, 106, 0.2);
   --map-accent: var(--accent);
   --map-halo: rgba(8, 5, 3, 0.88);
+  /* The live layers: the dimmed map under a layer, the heat ramp
+     (embers to white-hot, glowing additively on the dark stage),
+     sovereignty's alliance lightness and NPC holders, the four
+     Faction Warfare militias, incursions. */
+  --map-dim: rgba(200, 180, 160, 0.22);
+  --map-heat-lo: #7a2a0c;
+  --map-heat-hi: #ff6a1a;
+  --map-heat-core: #ffe7b0;
+  --map-heat-blend: lighter;
+  --map-sov-l: 62%;
+  --map-npc: #8d8279;
+  --map-unheld: rgba(200, 180, 160, 0.3);
+  --map-f-amarr: #e8b54a;
+  --map-f-caldari: #3d8bff;
+  --map-f-gallente: #3fbf7a;
+  --map-f-minmatar: #d8452f;
+  /* Threat: amber through red to white-hot; camps ringed in red. */
+  --map-threat-lo: #e0a020;
+  --map-threat-hi: #e0301c;
+  --map-threat-core: #fff0e0;
+  --map-camp: #ff3b3b;
+  --map-route: #ffd27a;
+  --map-route-halo: rgba(255, 210, 122, 0.25);
+  --map-inc: #c64bd6;
+  --map-inc-staging: #ff5ce0;
   --map-space: radial-gradient(120% 90% at 30% 20%, rgba(255, 106, 26, 0.08), transparent 55%),
     radial-gradient(90% 80% at 80% 85%, rgba(255, 184, 77, 0.05), transparent 60%),
     #070504;
@@ -38,6 +63,22 @@ html[data-theme="light"] .map {
   --map-region: rgba(150, 80, 20, 0.8);
   --map-cons: rgba(140, 95, 50, 0.22);
   --map-halo: rgba(255, 250, 242, 0.9);
+  --map-dim: rgba(110, 84, 64, 0.22);
+  --map-heat-lo: #f0b080;
+  --map-heat-hi: #d4520c;
+  --map-heat-core: #7a1d04;
+  --map-heat-blend: source-over;
+  --map-sov-l: 45%;
+  --map-npc: #8a7d72;
+  --map-unheld: rgba(110, 84, 64, 0.28);
+  --map-threat-lo: #f0c060;
+  --map-threat-hi: #c8281a;
+  --map-threat-core: #5a0a04;
+  --map-camp: #c41818;
+  --map-route: #a86a10;
+  --map-route-halo: rgba(168, 106, 16, 0.22);
+  --map-inc: #a12fb3;
+  --map-inc-staging: #d01ba8;
   --map-space: radial-gradient(120% 90% at 30% 20%, rgba(255, 106, 26, 0.07), transparent 55%), #fbf6ee;
 }
 
@@ -148,6 +189,36 @@ html[data-theme="light"] .map {
   color: var(--muted);
 }
 .map-status[hidden], .map-legend[hidden], .map-card [hidden] { display: none; }
+/* The hover popover: a small glass card beside the cursor (map.js
+   positions it with a transform; it never takes the pointer). */
+.map-tip {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 3;
+  max-width: 17rem;
+  padding: 0.4rem 0.6rem 0.45rem;
+  border: 1px solid var(--glass-edge);
+  border-radius: var(--r-md);
+  background: var(--glass);
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  backdrop-filter: blur(var(--glass-blur));
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.4);
+  font-size: 0.8rem;
+  pointer-events: none;
+  will-change: transform;
+}
+.map-tip[hidden] { display: none; }
+.map-tip p { margin: 0; }
+.map-tip-head { white-space: nowrap; }
+.map-tip-head strong { color: var(--text-bright); }
+.map-tip-region { color: var(--muted-2); }
+.map-tip-row { display: flex; justify-content: space-between; gap: 0.9rem; margin-top: 0.15rem !important; }
+.map-tip-row span:first-child { color: var(--muted-2); white-space: nowrap; }
+.map-tip-row span:last-child { color: var(--text); text-align: right; }
+/* Touch screens have no hover: the system card does this job. */
+@media (hover: none) { .map-tip { display: none !important; } }
+
 .map-hint {
   position: absolute;
   top: 0.75rem;
@@ -208,6 +279,68 @@ html[data-theme="light"] .map {
 }
 .map-legend li { display: flex; flex-direction: column; align-items: center; gap: 0.2rem; min-width: 0.95rem; }
 .map-legend-v { height: 0.8rem; line-height: 0.8rem; white-space: nowrap; }
+
+/* --- The layer picker: one swipeable row of chips --- */
+.map-layers {
+  display: flex;
+  gap: 0.3rem;
+  flex-basis: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+  overscroll-behavior-x: contain;
+}
+.map-layers::-webkit-scrollbar { display: none; }
+.map-layers button {
+  flex: none;
+  padding: 0.25rem 0.65rem;
+  border: 1px solid var(--box-edge);
+  border-radius: var(--r-xs);
+  background: var(--row-alt);
+  color: var(--muted-2);
+  font: inherit;
+  font-size: 0.8rem;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.map-layers button:hover:not(:disabled) { color: var(--text); border-color: var(--glass-edge); }
+.map-layers button[aria-checked="true"] {
+  color: var(--text-bright);
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+}
+.map-layers button:disabled { opacity: 0.45; cursor: default; }
+
+/* The live layer's legend, where the security legend sits. */
+.map-layer-legend {
+  position: absolute;
+  left: 0.75rem;
+  bottom: 0.75rem;
+  max-width: min(17rem, calc(100% - 1.5rem));
+  padding: 0.45rem 0.6rem 0.5rem;
+  border: 1px solid var(--glass-edge);
+  border-radius: var(--r-md);
+  background: var(--glass);
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  backdrop-filter: blur(var(--glass-blur));
+  font-size: 0.75rem;
+  pointer-events: none;
+}
+.map-layer-legend[hidden] { display: none; }
+.map-layer-legend p { margin: 0; }
+.map-layer-title { color: var(--text-bright); font-weight: 600; margin-bottom: 0.25rem !important; }
+.map-layer-row { display: flex; align-items: center; gap: 0.4rem; color: var(--muted-2); }
+.map-layer-sw { width: 0.65rem; height: 0.65rem; border-radius: 50%; flex: none; }
+.map-heat { display: flex; align-items: center; gap: 0.35rem; color: var(--muted-2); font-variant-numeric: tabular-nums; }
+.map-heat-bar { flex: 1; min-width: 6rem; height: 0.45rem; border-radius: 0.3rem; }
+.map-layer-at { margin-top: 0.25rem !important; font-size: 0.7rem; }
+
+/* The system card's live figures. */
+.map-card-live { margin: 0 0 0.45rem; font-size: 0.8rem; }
+.map-card-live[hidden] { display: none; }
+.map-card-live > div { display: flex; justify-content: space-between; gap: 0.75rem; padding: 0.15rem 0; border-top: 1px solid var(--box-edge); }
+.map-card-live > div:first-child { border-top: 0; }
+.map-card-live dt { color: var(--muted-2); white-space: nowrap; }
+.map-card-live dd { margin: 0; text-align: right; color: var(--text); }
 .map-swatch {
   display: block;
   width: 0.7rem;
@@ -272,6 +405,89 @@ html[data-theme="light"] .map {
 }
 .map-card-link:hover { border-color: var(--accent); }
 .map-card-actions { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.map-card-route { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.4rem; }
+
+/* --- The route planner --- */
+.map-route {
+  position: absolute;
+  right: 0.75rem;
+  bottom: 0.75rem;
+  width: min(21rem, calc(100% - 1.5rem));
+  max-height: calc(100% - 1.5rem);
+  overflow: auto;
+  padding: 0.8rem 0.9rem 0.9rem;
+  border: 1px solid var(--glass-edge);
+  border-radius: var(--r-lg);
+  background: var(--glass);
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  backdrop-filter: blur(var(--glass-blur));
+  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.4);
+}
+.map-route[hidden] { display: none; }
+.map-route-title { margin: 0 2rem 0.35rem 0; font-size: 1.05rem; color: var(--text-bright); }
+.map-route-ends {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0 0 0.55rem;
+  min-width: 0;
+}
+.map-route-end { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.map-route-swap {
+  flex: none;
+  padding: 0.15rem 0.4rem;
+  border: 1px solid var(--box-edge);
+  border-radius: var(--r-xs);
+  background: var(--row-alt);
+  color: var(--muted);
+  font: inherit;
+  cursor: pointer;
+}
+.map-route-swap:hover { color: var(--text); border-color: var(--accent); }
+.map-route-sys {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.88rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.map-route-sys:hover { color: var(--accent); }
+.map-route-modes { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-bottom: 0.55rem; }
+.map-route-modes button {
+  padding: 0.3rem 0.6rem;
+  border: 1px solid var(--box-edge);
+  border-radius: var(--r-xs);
+  background: var(--row-alt);
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+.map-route-modes button[aria-checked="true"] {
+  color: var(--text-bright);
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+}
+.map-route-sum { margin: 0 0 0.35rem; color: var(--text); }
+.map-route-warn { margin: 0 0 0.35rem; padding: 0; list-style: none; font-size: 0.85rem; }
+.map-route-warn li { padding: 0.15rem 0; color: var(--map-threat-lo); }
+.map-route-warn li.map-route-camp { color: var(--map-camp); font-weight: 600; }
+.map-route-steps summary { cursor: pointer; color: var(--muted-2); font-weight: 600; font-size: 0.85rem; }
+.map-route-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.5rem;
+  margin: 0.45rem 0 0;
+  padding: 0 0 0 1.1rem;
+  font-size: 0.85rem;
+}
+.map-route-list li.hot .map-route-sys { color: var(--map-threat-lo); }
+.map-route-list li.camp .map-route-sys { color: var(--map-camp); font-weight: 600; }
+.map-route-actions { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.6rem; }
+.map-route-note { margin: 0.5rem 0 0; font-size: 0.82rem; }
 
 /* --- The region index --- */
 .map-index { margin-top: 0.85rem; }
@@ -292,7 +508,9 @@ html[data-theme="light"] .map {
   .map-find { order: 3; flex-basis: 100%; max-width: none; margin-left: 0; }
   .map-zoom { margin-left: auto; }
   .map-stage { height: max(20rem, calc(100dvh - var(--sticky-top) - var(--phone-bar-h, 3.6rem) - 9.5rem)); }
-  .map-legend { left: 0.5rem; bottom: 0.5rem; }
+  .map-legend, .map-layer-legend { left: 0.5rem; bottom: 0.5rem; }
+  .map-layers { order: 4; -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 1.25rem), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 1.25rem), transparent); }
+  .map-layers button { padding: 0.4rem 0.75rem; }
   .map-card {
     top: auto;
     left: 0.4rem;
@@ -302,7 +520,17 @@ html[data-theme="light"] .map {
     max-height: 55%;
     border-radius: var(--r-lg) var(--r-lg) var(--r-md) var(--r-md);
   }
-  .map-card:not([hidden]) ~ .map-legend { display: none; }
+  .map-card:not([hidden]) ~ .map-legend,
+  .map-card:not([hidden]) ~ .map-layer-legend { display: none; }
+  /* The planner docks at the top on phones, opposite the
+     system card rising from the bottom. */
+  .map-route {
+    top: 0.4rem;
+    right: 0.4rem;
+    bottom: auto;
+    width: min(21rem, calc(100% - 0.8rem));
+    max-height: 62%;
+  }
 }
 /* Short landscape phones: the bar stays one line. */
 @media (max-height: 30rem) and (orientation: landscape) and (pointer: coarse) {

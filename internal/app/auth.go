@@ -124,8 +124,8 @@ const (
 // (GET https://esi.evetech.net/meta/openapi.json →
 // components.securitySchemes), minus every mutating scope — anything
 // whose name contains write_, send_, respond_, organize_, manage_ or
-// open_window (3 scopes excluded: write_contacts, write_fleet,
-// write_waypoint; esi-planets.manage_planets.v1
+// open_window (2 scopes excluded: write_contacts, write_fleet;
+// esi-planets.manage_planets.v1
 // is the one deliberate manage exception — see below). The user's
 // developer-portal application has the same scopes enabled, so
 // SSO grants exactly what is requested here. Already-linked
@@ -145,6 +145,15 @@ const (
 // linked before this scope was added hold no grant for it,
 // which the handler reports as "sign in again to enable View in
 // game" instead of failing silently.
+//
+// One deliberate exception: esi-ui.write_waypoint.v1 IS requested
+// (optional, under Location and ship), powering the map's "Set
+// destination" and "Send route" buttons (POST
+// /ui/autopilot/waypoint/). Like open_window it moves only the
+// player's own client -- the autopilot's destination and waypoints --
+// and the developer-portal application must have it enabled.
+// Characters linked before it hold no grant, which the map reports as
+// "sign in again to send routes to the game".
 //
 // One deliberate exception: esi-planets.manage_planets.v1
 // IS requested. CCP publishes no read scope for planetary industry —
@@ -225,6 +234,7 @@ var eveScopes = []string{
 	"esi-skills.read_skillqueue.v1",
 	"esi-skills.read_skills.v1",
 	"esi-ui.open_window.v1",
+	"esi-ui.write_waypoint.v1",
 	"esi-universe.read_structures.v1",
 	"esi-wallet.read_character_wallet.v1",
 	"esi-wallet.read_corporation_wallets.v1",

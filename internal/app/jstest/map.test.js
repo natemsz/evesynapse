@@ -64,3 +64,96 @@ test("region names stay visible and zoom entry needs the preference", () => {
   assert.strictEqual(map.zoomEntryAllowed(undefined), false);
   assert.strictEqual(map.zoomEntryAllowed(true), true);
 });
+
+test("live layers join onto the map's systems", () => {
+  const P = {
+    v: 1,
+    regions: [{ id: 10, name: "Alpha", x: 0, y: 0, w: 1000, h: 1000 }],
+    cons: [{ id: 1, name: "A1", r: 0 }],
+    sys: {
+      id: [101, 102, 103], n: ["One", "Two", "Three"], x: [0, 10, 20], y: [0, 0, 0],
+      s: [0.9, -0.3, -0.5], r: [0, 0, 0], c: [0, 0, 0], rx: [0, 500, 1000], ry: [0, 0, 0], f: [0, 0, 0]
+    },
+    gates: [0, 1, 1, 2]
+  };
+  const L = {
+    kills: { at: 1, id: [102, 999], ship: [3, 9], pod: [1, 9], npc: [0, 9] },
+    jumps: { at: 1, id: [101], n: [500] },
+    sov: { at: 1, id: [102, 103], a: [0, -1], f: [0, 500010] },
+    alliances: [{ id: 99003581, name: "Fraternity." }],
+    fw: { at: 1, id: [101], occ: [500001], own: [500004], state: ["vulnerable"], pct: [100] },
+    inc: { at: 1, list: [{ cons: 1, staging: 103, sys: [102, 103], state: "established", inf: 0.5, boss: false, f: 500019 }] },
+    factions: [{ id: 500001, name: "Caldari State" }]
+  };
+  const J = map.joinLayers(P, L);
+  assert.deepStrictEqual(Array.from(J.kills), [0, 4, 0], "ship + pod, unknown systems dropped");
+  assert.strictEqual(J.max.kills, 4);
+  assert.strictEqual(J.max.jumps, 500);
+  assert.deepStrictEqual(Array.from(J.sovA), [-1, 0, -1]);
+  assert.strictEqual(J.sovF[2], 500010);
+  assert.deepStrictEqual(J.allianceMembers, [[1]]);
+  assert.strictEqual(J.fwState[0], 3, "vulnerable");
+  assert.deepStrictEqual(Array.from(J.inc), [0, 1, 2], "infested, and staging wins");
+  assert.strictEqual(J.factions[500001], "Caldari State");
+  assert.strictEqual(map.heatT(0, 10), 0);
+  assert.strictEqual(map.heatT(10, 10), 1);
+  assert.ok(map.heatT(1, 1000) > 0 && map.heatT(1, 1000) < 0.2, "log scale keeps a lone kill visible but faint");
+  assert.notStrictEqual(map.allianceHue(99003581), map.allianceHue(99003582), "neighbouring IDs, different hues");
+});
+
+test("threat joins with levels, camps and spillover along the gates", () => {
+  const P = {
+    v: 1,
+    regions: [{ id: 10, name: "Alpha", x: 0, y: 0, w: 1000, h: 1000 }],
+    cons: [{ id: 1, name: "A1", r: 0 }],
+    sys: {
+      id: [101, 102, 103], n: ["One", "Two", "Three"], x: [0, 10, 20], y: [0, 0, 0],
+      s: [0.9, -0.3, -0.5], r: [0, 0, 0], c: [0, 0, 0], rx: [0, 500, 1000], ry: [0, 0, 0], f: [0, 0, 0]
+    },
+    gates: [0, 1, 1, 2]
+  };
+  const J = map.joinLayers(P, {
+    threat: { at: 1, id: [102], s: [600], k1: [4], last: [1000],
+      camps: [{ sys: 102, n: 3, kind: "alliance", gid: 99, group: "The Campers", since: 900 }] }
+  });
+  assert.strictEqual(J.threat[1], 6);
+  assert.strictEqual(J.threatHour[1], 4);
+  assert.strictEqual(J.camps.length, 1);
+  assert.strictEqual(J.campOf[1], 0);
+  assert.ok(Math.abs(J.spill[0] - 1.8) < 1e-6 && Math.abs(J.spill[2] - 1.8) < 1e-6, "neighbours carry 30%");
+  assert.strictEqual(J.spill[1], 0, "the hot system's own neighbours are quiet");
+  assert.deepStrictEqual([0, 0.4, 0.5, 2, 5, 10, 40].map(map.threatLevel), [0, 0, 1, 2, 3, 4, 4]);
+});
+
+test("routes plan shortest first and bend around danger when asked", () => {
+  // A - B - C is the short way; A - D - E - C detours. B is camped.
+  const P = {
+    v: 1,
+    regions: [{ id: 10, name: "Alpha", x: 0, y: 0, w: 1000, h: 1000 }],
+    cons: [],
+    sys: {
+      id: [101, 102, 103, 104, 105], n: ["A", "B", "C", "D", "E"],
+      x: [0, 10, 20, 0, 20], y: [0, 0, 0, 10, 10],
+      s: [0.9, 0.9, 0.9, 0.9, 0.9], r: [0, 0, 0, 0, 0], c: [-1, -1, -1, -1, -1],
+      rx: [0, 500, 1000, 0, 1000], ry: [0, 0, 0, 500, 500], f: [0, 0, 0, 0, 0]
+    },
+    gates: [0, 1, 1, 2, 0, 3, 3, 4, 4, 2]
+  };
+  const G = map.prepare(P);
+  const LY = { threat: new Float64Array(5), spill: new Float64Array(5), campOf: new Int32Array(5).fill(-1), camps: [{}] };
+  LY.campOf[1] = 0;
+
+  assert.deepStrictEqual(map.planRoute(G, 0, 2, map.routeCost(G, LY, "short")), [0, 1, 2],
+    "shortest takes the camped gate");
+  assert.deepStrictEqual(map.planRoute(G, 0, 2, map.routeCost(G, LY, "calm")), [0, 3, 4, 2],
+    "calm pays jumps to skirt the camp");
+  assert.strictEqual(map.planRoute(G, 0, 2, map.routeCost(G, null, "short")).length, 3,
+    "no layer loaded still plans");
+
+  const sum = map.routeSummary(G, LY, [0, 1, 2]);
+  assert.strictEqual(sum.jumps, 2);
+  assert.deepStrictEqual(sum.camps, [1], "the camp on the way is named");
+  const calm = map.routeSummary(G, LY, [0, 3, 4, 2]);
+  assert.strictEqual(calm.jumps, 3);
+  assert.deepStrictEqual(calm.camps, []);
+});

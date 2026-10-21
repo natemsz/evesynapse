@@ -428,6 +428,12 @@ var pgAbyssalLadderClampSchema string
 //go:embed schema_pg/072_universe_map.sql
 var pgUniverseMapSchema string
 
+// Step 073: the universe map's live layers payload (kills, jumps,
+// sovereignty, Faction Warfare, incursions), built by the worker.
+//
+//go:embed schema_pg/073_map_layers.sql
+var pgMapLayersSchema string
+
 // Step 074: the killboard -- every killmail (zKillboard's public
 // stream and our characters' own), a summary kept forever, attackers
 // and the full killmail kept a year, and the stream's cursor.
@@ -536,6 +542,7 @@ func schemaSteps() []schemaStep {
 		{70, "abyssal_learned", pgAbyssalLearnedSchema, ""},
 		{71, "abyssal_ladder_clamp", pgAbyssalLadderClampSchema, ""},
 		{72, "universe_map", pgUniverseMapSchema, ""},
+		{73, "map_layers", pgMapLayersSchema, ""},
 		{74, "killboard", pgKillboardSchema, ""},
 	}
 }

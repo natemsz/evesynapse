@@ -466,6 +466,14 @@ type LocalFitting struct {
 	LastViewedAt sql.NullTime `json:"last_viewed_at"`
 }
 
+type MapLayer struct {
+	ID      int32     `json:"id"`
+	Sources string    `json:"sources"`
+	Etag    string    `json:"etag"`
+	Payload []byte    `json:"payload"`
+	BuiltAt time.Time `json:"built_at"`
+}
+
 type MapUniverse struct {
 	ID      int32     `json:"id"`
 	Version int32     `json:"version"`

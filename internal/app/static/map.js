@@ -152,6 +152,211 @@
     return P._g;
   }
 
+  // --- Live layers: the pure part ---
+
+  /**
+   * The live layers payload (Go: mapLayersPayload, map_layers.go).
+   * Systems are keyed by ID; joinLayers maps them onto the universe
+   * payload's indices. Every layer carries at: its fetch time (unix).
+   * @typedef {Object} LayersPayload
+   * @property {{at:number,id:number[],ship:number[],pod:number[],npc:number[]}} kills
+   * @property {{at:number,id:number[],n:number[]}} jumps
+   * @property {{at:number,id:number[],a:number[],f:number[]}} sov  a: alliance index (-1 none); f: NPC faction
+   * @property {{id:number,name:string}[]} alliances
+   * @property {{at:number,id:number[],occ:number[],own:number[],state:string[],pct:number[]}} fw
+   * @property {{at:number,list:{cons:number,staging:number,sys:number[],state:string,inf:number,boss:boolean,f:number}[]}} inc
+   * @property {{id:number,name:string}[]} factions
+   */
+
+  var FW_STATE = { uncontested: 1, contested: 2, vulnerable: 3, captured: 4 };
+
+  // joinLayers maps a layers payload onto per-system arrays indexed
+  // like the universe payload, with each heat layer's maximum.
+  function joinLayers(P, L) {
+    var G = prepare(P), n = G.n, i, j;
+    var J = { at: {}, max: {}, factions: {}, alliances: L.alliances || [], incs: [] };
+    function each(part, name, fn) {
+      part = part || {};
+      J.at[name] = part.at || 0;
+      var ids = part.id || [];
+      for (j = 0; j < ids.length; j++) {
+        i = G.byID[ids[j]];
+        if (i !== undefined) fn(i, j, part);
+      }
+    }
+    J.ship = new Int32Array(n); J.pod = new Int32Array(n); J.npc = new Int32Array(n); J.kills = new Int32Array(n);
+    each(L.kills, "kills", function (i, j, p) {
+      J.ship[i] = p.ship[j]; J.pod[i] = p.pod[j]; J.npc[i] = p.npc[j];
+      J.kills[i] = p.ship[j] + p.pod[j];
+    });
+    J.at.npc = J.at.kills;
+    J.jumps = new Int32Array(n);
+    each(L.jumps, "jumps", function (i, j, p) { J.jumps[i] = p.n[j]; });
+    J.sovA = new Int16Array(n).fill(-1); J.sovF = new Float64Array(n);
+    J.allianceMembers = J.alliances.map(function () { return []; });
+    each(L.sov, "sov", function (i, j, p) {
+      J.sovA[i] = p.a[j];
+      J.sovF[i] = p.f[j];
+      if (p.a[j] >= 0 && J.allianceMembers[p.a[j]]) J.allianceMembers[p.a[j]].push(i);
+    });
+    J.fwOcc = new Float64Array(n); J.fwOwn = new Float64Array(n); J.fwState = new Uint8Array(n); J.fwPct = new Uint8Array(n);
+    each(L.fw, "fw", function (i, j, p) {
+      J.fwOcc[i] = p.occ[j]; J.fwOwn[i] = p.own[j];
+      J.fwState[i] = FW_STATE[p.state[j]] || 1; J.fwPct[i] = p.pct[j];
+    });
+    J.inc = new Uint8Array(n); J.incOf = new Int16Array(n).fill(-1);
+    var inc = L.inc || {};
+    J.at.inc = inc.at || 0;
+    (inc.list || []).forEach(function (x, xi) {
+      J.incs.push(x);
+      (x.sys || []).forEach(function (id) {
+        var s = G.byID[id];
+        if (s !== undefined) { J.inc[s] = Math.max(J.inc[s], 1); J.incOf[s] = xi; }
+      });
+      var st = G.byID[x.staging];
+      if (st !== undefined) { J.inc[st] = 2; J.incOf[st] = xi; }
+    });
+    (L.factions || []).forEach(function (f) { J.factions[f.id] = f.name; });
+    ["kills", "npc", "jumps"].forEach(function (k) {
+      var arr = J[k], m = 0;
+      for (i = 0; i < n; i++) if (arr[i] > m) m = arr[i];
+      J.max[k] = m;
+    });
+    // Threat: the decayed score on a fixed scale (THREAT_TOP is
+    // "extreme"), kills in the last hour, the latest kill, camps,
+    // and each system's spillover from its gate neighbours.
+    J.threat = new Float32Array(n); J.threatHour = new Int32Array(n); J.threatLast = new Float64Array(n);
+    each(L.threat, "threat", function (i, j, p) {
+      J.threat[i] = p.s[j] / 100; J.threatHour[i] = p.k1[j]; J.threatLast[i] = p.last[j];
+    });
+    J.max.threat = THREAT_TOP;
+    J.camps = []; J.campOf = new Int16Array(n).fill(-1);
+    ((L.threat || {}).camps || []).forEach(function (c) {
+      var s = G.byID[c.sys];
+      if (s === undefined) return;
+      J.campOf[s] = J.camps.length;
+      J.camps.push({ sys: s, n: c.n, kind: c.kind, gid: c.gid, group: c.group, since: c.since });
+    });
+    J.spill = new Float32Array(n);
+    for (i = 0; i < n; i++) {
+      var nb = G.adj[i], m2 = 0;
+      for (j = 0; j < nb.length; j++) if (J.threat[nb[j]] > m2) m2 = J.threat[nb[j]];
+      J.spill[i] = m2 * THREAT_SPILL;
+    }
+    return J;
+  }
+
+  // The threat scale: the decayed score at which each level starts.
+  // A fresh kill is worth 1 and halves every 45 minutes.
+  var THREAT_LEVELS = [
+    { at: 0, name: "Quiet" }, { at: 0.5, name: "Low" }, { at: 2, name: "Medium" },
+    { at: 5, name: "High" }, { at: 10, name: "Extreme" }
+  ];
+  var THREAT_TOP = 10;
+  var THREAT_SPILL = 0.3; // a neighbour's share of a system's threat
+  function threatLevel(score) {
+    var lv = 0;
+    for (var i = 0; i < THREAT_LEVELS.length; i++) if (score >= THREAT_LEVELS[i].at) lv = i;
+    return lv;
+  }
+
+  // heatT places a value on its layer's log scale, 0..1.
+  function heatT(v, max) {
+    return v <= 0 || max <= 0 ? 0 : Math.log(1 + v) / Math.log(1 + max);
+  }
+
+  // allianceHue gives every alliance its own stable hue: neighbours
+  // with near IDs still land far apart on the wheel.
+  function allianceHue(id) {
+    return (Math.imul(id | 0, 2654435761) >>> 0) % 360;
+  }
+
+  // --- Routing: the pure part ---
+  // Routes are planned here, over the payload's gates: Dijkstra with
+  // a price for entering each system. "short" prices every jump the
+  // same; "calm" adds the live threat (its level, gate camps, and
+  // its spill onto gate neighbours), so the route bends around
+  // trouble when a detour is cheap; "safe" does that and also
+  // prices leaving high-sec steeply, as the game's own "safer" does.
+  var ROUTE_MODES = { short: 1, safe: 1, calm: 1 };
+  var THREAT_PRICE = [0, 3, 10, 40, 120];
+  var CAMP_PRICE = 400, LOWSEC_PRICE = 50;
+  function routeCost(G, LY, mode) {
+    return function (j) {
+      var c = 1;
+      if (mode === "short") return c;
+      if (mode === "safe" && G.tier[j] < 5) c += LOWSEC_PRICE;
+      if (LY) {
+        c += THREAT_PRICE[threatLevel(LY.threat[j])];
+        if (LY.campOf[j] >= 0) c += CAMP_PRICE;
+        if (threatLevel(LY.spill[j]) >= 2) c += 2;
+      }
+      return c;
+    };
+  }
+  // planRoute: the cheapest path from a to b as system indices, a
+  // and b included; null when no gates join them.
+  function planRoute(G, a, b, cost) {
+    var n = G.n, dist = new Float64Array(n).fill(Infinity), prev = new Int32Array(n).fill(-1);
+    var heap = [], i;
+    function push(d, v) {
+      heap.push([d, v]);
+      for (i = heap.length - 1; i > 0;) {
+        var p = (i - 1) >> 1;
+        if (heap[p][0] <= heap[i][0]) break;
+        var t = heap[p]; heap[p] = heap[i]; heap[i] = t; i = p;
+      }
+    }
+    function pop() {
+      var top = heap[0], last = heap.pop();
+      if (heap.length) {
+        heap[0] = last;
+        for (i = 0; ;) {
+          var l = 2 * i + 1, r = l + 1, m = i;
+          if (l < heap.length && heap[l][0] < heap[m][0]) m = l;
+          if (r < heap.length && heap[r][0] < heap[m][0]) m = r;
+          if (m === i) break;
+          var t = heap[m]; heap[m] = heap[i]; heap[i] = t; i = m;
+        }
+      }
+      return top;
+    }
+    dist[a] = 0;
+    push(0, a);
+    while (heap.length) {
+      var top = pop(), u = top[1];
+      if (top[0] > dist[u]) continue;
+      if (u === b) break;
+      var nb = G.adj[u];
+      for (var k = 0; k < nb.length; k++) {
+        var v = nb[k], d = dist[u] + cost(v);
+        if (d < dist[v]) { dist[v] = d; prev[v] = u; push(d, v); }
+      }
+    }
+    if (dist[b] === Infinity) return null;
+    var path = [];
+    for (var at = b; at !== -1; at = prev[at]) path.push(at);
+    return path.reverse();
+  }
+  // routeSummary: the jumps by security band, the camps on the way,
+  // and the systems hot enough to warn of (Medium threat and up),
+  // hottest first.
+  function routeSummary(G, LY, path) {
+    var s = { jumps: path.length - 1, high: 0, low: 0, nul: 0, camps: [], hot: [], top: 0 };
+    path.forEach(function (i, at) {
+      if (at === 0) return; // where you start is not part of the trip
+      var t = G.tier[i];
+      if (t >= 5) s.high++; else if (t > 0) s.low++; else s.nul++;
+      if (!LY) return;
+      if (LY.campOf[i] >= 0) s.camps.push(i);
+      var lv = threatLevel(LY.threat[i]);
+      if (lv > s.top) s.top = lv;
+      if (lv >= 2) s.hot.push(i);
+    });
+    if (LY) s.hot.sort(function (x, y) { return LY.threat[y] - LY.threat[x]; });
+    return s;
+  }
+
   // Stub length past a region's edge system, in region-frame units.
   var STUB = 70;
 
@@ -209,10 +414,41 @@
         region: tok("--map-region", "rgba(255,210,122,0.75)"),
         cons: tok("--map-cons", "rgba(201,160,106,0.45)"),
         accent: tok("--map-accent", "#ff6a1a"),
-        halo: tok("--map-halo", "rgba(10,7,4,0.85)")
+        halo: tok("--map-halo", "rgba(10,7,4,0.85)"),
+        // The live layers.
+        dim: tok("--map-dim", "rgba(200,180,160,0.28)"),
+        heatLo: rgbOf(tok("--map-heat-lo", "#7a2a0c")),
+        heatHi: rgbOf(tok("--map-heat-hi", "#ff6a1a")),
+        heatCore: rgbOf(tok("--map-heat-core", "#ffe2a8")),
+        heatBlend: tok("--map-heat-blend", "lighter"),
+        npc: tok("--map-npc", "#9a8f86"),
+        unheld: tok("--map-unheld", "rgba(200,180,160,0.35)"),
+        sovL: tok("--map-sov-l", "62%"),
+        threatRamp: [rgbOf(tok("--map-threat-lo", "#e0a020")), rgbOf(tok("--map-threat-hi", "#e0301c")), rgbOf(tok("--map-threat-core", "#fff0e0"))],
+        route: tok("--map-route", "#ffd27a"),
+        routeHalo: tok("--map-route-halo", "rgba(255,210,122,0.25)"),
+        camp: tok("--map-camp", "#ff3b3b"),
+        inc: tok("--map-inc", "#c64bd6"),
+        incStage: tok("--map-inc-staging", "#ff4fd8"),
+        faction: {
+          500001: tok("--map-f-caldari", "#3d8bff"),
+          500002: tok("--map-f-minmatar", "#d8452f"),
+          500003: tok("--map-f-amarr", "#e8b54a"),
+          500004: tok("--map-f-gallente", "#3fbf7a")
+        }
       };
       font = cs.fontFamily || font;
       widthCache = {};
+    }
+    // rgbOf normalizes any CSS color to [r, g, b] through the
+    // canvas's own parser.
+    function rgbOf(c) {
+      ctx.fillStyle = "#000";
+      ctx.fillStyle = c;
+      var v = ctx.fillStyle;
+      if (v.charAt(0) === "#") return [parseInt(v.substr(1, 2), 16), parseInt(v.substr(3, 2), 16), parseInt(v.substr(5, 2), 16)];
+      var m = v.match(/[\d.]+/g) || [0, 0, 0];
+      return [+m[0], +m[1], +m[2]];
     }
 
     // --- Views ---
@@ -417,21 +653,28 @@
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       if (mode !== "universe") drawConstellations(k, ox, oy);
 
-      // Systems, batched by security color.
+      // The planned route, under the systems it joins.
+      drawRoute(k, ox, oy);
+
+      // Systems: by security, or by the live layer showing.
       var r = radius(), list = visible(), n = list ? list.length : G.n;
       var pad = 40;
-      for (t = 0; t <= 10; t++) {
-        ctx.beginPath();
-        for (var m = 0; m < n; m++) {
-          i = list ? list[m] : m;
-          if (G.tier[i] !== t) continue;
-          var sx = wx(i) * k + ox, sy = wy(i) * k + oy;
-          if (sx < -pad || sy < -pad || sx > cw + pad || sy > ch + pad) continue;
-          ctx.moveTo(sx + r, sy);
-          ctx.arc(sx, sy, r, 0, Math.PI * 2);
+      if (layer === "security" || !LY) {
+        for (t = 0; t <= 10; t++) {
+          ctx.beginPath();
+          for (var m = 0; m < n; m++) {
+            i = list ? list[m] : m;
+            if (G.tier[i] !== t) continue;
+            var sx = wx(i) * k + ox, sy = wy(i) * k + oy;
+            if (sx < -pad || sy < -pad || sx > cw + pad || sy > ch + pad) continue;
+            ctx.moveTo(sx + r, sy);
+            ctx.arc(sx, sy, r, 0, Math.PI * 2);
+          }
+          ctx.fillStyle = colors.sec[t];
+          ctx.fill();
         }
-        ctx.fillStyle = colors.sec[t];
-        ctx.fill();
+      } else {
+        drawLayer(k, ox, oy, r, list, n, pad);
       }
 
       // Ghost ends of the region's exits.
@@ -458,6 +701,7 @@
         ctx.strokeStyle = idx ? colors.accent : colors.label;
         ctx.stroke();
       });
+      drawRouteEnds(k, ox, oy, r);
 
       drawLabels(k, ox, oy, r);
     }
@@ -534,6 +778,7 @@
           if (box) labelBoxes.push({ r: i, b: box });
         });
         ctx.globalAlpha = 1;
+        layerLabels(k, ox, oy, label, inPlaceFirst);
         // System names once the picture opens up.
         if (f > 6) {
           var vis = [];
@@ -550,7 +795,8 @@
         return;
       }
 
-      // Tactical: every system, then the exits.
+      // Tactical: the layer's own labels, every system, the exits.
+      layerLabels(k, ox, oy, label, inPlaceFirst);
       inPlaceFirst(G.membersPrio[region], function (s) { return "t" + s; }, function (s) {
         label(S.n[s], S.rx[s] * k + ox, S.ry[s] * k + oy + r + 3, 12, colors.label, null, false, "t" + s);
       });
@@ -565,6 +811,458 @@
         label(S.n[to] + " · " + P.regions[S.r[to]].name, g[0] * k + ox, g[1] * k + oy + r + 2, 10.5, colors.labelDim, null, false, "x" + to);
       });
       shownLabels = nextShown;
+    }
+
+    // --- Live layers ---
+    // layer is what the systems are colored by; LY is the joined
+    // layers payload (joinLayers), null until it loads. Heat layers
+    // (kills, NPC kills, jumps) dim the map and glow each active
+    // system by its share of the hour's busiest, on a log scale;
+    // sovereignty colors by holder; Faction Warfare by occupier with
+    // its contest progress as an arc; incursions mark infested
+    // systems and ring the staging system.
+    var layer = "security", LY = null;
+    // The layer the URL asked for, read before anything rewrites the
+    // URL, and kept in it until the layers payload arrives.
+    var wantLayer = new URLSearchParams(location.search).get("layer");
+    var HEAT = { kills: 1, npc: 1, jumps: 1, threat: 1 };
+    var heatOrder = {};
+
+    // heatColor walks a three-stop ramp (the heat ramp unless one is
+    // given: threat has its own, amber through red to white-hot).
+    function heatColor(t, a, ramp) {
+      ramp = ramp || [colors.heatLo, colors.heatHi, colors.heatCore];
+      t = Math.min(Math.max(t, 0), 1);
+      var lo = ramp[0], hi = ramp[1], core = ramp[2], c;
+      if (t < 0.75) {
+        var u = t / 0.75;
+        c = [lo[0] + (hi[0] - lo[0]) * u, lo[1] + (hi[1] - lo[1]) * u, lo[2] + (hi[2] - lo[2]) * u];
+      } else {
+        var w = (t - 0.75) / 0.25;
+        c = [hi[0] + (core[0] - hi[0]) * w, hi[1] + (core[1] - hi[1]) * w, hi[2] + (core[2] - hi[2]) * w];
+      }
+      return "rgba(" + Math.round(c[0]) + "," + Math.round(c[1]) + "," + Math.round(c[2]) + "," + a + ")";
+    }
+    function allianceColor(ai) {
+      var al = LY.alliances[ai];
+      return "hsl(" + allianceHue(al ? al.id : ai) + ",68%," + colors.sovL + ")";
+    }
+
+    function drawLayer(k, ox, oy, r, list, n, pad) {
+      var i, m, sx, sy;
+      function on(i) {
+        sx = wx(i) * k + ox; sy = wy(i) * k + oy;
+        return !(sx < -pad || sy < -pad || sx > cw + pad || sy > ch + pad);
+      }
+      function batch(color, rr, test) {
+        ctx.beginPath();
+        for (m = 0; m < n; m++) {
+          i = list ? list[m] : m;
+          if (!test(i) || !on(i)) continue;
+          ctx.moveTo(sx + rr, sy);
+          ctx.arc(sx, sy, rr, 0, Math.PI * 2);
+        }
+        ctx.fillStyle = color;
+        ctx.fill();
+      }
+      if (HEAT[layer]) {
+        var vals = LY[layer], max = LY.max[layer];
+        var ramp = layer === "threat" ? colors.threatRamp : null;
+        batch(colors.dim, r * 0.8, function (i) { return vals[i] <= 0; });
+        // Threat spills along the gates: in a region's tactical view
+        // a quiet system beside a dangerous one wears a faint ring.
+        if (layer === "threat" && mode !== "universe") {
+          ctx.setLineDash([3, 3]);
+          ctx.lineWidth = 1.5;
+          for (m = 0; m < n; m++) {
+            i = list ? list[m] : m;
+            if (LY.spill[i] < THREAT_LEVELS[1].at || vals[i] >= LY.spill[i] || !on(i)) continue;
+            ctx.beginPath();
+            ctx.arc(sx, sy, r + 5, 0, Math.PI * 2);
+            ctx.strokeStyle = heatColor(heatT(LY.spill[i], max), 0.7, ramp);
+            ctx.stroke();
+          }
+          ctx.setLineDash([]);
+        }
+        // Quietest first, so the hottest glow on top.
+        var order = heatOrder[layer];
+        if (!order) {
+          order = [];
+          for (i = 0; i < G.n; i++) if (vals[i] > 0) order.push(i);
+          order.sort(function (a, b) { return vals[a] - vals[b]; });
+          heatOrder[layer] = order;
+        }
+        // In a region's tactical view systems sit far apart and are
+        // named; a modest glow keeps neighbours and their names clear.
+        var grow = mode === "universe" ? Math.min(1 + (cam.k / fitK() - 1) * 0.15, 3) : 0.9;
+        ctx.globalCompositeOperation = colors.heatBlend;
+        for (m = 0; m < order.length; m++) {
+          i = order[m];
+          if (mode !== "universe" && S.r[i] !== region) continue;
+          if (!on(i)) continue;
+          var t = heatT(vals[i], max), rr = r + (2 + 13 * t) * grow;
+          ctx.beginPath();
+          ctx.arc(sx, sy, rr, 0, Math.PI * 2);
+          ctx.fillStyle = heatColor(t, 0.18 + 0.3 * t, ramp);
+          ctx.fill();
+        }
+        ctx.globalCompositeOperation = "source-over";
+        for (m = 0; m < order.length; m++) {
+          i = order[m];
+          if (mode !== "universe" && S.r[i] !== region) continue;
+          if (!on(i)) continue;
+          ctx.beginPath();
+          ctx.arc(sx, sy, r + 0.6, 0, Math.PI * 2);
+          ctx.fillStyle = heatColor(heatT(vals[i], max), 1, ramp);
+          ctx.fill();
+        }
+        // Camps: a ring around each.
+        if (layer === "threat") {
+          ctx.lineWidth = 2;
+          ctx.strokeStyle = colors.camp;
+          LY.camps.forEach(function (c) {
+            if ((mode !== "universe" && S.r[c.sys] !== region) || !on(c.sys)) return;
+            ctx.beginPath();
+            ctx.arc(sx, sy, r + 9, 0, Math.PI * 2);
+            ctx.stroke();
+          });
+        }
+        return;
+      }
+      if (layer === "sov") {
+        batch(colors.unheld, r * 0.8, function (i) { return LY.sovA[i] < 0 && !LY.sovF[i]; });
+        batch(colors.npc, r, function (i) { return LY.sovA[i] < 0 && LY.sovF[i] > 0; });
+        for (var a = 0; a < LY.alliances.length; a++) {
+          var mem = LY.allianceMembers[a];
+          if (!mem.length) continue;
+          ctx.beginPath();
+          for (m = 0; m < mem.length; m++) {
+            i = mem[m];
+            if ((mode !== "universe" && S.r[i] !== region) || !on(i)) continue;
+            ctx.moveTo(sx + r * 1.15, sy);
+            ctx.arc(sx, sy, r * 1.15, 0, Math.PI * 2);
+          }
+          ctx.fillStyle = allianceColor(a);
+          ctx.fill();
+        }
+        return;
+      }
+      if (layer === "fw") {
+        batch(colors.dim, r * 0.8, function (i) { return !LY.fwState[i]; });
+        Object.keys(colors.faction).forEach(function (f) {
+          batch(colors.faction[f], r * 1.2, function (i) { return LY.fwState[i] && LY.fwOcc[i] === +f; });
+        });
+        // Contest progress: an arc around each contested system.
+        ctx.lineWidth = Math.max(1.5, r * 0.5);
+        for (m = 0; m < n; m++) {
+          i = list ? list[m] : m;
+          if (!LY.fwState[i] || LY.fwPct[i] <= 0 || !on(i)) continue;
+          ctx.beginPath();
+          ctx.arc(sx, sy, r * 1.2 + 3, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * LY.fwPct[i] / 100);
+          ctx.strokeStyle = LY.fwState[i] === 3 ? colors.accent : colors.label;
+          ctx.stroke();
+        }
+        return;
+      }
+      if (layer === "inc") {
+        batch(colors.dim, r * 0.8, function (i) { return !LY.inc[i]; });
+        batch(colors.inc, r * 1.4, function (i) { return LY.inc[i] === 1; });
+        batch(colors.incStage, r * 1.8, function (i) { return LY.inc[i] === 2; });
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = colors.incStage;
+        for (m = 0; m < n; m++) {
+          i = list ? list[m] : m;
+          if (LY.inc[i] !== 2 || !on(i)) continue;
+          ctx.beginPath();
+          ctx.arc(sx, sy, r * 1.8 + 5, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+      }
+    }
+
+    // The live layers' own labels, placed before system names:
+    // alliance names over the space they hold, incursion staging
+    // systems by name.
+    function layerLabels(k, ox, oy, label, inPlaceFirst) {
+      if (!LY) return;
+      if (layer === "sov") {
+        var holders = [];
+        for (var a = 0; a < LY.alliances.length; a++) {
+          var mem = LY.allianceMembers[a], cx = 0, cy = 0, c = 0;
+          for (var m = 0; m < mem.length; m++) {
+            var i = mem[m];
+            if (mode !== "universe" && S.r[i] !== region) continue;
+            cx += wx(i); cy += wy(i); c++;
+          }
+          if (c >= (mode === "universe" ? 4 : 2)) holders.push({ a: a, x: cx / c, y: cy / c, c: c });
+        }
+        holders.sort(function (p, q) { return q.c - p.c || p.a - q.a; });
+        inPlaceFirst(holders, function (h) { return "A" + h.a; }, function (h) {
+          var name = LY.alliances[h.a].name || "Alliance " + LY.alliances[h.a].id;
+          label(name, h.x * k + ox, h.y * k + oy - 6, mode === "universe" ? 11 : 12, allianceColor(h.a), "700", false, "A" + h.a);
+        });
+      } else if (layer === "threat") {
+        // A camp is named -- who, and how many kills -- once the
+        // view is close enough to read it; New Eden shows the rings.
+        if (mode === "universe" && cam.k / fitK() < 2.5) return;
+        inPlaceFirst(LY.camps, function (c) { return "C" + c.sys; }, function (c) {
+          if (mode !== "universe" && S.r[c.sys] !== region) return;
+          label("Camp · " + c.group + " · " + c.n + " kills", wx(c.sys) * k + ox, wy(c.sys) * k + oy + radius() + 12,
+            12, colors.camp, "700", false, "C" + c.sys);
+        });
+      } else if (layer === "inc") {
+        LY.incs.forEach(function (x) {
+          var s = G.byID[x.staging];
+          if (s === undefined || (mode !== "universe" && S.r[s] !== region)) return;
+          label("Staging · " + S.n[s], wx(s) * k + ox, wy(s) * k + oy + radius() * 1.8 + 8, 12, colors.incStage, "700", true, "I" + s);
+        });
+      }
+    }
+
+    function setLayer(name, quiet) {
+      if (name !== "security" && !LY) name = "security";
+      if (!el.querySelector('[data-map-layer="' + name + '"]')) name = "security";
+      layer = name;
+      showTip(-1);
+      el.querySelectorAll("[data-map-layer]").forEach(function (b) {
+        var on = b.getAttribute("data-map-layer") === name;
+        b.setAttribute("aria-checked", on ? "true" : "false");
+        // On a phone the picker scrolls sideways: keep the chosen
+        // chip in view without moving the page.
+        if (on && b.parentNode.scrollWidth > b.parentNode.clientWidth) {
+          var row = b.parentNode;
+          row.scrollLeft = Math.max(0, b.offsetLeft - (row.clientWidth - b.offsetWidth) / 2);
+        }
+      });
+      el.classList.toggle("map-live", name !== "security");
+      try { localStorage.setItem("evesynapse-map-layer", name); } catch (e) { /* private mode */ }
+      renderLegend();
+      updateCard();
+      if (!quiet) syncURL();
+      schedule();
+    }
+
+    function eveTime(unix) {
+      if (!unix) return "";
+      var d = new Date(unix * 1000);
+      return ("0" + d.getUTCHours()).slice(-2) + ":" + ("0" + d.getUTCMinutes()).slice(-2) + " EVE";
+    }
+    var LAYER_TITLES = { kills: "Ship and pod kills, last hour", npc: "NPC kills, last hour", jumps: "Jumps, last hour",
+      sov: "Sovereignty", fw: "Faction Warfare", inc: "Incursions", threat: "Threat now" };
+
+    // The legend for the layer showing: the security swatches for
+    // Security, otherwise a scale or key built here.
+    function renderLegend() {
+      var secLegend = el.querySelector(".map-legend"), box = el.querySelector(".map-layer-legend");
+      secLegend.hidden = layer !== "security";
+      box.hidden = layer === "security";
+      if (layer === "security" || !LY) return;
+      box.textContent = "";
+      var h = root.createElement("p");
+      h.className = "map-layer-title";
+      h.textContent = LAYER_TITLES[layer];
+      box.appendChild(h);
+      function row(cls, color, text) {
+        var p = root.createElement("p");
+        p.className = "map-layer-row";
+        var sw = root.createElement("span");
+        sw.className = "map-layer-sw " + cls;
+        sw.style.background = color;
+        p.appendChild(sw);
+        p.appendChild(root.createTextNode(text));
+        box.appendChild(p);
+      }
+      if (layer === "threat") {
+        // The fixed levels, each in its color on the threat ramp.
+        THREAT_LEVELS.forEach(function (lv, li) {
+          if (!li) return;
+          row("", heatColor(heatT(lv.at, THREAT_TOP), 1, colors.threatRamp), lv.name);
+        });
+        row("", colors.camp, LY.camps.length ? LY.camps.length + (LY.camps.length === 1 ? " camp" : " camps") + " right now" : "No camps right now");
+        var how = root.createElement("p");
+        how.className = "map-layer-row muted";
+        how.textContent = "PvP kills, fading over 45 minutes. A camp: one group killing passers-by, 4+ kills over the last hour.";
+        box.appendChild(how);
+      } else if (HEAT[layer]) {
+        var bar = root.createElement("p");
+        bar.className = "map-heat";
+        var g = root.createElement("span");
+        g.className = "map-heat-bar";
+        g.style.background = "linear-gradient(to right," + heatColor(0.05, 1) + "," + heatColor(0.75, 1) + "," + heatColor(1, 1) + ")";
+        bar.appendChild(root.createTextNode("1 "));
+        bar.appendChild(g);
+        bar.appendChild(root.createTextNode(" " + LY.max[layer].toLocaleString()));
+        box.appendChild(bar);
+      } else if (layer === "sov") {
+        var held = LY.allianceMembers.filter(function (m) { return m.length; }).length;
+        row("", "hsl(30,68%," + colors.sovL + ")", held + " alliances, each its own color");
+        row("", colors.npc, "NPC factions");
+        row("", colors.unheld, "Unclaimed");
+      } else if (layer === "fw") {
+        [[500003, "Amarr"], [500001, "Caldari"], [500004, "Gallente"], [500002, "Minmatar"]].forEach(function (f) {
+          row("", colors.faction[f[0]], (LY.factions[f[0]] || f[1]).replace(/ (Empire|State|Federation|Republic)$/, ""));
+        });
+        var arc = root.createElement("p");
+        arc.className = "map-layer-row muted";
+        arc.textContent = "Arc: contest progress";
+        box.appendChild(arc);
+      } else if (layer === "inc") {
+        row("", colors.inc, "Infested");
+        row("", colors.incStage, "Staging");
+        if (!LY.incs.length) row("", colors.dim, "No incursions right now");
+      }
+      var at = root.createElement("p");
+      at.className = "map-layer-at muted";
+      at.textContent = LY.at[layer] ? "As of " + eveTime(LY.at[layer]) : "No data yet";
+      box.appendChild(at);
+    }
+
+    // --- The hover popover ---
+    // The system under the mouse: its name, security and region,
+    // then only what the layer showing says about it. Placed beside
+    // the cursor and flipped at the stage's edges.
+    var tipEl = el.querySelector(".map-tip"), tipFor = -2;
+
+    function tipRows(i) {
+      if (!LY || layer === "security") return [];
+      var rows = [];
+      switch (layer) {
+        case "threat":
+          if (LY.threat[i] > 0) {
+            var lv = THREAT_LEVELS[threatLevel(LY.threat[i])].name;
+            rows.push([lv + " threat", LY.threatHour[i] + (LY.threatHour[i] === 1 ? " kill" : " kills") + " in the last hour"]);
+            if (LY.threatLast[i]) rows.push(["Last kill", agoShort(LY.threatLast[i])]);
+          } else if (LY.spill[i] >= THREAT_LEVELS[1].at) {
+            rows.push(["Quiet", "danger next door"]);
+          } else {
+            rows.push(["Quiet", "no PvP kills lately"]);
+          }
+          if (LY.campOf[i] >= 0) {
+            var c = LY.camps[LY.campOf[i]];
+            rows.push(["Camp", c.group + " · " + c.n + " kills"]);
+          }
+          break;
+        case "kills":
+          rows.push(["Last hour", LY.ship[i] + (LY.ship[i] === 1 ? " ship" : " ships") + " · " + LY.pod[i] + (LY.pod[i] === 1 ? " pod" : " pods")]);
+          break;
+        case "npc":
+          rows.push(["Last hour", LY.npc[i].toLocaleString() + " NPC kills"]);
+          break;
+        case "jumps":
+          rows.push(["Last hour", LY.jumps[i].toLocaleString() + " jumps"]);
+          break;
+        case "sov":
+          if (LY.sovA[i] >= 0) {
+            var al = LY.alliances[LY.sovA[i]];
+            rows.push(["Held by", al.name || "Alliance " + al.id]);
+          } else if (LY.sovF[i] > 0) {
+            rows.push(["Held by", LY.factions[LY.sovF[i]] || "NPC faction"]);
+          } else {
+            rows.push(["Held by", "nobody"]);
+          }
+          break;
+        case "fw":
+          if (LY.fwState[i]) {
+            rows.push(["Occupied by", LY.factions[LY.fwOcc[i]] || "a militia"]);
+            rows.push([["", "Uncontested", "Contested", "Vulnerable", "Captured"][LY.fwState[i]], LY.fwPct[i] + "% contested"]);
+          } else {
+            rows.push(["Faction Warfare", "not a warzone system"]);
+          }
+          break;
+        case "inc":
+          if (LY.incOf[i] >= 0) {
+            var x = LY.incs[LY.incOf[i]];
+            rows.push([LY.inc[i] === 2 ? "Staging" : "Infested", x.state + " · " + Math.round(x.inf * 100) + "% influence"]);
+          } else {
+            rows.push(["Incursions", "none here"]);
+          }
+          break;
+      }
+      return rows;
+    }
+
+    function showTip(i, px, py) {
+      if (!tipEl) return;
+      if (i < 0 || (mode !== "universe" && S.r[i] !== region)) {
+        tipEl.hidden = true;
+        tipFor = -2;
+        return;
+      }
+      if (i !== tipFor) {
+        tipFor = i;
+        tipEl.textContent = "";
+        var head = root.createElement("p");
+        head.className = "map-tip-head";
+        var sec = root.createElement("span");
+        sec.className = "sec sec-" + G.tier[i];
+        sec.textContent = secText(S.s[i]);
+        head.appendChild(sec);
+        var nm = root.createElement("strong");
+        nm.textContent = " " + S.n[i];
+        head.appendChild(nm);
+        var rg = root.createElement("span");
+        rg.className = "map-tip-region";
+        rg.textContent = " " + P.regions[S.r[i]].name;
+        head.appendChild(rg);
+        tipEl.appendChild(head);
+        tipRows(i).forEach(function (r) {
+          var p = root.createElement("p");
+          p.className = "map-tip-row";
+          var k = root.createElement("span");
+          k.textContent = r[0];
+          var v = root.createElement("span");
+          v.textContent = r[1];
+          p.appendChild(k);
+          p.appendChild(v);
+          tipEl.appendChild(p);
+        });
+        tipEl.hidden = false;
+      }
+      // Beside the cursor, flipped to stay inside the stage.
+      var w = tipEl.offsetWidth, h = tipEl.offsetHeight, gap = 14;
+      var x = px + gap, y = py + gap;
+      if (x + w > cw - 6) x = px - gap - w;
+      if (y + h > ch - 6) y = py - gap - h;
+      tipEl.style.transform = "translate(" + Math.max(6, x) + "px," + Math.max(6, y) + "px)";
+    }
+
+    function agoShort(unix) {
+      var m = Math.max(0, Math.round((Date.now() / 1000 - unix) / 60));
+      return m < 1 ? "just now" : m < 60 ? m + " min ago" : Math.round(m / 60) + " h ago";
+    }
+
+    // The card's live figures for one system, every layer at once.
+    function liveRows(i) {
+      if (!LY) return [];
+      var rows = [];
+      if (LY.at.threat) {
+        var lv = THREAT_LEVELS[threatLevel(LY.threat[i])].name, txt = lv;
+        if (LY.threatHour[i]) txt += " · " + LY.threatHour[i] + (LY.threatHour[i] === 1 ? " kill" : " kills") + " in the last hour";
+        if (LY.threatLast[i]) txt += " · last " + agoShort(LY.threatLast[i]);
+        if (!LY.threat[i] && LY.spill[i] >= THREAT_LEVELS[1].at) txt += " · danger next door";
+        rows.push(["Threat", txt]);
+        if (LY.campOf[i] >= 0) {
+          var c = LY.camps[LY.campOf[i]];
+          rows.push(["Camp", c.group + " · " + c.n + " kills since " + agoShort(c.since)]);
+        }
+      }
+      if (LY.at.kills) rows.push(["Kills, last hour", LY.ship[i] + " ships · " + LY.pod[i] + " pods · " + LY.npc[i] + " NPC"]);
+      if (LY.at.jumps) rows.push(["Jumps, last hour", String(LY.jumps[i])]);
+      if (LY.sovA[i] >= 0) {
+        var al = LY.alliances[LY.sovA[i]];
+        rows.push(["Sovereignty", al.name || "Alliance " + al.id]);
+      } else if (LY.sovF[i] > 0 && G.tier[i] === 0) {
+        rows.push(["Sovereignty", LY.factions[LY.sovF[i]] || "NPC faction"]);
+      }
+      if (LY.fwState[i]) {
+        var st = ["", "Uncontested", "Contested", "Vulnerable", "Captured"][LY.fwState[i]];
+        rows.push(["Faction Warfare", (LY.factions[LY.fwOcc[i]] || "Occupied") + " · " + st + (LY.fwPct[i] ? " " + LY.fwPct[i] + "%" : "")]);
+      }
+      if (LY.incOf[i] >= 0) {
+        var x = LY.incs[LY.incOf[i]];
+        rows.push(["Incursion", (LY.inc[i] === 2 ? "Staging · " : "Infested · ") + x.state + " · " + Math.round(x.inf * 100) + "% influence" + (x.boss ? " · boss" : "")]);
+      }
+      return rows;
     }
 
     // Tactical constellation names: a faint backdrop drawn before
@@ -686,6 +1384,7 @@
 
     // --- Chrome: crumbs, hint, card, URL ---
     function crumbs() {
+      showTip(-1);
       var inRegion = mode !== "universe";
       crumbSep.hidden = !inRegion;
       crumbRegion.hidden = !inRegion;
@@ -704,6 +1403,8 @@
       var q = [];
       if (mode !== "universe") q.push("region=" + P.regions[region].id);
       if (sel >= 0) q.push("system=" + S.id[sel]);
+      var shownLayer = LY ? layer : wantLayer || layer;
+      if (shownLayer && shownLayer !== "security") q.push("layer=" + encodeURIComponent(shownLayer));
       var url = location.pathname + (q.length ? "?" + q.join("&") : "") + location.hash;
       try { history.replaceState(history.state, "", url); } catch (e) { /* sandboxed */ }
     }
@@ -748,6 +1449,208 @@
       });
       card.querySelector("[data-map-system-page]").href = "/system/?system=" + S.id[i];
       card.querySelector("[data-map-enter]").hidden = mode !== "universe";
+      var live = card.querySelector(".map-card-live"), rows = liveRows(i);
+      live.textContent = "";
+      live.hidden = !rows.length;
+      rows.forEach(function (rw) {
+        var d = root.createElement("div"), dt = root.createElement("dt"), dd = root.createElement("dd");
+        dt.textContent = rw[0];
+        dd.textContent = rw[1];
+        d.appendChild(dt);
+        d.appendChild(dd);
+        live.appendChild(d);
+      });
+      card.querySelector('[data-route-set="from"]').hidden = i === routeFrom;
+      card.querySelector('[data-route-set="to"]').hidden = i === routeTo;
+    }
+
+    // --- Routes ---
+    // A route is two ends and a preference; the path is replanned
+    // whenever one changes, and again when the threat layer
+    // refreshes. Picking a destination with no start set starts
+    // from where the reader's character last was, when we know.
+    var routeEl = el.querySelector(".map-route");
+    var routeFrom = -1, routeTo = -1, routeMode = "short", routePath = null, routeSum = null;
+    var here = G.byID[+el.getAttribute("data-route-here")];
+    if (here === undefined) here = -1;
+    var canSend = el.hasAttribute("data-route-can-send"), signedIn = el.hasAttribute("data-route-signed-in");
+    var sending = false;
+
+    function setRouteEnd(which, i) {
+      if (i < 0) return;
+      if (which === "to") {
+        routeTo = i;
+        if (routeFrom < 0 && here >= 0) routeFrom = here;
+        if (routeFrom === i) routeFrom = -1;
+      } else {
+        routeFrom = i;
+        if (routeTo === i) routeTo = -1;
+      }
+      routeNote("");
+      replan();
+    }
+    function clearRoute() {
+      routeFrom = routeTo = -1;
+      routePath = routeSum = null;
+      routeNote("");
+      renderRoute();
+      updateCard();
+      syncURL();
+      schedule();
+    }
+    function replan() {
+      routePath = routeFrom >= 0 && routeTo >= 0 ? planRoute(G, routeFrom, routeTo, routeCost(G, LY, routeMode)) : null;
+      routeSum = routePath ? routeSummary(G, LY, routePath) : null;
+      renderRoute();
+      updateCard();
+      syncURL();
+      schedule();
+    }
+    function routeNote(text) { routeEl.querySelector(".map-route-note").textContent = text; }
+
+    function secBadge(i) {
+      var s = root.createElement("span");
+      s.className = "sec sec-" + G.tier[i];
+      s.textContent = secText(S.s[i]);
+      return s;
+    }
+    function sysButton(i) {
+      var b = root.createElement("button");
+      b.type = "button";
+      b.className = "map-route-sys";
+      b.setAttribute("data-map-sys", String(i));
+      b.appendChild(secBadge(i));
+      b.appendChild(root.createTextNode(" " + S.n[i]));
+      return b;
+    }
+    function renderRoute() {
+      routeEl.hidden = routeFrom < 0 && routeTo < 0;
+      el.classList.toggle("map-routing", !routeEl.hidden);
+      if (routeEl.hidden) return;
+      ["from", "to"].forEach(function (w) {
+        var at = w === "from" ? routeFrom : routeTo, box = routeEl.querySelector('[data-route-end="' + w + '"]');
+        box.textContent = "";
+        if (at >= 0) box.appendChild(sysButton(at));
+        else {
+          var m = root.createElement("span");
+          m.className = "muted";
+          m.textContent = w === "from" ? "Pick a start" : "Pick a destination";
+          box.appendChild(m);
+        }
+      });
+      routeEl.querySelectorAll("[data-route-mode]").forEach(function (b) {
+        b.setAttribute("aria-checked", b.getAttribute("data-route-mode") === routeMode ? "true" : "false");
+      });
+      var sum = routeEl.querySelector(".map-route-sum"), warn = routeEl.querySelector(".map-route-warn");
+      var list = routeEl.querySelector(".map-route-list");
+      warn.textContent = "";
+      list.textContent = "";
+      if (routeFrom < 0 || routeTo < 0) {
+        sum.textContent = "Select a system on the map, then “Route " + (routeFrom < 0 ? "from" : "to") + " here”.";
+      } else if (!routePath) {
+        sum.textContent = "No stargates join these systems.";
+      } else {
+        var s = routeSum, parts = [];
+        if (s.high) parts.push(s.high + " high");
+        if (s.low) parts.push(s.low + " low");
+        if (s.nul) parts.push(s.nul + " null");
+        sum.textContent = (s.jumps === 1 ? "1 jump" : s.jumps + " jumps") + (parts.length ? " · " + parts.join(" · ") : "") +
+          (LY ? "" : " · threat not loaded");
+        s.camps.forEach(function (i) {
+          var c = LY.camps[LY.campOf[i]], li = root.createElement("li");
+          li.className = "map-route-camp";
+          li.appendChild(root.createTextNode("Gate camp in "));
+          li.appendChild(sysButton(i));
+          li.appendChild(root.createTextNode(" · " + c.n + " kills" + (c.group ? " by " + c.group : "")));
+          warn.appendChild(li);
+        });
+        s.hot.slice(0, 3).forEach(function (i) {
+          if (LY.campOf[i] >= 0) return;
+          var li = root.createElement("li");
+          li.appendChild(root.createTextNode(THREAT_LEVELS[threatLevel(LY.threat[i])].name + " threat in "));
+          li.appendChild(sysButton(i));
+          warn.appendChild(li);
+        });
+        routePath.forEach(function (i) {
+          var li = root.createElement("li");
+          li.appendChild(sysButton(i));
+          if (LY && LY.campOf[i] >= 0) li.className = "camp";
+          else if (LY && threatLevel(LY.threat[i]) >= 2) li.className = "hot";
+          list.appendChild(li);
+        });
+      }
+      var acts = routeEl.querySelector(".map-route-actions");
+      acts.hidden = !signedIn;
+      acts.querySelectorAll("[data-route-send]").forEach(function (b) {
+        b.disabled = sending || !canSend || (b.getAttribute("data-route-send") === "route" ? !routePath || routeSum.jumps < 1 : routeTo < 0);
+      });
+      var note = routeEl.querySelector(".map-route-note");
+      if (!note.textContent) {
+        note.textContent = !signedIn ? "Sign in to send routes to your game client."
+          : !canSend ? "To send routes to your game client, sign in again and allow EveSynapse to set autopilot waypoints." : "";
+      }
+    }
+    function sendRoute(kind) {
+      if (sending || routeTo < 0) return;
+      var systems = kind === "dest" ? [S.id[routeTo]] : (routePath || []).slice(1).map(function (i) { return S.id[i]; });
+      if (!systems.length) return;
+      sending = true;
+      routeNote(kind === "dest" ? "Setting your destination…" : "Sending " + systems.length + " waypoints…");
+      renderRoute();
+      fetch("/map/route", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json", "X-Requested-With": "XMLHttpRequest" },
+        body: JSON.stringify({ mode: kind, systems: systems })
+      }).then(function (r) {
+        return r.json().catch(function () { return { ok: false, message: "The server did not answer — try again." }; });
+      }).then(function (res) {
+        routeNote(res.message || (res.ok ? "Sent." : "That did not go through."));
+      }).catch(function () {
+        routeNote("The server could not be reached — try again.");
+      }).then(function () {
+        sending = false;
+        if (el.isConnected) renderRoute();
+      });
+    }
+
+    // drawRoute: the path as a lit line, in screen space, under the
+    // systems; in a tactical view the legs that leave the region run
+    // out along their stubs.
+    function drawRoute(k, ox, oy) {
+      if (!routePath || routePath.length < 2) return;
+      ctx.beginPath();
+      for (var m = 1; m < routePath.length; m++) {
+        var a = routePath[m - 1], b = routePath[m], pa, pb;
+        if (mode === "universe") { pa = [S.x[a], S.y[a]]; pb = [S.x[b], S.y[b]]; }
+        else {
+          var ina = S.r[a] === region, inb = S.r[b] === region;
+          if (!ina && !inb) continue;
+          pa = ina ? [S.rx[a], S.ry[a]] : ghost(b, a);
+          pb = inb ? [S.rx[b], S.ry[b]] : ghost(a, b);
+        }
+        ctx.moveTo(pa[0] * k + ox, pa[1] * k + oy);
+        ctx.lineTo(pb[0] * k + ox, pb[1] * k + oy);
+      }
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      ctx.lineWidth = mode === "universe" ? 5 : 7;
+      ctx.strokeStyle = colors.routeHalo;
+      ctx.stroke();
+      ctx.lineWidth = mode === "universe" ? 2.2 : 3;
+      ctx.strokeStyle = colors.route;
+      ctx.stroke();
+    }
+    function drawRouteEnds(k, ox, oy, r) {
+      [routeFrom, routeTo].forEach(function (s, idx) {
+        if (s < 0 || (mode !== "universe" && S.r[s] !== region)) return;
+        var x = wx(s) * k + ox, y = wy(s) * k + oy;
+        ctx.beginPath();
+        ctx.arc(x, y, r + (idx ? 6 : 5), 0, Math.PI * 2);
+        ctx.lineWidth = idx ? 2.5 : 1.5;
+        ctx.strokeStyle = colors.route;
+        ctx.stroke();
+      });
     }
 
     // --- Search ---
@@ -814,6 +1717,7 @@
     function pt(e) { var b = canvas.getBoundingClientRect(); return [e.clientX - b.left, e.clientY - b.top]; }
 
     function onPointerDown(e) {
+      showTip(-1);
       stopMotion();
       canvas.setPointerCapture(e.pointerId);
       var p = pt(e);
@@ -831,6 +1735,7 @@
         if (e.pointerType === "mouse") {
           var h = pick(p[0], p[1]);
           if (h !== hover) { hover = h; schedule(); }
+          showTip(h, p[0], p[1]);
           canvas.style.cursor = h >= 0 || pickGhost(p[0], p[1]) >= 0 || (mode === "universe" && pickRegionLabel(p[0], p[1]) >= 0) ? "pointer" : "";
         }
         return;
@@ -965,12 +1870,27 @@
         case "0": case "f": flyFit(); break;
         case "/": findInput.focus(); break;
         case "?": toggleKeys(); break;
+        case "l": case "L": {
+          // Cycle through the layers the payload unlocked.
+          var opts = [].filter.call(el.querySelectorAll("[data-map-layer]"), function (b) { return !b.disabled; })
+            .map(function (b) { return b.getAttribute("data-map-layer"); });
+          var at = opts.indexOf(layer);
+          setLayer(opts[(at + (e.key === "L" ? opts.length - 1 : 1)) % opts.length]);
+          break;
+        }
         case "Enter":
           if (sel >= 0 && mode === "universe") enterRegion(S.r[sel], sel);
           else return;
           break;
+        case "r":
+          if (sel >= 0) setRouteEnd("to", sel); else return;
+          break;
+        case "R":
+          if (sel >= 0) setRouteEnd("from", sel); else return;
+          break;
         case "Escape":
           if (!keysPanel.hidden) toggleKeys(false);
+          else if (routeFrom >= 0 || routeTo >= 0) clearRoute();
           else if (sel >= 0) select(-1);
           else leaveRegion();
           break;
@@ -998,6 +1918,26 @@
         return;
       }
       if (t.closest("[data-map-keys]")) { toggleKeys(); return; }
+      var rs = t.closest("[data-route-set]");
+      if (rs) { if (sel >= 0) setRouteEnd(rs.getAttribute("data-route-set"), sel); return; }
+      if (t.closest("[data-route-close]")) { clearRoute(); return; }
+      if (t.closest("[data-route-swap]")) {
+        var tmp = routeFrom; routeFrom = routeTo; routeTo = tmp;
+        routeNote("");
+        replan();
+        return;
+      }
+      var rm = t.closest("[data-route-mode]");
+      if (rm && ROUTE_MODES[rm.getAttribute("data-route-mode")]) {
+        routeMode = rm.getAttribute("data-route-mode");
+        routeNote("");
+        replan();
+        return;
+      }
+      var rd = t.closest("[data-route-send]");
+      if (rd && !rd.disabled) { sendRoute(rd.getAttribute("data-route-send")); return; }
+      var lb = t.closest("[data-map-layer]");
+      if (lb && !lb.disabled) { setLayer(lb.getAttribute("data-map-layer")); return; }
       var hit = t.closest("[data-hit]");
       if (hit && findList.contains(hit)) { choose(hits[+hit.getAttribute("data-hit")]); }
     }
@@ -1072,7 +2012,7 @@
     canvas.addEventListener("pointermove", onPointerMove);
     canvas.addEventListener("pointerup", onPointerUp);
     canvas.addEventListener("pointercancel", onPointerCancel);
-    canvas.addEventListener("pointerleave", function () { if (hover >= 0) { hover = -1; schedule(); } });
+    canvas.addEventListener("pointerleave", function () { showTip(-1); if (hover >= 0) { hover = -1; schedule(); } });
     canvas.addEventListener("wheel", onWheel, { passive: false });
     canvas.addEventListener("gesturestart", onGestureStart);
     canvas.addEventListener("gesturechange", onGestureChange);
@@ -1085,12 +2025,56 @@
     var ro = new ResizeObserver(resize);
     ro.observe(stage);
     // The theme toggle recolors the page; the canvas follows.
-    var mo = new MutationObserver(function () { readColors(); schedule(); });
+    var mo = new MutationObserver(function () { readColors(); renderLegend(); schedule(); });
     mo.observe(root.documentElement, { attributes: true, attributeFilter: ["data-theme", "class"] });
+
+    // --- Live layers: loading, the picker, refresh ---
+    // The page names the payload it rendered with (hashed, cached for
+    // good); every two minutes while the page is in view the map
+    // asks for the current one, and redraws only when its ETag moved.
+    var layersEtag = "", layersTimer = 0, firstLayers = true;
+    function fetchLayers(url) {
+      return fetch(url, { credentials: "same-origin" }).then(function (r) {
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        var et = r.headers.get("ETag") || "";
+        if (et && et === layersEtag) return null;
+        layersEtag = et;
+        return r.json();
+      }).then(function (L) {
+        if (!L || !el.isConnected) return;
+        LY = joinLayers(P, L);
+        heatOrder = {};
+        showTip(-1);
+        el.querySelectorAll("[data-map-layer]").forEach(function (b) { b.disabled = false; });
+        if (firstLayers) {
+          firstLayers = false;
+          var want = wantLayer;
+          if (!want) { try { want = localStorage.getItem("evesynapse-map-layer"); } catch (e) { /* private mode */ } }
+          setLayer(want || "security");
+          if (routeFrom >= 0 || routeTo >= 0) replan();
+        } else if (routeFrom >= 0 || routeTo >= 0) {
+          // A calmer (or hotter) picture can bend the route.
+          renderLegend();
+          replan();
+        } else {
+          renderLegend();
+          updateCard();
+          schedule();
+        }
+      }).catch(function () { /* the map stands without its layers */ });
+    }
+    var layersURL = el.getAttribute("data-layers");
+    if (layersURL) {
+      fetchLayers(layersURL);
+      layersTimer = setInterval(function () {
+        if (document.visibilityState === "visible") fetchLayers("/map/layers.json");
+      }, 120000);
+    }
 
     function teardown() {
       ro.disconnect();
       mo.disconnect();
+      clearInterval(layersTimer);
       if (raf) cancelAnimationFrame(raf);
       clearTimeout(hintTimer);
       root.removeEventListener("evesynapse:content-will-swap", teardown);
@@ -1129,6 +2113,8 @@
 
   // Exposed for the node tests only (jstest/map_test.js).
   if (typeof module !== "undefined" && module.exports) {
-    module.exports = { secRounded: secRounded, secTier: secTier, secText: secText, prepare: prepare, regionLabelAlpha: regionLabelAlpha, zoomEntryAllowed: zoomEntryAllowed };
+    module.exports = { secRounded: secRounded, secTier: secTier, secText: secText, prepare: prepare, regionLabelAlpha: regionLabelAlpha, zoomEntryAllowed: zoomEntryAllowed,
+      joinLayers: joinLayers, heatT: heatT, allianceHue: allianceHue, threatLevel: threatLevel,
+      routeCost: routeCost, planRoute: planRoute, routeSummary: routeSummary };
   }
 })();

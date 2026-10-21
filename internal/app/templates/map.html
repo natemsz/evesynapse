@@ -9,7 +9,7 @@
      swatches carry the site's .sec-N colors, which the canvas reads
      back, so the map is colored exactly like every other security
      figure on the site, in either theme. */}}
-<div class="map" data-map{{if .Ready}} data-src="{{.PayloadURL}}"{{end}}>
+<div class="map" data-map{{if .Ready}} data-src="{{.PayloadURL}}"{{end}}{{if .LayersURL}} data-layers="{{.LayersURL}}"{{end}}{{with .Route}}{{if .SignedIn}} data-route-signed-in{{end}}{{if .Waypoints}} data-route-can-send{{end}}{{if .Here}} data-route-here="{{.Here}}"{{end}}{{end}}>
   <div class="map-bar">
     <nav class="map-crumbs" aria-label="Map location">
       <button type="button" class="map-crumb" data-map-universe>New Eden</button>
@@ -27,12 +27,28 @@
       <button type="button" class="btn small map-keys-btn" data-map-keys aria-label="Map controls" aria-expanded="false" aria-controls="map-keys" disabled>?</button>
     </div>
     <label class="map-pref" title="When on, zooming deep into a region opens its tactical view. When off, click a region's name instead."><input type="checkbox" data-map-zoom-tactical disabled> Zoom to tactical</label>
+    {{/* The layer picker: what the map colors by. Security needs
+         no live data; the rest unlock once the layers payload has
+         loaded (map.js). */}}
+    <div class="map-layers" role="radiogroup" aria-label="Map layer">
+      <button type="button" role="radio" aria-checked="true" data-map-layer="security">Security</button>
+      <button type="button" role="radio" aria-checked="false" data-map-layer="threat" disabled>Threat</button>
+      <button type="button" role="radio" aria-checked="false" data-map-layer="kills" disabled>Kills</button>
+      <button type="button" role="radio" aria-checked="false" data-map-layer="npc" disabled>NPC kills</button>
+      <button type="button" role="radio" aria-checked="false" data-map-layer="jumps" disabled>Jumps</button>
+      <button type="button" role="radio" aria-checked="false" data-map-layer="sov" disabled>Sovereignty</button>
+      <button type="button" role="radio" aria-checked="false" data-map-layer="fw" disabled>Faction Warfare</button>
+      <button type="button" role="radio" aria-checked="false" data-map-layer="inc" disabled>Incursions</button>
+    </div>
   </div>
   <div class="map-stage">
     <canvas class="map-canvas" tabindex="0" role="img" aria-label="Star map of New Eden's known space. Drag to pan, scroll or pinch to zoom, select a system for its details, or a region name for that region's tactical view."></canvas>
     <p class="map-status" role="status">{{if .Ready}}Charting New Eden…{{else}}The map is drawn from the static data export, and this server has not imported its star geometry yet. It appears after the next static data update.{{end}}</p>
     <noscript><p class="map-status">The interactive map needs JavaScript. Every region is listed below.</p></noscript>
     <div class="map-hint" hidden></div>
+    {{/* The hover popover (mouse only): the system under the cursor
+         and the figures of the layer showing. Filled by map.js. */}}
+    <div class="map-tip" role="tooltip" aria-hidden="true" hidden></div>
     <section class="map-keys" id="map-keys" aria-label="Map controls" hidden>
       <h2>Map controls</h2>
       <dl>
@@ -45,6 +61,8 @@
         <div><dt>Enter</dt><dd>Tactical view of the selected system</dd></div>
         <div><dt>0 · F</dt><dd>Fit</dd></div>
         <div><dt>/</dt><dd>Find</dd></div>
+        <div><dt>L · Shift L</dt><dd>Next · previous layer</dd></div>
+        <div><dt>R · Shift R</dt><dd>Route to · from the selected system</dd></div>
         <div><dt>?</dt><dd>These controls</dd></div>
       </dl>
     </section>
@@ -52,16 +70,54 @@
       <button type="button" class="map-card-close" data-map-close aria-label="Close system details">×</button>
       <h2 class="map-card-name"></h2>
       <p class="map-card-where"><span class="map-card-sec sec"></span> <span class="map-card-path"></span></p>
+      <dl class="map-card-live" hidden></dl>
       <p class="map-card-gates muted"></p>
       <ul class="map-card-links"></ul>
       <div class="map-card-actions">
         <a class="btn small" data-map-system-page href="/system/">System page</a>
         <button type="button" class="btn small" data-map-enter>Tactical view</button>
       </div>
+      <div class="map-card-route" role="group" aria-label="Route">
+        <button type="button" class="btn small" data-route-set="from">Route from here</button>
+        <button type="button" class="btn small" data-route-set="to">Route to here</button>
+      </div>
     </aside>
+    {{/* The route planner, filled by map.js once a route has an
+         end. Routes are planned in the browser from the gates and
+         the live threat layer; the buttons hand one to the game's
+         autopilot (POST /map/route, map_route.go). */}}
+    <section class="map-route" aria-label="Route" hidden>
+      <button type="button" class="map-card-close" data-route-close aria-label="Clear the route">×</button>
+      <h2 class="map-route-title">Route</h2>
+      <p class="map-route-ends">
+        <span class="map-route-end" data-route-end="from"></span>
+        <button type="button" class="map-route-swap" data-route-swap aria-label="Swap start and destination" title="Swap">⇄</button>
+        <span class="map-route-end" data-route-end="to"></span>
+      </p>
+      <div class="map-route-modes" role="radiogroup" aria-label="Route preference">
+        <button type="button" role="radio" aria-checked="true" data-route-mode="short" title="The fewest jumps">Shortest</button>
+        <button type="button" role="radio" aria-checked="false" data-route-mode="safe" title="High-sec wherever it can, and around trouble">Safer</button>
+        <button type="button" role="radio" aria-checked="false" data-route-mode="calm" title="Few jumps, skirting active threat and gate camps">Avoid danger</button>
+      </div>
+      <p class="map-route-sum" aria-live="polite"></p>
+      <ul class="map-route-warn"></ul>
+      <details class="map-route-steps">
+        <summary>Systems</summary>
+        <ol class="map-route-list"></ol>
+      </details>
+      <div class="map-route-actions">
+        <button type="button" class="btn small" data-route-send="dest">Set destination</button>
+        <button type="button" class="btn small" data-route-send="route">Send route</button>
+      </div>
+      <p class="map-route-note muted" aria-live="polite"></p>
+    </section>
     <ol class="map-legend" aria-label="Security status colors">
       {{range $t := mapSecTiers}}<li><span class="map-swatch sec sec-{{$t}}" data-tier="{{$t}}"></span><span class="map-legend-v">{{if eq $t 10}}1.0{{else if eq $t 5}}0.5{{else if eq $t 0}}0.0{{end}}</span></li>{{end}}
     </ol>
+    {{/* The live layers' legend, filled by map.js for whichever
+         layer is showing; the security legend above stands in for
+         the Security layer. */}}
+    <div class="map-layer-legend" aria-live="polite" hidden></div>
   </div>
 </div>
 

@@ -180,3 +180,60 @@ func TestKillLines(t *testing.T) {
 		t.Errorf("value %v coverage %v", total, cov)
 	}
 }
+
+// TestKillboardPages: the feed shows public kills only, scoped and
+// narrowed; the kill page shows a public kill's fitting and attackers
+// and keeps a private one hidden.
+func TestKillboardPages(t *testing.T) {
+	app, conn, _ := buildCorpTestApp(t, nil)
+	ctx := context.Background()
+	if _, err := conn.Exec(`INSERT INTO sde_systems (system_id, name, region_id, security) VALUES (30000142, 'Jita', 10000002, 0.946)`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := conn.Exec(`INSERT INTO sde_regions (region_id, name) VALUES (10000002, 'The Forge')`); err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []int64{700001, 700002} {
+		if _, err := app.ingestKill(ctx, json.RawMessage(killJSON(id)), "h", &killZKB{TotalValue: 2e9, Solo: id == 700002}, "zkill", true); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := app.ingestKill(ctx, json.RawMessage(killJSON(700003)), "h", nil, "esi", false); err != nil {
+		t.Fatal(err)
+	}
+	app.killboardMaintenance(ctx)
+
+	get := func(path string) (int, string) {
+		rec := httptest.NewRecorder()
+		app.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
+		return rec.Code, rec.Body.String()
+	}
+	code, body := get("/intel/kills/")
+	if code != http.StatusOK || !strings.Contains(body, `href="/intel/kill/700001/"`) || !strings.Contains(body, `href="/intel/kill/700002/"`) {
+		t.Fatalf("feed: %d, public kills missing", code)
+	}
+	if strings.Contains(body, "/intel/kill/700003/") {
+		t.Errorf("a private kill must never be listed")
+	}
+	if !strings.Contains(body, "Jita") || !strings.Contains(body, `class="sec sec-9"`) {
+		t.Errorf("feed rows name the system with its security")
+	}
+	row := func(id string) string { return `class="kb-kill-link" href="/intel/kill/` + id + `/"` }
+	if _, solo := get("/intel/kills/?solo=1"); strings.Contains(solo, row("700001")) || !strings.Contains(solo, row("700002")) {
+		t.Errorf("solo narrows to lone-attacker kills")
+	}
+	if _, sys := get("/intel/kills/?system=30000142"); !strings.Contains(sys, `class="kb-scope"`) || !strings.Contains(sys, "/intel/kill/700001/") {
+		t.Errorf("a system scope shows its pill and its kills")
+	}
+	if _, ent := get("/intel/kills/?character=9002"); !strings.Contains(ent, "/intel/kill/700001/") {
+		t.Errorf("a pilot's feed includes their kills as an attacker")
+	}
+
+	code, page := get("/intel/kill/700001/")
+	if code != http.StatusOK || !strings.Contains(page, "High slots") || !strings.Contains(page, `class="kp-a fb"`) {
+		t.Errorf("kill page: %d, fitting or attackers missing", code)
+	}
+	if code, _ := get("/intel/kill/700003/"); code != http.StatusNotFound {
+		t.Errorf("a private kill's page must not exist: %d", code)
+	}
+}

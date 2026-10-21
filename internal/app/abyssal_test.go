@@ -340,24 +340,40 @@ func TestAbyssalRecreationCheapestPath(t *testing.T) {
 		t.Fatalf("fixture: score %v attempts %v", sc.HasScore, sc.Attempts)
 	}
 	target := in.Rolls
-	own := abyssalBaseCandidate{SourceTypeID: 1, Typical: 200e6, Base: map[int64]float64{64: 2.0, 204: 0.95, 6: 10, 50: 20}}
-	cheap := abyssalBaseCandidate{SourceTypeID: 2, Typical: 8e6, Base: map[int64]float64{64: 1.9, 204: 0.9, 6: 9, 50: 18}}
-	cost, attempts, ok := abyssalRecreationCost(sc, in, target, []abyssalBaseCandidate{own, cheap}, 5e6)
+	path := func(src int64, typical float64, base map[int64]float64) abyssalRecreationPath {
+		return abyssalRecreationPath{SourceTypeID: src, BaseTypical: typical, Base: base,
+			MutatorTypeID: 9, MutatorTypical: 5e6, Ranges: in.Ranges}
+	}
+	own := path(1, 200e6, map[int64]float64{64: 2.0, 204: 0.95, 6: 10, 50: 20})
+	cheap := path(2, 8e6, map[int64]float64{64: 1.9, 204: 0.9, 6: 9, 50: 18})
+	// Each path is priced on its own odds: the weaker cheap
+	// base needs more attempts than the item's own base.
+	_, ownN, _ := abyssalRecreationCost(sc, in, target, []abyssalRecreationPath{own}, nil)
+	cost, attempts, ok := abyssalRecreationCost(sc, in, target, []abyssalRecreationPath{own, cheap}, nil)
 	if !ok {
 		t.Fatal("a reachable priced path exists")
+	}
+	if !(attempts > ownN) {
+		t.Errorf("a weaker base must need more attempts: cheap %v, own %v", attempts, ownN)
 	}
 	if want := attempts * (8e6 + 5e6); math.Abs(cost-want) > 1 {
 		t.Errorf("recreation = %v, want the cheapest path %v", cost, want)
 	}
-	// A near-perfect target the cheap base cannot reach and
-	// the dear one barely can: priced via the dear one; and
-	// with no reachable base at all, no figure.
+	// Missed rolls' resale lowers the cost, never below a
+	// quarter of each further attempt.
+	withResale, _, _ := abyssalRecreationCost(sc, in, target, []abyssalRecreationPath{cheap},
+		func(abyssalRecreationPath) float64 { return 1e12 })
+	if floor := 13e6 + (attempts-1)*0.25*13e6; math.Abs(withResale-floor) > 1 {
+		t.Errorf("resale credit: %v, want the floor %v", withResale, floor)
+	}
+	// A near-perfect target the cheap base cannot reach: no
+	// figure from it, and none with no path at all.
 	in2 := testFamilyInputs(map[int64]float64{64: 0.999, 204: 0.5, 6: 0.5, 50: 0.8})
 	sc2 := scoreAbyssal(in2)
-	if _, _, ok := abyssalRecreationCost(sc2, in2, in2.Rolls, []abyssalBaseCandidate{cheap}, 5e6); ok {
+	if _, _, ok := abyssalRecreationCost(sc2, in2, in2.Rolls, []abyssalRecreationPath{cheap}, nil); ok {
 		t.Error("an unreachable base must not price recreation")
 	}
-	if _, _, ok := abyssalRecreationCost(sc2, in2, in2.Rolls, nil, 5e6); ok {
+	if _, _, ok := abyssalRecreationCost(sc2, in2, in2.Rolls, nil, nil); ok {
 		t.Error("no candidates, no recreation figure")
 	}
 }
@@ -414,8 +430,12 @@ func TestAbyssalScoringPassEndToEnd(t *testing.T) {
 		('test_damage_thing', 50, 0.5, true)`)
 	exec(`INSERT INTO abyssal_ranges (mutator_type_id, attribute_id, min_mult, max_mult) VALUES
 		(47735, 64, 0.90, 1.25), (47735, 6, 0.90, 1.20), (47735, 50, 0.85, 1.40)`)
+	// The mutaplasmid at a realistic share of the base: with a
+	// near-free one, rolling past the faction rung would cost
+	// less than buying it, and recreation would rightly cap the
+	// item below that rung.
 	exec(`INSERT INTO market_region_stats (region_id, type_id, typical_sell, updated_at) VALUES
-		(10000002, 30001, 100000000, $1), (10000002, 47735, 5000000, $1),
+		(10000002, 30001, 100000000, $1), (10000002, 47735, 60000000, $1),
 		(10000002, 30010, 300000000, $1), (10000002, 30011, 2000000000, $1)`, now.Add(-time.Hour))
 
 	rollsJSON := func(p64, p6, p50 float64) string {

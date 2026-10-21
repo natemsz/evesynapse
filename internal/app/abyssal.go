@@ -31,25 +31,30 @@ package app
 // the item is priced between the rungs it falls between. Where
 // it falls is a fact of its absolute stats, so identical stats
 // mutated from different sources price the same. Recreation
-// cost -- the expected attempts to roll at least this profile
-// again, times the cheapest reachable base module plus the
-// mutaplasmid -- caps the figure: nobody needs to pay more than
-// making one. With no priced ladder, the source module's price
-// run through the score curve speaks instead, with a bounded
-// correction fitted from listings.
+// cost -- the cheapest path to roll at least this profile again
+// over every base module and mutaplasmid grade seen making the
+// type, each on its own odds, every missed roll's resale
+// credited at a haircut -- caps the figure: nobody needs to pay
+// more than making one. With no priced ladder, the source
+// module's price run through the score curve speaks instead,
+// with a bounded correction fitted from listings.
 //
-// Contract listings never set a figure. They are asks, not
-// sales, and a thin family's are easy to move, so they only
-// nudge one per-family factor, clamped to [0.8, 1.25] and
-// shrunk toward no correction until enough clean listings have
-// spoken (abyssalMarketCalibration). Clean means: a listing's
-// price is attributed to the item (bundles of abyssals and
-// exchanges are refused, small priced passengers subtracted --
-// schema 069), weighted by how it left the market (leaving
-// early counts more than sitting out its term, and
-// disappearance is never read as a sale), by recency and by how
-// long it has sat live, with each seller's say growing only as
-// the square root of what they list; and a listing priced
+// Contract listings never set a figure alone. A thin family's
+// listings only nudge one per-family factor, clamped to
+// [0.8, 1.25] and shrunk toward no correction until enough clean
+// listings have spoken (abyssalMarketCalibration). Where a
+// family is dense enough, a monotone boosted correction learned
+// from its clean listings and confirmed sales replaces the
+// factor, within [0.6, 1.6] of the ladder -- but only when it
+// beat the factor on newer listings it never saw
+// (abyssal_learn.go). Clean means: a listing's price is
+// attributed to the item (bundles of abyssals and exchanges are
+// refused, small priced passengers subtracted -- schema 069),
+// weighted by how it left the market (a sale ESI confirmed
+// counts most -- schema 070, pub_contracts_sales.go -- and
+// sitting out its term least), by recency and by how long it
+// has sat live, with each seller's say growing only as the
+// square root of what they list; and a listing priced
 // suspiciously close to our own estimate is down-weighted. An
 // item's own ask is never an input to its estimate.
 //
@@ -505,6 +510,11 @@ type abyssalComp struct {
 	// recency, attribution and the seller's share (compsFor).
 	DynamicsWeight float64
 	PrimaryAbs     float64
+	// For the learned correction: the comp's rolls, when it was
+	// first listed, and whether its listing is a confirmed sale.
+	Rolls     json.RawMessage
+	FirstSeen time.Time
+	Sold      bool
 }
 
 // abyssalRung is one ordinary module on an item's ladder: its
@@ -532,6 +542,14 @@ type abyssalEstimateInput struct {
 	// least this good; 0 when unknown. It caps the figure.
 	Recreation float64
 	Comps      []abyssalComp // same family, the item itself excluded
+	// Learned is the family's learned correction for this item
+	// (abyssal_learn.go); 0 when the family's model is not in
+	// use, and the bounded factor speaks instead.
+	Learned float64
+	// ErrFloor is the family's measured out-of-sample median
+	// log error for whichever adjustment applies (0: none yet).
+	// The range is never narrower than it.
+	ErrFloor float64
 }
 
 // abyssalEstimate is one stored estimate.
@@ -550,7 +568,10 @@ type abyssalEstimate struct {
 	LadderValue float64 // the uncalibrated ladder figure
 	LadderLo    int64   // the rung just below (0: none)
 	LadderHi    int64   // the rung just above (0: none)
-	Calib       float64 // the bounded market factor applied
+	Calib       float64 // the multiplier applied to the ladder figure
+	// MarketBasis names that multiplier: "factor" (the bounded
+	// per-family factor) or "learned" (the learned correction).
+	MarketBasis string
 }
 
 type weightedValue struct {
@@ -875,11 +896,27 @@ func abyssalMarketCalibration(comps []abyssalComp) (factor, nEff, sd float64) {
 	if len(logs) == 0 || sw2 <= 0 {
 		return 1, 0, 0.2
 	}
+	shrunk, nEff := abyssalShrunkLogFactor(logs)
+	return math.Exp(shrunk), nEff, 0.2 / math.Sqrt(1+nEff/4)
+}
+
+// abyssalShrunkLogFactor is the factor's arithmetic over weighted
+// log ratios: the weighted median, shrunk by the effective count,
+// clamped to the factor's bounds. Shared with the backtest, which
+// judges the learned correction against exactly this.
+func abyssalShrunkLogFactor(logs []weightedValue) (logFactor, nEff float64) {
+	sw, sw2 := 0.0, 0.0
+	for _, l := range logs {
+		sw += l.w
+		sw2 += l.w * l.w
+	}
+	if len(logs) == 0 || sw2 <= 0 {
+		return 0, 0
+	}
 	nEff = sw * sw / sw2
 	med := abyssalWeightedQuantile(logs, 0.5)
 	shrunk := med * nEff / (nEff + abyssalCalibPrior)
-	shrunk = math.Min(math.Max(shrunk, math.Log(abyssalCalibMin)), math.Log(abyssalCalibMax))
-	return math.Exp(shrunk), nEff, 0.2 / math.Sqrt(1+nEff/4)
+	return math.Min(math.Max(shrunk, math.Log(abyssalCalibMin)), math.Log(abyssalCalibMax)), nEff
 }
 
 // abyssalCurveCorrection fits the bounded per-family
@@ -915,7 +952,7 @@ func abyssalCurveCorrection(comps []abyssalComp) (float64, int) {
 // the score curve over the source module's price, then the
 // source price alone as a labeled prior. No anchor, no estimate.
 func estimateAbyssal(in abyssalEstimateInput) abyssalEstimate {
-	est := abyssalEstimate{PremiumMult: 1, Calib: 1}
+	est := abyssalEstimate{PremiumMult: 1, Calib: 1, MarketBasis: "factor"}
 	usable := make([]abyssalComp, 0, len(in.Comps))
 	for _, c := range in.Comps {
 		if c.Ask > 0 {
@@ -926,10 +963,18 @@ func estimateAbyssal(in abyssalEstimateInput) abyssalEstimate {
 	if in.HasIndex {
 		if logV, sd, lo, hi, scope, ok := abyssalLadderPrice(in.Index, in.Rungs); ok {
 			factor, _, sdCal := abyssalMarketCalibration(usable)
+			if in.Learned > 0 {
+				// The learned correction replaces the factor; its
+				// uncertainty is its measured error (the floor below).
+				factor, sdCal = in.Learned, 0
+				est.MarketBasis = "learned"
+			}
 			ladder := math.Exp(logV)
 			value := ladder * factor
 			total := math.Sqrt(sd*sd + sdCal*sdCal)
-			half := abyssalQuartileZ * total
+			// The middle half is never narrower than the median
+			// error the family's backtest measured.
+			half := math.Max(abyssalQuartileZ*total, in.ErrFloor)
 			low, high := value*math.Exp(-half), value*math.Exp(half)
 			// Nobody needs to pay more than making one.
 			if in.Recreation > 0 {
@@ -979,60 +1024,69 @@ func estimateAbyssal(in abyssalEstimateInput) abyssalEstimate {
 	return est
 }
 
-// abyssalBaseCandidate is one module a mutaplasmid can be
-// applied to, with our price for it and its base attributes.
-type abyssalBaseCandidate struct {
-	SourceTypeID int64
-	Typical      float64
-	Base         map[int64]float64
+// abyssalRecreationPath is one way to roll another item: a base
+// module and a mutaplasmid grade that produces the item's type,
+// with our prices for both, the base's attributes and the
+// grade's bands.
+type abyssalRecreationPath struct {
+	SourceTypeID   int64
+	BaseTypical    float64
+	Base           map[int64]float64
+	MutatorTypeID  int64
+	MutatorTypical float64
+	Ranges         map[int64]abyssalRange
 }
 
-// abyssalRecreationCost prices rolling another item at
-// least this good: expected attempts times the cheapest
-// reachable base plus the mutaplasmid. Reachable means the
-// base's band can still produce the item's primary rolls.
-// ok is false when no priced, reachable path exists.
-func abyssalRecreationCost(sc abyssalScoring, in abyssalScoringInputs, target map[int64]float64, cands []abyssalBaseCandidate, mutatorTypical float64) (float64, float64, bool) {
-	if !sc.HasScore || sc.Attempts <= 0 || mutatorTypical <= 0 {
+// Failed rolls are not worthless: each one is a module someone
+// will buy. Their resale is credited against the next attempt,
+// at a haircut (selling a pile of mediocre rolls is slow and
+// discounted), and never for more than a share of an attempt's
+// cost, so making one always costs at least a quarter of what
+// the bare attempts would.
+const (
+	abyssalResidualHaircut  = 0.5
+	abyssalResidualMaxShare = 0.75
+)
+
+// abyssalRecreationCost prices rolling another item at least
+// this good along the cheapest path: for every base and
+// mutaplasmid grade that can reach the item's primary rolls,
+// the expected attempts on that path's own odds (the scorer's
+// survival measure with the item as the target, placed in that
+// base's bands), each attempt costing the base plus the
+// mutaplasmid less the resale of the roll that missed. residual
+// prices a typical roll on a path (0 when unknown); nil credits
+// nothing. ok is false when no priced, reachable path exists;
+// attempts is the cheapest path's.
+func abyssalRecreationCost(sc abyssalScoring, in abyssalScoringInputs, target map[int64]float64, paths []abyssalRecreationPath, residual func(abyssalRecreationPath) float64) (cost, attempts float64, ok bool) {
+	if !sc.HasScore {
 		return 0, 0, false
 	}
-	var primaries []abyssalAttrResult
+	var primaries []int64
 	for _, a := range sc.Attrs {
 		if a.Scored && a.Primary {
-			primaries = append(primaries, a)
+			primaries = append(primaries, a.AttributeID)
 		}
 	}
 	best := math.Inf(1)
-	for _, cand := range cands {
-		if cand.Typical <= 0 || cand.Base == nil {
+	for _, p := range paths {
+		if p.BaseTypical <= 0 || p.MutatorTypical <= 0 || p.Base == nil || len(p.Ranges) == 0 {
 			continue
 		}
 		reachable := true
-		for _, p := range primaries {
-			rng, ok := in.Ranges[p.AttributeID]
-			if !ok {
-				reachable = false
-				break
-			}
-			base, ok := cand.Base[p.AttributeID]
-			if !ok || base == 0 {
-				reachable = false
-				break
-			}
-			want, ok := target[p.AttributeID]
-			if !ok {
+		for _, id := range primaries {
+			rng, okR := p.Ranges[id]
+			base, okB := p.Base[id]
+			want, okW := target[id]
+			if !okR || !okB || !okW || base == 0 {
 				reachable = false
 				break
 			}
 			high := true
-			if hg, ok := in.HighGood[p.AttributeID]; ok {
+			if hg, ok := in.HighGood[id]; ok {
 				high = hg
 			}
-			if high && base*rng.MaxMult < want {
-				reachable = false
-				break
-			}
-			if !high && base*rng.MinMult > want {
+			if (high && base*rng.MaxMult < want) || (!high && base*rng.MinMult > want) {
 				reachable = false
 				break
 			}
@@ -1040,14 +1094,43 @@ func abyssalRecreationCost(sc abyssalScoring, in abyssalScoringInputs, target ma
 		if !reachable {
 			continue
 		}
-		if cost := sc.Attempts * (cand.Typical + mutatorTypical); cost < best {
-			best = cost
+		odds := scoreAbyssal(abyssalScoringInputs{
+			Family: in.Family, Rolls: target, Ranges: p.Ranges,
+			Base: p.Base, HighGood: in.HighGood, Weights: in.Weights,
+		})
+		n := odds.Attempts
+		if !odds.HasScore || n <= 0 {
+			continue
+		}
+		try := p.BaseTypical + p.MutatorTypical
+		credit := 0.0
+		if residual != nil {
+			credit = math.Min(abyssalResidualHaircut*residual(p), abyssalResidualMaxShare*try)
+			credit = math.Max(credit, 0)
+		}
+		if c := try + (n-1)*(try-credit); c < best {
+			best, attempts = c, n
 		}
 	}
 	if math.IsInf(best, 1) {
 		return 0, 0, false
 	}
-	return best, sc.Attempts, true
+	return best, attempts, true
+}
+
+// abyssalTypicalRoll is a path's middle roll: every attribute
+// the grade moves at the centre of its band on that base.
+func abyssalTypicalRoll(p abyssalRecreationPath) map[int64]float64 {
+	vals := make(map[int64]float64, len(p.Base))
+	for id, v := range p.Base {
+		vals[id] = v
+	}
+	for id, r := range p.Ranges {
+		if b, ok := p.Base[id]; ok {
+			vals[id] = b * (r.MinMult + r.MaxMult) / 2
+		}
+	}
+	return vals
 }
 
 // ---------------------------------------------------------------------
@@ -1083,13 +1166,21 @@ func abyssalSlug(s string) string {
 	return strings.TrimSuffix(b.String(), "_")
 }
 
+// abyssalSoldWeight is the say of a confirmed sale: ESI
+// answered that the contract was accepted (pub_contracts_sales.go),
+// so its price is what a buyer paid, not an ask.
+const abyssalSoldWeight = 2.5
+
 // abyssalSightingWeight: exit dynamics over ask levels. A
-// listing still live counts once; one that vanished before
-// its term counts more (leaving early is consistent with
-// being accepted); one that expired counts least (it sat
-// the whole term at that ask). None of it reads a departure
-// as a sale.
-func abyssalSightingWeight(departed bool, departKind string) float64 {
+// confirmed sale counts most; a listing still live counts
+// once; one that vanished before its term without a confirmed
+// sale counts a little more (deleted, or accepted too long ago
+// for ESI to say); one that expired counts least (it sat the
+// whole term at that ask).
+func abyssalSightingWeight(departed bool, departKind string, sold bool) float64 {
+	if sold {
+		return abyssalSoldWeight
+	}
 	if !departed {
 		return 1.0
 	}
@@ -1258,6 +1349,24 @@ func (app *Application) scoreAbyssalItems(ctx context.Context) int {
 		baseBySource[source] = m
 		return m
 	}
+	// Every mutaplasmid grade seen producing a mutated type: the
+	// recreation paths beyond the grade this item was rolled with.
+	mutatorsByType := map[int64][]int64{}
+	mutatorsFor := func(typeID, own int64) []int64 {
+		ms, ok := mutatorsByType[typeID]
+		if !ok {
+			if rows, err := q.ListAbyssalMutatorsForType(ctx, typeID); err == nil {
+				ms = rows
+			}
+			mutatorsByType[typeID] = ms
+		}
+		for _, m := range ms {
+			if m == own {
+				return ms
+			}
+		}
+		return append([]int64{own}, ms...)
+	}
 	sourcesByMutator := map[int64][]int64{}
 	sourcesFor := func(mutator int64) []int64 {
 		if s, ok := sourcesByMutator[mutator]; ok {
@@ -1366,10 +1475,13 @@ func (app *Application) scoreAbyssalItems(ctx context.Context) int {
 	}
 	for _, it := range due {
 		priceTypes[it.SourceTypeID] = true
-		priceTypes[it.MutatorTypeID] = true
-		for _, src := range sourcesFor(it.MutatorTypeID) {
-			priceTypes[src] = true
-			baseFor(src)
+		for _, m := range mutatorsFor(it.TypeID, it.MutatorTypeID) {
+			priceTypes[m] = true
+			rangesFor(m)
+			for _, src := range sourcesFor(m) {
+				priceTypes[src] = true
+				baseFor(src)
+			}
 		}
 	}
 	for _, rows := range corpusByFamily {
@@ -1473,7 +1585,7 @@ func (app *Application) scoreAbyssalItems(ctx context.Context) int {
 			if !ok {
 				continue // the contract cannot say what this item asked
 			}
-			w := abyssalSightingWeight(r.DepartedAt.Valid, r.DepartKind.String) * attrW
+			w := abyssalSightingWeight(r.DepartedAt.Valid, r.DepartKind.String, r.SoldAt.Valid) * attrW
 			w *= abyssalAgeWeight(r.DepartedAt, r.FirstSeenAt, r.LastSeenAt, now)
 			// One seller's listings share one voice that grows
 			// only with the square root of how many they list.
@@ -1498,9 +1610,59 @@ func (app *Application) scoreAbyssalItems(ctx context.Context) int {
 				LadderValue:    r.LadderValue.Float64,
 				DynamicsWeight: w,
 				PrimaryAbs:     r.PrimaryAbs.Float64,
+				Rolls:          r.Attributes,
+				FirstSeen:      r.FirstSeenAt,
+				Sold:           r.SoldAt.Valid,
 			})
 		}
 		return comps
+	}
+
+	// Each family's learned correction, fitted once per pass
+	// from the same clean comps, and its backtest stored.
+	learnedByFamily := map[string]*abyssalLearned{}
+	learnedFor := func(family string) *abyssalLearned {
+		if l, ok := learnedByFamily[family]; ok {
+			return l
+		}
+		weights := weightsByFamily[family]
+		var rows []abyssalLearnRow
+		if len(weights) > 0 {
+			for _, c := range compsFor(family, 0) {
+				if c.LadderValue <= 0 || c.Ask <= 0 {
+					continue
+				}
+				var kv []abyssalRollKV
+				if json.Unmarshal(c.Rolls, &kv) != nil {
+					continue
+				}
+				rolls := make(map[int64]float64, len(kv))
+				for _, a := range kv {
+					rolls[a.AttributeID] = a.Value
+				}
+				rows = append(rows, abyssalLearnRow{
+					ItemID: c.ItemID,
+					X:      abyssalLearnFeatures(weights, highGood, rolls),
+					Y:      math.Log(c.Ask / c.LadderValue),
+					W:      c.DynamicsWeight,
+					Seen:   c.FirstSeen,
+					Sold:   c.Sold,
+				})
+			}
+		}
+		l := abyssalLearnFamily(rows)
+		learnedByFamily[family] = l
+		f := l.Fit
+		nf := func(v float64) sql.NullFloat64 { return sql.NullFloat64{Float64: v, Valid: f.HasBacktest} }
+		if err := q.UpsertAbyssalFamilyFit(ctx, db.UpsertAbyssalFamilyFitParams{
+			Family: family, Comps: int64(f.Comps), NEff: f.NEff,
+			HoldoutN: int64(f.HoldoutN), SalesN: int64(f.SalesN),
+			MaeLadder: nf(f.MAELadder), MaeModel: nf(f.MAEModel), BiasModel: nf(f.BiasModel),
+			UseModel: f.UseModel, FittedAt: now,
+		}); err != nil {
+			logging.Errorf("worker: abyssal scoring: store fit %s: %v", family, err)
+		}
+		return l
 	}
 
 	// Phase two: estimate and store.
@@ -1516,6 +1678,7 @@ func (app *Application) scoreAbyssalItems(ctx context.Context) int {
 			CapKind:        sc.CapKind,
 			PrimaryAbs:     sql.NullFloat64{Float64: sc.PrimaryAbs, Valid: sc.HasScore && sc.PrimaryAbs > 0},
 			MarketCalib:    1,
+			MarketBasis:    "factor",
 			ScoredAt:       now,
 		}
 		pcts := make(map[string]float64, len(sc.Percentiles))
@@ -1533,23 +1696,6 @@ func (app *Application) scoreAbyssalItems(ctx context.Context) int {
 		}
 		if sc.HasScore {
 			params.Score = sql.NullFloat64{Float64: sc.Score, Valid: true}
-			// Recreation first: it caps the estimate. The
-			// cheapest reachable base among every source this
-			// mutaplasmid has been seen on.
-			cands := make([]abyssalBaseCandidate, 0, 8)
-			for _, src := range sourcesFor(it.MutatorTypeID) {
-				cands = append(cands, abyssalBaseCandidate{
-					SourceTypeID: src,
-					Typical:      priceByType[src],
-					Base:         baseFor(src),
-				})
-			}
-			recreation := 0.0
-			if cost, attempts, ok := abyssalRecreationCost(sc, in, rolls, cands, priceByType[it.MutatorTypeID]); ok {
-				recreation = cost
-				params.RecreationCost = sql.NullFloat64{Float64: cost, Valid: true}
-				params.RecreationAttempts = sql.NullFloat64{Float64: attempts, Valid: true}
-			}
 			// The item's ladder: its family's ordinary modules
 			// of its size class, each indexed exactly as the
 			// item is, against the item's own base and bands.
@@ -1564,7 +1710,53 @@ func (app *Application) scoreAbyssalItems(ctx context.Context) int {
 					rungs = append(rungs, abyssalRung{TypeID: t, Price: priceByType[t], Index: ri})
 				}
 			}
+			// Recreation caps the estimate: the cheapest path
+			// over every base and mutaplasmid grade seen making
+			// this type, each on its own odds, with the missed
+			// rolls' resale priced on the same ladder.
+			var paths []abyssalRecreationPath
+			for _, m := range mutatorsFor(it.TypeID, it.MutatorTypeID) {
+				for _, src := range sourcesFor(m) {
+					paths = append(paths, abyssalRecreationPath{
+						SourceTypeID: src, BaseTypical: priceByType[src], Base: baseFor(src),
+						MutatorTypeID: m, MutatorTypical: priceByType[m], Ranges: rangesFor(m),
+					})
+				}
+			}
+			residual := func(p abyssalRecreationPath) float64 {
+				idx, ok := abyssalLadderIndex(in, abyssalTypicalRoll(p))
+				if !ok {
+					return 0
+				}
+				if logV, _, _, _, _, ok := abyssalLadderPrice(idx, rungs); ok {
+					return math.Exp(logV)
+				}
+				return 0
+			}
+			recreation := 0.0
+			if cost, attempts, ok := abyssalRecreationCost(sc, in, rolls, paths, residual); ok {
+				recreation = cost
+				params.RecreationCost = sql.NullFloat64{Float64: cost, Valid: true}
+				params.RecreationAttempts = sql.NullFloat64{Float64: attempts, Valid: true}
+			}
+			// The family's learned correction, where its
+			// backtest earned it a say; the measured error
+			// floors the range either way.
+			learned := learnedFor(family)
+			corr, useLearned := learned.Correction(it.ItemID, abyssalLearnFeatures(in.Weights, highGood, rolls))
+			errFloor := 0.0
+			if learned.Fit.HasBacktest {
+				errFloor = learned.Fit.MAELadder
+				if useLearned {
+					errFloor = learned.Fit.MAEModel
+				}
+			}
+			if !useLearned {
+				corr = 0
+			}
 			est := estimateAbyssal(abyssalEstimateInput{
+				Learned:       corr,
+				ErrFloor:      errFloor,
 				Score:         sc.Score,
 				SourceTypical: priceByType[it.SourceTypeID],
 				SourceTypeID:  it.SourceTypeID,
@@ -1585,6 +1777,7 @@ func (app *Application) scoreAbyssalItems(ctx context.Context) int {
 				params.EstComps = int64(est.Comps)
 				params.PremiumMult = est.PremiumMult
 				params.MarketCalib = est.Calib
+				params.MarketBasis = est.MarketBasis
 				if est.LadderValue > 0 {
 					params.LadderValue = sql.NullFloat64{Float64: est.LadderValue, Valid: true}
 				}

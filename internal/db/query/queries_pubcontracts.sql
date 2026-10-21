@@ -236,7 +236,7 @@ SELECT item_id, type_id, source_type_id, mutator_type_id, created_by,
     est_value, est_low, est_high, est_basis, est_scope, est_comps,
     premium_mult, cap_attribute_id, cap_kind,
     recreation_cost, recreation_attempts, primary_abs, scored_at,
-    ladder_value, ladder_lo_type_id, ladder_hi_type_id, market_calib
+    ladder_value, ladder_lo_type_id, ladder_hi_type_id, market_calib, market_basis
 FROM abyssal_items
 WHERE item_id = $1;
 
@@ -407,7 +407,7 @@ SELECT item_id, type_id, source_type_id, mutator_type_id, created_by,
     est_value, est_low, est_high, est_basis, est_scope, est_comps,
     premium_mult, cap_attribute_id, cap_kind,
     recreation_cost, recreation_attempts, primary_abs, scored_at,
-    ladder_value, ladder_lo_type_id, ladder_hi_type_id, market_calib
+    ladder_value, ladder_lo_type_id, ladder_hi_type_id, market_calib, market_basis
 FROM abyssal_items
 WHERE item_id = ANY(sqlc.arg(item_ids)::bigint[])
 ORDER BY item_id;
@@ -845,8 +845,8 @@ LIMIT sqlc.arg(max_rows)::bigint;
 -- name: ListAbyssalCorpusByGroupNames :many
 SELECT DISTINCT ON (a.item_id)
     a.item_id, a.source_type_id, a.score, a.est_value, a.primary_abs,
-    a.ladder_value,
-    s.price, s.departed_at, s.depart_kind,
+    a.ladder_value, a.attributes,
+    s.price, s.departed_at, s.depart_kind, s.sold_at,
     s.first_seen_at, s.last_seen_at, s.date_expired,
     g.name AS group_name,
     s.issuer_id, s.abyssal_lines, s.wanted_lines, s.other_lines,
@@ -875,6 +875,13 @@ WHERE src.type_id = ANY(sqlc.arg(source_ids)::bigint[])
   AND t.published = 1 AND t.market_group_id > 0
 ORDER BY src.type_id, t.type_id;
 
+-- Every mutaplasmid seen producing one mutated type: the
+-- recreation path's other grades.
+-- name: ListAbyssalMutatorsForType :many
+SELECT DISTINCT mutator_type_id FROM abyssal_items
+WHERE type_id = $1 AND mutator_type_id > 0
+ORDER BY mutator_type_id;
+
 -- name: ListAbyssalSourcesForMutator :many
 SELECT DISTINCT source_type_id FROM abyssal_items
 WHERE mutator_type_id = $1 AND source_type_id > 0
@@ -902,6 +909,7 @@ UPDATE abyssal_items SET
     ladder_lo_type_id   = sqlc.arg(ladder_lo_type_id)::bigint,
     ladder_hi_type_id   = sqlc.arg(ladder_hi_type_id)::bigint,
     market_calib        = sqlc.arg(market_calib)::double precision,
+    market_basis        = sqlc.arg(market_basis)::text,
     scored_at           = sqlc.arg(scored_at)::timestamptz
 WHERE item_id = sqlc.arg(item_id)::bigint;
 
@@ -973,3 +981,51 @@ LIMIT 1;
 SELECT type_id, runs, median_price, sample_count, computed_at
 FROM blueprint_copy_medians
 WHERE type_id = ANY(sqlc.arg(type_ids)::bigint[]);
+
+-- A finished contract seen on the public crawl: its abyssal
+-- sightings become confirmed sales (schema 070).
+-- name: MarkAbyssalSightingsSold :exec
+UPDATE abyssal_sightings SET sold_at = sqlc.arg(sold_at)::timestamptz,
+    sale_probed_at = COALESCE(sale_probed_at, sqlc.arg(sold_at)::timestamptz)
+WHERE contract_id = sqlc.arg(contract_id)::bigint
+  AND contract_type = 'item_exchange'
+  AND sold_at IS NULL;
+
+-- The exchange listings that left early and were never asked
+-- whether they sold, newest departure first, within the window
+-- ESI still answers for an accepted contract.
+-- name: ListAbyssalSaleProbes :many
+SELECT contract_id, MAX(departed_at)::timestamptz AS departed_at
+FROM abyssal_sightings
+WHERE depart_kind = 'vanished'
+  AND sale_probed_at IS NULL
+  AND contract_type = 'item_exchange'
+  AND departed_at > sqlc.arg(since)::timestamptz
+GROUP BY contract_id
+ORDER BY MAX(departed_at) DESC
+LIMIT sqlc.arg(max_rows)::bigint;
+
+-- name: MarkAbyssalSaleProbed :exec
+UPDATE abyssal_sightings SET sale_probed_at = sqlc.arg(probed_at)::timestamptz
+WHERE contract_id = sqlc.arg(contract_id)::bigint
+  AND sale_probed_at IS NULL;
+
+-- name: UpsertAbyssalFamilyFit :exec
+INSERT INTO abyssal_family_fit (family, comps, n_eff, holdout_n, sales_n,
+    mae_ladder, mae_model, bias_model, use_model, fitted_at)
+VALUES (sqlc.arg(family)::text, sqlc.arg(comps)::bigint, sqlc.arg(n_eff)::double precision,
+    sqlc.arg(holdout_n)::bigint, sqlc.arg(sales_n)::bigint,
+    sqlc.narg(mae_ladder)::double precision, sqlc.narg(mae_model)::double precision,
+    sqlc.narg(bias_model)::double precision, sqlc.arg(use_model)::boolean,
+    sqlc.arg(fitted_at)::timestamptz)
+ON CONFLICT (family) DO UPDATE SET
+    comps = EXCLUDED.comps, n_eff = EXCLUDED.n_eff, holdout_n = EXCLUDED.holdout_n,
+    sales_n = EXCLUDED.sales_n, mae_ladder = EXCLUDED.mae_ladder,
+    mae_model = EXCLUDED.mae_model, bias_model = EXCLUDED.bias_model,
+    use_model = EXCLUDED.use_model, fitted_at = EXCLUDED.fitted_at;
+
+-- name: GetAbyssalFamilyFit :one
+SELECT family, comps, n_eff, holdout_n, sales_n, mae_ladder, mae_model,
+    bias_model, use_model, fitted_at
+FROM abyssal_family_fit
+WHERE family = $1;

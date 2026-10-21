@@ -6,7 +6,7 @@
 <strong>How EveSynapse prices Abyssal modules</strong>
 <span class="ab-howto-step"><b>1. Score the rolls.</b> Each roll is placed in the range its mutaplasmid could have produced and weighted by how much that stat matters for the module. Fitting costs only count against it, and a bricked main stat caps the score.</span>
 <span class="ab-howto-step"><b>2. Place it on the ladder.</b> The same measure is taken of the ordinary modules of its kind and size (Tech II, faction, deadspace, officer), whose stats are fixed and whose prices come from deep markets. The module is priced between the two it falls between.</span>
-<span class="ab-howto-step"><b>3. Cap it at making another.</b> Never more than the expected cost of rolling one at least this good: attempts × (base module + mutaplasmid).</span>
-<span class="ab-howto-step"><b>4. Let clean listings nudge, never decide.</b> Contract asks move a family's figures by at most −20% / +25%, and only once enough clean listings agree. Bundles, exchanges, stale listings and one-seller floods don't count.</span>
-<span class="ab-howto-math">value = ladder(index) × market factor [0.8–1.25], ≤ recreation cost</span>
+<span class="ab-howto-step"><b>3. Learn what buyers pay for, where it's proven.</b> For kinds with enough clean listings and confirmed sales, a small model learns what the ladder misses: a correction that can never price a better roll lower and never moves the figure below 0.6× or above 1.6×. It's used only if it beat the plain ladder on newer listings it never saw. Elsewhere, listings only nudge a kind's figures by −20% / +25% at most. Bundles, exchanges, stale listings and one-seller floods never count.</span>
+<span class="ab-howto-step"><b>4. Cap it at making another.</b> Never more than the expected cost of rolling one at least this good on the cheapest base and mutaplasmid, after reselling the misses.</span>
+<span class="ab-howto-math">value = ladder(index) × correction [0.6–1.6] or market factor [0.8–1.25], ≤ recreation cost</span>
 </span></span>{{end}}

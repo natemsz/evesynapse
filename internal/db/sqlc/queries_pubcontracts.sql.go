@@ -373,6 +373,31 @@ func (q *Queries) DeletePublicContractsByIDs(ctx context.Context, contractIds []
 	return err
 }
 
+const getAbyssalFamilyFit = `-- name: GetAbyssalFamilyFit :one
+SELECT family, comps, n_eff, holdout_n, sales_n, mae_ladder, mae_model,
+    bias_model, use_model, fitted_at
+FROM abyssal_family_fit
+WHERE family = $1
+`
+
+func (q *Queries) GetAbyssalFamilyFit(ctx context.Context, family string) (AbyssalFamilyFit, error) {
+	row := q.db.QueryRowContext(ctx, getAbyssalFamilyFit, family)
+	var i AbyssalFamilyFit
+	err := row.Scan(
+		&i.Family,
+		&i.Comps,
+		&i.NEff,
+		&i.HoldoutN,
+		&i.SalesN,
+		&i.MaeLadder,
+		&i.MaeModel,
+		&i.BiasModel,
+		&i.UseModel,
+		&i.FittedAt,
+	)
+	return i, err
+}
+
 const getAbyssalItem = `-- name: GetAbyssalItem :one
 SELECT item_id, type_id, source_type_id, mutator_type_id, created_by,
     attributes, fetched_at, first_seen_at, last_seen_at,
@@ -380,7 +405,7 @@ SELECT item_id, type_id, source_type_id, mutator_type_id, created_by,
     est_value, est_low, est_high, est_basis, est_scope, est_comps,
     premium_mult, cap_attribute_id, cap_kind,
     recreation_cost, recreation_attempts, primary_abs, scored_at,
-    ladder_value, ladder_lo_type_id, ladder_hi_type_id, market_calib
+    ladder_value, ladder_lo_type_id, ladder_hi_type_id, market_calib, market_basis
 FROM abyssal_items
 WHERE item_id = $1
 `
@@ -419,6 +444,7 @@ func (q *Queries) GetAbyssalItem(ctx context.Context, itemID int64) (AbyssalItem
 		&i.LadderLoTypeID,
 		&i.LadderHiTypeID,
 		&i.MarketCalib,
+		&i.MarketBasis,
 	)
 	return i, err
 }
@@ -667,8 +693,8 @@ func (q *Queries) InsertPublicContractItem(ctx context.Context, arg InsertPublic
 const listAbyssalCorpusByGroupNames = `-- name: ListAbyssalCorpusByGroupNames :many
 SELECT DISTINCT ON (a.item_id)
     a.item_id, a.source_type_id, a.score, a.est_value, a.primary_abs,
-    a.ladder_value,
-    s.price, s.departed_at, s.depart_kind,
+    a.ladder_value, a.attributes,
+    s.price, s.departed_at, s.depart_kind, s.sold_at,
     s.first_seen_at, s.last_seen_at, s.date_expired,
     g.name AS group_name,
     s.issuer_id, s.abyssal_lines, s.wanted_lines, s.other_lines,
@@ -690,9 +716,11 @@ type ListAbyssalCorpusByGroupNamesRow struct {
 	EstValue      sql.NullFloat64 `json:"est_value"`
 	PrimaryAbs    sql.NullFloat64 `json:"primary_abs"`
 	LadderValue   sql.NullFloat64 `json:"ladder_value"`
+	Attributes    json.RawMessage `json:"attributes"`
 	Price         float64         `json:"price"`
 	DepartedAt    sql.NullTime    `json:"departed_at"`
 	DepartKind    sql.NullString  `json:"depart_kind"`
+	SoldAt        sql.NullTime    `json:"sold_at"`
 	FirstSeenAt   time.Time       `json:"first_seen_at"`
 	LastSeenAt    time.Time       `json:"last_seen_at"`
 	DateExpired   sql.NullTime    `json:"date_expired"`
@@ -726,9 +754,11 @@ func (q *Queries) ListAbyssalCorpusByGroupNames(ctx context.Context, groupNames 
 			&i.EstValue,
 			&i.PrimaryAbs,
 			&i.LadderValue,
+			&i.Attributes,
 			&i.Price,
 			&i.DepartedAt,
 			&i.DepartKind,
+			&i.SoldAt,
 			&i.FirstSeenAt,
 			&i.LastSeenAt,
 			&i.DateExpired,
@@ -824,7 +854,7 @@ SELECT item_id, type_id, source_type_id, mutator_type_id, created_by,
     est_value, est_low, est_high, est_basis, est_scope, est_comps,
     premium_mult, cap_attribute_id, cap_kind,
     recreation_cost, recreation_attempts, primary_abs, scored_at,
-    ladder_value, ladder_lo_type_id, ladder_hi_type_id, market_calib
+    ladder_value, ladder_lo_type_id, ladder_hi_type_id, market_calib, market_basis
 FROM abyssal_items
 WHERE item_id = ANY($1::bigint[])
 ORDER BY item_id
@@ -870,6 +900,7 @@ func (q *Queries) ListAbyssalItemsByIDs(ctx context.Context, itemIds []int64) ([
 			&i.LadderLoTypeID,
 			&i.LadderHiTypeID,
 			&i.MarketCalib,
+			&i.MarketBasis,
 		); err != nil {
 			return nil, err
 		}
@@ -982,6 +1013,37 @@ func (q *Queries) ListAbyssalLadderTypes(ctx context.Context, sourceIds []int64)
 	return items, nil
 }
 
+const listAbyssalMutatorsForType = `-- name: ListAbyssalMutatorsForType :many
+SELECT DISTINCT mutator_type_id FROM abyssal_items
+WHERE type_id = $1 AND mutator_type_id > 0
+ORDER BY mutator_type_id
+`
+
+// Every mutaplasmid seen producing one mutated type: the
+// recreation path's other grades.
+func (q *Queries) ListAbyssalMutatorsForType(ctx context.Context, typeID int64) ([]int64, error) {
+	rows, err := q.db.QueryContext(ctx, listAbyssalMutatorsForType, typeID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []int64
+	for rows.Next() {
+		var mutator_type_id int64
+		if err := rows.Scan(&mutator_type_id); err != nil {
+			return nil, err
+		}
+		items = append(items, mutator_type_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listAbyssalProbeCandidates = `-- name: ListAbyssalProbeCandidates :many
 
 SELECT i.item_id, i.type_id, i.contract_id,
@@ -1083,6 +1145,54 @@ func (q *Queries) ListAbyssalRangesForMutator(ctx context.Context, mutatorTypeID
 			&i.MaxMult,
 			&i.SdeBuild,
 		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listAbyssalSaleProbes = `-- name: ListAbyssalSaleProbes :many
+SELECT contract_id, MAX(departed_at)::timestamptz AS departed_at
+FROM abyssal_sightings
+WHERE depart_kind = 'vanished'
+  AND sale_probed_at IS NULL
+  AND contract_type = 'item_exchange'
+  AND departed_at > $1::timestamptz
+GROUP BY contract_id
+ORDER BY MAX(departed_at) DESC
+LIMIT $2::bigint
+`
+
+type ListAbyssalSaleProbesParams struct {
+	Since   time.Time `json:"since"`
+	MaxRows int64     `json:"max_rows"`
+}
+
+type ListAbyssalSaleProbesRow struct {
+	ContractID int64     `json:"contract_id"`
+	DepartedAt time.Time `json:"departed_at"`
+}
+
+// The exchange listings that left early and were never asked
+// whether they sold, newest departure first, within the window
+// ESI still answers for an accepted contract.
+func (q *Queries) ListAbyssalSaleProbes(ctx context.Context, arg ListAbyssalSaleProbesParams) ([]ListAbyssalSaleProbesRow, error) {
+	rows, err := q.db.QueryContext(ctx, listAbyssalSaleProbes, arg.Since, arg.MaxRows)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListAbyssalSaleProbesRow
+	for rows.Next() {
+		var i ListAbyssalSaleProbesRow
+		if err := rows.Scan(&i.ContractID, &i.DepartedAt); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -1742,6 +1852,42 @@ func (q *Queries) ListSDERegionIDs(ctx context.Context) ([]int64, error) {
 	return items, nil
 }
 
+const markAbyssalSaleProbed = `-- name: MarkAbyssalSaleProbed :exec
+UPDATE abyssal_sightings SET sale_probed_at = $1::timestamptz
+WHERE contract_id = $2::bigint
+  AND sale_probed_at IS NULL
+`
+
+type MarkAbyssalSaleProbedParams struct {
+	ProbedAt   time.Time `json:"probed_at"`
+	ContractID int64     `json:"contract_id"`
+}
+
+func (q *Queries) MarkAbyssalSaleProbed(ctx context.Context, arg MarkAbyssalSaleProbedParams) error {
+	_, err := q.db.ExecContext(ctx, markAbyssalSaleProbed, arg.ProbedAt, arg.ContractID)
+	return err
+}
+
+const markAbyssalSightingsSold = `-- name: MarkAbyssalSightingsSold :exec
+UPDATE abyssal_sightings SET sold_at = $1::timestamptz,
+    sale_probed_at = COALESCE(sale_probed_at, $1::timestamptz)
+WHERE contract_id = $2::bigint
+  AND contract_type = 'item_exchange'
+  AND sold_at IS NULL
+`
+
+type MarkAbyssalSightingsSoldParams struct {
+	SoldAt     time.Time `json:"sold_at"`
+	ContractID int64     `json:"contract_id"`
+}
+
+// A finished contract seen on the public crawl: its abyssal
+// sightings become confirmed sales (schema 070).
+func (q *Queries) MarkAbyssalSightingsSold(ctx context.Context, arg MarkAbyssalSightingsSoldParams) error {
+	_, err := q.db.ExecContext(ctx, markAbyssalSightingsSold, arg.SoldAt, arg.ContractID)
+	return err
+}
+
 const notePublicContractItemsFailure = `-- name: NotePublicContractItemsFailure :exec
 UPDATE pub_contracts
 SET items_attempts = items_attempts + 1,
@@ -2352,8 +2498,9 @@ UPDATE abyssal_items SET
     ladder_lo_type_id   = $18::bigint,
     ladder_hi_type_id   = $19::bigint,
     market_calib        = $20::double precision,
-    scored_at           = $21::timestamptz
-WHERE item_id = $22::bigint
+    market_basis        = $21::text,
+    scored_at           = $22::timestamptz
+WHERE item_id = $23::bigint
 `
 
 type UpdateAbyssalItemEstimateParams struct {
@@ -2377,6 +2524,7 @@ type UpdateAbyssalItemEstimateParams struct {
 	LadderLoTypeID     int64           `json:"ladder_lo_type_id"`
 	LadderHiTypeID     int64           `json:"ladder_hi_type_id"`
 	MarketCalib        float64         `json:"market_calib"`
+	MarketBasis        string          `json:"market_basis"`
 	ScoredAt           time.Time       `json:"scored_at"`
 	ItemID             int64           `json:"item_id"`
 }
@@ -2403,6 +2551,7 @@ func (q *Queries) UpdateAbyssalItemEstimate(ctx context.Context, arg UpdateAbyss
 		arg.LadderLoTypeID,
 		arg.LadderHiTypeID,
 		arg.MarketCalib,
+		arg.MarketBasis,
 		arg.ScoredAt,
 		arg.ItemID,
 	)
@@ -2470,6 +2619,50 @@ func (q *Queries) UpdatePublicContractItemAppraisal(ctx context.Context, arg Upd
 		arg.PriceTier,
 		arg.PriceAsof,
 		arg.RecordID,
+	)
+	return err
+}
+
+const upsertAbyssalFamilyFit = `-- name: UpsertAbyssalFamilyFit :exec
+INSERT INTO abyssal_family_fit (family, comps, n_eff, holdout_n, sales_n,
+    mae_ladder, mae_model, bias_model, use_model, fitted_at)
+VALUES ($1::text, $2::bigint, $3::double precision,
+    $4::bigint, $5::bigint,
+    $6::double precision, $7::double precision,
+    $8::double precision, $9::boolean,
+    $10::timestamptz)
+ON CONFLICT (family) DO UPDATE SET
+    comps = EXCLUDED.comps, n_eff = EXCLUDED.n_eff, holdout_n = EXCLUDED.holdout_n,
+    sales_n = EXCLUDED.sales_n, mae_ladder = EXCLUDED.mae_ladder,
+    mae_model = EXCLUDED.mae_model, bias_model = EXCLUDED.bias_model,
+    use_model = EXCLUDED.use_model, fitted_at = EXCLUDED.fitted_at
+`
+
+type UpsertAbyssalFamilyFitParams struct {
+	Family    string          `json:"family"`
+	Comps     int64           `json:"comps"`
+	NEff      float64         `json:"n_eff"`
+	HoldoutN  int64           `json:"holdout_n"`
+	SalesN    int64           `json:"sales_n"`
+	MaeLadder sql.NullFloat64 `json:"mae_ladder"`
+	MaeModel  sql.NullFloat64 `json:"mae_model"`
+	BiasModel sql.NullFloat64 `json:"bias_model"`
+	UseModel  bool            `json:"use_model"`
+	FittedAt  time.Time       `json:"fitted_at"`
+}
+
+func (q *Queries) UpsertAbyssalFamilyFit(ctx context.Context, arg UpsertAbyssalFamilyFitParams) error {
+	_, err := q.db.ExecContext(ctx, upsertAbyssalFamilyFit,
+		arg.Family,
+		arg.Comps,
+		arg.NEff,
+		arg.HoldoutN,
+		arg.SalesN,
+		arg.MaeLadder,
+		arg.MaeModel,
+		arg.BiasModel,
+		arg.UseModel,
+		arg.FittedAt,
 	)
 	return err
 }

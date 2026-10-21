@@ -35,7 +35,7 @@
       <a class="ld-btn ld-btn-ember" href="/auth/link">Link your characters, free</a>
       {{/* Try-it button hidden until the demo character profile exists for it to open. */}}
     </div>
-    <div class="ld-cta-note">Only the scopes you pick · Key held in a hardware vault · Open source</div>
+    <div class="ld-cta-note">Link with only the scopes you pick · Key held in a hardware vault · Open source</div>
 
     {{if .HasStrip}}
     <div class="ld-glass ld-strip">
@@ -60,16 +60,16 @@
     <h2>Your keys, your call.</h2>
     <p class="ld-lede">Prices on this site come from EveSynapse's own swept market data, and every price shows where it came from. The same care runs through the whole app: you stay in charge of your characters and your data.</p>
     <div class="ld-trust">
-      <div class="ld-glass ld-tcard"><h3>You pick the scopes</h3><p>Choose the features you want; the EVE login asks for exactly those scopes, and no more.</p></div>
+      <div class="ld-glass ld-tcard"><h3>You pick the scopes</h3><p>Linking a character starts with the features you want: the sign-in asks for the scopes behind those features, and no more. Re-linking the same character never takes a permission away.</p></div>
       <div class="ld-glass ld-tcard"><h3>Encrypted at rest</h3><p>Refresh tokens are sealed with AES-256-GCM, the current standard for encryption at rest. The encryption keys are stored off-server, on secure hardware. Reading your data never means trusting us with the keys to it.</p></div>
-      <div class="ld-glass ld-tcard"><h3>Public data, no login</h3><p>Tools using public data require no login at all to use: the fitting simulator, planners, market and intel tools are open to everyone. Sign in only when you want your own characters in the picture.</p></div>
+      <div class="ld-glass ld-tcard"><h3>Public data, no login</h3><p>Tools using public data require no login at all to use: the fitting simulator, planners, market and intel tools, and the universe map, are open to everyone. Sign in only when you want your own characters in the picture.</p></div>
       <div class="ld-glass ld-tcard"><h3>Or run it yourself</h3><p>Open source, one setup script, your own ESI application and your own data. The public site runs the same build you can download.</p></div>
     </div>
     <div class="ld-glass ld-tcard ld-tcard-wide"><h3>PKCE on every sign-in</h3><p>The EVE login flow is PKCE-protected: the sign-in code can only be exchanged by the browser that asked for it, so an intercepted code is worthless to anyone else.</p></div>
     <div class="ld-glass ld-tcard ld-tcard-wide"><h3>Revoke on unlink</h3><p>When you unlink a character, you can fully revoke its token with EVE itself, right in the unlink flow. Deleting our copy is the floor; killing the token at the source is your call.</p></div>
     <div class="ld-cta-repeat">
       <a class="ld-btn ld-btn-ember ld-btn-lg" href="/auth/link">Link your characters, free</a>
-      <span class="ld-why">The login asks only for the scopes behind the features you pick.</span>
+      <span class="ld-why">Linking asks only for the scopes behind the features you pick.</span>
     </div>
   </section>
 
@@ -251,6 +251,27 @@
     </div>
   </section>
 
+  <section class="ld-feat">
+    <div class="ld-feat-txt">
+      <div class="ld-eyebrow">Universe Map</div>
+      <h2>All of New Eden, on one map.</h2>
+      <p class="ld-lede">Every system in known space at its true position, with a tactical view inside each region. Colour it by security, sovereignty, jumps or faction warfare, or switch on the live layers: kills, NPC kills, incursions and a threat layer that fades as its kills age. <a href="/map/">Open the map</a></p>
+      <div class="ld-blurbs">
+        <div class="ld-blurb"><h3>The killboard</h3><p>Every public kill in the feed gets its own page: the ship, the fit by slot, the value split and everyone on the kill. Filter the feed by system, region, ship, character, corporation or alliance, or narrow it to solo kills and kills worth a billion ISK or more. <a href="/intel/kills/">Open the killboard</a></p></div>
+        <div class="ld-blurb"><h3>Routes that know the danger</h3><p>Pick two systems and the planner draws the route on the map. Shortest takes the fewest jumps, Safer runs through high-sec and around trouble, and Avoid danger skirts active threat and gate camps. Planning is open to everyone; sending the route to your ship's autopilot takes a signed-in character with the waypoint permission.</p></div>
+      </div>
+    </div>
+    <div class="ld-feat-vis">
+      <figure class="ld-shot">
+        <div class="ld-browser">
+          <div class="ld-browser-bar" aria-hidden="true"><span class="ld-dot ld-dot-on"></span><span class="ld-dot"></span><span class="ld-dot"></span><span class="ld-url">evesynapse.app/map/</span></div>
+          <img src="/static/shot-threat.webp?v={{.AssetVersion}}" width="732" height="385" loading="lazy" alt="The EveSynapse universe map with the threat layer on: New Eden coloured by live kill activity, and a system card open for 4-IT9G in Tenerifis showing medium threat, four kills in the last hour and the last kill five minutes ago">
+        </div>
+        <figcaption>The universe map on the live site, threat layer on: 4-IT9G in Tenerifis, four kills in the last hour.</figcaption>
+      </figure>
+    </div>
+  </section>
+
   <section class="ld-blk" id="tools">
     <h2>Every tool in the box.</h2>
     <p class="ld-lede">Twenty-three modules plus the core pages, all reading the same stored data. The public tools work with no account at all.</p>
@@ -292,6 +313,9 @@
       </ul></div>
       <div class="ld-glass ld-tgroup"><h3>Intel and reference</h3><ul>
         <li><b>Wars</b>, <b>Incursions</b> and <b>Faction Warfare</b></li>
+        <li><b>Universe Map</b> with threat, kill and sovereignty layers</li>
+        <li><b>Killboard</b> for every public kill in the feed</li>
+        <li><b>Route Planner</b>: shortest, safer, or around the danger</li>
         <li><b>System Pages</b> with kill heat</li>
         <li><b>Item Database</b> for all of New Eden</li>
         <li><b>Character Pages</b> for any pilot</li>

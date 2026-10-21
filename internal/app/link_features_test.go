@@ -298,6 +298,14 @@ func TestChooserPages(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("/auth/link: status %d", rec.Code)
 	}
+	// The plain login is identity-only: the page says so plainly,
+	// and never promises it preserves a chosen permission set.
+	if !strings.Contains(body, "logging in asks EVE for no permissions at all") {
+		t.Error("the chooser does not describe the plain login as asking for no permissions")
+	}
+	if strings.Contains(body, "you keep the permissions you chose") {
+		t.Error("the chooser still describes the plain login as keeping chosen permissions")
+	}
 	for _, a := range linkActivities {
 		if !strings.Contains(body, html.EscapeString(a.Title)) {
 			t.Errorf("the cards miss %q", a.Title)

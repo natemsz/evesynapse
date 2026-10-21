@@ -47,6 +47,7 @@ assets: ## Decode the fonts/wallpaper from ci-assets/ into the embedded asset di
 	ls ci-assets/shot-overview.webp.b64.part-* | sort -V | xargs cat | base64 -d > internal/app/static/shot-overview.webp
 	ls ci-assets/shot-ideas.webp.b64.part-* | sort -V | xargs cat | base64 -d > internal/app/static/shot-ideas.webp
 	ls ci-assets/shot-market.webp.b64.part-* | sort -V | xargs cat | base64 -d > internal/app/static/shot-market.webp
+	ls ci-assets/shot-threat.webp.b64.part-* | sort -V | xargs cat | base64 -d > internal/app/static/shot-threat.webp
 
 build-dev: ## Compile the dev server (includes /dev-login) into ./bin/evesynapse-dev
 	go build -o bin/evesynapse-dev ./cmd/evesynapse-dev

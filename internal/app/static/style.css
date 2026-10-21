@@ -1475,12 +1475,11 @@ input[type="search"]:not(.topsearch input),
 
 /* --- footer --- */
 footer {
-  /* Glass, as on the top bar and sidebar; the paint alone is the
-     no-blur fallback. Over it, a star tile: a small compressed
-     raster (a crop of the master wallpaper's own star field),
-     static and repeating. */
-  background: rgba(11, 11, 11, 0.85);
-  background-image: url("/static/stars-tile.webp?v=b6e2235b7c529ea9");
+  /* Black glass: the top bar's gradient inverted — the dark stop
+     meets the content, the lighter stop the page's bottom edge —
+     and deeper than the bar, near-black at 90% over the same
+     backdrop blur. The paint alone is the no-blur fallback. */
+  background: linear-gradient(to bottom, rgba(5, 5, 5, 0.9), rgba(18, 18, 18, 0.9));
   -webkit-backdrop-filter: blur(18px);
   backdrop-filter: blur(18px);
   border-top: 1px solid #262626;

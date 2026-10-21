@@ -174,6 +174,13 @@ type Application struct {
 	trueValuesLoaded time.Time
 	trueValuePass    tvPassState
 
+	// The killboard (killfeed.go): each system's region, loaded
+	// once from the SDE for kill ingest, and when retention last
+	// pruned the year-old details.
+	killRegionsMu  sync.Mutex
+	killRegions    map[int64]int64
+	killLastPruned time.Time
+
 	// The Forge's swept typical sells (market_guide_prices.go),
 	// the first tier of the house price order, cached in memory
 	// on the same window as the true values so renders reload

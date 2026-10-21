@@ -90,6 +90,8 @@ type Config struct {
 	devLogin                 bool           // DEV_LOGIN=1: register the /dev-login route
 	sdeBaseURL               string         // EVE SDE CSV dump base URL (Fuzzwork by default)
 	fuzzworkBaseURL          string         // Fuzzwork market aggregate base URL (fallback prices)
+	killfeedBaseURL          string         // zKillboard R2Z2 killmail stream base URL (killfeed.go)
+	killfeedOff              bool           // KILLFEED=off: no public killmail stream
 	adminCharIDs             map[int64]bool // EVE_ADMIN_CHARACTER_IDS (comma-separated)
 	tokenKey                 string         // TOKEN_ENCRYPTION_KEY: encrypts stored EVE tokens ("" = stored as they are)
 	tokenKeyProvider         string         // TOKEN_KEY_PROVIDER: where the token key comes from — env, http, oci or none ("" = derive: a set TOKEN_ENCRYPTION_KEY means env, none set means none)
@@ -287,6 +289,28 @@ func (c Config) FuzzworkBaseURL() string {
 	return base
 }
 
+// defaultKillfeedBaseURL is zKillboard's R2Z2 killmail stream: one
+// JSON file per killmail, numbered by a global sequence.
+const defaultKillfeedBaseURL = "https://r2z2.zkillboard.com/ephemeral/"
+
+// KillfeedBaseURL returns the killmail stream's base URL, always
+// with a trailing slash.
+func (c Config) KillfeedBaseURL() string {
+	base := c.killfeedBaseURL
+	if base == "" {
+		base = defaultKillfeedBaseURL
+	}
+	if !strings.HasSuffix(base, "/") {
+		base += "/"
+	}
+	return base
+}
+
+// KillfeedEnabled reports whether the public killmail stream runs:
+// KILLFEED=off turns it off, and a Config not built by LoadConfig
+// (the tests') never reaches the real stream.
+func (c Config) KillfeedEnabled() bool { return !c.killfeedOff && c.killfeedBaseURL != "" }
+
 // SDEBaseURL returns the base URL the SDE importer downloads the
 // CSV tables from, always with a trailing slash.
 func (c Config) SDEBaseURL() string {
@@ -334,6 +358,8 @@ func LoadConfig() (Config, error) {
 		devLogin:                   os.Getenv("DEV_LOGIN") == "1",
 		sdeBaseURL:                 getenvDefault("EVE_SDE_BASE_URL", defaultSDEBaseURL),
 		fuzzworkBaseURL:            getenvDefault("EVE_FUZZWORK_BASE_URL", defaultFuzzworkBaseURL),
+		killfeedBaseURL:            getenvDefault("KILLFEED_BASE_URL", defaultKillfeedBaseURL),
+		killfeedOff:                strings.EqualFold(strings.TrimSpace(os.Getenv("KILLFEED")), "off"),
 		adminCharIDs:               parseAdminCharIDs(os.Getenv("EVE_ADMIN_CHARACTER_IDS")),
 		tokenKey:                   os.Getenv("TOKEN_ENCRYPTION_KEY"),
 		tokenKeyProvider:           os.Getenv("TOKEN_KEY_PROVIDER"),

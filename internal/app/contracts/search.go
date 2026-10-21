@@ -25,6 +25,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"html/template"
 	"math"
 	"net/http"
 	"net/url"
@@ -707,17 +708,34 @@ type attrOption struct {
 
 // rollSlider is one attribute's pair of percentile bounds
 // in the abyssal drawer: the range/number slider pairs the
-// template prints for the family in scope (or, with no
-// family chosen, for the attributes carrying a band).
+// template prints. The drawer carries a slider for every
+// rollable attribute; Visible marks the ones the render
+// shows (and the form submits): the family in scope's set,
+// plus any attribute carrying a band outside that set, so
+// an active band is never invisible. The rest render
+// hidden and disabled, and contracts.js re-derives the
+// same split in place when the family pick changes.
 // Min/Max are whole percentiles; a side the search left
 // unset renders empty.
 type rollSlider struct {
-	ID     int64
-	Name   string
-	Min    int
-	Max    int
-	MinSet bool
-	MaxSet bool
+	ID      int64
+	Name    string
+	Min     int
+	Max     int
+	MinSet  bool
+	MaxSet  bool
+	Visible bool
+}
+
+// rollFamilyGroup is one family's entry in the roll slider
+// catalog the page carries as JSON (the #plan-data
+// pattern): the attributes its mutaplasmids roll, heaviest
+// scoring weight first. contracts.js swaps the drawer's
+// visible sliders to the picked family's group without a
+// submit.
+type rollFamilyGroup struct {
+	Family string  `json:"family"`
+	Attrs  []int64 `json:"attrs"`
 }
 
 // rowAbyssal is a result row's mutated-line summary for
@@ -749,10 +767,13 @@ type searchView struct {
 	Families     []familyOption
 	AttrOpts     []attrOption
 	// RollSliders are the abyssal drawer's per-attribute
-	// percentile bands; RollAttrNames names every rollable
-	// attribute for the band chips.
+	// percentile bands, one per rollable attribute;
+	// RollAttrNames names every rollable attribute for the
+	// band chips. RollCatalog is the per-family slider
+	// catalog as JSON for contracts.js.
 	RollSliders   []rollSlider
 	RollAttrNames map[int64]string
+	RollCatalog   template.JS
 	Sorts         []struct{ Key, Label string }
 	Rows          []searchRow
 	Total         int64
@@ -922,35 +943,85 @@ func (app *mod) buildSearchView(ctx context.Context, q url.Values) *searchView {
 			}
 			return s
 		}
-		seen := map[int64]bool{}
-		if f.AbFamily != "" {
-			// The family in scope leads: its own rollable
-			// attributes, heaviest weight first.
-			if famAttrs, err := app.queries.ListAbyssalFamilyRollAttributes(ctx, f.AbFamily); err == nil {
-				for _, row := range famAttrs {
-					view.RollSliders = append(view.RollSliders, sliderFor(row.AttributeID))
-					seen[row.AttributeID] = true
+
+		// The slider catalog: every family's rollable
+		// attributes, heaviest weight first, from one
+		// grouped pass over the same rows the per-family
+		// query reads. The page carries it as JSON so
+		// picking a family can swap the visible sliders
+		// without a submit.
+		byFamily := map[string][]int64{}
+		if rows, err := app.queries.ListAbyssalFamilyRollAttributesAll(ctx); err == nil {
+			for _, row := range rows {
+				byFamily[row.Family] = append(byFamily[row.Family], row.AttributeID)
+			}
+		}
+		famSlugs := make([]string, 0, len(byFamily))
+		for slug := range byFamily {
+			famSlugs = append(famSlugs, slug)
+		}
+		sort.Strings(famSlugs)
+		catalog := make([]rollFamilyGroup, 0, len(famSlugs))
+		for _, slug := range famSlugs {
+			catalog = append(catalog, rollFamilyGroup{Family: slug, Attrs: byFamily[slug]})
+		}
+		if payload, err := json.Marshal(catalog); err == nil {
+			view.RollCatalog = template.JS(payload)
+		}
+
+		// The family in scope's own rollable attributes,
+		// heaviest weight first. The grouped pass normally
+		// answers this; if it failed, the per-family read
+		// still can.
+		famAttrs := byFamily[f.AbFamily]
+		if f.AbFamily != "" && famAttrs == nil {
+			if rows, err := app.queries.ListAbyssalFamilyRollAttributes(ctx, f.AbFamily); err == nil {
+				for _, row := range rows {
+					famAttrs = append(famAttrs, row.AttributeID)
 				}
 			}
 		}
-		// Any banded attribute outside that set still gets
-		// its slider, so an active band is never invisible.
-		extra := []int64{}
-		for id := range f.AbRollMin {
-			if !seen[id] {
-				seen[id] = true
-				extra = append(extra, id)
+
+		// The visible split the render ships: the family in
+		// scope leads, then any banded attribute outside
+		// that set, so an active band is never invisible.
+		// Every remaining rollable attribute renders after
+		// them, hidden and disabled, for contracts.js to
+		// swap in when the family pick changes.
+		visible := map[int64]bool{}
+		ordered := []int64{}
+		add := func(id int64) {
+			if !visible[id] {
+				visible[id] = true
+				ordered = append(ordered, id)
 			}
 		}
-		for id := range f.AbRollMax {
-			if !seen[id] {
-				seen[id] = true
-				extra = append(extra, id)
+		for _, id := range famAttrs {
+			add(id)
+		}
+		extraSeen := map[int64]bool{}
+		extra := []int64{}
+		for _, banded := range []map[int64]float64{f.AbRollMin, f.AbRollMax} {
+			for id := range banded {
+				if !visible[id] && !extraSeen[id] {
+					extraSeen[id] = true
+					extra = append(extra, id)
+				}
 			}
 		}
 		sort.Slice(extra, func(i, j int) bool { return extra[i] < extra[j] })
 		for _, id := range extra {
-			view.RollSliders = append(view.RollSliders, sliderFor(id))
+			add(id)
+		}
+		for _, id := range ordered {
+			s := sliderFor(id)
+			s.Visible = true
+			view.RollSliders = append(view.RollSliders, s)
+		}
+		for _, id := range rollIDs {
+			if !visible[id] {
+				view.RollSliders = append(view.RollSliders, sliderFor(id))
+			}
 		}
 	}
 

@@ -155,13 +155,14 @@
         <label class="cs-field">Roll position ≥ (%)
           <input type="number" name="pos_min" min="0" max="100" value="{{$s.Echo.pos_min}}" placeholder="Any"></label>
       </div>
-      {{if $s.RollSliders}}<p class="cs-drawer-sub">Band a single roll by its percentile in the mutaplasmid's range (0–100, higher is the better roll). Bands test the same contract line as the other abyssal filters.{{if not $s.Filters.AbFamily}} Pick a module family to band any of its rolls.{{end}}</p>
+      {{if $s.RollSliders}}<p class="cs-drawer-sub">Band a single roll by its percentile in the mutaplasmid's range (0–100, higher is the better roll). Bands test the same contract line as the other abyssal filters. <span data-roll-hint{{if $s.Filters.AbFamily}} hidden{{end}}>Pick a module family to band any of its rolls.</span></p>
       <div class="cs-rollgrid">
-        {{range $s.RollSliders}}<div class="cs-field">{{.Name}}
-          <span class="cs-slider-pair">≥<input type="range" min="0" max="100" step="1" value="{{if .MinSet}}{{.Min}}{{else}}0{{end}}" data-slider-for="cs-rollmin-{{.ID}}" data-slider-rest="0" aria-label="{{.Name}} minimum percentile"><input type="number" id="cs-rollmin-{{.ID}}" name="rollmin_{{.ID}}" min="0" max="100" value="{{if .MinSet}}{{.Min}}{{end}}" placeholder="0"></span>
-          <span class="cs-slider-pair">≤<input type="range" min="0" max="100" step="1" value="{{if .MaxSet}}{{.Max}}{{else}}100{{end}}" data-slider-for="cs-rollmax-{{.ID}}" data-slider-rest="100" aria-label="{{.Name}} maximum percentile"><input type="number" id="cs-rollmax-{{.ID}}" name="rollmax_{{.ID}}" min="0" max="100" value="{{if .MaxSet}}{{.Max}}{{end}}" placeholder="100"></span>
+        {{range $s.RollSliders}}<div class="cs-field" data-roll-field="{{.ID}}"{{if not .Visible}} hidden{{end}}>{{.Name}}
+          <span class="cs-slider-pair">≥<input type="range" class="cs-rollslider" min="0" max="100" step="1" value="{{if .MinSet}}{{.Min}}{{else}}0{{end}}" data-slider-for="cs-rollmin-{{.ID}}" data-slider-rest="0" aria-label="{{.Name}} minimum percentile"{{if not .Visible}} disabled{{end}}><input type="number" id="cs-rollmin-{{.ID}}" name="rollmin_{{.ID}}" min="0" max="100" value="{{if .MinSet}}{{.Min}}{{end}}" placeholder="0"{{if not .Visible}} disabled{{end}}></span>
+          <span class="cs-slider-pair">≤<input type="range" class="cs-rollslider" min="0" max="100" step="1" value="{{if .MaxSet}}{{.Max}}{{else}}100{{end}}" data-slider-for="cs-rollmax-{{.ID}}" data-slider-rest="100" aria-label="{{.Name}} maximum percentile"{{if not .Visible}} disabled{{end}}><input type="number" id="cs-rollmax-{{.ID}}" name="rollmax_{{.ID}}" min="0" max="100" value="{{if .MaxSet}}{{.Max}}{{end}}" placeholder="100"{{if not .Visible}} disabled{{end}}></span>
         </div>{{end}}
-      </div>{{end}}
+      </div>
+      {{if $s.RollCatalog}}<script type="application/json" id="cs-roll-catalog">{{$s.RollCatalog}}</script>{{end}}{{end}}
     </section>
 
     <section class="cs-drawer" data-drawer-panel="couriers"{{if ne $s.OpenDrawer "couriers"}} hidden{{end}}>

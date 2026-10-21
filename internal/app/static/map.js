@@ -545,7 +545,7 @@
           pilots: rgbOf(tok("--map-d-pilots", "#6ff29a")), fleet: rgbOf(tok("--map-d-fleet", "#6aa8ff")),
           clones: rgbOf(tok("--map-d-clones", "#c4a1ff")), market: rgbOf(tok("--map-d-market", "#ffd24a")),
           industry: rgbOf(tok("--map-d-industry", "#ffa45c")), structures: rgbOf(tok("--map-d-structures", "#5ce0d8")),
-          posted: rgbOf(tok("--map-d-posted", "#3fd8ff"))
+          posted: rgbOf(tok("--map-d-posted", "#e6dccb"))
         },
         camp: tok("--map-camp", "#ff3b3b"),
         inc: tok("--map-inc", "#c64bd6"),
@@ -2721,13 +2721,21 @@
         b.title = off ? "A data heat layer is on: turn it off in Data to use this layer" : "";
       });
     }
+    // The layer a heat layer replaced, put back when the heat goes off.
+    var layerBeforeHeat = "";
     function setData(k, on) {
       if (on && DATA_HEAT[k]) {
         var heat = dataHeat();
         if (heat && heat !== k) return;
+        if (!heat) layerBeforeHeat = layer;
         if (layer !== "security") setLayer("security", true);
       }
       if (on) dataOn[k] = true; else delete dataOn[k];
+      if (!on && DATA_HEAT[k] && layerBeforeHeat) {
+        var back = layerBeforeHeat;
+        layerBeforeHeat = "";
+        if (back !== layer) setLayer(back, true);
+      }
       try { localStorage.setItem(DATA_KEY, Object.keys(dataOn).join(",")); } catch (e) { /* private mode */ }
       dataHeatOrder = null;
       syncDataMenu();

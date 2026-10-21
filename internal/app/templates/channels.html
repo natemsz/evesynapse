@@ -1,0 +1,36 @@
+{{define "title"}}Intel channels{{end}}
+{{define "pagetitle"}}<h1><span class="gt">Intel channels</span></h1>{{end}}
+{{define "pagetabs"}}{{template "sectiontabs" .}}{{end}}
+{{define "content"}}
+{{with .Channels}}
+{{/* The channels an account can read (channels.go), and a box to
+     make one. A visitor gets what a channel is and a way in. */}}
+<div class="ch">
+  {{if not .SignedIn}}
+  <section class="ch-panel ch-intro">
+    <h2>Intel, shared and on the map</h2>
+    <p>An intel channel is a live stream of sightings — “five hostiles in 1DQ1-A”, “Amamake clear” — shared with the pilots, corporations, alliances or groups you choose. Report from the map, paste lines straight from an in-game intel chat, or post a scan. Every report lands on the map for everyone in the channel, fading over half an hour, and routes steer around it.</p>
+    <p><a class="btn" href="/auth/login">Sign in with EVE Online</a></p>
+  </section>
+  {{else}}
+  {{if .Channels}}<ul class="ch-list" aria-label="Your channels">
+    {{range .Channels}}<li>
+      <a href="/intel/channels/{{.ID}}/">
+        <span class="ch-list-n">{{.Name}}</span>
+        {{if .Description}}<span class="ch-list-d">{{.Description}}</span>{{end}}
+        <span class="ch-list-tags">{{if .Owner}}<span class="ch-tag own">Owner</span>{{else if .CanPost}}<span class="ch-tag">Read and post</span>{{else}}<span class="ch-tag dim">Read only</span>{{end}}</span>
+      </a>
+    </li>{{end}}
+  </ul>
+  {{else}}<p class="ch-empty muted">No channels yet. Make one, or ask a channel's owner to grant you access.</p>{{end}}
+
+  <form class="ch-panel ch-create" method="post" action="/intel/channels/create">
+    <h2>New channel</h2>
+    <label><span>Name</span><input type="text" name="name" maxlength="60" required placeholder="Delve intel"></label>
+    <label><span>Description <span class="muted">(optional)</span></span><input type="text" name="description" maxlength="200" placeholder="What it covers, who is in it"></label>
+    <button type="submit" class="btn">Create channel</button>
+  </form>
+  {{end}}
+</div>
+{{end}}
+{{end}}

@@ -1,0 +1,91 @@
+-- ---------------------------------------------------------------------
+-- Intel channels (schema 078): channels, their grants, their reports.
+-- ---------------------------------------------------------------------
+
+-- name: CreateIntelChannel :one
+INSERT INTO intel_channels (owner_user_id, name, description, created_at)
+VALUES (sqlc.arg(owner_user_id), sqlc.arg(name), sqlc.arg(description), sqlc.arg(created_at))
+RETURNING id;
+
+-- name: GetIntelChannel :one
+SELECT id, owner_user_id, name, description, created_at FROM intel_channels WHERE id = $1;
+
+-- name: UpdateIntelChannel :exec
+UPDATE intel_channels SET name = sqlc.arg(name), description = sqlc.arg(description) WHERE id = sqlc.arg(id);
+
+-- name: DeleteIntelChannel :exec
+DELETE FROM intel_channels WHERE id = $1;
+
+-- The channels an account can read: its own, and those granted to any
+-- of its characters, their corporations and alliances, or groups they
+-- are in. can_post is true for the owner and for any grant that posts.
+-- name: ListAccessibleChannels :many
+SELECT c.id, c.owner_user_id, c.name, c.description, c.created_at,
+       (c.owner_user_id = sqlc.arg(user_id)::bigint OR COALESCE(BOOL_OR(g.can_post), FALSE))::boolean AS can_post
+FROM intel_channels c
+LEFT JOIN intel_channel_grants g ON g.channel_id = c.id AND (
+       (g.kind = 'character'   AND g.target_id = ANY(sqlc.arg(character_ids)::bigint[]))
+    OR (g.kind = 'corporation' AND g.target_id = ANY(sqlc.arg(corporation_ids)::bigint[]))
+    OR (g.kind = 'alliance'    AND g.target_id = ANY(sqlc.arg(alliance_ids)::bigint[]))
+    OR (g.kind = 'group'       AND g.target_id = ANY(sqlc.arg(group_ids)::bigint[])))
+GROUP BY c.id
+HAVING c.owner_user_id = sqlc.arg(user_id)::bigint OR COUNT(g.channel_id) > 0
+ORDER BY lower(c.name), c.id;
+
+-- name: ListIntelChannelGrants :many
+SELECT channel_id, kind, target_id, can_post, created_at FROM intel_channel_grants
+WHERE channel_id = $1
+ORDER BY kind, target_id;
+
+-- name: UpsertIntelChannelGrant :exec
+INSERT INTO intel_channel_grants (channel_id, kind, target_id, can_post, created_at)
+VALUES (sqlc.arg(channel_id), sqlc.arg(kind), sqlc.arg(target_id), sqlc.arg(can_post), sqlc.arg(created_at))
+ON CONFLICT (channel_id, kind, target_id) DO UPDATE SET can_post = EXCLUDED.can_post;
+
+-- name: DeleteIntelChannelGrant :exec
+DELETE FROM intel_channel_grants
+WHERE channel_id = sqlc.arg(channel_id) AND kind = sqlc.arg(kind) AND target_id = sqlc.arg(target_id);
+
+-- name: CountIntelChannelGrants :one
+SELECT COUNT(*) FROM intel_channel_grants WHERE channel_id = $1;
+
+-- name: InsertIntelReport :one
+INSERT INTO intel_reports (channel_id, system_id, author_user_id, author_character_id, reporter,
+    text, pilots, hostiles, clear, scan_id, source, seen_at, created_at)
+VALUES (sqlc.arg(channel_id), sqlc.arg(system_id), sqlc.arg(author_user_id), sqlc.arg(author_character_id),
+    sqlc.arg(reporter), sqlc.arg(text), sqlc.arg(pilots), sqlc.arg(hostiles), sqlc.arg(clear),
+    sqlc.arg(scan_id), sqlc.arg(source), sqlc.arg(seen_at), sqlc.arg(created_at))
+RETURNING id;
+
+-- A channel's reports, latest seen first: a page before a (seen_at,
+-- id) key, or everything posted after after_id (the live feed's poll).
+-- name: ListIntelReports :many
+SELECT id, channel_id, system_id, author_user_id, reporter, text, pilots, hostiles, clear, scan_id, source, seen_at, created_at
+FROM intel_reports
+WHERE channel_id = sqlc.arg(channel_id)
+  AND id > sqlc.arg(after_id)::bigint
+  AND (seen_at, id) < (sqlc.arg(before_at)::timestamptz, sqlc.arg(before_id)::bigint)
+ORDER BY seen_at DESC, id DESC
+LIMIT sqlc.arg(max_rows)::int;
+
+-- The recent reports across some channels: the map's intel layer.
+-- name: ListRecentIntelReports :many
+SELECT r.id, r.channel_id, r.system_id, r.reporter, r.text, r.pilots, r.hostiles, r.clear, r.scan_id, r.seen_at
+FROM intel_reports r
+WHERE r.channel_id = ANY(sqlc.arg(channel_ids)::bigint[])
+  AND r.seen_at >= sqlc.arg(since)::timestamptz
+ORDER BY r.seen_at DESC, r.id DESC
+LIMIT 2000;
+
+-- name: GetIntelReport :one
+SELECT id, channel_id, author_user_id FROM intel_reports WHERE id = $1;
+
+-- name: DeleteIntelReport :exec
+DELETE FROM intel_reports WHERE id = $1;
+
+-- name: PruneIntelReports :execrows
+DELETE FROM intel_reports WHERE seen_at < sqlc.arg(before)::timestamptz;
+
+-- Every system's name: the chat-line reader's dictionary.
+-- name: ListSDESystemNames :many
+SELECT system_id, name FROM sde_systems;

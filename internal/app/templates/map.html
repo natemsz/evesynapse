@@ -28,6 +28,10 @@
       <button type="button" class="btn small map-keys-btn" data-map-keys aria-label="Map controls" aria-expanded="false" aria-controls="map-keys" disabled>?</button>
     </div>
     <label class="map-pref" title="When on, zooming deep into a region opens its tactical view. When off, click a region's name instead."><input type="checkbox" data-map-zoom-tactical disabled> Zoom to tactical</label>
+    {{/* The intel overlay: the reader's channels' reports over any
+         layer. map.js shows it once it knows the reader has a
+         channel; the badge counts systems with hostiles. */}}
+    <button type="button" class="map-intel-toggle" data-map-intel aria-pressed="true" title="Reports from your intel channels, last 30 minutes" hidden>Intel <span data-map-intel-n></span></button>
     {{/* The layer picker: what the map colors by. Security needs
          no live data; the rest unlock once the layers payload has
          loaded (map.js). */}}
@@ -124,6 +128,22 @@
         <p class="map-card-scans-h">Your scans here</p>
         <ul></ul>
       </div>
+      {{/* Report from the map into one of the reader's intel
+           channels (channels.go); map.js fills the channels and
+           shows it only where the reader may post. */}}
+      <form class="map-card-intel" data-map-report hidden>
+        <p class="map-card-intel-h">Report intel</p>
+        <div class="map-card-intel-ch"><label><span class="visually-hidden">Channel</span><select name="channel"></select></label></div>
+        <div class="map-card-intel-row">
+          <input type="text" name="text" maxlength="300" placeholder="Pilots, ships…" aria-label="What was seen" autocomplete="off">
+          <input type="number" name="hostiles" min="0" max="999" inputmode="numeric" placeholder="#" aria-label="Hostiles">
+        </div>
+        <div class="map-card-intel-row">
+          <button type="submit" class="btn small" value="hostile">Report</button>
+          <button type="submit" class="btn small" value="clear">Clear</button>
+        </div>
+        <p class="map-card-intel-msg" aria-live="polite"></p>
+      </form>
       <div class="map-card-route" role="group" aria-label="Route">
         <button type="button" class="btn small" data-route-set="from">Route from here</button>
         <button type="button" class="btn small" data-route-set="to">Route to here</button>

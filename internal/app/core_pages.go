@@ -84,6 +84,10 @@ type pageData struct {
 	// Scans (/intel/scan/, /intel/scan/{id}/).
 	Scan *scanPageView
 
+	// Intel channels (/intel/channels/, /intel/channels/{id}/).
+	Channels *channelListView
+	Channel  *channelView
+
 	// Player structure page (/structure/): the local structure
 	// record.
 	Structure *structurePageView
@@ -144,7 +148,7 @@ func sectionForPage(page string) string {
 		return "corporation"
 	case "map.html":
 		return "map"
-	case "killboard.html", "kill.html", "scans.html", "scan.html":
+	case "killboard.html", "kill.html", "scans.html", "scan.html", "channels.html", "channel.html":
 		return "intel"
 	case "sync.html":
 		return "sync"

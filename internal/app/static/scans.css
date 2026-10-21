@@ -222,3 +222,15 @@ html[data-theme="light"] .sc { --sc-hot: #b0302a; }
   .sc-own-sys { grid-column: 1; grid-row: 2; font-size: 0.82rem; }
   .sc-own time { grid-row: 1 / span 2; grid-column: 2; }
 }
+
+/* Posting a scan into an intel channel. */
+.sc-post { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; flex-basis: 100%; }
+.sc-post select {
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--box-edge);
+  border-radius: var(--r-xs);
+  background: var(--row-alt);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.85rem;
+}

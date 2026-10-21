@@ -496,7 +496,11 @@
         ctx.font = (weight || "500") + " " + size + "px " + font;
         var w = textWidth(text, size);
         var lx = x - w / 2, ly = y;
-        if (!claim(lx - 2, ly - 2, w + 4, size + 4) && !force) return null;
+        // Geometric hysteresis: a name already showing claims a box
+        // a little inside its text, a newcomer one a little outside,
+        // so two names at the edge of touching don't trade places.
+        var pad = key && shownLabels[key] ? -1 : 3;
+        if (!claim(lx - pad, ly - pad, w + 2 * pad, size + 2 * pad) && !force) return null;
         if (key) nextShown[key] = 1;
         ctx.lineWidth = 3;
         ctx.strokeStyle = colors.halo;
@@ -522,13 +526,13 @@
         // they only thin out, never vanish (regionLabelAlpha),
         // so a zoomed-in region's name is always there to click.
         ctx.globalAlpha = regionLabelAlpha(f);
-        var size = Math.min(12 + f * 0.8, 18);
-        for (i = 0; i < P.regions.length; i++) {
+        var size = Math.min(12 + f * 0.8, 18), regs = [];
+        for (i = 0; i < P.regions.length; i++) if (G.members[i].length) regs.push(i);
+        inPlaceFirst(regs, function (i) { return "R" + i; }, function (i) {
           var rg = P.regions[i];
-          if (!G.members[i].length) continue;
-          var box = label(rg.name.toUpperCase(), rg.x * k + ox, rg.y * k + oy - size / 2, size, colors.region, "600");
+          var box = label(rg.name.toUpperCase(), rg.x * k + ox, rg.y * k + oy - size / 2, size, colors.region, "600", false, "R" + i);
           if (box) labelBoxes.push({ r: i, b: box });
-        }
+        });
         ctx.globalAlpha = 1;
         // System names once the picture opens up.
         if (f > 6) {

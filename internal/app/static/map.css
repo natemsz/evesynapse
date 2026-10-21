@@ -594,6 +594,9 @@ html[data-theme="light"] .map {
   .map-route-list { columns: 1; }
   .map-side:has(> :not([hidden])) ~ .map-legend,
   .map-side:has(> :not([hidden])) ~ .map-layer-legend { display: none; }
+  .map-stage:has(> .map-side > :not([hidden])) :is(.map-shot, .map-mark) { display: none; }
+  .map-stage .map-mark { top: 0.6rem; right: 0.6rem; bottom: auto; }
+  .map-stage .map-shot { right: 0.5rem; bottom: 0.5rem; }
 }
 /* Short landscape phones: the bar stays one line; the side column
    docks right, full height. */
@@ -620,6 +623,57 @@ html.map-full-open .page-body { -webkit-backdrop-filter: none; backdrop-filter: 
 }
 .map.map-full .map-stage { flex: 1 1 auto; height: auto; min-height: 0; }
 .map-full-btn { display: inline-flex; align-items: center; justify-content: center; }
+
+/* The brand watermark: only on the full-screen map, faint, out of the
+   way in the bottom-right corner, never taking the pointer. ".APP"
+   sits after the wordmark in Rajdhani capitals at 0.7 of its size. */
+.map-mark {
+  position: absolute;
+  right: 3.4rem;
+  bottom: 0.85rem;
+  display: none;
+  align-items: center;
+  gap: 0.45rem;
+  opacity: 0.4;
+  pointer-events: none;
+  user-select: none;
+}
+.map.map-full .map-mark, .map:fullscreen .map-mark { display: flex; }
+.map-mark-glyph { width: 1.5rem; height: 1.5rem; }
+.map-mark-word { display: inline-flex; align-items: baseline; font-size: 1.05rem; line-height: 1; }
+.map-mark-word .wordmark-svg { display: block; height: 1.2em; width: auto; }
+.map-mark-tld {
+  margin-left: 0.15em;
+  font-family: "Rajdhani", "Segoe UI", sans-serif;
+  font-size: 0.7em;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-bright);
+}
+
+/* The screenshot button: a quiet camera in the stage's corner. */
+.map-shot {
+  position: absolute;
+  right: 0.75rem;
+  bottom: 0.75rem;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 2.1rem;
+  height: 2.1rem;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--glass) 70%, transparent);
+  color: var(--muted-2);
+  opacity: 0.55;
+  cursor: pointer;
+  transition: opacity 0.15s, color 0.15s, border-color 0.15s;
+}
+.map-shot:hover, .map-shot:focus-visible { opacity: 1; color: var(--text-bright); border-color: var(--glass-edge); }
+.map-shot:disabled { display: none; }
+.map-shot.busy { opacity: 1; color: var(--accent); }
 .map-full-btn[aria-pressed="true"] { color: var(--accent); border-color: var(--accent); }
 
 /* --- The layer legend's controls (the legend itself lets the

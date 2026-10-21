@@ -64,9 +64,36 @@ func (q *Queries) CreateIntelChannel(ctx context.Context, arg CreateIntelChannel
 	return id, err
 }
 
-const createIntelToken = `-- name: CreateIntelToken :one
-INSERT INTO intel_tokens (user_id, name, prefix, token_hash, created_at)
+const createIntelPairingCode = `-- name: CreateIntelPairingCode :one
+INSERT INTO intel_pairing_codes (user_id, name, code_hash, created_at, expires_at)
 VALUES ($1, $2, $3, $4, $5)
+RETURNING id
+`
+
+type CreateIntelPairingCodeParams struct {
+	UserID    int64     `json:"user_id"`
+	Name      string    `json:"name"`
+	CodeHash  string    `json:"code_hash"`
+	CreatedAt time.Time `json:"created_at"`
+	ExpiresAt time.Time `json:"expires_at"`
+}
+
+func (q *Queries) CreateIntelPairingCode(ctx context.Context, arg CreateIntelPairingCodeParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, createIntelPairingCode,
+		arg.UserID,
+		arg.Name,
+		arg.CodeHash,
+		arg.CreatedAt,
+		arg.ExpiresAt,
+	)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
+}
+
+const createIntelToken = `-- name: CreateIntelToken :one
+INSERT INTO intel_tokens (user_id, name, prefix, token_hash, created_at, public_key, device)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
 RETURNING id
 `
 
@@ -76,9 +103,11 @@ type CreateIntelTokenParams struct {
 	Prefix    string    `json:"prefix"`
 	TokenHash string    `json:"token_hash"`
 	CreatedAt time.Time `json:"created_at"`
+	PublicKey string    `json:"public_key"`
+	Device    string    `json:"device"`
 }
 
-// Posting tokens (schema 079).
+// Posting tokens (schema 079) and Axon pairing (schema 081).
 func (q *Queries) CreateIntelToken(ctx context.Context, arg CreateIntelTokenParams) (int64, error) {
 	row := q.db.QueryRowContext(ctx, createIntelToken,
 		arg.UserID,
@@ -86,6 +115,8 @@ func (q *Queries) CreateIntelToken(ctx context.Context, arg CreateIntelTokenPara
 		arg.Prefix,
 		arg.TokenHash,
 		arg.CreatedAt,
+		arg.PublicKey,
+		arg.Device,
 	)
 	var id int64
 	err := row.Scan(&id)
@@ -160,6 +191,31 @@ func (q *Queries) GetIntelChannel(ctx context.Context, id int64) (IntelChannel, 
 	return i, err
 }
 
+const getIntelPairingCodeByHash = `-- name: GetIntelPairingCodeByHash :one
+SELECT id, user_id, name, expires_at, used_at FROM intel_pairing_codes WHERE code_hash = $1
+`
+
+type GetIntelPairingCodeByHashRow struct {
+	ID        int64        `json:"id"`
+	UserID    int64        `json:"user_id"`
+	Name      string       `json:"name"`
+	ExpiresAt time.Time    `json:"expires_at"`
+	UsedAt    sql.NullTime `json:"used_at"`
+}
+
+func (q *Queries) GetIntelPairingCodeByHash(ctx context.Context, codeHash string) (GetIntelPairingCodeByHashRow, error) {
+	row := q.db.QueryRowContext(ctx, getIntelPairingCodeByHash, codeHash)
+	var i GetIntelPairingCodeByHashRow
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.Name,
+		&i.ExpiresAt,
+		&i.UsedAt,
+	)
+	return i, err
+}
+
 const getIntelReport = `-- name: GetIntelReport :one
 SELECT id, channel_id, author_user_id FROM intel_reports WHERE id = $1
 `
@@ -178,18 +234,25 @@ func (q *Queries) GetIntelReport(ctx context.Context, id int64) (GetIntelReportR
 }
 
 const getIntelTokenByHash = `-- name: GetIntelTokenByHash :one
-SELECT id, user_id FROM intel_tokens WHERE token_hash = $1
+SELECT id, user_id, public_key, device FROM intel_tokens WHERE token_hash = $1
 `
 
 type GetIntelTokenByHashRow struct {
-	ID     int64 `json:"id"`
-	UserID int64 `json:"user_id"`
+	ID        int64  `json:"id"`
+	UserID    int64  `json:"user_id"`
+	PublicKey string `json:"public_key"`
+	Device    string `json:"device"`
 }
 
 func (q *Queries) GetIntelTokenByHash(ctx context.Context, tokenHash string) (GetIntelTokenByHashRow, error) {
 	row := q.db.QueryRowContext(ctx, getIntelTokenByHash, tokenHash)
 	var i GetIntelTokenByHashRow
-	err := row.Scan(&i.ID, &i.UserID)
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.PublicKey,
+		&i.Device,
+	)
 	return i, err
 }
 
@@ -456,7 +519,7 @@ func (q *Queries) ListIntelReports(ctx context.Context, arg ListIntelReportsPara
 }
 
 const listIntelTokens = `-- name: ListIntelTokens :many
-SELECT id, name, prefix, created_at, last_used_at FROM intel_tokens
+SELECT id, name, prefix, created_at, last_used_at, device FROM intel_tokens
 WHERE user_id = $1 ORDER BY created_at DESC, id DESC
 `
 
@@ -466,6 +529,7 @@ type ListIntelTokensRow struct {
 	Prefix     string       `json:"prefix"`
 	CreatedAt  time.Time    `json:"created_at"`
 	LastUsedAt sql.NullTime `json:"last_used_at"`
+	Device     string       `json:"device"`
 }
 
 func (q *Queries) ListIntelTokens(ctx context.Context, userID int64) ([]ListIntelTokensRow, error) {
@@ -483,6 +547,7 @@ func (q *Queries) ListIntelTokens(ctx context.Context, userID int64) ([]ListInte
 			&i.Prefix,
 			&i.CreatedAt,
 			&i.LastUsedAt,
+			&i.Device,
 		); err != nil {
 			return nil, err
 		}
@@ -656,4 +721,22 @@ func (q *Queries) UpsertIntelChannelGrant(ctx context.Context, arg UpsertIntelCh
 		arg.CreatedAt,
 	)
 	return err
+}
+
+const useIntelPairingCode = `-- name: UseIntelPairingCode :execrows
+UPDATE intel_pairing_codes SET used_at = $1
+WHERE id = $2 AND used_at IS NULL AND expires_at > $1
+`
+
+type UseIntelPairingCodeParams struct {
+	At sql.NullTime `json:"at"`
+	ID int64        `json:"id"`
+}
+
+func (q *Queries) UseIntelPairingCode(ctx context.Context, arg UseIntelPairingCodeParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, useIntelPairingCode, arg.At, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }

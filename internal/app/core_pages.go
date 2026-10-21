@@ -251,6 +251,11 @@ func (app *Application) fillShell(ctx context.Context, shell *module.ShellData, 
 	if shell.LoggedIn {
 		shell.NotifyPoll = app.cfg.notifyPoll
 	}
+	if shell.LoggedIn && !shell.AxonPaired {
+		if n, err := app.queries.CountIntelTokens(ctx, app.userID(ctx)); err == nil && n > 0 {
+			shell.AxonPaired = true
+		}
+	}
 	if shell.LoggedIn && shell.ViewerChars == nil {
 		shell.ViewerChars = make(map[int64]bool, len(shell.Switcher))
 		for _, entry := range shell.Switcher {

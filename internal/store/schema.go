@@ -479,6 +479,12 @@ var pgIntelTokensSchema string
 //go:embed schema_pg/080_intel_watch.sql
 var pgIntelWatchSchema string
 
+// Step 081: Axon pairing codes and per-device signing keys on
+// intel_tokens.
+//
+//go:embed schema_pg/081_axon_pairing.sql
+var pgAxonPairingSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -588,6 +594,7 @@ func schemaSteps() []schemaStep {
 		{78, "intel_channels", pgIntelChannelsSchema, ""},
 		{79, "intel_tokens", pgIntelTokensSchema, ""},
 		{80, "intel_watch", pgIntelWatchSchema, ""},
+		{81, "axon_pairing", pgAxonPairingSchema, ""},
 	}
 }
 

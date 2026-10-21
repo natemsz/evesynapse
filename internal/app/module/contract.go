@@ -913,6 +913,11 @@ type ShellData struct {
 	// search's sweep telemetry). Empty shows nothing.
 	SubTabNote   string
 	NavCharacter int64
+	// AxonPaired says the account has a paired EveSynapse Axon
+	// device, so the Intel menu links to Axon's fixed local
+	// address. Set by the shell fill; a device being paired says
+	// nothing about whether it is running right now.
+	AxonPaired bool
 }
 
 // Shell returns a pointer to the embedded ShellData so that

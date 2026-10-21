@@ -186,12 +186,11 @@ type channelListView struct {
 	SignedIn bool
 	Channels []channelRow
 	Error    string
-	// EveSynapse Axon (intel_tokens.go): the account's tokens, the
-	// downloads, and a token just made, shown once in its config.
-	Tokens    []intelTokenRow
-	Downloads []intelDownload
-	NewToken  string
-	NewConfig string
+	// EveSynapse Axon (intel_tokens.go): the account's paired
+	// devices, the downloads, and a pairing code just made.
+	Tokens      []intelTokenRow
+	Downloads   []intelDownload
+	PairingCode string
 }
 
 type channelRow struct {

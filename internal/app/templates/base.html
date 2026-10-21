@@ -102,7 +102,7 @@
         <summary data-tip="Intel"><span class="nav-icon" aria-hidden="true"><svg class="nav-icon-svg nav-icon-intel" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="url(#nav-glyph-gradient)" stroke-width="2"><circle cx="12" cy="12" r="7.4"/><circle cx="12" cy="12" r="3.6"/></g><circle cx="12" cy="12" r="1.35" fill="url(#nav-glyph-gradient)"/></svg></span><span class="nav-label">Intel</span></summary>
         <div class="menu">
           {{range index .NavLinks "intel"}}<a href="{{.Href}}"{{if .Active}} class="active"{{end}}>{{.Label}}</a>
-          {{end}}<a href="http://127.0.0.1:47611/open" data-axon-link hidden rel="noopener">EveSynapse Axon</a>
+          {{end}}{{if .AxonPaired}}<a href="http://127.0.0.1:47611/open" rel="noopener">EveSynapse Axon</a>{{end}}
         </div>
       </details>
       {{end}}

@@ -80,6 +80,13 @@
   // other way in (a name, the search, the index) is unconditional,
   // and zooming back out of a region always leaves it.
   function zoomEntryAllowed(prefOn) { return !!prefOn; }
+  // The mousewheel always zooms about the cursor, never pans:
+  // wheel up (negative delta) zooms in, wheel down zooms out. A
+  // pinch (browsers send it as a wheel with ctrlKey set) zooms
+  // faster. Panning stays on drag and the arrow/WASD keys.
+  function wheelZoomFactor(dy, pinch) {
+    return Math.exp(-dy * (pinch ? 0.012 : 0.0024));
+  }
 
   // --- Graph: derived once per payload ---
   function prepare(P) {
@@ -2901,38 +2908,16 @@
       }
       if (sel >= 0) select(-1);
     }
-    // The wheel. A mouse wheel zooms about the cursor; a touchpad's
-    // two-finger scroll pans; a touchpad pinch (which browsers send
-    // as a wheel with ctrlKey set) zooms. A mouse wheel moves in
-    // whole notches (deltaMode lines, or the legacy wheelDeltaY in
-    // multiples of 120); a touchpad streams small pixel deltas,
-    // often sideways too, and a stream keeps its first reading so
-    // one gesture never switches halfway.
-    var padUntil = 0;
-    function isTouchpad(e, dx, dy) {
-      if (e.deltaMode !== 0) return false;
-      var now = performance.now();
-      var pad = dx !== 0 ||
-        (typeof e.wheelDeltaY === "number" && e.wheelDeltaY !== 0 ? e.wheelDeltaY === -3 * e.deltaY || Math.abs(e.wheelDeltaY) % 120 !== 0
-          : Math.abs(dy) < 40 || dy % 1 !== 0);
-      if (now < padUntil) pad = true;
-      if (pad) padUntil = now + 90;
-      return pad;
-    }
+    // The wheel always zooms about the cursor (wheelZoomFactor);
+    // it never pans. Guessing mouse-vs-touchpad from the delta
+    // misread smooth-scroll mice as touchpads and slid the map
+    // around instead of zooming, so there is no guess any more.
     function onWheel(e) {
       e.preventDefault();
       var p = pt(e);
-      var dx = e.deltaX, dy = e.deltaY;
-      if (e.deltaMode === 1) { dx *= 16; dy *= 16; } else if (e.deltaMode === 2) { dx *= ch; dy *= ch; }
-      if (e.ctrlKey) { chaseZoom(p[0], p[1], Math.exp(-dy * 0.012)); return; }
-      if (isTouchpad(e, dx, dy)) {
-        stopMotion();
-        cam.x += dx / cam.k;
-        cam.y += dy / cam.k;
-        schedule();
-        return;
-      }
-      chaseZoom(p[0], p[1], Math.exp(-dy * 0.0024));
+      var dy = e.deltaY;
+      if (e.deltaMode === 1) { dy *= 16; } else if (e.deltaMode === 2) { dy *= ch; }
+      chaseZoom(p[0], p[1], wheelZoomFactor(dy, e.ctrlKey));
     }
     // Safari sends its trackpad pinch as gesture events.
     var gestureScale = 1;
@@ -3412,7 +3397,7 @@
 
   // Exposed for the node tests only (jstest/map_test.js).
   if (typeof module !== "undefined" && module.exports) {
-    module.exports = { secRounded: secRounded, secTier: secTier, secText: secText, prepare: prepare, regionLabelAlpha: regionLabelAlpha, zoomEntryAllowed: zoomEntryAllowed,
+    module.exports = { secRounded: secRounded, secTier: secTier, secText: secText, prepare: prepare, regionLabelAlpha: regionLabelAlpha, zoomEntryAllowed: zoomEntryAllowed, wheelZoomFactor: wheelZoomFactor,
       joinLayers: joinLayers, heatT: heatT, allianceHue: allianceHue, threatLevel: threatLevel,
       routeCost: routeCost, planRoute: planRoute, routeSummary: routeSummary, joinIntel: joinIntel,
       jumpRange: jumpRange, joinJump: joinJump, jumpNeighbours: jumpNeighbours, jumpFatigue: jumpFatigue };

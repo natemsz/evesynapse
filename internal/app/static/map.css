@@ -829,6 +829,7 @@ html.map-full-open .page-body { -webkit-backdrop-filter: none; backdrop-filter: 
 .map-data-sw.industry { border: 2px solid var(--map-d-industry); box-sizing: border-box; }
 .map-data-sw.structures { background: var(--map-d-structures); border-radius: 1px; }
 .map-data-sw.posted { border: 2px dashed var(--map-d-posted); box-sizing: border-box; }
+.map-data-sw.watched { border: 2px solid var(--map-camp); box-sizing: border-box; }
 .map-data-sw.heat { background: linear-gradient(90deg, var(--map-heat-lo), var(--map-heat-hi), var(--map-heat-core)); border-radius: 2px; width: 0.9rem; }
 /* A layer chip a data heat layer stands in for. */
 .map-layers button.off { opacity: 0.35; }

@@ -2,6 +2,63 @@
 {{define "pagetitle"}}{{if .Pilot}}{{template "pilot-title" .Pilot}}{{end}}{{end}}
 {{define "content"}}
 {{if .Pilot}}{{template "pilot-body" .Pilot}}{{end}}
+{{with .PilotIntel}}{{template "pilot-intel" .}}{{end}}
+{{end}}
+
+{{/* The pilot's doings (pilot_intel.go): public kills from our
+     killboard for anyone; for a signed-in reader, their intel
+     channels' reports and their own scans naming the pilot, and the
+     channels' known-hostiles lists. */}}
+{{define "pilot-intel"}}
+<section class="pi" aria-labelledby="pi-h">
+  <h2 id="pi-h">Activity <small class="muted">public kills, last 90 days</small></h2>
+  {{if .Any}}
+  <div class="pi-stats">
+    <div class="pi-stat"><span class="pi-v">{{.Kills}}</span><span class="pi-l">kills{{if .Solo}} · {{.Solo}} solo{{end}}</span></div>
+    <div class="pi-stat"><span class="pi-v">{{.Losses}}</span><span class="pi-l">losses</span></div>
+    {{if .ISK}}<div class="pi-stat"><span class="pi-v">{{.ISK}}</span><span class="pi-l">ISK destroyed</span></div>{{end}}
+    {{with .LastSeen}}<a class="pi-stat pi-seen" href="/intel/kill/{{.KillmailID}}/"><span class="pi-v"><span class="sec sec-{{.SecTier}}">{{.SecText}}</span> {{.System}}</span><span class="pi-l">last seen {{.Ago}}{{if .Flew}} in a {{.Flew}}{{end}}{{if .Lost}} · lost a {{.Ship}}{{end}}</span></a>{{end}}
+  </div>
+  <div class="pi-cols">
+    {{if .Ships}}<div class="pi-panel"><h3>Flies</h3><ol class="pi-bars">{{range .Ships}}<li><span class="pi-bar" data-w="{{.Pct}}"></span><img src="https://images.evetech.net/types/{{.ID}}/icon?size=32" alt="" width="20" height="20" loading="lazy"><span class="pi-n">{{.Name}}</span><span class="pi-c">{{.N}}</span></li>{{end}}</ol></div>{{end}}
+    {{if .Systems}}<div class="pi-panel"><h3>Hunts in</h3><ol class="pi-bars">{{range .Systems}}<li><span class="pi-bar" data-w="{{.Pct}}"></span><span class="pi-n"><span class="sec sec-{{.SecTier}}">{{.SecText}}</span> <a href="/map/?system={{.ID}}">{{.Name}}</a></span><span class="pi-c">{{.N}} <small class="muted">{{.Ago}}</small></span></li>{{end}}</ol></div>{{end}}
+  </div>
+  {{if .Hours}}<div class="pi-panel">
+    <h3>Active hours <small class="muted">{{.Peak}}</small></h3>
+    <ol class="pi-hours" aria-label="Kills by hour, EVE time">{{range .Hours}}<li title="{{printf "%02d" .Hour}}:00 EVE · {{.N}}"><span class="pi-hour" data-w="{{.Pct}}"></span></li>{{end}}</ol>
+    <p class="pi-hours-axis muted"><span>00</span><span>06</span><span>12</span><span>18</span><span>24</span></p>
+  </div>{{end}}
+  {{if .Companions}}<div class="pi-panel">
+    <h3>Flies with</h3>
+    <ul class="pi-mates">{{range .Companions}}<li><a href="/pilot/?character={{.ID}}"><img src="https://images.evetech.net/characters/{{.ID}}/portrait?size=32" alt="" width="24" height="24" loading="lazy"> {{.Name}}</a> <small class="muted">{{if .AllianceName}}{{.AllianceName}}{{else}}{{.CorpName}}{{end}} · {{.N}}</small></li>{{end}}</ul>
+  </div>{{end}}
+  {{if .Recent}}<div class="pi-panel">
+    <h3>Latest kills and losses <a class="pi-more" href="/intel/kills/?character={{.CharacterID}}">All</a></h3>
+    <ul class="pi-kills">{{range .Recent}}<li class="{{if .Lost}}lost{{end}}"><a href="/intel/kill/{{.KillmailID}}/"><img src="https://images.evetech.net/types/{{.ShipTypeID}}/icon?size=32" alt="" width="24" height="24" loading="lazy"> {{if .Lost}}Lost a {{.Ship}}{{else}}Killed a {{.Ship}}{{end}}</a> <small class="muted"><span class="sec sec-{{.SecTier}}">{{.SecText}}</span> {{.System}} · {{.Ago}}{{if .Value}} · {{.Value}}{{end}}</small></li>{{end}}</ul>
+  </div>{{end}}
+  {{else}}
+  <p class="muted">No public kills or losses on our killboard in the last 90 days.</p>
+  {{end}}
+
+  {{if .SignedIn}}
+  <h2 class="pi-h2">Your intel</h2>
+  {{if .Watched}}<p class="pi-watched">Known hostile in {{range $i, $w := .Watched}}{{if $i}}, {{end}}<strong>{{$w.Channel}}</strong>{{if $w.Note}} <span class="muted">({{$w.Note}})</span>{{end}}{{end}}.</p>
+  <div class="pi-unwatch">{{range .Watched}}<form method="post" action="/pilot/watch"><input type="hidden" name="character" value="{{$.CharacterID}}"><input type="hidden" name="channel" value="{{.ChannelID}}"><input type="hidden" name="remove" value="1"><button type="submit" class="btn small">Off {{.Channel}}</button></form>{{end}}</div>{{end}}
+  {{if .CanWatch}}<form class="pi-watch" method="post" action="/pilot/watch">
+    <input type="hidden" name="character" value="{{.CharacterID}}">
+    <label><span>Add to known hostiles</span><select name="channel">{{range .CanWatch}}<option value="{{.ID}}">{{.Name}}</option>{{end}}</select></label>
+    <label><span>Note <span class="muted">(optional)</span></span><input type="text" name="note" maxlength="140" placeholder="Cloaky camper, hunts in a Sabre"></label>
+    <button type="submit" class="btn small">Watch</button>
+  </form>{{end}}
+  {{if .Reports}}<div class="pi-panel"><h3>Named in your channels <small class="muted">last 7 days</small></h3>
+    <ul class="pi-kills">{{range .Reports}}<li><span class="sec sec-{{.SecTier}}">{{.SecText}}</span> <strong>{{.System}}</strong> {{.Text}} <small class="muted">{{.Channel}} · {{.By}} · {{.Ago}}</small></li>{{end}}</ul>
+  </div>{{end}}
+  {{if .Scans}}<div class="pi-panel"><h3>In your local scans</h3>
+    <ul class="pi-kills">{{range .Scans}}<li><a href="/intel/scan/{{.ID}}/">{{if .System}}<span class="sec sec-{{.SecTier}}">{{.SecText}}</span> {{.System}}{{else}}Local scan{{end}}</a> <small class="muted">{{.Ago}}</small></li>{{end}}</ul>
+  </div>{{end}}
+  {{if not (or .Watched .CanWatch .Reports .Scans)}}<p class="muted">Nothing in your channels or scans names this pilot. <a href="/intel/channels/">Intel channels</a></p>{{end}}
+  {{end}}
+</section>
 {{end}}
 
 {{define "pilot-title"}}

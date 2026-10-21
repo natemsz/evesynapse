@@ -249,7 +249,9 @@ type channelView struct {
 	Grants      []grantView
 	Groups      []groupChoice
 	PrefillSys  string
-	Error       string
+	// Watch is the channel's known hostiles (pilot_intel.go).
+	Watch []watchRow
+	Error string
 }
 
 // --- Pages ---
@@ -334,6 +336,7 @@ func (app *Application) handleChannel(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	v.Reports = app.channelReports(ctx, id, c.ID, 0, beforeAt, beforeID, intelFeedPage)
+	v.Watch = app.channelWatch(ctx, c.ID)
 	if len(v.Reports) == intelFeedPage {
 		last := v.Reports[len(v.Reports)-1]
 		v.Older = fmt.Sprintf("/intel/channels/%d/?before=%d.%d", c.ID, last.At, last.ID)

@@ -137,6 +137,11 @@ html[data-theme="light"] .ch { --ch-hostile: #b0302a; --ch-clear: #2f8f46; }
 .ch-stack .btn { align-self: flex-start; }
 .ch-danger { margin-top: 0.9rem; padding-top: 0.8rem; border-top: 1px solid var(--box-edge); }
 
+/* --- Known hostiles --- */
+.ch-hostiles li { flex-wrap: wrap; }
+.ch-hostiles img { border-radius: 50%; }
+.ch-seen { font-size: 0.82rem; white-space: nowrap; }
+
 /* --- The log watcher --- */
 .ch-watch p { margin: 0 0 0.6rem; }
 .ch-dl { display: flex; flex-wrap: wrap; gap: 0.4rem; }

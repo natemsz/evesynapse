@@ -130,6 +130,11 @@ func (app *Application) handlePilot(w http.ResponseWriter, r *http.Request) {
 
 	app.markGuessHit(ctx, pageWantPilot, id, 0)
 	data.Pilot = app.loadPilotView(ctx, id)
+	pname := ""
+	if data.Pilot != nil {
+		pname = data.Pilot.Name
+	}
+	data.PilotIntel = app.loadPilotIntel(ctx, id, pname)
 	if data.Pilot != nil && data.Pilot.State == "loading" {
 		app.notePageWant(ctx, pageWantPilot, id, 0)
 	}

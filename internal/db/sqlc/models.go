@@ -425,6 +425,14 @@ type IntelToken struct {
 	LastUsedAt sql.NullTime `json:"last_used_at"`
 }
 
+type IntelWatch struct {
+	ChannelID   int64     `json:"channel_id"`
+	CharacterID int64     `json:"character_id"`
+	Note        string    `json:"note"`
+	AddedBy     int64     `json:"added_by"`
+	AddedAt     time.Time `json:"added_at"`
+}
+
 type ItemName struct {
 	ItemID int64  `json:"item_id"`
 	Name   string `json:"name"`

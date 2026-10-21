@@ -64,3 +64,39 @@ test("region names stay visible and zoom entry needs the preference", () => {
   assert.strictEqual(map.zoomEntryAllowed(undefined), false);
   assert.strictEqual(map.zoomEntryAllowed(true), true);
 });
+
+test("live layers join onto the map's systems", () => {
+  const P = {
+    v: 1,
+    regions: [{ id: 10, name: "Alpha", x: 0, y: 0, w: 1000, h: 1000 }],
+    cons: [{ id: 1, name: "A1", r: 0 }],
+    sys: {
+      id: [101, 102, 103], n: ["One", "Two", "Three"], x: [0, 10, 20], y: [0, 0, 0],
+      s: [0.9, -0.3, -0.5], r: [0, 0, 0], c: [0, 0, 0], rx: [0, 500, 1000], ry: [0, 0, 0], f: [0, 0, 0]
+    },
+    gates: [0, 1, 1, 2]
+  };
+  const L = {
+    kills: { at: 1, id: [102, 999], ship: [3, 9], pod: [1, 9], npc: [0, 9] },
+    jumps: { at: 1, id: [101], n: [500] },
+    sov: { at: 1, id: [102, 103], a: [0, -1], f: [0, 500010] },
+    alliances: [{ id: 99003581, name: "Fraternity." }],
+    fw: { at: 1, id: [101], occ: [500001], own: [500004], state: ["vulnerable"], pct: [100] },
+    inc: { at: 1, list: [{ cons: 1, staging: 103, sys: [102, 103], state: "established", inf: 0.5, boss: false, f: 500019 }] },
+    factions: [{ id: 500001, name: "Caldari State" }]
+  };
+  const J = map.joinLayers(P, L);
+  assert.deepStrictEqual(Array.from(J.kills), [0, 4, 0], "ship + pod, unknown systems dropped");
+  assert.strictEqual(J.max.kills, 4);
+  assert.strictEqual(J.max.jumps, 500);
+  assert.deepStrictEqual(Array.from(J.sovA), [-1, 0, -1]);
+  assert.strictEqual(J.sovF[2], 500010);
+  assert.deepStrictEqual(J.allianceMembers, [[1]]);
+  assert.strictEqual(J.fwState[0], 3, "vulnerable");
+  assert.deepStrictEqual(Array.from(J.inc), [0, 1, 2], "infested, and staging wins");
+  assert.strictEqual(J.factions[500001], "Caldari State");
+  assert.strictEqual(map.heatT(0, 10), 0);
+  assert.strictEqual(map.heatT(10, 10), 1);
+  assert.ok(map.heatT(1, 1000) > 0 && map.heatT(1, 1000) < 0.2, "log scale keeps a lone kill visible but faint");
+  assert.notStrictEqual(map.allianceHue(99003581), map.allianceHue(99003582), "neighbouring IDs, different hues");
+});

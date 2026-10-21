@@ -180,6 +180,11 @@ const (
 	GlobalFWSystems  = "fw_systems" // GET /fw/systems/
 	GlobalFWStats    = "fw_stats"   // GET /fw/stats/
 	GlobalFactions   = "factions"   // GET /universe/factions/
+	// The map's live layers (schema 073): the last hour's kills
+	// and jumps per system, and who holds each null-sec system.
+	GlobalSystemKills = "system_kills" // GET /universe/system_kills/
+	GlobalSystemJumps = "system_jumps" // GET /universe/system_jumps/
+	GlobalSovMap      = "sov_map"      // GET /sovereignty/map/
 )
 
 // CorpJournalKind is the snapshot kind holding wallet division d's
@@ -1270,6 +1275,32 @@ type Faction struct {
 
 // Factions is GET /universe/factions/.
 type Factions []Faction
+
+// SystemKills is GET /universe/system_kills/: the last hour's
+// kills per system (only systems with any are listed).
+type SystemKills []struct {
+	SystemID  int64 `json:"system_id"`
+	ShipKills int64 `json:"ship_kills"`
+	PodKills  int64 `json:"pod_kills"`
+	NPCKills  int64 `json:"npc_kills"`
+}
+
+// SystemJumps is GET /universe/system_jumps/: the last hour's
+// jumps into each system (only systems with any are listed).
+type SystemJumps []struct {
+	SystemID  int64 `json:"system_id"`
+	ShipJumps int64 `json:"ship_jumps"`
+}
+
+// SovMap is GET /sovereignty/map/: each system's holder. Null-sec
+// systems name an alliance (and its holding corporation) when one
+// holds them; NPC null-sec and empire space name a faction.
+type SovMap []struct {
+	SystemID      int64 `json:"system_id"`
+	AllianceID    int64 `json:"alliance_id"`
+	CorporationID int64 `json:"corporation_id"`
+	FactionID     int64 `json:"faction_id"`
+}
 
 // Constellation is GET /universe/constellations/{id}/ (the slice
 // EveSynapse consumes).
@@ -2539,6 +2570,12 @@ func globalSnapshotPath(kind string) string {
 		return "/fw/stats/"
 	case GlobalFactions:
 		return "/universe/factions/"
+	case GlobalSystemKills:
+		return "/universe/system_kills/"
+	case GlobalSystemJumps:
+		return "/universe/system_jumps/"
+	case GlobalSovMap:
+		return "/sovereignty/map/"
 	}
 	return ""
 }

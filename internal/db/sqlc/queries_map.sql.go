@@ -10,6 +10,40 @@ import (
 	"time"
 )
 
+const getMapLayersMeta = `-- name: GetMapLayersMeta :one
+SELECT sources, etag, built_at FROM map_layers WHERE id = 1
+`
+
+type GetMapLayersMetaRow struct {
+	Sources string    `json:"sources"`
+	Etag    string    `json:"etag"`
+	BuiltAt time.Time `json:"built_at"`
+}
+
+// The live layers payload (schema 073).
+func (q *Queries) GetMapLayersMeta(ctx context.Context) (GetMapLayersMetaRow, error) {
+	row := q.db.QueryRowContext(ctx, getMapLayersMeta)
+	var i GetMapLayersMetaRow
+	err := row.Scan(&i.Sources, &i.Etag, &i.BuiltAt)
+	return i, err
+}
+
+const getMapLayersPayload = `-- name: GetMapLayersPayload :one
+SELECT etag, payload FROM map_layers WHERE id = 1
+`
+
+type GetMapLayersPayloadRow struct {
+	Etag    string `json:"etag"`
+	Payload []byte `json:"payload"`
+}
+
+func (q *Queries) GetMapLayersPayload(ctx context.Context) (GetMapLayersPayloadRow, error) {
+	row := q.db.QueryRowContext(ctx, getMapLayersPayload)
+	var i GetMapLayersPayloadRow
+	err := row.Scan(&i.Etag, &i.Payload)
+	return i, err
+}
+
 const getMapUniverseMeta = `-- name: GetMapUniverseMeta :one
 SELECT version, etag, systems, built_at FROM map_universe WHERE id = 1
 `
@@ -205,6 +239,32 @@ func (q *Queries) ListMapSystems(ctx context.Context) ([]ListMapSystemsRow, erro
 		return nil, err
 	}
 	return items, nil
+}
+
+const upsertMapLayers = `-- name: UpsertMapLayers :exec
+INSERT INTO map_layers (id, sources, etag, payload, built_at)
+VALUES (1, $1::text, $2::text, $3::bytea,
+    $4::timestamptz)
+ON CONFLICT (id) DO UPDATE SET
+    sources = EXCLUDED.sources, etag = EXCLUDED.etag,
+    payload = EXCLUDED.payload, built_at = EXCLUDED.built_at
+`
+
+type UpsertMapLayersParams struct {
+	Sources string    `json:"sources"`
+	Etag    string    `json:"etag"`
+	Payload []byte    `json:"payload"`
+	BuiltAt time.Time `json:"built_at"`
+}
+
+func (q *Queries) UpsertMapLayers(ctx context.Context, arg UpsertMapLayersParams) error {
+	_, err := q.db.ExecContext(ctx, upsertMapLayers,
+		arg.Sources,
+		arg.Etag,
+		arg.Payload,
+		arg.BuiltAt,
+	)
+	return err
 }
 
 const upsertMapUniverse = `-- name: UpsertMapUniverse :exec

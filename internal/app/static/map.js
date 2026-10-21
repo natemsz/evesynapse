@@ -152,6 +152,90 @@
     return P._g;
   }
 
+  // --- Live layers: the pure part ---
+
+  /**
+   * The live layers payload (Go: mapLayersPayload, map_layers.go).
+   * Systems are keyed by ID; joinLayers maps them onto the universe
+   * payload's indices. Every layer carries at: its fetch time (unix).
+   * @typedef {Object} LayersPayload
+   * @property {{at:number,id:number[],ship:number[],pod:number[],npc:number[]}} kills
+   * @property {{at:number,id:number[],n:number[]}} jumps
+   * @property {{at:number,id:number[],a:number[],f:number[]}} sov  a: alliance index (-1 none); f: NPC faction
+   * @property {{id:number,name:string}[]} alliances
+   * @property {{at:number,id:number[],occ:number[],own:number[],state:string[],pct:number[]}} fw
+   * @property {{at:number,list:{cons:number,staging:number,sys:number[],state:string,inf:number,boss:boolean,f:number}[]}} inc
+   * @property {{id:number,name:string}[]} factions
+   */
+
+  var FW_STATE = { uncontested: 1, contested: 2, vulnerable: 3, captured: 4 };
+
+  // joinLayers maps a layers payload onto per-system arrays indexed
+  // like the universe payload, with each heat layer's maximum.
+  function joinLayers(P, L) {
+    var G = prepare(P), n = G.n, i, j;
+    var J = { at: {}, max: {}, factions: {}, alliances: L.alliances || [], incs: [] };
+    function each(part, name, fn) {
+      part = part || {};
+      J.at[name] = part.at || 0;
+      var ids = part.id || [];
+      for (j = 0; j < ids.length; j++) {
+        i = G.byID[ids[j]];
+        if (i !== undefined) fn(i, j, part);
+      }
+    }
+    J.ship = new Int32Array(n); J.pod = new Int32Array(n); J.npc = new Int32Array(n); J.kills = new Int32Array(n);
+    each(L.kills, "kills", function (i, j, p) {
+      J.ship[i] = p.ship[j]; J.pod[i] = p.pod[j]; J.npc[i] = p.npc[j];
+      J.kills[i] = p.ship[j] + p.pod[j];
+    });
+    J.at.npc = J.at.kills;
+    J.jumps = new Int32Array(n);
+    each(L.jumps, "jumps", function (i, j, p) { J.jumps[i] = p.n[j]; });
+    J.sovA = new Int16Array(n).fill(-1); J.sovF = new Float64Array(n);
+    J.allianceMembers = J.alliances.map(function () { return []; });
+    each(L.sov, "sov", function (i, j, p) {
+      J.sovA[i] = p.a[j];
+      J.sovF[i] = p.f[j];
+      if (p.a[j] >= 0 && J.allianceMembers[p.a[j]]) J.allianceMembers[p.a[j]].push(i);
+    });
+    J.fwOcc = new Float64Array(n); J.fwOwn = new Float64Array(n); J.fwState = new Uint8Array(n); J.fwPct = new Uint8Array(n);
+    each(L.fw, "fw", function (i, j, p) {
+      J.fwOcc[i] = p.occ[j]; J.fwOwn[i] = p.own[j];
+      J.fwState[i] = FW_STATE[p.state[j]] || 1; J.fwPct[i] = p.pct[j];
+    });
+    J.inc = new Uint8Array(n); J.incOf = new Int16Array(n).fill(-1);
+    var inc = L.inc || {};
+    J.at.inc = inc.at || 0;
+    (inc.list || []).forEach(function (x, xi) {
+      J.incs.push(x);
+      (x.sys || []).forEach(function (id) {
+        var s = G.byID[id];
+        if (s !== undefined) { J.inc[s] = Math.max(J.inc[s], 1); J.incOf[s] = xi; }
+      });
+      var st = G.byID[x.staging];
+      if (st !== undefined) { J.inc[st] = 2; J.incOf[st] = xi; }
+    });
+    (L.factions || []).forEach(function (f) { J.factions[f.id] = f.name; });
+    ["kills", "npc", "jumps"].forEach(function (k) {
+      var arr = J[k], m = 0;
+      for (i = 0; i < n; i++) if (arr[i] > m) m = arr[i];
+      J.max[k] = m;
+    });
+    return J;
+  }
+
+  // heatT places a value on its layer's log scale, 0..1.
+  function heatT(v, max) {
+    return v <= 0 || max <= 0 ? 0 : Math.log(1 + v) / Math.log(1 + max);
+  }
+
+  // allianceHue gives every alliance its own stable hue: neighbours
+  // with near IDs still land far apart on the wheel.
+  function allianceHue(id) {
+    return (Math.imul(id | 0, 2654435761) >>> 0) % 360;
+  }
+
   // Stub length past a region's edge system, in region-frame units.
   var STUB = 70;
 
@@ -209,10 +293,37 @@
         region: tok("--map-region", "rgba(255,210,122,0.75)"),
         cons: tok("--map-cons", "rgba(201,160,106,0.45)"),
         accent: tok("--map-accent", "#ff6a1a"),
-        halo: tok("--map-halo", "rgba(10,7,4,0.85)")
+        halo: tok("--map-halo", "rgba(10,7,4,0.85)"),
+        // The live layers.
+        dim: tok("--map-dim", "rgba(200,180,160,0.28)"),
+        heatLo: rgbOf(tok("--map-heat-lo", "#7a2a0c")),
+        heatHi: rgbOf(tok("--map-heat-hi", "#ff6a1a")),
+        heatCore: rgbOf(tok("--map-heat-core", "#ffe2a8")),
+        heatBlend: tok("--map-heat-blend", "lighter"),
+        npc: tok("--map-npc", "#9a8f86"),
+        unheld: tok("--map-unheld", "rgba(200,180,160,0.35)"),
+        sovL: tok("--map-sov-l", "62%"),
+        inc: tok("--map-inc", "#c64bd6"),
+        incStage: tok("--map-inc-staging", "#ff4fd8"),
+        faction: {
+          500001: tok("--map-f-caldari", "#3d8bff"),
+          500002: tok("--map-f-minmatar", "#d8452f"),
+          500003: tok("--map-f-amarr", "#e8b54a"),
+          500004: tok("--map-f-gallente", "#3fbf7a")
+        }
       };
       font = cs.fontFamily || font;
       widthCache = {};
+    }
+    // rgbOf normalizes any CSS color to [r, g, b] through the
+    // canvas's own parser.
+    function rgbOf(c) {
+      ctx.fillStyle = "#000";
+      ctx.fillStyle = c;
+      var v = ctx.fillStyle;
+      if (v.charAt(0) === "#") return [parseInt(v.substr(1, 2), 16), parseInt(v.substr(3, 2), 16), parseInt(v.substr(5, 2), 16)];
+      var m = v.match(/[\d.]+/g) || [0, 0, 0];
+      return [+m[0], +m[1], +m[2]];
     }
 
     // --- Views ---
@@ -417,21 +528,25 @@
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       if (mode !== "universe") drawConstellations(k, ox, oy);
 
-      // Systems, batched by security color.
+      // Systems: by security, or by the live layer showing.
       var r = radius(), list = visible(), n = list ? list.length : G.n;
       var pad = 40;
-      for (t = 0; t <= 10; t++) {
-        ctx.beginPath();
-        for (var m = 0; m < n; m++) {
-          i = list ? list[m] : m;
-          if (G.tier[i] !== t) continue;
-          var sx = wx(i) * k + ox, sy = wy(i) * k + oy;
-          if (sx < -pad || sy < -pad || sx > cw + pad || sy > ch + pad) continue;
-          ctx.moveTo(sx + r, sy);
-          ctx.arc(sx, sy, r, 0, Math.PI * 2);
+      if (layer === "security" || !LY) {
+        for (t = 0; t <= 10; t++) {
+          ctx.beginPath();
+          for (var m = 0; m < n; m++) {
+            i = list ? list[m] : m;
+            if (G.tier[i] !== t) continue;
+            var sx = wx(i) * k + ox, sy = wy(i) * k + oy;
+            if (sx < -pad || sy < -pad || sx > cw + pad || sy > ch + pad) continue;
+            ctx.moveTo(sx + r, sy);
+            ctx.arc(sx, sy, r, 0, Math.PI * 2);
+          }
+          ctx.fillStyle = colors.sec[t];
+          ctx.fill();
         }
-        ctx.fillStyle = colors.sec[t];
-        ctx.fill();
+      } else {
+        drawLayer(k, ox, oy, r, list, n, pad);
       }
 
       // Ghost ends of the region's exits.
@@ -534,6 +649,7 @@
           if (box) labelBoxes.push({ r: i, b: box });
         });
         ctx.globalAlpha = 1;
+        layerLabels(k, ox, oy, label, inPlaceFirst);
         // System names once the picture opens up.
         if (f > 6) {
           var vis = [];
@@ -550,7 +666,8 @@
         return;
       }
 
-      // Tactical: every system, then the exits.
+      // Tactical: the layer's own labels, every system, the exits.
+      layerLabels(k, ox, oy, label, inPlaceFirst);
       inPlaceFirst(G.membersPrio[region], function (s) { return "t" + s; }, function (s) {
         label(S.n[s], S.rx[s] * k + ox, S.ry[s] * k + oy + r + 3, 12, colors.label, null, false, "t" + s);
       });
@@ -565,6 +682,279 @@
         label(S.n[to] + " · " + P.regions[S.r[to]].name, g[0] * k + ox, g[1] * k + oy + r + 2, 10.5, colors.labelDim, null, false, "x" + to);
       });
       shownLabels = nextShown;
+    }
+
+    // --- Live layers ---
+    // layer is what the systems are colored by; LY is the joined
+    // layers payload (joinLayers), null until it loads. Heat layers
+    // (kills, NPC kills, jumps) dim the map and glow each active
+    // system by its share of the hour's busiest, on a log scale;
+    // sovereignty colors by holder; Faction Warfare by occupier with
+    // its contest progress as an arc; incursions mark infested
+    // systems and ring the staging system.
+    var layer = "security", LY = null;
+    // The layer the URL asked for, read before anything rewrites the
+    // URL, and kept in it until the layers payload arrives.
+    var wantLayer = new URLSearchParams(location.search).get("layer");
+    var HEAT = { kills: 1, npc: 1, jumps: 1 };
+    var heatOrder = {};
+
+    function heatColor(t, a) {
+      var lo = colors.heatLo, hi = colors.heatHi, core = colors.heatCore, c;
+      if (t < 0.75) {
+        var u = t / 0.75;
+        c = [lo[0] + (hi[0] - lo[0]) * u, lo[1] + (hi[1] - lo[1]) * u, lo[2] + (hi[2] - lo[2]) * u];
+      } else {
+        var w = (t - 0.75) / 0.25;
+        c = [hi[0] + (core[0] - hi[0]) * w, hi[1] + (core[1] - hi[1]) * w, hi[2] + (core[2] - hi[2]) * w];
+      }
+      return "rgba(" + Math.round(c[0]) + "," + Math.round(c[1]) + "," + Math.round(c[2]) + "," + a + ")";
+    }
+    function allianceColor(ai) {
+      var al = LY.alliances[ai];
+      return "hsl(" + allianceHue(al ? al.id : ai) + ",68%," + colors.sovL + ")";
+    }
+
+    function drawLayer(k, ox, oy, r, list, n, pad) {
+      var i, m, sx, sy;
+      function on(i) {
+        sx = wx(i) * k + ox; sy = wy(i) * k + oy;
+        return !(sx < -pad || sy < -pad || sx > cw + pad || sy > ch + pad);
+      }
+      function batch(color, rr, test) {
+        ctx.beginPath();
+        for (m = 0; m < n; m++) {
+          i = list ? list[m] : m;
+          if (!test(i) || !on(i)) continue;
+          ctx.moveTo(sx + rr, sy);
+          ctx.arc(sx, sy, rr, 0, Math.PI * 2);
+        }
+        ctx.fillStyle = color;
+        ctx.fill();
+      }
+      if (HEAT[layer]) {
+        var vals = LY[layer], max = LY.max[layer];
+        batch(colors.dim, r * 0.8, function (i) { return vals[i] <= 0; });
+        // Quietest first, so the hottest glow on top.
+        var order = heatOrder[layer];
+        if (!order) {
+          order = [];
+          for (i = 0; i < G.n; i++) if (vals[i] > 0) order.push(i);
+          order.sort(function (a, b) { return vals[a] - vals[b]; });
+          heatOrder[layer] = order;
+        }
+        var grow = mode === "universe" ? Math.min(1 + (cam.k / fitK() - 1) * 0.15, 3) : 1.6;
+        ctx.globalCompositeOperation = colors.heatBlend;
+        for (m = 0; m < order.length; m++) {
+          i = order[m];
+          if (mode !== "universe" && S.r[i] !== region) continue;
+          if (!on(i)) continue;
+          var t = heatT(vals[i], max), rr = r + (2 + 13 * t) * grow;
+          ctx.beginPath();
+          ctx.arc(sx, sy, rr, 0, Math.PI * 2);
+          ctx.fillStyle = heatColor(t, 0.18 + 0.3 * t);
+          ctx.fill();
+        }
+        ctx.globalCompositeOperation = "source-over";
+        for (m = 0; m < order.length; m++) {
+          i = order[m];
+          if (mode !== "universe" && S.r[i] !== region) continue;
+          if (!on(i)) continue;
+          ctx.beginPath();
+          ctx.arc(sx, sy, r + 0.6, 0, Math.PI * 2);
+          ctx.fillStyle = heatColor(heatT(vals[i], max), 1);
+          ctx.fill();
+        }
+        return;
+      }
+      if (layer === "sov") {
+        batch(colors.unheld, r * 0.8, function (i) { return LY.sovA[i] < 0 && !LY.sovF[i]; });
+        batch(colors.npc, r, function (i) { return LY.sovA[i] < 0 && LY.sovF[i] > 0; });
+        for (var a = 0; a < LY.alliances.length; a++) {
+          var mem = LY.allianceMembers[a];
+          if (!mem.length) continue;
+          ctx.beginPath();
+          for (m = 0; m < mem.length; m++) {
+            i = mem[m];
+            if ((mode !== "universe" && S.r[i] !== region) || !on(i)) continue;
+            ctx.moveTo(sx + r * 1.15, sy);
+            ctx.arc(sx, sy, r * 1.15, 0, Math.PI * 2);
+          }
+          ctx.fillStyle = allianceColor(a);
+          ctx.fill();
+        }
+        return;
+      }
+      if (layer === "fw") {
+        batch(colors.dim, r * 0.8, function (i) { return !LY.fwState[i]; });
+        Object.keys(colors.faction).forEach(function (f) {
+          batch(colors.faction[f], r * 1.2, function (i) { return LY.fwState[i] && LY.fwOcc[i] === +f; });
+        });
+        // Contest progress: an arc around each contested system.
+        ctx.lineWidth = Math.max(1.5, r * 0.5);
+        for (m = 0; m < n; m++) {
+          i = list ? list[m] : m;
+          if (!LY.fwState[i] || LY.fwPct[i] <= 0 || !on(i)) continue;
+          ctx.beginPath();
+          ctx.arc(sx, sy, r * 1.2 + 3, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * LY.fwPct[i] / 100);
+          ctx.strokeStyle = LY.fwState[i] === 3 ? colors.accent : colors.label;
+          ctx.stroke();
+        }
+        return;
+      }
+      if (layer === "inc") {
+        batch(colors.dim, r * 0.8, function (i) { return !LY.inc[i]; });
+        batch(colors.inc, r * 1.4, function (i) { return LY.inc[i] === 1; });
+        batch(colors.incStage, r * 1.8, function (i) { return LY.inc[i] === 2; });
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = colors.incStage;
+        for (m = 0; m < n; m++) {
+          i = list ? list[m] : m;
+          if (LY.inc[i] !== 2 || !on(i)) continue;
+          ctx.beginPath();
+          ctx.arc(sx, sy, r * 1.8 + 5, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+      }
+    }
+
+    // The live layers' own labels, placed before system names:
+    // alliance names over the space they hold, incursion staging
+    // systems by name.
+    function layerLabels(k, ox, oy, label, inPlaceFirst) {
+      if (!LY) return;
+      if (layer === "sov") {
+        var holders = [];
+        for (var a = 0; a < LY.alliances.length; a++) {
+          var mem = LY.allianceMembers[a], cx = 0, cy = 0, c = 0;
+          for (var m = 0; m < mem.length; m++) {
+            var i = mem[m];
+            if (mode !== "universe" && S.r[i] !== region) continue;
+            cx += wx(i); cy += wy(i); c++;
+          }
+          if (c >= (mode === "universe" ? 4 : 2)) holders.push({ a: a, x: cx / c, y: cy / c, c: c });
+        }
+        holders.sort(function (p, q) { return q.c - p.c || p.a - q.a; });
+        inPlaceFirst(holders, function (h) { return "A" + h.a; }, function (h) {
+          var name = LY.alliances[h.a].name || "Alliance " + LY.alliances[h.a].id;
+          label(name, h.x * k + ox, h.y * k + oy - 6, mode === "universe" ? 11 : 12, allianceColor(h.a), "700", false, "A" + h.a);
+        });
+      } else if (layer === "inc") {
+        LY.incs.forEach(function (x) {
+          var s = G.byID[x.staging];
+          if (s === undefined || (mode !== "universe" && S.r[s] !== region)) return;
+          label("Staging · " + S.n[s], wx(s) * k + ox, wy(s) * k + oy + radius() * 1.8 + 8, 12, colors.incStage, "700", true, "I" + s);
+        });
+      }
+    }
+
+    function setLayer(name, quiet) {
+      if (name !== "security" && !LY) name = "security";
+      if (!el.querySelector('[data-map-layer="' + name + '"]')) name = "security";
+      layer = name;
+      el.querySelectorAll("[data-map-layer]").forEach(function (b) {
+        var on = b.getAttribute("data-map-layer") === name;
+        b.setAttribute("aria-checked", on ? "true" : "false");
+        // On a phone the picker scrolls sideways: keep the chosen
+        // chip in view without moving the page.
+        if (on && b.parentNode.scrollWidth > b.parentNode.clientWidth) {
+          var row = b.parentNode;
+          row.scrollLeft = Math.max(0, b.offsetLeft - (row.clientWidth - b.offsetWidth) / 2);
+        }
+      });
+      el.classList.toggle("map-live", name !== "security");
+      try { localStorage.setItem("evesynapse-map-layer", name); } catch (e) { /* private mode */ }
+      renderLegend();
+      updateCard();
+      if (!quiet) syncURL();
+      schedule();
+    }
+
+    function eveTime(unix) {
+      if (!unix) return "";
+      var d = new Date(unix * 1000);
+      return ("0" + d.getUTCHours()).slice(-2) + ":" + ("0" + d.getUTCMinutes()).slice(-2) + " EVE";
+    }
+    var LAYER_TITLES = { kills: "Ship and pod kills, last hour", npc: "NPC kills, last hour", jumps: "Jumps, last hour",
+      sov: "Sovereignty", fw: "Faction Warfare", inc: "Incursions" };
+
+    // The legend for the layer showing: the security swatches for
+    // Security, otherwise a scale or key built here.
+    function renderLegend() {
+      var secLegend = el.querySelector(".map-legend"), box = el.querySelector(".map-layer-legend");
+      secLegend.hidden = layer !== "security";
+      box.hidden = layer === "security";
+      if (layer === "security" || !LY) return;
+      box.textContent = "";
+      var h = root.createElement("p");
+      h.className = "map-layer-title";
+      h.textContent = LAYER_TITLES[layer];
+      box.appendChild(h);
+      function row(cls, color, text) {
+        var p = root.createElement("p");
+        p.className = "map-layer-row";
+        var sw = root.createElement("span");
+        sw.className = "map-layer-sw " + cls;
+        sw.style.background = color;
+        p.appendChild(sw);
+        p.appendChild(root.createTextNode(text));
+        box.appendChild(p);
+      }
+      if (HEAT[layer]) {
+        var bar = root.createElement("p");
+        bar.className = "map-heat";
+        var g = root.createElement("span");
+        g.className = "map-heat-bar";
+        g.style.background = "linear-gradient(to right," + heatColor(0.05, 1) + "," + heatColor(0.75, 1) + "," + heatColor(1, 1) + ")";
+        bar.appendChild(root.createTextNode("1 "));
+        bar.appendChild(g);
+        bar.appendChild(root.createTextNode(" " + LY.max[layer].toLocaleString()));
+        box.appendChild(bar);
+      } else if (layer === "sov") {
+        var held = LY.allianceMembers.filter(function (m) { return m.length; }).length;
+        row("", "hsl(30,68%," + colors.sovL + ")", held + " alliances, each its own color");
+        row("", colors.npc, "NPC factions");
+        row("", colors.unheld, "Unclaimed");
+      } else if (layer === "fw") {
+        [[500003, "Amarr"], [500001, "Caldari"], [500004, "Gallente"], [500002, "Minmatar"]].forEach(function (f) {
+          row("", colors.faction[f[0]], (LY.factions[f[0]] || f[1]).replace(/ (Empire|State|Federation|Republic)$/, ""));
+        });
+        var arc = root.createElement("p");
+        arc.className = "map-layer-row muted";
+        arc.textContent = "Arc: contest progress";
+        box.appendChild(arc);
+      } else if (layer === "inc") {
+        row("", colors.inc, "Infested");
+        row("", colors.incStage, "Staging");
+        if (!LY.incs.length) row("", colors.dim, "No incursions right now");
+      }
+      var at = root.createElement("p");
+      at.className = "map-layer-at muted";
+      at.textContent = LY.at[layer] ? "As of " + eveTime(LY.at[layer]) : "No data yet";
+      box.appendChild(at);
+    }
+
+    // The card's live figures for one system, every layer at once.
+    function liveRows(i) {
+      if (!LY) return [];
+      var rows = [];
+      if (LY.at.kills) rows.push(["Kills, last hour", LY.ship[i] + " ships · " + LY.pod[i] + " pods · " + LY.npc[i] + " NPC"]);
+      if (LY.at.jumps) rows.push(["Jumps, last hour", String(LY.jumps[i])]);
+      if (LY.sovA[i] >= 0) {
+        var al = LY.alliances[LY.sovA[i]];
+        rows.push(["Sovereignty", al.name || "Alliance " + al.id]);
+      } else if (LY.sovF[i] > 0 && G.tier[i] === 0) {
+        rows.push(["Sovereignty", LY.factions[LY.sovF[i]] || "NPC faction"]);
+      }
+      if (LY.fwState[i]) {
+        var st = ["", "Uncontested", "Contested", "Vulnerable", "Captured"][LY.fwState[i]];
+        rows.push(["Faction Warfare", (LY.factions[LY.fwOcc[i]] || "Occupied") + " · " + st + (LY.fwPct[i] ? " " + LY.fwPct[i] + "%" : "")]);
+      }
+      if (LY.incOf[i] >= 0) {
+        var x = LY.incs[LY.incOf[i]];
+        rows.push(["Incursion", (LY.inc[i] === 2 ? "Staging · " : "Infested · ") + x.state + " · " + Math.round(x.inf * 100) + "% influence" + (x.boss ? " · boss" : "")]);
+      }
+      return rows;
     }
 
     // Tactical constellation names: a faint backdrop drawn before
@@ -704,6 +1094,8 @@
       var q = [];
       if (mode !== "universe") q.push("region=" + P.regions[region].id);
       if (sel >= 0) q.push("system=" + S.id[sel]);
+      var shownLayer = LY ? layer : wantLayer || layer;
+      if (shownLayer && shownLayer !== "security") q.push("layer=" + encodeURIComponent(shownLayer));
       var url = location.pathname + (q.length ? "?" + q.join("&") : "") + location.hash;
       try { history.replaceState(history.state, "", url); } catch (e) { /* sandboxed */ }
     }
@@ -748,6 +1140,17 @@
       });
       card.querySelector("[data-map-system-page]").href = "/system/?system=" + S.id[i];
       card.querySelector("[data-map-enter]").hidden = mode !== "universe";
+      var live = card.querySelector(".map-card-live"), rows = liveRows(i);
+      live.textContent = "";
+      live.hidden = !rows.length;
+      rows.forEach(function (rw) {
+        var d = root.createElement("div"), dt = root.createElement("dt"), dd = root.createElement("dd");
+        dt.textContent = rw[0];
+        dd.textContent = rw[1];
+        d.appendChild(dt);
+        d.appendChild(dd);
+        live.appendChild(d);
+      });
     }
 
     // --- Search ---
@@ -965,6 +1368,14 @@
         case "0": case "f": flyFit(); break;
         case "/": findInput.focus(); break;
         case "?": toggleKeys(); break;
+        case "l": case "L": {
+          // Cycle through the layers the payload unlocked.
+          var opts = [].filter.call(el.querySelectorAll("[data-map-layer]"), function (b) { return !b.disabled; })
+            .map(function (b) { return b.getAttribute("data-map-layer"); });
+          var at = opts.indexOf(layer);
+          setLayer(opts[(at + (e.key === "L" ? opts.length - 1 : 1)) % opts.length]);
+          break;
+        }
         case "Enter":
           if (sel >= 0 && mode === "universe") enterRegion(S.r[sel], sel);
           else return;
@@ -998,6 +1409,8 @@
         return;
       }
       if (t.closest("[data-map-keys]")) { toggleKeys(); return; }
+      var lb = t.closest("[data-map-layer]");
+      if (lb && !lb.disabled) { setLayer(lb.getAttribute("data-map-layer")); return; }
       var hit = t.closest("[data-hit]");
       if (hit && findList.contains(hit)) { choose(hits[+hit.getAttribute("data-hit")]); }
     }
@@ -1085,12 +1498,50 @@
     var ro = new ResizeObserver(resize);
     ro.observe(stage);
     // The theme toggle recolors the page; the canvas follows.
-    var mo = new MutationObserver(function () { readColors(); schedule(); });
+    var mo = new MutationObserver(function () { readColors(); renderLegend(); schedule(); });
     mo.observe(root.documentElement, { attributes: true, attributeFilter: ["data-theme", "class"] });
+
+    // --- Live layers: loading, the picker, refresh ---
+    // The page names the payload it rendered with (hashed, cached for
+    // good); every five minutes while the page is in view the map
+    // asks for the current one, and redraws only when its ETag moved.
+    var layersEtag = "", layersTimer = 0, firstLayers = true;
+    function fetchLayers(url) {
+      return fetch(url, { credentials: "same-origin" }).then(function (r) {
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        var et = r.headers.get("ETag") || "";
+        if (et && et === layersEtag) return null;
+        layersEtag = et;
+        return r.json();
+      }).then(function (L) {
+        if (!L || !el.isConnected) return;
+        LY = joinLayers(P, L);
+        heatOrder = {};
+        el.querySelectorAll("[data-map-layer]").forEach(function (b) { b.disabled = false; });
+        if (firstLayers) {
+          firstLayers = false;
+          var want = wantLayer;
+          if (!want) { try { want = localStorage.getItem("evesynapse-map-layer"); } catch (e) { /* private mode */ } }
+          setLayer(want || "security");
+        } else {
+          renderLegend();
+          updateCard();
+          schedule();
+        }
+      }).catch(function () { /* the map stands without its layers */ });
+    }
+    var layersURL = el.getAttribute("data-layers");
+    if (layersURL) {
+      fetchLayers(layersURL);
+      layersTimer = setInterval(function () {
+        if (document.visibilityState === "visible") fetchLayers("/map/layers.json");
+      }, 300000);
+    }
 
     function teardown() {
       ro.disconnect();
       mo.disconnect();
+      clearInterval(layersTimer);
       if (raf) cancelAnimationFrame(raf);
       clearTimeout(hintTimer);
       root.removeEventListener("evesynapse:content-will-swap", teardown);
@@ -1129,6 +1580,7 @@
 
   // Exposed for the node tests only (jstest/map_test.js).
   if (typeof module !== "undefined" && module.exports) {
-    module.exports = { secRounded: secRounded, secTier: secTier, secText: secText, prepare: prepare, regionLabelAlpha: regionLabelAlpha, zoomEntryAllowed: zoomEntryAllowed };
+    module.exports = { secRounded: secRounded, secTier: secTier, secText: secText, prepare: prepare, regionLabelAlpha: regionLabelAlpha, zoomEntryAllowed: zoomEntryAllowed,
+      joinLayers: joinLayers, heatT: heatT, allianceHue: allianceHue };
   }
 })();

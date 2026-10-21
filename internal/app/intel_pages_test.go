@@ -308,6 +308,12 @@ func (s *intelStubTransport) RoundTrip(req *http.Request) (*http.Response, error
 		return respond(http.StatusOK, `[]`)
 	case path == "/universe/factions/":
 		return respond(http.StatusOK, `[{"faction_id":500001,"name":"Caldari State"}]`)
+	case path == "/universe/system_kills/":
+		return respond(http.StatusOK, `[{"system_id":30000142,"ship_kills":2,"pod_kills":1,"npc_kills":0}]`)
+	case path == "/universe/system_jumps/":
+		return respond(http.StatusOK, `[{"system_id":30000142,"ship_jumps":3000}]`)
+	case path == "/sovereignty/map/":
+		return respond(http.StatusOK, `[]`)
 	case path == fmt.Sprintf("/corporations/%d/", fixtureCorpA):
 		return respond(http.StatusOK, `{"name":"Fixture Corp","ticker":"FXC"}`)
 	case path == "/corporations/99000001/":
@@ -337,8 +343,8 @@ func TestRefreshIntel(t *testing.T) {
 	if limited {
 		t.Fatal("first pass: unexpectedly error-limited")
 	}
-	if stored != 8 { // 6 global snapshots + 2 war details
-		t.Fatalf("first pass: stored %d payloads, want 8", stored)
+	if stored != 11 { // 9 global snapshots + 2 war details
+		t.Fatalf("first pass: stored %d payloads, want 11", stored)
 	}
 	if names != 5 { // 3 corporations + 1 alliance + 1 constellation
 		t.Fatalf("first pass: resolved %d names, want 5", names)

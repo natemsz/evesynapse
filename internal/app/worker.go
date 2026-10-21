@@ -779,6 +779,9 @@ func (c *cycleState) warmNames(ctx context.Context, characters []db.Character) {
 			logging.Warnf("worker: ESI error limit hit refreshing intel; backing off until next cycle")
 			c.limited = true
 		}
+		// The map's live layers fold the snapshots just refreshed
+		// (a no-op when nothing they read has moved).
+		app.refreshMapLayers(ctx)
 	}
 }
 

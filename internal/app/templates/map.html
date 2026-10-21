@@ -9,7 +9,7 @@
      swatches carry the site's .sec-N colors, which the canvas reads
      back, so the map is colored exactly like every other security
      figure on the site, in either theme. */}}
-<div class="map" data-map{{if .Ready}} data-src="{{.PayloadURL}}"{{end}}>
+<div class="map" data-map{{if .Ready}} data-src="{{.PayloadURL}}"{{end}}{{if .LayersURL}} data-layers="{{.LayersURL}}"{{end}}>
   <div class="map-bar">
     <nav class="map-crumbs" aria-label="Map location">
       <button type="button" class="map-crumb" data-map-universe>New Eden</button>
@@ -27,6 +27,18 @@
       <button type="button" class="btn small map-keys-btn" data-map-keys aria-label="Map controls" aria-expanded="false" aria-controls="map-keys" disabled>?</button>
     </div>
     <label class="map-pref" title="When on, zooming deep into a region opens its tactical view. When off, click a region's name instead."><input type="checkbox" data-map-zoom-tactical disabled> Zoom to tactical</label>
+    {{/* The layer picker: what the map colors by. Security needs
+         no live data; the rest unlock once the layers payload has
+         loaded (map.js). */}}
+    <div class="map-layers" role="radiogroup" aria-label="Map layer">
+      <button type="button" role="radio" aria-checked="true" data-map-layer="security">Security</button>
+      <button type="button" role="radio" aria-checked="false" data-map-layer="kills" disabled>Kills</button>
+      <button type="button" role="radio" aria-checked="false" data-map-layer="npc" disabled>NPC kills</button>
+      <button type="button" role="radio" aria-checked="false" data-map-layer="jumps" disabled>Jumps</button>
+      <button type="button" role="radio" aria-checked="false" data-map-layer="sov" disabled>Sovereignty</button>
+      <button type="button" role="radio" aria-checked="false" data-map-layer="fw" disabled>Faction Warfare</button>
+      <button type="button" role="radio" aria-checked="false" data-map-layer="inc" disabled>Incursions</button>
+    </div>
   </div>
   <div class="map-stage">
     <canvas class="map-canvas" tabindex="0" role="img" aria-label="Star map of New Eden's known space. Drag to pan, scroll or pinch to zoom, select a system for its details, or a region name for that region's tactical view."></canvas>
@@ -45,6 +57,7 @@
         <div><dt>Enter</dt><dd>Tactical view of the selected system</dd></div>
         <div><dt>0 · F</dt><dd>Fit</dd></div>
         <div><dt>/</dt><dd>Find</dd></div>
+        <div><dt>L · Shift L</dt><dd>Next · previous layer</dd></div>
         <div><dt>?</dt><dd>These controls</dd></div>
       </dl>
     </section>
@@ -52,6 +65,7 @@
       <button type="button" class="map-card-close" data-map-close aria-label="Close system details">×</button>
       <h2 class="map-card-name"></h2>
       <p class="map-card-where"><span class="map-card-sec sec"></span> <span class="map-card-path"></span></p>
+      <dl class="map-card-live" hidden></dl>
       <p class="map-card-gates muted"></p>
       <ul class="map-card-links"></ul>
       <div class="map-card-actions">
@@ -62,6 +76,10 @@
     <ol class="map-legend" aria-label="Security status colors">
       {{range $t := mapSecTiers}}<li><span class="map-swatch sec sec-{{$t}}" data-tier="{{$t}}"></span><span class="map-legend-v">{{if eq $t 10}}1.0{{else if eq $t 5}}0.5{{else if eq $t 0}}0.0{{end}}</span></li>{{end}}
     </ol>
+    {{/* The live layers' legend, filled by map.js for whichever
+         layer is showing; the security legend above stands in for
+         the Security layer. */}}
+    <div class="map-layer-legend" aria-live="polite" hidden></div>
   </div>
 </div>
 

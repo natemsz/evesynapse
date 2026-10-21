@@ -428,6 +428,12 @@ var pgAbyssalLadderClampSchema string
 //go:embed schema_pg/072_universe_map.sql
 var pgUniverseMapSchema string
 
+// Step 073: the universe map's live layers payload (kills, jumps,
+// sovereignty, Faction Warfare, incursions), built by the worker.
+//
+//go:embed schema_pg/073_map_layers.sql
+var pgMapLayersSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -529,6 +535,7 @@ func schemaSteps() []schemaStep {
 		{70, "abyssal_learned", pgAbyssalLearnedSchema, ""},
 		{71, "abyssal_ladder_clamp", pgAbyssalLadderClampSchema, ""},
 		{72, "universe_map", pgUniverseMapSchema, ""},
+		{73, "map_layers", pgMapLayersSchema, ""},
 	}
 }
 

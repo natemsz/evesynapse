@@ -672,6 +672,7 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 		r.Use(anonPages)
 		r.Get("/", app.handleMapPage)
 		r.Get("/universe.json", app.handleUniverseJSON)
+		r.Get("/layers.json", app.handleMapLayersJSON)
 	})
 
 	// Player structure page: what this instance knows about one

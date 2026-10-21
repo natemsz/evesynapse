@@ -199,6 +199,15 @@ func (app *Application) warmIntelNames(ctx context.Context, budget *warmBudget) 
 			}
 		}
 	}
+	// The map's sovereignty layer names every holding alliance.
+	var sov esi.SovMap
+	if app.loadGlobalSnapshot(ctx, esi.GlobalSovMap, &sov) {
+		for _, s := range sov {
+			if s.AllianceID > 0 {
+				allianceIDs[s.AllianceID] = true
+			}
+		}
+	}
 
 	resolved := 0
 

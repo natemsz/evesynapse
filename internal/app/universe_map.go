@@ -330,29 +330,38 @@ func (app *Application) rebuildUniverseMap(ctx context.Context) error {
 	}
 	started := time.Now()
 	payload := buildUniverseMap(systems, regions, cons, jumps)
-	raw, err := json.Marshal(payload)
+	gz, etag, err := packMapJSON(payload)
 	if err != nil {
-		return fmt.Errorf("marshal: %w", err)
+		return err
 	}
-	var buf bytes.Buffer
-	zw, _ := gzip.NewWriterLevel(&buf, gzip.BestCompression)
-	if _, err := zw.Write(raw); err != nil {
-		return fmt.Errorf("compress: %w", err)
-	}
-	if err := zw.Close(); err != nil {
-		return fmt.Errorf("compress: %w", err)
-	}
-	sum := sha256.Sum256(raw)
-	etag := hex.EncodeToString(sum[:8])
 	if err := q.UpsertMapUniverse(ctx, db.UpsertMapUniverseParams{
-		Version: universeMapVersion, Etag: etag, Payload: buf.Bytes(),
+		Version: universeMapVersion, Etag: etag, Payload: gz,
 		Systems: int32(len(payload.Sys.ID)), BuiltAt: time.Now().UTC(),
 	}); err != nil {
 		return fmt.Errorf("store: %w", err)
 	}
 	logging.Infof("map: universe built (%d systems, %d gates, %d KB gzipped, %s)",
-		len(payload.Sys.ID), len(payload.Gates)/2, buf.Len()/1024, time.Since(started).Round(time.Millisecond))
+		len(payload.Sys.ID), len(payload.Gates)/2, len(gz)/1024, time.Since(started).Round(time.Millisecond))
 	return nil
+}
+
+// packMapJSON marshals a map payload, gzips it for storage, and
+// hashes the JSON for its etag (which versions its URL).
+func packMapJSON(v any) (gz []byte, etag string, err error) {
+	raw, err := json.Marshal(v)
+	if err != nil {
+		return nil, "", fmt.Errorf("marshal: %w", err)
+	}
+	var buf bytes.Buffer
+	zw, _ := gzip.NewWriterLevel(&buf, gzip.BestCompression)
+	if _, err := zw.Write(raw); err != nil {
+		return nil, "", fmt.Errorf("compress: %w", err)
+	}
+	if err := zw.Close(); err != nil {
+		return nil, "", fmt.Errorf("compress: %w", err)
+	}
+	sum := sha256.Sum256(raw)
+	return buf.Bytes(), hex.EncodeToString(sum[:8]), nil
 }
 
 // ensureUniverseMap rebuilds the stored payload when it is missing
@@ -387,24 +396,32 @@ func (app *Application) handleUniverseJSON(w http.ResponseWriter, r *http.Reques
 		http.Error(w, "map unavailable", http.StatusInternalServerError)
 		return
 	}
+	serveMapJSON(w, r, row.Etag, row.Payload, 300)
+}
+
+// serveMapJSON sends a stored gzipped map payload: cached for good
+// at its hashed URL (?v= matching the etag), for shortCache seconds
+// otherwise; as stored to any client that takes gzip (every
+// browser), unpacked for one that does not.
+func serveMapJSON(w http.ResponseWriter, r *http.Request, etag string, gz []byte, shortCache int) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Vary", "Accept-Encoding")
-	w.Header().Set("ETag", `"`+row.Etag+`"`)
-	if r.URL.Query().Get("v") == row.Etag {
+	w.Header().Set("ETag", `"`+etag+`"`)
+	if r.URL.Query().Get("v") == etag {
 		w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 	} else {
-		w.Header().Set("Cache-Control", "public, max-age=300")
+		w.Header().Set("Cache-Control", fmt.Sprintf("public, max-age=%d", shortCache))
 	}
-	if match := r.Header.Get("If-None-Match"); match == `"`+row.Etag+`"` {
+	if match := r.Header.Get("If-None-Match"); match == `"`+etag+`"` {
 		w.WriteHeader(http.StatusNotModified)
 		return
 	}
 	if strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
 		w.Header().Set("Content-Encoding", "gzip")
-		_, _ = w.Write(row.Payload)
+		_, _ = w.Write(gz)
 		return
 	}
-	zr, err := gzip.NewReader(bytes.NewReader(row.Payload))
+	zr, err := gzip.NewReader(bytes.NewReader(gz))
 	if err != nil {
 		http.Error(w, "map unavailable", http.StatusInternalServerError)
 		return
@@ -423,8 +440,11 @@ type mapRegionLink struct {
 type mapPageView struct {
 	Ready      bool
 	PayloadURL string
-	Systems    int
-	Regions    []mapRegionLink
+	// LayersURL is the live layers payload's hashed URL ("" until
+	// the worker has built one).
+	LayersURL string
+	Systems   int
+	Regions   []mapRegionLink
 }
 
 // loadMapPageView reads the stored payload's meta and the region
@@ -435,6 +455,9 @@ func (app *Application) loadMapPageView(ctx context.Context) *mapPageView {
 		v.Ready = true
 		v.PayloadURL = "/map/universe.json?v=" + meta.Etag
 		v.Systems = int(meta.Systems)
+	}
+	if lm, err := app.queries.GetMapLayersMeta(ctx); err == nil {
+		v.LayersURL = "/map/layers.json?v=" + lm.Etag
 	}
 	if rows, err := app.queries.ListMapRegions(ctx); err == nil {
 		for _, r := range rows {

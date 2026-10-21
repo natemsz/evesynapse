@@ -44,3 +44,18 @@ VALUES (1, sqlc.arg(version)::integer, sqlc.arg(etag)::text, sqlc.arg(payload)::
 ON CONFLICT (id) DO UPDATE SET
     version = EXCLUDED.version, etag = EXCLUDED.etag, payload = EXCLUDED.payload,
     systems = EXCLUDED.systems, built_at = EXCLUDED.built_at;
+
+-- The live layers payload (schema 073).
+-- name: GetMapLayersMeta :one
+SELECT sources, etag, built_at FROM map_layers WHERE id = 1;
+
+-- name: GetMapLayersPayload :one
+SELECT etag, payload FROM map_layers WHERE id = 1;
+
+-- name: UpsertMapLayers :exec
+INSERT INTO map_layers (id, sources, etag, payload, built_at)
+VALUES (1, sqlc.arg(sources)::text, sqlc.arg(etag)::text, sqlc.arg(payload)::bytea,
+    sqlc.arg(built_at)::timestamptz)
+ON CONFLICT (id) DO UPDATE SET
+    sources = EXCLUDED.sources, etag = EXCLUDED.etag,
+    payload = EXCLUDED.payload, built_at = EXCLUDED.built_at;

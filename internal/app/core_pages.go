@@ -233,6 +233,9 @@ func (app *Application) fillShell(ctx context.Context, shell *module.ShellData, 
 	if shell.LoggedIn && shell.Notify == nil {
 		shell.Notify = app.notifyBadgeFor(ctx, app.userID(ctx))
 	}
+	if shell.LoggedIn && !shell.Demo {
+		shell.Demo = app.isDemoUser(ctx, app.userID(ctx))
+	}
 	if shell.LoggedIn && shell.NotifyPrompt == nil {
 		shell.NotifyPrompt = app.notifyPromptFor(ctx, app.userID(ctx))
 	}

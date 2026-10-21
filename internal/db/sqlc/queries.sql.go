@@ -231,7 +231,7 @@ func (q *Queries) CreateSkillPlan(ctx context.Context, arg CreateSkillPlanParams
 const createUser = `-- name: CreateUser :one
 INSERT INTO users (created_at)
 VALUES (now())
-RETURNING id, created_at, home_layout, last_briefing_at, last_seen_at
+RETURNING id, created_at, home_layout, last_briefing_at, last_seen_at, is_demo
 `
 
 func (q *Queries) CreateUser(ctx context.Context) (User, error) {
@@ -243,6 +243,7 @@ func (q *Queries) CreateUser(ctx context.Context) (User, error) {
 		&i.HomeLayout,
 		&i.LastBriefingAt,
 		&i.LastSeenAt,
+		&i.IsDemo,
 	)
 	return i, err
 }
@@ -668,7 +669,7 @@ func (q *Queries) GetSnapshotFetchState(ctx context.Context, arg GetSnapshotFetc
 }
 
 const getUser = `-- name: GetUser :one
-SELECT id, created_at, home_layout, last_briefing_at, last_seen_at FROM users
+SELECT id, created_at, home_layout, last_briefing_at, last_seen_at, is_demo FROM users
 WHERE id = $1
 `
 
@@ -681,6 +682,7 @@ func (q *Queries) GetUser(ctx context.Context, id int64) (User, error) {
 		&i.HomeLayout,
 		&i.LastBriefingAt,
 		&i.LastSeenAt,
+		&i.IsDemo,
 	)
 	return i, err
 }
@@ -1849,7 +1851,7 @@ func (q *Queries) ListUserWalletHistory(ctx context.Context, userID int64) ([]Wa
 }
 
 const listUsers = `-- name: ListUsers :many
-SELECT id, created_at, home_layout, last_briefing_at, last_seen_at FROM users
+SELECT id, created_at, home_layout, last_briefing_at, last_seen_at, is_demo FROM users
 ORDER BY id
 `
 
@@ -1868,6 +1870,7 @@ func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
 			&i.HomeLayout,
 			&i.LastBriefingAt,
 			&i.LastSeenAt,
+			&i.IsDemo,
 		); err != nil {
 			return nil, err
 		}

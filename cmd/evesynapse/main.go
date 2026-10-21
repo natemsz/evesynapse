@@ -70,6 +70,13 @@ func run(args []string, stdout, stderr io.Writer) int {
 				return 2
 			}
 			return app.RunPopulateNames(args[1:], cfg, stdout, stderr)
+		case "-seed-demo":
+			cfg, err := app.LoadConfig()
+			if err != nil {
+				fmt.Fprintln(stderr, "evesynapse:", err)
+				return 2
+			}
+			return app.RunSeedDemo(args[1:], cfg, stdout, stderr)
 		case "-push-keys":
 			return app.RunPushKeys(stdout, stderr)
 		case "-wrap-token-key":
@@ -100,6 +107,7 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "  evesynapse -update <url> <checksum> install a downloaded update and restart (a local file needs no checksum)")
 	fmt.Fprintln(w, "  evesynapse -refresh                 refresh all cached data on next start (app must be stopped)")
 	fmt.Fprintln(w, "  evesynapse -populate-names          store every alliance and reachable corporation name now (safe while running)")
+	fmt.Fprintln(w, "  evesynapse -seed-demo               create or restore the shared demo account's seed data (safe while running)")
 	fmt.Fprintln(w, "  evesynapse -push-keys               print a new key pair for browser push, as lines for .env")
 	fmt.Fprintln(w, "  evesynapse -wrap-token-key          wrap TOKEN_ENCRYPTION_KEY with the OCI KMS key; prints TOKEN_KEY_WRAPPED")
 }

@@ -2,18 +2,13 @@
  * (kill.html). Glass panels on the site's tokens, so both themes and
  * the faction themes carry through. The feed's rows are a grid: one
  * line on a wide screen, two on a phone; a big kill wears a gold
- * edge. On the kill page destroyed lines are red and dropped green,
- * as in the game. */
+ * edge. On the kill page destroyed lines take the site's danger
+ * token and dropped lines its success token, as in the game. */
 
 .kb, .kp {
-  --kb-drop: #4fbf6a;
-  --kb-dest: #d0453a;
+  --kb-drop: var(--success);
+  --kb-dest: var(--danger);
   --kb-big: var(--gold);
-}
-html[data-theme="light"] .kb, html[data-theme="light"] .kp {
-  --kb-drop: #2f8f46;
-  --kb-dest: #b0302a;
-  --kb-big: #b8860b;
 }
 
 /* --- Headline tiles --- */
@@ -36,8 +31,8 @@ html[data-theme="light"] .kb, html[data-theme="light"] .kp {
   color: inherit;
   text-decoration: none;
 }
-.kb-stat-v { font-size: 1.35rem; font-weight: 700; color: var(--text-bright); font-variant-numeric: tabular-nums; line-height: 1.15; }
-.kb-stat-l { font-size: 0.78rem; color: var(--muted-2); }
+.kb-stat-v { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 1.35rem; font-weight: 600; color: var(--text-bright); font-variant-numeric: tabular-nums; line-height: 1.15; }
+.kb-stat-l { font-size: 0.78rem; color: var(--muted); }
 .kb-stat-big { flex-direction: row; align-items: center; gap: 0.6rem; border-color: color-mix(in srgb, var(--kb-big) 45%, transparent); }
 .kb-stat-big > span { display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; }
 .kb-stat-big .kb-stat-v { color: var(--kb-big); }
@@ -127,7 +122,7 @@ a.kb-stat:hover { border-color: var(--accent); }
 .kb-kill-main { display: flex; flex-direction: column; min-width: 0; }
 /* The ship name's link covers the whole row; the other links sit
    above it and keep their own targets. */
-.kb-kill-link { color: var(--text-bright); font-weight: 600; text-decoration: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.kb-kill-link { color: var(--text-bright); font-weight: 400; text-decoration: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .kb-kill-link::after { content: ""; position: absolute; inset: 0; }
 .kb-kill-link:focus-visible { outline: none; }
 .kb-kill-link:focus-visible::after { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: var(--r-sm); }
@@ -138,8 +133,8 @@ a.kb-stat:hover { border-color: var(--accent); }
 .kb-kill-org { color: var(--muted-2) !important; }
 .kb-kill-where { font-size: 0.85rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .kb-kill-region { color: var(--muted-2) !important; margin-left: 0.2rem; }
-.kb-kill-value { text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--text-bright); }
-.kb-kill-meta { font-size: 0.78rem; color: var(--muted-2); text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.kb-kill-value { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--text-bright); }
+.kb-kill-meta { font-size: 0.78rem; color: var(--muted); text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .kb-tag {
   display: inline-block;
   padding: 0 0.35rem;
@@ -215,10 +210,10 @@ a.kb-stat:hover { border-color: var(--accent); }
   background: radial-gradient(circle at 50% 45%, rgba(255, 255, 255, 0.06), transparent 70%);
   object-fit: contain;
 }
-.kp-shipline { margin: 0 0 0.6rem; font-size: 1.45rem; font-weight: 700; line-height: 1.2; }
+.kp-shipline { font-family: "Rajdhani", "Segoe UI", sans-serif; margin: 0 0 0.6rem; font-size: 1.45rem; font-weight: 700; line-height: 1.2; }
 .kp-shipline a { color: var(--text-bright); text-decoration: none; }
 .kp-shipline a:hover { color: var(--accent); }
-.kp-group { display: block; font-size: 0.82rem; font-weight: 500; color: var(--muted-2); letter-spacing: 0.04em; }
+.kp-group { display: block; font-size: 0.82rem; font-weight: 400; color: var(--muted-2); letter-spacing: 0.04em; }
 .kp-victim { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.75rem; }
 .kp-portrait { border-radius: var(--r-md); flex: none; }
 .kp-victim-names { display: flex; flex-direction: column; gap: 0.2rem; min-width: 0; }
@@ -236,8 +231,8 @@ a.kb-stat:hover { border-color: var(--accent); }
 .kp-value { padding: 0.75rem 0.85rem; border: 1px solid var(--box-edge); border-radius: var(--r-md); background: var(--row-alt); }
 .kp-value p { margin: 0; }
 .kp-value-l { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted-2); }
-.kp-value-v { font-size: 1.7rem; font-weight: 700; color: var(--gold); font-variant-numeric: tabular-nums; margin: 0.1rem 0 0.5rem !important; }
-.kp-value-v small { font-size: 0.8rem; color: var(--muted-2); font-weight: 500; }
+.kp-value-v { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 1.7rem; font-weight: 600; color: var(--gold); font-variant-numeric: tabular-nums; margin: 0.1rem 0 0.5rem !important; }
+.kp-value-v small { font-size: 0.8rem; color: var(--muted-2); font-weight: 400; }
 .kp-split {
   display: block;
   width: 100%;
@@ -300,7 +295,7 @@ a.kb-stat:hover { border-color: var(--accent); }
 .kp-a.fb { background: color-mix(in srgb, var(--accent) 9%, transparent); border-radius: var(--r-sm); }
 .kp-a-face { border-radius: var(--r-sm); }
 .kp-a-who { display: flex; flex-direction: column; min-width: 0; font-size: 0.86rem; }
-.kp-a-name { color: var(--text-bright); font-weight: 600; text-decoration: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.kp-a-name { color: var(--text-bright); font-weight: 400; text-decoration: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 a.kp-a-name:hover, .kp-a-org a:hover { color: var(--accent); }
 .kp-a-who .kb-tag { align-self: flex-start; margin: 0.1rem 0; }
 .kp-a-org { color: var(--muted-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

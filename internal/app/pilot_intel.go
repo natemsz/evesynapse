@@ -311,7 +311,7 @@ func (app *Application) handlePilotWatch(w http.ResponseWriter, r *http.Request)
 	id, _ := strconv.ParseInt(r.PostFormValue("character"), 10, 64)
 	cid, _ := strconv.ParseInt(r.PostFormValue("channel"), 10, 64)
 	back := r.PostFormValue("back")
-	if !strings.HasPrefix(back, "/") || strings.HasPrefix(back, "//") {
+	if !safeLocalNext(back) {
 		back = "/pilot/?character=" + strconv.FormatInt(id, 10)
 	}
 	flash := app.flashBack(w, r, back)

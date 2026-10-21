@@ -701,12 +701,18 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	// beside the Intel module's /intel routes.
 	r.With(anonPages).Get("/intel/kills/", app.handleKillboard)
 	r.With(anonPages).Get("/intel/kill/{id}/", app.handleKillPage)
+	// Scans (scans.go): the paste box, and each reading at its
+	// unlisted link. Anyone may paste, throttled like the pages.
+	r.With(anonPages).Get("/intel/scan/", app.handleScanForm)
+	r.With(anonPages).Post("/intel/scan/", app.handleScanSubmit)
+	r.With(anonPages).Get("/intel/scan/{id}/", app.handleScanPage)
 
 	r.Route("/map", func(r chi.Router) {
 		r.Use(anonPages)
 		r.Get("/", app.handleMapPage)
 		r.Get("/universe.json", app.handleUniverseJSON)
 		r.Get("/layers.json", app.handleMapLayersJSON)
+		r.Get("/scans.json", app.handleMapScans)
 		// A planned route to the game's autopilot (map_route.go);
 		// it answers JSON, signed-in or not.
 		r.Post("/route", app.handleMapRoute)

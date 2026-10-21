@@ -455,6 +455,12 @@ var pgPlaceActivitySchema string
 //go:embed schema_pg/076_demo_account.sql
 var pgDemoAccountSchema string
 
+// Step 077: pasted scans (d-scan, local, fleet, probe), unlisted
+// and kept 90 days.
+//
+//go:embed schema_pg/077_scans.sql
+var pgScansSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -560,6 +566,7 @@ func schemaSteps() []schemaStep {
 		{74, "killboard", pgKillboardSchema, ""},
 		{75, "place_activity", pgPlaceActivitySchema, ""},
 		{76, "demo_account", pgDemoAccountSchema, ""},
+		{77, "scans", pgScansSchema, ""},
 	}
 }
 

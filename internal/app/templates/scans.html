@@ -1,0 +1,39 @@
+{{define "title"}}Scans{{end}}
+{{define "pagetitle"}}<h1><span class="gt">Scans</span></h1>{{end}}
+{{define "pagetabs"}}{{template "sectiontabs" .}}{{end}}
+{{define "content"}}
+{{with .Scan}}
+{{/* The paste box (scans.go). One box takes all four pastes; the
+     kind is told from the text. A reading lands at its own unlisted
+     link; the reader's own scans are listed below. */}}
+<div class="sc">
+  <form class="sc-paste" method="post" action="/intel/scan/">
+    <label class="sc-label" for="sc-text">Paste a scan</label>
+    <textarea id="sc-text" name="scan" rows="10" spellcheck="false" autocomplete="off" required autofocus
+      placeholder="In the game, click into the window, select all (Ctrl+A), copy (Ctrl+C), and paste here.">{{.Raw}}</textarea>
+    {{if .Error}}<p class="sc-error" role="alert">{{.Error}}</p>{{end}}
+    <div class="sc-paste-row">
+      <label class="sc-sys">
+        <span>System <span class="muted">(optional)</span></span>
+        <input type="text" name="system" value="{{.SystemName}}" placeholder="Found from a d-scan" autocomplete="off" spellcheck="false" maxlength="40">
+      </label>
+      <button type="submit" class="btn">Read scan</button>
+    </div>
+    <ul class="sc-kinds" aria-label="What the box reads">
+      <li><strong>D-scan</strong> <span>ships by class and hull, structures, what is on grid; the system from its celestials</span></li>
+      <li><strong>Local</strong> <span>the member list: pilots by alliance and corporation, and who has been killing lately</span></li>
+      <li><strong>Fleet</strong> <span>the fleet composition window: ships, classes, where everyone is, wings</span></li>
+      <li><strong>Probe scan</strong> <span>signatures by type, and what is still unscanned</span></li>
+    </ul>
+    <p class="sc-note muted">A scan gets its own link, unlisted: only people you give it to can open it. Scans are kept 90 days.</p>
+  </form>
+
+  {{if .Own}}<section class="sc-own" aria-labelledby="sc-own-h">
+    <h2 id="sc-own-h">Your scans</h2>
+    <ol>
+      {{range .Own}}<li><a href="/intel/scan/{{.ID}}/"><span class="sc-own-k">{{.Title}}</span>{{if .System}}<span class="sc-own-sys"><span class="sec sec-{{.SecTier}}">{{.SecText}}</span> {{.System}}</span>{{end}}<time datetime="{{rfc3339 .At}}">{{.Ago}}</time></a></li>{{end}}
+    </ol>
+  </section>{{end}}
+</div>
+{{end}}
+{{end}}

@@ -2994,6 +2994,7 @@
     { name: "Groups", url: "/groups/" },
     { name: "Corporation Settings", url: "/corporations/settings/" },
     { name: "Killboard", url: "/intel/kills/" },
+    { name: "Scans", url: "/intel/scan/" },
     { name: "Wars", url: "/intel/wars/" },
     { name: "Incursions", url: "/intel/incursions/" },
     { name: "Faction Warfare", url: "/intel/fw/" },

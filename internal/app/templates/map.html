@@ -115,6 +115,14 @@
       <div class="map-card-actions">
         <a class="btn small" data-map-system-page href="/system/">System page</a>
         <button type="button" class="btn small" data-map-enter>Tactical view</button>
+        <a class="btn small" data-map-scan href="/intel/scan/">Paste a scan</a>
+      </div>
+      {{/* The reader's own scans of this system (/map/scans.json),
+           filled by map.js; unlisted scans are never shown to
+           anyone else. */}}
+      <div class="map-card-scans" hidden>
+        <p class="map-card-scans-h">Your scans here</p>
+        <ul></ul>
       </div>
       <div class="map-card-route" role="group" aria-label="Route">
         <button type="button" class="btn small" data-route-set="from">Route from here</button>

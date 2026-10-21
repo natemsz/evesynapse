@@ -819,6 +819,7 @@ func (c *cycleState) warmNames(ctx context.Context, characters []db.Character) {
 	// The killboard: merge our characters' killmails, price the
 	// unpriced, prune details past a year. Local work only.
 	runGuarded("killboard", func() { app.killboardMaintenance(ctx) })
+	runGuarded("scans", func() { app.pruneScans(ctx) })
 }
 
 // cycleSummary builds the one-line status/log summary of a cycle.

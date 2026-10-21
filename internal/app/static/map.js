@@ -825,7 +825,8 @@
     var layer = "security", LY = null;
     // The layer the URL asked for, read before anything rewrites the
     // URL, and kept in it until the layers payload arrives.
-    var wantLayer = new URLSearchParams(location.search).get("layer");
+    var startQuery = new URLSearchParams(location.search);
+    var wantLayer = startQuery.get("layer");
     var HEAT = { kills: 1, npc: 1, jumps: 1, threat: 1 };
     var heatOrder = {};
     // The heat layers' scale: a gain in powers of two on the value
@@ -843,7 +844,7 @@
     // space filled and edged where it meets a neighbour's.
     var SOV_KEY = "evesynapse-map-sov", sovView = "systems", sovFields = {};
     try { if (localStorage.getItem(SOV_KEY) === "territory") sovView = "territory"; } catch (e) { /* private mode */ }
-    if (new URLSearchParams(location.search).get("sov") === "territory") sovView = "territory";
+    if (startQuery.get("sov") === "territory") sovView = "territory";
 
     // heatColor walks a three-stop ramp (the heat ramp unless one is
     // given: threat has its own, amber through red to white-hot).
@@ -1520,7 +1521,9 @@
       hintTimer = setTimeout(function () { hintEl.hidden = true; }, 3200);
     }
     function syncURL() {
-      if (!window.history || !history.replaceState) return;
+      // Not before the first draw has read the URL (restore): the
+      // layers can arrive first, and would wipe what it asked for.
+      if (!fitted || !window.history || !history.replaceState) return;
       var q = [];
       if (mode !== "universe") q.push("region=" + P.regions[region].id);
       if (sel >= 0) q.push("system=" + S.id[sel]);
@@ -1587,6 +1590,38 @@
       });
       card.querySelector('[data-route-set="from"]').hidden = i === routeFrom;
       card.querySelector('[data-route-set="to"]').hidden = i === routeTo;
+      card.querySelector("[data-map-scan]").href = "/intel/scan/?system=" + S.id[i];
+      cardScans(i);
+    }
+
+    // The reader's own scans of the card's system: fetched once per
+    // system while the page lives (a new scan comes back through a
+    // page load anyway), shown only when there are some.
+    var scansFor = {};
+    function cardScans(i) {
+      var box = card.querySelector(".map-card-scans");
+      function show(list) {
+        if (sel !== i) return;
+        var ul = box.querySelector("ul");
+        ul.textContent = "";
+        box.hidden = !list.length;
+        list.slice(0, 5).forEach(function (s) {
+          var li = root.createElement("li"), a = root.createElement("a");
+          a.href = "/intel/scan/" + encodeURIComponent(s.id) + "/";
+          a.textContent = s.title + " · " + agoShort(s.at);
+          li.appendChild(a);
+          ul.appendChild(li);
+        });
+      }
+      var id = S.id[i];
+      if (scansFor[id]) { show(scansFor[id]); return; }
+      box.hidden = true;
+      fetch("/map/scans.json?system=" + id, { credentials: "same-origin" }).then(function (r) {
+        return r.ok ? r.json() : [];
+      }).then(function (list) {
+        scansFor[id] = Array.isArray(list) ? list : [];
+        if (el.isConnected) show(scansFor[id]);
+      }).catch(function () { /* the card stands without them */ });
     }
 
     // --- Routes ---
@@ -2175,7 +2210,7 @@
 
     // The URL's ?region= / ?system= on first draw.
     function restore() {
-      var qs = new URLSearchParams(location.search);
+      var qs = startQuery;
       var sys = G.byID[+qs.get("system")];
       var ri = G.regionByID[+qs.get("region")];
       if (sys !== undefined) sel = sys;

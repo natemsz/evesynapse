@@ -28,7 +28,11 @@ func ageText(now, t time.Time) string {
 	case d < 90*time.Second:
 		return "just now"
 	case d < time.Hour:
-		return fmt.Sprintf("%d minutes ago", int(d.Minutes()))
+		if m := int(d.Minutes()); m == 1 {
+			return "1 minute ago"
+		} else {
+			return fmt.Sprintf("%d minutes ago", m)
+		}
 	case d < 48*time.Hour:
 		if h := int(d.Hours()); h == 1 {
 			return "1 hour ago"

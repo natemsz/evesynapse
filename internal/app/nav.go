@@ -117,6 +117,11 @@ var sectionNav = map[string][]navEntry{
 	"map": {
 		{"/map/", "Map", []string{"map.html"}},
 	},
+	// The killboard leads the Intel section; the Intel module's
+	// pages (Wars, Incursions, Faction Warfare) follow it.
+	"intel": {
+		{"/intel/kills/", "Killboard", []string{"killboard.html", "kill.html"}},
+	},
 }
 
 // navLink is one rendered nav link: the sidebar menu item and the

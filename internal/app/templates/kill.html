@@ -1,0 +1,89 @@
+{{define "title"}}{{with .KillPage}}{{if .Row.ID}}{{if not .Row.VictimIsStructure}}{{.Row.VictimName}} · {{end}}{{.Row.ShipName}}{{else}}Kill{{end}}{{end}}{{end}}
+{{define "pagetitle"}}<h1><span class="gt">Kill</span></h1>{{end}}
+{{define "pagetabs"}}{{template "sectiontabs" .}}{{end}}
+{{define "content"}}
+{{with .KillPage}}
+{{if not .Row.ID}}
+<p class="kp-missing">This kill isn't on the killboard. It may not have been posted publicly yet, or the link is wrong. <a href="/intel/kills/">Back to the killboard</a></p>
+{{else}}
+{{/* One kill (killboard.go). The hero carries what died, whose it
+     was, where, when and what it was worth by our own appraisal; the
+     fitting by slot and the attackers by damage follow, side by side
+     on a wide screen and stacked on a phone. Destroyed lines are red
+     and dropped green, as in the game. */}}
+<div class="kp">
+  <section class="kp-hero">
+    <div class="kp-ship"><img src="https://images.evetech.net/types/{{.Row.ShipTypeID}}/render?size=256" alt="{{.Row.ShipName}}" width="256" height="256"></div>
+    <div class="kp-head">
+      <p class="kp-shipline"><a href="/intel/kills/?ship={{.Row.ShipTypeID}}">{{.Row.ShipName}}</a>{{if .ShipGroup}}<span class="kp-group">{{.ShipGroup}}</span>{{end}}</p>
+      <div class="kp-victim">
+        {{if not .Row.VictimIsStructure}}<img class="kp-portrait" src="https://images.evetech.net/characters/{{.Row.VictimID}}/portrait?size=128" alt="" width="64" height="64">{{end}}
+        <div class="kp-victim-names">
+          {{if not .Row.VictimIsStructure}}<a class="kp-name" href="/intel/kills/?character={{.Row.VictimID}}">{{.Row.VictimName}}</a>{{end}}
+          {{if .Row.CorpID}}<span class="kp-org"><img src="https://images.evetech.net/corporations/{{.Row.CorpID}}/logo?size=64" alt="" width="22" height="22"><a href="/intel/kills/?corporation={{.Row.CorpID}}">{{.Row.CorpName}}</a></span>{{end}}
+          {{if .Row.AllianceID}}<span class="kp-org"><img src="https://images.evetech.net/alliances/{{.Row.AllianceID}}/logo?size=64" alt="" width="22" height="22"><a href="/intel/kills/?alliance={{.Row.AllianceID}}">{{.Row.AllianceName}}</a></span>{{end}}
+        </div>
+      </div>
+      <dl class="kp-facts">
+        <div><dt>Where</dt><dd><span class="sec sec-{{.Row.SecTier}}">{{.Row.SecText}}</span> <a href="/intel/kills/?system={{.Row.SystemID}}">{{.Row.SystemName}}</a> · <a href="/intel/kills/?region={{.Row.RegionID}}">{{.Row.RegionName}}</a></dd></div>
+        <div><dt>When</dt><dd><time datetime="{{rfc3339 .Row.Time}}">{{.Row.Time.UTC.Format "2006-01-02 15:04"}} EVE</time> <span class="muted">({{.Row.Ago}})</span></dd></div>
+        <div><dt>Damage taken</dt><dd>{{.Damage}}</dd></div>
+        <div><dt>Attackers</dt><dd>{{.Row.Attackers}}{{if .Row.Solo}} <span class="kb-tag">solo</span>{{end}}{{if .Row.Awox}} <span class="kb-tag warn">awox</span>{{end}}{{if .Row.NPC}} <span class="kb-tag dim">NPC</span>{{end}}{{if .Points}} <span class="muted">· {{.Points}} points</span>{{end}}</dd></div>
+      </dl>
+    </div>
+    <div class="kp-value">
+      {{if .Priced}}
+      <p class="kp-value-l">Value</p>
+      <p class="kp-value-v">{{.ValueFull}} <small>ISK</small></p>
+      <meter class="kp-split" min="0" max="100" value="{{.DroppedPct}}" aria-label="Share of the value that dropped">{{.DroppedPct}}% dropped</meter>
+      <p class="kp-split-key"><span class="kp-drop">Dropped {{.DroppedFull}}</span> <span class="kp-dest">Destroyed {{.DestroyedFull}}</span></p>
+      <p class="kp-note">Priced by EveSynapse{{if lt .Coverage 100}} ({{.Coverage}}% of lines priced){{end}}.{{with .ZkillValue}} zKillboard: {{.}}.{{end}}</p>
+      {{else}}
+      <p class="kp-value-l">Value</p>
+      <p class="kp-note">Being priced. It shows within a minute.</p>
+      {{end}}
+      <div class="kp-actions">
+        <a class="btn small" href="/map/?system={{.Row.SystemID}}">On the map</a>
+        <a class="btn small" href="https://zkillboard.com/kill/{{.Row.ID}}/" target="_blank" rel="noopener noreferrer">zKillboard</a>
+      </div>
+    </div>
+  </section>
+
+  <div class="kp-cols">
+    <section class="kp-panel kp-fit">
+      <h2>Fitting and cargo</h2>
+      {{range .Slots}}
+      <h3>{{.Label}}</h3>
+      <ul>
+        {{range .Items}}<li class="kp-item {{if .Dropped}}dropped{{else}}destroyed{{end}}{{if .Depth}} nested{{end}}">
+          <img src="https://images.evetech.net/types/{{.TypeID}}/icon?size=32" alt="" width="28" height="28" loading="lazy">
+          <span class="kp-item-n">{{.Name}}{{if .Copy}} <small class="muted">(copy)</small>{{end}}</span>
+          <span class="kp-item-q">{{if gt .Qty 1}}× {{.Qty}}{{end}}</span>
+          <span class="kp-item-v">{{.Value}}</span>
+        </li>{{end}}
+      </ul>
+      {{else}}
+      <p class="muted">{{if .Detailed}}Nothing fitted or carried.{{else}}The full killmail is kept for a year; this one is older, so only its summary remains.{{end}}</p>
+      {{end}}
+    </section>
+
+    <section class="kp-panel kp-atk">
+      <h2>Attackers</h2>
+      <ol>
+        {{range .Attackers}}<li class="kp-a{{if .FinalBlow}} fb{{end}}">
+          {{if .NPC}}<img class="kp-a-face" src="https://images.evetech.net/types/{{.ShipTypeID}}/icon?size=64" alt="" width="40" height="40" loading="lazy">{{else}}<img class="kp-a-face" src="https://images.evetech.net/characters/{{.CharacterID}}/portrait?size=64" alt="" width="40" height="40" loading="lazy">{{end}}
+          <div class="kp-a-who">
+            {{if .NPC}}<span class="kp-a-name">{{.Name}}</span>{{else}}<a class="kp-a-name" href="/intel/kills/?character={{.CharacterID}}">{{.Name}}</a>{{end}}
+            {{if .FinalBlow}}<span class="kb-tag">final blow</span>{{end}}
+            <span class="kp-a-org">{{if .AllianceID}}<a href="/intel/kills/?alliance={{.AllianceID}}">{{.AllianceName}}</a>{{else if .CorpID}}<a href="/intel/kills/?corporation={{.CorpID}}">{{.CorpName}}</a>{{end}}</span>
+          </div>
+          <div class="kp-a-gear">{{if .ShipTypeID}}<img src="https://images.evetech.net/types/{{.ShipTypeID}}/icon?size=32" alt="{{.ShipName}}" title="{{.ShipName}}" width="26" height="26" loading="lazy">{{end}}{{if and .WeaponTypeID (ne .WeaponTypeID .ShipTypeID)}}<img src="https://images.evetech.net/types/{{.WeaponTypeID}}/icon?size=32" alt="{{.WeaponName}}" title="{{.WeaponName}}" width="26" height="26" loading="lazy">{{end}}</div>
+          <div class="kp-a-dmg"><span>{{.Damage}}</span><meter min="0" max="100" value="{{.Share}}" aria-label="Share of the damage">{{.Share}}%</meter></div>
+        </li>{{else}}<li class="muted">{{if .Detailed}}No attackers recorded.{{else}}Attacker details are kept for a year.{{end}}</li>{{end}}
+      </ol>
+    </section>
+  </div>
+</div>
+{{end}}
+{{end}}
+{{end}}

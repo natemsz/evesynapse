@@ -1,0 +1,65 @@
+{{define "title"}}{{with .Killboard}}{{if .ScopeName}}{{.ScopeName}} · {{end}}{{end}}Killboard{{end}}
+{{define "pagetitle"}}<h1><span class="gt">Killboard</span></h1>{{end}}
+{{define "pagetabs"}}{{template "sectiontabs" .}}{{end}}
+{{define "content"}}
+{{with .Killboard}}
+{{/* The killboard feed (killboard.go). Every kill row is one link to
+     the kill (the ship name's link stretches over the row), with the
+     pilot, organisation and system linked above it to their own
+     feeds. On a phone a row folds to two lines; the leaderboards
+     drop below the list. */}}
+<div class="kb">
+  <section class="kb-stats" aria-label="The last day across New Eden">
+    <div class="kb-stat"><span class="kb-stat-v">{{.Stats.KillsHour}}</span><span class="kb-stat-l">kills in the last hour</span></div>
+    <div class="kb-stat"><span class="kb-stat-v">{{.Stats.KillsDay}}</span><span class="kb-stat-l">kills in the last day</span></div>
+    <div class="kb-stat"><span class="kb-stat-v">{{if .Stats.ISKDay}}{{.Stats.ISKDay}}{{else}}0{{end}}</span><span class="kb-stat-l">ISK destroyed in the last day</span></div>
+    {{with .Stats.Biggest}}<a class="kb-stat kb-stat-big" href="/intel/kill/{{.ID}}/">
+      <img src="https://images.evetech.net/types/{{.ShipTypeID}}/icon?size=64" alt="" width="40" height="40" loading="lazy">
+      <span><span class="kb-stat-v">{{.Value}}</span><span class="kb-stat-l">biggest kill: {{.ShipName}}</span></span>
+    </a>{{end}}
+  </section>
+
+  <div class="kb-bar">
+    {{if .ScopeKind}}<p class="kb-scope"><span class="kb-scope-k">{{.ScopeLabel}}</span> <strong>{{.ScopeName}}</strong> <a class="kb-scope-x" href="{{.ClearHref}}" aria-label="Show every kill">×</a></p>{{end}}
+    <nav class="kb-chips" aria-label="Show">
+      {{range .Chips}}<a href="{{.Href}}"{{if .Active}} class="active" aria-current="true"{{end}}>{{.Label}}</a>{{end}}
+    </nav>
+  </div>
+
+  <div class="kb-layout">
+    <ol class="kb-list" aria-label="Kills, newest first">
+      {{range .Kills}}
+      <li class="kb-kill{{if .Big}} big{{end}}">
+        <img class="kb-kill-ship" src="https://images.evetech.net/types/{{.ShipTypeID}}/icon?size=64" alt="" width="44" height="44" loading="lazy">
+        <div class="kb-kill-main">
+          <a class="kb-kill-link" href="/intel/kill/{{.ID}}/">{{.ShipName}}</a>
+          <span class="kb-kill-who">{{if .VictimIsStructure}}{{if .CorpID}}<a href="/intel/kills/?corporation={{.CorpID}}">{{.CorpName}}</a>{{end}}{{else}}<a href="/intel/kills/?character={{.VictimID}}">{{.VictimName}}</a>{{end}}{{if .AllianceID}} <a class="kb-kill-org" href="/intel/kills/?alliance={{.AllianceID}}">{{.AllianceName}}</a>{{else if and .CorpID (not .VictimIsStructure)}} <a class="kb-kill-org" href="/intel/kills/?corporation={{.CorpID}}">{{.CorpName}}</a>{{end}}</span>
+        </div>
+        <div class="kb-kill-where"><span class="sec sec-{{.SecTier}}">{{.SecText}}</span> <a href="/intel/kills/?system={{.SystemID}}">{{.SystemName}}</a> <a class="kb-kill-region" href="/intel/kills/?region={{.RegionID}}">{{.RegionName}}</a></div>
+        <div class="kb-kill-value">{{if .Value}}{{.Value}}{{else}}<span class="muted">pricing…</span>{{end}}</div>
+        <div class="kb-kill-meta"><time datetime="{{rfc3339 .Time}}" title="{{.When}} EVE">{{.Ago}}</time> · {{.Attackers}} {{if eq .Attackers 1}}attacker{{else}}attackers{{end}}{{if .Solo}} <span class="kb-tag">solo</span>{{end}}{{if .Awox}} <span class="kb-tag warn">awox</span>{{end}}{{if .NPC}} <span class="kb-tag dim">NPC</span>{{end}}</div>
+      </li>
+      {{else}}
+      <li class="kb-empty">{{if .ScopeKind}}No public kills here yet.{{else}}No kills yet. The killboard fills from zKillboard's live stream within a minute of starting.{{end}}</li>
+      {{end}}
+    </ol>
+
+    <aside class="kb-side" aria-label="The last day's leaders">
+      {{if .Top.Alliances}}<section class="kb-top">
+        <h2>Top killers</h2>
+        <ol>{{range .Top.Alliances}}<li><a href="/intel/kills/?alliance={{.ID}}"><img src="https://images.evetech.net/alliances/{{.ID}}/logo?size=32" alt="" width="22" height="22" loading="lazy"><span class="kb-top-n">{{.Name}}</span><span class="kb-top-c">{{.Count}}</span></a></li>{{end}}</ol>
+      </section>{{end}}
+      {{if .Top.Ships}}<section class="kb-top">
+        <h2>Most lost</h2>
+        <ol>{{range .Top.Ships}}<li><a href="/intel/kills/?ship={{.ID}}"><img src="https://images.evetech.net/types/{{.ID}}/icon?size=32" alt="" width="22" height="22" loading="lazy"><span class="kb-top-n">{{.Name}}</span><span class="kb-top-c">{{.Count}}</span></a></li>{{end}}</ol>
+      </section>{{end}}
+      {{if .Top.Systems}}<section class="kb-top">
+        <h2>Hottest systems</h2>
+        <ol>{{range .Top.Systems}}<li><a href="/intel/kills/?system={{.ID}}"><span class="kb-top-sec sec sec-{{.Tier}}">{{.Note}}</span><span class="kb-top-n">{{.Name}}</span><span class="kb-top-c">{{.Count}}</span></a></li>{{end}}</ol>
+      </section>{{end}}
+    </aside>
+  </div>
+  {{if .Older}}<p class="kb-more"><a class="btn" href="{{.Older}}">Older kills</a></p>{{end}}
+</div>
+{{end}}
+{{end}}

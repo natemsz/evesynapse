@@ -77,6 +77,10 @@ type pageData struct {
 	// region index.
 	Map *mapPageView
 
+	// The killboard (/intel/kills/, /intel/kill/{id}/).
+	Killboard *killboardView
+	KillPage  *killPageView
+
 	// Player structure page (/structure/): the local structure
 	// record.
 	Structure *structurePageView
@@ -137,6 +141,8 @@ func sectionForPage(page string) string {
 		return "corporation"
 	case "map.html":
 		return "map"
+	case "killboard.html", "kill.html":
+		return "intel"
 	case "sync.html":
 		return "sync"
 	case "admin.html":

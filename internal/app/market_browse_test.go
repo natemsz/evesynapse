@@ -69,7 +69,7 @@ func TestSDEMarketGroupsParseAndStore(t *testing.T) {
 	if err != nil || len(children) != 1 || children[0].MarketGroupID != 404 {
 		t.Fatalf("children of Ships = %+v err=%v, want [Frigates]", children, err)
 	}
-	if ver, _ := app.sdeMeta(ctx, "sde_import_version"); ver != "10" {
+	if ver, _ := app.sdeMeta(ctx, "sde_import_version"); ver != sdeImportVersion {
 		t.Fatalf("sde_import_version = %q, want 10", ver)
 	}
 }

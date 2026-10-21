@@ -421,6 +421,13 @@ var pgAbyssalLearnedSchema string
 //go:embed schema_pg/071_abyssal_ladder_clamp.sql
 var pgAbyssalLadderClampSchema string
 
+// Step 072: the universe map -- system positions, constellations,
+// security classes and factions, the stargate graph, and the map
+// payload built from them.
+//
+//go:embed schema_pg/072_universe_map.sql
+var pgUniverseMapSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -521,6 +528,7 @@ func schemaSteps() []schemaStep {
 		{69, "abyssal_attribution", pgAbyssalAttributionSchema, ""},
 		{70, "abyssal_learned", pgAbyssalLearnedSchema, ""},
 		{71, "abyssal_ladder_clamp", pgAbyssalLadderClampSchema, ""},
+		{72, "universe_map", pgUniverseMapSchema, ""},
 	}
 }
 

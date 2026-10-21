@@ -409,6 +409,15 @@ type LocalFitting struct {
 	LastViewedAt sql.NullTime `json:"last_viewed_at"`
 }
 
+type MapUniverse struct {
+	ID      int32     `json:"id"`
+	Version int32     `json:"version"`
+	Etag    string    `json:"etag"`
+	Payload []byte    `json:"payload"`
+	Systems int32     `json:"systems"`
+	BuiltAt time.Time `json:"built_at"`
+}
+
 type MarketBookOrder struct {
 	RegionID     int64     `json:"region_id"`
 	TypeID       int64     `json:"type_id"`
@@ -843,6 +852,12 @@ type SdeCategory struct {
 	Name       string `json:"name"`
 }
 
+type SdeConstellation struct {
+	ConstellationID int64  `json:"constellation_id"`
+	Name            string `json:"name"`
+	RegionID        int64  `json:"region_id"`
+}
+
 type SdeEffect struct {
 	EffectID int64  `json:"effect_id"`
 	Name     string `json:"name"`
@@ -910,10 +925,21 @@ type SdeStation struct {
 }
 
 type SdeSystem struct {
-	SystemID int64   `json:"system_id"`
-	Name     string  `json:"name"`
-	RegionID int64   `json:"region_id"`
-	Security float64 `json:"security"`
+	SystemID        int64   `json:"system_id"`
+	Name            string  `json:"name"`
+	RegionID        int64   `json:"region_id"`
+	Security        float64 `json:"security"`
+	ConstellationID int64   `json:"constellation_id"`
+	X               float64 `json:"x"`
+	Y               float64 `json:"y"`
+	Z               float64 `json:"z"`
+	FactionID       int64   `json:"faction_id"`
+	SecurityClass   string  `json:"security_class"`
+}
+
+type SdeSystemJump struct {
+	FromSystemID int64 `json:"from_system_id"`
+	ToSystemID   int64 `json:"to_system_id"`
 }
 
 type SdeType struct {

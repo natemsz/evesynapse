@@ -114,6 +114,9 @@ var sectionNav = map[string][]navEntry{
 	"tools": {
 		{"/items/", "Item Browser", []string{"items.html"}},
 	},
+	"map": {
+		{"/map/", "Map", []string{"map.html"}},
+	},
 }
 
 // navLink is one rendered nav link: the sidebar menu item and the
@@ -332,6 +335,7 @@ var bottomBarSlots = []struct{ section, label string }{
 // bottomSheetSections is the sections sheet's rows, in sheet
 // order: every primary section.
 var bottomSheetSections = []struct{ section, label string }{
+	{"map", "Map"},
 	{"pilot", "Pilot"},
 	{"fitting", "Fitting"},
 	{"industry", "Industry"},

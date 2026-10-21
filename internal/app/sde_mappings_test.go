@@ -97,7 +97,7 @@ func TestSDEMappingsStoreAndKeep(t *testing.T) {
 	if build != "mappings-build-1" {
 		t.Fatalf("mapping sde_build = %q, want the file marker", build)
 	}
-	if ver, _ := app.sdeMeta(ctx, "sde_import_version"); ver != "10" {
+	if ver, _ := app.sdeMeta(ctx, "sde_import_version"); ver != sdeImportVersion {
 		t.Fatalf("sde_import_version = %q, want 10", ver)
 	}
 

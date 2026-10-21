@@ -39,7 +39,14 @@ bearing ones.
 - Per-surface files, loaded only where they belong (base.html
   gates them on section/page): `fit.js` (fitting), `plan.js`
   (build planner), `pi.js` (PI planner), `push.js` (notification
-  settings), and the surface files split out of app.js.
+  settings), `map.js` (the universe map: a canvas drawn from the
+  stored, content-hashed payload at `/map/universe.json`, its
+  colors read from `map.css` tokens and the legend's `.sec-N`
+  swatches), and the surface files split out of app.js. A page
+  script gated to one page loads after the shell's first
+  `content-ready`, so it runs once for the document as it stands
+  and subscribes with `onReady` for later swaps (`plan.js` and
+  `map.js` show the shape).
 - `sw.js` — the service worker.
 - CSS: `style.css` (the core; it is at the practical size ceiling,
   so a feature with substantial styles gets its own file, linked

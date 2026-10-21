@@ -221,3 +221,16 @@ test("jump drives: range, cyno-legal landings, routes and fatigue", () => {
   assert.deepStrictEqual(map.jumpFatigue([5, 5], 1, 0), { fatigue: 300, waits: 6 }, "capped at 5 hours");
   assert.deepStrictEqual(map.jumpFatigue([10], 0.1, 0), { fatigue: 20, waits: 0 }, "a jump freighter counts a tenth of the distance");
 });
+
+test("mousewheel zooms, never pans", () => {
+  // Wheel up zooms in, wheel down zooms out, whatever the notch
+  // size -- including the small, fractional deltas a smooth-scroll
+  // mouse sends, which used to be misread as a touchpad and panned.
+  assert.ok(map.wheelZoomFactor(-120, false) > 1, "wheel up zooms in");
+  assert.ok(map.wheelZoomFactor(-33.3, false) > 1, "small wheel tick zooms in");
+  assert.ok(map.wheelZoomFactor(120, false) < 1, "wheel down zooms out");
+  assert.ok(map.wheelZoomFactor(33.3, false) < 1, "small wheel tick zooms out");
+  assert.strictEqual(map.wheelZoomFactor(0, false), 1, "no delta, no zoom");
+  // A pinch (ctrlKey wheel) zooms faster than a plain tick.
+  assert.ok(map.wheelZoomFactor(-10, true) > map.wheelZoomFactor(-10, false), "pinch zooms faster");
+});

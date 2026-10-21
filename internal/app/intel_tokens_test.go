@@ -14,8 +14,28 @@ import (
 	db "evesynapse/internal/db/sqlc"
 )
 
+// TestAxonLinks pins the address and downloads the site offers for
+// Axon: the GUI's fixed local address (gui.ListenAddr in natemsz/axon,
+// probed by static/app.js) and the axon repo's release assets.
+func TestAxonLinks(t *testing.T) {
+	if AxonGUIAddr != "127.0.0.1:47611" {
+		t.Errorf("AxonGUIAddr %q, want Axon's fixed 127.0.0.1:47611", AxonGUIAddr)
+	}
+	if len(axonDownloads) == 0 || axonDownloads[0].File != "install.ps1" {
+		t.Errorf("first download should be the Windows installer: %v", axonDownloads)
+	}
+	for _, d := range axonDownloads {
+		if strings.Contains(d.File, "intelwatch") || strings.Contains(d.Label, "intelwatch") {
+			t.Errorf("old intelwatch download remains: %+v", d)
+		}
+	}
+	if !strings.HasPrefix(axonReleases, "https://github.com/natemsz/axon/") {
+		t.Errorf("downloads should come from the axon repo: %q", axonReleases)
+	}
+}
+
 // TestIntelTokens: a token made on the channels page is shown once in
-// a ready config, acts as its account on the watcher API -- listing
+// a ready config, acts as its account on the Axon API -- listing
 // channels, posting lines that become reports, the same lines sent
 // again stored once -- and stops the moment it is revoked.
 func TestIntelTokens(t *testing.T) {

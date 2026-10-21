@@ -468,7 +468,7 @@ var pgScansSchema string
 //go:embed schema_pg/078_intel_channels.sql
 var pgIntelChannelsSchema string
 
-// Step 079: intel posting tokens for the desktop log watcher, kept
+// Step 079: intel posting tokens for EveSynapse Axon, kept
 // as hashes.
 //
 //go:embed schema_pg/079_intel_tokens.sql

@@ -1,11 +1,11 @@
 package app
 
 // ---------------------------------------------------------------------------
-// The desktop log watcher's side of the site: posting tokens and the small
-// API the watcher (intelwatch, github.com/natemsz/intelwatch) talks to.
+// EveSynapse Axon's side of the site: posting tokens and the small
+// API Axon (github.com/natemsz/axon) talks to.
 //
 // An account makes a token on the channels page, names it ("Home PC"),
-// and sees it once, inside a ready-made intelwatch.json. Only the token's
+// and sees it once, inside a ready-made axon.json. Only the token's
 // SHA-256 is stored (schema 079), with its first characters to tell
 // tokens apart; revoking one stops it at once. A request bearing a token
 // ("Authorization: Bearer esw_...") acts as its account, for this API
@@ -14,8 +14,8 @@ package app
 //	GET  /api/intel/v1/channels              the channels it may post to
 //	POST /api/intel/v1/channels/{id}/lines   {"lines": [...]}: chat lines
 //
-// Lines go through the same reader as pasted ones (postChatLines), so a
-// watcher that restarts, or two characters logging one channel, store a
+// Lines go through the same reader as pasted ones (postChatLines), so an
+// Axon that restarts, or two characters logging one channel, store a
 // sighting once. Each token is held to a steady rate.
 // ---------------------------------------------------------------------------
 
@@ -47,16 +47,23 @@ const (
 	intelAPIPerMinute = 120
 )
 
-// The watcher's download, per platform: assets of the latest release
-// of its own repository, github.com/natemsz/intelwatch.
-var intelWatchDownloads = []struct{ Label, File string }{
-	{"Windows", "intelwatch-windows-amd64.exe"},
-	{"macOS (Apple silicon)", "intelwatch-darwin-arm64"},
-	{"macOS (Intel)", "intelwatch-darwin-amd64"},
-	{"Linux", "intelwatch-linux-amd64"},
+// Axon's downloads: the installers first, then the bare programs,
+// assets of the latest release of github.com/natemsz/axon.
+var axonDownloads = []struct{ Label, File string }{
+	{"Install on Windows", "install.ps1"},
+	{"Install on macOS/Linux", "install.sh"},
+	{"Windows program", "axon-windows-amd64.exe"},
+	{"macOS (Apple silicon)", "axon-darwin-arm64"},
+	{"macOS (Intel)", "axon-darwin-amd64"},
+	{"Linux", "axon-linux-amd64"},
 }
 
-const intelWatchReleases = "https://github.com/natemsz/intelwatch/releases/latest/download/"
+const axonReleases = "https://github.com/natemsz/axon/releases/latest/download/"
+
+// AxonGUIAddr is Axon's fixed address on the player's own computer
+// (gui.ListenAddr in natemsz/axon). The channels page and the Intel
+// menu link there, shown only while it answers (static/app.js).
+const AxonGUIAddr = "127.0.0.1:47611"
 
 type intelTokenRow struct {
 	ID       int64
@@ -89,11 +96,11 @@ func hashIntelToken(t string) string {
 	return hex.EncodeToString(sum[:])
 }
 
-// fillWatcher adds the log watcher's part of the channels page: the
+// fillAxon adds EveSynapse Axon's part of the channels page: the
 // account's tokens and the downloads.
-func (app *Application) fillWatcher(ctx context.Context, v *channelListView, userID int64) {
-	for _, d := range intelWatchDownloads {
-		v.Downloads = append(v.Downloads, intelDownload{Label: d.Label, URL: intelWatchReleases + d.File})
+func (app *Application) fillAxon(ctx context.Context, v *channelListView, userID int64) {
+	for _, d := range axonDownloads {
+		v.Downloads = append(v.Downloads, intelDownload{Label: d.Label, URL: axonReleases + d.File})
 	}
 	rows, err := app.queries.ListIntelTokens(ctx, userID)
 	if err != nil {
@@ -109,15 +116,15 @@ func (app *Application) fillWatcher(ctx context.Context, v *channelListView, use
 	}
 }
 
-// handleIntelTokenCreate makes a token and shows it once, in the
-// watcher's config.
+// handleIntelTokenCreate makes a token and shows it once, in
+// Axon's config.
 func (app *Application) handleIntelTokenCreate(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	userID := app.userID(ctx)
-	back := app.flashBack(w, r, "/intel/channels/#watcher")
+	back := app.flashBack(w, r, "/intel/channels/#axon")
 	name := strings.TrimSpace(r.PostFormValue("name"))
 	if name == "" {
-		name = "Log watcher"
+		name = "EveSynapse Axon"
 	}
 	if utf8.RuneCountInString(name) > 40 {
 		back("Name the token in up to 40 characters.")
@@ -142,7 +149,7 @@ func (app *Application) handleIntelTokenCreate(w http.ResponseWriter, r *http.Re
 	for _, c := range app.accessibleChannels(ctx, id) {
 		v.Channels = append(v.Channels, channelRow{ID: c.ID, Name: c.Name, Description: c.Description, Owner: c.OwnerUserID == id.userID, CanPost: c.CanPost})
 	}
-	app.fillWatcher(ctx, v, userID)
+	app.fillAxon(ctx, v, userID)
 	v.NewToken = token
 	cfg, _ := json.MarshalIndent(map[string]any{"server": app.cfg.publicOrigin(), "token": token, "channels": map[string]int64{}}, "", "  ")
 	v.NewConfig = string(cfg)
@@ -153,13 +160,13 @@ func (app *Application) handleIntelTokenCreate(w http.ResponseWriter, r *http.Re
 
 func (app *Application) handleIntelTokenRevoke(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	back := app.flashBack(w, r, "/intel/channels/#watcher")
+	back := app.flashBack(w, r, "/intel/channels/#axon")
 	id, _ := strconv.ParseInt(chi.URLParam(r, "tokenID"), 10, 64)
 	if n, err := app.queries.DeleteIntelToken(ctx, db.DeleteIntelTokenParams{ID: id, UserID: app.userID(ctx)}); err != nil || n == 0 {
 		back("That token is not yours, or already revoked.")
 		return
 	}
-	back("Token revoked: a watcher using it can no longer post.")
+	back("Token revoked: an Axon using it can no longer post.")
 }
 
 // --- The API ---
@@ -275,7 +282,7 @@ func (app *Application) handleAPILines(w http.ResponseWriter, r *http.Request) {
 	for i, l := range body.Lines {
 		body.Lines[i] = strings.ReplaceAll(l, "\n", " ")
 	}
-	res := app.postChatLines(ctx, base, strings.Join(body.Lines, "\n"), "watcher")
+	res := app.postChatLines(ctx, base, strings.Join(body.Lines, "\n"), "axon")
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
 	_ = json.NewEncoder(w).Encode(struct {

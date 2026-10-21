@@ -4346,6 +4346,41 @@
   });
 })();
 
+// EveSynapse Axon on this computer. Axon serves its settings page at
+// a fixed local address (127.0.0.1:47611, natemsz/axon gui.ListenAddr)
+// and answers /api/ping without a key, so this page can tell whether
+// it is running. While it is, the Intel menu gains its link
+// ([data-axon-link]) and the channels page swaps its install buttons
+// for a running status ([data-axon-install] / [data-axon-running]).
+// Where the browser refuses the probe (an https page asking after
+// plain http on loopback), nothing is shown and nothing breaks.
+(function () {
+  "use strict";
+  var running = false;
+  function apply() {
+    if (!running) return;
+    document.querySelectorAll("[data-axon-link]").forEach(function (el) { el.hidden = false; });
+    document.querySelectorAll("[data-axon-install]").forEach(function (el) { el.hidden = true; });
+    document.querySelectorAll("[data-axon-running]").forEach(function (el) { el.hidden = false; });
+  }
+  function probe() {
+    if (running || typeof fetch !== "function") { apply(); return; }
+    var ctl = typeof AbortController !== "undefined" ? new AbortController() : null;
+    var timer = ctl ? setTimeout(function () { ctl.abort(); }, 1500) : null;
+    fetch("http://127.0.0.1:47611/api/ping", ctl ? { signal: ctl.signal } : {})
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) {
+        if (d && d.app === "EveSynapse Axon") { running = true; apply(); }
+      })
+      .catch(function () { /* not running, or the browser refused */ })
+      .then(function () { if (timer) clearTimeout(timer); });
+  }
+  probe();
+  if (typeof window !== "undefined" && window.EveSynapseContent && window.EveSynapseContent.onReady) {
+    window.EveSynapseContent.onReady(probe);
+  }
+})();
+
 // Copy buttons: [data-copy] copies its data-copy-text, or the
 // text of [data-copy-from]; the label flips to Copied briefly.
 // Server-rendered share blocks use it so no page needs its own

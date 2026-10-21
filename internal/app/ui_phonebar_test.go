@@ -171,7 +171,7 @@ func TestPhoneBottomBarRenders(t *testing.T) {
 		`<a class="phone-sheet-section" href="/industry/" data-section="industry">Industry</a>`,
 		`<a class="phone-sheet-section active" href="/market/" data-section="market" aria-current="page">Market</a>`,
 		`<a class="phone-sheet-section" href="/corporations/" data-section="corporation">Corporation</a>`,
-		`<a class="phone-sheet-section" href="/intel/wars/" data-section="intel">Intel</a>`,
+		`<a class="phone-sheet-section" href="/intel/kills/" data-section="intel">Intel</a>`,
 		`<a class="phone-sheet-section" href="/items/" data-section="tools">Tools</a>`,
 		`<a href="/orders/">My Finances</a>`,
 		`<a href="/characters/">Manage Characters</a>`,

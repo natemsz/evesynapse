@@ -174,6 +174,14 @@ type Application struct {
 	trueValuesLoaded time.Time
 	trueValuePass    tvPassState
 
+	// The killboard (killfeed.go): each system's region, loaded
+	// once from the SDE for kill ingest, and when retention last
+	// pruned the year-old details.
+	killRegionsMu  sync.Mutex
+	killRegions    map[int64]int64
+	killLastPruned time.Time
+	killStatsMemo  *killboardStatsMemo // the feed's headline, held a minute
+
 	// The Forge's swept typical sells (market_guide_prices.go),
 	// the first tier of the house price order, cached in memory
 	// on the same window as the true values so renders reload
@@ -668,6 +676,11 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 
 	// The universe map: the page shell and its stored payload
 	// (universe_map.go), public like the place pages it links to.
+	// The killboard (killboard.go): core pages in the Intel section,
+	// beside the Intel module's /intel routes.
+	r.With(anonPages).Get("/intel/kills/", app.handleKillboard)
+	r.With(anonPages).Get("/intel/kill/{id}/", app.handleKillPage)
+
 	r.Route("/map", func(r chi.Router) {
 		r.Use(anonPages)
 		r.Get("/", app.handleMapPage)

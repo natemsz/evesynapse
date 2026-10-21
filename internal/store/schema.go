@@ -434,6 +434,13 @@ var pgUniverseMapSchema string
 //go:embed schema_pg/073_map_layers.sql
 var pgMapLayersSchema string
 
+// Step 074: the killboard -- every killmail (zKillboard's public
+// stream and our characters' own), a summary kept forever, attackers
+// and the full killmail kept a year, and the stream's cursor.
+//
+//go:embed schema_pg/074_killboard.sql
+var pgKillboardSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -536,6 +543,7 @@ func schemaSteps() []schemaStep {
 		{71, "abyssal_ladder_clamp", pgAbyssalLadderClampSchema, ""},
 		{72, "universe_map", pgUniverseMapSchema, ""},
 		{73, "map_layers", pgMapLayersSchema, ""},
+		{74, "killboard", pgKillboardSchema, ""},
 	}
 }
 

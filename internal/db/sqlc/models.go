@@ -382,6 +382,63 @@ type ItemName struct {
 	Name   string `json:"name"`
 }
 
+type Kill struct {
+	KillmailID          int64           `json:"killmail_id"`
+	Hash                string          `json:"hash"`
+	KillmailTime        time.Time       `json:"killmail_time"`
+	SystemID            int64           `json:"system_id"`
+	RegionID            int64           `json:"region_id"`
+	LocationID          int64           `json:"location_id"`
+	VictimCharacterID   int64           `json:"victim_character_id"`
+	VictimCorporationID int64           `json:"victim_corporation_id"`
+	VictimAllianceID    int64           `json:"victim_alliance_id"`
+	VictimFactionID     int64           `json:"victim_faction_id"`
+	ShipTypeID          int64           `json:"ship_type_id"`
+	DamageTaken         int64           `json:"damage_taken"`
+	AttackerCount       int32           `json:"attacker_count"`
+	FbCharacterID       int64           `json:"fb_character_id"`
+	FbCorporationID     int64           `json:"fb_corporation_id"`
+	FbAllianceID        int64           `json:"fb_alliance_id"`
+	FbShipTypeID        int64           `json:"fb_ship_type_id"`
+	Npc                 bool            `json:"npc"`
+	Solo                bool            `json:"solo"`
+	Awox                bool            `json:"awox"`
+	Points              int32           `json:"points"`
+	ValueZkill          sql.NullFloat64 `json:"value_zkill"`
+	ValueOurs           sql.NullFloat64 `json:"value_ours"`
+	ValueDroppedOurs    sql.NullFloat64 `json:"value_dropped_ours"`
+	ValueCoverage       sql.NullFloat64 `json:"value_coverage"`
+	PricedAt            sql.NullTime    `json:"priced_at"`
+	Source              string          `json:"source"`
+	Public              bool            `json:"public"`
+	IngestedAt          time.Time       `json:"ingested_at"`
+}
+
+type KillAttacker struct {
+	KillmailID    int64 `json:"killmail_id"`
+	Seq           int32 `json:"seq"`
+	CharacterID   int64 `json:"character_id"`
+	CorporationID int64 `json:"corporation_id"`
+	AllianceID    int64 `json:"alliance_id"`
+	FactionID     int64 `json:"faction_id"`
+	ShipTypeID    int64 `json:"ship_type_id"`
+	WeaponTypeID  int64 `json:"weapon_type_id"`
+	DamageDone    int64 `json:"damage_done"`
+	FinalBlow     bool  `json:"final_blow"`
+}
+
+type KillDetail struct {
+	KillmailID int64     `json:"killmail_id"`
+	Payload    []byte    `json:"payload"`
+	StoredAt   time.Time `json:"stored_at"`
+}
+
+type KillfeedState struct {
+	ID        int32     `json:"id"`
+	Sequence  int64     `json:"sequence"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
 type KillmailDetail struct {
 	KillmailID  int64     `json:"killmail_id"`
 	CharacterID int64     `json:"character_id"`

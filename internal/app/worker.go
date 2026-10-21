@@ -152,7 +152,15 @@ func (app *Application) runWorker(ctx context.Context) {
 	// worker has stopped and Close may close the database handles
 	// without any pass still querying them.
 	var children sync.WaitGroup
-	children.Add(2)
+	children.Add(3)
+
+	// The public killmail stream (killfeed.go) is its own paced
+	// loop: one file every 100 ms while kills arrive, six seconds
+	// while it waits for the next.
+	go func() {
+		defer children.Done()
+		runGuarded("killfeed", func() { app.runKillfeed(ctx) })
+	}()
 
 	// SDE maintenance runs alongside the ESI cycle: a first import
 	// when the static-data tables are empty, then a weekly update
@@ -783,6 +791,9 @@ func (c *cycleState) warmNames(ctx context.Context, characters []db.Character) {
 		// (a no-op when nothing they read has moved).
 		app.refreshMapLayers(ctx)
 	}
+	// The killboard: merge our characters' killmails, price the
+	// unpriced, prune details past a year. Local work only.
+	runGuarded("killboard", func() { app.killboardMaintenance(ctx) })
 }
 
 // cycleSummary builds the one-line status/log summary of a cycle.

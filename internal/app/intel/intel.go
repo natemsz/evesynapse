@@ -32,6 +32,10 @@ var Module = module.Module{
 	Nav: []module.NavSection{{
 		Section: "intel",
 		Entries: []module.NavEntry{
+			// The killboard's pages are core (killboard.go): they
+			// serve in every build, and lead this section's menu
+			// when the section exists.
+			{Href: "/intel/kills/", Label: "Killboard", Pages: []string{"killboard.html", "kill.html"}},
 			{Href: "/intel/wars/", Label: "Wars", Pages: []string{"intel_wars.html"}},
 			{Href: "/intel/incursions/", Label: "Incursions", Pages: []string{"intel_incursions.html"}},
 			{Href: "/intel/fw/", Label: "Faction Warfare", Pages: []string{"intel_fw.html"}},

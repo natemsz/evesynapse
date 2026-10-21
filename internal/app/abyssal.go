@@ -510,11 +510,13 @@ type abyssalComp struct {
 	// recency, attribution and the seller's share (compsFor).
 	DynamicsWeight float64
 	PrimaryAbs     float64
-	// For the learned correction: the comp's rolls, when it was
-	// first listed, and whether its listing is a confirmed sale.
-	Rolls     json.RawMessage
-	FirstSeen time.Time
-	Sold      bool
+	// For the learned correction: the comp's rolls and the
+	// mutaplasmid that made them, when it was first listed, and
+	// whether its listing is a confirmed sale.
+	Rolls         json.RawMessage
+	MutatorTypeID int64
+	FirstSeen     time.Time
+	Sold          bool
 }
 
 // abyssalRung is one ordinary module on an item's ladder: its
@@ -767,17 +769,43 @@ func abyssalPrimaryFigure(in abyssalScoringInputs, vals map[int64]float64) float
 		if w.PenaltyOnly || w.Weight <= bestW {
 			continue
 		}
-		if v, ok := vals[w.AttributeID]; ok {
+		if v, ok := vals[w.AttributeID]; ok && v != 0 {
 			best, bestW = math.Abs(v), w.Weight
 		}
 	}
 	return best
 }
 
+// abyssalRolledWeights is a family's weights cut to the
+// attributes one mutaplasmid moves. A family's weights cover
+// every class in its SDE group (an afterburner shares
+// propulsion's MWD signature weight, each smart bomb class rolls
+// one damage type of four), and a weight its mutaplasmid never
+// rolls must not choose the primary stat or the size figure.
+func abyssalRolledWeights(weights []db.AbyssalFamilyWeight, ranges map[int64]abyssalRange) []db.AbyssalFamilyWeight {
+	out := make([]db.AbyssalFamilyWeight, 0, len(weights))
+	for _, w := range weights {
+		if _, ok := ranges[w.AttributeID]; ok {
+			out = append(out, w)
+		}
+	}
+	return out
+}
+
+// abyssalDroneBandwidthAttr is droneBandwidthUsed: a drone's size
+// class itself (light 5, medium 10, heavy 25, ...).
+const abyssalDroneBandwidthAttr = 1272
+
 // abyssalSameSize reports whether a rung belongs to the item's
 // size class: its primary figure within a band of the source
-// module's own.
+// module's own. Drones are sized by bandwidth instead, exactly:
+// their primary figure (the damage multiplier) is about the same
+// for a light drone and a heavy one, and one SDE group holds
+// every size.
 func abyssalSameSize(in abyssalScoringInputs, rung map[int64]float64) bool {
+	if bw, ok := in.Base[abyssalDroneBandwidthAttr]; ok && bw > 0 {
+		return rung[abyssalDroneBandwidthAttr] == bw
+	}
 	src := abyssalPrimaryFigure(in, in.Base)
 	r := abyssalPrimaryFigure(in, rung)
 	if src <= 0 || r <= 0 {
@@ -1632,13 +1660,14 @@ func (app *Application) scoreAbyssalItems(ctx context.Context) int {
 		for _, kv := range rollList {
 			rolls[kv.AttributeID] = kv.Value
 		}
+		ranges := rangesFor(it.MutatorTypeID)
 		in := abyssalScoringInputs{
 			Family:   family,
 			Rolls:    rolls,
-			Ranges:   rangesFor(it.MutatorTypeID),
+			Ranges:   ranges,
 			Base:     baseFor(it.SourceTypeID),
 			HighGood: highGood,
-			Weights:  weightsByFamily[family],
+			Weights:  abyssalRolledWeights(weightsByFamily[family], ranges),
 		}
 		sc := scoreAbyssal(in)
 		entries = append(entries, scoredItem{it: it, family: family, rolls: rolls, in: in, sc: sc})
@@ -1711,6 +1740,7 @@ func (app *Application) scoreAbyssalItems(ctx context.Context) int {
 				DynamicsWeight: w,
 				PrimaryAbs:     r.PrimaryAbs.Float64,
 				Rolls:          r.Attributes,
+				MutatorTypeID:  r.MutatorTypeID,
 				FirstSeen:      r.FirstSeenAt,
 				Sold:           r.SoldAt.Valid,
 			})
@@ -1742,7 +1772,7 @@ func (app *Application) scoreAbyssalItems(ctx context.Context) int {
 				}
 				rows = append(rows, abyssalLearnRow{
 					ItemID: c.ItemID,
-					X:      abyssalLearnFeatures(weights, highGood, rolls),
+					X:      abyssalLearnFeatures(weights, highGood, rangesFor(c.MutatorTypeID), rolls),
 					Y:      math.Log(c.Ask / c.LadderValue),
 					W:      c.DynamicsWeight,
 					Seen:   c.FirstSeen,
@@ -1848,7 +1878,7 @@ func (app *Application) scoreAbyssalItems(ctx context.Context) int {
 			// backtest earned it a say; the measured error
 			// floors the range either way.
 			learned := learnedFor(family)
-			corr, useLearned := learned.Correction(it.ItemID, abyssalLearnFeatures(in.Weights, highGood, rolls))
+			corr, useLearned := learned.Correction(it.ItemID, abyssalLearnFeatures(weightsByFamily[family], highGood, in.Ranges, rolls))
 			errFloor := 0.0
 			if learned.Fit.HasBacktest {
 				errFloor = learned.Fit.MAELadder

@@ -1949,10 +1949,10 @@ func (app *mod) panelFromDetail(dv *detailView, row db.PubContract, pin pinSearc
 }
 
 // telemetryCard builds one abyssal line's mutaplasmid card:
-// the same stored roll data the detail page renders, keeping
-// only the rolls that moved their stat (an attribute left at
-// its base value is not a mutation worth a row; the detail
-// page keeps every roll).
+// the same stored rolls the detail page renders (only the
+// attributes the mutaplasmid moves; abyssalPanel), the compact
+// drawer further dropping a roll that landed exactly on its
+// base value.
 func telemetryCard(l detailLine, rollTag string, full bool) telemetryView {
 	a := l.Abyssal
 	tv := telemetryView{ItemID: l.ItemID, Name: l.Name, RollTag: rollTag, Full: full}
@@ -2306,7 +2306,7 @@ func (app *mod) detailLine(ctx context.Context, it db.PubContractItem, abyssal m
 }
 
 // abyssalPanel builds a mutated item's display from its
-// stored row: every rolled attribute with its value, the
+// stored row: every attribute its mutaplasmid rolled, with its value, the
 // source module's base value, which way the roll went, and
 // where the roll sits in the band its mutaplasmid could
 // produce -- then the stored score and estimate with their
@@ -2347,8 +2347,22 @@ func (app *mod) abyssalPanel(ctx context.Context, ab db.AbyssalItem) *abyssalPan
 			base[row.AttributeID] = row.Value
 		}
 	}
+	// ESI returns every dogma attribute of a mutated item, rolled
+	// or not. Only the ones its mutaplasmid moves are rolls: the
+	// scorer stores a percentile for exactly those (it is the
+	// same test pricing uses), so a row needs one. An item not
+	// yet scored has none, and shows the attributes that differ
+	// from its source module instead.
 	pcts := parseAbyssalPercentiles(ab.Percentiles)
 	for _, rl := range rolls {
+		if _, ok := pcts[rl.AttributeID]; !ok {
+			if len(pcts) > 0 {
+				continue
+			}
+			if bv, ok := base[rl.AttributeID]; !ok || bv == rl.Value {
+				continue
+			}
+		}
 		row := abyssalRoll{Value: formatAttrValue(rl.Value)}
 		sdeName := ""
 		if at, ok := names[rl.AttributeID]; ok {

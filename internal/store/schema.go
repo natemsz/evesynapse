@@ -468,6 +468,12 @@ var pgScansSchema string
 //go:embed schema_pg/078_intel_channels.sql
 var pgIntelChannelsSchema string
 
+// Step 079: intel posting tokens for the desktop log watcher, kept
+// as hashes.
+//
+//go:embed schema_pg/079_intel_tokens.sql
+var pgIntelTokensSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -575,6 +581,7 @@ func schemaSteps() []schemaStep {
 		{76, "demo_account", pgDemoAccountSchema, ""},
 		{77, "scans", pgScansSchema, ""},
 		{78, "intel_channels", pgIntelChannelsSchema, ""},
+		{79, "intel_tokens", pgIntelTokensSchema, ""},
 	}
 }
 

@@ -415,6 +415,16 @@ type IntelReport struct {
 	CreatedAt         time.Time `json:"created_at"`
 }
 
+type IntelToken struct {
+	ID         int64        `json:"id"`
+	UserID     int64        `json:"user_id"`
+	Name       string       `json:"name"`
+	Prefix     string       `json:"prefix"`
+	TokenHash  string       `json:"token_hash"`
+	CreatedAt  time.Time    `json:"created_at"`
+	LastUsedAt sql.NullTime `json:"last_used_at"`
+}
+
 type ItemName struct {
 	ItemID int64  `json:"item_id"`
 	Name   string `json:"name"`

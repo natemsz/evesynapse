@@ -69,7 +69,14 @@ type intelIdentity struct {
 }
 
 func (app *Application) intelIdentity(ctx context.Context) intelIdentity {
-	id := intelIdentity{userID: app.userID(ctx)}
+	return app.intelIdentityFor(ctx, app.userID(ctx), app.SessionCharacterID(ctx))
+}
+
+// intelIdentityFor is an account's identity by its user ID: a page's
+// reader (posting as their session character), or a posting token's
+// account (session 0: its first character).
+func (app *Application) intelIdentityFor(ctx context.Context, userID, session int64) intelIdentity {
+	id := intelIdentity{userID: userID}
 	if id.userID == 0 {
 		return id
 	}
@@ -77,7 +84,6 @@ func (app *Application) intelIdentity(ctx context.Context) intelIdentity {
 	if err != nil {
 		logging.Warnf("channels: characters of user %d: %v", id.userID, err)
 	}
-	session := app.SessionCharacterID(ctx)
 	seenCorp, seenAlliance := map[int64]bool{}, map[int64]bool{}
 	for _, r := range rows {
 		id.characters = append(id.characters, r.CharacterID)
@@ -105,7 +111,8 @@ func (app *Application) intelIdentity(ctx context.Context) intelIdentity {
 	if id.posterID == 0 {
 		// A character still settling (no corporation known yet)
 		// can post too.
-		for _, ch := range app.sessionCharacters(ctx) {
+		chars, _ := app.queries.ListCharactersByUser(ctx, id.userID)
+		for _, ch := range chars {
 			if id.posterID == 0 || ch.CharacterID == session {
 				id.posterID, id.posterName = ch.CharacterID, ch.Name
 			}
@@ -179,6 +186,12 @@ type channelListView struct {
 	SignedIn bool
 	Channels []channelRow
 	Error    string
+	// The log watcher (intel_tokens.go): the account's tokens, the
+	// downloads, and a token just made, shown once in its config.
+	Tokens    []intelTokenRow
+	Downloads []intelDownload
+	NewToken  string
+	NewConfig string
 }
 
 type channelRow struct {
@@ -251,6 +264,7 @@ func (app *Application) handleChannels(w http.ResponseWriter, r *http.Request) {
 		for _, c := range app.accessibleChannels(ctx, id) {
 			v.Channels = append(v.Channels, channelRow{ID: c.ID, Name: c.Name, Description: c.Description, Owner: c.OwnerUserID == id.userID, CanPost: c.CanPost})
 		}
+		app.fillWatcher(ctx, v, id.userID)
 	}
 	data.Channels = v
 	data.HeadMeta = app.HeadMeta(module.PageMeta{Title: "Intel channels", Description: "Shared intel channels: report hostiles, paste intel chat, and see it all on the map.", CanonicalPath: "/intel/channels/"})
@@ -423,28 +437,18 @@ func (app *Application) handleChannelReport(w http.ResponseWriter, r *http.Reque
 			reply(http.StatusUnprocessableEntity, fmt.Sprintf("Paste up to %d lines at a time.", intelMaxLines), 0)
 			return
 		}
-		o := intelchat.Parse(lines, app.systemLookup(ctx), now)
-		posted := 0
-		for _, rep := range o.Reports {
-			p := base
-			p.Source, p.SystemID, p.Clear, p.Hostiles = "chat", rep.SystemID, rep.Clear, int32(min(max(rep.Hostiles, 0), 999))
-			p.Text = clipRunes(rep.Text, intelMaxText)
-			p.Pilots = p.Text
-			if rep.Speaker != "" {
-				p.Reporter = clipRunes(rep.Speaker, 40)
-			}
-			if !rep.At.IsZero() && rep.At.Before(now.Add(time.Minute)) && rep.At.After(now.Add(-intelRetention)) {
-				p.SeenAt = rep.At
-			}
-			if _, err := app.queries.InsertIntelReport(ctx, p); err != nil {
-				logging.Errorf("channels: insert chat report: %v", err)
-				continue
-			}
-			posted++
-		}
+		res := app.postChatLines(ctx, base, lines, "chat")
+		posted := res.Posted
 		msg := fmt.Sprintf("Posted %s from the pasted lines.", plural(posted, "report"))
-		if skipped := o.NoSystem + o.Questions; skipped > 0 {
-			msg += fmt.Sprintf(" %s skipped (no system named, or a question).", plural(skipped, "line"))
+		if res.Duplicates > 0 {
+			msg += fmt.Sprintf(" %d already in the channel.", res.Duplicates)
+		}
+		if res.Skipped > 0 {
+			msg += fmt.Sprintf(" %s skipped (no system named, or a question).", plural(res.Skipped, "line"))
+		}
+		if posted == 0 && res.Duplicates > 0 {
+			reply(http.StatusOK, msg, 0)
+			return
 		}
 		if posted == 0 {
 			reply(http.StatusUnprocessableEntity, "No report found in those lines: each needs a system's name.", 0)
@@ -485,6 +489,49 @@ func (app *Application) handleChannelReport(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	reply(http.StatusOK, "Reported.", 1)
+}
+
+// chatPostResult is what posting chat lines came to.
+type chatPostResult struct {
+	Posted     int `json:"posted"`
+	Duplicates int `json:"duplicates"`
+	Skipped    int `json:"skipped"`
+}
+
+// postChatLines reads intel chat lines into reports on base's channel,
+// as base's author. A line's speaker and timestamp, when it has them,
+// are the report's; a report already in the channel (the same moment,
+// system, speaker and words) is not stored twice, so lines sent again
+// -- a pasted log overlapping the last, a watcher restarting, two
+// characters logging the same channel -- land once.
+func (app *Application) postChatLines(ctx context.Context, base db.InsertIntelReportParams, lines, source string) chatPostResult {
+	var res chatPostResult
+	now := base.CreatedAt
+	o := intelchat.Parse(lines, app.systemLookup(ctx), now)
+	res.Skipped = o.NoSystem + o.Questions
+	for _, rep := range o.Reports {
+		p := base
+		p.Source, p.SystemID, p.Clear, p.Hostiles = source, rep.SystemID, rep.Clear, int32(min(max(rep.Hostiles, 0), 999))
+		p.Text = clipRunes(rep.Text, intelMaxText)
+		p.Pilots = p.Text
+		if rep.Speaker != "" {
+			p.Reporter = clipRunes(rep.Speaker, 40)
+		}
+		if !rep.At.IsZero() && rep.At.Before(now.Add(time.Minute)) && rep.At.After(now.Add(-intelRetention)) {
+			p.SeenAt = rep.At
+			dup, err := app.queries.IntelReportExists(ctx, db.IntelReportExistsParams{ChannelID: p.ChannelID, SeenAt: p.SeenAt, SystemID: p.SystemID, Reporter: p.Reporter, Text: p.Text})
+			if err == nil && dup {
+				res.Duplicates++
+				continue
+			}
+		}
+		if _, err := app.queries.InsertIntelReport(ctx, p); err != nil {
+			logging.Errorf("channels: insert chat report: %v", err)
+			continue
+		}
+		res.Posted++
+	}
+	return res
 }
 
 // handleScanPost is POST /intel/scan/{id}/post: a scan from the scan

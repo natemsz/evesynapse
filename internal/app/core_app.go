@@ -725,6 +725,15 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 		r.Post("/intel/channels/{channelID}/delete", app.handleChannelDelete)
 		r.Post("/intel/channels/{channelID}/grants", app.handleGrantAdd)
 		r.Post("/intel/channels/{channelID}/grants/remove", app.handleGrantRemove)
+		r.Post("/intel/channels/tokens", app.handleIntelTokenCreate)
+		r.Post("/intel/channels/tokens/{tokenID}/revoke", app.handleIntelTokenRevoke)
+	})
+	// The desktop log watcher's API (intel_tokens.go): a posting
+	// token, not a session, is the credential.
+	r.Route("/api/intel/v1", func(r chi.Router) {
+		r.Use(app.intelTokenAuth)
+		r.Get("/channels", app.handleAPIChannels)
+		r.Post("/channels/{channelID}/lines", app.handleAPILines)
 	})
 
 	r.Route("/map", func(r chi.Router) {

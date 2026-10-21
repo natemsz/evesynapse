@@ -93,6 +93,11 @@ type Application struct {
 	allianceSeedMu   sync.Mutex
 	lastAllianceSeed time.Time
 
+	// demoMu guards the cached demo account id (demo.go).
+	demoMu           sync.Mutex
+	demoUserIDCached int64
+	demoUserKnown    bool
+
 	// tokenLocks serializes access-token refreshes one character at a
 	// time: CCP rotates refresh tokens on every refresh, so two
 	// concurrent refreshes on the same stored token could invalidate
@@ -396,6 +401,15 @@ func New(cfg Config) (*Application, error) {
 		}()
 	}
 
+	// The shared demo account (demo.go): created and seeded here
+	// so the landing page's Try it now button always has an
+	// account to open. A failure is a warning, not a boot
+	// failure: the sign-in route retries, and the worker's
+	// reset pass keeps retrying until the seed lands.
+	if err := app.ensureDemoAccount(context.Background()); err != nil {
+		logging.Warnf("demo: prepare the demo account: %v", err)
+	}
+
 	// One-shot reachability probe so phone (Termux) logs immediately
 	// show whether CCP is reachable — DNS trouble there otherwise only
 	// surfaces midway through a login attempt.
@@ -474,6 +488,10 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	r.Use(app.slideSession)
 	r.Use(app.trackActivity)
 	r.Use(app.pageWantScopeMiddleware)
+	// The demo account's write safeguards (demo.go): turns away
+	// mutating requests from demo sessions before any handler
+	// runs. Inert for every other session.
+	r.Use(app.demoWriteGate)
 
 	r.Get("/", app.handleHome)
 	r.Route("/home", func(r chi.Router) {
@@ -511,6 +529,9 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	r.Get("/auth/link", app.handleLinkChoose)
 	r.Get("/auth/eve", app.handleEVELogin)
 	r.Get("/auth/login", app.handleEVELoginIdentity)
+	// The landing page's Try it now: a session on the shared
+	// demo account, no EVE SSO (demo.go).
+	r.Get("/auth/demo", app.handleDemoSignIn)
 	r.Get("/auth/callback", app.handleEVECallback)
 	// Signing out changes state, so it is a POST: a link or an image
 	// tag on another page cannot sign the visitor out.

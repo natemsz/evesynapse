@@ -35,6 +35,8 @@ import (
 
 	"evesynapse/internal/pidfile"
 	"evesynapse/internal/store"
+
+	db "evesynapse/internal/db/sqlc"
 )
 
 // Version returns the rendered product version: "v" followed by the
@@ -100,6 +102,44 @@ func runRefresh(cfg Config, pidPath string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stdout, "  • %s\n", step)
 	}
 	fmt.Fprintln(stdout, "Your accounts, characters, watchlist, saved layouts, and collected history were not touched.")
+	return 0
+}
+
+// RunSeedDemo implements `evesynapse -seed-demo` (demo.go): it
+// creates the shared demo account if this install has none, then
+// restores its seed data to a fresh state. Unlike -refresh it is
+// safe to run while the server is up: seeding writes the same
+// stored rows the running server reads, and the daily worker
+// reset does exactly this on its own cadence.
+func RunSeedDemo(args []string, cfg Config, stdout, stderr io.Writer) int {
+	if len(args) > 0 {
+		fmt.Fprintln(stderr, "Usage: evesynapse -seed-demo")
+		return 2
+	}
+	conn, pool, err := store.Open(context.Background(), cfg.databaseURL)
+	if err != nil {
+		fmt.Fprintf(stderr, "Couldn't open the EveSynapse database: %v\n", err)
+		return 1
+	}
+	defer conn.Close()
+	defer pool.Close()
+
+	app := &Application{cfg: cfg, queries: db.New(conn), db: conn, pool: pool}
+	ctx := context.Background()
+	if err := app.ensureDemoAccount(ctx); err != nil {
+		fmt.Fprintf(stderr, "The demo account could not be prepared: %v\n", err)
+		return 1
+	}
+	if err := app.seedDemoData(ctx, time.Now()); err != nil {
+		fmt.Fprintf(stderr, "The demo seed did not finish: %v\n", err)
+		return 1
+	}
+	if err := app.queries.StampDemoReset(ctx, time.Now().UTC()); err != nil {
+		fmt.Fprintf(stderr, "The demo seed landed but its reset clock did not: %v\n", err)
+		return 1
+	}
+	fmt.Fprintf(stdout, "Demo account seeded: %s and %s of the %s are ready behind the landing page's Try it now button.\n",
+		demoCharName, demoChar2Name, demoCorpName)
 	return 0
 }
 

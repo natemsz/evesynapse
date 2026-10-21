@@ -82,7 +82,7 @@ func (app *Application) captureOpAttendance(ctx context.Context, now time.Time) 
 // captureOneOp reads one op's fleet and records who is in it.
 func (app *Application) captureOneOp(ctx context.Context, op db.Op, now time.Time) (status string, seen int, limited bool) {
 	fc, err := app.queries.GetCharacter(ctx, op.FcCharacterID)
-	if err != nil || !characterSyncs(fc) {
+	if err != nil || !app.characterMaySync(ctx, fc) {
 		return captureNoFC, 0, false
 	}
 	if !scopeSet(fc.Scopes)[fleetScope] {

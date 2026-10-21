@@ -441,6 +441,20 @@ var pgMapLayersSchema string
 //go:embed schema_pg/074_killboard.sql
 var pgKillboardSchema string
 
+// Step 075: place activity -- ESI's public hourly per-system
+// kills/jumps aggregates as history, the distilled per-system and
+// per-region figures the place pages read, current sovereignty
+// holders, and the collector's cache-window gate.
+//
+//go:embed schema_pg/075_place_activity.sql
+var pgPlaceActivitySchema string
+
+// Step 076: the shared demo account -- the is_demo flag on users
+// and the demo reset clock.
+//
+//go:embed schema_pg/076_demo_account.sql
+var pgDemoAccountSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -544,6 +558,8 @@ func schemaSteps() []schemaStep {
 		{72, "universe_map", pgUniverseMapSchema, ""},
 		{73, "map_layers", pgMapLayersSchema, ""},
 		{74, "killboard", pgKillboardSchema, ""},
+		{75, "place_activity", pgPlaceActivitySchema, ""},
+		{76, "demo_account", pgDemoAccountSchema, ""},
 	}
 }
 

@@ -878,6 +878,7 @@ type ShellData struct {
 	AssetVersion  string
 	LoggedIn      bool
 	IsAdmin       bool
+	Demo          bool // the session is the shared demo account (demo.go)
 	CharacterName string
 	SSOConfigured bool
 	AutoRefresh   bool

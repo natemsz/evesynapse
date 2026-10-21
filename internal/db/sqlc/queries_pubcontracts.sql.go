@@ -868,6 +868,55 @@ func (q *Queries) ListAbyssalFamilyRollAttributes(ctx context.Context, family st
 	return items, nil
 }
 
+const listAbyssalFamilyRollAttributesAll = `-- name: ListAbyssalFamilyRollAttributesAll :many
+SELECT a.family AS family,
+       r.attribute_id AS attribute_id,
+       COALESCE(MAX(w.weight), 0)::double precision AS weight
+FROM abyssal_items a
+JOIN abyssal_ranges r ON r.mutator_type_id = a.mutator_type_id
+LEFT JOIN abyssal_family_weights w
+  ON w.family = a.family AND w.attribute_id = r.attribute_id
+WHERE a.family <> ''
+  AND a.mutator_type_id <> 0
+  AND r.min_mult <> r.max_mult
+GROUP BY a.family, r.attribute_id
+ORDER BY a.family, weight DESC, r.attribute_id
+`
+
+type ListAbyssalFamilyRollAttributesAllRow struct {
+	Family      string  `json:"family"`
+	AttributeID int64   `json:"attribute_id"`
+	Weight      float64 `json:"weight"`
+}
+
+// Every family's rollable attributes in one grouped pass:
+// the roll slider catalog the search page carries so the
+// drawer can swap slider sets as families are picked,
+// without a submit. Same rows as
+// ListAbyssalFamilyRollAttributes, grouped per family.
+func (q *Queries) ListAbyssalFamilyRollAttributesAll(ctx context.Context) ([]ListAbyssalFamilyRollAttributesAllRow, error) {
+	rows, err := q.db.QueryContext(ctx, listAbyssalFamilyRollAttributesAll)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListAbyssalFamilyRollAttributesAllRow
+	for rows.Next() {
+		var i ListAbyssalFamilyRollAttributesAllRow
+		if err := rows.Scan(&i.Family, &i.AttributeID, &i.Weight); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listAbyssalFamilyWeightsByFamilies = `-- name: ListAbyssalFamilyWeightsByFamilies :many
 SELECT family, attribute_id, weight, penalty_only
 FROM abyssal_family_weights

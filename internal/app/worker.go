@@ -241,12 +241,13 @@ func (app *Application) refreshCycle(ctx context.Context) {
 	app.refreshListening(ctx)
 
 	// Parked characters (token_dead, owner_changed) are never
-	// synced until the user signs them in again; they are counted
-	// for the status line but cost no fetches.
+	// synced until the user signs them in again; the demo
+	// account's pilots never sync at all (characterMaySync).
+	// They are counted for the status line but cost no fetches.
 	var eligible []db.Character
 	parked := 0
 	for _, ch := range characters {
-		if characterSyncs(ch) {
+		if app.characterMaySync(ctx, ch) {
 			eligible = append(eligible, ch)
 		} else {
 			parked++
@@ -339,6 +340,24 @@ func (app *Application) refreshCycle(ctx context.Context) {
 	// mirror costs this cycle nothing.
 	app.refreshFallbackPrices(ctx)
 
+	// Place activity (schema 075): ESI's public hourly per-system
+	// kills/jumps aggregates and the sovereignty map, mirrored
+	// and distilled for the system and region pages. Self-gated
+	// on ESI's cache windows like the mirrors above, so a fresh
+	// collection costs this cycle nothing.
+	if stored, aLimited := app.refreshPlaceActivity(ctx); stored {
+		c.refreshed++
+	} else if aLimited {
+		logging.Warnf("worker: ESI error limit hit collecting place activity; backing off until next cycle")
+		c.limited = true
+	}
+	if stored, sLimited := app.refreshPlaceSovereignty(ctx); stored {
+		c.refreshed++
+	} else if sLimited {
+		logging.Warnf("worker: ESI error limit hit collecting place sovereignty; backing off until next cycle")
+		c.limited = true
+	}
+
 	// The character pass, several characters at a time
 	// (worker_lanes.go).
 	c.refreshCharacters(ctx, eligible)
@@ -397,6 +416,12 @@ func (app *Application) refreshCycle(ctx context.Context) {
 		}
 	})
 	clock.mark("notifications", time.Now())
+
+	// The demo account's daily restore (demo.go): puts the
+	// shared test-drive account back to its seed state.
+	runGuarded("demo reset", func() {
+		app.maybeResetDemo(ctx, time.Now())
+	})
 
 	// Module jobs that follow the notifications (Discord's, for one:
 	// new ops to their channels, roles brought in line with what was

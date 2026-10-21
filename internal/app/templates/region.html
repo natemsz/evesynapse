@@ -1,5 +1,5 @@
 {{define "title"}}{{if and .Region .Region.Name}}{{.Region.Name}}{{else}}Region{{end}}{{end}}
-{{define "pagetitle"}}{{if .Region}}{{if eq .Region.State "missing"}}<h1><span class="gt">Region</span></h1>{{else}}<h1 class="h-with-action"><span class="gt">{{.Region.Name}}</span>{{with dotlanRegionURL .Region.Name}}<a class="h-action" href="{{.}}" target="_blank" rel="noopener noreferrer" title="Open {{$.Region.Name}} on Dotlan"><svg viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="url(#nav-glyph-gradient)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4.5h5.5V10"/><path d="M19.5 4.5 11 13"/><path d="M18 14v4.5a1 1 0 0 1-1 1H6.5a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1H11"/></g></svg>Dotlan</a>{{end}}</h1>{{end}}{{end}}{{end}}
+{{define "pagetitle"}}{{if .Region}}{{if eq .Region.State "missing"}}<h1><span class="gt">Region</span></h1>{{else}}<h1 class="h-with-action"><span class="gt">{{.Region.Name}}</span><a class="h-action" href="/map/?region={{.Region.RegionID}}" title="Open {{.Region.Name}} on the universe map">Map</a></h1>{{end}}{{end}}{{end}}
 {{define "content"}}
 {{if .Region}}
 {{if eq .Region.State "missing"}}
@@ -8,12 +8,46 @@
 
 {{if .Region.Systems}}
 <p>{{len .Region.Systems}} systems{{if .Region.High}} · {{.Region.High}} high-sec{{end}}{{if .Region.Low}} · {{.Region.Low}} low-sec{{end}}{{if .Region.Null}} · {{.Region.Null}} null-sec{{end}}</p>
+{{end}}
+
+<h2>Activity</h2>
+{{with .Region.Activity}}
 <div class="tw">
 <table>
-  <thead><tr><th>System</th><th>Security</th></tr></thead>
+  <thead><tr><th></th><th>Last hour</th><th>Last 24 hours</th><th>{{.AvgLabel}}</th></tr></thead>
+  <tbody>
+    <tr><th>Ship kills</th><td>{{.ShipKills1h}}</td><td>{{.ShipKills24h}}</td><td>{{.ShipKillsDay}}</td></tr>
+    <tr><th>Pod kills</th><td>{{.PodKills1h}}</td><td>{{.PodKills24h}}</td><td>{{.PodKillsDay}}</td></tr>
+    <tr><th>NPC kills</th><td>{{.NPCKills1h}}</td><td>{{.NPCKills24h}}</td><td>{{.NPCKillsDay}}</td></tr>
+    <tr><th>Jumps</th><td>{{.Jumps1h}}</td><td>{{.Jumps24h}}</td><td>{{.JumpsDay}}</td></tr>
+  </tbody>
+</table>
+</div>
+{{else}}
+<p><small>No activity data collected yet.</small></p>
+{{end}}
+
+{{if .Region.Sov}}
+<h2>Sovereignty</h2>
+<div class="tw">
+<table>
+  <tbody>
+    {{range .Region.Sov}}
+    <tr><td>{{if .AllianceID}}{{allianceLink .AllianceID .AllianceName}}{{else if .CorpID}}{{corpLink .CorpID .CorpName}}{{else}}{{.FactionName}}{{end}}</td><td>{{.SystemsLabel}}</td></tr>
+    {{end}}
+  </tbody>
+</table>
+</div>
+{{if .Region.SovTruncated}}<p><small>Largest holders shown.</small></p>{{end}}
+{{end}}
+
+{{if .Region.Systems}}
+<div class="tw">
+<table>
+  <thead><tr><th>System</th><th>Security</th><th>Kills (24h)</th><th>Jumps (24h)</th></tr></thead>
   <tbody>
     {{range .Region.Systems}}
-    <tr><td>{{systemLink .SystemID .Name}}</td><td>{{secStatus .Security}}</td></tr>
+    <tr><td>{{systemLink .SystemID .Name}}</td><td>{{secStatus .Security}}</td><td>{{.Kills24h}}</td><td>{{.Jumps24h}}</td></tr>
     {{end}}
   </tbody>
 </table>

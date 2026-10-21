@@ -103,30 +103,100 @@ func TestContractSearchRollSlidersOffered(t *testing.T) {
 	app, conn, _ := buildCorpTestApp(t, tr)
 	seedRollBandCorpus(t, conn)
 
-	// With the family in scope, the drawer bands every
-	// attribute its mutaplasmids roll -- damage, capacitor
-	// and the CPU penalty -- and never the fixed one.
+	// With the family in scope, the drawer's sliders for
+	// every attribute its mutaplasmids roll -- damage,
+	// capacitor and the CPU penalty -- are visible and
+	// enabled, and never the fixed one (it renders nowhere).
 	_, body := getAnon(t, app, "/contracts/search/?family=test_damage_thing")
 	mustContain(t, "family roll sliders", body,
 		`name="rollmin_64"`, `name="rollmax_64"`,
 		`name="rollmin_6"`, `name="rollmax_6"`,
-		`name="rollmin_50"`, `name="rollmax_50"`)
+		`name="rollmin_50"`, `name="rollmax_50"`,
+		`data-roll-field="64">`, `data-roll-field="6">`, `data-roll-field="50">`)
 	if strings.Contains(body, `name="rollmin_999"`) {
 		t.Error("the fixed attribute (no range width) got a slider")
 	}
-	// No family and no band: no roll sliders at all.
+	// The page carries the per-family slider catalog,
+	// attributes heaviest weight first.
+	mustContain(t, "roll catalog", body, `id="cs-roll-catalog"`,
+		`"family":"test_damage_thing","attrs":[64,50,6]`)
+	// No family and no band: the guidance shows, and every
+	// slider renders hidden and disabled, so the submitted
+	// form carries no band -- the picker's swap enables
+	// them client-side when a family is chosen.
 	_, body = getAnon(t, app, "/contracts/search/")
-	if strings.Contains(body, `name="rollmin_64"`) {
-		t.Error("roll sliders rendered with no family in scope and no band set")
-	}
-	// A band alone summons its own slider (and opens the
-	// abyssal drawer), so an active band is never invisible.
+	mustContain(t, "no-family guidance", body,
+		`data-roll-hint>Pick a module family to band any of its rolls.`,
+		`data-roll-field="64" hidden`,
+		`name="rollmin_64" min="0" max="100" value="" placeholder="0" disabled`)
+	// A band alone makes its own slider visible and enabled
+	// (and opens the abyssal drawer), so an active band is
+	// never invisible; the unbanded attributes stay
+	// disabled.
 	_, body = getAnon(t, app, "/contracts/search/?rollmax_64=50")
-	mustContain(t, "banded slider", body, `name="rollmin_64"`, `name="rollmax_64"`,
-		`<section class="cs-drawer" data-drawer-panel="abyssal">`)
-	if strings.Contains(body, `name="rollmin_6"`) {
-		t.Error("an unbanded attribute got a slider with no family in scope")
+	mustContain(t, "banded slider", body,
+		`data-roll-field="64">`,
+		`name="rollmax_64" min="0" max="100" value="50" placeholder="100">`,
+		`<section class="cs-drawer" data-drawer-panel="abyssal">`,
+		`name="rollmin_6" min="0" max="100" value="" placeholder="0" disabled`)
+}
+
+// seedSecondRollFamily adds a second abyssal family whose
+// mutaplasmid rolls one attribute (77) the first family's
+// never does, for the catalog and cross-family band pins.
+func seedSecondRollFamily(t *testing.T, conn *sql.DB) {
+	t.Helper()
+	ctx := context.Background()
+	now := time.Now().UTC()
+	exec := func(query string, args ...any) {
+		t.Helper()
+		if _, err := conn.ExecContext(ctx, query, args...); err != nil {
+			t.Fatalf("seed %q: %v", query, err)
+		}
 	}
+	exec(`INSERT INTO sde_attribute_types (attribute_id, name, stackable, high_is_good, unit_id, default_value) VALUES
+		(77, 'testAttrB', 1, 1, 0, 0)`)
+	exec(`INSERT INTO abyssal_ranges (mutator_type_id, attribute_id, min_mult, max_mult, sde_build) VALUES
+		(47737, 77, 0.9, 1.2, 'test')`)
+	exec(`INSERT INTO abyssal_items (item_id, type_id, source_type_id, mutator_type_id, created_by,
+		attributes, fetched_at, first_seen_at, last_seen_at,
+		family, score, percentiles, derived_stats, est_value, est_low, est_high,
+		est_basis, est_scope, est_comps, premium_mult, cap_attribute_id, cap_kind, scored_at)
+		VALUES (900005, 60001, 30001, 47737, 9001,
+		'[{"attribute_id":77,"value":1.0}]', $1, $1, $1,
+		'test_other_thing', 0.5, '{"77":0.5}', '[]', 100000000, 90000000, 110000000,
+		'corpus', 'module', 4, 1, 0, '', $1)`, now)
+}
+
+func TestContractSearchRollSliderCatalog(t *testing.T) {
+	tr := &openWindowTransport{}
+	app, conn, _ := buildCorpTestApp(t, tr)
+	seedRollBandCorpus(t, conn)
+	seedSecondRollFamily(t, conn)
+
+	// The catalog carries every family's rollable
+	// attributes, so the drawer can swap slider sets as
+	// families are picked without a submit.
+	_, body := getAnon(t, app, "/contracts/search/")
+	mustContain(t, "two-family catalog", body,
+		`"family":"test_damage_thing","attrs":[64,50,6]`,
+		`"family":"test_other_thing","attrs":[77]`)
+
+	// A band on the other family's attribute stays visible
+	// and enabled beside the picked family's sliders.
+	_, body = getAnon(t, app, "/contracts/search/?family=test_damage_thing&rollmin_77=40")
+	mustContain(t, "cross-family band", body,
+		`data-roll-field="64">`,
+		`data-roll-field="77">`,
+		`name="rollmin_77" min="0" max="100" value="40" placeholder="0">`)
+
+	// With the other family in scope, the first family's
+	// unbanded sliders render hidden and disabled.
+	_, body = getAnon(t, app, "/contracts/search/?family=test_other_thing")
+	mustContain(t, "other family scope", body,
+		`data-roll-field="77">`,
+		`data-roll-field="64" hidden`,
+		`name="rollmin_64" min="0" max="100" value="" placeholder="0" disabled`)
 }
 
 func TestContractSearchRollBands(t *testing.T) {

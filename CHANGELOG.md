@@ -7,14 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-- Placeholder section for upcoming changes.
+## [v0.5.5.4] - 2026-10-21
 
-### Changed
-- Placeholder section for upcoming changes.
+Automated build of EveSynapse v0.5.5.4. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
-### Fixed
-- Placeholder section for upcoming changes.
+
+## What's Changed
+### 🚀 Features
+* Place pages: our map links, activity stats and sovereignty by @natemsz in https://github.com/natemsz/evesynapse/pull/543
+* Landing: map, killboard and route planner join the showcase by @natemsz in https://github.com/natemsz/evesynapse/pull/544
+### 🐛 Bug Fixes
+* Fix: abyssal roll sliders activate on family selection by @natemsz in https://github.com/natemsz/evesynapse/pull/545
+### Other Changes
+* docs(changelog): review changelog for v0.5.5.3 by @github-actions[bot] in https://github.com/natemsz/evesynapse/pull/542
+
+
+**Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.5.3...v0.5.5.4
+
+## [v0.5.5.3] - 2026-10-21
+
+Automated build of EveSynapse v0.5.5.3. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+
+## What's Changed
+### 🐛 Bug Fixes
+* Fix: footer sits 0.5px above the phone bottom bar by @natemsz in https://github.com/natemsz/evesynapse/pull/537
+### Other Changes
+* docs(changelog): review changelog for v0.5.5.2 by @github-actions[bot] in https://github.com/natemsz/evesynapse/pull/535
+* Map: steady labels while zooming; zoom in never exits a region by @natemsz in https://github.com/natemsz/evesynapse/pull/536
+* Killboard ingest: zKillboard R2Z2 stream + our characters' kills, priced by our appraisal by @natemsz in https://github.com/natemsz/evesynapse/pull/539
+* Map: threat layer + smart routing with ESI waypoint send by @natemsz in https://github.com/natemsz/evesynapse/pull/541
+
+
+**Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.5.2...v0.5.5.3
 
 ## [v0.5.5.2] - 2026-10-21
 

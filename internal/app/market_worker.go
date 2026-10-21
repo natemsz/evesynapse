@@ -482,7 +482,7 @@ func (app *Application) refreshOrderHealth(ctx context.Context, characters []db.
 	openByChar := make(map[int64]map[int64]bool)
 	allOpenByChar := make(map[int64]map[int64]esi.CharOrder)
 	for _, ch := range characters {
-		if !characterSyncs(ch) {
+		if !app.characterMaySync(ctx, ch) {
 			continue // parked characters' orders are stale news, not alerts
 		}
 		orders, ok := app.loadOrdersSnapshot(ctx, ch.CharacterID)

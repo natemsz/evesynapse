@@ -35,6 +35,14 @@ const tokenRefreshWindow = 60 * time.Second
 func (app *Application) validAccessToken(ctx context.Context, ch db.Character) (string, error) {
 	defer app.tokenLocks.lock(ch.CharacterID)()
 
+	// The demo account's pilots have no EVE tokens, by design:
+	// refuse here, at the one place every authenticated ESI
+	// call gets its token, so no caller can ever try to spend
+	// one on the demo's behalf.
+	if app.isDemoUser(ctx, ch.UserID) {
+		return "", fmt.Errorf("character %d is a demo pilot and has no EVE token", ch.CharacterID)
+	}
+
 	// Re-read: the row we were handed may predate a recent refresh.
 	if fresh, err := app.queries.GetCharacter(ctx, ch.CharacterID); err == nil {
 		ch = fresh

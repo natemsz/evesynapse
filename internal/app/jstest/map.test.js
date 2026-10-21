@@ -156,4 +156,28 @@ test("routes plan shortest first and bend around danger when asked", () => {
   const calm = map.routeSummary(G, LY, [0, 3, 4, 2]);
   assert.strictEqual(calm.jumps, 3);
   assert.deepStrictEqual(calm.camps, []);
+
+  // Intel: hostiles reported in B a minute ago, D reported then
+  // cleared, E's report past its half hour.
+  const now = 100000;
+  const I = map.joinIntel(G, {
+    channels: [{ id: 1, name: "Home", post: true }],
+    reports: [
+      { id: 1, ch: 1, sys: 102, n: 4, at: now - 60 },
+      { id: 2, ch: 1, sys: 104, n: 2, at: now - 600 },
+      { id: 3, ch: 1, sys: 104, n: 0, clear: true, at: now - 120 },
+      { id: 4, ch: 1, sys: 105, n: 9, at: now - 4000 },
+      { id: 5, ch: 1, sys: 999, n: 1, at: now }
+    ]
+  }, now);
+  assert.strictEqual(I.hostile, 1, "one system with live hostiles");
+  assert.strictEqual(I.clear, 1, "a newer clear clears a system");
+  assert.ok(I.prices[1] > 150 && I.prices[3] === 0 && I.prices[4] === 0, "only fresh hostiles cost");
+  assert.deepStrictEqual(I.bySys[3].map((r) => r.id), [3, 2], "a system's reports newest first");
+  assert.strictEqual(I.bySys[4], undefined, "a report past its half hour is gone");
+  const noLayer = map.routeCost(G, null, "calm", I.prices);
+  assert.deepStrictEqual(map.planRoute(G, 0, 2, noLayer), [0, 3, 4, 2], "calm skirts reported hostiles");
+  assert.deepStrictEqual(map.planRoute(G, 0, 2, map.routeCost(G, null, "short", I.prices)), [0, 1, 2],
+    "shortest ignores intel");
+  assert.deepStrictEqual(map.routeSummary(G, null, [0, 1, 2], I.prices).reported, [1], "the route names the reported system");
 });

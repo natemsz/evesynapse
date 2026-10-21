@@ -461,6 +461,13 @@ var pgDemoAccountSchema string
 //go:embed schema_pg/077_scans.sql
 var pgScansSchema string
 
+// Step 078: intel channels -- owned streams of intel reports, shared
+// by grant (a character, corporation, alliance or group; read or
+// read and post), drawn on the map; reports kept 7 days.
+//
+//go:embed schema_pg/078_intel_channels.sql
+var pgIntelChannelsSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -567,6 +574,7 @@ func schemaSteps() []schemaStep {
 		{75, "place_activity", pgPlaceActivitySchema, ""},
 		{76, "demo_account", pgDemoAccountSchema, ""},
 		{77, "scans", pgScansSchema, ""},
+		{78, "intel_channels", pgIntelChannelsSchema, ""},
 	}
 }
 

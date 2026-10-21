@@ -820,6 +820,7 @@ func (c *cycleState) warmNames(ctx context.Context, characters []db.Character) {
 	// unpriced, prune details past a year. Local work only.
 	runGuarded("killboard", func() { app.killboardMaintenance(ctx) })
 	runGuarded("scans", func() { app.pruneScans(ctx) })
+	runGuarded("channels", func() { app.pruneIntelReports(ctx) })
 }
 
 // cycleSummary builds the one-line status/log summary of a cycle.

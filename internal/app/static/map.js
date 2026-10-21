@@ -281,10 +281,13 @@
   var ROUTE_MODES = { short: 1, safe: 1, calm: 1 };
   var THREAT_PRICE = [0, 3, 10, 40, 120];
   var CAMP_PRICE = 400, LOWSEC_PRICE = 50;
-  function routeCost(G, LY, mode) {
+  // intel, when given, is the price of each system's fresh hostile
+  // reports from the reader's intel channels (intelPrices).
+  function routeCost(G, LY, mode, intel) {
     return function (j) {
       var c = 1;
       if (mode === "short") return c;
+      if (intel) c += intel[j];
       if (mode === "safe" && G.tier[j] < 5) c += LOWSEC_PRICE;
       if (LY) {
         c += THREAT_PRICE[threatLevel(LY.threat[j])];
@@ -341,12 +344,13 @@
   // routeSummary: the jumps by security band, the camps on the way,
   // and the systems hot enough to warn of (Medium threat and up),
   // hottest first.
-  function routeSummary(G, LY, path) {
-    var s = { jumps: path.length - 1, high: 0, low: 0, nul: 0, camps: [], hot: [], top: 0 };
+  function routeSummary(G, LY, path, intel) {
+    var s = { jumps: path.length - 1, high: 0, low: 0, nul: 0, camps: [], hot: [], top: 0, reported: [] };
     path.forEach(function (i, at) {
       if (at === 0) return; // where you start is not part of the trip
       var t = G.tier[i];
       if (t >= 5) s.high++; else if (t > 0) s.low++; else s.nul++;
+      if (intel && intel[i] > 0) s.reported.push(i);
       if (!LY) return;
       if (LY.campOf[i] >= 0) s.camps.push(i);
       var lv = threatLevel(LY.threat[i]);
@@ -355,6 +359,34 @@
     });
     if (LY) s.hot.sort(function (x, y) { return LY.threat[y] - LY.threat[x]; });
     return s;
+  }
+
+  // --- Intel channels: the pure part ---
+  // joinIntel indexes /map/intel.json by system: each system's reports
+  // newest first, its freshness (1 just now, 0 at 30 minutes), and the
+  // price a route pays to cross it. A clear newer than a system's last
+  // hostile report clears it; hostiles cost up to INTEL_PRICE, fading
+  // with age, more for a bigger count.
+  var INTEL_LIVE = 1800, INTEL_PRICE = 200;
+  function intelFresh(at, now) { return Math.max(0, 1 - (now - at) / INTEL_LIVE); }
+  function joinIntel(G, D, now) {
+    var I = { channels: D.channels || [], bySys: {}, systems: [], prices: new Float32Array(G.n), hostile: 0, clear: 0 };
+    I.names = {};
+    I.channels.forEach(function (c) { I.names[c.id] = c.name; });
+    (D.reports || []).forEach(function (r) {
+      var i = G.byID[r.sys];
+      if (i === undefined || intelFresh(r.at, now) <= 0) return;
+      if (!I.bySys[i]) { I.bySys[i] = []; I.systems.push(i); }
+      I.bySys[i].push(r);
+    });
+    I.systems.forEach(function (i) {
+      var list = I.bySys[i].sort(function (a, b) { return b.at - a.at || b.id - a.id; });
+      var last = list[0];
+      if (last.clear) { I.clear++; return; }
+      I.hostile++;
+      I.prices[i] = INTEL_PRICE * intelFresh(last.at, now) * (last.n > 5 ? 1.5 : 1);
+    });
+    return I;
   }
 
   // Stub length past a region's edge system, in region-frame units.
@@ -427,6 +459,8 @@
         threatRamp: [rgbOf(tok("--map-threat-lo", "#e0a020")), rgbOf(tok("--map-threat-hi", "#e0301c")), rgbOf(tok("--map-threat-core", "#fff0e0"))],
         route: tok("--map-route", "#ffd27a"),
         routeHalo: tok("--map-route-halo", "rgba(255,210,122,0.25)"),
+        intel: rgbOf(tok("--map-intel", "#3fd8ff")),
+        intelClear: rgbOf(tok("--map-intel-clear", "#4fbf6a")),
         camp: tok("--map-camp", "#ff3b3b"),
         inc: tok("--map-inc", "#c64bd6"),
         incStage: tok("--map-inc-staging", "#ff4fd8"),
@@ -701,6 +735,7 @@
         ctx.strokeStyle = idx ? colors.accent : colors.label;
         ctx.stroke();
       });
+      drawIntel(k, ox, oy, r);
       drawRouteEnds(k, ox, oy, r);
 
       drawLabels(k, ox, oy, r);
@@ -780,6 +815,7 @@
         });
         ctx.globalAlpha = 1;
         layerLabels(k, ox, oy, label, inPlaceFirst);
+        intelLabels(k, ox, oy, label, inPlaceFirst);
         // System names once the picture opens up.
         if (f > 6) {
           var vis = [];
@@ -798,6 +834,7 @@
 
       // Tactical: the layer's own labels, every system, the exits.
       layerLabels(k, ox, oy, label, inPlaceFirst);
+      intelLabels(k, ox, oy, label, inPlaceFirst);
       inPlaceFirst(G.membersPrio[region], function (s) { return "t" + s; }, function (s) {
         label(S.n[s], S.rx[s] * k + ox, S.ry[s] * k + oy + r + 3, 12, colors.label, null, false, "t" + s);
       });
@@ -1329,9 +1366,10 @@
       }
       return rows;
     }
-    function tipRows(i) { return layer === "security" ? [] : layerRows(i, layer, false); }
+    function tipRows(i) { return intelRows(i, 2).concat(layer === "security" ? [] : layerRows(i, layer, false)); }
     function liveRows(i) {
       var rows = [];
+      rows = intelRows(i, 3);
       ["threat", "kills", "npc", "jumps", "sov", "fw", "inc"].forEach(function (name) { rows = rows.concat(layerRows(i, name, true)); });
       return rows;
     }
@@ -1592,6 +1630,7 @@
       card.querySelector('[data-route-set="to"]').hidden = i === routeTo;
       card.querySelector("[data-map-scan]").href = "/intel/scan/?system=" + S.id[i];
       cardScans(i);
+      cardReport(i);
     }
 
     // The reader's own scans of the card's system: fetched once per
@@ -1659,8 +1698,8 @@
       schedule();
     }
     function replan() {
-      routePath = routeFrom >= 0 && routeTo >= 0 ? planRoute(G, routeFrom, routeTo, routeCost(G, LY, routeMode)) : null;
-      routeSum = routePath ? routeSummary(G, LY, routePath) : null;
+      routePath = routeFrom >= 0 && routeTo >= 0 ? planRoute(G, routeFrom, routeTo, routeCost(G, LY, routeMode, IN && intelOn ? IN.prices : null)) : null;
+      routeSum = routePath ? routeSummary(G, LY, routePath, IN && intelOn ? IN.prices : null) : null;
       renderRoute();
       updateCard();
       syncURL();
@@ -1742,6 +1781,14 @@
           li.appendChild(root.createTextNode("Gate camp in "));
           li.appendChild(sysButton(i));
           li.appendChild(root.createTextNode(" · " + c.n + " kills" + (c.group ? " by " + c.group : "")));
+          warn.appendChild(li);
+        });
+        s.reported.slice(0, 4).forEach(function (i) {
+          var last = IN.bySys[i][0], li = root.createElement("li");
+          li.className = "map-route-intel";
+          li.appendChild(root.createTextNode((last.n ? last.n + " hostiles" : "Hostiles") + " reported in "));
+          li.appendChild(sysButton(i));
+          li.appendChild(root.createTextNode(" · " + agoShort(last.at - intelSkew)));
           warn.appendChild(li);
         });
         s.hot.slice(0, 3).forEach(function (i) {
@@ -1832,6 +1879,139 @@
         ctx.stroke();
       });
     }
+
+    // --- Intel channels ---
+    // A signed-in reader's channels feed an overlay drawn over any
+    // layer: every system with a report in the last 30 minutes wears
+    // a cold ring (green for a clear), fading as the report ages. The
+    // overlay polls every 20 seconds while the page is in view; the
+    // card lists a system's latest reports and, where the reader may
+    // post, reports straight from the map. Routes price fresh
+    // hostiles (joinIntel).
+    var IN = null, intelOn = true, intelTimer = 0, intelSkew = 0, intelKey = "";
+    var intelBtn = el.querySelector("[data-map-intel]");
+    var reportForm = card.querySelector("[data-map-report]");
+    try { intelOn = localStorage.getItem("evesynapse-map-intel") !== "0"; } catch (e) { /* private mode */ }
+    function intelNow() { return Date.now() / 1000 + intelSkew; }
+    function fetchIntel(always) {
+      if (!signedIn || (!always && document.visibilityState === "hidden")) return;
+      fetch("/map/intel.json", { credentials: "same-origin" }).then(function (r) {
+        return r.ok ? r.json() : null;
+      }).then(function (D) {
+        if (!D || !el.isConnected) return;
+        if (D.now) intelSkew = D.now - Date.now() / 1000;
+        IN = joinIntel(G, D, intelNow());
+        intelSync();
+      }).catch(function () { /* the map stands without intel */ });
+    }
+    function intelSync() {
+      if (intelBtn) {
+        intelBtn.hidden = !IN || !IN.channels.length;
+        intelBtn.setAttribute("aria-pressed", intelOn ? "true" : "false");
+        var n = intelBtn.querySelector("[data-map-intel-n]");
+        if (n) n.textContent = IN && IN.hostile ? String(IN.hostile) : "";
+      }
+      if (routeFrom >= 0 && routeTo >= 0) replan();
+      else { updateCard(); schedule(); }
+    }
+    function intelList(i) {
+      if (!IN || !intelOn || !IN.bySys[i]) return [];
+      var now = intelNow();
+      return IN.bySys[i].filter(function (r) { return intelFresh(r.at, now) > 0; });
+    }
+    function intelRows(i, max) {
+      return intelList(i).slice(0, max).map(function (r) {
+        var what = r.clear ? "Clear" : r.n ? r.n + (r.n === 1 ? " hostile" : " hostiles") : "Hostiles";
+        return [IN.names[r.ch] || "Intel", what + (r.text ? " · " + r.text : "") + " · " + agoShort(r.at - intelSkew)];
+      });
+    }
+    function intelRGBA(c, a) { return "rgba(" + c[0] + "," + c[1] + "," + c[2] + "," + a.toFixed(3) + ")"; }
+    function drawIntel(k, ox, oy, r) {
+      if (!IN || !intelOn) return;
+      var now = intelNow();
+      IN.systems.forEach(function (i) {
+        if (mode !== "universe" && S.r[i] !== region) return;
+        var last = IN.bySys[i][0], f = intelFresh(last.at, now);
+        if (f <= 0) return;
+        var x = wx(i) * k + ox, y = wy(i) * k + oy;
+        if (x < -40 || y < -40 || x > cw + 40 || y > ch + 40) return;
+        var c = last.clear ? colors.intelClear : colors.intel;
+        var rr = r + 6 + (last.clear ? 0 : Math.min(8, Math.log(1 + (last.n || 1)) * 3));
+        ctx.beginPath();
+        ctx.arc(x, y, rr, 0, Math.PI * 2);
+        ctx.lineWidth = 2.2;
+        ctx.strokeStyle = intelRGBA(c, 0.35 + 0.65 * f);
+        ctx.stroke();
+        if (!last.clear) {
+          ctx.beginPath();
+          ctx.arc(x, y, rr + 4, 0, Math.PI * 2);
+          ctx.lineWidth = 1;
+          ctx.strokeStyle = intelRGBA(c, 0.3 * f);
+          ctx.stroke();
+        }
+      });
+    }
+    // A report's count and age beside its system, once the view is
+    // close enough to read it.
+    function intelLabels(k, ox, oy, label, inPlaceFirst) {
+      if (!IN || !intelOn || (mode === "universe" && cam.k / fitK() < 2)) return;
+      var now = intelNow(), r = radius();
+      inPlaceFirst(IN.systems, function (i) { return "N" + i; }, function (i) {
+        if (mode !== "universe" && S.r[i] !== region) return;
+        var last = IN.bySys[i][0], f = intelFresh(last.at, now);
+        if (f <= 0) return;
+        var m = Math.max(1, Math.round((now - last.at) / 60)) + "m";
+        var text = last.clear ? "clear · " + m : (last.n ? last.n + " · " : "") + m;
+        label(text, wx(i) * k + ox, wy(i) * k + oy - r - 24, 11, intelRGBA(last.clear ? colors.intelClear : colors.intel, 1), "700", false, "N" + i);
+      });
+    }
+    // The card's quick report: the channels the reader may post to,
+    // the last one used chosen.
+    function cardReport(i) {
+      if (!reportForm) return;
+      var posts = IN ? IN.channels.filter(function (c) { return c.post; }) : [];
+      reportForm.hidden = !posts.length;
+      if (!posts.length) return;
+      var key = posts.map(function (c) { return c.id + ":" + c.name; }).join("|");
+      var select = reportForm.querySelector("select");
+      if (key !== intelKey) {
+        intelKey = key;
+        var want = "";
+        try { want = localStorage.getItem("evesynapse-map-report-channel") || ""; } catch (e) { /* private mode */ }
+        select.textContent = "";
+        posts.forEach(function (c) {
+          var o = root.createElement("option");
+          o.value = String(c.id);
+          o.textContent = c.name;
+          if (String(c.id) === want) o.selected = true;
+          select.appendChild(o);
+        });
+      }
+      select.closest(".map-card-intel-ch").hidden = posts.length < 2;
+      reportForm.setAttribute("data-sys", String(S.id[i]));
+    }
+    function onReport(e) {
+      e.preventDefault();
+      var f = reportForm, kind = e.submitter && e.submitter.value === "clear" ? "clear" : "hostile";
+      var chID = f.querySelector("select").value, msg = f.querySelector(".map-card-intel-msg");
+      var body = new URLSearchParams();
+      body.set("system_id", f.getAttribute("data-sys"));
+      body.set("text", f.elements.text.value);
+      body.set("hostiles", f.elements.hostiles.value);
+      if (kind === "clear") body.set("clear", "1");
+      try { localStorage.setItem("evesynapse-map-report-channel", chID); } catch (err) { /* private mode */ }
+      msg.textContent = "Reporting…";
+      fetch("/intel/channels/" + encodeURIComponent(chID) + "/report", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/x-www-form-urlencoded", "X-Requested-With": "XMLHttpRequest" },
+        body: body.toString()
+      }).then(function (r) { return r.json(); }).then(function (res) {
+        msg.textContent = res.message || "";
+        if (res.ok) { f.elements.text.value = ""; f.elements.hostiles.value = ""; fetchIntel(); }
+      }).catch(function () { msg.textContent = "That did not go through — try again."; });
+    }
+    if (reportForm) reportForm.addEventListener("submit", onReport);
 
     // --- Search ---
     var hits = [], hitAt = -1;
@@ -2039,7 +2219,7 @@
     function onKey(e) {
       if (e.altKey || e.ctrlKey || e.metaKey) return;
       var t = e.target;
-      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA")) return;
+      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT")) return;
       switch (e.key) {
         case "ArrowLeft": case "a": pan(-90, 0); break;
         case "ArrowRight": case "d": pan(90, 0); break;
@@ -2164,6 +2344,12 @@
         return;
       }
       if (t.closest("[data-map-full]")) { toggleFull(); return; }
+      if (t.closest("[data-map-intel]")) {
+        intelOn = !intelOn;
+        try { localStorage.setItem("evesynapse-map-intel", intelOn ? "1" : "0"); } catch (err) { /* private mode */ }
+        intelSync();
+        return;
+      }
       var lb = t.closest("[data-map-layer]");
       if (lb && !lb.disabled) { setLayer(lb.getAttribute("data-map-layer")); return; }
       var hit = t.closest("[data-hit]");
@@ -2313,6 +2499,13 @@
         }
       }).catch(function () { /* the map stands without its layers */ });
     }
+    if (signedIn) {
+      fetchIntel(true);
+      intelTimer = setInterval(fetchIntel, 20000);
+      root.addEventListener("visibilitychange", onIntelVisible);
+    }
+    // Back from another tab: catch up at once, not at the next tick.
+    function onIntelVisible() { if (document.visibilityState === "visible") fetchIntel(); }
     var layersURL = el.getAttribute("data-layers");
     if (layersURL) {
       fetchLayers(layersURL);
@@ -2325,6 +2518,8 @@
       ro.disconnect();
       mo.disconnect();
       clearInterval(layersTimer);
+      clearInterval(intelTimer);
+      root.removeEventListener("visibilitychange", onIntelVisible);
       if (raf) cancelAnimationFrame(raf);
       clearTimeout(hintTimer);
       root.removeEventListener("fullscreenchange", onFullChange);
@@ -2368,6 +2563,6 @@
   if (typeof module !== "undefined" && module.exports) {
     module.exports = { secRounded: secRounded, secTier: secTier, secText: secText, prepare: prepare, regionLabelAlpha: regionLabelAlpha, zoomEntryAllowed: zoomEntryAllowed,
       joinLayers: joinLayers, heatT: heatT, allianceHue: allianceHue, threatLevel: threatLevel,
-      routeCost: routeCost, planRoute: planRoute, routeSummary: routeSummary };
+      routeCost: routeCost, planRoute: planRoute, routeSummary: routeSummary, joinIntel: joinIntel };
   }
 })();

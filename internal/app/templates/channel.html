@@ -1,0 +1,102 @@
+{{define "title"}}{{with .Channel}}{{if .Name}}{{.Name}} · {{end}}{{end}}Intel channel{{end}}
+{{define "pagetitle"}}<h1><span class="gt">{{with .Channel}}{{if .Name}}{{.Name}}{{else}}Intel channel{{end}}{{end}}</span></h1>{{end}}
+{{define "pagetabs"}}{{template "sectiontabs" .}}{{end}}
+{{define "content"}}
+{{with .Channel}}
+{{/* One intel channel (channels.go): report, the live feed (channels.js
+     polls feed.json for what is new), and for the owner, who has
+     access. */}}
+<div class="ch">
+{{if .Error}}
+  <p class="ch-panel">{{.Error}} <a href="/intel/channels/">Your channels</a></p>
+{{else}}
+  {{if .Description}}<p class="ch-desc muted">{{.Description}}</p>{{end}}
+
+  <div class="ch-layout">
+    <div class="ch-main">
+      {{if .CanPost}}
+      <form class="ch-panel ch-report" method="post" action="/intel/channels/{{.ID}}/report">
+        <div class="ch-report-tabs" role="tablist" aria-label="How to report">
+          <button type="button" role="tab" aria-selected="true" aria-controls="ch-one" data-ch-tab="one">Report</button>
+          <button type="button" role="tab" aria-selected="false" aria-controls="ch-paste" data-ch-tab="paste">Paste intel chat</button>
+        </div>
+        <div id="ch-one" role="tabpanel" class="ch-one">
+          <label class="ch-f-sys"><span>System</span><input type="text" name="system" value="{{.PrefillSys}}" maxlength="40" autocomplete="off" spellcheck="false" placeholder="1DQ1-A"></label>
+          <label class="ch-f-n"><span>Hostiles</span><input type="number" name="hostiles" min="0" max="999" inputmode="numeric" placeholder="0"></label>
+          <label class="ch-f-text"><span>Who, what</span><input type="text" name="text" maxlength="300" autocomplete="off" placeholder="Pilot names, ships, “gate camp on Jita gate”"></label>
+          <div class="ch-f-actions">
+            <label class="ch-clear"><input type="checkbox" name="clear" value="1"> Clear</label>
+            <button type="submit" class="btn">Report</button>
+          </div>
+        </div>
+        <div id="ch-paste" role="tabpanel" class="ch-paste" hidden>
+          <label><span>Lines from an in-game intel channel</span>
+            <textarea name="lines" rows="6" spellcheck="false" placeholder="[ 2026.10.21 11:20:05 ] Scout > 1DQ1-A  Hostile One  Hostile Two +2"></textarea></label>
+          <p class="ch-hint muted">Each line becomes a report: the system it names, “clr” for clear, counts like +3. Lines naming no system are skipped.</p>
+          <div class="ch-f-actions"><button type="submit" class="btn">Post lines</button></div>
+        </div>
+        <p class="ch-as muted">Posting as {{.Poster}}.</p>
+      </form>
+      {{end}}
+
+      <section class="ch-panel ch-feed-wrap" aria-labelledby="ch-feed-h">
+        <h2 id="ch-feed-h">Reports <span class="ch-live" data-ch-live hidden>live</span></h2>
+        <ol class="ch-feed" data-ch-feed="/intel/channels/{{.ID}}/feed.json" data-ch-after="{{.LastID}}" data-ch-id="{{.ID}}">
+          {{range .Reports}}{{template "ch-report" .}}{{else}}<li class="ch-empty muted" data-ch-empty>No reports yet.</li>{{end}}
+        </ol>
+        {{if .Older}}<p class="ch-older"><a href="{{.Older}}">Older reports</a></p>{{end}}
+      </section>
+    </div>
+
+    {{if .Owner}}
+    <aside class="ch-side" id="access">
+      <section class="ch-panel">
+        <h2>Access</h2>
+        {{if .Grants}}<ul class="ch-grants">
+          {{range .Grants}}<li>
+            {{if .Logo}}<img src="{{.Logo}}" alt="" width="24" height="24" loading="lazy">{{else}}<span class="ch-grant-g" aria-hidden="true">G</span>{{end}}
+            <span class="ch-grant-n">{{.Name}} <span class="muted">{{.Kind}}</span></span>
+            <span class="ch-tag{{if not .CanPost}} dim{{end}}">{{if .CanPost}}Post{{else}}Read{{end}}</span>
+            <form method="post" action="/intel/channels/{{$.Channel.ID}}/grants/remove"><input type="hidden" name="kind" value="{{.Kind}}"><input type="hidden" name="target" value="{{.ID}}"><button type="submit" class="ch-x" aria-label="Remove {{.Name}}">×</button></form>
+          </li>{{end}}
+        </ul>{{else}}<p class="muted">Only you can see this channel. Grant access to share it.</p>{{end}}
+        <form class="ch-grant-add" method="post" action="/intel/channels/{{.ID}}/grants">
+          <label><span>Grant</span>
+            <select name="kind" data-ch-kind>
+              <option value="alliance">Alliance</option>
+              <option value="corporation">Corporation</option>
+              <option value="character">Pilot</option>
+              {{if .Groups}}<option value="group">Group</option>{{end}}
+            </select>
+          </label>
+          <label data-ch-name><span>Exact name</span><input type="text" name="name" maxlength="50" autocomplete="off" spellcheck="false"></label>
+          {{if .Groups}}<label data-ch-group hidden><span>Group</span><select name="group">{{range .Groups}}<option value="{{.ID}}">{{.Name}}</option>{{end}}</select></label>{{end}}
+          <label class="ch-clear"><input type="checkbox" name="post" value="1" checked> Can post</label>
+          <button type="submit" class="btn small">Grant</button>
+        </form>
+      </section>
+      <details class="ch-panel ch-settings">
+        <summary>Channel settings</summary>
+        <form method="post" action="/intel/channels/{{.ID}}/edit" class="ch-stack">
+          <label><span>Name</span><input type="text" name="name" value="{{.Name}}" maxlength="60" required></label>
+          <label><span>Description</span><input type="text" name="description" value="{{.Description}}" maxlength="200"></label>
+          <button type="submit" class="btn small">Save</button>
+        </form>
+        <form method="post" action="/intel/channels/{{.ID}}/delete" class="ch-stack ch-danger">
+          <label><span>Type “{{.Name}}” to delete the channel and its reports</span><input type="text" name="confirm" autocomplete="off"></label>
+          <button type="submit" class="btn small">Delete channel</button>
+        </form>
+      </details>
+    </aside>
+    {{end}}
+  </div>
+{{end}}
+</div>
+{{end}}
+{{end}}
+
+{{define "ch-report"}}<li class="ch-rep{{if .Clear}} clear{{end}}" data-id="{{.ID}}">
+  <span class="ch-rep-sys"><span class="sec sec-{{.SecTier}}">{{.SecText}}</span> <a href="/map/?system={{.SystemID}}">{{.SystemName}}</a></span>
+  <span class="ch-rep-what">{{if .Clear}}<strong class="ch-clr">Clear</strong>{{else if .Hostiles}}<strong class="ch-n">{{.Hostiles}}</strong>{{end}}{{if .Text}} {{.Text}}{{end}}{{if .ScanID}} <a href="/intel/scan/{{.ScanID}}/">scan</a>{{end}}</span>
+  <span class="ch-rep-meta">{{.Reporter}} · <time datetime="{{rfc3339 .Time}}">{{.Ago}}</time>{{if .Mine}}<form method="post" action="/intel/channels/{{.Channel}}/reports/{{.ID}}/delete"><button type="submit" class="ch-x" aria-label="Remove this report">×</button></form>{{end}}</span>
+</li>{{end}}

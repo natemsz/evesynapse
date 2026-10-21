@@ -40,6 +40,9 @@
   --map-camp: #ff3b3b;
   --map-route: #ffd27a;
   --map-route-halo: rgba(255, 210, 122, 0.25);
+  /* Intel reports: cold cyan against the warm map, green for clear. */
+  --map-intel: #3fd8ff;
+  --map-intel-clear: #4fbf6a;
   --map-inc: #c64bd6;
   --map-inc-staging: #ff5ce0;
   --map-space: radial-gradient(120% 90% at 30% 20%, rgba(255, 106, 26, 0.08), transparent 55%),
@@ -77,6 +80,8 @@ html[data-theme="light"] .map {
   --map-camp: #c41818;
   --map-route: #a86a10;
   --map-route-halo: rgba(168, 106, 16, 0.22);
+  --map-intel: #0a7fa8;
+  --map-intel-clear: #2f8f46;
   --map-inc: #a12fb3;
   --map-inc-staging: #d01ba8;
   --map-space: radial-gradient(120% 90% at 30% 20%, rgba(255, 106, 26, 0.07), transparent 55%), #fbf6ee;
@@ -660,3 +665,45 @@ html.map-full-open .page-body { -webkit-backdrop-filter: none; backdrop-filter: 
 .map-card-scans-h { margin: 0 0 0.2rem; color: var(--muted-2); font-weight: 600; }
 .map-card-scans ul { margin: 0; padding: 0; list-style: none; }
 .map-card-scans li { padding: 0.1rem 0; }
+
+/* --- Intel channels on the map --- */
+.map-intel-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.65rem;
+  border: 1px solid var(--box-edge);
+  border-radius: var(--r-xs);
+  background: var(--row-alt);
+  color: var(--muted-2);
+  font: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+.map-intel-toggle[hidden] { display: none; }
+.map-intel-toggle::before { content: ""; width: 0.55rem; height: 0.55rem; border-radius: 50%; border: 2px solid var(--map-intel); }
+.map-intel-toggle[aria-pressed="true"] { color: var(--text-bright); border-color: var(--map-intel); background: color-mix(in srgb, var(--map-intel) 14%, transparent); }
+.map-intel-toggle [data-map-intel-n]:not(:empty) { min-width: 1.1rem; padding: 0 0.3rem; border-radius: 999px; background: var(--map-intel); color: #041016; font-weight: 700; font-size: 0.72rem; text-align: center; }
+.map-route-warn li.map-route-intel { border-left-color: var(--map-intel); color: var(--text); }
+/* The card's quick report. */
+.map-card-intel { display: flex; flex-direction: column; gap: 0.35rem; margin: 0.6rem 0 0; padding-top: 0.6rem; border-top: 1px solid var(--box-edge); }
+.map-card-intel[hidden], .map-card-intel [hidden] { display: none; }
+.map-card-intel-h { margin: 0; color: var(--muted-2); font-size: 0.78rem; font-weight: 600; }
+.map-card-intel-row { display: flex; gap: 0.35rem; }
+.map-card-intel input, .map-card-intel select {
+  min-width: 0;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--box-edge);
+  border-radius: var(--r-xs);
+  background: var(--row-alt);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.85rem;
+}
+.map-card-intel label { display: block; }
+.map-card-intel label select { width: 100%; }
+.map-card-intel input[name=text] { flex: 1; }
+.map-card-intel input[name=hostiles] { width: 4.2rem; }
+.map-card-intel .btn { flex: 1; justify-content: center; }
+.map-card-intel-msg { margin: 0; font-size: 0.78rem; color: var(--muted-2); }
+.map-card-intel-msg:empty { display: none; }

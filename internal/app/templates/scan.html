@@ -23,6 +23,10 @@
       <button type="button" class="btn small" data-scan-copy>Copy link</button>
       <a class="btn small" href="/intel/scan/{{if $r.SystemID}}?system={{$r.SystemID}}{{end}}">New scan</a>
     </div>
+    {{if .PostTo}}<form class="sc-post" method="post" action="/intel/scan/{{.ID}}/post">
+      <label><span class="visually-hidden">Channel</span><select name="channel">{{range .PostTo}}<option value="{{.ID}}">{{.Name}}</option>{{end}}</select></label>
+      <button type="submit" class="btn small">Post to channel</button>
+    </form>{{end}}
   </header>
 
   {{with $r.DScan}}

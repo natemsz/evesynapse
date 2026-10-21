@@ -382,6 +382,39 @@ type IndustryCostIndex struct {
 	FetchedAt     time.Time `json:"fetched_at"`
 }
 
+type IntelChannel struct {
+	ID          int64     `json:"id"`
+	OwnerUserID int64     `json:"owner_user_id"`
+	Name        string    `json:"name"`
+	Description string    `json:"description"`
+	CreatedAt   time.Time `json:"created_at"`
+}
+
+type IntelChannelGrant struct {
+	ChannelID int64     `json:"channel_id"`
+	Kind      string    `json:"kind"`
+	TargetID  int64     `json:"target_id"`
+	CanPost   bool      `json:"can_post"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+type IntelReport struct {
+	ID                int64     `json:"id"`
+	ChannelID         int64     `json:"channel_id"`
+	SystemID          int64     `json:"system_id"`
+	AuthorUserID      int64     `json:"author_user_id"`
+	AuthorCharacterID int64     `json:"author_character_id"`
+	Reporter          string    `json:"reporter"`
+	Text              string    `json:"text"`
+	Pilots            string    `json:"pilots"`
+	Hostiles          int32     `json:"hostiles"`
+	Clear             bool      `json:"clear"`
+	ScanID            string    `json:"scan_id"`
+	Source            string    `json:"source"`
+	SeenAt            time.Time `json:"seen_at"`
+	CreatedAt         time.Time `json:"created_at"`
+}
+
 type ItemName struct {
 	ItemID int64  `json:"item_id"`
 	Name   string `json:"name"`

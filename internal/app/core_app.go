@@ -59,6 +59,10 @@ type Application struct {
 	queries  *db.Queries
 	jwks     *jwksCache
 
+	// intelSystems is the system-name dictionary pasted intel chat
+	// lines are read against (channels.go).
+	intelSystems systemDict
+
 	// esi is the ESI client: HTTP access, the snapshot cache, and
 	// the type/group/place name-resolution caches.
 	esi *esi.Client
@@ -706,6 +710,22 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	r.With(anonPages).Get("/intel/scan/", app.handleScanForm)
 	r.With(anonPages).Post("/intel/scan/", app.handleScanSubmit)
 	r.With(anonPages).Get("/intel/scan/{id}/", app.handleScanPage)
+	// Intel channels (channels.go): the list explains itself to a
+	// visitor; everything else is an account's.
+	r.With(anonPages).Get("/intel/channels/", app.handleChannels)
+	r.Group(func(r chi.Router) {
+		r.Use(app.requireAuth)
+		r.Post("/intel/scan/{id}/post", app.handleScanPost)
+		r.Post("/intel/channels/create", app.handleChannelCreate)
+		r.Get("/intel/channels/{channelID}/", app.handleChannel)
+		r.Get("/intel/channels/{channelID}/feed.json", app.handleChannelFeed)
+		r.Post("/intel/channels/{channelID}/report", app.handleChannelReport)
+		r.Post("/intel/channels/{channelID}/reports/{reportID}/delete", app.handleReportDelete)
+		r.Post("/intel/channels/{channelID}/edit", app.handleChannelEdit)
+		r.Post("/intel/channels/{channelID}/delete", app.handleChannelDelete)
+		r.Post("/intel/channels/{channelID}/grants", app.handleGrantAdd)
+		r.Post("/intel/channels/{channelID}/grants/remove", app.handleGrantRemove)
+	})
 
 	r.Route("/map", func(r chi.Router) {
 		r.Use(anonPages)
@@ -713,6 +733,7 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 		r.Get("/universe.json", app.handleUniverseJSON)
 		r.Get("/layers.json", app.handleMapLayersJSON)
 		r.Get("/scans.json", app.handleMapScans)
+		r.Get("/intel.json", app.handleMapIntel)
 		// A planned route to the game's autopilot (map_route.go);
 		// it answers JSON, signed-in or not.
 		r.Post("/route", app.handleMapRoute)

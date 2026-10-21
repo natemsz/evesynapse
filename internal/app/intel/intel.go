@@ -37,6 +37,7 @@ var Module = module.Module{
 			// when the section exists.
 			{Href: "/intel/kills/", Label: "Killboard", Pages: []string{"killboard.html", "kill.html"}},
 			{Href: "/intel/scan/", Label: "Scans", Pages: []string{"scans.html", "scan.html"}},
+			{Href: "/intel/channels/", Label: "Channels", Pages: []string{"channels.html", "channel.html"}},
 			{Href: "/intel/wars/", Label: "Wars", Pages: []string{"intel_wars.html"}},
 			{Href: "/intel/incursions/", Label: "Incursions", Pages: []string{"intel_incursions.html"}},
 			{Href: "/intel/fw/", Label: "Faction Warfare", Pages: []string{"intel_fw.html"}},

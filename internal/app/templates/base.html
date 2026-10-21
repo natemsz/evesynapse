@@ -33,6 +33,7 @@
 {{if eq .NavPage "map.html"}}<link rel="stylesheet" href="/static/map.css?v={{.AssetVersion}}">{{end}}
 {{if or (eq .NavPage "killboard.html") (eq .NavPage "kill.html")}}<link rel="stylesheet" href="/static/killboard.css?v={{.AssetVersion}}">{{end}}
 {{if or (eq .NavPage "scans.html") (eq .NavPage "scan.html")}}<link rel="stylesheet" href="/static/scans.css?v={{.AssetVersion}}">{{end}}
+{{if or (eq .NavPage "channels.html") (eq .NavPage "channel.html")}}<link rel="stylesheet" href="/static/channels.css?v={{.AssetVersion}}">{{end}}
 <link rel="stylesheet" href="/static/phone.css?v={{.AssetVersion}}" media="(max-width: 45rem), (hover: none), (pointer: coarse)">
 </head>
 <body{{if .AutoRefresh}} data-autorefresh="5"{{end}}>
@@ -239,6 +240,7 @@
 {{if eq .NavPage "planner.html"}}<script src="/static/plan.js?v={{.AssetVersion}}" defer></script>{{end}}
 {{if eq .NavPage "map.html"}}<script src="/static/map.js?v={{.AssetVersion}}" defer></script>{{end}}
 {{if eq .NavPage "scan.html"}}<script src="/static/scans.js?v={{.AssetVersion}}" defer></script>{{end}}
+{{if eq .NavPage "channel.html"}}<script src="/static/channels.js?v={{.AssetVersion}}" defer></script>{{end}}
 {{if or (eq .NavPage "contract_search.html") (eq .NavPage "contract_detail.html")}}<script src="/static/contracts.js?v={{.AssetVersion}}" defer></script>{{end}}
 {{range .Scripts}}<script src="{{.}}?v={{$.AssetVersion}}" defer></script>{{end}}
 {{if .NotifySettings}}<script src="/static/push.js?v={{.AssetVersion}}" defer></script>{{end}}

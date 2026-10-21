@@ -672,6 +672,8 @@ type scanPageView struct {
 	OrgNames map[int64]string
 	// Sigs are a probe scan's signatures, for display.
 	Sigs []probeSig
+	// PostTo are the channels the reader may post this scan to.
+	PostTo []channelRow
 }
 
 // probeSig is one probe result as the page shows it.
@@ -860,6 +862,13 @@ func (app *Application) handleScanPage(w http.ResponseWriter, r *http.Request) {
 	}
 	uid := app.userID(ctx)
 	v.Mine = uid > 0 && row.UserID == uid
+	if uid > 0 && row.SystemID > 0 {
+		for _, c := range app.accessibleChannels(ctx, app.intelIdentity(ctx)) {
+			if c.CanPost {
+				v.PostTo = append(v.PostTo, channelRow{ID: c.ID, Name: c.Name})
+			}
+		}
+	}
 	for _, own := range app.sessionScanIDs(ctx) {
 		if own == id {
 			v.Mine = true

@@ -64,11 +64,11 @@ var axonDownloads = []struct{ Label, File string }{
 
 const axonReleases = "https://github.com/natemsz/axon/releases/latest/download/"
 
-// AxonGUIAddr is Axon's fixed address on the player's own computer
-// (gui.ListenAddr in natemsz/axon). The channels page and the Intel
-// menu link there for accounts with a paired device; nothing here
-// checks whether Axon is running at this moment.
-const AxonGUIAddr = "127.0.0.1:47611"
+// AxonOpenURL opens Axon's window on the player's own computer: Axon
+// registers the evesynapse-axon link type when it installs, and starts
+// itself if it isn't running. The channels page and the Intel menu
+// (base.html) link there for accounts with a paired device.
+const AxonOpenURL = "evesynapse-axon://open"
 
 type intelTokenRow struct {
 	ID       int64

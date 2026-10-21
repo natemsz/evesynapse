@@ -18,11 +18,11 @@ import (
 )
 
 // TestAxonLinks pins the address and downloads the site offers for
-// Axon: the GUI's fixed local address (gui.ListenAddr in natemsz/axon)
+// Axon: the link that opens its window (the URL scheme it registers)
 // and the axon repo's release assets.
 func TestAxonLinks(t *testing.T) {
-	if AxonGUIAddr != "127.0.0.1:47611" {
-		t.Errorf("AxonGUIAddr %q, want Axon's fixed 127.0.0.1:47611", AxonGUIAddr)
+	if AxonOpenURL != "evesynapse-axon://open" {
+		t.Errorf("AxonOpenURL %q, want the link Axon registers, evesynapse-axon://open", AxonOpenURL)
 	}
 	if len(axonDownloads) == 0 || axonDownloads[0].File != "axon-windows-amd64.exe" {
 		t.Errorf("first download should be the Windows program (its own installer): %v", axonDownloads)
@@ -102,7 +102,7 @@ func TestIntelTokens(t *testing.T) {
 	if rec := pair("XXXX-XXXX", "Test PC", pub); rec.Code != http.StatusUnauthorized {
 		t.Errorf("an invented pairing code works: %d", rec.Code)
 	}
-	if _, body := getPage(t, app, cookie, "/intel/channels/"); !strings.Contains(body, `href="http://`+AxonGUIAddr+`/open"`) || !strings.Contains(body, "Home PC") {
+	if _, body := getPage(t, app, cookie, "/intel/channels/"); !strings.Contains(body, `href="`+AxonOpenURL+`"`) || !strings.Contains(body, "Home PC") {
 		t.Errorf("a paired account is offered the Axon link and its device list")
 	}
 

@@ -90,7 +90,7 @@
       <form method="post" action="/intel/channels/tokens/{{.ID}}/revoke" class="inline-form"><button type="submit" class="btn btn-danger">Remove</button></form>
     </li>{{end}}
   </ul>
-  <p class="hint">Axon is paired. <a href="http://127.0.0.1:47611/open" rel="noopener">Open Axon on this computer</a>.</p>
+  <p class="hint">Axon is paired. <a href="evesynapse-axon://open">Open Axon on this computer</a>. If nothing opens, <a href="https://github.com/natemsz/axon/releases/latest" rel="noopener">get the latest Axon</a> and run it once to update.</p>
   {{else}}<p class="hint">None yet.</p>{{end}}
   <form class="op-form setting" method="post" action="/intel/channels/pairing">
     <h4>Pair a computer</h4>

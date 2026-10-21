@@ -25,6 +25,17 @@
     window.EveSynapseContent.onReady(fn);
   }
 
+  // --- Opening EveSynapse Axon ---------------------------------
+  // Axon links go to evesynapse-axon://open, which Axon registers on
+  // Windows and Linux. The Mac app can't take that link yet, so on a
+  // Mac the link opens Axon's own local page instead, in a new tab.
+  document.addEventListener("click", function (ev) {
+    var a = ev.target && ev.target.closest && ev.target.closest('a[href^="evesynapse-axon:"]');
+    if (!a || !/Mac/.test(navigator.platform || navigator.userAgent || "")) return;
+    ev.preventDefault();
+    window.open("http://127.0.0.1:47611/open", "_blank", "noopener");
+  }, true);
+
   // --- Modal dialogs ---------------------------------------------
   // One implementation behind every pop-up — add a module, the fit
   // picker, the planner's ME and settings dialogs, quick jump: a

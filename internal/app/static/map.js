@@ -217,6 +217,81 @@
     }
     function minK() { return fitK() * (mode === "universe" ? 0.6 : 0.5); }
     function maxK() { return fitK() * (mode === "universe" ? 60 : 8); }
+    function clampK(k) { return Math.min(Math.max(k, minK()), maxK()); }
+
+    // --- Motion ---
+    // Every camera change but a drag glides: a "fly" eases position
+    // and zoom (zoom in log space, so it feels even at any scale)
+    // to a target; a "zoom" eases the scale about a fixed screen
+    // point, so the point under the cursor stays put. Wheel and
+    // touchpad zoom chase a running target instead, so a burst of
+    // wheel ticks reads as one smooth glide. Any touch on the map
+    // stops the motion where it is; reduced motion jumps.
+    var anim = null, wheelZ = null;
+    var still = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+    function ease(t) { return 1 - Math.pow(1 - t, 3); }
+    function flyTo(x, y, k, dur) {
+      wheelZ = null;
+      k = clampK(k);
+      if (still || !cw) { anim = null; cam.x = x; cam.y = y; cam.k = k; schedule(); return; }
+      anim = { kind: "fly", t0: performance.now(), dur: dur || 320,
+        x0: cam.x, y0: cam.y, l0: Math.log(cam.k), x1: x, y1: y, l1: Math.log(k) };
+      schedule();
+    }
+    function glideZoom(px, py, factor, dur) {
+      wheelZ = null;
+      var k = clampK((anim && anim.kind === "zoom" ? Math.exp(anim.l1) : cam.k) * factor);
+      if (still) { setZoomAt(px, py, k); afterZoom(); schedule(); return; }
+      anim = { kind: "zoom", t0: performance.now(), dur: dur || 260, px: px, py: py,
+        l0: Math.log(cam.k), l1: Math.log(k) };
+      schedule();
+    }
+    function stopMotion() { anim = null; wheelZ = null; }
+    // Scale about a screen point: the world point under it stays.
+    function setZoomAt(px, py, k) {
+      var before = toWorld(px, py);
+      cam.k = clampK(k);
+      var after = toWorld(px, py);
+      cam.x += before[0] - after[0];
+      cam.y += before[1] - after[1];
+    }
+    // One frame of motion; true while more remains.
+    function stepMotion(now) {
+      var more = false;
+      if (anim) {
+        var t = Math.min(1, (now - anim.t0) / anim.dur), e = ease(t);
+        if (anim.kind === "fly") {
+          cam.x = anim.x0 + (anim.x1 - anim.x0) * e;
+          cam.y = anim.y0 + (anim.y1 - anim.y0) * e;
+          cam.k = Math.exp(anim.l0 + (anim.l1 - anim.l0) * e);
+          if (t >= 1) anim = null; else more = true;
+        } else {
+          var a = anim;
+          setZoomAt(a.px, a.py, Math.exp(a.l0 + (a.l1 - a.l0) * e));
+          if (t >= 1) anim = null; else more = true;
+          afterZoom();
+        }
+      }
+      if (wheelZ) {
+        var lk = Math.log(cam.k), lt = Math.log(wheelZ.k);
+        var done = Math.abs(lt - lk) < 0.004;
+        setZoomAt(wheelZ.px, wheelZ.py, Math.exp(done ? lt : lk + (lt - lk) * 0.3));
+        var w = wheelZ;
+        if (done) wheelZ = null; else more = true;
+        afterZoom();
+        if (wheelZ === w && !done) more = true;
+      }
+      return more;
+    }
+    // A wheel tick or touchpad pinch: move the running target.
+    function chaseZoom(px, py, factor) {
+      anim = null;
+      var base = wheelZ ? wheelZ.k : cam.k;
+      var k = clampK(base * factor);
+      if (still) { setZoomAt(px, py, k); afterZoom(); schedule(); return; }
+      wheelZ = { k: k, px: px, py: py };
+      schedule();
+    }
 
     // The ghost end of a gate leaving the region: past the edge
     // system, pointing the way the neighbour truly lies.
@@ -281,9 +356,10 @@
       return Math.min(3.4 + (f - 1) * 1.2, 10);
     }
 
-    function draw() {
+    function draw(now) {
       raf = 0;
       if (!cw || !ch) return;
+      if (stepMotion(now || performance.now())) schedule();
       var k = cam.k, ox = cw / 2 - cam.x * k, oy = ch / 2 - cam.y * k;
       var i, t;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -495,19 +571,9 @@
     }
 
     // --- Camera ---
-    function zoomAt(px, py, factor) {
-      var before = toWorld(px, py);
-      cam.k = Math.min(Math.max(cam.k * factor, minK()), maxK());
-      var after = toWorld(px, py);
-      cam.x += before[0] - after[0];
-      cam.y += before[1] - after[1];
-      afterZoom(px, py);
-      schedule();
-    }
-
     // Deep into a region enters it; far out of one leaves it. The
     // two thresholds sit apart, so the views never flicker.
-    function afterZoom(px, py) {
+    function afterZoom() {
       if (mode === "universe") {
         var c = toWorld(cw / 2, ch / 2), s = nearestUniverse(c[0], c[1]);
         if (s < 0) return;
@@ -526,16 +592,23 @@
       return best;
     }
 
+    // Entering flies in: the region opens from a little farther out
+    // (just past the exit threshold when the zoom brought us here,
+    // so the glide carries on) to its fit, or to the focus system.
     function enterRegion(ri, focus, byZoom) {
       if (ri < 0) return;
+      stopMotion();
       mode = "region";
       region = ri;
       fit();
+      var tx = cam.x, ty = cam.y, tk = cam.k;
       if (focus >= 0 && S.r[focus] === ri && !byZoom) {
-        cam.x = S.rx[focus];
-        cam.y = S.ry[focus];
-        cam.k = fitK() * 1.6;
+        tx = S.rx[focus];
+        ty = S.ry[focus];
+        tk = fitK() * 1.6;
       }
+      cam.k = fitK() * (byZoom ? 0.75 : 0.55);
+      flyTo(tx, ty, tk, byZoom ? 260 : 420);
       crumbs();
       if (byZoom) hint("Tactical view of " + P.regions[ri].name + ". Zoom out to return to New Eden.");
       syncURL();
@@ -544,13 +617,16 @@
     function leaveRegion() {
       if (mode === "universe") return;
       var rg = P.regions[region], bb = G.bounds[region];
+      stopMotion();
       mode = "universe";
+      region = -1;
+      // Out to just below the entry threshold, centred where we
+      // were, gliding back from a little closer in.
+      var tk = clampK(Math.min(cw, ch) * 0.95 / Math.max(bb[2] - bb[0], bb[3] - bb[1], 1));
       cam.x = (bb[0] + bb[2]) / 2;
       cam.y = (bb[1] + bb[3]) / 2;
-      // Just below the entry threshold, centred where we were.
-      cam.k = Math.min(cw, ch) * 0.95 / Math.max(bb[2] - bb[0], bb[3] - bb[1], 1);
-      cam.k = Math.min(Math.max(cam.k, minK()), maxK());
-      region = -1;
+      cam.k = tk * 1.35;
+      flyTo(cam.x, cam.y, tk, 300);
       crumbs();
       hint(rg.name + " in New Eden.");
       syncURL();
@@ -687,6 +763,7 @@
     function pt(e) { var b = canvas.getBoundingClientRect(); return [e.clientX - b.left, e.clientY - b.top]; }
 
     function onPointerDown(e) {
+      stopMotion();
       canvas.setPointerCapture(e.pointerId);
       var p = pt(e);
       pointers[e.pointerId] = p;
@@ -712,9 +789,10 @@
       if (gesture && gesture.pinch && ids.length >= 2) {
         var a = pointers[ids[0]], b = pointers[ids[1]];
         var d = Math.hypot(a[0] - b[0], a[1] - b[1]), mid = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+        // Fingers track exactly: no easing under a pinch.
         cam.x -= (mid[0] - gesture.mid[0]) / cam.k;
         cam.y -= (mid[1] - gesture.mid[1]) / cam.k;
-        if (gesture.d > 0) zoomAt(mid[0], mid[1], d / gesture.d);
+        if (gesture.d > 0) { setZoomAt(mid[0], mid[1], cam.k * d / gesture.d); afterZoom(); }
         gesture.d = d;
         gesture.mid = mid;
         schedule();
@@ -743,7 +821,7 @@
       var now = Date.now();
       if (lastTap && now - lastTap.t < 320 && Math.hypot(p[0] - lastTap.p[0], p[1] - lastTap.p[1]) < 24) {
         lastTap = null;
-        zoomAt(p[0], p[1], 2);
+        glideZoom(p[0], p[1], 2);
         return;
       }
       lastTap = { t: now, p: p };
@@ -765,29 +843,90 @@
       }
       if (sel >= 0) select(-1);
     }
+    // The wheel. A mouse wheel zooms about the cursor; a touchpad's
+    // two-finger scroll pans; a touchpad pinch (which browsers send
+    // as a wheel with ctrlKey set) zooms. A mouse wheel moves in
+    // whole notches (deltaMode lines, or the legacy wheelDeltaY in
+    // multiples of 120); a touchpad streams small pixel deltas,
+    // often sideways too, and a stream keeps its first reading so
+    // one gesture never switches halfway.
+    var padUntil = 0;
+    function isTouchpad(e, dx, dy) {
+      if (e.deltaMode !== 0) return false;
+      var now = performance.now();
+      var pad = dx !== 0 ||
+        (typeof e.wheelDeltaY === "number" && e.wheelDeltaY !== 0 ? e.wheelDeltaY === -3 * e.deltaY || Math.abs(e.wheelDeltaY) % 120 !== 0
+          : Math.abs(dy) < 40 || dy % 1 !== 0);
+      if (now < padUntil) pad = true;
+      if (pad) padUntil = now + 90;
+      return pad;
+    }
     function onWheel(e) {
       e.preventDefault();
       var p = pt(e);
-      var dy = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY;
-      zoomAt(p[0], p[1], Math.exp(-dy * 0.0016));
+      var dx = e.deltaX, dy = e.deltaY;
+      if (e.deltaMode === 1) { dx *= 16; dy *= 16; } else if (e.deltaMode === 2) { dx *= ch; dy *= ch; }
+      if (e.ctrlKey) { chaseZoom(p[0], p[1], Math.exp(-dy * 0.012)); return; }
+      if (isTouchpad(e, dx, dy)) {
+        stopMotion();
+        cam.x += dx / cam.k;
+        cam.y += dy / cam.k;
+        schedule();
+        return;
+      }
+      chaseZoom(p[0], p[1], Math.exp(-dy * 0.0024));
     }
+    // Safari sends its trackpad pinch as gesture events.
+    var gestureScale = 1;
+    function onGestureStart(e) { e.preventDefault(); gestureScale = 1; }
+    function onGestureChange(e) {
+      e.preventDefault();
+      var p = typeof e.clientX === "number" ? pt(e) : [cw / 2, ch / 2];
+      chaseZoom(p[0], p[1], e.scale / gestureScale);
+      gestureScale = e.scale;
+    }
+
+    function flyFit() {
+      var b = viewBounds();
+      flyTo((b[0] + b[2]) / 2, (b[1] + b[3]) / 2, fitK(), 360);
+    }
+    function pan(dx, dy) {
+      var base = anim && anim.kind === "fly" ? anim : null;
+      flyTo((base ? base.x1 : cam.x) + dx / cam.k, (base ? base.y1 : cam.y) + dy / cam.k,
+        base ? Math.exp(base.l1) : cam.k, 180);
+    }
+    // Keys work anywhere in the map frame but the search box.
     function onKey(e) {
-      var step = 60 / cam.k;
+      if (e.altKey || e.ctrlKey || e.metaKey) return;
+      var t = e.target;
+      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA")) return;
       switch (e.key) {
-        case "ArrowLeft": cam.x -= step; break;
-        case "ArrowRight": cam.x += step; break;
-        case "ArrowUp": cam.y -= step; break;
-        case "ArrowDown": cam.y += step; break;
-        case "+": case "=": zoomAt(cw / 2, ch / 2, 1.4); return void e.preventDefault();
-        case "-": case "_": zoomAt(cw / 2, ch / 2, 1 / 1.4); return void e.preventDefault();
-        case "0": fit(); break;
+        case "ArrowLeft": case "a": pan(-90, 0); break;
+        case "ArrowRight": case "d": pan(90, 0); break;
+        case "ArrowUp": case "w": pan(0, -90); break;
+        case "ArrowDown": case "s": pan(0, 90); break;
+        case "+": case "=": case "e": glideZoom(cw / 2, ch / 2, 1.5); break;
+        case "-": case "_": case "q": glideZoom(cw / 2, ch / 2, 1 / 1.5); break;
+        case "0": case "f": flyFit(); break;
+        case "/": findInput.focus(); break;
+        case "?": toggleKeys(); break;
+        case "Enter":
+          if (sel >= 0 && mode === "universe") enterRegion(S.r[sel], sel);
+          else return;
+          break;
         case "Escape":
-          if (sel >= 0) select(-1); else leaveRegion();
-          return;
+          if (!keysPanel.hidden) toggleKeys(false);
+          else if (sel >= 0) select(-1);
+          else leaveRegion();
+          break;
         default: return;
       }
       e.preventDefault();
-      schedule();
+    }
+    var keysPanel = el.querySelector(".map-keys"), keysBtn = el.querySelector("[data-map-keys]");
+    function toggleKeys(open) {
+      keysPanel.hidden = open === undefined ? !keysPanel.hidden : !open;
+      keysBtn.setAttribute("aria-expanded", keysPanel.hidden ? "false" : "true");
     }
 
     function onClick(e) {
@@ -800,9 +939,10 @@
       var z = t.closest("[data-map-zoom]");
       if (z) {
         var how = z.getAttribute("data-map-zoom");
-        if (how === "fit") { fit(); schedule(); } else zoomAt(cw / 2, ch / 2, how === "in" ? 1.6 : 1 / 1.6);
+        if (how === "fit") flyFit(); else glideZoom(cw / 2, ch / 2, how === "in" ? 1.6 : 1 / 1.6);
         return;
       }
+      if (t.closest("[data-map-keys]")) { toggleKeys(); return; }
       var hit = t.closest("[data-hit]");
       if (hit && findList.contains(hit)) { choose(hits[+hit.getAttribute("data-hit")]); }
     }
@@ -860,7 +1000,7 @@
     readColors();
     statusEl.hidden = true;
     findInput.disabled = false;
-    el.querySelectorAll("[data-map-zoom]").forEach(function (b) { b.disabled = false; });
+    el.querySelectorAll("[data-map-zoom], [data-map-keys]").forEach(function (b) { b.disabled = false; });
     var index = root.querySelector(".map-index");
     canvas.addEventListener("pointerdown", onPointerDown);
     canvas.addEventListener("pointermove", onPointerMove);
@@ -868,7 +1008,9 @@
     canvas.addEventListener("pointercancel", onPointerCancel);
     canvas.addEventListener("pointerleave", function () { if (hover >= 0) { hover = -1; schedule(); } });
     canvas.addEventListener("wheel", onWheel, { passive: false });
-    canvas.addEventListener("keydown", onKey);
+    canvas.addEventListener("gesturestart", onGestureStart);
+    canvas.addEventListener("gesturechange", onGestureChange);
+    el.addEventListener("keydown", onKey);
     el.addEventListener("click", onClick);
     findInput.addEventListener("input", function () { search(findInput.value); });
     findInput.addEventListener("keydown", onFindKey);

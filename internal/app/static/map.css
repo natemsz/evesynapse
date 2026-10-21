@@ -153,6 +153,30 @@ html[data-theme="light"] .map {
   pointer-events: none;
 }
 
+/* The controls panel ("?"). */
+.map-keys {
+  position: absolute;
+  top: 0.75rem;
+  left: 0.75rem;
+  z-index: 2;
+  width: min(22rem, calc(100% - 1.5rem));
+  padding: 0.7rem 0.9rem 0.8rem;
+  border: 1px solid var(--glass-edge);
+  border-radius: var(--r-lg);
+  background: var(--glass);
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  backdrop-filter: blur(var(--glass-blur));
+  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.4);
+  font-size: 0.82rem;
+}
+.map-keys[hidden] { display: none; }
+.map-keys h2 { margin: 0 0 0.45rem; font-size: 0.95rem; color: var(--text-bright); }
+.map-keys dl { margin: 0; }
+.map-keys dl > div { display: flex; justify-content: space-between; gap: 1rem; padding: 0.18rem 0; border-top: 1px solid var(--box-edge); }
+.map-keys dl > div:first-child { border-top: 0; }
+.map-keys dt { color: var(--muted-2); }
+.map-keys dd { margin: 0; text-align: right; color: var(--text); }
+
 /* The security legend: the canvas's palette, read from these. */
 .map-legend {
   position: absolute;

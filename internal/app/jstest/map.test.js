@@ -124,3 +124,36 @@ test("threat joins with levels, camps and spillover along the gates", () => {
   assert.strictEqual(J.spill[1], 0, "the hot system's own neighbours are quiet");
   assert.deepStrictEqual([0, 0.4, 0.5, 2, 5, 10, 40].map(map.threatLevel), [0, 0, 1, 2, 3, 4, 4]);
 });
+
+test("routes plan shortest first and bend around danger when asked", () => {
+  // A - B - C is the short way; A - D - E - C detours. B is camped.
+  const P = {
+    v: 1,
+    regions: [{ id: 10, name: "Alpha", x: 0, y: 0, w: 1000, h: 1000 }],
+    cons: [],
+    sys: {
+      id: [101, 102, 103, 104, 105], n: ["A", "B", "C", "D", "E"],
+      x: [0, 10, 20, 0, 20], y: [0, 0, 0, 10, 10],
+      s: [0.9, 0.9, 0.9, 0.9, 0.9], r: [0, 0, 0, 0, 0], c: [-1, -1, -1, -1, -1],
+      rx: [0, 500, 1000, 0, 1000], ry: [0, 0, 0, 500, 500], f: [0, 0, 0, 0, 0]
+    },
+    gates: [0, 1, 1, 2, 0, 3, 3, 4, 4, 2]
+  };
+  const G = map.prepare(P);
+  const LY = { threat: new Float64Array(5), spill: new Float64Array(5), campOf: new Int32Array(5).fill(-1), camps: [{}] };
+  LY.campOf[1] = 0;
+
+  assert.deepStrictEqual(map.planRoute(G, 0, 2, map.routeCost(G, LY, "short")), [0, 1, 2],
+    "shortest takes the camped gate");
+  assert.deepStrictEqual(map.planRoute(G, 0, 2, map.routeCost(G, LY, "calm")), [0, 3, 4, 2],
+    "calm pays jumps to skirt the camp");
+  assert.strictEqual(map.planRoute(G, 0, 2, map.routeCost(G, null, "short")).length, 3,
+    "no layer loaded still plans");
+
+  const sum = map.routeSummary(G, LY, [0, 1, 2]);
+  assert.strictEqual(sum.jumps, 2);
+  assert.deepStrictEqual(sum.camps, [1], "the camp on the way is named");
+  const calm = map.routeSummary(G, LY, [0, 3, 4, 2]);
+  assert.strictEqual(calm.jumps, 3);
+  assert.deepStrictEqual(calm.camps, []);
+});

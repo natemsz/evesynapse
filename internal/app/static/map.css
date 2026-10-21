@@ -38,6 +38,8 @@
   --map-threat-hi: #e0301c;
   --map-threat-core: #fff0e0;
   --map-camp: #ff3b3b;
+  --map-route: #ffd27a;
+  --map-route-halo: rgba(255, 210, 122, 0.25);
   --map-inc: #c64bd6;
   --map-inc-staging: #ff5ce0;
   --map-space: radial-gradient(120% 90% at 30% 20%, rgba(255, 106, 26, 0.08), transparent 55%),
@@ -73,6 +75,8 @@ html[data-theme="light"] .map {
   --map-threat-hi: #c8281a;
   --map-threat-core: #5a0a04;
   --map-camp: #c41818;
+  --map-route: #a86a10;
+  --map-route-halo: rgba(168, 106, 16, 0.22);
   --map-inc: #a12fb3;
   --map-inc-staging: #d01ba8;
   --map-space: radial-gradient(120% 90% at 30% 20%, rgba(255, 106, 26, 0.07), transparent 55%), #fbf6ee;
@@ -401,6 +405,89 @@ html[data-theme="light"] .map {
 }
 .map-card-link:hover { border-color: var(--accent); }
 .map-card-actions { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.map-card-route { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.4rem; }
+
+/* --- The route planner --- */
+.map-route {
+  position: absolute;
+  right: 0.75rem;
+  bottom: 0.75rem;
+  width: min(21rem, calc(100% - 1.5rem));
+  max-height: calc(100% - 1.5rem);
+  overflow: auto;
+  padding: 0.8rem 0.9rem 0.9rem;
+  border: 1px solid var(--glass-edge);
+  border-radius: var(--r-lg);
+  background: var(--glass);
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  backdrop-filter: blur(var(--glass-blur));
+  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.4);
+}
+.map-route[hidden] { display: none; }
+.map-route-title { margin: 0 2rem 0.35rem 0; font-size: 1.05rem; color: var(--text-bright); }
+.map-route-ends {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0 0 0.55rem;
+  min-width: 0;
+}
+.map-route-end { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.map-route-swap {
+  flex: none;
+  padding: 0.15rem 0.4rem;
+  border: 1px solid var(--box-edge);
+  border-radius: var(--r-xs);
+  background: var(--row-alt);
+  color: var(--muted);
+  font: inherit;
+  cursor: pointer;
+}
+.map-route-swap:hover { color: var(--text); border-color: var(--accent); }
+.map-route-sys {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.88rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.map-route-sys:hover { color: var(--accent); }
+.map-route-modes { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-bottom: 0.55rem; }
+.map-route-modes button {
+  padding: 0.3rem 0.6rem;
+  border: 1px solid var(--box-edge);
+  border-radius: var(--r-xs);
+  background: var(--row-alt);
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+.map-route-modes button[aria-checked="true"] {
+  color: var(--text-bright);
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+}
+.map-route-sum { margin: 0 0 0.35rem; color: var(--text); }
+.map-route-warn { margin: 0 0 0.35rem; padding: 0; list-style: none; font-size: 0.85rem; }
+.map-route-warn li { padding: 0.15rem 0; color: var(--map-threat-lo); }
+.map-route-warn li.map-route-camp { color: var(--map-camp); font-weight: 600; }
+.map-route-steps summary { cursor: pointer; color: var(--muted-2); font-weight: 600; font-size: 0.85rem; }
+.map-route-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.5rem;
+  margin: 0.45rem 0 0;
+  padding: 0 0 0 1.1rem;
+  font-size: 0.85rem;
+}
+.map-route-list li.hot .map-route-sys { color: var(--map-threat-lo); }
+.map-route-list li.camp .map-route-sys { color: var(--map-camp); font-weight: 600; }
+.map-route-actions { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.6rem; }
+.map-route-note { margin: 0.5rem 0 0; font-size: 0.82rem; }
 
 /* --- The region index --- */
 .map-index { margin-top: 0.85rem; }
@@ -435,6 +522,15 @@ html[data-theme="light"] .map {
   }
   .map-card:not([hidden]) ~ .map-legend,
   .map-card:not([hidden]) ~ .map-layer-legend { display: none; }
+  /* The planner docks at the top on phones, opposite the
+     system card rising from the bottom. */
+  .map-route {
+    top: 0.4rem;
+    right: 0.4rem;
+    bottom: auto;
+    width: min(21rem, calc(100% - 0.8rem));
+    max-height: 62%;
+  }
 }
 /* Short landscape phones: the bar stays one line. */
 @media (max-height: 30rem) and (orientation: landscape) and (pointer: coarse) {

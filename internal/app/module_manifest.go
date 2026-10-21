@@ -115,6 +115,7 @@ var moduleManifest = []moduleDef{
 			req("esi-location.read_location.v1", "Current system or station."),
 			req("esi-location.read_online.v1", "Online status and last login."),
 			req("esi-location.read_ship_type.v1", "The ship being flown."),
+			opt("esi-ui.write_waypoint.v1", "Send a route planned on the map to your game client's autopilot."),
 		},
 		Snapshots: []string{esi.SnapLocation, esi.SnapOnline, esi.SnapShip}},
 	{ID: "clones", Title: "Clones and implants", Layer: layerCharacter,

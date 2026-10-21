@@ -9,7 +9,7 @@
      swatches carry the site's .sec-N colors, which the canvas reads
      back, so the map is colored exactly like every other security
      figure on the site, in either theme. */}}
-<div class="map" data-map{{if .Ready}} data-src="{{.PayloadURL}}"{{end}}{{if .LayersURL}} data-layers="{{.LayersURL}}"{{end}}>
+<div class="map" data-map{{if .Ready}} data-src="{{.PayloadURL}}"{{end}}{{if .LayersURL}} data-layers="{{.LayersURL}}"{{end}}{{with .Route}}{{if .SignedIn}} data-route-signed-in{{end}}{{if .Waypoints}} data-route-can-send{{end}}{{if .Here}} data-route-here="{{.Here}}"{{end}}{{end}}>
   <div class="map-bar">
     <nav class="map-crumbs" aria-label="Map location">
       <button type="button" class="map-crumb" data-map-universe>New Eden</button>
@@ -62,6 +62,7 @@
         <div><dt>0 · F</dt><dd>Fit</dd></div>
         <div><dt>/</dt><dd>Find</dd></div>
         <div><dt>L · Shift L</dt><dd>Next · previous layer</dd></div>
+        <div><dt>R · Shift R</dt><dd>Route to · from the selected system</dd></div>
         <div><dt>?</dt><dd>These controls</dd></div>
       </dl>
     </section>
@@ -76,7 +77,40 @@
         <a class="btn small" data-map-system-page href="/system/">System page</a>
         <button type="button" class="btn small" data-map-enter>Tactical view</button>
       </div>
+      <div class="map-card-route" role="group" aria-label="Route">
+        <button type="button" class="btn small" data-route-set="from">Route from here</button>
+        <button type="button" class="btn small" data-route-set="to">Route to here</button>
+      </div>
     </aside>
+    {{/* The route planner, filled by map.js once a route has an
+         end. Routes are planned in the browser from the gates and
+         the live threat layer; the buttons hand one to the game's
+         autopilot (POST /map/route, map_route.go). */}}
+    <section class="map-route" aria-label="Route" hidden>
+      <button type="button" class="map-card-close" data-route-close aria-label="Clear the route">×</button>
+      <h2 class="map-route-title">Route</h2>
+      <p class="map-route-ends">
+        <span class="map-route-end" data-route-end="from"></span>
+        <button type="button" class="map-route-swap" data-route-swap aria-label="Swap start and destination" title="Swap">⇄</button>
+        <span class="map-route-end" data-route-end="to"></span>
+      </p>
+      <div class="map-route-modes" role="radiogroup" aria-label="Route preference">
+        <button type="button" role="radio" aria-checked="true" data-route-mode="short" title="The fewest jumps">Shortest</button>
+        <button type="button" role="radio" aria-checked="false" data-route-mode="safe" title="High-sec wherever it can, and around trouble">Safer</button>
+        <button type="button" role="radio" aria-checked="false" data-route-mode="calm" title="Few jumps, skirting active threat and gate camps">Avoid danger</button>
+      </div>
+      <p class="map-route-sum" aria-live="polite"></p>
+      <ul class="map-route-warn"></ul>
+      <details class="map-route-steps">
+        <summary>Systems</summary>
+        <ol class="map-route-list"></ol>
+      </details>
+      <div class="map-route-actions">
+        <button type="button" class="btn small" data-route-send="dest">Set destination</button>
+        <button type="button" class="btn small" data-route-send="route">Send route</button>
+      </div>
+      <p class="map-route-note muted" aria-live="polite"></p>
+    </section>
     <ol class="map-legend" aria-label="Security status colors">
       {{range $t := mapSecTiers}}<li><span class="map-swatch sec sec-{{$t}}" data-tier="{{$t}}"></span><span class="map-legend-v">{{if eq $t 10}}1.0{{else if eq $t 5}}0.5{{else if eq $t 0}}0.0{{end}}</span></li>{{end}}
     </ol>

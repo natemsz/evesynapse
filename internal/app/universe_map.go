@@ -445,6 +445,8 @@ type mapPageView struct {
 	LayersURL string
 	Systems   int
 	Regions   []mapRegionLink
+	// Route is the reader's side of routing (map_route.go).
+	Route mapRouteView
 }
 
 // loadMapPageView reads the stored payload's meta and the region
@@ -465,6 +467,7 @@ func (app *Application) loadMapPageView(ctx context.Context) *mapPageView {
 		}
 		sort.Slice(v.Regions, func(i, j int) bool { return v.Regions[i].Name < v.Regions[j].Name })
 	}
+	v.Route = app.loadMapRouteView(ctx)
 	return v
 }
 

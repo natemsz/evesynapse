@@ -271,6 +271,92 @@
     return (Math.imul(id | 0, 2654435761) >>> 0) % 360;
   }
 
+  // --- Routing: the pure part ---
+  // Routes are planned here, over the payload's gates: Dijkstra with
+  // a price for entering each system. "short" prices every jump the
+  // same; "calm" adds the live threat (its level, gate camps, and
+  // its spill onto gate neighbours), so the route bends around
+  // trouble when a detour is cheap; "safe" does that and also
+  // prices leaving high-sec steeply, as the game's own "safer" does.
+  var ROUTE_MODES = { short: 1, safe: 1, calm: 1 };
+  var THREAT_PRICE = [0, 3, 10, 40, 120];
+  var CAMP_PRICE = 400, LOWSEC_PRICE = 50;
+  function routeCost(G, LY, mode) {
+    return function (j) {
+      var c = 1;
+      if (mode === "short") return c;
+      if (mode === "safe" && G.tier[j] < 5) c += LOWSEC_PRICE;
+      if (LY) {
+        c += THREAT_PRICE[threatLevel(LY.threat[j])];
+        if (LY.campOf[j] >= 0) c += CAMP_PRICE;
+        if (threatLevel(LY.spill[j]) >= 2) c += 2;
+      }
+      return c;
+    };
+  }
+  // planRoute: the cheapest path from a to b as system indices, a
+  // and b included; null when no gates join them.
+  function planRoute(G, a, b, cost) {
+    var n = G.n, dist = new Float64Array(n).fill(Infinity), prev = new Int32Array(n).fill(-1);
+    var heap = [], i;
+    function push(d, v) {
+      heap.push([d, v]);
+      for (i = heap.length - 1; i > 0;) {
+        var p = (i - 1) >> 1;
+        if (heap[p][0] <= heap[i][0]) break;
+        var t = heap[p]; heap[p] = heap[i]; heap[i] = t; i = p;
+      }
+    }
+    function pop() {
+      var top = heap[0], last = heap.pop();
+      if (heap.length) {
+        heap[0] = last;
+        for (i = 0; ;) {
+          var l = 2 * i + 1, r = l + 1, m = i;
+          if (l < heap.length && heap[l][0] < heap[m][0]) m = l;
+          if (r < heap.length && heap[r][0] < heap[m][0]) m = r;
+          if (m === i) break;
+          var t = heap[m]; heap[m] = heap[i]; heap[i] = t; i = m;
+        }
+      }
+      return top;
+    }
+    dist[a] = 0;
+    push(0, a);
+    while (heap.length) {
+      var top = pop(), u = top[1];
+      if (top[0] > dist[u]) continue;
+      if (u === b) break;
+      var nb = G.adj[u];
+      for (var k = 0; k < nb.length; k++) {
+        var v = nb[k], d = dist[u] + cost(v);
+        if (d < dist[v]) { dist[v] = d; prev[v] = u; push(d, v); }
+      }
+    }
+    if (dist[b] === Infinity) return null;
+    var path = [];
+    for (var at = b; at !== -1; at = prev[at]) path.push(at);
+    return path.reverse();
+  }
+  // routeSummary: the jumps by security band, the camps on the way,
+  // and the systems hot enough to warn of (Medium threat and up),
+  // hottest first.
+  function routeSummary(G, LY, path) {
+    var s = { jumps: path.length - 1, high: 0, low: 0, nul: 0, camps: [], hot: [], top: 0 };
+    path.forEach(function (i, at) {
+      if (at === 0) return; // where you start is not part of the trip
+      var t = G.tier[i];
+      if (t >= 5) s.high++; else if (t > 0) s.low++; else s.nul++;
+      if (!LY) return;
+      if (LY.campOf[i] >= 0) s.camps.push(i);
+      var lv = threatLevel(LY.threat[i]);
+      if (lv > s.top) s.top = lv;
+      if (lv >= 2) s.hot.push(i);
+    });
+    if (LY) s.hot.sort(function (x, y) { return LY.threat[y] - LY.threat[x]; });
+    return s;
+  }
+
   // Stub length past a region's edge system, in region-frame units.
   var STUB = 70;
 
@@ -339,6 +425,8 @@
         unheld: tok("--map-unheld", "rgba(200,180,160,0.35)"),
         sovL: tok("--map-sov-l", "62%"),
         threatRamp: [rgbOf(tok("--map-threat-lo", "#e0a020")), rgbOf(tok("--map-threat-hi", "#e0301c")), rgbOf(tok("--map-threat-core", "#fff0e0"))],
+        route: tok("--map-route", "#ffd27a"),
+        routeHalo: tok("--map-route-halo", "rgba(255,210,122,0.25)"),
         camp: tok("--map-camp", "#ff3b3b"),
         inc: tok("--map-inc", "#c64bd6"),
         incStage: tok("--map-inc-staging", "#ff4fd8"),
@@ -565,6 +653,9 @@
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       if (mode !== "universe") drawConstellations(k, ox, oy);
 
+      // The planned route, under the systems it joins.
+      drawRoute(k, ox, oy);
+
       // Systems: by security, or by the live layer showing.
       var r = radius(), list = visible(), n = list ? list.length : G.n;
       var pad = 40;
@@ -610,6 +701,7 @@
         ctx.strokeStyle = idx ? colors.accent : colors.label;
         ctx.stroke();
       });
+      drawRouteEnds(k, ox, oy, r);
 
       drawLabels(k, ox, oy, r);
     }
@@ -1368,6 +1460,197 @@
         d.appendChild(dd);
         live.appendChild(d);
       });
+      card.querySelector('[data-route-set="from"]').hidden = i === routeFrom;
+      card.querySelector('[data-route-set="to"]').hidden = i === routeTo;
+    }
+
+    // --- Routes ---
+    // A route is two ends and a preference; the path is replanned
+    // whenever one changes, and again when the threat layer
+    // refreshes. Picking a destination with no start set starts
+    // from where the reader's character last was, when we know.
+    var routeEl = el.querySelector(".map-route");
+    var routeFrom = -1, routeTo = -1, routeMode = "short", routePath = null, routeSum = null;
+    var here = G.byID[+el.getAttribute("data-route-here")];
+    if (here === undefined) here = -1;
+    var canSend = el.hasAttribute("data-route-can-send"), signedIn = el.hasAttribute("data-route-signed-in");
+    var sending = false;
+
+    function setRouteEnd(which, i) {
+      if (i < 0) return;
+      if (which === "to") {
+        routeTo = i;
+        if (routeFrom < 0 && here >= 0) routeFrom = here;
+        if (routeFrom === i) routeFrom = -1;
+      } else {
+        routeFrom = i;
+        if (routeTo === i) routeTo = -1;
+      }
+      routeNote("");
+      replan();
+    }
+    function clearRoute() {
+      routeFrom = routeTo = -1;
+      routePath = routeSum = null;
+      routeNote("");
+      renderRoute();
+      updateCard();
+      syncURL();
+      schedule();
+    }
+    function replan() {
+      routePath = routeFrom >= 0 && routeTo >= 0 ? planRoute(G, routeFrom, routeTo, routeCost(G, LY, routeMode)) : null;
+      routeSum = routePath ? routeSummary(G, LY, routePath) : null;
+      renderRoute();
+      updateCard();
+      syncURL();
+      schedule();
+    }
+    function routeNote(text) { routeEl.querySelector(".map-route-note").textContent = text; }
+
+    function secBadge(i) {
+      var s = root.createElement("span");
+      s.className = "sec sec-" + G.tier[i];
+      s.textContent = secText(S.s[i]);
+      return s;
+    }
+    function sysButton(i) {
+      var b = root.createElement("button");
+      b.type = "button";
+      b.className = "map-route-sys";
+      b.setAttribute("data-map-sys", String(i));
+      b.appendChild(secBadge(i));
+      b.appendChild(root.createTextNode(" " + S.n[i]));
+      return b;
+    }
+    function renderRoute() {
+      routeEl.hidden = routeFrom < 0 && routeTo < 0;
+      el.classList.toggle("map-routing", !routeEl.hidden);
+      if (routeEl.hidden) return;
+      ["from", "to"].forEach(function (w) {
+        var at = w === "from" ? routeFrom : routeTo, box = routeEl.querySelector('[data-route-end="' + w + '"]');
+        box.textContent = "";
+        if (at >= 0) box.appendChild(sysButton(at));
+        else {
+          var m = root.createElement("span");
+          m.className = "muted";
+          m.textContent = w === "from" ? "Pick a start" : "Pick a destination";
+          box.appendChild(m);
+        }
+      });
+      routeEl.querySelectorAll("[data-route-mode]").forEach(function (b) {
+        b.setAttribute("aria-checked", b.getAttribute("data-route-mode") === routeMode ? "true" : "false");
+      });
+      var sum = routeEl.querySelector(".map-route-sum"), warn = routeEl.querySelector(".map-route-warn");
+      var list = routeEl.querySelector(".map-route-list");
+      warn.textContent = "";
+      list.textContent = "";
+      if (routeFrom < 0 || routeTo < 0) {
+        sum.textContent = "Select a system on the map, then “Route " + (routeFrom < 0 ? "from" : "to") + " here”.";
+      } else if (!routePath) {
+        sum.textContent = "No stargates join these systems.";
+      } else {
+        var s = routeSum, parts = [];
+        if (s.high) parts.push(s.high + " high");
+        if (s.low) parts.push(s.low + " low");
+        if (s.nul) parts.push(s.nul + " null");
+        sum.textContent = (s.jumps === 1 ? "1 jump" : s.jumps + " jumps") + (parts.length ? " · " + parts.join(" · ") : "") +
+          (LY ? "" : " · threat not loaded");
+        s.camps.forEach(function (i) {
+          var c = LY.camps[LY.campOf[i]], li = root.createElement("li");
+          li.className = "map-route-camp";
+          li.appendChild(root.createTextNode("Gate camp in "));
+          li.appendChild(sysButton(i));
+          li.appendChild(root.createTextNode(" · " + c.n + " kills" + (c.group ? " by " + c.group : "")));
+          warn.appendChild(li);
+        });
+        s.hot.slice(0, 3).forEach(function (i) {
+          if (LY.campOf[i] >= 0) return;
+          var li = root.createElement("li");
+          li.appendChild(root.createTextNode(THREAT_LEVELS[threatLevel(LY.threat[i])].name + " threat in "));
+          li.appendChild(sysButton(i));
+          warn.appendChild(li);
+        });
+        routePath.forEach(function (i) {
+          var li = root.createElement("li");
+          li.appendChild(sysButton(i));
+          if (LY && LY.campOf[i] >= 0) li.className = "camp";
+          else if (LY && threatLevel(LY.threat[i]) >= 2) li.className = "hot";
+          list.appendChild(li);
+        });
+      }
+      var acts = routeEl.querySelector(".map-route-actions");
+      acts.hidden = !signedIn;
+      acts.querySelectorAll("[data-route-send]").forEach(function (b) {
+        b.disabled = sending || !canSend || (b.getAttribute("data-route-send") === "route" ? !routePath || routeSum.jumps < 1 : routeTo < 0);
+      });
+      var note = routeEl.querySelector(".map-route-note");
+      if (!note.textContent) {
+        note.textContent = !signedIn ? "Sign in to send routes to your game client."
+          : !canSend ? "To send routes to your game client, sign in again and allow EveSynapse to set autopilot waypoints." : "";
+      }
+    }
+    function sendRoute(kind) {
+      if (sending || routeTo < 0) return;
+      var systems = kind === "dest" ? [S.id[routeTo]] : (routePath || []).slice(1).map(function (i) { return S.id[i]; });
+      if (!systems.length) return;
+      sending = true;
+      routeNote(kind === "dest" ? "Setting your destination…" : "Sending " + systems.length + " waypoints…");
+      renderRoute();
+      fetch("/map/route", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json", "X-Requested-With": "XMLHttpRequest" },
+        body: JSON.stringify({ mode: kind, systems: systems })
+      }).then(function (r) {
+        return r.json().catch(function () { return { ok: false, message: "The server did not answer — try again." }; });
+      }).then(function (res) {
+        routeNote(res.message || (res.ok ? "Sent." : "That did not go through."));
+      }).catch(function () {
+        routeNote("The server could not be reached — try again.");
+      }).then(function () {
+        sending = false;
+        if (el.isConnected) renderRoute();
+      });
+    }
+
+    // drawRoute: the path as a lit line, in screen space, under the
+    // systems; in a tactical view the legs that leave the region run
+    // out along their stubs.
+    function drawRoute(k, ox, oy) {
+      if (!routePath || routePath.length < 2) return;
+      ctx.beginPath();
+      for (var m = 1; m < routePath.length; m++) {
+        var a = routePath[m - 1], b = routePath[m], pa, pb;
+        if (mode === "universe") { pa = [S.x[a], S.y[a]]; pb = [S.x[b], S.y[b]]; }
+        else {
+          var ina = S.r[a] === region, inb = S.r[b] === region;
+          if (!ina && !inb) continue;
+          pa = ina ? [S.rx[a], S.ry[a]] : ghost(b, a);
+          pb = inb ? [S.rx[b], S.ry[b]] : ghost(a, b);
+        }
+        ctx.moveTo(pa[0] * k + ox, pa[1] * k + oy);
+        ctx.lineTo(pb[0] * k + ox, pb[1] * k + oy);
+      }
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      ctx.lineWidth = mode === "universe" ? 5 : 7;
+      ctx.strokeStyle = colors.routeHalo;
+      ctx.stroke();
+      ctx.lineWidth = mode === "universe" ? 2.2 : 3;
+      ctx.strokeStyle = colors.route;
+      ctx.stroke();
+    }
+    function drawRouteEnds(k, ox, oy, r) {
+      [routeFrom, routeTo].forEach(function (s, idx) {
+        if (s < 0 || (mode !== "universe" && S.r[s] !== region)) return;
+        var x = wx(s) * k + ox, y = wy(s) * k + oy;
+        ctx.beginPath();
+        ctx.arc(x, y, r + (idx ? 6 : 5), 0, Math.PI * 2);
+        ctx.lineWidth = idx ? 2.5 : 1.5;
+        ctx.strokeStyle = colors.route;
+        ctx.stroke();
+      });
     }
 
     // --- Search ---
@@ -1599,8 +1882,15 @@
           if (sel >= 0 && mode === "universe") enterRegion(S.r[sel], sel);
           else return;
           break;
+        case "r":
+          if (sel >= 0) setRouteEnd("to", sel); else return;
+          break;
+        case "R":
+          if (sel >= 0) setRouteEnd("from", sel); else return;
+          break;
         case "Escape":
           if (!keysPanel.hidden) toggleKeys(false);
+          else if (routeFrom >= 0 || routeTo >= 0) clearRoute();
           else if (sel >= 0) select(-1);
           else leaveRegion();
           break;
@@ -1628,6 +1918,24 @@
         return;
       }
       if (t.closest("[data-map-keys]")) { toggleKeys(); return; }
+      var rs = t.closest("[data-route-set]");
+      if (rs) { if (sel >= 0) setRouteEnd(rs.getAttribute("data-route-set"), sel); return; }
+      if (t.closest("[data-route-close]")) { clearRoute(); return; }
+      if (t.closest("[data-route-swap]")) {
+        var tmp = routeFrom; routeFrom = routeTo; routeTo = tmp;
+        routeNote("");
+        replan();
+        return;
+      }
+      var rm = t.closest("[data-route-mode]");
+      if (rm && ROUTE_MODES[rm.getAttribute("data-route-mode")]) {
+        routeMode = rm.getAttribute("data-route-mode");
+        routeNote("");
+        replan();
+        return;
+      }
+      var rd = t.closest("[data-route-send]");
+      if (rd && !rd.disabled) { sendRoute(rd.getAttribute("data-route-send")); return; }
       var lb = t.closest("[data-map-layer]");
       if (lb && !lb.disabled) { setLayer(lb.getAttribute("data-map-layer")); return; }
       var hit = t.closest("[data-hit]");
@@ -1743,6 +2051,11 @@
           var want = wantLayer;
           if (!want) { try { want = localStorage.getItem("evesynapse-map-layer"); } catch (e) { /* private mode */ } }
           setLayer(want || "security");
+          if (routeFrom >= 0 || routeTo >= 0) replan();
+        } else if (routeFrom >= 0 || routeTo >= 0) {
+          // A calmer (or hotter) picture can bend the route.
+          renderLegend();
+          replan();
         } else {
           renderLegend();
           updateCard();
@@ -1801,6 +2114,7 @@
   // Exposed for the node tests only (jstest/map_test.js).
   if (typeof module !== "undefined" && module.exports) {
     module.exports = { secRounded: secRounded, secTier: secTier, secText: secText, prepare: prepare, regionLabelAlpha: regionLabelAlpha, zoomEntryAllowed: zoomEntryAllowed,
-      joinLayers: joinLayers, heatT: heatT, allianceHue: allianceHue, threatLevel: threatLevel };
+      joinLayers: joinLayers, heatT: heatT, allianceHue: allianceHue, threatLevel: threatLevel,
+      routeCost: routeCost, planRoute: planRoute, routeSummary: routeSummary };
   }
 })();

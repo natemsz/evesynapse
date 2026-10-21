@@ -2755,9 +2755,18 @@
       var show = open === undefined ? dataMenu.hidden : open;
       dataMenu.hidden = !show;
       dataBtn.setAttribute("aria-expanded", show ? "true" : "false");
-      // The map box clips what spills past it, so the menu is never
-      // taller than the room left below its button; it scrolls instead.
+      // The map box clips what spills past it, so the menu opens
+      // toward the side with room (leftward when its button sits at
+      // the right end of the bar), and is never taller than the room
+      // left below its button; it scrolls instead.
       if (show) {
+        var box = el.getBoundingClientRect();
+        dataMenu.style.left = "0";
+        dataMenu.style.right = "auto";
+        if (dataMenu.getBoundingClientRect().right > box.right - 8) {
+          dataMenu.style.left = "auto";
+          dataMenu.style.right = "0";
+        }
         var room = Math.min(el.getBoundingClientRect().bottom, window.innerHeight) - dataMenu.getBoundingClientRect().top - 8;
         dataMenu.style.maxHeight = Math.max(160, room) + "px";
       }

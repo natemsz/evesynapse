@@ -2257,6 +2257,35 @@ func (q *Queries) ListTypeNameIDsByIDs(ctx context.Context, typeIds []int64) ([]
 	return items, nil
 }
 
+const listTypeNamesByExactName = `-- name: ListTypeNamesByExactName :many
+SELECT type_id, name FROM type_names
+WHERE lower(name) = lower($1)
+ORDER BY type_id
+`
+
+func (q *Queries) ListTypeNamesByExactName(ctx context.Context, name string) ([]TypeName, error) {
+	rows, err := q.db.QueryContext(ctx, listTypeNamesByExactName, name)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []TypeName
+	for rows.Next() {
+		var i TypeName
+		if err := rows.Scan(&i.TypeID, &i.Name); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const searchAllianceRecordsByName = `-- name: SearchAllianceRecordsByName :many
 SELECT alliance_id, payload
 FROM alliance_records

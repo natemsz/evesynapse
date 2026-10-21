@@ -298,6 +298,43 @@ func TestNotifyWatchListIsAStandingState(t *testing.T) {
 	}
 }
 
+// TestNotifyWatchGlobalTypeReadsGlobalRegion: a watch on a
+// global-market type (PLEX) saved under a normal region reads the
+// global market's history, the same normalization the home
+// briefing applies, and names that market in the alert.
+func TestNotifyWatchGlobalTypeReadsGlobalRegion(t *testing.T) {
+	f := newNotifyFixture(t)
+	now := notifyT0
+	const typeID = int64(44992) // PLEX: trades on the global market only
+	history := func(date string, average float64) {
+		t.Helper()
+		if err := f.q.UpsertMarketHistory(f.ctx, db.UpsertMarketHistoryParams{
+			RegionID: globalMarketRegion, TypeID: typeID, Date: date,
+			Average: average, Highest: average, Lowest: average, Volume: 100, OrderCount: 5,
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := f.q.UpsertWatchlistEntry(f.ctx, db.UpsertWatchlistEntryParams{
+		UserID: f.userID, TypeID: typeID, RegionID: forge, ThresholdPct: 10, CreatedAt: now,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	history("2026-09-25", 100)
+	history("2026-10-02", 101)
+	if n := f.pass(now); n != 0 {
+		t.Fatalf("a quiet price: %d notification(s) %q", n, f.titles())
+	}
+	history("2026-10-03", 102)
+	history("2026-10-10", 133)
+	if n := f.pass(now.Add(time.Minute)); n != 1 {
+		t.Fatalf("after the jump: %d notification(s) %q, want 1", n, f.titles())
+	}
+	if got := f.titles()[0]; !strings.Contains(got, "in Global market") {
+		t.Fatalf("the alert names the wrong market: %q", got)
+	}
+}
+
 // TestNotifyAccountsAreSeparate: one account's events never reach
 // another, and removing an account takes its notifications with it.
 func TestNotifyAccountsAreSeparate(t *testing.T) {

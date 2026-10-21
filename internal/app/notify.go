@@ -373,7 +373,8 @@ func (app *Application) notifyWatchEvents(ctx context.Context, c *notifyCollecto
 	}
 	src := c.source(notifyWatch, userID)
 	for _, e := range entries {
-		rows := app.recentHistoryRows(ctx, e.RegionID, e.TypeID, markethistory.ChartRows)
+		regionID := marketRegionForType(e.TypeID, e.RegionID)
+		rows := app.recentHistoryRows(ctx, regionID, e.TypeID, markethistory.ChartRows)
 		pct, ok := markethistory.ChangePct(rows, 7)
 		if !ok || absFloat(pct) < e.ThresholdPct {
 			continue
@@ -386,9 +387,9 @@ func (app *Application) notifyWatchEvents(ctx context.Context, c *notifyCollecto
 		}
 		c.add(notifyEvent{
 			Kind: notifyWatch, Source: src,
-			Key: fmt.Sprintf("watch|%d|%d|%s", e.TypeID, e.RegionID, way),
+			Key: fmt.Sprintf("watch|%d|%d|%s", e.TypeID, regionID, way),
 			Title: fmt.Sprintf("%s moved %s over 7 days in %s, past your %s watch",
-				app.typeNameOrID(ctx, e.TypeID), markethistory.ChangeDirection(pct), app.marketRegionLabel(ctx, e.RegionID),
+				app.typeNameOrID(ctx, e.TypeID), markethistory.ChangeDirection(pct), app.marketRegionLabel(ctx, regionID),
 				markethistory.FormatChangePct(e.ThresholdPct)),
 			URL: "/market/",
 		})

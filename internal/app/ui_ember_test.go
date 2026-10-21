@@ -431,6 +431,57 @@ func TestCharactersActiveRowTint(t *testing.T) {
 	}
 }
 
+// TestNoNestedBlurInsidePageGlass pins the blur ruling — blur
+// belongs only over unblurred content — for the small glass
+// pieces living inside the page panel: the quiet pill flattens
+// there and in the notify menu, the alert bars flatten inside
+// the panel, and the PI planner's Recalculate pill carries no
+// backdrop filter at all. Over the sky (the home bar, home's
+// notice under its stripped panel) the base rules keep theirs.
+// It also pins the highlighted-row paint: the solid rule that
+// actually paints a .yours row, and its pinned-cell variant.
+func TestNoNestedBlurInsidePageGlass(t *testing.T) {
+	read := func(name string) string {
+		raw, err := fs.ReadFile(staticFS, "static/"+name)
+		if err != nil {
+			t.Fatalf("read %s: %v", name, err)
+		}
+		return string(raw)
+	}
+	bg := read("bg.css")
+	for _, want := range []string{
+		".page-body:not(:has(.home-grid)) .btn.btn-quiet,",
+		".notify-menu .btn.btn-quiet {",
+	} {
+		if !strings.Contains(bg, want) {
+			t.Errorf("bg.css is missing the quiet-pill flatten rule %q", want)
+		}
+	}
+	style := read("style.css")
+	if !strings.Contains(style, ".page-body:not(:has(.home-grid)) .ok,") ||
+		!strings.Contains(style, ".page-body:not(:has(.home-grid)) .notice {") {
+		t.Error("style.css lost the alert-bar flatten rule inside the page panel")
+	}
+	if !strings.Contains(style, "tbody tr.yours td { background-color: #2a2015; }") {
+		t.Error("style.css lost the solid rule that paints highlighted rows")
+	}
+	if !strings.Contains(style, ".tw tbody tr.yours td:first-child { background: #2a2015; }") {
+		t.Error("style.css lost the pinned-cell variant of the highlighted row")
+	}
+	plan := read("plan.css")
+	i := strings.Index(plan, "#pi-form button[type=\"submit\"] {")
+	if i < 0 {
+		t.Fatal("plan.css lost the PI Recalculate pill rule")
+	}
+	rule := plan[i:]
+	if end := strings.Index(rule, "}"); end >= 0 {
+		rule = rule[:end]
+	}
+	if strings.Contains(rule, "backdrop-filter") {
+		t.Error("the PI Recalculate pill carries a backdrop filter inside the panel glass")
+	}
+}
+
 // TestPIPlannerColoniesAndControls pins the PI planner spacing and
 // controls pass: suggested colonies carry their own box (the generic
 // nested-foldable rule flattens them to padding 0 with no border, so

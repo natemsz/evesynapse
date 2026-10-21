@@ -5,6 +5,12 @@ name: Update CHANGELOG.md on Release
 # GITHUB_TOKEN, and events caused by GITHUB_TOKEN do not start new
 # workflow runs -- the old release trigger therefore never fired.
 # workflow_run is the documented exception and fires regardless.
+#
+# build-and-release runs on pushes to branches, never on tags, so a
+# workflow_run's head_branch is the branch the run was on ("main" or
+# "evesynapse-dev"), never a version tag. The version is derived from
+# the tree instead, the same way the release job derives it:
+# internal/app/version.txt, tag "v$VERSION".
 on:
   workflow_run:
     workflows: ["build-and-release"]
@@ -16,10 +22,13 @@ permissions:
 
 jobs:
   update-changelog:
-    # Only a successful release run: its head branch is the version tag.
+    # Only a successful run on main: plain versions are published from
+    # main only (the release job's plan step), so no other run can
+    # have published a release.
     if: >-
       github.event.workflow_run.conclusion == 'success' &&
-      startsWith(github.event.workflow_run.head_branch, 'v')
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.event != 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
@@ -28,18 +37,38 @@ jobs:
           fetch-depth: 0
           ref: main
 
+      # workflow_run fires on every successful build-and-release run
+      # on main, including pushes that publish no release (the version
+      # was already released). Act only when a release exists for the
+      # version in the tree and CHANGELOG.md does not document it yet.
+      - name: Decide whether this run published a new release
+        id: plan
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION=$(tr -d '[:space:]' < internal/app/version.txt)
+          TAG="v$VERSION"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          update=false
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            echo "No release $TAG exists; nothing to do."
+          elif grep -qF "## [$TAG]" CHANGELOG.md; then
+            echo "CHANGELOG.md already documents $TAG; nothing to do."
+          else
+            update=true
+          fi
+          echo "update=$update" >> "$GITHUB_OUTPUT"
+
       - name: Fetch the published release notes
+        if: steps.plan.outputs.update == 'true'
         id: release_notes
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # Via env, never interpolated into the script directly:
-          # a branch/tag name is untrusted input to a shell.
-          TAG_NAME: ${{ github.event.workflow_run.head_branch }}
+          # a tag name is untrusted input to a shell.
+          TAG_NAME: ${{ steps.plan.outputs.tag }}
         run: |
-          NOTES=$(gh api \
-            -H "Accept: application/vnd.github+json" \
-            "/repos/${{ github.repository }}/releases/tags/${TAG_NAME}" \
-            --jq '.body')
+          NOTES=$(gh release view "$TAG_NAME" --json body --jq '.body')
 
           {
             echo "RELEASE_TAG=$TAG_NAME"
@@ -49,6 +78,7 @@ jobs:
           } >> "$GITHUB_ENV"
 
       - name: Insert notes into CHANGELOG.md
+        if: steps.plan.outputs.update == 'true'
         run: |
           DATE=$(date +'%Y-%m-%d')
           SECTION_FILE=$(mktemp)
@@ -74,6 +104,7 @@ jobs:
           mv CHANGELOG.new CHANGELOG.md
 
       - name: Create Pull Request for Review
+        if: steps.plan.outputs.update == 'true'
         uses: peter-evans/create-pull-request@v8
         with:
           token: ${{ secrets.GITHUB_TOKEN }}

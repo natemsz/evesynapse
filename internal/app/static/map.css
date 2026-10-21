@@ -43,6 +43,14 @@
   /* Intel reports: cold cyan against the warm map, green for clear. */
   --map-intel: #3fd8ff;
   --map-intel-clear: #4fbf6a;
+  /* Your data (map_mine.go): one hue a kind of pin. */
+  --map-d-pilots: #6ff29a;
+  --map-d-fleet: #6aa8ff;
+  --map-d-clones: #c4a1ff;
+  --map-d-market: #ffd24a;
+  --map-d-industry: #ffa45c;
+  --map-d-structures: #5ce0d8;
+  --map-d-posted: #3fd8ff;
   --map-inc: #c64bd6;
   --map-inc-staging: #ff5ce0;
   --map-space: radial-gradient(120% 90% at 30% 20%, rgba(255, 106, 26, 0.08), transparent 55%),
@@ -82,6 +90,13 @@ html[data-theme="light"] .map {
   --map-route-halo: rgba(168, 106, 16, 0.22);
   --map-intel: #0a7fa8;
   --map-intel-clear: #2f8f46;
+  --map-d-pilots: #1f9d55;
+  --map-d-fleet: #2563c9;
+  --map-d-clones: #7b4fc9;
+  --map-d-market: #a87a00;
+  --map-d-industry: #b4560f;
+  --map-d-structures: #0f8a8a;
+  --map-d-posted: #0a7fa8;
   --map-inc: #a12fb3;
   --map-inc-staging: #d01ba8;
   --map-space: radial-gradient(120% 90% at 30% 20%, rgba(255, 106, 26, 0.07), transparent 55%), #fbf6ee;
@@ -761,3 +776,59 @@ html.map-full-open .page-body { -webkit-backdrop-filter: none; backdrop-filter: 
 .map-card-intel .btn { flex: 1; justify-content: center; }
 .map-card-intel-msg { margin: 0; font-size: 0.78rem; color: var(--muted-2); }
 .map-card-intel-msg:empty { display: none; }
+
+/* --- Your data: the Data menu --- */
+.map-data { position: relative; }
+.map-data-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.65rem;
+  border: 1px solid var(--box-edge);
+  border-radius: var(--r-xs);
+  background: var(--row-alt);
+  color: var(--muted-2);
+  font: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+.map-data-btn::after { content: "▾"; font-size: 0.7rem; opacity: 0.7; }
+.map-data-btn[aria-expanded="true"], .map-data-btn.on { color: var(--text-bright); border-color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.map-data-btn [data-map-data-n]:not(:empty) { min-width: 1.1rem; padding: 0 0.3rem; border-radius: 999px; background: var(--accent); color: #140a04; font-weight: 700; font-size: 0.72rem; text-align: center; }
+.map-data-menu {
+  position: absolute;
+  top: calc(100% + 0.35rem);
+  left: 0;
+  z-index: 6;
+  width: min(17rem, calc(100vw - 2rem));
+  padding: 0.6rem 0.7rem 0.5rem;
+  border: 1px solid var(--glass-edge);
+  border-radius: var(--r-lg);
+  background: var(--glass);
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  backdrop-filter: blur(var(--glass-blur));
+  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.45);
+  font-size: 0.85rem;
+}
+.map-data-menu[hidden] { display: none; }
+.map-data-menu fieldset { margin: 0 0 0.45rem; padding: 0; border: 0; }
+.map-data-menu legend { padding: 0; margin-bottom: 0.2rem; font-size: 0.7rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted-2); }
+.map-data-menu label { display: flex; align-items: center; gap: 0.45rem; padding: 0.22rem 0.2rem; border-radius: var(--r-xs); cursor: pointer; }
+.map-data-menu label:hover { background: var(--row-hover); }
+.map-data-menu input { margin: 0; accent-color: var(--accent); }
+.map-data-menu small { margin-left: auto; color: var(--muted-2); font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em; }
+/* What would conflict with what is on is greyed out, with why. */
+.map-data-menu label.off { opacity: 0.4; cursor: not-allowed; }
+.map-data-menu label.off:hover { background: none; }
+.map-data-note { margin: 0.2rem 0 0; font-size: 0.72rem; }
+.map-data-sw { flex: none; width: 0.65rem; height: 0.65rem; border-radius: 50%; }
+.map-data-sw.pilots { background: var(--map-d-pilots); transform: rotate(45deg); border-radius: 1px; }
+.map-data-sw.fleet { background: var(--map-d-fleet); }
+.map-data-sw.clones { border: 2px solid var(--map-d-clones); border-radius: 2px; box-sizing: border-box; }
+.map-data-sw.market { background: var(--map-d-market); }
+.map-data-sw.industry { border: 2px solid var(--map-d-industry); box-sizing: border-box; }
+.map-data-sw.structures { background: var(--map-d-structures); border-radius: 1px; }
+.map-data-sw.posted { border: 2px dashed var(--map-d-posted); box-sizing: border-box; }
+.map-data-sw.heat { background: linear-gradient(90deg, var(--map-heat-lo), var(--map-heat-hi), var(--map-heat-core)); border-radius: 2px; width: 0.9rem; }
+/* A layer chip a data heat layer stands in for. */
+.map-layers button.off { opacity: 0.35; }

@@ -124,7 +124,15 @@
       if (S.y[i] > uy) uy = S.y[i];
     }
     var regionLower = P.regions.map(function (rg) { return rg.name.toLowerCase(); });
+    // Label precedence: the best-connected systems first, then by
+    // ID, so the same names win wherever the map is panned.
+    function byPrio(a, b) { return adj[b].length - adj[a].length || S.id[a] - S.id[b]; }
+    var prio = [];
+    for (i = 0; i < n; i++) prio.push(i);
+    prio.sort(byPrio);
+    var membersPrio = members.map(function (m) { return m.slice().sort(byPrio); });
     P._g = {
+      prio: prio, membersPrio: membersPrio,
       n: n, adj: adj, tier: tier, lower: lower, byID: byID, regionByID: regionByID,
       members: members, bounds: bounds, exits: exits, consU: cu, consR: cr,
       uniW: ux, uniH: uy, regionLower: regionLower
@@ -358,13 +366,17 @@
       drawLabels(k, ox, oy, r);
     }
 
-    // Labels never overlap: each claims cells of a coarse screen
-    // grid, and one that would land on a claimed cell is skipped.
+    // Labels never overlap: each claims cells of a coarse grid, and
+    // one that would land on a claimed cell is skipped. The grid is
+    // anchored to the map, not the screen, and labels claim in a
+    // fixed order (best-connected systems first), so panning moves
+    // labels and cells together and the same names win every frame.
     function drawLabels(k, ox, oy, r) {
-      var cell = 12, cols = Math.ceil(cw / cell) + 1, grid = new Uint8Array(cols * (Math.ceil(ch / cell) + 1));
+      var cell = 12, cols = Math.ceil(cw / cell) + 2, grid = new Uint8Array(cols * (Math.ceil(ch / cell) + 2));
+      var gx = ((ox % cell) + cell) % cell, gy = ((oy % cell) + cell) % cell;
       function claim(x, y, w, h) {
-        var x0 = Math.floor(x / cell), y0 = Math.floor(y / cell);
-        var x1 = Math.floor((x + w) / cell), y1 = Math.floor((y + h) / cell);
+        var x0 = Math.floor((x - gx) / cell) + 1, y0 = Math.floor((y - gy) / cell) + 1;
+        var x1 = Math.floor((x + w - gx) / cell) + 1, y1 = Math.floor((y + h - gy) / cell) + 1;
         if (x0 < 0 || y0 < 0 || x1 >= cols || (y1 + 1) * cols > grid.length) return false;
         var a, b;
         for (b = y0; b <= y1; b++) for (a = x0; a <= x1; a++) if (grid[b * cols + a]) return false;
@@ -397,7 +409,8 @@
         labelBoxes = [];
         // System names once the picture opens up.
         if (f > 6) {
-          for (i = 0; i < G.n; i++) {
+          for (var o = 0; o < G.n; o++) {
+            i = G.prio[o];
             var sx = S.x[i] * k + ox, sy = S.y[i] * k + oy;
             if (sx < 0 || sy < 0 || sx > cw || sy > ch) continue;
             label(S.n[i], sx, sy + r + 3, 11, colors.labelDim);
@@ -420,7 +433,7 @@
       }
 
       // Tactical: every system, then the exits.
-      var ms = G.members[region];
+      var ms = G.membersPrio[region];
       for (i = 0; i < ms.length; i++) {
         s = ms[i];
         label(S.n[s], S.rx[s] * k + ox, S.ry[s] * k + oy + r + 3, 12, colors.label);

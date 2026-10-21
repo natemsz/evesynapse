@@ -219,8 +219,8 @@ a:hover { color: var(--success); text-decoration: underline; }
 .skip-link:focus { top: 0.5rem; color: var(--text-bright); }
 
 /* Headers, nav category labels, buttons, badges and table headers are
-   Rajdhani SemiBold in spaced capitals. Synthetic bold is off. Nav
-   links use the body face (next rule). */
+   Rajdhani SemiBold in spaced capitals. Synthetic bold is off. Menu
+   text (next rule) is Rajdhani in small caps. */
 h1, h2, h3, h4, .wordmark, .btn, thead th, .badge,
 :where(button:not([class]), input[type="submit"]:not([class]), input[type="button"]:not([class])),
 .branch > summary,
@@ -232,12 +232,21 @@ h1, h2, h3, h4, .wordmark, .btn, thead th, .badge,
   text-transform: uppercase;
   letter-spacing: 0.06em;
 }
-/* Nav menu links: the body face at Medium; the standalone top-level
-   rows (Home, Sync, Admin) take the category headers' capitals. */
-header a.navlink, .branch .menu a {
-  font-family: "Saira Semi Condensed", "Inter", "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif;
-  font-weight: 500;
+/* Menu text: Rajdhani in small caps. The sidenav rows and branch
+   summaries take the display face above; this swaps their capitals
+   for small caps, and the header links and dropdown items join them. */
+.sidenav a.navlink,
+.sidebar-account-footer .navlink,
+.branch > summary {
+  text-transform: none;
+  font-variant-caps: small-caps;
+}
+header a.navlink, .branch .menu a, .switcher .menu a {
+  font-family: "Rajdhani", "Segoe UI", sans-serif;
+  font-weight: 600;
   font-synthesis-weight: none;
+  font-variant-caps: small-caps;
+  letter-spacing: 0.04em;
 }
 .wordmark { font-weight: 600; }
 
@@ -413,6 +422,8 @@ header a.navlink.utility { font-size: 0.9em; color: var(--muted); }
 .branch .menu .nav-group-label {
   margin: 0.5rem 0 0.1rem;
   padding: 0.35rem 0.6rem 0;
+  font-family: "Rajdhani", "Segoe UI", sans-serif;
+  font-weight: 600;
   font-size: 0.72rem;
   letter-spacing: 0.09em;
   text-transform: uppercase;
@@ -2441,7 +2452,9 @@ html[data-theme="light"] .esi-down .esi-label { color: #b91c1c; }
   width: 100%;
   text-align: left;
   padding: 0.45rem 0.6rem;
-  font: inherit;
+  font-family: "Rajdhani", "Segoe UI", sans-serif;
+  font-weight: 600;
+  font-variant-caps: small-caps;
   font-size: 0.9rem;
   color: var(--text);
   background: none;
@@ -2757,7 +2770,6 @@ html[data-nav="rail"] #nav-collapse .nav-control-svg { transform: scaleX(-1); }
   color: var(--text);
   font-size: 1rem;
   letter-spacing: 0.04em;
-  text-transform: uppercase;
   cursor: pointer;
 }
 .sidenav a.navlink:hover,
@@ -4939,6 +4951,17 @@ html:not(.js) .checkselector .charselector-dropdown[hidden] {
 /* --- settings pages: fields, cards and rows (ops, Discord servers, groups) --- */
 .lede { color: var(--muted); max-width: 62rem; margin: 0 0 1rem; }
 .hint { color: var(--muted); font-size: 0.92em; margin: 0.3rem 0 0.75rem; }
+/* Open prose: standalone explanatory text that sits outside any
+   widget or table (a page's how-to paragraphs, footnotes, empty-state
+   lines) reads in Inter. The condensed face stays on table data and
+   widget/UI text. Mark each prose block: class="prose". */
+.prose {
+  font-family: "Inter", "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  line-height: 1.55;
+}
+/* A prose block's definition answers are prose, not standalone
+   figures: they keep the prose face against the figures rule. */
+.prose dd { font-family: inherit; }
 .warn-note { border-left: 3px solid var(--danger); padding-left: 0.7rem; }
 .form-card { max-width: 62rem; }
 .form-grid {

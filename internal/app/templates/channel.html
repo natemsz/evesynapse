@@ -36,14 +36,14 @@
   <details class="ch-paste">
   <summary>Paste lines from an in-game intel chat instead</summary>
   <form class="op-form setting" method="post" action="/intel/channels/{{.ID}}/report">
-    <p class="hint">Copy lines from an in-game intel channel and paste them here. Each line that names a system becomes a report, with counts like “+3” and “clr” for clear. Lines without a system are skipped. To send them automatically while you play, use <a href="/intel/channels/#axon">EveSynapse Axon</a>.</p>
+    <p class="hint prose">Copy lines from an in-game intel channel and paste them here. Each line that names a system becomes a report, with counts like “+3” and “clr” for clear. Lines without a system are skipped. To send them automatically while you play, use <a href="/intel/channels/#axon">EveSynapse Axon</a>.</p>
     <label class="field"><span class="field-label">Lines</span>
       <textarea name="lines" rows="6" spellcheck="false" placeholder="[ 2026.10.21 11:20:05 ] Scout > 1DQ1-A  Hostile One  Hostile Two +2"></textarea></label>
     <div class="form-actions"><button type="submit">Post lines</button></div>
   </form>
   </details>
   {{else}}
-  <p class="hint">You can read this channel but not post to it. Its owner can change that.</p>
+  <p class="hint prose">You can read this channel but not post to it. Its owner can change that.</p>
   {{end}}
 
   <h2>Reports <span class="badge kill" data-ch-live hidden>Live</span></h2>
@@ -65,13 +65,13 @@
         {{if $.Channel.CanPost}}<form method="post" action="/pilot/watch" class="inline-form"><input type="hidden" name="character" value="{{.ID}}"><input type="hidden" name="channel" value="{{$.Channel.ID}}"><input type="hidden" name="remove" value="1"><input type="hidden" name="back" value="/intel/channels/{{$.Channel.ID}}/"><button type="submit" class="btn">Remove</button></form>{{end}}
       </span>
     </li>{{end}}
-  </ul>{{else}}<p class="hint">None yet. To add someone, open their pilot page (every pilot name links to one) and choose this channel under <em>Add to known hostiles</em>.</p>{{end}}
+  </ul>{{else}}<p class="hint prose">None yet. To add someone, open their pilot page (every pilot name links to one) and choose this channel under <em>Add to known hostiles</em>.</p>{{end}}
 </section>
 
 {{if .Owner}}
 <section class="card page-card" id="access" data-fold="never">
   <h2>Who can see this channel</h2>
-  <p class="hint">Give access to a pilot, a corporation, an alliance or one of your groups. “Can post” lets them report too; otherwise they can only read.</p>
+  <p class="hint prose">Give access to a pilot, a corporation, an alliance or one of your groups. “Can post” lets them report too; otherwise they can only read.</p>
   {{if .Grants}}<ul class="row-list">
     {{range .Grants}}<li>
       <span>{{if .Logo}}<img class="ch-face" src="{{.Logo}}" alt="" width="24" height="24" loading="lazy"> {{end}}<strong>{{.Name}}</strong> <small class="muted">{{.Kind}}</small></span>

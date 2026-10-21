@@ -56,7 +56,7 @@
   {{if .Scans}}<div class="pi-panel"><h3>In your local scans</h3>
     <ul class="pi-kills">{{range .Scans}}<li><a href="/intel/scan/{{.ID}}/">{{if .System}}<span class="sec sec-{{.SecTier}}">{{.SecText}}</span> {{.System}}{{else}}Local scan{{end}}</a> <small class="muted">{{.Ago}}</small></li>{{end}}</ul>
   </div>{{end}}
-  {{if not (or .Watched .CanWatch .Reports .Scans)}}<p class="muted">Nothing in your channels or scans names this pilot. <a href="/intel/channels/">Intel channels</a></p>{{end}}
+  {{if not (or .Watched .CanWatch .Reports .Scans)}}<p class="muted">Nothing in your channels or scans names this pilot. <a href="/intel/channels/">Intel Channels</a></p>{{end}}
   {{end}}
 </section>
 {{end}}

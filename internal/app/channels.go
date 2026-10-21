@@ -191,6 +191,9 @@ type channelListView struct {
 	Tokens      []intelTokenRow
 	Downloads   []intelDownload
 	PairingCode string
+	// SiteAddr is this site's address, which Axon asks for when
+	// pairing.
+	SiteAddr string
 }
 
 type channelRow struct {
@@ -268,7 +271,7 @@ func (app *Application) handleChannels(w http.ResponseWriter, r *http.Request) {
 		app.fillAxon(ctx, v, id.userID)
 	}
 	data.Channels = v
-	data.HeadMeta = app.HeadMeta(module.PageMeta{Title: "Intel channels", Description: "Shared intel channels: report hostiles, paste intel chat, and see it all on the map.", CanonicalPath: "/intel/channels/"})
+	data.HeadMeta = app.HeadMeta(module.PageMeta{Title: "Intel Channels", Description: "Shared intel channels: report hostiles, paste intel chat, and see it all on the map.", CanonicalPath: "/intel/channels/"})
 	app.render(ctx, w, http.StatusOK, "channels.html", data)
 }
 

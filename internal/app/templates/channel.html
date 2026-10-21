@@ -1,116 +1,137 @@
-{{define "title"}}{{with .Channel}}{{if .Name}}{{.Name}} · {{end}}{{end}}Intel channel{{end}}
+{{define "title"}}{{with .Channel}}{{if .Name}}{{.Name}} · {{end}}{{end}}Intel Channels{{end}}
 {{define "pagetitle"}}<h1><span class="gt">{{with .Channel}}{{if .Name}}{{.Name}}{{else}}Intel channel{{end}}{{end}}</span></h1>{{end}}
 {{define "pagetabs"}}{{template "sectiontabs" .}}{{end}}
 {{define "content"}}
 {{with .Channel}}
-{{/* One intel channel (channels.go): report, the live feed (channels.js
-     polls feed.json for what is new), and for the owner, who has
-     access. */}}
-<div class="ch">
+{{/* One intel channel (channels.go): reporting, the live feed
+     (channels.js polls feed.json for what is new), its known hostiles
+     (pilot_intel.go), and for its owner, who can see it and its
+     settings. */}}
 {{if .Error}}
-  <p class="ch-panel">{{.Error}} <a href="/intel/channels/">Your channels</a></p>
+<section class="card page-card" data-fold="never">
+  <p>{{.Error}}</p>
+  <p><a href="/intel/channels/">Back to Intel Channels</a></p>
+</section>
 {{else}}
-  {{if .Description}}<p class="ch-desc muted">{{.Description}}</p>{{end}}
-
-  <div class="ch-layout">
-    <div class="ch-main">
-      {{if .CanPost}}
-      <form class="ch-panel ch-report" method="post" action="/intel/channels/{{.ID}}/report">
-        <div class="ch-report-tabs" role="tablist" aria-label="How to report">
-          <button type="button" role="tab" aria-selected="true" aria-controls="ch-one" data-ch-tab="one">Report</button>
-          <button type="button" role="tab" aria-selected="false" aria-controls="ch-paste" data-ch-tab="paste">Paste intel chat</button>
-        </div>
-        <div id="ch-one" role="tabpanel" class="ch-one">
-          <label class="ch-f-sys"><span>System</span><input type="text" name="system" value="{{.PrefillSys}}" maxlength="40" autocomplete="off" spellcheck="false" placeholder="1DQ1-A"></label>
-          <label class="ch-f-n"><span>Hostiles</span><input type="number" name="hostiles" min="0" max="999" inputmode="numeric" placeholder="0"></label>
-          <label class="ch-f-text"><span>Who, what</span><input type="text" name="text" maxlength="300" autocomplete="off" placeholder="Pilot names, ships, “gate camp on Jita gate”"></label>
-          <div class="ch-f-actions">
-            <label class="ch-clear"><input type="checkbox" name="clear" value="1"> Clear</label>
-            <button type="submit" class="btn">Report</button>
-          </div>
-        </div>
-        <div id="ch-paste" role="tabpanel" class="ch-paste" hidden>
-          <label><span>Lines from an in-game intel channel</span>
-            <textarea name="lines" rows="6" spellcheck="false" placeholder="[ 2026.10.21 11:20:05 ] Scout > 1DQ1-A  Hostile One  Hostile Two +2"></textarea></label>
-          <p class="ch-hint muted">Each line becomes a report: the system it names, “clr” for clear, counts like +3. Lines naming no system are skipped.</p>
-          <div class="ch-f-actions"><button type="submit" class="btn">Post lines</button></div>
-        </div>
-        <p class="ch-as muted">Posting as {{.Poster}}.</p>
-      </form>
-      {{end}}
-
-      <section class="ch-panel ch-feed-wrap" aria-labelledby="ch-feed-h">
-        <h2 id="ch-feed-h">Reports <span class="ch-live" data-ch-live hidden>live</span></h2>
-        <ol class="ch-feed" data-ch-feed="/intel/channels/{{.ID}}/feed.json" data-ch-after="{{.LastID}}" data-ch-id="{{.ID}}">
-          {{range .Reports}}{{template "ch-report" .}}{{else}}<li class="ch-empty muted" data-ch-empty>No reports yet.</li>{{end}}
-        </ol>
-        {{if .Older}}<p class="ch-older"><a href="{{.Older}}">Older reports</a></p>{{end}}
-      </section>
-
-      {{/* Known hostiles (pilot_intel.go): added from a pilot's page,
-           each with where it was last seen on a public kill. */}}
-      <section class="ch-panel" aria-labelledby="ch-watch-h">
-        <h2 id="ch-watch-h">Known hostiles</h2>
-        {{if .Watch}}<ul class="ch-grants ch-hostiles">
-          {{range .Watch}}<li>
-            <img src="https://images.evetech.net/characters/{{.ID}}/portrait?size=32" alt="" width="24" height="24" loading="lazy">
-            <span class="ch-grant-n"><a href="/pilot/?character={{.ID}}">{{.Name}}</a>{{if .Note}} <span class="muted">{{.Note}}</span>{{end}}</span>
-            <span class="ch-seen">{{if .Seen}}<span class="sec sec-{{.SecTier}}">{{.SecText}}</span> <a href="/map/?system={{.SysID}}">{{.Seen}}</a>{{else}}<span class="muted">not seen lately</span>{{end}}</span>
-            {{if $.Channel.CanPost}}<form method="post" action="/pilot/watch"><input type="hidden" name="character" value="{{.ID}}"><input type="hidden" name="channel" value="{{$.Channel.ID}}"><input type="hidden" name="remove" value="1"><input type="hidden" name="back" value="/intel/channels/{{$.Channel.ID}}/"><button type="submit" class="ch-x" aria-label="Take {{.Name}} off">×</button></form>{{end}}
-          </li>{{end}}
-        </ul>{{else}}<p class="muted">None yet. Open a pilot's page (any pilot name links to one) and add them here.</p>{{end}}
-      </section>
+<section class="card page-card" data-fold="never">
+  {{if .Description}}<p class="lede">{{.Description}}</p>{{end}}
+  {{if .CanPost}}
+  <form class="op-form setting" method="post" action="/intel/channels/{{.ID}}/report">
+    <h4>Report a sighting</h4>
+    <div class="form-grid">
+      <label class="field"><span class="field-label">System</span>
+        <input type="text" name="system" value="{{.PrefillSys}}" maxlength="40" autocomplete="off" spellcheck="false" placeholder="e.g. 1DQ1-A" required></label>
+      <label class="field"><span class="field-label">How many hostiles</span>
+        <input type="number" name="hostiles" min="0" max="999" inputmode="numeric" placeholder="Optional"></label>
+      <label class="field wide"><span class="field-label">Who or what</span>
+        <input type="text" name="text" maxlength="300" autocomplete="off" placeholder="Pilot names, ships, “camp on the Jita gate”"></label>
     </div>
+    <label class="check-row"><input type="checkbox" name="clear" value="1"> <span>The system is clear (no hostiles)</span></label>
+    <div class="form-actions">
+      <button type="submit">Report</button>
+      <span class="field-hint">Posting as {{.Poster}}. Everyone in this channel sees it on the map for half an hour.</span>
+    </div>
+  </form>
 
-    {{if .Owner}}
-    <aside class="ch-side" id="access">
-      <section class="ch-panel">
-        <h2>Access</h2>
-        {{if .Grants}}<ul class="ch-grants">
-          {{range .Grants}}<li>
-            {{if .Logo}}<img src="{{.Logo}}" alt="" width="24" height="24" loading="lazy">{{else}}<span class="ch-grant-g" aria-hidden="true">G</span>{{end}}
-            <span class="ch-grant-n">{{.Name}} <span class="muted">{{.Kind}}</span></span>
-            <span class="ch-tag{{if not .CanPost}} dim{{end}}">{{if .CanPost}}Post{{else}}Read{{end}}</span>
-            <form method="post" action="/intel/channels/{{$.Channel.ID}}/grants/remove"><input type="hidden" name="kind" value="{{.Kind}}"><input type="hidden" name="target" value="{{.ID}}"><button type="submit" class="ch-x" aria-label="Remove {{.Name}}">×</button></form>
-          </li>{{end}}
-        </ul>{{else}}<p class="muted">Only you can see this channel. Grant access to share it.</p>{{end}}
-        <form class="ch-grant-add" method="post" action="/intel/channels/{{.ID}}/grants">
-          <label><span>Grant</span>
-            <select name="kind" data-ch-kind>
-              <option value="alliance">Alliance</option>
-              <option value="corporation">Corporation</option>
-              <option value="character">Pilot</option>
-              {{if .Groups}}<option value="group">Group</option>{{end}}
-            </select>
-          </label>
-          <label data-ch-name><span>Exact name</span><input type="text" name="name" maxlength="50" autocomplete="off" spellcheck="false"></label>
-          {{if .Groups}}<label data-ch-group hidden><span>Group</span><select name="group">{{range .Groups}}<option value="{{.ID}}">{{.Name}}</option>{{end}}</select></label>{{end}}
-          <label class="ch-clear"><input type="checkbox" name="post" value="1" checked> Can post</label>
-          <button type="submit" class="btn small">Grant</button>
-        </form>
-      </section>
-      <details class="ch-panel ch-settings">
-        <summary>Channel settings</summary>
-        <form method="post" action="/intel/channels/{{.ID}}/edit" class="ch-stack">
-          <label><span>Name</span><input type="text" name="name" value="{{.Name}}" maxlength="60" required></label>
-          <label><span>Description</span><input type="text" name="description" value="{{.Description}}" maxlength="200"></label>
-          <button type="submit" class="btn small">Save</button>
-        </form>
-        <form method="post" action="/intel/channels/{{.ID}}/delete" class="ch-stack ch-danger">
-          <label><span>Type “{{.Name}}” to delete the channel and its reports</span><input type="text" name="confirm" autocomplete="off"></label>
-          <button type="submit" class="btn small">Delete channel</button>
-        </form>
-      </details>
-    </aside>
-    {{end}}
-  </div>
+  <details class="ch-paste">
+  <summary>Paste lines from an in-game intel chat instead</summary>
+  <form class="op-form setting" method="post" action="/intel/channels/{{.ID}}/report">
+    <p class="hint">Copy lines from an in-game intel channel and paste them here. Each line that names a system becomes a report, with counts like “+3” and “clr” for clear. Lines without a system are skipped. To send them automatically while you play, use <a href="/intel/channels/#axon">EveSynapse Axon</a>.</p>
+    <label class="field"><span class="field-label">Lines</span>
+      <textarea name="lines" rows="6" spellcheck="false" placeholder="[ 2026.10.21 11:20:05 ] Scout > 1DQ1-A  Hostile One  Hostile Two +2"></textarea></label>
+    <div class="form-actions"><button type="submit">Post lines</button></div>
+  </form>
+  </details>
+  {{else}}
+  <p class="hint">You can read this channel but not post to it. Its owner can change that.</p>
+  {{end}}
+
+  <h2>Reports <span class="badge kill" data-ch-live hidden>Live</span></h2>
+  <ol class="ch-feed" data-ch-feed="/intel/channels/{{.ID}}/feed.json" data-ch-after="{{.LastID}}" data-ch-id="{{.ID}}">
+    {{range .Reports}}{{template "ch-report" .}}{{else}}<li class="ch-empty hint" data-ch-empty>No reports yet.</li>{{end}}
+  </ol>
+  {{if .Older}}<p><a href="{{.Older}}">Older reports</a></p>{{end}}
+</section>
+
+{{/* Known hostiles (pilot_intel.go): added from a pilot's page,
+     each with where it was last seen on a public kill. */}}
+<section class="card page-card" data-fold="never">
+  <h2>Known hostiles</h2>
+  {{if .Watch}}<ul class="row-list">
+    {{range .Watch}}<li>
+      <span><img class="ch-face" src="https://images.evetech.net/characters/{{.ID}}/portrait?size=32" alt="" width="24" height="24" loading="lazy"> <a href="/pilot/?character={{.ID}}">{{.Name}}</a>{{if .Note}} <small class="muted">{{.Note}}</small>{{end}}</span>
+      <span class="ch-row-end">
+        {{if .Seen}}<small><span class="sec sec-{{.SecTier}}">{{.SecText}}</span> <a href="/map/?system={{.SysID}}">{{.Seen}}</a></small>{{else}}<small class="muted">not seen lately</small>{{end}}
+        {{if $.Channel.CanPost}}<form method="post" action="/pilot/watch" class="inline-form"><input type="hidden" name="character" value="{{.ID}}"><input type="hidden" name="channel" value="{{$.Channel.ID}}"><input type="hidden" name="remove" value="1"><input type="hidden" name="back" value="/intel/channels/{{$.Channel.ID}}/"><button type="submit" class="btn">Remove</button></form>{{end}}
+      </span>
+    </li>{{end}}
+  </ul>{{else}}<p class="hint">None yet. To add someone, open their pilot page (every pilot name links to one) and choose this channel under <em>Add to known hostiles</em>.</p>{{end}}
+</section>
+
+{{if .Owner}}
+<section class="card page-card" id="access" data-fold="never">
+  <h2>Who can see this channel</h2>
+  <p class="hint">Give access to a pilot, a corporation, an alliance or one of your groups. “Can post” lets them report too; otherwise they can only read.</p>
+  {{if .Grants}}<ul class="row-list">
+    {{range .Grants}}<li>
+      <span>{{if .Logo}}<img class="ch-face" src="{{.Logo}}" alt="" width="24" height="24" loading="lazy"> {{end}}<strong>{{.Name}}</strong> <small class="muted">{{.Kind}}</small></span>
+      <span class="ch-row-end">
+        <span class="badge {{if .CanPost}}kill{{else}}wait{{end}}">{{if .CanPost}}Read and post{{else}}Read only{{end}}</span>
+        <form method="post" action="/intel/channels/{{$.Channel.ID}}/grants/remove" class="inline-form"><input type="hidden" name="kind" value="{{.Kind}}"><input type="hidden" name="target" value="{{.ID}}"><button type="submit" class="btn">Remove</button></form>
+      </span>
+    </li>{{end}}
+  </ul>{{else}}<p class="hint">Only you can see it so far.</p>{{end}}
+  <form class="op-form setting" method="post" action="/intel/channels/{{.ID}}/grants">
+    <h4>Give access</h4>
+    <div class="form-grid">
+      <label class="field"><span class="field-label">Who</span>
+        <select name="kind" data-ch-kind>
+          <option value="alliance">An alliance</option>
+          <option value="corporation">A corporation</option>
+          <option value="character">A pilot</option>
+          {{if .Groups}}<option value="group">One of your groups</option>{{end}}
+        </select></label>
+      <label class="field" data-ch-name><span class="field-label">Exact name</span>
+        <input type="text" name="name" maxlength="50" autocomplete="off" spellcheck="false" placeholder="As it is spelled in game"></label>
+      {{if .Groups}}<label class="field" data-ch-group hidden><span class="field-label">Group</span>
+        <select name="group">{{range .Groups}}<option value="{{.ID}}">{{.Name}}</option>{{end}}</select></label>{{end}}
+    </div>
+    <label class="check-row"><input type="checkbox" name="post" value="1" checked> <span>Can post reports, not just read them</span></label>
+    <div class="form-actions"><button type="submit">Give access</button></div>
+  </form>
+
+  <form class="op-form setting" method="post" action="/intel/channels/{{.ID}}/edit">
+    <h4>Name and description</h4>
+    <div class="form-grid">
+      <label class="field"><span class="field-label">Name</span>
+        <input type="text" name="name" value="{{.Name}}" maxlength="60" required></label>
+      <label class="field"><span class="field-label">What it covers</span>
+        <input type="text" name="description" value="{{.Description}}" maxlength="200"></label>
+    </div>
+    <div class="form-actions">
+      <button type="submit">Save</button>
+      <span class="field-hint">Axon links an in-game channel with the same name automatically.</span>
+    </div>
+  </form>
+
+  <form class="op-form setting" method="post" action="/intel/channels/{{.ID}}/delete">
+    <h4>Delete this channel</h4>
+    <div class="form-grid">
+      <label class="field"><span class="field-label">Type “{{.Name}}” to confirm</span>
+        <input type="text" name="confirm" autocomplete="off"></label>
+    </div>
+    <div class="form-actions">
+      <button type="submit" class="btn btn-danger">Delete channel and its reports</button>
+    </div>
+  </form>
+</section>
 {{end}}
-</div>
+{{end}}
 {{end}}
 {{end}}
 
 {{define "ch-report"}}<li class="ch-rep{{if .Clear}} clear{{end}}" data-id="{{.ID}}">
   <span class="ch-rep-sys"><span class="sec sec-{{.SecTier}}">{{.SecText}}</span> <a href="/map/?system={{.SystemID}}">{{.SystemName}}</a></span>
-  <span class="ch-rep-what">{{if .Clear}}<strong class="ch-clr">Clear</strong>{{else if .Hostiles}}<strong class="ch-n">{{.Hostiles}}</strong>{{end}}{{if .Text}} {{.Text}}{{end}}{{if .ScanID}} <a href="/intel/scan/{{.ScanID}}/">scan</a>{{end}}</span>
-  <span class="ch-rep-meta">{{.Reporter}} · <time datetime="{{rfc3339 .Time}}">{{.Ago}}</time>{{if .Mine}}<form method="post" action="/intel/channels/{{.Channel}}/reports/{{.ID}}/delete"><button type="submit" class="ch-x" aria-label="Remove this report">×</button></form>{{end}}</span>
+  <span class="ch-rep-what">{{if .Clear}}<span class="badge kill">Clear</span>{{else if .Hostiles}}<span class="badge loss">{{.Hostiles}}</span>{{end}}{{if .Text}} {{.Text}}{{end}}{{if .ScanID}} <a href="/intel/scan/{{.ScanID}}/">scan</a>{{end}}</span>
+  <span class="ch-rep-meta">{{.Reporter}} · <time datetime="{{rfc3339 .Time}}">{{.Ago}}</time>{{if .Mine}}<form method="post" action="/intel/channels/{{.Channel}}/reports/{{.ID}}/delete" class="inline-form"><button type="submit" class="ch-x" aria-label="Remove this report">×</button></form>{{end}}</span>
 </li>{{end}}

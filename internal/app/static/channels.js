@@ -3,10 +3,9 @@
  * The feed is live: every 10 seconds while the page is in view it
  * asks feed.json for the reports after the newest it shows, and puts
  * them on top, built the same way the server builds a row. Ages
- * ("3 min ago") tick on their own. The report form's two tabs switch
- * between one report and pasted chat lines; the grant form shows the
- * name box or the group list for the kind chosen. Runs at load and on
- * every page swap that brings a channel back.
+ * ("3 min ago") tick on their own. The grant form shows the name box
+ * or the group list for the kind chosen. Runs at load and on every
+ * page swap that brings a channel back.
  */
 (function () {
   "use strict";
@@ -40,8 +39,8 @@
     var what = doc.createElement("span");
     what.className = "ch-rep-what";
     if (r.clear || r.n) {
-      var b = doc.createElement("strong");
-      b.className = r.clear ? "ch-clr" : "ch-n";
+      var b = doc.createElement("span");
+      b.className = "badge " + (r.clear ? "kill" : "loss");
       b.textContent = r.clear ? "Clear" : String(r.n);
       what.appendChild(b);
     }
@@ -64,6 +63,7 @@
       var f = doc.createElement("form");
       f.method = "post";
       f.action = "/intel/channels/" + r.ch + "/reports/" + r.id + "/delete";
+      f.className = "inline-form";
       var x = doc.createElement("button");
       x.type = "submit";
       x.className = "ch-x";
@@ -84,25 +84,6 @@
     if (feed && !feed.getAttribute("data-bound")) {
       feed.setAttribute("data-bound", "1");
       bindFeed(root, feed);
-    }
-    var form = root.querySelector(".ch-report");
-    if (form && !form.getAttribute("data-bound")) {
-      form.setAttribute("data-bound", "1");
-      form.addEventListener("click", function (e) {
-        var tab = e.target.closest("[data-ch-tab]");
-        if (!tab) return;
-        var which = tab.getAttribute("data-ch-tab");
-        form.querySelectorAll("[data-ch-tab]").forEach(function (b) {
-          b.setAttribute("aria-selected", b === tab ? "true" : "false");
-        });
-        form.querySelector(".ch-one").hidden = which !== "one";
-        form.querySelector(".ch-paste").hidden = which !== "paste";
-        // Only the shown tab's fields are sent.
-        form.querySelectorAll(".ch-one input, .ch-paste textarea").forEach(function (f) {
-          f.disabled = f.closest("[role=tabpanel]").hidden;
-        });
-      });
-      form.querySelector(".ch-paste textarea").disabled = true;
     }
     var kind = root.querySelector("[data-ch-kind]");
     if (kind && !kind.getAttribute("data-bound")) {

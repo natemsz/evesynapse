@@ -414,6 +414,13 @@ var pgAbyssalAttributionSchema string
 //go:embed schema_pg/070_abyssal_learned.sql
 var pgAbyssalLearnedSchema string
 
+// Step 071: the abyssal ladder clamp -- every item priced past
+// either end of its ladder, and every runaway stored ladder
+// figure, queued first for rescoring under the clamp.
+//
+//go:embed schema_pg/071_abyssal_ladder_clamp.sql
+var pgAbyssalLadderClampSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -513,6 +520,7 @@ func schemaSteps() []schemaStep {
 		{68, "public_structures", pgPublicStructuresSchema, ""},
 		{69, "abyssal_attribution", pgAbyssalAttributionSchema, ""},
 		{70, "abyssal_learned", pgAbyssalLearnedSchema, ""},
+		{71, "abyssal_ladder_clamp", pgAbyssalLadderClampSchema, ""},
 	}
 }
 

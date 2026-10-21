@@ -31,15 +31,20 @@
     <button type="submit" class="btn">Create channel</button>
   </form>
 
-  {{/* EveSynapse Axon (intel_tokens.go): installers, a token shown
-       once inside a ready config, the account's tokens. While Axon
-       answers on this computer, app.js swaps the install buttons
-       for a running status linking to its page. */}}
+  {{/* EveSynapse Axon (intel_tokens.go): the downloads (each program
+       installs itself), the setup steps, a pairing code shown once,
+       and the account's paired devices. With a device paired, the
+       downloads give way to a link to Axon on this computer. */}}
   <section class="ch-panel ch-watch" id="axon" aria-labelledby="ch-watch-h">
     <h2 id="ch-watch-h">EveSynapse Axon</h2>
     <p>Axon is an <a href="https://github.com/natemsz/axon" rel="noopener">open source</a> tool that runs beside the game and posts your in-game intel channels here as you play: it reads the chat logs EVE writes, so nothing is pasted by hand. Name a site channel the same as the in-game one (or map them in its config), and every line naming a system becomes a report.</p>
     {{if .Tokens}}<p>Paired with this account: <a href="http://127.0.0.1:47611/open" rel="noopener">Open EveSynapse Axon @ 127.0.0.1:47611</a> on this computer.</p>
-    {{else}}<p class="ch-dl">{{range .Downloads}}<a class="btn small" href="{{.URL}}" rel="noopener">{{.Label}}</a>{{end}}</p>{{end}}
+    {{else}}<ol class="ch-steps">
+      <li>Download the file for your computer and run it: it installs Axon and opens it.</li>
+      <li>Make a pairing code below and enter it in Axon.</li>
+    </ol>
+    <p class="ch-dl">{{range .Downloads}}<a class="btn small" href="{{.URL}}" rel="noopener">{{.Label}}</a>{{end}}</p>
+    <p class="muted ch-dl-note">Releases aren't code-signed yet: Windows may warn of an unknown publisher (choose <em>More info</em>, then <em>Run anyway</em>). On a Mac, make the download runnable with <code>chmod +x</code> and run it once from Terminal.</p>{{end}}
     {{if .PairingCode}}
     <div class="ch-newtoken" role="status">
       <p><strong>Your pairing code</strong> — shown this once, good for 10 minutes. Open Axon and enter it under <strong>Pair with EveSynapse</strong>:</p>

@@ -24,8 +24,8 @@ func TestAxonLinks(t *testing.T) {
 	if AxonGUIAddr != "127.0.0.1:47611" {
 		t.Errorf("AxonGUIAddr %q, want Axon's fixed 127.0.0.1:47611", AxonGUIAddr)
 	}
-	if len(axonDownloads) == 0 || axonDownloads[0].File != "install.ps1" {
-		t.Errorf("first download should be the Windows installer: %v", axonDownloads)
+	if len(axonDownloads) == 0 || axonDownloads[0].File != "axon-windows-amd64.exe" {
+		t.Errorf("first download should be the Windows program (its own installer): %v", axonDownloads)
 	}
 	for _, d := range axonDownloads {
 		if strings.Contains(d.File, "intelwatch") || strings.Contains(d.Label, "intelwatch") {

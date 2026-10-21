@@ -51,14 +51,14 @@ const (
 	intelAPIPerMinute = 120
 )
 
-// Axon's downloads: the installers first, then the bare programs,
-// assets of the latest release of github.com/natemsz/axon.
+// Axon's downloads, assets of the latest release of
+// github.com/natemsz/axon. Each program is its own installer: run from
+// a download, it installs itself for the player and opens its window,
+// and a newer download updates it in place. Windows first.
 var axonDownloads = []struct{ Label, File string }{
-	{"Install on Windows", "install.ps1"},
-	{"Install on macOS/Linux", "install.sh"},
-	{"Windows program", "axon-windows-amd64.exe"},
-	{"macOS (Apple silicon)", "axon-darwin-arm64"},
-	{"macOS (Intel)", "axon-darwin-amd64"},
+	{"Windows (installs itself)", "axon-windows-amd64.exe"},
+	{"macOS, Apple silicon", "axon-darwin-arm64"},
+	{"macOS, Intel", "axon-darwin-amd64"},
 	{"Linux", "axon-linux-amd64"},
 }
 

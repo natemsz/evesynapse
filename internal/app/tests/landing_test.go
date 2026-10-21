@@ -24,7 +24,9 @@ func TestLandingAnonymous(t *testing.T) {
 	for _, want := range []string{
 		"Stop alt-tabbing between <span class=\"ld-amp\">five different tools.</span>",
 		"Fits run on your real skills.",
-		"Only the scopes you pick",
+		"Link with only the scopes you pick",
+		"the sign-in asks for the scopes behind those features",
+		"Linking asks only for the scopes behind the features you pick",
 		"Key held in a hardware vault",
 		"stored off-server, on secure hardware",
 		"EveSynapse is free to use forever.",
@@ -75,6 +77,15 @@ func TestLandingAnonymous(t *testing.T) {
 		"449.8M",
 		"Greater than the sum of its parts.",
 		"Know where New Eden is hot.",
+		"All of New Eden, on one map.",
+		"href=\"/map/\"",         // the public universe map
+		"href=\"/intel/kills/\"", // the public killboard
+		"Universe Map",
+		"Killboard",
+		"Route Planner",
+		"shot-threat.webp",
+		"evesynapse.app/map/",
+		"sending the route to your ship's autopilot takes a signed-in character",
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("landing is missing %q", want)
@@ -90,9 +101,17 @@ func TestLandingAnonymous(t *testing.T) {
 	}
 	// The tools inventory is audited against the tree: features
 	// that do not exist yet are never claimed on the front door.
-	for _, unbuilt := range []string{"Universe Map", "Route Planner", "Profit Tracking"} {
+	for _, unbuilt := range []string{"Profit Tracking", "D-Scan"} {
 		if strings.Contains(body, unbuilt) {
 			t.Errorf("landing claims the unbuilt %q", unbuilt)
+		}
+	}
+	// Scope claims belong to the entry point they describe: the
+	// picked-scopes wording is the link chooser's, and the page
+	// never states it as a property of every EVE login.
+	for _, misplaced := range []string{"the EVE login asks for exactly those scopes", "The login asks only for the scopes"} {
+		if strings.Contains(body, misplaced) {
+			t.Errorf("landing still states the chooser claim as a login property %q", misplaced)
 		}
 	}
 	// The antithesis slogans the copy pass removed stay removed:

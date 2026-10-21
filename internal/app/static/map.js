@@ -299,7 +299,10 @@
   }
   // planRoute: the cheapest path from a to b as system indices, a
   // and b included; null when no gates join them.
-  function planRoute(G, a, b, cost) {
+  // next, when given, lists a system's neighbours in place of its
+  // gates (jump legs, gates plus jump bridges); cost is asked of each
+  // step as cost(to, from).
+  function planRoute(G, a, b, cost, next) {
     var n = G.n, dist = new Float64Array(n).fill(Infinity), prev = new Int32Array(n).fill(-1);
     var heap = [], i;
     function push(d, v) {
@@ -330,9 +333,9 @@
       var top = pop(), u = top[1];
       if (top[0] > dist[u]) continue;
       if (u === b) break;
-      var nb = G.adj[u];
+      var nb = next ? next(u) : G.adj[u];
       for (var k = 0; k < nb.length; k++) {
-        var v = nb[k], d = dist[u] + cost(v);
+        var v = nb[k], d = dist[u] + cost(v, u);
         if (d < dist[v]) { dist[v] = d; prev[v] = u; push(d, v); }
       }
     }
@@ -359,6 +362,76 @@
     });
     if (LY) s.hot.sort(function (x, y) { return LY.threat[y] - LY.threat[x]; });
     return s;
+  }
+
+  // --- Jump drives: the pure part ---
+  // /map/jump.json carries every known-space system's true position in
+  // light years and every jump-capable ship's base range (map_jump.go).
+  // A jump lands on a cyno: never in high-sec (security 0.5 and up),
+  // Pochven, or Zarzakh; Jump Drive Calibration adds 20% range a level.
+  var POCHVEN = 10000070, ZARZAKH = 30100000;
+  function jumpRange(base, jdc) { return base * (1 + 0.2 * Math.max(0, Math.min(5, jdc | 0))); }
+  function joinJump(G, J) {
+    var n = G.n, x = new Float64Array(n).fill(NaN), y = new Float64Array(n), z = new Float64Array(n);
+    var dest = new Uint8Array(n);
+    for (var k = 0; k < J.id.length; k++) {
+      var i = G.byID[J.id[k]];
+      if (i === undefined) continue;
+      x[i] = J.x[k]; y[i] = J.y[k]; z[i] = J.z[k];
+      dest[i] = G.tier[i] < 5 && J.region[k] !== POCHVEN && J.id[k] !== ZARZAKH ? 1 : 0;
+    }
+    return { x: x, y: y, z: z, dest: dest, ships: J.ships || [], grids: {} };
+  }
+  function lyBetween(JI, a, b) {
+    var dx = JI.x[a] - JI.x[b], dy = JI.y[a] - JI.y[b], dz = JI.z[a] - JI.z[b];
+    return Math.sqrt(dx * dx + dy * dy + dz * dz);
+  }
+  // jumpNeighbours lists where a jump of range R can land from i:
+  // systems that take a cyno within R light years, found through a
+  // grid of R-sized cells (built once per range).
+  function jumpNeighbours(JI, i, R) {
+    var key = R.toFixed(3), g = JI.grids[key];
+    if (!g) {
+      g = { cells: {}, near: {} };
+      for (var s = 0; s < JI.x.length; s++) {
+        if (!JI.dest[s] || isNaN(JI.x[s])) continue;
+        var c = Math.floor(JI.x[s] / R) + "," + Math.floor(JI.y[s] / R) + "," + Math.floor(JI.z[s] / R);
+        (g.cells[c] = g.cells[c] || []).push(s);
+      }
+      JI.grids[key] = g;
+    }
+    if (g.near[i]) return g.near[i];
+    var out = [];
+    if (!isNaN(JI.x[i])) {
+      var cx = Math.floor(JI.x[i] / R), cy = Math.floor(JI.y[i] / R), cz = Math.floor(JI.z[i] / R);
+      for (var a = -1; a <= 1; a++) for (var b = -1; b <= 1; b++) for (var d = -1; d <= 1; d++) {
+        var list = g.cells[(cx + a) + "," + (cy + b) + "," + (cz + d)];
+        if (!list) continue;
+        for (var m = 0; m < list.length; m++) {
+          var t = list[m];
+          if (t !== i && lyBetween(JI, i, t) <= R) out.push(t);
+        }
+      }
+    }
+    g.near[i] = out;
+    return out;
+  }
+  // jumpFatigue estimates fatigue and waits along legs (light years),
+  // as CCP has it: each jump's distance counts times the ship's
+  // fatigue multiplier; the reactivation wait is (1 + that) minutes or
+  // a tenth of the fatigue held, whichever is more, at most 30; the
+  // fatigue becomes 10 x (1 + that) minutes, or what was held times
+  // (1 + that) when that is more, at most 5 hours; it wears off in
+  // real time, so a wait between jumps takes off as much.
+  function jumpFatigue(legs, mult, start) {
+    var f = start || 0, waits = 0, last = 0;
+    legs.forEach(function (ly, at) {
+      var eff = ly * mult;
+      if (at > 0) { f = Math.max(0, f - last); waits += last; }
+      last = Math.min(30, Math.max(1 + eff, f / 10));
+      f = Math.min(300, Math.max(10 * (1 + eff), f * (1 + eff)));
+    });
+    return { fatigue: f, waits: waits };
   }
 
   // --- Intel channels: the pure part ---
@@ -744,6 +817,7 @@
         ctx.stroke();
       });
       drawData(k, ox, oy, r);
+      drawJumpRange(k, ox, oy, r);
       drawIntel(k, ox, oy, r);
       drawRouteEnds(k, ox, oy, r);
 
@@ -1595,6 +1669,13 @@
       if ((routeFrom >= 0 || routeTo >= 0) && routeMode !== "short") q.push("route=" + routeMode);
       var dk = Object.keys(dataOn).filter(function (k) { return dataOn[k]; });
       if (dk.length) q.push("data=" + dk.join(","));
+      if ((routeFrom >= 0 || routeTo >= 0) && travel === "jump") {
+        q.push("travel=jump");
+        var sh = jumpShip();
+        if (sh) q.push("ship=" + sh.t);
+        var jl = /^jdc:(\d)$/.exec(jumpPilot);
+        if (jl && jl[1] !== "5") q.push("jdc=" + jl[1]);
+      }
       var url = location.pathname + (q.length ? "?" + q.join("&") : "") + location.hash;
       try { history.replaceState(history.state, "", url); } catch (e) { /* sandboxed */ }
     }
@@ -1721,13 +1802,128 @@
       syncURL();
       schedule();
     }
+    // How to travel: "gates" (with the corporation's Ansiblex bridges
+    // when known and wanted) or "jump" (a jump drive, cyno to cyno).
+    // In jump mode the preferences read as fewest jumps (short), least
+    // fatigue -- the shortest total distance (safe) -- and avoid danger
+    // at the cyno points (calm). routeLegs holds each jump's light years.
+    var travel = startQuery.get("travel") === "jump" ? "jump" : "gates";
+    var JUMP = null, jumpLoading = false, routeLegs = null, bridgeLegs = 0;
+    var jumpShipID = +startQuery.get("ship") || 0, jumpPilot = startQuery.get("jdc") ? "jdc:" + startQuery.get("jdc") : "";
+    try {
+      if (!jumpShipID) jumpShipID = +localStorage.getItem("evesynapse-map-jump-ship") || 0;
+      if (!jumpPilot) jumpPilot = localStorage.getItem("evesynapse-map-jump-pilot") || "jdc:5";
+    } catch (e) { if (!jumpPilot) jumpPilot = "jdc:5"; }
+    var bridgesOn = true;
+    function jumpShip() {
+      if (!JUMP) return null;
+      var pick = null;
+      JUMP.ships.forEach(function (s) { if (s.t === jumpShipID) pick = s; });
+      return pick || JUMP.ships.filter(function (s) { return s.g === "Jump Freighter"; })[0] || JUMP.ships[0] || null;
+    }
+    function jumpPilotInfo() {
+      var m = /^p:(\d+)$/.exec(jumpPilot);
+      if (m && MINE && MINE.jumpers) {
+        for (var k = 0; k < MINE.jumpers.length; k++) if (MINE.jumpers[k].id === +m[1]) return MINE.jumpers[k];
+      }
+      var lv = /^jdc:(\d)$/.exec(jumpPilot);
+      return { jdc: lv ? +lv[1] : 5 };
+    }
+    function jumpRangeNow() {
+      var s = jumpShip();
+      return s ? jumpRange(s.r, jumpPilotInfo().jdc) : 0;
+    }
+    function loadJump() {
+      if (JUMP || jumpLoading) return;
+      jumpLoading = true;
+      fetch("/map/jump.json", { credentials: "same-origin" }).then(function (r) { return r.ok ? r.json() : null; }).then(function (J) {
+        jumpLoading = false;
+        if (!J || !el.isConnected) return;
+        JUMP = joinJump(G, J);
+        fillJumpControls();
+        replan();
+      }).catch(function () { jumpLoading = false; });
+    }
+    // The jump bridges known, as extra one-way edges by system index.
+    function bridgeEdges() {
+      if (!MINE || !MINE.bridges || !MINE.bridges.length) return null;
+      var out = {};
+      MINE.bridges.forEach(function (b) {
+        var a = G.byID[b.from], c = G.byID[b.to];
+        if (a === undefined || c === undefined) return;
+        (out[a] = out[a] || []).push(c);
+      });
+      return out;
+    }
     function replan() {
-      routePath = routeFrom >= 0 && routeTo >= 0 ? planRoute(G, routeFrom, routeTo, routeCost(G, LY, routeMode, IN && intelOn ? IN.prices : null)) : null;
-      routeSum = routePath ? routeSummary(G, LY, routePath, IN && intelOn ? IN.prices : null) : null;
+      if (signedIn && !MINE) fetchMine();
+      var prices = IN && intelOn ? IN.prices : null;
+      routeLegs = null;
+      bridgeLegs = 0;
+      routePath = null;
+      if (routeFrom >= 0 && routeTo >= 0) {
+        if (travel === "jump") {
+          if (!JUMP) loadJump();
+          var R = jumpRangeNow();
+          if (JUMP && R > 0 && JUMP.dest[routeTo]) {
+            var danger = routeCost(G, LY, "calm", prices);
+            var cost = routeMode === "safe" ? function (v, u) { return lyBetween(JUMP, u, v) + 0.01; }
+              : routeMode === "calm" ? function (v) { return danger(v); }
+              : function () { return 1; };
+            routePath = planRoute(G, routeFrom, routeTo, cost, function (u) { return jumpNeighbours(JUMP, u, R); });
+            if (routePath) {
+              routeLegs = [];
+              for (var m = 1; m < routePath.length; m++) routeLegs.push(lyBetween(JUMP, routePath[m - 1], routePath[m]));
+            }
+          }
+        } else {
+          var BR = bridgesOn ? bridgeEdges() : null;
+          routePath = planRoute(G, routeFrom, routeTo, routeCost(G, LY, routeMode, prices),
+            BR ? function (u) { return BR[u] ? G.adj[u].concat(BR[u]) : G.adj[u]; } : null);
+          if (routePath && BR) {
+            for (var b = 1; b < routePath.length; b++) if (G.adj[routePath[b - 1]].indexOf(routePath[b]) < 0) bridgeLegs++;
+          }
+        }
+      }
+      routeSum = routePath ? routeSummary(G, LY, routePath, prices) : null;
       renderRoute();
       updateCard();
       syncURL();
       schedule();
+    }
+    // The ship and pilot pickers, once the jump data (and the reader's
+    // pilots) are in.
+    function fillJumpControls() {
+      var shipSel = routeEl.querySelector("[data-route-ship]"), pilotSel = routeEl.querySelector("[data-route-pilot]");
+      if (JUMP && !shipSel.options.length) {
+        var groups = {};
+        JUMP.ships.forEach(function (s) {
+          if (!groups[s.g]) {
+            groups[s.g] = root.createElement("optgroup");
+            groups[s.g].label = s.g;
+            shipSel.appendChild(groups[s.g]);
+          }
+          var o = root.createElement("option");
+          o.value = String(s.t);
+          o.textContent = s.n + " · " + s.r.toFixed(2).replace(/\.?0+$/, "") + " LY base";
+          groups[s.g].appendChild(o);
+        });
+      }
+      var ship = jumpShip();
+      if (ship) shipSel.value = String(ship.t);
+      if (MINE && MINE.jumpers && MINE.jumpers.length && !pilotSel.querySelector("[data-pilots]")) {
+        var og = root.createElement("optgroup");
+        og.label = "Your pilots";
+        og.setAttribute("data-pilots", "");
+        MINE.jumpers.forEach(function (j) {
+          var o = root.createElement("option");
+          o.value = "p:" + j.id;
+          o.textContent = j.name + (j.known ? " · JDC " + j.jdc : "");
+          og.appendChild(o);
+        });
+        pilotSel.insertBefore(og, pilotSel.firstChild);
+      }
+      if ([].some.call(pilotSel.options, function (o) { return o.value === jumpPilot; })) pilotSel.value = jumpPilot;
     }
     function routeNote(text) { routeEl.querySelector(".map-route-note").textContent = text; }
 
@@ -1762,8 +1958,25 @@
         }
       });
       routeEl.querySelectorAll("[data-route-mode]").forEach(function (b) {
-        b.setAttribute("aria-checked", b.getAttribute("data-route-mode") === routeMode ? "true" : "false");
+        var mk = b.getAttribute("data-route-mode");
+        b.setAttribute("aria-checked", mk === routeMode ? "true" : "false");
+        b.textContent = (travel === "jump" ? { short: "Fewest jumps", safe: "Least fatigue", calm: "Avoid danger" }
+          : { short: "Shortest", safe: "Safer", calm: "Avoid danger" })[mk];
       });
+      routeEl.querySelectorAll("[data-route-travel]").forEach(function (b) {
+        b.setAttribute("aria-checked", b.getAttribute("data-route-travel") === travel ? "true" : "false");
+      });
+      routeEl.querySelector(".map-route-jump").hidden = travel !== "jump";
+      var nBridges = MINE && MINE.bridges ? MINE.bridges.length : 0, bridgesBox = routeEl.querySelector("[data-route-bridges]");
+      bridgesBox.hidden = travel !== "gates" || !nBridges;
+      bridgesBox.querySelector("input").checked = bridgesOn;
+      bridgesBox.querySelector("[data-route-bridges-n]").textContent = nBridges ? "(" + nBridges + " known)" : "";
+      if (travel === "jump") {
+        fillJumpControls();
+        var rr = jumpRangeNow(), ship = jumpShip();
+        routeEl.querySelector("[data-route-range]").textContent = !JUMP ? "Loading jump data…"
+          : ship ? ship.n + " jumps " + rr.toFixed(2) + " LY" : "No jump-capable ships in the data.";
+      }
       var sum = routeEl.querySelector(".map-route-sum"), warn = routeEl.querySelector(".map-route-warn");
       var list = routeEl.querySelector(".map-route-list");
       var strip = routeEl.querySelector(".map-route-strip");
@@ -1776,12 +1989,36 @@
       if (routeFrom < 0 || routeTo < 0) {
         sum.textContent = "Select a system, then “Route " + (routeFrom < 0 ? "from" : "to") + " here”.";
       } else if (!routePath) {
-        sum.textContent = "No stargates join these systems.";
+        sum.textContent = travel !== "jump" ? "No stargates join these systems."
+          : !JUMP ? "Loading jump data…"
+          : !JUMP.dest[routeTo] ? "A jump can't land in high-sec, Pochven or Zarzakh: pick a destination in low-sec or null."
+          : "No chain of cynos within " + jumpRangeNow().toFixed(2) + " LY reaches there: try another ship, or more Jump Drive Calibration.";
       } else {
         var s = routeSum;
         var j = root.createElement("strong");
         j.textContent = s.jumps === 1 ? "1 jump" : s.jumps + " jumps";
         sum.appendChild(j);
+        if (routeLegs) {
+          // Jump drive: the distance, the longest leg, and the fatigue
+          // it comes to (an estimate, by CCP's published rules).
+          var total = routeLegs.reduce(function (a, b) { return a + b; }, 0), longest = Math.max.apply(null, routeLegs);
+          var ly = root.createElement("span");
+          ly.className = "map-route-band";
+          ly.textContent = total.toFixed(1) + " LY · longest " + longest.toFixed(2);
+          sum.appendChild(ly);
+          var pi = jumpPilotInfo(), shipNow = jumpShip(), held = pi.fatigue ? Math.max(0, (pi.fatigue - Date.now() / 1000) / 60) : 0;
+          var est = jumpFatigue(routeLegs, shipNow ? shipNow.f : 1, held);
+          var fat = root.createElement("li");
+          fat.className = "map-route-fatigue";
+          fat.textContent = "Fatigue after ≈ " + minutesShort(est.fatigue) + (est.waits >= 1 ? " · waits between jumps ≈ " + minutesShort(est.waits) : "") +
+            (held ? " · " + (pi.name || "Pilot") + " holds " + minutesShort(held) + " now" : "") + " (estimate)";
+          warn.appendChild(fat);
+        } else if (bridgeLegs) {
+          var br = root.createElement("span");
+          br.className = "map-route-band";
+          br.textContent = plural(bridgeLegs, "jump bridge");
+          sum.appendChild(br);
+        }
         [[s.high, "high", 10], [s.low, "low", 3], [s.nul, "null", 0]].forEach(function (b) {
           if (!b[0]) return;
           var sp = root.createElement("span");
@@ -1822,9 +2059,20 @@
           li.appendChild(sysButton(i));
           warn.appendChild(li);
         });
-        routePath.forEach(function (i) {
+        routePath.forEach(function (i, at) {
           var li = root.createElement("li");
           li.appendChild(sysButton(i));
+          if (routeLegs && at > 0) {
+            var legLY = root.createElement("span");
+            legLY.className = "map-route-leg";
+            legLY.textContent = " " + routeLegs[at - 1].toFixed(2) + " LY";
+            li.appendChild(legLY);
+          } else if (at > 0 && G.adj[routePath[at - 1]].indexOf(i) < 0) {
+            var via = root.createElement("span");
+            via.className = "map-route-leg";
+            via.textContent = " bridge";
+            li.appendChild(via);
+          }
           if (LY && LY.campOf[i] >= 0) li.className = "camp";
           else if (LY && threatLevel(LY.threat[i]) >= 2) li.className = "hot";
           list.appendChild(li);
@@ -1834,6 +2082,8 @@
       acts.hidden = !signedIn;
       acts.querySelectorAll("[data-route-send]").forEach(function (b) {
         b.disabled = sending || !canSend || (b.getAttribute("data-route-send") === "route" ? !routePath || routeSum.jumps < 1 : routeTo < 0);
+        // The autopilot follows gates: a cyno route is not one.
+        if (b.getAttribute("data-route-send") === "route") b.hidden = travel === "jump";
       });
       var note = routeEl.querySelector(".map-route-note");
       if (!note.textContent) {
@@ -1890,7 +2140,10 @@
       ctx.stroke();
       ctx.lineWidth = mode === "universe" ? 2.2 : 3;
       ctx.strokeStyle = colors.route;
+      // A jump leg is no gate: drawn dashed, cyno to cyno.
+      if (routeLegs) ctx.setLineDash([9, 6]);
       ctx.stroke();
+      ctx.setLineDash([]);
     }
     function drawRouteEnds(k, ox, oy, r) {
       [routeFrom, routeTo].forEach(function (s, idx) {
@@ -2116,18 +2369,50 @@
       return M;
     }
     function fetchMine(fresh) {
-      if (!signedIn || !dataAny()) return;
+      // Wanted by the data layers on, or by an open route (its jump
+      // bridges, its pilots' jump skills).
+      if (!signedIn || (!dataAny() && routeFrom < 0 && routeTo < 0) || mineLoading) return;
+      mineLoading = true;
       fetch("/map/mine.json" + (fresh ? "?fresh=1" : ""), { credentials: "same-origin" }).then(function (r) {
         return r.ok ? r.json() : null;
       }).then(function (D) {
+        mineLoading = false;
         if (!D || !el.isConnected) return;
         MINE = joinMine(D);
         dataHeatOrder = null;
         syncDataMenu();
         renderLegend();
-        updateCard();
+        // Bridges and pilots may change the route.
+        if (routeFrom >= 0 && routeTo >= 0) replan(); else updateCard();
         schedule();
-      }).catch(function () { /* the map stands without them */ });
+      }).catch(function () { mineLoading = false; });
+    }
+    var mineLoading = false;
+
+    function minutesShort(min) {
+      min = Math.round(min);
+      if (min < 60) return min + " min";
+      return Math.floor(min / 60) + " h " + ("0" + (min % 60)).slice(-2) + " min";
+    }
+    // In jump mode, the systems a jump from the start can reach are
+    // ringed, over whatever layer is showing.
+    function drawJumpRange(k, ox, oy, r) {
+      if (travel !== "jump" || !JUMP || routeFrom < 0) return;
+      var R = jumpRangeNow();
+      if (!(R > 0)) return;
+      ctx.beginPath();
+      jumpNeighbours(JUMP, routeFrom, R).forEach(function (i) {
+        if (mode !== "universe" && S.r[i] !== region) return;
+        var x = wx(i) * k + ox, y = wy(i) * k + oy;
+        if (x < -20 || y < -20 || x > cw + 20 || y > ch + 20) return;
+        ctx.moveTo(x + r + 3, y);
+        ctx.arc(x, y, r + 3, 0, Math.PI * 2);
+      });
+      ctx.lineWidth = 1.2;
+      ctx.strokeStyle = colors.route;
+      ctx.globalAlpha = 0.55;
+      ctx.stroke();
+      ctx.globalAlpha = 1;
     }
 
     function dataRGBA(name, a) {
@@ -2415,6 +2700,23 @@
     function onDataOutside(e) {
       if (dataMenu && !dataMenu.hidden && !e.target.closest(".map-data")) toggleDataMenu(false);
     }
+    // The route panel's pickers: ship, pilot, jump bridges.
+    routeEl.addEventListener("change", function (e) {
+      var tg = e.target;
+      if (tg.hasAttribute("data-route-ship")) {
+        jumpShipID = +tg.value;
+        try { localStorage.setItem("evesynapse-map-jump-ship", String(jumpShipID)); } catch (err) { /* private mode */ }
+      } else if (tg.hasAttribute("data-route-pilot")) {
+        jumpPilot = tg.value;
+        try { localStorage.setItem("evesynapse-map-jump-pilot", jumpPilot); } catch (err) { /* private mode */ }
+      } else if (tg.closest("[data-route-bridges]")) {
+        bridgesOn = tg.checked;
+      } else {
+        return;
+      }
+      routeNote("");
+      replan();
+    });
     if (dataMenu) {
       dataMenu.addEventListener("change", function (e) {
         if (e.target.type === "checkbox") setData(e.target.value, e.target.checked);
@@ -2734,6 +3036,14 @@
         replan();
         return;
       }
+      var tv = t.closest("[data-route-travel]");
+      if (tv) {
+        travel = tv.getAttribute("data-route-travel") === "jump" ? "jump" : "gates";
+        if (travel === "jump") loadJump();
+        routeNote("");
+        replan();
+        return;
+      }
       var rm = t.closest("[data-route-mode]");
       if (rm && ROUTE_MODES[rm.getAttribute("data-route-mode")]) {
         routeMode = rm.getAttribute("data-route-mode");
@@ -2985,6 +3295,7 @@
   if (typeof module !== "undefined" && module.exports) {
     module.exports = { secRounded: secRounded, secTier: secTier, secText: secText, prepare: prepare, regionLabelAlpha: regionLabelAlpha, zoomEntryAllowed: zoomEntryAllowed,
       joinLayers: joinLayers, heatT: heatT, allianceHue: allianceHue, threatLevel: threatLevel,
-      routeCost: routeCost, planRoute: planRoute, routeSummary: routeSummary, joinIntel: joinIntel };
+      routeCost: routeCost, planRoute: planRoute, routeSummary: routeSummary, joinIntel: joinIntel,
+      jumpRange: jumpRange, joinJump: joinJump, jumpNeighbours: jumpNeighbours, jumpFatigue: jumpFatigue };
   }
 })();

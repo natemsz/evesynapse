@@ -137,6 +137,17 @@ type minePayload struct {
 	PvP        []mineHeat      `json:"pvp"`
 	Mining     []mineHeat      `json:"mining"`
 	Posted     []minePosted    `json:"posted"`
+	// The jump planner's (map_jump.go): each character's jump skills
+	// and fatigue, and the corporation's Ansiblex bridges.
+	Jumpers []mineJumper `json:"jumpers"`
+	Bridges []mineBridge `json:"bridges"`
+}
+
+// appKey keys a process-wide cache by instance and ID, so two
+// instances in one process (tests) never share an entry.
+type appKey struct {
+	app *Application
+	id  int64
 }
 
 type mineCacheEntry struct {
@@ -146,8 +157,8 @@ type mineCacheEntry struct {
 
 var mineCache = struct {
 	sync.Mutex
-	m map[int64]mineCacheEntry
-}{m: map[int64]mineCacheEntry{}}
+	m map[appKey]mineCacheEntry
+}{m: map[appKey]mineCacheEntry{}}
 
 // handleMapMine is GET /map/mine.json.
 func (app *Application) handleMapMine(w http.ResponseWriter, r *http.Request) {
@@ -161,7 +172,7 @@ func (app *Application) handleMapMine(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	mineCache.Lock()
-	e, ok := mineCache.m[userID]
+	e, ok := mineCache.m[appKey{app, userID}]
 	mineCache.Unlock()
 	if ok && time.Since(e.at) < mineCacheFor && r.URL.Query().Get("fresh") == "" {
 		_, _ = w.Write(e.body)
@@ -173,7 +184,7 @@ func (app *Application) handleMapMine(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	mineCache.Lock()
-	mineCache.m[userID] = mineCacheEntry{at: time.Now(), body: body}
+	mineCache.m[appKey{app, userID}] = mineCacheEntry{at: time.Now(), body: body}
 	mineCache.Unlock()
 	_, _ = w.Write(body)
 }
@@ -197,7 +208,7 @@ func unixOf(rfc string) int64 {
 func (app *Application) buildMine(ctx context.Context, userID int64) minePayload {
 	now := time.Now()
 	out := minePayload{Now: now.Unix(), Pilots: []minePilot{}, Fleets: []mineFleet{}, Clones: []mineClone{}, Market: []mineMarket{},
-		Industry: []mineIndustry{}, Structures: []mineStructure{}, Assets: []mineHeat{}, PvP: []mineHeat{}, Mining: []mineHeat{}, Posted: []minePosted{}}
+		Industry: []mineIndustry{}, Structures: []mineStructure{}, Assets: []mineHeat{}, PvP: []mineHeat{}, Mining: []mineHeat{}, Posted: []minePosted{}, Jumpers: []mineJumper{}, Bridges: []mineBridge{}}
 	chars, err := app.queries.ListCharactersByUser(ctx, userID)
 	if err != nil {
 		logging.Warnf("map: characters of user %d: %v", userID, err)
@@ -247,6 +258,7 @@ func (app *Application) buildMine(ctx context.Context, userID int64) minePayload
 
 	for _, ch := range chars {
 		charIDs = append(charIDs, ch.CharacterID)
+		out.Jumpers = append(out.Jumpers, app.mineJumper(ctx, ch.CharacterID, ch.Name))
 		// Where they are.
 		var loc esi.Location
 		if at, ok := app.snapAt(ctx, ch.CharacterID, esi.SnapLocation, &loc); ok && loc.SolarSystemID > 0 {
@@ -342,6 +354,11 @@ func (app *Application) buildMine(ctx context.Context, userID int64) minePayload
 					continue
 				}
 				structSeen[s.StructureID] = true
+				if s.TypeID == ansiblexTypeID {
+					if b, ok := app.ansiblexBridge(ctx, s.Name); ok {
+						out.Bridges = append(out.Bridges, b)
+					}
+				}
 				out.Structures = append(out.Structures, mineStructure{Sys: s.SystemID, Name: s.Name, Type: names.typeName(s.TypeID), State: s.State,
 					Fuel: unixOf(s.FuelExpires), Timer: unixOf(s.StateTimerEnd)})
 			}
@@ -482,8 +499,8 @@ type fleetCacheEntry struct {
 
 var fleetCache = struct {
 	sync.Mutex
-	m map[int64]fleetCacheEntry // by character
-}{m: map[int64]fleetCacheEntry{}}
+	m map[appKey]fleetCacheEntry // by character
+}{m: map[appKey]fleetCacheEntry{}}
 
 // mineFleets reads the fleets the account's characters are in. A fleet
 // whose boss is one of them is read whole: members, ships, systems.
@@ -528,14 +545,14 @@ func (app *Application) mineFleets(ctx context.Context, chars []db.Character) []
 
 func (app *Application) characterFleet(ctx context.Context, ch db.Character) *mineFleet {
 	fleetCache.Lock()
-	e, ok := fleetCache.m[ch.CharacterID]
+	e, ok := fleetCache.m[appKey{app, ch.CharacterID}]
 	fleetCache.Unlock()
 	if ok && time.Since(e.at) < mineCacheFor {
 		return e.fleet
 	}
 	keep := func(f *mineFleet) *mineFleet {
 		fleetCache.Lock()
-		fleetCache.m[ch.CharacterID] = fleetCacheEntry{at: time.Now(), fleet: f}
+		fleetCache.m[appKey{app, ch.CharacterID}] = fleetCacheEntry{at: time.Now(), fleet: f}
 		fleetCache.Unlock()
 		return f
 	}

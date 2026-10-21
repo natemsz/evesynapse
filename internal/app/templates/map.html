@@ -120,6 +120,20 @@
         <button type="button" class="map-route-swap" data-route-swap aria-label="Swap start and destination" title="Swap">⇅</button>
         <span class="map-route-lbl">To</span><span class="map-route-end" data-route-end="to"></span>
       </div>
+      {{/* How to travel: through stargates (and the corporation's
+           Ansiblex bridges, when known), or by jump drive, cyno to
+           cyno, with the ship and the pilot's Jump Drive Calibration
+           setting the range (map_jump.go). */}}
+      <div class="map-route-travel" role="radiogroup" aria-label="Travel by">
+        <button type="button" role="radio" aria-checked="true" data-route-travel="gates">Gates</button>
+        <button type="button" role="radio" aria-checked="false" data-route-travel="jump">Jump drive</button>
+      </div>
+      <label class="map-route-opt" data-route-bridges hidden><input type="checkbox" checked> Use jump bridges <span class="muted" data-route-bridges-n></span></label>
+      <div class="map-route-jump" hidden>
+        <label><span>Ship</span><select data-route-ship></select></label>
+        <label><span>Pilot</span><select data-route-pilot><option value="jdc:5">Jump Drive Calibration V</option><option value="jdc:4">Jump Drive Calibration IV</option><option value="jdc:3">Jump Drive Calibration III</option><option value="jdc:0">No calibration skill</option></select></label>
+        <p class="map-route-range"><span data-route-range></span></p>
+      </div>
       <div class="map-route-modes" role="radiogroup" aria-label="Route preference">
         <button type="button" role="radio" aria-checked="true" data-route-mode="short" title="The fewest jumps">Shortest</button>
         <button type="button" role="radio" aria-checked="false" data-route-mode="safe" title="High-sec wherever it can, and around trouble">Safer</button>

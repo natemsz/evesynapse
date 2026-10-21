@@ -47,6 +47,9 @@ type mapLayersPayload struct {
 	FW        mapLayerFW    `json:"fw"`
 	Inc       mapLayerIncs  `json:"inc"`
 	Factions  []mapNamed    `json:"factions"`
+	// Threat is built from the killboard (map_threat.go), not from
+	// a snapshot.
+	Threat mapLayerThreat `json:"threat"`
 }
 
 // Every layer carries At: when its data was fetched (unix seconds,
@@ -125,10 +128,14 @@ func (app *Application) refreshMapLayers(ctx context.Context) {
 		snaps[kind] = s
 		fp = append(fp, kind+"="+s.FetchedAt.UTC().Format(time.RFC3339))
 	}
-	if len(snaps) == 0 {
+	now := time.Now().UTC()
+	fp = append(fp, app.threatFingerprint(ctx, now))
+	threat, _ := app.loadThreat(ctx, now)
+	if len(snaps) == 0 && len(threat.ID) == 0 {
 		return
 	}
 	payload, named := app.buildMapLayers(ctx, snaps)
+	payload.Threat = threat
 	fp = append(fp, fmt.Sprintf("names=%d", named))
 	sources := strings.Join(fp, ";")
 	if meta, err := app.queries.GetMapLayersMeta(ctx); err == nil && meta.Sources == sources {

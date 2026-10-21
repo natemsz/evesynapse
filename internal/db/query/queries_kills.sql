@@ -233,3 +233,25 @@ SELECT DISTINCT unnest(ARRAY[k.victim_character_id, k.victim_corporation_id, k.v
 FROM kills k
 LEFT JOIN kill_attackers a ON a.killmail_id = k.killmail_id
 WHERE k.public AND k.ingested_at >= sqlc.arg(since)::timestamptz;
+
+-- ---------------------------------------------------------------------
+-- The map's threat layer (map_threat.go): recent PvP kills per system
+-- (every kill counts toward the score, private ones too -- it is a
+-- total), and the attackers of recent public kills (a camp is named
+-- from public kills only).
+-- ---------------------------------------------------------------------
+
+-- name: ListThreatKills :many
+SELECT killmail_id, system_id, killmail_time, public, victim_corporation_id
+FROM kills
+WHERE killmail_time >= sqlc.arg(since)::timestamptz AND NOT npc
+ORDER BY killmail_time;
+
+-- name: ListThreatAttackers :many
+SELECT a.killmail_id, a.character_id, a.corporation_id, a.alliance_id
+FROM kill_attackers a
+JOIN kills k ON k.killmail_id = a.killmail_id
+WHERE k.killmail_time >= sqlc.arg(since)::timestamptz AND NOT k.npc AND k.public AND a.character_id > 0;
+
+-- name: GetLatestKillIngest :one
+SELECT COALESCE(MAX(ingested_at), 'epoch'::timestamptz)::timestamptz AS latest FROM kills;

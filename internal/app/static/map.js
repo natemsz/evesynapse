@@ -222,7 +222,42 @@
       for (i = 0; i < n; i++) if (arr[i] > m) m = arr[i];
       J.max[k] = m;
     });
+    // Threat: the decayed score on a fixed scale (THREAT_TOP is
+    // "extreme"), kills in the last hour, the latest kill, camps,
+    // and each system's spillover from its gate neighbours.
+    J.threat = new Float32Array(n); J.threatHour = new Int32Array(n); J.threatLast = new Float64Array(n);
+    each(L.threat, "threat", function (i, j, p) {
+      J.threat[i] = p.s[j] / 100; J.threatHour[i] = p.k1[j]; J.threatLast[i] = p.last[j];
+    });
+    J.max.threat = THREAT_TOP;
+    J.camps = []; J.campOf = new Int16Array(n).fill(-1);
+    ((L.threat || {}).camps || []).forEach(function (c) {
+      var s = G.byID[c.sys];
+      if (s === undefined) return;
+      J.campOf[s] = J.camps.length;
+      J.camps.push({ sys: s, n: c.n, kind: c.kind, gid: c.gid, group: c.group, since: c.since });
+    });
+    J.spill = new Float32Array(n);
+    for (i = 0; i < n; i++) {
+      var nb = G.adj[i], m2 = 0;
+      for (j = 0; j < nb.length; j++) if (J.threat[nb[j]] > m2) m2 = J.threat[nb[j]];
+      J.spill[i] = m2 * THREAT_SPILL;
+    }
     return J;
+  }
+
+  // The threat scale: the decayed score at which each level starts.
+  // A fresh kill is worth 1 and halves every 45 minutes.
+  var THREAT_LEVELS = [
+    { at: 0, name: "Quiet" }, { at: 0.5, name: "Low" }, { at: 2, name: "Medium" },
+    { at: 5, name: "High" }, { at: 10, name: "Extreme" }
+  ];
+  var THREAT_TOP = 10;
+  var THREAT_SPILL = 0.3; // a neighbour's share of a system's threat
+  function threatLevel(score) {
+    var lv = 0;
+    for (var i = 0; i < THREAT_LEVELS.length; i++) if (score >= THREAT_LEVELS[i].at) lv = i;
+    return lv;
   }
 
   // heatT places a value on its layer's log scale, 0..1.
@@ -303,6 +338,8 @@
         npc: tok("--map-npc", "#9a8f86"),
         unheld: tok("--map-unheld", "rgba(200,180,160,0.35)"),
         sovL: tok("--map-sov-l", "62%"),
+        threatRamp: [rgbOf(tok("--map-threat-lo", "#e0a020")), rgbOf(tok("--map-threat-hi", "#e0301c")), rgbOf(tok("--map-threat-core", "#fff0e0"))],
+        camp: tok("--map-camp", "#ff3b3b"),
         inc: tok("--map-inc", "#c64bd6"),
         incStage: tok("--map-inc-staging", "#ff4fd8"),
         faction: {
@@ -696,11 +733,15 @@
     // The layer the URL asked for, read before anything rewrites the
     // URL, and kept in it until the layers payload arrives.
     var wantLayer = new URLSearchParams(location.search).get("layer");
-    var HEAT = { kills: 1, npc: 1, jumps: 1 };
+    var HEAT = { kills: 1, npc: 1, jumps: 1, threat: 1 };
     var heatOrder = {};
 
-    function heatColor(t, a) {
-      var lo = colors.heatLo, hi = colors.heatHi, core = colors.heatCore, c;
+    // heatColor walks a three-stop ramp (the heat ramp unless one is
+    // given: threat has its own, amber through red to white-hot).
+    function heatColor(t, a, ramp) {
+      ramp = ramp || [colors.heatLo, colors.heatHi, colors.heatCore];
+      t = Math.min(Math.max(t, 0), 1);
+      var lo = ramp[0], hi = ramp[1], core = ramp[2], c;
       if (t < 0.75) {
         var u = t / 0.75;
         c = [lo[0] + (hi[0] - lo[0]) * u, lo[1] + (hi[1] - lo[1]) * u, lo[2] + (hi[2] - lo[2]) * u];
@@ -734,7 +775,23 @@
       }
       if (HEAT[layer]) {
         var vals = LY[layer], max = LY.max[layer];
+        var ramp = layer === "threat" ? colors.threatRamp : null;
         batch(colors.dim, r * 0.8, function (i) { return vals[i] <= 0; });
+        // Threat spills along the gates: in a region's tactical view
+        // a quiet system beside a dangerous one wears a faint ring.
+        if (layer === "threat" && mode !== "universe") {
+          ctx.setLineDash([3, 3]);
+          ctx.lineWidth = 1.5;
+          for (m = 0; m < n; m++) {
+            i = list ? list[m] : m;
+            if (LY.spill[i] < THREAT_LEVELS[1].at || vals[i] >= LY.spill[i] || !on(i)) continue;
+            ctx.beginPath();
+            ctx.arc(sx, sy, r + 5, 0, Math.PI * 2);
+            ctx.strokeStyle = heatColor(heatT(LY.spill[i], max), 0.7, ramp);
+            ctx.stroke();
+          }
+          ctx.setLineDash([]);
+        }
         // Quietest first, so the hottest glow on top.
         var order = heatOrder[layer];
         if (!order) {
@@ -743,7 +800,9 @@
           order.sort(function (a, b) { return vals[a] - vals[b]; });
           heatOrder[layer] = order;
         }
-        var grow = mode === "universe" ? Math.min(1 + (cam.k / fitK() - 1) * 0.15, 3) : 1.6;
+        // In a region's tactical view systems sit far apart and are
+        // named; a modest glow keeps neighbours and their names clear.
+        var grow = mode === "universe" ? Math.min(1 + (cam.k / fitK() - 1) * 0.15, 3) : 0.9;
         ctx.globalCompositeOperation = colors.heatBlend;
         for (m = 0; m < order.length; m++) {
           i = order[m];
@@ -752,7 +811,7 @@
           var t = heatT(vals[i], max), rr = r + (2 + 13 * t) * grow;
           ctx.beginPath();
           ctx.arc(sx, sy, rr, 0, Math.PI * 2);
-          ctx.fillStyle = heatColor(t, 0.18 + 0.3 * t);
+          ctx.fillStyle = heatColor(t, 0.18 + 0.3 * t, ramp);
           ctx.fill();
         }
         ctx.globalCompositeOperation = "source-over";
@@ -762,8 +821,19 @@
           if (!on(i)) continue;
           ctx.beginPath();
           ctx.arc(sx, sy, r + 0.6, 0, Math.PI * 2);
-          ctx.fillStyle = heatColor(heatT(vals[i], max), 1);
+          ctx.fillStyle = heatColor(heatT(vals[i], max), 1, ramp);
           ctx.fill();
+        }
+        // Camps: a ring around each.
+        if (layer === "threat") {
+          ctx.lineWidth = 2;
+          ctx.strokeStyle = colors.camp;
+          LY.camps.forEach(function (c) {
+            if ((mode !== "universe" && S.r[c.sys] !== region) || !on(c.sys)) return;
+            ctx.beginPath();
+            ctx.arc(sx, sy, r + 9, 0, Math.PI * 2);
+            ctx.stroke();
+          });
         }
         return;
       }
@@ -839,6 +909,15 @@
           var name = LY.alliances[h.a].name || "Alliance " + LY.alliances[h.a].id;
           label(name, h.x * k + ox, h.y * k + oy - 6, mode === "universe" ? 11 : 12, allianceColor(h.a), "700", false, "A" + h.a);
         });
+      } else if (layer === "threat") {
+        // A camp is named -- who, and how many kills -- once the
+        // view is close enough to read it; New Eden shows the rings.
+        if (mode === "universe" && cam.k / fitK() < 2.5) return;
+        inPlaceFirst(LY.camps, function (c) { return "C" + c.sys; }, function (c) {
+          if (mode !== "universe" && S.r[c.sys] !== region) return;
+          label("Camp · " + c.group + " · " + c.n + " kills", wx(c.sys) * k + ox, wy(c.sys) * k + oy + radius() + 12,
+            12, colors.camp, "700", false, "C" + c.sys);
+        });
       } else if (layer === "inc") {
         LY.incs.forEach(function (x) {
           var s = G.byID[x.staging];
@@ -876,7 +955,7 @@
       return ("0" + d.getUTCHours()).slice(-2) + ":" + ("0" + d.getUTCMinutes()).slice(-2) + " EVE";
     }
     var LAYER_TITLES = { kills: "Ship and pod kills, last hour", npc: "NPC kills, last hour", jumps: "Jumps, last hour",
-      sov: "Sovereignty", fw: "Faction Warfare", inc: "Incursions" };
+      sov: "Sovereignty", fw: "Faction Warfare", inc: "Incursions", threat: "Threat now" };
 
     // The legend for the layer showing: the security swatches for
     // Security, otherwise a scale or key built here.
@@ -900,7 +979,18 @@
         p.appendChild(root.createTextNode(text));
         box.appendChild(p);
       }
-      if (HEAT[layer]) {
+      if (layer === "threat") {
+        // The fixed levels, each in its color on the threat ramp.
+        THREAT_LEVELS.forEach(function (lv, li) {
+          if (!li) return;
+          row("", heatColor(heatT(lv.at, THREAT_TOP), 1, colors.threatRamp), lv.name);
+        });
+        row("", colors.camp, LY.camps.length ? LY.camps.length + (LY.camps.length === 1 ? " camp" : " camps") + " right now" : "No camps right now");
+        var how = root.createElement("p");
+        how.className = "map-layer-row muted";
+        how.textContent = "PvP kills, fading over 45 minutes. A camp: one group killing passers-by, 4+ kills over the last hour.";
+        box.appendChild(how);
+      } else if (HEAT[layer]) {
         var bar = root.createElement("p");
         bar.className = "map-heat";
         var g = root.createElement("span");
@@ -934,10 +1024,26 @@
       box.appendChild(at);
     }
 
+    function agoShort(unix) {
+      var m = Math.max(0, Math.round((Date.now() / 1000 - unix) / 60));
+      return m < 1 ? "just now" : m < 60 ? m + " min ago" : Math.round(m / 60) + " h ago";
+    }
+
     // The card's live figures for one system, every layer at once.
     function liveRows(i) {
       if (!LY) return [];
       var rows = [];
+      if (LY.at.threat) {
+        var lv = THREAT_LEVELS[threatLevel(LY.threat[i])].name, txt = lv;
+        if (LY.threatHour[i]) txt += " · " + LY.threatHour[i] + (LY.threatHour[i] === 1 ? " kill" : " kills") + " in the last hour";
+        if (LY.threatLast[i]) txt += " · last " + agoShort(LY.threatLast[i]);
+        if (!LY.threat[i] && LY.spill[i] >= THREAT_LEVELS[1].at) txt += " · danger next door";
+        rows.push(["Threat", txt]);
+        if (LY.campOf[i] >= 0) {
+          var c = LY.camps[LY.campOf[i]];
+          rows.push(["Camp", c.group + " · " + c.n + " kills since " + agoShort(c.since)]);
+        }
+      }
       if (LY.at.kills) rows.push(["Kills, last hour", LY.ship[i] + " ships · " + LY.pod[i] + " pods · " + LY.npc[i] + " NPC"]);
       if (LY.at.jumps) rows.push(["Jumps, last hour", String(LY.jumps[i])]);
       if (LY.sovA[i] >= 0) {
@@ -1503,7 +1609,7 @@
 
     // --- Live layers: loading, the picker, refresh ---
     // The page names the payload it rendered with (hashed, cached for
-    // good); every five minutes while the page is in view the map
+    // good); every two minutes while the page is in view the map
     // asks for the current one, and redraws only when its ETag moved.
     var layersEtag = "", layersTimer = 0, firstLayers = true;
     function fetchLayers(url) {
@@ -1535,7 +1641,7 @@
       fetchLayers(layersURL);
       layersTimer = setInterval(function () {
         if (document.visibilityState === "visible") fetchLayers("/map/layers.json");
-      }, 300000);
+      }, 120000);
     }
 
     function teardown() {
@@ -1581,6 +1687,6 @@
   // Exposed for the node tests only (jstest/map_test.js).
   if (typeof module !== "undefined" && module.exports) {
     module.exports = { secRounded: secRounded, secTier: secTier, secText: secText, prepare: prepare, regionLabelAlpha: regionLabelAlpha, zoomEntryAllowed: zoomEntryAllowed,
-      joinLayers: joinLayers, heatT: heatT, allianceHue: allianceHue };
+      joinLayers: joinLayers, heatT: heatT, allianceHue: allianceHue, threatLevel: threatLevel };
   }
 })();

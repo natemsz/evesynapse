@@ -100,3 +100,27 @@ test("live layers join onto the map's systems", () => {
   assert.ok(map.heatT(1, 1000) > 0 && map.heatT(1, 1000) < 0.2, "log scale keeps a lone kill visible but faint");
   assert.notStrictEqual(map.allianceHue(99003581), map.allianceHue(99003582), "neighbouring IDs, different hues");
 });
+
+test("threat joins with levels, camps and spillover along the gates", () => {
+  const P = {
+    v: 1,
+    regions: [{ id: 10, name: "Alpha", x: 0, y: 0, w: 1000, h: 1000 }],
+    cons: [{ id: 1, name: "A1", r: 0 }],
+    sys: {
+      id: [101, 102, 103], n: ["One", "Two", "Three"], x: [0, 10, 20], y: [0, 0, 0],
+      s: [0.9, -0.3, -0.5], r: [0, 0, 0], c: [0, 0, 0], rx: [0, 500, 1000], ry: [0, 0, 0], f: [0, 0, 0]
+    },
+    gates: [0, 1, 1, 2]
+  };
+  const J = map.joinLayers(P, {
+    threat: { at: 1, id: [102], s: [600], k1: [4], last: [1000],
+      camps: [{ sys: 102, n: 3, kind: "alliance", gid: 99, group: "The Campers", since: 900 }] }
+  });
+  assert.strictEqual(J.threat[1], 6);
+  assert.strictEqual(J.threatHour[1], 4);
+  assert.strictEqual(J.camps.length, 1);
+  assert.strictEqual(J.campOf[1], 0);
+  assert.ok(Math.abs(J.spill[0] - 1.8) < 1e-6 && Math.abs(J.spill[2] - 1.8) < 1e-6, "neighbours carry 30%");
+  assert.strictEqual(J.spill[1], 0, "the hot system's own neighbours are quiet");
+  assert.deepStrictEqual([0, 0.4, 0.5, 2, 5, 10, 40].map(map.threatLevel), [0, 0, 1, 2, 3, 4, 4]);
+});

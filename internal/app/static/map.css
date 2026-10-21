@@ -33,6 +33,11 @@
   --map-f-caldari: #3d8bff;
   --map-f-gallente: #3fbf7a;
   --map-f-minmatar: #d8452f;
+  /* Threat: amber through red to white-hot; camps ringed in red. */
+  --map-threat-lo: #e0a020;
+  --map-threat-hi: #e0301c;
+  --map-threat-core: #fff0e0;
+  --map-camp: #ff3b3b;
   --map-inc: #c64bd6;
   --map-inc-staging: #ff5ce0;
   --map-space: radial-gradient(120% 90% at 30% 20%, rgba(255, 106, 26, 0.08), transparent 55%),
@@ -64,6 +69,10 @@ html[data-theme="light"] .map {
   --map-sov-l: 45%;
   --map-npc: #8a7d72;
   --map-unheld: rgba(110, 84, 64, 0.28);
+  --map-threat-lo: #f0c060;
+  --map-threat-hi: #c8281a;
+  --map-threat-core: #5a0a04;
+  --map-camp: #c41818;
   --map-inc: #a12fb3;
   --map-inc-staging: #d01ba8;
   --map-space: radial-gradient(120% 90% at 30% 20%, rgba(255, 106, 26, 0.07), transparent 55%), #fbf6ee;

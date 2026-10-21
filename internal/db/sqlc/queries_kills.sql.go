@@ -129,6 +129,17 @@ func (q *Queries) GetKillfeedState(ctx context.Context) (GetKillfeedStateRow, er
 	return i, err
 }
 
+const getLatestKillIngest = `-- name: GetLatestKillIngest :one
+SELECT COALESCE(MAX(ingested_at), 'epoch'::timestamptz)::timestamptz AS latest FROM kills
+`
+
+func (q *Queries) GetLatestKillIngest(ctx context.Context) (time.Time, error) {
+	row := q.db.QueryRowContext(ctx, getLatestKillIngest)
+	var latest time.Time
+	err := row.Scan(&latest)
+	return latest, err
+}
+
 const getPublicKill = `-- name: GetPublicKill :one
 SELECT killmail_id, hash, killmail_time, system_id, region_id, location_id, victim_character_id, victim_corporation_id, victim_alliance_id, victim_faction_id, ship_type_id, damage_taken, attacker_count, fb_character_id, fb_corporation_id, fb_alliance_id, fb_ship_type_id, npc, solo, awox, points, value_zkill, value_ours, value_dropped_ours, value_coverage, priced_at, source, public, ingested_at FROM kills WHERE killmail_id = $1 AND public
 `
@@ -884,6 +895,99 @@ func (q *Queries) ListSystemRegions(ctx context.Context) ([]ListSystemRegionsRow
 	for rows.Next() {
 		var i ListSystemRegionsRow
 		if err := rows.Scan(&i.SystemID, &i.RegionID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listThreatAttackers = `-- name: ListThreatAttackers :many
+SELECT a.killmail_id, a.character_id, a.corporation_id, a.alliance_id
+FROM kill_attackers a
+JOIN kills k ON k.killmail_id = a.killmail_id
+WHERE k.killmail_time >= $1::timestamptz AND NOT k.npc AND k.public AND a.character_id > 0
+`
+
+type ListThreatAttackersRow struct {
+	KillmailID    int64 `json:"killmail_id"`
+	CharacterID   int64 `json:"character_id"`
+	CorporationID int64 `json:"corporation_id"`
+	AllianceID    int64 `json:"alliance_id"`
+}
+
+func (q *Queries) ListThreatAttackers(ctx context.Context, since time.Time) ([]ListThreatAttackersRow, error) {
+	rows, err := q.db.QueryContext(ctx, listThreatAttackers, since)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListThreatAttackersRow
+	for rows.Next() {
+		var i ListThreatAttackersRow
+		if err := rows.Scan(
+			&i.KillmailID,
+			&i.CharacterID,
+			&i.CorporationID,
+			&i.AllianceID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listThreatKills = `-- name: ListThreatKills :many
+
+SELECT killmail_id, system_id, killmail_time, public, victim_corporation_id
+FROM kills
+WHERE killmail_time >= $1::timestamptz AND NOT npc
+ORDER BY killmail_time
+`
+
+type ListThreatKillsRow struct {
+	KillmailID          int64     `json:"killmail_id"`
+	SystemID            int64     `json:"system_id"`
+	KillmailTime        time.Time `json:"killmail_time"`
+	Public              bool      `json:"public"`
+	VictimCorporationID int64     `json:"victim_corporation_id"`
+}
+
+// ---------------------------------------------------------------------
+// The map's threat layer (map_threat.go): recent PvP kills per system
+// (every kill counts toward the score, private ones too -- it is a
+// total), and the attackers of recent public kills (a camp is named
+// from public kills only).
+// ---------------------------------------------------------------------
+func (q *Queries) ListThreatKills(ctx context.Context, since time.Time) ([]ListThreatKillsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listThreatKills, since)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListThreatKillsRow
+	for rows.Next() {
+		var i ListThreatKillsRow
+		if err := rows.Scan(
+			&i.KillmailID,
+			&i.SystemID,
+			&i.KillmailTime,
+			&i.Public,
+			&i.VictimCorporationID,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

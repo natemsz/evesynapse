@@ -85,12 +85,16 @@ Rules that follow from this:
   react to new content (the modal closer, the character-selector
   pruner), it listens for the lifecycle events itself.
 - A dialog open inside content being swapped out closes with it.
-- **The swapper never strands a page without its scripts.** If
-  the incoming page needs a script the shell hasn't loaded, the
-  swap falls back to a full navigation (fitting and the planner
-  always load whole regardless — their JS holds state). That's
-  what makes per-surface files safe: gate the file in base.html
-  and the first arrival simply does a real load.
+- **The swapper never strands a page without its assets.** A
+  swap adopts the incoming page's stylesheet and any page
+  scripts the shell hasn't loaded (in document order, against
+  the swapped-in content, before content-ready), and prunes the
+  stylesheet again when a later page doesn't carry it. Only an
+  asset that fails to load falls back to a full navigation —
+  plus the pages whose JS holds state (the fitting simulator
+  and saved fits always load whole regardless). That's what
+  makes per-surface files safe: gate the file in base.html and
+  the swap brings it along.
 
 ## The common pieces
 

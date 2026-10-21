@@ -1,7 +1,6 @@
 package app
 
 import (
-	"io/fs"
 	"strings"
 	"testing"
 )
@@ -14,9 +13,9 @@ import (
 // it fills its column at its content height, so container pages
 // span the column and wide content stays inside its own scroll
 // regions. In the block layout under 860px the same floor comes
-// from a min-height under the in-flow top bar. The footer's
-// background is the star tile: a real compressed raster whose
-// ?v= token names its own bytes, like the wallpaper's.
+// from a min-height under the in-flow top bar. The footer paints
+// black glass: the top bar's gradient inverted and deepened to
+// near-black, over the same backdrop blur.
 func TestStickyFooterShell(t *testing.T) {
 	css := readStatic(t, "style.css")
 
@@ -48,35 +47,11 @@ func TestStickyFooterShell(t *testing.T) {
 	}
 
 	foot := cssBlock(t, css, "footer {")
-	if !strings.Contains(foot, "background: rgba(11, 11, 11, 0.85);") {
-		t.Error("the footer's flat paint (its no-image fallback) changed")
+	if !strings.Contains(foot, "background: linear-gradient(to bottom, rgba(5, 5, 5, 0.9), rgba(18, 18, 18, 0.9));") {
+		t.Error("the footer's black glass paint changed; the footer is the top bar's gradient inverted and deepened to near-black")
 	}
-	idx := loadStaticIndex()
-	etag, ok := idx.etags["/stars-tile.webp"]
-	if !ok {
-		t.Fatal("stars-tile.webp is not in the static index")
-	}
-	want := "background-image: url(\"/static/stars-tile.webp?v=" + strings.Trim(etag, `"`) + "\");"
-	if !strings.Contains(foot, want) {
-		t.Errorf("the footer does not paint the star tile under its content-hash token; want %q", want)
-	}
-}
-
-// TestStarTileStaysTiny pins the tile's size contract: it is a
-// footer background, fetched once and cached forever, and must
-// stay a sliver next to the wallpaper tiers. The tile is a
-// lossless crop of a photographic star field, so its budget is
-// the lossless encode's size with headroom: 24 KiB.
-func TestStarTileStaysTiny(t *testing.T) {
-	raw, err := fs.ReadFile(staticFS, "static/stars-tile.webp")
-	if err != nil {
-		t.Fatalf("read stars-tile.webp: %v", err)
-	}
-	if len(raw) > 24576 {
-		t.Errorf("stars-tile.webp is %d bytes; the footer tile's budget is 24576", len(raw))
-	}
-	if len(raw) < 4 || string(raw[:4]) != "RIFF" {
-		t.Error("stars-tile.webp is not a WebP raster")
+	if !strings.Contains(foot, "backdrop-filter: blur(18px);") {
+		t.Error("the footer lost the top bar's backdrop blur; the wallpaper must blur through its black glass")
 	}
 }
 

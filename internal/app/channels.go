@@ -25,7 +25,6 @@ package app
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 	"sort"
@@ -647,10 +646,10 @@ func (app *Application) handleGrantAdd(w http.ResponseWriter, r *http.Request) {
 		}
 	} else {
 		name := strings.TrimSpace(r.PostFormValue("name"))
-		var err error
-		target, label, err = app.resolveGrantName(ctx, kind, name)
-		if err != nil {
-			back(err.Error())
+		var problem string
+		target, label, problem = app.resolveGrantName(ctx, kind, name)
+		if problem != "" {
+			back(problem)
 			return
 		}
 	}
@@ -666,10 +665,11 @@ func (app *Application) handleGrantAdd(w http.ResponseWriter, r *http.Request) {
 }
 
 // resolveGrantName finds a pilot, corporation or alliance by its exact
-// name through ESI.
-func (app *Application) resolveGrantName(ctx context.Context, kind, name string) (int64, string, error) {
+// name through ESI. problem, when not empty, is what to tell the
+// owner instead.
+func (app *Application) resolveGrantName(ctx context.Context, kind, name string) (id int64, label, problem string) {
 	if name == "" || utf8.RuneCountInString(name) > 50 {
-		return 0, "", errors.New("Type the exact name to grant.")
+		return 0, "", "Type the exact name to grant."
 	}
 	var ids struct {
 		Characters []struct {
@@ -687,7 +687,7 @@ func (app *Application) resolveGrantName(ctx context.Context, kind, name string)
 	}
 	if err := app.esi.PostJSON(ctx, "/universe/ids/", []string{name}, &ids); err != nil {
 		logging.Warnf("channels: resolve %s %q: %v", kind, name, err)
-		return 0, "", errors.New("EVE's servers did not answer — try again in a moment.")
+		return 0, "", "EVE's servers did not answer — try again in a moment."
 	}
 	var list []struct {
 		ID   int64
@@ -711,10 +711,10 @@ func (app *Application) resolveGrantName(ctx context.Context, kind, name string)
 			case "alliance":
 				app.esi.StoreAllianceName(e.ID, e.Name)
 			}
-			return e.ID, e.Name, nil
+			return e.ID, e.Name, ""
 		}
 	}
-	return 0, "", fmt.Errorf("No %s is named “%s”.", map[string]string{"character": "pilot", "corporation": "corporation", "alliance": "alliance"}[kind], name)
+	return 0, "", fmt.Sprintf("No %s is named “%s”.", map[string]string{"character": "pilot", "corporation": "corporation", "alliance": "alliance"}[kind], name)
 }
 
 func (app *Application) handleGrantRemove(w http.ResponseWriter, r *http.Request) {

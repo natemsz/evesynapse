@@ -64,14 +64,16 @@ func TestStickyFooterShell(t *testing.T) {
 
 // TestStarTileStaysTiny pins the tile's size contract: it is a
 // footer background, fetched once and cached forever, and must
-// stay a sliver next to the wallpaper tiers.
+// stay a sliver next to the wallpaper tiers. The tile is a
+// lossless crop of a photographic star field, so its budget is
+// the lossless encode's size with headroom: 24 KiB.
 func TestStarTileStaysTiny(t *testing.T) {
 	raw, err := fs.ReadFile(staticFS, "static/stars-tile.webp")
 	if err != nil {
 		t.Fatalf("read stars-tile.webp: %v", err)
 	}
-	if len(raw) > 8192 {
-		t.Errorf("stars-tile.webp is %d bytes; the footer tile's budget is 8192", len(raw))
+	if len(raw) > 24576 {
+		t.Errorf("stars-tile.webp is %d bytes; the footer tile's budget is 24576", len(raw))
 	}
 	if len(raw) < 4 || string(raw[:4]) != "RIFF" {
 		t.Error("stars-tile.webp is not a WebP raster")

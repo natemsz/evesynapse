@@ -7,15 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-- Placeholder section for upcoming changes.
-
-### Changed
-- Placeholder section for upcoming changes.
-
-### Fixed
-- Placeholder section for upcoming changes.
-
 ## [v0.5.5.4] - 2026-10-21
 
 Automated build of EveSynapse v0.5.5.4. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).

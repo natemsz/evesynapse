@@ -108,8 +108,15 @@ type searchFilters struct {
 	AbAttrKey  string  // attribute id as text, "" off
 	AbAttrMin  float64 // one named roll's percentile floor (URL-only)
 	AbPosMin   float64 // -1 off, else 0..1: the primary roll's percentile floor
-	Sort       string
-	Page       int
+	// Roll slider bands: per-attribute percentile bounds
+	// (0..1 fractions) from the drawer's rollmin_<id> /
+	// rollmax_<id> inputs. A side is present only when its
+	// map holds the attribute; buildSearchView prunes ids
+	// no mutaplasmid can roll before either map is read.
+	AbRollMin map[int64]float64
+	AbRollMax map[int64]float64
+	Sort      string
+	Page      int
 }
 
 var searchSorts = []struct{ Key, Label string }{
@@ -287,8 +294,10 @@ func parseSearchFilters(q url.Values) searchFilters {
 	if v := intOr(q, "pos_min", -1); v >= 0 && v <= 100 {
 		f.AbPosMin = float64(v) / 100
 	}
+	f.AbRollMin, f.AbRollMax = parseRollBands(q)
 	f.AbActive = f.AbFamily != "" || f.AbScoreMin >= 0 || f.AbSourceQ != "" ||
-		f.AbEstMin >= 0 || f.AbEstMax >= 0 || f.AbAttrKey != "" || f.AbPosMin >= 0
+		f.AbEstMin >= 0 || f.AbEstMax >= 0 || f.AbAttrKey != "" || f.AbPosMin >= 0 ||
+		len(f.AbRollMin) > 0 || len(f.AbRollMax) > 0
 	if s := q.Get("sort"); validSort(s) {
 		f.Sort = s
 	}
@@ -299,6 +308,81 @@ func parseSearchFilters(q url.Values) searchFilters {
 		f.Page = searchPageCap
 	}
 	return f
+}
+
+// parseRollBands reads the roll sliders' bounds:
+// rollmin_<attribute id> and rollmax_<attribute id>, each a
+// percentile 0..100. Values clamp to the percentile range;
+// an unparseable value or a malformed attribute id drops
+// that one bound, never the search.
+func parseRollBands(q url.Values) (mins, maxs map[int64]float64) {
+	mins, maxs = map[int64]float64{}, map[int64]float64{}
+	for k := range q {
+		var dst map[int64]float64
+		var suffix string
+		switch {
+		case strings.HasPrefix(k, "rollmin_"):
+			dst, suffix = mins, strings.TrimPrefix(k, "rollmin_")
+		case strings.HasPrefix(k, "rollmax_"):
+			dst, suffix = maxs, strings.TrimPrefix(k, "rollmax_")
+		default:
+			continue
+		}
+		id, err := strconv.ParseInt(suffix, 10, 64)
+		if err != nil || id <= 0 {
+			continue
+		}
+		raw := strings.TrimSpace(q.Get(k))
+		if raw == "" {
+			continue
+		}
+		v, err := strconv.ParseFloat(raw, 64)
+		if err != nil || math.IsNaN(v) || math.IsInf(v, 0) {
+			continue
+		}
+		if v < 0 {
+			v = 0
+		}
+		if v > 100 {
+			v = 100
+		}
+		dst[id] = v / 100
+	}
+	return mins, maxs
+}
+
+// rollBandsJSON flattens the slider bounds into the search
+// queries' single JSONB argument: attribute id (as text) to
+// [min, max] percentiles, an unset side reading as the
+// range end. No bands marshals as the empty object the SQL
+// treats as off.
+func (f searchFilters) rollBandsJSON() []byte {
+	if len(f.AbRollMin) == 0 && len(f.AbRollMax) == 0 {
+		return []byte("{}")
+	}
+	bands := map[int64][2]float64{}
+	for id, mn := range f.AbRollMin {
+		b := [2]float64{mn, 1}
+		if mx, ok := f.AbRollMax[id]; ok {
+			b[1] = mx
+		}
+		bands[id] = b
+	}
+	for id, mx := range f.AbRollMax {
+		if _, ok := bands[id]; !ok {
+			bands[id] = [2]float64{0, mx}
+		}
+	}
+	for id, b := range bands {
+		if b[0] > b[1] {
+			bands[id] = [2]float64{b[1], b[0]}
+		}
+	}
+	raw, err := json.Marshal(bands)
+	if err != nil {
+		return []byte("{}")
+	}
+	return raw
 }
 
 // searchParams maps the parsed filters onto the sqlc pair
@@ -326,7 +410,8 @@ func (f searchFilters) params(now time.Time) (sp db.SearchPublicContractsParams,
 		AbyssalActive: f.AbActive, AbFamily: f.AbFamily, AbScoreMin: f.AbScoreMin,
 		AbSourceQ: f.AbSourceQ, AbEstMin: f.AbEstMin, AbEstMax: f.AbEstMax,
 		AbAttrKey: f.AbAttrKey, AbAttrMin: f.AbAttrMin, AbPosMin: f.AbPosMin,
-		Sort: f.Sort, MaxRows: searchPageSize, RowOffset: int64((f.Page - 1) * searchPageSize),
+		AbRollBands: f.rollBandsJSON(),
+		Sort:        f.Sort, MaxRows: searchPageSize, RowOffset: int64((f.Page - 1) * searchPageSize),
 	}
 	if sp.Types == nil {
 		sp.Types = []string{}
@@ -348,6 +433,7 @@ func (f searchFilters) params(now time.Time) (sp db.SearchPublicContractsParams,
 		AbyssalActive: sp.AbyssalActive, AbFamily: sp.AbFamily, AbScoreMin: sp.AbScoreMin,
 		AbSourceQ: sp.AbSourceQ, AbEstMin: sp.AbEstMin, AbEstMax: sp.AbEstMax,
 		AbAttrKey: sp.AbAttrKey, AbAttrMin: sp.AbAttrMin, AbPosMin: sp.AbPosMin,
+		AbRollBands: sp.AbRollBands,
 	}
 	return sp, cp
 }
@@ -619,6 +705,21 @@ type attrOption struct {
 	Selected bool
 }
 
+// rollSlider is one attribute's pair of percentile bounds
+// in the abyssal drawer: the range/number slider pairs the
+// template prints for the family in scope (or, with no
+// family chosen, for the attributes carrying a band).
+// Min/Max are whole percentiles; a side the search left
+// unset renders empty.
+type rollSlider struct {
+	ID     int64
+	Name   string
+	Min    int
+	Max    int
+	MinSet bool
+	MaxSet bool
+}
+
 // rowAbyssal is a result row's mutated-line summary for
 // its contents pill: the stored roll score and the primary
 // roll's position. The rolls themselves render inline in
@@ -647,15 +748,20 @@ type searchView struct {
 	Regions      []regionOption
 	Families     []familyOption
 	AttrOpts     []attrOption
-	Sorts        []struct{ Key, Label string }
-	Rows         []searchRow
-	Total        int64
-	TotalText    string
-	Page         int
-	Pages        int
-	PrevURL      string
-	NextURL      string
-	HasRows      bool
+	// RollSliders are the abyssal drawer's per-attribute
+	// percentile bands; RollAttrNames names every rollable
+	// attribute for the band chips.
+	RollSliders   []rollSlider
+	RollAttrNames map[int64]string
+	Sorts         []struct{ Key, Label string }
+	Rows          []searchRow
+	Total         int64
+	TotalText     string
+	Page          int
+	Pages         int
+	PrevURL       string
+	NextURL       string
+	HasRows       bool
 	// Redesign furniture: active-filter chips, per-drawer
 	// active counts, the drawer the page opens with, and the
 	// quick-hunt preset URLs.
@@ -771,6 +877,80 @@ func (app *mod) buildSearchView(ctx context.Context, q url.Values) *searchView {
 			}
 			key := strconv.FormatInt(id, 10)
 			view.AttrOpts = append(view.AttrOpts, attrOption{Key: key, Name: name, Selected: key == f.AbAttrKey})
+		}
+	}
+
+	// Roll sliders: the attributes on offer are the ones
+	// some mutaplasmid can actually move (schema 055
+	// ranges). Bands naming anything else are pruned here,
+	// before the chips and the search read the maps (the
+	// view's Filters share them), so a hand-typed id can
+	// neither filter nor render.
+	if rollIDs, err := app.queries.ListAbyssalRollAttributeIDs(ctx); err == nil {
+		rollable := make(map[int64]bool, len(rollIDs))
+		for _, id := range rollIDs {
+			rollable[id] = true
+		}
+		for id := range f.AbRollMin {
+			if !rollable[id] {
+				delete(f.AbRollMin, id)
+			}
+		}
+		for id := range f.AbRollMax {
+			if !rollable[id] {
+				delete(f.AbRollMax, id)
+			}
+		}
+		names := map[int64]string{}
+		if rows, err := app.queries.ListSDEAttributeTypesByIDs(ctx, rollIDs); err == nil {
+			for _, row := range rows {
+				names[row.AttributeID] = row.Name
+			}
+		}
+		view.RollAttrNames = names
+		sliderFor := func(id int64) rollSlider {
+			name := names[id]
+			if name == "" {
+				name = fmt.Sprintf("Attribute #%d", id)
+			}
+			s := rollSlider{ID: id, Name: name}
+			if v, ok := f.AbRollMin[id]; ok {
+				s.Min, s.MinSet = int(math.Round(v*100)), true
+			}
+			if v, ok := f.AbRollMax[id]; ok {
+				s.Max, s.MaxSet = int(math.Round(v*100)), true
+			}
+			return s
+		}
+		seen := map[int64]bool{}
+		if f.AbFamily != "" {
+			// The family in scope leads: its own rollable
+			// attributes, heaviest weight first.
+			if famAttrs, err := app.queries.ListAbyssalFamilyRollAttributes(ctx, f.AbFamily); err == nil {
+				for _, row := range famAttrs {
+					view.RollSliders = append(view.RollSliders, sliderFor(row.AttributeID))
+					seen[row.AttributeID] = true
+				}
+			}
+		}
+		// Any banded attribute outside that set still gets
+		// its slider, so an active band is never invisible.
+		extra := []int64{}
+		for id := range f.AbRollMin {
+			if !seen[id] {
+				seen[id] = true
+				extra = append(extra, id)
+			}
+		}
+		for id := range f.AbRollMax {
+			if !seen[id] {
+				seen[id] = true
+				extra = append(extra, id)
+			}
+		}
+		sort.Slice(extra, func(i, j int) bool { return extra[i] < extra[j] })
+		for _, id := range extra {
+			view.RollSliders = append(view.RollSliders, sliderFor(id))
 		}
 	}
 
@@ -1033,6 +1213,42 @@ func (app *mod) buildSearchFurniture(view *searchView, f searchFilters, q url.Va
 		}
 		add(fmt.Sprintf("Roll: %s ≥ %s%%", name, view.Echo["attr_min"]), false, map[string]string{"attr": "", "attr_min": ""})
 		view.AbCount++
+	}
+	// Roll slider bands: one chip per banded attribute,
+	// naming the bounds the search actually carries.
+	{
+		ids := []int64{}
+		seen := map[int64]bool{}
+		for id := range f.AbRollMin {
+			seen[id] = true
+			ids = append(ids, id)
+		}
+		for id := range f.AbRollMax {
+			if !seen[id] {
+				ids = append(ids, id)
+			}
+		}
+		sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
+		for _, id := range ids {
+			name := view.RollAttrNames[id]
+			if name == "" {
+				name = fmt.Sprintf("Attribute #%d", id)
+			}
+			mn, hasMin := f.AbRollMin[id]
+			mx, hasMax := f.AbRollMax[id]
+			var label string
+			switch {
+			case hasMin && hasMax:
+				label = fmt.Sprintf("Roll: %s %d–%d%%", name, int(math.Round(mn*100)), int(math.Round(mx*100)))
+			case hasMin:
+				label = fmt.Sprintf("Roll: %s ≥ %d%%", name, int(math.Round(mn*100)))
+			default:
+				label = fmt.Sprintf("Roll: %s ≤ %d%%", name, int(math.Round(mx*100)))
+			}
+			key := strconv.FormatInt(id, 10)
+			add(label, false, map[string]string{"rollmin_" + key: "", "rollmax_" + key: ""})
+			view.AbCount++
+		}
 	}
 	// Courier drawer.
 	if f.PlaceEndQ != "" {

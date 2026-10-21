@@ -295,6 +295,19 @@
 .cs-slider-pair input[type="range"] { flex: 1; width: auto; }
 .cs-slider-pair input[type="number"] { width: 4.6rem; flex: none; }
 
+/* The abyssal roll bands: one field per attribute, each
+   carrying its min and max slider pairs, laid on the same
+   fixed six-track rhythm as the drawer grid above it. */
+.cs-rollgrid {
+  display: grid; grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 0.6rem 0.9rem; margin-top: 0.65rem;
+}
+.cs-rollgrid > .cs-field { grid-column: span 2; }
+/* The field's two bound pairs ride together at the cell's
+   bottom pin: the gap opens above the first pair only. */
+.cs-rollgrid > .cs-field > .cs-slider-pair { margin-top: 0; }
+.cs-rollgrid > .cs-field > .cs-slider-pair:first-of-type { margin-top: auto; }
+
 /* The filter labels speak in the results table's type
    voice: the box titles, the region quick links, the
    field labels and the specs band label take .cs-type's
@@ -619,6 +632,8 @@
   .cs-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .cs-drawer-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .cs-drawer-grid > .cs-field { grid-column: span 1; }
+  .cs-rollgrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .cs-rollgrid > .cs-field { grid-column: span 1; }
   [data-drawer-panel="abyssal"] .cs-drawer-grid > :nth-child(2),
   [data-drawer-panel="couriers"] .cs-drawer-grid > :nth-child(1) { grid-column: span 2; }
   /* The results table keeps its five columns and scrolls
@@ -638,6 +653,7 @@
   .cs-deals { width: 100%; justify-content: space-between; }
   .cs-intro { flex-direction: column; }
   .cs-drawer-grid { grid-template-columns: minmax(0, 1fr); }
+  .cs-rollgrid { grid-template-columns: minmax(0, 1fr); }
   .cs-drawer-grid > .cs-field,
   [data-drawer-panel="abyssal"] .cs-drawer-grid > :nth-child(2),
   [data-drawer-panel="couriers"] .cs-drawer-grid > :nth-child(1) { grid-column: span 1; }

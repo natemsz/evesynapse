@@ -14,7 +14,7 @@
      touch       (hover: none), (pointer: coarse)
                  phones, tablets, foldables at any size: tap
                  targets, field sizing, press feedback, safe
-                 areas, the blur budget
+                 areas
      phone       (max-width: 45rem) — the canon phone band
                  (style.css's head): flatter surfaces, swipeable
                  tab rows, stacked forms, sheets
@@ -35,24 +35,7 @@
     /* One control height for touch: buttons and fields share
        --control-h (style.css), so rows of them still line up. */
     --control-h: 2.5rem;
-    /* The blur budget: on touch hardware a backdrop-filter on
-       every scrolled card re-samples the sky each frame. Content
-       surfaces drop their blur and take a deeper paint instead
-       (the nebula still reads through at the edges); the fixed
-       chrome — top bar, bottom bar, sheets, menus — keeps its
-       glass, which is where the blur is seen. The light theme
-       sets its own solid --glass and keeps it. */
-    --glass: color-mix(in srgb, var(--panel) 88%, transparent);
     -webkit-tap-highlight-color: transparent;
-  }
-  .page-body, .card, .panel, .foldable, .kpi, .tw, .searchpanel,
-  .brief-card, footer,
-  #main-content > .section-tabs a,
-  #main-content > .section-tabs a.active,
-  #main-content > .section-subtabs,
-  .btn.btn-quiet {
-    -webkit-backdrop-filter: none;
-    backdrop-filter: none;
   }
 
   /* Text fields at 16px: iOS zooms the page into any focused

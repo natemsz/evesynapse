@@ -109,6 +109,17 @@ html[data-theme="light"] .map {
 .map-find-list small { color: var(--muted); }
 .map-zoom { display: flex; gap: 0.3rem; }
 .map-zoom .btn { min-width: var(--control-h); }
+.map-pref {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.map-pref:hover { color: var(--text); }
+.map-pref input { accent-color: var(--accent); margin: 0; }
 
 /* --- The stage --- */
 .map-stage {

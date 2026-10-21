@@ -9,11 +9,12 @@
  *     (computed at import, never here), every system named, gates to
  *     neighbouring regions drawn as labelled stubs that lead there.
  *
- * Zooming deep into a region enters its tactical view; zooming back
- * out of one returns to New Eden at the same place. A region label,
- * the search, the system card and the region index enter one
- * directly. The URL keeps ?region= and ?system=, so a view can be
- * shared.
+ * Clicking a region name enters its tactical view; zooming back
+ * out of one returns to New Eden at the same place. Zooming deep
+ * into a region enters it too, but only when the "Zoom to
+ * tactical" preference is on (it is off by default). The search,
+ * the system card and the region index enter one directly. The
+ * URL keeps ?region= and ?system=, so a view can be shared.
  *
  * Canvas 2D, drawn on demand: the gate network is one Path2D per
  * view in world coordinates; systems are batched by security color;
@@ -68,6 +69,17 @@
     var r = secRounded(s);
     return (r === 0 ? 0 : r).toFixed(1);
   }
+
+  // Region names thin out as system names take over, but never
+  // vanish: the name stays readable (and clickable) however deep
+  // the zoom, so it can always carry the reader into the region.
+  function regionLabelAlpha(f) {
+    return f > 6 ? Math.max(0.55, 1 - (f - 6) / 14) : 1;
+  }
+  // Zooming in enters a region only under the preference; every
+  // other way in (a name, the search, the index) is unconditional,
+  // and zooming back out of a region always leaves it.
+  function zoomEntryAllowed(prefOn) { return !!prefOn; }
 
   // --- Graph: derived once per payload ---
   function prepare(P) {
@@ -155,7 +167,15 @@
     var crumbRegion = el.querySelector(".map-crumb-region");
     var findInput = el.querySelector(".map-find-input");
     var findList = el.querySelector(".map-find-list");
+    var zoomPref = el.querySelector("[data-map-zoom-tactical]");
     var root = el.ownerDocument;
+
+    // The one preference: whether zooming deep into a region
+    // enters its tactical view. Off by default -- clicking the
+    // region's name is the way in -- and remembered per browser.
+    var ZOOM_TACTICAL_KEY = "evesynapse-map-zoom-tactical";
+    var zoomTactical = false;
+    try { zoomTactical = window.localStorage.getItem(ZOOM_TACTICAL_KEY) === "1"; } catch (e) { /* private mode */ }
 
     var cw = 0, ch = 0, dpr = 1;
     var mode = "universe", region = -1;
@@ -483,6 +503,19 @@
 
       if (mode === "universe") {
         labelBoxes = [];
+        // Region names first, at every zoom: they claim their
+        // cells before system names fill in around them, and
+        // they only thin out, never vanish (regionLabelAlpha),
+        // so a zoomed-in region's name is always there to click.
+        ctx.globalAlpha = regionLabelAlpha(f);
+        var size = Math.min(12 + f * 0.8, 18);
+        for (i = 0; i < P.regions.length; i++) {
+          var rg = P.regions[i];
+          if (!G.members[i].length) continue;
+          var box = label(rg.name.toUpperCase(), rg.x * k + ox, rg.y * k + oy - size / 2, size, colors.region, "600");
+          if (box) labelBoxes.push({ r: i, b: box });
+        }
+        ctx.globalAlpha = 1;
         // System names once the picture opens up.
         if (f > 6) {
           for (var o = 0; o < G.n; o++) {
@@ -491,19 +524,6 @@
             if (sx < 0 || sy < 0 || sx > cw || sy > ch) continue;
             label(S.n[i], sx, sy + r + 3, 11, colors.labelDim);
           }
-        }
-        // Region names, fading out as system names take over.
-        var alpha = f > 6 ? Math.max(0, 1 - (f - 6) / 6) : 1;
-        if (alpha > 0) {
-          ctx.globalAlpha = alpha;
-          var size = Math.min(12 + f * 0.8, 18);
-          for (i = 0; i < P.regions.length; i++) {
-            var rg = P.regions[i];
-            if (!G.members[i].length) continue;
-            var box = label(rg.name.toUpperCase(), rg.x * k + ox, rg.y * k + oy - size / 2, size, colors.region, "600");
-            if (box) labelBoxes.push({ r: i, b: box });
-          }
-          ctx.globalAlpha = 1;
         }
         return;
       }
@@ -571,17 +591,20 @@
     }
 
     // --- Camera ---
-    // Deep into a region enters it; far out of one leaves it. The
-    // two thresholds sit apart, so the views never flicker.
+    // Far out of a region always leaves it. Deep into one enters
+    // it only under the "Zoom to tactical" preference; clicking
+    // the region's name is the default way in. The entry and exit
+    // thresholds sit apart, so the views never flicker.
     function afterZoom() {
-      if (mode === "universe") {
-        var c = toWorld(cw / 2, ch / 2), s = nearestUniverse(c[0], c[1]);
-        if (s < 0) return;
-        var bb = G.bounds[S.r[s]], ext = Math.max(bb[2] - bb[0], bb[3] - bb[1]) * cam.k;
-        if (ext >= Math.min(cw, ch) * 1.25) enterRegion(S.r[s], s, true);
-      } else if (cam.k < fitK() * 0.7) {
-        leaveRegion();
+      if (mode !== "universe") {
+        if (cam.k < fitK() * 0.7) leaveRegion();
+        return;
       }
+      if (!zoomEntryAllowed(zoomTactical)) return;
+      var c = toWorld(cw / 2, ch / 2), s = nearestUniverse(c[0], c[1]);
+      if (s < 0) return;
+      var bb = G.bounds[S.r[s]], ext = Math.max(bb[2] - bb[0], bb[3] - bb[1]) * cam.k;
+      if (ext >= Math.min(cw, ch) * 1.25) enterRegion(S.r[s], s, true);
     }
     function nearestUniverse(x, y) {
       var best = -1, bd = Infinity;
@@ -621,11 +644,13 @@
       mode = "universe";
       region = -1;
       // Out to just below the entry threshold, centred where we
-      // were, gliding back from a little closer in.
+      // were, gliding back from a little closer in. The start
+      // stays below that threshold too (0.95 x 1.15 < 1.25), so
+      // the next zoom step cannot re-enter the region at once.
       var tk = clampK(Math.min(cw, ch) * 0.95 / Math.max(bb[2] - bb[0], bb[3] - bb[1], 1));
       cam.x = (bb[0] + bb[2]) / 2;
       cam.y = (bb[1] + bb[3]) / 2;
-      cam.k = tk * 1.35;
+      cam.k = tk * 1.15;
       flyTo(cam.x, cam.y, tk, 300);
       crumbs();
       hint(rg.name + " in New Eden.");
@@ -839,7 +864,11 @@
       if (g >= 0) { sel = g; enterRegion(S.r[g], g); return; }
       if (mode === "universe") {
         var r = pickRegionLabel(px, py);
-        if (r >= 0) { enterRegion(r, -1); return; }
+        if (r >= 0) {
+          enterRegion(r, -1);
+          hint("Tactical view of " + P.regions[r].name + ". Zoom out to return to New Eden.");
+          return;
+        }
       }
       if (sel >= 0) select(-1);
     }
@@ -1001,6 +1030,17 @@
     statusEl.hidden = true;
     findInput.disabled = false;
     el.querySelectorAll("[data-map-zoom], [data-map-keys]").forEach(function (b) { b.disabled = false; });
+    if (zoomPref) {
+      zoomPref.disabled = false;
+      zoomPref.checked = zoomTactical;
+      zoomPref.addEventListener("change", function () {
+        zoomTactical = zoomPref.checked;
+        try { window.localStorage.setItem(ZOOM_TACTICAL_KEY, zoomTactical ? "1" : "0"); } catch (e) { /* private mode */ }
+        hint(zoomTactical
+          ? "Zoom to tactical is on: zooming deep into a region opens its tactical view."
+          : "Zoom to tactical is off: click a region's name for its tactical view.");
+      });
+    }
     var index = root.querySelector(".map-index");
     canvas.addEventListener("pointerdown", onPointerDown);
     canvas.addEventListener("pointermove", onPointerMove);
@@ -1063,6 +1103,6 @@
 
   // Exposed for the node tests only (jstest/map_test.js).
   if (typeof module !== "undefined" && module.exports) {
-    module.exports = { secRounded: secRounded, secTier: secTier, secText: secText, prepare: prepare };
+    module.exports = { secRounded: secRounded, secTier: secTier, secText: secText, prepare: prepare, regionLabelAlpha: regionLabelAlpha, zoomEntryAllowed: zoomEntryAllowed };
   }
 })();

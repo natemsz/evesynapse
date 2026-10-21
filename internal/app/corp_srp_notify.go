@@ -51,7 +51,7 @@ func (app *Application) srpPilotName(ctx context.Context, characterID int64) str
 // account's standing is worked out only when there is an open request
 // to tell it about.
 func (app *Application) notifySRPEvents(ctx context.Context, c *notifyCollector, userID int64, now time.Time) {
-	rows, err := app.queries.ListCharacterCorporationsByUser(ctx, userID)
+	rows, err := app.queries.ListWorkingCharacterCorporationsByUser(ctx, userID)
 	if err != nil {
 		logging.Errorf("notify: corporations of user %d: %v", userID, err)
 		return

@@ -1469,7 +1469,6 @@ input[type="search"]:not(.topsearch input),
 .countdown { font-variant-numeric: tabular-nums; color: var(--accent); }
 
 /* --- intel: wars involving one of the user's corporations --- */
-tbody tr.yours td { background: rgba(255, 184, 77, 0.10); }
 /* The pinned first cell of a highlighted row needs the tint
    solid, or scrolled columns would show through it. */
 .tw tbody tr.yours td:first-child { background: #2a2015; }
@@ -5219,6 +5218,14 @@ html[data-theme="light"] .suggest li:not(.sug-kind):not(.sug-empty):hover, html[
   backdrop-filter: none;
   border-color: rgba(255, 110, 0, 0.14);
   box-shadow: none;
+}
+/* The alert bars flatten the same way inside the panel: their
+   own blur survives only where the panel glass is stripped
+   (home) and the bar rides the sky. */
+.page-body:not(:has(.home-grid)) .ok,
+.page-body:not(:has(.home-grid)) .notice {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
 }
 /* The module search bar is sticky: page content scrolls beneath it, so
    unlike the other inner panels it keeps the full panel glass. The

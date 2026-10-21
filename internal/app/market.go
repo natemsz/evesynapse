@@ -670,28 +670,38 @@ func (app *Application) historyFetchSettled(ctx context.Context, regionID, typeI
 	return err == nil && state.State == fetchStateOK
 }
 
-// searchTypes merges exact /universe/ids/ hits (first) with partial
-// matches from the local SDE type table. Exact hits are persisted
-// to type_names so the fallback cache finds them too.
+// exactTypeLookupRetry is how long a background exact-name
+// resolution rests before a later search may set it going again:
+// a name already under resolution is not asked twice, and one
+// ESI settled as no type (or could not settle) is not re-asked
+// on every search.
+const exactTypeLookupRetry = 10 * time.Minute
+
+// searchTypes merges exact hits (first) with partial matches
+// from the local SDE type table. The exact hits are read from
+// the stored type_names cache; a name the cache cannot settle
+// is resolved from ESI in the background and stored for the
+// next search, so the request thread never waits on the
+// lookup. Anonymous searches are the local SDE only, exactly
+// as before: no cache read, no lookup noted.
 func (app *Application) searchTypes(ctx context.Context, query string, localOnly bool) []marketMatch {
 	var matches []marketMatch
 	seen := make(map[int64]bool)
 
-	var ids esi.UniverseIDs
-	if localOnly {
-		// Anonymous: the local SDE only, no lookup at ESI.
-	} else if err := app.esi.PostJSON(ctx, "/universe/ids/", []string{query}, &ids); err != nil {
-		logging.Errorf("market: exact lookup for %q: %v", query, err)
-	} else {
-		for _, hit := range ids.InventoryTypes {
-			if hit.ID <= 0 || hit.Name == "" || seen[hit.ID] {
+	if !localOnly {
+		stored, err := app.queries.ListTypeNamesByExactName(ctx, query)
+		if err != nil {
+			logging.Errorf("market: stored exact lookup for %q: %v", query, err)
+		}
+		for _, hit := range stored {
+			if hit.TypeID <= 0 || hit.Name == "" || seen[hit.TypeID] {
 				continue
 			}
-			seen[hit.ID] = true
-			matches = append(matches, marketMatch{ID: hit.ID, Name: hit.Name})
-			if err := app.queries.UpsertTypeName(ctx, db.UpsertTypeNameParams{TypeID: hit.ID, Name: hit.Name}); err != nil {
-				logging.Errorf("market: persist type name %d: %v", hit.ID, err)
-			}
+			seen[hit.TypeID] = true
+			matches = append(matches, marketMatch{ID: hit.TypeID, Name: hit.Name})
+		}
+		if len(matches) == 0 {
+			app.noteExactTypeLookup(query)
 		}
 	}
 
@@ -708,6 +718,62 @@ func (app *Application) searchTypes(ctx context.Context, query string, localOnly
 		matches = append(matches, marketMatch{ID: row.TypeID, Name: row.Name})
 	}
 	return matches
+}
+
+// noteExactTypeLookup sets a background resolution of one exact
+// type name going, unless one is already under way or rested
+// recently. Writes a memo entry only; the resolution itself runs
+// off the request thread.
+func (app *Application) noteExactTypeLookup(query string) {
+	key := strings.ToLower(strings.Join(strings.Fields(query), " "))
+	if key == "" {
+		return
+	}
+	now := time.Now()
+	app.typeLookupMu.Lock()
+	if app.typeLookupTried == nil {
+		app.typeLookupTried = make(map[string]time.Time)
+	}
+	if len(app.typeLookupTried) >= 2000 {
+		for k, tried := range app.typeLookupTried {
+			if now.Sub(tried) >= exactTypeLookupRetry {
+				delete(app.typeLookupTried, k)
+			}
+		}
+	}
+	if tried, ok := app.typeLookupTried[key]; ok && now.Sub(tried) < exactTypeLookupRetry {
+		app.typeLookupMu.Unlock()
+		return
+	}
+	app.typeLookupTried[key] = now
+	app.typeLookupMu.Unlock()
+
+	ctx := app.workerCtx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	go app.resolveExactTypeName(ctx, query)
+}
+
+// resolveExactTypeName asks ESI to settle one exact type name
+// and persists the hits to type_names, where later searches
+// read them.
+func (app *Application) resolveExactTypeName(ctx context.Context, query string) {
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	var ids esi.UniverseIDs
+	if err := app.esi.PostJSON(ctx, "/universe/ids/", []string{query}, &ids); err != nil {
+		logging.Errorf("market: exact lookup for %q: %v", query, err)
+		return
+	}
+	for _, hit := range ids.InventoryTypes {
+		if hit.ID <= 0 || hit.Name == "" {
+			continue
+		}
+		if err := app.queries.UpsertTypeName(ctx, db.UpsertTypeNameParams{TypeID: hit.ID, Name: hit.Name}); err != nil {
+			logging.Errorf("market: persist type name %d: %v", hit.ID, err)
+		}
+	}
 }
 
 // marketPrices returns the full /markets/prices/ guide keyed by type

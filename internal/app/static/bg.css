@@ -177,6 +177,15 @@ html[data-theme="light"] .btn.btn-quiet {
   background: rgba(253, 251, 246, 0.72);
   border-color: #d3c7ae;
 }
+/* Inside glass that already blurs — the page panel, the
+   notify menu — the quiet pill keeps its paint and drops the
+   second blur: blur belongs only over unblurred content.
+   Over the sky (the home bar) the blur above is its frost. */
+.page-body:not(:has(.home-grid)) .btn.btn-quiet,
+.notify-menu .btn.btn-quiet {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
 
 /* Quiet-button hover takes the same ember edge the section tabs
    use, so the pill family shares one hover vocabulary. */

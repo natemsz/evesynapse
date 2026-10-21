@@ -360,15 +360,15 @@ html[data-theme="light"] #pi-wrap .pi-controls select,
 html[data-theme="light"] #pi-wrap .pi-controls input[type="number"] { border-color: #d8cdb8; }
 /* Recalculate is a plain <button>, so it wore the default loud
    orange gradient slab. Restyle it as a quiet glass pill — the
-   .btn-quiet recipe: warm translucent fill, ember edge, light
-   blur; the accent stays in the border and the hover. */
+   .btn-quiet recipe: warm translucent fill, ember edge; the
+   accent stays in the border and the hover. The form sits
+   inside the panel's glass, so the pill carries no backdrop
+   blur of its own. */
 #pi-form button[type="submit"] {
   background: rgba(23, 17, 13, 0.55);
   border: 1px solid rgba(255, 110, 0, 0.22);
   color: var(--text);
   text-shadow: none;
-  -webkit-backdrop-filter: blur(10px) saturate(1.2);
-  backdrop-filter: blur(10px) saturate(1.2);
 }
 #pi-form button[type="submit"]:hover:not(:disabled) {
   background: rgba(23, 17, 13, 0.55);

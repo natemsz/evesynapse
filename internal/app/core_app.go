@@ -133,6 +133,15 @@ type Application struct {
 	prices       map[int64]esi.MarketPrice
 	pricesExpiry time.Time
 
+	// Exact-name type lookups a market search set going in the
+	// background (market.go): the normalized query and when its
+	// resolution was last attempted, so a name ESI cannot settle
+	// is not re-asked on every search. In memory only; a restart
+	// forgets, and the stored type_names cache is the durable
+	// half.
+	typeLookupMu    sync.Mutex
+	typeLookupTried map[string]time.Time
+
 	// sweepMu serializes whole-region book sweep passes (P1
 	// region stats, market_region_stats.go): regions advance in
 	// parallel inside one pass, but passes never overlap, so a

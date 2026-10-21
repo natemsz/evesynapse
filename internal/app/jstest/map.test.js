@@ -48,3 +48,19 @@ test("prepare derives adjacency, exits and bounds", () => {
   assert.strictEqual(G.regionByID[30], 2);
   assert.strictEqual(map.prepare(P), G, "derived once per payload");
 });
+
+test("region names stay visible and zoom entry needs the preference", () => {
+  // Full strength while region names are the picture, then a
+  // floor: however deep the zoom, the name stays readable (and
+  // clickable) instead of fading away as it used to.
+  assert.strictEqual(map.regionLabelAlpha(1), 1);
+  assert.strictEqual(map.regionLabelAlpha(6), 1);
+  assert.ok(map.regionLabelAlpha(12) < 1 && map.regionLabelAlpha(12) >= 0.55,
+    "thinned but present at f=12, got " + map.regionLabelAlpha(12));
+  assert.strictEqual(map.regionLabelAlpha(60), 0.55, "floor at deep zoom");
+  // Clicking a name is the default way in; zooming in enters a
+  // region only when the preference is on.
+  assert.strictEqual(map.zoomEntryAllowed(false), false);
+  assert.strictEqual(map.zoomEntryAllowed(undefined), false);
+  assert.strictEqual(map.zoomEntryAllowed(true), true);
+});

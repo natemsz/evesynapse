@@ -32,6 +32,35 @@
          layer. map.js shows it once it knows the reader has a
          channel; the badge counts systems with hostiles. */}}
     <button type="button" class="map-intel-toggle" data-map-intel aria-pressed="true" title="Reports from your intel channels, last 30 minutes" hidden>Intel <span data-map-intel-n></span></button>
+    {{/* Your data on the map (map_mine.go): pins that combine with
+         anything, and heat layers, one at a time, that color the
+         systems in place of the layer picker. Signed-in readers only;
+         map.js enables what applies and greys out what conflicts. */}}
+    {{if .Route.SignedIn}}<div class="map-data">
+      <button type="button" class="map-data-btn" data-map-data aria-expanded="false" aria-controls="map-data-menu">Data <span data-map-data-n></span></button>
+      <div class="map-data-menu" id="map-data-menu" role="group" aria-label="Your data on the map" hidden>
+        <fieldset>
+          <legend>Your pilots</legend>
+          <label><input type="checkbox" value="pilots"><i class="map-data-sw pilots"></i> Pilot locations</label>
+          <label><input type="checkbox" value="fleet"><i class="map-data-sw fleet"></i> Fleet</label>
+          <label><input type="checkbox" value="clones"><i class="map-data-sw clones"></i> Clones &amp; homes</label>
+        </fieldset>
+        <fieldset>
+          <legend>Your stuff</legend>
+          <label><input type="checkbox" value="assets"><i class="map-data-sw heat"></i> Assets <small>heat</small></label>
+          <label><input type="checkbox" value="market"><i class="map-data-sw market"></i> Orders &amp; contracts</label>
+          <label><input type="checkbox" value="industry"><i class="map-data-sw industry"></i> Industry &amp; PI</label>
+          <label><input type="checkbox" value="structures"><i class="map-data-sw structures"></i> Corp structures</label>
+        </fieldset>
+        <fieldset>
+          <legend>Your activity</legend>
+          <label><input type="checkbox" value="pvp"><i class="map-data-sw heat"></i> Kills &amp; losses <small>heat</small></label>
+          <label><input type="checkbox" value="mining"><i class="map-data-sw heat"></i> Mining <small>heat</small></label>
+          <label><input type="checkbox" value="posted"><i class="map-data-sw posted"></i> Scans &amp; intel you posted</label>
+        </fieldset>
+        <p class="map-data-note muted">Heat layers color the systems, one at a time, in place of the layers above. Pins combine with everything.</p>
+      </div>
+    </div>{{end}}
     {{/* The layer picker: what the map colors by. Security needs
          no live data; the rest unlock once the layers payload has
          loaded (map.js). */}}

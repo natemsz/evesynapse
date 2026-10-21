@@ -461,6 +461,12 @@
         routeHalo: tok("--map-route-halo", "rgba(255,210,122,0.25)"),
         intel: rgbOf(tok("--map-intel", "#3fd8ff")),
         intelClear: rgbOf(tok("--map-intel-clear", "#4fbf6a")),
+        data: {
+          pilots: rgbOf(tok("--map-d-pilots", "#6ff29a")), fleet: rgbOf(tok("--map-d-fleet", "#6aa8ff")),
+          clones: rgbOf(tok("--map-d-clones", "#c4a1ff")), market: rgbOf(tok("--map-d-market", "#ffd24a")),
+          industry: rgbOf(tok("--map-d-industry", "#ffa45c")), structures: rgbOf(tok("--map-d-structures", "#5ce0d8")),
+          posted: rgbOf(tok("--map-d-posted", "#3fd8ff"))
+        },
         camp: tok("--map-camp", "#ff3b3b"),
         inc: tok("--map-inc", "#c64bd6"),
         incStage: tok("--map-inc-staging", "#ff4fd8"),
@@ -693,7 +699,9 @@
       // Systems: by security, or by the live layer showing.
       var r = radius(), list = visible(), n = list ? list.length : G.n;
       var pad = 40;
-      if (layer === "security" || !LY) {
+      if (dataHeat()) {
+        drawDataHeat(k, ox, oy, r, list, n, pad);
+      } else if (layer === "security" || !LY) {
         for (t = 0; t <= 10; t++) {
           ctx.beginPath();
           for (var m = 0; m < n; m++) {
@@ -735,6 +743,7 @@
         ctx.strokeStyle = idx ? colors.accent : colors.label;
         ctx.stroke();
       });
+      drawData(k, ox, oy, r);
       drawIntel(k, ox, oy, r);
       drawRouteEnds(k, ox, oy, r);
 
@@ -816,6 +825,7 @@
         ctx.globalAlpha = 1;
         layerLabels(k, ox, oy, label, inPlaceFirst);
         intelLabels(k, ox, oy, label, inPlaceFirst);
+        dataLabels(k, ox, oy, label, inPlaceFirst);
         // System names once the picture opens up.
         if (f > 6) {
           var vis = [];
@@ -835,6 +845,7 @@
       // Tactical: the layer's own labels, every system, the exits.
       layerLabels(k, ox, oy, label, inPlaceFirst);
       intelLabels(k, ox, oy, label, inPlaceFirst);
+      dataLabels(k, ox, oy, label, inPlaceFirst);
       inPlaceFirst(G.membersPrio[region], function (s) { return "t" + s; }, function (s) {
         label(S.n[s], S.rx[s] * k + ox, S.ry[s] * k + oy + r + 3, 12, colors.label, null, false, "t" + s);
       });
@@ -874,7 +885,13 @@
     try { heatGain = JSON.parse(localStorage.getItem(GAIN_KEY) || "{}") || {}; } catch (e) { heatGain = {}; }
     function heatMax(name) {
       var g = +heatGain[name] || 0;
-      return Math.max(LY.max[name] * Math.pow(2, -g), name === "threat" ? 0.25 : 1);
+      var top = DATA_HEAT[name] ? (MINE ? MINE.max[name] : 1) : LY.max[name];
+      return Math.max(top * Math.pow(2, -g), name === "threat" ? 0.25 : 1);
+    }
+    // heatTop is the value the legend's scale ends at, as said.
+    function heatTop(name) {
+      var m = heatMax(name), full = DATA_HEAT[name] ? (MINE ? MINE.max[name] : 1) : LY.max[name];
+      return (DATA_HEAT[name] && DATA_HEAT[name].isk ? iskShort(m) : Math.round(m).toLocaleString()) + (m < full ? "+" : "");
     }
     // Sovereignty can show as dots (each system its holder's color)
     // or as territory: the old influence-map look, each holder's
@@ -1164,6 +1181,9 @@
 
     function setLayer(name, quiet) {
       if (name !== "security" && !LY) name = "security";
+      // A data heat layer colors the systems; the picker's other
+      // colorings wait until it is off.
+      if (name !== "security" && dataHeat()) name = "security";
       if (!el.querySelector('[data-map-layer="' + name + '"]')) name = "security";
       layer = name;
       showTip(-1);
@@ -1197,8 +1217,10 @@
     // Security, otherwise a scale or key built here.
     function renderLegend() {
       var secLegend = el.querySelector(".map-legend"), box = el.querySelector(".map-layer-legend");
-      secLegend.hidden = layer !== "security";
-      box.hidden = layer === "security";
+      var dk = dataHeat();
+      secLegend.hidden = layer !== "security" || !!dk;
+      box.hidden = layer === "security" && !dk;
+      if (dk) { renderDataLegend(box, dk); return; }
       if (layer === "security" || !LY) return;
       box.textContent = "";
       var h = root.createElement("p");
@@ -1233,7 +1255,7 @@
         bar.appendChild(g);
         var top = root.createElement("span");
         top.className = "map-heat-top";
-        top.textContent = " " + Math.round(heatMax(layer)).toLocaleString() + (heatMax(layer) < LY.max[layer] ? "+" : "");
+        top.textContent = " " + heatTop(layer);
         bar.appendChild(top);
         box.appendChild(bar);
       } else if (layer === "sov") {
@@ -1366,10 +1388,10 @@
       }
       return rows;
     }
-    function tipRows(i) { return intelRows(i, 2).concat(layer === "security" ? [] : layerRows(i, layer, false)); }
+    function tipRows(i) { return dataRows(i).concat(intelRows(i, 2), layer === "security" || dataHeat() ? [] : layerRows(i, layer, false)); }
     function liveRows(i) {
       var rows = [];
-      rows = intelRows(i, 3);
+      rows = dataRows(i).concat(intelRows(i, 3));
       ["threat", "kills", "npc", "jumps", "sov", "fw", "inc"].forEach(function (name) { rows = rows.concat(layerRows(i, name, true)); });
       return rows;
     }
@@ -1571,6 +1593,8 @@
       if (routeFrom >= 0) q.push("from=" + S.id[routeFrom]);
       if (routeTo >= 0) q.push("to=" + S.id[routeTo]);
       if ((routeFrom >= 0 || routeTo >= 0) && routeMode !== "short") q.push("route=" + routeMode);
+      var dk = Object.keys(dataOn).filter(function (k) { return dataOn[k]; });
+      if (dk.length) q.push("data=" + dk.join(","));
       var url = location.pathname + (q.length ? "?" + q.join("&") : "") + location.hash;
       try { history.replaceState(history.state, "", url); } catch (e) { /* sandboxed */ }
     }
@@ -2013,6 +2037,391 @@
     }
     if (reportForm) reportForm.addEventListener("submit", onReport);
 
+    // --- Your data (map_mine.go) ---
+    // The Data menu turns on layers of the reader's own data. Pins
+    // (pilots, fleet, clones, market, industry, structures, posted)
+    // draw over everything and combine freely. Heat layers (assets,
+    // PvP, mining) color the systems themselves, so one at a time, and
+    // while one is on the layer picker's colorings stand down: the
+    // menu greys out the other heats, the picker greys out its chips.
+    var DATA_ALL = ["pilots", "fleet", "clones", "assets", "market", "industry", "structures", "pvp", "mining", "posted"];
+    var DATA_HEAT = {
+      assets: { title: "Your assets, estimated ISK", isk: true },
+      pvp: { title: "Your kills and losses, 30 days" },
+      mining: { title: "Your mining, 30 days, units" }
+    };
+    var DATA_KEY = "evesynapse-map-data";
+    var dataOn = {}, MINE = null, mineTimer = 0;
+    var dataBtn = el.querySelector("[data-map-data]"), dataMenu = el.querySelector(".map-data-menu");
+    (function () {
+      var want = startQuery.get("data");
+      if (want === null) { try { want = localStorage.getItem(DATA_KEY) || ""; } catch (e) { want = ""; } }
+      want.split(",").forEach(function (k) { if (DATA_ALL.indexOf(k) >= 0) dataOn[k] = true; });
+      // One heat at most, whatever was stored.
+      var heat = "";
+      DATA_ALL.forEach(function (k) { if (DATA_HEAT[k] && dataOn[k]) { if (heat) delete dataOn[k]; else heat = k; } });
+      if (!signedIn) dataOn = {};
+    })();
+    function dataHeat() {
+      for (var k in DATA_HEAT) if (dataOn[k]) return k;
+      return "";
+    }
+    function dataAny() { for (var k in dataOn) if (dataOn[k]) return true; return false; }
+
+    function iskShort(v) {
+      if (v >= 1e12) return (v / 1e12).toFixed(1) + "t";
+      if (v >= 1e9) return (v / 1e9).toFixed(1) + "b";
+      if (v >= 1e6) return (v / 1e6).toFixed(v >= 1e8 ? 0 : 1) + "m";
+      if (v >= 1e3) return Math.round(v / 1e3) + "k";
+      return String(Math.round(v));
+    }
+    function untilShort(unix) {
+      var s = unix - Date.now() / 1000;
+      if (s <= 0) return "now";
+      if (s < 3600) return Math.ceil(s / 60) + " min";
+      if (s < 172800) return Math.round(s / 3600) + " h";
+      return Math.round(s / 86400) + " d";
+    }
+
+    // joinMine indexes /map/mine.json by system index.
+    function joinMine(D) {
+      var M = { pilots: {}, fleet: {}, clones: {}, market: {}, industry: {}, structures: {}, posted: {}, heat: {}, max: {}, fleets: D.fleets || [] };
+      function at(map, sys) {
+        var i = G.byID[sys];
+        if (i === undefined) return null;
+        return map[i] || (map[i] = []);
+      }
+      function one(map, sys, v) { var i = G.byID[sys]; if (i !== undefined) map[i] = v; }
+      (D.pilots || []).forEach(function (p) { var a = at(M.pilots, p.sys); if (a) a.push(p); });
+      M.fleets.forEach(function (f) {
+        (f.members || []).forEach(function (m) { var a = at(M.fleet, m.sys); if (a) a.push(m); });
+      });
+      (D.clones || []).forEach(function (c) { var a = at(M.clones, c.sys); if (a) a.push(c); });
+      (D.market || []).forEach(function (m) { one(M.market, m.sys, m); });
+      (D.industry || []).forEach(function (m) { one(M.industry, m.sys, m); });
+      (D.structures || []).forEach(function (s) { var a = at(M.structures, s.sys); if (a) a.push(s); });
+      (D.posted || []).forEach(function (p) { one(M.posted, p.sys, p); });
+      ["assets", "pvp", "mining"].forEach(function (k) {
+        var vals = new Float64Array(G.n), rows = {}, top = 0;
+        (D[k] || []).forEach(function (h) {
+          var i = G.byID[h.sys];
+          if (i === undefined) return;
+          vals[i] = h.v;
+          rows[i] = h;
+          if (h.v > top) top = h.v;
+        });
+        M.heat[k] = { vals: vals, rows: rows };
+        M.max[k] = top || 1;
+      });
+      return M;
+    }
+    function fetchMine(fresh) {
+      if (!signedIn || !dataAny()) return;
+      fetch("/map/mine.json" + (fresh ? "?fresh=1" : ""), { credentials: "same-origin" }).then(function (r) {
+        return r.ok ? r.json() : null;
+      }).then(function (D) {
+        if (!D || !el.isConnected) return;
+        MINE = joinMine(D);
+        dataHeatOrder = null;
+        syncDataMenu();
+        renderLegend();
+        updateCard();
+        schedule();
+      }).catch(function () { /* the map stands without them */ });
+    }
+
+    function dataRGBA(name, a) {
+      var c = colors.data[name];
+      return "rgba(" + c[0] + "," + c[1] + "," + c[2] + "," + a + ")";
+    }
+    // drawData: the pins, each kind its own shape and place around
+    // the system so several read at once.
+    function drawData(k, ox, oy, r) {
+      if (!MINE) return;
+      function each(name, fn) {
+        if (!dataOn[name]) return;
+        var map = MINE[name];
+        for (var key in map) {
+          var i = +key;
+          if (mode !== "universe" && S.r[i] !== region) continue;
+          var x = wx(i) * k + ox, y = wy(i) * k + oy;
+          if (x < -30 || y < -30 || x > cw + 30 || y > ch + 30) continue;
+          fn(i, x, y, map[key]);
+        }
+      }
+      ctx.lineWidth = 1.6;
+      each("posted", function (i, x, y) {
+        ctx.setLineDash([3, 3]);
+        ctx.beginPath();
+        ctx.arc(x, y, r + 13, 0, Math.PI * 2);
+        ctx.strokeStyle = dataRGBA("posted", 0.8);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      });
+      each("industry", function (i, x, y, v) {
+        ctx.beginPath();
+        ctx.arc(x, y, r + 9, 0, Math.PI * 2);
+        ctx.lineWidth = v.ready ? 2.6 : 1.5;
+        ctx.strokeStyle = dataRGBA("industry", 0.9);
+        ctx.stroke();
+        ctx.lineWidth = 1.6;
+      });
+      each("clones", function (i, x, y) {
+        var s = r + 5;
+        ctx.strokeStyle = dataRGBA("clones", 0.95);
+        ctx.strokeRect(x - s, y - s, 2 * s, 2 * s);
+      });
+      each("market", function (i, x, y) {
+        ctx.beginPath();
+        ctx.arc(x + r + 5, y - r - 5, 3.2, 0, Math.PI * 2);
+        ctx.fillStyle = dataRGBA("market", 1);
+        ctx.fill();
+      });
+      each("structures", function (i, x, y, list) {
+        var low = list.some(function (s) { return (s.fuel && s.fuel - Date.now() / 1000 < 3 * 86400) || /reinforce|armor|hull/.test(s.state); });
+        ctx.fillStyle = dataRGBA("structures", 1);
+        ctx.fillRect(x - r - 9, y - r - 9, 6, 6);
+        if (low) {
+          ctx.strokeStyle = colors.camp;
+          ctx.strokeRect(x - r - 10.5, y - r - 10.5, 9, 9);
+        }
+      });
+      each("fleet", function (i, x, y, list) {
+        ctx.beginPath();
+        ctx.arc(x, y, r + 3 + Math.min(6, Math.log(1 + list.length) * 2.5), 0, Math.PI * 2);
+        ctx.fillStyle = dataRGBA("fleet", 0.45);
+        ctx.fill();
+      });
+      each("pilots", function (i, x, y, list) {
+        var on = list.some(function (p) { return p.online; }), s = r + 4;
+        ctx.beginPath();
+        ctx.moveTo(x, y - s); ctx.lineTo(x + s, y); ctx.lineTo(x, y + s); ctx.lineTo(x - s, y); ctx.closePath();
+        ctx.fillStyle = dataRGBA("pilots", on ? 0.95 : 0.5);
+        ctx.fill();
+        ctx.lineWidth = 1.2;
+        ctx.strokeStyle = colors.halo;
+        ctx.stroke();
+        if (on) {
+          ctx.beginPath();
+          ctx.arc(x, y, s + 4, 0, Math.PI * 2);
+          ctx.strokeStyle = dataRGBA("pilots", 0.5);
+          ctx.stroke();
+        }
+      });
+    }
+    // Pilots are named where they are; a fleet's count shows up close.
+    function dataLabels(k, ox, oy, label, inPlaceFirst) {
+      if (!MINE) return;
+      var r = radius(), close = mode !== "universe" || cam.k / fitK() >= 2.5;
+      if (dataOn.pilots) {
+        var keys = Object.keys(MINE.pilots).map(Number);
+        inPlaceFirst(keys, function (i) { return "D" + i; }, function (i) {
+          if (mode !== "universe" && S.r[i] !== region) return;
+          var list = MINE.pilots[i], text = list[0].name + (list.length > 1 ? " +" + (list.length - 1) : "");
+          label(text, wx(i) * k + ox, wy(i) * k + oy - r - 22, 11, dataRGBA("pilots", 1), "700", false, "D" + i);
+        });
+      }
+      if (dataOn.fleet && close) {
+        var fk = Object.keys(MINE.fleet).map(Number);
+        inPlaceFirst(fk, function (i) { return "F" + i; }, function (i) {
+          if (mode !== "universe" && S.r[i] !== region) return;
+          label(MINE.fleet[i].length + " in fleet", wx(i) * k + ox, wy(i) * k + oy + r + 16, 10.5, dataRGBA("fleet", 1), "700", false, "F" + i);
+        });
+      }
+    }
+    var dataHeatOrder = null;
+    function drawDataHeat(k, ox, oy, r, list, n, pad) {
+      var dk = dataHeat(), H = MINE && MINE.heat[dk];
+      ctx.beginPath();
+      for (var m = 0; m < n; m++) {
+        var i = list ? list[m] : m;
+        if (H && H.vals[i] > 0) continue;
+        var sx = wx(i) * k + ox, sy = wy(i) * k + oy;
+        if (sx < -pad || sy < -pad || sx > cw + pad || sy > ch + pad) continue;
+        ctx.moveTo(sx + r * 0.8, sy);
+        ctx.arc(sx, sy, r * 0.8, 0, Math.PI * 2);
+      }
+      ctx.fillStyle = colors.dim;
+      ctx.fill();
+      if (!H) return;
+      if (!dataHeatOrder || dataHeatOrder.k !== dk) {
+        var order = Object.keys(H.rows).map(Number).sort(function (a, b) { return H.vals[a] - H.vals[b]; });
+        dataHeatOrder = { k: dk, order: order };
+      }
+      var max = heatMax(dk), grow = mode === "universe" ? Math.min(1 + (cam.k / fitK() - 1) * 0.15, 3) : 0.9;
+      ctx.globalCompositeOperation = colors.heatBlend;
+      dataHeatOrder.order.forEach(function (i) {
+        if (mode !== "universe" && S.r[i] !== region) return;
+        var sx = wx(i) * k + ox, sy = wy(i) * k + oy;
+        if (sx < -pad || sy < -pad || sx > cw + pad || sy > ch + pad) return;
+        var t = heatT(H.vals[i], max);
+        ctx.beginPath();
+        ctx.arc(sx, sy, r + (2 + 13 * t) * grow, 0, Math.PI * 2);
+        ctx.fillStyle = heatColor(t, 0.18 + 0.3 * t);
+        ctx.fill();
+      });
+      ctx.globalCompositeOperation = "source-over";
+      dataHeatOrder.order.forEach(function (i) {
+        if (mode !== "universe" && S.r[i] !== region) return;
+        var sx = wx(i) * k + ox, sy = wy(i) * k + oy;
+        ctx.beginPath();
+        ctx.arc(sx, sy, r + 0.6, 0, Math.PI * 2);
+        ctx.fillStyle = heatColor(heatT(H.vals[i], max), 1);
+        ctx.fill();
+      });
+    }
+    function renderDataLegend(box, dk) {
+      box.textContent = "";
+      var h = root.createElement("p");
+      h.className = "map-layer-title";
+      h.textContent = DATA_HEAT[dk].title;
+      box.appendChild(h);
+      var bar = root.createElement("p");
+      bar.className = "map-heat";
+      var g = root.createElement("span");
+      g.className = "map-heat-bar";
+      g.style.background = "linear-gradient(to right," + heatColor(0.05, 1) + "," + heatColor(0.75, 1) + "," + heatColor(1, 1) + ")";
+      bar.appendChild(root.createTextNode(DATA_HEAT[dk].isk ? "0 " : "1 "));
+      bar.appendChild(g);
+      var top = root.createElement("span");
+      top.className = "map-heat-top";
+      top.textContent = " " + (MINE ? heatTop(dk) : "…");
+      bar.appendChild(top);
+      box.appendChild(bar);
+      var sc = root.createElement("label");
+      sc.className = "map-layer-ctl map-scale";
+      var lo = root.createElement("span");
+      lo.textContent = "Biggest";
+      var rng = root.createElement("input");
+      rng.type = "range";
+      rng.min = "-3"; rng.max = "5"; rng.step = "0.5";
+      rng.value = String(+heatGain[dk] || 0);
+      rng.setAttribute("data-map-gain", "");
+      rng.setAttribute("aria-label", "Layer scale");
+      var hi = root.createElement("span");
+      hi.textContent = "All of it";
+      sc.appendChild(lo); sc.appendChild(rng); sc.appendChild(hi);
+      box.appendChild(sc);
+    }
+    // dataRows: what the data layers on say about system i.
+    function dataRows(i) {
+      if (!MINE) return [];
+      var rows = [];
+      if (dataOn.pilots && MINE.pilots[i]) {
+        rows.push(["Your pilots", MINE.pilots[i].map(function (p) {
+          return p.name + (p.ship ? " (" + p.ship + ")" : "") + (p.online ? ", online" : "") + (Date.now() / 1000 - p.at > 3600 ? ", as of " + agoShort(p.at) : "");
+        }).join(" · ")]);
+      }
+      if (dataOn.fleet && MINE.fleet[i]) {
+        var fl = MINE.fleet[i];
+        rows.push(["Fleet", fl.length + " here: " + fl.slice(0, 6).map(function (m) { return m.name + (m.ship ? " (" + m.ship + ")" : ""); }).join(", ") + (fl.length > 6 ? "…" : "")]);
+      }
+      if (dataOn.clones && MINE.clones[i]) {
+        var cl = MINE.clones[i], homes = cl.filter(function (c) { return c.home; }), jumps = cl.filter(function (c) { return !c.home; });
+        var parts = [];
+        if (homes.length) parts.push("home of " + homes.map(function (c) { return c.char; }).join(", "));
+        if (jumps.length) parts.push(plural(jumps.length, "jump clone") + " (" + jumps.map(function (c) { return c.char; }).join(", ") + ")");
+        rows.push(["Clones", parts.join(" · ")]);
+      }
+      if (dataOn.market && MINE.market[i]) {
+        var mk = MINE.market[i], mp = [];
+        if (mk.sell) mp.push(mk.sell + " sell · " + iskShort(mk.iskSell));
+        if (mk.buy) mp.push(mk.buy + " buy · " + iskShort(mk.iskBuy));
+        if (mk.contracts) mp.push(plural(mk.contracts, "contract"));
+        rows.push(["Orders", mp.join("; ")]);
+      }
+      if (dataOn.industry && MINE.industry[i]) {
+        var ind = MINE.industry[i], ip = [];
+        if (ind.jobs) ip.push(plural(ind.jobs, "job") + (ind.ready ? ", " + ind.ready + " ready" : "") + (ind.next ? " · next " + untilShort(ind.next) : ""));
+        if (ind.colonies) ip.push(plural(ind.colonies, "colony").replace("colonys", "colonies"));
+        rows.push(["Industry", ip.join("; ")]);
+      }
+      if (dataOn.structures && MINE.structures[i]) {
+        MINE.structures[i].forEach(function (s) {
+          rows.push([s.type || "Structure", s.name + " · " + s.state.replace(/_/g, " ") + (s.fuel ? " · fuel " + untilShort(s.fuel) : "") + (s.timer && s.timer > Date.now() / 1000 ? " · timer " + untilShort(s.timer) : "")]);
+        });
+      }
+      var dk = dataHeat(), hr = dk && MINE.heat[dk].rows[i];
+      if (hr) {
+        if (dk === "assets") rows.push(["Your assets", "≈" + iskShort(hr.v) + " ISK"]);
+        if (dk === "pvp") rows.push(["Your PvP, 30 days", plural(hr.a, "kill") + " · " + plural(hr.b, "loss").replace("losss", "losses") + " · " + iskShort(hr.c) + " ISK"]);
+        if (dk === "mining") rows.push(["Your mining, 30 days", Math.round(hr.v).toLocaleString() + " units" + (hr.a ? " · " + iskShort(hr.a) + " ISK" : "")]);
+      }
+      if (dataOn.posted && MINE.posted[i]) {
+        var po = MINE.posted[i], pp = [];
+        if (po.reports) pp.push(plural(po.reports, "report"));
+        if (po.scans) pp.push(plural(po.scans, "scan"));
+        rows.push(["You posted", pp.join(" · ") + " · " + agoShort(po.last)]);
+      }
+      return rows;
+    }
+    function plural(n, w) { return n === 1 ? "1 " + w : n + " " + w + "s"; }
+
+    // The menu: what is on, what would conflict, and the badge.
+    function syncDataMenu() {
+      if (!dataMenu) return;
+      var heat = dataHeat();
+      dataMenu.querySelectorAll("input[type=checkbox]").forEach(function (cb) {
+        var k = cb.value, lab = cb.closest("label");
+        cb.checked = !!dataOn[k];
+        var off = !!(DATA_HEAT[k] && heat && heat !== k);
+        cb.disabled = off;
+        lab.classList.toggle("off", off);
+        lab.title = off ? "One heat layer at a time: turn off " + DATA_HEAT[heat].title.toLowerCase() + " first" : "";
+      });
+      var fleetSmall = dataMenu.querySelector('input[value="fleet"]').closest("label");
+      if (MINE && dataOn.fleet) {
+        var note = !MINE.fleets.length ? "Not in a fleet" : MINE.fleets.some(function (f) { return f.boss; }) ? "" : "Members show to the fleet boss only";
+        fleetSmall.title = note;
+      }
+      var n = 0;
+      for (var k2 in dataOn) if (dataOn[k2]) n++;
+      dataBtn.querySelector("[data-map-data-n]").textContent = n ? String(n) : "";
+      dataBtn.classList.toggle("on", n > 0);
+      // The picker's colorings stand down under a data heat layer.
+      el.querySelectorAll("[data-map-layer]").forEach(function (b) {
+        var off = !!heat && b.getAttribute("data-map-layer") !== "security";
+        b.classList.toggle("off", off);
+        b.title = off ? "A data heat layer is on: turn it off in Data to use this layer" : "";
+      });
+    }
+    function setData(k, on) {
+      if (on && DATA_HEAT[k]) {
+        var heat = dataHeat();
+        if (heat && heat !== k) return;
+        if (layer !== "security") setLayer("security", true);
+      }
+      if (on) dataOn[k] = true; else delete dataOn[k];
+      try { localStorage.setItem(DATA_KEY, Object.keys(dataOn).join(",")); } catch (e) { /* private mode */ }
+      dataHeatOrder = null;
+      syncDataMenu();
+      renderLegend();
+      syncURL();
+      clearInterval(mineTimer);
+      if (dataAny()) {
+        if (!MINE) fetchMine(); else { updateCard(); schedule(); }
+        mineTimer = setInterval(function () { if (document.visibilityState === "visible") fetchMine(); }, 60000);
+      } else {
+        updateCard();
+        schedule();
+      }
+    }
+    function toggleDataMenu(open) {
+      if (!dataMenu) return;
+      var show = open === undefined ? dataMenu.hidden : open;
+      dataMenu.hidden = !show;
+      dataBtn.setAttribute("aria-expanded", show ? "true" : "false");
+    }
+    function onDataOutside(e) {
+      if (dataMenu && !dataMenu.hidden && !e.target.closest(".map-data")) toggleDataMenu(false);
+    }
+    if (dataMenu) {
+      dataMenu.addEventListener("change", function (e) {
+        if (e.target.type === "checkbox") setData(e.target.value, e.target.checked);
+      });
+      root.addEventListener("click", onDataOutside);
+    }
+
     // --- Search ---
     var hits = [], hitAt = -1;
     function search(q) {
@@ -2233,7 +2642,7 @@
         case "?": toggleKeys(); break;
         case "l": case "L": {
           // Cycle through the layers the payload unlocked.
-          var opts = [].filter.call(el.querySelectorAll("[data-map-layer]"), function (b) { return !b.disabled; })
+          var opts = [].filter.call(el.querySelectorAll("[data-map-layer]"), function (b) { return !b.disabled && !b.classList.contains("off"); })
             .map(function (b) { return b.getAttribute("data-map-layer"); });
           var at = opts.indexOf(layer);
           setLayer(opts[(at + (e.key === "L" ? opts.length - 1 : 1)) % opts.length]);
@@ -2344,6 +2753,8 @@
         return;
       }
       if (t.closest("[data-map-full]")) { toggleFull(); return; }
+      if (t.closest("[data-map-data]")) { toggleDataMenu(); return; }
+      if (t.closest(".map-data-menu")) return;
       if (t.closest("[data-map-intel]")) {
         intelOn = !intelOn;
         try { localStorage.setItem("evesynapse-map-intel", intelOn ? "1" : "0"); } catch (err) { /* private mode */ }
@@ -2351,6 +2762,7 @@
         return;
       }
       var lb = t.closest("[data-map-layer]");
+      if (lb && lb.classList.contains("off")) { hint("A data heat layer is on: turn it off under Data to use this layer."); return; }
       if (lb && !lb.disabled) { setLayer(lb.getAttribute("data-map-layer")); return; }
       var hit = t.closest("[data-hit]");
       if (hit && findList.contains(hit)) { choose(hits[+hit.getAttribute("data-hit")]); }
@@ -2421,11 +2833,13 @@
     // The layer scale: the map follows the slider as it moves; the
     // legend redraws (threat's level swatches) once it is let go.
     el.addEventListener("input", function (e) {
-      if (!e.target.hasAttribute || !e.target.hasAttribute("data-map-gain") || !LY) return;
-      heatGain[layer] = +e.target.value;
+      if (!e.target.hasAttribute || !e.target.hasAttribute("data-map-gain")) return;
+      var gk = dataHeat() || layer;
+      if (!DATA_HEAT[gk] && !LY) return;
+      heatGain[gk] = +e.target.value;
       try { localStorage.setItem(GAIN_KEY, JSON.stringify(heatGain)); } catch (err) { /* private mode */ }
       var top = el.querySelector(".map-heat-top");
-      if (top) top.textContent = " " + Math.round(heatMax(layer)).toLocaleString() + (heatMax(layer) < LY.max[layer] ? "+" : "");
+      if (top) top.textContent = " " + heatTop(gk);
       schedule();
     });
     el.addEventListener("change", function (e) {
@@ -2499,6 +2913,12 @@
         }
       }).catch(function () { /* the map stands without its layers */ });
     }
+    // Your data: what the URL or last visit had on.
+    syncDataMenu();
+    if (signedIn && dataAny()) {
+      fetchMine();
+      mineTimer = setInterval(function () { if (document.visibilityState === "visible") fetchMine(); }, 60000);
+    }
     if (signedIn) {
       fetchIntel(true);
       intelTimer = setInterval(fetchIntel, 20000);
@@ -2519,6 +2939,8 @@
       mo.disconnect();
       clearInterval(layersTimer);
       clearInterval(intelTimer);
+      clearInterval(mineTimer);
+      root.removeEventListener("click", onDataOutside);
       root.removeEventListener("visibilitychange", onIntelVisible);
       if (raf) cancelAnimationFrame(raf);
       clearTimeout(hintTimer);

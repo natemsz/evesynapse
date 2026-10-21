@@ -743,6 +743,7 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 		r.Get("/layers.json", app.handleMapLayersJSON)
 		r.Get("/scans.json", app.handleMapScans)
 		r.Get("/intel.json", app.handleMapIntel)
+		r.Get("/mine.json", app.handleMapMine)
 		// A planned route to the game's autopilot (map_route.go);
 		// it answers JSON, signed-in or not.
 		r.Post("/route", app.handleMapRoute)

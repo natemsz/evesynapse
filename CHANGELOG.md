@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.5.6.5] - 2026-10-21
+
+Automated build of EveSynapse v0.5.6.5. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+
+## What's Changed
+### Other Changes
+* docs(changelog): review changelog for v0.5.6.4 by @github-actions[bot] in https://github.com/natemsz/evesynapse/pull/569
+* Map: Data menu no longer cut off on the right by @natemsz in https://github.com/natemsz/evesynapse/pull/570
+
+
+**Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.6.4...v0.5.6.5
+
 ## [v0.5.6.4] - 2026-10-21
 
 Automated build of EveSynapse v0.5.6.4. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).

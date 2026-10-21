@@ -135,7 +135,9 @@ func TestQuickJumpPagesMatchNav(t *testing.T) {
 	navURLs := map[string]bool{}
 	for _, m := range hrefRe.FindAllStringSubmatch(string(base)[navStart:navEnd], -1) {
 		href := m[1]
-		if strings.Contains(href, "switch") || strings.HasPrefix(href, "/auth/") || strings.HasPrefix(href, "{{") {
+		// Off-site links (EveSynapse Axon on the player's own
+		// computer) are not pages the palette jumps to.
+		if strings.Contains(href, "switch") || strings.HasPrefix(href, "/auth/") || strings.HasPrefix(href, "{{") || strings.Contains(href, "://") {
 			continue
 		}
 		navURLs[href] = true

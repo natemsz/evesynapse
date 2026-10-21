@@ -186,12 +186,11 @@ type channelListView struct {
 	SignedIn bool
 	Channels []channelRow
 	Error    string
-	// The log watcher (intel_tokens.go): the account's tokens, the
-	// downloads, and a token just made, shown once in its config.
-	Tokens    []intelTokenRow
-	Downloads []intelDownload
-	NewToken  string
-	NewConfig string
+	// EveSynapse Axon (intel_tokens.go): the account's paired
+	// devices, the downloads, and a pairing code just made.
+	Tokens      []intelTokenRow
+	Downloads   []intelDownload
+	PairingCode string
 }
 
 type channelRow struct {
@@ -266,7 +265,7 @@ func (app *Application) handleChannels(w http.ResponseWriter, r *http.Request) {
 		for _, c := range app.accessibleChannels(ctx, id) {
 			v.Channels = append(v.Channels, channelRow{ID: c.ID, Name: c.Name, Description: c.Description, Owner: c.OwnerUserID == id.userID, CanPost: c.CanPost})
 		}
-		app.fillWatcher(ctx, v, id.userID)
+		app.fillAxon(ctx, v, id.userID)
 	}
 	data.Channels = v
 	data.HeadMeta = app.HeadMeta(module.PageMeta{Title: "Intel channels", Description: "Shared intel channels: report hostiles, paste intel chat, and see it all on the map.", CanonicalPath: "/intel/channels/"})
@@ -505,7 +504,7 @@ type chatPostResult struct {
 // as base's author. A line's speaker and timestamp, when it has them,
 // are the report's; a report already in the channel (the same moment,
 // system, speaker and words) is not stored twice, so lines sent again
-// -- a pasted log overlapping the last, a watcher restarting, two
+// -- a pasted log overlapping the last, an Axon restarting, two
 // characters logging the same channel -- land once.
 func (app *Application) postChatLines(ctx context.Context, base db.InsertIntelReportParams, lines, source string) chatPostResult {
 	var res chatPostResult

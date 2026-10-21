@@ -398,6 +398,16 @@ type IntelChannelGrant struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
+type IntelPairingCode struct {
+	ID        int64        `json:"id"`
+	UserID    int64        `json:"user_id"`
+	Name      string       `json:"name"`
+	CodeHash  string       `json:"code_hash"`
+	CreatedAt time.Time    `json:"created_at"`
+	ExpiresAt time.Time    `json:"expires_at"`
+	UsedAt    sql.NullTime `json:"used_at"`
+}
+
 type IntelReport struct {
 	ID                int64     `json:"id"`
 	ChannelID         int64     `json:"channel_id"`
@@ -423,6 +433,8 @@ type IntelToken struct {
 	TokenHash  string       `json:"token_hash"`
 	CreatedAt  time.Time    `json:"created_at"`
 	LastUsedAt sql.NullTime `json:"last_used_at"`
+	PublicKey  string       `json:"public_key"`
+	Device     string       `json:"device"`
 }
 
 type IntelWatch struct {

@@ -31,30 +31,32 @@
     <button type="submit" class="btn">Create channel</button>
   </form>
 
-  {{/* The desktop log watcher (intel_tokens.go): download, a token
-       shown once inside a ready config, the account's tokens. */}}
-  <section class="ch-panel ch-watch" id="watcher" aria-labelledby="ch-watch-h">
-    <h2 id="ch-watch-h">Log watcher</h2>
-    <p>Intelwatch runs beside the game and posts your in-game intel channels here as you play: it reads the chat logs EVE writes, so nothing is pasted by hand. Name a site channel the same as the in-game one (or map them in its config), and every line naming a system becomes a report.</p>
-    <p class="ch-dl">{{range .Downloads}}<a class="btn small" href="{{.URL}}" rel="noopener">{{.Label}}</a>{{end}}</p>
-    <p class="muted">Open source: <a href="https://github.com/natemsz/intelwatch" rel="noopener">read the code</a> — it only reads your chat logs and talks to this site.</p>
-    {{if .NewToken}}
+  {{/* EveSynapse Axon (intel_tokens.go): installers, a token shown
+       once inside a ready config, the account's tokens. While Axon
+       answers on this computer, app.js swaps the install buttons
+       for a running status linking to its page. */}}
+  <section class="ch-panel ch-watch" id="axon" aria-labelledby="ch-watch-h">
+    <h2 id="ch-watch-h">EveSynapse Axon</h2>
+    <p>Axon is an <a href="https://github.com/natemsz/axon" rel="noopener">open source</a> tool that runs beside the game and posts your in-game intel channels here as you play: it reads the chat logs EVE writes, so nothing is pasted by hand. Name a site channel the same as the in-game one (or map them in its config), and every line naming a system becomes a report.</p>
+    {{if .Tokens}}<p>Paired with this account: <a href="http://127.0.0.1:47611/open" rel="noopener">Open EveSynapse Axon @ 127.0.0.1:47611</a> on this computer.</p>
+    {{else}}<p class="ch-dl">{{range .Downloads}}<a class="btn small" href="{{.URL}}" rel="noopener">{{.Label}}</a>{{end}}</p>{{end}}
+    {{if .PairingCode}}
     <div class="ch-newtoken" role="status">
-      <p><strong>Your new token</strong> — shown this once. Save this as <code>intelwatch.json</code> next to the program, then run it:</p>
-      <pre class="ch-config">{{.NewConfig}}</pre>
-      <p class="muted">Add your channels to <code>"channels"</code> as <code>"In-game channel name": site channel number</code>, or leave it empty to match by name.</p>
+      <p><strong>Your pairing code</strong> — shown this once, good for 10 minutes. Open Axon and enter it under <strong>Pair with EveSynapse</strong>:</p>
+      <pre class="ch-config">{{.PairingCode}}</pre>
+      <p class="muted">Axon trades the code for a credential tied to that computer's own key, so the code alone — or a copied config — cannot post as you. Devices paired before this change must pair again.</p>
     </div>
     {{end}}
     {{if .Tokens}}<ul class="ch-tokens">
       {{range .Tokens}}<li>
-        <span class="ch-token-n">{{.Name}} <code class="muted">{{.Prefix}}…</code></span>
-        <span class="muted">made {{.Created}} · used {{.LastUsed}}</span>
+        <span class="ch-token-n">{{.Name}} <code class="muted">{{.Prefix}}…</code>{{if .Device}}<span class="muted"> · {{.Device}}</span>{{end}}</span>
+        <span class="muted">paired {{.Created}} · used {{.LastUsed}}</span>
         <form method="post" action="/intel/channels/tokens/{{.ID}}/revoke"><button type="submit" class="btn small">Revoke</button></form>
       </li>{{end}}
     </ul>{{end}}
-    <form class="ch-token-add" method="post" action="/intel/channels/tokens">
-      <label><span>Token name</span><input type="text" name="name" maxlength="40" placeholder="Home PC"></label>
-      <button type="submit" class="btn">Make a token</button>
+    <form class="ch-token-add" method="post" action="/intel/channels/pairing">
+      <label><span>Device name</span><input type="text" name="name" maxlength="40" placeholder="Home PC"></label>
+      <button type="submit" class="btn">Make a pairing code</button>
     </form>
   </section>
   {{end}}

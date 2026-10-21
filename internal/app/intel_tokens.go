@@ -1,11 +1,11 @@
 package app
 
 // ---------------------------------------------------------------------------
-// The desktop log watcher's side of the site: posting tokens and the small
-// API the watcher (intelwatch, github.com/natemsz/intelwatch) talks to.
+// EveSynapse Axon's side of the site: posting tokens and the small
+// API Axon (github.com/natemsz/axon) talks to.
 //
 // An account makes a token on the channels page, names it ("Home PC"),
-// and sees it once, inside a ready-made intelwatch.json. Only the token's
+// and sees it once, inside a ready-made axon.json. Only the token's
 // SHA-256 is stored (schema 079), with its first characters to tell
 // tokens apart; revoking one stops it at once. A request bearing a token
 // ("Authorization: Bearer esw_...") acts as its account, for this API
@@ -14,18 +14,22 @@ package app
 //	GET  /api/intel/v1/channels              the channels it may post to
 //	POST /api/intel/v1/channels/{id}/lines   {"lines": [...]}: chat lines
 //
-// Lines go through the same reader as pasted ones (postChatLines), so a
-// watcher that restarts, or two characters logging one channel, store a
+// Lines go through the same reader as pasted ones (postChatLines), so an
+// Axon that restarts, or two characters logging one channel, store a
 // sighting once. Each token is held to a steady rate.
 // ---------------------------------------------------------------------------
 
 import (
+	"bytes"
 	"context"
+	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"math/big"
 	"net/http"
 	"strconv"
@@ -47,16 +51,24 @@ const (
 	intelAPIPerMinute = 120
 )
 
-// The watcher's download, per platform: assets of the latest release
-// of its own repository, github.com/natemsz/intelwatch.
-var intelWatchDownloads = []struct{ Label, File string }{
-	{"Windows", "intelwatch-windows-amd64.exe"},
-	{"macOS (Apple silicon)", "intelwatch-darwin-arm64"},
-	{"macOS (Intel)", "intelwatch-darwin-amd64"},
-	{"Linux", "intelwatch-linux-amd64"},
+// Axon's downloads: the installers first, then the bare programs,
+// assets of the latest release of github.com/natemsz/axon.
+var axonDownloads = []struct{ Label, File string }{
+	{"Install on Windows", "install.ps1"},
+	{"Install on macOS/Linux", "install.sh"},
+	{"Windows program", "axon-windows-amd64.exe"},
+	{"macOS (Apple silicon)", "axon-darwin-arm64"},
+	{"macOS (Intel)", "axon-darwin-amd64"},
+	{"Linux", "axon-linux-amd64"},
 }
 
-const intelWatchReleases = "https://github.com/natemsz/intelwatch/releases/latest/download/"
+const axonReleases = "https://github.com/natemsz/axon/releases/latest/download/"
+
+// AxonGUIAddr is Axon's fixed address on the player's own computer
+// (gui.ListenAddr in natemsz/axon). The channels page and the Intel
+// menu link there for accounts with a paired device; nothing here
+// checks whether Axon is running at this moment.
+const AxonGUIAddr = "127.0.0.1:47611"
 
 type intelTokenRow struct {
 	ID       int64
@@ -64,6 +76,7 @@ type intelTokenRow struct {
 	Prefix   string
 	Created  string
 	LastUsed string
+	Device   string
 }
 
 type intelDownload struct{ Label, URL string }
@@ -89,11 +102,11 @@ func hashIntelToken(t string) string {
 	return hex.EncodeToString(sum[:])
 }
 
-// fillWatcher adds the log watcher's part of the channels page: the
+// fillAxon adds EveSynapse Axon's part of the channels page: the
 // account's tokens and the downloads.
-func (app *Application) fillWatcher(ctx context.Context, v *channelListView, userID int64) {
-	for _, d := range intelWatchDownloads {
-		v.Downloads = append(v.Downloads, intelDownload{Label: d.Label, URL: intelWatchReleases + d.File})
+func (app *Application) fillAxon(ctx context.Context, v *channelListView, userID int64) {
+	for _, d := range axonDownloads {
+		v.Downloads = append(v.Downloads, intelDownload{Label: d.Label, URL: axonReleases + d.File})
 	}
 	rows, err := app.queries.ListIntelTokens(ctx, userID)
 	if err != nil {
@@ -101,7 +114,7 @@ func (app *Application) fillWatcher(ctx context.Context, v *channelListView, use
 	}
 	now := time.Now()
 	for _, r := range rows {
-		t := intelTokenRow{ID: r.ID, Name: r.Name, Prefix: r.Prefix, Created: r.CreatedAt.UTC().Format("2006-01-02"), LastUsed: "never"}
+		t := intelTokenRow{ID: r.ID, Name: r.Name, Prefix: r.Prefix, Created: r.CreatedAt.UTC().Format("2006-01-02"), LastUsed: "never", Device: r.Device}
 		if r.LastUsedAt.Valid {
 			t.LastUsed = ageText(now, r.LastUsedAt.Time)
 		}
@@ -109,30 +122,57 @@ func (app *Application) fillWatcher(ctx context.Context, v *channelListView, use
 	}
 }
 
-// handleIntelTokenCreate makes a token and shows it once, in the
-// watcher's config.
-func (app *Application) handleIntelTokenCreate(w http.ResponseWriter, r *http.Request) {
+// pairingCodeTTL is how long a pairing code stays good: long
+// enough to walk from the site to Axon, short enough to leak little.
+const pairingCodeTTL = 10 * time.Minute
+
+// newPairingCode is a fresh code in two readable groups, e.g.
+// "K7QX-4MZD". Only its hash is stored.
+func newPairingCode() (string, error) {
+	const alphabet = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
+	b := make([]byte, 8)
+	n := big.NewInt(int64(len(alphabet)))
+	for i := range b {
+		v, err := rand.Int(rand.Reader, n)
+		if err != nil {
+			return "", err
+		}
+		b[i] = alphabet[v.Int64()]
+	}
+	return string(b[:4]) + "-" + string(b[4:]), nil
+}
+
+func normalizePairingCode(s string) string {
+	return strings.ToUpper(strings.ReplaceAll(strings.TrimSpace(s), " ", ""))
+}
+
+// handlePairingCodeCreate makes a one-time pairing code and shows
+// it once. Axon exchanges it (with its device public key) for a
+// posting credential at POST /api/intel/v1/pair; no token is ever
+// shown or pasted any more.
+func (app *Application) handlePairingCodeCreate(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	userID := app.userID(ctx)
-	back := app.flashBack(w, r, "/intel/channels/#watcher")
+	back := app.flashBack(w, r, "/intel/channels/#axon")
 	name := strings.TrimSpace(r.PostFormValue("name"))
 	if name == "" {
-		name = "Log watcher"
+		name = "EveSynapse Axon"
 	}
 	if utf8.RuneCountInString(name) > 40 {
-		back("Name the token in up to 40 characters.")
+		back("Name the device in up to 40 characters.")
 		return
 	}
 	if n, err := app.queries.CountIntelTokens(ctx, userID); err == nil && n >= intelMaxTokens {
-		back(fmt.Sprintf("An account holds up to %d tokens; revoke one first.", intelMaxTokens))
+		back(fmt.Sprintf("An account holds up to %d paired devices; revoke one first.", intelMaxTokens))
 		return
 	}
-	token, err := newIntelToken()
+	code, err := newPairingCode()
+	now := time.Now().UTC()
 	if err == nil {
-		_, err = app.queries.CreateIntelToken(ctx, db.CreateIntelTokenParams{UserID: userID, Name: name, Prefix: token[:len(intelTokenPrefix)+4], TokenHash: hashIntelToken(token), CreatedAt: time.Now().UTC()})
+		_, err = app.queries.CreateIntelPairingCode(ctx, db.CreateIntelPairingCodeParams{UserID: userID, Name: name, CodeHash: hashIntelToken(normalizePairingCode(code)), CreatedAt: now, ExpiresAt: now.Add(pairingCodeTTL)})
 	}
 	if err != nil {
-		logging.Errorf("channels: create token: %v", err)
+		logging.Errorf("channels: create pairing code: %v", err)
 		back("That did not go through — please try again.")
 		return
 	}
@@ -142,24 +182,73 @@ func (app *Application) handleIntelTokenCreate(w http.ResponseWriter, r *http.Re
 	for _, c := range app.accessibleChannels(ctx, id) {
 		v.Channels = append(v.Channels, channelRow{ID: c.ID, Name: c.Name, Description: c.Description, Owner: c.OwnerUserID == id.userID, CanPost: c.CanPost})
 	}
-	app.fillWatcher(ctx, v, userID)
-	v.NewToken = token
-	cfg, _ := json.MarshalIndent(map[string]any{"server": app.cfg.publicOrigin(), "token": token, "channels": map[string]int64{}}, "", "  ")
-	v.NewConfig = string(cfg)
+	app.fillAxon(ctx, v, userID)
+	v.PairingCode = code
 	data.Channels = v
 	w.Header().Set("Cache-Control", "no-store")
 	app.render(ctx, w, http.StatusOK, "channels.html", data)
 }
 
+// handleAPIPair exchanges a pairing code for a device credential.
+// It is the one Axon API call without a credential: the code is
+// single-use and short-lived, and the returned token only ever
+// works signed by the private half of the public key sent here.
+func (app *Application) handleAPIPair(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	var in struct {
+		Code      string `json:"code"`
+		PublicKey string `json:"public_key"`
+		Device    string `json:"device"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 16<<10)).Decode(&in); err != nil {
+		intelAPIError(w, http.StatusBadRequest, "send {\"code\", \"public_key\", \"device\"}")
+		return
+	}
+	pub, err := base64.StdEncoding.DecodeString(in.PublicKey)
+	if err != nil || len(pub) != ed25519.PublicKeySize {
+		intelAPIError(w, http.StatusBadRequest, "public_key must be a base64 Ed25519 public key")
+		return
+	}
+	device := strings.TrimSpace(in.Device)
+	if device == "" || utf8.RuneCountInString(device) > 80 {
+		intelAPIError(w, http.StatusBadRequest, "name this device (up to 80 characters)")
+		return
+	}
+	row, err := app.queries.GetIntelPairingCodeByHash(ctx, hashIntelToken(normalizePairingCode(in.Code)))
+	if err != nil || row.UsedAt.Valid {
+		intelAPIError(w, http.StatusUnauthorized, "unknown, used or expired pairing code")
+		return
+	}
+	now := time.Now().UTC()
+	if n, err := app.queries.UseIntelPairingCode(ctx, db.UseIntelPairingCodeParams{ID: row.ID, At: timeSet(now)}); err != nil || n == 0 {
+		intelAPIError(w, http.StatusUnauthorized, "unknown, used or expired pairing code")
+		return
+	}
+	token, err := newIntelToken()
+	if err != nil {
+		intelAPIError(w, http.StatusInternalServerError, "try again")
+		return
+	}
+	if _, err := app.queries.CreateIntelToken(ctx, db.CreateIntelTokenParams{UserID: row.UserID, Name: row.Name, Prefix: token[:len(intelTokenPrefix)+4], TokenHash: hashIntelToken(token), CreatedAt: now, PublicKey: in.PublicKey, Device: device}); err != nil {
+		logging.Errorf("pair: create token: %v", err)
+		intelAPIError(w, http.StatusInternalServerError, "try again")
+		return
+	}
+	id := app.intelIdentityFor(ctx, row.UserID, 0)
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-store")
+	_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "token": token, "account": id.posterName})
+}
+
 func (app *Application) handleIntelTokenRevoke(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	back := app.flashBack(w, r, "/intel/channels/#watcher")
+	back := app.flashBack(w, r, "/intel/channels/#axon")
 	id, _ := strconv.ParseInt(chi.URLParam(r, "tokenID"), 10, 64)
 	if n, err := app.queries.DeleteIntelToken(ctx, db.DeleteIntelTokenParams{ID: id, UserID: app.userID(ctx)}); err != nil || n == 0 {
 		back("That token is not yours, or already revoked.")
 		return
 	}
-	back("Token revoked: a watcher using it can no longer post.")
+	back("Token revoked: an Axon using it can no longer post.")
 }
 
 // --- The API ---
@@ -199,8 +288,18 @@ func intelAPIError(w http.ResponseWriter, status int, msg string) {
 	_ = json.NewEncoder(w).Encode(map[string]any{"ok": false, "error": msg})
 }
 
-// intelTokenAuth admits a request bearing a live token, as its
-// account.
+// axonSignatureText is what Axon signs and the site checks, in
+// both repos (axon watch.SignText): the method, the path, the
+// timestamp and the body's hash, so a captured request cannot be
+// replayed later or pointed elsewhere.
+func axonSignatureText(method, path, timestamp string, body []byte) string {
+	sum := sha256.Sum256(body)
+	return method + "\n" + path + "\n" + timestamp + "\n" + hex.EncodeToString(sum[:])
+}
+
+// intelTokenAuth admits a request bearing a live device credential
+// signed by its paired private key, as its account. A token alone
+// (copied, or issued before pairing) is not enough.
 func (app *Application) intelTokenAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		bearer, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
@@ -214,7 +313,36 @@ func (app *Application) intelTokenAuth(next http.Handler) http.Handler {
 			intelAPIError(w, http.StatusUnauthorized, "unknown or revoked token")
 			return
 		}
+		pub, err := base64.StdEncoding.DecodeString(tok.PublicKey)
+		if err != nil || len(pub) != ed25519.PublicKeySize {
+			intelAPIError(w, http.StatusUnauthorized, "this credential is not paired: pair Axon again from the Channels page")
+			return
+		}
+		ts := r.Header.Get("X-Axon-Timestamp")
+		at, err := strconv.ParseInt(ts, 10, 64)
+		if err != nil {
+			intelAPIError(w, http.StatusUnauthorized, "missing X-Axon-Timestamp")
+			return
+		}
+		var body []byte
+		if r.Body != nil {
+			body, err = io.ReadAll(http.MaxBytesReader(w, r.Body, intelMaxPaste))
+			if err != nil {
+				intelAPIError(w, http.StatusBadRequest, "unreadable body")
+				return
+			}
+			r.Body = io.NopCloser(bytes.NewReader(body))
+		}
+		sig, err := base64.StdEncoding.DecodeString(r.Header.Get("X-Axon-Signature"))
+		if err != nil || !ed25519.Verify(ed25519.PublicKey(pub), []byte(axonSignatureText(r.Method, r.URL.RequestURI(), ts, body)), sig) {
+			intelAPIError(w, http.StatusUnauthorized, "bad signature")
+			return
+		}
 		now := time.Now()
+		if d := now.Unix() - at; d > 300 || d < -300 {
+			intelAPIError(w, http.StatusUnauthorized, "signed too long ago: check this computer's clock")
+			return
+		}
 		if !intelAPILimit.allow(tok.ID, now) {
 			w.Header().Set("Retry-After", "30")
 			intelAPIError(w, http.StatusTooManyRequests, "too many requests: slow down")
@@ -275,7 +403,7 @@ func (app *Application) handleAPILines(w http.ResponseWriter, r *http.Request) {
 	for i, l := range body.Lines {
 		body.Lines[i] = strings.ReplaceAll(l, "\n", " ")
 	}
-	res := app.postChatLines(ctx, base, strings.Join(body.Lines, "\n"), "watcher")
+	res := app.postChatLines(ctx, base, strings.Join(body.Lines, "\n"), "axon")
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
 	_ = json.NewEncoder(w).Encode(struct {

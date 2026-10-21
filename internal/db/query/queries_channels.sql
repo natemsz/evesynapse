@@ -96,18 +96,30 @@ SELECT EXISTS (
       AND system_id = sqlc.arg(system_id) AND reporter = sqlc.arg(reporter) AND text = sqlc.arg(text)
 )::boolean;
 
--- Posting tokens (schema 079).
+-- Posting tokens (schema 079) and Axon pairing (schema 081).
 -- name: CreateIntelToken :one
-INSERT INTO intel_tokens (user_id, name, prefix, token_hash, created_at)
-VALUES (sqlc.arg(user_id), sqlc.arg(name), sqlc.arg(prefix), sqlc.arg(token_hash), sqlc.arg(created_at))
+INSERT INTO intel_tokens (user_id, name, prefix, token_hash, created_at, public_key, device)
+VALUES (sqlc.arg(user_id), sqlc.arg(name), sqlc.arg(prefix), sqlc.arg(token_hash), sqlc.arg(created_at), sqlc.arg(public_key), sqlc.arg(device))
 RETURNING id;
 
 -- name: ListIntelTokens :many
-SELECT id, name, prefix, created_at, last_used_at FROM intel_tokens
+SELECT id, name, prefix, created_at, last_used_at, device FROM intel_tokens
 WHERE user_id = $1 ORDER BY created_at DESC, id DESC;
 
 -- name: GetIntelTokenByHash :one
-SELECT id, user_id FROM intel_tokens WHERE token_hash = $1;
+SELECT id, user_id, public_key, device FROM intel_tokens WHERE token_hash = $1;
+
+-- name: CreateIntelPairingCode :one
+INSERT INTO intel_pairing_codes (user_id, name, code_hash, created_at, expires_at)
+VALUES (sqlc.arg(user_id), sqlc.arg(name), sqlc.arg(code_hash), sqlc.arg(created_at), sqlc.arg(expires_at))
+RETURNING id;
+
+-- name: GetIntelPairingCodeByHash :one
+SELECT id, user_id, name, expires_at, used_at FROM intel_pairing_codes WHERE code_hash = $1;
+
+-- name: UseIntelPairingCode :execrows
+UPDATE intel_pairing_codes SET used_at = sqlc.arg(at)
+WHERE id = sqlc.arg(id) AND used_at IS NULL AND expires_at > sqlc.arg(at);
 
 -- name: TouchIntelToken :exec
 UPDATE intel_tokens SET last_used_at = sqlc.arg(at) WHERE id = sqlc.arg(id);

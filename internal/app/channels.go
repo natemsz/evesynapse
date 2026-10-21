@@ -428,7 +428,7 @@ func (app *Application) handleChannelReport(w http.ResponseWriter, r *http.Reque
 		posted := 0
 		for _, rep := range o.Reports {
 			p := base
-			p.Source, p.SystemID, p.Clear, p.Hostiles = "chat", rep.SystemID, rep.Clear, int32(rep.Hostiles)
+			p.Source, p.SystemID, p.Clear, p.Hostiles = "chat", rep.SystemID, rep.Clear, int32(min(max(rep.Hostiles, 0), 999))
 			p.Text = clipRunes(rep.Text, intelMaxText)
 			p.Pilots = p.Text
 			if rep.Speaker != "" {
@@ -473,8 +473,8 @@ func (app *Application) handleChannelReport(w http.ResponseWriter, r *http.Reque
 	base.Clear = r.PostForm.Get("clear") != ""
 	base.Text = clipRunes(strings.TrimSpace(r.PostForm.Get("text")), intelMaxText)
 	base.Pilots = base.Text
-	if n, err := strconv.Atoi(strings.TrimSpace(r.PostForm.Get("hostiles"))); err == nil && n > 0 && !base.Clear {
-		base.Hostiles = int32(min(n, 999))
+	if n, err := strconv.ParseInt(strings.TrimSpace(r.PostForm.Get("hostiles")), 10, 32); err == nil && n > 0 && !base.Clear {
+		base.Hostiles = int32(min(n, 999)) // n fits 32 bits: ParseInt above
 	}
 	if !base.Clear && base.Text == "" && base.Hostiles == 0 {
 		reply(http.StatusUnprocessableEntity, "Say what was seen: pilots, a count, or mark it clear.", 0)

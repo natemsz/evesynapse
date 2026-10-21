@@ -333,6 +333,21 @@ func TestAbyssalDerivedRepPerSec(t *testing.T) {
 	}
 }
 
+// TestAbyssalLadderDroneSize: drones size by bandwidth, never by
+// their damage multiplier, which a light and a heavy drone share.
+func TestAbyssalLadderDroneSize(t *testing.T) {
+	in := testFamilyInputs(nil)
+	in.Base = map[int64]float64{64: 1.9, abyssalDroneBandwidthAttr: 10}
+	if !abyssalSameSize(in, map[int64]float64{64: 2.2, abyssalDroneBandwidthAttr: 10}) {
+		t.Error("a medium faction drone belongs on a medium drone's ladder")
+	}
+	for _, bw := range []float64{5, 25} {
+		if abyssalSameSize(in, map[int64]float64{64: 1.9, abyssalDroneBandwidthAttr: bw}) {
+			t.Errorf("a %v-bandwidth drone must be off a medium drone's ladder", bw)
+		}
+	}
+}
+
 func TestAbyssalRecreationCheapestPath(t *testing.T) {
 	in := testFamilyInputs(map[int64]float64{64: 0.8, 204: 0.5, 6: 0.5, 50: 0.8})
 	sc := scoreAbyssal(in)

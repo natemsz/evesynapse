@@ -692,7 +692,7 @@ func (q *Queries) InsertPublicContractItem(ctx context.Context, arg InsertPublic
 
 const listAbyssalCorpusByGroupNames = `-- name: ListAbyssalCorpusByGroupNames :many
 SELECT DISTINCT ON (a.item_id)
-    a.item_id, a.source_type_id, a.score, a.est_value, a.primary_abs,
+    a.item_id, a.source_type_id, a.mutator_type_id, a.score, a.est_value, a.primary_abs,
     a.ladder_value, a.attributes,
     s.price, s.departed_at, s.depart_kind, s.sold_at,
     s.first_seen_at, s.last_seen_at, s.date_expired,
@@ -712,6 +712,7 @@ ORDER BY a.item_id, s.first_seen_at DESC
 type ListAbyssalCorpusByGroupNamesRow struct {
 	ItemID        int64           `json:"item_id"`
 	SourceTypeID  int64           `json:"source_type_id"`
+	MutatorTypeID int64           `json:"mutator_type_id"`
 	Score         sql.NullFloat64 `json:"score"`
 	EstValue      sql.NullFloat64 `json:"est_value"`
 	PrimaryAbs    sql.NullFloat64 `json:"primary_abs"`
@@ -750,6 +751,7 @@ func (q *Queries) ListAbyssalCorpusByGroupNames(ctx context.Context, groupNames 
 		if err := rows.Scan(
 			&i.ItemID,
 			&i.SourceTypeID,
+			&i.MutatorTypeID,
 			&i.Score,
 			&i.EstValue,
 			&i.PrimaryAbs,

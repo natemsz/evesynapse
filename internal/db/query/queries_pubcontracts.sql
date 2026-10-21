@@ -844,7 +844,7 @@ LIMIT sqlc.arg(max_rows)::bigint;
 -- corpus is exchange listings only.
 -- name: ListAbyssalCorpusByGroupNames :many
 SELECT DISTINCT ON (a.item_id)
-    a.item_id, a.source_type_id, a.score, a.est_value, a.primary_abs,
+    a.item_id, a.source_type_id, a.mutator_type_id, a.score, a.est_value, a.primary_abs,
     a.ladder_value, a.attributes,
     s.price, s.departed_at, s.depart_kind, s.sold_at,
     s.first_seen_at, s.last_seen_at, s.date_expired,

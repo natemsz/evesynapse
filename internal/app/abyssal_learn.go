@@ -67,12 +67,16 @@ type abyssalLearnRow struct {
 
 // abyssalLearnFeatures turns rolled stats into the model's
 // features: one per family-weighted attribute, the log of its
-// magnitude signed so higher is better. Missing is NaN.
-func abyssalLearnFeatures(weights []db.AbyssalFamilyWeight, highGood map[int64]bool, rolls map[int64]float64) []float64 {
+// magnitude signed so higher is better. Missing is NaN, and so
+// is an attribute the item's own mutaplasmid does not move
+// (ranges): ESI reports every attribute of a mutated item, and an
+// unrolled one is just its source module's base stat -- a label
+// of where it came from, which the correction must never price.
+func abyssalLearnFeatures(weights []db.AbyssalFamilyWeight, highGood map[int64]bool, ranges map[int64]abyssalRange, rolls map[int64]float64) []float64 {
 	x := make([]float64, len(weights))
 	for i, w := range weights {
 		v, ok := rolls[w.AttributeID]
-		if !ok || v == 0 {
+		if _, rolled := ranges[w.AttributeID]; !ok || !rolled || v == 0 {
 			x[i] = math.NaN()
 			continue
 		}

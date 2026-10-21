@@ -16,6 +16,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Placeholder section for upcoming changes.
 
+## [v0.5.5.2] - 2026-10-21
+
+Automated build of EveSynapse v0.5.5.2. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+
+## What's Changed
+### 🚀 Features
+* Feat: footer as dark black glass, star tile removed by @natemsz in https://github.com/natemsz/evesynapse/pull/534
+### 🐛 Bug Fixes
+* Fix: restore glass blur on touch devices by @natemsz in https://github.com/natemsz/evesynapse/pull/533
+### Other Changes
+* docs(changelog): review changelog for v0.5.5.1 by @github-actions[bot] in https://github.com/natemsz/evesynapse/pull/532
+
+## New Contributors
+* @github-actions[bot] made their first contribution in https://github.com/natemsz/evesynapse/pull/532
+
+**Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.5.1...v0.5.5.2
+
 ## [v0.5.5.1] - 2026-10-21
 
 Automated build of EveSynapse v0.5.5.1. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).

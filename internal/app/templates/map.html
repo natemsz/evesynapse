@@ -46,6 +46,9 @@
     <p class="map-status" role="status">{{if .Ready}}Charting New Eden…{{else}}The map is drawn from the static data export, and this server has not imported its star geometry yet. It appears after the next static data update.{{end}}</p>
     <noscript><p class="map-status">The interactive map needs JavaScript. Every region is listed below.</p></noscript>
     <div class="map-hint" hidden></div>
+    {{/* The hover popover (mouse only): the system under the cursor
+         and the figures of the layer showing. Filled by map.js. */}}
+    <div class="map-tip" role="tooltip" aria-hidden="true" hidden></div>
     <section class="map-keys" id="map-keys" aria-label="Map controls" hidden>
       <h2>Map controls</h2>
       <dl>

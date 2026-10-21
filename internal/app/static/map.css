@@ -185,6 +185,36 @@ html[data-theme="light"] .map {
   color: var(--muted);
 }
 .map-status[hidden], .map-legend[hidden], .map-card [hidden] { display: none; }
+/* The hover popover: a small glass card beside the cursor (map.js
+   positions it with a transform; it never takes the pointer). */
+.map-tip {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 3;
+  max-width: 17rem;
+  padding: 0.4rem 0.6rem 0.45rem;
+  border: 1px solid var(--glass-edge);
+  border-radius: var(--r-md);
+  background: var(--glass);
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  backdrop-filter: blur(var(--glass-blur));
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.4);
+  font-size: 0.8rem;
+  pointer-events: none;
+  will-change: transform;
+}
+.map-tip[hidden] { display: none; }
+.map-tip p { margin: 0; }
+.map-tip-head { white-space: nowrap; }
+.map-tip-head strong { color: var(--text-bright); }
+.map-tip-region { color: var(--muted-2); }
+.map-tip-row { display: flex; justify-content: space-between; gap: 0.9rem; margin-top: 0.15rem !important; }
+.map-tip-row span:first-child { color: var(--muted-2); white-space: nowrap; }
+.map-tip-row span:last-child { color: var(--text); text-align: right; }
+/* Touch screens have no hover: the system card does this job. */
+@media (hover: none) { .map-tip { display: none !important; } }
+
 .map-hint {
   position: absolute;
   top: 0.75rem;

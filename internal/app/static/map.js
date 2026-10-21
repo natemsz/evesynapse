@@ -931,6 +931,7 @@
       if (name !== "security" && !LY) name = "security";
       if (!el.querySelector('[data-map-layer="' + name + '"]')) name = "security";
       layer = name;
+      showTip(-1);
       el.querySelectorAll("[data-map-layer]").forEach(function (b) {
         var on = b.getAttribute("data-map-layer") === name;
         b.setAttribute("aria-checked", on ? "true" : "false");
@@ -1022,6 +1023,115 @@
       at.className = "map-layer-at muted";
       at.textContent = LY.at[layer] ? "As of " + eveTime(LY.at[layer]) : "No data yet";
       box.appendChild(at);
+    }
+
+    // --- The hover popover ---
+    // The system under the mouse: its name, security and region,
+    // then only what the layer showing says about it. Placed beside
+    // the cursor and flipped at the stage's edges.
+    var tipEl = el.querySelector(".map-tip"), tipFor = -2;
+
+    function tipRows(i) {
+      if (!LY || layer === "security") return [];
+      var rows = [];
+      switch (layer) {
+        case "threat":
+          if (LY.threat[i] > 0) {
+            var lv = THREAT_LEVELS[threatLevel(LY.threat[i])].name;
+            rows.push([lv + " threat", LY.threatHour[i] + (LY.threatHour[i] === 1 ? " kill" : " kills") + " in the last hour"]);
+            if (LY.threatLast[i]) rows.push(["Last kill", agoShort(LY.threatLast[i])]);
+          } else if (LY.spill[i] >= THREAT_LEVELS[1].at) {
+            rows.push(["Quiet", "danger next door"]);
+          } else {
+            rows.push(["Quiet", "no PvP kills lately"]);
+          }
+          if (LY.campOf[i] >= 0) {
+            var c = LY.camps[LY.campOf[i]];
+            rows.push(["Camp", c.group + " · " + c.n + " kills"]);
+          }
+          break;
+        case "kills":
+          rows.push(["Last hour", LY.ship[i] + (LY.ship[i] === 1 ? " ship" : " ships") + " · " + LY.pod[i] + (LY.pod[i] === 1 ? " pod" : " pods")]);
+          break;
+        case "npc":
+          rows.push(["Last hour", LY.npc[i].toLocaleString() + " NPC kills"]);
+          break;
+        case "jumps":
+          rows.push(["Last hour", LY.jumps[i].toLocaleString() + " jumps"]);
+          break;
+        case "sov":
+          if (LY.sovA[i] >= 0) {
+            var al = LY.alliances[LY.sovA[i]];
+            rows.push(["Held by", al.name || "Alliance " + al.id]);
+          } else if (LY.sovF[i] > 0) {
+            rows.push(["Held by", LY.factions[LY.sovF[i]] || "NPC faction"]);
+          } else {
+            rows.push(["Held by", "nobody"]);
+          }
+          break;
+        case "fw":
+          if (LY.fwState[i]) {
+            rows.push(["Occupied by", LY.factions[LY.fwOcc[i]] || "a militia"]);
+            rows.push([["", "Uncontested", "Contested", "Vulnerable", "Captured"][LY.fwState[i]], LY.fwPct[i] + "% contested"]);
+          } else {
+            rows.push(["Faction Warfare", "not a warzone system"]);
+          }
+          break;
+        case "inc":
+          if (LY.incOf[i] >= 0) {
+            var x = LY.incs[LY.incOf[i]];
+            rows.push([LY.inc[i] === 2 ? "Staging" : "Infested", x.state + " · " + Math.round(x.inf * 100) + "% influence"]);
+          } else {
+            rows.push(["Incursions", "none here"]);
+          }
+          break;
+      }
+      return rows;
+    }
+
+    function showTip(i, px, py) {
+      if (!tipEl) return;
+      if (i < 0 || (mode !== "universe" && S.r[i] !== region)) {
+        tipEl.hidden = true;
+        tipFor = -2;
+        return;
+      }
+      if (i !== tipFor) {
+        tipFor = i;
+        tipEl.textContent = "";
+        var head = root.createElement("p");
+        head.className = "map-tip-head";
+        var sec = root.createElement("span");
+        sec.className = "sec sec-" + G.tier[i];
+        sec.textContent = secText(S.s[i]);
+        head.appendChild(sec);
+        var nm = root.createElement("strong");
+        nm.textContent = " " + S.n[i];
+        head.appendChild(nm);
+        var rg = root.createElement("span");
+        rg.className = "map-tip-region";
+        rg.textContent = " " + P.regions[S.r[i]].name;
+        head.appendChild(rg);
+        tipEl.appendChild(head);
+        tipRows(i).forEach(function (r) {
+          var p = root.createElement("p");
+          p.className = "map-tip-row";
+          var k = root.createElement("span");
+          k.textContent = r[0];
+          var v = root.createElement("span");
+          v.textContent = r[1];
+          p.appendChild(k);
+          p.appendChild(v);
+          tipEl.appendChild(p);
+        });
+        tipEl.hidden = false;
+      }
+      // Beside the cursor, flipped to stay inside the stage.
+      var w = tipEl.offsetWidth, h = tipEl.offsetHeight, gap = 14;
+      var x = px + gap, y = py + gap;
+      if (x + w > cw - 6) x = px - gap - w;
+      if (y + h > ch - 6) y = py - gap - h;
+      tipEl.style.transform = "translate(" + Math.max(6, x) + "px," + Math.max(6, y) + "px)";
     }
 
     function agoShort(unix) {
@@ -1182,6 +1292,7 @@
 
     // --- Chrome: crumbs, hint, card, URL ---
     function crumbs() {
+      showTip(-1);
       var inRegion = mode !== "universe";
       crumbSep.hidden = !inRegion;
       crumbRegion.hidden = !inRegion;
@@ -1323,6 +1434,7 @@
     function pt(e) { var b = canvas.getBoundingClientRect(); return [e.clientX - b.left, e.clientY - b.top]; }
 
     function onPointerDown(e) {
+      showTip(-1);
       stopMotion();
       canvas.setPointerCapture(e.pointerId);
       var p = pt(e);
@@ -1340,6 +1452,7 @@
         if (e.pointerType === "mouse") {
           var h = pick(p[0], p[1]);
           if (h !== hover) { hover = h; schedule(); }
+          showTip(h, p[0], p[1]);
           canvas.style.cursor = h >= 0 || pickGhost(p[0], p[1]) >= 0 || (mode === "universe" && pickRegionLabel(p[0], p[1]) >= 0) ? "pointer" : "";
         }
         return;
@@ -1591,7 +1704,7 @@
     canvas.addEventListener("pointermove", onPointerMove);
     canvas.addEventListener("pointerup", onPointerUp);
     canvas.addEventListener("pointercancel", onPointerCancel);
-    canvas.addEventListener("pointerleave", function () { if (hover >= 0) { hover = -1; schedule(); } });
+    canvas.addEventListener("pointerleave", function () { showTip(-1); if (hover >= 0) { hover = -1; schedule(); } });
     canvas.addEventListener("wheel", onWheel, { passive: false });
     canvas.addEventListener("gesturestart", onGestureStart);
     canvas.addEventListener("gesturechange", onGestureChange);
@@ -1623,6 +1736,7 @@
         if (!L || !el.isConnected) return;
         LY = joinLayers(P, L);
         heatOrder = {};
+        showTip(-1);
         el.querySelectorAll("[data-map-layer]").forEach(function (b) { b.disabled = false; });
         if (firstLayers) {
           firstLayers = false;

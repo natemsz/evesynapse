@@ -757,9 +757,10 @@
       ctx.lineJoin = "round";
       var i, s, f = cam.k / fitK();
 
-      // The selected and hovered systems are always named first.
-      [sel, hover].forEach(function (s) {
-        if (s < 0 || (mode !== "universe" && S.r[s] !== region)) return;
+      // The selected and hovered systems, and the route's ends, are
+      // always named first.
+      [sel, hover, routeFrom, routeTo].forEach(function (s, at, all) {
+        if (s < 0 || all.indexOf(s) !== at || (mode !== "universe" && S.r[s] !== region)) return;
         label(S.n[s], wx(s) * k + ox, wy(s) * k + oy + r + 4, 13, colors.label, "700", true);
       });
 
@@ -827,6 +828,22 @@
     var wantLayer = new URLSearchParams(location.search).get("layer");
     var HEAT = { kills: 1, npc: 1, jumps: 1, threat: 1 };
     var heatOrder = {};
+    // The heat layers' scale: a gain in powers of two on the value
+    // that glows white-hot (the hour's busiest, or Extreme for
+    // threat), set from the legend and remembered per browser. Up
+    // brings quiet systems out; down picks out only the hottest.
+    var GAIN_KEY = "evesynapse-map-gain", heatGain = {};
+    try { heatGain = JSON.parse(localStorage.getItem(GAIN_KEY) || "{}") || {}; } catch (e) { heatGain = {}; }
+    function heatMax(name) {
+      var g = +heatGain[name] || 0;
+      return Math.max(LY.max[name] * Math.pow(2, -g), name === "threat" ? 0.25 : 1);
+    }
+    // Sovereignty can show as dots (each system its holder's color)
+    // or as territory: the old influence-map look, each holder's
+    // space filled and edged where it meets a neighbour's.
+    var SOV_KEY = "evesynapse-map-sov", sovView = "systems", sovFields = {};
+    try { if (localStorage.getItem(SOV_KEY) === "territory") sovView = "territory"; } catch (e) { /* private mode */ }
+    if (new URLSearchParams(location.search).get("sov") === "territory") sovView = "territory";
 
     // heatColor walks a three-stop ramp (the heat ramp unless one is
     // given: threat has its own, amber through red to white-hot).
@@ -866,7 +883,7 @@
         ctx.fill();
       }
       if (HEAT[layer]) {
-        var vals = LY[layer], max = LY.max[layer];
+        var vals = LY[layer], max = heatMax(layer);
         var ramp = layer === "threat" ? colors.threatRamp : null;
         batch(colors.dim, r * 0.8, function (i) { return vals[i] <= 0; });
         // Threat spills along the gates: in a region's tactical view
@@ -930,8 +947,10 @@
         return;
       }
       if (layer === "sov") {
-        batch(colors.unheld, r * 0.8, function (i) { return LY.sovA[i] < 0 && !LY.sovF[i]; });
-        batch(colors.npc, r, function (i) { return LY.sovA[i] < 0 && LY.sovF[i] > 0; });
+        var land = sovView === "territory";
+        if (land) drawTerritory(k, ox, oy);
+        batch(colors.unheld, r * 0.8, function (i) { return LY.sovA[i] < 0 && (!LY.sovF[i] || (land && G.tier[i] > 0)); });
+        batch(colors.npc, r, function (i) { return LY.sovA[i] < 0 && LY.sovF[i] > 0 && !(land && G.tier[i] > 0); });
         for (var a = 0; a < LY.alliances.length; a++) {
           var mem = LY.allianceMembers[a];
           if (!mem.length) continue;
@@ -978,6 +997,92 @@
           ctx.stroke();
         }
       }
+    }
+
+    // --- Sovereignty as territory ---
+    // Each held nullsec system casts a soft influence (a Gaussian a
+    // little wider than the space between systems) for its holder:
+    // an alliance, or the NPC faction of NPC null. Every cell of a
+    // coarse grid over the view goes to the strongest holder there,
+    // filled faintly, and cells beside another holder's (or empty
+    // space) are the border, drawn strong. The grid is built once
+    // per view and layers payload, and drawn scaled and smoothed.
+    function sovField() {
+      var key = mode === "universe" ? "u" : "r" + region;
+      if (sovFields[key]) return sovFields[key];
+      var list = mode === "universe" ? null : G.members[region];
+      var n = list ? list.length : G.n, A = LY.alliances.length;
+      var owners = [], i, m, npcIdx = {};
+      for (m = 0; m < n; m++) {
+        i = list ? list[m] : m;
+        if (LY.sovA[i] >= 0) owners.push([i, LY.sovA[i]]);
+        else if (LY.sovF[i] > 0 && G.tier[i] === 0) {
+          if (npcIdx[LY.sovF[i]] === undefined) npcIdx[LY.sovF[i]] = A + Object.keys(npcIdx).length;
+          owners.push([i, npcIdx[LY.sovF[i]]]);
+        }
+      }
+      var b = viewBounds(), bw = b[2] - b[0], bh = b[3] - b[1];
+      var gw = mode === "universe" ? 640 : 320, cell = bw / gw, gh = Math.ceil(bh / cell);
+      var sigma = 0.85 * Math.sqrt(bw * bh / Math.max(n, 1)), reach = Math.ceil(2.4 * sigma / cell);
+      var best = new Float32Array(gw * gh), who = new Int16Array(gw * gh).fill(-1);
+      // One holder at a time: sum its influence over its own box,
+      // then keep the cells where it beats the strongest so far.
+      var byOwner = {};
+      owners.forEach(function (o) { (byOwner[o[1]] = byOwner[o[1]] || []).push(o[0]); });
+      var acc = new Float32Array(gw * gh), s2 = 2 * sigma * sigma;
+      Object.keys(byOwner).forEach(function (ok) {
+        var sys = byOwner[ok], x0 = gw, y0 = gh, x1 = 0, y1 = 0, q, x, y;
+        sys.forEach(function (s) {
+          var cx = Math.floor((wx(s) - b[0]) / cell), cy = Math.floor((wy(s) - b[1]) / cell);
+          var ax = Math.max(0, cx - reach), bx = Math.min(gw - 1, cx + reach);
+          var ay = Math.max(0, cy - reach), by = Math.min(gh - 1, cy + reach);
+          if (ax < x0) x0 = ax; if (ay < y0) y0 = ay; if (bx > x1) x1 = bx; if (by > y1) y1 = by;
+          for (y = ay; y <= by; y++) {
+            var dy = b[1] + (y + 0.5) * cell - wy(s);
+            for (x = ax; x <= bx; x++) {
+              var dx = b[0] + (x + 0.5) * cell - wx(s);
+              acc[y * gw + x] += Math.exp(-(dx * dx + dy * dy) / s2);
+            }
+          }
+        });
+        for (y = y0; y <= y1; y++) for (x = x0; x <= x1; x++) {
+          q = y * gw + x;
+          if (acc[q] > best[q]) { best[q] = acc[q]; who[q] = +ok; }
+          acc[q] = 0;
+        }
+      });
+      var rgb = [];
+      function ownerRGB(o) {
+        if (!rgb[o]) rgb[o] = rgbOf(o < A ? allianceColor(o) : colors.npc);
+        return rgb[o];
+      }
+      var off = root.createElement("canvas");
+      off.width = gw; off.height = gh;
+      var oc = off.getContext("2d"), img = oc.createImageData(gw, gh), px = img.data;
+      var floor = 0.3;
+      for (var y2 = 0; y2 < gh; y2++) for (var x2 = 0; x2 < gw; x2++) {
+        var p = y2 * gw + x2, o = best[p] >= floor ? who[p] : -1;
+        if (o < 0) continue;
+        var edge = false;
+        [[1, 0], [-1, 0], [0, 1], [0, -1]].forEach(function (d) {
+          var nx = x2 + d[0], ny = y2 + d[1];
+          if (nx < 0 || ny < 0 || nx >= gw || ny >= gh) return;
+          var nq = ny * gw + nx;
+          if ((best[nq] >= floor ? who[nq] : -1) !== o) edge = true;
+        });
+        var c = ownerRGB(o);
+        px[p * 4] = c[0]; px[p * 4 + 1] = c[1]; px[p * 4 + 2] = c[2];
+        px[p * 4 + 3] = edge ? 235 : Math.round(255 * Math.min(0.34, 0.14 + 0.08 * best[p]));
+      }
+      oc.putImageData(img, 0, 0);
+      sovFields[key] = { canvas: off, x: b[0], y: b[1], w: gw * cell, h: gh * cell };
+      return sovFields[key];
+    }
+    function drawTerritory(k, ox, oy) {
+      var f = sovField();
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = "high";
+      ctx.drawImage(f.canvas, f.x * k + ox, f.y * k + oy, f.w * k, f.h * k);
     }
 
     // The live layers' own labels, placed before system names:
@@ -1073,16 +1178,13 @@
         box.appendChild(p);
       }
       if (layer === "threat") {
-        // The fixed levels, each in its color on the threat ramp.
+        // The levels, each in its color on the threat ramp (as the
+        // scale has it).
         THREAT_LEVELS.forEach(function (lv, li) {
           if (!li) return;
-          row("", heatColor(heatT(lv.at, THREAT_TOP), 1, colors.threatRamp), lv.name);
+          row("", heatColor(heatT(lv.at, heatMax("threat")), 1, colors.threatRamp), lv.name);
         });
-        row("", colors.camp, LY.camps.length ? LY.camps.length + (LY.camps.length === 1 ? " camp" : " camps") + " right now" : "No camps right now");
-        var how = root.createElement("p");
-        how.className = "map-layer-row muted";
-        how.textContent = "PvP kills, fading over 45 minutes. A camp: one group killing passers-by, 4+ kills over the last hour.";
-        box.appendChild(how);
+        row("", colors.camp, LY.camps.length ? LY.camps.length + (LY.camps.length === 1 ? " gate camp" : " gate camps") : "No gate camps");
       } else if (HEAT[layer]) {
         var bar = root.createElement("p");
         bar.className = "map-heat";
@@ -1091,13 +1193,29 @@
         g.style.background = "linear-gradient(to right," + heatColor(0.05, 1) + "," + heatColor(0.75, 1) + "," + heatColor(1, 1) + ")";
         bar.appendChild(root.createTextNode("1 "));
         bar.appendChild(g);
-        bar.appendChild(root.createTextNode(" " + LY.max[layer].toLocaleString()));
+        var top = root.createElement("span");
+        top.className = "map-heat-top";
+        top.textContent = " " + Math.round(heatMax(layer)).toLocaleString() + (heatMax(layer) < LY.max[layer] ? "+" : "");
+        bar.appendChild(top);
         box.appendChild(bar);
       } else if (layer === "sov") {
-        var held = LY.allianceMembers.filter(function (m) { return m.length; }).length;
-        row("", "hsl(30,68%," + colors.sovL + ")", held + " alliances, each its own color");
+        var view = root.createElement("div");
+        view.className = "map-layer-ctl map-layer-seg";
+        view.setAttribute("role", "radiogroup");
+        view.setAttribute("aria-label", "Show sovereignty as");
+        [["systems", "Systems"], ["territory", "Territory"]].forEach(function (v) {
+          var b = root.createElement("button");
+          b.type = "button";
+          b.setAttribute("role", "radio");
+          b.setAttribute("aria-checked", sovView === v[0] ? "true" : "false");
+          b.setAttribute("data-map-sov", v[0]);
+          b.textContent = v[1];
+          view.appendChild(b);
+        });
+        box.appendChild(view);
+        row("", "hsl(30,68%," + colors.sovL + ")", "Alliances");
         row("", colors.npc, "NPC factions");
-        row("", colors.unheld, "Unclaimed");
+        if (sovView === "systems") row("", colors.unheld, "Unclaimed");
       } else if (layer === "fw") {
         [[500003, "Amarr"], [500001, "Caldari"], [500004, "Gallente"], [500002, "Minmatar"]].forEach(function (f) {
           row("", colors.faction[f[0]], (LY.factions[f[0]] || f[1]).replace(/ (Empire|State|Federation|Republic)$/, ""));
@@ -1111,6 +1229,25 @@
         row("", colors.incStage, "Staging");
         if (!LY.incs.length) row("", colors.dim, "No incursions right now");
       }
+      if (HEAT[layer]) {
+        // The scale: a slider, ends labelled by what they do.
+        var sc = root.createElement("label");
+        sc.className = "map-layer-ctl map-scale";
+        var lo = root.createElement("span");
+        lo.textContent = "Hottest";
+        var rng = root.createElement("input");
+        rng.type = "range";
+        rng.min = "-3"; rng.max = "5"; rng.step = "0.5";
+        rng.value = String(+heatGain[layer] || 0);
+        rng.setAttribute("data-map-gain", "");
+        rng.setAttribute("aria-label", "Layer scale");
+        var hi = root.createElement("span");
+        hi.textContent = "All activity";
+        sc.appendChild(lo);
+        sc.appendChild(rng);
+        sc.appendChild(hi);
+        box.appendChild(sc);
+      }
       var at = root.createElement("p");
       at.className = "map-layer-at muted";
       at.textContent = LY.at[layer] ? "As of " + eveTime(LY.at[layer]) : "No data yet";
@@ -1123,61 +1260,78 @@
     // the cursor and flipped at the stage's edges.
     var tipEl = el.querySelector(".map-tip"), tipFor = -2;
 
-    function tipRows(i) {
-      if (!LY || layer === "security") return [];
+    // layerRows: what one layer says about system i, as [label,
+    // value] rows. The popover shows the rows of the layer showing;
+    // the card shows every layer's, briefly (rows that only say
+    // "nothing here" are left out), so the two always agree. The two
+    // kill counts come from different places and say so: the game's
+    // own hourly count (the Kills layer, up to an hour behind) and
+    // our killfeed (the Threat layer, live).
+    function layerRows(i, name, brief) {
       var rows = [];
-      switch (layer) {
-        case "threat":
-          if (LY.threat[i] > 0) {
-            var lv = THREAT_LEVELS[threatLevel(LY.threat[i])].name;
-            rows.push([lv + " threat", LY.threatHour[i] + (LY.threatHour[i] === 1 ? " kill" : " kills") + " in the last hour"]);
+      if (!LY || (!LY.at[name] && name !== "sov")) return rows;
+      switch (name) {
+        case "threat": {
+          if (LY.threat[i] > 0 || LY.threatHour[i]) {
+            rows.push(["Threat", THREAT_LEVELS[threatLevel(LY.threat[i])].name]);
+            rows.push(["Killfeed, last hour", LY.threatHour[i] + (LY.threatHour[i] === 1 ? " kill" : " kills")]);
             if (LY.threatLast[i]) rows.push(["Last kill", agoShort(LY.threatLast[i])]);
           } else if (LY.spill[i] >= THREAT_LEVELS[1].at) {
-            rows.push(["Quiet", "danger next door"]);
-          } else {
-            rows.push(["Quiet", "no PvP kills lately"]);
+            rows.push(["Threat", "Quiet · danger next door"]);
+          } else if (!brief) {
+            rows.push(["Threat", "Quiet · no PvP kills lately"]);
           }
           if (LY.campOf[i] >= 0) {
             var c = LY.camps[LY.campOf[i]];
-            rows.push(["Camp", c.group + " · " + c.n + " kills"]);
+            rows.push(["Gate camp", (c.group ? c.group + " · " : "") + c.n + " kills since " + agoShort(c.since)]);
           }
           break;
+        }
         case "kills":
-          rows.push(["Last hour", LY.ship[i] + (LY.ship[i] === 1 ? " ship" : " ships") + " · " + LY.pod[i] + (LY.pod[i] === 1 ? " pod" : " pods")]);
+          if (brief && !LY.ship[i] && !LY.pod[i]) break;
+          rows.push(["Game count, last hour", LY.ship[i] + (LY.ship[i] === 1 ? " ship" : " ships") + " · " + LY.pod[i] + (LY.pod[i] === 1 ? " pod" : " pods")]);
           break;
         case "npc":
-          rows.push(["Last hour", LY.npc[i].toLocaleString() + " NPC kills"]);
+          if (brief && !LY.npc[i]) break;
+          rows.push(["NPC kills, last hour", LY.npc[i].toLocaleString()]);
           break;
         case "jumps":
-          rows.push(["Last hour", LY.jumps[i].toLocaleString() + " jumps"]);
+          if (brief && !LY.jumps[i]) break;
+          rows.push(["Jumps, last hour", LY.jumps[i].toLocaleString()]);
           break;
         case "sov":
           if (LY.sovA[i] >= 0) {
             var al = LY.alliances[LY.sovA[i]];
-            rows.push(["Held by", al.name || "Alliance " + al.id]);
+            rows.push(["Sovereignty", al.name || "Alliance " + al.id]);
           } else if (LY.sovF[i] > 0) {
-            rows.push(["Held by", LY.factions[LY.sovF[i]] || "NPC faction"]);
-          } else {
-            rows.push(["Held by", "nobody"]);
+            rows.push(["Sovereignty", LY.factions[LY.sovF[i]] || "NPC faction"]);
+          } else if (!brief) {
+            rows.push(["Sovereignty", "Unclaimed"]);
           }
           break;
         case "fw":
           if (LY.fwState[i]) {
-            rows.push(["Occupied by", LY.factions[LY.fwOcc[i]] || "a militia"]);
-            rows.push([["", "Uncontested", "Contested", "Vulnerable", "Captured"][LY.fwState[i]], LY.fwPct[i] + "% contested"]);
-          } else {
-            rows.push(["Faction Warfare", "not a warzone system"]);
+            rows.push(["Faction Warfare", (LY.factions[LY.fwOcc[i]] || "Occupied") + " · " +
+              ["", "Uncontested", "Contested", "Vulnerable", "Captured"][LY.fwState[i]] + (LY.fwPct[i] ? " " + LY.fwPct[i] + "%" : "")]);
+          } else if (!brief) {
+            rows.push(["Faction Warfare", "Not a warzone system"]);
           }
           break;
         case "inc":
           if (LY.incOf[i] >= 0) {
             var x = LY.incs[LY.incOf[i]];
-            rows.push([LY.inc[i] === 2 ? "Staging" : "Infested", x.state + " · " + Math.round(x.inf * 100) + "% influence"]);
-          } else {
-            rows.push(["Incursions", "none here"]);
+            rows.push(["Incursion", (LY.inc[i] === 2 ? "Staging · " : "Infested · ") + x.state + " · " + Math.round(x.inf * 100) + "% influence" + (x.boss ? " · boss" : "")]);
+          } else if (!brief) {
+            rows.push(["Incursion", "None here"]);
           }
           break;
       }
+      return rows;
+    }
+    function tipRows(i) { return layer === "security" ? [] : layerRows(i, layer, false); }
+    function liveRows(i) {
+      var rows = [];
+      ["threat", "kills", "npc", "jumps", "sov", "fw", "inc"].forEach(function (name) { rows = rows.concat(layerRows(i, name, true)); });
       return rows;
     }
 
@@ -1232,39 +1386,6 @@
     }
 
     // The card's live figures for one system, every layer at once.
-    function liveRows(i) {
-      if (!LY) return [];
-      var rows = [];
-      if (LY.at.threat) {
-        var lv = THREAT_LEVELS[threatLevel(LY.threat[i])].name, txt = lv;
-        if (LY.threatHour[i]) txt += " · " + LY.threatHour[i] + (LY.threatHour[i] === 1 ? " kill" : " kills") + " in the last hour";
-        if (LY.threatLast[i]) txt += " · last " + agoShort(LY.threatLast[i]);
-        if (!LY.threat[i] && LY.spill[i] >= THREAT_LEVELS[1].at) txt += " · danger next door";
-        rows.push(["Threat", txt]);
-        if (LY.campOf[i] >= 0) {
-          var c = LY.camps[LY.campOf[i]];
-          rows.push(["Camp", c.group + " · " + c.n + " kills since " + agoShort(c.since)]);
-        }
-      }
-      if (LY.at.kills) rows.push(["Kills, last hour", LY.ship[i] + " ships · " + LY.pod[i] + " pods · " + LY.npc[i] + " NPC"]);
-      if (LY.at.jumps) rows.push(["Jumps, last hour", String(LY.jumps[i])]);
-      if (LY.sovA[i] >= 0) {
-        var al = LY.alliances[LY.sovA[i]];
-        rows.push(["Sovereignty", al.name || "Alliance " + al.id]);
-      } else if (LY.sovF[i] > 0 && G.tier[i] === 0) {
-        rows.push(["Sovereignty", LY.factions[LY.sovF[i]] || "NPC faction"]);
-      }
-      if (LY.fwState[i]) {
-        var st = ["", "Uncontested", "Contested", "Vulnerable", "Captured"][LY.fwState[i]];
-        rows.push(["Faction Warfare", (LY.factions[LY.fwOcc[i]] || "Occupied") + " · " + st + (LY.fwPct[i] ? " " + LY.fwPct[i] + "%" : "")]);
-      }
-      if (LY.incOf[i] >= 0) {
-        var x = LY.incs[LY.incOf[i]];
-        rows.push(["Incursion", (LY.inc[i] === 2 ? "Staging · " : "Infested · ") + x.state + " · " + Math.round(x.inf * 100) + "% influence" + (x.boss ? " · boss" : "")]);
-      }
-      return rows;
-    }
-
     // Tactical constellation names: a faint backdrop drawn before
     // the systems, so they never take a system name's place.
     function drawConstellations(k, ox, oy) {
@@ -1405,6 +1526,10 @@
       if (sel >= 0) q.push("system=" + S.id[sel]);
       var shownLayer = LY ? layer : wantLayer || layer;
       if (shownLayer && shownLayer !== "security") q.push("layer=" + encodeURIComponent(shownLayer));
+      if (shownLayer === "sov" && sovView === "territory") q.push("sov=territory");
+      if (routeFrom >= 0) q.push("from=" + S.id[routeFrom]);
+      if (routeTo >= 0) q.push("to=" + S.id[routeTo]);
+      if ((routeFrom >= 0 || routeTo >= 0) && routeMode !== "short") q.push("route=" + routeMode);
       var url = location.pathname + (q.length ? "?" + q.join("&") : "") + location.hash;
       try { history.replaceState(history.state, "", url); } catch (e) { /* sandboxed */ }
     }
@@ -1543,19 +1668,39 @@
       });
       var sum = routeEl.querySelector(".map-route-sum"), warn = routeEl.querySelector(".map-route-warn");
       var list = routeEl.querySelector(".map-route-list");
+      var strip = routeEl.querySelector(".map-route-strip");
       warn.textContent = "";
       list.textContent = "";
+      sum.textContent = "";
+      strip.textContent = "";
+      strip.hidden = true;
+      routeEl.querySelector(".map-route-steps").hidden = !routePath;
       if (routeFrom < 0 || routeTo < 0) {
-        sum.textContent = "Select a system on the map, then “Route " + (routeFrom < 0 ? "from" : "to") + " here”.";
+        sum.textContent = "Select a system, then “Route " + (routeFrom < 0 ? "from" : "to") + " here”.";
       } else if (!routePath) {
         sum.textContent = "No stargates join these systems.";
       } else {
-        var s = routeSum, parts = [];
-        if (s.high) parts.push(s.high + " high");
-        if (s.low) parts.push(s.low + " low");
-        if (s.nul) parts.push(s.nul + " null");
-        sum.textContent = (s.jumps === 1 ? "1 jump" : s.jumps + " jumps") + (parts.length ? " · " + parts.join(" · ") : "") +
-          (LY ? "" : " · threat not loaded");
+        var s = routeSum;
+        var j = root.createElement("strong");
+        j.textContent = s.jumps === 1 ? "1 jump" : s.jumps + " jumps";
+        sum.appendChild(j);
+        [[s.high, "high", 10], [s.low, "low", 3], [s.nul, "null", 0]].forEach(function (b) {
+          if (!b[0]) return;
+          var sp = root.createElement("span");
+          sp.className = "map-route-band sec sec-" + b[2];
+          sp.textContent = b[0] + " " + b[1];
+          sum.appendChild(sp);
+        });
+        // The route at a glance: one segment a system, in its
+        // security color, camps and hot systems marked.
+        strip.hidden = false;
+        routePath.forEach(function (i, at) {
+          if (!at) return;
+          var seg = root.createElement("span");
+          seg.className = "sec sec-" + G.tier[i] + (LY && LY.campOf[i] >= 0 ? " camp" : LY && threatLevel(LY.threat[i]) >= 2 ? " hot" : "");
+          seg.title = S.n[i] + " " + secText(S.s[i]);
+          strip.appendChild(seg);
+        });
         s.camps.forEach(function (i) {
           var c = LY.camps[LY.campOf[i]], li = root.createElement("li");
           li.className = "map-route-camp";
@@ -1868,6 +2013,7 @@
         case "+": case "=": case "e": glideZoom(cw / 2, ch / 2, 1.5); break;
         case "-": case "_": case "q": glideZoom(cw / 2, ch / 2, 1 / 1.5); break;
         case "0": case "f": flyFit(); break;
+        case "F": toggleFull(); break;
         case "/": findInput.focus(); break;
         case "?": toggleKeys(); break;
         case "l": case "L": {
@@ -1892,7 +2038,8 @@
           if (!keysPanel.hidden) toggleKeys(false);
           else if (routeFrom >= 0 || routeTo >= 0) clearRoute();
           else if (sel >= 0) select(-1);
-          else leaveRegion();
+          else if (mode !== "universe" || !el.classList.contains("map-full")) leaveRegion();
+          else toggleFull(false);
           break;
         default: return;
       }
@@ -1902,6 +2049,42 @@
     function toggleKeys(open) {
       keysPanel.hidden = open === undefined ? !keysPanel.hidden : !open;
       keysBtn.setAttribute("aria-expanded", keysPanel.hidden ? "false" : "true");
+    }
+
+    // --- Full screen ---
+    // The map frame takes the whole screen: through the Fullscreen
+    // API where the browser has it for an element, and as a fixed
+    // frame over the page where it does not (iPhone Safari). Either
+    // way the frame wears .map-full, and the canvas follows its size.
+    var fullBtn = el.querySelector("[data-map-full]"), fullViaAPI = false;
+    function fullscreenElement() { return root.fullscreenElement || root.webkitFullscreenElement || null; }
+    function setFullClass(on) {
+      el.classList.toggle("map-full", on);
+      root.documentElement.classList.toggle("map-full-open", on);
+      if (fullBtn) {
+        fullBtn.setAttribute("aria-pressed", on ? "true" : "false");
+        fullBtn.setAttribute("aria-label", on ? "Leave full screen" : "Full screen");
+        fullBtn.title = on ? "Leave full screen (Shift F)" : "Full screen (Shift F)";
+      }
+    }
+    function toggleFull(force) {
+      var on = force === undefined ? !el.classList.contains("map-full") : force;
+      setFullClass(on);
+      if (on) {
+        var req = el.requestFullscreen || el.webkitRequestFullscreen;
+        if (req) {
+          try {
+            var pr = req.call(el);
+            if (pr && pr.catch) pr.catch(function () { /* the fixed frame stands in */ });
+          } catch (e) { /* the fixed frame stands in */ }
+        }
+      } else if (fullscreenElement() === el) {
+        (root.exitFullscreen || root.webkitExitFullscreen).call(root);
+      }
+    }
+    function onFullChange() {
+      if (fullscreenElement() === el) { fullViaAPI = true; return; }
+      if (fullViaAPI) { fullViaAPI = false; setFullClass(false); }
     }
 
     function onClick(e) {
@@ -1936,6 +2119,16 @@
       }
       var rd = t.closest("[data-route-send]");
       if (rd && !rd.disabled) { sendRoute(rd.getAttribute("data-route-send")); return; }
+      var sv = t.closest("[data-map-sov]");
+      if (sv) {
+        sovView = sv.getAttribute("data-map-sov");
+        try { localStorage.setItem(SOV_KEY, sovView); } catch (err) { /* private mode */ }
+        renderLegend();
+        syncURL();
+        schedule();
+        return;
+      }
+      if (t.closest("[data-map-full]")) { toggleFull(); return; }
       var lb = t.closest("[data-map-layer]");
       if (lb && !lb.disabled) { setLayer(lb.getAttribute("data-map-layer")); return; }
       var hit = t.closest("[data-hit]");
@@ -1988,6 +2181,12 @@
       if (sys !== undefined) sel = sys;
       if (ri !== undefined) enterRegion(ri, sys !== undefined ? sys : -1);
       else if (sys !== undefined) enterRegion(S.r[sys], sys);
+      // A shared route: its ends and preference.
+      var rf = G.byID[+qs.get("from")], rt = G.byID[+qs.get("to")];
+      if (ROUTE_MODES[qs.get("route")]) routeMode = qs.get("route");
+      if (rf !== undefined) routeFrom = rf;
+      if (rt !== undefined && rt !== rf) routeTo = rt;
+      if (routeFrom >= 0 || routeTo >= 0) replan();
       updateCard();
     }
 
@@ -1995,7 +2194,22 @@
     readColors();
     statusEl.hidden = true;
     findInput.disabled = false;
-    el.querySelectorAll("[data-map-zoom], [data-map-keys]").forEach(function (b) { b.disabled = false; });
+    el.querySelectorAll("[data-map-zoom], [data-map-keys], [data-map-full]").forEach(function (b) { b.disabled = false; });
+    root.addEventListener("fullscreenchange", onFullChange);
+    root.addEventListener("webkitfullscreenchange", onFullChange);
+    // The layer scale: the map follows the slider as it moves; the
+    // legend redraws (threat's level swatches) once it is let go.
+    el.addEventListener("input", function (e) {
+      if (!e.target.hasAttribute || !e.target.hasAttribute("data-map-gain") || !LY) return;
+      heatGain[layer] = +e.target.value;
+      try { localStorage.setItem(GAIN_KEY, JSON.stringify(heatGain)); } catch (err) { /* private mode */ }
+      var top = el.querySelector(".map-heat-top");
+      if (top) top.textContent = " " + Math.round(heatMax(layer)).toLocaleString() + (heatMax(layer) < LY.max[layer] ? "+" : "");
+      schedule();
+    });
+    el.addEventListener("change", function (e) {
+      if (e.target.hasAttribute && e.target.hasAttribute("data-map-gain") && layer === "threat") renderLegend();
+    });
     if (zoomPref) {
       zoomPref.disabled = false;
       zoomPref.checked = zoomTactical;
@@ -2025,7 +2239,7 @@
     var ro = new ResizeObserver(resize);
     ro.observe(stage);
     // The theme toggle recolors the page; the canvas follows.
-    var mo = new MutationObserver(function () { readColors(); renderLegend(); schedule(); });
+    var mo = new MutationObserver(function () { readColors(); sovFields = {}; renderLegend(); schedule(); });
     mo.observe(root.documentElement, { attributes: true, attributeFilter: ["data-theme", "class"] });
 
     // --- Live layers: loading, the picker, refresh ---
@@ -2044,6 +2258,7 @@
         if (!L || !el.isConnected) return;
         LY = joinLayers(P, L);
         heatOrder = {};
+        sovFields = {};
         showTip(-1);
         el.querySelectorAll("[data-map-layer]").forEach(function (b) { b.disabled = false; });
         if (firstLayers) {
@@ -2077,6 +2292,9 @@
       clearInterval(layersTimer);
       if (raf) cancelAnimationFrame(raf);
       clearTimeout(hintTimer);
+      root.removeEventListener("fullscreenchange", onFullChange);
+      root.removeEventListener("webkitfullscreenchange", onFullChange);
+      if (el.classList.contains("map-full")) toggleFull(false);
       root.removeEventListener("evesynapse:content-will-swap", teardown);
     }
     root.addEventListener("evesynapse:content-will-swap", teardown);

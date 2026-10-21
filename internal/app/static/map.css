@@ -350,13 +350,9 @@ html[data-theme="light"] .map {
 }
 
 /* --- The system card --- */
+/* In the side column (.map-side), which places and sizes it. */
 .map-card {
-  position: absolute;
-  top: 0.75rem;
-  right: 0.75rem;
-  width: min(20rem, calc(100% - 1.5rem));
-  max-height: calc(100% - 1.5rem);
-  overflow: auto;
+  position: relative;
   padding: 0.8rem 0.9rem 0.9rem;
   border: 1px solid var(--glass-edge);
   border-radius: var(--r-lg);
@@ -407,87 +403,150 @@ html[data-theme="light"] .map {
 .map-card-actions { display: flex; flex-wrap: wrap; gap: 0.4rem; }
 .map-card-route { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.4rem; }
 
+/* --- The side column: the route planner over the system card ---
+   One column docked top right; the two panels share its height
+   (each scrolls on its own when both are long), so neither ever
+   covers the other. */
+.map-side {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  width: min(20rem, calc(100% - 1.5rem));
+  max-height: calc(100% - 1.5rem);
+  pointer-events: none;
+}
+.map-side > * {
+  pointer-events: auto;
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.map-side > .map-route { flex-shrink: 0; max-height: 60%; }
+
 /* --- The route planner --- */
 .map-route {
-  position: absolute;
-  right: 0.75rem;
-  bottom: 0.75rem;
-  width: min(21rem, calc(100% - 1.5rem));
-  max-height: calc(100% - 1.5rem);
-  overflow: auto;
-  padding: 0.8rem 0.9rem 0.9rem;
+  padding: 0.65rem 0.85rem 0.75rem;
   border: 1px solid var(--glass-edge);
   border-radius: var(--r-lg);
   background: var(--glass);
   -webkit-backdrop-filter: blur(var(--glass-blur));
   backdrop-filter: blur(var(--glass-blur));
   box-shadow: 0 14px 32px rgba(0, 0, 0, 0.4);
+  font-size: 0.85rem;
 }
 .map-route[hidden] { display: none; }
-.map-route-title { margin: 0 2rem 0.35rem 0; font-size: 1.05rem; color: var(--text-bright); }
-.map-route-ends {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  margin: 0 0 0.55rem;
-  min-width: 0;
+.map-route-head { display: flex; align-items: center; justify-content: space-between; margin: -0.15rem -0.45rem 0.35rem 0; }
+.map-route-head .map-card-close { position: static; width: 1.9rem; height: 1.9rem; }
+.map-route-title {
+  margin: 0;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--map-route);
 }
+/* From / To, with the swap button spanning both rows. */
+.map-route-ends {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.2rem 0.6rem;
+  margin: 0 0 0.6rem;
+}
+.map-route-lbl { color: var(--muted-2); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.06em; }
 .map-route-end { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .map-route-swap {
-  flex: none;
-  padding: 0.15rem 0.4rem;
+  grid-column: 3;
+  grid-row: 1 / span 2;
+  width: 2rem;
+  height: 2rem;
   border: 1px solid var(--box-edge);
   border-radius: var(--r-xs);
   background: var(--row-alt);
   color: var(--muted);
   font: inherit;
+  font-size: 1rem;
   cursor: pointer;
 }
 .map-route-swap:hover { color: var(--text); border-color: var(--accent); }
 .map-route-sys {
+  max-width: 100%;
   padding: 0;
   border: 0;
   background: none;
   color: var(--text);
   font: inherit;
-  font-size: 0.88rem;
-  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
+  cursor: pointer;
 }
 .map-route-sys:hover { color: var(--accent); }
-.map-route-modes { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-bottom: 0.55rem; }
-.map-route-modes button {
-  padding: 0.3rem 0.6rem;
+.map-route-end .map-route-sys { font-weight: 600; color: var(--text-bright); }
+/* The preference: one segmented control. */
+.map-route-modes {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  margin-bottom: 0.6rem;
   border: 1px solid var(--box-edge);
   border-radius: var(--r-xs);
+  overflow: hidden;
+}
+.map-route-modes button {
+  padding: 0.35rem 0.3rem;
+  border: 0;
+  border-left: 1px solid var(--box-edge);
   background: var(--row-alt);
-  color: var(--muted);
+  color: var(--muted-2);
   font: inherit;
-  font-size: 0.82rem;
+  font-size: 0.8rem;
+  white-space: nowrap;
   cursor: pointer;
 }
+.map-route-modes button:first-child { border-left: 0; }
+.map-route-modes button:hover { color: var(--text); }
 .map-route-modes button[aria-checked="true"] {
   color: var(--text-bright);
-  border-color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  background: color-mix(in srgb, var(--accent) 20%, transparent);
+  box-shadow: inset 0 -2px 0 var(--accent);
 }
-.map-route-sum { margin: 0 0 0.35rem; color: var(--text); }
-.map-route-warn { margin: 0 0 0.35rem; padding: 0; list-style: none; font-size: 0.85rem; }
-.map-route-warn li { padding: 0.15rem 0; color: var(--map-threat-lo); }
-.map-route-warn li.map-route-camp { color: var(--map-camp); font-weight: 600; }
-.map-route-steps summary { cursor: pointer; color: var(--muted-2); font-weight: 600; font-size: 0.85rem; }
+.map-route-sum { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.2rem 0.6rem; margin: 0 0 0.35rem; color: var(--text); }
+.map-route-sum strong { font-size: 1.05rem; color: var(--text-bright); }
+.map-route-band { font-size: 0.8rem; font-variant-numeric: tabular-nums; }
+/* The route at a glance: a segment a jump, in its security color. */
+.map-route-strip { display: flex; gap: 1px; height: 0.45rem; margin: 0 0 0.5rem; border-radius: 0.25rem; overflow: hidden; }
+.map-route-strip[hidden] { display: none; }
+.map-route-strip span { flex: 1; min-width: 1px; background: currentColor; opacity: 0.85; }
+.map-route-strip span.hot { box-shadow: inset 0 -2px 0 var(--map-threat-hi); opacity: 1; }
+.map-route-strip span.camp { background: var(--map-camp); opacity: 1; }
+.map-route-warn { margin: 0 0 0.4rem; padding: 0; list-style: none; }
+.map-route-warn li { display: flex; flex-wrap: wrap; gap: 0 0.3rem; padding: 0.2rem 0 0.2rem 0.55rem; border-left: 2px solid var(--map-threat-lo); color: var(--muted-2); }
+.map-route-warn li + li { margin-top: 0.2rem; }
+.map-route-warn li.map-route-camp { border-left-color: var(--map-camp); color: var(--text); }
+.map-route-steps[hidden] { display: none; }
+.map-route-steps summary { cursor: pointer; color: var(--muted-2); font-weight: 600; font-size: 0.8rem; }
+.map-route-steps summary:hover { color: var(--text); }
 .map-route-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.25rem 0.5rem;
-  margin: 0.45rem 0 0;
-  padding: 0 0 0 1.1rem;
-  font-size: 0.85rem;
+  columns: 2;
+  column-gap: 0.75rem;
+  margin: 0.4rem 0 0;
+  padding: 0 0 0 1.4rem;
+  font-size: 0.82rem;
 }
+.map-route-list li { break-inside: avoid; padding: 0.05rem 0; }
+.map-route-list li::marker { color: var(--muted-2); font-size: 0.72rem; font-variant-numeric: tabular-nums; }
 .map-route-list li.hot .map-route-sys { color: var(--map-threat-lo); }
 .map-route-list li.camp .map-route-sys { color: var(--map-camp); font-weight: 600; }
-.map-route-actions { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.6rem; }
-.map-route-note { margin: 0.5rem 0 0; font-size: 0.82rem; }
+.map-route-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 0.4rem; margin-top: 0.65rem; }
+.map-route-actions[hidden] { display: none; }
+.map-route-actions .btn { justify-content: center; text-align: center; }
+.map-route-note { margin: 0.45rem 0 0; font-size: 0.78rem; }
+.map-route-note:empty { display: none; }
 
 /* --- The region index --- */
 .map-index { margin-top: 0.85rem; }
@@ -511,30 +570,86 @@ html[data-theme="light"] .map {
   .map-legend, .map-layer-legend { left: 0.5rem; bottom: 0.5rem; }
   .map-layers { order: 4; -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 1.25rem), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 1.25rem), transparent); }
   .map-layers button { padding: 0.4rem 0.75rem; }
-  .map-card {
+  /* The side column is one sheet rising from the bottom, the
+     route over the card, scrolling as a whole. */
+  .map-side {
     top: auto;
     left: 0.4rem;
     right: 0.4rem;
     bottom: 0.4rem;
     width: auto;
-    max-height: 55%;
+    max-height: 58%;
+    overflow: auto;
+    overscroll-behavior: contain;
+    pointer-events: auto;
     border-radius: var(--r-lg) var(--r-lg) var(--r-md) var(--r-md);
   }
-  .map-card:not([hidden]) ~ .map-legend,
-  .map-card:not([hidden]) ~ .map-layer-legend { display: none; }
-  /* The planner docks at the top on phones, opposite the
-     system card rising from the bottom. */
-  .map-route {
-    top: 0.4rem;
-    right: 0.4rem;
-    bottom: auto;
-    width: min(21rem, calc(100% - 0.8rem));
-    max-height: 62%;
-  }
+  .map-side:not(:has(> :not([hidden]))) { pointer-events: none; }
+  .map-side > *, .map-side > .map-route { flex: none; max-height: none; overflow: visible; }
+  .map-route-list { columns: 1; }
+  .map-side:has(> :not([hidden])) ~ .map-legend,
+  .map-side:has(> :not([hidden])) ~ .map-layer-legend { display: none; }
 }
-/* Short landscape phones: the bar stays one line. */
+/* Short landscape phones: the bar stays one line; the side column
+   docks right, full height. */
 @media (max-height: 30rem) and (orientation: landscape) and (pointer: coarse) {
   .map-find { order: 0; flex: 1 1 10rem; }
   .map-stage { height: calc(100dvh - var(--sticky-top) - 5rem); }
-  .map-card { top: 0.5rem; bottom: 0.5rem; left: auto; right: 0.5rem; width: min(18rem, 45%); max-height: none; }
+  .map-side { top: 0.5rem; bottom: 0.5rem; left: auto; right: 0.5rem; width: min(18rem, 45%); max-height: none; }
 }
+
+/* --- Full screen: the frame over everything, the stage filling it --- */
+html.map-full-open { overflow: hidden; }
+/* A backdrop filter on an ancestor would become the fixed frame's
+   containing block (and stacking context): off while full screen. */
+html.map-full-open .page-body { -webkit-backdrop-filter: none; backdrop-filter: none; }
+.map.map-full {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  background: var(--panel);
+}
+.map.map-full .map-stage { flex: 1 1 auto; height: auto; min-height: 0; }
+.map-full-btn { display: inline-flex; align-items: center; justify-content: center; }
+.map-full-btn[aria-pressed="true"] { color: var(--accent); border-color: var(--accent); }
+
+/* --- The layer legend's controls (the legend itself lets the
+   pointer through to the map; these take it) --- */
+.map-layer-ctl { pointer-events: auto; }
+.map-layer-seg {
+  display: inline-grid;
+  grid-auto-flow: column;
+  margin: 0.1rem 0 0.35rem;
+  border: 1px solid var(--box-edge);
+  border-radius: var(--r-xs);
+  overflow: hidden;
+}
+.map-layer-seg button {
+  padding: 0.25rem 0.6rem;
+  border: 0;
+  border-left: 1px solid var(--box-edge);
+  background: var(--row-alt);
+  color: var(--muted-2);
+  font: inherit;
+  cursor: pointer;
+}
+.map-layer-seg button:first-child { border-left: 0; }
+.map-layer-seg button[aria-checked="true"] {
+  color: var(--text-bright);
+  background: color-mix(in srgb, var(--accent) 20%, transparent);
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+.map-scale {
+  display: grid;
+  grid-template-columns: auto minmax(5rem, 1fr) auto;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.35rem;
+  color: var(--muted-2);
+  font-size: 0.7rem;
+}
+.map-scale input { width: 100%; margin: 0; accent-color: var(--accent); }

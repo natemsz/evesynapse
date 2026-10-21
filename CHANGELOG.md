@@ -16,6 +16,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Placeholder section for upcoming changes.
 
+## [v0.5.5.4] - 2026-10-21
+
+Automated build of EveSynapse v0.5.5.4. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+
+## What's Changed
+### 🚀 Features
+* Place pages: our map links, activity stats and sovereignty by @natemsz in https://github.com/natemsz/evesynapse/pull/543
+* Landing: map, killboard and route planner join the showcase by @natemsz in https://github.com/natemsz/evesynapse/pull/544
+### 🐛 Bug Fixes
+* Fix: abyssal roll sliders activate on family selection by @natemsz in https://github.com/natemsz/evesynapse/pull/545
+### Other Changes
+* docs(changelog): review changelog for v0.5.5.3 by @github-actions[bot] in https://github.com/natemsz/evesynapse/pull/542
+
+
+**Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.5.3...v0.5.5.4
+
 ## [v0.5.5.3] - 2026-10-21
 
 Automated build of EveSynapse v0.5.5.3. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).

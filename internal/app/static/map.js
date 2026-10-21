@@ -2338,7 +2338,7 @@
 
     // joinMine indexes /map/mine.json by system index.
     function joinMine(D) {
-      var M = { pilots: {}, fleet: {}, clones: {}, market: {}, industry: {}, structures: {}, posted: {}, heat: {}, max: {}, fleets: D.fleets || [] };
+      var M = { pilots: {}, fleet: {}, clones: {}, market: {}, industry: {}, structures: {}, posted: {}, heat: {}, max: {}, fleets: D.fleets || [], jumpers: D.jumpers || [], bridges: D.bridges || [] };
       function at(map, sys) {
         var i = G.byID[sys];
         if (i === undefined) return null;

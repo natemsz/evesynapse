@@ -348,6 +348,42 @@ func TestAbyssalLadderDroneSize(t *testing.T) {
 	}
 }
 
+// TestAbyssalRolledWeightsOnly: a smart bomb family weights all
+// four damage types; a Proton bomb's mutaplasmid rolls only
+// explosive. Cut to the rolled weights, explosive is the primary
+// and the size figure, and the ladder takes Proton rungs (an EMP
+// bomb, explosive 0, stays off it). Uncut, the zero emDamage was
+// the size figure and no rung could ever match.
+func TestAbyssalRolledWeightsOnly(t *testing.T) {
+	weights := []db.AbyssalFamilyWeight{
+		{Family: "smart_bomb", AttributeID: 114, Weight: 1}, // em
+		{Family: "smart_bomb", AttributeID: 116, Weight: 1}, // explosive
+		{Family: "smart_bomb", AttributeID: 117, Weight: 1}, // kinetic
+		{Family: "smart_bomb", AttributeID: 118, Weight: 1}, // thermal
+		{Family: "smart_bomb", AttributeID: 50, Weight: 0.5, PenaltyOnly: true},
+	}
+	ranges := map[int64]abyssalRange{116: {MinMult: 0.9, MaxMult: 1.2}, 50: {MinMult: 0.85, MaxMult: 1.4}}
+	base := map[int64]float64{114: 0, 116: 100, 117: 0, 118: 0, 50: 40}
+	in := abyssalScoringInputs{
+		Family: "smart_bomb", Ranges: ranges, Base: base,
+		Rolls:   map[int64]float64{114: 0, 116: 115, 117: 0, 118: 0, 50: 42},
+		Weights: abyssalRolledWeights(weights, ranges),
+	}
+	if len(in.Weights) != 2 {
+		t.Fatalf("rolled weights = %+v, want explosive and cpu", in.Weights)
+	}
+	sc := scoreAbyssal(in)
+	if !sc.HasScore || sc.PrimaryAbs != 115 {
+		t.Errorf("explosive must be the primary: score %v, primary %v", sc.HasScore, sc.PrimaryAbs)
+	}
+	if !abyssalSameSize(in, map[int64]float64{114: 0, 116: 130, 117: 0, 118: 0, 50: 40}) {
+		t.Error("a faction Proton bomb belongs on the ladder")
+	}
+	if abyssalSameSize(in, map[int64]float64{114: 100, 116: 0, 117: 0, 118: 0, 50: 40}) {
+		t.Error("an EMP bomb must stay off a Proton bomb's ladder")
+	}
+}
+
 func TestAbyssalRecreationCheapestPath(t *testing.T) {
 	in := testFamilyInputs(map[int64]float64{64: 0.8, 204: 0.5, 6: 0.5, 50: 0.8})
 	sc := scoreAbyssal(in)

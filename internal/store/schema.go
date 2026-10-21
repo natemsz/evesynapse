@@ -474,6 +474,11 @@ var pgIntelChannelsSchema string
 //go:embed schema_pg/079_intel_tokens.sql
 var pgIntelTokensSchema string
 
+// Step 080: known hostiles -- the pilots each intel channel watches.
+//
+//go:embed schema_pg/080_intel_watch.sql
+var pgIntelWatchSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -582,6 +587,7 @@ func schemaSteps() []schemaStep {
 		{77, "scans", pgScansSchema, ""},
 		{78, "intel_channels", pgIntelChannelsSchema, ""},
 		{79, "intel_tokens", pgIntelTokensSchema, ""},
+		{80, "intel_watch", pgIntelWatchSchema, ""},
 	}
 }
 

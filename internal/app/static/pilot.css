@@ -1,0 +1,71 @@
+/* pilot.css -- the pilot page's intel section (pilot.html,
+ * pilot_intel.go). Glass panels on the site's tokens, like the
+ * killboard and the scan tool. Bars take their widths from data-w
+ * (scans.js); losses are red, as on the killboard. */
+
+.pi { margin-top: 1.4rem; display: flex; flex-direction: column; gap: 0.8rem; --pi-loss: #d0453a; }
+html[data-theme="light"] .pi { --pi-loss: #b0302a; }
+.pi h2 { margin: 0; }
+.pi h2 small, .pi h3 small { font-weight: 400; font-size: 0.75rem; text-transform: none; letter-spacing: 0; }
+.pi-h2 { margin-top: 0.6rem !important; }
+.pi h3 { margin: 0 0 0.5rem; font-size: 0.78rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted-2); display: flex; align-items: baseline; gap: 0.5rem; }
+.pi-more { margin-left: auto; font-size: 0.78rem; letter-spacing: 0; text-transform: none; }
+
+.pi-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); gap: 0.6rem; }
+.pi-stat, .pi-panel {
+  padding: 0.65rem 0.85rem;
+  border: 1px solid var(--glass-edge);
+  border-radius: var(--r-lg);
+  background: var(--glass);
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  backdrop-filter: blur(var(--glass-blur));
+}
+.pi-stat { display: flex; flex-direction: column; gap: 0.1rem; color: inherit; text-decoration: none; }
+a.pi-stat:hover { border-color: var(--accent); }
+.pi-seen { grid-column: span 2; }
+.pi-v { font-size: 1.3rem; font-weight: 700; color: var(--text-bright); font-variant-numeric: tabular-nums; line-height: 1.15; }
+.pi-l { font-size: 0.78rem; color: var(--muted-2); }
+
+.pi-cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.8rem; align-items: start; }
+.pi-bars { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 0.2rem; }
+.pi-bars li { position: relative; display: flex; align-items: center; gap: 0.5rem; padding: 0.28rem 0.5rem; border-radius: var(--r-xs); overflow: hidden; font-size: 0.88rem; }
+.pi-bar { position: absolute; inset: 0 auto 0 0; width: var(--w, 0%); background: color-mix(in srgb, var(--accent) 22%, transparent); pointer-events: none; }
+.pi-bars img { position: relative; flex: none; border-radius: var(--r-xs); }
+.pi-n { position: relative; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pi-c { position: relative; flex: none; color: var(--text-bright); font-variant-numeric: tabular-nums; }
+
+/* Active hours: 24 columns, the busiest full height. */
+.pi-hours { display: grid; grid-template-columns: repeat(24, 1fr); align-items: end; gap: 2px; height: 3.5rem; margin: 0; padding: 0; list-style: none; }
+.pi-hours li { position: relative; height: 100%; border-radius: 2px; background: var(--row-alt); }
+.pi-hour { position: absolute; inset: auto 0 0 0; height: var(--w, 0%); border-radius: 2px; background: var(--accent); }
+.pi-hours-axis { display: flex; justify-content: space-between; margin: 0.2rem 0 0; font-size: 0.7rem; }
+
+.pi-mates, .pi-kills { margin: 0; padding: 0; list-style: none; }
+.pi-mates { display: grid; grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr)); gap: 0.3rem 1rem; }
+.pi-mates li, .pi-kills li { padding: 0.2rem 0; font-size: 0.88rem; }
+.pi-mates img, .pi-kills img { vertical-align: middle; border-radius: 50%; }
+.pi-kills img { border-radius: var(--r-xs); }
+.pi-kills li + li { border-top: 1px solid var(--box-edge); }
+.pi-kills li.lost a { color: var(--pi-loss); }
+
+.pi-watched { margin: 0; }
+.pi-unwatch { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.pi-unwatch form { margin: 0; }
+.pi-watch { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 0.5rem 0.7rem; }
+.pi-watch label > span { display: block; margin-bottom: 0.2rem; font-size: 0.78rem; color: var(--muted-2); }
+.pi-watch select, .pi-watch input[type=text] {
+  padding: 0.38rem 0.5rem;
+  border: 1px solid var(--box-edge);
+  border-radius: var(--r-xs);
+  background: var(--row-alt);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.88rem;
+}
+.pi-watch input[type=text] { width: 18rem; max-width: 100%; }
+
+@media (max-width: 45rem) {
+  .pi-cols { grid-template-columns: minmax(0, 1fr); }
+  .pi-seen { grid-column: 1 / -1; }
+  .pi-hours { height: 2.6rem; }
+}

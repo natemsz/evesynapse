@@ -2297,7 +2297,7 @@
     // PvP, mining) color the systems themselves, so one at a time, and
     // while one is on the layer picker's colorings stand down: the
     // menu greys out the other heats, the picker greys out its chips.
-    var DATA_ALL = ["pilots", "fleet", "clones", "assets", "market", "industry", "structures", "pvp", "mining", "posted"];
+    var DATA_ALL = ["pilots", "fleet", "clones", "assets", "market", "industry", "structures", "pvp", "mining", "posted", "watched"];
     var DATA_HEAT = {
       assets: { title: "Your assets, estimated ISK", isk: true },
       pvp: { title: "Your kills and losses, 30 days" },
@@ -2338,7 +2338,7 @@
 
     // joinMine indexes /map/mine.json by system index.
     function joinMine(D) {
-      var M = { pilots: {}, fleet: {}, clones: {}, market: {}, industry: {}, structures: {}, posted: {}, heat: {}, max: {}, fleets: D.fleets || [] };
+      var M = { pilots: {}, fleet: {}, clones: {}, market: {}, industry: {}, structures: {}, posted: {}, watched: {}, heat: {}, max: {}, fleets: D.fleets || [], jumpers: D.jumpers || [], bridges: D.bridges || [] };
       function at(map, sys) {
         var i = G.byID[sys];
         if (i === undefined) return null;
@@ -2354,6 +2354,7 @@
       (D.industry || []).forEach(function (m) { one(M.industry, m.sys, m); });
       (D.structures || []).forEach(function (s) { var a = at(M.structures, s.sys); if (a) a.push(s); });
       (D.posted || []).forEach(function (p) { one(M.posted, p.sys, p); });
+      (D.watched || []).forEach(function (w) { var a = at(M.watched, w.sys); if (a) a.push(w); });
       ["assets", "pvp", "mining"].forEach(function (k) {
         var vals = new Float64Array(G.n), rows = {}, top = 0;
         (D[k] || []).forEach(function (h) {
@@ -2477,6 +2478,19 @@
         ctx.fillStyle = dataRGBA("fleet", 0.45);
         ctx.fill();
       });
+      // A watched hostile: a red crosshair.
+      each("watched", function (i, x, y) {
+        var s = r + 7;
+        ctx.beginPath();
+        ctx.arc(x, y, s, 0, Math.PI * 2);
+        ctx.moveTo(x - s - 4, y); ctx.lineTo(x - s + 3, y);
+        ctx.moveTo(x + s - 3, y); ctx.lineTo(x + s + 4, y);
+        ctx.moveTo(x, y - s - 4); ctx.lineTo(x, y - s + 3);
+        ctx.moveTo(x, y + s - 3); ctx.lineTo(x, y + s + 4);
+        ctx.lineWidth = 1.8;
+        ctx.strokeStyle = colors.camp;
+        ctx.stroke();
+      });
       each("pilots", function (i, x, y, list) {
         var on = list.some(function (p) { return p.online; }), s = r + 4;
         ctx.beginPath();
@@ -2504,6 +2518,14 @@
           if (mode !== "universe" && S.r[i] !== region) return;
           var list = MINE.pilots[i], text = list[0].name + (list.length > 1 ? " +" + (list.length - 1) : "");
           label(text, wx(i) * k + ox, wy(i) * k + oy - r - 22, 11, dataRGBA("pilots", 1), "700", false, "D" + i);
+        });
+      }
+      if (dataOn.watched) {
+        var wk = Object.keys(MINE.watched).map(Number);
+        inPlaceFirst(wk, function (i) { return "W" + i; }, function (i) {
+          if (mode !== "universe" && S.r[i] !== region) return;
+          var list = MINE.watched[i], text = list[0].name + (list.length > 1 ? " +" + (list.length - 1) : "");
+          label(text, wx(i) * k + ox, wy(i) * k + oy + r + 14, 11, colors.camp, "700", false, "W" + i);
         });
       }
       if (dataOn.fleet && close) {
@@ -2631,6 +2653,11 @@
         if (dk === "assets") rows.push(["Your assets", "≈" + iskShort(hr.v) + " ISK"]);
         if (dk === "pvp") rows.push(["Your PvP, 30 days", plural(hr.a, "kill") + " · " + plural(hr.b, "loss").replace("losss", "losses") + " · " + iskShort(hr.c) + " ISK"]);
         if (dk === "mining") rows.push(["Your mining, 30 days", Math.round(hr.v).toLocaleString() + " units" + (hr.a ? " · " + iskShort(hr.a) + " ISK" : "")]);
+      }
+      if (dataOn.watched && MINE.watched[i]) {
+        rows.push(["Watched", MINE.watched[i].map(function (w) {
+          return w.name + (w.note ? " (" + w.note + ")" : "") + " · " + agoShort(w.at);
+        }).join(" · ")]);
       }
       if (dataOn.posted && MINE.posted[i]) {
         var po = MINE.posted[i], pp = [];

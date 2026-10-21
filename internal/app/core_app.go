@@ -664,6 +664,7 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 		r.Use(anonPages)
 		r.Get("/", app.handlePilot)
 		r.Get("/fragment", app.handlePilotFragment)
+		r.With(app.requireAuth).Post("/watch", app.handlePilotWatch)
 	})
 
 	// Public record pages (pilot, corporation, alliance, system,

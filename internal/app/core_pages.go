@@ -61,6 +61,8 @@ type pageData struct {
 
 	// Public pilot page (/pilot/): a stranger's public record.
 	Pilot *pilotView
+	// PilotIntel is the pilot page's intel section (pilot_intel.go).
+	PilotIntel *pilotIntelView
 
 	// Public corporation & alliance pages (/corporation/,
 	// /alliance/): an organization's public record.

@@ -46,6 +46,20 @@
         </ol>
         {{if .Older}}<p class="ch-older"><a href="{{.Older}}">Older reports</a></p>{{end}}
       </section>
+
+      {{/* Known hostiles (pilot_intel.go): added from a pilot's page,
+           each with where it was last seen on a public kill. */}}
+      <section class="ch-panel" aria-labelledby="ch-watch-h">
+        <h2 id="ch-watch-h">Known hostiles</h2>
+        {{if .Watch}}<ul class="ch-grants ch-hostiles">
+          {{range .Watch}}<li>
+            <img src="https://images.evetech.net/characters/{{.ID}}/portrait?size=32" alt="" width="24" height="24" loading="lazy">
+            <span class="ch-grant-n"><a href="/pilot/?character={{.ID}}">{{.Name}}</a>{{if .Note}} <span class="muted">{{.Note}}</span>{{end}}</span>
+            <span class="ch-seen">{{if .Seen}}<span class="sec sec-{{.SecTier}}">{{.SecText}}</span> <a href="/map/?system={{.SysID}}">{{.Seen}}</a>{{else}}<span class="muted">not seen lately</span>{{end}}</span>
+            {{if $.Channel.CanPost}}<form method="post" action="/pilot/watch"><input type="hidden" name="character" value="{{.ID}}"><input type="hidden" name="channel" value="{{$.Channel.ID}}"><input type="hidden" name="remove" value="1"><input type="hidden" name="back" value="/intel/channels/{{$.Channel.ID}}/"><button type="submit" class="ch-x" aria-label="Take {{.Name}} off">×</button></form>{{end}}
+          </li>{{end}}
+        </ul>{{else}}<p class="muted">None yet. Open a pilot's page (any pilot name links to one) and add them here.</p>{{end}}
+      </section>
     </div>
 
     {{if .Owner}}

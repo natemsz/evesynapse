@@ -141,6 +141,9 @@ type minePayload struct {
 	// and fatigue, and the corporation's Ansiblex bridges.
 	Jumpers []mineJumper `json:"jumpers"`
 	Bridges []mineBridge `json:"bridges"`
+	// Watched is the reader's channels' known hostiles where last
+	// seen (pilot_intel.go).
+	Watched []mineWatched `json:"watched"`
 }
 
 // appKey keys a process-wide cache by instance and ID, so two
@@ -483,6 +486,7 @@ func (app *Application) buildMine(ctx context.Context, userID int64) minePayload
 	for _, p := range posted {
 		out.Posted = append(out.Posted, *p)
 	}
+	out.Watched = app.mineWatched(ctx, userID)
 	if f := app.mineFleets(ctx, chars); f != nil {
 		out.Fleets = f
 	}

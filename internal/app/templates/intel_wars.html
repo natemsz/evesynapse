@@ -7,7 +7,7 @@
 
 {{if .IntelWars}}
   {{if .IntelWars.Warming}}
-  <p>Not loaded yet. The public war list is fetched on a regular cycle; progress is on the <a href="/sync/">Sync page</a>.</p>
+  <p>Not loaded yet. The public war list is fetched on a regular cycle{{if .IsAdmin}}; progress is on the <a href="/sync/">Sync page</a>{{end}}.</p>
   {{else}}
   {{if .IntelWars.Rows}}
   <div class="tw">

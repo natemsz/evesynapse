@@ -38,7 +38,7 @@
   {{if .Killmails.RoleMissing}}
   <p>Needs the <b>{{.Killmails.RoleMissing}}</b> role in game. {{.Killmails.CharacterName}} doesn't hold it, so ESI won't share {{.Killmails.Subject}}'s recent killmails. The list appears here once they do.</p>
   {{else if .Killmails.Warming}}
-  <p>Still syncing. Progress is on the <a href="/sync/">Sync page</a>.</p>
+  <p>Still syncing.{{if .IsAdmin}} Progress is on the <a href="/sync/">Sync page</a>.{{end}}</p>
   {{else}}
   <p><small>Killmails couldn't be loaded. The server log has the details.</small></p>
   {{end}}

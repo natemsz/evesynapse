@@ -20,7 +20,7 @@
   {{else if .CorpStructs.NoFeeder}}
   <p>{{.CorpStructs.CharacterName}} hasn't granted the corporation permissions that feed the structures, so nobody is sharing this corporation's data with EveSynapse yet. <a href="{{.CorpStructs.AddScopesURL}}">Add the corporation permissions</a> — EVE asks for them on top of what is already granted.</p>
   {{else if .CorpStructs.Warming}}
-  <p>Still syncing. Progress is on the <a href="/sync/">Sync page</a>.</p>
+  <p>Still syncing.{{if .IsAdmin}} Progress is on the <a href="/sync/">Sync page</a>.{{end}}</p>
   {{else if .CorpStructs.Loaded}}
   {{if .CorpStructs.Rows}}
   {{range .CorpStructs.Rows}}

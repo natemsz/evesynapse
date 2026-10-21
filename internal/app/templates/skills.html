@@ -51,7 +51,7 @@
 
   <h2>Browse skills</h2>
   {{if .Skills.BrowseWarming}}
-  <p><small>Skill data is still loading. The full catalog appears when the static data import finishes; progress is on the <a href="/sync/">Sync page</a>.</small></p>
+  <p><small>Skill data is still loading. The full catalog appears when the static data import finishes{{if .IsAdmin}}; progress is on the <a href="/sync/">Sync page</a>{{end}}.</small></p>
   {{else}}
   {{if and (moduleOn "skillplans") (not .Skills.Plans)}}<p><small><a href="/skills/plans?character={{.Skills.CharacterID}}">Create a skill plan</a> to add skills straight from this catalog.</small></p>{{end}}
   {{range .Skills.Browse}}
@@ -91,7 +91,7 @@
   {{end}}
   {{else}}
   {{if .Skills.Warming}}
-  <p>Still syncing. Progress is on the <a href="/sync/">Sync page</a>.</p>
+  <p>Still syncing.{{if .IsAdmin}} Progress is on the <a href="/sync/">Sync page</a>.{{end}}</p>
   {{else}}
   <p><small>Skills couldn't be loaded. The server log has the details.</small></p>
   {{end}}

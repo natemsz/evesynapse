@@ -207,7 +207,11 @@ func (app *Application) handlePlanets(w http.ResponseWriter, r *http.Request) {
 	} else if app.piNotEnabled(ctx, active) {
 		view.Colonies = econSectionState{Note: "Planetary industry is not enabled for this character yet — sign in again to re-link and approve the planetary scope. EVE's consent screen calls it “manage your planetary installations”; EveSynapse only ever reads your colonies."}
 	} else if state, _, found := app.corpKindState(ctx, active.CharacterID, esi.SnapPlanets); found && state == fetchStateError {
-		view.Colonies = econSectionState{Note: "Colony data could not be loaded — see the Sync page for status."}
+		note := "Colony data could not be loaded."
+		if app.isAdmin(ctx) {
+			note = "Colony data could not be loaded — see the Sync page for status."
+		}
+		view.Colonies = econSectionState{Note: note}
 	} else {
 		view.Colonies = econSectionState{Warming: true}
 	}

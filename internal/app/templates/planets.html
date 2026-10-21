@@ -13,7 +13,7 @@
 {{if .Planets.Colonies.Note}}
 <p>{{.Planets.Colonies.Note}}</p>
 {{else if .Planets.Colonies.Warming}}
-<p><small>Still syncing. Progress is on the <a href="/sync/">Sync page</a>.</small></p>
+<p><small>Still syncing.{{if .IsAdmin}} Progress is on the <a href="/sync/">Sync page</a>.{{end}}</small></p>
 {{else if .Planets.Rows}}
 {{range .Planets.Rows}}
 <section class="foldable">

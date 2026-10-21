@@ -5303,7 +5303,18 @@ html[data-theme="light"] .suggest li:not(.sug-kind):not(.sug-empty):hover, html[
   #site-nav { display: none; }
   .nav-backdrop { display: none; }
   .page-shell {
-    padding-bottom: calc(var(--phone-bar-h) + env(safe-area-inset-bottom, 0px) + 0.75rem);
+    /* The bottom clearance is the bar's own height plus a
+       hairline: at full scroll the last content (the footer, on
+       most pages) rests 0.5px above the bar's top edge. */
+    padding-bottom: calc(var(--phone-bar-h) + env(safe-area-inset-bottom, 0px) + 0.5px);
+    /* The short-page floor inside this band: the in-flow top
+       bar here is 3.2rem plus its 1px bottom border (and any
+       top safe-area padding it carries), not the 3.75rem the
+       860px floor subtracts, so the shell reaches the
+       viewport's bottom edge and the footer lands on it
+       instead of floating above a band of wallpaper. */
+    min-height: calc(100vh - 3.2rem - 1px - env(safe-area-inset-top, 0px));
+    min-height: calc(100dvh - 3.2rem - 1px - env(safe-area-inset-top, 0px));
   }
   .phone-bar {
     display: flex;

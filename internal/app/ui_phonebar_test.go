@@ -48,7 +48,8 @@ func TestPhoneShellStatic(t *testing.T) {
 		".phone-bar {",
 		"position: fixed",
 		".page-shell {",
-		"padding-bottom: calc(var(--phone-bar-h)",
+		"padding-bottom: calc(var(--phone-bar-h) + env(safe-area-inset-bottom, 0px) + 0.5px);",
+		"min-height: calc(100dvh - 3.2rem - 1px - env(safe-area-inset-top, 0px));",
 		".phone-sheet:not([hidden]) {",
 		".phone-sheet-backdrop:not([hidden]) {",
 	} {

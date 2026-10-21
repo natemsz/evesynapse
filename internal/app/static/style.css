@@ -160,7 +160,7 @@
      edge it with this faint accent hairline, never a dark
      fill. One token pair restyles every inset box. */
   --box-edge: color-mix(in srgb, var(--accent) 14%, transparent);
-  --glass-blur: 34px;
+  --glass-blur: 24px;
   --row: rgba(16, 13, 10, 0.55);
   --row-alt: rgba(255, 255, 255, 0.03);
   --row-hover: rgba(255, 140, 50, 0.09);
@@ -2969,20 +2969,32 @@ html[data-nav="rail"] .sidebar .branch .menu a { white-space: nowrap; }
     box-shadow: none;
   }
 }
-/* The shell is a column as tall as its grid row (the sidebar's
-   height): main grows into the slack, so on a page shorter than
-   the viewport the footer rests on the bottom edge instead of
-   ending with the content and leaving a band of wallpaper below
-   it. Main's bottom margin goes: in a flex column margins no
-   longer collapse, and the footer's own margin-top stays the one
-   gap above it. */
+/* The shell is a two-row grid as tall as its grid row (the
+   sidebar's height): the main row takes the slack, so on a page
+   shorter than the viewport the footer rests on the bottom edge
+   instead of ending with the content and leaving a band of
+   wallpaper below it. Main is sized by width, never by its
+   content: it fills its column (its max-width cap and auto
+   margins center it past that, exactly as in block flow) and
+   sits at the top of its row at its content height. A flex
+   column here shrink-wrapped main to its fit-content width and
+   centered it, and a wide table's min-content pushed it past
+   the viewport instead of scrolling inside its panel. Main's
+   bottom margin goes: the footer's own margin-top stays the
+   one gap above it. */
 .page-shell {
   min-width: 0;
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) auto;
   height: 100%;
 }
-.page-shell > main { flex: 1 0 auto; margin-bottom: 0; }
+.page-shell > main {
+  align-self: start;
+  width: 100%;
+  min-width: 0;
+  margin-bottom: 0;
+}
 .topbar { min-height: 3.75rem; }
 .wordmark-glyph {
   display: inline-block;
@@ -3097,9 +3109,9 @@ tbody tr.yours td { background-color: #2a2015; }
 }
 @media (max-width: 860px) {
   body { display: block; padding-top: 0; }
-  /* Block shell here, not the grid: the column's floor is the
-     viewport under the in-flow top bar, so the footer still
-     rests on the bottom edge of short pages. */
+  /* Body is block flow here, not the sidebar grid: the shell's
+     floor is the viewport under the in-flow top bar, so the
+     footer still rests on the bottom edge of short pages. */
   .page-shell { min-height: calc(100vh - 3.75rem); min-height: calc(100dvh - 3.75rem); }
   html[data-nav="hidden"] .sidebar {
     display: block;

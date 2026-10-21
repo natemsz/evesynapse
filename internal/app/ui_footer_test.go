@@ -7,11 +7,14 @@ import (
 )
 
 // TestStickyFooterShell pins the app shell's footer contract: the
-// page column fills its grid row and main grows into the slack,
-// so the footer rests on the viewport's bottom edge on pages
-// shorter than the viewport (and simply follows the content on
-// long ones). In the block layout under 860px the same floor
-// comes from a min-height under the in-flow top bar. The footer's
+// page column fills its grid row and the main row absorbs the
+// slack, so the footer rests on the viewport's bottom edge on
+// pages shorter than the viewport (and simply follows the content
+// on long ones). Main is sized by width, never by its content:
+// it fills its column at its content height, so container pages
+// span the column and wide content stays inside its own scroll
+// regions. In the block layout under 860px the same floor comes
+// from a min-height under the in-flow top bar. The footer's
 // background is the star tile: a real compressed raster whose
 // ?v= token names its own bytes, like the wallpaper's.
 func TestStickyFooterShell(t *testing.T) {
@@ -19,16 +22,24 @@ func TestStickyFooterShell(t *testing.T) {
 
 	shell := cssBlock(t, css, ".page-shell {")
 	for _, want := range []string{
-		"display: flex;",
-		"flex-direction: column;",
+		"display: grid;",
+		"grid-template-rows: minmax(0, 1fr) auto;",
 		"height: 100%;",
 	} {
 		if !strings.Contains(shell, want) {
 			t.Errorf("the .page-shell rule is missing %q; the footer cannot rest on the bottom edge of short pages", want)
 		}
 	}
-	if !strings.Contains(css, ".page-shell > main { flex: 1 0 auto; margin-bottom: 0; }") {
-		t.Error("main no longer grows inside the shell (or its bottom margin crept back, doubling the gap above the footer)")
+	main := cssBlock(t, css, ".page-shell > main {")
+	for _, want := range []string{
+		"align-self: start;",
+		"width: 100%;",
+		"min-width: 0;",
+		"margin-bottom: 0;",
+	} {
+		if !strings.Contains(main, want) {
+			t.Errorf("the .page-shell > main rule is missing %q; main must fill its column at its content height, sized by width and never by its content (and its bottom margin stays out, so the footer's own margin-top is the one gap above it)", want)
+		}
 	}
 
 	block := mediaBlock(t, css, "@media (max-width: 860px)")

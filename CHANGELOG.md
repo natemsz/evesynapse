@@ -16,6 +16,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Placeholder section for upcoming changes.
 
+## [v0.5.5.1] - 2026-10-21
+
+Automated build of EveSynapse v0.5.5.1. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+
+## What's Changed
+### 🚀 Features
+* Feature: abyssal roll-attribute sliders in contract search by @natemsz in https://github.com/natemsz/evesynapse/pull/528
+### 🧰 Maintenance & Dependencies
+* Fix: changelog automation by @natemsz in https://github.com/natemsz/evesynapse/pull/529
+* Chore: backfill CHANGELOG.md from published release notes by @natemsz in https://github.com/natemsz/evesynapse/pull/530
+### Other Changes
+* Map: click a region name for tactical; zoom entry becomes a preference by @natemsz in https://github.com/natemsz/evesynapse/pull/531
+
+
+**Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.5.0...v0.5.5.1
+
 ## [v0.5.5.0] - 2026-10-21
 
 Automated build of EveSynapse v0.5.5.0. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).

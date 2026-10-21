@@ -912,6 +912,16 @@ type RestockTarget struct {
 	UpdatedAt    time.Time `json:"updated_at"`
 }
 
+type Scan struct {
+	ID        string    `json:"id"`
+	Kind      string    `json:"kind"`
+	SystemID  int64     `json:"system_id"`
+	UserID    int64     `json:"user_id"`
+	Raw       string    `json:"raw"`
+	Result    string    `json:"result"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
 type SdeAttributeType struct {
 	AttributeID  int64   `json:"attribute_id"`
 	Name         string  `json:"name"`

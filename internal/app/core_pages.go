@@ -81,6 +81,9 @@ type pageData struct {
 	Killboard *killboardView
 	KillPage  *killPageView
 
+	// Scans (/intel/scan/, /intel/scan/{id}/).
+	Scan *scanPageView
+
 	// Player structure page (/structure/): the local structure
 	// record.
 	Structure *structurePageView
@@ -141,7 +144,7 @@ func sectionForPage(page string) string {
 		return "corporation"
 	case "map.html":
 		return "map"
-	case "killboard.html", "kill.html":
+	case "killboard.html", "kill.html", "scans.html", "scan.html":
 		return "intel"
 	case "sync.html":
 		return "sync"

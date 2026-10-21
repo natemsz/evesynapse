@@ -653,3 +653,10 @@ html.map-full-open .page-body { -webkit-backdrop-filter: none; backdrop-filter: 
   font-size: 0.7rem;
 }
 .map-scale input { width: 100%; margin: 0; accent-color: var(--accent); }
+
+/* The system card's list of the reader's own scans here. */
+.map-card-scans { margin: 0.55rem 0 0; font-size: 0.82rem; }
+.map-card-scans[hidden] { display: none; }
+.map-card-scans-h { margin: 0 0 0.2rem; color: var(--muted-2); font-weight: 600; }
+.map-card-scans ul { margin: 0; padding: 0; list-style: none; }
+.map-card-scans li { padding: 0.1rem 0; }

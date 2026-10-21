@@ -1,0 +1,141 @@
+{{define "title"}}{{with .Scan}}{{if .Title}}{{.Title}}{{if .SysName}} · {{.SysName}}{{end}}{{else}}Scan{{end}}{{end}}{{end}}
+{{define "pagetitle"}}<h1><span class="gt">{{with .Scan}}{{if .Title}}{{.Title}}{{else}}Scan{{end}}{{end}}</span></h1>{{end}}
+{{define "pagetabs"}}{{template "sectiontabs" .}}{{end}}
+{{define "content"}}
+{{with .Scan}}
+{{/* One scan's reading (scans.go), as of when it was pasted. The
+     head says where and when and carries the share link; the body
+     is the kind's own breakdown. */}}
+<div class="sc">
+{{if .Error}}
+  <p class="sc-missing">{{.Error}} <a href="/intel/scan/">Paste a scan</a></p>
+{{else}}
+  {{$r := .Result}}
+  <header class="sc-head">
+    <p class="sc-where">
+      {{if .SysName}}<span class="sec sec-{{.SecTier}}">{{.SecText}}</span> <a href="/system/?system={{$r.SystemID}}">{{.SysName}}</a> <span class="muted">{{.RegionName}}</span>
+      · <a href="/map/?system={{$r.SystemID}}">Map</a> · <a href="/intel/kills/?system={{$r.SystemID}}">Kills</a>
+      {{else}}<span class="muted">No system</span>{{end}}
+      · <time datetime="{{rfc3339 .At}}" title="{{.At.UTC.Format "2006-01-02 15:04"}} EVE">{{.Ago}}</time>
+    </p>
+    <div class="sc-share">
+      <input type="text" readonly value="/intel/scan/{{.ID}}/" data-scan-link aria-label="Link to this scan">
+      <button type="button" class="btn small" data-scan-copy>Copy link</button>
+      <a class="btn small" href="/intel/scan/{{if $r.SystemID}}?system={{$r.SystemID}}{{end}}">New scan</a>
+    </div>
+  </header>
+
+  {{with $r.DScan}}
+  <section class="sc-stats" aria-label="Summary">
+    <div class="sc-stat"><span class="sc-stat-v">{{.Ships}}</span><span class="sc-stat-l">ships</span></div>
+    <div class="sc-stat{{if .ShipsGrid}} hot{{end}}"><span class="sc-stat-v">{{.ShipsGrid}}</span><span class="sc-stat-l">on grid</span></div>
+    <div class="sc-stat"><span class="sc-stat-v">{{len .Structures}}</span><span class="sc-stat-l">structure types</span></div>
+    {{if or .Drones .Fighters}}<div class="sc-stat"><span class="sc-stat-v">{{.Drones}}{{if .Fighters}} · {{.Fighters}}{{end}}</span><span class="sc-stat-l">drones{{if .Fighters}} · fighters{{end}}</span></div>{{end}}
+  </section>
+  <div class="sc-cols">
+    <section class="sc-panel">
+      <h2>Ship classes</h2>
+      {{if .Classes}}<ol class="sc-bars">{{range .Classes}}<li><span class="sc-bar" data-w="{{.Pct}}"></span><span class="sc-bar-n">{{.Name}}</span><span class="sc-bar-c">{{.N}}{{if .Grid}} <span class="sc-grid" title="on grid">{{.Grid}} on grid</span>{{end}}</span></li>{{end}}</ol>
+      {{else}}<p class="muted">No ships.</p>{{end}}
+    </section>
+    <section class="sc-panel">
+      <h2>Ships</h2>
+      {{if .Types}}<ol class="sc-bars">{{range .Types}}<li><span class="sc-bar" data-w="{{.Pct}}"></span><img src="https://images.evetech.net/types/{{.ID}}/icon?size=32" alt="" width="20" height="20" loading="lazy"><span class="sc-bar-n">{{.Name}} <span class="muted">{{.Class}}</span></span><span class="sc-bar-c">{{.N}}{{if .Grid}} <span class="sc-grid">{{.Grid}} on grid</span>{{end}}</span></li>{{end}}</ol>
+      {{else}}<p class="muted">No ships.</p>{{end}}
+    </section>
+  </div>
+  {{if or .Structures .Deployables}}<div class="sc-cols">
+    {{if .Structures}}<section class="sc-panel">
+      <h2>Structures</h2>
+      <ul class="sc-list">{{range .Structures}}<li><img src="https://images.evetech.net/types/{{.ID}}/icon?size=32" alt="" width="20" height="20" loading="lazy"><span>{{.Name}}</span><span class="sc-bar-c">{{.N}}{{if .Grid}} <span class="sc-grid">on grid</span>{{end}}</span></li>{{end}}</ul>
+    </section>{{end}}
+    {{if .Deployables}}<section class="sc-panel">
+      <h2>Deployables</h2>
+      <ul class="sc-list">{{range .Deployables}}<li><img src="https://images.evetech.net/types/{{.ID}}/icon?size=32" alt="" width="20" height="20" loading="lazy"><span>{{.Name}}</span><span class="sc-bar-c">{{.N}}{{if .Grid}} <span class="sc-grid">on grid</span>{{end}}</span></li>{{end}}</ul>
+    </section>{{end}}
+  </div>{{end}}
+  <p class="sc-note muted">On grid: within 10,000 km. {{.Items}} lines read{{if .Celestials}}, {{.Celestials}} celestials{{end}}.</p>
+  {{end}}
+
+  {{with $r.Local}}
+  <section class="sc-stats" aria-label="Summary">
+    <div class="sc-stat"><span class="sc-stat-v">{{len .Pilots}}</span><span class="sc-stat-l">pilots</span></div>
+    <div class="sc-stat"><span class="sc-stat-v">{{len .Alliances}}</span><span class="sc-stat-l">groups</span></div>
+    <div class="sc-stat{{if $.Scan.Killers}} hot{{end}}"><span class="sc-stat-v">{{len $.Scan.Killers}}</span><span class="sc-stat-l">with kills in 30 days</span></div>
+    {{if .Unknown}}<div class="sc-stat"><span class="sc-stat-v">{{len .Unknown}}</span><span class="sc-stat-l">not found</span></div>{{end}}
+  </section>
+  {{if .Partial}}<p class="sc-warn">EVE's servers did not answer for every pilot; some are missing or ungrouped.</p>{{end}}
+  <div class="sc-cols">
+    <section class="sc-panel">
+      <h2>Alliances and corporations</h2>
+      <ol class="sc-bars sc-orgs">
+        {{range .Alliances}}<li>
+          <details>
+            <summary><span class="sc-bar" data-w="{{.Pct}}"></span><img src="https://images.evetech.net/{{if .Corp}}corporations{{else}}alliances{{end}}/{{.ID}}/logo?size=32" alt="" width="20" height="20" loading="lazy"><span class="sc-bar-n">{{.Name}}</span><span class="sc-bar-c">{{.N}}{{if .Kills}} <span class="sc-kills" title="kills in 30 days">{{.Kills}} kills</span>{{end}}</span></summary>
+            {{if .Corps}}<ul class="sc-corps">{{range .Corps}}<li><a href="/intel/kills/?corporation={{.ID}}">{{.Name}}</a><span class="sc-bar-c">{{.N}}{{if .Kills}} <span class="sc-kills">{{.Kills}} kills</span>{{end}}</span></li>{{end}}</ul>{{end}}
+            <p class="sc-org-link"><a href="/intel/kills/?{{if .Corp}}corporation{{else}}alliance{{end}}={{.ID}}">Killboard</a></p>
+          </details>
+        </li>{{end}}
+      </ol>
+    </section>
+    <section class="sc-panel">
+      <h2>Active killers</h2>
+      {{if $.Scan.Killers}}<ol class="sc-killers">
+        {{range $.Scan.Killers}}<li>
+          <img src="https://images.evetech.net/characters/{{.ID}}/portrait?size=64" alt="" width="32" height="32" loading="lazy">
+          <span class="sc-killer-main"><a href="/intel/kills/?character={{.ID}}">{{.Name}}</a><span class="muted">{{.Org}}</span></span>
+          <span class="sc-killer-n"><strong>{{.Kills}}</strong> <span class="muted">kills</span></span>
+          <span class="sc-killer-last">{{.Ago}}{{if .SystemName}} · <span class="sec sec-{{.SecTier}}">{{.SecText}}</span> {{.SystemName}}{{end}}</span>
+        </li>{{end}}
+      </ol>
+      {{else}}<p class="muted">Nobody here has a public kill in the last 30 days.</p>{{end}}
+    </section>
+  </div>
+  {{if .Unknown}}<details class="sc-panel sc-fold"><summary>Not found ({{len .Unknown}})</summary><p class="sc-names">{{range $i, $n := .Unknown}}{{if $i}}, {{end}}{{$n}}{{end}}</p></details>{{end}}
+  {{end}}
+
+  {{with $r.Fleet}}
+  <section class="sc-stats" aria-label="Summary">
+    <div class="sc-stat"><span class="sc-stat-v">{{len .Members}}</span><span class="sc-stat-l">members</span></div>
+    <div class="sc-stat"><span class="sc-stat-v">{{len .Classes}}</span><span class="sc-stat-l">ship classes</span></div>
+    <div class="sc-stat"><span class="sc-stat-v">{{len .Systems}}</span><span class="sc-stat-l">{{if eq (len .Systems) 1}}system{{else}}systems{{end}}</span></div>
+  </section>
+  <div class="sc-cols">
+    <section class="sc-panel"><h2>Ship classes</h2><ol class="sc-bars">{{range .Classes}}<li><span class="sc-bar" data-w="{{.Pct}}"></span><span class="sc-bar-n">{{.Name}}</span><span class="sc-bar-c">{{.N}}</span></li>{{end}}</ol></section>
+    <section class="sc-panel"><h2>Ships</h2><ol class="sc-bars">{{range .Types}}<li><span class="sc-bar" data-w="{{.Pct}}"></span><span class="sc-bar-n">{{.Name}} <span class="muted">{{.Class}}</span></span><span class="sc-bar-c">{{.N}}</span></li>{{end}}</ol></section>
+  </div>
+  <div class="sc-cols">
+    <section class="sc-panel"><h2>Where</h2><ol class="sc-bars">{{range .Systems}}<li><span class="sc-bar" data-w="{{.Pct}}"></span><span class="sc-bar-n">{{.Name}}</span><span class="sc-bar-c">{{.N}}</span></li>{{end}}</ol></section>
+    {{if .Wings}}<section class="sc-panel"><h2>Wings</h2><ol class="sc-bars">{{range .Wings}}<li><span class="sc-bar" data-w="{{.Pct}}"></span><span class="sc-bar-n">{{.Name}}</span><span class="sc-bar-c">{{.N}}</span></li>{{end}}</ol></section>{{end}}
+  </div>
+  <details class="sc-panel sc-fold"><summary>Members ({{len .Members}})</summary>
+    <div class="sc-table-wrap"><table class="sc-table">
+      <thead><tr><th>Pilot</th><th>Ship</th><th>System</th><th>Position</th></tr></thead>
+      <tbody>{{range .Members}}<tr><td>{{.Name}}</td><td>{{.Ship}} <span class="muted">{{.Class}}</span></td><td>{{.System}}</td><td class="muted">{{.Position}}</td></tr>{{end}}</tbody>
+    </table></div>
+  </details>
+  {{end}}
+
+  {{with $r.Probe}}
+  <section class="sc-stats" aria-label="Summary">
+    <div class="sc-stat"><span class="sc-stat-v">{{len .Sigs}}</span><span class="sc-stat-l">signatures</span></div>
+    <div class="sc-stat{{if .Unresolved}} hot{{end}}"><span class="sc-stat-v">{{.Unresolved}}</span><span class="sc-stat-l">not fully scanned</span></div>
+  </section>
+  <div class="sc-cols sc-cols-wide">
+    <section class="sc-panel"><h2>By type</h2><ol class="sc-bars">{{range .Groups}}<li><span class="sc-bar" data-w="{{.Pct}}"></span><span class="sc-bar-n">{{.Name}}</span><span class="sc-bar-c">{{.N}}</span></li>{{end}}</ol></section>
+    <section class="sc-panel">
+      <h2>Signatures</h2>
+      <div class="sc-table-wrap"><table class="sc-table sc-sigs">
+        <thead><tr><th>ID</th><th>Type</th><th>Name</th><th>Signal</th><th>Distance</th></tr></thead>
+        <tbody>{{range $.Scan.Sigs}}<tr{{if lt .Pct 100}} class="partial"{{end}}><td class="sc-sig-id">{{.ID}}</td><td>{{if .Type}}{{.Type}}{{else}}<span class="muted">{{.Group}}</span>{{end}}</td><td>{{.Name}}</td><td><span class="sc-signal" data-w="{{.Pct}}"><span>{{.Pct}}%</span></span></td><td class="sc-num">{{.Dist}}</td></tr>{{end}}</tbody>
+      </table></div>
+    </section>
+  </div>
+  {{end}}
+
+  {{if $r.Skipped}}<p class="sc-note muted">{{$r.Skipped}} {{if eq $r.Skipped 1}}line was{{else}}lines were{{end}} not part of the scan and were skipped.</p>{{end}}
+  <details class="sc-panel sc-fold"><summary>The paste</summary><pre class="sc-raw">{{.Raw}}</pre></details>
+{{end}}
+</div>
+{{end}}
+{{end}}

@@ -86,7 +86,7 @@ func (app *Application) structureResolverCandidates(ctx context.Context, charact
 	var out []db.Character
 	corpOf := map[int64]int64{}
 	for _, ch := range characters {
-		if !characterSyncs(ch) || !characterHasScope(ch, structureScope) {
+		if !app.characterMaySync(ctx, ch) || !characterHasScope(ch, structureScope) {
 			continue
 		}
 		out = append(out, ch)

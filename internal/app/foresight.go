@@ -216,7 +216,7 @@ func (app *Application) foresee(ctx context.Context, userID int64, bundles []*ch
 		return
 	}
 	for _, b := range bundles {
-		if !characterSyncs(b.ch) {
+		if !app.characterMaySync(ctx, b.ch) {
 			continue
 		}
 		app.foreseeDock(ctx, userID, b.ch, now)

@@ -449,6 +449,12 @@ var pgKillboardSchema string
 //go:embed schema_pg/075_place_activity.sql
 var pgPlaceActivitySchema string
 
+// Step 076: the shared demo account -- the is_demo flag on users
+// and the demo reset clock.
+//
+//go:embed schema_pg/076_demo_account.sql
+var pgDemoAccountSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -553,6 +559,7 @@ func schemaSteps() []schemaStep {
 		{73, "map_layers", pgMapLayersSchema, ""},
 		{74, "killboard", pgKillboardSchema, ""},
 		{75, "place_activity", pgPlaceActivitySchema, ""},
+		{76, "demo_account", pgDemoAccountSchema, ""},
 	}
 }
 

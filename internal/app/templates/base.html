@@ -117,7 +117,7 @@
     </nav>
     <div class="sidebar-account{{if .LoggedIn}} has-character{{end}}">
       <div class="sidebar-character">
-        <span class="who">{{if .LoggedIn}}Signed in{{if .CharacterName}} as {{.CharacterName}}{{end}}{{else}}Not signed in{{end}}</span>
+        <span class="who">{{if .LoggedIn}}Signed in{{if .CharacterName}} as {{.CharacterName}}{{end}}{{if .Demo}} <span class="badge demo">Demo</span>{{end}}{{else}}Not signed in{{end}}</span>
         {{if and .LoggedIn .Switcher}}
         <details class="branch switcher">
           <summary>Switch Character</summary>
@@ -161,7 +161,7 @@
     </details>{{end}}
     {{if .NotifyPrompt}}{{template "notify-prompt" .NotifyPrompt}}{{end}}
     <div class="topbar-character">
-      {{range .Switcher}}{{if .Active}}<img class="portrait topbar-portrait" src="{{.PortraitURL}}" alt="" width="32" height="32">{{end}}{{end}}      <span class="topbar-character-name">{{.CharacterName}}</span>
+      {{range .Switcher}}{{if .Active}}<img class="portrait topbar-portrait" src="{{.PortraitURL}}" alt="" width="32" height="32">{{end}}{{end}}      <span class="topbar-character-name">{{.CharacterName}}</span>{{if .Demo}} <span class="badge demo">Demo</span>{{end}}
       {{if .Switcher}}
       <details class="branch switcher topbar-switcher">
         <summary>Switch Character</summary>
@@ -209,7 +209,7 @@
   </ul>
   <div class="phone-sheet-account">
     {{if .LoggedIn}}
-    <p class="phone-sheet-who">Signed in{{if .CharacterName}} as {{.CharacterName}}{{end}}</p>
+    <p class="phone-sheet-who">Signed in{{if .CharacterName}} as {{.CharacterName}}{{end}}{{if .Demo}} <span class="badge demo">Demo</span>{{end}}</p>
     {{if .SheetSwitcher}}<ul class="phone-sheet-switch">
       {{range .SheetSwitcher}}<li><a href="/characters/switch?character={{.ID}}"{{if .Active}} class="active"{{end}}><img class="portrait" src="{{.PortraitURL}}" alt="" width="24" height="24"><span class="phone-sheet-pilot"><span class="phone-sheet-pilot-name">{{.Name}}</span>{{if or .Tags .Relink}}<small>{{.Tags}}{{if and .Tags .Relink}} · {{end}}{{if .Relink}}re-link needed{{end}}</small>{{end}}</span></a></li>
       {{end}}{{if .SheetMoreCount}}<li><a class="phone-sheet-more" href="/characters/">+{{.SheetMoreCount}} more</a></li>{{end}}

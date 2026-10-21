@@ -215,6 +215,11 @@ type CorporationRecord struct {
 	NotedAt       sql.NullTime `json:"noted_at"`
 }
 
+type DemoState struct {
+	ID          int64     `json:"id"`
+	LastResetAt time.Time `json:"last_reset_at"`
+}
+
 type DiscordChannelAccess struct {
 	GuildID   string    `json:"guild_id"`
 	ChannelID string    `json:"channel_id"`
@@ -1302,6 +1307,7 @@ type User struct {
 	HomeLayout     string       `json:"home_layout"`
 	LastBriefingAt sql.NullTime `json:"last_briefing_at"`
 	LastSeenAt     time.Time    `json:"last_seen_at"`
+	IsDemo         int64        `json:"is_demo"`
 }
 
 type UserAppraisal struct {

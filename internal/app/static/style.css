@@ -1131,11 +1131,9 @@ h3 + .tw > table, h3 + table {
   padding: 0.2rem 0.85rem;
   line-height: 1.2;
   color: #2a1302;
-  background: linear-gradient(to bottom, #ffb84d, #ff6a1a 55%, #e04e12) padding-box,
-    linear-gradient(135deg, #ffd27a, #ff6a1a 50%, #a12808) border-box;
-  border: 1px solid transparent;
+  background: #ff6a1a;
+  border: 1px solid #a12808;
   border-radius: var(--r-sm);
-  text-shadow: 0 1px 0 rgba(255, 214, 150, 0.35);
   cursor: pointer;
 }
 /* Compact variant for inline actions beside body text (copy-link buttons). */
@@ -1146,8 +1144,7 @@ h3 + .tw > table, h3 + table {
 }
 .btn:hover,
 :where(button:not([class]), input[type="submit"]:not([class]), input[type="button"]:not([class])):hover:not(:disabled) {
-  background: linear-gradient(to bottom, #ff6a1a, #d63c14 60%, #a12808) padding-box,
-    linear-gradient(135deg, #ffd27a, #ff6a1a 50%, #a12808) border-box;
+  background: #e04e12;
   color: var(--text-bright);
   text-decoration: none;
 }
@@ -1159,13 +1156,11 @@ h3 + .tw > table, h3 + table {
 /* Destructive actions: the same button in the theme's red. */
 .btn.btn-danger {
   color: #fff3ec;
-  background: linear-gradient(to bottom, #e8664a, #c62f10 55%, #8f1d06) padding-box,
-    linear-gradient(135deg, #ffb09a, #c62f10 50%, #6b1604) border-box;
-  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.35);
+  background: #c62f10;
+  border-color: #6b1604;
 }
 .btn.btn-danger:hover:not(:disabled) {
-  background: linear-gradient(to bottom, #c62f10, #a02208 60%, #6b1604) padding-box,
-    linear-gradient(135deg, #ffb09a, #c62f10 50%, #6b1604) border-box;
+  background: #a02208;
   color: #fff3ec;
 }
 .btn:disabled, .btn[aria-disabled="true"],

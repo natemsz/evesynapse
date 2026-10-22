@@ -242,6 +242,36 @@ test("route fit zooms to the route's span in the free canvas", () => {
   assert.strictEqual(map.routeFitScale(0, 0, 1000, 500, 48), 404, "a point route is not divided by zero");
 });
 
+test("sov palette keeps holders' colors apart", () => {
+  const pal = map.sovPalette([300, 200, 100, 50, 10]);
+  // Indexed like the input, largest holder first.
+  assert.strictEqual(pal.length, 5);
+  assert.strictEqual(pal[0][0], 0, "the largest holder takes the first hue");
+  const hues = pal.map((p) => p[0]);
+  for (let a = 0; a < hues.length; a++) for (let b = a + 1; b < hues.length; b++) {
+    const d = Math.min(Math.abs(hues[a] - hues[b]), 360 - Math.abs(hues[a] - hues[b]));
+    assert.ok(d >= 30, "hues " + hues[a] + " and " + hues[b] + " are " + d + "deg apart");
+  }
+  // A crowded map: no two of a dozen holders share a near hue,
+  // and repeats at least differ in lightness.
+  const many = map.sovPalette(Array.from({ length: 12 }, (_, i) => 100 - i));
+  for (let a = 0; a < 12; a++) for (let b = a + 1; b < 12; b++) {
+    const d = Math.min(Math.abs(many[a][0] - many[b][0]), 360 - Math.abs(many[a][0] - many[b][0]));
+    assert.ok(d >= 15 || many[a][1] !== many[b][1], "holders " + a + " and " + b + " too similar");
+  }
+});
+
+test("share views round-trip centre and zoom", () => {
+  assert.strictEqual(map.formatView(1234.4, -56.6, 2.34567), "1234,-57,2.346");
+  assert.deepStrictEqual(map.parseView("1234,-57,2.346"), { x: 1234, y: -57, f: 2.346 });
+  assert.deepStrictEqual(map.parseView(map.formatView(0, 0, 1)), { x: 0, y: 0, f: 1 });
+  assert.strictEqual(map.parseView(""), null);
+  assert.strictEqual(map.parseView("1,2"), null);
+  assert.strictEqual(map.parseView("a,b,c"), null);
+  assert.strictEqual(map.parseView("1,2,0"), null, "no zoom, no view");
+  assert.strictEqual(map.parseView(null), null);
+});
+
 test("mousewheel zooms, never pans", () => {
   // Wheel up zooms in, wheel down zooms out, whatever the notch
   // size -- including the small, fractional deltas a smooth-scroll

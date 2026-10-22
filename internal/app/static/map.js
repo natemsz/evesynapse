@@ -95,6 +95,19 @@
   function pickScore(d, w, dot) {
     return d <= dot * dot ? d - 1e6 : (d + 4) / ((1 + 3 * w) * (1 + 3 * w));
   }
+  // A shareable view: the camera centre (in whichever world the
+  // map is showing) and its zoom as a multiple of the fit zoom.
+  function formatView(x, y, f) {
+    return Math.round(x) + "," + Math.round(y) + "," + Math.round(f * 1000) / 1000;
+  }
+  function parseView(s) {
+    if (!s) return null;
+    var p = String(s).split(",");
+    if (p.length !== 3) return null;
+    var x = +p[0], y = +p[1], f = +p[2];
+    if (!isFinite(x) || !isFinite(y) || !isFinite(f) || f <= 0) return null;
+    return { x: x, y: y, f: f };
+  }
   // The zoom that fits a route's span (dx by dy world units) into
   // the free part of the canvas (fw by fh px), pad px to spare.
   function routeFitScale(dx, dy, fw, fh, pad) {
@@ -289,6 +302,22 @@
   // with near IDs still land far apart on the wheel.
   function allianceHue(id) {
     return (Math.imul(id | 0, 2654435761) >>> 0) % 360;
+  }
+  // Hues for the holders actually on the map, assigned to stand
+  // apart: largest first, each a golden-angle step (137.5 deg)
+  // from the last, so neighbours never land on near-identical
+  // hues the way hashed IDs can. Past a full turn of the wheel,
+  // a lightness offset keeps repeats apart too. counts is each
+  // alliance's held-system count; the result is indexed the
+  // same way, [hue, lightnessOffset] per alliance.
+  function sovPalette(counts) {
+    var order = counts.map(function (c, i) { return i; });
+    order.sort(function (a, b) { return counts[b] - counts[a] || a - b; });
+    var out = [];
+    order.forEach(function (a, idx) {
+      out[a] = [Math.round(idx * 137.508) % 360, idx < 6 ? 0 : ((idx % 3) - 1) * 7];
+    });
+    return out;
   }
 
   // --- Routing: the pure part ---
@@ -512,7 +541,7 @@
     var cam = { x: 0, y: 0, k: 1 };
     var sel = -1, hover = -1;
     var raf = 0, hintTimer = 0, fitted = false;
-    var colors = null, font = "sans-serif";
+    var colors = null, font = "sans-serif", fontDisplay = "\"Rajdhani\", \"Segoe UI\", sans-serif";
     var labelBoxes = []; // region labels hit-tested in the universe view
     var pathCache = {};
     var widthCache = {};
@@ -571,6 +600,7 @@
         }
       };
       font = cs.fontFamily || font;
+      fontDisplay = tok("--map-font-display", fontDisplay);
       widthCache = {};
     }
     // rgbOf normalizes any CSS color to [r, g, b] through the
@@ -733,7 +763,7 @@
     function schedule() { if (!raf) raf = requestAnimationFrame(draw); }
 
     function textWidth(s, size) {
-      var key = size + "|" + s;
+      var key = ctx.font + "|" + size + "|" + s;
       var w = widthCache[key];
       if (w === undefined) { w = ctx.measureText(s).width; widthCache[key] = w; }
       return w;
@@ -874,8 +904,8 @@
         for (b = y0; b <= y1; b++) for (a = x0; a <= x1; a++) grid[b * cols + a] = 1;
         return true;
       }
-      function label(text, x, y, size, color, weight, force, key) {
-        ctx.font = (weight || "500") + " " + size + "px " + font;
+      function label(text, x, y, size, color, weight, force, key, face) {
+        ctx.font = (weight || "500") + " " + size + "px " + (face || font);
         var w = textWidth(text, size);
         var lx = x - w / 2, ly = y;
         // Geometric hysteresis: a name already showing claims a box
@@ -904,20 +934,23 @@
 
       if (mode === "universe") {
         labelBoxes = [];
-        // Region names first, at every zoom: they claim their
-        // cells before system names fill in around them, and
-        // they only thin out, never vanish (regionLabelAlpha),
-        // so a zoomed-in region's name is always there to click.
-        ctx.globalAlpha = regionLabelAlpha(f);
-        var size = Math.min(12 + f * 0.8, 18), regs = [];
+        // In Territory mode the holders are the subject: their
+        // names claim their cells first, at display size, and the
+        // region names stay visible behind them -- smaller,
+        // thinner, still there to click. Everywhere else region
+        // names claim first, as before.
+        var terrSov = layer === "sov" && sovView === "territory" && LY;
+        if (terrSov) layerLabels(k, ox, oy, label, inPlaceFirst);
+        ctx.globalAlpha = regionLabelAlpha(f) * (terrSov ? 0.5 : 1);
+        var size = Math.min(12 + f * 0.8, 18) - (terrSov ? 3 : 0), regs = [];
         for (i = 0; i < P.regions.length; i++) if (G.members[i].length) regs.push(i);
         inPlaceFirst(regs, function (i) { return "R" + i; }, function (i) {
           var rg = P.regions[i];
-          var box = label(rg.name.toUpperCase(), rg.x * k + ox, rg.y * k + oy - size / 2, size, colors.region, "600", false, "R" + i);
+          var box = label(rg.name.toUpperCase(), rg.x * k + ox, rg.y * k + oy - size / 2, size, colors.region, "600", false, "R" + i, fontDisplay);
           if (box) labelBoxes.push({ r: i, b: box });
         });
         ctx.globalAlpha = 1;
-        layerLabels(k, ox, oy, label, inPlaceFirst);
+        if (!terrSov) layerLabels(k, ox, oy, label, inPlaceFirst);
         intelLabels(k, ox, oy, label, inPlaceFirst);
         dataLabels(k, ox, oy, label, inPlaceFirst);
         // System names once the picture opens up.
@@ -993,6 +1026,12 @@
     var SOV_KEY = "evesynapse-map-sov", sovView = "systems", sovFields = {};
     try { if (localStorage.getItem(SOV_KEY) === "territory") sovView = "territory"; } catch (e) { /* private mode */ }
     if (startQuery.get("sov") === "territory") sovView = "territory";
+    // NPC faction territory (the grey empires) can be hidden so
+    // only alliance borders show; on unless turned off.
+    var sovNPC = true;
+    try { sovNPC = localStorage.getItem("evesynapse-map-sov-npc") !== "0"; } catch (e) { /* private mode */ }
+    if (startQuery.get("npc") === "0") sovNPC = false;
+    if (startQuery.get("npc") === "1") sovNPC = true;
 
     // heatColor walks a three-stop ramp (the heat ramp unless one is
     // given: threat has its own, amber through red to white-hot).
@@ -1009,8 +1048,21 @@
       }
       return "rgba(" + Math.round(c[0]) + "," + Math.round(c[1]) + "," + Math.round(c[2]) + "," + a + ")";
     }
+    var sovPal = null, sovPalLY = null;
     function allianceColor(ai) {
       var al = LY.alliances[ai];
+      if (al && LY.allianceMembers) {
+        if (sovPalLY !== LY) {
+          sovPalLY = LY;
+          sovPal = sovPalette(LY.allianceMembers.map(function (mem) { return mem.length; }));
+        }
+        var p = sovPal[ai];
+        if (p) {
+          var baseL = parseFloat(colors.sovL) || 62;
+          var li = Math.max(32, Math.min(78, Math.round(baseL + p[1])));
+          return "hsl(" + p[0] + ",68%," + li + "%)";
+        }
+      }
       return "hsl(" + allianceHue(al ? al.id : ai) + ",68%," + colors.sovL + ")";
     }
 
@@ -1157,39 +1209,68 @@
     // space) are the border, drawn strong. The grid is built once
     // per view and layers payload, and drawn scaled and smoothed.
     function sovField() {
-      var key = mode === "universe" ? "u" : "r" + region;
+      // The grid sharpens as the view zooms in (doubling, to a
+      // cap), so borders stay smooth instead of showing the coarse
+      // grid's pixels; each sharpness is built once and kept.
+      var res = 1, fNow = cam.k / fitK();
+      while (res < fNow && (mode === "universe" ? 640 : 320) * res < 2048) res *= 2;
+      var key = (mode === "universe" ? "u" : "r" + region) + "z" + res;
       if (sovFields[key]) return sovFields[key];
       var list = mode === "universe" ? null : G.members[region];
       var n = list ? list.length : G.n, A = LY.alliances.length;
-      var owners = [], i, m, npcIdx = {};
+      var owners = [], ownerOf = new Int32Array(G.n).fill(-1), i, m, npcIdx = {};
       for (m = 0; m < n; m++) {
         i = list ? list[m] : m;
-        if (LY.sovA[i] >= 0) owners.push([i, LY.sovA[i]]);
-        else if (LY.sovF[i] > 0 && G.tier[i] === 0) {
+        if (LY.sovA[i] >= 0) { owners.push([i, LY.sovA[i]]); ownerOf[i] = LY.sovA[i]; }
+        else if (sovNPC && LY.sovF[i] > 0 && G.tier[i] === 0) {
           if (npcIdx[LY.sovF[i]] === undefined) npcIdx[LY.sovF[i]] = A + Object.keys(npcIdx).length;
-          owners.push([i, npcIdx[LY.sovF[i]]]);
+          owners.push([i, npcIdx[LY.sovF[i]]]); ownerOf[i] = npcIdx[LY.sovF[i]];
         }
       }
       var b = viewBounds(), bw = b[2] - b[0], bh = b[3] - b[1];
-      var gw = mode === "universe" ? 640 : 320, cell = bw / gw, gh = Math.ceil(bh / cell);
-      var sigma = 0.85 * Math.sqrt(bw * bh / Math.max(n, 1)), reach = Math.ceil(2.4 * sigma / cell);
+      var sigma = 0.85 * Math.sqrt(bw * bh / Math.max(n, 1));
+      // The field runs past the view's edge by a few sigmas, so
+      // territory at the map's rim (Paragon Soul, Omist, the far
+      // south generally) rounds off and fades instead of being
+      // cut straight where the universe's bounds end.
+      var padW = 2.6 * sigma;
+      b = [b[0] - padW, b[1] - padW, b[2] + padW, b[3] + padW];
+      bw = b[2] - b[0]; bh = b[3] - b[1];
+      var gw = (mode === "universe" ? 640 : 320) * res, cell = bw / gw, gh = Math.ceil(bh / cell);
+      var reach = Math.ceil(2.4 * sigma / cell);
       var best = new Float32Array(gw * gh), who = new Int16Array(gw * gh).fill(-1);
       // One holder at a time: sum its influence over its own box,
       // then keep the cells where it beats the strongest so far.
+      // Influence sources per holder: its systems, plus points
+      // along each gate joining two of its systems. Gate-contiguous
+      // space is one territory: the link bridges the gap between
+      // sparse systems (and between regions), so a contiguous
+      // holding fills as one shape with no border inside it.
+      // Holdings with no gate between them stay apart.
       var byOwner = {};
-      owners.forEach(function (o) { (byOwner[o[1]] = byOwner[o[1]] || []).push(o[0]); });
+      owners.forEach(function (o) { (byOwner[o[1]] = byOwner[o[1]] || []).push([wx(o[0]), wy(o[0])]); });
+      for (i = 0; i < G.n; i++) {
+        if (ownerOf[i] < 0) continue;
+        for (m = 0; m < G.adj[i].length; m++) {
+          var j = G.adj[i][m];
+          if (j <= i || ownerOf[j] !== ownerOf[i]) continue;
+          var xa = wx(i), ya = wy(i), xb = wx(j), yb = wy(j);
+          var steps = Math.min(24, Math.max(1, Math.ceil(Math.hypot(xb - xa, yb - ya) / (sigma * 0.55))));
+          for (var t = 1; t < steps; t++) byOwner[ownerOf[i]].push([xa + (xb - xa) * t / steps, ya + (yb - ya) * t / steps]);
+        }
+      }
       var acc = new Float32Array(gw * gh), s2 = 2 * sigma * sigma;
       Object.keys(byOwner).forEach(function (ok) {
         var sys = byOwner[ok], x0 = gw, y0 = gh, x1 = 0, y1 = 0, q, x, y;
         sys.forEach(function (s) {
-          var cx = Math.floor((wx(s) - b[0]) / cell), cy = Math.floor((wy(s) - b[1]) / cell);
+          var cx = Math.floor((s[0] - b[0]) / cell), cy = Math.floor((s[1] - b[1]) / cell);
           var ax = Math.max(0, cx - reach), bx = Math.min(gw - 1, cx + reach);
           var ay = Math.max(0, cy - reach), by = Math.min(gh - 1, cy + reach);
           if (ax < x0) x0 = ax; if (ay < y0) y0 = ay; if (bx > x1) x1 = bx; if (by > y1) y1 = by;
           for (y = ay; y <= by; y++) {
-            var dy = b[1] + (y + 0.5) * cell - wy(s);
+            var dy = b[1] + (y + 0.5) * cell - s[1];
             for (x = ax; x <= bx; x++) {
-              var dx = b[0] + (x + 0.5) * cell - wx(s);
+              var dx = b[0] + (x + 0.5) * cell - s[0];
               acc[y * gw + x] += Math.exp(-(dx * dx + dy * dy) / s2);
             }
           }
@@ -1253,7 +1334,8 @@
         holders.sort(function (p, q) { return q.c - p.c || p.a - q.a; });
         inPlaceFirst(holders, function (h) { return "A" + h.a; }, function (h) {
           var name = LY.alliances[h.a].name || "Alliance " + LY.alliances[h.a].id;
-          label(name, h.x * k + ox, h.y * k + oy - 6, mode === "universe" ? 11 : 12, allianceColor(h.a), "700", false, "A" + h.a);
+          var terr = sovView === "territory";
+          label(name, h.x * k + ox, h.y * k + oy - 6, terr ? (mode === "universe" ? 14 : 15) : (mode === "universe" ? 11 : 12), allianceColor(h.a), "700", false, "A" + h.a, fontDisplay);
         });
       } else if (layer === "threat") {
         // A camp is named -- who, and how many kills -- once the
@@ -1367,8 +1449,19 @@
           view.appendChild(b);
         });
         box.appendChild(view);
+        if (sovView === "territory") {
+          var npcRow = root.createElement("label");
+          npcRow.className = "map-layer-ctl map-layer-npc";
+          var npcCb = root.createElement("input");
+          npcCb.type = "checkbox";
+          npcCb.checked = sovNPC;
+          npcCb.setAttribute("data-map-sov-npc", "");
+          npcRow.appendChild(npcCb);
+          npcRow.appendChild(root.createTextNode(" NPC faction borders"));
+          box.appendChild(npcRow);
+        }
         row("", "hsl(30,68%," + colors.sovL + ")", "Alliances");
-        row("", colors.npc, "NPC factions");
+        if (sovNPC || sovView !== "territory") row("", colors.npc, "NPC factions");
         if (sovView === "systems") row("", colors.unheld, "Unclaimed");
       } else if (layer === "fw") {
         [[500003, "Amarr"], [500001, "Caldari"], [500004, "Gallente"], [500002, "Minmatar"]].forEach(function (f) {
@@ -1707,9 +1800,11 @@
       var q = [];
       if (mode !== "universe") q.push("region=" + P.regions[region].id);
       if (sel >= 0) q.push("system=" + S.id[sel]);
+      q.push("view=" + formatView(cam.x, cam.y, cam.k / fitK()));
       var shownLayer = LY ? layer : wantLayer || layer;
       if (shownLayer && shownLayer !== "security") q.push("layer=" + encodeURIComponent(shownLayer));
       if (shownLayer === "sov" && sovView === "territory") q.push("sov=territory");
+      if (shownLayer === "sov" && sovView === "territory" && !sovNPC) q.push("npc=0");
       if (routeFrom >= 0) q.push("from=" + S.id[routeFrom]);
       if (routeTo >= 0) q.push("to=" + S.id[routeTo]);
       if ((routeFrom >= 0 || routeTo >= 0) && routeMode !== "short") q.push("route=" + routeMode);
@@ -3225,6 +3320,35 @@
       }).then(function () { shotBtn.classList.remove("busy"); });
     }
 
+    // The Share button: copy a link to the map exactly as it
+    // stands -- layer and filters, route, selected system, and
+    // the centre and zoom on screen (syncURL writes them all).
+    // Nothing is stripped at copy time: data that is not public
+    // is checked when the link is opened, as it already is (your
+    // data and intel are only ever served to readers entitled to
+    // them), so alliancemates opening the same link see their
+    // own view of it while anyone else sees the public map.
+    function shareMap() {
+      syncURL();
+      var url = location.href;
+      function done() { hint("Map link copied."); }
+      function fallback() {
+        var ta = root.createElement("textarea");
+        ta.value = url;
+        ta.setAttribute("readonly", "");
+        ta.style.position = "absolute";
+        ta.style.opacity = "0";
+        root.body.appendChild(ta);
+        ta.select();
+        var ok = false;
+        try { ok = root.execCommand && root.execCommand("copy"); } catch (e) { /* no clipboard */ }
+        ta.remove();
+        if (ok) done(); else window.prompt("Copy this map link:", url);
+      }
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(url).then(done, fallback);
+      else fallback();
+    }
+
     function onClick(e) {
       var t = e.target;
       var b = t.closest("[data-map-sys]");
@@ -3274,6 +3398,15 @@
       }
       var rd = t.closest("[data-route-send]");
       if (rd && !rd.disabled) { sendRoute(rd.getAttribute("data-route-send")); return; }
+      var npcT = t.closest("[data-map-sov-npc]");
+      if (npcT) {
+        sovNPC = npcT.checked;
+        try { localStorage.setItem("evesynapse-map-sov-npc", sovNPC ? "1" : "0"); } catch (err) { /* private mode */ }
+        sovFields = {};
+        syncURL();
+        schedule();
+        return;
+      }
       var sv = t.closest("[data-map-sov]");
       if (sv) {
         sovView = sv.getAttribute("data-map-sov");
@@ -3287,6 +3420,7 @@
       if (t.closest("[data-map-data]")) { toggleDataMenu(); return; }
       if (t.closest(".map-data-menu")) return;
       if (t.closest("[data-map-shot]")) { takeShot(); return; }
+      if (t.closest("[data-map-share]")) { shareMap(); return; }
       if (t.closest("[data-map-intel]")) {
         intelOn = !intelOn;
         try { localStorage.setItem("evesynapse-map-intel", intelOn ? "1" : "0"); } catch (err) { /* private mode */ }
@@ -3346,6 +3480,10 @@
       if (sys !== undefined) sel = sys;
       if (ri !== undefined) enterRegion(ri, sys !== undefined ? sys : -1);
       else if (sys !== undefined) enterRegion(S.r[sys], sys);
+      // A shared view: the exact centre and zoom it was copied at.
+      // A shared route that will fly to fit itself (below) wins.
+      var vw = parseView(qs.get("view"));
+      if (vw) { stopMotion(); cam.x = vw.x; cam.y = vw.y; cam.k = clampK(fitK() * vw.f); }
       // A shared route: its ends and preference.
       var rf = G.byID[+qs.get("from")], rt = G.byID[+qs.get("to")];
       if (ROUTE_MODES[qs.get("route")]) routeMode = qs.get("route");
@@ -3361,7 +3499,7 @@
     readColors();
     statusEl.hidden = true;
     findInput.disabled = false;
-    el.querySelectorAll("[data-map-zoom], [data-map-keys], [data-map-full], [data-map-shot]").forEach(function (b) { b.disabled = false; });
+    el.querySelectorAll("[data-map-zoom], [data-map-keys], [data-map-full], [data-map-shot], [data-map-share]").forEach(function (b) { b.disabled = false; });
     root.addEventListener("fullscreenchange", onFullChange);
     root.addEventListener("webkitfullscreenchange", onFullChange);
     // The layer scale: the map follows the slider as it moves; the
@@ -3517,7 +3655,7 @@
 
   // Exposed for the node tests only (jstest/map_test.js).
   if (typeof module !== "undefined" && module.exports) {
-    module.exports = { secRounded: secRounded, secTier: secTier, secText: secText, prepare: prepare, regionLabelAlpha: regionLabelAlpha, zoomEntryAllowed: zoomEntryAllowed, wheelZoomFactor: wheelZoomFactor, pickReach: pickReach, pickScore: pickScore, routeFitScale: routeFitScale,
+    module.exports = { secRounded: secRounded, secTier: secTier, secText: secText, prepare: prepare, regionLabelAlpha: regionLabelAlpha, zoomEntryAllowed: zoomEntryAllowed, wheelZoomFactor: wheelZoomFactor, pickReach: pickReach, pickScore: pickScore, routeFitScale: routeFitScale, formatView: formatView, parseView: parseView, sovPalette: sovPalette,
       joinLayers: joinLayers, heatT: heatT, allianceHue: allianceHue, threatLevel: threatLevel,
       routeCost: routeCost, planRoute: planRoute, routeSummary: routeSummary, joinIntel: joinIntel,
       jumpRange: jumpRange, joinJump: joinJump, jumpNeighbours: jumpNeighbours, jumpFatigue: jumpFatigue };

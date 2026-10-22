@@ -33,9 +33,9 @@
   </tbody>
 </table>
 </div>
-<p><small>Trust is this instance's own score for each signer: good checks over all checks, starting at 90%. Ten checks under 50% excludes on its own. Excluding never reads from a peer again; re-admitting keeps its history. Reputation never travels between instances, so no peer can talk this one into distrusting another. Build is the hash of the binary each instance says it runs — Mainline when the hash matches a published release, Fork when it matches none — self-reported for orientation only: it plays no part in trust, which persists across releases.</small></p>
+<p><small>Trust is this instance's own score for each signer: good checks over all checks, starting at 90%. Ten checks under 50% excludes on its own. Excluding never reads from a peer again; re-admitting keeps its history. Reputation never travels between instances, so no peer can talk this one into distrusting another. Build is the hash of the binary each instance says it runs: Mainline when the hash matches a published release, Fork when it matches none. The build is self-reported, for orientation only, and plays no part in trust, which persists across releases.</small></p>
 {{else}}
-<p><small>No other instances heard from yet{{if .Enabled}} — new members arrive through the seeds and gossip{{end}}.</small></p>
+<p><small>No other instances heard from yet{{if .Enabled}}. New members arrive through the seeds and gossip{{end}}.</small></p>
 {{end}}
 </section>
 {{end}}

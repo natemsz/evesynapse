@@ -282,13 +282,13 @@ func TestDemoSignInAndPagesRender(t *testing.T) {
 		t.Fatalf("demo GET / = %d", home.Code)
 	}
 	mustContain(t, "demo home", home.Body.String(),
-		"Astra Vale", "Test Pilot Collective", `badge demo`, "Demo")
+		"Sable Iversen", "Test Pilot Collective", `badge demo`, "Demo")
 
 	pages := []struct {
 		path string
 		want []string
 	}{
-		{"/character/", []string{"Astra Vale", "Test Pilot Collective", "Gunnery", "Capital Industrial Ships"}},
+		{"/character/", []string{"Sable Iversen", "Test Pilot Collective", "Gunnery", "Capital Industrial Ships"}},
 		{"/wallet/", []string{"Bounty prizes"}},
 		{"/mail/", []string{"Your Rifter is ready in Jita", "Saturday op: Tama roam"}},
 		{"/industry/", []string{"Rifter", "Damage Control II"}},
@@ -459,5 +459,134 @@ func TestDemoResetRestoresSeedState(t *testing.T) {
 	}
 	if len(fits) != 2 {
 		t.Errorf("fits after reset = %d, want the seeded 2", len(fits))
+	}
+}
+
+// TestDemoPilotNameRefreshReachesSeededInstalls pins the
+// bootstrap's name refresh: on an install whose seed already
+// landed, every stored copy of the lead pilot's name follows
+// the constant — the character row, the entity name, the pilot
+// record and the profile snapshot — with the rest of each
+// payload preserved and no other pilot's rows touched.
+func TestDemoPilotNameRefreshReachesSeededInstalls(t *testing.T) {
+	app, conn, queries := demoTestApp(t)
+	ctx := context.Background()
+	const stale = "Stale Name"
+
+	setPayloadName := func(payload, name string) string {
+		t.Helper()
+		var pilot esi.Character
+		if err := json.Unmarshal([]byte(payload), &pilot); err != nil {
+			t.Fatalf("decode payload: %v", err)
+		}
+		pilot.Name = name
+		raw, err := json.Marshal(pilot)
+		if err != nil {
+			t.Fatalf("encode payload: %v", err)
+		}
+		return string(raw)
+	}
+
+	// Put a stale name in every store the bootstrap refreshes.
+	if _, err := conn.ExecContext(ctx,
+		`UPDATE characters SET name = $1 WHERE character_id = $2`, stale, demoCharacterID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := conn.ExecContext(ctx,
+		`UPDATE entity_names SET name = $1 WHERE kind = $2 AND id = $3`,
+		stale, esi.NameCharacter, demoCharacterID); err != nil {
+		t.Fatal(err)
+	}
+	rec, err := queries.GetPilotRecord(ctx, demoCharacterID)
+	if err != nil {
+		t.Fatalf("pilot record: %v", err)
+	}
+	if err := queries.SetPilotRecord(ctx, db.SetPilotRecordParams{
+		CharacterID: demoCharacterID, Payload: setPayloadName(rec.Payload, stale),
+		State: rec.State, FetchedAt: rec.FetchedAt,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	snap, err := queries.GetSnapshot(ctx, db.GetSnapshotParams{
+		CharacterID: demoCharacterID, Kind: esi.SnapProfile,
+	})
+	if err != nil {
+		t.Fatalf("profile snapshot: %v", err)
+	}
+	if err := queries.UpsertSnapshot(ctx, db.UpsertSnapshotParams{
+		CharacterID: demoCharacterID, Kind: esi.SnapProfile,
+		Payload:   setPayloadName(snap.Payload, stale),
+		FetchedAt: snap.FetchedAt, CachedUntil: snap.CachedUntil, Etag: snap.Etag,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	// The bootstrap pass puts the constant's name back in all
+	// four stores.
+	if err := app.ensureDemoAccount(ctx); err != nil {
+		t.Fatalf("ensureDemoAccount: %v", err)
+	}
+	var charName string
+	if err := conn.QueryRowContext(ctx,
+		`SELECT name FROM characters WHERE character_id = $1`, demoCharacterID).Scan(&charName); err != nil {
+		t.Fatal(err)
+	}
+	if charName != demoCharName {
+		t.Errorf("character row name = %q, want %q", charName, demoCharName)
+	}
+	var entityName string
+	if err := conn.QueryRowContext(ctx,
+		`SELECT name FROM entity_names WHERE kind = $1 AND id = $2`,
+		esi.NameCharacter, demoCharacterID).Scan(&entityName); err != nil {
+		t.Fatal(err)
+	}
+	if entityName != demoCharName {
+		t.Errorf("entity name = %q, want %q", entityName, demoCharName)
+	}
+	rec, err = queries.GetPilotRecord(ctx, demoCharacterID)
+	if err != nil {
+		t.Fatalf("pilot record: %v", err)
+	}
+	var recordPilot esi.Character
+	if err := json.Unmarshal([]byte(rec.Payload), &recordPilot); err != nil {
+		t.Fatalf("decode pilot record: %v", err)
+	}
+	if recordPilot.Name != demoCharName {
+		t.Errorf("pilot record name = %q, want %q", recordPilot.Name, demoCharName)
+	}
+	if recordPilot.Birthday != "2016-03-14T09:24:00Z" || recordPilot.SecurityStatus != 4.8 {
+		t.Errorf("pilot record payload changed beyond the name: %+v", recordPilot)
+	}
+	snap, err = queries.GetSnapshot(ctx, db.GetSnapshotParams{
+		CharacterID: demoCharacterID, Kind: esi.SnapProfile,
+	})
+	if err != nil {
+		t.Fatalf("profile snapshot: %v", err)
+	}
+	var profile esi.Character
+	if err := json.Unmarshal([]byte(snap.Payload), &profile); err != nil {
+		t.Fatalf("decode profile snapshot: %v", err)
+	}
+	if profile.Name != demoCharName {
+		t.Errorf("profile snapshot name = %q, want %q", profile.Name, demoCharName)
+	}
+	if !strings.Contains(profile.Description, "sample data") {
+		t.Errorf("profile snapshot payload changed beyond the name: %q", profile.Description)
+	}
+
+	// The other pilot's name is not the refresh's business.
+	var altName string
+	if err := conn.QueryRowContext(ctx,
+		`SELECT name FROM entity_names WHERE kind = $1 AND id = $2`,
+		esi.NameCharacter, demoCharacter2ID).Scan(&altName); err != nil {
+		t.Fatal(err)
+	}
+	if altName != demoChar2Name {
+		t.Errorf("alt pilot entity name = %q, want %q", altName, demoChar2Name)
+	}
+
+	// A second pass over current data is a no-op that succeeds.
+	if err := app.ensureDemoAccount(ctx); err != nil {
+		t.Fatalf("second ensureDemoAccount: %v", err)
 	}
 }

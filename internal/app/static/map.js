@@ -108,6 +108,150 @@
     if (!isFinite(x) || !isFinite(y) || !isFinite(f) || f <= 0) return null;
     return { x: x, y: y, f: f };
   }
+  // --- Sovereignty territory: field and outlines ---
+  // territoryField: who holds each cell of a grid over bounds b
+  // ([x0, y0, x1, y1], gw cells across). Every source (flat arrays:
+  // owner o, position x/y, spread s) casts a Gaussian of its own
+  // width; each cell keeps its strongest holder and the runner-up, so
+  // borders can be traced where the two are equal.
+  function territoryField(src, b, gw) {
+    var cell = (b[2] - b[0]) / gw, gh = Math.max(1, Math.ceil((b[3] - b[1]) / cell)), N = gw * gh;
+    var best = new Float32Array(N), second = new Float32Array(N);
+    var who = new Int32Array(N).fill(-1), who2 = new Int32Array(N).fill(-1);
+    var acc = new Float32Array(N), boxes = {};
+    // The Gaussian as a table: the inner loop runs tens of millions
+    // of times on a big map, and a table read beats Math.exp.
+    var lut = new Float32Array(1025);
+    for (var li = 0; li <= 1024; li++) lut[li] = Math.exp(-li / 128);
+    var byOwner = {};
+    for (var n = 0; n < src.o.length; n++) (byOwner[src.o[n]] = byOwner[src.o[n]] || []).push(n);
+    Object.keys(byOwner).forEach(function (ok) {
+      var o = +ok, list = byOwner[ok], x0 = gw, y0 = gh, x1 = -1, y1 = -1, x, y, q;
+      list.forEach(function (n) {
+        var sx = src.x[n], sy = src.y[n], s = src.s[n], lutK = 128 / (2 * s * s), reach = Math.ceil(2.4 * s / cell);
+        var cx = Math.floor((sx - b[0]) / cell), cy = Math.floor((sy - b[1]) / cell);
+        var ax = Math.max(0, cx - reach), bx = Math.min(gw - 1, cx + reach);
+        var ay = Math.max(0, cy - reach), by = Math.min(gh - 1, cy + reach);
+        if (ax > bx || ay > by) return;
+        if (ax < x0) x0 = ax; if (ay < y0) y0 = ay; if (bx > x1) x1 = bx; if (by > y1) y1 = by;
+        for (y = ay; y <= by; y++) {
+          var dy = b[1] + (y + 0.5) * cell - sy, dy2 = dy * dy, row = y * gw;
+          for (x = ax; x <= bx; x++) {
+            var dx = b[0] + (x + 0.5) * cell - sx, l = ((dx * dx + dy2) * lutK) | 0;
+            acc[row + x] += lut[l > 1024 ? 1024 : l];
+          }
+        }
+      });
+      if (x1 < 0) return;
+      boxes[o] = [x0, y0, x1, y1];
+      for (y = y0; y <= y1; y++) for (x = x0; x <= x1; x++) {
+        q = y * gw + x;
+        var v = acc[q];
+        if (v > best[q]) { second[q] = best[q]; who2[q] = who[q]; best[q] = v; who[q] = o; }
+        else if (v > second[q]) { second[q] = v; who2[q] = o; }
+        acc[q] = 0;
+      }
+    });
+    return { gw: gw, gh: gh, cell: cell, x0: b[0], y0: b[1], best: best, second: second, who: who, who2: who2, boxes: boxes };
+  }
+  // territoryOutlines: every holder's land as closed outlines in world
+  // units, by holder. Traced (marching squares) where a holder's lead
+  // over the runner-up, or its strength over floor, crosses zero, the
+  // crossing placed between cell centres by the values, then rounded
+  // once (Chaikin): smooth at any zoom, with no grid steps. One pass
+  // over the grid serves every holder; a square is looked at only for
+  // the holders of its corners, the only ones that can lead there.
+  function territoryOutlines(F, floor) {
+    var gw = F.gw, gh = F.gh, who = F.who, who2 = F.who2, best = F.best, second = F.second;
+    // Edge ids: horizontal (x,y)-(x+1,y) is 2*((y+1)*W+(x+1)),
+    // vertical (x,y)-(x,y+1) the same plus one; W spans the grid and
+    // the ring of empty cells around it.
+    var W = gw + 2, st = {};
+    function g(q, o) {
+      if (q < 0) return -1;
+      var bv = best[q];
+      if (who[q] === o) return Math.min(bv - floor, bv - second[q]);
+      if (who2[q] === o) return -(bv - second[q]);
+      return -Math.max(bv, 0.05);
+    }
+    function at(x, y) { return x >= 0 && y >= 0 && x < gw && y < gh ? y * gw + x : -1; }
+    function edge(s, x, y, vert, ga, gb) {
+      var id = 2 * ((y + 1) * W + (x + 1)) + (vert ? 1 : 0);
+      if (!s.pts[id]) {
+        var t = ga / (ga - gb);
+        s.pts[id] = [F.x0 + (x + (vert ? 0 : t) + 0.5) * F.cell, F.y0 + (y + (vert ? t : 0) + 0.5) * F.cell];
+      }
+      return id;
+    }
+    function seg(s, a, b) {
+      s.segs.push(a, b);
+      var n = s.segs.length / 2 - 1;
+      (s.ends[a] = s.ends[a] || []).push(n);
+      (s.ends[b] = s.ends[b] || []).push(n);
+    }
+    function trace(o, x, y, qa, qb, qc, qd) {
+      var a = g(qa, o), b = g(qb, o), c = g(qc, o), d = g(qd, o);
+      var k = (a > 0 ? 8 : 0) | (b > 0 ? 4 : 0) | (c > 0 ? 2 : 0) | (d > 0 ? 1 : 0);
+      if (k === 0 || k === 15) return;
+      var s = st[o] || (st[o] = { pts: {}, segs: [], ends: {} });
+      var mid = a + b + c + d > 0;
+      // Top, right, bottom, left edges of the square, made on demand.
+      var T = k === 3 || k === 12 || k === 1 || k === 14 || k === 2 || k === 13 ? -1 : edge(s, x, y, false, a, b);
+      var R = k === 1 || k === 14 || k === 6 || k === 9 || k === 7 || k === 8 ? -1 : edge(s, x + 1, y, true, b, c);
+      var B = k === 4 || k === 11 || k === 3 || k === 12 || k === 7 || k === 8 ? -1 : edge(s, x, y + 1, false, d, c);
+      var L = k === 2 || k === 13 || k === 4 || k === 11 || k === 6 || k === 9 ? -1 : edge(s, x, y, true, a, d);
+      switch (k) {
+        case 1: case 14: seg(s, L, B); break;
+        case 2: case 13: seg(s, B, R); break;
+        case 3: case 12: seg(s, L, R); break;
+        case 4: case 11: seg(s, T, R); break;
+        case 6: case 9: seg(s, T, B); break;
+        case 7: case 8: seg(s, L, T); break;
+        case 5: if (mid) { seg(s, L, T); seg(s, B, R); } else { seg(s, T, R); seg(s, L, B); } break;
+        case 10: if (mid) { seg(s, T, R); seg(s, L, B); } else { seg(s, L, T); seg(s, B, R); } break;
+      }
+    }
+    for (var y = -1; y < gh; y++) {
+      for (var x = -1; x < gw; x++) {
+        var qa = at(x, y), qb = at(x + 1, y), qc = at(x + 1, y + 1), qd = at(x, y + 1);
+        var wa = qa < 0 ? -1 : who[qa], wb = qb < 0 ? -1 : who[qb], wc = qc < 0 ? -1 : who[qc], wd = qd < 0 ? -1 : who[qd];
+        if (wa < 0 && wb < 0 && wc < 0 && wd < 0) continue;
+        if (wa >= 0) trace(wa, x, y, qa, qb, qc, qd);
+        if (wb >= 0 && wb !== wa) trace(wb, x, y, qa, qb, qc, qd);
+        if (wc >= 0 && wc !== wa && wc !== wb) trace(wc, x, y, qa, qb, qc, qd);
+        if (wd >= 0 && wd !== wa && wd !== wb && wd !== wc) trace(wd, x, y, qa, qb, qc, qd);
+      }
+    }
+    // Chain each holder's segments into closed loops, then round them.
+    var out = {};
+    Object.keys(st).forEach(function (ok) {
+      var s = st[ok], segs = s.segs, nseg = segs.length / 2, used = new Uint8Array(nseg), loops = [];
+      for (var s0 = 0; s0 < nseg; s0++) {
+        if (used[s0]) continue;
+        used[s0] = 1;
+        var loop = [segs[2 * s0]], cur = segs[2 * s0 + 1], guard = nseg + 2;
+        while (cur !== loop[0] && guard-- > 0) {
+          loop.push(cur);
+          var nx = -1, cand = s.ends[cur];
+          for (var ci = 0; ci < cand.length; ci++) if (!used[cand[ci]]) { nx = cand[ci]; break; }
+          if (nx < 0) break;
+          used[nx] = 1;
+          cur = segs[2 * nx] === cur ? segs[2 * nx + 1] : segs[2 * nx];
+        }
+        if (loop.length < 3) continue;
+        var sm = [];
+        for (var i = 0; i < loop.length; i++) {
+          var p = s.pts[loop[i]], q = s.pts[loop[(i + 1) % loop.length]];
+          sm.push([0.75 * p[0] + 0.25 * q[0], 0.75 * p[1] + 0.25 * q[1]], [0.25 * p[0] + 0.75 * q[0], 0.25 * p[1] + 0.75 * q[1]]);
+        }
+        loops.push(sm);
+      }
+      if (loops.length) out[ok] = loops;
+    });
+    return out;
+  }
+  // territoryLoops: one holder's outlines (territoryOutlines).
+  function territoryLoops(F, o, floor) { return territoryOutlines(F, floor)[o] || []; }
   // The zoom that fits a route's span (dx by dy world units) into
   // the free part of the canvas (fw by fh px), pad px to spare.
   function routeFitScale(dx, dy, fw, fh, pad) {
@@ -1201,198 +1345,131 @@
     }
 
     // --- Sovereignty as territory ---
-    // Each held nullsec system casts a soft influence (a Gaussian a
-    // little wider than the space between systems) for its holder:
-    // an alliance, or the NPC faction of NPC null. Every cell of a
-    // coarse grid over the view goes to the strongest holder there,
-    // filled faintly, and cells beside another holder's (or empty
-    // space) are the border, drawn strong. The grid is built once
-    // per view and layers payload, and drawn scaled and smoothed.
-    // The most grid a build may use: capped lower on small
-    // hardware, and lowered for the session when a build proves
-    // slow here, so weak machines trade a little border sharpness
-    // for a map that keeps up.
-    var sovCapGW = 2048, sovSettleTimer = 0;
+    // Each held nullsec system casts a soft influence for its holder
+    // (an alliance, or the NPC faction of NPC null), wider where
+    // systems sit far apart, so sparse space at the rim fills in. A
+    // gate joining two systems of one holder carries influence along
+    // it, and a long one a broad band, so a holding joined across
+    // empty space (Period Basis and Paragon Soul) reads as one shape.
+    // The field is built once per view and NPC setting at a modest
+    // grid (territoryField), and each holder's border traced from it
+    // as smooth outlines (territoryLoops). Every frame then only fills
+    // and strokes those outlines: crisp at any zoom, nothing rebuilt
+    // while zooming, and the other NPC setting built while idle so
+    // the toggle is instant.
+    var sovGW = 720, sovSettleTimer = 0, sovIdleTimer = 0;
     try {
-      if ((navigator.hardwareConcurrency || 8) <= 2 || (navigator.deviceMemory || 8) <= 2) sovCapGW = 1024;
+      if ((navigator.hardwareConcurrency || 8) <= 2 || (navigator.deviceMemory || 8) <= 2) sovGW = 512;
     } catch (e) { /* no hardware hints */ }
     function sovMoving() { return !!(anim || wheelZ || gesture); }
-    // What this view wants: its cache key (view, grid width, NPC
-    // setting -- each NPC setting keeps its own field, so the
-    // toggle never pays for a rebuild it has already done) and
-    // the prefix its cached variants share.
-    function sovWant() {
-      // The grid sharpens as the view zooms in (doubling, to the
-      // cap), so borders stay smooth instead of showing the
-      // coarse grid's pixels; each sharpness is built once.
-      var base = mode === "universe" ? 640 : 320, res = 1, fNow = cam.k / fitK();
-      while (res < fNow && base * res < sovCapGW) res *= 2;
-      var gw = Math.min(base * res, sovCapGW);
-      var prefix = (mode === "universe" ? "u" : "r" + region) + (sovNPC ? "n1g" : "n0g");
-      return { base: base, gw: gw, prefix: prefix, key: prefix + gw };
-    }
-    // The best cached variant of this view, for drawing while a
-    // sharper one is still to be built.
-    function sovCached(want) {
-      var bestF = null, bestGW = -1;
-      for (var key in sovFields) {
-        if (key.indexOf(want.prefix) !== 0) continue;
-        var gw = +key.slice(want.prefix.length);
-        if (gw > bestGW) { bestGW = gw; bestF = sovFields[key]; }
-      }
-      return bestF;
-    }
-    // Build the wanted field once the map has settled (a drag or
-    // zoom ending), then redraw with it.
+    function sovKey(npc) { return (mode === "universe" ? "u" : "r" + region) + (npc ? ":n1" : ":n0"); }
+    // Build the view's field once the map has settled, then redraw.
     function sovSettle() {
       clearTimeout(sovSettleTimer);
       sovSettleTimer = setTimeout(function () {
         sovSettleTimer = 0;
         if (!el.isConnected || !LY || layer !== "sov" || sovView !== "territory") return;
-        var want = sovWant();
-        if (!sovFields[want.key]) { sovField(); schedule(); }
+        if (sovMoving()) { sovSettle(); return; }
+        sovBuild(sovNPC);
+        schedule();
       }, 180);
     }
+    // The other NPC setting, built when the map is idle.
+    function sovPrebuild() {
+      clearTimeout(sovIdleTimer);
+      sovIdleTimer = setTimeout(function () {
+        if (!el.isConnected || !LY || layer !== "sov" || sovView !== "territory") return;
+        if (sovMoving()) { sovPrebuild(); return; }
+        sovBuild(!sovNPC);
+      }, 600);
+    }
     function sovField() {
-      var want = sovWant();
-      if (sovFields[want.key]) return sovFields[want.key];
-      // Mid-drag or mid-zoom, never build: draw what is cached
-      // and sharpen when the gesture settles (sovSettle).
-      if (sovMoving()) {
-        var cached = sovCached(want);
-        if (cached) { sovSettle(); return cached; }
-      }
-      var gw = want.gw, buildT0 = performance.now();
+      var f = sovFields[sovKey(sovNPC)];
+      if (f) return f;
+      // Mid-drag or mid-zoom, never build: draw once it settles.
+      if (sovMoving()) { sovSettle(); return null; }
+      f = sovBuild(sovNPC);
+      sovPrebuild();
+      return f;
+    }
+    function sovBuild(npc) {
+      var key = sovKey(npc);
+      if (sovFields[key]) return sovFields[key];
       var list = mode === "universe" ? null : G.members[region];
       var n = list ? list.length : G.n, A = LY.alliances.length;
-      var owners = [], ownerOf = new Int32Array(G.n).fill(-1), i, m, npcIdx = {};
+      var ownerOf = new Int32Array(G.n).fill(-1), npcIdx = {}, i, m, j;
       for (m = 0; m < n; m++) {
         i = list ? list[m] : m;
-        if (LY.sovA[i] >= 0) { owners.push([i, LY.sovA[i]]); ownerOf[i] = LY.sovA[i]; }
-        else if (sovNPC && LY.sovF[i] > 0 && G.tier[i] === 0) {
+        if (LY.sovA[i] >= 0) ownerOf[i] = LY.sovA[i];
+        else if (npc && LY.sovF[i] > 0 && G.tier[i] === 0) {
           if (npcIdx[LY.sovF[i]] === undefined) npcIdx[LY.sovF[i]] = A + Object.keys(npcIdx).length;
-          owners.push([i, npcIdx[LY.sovF[i]]]); ownerOf[i] = npcIdx[LY.sovF[i]];
+          ownerOf[i] = npcIdx[LY.sovF[i]];
         }
       }
       var b = viewBounds(), bw = b[2] - b[0], bh = b[3] - b[1];
       var sigma = 0.85 * Math.sqrt(bw * bh / Math.max(n, 1));
-      // The field runs past the view's edge by a few sigmas, so
-      // territory at the map's rim (Paragon Soul, Omist, the far
-      // south generally) rounds off and fades instead of being
-      // cut straight where the universe's bounds end.
-      var padW = 2.6 * sigma;
+      var src = { o: [], x: [], y: [], s: [] };
+      function add(o, x, y, s) { src.o.push(o); src.x.push(x); src.y.push(y); src.s.push(s); }
+      for (m = 0; m < n; m++) {
+        i = list ? list[m] : m;
+        var o = ownerOf[i];
+        if (o < 0) continue;
+        var xa = wx(i), ya = wy(i), near = Infinity;
+        for (var e = 0; e < G.adj[i].length; e++) {
+          j = G.adj[i][e];
+          if (list && S.r[j] !== region) continue;
+          var d = Math.hypot(wx(j) - xa, wy(j) - ya);
+          if (d < near) near = d;
+          if (j <= i || ownerOf[j] !== o) continue;
+          // Influence along a gate within one holding: points a
+          // sigma apart on a short gate; a long one carries a broad
+          // band, wider the longer the gap, that fills the empty
+          // space around it rather than drawing a thin corridor.
+          var xb = wx(j), yb = wy(j);
+          var s2 = d > 2.5 * sigma ? Math.min(3 * sigma, Math.max(sigma, 0.25 * d)) : sigma;
+          var steps = Math.min(40, Math.max(1, Math.ceil(d / (s2 * 0.6))));
+          for (var t = 1; t < steps; t++) add(o, xa + (xb - xa) * t / steps, ya + (yb - ya) * t / steps, s2);
+        }
+        // A system far from its neighbours reaches farther.
+        add(o, xa, ya, isFinite(near) ? Math.min(2.2 * sigma, Math.max(sigma, 0.8 * near)) : sigma);
+      }
+      // The field runs past the view's edge, so territory at the
+      // map's rim rounds off instead of being cut straight.
+      var padW = 3 * sigma;
       b = [b[0] - padW, b[1] - padW, b[2] + padW, b[3] + padW];
-      bw = b[2] - b[0]; bh = b[3] - b[1];
-      var cell = bw / gw, gh = Math.ceil(bh / cell);
-      var reach = Math.ceil(2.4 * sigma / cell);
-      var best = new Float32Array(gw * gh), who = new Int16Array(gw * gh).fill(-1);
-      // One holder at a time: sum its influence over its own box,
-      // then keep the cells where it beats the strongest so far.
-      // Influence sources per holder: its systems, plus points
-      // along each gate joining two of its systems. Gate-contiguous
-      // space is one territory: the link bridges the gap between
-      // sparse systems (and between regions), so a contiguous
-      // holding fills as one shape with no border inside it.
-      // Holdings with no gate between them stay apart.
-      // Sources as flat x,y pairs per holder (no per-point arrays).
-      var byOwner = {};
-      owners.forEach(function (o) { (byOwner[o[1]] = byOwner[o[1]] || []).push(wx(o[0]), wy(o[0])); });
-      for (i = 0; i < G.n; i++) {
-        if (ownerOf[i] < 0) continue;
-        for (m = 0; m < G.adj[i].length; m++) {
-          var j = G.adj[i][m];
-          if (j <= i || ownerOf[j] !== ownerOf[i]) continue;
-          var xa = wx(i), ya = wy(i), xb = wx(j), yb = wy(j);
-          var dist = Math.hypot(xb - xa, yb - ya);
-          var steps = Math.min(24, Math.max(1, Math.ceil(dist / (sigma * 0.55))));
-          for (var t = 1; t < steps; t++) byOwner[ownerOf[i]].push(xa + (xb - xa) * t / steps, ya + (yb - ya) * t / steps);
-          // A long link (the Paragon Soul - Period Basis jump
-          // and its kin) would read as a ruler-straight corridor.
-          // Give it a soft circular lobe at its middle instead:
-          // a disc of sources the territory swells around, so
-          // the two areas join in a round, organic shape.
-          if (dist > 3 * sigma) {
-            var mx = (xa + xb) / 2, my = (ya + yb) / 2;
-            byOwner[ownerOf[i]].push(mx, my);
-            [0.7, 1.4].forEach(function (rr) {
-              var cnt = rr < 1 ? 6 : 8;
-              for (var a2 = 0; a2 < cnt; a2++) {
-                var th = a2 / cnt * Math.PI * 2;
-                byOwner[ownerOf[i]].push(mx + Math.cos(th) * rr * sigma, my + Math.sin(th) * rr * sigma);
-              }
-            });
-          }
-        }
-      }
-      var acc = new Float32Array(gw * gh), s2 = 2 * sigma * sigma;
-      // The Gaussian as a lookup table: the inner loop below runs
-      // once per source per cell in reach -- tens of millions of
-      // times on a big map -- and a table read is far cheaper
-      // than Math.exp each time.
-      var lut = new Float32Array(1025), lutK = 128 / s2;
-      for (var li = 0; li <= 1024; li++) lut[li] = Math.exp(-li / 128);
-      Object.keys(byOwner).forEach(function (ok) {
-        var sys = byOwner[ok], x0 = gw, y0 = gh, x1 = 0, y1 = 0, q, x, y;
-        for (var si = 0; si < sys.length; si += 2) {
-          var sx2 = sys[si], sy2 = sys[si + 1];
-          var cx = Math.floor((sx2 - b[0]) / cell), cy = Math.floor((sy2 - b[1]) / cell);
-          var ax = Math.max(0, cx - reach), bx = Math.min(gw - 1, cx + reach);
-          var ay = Math.max(0, cy - reach), by = Math.min(gh - 1, cy + reach);
-          if (ax < x0) x0 = ax; if (ay < y0) y0 = ay; if (bx > x1) x1 = bx; if (by > y1) y1 = by;
-          for (y = ay; y <= by; y++) {
-            var dy = b[1] + (y + 0.5) * cell - sy2, dy2 = dy * dy, row = y * gw;
-            for (x = ax; x <= bx; x++) {
-              var dx = b[0] + (x + 0.5) * cell - sx2;
-              var li2 = ((dx * dx + dy2) * lutK) | 0;
-              acc[row + x] += lut[li2 > 1024 ? 1024 : li2];
-            }
-          }
-        }
-        for (y = y0; y <= y1; y++) for (x = x0; x <= x1; x++) {
-          q = y * gw + x;
-          if (acc[q] > best[q]) { best[q] = acc[q]; who[q] = +ok; }
-          acc[q] = 0;
-        }
+      var F = territoryField(src, b, mode === "universe" ? sovGW : Math.round(sovGW / 2));
+      var shapes = [], outlines = territoryOutlines(F, 0.3);
+      Object.keys(outlines).forEach(function (ok) {
+        var o = +ok, loops = outlines[ok];
+        var path = new Path2D();
+        loops.forEach(function (lp) {
+          path.moveTo(lp[0][0], lp[0][1]);
+          for (var q = 1; q < lp.length; q++) path.lineTo(lp[q][0], lp[q][1]);
+          path.closePath();
+        });
+        var c = rgbOf(o < A ? allianceColor(o) : colors.npc);
+        shapes.push({ path: path, fill: "rgba(" + c[0] + "," + c[1] + "," + c[2] + ",0.17)", line: "rgba(" + c[0] + "," + c[1] + "," + c[2] + ",0.9)" });
       });
-      var rgb = [];
-      function ownerRGB(o) {
-        if (!rgb[o]) rgb[o] = rgbOf(o < A ? allianceColor(o) : colors.npc);
-        return rgb[o];
-      }
-      var off = root.createElement("canvas");
-      off.width = gw; off.height = gh;
-      var oc = off.getContext("2d"), img = oc.createImageData(gw, gh), px = img.data;
-      // The border/fill pass, inline: at full sharpness this
-      // walks millions of cells, so no per-cell closures.
-      var floor = 0.3;
-      function ownerAt(p2) { return best[p2] >= floor ? who[p2] : -1; }
-      for (var y2 = 0; y2 < gh; y2++) {
-        var row2 = y2 * gw;
-        for (var x2 = 0; x2 < gw; x2++) {
-          var p = row2 + x2, o = ownerAt(p);
-          if (o < 0) continue;
-          var edge = (x2 > 0 && ownerAt(p - 1) !== o) || (x2 < gw - 1 && ownerAt(p + 1) !== o) ||
-            (y2 > 0 && ownerAt(p - gw) !== o) || (y2 < gh - 1 && ownerAt(p + gw) !== o);
-          var c = ownerRGB(o);
-          px[p * 4] = c[0]; px[p * 4 + 1] = c[1]; px[p * 4 + 2] = c[2];
-          px[p * 4 + 3] = edge ? 235 : Math.round(255 * Math.min(0.34, 0.14 + 0.08 * best[p]));
-        }
-      }
-      oc.putImageData(img, 0, 0);
-      sovFields[want.key] = { canvas: off, x: b[0], y: b[1], w: gw * cell, h: gh * cell };
-      // A slow build lowers the cap for the rest of the session:
-      // the next views (and this one's other NPC setting) build
-      // smaller instead of janking the same way again.
-      if (performance.now() - buildT0 > 260 && sovCapGW > want.base) sovCapGW = Math.max(want.base, sovCapGW / 2);
-      return sovFields[want.key];
+      sovFields[key] = { shapes: shapes };
+      return sovFields[key];
     }
     function drawTerritory(k, ox, oy) {
       var f = sovField();
-      ctx.imageSmoothingEnabled = true;
-      // Scaling this big image is the per-frame cost while the
-      // map moves; cheap smoothing until it settles.
-      ctx.imageSmoothingQuality = sovMoving() ? "low" : "high";
-      ctx.drawImage(f.canvas, f.x * k + ox, f.y * k + oy, f.w * k, f.h * k);
+      if (!f) return;
+      ctx.save();
+      ctx.setTransform(dpr * k, 0, 0, dpr * k, dpr * ox, dpr * oy);
+      ctx.lineJoin = "round";
+      f.shapes.forEach(function (sh) {
+        ctx.fillStyle = sh.fill;
+        ctx.fill(sh.path, "evenodd");
+      });
+      // Borders a constant width on screen at any zoom.
+      ctx.lineWidth = 1.6 / k;
+      f.shapes.forEach(function (sh) {
+        ctx.strokeStyle = sh.line;
+        ctx.stroke(sh.path);
+      });
+      ctx.restore();
     }
 
     // The live layers' own labels, placed before system names:
@@ -3483,7 +3560,8 @@
         sovNPC = npcT.checked;
         try { localStorage.setItem("evesynapse-map-sov-npc", sovNPC ? "1" : "0"); } catch (err) { /* private mode */ }
         // No cache clear: each NPC setting is its own cached
-        // field (see sovWant), so toggling back is instant.
+        // field (see sovKey), the other built while idle, so the
+        // toggle is instant.
         syncURL();
         schedule();
         return;
@@ -3627,7 +3705,19 @@
     var ro = new ResizeObserver(resize);
     ro.observe(stage);
     // The theme toggle recolors the page; the canvas follows.
-    var mo = new MutationObserver(function () { readColors(); sovFields = {}; renderLegend(); schedule(); });
+    // Other classes come and go on the root too (full screen, the
+    // nav); only a real change of colors throws the territory away.
+    function colorSig() { return [colors.npc, colors.sovL, colors.label, colors.halo].join("|"); }
+    var lastColors = colorSig();
+    var mo = new MutationObserver(function () {
+      readColors();
+      var sig = colorSig();
+      if (sig === lastColors) return;
+      lastColors = sig;
+      sovFields = {};
+      renderLegend();
+      schedule();
+    });
     mo.observe(root.documentElement, { attributes: true, attributeFilter: ["data-theme", "class"] });
 
     // --- Live layers: loading, the picker, refresh ---
@@ -3736,7 +3826,7 @@
 
   // Exposed for the node tests only (jstest/map_test.js).
   if (typeof module !== "undefined" && module.exports) {
-    module.exports = { secRounded: secRounded, secTier: secTier, secText: secText, prepare: prepare, regionLabelAlpha: regionLabelAlpha, zoomEntryAllowed: zoomEntryAllowed, wheelZoomFactor: wheelZoomFactor, pickReach: pickReach, pickScore: pickScore, routeFitScale: routeFitScale, formatView: formatView, parseView: parseView, sovPalette: sovPalette,
+    module.exports = { secRounded: secRounded, secTier: secTier, secText: secText, prepare: prepare, regionLabelAlpha: regionLabelAlpha, zoomEntryAllowed: zoomEntryAllowed, wheelZoomFactor: wheelZoomFactor, pickReach: pickReach, pickScore: pickScore, routeFitScale: routeFitScale, formatView: formatView, parseView: parseView, sovPalette: sovPalette, territoryField: territoryField, territoryLoops: territoryLoops,
       joinLayers: joinLayers, heatT: heatT, allianceHue: allianceHue, threatLevel: threatLevel,
       routeCost: routeCost, planRoute: planRoute, routeSummary: routeSummary, joinIntel: joinIntel,
       jumpRange: jumpRange, joinJump: joinJump, jumpNeighbours: jumpNeighbours, jumpFatigue: jumpFatigue };

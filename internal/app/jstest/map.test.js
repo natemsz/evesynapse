@@ -284,3 +284,27 @@ test("mousewheel zooms, never pans", () => {
   // A pinch (ctrlKey wheel) zooms faster than a plain tick.
   assert.ok(map.wheelZoomFactor(-10, true) > map.wheelZoomFactor(-10, false), "pinch zooms faster");
 });
+
+test("territory outlines: round, split between holders, joined by a band", () => {
+  const src = (list) => ({ o: list.map((p) => p[0]), x: list.map((p) => p[1]), y: list.map((p) => p[2]), s: list.map((p) => p[3]) });
+  const B = [0, 0, 200, 100];
+  // One source: one closed outline, about 1.55 sigma from it (where
+  // the Gaussian falls to the 0.3 floor).
+  let F = map.territoryField(src([[0, 50, 50, 10]]), B, 400);
+  let loops = map.territoryLoops(F, 0, 0.3);
+  assert.strictEqual(loops.length, 1);
+  const r = loops[0].map((p) => Math.hypot(p[0] - 50, p[1] - 50));
+  assert.ok(Math.min(...r) > 14 && Math.max(...r) < 17, "radius " + Math.min(...r) + ".." + Math.max(...r));
+  // Two holders side by side: the border runs down the middle.
+  F = map.territoryField(src([[0, 80, 50, 15], [1, 120, 50, 15]]), B, 400);
+  const left = map.territoryLoops(F, 0, 0.3)[0], right = map.territoryLoops(F, 1, 0.3)[0];
+  const atMid = (lp) => lp.filter((p) => Math.abs(p[1] - 50) < 2).map((p) => p[0]);
+  assert.ok(Math.abs(Math.max(...atMid(left)) - 100) < 1.5, "left holder ends at the middle");
+  assert.ok(Math.abs(Math.min(...atMid(right)) - 100) < 1.5, "right holder starts at the middle");
+  // Two far clusters of one holder: apart alone, one shape with a band.
+  const far = [[0, 30, 50, 8], [0, 170, 50, 8]];
+  assert.strictEqual(map.territoryLoops(map.territoryField(src(far), B, 400), 0, 0.3).length, 2);
+  const band = far.slice();
+  for (let t = 1; t < 10; t++) band.push([0, 30 + 14 * t, 50, 24]);
+  assert.strictEqual(map.territoryLoops(map.territoryField(src(band), B, 400), 0, 0.3).length, 1);
+});

@@ -49,6 +49,31 @@ test("prepare derives adjacency, exits and bounds", () => {
   assert.strictEqual(map.prepare(P), G, "derived once per payload");
 });
 
+test("prepare carries the projected frame, falling back to the true one", () => {
+  const base = {
+    v: 2,
+    regions: [{ id: 10, name: "Alpha", x: 50, y: 25, px: 60, py: 30, w: 1000, h: 1000 }],
+    cons: [],
+    sys: {
+      id: [101, 102], n: ["One", "Two"], x: [0, 100], y: [0, 50],
+      px: [10, 130], py: [5, 80],
+      s: [0.9, 0.5], r: [0, 0], c: [-1, -1], rx: [0, 1000], ry: [0, 500], f: [0, 0]
+    },
+    gates: [0, 1]
+  };
+  const G = map.prepare(base);
+  assert.deepStrictEqual(G.px, [10, 130]);
+  assert.deepStrictEqual(G.py, [5, 80]);
+  assert.deepStrictEqual(G.pbounds[0], [10, 5, 130, 80], "projected region bounds");
+  assert.strictEqual(G.projW, 130);
+  // An older payload without the projected frame: true positions stand in.
+  const old = JSON.parse(JSON.stringify(base));
+  delete old.sys.px; delete old.sys.py; delete old._g;
+  const G2 = map.prepare(old);
+  assert.deepStrictEqual(G2.px, [0, 100]);
+  assert.deepStrictEqual(G2.pbounds[0], [0, 0, 100, 50]);
+});
+
 test("region names stay visible and zoom entry needs the preference", () => {
   // Full strength while region names are the picture, then a
   // floor: however deep the zoom, the name stays readable (and

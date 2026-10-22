@@ -47,7 +47,7 @@ import (
 // universeMapVersion is the builder's version: bump it when the
 // payload shape or a layout changes, and the stored payload
 // rebuilds from the stored SDE without a re-import.
-const universeMapVersion = 2
+const universeMapVersion = 3
 
 const (
 	universeFrame = 10000.0 // the universe view's longest side
@@ -107,10 +107,51 @@ type universeMapSystems struct {
 	// Faction is the owning faction's ID (0: none): the
 	// Faction Warfare and sovereignty layers key on it.
 	Faction []int64 `json:"f"`
+	// Prom is the system's label prominence (mapProminence):
+	// at the map's middle zoom tier only the most prominent
+	// systems in view are named, best first.
+	Prom []int `json:"p"`
+}
+
+// Label prominence: a system's claim on being named when the
+// map cannot name everyone. Trade hubs outrank everything, a
+// station outranks any number of gates, and each gate counts --
+// so the order reads hubs, then station systems by how joined
+// up they are, then the rest by the same measure.
+const (
+	promHub     = 1000
+	promStation = 100
+	promPerGate = 10
+)
+
+// tradeHubSystems are the systems of the five market hubs (the
+// stations in foresight.go's tradeHubs).
+var tradeHubSystems = map[int64]bool{
+	30000142: true, // Jita
+	30002187: true, // Amarr
+	30002659: true, // Dodixie
+	30002510: true, // Rens
+	30002053: true, // Hek
+}
+
+// mapProminence scores one system for label precedence from its
+// gate degree, whether it holds a station, and whether it is a
+// trade hub.
+func mapProminence(degree int, station, hub bool) int {
+	p := degree * promPerGate
+	if station {
+		p += promStation
+	}
+	if hub {
+		p += promHub
+	}
+	return p
 }
 
 // buildUniverseMap lays out the payload from the SDE rows.
-func buildUniverseMap(systems []db.ListMapSystemsRow, regions []db.SdeRegion, cons []db.SdeConstellation, jumps []db.ListMapJumpsRow) universeMapPayload {
+// stationSystems holds the IDs of systems with at least one NPC
+// station (ListMapStationSystems); it feeds label prominence.
+func buildUniverseMap(systems []db.ListMapSystemsRow, regions []db.SdeRegion, cons []db.SdeConstellation, jumps []db.ListMapJumpsRow, stationSystems map[int64]bool) universeMapPayload {
 	p := universeMapPayload{Version: universeMapVersion}
 	regionIdx := map[int64]int{}
 	for _, r := range regions {
@@ -142,6 +183,7 @@ func buildUniverseMap(systems []db.ListMapSystemsRow, regions []db.SdeRegion, co
 	S.PX, S.PY = make([]int, n), make([]int, n)
 	S.Sec, S.Region, S.Cons = make([]float64, n), make([]int, n), make([]int, n)
 	S.RX, S.RY, S.Faction = make([]int, n), make([]int, n), make([]int64, n)
+	S.Prom = make([]int, n)
 
 	// The universe frame: top-down, x right, z up (flipped for
 	// screen y), scaled so the longest side spans universeFrame.
@@ -174,6 +216,13 @@ func buildUniverseMap(systems []db.ListMapSystemsRow, regions []db.SdeRegion, co
 		p.Gates = append(p.Gates, a, b)
 		adj[a] = append(adj[a], b)
 		adj[b] = append(adj[b], a)
+	}
+
+	// Label prominence, from the graph just built and the SDE's
+	// station list: precomputed here like every other part of
+	// the payload, so the client only ever reads the order.
+	for i, s := range kept {
+		S.Prom[i] = mapProminence(len(adj[i]), stationSystems[s.SystemID], tradeHubSystems[s.SystemID])
 	}
 
 	// The Improved Projection: the universe relaxed as one
@@ -461,8 +510,16 @@ func (app *Application) rebuildUniverseMap(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("list jumps: %w", err)
 	}
+	stationRows, err := q.ListMapStationSystems(ctx)
+	if err != nil {
+		return fmt.Errorf("list station systems: %w", err)
+	}
+	stationSystems := make(map[int64]bool, len(stationRows))
+	for _, id := range stationRows {
+		stationSystems[id] = true
+	}
 	started := time.Now()
-	payload := buildUniverseMap(systems, regions, cons, jumps)
+	payload := buildUniverseMap(systems, regions, cons, jumps, stationSystems)
 	gz, etag, err := packMapJSON(payload)
 	if err != nil {
 		return err

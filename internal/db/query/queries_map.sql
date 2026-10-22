@@ -13,6 +13,13 @@ WHERE region_id > 0 AND region_id < 11000000
   AND (x <> 0 OR y <> 0 OR z <> 0)
 ORDER BY system_id;
 
+-- The systems holding at least one NPC station: a prominence
+-- input for the map's label tiers.
+-- name: ListMapStationSystems :many
+SELECT DISTINCT system_id FROM sde_stations
+WHERE system_id > 0
+ORDER BY 1;
+
 -- name: ListMapRegions :many
 SELECT region_id, name FROM sde_regions
 WHERE region_id < 11000000

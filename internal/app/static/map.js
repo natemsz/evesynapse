@@ -34,11 +34,11 @@
    *   x, y: label point in the universe frame; px, py: in the projected
    *   frame; w, h: region frame size.
    * @property {{id:number,name:string,r:number}[]} cons  r: region index.
-   * @property {{id:number[],n:string[],x:number[],y:number[],px:number[],py:number[],s:number[],r:number[],c:number[],rx:number[],ry:number[],f:number[]}} sys
+   * @property {{id:number[],n:string[],x:number[],y:number[],px:number[],py:number[],s:number[],r:number[],c:number[],rx:number[],ry:number[],f:number[],p:number[]}} sys
    *   x, y: universe frame (0..10000); px, py: projected frame;
    *   rx, ry: region frame (0..1000);
    *   s: true security; r: region index; c: constellation index (-1 none);
-   *   f: faction ID.
+   *   f: faction ID; p: label prominence (higher names first).
    * @property {number[]} gates  stargate pairs as flattened index pairs.
    */
 
@@ -77,6 +77,31 @@
   // the zoom, so it can always carry the reader into the region.
   function regionLabelAlpha(f) {
     return f > 6 ? Math.max(0.55, 1 - (f - 6) / 14) : 1;
+  }
+  // System names are rationed by zoom tier, f the multiple of
+  // the fit zoom: at 0 the region names are the picture and no
+  // system is named; at 1 a few regions fill the view and only
+  // the prominent systems in view are named, capped so the tier
+  // stays readable however dense the cluster; at 2 a single
+  // region or less fills the view and every system in view is
+  // named. A pure function of the view's scale: the tier changes
+  // with the same redraw that settles the picture, never mid-way
+  // through a separate pass.
+  var LABEL_MID_CAP = 120;
+  function labelTier(f) {
+    return f <= 6 ? 0 : f <= 24 ? 1 : 2;
+  }
+  // midTierLabels picks the middle tier's names: the candidates
+  // arrive in label precedence order (best first), so the cap
+  // simply keeps the front of the line.
+  function midTierLabels(cands, cap) {
+    return cands.length > cap ? cands.slice(0, cap) : cands;
+  }
+  // boxesOverlap is the label collision rule: the box x, y, w, h
+  // against a placed box [x, y, w, h]. Edges that merely touch
+  // do not collide.
+  function boxesOverlap(x, y, w, h, o) {
+    return x < o[0] + o[2] && x + w > o[0] && y < o[1] + o[3] && y + h > o[1];
   }
   // Zooming in enters a region only under the preference; every
   // other way in (a name, the search, the index) is unconditional,
@@ -332,9 +357,12 @@
       if (py[i] > puy) puy = py[i];
     }
     var regionLower = P.regions.map(function (rg) { return rg.name.toLowerCase(); });
-    // Label precedence: the best-connected systems first, then by
-    // ID, so the same names win wherever the map is panned.
-    function byPrio(a, b) { return adj[b].length - adj[a].length || S.id[a] - S.id[b]; }
+    // Label precedence: the payload's prominence first (hubs,
+    // station systems, the best-connected), then by ID, so the
+    // same names win wherever the map is panned. A payload older
+    // than the prominence array falls back to gate degree.
+    var prom = S.p && S.p.length === n ? S.p : null;
+    function byPrio(a, b) { return (prom ? prom[b] - prom[a] : adj[b].length - adj[a].length) || S.id[a] - S.id[b]; }
     var prio = [];
     for (i = 0; i < n; i++) prio.push(i);
     prio.sort(byPrio);
@@ -967,10 +995,15 @@
       ctx.setTransform(dpr * k, 0, 0, dpr * k, dpr * ox, dpr * oy);
       ctx.lineCap = "round";
       ctx.lineWidth = (mode === "universe" ? 0.7 : 1.4) / k;
+      // In the projection at the widest tier the gate web is
+      // texture behind the region names, not the picture: drawn
+      // at reduced alpha until the reader zooms into it.
+      if (mode === "universe" && projOn && labelTier(cam.k / fitK()) === 0) ctx.globalAlpha = 0.45;
       ctx.strokeStyle = colors.gate;
       ctx.stroke(pp.intra);
       ctx.strokeStyle = colors.gateInter;
       ctx.stroke(pp.inter);
+      ctx.globalAlpha = 1;
       if (mode !== "universe") {
         ctx.setLineDash([4 / k, 4 / k]);
         ctx.strokeStyle = colors.gateInter;
@@ -1055,7 +1088,7 @@
     // Labels never overlap: each claims cells of a coarse grid, and
     // one that would land on a claimed cell is skipped. The grid is
     // anchored to the map, not the screen, and labels claim in a
-    // fixed order (best-connected systems first), so panning moves
+    // fixed order (most prominent systems first), so panning moves
     // labels and cells together and the same names win every frame.
     // Zooming moves overlaps every frame, so every name showing last
     // frame claims before any new one, whatever kind of name it is:
@@ -1087,7 +1120,7 @@
           if (!list) continue;
           for (n = 0; n < list.length; n++) {
             o = list[n];
-            if (x < o[0] + o[2] && x + w > o[0] && y < o[1] + o[3] && y + h > o[1]) return false;
+            if (boxesOverlap(x, y, w, h, o)) return false;
           }
         }
         var box = [x, y, w, h];
@@ -1157,14 +1190,20 @@
         if (!terrSov) layerLabels(k, ox, oy, label, inPlaceFirst);
         intelLabels(k, ox, oy, label, inPlaceFirst);
         dataLabels(k, ox, oy, label, inPlaceFirst);
-        // System names once the picture opens up.
-        if (f > 6) {
+        // System names by zoom tier (labelTier): none while the
+        // region names are the picture, the prominent few in view
+        // once it opens up, every system in view once a single
+        // region fills it. Candidates queue in precedence order,
+        // so the collision placement below keeps the best names.
+        var ltier = labelTier(f);
+        if (ltier > 0) {
           var vis = [];
           for (var o = 0; o < G.n; o++) {
             i = G.prio[o];
             var sx = wx(i) * k + ox, sy = wy(i) * k + oy;
             if (sx >= 0 && sy >= 0 && sx <= cw && sy <= ch) vis.push(i);
           }
+          if (ltier === 1) vis = midTierLabels(vis, LABEL_MID_CAP);
           inPlaceFirst(vis, function (i) { return "s" + i; }, function (i) {
             label(S.n[i], wx(i) * k + ox, wy(i) * k + oy + r + 3, 11, colors.labelDim, null, false, "s" + i);
           });
@@ -4036,7 +4075,7 @@
 
   // Exposed for the node tests only (jstest/map_test.js).
   if (typeof module !== "undefined" && module.exports) {
-    module.exports = { secRounded: secRounded, secTier: secTier, secText: secText, prepare: prepare, regionLabelAlpha: regionLabelAlpha, zoomEntryAllowed: zoomEntryAllowed, wheelZoomFactor: wheelZoomFactor, pickReach: pickReach, pickScore: pickScore, routeFitScale: routeFitScale, formatView: formatView, parseView: parseView, viewFits: viewFits, sovPalette: sovPalette, territoryField: territoryField, territoryLoops: territoryLoops,
+    module.exports = { secRounded: secRounded, secTier: secTier, secText: secText, prepare: prepare, regionLabelAlpha: regionLabelAlpha, labelTier: labelTier, midTierLabels: midTierLabels, boxesOverlap: boxesOverlap, LABEL_MID_CAP: LABEL_MID_CAP, zoomEntryAllowed: zoomEntryAllowed, wheelZoomFactor: wheelZoomFactor, pickReach: pickReach, pickScore: pickScore, routeFitScale: routeFitScale, formatView: formatView, parseView: parseView, viewFits: viewFits, sovPalette: sovPalette, territoryField: territoryField, territoryLoops: territoryLoops,
       joinLayers: joinLayers, heatT: heatT, allianceHue: allianceHue, threatLevel: threatLevel,
       routeCost: routeCost, planRoute: planRoute, routeSummary: routeSummary, joinIntel: joinIntel,
       jumpRange: jumpRange, joinJump: joinJump, jumpNeighbours: jumpNeighbours, jumpFatigue: jumpFatigue };

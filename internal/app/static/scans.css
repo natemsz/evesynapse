@@ -1,9 +1,11 @@
 /* scans.css -- the scan tool: the paste box (scans.html) and a
- * reading (scan.html). Glass panels on the site's tokens, like the
- * killboard. Tallies are bars behind their rows (widths from data-w,
- * set by scans.js); on grid, kills and unscanned signatures wear the
- * accent, red for danger. Two columns on a wide screen, one on a
- * phone. */
+ * reading (scan.html). Glass panels carry the site's full glass
+ * recipe (the .card/.panel treatment in style.css): the --glass
+ * tint, the glass-edge border, the deepened shadow, and the blur
+ * with its saturate. Tallies are bars behind their rows (widths
+ * from data-w, set by scans.js); on grid, kills and unscanned
+ * signatures wear the accent, red for danger. Two columns on a
+ * wide screen, one on a phone. */
 
 .sc {
   --sc-hot: #e0301c;
@@ -14,13 +16,14 @@
 }
 html[data-theme="light"] .sc { --sc-hot: #b0302a; }
 
-.sc-panel, .sc-paste, .sc-own, .sc-head {
+.sc-panel, .sc-paste, .sc-own, .sc-head, .sc-missing {
   padding: 0.85rem 1rem;
   border: 1px solid var(--glass-edge);
   border-radius: var(--r-lg);
   background: var(--glass);
-  -webkit-backdrop-filter: blur(var(--glass-blur));
-  backdrop-filter: blur(var(--glass-blur));
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.6);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(0.9);
+  backdrop-filter: blur(var(--glass-blur)) saturate(0.9);
 }
 .sc h2 { margin: 0 0 0.6rem; font-size: 0.8rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted-2); }
 
@@ -117,10 +120,13 @@ html[data-theme="light"] .sc { --sc-hot: #b0302a; }
   border: 1px solid var(--glass-edge);
   border-radius: var(--r-lg);
   background: var(--glass);
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.6);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(0.9);
+  backdrop-filter: blur(var(--glass-blur)) saturate(0.9);
 }
 .sc-stat.hot { border-color: color-mix(in srgb, var(--sc-hot) 55%, transparent); }
 .sc-stat.hot .sc-stat-v { color: var(--sc-hot); }
-.sc-stat-v { font-size: 1.35rem; font-weight: 700; color: var(--text-bright); font-variant-numeric: tabular-nums; line-height: 1.15; }
+.sc-stat-v { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 1.35rem; font-weight: 600; color: var(--text-bright); font-variant-numeric: tabular-nums; line-height: 1.15; }
 .sc-stat-l { font-size: 0.78rem; color: var(--muted-2); }
 
 .sc-cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.9rem; align-items: start; }
@@ -213,7 +219,7 @@ html[data-theme="light"] .sc { --sc-hot: #b0302a; }
 /* --- Phones: one column; the share row folds --- */
 @media (max-width: 45rem) {
   .sc-cols, .sc-cols-wide { grid-template-columns: minmax(0, 1fr); }
-  .sc-panel, .sc-paste, .sc-own, .sc-head { padding: 0.75rem 0.8rem; }
+  .sc-panel, .sc-paste, .sc-own, .sc-head, .sc-missing { padding: 0.75rem 0.8rem; }
   .sc-paste-row .btn { flex: 1 1 100%; margin-left: 0; }
   .sc-sys, .sc-sys input { width: 100%; }
   .sc-share { width: 100%; }

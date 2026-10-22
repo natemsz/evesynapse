@@ -48,7 +48,7 @@ func TestNotificationSettingsChannelsAndTypes(t *testing.T) {
 	mustContain(t, "settings channels", body,
 		"<h2>Notification Channels</h2>",
 		"<h2>Notification Types</h2>",
-		"On Discord <small>— direct messages to pilot-alice</small>",
+		"On Discord <small>(direct messages to pilot-alice)</small>",
 		`<input type="checkbox" name="channel_desktop" value="1" checked>`,
 		"<h2>Browser notifications</h2>",
 		"1 browser on this account receives notifications.",
@@ -130,7 +130,7 @@ func TestNotificationSettingsChannelsUnlinkedAndNoPush(t *testing.T) {
 	_, body := getPage(t, f.app, cookie, "/notifications/settings")
 	mustContain(t, "settings channels (unlinked, no push)", body,
 		"<h2>Notification Channels</h2>",
-		"On Discord <small>— not connected yet: <a href=\"#discord\">connect it under Discord, below</a></small>",
+		"On Discord <small>(not connected yet: <a href=\"#discord\">connect it under Discord, below</a>)</small>",
 		"<h2>Notification Types</h2>",
 		"<h2>Browser notifications</h2>",
 		"Browser notifications are not set up on this server.",

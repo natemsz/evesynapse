@@ -96,7 +96,7 @@
       {{if .Groups}}<label class="field" data-ch-group hidden><span class="field-label">Group</span>
         <select name="group">{{range .Groups}}<option value="{{.ID}}">{{.Name}}</option>{{end}}</select></label>{{end}}
     </div>
-    <label class="check-row"><input type="checkbox" name="post" value="1" checked> <span>Can post reports, not just read them</span></label>
+    <label class="check-row"><input type="checkbox" name="post" value="1" checked> <span>Can post reports as well as read them</span></label>
     <div class="form-actions"><button type="submit">Give access</button></div>
   </form>
 

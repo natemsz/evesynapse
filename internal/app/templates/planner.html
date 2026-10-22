@@ -60,7 +60,7 @@
 <div class="foldable plan-head" data-fold="never">
 <h2 class="plan-title">{{.ProductName}}</h2>
 <div class="plan-fromrow">
-<p class="plan-from"><small>From <strong>{{.BlueprintName}}</strong> — builds {{.ProducedLine}}.{{if .MaxRunNote}} {{.MaxRunNote}}.{{end}}</small></p>
+<p class="plan-from"><small>From <strong>{{.BlueprintName}}</strong>: builds {{.ProducedLine}}.{{if .MaxRunNote}} {{.MaxRunNote}}.{{end}}</small></p>
 <span class="plan-headbtns">
 {{if .MEInputs}}<button type="button" id="me-toggle" aria-haspopup="dialog">Blueprint ME</button>{{end}}
 <span class="plan-has-tip"><a href="#" id="csv-export" class="plan-csvbtn" aria-label="Export CSV"><svg class="plan-glyph" width="21" height="21" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="url(#nav-glyph-gradient)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.5h8L18.5 8v12.5h-12.5Z"/><path d="M14 3.5V8h4.5"/></g><text x="12.2" y="17.6" text-anchor="middle" font-size="5.2" font-weight="700" fill="url(#nav-glyph-gradient)" stroke="none">CSV</text></svg></a><span class="plan-tip plan-tip-fit" aria-hidden="true"><span class="plan-tip-note">Export CSV</span></span></span>

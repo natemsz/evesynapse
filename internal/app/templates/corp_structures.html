@@ -18,7 +18,7 @@
   <p>Structures were refused by ESI (403). They'll appear here once {{.CorpStructs.CharacterName}} holds the Station Manager role in this corporation.</p>
   {{end}}
   {{else if .CorpStructs.NoFeeder}}
-  <p>{{.CorpStructs.CharacterName}} hasn't granted the corporation permissions that feed the structures, so nobody is sharing this corporation's data with EveSynapse yet. <a href="{{.CorpStructs.AddScopesURL}}">Add the corporation permissions</a> — EVE asks for them on top of what is already granted.</p>
+  <p>{{.CorpStructs.CharacterName}} hasn't granted the corporation permissions that feed the structures, so nobody is sharing this corporation's data with EveSynapse yet. <a href="{{.CorpStructs.AddScopesURL}}">Add the corporation permissions</a>. EVE asks for them on top of what is already granted.</p>
   {{else if .CorpStructs.Warming}}
   <p>Still syncing.{{if .IsAdmin}} Progress is on the <a href="/sync/">Sync page</a>.{{end}}</p>
   {{else if .CorpStructs.Loaded}}

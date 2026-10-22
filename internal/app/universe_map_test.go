@@ -54,6 +54,61 @@ func TestLayoutRegionDeclutters(t *testing.T) {
 	}
 }
 
+// TestLayoutProjectionDeclutters: the Improved Projection takes
+// piled-up systems to readable spacing across the whole universe
+// frame, keeps everyone near home, and is the same on every build.
+func TestLayoutProjectionDeclutters(t *testing.T) {
+	// A dense core (a few hundred systems in a tight patch, the
+	// empire problem), a sparse rim, all in the universe frame.
+	var pts [][2]float64
+	for i := 0; i < 300; i++ {
+		pts = append(pts, [2]float64{5000 + float64(i%20)*3, 5000 + float64(i/20)*3})
+	}
+	for i := 0; i < 60; i++ {
+		a := float64(i) / 60 * 2 * math.Pi
+		pts = append(pts, [2]float64{5000 + math.Cos(a)*4200, 5000 + math.Sin(a)*4200})
+	}
+	var edges [][2]int
+	for i := 1; i < len(pts); i++ {
+		edges = append(edges, [2]int{i - 1, i})
+	}
+	a := layoutProjection(pts, edges)
+	b := layoutProjection(pts, edges)
+	minD := universeMinSpacing(len(pts))
+	worst := math.Inf(1)
+	moveSum, moveMax := 0.0, 0.0
+	for i := range a {
+		if a[i] != b[i] {
+			t.Fatalf("projection is not deterministic at %d: %v vs %v", i, a[i], b[i])
+		}
+		if a[i][0] < -1e-6 || a[i][1] < -1e-6 || a[i][0] > universeFrame+1e-6 || a[i][1] > universeFrame+1e-6 {
+			t.Errorf("system %d left the frame: %v", i, a[i])
+		}
+		// Near home is measured against the input as given; the
+		// layout's final refit only makes this stricter here,
+		// since the test patch does not fill the frame.
+		moveSum += math.Hypot(a[i][0]-pts[i][0], a[i][1]-pts[i][1])
+		moveMax = math.Max(moveMax, math.Hypot(a[i][0]-pts[i][0], a[i][1]-pts[i][1]))
+		for j := i + 1; j < len(a); j++ {
+			worst = math.Min(worst, math.Hypot(a[i][0]-a[j][0], a[i][1]-a[j][1]))
+		}
+	}
+	if worst < 0.6*minD {
+		t.Errorf("closest pair %.1f apart, want at least %.1f (minimum spacing %.1f)", worst, 0.6*minD, minD)
+	}
+	// Near home: the core above starts at 3-unit spacing and
+	// must expand ~30x just to reach spacing, so its mean move
+	// is necessarily a few percent of the frame. Anything
+	// beyond 8% would mean the layout, not the crowding, is
+	// deciding where systems live.
+	if mean := moveSum / float64(len(pts)); mean > 800 {
+		t.Errorf("mean move %.0f, want everyone near home (<= 800 of a %.0f frame)", mean, universeFrame)
+	}
+	if moveMax > 2500 {
+		t.Errorf("worst move %.0f, want no system flung (<= 2500)", moveMax)
+	}
+}
+
 // TestBuildUniverseMap: the payload carries every known-space
 // system in both frames, the gate graph by index, each region's
 // label point and frame, and drops anything outside the listed
@@ -85,6 +140,14 @@ func TestBuildUniverseMap(t *testing.T) {
 		}
 		if p.Sys.X[i] < 0 || p.Sys.X[i] > universeFrame || p.Sys.Y[i] < 0 || p.Sys.Y[i] > universeFrame {
 			t.Errorf("system %d outside the universe frame: %d,%d", id, p.Sys.X[i], p.Sys.Y[i])
+		}
+		if p.Sys.PX[i] < 0 || p.Sys.PX[i] > universeFrame || p.Sys.PY[i] < 0 || p.Sys.PY[i] > universeFrame {
+			t.Errorf("system %d outside the projected frame: %d,%d", id, p.Sys.PX[i], p.Sys.PY[i])
+		}
+	}
+	for _, rg := range p.Regions {
+		if rg.PX < 0 || rg.PX > universeFrame || rg.PY < 0 || rg.PY > universeFrame {
+			t.Errorf("region %s projected label point outside the frame: %d,%d", rg.Name, rg.PX, rg.PY)
 		}
 	}
 	if p.Sys.Sec[jita] != 0.946 || p.Regions[p.Sys.Region[jita]].Name != "The Forge" || p.Cons[p.Sys.Cons[jita]].Name != "Kimotoro" {

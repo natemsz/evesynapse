@@ -30,11 +30,13 @@
    * Systems are columnar: index i is one system across every array.
    * @typedef {Object} UniversePayload
    * @property {number} v
-   * @property {{id:number,name:string,x:number,y:number,w:number,h:number}[]} regions
-   *   x, y: label point in the universe frame; w, h: region frame size.
+   * @property {{id:number,name:string,x:number,y:number,px:number,py:number,w:number,h:number}[]} regions
+   *   x, y: label point in the universe frame; px, py: in the projected
+   *   frame; w, h: region frame size.
    * @property {{id:number,name:string,r:number}[]} cons  r: region index.
-   * @property {{id:number[],n:string[],x:number[],y:number[],s:number[],r:number[],c:number[],rx:number[],ry:number[],f:number[]}} sys
-   *   x, y: universe frame (0..10000); rx, ry: region frame (0..1000);
+   * @property {{id:number[],n:string[],x:number[],y:number[],px:number[],py:number[],s:number[],r:number[],c:number[],rx:number[],ry:number[],f:number[]}} sys
+   *   x, y: universe frame (0..10000); px, py: projected frame;
+   *   rx, ry: region frame (0..1000);
    *   s: true security; r: region index; c: constellation index (-1 none);
    *   f: faction ID.
    * @property {number[]} gates  stargate pairs as flattened index pairs.
@@ -280,20 +282,29 @@
       a = P.gates[i]; b = P.gates[i + 1];
       adj[a].push(b); adj[b].push(a);
     }
+    // The projected frame, for payloads that carry one; older
+    // payloads fall back to the true frame throughout.
+    var px = S.px && S.px.length === n ? S.px : S.x;
+    var py = S.py && S.py.length === n ? S.py : S.y;
     var R = P.regions.length;
-    var members = [], bounds = [], exits = [], regionByID = {};
+    var members = [], bounds = [], pbounds = [], exits = [], regionByID = {};
     for (j = 0; j < R; j++) {
       members.push([]); exits.push([]);
       bounds.push([Infinity, Infinity, -Infinity, -Infinity]);
+      pbounds.push([Infinity, Infinity, -Infinity, -Infinity]);
       regionByID[P.regions[j].id] = j;
     }
     for (i = 0; i < n; i++) {
-      var r = S.r[i], bb = bounds[r];
+      var r = S.r[i], bb = bounds[r], pb = pbounds[r];
       members[r].push(i);
       if (S.x[i] < bb[0]) bb[0] = S.x[i];
       if (S.y[i] < bb[1]) bb[1] = S.y[i];
       if (S.x[i] > bb[2]) bb[2] = S.x[i];
       if (S.y[i] > bb[3]) bb[3] = S.y[i];
+      if (px[i] < pb[0]) pb[0] = px[i];
+      if (py[i] < pb[1]) pb[1] = py[i];
+      if (px[i] > pb[2]) pb[2] = px[i];
+      if (py[i] > pb[3]) pb[3] = py[i];
       for (j = 0; j < adj[i].length; j++) {
         if (S.r[adj[i][j]] !== r) exits[r].push([i, adj[i][j]]);
       }
@@ -313,10 +324,12 @@
       cu[j][0] /= cn[j]; cu[j][1] /= cn[j];
       cr[j][0] /= cn[j]; cr[j][1] /= cn[j];
     }
-    var ux = 0, uy = 0;
+    var ux = 0, uy = 0, pux = 0, puy = 0;
     for (i = 0; i < n; i++) {
       if (S.x[i] > ux) ux = S.x[i];
       if (S.y[i] > uy) uy = S.y[i];
+      if (px[i] > pux) pux = px[i];
+      if (py[i] > puy) puy = py[i];
     }
     var regionLower = P.regions.map(function (rg) { return rg.name.toLowerCase(); });
     // Label precedence: the best-connected systems first, then by
@@ -329,8 +342,8 @@
     P._g = {
       prio: prio, membersPrio: membersPrio,
       n: n, adj: adj, tier: tier, lower: lower, byID: byID, regionByID: regionByID,
-      members: members, bounds: bounds, exits: exits, consU: cu, consR: cr,
-      uniW: ux, uniH: uy, regionLower: regionLower
+      members: members, bounds: bounds, pbounds: pbounds, exits: exits, consU: cu, consR: cr,
+      uniW: ux, uniH: uy, projW: pux, projH: puy, px: px, py: py, regionLower: regionLower
     };
     return P._g;
   }
@@ -770,11 +783,18 @@
     }
 
     // --- Views ---
-    function wx(i) { return mode === "universe" ? S.x[i] : S.rx[i]; }
-    function wy(i) { return mode === "universe" ? S.y[i] : S.ry[i]; }
+    // wx/wy are the map's one coordinate choice: the region
+    // frame in a region, and in the universe the projected
+    // frame when Improved Projection is on, the true frame
+    // otherwise. Everything that draws, picks or measures in
+    // the universe goes through them.
+    function wx(i) { return mode === "universe" ? (projOn ? G.px[i] : S.x[i]) : S.rx[i]; }
+    function wy(i) { return mode === "universe" ? (projOn ? G.py[i] : S.y[i]) : S.ry[i]; }
+    // A region's bounds in the universe frame in use.
+    function uBounds(r) { return projOn ? G.pbounds[r] : G.bounds[r]; }
 
     function viewBounds() {
-      if (mode === "universe") return [0, 0, G.uniW, G.uniH];
+      if (mode === "universe") return [0, 0, projOn ? G.projW : G.uniW, projOn ? G.projH : G.uniH];
       var rg = P.regions[region];
       return [-STUB - 30, -STUB - 30, rg.w + STUB + 30, rg.h + STUB + 30];
     }
@@ -879,7 +899,7 @@
     }
 
     function paths() {
-      var key = mode === "universe" ? "u" : "r" + region;
+      var key = mode === "universe" ? (projOn ? "up" : "u") : "r" + region;
       if (pathCache[key]) return pathCache[key];
       var intra = new Path2D(), inter = new Path2D(), stubs = new Path2D();
       var i, a, b;
@@ -887,8 +907,8 @@
         for (i = 0; i < P.gates.length; i += 2) {
           a = P.gates[i]; b = P.gates[i + 1];
           var p = S.r[a] === S.r[b] ? intra : inter;
-          p.moveTo(S.x[a], S.y[a]);
-          p.lineTo(S.x[b], S.y[b]);
+          p.moveTo(wx(a), wy(a));
+          p.lineTo(wx(b), wy(b));
         }
       } else {
         var ms = G.members[region];
@@ -1130,7 +1150,7 @@
         for (i = 0; i < P.regions.length; i++) if (G.members[i].length) regs.push(i);
         inPlaceFirst(regs, function (i) { return "R" + i; }, function (i) {
           var rg = P.regions[i];
-          label(rg.name.toUpperCase(), rg.x * k + ox, rg.y * k + oy - size / 2, size, colors.region, "600", false, "R" + i, fontDisplay,
+          label(rg.name.toUpperCase(), (projOn && rg.px !== undefined ? rg.px : rg.x) * k + ox, (projOn && rg.py !== undefined ? rg.py : rg.y) * k + oy - size / 2, size, colors.region, "600", false, "R" + i, fontDisplay,
             function (box) { labelBoxes.push({ r: i, b: box }); });
         });
         ctx.globalAlpha = 1;
@@ -1142,11 +1162,11 @@
           var vis = [];
           for (var o = 0; o < G.n; o++) {
             i = G.prio[o];
-            var sx = S.x[i] * k + ox, sy = S.y[i] * k + oy;
+            var sx = wx(i) * k + ox, sy = wy(i) * k + oy;
             if (sx >= 0 && sy >= 0 && sx <= cw && sy <= ch) vis.push(i);
           }
           inPlaceFirst(vis, function (i) { return "s" + i; }, function (i) {
-            label(S.n[i], S.x[i] * k + ox, S.y[i] * k + oy + r + 3, 11, colors.labelDim, null, false, "s" + i);
+            label(S.n[i], wx(i) * k + ox, wy(i) * k + oy + r + 3, 11, colors.labelDim, null, false, "s" + i);
           });
         }
         placeAll();
@@ -1216,6 +1236,15 @@
     try { sovNPC = localStorage.getItem("evesynapse-map-sov-npc") !== "0"; } catch (e) { /* private mode */ }
     if (startQuery.get("npc") === "0") sovNPC = false;
     if (startQuery.get("npc") === "1") sovNPC = true;
+    // Improved Projection: the universe in its precomputed
+    // relaxed frame. A remembered preference, on every visit
+    // until the reader changes it; a link's proj= settles it
+    // for that visit only, without touching the preference.
+    var PROJ_KEY = "evesynapse-map-projection", projOn = false;
+    try { projOn = window.localStorage.getItem(PROJ_KEY) === "1"; } catch (e) { /* private mode */ }
+    if (startQuery.get("proj") === "1") projOn = true;
+    if (startQuery.get("proj") === "0") projOn = false;
+    var projPref = el.querySelector("[data-map-proj]");
 
     // heatColor walks a three-stop ramp (the heat ramp unless one is
     // given: threat has its own, amber through red to white-hot).
@@ -1967,13 +1996,13 @@
       if (dir <= 0 || !zoomEntryAllowed(zoomTactical)) return;
       var c = toWorld(cw / 2, ch / 2), s = nearestUniverse(c[0], c[1]);
       if (s < 0) return;
-      var bb = G.bounds[S.r[s]], ext = Math.max(bb[2] - bb[0], bb[3] - bb[1]) * cam.k;
+      var bb = uBounds(S.r[s]), ext = Math.max(bb[2] - bb[0], bb[3] - bb[1]) * cam.k;
       if (ext >= Math.min(cw, ch) * 1.25) enterRegion(S.r[s], s, true);
     }
     function nearestUniverse(x, y) {
       var best = -1, bd = Infinity;
       for (var i = 0; i < G.n; i++) {
-        var dx = S.x[i] - x, dy = S.y[i] - y, d = dx * dx + dy * dy;
+        var dx = wx(i) - x, dy = wy(i) - y, d = dx * dx + dy * dy;
         if (d < bd) { bd = d; best = i; }
       }
       return best;
@@ -2003,7 +2032,7 @@
     }
     function leaveRegion() {
       if (mode === "universe") return;
-      var rg = P.regions[region], bb = G.bounds[region];
+      var rg = P.regions[region], bb = uBounds(region);
       stopMotion();
       mode = "universe";
       region = -1;
@@ -2050,6 +2079,7 @@
       if (shownLayer && shownLayer !== "security") q.push("layer=" + encodeURIComponent(shownLayer));
       if (shownLayer === "sov" && sovView === "territory") q.push("sov=territory");
       if (shownLayer === "sov" && sovView === "territory" && !sovNPC) q.push("npc=0");
+      if (projOn) q.push("proj=1");
       if (routeFrom >= 0) q.push("from=" + S.id[routeFrom]);
       if (routeTo >= 0) q.push("to=" + S.id[routeTo]);
       if ((routeFrom >= 0 || routeTo >= 0) && routeMode !== "short") q.push("route=" + routeMode);
@@ -2611,7 +2641,7 @@
       ctx.beginPath();
       for (var m = 1; m < routePath.length; m++) {
         var a = routePath[m - 1], b = routePath[m], pa, pb;
-        if (mode === "universe") { pa = [S.x[a], S.y[a]]; pb = [S.x[b], S.y[b]]; }
+        if (mode === "universe") { pa = [wx(a), wy(a)]; pb = [wx(b), wy(b)]; }
         else {
           var ina = S.r[a] === region, inb = S.r[b] === region;
           if (!ina && !inb) continue;
@@ -3849,6 +3879,22 @@
         hint(zoomTactical
           ? "Zoom to tactical is on: zooming deep into a region opens its tactical view."
           : "Zoom to tactical is off: click a region's name for its tactical view.");
+      });
+    }
+    if (projPref) {
+      projPref.disabled = false;
+      projPref.checked = projOn;
+      projPref.addEventListener("change", function () {
+        projOn = projPref.checked;
+        // The one place the preference itself changes: it is
+        // remembered from here, across sessions, until the
+        // reader changes it again.
+        try { window.localStorage.setItem(PROJ_KEY, projOn ? "1" : "0"); } catch (e) { /* private mode */ }
+        syncURL();
+        schedule();
+        hint(projOn
+          ? "Improved projection is on: the universe in its relaxed, readable layout. It stays on until you turn it off."
+          : "Improved projection is off: the universe at its true positions. It stays off until you turn it on.");
       });
     }
     var index = root.querySelector(".map-index");

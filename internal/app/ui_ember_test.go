@@ -346,14 +346,16 @@ func TestWallpaperFirstPaintUnderlay(t *testing.T) {
 }
 
 // TestLandingMockupFidelity pins the landing's fidelity to its
-// approved design: the fixed dark veil over the sky (the layer
-// the text reads against), the design's own glass recipe at a
-// 9px backdrop blur instead of the site's full-strength one, the
-// landing dim text tone, the pure-CSS star layers, the JetBrains
-// Mono footer, and the preview's flat KPI/brief treatment. Each
-// of these regressed once already by borrowing site values; if
-// one drops out, the landing quietly stops looking like the
-// approved design — this says so.
+// approved design: the sunrise art band at the top of the page
+// fading into page black with the star layer carrying the
+// background below it, the floating glass header, the site
+// gradient on the hero tail and the playstyle labels (the
+// section headlines take it from style.css's heading rule), the
+// design's own glass recipe at a 9px backdrop blur instead of
+// the site's full-strength one, the landing dim text tone, the
+// JetBrains Mono footer, and the preview's flat KPI/brief
+// treatment. If one drops out, the landing quietly stops
+// looking like the approved design — this says so.
 func TestLandingMockupFidelity(t *testing.T) {
 	raw, err := fs.ReadFile(staticFS, "static/landing.css")
 	if err != nil {
@@ -361,11 +363,20 @@ func TestLandingMockupFidelity(t *testing.T) {
 	}
 	landing := string(raw)
 	for _, want := range []string{
-		// The sky stack: art reseated to the bottom, the dark
-		// veil above it at the slot the site sheet gives the art,
-		// pinning under no pointer.
-		"body::before { z-index: -3; }",
-		"body::after { content: \"\"; position: fixed; inset: 0; z-index: -1; background: linear-gradient(180deg, rgba(7, 5, 4, 0.42), rgba(7, 5, 4, 0.66) 46%, rgba(7, 5, 4, 0.9)); pointer-events: none; }",
+		// The sky stack: the art band seated at the top of the
+		// page and masked into it, the fade layer deepening to
+		// page black at the band's foot, the star layer above
+		// both, each under no pointer.
+		"body::before { z-index: -3; position: absolute; top: 0; left: 0; right: 0; bottom: auto; height: 60rem;",
+		"body::after { content: \"\"; position: absolute; top: 0; left: 0; right: 0; height: 60rem; z-index: -2; background: linear-gradient(180deg, rgba(4, 2, 2, 0.12), rgba(4, 2, 2, 0) 26%, rgba(4, 2, 2, 0.5) 68%, #040202 97%); pointer-events: none; }",
+		".ld-stars { position: absolute; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; }",
+		// The header floats as one glass pill over the art.
+		".ld-header { position: fixed; top: 14px;",
+		// The site gradient on the two landing spots that carry
+		// it outside an h2/h3: the hero's tail and the
+		// playstyle labels.
+		".ld-hero h1 .ld-amp { background: linear-gradient(90deg, #ffd27a 0%, #ff6a1a 50%, #d63c14 100%);",
+		".ld-scard .ld-who { background: linear-gradient(90deg, #ffd27a 0%, #ff6a1a 50%, #d63c14 100%);",
 		// The design's glass: dark gradient surface, 9px blur,
 		// ember-tinted edge, 14px radius.
 		".ld-glass { background: linear-gradient(180deg, rgba(12, 8, 6, 0.58), rgba(12, 8, 6, 0) 52%), rgba(19, 14, 10, 0.84); backdrop-filter: blur(9px) saturate(1.15); -webkit-backdrop-filter: blur(9px) saturate(1.15); border: 1px solid rgba(255, 106, 0, 0.16); border-radius: 14px;",

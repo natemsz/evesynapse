@@ -55,7 +55,7 @@ func TestLandingAnonymous(t *testing.T) {
 		"Public data, no login",
 		"PKCE on every sign-in",
 		"Revoke on unlink",
-		"Three alts, or a hundred boxed characters.",
+		"Three alts, or a hundred multiboxed characters.",
 		"Know what your ISK is doing.",
 		"Build with the margin already proven.",
 		"One stack for the whole corporation.",
@@ -72,7 +72,7 @@ func TestLandingAnonymous(t *testing.T) {
 		"The appraisal tool on the live site.",
 		"evesynapse.app/market/appraise/",
 		"shot-appraisal.webp",
-		"The six sections, up close.",
+		"Modules, up close.",
 		"data-xtab=\"pilots\"",
 		"data-xtab=\"intel\"",
 		"Intel and Reference",
@@ -114,8 +114,8 @@ func TestLandingAnonymous(t *testing.T) {
 	// feature sections.
 	toolsAt := strings.Index(body, "Every tool in the box.")
 	trustAt := strings.Index(body, "Your keys, your call.")
-	stylesAt := strings.Index(body, "Three alts, or a hundred boxed characters.")
-	explorerAt := strings.Index(body, "The six sections, up close.")
+	stylesAt := strings.Index(body, "Three alts, or a hundred multiboxed characters.")
+	explorerAt := strings.Index(body, "Modules, up close.")
 	fleetAt := strings.Index(body, "Every pilot, at a glance.")
 	if !(toolsAt >= 0 && toolsAt < trustAt && trustAt < stylesAt && stylesAt < explorerAt && explorerAt < fleetAt) {
 		t.Error("landing sections out of order: want tools, trust, playstyles, explorer, then the feature sections")

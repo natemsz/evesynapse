@@ -25,8 +25,8 @@ body::before { filter: brightness(0.8) saturate(0.98); }
    is black and the stars carry the background on their own.
    The site sheet parks body::before at z-index -1; the landing
    re-seats the stack so each layer takes its own slot. */
-body::before { z-index: -3; position: absolute; top: 0; left: 0; right: 0; bottom: auto; height: 60rem; background-position: center top; -webkit-mask-image: linear-gradient(180deg, #000 60%, transparent 98%); mask-image: linear-gradient(180deg, #000 60%, transparent 98%); }
-body::after { content: ""; position: absolute; top: 0; left: 0; right: 0; height: 60rem; z-index: -2; background: linear-gradient(180deg, rgba(4, 2, 2, 0.12), rgba(4, 2, 2, 0) 26%, rgba(4, 2, 2, 0.5) 68%, #040202 97%); pointer-events: none; }
+body::before { z-index: -3; position: absolute; top: 0; left: 0; right: 0; bottom: auto; height: 72rem; background-position: center top; -webkit-mask-image: linear-gradient(180deg, #000 42%, transparent 99%); mask-image: linear-gradient(180deg, #000 42%, transparent 99%); }
+body::after { content: ""; position: absolute; top: 0; left: 0; right: 0; height: 72rem; z-index: -2; background: linear-gradient(180deg, rgba(4, 2, 2, 0.1), rgba(4, 2, 2, 0) 30%, rgba(4, 2, 2, 0.26) 58%, rgba(4, 2, 2, 0.62) 82%, #040202 100%); pointer-events: none; }
 .ld-stars { position: absolute; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; }
 .ld-stars i { position: absolute; border-radius: 50%; background: #ffe9c9; }
 .ld-stars b { position: absolute; background: linear-gradient(180deg, #ffe9c4, #ffb35c); clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%); }
@@ -284,6 +284,13 @@ body::after { content: ""; position: absolute; top: 0; left: 0; right: 0; height
 .ld-tm-group a span { display: block; color: var(--ld-dim); font-size: 13px; }
 .ld-tm-group a:hover strong { color: var(--amber, #ffb35c); }
 
+@media (max-width: 560px) {
+  /* The floating pill at phone width: the wordmark's text span
+     yields to its glyph so both header actions stay on the pill. */
+  .ld-wordmark span { display: none; }
+  .ld-hbar { gap: 10px; padding-left: 12px; }
+  .ld-header .ld-btn { padding: 8px 12px; font-size: 15px; }
+}
 @media (max-width: 900px) {
   .ld-strip-grid, .ld-trust, .ld-tools { grid-template-columns: 1fr; }
   .ld-styles { grid-template-columns: 1fr; }

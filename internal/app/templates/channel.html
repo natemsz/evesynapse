@@ -71,18 +71,32 @@
 {{if .Owner}}
 <section class="card page-card" id="access" data-fold="never">
   <h2>Who can see this channel</h2>
-  <p class="hint prose">Give access to a pilot, a corporation, an alliance or one of your groups. “Can post” lets them report too; otherwise they can only read.</p>
+  {{if .Org}}<p class="hint prose">This is {{.Org}}'s channel. Its directors run it, along with whoever they choose under “Intel channels” in the corporation's settings. Share it with people in {{.Org}} by rank, role or group, the same choices as its Discord roles, or with anyone else by name. “Can post” lets them report too; otherwise they can only read.</p>
+  {{else}}<p class="hint prose">Give access to a pilot, a corporation, an alliance or one of your groups. “Can post” lets them report too; otherwise they can only read.</p>{{end}}
   {{if .Grants}}<ul class="row-list">
     {{range .Grants}}<li>
-      <span>{{if .Logo}}<img class="ch-face" src="{{.Logo}}" alt="" width="24" height="24" loading="lazy"> {{end}}<strong>{{.Name}}</strong> <small class="muted">{{.Kind}}</small></span>
+      <span>{{if .Logo}}<img class="ch-face" src="{{.Logo}}" alt="" width="24" height="24" loading="lazy"> {{end}}<strong>{{.Name}}</strong>{{if ne .Kind "rule"}} <small class="muted">{{.Kind}}</small>{{end}}</span>
       <span class="ch-row-end">
         <span class="badge {{if .CanPost}}kill{{else}}wait{{end}}">{{if .CanPost}}Read and post{{else}}Read only{{end}}</span>
-        <form method="post" action="/intel/channels/{{$.Channel.ID}}/grants/remove" class="inline-form"><input type="hidden" name="kind" value="{{.Kind}}"><input type="hidden" name="target" value="{{.ID}}"><button type="submit" class="btn">Remove</button></form>
+        <form method="post" action="/intel/channels/{{$.Channel.ID}}/grants/remove" class="inline-form"><input type="hidden" name="kind" value="{{.Kind}}">{{if eq .Kind "rule"}}<input type="hidden" name="who" value="{{.Who}}">{{else}}<input type="hidden" name="target" value="{{.ID}}">{{end}}<button type="submit" class="btn">Remove</button></form>
       </span>
     </li>{{end}}
-  </ul>{{else}}<p class="hint">Only you can see it so far.</p>{{end}}
+  </ul>{{else}}<p class="hint">{{if .Org}}Only those who run it can see it so far.{{else}}Only you can see it so far.{{end}}</p>{{end}}
+  {{if .RuleChoices}}<form class="op-form setting" method="post" action="/intel/channels/{{.ID}}/grants">
+    <h4>Share within {{.Org}}</h4>
+    <input type="hidden" name="kind" value="rule">
+    <div class="form-grid">
+      <label class="field wide"><span class="field-label">Who</span>
+        <select name="who">{{range .RuleChoices}}<option value="{{.Value}}">{{.Label}}</option>{{end}}</select></label>
+    </div>
+    <label class="check-row"><input type="checkbox" name="post" value="1" checked> <span>Can post reports as well as read them</span></label>
+    <div class="form-actions">
+      <button type="submit">Share</button>
+      <span class="field-hint">Checked live: someone who leaves the corporation, loses the role or leaves the group loses access too.</span>
+    </div>
+  </form>{{end}}
   <form class="op-form setting" method="post" action="/intel/channels/{{.ID}}/grants">
-    <h4>Give access</h4>
+    <h4>{{if .Org}}Give access to anyone else{{else}}Give access{{end}}</h4>
     <div class="form-grid">
       <label class="field"><span class="field-label">Who</span>
         <select name="kind" data-ch-kind>

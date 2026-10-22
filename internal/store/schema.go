@@ -485,6 +485,12 @@ var pgIntelWatchSchema string
 //go:embed schema_pg/081_axon_pairing.sql
 var pgAxonPairingSchema string
 
+// Step 082: intel channels owned by a corporation or alliance, and
+// rule grants judged by the standing model.
+//
+//go:embed schema_pg/082_intel_channel_orgs.sql
+var pgIntelChannelOrgsSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -595,6 +601,7 @@ func schemaSteps() []schemaStep {
 		{79, "intel_tokens", pgIntelTokensSchema, ""},
 		{80, "intel_watch", pgIntelWatchSchema, ""},
 		{81, "axon_pairing", pgAxonPairingSchema, ""},
+		{82, "intel_channel_orgs", pgIntelChannelOrgsSchema, ""},
 	}
 }
 

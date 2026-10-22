@@ -62,6 +62,11 @@ type intelIdentity struct {
 	corporations []int64
 	alliances    []int64
 	groups       []int64
+	// standing is the account's standing (internal/standing), for
+	// organisation channels' rules; managed, the organisations whose
+	// channels it manages (channels_orgs.go).
+	standing orgStanding
+	managed  []orgOwner
 	// poster is the character a report is posted as: the session
 	// character when it is one of the account's, else the first.
 	posterID   int64
@@ -108,6 +113,12 @@ func (app *Application) intelIdentityFor(ctx context.Context, userID, session in
 			}
 		}
 	}
+	if st, err := app.standingFor(ctx, id.userID); err == nil {
+		id.standing = st
+		id.managed = app.intelManagedOrgs(ctx, st)
+	} else {
+		logging.Warnf("channels: standing of user %d: %v", id.userID, err)
+	}
 	if id.posterID == 0 {
 		// A character still settling (no corporation known yet)
 		// can post too.
@@ -121,35 +132,15 @@ func (app *Application) intelIdentityFor(ctx context.Context, userID, session in
 	return id
 }
 
-func (app *Application) accessibleChannels(ctx context.Context, id intelIdentity) []db.ListAccessibleChannelsRow {
-	if id.userID == 0 {
-		return nil
-	}
-	nz := func(s []int64) []int64 {
-		if s == nil {
-			return []int64{}
-		}
-		return s
-	}
-	rows, err := app.queries.ListAccessibleChannels(ctx, db.ListAccessibleChannelsParams{
-		UserID: id.userID, CharacterIds: nz(id.characters), CorporationIds: nz(id.corporations),
-		AllianceIds: nz(id.alliances), GroupIds: nz(id.groups),
-	})
-	if err != nil {
-		logging.Warnf("channels: accessible for user %d: %v", id.userID, err)
-		return nil
-	}
-	return rows
-}
-
-// channelAccess finds one channel among those the account can read.
-func (app *Application) channelAccess(ctx context.Context, id intelIdentity, channelID int64) (db.ListAccessibleChannelsRow, bool) {
+// channelAccess finds one channel among those the account can read
+// (accessibleChannels, channels_orgs.go).
+func (app *Application) channelAccess(ctx context.Context, id intelIdentity, channelID int64) (accessChannel, bool) {
 	for _, c := range app.accessibleChannels(ctx, id) {
 		if c.ID == channelID {
 			return c, true
 		}
 	}
-	return db.ListAccessibleChannelsRow{}, false
+	return accessChannel{}, false
 }
 
 // --- The system dictionary for pasted chat lines ---
@@ -186,6 +177,9 @@ type channelListView struct {
 	SignedIn bool
 	Channels []channelRow
 	Error    string
+	// Owners are who a new channel can belong to: just the reader,
+	// or an organisation whose channels they manage.
+	Owners []channelOwnerOption
 	// EveSynapse Axon (intel_tokens.go): the account's paired
 	// devices, the downloads, and a pairing code just made.
 	Tokens      []intelTokenRow
@@ -200,8 +194,9 @@ type channelRow struct {
 	ID          int64
 	Name        string
 	Description string
-	Owner       bool
+	Owner       bool // the reader manages it
 	CanPost     bool
+	Org         string // the owner organisation's name, "" for a personal channel
 }
 
 type grantView struct {
@@ -210,6 +205,7 @@ type grantView struct {
 	Name    string
 	CanPost bool
 	Logo    string // image URL, "" for groups
+	Who     string // a rule grant's "Who" choice (channels_orgs.go)
 }
 
 type groupChoice struct {
@@ -250,6 +246,10 @@ type channelView struct {
 	LastID      int64
 	Grants      []grantView
 	Groups      []groupChoice
+	// Org is the owner organisation's name ("" for a personal
+	// channel); RuleChoices, who in it the channel can be shared with.
+	Org         string
+	RuleChoices []whoChoice
 	PrefillSys  string
 	// Watch is the channel's known hostiles (pilot_intel.go).
 	Watch []watchRow
@@ -266,8 +266,9 @@ func (app *Application) handleChannels(w http.ResponseWriter, r *http.Request) {
 	if id.userID > 0 {
 		v.SignedIn = true
 		for _, c := range app.accessibleChannels(ctx, id) {
-			v.Channels = append(v.Channels, channelRow{ID: c.ID, Name: c.Name, Description: c.Description, Owner: c.OwnerUserID == id.userID, CanPost: c.CanPost})
+			v.Channels = append(v.Channels, app.channelRowOf(ctx, c))
 		}
+		v.Owners = app.channelOwnerOptions(ctx, id)
 		app.fillAxon(ctx, v, id.userID)
 	}
 	data.Channels = v
@@ -285,23 +286,45 @@ func (app *Application) handleChannelCreate(w http.ResponseWriter, r *http.Reque
 		back("A channel needs a name of up to 60 characters (and a description of up to 200).")
 		return
 	}
+	// Personal, or an organisation's the reader manages channels for.
+	var org orgOwner
+	isOrg := false
+	if raw := r.PostFormValue("owner"); raw != "" {
+		o, ok := parseOrgOwner(raw)
+		if !ok || !ownersInclude(id.managed, o) {
+			back("You can't make channels for that corporation or alliance.")
+			return
+		}
+		org, isOrg = o, true
+	}
 	owned := 0
 	for _, c := range app.accessibleChannels(ctx, id) {
-		if c.OwnerUserID == id.userID {
+		if o, ok := c.Org(); (isOrg && ok && o == org) || (!isOrg && !ok && c.OwnerUserID == id.userID) {
 			owned++
 		}
 	}
 	if owned >= intelMaxChannels {
-		back(fmt.Sprintf("You can own up to %d channels.", intelMaxChannels))
+		if isOrg {
+			back(fmt.Sprintf("A corporation or alliance can have up to %d channels.", intelMaxChannels))
+		} else {
+			back(fmt.Sprintf("You can own up to %d channels.", intelMaxChannels))
+		}
 		return
 	}
-	cid, err := app.queries.CreateIntelChannel(ctx, db.CreateIntelChannelParams{OwnerUserID: id.userID, Name: name, Description: desc, CreatedAt: time.Now().UTC()})
+	cid, err := app.queries.CreateIntelChannel(ctx, db.CreateIntelChannelParams{OwnerUserID: id.userID, Name: name, Description: desc,
+		CreatedAt: time.Now().UTC(), OwnerKind: org.Kind, OwnerID: org.ID})
 	if err != nil {
 		logging.Errorf("channels: create: %v", err)
 		back("That did not go through — please try again.")
 		return
 	}
-	app.flash(ctx, "Channel created. Grant access below to share it.")
+	if isOrg {
+		// An organisation's channel starts open to its members.
+		app.addChannelRule(ctx, org, cid, ruleMember, true)
+		app.flash(ctx, "Channel created. Every member of "+app.ownerName(ctx, org)+" can read and post; change who below.")
+	} else {
+		app.flash(ctx, "Channel created. Grant access below to share it.")
+	}
 	http.Redirect(w, r, fmt.Sprintf("/intel/channels/%d/", cid), http.StatusSeeOther)
 }
 
@@ -320,7 +343,11 @@ func (app *Application) handleChannel(w http.ResponseWriter, r *http.Request) {
 		app.render(ctx, w, http.StatusNotFound, "channel.html", data)
 		return
 	}
-	v := &channelView{ID: c.ID, Name: c.Name, Description: c.Description, Owner: c.OwnerUserID == id.userID, CanPost: c.CanPost, Poster: id.posterName}
+	v := &channelView{ID: c.ID, Name: c.Name, Description: c.Description, Owner: c.Manage, CanPost: c.CanPost, Poster: id.posterName}
+	org, isOrg := c.Org()
+	if isOrg {
+		v.Org = app.ownerName(ctx, org)
+	}
 	if sys, err := strconv.ParseInt(r.URL.Query().Get("system"), 10, 64); err == nil && sys > 0 {
 		if s, err := app.queries.GetSDESystem(ctx, sys); err == nil {
 			v.PrefillSys = s.Name
@@ -353,6 +380,10 @@ func (app *Application) handleChannel(w http.ResponseWriter, r *http.Request) {
 	if v.Owner {
 		v.Grants = app.channelGrants(ctx, c.ID)
 		v.Groups = app.grantableGroups(ctx, id)
+		if isOrg {
+			v.Grants = append(app.channelRuleGrants(ctx, org, c.ID), v.Grants...)
+			v.RuleChoices = app.whoChoices(ctx, org)
+		}
 	}
 	data.Channel = v
 	data.HeadMeta = app.HeadMeta(module.PageMeta{Title: c.Name + " · Intel channel"})
@@ -601,7 +632,7 @@ func (app *Application) handleReportDelete(w http.ResponseWriter, r *http.Reques
 	c, ok := app.channelAccess(ctx, id, cid)
 	rid, _ := strconv.ParseInt(chi.URLParam(r, "reportID"), 10, 64)
 	rep, err := app.queries.GetIntelReport(ctx, rid)
-	if !ok || err != nil || rep.ChannelID != c.ID || (rep.AuthorUserID != id.userID && c.OwnerUserID != id.userID) {
+	if !ok || err != nil || rep.ChannelID != c.ID || (rep.AuthorUserID != id.userID && !c.Manage) {
 		back("You cannot remove that report.")
 		return
 	}
@@ -614,11 +645,12 @@ func (app *Application) handleReportDelete(w http.ResponseWriter, r *http.Reques
 
 // --- Managing (the owner only) ---
 
-// ownedChannel finds a channel the account owns.
+// ownedChannel finds a channel the account manages: its own, or one
+// of an organisation it manages channels for.
 func (app *Application) ownedChannel(ctx context.Context, r *http.Request) (db.IntelChannel, intelIdentity, bool) {
 	id := app.intelIdentity(ctx)
 	c, err := app.queries.GetIntelChannel(ctx, channelIDParam(r))
-	if err != nil || c.OwnerUserID != id.userID || id.userID == 0 {
+	if err != nil || !id.managesChannel(c.OwnerKind, c.OwnerID, c.OwnerUserID) {
 		return db.IntelChannel{}, id, false
 	}
 	return c, id, true
@@ -629,7 +661,7 @@ func (app *Application) handleChannelEdit(w http.ResponseWriter, r *http.Request
 	c, _, ok := app.ownedChannel(ctx, r)
 	back := app.flashBack(w, r, fmt.Sprintf("/intel/channels/%d/", channelIDParam(r)))
 	if !ok {
-		back("Only the channel's owner can change it.")
+		back("Only whoever runs the channel can change it.")
 		return
 	}
 	name := strings.TrimSpace(r.PostFormValue("name"))
@@ -649,7 +681,7 @@ func (app *Application) handleChannelDelete(w http.ResponseWriter, r *http.Reque
 	ctx := r.Context()
 	c, _, ok := app.ownedChannel(ctx, r)
 	if !ok {
-		app.flashBack(w, r, fmt.Sprintf("/intel/channels/%d/", channelIDParam(r)))("Only the channel's owner can delete it.")
+		app.flashBack(w, r, fmt.Sprintf("/intel/channels/%d/", channelIDParam(r)))("Only whoever runs the channel can delete it.")
 		return
 	}
 	if r.PostFormValue("confirm") != c.Name {
@@ -670,17 +702,37 @@ func (app *Application) handleGrantAdd(w http.ResponseWriter, r *http.Request) {
 	c, id, ok := app.ownedChannel(ctx, r)
 	back := app.flashBack(w, r, fmt.Sprintf("/intel/channels/%d/#access", channelIDParam(r)))
 	if !ok {
-		back("Only the channel's owner can grant access.")
+		back("Only whoever runs the channel can grant access.")
 		return
 	}
 	kind := r.PostFormValue("kind")
 	canPost := r.PostFormValue("post") != ""
-	if !grantKinds[kind] {
-		back("Choose who to grant: a pilot, a corporation, an alliance or a group.")
+	nGrants, _ := app.queries.CountIntelChannelGrants(ctx, c.ID)
+	nRules, _ := app.queries.CountIntelChannelRules(ctx, c.ID)
+	if nGrants+nRules >= intelMaxGrants {
+		back(fmt.Sprintf("A channel holds up to %d grants.", intelMaxGrants))
 		return
 	}
-	if n, err := app.queries.CountIntelChannelGrants(ctx, c.ID); err == nil && n >= intelMaxGrants {
-		back(fmt.Sprintf("A channel holds up to %d grants.", intelMaxGrants))
+	// An organisation's channel shared by rule (channels_orgs.go).
+	if kind == "rule" {
+		if c.OwnerKind == "" {
+			back("Only a corporation's or alliance's channel can be shared by role or rank.")
+			return
+		}
+		label, ok := app.addChannelRule(ctx, orgOwner{Kind: c.OwnerKind, ID: c.OwnerID}, c.ID, r.PostFormValue("who"), canPost)
+		if !ok {
+			back("Choose who in the corporation or alliance to share with.")
+			return
+		}
+		how := "can read"
+		if canPost {
+			how = "can read and post"
+		}
+		back(label + ": " + how + ".")
+		return
+	}
+	if !grantKinds[kind] {
+		back("Choose who to grant: a pilot, a corporation, an alliance or a group.")
 		return
 	}
 	var target int64
@@ -774,7 +826,16 @@ func (app *Application) handleGrantRemove(w http.ResponseWriter, r *http.Request
 	c, _, ok := app.ownedChannel(ctx, r)
 	back := app.flashBack(w, r, fmt.Sprintf("/intel/channels/%d/#access", channelIDParam(r)))
 	if !ok {
-		back("Only the channel's owner can change access.")
+		back("Only whoever runs the channel can change access.")
+		return
+	}
+	if r.PostFormValue("kind") == "rule" {
+		kind, ref, _ := strings.Cut(r.PostFormValue("who"), ":")
+		if err := app.queries.DeleteIntelChannelRule(ctx, db.DeleteIntelChannelRuleParams{ChannelID: c.ID, RuleKind: kind, RuleRef: ref}); err != nil {
+			back("That did not go through — please try again.")
+			return
+		}
+		back("Access removed.")
 		return
 	}
 	target, _ := strconv.ParseInt(r.PostFormValue("target"), 10, 64)

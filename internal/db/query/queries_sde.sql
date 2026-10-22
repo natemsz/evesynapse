@@ -602,3 +602,14 @@ LIMIT 1;
 SELECT t.type_id FROM sde_types t
 JOIN sde_groups g ON g.group_id = t.group_id
 WHERE g.category_id = 6 AND t.type_id = ANY(sqlc.arg(type_ids)::bigint[]);
+
+-- Every ship by name with its group, for reading intel reports
+-- (intel_analysis.go).
+-- name: ListSDEShipNames :many
+SELECT t.type_id, t.name, COALESCE(g.name, '') AS group_name
+FROM sde_types t
+JOIN sde_groups g ON g.group_id = t.group_id
+WHERE g.category_id = 6 AND t.published = 1;
+
+-- name: ListSDESystemNeighbours :many
+SELECT to_system_id FROM sde_system_jumps WHERE from_system_id = $1;

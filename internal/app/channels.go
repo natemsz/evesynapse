@@ -234,6 +234,14 @@ type reportView struct {
 	At         int64  `json:"at"`
 	Ago        string `json:"ago"`
 	Mine       bool   `json:"mine,omitempty"`
+	// What the report says (intel_analysis.go): its kind in words,
+	// the pilots (each linking to their page), ships and gate.
+	Kind      string        `json:"kind,omitempty"`
+	KindLabel string        `json:"kindLabel,omitempty"`
+	KindTone  string        `json:"tone,omitempty"` // the badge's class: loss, wait or kill
+	Pilots    []reportPilot `json:"pilots,omitempty"`
+	Ships     []reportShip  `json:"ships,omitempty"`
+	Gate      string        `json:"gate,omitempty"`
 	// Time is At for the templates.
 	Time time.Time `json:"-"`
 }
@@ -379,6 +387,7 @@ func (app *Application) channelReports(ctx context.Context, id intelIdentity, ch
 		sys := names.system(r.SystemID)
 		rv.SystemName = sys.Name
 		rv.SecText, rv.SecTier = secRound(sys.Security)
+		applyAnalysis(&rv, r.Kind, r.Analysis, names)
 		out = append(out, rv)
 	}
 	return out
@@ -488,7 +497,7 @@ func (app *Application) handleChannelReport(w http.ResponseWriter, r *http.Reque
 		reply(http.StatusUnprocessableEntity, "Say what was seen: pilots, a count, or mark it clear.", 0)
 		return
 	}
-	if _, err := app.queries.InsertIntelReport(ctx, base); err != nil {
+	if _, err := app.insertIntelReport(ctx, base, false); err != nil {
 		logging.Errorf("channels: insert report: %v", err)
 		reply(http.StatusInternalServerError, "That did not go through — please try again.", 0)
 		return
@@ -530,7 +539,7 @@ func (app *Application) postChatLines(ctx context.Context, base db.InsertIntelRe
 				continue
 			}
 		}
-		if _, err := app.queries.InsertIntelReport(ctx, p); err != nil {
+		if _, err := app.insertIntelReport(ctx, p, rep.NoVisual); err != nil {
 			logging.Errorf("channels: insert chat report: %v", err)
 			continue
 		}
@@ -578,7 +587,7 @@ func (app *Application) handleScanPost(w http.ResponseWriter, r *http.Request) {
 	case res.Fleet != nil:
 		p.Hostiles = int32(len(res.Fleet.Members))
 	}
-	if _, err := app.queries.InsertIntelReport(ctx, p); err != nil {
+	if _, err := app.insertIntelReport(ctx, p, false); err != nil {
 		logging.Errorf("channels: insert scan report: %v", err)
 		back("That did not go through — please try again.")
 		return
@@ -863,6 +872,7 @@ func (app *Application) handleMapIntel(w http.ResponseWriter, r *http.Request) {
 		Clear bool   `json:"clear,omitempty"`
 		Scan  string `json:"scan,omitempty"`
 		At    int64  `json:"at"`
+		Kind  string `json:"kind,omitempty"` // what the report is (intel_analysis.go)
 	}
 	out := struct {
 		Now      int64     `json:"now"`
@@ -881,7 +891,7 @@ func (app *Application) handleMapIntel(w http.ResponseWriter, r *http.Request) {
 			logging.Warnf("channels: map reports: %v", err)
 		}
 		for _, r := range rows {
-			out.Reports = append(out.Reports, report{ID: r.ID, Ch: r.ChannelID, Sys: r.SystemID, By: r.Reporter, Text: r.Text, N: r.Hostiles, Clear: r.Clear, Scan: r.ScanID, At: r.SeenAt.Unix()})
+			out.Reports = append(out.Reports, report{ID: r.ID, Ch: r.ChannelID, Sys: r.SystemID, By: r.Reporter, Text: r.Text, N: r.Hostiles, Clear: r.Clear, Scan: r.ScanID, At: r.SeenAt.Unix(), Kind: r.Kind})
 		}
 	}
 	w.Header().Set("Content-Type", "application/json")

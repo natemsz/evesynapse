@@ -34,7 +34,7 @@ func TestParse(t *testing.T) {
 		t.Fatalf("reports %d, questions %d, no system %d: %+v", len(o.Reports), o.Questions, o.NoSystem, o.Reports)
 	}
 	r := o.Reports[0]
-	if r.Speaker != "Some Scout" || r.SystemID != 30004759 || r.Hostiles != 3 || !r.NoVisual || r.Text != "Hostile One Hostile Two" {
+	if r.Speaker != "Some Scout" || r.SystemID != 30004759 || r.Hostiles != 3 || !r.NoVisual || r.Text != "Hostile One  Hostile Two" { // the gap names were pasted with is kept
 		t.Errorf("first: %+v", r)
 	}
 	if !r.At.Equal(time.Date(2026, 10, 21, 11, 20, 5, 0, time.UTC)) {

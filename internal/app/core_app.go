@@ -128,6 +128,9 @@ type Application struct {
 	// histFetchMu serializes market history fetches (cycle and urgent)
 	// apart from fetchMu, for the same reason.
 	histFetchMu sync.Mutex
+	// intelAnalysisMu serializes the intel reports' name and
+	// affiliation lookups (intel_analysis.go).
+	intelAnalysisMu sync.Mutex
 
 	// urgentMu guards urgentHoldUntil: after ESI pushes back, the
 	// urgent drain stays quiet for a while instead of nudging

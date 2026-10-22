@@ -216,6 +216,38 @@ func (q *Queries) GetIntelPairingCodeByHash(ctx context.Context, codeHash string
 	return i, err
 }
 
+const getIntelPilotAffiliation = `-- name: GetIntelPilotAffiliation :one
+SELECT character_id, corporation_id, alliance_id, checked_at FROM intel_pilot_affiliations WHERE character_id = $1
+`
+
+func (q *Queries) GetIntelPilotAffiliation(ctx context.Context, characterID int64) (IntelPilotAffiliation, error) {
+	row := q.db.QueryRowContext(ctx, getIntelPilotAffiliation, characterID)
+	var i IntelPilotAffiliation
+	err := row.Scan(
+		&i.CharacterID,
+		&i.CorporationID,
+		&i.AllianceID,
+		&i.CheckedAt,
+	)
+	return i, err
+}
+
+const getIntelPilotName = `-- name: GetIntelPilotName :one
+SELECT name_lower, character_id, name, checked_at FROM intel_pilot_names WHERE name_lower = $1
+`
+
+func (q *Queries) GetIntelPilotName(ctx context.Context, nameLower string) (IntelPilotName, error) {
+	row := q.db.QueryRowContext(ctx, getIntelPilotName, nameLower)
+	var i IntelPilotName
+	err := row.Scan(
+		&i.NameLower,
+		&i.CharacterID,
+		&i.Name,
+		&i.CheckedAt,
+	)
+	return i, err
+}
+
 const getIntelReport = `-- name: GetIntelReport :one
 SELECT id, channel_id, author_user_id FROM intel_reports WHERE id = $1
 `
@@ -258,10 +290,11 @@ func (q *Queries) GetIntelTokenByHash(ctx context.Context, tokenHash string) (Ge
 
 const insertIntelReport = `-- name: InsertIntelReport :one
 INSERT INTO intel_reports (channel_id, system_id, author_user_id, author_character_id, reporter,
-    text, pilots, hostiles, clear, scan_id, source, seen_at, created_at)
+    text, pilots, hostiles, clear, scan_id, source, seen_at, created_at, kind, analysis, analysis_pending)
 VALUES ($1, $2, $3, $4,
     $5, $6, $7, $8, $9,
-    $10, $11, $12, $13)
+    $10, $11, $12, $13,
+    $14, $15, $16)
 RETURNING id
 `
 
@@ -279,6 +312,9 @@ type InsertIntelReportParams struct {
 	Source            string    `json:"source"`
 	SeenAt            time.Time `json:"seen_at"`
 	CreatedAt         time.Time `json:"created_at"`
+	Kind              string    `json:"kind"`
+	Analysis          string    `json:"analysis"`
+	AnalysisPending   bool      `json:"analysis_pending"`
 }
 
 func (q *Queries) InsertIntelReport(ctx context.Context, arg InsertIntelReportParams) (int64, error) {
@@ -296,6 +332,9 @@ func (q *Queries) InsertIntelReport(ctx context.Context, arg InsertIntelReportPa
 		arg.Source,
 		arg.SeenAt,
 		arg.CreatedAt,
+		arg.Kind,
+		arg.Analysis,
+		arg.AnalysisPending,
 	)
 	var id int64
 	err := row.Scan(&id)
@@ -439,8 +478,52 @@ func (q *Queries) ListIntelChannelGrants(ctx context.Context, channelID int64) (
 	return items, nil
 }
 
+const listIntelChannelSideCorps = `-- name: ListIntelChannelSideCorps :many
+SELECT DISTINCT cc.corporation_id
+FROM character_corporations cc
+WHERE cc.corporation_id > 0 AND cc.character_id IN (
+    SELECT r.author_character_id FROM intel_reports r
+    WHERE r.channel_id = $1 AND r.author_character_id > 0 AND r.created_at >= $2::timestamptz
+    UNION
+    SELECT ch.character_id FROM characters ch
+    JOIN intel_channels c ON c.owner_user_id = ch.user_id
+    WHERE c.id = $1
+)
+`
+
+type ListIntelChannelSideCorpsParams struct {
+	ChannelID int64     `json:"channel_id"`
+	Since     time.Time `json:"since"`
+}
+
+// The corporations of a channel's recent reporters, and of its
+// owner's characters: the channel's own side, for telling friend from
+// foe by default.
+func (q *Queries) ListIntelChannelSideCorps(ctx context.Context, arg ListIntelChannelSideCorpsParams) ([]int64, error) {
+	rows, err := q.db.QueryContext(ctx, listIntelChannelSideCorps, arg.ChannelID, arg.Since)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []int64
+	for rows.Next() {
+		var corporation_id int64
+		if err := rows.Scan(&corporation_id); err != nil {
+			return nil, err
+		}
+		items = append(items, corporation_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listIntelReports = `-- name: ListIntelReports :many
-SELECT id, channel_id, system_id, author_user_id, reporter, text, pilots, hostiles, clear, scan_id, source, seen_at, created_at
+SELECT id, channel_id, system_id, author_user_id, reporter, text, pilots, hostiles, clear, scan_id, source, seen_at, created_at, kind, analysis
 FROM intel_reports
 WHERE channel_id = $1
   AND id > $2::bigint
@@ -471,6 +554,8 @@ type ListIntelReportsRow struct {
 	Source       string    `json:"source"`
 	SeenAt       time.Time `json:"seen_at"`
 	CreatedAt    time.Time `json:"created_at"`
+	Kind         string    `json:"kind"`
+	Analysis     string    `json:"analysis"`
 }
 
 // A channel's reports, latest seen first: a page before a (seen_at,
@@ -504,6 +589,8 @@ func (q *Queries) ListIntelReports(ctx context.Context, arg ListIntelReportsPara
 			&i.Source,
 			&i.SeenAt,
 			&i.CreatedAt,
+			&i.Kind,
+			&i.Analysis,
 		); err != nil {
 			return nil, err
 		}
@@ -562,8 +649,63 @@ func (q *Queries) ListIntelTokens(ctx context.Context, userID int64) ([]ListInte
 	return items, nil
 }
 
+const listPendingIntelReports = `-- name: ListPendingIntelReports :many
+SELECT id, channel_id, system_id, text, hostiles, clear, analysis
+FROM intel_reports
+WHERE analysis_pending AND created_at >= $1::timestamptz
+ORDER BY created_at
+LIMIT $2::bigint
+`
+
+type ListPendingIntelReportsParams struct {
+	Since   time.Time `json:"since"`
+	MaxRows int64     `json:"max_rows"`
+}
+
+type ListPendingIntelReportsRow struct {
+	ID        int64  `json:"id"`
+	ChannelID int64  `json:"channel_id"`
+	SystemID  int64  `json:"system_id"`
+	Text      string `json:"text"`
+	Hostiles  int32  `json:"hostiles"`
+	Clear     bool   `json:"clear"`
+	Analysis  string `json:"analysis"`
+}
+
+// Intel analysis (schema 083).
+func (q *Queries) ListPendingIntelReports(ctx context.Context, arg ListPendingIntelReportsParams) ([]ListPendingIntelReportsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listPendingIntelReports, arg.Since, arg.MaxRows)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListPendingIntelReportsRow
+	for rows.Next() {
+		var i ListPendingIntelReportsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.ChannelID,
+			&i.SystemID,
+			&i.Text,
+			&i.Hostiles,
+			&i.Clear,
+			&i.Analysis,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listRecentIntelReports = `-- name: ListRecentIntelReports :many
-SELECT r.id, r.channel_id, r.system_id, r.reporter, r.text, r.pilots, r.hostiles, r.clear, r.scan_id, r.seen_at
+SELECT r.id, r.channel_id, r.system_id, r.reporter, r.text, r.pilots, r.hostiles, r.clear, r.scan_id, r.seen_at, r.kind, r.analysis
 FROM intel_reports r
 WHERE r.channel_id = ANY($1::bigint[])
   AND r.seen_at >= $2::timestamptz
@@ -587,6 +729,8 @@ type ListRecentIntelReportsRow struct {
 	Clear     bool      `json:"clear"`
 	ScanID    string    `json:"scan_id"`
 	SeenAt    time.Time `json:"seen_at"`
+	Kind      string    `json:"kind"`
+	Analysis  string    `json:"analysis"`
 }
 
 // The recent reports across some channels: the map's intel layer.
@@ -610,6 +754,8 @@ func (q *Queries) ListRecentIntelReports(ctx context.Context, arg ListRecentInte
 			&i.Clear,
 			&i.ScanID,
 			&i.SeenAt,
+			&i.Kind,
+			&i.Analysis,
 		); err != nil {
 			return nil, err
 		}
@@ -669,6 +815,28 @@ func (q *Queries) PruneIntelReports(ctx context.Context, before time.Time) (int6
 	return result.RowsAffected()
 }
 
+const setIntelReportAnalysis = `-- name: SetIntelReportAnalysis :exec
+UPDATE intel_reports SET kind = $1, analysis = $2, analysis_pending = $3
+WHERE id = $4
+`
+
+type SetIntelReportAnalysisParams struct {
+	Kind            string `json:"kind"`
+	Analysis        string `json:"analysis"`
+	AnalysisPending bool   `json:"analysis_pending"`
+	ID              int64  `json:"id"`
+}
+
+func (q *Queries) SetIntelReportAnalysis(ctx context.Context, arg SetIntelReportAnalysisParams) error {
+	_, err := q.db.ExecContext(ctx, setIntelReportAnalysis,
+		arg.Kind,
+		arg.Analysis,
+		arg.AnalysisPending,
+		arg.ID,
+	)
+	return err
+}
+
 const touchIntelToken = `-- name: TouchIntelToken :exec
 UPDATE intel_tokens SET last_used_at = $1 WHERE id = $2
 `
@@ -719,6 +887,52 @@ func (q *Queries) UpsertIntelChannelGrant(ctx context.Context, arg UpsertIntelCh
 		arg.TargetID,
 		arg.CanPost,
 		arg.CreatedAt,
+	)
+	return err
+}
+
+const upsertIntelPilotAffiliation = `-- name: UpsertIntelPilotAffiliation :exec
+INSERT INTO intel_pilot_affiliations (character_id, corporation_id, alliance_id, checked_at)
+VALUES ($1, $2, $3, $4)
+ON CONFLICT (character_id) DO UPDATE SET corporation_id = EXCLUDED.corporation_id, alliance_id = EXCLUDED.alliance_id, checked_at = EXCLUDED.checked_at
+`
+
+type UpsertIntelPilotAffiliationParams struct {
+	CharacterID   int64     `json:"character_id"`
+	CorporationID int64     `json:"corporation_id"`
+	AllianceID    int64     `json:"alliance_id"`
+	CheckedAt     time.Time `json:"checked_at"`
+}
+
+func (q *Queries) UpsertIntelPilotAffiliation(ctx context.Context, arg UpsertIntelPilotAffiliationParams) error {
+	_, err := q.db.ExecContext(ctx, upsertIntelPilotAffiliation,
+		arg.CharacterID,
+		arg.CorporationID,
+		arg.AllianceID,
+		arg.CheckedAt,
+	)
+	return err
+}
+
+const upsertIntelPilotName = `-- name: UpsertIntelPilotName :exec
+INSERT INTO intel_pilot_names (name_lower, character_id, name, checked_at)
+VALUES ($1, $2, $3, $4)
+ON CONFLICT (name_lower) DO UPDATE SET character_id = EXCLUDED.character_id, name = EXCLUDED.name, checked_at = EXCLUDED.checked_at
+`
+
+type UpsertIntelPilotNameParams struct {
+	NameLower   string    `json:"name_lower"`
+	CharacterID int64     `json:"character_id"`
+	Name        string    `json:"name"`
+	CheckedAt   time.Time `json:"checked_at"`
+}
+
+func (q *Queries) UpsertIntelPilotName(ctx context.Context, arg UpsertIntelPilotNameParams) error {
+	_, err := q.db.ExecContext(ctx, upsertIntelPilotName,
+		arg.NameLower,
+		arg.CharacterID,
+		arg.Name,
+		arg.CheckedAt,
 	)
 	return err
 }

@@ -38,19 +38,50 @@
     sys.appendChild(a);
     var what = doc.createElement("span");
     what.className = "ch-rep-what";
-    if (r.clear || r.n) {
+    function badge(cls, text) {
       var b = doc.createElement("span");
-      b.className = "badge " + (r.clear ? "kill" : "loss");
-      b.textContent = r.clear ? "Clear" : String(r.n);
+      b.className = "badge " + cls;
+      b.textContent = text;
       what.appendChild(b);
+      what.appendChild(doc.createTextNode(" "));
     }
-    if (r.text) what.appendChild(doc.createTextNode(" " + r.text));
+    // What the report is, as the server worked it out, then the count.
+    if (r.kindLabel) badge(r.tone || "loss", r.kindLabel);
+    else if (r.clear) badge("kill", "Clear");
+    if (r.n && !r.clear) badge("loss", String(r.n));
+    if (r.text) what.appendChild(doc.createTextNode(r.text));
     if (r.scan) {
       var sa = doc.createElement("a");
       sa.href = "/intel/scan/" + encodeURIComponent(r.scan) + "/";
       sa.textContent = "scan";
       what.appendChild(doc.createTextNode(" "));
       what.appendChild(sa);
+    }
+    // The pilots (each opening their page), ships and gate read from it.
+    if ((r.pilots && r.pilots.length) || (r.ships && r.ships.length) || r.gate) {
+      var tags = doc.createElement("span");
+      tags.className = "ch-rep-tags";
+      (r.pilots || []).forEach(function (p) {
+        var pa = doc.createElement("a");
+        pa.className = "ch-tag" + (p.friendly ? " friendly" : "");
+        pa.href = "/pilot/?character=" + p.id;
+        if (p.friendly) pa.title = "Friendly";
+        pa.textContent = p.name;
+        tags.appendChild(pa);
+      });
+      (r.ships || []).forEach(function (s) {
+        var sp = doc.createElement("span");
+        sp.className = "ch-tag ship";
+        sp.textContent = s.name + (s.n > 1 ? " ×" + s.n : "");
+        tags.appendChild(sp);
+      });
+      if (r.gate) {
+        var g = doc.createElement("span");
+        g.className = "ch-tag";
+        g.textContent = r.gate + " gate";
+        tags.appendChild(g);
+      }
+      what.appendChild(tags);
     }
     var meta = doc.createElement("span");
     meta.className = "ch-rep-meta";

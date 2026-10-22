@@ -29,7 +29,9 @@ package app
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
@@ -43,11 +45,11 @@ import (
 // The demo cast. Character and corporation IDs are fictional and
 // chosen far outside the ranges CCP has issued.
 const (
-	demoCharacterID  = int64(2900000001) // Astra Vale, the all-V pilot
+	demoCharacterID  = int64(2900000001) // Sable Iversen, the all-V pilot
 	demoCharacter2ID = int64(2900000002) // Juno Park, her industry alt
 	demoCorpID       = int64(2900001001) // Test Pilot Collective
 
-	demoCharName  = "Astra Vale"
+	demoCharName  = "Sable Iversen"
 	demoChar2Name = "Juno Park"
 	demoCorpName  = "Test Pilot Collective"
 )
@@ -127,8 +129,10 @@ func (app *Application) characterMaySync(ctx context.Context, ch db.Character) b
 // boot and again from the demo sign-in route, so a first visit
 // works even on an install whose boot seed was interrupted. The
 // account and character rows are upserts with fixed values; the
-// data seed runs only when it is absent, and re-running it is
-// the reset's job, not this one's.
+// lead pilot's stored name rows are refreshed from the constant
+// on the same pass, so a rename reaches installs whose seed
+// already landed. The data seed runs only when it is absent,
+// and re-running it is the reset's job, not this one's.
 func (app *Application) ensureDemoAccount(ctx context.Context) error {
 	userID := app.demoUserID(ctx)
 	if userID == 0 {
@@ -161,6 +165,9 @@ func (app *Application) ensureDemoAccount(ctx context.Context) error {
 			return err
 		}
 	}
+	if err := app.refreshDemoPilotName(ctx); err != nil {
+		return err
+	}
 	if !app.demoSeedPresent(ctx) {
 		if err := app.seedDemoData(ctx, time.Now()); err != nil {
 			return err
@@ -168,6 +175,84 @@ func (app *Application) ensureDemoAccount(ctx context.Context) error {
 		if err := app.queries.StampDemoReset(ctx, time.Now().UTC()); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+// refreshDemoPilotName brings the stored copies of the lead
+// pilot's name in line with the constant: the entity name the
+// resolvers read, the public pilot record and the profile
+// snapshot the character sheet renders. The character row
+// itself is refreshed by the upserts above; these copies are
+// written by the seed, which an install that already holds its
+// seed would otherwise keep until the daily restore. Only the
+// name field of each payload moves; everything else in it is
+// preserved, and a copy that is absent or already current is
+// left untouched.
+func (app *Application) refreshDemoPilotName(ctx context.Context) error {
+	if err := upsertEntityNames(ctx, app.db, []entityName{
+		{Kind: esi.NameCharacter, ID: demoCharacterID, Name: demoCharName},
+	}); err != nil {
+		return fmt.Errorf("demo: refresh pilot entity name: %w", err)
+	}
+	if app.esi != nil {
+		app.esi.PrimeName(esi.NameCharacter, demoCharacterID, demoCharName)
+	}
+	q := app.queries
+	rec, err := q.GetPilotRecord(ctx, demoCharacterID)
+	switch {
+	case err == nil:
+		if rec.Payload != "" {
+			var pilot esi.Character
+			if err := json.Unmarshal([]byte(rec.Payload), &pilot); err != nil {
+				return fmt.Errorf("demo: decode pilot record: %w", err)
+			}
+			if pilot.Name != demoCharName {
+				pilot.Name = demoCharName
+				raw, err := json.Marshal(pilot)
+				if err != nil {
+					return fmt.Errorf("demo: encode pilot record: %w", err)
+				}
+				if err := q.SetPilotRecord(ctx, db.SetPilotRecordParams{
+					CharacterID: demoCharacterID, Payload: string(raw),
+					State: rec.State, FetchedAt: rec.FetchedAt,
+				}); err != nil {
+					return fmt.Errorf("demo: refresh pilot record: %w", err)
+				}
+			}
+		}
+	case errors.Is(err, sql.ErrNoRows):
+		// No record yet; the seed writes it.
+	default:
+		return fmt.Errorf("demo: read pilot record: %w", err)
+	}
+	snap, err := q.GetSnapshot(ctx, db.GetSnapshotParams{
+		CharacterID: demoCharacterID, Kind: esi.SnapProfile,
+	})
+	switch {
+	case err == nil:
+	case errors.Is(err, sql.ErrNoRows):
+		return nil // No snapshot yet; the seed writes it.
+	default:
+		return fmt.Errorf("demo: read profile snapshot: %w", err)
+	}
+	var profile esi.Character
+	if err := json.Unmarshal([]byte(snap.Payload), &profile); err != nil {
+		return fmt.Errorf("demo: decode profile snapshot: %w", err)
+	}
+	if profile.Name == demoCharName {
+		return nil
+	}
+	profile.Name = demoCharName
+	raw, err := json.Marshal(profile)
+	if err != nil {
+		return fmt.Errorf("demo: encode profile snapshot: %w", err)
+	}
+	if err := q.UpsertSnapshot(ctx, db.UpsertSnapshotParams{
+		CharacterID: demoCharacterID, Kind: esi.SnapProfile, Payload: string(raw),
+		FetchedAt: snap.FetchedAt, CachedUntil: snap.CachedUntil, Etag: snap.Etag,
+	}); err != nil {
+		return fmt.Errorf("demo: refresh profile snapshot: %w", err)
 	}
 	return nil
 }

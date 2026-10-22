@@ -454,7 +454,7 @@ func corpJournalBalances(entries []esi.CorpJournalEntry, current float64) {
 
 func intPtr(v int) *int { return &v }
 
-// writePilotOne seeds Astra Vale: the all-skills-at-V pilot.
+// writePilotOne seeds Sable Iversen: the all-skills-at-V pilot.
 func (s *demoSeed) writePilotOne(ctx context.Context) error {
 	id := demoCharacterID
 	now := s.now
@@ -532,7 +532,7 @@ func (s *demoSeed) writePilotOne(ctx context.Context) error {
 	return nil
 }
 
-// writePilotOneMarkets seeds Astra's orders, contracts and their
+// writePilotOneMarkets seeds Sable's orders, contracts and their
 // stored detail rows.
 func (s *demoSeed) writePilotOneMarkets(ctx context.Context) error {
 	id := demoCharacterID
@@ -647,7 +647,7 @@ func boolToInt(b bool) int64 {
 	return 0
 }
 
-// writePilotOneIndustry seeds Astra's jobs, blueprints and
+// writePilotOneIndustry seeds Sable's jobs, blueprints and
 // mining ledger.
 func (s *demoSeed) writePilotOneIndustry(ctx context.Context) error {
 	id := demoCharacterID
@@ -681,7 +681,7 @@ func (s *demoSeed) writePilotOneIndustry(ctx context.Context) error {
 	return nil
 }
 
-// writePilotOneAssets seeds Astra's assets, live state, clones,
+// writePilotOneAssets seeds Sable's assets, live state, clones,
 // implants, saved-in-game fittings and fatigue.
 func (s *demoSeed) writePilotOneAssets(ctx context.Context) error {
 	id := demoCharacterID
@@ -816,7 +816,7 @@ const (
 	demoKillmailHashKill = "b7d2098a6f1e3c5f9a1c4e7092d4a6f8e1b3c5d7"
 )
 
-// writePilotOneKillmails seeds Astra's recent killmails: a loss
+// writePilotOneKillmails seeds Sable's recent killmails: a loss
 // to her Tama rival and the revenge kill, with detail rows.
 func (s *demoSeed) writePilotOneKillmails(ctx context.Context) error {
 	id := demoCharacterID
@@ -953,7 +953,7 @@ func (s *demoSeed) writeColonies(ctx context.Context, characterID int64) error {
 	return s.snap(ctx, characterID, esi.SnapPlanets, esi.Colonies(s.pendingColonies[characterID]))
 }
 
-// writePilotOneComms seeds Astra's mail, calendar and contacts.
+// writePilotOneComms seeds Sable's mail, calendar and contacts.
 func (s *demoSeed) writePilotOneComms(ctx context.Context) error {
 	id := demoCharacterID
 	now := s.now
@@ -983,7 +983,7 @@ func (s *demoSeed) writePilotOneComms(ctx context.Context) error {
 		body   string
 	}{
 		{esi.MailHeader{MailID: 3900000001, From: demoCharMarcus, Subject: "Your Rifter is ready in Jita", Timestamp: s.rfc(now.Add(-5 * hour)), IsRead: false, Labels: []int64{1001}, Recipients: []esi.MailRecipient{{RecipientID: id, RecipientType: "character"}}},
-			"<p>Astra,</p><p>The Rifter from the contract is fitted and sitting in your hangar at Jita IV-4, EMP loaded. Try not to feed this one to Ilya before Saturday.</p><p>Marcus</p>"},
+			"<p>Sable,</p><p>The Rifter from the contract is fitted and sitting in your hangar at Jita IV-4, EMP loaded. Try not to feed this one to Ilya before Saturday.</p><p>Marcus</p>"},
 		{esi.MailHeader{MailID: 3900000002, From: demoCharSera, Subject: "Saturday op: Tama roam, 19:00", Timestamp: s.rfc(now.Add(-1 * day)), IsRead: false, Labels: []int64{1002}, Recipients: []esi.MailRecipient{{RecipientID: demoCorpID, RecipientType: "corporation"}}},
 			"<p>All,</p><p>Form-up is Jita IV-4 at 19:00 on Saturday. Rifters and Thrashers, SRP is on. Dario has the route, Mina is bringing links. New pilots welcome, loaner fits are in the corp hangar.</p><p>Sera</p>"},
 		{esi.MailHeader{MailID: 3900000003, From: demoCharPetra, Subject: "Re: PI pickup on Sunday", Timestamp: s.rfc(now.Add(-2 * day)), IsRead: true, Labels: []int64{}, Recipients: []esi.MailRecipient{{RecipientID: id, RecipientType: "character"}}},
@@ -1336,7 +1336,7 @@ func (s *demoSeed) writePilotTwo(ctx context.Context) error {
 	mail := esi.MailHeader{MailID: 3900000011, From: demoCharacterID, Subject: "Blueprints are in the corp hangar", Timestamp: s.rfc(now.Add(-8 * hour)), IsRead: false, Labels: []int64{}, Recipients: []esi.MailRecipient{{RecipientID: id, RecipientType: "character"}}}
 	if err := s.snap(ctx, id, esi.MailBodyKind(mail.MailID), esi.Mail{
 		From: mail.From, Subject: mail.Subject,
-		Body:      "<p>Juno,</p><p>The Thrasher prints moved to the corp hangar in Jita, division 2. The Covetor original stays in Amarr with you. Queue is yours to run this week.</p><p>Astra</p>",
+		Body:      "<p>Juno,</p><p>The Thrasher prints moved to the corp hangar in Jita, division 2. The Covetor original stays in Amarr with you. Queue is yours to run this week.</p><p>Sable</p>",
 		Timestamp: mail.Timestamp, Read: false, Labels: mail.Labels, Recipients: mail.Recipients,
 	}); err != nil {
 		return err

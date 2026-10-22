@@ -8,9 +8,10 @@ package app
 // Three layouts ride in one payload. The universe view is the true
 // top-down picture: every known-space system at its SDE x and z
 // (z flipped so galactic north is up), scaled into a 0..10000 frame.
-// Beside it sits the Improved Projection: the same picture relaxed
-// as one whole (layoutProjection) until overlaps end, for the
-// reader who wants the tactical reading over the true one.
+// Beside it sits the Improved Projection: the same picture with
+// crowding nudged apart inside a per-system displacement budget
+// (layoutProjection), so the geography -- densities, voids, cluster
+// shapes -- survives at every scale and only overlaps give way.
 // The region view is the tactical one, computed rather than
 // hand-drawn: each region's systems start from the same true
 // positions, fitted to their own 0..1000 frame, then pushed apart
@@ -47,7 +48,7 @@ import (
 // universeMapVersion is the builder's version: bump it when the
 // payload shape or a layout changes, and the stored payload
 // rebuilds from the stored SDE without a re-import.
-const universeMapVersion = 3
+const universeMapVersion = 4
 
 const (
 	universeFrame = 10000.0 // the universe view's longest side
@@ -225,19 +226,12 @@ func buildUniverseMap(systems []db.ListMapSystemsRow, regions []db.SdeRegion, co
 		S.Prom[i] = mapProminence(len(adj[i]), stationSystems[s.SystemID], tradeHubSystems[s.SystemID])
 	}
 
-	// The Improved Projection: the universe relaxed as one
-	// picture (layoutProjection), precomputed here like every
-	// other layout and carried beside the true positions, so
-	// the client only ever chooses between two stored frames.
-	var allEdges [][2]int
-	for a := range adj {
-		for _, b := range adj[a] {
-			if a < b {
-				allEdges = append(allEdges, [2]int{a, b})
-			}
-		}
-	}
-	proj := layoutProjection(uni, allEdges)
+	// The Improved Projection: the universe nudged out of its
+	// own crowding inside per-system budgets (layoutProjection),
+	// precomputed here like every other layout and carried
+	// beside the true positions, so the client only ever
+	// chooses between two stored frames.
+	proj := layoutProjection(uni, S.Cons)
 	for i := range kept {
 		S.PX[i], S.PY[i] = int(math.Round(proj[i][0])), int(math.Round(proj[i][1]))
 	}
@@ -396,20 +390,118 @@ func universeMinSpacing(n int) float64 {
 	return math.Min(math.Max(universeFrame/math.Sqrt(float64(n))*0.62, 42), 95)
 }
 
-// layoutProjection is the universe's tactical picture: the true
-// top-down positions (already fitted to universeFrame) relaxed
-// until no two systems crowd closer than universeMinSpacing.
-// It is layoutRegion's recipe at universe scale -- crowded
-// pairs push apart, long gate links pull back, and every system
-// is anchored gently to home, so the projected map stays
-// recognisably the real one, only readable. Where layoutRegion
-// can afford every pair, ~5,400 systems cannot: each step
-// buckets systems into a grid of spacing-sized cells and only
-// the neighbours in adjacent cells can crowd, which keeps a
-// step near-linear. Deterministic, like layoutRegion: buckets
-// are built and walked in index order, steps are fixed, and
-// coincident systems separate along an index-fixed direction.
-func layoutProjection(true2D [][2]float64, edges [][2]int) [][2]float64 {
+// The anchored projection's tuning. A system's displacement
+// budget comes from its own crowding: count out to
+// projCrowdNeighbours neighbours, ask how large a disc packed at
+// the minimum spacing would need to be to hold them, and let the
+// system roam a little beyond that growth. A system in open
+// space has no crowd to hold, so its budget is the bare slack
+// and it effectively stays home.
+const (
+	// projCrowdNeighbours bounds how many neighbours' worth of
+	// crowding one system answers for: crowds bigger than this
+	// are geography, and no single system is displaced on
+	// their account.
+	projCrowdNeighbours = 256
+	// projPackPerPoint is the area, in units of the minimum
+	// spacing squared, one system needs in a hexagonal packing.
+	projPackPerPoint = 0.866
+	// projCapBase is every system's displacement slack, in
+	// minimum spacings: enough to step out of a single overlap.
+	projCapBase = 0.18
+	// projCapSlack is the headroom over the estimated growth a
+	// crowded neighbourhood needs.
+	projCapSlack = 1.3
+	// projCapCeiling is the absolute displacement budget, as a
+	// fraction of the frame: no system crosses the map.
+	projCapCeiling = 0.28
+	// projHomePull is how fast a system nothing is crowding
+	// returns home each step.
+	projHomePull = 0.08
+	// projDriftShare is how strongly a system follows its
+	// constellation's mean displacement each step, so a
+	// constellation pushed by its neighbours travels as a
+	// group instead of scattering.
+	projDriftShare = 0.02
+	// projRelax damps each step's accumulated pair corrections:
+	// a pile resolves over several steps instead of every pair
+	// correction landing at full strength in one.
+	projRelax = 0.7
+	projSteps = 520
+	// projReliefs bounds the budget-relief passes after the
+	// main solve; projStuckFrac is the spacing fraction below
+	// which a pair counts as still crowded, and
+	// projReliefGrow is how much a stuck system's budget
+	// grows per pass.
+	projReliefs    = 3
+	projStuckFrac  = 0.85
+	projReliefGrow = 1.3
+)
+
+// projBudgets returns each system's displacement budget for the
+// anchored projection, from the crowding around its true
+// position: for every crowd size m up to projCrowdNeighbours,
+// the disc that holds m neighbours (and the system) packed at
+// minD has radius minD*sqrt((m+1)*projPackPerPoint/pi); where
+// that radius exceeds the distance to the m-th neighbour at
+// home, the neighbourhood must grow by the difference, and the
+// largest such growth over all m is the system's need.
+func projBudgets(anchor [][2]float64, minD float64) []float64 {
+	n := len(anchor)
+	caps := make([]float64, n)
+	ds := make([]float64, 0, n-1)
+	for i := 0; i < n; i++ {
+		ds = ds[:0]
+		for j := 0; j < n; j++ {
+			if j != i {
+				ds = append(ds, math.Hypot(anchor[j][0]-anchor[i][0], anchor[j][1]-anchor[i][1]))
+			}
+		}
+		sort.Float64s(ds)
+		need := 0.0
+		mMax := projCrowdNeighbours
+		if len(ds) < mMax {
+			mMax = len(ds)
+		}
+		for m := 1; m <= mMax; m++ {
+			radius := minD * math.Sqrt(float64(m+1)*projPackPerPoint/math.Pi)
+			if grow := radius - ds[m-1]; grow > need {
+				need = grow
+			}
+		}
+		c := minD*projCapBase + projCapSlack*need
+		if ceil := projCapCeiling * universeFrame; c > ceil {
+			c = ceil
+		}
+		caps[i] = c
+	}
+	return caps
+}
+
+// layoutProjection is the universe's tactical picture, built by
+// nudging the true positions (already fitted to universeFrame)
+// out of their own crowding -- never by re-laying the universe
+// out. Each system holds a displacement budget from the
+// crowding around its home (projBudgets): pairs closer than
+// the minimum spacing have the gap between them closed,
+// sharing the move by mobility (a system with budget to spare
+// does the moving), every system is clamped to its budget,
+// and a system nothing is crowding returns home. Repulsion is
+// local by construction -- only pairs already closer than the
+// spacing interact -- so voids stay void and the density
+// pattern that makes the map recognisable survives;
+// constellations also share their mean displacement, so a
+// group pushed by a denser neighbour travels together.
+// Nothing pulls gate links toward a standard length and
+// nothing equilibrates the whole field: the projected map is
+// the true map with its overlaps relieved, at every scale.
+// Where a pile still crowds at the end of a solve, the
+// budgets of the systems in it grow and the solve resumes --
+// the estimate yields to the evidence, in that pile only.
+// Deterministic: buckets are built and walked in index order,
+// steps are fixed, and coincident systems separate along an
+// index-fixed direction.
+func layoutProjection(true2D [][2]float64, groups []int) [][2]float64 {
 	n := len(true2D)
 	if n == 0 {
 		return nil
@@ -422,68 +514,182 @@ func layoutProjection(true2D [][2]float64, edges [][2]int) [][2]float64 {
 	pos := make([][2]float64, n)
 	copy(pos, anchor)
 	minD := universeMinSpacing(n)
-	const steps = 420
-	type cellKey [2]int
-	for step := 0; step < steps; step++ {
-		cool := 1 - float64(step)/steps*0.6
-		buckets := make(map[cellKey][]int, n*2)
-		for i := range pos {
-			k := cellKey{int(math.Floor(pos[i][0] / minD)), int(math.Floor(pos[i][1] / minD))}
-			buckets[k] = append(buckets[k], i)
+	caps := projBudgets(anchor, minD)
+	// Constellation member lists, in first-member order, for
+	// drift sharing.
+	members := make(map[int][]int)
+	var groupOrder []int
+	for i, g := range groups {
+		if g < 0 {
+			continue
 		}
-		for i := 0; i < n; i++ {
-			ci, cj := int(math.Floor(pos[i][0]/minD)), int(math.Floor(pos[i][1]/minD))
-			for gx := ci - 1; gx <= ci+1; gx++ {
-				for gy := cj - 1; gy <= cj+1; gy++ {
-					for _, j := range buckets[cellKey{gx, gy}] {
-						if j <= i {
-							continue
+		if _, ok := members[g]; !ok {
+			groupOrder = append(groupOrder, g)
+		}
+		members[g] = append(members[g], i)
+	}
+
+	solve := func(steps int) {
+		// Mobility: the share of a pair's correction a system
+		// takes, from its budget. A system deep in budget
+		// moves; one near its limit makes its neighbour do
+		// more of the work.
+		mobility := make([]float64, n)
+		for i := range caps {
+			mobility[i] = caps[i] / (caps[i] + 0.5*minD)
+		}
+		type cellKey [2]int
+		crowded := make([]bool, n)
+		delta := make([][2]float64, n)
+		for step := 0; step < steps; step++ {
+			buckets := make(map[cellKey][]int, n*2)
+			for i := range pos {
+				k := cellKey{int(math.Floor(pos[i][0] / minD)), int(math.Floor(pos[i][1] / minD))}
+				buckets[k] = append(buckets[k], i)
+			}
+			for i := range crowded {
+				crowded[i] = false
+				delta[i] = [2]float64{}
+			}
+			// Corrections accumulate against the step's
+			// starting positions and land together,
+			// damped: a system in a pile feels the sum of
+			// its neighbours' pushes as one net shove
+			// instead of a sequence of full corrections
+			// that fling it from pair to pair.
+			for i := 0; i < n; i++ {
+				ci, cj := int(math.Floor(pos[i][0]/minD)), int(math.Floor(pos[i][1]/minD))
+				for gx := ci - 1; gx <= ci+1; gx++ {
+					for gy := cj - 1; gy <= cj+1; gy++ {
+						for _, j := range buckets[cellKey{gx, gy}] {
+							if j <= i {
+								continue
+							}
+							dx, dy := pos[j][0]-pos[i][0], pos[j][1]-pos[i][1]
+							d := math.Hypot(dx, dy)
+							if d >= minD {
+								continue
+							}
+							if d < 1e-6 {
+								a := float64(i*7+j*13) * 0.618
+								dx, dy, d = math.Cos(a), math.Sin(a), 1
+							}
+							move := (minD - d) * projRelax
+							wi, wj := mobility[i], mobility[j]
+							mi := move * wi / (wi + wj)
+							mj := move - mi
+							ux, uy := dx/d, dy/d
+							delta[i][0] -= ux * mi
+							delta[i][1] -= uy * mi
+							delta[j][0] += ux * mj
+							delta[j][1] += uy * mj
+							crowded[i], crowded[j] = true, true
 						}
-						dx, dy := pos[j][0]-pos[i][0], pos[j][1]-pos[i][1]
-						d := math.Hypot(dx, dy)
-						if d >= minD {
-							continue
-						}
-						if d < 1e-6 {
-							a := float64(i*7+j*13) * 0.618
-							dx, dy, d = math.Cos(a), math.Sin(a), 1
-						}
-						push := (minD - d) / 2 * 0.65 * cool
-						ux, uy := dx/d, dy/d
-						pos[i][0] -= ux * push
-						pos[i][1] -= uy * push
-						pos[j][0] += ux * push
-						pos[j][1] += uy * push
+					}
+				}
+			}
+			for i := range pos {
+				pos[i][0] += delta[i][0]
+				pos[i][1] += delta[i][1]
+			}
+			// The springs work the early steps, while the
+			// layout is still finding its shape; the last
+			// steps are pure spacing, so a crowded core
+			// finishes resolving instead of fighting the
+			// pull home.
+			settled := step >= steps-steps/3
+			if !settled {
+				for i := range pos {
+					if crowded[i] {
+						continue
+					}
+					pos[i][0] += (anchor[i][0] - pos[i][0]) * projHomePull
+					pos[i][1] += (anchor[i][1] - pos[i][1]) * projHomePull
+				}
+			}
+			for _, g := range groupOrder {
+				idxs := members[g]
+				if len(idxs) < 2 || settled {
+					continue
+				}
+				var mx, my float64
+				for _, i := range idxs {
+					mx += pos[i][0] - anchor[i][0]
+					my += pos[i][1] - anchor[i][1]
+				}
+				mx /= float64(len(idxs))
+				my /= float64(len(idxs))
+				for _, i := range idxs {
+					pos[i][0] += (anchor[i][0] + mx - pos[i][0]) * projDriftShare
+					pos[i][1] += (anchor[i][1] + my - pos[i][1]) * projDriftShare
+				}
+			}
+			for i := range pos {
+				dx, dy := pos[i][0]-anchor[i][0], pos[i][1]-anchor[i][1]
+				if d := math.Hypot(dx, dy); d > caps[i] {
+					pos[i][0] = anchor[i][0] + dx/d*caps[i]
+					pos[i][1] = anchor[i][1] + dy/d*caps[i]
+				}
+			}
+		}
+	}
+
+	solve(projSteps)
+	// Budget relief: a pile the estimate under-budgeted still
+	// crowds when the solve settles. Grow the budgets of the
+	// systems in such pairs and solve again, a few times at
+	// most; everywhere else the original budgets stand.
+	for relief := 0; relief < projReliefs; relief++ {
+		stuck := crowdedSystems(pos, minD, projStuckFrac)
+		if len(stuck) == 0 {
+			break
+		}
+		for _, i := range stuck {
+			caps[i] *= projReliefGrow
+			if ceil := projCapCeiling * universeFrame; caps[i] > ceil {
+				caps[i] = ceil
+			}
+		}
+		solve(projSteps / 3)
+	}
+	return fitFrame(pos, universeFrame)
+}
+
+// crowdedSystems returns the systems still in a pair closer
+// than frac*minD, in index order.
+func crowdedSystems(pos [][2]float64, minD, frac float64) []int {
+	n := len(pos)
+	limit := frac * minD
+	type cellKey [2]int
+	buckets := make(map[cellKey][]int, n*2)
+	for i := range pos {
+		k := cellKey{int(math.Floor(pos[i][0] / minD)), int(math.Floor(pos[i][1] / minD))}
+		buckets[k] = append(buckets[k], i)
+	}
+	stuck := make([]bool, n)
+	for i := 0; i < n; i++ {
+		ci, cj := int(math.Floor(pos[i][0]/minD)), int(math.Floor(pos[i][1]/minD))
+		for gx := ci - 1; gx <= ci+1; gx++ {
+			for gy := cj - 1; gy <= cj+1; gy++ {
+				for _, j := range buckets[cellKey{gx, gy}] {
+					if j <= i {
+						continue
+					}
+					dx, dy := pos[j][0]-pos[i][0], pos[j][1]-pos[i][1]
+					if math.Hypot(dx, dy) < limit {
+						stuck[i], stuck[j] = true, true
 					}
 				}
 			}
 		}
-		for _, e := range edges {
-			a, b := e[0], e[1]
-			dx, dy := pos[b][0]-pos[a][0], pos[b][1]-pos[a][1]
-			d := math.Hypot(dx, dy)
-			if d <= 2.4*minD || d < 1e-6 {
-				continue
-			}
-			pull := (d - 2.4*minD) * 0.02 * cool
-			ux, uy := dx/d, dy/d
-			pos[a][0] += ux * pull
-			pos[a][1] += uy * pull
-			pos[b][0] -= ux * pull
-			pos[b][1] -= uy * pull
-		}
-		// Home pulls far weaker than in a region's layout: a
-		// dense core can only reach spacing by genuinely
-		// expanding, and a strong anchor would hold it crowded
-		// in equilibrium. The gates and the cooling keep the
-		// expansion honest and local.
-		home := 0.003 * cool * cool
-		for i := range pos {
-			pos[i][0] += (anchor[i][0] - pos[i][0]) * home
-			pos[i][1] += (anchor[i][1] - pos[i][1]) * home
+	}
+	var out []int
+	for i, s := range stuck {
+		if s {
+			out = append(out, i)
 		}
 	}
-	return fitFrame(pos, universeFrame)
+	return out
 }
 
 // rebuildUniverseMap builds the payload from the stored SDE and

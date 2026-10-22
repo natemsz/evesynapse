@@ -9,6 +9,7 @@ import (
 	"math"
 	"net/http"
 	"net/http/httptest"
+	"sort"
 	"strings"
 	"testing"
 
@@ -68,12 +69,16 @@ func TestLayoutProjectionDeclutters(t *testing.T) {
 		a := float64(i) / 60 * 2 * math.Pi
 		pts = append(pts, [2]float64{5000 + math.Cos(a)*4200, 5000 + math.Sin(a)*4200})
 	}
-	var edges [][2]int
-	for i := 1; i < len(pts); i++ {
-		edges = append(edges, [2]int{i - 1, i})
+	groups := make([]int, len(pts))
+	for i := range groups {
+		if i < 300 {
+			groups[i] = 0 // the core is one constellation
+		} else {
+			groups[i] = 1 // the rim is another
+		}
 	}
-	a := layoutProjection(pts, edges)
-	b := layoutProjection(pts, edges)
+	a := layoutProjection(pts, groups)
+	b := layoutProjection(pts, groups)
 	minD := universeMinSpacing(len(pts))
 	worst := math.Inf(1)
 	moveSum, moveMax := 0.0, 0.0
@@ -299,5 +304,155 @@ func TestMapPageBeforeGeometry(t *testing.T) {
 	if rec.Code != http.StatusOK || strings.Contains(body, "data-src=") ||
 		!strings.Contains(body, "has not imported its star geometry yet") || !strings.Contains(body, "The Forge") {
 		t.Errorf("map page before geometry: %d", rec.Code)
+	}
+}
+
+// TestLayoutProjectionBudgetsAndLocality: in the anchored
+// projection no system travels beyond its displacement budget
+// (relief growth included), a system alone in a void does not
+// move toward a distant cluster, and the void stays void.
+func TestLayoutProjectionBudgetsAndLocality(t *testing.T) {
+	// Corner posts pin the frame, so the layout's final refit
+	// is the identity and output displacement is the solver's
+	// own. They are far from everything and never move.
+	pts := [][2]float64{{0, 0}, {10000, 0}, {0, 10000}, {10000, 10000}}
+	groups := []int{-1, -1, -1, -1}
+	// A dense cluster: 60 systems in a 90-unit patch.
+	for i := 0; i < 60; i++ {
+		pts = append(pts, [2]float64{3000 + float64(i%8)*12, 3000 + float64(i/8)*12})
+		groups = append(groups, 0)
+	}
+	// One system alone in the void, thousands of units away.
+	lone := len(pts)
+	pts = append(pts, [2]float64{7200, 6400})
+	groups = append(groups, -1)
+
+	out := layoutProjection(pts, groups)
+	out2 := layoutProjection(pts, groups)
+	minD := universeMinSpacing(len(pts))
+	budgets := projBudgets(pts, minD)
+	maxBudget := func(i int) float64 {
+		b := budgets[i]
+		for r := 0; r < projReliefs; r++ {
+			b *= projReliefGrow
+		}
+		if c := projCapCeiling * universeFrame; b > c {
+			b = c
+		}
+		return b
+	}
+	for i := range pts {
+		if out[i] != out2[i] {
+			t.Fatalf("projection is not deterministic at %d", i)
+		}
+		d := math.Hypot(out[i][0]-pts[i][0], out[i][1]-pts[i][1])
+		if d > maxBudget(i)+1e-6 {
+			t.Errorf("system %d moved %.1f, beyond its budget %.1f (relief included)", i, d, maxBudget(i))
+		}
+	}
+	if d := math.Hypot(out[lone][0]-pts[lone][0], out[lone][1]-pts[lone][1]); d > 0.2*minD {
+		t.Errorf("void system moved %.1f toward the cluster; want it home (<= %.1f)", d, 0.2*minD)
+	}
+	nearest := math.Inf(1)
+	for i := range pts {
+		if i == lone {
+			continue
+		}
+		nearest = math.Min(nearest, math.Hypot(out[i][0]-out[lone][0], out[i][1]-out[lone][1]))
+	}
+	if nearest < 2500 {
+		t.Errorf("the void filled in: lone system's nearest neighbour is %.0f away", nearest)
+	}
+	// The cluster itself still declutters.
+	worst := math.Inf(1)
+	for i := 4; i < lone; i++ {
+		for j := i + 1; j < lone; j++ {
+			worst = math.Min(worst, math.Hypot(out[i][0]-out[j][0], out[i][1]-out[j][1]))
+		}
+	}
+	if worst < 0.6*minD {
+		t.Errorf("cluster's closest pair %.1f, want at least %.1f", worst, 0.6*minD)
+	}
+}
+
+// TestLayoutProjectionConstellationCohesion: a constellation's
+// projected shape stays recognisably its true one -- its spread
+// grows only as much as its crowding demands, its centroid
+// stays in the neighbourhood, and its internal distances hold.
+func TestLayoutProjectionConstellationCohesion(t *testing.T) {
+	var pts [][2]float64
+	var groups []int
+	// Corner posts pin the frame (see the budgets test).
+	pts = append(pts, [2]float64{0, 0}, [2]float64{10000, 0}, [2]float64{0, 10000}, [2]float64{10000, 10000})
+	groups = append(groups, -1, -1, -1, -1)
+	// A sparse background grid the constellations sit in.
+	for gx := 0; gx < 20; gx++ {
+		for gy := 0; gy < 20; gy++ {
+			pts = append(pts, [2]float64{float64(gx)*500 + 250, float64(gy)*500 + 250})
+			groups = append(groups, -1)
+		}
+	}
+	// Constellation A: a centre and a ring, mildly crowded.
+	aStart := len(pts)
+	pts = append(pts, [2]float64{3500, 3500})
+	groups = append(groups, 0)
+	for k := 0; k < 6; k++ {
+		a := float64(k) * math.Pi / 3
+		pts = append(pts, [2]float64{3500 + 95*math.Cos(a), 3500 + 95*math.Sin(a)})
+		groups = append(groups, 0)
+	}
+	// Constellation B: a bent chain, the shape a real
+	// constellation's gate path makes.
+	bStart := len(pts)
+	for k := 0; k < 7; k++ {
+		pts = append(pts, [2]float64{6400 + float64(k)*68, 6100 + float64(k*k)*9})
+		groups = append(groups, 1)
+	}
+
+	out := layoutProjection(pts, groups)
+	rms := func(src [][2]float64, from, to int) (float64, [2]float64) {
+		var c [2]float64
+		for i := from; i < to; i++ {
+			c[0] += src[i][0]
+			c[1] += src[i][1]
+		}
+		n := float64(to - from)
+		c[0] /= n
+		c[1] /= n
+		var s float64
+		for i := from; i < to; i++ {
+			s += (src[i][0]-c[0])*(src[i][0]-c[0]) + (src[i][1]-c[1])*(src[i][1]-c[1])
+		}
+		return math.Sqrt(s / n), c
+	}
+	for _, tc := range []struct {
+		name     string
+		from, to int
+	}{
+		{"ring", aStart, bStart},
+		{"chain", bStart, len(pts)},
+	} {
+		rt, ct := rms(pts, tc.from, tc.to)
+		rl, cl := rms(out, tc.from, tc.to)
+		if ratio := rl / rt; ratio < 0.75 || ratio > 1.8 {
+			t.Errorf("%s constellation spread ratio %.2f, want its shape kept (0.75..1.8)", tc.name, ratio)
+		}
+		if d := math.Hypot(cl[0]-ct[0], cl[1]-ct[1]); d > 150 {
+			t.Errorf("%s constellation centroid moved %.0f, want it in its neighbourhood (<= 150)", tc.name, d)
+		}
+	}
+	// The chain's internal distances hold: its bent shape is
+	// the landmark, not just its size.
+	var errs []float64
+	for i := bStart; i < len(pts); i++ {
+		for j := i + 1; j < len(pts); j++ {
+			dt := math.Hypot(pts[i][0]-pts[j][0], pts[i][1]-pts[j][1])
+			dl := math.Hypot(out[i][0]-out[j][0], out[i][1]-out[j][1])
+			errs = append(errs, math.Abs(dl/dt-1))
+		}
+	}
+	sort.Float64s(errs)
+	if med := errs[len(errs)/2]; med > 0.35 {
+		t.Errorf("chain's internal distances: median error %.2f, want its shape kept (<= 0.35)", med)
 	}
 }

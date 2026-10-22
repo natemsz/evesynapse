@@ -369,7 +369,7 @@ func TestLandingMockupFidelity(t *testing.T) {
 		// both, each under no pointer.
 		"body::before { z-index: -3; position: absolute; top: 0; left: 0; right: 0; bottom: auto; height: 72rem;",
 		"body::after { content: \"\"; position: absolute; top: 0; left: 0; right: 0; height: 72rem; z-index: -2; background: linear-gradient(180deg, rgba(4, 2, 2, 0.1), rgba(4, 2, 2, 0) 30%, rgba(4, 2, 2, 0.26) 58%, rgba(4, 2, 2, 0.62) 82%, #040202 100%); pointer-events: none; }",
-		".ld-stars { position: absolute; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; }",
+		".ld-stars { position: absolute; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; background: url(\"/static/stars-tile.webp?v=047d2bb63562f133\") repeat; }",
 		// The header floats as one glass pill over the art.
 		".ld-header { position: fixed; top: 14px;",
 		// The site gradient on the two landing spots that carry
@@ -406,6 +406,25 @@ func TestLandingMockupFidelity(t *testing.T) {
 	// full-strength blur token.
 	if strings.Contains(landing, "var(--glass-blur)") {
 		t.Error("landing.css still uses the site --glass-blur token; the landing glass is a fixed 9px")
+	}
+}
+
+// TestLandingStarTileStaysTiny pins the star tile's size
+// contract: it is the landing's background over the whole page
+// depth, fetched once and cached, and must stay a sliver next
+// to the wallpaper tiers. The bake is lossless WebP, mostly
+// transparent; the budget is that encode's class of size with
+// headroom: 8 KiB.
+func TestLandingStarTileStaysTiny(t *testing.T) {
+	raw, err := fs.ReadFile(staticFS, "static/stars-tile.webp")
+	if err != nil {
+		t.Fatalf("read stars-tile.webp: %v", err)
+	}
+	if len(raw) > 8192 {
+		t.Errorf("stars-tile.webp is %d bytes; the star tile's budget is 8192", len(raw))
+	}
+	if len(raw) < 12 || string(raw[:4]) != "RIFF" || string(raw[8:12]) != "WEBP" {
+		t.Error("stars-tile.webp is not a WebP raster")
 	}
 }
 

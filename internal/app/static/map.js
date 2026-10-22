@@ -108,6 +108,12 @@
     if (!isFinite(x) || !isFinite(y) || !isFinite(f) || f <= 0) return null;
     return { x: x, y: y, f: f };
   }
+  // viewFits: whether a shared view's centre lies within the bounds
+  // being shown ([x0, y0, x1, y1]), a quarter of their size to spare.
+  function viewFits(v, b) {
+    var mx = (b[2] - b[0]) * 0.25, my = (b[3] - b[1]) * 0.25;
+    return v.x >= b[0] - mx && v.x <= b[2] + mx && v.y >= b[1] - my && v.y <= b[3] + my;
+  }
   // The zoom that fits a route's span (dx by dy world units) into
   // the free part of the canvas (fw by fh px), pad px to spare.
   function routeFitScale(dx, dy, fw, fh, pad) {
@@ -676,7 +682,7 @@
     }
     // One frame of motion; true while more remains.
     function stepMotion(now) {
-      var more = false;
+      var more = false, moving = !!(anim || wheelZ);
       if (anim) {
         var t = Math.min(1, (now - anim.t0) / anim.dur), e = ease(t);
         if (anim.kind === "fly") {
@@ -700,6 +706,9 @@
         afterZoom(lt > lk ? 1 : -1);
         if (wheelZ === w && !done) more = true;
       }
+      // The glide has settled: the address now says where it ended,
+      // not where it began.
+      if (moving && !anim && !wheelZ) syncURL();
       return more;
     }
     // A wheel tick or touchpad pinch: move the running target.
@@ -3563,8 +3572,11 @@
       else if (sys !== undefined) enterRegion(S.r[sys], sys);
       // A shared view: the exact centre and zoom it was copied at.
       // A shared route that will fly to fit itself (below) wins.
+      // One whose centre lies outside what is showing (a New Eden
+      // view under a region's name) would open on empty space: it is
+      // ignored, and the region or system opens as it would without.
       var vw = parseView(qs.get("view"));
-      if (vw) { stopMotion(); cam.x = vw.x; cam.y = vw.y; cam.k = clampK(fitK() * vw.f); }
+      if (vw && viewFits(vw, viewBounds())) { stopMotion(); cam.x = vw.x; cam.y = vw.y; cam.k = clampK(fitK() * vw.f); }
       // A shared route: its ends and preference.
       var rf = G.byID[+qs.get("from")], rt = G.byID[+qs.get("to")];
       if (ROUTE_MODES[qs.get("route")]) routeMode = qs.get("route");
@@ -3736,7 +3748,7 @@
 
   // Exposed for the node tests only (jstest/map_test.js).
   if (typeof module !== "undefined" && module.exports) {
-    module.exports = { secRounded: secRounded, secTier: secTier, secText: secText, prepare: prepare, regionLabelAlpha: regionLabelAlpha, zoomEntryAllowed: zoomEntryAllowed, wheelZoomFactor: wheelZoomFactor, pickReach: pickReach, pickScore: pickScore, routeFitScale: routeFitScale, formatView: formatView, parseView: parseView, sovPalette: sovPalette,
+    module.exports = { secRounded: secRounded, secTier: secTier, secText: secText, prepare: prepare, regionLabelAlpha: regionLabelAlpha, zoomEntryAllowed: zoomEntryAllowed, wheelZoomFactor: wheelZoomFactor, pickReach: pickReach, pickScore: pickScore, routeFitScale: routeFitScale, formatView: formatView, parseView: parseView, viewFits: viewFits, sovPalette: sovPalette,
       joinLayers: joinLayers, heatT: heatT, allianceHue: allianceHue, threatLevel: threatLevel,
       routeCost: routeCost, planRoute: planRoute, routeSummary: routeSummary, joinIntel: joinIntel,
       jumpRange: jumpRange, joinJump: joinJump, jumpNeighbours: jumpNeighbours, jumpFatigue: jumpFatigue };

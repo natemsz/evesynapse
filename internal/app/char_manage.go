@@ -229,9 +229,11 @@ func (app *Application) handleCharacterSwitch(w http.ResponseWriter, r *http.Req
 	ctx := r.Context()
 	userID := app.userID(ctx)
 	characterID, _ := strconv.ParseInt(r.URL.Query().Get("character"), 10, 64)
+	var switched int64
 	if userID != 0 && characterID != 0 {
 		if ch, err := app.queries.GetCharacter(ctx, characterID); err == nil && ch.UserID == userID {
 			app.pinSessionCharacter(ctx, characterID, ch.Name)
+			switched = characterID
 		}
 	}
 	target := "/"
@@ -241,12 +243,31 @@ func (app *Application) handleCharacterSwitch(w http.ResponseWriter, r *http.Req
 			safeLocalNext(u.Path) &&
 			!strings.ContainsAny(u.RawQuery, "\r\n") {
 			target = u.Path
-			if u.RawQuery != "" {
+			if u.Path == "/map/" {
+				target = mapAfterSwitch(ctx, app, u.Query(), switched)
+			} else if u.RawQuery != "" {
 				target += "?" + u.RawQuery
 			}
 		}
 	}
 	http.Redirect(w, r, target, http.StatusSeeOther)
+}
+
+// mapAfterSwitch is where the map reopens after a character switch:
+// the same layers, data and route, but centred on the newly active
+// character's last known system rather than the old place and view.
+func mapAfterSwitch(ctx context.Context, app *Application, q url.Values, characterID int64) string {
+	q.Del("region")
+	q.Del("system")
+	q.Del("view")
+	var loc esi.Location
+	if characterID != 0 && app.loadCorpSnapshot(ctx, characterID, esi.SnapLocation, &loc) && isKSpaceSystem(loc.SolarSystemID) {
+		q.Set("system", strconv.FormatInt(loc.SolarSystemID, 10))
+	}
+	if len(q) == 0 {
+		return "/map/"
+	}
+	return "/map/?" + q.Encode()
 }
 
 // handleCharacterTags saves one character's free-text tags.

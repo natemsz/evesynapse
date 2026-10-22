@@ -24,6 +24,17 @@ func (q *Queries) CountIntelChannelGrants(ctx context.Context, channelID int64) 
 	return count, err
 }
 
+const countIntelChannelRules = `-- name: CountIntelChannelRules :one
+SELECT COUNT(*) FROM intel_channel_rules WHERE channel_id = $1
+`
+
+func (q *Queries) CountIntelChannelRules(ctx context.Context, channelID int64) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countIntelChannelRules, channelID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countIntelTokens = `-- name: CountIntelTokens :one
 SELECT COUNT(*) FROM intel_tokens WHERE user_id = $1
 `
@@ -37,8 +48,8 @@ func (q *Queries) CountIntelTokens(ctx context.Context, userID int64) (int64, er
 
 const createIntelChannel = `-- name: CreateIntelChannel :one
 
-INSERT INTO intel_channels (owner_user_id, name, description, created_at)
-VALUES ($1, $2, $3, $4)
+INSERT INTO intel_channels (owner_user_id, name, description, created_at, owner_kind, owner_id)
+VALUES ($1, $2, $3, $4, $5, $6)
 RETURNING id
 `
 
@@ -47,6 +58,8 @@ type CreateIntelChannelParams struct {
 	Name        string    `json:"name"`
 	Description string    `json:"description"`
 	CreatedAt   time.Time `json:"created_at"`
+	OwnerKind   string    `json:"owner_kind"`
+	OwnerID     int64     `json:"owner_id"`
 }
 
 // ---------------------------------------------------------------------
@@ -58,6 +71,8 @@ func (q *Queries) CreateIntelChannel(ctx context.Context, arg CreateIntelChannel
 		arg.Name,
 		arg.Description,
 		arg.CreatedAt,
+		arg.OwnerKind,
+		arg.OwnerID,
 	)
 	var id int64
 	err := row.Scan(&id)
@@ -148,6 +163,22 @@ func (q *Queries) DeleteIntelChannelGrant(ctx context.Context, arg DeleteIntelCh
 	return err
 }
 
+const deleteIntelChannelRule = `-- name: DeleteIntelChannelRule :exec
+DELETE FROM intel_channel_rules
+WHERE channel_id = $1 AND rule_kind = $2 AND rule_ref = $3
+`
+
+type DeleteIntelChannelRuleParams struct {
+	ChannelID int64  `json:"channel_id"`
+	RuleKind  string `json:"rule_kind"`
+	RuleRef   string `json:"rule_ref"`
+}
+
+func (q *Queries) DeleteIntelChannelRule(ctx context.Context, arg DeleteIntelChannelRuleParams) error {
+	_, err := q.db.ExecContext(ctx, deleteIntelChannelRule, arg.ChannelID, arg.RuleKind, arg.RuleRef)
+	return err
+}
+
 const deleteIntelReport = `-- name: DeleteIntelReport :exec
 DELETE FROM intel_reports WHERE id = $1
 `
@@ -175,7 +206,7 @@ func (q *Queries) DeleteIntelToken(ctx context.Context, arg DeleteIntelTokenPara
 }
 
 const getIntelChannel = `-- name: GetIntelChannel :one
-SELECT id, owner_user_id, name, description, created_at FROM intel_channels WHERE id = $1
+SELECT id, owner_user_id, name, description, created_at, owner_kind, owner_id FROM intel_channels WHERE id = $1
 `
 
 func (q *Queries) GetIntelChannel(ctx context.Context, id int64) (IntelChannel, error) {
@@ -187,6 +218,8 @@ func (q *Queries) GetIntelChannel(ctx context.Context, id int64) (IntelChannel, 
 		&i.Name,
 		&i.Description,
 		&i.CreatedAt,
+		&i.OwnerKind,
+		&i.OwnerID,
 	)
 	return i, err
 }
@@ -374,8 +407,8 @@ func (q *Queries) IntelReportExists(ctx context.Context, arg IntelReportExistsPa
 }
 
 const listAccessibleChannels = `-- name: ListAccessibleChannels :many
-SELECT c.id, c.owner_user_id, c.name, c.description, c.created_at,
-       (c.owner_user_id = $1::bigint OR COALESCE(BOOL_OR(g.can_post), FALSE))::boolean AS can_post
+SELECT c.id, c.owner_user_id, c.name, c.description, c.created_at, c.owner_kind, c.owner_id,
+       ((c.owner_kind = '' AND c.owner_user_id = $1::bigint) OR COALESCE(BOOL_OR(g.can_post), FALSE))::boolean AS can_post
 FROM intel_channels c
 LEFT JOIN intel_channel_grants g ON g.channel_id = c.id AND (
        (g.kind = 'character'   AND g.target_id = ANY($2::bigint[]))
@@ -383,7 +416,7 @@ LEFT JOIN intel_channel_grants g ON g.channel_id = c.id AND (
     OR (g.kind = 'alliance'    AND g.target_id = ANY($4::bigint[]))
     OR (g.kind = 'group'       AND g.target_id = ANY($5::bigint[])))
 GROUP BY c.id
-HAVING c.owner_user_id = $1::bigint OR COUNT(g.channel_id) > 0
+HAVING (c.owner_kind = '' AND c.owner_user_id = $1::bigint) OR COUNT(g.channel_id) > 0
 ORDER BY lower(c.name), c.id
 `
 
@@ -401,6 +434,8 @@ type ListAccessibleChannelsRow struct {
 	Name        string    `json:"name"`
 	Description string    `json:"description"`
 	CreatedAt   time.Time `json:"created_at"`
+	OwnerKind   string    `json:"owner_kind"`
+	OwnerID     int64     `json:"owner_id"`
 	CanPost     bool      `json:"can_post"`
 }
 
@@ -428,6 +463,8 @@ func (q *Queries) ListAccessibleChannels(ctx context.Context, arg ListAccessible
 			&i.Name,
 			&i.Description,
 			&i.CreatedAt,
+			&i.OwnerKind,
+			&i.OwnerID,
 			&i.CanPost,
 		); err != nil {
 			return nil, err
@@ -462,6 +499,98 @@ func (q *Queries) ListIntelChannelGrants(ctx context.Context, channelID int64) (
 			&i.ChannelID,
 			&i.Kind,
 			&i.TargetID,
+			&i.CanPost,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listIntelChannelRuleGrants = `-- name: ListIntelChannelRuleGrants :many
+SELECT r.channel_id, r.rule_kind, r.rule_ref, r.can_post,
+       c.owner_user_id, c.name, c.description, c.created_at, c.owner_kind, c.owner_id
+FROM intel_channel_rules r
+JOIN intel_channels c ON c.id = r.channel_id
+WHERE c.owner_kind <> ''
+`
+
+type ListIntelChannelRuleGrantsRow struct {
+	ChannelID   int64     `json:"channel_id"`
+	RuleKind    string    `json:"rule_kind"`
+	RuleRef     string    `json:"rule_ref"`
+	CanPost     bool      `json:"can_post"`
+	OwnerUserID int64     `json:"owner_user_id"`
+	Name        string    `json:"name"`
+	Description string    `json:"description"`
+	CreatedAt   time.Time `json:"created_at"`
+	OwnerKind   string    `json:"owner_kind"`
+	OwnerID     int64     `json:"owner_id"`
+}
+
+// Every rule grant with its channel: judged in Go against each
+// reader's standing.
+func (q *Queries) ListIntelChannelRuleGrants(ctx context.Context) ([]ListIntelChannelRuleGrantsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listIntelChannelRuleGrants)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListIntelChannelRuleGrantsRow
+	for rows.Next() {
+		var i ListIntelChannelRuleGrantsRow
+		if err := rows.Scan(
+			&i.ChannelID,
+			&i.RuleKind,
+			&i.RuleRef,
+			&i.CanPost,
+			&i.OwnerUserID,
+			&i.Name,
+			&i.Description,
+			&i.CreatedAt,
+			&i.OwnerKind,
+			&i.OwnerID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listIntelChannelRules = `-- name: ListIntelChannelRules :many
+SELECT channel_id, rule_kind, rule_ref, can_post, created_at FROM intel_channel_rules
+WHERE channel_id = $1
+ORDER BY rule_kind, rule_ref
+`
+
+func (q *Queries) ListIntelChannelRules(ctx context.Context, channelID int64) ([]IntelChannelRule, error) {
+	rows, err := q.db.QueryContext(ctx, listIntelChannelRules, channelID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []IntelChannelRule
+	for rows.Next() {
+		var i IntelChannelRule
+		if err := rows.Scan(
+			&i.ChannelID,
+			&i.RuleKind,
+			&i.RuleRef,
 			&i.CanPost,
 			&i.CreatedAt,
 		); err != nil {
@@ -635,6 +764,49 @@ func (q *Queries) ListIntelTokens(ctx context.Context, userID int64) ([]ListInte
 			&i.CreatedAt,
 			&i.LastUsedAt,
 			&i.Device,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listOrgIntelChannels = `-- name: ListOrgIntelChannels :many
+SELECT id, owner_user_id, name, description, created_at, owner_kind, owner_id FROM intel_channels
+WHERE owner_kind = $1 AND owner_id = $2
+ORDER BY lower(name), id
+`
+
+type ListOrgIntelChannelsParams struct {
+	OwnerKind string `json:"owner_kind"`
+	OwnerID   int64  `json:"owner_id"`
+}
+
+// The channels a corporation or alliance owns (schema 082).
+func (q *Queries) ListOrgIntelChannels(ctx context.Context, arg ListOrgIntelChannelsParams) ([]IntelChannel, error) {
+	rows, err := q.db.QueryContext(ctx, listOrgIntelChannels, arg.OwnerKind, arg.OwnerID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []IntelChannel
+	for rows.Next() {
+		var i IntelChannel
+		if err := rows.Scan(
+			&i.ID,
+			&i.OwnerUserID,
+			&i.Name,
+			&i.Description,
+			&i.CreatedAt,
+			&i.OwnerKind,
+			&i.OwnerID,
 		); err != nil {
 			return nil, err
 		}
@@ -885,6 +1057,31 @@ func (q *Queries) UpsertIntelChannelGrant(ctx context.Context, arg UpsertIntelCh
 		arg.ChannelID,
 		arg.Kind,
 		arg.TargetID,
+		arg.CanPost,
+		arg.CreatedAt,
+	)
+	return err
+}
+
+const upsertIntelChannelRule = `-- name: UpsertIntelChannelRule :exec
+INSERT INTO intel_channel_rules (channel_id, rule_kind, rule_ref, can_post, created_at)
+VALUES ($1, $2, $3, $4, $5)
+ON CONFLICT (channel_id, rule_kind, rule_ref) DO UPDATE SET can_post = EXCLUDED.can_post
+`
+
+type UpsertIntelChannelRuleParams struct {
+	ChannelID int64     `json:"channel_id"`
+	RuleKind  string    `json:"rule_kind"`
+	RuleRef   string    `json:"rule_ref"`
+	CanPost   bool      `json:"can_post"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+func (q *Queries) UpsertIntelChannelRule(ctx context.Context, arg UpsertIntelChannelRuleParams) error {
+	_, err := q.db.ExecContext(ctx, upsertIntelChannelRule,
+		arg.ChannelID,
+		arg.RuleKind,
+		arg.RuleRef,
 		arg.CanPost,
 		arg.CreatedAt,
 	)

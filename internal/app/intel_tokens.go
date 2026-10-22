@@ -181,7 +181,7 @@ func (app *Application) handlePairingCodeCreate(w http.ResponseWriter, r *http.R
 	v := &channelListView{SignedIn: true}
 	id := app.intelIdentity(ctx)
 	for _, c := range app.accessibleChannels(ctx, id) {
-		v.Channels = append(v.Channels, channelRow{ID: c.ID, Name: c.Name, Description: c.Description, Owner: c.OwnerUserID == id.userID, CanPost: c.CanPost})
+		v.Channels = append(v.Channels, app.channelRowOf(ctx, c))
 	}
 	app.fillAxon(ctx, v, userID)
 	v.PairingCode = code

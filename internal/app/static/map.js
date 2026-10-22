@@ -480,13 +480,13 @@
   var ROUTE_MODES = { short: 1, safe: 1, calm: 1 };
   var THREAT_PRICE = [0, 3, 10, 40, 120];
   var CAMP_PRICE = 400, LOWSEC_PRICE = 50;
-  // intel, when given, is the price of each system's fresh hostile
-  // reports from the reader's intel channels (intelPrices).
-  function routeCost(G, LY, mode, intel) {
+  // Intel reports never price a route: a report is not danger (a
+  // neutral, a friendly, a clear), so a route only names the reported
+  // systems it crosses (routeSummary) and the pilot decides.
+  function routeCost(G, LY, mode) {
     return function (j) {
       var c = 1;
       if (mode === "short") return c;
-      if (intel) c += intel[j];
       if (mode === "safe" && G.tier[j] < 5) c += LOWSEC_PRICE;
       if (LY) {
         c += THREAT_PRICE[threatLevel(LY.threat[j])];
@@ -635,10 +635,11 @@
 
   // --- Intel channels: the pure part ---
   // joinIntel indexes /map/intel.json by system: each system's reports
-  // newest first, its freshness (1 just now, 0 at 30 minutes), and the
-  // price a route pays to cross it. A clear newer than a system's last
-  // hostile report clears it; hostiles cost up to INTEL_PRICE, fading
-  // with age, more for a bigger count.
+  // newest first, its freshness (1 just now, 0 at 30 minutes), and a
+  // weight for its fresh hostile reports, by which a route names the
+  // reported systems it crosses (never steering around them). A clear
+  // newer than a system's last hostile report clears it; the weight
+  // fades with age and is more for a bigger count.
   var INTEL_LIVE = 1800, INTEL_PRICE = 200;
   function intelFresh(at, now) { return Math.max(0, 1 - (now - at) / INTEL_LIVE); }
   function joinIntel(G, D, now) {
@@ -2278,7 +2279,7 @@
           if (!JUMP) loadJump();
           var R = jumpRangeNow();
           if (JUMP && R > 0 && JUMP.dest[routeTo]) {
-            var danger = routeCost(G, LY, "calm", prices);
+            var danger = routeCost(G, LY, "calm");
             var cost = routeMode === "safe" ? function (v, u) { return lyBetween(JUMP, u, v) + 0.01; }
               : routeMode === "calm" ? function (v) { return danger(v); }
               : function () { return 1; };
@@ -2290,7 +2291,7 @@
           }
         } else {
           var BR = bridgesOn ? bridgeEdges() : null;
-          routePath = planRoute(G, routeFrom, routeTo, routeCost(G, LY, routeMode, prices),
+          routePath = planRoute(G, routeFrom, routeTo, routeCost(G, LY, routeMode),
             BR ? function (u) { return BR[u] ? G.adj[u].concat(BR[u]) : G.adj[u]; } : null);
           if (routePath && BR) {
             for (var b = 1; b < routePath.length; b++) if (G.adj[routePath[b - 1]].indexOf(routePath[b]) < 0) bridgeLegs++;

@@ -7,7 +7,7 @@
      channels and a form to make one, then EveSynapse Axon -- set-up
      steps, plain answers, the paired computers (intel_tokens.go). */}}
 <section class="card page-card" data-fold="never">
-  <p class="lede prose">An intel channel is where you and your friends share sightings, like “5 hostiles in 1DQ1-A” or “Amamake clear”. Every report shows on the <a href="/map/">map</a> for everyone in the channel for half an hour, and routes avoid those systems.</p>
+  <p class="lede prose">An intel channel is where you and your friends share sightings, like “5 hostiles in 1DQ1-A” or “Amamake clear”. Every report shows on the <a href="/map/">map</a> for everyone in the channel for half an hour, and a route through a reported system points it out.</p>
   <p class="hint prose">You can add reports three ways: type them on the channel's page or the map, paste lines from an in-game intel chat, or let <a href="#axon">EveSynapse Axon</a> send them for you while you play.</p>
 
   {{if not .SignedIn}}
@@ -16,8 +16,8 @@
   <h2>Your channels</h2>
   {{if .Channels}}<ul class="row-list ch-list">
     {{range .Channels}}<li>
-      <span><a href="/intel/channels/{{.ID}}/"><strong>{{.Name}}</strong></a>{{if .Description}} <small class="muted">{{.Description}}</small>{{end}}</span>
-      <span class="badge {{if .Owner}}demo{{else if .CanPost}}kill{{else}}wait{{end}}">{{if .Owner}}Owner{{else if .CanPost}}Read and post{{else}}Read only{{end}}</span>
+      <span><a href="/intel/channels/{{.ID}}/"><strong>{{.Name}}</strong></a>{{if .Org}} <small class="muted">· {{.Org}}</small>{{end}}{{if .Description}} <small class="muted">{{.Description}}</small>{{end}}</span>
+      <span class="badge {{if .Owner}}demo{{else if .CanPost}}kill{{else}}wait{{end}}">{{if .Owner}}{{if .Org}}You manage it{{else}}Owner{{end}}{{else if .CanPost}}Read and post{{else}}Read only{{end}}</span>
     </li>{{end}}
   </ul>
   {{else}}<p class="hint">You're not in any channels yet. Make one below, or ask a channel's owner to give you access.</p>{{end}}
@@ -29,10 +29,12 @@
         <input type="text" name="name" maxlength="60" required placeholder="e.g. Delve Intel"></label>
       <label class="field"><span class="field-label">What it covers</span>
         <input type="text" name="description" maxlength="200" placeholder="Optional"></label>
+      {{if gt (len .Owners) 1}}<label class="field"><span class="field-label">Belongs to</span>
+        <select name="owner">{{range .Owners}}<option value="{{.Value}}">{{.Label}}</option>{{end}}</select></label>{{end}}
     </div>
     <div class="form-actions">
       <button type="submit">Create channel</button>
-      <span class="field-hint">Only you can see a new channel until you give others access on its page.</span>
+      <span class="field-hint">{{if gt (len .Owners) 1}}A channel of your corporation or alliance is run by its directors (and whoever they choose in the corporation's settings), and starts open to its members. A channel of your own is yours alone until you share it.{{else}}Only you can see a new channel until you give others access on its page.{{end}}</span>
     </div>
   </form>
   {{end}}

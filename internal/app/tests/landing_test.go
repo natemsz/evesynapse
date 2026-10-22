@@ -61,7 +61,7 @@ func TestLandingAnonymous(t *testing.T) {
 		"One stack for the whole corporation.",
 		"A hundred pilots, one morning briefing.",
 		"Every pilot, at a glance.",
-		"fully customizable dashboard",
+		"customizable dashboard over every character you link",
 		"Desktop grade fitting, in a browser tab.",
 		"shot-fitting.webp",
 		"ld-browser",
@@ -84,8 +84,8 @@ func TestLandingAnonymous(t *testing.T) {
 		"shot-axon.webp",
 		"one-time code from the channels page",
 		"posting each new line into the channel",
-		"the route planner prices them into the route it draws",
-		"Replacement claims check the lost ship against the doctrine fit",
+		"the route planner steers around reported systems",
+		"Claims check the lost ship against the doctrine fit",
 		"/static/landing.js",
 		"Plans that price themselves.",
 		"87.6M",
@@ -103,7 +103,7 @@ func TestLandingAnonymous(t *testing.T) {
 		"Axon",
 		"shot-threat.webp",
 		"evesynapse.app/map/",
-		"sending the route to your ship's autopilot takes a signed-in character",
+		"can send it to your ship's autopilot",
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("landing is missing %q", want)
@@ -252,8 +252,8 @@ func TestLandingStripFromStoredRows(t *testing.T) {
 	if strings.Contains(body, "warming") {
 		t.Error("landing still says warming")
 	}
-	if !strings.Contains(body, "syncing in the background") {
-		t.Error("landing does not say syncing in the background")
+	if !strings.Contains(body, "syncs in the background") {
+		t.Error("landing does not say syncs in the background")
 	}
 }
 

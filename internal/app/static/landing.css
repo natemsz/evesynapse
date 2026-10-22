@@ -138,7 +138,7 @@ body::after { content: ""; position: absolute; top: 0; left: 0; right: 0; height
 .ld-blk { padding: 64px 0 8px; }
 .ld-blk h2 { font-size: clamp(28px, 3.6vw, 40px); font-weight: 700; margin-bottom: 10px; }
 .ld-lede { color: #ddd0bd; max-width: 44em; font-size: 17.5px; }
-.ld-eyebrow { color: var(--gold); letter-spacing: 0.3em; font-size: 12px; font-weight: 600; text-transform: uppercase; margin-bottom: 8px; }
+.ld-eyebrow { color: #fff; letter-spacing: 0.3em; font-size: 12px; font-weight: 600; text-transform: uppercase; margin-bottom: 8px; }
 .ld-eyebrow + h2 { margin-top: 0.35rem; }
 
 .ld-cta-repeat { display: flex; align-items: center; gap: 16px; margin-top: 28px; flex-wrap: wrap; }

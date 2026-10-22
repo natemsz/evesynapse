@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.5.6.8] - 2026-10-22
+
+Automated build of EveSynapse v0.5.6.8. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+
+## What's Changed
+### 🚀 Features
+* D-scan: full glass treatment for the scan surfaces by @natemsz in https://github.com/natemsz/evesynapse/pull/580
+* Killboard: complete the glass treatment on every panel surface by @natemsz in https://github.com/natemsz/evesynapse/pull/581
+* Landing: name the shipped intel tools in the inventory; stage the intel route capture by @natemsz in https://github.com/natemsz/evesynapse/pull/587
+* Landing: tools inventory up top, tabbed feature explorer by @natemsz in https://github.com/natemsz/evesynapse/pull/592
+### 🐛 Bug Fixes
+* Menus: full capitals instead of small caps by @natemsz in https://github.com/natemsz/evesynapse/pull/579
+* Rename the demo pilot to Sable Iversen by @natemsz in https://github.com/natemsz/evesynapse/pull/582
+* Demo notice: link your characters for full functionality by @natemsz in https://github.com/natemsz/evesynapse/pull/590
+* Tab navigation at 12px, weight 500, regular letter spacing by @natemsz in https://github.com/natemsz/evesynapse/pull/593
+### 🧰 Maintenance & Dependencies
+* Plainer wording across the app text by @natemsz in https://github.com/natemsz/evesynapse/pull/584
+### Other Changes
+* docs(changelog): review changelog for v0.5.6.7 by @github-actions[bot] in https://github.com/natemsz/evesynapse/pull/578
+* Map: no more blank map after going back or switching characters by @natemsz in https://github.com/natemsz/evesynapse/pull/583
+* Map: kills and gate camp reports on the system card by @natemsz in https://github.com/natemsz/evesynapse/pull/585
+* Map: crisp sov borders, contiguous holdings fill in, faster builds by @natemsz in https://github.com/natemsz/evesynapse/pull/586
+* Intel channels: corp and alliance channels, shared by the same rules as Discord roles by @natemsz in https://github.com/natemsz/evesynapse/pull/588
+* Map: routes don't avoid systems just because of intel by @natemsz in https://github.com/natemsz/evesynapse/pull/589
+* Intel: understand each report (pilots, ships, gate, kind, friend or foe) by @natemsz in https://github.com/natemsz/evesynapse/pull/591
+
+
+**Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.6.7...v0.5.6.8
+
 ## [v0.5.6.7] - 2026-10-22
 
 Automated build of EveSynapse v0.5.6.7. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).

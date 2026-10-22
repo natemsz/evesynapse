@@ -645,6 +645,13 @@
     var I = { channels: D.channels || [], bySys: {}, systems: [], prices: new Float32Array(G.n), hostile: 0, clear: 0 };
     I.names = {};
     I.channels.forEach(function (c) { I.names[c.id] = c.name; });
+    // What is going on in each system, as the server took the reports
+    // together (intel_situations.go), by system index.
+    I.sit = {};
+    (D.situations || []).forEach(function (s) {
+      var i = G.byID[s.sys];
+      if (i !== undefined) I.sit[i] = s;
+    });
     (D.reports || []).forEach(function (r) {
       var i = G.byID[r.sys];
       if (i === undefined || intelFresh(r.at, now) <= 0) return;
@@ -2055,6 +2062,7 @@
       card.querySelector('[data-route-set="to"]').hidden = i === routeTo;
       card.querySelector("[data-map-scan]").href = "/intel/scan/?system=" + S.id[i];
       cardScans(i);
+      cardSituation(i);
       cardKills(i);
       cardReport(i);
     }
@@ -2119,6 +2127,35 @@
         systemFor[id] = { at: Date.now(), d: d };
         show(d);
       }).catch(function () { /* the card stands without them */ });
+    }
+
+    // What is going on in the card's system now, from the reader's
+    // intel channels: the situation's kind and danger, then its
+    // pilots (each opening their page, with this week's kills), ships,
+    // gate, and where they came from.
+    function cardSituation(i) {
+      var box = card.querySelector(".map-card-sit");
+      var s = IN && intelOn && IN.sit ? IN.sit[i] : null;
+      box.hidden = !s || s.calm;
+      if (box.hidden) return;
+      box.querySelector("[data-map-sit-head]").textContent = s.label + (s.level ? " · danger " + s.level.toLowerCase() : "") +
+        " · " + (s.reporters > 1 ? s.reporters + " scouts · " : "") + agoShort(s.at - intelSkew);
+      var tags = box.querySelector("[data-map-sit-tags]");
+      tags.textContent = "";
+      function tag(text, href, cls) {
+        var t = root.createElement(href ? "a" : "span");
+        t.className = "map-card-tag" + (cls ? " " + cls : "");
+        if (href) t.href = href;
+        t.textContent = text;
+        tags.appendChild(t);
+      }
+      if (s.count) tag(s.count + " hostiles");
+      (s.pilots || []).forEach(function (p) {
+        tag(p.name + (p.kills ? " · " + plural(p.kills, "kill") + " this week" : ""), "/pilot/?character=" + p.id, p.friendly ? "friendly" : "");
+      });
+      (s.ships || []).forEach(function (sh) { tag(sh.name + (sh.n > 1 ? " ×" + sh.n : ""), "", "ship"); });
+      if (s.gate) tag("on the " + s.gate + " gate");
+      if (s.from) tag("came from " + s.from);
     }
 
     // The reader's own scans of the card's system: fetched once per
@@ -2615,6 +2652,7 @@
         return [IN.names[r.ch] || "Intel", what + (r.text ? " · " + r.text : "") + " · " + agoShort(r.at - intelSkew), "/intel/channels/" + r.ch + "/"];
       });
     }
+    var hotFor = "", hotRGB = null;
     function intelRGBA(c, a) { return "rgba(" + c[0] + "," + c[1] + "," + c[2] + "," + a.toFixed(3) + ")"; }
     function drawIntel(k, ox, oy, r) {
       if (!IN || !intelOn) return;
@@ -2626,7 +2664,10 @@
         var x = wx(i) * k + ox, y = wy(i) * k + oy;
         if (x < -40 || y < -40 || x > cw + 40 || y > ch + 40) return;
         var calm = last.clear || last.calm;
-        var c = calm ? colors.intelClear : colors.intel;
+        // A high-danger situation rings in the camp red.
+        var hot = !calm && IN.sit[i] && IN.sit[i].level === "High";
+        if (hot && hotFor !== colors.camp) { hotFor = colors.camp; hotRGB = rgbOf(colors.camp); }
+        var c = calm ? colors.intelClear : hot ? hotRGB : colors.intel;
         var rr = r + 6 + (calm ? 0 : Math.min(8, Math.log(1 + (last.n || 1)) * 3));
         ctx.beginPath();
         ctx.arc(x, y, rr, 0, Math.PI * 2);

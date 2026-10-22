@@ -782,6 +782,14 @@ html.map-full-open .page-body { -webkit-backdrop-filter: none; backdrop-filter: 
 .map-card-scans-h { margin: 0 0 0.2rem; color: var(--muted-2); font-weight: 600; }
 .map-card-scans ul { margin: 0; padding: 0; list-style: none; }
 .map-card-scans li { padding: 0.1rem 0; }
+/* What is going on here now, from the reader's intel channels. */
+.map-card-sit { margin: 0.55rem 0 0; font-size: 0.82rem; }
+.map-card-sit[hidden] { display: none; }
+.map-card-sit-tags { display: flex; flex-wrap: wrap; gap: 0.25rem; margin: 0; }
+.map-card-tag { display: inline-block; padding: 0.05rem 0.45rem; border: 1px solid var(--box-edge); border-radius: 999px; font-size: 0.76rem; color: var(--text); text-decoration: none; }
+a.map-card-tag:hover { border-color: var(--accent); }
+.map-card-tag.friendly { border-color: var(--success); color: var(--muted); }
+.map-card-tag.ship { color: var(--muted); }
 /* The data behind the kills and threat layers: a camp, then the
    latest kills, each a link to the killboard. */
 .map-card-camp, .map-card-kills { margin: 0.55rem 0 0; font-size: 0.82rem; }

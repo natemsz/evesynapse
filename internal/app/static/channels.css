@@ -32,6 +32,14 @@
 .ch-rep-sys { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 600; }
 .ch-rep-what { min-width: 0; overflow-wrap: anywhere; }
 .ch-rep-what .badge { font-variant-numeric: tabular-nums; }
+/* Right now: the last half hour taken together by system. */
+.ch-sits { margin: 0 0 1rem; padding: 0; list-style: none; display: grid; gap: 0.5rem; }
+.ch-sit { padding: 0.5rem 0.65rem; border: 1px solid var(--box-edge); border-left-width: 3px; border-radius: var(--r-sm); }
+.ch-sit-High { border-left-color: var(--danger); background: color-mix(in srgb, var(--danger) 8%, transparent); }
+.ch-sit-Medium { border-left-color: var(--accent); }
+.ch-sit-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.4rem 0.6rem; }
+.ch-danger { font-size: 0.78rem; font-weight: 700; color: var(--text-bright); }
+.ch-sit-High .ch-danger { color: var(--danger); }
 /* What the report was read to name: pilots (linked), ships, the gate. */
 .ch-rep-tags { display: flex; flex-wrap: wrap; gap: 0.25rem; margin-top: 0.25rem; }
 .ch-tag { display: inline-block; padding: 0.05rem 0.45rem; border: 1px solid var(--box-edge); border-radius: 999px; font-size: 0.76rem; color: var(--text); text-decoration: none; }

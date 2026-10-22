@@ -268,3 +268,12 @@ FROM kill_attackers a
 JOIN kills k ON k.killmail_id = a.killmail_id
 WHERE k.system_id = sqlc.arg(system_id)::bigint AND k.killmail_time >= sqlc.arg(since)::timestamptz
   AND NOT k.npc AND k.public AND a.character_id > 0;
+
+-- PvP kills each pilot took part in since a time: how dangerous a
+-- pilot named in intel is (intel_situations.go).
+-- name: CountPilotKillsSince :many
+SELECT a.character_id, COUNT(DISTINCT a.killmail_id)::bigint AS kills
+FROM kill_attackers a
+JOIN kills k ON k.killmail_id = a.killmail_id
+WHERE a.character_id = ANY(sqlc.arg(ids)::bigint[]) AND k.killmail_time >= sqlc.arg(since)::timestamptz AND NOT k.npc
+GROUP BY a.character_id;

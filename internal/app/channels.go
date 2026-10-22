@@ -261,6 +261,10 @@ type channelView struct {
 	PrefillSys  string
 	// Watch is the channel's known hostiles (pilot_intel.go).
 	Watch []watchRow
+	// Situations is what is going on now (intel_situations.go);
+	// UseStandings, whether the owner's standings tell friend from foe.
+	Situations   []situationView
+	UseStandings bool
 	Error string
 }
 
@@ -347,6 +351,14 @@ func (app *Application) handleChannel(w http.ResponseWriter, r *http.Request) {
 	}
 	v.Reports = app.channelReports(ctx, id, c.ID, 0, beforeAt, beforeID, intelFeedPage)
 	v.Watch = app.channelWatch(ctx, c.ID)
+	for _, s := range app.channelSituations(ctx, c.ID) {
+		if !s.Calm {
+			v.Situations = append(v.Situations, s)
+		}
+	}
+	if ch, err := app.queries.GetIntelChannel(ctx, c.ID); err == nil {
+		v.UseStandings = ch.UseStandings
+	}
 	if len(v.Reports) == intelFeedPage {
 		last := v.Reports[len(v.Reports)-1]
 		v.Older = fmt.Sprintf("/intel/channels/%d/?before=%d.%d", c.ID, last.At, last.ID)
@@ -651,6 +663,10 @@ func (app *Application) handleChannelEdit(w http.ResponseWriter, r *http.Request
 		back("That did not go through — please try again.")
 		return
 	}
+	if err := app.queries.SetIntelChannelStandings(ctx, db.SetIntelChannelStandingsParams{ID: c.ID, UseStandings: r.PostFormValue("standings") != ""}); err != nil {
+		back("That did not go through — please try again.")
+		return
+	}
 	back("Saved.")
 }
 
@@ -875,10 +891,11 @@ func (app *Application) handleMapIntel(w http.ResponseWriter, r *http.Request) {
 		Kind  string `json:"kind,omitempty"` // what the report is (intel_analysis.go)
 	}
 	out := struct {
-		Now      int64     `json:"now"`
-		Channels []channel `json:"channels"`
-		Reports  []report  `json:"reports"`
-	}{Now: time.Now().Unix(), Channels: []channel{}, Reports: []report{}}
+		Now        int64           `json:"now"`
+		Channels   []channel       `json:"channels"`
+		Reports    []report        `json:"reports"`
+		Situations []situationView `json:"situations"`
+	}{Now: time.Now().Unix(), Channels: []channel{}, Reports: []report{}, Situations: []situationView{}}
 	id := app.intelIdentity(ctx)
 	var ids []int64
 	for _, c := range app.accessibleChannels(ctx, id) {
@@ -892,6 +909,9 @@ func (app *Application) handleMapIntel(w http.ResponseWriter, r *http.Request) {
 		}
 		for _, r := range rows {
 			out.Reports = append(out.Reports, report{ID: r.ID, Ch: r.ChannelID, Sys: r.SystemID, By: r.Reporter, Text: r.Text, N: r.Hostiles, Clear: r.Clear, Scan: r.ScanID, At: r.SeenAt.Unix(), Kind: r.Kind})
+		}
+		if s := app.intelSituations(ctx, recentReports(rows)); s != nil {
+			out.Situations = s
 		}
 	}
 	w.Header().Set("Content-Type", "application/json")

@@ -175,7 +175,7 @@ func (q *Queries) DeleteIntelToken(ctx context.Context, arg DeleteIntelTokenPara
 }
 
 const getIntelChannel = `-- name: GetIntelChannel :one
-SELECT id, owner_user_id, name, description, created_at FROM intel_channels WHERE id = $1
+SELECT id, owner_user_id, name, description, created_at, use_standings FROM intel_channels WHERE id = $1
 `
 
 func (q *Queries) GetIntelChannel(ctx context.Context, id int64) (IntelChannel, error) {
@@ -187,8 +187,20 @@ func (q *Queries) GetIntelChannel(ctx context.Context, id int64) (IntelChannel, 
 		&i.Name,
 		&i.Description,
 		&i.CreatedAt,
+		&i.UseStandings,
 	)
 	return i, err
+}
+
+const getIntelChannelStandings = `-- name: GetIntelChannelStandings :one
+SELECT use_standings FROM intel_channels WHERE id = $1
+`
+
+func (q *Queries) GetIntelChannelStandings(ctx context.Context, id int64) (bool, error) {
+	row := q.db.QueryRowContext(ctx, getIntelChannelStandings, id)
+	var use_standings bool
+	err := row.Scan(&use_standings)
+	return use_standings, err
 }
 
 const getIntelPairingCodeByHash = `-- name: GetIntelPairingCodeByHash :one
@@ -813,6 +825,20 @@ func (q *Queries) PruneIntelReports(ctx context.Context, before time.Time) (int6
 		return 0, err
 	}
 	return result.RowsAffected()
+}
+
+const setIntelChannelStandings = `-- name: SetIntelChannelStandings :exec
+UPDATE intel_channels SET use_standings = $1 WHERE id = $2
+`
+
+type SetIntelChannelStandingsParams struct {
+	UseStandings bool  `json:"use_standings"`
+	ID           int64 `json:"id"`
+}
+
+func (q *Queries) SetIntelChannelStandings(ctx context.Context, arg SetIntelChannelStandingsParams) error {
+	_, err := q.db.ExecContext(ctx, setIntelChannelStandings, arg.UseStandings, arg.ID)
+	return err
 }
 
 const setIntelReportAnalysis = `-- name: SetIntelReportAnalysis :exec

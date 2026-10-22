@@ -383,11 +383,12 @@ type IndustryCostIndex struct {
 }
 
 type IntelChannel struct {
-	ID          int64     `json:"id"`
-	OwnerUserID int64     `json:"owner_user_id"`
-	Name        string    `json:"name"`
-	Description string    `json:"description"`
-	CreatedAt   time.Time `json:"created_at"`
+	ID           int64     `json:"id"`
+	OwnerUserID  int64     `json:"owner_user_id"`
+	Name         string    `json:"name"`
+	Description  string    `json:"description"`
+	CreatedAt    time.Time `json:"created_at"`
+	UseStandings bool      `json:"use_standings"`
 }
 
 type IntelChannelGrant struct {

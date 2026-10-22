@@ -27,6 +27,7 @@ import (
 	"time"
 
 	db "evesynapse/internal/db/sqlc"
+	"evesynapse/internal/esi"
 	"evesynapse/internal/intelanalyze"
 	"evesynapse/internal/logging"
 )
@@ -111,6 +112,7 @@ func (app *Application) intelDict(ctx context.Context, channelID int64, missing 
 	ships := app.intelShips(ctx)
 	systems := app.systemLookup(ctx)
 	side := app.intelSideOf(ctx, channelID)
+	standings := app.intelStandings(ctx, channelID)
 	neighbours := map[int64]map[int64]bool{}
 	pilots := map[string][3]any{}
 	return intelanalyze.Dict{
@@ -150,9 +152,61 @@ func (app *Application) intelDict(ctx context.Context, channelID int64, missing 
 				}
 				return false, false
 			}
-			return side.corps[corp] || (alliance > 0 && side.alliances[alliance]), false
+			friendly := side.corps[corp] || (alliance > 0 && side.alliances[alliance])
+			if s, set := standings.of(id, corp, alliance); set {
+				switch {
+				case s <= -5:
+					return false, true
+				case s >= 5:
+					friendly = true
+				}
+			}
+			return friendly, false
 		},
 	}
+}
+
+// intelStandingSet is the standings a channel's owner has set, when
+// the channel uses them: by contact ID, for characters, corporations
+// and alliances alike (EVE's IDs do not overlap).
+type intelStandingSet map[int64]float64
+
+// of is the standing that applies to a pilot: one set on the pilot
+// wins over their corporation's, which wins over their alliance's.
+func (s intelStandingSet) of(pilot, corp, alliance int64) (float64, bool) {
+	for _, id := range []int64{pilot, corp, alliance} {
+		if v, ok := s[id]; ok && id > 0 {
+			return v, true
+		}
+	}
+	return 0, false
+}
+
+// intelStandings is the owner's standings for a channel that uses them
+// (schema 084): the contacts of the owner's characters, where they
+// disagree the more cautious (the lower) standing.
+func (app *Application) intelStandings(ctx context.Context, channelID int64) intelStandingSet {
+	c, err := app.queries.GetIntelChannel(ctx, channelID)
+	if err != nil || !c.UseStandings {
+		return nil
+	}
+	chars, err := app.queries.ListCharactersByUser(ctx, c.OwnerUserID)
+	if err != nil {
+		return nil
+	}
+	out := intelStandingSet{}
+	for _, ch := range chars {
+		var contacts esi.Contacts
+		if !app.loadCorpSnapshot(ctx, ch.CharacterID, esi.SnapContacts, &contacts) {
+			continue
+		}
+		for _, k := range contacts {
+			if v, ok := out[k.ContactID]; !ok || k.Standing < v {
+				out[k.ContactID] = k.Standing
+			}
+		}
+	}
+	return out
 }
 
 // analyzeIntel works out what a report says, and whether anything in

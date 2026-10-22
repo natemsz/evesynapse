@@ -537,7 +537,7 @@ func TestDiscordDirectMessages(t *testing.T) {
 		return form
 	}
 	_, body := getPage(t, f.app, cookie, "/notifications/settings")
-	mustContain(t, "settings before ticking", body, `<input type="checkbox" name="discord_dm" value="1"> On Discord <small>— direct messages to pilot-alice</small>`)
+	mustContain(t, "settings before ticking", body, `<input type="checkbox" name="discord_dm" value="1"> On Discord <small>(direct messages to pilot-alice)</small>`)
 	if code, _ := f.post(cookie, "/notifications/settings", settings(true)); code != http.StatusSeeOther {
 		t.Fatalf("save: %d", code)
 	}

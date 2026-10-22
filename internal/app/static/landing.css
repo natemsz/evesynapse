@@ -3,7 +3,9 @@
    style.css, but the glass, the dim text tone, and the sky stack
    follow the approved landing design's own values, kept
    landing-scoped so interior pages keep the site recipe.
-   No JavaScript on this page at all. */
+   One script (landing.js): the feature explorer's tab switcher.
+   The default tab is rendered active in the HTML, so the
+   section works with JavaScript off. */
 
 :root { --ld-dim: #b9a892; }
 
@@ -188,6 +190,33 @@ body::after { content: ""; position: fixed; inset: 0; z-index: -1; background: l
 .ld-stat span { color: var(--ld-dim); font-size: 14.5px; display: block; font-family: "Saira Semi Condensed", sans-serif; }
 .ld-stat-note { color: var(--ld-dim); font-size: 13.5px; margin-top: 10px; max-width: 46rem; }
 
+/* Feature explorer: the six inventory sections behind folder
+   tabs in the site's section-tab pattern. The tab row sits
+   flush on one glass panel with squared top corners; the
+   active tab merges into the panel (no bottom border) and is
+   marked by the ember top stripe alone. Panels are hidden
+   unless active; the default panel ships active in the HTML. */
+.ld-xtabs { display: flex; gap: 6px; padding: 0 12px; margin-top: 26px; overflow-x: auto; overflow-y: hidden; flex-wrap: nowrap; scrollbar-width: thin; }
+.ld-xtab { font-family: Rajdhani, sans-serif; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; font-size: 16.5px; white-space: nowrap; cursor: pointer; color: var(--ld-dim); background: rgba(19, 14, 10, 0.55); border: 1px solid rgba(255, 106, 0, 0.16); border-bottom: none; border-radius: 10px 10px 0 0; padding: 10px 18px 12px; transition: color 150ms ease, background-color 150ms ease; }
+.ld-xtab:hover { color: var(--text); }
+.ld-xtab.active { color: var(--text); background: linear-gradient(180deg, rgba(12, 8, 6, 0.58), rgba(12, 8, 6, 0) 52%), rgba(19, 14, 10, 0.84); box-shadow: inset 0 3px 0 var(--accent, #f97116); }
+.ld-xwrap { border-radius: 0 0 14px 14px; padding: 26px; }
+.ld-xpanel { display: none; }
+.ld-xpanel.active { display: grid; grid-template-columns: 1.45fr 1fr; gap: 30px; align-items: start; }
+.ld-xpanel .ld-shot { margin: 0; }
+.ld-xcopy h3 { font-size: 21px; color: var(--gold); margin-bottom: 5px; }
+.ld-xsub { color: #ddd0bd; font-size: 16px; margin-bottom: 16px; }
+.ld-xlist { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.ld-xlist li { color: var(--ld-dim); font-size: 15px; }
+.ld-xlist li b { color: var(--text); font-weight: 600; display: block; font-size: 15.5px; margin-bottom: 1px; }
+/* Axon leads the intel list with its own visual: the desktop
+   app's window beside its entry, inside the panel's copy
+   column. */
+.ld-xaxon { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; margin-bottom: 16px; }
+.ld-xaxon img { display: block; width: 100%; height: auto; border-radius: 8px; border: 1px solid rgba(255, 140, 40, 0.4); }
+.ld-xaxon p { color: var(--ld-dim); font-size: 15px; }
+.ld-xaxon p b { color: var(--text); font-weight: 600; display: block; font-size: 15.5px; margin-bottom: 1px; }
+
 .ld-tools { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 26px; }
 .ld-tgroup { padding: 18px; }
 .ld-tgroup h3 { font-size: 17px; margin-bottom: 8px; }
@@ -217,6 +246,10 @@ body::after { content: ""; position: fixed; inset: 0; z-index: -1; background: l
 @media (max-width: 900px) {
   .ld-strip-grid, .ld-trust, .ld-tools { grid-template-columns: 1fr; }
   .ld-styles { grid-template-columns: 1fr; }
+  .ld-xpanel.active { grid-template-columns: 1fr; }
+  .ld-xaxon { grid-template-columns: 1fr; }
+  .ld-xwrap { padding: 18px; }
+  .ld-xtab { font-size: 15px; padding: 9px 14px 10px; }
   .ld-feat { grid-template-columns: 1fr; gap: 22px; }
   .ld-feat-vis { order: 2; }
   .ld-brief { grid-template-columns: 1fr; }

@@ -55,11 +55,13 @@ func TestLayoutRegionDeclutters(t *testing.T) {
 }
 
 // TestLayoutMosaicPreservesRegionShapes: the projection is a
-// mosaic of the regions' own layouts -- inside a region, every
-// pairwise distance is the region layout's distance under one
-// ratio; across regions, the centroids keep their true bearings;
-// the dense cores arrive already decluttered by their region
-// layouts; and the picture is the same on every build.
+// mosaic of the regions' own layouts -- inside a constellation,
+// every pairwise distance is the region layout's distance under
+// one ratio, and that ratio is the mosaic's tile scale times
+// the constellation contraction; across regions, the centroids
+// keep their true bearings; the dense cores arrive already
+// decluttered by their region layouts; and the picture is the
+// same on every build.
 func TestLayoutMosaicPreservesRegionShapes(t *testing.T) {
 	// Three regions in the universe frame, shaped like real
 	// ones: a tight core with an arm, a second core, a sparse
@@ -83,6 +85,25 @@ func TestLayoutMosaicPreservesRegionShapes(t *testing.T) {
 	solo := [][2]float64{{1500, 8200}}
 
 	uni := append(append(append(append([][2]float64{}, west...), east...), south...), solo...)
+	// Constellations: each wide region is a crowded core and an
+	// arm reaching away, the sparse region is two trios, and the
+	// lone system belongs to none.
+	var consOf []int
+	for k := 0; k < 36; k++ {
+		if k < 24 {
+			consOf = append(consOf, 0) // west core
+		} else {
+			consOf = append(consOf, 1) // west arm
+		}
+	}
+	for k := 0; k < 36; k++ {
+		if k < 24 {
+			consOf = append(consOf, 2) // east core
+		} else {
+			consOf = append(consOf, 3) // east arm
+		}
+	}
+	consOf = append(consOf, 4, 4, 4, 5, 5, 5, -1)
 	var members [][]int
 	var regionLaid [][][2]float64
 	start := 0
@@ -100,8 +121,8 @@ func TestLayoutMosaicPreservesRegionShapes(t *testing.T) {
 		start += len(pts)
 	}
 
-	a := layoutMosaic(uni, members, regionLaid)
-	b := layoutMosaic(uni, members, regionLaid)
+	a := layoutMosaic(uni, members, consOf, regionLaid)
+	b := layoutMosaic(uni, members, consOf, regionLaid)
 	for i := range a {
 		if a[i] != b[i] {
 			t.Fatalf("mosaic is not deterministic at %d: %v vs %v", i, a[i], b[i])
@@ -111,24 +132,74 @@ func TestLayoutMosaicPreservesRegionShapes(t *testing.T) {
 		}
 	}
 
-	// One ratio per region: every intra-region distance in the
-	// mosaic is the region layout's distance times one constant.
+	// One ratio per constellation: every intra-constellation
+	// distance in the mosaic is the region layout's distance
+	// times one constant.
+	ratioOf := make(map[int]float64)
 	for ri, idxs := range members {
 		laid := regionLaid[ri]
-		lo, hi := math.Inf(1), math.Inf(-1)
-		for x := 0; x < len(idxs); x++ {
-			for y := x + 1; y < len(idxs); y++ {
-				ld := math.Hypot(laid[x][0]-laid[y][0], laid[x][1]-laid[y][1])
-				if ld < 1 {
-					continue
+		groups := make(map[int][]int)
+		for k, i := range idxs {
+			groups[consOf[i]] = append(groups[consOf[i]], k)
+		}
+		for c, ks := range groups {
+			if len(ks) < 2 || c < 0 {
+				continue
+			}
+			lo, hi := math.Inf(1), math.Inf(-1)
+			for x := 0; x < len(ks); x++ {
+				for y := x + 1; y < len(ks); y++ {
+					ld := math.Hypot(laid[ks[x]][0]-laid[ks[y]][0], laid[ks[x]][1]-laid[ks[y]][1])
+					if ld < 1 {
+						continue
+					}
+					md := math.Hypot(a[idxs[ks[x]]][0]-a[idxs[ks[y]]][0], a[idxs[ks[x]]][1]-a[idxs[ks[y]]][1])
+					r := md / ld
+					lo, hi = math.Min(lo, r), math.Max(hi, r)
 				}
-				md := math.Hypot(a[idxs[x]][0]-a[idxs[y]][0], a[idxs[x]][1]-a[idxs[y]][1])
-				r := md / ld
-				lo, hi = math.Min(lo, r), math.Max(hi, r)
+			}
+			if hi > lo*1.000001 {
+				t.Errorf("constellation %d: intra-constellation ratios run %.6f..%.6f, want one uniform scale", c, lo, hi)
+			}
+			ratioOf[c] = lo
+		}
+	}
+
+	// The contraction is the difference between a constellation's
+	// ratio and the scale its centre travels at: a constellation's
+	// centre does not contract, so the west core's and arm's
+	// centres sit at the tile scale, and each constellation's own
+	// ratio is the contraction times that scale.
+	laidC := func(ri int, c int) [2]float64 {
+		var ctr [2]float64
+		cnt := 0
+		for k, i := range members[ri] {
+			if consOf[i] == c {
+				ctr[0] += regionLaid[ri][k][0]
+				ctr[1] += regionLaid[ri][k][1]
+				cnt++
 			}
 		}
-		if hi > lo*1.000001 {
-			t.Errorf("region %d: intra-region ratios run %.6f..%.6f, want one uniform scale", ri, lo, hi)
+		return [2]float64{ctr[0] / float64(cnt), ctr[1] / float64(cnt)}
+	}
+	mosC := func(ri int, c int) [2]float64 {
+		var ctr [2]float64
+		cnt := 0
+		for _, i := range members[ri] {
+			if consOf[i] == c {
+				ctr[0] += a[i][0]
+				ctr[1] += a[i][1]
+				cnt++
+			}
+		}
+		return [2]float64{ctr[0] / float64(cnt), ctr[1] / float64(cnt)}
+	}
+	lc0, lc1 := laidC(0, 0), laidC(0, 1)
+	mc0, mc1 := mosC(0, 0), mosC(0, 1)
+	tileScale := math.Hypot(mc1[0]-mc0[0], mc1[1]-mc0[1]) / math.Hypot(lc1[0]-lc0[0], lc1[1]-lc0[1])
+	for _, c := range []int{0, 1, 2, 3} {
+		if got, want := ratioOf[c]/tileScale, mosaicConsContract; math.Abs(got-want) > want*1e-6 {
+			t.Errorf("constellation %d: ratio %.6f is %.6f of the tile scale, want the contraction %.2f", c, ratioOf[c], got, want)
 		}
 	}
 
@@ -164,6 +235,40 @@ func TestLayoutMosaicPreservesRegionShapes(t *testing.T) {
 		if d := math.Abs(tb - mb); d > 0.001 {
 			t.Errorf("centroid bearing %d -> %d off by %.4f rad (true %.4f, mosaic %.4f)", pair[0], pair[1], d, tb, mb)
 		}
+	}
+}
+
+// TestNudgeOverlapsSeparatesClosePairs: the nudge pass takes
+// the pairs the mosaic's tiles leave on top of each other -- a
+// border pair two units apart, a coincident pair, a chain of
+// three -- and separates every one of them past the overlap
+// band, moving no system further than the cap, never touching
+// a system that sits in no close pair, and landing on the same
+// picture every time.
+func TestNudgeOverlapsSeparatesClosePairs(t *testing.T) {
+	pos := [][2]float64{
+		{5000, 5000}, {5002, 5000}, // the border pair, 2 apart
+		{7000, 7000}, {7000, 7000}, // the coincident pair
+		{2000, 2000}, {2015, 2000}, {2030, 2000}, // the chain, 15 apart
+		{100, 100}, // the loner, in no close pair
+	}
+	a := nudgeOverlaps(pos)
+	b := nudgeOverlaps(pos)
+	for i := range a {
+		if a[i] != b[i] {
+			t.Fatalf("nudge is not deterministic at %d: %v vs %v", i, a[i], b[i])
+		}
+		if d := math.Hypot(a[i][0]-pos[i][0], a[i][1]-pos[i][1]); d > mosaicNudgeCap+1e-9 {
+			t.Errorf("system %d moved %.1f, past the cap %.0f", i, d, mosaicNudgeCap)
+		}
+		for j := i + 1; j < len(a); j++ {
+			if d := math.Hypot(a[j][0]-a[i][0], a[j][1]-a[i][1]); d < 20 {
+				t.Errorf("systems %d and %d still %.1f apart after the nudge, want out of the overlap band (>= 20)", i, j, d)
+			}
+		}
+	}
+	if a[7] != pos[7] {
+		t.Errorf("the loner moved to %v, want it untouched at %v", a[7], pos[7])
 	}
 }
 

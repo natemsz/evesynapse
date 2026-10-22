@@ -17,9 +17,13 @@ package app
 // its neighbours stays the true picture; only overlaps give way.
 // Beside them sits the Improved Projection: a mosaic of the
 // region layouts (layoutMosaic) -- each region keeps its region
-// view's shape verbatim, set down at its true size on its true
-// centroid -- for the reader who wants the tactical reading at
-// universe scale: one shape at two zooms.
+// view's shape, set down at its true size on its true centroid --
+// with each constellation's arrangement drawn a little tighter
+// about its own centre (mosaicConsContract), so constellations
+// read as knots, and a bounded nudge pass (nudgeOverlaps) that
+// separates the pairs the tiles leave on top of each other
+// across region borders. For the reader who wants the tactical
+// reading at universe scale: one shape at two zooms.
 //
 // Known space only: wormhole space has no stargates to draw, and the
 // abyssal and void pockets are not places on a map.
@@ -271,7 +275,7 @@ func buildUniverseMap(systems []db.ListMapSystemsRow, regions []db.SdeRegion, co
 	// like every other layout and carried beside the true
 	// positions, so the client only ever chooses between two
 	// stored frames.
-	proj := layoutMosaic(uni, members, regionLaid)
+	proj := nudgeOverlaps(layoutMosaic(uni, members, S.Cons, regionLaid))
 	for i := range kept {
 		S.PX[i], S.PY[i] = int(math.Round(proj[i][0])), int(math.Round(proj[i][1]))
 	}
@@ -395,20 +399,34 @@ func regionMinSpacing(n int) float64 {
 // the spread is one similarity, and so is the final frame fit.
 const mosaicCentroidSpread = 1.05
 
+// mosaicConsContract is how far the mosaic draws each
+// constellation's arrangement in toward its own centre before
+// the tile is set down: constellations read as knots, and the
+// gaps between them inside a region open up. The contraction
+// is a uniform scale about the constellation's own centroid,
+// so a constellation's shape and centre do not change, only
+// its size. The value is set by measurement on the real
+// payload: stronger contractions (0.90, 0.85) let the nudge
+// pass close The Forge's closest pair past the spacing the
+// old whole-universe solver managed there; at 0.95 that pair
+// keeps its headroom through the whole build.
+const mosaicConsContract = 0.95
+
 // layoutMosaic assembles the projected frame from the regions'
 // own tactical layouts, one tile per region. A region's shape
-// in the projection is its region-view layout verbatim -- the
-// same arrangement at a second zoom -- under one uniform scale
-// per region: the shape is set down at the size of the region's
-// true extent, centred on the region's true centroid (spread a
-// little for clearance, see mosaicCentroidSpread). Relative
-// sizes and bearings across the universe stay the true ones,
-// and the gate web ties the tiles together. Nothing is
-// re-solved at this level: where a system sits inside its
-// region is the region layout's business, settled there.
-// Deterministic: means and extents over fixed member lists, a
-// fixed spread, and the shared frame fit.
-func layoutMosaic(uni [][2]float64, members [][]int, regionLaid [][][2]float64) [][2]float64 {
+// in the projection is its region-view layout under one
+// uniform scale per region, with each constellation first
+// contracted about its own centre (mosaicConsContract): the
+// shape is set down at the size of the region's true extent,
+// centred on the region's true centroid (spread a little for
+// clearance, see mosaicCentroidSpread). Relative sizes and
+// bearings across the universe stay the true ones, and the
+// gate web ties the tiles together. Nothing is re-solved at
+// this level: where a system sits inside its constellation
+// is the region layout's business, settled there.
+// Deterministic: means and extents over fixed member lists,
+// a fixed spread, and the shared frame fit.
+func layoutMosaic(uni [][2]float64, members [][]int, consOf []int, regionLaid [][][2]float64) [][2]float64 {
 	out := make([][2]float64, len(uni))
 	if len(uni) == 0 {
 		return out
@@ -426,14 +444,15 @@ func layoutMosaic(uni [][2]float64, members [][]int, regionLaid [][][2]float64) 
 		if len(idxs) == 0 || len(laid) != len(idxs) {
 			continue
 		}
+		shape := contractConstellations(idxs, consOf, laid)
 		var cx, cy, rcx, rcy float64
 		loX, loY := math.Inf(1), math.Inf(1)
 		hiX, hiY := math.Inf(-1), math.Inf(-1)
 		for k, i := range idxs {
 			cx += uni[i][0]
 			cy += uni[i][1]
-			rcx += laid[k][0]
-			rcy += laid[k][1]
+			rcx += shape[k][0]
+			rcy += shape[k][1]
 			loX, hiX = math.Min(loX, uni[i][0]), math.Max(hiX, uni[i][0])
 			loY, hiY = math.Min(loY, uni[i][1]), math.Max(hiY, uni[i][1])
 		}
@@ -453,10 +472,156 @@ func layoutMosaic(uni [][2]float64, members [][]int, regionLaid [][][2]float64) 
 		ax := ctrX + (cx-ctrX)*mosaicCentroidSpread
 		ay := ctrY + (cy-ctrY)*mosaicCentroidSpread
 		for k, i := range idxs {
-			out[i] = [2]float64{ax + scale*(laid[k][0]-rcx), ay + scale*(laid[k][1]-rcy)}
+			out[i] = [2]float64{ax + scale*(shape[k][0]-rcx), ay + scale*(shape[k][1]-rcy)}
 		}
 	}
 	return fitFrame(out, universeFrame)
+}
+
+// contractConstellations draws one region's laid-out systems
+// toward their constellation centres: each constellation's
+// points scale by mosaicConsContract about the constellation's
+// own centroid, so the arrangement inside a constellation is
+// preserved exactly, only tighter, and no constellation's
+// centre moves. Systems whose constellation is unknown keep
+// their places, as do lone systems of a constellation.
+func contractConstellations(idxs []int, consOf []int, laid [][2]float64) [][2]float64 {
+	out := make([][2]float64, len(laid))
+	copy(out, laid)
+	groups := make(map[int][]int)
+	for k, i := range idxs {
+		c := -1
+		if i < len(consOf) {
+			c = consOf[i]
+		}
+		if c < 0 {
+			// Unknown constellation: a group of one, so the
+			// contraction leaves the system where it sits.
+			c = -k - 2
+		}
+		groups[c] = append(groups[c], k)
+	}
+	for _, ks := range groups {
+		if len(ks) < 2 {
+			continue
+		}
+		var cx, cy float64
+		for _, k := range ks {
+			cx += laid[k][0]
+			cy += laid[k][1]
+		}
+		cx /= float64(len(ks))
+		cy /= float64(len(ks))
+		for _, k := range ks {
+			out[k] = [2]float64{
+				cx + (laid[k][0]-cx)*mosaicConsContract,
+				cy + (laid[k][1]-cy)*mosaicConsContract,
+			}
+		}
+	}
+	return out
+}
+
+// The nudge pass: where two regions' tiles meet, a system of
+// one can land on top of a system of the other -- the tiles are
+// set down independently, at their true sizes, and the true
+// map's borders interleave. The pass separates the pairs that
+// sit closer than mosaicNudgeFloor, and nothing else: each
+// pair splits along its own axis, the corrections of a step
+// are all computed against the step's starting positions and
+// applied together, damped, and no system moves more than
+// mosaicNudgeCap across the whole pass. It is a janitor for
+// border pairs, not a solver: pairs it cannot separate inside
+// the cap stay close, and systems in no close pair never move.
+const (
+	mosaicNudgeFloor = 26.0
+	mosaicNudgeCap   = 30.0
+	mosaicNudgeSteps = 16
+	mosaicNudgeDamp  = 0.5
+)
+
+func nudgeOverlaps(pos [][2]float64) [][2]float64 {
+	n := len(pos)
+	out := make([][2]float64, n)
+	copy(out, pos)
+	if n < 2 {
+		return out
+	}
+	start := make([][2]float64, n)
+	copy(start, pos)
+	cur := make([][2]float64, n)
+	copy(cur, pos)
+	for step := 0; step < mosaicNudgeSteps; step++ {
+		pairs := closePairs(cur, mosaicNudgeFloor)
+		if len(pairs) == 0 {
+			break
+		}
+		corr := make([][2]float64, n)
+		for _, pr := range pairs {
+			i, j := pr[0], pr[1]
+			dx, dy := cur[j][0]-cur[i][0], cur[j][1]-cur[i][1]
+			d := math.Hypot(dx, dy)
+			var ux, uy, push float64
+			if d < 1e-6 {
+				// Coincident: split along a direction fixed
+				// by the pair's indices, as layoutRegion does.
+				a := float64(i*7+j*13) * 0.618
+				ux, uy = math.Cos(a), math.Sin(a)
+				push = mosaicNudgeFloor / 2 * mosaicNudgeDamp
+			} else {
+				ux, uy = dx/d, dy/d
+				push = (mosaicNudgeFloor - d) / 2 * mosaicNudgeDamp
+			}
+			corr[i][0] -= ux * push
+			corr[i][1] -= uy * push
+			corr[j][0] += ux * push
+			corr[j][1] += uy * push
+		}
+		for i := range cur {
+			vx := cur[i][0] + corr[i][0] - start[i][0]
+			vy := cur[i][1] + corr[i][1] - start[i][1]
+			if l := math.Hypot(vx, vy); l > mosaicNudgeCap {
+				vx *= mosaicNudgeCap / l
+				vy *= mosaicNudgeCap / l
+			}
+			cur[i] = [2]float64{start[i][0] + vx, start[i][1] + vy}
+		}
+	}
+	copy(out, cur)
+	return out
+}
+
+// closePairs lists the index pairs closer than floor, in index
+// order, found through a bucket grid of floor-sized cells.
+func closePairs(pos [][2]float64, floor float64) [][2]int {
+	grid := make(map[[2]int][]int)
+	for i, p := range pos {
+		cell := [2]int{int(math.Floor(p[0] / floor)), int(math.Floor(p[1] / floor))}
+		grid[cell] = append(grid[cell], i)
+	}
+	var pairs [][2]int
+	for i, p := range pos {
+		cx, cy := int(math.Floor(p[0]/floor)), int(math.Floor(p[1]/floor))
+		for gx := cx - 1; gx <= cx+1; gx++ {
+			for gy := cy - 1; gy <= cy+1; gy++ {
+				for _, j := range grid[[2]int{gx, gy}] {
+					if j <= i {
+						continue
+					}
+					if math.Hypot(pos[j][0]-p[0], pos[j][1]-p[1]) < floor {
+						pairs = append(pairs, [2]int{i, j})
+					}
+				}
+			}
+		}
+	}
+	sort.Slice(pairs, func(a, b int) bool {
+		if pairs[a][0] != pairs[b][0] {
+			return pairs[a][0] < pairs[b][0]
+		}
+		return pairs[a][1] < pairs[b][1]
+	})
+	return pairs
 }
 
 // rebuildUniverseMap builds the payload from the stored SDE and

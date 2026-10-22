@@ -167,6 +167,12 @@
       <h2 class="map-card-name"></h2>
       <p class="map-card-where"><span class="map-card-sec sec"></span> <span class="map-card-path"></span></p>
       <dl class="map-card-live" hidden></dl>
+      {{/* What is going on here now, from the reader's intel
+           channels (intel_situations.go), filled by map.js. */}}
+      <div class="map-card-sit" hidden>
+        <p class="map-card-scans-h" data-map-sit-head></p>
+        <p class="map-card-sit-tags" data-map-sit-tags></p>
+      </div>
       {{/* The data behind the kills and threat layers
            (/map/system.json), filled by map.js: a camp on now, then
            the latest kills, each opening on the killboard. */}}

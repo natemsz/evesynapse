@@ -24,6 +24,49 @@ func (q *Queries) CountKillsSince(ctx context.Context, since time.Time) (int64, 
 	return count, err
 }
 
+const countPilotKillsSince = `-- name: CountPilotKillsSince :many
+SELECT a.character_id, COUNT(DISTINCT a.killmail_id)::bigint AS kills
+FROM kill_attackers a
+JOIN kills k ON k.killmail_id = a.killmail_id
+WHERE a.character_id = ANY($1::bigint[]) AND k.killmail_time >= $2::timestamptz AND NOT k.npc
+GROUP BY a.character_id
+`
+
+type CountPilotKillsSinceParams struct {
+	Ids   []int64   `json:"ids"`
+	Since time.Time `json:"since"`
+}
+
+type CountPilotKillsSinceRow struct {
+	CharacterID int64 `json:"character_id"`
+	Kills       int64 `json:"kills"`
+}
+
+// PvP kills each pilot took part in since a time: how dangerous a
+// pilot named in intel is (intel_situations.go).
+func (q *Queries) CountPilotKillsSince(ctx context.Context, arg CountPilotKillsSinceParams) ([]CountPilotKillsSinceRow, error) {
+	rows, err := q.db.QueryContext(ctx, countPilotKillsSince, pq.Array(arg.Ids), arg.Since)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []CountPilotKillsSinceRow
+	for rows.Next() {
+		var i CountPilotKillsSinceRow
+		if err := rows.Scan(&i.CharacterID, &i.Kills); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getBiggestKill = `-- name: GetBiggestKill :one
 SELECT killmail_id, hash, killmail_time, system_id, region_id, location_id, victim_character_id, victim_corporation_id, victim_alliance_id, victim_faction_id, ship_type_id, damage_taken, attacker_count, fb_character_id, fb_corporation_id, fb_alliance_id, fb_ship_type_id, npc, solo, awox, points, value_zkill, value_ours, value_dropped_ours, value_coverage, priced_at, source, public, ingested_at FROM kills
 WHERE public AND killmail_time >= $1::timestamptz AND value_ours IS NOT NULL

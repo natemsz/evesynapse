@@ -46,6 +46,27 @@
   <p class="hint prose">You can read this channel but not post to it. Its owner can change that.</p>
   {{end}}
 
+  {{/* What is going on now (intel_situations.go): the last half
+       hour's reports taken together by system, most pressing first. */}}
+  {{if .Situations}}<h2>Right now</h2>
+  <ul class="ch-sits">
+    {{range .Situations}}<li class="ch-sit ch-sit-{{.Level}}">
+      <div class="ch-sit-head">
+        <span class="badge {{.Tone}}">{{.Label}}</span>
+        <span><span class="sec sec-{{.SecTier}}">{{.SecText}}</span> <a href="/map/?system={{.Sys}}"><strong>{{.SysName}}</strong></a></span>
+        {{if .Level}}<span class="ch-danger">Danger: {{.Level}}</span>{{end}}
+        <small class="muted">{{.Ago}}{{if gt .Reporters 1}} · {{.Reporters}} scouts{{end}}</small>
+      </div>
+      {{if or .Pilots .Ships .Gate .From .Count}}<div class="ch-rep-tags">
+        {{- if .Count}}<span class="ch-tag">{{.Count}} hostiles</span>{{end}}
+        {{- range .Pilots}}<a class="ch-tag{{if .Friendly}} friendly{{end}}" href="/pilot/?character={{.ID}}">{{.Name}}{{if .Kills}} · {{.Kills}} {{if eq .Kills 1}}kill{{else}}kills{{end}} this week{{end}}</a>{{end}}
+        {{- range .Ships}}<span class="ch-tag ship">{{.Name}}{{if gt .N 1}} ×{{.N}}{{end}}</span>{{end}}
+        {{- if .Gate}}<span class="ch-tag">on the {{.Gate}} gate</span>{{end}}
+        {{- if .From}}<span class="ch-tag">came from {{.From}}</span>{{end}}
+      </div>{{end}}
+    </li>{{end}}
+  </ul>{{end}}
+
   <h2>Reports <span class="badge kill" data-ch-live hidden>Live</span></h2>
   <ol class="ch-feed" data-ch-feed="/intel/channels/{{.ID}}/feed.json" data-ch-after="{{.LastID}}" data-ch-id="{{.ID}}">
     {{range .Reports}}{{template "ch-report" .}}{{else}}<li class="ch-empty hint" data-ch-empty>No reports yet.</li>{{end}}
@@ -115,13 +136,14 @@
   </form>
 
   <form class="op-form setting" method="post" action="/intel/channels/{{.ID}}/edit">
-    <h4>Name and description</h4>
+    <h4>Channel settings</h4>
     <div class="form-grid">
       <label class="field"><span class="field-label">Name</span>
         <input type="text" name="name" value="{{.Name}}" maxlength="60" required></label>
       <label class="field"><span class="field-label">What it covers</span>
         <input type="text" name="description" value="{{.Description}}" maxlength="200"></label>
     </div>
+    <label class="check-row"><input type="checkbox" name="standings" value="1"{{if .UseStandings}} checked{{end}}> <span>Use your standings to tell friend from foe. Pilots, corporations and alliances you've set at +5 or better count as friendly, and those at -5 or worse as hostile. Without this, only pilots in the channel's own corporations and alliances count as friendly.</span></label>
     <div class="form-actions">
       <button type="submit">Save</button>
       <span class="field-hint">Axon links an in-game channel with the same name automatically.</span>

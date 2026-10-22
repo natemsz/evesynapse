@@ -8,7 +8,7 @@ VALUES (sqlc.arg(owner_user_id), sqlc.arg(name), sqlc.arg(description), sqlc.arg
 RETURNING id;
 
 -- name: GetIntelChannel :one
-SELECT id, owner_user_id, name, description, created_at, owner_kind, owner_id FROM intel_channels WHERE id = $1;
+SELECT id, owner_user_id, name, description, created_at, owner_kind, owner_id, use_standings FROM intel_channels WHERE id = $1;
 
 -- The channels a corporation or alliance owns (schema 082).
 -- name: ListOrgIntelChannels :many
@@ -209,3 +209,9 @@ SELECT COUNT(*) FROM intel_tokens WHERE user_id = $1;
 -- Every system's name: the chat-line reader's dictionary.
 -- name: ListSDESystemNames :many
 SELECT system_id, name FROM sde_systems;
+
+-- name: GetIntelChannelStandings :one
+SELECT use_standings FROM intel_channels WHERE id = $1;
+
+-- name: SetIntelChannelStandings :exec
+UPDATE intel_channels SET use_standings = sqlc.arg(use_standings) WHERE id = sqlc.arg(id);

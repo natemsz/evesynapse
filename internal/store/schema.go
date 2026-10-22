@@ -497,6 +497,12 @@ var pgIntelChannelOrgsSchema string
 //go:embed schema_pg/083_intel_analysis.sql
 var pgIntelAnalysisSchema string
 
+// Step 084: intel channels may use their owner's standings to tell
+// friend from foe.
+//
+//go:embed schema_pg/084_intel_standings.sql
+var pgIntelStandingsSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -609,6 +615,7 @@ func schemaSteps() []schemaStep {
 		{81, "axon_pairing", pgAxonPairingSchema, ""},
 		{82, "intel_channel_orgs", pgIntelChannelOrgsSchema, ""},
 		{83, "intel_analysis", pgIntelAnalysisSchema, ""},
+		{84, "intel_standings", pgIntelStandingsSchema, ""},
 	}
 }
 

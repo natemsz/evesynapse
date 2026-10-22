@@ -7,8 +7,8 @@
      channels and a form to make one, then EveSynapse Axon -- set-up
      steps, plain answers, the paired computers (intel_tokens.go). */}}
 <section class="card page-card" data-fold="never">
-  <p class="lede">An intel channel is where you and your friends share sightings, like “5 hostiles in 1DQ1-A” or “Amamake clear”. Every report shows on the <a href="/map/">map</a> for everyone in the channel for half an hour, and routes avoid those systems.</p>
-  <p class="hint">You can add reports three ways: type them on the channel's page or the map, paste lines from an in-game intel chat, or let <a href="#axon">EveSynapse Axon</a> send them for you while you play.</p>
+  <p class="lede prose">An intel channel is where you and your friends share sightings, like “5 hostiles in 1DQ1-A” or “Amamake clear”. Every report shows on the <a href="/map/">map</a> for everyone in the channel for half an hour, and routes avoid those systems.</p>
+  <p class="hint prose">You can add reports three ways: type them on the channel's page or the map, paste lines from an in-game intel chat, or let <a href="#axon">EveSynapse Axon</a> send them for you while you play.</p>
 
   {{if not .SignedIn}}
   <p><a class="btn" href="/auth/login">Sign in with EVE Online</a> to make a channel or join one.</p>
@@ -41,7 +41,7 @@
 {{if .SignedIn}}
 <section class="card page-card" id="axon" data-fold="never">
   <h2>EveSynapse Axon</h2>
-  <p class="lede">Axon is a small program you run on your own computer. EVE already saves your chat to files on your computer. While you play, Axon reads those files for your in-game intel channel and sends each new line here, so sightings show up on the map without anyone typing or pasting them. It is <a href="https://github.com/natemsz/axon" rel="noopener">open source</a>.</p>
+  <p class="lede prose">Axon is a small program you run on your own computer. EVE already saves your chat to files on your computer. While you play, Axon reads those files for your in-game intel channel and sends each new line here, so sightings show up on the map without anyone typing or pasting them. It is <a href="https://github.com/natemsz/axon" rel="noopener">open source</a>.</p>
 
   {{if .PairingCode}}
   <div class="setting ch-code" role="status">
@@ -52,7 +52,7 @@
   {{end}}
 
   <h3>Set it up</h3>
-  <ol class="ch-steps">
+  <ol class="ch-steps prose">
     <li>
       <strong>Install Axon.</strong> Download the file for your computer and run it. It installs itself and opens Axon's window.
       {{if not .Tokens}}<div class="ch-dl">{{range .Downloads}}<a class="btn" href="{{.URL}}" rel="noopener">{{.Label}}</a>{{end}}</div>
@@ -70,7 +70,7 @@
   </ol>
 
   <h3>Questions</h3>
-  <dl class="ch-faq">
+  <dl class="ch-faq prose">
     <dt>What exactly does Axon read?</dt>
     <dd>Only the chat log files EVE writes to your computer (in <code>Documents\EVE\logs\Chatlogs</code>), and only for the in-game channels you link. Not your screen, the game, or any other files. EVE saves these logs unless chat logging was turned off in its settings.</dd>
     <dt>What does it send here?</dt>

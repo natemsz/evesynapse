@@ -7,7 +7,7 @@
 
 {{if .IntelIncursions}}
   {{if .IntelIncursions.Warming}}
-  <p>Not loaded yet. The public incursion list is fetched on a regular cycle{{if .IsAdmin}}; progress is on the <a href="/sync/">Sync page</a>{{end}}.</p>
+  <p class="prose">Not loaded yet. The public incursion list is fetched on a regular cycle{{if .IsAdmin}}; progress is on the <a href="/sync/">Sync page</a>{{end}}.</p>
   {{else}}
   {{if .IntelIncursions.Rows}}
   <div class="grid">
@@ -31,10 +31,10 @@
   {{end}}
   </div>
   {{else}}
-  <p><small>No active incursions right now.</small></p>
+  <p class="prose"><small>No active incursions right now.</small></p>
   {{end}}
   {{end}}
 {{else}}
-  <p>No intel to show yet.</p>
+  <p class="prose">No intel to show yet.</p>
 {{end}}
 {{end}}

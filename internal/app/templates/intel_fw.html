@@ -7,7 +7,7 @@
 
 {{if .IntelFW}}
   {{if .IntelFW.Warming}}
-  <p>Not loaded yet. The public faction-warfare data is fetched on a regular cycle{{if .IsAdmin}}; progress is on the <a href="/sync/">Sync page</a>{{end}}.</p>
+  <p class="prose">Not loaded yet. The public faction-warfare data is fetched on a regular cycle{{if .IsAdmin}}; progress is on the <a href="/sync/">Sync page</a>{{end}}.</p>
   {{else}}
   {{if .IntelFW.Factions}}
   <div class="tw">
@@ -49,11 +49,11 @@
     </tbody>
   </table>
   </div>
-  <p><small>Contested % is victory points divided by the flip threshold, the same figure the game shows.{{if gt .IntelFW.Total (len .IntelFW.Systems)}} Showing the {{len .IntelFW.Systems}} most contested of {{.IntelFW.Total}} front-line systems.{{end}}</small></p>
+  <p class="prose"><small>Contested % is victory points divided by the flip threshold, the same figure the game shows.{{if gt .IntelFW.Total (len .IntelFW.Systems)}} Showing the {{len .IntelFW.Systems}} most contested of {{.IntelFW.Total}} front-line systems.{{end}}</small></p>
   </section>
   {{end}}
   {{end}}
 {{else}}
-  <p>No intel to show yet.</p>
+  <p class="prose">No intel to show yet.</p>
 {{end}}
 {{end}}

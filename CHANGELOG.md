@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.5.7.0] - 2026-10-22
+
+Automated build of EveSynapse v0.5.7.0. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+
+## What's Changed
+### 🚀 Features
+* feat:Map: Improved Projection, a precomputed relaxed universe layout by @natemsz in https://github.com/natemsz/evesynapse/pull/599
+### Other Changes
+* docs(changelog): review changelog for v0.5.6.9 by @github-actions[bot] in https://github.com/natemsz/evesynapse/pull/598
+
+
+**Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.6.9...v0.5.7.0
+
 ## [v0.5.6.9] - 2026-10-22
 
 Automated build of EveSynapse v0.5.6.9. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).

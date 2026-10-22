@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.5.6.9] - 2026-10-22
+
+Automated build of EveSynapse v0.5.6.9. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+
+## What's Changed
+### Other Changes
+* docs(changelog): review changelog for v0.5.6.8 by @github-actions[bot] in https://github.com/natemsz/evesynapse/pull/595
+* Map: names stop flickering while zooming by @natemsz in https://github.com/natemsz/evesynapse/pull/596
+* Map: smooth sov territory (painted once, moved as a picture) by @natemsz in https://github.com/natemsz/evesynapse/pull/597
+
+
+**Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.6.8...v0.5.6.9
+
 ## [v0.5.6.8] - 2026-10-22
 
 Automated build of EveSynapse v0.5.6.8. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).

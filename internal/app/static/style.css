@@ -4289,6 +4289,11 @@ html[data-theme="light"] .tw, html[data-theme="light"] .kpis { background: #fdfb
 html[data-theme="light"] .foldable { background: #fdfbf6; border-color: #ddd2bd; }
 .page-body { padding: 1.25rem 1.25rem 1.5rem; }
 .page-card { padding: 1rem 1.25rem; }
+/* Stacked page cards keep the section gap the wrapper's other
+   stacked surfaces carry (.panel and .foldable sit 1.25rem apart):
+   a page-card that follows another starts a step lower, never
+   flush against it. A lone page-card is untouched. */
+.page-body:not(:has(.home-grid)) .page-card + .page-card { margin-top: 1.25rem; }
 html[data-theme="light"] .panel {
   background: linear-gradient(#fdfbf6, #f8f4ec) padding-box,
     linear-gradient(135deg, #e8d5b5 0%, #d9c19a 45%, #c9ad7f 100%) border-box;

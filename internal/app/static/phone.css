@@ -116,6 +116,7 @@
   .foldable { padding: 0.75rem 0.7rem 0.8rem; margin-bottom: 0.85rem; }
   .panel { padding: 0.85rem 0.7rem 1rem; }
   .page-body > .panel { margin-bottom: 0.85rem; }
+  .page-body:not(:has(.home-grid)) .page-card + .page-card { margin-top: 0.85rem; }
   th, td { padding: 0.45rem 0.5rem; }
 
   /* Section tabs: one swipeable row. The folder strip and the

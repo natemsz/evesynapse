@@ -744,6 +744,7 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 		r.Get("/universe.json", app.handleUniverseJSON)
 		r.Get("/layers.json", app.handleMapLayersJSON)
 		r.Get("/scans.json", app.handleMapScans)
+		r.Get("/system.json", app.handleMapSystem)
 		r.Get("/intel.json", app.handleMapIntel)
 		r.Get("/mine.json", app.handleMapMine)
 		r.Get("/jump.json", app.handleMapJump)

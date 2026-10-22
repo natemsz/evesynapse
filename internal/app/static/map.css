@@ -782,6 +782,18 @@ html.map-full-open .page-body { -webkit-backdrop-filter: none; backdrop-filter: 
 .map-card-scans-h { margin: 0 0 0.2rem; color: var(--muted-2); font-weight: 600; }
 .map-card-scans ul { margin: 0; padding: 0; list-style: none; }
 .map-card-scans li { padding: 0.1rem 0; }
+/* The data behind the kills and threat layers: a camp, then the
+   latest kills, each a link to the killboard. */
+.map-card-camp, .map-card-kills { margin: 0.55rem 0 0; font-size: 0.82rem; }
+.map-card-camp[hidden], .map-card-kills[hidden] { display: none; }
+.map-card-camp { padding: 0.45rem 0.55rem; border: 1px solid var(--danger); border-radius: var(--r-sm); background: color-mix(in srgb, var(--danger) 10%, transparent); }
+.map-card-camp p { margin: 0 0 0.2rem; }
+.map-card-camp-ships:empty { display: none; }
+.map-card-kill-list { margin: 0; padding: 0; list-style: none; }
+.map-card-kill-list li { padding: 0.12rem 0; border-top: 1px solid var(--box-edge); overflow-wrap: anywhere; }
+.map-card-kill-list li:first-child { border-top: 0; }
+.map-card-more { display: inline-block; margin-top: 0.3rem; font-weight: 600; }
+.map-card-live dd a { color: inherit; text-decoration: underline; text-decoration-color: color-mix(in srgb, currentColor 40%, transparent); text-underline-offset: 2px; }
 
 /* --- Intel channels on the map --- */
 .map-intel-toggle {

@@ -175,10 +175,10 @@ test("routes plan shortest first and bend around danger when asked", () => {
   assert.ok(I.prices[1] > 150 && I.prices[3] === 0 && I.prices[4] === 0, "only fresh hostiles cost");
   assert.deepStrictEqual(I.bySys[3].map((r) => r.id), [3, 2], "a system's reports newest first");
   assert.strictEqual(I.bySys[4], undefined, "a report past its half hour is gone");
-  const noLayer = map.routeCost(G, null, "calm", I.prices);
-  assert.deepStrictEqual(map.planRoute(G, 0, 2, noLayer), [0, 3, 4, 2], "calm skirts reported hostiles");
-  assert.deepStrictEqual(map.planRoute(G, 0, 2, map.routeCost(G, null, "short", I.prices)), [0, 1, 2],
-    "shortest ignores intel");
+  // A report is not danger: no route steers around it, but a route
+  // through it names it.
+  assert.deepStrictEqual(map.planRoute(G, 0, 2, map.routeCost(G, null, "calm")), [0, 1, 2], "calm does not skirt reported systems");
+  assert.deepStrictEqual(map.planRoute(G, 0, 2, map.routeCost(G, null, "safe")), [0, 1, 2], "nor does safer");
   assert.deepStrictEqual(map.routeSummary(G, null, [0, 1, 2], I.prices).reported, [1], "the route names the reported system");
 });
 

@@ -3,12 +3,44 @@
 -- ---------------------------------------------------------------------
 
 -- name: CreateIntelChannel :one
-INSERT INTO intel_channels (owner_user_id, name, description, created_at)
-VALUES (sqlc.arg(owner_user_id), sqlc.arg(name), sqlc.arg(description), sqlc.arg(created_at))
+INSERT INTO intel_channels (owner_user_id, name, description, created_at, owner_kind, owner_id)
+VALUES (sqlc.arg(owner_user_id), sqlc.arg(name), sqlc.arg(description), sqlc.arg(created_at), sqlc.arg(owner_kind), sqlc.arg(owner_id))
 RETURNING id;
 
 -- name: GetIntelChannel :one
-SELECT id, owner_user_id, name, description, created_at, use_standings FROM intel_channels WHERE id = $1;
+SELECT id, owner_user_id, name, description, created_at, owner_kind, owner_id, use_standings FROM intel_channels WHERE id = $1;
+
+-- The channels a corporation or alliance owns (schema 082).
+-- name: ListOrgIntelChannels :many
+SELECT id, owner_user_id, name, description, created_at, owner_kind, owner_id FROM intel_channels
+WHERE owner_kind = sqlc.arg(owner_kind) AND owner_id = sqlc.arg(owner_id)
+ORDER BY lower(name), id;
+
+-- Every rule grant with its channel: judged in Go against each
+-- reader's standing.
+-- name: ListIntelChannelRuleGrants :many
+SELECT r.channel_id, r.rule_kind, r.rule_ref, r.can_post,
+       c.owner_user_id, c.name, c.description, c.created_at, c.owner_kind, c.owner_id
+FROM intel_channel_rules r
+JOIN intel_channels c ON c.id = r.channel_id
+WHERE c.owner_kind <> '';
+
+-- name: ListIntelChannelRules :many
+SELECT channel_id, rule_kind, rule_ref, can_post, created_at FROM intel_channel_rules
+WHERE channel_id = $1
+ORDER BY rule_kind, rule_ref;
+
+-- name: UpsertIntelChannelRule :exec
+INSERT INTO intel_channel_rules (channel_id, rule_kind, rule_ref, can_post, created_at)
+VALUES (sqlc.arg(channel_id), sqlc.arg(rule_kind), sqlc.arg(rule_ref), sqlc.arg(can_post), sqlc.arg(created_at))
+ON CONFLICT (channel_id, rule_kind, rule_ref) DO UPDATE SET can_post = EXCLUDED.can_post;
+
+-- name: DeleteIntelChannelRule :exec
+DELETE FROM intel_channel_rules
+WHERE channel_id = sqlc.arg(channel_id) AND rule_kind = sqlc.arg(rule_kind) AND rule_ref = sqlc.arg(rule_ref);
+
+-- name: CountIntelChannelRules :one
+SELECT COUNT(*) FROM intel_channel_rules WHERE channel_id = $1;
 
 -- name: UpdateIntelChannel :exec
 UPDATE intel_channels SET name = sqlc.arg(name), description = sqlc.arg(description) WHERE id = sqlc.arg(id);
@@ -20,8 +52,8 @@ DELETE FROM intel_channels WHERE id = $1;
 -- of its characters, their corporations and alliances, or groups they
 -- are in. can_post is true for the owner and for any grant that posts.
 -- name: ListAccessibleChannels :many
-SELECT c.id, c.owner_user_id, c.name, c.description, c.created_at,
-       (c.owner_user_id = sqlc.arg(user_id)::bigint OR COALESCE(BOOL_OR(g.can_post), FALSE))::boolean AS can_post
+SELECT c.id, c.owner_user_id, c.name, c.description, c.created_at, c.owner_kind, c.owner_id,
+       ((c.owner_kind = '' AND c.owner_user_id = sqlc.arg(user_id)::bigint) OR COALESCE(BOOL_OR(g.can_post), FALSE))::boolean AS can_post
 FROM intel_channels c
 LEFT JOIN intel_channel_grants g ON g.channel_id = c.id AND (
        (g.kind = 'character'   AND g.target_id = ANY(sqlc.arg(character_ids)::bigint[]))
@@ -29,7 +61,7 @@ LEFT JOIN intel_channel_grants g ON g.channel_id = c.id AND (
     OR (g.kind = 'alliance'    AND g.target_id = ANY(sqlc.arg(alliance_ids)::bigint[]))
     OR (g.kind = 'group'       AND g.target_id = ANY(sqlc.arg(group_ids)::bigint[])))
 GROUP BY c.id
-HAVING c.owner_user_id = sqlc.arg(user_id)::bigint OR COUNT(g.channel_id) > 0
+HAVING (c.owner_kind = '' AND c.owner_user_id = sqlc.arg(user_id)::bigint) OR COUNT(g.channel_id) > 0
 ORDER BY lower(c.name), c.id;
 
 -- name: ListIntelChannelGrants :many

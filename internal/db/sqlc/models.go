@@ -388,6 +388,8 @@ type IntelChannel struct {
 	Name         string    `json:"name"`
 	Description  string    `json:"description"`
 	CreatedAt    time.Time `json:"created_at"`
+	OwnerKind    string    `json:"owner_kind"`
+	OwnerID      int64     `json:"owner_id"`
 	UseStandings bool      `json:"use_standings"`
 }
 
@@ -395,6 +397,14 @@ type IntelChannelGrant struct {
 	ChannelID int64     `json:"channel_id"`
 	Kind      string    `json:"kind"`
 	TargetID  int64     `json:"target_id"`
+	CanPost   bool      `json:"can_post"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+type IntelChannelRule struct {
+	ChannelID int64     `json:"channel_id"`
+	RuleKind  string    `json:"rule_kind"`
+	RuleRef   string    `json:"rule_ref"`
 	CanPost   bool      `json:"can_post"`
 	CreatedAt time.Time `json:"created_at"`
 }

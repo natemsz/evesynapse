@@ -64,7 +64,7 @@ var demoPilots = []struct {
 }
 
 // demoWriteNotice is the one answer every blocked write gives.
-const demoWriteNotice = "That's switched off in the demo: this account is shared by every visitor, so changes are not saved. Link your own characters to use it for real."
+const demoWriteNotice = "That's switched off in the demo: this account is shared by every visitor, so changes are not saved. Link your characters for full functionality."
 
 // demoUserID resolves the demo account's user id, or 0 when this
 // install has no demo account yet. The answer is cached on the

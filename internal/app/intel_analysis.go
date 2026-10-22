@@ -10,7 +10,8 @@ package app
 // corporation and alliance (intel_pilot_affiliations, or the stored
 // corporation of a linked character). A pilot is friendly by default
 // when they are in a corporation or alliance of the channel's own
-// side: its owner's characters and its recent reporters.
+// side: its owner's characters, its recent reporters, and for a
+// corporation's or alliance's channel that organisation.
 //
 // Names nobody has looked up yet, and pilots whose affiliation is not
 // known, leave the report pending. The worker's short loop (every few
@@ -87,6 +88,19 @@ func (app *Application) intelSideOf(ctx context.Context, channelID int64) intelS
 		side.corps[c] = true
 		if a, _ := app.corpAlliance(ctx, c); a > 0 {
 			side.alliances[a] = true
+		}
+	}
+	// A corporation's or alliance's channel (channels_orgs.go) is on
+	// its owner's side.
+	if ch, err := app.queries.GetIntelChannel(ctx, channelID); err == nil {
+		switch ch.OwnerKind {
+		case ownerCorporation:
+			side.corps[ch.OwnerID] = true
+			if a, _ := app.corpAlliance(ctx, ch.OwnerID); a > 0 {
+				side.alliances[a] = true
+			}
+		case ownerAlliance:
+			side.alliances[ch.OwnerID] = true
 		}
 	}
 	return side

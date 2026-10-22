@@ -83,6 +83,9 @@ func TestLandingAnonymous(t *testing.T) {
 		"Universe Map",
 		"Killboard",
 		"Route Planner",
+		"D-Scan Parser",
+		"Intel Channels",
+		"Axon",
 		"shot-threat.webp",
 		"evesynapse.app/map/",
 		"sending the route to your ship's autopilot takes a signed-in character",
@@ -101,7 +104,7 @@ func TestLandingAnonymous(t *testing.T) {
 	}
 	// The tools inventory is audited against the tree: features
 	// that do not exist yet are never claimed on the front door.
-	for _, unbuilt := range []string{"Profit Tracking", "D-Scan"} {
+	for _, unbuilt := range []string{"Profit Tracking"} {
 		if strings.Contains(body, unbuilt) {
 			t.Errorf("landing claims the unbuilt %q", unbuilt)
 		}

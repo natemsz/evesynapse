@@ -1479,37 +1479,85 @@
       b = [b[0] - padW, b[1] - padW, b[2] + padW, b[3] + padW];
       var F = territoryField(src, b, mode === "universe" ? sovGW : Math.round(sovGW / 2));
       var shapes = [], outlines = territoryOutlines(F, 0.3);
+      var bx0 = Infinity, by0 = Infinity, bx1 = -Infinity, by1 = -Infinity;
       Object.keys(outlines).forEach(function (ok) {
         var o = +ok, loops = outlines[ok];
         var path = new Path2D();
         loops.forEach(function (lp) {
           path.moveTo(lp[0][0], lp[0][1]);
-          for (var q = 1; q < lp.length; q++) path.lineTo(lp[q][0], lp[q][1]);
+          for (var q = 0; q < lp.length; q++) {
+            if (q) path.lineTo(lp[q][0], lp[q][1]);
+            if (lp[q][0] < bx0) bx0 = lp[q][0]; if (lp[q][0] > bx1) bx1 = lp[q][0];
+            if (lp[q][1] < by0) by0 = lp[q][1]; if (lp[q][1] > by1) by1 = lp[q][1];
+          }
           path.closePath();
         });
         var c = rgbOf(o < A ? allianceColor(o) : colors.npc);
         shapes.push({ path: path, fill: "rgba(" + c[0] + "," + c[1] + "," + c[2] + ",0.17)", line: "rgba(" + c[0] + "," + c[1] + "," + c[2] + ",0.9)" });
       });
-      sovFields[key] = { shapes: shapes };
+      sovFields[key] = { shapes: shapes, bounds: [bx0, by0, bx1, by1], fitK: fitK() };
       return sovFields[key];
+    }
+
+    // Territory is painted into pictures and the pictures are drawn,
+    // not the shapes: filling and outlining every holder's detailed
+    // shape every frame is what made the territory view slow while
+    // moving. A base picture holds the whole territory (up to 2048 px
+    // across), painted once; a sharp picture holds the view and a
+    // margin (up to 4096 px) at the zoom the map came to rest at, painted once each
+    // time it settles. While the map moves, the GPU only moves and
+    // scales a picture: the sharp one while it covers the view near
+    // its zoom, else the base; once it settles, the view is painted
+    // sharp again. Borders are drawn 1.6 px wide on screen at the
+    // zoom each picture is painted for.
+    function paintTerritory(f, w, h, scale, tx, ty, lineWidth) {
+      var c = root.createElement("canvas");
+      c.width = Math.max(1, Math.ceil(w));
+      c.height = Math.max(1, Math.ceil(h));
+      var g = c.getContext("2d");
+      g.setTransform(scale, 0, 0, scale, tx, ty);
+      g.lineJoin = "round";
+      f.shapes.forEach(function (sh) {
+        g.fillStyle = sh.fill;
+        g.fill(sh.path, "evenodd");
+      });
+      g.lineWidth = lineWidth;
+      f.shapes.forEach(function (sh) {
+        g.strokeStyle = sh.line;
+        g.stroke(sh.path);
+      });
+      return c;
     }
     function drawTerritory(k, ox, oy) {
       var f = sovField();
       if (!f) return;
-      ctx.save();
-      ctx.setTransform(dpr * k, 0, 0, dpr * k, dpr * ox, dpr * oy);
-      ctx.lineJoin = "round";
-      f.shapes.forEach(function (sh) {
-        ctx.fillStyle = sh.fill;
-        ctx.fill(sh.path, "evenodd");
-      });
-      // Borders a constant width on screen at any zoom.
-      ctx.lineWidth = 1.6 / k;
-      f.shapes.forEach(function (sh) {
-        ctx.strokeStyle = sh.line;
-        ctx.stroke(sh.path);
-      });
-      ctx.restore();
+      var b = f.bounds;
+      if (!(b[2] > b[0])) return;
+      // The view in world units.
+      var vx0 = -ox / k, vy0 = -oy / k, vx1 = (cw - ox) / k, vy1 = (ch - oy) / k;
+      var sharp = f.sharp;
+      var covers = sharp && vx0 >= sharp.x0 && vy0 >= sharp.y0 && vx1 <= sharp.x1 && vy1 <= sharp.y1;
+      if (!sovMoving() && !(covers && sharp.k === k)) {
+        // At rest: paint the view, and a quarter of it each side, sharp.
+        var mx = (vx1 - vx0) * 0.2, my = (vy1 - vy0) * 0.2;
+        var x0 = vx0 - mx, y0 = vy0 - my, x1 = vx1 + mx, y1 = vy1 + my;
+        // Never more than 4096 px on a side, so a big screen at a
+        // high pixel ratio stays within a modest GPU's memory.
+        var s = Math.min(k * dpr, 4096 / Math.max(x1 - x0, y1 - y0));
+        sharp = f.sharp = { k: k, x0: x0, y0: y0, x1: x1, y1: y1,
+          canvas: paintTerritory(f, (x1 - x0) * s, (y1 - y0) * s, s, -x0 * s, -y0 * s, 1.6 / k) };
+        covers = true;
+      }
+      var r = sharp && sharp.k / k;
+      if (covers && r > 0.5 && r < 2) {
+        ctx.drawImage(sharp.canvas, sharp.x0 * k + ox, sharp.y0 * k + oy, (sharp.x1 - sharp.x0) * k, (sharp.y1 - sharp.y0) * k);
+        return;
+      }
+      if (!f.base) {
+        var bw = b[2] - b[0], bh = b[3] - b[1], bs = Math.min(2048 / bw, 2048 / bh);
+        f.base = { s: bs, canvas: paintTerritory(f, bw * bs, bh * bs, bs, -b[0] * bs, -b[1] * bs, 1.6 / f.fitK) };
+      }
+      ctx.drawImage(f.base.canvas, b[0] * k + ox, b[1] * k + oy, (b[2] - b[0]) * k, (b[3] - b[1]) * k);
     }
 
     // The live layers' own labels, placed before system names:

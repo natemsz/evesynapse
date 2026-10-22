@@ -265,7 +265,7 @@ type channelView struct {
 	// UseStandings, whether the owner's standings tell friend from foe.
 	Situations   []situationView
 	UseStandings bool
-	Error string
+	Error        string
 }
 
 // --- Pages ---

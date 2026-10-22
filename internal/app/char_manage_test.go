@@ -252,6 +252,19 @@ func TestCharacterSwitchFlow(t *testing.T) {
 		t.Fatal("foreign switch changed the acting character")
 	}
 
+	// From the map, the switch reopens it on the new character's
+	// system, keeping layers and data, dropping the old place.
+	seedSnapshot(t, q, fixtureCharA, esi.SnapLocation, esi.Location{SolarSystemID: 30000142})
+	req := httptest.NewRequest(http.MethodGet, "/characters/switch?character="+fmt.Sprint(fixtureCharA), nil)
+	req.Header.Set("Referer", "http://example.com/map/?region=10000008&system=30000671&view=4212,5507,4.221&layer=kills&data=clones")
+	req.Host = "example.com"
+	req.AddCookie(cookie)
+	rec := httptest.NewRecorder()
+	app.Handler().ServeHTTP(rec, req)
+	if loc := rec.Header().Get("Location"); loc != "/map/?data=clones&layer=kills&system=30000142" {
+		t.Errorf("switch from the map went to %q, want the new character's system", loc)
+	}
+
 	if got := transport.calls.Load(); got != 0 {
 		t.Fatalf("handlers made %d outbound calls, want 0", got)
 	}

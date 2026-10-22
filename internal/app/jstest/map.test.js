@@ -272,6 +272,13 @@ test("share views round-trip centre and zoom", () => {
   assert.strictEqual(map.parseView(null), null);
 });
 
+test("a shared view outside what is showing is ignored", () => {
+  var region = [-60, -60, 1060, 860];
+  assert.ok(map.viewFits({ x: 500, y: 425, f: 1 }, region));
+  assert.ok(map.viewFits({ x: -200, y: 900, f: 1 }, region), "a little past the edge is fine");
+  assert.ok(!map.viewFits({ x: 4212, y: 5507, f: 4.221 }, region), "a New Eden view under a region's name");
+});
+
 test("mousewheel zooms, never pans", () => {
   // Wheel up zooms in, wheel down zooms out, whatever the notch
   // size -- including the small, fractional deltas a smooth-scroll

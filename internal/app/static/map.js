@@ -252,6 +252,12 @@
   }
   // territoryLoops: one holder's outlines (territoryOutlines).
   function territoryLoops(F, o, floor) { return territoryOutlines(F, floor)[o] || []; }
+  // viewFits: whether a shared view's centre lies within the bounds
+  // being shown ([x0, y0, x1, y1]), a quarter of their size to spare.
+  function viewFits(v, b) {
+    var mx = (b[2] - b[0]) * 0.25, my = (b[3] - b[1]) * 0.25;
+    return v.x >= b[0] - mx && v.x <= b[2] + mx && v.y >= b[1] - my && v.y <= b[3] + my;
+  }
   // The zoom that fits a route's span (dx by dy world units) into
   // the free part of the canvas (fw by fh px), pad px to spare.
   function routeFitScale(dx, dy, fw, fh, pad) {
@@ -820,7 +826,7 @@
     }
     // One frame of motion; true while more remains.
     function stepMotion(now) {
-      var more = false;
+      var more = false, moving = !!(anim || wheelZ);
       if (anim) {
         var t = Math.min(1, (now - anim.t0) / anim.dur), e = ease(t);
         if (anim.kind === "fly") {
@@ -844,6 +850,9 @@
         afterZoom(lt > lk ? 1 : -1);
         if (wheelZ === w && !done) more = true;
       }
+      // The glide has settled: the address now says where it ended,
+      // not where it began.
+      if (moving && !anim && !wheelZ) syncURL();
       return more;
     }
     // A wheel tick or touchpad pinch: move the running target.
@@ -1678,7 +1687,7 @@
         case "threat": {
           if (LY.threat[i] > 0 || LY.threatHour[i]) {
             rows.push(["Threat", THREAT_LEVELS[threatLevel(LY.threat[i])].name]);
-            rows.push(["Killfeed, last hour", LY.threatHour[i] + (LY.threatHour[i] === 1 ? " kill" : " kills")]);
+            rows.push(["Killfeed, last hour", LY.threatHour[i] + (LY.threatHour[i] === 1 ? " kill" : " kills"), killsHref(i)]);
             if (LY.threatLast[i]) rows.push(["Last kill", agoShort(LY.threatLast[i])]);
           } else if (LY.spill[i] >= THREAT_LEVELS[1].at) {
             rows.push(["Threat", "Quiet · danger next door"]);
@@ -1687,13 +1696,13 @@
           }
           if (LY.campOf[i] >= 0) {
             var c = LY.camps[LY.campOf[i]];
-            rows.push(["Gate camp", (c.group ? c.group + " · " : "") + c.n + " kills since " + agoShort(c.since)]);
+            rows.push(["Gate camp", (c.group ? c.group + " · " : "") + c.n + " kills since " + agoShort(c.since), c.gid ? "/intel/kills/?" + c.kind + "=" + c.gid : ""]);
           }
           break;
         }
         case "kills":
           if (brief && !LY.ship[i] && !LY.pod[i]) break;
-          rows.push(["Game count, last hour", LY.ship[i] + (LY.ship[i] === 1 ? " ship" : " ships") + " · " + LY.pod[i] + (LY.pod[i] === 1 ? " pod" : " pods")]);
+          rows.push(["Game count, last hour", LY.ship[i] + (LY.ship[i] === 1 ? " ship" : " ships") + " · " + LY.pod[i] + (LY.pod[i] === 1 ? " pod" : " pods"), killsHref(i)]);
           break;
         case "npc":
           if (brief && !LY.npc[i]) break;
@@ -1706,7 +1715,7 @@
         case "sov":
           if (LY.sovA[i] >= 0) {
             var al = LY.alliances[LY.sovA[i]];
-            rows.push(["Sovereignty", al.name || "Alliance " + al.id]);
+            rows.push(["Sovereignty", al.name || "Alliance " + al.id, "/alliance/?alliance=" + al.id]);
           } else if (LY.sovF[i] > 0) {
             rows.push(["Sovereignty", LY.factions[LY.sovF[i]] || "NPC faction"]);
           } else if (!brief) {
@@ -1716,7 +1725,7 @@
         case "fw":
           if (LY.fwState[i]) {
             rows.push(["Faction Warfare", (LY.factions[LY.fwOcc[i]] || "Occupied") + " · " +
-              ["", "Uncontested", "Contested", "Vulnerable", "Captured"][LY.fwState[i]] + (LY.fwPct[i] ? " " + LY.fwPct[i] + "%" : "")]);
+              ["", "Uncontested", "Contested", "Vulnerable", "Captured"][LY.fwState[i]] + (LY.fwPct[i] ? " " + LY.fwPct[i] + "%" : ""), "/intel/fw/"]);
           } else if (!brief) {
             rows.push(["Faction Warfare", "Not a warzone system"]);
           }
@@ -1724,7 +1733,7 @@
         case "inc":
           if (LY.incOf[i] >= 0) {
             var x = LY.incs[LY.incOf[i]];
-            rows.push(["Incursion", (LY.inc[i] === 2 ? "Staging · " : "Infested · ") + x.state + " · " + Math.round(x.inf * 100) + "% influence" + (x.boss ? " · boss" : "")]);
+            rows.push(["Incursion", (LY.inc[i] === 2 ? "Staging · " : "Infested · ") + x.state + " · " + Math.round(x.inf * 100) + "% influence" + (x.boss ? " · boss" : ""), "/intel/incursions/"]);
           } else if (!brief) {
             rows.push(["Incursion", "None here"]);
           }
@@ -2024,7 +2033,16 @@
       rows.forEach(function (rw) {
         var d = root.createElement("div"), dt = root.createElement("dt"), dd = root.createElement("dd");
         dt.textContent = rw[0];
-        dd.textContent = rw[1];
+        // A row with a source opens it: the killboard, the channel,
+        // the alliance, the warzone or incursion page.
+        if (rw[2]) {
+          var a = root.createElement("a");
+          a.href = rw[2];
+          a.textContent = rw[1];
+          dd.appendChild(a);
+        } else {
+          dd.textContent = rw[1];
+        }
         d.appendChild(dt);
         d.appendChild(dd);
         live.appendChild(d);
@@ -2033,7 +2051,70 @@
       card.querySelector('[data-route-set="to"]').hidden = i === routeTo;
       card.querySelector("[data-map-scan]").href = "/intel/scan/?system=" + S.id[i];
       cardScans(i);
+      cardKills(i);
       cardReport(i);
+    }
+
+    function killsHref(i) { return "/intel/kills/?system=" + S.id[i]; }
+
+    // The data behind the kills and threat layers for the card's
+    // system (/map/system.json): its latest kills, each opening on the
+    // killboard, and the camp report when one is on. Shown with those
+    // layers, or wherever there is a camp or a kill in the last hour.
+    var systemFor = {};
+    function cardKills(i) {
+      var kbox = card.querySelector(".map-card-kills"), cbox = card.querySelector(".map-card-camp");
+      var hot = LY && (LY.campOf[i] >= 0 || LY.threatHour[i] > 0);
+      if (!(hot || layer === "kills" || layer === "threat")) {
+        kbox.hidden = cbox.hidden = true;
+        return;
+      }
+      function killItem(k) {
+        var li = root.createElement("li"), a = root.createElement("a");
+        a.href = "/intel/kill/" + k.id + "/";
+        a.textContent = k.ship + " · " + k.victim + (k.group ? " (" + k.group + ")" : "");
+        li.appendChild(a);
+        var m = root.createElement("small");
+        m.className = "muted";
+        m.textContent = " " + (k.value ? k.value + " · " : "") + agoShort(k.at) + (k.solo ? " · solo" : "") + (k.npc ? " · NPC" : "");
+        li.appendChild(m);
+        return li;
+      }
+      function show(d) {
+        if (sel !== i) return;
+        var ul = kbox.querySelector("ul");
+        ul.textContent = "";
+        d.kills.forEach(function (k) { ul.appendChild(killItem(k)); });
+        kbox.hidden = !d.kills.length;
+        var more = kbox.querySelector("[data-map-kills-more]");
+        more.href = d.more;
+        more.textContent = "All kills in " + S.n[i] + " on the killboard";
+        cbox.hidden = !d.camp;
+        if (!d.camp) return;
+        var c = d.camp, who = cbox.querySelector("[data-map-camp-who]");
+        who.textContent = "";
+        var ga = root.createElement("a");
+        ga.href = c.href;
+        ga.textContent = c.group || "Unknown " + c.kind;
+        who.appendChild(ga);
+        who.appendChild(root.createTextNode(" · " + plural(c.n, "kill") + " since " + agoShort(c.since) + " · " + plural(c.pilots, "pilot")));
+        cbox.querySelector("[data-map-camp-ships]").textContent = c.ships.length
+          ? "Flying " + c.ships.map(function (s) { return s.name + (s.n > 1 ? " ×" + s.n : ""); }).join(", ")
+          : "";
+        var vl = cbox.querySelector("ul");
+        vl.textContent = "";
+        c.victims.forEach(function (k) { vl.appendChild(killItem(k)); });
+      }
+      var id = S.id[i], cached = systemFor[id];
+      if (cached && Date.now() - cached.at < 60000) { show(cached.d); return; }
+      kbox.hidden = cbox.hidden = true;
+      fetch("/map/system.json?system=" + id, { credentials: "same-origin" }).then(function (r) {
+        return r.ok ? r.json() : null;
+      }).then(function (d) {
+        if (!d || !el.isConnected) return;
+        systemFor[id] = { at: Date.now(), d: d };
+        show(d);
+      }).catch(function () { /* the card stands without them */ });
     }
 
     // The reader's own scans of the card's system: fetched once per
@@ -2527,7 +2608,7 @@
     function intelRows(i, max) {
       return intelList(i).slice(0, max).map(function (r) {
         var what = r.clear ? "Clear" : r.n ? r.n + (r.n === 1 ? " hostile" : " hostiles") : "Hostiles";
-        return [IN.names[r.ch] || "Intel", what + (r.text ? " · " + r.text : "") + " · " + agoShort(r.at - intelSkew)];
+        return [IN.names[r.ch] || "Intel", what + (r.text ? " · " + r.text : "") + " · " + agoShort(r.at - intelSkew), "/intel/channels/" + r.ch + "/"];
       });
     }
     function intelRGBA(c, a) { return "rgba(" + c[0] + "," + c[1] + "," + c[2] + "," + a.toFixed(3) + ")"; }
@@ -3641,8 +3722,11 @@
       else if (sys !== undefined) enterRegion(S.r[sys], sys);
       // A shared view: the exact centre and zoom it was copied at.
       // A shared route that will fly to fit itself (below) wins.
+      // One whose centre lies outside what is showing (a New Eden
+      // view under a region's name) would open on empty space: it is
+      // ignored, and the region or system opens as it would without.
       var vw = parseView(qs.get("view"));
-      if (vw) { stopMotion(); cam.x = vw.x; cam.y = vw.y; cam.k = clampK(fitK() * vw.f); }
+      if (vw && viewFits(vw, viewBounds())) { stopMotion(); cam.x = vw.x; cam.y = vw.y; cam.k = clampK(fitK() * vw.f); }
       // A shared route: its ends and preference.
       var rf = G.byID[+qs.get("from")], rt = G.byID[+qs.get("to")];
       if (ROUTE_MODES[qs.get("route")]) routeMode = qs.get("route");
@@ -3826,7 +3910,7 @@
 
   // Exposed for the node tests only (jstest/map_test.js).
   if (typeof module !== "undefined" && module.exports) {
-    module.exports = { secRounded: secRounded, secTier: secTier, secText: secText, prepare: prepare, regionLabelAlpha: regionLabelAlpha, zoomEntryAllowed: zoomEntryAllowed, wheelZoomFactor: wheelZoomFactor, pickReach: pickReach, pickScore: pickScore, routeFitScale: routeFitScale, formatView: formatView, parseView: parseView, sovPalette: sovPalette, territoryField: territoryField, territoryLoops: territoryLoops,
+    module.exports = { secRounded: secRounded, secTier: secTier, secText: secText, prepare: prepare, regionLabelAlpha: regionLabelAlpha, zoomEntryAllowed: zoomEntryAllowed, wheelZoomFactor: wheelZoomFactor, pickReach: pickReach, pickScore: pickScore, routeFitScale: routeFitScale, formatView: formatView, parseView: parseView, viewFits: viewFits, sovPalette: sovPalette, territoryField: territoryField, territoryLoops: territoryLoops,
       joinLayers: joinLayers, heatT: heatT, allianceHue: allianceHue, threatLevel: threatLevel,
       routeCost: routeCost, planRoute: planRoute, routeSummary: routeSummary, joinIntel: joinIntel,
       jumpRange: jumpRange, joinJump: joinJump, jumpNeighbours: jumpNeighbours, jumpFatigue: jumpFatigue };

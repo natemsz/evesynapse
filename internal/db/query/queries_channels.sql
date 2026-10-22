@@ -83,16 +83,60 @@ SELECT COUNT(*) FROM intel_channel_grants WHERE channel_id = $1;
 
 -- name: InsertIntelReport :one
 INSERT INTO intel_reports (channel_id, system_id, author_user_id, author_character_id, reporter,
-    text, pilots, hostiles, clear, scan_id, source, seen_at, created_at)
+    text, pilots, hostiles, clear, scan_id, source, seen_at, created_at, kind, analysis, analysis_pending)
 VALUES (sqlc.arg(channel_id), sqlc.arg(system_id), sqlc.arg(author_user_id), sqlc.arg(author_character_id),
     sqlc.arg(reporter), sqlc.arg(text), sqlc.arg(pilots), sqlc.arg(hostiles), sqlc.arg(clear),
-    sqlc.arg(scan_id), sqlc.arg(source), sqlc.arg(seen_at), sqlc.arg(created_at))
+    sqlc.arg(scan_id), sqlc.arg(source), sqlc.arg(seen_at), sqlc.arg(created_at),
+    sqlc.arg(kind), sqlc.arg(analysis), sqlc.arg(analysis_pending))
 RETURNING id;
+
+-- Intel analysis (schema 083).
+-- name: ListPendingIntelReports :many
+SELECT id, channel_id, system_id, text, hostiles, clear, analysis
+FROM intel_reports
+WHERE analysis_pending AND created_at >= sqlc.arg(since)::timestamptz
+ORDER BY created_at
+LIMIT sqlc.arg(max_rows)::bigint;
+
+-- name: SetIntelReportAnalysis :exec
+UPDATE intel_reports SET kind = sqlc.arg(kind), analysis = sqlc.arg(analysis), analysis_pending = sqlc.arg(analysis_pending)
+WHERE id = sqlc.arg(id);
+
+-- name: GetIntelPilotName :one
+SELECT name_lower, character_id, name, checked_at FROM intel_pilot_names WHERE name_lower = $1;
+
+-- name: UpsertIntelPilotName :exec
+INSERT INTO intel_pilot_names (name_lower, character_id, name, checked_at)
+VALUES (sqlc.arg(name_lower), sqlc.arg(character_id), sqlc.arg(name), sqlc.arg(checked_at))
+ON CONFLICT (name_lower) DO UPDATE SET character_id = EXCLUDED.character_id, name = EXCLUDED.name, checked_at = EXCLUDED.checked_at;
+
+-- name: GetIntelPilotAffiliation :one
+SELECT character_id, corporation_id, alliance_id, checked_at FROM intel_pilot_affiliations WHERE character_id = $1;
+
+-- name: UpsertIntelPilotAffiliation :exec
+INSERT INTO intel_pilot_affiliations (character_id, corporation_id, alliance_id, checked_at)
+VALUES (sqlc.arg(character_id), sqlc.arg(corporation_id), sqlc.arg(alliance_id), sqlc.arg(checked_at))
+ON CONFLICT (character_id) DO UPDATE SET corporation_id = EXCLUDED.corporation_id, alliance_id = EXCLUDED.alliance_id, checked_at = EXCLUDED.checked_at;
+
+-- The corporations of a channel's recent reporters, and of its
+-- owner's characters: the channel's own side, for telling friend from
+-- foe by default.
+-- name: ListIntelChannelSideCorps :many
+SELECT DISTINCT cc.corporation_id
+FROM character_corporations cc
+WHERE cc.corporation_id > 0 AND cc.character_id IN (
+    SELECT r.author_character_id FROM intel_reports r
+    WHERE r.channel_id = sqlc.arg(channel_id) AND r.author_character_id > 0 AND r.created_at >= sqlc.arg(since)::timestamptz
+    UNION
+    SELECT ch.character_id FROM characters ch
+    JOIN intel_channels c ON c.owner_user_id = ch.user_id
+    WHERE c.id = sqlc.arg(channel_id)
+);
 
 -- A channel's reports, latest seen first: a page before a (seen_at,
 -- id) key, or everything posted after after_id (the live feed's poll).
 -- name: ListIntelReports :many
-SELECT id, channel_id, system_id, author_user_id, reporter, text, pilots, hostiles, clear, scan_id, source, seen_at, created_at
+SELECT id, channel_id, system_id, author_user_id, reporter, text, pilots, hostiles, clear, scan_id, source, seen_at, created_at, kind, analysis
 FROM intel_reports
 WHERE channel_id = sqlc.arg(channel_id)
   AND id > sqlc.arg(after_id)::bigint
@@ -102,7 +146,7 @@ LIMIT sqlc.arg(max_rows)::int;
 
 -- The recent reports across some channels: the map's intel layer.
 -- name: ListRecentIntelReports :many
-SELECT r.id, r.channel_id, r.system_id, r.reporter, r.text, r.pilots, r.hostiles, r.clear, r.scan_id, r.seen_at
+SELECT r.id, r.channel_id, r.system_id, r.reporter, r.text, r.pilots, r.hostiles, r.clear, r.scan_id, r.seen_at, r.kind, r.analysis
 FROM intel_reports r
 WHERE r.channel_id = ANY(sqlc.arg(channel_ids)::bigint[])
   AND r.seen_at >= sqlc.arg(since)::timestamptz

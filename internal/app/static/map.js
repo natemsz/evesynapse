@@ -649,13 +649,17 @@
     (D.reports || []).forEach(function (r) {
       var i = G.byID[r.sys];
       if (i === undefined || intelFresh(r.at, now) <= 0) return;
+      // Chatter and questions are not reports of anything; only
+      // friendlies named is calm, like a clear.
+      if (r.kind === "chatter" || r.kind === "question") return;
+      if (r.kind === "friendly") r.calm = true;
       if (!I.bySys[i]) { I.bySys[i] = []; I.systems.push(i); }
       I.bySys[i].push(r);
     });
     I.systems.forEach(function (i) {
       var list = I.bySys[i].sort(function (a, b) { return b.at - a.at || b.id - a.id; });
       var last = list[0];
-      if (last.clear) { I.clear++; return; }
+      if (last.clear || last.calm) { I.clear++; return; }
       I.hostile++;
       I.prices[i] = INTEL_PRICE * intelFresh(last.at, now) * (last.n > 5 ? 1.5 : 1);
     });
@@ -2608,7 +2612,7 @@
     }
     function intelRows(i, max) {
       return intelList(i).slice(0, max).map(function (r) {
-        var what = r.clear ? "Clear" : r.n ? r.n + (r.n === 1 ? " hostile" : " hostiles") : "Hostiles";
+        var what = r.clear ? "Clear" : r.calm ? "Friendly" : r.n ? r.n + (r.n === 1 ? " hostile" : " hostiles") : "Hostiles";
         return [IN.names[r.ch] || "Intel", what + (r.text ? " · " + r.text : "") + " · " + agoShort(r.at - intelSkew), "/intel/channels/" + r.ch + "/"];
       });
     }
@@ -2622,14 +2626,15 @@
         if (f <= 0) return;
         var x = wx(i) * k + ox, y = wy(i) * k + oy;
         if (x < -40 || y < -40 || x > cw + 40 || y > ch + 40) return;
-        var c = last.clear ? colors.intelClear : colors.intel;
-        var rr = r + 6 + (last.clear ? 0 : Math.min(8, Math.log(1 + (last.n || 1)) * 3));
+        var calm = last.clear || last.calm;
+        var c = calm ? colors.intelClear : colors.intel;
+        var rr = r + 6 + (calm ? 0 : Math.min(8, Math.log(1 + (last.n || 1)) * 3));
         ctx.beginPath();
         ctx.arc(x, y, rr, 0, Math.PI * 2);
         ctx.lineWidth = 2.2;
         ctx.strokeStyle = intelRGBA(c, 0.35 + 0.65 * f);
         ctx.stroke();
-        if (!last.clear) {
+        if (!calm) {
           ctx.beginPath();
           ctx.arc(x, y, rr + 4, 0, Math.PI * 2);
           ctx.lineWidth = 1;
@@ -2648,8 +2653,8 @@
         var last = IN.bySys[i][0], f = intelFresh(last.at, now);
         if (f <= 0) return;
         var m = Math.max(1, Math.round((now - last.at) / 60)) + "m";
-        var text = last.clear ? "clear · " + m : (last.n ? last.n + " · " : "") + m;
-        label(text, wx(i) * k + ox, wy(i) * k + oy - r - 24, 11, intelRGBA(last.clear ? colors.intelClear : colors.intel, 1), "700", false, "N" + i);
+        var text = last.clear ? "clear · " + m : last.calm ? "friendly · " + m : (last.n ? last.n + " · " : "") + m;
+        label(text, wx(i) * k + ox, wy(i) * k + oy - r - 24, 11, intelRGBA(last.clear || last.calm ? colors.intelClear : colors.intel, 1), "700", false, "N" + i);
       });
     }
     // The card's quick report: the channels the reader may post to,

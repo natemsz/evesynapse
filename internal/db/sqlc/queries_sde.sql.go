@@ -1465,6 +1465,44 @@ func (q *Queries) ListSDERequirementsByTypes(ctx context.Context, typeIds []int6
 	return items, nil
 }
 
+const listSDEShipNames = `-- name: ListSDEShipNames :many
+SELECT t.type_id, t.name, COALESCE(g.name, '') AS group_name
+FROM sde_types t
+JOIN sde_groups g ON g.group_id = t.group_id
+WHERE g.category_id = 6 AND t.published = 1
+`
+
+type ListSDEShipNamesRow struct {
+	TypeID    int64  `json:"type_id"`
+	Name      string `json:"name"`
+	GroupName string `json:"group_name"`
+}
+
+// Every ship by name with its group, for reading intel reports
+// (intel_analysis.go).
+func (q *Queries) ListSDEShipNames(ctx context.Context) ([]ListSDEShipNamesRow, error) {
+	rows, err := q.db.QueryContext(ctx, listSDEShipNames)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListSDEShipNamesRow
+	for rows.Next() {
+		var i ListSDEShipNamesRow
+		if err := rows.Scan(&i.TypeID, &i.Name, &i.GroupName); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listSDEShipTypeIDs = `-- name: ListSDEShipTypeIDs :many
 SELECT t.type_id FROM sde_types t
 JOIN sde_groups g ON g.group_id = t.group_id
@@ -1597,6 +1635,33 @@ func (q *Queries) ListSDEStationsBySystem(ctx context.Context, systemID int64) (
 			return nil, err
 		}
 		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSDESystemNeighbours = `-- name: ListSDESystemNeighbours :many
+SELECT to_system_id FROM sde_system_jumps WHERE from_system_id = $1
+`
+
+func (q *Queries) ListSDESystemNeighbours(ctx context.Context, fromSystemID int64) ([]int64, error) {
+	rows, err := q.db.QueryContext(ctx, listSDESystemNeighbours, fromSystemID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []int64
+	for rows.Next() {
+		var to_system_id int64
+		if err := rows.Scan(&to_system_id); err != nil {
+			return nil, err
+		}
+		items = append(items, to_system_id)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err

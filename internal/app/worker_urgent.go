@@ -106,6 +106,17 @@ func (app *Application) drainUrgentWants(ctx context.Context) (limited bool) {
 		return true
 	}
 
+	// Intel reports waiting on names and affiliations next
+	// (intel_analysis.go): a pasted report is understood within a
+	// tick. Two small bulk calls at most; under its own lock.
+	if func() bool {
+		app.intelAnalysisMu.Lock()
+		defer app.intelAnalysisMu.Unlock()
+		return app.drainIntelAnalysis(ctx)
+	}() {
+		return true
+	}
+
 	// Market history next, under its own lock: the item page being
 	// looked at gets its chart within a tick even while a long cycle
 	// pass (a market sweep) holds the fetch lock.

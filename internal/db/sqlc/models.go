@@ -418,6 +418,20 @@ type IntelPairingCode struct {
 	UsedAt    sql.NullTime `json:"used_at"`
 }
 
+type IntelPilotAffiliation struct {
+	CharacterID   int64     `json:"character_id"`
+	CorporationID int64     `json:"corporation_id"`
+	AllianceID    int64     `json:"alliance_id"`
+	CheckedAt     time.Time `json:"checked_at"`
+}
+
+type IntelPilotName struct {
+	NameLower   string    `json:"name_lower"`
+	CharacterID int64     `json:"character_id"`
+	Name        string    `json:"name"`
+	CheckedAt   time.Time `json:"checked_at"`
+}
+
 type IntelReport struct {
 	ID                int64     `json:"id"`
 	ChannelID         int64     `json:"channel_id"`
@@ -433,6 +447,9 @@ type IntelReport struct {
 	Source            string    `json:"source"`
 	SeenAt            time.Time `json:"seen_at"`
 	CreatedAt         time.Time `json:"created_at"`
+	Kind              string    `json:"kind"`
+	Analysis          string    `json:"analysis"`
+	AnalysisPending   bool      `json:"analysis_pending"`
 }
 
 type IntelToken struct {

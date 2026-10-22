@@ -131,17 +131,41 @@ func Parse(raw string, lookup Lookup, now time.Time) Outcome {
 			out.Questions++
 			continue
 		}
-		var rest []string
-		for i, w := range words {
-			if !used[i] {
-				rest = append(rest, w)
-			}
-		}
-		r.Text = strings.Join(rest, " ")
+		r.Text = restText(msg, used)
 		out.Reports = append(out.Reports, r)
 	}
 	return out
 }
+
+// restText is what is left of msg once the used words are taken out.
+// Names dragged from the game's Local are pasted two spaces apart,
+// and the analyser splits pilots there (internal/intelanalyze), so
+// such a gap is kept, and a word taken out leaves one too; any other
+// run of space is one space.
+func restText(msg string, used []bool) string {
+	var b strings.Builder
+	gap := ""
+	for i, span := range wordRe.FindAllStringIndex(msg, -1) {
+		if i < len(used) && used[i] {
+			gap = "  "
+			continue
+		}
+		if b.Len() > 0 {
+			if gap == "" {
+				gap = " "
+				if prev := msg[:span[0]]; strings.HasSuffix(prev, "  ") || strings.HasSuffix(prev, "\t") {
+					gap = "  "
+				}
+			}
+			b.WriteString(gap)
+		}
+		b.WriteString(msg[span[0]:span[1]])
+		gap = ""
+	}
+	return b.String()
+}
+
+var wordRe = regexp.MustCompile(`\S+`)
 
 func trim(w string) string { return strings.Trim(w, ",.;:*!()[]") }
 

@@ -8,6 +8,12 @@
  * rises from the bottom on a phone. */
 
 .map {
+  /* Type: the body face for names and figures, the display face
+     (Rajdhani, as the site's headings) for region and holder
+     names, panel titles, and the picker chips. The canvas reads
+     --map-font-display back for its display labels. */
+  --map-font-display: "Rajdhani", "Segoe UI", sans-serif;
+  font-family: "Saira Semi Condensed", "Inter", "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif;
   --map-gate: rgba(255, 178, 120, 0.2);
   --map-gate-inter: rgba(255, 128, 64, 0.42);
   --map-gate-hot: #ff8a3d;
@@ -317,8 +323,11 @@ html[data-theme="light"] .map {
   border-radius: var(--r-xs);
   background: var(--row-alt);
   color: var(--muted-2);
-  font: inherit;
-  font-size: 0.8rem;
+  font-family: var(--map-font-display);
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
   white-space: nowrap;
   cursor: pointer;
 }
@@ -347,7 +356,7 @@ html[data-theme="light"] .map {
 }
 .map-layer-legend[hidden] { display: none; }
 .map-layer-legend p { margin: 0; }
-.map-layer-title { color: var(--text-bright); font-weight: 600; margin-bottom: 0.25rem !important; }
+.map-layer-title { color: var(--text-bright); font-family: var(--map-font-display); font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; margin-bottom: 0.25rem !important; }
 .map-layer-row { display: flex; align-items: center; gap: 0.4rem; color: var(--muted-2); }
 .map-layer-sw { width: 0.65rem; height: 0.65rem; border-radius: 50%; flex: none; }
 .map-heat { display: flex; align-items: center; gap: 0.35rem; color: var(--muted-2); font-variant-numeric: tabular-nums; }
@@ -523,8 +532,11 @@ html[data-theme="light"] .map {
   border-left: 1px solid var(--box-edge);
   background: var(--row-alt);
   color: var(--muted-2);
-  font: inherit;
-  font-size: 0.8rem;
+  font-family: var(--map-font-display);
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
   white-space: nowrap;
   cursor: pointer;
 }
@@ -609,9 +621,10 @@ html[data-theme="light"] .map {
   .map-route-list { columns: 1; }
   .map-side:has(> :not([hidden])) ~ .map-legend,
   .map-side:has(> :not([hidden])) ~ .map-layer-legend { display: none; }
-  .map-stage:has(> .map-side > :not([hidden])) :is(.map-shot, .map-mark) { display: none; }
+  .map-stage:has(> .map-side > :not([hidden])) :is(.map-shot, .map-share, .map-mark) { display: none; }
   .map-stage .map-mark { top: 0.6rem; right: 0.6rem; bottom: auto; }
   .map-stage .map-shot { right: 0.5rem; bottom: 0.5rem; }
+  .map-stage .map-share { right: 2.85rem; bottom: 0.5rem; }
 }
 /* Short landscape phones: the bar stays one line; the side column
    docks right, full height. */
@@ -688,6 +701,27 @@ html.map-full-open .page-body { -webkit-backdrop-filter: none; backdrop-filter: 
 }
 .map-shot:hover, .map-shot:focus-visible { opacity: 1; color: var(--text-bright); border-color: var(--glass-edge); }
 .map-shot:disabled { display: none; }
+/* The share button: the shot button's twin, just to its left. */
+.map-share {
+  position: absolute;
+  right: 3.1rem;
+  bottom: 0.75rem;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 2.1rem;
+  height: 2.1rem;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--glass) 70%, transparent);
+  color: var(--muted-2);
+  opacity: 0.55;
+  cursor: pointer;
+  transition: opacity 0.15s, color 0.15s, border-color 0.15s;
+}
+.map-share:hover, .map-share:focus-visible { opacity: 1; color: var(--text-bright); border-color: var(--glass-edge); }
+.map-share:disabled { display: none; }
 .map-shot.busy { opacity: 1; color: var(--accent); }
 .map-full-btn[aria-pressed="true"] { color: var(--accent); border-color: var(--accent); }
 
@@ -708,7 +742,11 @@ html.map-full-open .page-body { -webkit-backdrop-filter: none; backdrop-filter: 
   border-left: 1px solid var(--box-edge);
   background: var(--row-alt);
   color: var(--muted-2);
-  font: inherit;
+  font-family: var(--map-font-display);
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
   cursor: pointer;
 }
 .map-layer-seg button:first-child { border-left: 0; }
@@ -717,6 +755,16 @@ html.map-full-open .page-body { -webkit-backdrop-filter: none; backdrop-filter: 
   background: color-mix(in srgb, var(--accent) 20%, transparent);
   box-shadow: inset 0 -2px 0 var(--accent);
 }
+.map-layer-npc {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0 0 0.35rem;
+  color: var(--muted-2);
+  cursor: pointer;
+}
+.map-layer-npc:hover { color: var(--text); }
+.map-layer-npc input { accent-color: var(--accent); margin: 0; }
 .map-scale {
   display: grid;
   grid-template-columns: auto minmax(5rem, 1fr) auto;

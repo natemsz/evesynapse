@@ -113,17 +113,18 @@ type ReleaseBuild struct {
 // reports for each release — every digest verified there,
 // none computed or guessed locally.
 //
-// Storm entries follow the app entries: storm cuts signed
-// releases of its own (tag-triggered workflow there), and each
-// adds its hashes here, once, the way app releases do. The
-// v0.1.0 digests below are from that release's SHA256SUMS,
-// whose signature was verified against the storm repo's
-// committed release-signing.pub before they were recorded.
+// Storm entries follow the app entries: the v0.1.0 digests
+// are from that release's SHA256SUMS, whose signature was
+// verified against the storm repo's committed
+// release-signing.pub before they were recorded.
 //
-// The library grows by hand: each future release adds its
-// hashes here, once, at release time. Official releases
-// before the v0.5.2.x line are not seeded; a peer running one
-// shows as a fork until its hashes are added. The library
+// This seeded map is the library's historical half and no
+// longer grows by hand: newer releases are learned from the
+// GitHub releases API and remembered in the release_builds
+// table (releases.go), and ReleaseFor consults the learned
+// set first, then this map. Official releases before the
+// v0.5.2.x line are not seeded; a peer running one shows as a
+// fork unless the learner has recorded it. The library
 // decides a display label only — absence is not a verdict
 // about the peer, just a fact about the library.
 var ReleaseLibrary = map[string]ReleaseBuild{
@@ -168,10 +169,51 @@ var ReleaseLibrary = map[string]ReleaseBuild{
 	"120e2f4d3f8c4646f2f9b9be0a8fcf7b55c4c137db9c3e688fbfef3bf07a6eaf": {ReleaseStorm, "v0.1.0"}, // storm arm64
 }
 
+// The learned half of the library: the builds the release
+// learner (releases.go) has recorded from the owner's GitHub
+// releases and stored in release_builds. The learner keeps
+// this snapshot current; classification reads it instead of
+// the table, so rendering the Admin page never queries per
+// peer row.
+var learnedBuilds struct {
+	sync.RWMutex
+	byHash map[string]ReleaseBuild
+}
+
+// SetLearnedBuilds replaces the learned snapshot wholesale:
+// the learner calls it with the full stored set after every
+// load and learn pass, so the snapshot is never a partial
+// write's view.
+func SetLearnedBuilds(byHash map[string]ReleaseBuild) {
+	learnedBuilds.Lock()
+	defer learnedBuilds.Unlock()
+	learnedBuilds.byHash = byHash
+}
+
+// LearnedBuilds returns the current learned snapshot.
+func LearnedBuilds() map[string]ReleaseBuild {
+	learnedBuilds.RLock()
+	defer learnedBuilds.RUnlock()
+	out := make(map[string]ReleaseBuild, len(learnedBuilds.byHash))
+	for hash, rel := range learnedBuilds.byHash {
+		out[hash] = rel
+	}
+	return out
+}
+
 // ReleaseFor looks one claim up in the release library: the
-// entry it names, and whether it names any.
+// entry it names, and whether it names any. The learned set
+// is consulted first — it is the newer word on any hash the
+// two halves disagree about — then the seeded map.
 func ReleaseFor(claim string) (ReleaseBuild, bool) {
-	rel, ok := ReleaseLibrary[strings.TrimSpace(claim)]
+	claim = strings.TrimSpace(claim)
+	learnedBuilds.RLock()
+	rel, ok := learnedBuilds.byHash[claim]
+	learnedBuilds.RUnlock()
+	if ok {
+		return rel, true
+	}
+	rel, ok = ReleaseLibrary[claim]
 	return rel, ok
 }
 
@@ -184,7 +226,7 @@ func ClassifyBuild(claim string) BuildClass {
 	if claim == "" {
 		return BuildUnknown
 	}
-	if _, ok := ReleaseLibrary[claim]; ok {
+	if _, ok := ReleaseFor(claim); ok {
 		return BuildMainline
 	}
 	return BuildFork
@@ -199,7 +241,7 @@ func BuildLabel(claim string) string {
 	claim = strings.TrimSpace(claim)
 	switch ClassifyBuild(claim) {
 	case BuildMainline:
-		rel := ReleaseLibrary[claim]
+		rel, _ := ReleaseFor(claim)
 		if rel.Kind == ReleaseStorm {
 			return "Mainline · Storm " + rel.Label
 		}

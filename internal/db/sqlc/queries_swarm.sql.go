@@ -323,6 +323,43 @@ func (q *Queries) GetSwarmPeer(ctx context.Context, instanceID string) (SwarmPee
 	return i, err
 }
 
+const listLearnedBuilds = `-- name: ListLearnedBuilds :many
+SELECT hash, kind, label FROM release_builds ORDER BY hash
+`
+
+type ListLearnedBuildsRow struct {
+	Hash  string `json:"hash"`
+	Kind  string `json:"kind"`
+	Label string `json:"label"`
+}
+
+// Every learned build, for the in-memory snapshot the Admin
+// page's classification reads. The set is small by
+// construction (two repositories, a page of releases each,
+// two binaries per release), so the whole of it loads.
+func (q *Queries) ListLearnedBuilds(ctx context.Context) ([]ListLearnedBuildsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listLearnedBuilds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListLearnedBuildsRow
+	for rows.Next() {
+		var i ListLearnedBuildsRow
+		if err := rows.Scan(&i.Hash, &i.Kind, &i.Label); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listSwarmAllianceDemand = `-- name: ListSwarmAllianceDemand :many
 SELECT alliance_id
 FROM alliance_records
@@ -927,6 +964,36 @@ type TouchSwarmPeerServedParams struct {
 
 func (q *Queries) TouchSwarmPeerServed(ctx context.Context, arg TouchSwarmPeerServedParams) error {
 	_, err := q.db.ExecContext(ctx, touchSwarmPeerServed, arg.InstanceID, arg.LastServed)
+	return err
+}
+
+const upsertLearnedBuild = `-- name: UpsertLearnedBuild :exec
+INSERT INTO release_builds (hash, kind, label, learned_at)
+VALUES ($1, $2, $3, $4)
+ON CONFLICT (hash) DO UPDATE SET
+    kind = excluded.kind,
+    label = excluded.label,
+    learned_at = excluded.learned_at
+`
+
+type UpsertLearnedBuildParams struct {
+	Hash      string    `json:"hash"`
+	Kind      string    `json:"kind"`
+	Label     string    `json:"label"`
+	LearnedAt time.Time `json:"learned_at"`
+}
+
+// One build the release learner recorded: the binary's
+// SHA-256, which product it belongs to and the release's
+// version label. Relearning the same hash writes the same
+// values again -- the table is a remembered set, not a log.
+func (q *Queries) UpsertLearnedBuild(ctx context.Context, arg UpsertLearnedBuildParams) error {
+	_, err := q.db.ExecContext(ctx, upsertLearnedBuild,
+		arg.Hash,
+		arg.Kind,
+		arg.Label,
+		arg.LearnedAt,
+	)
 	return err
 }
 

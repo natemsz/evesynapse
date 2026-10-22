@@ -4,9 +4,9 @@
    follow the approved landing design's own values, kept
    landing-scoped so interior pages keep the site recipe.
    One script (landing.js): the explorer's tab switcher, the
-   public-tools modal, the back-to-top button, and the starfield
-   scatter. Every section works with JavaScript off; the script
-   only adds motion between states the HTML already holds. */
+   public-tools modal, and the back-to-top button. Every section
+   works with JavaScript off; the script only adds motion
+   between states the HTML already holds. */
 
 :root { --ld-dim: #b9a892; }
 
@@ -21,16 +21,20 @@ body::before { filter: brightness(0.8) saturate(0.98); }
 
 /* The sky stack, back to front: the art band (body::before),
    the fade into page black (body::after), then the star layer
-   (.ld-stars, scattered by landing.js). Below the band the page
-   is black and the stars carry the background on their own.
+   (.ld-stars). Below the band the page is black and the stars
+   carry the background on their own.
    The site sheet parks body::before at z-index -1; the landing
    re-seats the stack so each layer takes its own slot. */
 body::before { z-index: -3; position: absolute; top: 0; left: 0; right: 0; bottom: auto; height: 72rem; background-position: center top; -webkit-mask-image: linear-gradient(180deg, #000 42%, transparent 99%); mask-image: linear-gradient(180deg, #000 42%, transparent 99%); }
 body::after { content: ""; position: absolute; top: 0; left: 0; right: 0; height: 72rem; z-index: -2; background: linear-gradient(180deg, rgba(4, 2, 2, 0.1), rgba(4, 2, 2, 0) 30%, rgba(4, 2, 2, 0.26) 58%, rgba(4, 2, 2, 0.62) 82%, #040202 100%); pointer-events: none; }
-.ld-stars { position: absolute; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; }
-.ld-stars i { position: absolute; border-radius: 50%; background: #ffe9c9; }
-.ld-stars b { position: absolute; background: linear-gradient(180deg, #ffe9c4, #ffb35c); clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%); }
-.ld-stars s { position: absolute; text-decoration: none; font-style: normal; color: rgba(255, 210, 140, 0.5); line-height: 1; }
+/* The starfield is one baked tile (stars-tile.webp, decoded
+   from ci-assets like the wallpaper tiers): warm pinpoint dots,
+   four-point sparkles and plus glints at the density the page
+   has always carried, drawn toroidally so the repeat never
+   shows a seam. The layer it paints used to be hundreds of
+   positioned nodes; as an image it costs one fetch and no
+   layout, which is what phones were struggling with. */
+.ld-stars { position: absolute; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; background: url("/static/stars-tile.webp?v=047d2bb63562f133") repeat; }
 
 /* The design zeroes heading and paragraph margins and re-adds
    only the ones it wants; the site sheet and the UA sheet leave

@@ -222,6 +222,26 @@ test("jump drives: range, cyno-legal landings, routes and fatigue", () => {
   assert.deepStrictEqual(map.jumpFatigue([10], 0.1, 0), { fatigue: 20, waits: 0 }, "a jump freighter counts a tenth of the distance");
 });
 
+test("zoomed-out picking prefers the system with something on it", () => {
+  // A bare system keeps the old 14px reach; a hot one reaches 24px.
+  assert.strictEqual(map.pickReach(0), 14);
+  assert.strictEqual(map.pickReach(1), 24);
+  const dot = 3;
+  // At the same distance the hot system wins; a somewhat farther
+  // hot system (12px) still beats a bare neighbour (10px).
+  assert.ok(map.pickScore(100, 1, dot) < map.pickScore(100, 0, dot));
+  assert.ok(map.pickScore(144, 1, dot) < map.pickScore(100, 0, dot));
+  // A system right under the pointer beats a hot one nearby.
+  assert.ok(map.pickScore(4, 0, dot) < map.pickScore(20, 1, dot));
+});
+
+test("route fit zooms to the route's span in the free canvas", () => {
+  // 100x50 world span into 1000x500 free px with 48px pad: the
+  // tighter (vertical) side decides.
+  assert.strictEqual(map.routeFitScale(100, 50, 1000, 500, 48), (500 - 96) / 50);
+  assert.strictEqual(map.routeFitScale(0, 0, 1000, 500, 48), 404, "a point route is not divided by zero");
+});
+
 test("mousewheel zooms, never pans", () => {
   // Wheel up zooms in, wheel down zooms out, whatever the notch
   // size -- including the small, fractional deltas a smooth-scroll

@@ -87,6 +87,19 @@
   function wheelZoomFactor(dy, pinch) {
     return Math.exp(-dy * (pinch ? 0.012 : 0.0024));
   }
+  // Zoomed-out picking: a system with something on it (interest
+  // w, 0 to 1) reaches farther than a bare one, and at a similar
+  // distance wins; a system right under the pointer (within dot)
+  // still beats everything.
+  function pickReach(w) { return 14 + 10 * w; }
+  function pickScore(d, w, dot) {
+    return d <= dot * dot ? d - 1e6 : (d + 4) / ((1 + 3 * w) * (1 + 3 * w));
+  }
+  // The zoom that fits a route's span (dx by dy world units) into
+  // the free part of the canvas (fw by fh px), pad px to spare.
+  function routeFitScale(dx, dy, fw, fh, pad) {
+    return Math.min((fw - 2 * pad) / Math.max(dx, 1), (fh - 2 * pad) / Math.max(dy, 1));
+  }
 
   // --- Graph: derived once per payload ---
   function prepare(P) {
@@ -1545,13 +1558,39 @@
     // --- Picking ---
     function toWorld(px, py) { return [(px - cw / 2) / cam.k + cam.x, (py - ch / 2) / cam.k + cam.y]; }
 
+    // How much a system has on it right now, 0 to 1: a fresh intel
+    // report, one of your pins, or a hot spot on the heat showing.
+    function interest(i) {
+      var w = 0, dk = dataHeat();
+      if (IN && intelOn && IN.bySys[i] && intelFresh(IN.bySys[i][0].at, intelNow()) > 0) return 1;
+      if (MINE) {
+        for (var name in dataOn) if (dataOn[name] && !DATA_HEAT[name] && MINE[name] && MINE[name][i]) return 1;
+        var H = dk && MINE.heat[dk];
+        if (H && H.vals[i] > 0) w = 0.4 + 0.6 * heatT(H.vals[i], heatMax(dk));
+      }
+      if (!dk && LY && HEAT[layer]) {
+        if (layer === "threat" && LY.campOf[i] >= 0) return 1;
+        if (LY[layer][i] > 0) w = Math.max(w, 0.2 + 0.8 * heatT(LY[layer][i], heatMax(layer)));
+      }
+      return w;
+    }
+    // The system under the pointer. Zoomed out, systems crowd
+    // together; one with something on it reaches a little farther and
+    // wins over a bare neighbour at a similar distance, so the pointer
+    // finds what the reader is most likely after. One right under the
+    // pointer still wins.
     function pick(px, py) {
       var k = cam.k, ox = cw / 2 - cam.x * k, oy = ch / 2 - cam.y * k;
-      var best = -1, bd = 14 * 14, list = visible(), n = list ? list.length : G.n;
+      var best = -1, bs = Infinity, list = visible(), n = list ? list.length : G.n;
+      var dot = radius() + 1;
       for (var m = 0; m < n; m++) {
         var i = list ? list[m] : m;
         var dx = wx(i) * k + ox - px, dy = wy(i) * k + oy - py, d = dx * dx + dy * dy;
-        if (d < bd) { bd = d; best = i; }
+        if (d >= 24 * 24) continue;
+        var w = interest(i), reach = pickReach(w);
+        if (d >= reach * reach) continue;
+        var s = pickScore(d, w, dot);
+        if (s < bs) { bs = s; best = i; }
       }
       return best;
     }
@@ -1787,8 +1826,36 @@
     var canSend = el.hasAttribute("data-route-can-send"), signedIn = el.hasAttribute("data-route-signed-in");
     var sending = false;
 
+    // After the reader sets or changes a route, the view flies to show
+    // all of it (fitNext), in the part of the map the route panel
+    // leaves free. Re-plans of their own (fresh intel, the layers
+    // arriving) leave the view where it is.
+    var fitNext = false;
+    function routeKey() { return routePath ? routePath.join(",") : ""; }
+    function fitRoute() {
+      if (!routePath || routePath.length < 2 || !cw) return;
+      if (mode !== "universe" && routePath.some(function (i) { return S.r[i] !== region; })) leaveRegion();
+      var x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+      routePath.forEach(function (i) {
+        x0 = Math.min(x0, wx(i)); x1 = Math.max(x1, wx(i));
+        y0 = Math.min(y0, wy(i)); y1 = Math.max(y1, wy(i));
+      });
+      // The free part of the canvas: left of the side column, or
+      // above it where it is a sheet rising from the bottom (phones).
+      var fx0 = 0, fy0 = 0, fx1 = cw, fy1 = ch, side = el.querySelector(".map-side");
+      if (side && !routeEl.hidden) {
+        var cr = canvas.getBoundingClientRect(), sr = side.getBoundingClientRect();
+        if (sr.top > cr.top + ch * 0.3) fy1 = Math.max(ch * 0.4, sr.top - cr.top);
+        else fx1 = Math.max(cw * 0.4, sr.left - cr.left);
+      }
+      var pad = 48;
+      var k = routeFitScale(x1 - x0, y1 - y0, fx1 - fx0, fy1 - fy0, pad);
+      k = clampK(Math.min(k, fitK() * (mode === "universe" ? 12 : 3)));
+      flyTo((x0 + x1) / 2 - ((fx0 + fx1) / 2 - cw / 2) / k, (y0 + y1) / 2 - ((fy0 + fy1) / 2 - ch / 2) / k, k, 420);
+    }
     function setRouteEnd(which, i) {
       if (i < 0) return;
+      fitNext = true;
       if (which === "to") {
         routeTo = i;
         if (routeFrom < 0 && here >= 0) routeFrom = here;
@@ -1801,6 +1868,7 @@
       replan();
     }
     function clearRoute() {
+      fitNext = false;
       routeFrom = routeTo = -1;
       routePath = routeSum = null;
       routeNote("");
@@ -1894,6 +1962,7 @@
       }
       routeSum = routePath ? routeSummary(G, LY, routePath, prices) : null;
       renderRoute();
+      if (fitNext && routePath) { fitNext = false; fitRoute(); }
       updateCard();
       syncURL();
       schedule();
@@ -3176,6 +3245,7 @@
       if (t.closest("[data-route-swap]")) {
         var tmp = routeFrom; routeFrom = routeTo; routeTo = tmp;
         routeNote("");
+        fitNext = true;
         replan();
         return;
       }
@@ -3184,14 +3254,22 @@
         travel = tv.getAttribute("data-route-travel") === "jump" ? "jump" : "gates";
         if (travel === "jump") loadJump();
         routeNote("");
+        fitNext = true;
         replan();
         return;
       }
+      // A route choice that finds no better way says so, or the
+      // button would seem to do nothing.
       var rm = t.closest("[data-route-mode]");
       if (rm && ROUTE_MODES[rm.getAttribute("data-route-mode")]) {
+        var was = routeKey(), wasMode = routeMode;
         routeMode = rm.getAttribute("data-route-mode");
         routeNote("");
+        fitNext = true;
         replan();
+        if (routeMode !== wasMode && was && routeKey() === was) {
+          routeNote("Same route: this is already the best way for that choice.");
+        }
         return;
       }
       var rd = t.closest("[data-route-send]");
@@ -3273,6 +3351,8 @@
       if (ROUTE_MODES[qs.get("route")]) routeMode = qs.get("route");
       if (rf !== undefined) routeFrom = rf;
       if (rt !== undefined && rt !== rf) routeTo = rt;
+      // A shared route with no system asked for opens showing all of it.
+      fitNext = sys === undefined && ri === undefined;
       if (routeFrom >= 0 || routeTo >= 0) replan();
       updateCard();
     }
@@ -3437,7 +3517,7 @@
 
   // Exposed for the node tests only (jstest/map_test.js).
   if (typeof module !== "undefined" && module.exports) {
-    module.exports = { secRounded: secRounded, secTier: secTier, secText: secText, prepare: prepare, regionLabelAlpha: regionLabelAlpha, zoomEntryAllowed: zoomEntryAllowed, wheelZoomFactor: wheelZoomFactor,
+    module.exports = { secRounded: secRounded, secTier: secTier, secText: secText, prepare: prepare, regionLabelAlpha: regionLabelAlpha, zoomEntryAllowed: zoomEntryAllowed, wheelZoomFactor: wheelZoomFactor, pickReach: pickReach, pickScore: pickScore, routeFitScale: routeFitScale,
       joinLayers: joinLayers, heatT: heatT, allianceHue: allianceHue, threatLevel: threatLevel,
       routeCost: routeCost, planRoute: planRoute, routeSummary: routeSummary, joinIntel: joinIntel,
       jumpRange: jumpRange, joinJump: joinJump, jumpNeighbours: jumpNeighbours, jumpFatigue: jumpFatigue };

@@ -1587,9 +1587,18 @@ footer .version-number {
 .home-grid .brief-card a { color: inherit; font-weight: inherit; }
 /* In-page section anchors land clear of the sticky top bar. */
 .card[id] { scroll-margin-top: 4.5rem; }
-/* Section tabs, filter chips and strategy tabs read as controls: the
-   same Rajdhani capitals as the buttons. */
-.section-tabs a, .section-tabs .tabs-more-btn, .chip, .ti-tabs button {
+/* Section tabs and strategy tabs read as controls: Rajdhani
+   capitals at 12px, medium weight, regular letter spacing. */
+.section-tabs a, .section-tabs .tabs-more-btn, .ti-tabs button {
+  font-family: "Rajdhani", "Segoe UI", sans-serif;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: normal;
+  font-size: 0.75rem;
+}
+/* Filter chips read as controls too: the same Rajdhani capitals
+   as the buttons. */
+.chip {
   font-family: "Rajdhani", "Segoe UI", sans-serif;
   font-weight: 600;
   text-transform: uppercase;
@@ -1616,7 +1625,7 @@ html.js .ti-tabs[data-tabs]:not([data-tabs-ready]) { display: flex; }
 html.js [data-tabs]:not([data-tabs-ready]) ~ [role="tabpanel"] { display: none; }
 html.js [data-tabs]:not([data-tabs-ready]) + [role="tabpanel"] { display: block; }
 html.js :has(> [data-tabs]:not([data-tabs-ready])) .ti-h { display: none; }
-.ti-tabs button { flex: none; display: inline-flex; align-items: baseline; gap: 0.4rem; padding: 0.3rem 0.7rem; border: 1px solid var(--border, #333); border-radius: var(--r-sm); background: transparent; color: var(--muted); font: inherit; font-size: 0.85rem; white-space: nowrap; cursor: pointer; }
+.ti-tabs button { flex: none; display: inline-flex; align-items: baseline; gap: 0.4rem; padding: 0.3rem 0.7rem; border: 1px solid var(--border, #333); border-radius: var(--r-sm); background: transparent; color: var(--muted); font: inherit; font-size: 0.75rem; white-space: nowrap; cursor: pointer; }
 .ti-tabs button:hover { color: var(--text-bright); border-color: #555; }
 .ti-tabs button[aria-selected="true"] { border-color: var(--accent); color: var(--text-bright); background: var(--row-hover); }
 .ti-tabs button small { color: var(--accent); font-size: 0.75rem; }
@@ -1636,7 +1645,7 @@ html.js :has(> [data-tabs]:not([data-tabs-ready])) .ti-h { display: none; }
 .ti-detail { grid-template-columns: repeat(auto-fill, minmax(min(100%, 30rem), 1fr)); }
 .ti-detail li { color: var(--muted); font-size: 0.88rem; line-height: 1.45; }
 .ti-detail li > strong:first-child { display: block; margin-bottom: 0.1rem; font-size: 0.95rem; }
-.ti-compact .ti-tabs button { padding: 0.2rem 0.55rem; font-size: 0.8rem; }
+.ti-compact .ti-tabs button { padding: 0.2rem 0.55rem; font-size: 0.75rem; }
 .ti-compact .ti-list li { padding: 0.25rem 0.45rem 0.25rem 2rem; font-size: 0.9rem; }
 .ti-compact .ti-list li::before { top: 0.33rem; }
 /* The module shows each idea's brief until More opens it. */
@@ -5158,10 +5167,10 @@ tbody tr:nth-child(even) th:first-child {
    and its active pill (orange at 20% fill, 40% border). */
 .ti-tabs button {
   font-family: Rajdhani, sans-serif;
-  font-weight: 600;
+  font-weight: 500;
   text-transform: uppercase;
-  letter-spacing: 0.07em;
-  font-size: 0.8rem;
+  letter-spacing: normal;
+  font-size: 0.75rem;
 
   background: rgba(23, 17, 13, 0.55);
   border-color: rgba(255, 110, 0, 0.22);

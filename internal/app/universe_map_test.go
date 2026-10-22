@@ -123,7 +123,7 @@ func TestBuildUniverseMap(t *testing.T) {
 		{SystemID: 31000001, Name: "J100001", RegionID: 11000001, Security: -0.99, X: 0, Z: 0},
 	}
 	jumps := []db.ListMapJumpsRow{{A: 30000142, B: 30000144}, {A: 30000001, B: 30000142}, {A: 30000142, B: 31000001}}
-	p := buildUniverseMap(systems, regions, cons, jumps)
+	p := buildUniverseMap(systems, regions, cons, jumps, nil)
 	if len(p.Sys.ID) != 3 {
 		t.Fatalf("systems = %v, want the three known-space ones", p.Sys.ID)
 	}
@@ -159,6 +159,55 @@ func TestBuildUniverseMap(t *testing.T) {
 	}
 	if forge := p.Regions[p.Sys.Region[jita]]; forge.W <= 0 && forge.H <= 0 {
 		t.Errorf("The Forge has no region frame: %+v", forge)
+	}
+}
+
+// TestBuildUniverseMapProminence: the payload carries each
+// system's label prominence -- hubs above station systems above
+// the rest, gate degree ordering within a class -- so the map's
+// middle zoom tier names the systems that matter first.
+func TestBuildUniverseMapProminence(t *testing.T) {
+	if got := mapProminence(0, false, false); got != 0 {
+		t.Errorf("bare isolated system = %d, want 0", got)
+	}
+	if got := mapProminence(3, false, false); got != 30 {
+		t.Errorf("degree only = %d, want 30 (10 a gate)", got)
+	}
+	if got := mapProminence(0, true, false); got != 100 {
+		t.Errorf("station only = %d, want 100", got)
+	}
+	if got := mapProminence(2, true, true); got != 1120 {
+		t.Errorf("hub with a station and two gates = %d, want 1120", got)
+	}
+
+	regions := []db.SdeRegion{{RegionID: 10000002, Name: "The Forge"}}
+	systems := []db.ListMapSystemsRow{
+		{SystemID: 30000142, Name: "Jita", RegionID: 10000002, X: 1e16, Z: -1e16},
+		{SystemID: 30001001, Name: "Station", RegionID: 10000002, X: 2e16, Z: -1e16},
+		{SystemID: 30001002, Name: "Junction", RegionID: 10000002, X: 3e16, Z: -1e16},
+		{SystemID: 30001003, Name: "Leaf", RegionID: 10000002, X: 4e16, Z: -1e16},
+		{SystemID: 30001004, Name: "Isolated", RegionID: 10000002, X: 5e16, Z: -1e16},
+	}
+	jumps := []db.ListMapJumpsRow{
+		{A: 30000142, B: 30001001}, {A: 30000142, B: 30001002},
+		{A: 30001001, B: 30001002}, {A: 30001002, B: 30001003},
+	}
+	stations := map[int64]bool{30001001: true}
+	p := buildUniverseMap(systems, regions, nil, jumps, stations)
+	want := map[int64]int{
+		30000142: 1020, // the hub, two gates
+		30001001: 120,  // a station, two gates
+		30001002: 30,   // three gates, no station: below the station system
+		30001003: 10,   // one gate
+		30001004: 0,    // no gates
+	}
+	if len(p.Sys.Prom) != len(p.Sys.ID) {
+		t.Fatalf("prominence covers %d of %d systems", len(p.Sys.Prom), len(p.Sys.ID))
+	}
+	for i, id := range p.Sys.ID {
+		if p.Sys.Prom[i] != want[id] {
+			t.Errorf("system %d prominence = %d, want %d", id, p.Sys.Prom[i], want[id])
+		}
 	}
 }
 

@@ -436,6 +436,37 @@ func (q *Queries) ListMapRegions(ctx context.Context) ([]SdeRegion, error) {
 	return items, nil
 }
 
+const listMapStationSystems = `-- name: ListMapStationSystems :many
+SELECT DISTINCT system_id FROM sde_stations
+WHERE system_id > 0
+ORDER BY 1
+`
+
+// The systems holding at least one NPC station: a prominence
+// input for the map's label tiers.
+func (q *Queries) ListMapStationSystems(ctx context.Context) ([]int64, error) {
+	rows, err := q.db.QueryContext(ctx, listMapStationSystems)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []int64
+	for rows.Next() {
+		var system_id int64
+		if err := rows.Scan(&system_id); err != nil {
+			return nil, err
+		}
+		items = append(items, system_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listMapSystems = `-- name: ListMapSystems :many
 
 SELECT system_id, name, region_id, constellation_id, security,

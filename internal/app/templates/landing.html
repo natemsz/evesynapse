@@ -16,9 +16,10 @@
 <link rel="stylesheet" href="/static/landing.css?v={{.AssetVersion}}">
 </head>
 <body>
+<div class="ld-stars" id="ldStars" aria-hidden="true"></div>
 <header class="ld-header"><div class="ld-wrap ld-hbar">
   <a class="wordmark ld-wordmark" href="/" aria-label="EveSynapse home"><img class="wordmark-glyph" src="/static/logo.svg?v={{.AssetVersion}}" alt="" width="64" height="64"><span>{{template "wordmark-svg"}}</span></a>
-  <nav class="ld-nav"><a href="/fittings/">Fitting</a><a href="/market/">Market</a><a href="/contracts/search/">Contracts</a><a href="/market/appraise/">Appraisal</a><a href="/planner/">Build Planner</a><a href="/intel/wars/">Intel</a><a href="/fittings/public/">Public Fits</a></nav>
+  <nav class="ld-nav"><a href="#fleet">Fleet</a><a href="#market">Market</a><a href="#industry">Industry</a><a href="#fitting">Fitting</a><a href="#corp">Corporation</a><a href="#intel">Intel</a><a href="#map">Universe Map</a></nav>
   <div class="ld-hsp"></div>
   <a class="ld-btn ld-btn-ghost" href="/auth/login">Sign in</a>
   <a class="ld-btn ld-btn-ember" href="/auth/link">Link your characters</a>
@@ -129,7 +130,7 @@
 
   <section class="ld-blk">
     <div class="ld-eyebrow">Playstyles</div>
-    <h2>Three alts, or a hundred boxed characters.</h2>
+    <h2>Three alts, or a hundred multiboxed characters.</h2>
     <p class="ld-lede">It adapts to your playstyle. With every character syncing in the background and the briefing leaning toward what you actually do, the same system serves a market alt army and a single main with equal care.</p>
     <div class="ld-styles">
       <div class="ld-glass ld-scard">
@@ -153,7 +154,7 @@
       <div class="ld-glass ld-scard">
         <div class="ld-who">The Multiboxer</div>
         <h3>A hundred pilots, one morning briefing.</h3>
-        <p>Every character syncs in the background and reports into a single briefing: empty skill queues, halted extractors, expiring orders, mail that matters. Three alts get the same care as a hundred boxed characters, and every page opens ready.</p>
+        <p>Every character syncs in the background and reports into a single briefing: empty skill queues, halted extractors, expiring orders, mail that matters. Three alts get the same care as a hundred multiboxed characters, and every page opens ready.</p>
         <div class="ld-chips"><span class="ld-chip">Fleet Overview</span><span class="ld-chip">Priority Briefing</span><span class="ld-chip">Skill Plans</span><span class="ld-chip">PI tracking</span></div>
       </div>
     </div>
@@ -171,8 +172,8 @@
 
   <section class="ld-blk" id="explorer">
     <div class="ld-eyebrow">Up close</div>
-    <h2>The six sections, up close.</h2>
-    <p class="ld-lede">The inventory above, one section at a time. Each tab shows the section's headline tool in the picture and the rest of the section beside it, with the connections that make the pieces worth more together.</p>
+    <h2>Modules, up close.</h2>
+    <p class="ld-lede">The inventory above, one module at a time. Each tab shows the module's headline tool in the picture and the rest of the module beside it, with the connections that make the pieces worth more together.</p>
     <div class="ld-xtabs" role="tablist" aria-label="Feature explorer">
       <button type="button" class="ld-xtab active" role="tab" aria-selected="true" data-xtab="pilots">Your Pilots</button>
       <button type="button" class="ld-xtab" role="tab" aria-selected="false" data-xtab="fitting">Fitting</button>
@@ -306,7 +307,7 @@
     </div>
   </section>
 
-  <section class="ld-feat">
+  <section class="ld-feat" id="fleet">
     <div class="ld-feat-txt">
       <div class="ld-eyebrow">Fleet Home</div>
       <h2>Every pilot, at a glance.</h2>
@@ -328,7 +329,7 @@
     </div>
   </section>
 
-  <section class="ld-feat">
+  <section class="ld-feat" id="market">
     <div class="ld-feat-vis">
       <figure class="ld-shot">
         <div class="ld-browser">
@@ -350,7 +351,7 @@
     </div>
   </section>
 
-  <section class="ld-feat">
+  <section class="ld-feat" id="industry">
     <div class="ld-feat-txt">
       <div class="ld-eyebrow">Industry</div>
       <h2>Plans that price themselves.</h2>
@@ -374,7 +375,7 @@
     </div>
   </section>
 
-  <section class="ld-feat">
+  <section class="ld-feat" id="fitting">
     <div class="ld-feat-vis">
       <figure class="ld-shot">
         <div class="ld-browser">
@@ -395,7 +396,7 @@
     </div>
   </section>
 
-  <section class="ld-feat">
+  <section class="ld-feat" id="corp">
     <div class="ld-feat-txt">
       <div class="ld-eyebrow">Corporation</div>
       <h2>Greater than the sum of its parts.</h2>
@@ -418,7 +419,7 @@
     </div>
   </section>
 
-  <section class="ld-feat">
+  <section class="ld-feat" id="intel">
     <div class="ld-feat-vis">
       <div class="ld-glass ld-panel">
         <h3>System heat · last 24 hours</h3>
@@ -441,7 +442,7 @@
     </div>
   </section>
 
-  <section class="ld-feat">
+  <section class="ld-feat" id="map">
     <div class="ld-feat-txt">
       <div class="ld-eyebrow">Universe Map</div>
       <h2>All of New Eden, on one map.</h2>
@@ -469,7 +470,7 @@
   <div class="ld-finalcta">
     <div class="ld-ctas ld-ctas-center">
       <a class="ld-btn ld-btn-ember" href="/auth/link">Link your characters, free</a>
-      <a class="ld-btn ld-btn-ghost" href="#tools">Browse the public tools</a>
+      <a class="ld-btn ld-btn-ghost" href="#" data-open-tools>Browse the public tools</a>
     </div>
   </div>
 
@@ -484,6 +485,48 @@
   No official affiliation or endorsement by CCP Games hf is stated or implied.</p>
   <p class="ld-version"><a href="https://github.com/natemsz/evesynapse" target="_blank" rel="noopener noreferrer">EveSynapse</a> <span class="version-number">{{.Version}}</span></p>
 </div></footer>
+<div class="ld-float">
+  <button type="button" class="ld-btn ld-btn-ghost ld-topbtn" id="ldTop" hidden>&uarr; Back to top</button>
+  <a class="ld-btn ld-btn-ember" href="/auth/demo">Try the demo</a>
+</div>
+<div class="ld-modal" id="ldToolsModal" hidden>
+  <div class="ld-modal-backdrop" data-close-tools></div>
+  <div class="ld-glass ld-modal-card" role="dialog" aria-modal="true" aria-labelledby="ldTmTitle">
+    <button type="button" class="ld-modal-x" data-close-tools aria-label="Close">&times;</button>
+    <div class="ld-eyebrow">No account needed</div>
+    <h3 id="ldTmTitle">Public tools</h3>
+    <p class="ld-tm-sub">Every tool that runs without linking a character, each one a direct link. Sign in only when you want your own pilots in the picture.</p>
+    <div class="ld-tm-grid">
+      <div class="ld-tm-group">
+        <h4>Fitting</h4>
+        <a href="/fittings/"><strong>Fitting Simulator</strong><span>Fits run on real skill math</span></a>
+        <a href="/fittings/public/"><strong>Public Fits</strong><span>Community fits, priced at the hub you pick</span></a>
+      </div>
+      <div class="ld-tm-group">
+        <h4>Industry</h4>
+        <a href="/planner/"><strong>Build Planner</strong><span>Whole build trees, costed, hangars checked first</span></a>
+      </div>
+      <div class="ld-tm-group">
+        <h4>Market</h4>
+        <a href="/market/appraise/"><strong>Appraisal</strong><span>Price a pile, a hangar or a contract</span></a>
+        <a href="/market/scanner/"><strong>Spread Scanner</strong><span>Margins ranked across every hub</span></a>
+        <a href="/market/tradefinder/"><strong>Tradefinder</strong><span>Routes priced at both ends</span></a>
+        <a href="/market/leaderboard/"><strong>Top Stations</strong><span>The station leaderboard</span></a>
+        <a href="/contracts/search/"><strong>Contract Search</strong><span>Across public contracts</span></a>
+        <a href="/market/"><strong>Market Browser</strong><span>Order books from stored sweeps</span></a>
+      </div>
+      <div class="ld-tm-group">
+        <h4>Intel and reference</h4>
+        <a href="/map/"><strong>Universe Map</strong><span>Threat, kill and sovereignty layers</span></a>
+        <a href="/intel/wars/"><strong>Wars</strong><span>Declared wars as they unfold</span></a>
+        <a href="/intel/incursions/"><strong>Incursions</strong><span>Sansha incursions, tracked live</span></a>
+        <a href="/intel/fw/"><strong>Faction Warfare</strong><span>87 systems in play this week</span></a>
+        <a href="/intel/kills/"><strong>Killboard</strong><span>Every public kill in the feed</span></a>
+        <a href="/items/"><strong>Item Database</strong><span>For all of New Eden</span></a>
+      </div>
+    </div>
+  </div>
+</div>
 <script src="/static/landing.js?v={{.AssetVersion}}" defer></script>
 </body>
 </html>

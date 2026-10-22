@@ -3,30 +3,34 @@
    style.css, but the glass, the dim text tone, and the sky stack
    follow the approved landing design's own values, kept
    landing-scoped so interior pages keep the site recipe.
-   One script (landing.js): the feature explorer's tab switcher.
-   The default tab is rendered active in the HTML, so the
-   section works with JavaScript off. */
+   One script (landing.js): the explorer's tab switcher, the
+   public-tools modal, the back-to-top button, and the starfield
+   scatter. Every section works with JavaScript off; the script
+   only adds motion between states the HTML already holds. */
 
 :root { --ld-dim: #b9a892; }
 
 /* The app shell lays body out as its sidebar grid (style.css);
    the landing is a standalone document, so it takes plain block
    flow back — otherwise the footer lands in the sidebar column. */
-body { display: block; padding-top: 0; }
-/* The sunrise art is bright behind the landing's open text zones.
-   Dim and soften the sky layer itself (never the content) so the
-   words stop fighting the sun. */
-body::before { filter: brightness(0.74) saturate(0.97) blur(2px); transform: scale(1.03); }
+body { display: block; padding-top: 0; position: relative; background: #040202; }
+/* The sunrise art lives at the top of the page: a band behind
+   the hero, dimmed at the layer itself (never the content) and
+   masked so its foot dissolves instead of ending on a line. */
+body::before { filter: brightness(0.8) saturate(0.98); }
 
-/* The sky stack, back to front: the art (body::before), then a
-   fixed dark veil (body::after) under all content.
+/* The sky stack, back to front: the art band (body::before),
+   the fade into page black (body::after), then the star layer
+   (.ld-stars, scattered by landing.js). Below the band the page
+   is black and the stars carry the background on their own.
    The site sheet parks body::before at z-index -1; the landing
-   re-seats the stack so the veil can take that slot and deepen
-   toward the foot of the page. The veil is what the approved
-   design reads its text against — without it the words sit on
-   the raw brightened sky. */
-body::before { z-index: -3; }
-body::after { content: ""; position: fixed; inset: 0; z-index: -1; background: linear-gradient(180deg, rgba(7, 5, 4, 0.42), rgba(7, 5, 4, 0.66) 46%, rgba(7, 5, 4, 0.9)); pointer-events: none; }
+   re-seats the stack so each layer takes its own slot. */
+body::before { z-index: -3; position: absolute; top: 0; left: 0; right: 0; bottom: auto; height: 60rem; background-position: center top; -webkit-mask-image: linear-gradient(180deg, #000 60%, transparent 98%); mask-image: linear-gradient(180deg, #000 60%, transparent 98%); }
+body::after { content: ""; position: absolute; top: 0; left: 0; right: 0; height: 60rem; z-index: -2; background: linear-gradient(180deg, rgba(4, 2, 2, 0.12), rgba(4, 2, 2, 0) 26%, rgba(4, 2, 2, 0.5) 68%, #040202 97%); pointer-events: none; }
+.ld-stars { position: absolute; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; }
+.ld-stars i { position: absolute; border-radius: 50%; background: #ffe9c9; }
+.ld-stars b { position: absolute; background: linear-gradient(180deg, #ffe9c4, #ffb35c); clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%); }
+.ld-stars s { position: absolute; text-decoration: none; font-style: normal; color: rgba(255, 210, 140, 0.5); line-height: 1; }
 
 /* The design zeroes heading and paragraph margins and re-adds
    only the ones it wants; the site sheet and the UA sheet leave
@@ -37,13 +41,14 @@ body::after { content: ""; position: fixed; inset: 0; z-index: -1; background: l
 
 .ld-wrap { max-width: 1180px; margin: 0 auto; padding: 0 22px; }
 
-.ld-header { position: sticky; top: 0; z-index: 20; backdrop-filter: blur(9px) saturate(1.15); -webkit-backdrop-filter: blur(9px) saturate(1.15); background: rgba(10, 7, 5, 0.72); border-bottom: 1px solid rgba(255, 255, 255, 0.07); }
-.ld-hbar { display: flex; align-items: center; gap: 26px; height: 58px; }
+.ld-header { position: fixed; top: 14px; left: 0; right: 0; z-index: 40; }
+.ld-hbar { display: flex; align-items: center; gap: 22px; height: 56px; padding: 0 10px 0 18px; border-radius: 999px; background: linear-gradient(180deg, rgba(12, 8, 6, 0.58), rgba(12, 8, 6, 0) 52%), rgba(19, 14, 10, 0.84); backdrop-filter: blur(9px) saturate(1.15); -webkit-backdrop-filter: blur(9px) saturate(1.15); border: 1px solid rgba(255, 106, 0, 0.16); box-shadow: 0 14px 34px rgba(0, 0, 0, 0.45); }
 .ld-wordmark { display: inline-flex; align-items: center; flex: none; margin: 0; text-decoration: none; }
 .ld-wordmark .wordmark-glyph { height: 30px; width: 30px; margin-right: 9px; }
-.ld-nav { display: flex; gap: 20px; margin-left: 8px; }
-.ld-nav a { color: var(--ld-dim); text-decoration: none; font-size: 15.5px; white-space: nowrap; }
+.ld-nav { display: flex; gap: 18px; margin-left: 4px; }
+.ld-nav a { color: var(--ld-dim); text-decoration: none; font-family: Rajdhani, sans-serif; font-weight: 600; text-transform: uppercase; letter-spacing: 0.07em; font-size: 14.5px; white-space: nowrap; }
 .ld-nav a:hover { color: var(--text); }
+.ld-blk, .ld-feat { scroll-margin-top: 92px; }
 .ld-hsp { flex: 1; }
 
 .ld-btn { display: inline-block; padding: 9px 18px; border-radius: 9px; font-family: Rajdhani, sans-serif; font-weight: 600; font-size: 16px; text-decoration: none; border: 1px solid transparent; cursor: pointer; white-space: nowrap; flex: none; }
@@ -56,10 +61,10 @@ body::after { content: ""; position: fixed; inset: 0; z-index: -1; background: l
 .ld-main { display: block; }
 .ld-error { margin: 18px 0 0; padding: 0.6rem 0.9rem; border: 1px solid rgba(239, 68, 68, 0.45); border-radius: var(--r-md); background: rgba(60, 12, 8, 0.5); color: #ffb4a8; }
 
-.ld-hero { padding: 74px 0 8px; }
+.ld-hero { padding: 128px 0 8px; }
 .ld-kicker { color: var(--gold); letter-spacing: 0.34em; font-size: 12.5px; font-weight: 600; text-transform: uppercase; }
 .ld-hero h1 { font-size: clamp(40px, 6.2vw, 68px); line-height: 1.04; font-weight: 700; margin: 14px 0 16px; max-width: 13.5em; }
-.ld-hero h1 .ld-amp { color: var(--accent); }
+.ld-hero h1 .ld-amp { background: linear-gradient(90deg, #ffd27a 0%, #ff6a1a 50%, #d63c14 100%); -webkit-background-clip: text; background-clip: text; color: transparent; text-shadow: none; }
 .ld-sub { font-size: clamp(17px, 2vw, 20.5px); color: #e3d5c2; max-width: 37em; }
 .ld-sub b { color: var(--text); }
 .ld-ctas { display: flex; gap: 14px; margin: 28px 0 12px; flex-wrap: wrap; }
@@ -143,7 +148,7 @@ body::after { content: ""; position: fixed; inset: 0; z-index: -1; background: l
    terms, each card naming the modules that loop runs on. */
 .ld-styles { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-top: 26px; }
 .ld-scard { padding: 22px; }
-.ld-scard .ld-who { color: var(--gold); letter-spacing: 0.22em; font-size: 12px; font-weight: 600; text-transform: uppercase; }
+.ld-scard .ld-who { background: linear-gradient(90deg, #ffd27a 0%, #ff6a1a 50%, #d63c14 100%); -webkit-background-clip: text; background-clip: text; color: transparent; letter-spacing: 0.22em; font-size: 12px; font-weight: 600; text-transform: uppercase; }
 .ld-scard h3 { font-size: 21px; margin: 6px 0 7px; }
 .ld-scard p { color: var(--ld-dim); font-size: 15.5px; }
 .ld-chips { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
@@ -243,6 +248,42 @@ body::after { content: ""; position: fixed; inset: 0; z-index: -1; background: l
 .ld-legal { font-size: 12.5px; margin-bottom: 10px; }
 .ld-version { margin-top: 8px; }
 
+/* Gradient text fallback for the two landing spots that carry
+   the site gradient outside an h2/h3: the hero's tail and the
+   playstyle labels. Mirrors style.css's heading fallback. */
+@supports not (background-clip: text) {
+  .ld-hero h1 .ld-amp, .ld-scard .ld-who { background: none; color: var(--gold); }
+}
+@media (forced-colors: active) {
+  .ld-hero h1 .ld-amp, .ld-scard .ld-who { background: none; color: CanvasText; }
+}
+
+/* The floating cluster, bottom right: the demo stays in reach
+   for the whole scroll; back-to-top joins it once the reader is
+   deep enough to need it (landing.js toggles its hidden flag). */
+.ld-float { position: fixed; right: 18px; bottom: 18px; z-index: 40; display: flex; flex-direction: column; align-items: flex-end; gap: 9px; }
+.ld-float .ld-btn { box-shadow: 0 10px 26px rgba(0, 0, 0, 0.55); border-radius: 999px; }
+.ld-topbtn[hidden] { display: none; }
+
+/* Public tools modal: every public tool by category, each a
+   direct link. Opened from the final CTA (and anywhere else the
+   data-open-tools hook lands); closes on the backdrop, the x,
+   or Escape (landing.js). */
+.ld-modal { position: fixed; inset: 0; z-index: 80; display: flex; align-items: center; justify-content: center; padding: 16px; }
+.ld-modal[hidden] { display: none; }
+.ld-modal-backdrop { position: absolute; inset: 0; background: rgba(2, 1, 1, 0.74); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+.ld-modal-card { position: relative; width: min(880px, 100%); max-height: 86vh; overflow: auto; border-radius: 20px; padding: 26px 28px 30px; }
+.ld-modal-card h3 { font-size: 27px; margin: 4px 0 6px; }
+.ld-tm-sub { color: var(--ld-dim); font-size: 14.5px; max-width: 56ch; }
+.ld-modal-x { position: absolute; top: 14px; right: 14px; width: 34px; height: 34px; border-radius: 50%; border: 1px solid rgba(255, 255, 255, 0.07); background: rgba(19, 14, 10, 0.5); color: var(--text); font-size: 17px; cursor: pointer; line-height: 1; }
+.ld-tm-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px 28px; margin-top: 18px; }
+.ld-tm-group h4 { font-family: Rajdhani, sans-serif; text-transform: uppercase; letter-spacing: 0.08em; font-size: 15px; margin: 0 0 6px; }
+.ld-tm-group a { display: block; padding: 7px 2px; border-bottom: 1px dashed rgba(255, 255, 255, 0.06); color: var(--text); text-decoration: none; }
+.ld-tm-group a:last-child { border-bottom: 0; }
+.ld-tm-group a strong { font-size: 15px; font-weight: 600; }
+.ld-tm-group a span { display: block; color: var(--ld-dim); font-size: 13px; }
+.ld-tm-group a:hover strong { color: var(--amber, #ffb35c); }
+
 @media (max-width: 900px) {
   .ld-strip-grid, .ld-trust, .ld-tools { grid-template-columns: 1fr; }
   .ld-styles { grid-template-columns: 1fr; }
@@ -254,6 +295,7 @@ body::after { content: ""; position: fixed; inset: 0; z-index: -1; background: l
   .ld-feat-vis { order: 2; }
   .ld-brief { grid-template-columns: 1fr; }
   .ld-nav { display: none; }
+  .ld-tm-grid { grid-template-columns: 1fr; }
   /* The planner card's three totals wrap as a left-aligned
      group instead of stretching across the card's full width. */
   .ld-ptotal { justify-content: flex-start; column-gap: 20px; }

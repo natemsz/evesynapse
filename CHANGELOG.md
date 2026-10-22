@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.5.7.3] - 2026-10-22
+
+Automated build of EveSynapse v0.5.7.3. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+
+## What's Changed
+### 🚀 Features
+* Landing starfield: bake the star scatter into a static tile by @natemsz in https://github.com/natemsz/evesynapse/pull/605
+* Landing: header pill flush to the top of the viewport by @natemsz in https://github.com/natemsz/evesynapse/pull/607
+### 🐛 Bug Fixes
+* Map: zoom-tier label discipline for the tactical projection by @natemsz in https://github.com/natemsz/evesynapse/pull/606
+### Other Changes
+* docs(changelog): review changelog for v0.5.7.2 by @github-actions[bot] in https://github.com/natemsz/evesynapse/pull/604
+
+
+**Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.7.2...v0.5.7.3
+
 ## [v0.5.7.2] - 2026-10-22
 
 Automated build of EveSynapse v0.5.7.2. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).

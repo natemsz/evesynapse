@@ -4,7 +4,7 @@
 {{define "content"}}
 {{with .KillPage}}
 {{if not .Row.ID}}
-<p class="kp-missing">This kill isn't on the killboard. It may not have been posted publicly yet, or the link is wrong. <a href="/intel/kills/">Back to the killboard</a></p>
+<p class="kp-missing prose">This kill isn't on the killboard. It may not have been posted publicly yet, or the link is wrong. <a href="/intel/kills/">Back to the killboard</a></p>
 {{else}}
 {{/* One kill (killboard.go). The hero carries what died, whose it
      was, where, when and what it was worth by our own appraisal; the

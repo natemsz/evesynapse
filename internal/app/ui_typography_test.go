@@ -33,6 +33,35 @@ func TestMenuTextIsAllCapsRajdhani(t *testing.T) {
 	}
 }
 
+// TestTabNavTypeSpec pins the tab-navigation face: every tab bar
+// on the Rajdhani capitals treatment (section tabs, the strategy
+// tabs, the contract spec tabs, the fitting view tabs) reads at
+// 12px, weight 500, regular letter spacing. Filter chips keep
+// their own heavier control treatment.
+func TestTabNavTypeSpec(t *testing.T) {
+	style := readStatic(t, "style.css")
+	for _, want := range []string{
+		// Section tabs and strategy tabs share the tab rule; the
+		// chip is not a tab and keeps its own rule.
+		".section-tabs a, .section-tabs .tabs-more-btn, .ti-tabs button {\n  font-family: \"Rajdhani\", \"Segoe UI\", sans-serif;\n  font-weight: 500;\n  text-transform: uppercase;\n  letter-spacing: normal;\n  font-size: 0.75rem;\n}",
+		".chip {\n  font-family: \"Rajdhani\", \"Segoe UI\", sans-serif;\n  font-weight: 600;\n  text-transform: uppercase;\n  letter-spacing: 0.06em;\n}",
+		// The strategy tabs' pill paint block states the same spec.
+		".ti-tabs button {\n  font-family: Rajdhani, sans-serif;\n  font-weight: 500;\n  text-transform: uppercase;\n  letter-spacing: normal;\n  font-size: 0.75rem;",
+	} {
+		if !strings.Contains(style, want) {
+			t.Errorf("style.css missing tab rule %q", want)
+		}
+	}
+	contracts := readStatic(t, "contracts.css")
+	if want := "font-weight: 500; text-transform: uppercase; letter-spacing: normal; font-size: 0.75rem;"; !strings.Contains(contracts, want) {
+		t.Errorf("contracts.css .cs-tab missing tab spec %q", want)
+	}
+	fit := readStatic(t, "fit.css")
+	if want := "font-weight: 500; text-transform: uppercase; letter-spacing: normal;\n    font-size: 0.75rem;"; !strings.Contains(fit, want) {
+		t.Errorf("fit.css .fit-mtabs button missing tab spec %q", want)
+	}
+}
+
 // TestOpenProseReadsInInter pins the prose role: the shared sheet
 // carries the Inter prose rule, and the intel pages mark their
 // standalone explanatory blocks with it. Widget, card and table

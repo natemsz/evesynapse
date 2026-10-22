@@ -67,8 +67,8 @@
     padding: 0.55rem 0.3rem; min-height: 2.5rem;
     background: none; border: 0; cursor: pointer;
     color: var(--muted); font-family: "Rajdhani", "Segoe UI", sans-serif;
-    font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;
-    font-size: 0.85rem; white-space: nowrap;
+    font-weight: 500; text-transform: uppercase; letter-spacing: normal;
+    font-size: 0.75rem; white-space: nowrap;
   }
   .fit-mtabs > button + button { border-left: 1px solid var(--box-edge); }
   .fit-mtabs > button.on { background: var(--accent); color: #16100b; }

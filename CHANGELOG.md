@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.5.6.6] - 2026-10-22
+
+Automated build of EveSynapse v0.5.6.6. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+
+## What's Changed
+### 🚀 Features
+* Typography foundation: small-caps Rajdhani menus, Inter prose role, bold pass by @natemsz in https://github.com/natemsz/evesynapse/pull/572
+### Other Changes
+* docs(changelog): review changelog for v0.5.6.5 by @github-actions[bot] in https://github.com/natemsz/evesynapse/pull/571
+* Map: re-route visibly, fly to the route, pick the system with something on it by @natemsz in https://github.com/natemsz/evesynapse/pull/573
+* Map: merged territory, shareable views, flat buttons, clearer type by @natemsz in https://github.com/natemsz/evesynapse/pull/574
+
+
+**Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.6.5...v0.5.6.6
+
 ## [v0.5.6.5] - 2026-10-21
 
 Automated build of EveSynapse v0.5.6.5. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).

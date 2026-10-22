@@ -370,8 +370,9 @@ func TestLandingMockupFidelity(t *testing.T) {
 		"body::before { z-index: -3; position: absolute; top: 0; left: 0; right: 0; bottom: auto; height: 72rem;",
 		"body::after { content: \"\"; position: absolute; top: 0; left: 0; right: 0; height: 72rem; z-index: -2; background: linear-gradient(180deg, rgba(4, 2, 2, 0.1), rgba(4, 2, 2, 0) 30%, rgba(4, 2, 2, 0.26) 58%, rgba(4, 2, 2, 0.62) 82%, #040202 100%); pointer-events: none; }",
 		".ld-stars { position: absolute; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; background: url(\"/static/stars-tile.webp?v=047d2bb63562f133\") repeat; }",
-		// The header floats as one glass pill over the art.
-		".ld-header { position: fixed; top: 14px;",
+		// The header is one glass pill pinned flush to the top of the
+		// viewport over the art: no gap above it.
+		".ld-header { position: fixed; top: 0;",
 		// The site gradient on the two landing spots that carry
 		// it outside an h2/h3: the hero's tail and the
 		// playstyle labels.

@@ -111,7 +111,7 @@
     <input type="hidden" name="type" value="{{$item.TypeID}}">
     <input type="hidden" name="region" value="{{$item.RegionID}}">
     <input type="hidden" name="next" value="/market/?type={{$item.TypeID}}&region={{$item.RegionID}}">
-    <label><small>Watching in {{$item.RegionName}} — alert me at</small>
+    <label><small>Watching in {{$item.RegionName}}: alert me at</small>
       <input type="number" name="threshold" min="1" max="50" step="any" value="{{$item.WatchThreshold}}" size="4">
       <small>% over 7 days</small></label>
     <button class="btn" type="submit">Update watch</button>

@@ -28,7 +28,7 @@
   {{if .Stats}}
   <p><small>{{.Stats.Days}} days of recorded trades in {{.RegionName}}: average {{.Stats.Mean}} ISK · low {{.Stats.Min}} · high {{.Stats.Max}} · latest {{.Stats.Latest}} ({{.Stats.LastDay}}){{if .Change7}} · 7 days {{.Change7}}{{end}}{{if .Change30}} · 30 days {{.Change30}}{{end}}</small></p>
   {{end}}
-  {{if .HistoryLastDay}}<p><small>Last trades {{.HistoryLastDay}} — this item hasn't traded in {{.RegionName}} recently.</small></p>{{end}}
+  {{if .HistoryLastDay}}<p><small>Last trades {{.HistoryLastDay}}. This item hasn't traded in {{.RegionName}} recently.</small></p>{{end}}
   {{if $c.Recent}}
   <h4>Last recorded days</h4>
   <div class="tw">

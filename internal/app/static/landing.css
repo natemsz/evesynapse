@@ -45,7 +45,7 @@ body::after { content: ""; position: absolute; top: 0; left: 0; right: 0; height
 
 .ld-wrap { max-width: 1180px; margin: 0 auto; padding: 0 22px; }
 
-.ld-header { position: fixed; top: 14px; left: 0; right: 0; z-index: 40; }
+.ld-header { position: fixed; top: 0; left: 0; right: 0; z-index: 40; }
 .ld-hbar { display: flex; align-items: center; gap: 22px; height: 56px; padding: 0 10px 0 18px; border-radius: 999px; background: linear-gradient(180deg, rgba(12, 8, 6, 0.58), rgba(12, 8, 6, 0) 52%), rgba(19, 14, 10, 0.84); backdrop-filter: blur(9px) saturate(1.15); -webkit-backdrop-filter: blur(9px) saturate(1.15); border: 1px solid rgba(255, 106, 0, 0.16); box-shadow: 0 14px 34px rgba(0, 0, 0, 0.45); }
 .ld-wordmark { display: inline-flex; align-items: center; flex: none; margin: 0; text-decoration: none; }
 .ld-wordmark .wordmark-glyph { height: 30px; width: 30px; margin-right: 9px; }

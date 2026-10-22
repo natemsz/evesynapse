@@ -8,9 +8,6 @@ package app
 // Three layouts ride in one payload. The universe view is the true
 // top-down picture: every known-space system at its SDE x and z
 // (z flipped so galactic north is up), scaled into a 0..10000 frame.
-// Beside it sits the Improved Projection: the same picture relaxed
-// as one whole (layoutProjection) until overlaps end, for the
-// reader who wants the tactical reading over the true one.
 // The region view is the tactical one, computed rather than
 // hand-drawn: each region's systems start from the same true
 // positions, fitted to their own 0..1000 frame, then pushed apart
@@ -18,6 +15,11 @@ package app
 // the true positions, deterministic, so a layout never shifts
 // between builds of the same dump). Where a system sits relative to
 // its neighbours stays the true picture; only overlaps give way.
+// Beside them sits the Improved Projection: a mosaic of the
+// region layouts (layoutMosaic) -- each region keeps its region
+// view's shape verbatim, set down at its true size on its true
+// centroid -- for the reader who wants the tactical reading at
+// universe scale: one shape at two zooms.
 //
 // Known space only: wormhole space has no stargates to draw, and the
 // abyssal and void pockets are not places on a map.
@@ -47,7 +49,7 @@ import (
 // universeMapVersion is the builder's version: bump it when the
 // payload shape or a layout changes, and the stored payload
 // rebuilds from the stored SDE without a re-import.
-const universeMapVersion = 3
+const universeMapVersion = 4
 
 const (
 	universeFrame = 10000.0 // the universe view's longest side
@@ -225,48 +227,27 @@ func buildUniverseMap(systems []db.ListMapSystemsRow, regions []db.SdeRegion, co
 		S.Prom[i] = mapProminence(len(adj[i]), stationSystems[s.SystemID], tradeHubSystems[s.SystemID])
 	}
 
-	// The Improved Projection: the universe relaxed as one
-	// picture (layoutProjection), precomputed here like every
-	// other layout and carried beside the true positions, so
-	// the client only ever chooses between two stored frames.
-	var allEdges [][2]int
-	for a := range adj {
-		for _, b := range adj[a] {
-			if a < b {
-				allEdges = append(allEdges, [2]int{a, b})
-			}
-		}
-	}
-	proj := layoutProjection(uni, allEdges)
-	for i := range kept {
-		S.PX[i], S.PY[i] = int(math.Round(proj[i][0])), int(math.Round(proj[i][1]))
-	}
-
 	// Each region: its label point and its own decluttered frame.
 	members := make([][]int, len(p.Regions))
 	for i := range kept {
 		members[S.Region[i]] = append(members[S.Region[i]], i)
 	}
+	regionLaid := make([][][2]float64, len(p.Regions))
 	for ri, idxs := range members {
 		if len(idxs) == 0 {
 			continue
 		}
 		cx, cy := 0.0, 0.0
-		pcx, pcy := 0.0, 0.0
 		local := make([][2]float64, len(idxs))
 		pos := make(map[int]int, len(idxs))
 		for k, i := range idxs {
 			cx += float64(S.X[i])
 			cy += float64(S.Y[i])
-			pcx += float64(S.PX[i])
-			pcy += float64(S.PY[i])
 			local[k] = pts[i]
 			pos[i] = k
 		}
 		p.Regions[ri].X = int(math.Round(cx / float64(len(idxs))))
 		p.Regions[ri].Y = int(math.Round(cy / float64(len(idxs))))
-		p.Regions[ri].PX = int(math.Round(pcx / float64(len(idxs))))
-		p.Regions[ri].PY = int(math.Round(pcy / float64(len(idxs))))
 		var edges [][2]int
 		for k, i := range idxs {
 			for _, j := range adj[i] {
@@ -276,12 +257,35 @@ func buildUniverseMap(systems []db.ListMapSystemsRow, regions []db.SdeRegion, co
 			}
 		}
 		laid := layoutRegion(local, edges)
+		regionLaid[ri] = laid
 		w, h := 0.0, 0.0
 		for k, i := range idxs {
 			S.RX[i], S.RY[i] = int(math.Round(laid[k][0])), int(math.Round(laid[k][1]))
 			w, h = math.Max(w, laid[k][0]), math.Max(h, laid[k][1])
 		}
 		p.Regions[ri].W, p.Regions[ri].H = int(math.Ceil(w)), int(math.Ceil(h))
+	}
+
+	// The Improved Projection: the regions' layouts assembled
+	// into the universe frame (layoutMosaic), precomputed here
+	// like every other layout and carried beside the true
+	// positions, so the client only ever chooses between two
+	// stored frames.
+	proj := layoutMosaic(uni, members, regionLaid)
+	for i := range kept {
+		S.PX[i], S.PY[i] = int(math.Round(proj[i][0])), int(math.Round(proj[i][1]))
+	}
+	for ri, idxs := range members {
+		if len(idxs) == 0 {
+			continue
+		}
+		pcx, pcy := 0.0, 0.0
+		for _, i := range idxs {
+			pcx += float64(S.PX[i])
+			pcy += float64(S.PY[i])
+		}
+		p.Regions[ri].PX = int(math.Round(pcx / float64(len(idxs))))
+		p.Regions[ri].PY = int(math.Round(pcy / float64(len(idxs))))
 	}
 	return p
 }
@@ -384,106 +388,75 @@ func regionMinSpacing(n int) float64 {
 	return math.Min(math.Max(regionFrame/math.Sqrt(float64(n))*0.8, 45), 160)
 }
 
-// universeMinSpacing is the closest two systems may sit in the
-// Improved Projection: at the universe's fitted size this is a
-// few screen pixels -- dots stop overlapping, and at reading
-// zoom neighbouring names have room -- without demanding so
-// much space that the anchored layout tears the map apart.
-func universeMinSpacing(n int) float64 {
-	if n < 2 {
-		return 60
-	}
-	return math.Min(math.Max(universeFrame/math.Sqrt(float64(n))*0.62, 42), 95)
-}
+// mosaicCentroidSpread is how far the mosaic pushes the
+// regions' anchors apart, radially from the frame's centre,
+// before the tiles are set down: neighbouring tiles clear each
+// other a little, and no bearing between two anchors changes --
+// the spread is one similarity, and so is the final frame fit.
+const mosaicCentroidSpread = 1.05
 
-// layoutProjection is the universe's tactical picture: the true
-// top-down positions (already fitted to universeFrame) relaxed
-// until no two systems crowd closer than universeMinSpacing.
-// It is layoutRegion's recipe at universe scale -- crowded
-// pairs push apart, long gate links pull back, and every system
-// is anchored gently to home, so the projected map stays
-// recognisably the real one, only readable. Where layoutRegion
-// can afford every pair, ~5,400 systems cannot: each step
-// buckets systems into a grid of spacing-sized cells and only
-// the neighbours in adjacent cells can crowd, which keeps a
-// step near-linear. Deterministic, like layoutRegion: buckets
-// are built and walked in index order, steps are fixed, and
-// coincident systems separate along an index-fixed direction.
-func layoutProjection(true2D [][2]float64, edges [][2]int) [][2]float64 {
-	n := len(true2D)
-	if n == 0 {
-		return nil
+// layoutMosaic assembles the projected frame from the regions'
+// own tactical layouts, one tile per region. A region's shape
+// in the projection is its region-view layout verbatim -- the
+// same arrangement at a second zoom -- under one uniform scale
+// per region: the shape is set down at the size of the region's
+// true extent, centred on the region's true centroid (spread a
+// little for clearance, see mosaicCentroidSpread). Relative
+// sizes and bearings across the universe stay the true ones,
+// and the gate web ties the tiles together. Nothing is
+// re-solved at this level: where a system sits inside its
+// region is the region layout's business, settled there.
+// Deterministic: means and extents over fixed member lists, a
+// fixed spread, and the shared frame fit.
+func layoutMosaic(uni [][2]float64, members [][]int, regionLaid [][][2]float64) [][2]float64 {
+	out := make([][2]float64, len(uni))
+	if len(uni) == 0 {
+		return out
 	}
-	if n == 1 {
-		return [][2]float64{{universeFrame / 2, universeFrame / 2}}
+	// The frame's centre, the pivot the anchors spread from.
+	minX, minY := math.Inf(1), math.Inf(1)
+	maxX, maxY := math.Inf(-1), math.Inf(-1)
+	for _, p := range uni {
+		minX, maxX = math.Min(minX, p[0]), math.Max(maxX, p[0])
+		minY, maxY = math.Min(minY, p[1]), math.Max(maxY, p[1])
 	}
-	anchor := make([][2]float64, n)
-	copy(anchor, true2D)
-	pos := make([][2]float64, n)
-	copy(pos, anchor)
-	minD := universeMinSpacing(n)
-	const steps = 420
-	type cellKey [2]int
-	for step := 0; step < steps; step++ {
-		cool := 1 - float64(step)/steps*0.6
-		buckets := make(map[cellKey][]int, n*2)
-		for i := range pos {
-			k := cellKey{int(math.Floor(pos[i][0] / minD)), int(math.Floor(pos[i][1] / minD))}
-			buckets[k] = append(buckets[k], i)
+	ctrX, ctrY := (minX+maxX)/2, (minY+maxY)/2
+	for ri, idxs := range members {
+		laid := regionLaid[ri]
+		if len(idxs) == 0 || len(laid) != len(idxs) {
+			continue
 		}
-		for i := 0; i < n; i++ {
-			ci, cj := int(math.Floor(pos[i][0]/minD)), int(math.Floor(pos[i][1]/minD))
-			for gx := ci - 1; gx <= ci+1; gx++ {
-				for gy := cj - 1; gy <= cj+1; gy++ {
-					for _, j := range buckets[cellKey{gx, gy}] {
-						if j <= i {
-							continue
-						}
-						dx, dy := pos[j][0]-pos[i][0], pos[j][1]-pos[i][1]
-						d := math.Hypot(dx, dy)
-						if d >= minD {
-							continue
-						}
-						if d < 1e-6 {
-							a := float64(i*7+j*13) * 0.618
-							dx, dy, d = math.Cos(a), math.Sin(a), 1
-						}
-						push := (minD - d) / 2 * 0.65 * cool
-						ux, uy := dx/d, dy/d
-						pos[i][0] -= ux * push
-						pos[i][1] -= uy * push
-						pos[j][0] += ux * push
-						pos[j][1] += uy * push
-					}
-				}
-			}
+		var cx, cy, rcx, rcy float64
+		loX, loY := math.Inf(1), math.Inf(1)
+		hiX, hiY := math.Inf(-1), math.Inf(-1)
+		for k, i := range idxs {
+			cx += uni[i][0]
+			cy += uni[i][1]
+			rcx += laid[k][0]
+			rcy += laid[k][1]
+			loX, hiX = math.Min(loX, uni[i][0]), math.Max(hiX, uni[i][0])
+			loY, hiY = math.Min(loY, uni[i][1]), math.Max(hiY, uni[i][1])
 		}
-		for _, e := range edges {
-			a, b := e[0], e[1]
-			dx, dy := pos[b][0]-pos[a][0], pos[b][1]-pos[a][1]
-			d := math.Hypot(dx, dy)
-			if d <= 2.4*minD || d < 1e-6 {
-				continue
-			}
-			pull := (d - 2.4*minD) * 0.02 * cool
-			ux, uy := dx/d, dy/d
-			pos[a][0] += ux * pull
-			pos[a][1] += uy * pull
-			pos[b][0] -= ux * pull
-			pos[b][1] -= uy * pull
+		m := float64(len(idxs))
+		cx, cy, rcx, rcy = cx/m, cy/m, rcx/m, rcy/m
+		// The tile's scale: the shape's own frame spans
+		// regionFrame on its longest side, so scaling by the
+		// region's true extent over regionFrame sets the tile
+		// down at the region's true size.
+		scale := math.Max(hiX-loX, hiY-loY) / regionFrame
+		if scale <= 0 {
+			// Every system of the region on one true point:
+			// keep the shape at its own scale rather than
+			// collapsing it onto the anchor.
+			scale = 1
 		}
-		// Home pulls far weaker than in a region's layout: a
-		// dense core can only reach spacing by genuinely
-		// expanding, and a strong anchor would hold it crowded
-		// in equilibrium. The gates and the cooling keep the
-		// expansion honest and local.
-		home := 0.003 * cool * cool
-		for i := range pos {
-			pos[i][0] += (anchor[i][0] - pos[i][0]) * home
-			pos[i][1] += (anchor[i][1] - pos[i][1]) * home
+		ax := ctrX + (cx-ctrX)*mosaicCentroidSpread
+		ay := ctrY + (cy-ctrY)*mosaicCentroidSpread
+		for k, i := range idxs {
+			out[i] = [2]float64{ax + scale*(laid[k][0]-rcx), ay + scale*(laid[k][1]-rcy)}
 		}
 	}
-	return fitFrame(pos, universeFrame)
+	return fitFrame(out, universeFrame)
 }
 
 // rebuildUniverseMap builds the payload from the stored SDE and

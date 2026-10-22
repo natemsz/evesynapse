@@ -54,58 +54,116 @@ func TestLayoutRegionDeclutters(t *testing.T) {
 	}
 }
 
-// TestLayoutProjectionDeclutters: the Improved Projection takes
-// piled-up systems to readable spacing across the whole universe
-// frame, keeps everyone near home, and is the same on every build.
-func TestLayoutProjectionDeclutters(t *testing.T) {
-	// A dense core (a few hundred systems in a tight patch, the
-	// empire problem), a sparse rim, all in the universe frame.
-	var pts [][2]float64
-	for i := 0; i < 300; i++ {
-		pts = append(pts, [2]float64{5000 + float64(i%20)*3, 5000 + float64(i/20)*3})
+// TestLayoutMosaicPreservesRegionShapes: the projection is a
+// mosaic of the regions' own layouts -- inside a region, every
+// pairwise distance is the region layout's distance under one
+// ratio; across regions, the centroids keep their true bearings;
+// the dense cores arrive already decluttered by their region
+// layouts; and the picture is the same on every build.
+func TestLayoutMosaicPreservesRegionShapes(t *testing.T) {
+	// Three regions in the universe frame, shaped like real
+	// ones: a tight core with an arm, a second core, a sparse
+	// handful, plus a one-system region.
+	wide := func(cx, cy float64) [][2]float64 {
+		var pts [][2]float64
+		for i := 0; i < 24; i++ { // the crowded core
+			pts = append(pts, [2]float64{cx + float64(i%6)*4, cy + float64(i/6)*4})
+		}
+		for i := 0; i < 12; i++ { // the arm reaching away
+			pts = append(pts, [2]float64{cx + 120 + float64(i)*70, cy + 90 + float64(i)*45})
+		}
+		return pts
 	}
-	for i := 0; i < 60; i++ {
-		a := float64(i) / 60 * 2 * math.Pi
-		pts = append(pts, [2]float64{5000 + math.Cos(a)*4200, 5000 + math.Sin(a)*4200})
+	west := wide(2400, 3800)
+	east := wide(6600, 5200)
+	var south [][2]float64
+	for i := 0; i < 6; i++ {
+		south = append(south, [2]float64{4300 + float64(i)*330, 900 + float64(i%2)*700})
 	}
-	var edges [][2]int
-	for i := 1; i < len(pts); i++ {
-		edges = append(edges, [2]int{i - 1, i})
+	solo := [][2]float64{{1500, 8200}}
+
+	uni := append(append(append(append([][2]float64{}, west...), east...), south...), solo...)
+	var members [][]int
+	var regionLaid [][][2]float64
+	start := 0
+	for _, pts := range [][][2]float64{west, east, south, solo} {
+		var idxs []int
+		var edges [][2]int
+		for k := range pts {
+			idxs = append(idxs, start+k)
+			if k > 0 {
+				edges = append(edges, [2]int{k - 1, k})
+			}
+		}
+		members = append(members, idxs)
+		regionLaid = append(regionLaid, layoutRegion(pts, edges))
+		start += len(pts)
 	}
-	a := layoutProjection(pts, edges)
-	b := layoutProjection(pts, edges)
-	minD := universeMinSpacing(len(pts))
-	worst := math.Inf(1)
-	moveSum, moveMax := 0.0, 0.0
+
+	a := layoutMosaic(uni, members, regionLaid)
+	b := layoutMosaic(uni, members, regionLaid)
 	for i := range a {
 		if a[i] != b[i] {
-			t.Fatalf("projection is not deterministic at %d: %v vs %v", i, a[i], b[i])
+			t.Fatalf("mosaic is not deterministic at %d: %v vs %v", i, a[i], b[i])
 		}
 		if a[i][0] < -1e-6 || a[i][1] < -1e-6 || a[i][0] > universeFrame+1e-6 || a[i][1] > universeFrame+1e-6 {
 			t.Errorf("system %d left the frame: %v", i, a[i])
 		}
-		// Near home is measured against the input as given; the
-		// layout's final refit only makes this stricter here,
-		// since the test patch does not fill the frame.
-		moveSum += math.Hypot(a[i][0]-pts[i][0], a[i][1]-pts[i][1])
-		moveMax = math.Max(moveMax, math.Hypot(a[i][0]-pts[i][0], a[i][1]-pts[i][1]))
-		for j := i + 1; j < len(a); j++ {
-			worst = math.Min(worst, math.Hypot(a[i][0]-a[j][0], a[i][1]-a[j][1]))
+	}
+
+	// One ratio per region: every intra-region distance in the
+	// mosaic is the region layout's distance times one constant.
+	for ri, idxs := range members {
+		laid := regionLaid[ri]
+		lo, hi := math.Inf(1), math.Inf(-1)
+		for x := 0; x < len(idxs); x++ {
+			for y := x + 1; y < len(idxs); y++ {
+				ld := math.Hypot(laid[x][0]-laid[y][0], laid[x][1]-laid[y][1])
+				if ld < 1 {
+					continue
+				}
+				md := math.Hypot(a[idxs[x]][0]-a[idxs[y]][0], a[idxs[x]][1]-a[idxs[y]][1])
+				r := md / ld
+				lo, hi = math.Min(lo, r), math.Max(hi, r)
+			}
+		}
+		if hi > lo*1.000001 {
+			t.Errorf("region %d: intra-region ratios run %.6f..%.6f, want one uniform scale", ri, lo, hi)
 		}
 	}
-	if worst < 0.6*minD {
-		t.Errorf("closest pair %.1f apart, want at least %.1f (minimum spacing %.1f)", worst, 0.6*minD, minD)
+
+	// The crowded cores arrive decluttered: the west core's
+	// systems sat 4 units apart in truth and sit far apart in
+	// the mosaic, because the region layout's spacing carried.
+	worst := math.Inf(1)
+	for x := 0; x < 24; x++ {
+		for y := x + 1; y < 24; y++ {
+			worst = math.Min(worst, math.Hypot(a[x][0]-a[y][0], a[x][1]-a[y][1]))
+		}
 	}
-	// Near home: the core above starts at 3-unit spacing and
-	// must expand ~30x just to reach spacing, so its mean move
-	// is necessarily a few percent of the frame. Anything
-	// beyond 8% would mean the layout, not the crowding, is
-	// deciding where systems live.
-	if mean := moveSum / float64(len(pts)); mean > 800 {
-		t.Errorf("mean move %.0f, want everyone near home (<= 800 of a %.0f frame)", mean, universeFrame)
+	if worst < 25 {
+		t.Errorf("west core's closest pair %.1f apart in the mosaic, want the region layout's spacing (>= 25)", worst)
 	}
-	if moveMax > 2500 {
-		t.Errorf("worst move %.0f, want no system flung (<= 2500)", moveMax)
+
+	// Centroid bearings are the true ones: west -> east and
+	// west -> south point the same way in both frames.
+	centroid := func(pts [][2]float64, idxs []int) [2]float64 {
+		var c [2]float64
+		for _, i := range idxs {
+			c[0] += pts[i][0]
+			c[1] += pts[i][1]
+		}
+		return [2]float64{c[0] / float64(len(idxs)), c[1] / float64(len(idxs))}
+	}
+	bearing := func(from, to [2]float64) float64 {
+		return math.Atan2(-(to[1] - from[1]), to[0]-from[0])
+	}
+	for _, pair := range [][2]int{{0, 1}, {0, 2}, {1, 2}} {
+		tb := bearing(centroid(uni, members[pair[0]]), centroid(uni, members[pair[1]]))
+		mb := bearing(centroid(a, members[pair[0]]), centroid(a, members[pair[1]]))
+		if d := math.Abs(tb - mb); d > 0.001 {
+			t.Errorf("centroid bearing %d -> %d off by %.4f rad (true %.4f, mosaic %.4f)", pair[0], pair[1], d, tb, mb)
+		}
 	}
 }
 

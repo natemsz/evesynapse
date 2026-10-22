@@ -1276,7 +1276,8 @@
     if (startQuery.get("npc") === "0") sovNPC = false;
     if (startQuery.get("npc") === "1") sovNPC = true;
     // Improved Projection: the universe in its precomputed
-    // relaxed frame. A remembered preference, on every visit
+    // assembled frame -- each region in its own tactical
+    // shape, set at its true place. A remembered preference, on every visit
     // until the reader changes it; a link's proj= settles it
     // for that visit only, without touching the preference.
     var PROJ_KEY = "evesynapse-map-projection", projOn = false;
@@ -3932,7 +3933,7 @@
         syncURL();
         schedule();
         hint(projOn
-          ? "Improved projection is on: the universe in its relaxed, readable layout. It stays on until you turn it off."
+          ? "Improved projection is on: the universe assembled region by region, each in its tactical shape. It stays on until you turn it off."
           : "Improved projection is off: the universe at its true positions. It stays off until you turn it on.");
       });
     }

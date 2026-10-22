@@ -35,7 +35,7 @@
       <a class="ld-btn ld-btn-ember" href="/auth/link">Link your characters, free</a>
       <a class="ld-btn ld-btn-ghost" href="/auth/demo">Try it now</a>
     </div>
-    <div class="ld-cta-note">Try it now opens a shared demo account, no sign-in needed · Link with only the scopes you pick · Key held in a hardware vault · Open source</div>
+    <div class="ld-cta-note">Try it now opens in demo mode, no sign-in needed</div>
 
     {{if .HasStrip}}
     <div class="ld-glass ld-strip">
@@ -54,6 +54,60 @@
     </div>
     {{end}}
   </div>
+
+  <section class="ld-blk" id="tools">
+    <h2>Every tool in the box.</h2>
+    <p class="ld-lede">Twenty-three modules plus the core pages, all reading the same stored data. The public tools work with no account at all.</p>
+    <div class="ld-tools">
+      <div class="ld-glass ld-tgroup"><h3>Your pilots</h3><ul>
+        <li><b>Fleet Overview</b> with the daily briefing</li>
+        <li><b>Wallet</b> and journal across every character</li>
+        <li><b>Assets</b> searchable account-wide</li>
+        <li><b>Mail</b>, <b>Calendar</b> and <b>Contacts</b></li>
+        <li><b>Skill Plans</b> and training tracking</li>
+      </ul></div>
+      <div class="ld-glass ld-tgroup"><h3>Fitting</h3><ul>
+        <li><b>Fitting Simulator</b> with real skill math</li>
+        <li><b>Saved Fits</b> and community <b>Public Fits</b></li>
+        <li><b>Doctrines</b>, your corp's official fit sets</li>
+        <li><b>Ship Replacement</b> paid against doctrines</li>
+        <li><b>Save to EVE</b> from the simulator</li>
+      </ul></div>
+      <div class="ld-glass ld-tgroup"><h3>Industry</h3><ul>
+        <li><b>Build Planner</b> with hangar coverage checks</li>
+        <li><b>PI Planner</b> from extractor to finished goods</li>
+        <li><b>Restock Planner</b> for market stock levels</li>
+        <li><b>Blueprints</b> and job tracking</li>
+      </ul></div>
+      <div class="ld-glass ld-tgroup"><h3>Market</h3><ul>
+        <li><b>Appraisal</b> for piles, hangars and contracts</li>
+        <li><b>Spread Scanner</b> across every hub</li>
+        <li><b>Tradefinder</b> routes between regions</li>
+        <li><b>Trade Ideas</b>, the AI analyst</li>
+        <li><b>Market Orders</b> with outbid tracking</li>
+        <li><b>Top Stations</b> leaderboard</li>
+        <li><b>Contract Search</b> across public contracts</li>
+      </ul></div>
+      <div class="ld-glass ld-tgroup"><h3>Corporation</h3><ul>
+        <li><b>Corporation Data</b>: members, wallets, assets, structures</li>
+        <li><b>Groups</b> and roles across the corp</li>
+        <li><b>Discord</b> server roles, ops posts and DMs</li>
+        <li><b>Ops Calendar</b> shared with every member</li>
+      </ul></div>
+      <div class="ld-glass ld-tgroup"><h3>Intel and reference</h3><ul>
+        <li><b>Wars</b>, <b>Incursions</b> and <b>Faction Warfare</b></li>
+        <li><b>Universe Map</b> with threat, kill and sovereignty layers</li>
+        <li><b>Killboard</b> for every public kill in the feed</li>
+        <li><b>Route Planner</b>: shortest, safer, or around the danger</li>
+        <li><b>D-Scan Parser</b>: paste a scan, get the breakdown and a link to share</li>
+        <li><b>Intel Channels</b> shared with a pilot, a corp, an alliance or a group</li>
+        <li><b>Axon</b> feeds your in-game intel chat into your channels</li>
+        <li><b>System Pages</b> with kill heat</li>
+        <li><b>Item Database</b> for all of New Eden</li>
+        <li><b>Character Pages</b> for any pilot</li>
+      </ul></div>
+    </div>
+  </section>
 
   <section class="ld-blk">
     <div class="ld-eyebrow">Trust</div>
@@ -269,60 +323,6 @@
         </div>
         <figcaption>The universe map on the live site, threat layer on: 4-IT9G in Tenerifis, four kills in the last hour.</figcaption>
       </figure>
-    </div>
-  </section>
-
-  <section class="ld-blk" id="tools">
-    <h2>Every tool in the box.</h2>
-    <p class="ld-lede">Twenty-three modules plus the core pages, all reading the same stored data. The public tools work with no account at all.</p>
-    <div class="ld-tools">
-      <div class="ld-glass ld-tgroup"><h3>Your pilots</h3><ul>
-        <li><b>Fleet Overview</b> with the daily briefing</li>
-        <li><b>Wallet</b> and journal across every character</li>
-        <li><b>Assets</b> searchable account-wide</li>
-        <li><b>Mail</b>, <b>Calendar</b> and <b>Contacts</b></li>
-        <li><b>Skill Plans</b> and training tracking</li>
-      </ul></div>
-      <div class="ld-glass ld-tgroup"><h3>Fitting</h3><ul>
-        <li><b>Fitting Simulator</b> with real skill math</li>
-        <li><b>Saved Fits</b> and community <b>Public Fits</b></li>
-        <li><b>Doctrines</b>, your corp's official fit sets</li>
-        <li><b>Ship Replacement</b> paid against doctrines</li>
-        <li><b>Save to EVE</b> from the simulator</li>
-      </ul></div>
-      <div class="ld-glass ld-tgroup"><h3>Industry</h3><ul>
-        <li><b>Build Planner</b> with hangar coverage checks</li>
-        <li><b>PI Planner</b> from extractor to finished goods</li>
-        <li><b>Restock Planner</b> for market stock levels</li>
-        <li><b>Blueprints</b> and job tracking</li>
-      </ul></div>
-      <div class="ld-glass ld-tgroup"><h3>Market</h3><ul>
-        <li><b>Appraisal</b> for piles, hangars and contracts</li>
-        <li><b>Spread Scanner</b> across every hub</li>
-        <li><b>Tradefinder</b> routes between regions</li>
-        <li><b>Trade Ideas</b>, the AI analyst</li>
-        <li><b>Market Orders</b> with outbid tracking</li>
-        <li><b>Top Stations</b> leaderboard</li>
-        <li><b>Contract Search</b> across public contracts</li>
-      </ul></div>
-      <div class="ld-glass ld-tgroup"><h3>Corporation</h3><ul>
-        <li><b>Corporation Data</b>: members, wallets, assets, structures</li>
-        <li><b>Groups</b> and roles across the corp</li>
-        <li><b>Discord</b> server roles, ops posts and DMs</li>
-        <li><b>Ops Calendar</b> shared with every member</li>
-      </ul></div>
-      <div class="ld-glass ld-tgroup"><h3>Intel and reference</h3><ul>
-        <li><b>Wars</b>, <b>Incursions</b> and <b>Faction Warfare</b></li>
-        <li><b>Universe Map</b> with threat, kill and sovereignty layers</li>
-        <li><b>Killboard</b> for every public kill in the feed</li>
-        <li><b>Route Planner</b>: shortest, safer, or around the danger</li>
-        <li><b>D-Scan Parser</b>: paste a scan, get the breakdown and a link to share</li>
-        <li><b>Intel Channels</b> shared with a pilot, a corp, an alliance or a group</li>
-        <li><b>Axon</b> feeds your in-game intel chat into your channels</li>
-        <li><b>System Pages</b> with kill heat</li>
-        <li><b>Item Database</b> for all of New Eden</li>
-        <li><b>Character Pages</b> for any pilot</li>
-      </ul></div>
     </div>
   </section>
 

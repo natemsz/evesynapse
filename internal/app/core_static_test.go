@@ -427,8 +427,9 @@ func TestStaticFileHashVersionTokens(t *testing.T) {
 }
 
 // wallpaperRef matches a wallpaper reference in a stylesheet or
-// template, with its ?v= token when one is present.
-var wallpaperRef = regexp.MustCompile(`/static/(bg-[^"')?\s]+|bg\.(?:jpg|jxl))(?:\?v=([0-9a-f]+))?`)
+// template, with its ?v= token when one is present. The landing's
+// star tile rides the same token discipline.
+var wallpaperRef = regexp.MustCompile(`/static/(bg-[^"')?\s]+|bg\.(?:jpg|jxl)|stars-tile\.webp)(?:\?v=([0-9a-f]+))?`)
 
 // TestStaticWallpaperVersionTokens pins the tokens the
 // stylesheets and the base template put on the wallpaper files

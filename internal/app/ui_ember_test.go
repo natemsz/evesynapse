@@ -367,8 +367,8 @@ func TestLandingMockupFidelity(t *testing.T) {
 		// page and masked into it, the fade layer deepening to
 		// page black at the band's foot, the star layer above
 		// both, each under no pointer.
-		"body::before { z-index: -3; position: absolute; top: 0; left: 0; right: 0; bottom: auto; height: 60rem;",
-		"body::after { content: \"\"; position: absolute; top: 0; left: 0; right: 0; height: 60rem; z-index: -2; background: linear-gradient(180deg, rgba(4, 2, 2, 0.12), rgba(4, 2, 2, 0) 26%, rgba(4, 2, 2, 0.5) 68%, #040202 97%); pointer-events: none; }",
+		"body::before { z-index: -3; position: absolute; top: 0; left: 0; right: 0; bottom: auto; height: 72rem;",
+		"body::after { content: \"\"; position: absolute; top: 0; left: 0; right: 0; height: 72rem; z-index: -2; background: linear-gradient(180deg, rgba(4, 2, 2, 0.1), rgba(4, 2, 2, 0) 30%, rgba(4, 2, 2, 0.26) 58%, rgba(4, 2, 2, 0.62) 82%, #040202 100%); pointer-events: none; }",
 		".ld-stars { position: absolute; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; }",
 		// The header floats as one glass pill over the art.
 		".ld-header { position: fixed; top: 14px;",

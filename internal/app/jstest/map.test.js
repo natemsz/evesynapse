@@ -90,6 +90,70 @@ test("region names stay visible and zoom entry needs the preference", () => {
   assert.strictEqual(map.zoomEntryAllowed(true), true);
 });
 
+test("system names are rationed by zoom tier", () => {
+  // Tier 0: region names are the picture, no system names.
+  assert.strictEqual(map.labelTier(1), 0);
+  assert.strictEqual(map.labelTier(6), 0, "the widest tier runs to the old gate");
+  // Tier 1: a few regions fill the view, prominent systems only.
+  assert.strictEqual(map.labelTier(6.5), 1);
+  assert.strictEqual(map.labelTier(24), 1);
+  // Tier 2: a single region or less, every system in view named.
+  assert.strictEqual(map.labelTier(24.5), 2);
+  assert.strictEqual(map.labelTier(60), 2, "the deepest universe zoom");
+});
+
+test("the middle tier names the front of the precedence line, capped", () => {
+  const line = Array.from({ length: 300 }, (_, i) => i);
+  const picked = map.midTierLabels(line, map.LABEL_MID_CAP);
+  assert.strictEqual(picked.length, 120, "the cap is the tier's bound");
+  assert.deepStrictEqual(picked, line.slice(0, 120), "best first, order kept");
+  assert.deepStrictEqual(map.midTierLabels([5, 4], map.LABEL_MID_CAP), [5, 4],
+    "under the cap the line passes through");
+});
+
+test("label collision: greedy in precedence order, touching is not overlap", () => {
+  assert.strictEqual(map.boxesOverlap(0, 0, 50, 10, [25, 5, 50, 10]), true, "crossing boxes collide");
+  assert.strictEqual(map.boxesOverlap(0, 0, 50, 10, [10, 2, 10, 4]), true, "a box inside another collides");
+  assert.strictEqual(map.boxesOverlap(0, 0, 50, 10, [50, 0, 50, 10]), false, "edges that touch do not collide");
+  assert.strictEqual(map.boxesOverlap(0, 0, 50, 10, [60, 30, 50, 10]), false, "apart is apart");
+  // The placement rule itself: walk in precedence order, a name
+  // is skipped when its box would land on one already placed.
+  const placed = [], skipped = [];
+  const greedy = (boxes) => {
+    const kept = [];
+    for (const b of boxes) {
+      if (kept.some((o) => map.boxesOverlap(b[0], b[1], b[2], b[3], o))) skipped.push(b);
+      else { kept.push(b); placed.push(b); }
+    }
+    return kept;
+  };
+  const order = [[0, 0, 50, 10], [25, 5, 50, 10], [100, 0, 50, 10], [110, 2, 50, 10]];
+  assert.deepStrictEqual(greedy(order), [[0, 0, 50, 10], [100, 0, 50, 10]],
+    "the first in line wins its ground; the overlapping later names skip");
+  assert.strictEqual(skipped.length, 2);
+});
+
+test("label precedence follows the payload's prominence, degree before it", () => {
+  const base = {
+    v: 3,
+    regions: [{ id: 10, name: "Alpha", x: 0, y: 0, w: 1000, h: 1000 }],
+    cons: [],
+    sys: {
+      id: [101, 102, 103], n: ["Hub", "Quiet", "Junction"],
+      x: [0, 10, 20], y: [0, 0, 0], s: [0.9, 0.9, 0.9],
+      r: [0, 0, 0], c: [-1, -1, -1], rx: [0, 500, 1000], ry: [0, 0, 0], f: [0, 0, 0]
+    },
+    gates: [0, 1, 0, 2]
+  };
+  // Degrees: Hub 2, Quiet 1, Junction 1 (Quiet first on the ID tie).
+  assert.deepStrictEqual(map.prepare(base).prio, [0, 1, 2], "no prominence array: gate degree, then ID");
+  const withProm = JSON.parse(JSON.stringify(base));
+  withProm.sys.p = [0, 500, 130];
+  delete withProm._g;
+  assert.deepStrictEqual(map.prepare(withProm).prio, [1, 2, 0],
+    "prominence outranks degree: the quiet station system leads, the bare hub of gates last");
+});
+
 test("live layers join onto the map's systems", () => {
   const P = {
     v: 1,

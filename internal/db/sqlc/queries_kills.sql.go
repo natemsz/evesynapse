@@ -876,6 +876,56 @@ func (q *Queries) ListRecentKillEntities(ctx context.Context, since time.Time) (
 	return items, nil
 }
 
+const listSystemKillAttackers = `-- name: ListSystemKillAttackers :many
+SELECT a.killmail_id, a.character_id, a.corporation_id, a.alliance_id, a.ship_type_id
+FROM kill_attackers a
+JOIN kills k ON k.killmail_id = a.killmail_id
+WHERE k.system_id = $1::bigint AND k.killmail_time >= $2::timestamptz
+  AND NOT k.npc AND k.public AND a.character_id > 0
+`
+
+type ListSystemKillAttackersParams struct {
+	SystemID int64     `json:"system_id"`
+	Since    time.Time `json:"since"`
+}
+
+type ListSystemKillAttackersRow struct {
+	KillmailID    int64 `json:"killmail_id"`
+	CharacterID   int64 `json:"character_id"`
+	CorporationID int64 `json:"corporation_id"`
+	AllianceID    int64 `json:"alliance_id"`
+	ShipTypeID    int64 `json:"ship_type_id"`
+}
+
+func (q *Queries) ListSystemKillAttackers(ctx context.Context, arg ListSystemKillAttackersParams) ([]ListSystemKillAttackersRow, error) {
+	rows, err := q.db.QueryContext(ctx, listSystemKillAttackers, arg.SystemID, arg.Since)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListSystemKillAttackersRow
+	for rows.Next() {
+		var i ListSystemKillAttackersRow
+		if err := rows.Scan(
+			&i.KillmailID,
+			&i.CharacterID,
+			&i.CorporationID,
+			&i.AllianceID,
+			&i.ShipTypeID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listSystemRegions = `-- name: ListSystemRegions :many
 SELECT system_id, region_id FROM sde_systems
 `
@@ -895,6 +945,55 @@ func (q *Queries) ListSystemRegions(ctx context.Context) ([]ListSystemRegionsRow
 	for rows.Next() {
 		var i ListSystemRegionsRow
 		if err := rows.Scan(&i.SystemID, &i.RegionID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSystemThreatKills = `-- name: ListSystemThreatKills :many
+SELECT killmail_id, system_id, killmail_time, public, victim_corporation_id
+FROM kills
+WHERE system_id = $1::bigint AND killmail_time >= $2::timestamptz AND NOT npc
+ORDER BY killmail_time
+`
+
+type ListSystemThreatKillsParams struct {
+	SystemID int64     `json:"system_id"`
+	Since    time.Time `json:"since"`
+}
+
+type ListSystemThreatKillsRow struct {
+	KillmailID          int64     `json:"killmail_id"`
+	SystemID            int64     `json:"system_id"`
+	KillmailTime        time.Time `json:"killmail_time"`
+	Public              bool      `json:"public"`
+	VictimCorporationID int64     `json:"victim_corporation_id"`
+}
+
+func (q *Queries) ListSystemThreatKills(ctx context.Context, arg ListSystemThreatKillsParams) ([]ListSystemThreatKillsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listSystemThreatKills, arg.SystemID, arg.Since)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListSystemThreatKillsRow
+	for rows.Next() {
+		var i ListSystemThreatKillsRow
+		if err := rows.Scan(
+			&i.KillmailID,
+			&i.SystemID,
+			&i.KillmailTime,
+			&i.Public,
+			&i.VictimCorporationID,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

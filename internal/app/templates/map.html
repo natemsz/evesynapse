@@ -167,6 +167,20 @@
       <h2 class="map-card-name"></h2>
       <p class="map-card-where"><span class="map-card-sec sec"></span> <span class="map-card-path"></span></p>
       <dl class="map-card-live" hidden></dl>
+      {{/* The data behind the kills and threat layers
+           (/map/system.json), filled by map.js: a camp on now, then
+           the latest kills, each opening on the killboard. */}}
+      <div class="map-card-camp" hidden>
+        <p class="map-card-scans-h">Gate camp now</p>
+        <p class="map-card-camp-who" data-map-camp-who></p>
+        <p class="map-card-camp-ships muted" data-map-camp-ships></p>
+        <ul class="map-card-kill-list"></ul>
+      </div>
+      <div class="map-card-kills" hidden>
+        <p class="map-card-scans-h">Latest kills</p>
+        <ul class="map-card-kill-list"></ul>
+        <a class="map-card-more" data-map-kills-more href="/intel/kills/">All kills here on the killboard</a>
+      </div>
       <p class="map-card-gates muted"></p>
       <ul class="map-card-links"></ul>
       <div class="map-card-actions">

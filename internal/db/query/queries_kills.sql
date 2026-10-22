@@ -255,3 +255,16 @@ WHERE k.killmail_time >= sqlc.arg(since)::timestamptz AND NOT k.npc AND k.public
 
 -- name: GetLatestKillIngest :one
 SELECT COALESCE(MAX(ingested_at), 'epoch'::timestamptz)::timestamptz AS latest FROM kills;
+
+-- name: ListSystemThreatKills :many
+SELECT killmail_id, system_id, killmail_time, public, victim_corporation_id
+FROM kills
+WHERE system_id = sqlc.arg(system_id)::bigint AND killmail_time >= sqlc.arg(since)::timestamptz AND NOT npc
+ORDER BY killmail_time;
+
+-- name: ListSystemKillAttackers :many
+SELECT a.killmail_id, a.character_id, a.corporation_id, a.alliance_id, a.ship_type_id
+FROM kill_attackers a
+JOIN kills k ON k.killmail_id = a.killmail_id
+WHERE k.system_id = sqlc.arg(system_id)::bigint AND k.killmail_time >= sqlc.arg(since)::timestamptz
+  AND NOT k.npc AND k.public AND a.character_id > 0;

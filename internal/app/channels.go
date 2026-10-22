@@ -18,7 +18,8 @@ package app
 // intelchat picks out each line's system, count and clear), and a scan
 // from the scan tool posted into a channel. The map draws the last 30
 // minutes of every channel its reader can see (/map/intel.json), fading
-// as they age, and its routes steer around fresh hostiles. Reports are
+// as they age; a route names the reported systems it crosses but never
+// steers around them, since a report is not danger. Reports are
 // kept 7 days.
 // ---------------------------------------------------------------------------
 

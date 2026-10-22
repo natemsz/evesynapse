@@ -1037,47 +1037,73 @@
     // anchored to the map, not the screen, and labels claim in a
     // fixed order (best-connected systems first), so panning moves
     // labels and cells together and the same names win every frame.
-    // Zooming moves overlaps every frame, so names placed last frame
-    // claim before new ones (inPlaceFirst): a name holds its place
-    // until one already placed truly covers it, and names stop
+    // Zooming moves overlaps every frame, so every name showing last
+    // frame claims before any new one, whatever kind of name it is:
+    // labels are gathered first and placed in three passes (always
+    // shown, showing last frame, new), in their priority order within
+    // each. A name holds its place until one already showing truly
+    // covers it, so a new alliance name cannot push out a region name
+    // that is showing (and lose it back the next frame): names stop
     // blinking in and out as the scale changes.
     var shownLabels = {};
     function drawLabels(k, ox, oy, r) {
-      var nextShown = {};
-      // Run fn over items (already in priority order) twice: the
-      // names showing last frame first, then the rest.
+      var nextShown = {}, queue = [];
+      // Items in priority order; the passes do the rest.
       function inPlaceFirst(items, key, fn) {
-        var i;
-        for (i = 0; i < items.length; i++) if (shownLabels[key(items[i])]) fn(items[i]);
-        for (i = 0; i < items.length; i++) if (!shownLabels[key(items[i])]) fn(items[i]);
+        for (var i = 0; i < items.length; i++) fn(items[i]);
       }
-      var cell = 12, cols = Math.ceil(cw / cell) + 2, grid = new Uint8Array(cols * (Math.ceil(ch / cell) + 2));
-      var gx = ((ox % cell) + cell) % cell, gy = ((oy % cell) + cell) % cell;
+      // Placed names as exact boxes, bucketed by screen area so a
+      // check looks only at its neighbours. Exact geometry (not grid
+      // cells, whose edges a gliding name keeps crossing) means a pair
+      // of names moving apart or together changes once, not back and
+      // forth.
+      var BUCKET = 96, buckets = {};
       function claim(x, y, w, h) {
-        var x0 = Math.floor((x - gx) / cell) + 1, y0 = Math.floor((y - gy) / cell) + 1;
-        var x1 = Math.floor((x + w - gx) / cell) + 1, y1 = Math.floor((y + h - gy) / cell) + 1;
-        if (x0 < 0 || y0 < 0 || x1 >= cols || (y1 + 1) * cols > grid.length) return false;
-        var a, b;
-        for (b = y0; b <= y1; b++) for (a = x0; a <= x1; a++) if (grid[b * cols + a]) return false;
-        for (b = y0; b <= y1; b++) for (a = x0; a <= x1; a++) grid[b * cols + a] = 1;
+        if (x < -12 || y < -12 || x + w > cw + 12 || y + h > ch + 12) return false;
+        var bx0 = Math.floor(x / BUCKET), by0 = Math.floor(y / BUCKET), bx1 = Math.floor((x + w) / BUCKET), by1 = Math.floor((y + h) / BUCKET);
+        var a, b, list, n, o;
+        for (b = by0; b <= by1; b++) for (a = bx0; a <= bx1; a++) {
+          list = buckets[a + "," + b];
+          if (!list) continue;
+          for (n = 0; n < list.length; n++) {
+            o = list[n];
+            if (x < o[0] + o[2] && x + w > o[0] && y < o[1] + o[3] && y + h > o[1]) return false;
+          }
+        }
+        var box = [x, y, w, h];
+        for (b = by0; b <= by1; b++) for (a = bx0; a <= bx1; a++) (buckets[a + "," + b] = buckets[a + "," + b] || []).push(box);
         return true;
       }
-      function label(text, x, y, size, color, weight, force, key, face) {
-        ctx.font = (weight || "500") + " " + size + "px " + (face || font);
-        var w = textWidth(text, size);
-        var lx = x - w / 2, ly = y;
+      // label queues a name; placed, when given, is told its box.
+      function label(text, x, y, size, color, weight, force, key, face, placed) {
+        queue.push({ text: text, x: x, y: y, size: size, color: color, weight: weight, force: force, key: key, face: face,
+          placed: placed, alpha: ctx.globalAlpha, pass: force ? 0 : key && shownLabels[key] ? 1 : 2 });
+      }
+      function place(q) {
+        ctx.font = (q.weight || "500") + " " + q.size + "px " + (q.face || font);
+        var w = textWidth(q.text, q.size);
+        var lx = q.x - w / 2, ly = q.y;
         // Geometric hysteresis: a name already showing claims a box
         // a little inside its text, a newcomer one a little outside,
         // so two names at the edge of touching don't trade places.
-        var pad = key && shownLabels[key] ? -1 : 3;
-        if (!claim(lx - pad, ly - pad, w + 2 * pad, size + 2 * pad) && !force) return null;
-        if (key) nextShown[key] = 1;
+        var pad = q.pass === 1 ? -2 : 4;
+        if (!claim(lx - pad, ly - pad, w + 2 * pad, q.size + 2 * pad) && !q.force) return;
+        if (q.key) nextShown[q.key] = 1;
+        ctx.globalAlpha = q.alpha;
         ctx.lineWidth = 3;
         ctx.strokeStyle = colors.halo;
-        ctx.strokeText(text, lx, ly + size * 0.8);
-        ctx.fillStyle = color;
-        ctx.fillText(text, lx, ly + size * 0.8);
-        return [lx, ly, w, size];
+        ctx.strokeText(q.text, lx, ly + q.size * 0.8);
+        ctx.fillStyle = q.color;
+        ctx.fillText(q.text, lx, ly + q.size * 0.8);
+        if (q.placed) q.placed([lx, ly, w, q.size]);
+      }
+      function placeAll() {
+        for (var pass = 0; pass < 3; pass++) {
+          for (var n = 0; n < queue.length; n++) if (queue[n].pass === pass) place(queue[n]);
+        }
+        ctx.globalAlpha = 1;
+        queue = [];
+        shownLabels = nextShown;
       }
       ctx.textBaseline = "alphabetic";
       ctx.lineJoin = "round";
@@ -1104,8 +1130,8 @@
         for (i = 0; i < P.regions.length; i++) if (G.members[i].length) regs.push(i);
         inPlaceFirst(regs, function (i) { return "R" + i; }, function (i) {
           var rg = P.regions[i];
-          var box = label(rg.name.toUpperCase(), rg.x * k + ox, rg.y * k + oy - size / 2, size, colors.region, "600", false, "R" + i, fontDisplay);
-          if (box) labelBoxes.push({ r: i, b: box });
+          label(rg.name.toUpperCase(), rg.x * k + ox, rg.y * k + oy - size / 2, size, colors.region, "600", false, "R" + i, fontDisplay,
+            function (box) { labelBoxes.push({ r: i, b: box }); });
         });
         ctx.globalAlpha = 1;
         if (!terrSov) layerLabels(k, ox, oy, label, inPlaceFirst);
@@ -1123,7 +1149,7 @@
             label(S.n[i], S.x[i] * k + ox, S.y[i] * k + oy + r + 3, 11, colors.labelDim, null, false, "s" + i);
           });
         }
-        shownLabels = nextShown;
+        placeAll();
         return;
       }
 
@@ -1144,7 +1170,7 @@
         var to = e[1], g = ghost(e[0], to);
         label(S.n[to] + " · " + P.regions[S.r[to]].name, g[0] * k + ox, g[1] * k + oy + r + 2, 10.5, colors.labelDim, null, false, "x" + to);
       });
-      shownLabels = nextShown;
+      placeAll();
     }
 
     // --- Live layers ---

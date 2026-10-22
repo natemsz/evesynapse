@@ -220,7 +220,7 @@ a:hover { color: var(--success); text-decoration: underline; }
 
 /* Headers, nav category labels, buttons, badges and table headers are
    Rajdhani SemiBold in spaced capitals. Synthetic bold is off. Menu
-   text (next rule) is Rajdhani in small caps. */
+   text (next rule) is Rajdhani in capitals. */
 h1, h2, h3, h4, .wordmark, .btn, thead th, .badge,
 :where(button:not([class]), input[type="submit"]:not([class]), input[type="button"]:not([class])),
 .branch > summary,
@@ -232,20 +232,19 @@ h1, h2, h3, h4, .wordmark, .btn, thead th, .badge,
   text-transform: uppercase;
   letter-spacing: 0.06em;
 }
-/* Menu text: Rajdhani in small caps. The sidenav rows and branch
-   summaries take the display face above; this swaps their capitals
-   for small caps, and the header links and dropdown items join them. */
+/* Menu text: Rajdhani in capitals. The sidenav rows and branch
+   summaries take the display face above; the header links and
+   dropdown items carry the same face and capitals here. */
 .sidenav a.navlink,
 .sidebar-account-footer .navlink,
 .branch > summary {
-  text-transform: none;
-  font-variant-caps: small-caps;
+  text-transform: uppercase;
 }
 header a.navlink, .branch .menu a, .switcher .menu a {
   font-family: "Rajdhani", "Segoe UI", sans-serif;
   font-weight: 600;
   font-synthesis-weight: none;
-  font-variant-caps: small-caps;
+  text-transform: uppercase;
   letter-spacing: 0.04em;
 }
 .wordmark { font-weight: 600; }
@@ -2449,7 +2448,7 @@ html[data-theme="light"] .esi-down .esi-label { color: #b91c1c; }
   padding: 0.45rem 0.6rem;
   font-family: "Rajdhani", "Segoe UI", sans-serif;
   font-weight: 600;
-  font-variant-caps: small-caps;
+  text-transform: uppercase;
   font-size: 0.9rem;
   color: var(--text);
   background: none;
@@ -2457,7 +2456,6 @@ html[data-theme="light"] .esi-down .esi-label { color: #b91c1c; }
   border-radius: var(--r-sm);
   cursor: pointer;
   text-decoration: none;
-  text-transform: none;
 }
 .menu-pop-body a:hover, .menu-pop-body button:hover { background: var(--row-hover); color: var(--text-bright); }
 .menu-pop-body form { margin: 0; }

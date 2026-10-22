@@ -6,26 +6,30 @@ import (
 	"testing"
 )
 
-// TestMenuTextIsSmallCapsRajdhani pins the menu face: every menu
+// TestMenuTextIsAllCapsRajdhani pins the menu face: every menu
 // surface (sidenav rows, branch summaries, header links, dropdown
-// items, pop menus) reads in Rajdhani small caps, never the body
-// face and never full capitals.
-func TestMenuTextIsSmallCapsRajdhani(t *testing.T) {
+// items, pop menus) reads in Rajdhani full capitals, never the body
+// face and never small caps.
+func TestMenuTextIsAllCapsRajdhani(t *testing.T) {
 	style := readStatic(t, "style.css")
 	for _, want := range []string{
-		// The display-face rows swap their capitals for small caps.
-		".sidenav a.navlink,\n.sidebar-account-footer .navlink,\n.branch > summary {\n  text-transform: none;\n  font-variant-caps: small-caps;\n}",
+		// The display-face rows state their capitals in the menu rule.
+		".sidenav a.navlink,\n.sidebar-account-footer .navlink,\n.branch > summary {\n  text-transform: uppercase;\n}",
 		// Header links and dropdown items take the same face.
-		"header a.navlink, .branch .menu a, .switcher .menu a {\n  font-family: \"Rajdhani\", \"Segoe UI\", sans-serif;\n  font-weight: 600;\n  font-synthesis-weight: none;\n  font-variant-caps: small-caps;",
+		"header a.navlink, .branch .menu a, .switcher .menu a {\n  font-family: \"Rajdhani\", \"Segoe UI\", sans-serif;\n  font-weight: 600;\n  font-synthesis-weight: none;\n  text-transform: uppercase;",
 		// Pop-menu items too.
-		".menu-pop-body a, .menu-pop-body button {\n  display: block;\n  width: 100%;\n  text-align: left;\n  padding: 0.45rem 0.6rem;\n  font-family: \"Rajdhani\", \"Segoe UI\", sans-serif;\n  font-weight: 600;\n  font-variant-caps: small-caps;",
+		".menu-pop-body a, .menu-pop-body button {\n  display: block;\n  width: 100%;\n  text-align: left;\n  padding: 0.45rem 0.6rem;\n  font-family: \"Rajdhani\", \"Segoe UI\", sans-serif;\n  font-weight: 600;\n  text-transform: uppercase;",
 		// The sidenav layout rule carries no casing of its own: the
-		// small-caps rule above is the only casing menu rows get.
+		// menu rule above is the only casing menu rows get.
 		".sidenav a.navlink,\n.sidebar .branch > summary {\n  display: flex;\n  align-items: center;\n  gap: 0.6rem;\n  min-height: 2.35rem;\n  padding: 0.42rem 0.55rem;\n  border-radius: var(--r-sm);\n  color: var(--text);\n  font-size: 1rem;\n  letter-spacing: 0.04em;\n  cursor: pointer;\n}",
 	} {
 		if !strings.Contains(style, want) {
 			t.Errorf("style.css missing menu rule %q", want)
 		}
+	}
+	// Menu text never renders in small caps.
+	if strings.Contains(style, "font-variant-caps: small-caps") {
+		t.Errorf("style.css carries a small-caps rule; menu text is full capitals")
 	}
 }
 

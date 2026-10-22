@@ -134,6 +134,7 @@ type corpSettingsView struct {
 	SRPWho       []permissionChoice
 	SRPPolicy    string
 	DoctrinesWho []permissionChoice
+	IntelWho     []permissionChoice
 }
 
 // directedCorps lists the corporations an account has a director, or
@@ -163,6 +164,7 @@ func (app *Application) handleCorpSettings(w http.ResponseWriter, r *http.Reques
 		view.CorpOptions, view.ID, view.Name = options, corp, app.corpDisplayName(ctx, corp)
 		view.SRPWho = app.permissionChoices(ctx, corp, permSRP)
 		view.DoctrinesWho = app.permissionChoices(ctx, corp, permDoctrines)
+		view.IntelWho = app.permissionChoices(ctx, corp, permIntel)
 		if settings, err := app.queries.GetSRPSettings(ctx, corp); err == nil {
 			view.SRPPolicy = settings.Policy
 		}
@@ -185,7 +187,7 @@ func (app *Application) handleCorpSettingsSave(w http.ResponseWriter, r *http.Re
 		return
 	}
 	owner := orgOwner{Kind: ownerCorporation, ID: corp}
-	for _, raw := range []string{r.Form.Get("srp_who"), r.Form.Get("doctrines_who")} {
+	for _, raw := range []string{r.Form.Get("srp_who"), r.Form.Get("doctrines_who"), r.Form.Get("intel_who")} {
 		if kind, ref, ok := app.parseRuleWho(ctx, owner, raw); raw != "" && (!ok || !permissionRule(kind+":"+ref)) {
 			back("That cannot be handed to the choice made; nothing was saved.")
 			return
@@ -193,7 +195,8 @@ func (app *Application) handleCorpSettingsSave(w http.ResponseWriter, r *http.Re
 	}
 	by := app.CorpActorFor(ctx, userID, corp).CharacterID
 	saved := app.setCorpPermission(ctx, corp, permSRP, r.Form.Get("srp_who"), by) &&
-		app.setCorpPermission(ctx, corp, permDoctrines, r.Form.Get("doctrines_who"), by)
+		app.setCorpPermission(ctx, corp, permDoctrines, r.Form.Get("doctrines_who"), by) &&
+		app.setCorpPermission(ctx, corp, permIntel, r.Form.Get("intel_who"), by)
 	if saved {
 		err = app.queries.SetSRPSettings(ctx, db.SetSRPSettingsParams{
 			CorporationID: corp, Policy: clip(strings.TrimSpace(r.Form.Get("srp_policy")), srpPolicyMax), UpdatedAt: time.Now().UTC(),

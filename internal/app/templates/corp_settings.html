@@ -36,8 +36,15 @@
     </section>
 
     <section class="setting">
+      <h4>Intel channels</h4>
+      <label class="field"><span class="field-label">Who runs the corporation's intel channels, besides directors and the CEO</span>
+        <select name="intel_who">{{range .IntelWho}}<option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>{{end}}</select>
+        <span class="field-hint">They make the corporation's <a href="/intel/channels/">intel channels</a>, rename and delete them, and choose who can read and post.</span></label>
+    </section>
+
+    <section class="setting">
       <h4>Groups and Discord</h4>
-      <p class="hint">Either setting above can be an in-game role or one of the corporation's groups. Groups, and the corporation's Discord server, have pages of their own.</p>
+      <p class="hint">Each setting above can be an in-game role or one of the corporation's groups. Groups, and the corporation's Discord server, have pages of their own.</p>
       <div class="form-actions">{{if moduleOn "groups"}}<a class="btn" href="/groups/?owner=corporation:{{.ID}}">Groups</a>{{end}}{{if moduleOn "discord"}}<a class="btn" href="/discord/servers?owner=corporation:{{.ID}}">Discord Server</a>{{end}}</div>
     </section>
   </div>

@@ -12,9 +12,10 @@ import (
 
 // The anonymous front door is the landing page: hero and heritage
 // copy verbatim, a sign-in link for existing members (plain login,
-// not the sign-up chooser), trust and playstyle sections ahead of
-// the alternating feature sections, the stored-data strip, and no
-// em dashes anywhere on the page.
+// not the sign-up chooser), the tools inventory ahead of trust and
+// playstyles, the tabbed feature explorer under playstyles, then
+// the alternating feature sections, the stored-data strip, and
+// no em dashes anywhere on the page.
 func TestLandingAnonymous(t *testing.T) {
 	rig := apptest.Build(t, nil)
 	code, body := apptest.GetPage(t, rig, nil, "/")
@@ -24,10 +25,9 @@ func TestLandingAnonymous(t *testing.T) {
 	for _, want := range []string{
 		"Stop alt-tabbing between <span class=\"ld-amp\">five different tools.</span>",
 		"Fits run on your real skills.",
-		"Link with only the scopes you pick",
+		"Try it now opens in demo mode, no sign-in needed",
 		"the sign-in asks for the scopes behind those features",
 		"Linking asks only for the scopes behind the features you pick",
-		"Key held in a hardware vault",
 		"stored off-server, on secure hardware",
 		"EveSynapse is free to use forever.",
 		"No donation pop-ups.",
@@ -71,7 +71,22 @@ func TestLandingAnonymous(t *testing.T) {
 		"Appraisal: paste anything, get a price",
 		"The appraisal tool on the live site.",
 		"evesynapse.app/market/appraise/",
-		"shot-market.webp",
+		"shot-appraisal.webp",
+		"The six sections, up close.",
+		"data-xtab=\"pilots\"",
+		"data-xtab=\"intel\"",
+		"Intel and Reference",
+		"shot-overview.webp",
+		"shot-simulator.webp",
+		"shot-planner.webp",
+		"shot-doctrines.webp",
+		"shot-intel.webp",
+		"shot-axon.webp",
+		"one-time code from the channels page",
+		"posting each new line into the channel",
+		"the route planner prices them into the route it draws",
+		"Replacement claims check the lost ship against the doctrine fit",
+		"/static/landing.js",
 		"Plans that price themselves.",
 		"87.6M",
 		"449.8M",
@@ -94,13 +109,16 @@ func TestLandingAnonymous(t *testing.T) {
 			t.Errorf("landing is missing %q", want)
 		}
 	}
-	// The section order is the restructure's whole point: trust
-	// first, playstyles next, then the feature sections.
+	// The section order: the tools inventory sits above trust,
+	// then playstyles, then the feature explorer, then the
+	// feature sections.
+	toolsAt := strings.Index(body, "Every tool in the box.")
 	trustAt := strings.Index(body, "Your keys, your call.")
 	stylesAt := strings.Index(body, "Three alts, or a hundred boxed characters.")
+	explorerAt := strings.Index(body, "The six sections, up close.")
 	fleetAt := strings.Index(body, "Every pilot, at a glance.")
-	if !(trustAt >= 0 && trustAt < stylesAt && stylesAt < fleetAt) {
-		t.Error("landing sections out of order: want trust, then playstyles, then the feature sections")
+	if !(toolsAt >= 0 && toolsAt < trustAt && trustAt < stylesAt && stylesAt < explorerAt && explorerAt < fleetAt) {
+		t.Error("landing sections out of order: want tools, trust, playstyles, explorer, then the feature sections")
 	}
 	// The tools inventory is audited against the tree: features
 	// that do not exist yet are never claimed on the front door.

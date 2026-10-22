@@ -333,8 +333,7 @@
       <figure class="ld-shot">
         <div class="ld-browser">
           <div class="ld-browser-bar" aria-hidden="true"><span class="ld-dot ld-dot-on"></span><span class="ld-dot"></span><span class="ld-dot"></span><span class="ld-url">evesynapse.app/market/appraise/</span></div>
-          {{/* Appraisal capture: when the real capture of the appraisal tool lands (landing-shots/appraisal-tool-real-2026-10-19.png, processed to static/shot-appraisal.webp), it swaps in on the img line below; until then the market page shot stands in. */}}
-          <img src="/static/shot-market.webp?v={{.AssetVersion}}" width="732" height="615" loading="lazy" alt="EveSynapse market item page for a Large Skill Injector: prices across five hub regions and a ninety day price history chart">
+          <img src="/static/shot-appraisal.webp?v={{.AssetVersion}}" width="1464" height="1230" loading="lazy" alt="EveSynapse appraisal tool with demo data: a pasted list priced line by line from The Forge's swept orders, with the source on every line">
         </div>
         <figcaption>The appraisal tool on the live site. Paste anything, and every line comes back priced with its source.</figcaption>
       </figure>
@@ -485,6 +484,7 @@
   No official affiliation or endorsement by CCP Games hf is stated or implied.</p>
   <p class="ld-version"><a href="https://github.com/natemsz/evesynapse" target="_blank" rel="noopener noreferrer">EveSynapse</a> <span class="version-number">{{.Version}}</span></p>
 </div></footer>
+<script src="/static/landing.js?v={{.AssetVersion}}" defer></script>
 </body>
 </html>
 {{end}}

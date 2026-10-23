@@ -381,6 +381,148 @@ test("a plan swapped in after a page without one renders", async function () {
   }, "map render after the swap");
 });
 
+// --- Recalculate --------------------------------------------------
+// The dialogs' controls belong to #plan-form by explicit
+// association (the shell lifts the dialogs out of the form's
+// subtree), and a submission is turned into a fetch + swap by
+// onRecalc. These tests pin that flow: the fetch carries the
+// form's values plus the submitter, a successful swap retires
+// the parked dialogs, and any failure falls back to exactly one
+// native submission that keeps its submitter — a judge pick
+// rides on the submitter, and a bare form.submit() would drop it.
+function installRecalc(opts) {
+  opts = opts || {};
+  const els = {};
+  const docListeners = {};
+  const form = {
+    __entries: opts.entries || [["product", "587"], ["runs", "1"], ["structure", "35827"], ["rig", "t2"], ["me_691", "10"]],
+    __submitListeners: [],
+    __requestSubmit: [],
+    __submitCalls: 0,
+    addEventListener: function (type, fn) { if (type === "submit") this.__submitListeners.push(fn); },
+    requestSubmit: function (sub) { this.__requestSubmit.push(sub === undefined ? null : sub); },
+    submit: function () { this.__submitCalls++; }
+  };
+  const hostWrap = makeEl();
+  const freshWrap = { innerHTML: "<div class=\"fresh-plan\">swapped</div>" };
+  const parkedSettings = { id: "plan-settings-modal", removed: false, remove: function () { this.removed = true; } };
+  const parkedME = { id: "me-modal", removed: false, remove: function () { this.removed = true; } };
+  const fetched = [], replaced = [], closedModals = [];
+  const doc = {
+    readyState: "complete",
+    title: "probe",
+    getElementById: function (id) {
+      if (id === "plan-form") return form;
+      if (id === "plan-wrap") return hostWrap;
+      if (id === "plan-data") {
+        if (!els["plan-data"]) {
+          els["plan-data"] = makeEl();
+          els["plan-data"].textContent = JSON.stringify(capitalPayload());
+        }
+        return els["plan-data"];
+      }
+      if (!els[id]) els[id] = makeEl();
+      return els[id];
+    },
+    querySelector: function (sel) {
+      if (sel === "body > #plan-settings-modal") return parkedSettings;
+      if (sel === "body > #me-modal") return parkedME;
+      if (sel === "#plan-form button[type=\"submit\"]") return makeEl();
+      return null;
+    },
+    querySelectorAll: function () { return []; },
+    addEventListener: function (type, fn) {
+      (docListeners[type] = docListeners[type] || []).push(fn);
+    }
+  };
+  const win = {
+    location: { href: "https://x.test/planner/?product=587", search: "?product=587", pathname: "/planner/" },
+    history: { replaceState: function (a, b, url) { replaced.push(url); } },
+    matchMedia: function () { return { matches: false }; },
+    scrollTo: function () {},
+    EveSynapseModal: { open: function () {}, close: function (el) { closedModals.push(el); } }
+  };
+  global.document = doc;
+  global.window = win;
+  global.fetch = function (url) {
+    fetched.push(String(url));
+    if (opts.fetchFails) return Promise.resolve({ ok: false, text: function () { return Promise.resolve(""); } });
+    return Promise.resolve({
+      ok: true,
+      text: function () { return Promise.resolve("<html></html>"); },
+      json: function () { return Promise.resolve(capitalPayload()); }
+    });
+  };
+  global.FormData = function (f) { this.__pairs = f.__entries.slice(); };
+  global.FormData.prototype[Symbol.iterator] = function () { return this.__pairs[Symbol.iterator](); };
+  global.DOMParser = function () {};
+  global.DOMParser.prototype.parseFromString = function () {
+    return { getElementById: function (id) { return id === "plan-wrap" ? freshWrap : null; } };
+  };
+  const resolved = require.resolve("../static/plan.js");
+  delete require.cache[resolved];
+  require("../static/plan.js");
+  return { form, hostWrap, freshWrap, parkedSettings, parkedME, fetched, replaced, closedModals };
+}
+
+function fireSubmit(rig, submitter) {
+  const rec = { prevented: 0 };
+  const ev = { preventDefault: function () { rec.prevented++; }, submitter: submitter };
+  rig.form.__submitListeners.forEach(function (fn) { fn(ev); });
+  return rec;
+}
+
+test("recalc fetches the form values plus the submitter and swaps the plan in", async function () {
+  const rig = installRecalc({});
+  const rec = fireSubmit(rig, { name: "judge", value: "allv" });
+  assert.strictEqual(rec.prevented, 1, "the async path intercepts the submission");
+  await waitFor(function () { return rig.hostWrap.innerHTML === rig.freshWrap.innerHTML; }, "plan swap");
+  const url = rig.fetched[0] || "";
+  for (const want of ["product=587", "structure=35827", "rig=t2", "me_691=10", "judge=allv"]) {
+    assert.ok(url.indexOf(want) !== -1, "recalc URL carries " + want + " (got " + url + ")");
+  }
+  assert.deepStrictEqual(rig.replaced, [url], "the address bar follows the recalc");
+  assert.strictEqual(rig.form.__requestSubmit.length, 0, "no native fallback on success");
+  assert.strictEqual(rig.form.__submitCalls, 0, "no bare submit on success");
+});
+
+test("a successful recalc closes and removes the dialogs parked at body level", async function () {
+  const rig = installRecalc({});
+  fireSubmit(rig, { name: "", value: "" });
+  await waitFor(function () { return rig.hostWrap.innerHTML === rig.freshWrap.innerHTML; }, "plan swap");
+  assert.deepStrictEqual(rig.closedModals, [rig.parkedSettings, rig.parkedME],
+    "parked dialogs are closed through the modal owner");
+  assert.ok(rig.parkedSettings.removed, "parked settings dialog removed");
+  assert.ok(rig.parkedME.removed, "parked ME dialog removed");
+});
+
+test("a failed recalc falls back natively with the judge pick still on the submission", async function () {
+  const rig = installRecalc({ fetchFails: true });
+  const pick = { name: "judge", value: "char:42" };
+  const rec = fireSubmit(rig, pick);
+  assert.strictEqual(rec.prevented, 1, "the async path intercepts the submission");
+  await waitFor(function () { return rig.form.__requestSubmit.length === 1; }, "native fallback");
+  assert.strictEqual(rig.form.__requestSubmit[0], pick,
+    "the fallback re-submits through the same button, so the pick rides along");
+  assert.strictEqual(rig.form.__submitCalls, 0, "the submitter-less form.submit() is never the fallback");
+  // The fallback's own submission passes the listener untouched:
+  // it must neither be intercepted nor fetch a second time.
+  const rec2 = fireSubmit(rig, pick);
+  assert.strictEqual(rec2.prevented, 0, "the fallback submission is not intercepted");
+  assert.strictEqual(rig.fetched.length, 1, "the fallback does not fetch again");
+  // The pass is spent: the next user submission recalcs in page.
+  const rec3 = fireSubmit(rig, pick);
+  assert.strictEqual(rec3.prevented, 1, "later submissions recalc in page again");
+});
+
+test("a failed recalc without a submitter still falls back through requestSubmit", async function () {
+  const rig = installRecalc({ fetchFails: true });
+  fireSubmit(rig, undefined);
+  await waitFor(function () { return rig.form.__requestSubmit.length === 1; }, "native fallback");
+  assert.strictEqual(rig.form.__requestSubmit[0], null, "no submitter to preserve: a plain requestSubmit");
+  assert.strictEqual(rig.form.__submitCalls, 0, "the submitter-less form.submit() is never the fallback");
+});
+
 // Deep columns follow the selection: open two components and a
 // sub under each, and the columns past the components hold the
 // selected branch's children, not every open branch's.

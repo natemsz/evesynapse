@@ -20,9 +20,18 @@ import (
 // (truevalue.go). One bounded chunk of manufacturable types
 // per cycle, priced bottom-up from stored inputs -- SDE
 // blueprints, The Forge's swept typicals, the stored guide --
-// plus one bounded crawl of ESI's public contracts per cycle
-// for the types the market cannot price. Pages never compute
-// any of this; they read the stored rows.
+// plus contract evidence for the types the market cannot
+// price: the stored public-contract corpus mined at
+// evaluation time, one bounded crawl of ESI's public
+// contracts per cycle behind it, exit probes over the
+// corpus's departed ship listings (truevalue_sales.go), and
+// a bounded walk of ship types with no blueprint at all.
+// Thin non-ship types price from their samples by evidence
+// tier; thin ships price the abyssal way, by a learned
+// correction over their build cost (truevalue_learn.go). An
+// estimated sell is stored only when the evidence produces
+// one; a build cost is never stored as one. Pages never
+// compute any of this; they read the stored rows.
 //
 // A stored row goes stale when the profile version moves,
 // when the inputs it was computed from move (the guide's
@@ -40,10 +49,11 @@ const tvPassChunk = 400
 // worker touches it (refreshCycle is serial), so it needs no
 // lock of its own.
 type tvPassState struct {
-	cursor      int    // next product index to evaluate
-	fingerprint string // inputs the stored rows were computed under
-	graph       *tvBlueprintGraph
-	profile     trueValueProfile
+	cursor         int    // next product index to evaluate
+	evidenceCursor int    // next evidence-only type to evaluate
+	fingerprint    string // inputs the stored rows were computed under
+	graph          *tvBlueprintGraph
+	profile        trueValueProfile
 
 	samples   map[int64][]tvContractSample // thin type -> contract samples
 	lastCrawl map[int64]time.Time          // region -> last crawl
@@ -69,20 +79,40 @@ const (
 	tvSampleListing   = "listing"
 )
 
-// tvContractSample is one clean contract observation whose
-// implied unit price for a thin type sat inside the band
-// around that type's build cost. source is its evidence tier
-// (the tvSample* constants).
+// tvContractSample is one clean contract observation of a
+// thin type: a contract whose shape the sampler accepts,
+// reduced to its implied unit price for that type. Whether
+// the price agrees with the type's build-cost anchor is the
+// estimate step's question, not the sample's. source is its
+// evidence tier (the tvSample* constants); contractID is the
+// contract it came from (0 when the source does not carry
+// one), so the same contract seen by two stores speaks once.
 type tvContractSample struct {
-	price  float64
-	at     time.Time
-	source string
+	price      float64
+	at         time.Time
+	source     string
+	contractID int64
 }
 
-// tvSampleWindow is how long a sample of any tier stays
-// meaningful (contracts turn over fast; a fortnight covers
-// the crawl's rotation several times over).
+// tvSampleWindow is how long a sample stays meaningful
+// for the TIERED estimate (thin non-ship types): contracts
+// turn over fast, and a fortnight covers the crawl's
+// rotation several times over. Ship evidence is not cut
+// off at this window -- the learned fit weights age
+// instead (tvSampleWeight) -- and is kept to
+// tvEvidenceRetention.
 const tvSampleWindow = 14 * 24 * time.Hour
+
+// tvEvidenceRetention bounds how long evidence is KEPT --
+// exited rows in the observation store, samples in the
+// pass's memory -- never how long it counts. A confirmed
+// sale from weeks ago still counts in a ship fit,
+// discounted by its age curve; the horizon sits well past
+// the point where the slowest curve (a sale's) reaches its
+// floor (~119 days), so evidence lives at its floored
+// voice for a long plateau before storage lets it go. It
+// is storage hygiene, not an estimate gate.
+const tvEvidenceRetention = 240 * 24 * time.Hour
 
 // tvBlueprintGraph is the whole SDE recipe book in memory,
 // loaded once per sweep (the SDE changes only on reimport).
@@ -90,6 +120,8 @@ type tvBlueprintGraph struct {
 	byProduct map[int64]*buildplan.Blueprint
 	products  []int64 // product type IDs, ascending
 	ships     map[int64]bool
+	allShips  []int64 // every SDE ship type ID, ascending
+	shipsAll  map[int64]bool
 }
 
 func (g *tvBlueprintGraph) BlueprintForProduct(productTypeID int64) (*buildplan.Blueprint, bool) {
@@ -150,6 +182,15 @@ func (app *Application) loadTVBlueprintGraph(ctx context.Context) (*tvBlueprintG
 		}
 	} else {
 		logging.Errorf("true values: ship set: %v", err)
+	}
+	if allShips, err := app.queries.ListAllSDEShipTypeIDs(ctx); err == nil {
+		graph.allShips = allShips
+		graph.shipsAll = make(map[int64]bool, len(allShips))
+		for _, id := range allShips {
+			graph.shipsAll[id] = true
+		}
+	} else {
+		logging.Errorf("true values: all-ships set: %v", err)
 	}
 	return graph, nil
 }
@@ -214,6 +255,11 @@ func (app *Application) refreshTrueValues(ctx context.Context) {
 	}
 	graph := st.graph
 
+	// Departed ship listings get their exit probes first, so
+	// a sale confirmed this cycle already counts as evidence
+	// in the reads below (truevalue_sales.go).
+	app.probeShipContractSales(ctx, graph.allShips, time.Now())
+
 	existing := make(map[int64]db.TrueValue)
 	if rows, err := app.queries.ListTrueValues(ctx); err == nil {
 		for _, row := range rows {
@@ -230,7 +276,7 @@ func (app *Application) refreshTrueValues(ctx context.Context) {
 	// process, unlike the listing samples in memory).
 	priceOf := tvStoredPricerFrom(typicalSell, existing, guide)
 	vanished := make(map[int64][]tvContractSample)
-	if rows, err := app.queries.ListTVVanishedSamplesSince(ctx, sql.NullTime{Time: time.Now().Add(-tvSampleWindow), Valid: true}); err == nil {
+	if rows, err := app.queries.ListTVVanishedSamplesSince(ctx, sql.NullTime{Time: time.Now().Add(-tvEvidenceRetention), Valid: true}); err == nil {
 		for _, row := range rows {
 			if row.VanishedAt.Valid {
 				// A listing ESI confirmed accepted is a recorded
@@ -240,7 +286,7 @@ func (app *Application) refreshTrueValues(ctx context.Context) {
 					source = tvSampleFulfilled
 				}
 				vanished[row.TypeID] = append(vanished[row.TypeID], tvContractSample{
-					price: row.SamplePrice, at: row.VanishedAt.Time, source: source,
+					price: row.SamplePrice, at: row.VanishedAt.Time, source: source, contractID: row.ContractID,
 				})
 			}
 		}
@@ -250,19 +296,28 @@ func (app *Application) refreshTrueValues(ctx context.Context) {
 
 	// Leaf prices: Forge typical sell first (the price a
 	// builder actually pays), then the stored estimated sell
-	// from the previous pass. The guide's average is banned
-	// as a price source (owner doctrine, 2026-10-17) and the
-	// adjusted price is not one either: a leaf neither house
-	// source knows is unpriced, and whatever builds from it
-	// stays unpriced with it — an honest gap, never a fossil.
-	// The EIV base for job fees follows the planner: adjusted
-	// where present, average behind it (fees only).
+	// from the previous pass, then the stored build cost --
+	// a COST input only: what a builder pays to make the leaf
+	// is the honest basis for a parent's build cost, and it
+	// is quoted as nobody's sell price anywhere. The guide's
+	// average is banned as a price source (owner doctrine,
+	// 2026-10-17) and the adjusted price is not one either: a
+	// leaf no house source knows is unpriced, and whatever
+	// builds from it stays unpriced with it — an honest gap,
+	// never a fossil. The EIV base for job fees follows the
+	// planner: adjusted where present, average behind it
+	// (fees only).
 	leafPrice := func(typeID int64) (float64, bool) {
 		if v := typicalSell[typeID]; v > 0 {
 			return v, true
 		}
-		if tv, ok := existing[typeID]; ok && tv.EstSell.Valid && tv.EstSell.Float64 > 0 {
-			return tv.EstSell.Float64, true
+		if tv, ok := existing[typeID]; ok {
+			if est, ok := storedEstimate(tv); ok {
+				return est, true
+			}
+			if tv.BuildCost > 0 {
+				return tv.BuildCost, true
+			}
 		}
 		return 0, false
 	}
@@ -287,6 +342,34 @@ func (app *Application) refreshTrueValues(ctx context.Context) {
 		FacilityTax: buildplan.NPCFacilityTax,
 	})
 
+	// The thin set, whole: every type contracts may have to
+	// speak for this pass. It is the subject set the corpus
+	// miner judges contract shapes against (a second thin
+	// type aboard a fitted contract makes its subject
+	// ambiguous there too).
+	thinSubjects := make(map[int64]bool, len(graph.products))
+	for _, id := range graph.products {
+		if isThinType(guide, dailyVolume, id) {
+			thinSubjects[id] = true
+		}
+	}
+	// Evidence-only types: ships with no manufacturing
+	// blueprint (prize hulls, limited-run rewards). The BOM
+	// walk can never reach them -- no blueprint, no build
+	// cost, no row -- yet contracts price them every day.
+	// They join the thin set as sampler subjects and are
+	// evaluated from contract evidence alone below.
+	var evidenceTypes []int64
+	for _, id := range graph.allShips {
+		if _, manufacturable := graph.byProduct[id]; manufacturable {
+			continue
+		}
+		if isThinType(guide, dailyVolume, id) {
+			thinSubjects[id] = true
+			evidenceTypes = append(evidenceTypes, id)
+		}
+	}
+
 	now := time.Now()
 	start := st.cursor
 	if start >= len(graph.products) {
@@ -298,6 +381,7 @@ func (app *Application) refreshTrueValues(ctx context.Context) {
 	}
 	computed, unpriced := 0, 0
 	thinCosts := make(map[int64]float64)
+	var pendingShips []int64 // thin ships this chunk owes a row: priced below, by the learned fit
 	for _, typeID := range graph.products[start:end] {
 		if row, ok := existing[typeID]; ok && !inputsChanged &&
 			row.ProfileVersion == trueValueProfileVersion &&
@@ -326,14 +410,42 @@ func (app *Application) refreshTrueValues(ctx context.Context) {
 		}
 		if isThinType(guide, dailyVolume, typeID) {
 			thinCosts[typeID] = buildCost
-			st.fulfilled[typeID] = freshContractSamples(st.fulfilled[typeID], now)
-			samples := freshContractSamples(st.samples[typeID], now)
+			st.fulfilled[typeID] = retainedContractSamples(st.fulfilled[typeID], now)
+			if graph.ships[typeID] {
+				// Ships price from the learned fit, not the
+				// tiered median: the pricing step below writes
+				// this hull's row from the family model.
+				pendingShips = append(pendingShips, typeID)
+				continue
+			}
+			// The corpus speaks first (its copy of a contract
+			// is the durable one); the crawl's in-memory
+			// samples, the vanished tier and the fulfilled
+			// tier follow. The tiered rules judge the samples
+			// that corroborate the build-cost anchor. An
+			// estimate is stored only when the evidence
+			// produces one -- never the build cost standing
+			// in for a price.
+			samples := freshContractSamples(app.corpusListingSamples(ctx, typeID, thinSubjects, graph.shipsAll, priceOf, now), now)
+			samples = append(samples, freshContractSamples(st.samples[typeID], now)...)
 			samples = append(samples, freshContractSamples(vanished[typeID], now)...)
-			samples = append(samples, st.fulfilled[typeID]...)
-			est, source, count := estimatedSellTiered(buildCost, samples)
+			samples = append(samples, freshContractSamples(st.fulfilled[typeID], now)...)
+			samples = dedupeSamplesByContract(samples)
+			var inBand []tvContractSample
+			for _, s := range samples {
+				if s.price >= tvContractBandLow*buildCost && s.price <= tvContractBandHigh*buildCost {
+					inBand = append(inBand, s)
+				}
+			}
+			est, source, count, ok := estimatedSellTiered(inBand)
+			if !ok {
+				count, source = len(samples), ""
+			}
 			row.SellSamples = int64(count)
 			row.SellSource = source
-			row.EstSell = sql.NullFloat64{Float64: est, Valid: true}
+			if ok {
+				row.EstSell = sql.NullFloat64{Float64: est, Valid: true}
+			}
 		}
 		if err := app.queries.UpsertTrueValue(ctx, row); err != nil {
 			logging.Errorf("true values: store %d: %v", typeID, err)
@@ -358,6 +470,7 @@ func (app *Application) refreshTrueValues(ctx context.Context) {
 			thinCosts[typeID] = row.BuildCost
 		}
 	}
+	app.priceThinShips(ctx, pendingShips, evidenceTypes, existing, thinSubjects, thinCosts, vanished, graph, priceOf, inputsChanged, now)
 	app.harvestFulfilledSamples(ctx, thinCosts, graph.ships, priceOf, now)
 	app.crawlPublicContracts(ctx, thinCosts, graph.ships, priceOf, now)
 }
@@ -374,7 +487,9 @@ func isThinType(guide map[int64]esi.MarketPrice, dailyVolume map[int64]float64, 
 }
 
 // freshContractSamples drops samples older than the window
-// they stay meaningful for (tvSampleWindow).
+// they stay meaningful for (tvSampleWindow): the tiered
+// estimate's freshness rule, applied where that estimate
+// consumes samples.
 func freshContractSamples(samples []tvContractSample, now time.Time) []tvContractSample {
 	out := samples[:0]
 	for _, s := range samples {
@@ -385,14 +500,23 @@ func freshContractSamples(samples []tvContractSample, now time.Time) []tvContrac
 	return out
 }
 
-// estimatedSell turns a build cost and the clean contract
-// samples around it into the estimated sell price: the
-// samples' median once at least two agree a market exists,
-// the build cost itself (the anchored fallback) before that.
-func estimatedSell(buildCost float64, samples []tvContractSample) float64 {
-	if len(samples) < 2 {
-		return buildCost
+// retainedContractSamples drops samples past the evidence
+// retention horizon (tvEvidenceRetention): storage hygiene
+// for the pass's in-memory sets. Ship fits consume samples
+// WITHOUT the freshness filter -- age reaches them as a
+// weight (tvSampleWeight), never as this or any cutoff.
+func retainedContractSamples(samples []tvContractSample, now time.Time) []tvContractSample {
+	out := samples[:0]
+	for _, s := range samples {
+		if now.Sub(s.at) < tvEvidenceRetention {
+			out = append(out, s)
+		}
 	}
+	return out
+}
+
+// medianSamplePrice is the median of a sample set's prices.
+func medianSamplePrice(samples []tvContractSample) float64 {
 	prices := make([]float64, 0, len(samples))
 	for _, s := range samples {
 		prices = append(prices, s.price)
@@ -405,15 +529,14 @@ func estimatedSell(buildCost float64, samples []tvContractSample) float64 {
 	return (prices[mid-1] + prices[mid]) / 2
 }
 
-// estimatedSellTiered spends the samples by evidence tier:
-// the strongest tier holding at least two fresh samples sets
-// the estimate -- its median, its name, and its count. A tier
+// estimatedSellTiered spends samples by evidence tier: the
+// strongest tier holding at least two samples sets the
+// estimate -- its median, its name, and its count. A tier
 // with a single sample cannot speak, however strong: one
 // observation is an anecdote at every tier. When no tier
-// speaks, the estimate stays the build-cost anchor, the
-// source is empty, and the count is every fresh sample (the
-// informational count the stored row has always carried).
-func estimatedSellTiered(buildCost float64, samples []tvContractSample) (est float64, source string, count int) {
+// speaks, ok is false and the count is every sample (the
+// informational count the stored row carries).
+func estimatedSellTiered(samples []tvContractSample) (est float64, source string, count int, ok bool) {
 	for _, tier := range []string{tvSampleFulfilled, tvSampleVanished, tvSampleListing} {
 		var tierSamples []tvContractSample
 		for _, s := range samples {
@@ -422,21 +545,255 @@ func estimatedSellTiered(buildCost float64, samples []tvContractSample) (est flo
 			}
 		}
 		if len(tierSamples) >= 2 {
-			return estimatedSell(buildCost, tierSamples), tier, len(tierSamples)
+			return medianSamplePrice(tierSamples), tier, len(tierSamples), true
 		}
 	}
-	return buildCost, "", len(samples)
+	return 0, "", len(samples), false
+}
+
+// tvCorpusMaxContracts bounds the corpus contracts mined for
+// one type at one evaluation: its newest-seen live asks.
+const tvCorpusMaxContracts = 40
+
+// corpusListingSamples mines the stored public-contract
+// corpus for one thin type's listing-tier samples. The
+// corpus is the contract sweep's own store of live contracts
+// (every region, continuously), so this reads the evidence
+// the whole market is showing -- where the crawl below sees
+// one region at a time through a narrow fetch budget, and
+// held its samples in memory. A sample's stamp is its
+// contract's last-seen time: the ask stands now. Contracts
+// are judged by the same shape rules the crawl applies
+// (tvContractSampleShape) but NOT banded: banding is the
+// estimate step's business, against the type's current
+// anchor.
+//
+// An accepted contract for a SHIP type is also recorded as
+// an observation, the crawl's longitudinal memory, so when
+// the listing leaves the corpus its exit can be probed and
+// the sample promoted to a likely or confirmed sale
+// (truevalue_sales.go): the corpus connection is what lets
+// sale evidence accumulate at corpus scale.
+func (app *Application) corpusListingSamples(ctx context.Context, typeID int64, subjects map[int64]bool, ships map[int64]bool, priceOf tvStoredPricer, now time.Time) []tvContractSample {
+	rows, err := app.queries.ListTrueValueCorpusContracts(ctx, db.ListTrueValueCorpusContractsParams{
+		TypeID: typeID, Price: tvContractMinPrice, Limit: tvCorpusMaxContracts,
+	})
+	if err != nil {
+		logging.Errorf("true values: corpus samples %d: %v", typeID, err)
+		return nil
+	}
+	var out []tvContractSample
+	var (
+		contractID int64
+		price      float64
+		lastSeen   time.Time
+		firstSeen  time.Time
+		expiresAt  time.Time
+		regionID   int64
+		items      []tvPublicContractItem
+	)
+	flush := func() {
+		if contractID == 0 {
+			return
+		}
+		subject, unit, shape, ok := tvContractSampleShape(price, items, subjects, ships, priceOf)
+		if !ok || subject != typeID {
+			return
+		}
+		out = append(out, tvContractSample{price: unit, at: lastSeen, source: tvSampleListing, contractID: contractID})
+		if ships[typeID] && !expiresAt.IsZero() {
+			if err := app.queries.UpsertTVContractObservation(ctx, db.UpsertTVContractObservationParams{
+				ContractID: contractID, RegionID: regionID, TypeID: typeID, Shape: shape,
+				ListedPrice: price, SamplePrice: unit, FirstSeenAt: firstSeen, ExpiresAt: expiresAt,
+			}); err != nil {
+				logging.Errorf("true values: observe corpus contract %d: %v", contractID, err)
+			}
+		}
+	}
+	for _, row := range rows {
+		if row.ContractID != contractID {
+			flush()
+			contractID, price, lastSeen = row.ContractID, row.Price, row.LastSeen
+			firstSeen, expiresAt, regionID = row.FirstSeen, row.DateExpired, row.RegionID
+			items = items[:0]
+		}
+		items = append(items, tvPublicContractItem{TypeID: row.TypeID, Quantity: row.Quantity, IsIncluded: row.IsIncluded})
+	}
+	flush()
+	return out
+}
+
+// dedupeSamplesByContract makes one contract speak once, at
+// its strongest tier: the same contract can surface as a
+// live ask in the corpus, a watched listing in the crawl,
+// and -- once its exit is probed -- a confirmed sale in the
+// observation store, and counting it at every tier would let
+// one contract outvote the market.
+func dedupeSamplesByContract(samples []tvContractSample) []tvContractSample {
+	strength := func(source string) int {
+		switch source {
+		case tvSampleFulfilled:
+			return 3
+		case tvSampleVanished:
+			return 2
+		}
+		return 1
+	}
+	best := make(map[int64]int) // contract ID -> index into out
+	out := samples[:0]
+	for _, s := range samples {
+		if s.contractID == 0 {
+			out = append(out, s)
+			continue
+		}
+		if i, seen := best[s.contractID]; seen {
+			if strength(s.source) > strength(out[i].source) {
+				out[i] = s
+			}
+			continue
+		}
+		best[s.contractID] = len(out)
+		out = append(out, s)
+	}
+	return out
+}
+
+// tvEvidenceChunk bounds one cycle's evidence-only
+// evaluations (types with no blueprint to walk).
+const tvEvidenceChunk = 100
+
+// priceThinShips is the ship side of the pass: it fits the
+// learned pricing model (truevalue_learn.go) over every thin
+// ship type's contract evidence and writes the rows this
+// cycle owes -- the main walk's thin ships (pending) and one
+// rotating chunk of the evidence-only types (no blueprint,
+// hence no build cost and no ladder: priced by their learned
+// level inside the same fit). The fit itself is rebuilt from
+// the cycle's assembled samples each cycle; the row writes
+// keep the walk's bounded discipline.
+//
+// Evidence assembly per type mirrors the tiered path's: the
+// corpus speaks first, then the crawl's in-memory samples,
+// the vanished/confirmed tier read back from the
+// observation store, and the fulfilled harvest -- deduped
+// by contract at the strongest tier.
+func (app *Application) priceThinShips(ctx context.Context, pending []int64, evidenceTypes []int64, existing map[int64]db.TrueValue, subjects map[int64]bool, ladders map[int64]float64, vanished map[int64][]tvContractSample, graph *tvBlueprintGraph, priceOf tvStoredPricer, inputsChanged bool, now time.Time) {
+	st := &app.trueValuePass
+	shipSubjects := make(map[int64]bool, len(subjects))
+	subjectIDs := make([]int64, 0, len(subjects))
+	for typeID := range subjects {
+		if graph.shipsAll[typeID] {
+			shipSubjects[typeID] = true
+			subjectIDs = append(subjectIDs, typeID)
+		}
+	}
+	if len(shipSubjects) == 0 {
+		return
+	}
+	sort.Slice(subjectIDs, func(i, j int) bool { return subjectIDs[i] < subjectIDs[j] })
+
+	// The family of a hull is its class: the SDE group name.
+	// A type the SDE does not group stands alone as its own
+	// family (its fit then rests on its own samples only).
+	families := make(map[int64]string, len(subjectIDs))
+	for _, typeID := range subjectIDs {
+		families[typeID] = fmt.Sprintf("type:%d", typeID)
+	}
+	if rows, err := app.queries.ListTypeGroupNames(ctx, subjectIDs); err == nil {
+		for _, row := range rows {
+			if row.Name != "" {
+				families[row.TypeID] = row.Name
+			}
+		}
+	} else {
+		logging.Errorf("true values: ship families: %v", err)
+	}
+
+	samplesByType := make(map[int64][]tvContractSample, len(subjectIDs))
+	for _, typeID := range subjectIDs {
+		// No freshness filter here, deliberately: hulls
+		// move slowly, and the fit ages every sample by
+		// weight (tvSampleWeight) -- a confirmed sale from
+		// weeks ago still counts, discounted. The 14-day
+		// hard window the tiered path keeps is what let
+		// real ship estimates lapse.
+		samples := app.corpusListingSamples(ctx, typeID, subjects, graph.shipsAll, priceOf, now)
+		samples = append(samples, st.samples[typeID]...)
+		samples = append(samples, vanished[typeID]...)
+		samples = append(samples, st.fulfilled[typeID]...)
+		samplesByType[typeID] = dedupeSamplesByContract(samples)
+	}
+	pricing := buildTVShipPricing(shipSubjects, ladders, samplesByType, families, now)
+	learned := 0
+	for _, fam := range pricing.families {
+		if fam.useModel {
+			learned++
+		}
+	}
+
+	due := make(map[int64]bool, len(pending)+tvEvidenceChunk)
+	for _, typeID := range pending {
+		due[typeID] = true
+	}
+	if len(evidenceTypes) > 0 {
+		start := st.evidenceCursor
+		if start >= len(evidenceTypes) {
+			start = 0
+		}
+		end := start + tvEvidenceChunk
+		if end > len(evidenceTypes) {
+			end = len(evidenceTypes)
+		}
+		for _, typeID := range evidenceTypes[start:end] {
+			if row, ok := existing[typeID]; ok && !inputsChanged &&
+				row.ProfileVersion == trueValueProfileVersion &&
+				now.Sub(row.ComputedAt) < trueValueStaleAfter {
+				continue
+			}
+			due[typeID] = true
+		}
+		st.evidenceCursor = end
+		if end >= len(evidenceTypes) {
+			st.evidenceCursor = 0
+		}
+	}
+
+	written := 0
+	for typeID := range due {
+		est, source, count, ok := pricing.price(typeID)
+		row := db.UpsertTrueValueParams{
+			TypeID:         typeID,
+			BuildCost:      ladders[typeID],
+			ComputedAt:     now,
+			ProfileVersion: trueValueProfileVersion,
+			SellSamples:    int64(count),
+			SellSource:     source,
+		}
+		if ok {
+			row.EstSell = sql.NullFloat64{Float64: est, Valid: true}
+		}
+		if err := app.queries.UpsertTrueValue(ctx, row); err != nil {
+			logging.Errorf("true values: store ship %d: %v", typeID, err)
+			continue
+		}
+		written++
+	}
+	if written > 0 {
+		logging.Infof("true values: priced %d ship types from contract evidence (%d families fitted, %d learned)",
+			written, len(pricing.families), learned)
+	}
 }
 
 // tvStoredPricer prices a type from stored data alone, in
 // the house order: The Forge's swept typical sell, then the
-// stored true-value estimated sell, then CCP's adjusted
-// price. The guide's average is not a price source here (or
-// anywhere in the sampler): it is too stale to net real
-// fittings against. The contract sampler nets a fitted
-// contract's other items out at these prices; ok=false when
-// none of the three knows the type, which rejects the sample
-// rather than guessing.
+// stored true-value estimated sell, then the stored build
+// cost (a cost input to the netting arithmetic, quoted as
+// nobody's price), then CCP's adjusted price. The guide's
+// average is not a price source here (or anywhere in the
+// sampler): it is too stale to net real fittings against.
+// The contract sampler nets a fitted contract's other items
+// out at these prices; ok=false when none of them knows the
+// type, which rejects the sample rather than guessing.
 type tvStoredPricer func(typeID int64) (float64, bool)
 
 func tvStoredPricerFrom(typicalSell map[int64]float64, stored map[int64]db.TrueValue, guide map[int64]esi.MarketPrice) tvStoredPricer {
@@ -444,8 +801,13 @@ func tvStoredPricerFrom(typicalSell map[int64]float64, stored map[int64]db.TrueV
 		if v := typicalSell[typeID]; v > 0 {
 			return v, true
 		}
-		if tv, ok := stored[typeID]; ok && tv.EstSell.Valid && tv.EstSell.Float64 > 0 {
-			return tv.EstSell.Float64, true
+		if tv, ok := stored[typeID]; ok {
+			if est, ok := storedEstimate(tv); ok {
+				return est, true
+			}
+			if tv.BuildCost > 0 {
+				return tv.BuildCost, true
+			}
 		}
 		if p, ok := guide[typeID]; ok && p.AdjustedPrice > 0 {
 			return p.AdjustedPrice, true
@@ -459,11 +821,23 @@ func tvStoredPricerFrom(typicalSell map[int64]float64, stored map[int64]db.TrueV
 // evidence tiers (schema 052). A contract is evidence only in
 // context -- public contracts are full of scams, mislabels
 // and bundled fits -- so every sample has to earn it: the
-// header price must sit within a band around some thin type's
-// build cost before its item list is even fetched, and the
 // item list must name the thin type cleanly (see
-// tvContractSampleFor). What survives is a cluster around the
-// build-cost anchor, never a raw feed.
+// tvContractSampleShape), and where a build-cost anchor
+// exists the price must sit within its band. The listing
+// tier's main source is the stored public-contract corpus,
+// mined at evaluation time (corpusListingSamples), which
+// also records the ship listings it accepts as observations;
+// the crawl below is its watched companion in eight regions.
+// Departed listings -- the crawl's watched ones and the
+// corpus's recorded ones alike -- get one exit probe apiece
+// (reconcileContractObservations, probeShipContractSales),
+// which is how listings graduate to the vanished and
+// fulfilled tiers the corpus, holding only live contracts,
+// can never see leave. The tiers are the evidence's
+// provenance and its weight: thin non-ship types price from
+// the strongest tier holding two samples; thin ships feed
+// every tier into the learned correction
+// (truevalue_learn.go), confirmed sales weighted highest.
 //
 //   fulfilled -- contracts of linked characters that ESI
 //     reports finished: certain sales, harvested from the
@@ -537,7 +911,7 @@ type tvPublicContractItem struct {
 func (app *Application) crawlPublicContracts(ctx context.Context, thinCosts map[int64]float64, ships map[int64]bool, priceOf tvStoredPricer, now time.Time) {
 	st := &app.trueValuePass
 	for typeID, samples := range st.samples {
-		if samples = freshContractSamples(samples, now); len(samples) == 0 {
+		if samples = retainedContractSamples(samples, now); len(samples) == 0 {
 			delete(st.samples, typeID)
 		} else {
 			st.samples[typeID] = samples
@@ -545,11 +919,12 @@ func (app *Application) crawlPublicContracts(ctx context.Context, thinCosts map[
 	}
 	// Observation housekeeping: a watched listing that
 	// expired without ever vanishing can never become
-	// evidence now, and a vanished row outlives its samples
-	// by nothing once they age out.
+	// evidence now, and an exited row is kept to the
+	// evidence retention horizon -- ship fits still count
+	// its sale, age-weighted, long after it leaves.
 	if err := app.queries.PurgeTVContractObservations(ctx, db.PurgeTVContractObservationsParams{
 		ExpiresAt:  now.Add(-tvContractVanishMargin),
-		VanishedAt: sql.NullTime{Time: now.Add(-tvSampleWindow), Valid: true},
+		VanishedAt: sql.NullTime{Time: now.Add(-tvEvidenceRetention), Valid: true},
 	}); err != nil {
 		logging.Errorf("true values: purge observations: %v", err)
 	}
@@ -629,7 +1004,7 @@ func (app *Application) crawlContractRegion(ctx context.Context, regionID int64,
 			continue
 		}
 		if typeID, unit, shape, ok := tvContractSampleFor(c.Price, items, thinCosts, ships, priceOf); ok {
-			st.samples[typeID] = append(st.samples[typeID], tvContractSample{price: unit, at: now, source: tvSampleListing})
+			st.samples[typeID] = append(st.samples[typeID], tvContractSample{price: unit, at: now, source: tvSampleListing, contractID: c.ContractID})
 			sampled++
 			app.observeContract(ctx, c, regionID, typeID, unit, shape, now)
 		}
@@ -779,21 +1154,45 @@ const (
 )
 
 // tvContractSampleFor is the strict second filter, run on a
-// fetched item list. Two shapes earn a sample:
+// fetched item list: the shape test (tvContractSampleShape),
+// plus the band around the subject's build cost. The crawl
+// and the fulfilled harvest admit samples through it; the
+// stored-corpus miner runs the shape test alone and leaves
+// banding to the estimate step, which is what lets contract
+// evidence that flatly contradicts an anchor (or a type with
+// no anchor at all) still be heard there.
+func tvContractSampleFor(price float64, items []tvPublicContractItem, thinCosts map[int64]float64, ships map[int64]bool, priceOf tvStoredPricer) (typeID int64, unitPrice float64, shape string, ok bool) {
+	subjects := make(map[int64]bool, len(thinCosts))
+	for id := range thinCosts {
+		subjects[id] = true
+	}
+	typeID, unitPrice, shape, ok = tvContractSampleShape(price, items, subjects, ships, priceOf)
+	if !ok {
+		return 0, 0, "", false
+	}
+	anchor := thinCosts[typeID]
+	if unitPrice < tvContractBandLow*anchor || unitPrice > tvContractBandHigh*anchor {
+		return 0, 0, "", false
+	}
+	return typeID, unitPrice, shape, true
+}
+
+// tvContractSampleShape judges a contract's structure alone.
+// Two shapes earn a sample:
 //
 //   - single: the contract is exactly one thin type (a single
-//     unit of it, for a ship hull), and its implied unit
-//     price sits in the band around that type's build cost.
+//     unit of it, for a ship hull).
 //   - fitted: the contract carries exactly one unit of one
 //     thin ship hull plus other items -- the way titans
 //     actually trade, never bare. The other items are netted
 //     out at their stored prices (priceOf) and the residual
-//     is the hull's implied price, admitted under the same
-//     band. A second thin type aboard makes the subject
-//     ambiguous and rejects the contract, as does any item
-//     stored prices cannot value: the residual must be
-//     arithmetic, never a guess.
-func tvContractSampleFor(price float64, items []tvPublicContractItem, thinCosts map[int64]float64, ships map[int64]bool, priceOf tvStoredPricer) (typeID int64, unitPrice float64, shape string, ok bool) {
+//     is the hull's implied price. A second thin type aboard
+//     makes the subject ambiguous and rejects the contract,
+//     as does any item stored prices cannot value: the
+//     residual must be arithmetic, never a guess.
+//
+// subjects is the thin set the subject must belong to.
+func tvContractSampleShape(price float64, items []tvPublicContractItem, subjects map[int64]bool, ships map[int64]bool, priceOf tvStoredPricer) (typeID int64, unitPrice float64, shape string, ok bool) {
 	byType := make(map[int64]int64)
 	for _, it := range items {
 		if !it.IsIncluded || it.Quantity <= 0 {
@@ -806,25 +1205,20 @@ func tvContractSampleFor(price float64, items []tvPublicContractItem, thinCosts 
 	}
 	if len(byType) == 1 {
 		for id, qty := range byType {
-			buildCost, thin := thinCosts[id]
-			if !thin {
+			if !subjects[id] {
 				return 0, 0, "", false
 			}
 			if ships[id] && qty != 1 {
 				return 0, 0, "", false
 			}
-			unit := price / float64(qty)
-			if unit < tvContractBandLow*buildCost || unit > tvContractBandHigh*buildCost {
-				return 0, 0, "", false
-			}
-			return id, unit, tvContractShapeSingle, true
+			return id, price / float64(qty), tvContractShapeSingle, true
 		}
 	}
 	// Fitted shape: one candidate hull, everything else
 	// netted away.
 	var hull int64
 	for id, qty := range byType {
-		if _, thin := thinCosts[id]; thin {
+		if subjects[id] {
 			if hull != 0 || !ships[id] || qty != 1 {
 				return 0, 0, "", false
 			}
@@ -845,12 +1239,7 @@ func tvContractSampleFor(price float64, items []tvPublicContractItem, thinCosts 
 		}
 		net += unit * float64(qty)
 	}
-	residual := price - net
-	buildCost := thinCosts[hull]
-	if residual < tvContractBandLow*buildCost || residual > tvContractBandHigh*buildCost {
-		return 0, 0, "", false
-	}
-	return hull, residual, tvContractShapeFitted, true
+	return hull, price - net, tvContractShapeFitted, true
 }
 
 // ---------------------------------------------------------------------------
@@ -903,7 +1292,7 @@ func (app *Application) harvestFulfilledSamples(ctx context.Context, thinCosts m
 				continue
 			}
 			completed := tvContractCompletedAt(c)
-			if completed.IsZero() || now.Sub(completed) >= tvSampleWindow || completed.After(now) {
+			if completed.IsZero() || now.Sub(completed) >= tvEvidenceRetention || completed.After(now) {
 				continue
 			}
 			detail, err := app.queries.GetContractDetail(ctx, c.ContractID)
@@ -920,7 +1309,7 @@ func (app *Application) harvestFulfilledSamples(ctx context.Context, thinCosts m
 			}
 			if typeID, unit, _, ok := tvContractSampleFor(c.Price, items, thinCosts, ships, priceOf); ok {
 				st.fulfilled[typeID] = append(st.fulfilled[typeID], tvContractSample{
-					price: unit, at: completed, source: tvSampleFulfilled,
+					price: unit, at: completed, source: tvSampleFulfilled, contractID: c.ContractID,
 				})
 				st.fulfilledSeen[c.ContractID] = true
 			}

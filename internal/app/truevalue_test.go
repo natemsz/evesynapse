@@ -52,18 +52,24 @@ func TestTrueValueContractFilters(t *testing.T) {
 
 	// The netting pricer: stored prices in the house order
 	// (Forge typical sell, then the stored estimated sell,
-	// then adjusted). The guide's average is never a source:
-	// 3005 carries one and nothing else, and must come back
-	// unpriced. 3010 carries all three real sources and the
-	// typical must win; 3002 only an estimated sell; 3003 an
-	// estimate and an adjusted (estimate first); 3004 only
-	// an adjusted.
+	// then the stored build cost, then adjusted). The guide's
+	// average is never a source: 3005 carries one and nothing
+	// else, and must come back unpriced. 3010 carries all
+	// three real sources and the typical must win; 3002 only
+	// an estimated sell; 3003 an estimate and an adjusted
+	// (estimate first); 3004 only an adjusted; 3006 only a
+	// build cost (a cost input to the netting arithmetic,
+	// quoted as nobody's price); 3007 a legacy anchored row
+	// -- its figure names no evidence tier, so it is no
+	// estimate, and it too nets at its build cost.
 	priceOf := tvStoredPricerFrom(
 		map[int64]float64{34: 5.5, 3001: 250, 3010: 100, 3011: 1e10},
 		map[int64]db.TrueValue{
-			3002: {TypeID: 3002, EstSell: sql.NullFloat64{Float64: 45, Valid: true}},
-			3003: {TypeID: 3003, EstSell: sql.NullFloat64{Float64: 50, Valid: true}},
-			3010: {TypeID: 3010, EstSell: sql.NullFloat64{Float64: 90, Valid: true}},
+			3002: {TypeID: 3002, EstSell: sql.NullFloat64{Float64: 45, Valid: true}, SellSource: tvSampleListing},
+			3003: {TypeID: 3003, EstSell: sql.NullFloat64{Float64: 50, Valid: true}, SellSource: tvSampleListing},
+			3006: {TypeID: 3006, BuildCost: 33},
+			3007: {TypeID: 3007, BuildCost: 70, EstSell: sql.NullFloat64{Float64: 70, Valid: true}},
+			3010: {TypeID: 3010, EstSell: sql.NullFloat64{Float64: 90, Valid: true}, SellSource: tvSampleListing},
 		},
 		map[int64]esi.MarketPrice{
 			34:   {AveragePrice: 6, AdjustedPrice: 4},
@@ -73,7 +79,7 @@ func TestTrueValueContractFilters(t *testing.T) {
 			3005: {AveragePrice: 777},
 			3010: {AveragePrice: 110, AdjustedPrice: 80},
 		})
-	for id, want := range map[int64]float64{34: 5.5, 3001: 250, 3002: 45, 3003: 50, 3004: 40, 3010: 100} {
+	for id, want := range map[int64]float64{34: 5.5, 3001: 250, 3002: 45, 3003: 50, 3004: 40, 3006: 33, 3007: 70, 3010: 100} {
 		if got, ok := priceOf(id); !ok || got != want {
 			t.Errorf("priceOf(%d) = (%v, %v), want (%v, true)", id, got, ok, want)
 		}
@@ -83,6 +89,21 @@ func TestTrueValueContractFilters(t *testing.T) {
 	}
 	if _, ok := priceOf(3005); ok {
 		t.Error("priceOf priced a type from the guide average, which is never a price source")
+	}
+
+	// The stored-estimate invariant: a figure counts as an
+	// estimated sell only when an evidence tier stands behind
+	// it. A legacy anchored row (the build cost copied into
+	// the sell column, no tier named) reads as no estimate to
+	// every consumer.
+	if _, ok := storedEstimate(db.TrueValue{EstSell: sql.NullFloat64{Float64: 70, Valid: true}}); ok {
+		t.Error("anchored row read as an estimate")
+	}
+	if est, ok := storedEstimate(db.TrueValue{EstSell: sql.NullFloat64{Float64: 70, Valid: true}, SellSource: tvSampleListing}); !ok || est != 70 {
+		t.Errorf("tier-backed row = (%v, %v), want (70, true)", est, ok)
+	}
+	if _, ok := storedEstimate(db.TrueValue{}); ok {
+		t.Error("empty row read as an estimate")
 	}
 
 	// Item-list filter: exactly the thin type, at an in-band
@@ -146,45 +167,34 @@ func TestTrueValueContractFilters(t *testing.T) {
 		t.Error("fitted contract with two hulls sampled")
 	}
 
-	// Estimated sell: the median once two samples agree,
-	// the build cost itself before that.
-	sample := func(p float64) tvContractSample { return tvContractSample{price: p, at: time.Now()} }
-	if got := estimatedSell(550e9, nil); got != 550e9 {
-		t.Errorf("no samples: est = %v, want build cost 550e9", got)
-	}
-	if got := estimatedSell(550e9, []tvContractSample{sample(590e9)}); got != 550e9 {
-		t.Errorf("one sample: est = %v, want build cost 550e9", got)
-	}
-	if got := estimatedSell(550e9, []tvContractSample{sample(610e9), sample(590e9)}); got != 600e9 {
-		t.Errorf("two samples: est = %v, want median 600e9", got)
-	}
-	if got := estimatedSell(550e9, []tvContractSample{sample(700e9), sample(590e9), sample(610e9)}); got != 610e9 {
-		t.Errorf("three samples: est = %v, want median 610e9", got)
-	}
-
-	// Tiered estimates: the strongest tier with two samples
-	// speaks -- recorded sales over likely sales over asks --
-	// and a lone sample at any tier cannot.
+	// Ship types no longer price through this function at
+	// all: they feed every tier into the learned correction
+	// (truevalue_learn.go, pinned in truevalue_learn_test.go).
+	// What remains here is the tiered estimate thin NON-ship
+	// types still use, over the samples inside their anchor's
+	// band: the strongest tier with two samples speaks --
+	// recorded sales over likely sales over asks -- and a
+	// lone sample at any tier cannot.
 	tiered := func(p float64, source string) tvContractSample {
 		return tvContractSample{price: p, at: time.Now(), source: source}
 	}
-	if est, source, n := estimatedSellTiered(550e9, []tvContractSample{
+	if est, source, n, ok := estimatedSellTiered([]tvContractSample{
 		tiered(600e9, tvSampleFulfilled), tiered(620e9, tvSampleFulfilled),
 		tiered(590e9, tvSampleListing), tiered(595e9, tvSampleListing), tiered(598e9, tvSampleListing),
-	}); est != 610e9 || source != tvSampleFulfilled || n != 2 {
-		t.Errorf("fulfilled over listings = (%v, %q, %d), want (610e9, fulfilled, 2)", est, source, n)
+	}); !ok || est != 610e9 || source != tvSampleFulfilled || n != 2 {
+		t.Errorf("fulfilled over listings = (%v, %q, %d, %v), want (610e9, fulfilled, 2, true)", est, source, n, ok)
 	}
-	if est, source, n := estimatedSellTiered(550e9, []tvContractSample{
+	if est, source, n, ok := estimatedSellTiered([]tvContractSample{
 		tiered(600e9, tvSampleFulfilled),
 		tiered(500e9, tvSampleVanished), tiered(520e9, tvSampleVanished),
 		tiered(590e9, tvSampleListing), tiered(610e9, tvSampleListing),
-	}); est != 510e9 || source != tvSampleVanished || n != 2 {
-		t.Errorf("vanished over listings = (%v, %q, %d), want (510e9, vanished, 2)", est, source, n)
+	}); !ok || est != 510e9 || source != tvSampleVanished || n != 2 {
+		t.Errorf("vanished over listings = (%v, %q, %d, %v), want (510e9, vanished, 2, true)", est, source, n, ok)
 	}
-	if est, source, n := estimatedSellTiered(550e9, []tvContractSample{
+	if est, source, n, ok := estimatedSellTiered([]tvContractSample{
 		tiered(600e9, tvSampleFulfilled), tiered(500e9, tvSampleVanished), tiered(590e9, tvSampleListing),
-	}); est != 550e9 || source != "" || n != 3 {
-		t.Errorf("one sample per tier = (%v, %q, %d), want (550e9 anchor, \"\", 3)", est, source, n)
+	}); ok || est != 0 || source != "" || n != 3 {
+		t.Errorf("one sample per tier = (%v, %q, %d, %v), want no estimate (0, \"\", 3, false)", est, source, n, ok)
 	}
 
 	// The vanish margin: gone a day or more before expiry is
@@ -292,7 +302,9 @@ func TestTrueValueWorkerPass(t *testing.T) {
 
 	// Component: ceil(100 x .9 x .940104) = 85 of 34 at 5 =
 	// 425, plus fee EIV 400 x .0615 = 24.6 -> 449.6. Thin
-	// (no average): estimated sell anchors to the build.
+	// (no average): no contract evidence has spoken, so no
+	// estimated sell is stored -- the build cost is not a
+	// price and is never stored as one.
 	comp, err := q.GetTrueValue(ctx, 5001)
 	if err != nil {
 		t.Fatalf("component true value: %v", err)
@@ -300,8 +312,8 @@ func TestTrueValueWorkerPass(t *testing.T) {
 	if math.Abs(comp.BuildCost-449.6) > 0.01 {
 		t.Errorf("component build cost = %v, want 449.6", comp.BuildCost)
 	}
-	if !comp.EstSell.Valid || comp.EstSell.Float64 != comp.BuildCost || comp.SellSamples != 0 {
-		t.Errorf("component est = %+v samples %d, want anchored at build cost with 0 samples", comp.EstSell, comp.SellSamples)
+	if comp.EstSell.Valid || comp.SellSamples != 0 || comp.SellSource != "" {
+		t.Errorf("component est = %+v samples %d source %q, want no estimate stored", comp.EstSell, comp.SellSamples, comp.SellSource)
 	}
 
 	// Titan (hull ME 2): ceil(10 x .98 x .940104) = 10
@@ -314,8 +326,8 @@ func TestTrueValueWorkerPass(t *testing.T) {
 	if math.Abs(titan.BuildCost-4803.5) > 0.01 {
 		t.Errorf("titan build cost = %v, want 4803.5", titan.BuildCost)
 	}
-	if !titan.EstSell.Valid || titan.EstSell.Float64 != titan.BuildCost {
-		t.Errorf("titan est = %+v, want anchored at build cost", titan.EstSell)
+	if titan.EstSell.Valid {
+		t.Errorf("titan est = %+v, want no estimate stored (no contract evidence)", titan.EstSell)
 	}
 
 	// Healthy widget (average + real volume): a build cost
@@ -334,6 +346,145 @@ func TestTrueValueWorkerPass(t *testing.T) {
 	// The mineral is not manufacturable: no row.
 	if _, err := q.GetTrueValue(ctx, 34); err != sql.ErrNoRows {
 		t.Errorf("mineral true value err = %v, want no row", err)
+	}
+}
+
+// TestTrueValueCorpusPricing: the stored public-contract
+// corpus is the listing tier's price of record, and ships
+// price from it the abyssal way (truevalue_learn.go). Two
+// bare asks inside the titan's band price it through its own
+// bounded factor -- the shrunk weighted median of their log
+// ratios to its build cost; a prize ship with NO blueprint
+// at all (no build cost, no ladder) prices from the learned
+// level of its own asks -- a fitted contract netted at
+// stored prices, a 9x outlier trimmed -- and a contract
+// carrying two thin hulls speaks for neither.
+func TestTrueValueCorpusPricing(t *testing.T) {
+	transport := &countingTransport{}
+	app, conn, q := buildCorpTestApp(t, transport)
+	ctx := context.Background()
+	now := time.Now().UTC()
+
+	for _, stmt := range []string{
+		`INSERT INTO sde_categories (category_id, name) VALUES (6, 'Ship'), (900, 'Fixture')`,
+		`INSERT INTO sde_groups (group_id, name, category_id) VALUES (25, 'Titan', 6), (910, 'Fixture Goods', 900)`,
+		`INSERT INTO sde_types (type_id, name, group_id, market_group_id, published) VALUES
+			(34, 'Tritanium', 910, 2, 1),
+			(5001, 'Fixture Component', 910, 2, 1),
+			(5003, 'Fixture Titan', 25, 2, 1),
+			(5005, 'Fixture Prize Ship', 25, 2, 1)`,
+		`INSERT INTO sde_blueprints (blueprint_type_id, product_type_id, product_quantity, max_production_limit, manufacturing_time_seconds) VALUES
+			(7001, 5001, 1, 100, 300),
+			(7003, 5003, 1, 1, 3600)`,
+		`INSERT INTO sde_blueprint_materials (blueprint_type_id, material_type_id, quantity) VALUES
+			(7001, 34, 100),
+			(7003, 5001, 10)`,
+		`INSERT INTO sde_type_attributes (type_id, attribute_id, value) VALUES
+			(35827, 2600, 0.99), (35827, 2601, 0.95),
+			(37147, 2594, -2.4), (37147, 2357, 2.1)`,
+	} {
+		if _, err := conn.ExecContext(ctx, stmt); err != nil {
+			t.Fatalf("seed sde: %v", err)
+		}
+	}
+	guide := []db.UpsertGuidePriceParams{
+		{TypeID: 34, AveragePrice: 5.5e6, AdjustedPrice: 4e6},
+		{TypeID: 5001, AveragePrice: 0, AdjustedPrice: 5e8},
+		{TypeID: 5003, AveragePrice: 0, AdjustedPrice: 999},
+	}
+	for _, g := range guide {
+		if err := q.UpsertGuidePrice(ctx, g); err != nil {
+			t.Fatalf("seed guide: %v", err)
+		}
+	}
+	if err := q.UpsertGuidePricesMeta(ctx, db.UpsertGuidePricesMetaParams{
+		FetchedAt: now, CachedUntil: mustTime("2999-01-01T00:00:00Z"),
+	}); err != nil {
+		t.Fatalf("seed guide meta: %v", err)
+	}
+	if err := q.UpsertMarketRegionStat(ctx, db.UpsertMarketRegionStatParams{
+		RegionID: 10000002, TypeID: 34, TypicalSell: 5e6, AvgDailyVolume: 1_000_000, UpdatedAt: now,
+	}); err != nil {
+		t.Fatalf("seed stats: %v", err)
+	}
+	if err := q.UpsertIndustryCostIndex(ctx, db.UpsertIndustryCostIndexParams{
+		SolarSystemID: trueValueReferenceSystemID, Activity: "manufacturing", CostIndex: 0.02,
+	}); err != nil {
+		t.Fatalf("seed cost index: %v", err)
+	}
+
+	// The corpus: live item exchanges with their item lists
+	// stored, as the contract sweep leaves them.
+	contracts := []struct {
+		id    int64
+		price float64
+		items []tvPublicContractItem
+	}{
+		{9001, 5.3e9, []tvPublicContractItem{{TypeID: 5003, Quantity: 1, IsIncluded: true}}},
+		{9002, 6.1e9, []tvPublicContractItem{{TypeID: 5003, Quantity: 1, IsIncluded: true}}},
+		{9003, 4e10, []tvPublicContractItem{{TypeID: 5005, Quantity: 1, IsIncluded: true}}},
+		{9004, 5e10, []tvPublicContractItem{{TypeID: 5005, Quantity: 1, IsIncluded: true}}},
+		{9005, 6e10, []tvPublicContractItem{{TypeID: 5005, Quantity: 1, IsIncluded: true}}},
+		{9006, 9e11, []tvPublicContractItem{{TypeID: 5005, Quantity: 1, IsIncluded: true}}},
+		{9007, 52e9, []tvPublicContractItem{{TypeID: 5005, Quantity: 1, IsIncluded: true}, {TypeID: 34, Quantity: 500, IsIncluded: true}}},
+		{9008, 7e10, []tvPublicContractItem{{TypeID: 5005, Quantity: 1, IsIncluded: true}, {TypeID: 5003, Quantity: 1, IsIncluded: true}}},
+	}
+	recordID := int64(1)
+	for _, c := range contracts {
+		if _, err := conn.ExecContext(ctx,
+			`INSERT INTO pub_contracts (contract_id, region_id, type, price, date_issued, date_expired, items_state, first_seen, last_seen)
+			 VALUES ($1, 10000002, 'item_exchange', $2, $3, $4, 'stored', $3, $3)`,
+			c.id, c.price, now.Add(-24*time.Hour), now.Add(7*24*time.Hour)); err != nil {
+			t.Fatalf("seed contract %d: %v", c.id, err)
+		}
+		for _, it := range c.items {
+			if _, err := conn.ExecContext(ctx,
+				`INSERT INTO pub_contract_items (record_id, contract_id, type_id, quantity, is_included)
+				 VALUES ($1, $2, $3, $4, $5)`,
+				recordID, c.id, it.TypeID, it.Quantity, it.IsIncluded); err != nil {
+				t.Fatalf("seed contract item: %v", err)
+			}
+			recordID++
+		}
+	}
+
+	app.refreshTrueValues(ctx)
+
+	// Titan: build cost at the evidence fixture's scale
+	// (4803.5e6); its two in-band corpus asks price it
+	// through its own factor: the weighted median log ratio
+	// (the lower ask's, log(5.3e9 / 4803.5e6)) shrunk by its
+	// effective count, 2/(2+6) -- 4803.5e6 x exp(0.25 x
+	// 0.09836) = 4.9231e9. The two-hull contract 9008 is no
+	// sample.
+	titan, err := q.GetTrueValue(ctx, 5003)
+	if err != nil {
+		t.Fatalf("titan true value: %v", err)
+	}
+	if math.Abs(titan.BuildCost-4803.5e6) > 1 {
+		t.Errorf("titan build cost = %v, want 4803.5e6", titan.BuildCost)
+	}
+	if !titan.EstSell.Valid || math.Abs(titan.EstSell.Float64-4.9231e9) > 1e6 || titan.SellSource != tvSampleListing || titan.SellSamples != 2 {
+		t.Errorf("titan est = %+v source %q samples %d, want ~4.9231e9 from 2 corpus listings",
+			titan.EstSell, titan.SellSource, titan.SellSamples)
+	}
+
+	// Prize ship: no blueprint, so build cost 0 and no
+	// ladder; its asks set a learned level (the fitted one
+	// netted to 49.5e9, the 9e11 outlier trimmed): the
+	// survivors' weighted mean log price, exp(24.6226) =
+	// 4.9373e10.
+	prize, err := q.GetTrueValue(ctx, 5005)
+	if err != nil {
+		t.Fatalf("prize ship true value: %v", err)
+	}
+	if prize.BuildCost != 0 {
+		t.Errorf("prize build cost = %v, want 0 (no blueprint)", prize.BuildCost)
+	}
+	if !prize.EstSell.Valid || math.Abs(prize.EstSell.Float64-4.9373e10) > 4e8 ||
+		prize.SellSource != tvSampleListing || prize.SellSamples != 4 {
+		t.Errorf("prize est = %+v source %q samples %d, want ~4.9373e10 from 4 contracts",
+			prize.EstSell, prize.SellSource, prize.SellSamples)
 	}
 }
 
@@ -446,9 +597,17 @@ func seedTrueValue(t *testing.T, q *db.Queries, typeID int64, build, est float64
 	if est > 0 {
 		estv = sql.NullFloat64{Float64: est, Valid: true}
 	}
+	// A seeded estimate represents a tier-backed one (the
+	// only kind the worker writes): two or more samples name
+	// the listing tier behind it.
+	source := ""
+	if est > 0 && samples >= 2 {
+		source = tvSampleListing
+	}
 	if err := q.UpsertTrueValue(context.Background(), db.UpsertTrueValueParams{
 		TypeID: typeID, BuildCost: build, EstSell: estv, SellSamples: samples,
 		ComputedAt: time.Now().UTC(), ProfileVersion: trueValueProfileVersion,
+		SellSource: source,
 	}); err != nil {
 		t.Fatalf("seed true value %d: %v", typeID, err)
 	}
@@ -469,7 +628,7 @@ func TestTrueValueFitPricing(t *testing.T) {
 		t.Fatalf("create user: %v", err)
 	}
 	seedTrueValue(t, q, 11567, 550e9, 590e9, 4)
-	seedTrueValue(t, q, 3002, 30, 45, 0) // a module tier too: avg 0, adj 40, est 45
+	seedTrueValue(t, q, 3002, 30, 45, 2) // a module tier too: avg 0, adj 40, est 45
 	if err := q.UpsertMarketRegionStat(ctx, db.UpsertMarketRegionStatParams{
 		RegionID: 10000002, TypeID: 3001, TypicalSell: 250, AvgDailyVolume: 100,
 		UpdatedAt: time.Now().UTC(),
@@ -649,7 +808,7 @@ func TestTrueValueNetWorthFallback(t *testing.T) {
 		t.Fatalf("seed region stat: %v", err)
 	}
 	seedTrueValue(t, q, 5001, 650, 700, 2)
-	seedTrueValue(t, q, 4242, 480, 500, 0)
+	seedTrueValue(t, q, 4242, 480, 500, 2)
 
 	// Assets: 100x6 + 1x700 + 2x500 = 2300; total 3300.50,
 	// every stack priced.

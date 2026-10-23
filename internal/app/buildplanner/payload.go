@@ -831,7 +831,13 @@ func (app *planner) planPriceMap(ctx context.Context, ids []int64) map[int64]esi
 		logging.Errorf("planner: true values for plan: %v", err)
 	} else {
 		for _, row := range rows {
-			if row.EstSell.Valid && row.EstSell.Float64 > 0 {
+			// The stored-estimate invariant (storedEstimate in
+			// the app package): a row prices a plan only when
+			// an evidence tier stands behind its estimated
+			// sell (sell_source names it) -- never at its
+			// build cost, or a plan would grade building
+			// against the cost of building.
+			if row.EstSell.Valid && row.EstSell.Float64 > 0 && row.SellSource != "" {
 				estSells[row.TypeID] = row.EstSell.Float64
 			}
 		}

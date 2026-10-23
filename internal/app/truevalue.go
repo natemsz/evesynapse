@@ -99,6 +99,22 @@ func (app *Application) storedTrueValues(ctx context.Context) map[int64]db.TrueV
 	return out
 }
 
+// storedEstimate reads a stored row's estimated sell as a
+// price: the figure itself, with ok true only when an
+// evidence tier stands behind it (sell_source names the tier
+// that spoke). A row whose figure carries no tier is the
+// pre-fix anchored shape -- the build cost copied into the
+// sell column -- and reads as NO estimate to every consumer:
+// an anchored cost is a cost, never a sell price. The worker
+// no longer writes such rows; this guard is what makes the
+// ones already stored harmless the moment this ships.
+func storedEstimate(tv db.TrueValue) (float64, bool) {
+	if tv.EstSell.Valid && tv.EstSell.Float64 > 0 && tv.SellSource != "" {
+		return tv.EstSell.Float64, true
+	}
+	return 0, false
+}
+
 // TrueValues is the fit foundation's view of the table
 // (fitview.Env): estimated sell by type, only where one is
 // stored -- healthy-market types are absent by design.
@@ -109,8 +125,8 @@ func (app *Application) TrueValues(ctx context.Context) map[int64]float64 {
 	}
 	out := make(map[int64]float64, len(rows))
 	for id, tv := range rows {
-		if tv.EstSell.Valid && tv.EstSell.Float64 > 0 {
-			out[id] = tv.EstSell.Float64
+		if est, ok := storedEstimate(tv); ok {
+			out[id] = est
 		}
 	}
 	return out
@@ -136,8 +152,10 @@ func pickValuationPrice(typicalSell, estSell float64) (float64, bool) {
 // estSellOf reads the estimated sell for one type out of a
 // stored-true-values map (nil-safe): 0 when there is none.
 func estSellOf(rows map[int64]db.TrueValue, typeID int64) float64 {
-	if tv, ok := rows[typeID]; ok && tv.EstSell.Valid {
-		return tv.EstSell.Float64
+	if tv, ok := rows[typeID]; ok {
+		if est, ok := storedEstimate(tv); ok {
+			return est
+		}
 	}
 	return 0
 }
@@ -145,9 +163,10 @@ func estSellOf(rows map[int64]db.TrueValue, typeID int64) float64 {
 // trueValueBasis is the estimated sell's provenance in plain
 // end-user words, tier by tier: recorded sales are sales,
 // vanished listings are only ever "likely" sales (a listing
-// can also have been withdrawn), live listings are asks, and
-// the anchor is named when no tier had two samples to speak
-// with.
+// can also have been withdrawn), live listings are asks. It
+// renders only for rows an evidence tier stands behind
+// (storedEstimate); the fallback names the anchor for any
+// older row that still carries one.
 func trueValueBasis(tv db.TrueValue) string {
 	if tv.SellSamples >= 2 {
 		switch tv.SellSource {

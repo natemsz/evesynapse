@@ -18,11 +18,12 @@ import (
 
 // ---------------------------------------------------------------------------
 // True-value evidence tiers (schema 052): the crawl's fitted
-// listings teach a titan an estimated sell, the Hel's bare
-// listings keep working exactly as before, a watched listing
+// listings teach a titan an estimated sell, a watched listing
 // that vanishes before expiry graduates to the probable
 // tier, and a linked character's finished contracts are the
-// certain tier -- recorded sales that outrank both.
+// certain tier -- recorded sales. The tiers are the evidence
+// ships price from (truevalue_learn.go): every tier feeds
+// the learned correction, confirmed sales weighted highest.
 //
 // Fixture economics are TestTrueValueWorkerPass scaled by
 // 1e6 so contract prices clear the sampler's floor: mineral
@@ -164,8 +165,11 @@ func tvHeader(id int64, price float64, expires time.Time) tvPublicContract {
 // TestTrueValueFittedListings: titans trade fitted, so the
 // crawl's fitted samples (residuals after netting the fit at
 // stored prices) give the fixture titan a listing-tier
-// estimated sell; the supercarrier's bare listings produce
-// exactly the median they always did.
+// estimated sell; the supercarrier's bare listings price it
+// the same way. Both hulls price through their own bounded
+// factor (truevalue_learn.go): the weighted median log ratio
+// to build cost -- the lower sample's, for two -- shrunk by
+// the effective count, 2/(2+6).
 func TestTrueValueFittedListings(t *testing.T) {
 	now := time.Now().UTC()
 	expires := now.Add(10 * 24 * time.Hour)
@@ -213,7 +217,9 @@ func TestTrueValueFittedListings(t *testing.T) {
 	bumpTVGuideMeta(t, q, seed.Add(time.Hour))
 	app.refreshTrueValues(ctx)
 
-	// Titan: median of the two fitted residuals (5.3e9, 6.0e9).
+	// Titan: its own factor over the two fitted residuals
+	// (5.3e9, 6.0e9): 4803.5e6 x exp(0.25 x log(5.3/4.8035))
+	// = 4.9231e9.
 	titan, err := q.GetTrueValue(ctx, 5003)
 	if err != nil {
 		t.Fatalf("titan true value: %v", err)
@@ -221,18 +227,19 @@ func TestTrueValueFittedListings(t *testing.T) {
 	if math.Abs(titan.BuildCost-4803.5e6) > 1 {
 		t.Errorf("titan build cost = %v, want 4803.5e6 (the fix must not touch costing)", titan.BuildCost)
 	}
-	if !titan.EstSell.Valid || titan.EstSell.Float64 != 5.65e9 || titan.SellSamples != 2 || titan.SellSource != tvSampleListing {
-		t.Errorf("titan est = %+v samples %d source %q, want 5.65e9 from 2 listing samples",
+	if !titan.EstSell.Valid || math.Abs(titan.EstSell.Float64-4.9231e9) > 1e6 || titan.SellSamples != 2 || titan.SellSource != tvSampleListing {
+		t.Errorf("titan est = %+v samples %d source %q, want ~4.9231e9 from 2 listing samples",
 			titan.EstSell, titan.SellSamples, titan.SellSource)
 	}
-	// The control: bare supercarrier listings, the median
-	// they have always produced.
+	// The control: bare supercarrier listings through the
+	// same factor: 2401.75e6 x exp(0.25 x log(2.5/2.40175))
+	// = 2.4259e9.
 	hel, err := q.GetTrueValue(ctx, 5004)
 	if err != nil {
 		t.Fatalf("supercarrier true value: %v", err)
 	}
-	if !hel.EstSell.Valid || hel.EstSell.Float64 != 2.55e9 || hel.SellSamples != 2 || hel.SellSource != tvSampleListing {
-		t.Errorf("supercarrier est = %+v samples %d source %q, want 2.55e9 from 2 listing samples",
+	if !hel.EstSell.Valid || math.Abs(hel.EstSell.Float64-2.4259e9) > 1e6 || hel.SellSamples != 2 || hel.SellSource != tvSampleListing {
+		t.Errorf("supercarrier est = %+v samples %d source %q, want ~2.4259e9 from 2 listing samples",
 			hel.EstSell, hel.SellSamples, hel.SellSource)
 	}
 	if got := trueValueBasis(hel); got != "from 2 public contracts" {
@@ -310,8 +317,8 @@ func TestTrueValueVanishedListings(t *testing.T) {
 	if err != nil {
 		t.Fatalf("titan true value: %v", err)
 	}
-	if !titan.EstSell.Valid || titan.EstSell.Float64 != 5.65e9 || titan.SellSamples != 2 || titan.SellSource != tvSampleVanished {
-		t.Errorf("titan est = %+v samples %d source %q, want 5.65e9 from 2 vanished samples",
+	if !titan.EstSell.Valid || math.Abs(titan.EstSell.Float64-4.9231e9) > 1e6 || titan.SellSamples != 2 || titan.SellSource != tvSampleVanished {
+		t.Errorf("titan est = %+v samples %d source %q, want ~4.9231e9 from 2 vanished samples",
 			titan.EstSell, titan.SellSamples, titan.SellSource)
 	}
 	if got := trueValueBasis(titan); got != "from 2 likely sales" {
@@ -323,8 +330,11 @@ func TestTrueValueVanishedListings(t *testing.T) {
 // linked character's own sync are recorded sales. Two of them
 // (one as issuer, one as acceptor, both fitted) set the
 // titan's estimated sell ahead of its live listings; a
-// finished contract between strangers, a deleted one, and a
-// sale outside the sample window contribute nothing.
+// finished contract between strangers, a deleted one, and one
+// whose item list was never warmed contribute nothing. (The
+// unwarmed one completed 20 days out: age alone no longer
+// excludes a sale -- ship fits weight it -- but a sale whose
+// shape cannot be judged is no sample at any age.)
 func TestTrueValueFulfilledSales(t *testing.T) {
 	now := time.Now().UTC()
 	expires := now.Add(10 * 24 * time.Hour)
@@ -395,10 +405,14 @@ func TestTrueValueFulfilledSales(t *testing.T) {
 	if err != nil {
 		t.Fatalf("titan true value: %v", err)
 	}
-	// Median of the recorded sales (5.7e9, 6.3e9) -- ahead of
-	// the listings' 5.65e9.
-	if !titan.EstSell.Valid || titan.EstSell.Float64 != 6.0e9 || titan.SellSamples != 2 || titan.SellSource != tvSampleFulfilled {
-		t.Errorf("titan est = %+v samples %d source %q, want 6e9 from 2 fulfilled samples",
+	// The family factor over all four samples, the two
+	// recorded sales (5.7e9, 6.3e9) weighted 2.5 against the
+	// listings' 1: the weighted median log ratio lands on
+	// the 6.0e9 listing's, shrunk by the effective count --
+	// 4803.5e6 x exp(0.3615 x 0.22248) = 5.2059e9 -- and the
+	// provenance names the tier that carried the weight.
+	if !titan.EstSell.Valid || math.Abs(titan.EstSell.Float64-5.2059e9) > 2e7 || titan.SellSamples != 2 || titan.SellSource != tvSampleFulfilled {
+		t.Errorf("titan est = %+v samples %d source %q, want ~5.2059e9 resting on 2 fulfilled samples",
 			titan.EstSell, titan.SellSamples, titan.SellSource)
 	}
 	if got := trueValueBasis(titan); got != "from 2 recorded sales" {

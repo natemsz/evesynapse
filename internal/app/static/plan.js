@@ -1018,7 +1018,16 @@ function wirePlanSettings() {
 // whole plan region (header, tabs, static list, verdict) and the
 // client reboots its interactive state on top. Anything fails,
 // the form submits natively and the server render stands alone.
+// That fallback is itself a submission through this listener:
+// the flag lets exactly one pass untouched, so the native submit
+// keeps its submitter (a judge pick rides on it; a bare
+// form.submit() would silently drop the pick).
+var recalcNativePass = false;
 function onRecalc(ev) {
+  if (recalcNativePass) {
+    recalcNativePass = false;
+    return;
+  }
   ev.preventDefault();
   var form = document.getElementById("plan-form");
   if (!form) return;
@@ -1044,6 +1053,17 @@ function onRecalc(ev) {
     var host = document.getElementById("plan-wrap");
     if (!fresh || !host) throw new Error("recalc unavailable");
     host.innerHTML = fresh.innerHTML;
+    // The shell parked the outgoing dialogs at body level (the
+    // settings one may still be open over the fresh plan). Close
+    // and remove the parked pair: the swap brought fresh copies,
+    // and the parked controls carry pre-submit values while
+    // staying tied to this form by their form attribute.
+    ["plan-settings-modal", "me-modal"].forEach(function (id) {
+      var parked = document.querySelector("body > #" + id);
+      if (!parked) return;
+      if (window.EveSynapseModal) window.EveSynapseModal.close(parked);
+      parked.remove();
+    });
     window.history.replaceState(null, "", url);
     section = document.getElementById("plan");
     if (!section) throw new Error("recalc unavailable");
@@ -1055,7 +1075,11 @@ function onRecalc(ev) {
     if (btn) btn.focus({ preventScroll: true });
   }).catch(function () {
     var f = document.getElementById("plan-form");
-    if (f) f.submit();
+    if (!f) return;
+    recalcNativePass = true;
+    if (f.requestSubmit && sub) f.requestSubmit(sub);
+    else if (f.requestSubmit) f.requestSubmit();
+    else f.submit();
   });
 }
 

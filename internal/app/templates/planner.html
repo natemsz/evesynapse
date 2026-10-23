@@ -71,36 +71,41 @@
 {{if .StockNote}}<p><small>{{.StockNote}}</small></p>{{end}}
 
 <form method="get" action="/planner/" id="plan-form">
+  {{/* The shell lifts .modal-backdrop dialogs to the body, out of
+       this form. Every control inside the two dialogs therefore
+       carries form="plan-form": the explicit association keeps it
+       a listed control of this form wherever the dialog sits, so
+       its value submits and its buttons still submit the form. */}}
   <input type="hidden" name="product" value="{{.ProductTypeID}}">
   <div class="modal-backdrop" id="plan-settings-modal" hidden>
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="plan-settings-title">
       <div class="modal-head"><h2 id="plan-settings-title">Plan settings</h2><button type="button" class="modal-close" id="plan-settings-close" aria-label="Close">×</button></div>
       <p class="plan-setnote"><small>Runs, pricing basis and facility for this plan. Everything recalculates from these.</small></p>
       <div class="plan-settings-fields plan-setgrid">
-        <label class="plan-setcell"><span>Runs</span><input type="number" name="runs" value="{{.Runs}}" min="1"></label>
-        {{if .JudgeOptions}}<span class="plan-setcell judge-wrap"><span>Judge as</span><input type="text" id="judge-q" value="{{.JudgeLabel}}" data-judge-current="{{.JudgeLabel}}" placeholder="Everyone together" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="judge-suggest" aria-autocomplete="list" aria-label="Judge as which character"><span id="judge-suggest" class="charselector-dropdown" hidden>{{range .JudgeOptions}}<button type="submit" name="judge" value="{{.Value}}" class="charselector-option{{if .Selected}} active{{end}}"{{if .Selected}} aria-current="true"{{end}} data-judge-pick>{{.Label}}</button>{{end}}</span></span>{{end}}
-        <label class="plan-setcell"><span>Market</span><span class="market-wrap"><input type="text" id="market-q" value="{{if ne .Market "guide"}}{{.MarketName}}{{end}}" placeholder="Jita market" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="market-suggest" aria-autocomplete="list" aria-label="Sell market region"><input type="hidden" name="market" id="market-value" value="{{.Market}}"><span id="market-suggest" class="charselector-dropdown" hidden></span></span></label>
-        {{if .Meta}}<label class="plan-setcell"><span>Build system</span><span class="sys-wrap"><input type="text" id="system-q" name="system" value="{{.SystemName}}" placeholder="Jita" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="system-suggest" aria-autocomplete="list" aria-label="Build system"><span id="system-suggest" class="charselector-dropdown" hidden></span></span></label>
-        <label class="plan-setcell"><span>Structure</span><select name="structure">
+        <label class="plan-setcell"><span>Runs</span><input type="number" name="runs" form="plan-form" value="{{.Runs}}" min="1"></label>
+        {{if .JudgeOptions}}<span class="plan-setcell judge-wrap"><span>Judge as</span><input type="text" id="judge-q" value="{{.JudgeLabel}}" data-judge-current="{{.JudgeLabel}}" placeholder="Everyone together" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="judge-suggest" aria-autocomplete="list" aria-label="Judge as which character"><span id="judge-suggest" class="charselector-dropdown" hidden>{{range .JudgeOptions}}<button type="submit" name="judge" form="plan-form" value="{{.Value}}" class="charselector-option{{if .Selected}} active{{end}}"{{if .Selected}} aria-current="true"{{end}} data-judge-pick>{{.Label}}</button>{{end}}</span></span>{{end}}
+        <label class="plan-setcell"><span>Market</span><span class="market-wrap"><input type="text" id="market-q" value="{{if ne .Market "guide"}}{{.MarketName}}{{end}}" placeholder="Jita market" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="market-suggest" aria-autocomplete="list" aria-label="Sell market region"><input type="hidden" name="market" form="plan-form" id="market-value" value="{{.Market}}"><span id="market-suggest" class="charselector-dropdown" hidden></span></span></label>
+        {{if .Meta}}<label class="plan-setcell"><span>Build system</span><span class="sys-wrap"><input type="text" id="system-q" name="system" form="plan-form" value="{{.SystemName}}" placeholder="Jita" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="system-suggest" aria-autocomplete="list" aria-label="Build system"><span id="system-suggest" class="charselector-dropdown" hidden></span></span></label>
+        <label class="plan-setcell"><span>Structure</span><select name="structure" form="plan-form">
           <option value=""{{if eq .StructureID 0}} selected{{end}}>NPC station</option>
           <option value="35825"{{if eq .StructureID 35825}} selected{{end}}>Raitaru</option>
           <option value="35826"{{if eq .StructureID 35826}} selected{{end}}>Azbel</option>
           <option value="35827"{{if eq .StructureID 35827}} selected{{end}}>Sotiyo</option>
         </select></label>
-        <label class="plan-setcell"><span>Rigs</span><select name="rig">
+        <label class="plan-setcell"><span>Rigs</span><select name="rig" form="plan-form">
           <option value=""{{if eq .RigTier ""}} selected{{end}}>No rigs</option>
           <option value="t1"{{if eq .RigTier "t1"}} selected{{end}}>T1 manufacturing rigs</option>
           <option value="t2"{{if eq .RigTier "t2"}} selected{{end}}>T2 manufacturing rigs</option>
         </select></label>
-        <label class="plan-setcell"><span>Facility tax %</span><input type="number" name="ftax" value="{{.FacilityTaxPct}}" min="0" max="100" step="0.01"></label>
-        <label class="plan-setcell"><span>Alpha clone</span><select name="alpha">
+        <label class="plan-setcell"><span>Facility tax %</span><input type="number" name="ftax" form="plan-form" value="{{.FacilityTaxPct}}" min="0" max="100" step="0.01"></label>
+        <label class="plan-setcell"><span>Alpha clone</span><select name="alpha" form="plan-form">
           <option value=""{{if not .AlphaClone}} selected{{end}}>No (Omega)</option>
           <option value="1"{{if .AlphaClone}} selected{{end}}>Yes (+0.25% job tax)</option>
         </select></label>
-        <label class="plan-setcell"><span>Slots</span><input type="number" name="slots" value="{{.Meta.Slots}}" min="1" max="20"></label>{{end}}
-        <label class="plan-setcell"><span>Time factor</span><input type="text" name="timef" placeholder="auto"></label>
+        <label class="plan-setcell"><span>Slots</span><input type="number" name="slots" form="plan-form" value="{{.Meta.Slots}}" min="1" max="20"></label>{{end}}
+        <label class="plan-setcell"><span>Time factor</span><input type="text" name="timef" form="plan-form" placeholder="auto"></label>
       </div>
-      <p class="plan-setactions"><button type="submit">Recalculate</button></p>
+      <p class="plan-setactions"><button type="submit" form="plan-form">Recalculate</button></p>
     </div>
   </div>
   {{if .MEInputs}}<div class="modal-backdrop" id="me-modal" hidden>
@@ -110,7 +115,7 @@
         <p class="me-summary">{{.MESummary}}</p>
         <p><label>Set all to: <input type="number" id="me-setall" min="0" max="10" size="3"></label>
         <button type="button" id="me-apply">Apply</button></p>
-        <div class="me-grid">{{range .MEInputs}}<label class="me-cell" title="Material efficiency for the blueprint behind {{.Label}}" data-me-src="{{.Source}}"><span class="me-name">{{.Label}}</span>&nbsp;ME <input type="number" name="{{.FieldName}}" value="{{.Value}}" min="0" max="10" size="3"></label>{{end}}</div>
+        <div class="me-grid">{{range .MEInputs}}<label class="me-cell" title="Material efficiency for the blueprint behind {{.Label}}" data-me-src="{{.Source}}"><span class="me-name">{{.Label}}</span>&nbsp;ME <input type="number" name="{{.FieldName}}" form="plan-form" value="{{.Value}}" min="0" max="10" size="3"></label>{{end}}</div>
       </div>
     </div>
   </div>{{end}}

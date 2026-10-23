@@ -434,6 +434,10 @@ func TestPlannerMESummaryCollapsed(t *testing.T) {
 		`class="me-name"`,
 		`id="me-setall"`,
 		`id="me-apply"`,
+		// The ME inputs name the plan form as their owner, like
+		// the settings dialog's controls: association by attribute
+		// survives the dialog being lifted out of the form.
+		`name="me_2002" form="plan-form"`,
 		`data-me-src="owned"`,
 		`data-plan-expand-all`,
 		`data-plan-collapse-all`,
@@ -463,19 +467,34 @@ func TestPlannerSettingsModal(t *testing.T) {
 		`class="plan-settings-fields plan-setgrid"`,
 		`name="runs"`,
 		`name="market"`,
-		`id="system-q" name="system" value="Jita"`,
+		`id="system-q" name="system" form="plan-form" value="Jita"`,
 		`name="slots"`,
 		`name="timef"`,
 		`>Recalculate</button>`,
+		// Every control in the dialog names the plan form as its
+		// owner: the shell lifts dialogs out of the form's subtree,
+		// and the explicit association is what keeps the control a
+		// working part of the form wherever the dialog sits.
+		`name="runs" form="plan-form"`,
+		`name="judge" form="plan-form"`,
+		`name="market" form="plan-form"`,
+		`id="system-q" name="system" form="plan-form"`,
+		`<select name="structure" form="plan-form">`,
+		`<select name="rig" form="plan-form">`,
+		`name="ftax" form="plan-form"`,
+		`<select name="alpha" form="plan-form">`,
+		`name="slots" form="plan-form"`,
+		`name="timef" form="plan-form"`,
+		`<button type="submit" form="plan-form">Recalculate</button>`,
 	)
 
 	// A system name in the query resolves to the same face, and a
 	// numeric ID renders as the name too: the raw ID is never the
 	// visible value.
 	_, named := getPage(t, app, cookie, "/planner/?product=1001&runs=1&system=Jita")
-	mustContain(t, "/planner/ (system name)", named, `id="system-q" name="system" value="Jita"`)
+	mustContain(t, "/planner/ (system name)", named, `id="system-q" name="system" form="plan-form" value="Jita"`)
 	_, numbered := getPage(t, app, cookie, "/planner/?product=1001&runs=1&system=30000142")
-	mustContain(t, "/planner/ (system id)", numbered, `id="system-q" name="system" value="Jita"`)
+	mustContain(t, "/planner/ (system id)", numbered, `id="system-q" name="system" form="plan-form" value="Jita"`)
 }
 
 // TestIndustryBlueprintPlannerLink: an owned blueprint whose SDE

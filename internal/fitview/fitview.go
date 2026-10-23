@@ -1083,7 +1083,7 @@ type FitTile struct {
 	Over  bool
 }
 
-// FitStatsView is the pyfa-vocabulary stat panel, preformatted.
+// FitStatsView is the fitting stat panel, preformatted.
 type FitStatsView struct {
 	Powergrid     FitBarRow
 	CPU           FitBarRow
@@ -1894,7 +1894,7 @@ func FitBar(label string, used, max float64) FitBarRow {
 	return row
 }
 
-// FitBuildStats preformats the pyfa-vocabulary stat panel.
+// FitBuildStats preformats the fitting stat panel.
 func FitBuildStats(res *fit.Result) *FitStatsView {
 	st := &FitStatsView{}
 	st.Powergrid = FitBar("Powergrid", res.PowergridUsed, res.PowergridMax)
@@ -2233,7 +2233,7 @@ func (app *Builder) ParseEFT(ctx context.Context, text string) (*FitDoc, []strin
 			doc.Items = append(doc.Items, FitDocItem{TypeID: id, Qty: qty})
 			continue
 		}
-		// pyfa-style "Module, Charge" line.
+		// A "Module, Charge" line.
 		if cut := strings.LastIndex(body, ", "); cut > 0 {
 			if modID, ok := lookup(strings.TrimSpace(body[:cut])); ok {
 				if chargeID, ok := lookup(strings.TrimSpace(body[cut+2:])); ok {

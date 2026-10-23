@@ -205,6 +205,28 @@ func (q *Queries) DeleteIntelToken(ctx context.Context, arg DeleteIntelTokenPara
 	return result.RowsAffected()
 }
 
+const deleteStaleIntelPairingCodes = `-- name: DeleteStaleIntelPairingCodes :execrows
+DELETE FROM intel_pairing_codes
+WHERE id IN (
+    SELECT c.id FROM intel_pairing_codes c
+    WHERE c.used_at IS NOT NULL OR c.expires_at < $1
+    ORDER BY c.id LIMIT $2
+)
+`
+
+type DeleteStaleIntelPairingCodesParams struct {
+	Now     time.Time `json:"now"`
+	MaxRows int32     `json:"max_rows"`
+}
+
+func (q *Queries) DeleteStaleIntelPairingCodes(ctx context.Context, arg DeleteStaleIntelPairingCodesParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, deleteStaleIntelPairingCodes, arg.Now, arg.MaxRows)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const getIntelChannel = `-- name: GetIntelChannel :one
 SELECT id, owner_user_id, name, description, created_at, owner_kind, owner_id FROM intel_channels WHERE id = $1
 `

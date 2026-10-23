@@ -63,8 +63,7 @@ package fit
 // (4, 5, 6) when the *modified* attribute is flagged
 // non-stackable in dgmAttributeTypes AND the modifier's source is
 // a fitted module/rig/subsystem. Ship hull bonuses and skill
-// effects are never penalized. Following pyfa's eos
-// (modifiedAttributeDict.__calculateValue), penalized modifiers
+// effects are never penalized. Penalized modifiers
 // on one attribute split into bonus (>1) and penalty (<1)
 // chains; each chain is ordered by |factor-1| descending and
 // its i-th entry (0-based) applies at effectiveness
@@ -238,7 +237,7 @@ const (
 const catOverload = 5
 
 // Module states: the values ItemInput.State carries, and a saved
-// fit stores per module. pyfa/eos semantics —
+// fit stores per module:
 //   - offline:    fitted but contributes nothing (no CPU/PG, no effects)
 //   - online:     powered; passive + online-category effects apply,
 //     active effects don't, nothing cycles
@@ -436,7 +435,7 @@ func NormalizeModuleState(snap *Snapshot, typeID int64, state string) string {
 }
 
 // sourceCategories lists the effect categories that bind for
-// one entity under its module state (pyfa semantics): offline
+// one entity under its module state: offline
 // modules bind nothing; online skips active and overload;
 // active adds the active category; overheated adds overload.
 func sourceCategories(e *entity) map[int64]bool {
@@ -737,7 +736,7 @@ type Result struct {
 	CapacitorPeakRecharge  float64 // GJ/s at the curve's peak
 	CapacitorDraw          float64 // GJ/s with everything cycling
 	CapacitorStable        bool
-	CapacitorStablePercent float64 // equilibrium % when stable (pyfa's cap state)
+	CapacitorStablePercent float64 // equilibrium % when stable
 	CapacitorDepletionSecs float64 // approx seconds to empty; 0 when stable
 
 	TurretDPS    float64
@@ -916,7 +915,7 @@ func (app application) penaltySubject(snap *Snapshot) bool {
 
 // impact ranks a multiplicative modifier for penalty ordering:
 // larger = stronger effect on the value. Multipliers are
-// compared as plain ratios (pyfa eos sorts by |factor - 1|).
+// compared as plain ratios, sorted by |factor - 1|.
 func impact(op int64, v float64) float64 {
 	var factor float64
 	switch op {
@@ -965,7 +964,7 @@ func stackingEffectiveness(rank int) float64 {
 // base under the bound applications, in dogma stage order.
 // Source attribute values are read live, so earlier stages feed
 // later ones (skill pre-multipliers before percent bonuses).
-// Multiplicative stages follow pyfa eos: non-penalized
+// Multiplicative stages: non-penalized
 // multipliers apply at full strength; penalized ones are split
 // into bonus (>1) and penalty (<1) chains, each ordered by
 // impact descending and damped independently. The caller passes

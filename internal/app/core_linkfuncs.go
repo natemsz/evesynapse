@@ -20,9 +20,9 @@ import (
 //     character sheet (/character/?character=<id>) — everywhere,
 //     including kill contexts.
 //   - Everyone else links to the public pilot page
-//     (/pilot/?character=<id>) — except in kill contexts, where
-//     strangers link to their zKillboard pilot page instead, since
-//     kill history is what zKillboard does best.
+//     (/pilot/?character=<id>) — in kill contexts too: the pilot
+//     page serves any character, settling unknown ones from the
+//     worker's queue, so no name ever leaves the site.
 //   - Corporations link to the public corporation page
 //     (/corporation/?corporation=<id>) and alliances to the public
 //     alliance page (/alliance/?alliance=<id>) — in every context,
@@ -79,26 +79,20 @@ func charLink(viewer map[int64]bool, charID int64, name string) template.HTML {
 }
 
 // killCharLink is charLink for kill contexts (killmail listings,
-// kill pages): own characters still go to their sheet, but
-// strangers go to zKillboard's character page, where their kill
-// history lives.
+// kill pages). The destination is the same as anywhere else —
+// the character's own sheet or the public pilot page — kept as
+// its own helper so kill templates name the context they mean.
 func killCharLink(viewer map[int64]bool, charID int64, name string) template.HTML {
-	if charID <= 0 || name == "" {
-		return template.HTML(html.EscapeString(name))
-	}
-	if viewer[charID] {
-		return template.HTML(fmt.Sprintf(`<a href="/character/?character=%d">%s</a>`, charID, html.EscapeString(name)))
-	}
-	return template.HTML(fmt.Sprintf(`<a href="https://zkillboard.com/character/%d/" target="_blank" rel="noopener noreferrer">%s</a>`, charID, html.EscapeString(name)))
+	return charLink(viewer, charID, name)
 }
 
-// zkillKillLink renders the "View on zKillboard" link for one
-// killmail. Plain text (empty name) degrades to empty.
-func zkillKillLink(killmailID int64) template.HTML {
+// killPageLink renders the "View kill" link for one killmail,
+// to the site's own kill page. An unknown id degrades to empty.
+func killPageLink(killmailID int64) template.HTML {
 	if killmailID <= 0 {
 		return ""
 	}
-	return template.HTML(fmt.Sprintf(`<a href="https://zkillboard.com/kill/%d/" target="_blank" rel="noopener noreferrer">View on zKillboard</a>`, killmailID))
+	return template.HTML(fmt.Sprintf(`<a href="/intel/kill/%d/">View kill</a>`, killmailID))
 }
 
 // corpLink renders a corporation name as a link to the public
@@ -277,7 +271,7 @@ func linkFuncMap() template.FuncMap {
 		"publicItemLink": publicItemLink,
 		"charLink":       charLink,
 		"killCharLink":   killCharLink,
-		"zkillKillLink":  zkillKillLink,
+		"killPageLink":   killPageLink,
 		"corpLink":       corpLink,
 		"allianceLink":   allianceLink,
 		"systemLink":     systemLink,

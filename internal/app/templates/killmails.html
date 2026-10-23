@@ -24,7 +24,7 @@
         <td>{{killCharLink $.ViewerChars .FinalBlowID .FinalBlow}}</td>
         <td>{{.Involved}}</td>
         <td>{{if eq .Value "—"}}—{{else}}{{.Value}} ISK{{end}}</td>
-        <td><small>{{zkillKillLink .KillmailID}}</small></td>
+        <td><small>{{killPageLink .KillmailID}}</small></td>
       </tr>
     {{end}}
     </tbody>

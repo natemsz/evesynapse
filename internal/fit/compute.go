@@ -333,8 +333,8 @@ func (f *fitting) bindModifiers() {
 	}
 
 	for _, source := range sources {
-		// Effect categories bind per module state (pyfa
-		// semantics): an offline module binds nothing, an
+		// Effect categories bind per module state: an
+		// offline module binds nothing, an
 		// online-but-inactive one skips active and overload,
 		// overheated adds the overload category.
 		allowed := sourceCategories(source)

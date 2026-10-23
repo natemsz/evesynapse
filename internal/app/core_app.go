@@ -92,6 +92,15 @@ type Application struct {
 	workerCtx  context.Context // the worker's context, captured in New for background jobs (SDE import)
 	startedAt  time.Time       // when New built this application; /healthz measures a worker that never ran from here
 
+	// /healthz's last check (core_health.go): the answer is
+	// cached for a few seconds, and its error logging throttled,
+	// so a flood of health checks cannot become a flood of
+	// database pings and log lines.
+	healthMu          sync.Mutex
+	healthCacheAt     time.Time
+	healthCacheResult []string
+	healthLogAt       time.Time
+
 	// allianceSeedMu guards lastAllianceSeed, the worker's daily
 	// full-universe alliance seeding pass (intel_org_worker.go).
 	allianceSeedMu   sync.Mutex
@@ -738,8 +747,10 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 		r.Post("/intel/channels/tokens/{tokenID}/revoke", app.handleIntelTokenRevoke)
 	})
 	// EveSynapse Axon's API (intel_tokens.go): a posting
-	// token, not a session, is the credential.
-	r.Post("/api/intel/v1/pair", app.handleAPIPair)
+	// token, not a session, is the credential. The pairing
+	// exchange has no credential at all, so it takes the
+	// per-address anonymous throttle like the public pages.
+	r.With(anonPages).Post("/api/intel/v1/pair", app.handleAPIPair)
 	r.Route("/api/intel/v1", func(r chi.Router) {
 		r.Use(app.intelTokenAuth)
 		r.Get("/channels", app.handleAPIChannels)

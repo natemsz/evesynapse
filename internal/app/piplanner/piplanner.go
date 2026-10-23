@@ -21,7 +21,7 @@ import (
 
 // ---------------------------------------------------------------------------
 // PI Planner (/industry/pi/): full planetary-interaction simulator
-// under the Industry hub, modelled on evepitool.com. Pick a P1–P4
+// under the Industry hub. Pick a P1–P4
 // product, set how much to make, and get the whole chain — raw
 // needs, factory counts, extractor colonies, CPU/Power fit,
 // POCO taxes and market economics. Prices come from the stored
@@ -151,7 +151,7 @@ func HandlePIPlanner(deps module.Deps) http.HandlerFunc {
 			deps.Render(ctx, w, http.StatusOK, "piplanner.html", &data)
 			return
 		}
-		// Standalone like evepitool: no character is fine. When one
+		// Standalone: no character is fine. When one
 		// exists, its colonies pre-fill the planet picker.
 		var ownedPlanets []string
 		ownedNote := ""

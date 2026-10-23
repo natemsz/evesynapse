@@ -2,8 +2,8 @@ package app
 
 // Hermetic tests for the linking pass: the shared link helpers,
 // the public pilot page (+ its worker queue), the item details
-// page (+ its description queue), and the zKillboard links in
-// kill contexts. Same two-layer approach as the other suites:
+// page (+ its description queue), and the links kill contexts
+// use. Same two-layer approach as the other suites:
 // renders run against a counting transport that must stay at zero
 // calls; worker drains run against a path-routing stub.
 
@@ -45,10 +45,10 @@ func TestLinkHelpers(t *testing.T) {
 		{"stranger", charLink(viewer, stranger, "Member One"), `<a href="/pilot/?character=93300001">Member One</a>`},
 		{"char no id", charLink(viewer, 0, "NPC"), `NPC`},
 		{"kill own", killCharLink(viewer, own, "Fixture Ceo"), `<a href="/character/?character=90000001">Fixture Ceo</a>`},
-		{"kill stranger", killCharLink(viewer, stranger, "Member One"), `<a href="https://zkillboard.com/character/93300001/" target="_blank" rel="noopener noreferrer">Member One</a>`},
+		{"kill stranger", killCharLink(viewer, stranger, "Member One"), `<a href="/pilot/?character=93300001">Member One</a>`},
 		{"kill no id", killCharLink(viewer, 0, "NPC"), `NPC`},
-		{"zkill kill", zkillKillLink(7001), `<a href="https://zkillboard.com/kill/7001/" target="_blank" rel="noopener noreferrer">View on zKillboard</a>`},
-		{"zkill kill none", zkillKillLink(0), ``},
+		{"kill page", killPageLink(7001), `<a href="/intel/kill/7001/">View kill</a>`},
+		{"kill page none", killPageLink(0), ``},
 		{"name escaped", itemLink(item, `<b>"x"</b>`), `<a href="/items/type/34/">&lt;b&gt;&#34;x&#34;&lt;/b&gt;</a>`},
 	}
 	for _, c := range cases {
@@ -479,12 +479,12 @@ func TestKillmailAndWalletLinks(t *testing.T) {
 		t.Fatalf("killmails page: status %d", code)
 	}
 	mustContain(t, "/killmails/", body,
-		// Strangers in a kill context go to zKillboard.
-		`<a href="https://zkillboard.com/character/93300088/" target="_blank" rel="noopener noreferrer">Victim EightyEight</a>`,
-		`<a href="https://zkillboard.com/character/93300077/" target="_blank" rel="noopener noreferrer">Attacker SevenSeven</a>`,
-		// Every displayed kill carries its zKillboard kill link.
-		`<a href="https://zkillboard.com/kill/7001/" target="_blank" rel="noopener noreferrer">View on zKillboard</a>`,
-		`<a href="https://zkillboard.com/kill/7002/" target="_blank" rel="noopener noreferrer">View on zKillboard</a>`,
+		// Strangers in a kill context go to the pilot page.
+		`<a href="/pilot/?character=93300088">Victim EightyEight</a>`,
+		`<a href="/pilot/?character=93300077">Attacker SevenSeven</a>`,
+		// Every displayed kill carries its kill-page link.
+		`<a href="/intel/kill/7001/">View kill</a>`,
+		`<a href="/intel/kill/7002/">View kill</a>`,
 		// Victim ships go to item details.
 		`<a href="/items/type/587/">Rifter</a>`,
 	)
@@ -494,8 +494,8 @@ func TestKillmailAndWalletLinks(t *testing.T) {
 	if n := strings.Count(body, ownLink); n != 2 {
 		t.Errorf("own character linked in-app %d times on the kill page, want 2 (victim + final blow)", n)
 	}
-	if strings.Contains(body, "https://zkillboard.com/character/90000001/") {
-		t.Error("own character sent to zKillboard from a kill page")
+	if strings.Contains(body, "zkillboard.com") {
+		t.Error("the kill page links off-site to zKillboard")
 	}
 
 	// Wallet: the same item name, the same item-details target,

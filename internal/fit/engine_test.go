@@ -297,7 +297,7 @@ func punisherFixture() *fitFixture {
 	return fx
 }
 
-// TestFitEngineCanonicalPunisherFit is the pyfa-style canonical
+// TestFitEngineCanonicalPunisherFit is the canonical
 // check: a complete small fit whose headline numbers are worked
 // by hand from the SDE fixture values.
 func TestFitEngineCanonicalPunisherFit(t *testing.T) {
@@ -419,7 +419,7 @@ func TestFitEngineDrones(t *testing.T) {
 	near(t, "drone DPS (II)", res.DroneDPS, 19.2, 0.001)
 }
 
-// TestFitEngineCapacitorEquilibrium pins the pyfa-style cap
+// TestFitEngineCapacitorEquilibrium pins the cap
 // state: the equilibrium percentage when stable.
 func TestFitEngineCapacitorEquilibrium(t *testing.T) {
 	fx := newFitFixture()

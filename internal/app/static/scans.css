@@ -161,8 +161,35 @@ html[data-theme="light"] .sc { --sc-hot: #b0302a; }
 .sc-grid { margin-left: 0.3rem; padding: 0.05rem 0.35rem; border-radius: var(--r-xs); background: color-mix(in srgb, var(--sc-hot) 18%, transparent); color: var(--sc-hot); font-size: 0.72rem; font-weight: 600; }
 .sc-kills { margin-left: 0.3rem; color: var(--sc-hot); font-size: 0.78rem; }
 .sc-corps { margin: 0.2rem 0 0.2rem 2.2rem; padding: 0; list-style: none; font-size: 0.84rem; }
-.sc-corps li { display: flex; justify-content: space-between; gap: 0.6rem; padding: 0.15rem 0; border-top: 1px solid var(--box-edge); }
+.sc-corps li { padding: 0.15rem 0; border-top: 1px solid var(--box-edge); }
+.sc-corp-row { display: flex; justify-content: space-between; gap: 0.6rem; }
 .sc-org-link { margin: 0.15rem 0 0.4rem 2.2rem; font-size: 0.8rem; }
+
+/* A local reading's rosters: pilot names under their corporation,
+   quiet until hovered. */
+.sc-pilots { margin: 0.15rem 0 0.3rem; font-size: 0.8rem; color: var(--muted); overflow-wrap: anywhere; }
+.sc-pilots a { color: var(--muted); text-decoration: none; }
+.sc-pilots a:hover { color: var(--accent); text-decoration: underline; }
+details > .sc-pilots { margin-left: 2.2rem; }
+
+/* Composition subheads inside one panel. */
+.sc-sub { margin: 0.8rem 0 0.35rem; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted-2); }
+.sc-sub:first-of-type { margin-top: 0; }
+
+/* Notable hulls: the callout chips above the breakdown. */
+.sc-notable-list { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0; padding: 0; list-style: none; }
+.sc-notable-list li {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.3rem 0.55rem;
+  border: 1px solid color-mix(in srgb, var(--sc-hot) 45%, transparent);
+  border-radius: var(--r-md);
+  background: color-mix(in srgb, var(--sc-hot) 10%, transparent);
+  font-size: 0.88rem;
+}
+.sc-notable-list img { border-radius: var(--r-xs); }
+.sc-notable-n { color: var(--text-bright); font-weight: 600; }
 
 .sc-list { margin: 0; padding: 0; list-style: none; }
 .sc-list li { display: flex; align-items: center; gap: 0.5rem; padding: 0.3rem 0; border-top: 1px solid var(--box-edge); font-size: 0.88rem; }

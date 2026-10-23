@@ -18,11 +18,10 @@ package app
 // Beside them sits the Improved Projection: a mosaic of the
 // region layouts (layoutMosaic) -- each region keeps its region
 // view's shape, set down at its true size on its true centroid --
-// with each constellation's footprint first normalized toward
-// the size its system count earns (normalizeConstellations), so
-// a constellation reads as its own glyph at a weight comparable
-// to its neighbours', and a bounded nudge pass (nudgeOverlaps)
-// that separates the pairs the tiles leave on top of each other
+// with each constellation's arrangement drawn a little tighter
+// about its own centre (mosaicConsContract), so constellations
+// read as knots, and a bounded nudge pass (nudgeOverlaps) that
+// separates the pairs the tiles leave on top of each other
 // across region borders. For the reader who wants the tactical
 // reading at universe scale: one shape at two zooms.
 //
@@ -400,61 +399,24 @@ func regionMinSpacing(n int) float64 {
 // the spread is one similarity, and so is the final frame fit.
 const mosaicCentroidSpread = 1.05
 
-// The mosaic's schematic step, run on a region's laid-out
-// systems before its tile is set down: constellation
-// footprints are normalized, then the constellations are
-// separated where the new sizes crowd each other.
-//
-// A constellation's footprint is its RMS radius -- the
-// root-mean-square distance of its systems from its centroid.
-// The normalization rescales each constellation rigidly about
-// its own centroid so its footprint becomes k*sqrt(n) for its
-// n systems, with k the region's median per-system density
-// (the median of r/sqrt(n) over the region's multi-system
-// constellations): the median constellation keeps its size,
-// sparse sprawlers shrink toward the common weight, dense
-// knots grow into it, and a constellation's internal shape is
-// preserved exactly -- only its size changes. The scale
-// factor is clamped to [mosaicNormShrink, mosaicNormGrow]:
-// the shrink bound is set by measurement on the real payload
-// (at 0.85 The Forge's closest pair in the finished payload
-// fell to 55 units; at 0.90 it keeps 67), and the grow bound
-// is a sanity cap no real constellation reaches (the largest
-// factor the rule asks for anywhere is about 1.6).
-const (
-	mosaicNormShrink = 0.90
-	mosaicNormGrow   = 1.9
-)
-
-// The separation pass then treats each constellation as a
-// rigid body and restores the spacing the rescaling disturbed:
-// wherever two systems of different constellations sit closer
-// than mosaicSepFloor times the region layout's own minimum
-// pair distance, their constellations are pushed apart along
-// the pair's axis, each body by half the deficit. The test is
-// on system pairs, not on covering discs: in a dense region
-// the discs overlap everywhere and disc-driven pushes shove
-// glyphs through each other, while pair-driven pushes fire
-// only where systems actually crowd. Corrections are computed
-// against the step's starting offsets and applied together,
-// damped (the accumulated form layoutRegion's cousins use),
-// and no constellation moves more than mosaicSepCap in total
-// or leaves the region frame. Pairs that stay below the floor
-// inside the cap stay close; the pass is a janitor, not a
-// solver. What it cannot do is change any distance inside a
-// constellation: those are the normalization's, set above.
-const (
-	mosaicSepFloor = 0.94
-	mosaicSepCap   = 80.0
-	mosaicSepSteps = 32
-	mosaicSepDamp  = 0.5
-)
+// mosaicConsContract is how far the mosaic draws each
+// constellation's arrangement in toward its own centre before
+// the tile is set down: constellations read as knots, and the
+// gaps between them inside a region open up. The contraction
+// is a uniform scale about the constellation's own centroid,
+// so a constellation's shape and centre do not change, only
+// its size. The value is set by measurement on the real
+// payload: stronger contractions (0.90, 0.85) let the nudge
+// pass close The Forge's closest pair past the spacing the
+// old whole-universe solver managed there; at 0.95 that pair
+// keeps its headroom through the whole build.
+const mosaicConsContract = 0.95
 
 // layoutMosaic assembles the projected frame from the regions'
 // own tactical layouts, one tile per region. A region's shape
 // in the projection is its region-view layout under one
-// uniform scale per region, with each constellation's
-// footprint first normalized (normalizeConstellations): the
+// uniform scale per region, with each constellation first
+// contracted about its own centre (mosaicConsContract): the
 // shape is set down at the size of the region's true extent,
 // centred on the region's true centroid (spread a little for
 // clearance, see mosaicCentroidSpread). Relative sizes and
@@ -482,7 +444,7 @@ func layoutMosaic(uni [][2]float64, members [][]int, consOf []int, regionLaid []
 		if len(idxs) == 0 || len(laid) != len(idxs) {
 			continue
 		}
-		shape := normalizeConstellations(idxs, consOf, laid)
+		shape := contractConstellations(idxs, consOf, laid)
 		var cx, cy, rcx, rcy float64
 		loX, loY := math.Inf(1), math.Inf(1)
 		hiX, hiY := math.Inf(-1), math.Inf(-1)
@@ -516,32 +478,17 @@ func layoutMosaic(uni [][2]float64, members [][]int, consOf []int, regionLaid []
 	return fitFrame(out, universeFrame)
 }
 
-// normalizeConstellations applies the mosaic's schematic step
-// to one region's laid-out systems (see the constants above):
-// each constellation is rescaled about its own centroid to
-// the footprint its system count earns, the constellations
-// are separated where the new sizes crowd each other, and the
-// region is refitted to its frame, so the region's extent --
-// the tile's size reference -- is the layout's own. Systems
-// whose constellation is unknown are bodies of one: no
-// footprint to normalize, but the separation can still move
-// them. Deterministic: groups in first-appearance order,
-// pairs in index order, a fixed step count, no randomness.
-func normalizeConstellations(idxs []int, consOf []int, laid [][2]float64) [][2]float64 {
+// contractConstellations draws one region's laid-out systems
+// toward their constellation centres: each constellation's
+// points scale by mosaicConsContract about the constellation's
+// own centroid, so the arrangement inside a constellation is
+// preserved exactly, only tighter, and no constellation's
+// centre moves. Systems whose constellation is unknown keep
+// their places, as do lone systems of a constellation.
+func contractConstellations(idxs []int, consOf []int, laid [][2]float64) [][2]float64 {
 	out := make([][2]float64, len(laid))
 	copy(out, laid)
-	if len(laid) < 2 {
-		return out
-	}
-
-	// The region's constellations, in first-appearance order.
-	type consGroup struct {
-		ks     []int
-		cx, cy float64 // centroid in the laid frame
-		rms    float64 // footprint in the laid frame
-	}
-	var groups []*consGroup
-	byCons := make(map[int]*consGroup)
+	groups := make(map[int][]int)
 	for k, i := range idxs {
 		c := -1
 		if i < len(consOf) {
@@ -549,149 +496,30 @@ func normalizeConstellations(idxs []int, consOf []int, laid [][2]float64) [][2]f
 		}
 		if c < 0 {
 			// Unknown constellation: a group of one, so the
-			// normalization leaves the system where it sits.
+			// contraction leaves the system where it sits.
 			c = -k - 2
 		}
-		g := byCons[c]
-		if g == nil {
-			g = &consGroup{}
-			byCons[c] = g
-			groups = append(groups, g)
-		}
-		g.ks = append(g.ks, k)
+		groups[c] = append(groups[c], k)
 	}
-	for _, g := range groups {
-		for _, k := range g.ks {
-			g.cx += laid[k][0]
-			g.cy += laid[k][1]
+	for _, ks := range groups {
+		if len(ks) < 2 {
+			continue
 		}
-		g.cx /= float64(len(g.ks))
-		g.cy /= float64(len(g.ks))
-		if len(g.ks) > 1 {
-			var ss float64
-			for _, k := range g.ks {
-				dx, dy := laid[k][0]-g.cx, laid[k][1]-g.cy
-				ss += dx*dx + dy*dy
-			}
-			g.rms = math.Sqrt(ss / float64(len(g.ks)))
+		var cx, cy float64
+		for _, k := range ks {
+			cx += laid[k][0]
+			cy += laid[k][1]
 		}
-	}
-
-	// The region layout's own minimum pair distance: the
-	// spacing standard the separation pass restores toward.
-	laidMin := math.Inf(1)
-	for a := 0; a < len(laid); a++ {
-		for b := a + 1; b < len(laid); b++ {
-			d := math.Hypot(laid[a][0]-laid[b][0], laid[a][1]-laid[b][1])
-			laidMin = math.Min(laidMin, d)
-		}
-	}
-
-	// The rescaling: k is the median per-system density, so
-	// the median constellation's footprint is unchanged.
-	var dens []float64
-	for _, g := range groups {
-		if len(g.ks) >= 2 && g.rms > 0 {
-			dens = append(dens, g.rms/math.Sqrt(float64(len(g.ks))))
-		}
-	}
-	if len(dens) > 0 {
-		sort.Float64s(dens)
-		kmed := dens[len(dens)/2]
-		for _, g := range groups {
-			if len(g.ks) < 2 || g.rms <= 0 {
-				continue
-			}
-			f := kmed * math.Sqrt(float64(len(g.ks))) / g.rms
-			f = math.Min(math.Max(f, mosaicNormShrink), mosaicNormGrow)
-			if f == 1 {
-				continue
-			}
-			for _, k := range g.ks {
-				out[k] = [2]float64{
-					g.cx + (laid[k][0]-g.cx)*f,
-					g.cy + (laid[k][1]-g.cy)*f,
-				}
+		cx /= float64(len(ks))
+		cy /= float64(len(ks))
+		for _, k := range ks {
+			out[k] = [2]float64{
+				cx + (laid[k][0]-cx)*mosaicConsContract,
+				cy + (laid[k][1]-cy)*mosaicConsContract,
 			}
 		}
 	}
-
-	// The separation: rigid constellation bodies pushed apart
-	// where systems of different constellations crowd.
-	if len(groups) > 1 && laidMin > 0 {
-		floor := mosaicSepFloor * laidMin
-		bodyOf := make([]int, len(laid))
-		startC := make([][2]float64, len(groups))
-		for gi, g := range groups {
-			var cx, cy float64
-			for _, k := range g.ks {
-				bodyOf[k] = gi
-				cx += out[k][0]
-				cy += out[k][1]
-			}
-			startC[gi] = [2]float64{cx / float64(len(g.ks)), cy / float64(len(g.ks))}
-		}
-		off := make([][2]float64, len(groups))
-		cur := make([][2]float64, len(laid))
-		for step := 0; step < mosaicSepSteps; step++ {
-			for k := range laid {
-				b := bodyOf[k]
-				cur[k] = [2]float64{out[k][0] + off[b][0], out[k][1] + off[b][1]}
-			}
-			var pairs [][2]int
-			for a := 0; a < len(laid); a++ {
-				for b := a + 1; b < len(laid); b++ {
-					if bodyOf[a] == bodyOf[b] {
-						continue
-					}
-					if math.Hypot(cur[b][0]-cur[a][0], cur[b][1]-cur[a][1]) < floor {
-						pairs = append(pairs, [2]int{a, b})
-					}
-				}
-			}
-			if len(pairs) == 0 {
-				break
-			}
-			corr := make([][2]float64, len(groups))
-			for _, pr := range pairs {
-				a, b := pr[0], pr[1]
-				dx, dy := cur[b][0]-cur[a][0], cur[b][1]-cur[a][1]
-				d := math.Hypot(dx, dy)
-				var ux, uy, push float64
-				if d < 1e-6 {
-					// Coincident: split along a direction
-					// fixed by the pair's indices, as
-					// layoutRegion does.
-					ang := float64(a*7+b*13) * 0.618
-					ux, uy = math.Cos(ang), math.Sin(ang)
-					push = floor / 2 * mosaicSepDamp
-				} else {
-					ux, uy = dx/d, dy/d
-					push = (floor - d) / 2 * mosaicSepDamp
-				}
-				ba, bb := bodyOf[a], bodyOf[b]
-				corr[ba][0] -= ux * push
-				corr[ba][1] -= uy * push
-				corr[bb][0] += ux * push
-				corr[bb][1] += uy * push
-			}
-			for gi := range groups {
-				vx, vy := off[gi][0]+corr[gi][0], off[gi][1]+corr[gi][1]
-				if l := math.Hypot(vx, vy); l > mosaicSepCap {
-					vx *= mosaicSepCap / l
-					vy *= mosaicSepCap / l
-				}
-				cx := math.Min(math.Max(startC[gi][0]+vx, 0), regionFrame)
-				cy := math.Min(math.Max(startC[gi][1]+vy, 0), regionFrame)
-				off[gi] = [2]float64{cx - startC[gi][0], cy - startC[gi][1]}
-			}
-		}
-		for k := range out {
-			b := bodyOf[k]
-			out[k] = [2]float64{out[k][0] + off[b][0], out[k][1] + off[b][1]}
-		}
-	}
-	return fitFrame(out, regionFrame)
+	return out
 }
 
 // The nudge pass: where two regions' tiles meet, a system of

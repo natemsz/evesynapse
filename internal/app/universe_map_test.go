@@ -9,7 +9,6 @@ import (
 	"math"
 	"net/http"
 	"net/http/httptest"
-	"sort"
 	"strings"
 	"testing"
 
@@ -58,11 +57,11 @@ func TestLayoutRegionDeclutters(t *testing.T) {
 // TestLayoutMosaicPreservesRegionShapes: the projection is a
 // mosaic of the regions' own layouts -- inside a constellation,
 // every pairwise distance is the region layout's distance under
-// one ratio, and the ratio between two constellations of a
-// region is the ratio of the normalization factors the rule
-// gives them; across regions, the centroids keep their true
-// bearings; the dense cores arrive already decluttered by their
-// region layouts; and the picture is the same on every build.
+// one ratio, and that ratio is the mosaic's tile scale times
+// the constellation contraction; across regions, the centroids
+// keep their true bearings; the dense cores arrive already
+// decluttered by their region layouts; and the picture is the
+// same on every build.
 func TestLayoutMosaicPreservesRegionShapes(t *testing.T) {
 	// Three regions in the universe frame, shaped like real
 	// ones: a tight core with an arm, a second core, a sparse
@@ -166,53 +165,41 @@ func TestLayoutMosaicPreservesRegionShapes(t *testing.T) {
 		}
 	}
 
-	// The normalization factor the rule gives a constellation,
-	// recomputed from the region layout: k is the region's
-	// median per-system density, the target footprint is
-	// k*sqrt(n), and the factor that takes the laid footprint
-	// there is clamped to the band. Within one region every
-	// constellation rides the same tile scale, so the ratio of
-	// two constellations' distance ratios is the ratio of their
-	// factors.
-	normFactor := func(ri int, c int) float64 {
-		groups := make(map[int][]int)
+	// The contraction is the difference between a constellation's
+	// ratio and the scale its centre travels at: a constellation's
+	// centre does not contract, so the west core's and arm's
+	// centres sit at the tile scale, and each constellation's own
+	// ratio is the contraction times that scale.
+	laidC := func(ri int, c int) [2]float64 {
+		var ctr [2]float64
+		cnt := 0
 		for k, i := range members[ri] {
-			groups[consOf[i]] = append(groups[consOf[i]], k)
-		}
-		rmsOf := func(ks []int) float64 {
-			var cx, cy float64
-			for _, k := range ks {
-				cx += regionLaid[ri][k][0]
-				cy += regionLaid[ri][k][1]
-			}
-			cx /= float64(len(ks))
-			cy /= float64(len(ks))
-			var ss float64
-			for _, k := range ks {
-				dx, dy := regionLaid[ri][k][0]-cx, regionLaid[ri][k][1]-cy
-				ss += dx*dx + dy*dy
-			}
-			return math.Sqrt(ss / float64(len(ks)))
-		}
-		var dens []float64
-		for _, ks := range groups {
-			if len(ks) >= 2 {
-				if r := rmsOf(ks); r > 0 {
-					dens = append(dens, r/math.Sqrt(float64(len(ks))))
-				}
+			if consOf[i] == c {
+				ctr[0] += regionLaid[ri][k][0]
+				ctr[1] += regionLaid[ri][k][1]
+				cnt++
 			}
 		}
-		sort.Float64s(dens)
-		kmed := dens[len(dens)/2]
-		ks := groups[c]
-		f := kmed * math.Sqrt(float64(len(ks))) / rmsOf(ks)
-		return math.Min(math.Max(f, mosaicNormShrink), mosaicNormGrow)
+		return [2]float64{ctr[0] / float64(cnt), ctr[1] / float64(cnt)}
 	}
-	for _, tc := range []struct{ ri, c, ref int }{{0, 1, 0}, {1, 3, 2}} {
-		got := ratioOf[tc.c] / ratioOf[tc.ref]
-		want := normFactor(tc.ri, tc.c) / normFactor(tc.ri, tc.ref)
-		if math.Abs(got-want) > want*1e-6 {
-			t.Errorf("constellations %d and %d: distance ratios stand %.6f apart, want the normalization factors' %.6f", tc.c, tc.ref, got, want)
+	mosC := func(ri int, c int) [2]float64 {
+		var ctr [2]float64
+		cnt := 0
+		for _, i := range members[ri] {
+			if consOf[i] == c {
+				ctr[0] += a[i][0]
+				ctr[1] += a[i][1]
+				cnt++
+			}
+		}
+		return [2]float64{ctr[0] / float64(cnt), ctr[1] / float64(cnt)}
+	}
+	lc0, lc1 := laidC(0, 0), laidC(0, 1)
+	mc0, mc1 := mosC(0, 0), mosC(0, 1)
+	tileScale := math.Hypot(mc1[0]-mc0[0], mc1[1]-mc0[1]) / math.Hypot(lc1[0]-lc0[0], lc1[1]-lc0[1])
+	for _, c := range []int{0, 1, 2, 3} {
+		if got, want := ratioOf[c]/tileScale, mosaicConsContract; math.Abs(got-want) > want*1e-6 {
+			t.Errorf("constellation %d: ratio %.6f is %.6f of the tile scale, want the contraction %.2f", c, ratioOf[c], got, want)
 		}
 	}
 
@@ -248,213 +235,6 @@ func TestLayoutMosaicPreservesRegionShapes(t *testing.T) {
 		if d := math.Abs(tb - mb); d > 0.001 {
 			t.Errorf("centroid bearing %d -> %d off by %.4f rad (true %.4f, mosaic %.4f)", pair[0], pair[1], d, tb, mb)
 		}
-	}
-}
-
-// TestNormalizeConstellationsFootprints: the normalization
-// takes each constellation to the footprint its system count
-// earns -- a sparse sprawler shrinks (to the shrink bound, no
-// further), a dense knot grows, the region's median-density
-// constellation keeps its size -- while every constellation's
-// internal shape is preserved exactly, lone systems ride
-// along untouched, the region keeps its frame extent, and the
-// result is the same on every build.
-func TestNormalizeConstellationsFootprints(t *testing.T) {
-	// One region, four constellations placed far apart, with
-	// footprints known exactly: A is a 4-system ring of radius
-	// 20, B a 9-system sprawl (eight on a ring of radius 90,
-	// one at the centre), D a 6-system hexagon of radius 40,
-	// C a lone system.
-	var laid [][2]float64
-	var consOf []int
-	ring := func(cx, cy, r float64, n int, c int) {
-		for i := 0; i < n; i++ {
-			a := float64(i) * 2 * math.Pi / float64(n)
-			laid = append(laid, [2]float64{cx + r*math.Cos(a), cy + r*math.Sin(a)})
-			consOf = append(consOf, c)
-		}
-	}
-	ring(200, 200, 20, 4, 0) // A: RMS 20, density 10
-	ring(800, 200, 90, 8, 1) // B's ring...
-	laid = append(laid, [2]float64{800, 200})
-	consOf = append(consOf, 1) // ...and its centre: RMS sqrt(7200), density 28.28
-	ring(800, 800, 40, 6, 2)   // D: RMS 40, density 16.33 -- the median
-	laid = append(laid, [2]float64{200, 800})
-	consOf = append(consOf, 3) // C: the lone system
-	idxs := make([]int, len(laid))
-	for i := range idxs {
-		idxs[i] = i
-	}
-
-	out := normalizeConstellations(idxs, consOf, laid)
-	out2 := normalizeConstellations(idxs, consOf, laid)
-	for i := range out {
-		if out[i] != out2[i] {
-			t.Fatalf("normalization is not deterministic at %d: %v vs %v", i, out[i], out2[i])
-		}
-	}
-
-	rmsOut := func(c int) float64 {
-		var pts [][2]float64
-		for k, i := range idxs {
-			if consOf[i] == c {
-				pts = append(pts, out[k])
-			}
-		}
-		var cx, cy float64
-		for _, p := range pts {
-			cx += p[0]
-			cy += p[1]
-		}
-		cx /= float64(len(pts))
-		cy /= float64(len(pts))
-		var ss float64
-		for _, p := range pts {
-			ss += (p[0]-cx)*(p[0]-cx) + (p[1]-cy)*(p[1]-cy)
-		}
-		return math.Sqrt(ss / float64(len(pts)))
-	}
-	// The refit to the frame scales every footprint by one
-	// common factor, so footprints stand in the rule's ratios
-	// to the median constellation D, whose factor is 1:
-	// A's target is k*sqrt(4) = 32.66 against its laid 20,
-	// B's target is k*sqrt(9) = 49.0 against its laid 84.85 --
-	// a factor of 0.58, stopped by the shrink bound at 0.90.
-	if got, want := rmsOut(0)/rmsOut(2), (16.3299*2/20)*20/40; math.Abs(got-want) > want*1e-3 {
-		t.Errorf("A's footprint stands %.4f of D's, want %.4f (grown toward its target)", got, want)
-	}
-	if got, want := rmsOut(1)/rmsOut(2), mosaicNormShrink*math.Sqrt(7200)/40; math.Abs(got-want) > want*1e-3 {
-		t.Errorf("B's footprint stands %.4f of D's, want %.4f (shrunk to the bound, no further)", got, want)
-	}
-
-	// A's internal shape is preserved exactly: every pairwise
-	// distance is the laid distance times one constant.
-	lo, hi := math.Inf(1), math.Inf(-1)
-	for x := 0; x < 4; x++ {
-		for y := x + 1; y < 4; y++ {
-			ld := math.Hypot(laid[x][0]-laid[y][0], laid[x][1]-laid[y][1])
-			od := math.Hypot(out[x][0]-out[y][0], out[x][1]-out[y][1])
-			r := od / ld
-			lo, hi = math.Min(lo, r), math.Max(hi, r)
-		}
-	}
-	if hi > lo*1.000001 {
-		t.Errorf("A's internal distance ratios run %.6f..%.6f, want one uniform scale", lo, hi)
-	}
-
-	// The region keeps its frame extent, and the lone system
-	// rides the same refit as everything else: its distance to
-	// D's centroid scales by the factor D's footprint reports.
-	span := 0.0
-	minX, minY := math.Inf(1), math.Inf(1)
-	maxX, maxY := math.Inf(-1), math.Inf(-1)
-	for _, p := range out {
-		minX, maxX = math.Min(minX, p[0]), math.Max(maxX, p[0])
-		minY, maxY = math.Min(minY, p[1]), math.Max(maxY, p[1])
-	}
-	span = math.Max(maxX-minX, maxY-minY)
-	if math.Abs(span-regionFrame) > 1e-6 {
-		t.Errorf("region span after normalization %.4f, want the frame %.0f", span, regionFrame)
-	}
-	refit := rmsOut(2) / 40
-	dIn := math.Hypot(laid[19][0]-800, laid[19][1]-800)
-	var dc [2]float64
-	for k, i := range idxs {
-		if consOf[i] == 2 {
-			dc[0] += out[k][0]
-			dc[1] += out[k][1]
-		}
-	}
-	dc = [2]float64{dc[0] / 6, dc[1] / 6}
-	dOut := math.Hypot(out[19][0]-dc[0], out[19][1]-dc[1])
-	if math.Abs(dOut/dIn-refit) > refit*1e-3 {
-		t.Errorf("lone system rode a factor %.4f, want the common refit %.4f", dOut/dIn, refit)
-	}
-}
-
-// TestNormalizeConstellationsSeparation: where the rescaling
-// grows two constellations into each other, the separation
-// pushes the bodies apart -- rigidly, each internal distance
-// untouched -- until their closest systems clear the floor
-// the region layout's own spacing sets, moving no body past
-// the cap and never touching a body in no crowd.
-func TestNormalizeConstellationsSeparation(t *testing.T) {
-	// Two dense 4-system crosses (radius 15) whose centres sit
-	// 52 apart, flanked by two median-density hexagons that set
-	// the calibration, and two lone anchors pinning the frame's
-	// corners so the refit is the identity.
-	var laid [][2]float64
-	var consOf []int
-	cross := func(cx, cy float64, c int) {
-		for _, d := range [][2]float64{{15, 0}, {-15, 0}, {0, 15}, {0, -15}} {
-			laid = append(laid, [2]float64{cx + d[0], cy + d[1]})
-			consOf = append(consOf, c)
-		}
-	}
-	ring := func(cx, cy, r float64, n int, c int) {
-		for i := 0; i < n; i++ {
-			a := float64(i) * 2 * math.Pi / float64(n)
-			laid = append(laid, [2]float64{cx + r*math.Cos(a), cy + r*math.Sin(a)})
-			consOf = append(consOf, c)
-		}
-	}
-	cross(400, 500, 0)       // A: density 7.5, grows to the grow bound
-	cross(452, 500, 1)       // B: same; the pair's closest systems start 22 apart
-	ring(850, 150, 40, 6, 2) // E: density 16.33, the median
-	ring(150, 850, 40, 6, 3) // F: the same
-	laid = append(laid, [2]float64{0, 0}, [2]float64{1000, 1000})
-	consOf = append(consOf, 4, 5) // the anchors
-	idxs := make([]int, len(laid))
-	for i := range idxs {
-		idxs[i] = i
-	}
-
-	out := normalizeConstellations(idxs, consOf, laid)
-	out2 := normalizeConstellations(idxs, consOf, laid)
-	for i := range out {
-		if out[i] != out2[i] {
-			t.Fatalf("normalization is not deterministic at %d: %v vs %v", i, out[i], out2[i])
-		}
-	}
-
-	// The floor: 0.94 of the laid minimum pair distance. The
-	// laid minimum is the crosses' chord, 15*sqrt(2).
-	floor := mosaicSepFloor * 15 * math.Sqrt(2)
-	closest := math.Inf(1)
-	for x := 0; x < 4; x++ {
-		for y := 4; y < 8; y++ {
-			d := math.Hypot(out[x][0]-out[y][0], out[x][1]-out[y][1])
-			closest = math.Min(closest, d)
-		}
-	}
-	if closest < floor*0.98 {
-		t.Errorf("A and B's closest systems sit %.2f apart after separation, want the floor %.2f", closest, floor)
-	}
-
-	// A is rigid at its grown size: every internal distance is
-	// the laid distance times the grow bound.
-	for x := 0; x < 4; x++ {
-		for y := x + 1; y < 4; y++ {
-			ld := math.Hypot(laid[x][0]-laid[y][0], laid[x][1]-laid[y][1])
-			od := math.Hypot(out[x][0]-out[y][0], out[x][1]-out[y][1])
-			if math.Abs(od/ld-mosaicNormGrow) > mosaicNormGrow*1e-9 {
-				t.Errorf("A's pair %d-%d scaled %.6f, want the rigid grow bound %.2f", x, y, od/ld, mosaicNormGrow)
-			}
-		}
-	}
-
-	// A's body moved no further than the cap, and the anchors
-	// -- in no crowd -- did not move at all.
-	var ac [2]float64
-	for x := 0; x < 4; x++ {
-		ac[0] += out[x][0]
-		ac[1] += out[x][1]
-	}
-	if d := math.Hypot(ac[0]/4-400, ac[1]/4-500); d > mosaicSepCap {
-		t.Errorf("A's centre moved %.1f, past the cap %.0f", d, mosaicSepCap)
-	}
-	if out[20] != laid[20] || out[21] != laid[21] {
-		t.Errorf("anchors moved: %v and %v, want them at %v and %v", out[20], out[21], laid[20], laid[21])
 	}
 }
 

@@ -164,6 +164,14 @@ func (app *Application) intelDict(ctx context.Context, channelID int64, missing 
 	types := app.intelTypes(ctx)
 	systems := app.systemLookup(ctx)
 	side := app.intelSideOf(ctx, channelID)
+	// The channel's known hostiles are its set standing: a pilot
+	// on the watch list reads red whatever their affiliation says.
+	watch := map[int64]bool{}
+	if rows, err := app.queries.ListIntelWatch(ctx, []int64{channelID}); err == nil {
+		for _, r := range rows {
+			watch[r.CharacterID] = true
+		}
+	}
 	neighbours := map[int64]map[int64]bool{}
 	pilots := map[string][3]any{}
 	return intelanalyze.Dict{
@@ -205,9 +213,9 @@ func (app *Application) intelDict(ctx context.Context, channelID int64, missing 
 				if missing != nil {
 					missing[id] = true
 				}
-				return false, false
+				return false, watch[id]
 			}
-			return side.corps[corp] || (alliance > 0 && side.alliances[alliance]), false
+			return side.corps[corp] || (alliance > 0 && side.alliances[alliance]), watch[id]
 		},
 	}
 }

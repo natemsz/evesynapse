@@ -41,6 +41,7 @@ import (
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/intelchat"
 	"evesynapse/internal/logging"
+	"evesynapse/internal/scan"
 )
 
 const (
@@ -640,7 +641,8 @@ func (app *Application) handleChannelReport(w http.ResponseWriter, r *http.Reque
 	}
 	base.Source = "form"
 	base.Clear = r.PostForm.Get("clear") != ""
-	base.Text = clipRunes(strings.TrimSpace(r.PostForm.Get("text")), intelMaxText)
+	text := strings.TrimSpace(r.PostForm.Get("text"))
+	base.Text = clipRunes(text, intelMaxText)
 	base.Pilots = base.Text
 	if n, err := strconv.ParseInt(strings.TrimSpace(r.PostForm.Get("hostiles")), 10, 32); err == nil && n > 0 && !base.Clear {
 		base.Hostiles = int32(min(n, 999)) // n fits 32 bits: ParseInt above
@@ -648,6 +650,21 @@ func (app *Application) handleChannelReport(w http.ResponseWriter, r *http.Reque
 	if !base.Clear && base.Text == "" && base.Hostiles == 0 {
 		reply(http.StatusUnprocessableEntity, "Say what was seen: pilots, a count, or mark it clear.", 0)
 		return
+	}
+	// A scan pasted into the report box is a scan, not prose:
+	// the report is the one its reading makes, on the system
+	// named here. (Classified on the text as pasted, before the
+	// clip above shortened it.)
+	if !base.Clear {
+		if p, ok := app.scanReportOf(ctx, base, text, base.SystemID); ok {
+			if _, err := app.insertIntelReport(ctx, p, false); err != nil {
+				logging.Errorf("channels: insert report: %v", err)
+				reply(http.StatusInternalServerError, "That did not go through — please try again.", 0)
+				return
+			}
+			reply(http.StatusOK, "Reported.", 1)
+			return
+		}
 	}
 	if _, err := app.insertIntelReport(ctx, base, false); err != nil {
 		logging.Errorf("channels: insert report: %v", err)
@@ -667,6 +684,51 @@ type chatPostResult struct {
 	SkippedLines []string `json:"skippedLines,omitempty"`
 }
 
+// scanReportOf reads raw as a scan paste, when it is one, and
+// makes the report a reading of it makes: the reading is stored
+// (as the scan tool stores it) and the report carries the
+// reading's interpreted sentence, its system and its headline
+// count -- never the raw paste. namedSystemID, when the poster named a system,
+// wins over the one the reading finds. ok is false when the
+// paste is no scan the tool knows, or names no system: a local
+// list on its own cannot be a report, reports being about a
+// system.
+func (app *Application) scanReportOf(ctx context.Context, base db.InsertIntelReportParams, raw string, namedSystemID int64) (db.InsertIntelReportParams, bool) {
+	kind := scan.Detect(raw)
+	if kind == "" || (kind == scan.KindLocal && namedSystemID == 0) {
+		return base, false
+	}
+	p, err := scan.Parse(raw)
+	if err != nil {
+		return base, false
+	}
+	res := app.readScan(ctx, p, namedSystemID)
+	if res.SystemID == 0 {
+		return base, false
+	}
+	body, err := json.Marshal(res)
+	if err != nil {
+		return base, false
+	}
+	id, err := newScanID()
+	if err == nil {
+		err = app.queries.InsertScan(ctx, db.InsertScanParams{ID: id, Kind: string(res.Kind), SystemID: res.SystemID, UserID: base.AuthorUserID, Raw: raw, Result: string(body), CreatedAt: time.Now().UTC()})
+	}
+	if err != nil {
+		logging.Errorf("channels: store scan from a paste: %v", err)
+		return base, false
+	}
+	out := base
+	out.SystemID = res.SystemID
+	out.Text = app.scanReportText(ctx, base.ChannelID, res, &p, base.AuthorCharacterID)
+	out.Pilots = out.Text
+	out.Hostiles = scanHostiles(res)
+	out.Clear = false
+	out.ScanID = id
+	out.Source = "scan"
+	return out, true
+}
+
 // postChatLines reads intel chat lines into reports on base's channel,
 // as base's author. A line's speaker and timestamp, when it has them,
 // are the report's; a report already in the channel (the same moment,
@@ -676,6 +738,16 @@ type chatPostResult struct {
 func (app *Application) postChatLines(ctx context.Context, base db.InsertIntelReportParams, lines, source string) chatPostResult {
 	var res chatPostResult
 	now := base.CreatedAt
+	// A scan pasted as chat lines is a scan, not chat: the same
+	// reading the scan tool makes of it, reported as one report.
+	if p, ok := app.scanReportOf(ctx, base, lines, 0); ok {
+		if _, err := app.insertIntelReport(ctx, p, false); err != nil {
+			logging.Errorf("channels: insert scan report: %v", err)
+			return res
+		}
+		res.Posted = 1
+		return res
+	}
 	o := intelchat.Parse(lines, app.systemLookup(ctx), now)
 	res.Skipped = o.NoSystem + o.Questions
 	res.SkippedLines = o.NoSystemLines
@@ -733,16 +805,16 @@ func (app *Application) handleScanPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	now := time.Now().UTC()
-	p := db.InsertIntelReportParams{ChannelID: c.ID, SystemID: row.SystemID, AuthorUserID: id.userID, AuthorCharacterID: id.posterID,
-		Reporter: id.posterName, Text: scanTitle(res), ScanID: scanID, Source: "scan", SeenAt: row.CreatedAt, CreatedAt: now}
-	switch {
-	case res.DScan != nil:
-		p.Hostiles = int32(res.DScan.Ships)
-	case res.Local != nil:
-		p.Hostiles = int32(len(res.Local.Pilots) + len(res.Local.Unknown))
-	case res.Fleet != nil:
-		p.Hostiles = int32(len(res.Fleet.Members))
+	// The paste the reading was made from, for the sentence's
+	// attribution; a reading whose paste no longer parses is
+	// reported from its tallies alone.
+	var parsed *scan.Result
+	if pp, err := scan.Parse(row.Raw); err == nil {
+		parsed = &pp
 	}
+	p := db.InsertIntelReportParams{ChannelID: c.ID, SystemID: row.SystemID, AuthorUserID: id.userID, AuthorCharacterID: id.posterID,
+		Reporter: id.posterName, Text: app.scanReportText(ctx, c.ID, res, parsed, id.posterID), ScanID: scanID, Source: "scan", SeenAt: row.CreatedAt, CreatedAt: now}
+	p.Hostiles = scanHostiles(res)
 	if _, err := app.insertIntelReport(ctx, p, false); err != nil {
 		logging.Errorf("channels: insert scan report: %v", err)
 		back("That did not go through — please try again.")

@@ -2,6 +2,7 @@ package intelanalyze
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -16,13 +17,16 @@ func dict() Dict {
 		"rifter":   {587, "Rifter", ClassOther},
 		"nyx":      {23913, "Nyx", ClassCapital},
 		"purifier": {12038, "Purifier", ClassBomber},
+		"ibis":     {601, "Ibis", ClassOther},
+		"velator":  {606, "Velator", ClassOther},
 	}
 	// Some of these pilots share their names with things and
 	// places, as EVE's do: characters called "Force Field",
 	// "Station" and "VIII" all exist.
 	pilots := map[string]int64{"hostile one": 91000001, "hostile two": 91000002, "solo": 91000003, "friendly guy": 91000004,
 		"force field": 91000005, "viii": 91000006, "station": 91000007, "moon": 91000008,
-		"minmatar control tower": 91000009, "minmatar military": 91000010, "vherokior": 91000011, "treasury": 91000012}
+		"minmatar control tower": 91000009, "minmatar military": 91000010, "vherokior": 91000011, "treasury": 91000012,
+		"blackcatrus": 91000013, "legendmysticdragon": 91000014, "grid": 91000015, "unclassified": 91000016}
 	types := map[string]int64{"force field": 16103, "minmatar control tower": 16214}
 	asked := map[string]bool{"some random words": true, "some random": true, "random words": true, "some": true, "random": true, "words": true}
 	return Dict{
@@ -36,7 +40,8 @@ func dict() Dict {
 		},
 		Pilot: func(l string) (int64, string, bool, bool) {
 			id, ok := pilots[l]
-			names := map[int64]string{91000001: "Hostile One", 91000002: "Hostile Two", 91000003: "Solo", 91000004: "Friendly Guy"}
+			names := map[int64]string{91000001: "Hostile One", 91000002: "Hostile Two", 91000003: "Solo", 91000004: "Friendly Guy",
+				91000013: "BlackCatRus", 91000014: "LegendMysticDragon"}
 			return id, names[id], ok, ok || asked[l]
 		},
 		Gate: func(sys int64, l string) (int64, bool) {
@@ -90,6 +95,10 @@ func TestAnalyze(t *testing.T) {
 			func(a Analysis) bool { return len(a.Pilots) == 0 && len(a.Unknown) == 0 }},
 		{"a bare place noun is not a pilot", Input{System: 1, Text: "Station"}, KindChatter,
 			func(a Analysis) bool { return len(a.Pilots) == 0 && len(a.Unknown) == 0 }},
+		{"report scaffolding is not a pilot", Input{System: 1, Text: "Grid"}, KindChatter,
+			func(a Analysis) bool { return len(a.Pilots) == 0 && len(a.Unknown) == 0 }},
+		{"a standing word is not a pilot", Input{System: 1, Text: "Unclassified"}, KindChatter,
+			func(a Analysis) bool { return len(a.Pilots) == 0 && len(a.Unknown) == 0 }},
 		{"a station's name is one location, not pilots", Input{System: 1, Text: "VII - Moon 1 - Vherokior Tribe Treasury Minmatar Military Station"}, KindChatter,
 			func(a Analysis) bool { return len(a.Pilots) == 0 && len(a.Unknown) == 0 && len(a.Ships) == 0 }},
 		{"a mangled d-scan line: types and a location, no pilots", Input{System: 1, Text: "16103 Force Field Minmatar Control Tower 4,875 km 2498 VII - Moon 1 - Vherokior Tribe Treasury Minmatar Military Station 0 m"}, KindSighting,
@@ -114,6 +123,44 @@ func TestAnalyze(t *testing.T) {
 		if c.want != nil && !c.want(a) {
 			t.Errorf("%s: %+v", c.name, a)
 		}
+	}
+}
+
+// The interpreted sentence a scan report carries is analysed
+// like any other report text when the report is stored: its
+// pilots and ships must chip, and its own scaffolding -- the
+// standings words, the grid clause, the anchor -- must not, even
+// though EVE has characters named for the scaffolding too.
+func TestAnalyzeScanSentence(t *testing.T) {
+	d := dict()
+	a := Analyze(Input{System: 1, Text: "At the Moon 1 station in Teonusude: 0 hostiles, 0 friendly, 0 neutral, 2 unclassified ships (Ibis, Velator), 0 on grid — BlackCatRus in the Ibis, LegendMysticDragon in the Velator."}, d)
+	if len(a.Pilots) != 2 || a.Pilots[0].Name != "BlackCatRus" || a.Pilots[1].Name != "LegendMysticDragon" {
+		t.Errorf("pilots %+v, want BlackCatRus and LegendMysticDragon only", a.Pilots)
+	}
+	shipIDs := map[int64]bool{}
+	for _, s := range a.Ships {
+		shipIDs[s.TypeID] = true
+	}
+	if !shipIDs[601] || !shipIDs[606] {
+		t.Errorf("ships %+v, want the Ibis and the Velator", a.Ships)
+	}
+	for _, u := range a.Unknown {
+		// The one word a lookup may settle is the system name;
+		// phrases the prober forms around it are its normal
+		// operation, phrases around anything else are not.
+		if !strings.Contains(u, "teonusude") {
+			t.Errorf("unknown %q, want phrases around the system name only (%+v)", u, a)
+		}
+	}
+}
+
+// A local report's sentence: counts and the gap clause only, no
+// names to chip and nothing left to look up.
+func TestAnalyzeLocalSentence(t *testing.T) {
+	d := dict()
+	a := Analyze(Input{System: 1, Text: "27 in local: 6 hostiles, 4 friendly (incl. you), 17 neutral — no scan attached, ships unknown."}, d)
+	if len(a.Pilots) != 0 || len(a.Ships) != 0 || len(a.Unknown) != 0 {
+		t.Errorf("%+v, want no pilots, ships or unknowns", a)
 	}
 }
 

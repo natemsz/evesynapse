@@ -156,7 +156,7 @@ var keywords = map[string]string{
 	"dic": "dictor", "dics": "dictor", "dictor": "dictor", "dictors": "dictor", "hic": "dictor", "hics": "dictor",
 	"recon": "hunter", "recons": "hunter", "t3": "hunter", "t3c": "hunter", "cloaky": "cloaky", "cloakies": "cloaky", "cloaked": "cloaky",
 	"neut": "local", "neuts": "local", "red": "local", "reds": "local", "local": "local", "spike": "local", "docked": "docked", "dock": "docked",
-	"gate": "", "on": "", "at": "", "in": "", "and": "", "the": "", "x": "", "+": "", "-": "", "/": "", "with": "",
+	"gate": "", "on": "", "at": "", "in": "", "and": "", "the": "", "x": "", "+": "", "-": "", "—": "", "–": "", "/": "", "with": "",
 }
 
 // Nicknamed classes, as ships the report names.
@@ -411,6 +411,25 @@ var placeNouns = map[string]bool{
 	"km": true, "au": true,
 }
 
+// reportWords are the vocabulary of a report itself: standings
+// and the scaffolding of the interpreted sentence a scan report
+// carries ("hostiles", "neutral", "on grid", "ships unknown").
+// They are read as words, never as names -- a pilot named after
+// one resolves in typed lists, not in free-form text, exactly as
+// with the place nouns above.
+var reportWords = map[string]bool{
+	"hostile": true, "hostiles": true, "neutral": true, "neutrals": true,
+	"friendly": true, "friendlies": true, "unclassified": true,
+	"unresolved": true, "grid": true, "ship": true, "ships": true,
+	"scan": true, "attached": true, "unknown": true, "no": true,
+	"incl": true, "you": true, "more": true, "killed": true,
+	"here": true, "this": true, "week": true, "system": true,
+	"hot": true, "kills": true, "npc": true, "likely": true,
+	"ratting": true, "heavy": true, "traffic": true, "clusters": true,
+	"partial": true, "roster": true, "names": true, "last": true,
+	"hours": true,
+}
+
 // romanRe is a roman numeral, strictly: only numeral letters, in
 // numeral order ("civil", "vivid" and "mild" do not match).
 var romanRe = regexp.MustCompile(`^m{0,3}(cm|cd|d?c{0,3})(xc|xl|l?x{0,3})(ix|iv|v?i{0,3})$`)
@@ -433,16 +452,19 @@ func pilotCandidate(name string) bool {
 	if !letter {
 		return false
 	}
-	if isRomanNumeral(name) || placeNouns[name] {
+	if isRomanNumeral(name) || placeNouns[name] || reportWords[name] {
 		return false
 	}
-	if i := strings.LastIndex(name, " "); i >= 0 && placeNouns[name[i+1:]] {
+	if i := strings.LastIndex(name, " "); i >= 0 && placeNouns[clean(name[i+1:])] {
 		return false
 	}
 	// A phrase of nothing but numbers, designators, place nouns
-	// and units ("km 2498", "0 m") has no name in it either.
+	// and units ("km 2498", "0 m") has no name in it either. The
+	// words are cleaned first: a phrase carries its punctuation
+	// inside ("(incl." is the word "incl").
 	for _, w := range strings.Fields(name) {
-		if !isDigits(w) && !isRomanNumeral(w) && !placeNouns[w] && w != "-" {
+		w = clean(w)
+		if !isDigits(w) && !isRomanNumeral(w) && !placeNouns[w] && !reportWords[w] && w != "-" && w != "—" && w != "–" {
 			return true
 		}
 	}

@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.5.7.4] - 2026-10-23
+
+Automated build of EveSynapse v0.5.7.4. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+
+## What's Changed
+### 🚀 Features
+* Map: the improved projection is the SDE authored 2D layout, and the default view by @natemsz in https://github.com/natemsz/evesynapse/pull/609
+### 🐛 Bug Fixes
+* Learn the swarm release library from GitHub releases by @natemsz in https://github.com/natemsz/evesynapse/pull/610
+* Landing: repin copy assertions to the current page text by @natemsz in https://github.com/natemsz/evesynapse/pull/612
+### Other Changes
+* docs(changelog): review changelog for v0.5.7.3 by @github-actions[bot] in https://github.com/natemsz/evesynapse/pull/611
+
+
+**Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.7.3...v0.5.7.4
+
 ## [v0.5.7.3] - 2026-10-22
 
 Automated build of EveSynapse v0.5.7.3. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).

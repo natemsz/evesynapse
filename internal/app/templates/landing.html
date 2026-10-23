@@ -19,7 +19,7 @@
 <div class="ld-stars" aria-hidden="true"></div>
 <header class="ld-header"><div class="ld-wrap ld-hbar">
   <a class="wordmark ld-wordmark" href="/" aria-label="EveSynapse home"><img class="wordmark-glyph" src="/static/logo.svg?v={{.AssetVersion}}" alt="" width="64" height="64"><span>{{template "wordmark-svg"}}</span></a>
-  <nav class="ld-nav"><a href="#fleet">Fleet</a><a href="#market">Market</a><a href="#industry">Industry</a><a href="#fitting">Fitting</a><a href="#corp">Corporation</a><a href="#intel">Intel</a><a href="#map">Universe Map</a></nav>
+  <nav class="ld-nav"><a href="#tools">Tools</a><a href="#apart">What sets us apart</a><a href="#trust">Trust</a></nav>
   <div class="ld-hsp"></div>
   <a class="ld-btn ld-btn-ghost" href="/auth/login">Sign in</a>
   <a class="ld-btn ld-btn-ember" href="/auth/link">Link your characters</a>
@@ -29,15 +29,16 @@
 <div class="ld-wrap">
   {{if .Error}}<p class="ld-error">{{.Error}}</p>{{end}}
   <div class="ld-hero">
-    <h1>Stop alt-tabbing between <span class="ld-amp">five different tools.</span></h1>
+    <h1>One connected system for <span class="ld-amp">your whole fleet.</span></h1>
     <div class="ld-hero-lower">
       <div class="ld-kicker">EVE Online Companion</div>
-      <p class="ld-sub">An advanced all-in-one integrated dashboard for EVE Online. Fully customizable to your playstyle, it handles one pilot or hundreds without breaking a sweat.</p>
+      <p class="ld-sub">Market, fitting, industry, intel and corporation tools in one place, all reading the same stored data.</p>
       <div class="ld-ctas">
-        <a class="ld-btn ld-btn-ember" href="/auth/link">Link your characters, free</a>
-        <a class="ld-btn ld-btn-ghost" href="/auth/demo">Try it now</a>
+        <a class="ld-btn ld-btn-ember" href="/auth/link">Sign up free</a>
+        <a class="ld-btn ld-btn-ghost" href="/auth/demo">Try the demo</a>
+        <a class="ld-btn ld-btn-ghost" href="#" data-open-tools>Public tools</a>
       </div>
-      <div class="ld-cta-note">Try it now opens in demo mode, no sign-in needed</div>
+      <div class="ld-cta-note">Try the demo runs on a sample fleet. No sign-in needed.</div>
     </div>
 
     {{if .HasStrip}}
@@ -60,7 +61,7 @@
 
   <section class="ld-blk" id="tools">
     <h2>Every tool in the box.</h2>
-    <p class="ld-lede">Twenty-three modules plus the core pages, all reading the same stored interconnected data. Integrated and seamless, it connects the dots where seperate offline tools cannot. The public tools work with no account at all.</p>
+    <p class="ld-lede">Twenty-three modules plus the core pages, all reading the same stored data. The public tools work with no account at all.</p>
     <div class="ld-tools">
       <div class="ld-glass ld-tgroup"><h3>Your pilots</h3><ul>
         <li><b>Fleet Overview</b> with the daily briefing</li>
@@ -104,60 +105,24 @@
         <li><b>Route Planner</b>: shortest, safer, or around the danger</li>
         <li><b>D-Scan Parser</b>: paste a scan, get the breakdown and a link to share</li>
         <li><b>Intel Channels</b> shared with a pilot, a corp, an alliance or a group</li>
-        <li><b>Axon</b> feeds your in-game intel chat into your channels, and universe map</li>
+        <li><b>Axon</b> feeds in-game intel chat into your channels and onto the universe map</li>
         <li><b>Hostile Pilots Tracker</b> keeps track of the pilots your channels watch</li>
         <li><b>Item Database</b> for all of New Eden</li>
       </ul></div>
     </div>
   </section>
 
-  <section class="ld-blk">
-    <div class="ld-eyebrow">Trust</div>
-    <h2>Your keys, your call.</h2>
-    <p class="ld-lede">Prices come from EveSynapse's own swept market data, and every price shows its source. An advanced proprietary model accurately prices items that aren't in market data, like abyssals, capital ships, and blueprints.</p>
-    <div class="ld-trust">
-      <div class="ld-glass ld-tcard"><h3>You pick the scopes</h3><p>Linking a character starts with the features you want: the sign-in asks for the scopes behind those features, and no more. Re-linking the same character never takes a permission away.</p></div>
-      <div class="ld-glass ld-tcard"><h3>Encrypted at rest</h3><p>Refresh tokens are sealed with AES-256-GCM, the current standard for encryption at rest. The encryption keys are stored off-server, on secure hardware. Reading your data never means trusting us with the keys to it.</p></div>
-      <div class="ld-glass ld-tcard"><h3>Public data, no login</h3><p>Tools using public data require no login at all to use: the fitting simulator, planners, market and intel tools, and the universe map, are open to everyone. Sign in only when you want your own characters in the picture.</p></div>
-      <div class="ld-glass ld-tcard"><h3>Or run it yourself</h3><p>Open source, one setup script, your own ESI application and your own data. The public site runs the same build you can download.</p></div>
-    </div>
-    <div class="ld-glass ld-tcard ld-tcard-wide"><h3>PKCE on every sign-in</h3><p>The EVE login flow is PKCE-protected: the sign-in code can only be exchanged by the browser that asked for it, so an intercepted code is worthless to anyone else.</p></div>
-    <div class="ld-glass ld-tcard ld-tcard-wide"><h3>Revoke on unlink</h3><p>When you unlink a character, you can fully revoke its token with EVE itself, right in the unlink flow. Deleting our copy is the floor; killing the token at the source is your call.</p></div>
-    <div class="ld-cta-repeat">
-      <a class="ld-btn ld-btn-ember ld-btn-lg" href="/auth/link">Link your characters, free</a>
-      <span class="ld-why">Linking asks only for the scopes behind the features you pick.</span>
-    </div>
-  </section>
-
-  <section class="ld-blk">
-    <div class="ld-eyebrow">Playstyles</div>
-    <h2>Three alts, or a hundred multiboxed characters.</h2>
-    <p class="ld-lede">Every character syncs in the background and the briefing leans toward what you actually do, whether that is a market alt army or a single main, the data important to you is shown and is fully customizable.</p>
-    <div class="ld-styles">
-      <div class="ld-glass ld-scard">
-        <div class="ld-who">The Trader</div>
-        <h3>Know what your ISK is doing.</h3>
-        <p>Your orders across five hubs, watched as they age: an outbid gets flagged the moment it happens, and Trade Ideas identifies opportunities for all trading styles, the spread, margin and reasoning included.</p>
-        <div class="ld-chips"><span class="ld-chip">Spread Scanner</span><span class="ld-chip">Tradefinder</span><span class="ld-chip">Trade Ideas</span><span class="ld-chip">Outbid tracking</span></div>
-      </div>
-      <div class="ld-glass ld-scard">
-        <div class="ld-who">The Industrialist</div>
-        <h3>Build with the margin already proven.</h3>
-        <p>Pick a blueprint and the whole tree is priced before you commit. Hangars are checked first, and your build is optimized between buying and building components, PI chains run extractor to finished goods, and restock levels keep your market stock where you set it, simplifying your Jita runs.</p>
-        <div class="ld-chips"><span class="ld-chip">Build Planner</span><span class="ld-chip">PI Planner</span><span class="ld-chip">Restock Planner</span><span class="ld-chip">Hangar checks</span></div>
-      </div>
-      <div class="ld-glass ld-scard">
-        <div class="ld-who">The Corp Leader</div>
-        <h3>One stack for the whole corporation.</h3>
-        <p>Directors publish the doctrines for ships and entire fleets, once; member fits and ship replacement check against them, Discord servers are provisioned with roles that follow the same groups you set, and ops land on one shared calendar that syncs in-game in both directions.</p>
-        <div class="ld-chips"><span class="ld-chip">Doctrines</span><span class="ld-chip">Ship Replacement</span><span class="ld-chip">Discord</span><span class="ld-chip">Ops Calendar</span></div>
-      </div>
-      <div class="ld-glass ld-scard">
-        <div class="ld-who">The Multiboxer</div>
-        <h3>A hundred pilots, one morning briefing.</h3>
-        <p>Every character syncs in the background into a single briefing: empty skill queues, halted extractors, expiring orders, mail that matters, your entire industry workflow. Three alts get the same care as a hundred.</p>
-        <div class="ld-chips"><span class="ld-chip">Fleet Overview</span><span class="ld-chip">Priority Briefing</span><span class="ld-chip">Skill Plans</span><span class="ld-chip">PI tracking</span></div>
-      </div>
+  <section class="ld-blk" id="apart">
+    <div class="ld-eyebrow">What sets us apart</div>
+    <h2>One system that does its own math.</h2>
+    <p class="ld-lede">Every tool reads the same characters and the same stored data, and every character syncs in the background. A solo pilot gets the public tools; a medium-sized group gets doctrines, ship replacement and intel channels in the same place, with nothing extra to host.</p>
+    <div class="ld-blurbs">
+      <div class="ld-blurb"><h3>Fitting in the browser</h3><p>A full fitting simulator in a browser tab: full dogma simulation, T3 subsystem morphing from live game data, and Save to EVE built in. Nothing to install.</p></div>
+      <div class="ld-blurb"><h3>Prices we compute ourselves</h3><p>Every price comes from our own swept market data, with its source shown. Ships the market never lists are priced from confirmed contract sales, abyssals from their own rolls, blueprints from the full material tree.</p></div>
+      <div class="ld-blurb"><h3>Contract search</h3><p>Every public contract in New Eden in one search, all regions at once, refreshed every 30 minutes. Each contract is appraised line by line, and deals are flagged on the row.</p></div>
+      <div class="ld-blurb"><h3>Appraisal</h3><p>Paste a list, a fit, or a cargo scan and every line comes back priced with its source shown. No account needed.</p></div>
+      <div class="ld-blurb"><h3>Intel on the map</h3><p>Axon reads a member's in-game intel chat and posts parsed reports to shared channels, and channel reports draw on the universe map. Gate camps are counted from ship kills only.</p></div>
+      <div class="ld-blurb"><h3>Corporation tools</h3><p>Directors author doctrines in the fitting tool itself. Ship replacement values the loss with the same pricing models, and the kill behind the claim is already in the system.</p></div>
     </div>
     <div class="ld-stats">
       <div class="ld-glass ld-stat"><b>2,400+</b><span>concurrent pilots on one small server, load-tested</span></div>
@@ -167,178 +132,20 @@
     <p class="ld-stat-note">How the sync number was measured: rosters of 12 to 14,800 pilots driven through the real sync cycle against a local ESI stub. Every starting backlog cleared, and a pilot coming due was fresh again within one cycle. Run on a 8 core ARM server with 24 GB of RAM. The test's largest roster was its stopping point; the production server is far stronger.</p>
     <div class="ld-cta-repeat">
       <a class="ld-btn ld-btn-ember ld-btn-lg" href="/auth/link">Link your characters, free</a>
+      <span class="ld-why">Linking asks only for the scopes behind the features you pick.</span>
     </div>
   </section>
 
-  <section class="ld-feat" id="fleet">
-    <div class="ld-feat-txt">
-      <div class="ld-eyebrow">Fleet Home</div>
-      <h2>Every pilot, at a glance.</h2>
-      <p class="ld-lede">Every character you link, on one screen: fleet worth, wallets, training, and fully customizable widgets that match your playstyle.</p>
-      <div class="ld-blurbs">
-        <div class="ld-blurb"><h3>Wallet and Journal</h3><p>Every character's wallet and journal in one ledger. Fully searchable.</p></div>
-        <div class="ld-blurb"><h3>Assets</h3><p>Search every hangar, ship and container across all of your pilots on all accounts at once.</p></div>
-        <div class="ld-blurb"><h3>Mail, Calendar and Contacts</h3><p>Mail and events from all your characters in one organized inbox and one unified, filterable calendar.</p></div>
-        <div class="ld-blurb"><h3>Skill Plans</h3><p>Lay out your goals, and optimize your plan to reach them.</p></div>
-      </div>
-    </div>
-    <div class="ld-feat-vis">
-      <div class="ld-glass ld-preview">
-        <div class="ld-pv-head"><h2>Fleet Overview</h2><span>every character, at a glance. This is the home page for your personal fleet, shown with sample data{{if .Alerts}}. The alerts beneath it are live, read from stored data{{end}}</span></div>
-        <div class="kpis">
-          <div class="kpi"><span class="kpi-k">Fleet net worth</span><span class="kpi-v">{{.Showcase.NetWorth}}</span><span class="kpi-sub">{{.Showcase.NetWorthSub}}</span><svg class="kpi-spark" viewBox="0 0 100 28" preserveAspectRatio="none" aria-hidden="true" focusable="false"><polygon class="kpi-spark-area" points="{{.Showcase.SparkArea}}"/><polyline class="kpi-spark-line" points="{{.Showcase.SparkPoints}}"/></svg></div>
-          <div class="kpi"><span class="kpi-k">Liquid ISK</span><span class="kpi-v">{{.Showcase.Liquid}}</span><span class="kpi-sub">{{.Showcase.LiquidSub}}</span><svg class="ld-bar" viewBox="0 0 100 6" preserveAspectRatio="none" aria-hidden="true"><rect class="ld-bar-track" width="100" height="6" rx="3"/><rect class="ld-bar-fill" width="{{.Showcase.LiquidPct}}" height="6" rx="3"/></svg></div>
-          <div class="kpi"><span class="kpi-k">Hangar &amp; assets</span><span class="kpi-v">{{.Showcase.Hangar}}</span><span class="kpi-sub">{{.Showcase.HangarSub}}</span><svg class="ld-bar" viewBox="0 0 100 6" preserveAspectRatio="none" aria-hidden="true"><rect class="ld-bar-track" width="100" height="6" rx="3"/><rect class="ld-bar-fill" width="{{.Showcase.HangarPct}}" height="6" rx="3"/></svg></div>
-          <div class="kpi"><span class="kpi-k">Skill training</span><span class="kpi-v">{{.Showcase.Training}}</span><span class="kpi-sub">{{.Showcase.TrainingSub}}</span><svg class="ld-bar" viewBox="0 0 100 6" preserveAspectRatio="none" aria-hidden="true"><rect class="ld-bar-track" width="100" height="6" rx="3"/><rect class="ld-bar-fill" width="{{.Showcase.TrainPct}}" height="6" rx="3"/></svg></div>
-        </div>
-        {{if .Alerts}}<div class="ld-brief">
-          {{range .Alerts}}<div class="brief-card sev-{{.Sev}}"><span class="sev">{{.Sev}}</span> <span class="brief-text"><strong>{{.Head}}</strong> {{.Text}}</span></div>{{end}}
-        </div>{{end}}
-      </div>
-    </div>
-  </section>
-
-  <section class="ld-feat" id="market">
-    <div class="ld-feat-vis">
-      <figure class="ld-shot">
-        <div class="ld-browser">
-          <div class="ld-browser-bar" aria-hidden="true"><span class="ld-dot ld-dot-on"></span><span class="ld-dot"></span><span class="ld-dot"></span><span class="ld-url">evesynapse.app/market/appraise/</span></div>
-          <img src="/static/shot-appraisal.webp?v={{.AssetVersion}}" width="1464" height="1230" loading="lazy" alt="EveSynapse appraisal tool with demo data: a pasted list priced line by line from The Forge's swept orders, with the source on every line">
-        </div>
-        <figcaption>The appraisal tool. Paste anything, and every line comes back priced with its source. Rare items, blueprints, capital ships, and abyssals work too.</figcaption>
-      </figure>
-    </div>
-    <div class="ld-feat-txt">
-      <div class="ld-eyebrow">Market</div>
-      <h2>Know what it's worth, and what to do next.</h2>
-      <p class="ld-lede">Paste a cargo scan, a contract or a whole hangar and every line comes back priced, even abyssals and blueprints, with the source and the age of the price data.</p>
-      <div class="ld-blurbs">
-        <div class="ld-blurb"><h3>Spread Scanner</h3><p>Reads every hub's order books and ranks the margins.</p></div>
-        <div class="ld-blurb"><h3>Tradefinder</h3><p>Routes between regions and prices both ends of the haul.</p></div>
-        <div class="ld-blurb"><h3>Trade Ideas</h3><p>Reads every hub sweep and writes up what to trade or build, with the item, the margin and the reasoning on the page.</p></div>
-        <div class="ld-blurb"><h3>Market Orders</h3><p>Your orders across every hub; an outbid lands in your briefing. (Notifications are customizable)</p></div>
-        <div class="ld-blurb"><h3>Top Stations</h3><p>The stations holding the most open ISK and the most orders, ranked from the stored sweeps.</p></div>
-        <div class="ld-blurb"><h3>Contract Search</h3><p>Search public contracts across New Eden and price what you find using our own model to price abyssals, blueprints, capitals and rare items.</p></div>
-      </div>
-    </div>
-  </section>
-
-  <section class="ld-feat" id="industry">
-    <div class="ld-feat-txt">
-      <div class="ld-eyebrow">Industry</div>
-      <h2>Plans that price themselves.</h2>
-      <p class="ld-lede">Read a blueprint and the whole tree is priced before you commit: build or buy on every component is optimized, job fees included, ALL of your hangars checked first.</p>
-      <div class="ld-blurbs">
-        <div class="ld-blurb"><h3>PI Planner</h3><p>Follow a chain from extractor to finished goods, priced from fresh market data.</p></div>
-        <div class="ld-blurb"><h3>Restock Planner</h3><p>Watches your market stock and calls out the lines running low, simplifying your Jita runs.</p></div>
-        <div class="ld-blurb"><h3>Blueprints and Job Tracking</h3><p>Your blueprints and running jobs in one place. Find out what is worth building quickly.</p></div>
-      </div>
-    </div>
-    <div class="ld-feat-vis">
-      <figure class="ld-shot">
-        <div class="ld-browser">
-          <div class="ld-browser-bar" aria-hidden="true"><span class="ld-dot ld-dot-on"></span><span class="ld-dot"></span><span class="ld-dot"></span><span class="ld-url">evesynapse.app/planner/</span></div>
-          <img src="/static/shot-planner.webp?v={{.AssetVersion}}" width="1669" height="896" loading="lazy" alt="EveSynapse Build Planner with a Hel supercarrier build plan open: the component build tree priced node by node, and the node inspector for Capital Armor Plates showing its branch cost, fees, duration and what buying instead would save">
-        </div>
-        <figcaption>The Build Planner with a Hel plan open: every component priced, and the selected node's costs broken down in the inspector.</figcaption>
-      </figure>
-    </div>
-  </section>
-
-  <section class="ld-feat" id="fitting">
-    <div class="ld-feat-vis">
-      <figure class="ld-shot">
-        <div class="ld-browser">
-          <div class="ld-browser-bar" aria-hidden="true"><span class="ld-dot ld-dot-on"></span><span class="ld-dot"></span><span class="ld-dot"></span><span class="ld-url">evesynapse.app/fittings/</span></div>
-          <img src="/static/shot-fitting.webp?v={{.AssetVersion}}" width="732" height="615" loading="lazy" alt="EveSynapse fitting simulator: a Loki simulated with its pilot's real skills, a module tooltip open, the fit priced at 2.16 billion ISK">
-        </div>
-        <figcaption>A 2.16 billion ISK Loki, priced and simulated with its pilot's own skills.</figcaption>
-      </figure>
-    </div>
-    <div class="ld-feat-txt">
-      <div class="ld-eyebrow">Fitting</div>
-      <h2>Desktop grade fitting, in a browser tab.</h2>
-      <p class="ld-lede">A full desktop-grade, accurate simulation in the browser: drag modules, analyze your stats, every number recalculates on the spot.</p>
-      <div class="ld-blurbs">
-        <div class="ld-blurb"><h3>Saved Fits and Public Fits</h3><p>Saved fits you can share or save in-game; publish them to Public Fits to help fellow capsuleers.</p></div>
-        <div class="ld-blurb"><h3>Save to EVE</h3><p>Push a finished fit straight into the game from the simulator.</p></div>
-        <div class="ld-blurb"><h3>Doctrines</h3><p>A director promotes an ordinary fit or fleet composition into a corp doctrine, listed for every member or just a group of them that you define.</p></div>
-        <div class="ld-blurb"><h3>Ship Replacement</h3><p>Claims check the lost ship against the doctrine fit and participation before they pay out. Simplify your SRP process with trusted verifiable data from ESI.</p></div>
-      </div>
-    </div>
-  </section>
-
-  <section class="ld-feat" id="corp">
-    <div class="ld-feat-txt">
-      <div class="ld-eyebrow">Corporation</div>
-      <h2>Greater than the sum of its parts.</h2>
-      <p class="ld-lede">The corp's official fit sets: directors publish them once, and every fit opens in the fitting tool for the member reading it.</p>
-      <div class="ld-blurbs">
-        <div class="ld-blurb"><h3>Corporation Data</h3><p>Members, wallets, assets and structures in one place.</p></div>
-        <div class="ld-blurb"><h3>Groups and Roles</h3><p>The groups your corp runs on, customizable; they carry into Discord roles to automatically manage your server roles, channel permissions, and intel channel access.</p></div>
-        <div class="ld-blurb"><h3>Discord</h3><p>Roles follow the corp's groups; ops posts go out from the shared calendar in to your specified channel if desired.</p></div>
-        <div class="ld-blurb"><h3>Ops Calendar</h3><p>One calendar every member can read; an op can name a doctrine or fleet composition which verified SRP claims automatically.</p></div>
-      </div>
-    </div>
-    <div class="ld-feat-vis">
-      <div class="ld-vloop">
-        <div class="ld-glass ld-vnode"><h3>Doctrines</h3><p>Your corp's official fits, kept by directors, readable by every member.</p></div>
-        <div class="ld-varrow">↓</div>
-        <div class="ld-glass ld-vnode"><h3>Fits</h3><p>Priced by the market engine and checked against your actual hangars.</p></div>
-        <div class="ld-varrow">↓</div>
-        <div class="ld-glass ld-vnode"><h3>Ship replacement</h3><p>Reimbursement pays out against those doctrines. No spreadsheets. No disputes about what the fit was.</p></div>
-        <div class="ld-varrow">↓</div>
-        <div class="ld-glass ld-vnode"><h3>Discord</h3><p>Your corp's server runs off the same groups and roles as everything else.</p></div>
-      </div>
-    </div>
-  </section>
-
-  <section class="ld-feat" id="intel">
-    <div class="ld-feat-vis">
-      <div class="ld-glass ld-panel">
-        <h3>System heat · last 24 hours</h3>
-        <div class="ld-cap">Every system page carries its kill heat. Sample figures.</div>
-        <div class="ld-prow"><span><b>Amamake</b> <span class="ld-sec">0.4</span></span><span class="ld-fig">312 kills</span></div>
-        <div class="ld-prow"><span><b>Tama</b> <span class="ld-sec">0.3</span></span><span class="ld-fig">208 kills</span></div>
-        <div class="ld-prow"><span><b>Ahbazon</b> <span class="ld-sec">0.4</span></span><span class="ld-fig">167 kills</span></div>
-        <div class="ld-prow"><span><b>Heydieles</b> <span class="ld-sec">0.5</span></span><span class="ld-fig">94 kills</span></div>
-        <div class="ld-ptotal"><span>Wars tracked <b>live</b></span><span>Incursions <b>live</b></span><span>Faction warfare <b>live</b></span></div>
-      </div>
-    </div>
-    <div class="ld-feat-txt">
-      <div class="ld-eyebrow">Intel</div>
-      <h2>Know where New Eden is hot.</h2>
-      <p class="ld-lede">Intel is fed straight in to your map and access is managed by your rules.</p>
-      <div class="ld-blurbs">
-        <div class="ld-blurb"><h3>Axon</h3><p>Axon runs on a member's own PC and reads the chat logs, posting each new line into the channel on its own after parsing it and turning it in to a useful report. Pairing is a one-time code from the channels page. Available for Windows, macOS, and Linux.</p></div>
-        <div class="ld-blurb"><h3>Intel Channels</h3><p>A channel can belong to a pilot, a corporation, an alliance or a group you set up; the owner decides who can read and who can post.</p></div>
-        <div class="ld-blurb"><h3>Scan Reading</h3><p>Paste a directional scan or a local listing and read the breakdown by ship class and automatically detect hostiles, with a link you can share. Feeds in to the universe map</p></div>
-        <div class="ld-blurb"><h3>Wars, Incursions and Faction Warfare</h3><p>Tracked as they happen; the same fronts feed the map's layers.</p></div>
-        <div class="ld-blurb"><h3>Hostile Pilots Tracker</h3><p>Mark a pilot as a known hostile in a channel or automatically from standings; the watch shows on their page for every member. Track their fits, sightings, and other intel.</p></div>
-        <div class="ld-blurb"><h3>Item Database</h3><p>All of New Eden's items, searchable, priced from the stored sweeps.</p></div>
-        <div class="ld-blurb"><h3>System and character pages</h3><p>Every system gets a page with its kill heat and history; every pilot gets one too.</p></div>
-      </div>
-    </div>
-  </section>
-
-  <section class="ld-feat" id="map">
-    <div class="ld-feat-txt">
-      <div class="ld-eyebrow">Universe Map</div>
-      <h2>All of New Eden, on one map.</h2>
-      <p class="ld-lede">Channel reports draw on the map, and the route planner steers around reported systems if desired. <a href="/map/">Open the map</a></p>
-      <div class="ld-blurbs">
-        <div class="ld-blurb"><h3>Killboard</h3><p>Every public kill gets its own page, kills feed the map's threat layer.</p></div>
-        <div class="ld-blurb"><h3>Routes that know the danger</h3><p>Shortest, Safer or Avoid danger: the planner draws the route on the map and can send it to your ship's autopilot.</p></div>
-      </div>
-    </div>
-    <div class="ld-feat-vis">
-      <figure class="ld-shot">
-        <div class="ld-browser">
-          <div class="ld-browser-bar" aria-hidden="true"><span class="ld-dot ld-dot-on"></span><span class="ld-dot"></span><span class="ld-dot"></span><span class="ld-url">evesynapse.app/map/</span></div>
-          <img src="/static/shot-map.webp?v={{.AssetVersion}}" width="3015" height="1572" loading="lazy" alt="The EveSynapse universe map with the threat layer on: New Eden coloured by live kill activity, beside an enlarged system panel for Tama in The Citadel showing extreme threat, 36 kills in the last hour and an active gate camp">
-        </div>
-        <figcaption>The universe map with the threat layer on, and the Tama system panel up close: extreme threat, 36 kills in the last hour, and a gate camp on the Nourv gate.</figcaption>
-      </figure>
+  <section class="ld-blk" id="trust">
+    <div class="ld-eyebrow">Trust</div>
+    <h2>Free. No ads. No tracking.</h2>
+    <div class="ld-trust">
+      <div class="ld-glass ld-tcard"><h3>Free</h3><p>Free to use forever, visitor and member alike.</p></div>
+      <div class="ld-glass ld-tcard"><h3>No ads</h3><p>No ads anywhere on the site.</p></div>
+      <div class="ld-glass ld-tcard"><h3>No tracking</h3><p>No trackers and no analytics beacons.</p></div>
+      <div class="ld-glass ld-tcard"><h3>No donation requests</h3><p>No donation pop-ups, no tip jar, no nag screens.</p></div>
+      <div class="ld-glass ld-tcard"><h3>No bloc ties</h3><p>Built and run by a solo small-gang low-sec pilot. No coalition funding, and no bloc agenda to serve.</p></div>
+      <div class="ld-glass ld-tcard"><h3>Open source</h3><p>The code is public under the BSD-3-Clause-Clear license. Run your own copy if you would rather host it yourself.</p></div>
     </div>
   </section>
 

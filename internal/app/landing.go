@@ -16,14 +16,11 @@ import (
 
 // The anonymous landing page: a standalone shell (its own slim
 // header, no sidebar) rendered from templates/landing.html. It is
-// the site's public face: hero, a Fleet Overview preview whose
-// KPI band renders a static showcase dataset (sample figures,
-// captioned as such; no account data ever renders here) while
-// its alert cards carry live universe alerts shaped from the
-// stored global snapshots, and the "New Eden, right now" strip,
-// which reads stored rows only: the workers precompute, the
-// landing never waits on ESI and never computes beyond shaping
-// small stored results.
+// the site's public face: a hero with the three doors (sign up,
+// the demo, the public tools), the tool inventory, and the "New
+// Eden, right now" strip, which reads stored rows only: the
+// workers precompute, the landing never waits on ESI and never
+// computes beyond shaping small stored results.
 
 type landingMover struct {
 	Name  string
@@ -47,46 +44,10 @@ type landingFit struct {
 	IsNewest bool
 }
 
-// landingAlert is one live alert card in the preview panel,
-// shaped from the stored global snapshots (incursions, faction
-// warfare) the worker keeps warm. Severity uses the home
-// briefing's own classes and chip words (critical, warning,
-// info). When no snapshot holds anything worth flagging, the
-// panel shows no cards at all.
-type landingAlert struct {
-	Sev  string
-	Head string
-	Text string
-}
-
-// landingShowcase is the preview panel's static dataset: the
-// approved sample figures, verbatim, shaped like the real home
-// KPI band so the illustration cannot drift from the product.
-type landingShowcaseData struct {
-	NetWorth, NetWorthSub          string
-	Liquid, LiquidSub              string
-	Hangar, HangarSub              string
-	Training, TrainingSub          string
-	SparkPoints, SparkArea         string
-	LiquidPct, HangarPct, TrainPct string
-}
-
-var landingShowcase = landingShowcaseData{
-	NetWorth: "140,699,221,099", NetWorthSub: "▲ 2.4% this week",
-	Liquid: "67,713,672,586", LiquidSub: "48.1% of net worth",
-	Hangar: "72,985,548,513", HangarSub: "93.5% priced",
-	Training: "3 of 8 training", TrainingSub: "5 queues idle, flagged below",
-	SparkPoints: "0,22 13,21 25,21 38,17 50,18 63,12 75,13 88,7 100,6",
-	SparkArea:   "0,22 13,21 25,21 38,17 50,18 63,12 75,13 88,7 100,6 100,28 0,28",
-	LiquidPct:   "48", HangarPct: "93", TrainPct: "37",
-}
-
 type landingData struct {
 	module.ShellData
 	Error         string
 	SSOConfigured bool
-	Showcase      landingShowcaseData
-	Alerts        []landingAlert
 	Movers        []landingMover
 	Fit           *landingFit
 	ServerStatus  *serverStatusView
@@ -132,7 +93,7 @@ var landingWatched = []landingWatchedItem{
 // that errors or is empty simply leaves its card to the template's
 // evergreen fallback; the page itself never fails on data.
 func (app *Application) buildLanding(ctx context.Context) landingData {
-	data := landingData{SSOConfigured: app.cfg.SSOConfigured(), Showcase: landingShowcase}
+	data := landingData{SSOConfigured: app.cfg.SSOConfigured()}
 
 	// The strip shows three watched items, always the same: PLEX
 	// and the two skill injectors, the prices every pilot checks.
@@ -248,111 +209,12 @@ func (app *Application) buildLanding(ctx context.Context) landingData {
 		data.Fit = fit
 	}
 
-	data.Alerts = app.landingAlerts(ctx)
-
 	if status, ok := app.loadServerStatus(ctx); ok {
 		data.ServerStatus = status
 	}
 
 	data.HasStrip = len(data.Movers) > 0 || data.Fit != nil || data.ServerStatus != nil
 	return data
-}
-
-// landingAlerts shapes the preview panel's alert cards from the
-// stored global snapshots: the Sansha incursions and the faction
-// warfare front, both public ESI data the intel worker keeps
-// warm. Stored reads only, and every figure on a card comes from
-// the snapshot itself; a snapshot that is missing or quiet
-// simply contributes no card.
-func (app *Application) landingAlerts(ctx context.Context) []landingAlert {
-	var alerts []landingAlert
-
-	var incursions esi.Incursions
-	if app.loadGlobalSnapshot(ctx, esi.GlobalIncursions, &incursions) && len(incursions) > 0 {
-		pick := incursions[0]
-		for _, inc := range incursions[1:] {
-			if incursionRank(inc) < incursionRank(pick) ||
-				(incursionRank(inc) == incursionRank(pick) && inc.Influence > pick.Influence) {
-				pick = inc
-			}
-		}
-		name := fmt.Sprintf("Constellation #%d", pick.ConstellationID)
-		if n, ok := app.esi.CachedConstellationName(pick.ConstellationID); ok && n != "" {
-			name = n
-		}
-		pct := int(pick.Influence*100 + 0.5)
-		if pct < 0 {
-			pct = 0
-		}
-		if pct > 100 {
-			pct = 100
-		}
-		systems := len(pick.InfestedSystems)
-		var text string
-		switch pick.State {
-		case "mobilizing":
-			text = fmt.Sprintf("Sansha forces are mobilizing across %d systems.", systems)
-		case "withdrawing":
-			text = fmt.Sprintf("The incursion is withdrawing, with %d systems still infested and influence down to %d%%.", systems, pct)
-		default:
-			text = fmt.Sprintf("Sansha forces hold %d systems at %d%% influence.", systems, pct)
-		}
-		sev := "warning"
-		if pick.HasBoss {
-			sev = "critical"
-			text += " The final-encounter boss is present."
-		}
-		alerts = append(alerts, landingAlert{
-			Sev:  sev,
-			Head: fmt.Sprintf("Incursion in %s.", name),
-			Text: text,
-		})
-	}
-
-	var fw esi.FWSystems
-	if app.loadGlobalSnapshot(ctx, esi.GlobalFWSystems, &fw) && len(fw) > 0 {
-		var contested, vulnerable int
-		for _, s := range fw {
-			switch s.Contested {
-			case "contested":
-				contested++
-			case "vulnerable":
-				vulnerable++
-			}
-		}
-		if contested+vulnerable > 0 {
-			var text string
-			switch {
-			case contested > 0 && vulnerable > 0:
-				text = fmt.Sprintf("%d systems contested and %d vulnerable across the warzones.", contested, vulnerable)
-			case contested > 0:
-				text = fmt.Sprintf("%d systems contested across the warzones.", contested)
-			default:
-				text = fmt.Sprintf("%d systems vulnerable across the warzones.", vulnerable)
-			}
-			alerts = append(alerts, landingAlert{
-				Sev:  "info",
-				Head: "Faction warfare.",
-				Text: text,
-			})
-		}
-	}
-
-	return alerts
-}
-
-// incursionRank orders incursion states by how much attention
-// they ask for: an established incursion outranks one still
-// mobilizing, which outranks one already withdrawing.
-func incursionRank(inc esi.Incursion) int {
-	switch inc.State {
-	case "established":
-		return 0
-	case "withdrawing":
-		return 2
-	default:
-		return 1
-	}
 }
 
 func (app *Application) renderLanding(ctx context.Context, w http.ResponseWriter, data landingData) {

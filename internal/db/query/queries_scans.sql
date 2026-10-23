@@ -4,11 +4,36 @@
 -- ---------------------------------------------------------------------
 
 -- name: InsertScan :exec
-INSERT INTO scans (id, kind, system_id, user_id, raw, result, created_at)
-VALUES (sqlc.arg(id), sqlc.arg(kind), sqlc.arg(system_id), sqlc.arg(user_id), sqlc.arg(raw), sqlc.arg(result), sqlc.arg(created_at));
+INSERT INTO scans (id, kind, system_id, user_id, group_id, raw, result, created_at)
+VALUES (sqlc.arg(id), sqlc.arg(kind), sqlc.arg(system_id), sqlc.arg(user_id), sqlc.arg(group_id), sqlc.arg(raw), sqlc.arg(result), sqlc.arg(created_at));
 
 -- name: GetScan :one
-SELECT id, kind, system_id, user_id, raw, result, created_at FROM scans WHERE id = $1;
+SELECT id, kind, system_id, user_id, group_id, raw, result, created_at FROM scans WHERE id = $1;
+
+-- A scan group (schema 086): every scan filed under one group
+-- id, oldest first -- the group's timeline on a member's page.
+-- name: ListScanGroup :many
+SELECT id, kind, system_id, user_id, created_at, result FROM scans
+WHERE group_id = sqlc.arg(group_id) OR id = sqlc.arg(group_id)
+ORDER BY created_at ASC
+LIMIT sqlc.arg(max_rows)::int;
+
+-- Recent scans of one system, newest first, leaving out one
+-- scan and, when it is set, every scan of its group: the
+-- reading page's related-scans rail.
+-- name: ListRelatedScans :many
+SELECT id, kind, system_id, user_id, group_id, created_at, result FROM scans
+WHERE system_id = sqlc.arg(system_id)::bigint
+  AND id <> sqlc.arg(exclude_id)
+  AND (sqlc.arg(exclude_group)::text = '' OR (group_id <> sqlc.arg(exclude_group) AND id <> sqlc.arg(exclude_group)))
+  AND created_at > sqlc.arg(since)::timestamptz
+ORDER BY created_at DESC
+LIMIT sqlc.arg(max_rows)::int;
+
+-- A reading's system, corrected after the paste: the column
+-- and the stored reading move together.
+-- name: UpdateScanSystem :exec
+UPDATE scans SET system_id = sqlc.arg(system_id), result = sqlc.arg(result) WHERE id = sqlc.arg(id);
 
 -- A reader's own scans, newest first: those they pasted signed in,
 -- and those this session pasted (by id).

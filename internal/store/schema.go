@@ -509,6 +509,12 @@ var pgReleaseBuildsSchema string
 //go:embed schema_pg/085_system_position2d.sql
 var pgSystemPosition2DSchema string
 
+// Step 086: scan groups -- a scans.group_id naming the founding
+// scan of the group a paste belongs to.
+//
+//go:embed schema_pg/086_scan_groups.sql
+var pgScanGroupsSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -623,6 +629,7 @@ func schemaSteps() []schemaStep {
 		{83, "intel_analysis", pgIntelAnalysisSchema, ""},
 		{84, "release_builds", pgReleaseBuildsSchema, ""},
 		{85, "system_position2d", pgSystemPosition2DSchema, ""},
+		{86, "scan_groups", pgScanGroupsSchema, ""},
 	}
 }
 

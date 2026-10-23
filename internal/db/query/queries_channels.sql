@@ -153,6 +153,18 @@ WHERE r.channel_id = ANY(sqlc.arg(channel_ids)::bigint[])
 ORDER BY r.seen_at DESC, r.id DESC
 LIMIT 2000;
 
+-- One system's reports across some channels, newest first: the
+-- system page's intel section. The caller passes only the channels
+-- its reader can access (accessibleChannels), so the access check
+-- stays in one place.
+-- name: ListIntelReportsBySystem :many
+SELECT id, channel_id, system_id, author_user_id, reporter, text, pilots, hostiles, clear, scan_id, source, seen_at, created_at, kind, analysis
+FROM intel_reports
+WHERE channel_id = ANY(sqlc.arg(channel_ids)::bigint[])
+  AND system_id = sqlc.arg(system_id)::bigint
+ORDER BY seen_at DESC, id DESC
+LIMIT sqlc.arg(max_rows)::int;
+
 -- name: GetIntelReport :one
 SELECT id, channel_id, author_user_id FROM intel_reports WHERE id = $1;
 

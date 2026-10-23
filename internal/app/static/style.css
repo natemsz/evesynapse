@@ -474,7 +474,7 @@ main {
 .char-kpis .kpi-sub { overflow-wrap: anywhere; }
 /* A link that belongs to a page's title sits in the title bar's right
    corner, drawn like the sidebar's links. */
-.panel > h1.h-with-action:first-child { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.panel > h1.h-with-action:first-child, .page-body > h1.h-with-action:first-child { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
 .h-action {
   display: inline-flex;
   align-items: center;

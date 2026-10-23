@@ -197,6 +197,14 @@ SELECT id, user_id, name, expires_at, used_at FROM intel_pairing_codes WHERE cod
 UPDATE intel_pairing_codes SET used_at = sqlc.arg(at)
 WHERE id = sqlc.arg(id) AND used_at IS NULL AND expires_at > sqlc.arg(at);
 
+-- name: DeleteStaleIntelPairingCodes :execrows
+DELETE FROM intel_pairing_codes
+WHERE id IN (
+    SELECT c.id FROM intel_pairing_codes c
+    WHERE c.used_at IS NOT NULL OR c.expires_at < sqlc.arg(now)
+    ORDER BY c.id LIMIT sqlc.arg(max_rows)
+);
+
 -- name: TouchIntelToken :exec
 UPDATE intel_tokens SET last_used_at = sqlc.arg(at) WHERE id = sqlc.arg(id);
 

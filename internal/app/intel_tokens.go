@@ -127,6 +127,11 @@ func (app *Application) fillAxon(ctx context.Context, v *channelListView, userID
 // enough to walk from the site to Axon, short enough to leak little.
 const pairingCodeTTL = 10 * time.Minute
 
+// pairingCodePurgeBatch bounds one stale-code purge: each code
+// made sweeps up to this many used or expired rows, so the table
+// holds live codes and a short tail, never every code ever made.
+const pairingCodePurgeBatch = 200
+
 // newPairingCode is a fresh code in two readable groups, e.g.
 // "K7QX-4MZD". Only its hash is stored.
 func newPairingCode() (string, error) {
@@ -171,6 +176,11 @@ func (app *Application) handlePairingCodeCreate(w http.ResponseWriter, r *http.R
 	now := time.Now().UTC()
 	if err == nil {
 		_, err = app.queries.CreateIntelPairingCode(ctx, db.CreateIntelPairingCodeParams{UserID: userID, Name: name, CodeHash: hashIntelToken(normalizePairingCode(code)), CreatedAt: now, ExpiresAt: now.Add(pairingCodeTTL)})
+	}
+	if err == nil {
+		if _, perr := app.queries.DeleteStaleIntelPairingCodes(ctx, db.DeleteStaleIntelPairingCodesParams{Now: now, MaxRows: pairingCodePurgeBatch}); perr != nil {
+			logging.Errorf("channels: purge stale pairing codes: %v", perr)
+		}
 	}
 	if err != nil {
 		logging.Errorf("channels: create pairing code: %v", err)
@@ -220,6 +230,14 @@ func (app *Application) handleAPIPair(w http.ResponseWriter, r *http.Request) {
 		intelAPIError(w, http.StatusUnauthorized, "unknown, used or expired pairing code")
 		return
 	}
+	// The device cap is checked again here, not only when the
+	// code was made: several codes minted under the cap must not
+	// redeem past it. A refused redemption leaves the code
+	// unconsumed, so it still works once a device is revoked.
+	if n, err := app.queries.CountIntelTokens(ctx, row.UserID); err == nil && n >= intelMaxTokens {
+		intelAPIError(w, http.StatusConflict, fmt.Sprintf("an account holds up to %d paired devices; revoke one first", intelMaxTokens))
+		return
+	}
 	now := time.Now().UTC()
 	if n, err := app.queries.UseIntelPairingCode(ctx, db.UseIntelPairingCodeParams{ID: row.ID, At: timeSet(now)}); err != nil || n == 0 {
 		intelAPIError(w, http.StatusUnauthorized, "unknown, used or expired pairing code")
@@ -258,8 +276,9 @@ type intelTokenCtxKey struct{}
 
 // intelLimiter holds each token to intelAPIPerMinute requests a minute.
 type intelLimiter struct {
-	mu   sync.Mutex
-	seen map[int64][]time.Time
+	mu        sync.Mutex
+	seen      map[int64][]time.Time
+	lastSweep time.Time
 }
 
 var intelAPILimit = &intelLimiter{seen: map[int64][]time.Time{}}
@@ -267,6 +286,7 @@ var intelAPILimit = &intelLimiter{seen: map[int64][]time.Time{}}
 func (l *intelLimiter) allow(id int64, now time.Time) bool {
 	l.mu.Lock()
 	defer l.mu.Unlock()
+	l.sweep(now)
 	cut := now.Add(-time.Minute)
 	keep := l.seen[id][:0]
 	for _, t := range l.seen[id] {
@@ -274,11 +294,87 @@ func (l *intelLimiter) allow(id int64, now time.Time) bool {
 			keep = append(keep, t)
 		}
 	}
+	if len(keep) == 0 {
+		// Nothing in the window: forget the token entirely, so
+		// a revoked or abandoned one leaves no entry behind.
+		delete(l.seen, id)
+		keep = nil
+	}
 	if len(keep) >= intelAPIPerMinute {
 		l.seen[id] = keep
 		return false
 	}
 	l.seen[id] = append(keep, now)
+	return true
+}
+
+// sweep prunes every token's window, at most once a minute, and
+// deletes the ones it empties (the same shape as the anonymous
+// page throttle's sweep in core_throttle.go).
+func (l *intelLimiter) sweep(now time.Time) {
+	if now.Sub(l.lastSweep) < time.Minute {
+		return
+	}
+	l.lastSweep = now
+	cut := now.Add(-time.Minute)
+	for id, list := range l.seen {
+		keep := list[:0]
+		for _, t := range list {
+			if t.After(cut) {
+				keep = append(keep, t)
+			}
+		}
+		if len(keep) == 0 {
+			delete(l.seen, id)
+		} else {
+			l.seen[id] = keep
+		}
+	}
+}
+
+// axonReplayMaxEntries bounds the seen-signature cache. At the
+// API's per-token rate limit a full cache still covers hours of
+// one token's traffic, far past any signature's useful life.
+const axonReplayMaxEntries = 4096
+
+// axonReplayGuard remembers the verified signatures it has
+// accepted. A signature covers the timestamp, so a captured
+// request replays byte-identically; remembering each one until
+// its acceptance window closes (300s past its timestamp) makes
+// the copy worthless. Entries are bounded: expired ones go
+// first, then arbitrary ones once the cap is passed.
+type axonReplayGuard struct {
+	mu   sync.Mutex
+	seen map[string]time.Time // token + signature -> window close
+}
+
+var intelReplayGuard = &axonReplayGuard{seen: map[string]time.Time{}}
+
+// fresh records one verified signature and reports whether it is
+// new: false when the same signed request was already accepted
+// and its window has not yet closed.
+func (g *axonReplayGuard) fresh(tokenID int64, sig []byte, signedAt, now time.Time) bool {
+	key := strconv.FormatInt(tokenID, 10) + "/" + base64.StdEncoding.EncodeToString(sig)
+	expiry := signedAt.Add(300 * time.Second)
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if exp, ok := g.seen[key]; ok && exp.After(now) {
+		return false
+	}
+	g.seen[key] = expiry
+	if len(g.seen) > axonReplayMaxEntries {
+		for k, exp := range g.seen {
+			if !exp.After(now) {
+				delete(g.seen, k)
+			}
+		}
+		for k := range g.seen {
+			if len(g.seen) <= axonReplayMaxEntries {
+				break
+			}
+			delete(g.seen, k)
+		}
+	}
 	return true
 }
 
@@ -342,6 +438,10 @@ func (app *Application) intelTokenAuth(next http.Handler) http.Handler {
 		now := time.Now()
 		if d := now.Unix() - at; d > 300 || d < -300 {
 			intelAPIError(w, http.StatusUnauthorized, "signed too long ago: check this computer's clock")
+			return
+		}
+		if !intelReplayGuard.fresh(tok.ID, sig, time.Unix(at, 0), now) {
+			intelAPIError(w, http.StatusUnauthorized, "this request was already received: sign a fresh one")
 			return
 		}
 		if !intelAPILimit.allow(tok.ID, now) {

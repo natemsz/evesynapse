@@ -20,6 +20,21 @@ import (
 // while still catching a worker that has stopped coming round.
 const workerStallAfter = 15 * time.Minute
 
+// healthCacheFor is how long a /healthz answer stands before the
+// checks run again. The endpoint is unauthenticated and cheap to
+// call, so an uncached database ping per request would let
+// anyone keep the database busy and fill the log with one error
+// per call. A few seconds of cache keeps the answer truthful: a
+// database that goes down is reported within the window, not
+// hidden by it.
+const healthCacheFor = 5 * time.Second
+
+// healthLogEvery bounds the error logging while a problem
+// persists: the first failing check logs at once, repeats at
+// most once a minute, and a return to health re-arms the log so
+// the next failure is never swallowed by the throttle.
+const healthLogEvery = time.Minute
+
 // handleHealthz answers a monitor: 200 "ok" when the app can reach its
 // database and its background worker is running, 503 with one line per
 // problem otherwise. The process being up is not enough: that is true
@@ -41,13 +56,50 @@ func (app *Application) handleHealthz(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "unhealthy\n%s\n", strings.Join(problems, "\n"))
 }
 
+// healthProblems answers from the cache while the last check is
+// fresh (healthCacheFor), and runs the checks again once it is
+// not. Only a fresh check can log, and even then at most once a
+// minute while the same outage persists.
 func (app *Application) healthProblems(ctx context.Context) []string {
-	var problems []string
+	app.healthMu.Lock()
+	if !app.healthCacheAt.IsZero() && time.Since(app.healthCacheAt) < healthCacheFor {
+		problems := app.healthCacheResult
+		app.healthMu.Unlock()
+		return problems
+	}
+	app.healthMu.Unlock()
 
+	problems, logLines := app.checkHealth(ctx)
+
+	app.healthMu.Lock()
+	app.healthCacheAt = time.Now()
+	app.healthCacheResult = problems
+	logNow := false
+	if len(problems) == 0 {
+		app.healthLogAt = time.Time{}
+	} else if time.Since(app.healthLogAt) >= healthLogEvery {
+		app.healthLogAt = time.Now()
+		logNow = true
+	}
+	app.healthMu.Unlock()
+
+	if logNow {
+		for _, line := range logLines {
+			logging.Errorf("%s", line)
+		}
+	}
+	return problems
+}
+
+// checkHealth runs the health checks once: the database ping and,
+// for an application that runs a worker, the worker's freshness.
+// It returns the problems to report and the log lines for them;
+// the caller decides whether the lines are due to be logged.
+func (app *Application) checkHealth(ctx context.Context) (problems, logLines []string) {
 	pingCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
 	if err := app.db.PingContext(pingCtx); err != nil {
-		logging.Errorf("healthz: database: %v", err)
+		logLines = append(logLines, fmt.Sprintf("healthz: database: %v", err))
 		problems = append(problems, "database: unreachable")
 	}
 
@@ -59,11 +111,11 @@ func (app *Application) healthProblems(ctx context.Context) []string {
 			last = app.startedAt
 		}
 		if idle := time.Since(last); idle > workerStallAfter {
-			logging.Errorf("healthz: worker: no cycle has started for %s", idle.Round(time.Second))
+			logLines = append(logLines, fmt.Sprintf("healthz: worker: no cycle has started for %s", idle.Round(time.Second)))
 			problems = append(problems, "worker: stalled")
 		}
 	}
-	return problems
+	return problems, logLines
 }
 
 // NewHTTPServer builds the server both entrypoints run. Every

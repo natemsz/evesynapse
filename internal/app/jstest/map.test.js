@@ -43,15 +43,15 @@ test("prepare derives adjacency, exits and bounds", () => {
   const P = {
     v: 1,
     regions: [
-      { id: 10, name: "Alpha", x: 0, y: 0, w: 1000, h: 1000 },
-      { id: 20, name: "Beta", x: 0, y: 0, w: 1000, h: 1000 },
-      { id: 30, name: "Gamma", x: 0, y: 0, w: 1000, h: 1000 }
+      { id: 10, name: "Alpha", x: 0, y: 0 },
+      { id: 20, name: "Beta", x: 0, y: 0 },
+      { id: 30, name: "Gamma", x: 0, y: 0 }
     ],
     cons: [{ id: 1, name: "A1", r: 0 }, { id: 2, name: "B1", r: 1 }, { id: 3, name: "G1", r: 2 }],
     sys: {
       id: [101, 102, 201, 301], n: ["Aone", "Atwo", "Bone", "Gone"],
       x: [0, 100, 500, 900], y: [0, 50, 500, 900], s: [0.9, 0.5, -0.2, 0.3],
-      r: [0, 0, 1, 2], c: [0, 0, 1, 2], rx: [0, 1000, 500, 500], ry: [0, 500, 500, 500],
+      r: [0, 0, 1, 2], c: [0, 0, 1, 2],
       f: [0, 0, 0, 0]
     },
     gates: [0, 1, 1, 2, 2, 3]
@@ -63,6 +63,10 @@ test("prepare derives adjacency, exits and bounds", () => {
   assert.deepStrictEqual(G.exits[1].sort(), [[2, 1], [2, 3]]);
   assert.deepStrictEqual(G.exits[2], [[3, 2]]);
   assert.deepStrictEqual(G.bounds[0], [0, 0, 100, 50]);
+  // Constellation label points are the member means, per frame;
+  // a payload with no projected frame falls back to the true one.
+  assert.deepStrictEqual(G.consU, [[50, 25], [500, 500], [900, 900]]);
+  assert.deepStrictEqual(G.consP, [[50, 25], [500, 500], [900, 900]]);
   assert.strictEqual(G.byID[201], 2);
   assert.strictEqual(G.regionByID[30], 2);
   assert.strictEqual(map.prepare(P), G, "derived once per payload");
@@ -71,12 +75,12 @@ test("prepare derives adjacency, exits and bounds", () => {
 test("prepare carries the projected frame, falling back to the true one", () => {
   const base = {
     v: 2,
-    regions: [{ id: 10, name: "Alpha", x: 50, y: 25, px: 60, py: 30, w: 1000, h: 1000 }],
-    cons: [],
+    regions: [{ id: 10, name: "Alpha", x: 50, y: 25, px: 60, py: 30 }],
+    cons: [{ id: 1, name: "A1", r: 0 }],
     sys: {
       id: [101, 102], n: ["One", "Two"], x: [0, 100], y: [0, 50],
       px: [10, 130], py: [5, 80],
-      s: [0.9, 0.5], r: [0, 0], c: [-1, -1], rx: [0, 1000], ry: [0, 500], f: [0, 0]
+      s: [0.9, 0.5], r: [0, 0], c: [0, 0], f: [0, 0]
     },
     gates: [0, 1]
   };
@@ -84,6 +88,8 @@ test("prepare carries the projected frame, falling back to the true one", () => 
   assert.deepStrictEqual(G.px, [10, 130]);
   assert.deepStrictEqual(G.py, [5, 80]);
   assert.deepStrictEqual(G.pbounds[0], [10, 5, 130, 80], "projected region bounds");
+  assert.deepStrictEqual(G.consU[0], [50, 25], "constellation point in the true frame");
+  assert.deepStrictEqual(G.consP[0], [70, 42.5], "constellation point in the projected frame");
   assert.strictEqual(G.projW, 130);
   // An older payload without the projected frame: true positions stand in.
   const old = JSON.parse(JSON.stringify(base));
@@ -155,12 +161,12 @@ test("label collision: greedy in precedence order, touching is not overlap", () 
 test("label precedence follows the payload's prominence, degree before it", () => {
   const base = {
     v: 3,
-    regions: [{ id: 10, name: "Alpha", x: 0, y: 0, w: 1000, h: 1000 }],
+    regions: [{ id: 10, name: "Alpha", x: 0, y: 0 }],
     cons: [],
     sys: {
       id: [101, 102, 103], n: ["Hub", "Quiet", "Junction"],
       x: [0, 10, 20], y: [0, 0, 0], s: [0.9, 0.9, 0.9],
-      r: [0, 0, 0], c: [-1, -1, -1], rx: [0, 500, 1000], ry: [0, 0, 0], f: [0, 0, 0]
+      r: [0, 0, 0], c: [-1, -1, -1], f: [0, 0, 0]
     },
     gates: [0, 1, 0, 2]
   };
@@ -176,11 +182,11 @@ test("label precedence follows the payload's prominence, degree before it", () =
 test("live layers join onto the map's systems", () => {
   const P = {
     v: 1,
-    regions: [{ id: 10, name: "Alpha", x: 0, y: 0, w: 1000, h: 1000 }],
+    regions: [{ id: 10, name: "Alpha", x: 0, y: 0 }],
     cons: [{ id: 1, name: "A1", r: 0 }],
     sys: {
       id: [101, 102, 103], n: ["One", "Two", "Three"], x: [0, 10, 20], y: [0, 0, 0],
-      s: [0.9, -0.3, -0.5], r: [0, 0, 0], c: [0, 0, 0], rx: [0, 500, 1000], ry: [0, 0, 0], f: [0, 0, 0]
+      s: [0.9, -0.3, -0.5], r: [0, 0, 0], c: [0, 0, 0], f: [0, 0, 0]
     },
     gates: [0, 1, 1, 2]
   };
@@ -212,11 +218,11 @@ test("live layers join onto the map's systems", () => {
 test("threat joins with levels, camps and spillover along the gates", () => {
   const P = {
     v: 1,
-    regions: [{ id: 10, name: "Alpha", x: 0, y: 0, w: 1000, h: 1000 }],
+    regions: [{ id: 10, name: "Alpha", x: 0, y: 0 }],
     cons: [{ id: 1, name: "A1", r: 0 }],
     sys: {
       id: [101, 102, 103], n: ["One", "Two", "Three"], x: [0, 10, 20], y: [0, 0, 0],
-      s: [0.9, -0.3, -0.5], r: [0, 0, 0], c: [0, 0, 0], rx: [0, 500, 1000], ry: [0, 0, 0], f: [0, 0, 0]
+      s: [0.9, -0.3, -0.5], r: [0, 0, 0], c: [0, 0, 0], f: [0, 0, 0]
     },
     gates: [0, 1, 1, 2]
   };
@@ -237,13 +243,13 @@ test("routes plan shortest first and bend around danger when asked", () => {
   // A - B - C is the short way; A - D - E - C detours. B is camped.
   const P = {
     v: 1,
-    regions: [{ id: 10, name: "Alpha", x: 0, y: 0, w: 1000, h: 1000 }],
+    regions: [{ id: 10, name: "Alpha", x: 0, y: 0 }],
     cons: [],
     sys: {
       id: [101, 102, 103, 104, 105], n: ["A", "B", "C", "D", "E"],
       x: [0, 10, 20, 0, 20], y: [0, 0, 0, 10, 10],
       s: [0.9, 0.9, 0.9, 0.9, 0.9], r: [0, 0, 0, 0, 0], c: [-1, -1, -1, -1, -1],
-      rx: [0, 500, 1000, 0, 1000], ry: [0, 0, 0, 500, 500], f: [0, 0, 0, 0, 0]
+      f: [0, 0, 0, 0, 0]
     },
     gates: [0, 1, 1, 2, 0, 3, 3, 4, 4, 2]
   };
@@ -294,13 +300,13 @@ test("jump drives: range, cyno-legal landings, routes and fatigue", () => {
   // Five systems on a line, 3 LY apart: A (high-sec) B C D (null), E in Pochven.
   const P = {
     v: 1,
-    regions: [{ id: 10, name: "Alpha", x: 0, y: 0, w: 1000, h: 1000 }, { id: 10000070, name: "Pochven", x: 0, y: 0, w: 1000, h: 1000 }],
+    regions: [{ id: 10, name: "Alpha", x: 0, y: 0 }, { id: 10000070, name: "Pochven", x: 0, y: 0 }],
     cons: [],
     sys: {
       id: [201, 202, 203, 204, 205], n: ["A", "B", "C", "D", "E"],
       x: [0, 10, 20, 30, 40], y: [0, 0, 0, 0, 0],
       s: [0.9, -0.2, -0.3, -0.4, -0.5], r: [0, 0, 0, 0, 1], c: [-1, -1, -1, -1, -1],
-      rx: [0, 1, 2, 3, 4], ry: [0, 0, 0, 0, 0], f: [0, 0, 0, 0, 0]
+      f: [0, 0, 0, 0, 0]
     },
     gates: [0, 1, 1, 2, 2, 3]
   };
@@ -422,4 +428,81 @@ test("territory outlines: round, split between holders, joined by a band", () =>
   const band = far.slice();
   for (let t = 1; t < 10; t++) band.push([0, 30 + 14 * t, 50, 24]);
   assert.strictEqual(map.territoryLoops(map.territoryField(src(band), B, 400), 0, 0.3).length, 1);
+});
+
+test("system coordinates follow the projection setting", () => {
+  const P = {
+    v: 6,
+    regions: [{ id: 10, name: "Alpha", x: 0, y: 0, px: 0, py: 0 }],
+    cons: [],
+    sys: {
+      id: [101, 102], n: ["One", "Two"],
+      x: [0, 100], y: [0, 40], px: [9000, 9100], py: [500, 560],
+      s: [-0.5, -0.5], r: [0, 0], c: [-1, -1], f: [0, 0]
+    },
+    gates: [0, 1]
+  };
+  const G = map.prepare(P), S = P.sys;
+  // frameX/frameY are the choice wx/wy draw, pick and measure
+  // with, in the universe and in a region alike: the projected
+  // frame when the projection is on, the true frame when off.
+  assert.strictEqual(map.frameX(G, S, 1, true), 9100);
+  assert.strictEqual(map.frameY(G, S, 1, true), 560);
+  assert.strictEqual(map.frameX(G, S, 1, false), 100);
+  assert.strictEqual(map.frameY(G, S, 1, false), 40);
+});
+
+test("territory fields are cached per coordinate frame", () => {
+  const P = {
+    v: 6,
+    regions: [{ id: 10, name: "Alpha", x: 0, y: 0, px: 0, py: 0 }],
+    cons: [],
+    sys: {
+      id: [101, 102], n: ["One", "Two"],
+      x: [0, 100], y: [0, 40], px: [9000, 9100], py: [500, 560],
+      s: [-0.5, -0.5], r: [0, 0], c: [-1, -1], f: [0, 0]
+    },
+    gates: [0, 1]
+  };
+  const G = map.prepare(P), S = P.sys;
+  // The view's field cache, kept the way sovField/sovBuild keep
+  // it: a field is stored under its key and read back only under
+  // the same key, so a frame change can never serve the field
+  // traced from the other frame's ground.
+  const fields = {};
+  const fieldFor = (mode, region, projOn) => {
+    const key = map.sovFieldKey(mode, region, true, projOn);
+    if (!fields[key]) {
+      // A stand-in field: one system's ground, sampled from the
+      // frame in use the way sovBuild samples wx/wy.
+      fields[key] = [map.frameX(G, S, 0, projOn), map.frameY(G, S, 0, projOn)];
+    }
+    return fields[key];
+  };
+  assert.deepStrictEqual(fieldFor("universe", -1, true), [9000, 500], "built from the projected frame");
+  assert.deepStrictEqual(fieldFor("universe", -1, false), [0, 0], "toggling the projection builds from the true frame, not the cached projected field");
+  assert.deepStrictEqual(fieldFor("universe", -1, true), [9000, 500], "toggling back returns the projected field, still cached");
+  assert.deepStrictEqual(fieldFor("region", 0, true), [9000, 500], "a region's field follows the frame too");
+  assert.deepStrictEqual(fieldFor("region", 0, false), [0, 0]);
+  // The view, the region and the NPC setting still split the key.
+  assert.notStrictEqual(map.sovFieldKey("region", 0, true, true), map.sovFieldKey("region", 1, true, true));
+  assert.notStrictEqual(map.sovFieldKey("universe", -1, true, true), map.sovFieldKey("universe", -1, false, true));
+  assert.strictEqual(map.sovFieldKey("region", 0, true, true), map.sovFieldKey("region", 0, true, true), "stable for the same state");
+});
+
+test("the projection resolves on unless a current choice or a link says off", () => {
+  // The key the view reads is not the pre-default one: an off
+  // stored back when off was the default is never read, so it
+  // cannot keep the projection off now.
+  assert.notStrictEqual(map.PROJ_PREF_KEY, "evesynapse-map-projection");
+  const legacyOnly = { "evesynapse-map-projection": "0" };
+  const stored = legacyOnly[map.PROJ_PREF_KEY] ?? null;
+  assert.strictEqual(map.resolveProj(stored, null), true, "a legacy off does not carry over");
+  assert.strictEqual(map.resolveProj(null, null), true, "nothing remembered: on");
+  assert.strictEqual(map.resolveProj("1", null), true, "remembered on: on");
+  assert.strictEqual(map.resolveProj("0", null), false, "an explicit off under the current key persists");
+  // A link's proj= settles the visit, over any remembered choice.
+  assert.strictEqual(map.resolveProj("0", "1"), true, "proj=1 wins over a remembered off");
+  assert.strictEqual(map.resolveProj("1", "0"), false, "proj=0 wins over a remembered on");
+  assert.strictEqual(map.resolveProj(null, "0"), false, "proj=0 wins with nothing remembered");
 });

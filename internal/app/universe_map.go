@@ -51,11 +51,10 @@ import (
 // universeMapVersion is the builder's version: bump it when the
 // payload shape or a layout changes, and the stored payload
 // rebuilds from the stored SDE without a re-import.
-const universeMapVersion = 5
+const universeMapVersion = 6
 
 const (
 	universeFrame = 10000.0 // the universe view's longest side
-	regionFrame   = 1000.0  // a region view's longest side
 	// universeMapMinSystems: below this the SDE geometry has not
 	// landed yet (an import predating schema 072), and there is no
 	// map to build.
@@ -81,13 +80,11 @@ type universeMapRegion struct {
 	Name string `json:"name"`
 	// X, Y: the region's label point in the universe frame (its
 	// systems' centroid). PX, PY: the same in the projected
-	// frame. W, H: its region-view frame.
+	// frame.
 	X  int `json:"x"`
 	Y  int `json:"y"`
 	PX int `json:"px"`
 	PY int `json:"py"`
-	W  int `json:"w"`
-	H  int `json:"h"`
 }
 
 type universeMapCons struct {
@@ -106,8 +103,6 @@ type universeMapSystems struct {
 	Sec    []float64 `json:"s"`  // true security, 3 decimals
 	Region []int     `json:"r"`  // index into regions
 	Cons   []int     `json:"c"`  // index into cons (-1: unknown)
-	RX     []int     `json:"rx"` // region frame
-	RY     []int     `json:"ry"` // region frame
 	// Faction is the owning faction's ID (0: none): the
 	// Faction Warfare and sovereignty layers key on it.
 	Faction []int64 `json:"f"`
@@ -186,7 +181,7 @@ func buildUniverseMap(systems []db.ListMapSystemsRow, regions []db.SdeRegion, co
 	S.X, S.Y = make([]int, n), make([]int, n)
 	S.PX, S.PY = make([]int, n), make([]int, n)
 	S.Sec, S.Region, S.Cons = make([]float64, n), make([]int, n), make([]int, n)
-	S.RX, S.RY, S.Faction = make([]int, n), make([]int, n), make([]int64, n)
+	S.Faction = make([]int64, n)
 	S.Prom = make([]int, n)
 
 	// The universe frame: top-down, x right, z up (flipped for
@@ -229,43 +224,24 @@ func buildUniverseMap(systems []db.ListMapSystemsRow, regions []db.SdeRegion, co
 		S.Prom[i] = mapProminence(len(adj[i]), stationSystems[s.SystemID], tradeHubSystems[s.SystemID])
 	}
 
-	// Each region: its label point and its own decluttered frame.
+	// Each region: its label point, the centroid of its systems
+	// in the universe frame. (The projected frame's label point
+	// is set with the projection below.)
 	members := make([][]int, len(p.Regions))
 	for i := range kept {
 		members[S.Region[i]] = append(members[S.Region[i]], i)
 	}
-	regionLaid := make([][][2]float64, len(p.Regions))
 	for ri, idxs := range members {
 		if len(idxs) == 0 {
 			continue
 		}
 		cx, cy := 0.0, 0.0
-		local := make([][2]float64, len(idxs))
-		pos := make(map[int]int, len(idxs))
-		for k, i := range idxs {
+		for _, i := range idxs {
 			cx += float64(S.X[i])
 			cy += float64(S.Y[i])
-			local[k] = pts[i]
-			pos[i] = k
 		}
 		p.Regions[ri].X = int(math.Round(cx / float64(len(idxs))))
 		p.Regions[ri].Y = int(math.Round(cy / float64(len(idxs))))
-		var edges [][2]int
-		for k, i := range idxs {
-			for _, j := range adj[i] {
-				if kj, ok := pos[j]; ok && k < kj {
-					edges = append(edges, [2]int{k, kj})
-				}
-			}
-		}
-		laid := layoutRegion(local, edges)
-		regionLaid[ri] = laid
-		w, h := 0.0, 0.0
-		for k, i := range idxs {
-			S.RX[i], S.RY[i] = int(math.Round(laid[k][0])), int(math.Round(laid[k][1]))
-			w, h = math.Max(w, laid[k][0]), math.Max(h, laid[k][1])
-		}
-		p.Regions[ri].W, p.Regions[ri].H = int(math.Ceil(w)), int(math.Ceil(h))
 	}
 
 	// The Improved Projection: the SDE's authored 2D layout
@@ -325,80 +301,6 @@ func fitFrame(pts [][2]float64, size float64) [][2]float64 {
 		out[i] = [2]float64{(p[0] - minX) * k, (p[1] - minY) * k}
 	}
 	return out
-}
-
-// layoutRegion is a region's tactical layout: its true positions
-// fitted to regionFrame, then relaxed until no two systems sit
-// closer than the region's minimum spacing. Each step pushes
-// crowded pairs apart, pulls long gate links back toward the
-// spacing they would have uncrowded, and pulls every system gently
-// back toward its true position, so the picture stays the real one.
-// Deterministic: no randomness, a fixed step count, and coincident
-// systems separated along a direction fixed by their index.
-func layoutRegion(true2D [][2]float64, edges [][2]int) [][2]float64 {
-	n := len(true2D)
-	if n == 0 {
-		return nil
-	}
-	if n == 1 {
-		return [][2]float64{{regionFrame / 2, regionFrame / 2}}
-	}
-	anchor := fitFrame(true2D, regionFrame)
-	pos := make([][2]float64, n)
-	copy(pos, anchor)
-	minD := regionMinSpacing(n)
-	const steps = 320
-	for step := 0; step < steps; step++ {
-		cool := 1 - float64(step)/steps*0.6
-		for i := 0; i < n; i++ {
-			for j := i + 1; j < n; j++ {
-				dx, dy := pos[j][0]-pos[i][0], pos[j][1]-pos[i][1]
-				d := math.Hypot(dx, dy)
-				if d >= minD {
-					continue
-				}
-				if d < 1e-6 {
-					a := float64(i*7+j*13) * 0.618
-					dx, dy, d = math.Cos(a), math.Sin(a), 1
-				}
-				push := (minD - d) / 2 * 0.5 * cool
-				ux, uy := dx/d, dy/d
-				pos[i][0] -= ux * push
-				pos[i][1] -= uy * push
-				pos[j][0] += ux * push
-				pos[j][1] += uy * push
-			}
-		}
-		for _, e := range edges {
-			a, b := e[0], e[1]
-			dx, dy := pos[b][0]-pos[a][0], pos[b][1]-pos[a][1]
-			d := math.Hypot(dx, dy)
-			if d <= 2.4*minD || d < 1e-6 {
-				continue
-			}
-			pull := (d - 2.4*minD) * 0.02 * cool
-			ux, uy := dx/d, dy/d
-			pos[a][0] += ux * pull
-			pos[a][1] += uy * pull
-			pos[b][0] -= ux * pull
-			pos[b][1] -= uy * pull
-		}
-		// The pull home eases off as the layout cools, so the
-		// last steps settle spacing rather than fight it.
-		home := 0.012 * cool * cool
-		for i := range pos {
-			pos[i][0] += (anchor[i][0] - pos[i][0]) * home
-			pos[i][1] += (anchor[i][1] - pos[i][1]) * home
-		}
-	}
-	return fitFrame(pos, regionFrame)
-}
-
-// regionMinSpacing is the closest two systems of an n-system region
-// may sit in its tactical layout: wide enough that names fit beside
-// each other at the region's fitted zoom.
-func regionMinSpacing(n int) float64 {
-	return math.Min(math.Max(regionFrame/math.Sqrt(float64(n))*0.8, 45), 160)
 }
 
 // layoutProjected carries the authored 2D positions into the

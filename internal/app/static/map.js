@@ -33,13 +33,12 @@
    * Systems are columnar: index i is one system across every array.
    * @typedef {Object} UniversePayload
    * @property {number} v
-   * @property {{id:number,name:string,x:number,y:number,px:number,py:number,w:number,h:number}[]} regions
+   * @property {{id:number,name:string,x:number,y:number,px:number,py:number}[]} regions
    *   x, y: label point in the universe frame; px, py: in the projected
-   *   frame; w, h: region frame size.
+   *   frame.
    * @property {{id:number,name:string,r:number}[]} cons  r: region index.
-   * @property {{id:number[],n:string[],x:number[],y:number[],px:number[],py:number[],s:number[],r:number[],c:number[],rx:number[],ry:number[],f:number[],p:number[]}} sys
+   * @property {{id:number[],n:string[],x:number[],y:number[],px:number[],py:number[],s:number[],r:number[],c:number[],f:number[],p:number[]}} sys
    *   x, y: universe frame (0..10000); px, py: projected frame;
-   *   rx, ry: region frame (0..1000);
    *   s: true security; r: region index; c: constellation index (-1 none);
    *   f: faction ID; p: label prominence (higher names first).
    * @property {number[]} gates  stargate pairs as flattened index pairs.
@@ -297,6 +296,17 @@
   }
   // territoryLoops: one holder's outlines (territoryOutlines).
   function territoryLoops(F, o, floor) { return territoryOutlines(F, floor)[o] || []; }
+
+  // sovFieldKey names a built territory field: the view, the
+  // coordinate frame it was traced from, and the NPC setting.
+  // The frame belongs in the key: a field built from one frame's
+  // positions is wrong ground in the other, and with both frames
+  // cached, toggling the projection redraws territory from the
+  // field built for the frame now in use (the frame-dependent
+  // fitK rides along inside the field, under the same key).
+  function sovFieldKey(mode, region, npc, projOn) {
+    return (mode === "universe" ? "u" : "r" + region) + (projOn ? ":p" : ":t") + (npc ? ":n1" : ":n0");
+  }
   // viewFits: whether a shared view's centre lies within the bounds
   // being shown ([x0, y0, x1, y1]), a quarter of their size to spare.
   function viewFits(v, b) {
@@ -353,19 +363,19 @@
       }
     }
     // Constellation label points, in both frames.
-    var C = P.cons.length, cu = [], cr = [], cn = new Array(C);
-    for (j = 0; j < C; j++) { cu.push([0, 0]); cr.push([0, 0]); cn[j] = 0; }
+    var C = P.cons.length, cu = [], cp = [], cn = new Array(C);
+    for (j = 0; j < C; j++) { cu.push([0, 0]); cp.push([0, 0]); cn[j] = 0; }
     for (i = 0; i < n; i++) {
       var c = S.c[i];
       if (c < 0) continue;
       cu[c][0] += S.x[i]; cu[c][1] += S.y[i];
-      cr[c][0] += S.rx[i]; cr[c][1] += S.ry[i];
+      cp[c][0] += px[i]; cp[c][1] += py[i];
       cn[c]++;
     }
     for (j = 0; j < C; j++) {
       if (!cn[j]) continue;
       cu[j][0] /= cn[j]; cu[j][1] /= cn[j];
-      cr[j][0] /= cn[j]; cr[j][1] /= cn[j];
+      cp[j][0] /= cn[j]; cp[j][1] /= cn[j];
     }
     var ux = 0, uy = 0, pux = 0, puy = 0;
     for (i = 0; i < n; i++) {
@@ -388,10 +398,34 @@
     P._g = {
       prio: prio, membersPrio: membersPrio,
       n: n, adj: adj, tier: tier, lower: lower, byID: byID, regionByID: regionByID,
-      members: members, bounds: bounds, pbounds: pbounds, exits: exits, consU: cu, consR: cr,
+      members: members, bounds: bounds, pbounds: pbounds, exits: exits, consU: cu, consP: cp,
       uniW: ux, uniH: uy, projW: pux, projH: puy, px: px, py: py, regionLower: regionLower
     };
     return P._g;
+  }
+
+  // frameX/frameY are the map's one coordinate choice, for the
+  // universe and a region alike (a region is a crop of the same
+  // frame): the projected frame when Improved Projection is on,
+  // the true frame otherwise. Everything that draws, picks or
+  // measures a system goes through them (as wx/wy in the view).
+  function frameX(G, S, i, projOn) { return projOn ? G.px[i] : S.x[i]; }
+  function frameY(G, S, i, projOn) { return projOn ? G.py[i] : S.y[i]; }
+
+  // The Improved Projection's preference key. The "2" is load-
+  // bearing: the first key ("evesynapse-map-projection") predates
+  // the projection becoming the default, so an off stored under
+  // it was the old default talking, not a reader's choice, and it
+  // is not read any more. Choices made now persist under this key.
+  var PROJ_PREF_KEY = "evesynapse-map-projection-2";
+
+  // resolveProj settles the projection for one visit: a link's
+  // proj= wins for that visit; otherwise the remembered
+  // preference; on unless an explicit off is remembered.
+  function resolveProj(stored, query) {
+    if (query === "1") return true;
+    if (query === "0") return false;
+    return stored !== "0";
   }
 
   // --- Live layers: the pure part ---
@@ -840,20 +874,22 @@
     }
 
     // --- Views ---
-    // wx/wy are the map's one coordinate choice: the region
-    // frame in a region, and in the universe the projected
-    // frame when Improved Projection is on, the true frame
-    // otherwise. Everything that draws, picks or measures in
-    // the universe goes through them.
-    function wx(i) { return mode === "universe" ? (projOn ? G.px[i] : S.x[i]) : S.rx[i]; }
-    function wy(i) { return mode === "universe" ? (projOn ? G.py[i] : S.y[i]) : S.ry[i]; }
+    // wx/wy are the map's one coordinate choice (frameX/frameY):
+    // the projected frame when Improved Projection is on, the
+    // true frame otherwise, in the universe and in a region
+    // alike -- a region is a crop of the frame in use, so its
+    // systems, gates, labels and territory all follow the
+    // projection setting. Everything that draws, picks or
+    // measures goes through them.
+    function wx(i) { return frameX(G, S, i, projOn); }
+    function wy(i) { return frameY(G, S, i, projOn); }
     // A region's bounds in the universe frame in use.
     function uBounds(r) { return projOn ? G.pbounds[r] : G.bounds[r]; }
 
     function viewBounds() {
       if (mode === "universe") return [0, 0, projOn ? G.projW : G.uniW, projOn ? G.projH : G.uniH];
-      var rg = P.regions[region];
-      return [-STUB - 30, -STUB - 30, rg.w + STUB + 30, rg.h + STUB + 30];
+      var bb = uBounds(region);
+      return [bb[0] - STUB - 30, bb[1] - STUB - 30, bb[2] + STUB + 30, bb[3] + STUB + 30];
     }
     function fitK() {
       var b = viewBounds();
@@ -948,15 +984,16 @@
     }
 
     // The ghost end of a gate leaving the region: past the edge
-    // system, pointing the way the neighbour truly lies.
+    // system, pointing the way the neighbour lies in the frame
+    // in use.
     function ghost(i, j) {
-      var dx = S.x[j] - S.x[i], dy = S.y[j] - S.y[i];
+      var dx = wx(j) - wx(i), dy = wy(j) - wy(i);
       var d = Math.sqrt(dx * dx + dy * dy) || 1;
-      return [S.rx[i] + dx / d * STUB, S.ry[i] + dy / d * STUB];
+      return [wx(i) + dx / d * STUB, wy(i) + dy / d * STUB];
     }
 
     function paths() {
-      var key = mode === "universe" ? (projOn ? "up" : "u") : "r" + region;
+      var key = mode === "universe" ? (projOn ? "up" : "u") : "r" + region + (projOn ? "p" : "t");
       if (pathCache[key]) return pathCache[key];
       var intra = new Path2D(), inter = new Path2D(), stubs = new Path2D();
       var web = null;
@@ -982,12 +1019,12 @@
             if (S.r[b] === region) {
               if (a < b) {
                 var q = S.c[a] === S.c[b] ? intra : inter;
-                q.moveTo(S.rx[a], S.ry[a]);
-                q.lineTo(S.rx[b], S.ry[b]);
+                q.moveTo(wx(a), wy(a));
+                q.lineTo(wx(b), wy(b));
               }
             } else {
               var g = ghost(a, b);
-              stubs.moveTo(S.rx[a], S.ry[a]);
+              stubs.moveTo(wx(a), wy(a));
               stubs.lineTo(g[0], g[1]);
             }
           }
@@ -1266,7 +1303,7 @@
       intelLabels(k, ox, oy, label, inPlaceFirst);
       dataLabels(k, ox, oy, label, inPlaceFirst);
       inPlaceFirst(G.membersPrio[region], function (s) { return "t" + s; }, function (s) {
-        label(S.n[s], S.rx[s] * k + ox, S.ry[s] * k + oy + r + 3, 12, colors.label, null, false, "t" + s);
+        label(S.n[s], wx(s) * k + ox, wy(s) * k + oy + r + 3, 12, colors.label, null, false, "t" + s);
       });
       var ex = G.exits[region], seen = {}, exits = [];
       for (i = 0; i < ex.length; i++) {
@@ -1329,11 +1366,11 @@
     // preference, on every visit until the reader changes it
     // (only an explicit off is remembered as off); a link's
     // proj= settles it for that visit only, without touching
-    // the preference.
-    var PROJ_KEY = "evesynapse-map-projection", projOn = true;
-    try { projOn = window.localStorage.getItem(PROJ_KEY) !== "0"; } catch (e) { /* private mode */ }
-    if (startQuery.get("proj") === "1") projOn = true;
-    if (startQuery.get("proj") === "0") projOn = false;
+    // the preference. The preference lives under PROJ_PREF_KEY:
+    // an off stored under the pre-default key is not read.
+    var PROJ_KEY = PROJ_PREF_KEY, projStored = null;
+    try { projStored = window.localStorage.getItem(PROJ_KEY); } catch (e) { /* private mode */ }
+    var projOn = resolveProj(projStored, startQuery.get("proj"));
     var projPref = el.querySelector("[data-map-proj]");
 
     // heatColor walks a three-stop ramp (the heat ramp unless one is
@@ -1521,7 +1558,7 @@
       if ((navigator.hardwareConcurrency || 8) <= 2 || (navigator.deviceMemory || 8) <= 2) sovGW = 512;
     } catch (e) { /* no hardware hints */ }
     function sovMoving() { return !!(anim || wheelZ || gesture); }
-    function sovKey(npc) { return (mode === "universe" ? "u" : "r" + region) + (npc ? ":n1" : ":n0"); }
+    function sovKey(npc) { return sovFieldKey(mode, region, npc, projOn); }
     // Build the view's field once the map has settled, then redraw.
     function sovSettle() {
       clearTimeout(sovSettleTimer);
@@ -2001,7 +2038,7 @@
     // Tactical constellation names: a faint backdrop drawn before
     // the systems, so they never take a system name's place.
     function drawConstellations(k, ox, oy) {
-      var cr = G.consR, size = Math.min(13 + (cam.k / fitK() - 1) * 2, 20);
+      var cr = projOn ? G.consP : G.consU, size = Math.min(13 + (cam.k / fitK() - 1) * 2, 20);
       ctx.font = "600 " + size + "px " + font;
       ctx.fillStyle = colors.cons;
       ctx.textAlign = "center";
@@ -2109,8 +2146,8 @@
       fit();
       var tx = cam.x, ty = cam.y, tk = cam.k;
       if (focus >= 0 && S.r[focus] === ri && !byZoom) {
-        tx = S.rx[focus];
-        ty = S.ry[focus];
+        tx = wx(focus);
+        ty = wy(focus);
         tk = fitK() * 1.6;
       }
       cam.k = fitK() * (byZoom ? 0.75 : 0.55);
@@ -2735,8 +2772,8 @@
         else {
           var ina = S.r[a] === region, inb = S.r[b] === region;
           if (!ina && !inb) continue;
-          pa = ina ? [S.rx[a], S.ry[a]] : ghost(b, a);
-          pb = inb ? [S.rx[b], S.ry[b]] : ghost(a, b);
+          pa = ina ? [wx(a), wy(a)] : ghost(b, a);
+          pb = inb ? [wx(b), wy(b)] : ghost(a, b);
         }
         ctx.moveTo(pa[0] * k + ox, pa[1] * k + oy);
         ctx.lineTo(pb[0] * k + ox, pb[1] * k + oy);
@@ -3980,6 +4017,11 @@
         // remembered from here, across sessions, until the
         // reader changes it again.
         try { window.localStorage.setItem(PROJ_KEY, projOn ? "1" : "0"); } catch (e) { /* private mode */ }
+        // In a region the frame swap moves the ground itself:
+        // refit, so the region stays in view in the new frame.
+        // The territory fields and the gate paths are keyed by
+        // frame, so the redraw picks the ones built for it.
+        if (mode === "region") { stopMotion(); fit(); }
         syncURL();
         schedule();
         hint(projOn
@@ -4127,6 +4169,7 @@
   // Exposed for the node tests only (jstest/map_test.js).
   if (typeof module !== "undefined" && module.exports) {
     module.exports = { secRounded: secRounded, secTier: secTier, secText: secText, gateClass: gateClass, gateBatch: gateBatch, prepare: prepare, regionLabelAlpha: regionLabelAlpha, labelTier: labelTier, midTierLabels: midTierLabels, boxesOverlap: boxesOverlap, LABEL_MID_CAP: LABEL_MID_CAP, zoomEntryAllowed: zoomEntryAllowed, wheelZoomFactor: wheelZoomFactor, pickReach: pickReach, pickScore: pickScore, routeFitScale: routeFitScale, formatView: formatView, parseView: parseView, viewFits: viewFits, sovPalette: sovPalette, territoryField: territoryField, territoryLoops: territoryLoops,
+      frameX: frameX, frameY: frameY, sovFieldKey: sovFieldKey, resolveProj: resolveProj, PROJ_PREF_KEY: PROJ_PREF_KEY,
       joinLayers: joinLayers, heatT: heatT, allianceHue: allianceHue, threatLevel: threatLevel,
       routeCost: routeCost, planRoute: planRoute, routeSummary: routeSummary, joinIntel: joinIntel,
       jumpRange: jumpRange, joinJump: joinJump, jumpNeighbours: jumpNeighbours, jumpFatigue: jumpFatigue };

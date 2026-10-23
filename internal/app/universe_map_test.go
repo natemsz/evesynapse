@@ -15,45 +15,6 @@ import (
 	db "evesynapse/internal/db/sqlc"
 )
 
-// TestLayoutRegionDeclutters: a region whose true positions pile
-// systems on top of each other comes out with every pair at least
-// most of the minimum spacing apart, inside the frame, and the same
-// on every build.
-func TestLayoutRegionDeclutters(t *testing.T) {
-	var pts [][2]float64
-	for i := 0; i < 60; i++ {
-		// Two tight clumps and a few strays: the shape real
-		// regions' flattened z axis produces.
-		c := float64(i % 2 * 50)
-		pts = append(pts, [2]float64{c + float64(i%5)*0.3, c + float64(i%7)*0.2})
-	}
-	pts = append(pts, [2]float64{300, 10}, [2]float64{-200, 260})
-	var edges [][2]int
-	for i := 1; i < len(pts); i++ {
-		edges = append(edges, [2]int{i - 1, i})
-	}
-	a := layoutRegion(pts, edges)
-	b := layoutRegion(pts, edges)
-	minD := regionMinSpacing(len(pts))
-	worst := math.Inf(1)
-	for i := range a {
-		if a[i] != b[i] {
-			t.Fatalf("layout is not deterministic at %d: %v vs %v", i, a[i], b[i])
-		}
-		if a[i][0] < -1e-6 || a[i][1] < -1e-6 || a[i][0] > regionFrame+1e-6 || a[i][1] > regionFrame+1e-6 {
-			t.Errorf("system %d left the frame: %v", i, a[i])
-		}
-		for j := i + 1; j < len(a); j++ {
-			worst = math.Min(worst, math.Hypot(a[i][0]-a[j][0], a[i][1]-a[j][1]))
-		}
-	}
-	// The final refit can shrink the frame a little; anything near
-	// the spacing reads apart, a pile-up does not.
-	if worst < 0.6*minD {
-		t.Errorf("closest pair %.1f apart, want at least %.1f (minimum spacing %.1f)", worst, 0.6*minD, minD)
-	}
-}
-
 // TestLayoutProjectedIsTheAuthoredLayout: the projected frame
 // is the authored 2D layout under one global similarity --
 // every pairwise distance in the projection is the authored
@@ -159,9 +120,6 @@ func TestBuildUniverseMap(t *testing.T) {
 	// North is up: Tanoo (larger z) sits above Jita on screen.
 	if !(p.Sys.Y[tanoo] < p.Sys.Y[jita]) {
 		t.Errorf("z is not flipped: Tanoo y %d, Jita y %d", p.Sys.Y[tanoo], p.Sys.Y[jita])
-	}
-	if forge := p.Regions[p.Sys.Region[jita]]; forge.W <= 0 && forge.H <= 0 {
-		t.Errorf("The Forge has no region frame: %+v", forge)
 	}
 }
 

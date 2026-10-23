@@ -17,12 +17,22 @@ func dict() Dict {
 		"nyx":      {23913, "Nyx", ClassCapital},
 		"purifier": {12038, "Purifier", ClassBomber},
 	}
-	pilots := map[string]int64{"hostile one": 91000001, "hostile two": 91000002, "solo": 91000003, "friendly guy": 91000004}
+	// Some of these pilots share their names with things and
+	// places, as EVE's do: characters called "Force Field",
+	// "Station" and "VIII" all exist.
+	pilots := map[string]int64{"hostile one": 91000001, "hostile two": 91000002, "solo": 91000003, "friendly guy": 91000004,
+		"force field": 91000005, "viii": 91000006, "station": 91000007, "moon": 91000008,
+		"minmatar control tower": 91000009, "minmatar military": 91000010, "vherokior": 91000011, "treasury": 91000012}
+	types := map[string]int64{"force field": 16103, "minmatar control tower": 16214}
 	asked := map[string]bool{"some random words": true, "some random": true, "random words": true, "some": true, "random": true, "words": true}
 	return Dict{
 		Ship: func(l string) (int64, string, string, bool) {
 			s, ok := ships[l]
 			return s.id, s.name, s.class, ok
+		},
+		Type: func(l string) (int64, string, bool) {
+			id, ok := types[l]
+			return id, l, ok
 		},
 		Pilot: func(l string) (int64, string, bool, bool) {
 			id, ok := pilots[l]
@@ -70,6 +80,26 @@ func TestAnalyze(t *testing.T) {
 			func(a Analysis) bool { return a.Pilots[0].Friendly }},
 		{"a friendly and a hostile is a sighting", Input{System: 1, Text: "Friendly Guy  Solo"}, KindSighting, nil},
 		{"clear", Input{System: 1, Clear: true}, KindClear, nil},
+		{"a type, not the character with its name", Input{System: 1, Text: "Force Field"}, KindSighting,
+			func(a Analysis) bool { return len(a.Pilots) == 0 && len(a.Ships) == 1 && a.Ships[0].TypeID == 16103 }},
+		{"a control tower is a type, not a pilot", Input{System: 1, Text: "Minmatar Control Tower"}, KindSighting,
+			func(a Analysis) bool { return len(a.Pilots) == 0 && len(a.Ships) == 1 && a.Ships[0].TypeID == 16214 }},
+		{"a pilot and a type together", Input{System: 1, Text: "Hostile One  Force Field"}, KindSighting,
+			func(a Analysis) bool { return len(a.Pilots) == 1 && len(a.Ships) == 1 && a.Ships[0].TypeID == 16103 }},
+		{"a roman numeral is not a pilot", Input{System: 1, Text: "VIII"}, KindChatter,
+			func(a Analysis) bool { return len(a.Pilots) == 0 && len(a.Unknown) == 0 }},
+		{"a bare place noun is not a pilot", Input{System: 1, Text: "Station"}, KindChatter,
+			func(a Analysis) bool { return len(a.Pilots) == 0 && len(a.Unknown) == 0 }},
+		{"a station's name is one location, not pilots", Input{System: 1, Text: "VII - Moon 1 - Vherokior Tribe Treasury Minmatar Military Station"}, KindChatter,
+			func(a Analysis) bool { return len(a.Pilots) == 0 && len(a.Unknown) == 0 && len(a.Ships) == 0 }},
+		{"a mangled d-scan line: types and a location, no pilots", Input{System: 1, Text: "16103 Force Field Minmatar Control Tower 4,875 km 2498 VII - Moon 1 - Vherokior Tribe Treasury Minmatar Military Station 0 m"}, KindSighting,
+			func(a Analysis) bool {
+				if len(a.Pilots) != 0 || len(a.Unknown) != 0 || len(a.Ships) != 2 {
+					return false
+				}
+				ids := map[int64]bool{a.Ships[0].TypeID: true, a.Ships[1].TypeID: true}
+				return ids[16103] && ids[16214]
+			}},
 		{"words no one knows yet", Input{System: 1, Text: "Unheard Of"}, KindSighting,
 			func(a Analysis) bool { return reflect.DeepEqual(a.Unknown, []string{"unheard of", "unheard", "of"}) }},
 		{"words known to be no one", Input{System: 1, Text: "some random words"}, KindChatter,

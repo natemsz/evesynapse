@@ -215,14 +215,13 @@ func TestIntelPagesRenderFromStore(t *testing.T) {
 	}
 	mustContain(t, "/ (fresh status)", body, `class="esi-pill esi-ok"`, "ESI healthy", "Tranquility <b>23,456</b> online")
 
-	// Signed out, the line renders too (status is public data).
+	// Signed out, / is the landing page, not the member home.
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
 	app.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("home (signed out): status %d", rec.Code)
 	}
-	mustContain(t, "/ (signed out)", rec.Body.String(), "Tranquility: 23,456 players online")
 
 	// Intel pages are public: the stored wars render signed out too.
 	req = httptest.NewRequest(http.MethodGet, "/intel/wars/", nil)

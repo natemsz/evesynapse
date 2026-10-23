@@ -260,7 +260,7 @@ func TestDemoSignInAndPagesRender(t *testing.T) {
 	if landing.Code != http.StatusOK {
 		t.Fatalf("GET / signed out = %d", landing.Code)
 	}
-	mustContain(t, "landing", landing.Body.String(), `href="/auth/demo"`, "Try it now")
+	mustContain(t, "landing", landing.Body.String(), `href="/auth/demo"`, "Try the demo")
 
 	// The button opens a session on the demo account.
 	rec := get(app, nil, "/auth/demo")

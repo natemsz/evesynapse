@@ -100,7 +100,7 @@ func TestPagesRenderFullShellNoJS(t *testing.T) {
 		t.Errorf("GET / (anonymous): status %d, want 200", code)
 	} else {
 		mustContain(t, "/ (anonymous landing)", body,
-			`<header class="ld-header">`, "Greater than the", `</html>`)
+			`<header class="ld-header">`, "One connected system.", `</html>`)
 	}
 }
 

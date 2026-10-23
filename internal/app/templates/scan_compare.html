@@ -1,0 +1,119 @@
+{{define "title"}}Compare scans{{end}}
+{{define "pagetitle"}}<h1><span class="gt">Compare scans</span></h1>{{end}}
+{{define "pagetabs"}}{{template "sectiontabs" .}}{{end}}
+{{define "content"}}
+{{with .ScanCompare}}
+{{/* Two scans diffed (scans_compare.go). The first is "before",
+     the second "after"; links or bare ids both work. */}}
+<div class="sc">
+  <form class="sc-panel sc-cmp-form" method="get" action="/intel/scan/compare/">
+    <label class="sc-sys"><span>First scan <span class="muted">(before)</span></span><input type="text" name="a" value="{{.AID}}" placeholder="Scan link or id" autocomplete="off" spellcheck="false"></label>
+    <label class="sc-sys"><span>Second scan <span class="muted">(after)</span></span><input type="text" name="b" value="{{.BID}}" placeholder="Scan link or id" autocomplete="off" spellcheck="false"></label>
+    <div class="sc-cmp-btns">
+      <button type="submit" class="btn">Compare</button>
+      {{if .SwapURL}}<a class="btn small" href="{{.SwapURL}}">Swap</a>{{end}}
+    </div>
+  </form>
+  {{if .Error}}<p class="sc-error" role="alert">{{.Error}}</p>{{end}}
+  {{if .A}}
+  <div class="sc-cols">
+    {{with .A}}<section class="sc-panel sc-cmp-side">
+      <h2><a href="/intel/scan/{{.ID}}/">{{.Title}}</a></h2>
+      <p class="sc-note">{{if .SysName}}<span class="sec sec-{{.SecTier}}">{{.SecText}}</span> {{.SysName}} · {{end}}<time datetime="{{rfc3339 .At}}" title="{{.At.UTC.Format "2006-01-02 15:04"}} EVE">{{.Ago}}</time></p>
+      <p class="sc-cmp-head">{{.Headline}}</p>
+    </section>{{end}}
+    {{with .B}}<section class="sc-panel sc-cmp-side">
+      <h2><a href="/intel/scan/{{.ID}}/">{{.Title}}</a></h2>
+      <p class="sc-note">{{if .SysName}}<span class="sec sec-{{.SecTier}}">{{.SecText}}</span> {{.SysName}} · {{end}}<time datetime="{{rfc3339 .At}}" title="{{.At.UTC.Format "2006-01-02 15:04"}} EVE">{{.Ago}}</time></p>
+      <p class="sc-cmp-head">{{.Headline}}</p>
+    </section>{{end}}
+  </div>
+  {{if .SystemMismatch}}<p class="sc-warn">These scans name different systems — {{.A.SysName}} and {{.B.SysName}}. The difference may just be the move between them.</p>{{end}}
+
+  {{with .DScan}}
+  <section class="sc-stats" aria-label="Summary">
+    <div class="sc-stat"><span class="sc-stat-v">{{.ShipsBefore}} → {{.ShipsAfter}}</span><span class="sc-stat-l">ships ({{.ShipsDeltaText}})</span></div>
+    <div class="sc-stat"><span class="sc-stat-v">{{.GridBefore}} → {{.GridAfter}}</span><span class="sc-stat-l">on grid</span></div>
+    {{if or .ValueBefore .ValueAfter}}<div class="sc-stat"><span class="sc-stat-v">{{if .ValueBefore}}{{.ValueBefore}}{{else}}—{{end}} → {{if .ValueAfter}}{{.ValueAfter}}{{else}}—{{end}}</span><span class="sc-stat-l">hull value, ISK</span></div>{{end}}
+  </section>
+  {{if or .NotableArrived .NotableLeft}}<section class="sc-panel">
+    <h2>Notable moves</h2>
+    <ul class="sc-list">
+      {{range .NotableArrived}}<li><span><span class="sc-state new">arrived</span> {{.Name}}</span><span class="muted">{{.Class}}</span><span class="sc-bar-c">{{.N}}</span></li>{{end}}
+      {{range .NotableLeft}}<li><span><span class="sc-state gone">left</span> {{.Name}}</span><span class="muted">{{.Class}}</span><span class="sc-bar-c">{{.N}}</span></li>{{end}}
+    </ul>
+  </section>{{end}}
+  {{if .Moves}}<section class="sc-panel">
+    <h2>Grid moves</h2>
+    <p class="sc-note muted">Hull counts held; what changed is which side of the grid line they sit on.</p>
+    <ul class="sc-list">{{range .Moves}}<li><span>{{.Name}} <span class="muted">{{.Class}}</span></span><span class="sc-bar-c">{{.GridBefore}} → {{.GridAfter}} of {{.After}} <span class="sc-state">{{.Move}}</span></span></li>{{end}}</ul>
+  </section>{{end}}
+  {{if .Types}}<section class="sc-panel">
+    <h2>Ships</h2>
+    <div class="sc-table-wrap"><table class="sc-table">
+      <thead><tr><th>Ship</th><th>Before</th><th>After</th><th>Change</th><th>On grid</th></tr></thead>
+      <tbody>{{range .Types}}<tr>{{if .ID}}<td><img src="https://images.evetech.net/types/{{.ID}}/icon?size=32" alt="" width="20" height="20" loading="lazy"> {{.Name}} <span class="muted">{{.Class}}</span>{{if .State}} <span class="sc-state {{.State}}">{{.State}}</span>{{end}}</td>{{else}}<td>{{.Name}}{{if .State}} <span class="sc-state {{.State}}">{{.State}}</span>{{end}}</td>{{end}}<td class="sc-num">{{.Before}}</td><td class="sc-num">{{.After}}</td><td class="sc-num">{{.DeltaText}}</td><td class="sc-num">{{.GridBefore}} → {{.GridAfter}}</td></tr>{{end}}</tbody>
+    </table></div>
+  </section>{{end}}
+  {{if .Classes}}<section class="sc-panel">
+    <h2>Ship classes</h2>
+    <div class="sc-table-wrap"><table class="sc-table">
+      <thead><tr><th>Class</th><th>Before</th><th>After</th><th>Change</th><th>On grid</th></tr></thead>
+      <tbody>{{range .Classes}}<tr><td>{{.Name}}{{if .State}} <span class="sc-state {{.State}}">{{.State}}</span>{{end}}</td><td class="sc-num">{{.Before}}</td><td class="sc-num">{{.After}}</td><td class="sc-num">{{.DeltaText}}</td><td class="sc-num">{{.GridBefore}} → {{.GridAfter}}</td></tr>{{end}}</tbody>
+    </table></div>
+  </section>{{end}}
+  {{if and (not .Types) (not .Classes) (not .Moves) (not .NotableArrived) (not .NotableLeft)}}<p class="sc-note muted prose">The two readings agree: same ships, same grid split, same notables.</p>{{end}}
+  {{end}}
+
+  {{with .Local}}
+  <section class="sc-stats" aria-label="Summary">
+    <div class="sc-stat"><span class="sc-stat-v">{{.PilotsBefore}} → {{.PilotsAfter}}</span><span class="sc-stat-l">pilots</span></div>
+    <div class="sc-stat"><span class="sc-stat-v">{{.ArrivedN}}</span><span class="sc-stat-l">arrived</span></div>
+    <div class="sc-stat"><span class="sc-stat-v">{{.LeftN}}</span><span class="sc-stat-l">left</span></div>
+    <div class="sc-stat"><span class="sc-stat-v">{{.StayedN}}</span><span class="sc-stat-l">stayed</span></div>
+    {{if or .UnknownBefore .UnknownAfter}}<div class="sc-stat"><span class="sc-stat-v">{{.UnknownBefore}} → {{.UnknownAfter}}</span><span class="sc-stat-l">not found</span></div>{{end}}
+  </section>
+  <div class="sc-cols">
+    {{if .Arrived}}<section class="sc-panel">
+      <h2>Arrived ({{.ArrivedN}})</h2>
+      <p class="sc-names">{{range $i, $p := .Arrived}}{{if $i}}, {{end}}<a href="/intel/kills/?character={{$p.ID}}">{{$p.Name}}</a>{{end}}{{if .ArrivedMore}} <span class="muted">…and {{.ArrivedMore}} more</span>{{end}}</p>
+    </section>{{end}}
+    {{if .Left}}<section class="sc-panel">
+      <h2>Left ({{.LeftN}})</h2>
+      <p class="sc-names">{{range $i, $p := .Left}}{{if $i}}, {{end}}<a href="/intel/kills/?character={{$p.ID}}">{{$p.Name}}</a>{{end}}{{if .LeftMore}} <span class="muted">…and {{.LeftMore}} more</span>{{end}}</p>
+    </section>{{end}}
+  </div>
+  {{if .Moved}}<section class="sc-panel">
+    <h2>Changed organization</h2>
+    <div class="sc-table-wrap"><table class="sc-table">
+      <thead><tr><th>Pilot</th><th>From</th><th>To</th></tr></thead>
+      <tbody>{{range .Moved}}<tr><td><a href="/intel/kills/?character={{.ID}}">{{.Name}}</a></td><td>{{.FromOrg}}</td><td>{{.ToOrg}}</td></tr>{{end}}</tbody>
+    </table></div>
+  </section>{{end}}
+  {{if .Alliances}}<section class="sc-panel">
+    <h2>Alliances</h2>
+    <div class="sc-table-wrap"><table class="sc-table">
+      <thead><tr><th>Alliance</th><th>Before</th><th>After</th><th>Change</th></tr></thead>
+      <tbody>{{range .Alliances}}<tr><td>{{.Name}}</td><td class="sc-num">{{.Before}}</td><td class="sc-num">{{.After}}</td><td class="sc-num">{{.DeltaText}}</td></tr>{{end}}</tbody>
+    </table></div>
+  </section>{{end}}
+  {{if .Corps}}<section class="sc-panel">
+    <h2>Corporations</h2>
+    <div class="sc-table-wrap"><table class="sc-table">
+      <thead><tr><th>Corporation</th><th>Before</th><th>After</th><th>Change</th></tr></thead>
+      <tbody>{{range .Corps}}<tr><td>{{.Name}}</td><td class="sc-num">{{.Before}}</td><td class="sc-num">{{.After}}</td><td class="sc-num">{{.DeltaText}}</td></tr>{{end}}</tbody>
+    </table></div>
+  </section>{{end}}
+  {{end}}
+
+  {{range .Tallies}}{{if .Rows}}<section class="sc-panel">
+    <h2>{{.Title}}</h2>
+    <div class="sc-table-wrap"><table class="sc-table">
+      <thead><tr><th></th><th>Before</th><th>After</th><th>Change</th></tr></thead>
+      <tbody>{{range .Rows}}<tr><td>{{.Name}}{{if .Class}} <span class="muted">{{.Class}}</span>{{end}}{{if .State}} <span class="sc-state {{.State}}">{{.State}}</span>{{end}}</td><td class="sc-num">{{.Before}}</td><td class="sc-num">{{.After}}</td><td class="sc-num">{{.DeltaText}}</td></tr>{{end}}</tbody>
+    </table></div>
+  </section>{{end}}{{end}}
+  {{end}}
+</div>
+{{end}}
+{{end}}

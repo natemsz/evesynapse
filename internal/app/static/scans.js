@@ -13,6 +13,9 @@
     root.querySelectorAll("[data-w]").forEach(function (b) {
       b.style.setProperty("--w", Math.max(0, Math.min(100, +b.getAttribute("data-w") || 0)) + "%");
     });
+    root.querySelectorAll("[data-n]").forEach(function (b) {
+      b.style.setProperty("--n", Math.max(0, +b.getAttribute("data-n") || 0));
+    });
     var link = root.querySelector("[data-scan-link]");
     var btn = root.querySelector("[data-scan-copy]");
     if (!link || !btn || btn.getAttribute("data-bound")) return;

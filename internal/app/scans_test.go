@@ -7,6 +7,9 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+	"time"
+
+	"evesynapse/internal/app/module"
 )
 
 // TestScanPasteAndRead: a pasted d-scan is sorted by ship class with
@@ -118,5 +121,33 @@ func TestGroupLocal(t *testing.T) {
 	}
 	if !g[1].Corp || g[1].ID != 20 || g[1].Name != "Loners" {
 		t.Errorf("an alliance-less corporation stands alone: %+v", g[1])
+	}
+}
+
+// TestScanPricesFromAppraisal: a scan's stored prices, total and
+// coverage come from the priced appraisal lines only — an unpriced
+// hull contributes nothing, not even its count.
+func TestScanPricesFromAppraisal(t *testing.T) {
+	asOf := time.Date(2026, 10, 20, 0, 0, 0, 0, time.UTC)
+	lines := []module.AppraisedLine{
+		{TypeID: 11176, Quantity: 3, Priced: true, UnitPrice: 20_000_000, LineValue: 60_000_000, Tier: module.AppraisalTierTypical},
+		{TypeID: 19720, Quantity: 1, Priced: true, UnitPrice: 900_000_000_000, LineValue: 900_000_000_000, Tier: module.AppraisalTierEstimate, AsOf: asOf},
+		{TypeID: 587, Quantity: 5, Priced: false},
+	}
+	prices, total, covered := scanPricesFromAppraisal(lines)
+	if len(prices) != 2 {
+		t.Fatalf("prices: %v", prices)
+	}
+	if p := prices[11176]; p.Unit != 20_000_000 || p.Tier != module.AppraisalTierTypical {
+		t.Errorf("crow price: %+v", p)
+	}
+	if p := prices[19720]; p.Unit != 900_000_000_000 || p.Tier != module.AppraisalTierEstimate || !p.AsOf.Equal(asOf) {
+		t.Errorf("capital price: %+v", p)
+	}
+	if total != 900_060_000_000 {
+		t.Errorf("total: %v", total)
+	}
+	if covered != 4 {
+		t.Errorf("covered: %d", covered)
 	}
 }

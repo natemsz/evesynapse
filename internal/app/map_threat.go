@@ -18,7 +18,10 @@ package app
 // camp), their victims from at least threatCampVictims corporations
 // (one fleet dying together is a fight too), and the same alliance
 // (else corporation, else pilot) on most of them. It is named from
-// public kills only, so no private kill is ever revealed.
+// public kills only, so no private kill is ever revealed. Only ship
+// kills are camp evidence: a structure or deployable dying (a tractor
+// unit farmed at a gate) counts toward the system's heat, never
+// toward a camp -- not its kill count, span, victim set or share.
 // ---------------------------------------------------------------------------
 
 import (
@@ -68,6 +71,9 @@ type threatKill struct {
 	Time       time.Time
 	Public     bool
 	VictimCorp int64
+	// Structure: the victim was a structure or deployable, by SDE
+	// category. Such kills are heat, not camp evidence.
+	Structure bool
 }
 
 type threatAttacker struct {
@@ -106,7 +112,7 @@ func buildThreat(now time.Time, kills []threatKill, attackers []threatAttacker, 
 		if k.Time.After(a.last) {
 			a.last = k.Time
 		}
-		if k.Public && age <= threatCampWindow {
+		if k.Public && !k.Structure && age <= threatCampWindow {
 			recent[k.System] = append(recent[k.System], k)
 		}
 	}
@@ -191,6 +197,47 @@ func buildThreat(now time.Time, kills []threatKill, attackers []threatAttacker, 
 	return t
 }
 
+// structureCategory reports whether an SDE category is a structure
+// or a deployable: what a gate's campers can farm without ever
+// killing a ship (tractor units, depots, siphons, inhibitors,
+// Upwell structures, starbase pieces).
+func structureCategory(categoryID int64) bool {
+	switch categoryID {
+	case catDeployable, catStarbase, catStructure:
+		return true
+	}
+	return false
+}
+
+// structureTypes resolves which of the given victim ship types are
+// structures or deployables, in one batched SDE category read. A
+// type the SDE does not classify counts as a ship.
+func (app *Application) structureTypes(ctx context.Context, typeIDs []int64) map[int64]bool {
+	out := map[int64]bool{}
+	seen := map[int64]bool{}
+	ids := make([]int64, 0, len(typeIDs))
+	for _, id := range typeIDs {
+		if id > 0 && !seen[id] {
+			seen[id] = true
+			ids = append(ids, id)
+		}
+	}
+	if len(ids) == 0 {
+		return out
+	}
+	rows, err := app.queries.ListSDETypeCategories(ctx, ids)
+	if err != nil {
+		logging.Errorf("map: threat: type categories: %v", err)
+		return out
+	}
+	for _, r := range rows {
+		if structureCategory(r.CategoryID) {
+			out[r.TypeID] = true
+		}
+	}
+	return out
+}
+
 // loadThreat reads the recent kills and builds the threat layer.
 func (app *Application) loadThreat(ctx context.Context, now time.Time) (mapLayerThreat, bool) {
 	since := now.Add(-threatWindow)
@@ -199,9 +246,14 @@ func (app *Application) loadThreat(ctx context.Context, now time.Time) (mapLayer
 		logging.Errorf("map: threat: kills: %v", err)
 		return mapLayerThreat{}, false
 	}
+	types := make([]int64, len(rows))
+	for i, r := range rows {
+		types[i] = r.ShipTypeID
+	}
+	structs := app.structureTypes(ctx, types)
 	kills := make([]threatKill, len(rows))
 	for i, r := range rows {
-		kills[i] = threatKill{ID: r.KillmailID, System: r.SystemID, Time: r.KillmailTime, Public: r.Public, VictimCorp: r.VictimCorporationID}
+		kills[i] = threatKill{ID: r.KillmailID, System: r.SystemID, Time: r.KillmailTime, Public: r.Public, VictimCorp: r.VictimCorporationID, Structure: structs[r.ShipTypeID]}
 	}
 	arows, err := app.queries.ListThreatAttackers(ctx, now.Add(-threatCampWindow))
 	if err != nil {

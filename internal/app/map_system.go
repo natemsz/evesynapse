@@ -146,9 +146,14 @@ func (app *Application) mapSystemCamp(ctx context.Context, names *killNames, sys
 		logging.Errorf("map: system %d: attackers: %v", sys, err)
 		return nil
 	}
+	types := make([]int64, len(krows))
+	for i, r := range krows {
+		types[i] = r.ShipTypeID
+	}
+	structs := app.structureTypes(ctx, types)
 	kills := make([]threatKill, len(krows))
 	for i, r := range krows {
-		kills[i] = threatKill{ID: r.KillmailID, System: r.SystemID, Time: r.KillmailTime, Public: r.Public, VictimCorp: r.VictimCorporationID}
+		kills[i] = threatKill{ID: r.KillmailID, System: r.SystemID, Time: r.KillmailTime, Public: r.Public, VictimCorp: r.VictimCorporationID, Structure: structs[r.ShipTypeID]}
 	}
 	atk := make([]threatAttacker, len(arows))
 	for i, a := range arows {
@@ -184,7 +189,12 @@ func (app *Application) mapSystemCamp(ctx context.Context, names *killNames, sys
 		}
 		return a.CharacterID == c.GroupID
 	}
-	pilots, ships, onKill := map[int64]bool{}, map[int64]int{}, map[int64]bool{}
+	// Composition counts distinct campers: a pilot counts once per
+	// ship type they flew in the window, however many of the camp's
+	// kills they were on. (Counting involvements instead would call
+	// one Loki pilot on sixteen kills "Loki x16".)
+	pilots, onKill := map[int64]bool{}, map[int64]bool{}
+	shipPilots := map[int64]map[int64]bool{}
 	for _, a := range arows {
 		if !member(a) {
 			continue
@@ -192,12 +202,17 @@ func (app *Application) mapSystemCamp(ctx context.Context, names *killNames, sys
 		onKill[a.KillmailID] = true
 		pilots[a.CharacterID] = true
 		if a.ShipTypeID > 0 {
-			ships[a.ShipTypeID]++
+			flying := shipPilots[a.ShipTypeID]
+			if flying == nil {
+				flying = map[int64]bool{}
+				shipPilots[a.ShipTypeID] = flying
+			}
+			flying[a.CharacterID] = true
 		}
 	}
 	camp.Pilots = len(pilots)
-	for id, n := range ships {
-		camp.Ships = append(camp.Ships, mapSystemShip{ID: id, Name: names.typeName(id), N: n})
+	for id, flying := range shipPilots {
+		camp.Ships = append(camp.Ships, mapSystemShip{ID: id, Name: names.typeName(id), N: len(flying)})
 	}
 	sort.Slice(camp.Ships, func(i, j int) bool {
 		if camp.Ships[i].N != camp.Ships[j].N {

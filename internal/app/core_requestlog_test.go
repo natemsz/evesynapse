@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 )
 
 // TestRequestLogLevels: a request is routine (info) unless the
@@ -26,6 +27,13 @@ func TestRequestLogLevels(t *testing.T) {
 	}
 
 	logs.Reset()
+	// /healthz serves its last check from a short cache, so the
+	// cached answer is dropped here: the second call must run
+	// the checks again, this time against the closed database.
+	app.healthMu.Lock()
+	app.healthCacheAt = time.Time{}
+	app.healthCacheResult = nil
+	app.healthMu.Unlock()
 	conn.Close()
 	if code, _ := healthz(app); code != 503 {
 		t.Fatalf("database closed: status %d", code)

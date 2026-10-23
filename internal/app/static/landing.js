@@ -1,28 +1,8 @@
-// The landing page's script: the feature explorer's tab
-// switcher, the public-tools modal, and the back-to-top button.
-// Every section works with the script off — the default explorer
-// panel is rendered active in the HTML and the modal's links
-// are plain anchors in the markup — so the script only moves
-// state between shapes the page already holds.
-
-// Explorer tabs: move the active marker between tabs and panels.
-(function () {
-  var tabs = document.querySelectorAll(".ld-xtab");
-  var panels = document.querySelectorAll(".ld-xpanel");
-  if (!tabs.length || !panels.length) return;
-  tabs.forEach(function (tab) {
-    tab.addEventListener("click", function () {
-      tabs.forEach(function (t) {
-        var on = t === tab;
-        t.classList.toggle("active", on);
-        t.setAttribute("aria-selected", on ? "true" : "false");
-      });
-      panels.forEach(function (p) {
-        p.classList.toggle("active", p.getAttribute("data-xpanel") === tab.getAttribute("data-xtab"));
-      });
-    });
-  });
-})();
+// The landing page's script: the public-tools modal and the
+// back-to-top button. Every section works with the script
+// off — the modal's links are plain anchors in the markup —
+// so the script only moves state between shapes the page
+// already holds.
 
 // Public tools modal: open from any data-open-tools hook, close
 // on the backdrop, the x, or Escape; the page behind stays put.

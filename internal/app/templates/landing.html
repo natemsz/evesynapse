@@ -41,22 +41,6 @@
       <div class="ld-cta-note">Try the demo runs on a sample fleet. No sign-in needed.</div>
     </div>
 
-    {{if .HasStrip}}
-    <div class="ld-glass ld-strip">
-      <div class="ld-strip-head"><h2>NEW EDEN, RIGHT NOW</h2><span class="ld-live">● FROM LIVE DATA</span></div>
-      <div class="ld-strip-grid">
-        <div><div class="ld-mini-lab">Market</div>
-        {{if .Movers}}<div class="ld-movers">
-          {{range .Movers}}<div><span>{{.Name}}</span><span class="ld-fig">{{.Price}} {{if .Up}}<span class="ld-up">▲ {{.Pct}}</span>{{else}}<span class="ld-down">▼ {{.Pct}}</span>{{end}}</span></div>{{end}}
-        </div>{{else}}<p class="ld-evergreen">The spread scanner reads every hub's order books. <a href="/market/scanner/">Open the scanner</a></p>{{end}}
-        </div>
-        <div><div class="ld-mini-lab">Intel</div><p class="ld-evergreen">Wars, incursions and faction warfare, tracked as they happen. <a href="/intel/wars/">Read the intel pages</a></p>{{if .ServerStatus}}<p class="ld-strip-note">Tranquility: {{.ServerStatus.Players}} players online</p>{{end}}</div>
-        <div><div class="ld-mini-lab">{{if and .Fit .Fit.IsNewest}}Newest public fit{{else}}Public fit{{end}}</div>
-        {{with .Fit}}<p class="ld-fit-line"><b>{{.ShipName}}</b> · {{.FitName}}{{if .Price}} · {{.Price}}{{end}}</p><p class="ld-fit-sub">Shared{{if .Author}} by {{.Author}}{{end}}{{if .Price}}, priced from stored market data{{end}}. <a href="{{.URL}}">Open the fit</a></p>{{else}}<p class="ld-evergreen">Community fits, simulated and priced. <a href="/fittings/public/">Browse public fits</a></p>{{end}}
-        </div>
-      </div>
-    </div>
-    {{end}}
   </div>
 
   <section class="ld-blk" id="tools">
@@ -114,7 +98,7 @@
 
   <section class="ld-blk" id="apart">
     <div class="ld-eyebrow">What sets us apart</div>
-    <h2>One system that does its own math.</h2>
+    <h2>One connected system.</h2>
     <p class="ld-lede">Every tool reads the same characters and the same stored data, and every character syncs in the background. A solo pilot gets the public tools; a medium-sized group gets doctrines, ship replacement and intel channels in the same place, with nothing extra to host.</p>
     <div class="ld-blurbs">
       <div class="ld-blurb"><h3>Fitting in the browser</h3><p>A full fitting simulator in a browser tab: full dogma simulation, T3 subsystem morphing from live game data, and Save to EVE built in. Nothing to install.</p></div>

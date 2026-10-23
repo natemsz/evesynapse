@@ -130,21 +130,6 @@ body::after { content: ""; position: absolute; top: 0; left: 0; right: 0; height
 .ld-ctas-center { justify-content: center; }
 .ld-brief { display: grid; grid-template-columns: 1fr; gap: 14px; margin-top: 14px; }
 
-.ld-strip { margin-top: 36px; padding: 18px 22px; }
-.ld-strip-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
-.ld-strip-head h2 { font-size: 18px; letter-spacing: 0.06em; margin: 0; }
-.ld-live { color: var(--success); font-size: 13px; letter-spacing: 0.18em; }
-.ld-strip-note { color: var(--faint, #8a7a66); font-size: 13.5px; margin-left: auto; }
-.ld-strip-grid { display: grid; grid-template-columns: 1.25fr 1fr 1fr; gap: 16px; }
-.ld-mini-lab { color: var(--faint, #8a7a66); font-size: 12.5px; letter-spacing: 0.14em; text-transform: uppercase; margin-bottom: 7px; }
-.ld-movers div { display: flex; justify-content: space-between; gap: 10px; padding: 5px 0; border-bottom: 1px dashed rgba(255, 255, 255, 0.06); font-size: 15px; }
-.ld-movers div:last-child { border-bottom: none; }
-.ld-fig { font-family: "JetBrains Mono", monospace; font-size: 13.5px; white-space: nowrap; }
-.ld-up { color: #3fb96f; }
-.ld-down { color: #e5484d; }
-.ld-evergreen, .ld-fit-sub { color: var(--ld-dim); font-size: 14.5px; }
-.ld-fit-line { font-size: 17px; }
-
 .ld-blk { padding: 64px 0 8px; }
 .ld-blk h2 { font-size: clamp(28px, 3.6vw, 40px); font-weight: 700; margin-bottom: 10px; }
 .ld-lede { color: #ddd0bd; max-width: 44em; font-size: 17.5px; }
@@ -278,7 +263,7 @@ body::after { content: ""; position: absolute; top: 0; left: 0; right: 0; height
   /* The stacked hero group is taller on a phone, so its drop
      into the darkened band shrinks to match. */
   .ld-hero-lower { margin-top: clamp(110px, 22vh, 210px); }
-  .ld-strip-grid, .ld-trust, .ld-tools { grid-template-columns: 1fr; }
+  .ld-trust, .ld-tools { grid-template-columns: 1fr; }
   .ld-styles { grid-template-columns: 1fr; }
   .ld-feat { grid-template-columns: 1fr; gap: 22px; }
   .ld-feat-vis { order: 2; }

@@ -959,7 +959,7 @@ func (q *Queries) ListSystemRegions(ctx context.Context) ([]ListSystemRegionsRow
 }
 
 const listSystemThreatKills = `-- name: ListSystemThreatKills :many
-SELECT killmail_id, system_id, killmail_time, public, victim_corporation_id
+SELECT killmail_id, system_id, killmail_time, public, victim_corporation_id, ship_type_id
 FROM kills
 WHERE system_id = $1::bigint AND killmail_time >= $2::timestamptz AND NOT npc
 ORDER BY killmail_time
@@ -976,6 +976,7 @@ type ListSystemThreatKillsRow struct {
 	KillmailTime        time.Time `json:"killmail_time"`
 	Public              bool      `json:"public"`
 	VictimCorporationID int64     `json:"victim_corporation_id"`
+	ShipTypeID          int64     `json:"ship_type_id"`
 }
 
 func (q *Queries) ListSystemThreatKills(ctx context.Context, arg ListSystemThreatKillsParams) ([]ListSystemThreatKillsRow, error) {
@@ -993,6 +994,7 @@ func (q *Queries) ListSystemThreatKills(ctx context.Context, arg ListSystemThrea
 			&i.KillmailTime,
 			&i.Public,
 			&i.VictimCorporationID,
+			&i.ShipTypeID,
 		); err != nil {
 			return nil, err
 		}
@@ -1051,7 +1053,7 @@ func (q *Queries) ListThreatAttackers(ctx context.Context, since time.Time) ([]L
 
 const listThreatKills = `-- name: ListThreatKills :many
 
-SELECT killmail_id, system_id, killmail_time, public, victim_corporation_id
+SELECT killmail_id, system_id, killmail_time, public, victim_corporation_id, ship_type_id
 FROM kills
 WHERE killmail_time >= $1::timestamptz AND NOT npc
 ORDER BY killmail_time
@@ -1063,6 +1065,7 @@ type ListThreatKillsRow struct {
 	KillmailTime        time.Time `json:"killmail_time"`
 	Public              bool      `json:"public"`
 	VictimCorporationID int64     `json:"victim_corporation_id"`
+	ShipTypeID          int64     `json:"ship_type_id"`
 }
 
 // ---------------------------------------------------------------------
@@ -1086,6 +1089,7 @@ func (q *Queries) ListThreatKills(ctx context.Context, since time.Time) ([]ListT
 			&i.KillmailTime,
 			&i.Public,
 			&i.VictimCorporationID,
+			&i.ShipTypeID,
 		); err != nil {
 			return nil, err
 		}

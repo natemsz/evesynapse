@@ -77,8 +77,12 @@ func TestMapSystem(t *testing.T) {
 	if c.Pilots != 3 {
 		t.Errorf("camp pilots = %d, want 3 (91000001-3)", c.Pilots)
 	}
-	if len(c.Ships) == 0 || c.Ships[0].Name != "Sabre" || c.Ships[0].N != 4 {
-		t.Errorf("camp ships = %+v, want Sabre x4 first", c.Ships)
+	// Composition counts distinct pilots per ship, not involvements:
+	// 91000001 flew the Sabre on four of the camp's kills and
+	// 91000003 on one, so the Sabre is x2, not x5; 91000002's
+	// Machariel is x1.
+	if len(c.Ships) != 2 || c.Ships[0].Name != "Sabre" || c.Ships[0].N != 2 || c.Ships[1].Name != "Machariel" || c.Ships[1].N != 1 {
+		t.Errorf("camp ships = %+v, want Sabre x2 then Machariel x1 (distinct pilots per ship)", c.Ships)
 	}
 	if len(c.Victims) != 4 {
 		t.Errorf("camp victims = %d, want the alliance's 4", len(c.Victims))

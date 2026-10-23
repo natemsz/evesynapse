@@ -83,3 +83,84 @@ func TestBuildThreat(t *testing.T) {
 		t.Errorf("a camp runs from its window's first kill: %d", c.Since)
 	}
 }
+
+// TestBuildThreatStructureKills: structure and deployable kills are
+// heat, never camp evidence. The acceptance shape: two campers
+// farming sixteen tractor units at one gate over half an hour --
+// every other camp signal fires (count, span, victim corps, one
+// alliance on all of them) and it still names no camp, because none
+// of the sixteen victims was a ship. A mixed system whose ship kills
+// alone are under the threshold names no camp either, and a genuine
+// camp's kill count ignores its structure kills.
+func TestBuildThreatStructureKills(t *testing.T) {
+	for cat, want := range map[int64]bool{22: true, 23: true, 65: true, 6: false, 3: false, 18: false, 0: false} {
+		if got := structureCategory(cat); got != want {
+			t.Errorf("structureCategory(%d) = %v, want %v", cat, got, want)
+		}
+	}
+	now := time.Date(2026, 10, 22, 12, 0, 0, 0, time.UTC)
+	ago := func(m int) time.Time { return now.Add(-time.Duration(m) * time.Minute) }
+	const (
+		farm  = int64(30009991) // structures only
+		mixed = int64(30009992) // ships under threshold + structures
+		real  = int64(30009993) // a genuine camp, plus structure noise
+	)
+	var kills []threatKill
+	var atk []threatAttacker
+	id := int64(0)
+	add := func(sys int64, minutes int, victimCorp int64, structure bool, attackers ...int64) int64 {
+		id++
+		kills = append(kills, threatKill{ID: id, System: sys, Time: ago(minutes), Public: true, VictimCorp: victimCorp, Structure: structure})
+		for _, a := range attackers {
+			atk = append(atk, threatAttacker{Kill: id, Character: a, Corp: 98000001, Alliance: 99000001})
+		}
+		return id
+	}
+	// The farm: sixteen structure kills over thirty minutes, the
+	// victims from five different corporations, two pilots of one
+	// alliance alternating on all of them.
+	for i := 0; i < 16; i++ {
+		pilot := int64(1)
+		if i%2 == 1 {
+			pilot = 2
+		}
+		add(farm, 2+2*i, int64(1+i%5), true, pilot)
+	}
+	// Mixed: three ship kills and thirteen structure kills, one
+	// alliance on everything, spread over the same half hour.
+	for i, m := range []int{5, 20, 35} {
+		add(mixed, m, int64(1+i), false, 1)
+	}
+	for i := 0; i < 13; i++ {
+		add(mixed, 3+2*i, int64(1+i%5), true, 1)
+	}
+	// A genuine camp: five ship kills on passers-by over forty
+	// minutes, the alliance on four -- plus ten structure kills by
+	// the same alliance, which must not inflate its count.
+	for i, m := range []int{5, 15, 25, 35, 40} {
+		if i == 3 {
+			odd := add(real, m, int64(11+i), false)
+			atk = append(atk, threatAttacker{Kill: odd, Character: 9, Corp: 1000125}) // an NPC corp: not the alliance
+			continue
+		}
+		add(real, m, int64(11+i), false, 1)
+	}
+	for i := 0; i < 10; i++ {
+		add(real, 6+3*i, int64(1+i%5), true, 1)
+	}
+	th := buildThreat(now, kills, atk, func(kind string, gid int64) string { return "The Campers" })
+	hour := map[int64]int{}
+	for i, sys := range th.ID {
+		hour[sys] = th.Hour[i]
+	}
+	if hour[farm] != 16 {
+		t.Errorf("the farm's kills still count as heat: hour = %d, want 16", hour[farm])
+	}
+	if len(th.Camps) != 1 {
+		t.Fatalf("camps = %+v, want the genuine camp alone", th.Camps)
+	}
+	c := th.Camps[0]
+	if c.System != real || c.Kills != 4 {
+		t.Errorf("camp = %+v, want the genuine camp with its 4 ship kills (structure kills uncounted)", c)
+	}
+}

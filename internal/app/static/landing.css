@@ -67,7 +67,13 @@ body::after { content: ""; position: absolute; top: 0; left: 0; right: 0; height
 
 .ld-hero { padding: 128px 0 8px; }
 .ld-kicker { color: var(--gold); letter-spacing: 0.34em; font-size: 12.5px; font-weight: 600; text-transform: uppercase; }
-.ld-hero h1 { font-size: clamp(40px, 6.2vw, 68px); line-height: 1.04; font-weight: 700; margin: 14px 0 16px; max-width: 13.5em; }
+.ld-hero h1 { font-size: clamp(36px, 5.5vw, 60px); line-height: 1.04; font-weight: 700; margin: 0; max-width: 15.5em; }
+/* The headline stands alone beside the planet; everything that
+   used to stack under it (kicker, sub, calls to action, note)
+   drops to the band where the art darkens into the page fade,
+   at the hero's lower edge. */
+.ld-hero-lower { margin-top: clamp(170px, 30vh, 330px); }
+.ld-hero-lower .ld-kicker { margin-bottom: 10px; }
 .ld-hero h1 .ld-amp { background: linear-gradient(90deg, #ffd27a 0%, #ff6a1a 50%, #d63c14 100%); -webkit-background-clip: text; background-clip: text; color: transparent; text-shadow: none; }
 .ld-sub { font-size: clamp(17px, 2vw, 20.5px); color: #e3d5c2; max-width: 37em; }
 .ld-sub b { color: var(--text); }
@@ -269,6 +275,9 @@ body::after { content: ""; position: absolute; top: 0; left: 0; right: 0; height
   .ld-header .ld-btn { padding: 8px 12px; font-size: 15px; }
 }
 @media (max-width: 900px) {
+  /* The stacked hero group is taller on a phone, so its drop
+     into the darkened band shrinks to match. */
+  .ld-hero-lower { margin-top: clamp(110px, 22vh, 210px); }
   .ld-strip-grid, .ld-trust, .ld-tools { grid-template-columns: 1fr; }
   .ld-styles { grid-template-columns: 1fr; }
   .ld-feat { grid-template-columns: 1fr; gap: 22px; }

@@ -33,9 +33,14 @@
   <section class="sc-stats" aria-label="Summary">
     <div class="sc-stat"><span class="sc-stat-v">{{.Ships}}</span><span class="sc-stat-l">ships</span></div>
     <div class="sc-stat{{if .ShipsGrid}} hot{{end}}"><span class="sc-stat-v">{{.ShipsGrid}}</span><span class="sc-stat-l">on grid</span></div>
+    <div class="sc-stat"><span class="sc-stat-v">{{.ShipsOff}}</span><span class="sc-stat-l">off grid</span></div>
     <div class="sc-stat"><span class="sc-stat-v">{{len .Structures}}</span><span class="sc-stat-l">structure types</span></div>
     {{if or .Drones .Fighters}}<div class="sc-stat"><span class="sc-stat-v">{{.Drones}}{{if .Fighters}} · {{.Fighters}}{{end}}</span><span class="sc-stat-l">drones{{if .Fighters}} · fighters{{end}}</span></div>{{end}}
   </section>
+  {{if .Notable}}<section class="sc-panel sc-notable">
+    <h2>Notable</h2>
+    <ul class="sc-notable-list">{{range .Notable}}<li>{{if .ID}}<img src="https://images.evetech.net/types/{{.ID}}/icon?size=32" alt="" width="20" height="20" loading="lazy">{{end}}<span class="sc-notable-n">{{.Name}}</span><span class="muted">{{.Class}}</span><span class="sc-bar-c">{{.N}}{{if .Grid}} <span class="sc-grid">on grid</span>{{end}}</span></li>{{end}}</ul>
+  </section>{{end}}
   <div class="sc-cols">
     <section class="sc-panel">
       <h2>Ship classes</h2>
@@ -43,10 +48,23 @@
       {{else}}<p class="muted">No ships.</p>{{end}}
     </section>
     <section class="sc-panel">
-      <h2>Ships</h2>
-      {{if .Types}}<ol class="sc-bars">{{range .Types}}<li><span class="sc-bar" data-w="{{.Pct}}"></span><img src="https://images.evetech.net/types/{{.ID}}/icon?size=32" alt="" width="20" height="20" loading="lazy"><span class="sc-bar-n">{{.Name}} <span class="muted">{{.Class}}</span></span><span class="sc-bar-c">{{.N}}{{if .Grid}} <span class="sc-grid">{{.Grid}} on grid</span>{{end}}</span></li>{{end}}</ol>
-      {{else}}<p class="muted">No ships.</p>{{end}}
+      <h2>Ships on grid</h2>
+      {{if $.Scan.TypesGrid}}<ol class="sc-bars">{{range $.Scan.TypesGrid}}<li><span class="sc-bar" data-w="{{.Pct}}"></span><img src="https://images.evetech.net/types/{{.ID}}/icon?size=32" alt="" width="20" height="20" loading="lazy"><span class="sc-bar-n">{{.Name}} <span class="muted">{{.Class}}</span></span><span class="sc-bar-c">{{.N}}</span></li>{{end}}</ol>
+      {{else}}<p class="muted">No ships on grid.</p>{{end}}
     </section>
+  </div>
+  <div class="sc-cols">
+    {{if .Hulls}}<section class="sc-panel">
+      <h2>Composition</h2>
+      <p class="sc-sub">Hull classes</p>
+      <ol class="sc-bars">{{range .Hulls}}<li><span class="sc-bar" data-w="{{.Pct}}"></span><span class="sc-bar-n">{{.Name}}</span><span class="sc-bar-c">{{.N}}{{if .Grid}} <span class="sc-grid" title="on grid">{{.Grid}} on grid</span>{{end}}</span></li>{{end}}</ol>
+      <p class="sc-sub">Fleet roles</p>
+      <ol class="sc-bars">{{range .Roles}}<li><span class="sc-bar" data-w="{{.Pct}}"></span><span class="sc-bar-n">{{.Name}}</span><span class="sc-bar-c">{{.N}}{{if .Grid}} <span class="sc-grid" title="on grid">{{.Grid}} on grid</span>{{end}}</span></li>{{end}}</ol>
+    </section>{{end}}
+    {{if $.Scan.TypesOff}}<section class="sc-panel">
+      <h2>Ships off grid</h2>
+      <ol class="sc-bars">{{range $.Scan.TypesOff}}<li><span class="sc-bar" data-w="{{.Pct}}"></span><img src="https://images.evetech.net/types/{{.ID}}/icon?size=32" alt="" width="20" height="20" loading="lazy"><span class="sc-bar-n">{{.Name}} <span class="muted">{{.Class}}</span></span><span class="sc-bar-c">{{.N}}</span></li>{{end}}</ol>
+    </section>{{end}}
   </div>
   {{if or .Structures .Deployables}}<div class="sc-cols">
     {{if .Structures}}<section class="sc-panel">
@@ -58,6 +76,20 @@
       <ul class="sc-list">{{range .Deployables}}<li><img src="https://images.evetech.net/types/{{.ID}}/icon?size=32" alt="" width="20" height="20" loading="lazy"><span>{{.Name}}</span><span class="sc-bar-c">{{.N}}{{if .Grid}} <span class="sc-grid">on grid</span>{{end}}</span></li>{{end}}</ul>
     </section>{{end}}
   </div>{{end}}
+  {{if or .DroneTypes .FighterTypes}}<div class="sc-cols">
+    {{if .DroneTypes}}<section class="sc-panel">
+      <h2>Drones</h2>
+      <ul class="sc-list">{{range .DroneTypes}}<li><img src="https://images.evetech.net/types/{{.ID}}/icon?size=32" alt="" width="20" height="20" loading="lazy"><span>{{.Name}}</span><span class="sc-bar-c">{{.N}}{{if .Grid}} <span class="sc-grid">on grid</span>{{end}}</span></li>{{end}}</ul>
+    </section>{{end}}
+    {{if .FighterTypes}}<section class="sc-panel">
+      <h2>Fighters</h2>
+      <ul class="sc-list">{{range .FighterTypes}}<li><img src="https://images.evetech.net/types/{{.ID}}/icon?size=32" alt="" width="20" height="20" loading="lazy"><span>{{.Name}}</span><span class="sc-bar-c">{{.N}}{{if .Grid}} <span class="sc-grid">on grid</span>{{end}}</span></li>{{end}}</ul>
+    </section>{{end}}
+  </div>{{end}}
+  {{if .Objects}}<section class="sc-panel">
+    <h2>Also on scan</h2>
+    <ul class="sc-list">{{range .Objects}}<li><img src="https://images.evetech.net/types/{{.ID}}/icon?size=32" alt="" width="20" height="20" loading="lazy"><span>{{.Name}} <span class="muted">{{.Class}}</span></span><span class="sc-bar-c">{{.N}}{{if .Grid}} <span class="sc-grid">on grid</span>{{end}}</span></li>{{end}}</ul>
+  </section>{{end}}
   <p class="sc-note muted prose">On grid: within 10,000 km. {{.Items}} lines read{{if .Celestials}}, {{.Celestials}} celestials{{end}}.</p>
   {{end}}
 
@@ -76,7 +108,8 @@
         {{range .Alliances}}<li>
           <details>
             <summary><span class="sc-bar" data-w="{{.Pct}}"></span><img src="https://images.evetech.net/{{if .Corp}}corporations{{else}}alliances{{end}}/{{.ID}}/logo?size=32" alt="" width="20" height="20" loading="lazy"><span class="sc-bar-n">{{.Name}}</span><span class="sc-bar-c">{{.N}}{{if .Kills}} <span class="sc-kills" title="kills in 30 days">{{.Kills}} kills</span>{{end}}</span></summary>
-            {{if .Corps}}<ul class="sc-corps">{{range .Corps}}<li><a href="/intel/kills/?corporation={{.ID}}">{{.Name}}</a><span class="sc-bar-c">{{.N}}{{if .Kills}} <span class="sc-kills">{{.Kills}} kills</span>{{end}}</span></li>{{end}}</ul>{{end}}
+            {{if .Corps}}<ul class="sc-corps">{{range .Corps}}<li><div class="sc-corp-row"><a href="/intel/kills/?corporation={{.ID}}">{{.Name}}</a><span class="sc-bar-c">{{.N}}{{if .Kills}} <span class="sc-kills">{{.Kills}} kills</span>{{end}}</span></div>{{if .Pilots}}<p class="sc-pilots">{{range $i, $p := .Pilots}}{{if $i}}, {{end}}<a href="/intel/kills/?character={{$p.ID}}">{{$p.Name}}</a>{{end}}{{if .MorePilots}} <span class="muted">…and {{.MorePilots}} more</span>{{end}}</p>{{end}}</li>{{end}}</ul>{{end}}
+            {{if and .Corp .Pilots}}<p class="sc-pilots">{{range $i, $p := .Pilots}}{{if $i}}, {{end}}<a href="/intel/kills/?character={{$p.ID}}">{{$p.Name}}</a>{{end}}{{if .MorePilots}} <span class="muted">…and {{.MorePilots}} more</span>{{end}}</p>{{end}}
             <p class="sc-org-link"><a href="/intel/kills/?{{if .Corp}}corporation{{else}}alliance{{end}}={{.ID}}">Killboard</a></p>
           </details>
         </li>{{end}}

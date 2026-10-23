@@ -55,12 +55,117 @@ const (
 	catCelestial  = 2
 	catStation    = 3
 	catShip       = 6
+	catCharge     = 8
+	catEntity     = 11
 	catDrone      = 18
 	catDeployable = 22
 	catStarbase   = 23
+	catSov        = 40
+	catOrbitals   = 46
 	catStructure  = 65
 	catFighter    = 87
 )
+
+// objectKindByGroup labels the SDE groups a reader wants told apart
+// from their category's plain members: wrecks, stargates and
+// containers share Celestial with the planets, billboards share
+// Entity with the NPCs. Anything in those two categories whose
+// group is not here reads as a celestial (planets, moons, suns) or
+// an NPC.
+var objectKindByGroup = map[string]string{
+	"Stargate": "Stargate", "Wreck": "Wreck",
+	"Cargo Container": "Container", "Secure Cargo Container": "Container",
+	"Freight Container": "Container", "Audit Log Secure Container": "Container",
+	"Spawn Container": "Container", "Mission Container": "Container",
+	"Scatter Container": "Container", "Irregular Container": "Container",
+	"Billboard": "Billboard",
+}
+
+// shipHullClasses folds the SDE's ship groups into the hull
+// classes a fleet read is given in.
+var shipHullClasses = map[string]string{
+	"Titan": "Capitals", "Dreadnought": "Capitals", "Lancer Dreadnought": "Capitals",
+	"Carrier": "Capitals", "Supercarrier": "Capitals", "Force Auxiliary": "Capitals",
+	"Capital Industrial Ship": "Capitals", "Command Carrier": "Capitals",
+	"Freighter": "Capitals", "Jump Freighter": "Capitals",
+	"Battleship": "Battleships", "Elite Battleship": "Battleships",
+	"Marauder": "Battleships", "Black Ops": "Battleships",
+	"Combat Battlecruiser": "Battlecruisers", "Attack Battlecruiser": "Battlecruisers",
+	"Command Ship": "Battlecruisers",
+	"Cruiser":      "Cruisers", "Heavy Assault Cruiser": "Cruisers",
+	"Heavy Interdiction Cruiser": "Cruisers", "Logistics": "Cruisers",
+	"Force Recon Ship": "Cruisers", "Combat Recon Ship": "Cruisers",
+	"Strategic Cruiser": "Cruisers", "Flag Cruiser": "Cruisers",
+	"Special Edition Yachts": "Cruisers",
+	"Destroyer":              "Destroyers", "Tactical Destroyer": "Destroyers",
+	"Interdictor": "Destroyers", "Command Destroyer": "Destroyers",
+	"Frigate": "Frigates", "Assault Frigate": "Frigates", "Covert Ops": "Frigates",
+	"Interceptor": "Frigates", "Stealth Bomber": "Frigates",
+	"Electronic Attack Ship": "Frigates", "Logistics Frigate": "Frigates",
+	"Expedition Frigate": "Frigates", "Prototype Exploration Ship": "Frigates",
+	"Corvette": "Frigates",
+	"Hauler":   "Industrial", "Deep Space Transport": "Industrial",
+	"Blockade Runner": "Industrial", "Mining Barge": "Industrial",
+	"Exhumer": "Industrial", "Industrial Command Ship": "Industrial",
+	"Expedition Command Ship": "Industrial",
+	"Capsule":                 "Pods",
+}
+
+// shipRoleGroups gives a ship group's fleet role. Groups not here
+// fight: their role is DPS.
+var shipRoleGroups = map[string]string{
+	"Logistics": "Logistics", "Logistics Frigate": "Logistics",
+	"Force Auxiliary": "Logistics",
+	"Command Ship":    "Command", "Command Destroyer": "Command",
+	"Industrial Command Ship": "Command", "Expedition Command Ship": "Command",
+	"Command Carrier": "Command", "Flag Cruiser": "Command",
+	"Interdictor": "Interdiction", "Heavy Interdiction Cruiser": "Interdiction",
+	"Force Recon Ship": "Recon & EWAR", "Combat Recon Ship": "Recon & EWAR",
+	"Electronic Attack Ship": "Recon & EWAR", "Covert Ops": "Recon & EWAR",
+	"Stealth Bomber": "Bombers",
+	"Capsule":        "Non-combat", "Shuttle": "Non-combat", "Corvette": "Non-combat",
+	"Citizen Ships": "Non-combat", "Hauler": "Non-combat",
+	"Deep Space Transport": "Non-combat", "Blockade Runner": "Non-combat",
+	"Mining Barge": "Non-combat", "Exhumer": "Non-combat",
+	"Expedition Frigate": "Non-combat", "Prototype Exploration Ship": "Non-combat",
+	"Freighter": "Non-combat", "Jump Freighter": "Non-combat",
+	"Capital Industrial Ship": "Non-combat", "Special Edition Yachts": "Non-combat",
+}
+
+// shipRoleTypes overrides the group role hull by hull for the
+// mixed T1 groups: the T1 logistics and EWAR frigates and cruisers
+// sit in the plain Frigate and Cruiser groups beside the damage
+// hulls.
+var shipRoleTypes = map[int64]string{
+	// T1 logistics cruisers.
+	620: "Logistics", 625: "Logistics", 631: "Logistics", 634: "Logistics",
+	// T1 logistics frigates.
+	582: "Logistics", 590: "Logistics", 592: "Logistics", 599: "Logistics",
+	// T1 EWAR cruisers.
+	628: "Recon & EWAR", 630: "Recon & EWAR", 632: "Recon & EWAR", 633: "Recon & EWAR",
+	// T1 EWAR frigates.
+	584: "Recon & EWAR", 609: "Recon & EWAR", 2161: "Recon & EWAR", 3766: "Recon & EWAR",
+}
+
+// notableGroups are the ship groups called out on sight: capital
+// hulls and the freighters that feed them.
+var notableGroups = map[string]bool{
+	"Titan": true, "Dreadnought": true, "Lancer Dreadnought": true,
+	"Carrier": true, "Supercarrier": true, "Force Auxiliary": true,
+	"Capital Industrial Ship": true, "Command Carrier": true,
+	"Freighter": true, "Jump Freighter": true,
+}
+
+// specialHulls are alliance-tournament and special-edition ship
+// types, by SDE type id: hulls that exist in handfuls.
+var specialHulls = map[int64]bool{
+	2834: true, 2836: true, 3516: true, 3518: true, 635: true,
+	11011: true, 11940: true, 11942: true, 29266: true, 32207: true,
+	32209: true, 32788: true, 32790: true, 33395: true, 33397: true,
+	33513: true, 33553: true, 33673: true, 33675: true, 34590: true,
+	35779: true, 35781: true, 42245: true, 42246: true, 48635: true,
+	48636: true, 60764: true, 60765: true, 74141: true, 77726: true,
+}
 
 // --- The stored reading ---
 
@@ -99,17 +204,31 @@ func withPct(list []scanCount) []scanCount {
 }
 
 type dscanReading struct {
-	Items       int         `json:"items"`
-	Ships       int         `json:"ships"`
-	ShipsGrid   int         `json:"ships_grid"`
-	Classes     []scanCount `json:"classes"`
-	Types       []scanCount `json:"types"`
-	Structures  []scanCount `json:"structures,omitempty"`
-	Deployables []scanCount `json:"deployables,omitempty"`
-	Drones      int         `json:"drones,omitempty"`
-	Fighters    int         `json:"fighters,omitempty"`
-	Celestials  int         `json:"celestials,omitempty"`
-	Other       int         `json:"other,omitempty"`
+	Items     int `json:"items"`
+	Ships     int `json:"ships"`
+	ShipsGrid int `json:"ships_grid"`
+	// ShipsOff is Ships - ShipsGrid, filled for the page.
+	ShipsOff int         `json:"-"`
+	Classes  []scanCount `json:"classes"`
+	Types    []scanCount `json:"types"`
+	// Hulls and Roles are the composition rollups of Types, by
+	// hull class and by fleet role.
+	Hulls []scanCount `json:"hulls,omitempty"`
+	Roles []scanCount `json:"roles,omitempty"`
+	// Notable is the callout list: capital and special hulls on
+	// the scan, and massed cheap hulls.
+	Notable      []scanCount `json:"notable,omitempty"`
+	Structures   []scanCount `json:"structures,omitempty"`
+	Deployables  []scanCount `json:"deployables,omitempty"`
+	Drones       int         `json:"drones,omitempty"`
+	Fighters     int         `json:"fighters,omitempty"`
+	DroneTypes   []scanCount `json:"drone_types,omitempty"`
+	FighterTypes []scanCount `json:"fighter_types,omitempty"`
+	// Objects is everything else a d-scan shows, itemized by
+	// type: wrecks, stargates, containers, charges, billboards,
+	// orbitals, NPCs. Class carries the kind.
+	Objects    []scanCount `json:"objects,omitempty"`
+	Celestials int         `json:"celestials,omitempty"`
 }
 
 type localPilot struct {
@@ -131,6 +250,12 @@ type localGroup struct {
 	Pct   int          `json:"-"`
 	// Corp marks a corporation standing outside any alliance.
 	Corp bool `json:"corp,omitempty"`
+	// Pilots is the group's roster as the page shows it, grouped
+	// from the reading's pilot list at render (a reading stored
+	// before rosters were shown carries the same pilots at the
+	// top level); MorePilots counts any past the rendered cap.
+	Pilots     []localPilot `json:"pilots,omitempty"`
+	MorePilots int          `json:"-"`
 }
 
 type localReading struct {
@@ -239,48 +364,96 @@ func (app *Application) readDScan(ctx context.Context, rows []scan.DScanRow) (*d
 	}
 	d := &dscanReading{Items: len(rows)}
 	classes, types, structs, deploy := newTally(), newTally(), newTally(), newTally()
+	droneTypes, fighterTypes, objects := newTally(), newTally(), newTally()
+	// The system is voted on with weights: a sun names its system
+	// outright, planets, moons, belts and NPC stations are strong
+	// evidence, player structures and gates are weak (a system
+	// full of citadels named for it must not outvote its own sun),
+	// and stargates never vote -- a gate's name is its destination.
 	sysVotes := map[string]int{}
 	for _, r := range rows {
 		grid := r.DistKm >= 0 && r.DistKm <= scanGridKm
-		switch cat[r.TypeID] {
+		gname := class[r.TypeID]
+		switch c := cat[r.TypeID]; c {
 		case catShip:
 			d.Ships++
 			if grid {
 				d.ShipsGrid++
 			}
-			cl := class[r.TypeID]
+			cl := gname
 			if cl == "" {
 				cl = "Ship"
 			}
 			classes.add(0, cl, "", grid)
 			types.add(r.TypeID, r.TypeName, cl, grid)
-		case catStructure, catStarbase, catStation:
-			structs.add(r.TypeID, r.TypeName, class[r.TypeID], grid)
+		case catStructure, catStarbase, catStation, catSov:
+			structs.add(r.TypeID, r.TypeName, gname, grid)
 			// Stations carry their moon's name; player structures
 			// are named "System - Name".
+			w := 1
+			if c == catStation {
+				w = 3
+			}
 			if s := scan.SystemFromCelestial(r.Name); s != "" {
-				sysVotes[s]++
+				sysVotes[s] += w
 			} else if i := strings.Index(r.Name, " - "); i > 0 {
-				sysVotes[r.Name[:i]]++
+				sysVotes[r.Name[:i]] += w
 			}
 		case catDeployable:
-			deploy.add(r.TypeID, r.TypeName, class[r.TypeID], grid)
+			deploy.add(r.TypeID, r.TypeName, gname, grid)
 		case catDrone:
 			d.Drones++
+			droneTypes.add(r.TypeID, r.TypeName, gname, grid)
 		case catFighter:
 			d.Fighters++
+			fighterTypes.add(r.TypeID, r.TypeName, gname, grid)
 		case catCelestial:
+			if kind, ok := objectKindByGroup[gname]; ok {
+				objects.add(r.TypeID, r.TypeName, kind, grid)
+				break
+			}
 			d.Celestials++
 			if s := scan.SystemFromCelestial(r.Name); s != "" {
-				sysVotes[s]++
+				w := 3
+				if gname == "Sun" {
+					w = 10
+				}
+				sysVotes[s] += w
 			}
+		case catCharge:
+			objects.add(r.TypeID, r.TypeName, "Charge", grid)
+		case catEntity:
+			kind := objectKindByGroup[gname]
+			if kind == "" {
+				kind = "NPC"
+			}
+			objects.add(r.TypeID, r.TypeName, kind, grid)
+		case catOrbitals:
+			objects.add(r.TypeID, r.TypeName, "Orbital", grid)
 		default:
-			d.Other++
+			objects.add(r.TypeID, r.TypeName, "Other", grid)
 		}
 	}
 	d.Classes, d.Types, d.Structures, d.Deployables = classes.sorted(), types.sorted(), structs.sorted(), deploy.sorted()
-	// The system: the name most celestials carry, if the SDE knows
-	// it (a few lookups at most).
+	d.DroneTypes, d.FighterTypes, d.Objects = droneTypes.sorted(), fighterTypes.sorted(), objects.sorted()
+	d.Hulls = rollupCounts(d.Types, func(c scanCount) string {
+		if h, ok := shipHullClasses[c.Class]; ok {
+			return h
+		}
+		return "Other"
+	})
+	d.Roles = rollupCounts(d.Types, func(c scanCount) string {
+		if r, ok := shipRoleTypes[c.ID]; ok {
+			return r
+		}
+		if r, ok := shipRoleGroups[c.Class]; ok {
+			return r
+		}
+		return "DPS"
+	})
+	d.Notable = notableCallouts(d)
+	// The system: the name the weighted vote carries, if the SDE
+	// knows it (a few lookups at most).
 	cands := make([]string, 0, len(sysVotes))
 	for s := range sysVotes {
 		cands = append(cands, s)
@@ -292,7 +465,7 @@ func (app *Application) readDScan(ctx context.Context, rows []scan.DScanRow) (*d
 		return cands[i] < cands[j]
 	})
 	for i, s := range cands {
-		if i == 3 {
+		if i == 6 {
 			break
 		}
 		if sys, err := app.queries.GetSDESystemByName(ctx, s); err == nil {
@@ -300,6 +473,58 @@ func (app *Application) readDScan(ctx context.Context, rows []scan.DScanRow) (*d
 		}
 	}
 	return d, 0
+}
+
+// rollupCounts folds type tallies into coarser buckets by a key
+// function, summing counts and on-grid counts.
+func rollupCounts(types []scanCount, pick func(scanCount) string) []scanCount {
+	t := newTally()
+	for _, c := range types {
+		k := pick(c)
+		e := t.at[k]
+		if e == nil {
+			e = &scanCount{Name: k}
+			t.at[k] = e
+			t.order = append(t.order, k)
+		}
+		e.N += c.N
+		e.Grid += c.Grid
+	}
+	return t.sorted()
+}
+
+// notableCallouts picks what a reader looks for first on a scan:
+// capital and special hulls, named a type at a time, and cheap
+// hulls massed past the point they are the fleet (25 or more of a
+// hull class, a fifth of the ships or better).
+func notableCallouts(d *dscanReading) []scanCount {
+	var out []scanCount
+	for _, c := range d.Types {
+		switch {
+		case notableGroups[c.Class]:
+			out = append(out, scanCount{ID: c.ID, Name: c.Name, Class: c.Class, N: c.N, Grid: c.Grid})
+		case specialHulls[c.ID]:
+			out = append(out, scanCount{ID: c.ID, Name: c.Name, Class: "Special edition", N: c.N, Grid: c.Grid})
+		}
+	}
+	for _, h := range d.Hulls {
+		switch h.Name {
+		case "Frigates", "Destroyers", "Cruisers", "Battlecruisers", "Battleships", "Industrial":
+			if h.N >= 25 && h.N*5 >= d.Ships {
+				out = append(out, scanCount{Name: h.Name, Class: "Massed hulls", N: h.N, Grid: h.Grid})
+			}
+		}
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		if out[i].N != out[j].N {
+			return out[i].N > out[j].N
+		}
+		return out[i].Name < out[j].Name
+	})
+	if len(out) > 8 {
+		out = out[:8]
+	}
+	return out
 }
 
 // readLocal resolves a local list: names to pilots, pilots to their
@@ -670,6 +895,10 @@ type scanPageView struct {
 	// it.
 	Killers  []scanKiller
 	OrgNames map[int64]string
+	// TypesGrid and TypesOff are a d-scan's ship types split by
+	// the grid line, each counted on its own side of it.
+	TypesGrid []scanCount
+	TypesOff  []scanCount
 	// Sigs are a probe scan's signatures, for display.
 	Sigs []probeSig
 	// PostTo are the channels the reader may post this scan to.
@@ -683,12 +912,36 @@ type probeSig struct {
 	Dist string
 }
 
+// sortCounts orders tallies most first, then by name, as tally's
+// own listing does.
+func sortCounts(list []scanCount) []scanCount {
+	sort.SliceStable(list, func(i, j int) bool {
+		if list[i].N != list[j].N {
+			return list[i].N > list[j].N
+		}
+		return list[i].Name < list[j].Name
+	})
+	return list
+}
+
 // prepScanView fills what the reading's page shows but does not
 // store: bar widths, distances.
 func prepScanView(v *scanPageView) {
 	r := &v.Result
 	if d := r.DScan; d != nil {
 		d.Classes, d.Types = withPct(d.Classes), withPct(d.Types)
+		d.Hulls, d.Roles = withPct(d.Hulls), withPct(d.Roles)
+		d.ShipsOff = d.Ships - d.ShipsGrid
+		for _, c := range d.Types {
+			if c.Grid > 0 {
+				v.TypesGrid = append(v.TypesGrid, scanCount{ID: c.ID, Name: c.Name, Class: c.Class, N: c.Grid})
+			}
+			if off := c.N - c.Grid; off > 0 {
+				v.TypesOff = append(v.TypesOff, scanCount{ID: c.ID, Name: c.Name, Class: c.Class, N: off})
+			}
+		}
+		v.TypesGrid = withPct(sortCounts(v.TypesGrid))
+		v.TypesOff = withPct(sortCounts(v.TypesOff))
 	}
 	if f := r.Fleet; f != nil {
 		f.Classes, f.Types, f.Systems, f.Wings = withPct(f.Classes), withPct(f.Types), withPct(f.Systems), withPct(f.Wings)
@@ -715,6 +968,53 @@ func prepScanView(v *scanPageView) {
 		}
 		for i := range l.Alliances {
 			l.Alliances[i].Pct = max(2, l.Alliances[i].N*100/top)
+		}
+		fillLocalRosters(l)
+	}
+}
+
+// scanRosterCap is how many pilots a local reading prints under
+// one corporation; the rest are counted, not listed.
+const scanRosterCap = 200
+
+// fillLocalRosters groups a local reading's stored pilot list
+// under its corporations for the page, sorted by name and capped
+// per corporation. Groups already carrying a roster (a reading
+// stored with one) keep it.
+func fillLocalRosters(l *localReading) {
+	if len(l.Pilots) == 0 {
+		return
+	}
+	byCorp := map[[2]int64][]localPilot{}
+	solo := map[int64][]localPilot{}
+	for _, p := range l.Pilots {
+		if p.AllianceID > 0 {
+			k := [2]int64{p.AllianceID, p.CorpID}
+			byCorp[k] = append(byCorp[k], p)
+		} else {
+			solo[p.CorpID] = append(solo[p.CorpID], p)
+		}
+	}
+	capList := func(ps []localPilot) ([]localPilot, int) {
+		sort.Slice(ps, func(i, j int) bool { return ps[i].Name < ps[j].Name })
+		if len(ps) > scanRosterCap {
+			return ps[:scanRosterCap], len(ps) - scanRosterCap
+		}
+		return ps, 0
+	}
+	for i := range l.Alliances {
+		g := &l.Alliances[i]
+		if g.Corp {
+			if len(g.Pilots) == 0 {
+				g.Pilots, g.MorePilots = capList(solo[g.ID])
+			}
+			continue
+		}
+		for j := range g.Corps {
+			c := &g.Corps[j]
+			if len(c.Pilots) == 0 {
+				c.Pilots, c.MorePilots = capList(byCorp[[2]int64{g.ID, c.ID}])
+			}
 		}
 	}
 }

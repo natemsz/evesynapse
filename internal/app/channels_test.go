@@ -150,3 +150,92 @@ func TestIntelChannels(t *testing.T) {
 		t.Errorf("the owner's removal did not take")
 	}
 }
+
+// TestIntelFeedAccess: the cross-channel feed gathers only the
+// channels its reader can reach, each report naming its channel; a
+// channel nobody granted stays out of it entirely, and the page
+// itself needs a signed-in account.
+func TestIntelFeedAccess(t *testing.T) {
+	app, conn, q := buildCorpTestApp(t, nil)
+	ctx := context.Background()
+	if _, err := conn.ExecContext(ctx, `INSERT INTO sde_systems (system_id, name, region_id, security) VALUES
+		(30000142, 'Jita', 10000002, 0.946), (30004759, '1DQ1-A', 10000060, -0.38) ON CONFLICT DO NOTHING`); err != nil {
+		t.Fatal(err)
+	}
+	const corp, otherCorp = int64(98000101), int64(98000102)
+	member := func(charID int64, name string, corpID int64) (int64, *http.Cookie) {
+		u, err := q.CreateUser(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		seedCharacter(t, q, u.ID, charID, name)
+		if err := q.UpsertCharacterCorporation(ctx, db.UpsertCharacterCorporationParams{CharacterID: charID, CorporationID: corpID, UpdatedAt: time.Now().UTC()}); err != nil {
+			t.Fatal(err)
+		}
+		return u.ID, sessionCookie(t, app, u.ID, charID, name)
+	}
+	ownerID, owner := member(90000101, "Channel Owner", corp)
+	_, mate := member(90000102, "Corp Mate", corp)
+	_, stranger := member(90000103, "Other Pilot", otherCorp)
+
+	send := func(c *http.Cookie, path string, form url.Values) *httptest.ResponseRecorder {
+		t.Helper()
+		req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(form.Encode()))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.Header.Set("X-Requested-With", "XMLHttpRequest")
+		req.AddCookie(c)
+		rec := httptest.NewRecorder()
+		app.Handler().ServeHTTP(rec, req)
+		return rec
+	}
+	send(owner, "/intel/channels/create", url.Values{"name": {"Home intel"}})
+	send(owner, "/intel/channels/create", url.Values{"name": {"Secret intel"}})
+	chans, err := q.ListAccessibleChannels(ctx, db.ListAccessibleChannelsParams{UserID: ownerID, CharacterIds: []int64{}, CorporationIds: []int64{}, AllianceIds: []int64{}, GroupIds: []int64{}})
+	if err != nil || len(chans) != 2 {
+		t.Fatalf("the owner's channels: %+v %v", chans, err)
+	}
+	byName := map[string]int64{}
+	for _, c := range chans {
+		byName[c.Name] = c.ID
+	}
+	if err := q.UpsertIntelChannelGrant(ctx, db.UpsertIntelChannelGrantParams{ChannelID: byName["Home intel"], Kind: "corporation", TargetID: corp, CanPost: true, CreatedAt: time.Now()}); err != nil {
+		t.Fatal(err)
+	}
+	report := func(c *http.Cookie, channelID int64, text string) {
+		t.Helper()
+		path := "/intel/channels/" + strconv.FormatInt(channelID, 10) + "/report"
+		if rec := send(c, path, url.Values{"system": {"Jita"}, "text": {text}}); rec.Code != http.StatusOK {
+			t.Fatalf("report %q: %d %s", text, rec.Code, rec.Body.String())
+		}
+	}
+	report(owner, byName["Home intel"], "Home Guy")
+	report(owner, byName["Secret intel"], "Secret Guy")
+
+	feed := func(c *http.Cookie) []reportView {
+		t.Helper()
+		var d struct{ Reports []reportView }
+		_, body := getPage(t, app, c, "/intel/feed.json")
+		if err := json.Unmarshal([]byte(body), &d); err != nil {
+			t.Fatalf("feed.json: %v %s", err, body)
+		}
+		return d.Reports
+	}
+	if rs := feed(mate); len(rs) != 1 || rs[0].Text != "Home Guy" || rs[0].ChName != "Home intel" {
+		t.Errorf("the mate's feed carries only the granted channel, named: %+v", rs)
+	}
+	if rs := feed(owner); len(rs) != 2 {
+		t.Errorf("the owner's feed carries both channels: %+v", rs)
+	}
+	if rs := feed(stranger); len(rs) != 0 {
+		t.Errorf("a stranger's feed is empty: %+v", rs)
+	}
+	if code, body := getPage(t, app, mate, "/intel/feed/"); code != http.StatusOK || !strings.Contains(body, "Home Guy") || strings.Contains(body, "Secret Guy") {
+		t.Errorf("the mate's feed page: %d, shows the granted channel's report only", code)
+	}
+	req := httptest.NewRequest(http.MethodGet, "/intel/feed/", nil)
+	rec := httptest.NewRecorder()
+	app.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusSeeOther {
+		t.Errorf("the feed page signed out: %d, want the sign-in redirect", rec.Code)
+	}
+}

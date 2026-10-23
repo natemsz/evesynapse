@@ -1,4 +1,5 @@
-/* channels.js -- one intel channel (channel.html).
+/* channels.js -- an intel channel (channel.html) and the
+ * cross-channel feed (feed.html).
  *
  * The feed is live: every 10 seconds while the page is in view it
  * asks feed.json for the reports after the newest it shows, and puts
@@ -88,7 +89,16 @@
     var t = doc.createElement("time");
     t.dateTime = new Date(r.at * 1000).toISOString();
     t.textContent = ago(r.at);
-    meta.appendChild(doc.createTextNode(r.by + " · "));
+    meta.appendChild(doc.createTextNode(r.by));
+    if (r.chn) {
+      // The cross-channel feed names the channel each report is in.
+      var ca = doc.createElement("a");
+      ca.href = "/intel/channels/" + r.ch + "/";
+      ca.textContent = r.chn;
+      meta.appendChild(doc.createTextNode(" · "));
+      meta.appendChild(ca);
+    }
+    meta.appendChild(doc.createTextNode(" · "));
     meta.appendChild(t);
     if (r.mine) {
       var f = doc.createElement("form");

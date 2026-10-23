@@ -734,6 +734,8 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	r.Group(func(r chi.Router) {
 		r.Use(app.requireAuth)
 		r.Post("/intel/scan/{id}/post", app.handleScanPost)
+		r.Get("/intel/feed/", app.handleIntelFeed)
+		r.Get("/intel/feed.json", app.handleIntelFeedJSON)
 		r.Post("/intel/channels/create", app.handleChannelCreate)
 		r.Get("/intel/channels/{channelID}/", app.handleChannel)
 		r.Get("/intel/channels/{channelID}/feed.json", app.handleChannelFeed)

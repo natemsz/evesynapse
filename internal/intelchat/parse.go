@@ -10,7 +10,8 @@
 // The timestamp and speaker are optional (a bare "1DQ1-A clr" reads
 // too). The system is found anywhere in the message, longest name
 // first (names run up to three words: "Old Man Star"). Counts are
-// written "+3", "3x" or "x3"; "clr"/"clear" marks the system clear;
+// written "+3", "3x" or "x3", or as a bare number before who they
+// are ("5 reds", "12 neuts"); "clr"/"clear" marks the system clear;
 // "nv" (no visual) and "status?" questions are understood. What is
 // left once those are taken out is the report's text -- usually the
 // pilots' names.
@@ -40,11 +41,14 @@ type Report struct {
 }
 
 // Outcome of Parse beyond the reports: lines that named no system,
-// and questions ("status?"), neither of which are reports.
+// and questions ("status?"), neither of which are reports. The
+// no-system lines are kept as written, so whoever pasted them can
+// be shown what was not read instead of it vanishing.
 type Outcome struct {
-	Reports   []Report
-	NoSystem  int
-	Questions int
+	Reports       []Report
+	NoSystem      int
+	NoSystemLines []string
+	Questions     int
 }
 
 var (
@@ -66,6 +70,7 @@ func Parse(raw string, lookup Lookup, now time.Time) Outcome {
 		if line == "" {
 			continue
 		}
+		orig := line
 		var r Report
 		if m := stamp.FindStringSubmatch(line); m != nil {
 			r.At = stampTime(m, now)
@@ -109,6 +114,11 @@ func Parse(raw string, lookup Lookup, now time.Time) Outcome {
 				r.Clear, used[i] = true, true
 			case lw == "nv" || lw == "novis" || lw == "novisual":
 				r.NoVisual, used[i] = true, true
+			case i+1 < len(words) && !used[i+1] && bareCount(lw) > 0 && hostileNoun(strings.ToLower(trim(words[i+1]))):
+				// "5 reds": a bare number counts when who they are
+				// follows it; the pair is the count, not text.
+				r.Hostiles += bareCount(lw)
+				used[i], used[i+1] = true, true
 			case lw == "status" || lw == "status?" || strings.HasSuffix(w, "?") && len(words) <= 3:
 				question = true
 			default:
@@ -125,6 +135,7 @@ func Parse(raw string, lookup Lookup, now time.Time) Outcome {
 		}
 		if r.SystemID == 0 {
 			out.NoSystem++
+			out.NoSystemLines = append(out.NoSystemLines, orig)
 			continue
 		}
 		if question && !r.Clear && r.Hostiles == 0 {
@@ -163,6 +174,29 @@ func restText(msg string, used []bool) string {
 		gap = ""
 	}
 	return b.String()
+}
+
+// bareCount reads a plain number ("5", "12") as a count. Zero and
+// anything longer than three digits are not counts.
+func bareCount(w string) int {
+	if len(w) == 0 || len(w) > 3 {
+		return 0
+	}
+	n, err := strconv.Atoi(w)
+	if err != nil || n <= 0 {
+		return 0
+	}
+	return n
+}
+
+// hostileNoun is who a bare count counts: the words intel uses for
+// pilots who are not friendly.
+func hostileNoun(w string) bool {
+	switch w {
+	case "red", "reds", "neut", "neuts", "hostile", "hostiles":
+		return true
+	}
+	return false
 }
 
 var wordRe = regexp.MustCompile(`\S+`)

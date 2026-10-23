@@ -218,6 +218,7 @@ type groupChoice struct {
 type reportView struct {
 	ID         int64  `json:"id"`
 	Channel    int64  `json:"ch"`
+	ChName     string `json:"chn,omitempty"` // the channel's name: set on the cross-channel feed only
 	SystemID   int64  `json:"sys"`
 	SystemName string `json:"sysName"`
 	SecText    string `json:"sec"`
@@ -444,6 +445,99 @@ func (app *Application) handleChannelFeed(w http.ResponseWriter, r *http.Request
 	_ = json.NewEncoder(w).Encode(map[string]any{"reports": reports})
 }
 
+// --- The cross-channel feed ---
+
+// intelFeedView is the feed page: the newest reports across every
+// channel its reader can reach, each card naming its channel.
+type intelFeedView struct {
+	Reports  []reportView
+	Older    string
+	LastID   int64
+	Channels int // how many channels feed it
+}
+
+// feedReports lists reports across channels as the feed shows them:
+// channelReports across more than one channel, each view naming
+// its channel.
+func (app *Application) feedReports(ctx context.Context, id intelIdentity, channels []accessChannel, after int64, beforeAt time.Time, beforeID int64, limit int) []reportView {
+	if len(channels) == 0 {
+		return nil
+	}
+	ids := make([]int64, 0, len(channels))
+	namesByID := make(map[int64]string, len(channels))
+	for _, c := range channels {
+		ids = append(ids, c.ID)
+		namesByID[c.ID] = c.Name
+	}
+	rows, err := app.queries.ListIntelReportsAcrossChannels(ctx, db.ListIntelReportsAcrossChannelsParams{ChannelIds: ids, AfterID: after, BeforeAt: beforeAt, BeforeID: beforeID, MaxRows: int32(limit)})
+	if err != nil {
+		logging.Warnf("channels: feed reports: %v", err)
+		return nil
+	}
+	names := app.newKillNames(ctx)
+	now := time.Now()
+	out := make([]reportView, 0, len(rows))
+	for _, r := range rows {
+		rv := reportView{ID: r.ID, Channel: r.ChannelID, ChName: namesByID[r.ChannelID], SystemID: r.SystemID, Reporter: r.Reporter, Text: r.Text,
+			Hostiles: r.Hostiles, Clear: r.Clear, ScanID: r.ScanID, Source: r.Source, At: r.SeenAt.Unix(), Time: r.SeenAt,
+			Ago: ageText(now, r.SeenAt), Mine: r.AuthorUserID == id.userID}
+		sys := names.system(r.SystemID)
+		rv.SystemName = sys.Name
+		rv.SecText, rv.SecTier = secRound(sys.Security)
+		applyAnalysis(&rv, r.Kind, r.Analysis, names)
+		out = append(out, rv)
+	}
+	return out
+}
+
+func (app *Application) handleIntelFeed(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	id := app.intelIdentity(ctx)
+	channels := app.accessibleChannels(ctx, id)
+	data := app.publicPage(ctx)
+	v := &intelFeedView{Channels: len(channels)}
+	// Pages go back by (seen, id), as a channel's do: ?before=<unix>.<id>.
+	beforeAt, beforeID, paged := intelFeedTop(), int64(1<<62), false
+	if b := r.URL.Query().Get("before"); b != "" {
+		if dot := strings.IndexByte(b, '.'); dot > 0 {
+			sec, err1 := strconv.ParseInt(b[:dot], 10, 64)
+			bid, err2 := strconv.ParseInt(b[dot+1:], 10, 64)
+			if err1 == nil && err2 == nil {
+				beforeAt, beforeID, paged = time.Unix(sec, 0).UTC(), bid, true
+			}
+		}
+	}
+	v.Reports = app.feedReports(ctx, id, channels, 0, beforeAt, beforeID, intelFeedPage)
+	if len(v.Reports) == intelFeedPage {
+		last := v.Reports[len(v.Reports)-1]
+		v.Older = fmt.Sprintf("/intel/feed/?before=%d.%d", last.At, last.ID)
+	}
+	if !paged {
+		for _, rep := range v.Reports {
+			v.LastID = max(v.LastID, rep.ID)
+		}
+	}
+	data.IntelFeed = v
+	data.HeadMeta = app.HeadMeta(module.PageMeta{Title: "Intel Feed", Description: "The newest reports across your intel channels.", CanonicalPath: "/intel/feed/"})
+	app.render(ctx, w, http.StatusOK, "feed.html", data)
+}
+
+// handleIntelFeedJSON is GET /intel/feed.json: the feed page's live
+// poll, the reports across the reader's channels posted after
+// after_id.
+func (app *Application) handleIntelFeedJSON(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	id := app.intelIdentity(ctx)
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "private, no-store")
+	after, _ := strconv.ParseInt(r.URL.Query().Get("after"), 10, 64)
+	reports := app.feedReports(ctx, id, app.accessibleChannels(ctx, id), after, intelFeedTop(), 1<<62, intelFeedPage)
+	if reports == nil {
+		reports = []reportView{}
+	}
+	_ = json.NewEncoder(w).Encode(map[string]any{"reports": reports})
+}
+
 // --- Posting ---
 
 // wantsJSON: the map's quick report and the feed post by script.
@@ -483,6 +577,32 @@ func (app *Application) handleChannelReport(w http.ResponseWriter, r *http.Reque
 			reply(http.StatusUnprocessableEntity, fmt.Sprintf("Paste up to %d lines at a time.", intelMaxLines), 0)
 			return
 		}
+		// linesReply is reply, with the lines that named no system
+		// named in the answer: shown to the poster as written, never
+		// silently dropped.
+		linesReply := func(status int, msg string, n int, skipped []string) {
+			if wantsJSON(r) {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(status)
+				_ = json.NewEncoder(w).Encode(map[string]any{"ok": status < 300, "message": msg, "posted": n, "skippedLines": skipped})
+				return
+			}
+			if len(skipped) > 0 {
+				shown := skipped
+				if len(shown) > 3 {
+					shown = shown[:3]
+				}
+				quoted := make([]string, len(shown))
+				for i, s := range shown {
+					quoted[i] = "“" + clipRunes(s, 80) + "”"
+				}
+				msg += " Not read: " + strings.Join(quoted, " · ")
+				if len(skipped) > len(shown) {
+					msg += fmt.Sprintf(" and %d more.", len(skipped)-len(shown))
+				}
+			}
+			app.flashBack(w, r, page)(msg)
+		}
 		res := app.postChatLines(ctx, base, lines, "chat")
 		posted := res.Posted
 		msg := fmt.Sprintf("Posted %s from the pasted lines.", plural(posted, "report"))
@@ -493,14 +613,14 @@ func (app *Application) handleChannelReport(w http.ResponseWriter, r *http.Reque
 			msg += fmt.Sprintf(" %s skipped (no system named, or a question).", plural(res.Skipped, "line"))
 		}
 		if posted == 0 && res.Duplicates > 0 {
-			reply(http.StatusOK, msg, 0)
+			linesReply(http.StatusOK, msg, 0, res.SkippedLines)
 			return
 		}
 		if posted == 0 {
-			reply(http.StatusUnprocessableEntity, "No report found in those lines: each needs a system's name.", 0)
+			linesReply(http.StatusUnprocessableEntity, "No report found in those lines: each needs a system's name.", 0, res.SkippedLines)
 			return
 		}
-		reply(http.StatusOK, msg, posted)
+		linesReply(http.StatusOK, msg, posted, res.SkippedLines)
 		return
 	}
 
@@ -537,11 +657,14 @@ func (app *Application) handleChannelReport(w http.ResponseWriter, r *http.Reque
 	reply(http.StatusOK, "Reported.", 1)
 }
 
-// chatPostResult is what posting chat lines came to.
+// chatPostResult is what posting chat lines came to. SkippedLines
+// are the lines that named no system, kept as written so the poster
+// can be shown what was not read.
 type chatPostResult struct {
-	Posted     int `json:"posted"`
-	Duplicates int `json:"duplicates"`
-	Skipped    int `json:"skipped"`
+	Posted       int      `json:"posted"`
+	Duplicates   int      `json:"duplicates"`
+	Skipped      int      `json:"skipped"`
+	SkippedLines []string `json:"skippedLines,omitempty"`
 }
 
 // postChatLines reads intel chat lines into reports on base's channel,
@@ -555,6 +678,7 @@ func (app *Application) postChatLines(ctx context.Context, base db.InsertIntelRe
 	now := base.CreatedAt
 	o := intelchat.Parse(lines, app.systemLookup(ctx), now)
 	res.Skipped = o.NoSystem + o.Questions
+	res.SkippedLines = o.NoSystemLines
 	for _, rep := range o.Reports {
 		p := base
 		p.Source, p.SystemID, p.Clear, p.Hostiles = source, rep.SystemID, rep.Clear, int32(min(max(rep.Hostiles, 0), 999))

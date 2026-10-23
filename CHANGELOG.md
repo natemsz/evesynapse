@@ -318,7 +318,7 @@ Automated build of EveSynapse v0.5.5.0. Update with: evesynapse -update -arm64 (
 ### 🐛 Bug Fixes
 * Fix: Argon re-attack residuals (1.1, 1.8c, 2.8e, 3.2.2, 4.1c, 4.2) by @natemsz in https://github.com/natemsz/evesynapse/pull/525
 ### Other Changes
-* Universe map: New Eden top-down with DOTLAN-style tactical region views by @natemsz in https://github.com/natemsz/evesynapse/pull/526
+* Universe map: New Eden top-down with tactical region views by @natemsz in https://github.com/natemsz/evesynapse/pull/526
 * Map: smooth zoom, touchpad gestures, full keyboard by @natemsz in https://github.com/natemsz/evesynapse/pull/527
 
 

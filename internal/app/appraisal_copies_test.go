@@ -159,7 +159,7 @@ func TestAppraiseLinesBlueprintCopyPricing(t *testing.T) {
 	// fallback. 17482 has a fresh typical and nothing else.
 	exec(`INSERT INTO market_region_stats (region_id, type_id, typical_sell, updated_at) VALUES
 		(10000002, 17481, 1558500000, $1), (10000002, 17482, 5000, $1)`, now.Add(-time.Hour))
-	exec(`INSERT INTO true_values (type_id, build_cost, est_sell, computed_at) VALUES (17481, 0, 999999999, $1)`, now)
+	exec(`INSERT INTO true_values (type_id, build_cost, est_sell, sell_samples, sell_source, computed_at) VALUES (17481, 0, 999999999, 2, 'listing', $1)`, now)
 	if err := q.InsertMarketStatsFallback(ctx, db.InsertMarketStatsFallbackParams{
 		RegionID: 10000002, TypeID: 17481, MedianSell: 888_888_888, FivepctSell: 888_888_888,
 		Source: "fuzzwork", SourceAsof: now.Add(-time.Hour), FetchedAt: now,

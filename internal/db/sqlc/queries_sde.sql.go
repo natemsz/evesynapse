@@ -591,6 +591,40 @@ func (q *Queries) GetTypeName(ctx context.Context, typeID int64) (string, error)
 	return name, err
 }
 
+const listAllSDEShipTypeIDs = `-- name: ListAllSDEShipTypeIDs :many
+SELECT t.type_id FROM sde_types t
+JOIN sde_groups g ON g.group_id = t.group_id
+WHERE g.category_id = 6
+ORDER BY t.type_id
+`
+
+// Every ship type in the SDE, ascending: the true-value
+// pass's evidence-only candidates (ship types with no
+// manufacturing blueprint -- prize hulls and the like -- that
+// only contract evidence can price).
+func (q *Queries) ListAllSDEShipTypeIDs(ctx context.Context) ([]int64, error) {
+	rows, err := q.db.QueryContext(ctx, listAllSDEShipTypeIDs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []int64
+	for rows.Next() {
+		var type_id int64
+		if err := rows.Scan(&type_id); err != nil {
+			return nil, err
+		}
+		items = append(items, type_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listAllTypeNames = `-- name: ListAllTypeNames :many
 SELECT type_id, name FROM type_names
 ORDER BY type_id

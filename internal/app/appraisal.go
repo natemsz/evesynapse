@@ -145,8 +145,10 @@ func resolveAppraisalPriceMode(own *db.MarketRegionStat, tv *db.TrueValue, fb *d
 	if p, ok := typicalForMode(own, mode); ok && now.Sub(own.UpdatedAt) < fallbackOwnFresh {
 		return p
 	}
-	if tv != nil && tv.EstSell.Valid && tv.EstSell.Float64 > 0 {
-		return appraisalPrice{unit: tv.EstSell.Float64, tier: module.AppraisalTierEstimate, asOf: tv.ComputedAt, ok: true}
+	if tv != nil {
+		if est, ok := storedEstimate(*tv); ok {
+			return appraisalPrice{unit: est, tier: module.AppraisalTierEstimate, asOf: tv.ComputedAt, ok: true}
+		}
 	}
 	if fb != nil && fb.MedianSell > 0 && now.Sub(fb.SourceAsof) < fallbackHardExpiry {
 		return appraisalPrice{unit: fb.MedianSell, tier: module.AppraisalTierFallback, asOf: fb.SourceAsof, ok: true}

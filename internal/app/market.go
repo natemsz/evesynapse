@@ -890,9 +890,11 @@ func (app *Application) loadMarketItem(ctx context.Context, typeID, regionID int
 	// market, and CCP's adjusted price for it is a fossil.
 	// The stored true value is the honest headline instead.
 	if item.AveragePrice == "" {
-		if tv, ok := app.storedTrueValues(ctx)[typeID]; ok && tv.EstSell.Valid && tv.EstSell.Float64 > 0 {
-			item.EstimatedSell = esi.FormatISK(tv.EstSell.Float64)
-			item.EstimatedSellNote = trueValueBasis(tv)
+		if tv, ok := app.storedTrueValues(ctx)[typeID]; ok {
+			if est, ok := storedEstimate(tv); ok {
+				item.EstimatedSell = esi.FormatISK(est)
+				item.EstimatedSellNote = trueValueBasis(tv)
+			}
 		}
 	}
 

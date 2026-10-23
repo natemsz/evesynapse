@@ -679,14 +679,16 @@ func (app *Application) buildItemTypeDetail(ctx context.Context, t db.SdeType) *
 	// sell only where the market cannot price the type).
 	// Without a guide average it is the price of record, so
 	// the adjusted row steps aside rather than posing as one.
-	if tv, ok := app.storedTrueValues(ctx)[typeID]; ok && tv.EstSell.Valid && tv.EstSell.Float64 > 0 {
-		if tv.BuildCost > 0 {
-			detail.BuildCost = esi.FormatISK(tv.BuildCost)
-		}
-		detail.EstimatedSell = esi.FormatISK(tv.EstSell.Float64)
-		detail.EstimatedSellNote = trueValueBasis(tv)
-		if detail.AveragePrice == "" {
-			detail.AdjustedPrice = ""
+	if tv, ok := app.storedTrueValues(ctx)[typeID]; ok {
+		if est, ok := storedEstimate(tv); ok {
+			if tv.BuildCost > 0 {
+				detail.BuildCost = esi.FormatISK(tv.BuildCost)
+			}
+			detail.EstimatedSell = esi.FormatISK(est)
+			detail.EstimatedSellNote = trueValueBasis(tv)
+			if detail.AveragePrice == "" {
+				detail.AdjustedPrice = ""
+			}
 		}
 	}
 

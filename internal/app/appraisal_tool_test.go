@@ -46,8 +46,9 @@ func seedAppraisalTool(t *testing.T, conn *sql.DB, q *db.Queries) {
 		(10000002, 7001, 1000000, 0, $1), (10000002, 40001, 40000, 0, $1)`, now.Add(-time.Hour))
 	exec(`INSERT INTO market_region_stats (region_id, type_id, typical_sell, typical_buy, updated_at)
 		VALUES (10000002, 30001, 150000, 0, $1)`, now.Add(-10*24*time.Hour))
-	// Pyerite: a stored estimate only.
-	exec(`INSERT INTO true_values (type_id, build_cost, est_sell, computed_at) VALUES (35, 0, 9.25, $1)`, now)
+	// Pyerite: a stored estimate only (tier-backed, the only
+	// kind the worker writes).
+	exec(`INSERT INTO true_values (type_id, build_cost, est_sell, sell_samples, sell_source, computed_at) VALUES (35, 0, 9.25, 2, 'listing', $1)`, now)
 	// Cap Booster 3200: a live fallback median; Damage
 	// Control II: the same source, long expired.
 	fb := func(typeID int64, median float64, asof time.Time) {

@@ -20,7 +20,7 @@ func TestResolveAppraisalPriceOrder(t *testing.T) {
 	freshOwn := &db.MarketRegionStat{TypeID: 1, TypicalSell: 100, UpdatedAt: now.Add(-time.Hour)}
 	staleOwn := &db.MarketRegionStat{TypeID: 1, TypicalSell: 100, UpdatedAt: now.Add(-10 * 24 * time.Hour)}
 	zeroOwn := &db.MarketRegionStat{TypeID: 1, TypicalSell: 0, UpdatedAt: now.Add(-time.Hour)}
-	tv := &db.TrueValue{TypeID: 1, EstSell: sql.NullFloat64{Float64: 80, Valid: true}, ComputedAt: now.Add(-2 * time.Hour)}
+	tv := &db.TrueValue{TypeID: 1, EstSell: sql.NullFloat64{Float64: 80, Valid: true}, SellSource: tvSampleListing, ComputedAt: now.Add(-2 * time.Hour)}
 	tvNone := &db.TrueValue{TypeID: 1, ComputedAt: now}
 	freshFB := &db.MarketStatsFallback{TypeID: 1, MedianSell: 60, SourceAsof: now.Add(-time.Hour)}
 	expiredFB := &db.MarketStatsFallback{TypeID: 1, MedianSell: 60, SourceAsof: now.Add(-72 * time.Hour)}
@@ -179,8 +179,8 @@ func TestAppraisePublicContractsEndToEnd(t *testing.T) {
 	exec(`INSERT INTO market_region_stats (region_id, type_id, typical_sell, updated_at) VALUES (10000002, 1001, 100, $1)`, now.Add(-time.Hour))
 	exec(`INSERT INTO market_region_stats (region_id, type_id, typical_sell, updated_at) VALUES (10000002, 1002, 50, $1)`, now.Add(-10*24*time.Hour))
 	exec(`INSERT INTO market_region_stats (region_id, type_id, typical_sell, updated_at) VALUES (10000002, 1005, 10, $1)`, now.Add(-10*24*time.Hour))
-	exec(`INSERT INTO true_values (type_id, build_cost, est_sell, computed_at) VALUES (1002, 0, 80, $1)`, now)
-	exec(`INSERT INTO true_values (type_id, build_cost, est_sell, computed_at) VALUES (1003, 0, 30, $1)`, now)
+	exec(`INSERT INTO true_values (type_id, build_cost, est_sell, sell_samples, sell_source, computed_at) VALUES (1002, 0, 80, 2, 'listing', $1)`, now)
+	exec(`INSERT INTO true_values (type_id, build_cost, est_sell, sell_samples, sell_source, computed_at) VALUES (1003, 0, 30, 2, 'listing', $1)`, now)
 	fb := func(typeID int64, median float64, asof time.Time) db.InsertMarketStatsFallbackParams {
 		return db.InsertMarketStatsFallbackParams{
 			RegionID: 10000002, TypeID: typeID, MedianSell: median, FivepctSell: median,

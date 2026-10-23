@@ -603,6 +603,16 @@ SELECT t.type_id FROM sde_types t
 JOIN sde_groups g ON g.group_id = t.group_id
 WHERE g.category_id = 6 AND t.type_id = ANY(sqlc.arg(type_ids)::bigint[]);
 
+-- Every ship type in the SDE, ascending: the true-value
+-- pass's evidence-only candidates (ship types with no
+-- manufacturing blueprint -- prize hulls and the like -- that
+-- only contract evidence can price).
+-- name: ListAllSDEShipTypeIDs :many
+SELECT t.type_id FROM sde_types t
+JOIN sde_groups g ON g.group_id = t.group_id
+WHERE g.category_id = 6
+ORDER BY t.type_id;
+
 -- Every ship by name with its group, for reading intel reports
 -- (intel_analysis.go).
 -- name: ListSDEShipNames :many

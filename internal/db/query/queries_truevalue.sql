@@ -1,13 +1,17 @@
 -- True values (schema 051): the worker's bottom-up price per
 -- manufacturable type. build_cost is the per-unit cost of
--- building the type at the standard pricing profile; est_sell
--- is the estimated sell price for types with no real market
--- (NULL while the market price rules); sell_samples counts the
--- samples of the tier behind est_sell (0 = anchored to build
--- cost); sell_source names that tier (schema 052): 'fulfilled'
--- (linked characters' finished contracts -- certain sales),
--- 'vanished' (watched listings gone before expiry -- likely
--- sold), 'listing' (live public asks), '' while anchored.
+-- building the type at the standard pricing profile (0 for
+-- types with no manufacturing blueprint, priced from contract
+-- evidence alone); est_sell is the estimated sell price for
+-- types with no real market -- NULL until an evidence tier
+-- stands behind a figure, because a build cost is a cost and
+-- is never stored as a sell price. sell_samples counts the
+-- samples behind est_sell (while it is NULL, every fresh
+-- sample seen); sell_source names that tier (schema 052):
+-- 'fulfilled' (linked characters' finished contracts --
+-- certain sales), 'vanished' (watched listings gone before
+-- expiry -- likely sold), 'listing' (live public asks),
+-- '' while no tier has spoken.
 -- Consumers resolve: The Forge's swept typical sell, then
 -- est_sell, then unpriced (the guide average is never a price).
 -- Written only by the worker's true-value pass.
@@ -80,10 +84,28 @@ DELETE FROM true_value_contract_observations
 WHERE contract_id = $1;
 
 -- name: ListTVVanishedSamplesSince :many
-SELECT type_id, sample_price, vanished_at, sold
+SELECT contract_id, type_id, sample_price, vanished_at, sold
 FROM true_value_contract_observations
 WHERE vanished_at IS NOT NULL AND vanished_at >= $1
 ORDER BY type_id, vanished_at;
+
+-- Departed ship contracts awaiting their exit probe: watched
+-- observations (the crawl's, and the ones the corpus miner
+-- records) whose contract has left the stored public-contract
+-- corpus -- the corpus holds live contracts only, so absence
+-- is a departure -- and whose expiry is still near enough for
+-- ESI to answer whether it was accepted (a 204 before expiry
+-- is a sale; see pub_contracts_sales.go). Freshest departures
+-- first: ESI's memory of an accepted contract fades.
+-- name: ListTVShipSaleProbes :many
+SELECT o.contract_id, o.expires_at, o.type_id, o.sample_price, o.first_seen_at
+FROM true_value_contract_observations o
+WHERE o.vanished_at IS NULL
+  AND o.type_id = ANY(sqlc.arg(ship_type_ids)::bigint[])
+  AND o.expires_at > sqlc.arg(probe_after)::timestamptz
+  AND NOT EXISTS (SELECT 1 FROM pub_contracts c WHERE c.contract_id = o.contract_id)
+ORDER BY o.last_seen_at DESC
+LIMIT sqlc.arg(max_rows)::bigint;
 
 -- name: PurgeTVContractObservations :exec
 DELETE FROM true_value_contract_observations
@@ -95,3 +117,28 @@ SELECT type_id, build_cost, est_sell, sell_samples, computed_at, profile_version
 FROM true_values
 WHERE type_id = ANY($1::bigint[])
 ORDER BY type_id;
+
+-- The stored public-contract corpus's live item exchanges
+-- carrying one type: the newest-seen contracts first, capped,
+-- with every stored item line of each, so the true-value pass
+-- can judge a contract's shape from the corpus exactly as it
+-- judges a crawl fetch. The corpus holds live contracts only
+-- (the sweep retires them once they close), so a contract's
+-- last_seen is its ask standing now.
+-- name: ListTrueValueCorpusContracts :many
+WITH cand AS (
+    SELECT c.contract_id, c.price, c.last_seen, c.region_id, c.date_expired, c.first_seen
+    FROM pub_contracts c
+    WHERE c.type = 'item_exchange' AND c.items_state = 'stored'
+      AND c.price >= $2
+      AND EXISTS (SELECT 1 FROM pub_contract_items x
+                  WHERE x.contract_id = c.contract_id
+                    AND x.type_id = $1 AND x.is_included)
+    ORDER BY c.last_seen DESC
+    LIMIT $3
+)
+SELECT cand.contract_id, cand.price, cand.last_seen, cand.region_id, cand.date_expired, cand.first_seen,
+       i.type_id, i.quantity, i.is_included
+FROM cand
+JOIN pub_contract_items i ON i.contract_id = cand.contract_id
+ORDER BY cand.contract_id, i.type_id;

@@ -533,6 +533,11 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	r.Get("/about/", app.handleAbout)
 	r.Get("/license", app.handleLicense)
 	r.Get("/license/", app.handleLicense)
+	// The Report a bug page is public for the same reason: the
+	// people who hit a bug may not have an account yet, and the
+	// footer on every page links here.
+	r.Get("/report", app.handleReport)
+	r.Get("/report/", app.handleReport)
 	r.Get("/auth/link", app.handleLinkChoose)
 	r.Get("/auth/eve", app.handleEVELogin)
 	r.Get("/auth/login", app.handleEVELoginIdentity)

@@ -24,6 +24,7 @@ import (
 	"crypto/rand"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"math/big"
 	"net/http"
 	"sort"
@@ -248,12 +249,13 @@ type localPilot struct {
 }
 
 type localGroup struct {
-	ID    int64        `json:"id"`
-	Name  string       `json:"name"`
-	N     int          `json:"n"`
-	Kills int64        `json:"kills,omitempty"`
-	Corps []localGroup `json:"corps,omitempty"`
-	Pct   int          `json:"-"`
+	ID     int64        `json:"id"`
+	Name   string       `json:"name"`
+	Ticker string       `json:"ticker,omitempty"`
+	N      int          `json:"n"`
+	Kills  int64        `json:"kills,omitempty"`
+	Corps  []localGroup `json:"corps,omitempty"`
+	Pct    int          `json:"-"`
 	// Corp marks a corporation standing outside any alliance.
 	Corp bool `json:"corp,omitempty"`
 	// Pilots is the group's roster as the page shows it, grouped
@@ -642,7 +644,56 @@ func (app *Application) readLocal(ctx context.Context, names []string) *localRea
 		}
 	}
 	l.Alliances = groupLocal(l.Pilots, orgName)
+	app.fillLocalTickers(ctx, l.Alliances)
 	return l
+}
+
+// scanTickerBudget bounds the public calls a local paste spends on
+// alliance and corporation tickers.
+const scanTickerBudget = 30
+
+// fillLocalTickers resolves group tickers from ESI's public org
+// records, biggest groups first, under a fixed call budget. A
+// group the budget or ESI does not reach keeps no ticker; the
+// reading is not marked partial over dressing.
+func (app *Application) fillLocalTickers(ctx context.Context, groups []localGroup) {
+	type target struct {
+		g    *localGroup
+		path string
+	}
+	var targets []target
+	for i := range groups {
+		g := &groups[i]
+		if g.ID <= 0 {
+			continue
+		}
+		kind := "alliances"
+		if g.Corp {
+			kind = "corporations"
+		}
+		targets = append(targets, target{g, fmt.Sprintf("/%s/%d/", kind, g.ID)})
+	}
+	for i := range groups {
+		for j := range groups[i].Corps {
+			c := &groups[i].Corps[j]
+			if c.ID > 0 {
+				targets = append(targets, target{c, fmt.Sprintf("/corporations/%d/", c.ID)})
+			}
+		}
+	}
+	left := scanTickerBudget
+	for _, t := range targets {
+		if left == 0 {
+			break
+		}
+		left--
+		var rec struct {
+			Ticker string `json:"ticker"`
+		}
+		if err := app.esi.Get(ctx, "", t.path, &rec); err == nil {
+			t.g.Ticker = rec.Ticker
+		}
+	}
 }
 
 // groupLocal folds pilots into alliances (corporations without one
@@ -909,6 +960,10 @@ type scanPageView struct {
 	// the grid line, each counted on its own side of it.
 	TypesGrid []scanCount
 	TypesOff  []scanCount
+	// Groups is a d-scan's full group grid: ship classes beside
+	// the structure, deployable, drone and fighter groups and
+	// the other objects' kinds, each with its on-grid count.
+	Groups []scanCount
 	// Sigs are a probe scan's signatures, for display.
 	Sigs []probeSig
 	// PostTo are the channels the reader may post this scan to.
@@ -952,6 +1007,7 @@ func prepScanView(v *scanPageView) {
 		}
 		v.TypesGrid = withPct(sortCounts(v.TypesGrid))
 		v.TypesOff = withPct(sortCounts(v.TypesOff))
+		v.Groups = scanGroupsView(d)
 	}
 	if f := r.Fleet; f != nil {
 		f.Classes, f.Types, f.Systems, f.Wings = withPct(f.Classes), withPct(f.Types), withPct(f.Systems), withPct(f.Wings)
@@ -981,6 +1037,50 @@ func prepScanView(v *scanPageView) {
 		}
 		fillLocalRosters(l)
 	}
+}
+
+// scanGroupsView folds a d-scan's stored tallies into the one
+// group grid the page shows: the ship classes beside the
+// structure, deployable, drone and fighter groups (tallied under
+// their SDE group names) and the other objects under their kinds,
+// each with its total and on-grid count. Celestials stay a bare
+// count in the reading's footnote: the stored reading keeps no
+// per-group split for them.
+func scanGroupsView(d *dscanReading) []scanCount {
+	at := map[string]*scanCount{}
+	var order []string
+	add := func(list []scanCount, key func(scanCount) string) {
+		for _, c := range list {
+			k := key(c)
+			e := at[k]
+			if e == nil {
+				e = &scanCount{Name: k}
+				at[k] = e
+				order = append(order, k)
+			}
+			e.N += c.N
+			e.Grid += c.Grid
+		}
+	}
+	byClass := func(fallback string) func(scanCount) string {
+		return func(c scanCount) string {
+			if c.Class != "" {
+				return c.Class
+			}
+			return fallback
+		}
+	}
+	add(d.Classes, func(c scanCount) string { return c.Name })
+	add(d.Structures, byClass("Structure"))
+	add(d.Deployables, byClass("Deployable"))
+	add(d.DroneTypes, byClass("Drone"))
+	add(d.FighterTypes, byClass("Fighter"))
+	add(d.Objects, byClass("Other"))
+	out := make([]scanCount, 0, len(order))
+	for _, k := range order {
+		out = append(out, *at[k])
+	}
+	return withPct(sortCounts(out))
 }
 
 // scanRosterCap is how many pilots a local reading prints under
@@ -1172,7 +1272,7 @@ func (app *Application) handleScanPage(w http.ResponseWriter, r *http.Request) {
 	}
 	uid := app.userID(ctx)
 	v.Mine = uid > 0 && row.UserID == uid
-	if uid > 0 && row.SystemID > 0 {
+	if uid > 0 {
 		for _, c := range app.accessibleChannels(ctx, app.intelIdentity(ctx)) {
 			if c.CanPost {
 				v.PostTo = append(v.PostTo, channelRow{ID: c.ID, Name: c.Name})

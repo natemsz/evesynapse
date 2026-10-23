@@ -54,7 +54,7 @@ func TestScanPasteAndRead(t *testing.T) {
 		t.Fatalf("reading: %d", page.Code)
 	}
 	body := page.Body.String()
-	for _, want := range []string{"D-scan · 2 ships", "Interceptor", ">Jita<", "1 on grid", "Astrahus"} {
+	for _, want := range []string{"D-scan · 2 ships", "Interceptor", "Citadel", ">Jita<", "1 on grid", "Astrahus"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("reading lacks %q", want)
 		}

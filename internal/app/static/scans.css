@@ -160,17 +160,38 @@ html[data-theme="light"] .sc { --sc-hot: #b0302a; }
 .sc-bar-c { position: relative; flex: none; color: var(--text-bright); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .sc-grid { margin-left: 0.3rem; padding: 0.05rem 0.35rem; border-radius: var(--r-xs); background: color-mix(in srgb, var(--sc-hot) 18%, transparent); color: var(--sc-hot); font-size: 0.72rem; font-weight: 600; }
 .sc-kills { margin-left: 0.3rem; color: var(--sc-hot); font-size: 0.78rem; }
-.sc-corps { margin: 0.2rem 0 0.2rem 2.2rem; padding: 0; list-style: none; font-size: 0.84rem; }
-.sc-corps li { padding: 0.15rem 0; border-top: 1px solid var(--box-edge); }
-.sc-corp-row { display: flex; justify-content: space-between; gap: 0.6rem; }
-.sc-org-link { margin: 0.15rem 0 0.4rem 2.2rem; font-size: 0.8rem; }
 
-/* A local reading's rosters: pilot names under their corporation,
-   quiet until hovered. */
-.sc-pilots { margin: 0.15rem 0 0.3rem; font-size: 0.8rem; color: var(--muted); overflow-wrap: anywhere; }
-.sc-pilots a { color: var(--muted); text-decoration: none; }
-.sc-pilots a:hover { color: var(--accent); text-decoration: underline; }
-details > .sc-pilots { margin-left: 2.2rem; }
+/* A panel heading's total, right-aligned in the data face. */
+.sc-h-c { float: right; font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 0.95rem; font-weight: 600; color: var(--muted-2); font-variant-numeric: tabular-nums; }
+.sc-corps { margin: 0.2rem 0 0.2rem 2.2rem; padding: 0; list-style: none; font-size: 0.84rem; }
+.sc-corps > li { padding: 0.15rem 0; border-top: 1px solid var(--box-edge); }
+.sc-org-link { margin: 0.15rem 0 0.4rem 2.2rem; font-size: 0.8rem; }
+.sc-corp .sc-org-link { margin-left: 1.9rem; }
+
+/* A local reading's groups: the ticker before the name, the
+   corporation count before the pilot count. */
+.sc-ticker { position: relative; flex: none; color: var(--accent); font-weight: 700; font-size: 0.8rem; }
+.sc-corps-n { color: var(--muted-2); font-variant-numeric: tabular-nums; }
+
+/* Corporations fold inside their alliance; pilots fold inside
+   their corporation. */
+.sc-corp > summary {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.25rem 0.3rem;
+  border-radius: var(--r-xs);
+  cursor: pointer;
+  list-style: none;
+}
+.sc-corp > summary::-webkit-details-marker { display: none; }
+.sc-corp > summary:hover .sc-bar-n { color: var(--accent); }
+.sc-corp > summary img { flex: none; border-radius: var(--r-xs); }
+.sc-pilot-list { margin: 0.2rem 0 0.3rem 1.9rem; padding: 0; list-style: none; font-size: 0.82rem; }
+.sc-pilot-list li { display: flex; justify-content: space-between; gap: 0.6rem; padding: 0.12rem 0; border-top: 1px solid var(--box-edge); }
+.sc-pilot-list li:first-child { border-top: 0; }
+.sc-pilot-list a { color: var(--text); text-decoration: none; }
+.sc-pilot-list a:hover { color: var(--accent); text-decoration: underline; }
 
 /* Composition subheads inside one panel. */
 .sc-sub { margin: 0.8rem 0 0.35rem; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted-2); }

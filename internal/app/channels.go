@@ -722,7 +722,13 @@ func (app *Application) scanReportOf(ctx context.Context, base db.InsertIntelRep
 	out.SystemID = res.SystemID
 	out.Text = app.scanReportText(ctx, base.ChannelID, res, &p, base.AuthorCharacterID)
 	out.Pilots = out.Text
-	out.Hostiles = scanHostiles(res)
+	// A count the poster typed is theirs and survives
+	// classification; without one (chat lines, the scan tool),
+	// the report carries the reading's count. An incoming
+	// Hostiles is only ever set by the form's count field.
+	if base.Hostiles == 0 {
+		out.Hostiles = scanHostiles(res)
+	}
 	out.Clear = false
 	out.ScanID = id
 	out.Source = "scan"

@@ -109,17 +109,23 @@ type pilotIntelView struct {
 	CharacterID int64
 	Name        string
 	Any         bool
-	Kills       int64
-	Solo        int64
-	Losses      int64
-	ISK         string
-	LastSeen    *pilotKill
-	Ships       []pilotCount
-	Systems     []pilotCount
-	Hours       []pilotHour
-	Peak        string
-	Companions  []pilotCompanion
-	Recent      []pilotKill
+	// HasIntel: the section holds actual intel on this pilot —
+	// killboard activity, or the reader's channel reports, scans or
+	// watched lists naming them. The page gives such a section the
+	// rail placement (pilot.html); an empty section keeps the plain
+	// stacked placement it has always had.
+	HasIntel   bool
+	Kills      int64
+	Solo       int64
+	Losses     int64
+	ISK        string
+	LastSeen   *pilotKill
+	Ships      []pilotCount
+	Systems    []pilotCount
+	Hours      []pilotHour
+	Peak       string
+	Companions []pilotCompanion
+	Recent     []pilotKill
 
 	SignedIn  bool
 	Reports   []pilotReport
@@ -215,6 +221,7 @@ func (app *Application) loadPilotIntel(ctx context.Context, id int64, name strin
 		}
 	}
 	v.Any = v.Kills+v.Losses > 0 || len(v.Recent) > 0
+	v.HasIntel = v.Any
 
 	// The reader's own: channel reports naming the pilot, their scans
 	// with the pilot in them, the channels watching the pilot.
@@ -271,6 +278,7 @@ func (app *Application) loadPilotIntel(ctx context.Context, id int64, name strin
 			v.CanWatch = append(v.CanWatch, channelRow{ID: c.ID, Name: c.Name})
 		}
 	}
+	v.HasIntel = v.HasIntel || len(v.Reports) > 0 || len(v.Scans) > 0 || len(v.Watched) > 0
 	return v
 }
 

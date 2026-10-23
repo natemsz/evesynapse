@@ -20,7 +20,7 @@ import (
 // ---------------------------------------------------------------------------
 
 // renderFragment executes one named define from a page template
-// (history-section and trader-section in market.html, pilot-body
+// (history-section and trader-section in market.html, pilot-fragment
 // in pilot.html, type-description in items.html) with the same
 // link helpers the full pages use.
 func (app *Application) renderFragment(w http.ResponseWriter, page, define string, data any) {
@@ -100,8 +100,9 @@ func (app *Application) handleMarketTraderFragment(w http.ResponseWriter, r *htt
 	app.renderFragment(w, "market.html", "trader-section", item)
 }
 
-// handlePilotFragment re-renders just the pilot record body from
-// the pilot_records queue. One of the viewer's own characters
+// handlePilotFragment re-renders just the pilot record — head and
+// employment history (the pilot-fragment define) — from the
+// pilot_records queue. One of the viewer's own characters
 // gets a settled pointer to the full sheet (the page itself
 // redirects; the fragment cannot).
 func (app *Application) handlePilotFragment(w http.ResponseWriter, r *http.Request) {
@@ -116,7 +117,7 @@ func (app *Application) handlePilotFragment(w http.ResponseWriter, r *http.Reque
 		app.renderFragment(w, "pilot.html", "pilot-own-fragment", view)
 		return
 	}
-	app.renderFragment(w, "pilot.html", "pilot-body", app.loadPilotView(ctx, id))
+	app.renderFragment(w, "pilot.html", "pilot-fragment", app.loadPilotView(ctx, id))
 }
 
 // handleItemDescriptionFragment re-renders just an item's

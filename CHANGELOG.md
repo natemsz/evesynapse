@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.5.7.6] - 2026-10-23
+
+Automated build of EveSynapse v0.5.7.6. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+
+## What's Changed
+### 🚀 Features
+* Intel feed page, bare hostile counts in chat parsing, skipped lines named to the poster by @natemsz in https://github.com/natemsz/evesynapse/pull/624
+* Landing page: simple structure, three doors, factual differentiators by @natemsz in https://github.com/natemsz/evesynapse/pull/625
+* D-scan parity step 1: the reading itself by @natemsz in https://github.com/natemsz/evesynapse/pull/626
+* Pilot page: intel section moves to a right rail when the pilot has intel by @natemsz in https://github.com/natemsz/evesynapse/pull/628
+### Other Changes
+* docs(changelog): review changelog for v0.5.7.5 by @github-actions[bot] in https://github.com/natemsz/evesynapse/pull/623
+
+
+**Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.7.5...v0.5.7.6
+
 ## [v0.5.7.5] - 2026-10-23
 
 Automated build of EveSynapse v0.5.7.5. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).

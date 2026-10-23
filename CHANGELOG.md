@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.5.7.5] - 2026-10-23
+
+Automated build of EveSynapse v0.5.7.5. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+
+## What's Changed
+### 🚀 Features
+* Landing: one display for the module copy by @natemsz in https://github.com/natemsz/evesynapse/pull/615
+* Report a bug page by @natemsz in https://github.com/natemsz/evesynapse/pull/617
+* System page: recent kills, gate camp flag, intel reports, map link by @natemsz in https://github.com/natemsz/evesynapse/pull/622
+### 🐛 Bug Fixes
+* Map: territory outline and region view follow the projection setting by @natemsz in https://github.com/natemsz/evesynapse/pull/614
+* Planner: recalculate works again — dialog controls keep their form by @natemsz in https://github.com/natemsz/evesynapse/pull/616
+* Harden /healthz, pairing and the Axon API; link kills in-app by @natemsz in https://github.com/natemsz/evesynapse/pull/618
+* Gate camps: ship kills only; composition counts distinct pilots by @natemsz in https://github.com/natemsz/evesynapse/pull/619
+* True values: price contract-only types from contract evidence, never from build cost by @natemsz in https://github.com/natemsz/evesynapse/pull/620
+* Landing hero: headline alone beside the planet, support copy drops to the dark band by @natemsz in https://github.com/natemsz/evesynapse/pull/621
+### Other Changes
+* docs(changelog): review changelog for v0.5.7.4 by @github-actions[bot] in https://github.com/natemsz/evesynapse/pull/613
+
+
+**Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.7.4...v0.5.7.5
+
 ## [v0.5.7.4] - 2026-10-23
 
 Automated build of EveSynapse v0.5.7.4. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).

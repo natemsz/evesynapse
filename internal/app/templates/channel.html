@@ -36,7 +36,7 @@
   <details class="ch-paste">
   <summary>Paste lines from an in-game intel chat instead</summary>
   <form class="op-form setting" method="post" action="/intel/channels/{{.ID}}/report">
-    <p class="hint prose">Copy lines from an in-game intel channel and paste them here. Each line that names a system becomes a report, with counts like “+3” and “clr” for clear. Lines without a system are skipped. To send them automatically while you play, use <a href="/intel/channels/#axon">EveSynapse Axon</a>.</p>
+    <p class="hint prose">Copy lines from an in-game intel channel and paste them here. Each line that names a system becomes a report, with counts like “+3”, “5 reds”, and “clr” for clear. Lines without a system are not posted, and you are shown which ones. To send them automatically while you play, use <a href="/intel/channels/#axon">EveSynapse Axon</a>.</p>
     <label class="field"><span class="field-label">Lines</span>
       <textarea name="lines" rows="6" spellcheck="false" placeholder="[ 2026.10.21 11:20:05 ] Scout > 1DQ1-A  Hostile One  Hostile Two +2"></textarea></label>
     <div class="form-actions"><button type="submit">Post lines</button></div>

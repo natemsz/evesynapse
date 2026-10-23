@@ -3007,6 +3007,7 @@
     { name: "Killboard", url: "/intel/kills/" },
     { name: "D-Scan Parser", url: "/intel/scan/" },
     { name: "Intel Channels", url: "/intel/channels/" },
+    { name: "Intel Feed", url: "/intel/feed/" },
     { name: "Wars", url: "/intel/wars/" },
     { name: "Incursions", url: "/intel/incursions/" },
     { name: "Faction Warfare", url: "/intel/fw/" },

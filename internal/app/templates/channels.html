@@ -14,6 +14,7 @@
   <p><a class="btn" href="/auth/login">Sign in with EVE Online</a> to make a channel or join one.</p>
   {{else}}
   <h2>Your channels</h2>
+  <p class="hint prose">Reading several channels at once? The <a href="/intel/feed/">intel feed</a> gathers the newest reports from all of them in one stream.</p>
   {{if .Channels}}<ul class="row-list ch-list">
     {{range .Channels}}<li>
       <span><a href="/intel/channels/{{.ID}}/"><strong>{{.Name}}</strong></a>{{if .Org}} <small class="muted">· {{.Org}}</small>{{end}}{{if .Description}} <small class="muted">{{.Description}}</small>{{end}}</span>

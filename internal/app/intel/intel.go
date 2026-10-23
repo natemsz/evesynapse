@@ -38,6 +38,7 @@ var Module = module.Module{
 			{Href: "/intel/kills/", Label: "Killboard", Pages: []string{"killboard.html", "kill.html"}},
 			{Href: "/intel/scan/", Label: "D-Scan Parser", Pages: []string{"scans.html", "scan.html"}},
 			{Href: "/intel/channels/", Label: "Intel Channels", Pages: []string{"channels.html", "channel.html"}},
+			{Href: "/intel/feed/", Label: "Intel Feed", Pages: []string{"feed.html"}},
 			{Href: "/intel/wars/", Label: "Wars", Pages: []string{"intel_wars.html"}},
 			{Href: "/intel/incursions/", Label: "Incursions", Pages: []string{"intel_incursions.html"}},
 			{Href: "/intel/fw/", Label: "Faction Warfare", Pages: []string{"intel_fw.html"}},

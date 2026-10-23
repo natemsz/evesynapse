@@ -165,6 +165,20 @@ WHERE channel_id = ANY(sqlc.arg(channel_ids)::bigint[])
 ORDER BY seen_at DESC, id DESC
 LIMIT sqlc.arg(max_rows)::int;
 
+-- The feed: reports across some channels, latest seen first -- a
+-- page before a (seen_at, id) key, or everything posted after
+-- after_id (the live feed's poll). The caller passes only the
+-- channels its reader can access (accessibleChannels), so the
+-- access check stays in one place.
+-- name: ListIntelReportsAcrossChannels :many
+SELECT id, channel_id, system_id, author_user_id, reporter, text, pilots, hostiles, clear, scan_id, source, seen_at, created_at, kind, analysis
+FROM intel_reports
+WHERE channel_id = ANY(sqlc.arg(channel_ids)::bigint[])
+  AND id > sqlc.arg(after_id)::bigint
+  AND (seen_at, id) < (sqlc.arg(before_at)::timestamptz, sqlc.arg(before_id)::bigint)
+ORDER BY seen_at DESC, id DESC
+LIMIT sqlc.arg(max_rows)::int;
+
 -- name: GetIntelReport :one
 SELECT id, channel_id, author_user_id FROM intel_reports WHERE id = $1;
 

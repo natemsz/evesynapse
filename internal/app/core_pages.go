@@ -89,6 +89,8 @@ type pageData struct {
 	// Intel channels (/intel/channels/, /intel/channels/{id}/).
 	Channels *channelListView
 	Channel  *channelView
+	// IntelFeed is the cross-channel feed page (/intel/feed/).
+	IntelFeed *intelFeedView
 
 	// Player structure page (/structure/): the local structure
 	// record.

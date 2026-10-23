@@ -22,11 +22,11 @@ func TestScanPasteAndRead(t *testing.T) {
 		}
 	}
 	exec(`INSERT INTO sde_systems (system_id, name, region_id, security) VALUES (30000142, 'Jita', 10000002, 0.946) ON CONFLICT DO NOTHING`)
-	exec(`INSERT INTO sde_groups (group_id, name, category_id) VALUES (831, 'Interceptor', 6), (8, 'Moon', 2), (1657, 'Citadel', 65) ON CONFLICT DO NOTHING`)
-	exec(`INSERT INTO sde_types (type_id, name, group_id) VALUES (11176, 'Crow', 831), (14, 'Moon', 8), (35832, 'Astrahus', 1657) ON CONFLICT DO NOTHING`)
+	exec(`INSERT INTO sde_groups (group_id, name, category_id) VALUES (831, 'Interceptor', 6), (8, 'Moon', 2), (1657, 'Citadel', 65), (9001, 'Billboard', 11), (9002, 'Large Collidable Object', 2) ON CONFLICT DO NOTHING`)
+	exec(`INSERT INTO sde_types (type_id, name, group_id) VALUES (11176, 'Crow', 831), (14, 'Moon', 8), (35832, 'Astrahus', 1657), (9003, 'CONCORD Billboard', 9001), (9004, 'Large Collidable Object', 9002) ON CONFLICT DO NOTHING`)
 
 	h := app.Handler()
-	paste := "11176\tCrow\tCrow\t1,234 km\n11176\tCrow\tCrow\t-\n14\tJita IV - Moon 4\tMoon\t3.2 AU\n35832\tPerimeter Keepstar\tAstrahus\t42,000 km\n"
+	paste := "11176\tCrow\tCrow\t1,234 km\n11176\tCrow\tCrow\t-\n14\tJita IV - Moon 4\tMoon\t3.2 AU\n35832\tPerimeter Keepstar\tAstrahus\t42,000 km\n9003\tCONCORD Billboard\tCONCORD Billboard\t2,500 km\n9004\tLarge Collidable Object\tLarge Collidable Object\t150 km\n"
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/intel/scan/", strings.NewReader(url.Values{"scan": {paste}}.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -58,6 +58,18 @@ func TestScanPasteAndRead(t *testing.T) {
 		if !strings.Contains(body, want) {
 			t.Errorf("reading lacks %q", want)
 		}
+	}
+	// Billboards and large collidables are scenery: the reading
+	// leaves them out entirely, totals included. (The paste
+	// itself is still shown verbatim at the foot of the page.)
+	breakdown, _, _ := strings.Cut(body, "<summary>The paste</summary>")
+	for _, noise := range []string{"CONCORD Billboard", "Large Collidable Object"} {
+		if strings.Contains(breakdown, noise) {
+			t.Errorf("reading shows %q", noise)
+		}
+	}
+	if !strings.Contains(body, "4 lines read") {
+		t.Errorf("reading counts the lines it leaves out")
 	}
 	if page.Header().Get("X-Robots-Tag") != "noindex" {
 		t.Errorf("a scan must not be indexed")

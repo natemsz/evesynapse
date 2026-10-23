@@ -66,19 +66,25 @@ const (
 	catFighter    = 87
 )
 
+// scanNoiseGroups are the SDE groups a reading leaves out entirely:
+// billboards and large collidables are scenery on every scan, and
+// counting them pads every total on the page.
+var scanNoiseGroups = map[string]bool{
+	"Billboard": true, "Large Collidable Object": true,
+	"Large Collidable Structure": true,
+}
+
 // objectKindByGroup labels the SDE groups a reader wants told apart
 // from their category's plain members: wrecks, stargates and
-// containers share Celestial with the planets, billboards share
-// Entity with the NPCs. Anything in those two categories whose
-// group is not here reads as a celestial (planets, moons, suns) or
-// an NPC.
+// containers share Celestial with the planets. Anything in the
+// Celestial or Entity category whose group is not here reads as a
+// celestial (planets, moons, suns) or an NPC.
 var objectKindByGroup = map[string]string{
 	"Stargate": "Stargate", "Wreck": "Wreck",
 	"Cargo Container": "Container", "Secure Cargo Container": "Container",
 	"Freight Container": "Container", "Audit Log Secure Container": "Container",
 	"Spawn Container": "Container", "Mission Container": "Container",
 	"Scatter Container": "Container", "Irregular Container": "Container",
-	"Billboard": "Billboard",
 }
 
 // shipHullClasses folds the SDE's ship groups into the hull
@@ -225,8 +231,8 @@ type dscanReading struct {
 	DroneTypes   []scanCount `json:"drone_types,omitempty"`
 	FighterTypes []scanCount `json:"fighter_types,omitempty"`
 	// Objects is everything else a d-scan shows, itemized by
-	// type: wrecks, stargates, containers, charges, billboards,
-	// orbitals, NPCs. Class carries the kind.
+	// type: wrecks, stargates, containers, charges, orbitals,
+	// NPCs. Class carries the kind.
 	Objects    []scanCount `json:"objects,omitempty"`
 	Celestials int         `json:"celestials,omitempty"`
 }
@@ -374,6 +380,10 @@ func (app *Application) readDScan(ctx context.Context, rows []scan.DScanRow) (*d
 	for _, r := range rows {
 		grid := r.DistKm >= 0 && r.DistKm <= scanGridKm
 		gname := class[r.TypeID]
+		if scanNoiseGroups[gname] {
+			d.Items--
+			continue
+		}
 		switch c := cat[r.TypeID]; c {
 		case catShip:
 			d.Ships++

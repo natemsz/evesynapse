@@ -54,221 +54,58 @@ func TestLayoutRegionDeclutters(t *testing.T) {
 	}
 }
 
-// TestLayoutMosaicPreservesRegionShapes: the projection is a
-// mosaic of the regions' own layouts -- inside a constellation,
-// every pairwise distance is the region layout's distance under
-// one ratio, and that ratio is the mosaic's tile scale times
-// the constellation contraction; across regions, the centroids
-// keep their true bearings; the dense cores arrive already
-// decluttered by their region layouts; and the picture is the
-// same on every build.
-func TestLayoutMosaicPreservesRegionShapes(t *testing.T) {
-	// Three regions in the universe frame, shaped like real
-	// ones: a tight core with an arm, a second core, a sparse
-	// handful, plus a one-system region.
-	wide := func(cx, cy float64) [][2]float64 {
-		var pts [][2]float64
-		for i := 0; i < 24; i++ { // the crowded core
-			pts = append(pts, [2]float64{cx + float64(i%6)*4, cy + float64(i/6)*4})
-		}
-		for i := 0; i < 12; i++ { // the arm reaching away
-			pts = append(pts, [2]float64{cx + 120 + float64(i)*70, cy + 90 + float64(i)*45})
-		}
-		return pts
+// TestLayoutProjectedIsTheAuthoredLayout: the projected frame
+// is the authored 2D layout under one global similarity --
+// every pairwise distance in the projection is the authored
+// distance times one constant; a system with no authored
+// position lands at its flat position; the picture is the same
+// on every build; and nothing leaves the universe frame.
+func TestLayoutProjectedIsTheAuthoredLayout(t *testing.T) {
+	// Authored points on the dump's own scale, in a loose
+	// pattern with one exact shared row, as the dump authors
+	// draw them.
+	auth := [][2]float64{
+		{-4.0e17, 1.5e17}, {-3.9e17, 1.5e17}, {-1.0e17, -2.0e17},
+		{0.5e17, 0.25e17}, {2.0e17, -3.5e17}, {4.5e17, 4.0e17},
 	}
-	west := wide(2400, 3800)
-	east := wide(6600, 5200)
-	var south [][2]float64
-	for i := 0; i < 6; i++ {
-		south = append(south, [2]float64{4300 + float64(i)*330, 900 + float64(i%2)*700})
+	flat := make([][2]float64, len(auth))
+	for i := range flat {
+		flat[i] = [2]float64{1000 + float64(i)*1300, 9000 - float64(i)*1400}
 	}
-	solo := [][2]float64{{1500, 8200}}
-
-	uni := append(append(append(append([][2]float64{}, west...), east...), south...), solo...)
-	// Constellations: each wide region is a crowded core and an
-	// arm reaching away, the sparse region is two trios, and the
-	// lone system belongs to none.
-	var consOf []int
-	for k := 0; k < 36; k++ {
-		if k < 24 {
-			consOf = append(consOf, 0) // west core
-		} else {
-			consOf = append(consOf, 1) // west arm
-		}
-	}
-	for k := 0; k < 36; k++ {
-		if k < 24 {
-			consOf = append(consOf, 2) // east core
-		} else {
-			consOf = append(consOf, 3) // east arm
-		}
-	}
-	consOf = append(consOf, 4, 4, 4, 5, 5, 5, -1)
-	var members [][]int
-	var regionLaid [][][2]float64
-	start := 0
-	for _, pts := range [][][2]float64{west, east, south, solo} {
-		var idxs []int
-		var edges [][2]int
-		for k := range pts {
-			idxs = append(idxs, start+k)
-			if k > 0 {
-				edges = append(edges, [2]int{k - 1, k})
-			}
-		}
-		members = append(members, idxs)
-		regionLaid = append(regionLaid, layoutRegion(pts, edges))
-		start += len(pts)
-	}
-
-	a := layoutMosaic(uni, members, consOf, regionLaid)
-	b := layoutMosaic(uni, members, consOf, regionLaid)
+	a := layoutProjected(auth, flat)
+	b := layoutProjected(auth, flat)
+	scale := 0.0
 	for i := range a {
 		if a[i] != b[i] {
-			t.Fatalf("mosaic is not deterministic at %d: %v vs %v", i, a[i], b[i])
+			t.Fatalf("projection is not deterministic at %d: %v vs %v", i, a[i], b[i])
 		}
 		if a[i][0] < -1e-6 || a[i][1] < -1e-6 || a[i][0] > universeFrame+1e-6 || a[i][1] > universeFrame+1e-6 {
 			t.Errorf("system %d left the frame: %v", i, a[i])
 		}
-	}
-
-	// One ratio per constellation: every intra-constellation
-	// distance in the mosaic is the region layout's distance
-	// times one constant.
-	ratioOf := make(map[int]float64)
-	for ri, idxs := range members {
-		laid := regionLaid[ri]
-		groups := make(map[int][]int)
-		for k, i := range idxs {
-			groups[consOf[i]] = append(groups[consOf[i]], k)
-		}
-		for c, ks := range groups {
-			if len(ks) < 2 || c < 0 {
+		for j := i + 1; j < len(a); j++ {
+			ad := math.Hypot(auth[i][0]-auth[j][0], auth[i][1]-auth[j][1])
+			pd := math.Hypot(a[i][0]-a[j][0], a[i][1]-a[j][1])
+			if ad == 0 {
 				continue
 			}
-			lo, hi := math.Inf(1), math.Inf(-1)
-			for x := 0; x < len(ks); x++ {
-				for y := x + 1; y < len(ks); y++ {
-					ld := math.Hypot(laid[ks[x]][0]-laid[ks[y]][0], laid[ks[x]][1]-laid[ks[y]][1])
-					if ld < 1 {
-						continue
-					}
-					md := math.Hypot(a[idxs[ks[x]]][0]-a[idxs[ks[y]]][0], a[idxs[ks[x]]][1]-a[idxs[ks[y]]][1])
-					r := md / ld
-					lo, hi = math.Min(lo, r), math.Max(hi, r)
-				}
+			r := pd / ad
+			if scale == 0 {
+				scale = r
+			} else if math.Abs(r-scale) > scale*1e-9 {
+				t.Errorf("pair %d-%d: projected/authored ratio %.12g, want the one global scale %.12g", i, j, r, scale)
 			}
-			if hi > lo*1.000001 {
-				t.Errorf("constellation %d: intra-constellation ratios run %.6f..%.6f, want one uniform scale", c, lo, hi)
-			}
-			ratioOf[c] = lo
 		}
 	}
 
-	// The contraction is the difference between a constellation's
-	// ratio and the scale its centre travels at: a constellation's
-	// centre does not contract, so the west core's and arm's
-	// centres sit at the tile scale, and each constellation's own
-	// ratio is the contraction times that scale.
-	laidC := func(ri int, c int) [2]float64 {
-		var ctr [2]float64
-		cnt := 0
-		for k, i := range members[ri] {
-			if consOf[i] == c {
-				ctr[0] += regionLaid[ri][k][0]
-				ctr[1] += regionLaid[ri][k][1]
-				cnt++
-			}
-		}
-		return [2]float64{ctr[0] / float64(cnt), ctr[1] / float64(cnt)}
-	}
-	mosC := func(ri int, c int) [2]float64 {
-		var ctr [2]float64
-		cnt := 0
-		for _, i := range members[ri] {
-			if consOf[i] == c {
-				ctr[0] += a[i][0]
-				ctr[1] += a[i][1]
-				cnt++
-			}
-		}
-		return [2]float64{ctr[0] / float64(cnt), ctr[1] / float64(cnt)}
-	}
-	lc0, lc1 := laidC(0, 0), laidC(0, 1)
-	mc0, mc1 := mosC(0, 0), mosC(0, 1)
-	tileScale := math.Hypot(mc1[0]-mc0[0], mc1[1]-mc0[1]) / math.Hypot(lc1[0]-lc0[0], lc1[1]-lc0[1])
-	for _, c := range []int{0, 1, 2, 3} {
-		if got, want := ratioOf[c]/tileScale, mosaicConsContract; math.Abs(got-want) > want*1e-6 {
-			t.Errorf("constellation %d: ratio %.6f is %.6f of the tile scale, want the contraction %.2f", c, ratioOf[c], got, want)
-		}
-	}
-
-	// The crowded cores arrive decluttered: the west core's
-	// systems sat 4 units apart in truth and sit far apart in
-	// the mosaic, because the region layout's spacing carried.
-	worst := math.Inf(1)
-	for x := 0; x < 24; x++ {
-		for y := x + 1; y < 24; y++ {
-			worst = math.Min(worst, math.Hypot(a[x][0]-a[y][0], a[x][1]-a[y][1]))
-		}
-	}
-	if worst < 25 {
-		t.Errorf("west core's closest pair %.1f apart in the mosaic, want the region layout's spacing (>= 25)", worst)
-	}
-
-	// Centroid bearings are the true ones: west -> east and
-	// west -> south point the same way in both frames.
-	centroid := func(pts [][2]float64, idxs []int) [2]float64 {
-		var c [2]float64
-		for _, i := range idxs {
-			c[0] += pts[i][0]
-			c[1] += pts[i][1]
-		}
-		return [2]float64{c[0] / float64(len(idxs)), c[1] / float64(len(idxs))}
-	}
-	bearing := func(from, to [2]float64) float64 {
-		return math.Atan2(-(to[1] - from[1]), to[0]-from[0])
-	}
-	for _, pair := range [][2]int{{0, 1}, {0, 2}, {1, 2}} {
-		tb := bearing(centroid(uni, members[pair[0]]), centroid(uni, members[pair[1]]))
-		mb := bearing(centroid(a, members[pair[0]]), centroid(a, members[pair[1]]))
-		if d := math.Abs(tb - mb); d > 0.001 {
-			t.Errorf("centroid bearing %d -> %d off by %.4f rad (true %.4f, mosaic %.4f)", pair[0], pair[1], d, tb, mb)
-		}
-	}
-}
-
-// TestNudgeOverlapsSeparatesClosePairs: the nudge pass takes
-// the pairs the mosaic's tiles leave on top of each other -- a
-// border pair two units apart, a coincident pair, a chain of
-// three -- and separates every one of them past the overlap
-// band, moving no system further than the cap, never touching
-// a system that sits in no close pair, and landing on the same
-// picture every time.
-func TestNudgeOverlapsSeparatesClosePairs(t *testing.T) {
-	pos := [][2]float64{
-		{5000, 5000}, {5002, 5000}, // the border pair, 2 apart
-		{7000, 7000}, {7000, 7000}, // the coincident pair
-		{2000, 2000}, {2015, 2000}, {2030, 2000}, // the chain, 15 apart
-		{100, 100}, // the loner, in no close pair
-	}
-	a := nudgeOverlaps(pos)
-	b := nudgeOverlaps(pos)
-	for i := range a {
-		if a[i] != b[i] {
-			t.Fatalf("nudge is not deterministic at %d: %v vs %v", i, a[i], b[i])
-		}
-		if d := math.Hypot(a[i][0]-pos[i][0], a[i][1]-pos[i][1]); d > mosaicNudgeCap+1e-9 {
-			t.Errorf("system %d moved %.1f, past the cap %.0f", i, d, mosaicNudgeCap)
-		}
-		for j := i + 1; j < len(a); j++ {
-			if d := math.Hypot(a[j][0]-a[i][0], a[j][1]-a[i][1]); d < 20 {
-				t.Errorf("systems %d and %d still %.1f apart after the nudge, want out of the overlap band (>= 20)", i, j, d)
-			}
-		}
-	}
-	if a[7] != pos[7] {
-		t.Errorf("the loner moved to %v, want it untouched at %v", a[7], pos[7])
+	// A missing authored position (NaN) falls back to the flat
+	// frame: the system lands exactly at its flat position,
+	// inside the frame the authored systems span.
+	auth2 := make([][2]float64, len(auth))
+	copy(auth2, auth)
+	auth2[3] = [2]float64{math.NaN(), math.NaN()}
+	c := layoutProjected(auth2, flat)
+	if c[3] != flat[3] {
+		t.Errorf("system without an authored position landed at %v, want its flat position %v", c[3], flat[3])
 	}
 }
 
@@ -292,6 +129,9 @@ func TestBuildUniverseMap(t *testing.T) {
 	}
 	if len(p.Gates) != 4 {
 		t.Errorf("gates = %v, want two pairs (the wormhole link dropped)", p.Gates)
+	}
+	if p.Version != universeMapVersion {
+		t.Errorf("payload version = %d, want the builder's %d", p.Version, universeMapVersion)
 	}
 	jita, tanoo := -1, -1
 	for i, id := range p.Sys.ID {
@@ -322,6 +162,65 @@ func TestBuildUniverseMap(t *testing.T) {
 	}
 	if forge := p.Regions[p.Sys.Region[jita]]; forge.W <= 0 && forge.H <= 0 {
 		t.Errorf("The Forge has no region frame: %+v", forge)
+	}
+}
+
+// TestBuildUniverseMapProjectedFrame: the payload's projected
+// frame is the systems' authored 2D layout (position2D) under
+// one global similarity -- every pairwise distance in PX/PY is
+// the authored distance times one constant -- and a system
+// whose row carries no authored position sits at its flat
+// (universe frame) position instead.
+func TestBuildUniverseMapProjectedFrame(t *testing.T) {
+	regions := []db.SdeRegion{{RegionID: 10000002, Name: "The Forge"}}
+	mk := func(id int64, x, z, p2x, p2y float64) db.ListMapSystemsRow {
+		return db.ListMapSystemsRow{SystemID: id, Name: "S", RegionID: 10000002,
+			X: x, Z: z, Position2dX: p2x, Position2dY: p2y}
+	}
+	systems := []db.ListMapSystemsRow{
+		mk(30000101, 0, 0, -4.0e17, 1.5e17),
+		mk(30000102, 1e16, 0, -3.9e17, 1.5e17),
+		mk(30000103, 0, 1e16, 0.5e17, -2.0e17),
+		mk(30000104, 1e16, 1e16, 4.5e17, -3.5e17),
+		mk(30000105, 5e15, 5e15, 0, 0), // no authored position
+	}
+	p := buildUniverseMap(systems, regions, nil, nil, nil)
+	if len(p.Sys.ID) != len(systems) {
+		t.Fatalf("systems = %v, want all five", p.Sys.ID)
+	}
+	byID := make(map[int64]int)
+	for i, id := range p.Sys.ID {
+		byID[id] = i
+	}
+	scale := 0.0
+	for a := 0; a < 4; a++ {
+		for b := a + 1; b < 4; b++ {
+			sa, sb := systems[a], systems[b]
+			// The payload's PY axis is the authored Y flipped.
+			ad := math.Hypot(sa.Position2dX-sb.Position2dX, sa.Position2dY-sb.Position2dY)
+			ia, ib := byID[sa.SystemID], byID[sb.SystemID]
+			pd := math.Hypot(float64(p.Sys.PX[ia]-p.Sys.PX[ib]), float64(p.Sys.PY[ia]-p.Sys.PY[ib]))
+			r := pd / ad
+			if scale == 0 {
+				scale = r
+			} else if math.Abs(r-scale) > scale*0.02 {
+				t.Errorf("pair %d-%d: projected/authored ratio %.6g, want the one global scale %.6g (integer rounding aside)", sa.SystemID, sb.SystemID, r, scale)
+			}
+			// The flip: the system higher in authored Y sits
+			// higher on screen (smaller PY), as authored X
+			// order is kept.
+			if sa.Position2dY > sb.Position2dY && !(p.Sys.PY[ia] < p.Sys.PY[ib]) {
+				t.Errorf("authored Y order not flipped: %d above %d in the dump, PY %d vs %d", sa.SystemID, sb.SystemID, p.Sys.PY[ia], p.Sys.PY[ib])
+			}
+			if sa.Position2dX < sb.Position2dX && !(p.Sys.PX[ia] < p.Sys.PX[ib]) {
+				t.Errorf("authored X order not kept: %d left of %d in the dump, PX %d vs %d", sa.SystemID, sb.SystemID, p.Sys.PX[ia], p.Sys.PX[ib])
+			}
+		}
+	}
+	i5 := byID[30000105]
+	if p.Sys.PX[i5] != p.Sys.X[i5] || p.Sys.PY[i5] != p.Sys.Y[i5] {
+		t.Errorf("system without an authored position: projected %d,%d, want its flat position %d,%d",
+			p.Sys.PX[i5], p.Sys.PY[i5], p.Sys.X[i5], p.Sys.Y[i5])
 	}
 }
 

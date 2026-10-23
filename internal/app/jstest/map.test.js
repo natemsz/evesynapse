@@ -20,6 +20,25 @@ test("security rounds and colors like the server", () => {
   }
 });
 
+test("gate lines wear the lower end's class, dashed across a border", () => {
+  // The class is the lower-security endpoint's: the dangerous
+  // end of the jump decides.
+  assert.strictEqual(map.gateClass(0.9, 0.5), 0, "both ends high");
+  assert.strictEqual(map.gateClass(0.45, 1.0), 0, "0.45 is the high boundary");
+  assert.strictEqual(map.gateClass(0.9, 0.44), 1, "a low end makes a low line");
+  assert.strictEqual(map.gateClass(0.05, 0.3), 1, "0.05 is the low boundary");
+  assert.strictEqual(map.gateClass(0.9, 0.049), 2, "below 0.05 is null");
+  assert.strictEqual(map.gateClass(-0.3, 0.9), 2, "a null end makes a null line");
+  // The batch is the class, plus 3 when the jump crosses a
+  // region border (drawn dashed).
+  assert.strictEqual(map.gateBatch(0.9, 0.8, 0, 0), 0, "in-region high: solid high");
+  assert.strictEqual(map.gateBatch(0.9, 0.8, 0, 1), 3, "cross-region high: dashed high");
+  assert.strictEqual(map.gateBatch(0.2, 0.9, 0, 0), 1, "in-region low: solid low");
+  assert.strictEqual(map.gateBatch(0.2, 0.9, 0, 1), 4, "cross-region low: dashed low");
+  assert.strictEqual(map.gateBatch(-0.1, 0.2, 2, 2), 2, "in-region null: solid null");
+  assert.strictEqual(map.gateBatch(-0.1, 0.2, 2, 3), 5, "cross-region null: dashed null");
+});
+
 test("prepare derives adjacency, exits and bounds", () => {
   const P = {
     v: 1,

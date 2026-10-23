@@ -16,9 +16,12 @@
  * the system card and the region index enter one directly. The
  * URL keeps ?region= and ?system=, so a view can be shared.
  *
- * Canvas 2D, drawn on demand: the gate network is one Path2D per
- * view in world coordinates; systems are batched by security color;
- * labels are culled against an occupancy grid so they never pile up.
+ * Canvas 2D, drawn on demand: the gate network is a few Path2D
+ * batches per view in world coordinates (in New Eden, by line
+ * class: in-region jumps solid, region-border jumps dashed, each
+ * in its lower end's security color); systems are batched by
+ * security color; labels are culled against an occupancy grid so
+ * they never pile up.
  * Colors come from the page: the legend's .sec-N swatches and the
  * --map-* tokens in map.css, re-read when the theme changes.
  */
@@ -70,6 +73,21 @@
   function secText(s) {
     var r = secRounded(s);
     return (r === 0 ? 0 : r).toFixed(1);
+  }
+
+  // A gate line wears the security class of its lower-security
+  // end -- the end that decides how dangerous the jump is: 0 high
+  // (0.45 and up), 1 low (0.05 to 0.45), 2 null (below 0.05). A
+  // jump that crosses a region border is drawn dashed; the draw
+  // batch index is the class, plus 3 for a border crossing, so
+  // the web strokes in at most six batches: three solid, three
+  // dashed.
+  function gateClass(sa, sb) {
+    var m = Math.min(sa, sb);
+    return m >= 0.45 ? 0 : m >= 0.05 ? 1 : 2;
+  }
+  function gateBatch(sa, sb, ra, rb) {
+    return gateClass(sa, sb) + (ra !== rb ? 3 : 0);
   }
 
   // Region names thin out as system names take over, but never
@@ -754,10 +772,21 @@
         var sw = el.querySelector('.map-swatch[data-tier="' + t + '"]');
         sec[t] = sw ? getComputedStyle(sw).color : "#888";
       }
+      // The universe web's line colors: the dot palette's own
+      // color for each security class (the 1.0 blue, the 0.4
+      // amber, the 0.0 magenta), muted -- structure, not a
+      // rainbow. Border-crossing jumps stroke stronger than
+      // in-region ones, as the old inter-region color did.
+      function lineColor(tier, alpha) {
+        var rgb = rgbOf(sec[tier]);
+        return "rgba(" + rgb[0] + "," + rgb[1] + "," + rgb[2] + "," + alpha + ")";
+      }
       colors = {
         sec: sec,
         gate: tok("--map-gate", "rgba(255,180,120,0.22)"),
         gateInter: tok("--map-gate-inter", "rgba(255,120,60,0.4)"),
+        gateLine: [lineColor(10, 0.4), lineColor(4, 0.4), lineColor(0, 0.4)],
+        gateLineX: [lineColor(10, 0.6), lineColor(4, 0.6), lineColor(0, 0.6)],
         gateHot: tok("--map-gate-hot", "#ff6a1a"),
         label: tok("--map-label", "#faf3e6"),
         labelDim: tok("--map-label-dim", "#b39a7d"),
@@ -930,11 +959,16 @@
       var key = mode === "universe" ? (projOn ? "up" : "u") : "r" + region;
       if (pathCache[key]) return pathCache[key];
       var intra = new Path2D(), inter = new Path2D(), stubs = new Path2D();
+      var web = null;
       var i, a, b;
       if (mode === "universe") {
+        // The web, batched by line class (gateBatch): solid
+        // in-region jumps, then the dashed border crossings,
+        // each in its lower end's security color.
+        web = [new Path2D(), new Path2D(), new Path2D(), new Path2D(), new Path2D(), new Path2D()];
         for (i = 0; i < P.gates.length; i += 2) {
           a = P.gates[i]; b = P.gates[i + 1];
-          var p = S.r[a] === S.r[b] ? intra : inter;
+          var p = web[gateBatch(S.s[a], S.s[b], S.r[a], S.r[b])];
           p.moveTo(wx(a), wy(a));
           p.lineTo(wx(b), wy(b));
         }
@@ -959,7 +993,7 @@
           }
         }
       }
-      pathCache[key] = { intra: intra, inter: inter, stubs: stubs };
+      pathCache[key] = { intra: intra, inter: inter, stubs: stubs, web: web };
       return pathCache[key];
     }
 
@@ -999,10 +1033,25 @@
       // texture behind the region names, not the picture: drawn
       // at reduced alpha until the reader zooms into it.
       if (mode === "universe" && projOn && labelTier(cam.k / fitK()) === 0) ctx.globalAlpha = 0.45;
-      ctx.strokeStyle = colors.gate;
-      ctx.stroke(pp.intra);
-      ctx.strokeStyle = colors.gateInter;
-      ctx.stroke(pp.inter);
+      if (pp.web) {
+        // Solid batches first, then the border crossings in the
+        // same class colors, dashed at a constant screen size.
+        for (i = 0; i < 3; i++) {
+          ctx.strokeStyle = colors.gateLine[i];
+          ctx.stroke(pp.web[i]);
+        }
+        ctx.setLineDash([5 / k, 4 / k]);
+        for (i = 0; i < 3; i++) {
+          ctx.strokeStyle = colors.gateLineX[i];
+          ctx.stroke(pp.web[i + 3]);
+        }
+        ctx.setLineDash([]);
+      } else {
+        ctx.strokeStyle = colors.gate;
+        ctx.stroke(pp.intra);
+        ctx.strokeStyle = colors.gateInter;
+        ctx.stroke(pp.inter);
+      }
       ctx.globalAlpha = 1;
       if (mode !== "universe") {
         ctx.setLineDash([4 / k, 4 / k]);
@@ -1275,12 +1324,14 @@
     try { sovNPC = localStorage.getItem("evesynapse-map-sov-npc") !== "0"; } catch (e) { /* private mode */ }
     if (startQuery.get("npc") === "0") sovNPC = false;
     if (startQuery.get("npc") === "1") sovNPC = true;
-    // Improved Projection: the universe in its precomputed
-    // relaxed frame. A remembered preference, on every visit
-    // until the reader changes it; a link's proj= settles it
-    // for that visit only, without touching the preference.
-    var PROJ_KEY = "evesynapse-map-projection", projOn = false;
-    try { projOn = window.localStorage.getItem(PROJ_KEY) === "1"; } catch (e) { /* private mode */ }
+    // Improved Projection: the universe in the game's own
+    // authored 2D layout, the default view. A remembered
+    // preference, on every visit until the reader changes it
+    // (only an explicit off is remembered as off); a link's
+    // proj= settles it for that visit only, without touching
+    // the preference.
+    var PROJ_KEY = "evesynapse-map-projection", projOn = true;
+    try { projOn = window.localStorage.getItem(PROJ_KEY) !== "0"; } catch (e) { /* private mode */ }
     if (startQuery.get("proj") === "1") projOn = true;
     if (startQuery.get("proj") === "0") projOn = false;
     var projPref = el.querySelector("[data-map-proj]");
@@ -3932,7 +3983,7 @@
         syncURL();
         schedule();
         hint(projOn
-          ? "Improved projection is on: the universe in its relaxed, readable layout. It stays on until you turn it off."
+          ? "Improved projection is on: the universe in the game's own 2D layout. It stays on until you turn it off."
           : "Improved projection is off: the universe at its true positions. It stays off until you turn it on.");
       });
     }
@@ -4075,7 +4126,7 @@
 
   // Exposed for the node tests only (jstest/map_test.js).
   if (typeof module !== "undefined" && module.exports) {
-    module.exports = { secRounded: secRounded, secTier: secTier, secText: secText, prepare: prepare, regionLabelAlpha: regionLabelAlpha, labelTier: labelTier, midTierLabels: midTierLabels, boxesOverlap: boxesOverlap, LABEL_MID_CAP: LABEL_MID_CAP, zoomEntryAllowed: zoomEntryAllowed, wheelZoomFactor: wheelZoomFactor, pickReach: pickReach, pickScore: pickScore, routeFitScale: routeFitScale, formatView: formatView, parseView: parseView, viewFits: viewFits, sovPalette: sovPalette, territoryField: territoryField, territoryLoops: territoryLoops,
+    module.exports = { secRounded: secRounded, secTier: secTier, secText: secText, gateClass: gateClass, gateBatch: gateBatch, prepare: prepare, regionLabelAlpha: regionLabelAlpha, labelTier: labelTier, midTierLabels: midTierLabels, boxesOverlap: boxesOverlap, LABEL_MID_CAP: LABEL_MID_CAP, zoomEntryAllowed: zoomEntryAllowed, wheelZoomFactor: wheelZoomFactor, pickReach: pickReach, pickScore: pickScore, routeFitScale: routeFitScale, formatView: formatView, parseView: parseView, viewFits: viewFits, sovPalette: sovPalette, territoryField: territoryField, territoryLoops: territoryLoops,
       joinLayers: joinLayers, heatT: heatT, allianceHue: allianceHue, threatLevel: threatLevel,
       routeCost: routeCost, planRoute: planRoute, routeSummary: routeSummary, joinIntel: joinIntel,
       jumpRange: jumpRange, joinJump: joinJump, jumpNeighbours: jumpNeighbours, jumpFatigue: jumpFatigue };

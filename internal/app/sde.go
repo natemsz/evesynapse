@@ -295,7 +295,7 @@ func (app *Application) sdeMaintenance(ctx context.Context) {
 
 // sdeImportVersion is the importer's column-set marker (see
 // sdeMaintenance): an import stored under an older one re-imports.
-const sdeImportVersion = "11"
+const sdeImportVersion = "12"
 
 // sdeMeta reads one sde_meta value ("" when absent).
 func (app *Application) sdeMeta(ctx context.Context, key string) (string, error) {
@@ -699,6 +699,7 @@ type sdeSystemRow struct {
 	security        float64
 	constellationID int64
 	x, y, z         float64
+	pos2dx, pos2dy  float64
 	factionID       int64
 	securityClass   string
 }
@@ -1102,6 +1103,8 @@ func parseSDESystems(cr *csv.Reader, idx map[string]int) ([]sdeSystemRow, error)
 			x:               csvFloatOrZero(rec, idx, "x"),
 			y:               csvFloatOrZero(rec, idx, "y"),
 			z:               csvFloatOrZero(rec, idx, "z"),
+			pos2dx:          csvFloatOrZero(rec, idx, "position2Dx"),
+			pos2dy:          csvFloatOrZero(rec, idx, "position2Dy"),
 			factionID:       csvIDOrZero(rec, idx, "factionID"),
 			securityClass:   class,
 		})
@@ -1818,9 +1821,9 @@ func (app *Application) storeSDE(ctx context.Context, base string, parsed *parse
 	}); err != nil {
 		return 0, err
 	}
-	if err := insert("INSERT INTO sde_systems (system_id, name, region_id, security, constellation_id, x, y, z, faction_id, security_class) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)", len(parsed.systems), func(i int) []any {
+	if err := insert("INSERT INTO sde_systems (system_id, name, region_id, security, constellation_id, x, y, z, position2d_x, position2d_y, faction_id, security_class) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)", len(parsed.systems), func(i int) []any {
 		r := parsed.systems[i]
-		return []any{r.systemID, r.name, r.regionID, r.security, r.constellationID, r.x, r.y, r.z, r.factionID, r.securityClass}
+		return []any{r.systemID, r.name, r.regionID, r.security, r.constellationID, r.x, r.y, r.z, r.pos2dx, r.pos2dy, r.factionID, r.securityClass}
 	}); err != nil {
 		return 0, err
 	}

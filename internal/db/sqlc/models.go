@@ -1136,6 +1136,8 @@ type SdeSystem struct {
 	Z               float64 `json:"z"`
 	FactionID       int64   `json:"faction_id"`
 	SecurityClass   string  `json:"security_class"`
+	Position2dX     float64 `json:"position2d_x"`
+	Position2dY     float64 `json:"position2d_y"`
 }
 
 type SdeSystemJump struct {

@@ -54,29 +54,27 @@ func TestLayoutRegionDeclutters(t *testing.T) {
 	}
 }
 
-// TestLayoutProjectionDeclutters: the Improved Projection takes
-// piled-up systems to readable spacing across the whole universe
-// frame, keeps everyone near home, and is the same on every build.
-func TestLayoutProjectionDeclutters(t *testing.T) {
-	// A dense core (a few hundred systems in a tight patch, the
-	// empire problem), a sparse rim, all in the universe frame.
-	var pts [][2]float64
-	for i := 0; i < 300; i++ {
-		pts = append(pts, [2]float64{5000 + float64(i%20)*3, 5000 + float64(i/20)*3})
+// TestLayoutProjectedIsTheAuthoredLayout: the projected frame
+// is the authored 2D layout under one global similarity --
+// every pairwise distance in the projection is the authored
+// distance times one constant; a system with no authored
+// position lands at its flat position; the picture is the same
+// on every build; and nothing leaves the universe frame.
+func TestLayoutProjectedIsTheAuthoredLayout(t *testing.T) {
+	// Authored points on the dump's own scale, in a loose
+	// pattern with one exact shared row, as the dump authors
+	// draw them.
+	auth := [][2]float64{
+		{-4.0e17, 1.5e17}, {-3.9e17, 1.5e17}, {-1.0e17, -2.0e17},
+		{0.5e17, 0.25e17}, {2.0e17, -3.5e17}, {4.5e17, 4.0e17},
 	}
-	for i := 0; i < 60; i++ {
-		a := float64(i) / 60 * 2 * math.Pi
-		pts = append(pts, [2]float64{5000 + math.Cos(a)*4200, 5000 + math.Sin(a)*4200})
+	flat := make([][2]float64, len(auth))
+	for i := range flat {
+		flat[i] = [2]float64{1000 + float64(i)*1300, 9000 - float64(i)*1400}
 	}
-	var edges [][2]int
-	for i := 1; i < len(pts); i++ {
-		edges = append(edges, [2]int{i - 1, i})
-	}
-	a := layoutProjection(pts, edges)
-	b := layoutProjection(pts, edges)
-	minD := universeMinSpacing(len(pts))
-	worst := math.Inf(1)
-	moveSum, moveMax := 0.0, 0.0
+	a := layoutProjected(auth, flat)
+	b := layoutProjected(auth, flat)
+	scale := 0.0
 	for i := range a {
 		if a[i] != b[i] {
 			t.Fatalf("projection is not deterministic at %d: %v vs %v", i, a[i], b[i])
@@ -84,28 +82,30 @@ func TestLayoutProjectionDeclutters(t *testing.T) {
 		if a[i][0] < -1e-6 || a[i][1] < -1e-6 || a[i][0] > universeFrame+1e-6 || a[i][1] > universeFrame+1e-6 {
 			t.Errorf("system %d left the frame: %v", i, a[i])
 		}
-		// Near home is measured against the input as given; the
-		// layout's final refit only makes this stricter here,
-		// since the test patch does not fill the frame.
-		moveSum += math.Hypot(a[i][0]-pts[i][0], a[i][1]-pts[i][1])
-		moveMax = math.Max(moveMax, math.Hypot(a[i][0]-pts[i][0], a[i][1]-pts[i][1]))
 		for j := i + 1; j < len(a); j++ {
-			worst = math.Min(worst, math.Hypot(a[i][0]-a[j][0], a[i][1]-a[j][1]))
+			ad := math.Hypot(auth[i][0]-auth[j][0], auth[i][1]-auth[j][1])
+			pd := math.Hypot(a[i][0]-a[j][0], a[i][1]-a[j][1])
+			if ad == 0 {
+				continue
+			}
+			r := pd / ad
+			if scale == 0 {
+				scale = r
+			} else if math.Abs(r-scale) > scale*1e-9 {
+				t.Errorf("pair %d-%d: projected/authored ratio %.12g, want the one global scale %.12g", i, j, r, scale)
+			}
 		}
 	}
-	if worst < 0.6*minD {
-		t.Errorf("closest pair %.1f apart, want at least %.1f (minimum spacing %.1f)", worst, 0.6*minD, minD)
-	}
-	// Near home: the core above starts at 3-unit spacing and
-	// must expand ~30x just to reach spacing, so its mean move
-	// is necessarily a few percent of the frame. Anything
-	// beyond 8% would mean the layout, not the crowding, is
-	// deciding where systems live.
-	if mean := moveSum / float64(len(pts)); mean > 800 {
-		t.Errorf("mean move %.0f, want everyone near home (<= 800 of a %.0f frame)", mean, universeFrame)
-	}
-	if moveMax > 2500 {
-		t.Errorf("worst move %.0f, want no system flung (<= 2500)", moveMax)
+
+	// A missing authored position (NaN) falls back to the flat
+	// frame: the system lands exactly at its flat position,
+	// inside the frame the authored systems span.
+	auth2 := make([][2]float64, len(auth))
+	copy(auth2, auth)
+	auth2[3] = [2]float64{math.NaN(), math.NaN()}
+	c := layoutProjected(auth2, flat)
+	if c[3] != flat[3] {
+		t.Errorf("system without an authored position landed at %v, want its flat position %v", c[3], flat[3])
 	}
 }
 
@@ -129,6 +129,9 @@ func TestBuildUniverseMap(t *testing.T) {
 	}
 	if len(p.Gates) != 4 {
 		t.Errorf("gates = %v, want two pairs (the wormhole link dropped)", p.Gates)
+	}
+	if p.Version != universeMapVersion {
+		t.Errorf("payload version = %d, want the builder's %d", p.Version, universeMapVersion)
 	}
 	jita, tanoo := -1, -1
 	for i, id := range p.Sys.ID {
@@ -159,6 +162,65 @@ func TestBuildUniverseMap(t *testing.T) {
 	}
 	if forge := p.Regions[p.Sys.Region[jita]]; forge.W <= 0 && forge.H <= 0 {
 		t.Errorf("The Forge has no region frame: %+v", forge)
+	}
+}
+
+// TestBuildUniverseMapProjectedFrame: the payload's projected
+// frame is the systems' authored 2D layout (position2D) under
+// one global similarity -- every pairwise distance in PX/PY is
+// the authored distance times one constant -- and a system
+// whose row carries no authored position sits at its flat
+// (universe frame) position instead.
+func TestBuildUniverseMapProjectedFrame(t *testing.T) {
+	regions := []db.SdeRegion{{RegionID: 10000002, Name: "The Forge"}}
+	mk := func(id int64, x, z, p2x, p2y float64) db.ListMapSystemsRow {
+		return db.ListMapSystemsRow{SystemID: id, Name: "S", RegionID: 10000002,
+			X: x, Z: z, Position2dX: p2x, Position2dY: p2y}
+	}
+	systems := []db.ListMapSystemsRow{
+		mk(30000101, 0, 0, -4.0e17, 1.5e17),
+		mk(30000102, 1e16, 0, -3.9e17, 1.5e17),
+		mk(30000103, 0, 1e16, 0.5e17, -2.0e17),
+		mk(30000104, 1e16, 1e16, 4.5e17, -3.5e17),
+		mk(30000105, 5e15, 5e15, 0, 0), // no authored position
+	}
+	p := buildUniverseMap(systems, regions, nil, nil, nil)
+	if len(p.Sys.ID) != len(systems) {
+		t.Fatalf("systems = %v, want all five", p.Sys.ID)
+	}
+	byID := make(map[int64]int)
+	for i, id := range p.Sys.ID {
+		byID[id] = i
+	}
+	scale := 0.0
+	for a := 0; a < 4; a++ {
+		for b := a + 1; b < 4; b++ {
+			sa, sb := systems[a], systems[b]
+			// The payload's PY axis is the authored Y flipped.
+			ad := math.Hypot(sa.Position2dX-sb.Position2dX, sa.Position2dY-sb.Position2dY)
+			ia, ib := byID[sa.SystemID], byID[sb.SystemID]
+			pd := math.Hypot(float64(p.Sys.PX[ia]-p.Sys.PX[ib]), float64(p.Sys.PY[ia]-p.Sys.PY[ib]))
+			r := pd / ad
+			if scale == 0 {
+				scale = r
+			} else if math.Abs(r-scale) > scale*0.02 {
+				t.Errorf("pair %d-%d: projected/authored ratio %.6g, want the one global scale %.6g (integer rounding aside)", sa.SystemID, sb.SystemID, r, scale)
+			}
+			// The flip: the system higher in authored Y sits
+			// higher on screen (smaller PY), as authored X
+			// order is kept.
+			if sa.Position2dY > sb.Position2dY && !(p.Sys.PY[ia] < p.Sys.PY[ib]) {
+				t.Errorf("authored Y order not flipped: %d above %d in the dump, PY %d vs %d", sa.SystemID, sb.SystemID, p.Sys.PY[ia], p.Sys.PY[ib])
+			}
+			if sa.Position2dX < sb.Position2dX && !(p.Sys.PX[ia] < p.Sys.PX[ib]) {
+				t.Errorf("authored X order not kept: %d left of %d in the dump, PX %d vs %d", sa.SystemID, sb.SystemID, p.Sys.PX[ia], p.Sys.PX[ib])
+			}
+		}
+	}
+	i5 := byID[30000105]
+	if p.Sys.PX[i5] != p.Sys.X[i5] || p.Sys.PY[i5] != p.Sys.Y[i5] {
+		t.Errorf("system without an authored position: projected %d,%d, want its flat position %d,%d",
+			p.Sys.PX[i5], p.Sys.PY[i5], p.Sys.X[i5], p.Sys.Y[i5])
 	}
 }
 

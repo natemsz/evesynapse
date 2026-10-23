@@ -503,6 +503,12 @@ var pgIntelAnalysisSchema string
 //go:embed schema_pg/084_release_builds.sql
 var pgReleaseBuildsSchema string
 
+// Step 085: the SDE's authored 2D layout (position2D) on
+// sde_systems, the universe map's improved projection source.
+//
+//go:embed schema_pg/085_system_position2d.sql
+var pgSystemPosition2DSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -616,6 +622,7 @@ func schemaSteps() []schemaStep {
 		{82, "intel_channel_orgs", pgIntelChannelOrgsSchema, ""},
 		{83, "intel_analysis", pgIntelAnalysisSchema, ""},
 		{84, "release_builds", pgReleaseBuildsSchema, ""},
+		{85, "system_position2d", pgSystemPosition2DSchema, ""},
 	}
 }
 

@@ -7,7 +7,7 @@
 
 -- name: ListMapSystems :many
 SELECT system_id, name, region_id, constellation_id, security,
-    x, y, z, faction_id, security_class
+    x, y, z, position2d_x, position2d_y, faction_id, security_class
 FROM sde_systems
 WHERE region_id > 0 AND region_id < 11000000
   AND (x <> 0 OR y <> 0 OR z <> 0)

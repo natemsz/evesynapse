@@ -8,9 +8,6 @@ package app
 // Three layouts ride in one payload. The universe view is the true
 // top-down picture: every known-space system at its SDE x and z
 // (z flipped so galactic north is up), scaled into a 0..10000 frame.
-// Beside it sits the Improved Projection: the same picture relaxed
-// as one whole (layoutProjection) until overlaps end, for the
-// reader who wants the tactical reading over the true one.
 // The region view is the tactical one, computed rather than
 // hand-drawn: each region's systems start from the same true
 // positions, fitted to their own 0..1000 frame, then pushed apart
@@ -18,6 +15,13 @@ package app
 // the true positions, deterministic, so a layout never shifts
 // between builds of the same dump). Where a system sits relative to
 // its neighbours stays the true picture; only overlaps give way.
+// Beside them sits the Improved Projection: the SDE's own
+// authored 2D layout (position2D, schema 085), the positions the
+// game's flat map draws, carried into the same frame by one
+// global similarity (layoutProjected). The geometry is CCP's,
+// published in the dump: nothing is re-solved, contracted or
+// nudged here. A system whose dump row carries no position2D
+// keeps its universe-frame position in the projection.
 //
 // Known space only: wormhole space has no stargates to draw, and the
 // abyssal and void pockets are not places on a map.
@@ -47,7 +51,7 @@ import (
 // universeMapVersion is the builder's version: bump it when the
 // payload shape or a layout changes, and the stored payload
 // rebuilds from the stored SDE without a re-import.
-const universeMapVersion = 3
+const universeMapVersion = 5
 
 const (
 	universeFrame = 10000.0 // the universe view's longest side
@@ -225,48 +229,27 @@ func buildUniverseMap(systems []db.ListMapSystemsRow, regions []db.SdeRegion, co
 		S.Prom[i] = mapProminence(len(adj[i]), stationSystems[s.SystemID], tradeHubSystems[s.SystemID])
 	}
 
-	// The Improved Projection: the universe relaxed as one
-	// picture (layoutProjection), precomputed here like every
-	// other layout and carried beside the true positions, so
-	// the client only ever chooses between two stored frames.
-	var allEdges [][2]int
-	for a := range adj {
-		for _, b := range adj[a] {
-			if a < b {
-				allEdges = append(allEdges, [2]int{a, b})
-			}
-		}
-	}
-	proj := layoutProjection(uni, allEdges)
-	for i := range kept {
-		S.PX[i], S.PY[i] = int(math.Round(proj[i][0])), int(math.Round(proj[i][1]))
-	}
-
 	// Each region: its label point and its own decluttered frame.
 	members := make([][]int, len(p.Regions))
 	for i := range kept {
 		members[S.Region[i]] = append(members[S.Region[i]], i)
 	}
+	regionLaid := make([][][2]float64, len(p.Regions))
 	for ri, idxs := range members {
 		if len(idxs) == 0 {
 			continue
 		}
 		cx, cy := 0.0, 0.0
-		pcx, pcy := 0.0, 0.0
 		local := make([][2]float64, len(idxs))
 		pos := make(map[int]int, len(idxs))
 		for k, i := range idxs {
 			cx += float64(S.X[i])
 			cy += float64(S.Y[i])
-			pcx += float64(S.PX[i])
-			pcy += float64(S.PY[i])
 			local[k] = pts[i]
 			pos[i] = k
 		}
 		p.Regions[ri].X = int(math.Round(cx / float64(len(idxs))))
 		p.Regions[ri].Y = int(math.Round(cy / float64(len(idxs))))
-		p.Regions[ri].PX = int(math.Round(pcx / float64(len(idxs))))
-		p.Regions[ri].PY = int(math.Round(pcy / float64(len(idxs))))
 		var edges [][2]int
 		for k, i := range idxs {
 			for _, j := range adj[i] {
@@ -276,12 +259,46 @@ func buildUniverseMap(systems []db.ListMapSystemsRow, regions []db.SdeRegion, co
 			}
 		}
 		laid := layoutRegion(local, edges)
+		regionLaid[ri] = laid
 		w, h := 0.0, 0.0
 		for k, i := range idxs {
 			S.RX[i], S.RY[i] = int(math.Round(laid[k][0])), int(math.Round(laid[k][1]))
 			w, h = math.Max(w, laid[k][0]), math.Max(h, laid[k][1])
 		}
 		p.Regions[ri].W, p.Regions[ri].H = int(math.Ceil(w)), int(math.Ceil(h))
+	}
+
+	// The Improved Projection: the SDE's authored 2D layout
+	// (position2D), carried into the universe frame by one
+	// global similarity (layoutProjected), precomputed here
+	// like every other layout and carried beside the true
+	// positions, so the client only ever chooses between two
+	// stored frames.
+	auth := make([][2]float64, n)
+	for i, s := range kept {
+		if s.Position2dX != 0 || s.Position2dY != 0 {
+			auth[i] = [2]float64{s.Position2dX, -s.Position2dY}
+		} else {
+			// No authored position: layoutProjected places
+			// the system from its flat position instead.
+			auth[i] = [2]float64{math.NaN(), math.NaN()}
+		}
+	}
+	proj := layoutProjected(auth, uni)
+	for i := range kept {
+		S.PX[i], S.PY[i] = int(math.Round(proj[i][0])), int(math.Round(proj[i][1]))
+	}
+	for ri, idxs := range members {
+		if len(idxs) == 0 {
+			continue
+		}
+		pcx, pcy := 0.0, 0.0
+		for _, i := range idxs {
+			pcx += float64(S.PX[i])
+			pcy += float64(S.PY[i])
+		}
+		p.Regions[ri].PX = int(math.Round(pcx / float64(len(idxs))))
+		p.Regions[ri].PY = int(math.Round(pcy / float64(len(idxs))))
 	}
 	return p
 }
@@ -384,106 +401,41 @@ func regionMinSpacing(n int) float64 {
 	return math.Min(math.Max(regionFrame/math.Sqrt(float64(n))*0.8, 45), 160)
 }
 
-// universeMinSpacing is the closest two systems may sit in the
-// Improved Projection: at the universe's fitted size this is a
-// few screen pixels -- dots stop overlapping, and at reading
-// zoom neighbouring names have room -- without demanding so
-// much space that the anchored layout tears the map apart.
-func universeMinSpacing(n int) float64 {
-	if n < 2 {
-		return 60
-	}
-	return math.Min(math.Max(universeFrame/math.Sqrt(float64(n))*0.62, 42), 95)
-}
-
-// layoutProjection is the universe's tactical picture: the true
-// top-down positions (already fitted to universeFrame) relaxed
-// until no two systems crowd closer than universeMinSpacing.
-// It is layoutRegion's recipe at universe scale -- crowded
-// pairs push apart, long gate links pull back, and every system
-// is anchored gently to home, so the projected map stays
-// recognisably the real one, only readable. Where layoutRegion
-// can afford every pair, ~5,400 systems cannot: each step
-// buckets systems into a grid of spacing-sized cells and only
-// the neighbours in adjacent cells can crowd, which keeps a
-// step near-linear. Deterministic, like layoutRegion: buckets
-// are built and walked in index order, steps are fixed, and
-// coincident systems separate along an index-fixed direction.
-func layoutProjection(true2D [][2]float64, edges [][2]int) [][2]float64 {
-	n := len(true2D)
-	if n == 0 {
-		return nil
-	}
-	if n == 1 {
-		return [][2]float64{{universeFrame / 2, universeFrame / 2}}
-	}
-	anchor := make([][2]float64, n)
-	copy(anchor, true2D)
-	pos := make([][2]float64, n)
-	copy(pos, anchor)
-	minD := universeMinSpacing(n)
-	const steps = 420
-	type cellKey [2]int
-	for step := 0; step < steps; step++ {
-		cool := 1 - float64(step)/steps*0.6
-		buckets := make(map[cellKey][]int, n*2)
-		for i := range pos {
-			k := cellKey{int(math.Floor(pos[i][0] / minD)), int(math.Floor(pos[i][1] / minD))}
-			buckets[k] = append(buckets[k], i)
-		}
-		for i := 0; i < n; i++ {
-			ci, cj := int(math.Floor(pos[i][0]/minD)), int(math.Floor(pos[i][1]/minD))
-			for gx := ci - 1; gx <= ci+1; gx++ {
-				for gy := cj - 1; gy <= cj+1; gy++ {
-					for _, j := range buckets[cellKey{gx, gy}] {
-						if j <= i {
-							continue
-						}
-						dx, dy := pos[j][0]-pos[i][0], pos[j][1]-pos[i][1]
-						d := math.Hypot(dx, dy)
-						if d >= minD {
-							continue
-						}
-						if d < 1e-6 {
-							a := float64(i*7+j*13) * 0.618
-							dx, dy, d = math.Cos(a), math.Sin(a), 1
-						}
-						push := (minD - d) / 2 * 0.65 * cool
-						ux, uy := dx/d, dy/d
-						pos[i][0] -= ux * push
-						pos[i][1] -= uy * push
-						pos[j][0] += ux * push
-						pos[j][1] += uy * push
-					}
-				}
-			}
-		}
-		for _, e := range edges {
-			a, b := e[0], e[1]
-			dx, dy := pos[b][0]-pos[a][0], pos[b][1]-pos[a][1]
-			d := math.Hypot(dx, dy)
-			if d <= 2.4*minD || d < 1e-6 {
-				continue
-			}
-			pull := (d - 2.4*minD) * 0.02 * cool
-			ux, uy := dx/d, dy/d
-			pos[a][0] += ux * pull
-			pos[a][1] += uy * pull
-			pos[b][0] -= ux * pull
-			pos[b][1] -= uy * pull
-		}
-		// Home pulls far weaker than in a region's layout: a
-		// dense core can only reach spacing by genuinely
-		// expanding, and a strong anchor would hold it crowded
-		// in equilibrium. The gates and the cooling keep the
-		// expansion honest and local.
-		home := 0.003 * cool * cool
-		for i := range pos {
-			pos[i][0] += (anchor[i][0] - pos[i][0]) * home
-			pos[i][1] += (anchor[i][1] - pos[i][1]) * home
+// layoutProjected carries the authored 2D positions into the
+// universe frame under one global similarity: a uniform scale
+// and a translation, the frame fit of the authored points, so
+// every pairwise distance in the projection is the authored
+// distance times one constant. A system with no authored
+// position (NaN in auth) is placed by the matching similarity
+// between the flat positions and the authored ones: at the
+// flat point carried through the two frame fits, so it lands
+// where its flat position sits inside the authored picture.
+// Systems the dump authors placed exactly on top of each other
+// land together; the authored layout is drawn as published,
+// not repaired. Deterministic: fixed passes over the points.
+func layoutProjected(auth, flat [][2]float64) [][2]float64 {
+	out := make([][2]float64, len(auth))
+	present := make([][2]float64, 0, len(auth))
+	for _, p := range auth {
+		if !math.IsNaN(p[0]) {
+			present = append(present, p)
 		}
 	}
-	return fitFrame(pos, universeFrame)
+	if len(present) == 0 {
+		copy(out, flat)
+		return out
+	}
+	fit := fitFrame(present, universeFrame)
+	k := 0
+	for i := range auth {
+		if math.IsNaN(auth[i][0]) {
+			out[i] = flat[i]
+			continue
+		}
+		out[i] = fit[k]
+		k++
+	}
+	return out
 }
 
 // rebuildUniverseMap builds the payload from the stored SDE and

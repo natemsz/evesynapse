@@ -756,6 +756,82 @@ func (q *Queries) ListIntelReports(ctx context.Context, arg ListIntelReportsPara
 	return items, nil
 }
 
+const listIntelReportsBySystem = `-- name: ListIntelReportsBySystem :many
+SELECT id, channel_id, system_id, author_user_id, reporter, text, pilots, hostiles, clear, scan_id, source, seen_at, created_at, kind, analysis
+FROM intel_reports
+WHERE channel_id = ANY($1::bigint[])
+  AND system_id = $2::bigint
+ORDER BY seen_at DESC, id DESC
+LIMIT $3::int
+`
+
+type ListIntelReportsBySystemParams struct {
+	ChannelIds []int64 `json:"channel_ids"`
+	SystemID   int64   `json:"system_id"`
+	MaxRows    int32   `json:"max_rows"`
+}
+
+type ListIntelReportsBySystemRow struct {
+	ID           int64     `json:"id"`
+	ChannelID    int64     `json:"channel_id"`
+	SystemID     int64     `json:"system_id"`
+	AuthorUserID int64     `json:"author_user_id"`
+	Reporter     string    `json:"reporter"`
+	Text         string    `json:"text"`
+	Pilots       string    `json:"pilots"`
+	Hostiles     int32     `json:"hostiles"`
+	Clear        bool      `json:"clear"`
+	ScanID       string    `json:"scan_id"`
+	Source       string    `json:"source"`
+	SeenAt       time.Time `json:"seen_at"`
+	CreatedAt    time.Time `json:"created_at"`
+	Kind         string    `json:"kind"`
+	Analysis     string    `json:"analysis"`
+}
+
+// One system's reports across some channels, newest first: the
+// system page's intel section. The caller passes only the channels
+// its reader can access (accessibleChannels), so the access check
+// stays in one place.
+func (q *Queries) ListIntelReportsBySystem(ctx context.Context, arg ListIntelReportsBySystemParams) ([]ListIntelReportsBySystemRow, error) {
+	rows, err := q.db.QueryContext(ctx, listIntelReportsBySystem, pq.Array(arg.ChannelIds), arg.SystemID, arg.MaxRows)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListIntelReportsBySystemRow
+	for rows.Next() {
+		var i ListIntelReportsBySystemRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.ChannelID,
+			&i.SystemID,
+			&i.AuthorUserID,
+			&i.Reporter,
+			&i.Text,
+			&i.Pilots,
+			&i.Hostiles,
+			&i.Clear,
+			&i.ScanID,
+			&i.Source,
+			&i.SeenAt,
+			&i.CreatedAt,
+			&i.Kind,
+			&i.Analysis,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listIntelTokens = `-- name: ListIntelTokens :many
 SELECT id, name, prefix, created_at, last_used_at, device FROM intel_tokens
 WHERE user_id = $1 ORDER BY created_at DESC, id DESC

@@ -6,8 +6,10 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"evesynapse/internal/app/module"
 	db "evesynapse/internal/db/sqlc"
@@ -108,6 +110,35 @@ type systemPageView struct {
 	SovCorpID       int64
 	SovCorpName     string
 	SovFactionName  string
+	// Kills is the system's most recent public kills, newest
+	// first, at most systemKillsShown. Camp is set while a gate
+	// camp is running in the system.
+	Kills []killRow
+	Camp  *systemCampView
+	// Reports is the intel reported about this system in the
+	// channels the page's reader can access, grouped by channel,
+	// newest first. Empty for signed-out readers.
+	Reports []systemReportGroup
+}
+
+// systemCampView is the gate camp flag on a system page: the
+// map card's camp (map_system.go) in display form. Tip carries
+// the detail the mouseover shows: who holds the gate, the kills
+// behind the flag, the window, and what the campers fly.
+type systemCampView struct {
+	Group     string
+	Href      string // the camp's group on the killboard
+	Kills     int
+	Pilots    int
+	SinceText string // "30 min ago"
+	Tip       string
+}
+
+// systemReportGroup is one channel's reports about a system.
+type systemReportGroup struct {
+	ChannelID   int64
+	ChannelName string
+	Reports     []reportView
 }
 
 // stationPageView is the /station/ page body.
@@ -370,7 +401,162 @@ func (app *Application) loadSystemView(ctx context.Context, id int64) *systemPag
 	} else if !errors.Is(verr, sql.ErrNoRows) {
 		logging.Errorf("system page: read sovereignty for system %d: %v", id, verr)
 	}
+
+	names := app.newKillNames(ctx)
+	now := time.Now().UTC()
+	stream, kerr := app.queries.ListKillsBySystem(ctx, db.ListKillsBySystemParams{
+		SystemID: id, BeforeTime: now.Add(time.Hour), BeforeID: 1 << 62, MaxRows: systemKillsFetch,
+	})
+	if kerr != nil {
+		logging.Errorf("system page: recent kills for system %d: %v", id, kerr)
+	} else {
+		offered := make([]systemKill, len(stream))
+		for i, k := range stream {
+			offered[i] = systemKill{kill: k}
+		}
+		// A first-party kill source joins here when one exists:
+		// its kills are offered as their own source and win the
+		// merge below against the stream's row of the same kill.
+		for _, k := range mergeSystemKills(systemKillsShown, offered) {
+			view.Kills = append(view.Kills, names.row(k))
+		}
+		if camp := app.mapSystemCamp(ctx, names, id, now, stream); camp != nil {
+			view.Camp = systemCampViewOf(camp, now)
+		}
+	}
+	view.Reports = app.systemIntelReports(ctx, names, id)
 	return view
+}
+
+const (
+	// systemKillsShown is how many of a system's most recent
+	// kills its page lists.
+	systemKillsShown = 5
+	// systemKillsFetch is how deep each kill source is read for
+	// the merge: deep enough that duplicates between sources
+	// cannot push a shown kill out, and the depth the map card
+	// already reads for one system.
+	systemKillsFetch = 40
+	// systemReportsMax bounds the intel reports a system page
+	// lists across every channel its reader can access.
+	systemReportsMax = 10
+)
+
+// systemKill is one kill offered to a system page by one source:
+// the killboard's ingested stream today, first-party kill data
+// when EveSynapse has its own.
+type systemKill struct {
+	kill db.Kill
+	// firstParty marks EveSynapse's own record of the kill. On a
+	// duplicate it is the row the page stands behind.
+	firstParty bool
+}
+
+// mergeSystemKills folds every source's kills into one list,
+// newest first (killmail time, then id, the killboard's own
+// order), at most limit long. A killmail offered by more than
+// one source appears once: the first-party row wins; between
+// rows of the same standing the first source to offer it keeps
+// it.
+func mergeSystemKills(limit int, sources ...[]systemKill) []db.Kill {
+	byID := map[int64]db.Kill{}
+	party := map[int64]bool{}
+	for _, src := range sources {
+		for _, sk := range src {
+			id := sk.kill.KillmailID
+			if _, seen := byID[id]; !seen || (sk.firstParty && !party[id]) {
+				byID[id] = sk.kill
+				party[id] = sk.firstParty
+			}
+		}
+	}
+	out := make([]db.Kill, 0, len(byID))
+	for _, k := range byID {
+		out = append(out, k)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if !out[i].KillmailTime.Equal(out[j].KillmailTime) {
+			return out[i].KillmailTime.After(out[j].KillmailTime)
+		}
+		return out[i].KillmailID > out[j].KillmailID
+	})
+	if len(out) > limit {
+		out = out[:limit]
+	}
+	return out
+}
+
+// systemCampViewOf renders the map card's camp for the page: the
+// flag's line and its mouseover detail, from the same facts the
+// card shows (map_system.go).
+func systemCampViewOf(c *mapSystemCamp, now time.Time) *systemCampView {
+	v := &systemCampView{
+		Group: c.Group, Href: c.Href, Kills: c.Kills, Pilots: c.Pilots,
+		SinceText: ageText(now, time.Unix(c.Since, 0).UTC()),
+	}
+	ships := make([]string, len(c.Ships))
+	for i, s := range c.Ships {
+		ships[i] = fmt.Sprintf("%s ×%d", s.Name, s.N)
+	}
+	since := time.Unix(c.Since, 0).UTC().Format("15:04")
+	switch {
+	case c.Group != "" && len(ships) > 0:
+		v.Tip = fmt.Sprintf("Gate camp by %s: %d kills in the last hour (first at %s EVE), %d pilots. Flying %s.",
+			c.Group, c.Kills, since, c.Pilots, strings.Join(ships, ", "))
+	case c.Group != "":
+		v.Tip = fmt.Sprintf("Gate camp by %s: %d kills in the last hour (first at %s EVE), %d pilots.",
+			c.Group, c.Kills, since, c.Pilots)
+	default:
+		v.Tip = fmt.Sprintf("Gate camp: %d kills in the last hour (first at %s EVE), %d pilots.",
+			c.Kills, since, c.Pilots)
+	}
+	return v
+}
+
+// systemIntelReports lists the intel reported about a system in
+// the channels the page's reader can access -- the channels'
+// own access check (accessibleChannels over the reader's intel
+// identity), never a second one. A signed-out reader has no
+// identity and sees none.
+func (app *Application) systemIntelReports(ctx context.Context, names *killNames, systemID int64) []systemReportGroup {
+	id := app.intelIdentity(ctx)
+	chans := app.accessibleChannels(ctx, id)
+	if len(chans) == 0 {
+		return nil
+	}
+	ids := make([]int64, len(chans))
+	nameOf := make(map[int64]string, len(chans))
+	for i, c := range chans {
+		ids[i] = c.ID
+		nameOf[c.ID] = c.Name
+	}
+	rows, err := app.queries.ListIntelReportsBySystem(ctx, db.ListIntelReportsBySystemParams{
+		ChannelIds: ids, SystemID: systemID, MaxRows: systemReportsMax,
+	})
+	if err != nil {
+		logging.Errorf("system page: intel reports for system %d: %v", systemID, err)
+		return nil
+	}
+	now := time.Now()
+	var groups []systemReportGroup
+	at := map[int64]int{}
+	for _, r := range rows {
+		rv := reportView{ID: r.ID, Channel: r.ChannelID, SystemID: r.SystemID, Reporter: r.Reporter, Text: r.Text,
+			Hostiles: r.Hostiles, Clear: r.Clear, ScanID: r.ScanID, Source: r.Source, At: r.SeenAt.Unix(), Time: r.SeenAt,
+			Ago: ageText(now, r.SeenAt), Mine: r.AuthorUserID == id.userID}
+		sys := names.system(r.SystemID)
+		rv.SystemName = sys.Name
+		rv.SecText, rv.SecTier = secRound(sys.Security)
+		applyAnalysis(&rv, r.Kind, r.Analysis, names)
+		gi, ok := at[r.ChannelID]
+		if !ok {
+			groups = append(groups, systemReportGroup{ChannelID: r.ChannelID, ChannelName: nameOf[r.ChannelID]})
+			gi = len(groups) - 1
+			at[r.ChannelID] = gi
+		}
+		groups[gi].Reports = append(groups[gi].Reports, rv)
+	}
+	return groups
 }
 
 // loadStationView builds the render model for a station page from

@@ -24,7 +24,7 @@ func TestLandingAnonymous(t *testing.T) {
 	}
 	for _, want := range []string{
 		"Stop alt-tabbing between <span class=\"ld-amp\">five different tools.</span>",
-		"Fits run on your real skills.",
+		"An advanced all-in-one integrated dashboard for EVE Online.",
 		"Try it now opens in demo mode, no sign-in needed",
 		"the sign-in asks for the scopes behind those features",
 		"Linking asks only for the scopes behind the features you pick",
@@ -33,8 +33,8 @@ func TestLandingAnonymous(t *testing.T) {
 		"No donation pop-ups.",
 		"concurrent pilots on one small server, load-tested",
 		"pilots kept fully current, sync load-tested",
-		"rosters of 12 to 2,400 pilots driven through the real sync cycle",
-		"Run on a Core 2 Duo laptop with 8 GB of RAM",
+		"rosters of 12 to 14,800 pilots driven through the real sync cycle",
+		"Run on a 8 core ARM server with 24 GB of RAM",
 		"Rebuilt over <em>4 years</em>. Originating in <em>2013</em>. Built for <em>2026</em>.",
 		"href=\"/auth/login\"",        // existing members sign in plainly
 		"href=\"/auth/link\"",         // new members link characters
@@ -61,7 +61,7 @@ func TestLandingAnonymous(t *testing.T) {
 		"One stack for the whole corporation.",
 		"A hundred pilots, one morning briefing.",
 		"Every pilot, at a glance.",
-		"customizable dashboard over every character you link",
+		"fully customizable dashboard for every character you link",
 		"Desktop grade fitting, in a browser tab.",
 		"shot-fitting.webp",
 		"ld-browser",
@@ -69,7 +69,7 @@ func TestLandingAnonymous(t *testing.T) {
 		"priced and simulated with its pilot's own skills",
 		"Know what it's worth, and what to do next.",
 		"Appraisal: paste anything, get a price",
-		"The appraisal tool on the live site.",
+		"The appraisal tool. Paste anything, and every line comes back priced with its source.",
 		"evesynapse.app/market/appraise/",
 		"shot-appraisal.webp",
 		"Modules, up close.",

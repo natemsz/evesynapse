@@ -497,10 +497,16 @@ var pgIntelChannelOrgsSchema string
 //go:embed schema_pg/083_intel_analysis.sql
 var pgIntelAnalysisSchema string
 
-// Step 084: the SDE's authored 2D layout (position2D) on
+// Step 084: the release builds the swarm's learner has
+// recorded from the owner's GitHub releases.
+//
+//go:embed schema_pg/084_release_builds.sql
+var pgReleaseBuildsSchema string
+
+// Step 085: the SDE's authored 2D layout (position2D) on
 // sde_systems, the universe map's improved projection source.
 //
-//go:embed schema_pg/084_system_position2d.sql
+//go:embed schema_pg/085_system_position2d.sql
 var pgSystemPosition2DSchema string
 
 // schemaStep is one numbered file in schema_pg. Steps apply in
@@ -615,7 +621,8 @@ func schemaSteps() []schemaStep {
 		{81, "axon_pairing", pgAxonPairingSchema, ""},
 		{82, "intel_channel_orgs", pgIntelChannelOrgsSchema, ""},
 		{83, "intel_analysis", pgIntelAnalysisSchema, ""},
-		{84, "system_position2d", pgSystemPosition2DSchema, ""},
+		{84, "release_builds", pgReleaseBuildsSchema, ""},
+		{85, "system_position2d", pgSystemPosition2DSchema, ""},
 	}
 }
 

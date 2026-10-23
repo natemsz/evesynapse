@@ -64,6 +64,16 @@ type Mod struct {
 	// SwarmCover is what peers warm for the swarm and which misses
 	// have been left to them (warm.go).
 	SwarmCover SwarmCoverage
+
+	// ReleaseFetch fetches one URL's body for the release
+	// learner (releases.go); nil uses the built-in HTTP fetch.
+	// Tests replace it to serve fixture payloads.
+	ReleaseFetch func(ctx context.Context, url string) ([]byte, error)
+	// LearnMu guards the release learner's due time and busy
+	// flag; the learned set itself lives in build.go.
+	LearnMu   sync.Mutex
+	LearnNext time.Time
+	LearnBusy bool
 }
 
 var states sync.Map // module.Deps -> *Mod
@@ -160,6 +170,11 @@ var Module = module.Module{
 		return []module.Scope{{Scope: module.StructureScope, Unlocks: "Check the structure names this server shares with other instances, using a character that can read the structure."}}
 	},
 	FetchGates: []module.FetchGate{gate{}},
+	WorkerJobs: []module.WorkerJob{
+		{Name: "release library", After: module.AfterMarket, Start: func(ctx context.Context, deps module.Deps) {
+			StateFor(deps).MaybeLearnReleases(ctx)
+		}},
+	},
 	CycleJobs: []module.CycleJob{
 		{Name: "swarm fetch", Describe: "asking the swarm first", At: module.BeforePublicData, Run: func(ctx context.Context, deps module.Deps, c module.Cycle) (int, bool) {
 			StateFor(deps).SwarmFetchPhase(ctx, c.Now)
@@ -231,6 +246,13 @@ func initSwarm(deps module.Deps) error {
 	}
 	st := StateFor(deps)
 	st.Cfg = cfg
+	// The release library's learned half loads before anything
+	// can render the Admin page: a failed load leaves the
+	// seeded library standing alone until the learner's first
+	// pass lands, so it is logged, never fatal.
+	if err := st.LoadLearnedBuilds(context.Background()); err != nil {
+		logging.Warnf("swarm: load learned release builds: %v", err)
+	}
 	if cfg.Enabled() {
 		id, err := LoadSwarmIdentity(context.Background(), deps.DB(), cfg.Secret)
 		if err != nil {

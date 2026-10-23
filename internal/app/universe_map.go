@@ -16,7 +16,7 @@ package app
 // between builds of the same dump). Where a system sits relative to
 // its neighbours stays the true picture; only overlaps give way.
 // Beside them sits the Improved Projection: the SDE's own
-// authored 2D layout (position2D, schema 084), the positions the
+// authored 2D layout (position2D, schema 085), the positions the
 // game's flat map draws, carried into the same frame by one
 // global similarity (layoutProjected). The geometry is CCP's,
 // published in the dump: nothing is re-solved, contracted or

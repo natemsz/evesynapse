@@ -994,6 +994,13 @@ type RegionActivityStat struct {
 	UpdatedAt    time.Time `json:"updated_at"`
 }
 
+type ReleaseBuild struct {
+	Hash      string    `json:"hash"`
+	Kind      string    `json:"kind"`
+	Label     string    `json:"label"`
+	LearnedAt time.Time `json:"learned_at"`
+}
+
 type RestockTarget struct {
 	UserID       int64     `json:"user_id"`
 	TypeID       int64     `json:"type_id"`

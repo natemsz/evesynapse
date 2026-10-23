@@ -1324,13 +1324,14 @@
     try { sovNPC = localStorage.getItem("evesynapse-map-sov-npc") !== "0"; } catch (e) { /* private mode */ }
     if (startQuery.get("npc") === "0") sovNPC = false;
     if (startQuery.get("npc") === "1") sovNPC = true;
-    // Improved Projection: the universe in its precomputed
-    // assembled frame -- each region in its own tactical
-    // shape, set at its true place. A remembered preference, on every visit
-    // until the reader changes it; a link's proj= settles it
-    // for that visit only, without touching the preference.
-    var PROJ_KEY = "evesynapse-map-projection", projOn = false;
-    try { projOn = window.localStorage.getItem(PROJ_KEY) === "1"; } catch (e) { /* private mode */ }
+    // Improved Projection: the universe in the game's own
+    // authored 2D layout, the default view. A remembered
+    // preference, on every visit until the reader changes it
+    // (only an explicit off is remembered as off); a link's
+    // proj= settles it for that visit only, without touching
+    // the preference.
+    var PROJ_KEY = "evesynapse-map-projection", projOn = true;
+    try { projOn = window.localStorage.getItem(PROJ_KEY) !== "0"; } catch (e) { /* private mode */ }
     if (startQuery.get("proj") === "1") projOn = true;
     if (startQuery.get("proj") === "0") projOn = false;
     var projPref = el.querySelector("[data-map-proj]");
@@ -3982,7 +3983,7 @@
         syncURL();
         schedule();
         hint(projOn
-          ? "Improved projection is on: the universe assembled region by region, each in its tactical shape. It stays on until you turn it off."
+          ? "Improved projection is on: the universe in the game's own 2D layout. It stays on until you turn it off."
           : "Improved projection is off: the universe at its true positions. It stays off until you turn it on.");
       });
     }

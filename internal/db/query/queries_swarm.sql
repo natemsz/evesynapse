@@ -281,3 +281,22 @@ WHERE region_id = $1 AND type_id = $2
 -- name: RollBackSwarmHistoryState :execrows
 DELETE FROM market_fetch_state
 WHERE kind = $1 AND detail = 'swarm' AND attempted_at = sqlc.arg(row_stamp)::timestamptz;
+
+-- One build the release learner recorded: the binary's
+-- SHA-256, which product it belongs to and the release's
+-- version label. Relearning the same hash writes the same
+-- values again -- the table is a remembered set, not a log.
+-- name: UpsertLearnedBuild :exec
+INSERT INTO release_builds (hash, kind, label, learned_at)
+VALUES ($1, $2, $3, $4)
+ON CONFLICT (hash) DO UPDATE SET
+    kind = excluded.kind,
+    label = excluded.label,
+    learned_at = excluded.learned_at;
+
+-- Every learned build, for the in-memory snapshot the Admin
+-- page's classification reads. The set is small by
+-- construction (two repositories, a page of releases each,
+-- two binaries per release), so the whole of it loads.
+-- name: ListLearnedBuilds :many
+SELECT hash, kind, label FROM release_builds ORDER BY hash;

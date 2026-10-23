@@ -64,6 +64,37 @@ a.pi-stat:hover { border-color: var(--accent); }
 }
 .pi-watch input[type=text] { width: 18rem; max-width: 100%; }
 
+/* --- Sheet + intel layout (pilot.html) ---
+ * With actual intel on the pilot, the page lays out as the record
+ * and its employment history in the main column and the intel
+ * section in a right rail — the killboard's kb-layout shape. Below
+ * the rail breakpoint the grid gives up and the source order
+ * stacks: record, intel, employment history. No intel, no rail:
+ * the wrapper stays a plain stack, exactly as the page has
+ * always rendered. */
+.pilot-layout-rail {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 26rem;
+  grid-template-areas: "record rail" "history rail";
+  /* The history row absorbs whatever height the rail adds, so
+     the history stays directly under the record however tall
+     the intel section runs. */
+  grid-template-rows: auto 1fr;
+  column-gap: 1.5rem;
+  align-items: start;
+}
+.pilot-layout-rail .pilot-record { grid-area: record; min-width: 0; }
+.pilot-layout-rail .pilot-employment { grid-area: history; min-width: 0; }
+.pilot-layout-rail > .pi { grid-area: rail; min-width: 0; margin-top: 0; }
+@media (min-width: 64rem) {
+  /* The rail is too narrow for the section's side-by-side panels. */
+  .pilot-layout-rail .pi-cols { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 64rem) {
+  .pilot-layout-rail { display: block; }
+  .pilot-layout-rail > .pi { margin-top: 1.4rem; }
+}
+
 @media (max-width: 45rem) {
   .pi-cols { grid-template-columns: minmax(0, 1fr); }
   .pi-seen { grid-column: 1 / -1; }

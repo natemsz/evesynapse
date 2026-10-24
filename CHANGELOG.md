@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.5.8.3] - 2026-10-24
+
+Automated build of EveSynapse v0.5.8.3. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+
+## What's Changed
+### 🐛 Bug Fixes
+* Intel analyzer: read scan-shaped text as rows, set name columns aside by @natemsz in https://github.com/natemsz/evesynapse/pull/655
+* Warming: stop junk ESI calls, settle definitive 404s as dead by @natemsz in https://github.com/natemsz/evesynapse/pull/656
+### Other Changes
+* docs(changelog): review changelog for v0.5.8.2 by @github-actions[bot] in https://github.com/natemsz/evesynapse/pull/650
+* Landing nav: headline tools as direct links by @natemsz in https://github.com/natemsz/evesynapse/pull/651
+* Gate camps name their gate: celestial attribution and recurring crew by @natemsz in https://github.com/natemsz/evesynapse/pull/652
+* Landing: categorized Tools dropdown and full-width top bar by @natemsz in https://github.com/natemsz/evesynapse/pull/654
+
+
+**Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.8.2...v0.5.8.3
+
 ## [v0.5.8.2] - 2026-10-24
 
 Automated build of EveSynapse v0.5.8.2. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).

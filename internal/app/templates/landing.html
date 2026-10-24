@@ -19,7 +19,7 @@
 <div class="ld-stars" aria-hidden="true"></div>
 <header class="ld-header"><div class="ld-wrap ld-hbar">
   <a class="wordmark ld-wordmark" href="/" aria-label="EveSynapse home"><img class="wordmark-glyph" src="/static/logo.svg?v={{.AssetVersion}}" alt="" width="64" height="64"><span>{{template "wordmark-svg"}}</span></a>
-  <nav class="ld-nav"><a href="#tools">Tools</a><a href="#apart">What sets us apart</a><a href="#trust">Trust</a></nav>
+  <nav class="ld-nav"><a href="#tools">Tools</a><a href="#trust">Trust</a></nav>
   <div class="ld-hsp"></div>
   <a class="ld-btn ld-btn-ghost" href="/auth/login">Sign in</a>
   <a class="ld-btn ld-btn-ember" href="/auth/link">Link your characters</a>
@@ -96,26 +96,6 @@
     </div>
   </section>
 
-  <section class="ld-blk" id="apart">
-    <div class="ld-eyebrow">What sets us apart</div>
-    <h2>One connected system.</h2>
-    <p class="ld-lede">Every tool uses the same characters and the same stored data, and each character syncs in the background. A solo pilot gets the public tools; a larger group gets doctrines, ship replacement, and intel channels in the same place without needing extra hosting.</p>
-    <p class="ld-lede">Prices come from EveSynapse's own swept market data, and every price shows its source. An advanced proprietary model accurately prices items that aren't in market data, like abyssals, capital ships, and blueprints.</p>
-    <div class="ld-blurbs">
-      <div class="ld-blurb"><h3>Public data, no login</h3><p>Tools using public data require no login at all to use: the fitting simulator, planners, market and intel tools, and the universe map, are open to everyone. Sign in only when you want your own characters in the picture.</p></div>
-      <div class="ld-blurb"><h3>One stack for the whole corporation.</h3><p>Directors publish the doctrines for ships and entire fleets, once; member fits and ship replacement check against them, Discord servers are provisioned with roles that follow the same groups you set, and ops land on one shared calendar that syncs in-game in both directions.</p></div>
-    </div>
-    <div class="ld-stats">
-      <div class="ld-glass ld-stat"><b>2,400+</b><span>concurrent pilots on one small server, load-tested</span></div>
-      <div class="ld-glass ld-stat"><b>14,800+</b><span>pilots kept fully current, sync load-tested</span></div>
-      <div class="ld-glass ld-stat"><b>23</b><span>feature modules, each one feeding the others</span></div>
-    </div>
-    <p class="ld-stat-note">How the sync number was measured: rosters of 12 to 14,800 pilots ran through the real sync cycle against a local ESI stub. Every backlog cleared, and a pilot due for refresh was current again within one cycle. The test ran on an 8-core ARM server with 24 GB of RAM. The largest roster was the stopping point, and the production server is significantly stronger.</p>
-    <div class="ld-cta-repeat">
-      <a class="ld-btn ld-btn-ember ld-btn-lg" href="/auth/link">Link your characters, free</a>
-      <span class="ld-why">Linking asks only for the scopes behind the features you pick.</span>
-    </div>
-  </section>
 
   <section class="ld-blk" id="trust">
     <div class="ld-eyebrow">Trust</div>

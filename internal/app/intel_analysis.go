@@ -230,8 +230,15 @@ func (app *Application) analyzeIntel(ctx context.Context, channelID int64, in in
 
 // insertIntelReport stores a report with what it says. nv is "no
 // visual", which the stored report keeps only in its analysis.
-func (app *Application) insertIntelReport(ctx context.Context, p db.InsertIntelReportParams, nv bool) (int64, error) {
+// counts, when given, are the standing split the report's own
+// reading counted (a scan's synthesis): they are stored over the
+// split the analysis of the headline derives, a reading's counts
+// being the exact ones.
+func (app *Application) insertIntelReport(ctx context.Context, p db.InsertIntelReportParams, nv bool, counts *intelanalyze.StandingCounts) (int64, error) {
 	a, pending := app.analyzeIntel(ctx, p.ChannelID, intelanalyze.Input{System: p.SystemID, Text: p.Text, Hostiles: int(p.Hostiles), Clear: p.Clear, NoVisual: nv})
+	if counts != nil && counts.Total() > 0 {
+		a.Counts = counts
+	}
 	p.Kind = a.Kind
 	if raw, err := json.Marshal(a); err == nil {
 		p.Analysis = string(raw)
@@ -292,6 +299,14 @@ func (app *Application) drainIntelAnalysis(ctx context.Context) (limited bool) {
 	// either way: what EVE does not know is not asked again.
 	for _, r := range rows {
 		a, _ := app.analyzeIntel(ctx, r.ChannelID, input(r))
+		// A scan report keeps the split its reading counted at
+		// ingest: re-reading its headline sentence can only
+		// approximate them.
+		var prev intelanalyze.Analysis
+		_ = json.Unmarshal([]byte(r.Analysis), &prev)
+		if r.ScanID != "" && prev.Counts != nil {
+			a.Counts = prev.Counts
+		}
 		raw, _ := json.Marshal(a)
 		if err := app.queries.SetIntelReportAnalysis(ctx, db.SetIntelReportAnalysisParams{ID: r.ID, Kind: a.Kind, Analysis: string(raw), AnalysisPending: false}); err != nil {
 			logging.Warnf("intel: save analysis of report %d: %v", r.ID, err)
@@ -354,7 +369,37 @@ func applyAnalysis(rv *reportView, kind, raw string, names *killNames) {
 	}
 	if a.Gate > 0 {
 		rv.Gate = names.system(a.Gate).Name
+		rv.GateID = a.Gate
 	}
+	// The stats bar: the standing split stored with the report.
+	// Questions and chatter carry no split worth a bar, as they
+	// carry no kind label.
+	if a.Counts != nil && kind != intelanalyze.KindQuestion && kind != intelanalyze.KindChatter {
+		rv.Split = standingSplit(a.Counts)
+	}
+}
+
+// standingSplit turns stored counts into bar segments, in the
+// order the site speaks of them, empty buckets left out.
+func standingSplit(c *intelanalyze.StandingCounts) []reportSeg {
+	total := c.Total()
+	if total == 0 {
+		return nil
+	}
+	all := []reportSeg{
+		{Name: "Hostiles", N: c.Hostile, Class: "hostile"},
+		{Name: "Friendly", N: c.Friendly, Class: "friendly"},
+		{Name: "Neutral", N: c.Neutral, Class: "neutral"},
+		{Name: "Unclassified", N: c.Unclassified, Class: "unclassified"},
+	}
+	out := make([]reportSeg, 0, len(all))
+	for _, s := range all {
+		if s.N > 0 {
+			s.Pct = s.N * 100 / total
+			out = append(out, s)
+		}
+	}
+	return out
 }
 
 // lookupIntelNames asks EVE which of the names are pilots (exact

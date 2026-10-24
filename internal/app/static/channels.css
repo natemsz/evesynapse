@@ -38,6 +38,32 @@
 a.ch-tag:hover { border-color: var(--accent); }
 .ch-tag.friendly { border-color: var(--success); color: var(--muted); }
 .ch-tag.ship { color: var(--muted); }
+/* The standing-split bar under a report's sentence: the same
+ * proportional read as the scan pages' strips, in the standing
+ * colours -- hostiles red, friendly amber, neutral grey-blue,
+ * unclassified dark. Segment widths come from data-n, set as the
+ * --n custom property by channels.js (the CSP keeps style
+ * attributes out of the markup). */
+.ch-strip { display: flex; height: 0.65rem; border-radius: var(--r-xs); overflow: hidden; background: var(--row-alt); margin-top: 0.35rem; max-width: 34rem; }
+.ch-seg { display: block; min-width: 2px; flex: var(--n, 1) 1 0; }
+.ch-seg.hostile { background: #e0301c; }
+.ch-seg.friendly { background: #ffb84d; }
+.ch-seg.neutral { background: #7d8ca3; }
+.ch-seg.unclassified { background: #57493a; }
+.ch-strip-legend { display: flex; flex-wrap: wrap; gap: 0.15rem 0.8rem; margin-top: 0.25rem; font-size: 0.78rem; color: var(--muted); }
+.ch-strip-legend strong { color: var(--text); }
+.ch-dot { display: inline-block; width: 0.55rem; height: 0.55rem; border-radius: 2px; margin-right: 0.25rem; }
+.ch-dot.hostile { background: #e0301c; }
+.ch-dot.friendly { background: #ffb84d; }
+.ch-dot.neutral { background: #7d8ca3; }
+.ch-dot.unclassified { background: #57493a; }
+/* A report's doors: where its system leads next. */
+.ch-rep-doors { display: block; margin-top: 0.3rem; font-size: 0.78rem; color: var(--muted); }
+.ch-rep-doors a { color: var(--muted); }
+.ch-rep-doors a:hover { color: var(--text); }
+/* The feed's systems at a glance. */
+.ch-hot { display: flex; flex-wrap: wrap; gap: 0.3rem 1.2rem; margin: 0 0 0.5rem; padding: 0; list-style: none; font-size: 0.88rem; }
+.ch-hot a { font-weight: 600; }
 .ch-rep-meta { display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.78rem; color: var(--muted); white-space: nowrap; }
 .ch-x { width: 1.6rem; height: 1.6rem; border: 0; border-radius: 50%; background: none; color: var(--muted); font-size: 1.05rem; line-height: 1; cursor: pointer; }
 .ch-x:hover { color: var(--text-bright); background: var(--row-hover); }

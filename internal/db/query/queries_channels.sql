@@ -92,7 +92,7 @@ RETURNING id;
 
 -- Intel analysis (schema 083).
 -- name: ListPendingIntelReports :many
-SELECT id, channel_id, system_id, text, hostiles, clear, analysis
+SELECT id, channel_id, system_id, text, hostiles, clear, analysis, scan_id
 FROM intel_reports
 WHERE analysis_pending AND created_at >= sqlc.arg(since)::timestamptz
 ORDER BY created_at

@@ -1006,7 +1006,7 @@ func (q *Queries) ListOrgIntelChannels(ctx context.Context, arg ListOrgIntelChan
 }
 
 const listPendingIntelReports = `-- name: ListPendingIntelReports :many
-SELECT id, channel_id, system_id, text, hostiles, clear, analysis
+SELECT id, channel_id, system_id, text, hostiles, clear, analysis, scan_id
 FROM intel_reports
 WHERE analysis_pending AND created_at >= $1::timestamptz
 ORDER BY created_at
@@ -1026,6 +1026,7 @@ type ListPendingIntelReportsRow struct {
 	Hostiles  int32  `json:"hostiles"`
 	Clear     bool   `json:"clear"`
 	Analysis  string `json:"analysis"`
+	ScanID    string `json:"scan_id"`
 }
 
 // Intel analysis (schema 083).
@@ -1046,6 +1047,7 @@ func (q *Queries) ListPendingIntelReports(ctx context.Context, arg ListPendingIn
 			&i.Hostiles,
 			&i.Clear,
 			&i.Analysis,
+			&i.ScanID,
 		); err != nil {
 			return nil, err
 		}

@@ -543,7 +543,7 @@ func (app *Application) systemIntelReports(ctx context.Context, names *killNames
 	for _, r := range rows {
 		rv := reportView{ID: r.ID, Channel: r.ChannelID, SystemID: r.SystemID, Reporter: r.Reporter, Text: r.Text,
 			Hostiles: r.Hostiles, Clear: r.Clear, ScanID: r.ScanID, Source: r.Source, At: r.SeenAt.Unix(), Time: r.SeenAt,
-			Ago: ageText(now, r.SeenAt), Mine: r.AuthorUserID == id.userID}
+			Ago: ageText(now, r.SeenAt), Mine: r.AuthorUserID == id.userID, NoDoors: true}
 		sys := names.system(r.SystemID)
 		rv.SystemName = sys.Name
 		rv.SecText, rv.SecTier = secRound(sys.Security)

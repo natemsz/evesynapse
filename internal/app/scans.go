@@ -941,12 +941,13 @@ func (st channelStanding) ofLocal(lp localPilot) int {
 }
 
 // scanReportText makes the one interpreted sentence a report made
-// from a reading carries as its headline. p is the paste the
-// reading was made from, when it can still be had; without it the
-// sentence is made from the reading's tallies alone and says less.
-// posterID is the reporting pilot, counted friendly when a local
-// roster names them.
-func (app *Application) scanReportText(ctx context.Context, channelID int64, res scanResult, p *scan.Result, posterID int64) string {
+// from a reading carries as its headline, and the standing split
+// the sentence was counted from, for the report's stats bar. p is
+// the paste the reading was made from, when it can still be had;
+// without it the sentence is made from the reading's tallies alone
+// and says less. posterID is the reporting pilot, counted friendly
+// when a local roster names them.
+func (app *Application) scanReportText(ctx context.Context, channelID int64, res scanResult, p *scan.Result, posterID int64) (string, [4]int) {
 	st := app.channelStandingOf(ctx, channelID)
 	standingOf := st.of
 	sysName := ""
@@ -1034,9 +1035,9 @@ func (app *Application) scanReportText(ctx context.Context, channelID int64, res
 		if res.Probe == nil {
 			break
 		}
-		return probeSentence(res.Probe, sysName)
+		return probeSentence(res.Probe, sysName), [4]int{}
 	}
-	return scanTitle(res)
+	return scanTitle(res), [4]int{}
 }
 
 // scanCategories reads the SDE category of each distinct type on
@@ -1232,7 +1233,7 @@ func pairText(pairs []shipPair) string {
 // instead: every ship unclassified, no attribution.
 func dscanSentence(d *dscanReading, rows []scan.DScanRow, cats map[int64]int64, sysName string,
 	standingOf func(int64) int, pilotOf func(string) (int64, string, bool), killedHere func(int64) bool,
-	shipKills24h, npcKills24h int64) string {
+	shipKills24h, npcKills24h int64) (string, [4]int) {
 
 	var counts [4]int
 	hulls := [4]map[string]int{}
@@ -1291,7 +1292,7 @@ func dscanSentence(d *dscanReading, rows []scan.DScanRow, cats map[int64]int64, 
 	b.WriteString(killedHereNotes(flagged))
 	b.WriteString(systemNotes(shipKills24h, npcKills24h, counts[bucketNeutral]+counts[bucketUnknown]))
 	b.WriteString(".")
-	return b.String()
+	return b.String(), counts
 }
 
 // hostileClusters reads the hostile names for the groups a player
@@ -1378,7 +1379,7 @@ func hostileClusters(names []string) (descs []string, altCut int) {
 // stored kills put them in this system within the week are
 // flagged: standing alone understates them.
 func localSentence(l *localReading, systemID, posterID int64, now time.Time,
-	standingOf func(localPilot) int, shipKills24h, npcKills24h int64) string {
+	standingOf func(localPilot) int, shipKills24h, npcKills24h int64) (string, [4]int) {
 
 	var counts [4]int
 	inclYou := false
@@ -1427,7 +1428,11 @@ func localSentence(l *localReading, systemID, posterID int64, now time.Time,
 	s += " — no scan attached, ships unknown"
 	s += killedHereNotes(flagged)
 	s += systemNotes(shipKills24h, npcKills24h, counts[bucketNeutral]+counts[bucketUnknown]+len(l.Unknown))
-	return s + "."
+	// The split a stats bar shows folds the roster's unresolved
+	// names into the unclassified: the sentence keeps them apart,
+	// a proportion does not need to.
+	counts[bucketUnknown] += len(l.Unknown)
+	return s + ".", counts
 }
 
 // fleetSentence synthesises a fleet composition: its members are
@@ -1435,7 +1440,7 @@ func localSentence(l *localReading, systemID, posterID int64, now time.Time,
 // counts by standing carry each bucket's hulls. A composition
 // says nothing about grid, and the sentence claims none.
 func fleetSentence(f *fleetReading, sysName string,
-	standingOf func(int64) int, pilotOf func(string) (int64, string, bool), killedHere func(int64) bool) string {
+	standingOf func(int64) int, pilotOf func(string) (int64, string, bool), killedHere func(int64) bool) (string, [4]int) {
 
 	var counts [4]int
 	hulls := [4]map[string]int{}
@@ -1472,7 +1477,7 @@ func fleetSentence(f *fleetReading, sysName string,
 	b.WriteString(pairText(pairs))
 	b.WriteString(killedHereNotes(flagged))
 	b.WriteString(".")
-	return b.String()
+	return b.String(), counts
 }
 
 // probeSentence synthesises probe results: signatures are the

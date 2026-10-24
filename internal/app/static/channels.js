@@ -71,19 +71,74 @@
         tags.appendChild(pa);
       });
       (r.ships || []).forEach(function (s) {
-        var sp = doc.createElement("span");
+        var label = s.name + (s.n > 1 ? " ×" + s.n : "");
+        var sp;
+        if (s.id) {
+          sp = doc.createElement("a");
+          sp.href = "/items/type/" + s.id + "/";
+        } else {
+          sp = doc.createElement("span");
+        }
         sp.className = "ch-tag ship";
-        sp.textContent = s.name + (s.n > 1 ? " ×" + s.n : "");
+        sp.textContent = label;
         tags.appendChild(sp);
       });
       if (r.gate) {
-        var g = doc.createElement("span");
+        var g = doc.createElement("a");
         g.className = "ch-tag";
+        g.href = "/map/?system=" + r.gateId;
         g.textContent = r.gate + " gate";
         tags.appendChild(g);
       }
       what.appendChild(tags);
     }
+    // The standing split as a proportional bar, its counts in
+    // the legend under it.
+    if (r.split && r.split.length) {
+      var strip = doc.createElement("span");
+      strip.className = "ch-strip";
+      strip.setAttribute("role", "img");
+      strip.setAttribute("aria-label", "Standing split: " + r.split.map(function (s) { return s.name + " " + s.n; }).join(", "));
+      var legend = doc.createElement("span");
+      legend.className = "ch-strip-legend";
+      r.split.forEach(function (s) {
+        var seg = doc.createElement("span");
+        seg.className = "ch-seg " + s.class;
+        seg.setAttribute("data-n", String(s.n));
+        seg.style.setProperty("--n", String(s.n));
+        seg.title = s.name + " · " + s.n;
+        strip.appendChild(seg);
+        var item = doc.createElement("span");
+        item.className = "ch-strip-item";
+        var dot = doc.createElement("span");
+        dot.className = "ch-dot " + s.class;
+        item.appendChild(dot);
+        item.appendChild(doc.createTextNode(s.name + " "));
+        var strong = doc.createElement("strong");
+        strong.textContent = String(s.n);
+        item.appendChild(strong);
+        var pct = doc.createElement("span");
+        pct.className = "muted";
+        pct.textContent = " " + s.pct + "%";
+        item.appendChild(pct);
+        legend.appendChild(item);
+      });
+      what.appendChild(strip);
+      what.appendChild(legend);
+    }
+    // The report's doors: its system's kills and page.
+    var doors = doc.createElement("span");
+    doors.className = "ch-rep-doors";
+    var kills = doc.createElement("a");
+    kills.href = "/intel/kills/?system=" + r.sys;
+    kills.textContent = "System kills";
+    doors.appendChild(kills);
+    doors.appendChild(doc.createTextNode(" · "));
+    var sysPage = doc.createElement("a");
+    sysPage.href = "/system/?system=" + r.sys;
+    sysPage.textContent = "System page";
+    doors.appendChild(sysPage);
+    what.appendChild(doors);
     var meta = doc.createElement("span");
     meta.className = "ch-rep-meta";
     var t = doc.createElement("time");
@@ -121,6 +176,11 @@
 
   function init(root) {
     if (!root.querySelector) return;
+    // Server-rendered bars: their widths ride on data-n, as the
+    // scan strips' do.
+    root.querySelectorAll(".ch-seg[data-n]").forEach(function (b) {
+      b.style.setProperty("--n", String(Math.max(0, +b.getAttribute("data-n") || 0)));
+    });
     var feed = root.querySelector("[data-ch-feed]");
     if (feed && !feed.getAttribute("data-bound")) {
       feed.setAttribute("data-bound", "1");

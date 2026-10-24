@@ -45,6 +45,13 @@ body::after { content: ""; position: absolute; top: 0; left: 0; right: 0; height
 
 .ld-wrap { max-width: 1180px; margin: 0 auto; padding: 0 22px; }
 
+/* The liquid-glass filter defs ride in a zero-size svg at the
+   top of the body: parked absolute and zero-sized, never
+   display:none, which would break the filter reference in
+   some engines. The hiding lives here rather than in an
+   inline style attribute, which the CSP bans in templates. */
+.ld-filter-defs { position: absolute; width: 0; height: 0; }
+
 /* The header itself is a transparent positioning container:
    the pill inside it carries all the paint. The site sheet's
    bare header rule would otherwise lay its full-width bar

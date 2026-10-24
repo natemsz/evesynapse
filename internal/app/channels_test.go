@@ -222,6 +222,8 @@ func TestIntelFeedAccess(t *testing.T) {
 	}
 	if rs := feed(mate); len(rs) != 1 || rs[0].Text != "1 in local: 0 hostiles, 0 friendly, 0 neutral, 1 unresolved — no scan attached, ships unknown." || rs[0].ChName != "Home intel" {
 		t.Errorf("the mate's feed carries only the granted channel, named: %+v", rs)
+	} else if len(rs[0].Split) != 1 || rs[0].Split[0].Class != "unclassified" || rs[0].Split[0].N != 1 {
+		t.Errorf("the mate's feed report carries its stored standing split for the bar: %+v", rs[0].Split)
 	}
 	if rs := feed(owner); len(rs) != 2 {
 		t.Errorf("the owner's feed carries both channels: %+v", rs)

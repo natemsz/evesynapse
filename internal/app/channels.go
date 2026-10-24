@@ -39,6 +39,7 @@ import (
 
 	"evesynapse/internal/app/module"
 	db "evesynapse/internal/db/sqlc"
+	"evesynapse/internal/intelanalyze"
 	"evesynapse/internal/intelchat"
 	"evesynapse/internal/logging"
 	"evesynapse/internal/scan"
@@ -241,8 +242,27 @@ type reportView struct {
 	Pilots    []reportPilot `json:"pilots,omitempty"`
 	Ships     []reportShip  `json:"ships,omitempty"`
 	Gate      string        `json:"gate,omitempty"`
+	GateID    int64         `json:"gateId,omitempty"`
+	// Split is the report's standing split as proportional
+	// segments for the stats bar, from the counts stored with
+	// the report at ingest.
+	Split []reportSeg `json:"split,omitempty"`
+	// NoDoors is set when the card is shown on the report's own
+	// system page, where its system doors would point at the
+	// page itself.
+	NoDoors bool `json:"-"`
 	// Time is At for the templates.
 	Time time.Time `json:"-"`
+}
+
+// reportSeg is one segment of a report's standing-split bar:
+// its name, its count, its share of the whole in percent, and
+// its class, which names its colour in channels.css.
+type reportSeg struct {
+	Name  string `json:"name"`
+	N     int    `json:"n"`
+	Pct   int    `json:"pct"`
+	Class string `json:"class"`
 }
 
 type channelView struct {
@@ -455,6 +475,60 @@ type intelFeedView struct {
 	Older    string
 	LastID   int64
 	Channels int // how many channels feed it
+	// Systems is the front page's systems at a glance, busiest
+	// first: which systems the reports are about, how many
+	// reports and the largest hostile count among them.
+	Systems []feedSystem
+}
+
+// feedSystem is one system's line in the feed's summary: its
+// name and security (for the map link), how many of the page's
+// reports name it, the largest hostile count among them, and
+// the newest report's age.
+type feedSystem struct {
+	ID       int64
+	Name     string
+	SecText  string
+	SecTier  int
+	Reports  int
+	Hostiles int32
+	Ago      string
+}
+
+// feedSystems summarises the reports a feed page already holds
+// by system: no extra read, the page's own sixty at most.
+func feedSystems(reports []reportView) []feedSystem {
+	byID := map[int64]*feedSystem{}
+	var order []*feedSystem
+	for _, r := range reports {
+		if r.SystemID == 0 {
+			continue
+		}
+		s := byID[r.SystemID]
+		if s == nil {
+			s = &feedSystem{ID: r.SystemID, Name: r.SystemName, SecText: r.SecText, SecTier: r.SecTier, Ago: r.Ago}
+			byID[r.SystemID] = s
+			order = append(order, s)
+		}
+		s.Reports++
+		if !r.Clear && r.Hostiles > s.Hostiles {
+			s.Hostiles = r.Hostiles
+		}
+	}
+	sort.SliceStable(order, func(i, j int) bool {
+		if order[i].Reports != order[j].Reports {
+			return order[i].Reports > order[j].Reports
+		}
+		return order[i].Hostiles > order[j].Hostiles
+	})
+	if len(order) > 6 {
+		order = order[:6]
+	}
+	out := make([]feedSystem, 0, len(order))
+	for _, s := range order {
+		out = append(out, *s)
+	}
+	return out
 }
 
 // feedReports lists reports across channels as the feed shows them:
@@ -509,6 +583,9 @@ func (app *Application) handleIntelFeed(w http.ResponseWriter, r *http.Request) 
 		}
 	}
 	v.Reports = app.feedReports(ctx, id, channels, 0, beforeAt, beforeID, intelFeedPage)
+	if !paged {
+		v.Systems = feedSystems(v.Reports)
+	}
 	if len(v.Reports) == intelFeedPage {
 		last := v.Reports[len(v.Reports)-1]
 		v.Older = fmt.Sprintf("/intel/feed/?before=%d.%d", last.At, last.ID)
@@ -656,8 +733,8 @@ func (app *Application) handleChannelReport(w http.ResponseWriter, r *http.Reque
 	// named here. (Classified on the text as pasted, before the
 	// clip above shortened it.)
 	if !base.Clear {
-		if p, ok := app.scanReportOf(ctx, base, text, base.SystemID); ok {
-			if _, err := app.insertIntelReport(ctx, p, false); err != nil {
+		if p, counts, ok := app.scanReportOf(ctx, base, text, base.SystemID); ok {
+			if _, err := app.insertIntelReport(ctx, p, false, counts); err != nil {
 				logging.Errorf("channels: insert report: %v", err)
 				reply(http.StatusInternalServerError, "That did not go through — please try again.", 0)
 				return
@@ -666,7 +743,7 @@ func (app *Application) handleChannelReport(w http.ResponseWriter, r *http.Reque
 			return
 		}
 	}
-	if _, err := app.insertIntelReport(ctx, base, false); err != nil {
+	if _, err := app.insertIntelReport(ctx, base, false, nil); err != nil {
 		logging.Errorf("channels: insert report: %v", err)
 		reply(http.StatusInternalServerError, "That did not go through — please try again.", 0)
 		return
@@ -693,22 +770,22 @@ type chatPostResult struct {
 // paste is no scan the tool knows, or names no system: a local
 // list on its own cannot be a report, reports being about a
 // system.
-func (app *Application) scanReportOf(ctx context.Context, base db.InsertIntelReportParams, raw string, namedSystemID int64) (db.InsertIntelReportParams, bool) {
+func (app *Application) scanReportOf(ctx context.Context, base db.InsertIntelReportParams, raw string, namedSystemID int64) (db.InsertIntelReportParams, *intelanalyze.StandingCounts, bool) {
 	kind := scan.Detect(raw)
 	if kind == "" || (kind == scan.KindLocal && namedSystemID == 0) {
-		return base, false
+		return base, nil, false
 	}
 	p, err := scan.Parse(raw)
 	if err != nil {
-		return base, false
+		return base, nil, false
 	}
 	res := app.readScan(ctx, p, namedSystemID)
 	if res.SystemID == 0 {
-		return base, false
+		return base, nil, false
 	}
 	body, err := json.Marshal(res)
 	if err != nil {
-		return base, false
+		return base, nil, false
 	}
 	id, err := newScanID()
 	if err == nil {
@@ -716,11 +793,13 @@ func (app *Application) scanReportOf(ctx context.Context, base db.InsertIntelRep
 	}
 	if err != nil {
 		logging.Errorf("channels: store scan from a paste: %v", err)
-		return base, false
+		return base, nil, false
 	}
 	out := base
 	out.SystemID = res.SystemID
-	out.Text = app.scanReportText(ctx, base.ChannelID, res, &p, base.AuthorCharacterID)
+	text, split := app.scanReportText(ctx, base.ChannelID, res, &p, base.AuthorCharacterID)
+	out.Text = text
+	counts := &intelanalyze.StandingCounts{Hostile: split[bucketHostile], Friendly: split[bucketFriendly], Neutral: split[bucketNeutral], Unclassified: split[bucketUnknown]}
 	out.Pilots = out.Text
 	// A count the poster typed is theirs and survives
 	// classification; without one (chat lines, the scan tool),
@@ -732,7 +811,7 @@ func (app *Application) scanReportOf(ctx context.Context, base db.InsertIntelRep
 	out.Clear = false
 	out.ScanID = id
 	out.Source = "scan"
-	return out, true
+	return out, counts, true
 }
 
 // postChatLines reads intel chat lines into reports on base's channel,
@@ -746,8 +825,8 @@ func (app *Application) postChatLines(ctx context.Context, base db.InsertIntelRe
 	now := base.CreatedAt
 	// A scan pasted as chat lines is a scan, not chat: the same
 	// reading the scan tool makes of it, reported as one report.
-	if p, ok := app.scanReportOf(ctx, base, lines, 0); ok {
-		if _, err := app.insertIntelReport(ctx, p, false); err != nil {
+	if p, counts, ok := app.scanReportOf(ctx, base, lines, 0); ok {
+		if _, err := app.insertIntelReport(ctx, p, false, counts); err != nil {
 			logging.Errorf("channels: insert scan report: %v", err)
 			return res
 		}
@@ -773,7 +852,7 @@ func (app *Application) postChatLines(ctx context.Context, base db.InsertIntelRe
 				continue
 			}
 		}
-		if _, err := app.insertIntelReport(ctx, p, rep.NoVisual); err != nil {
+		if _, err := app.insertIntelReport(ctx, p, rep.NoVisual, nil); err != nil {
 			logging.Errorf("channels: insert chat report: %v", err)
 			continue
 		}
@@ -818,10 +897,12 @@ func (app *Application) handleScanPost(w http.ResponseWriter, r *http.Request) {
 	if pp, err := scan.Parse(row.Raw); err == nil {
 		parsed = &pp
 	}
+	text, split := app.scanReportText(ctx, c.ID, res, parsed, id.posterID)
+	counts := &intelanalyze.StandingCounts{Hostile: split[bucketHostile], Friendly: split[bucketFriendly], Neutral: split[bucketNeutral], Unclassified: split[bucketUnknown]}
 	p := db.InsertIntelReportParams{ChannelID: c.ID, SystemID: row.SystemID, AuthorUserID: id.userID, AuthorCharacterID: id.posterID,
-		Reporter: id.posterName, Text: app.scanReportText(ctx, c.ID, res, parsed, id.posterID), ScanID: scanID, Source: "scan", SeenAt: row.CreatedAt, CreatedAt: now}
+		Reporter: id.posterName, Text: text, ScanID: scanID, Source: "scan", SeenAt: row.CreatedAt, CreatedAt: now}
 	p.Hostiles = scanHostiles(res)
-	if _, err := app.insertIntelReport(ctx, p, false); err != nil {
+	if _, err := app.insertIntelReport(ctx, p, false, counts); err != nil {
 		logging.Errorf("channels: insert scan report: %v", err)
 		back("That did not go through — please try again.")
 		return

@@ -101,15 +101,31 @@ type Ship struct {
 	N      int    `json:"n,omitempty"`
 }
 
+// StandingCounts is a report's split by standing, in the order
+// the site speaks of them: hostiles, friendlies, neutrals, and
+// the unclassified no stored source speaks for.
+type StandingCounts struct {
+	Hostile      int `json:"hostile"`
+	Friendly     int `json:"friendly"`
+	Neutral      int `json:"neutral"`
+	Unclassified int `json:"unclassified"`
+}
+
+// Total is everyone the split counts.
+func (c StandingCounts) Total() int {
+	return c.Hostile + c.Friendly + c.Neutral + c.Unclassified
+}
+
 // Analysis is what a report says.
 type Analysis struct {
-	Kind    string   `json:"kind"`
-	Pilots  []Pilot  `json:"pilots,omitempty"`
-	Ships   []Ship   `json:"ships,omitempty"`
-	Gate    int64    `json:"gate,omitempty"` // the system the gate named leads to
-	Flags   []string `json:"flags,omitempty"`
-	Count   int      `json:"count,omitempty"`
-	Unknown []string `json:"-"` // names to look up, then analyse again
+	Kind    string          `json:"kind"`
+	Pilots  []Pilot         `json:"pilots,omitempty"`
+	Ships   []Ship          `json:"ships,omitempty"`
+	Gate    int64           `json:"gate,omitempty"` // the system the gate named leads to
+	Flags   []string        `json:"flags,omitempty"`
+	Count   int             `json:"count,omitempty"`
+	Counts  *StandingCounts `json:"counts,omitempty"` // the standing split, when it counts anyone
+	Unknown []string        `json:"-"`                // names to look up, then analyse again
 }
 
 // Input is one report to analyse.
@@ -348,6 +364,27 @@ func Analyze(in Input, d Dict) Analysis {
 		for i := range a.Pilots {
 			a.Pilots[i].Friendly, a.Pilots[i].Red = d.Friend(a.Pilots[i].ID)
 		}
+	}
+	// The standing split: the named pilots by their read, with
+	// the headline count standing for the hostiles it names no
+	// pilots for. A report made from a scan reading carries its
+	// reading's own counts instead (the caller sets them).
+	var counts StandingCounts
+	for _, p := range a.Pilots {
+		switch {
+		case p.Red:
+			counts.Hostile++
+		case p.Friendly:
+			counts.Friendly++
+		default:
+			counts.Neutral++
+		}
+	}
+	if in.Hostiles > counts.Hostile {
+		counts.Hostile = in.Hostiles
+	}
+	if counts.Total() > 0 {
+		a.Counts = &counts
 	}
 	for f := range flags {
 		a.Flags = append(a.Flags, f)

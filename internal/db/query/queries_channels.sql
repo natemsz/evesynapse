@@ -100,6 +100,20 @@ WHERE analysis_pending AND created_at >= sqlc.arg(since)::timestamptz
 ORDER BY created_at
 LIMIT sqlc.arg(max_rows)::bigint;
 
+-- Settled reports the roster re-read has never been offered (the
+-- backfill pass in intel_analysis.go): no scan of their own -- a
+-- re-read report carries its reading as one -- and no offer
+-- marker (the "rr" flag) in the analysis. The caller's window
+-- and limit bound the pass like the pending list above.
+-- name: ListStoredRosterCandidates :many
+SELECT id, channel_id, system_id, text, hostiles, clear, analysis, scan_id, author_character_id, author_user_id, seen_at
+FROM intel_reports
+WHERE NOT analysis_pending AND scan_id = ''
+  AND created_at >= sqlc.arg(since)::timestamptz AND created_at < sqlc.arg(until)::timestamptz
+  AND analysis NOT LIKE '%"rr"%'
+ORDER BY created_at
+LIMIT sqlc.arg(max_rows)::bigint;
+
 -- The reports a roster re-send might already stand as: same
 -- channel and system, seen within the caller's window either
 -- way. The caller compares pilot sets in Go -- a roster sent

@@ -24,6 +24,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -541,7 +542,7 @@ func (app *Application) insertIntelReport(ctx context.Context, p db.InsertIntelR
 func (app *Application) drainIntelAnalysis(ctx context.Context) (limited bool) {
 	now := time.Now().UTC()
 	rows, err := app.queries.ListPendingIntelReports(ctx, db.ListPendingIntelReportsParams{Since: now.Add(-intelAnalysisWindow), MaxRows: intelAnalysisBatch})
-	if err != nil || len(rows) == 0 {
+	if err != nil {
 		return false
 	}
 	input := func(r db.ListPendingIntelReportsRow) intelanalyze.Input {
@@ -630,7 +631,73 @@ func (app *Application) drainIntelAnalysis(ctx context.Context) (limited bool) {
 			logging.Warnf("intel: save analysis of report %d: %v", r.ID, err)
 		}
 	}
+	app.backfillStoredRosters(ctx, now)
 	return false
+}
+
+// rosterOfferedFlag marks, in a stored report's analysis, that
+// the roster re-read has been offered to it: the backfill below
+// makes the offer once, and the candidate list holds back any
+// report already carrying it.
+const rosterOfferedFlag = "rr"
+
+// backfillStoredRosters offers the roster re-read to settled
+// reports that never had it. The re-read runs at ingest and in
+// the pending drain above, so a report stored before it existed
+// -- or settled by a reading that had no roster to give --
+// stands forever as the prose its text was misread for, blob
+// and all. A candidate is a settled report with no scan of its
+// own, inside the retention window but older than the pending
+// one (a fresh report is the ingest paths' business), and the
+// pass takes the drain's usual batch. A report the re-read
+// converts is settled as a roster exactly as a pending one is
+// (settleRosterReport) and carries its scan from then on, so
+// it is never a candidate again. A report whose roster already
+// stands in the channel is left as it stands. Anything else
+// keeps the fresh plain reading, flagged as offered so it is
+// not offered again.
+func (app *Application) backfillStoredRosters(ctx context.Context, now time.Time) {
+	rows, err := app.queries.ListStoredRosterCandidates(ctx, db.ListStoredRosterCandidatesParams{
+		Since: now.Add(-intelRetention), Until: now.Add(-intelAnalysisWindow), MaxRows: intelAnalysisBatch})
+	if err != nil {
+		logging.Warnf("intel: list stored roster candidates: %v", err)
+		return
+	}
+	for _, c := range rows {
+		r := db.ListPendingIntelReportsRow(c)
+		var prev intelanalyze.Analysis
+		_ = json.Unmarshal([]byte(r.Analysis), &prev)
+		nv := false
+		for _, f := range prev.Flags {
+			nv = nv || f == "nv"
+		}
+		in := intelanalyze.Input{System: r.SystemID, Text: r.Text, Hostiles: int(r.Hostiles), Clear: r.Clear, NoVisual: nv}
+		a, roster, _ := app.analyzeIntel(ctx, r.ChannelID, in, r.AuthorCharacterID, false)
+		if roster != nil {
+			if set := pilotIDSet(roster.analysis.Pilots); set != nil &&
+				app.rosterDuplicate(ctx, r.ChannelID, r.SystemID, r.ID, r.SeenAt, set) > 0 {
+				roster = nil // the roster already stands in the channel: leave this one as it is
+			}
+		}
+		if roster != nil {
+			if err := app.settleRosterReport(ctx, r, roster); err != nil {
+				logging.Warnf("intel: settle stored roster report %d: %v", r.ID, err)
+			}
+			continue
+		}
+		offered := false
+		for _, f := range a.Flags {
+			offered = offered || f == rosterOfferedFlag
+		}
+		if !offered {
+			a.Flags = append(a.Flags, rosterOfferedFlag)
+			sort.Strings(a.Flags)
+		}
+		raw, _ := json.Marshal(a)
+		if err := app.queries.SetIntelReportAnalysis(ctx, db.SetIntelReportAnalysisParams{ID: r.ID, Kind: a.Kind, Analysis: string(raw), AnalysisPending: false}); err != nil {
+			logging.Warnf("intel: save analysis of stored report %d: %v", r.ID, err)
+		}
+	}
 }
 
 // settleRosterReport stores a pending report's roster re-read:

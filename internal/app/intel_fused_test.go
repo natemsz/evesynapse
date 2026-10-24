@@ -490,3 +490,99 @@ func TestIntelFusedRoster(t *testing.T) {
 	}
 }
 
+// TestIntelStoredRosterBackfill: a report stored before the
+// roster re-read existed -- the blob filed as prose, its
+// analysis reading no pilots from it, settled on arrival --
+// is converted by the drain into the roster reading, the blob
+// kept as the reading's paste. A second drain changes nothing.
+func TestIntelStoredRosterBackfill(t *testing.T) {
+	app, conn, q := buildCorpTestApp(t, newFusedESI())
+	ctx := context.Background()
+	if _, err := conn.ExecContext(ctx, `INSERT INTO sde_systems (system_id, name, region_id, security) VALUES (30004759, '1DQ1-A', 10000060, -0.38) ON CONFLICT DO NOTHING`); err != nil {
+		t.Fatal(err)
+	}
+	const (
+		sysID   = int64(30004759)
+		poster  = int64(519225918) // Burzrujat
+		ownCorp = int64(98000301)
+	)
+	u, _ := q.CreateUser(ctx)
+	seedCharacter(t, q, u.ID, poster, "Burzrujat")
+	if err := q.UpsertCharacterCorporation(ctx, db.UpsertCharacterCorporationParams{CharacterID: poster, CorporationID: ownCorp, UpdatedAt: time.Now().UTC()}); err != nil {
+		t.Fatal(err)
+	}
+	cid, err := q.CreateIntelChannel(ctx, db.CreateIntelChannelParams{OwnerUserID: u.ID, Name: "Stored", CreatedAt: time.Now()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC()
+	for _, p := range fusedRoster {
+		if err := q.UpsertIntelPilotName(ctx, db.UpsertIntelPilotNameParams{NameLower: strings.ToLower(p.name), CharacterID: p.id, Name: p.name, CheckedAt: now}); err != nil {
+			t.Fatal(err)
+		}
+		if err := q.UpsertIntelPilotAffiliation(ctx, db.UpsertIntelPilotAffiliationParams{CharacterID: p.id, CorporationID: p.corp, CheckedAt: now}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// The old way in: the blob as prose, settled on arrival,
+	// two hours past the pending window.
+	old := now.Add(-2 * time.Hour)
+	plain, _ := json.Marshal(intelanalyze.Analysis{Kind: intelanalyze.KindSighting})
+	id, err := q.InsertIntelReport(ctx, db.InsertIntelReportParams{ChannelID: cid, SystemID: sysID,
+		AuthorUserID: u.ID, AuthorCharacterID: poster, Reporter: "Burzrujat",
+		Text: fusedBlob, Pilots: fusedBlob, Source: "axon", SeenAt: old, CreatedAt: old,
+		Kind: intelanalyze.KindSighting, Analysis: string(plain), AnalysisPending: false})
+	if err != nil {
+		t.Fatalf("store the old-way report: %v", err)
+	}
+	stored := func() db.ListIntelReportsRow {
+		t.Helper()
+		rows, err := q.ListIntelReports(ctx, db.ListIntelReportsParams{ChannelID: cid, BeforeAt: intelFeedTop(), BeforeID: 1 << 62, MaxRows: 100})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(rows) != 1 {
+			t.Fatalf("the channel holds %d reports, want 1", len(rows))
+		}
+		return rows[0]
+	}
+	if row := stored(); row.ID != id || row.ScanID != "" || row.Text != fusedBlob {
+		t.Fatalf("the report did not go in the old way: %+v", row)
+	}
+
+	if limited := app.drainIntelAnalysis(ctx); limited {
+		t.Fatal("the drain hit a limit")
+	}
+	row := stored()
+	if row.Kind != intelanalyze.KindLocal || row.ScanID == "" {
+		t.Fatalf("the stored blob was not re-read: kind %q scan %q", row.Kind, row.ScanID)
+	}
+	if !strings.HasPrefix(row.Text, "28 in local: 0 hostiles, 2 friendly (incl. you), 26 neutral") ||
+		!strings.Contains(row.Text, "no scan attached, ships unknown") ||
+		strings.Contains(row.Text, "AltorrAstria") {
+		t.Errorf("backfilled headline: %q", row.Text)
+	}
+	var a intelanalyze.Analysis
+	if err := json.Unmarshal([]byte(row.Analysis), &a); err != nil {
+		t.Fatalf("backfilled analysis: %v", err)
+	}
+	if len(a.Pilots) != len(fusedRoster) {
+		t.Errorf("backfilled analysis names %d pilots, want %d", len(a.Pilots), len(fusedRoster))
+	}
+	scanRow, err := q.GetScan(ctx, row.ScanID)
+	if err != nil {
+		t.Fatalf("the reading's scan: %v", err)
+	}
+	if scanRow.Raw != fusedBlob {
+		t.Errorf("the scan's paste is not the blob as stored")
+	}
+
+	// The drain again: nothing changes.
+	if limited := app.drainIntelAnalysis(ctx); limited {
+		t.Fatal("the drain hit a limit")
+	}
+	if again := stored(); again.ScanID != row.ScanID || again.Text != row.Text || again.Analysis != row.Analysis {
+		t.Errorf("the second drain changed the report:\nfirst  scan %q text %q\nsecond scan %q text %q", row.ScanID, row.Text, again.ScanID, again.Text)
+	}
+}

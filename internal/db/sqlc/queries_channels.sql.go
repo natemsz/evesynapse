@@ -1267,6 +1267,76 @@ func (q *Queries) ListSDESystemNames(ctx context.Context) ([]ListSDESystemNamesR
 	return items, nil
 }
 
+const listStoredRosterCandidates = `-- name: ListStoredRosterCandidates :many
+SELECT id, channel_id, system_id, text, hostiles, clear, analysis, scan_id, author_character_id, author_user_id, seen_at
+FROM intel_reports
+WHERE NOT analysis_pending AND scan_id = ''
+  AND created_at >= $1::timestamptz AND created_at < $2::timestamptz
+  AND analysis NOT LIKE '%"rr"%'
+ORDER BY created_at
+LIMIT $3::bigint
+`
+
+type ListStoredRosterCandidatesParams struct {
+	Since   time.Time `json:"since"`
+	Until   time.Time `json:"until"`
+	MaxRows int64     `json:"max_rows"`
+}
+
+type ListStoredRosterCandidatesRow struct {
+	ID                int64     `json:"id"`
+	ChannelID         int64     `json:"channel_id"`
+	SystemID          int64     `json:"system_id"`
+	Text              string    `json:"text"`
+	Hostiles          int32     `json:"hostiles"`
+	Clear             bool      `json:"clear"`
+	Analysis          string    `json:"analysis"`
+	ScanID            string    `json:"scan_id"`
+	AuthorCharacterID int64     `json:"author_character_id"`
+	AuthorUserID      int64     `json:"author_user_id"`
+	SeenAt            time.Time `json:"seen_at"`
+}
+
+// Settled reports the roster re-read has never been offered (the
+// backfill pass in intel_analysis.go): no scan of their own -- a
+// re-read report carries its reading as one -- and no offer
+// marker (the "rr" flag) in the analysis. The caller's window
+// and limit bound the pass like the pending list above.
+func (q *Queries) ListStoredRosterCandidates(ctx context.Context, arg ListStoredRosterCandidatesParams) ([]ListStoredRosterCandidatesRow, error) {
+	rows, err := q.db.QueryContext(ctx, listStoredRosterCandidates, arg.Since, arg.Until, arg.MaxRows)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListStoredRosterCandidatesRow
+	for rows.Next() {
+		var i ListStoredRosterCandidatesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.ChannelID,
+			&i.SystemID,
+			&i.Text,
+			&i.Hostiles,
+			&i.Clear,
+			&i.Analysis,
+			&i.ScanID,
+			&i.AuthorCharacterID,
+			&i.AuthorUserID,
+			&i.SeenAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const pruneIntelReports = `-- name: PruneIntelReports :execrows
 DELETE FROM intel_reports WHERE seen_at < $1::timestamptz
 `

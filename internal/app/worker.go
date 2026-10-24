@@ -153,7 +153,7 @@ func (app *Application) runWorker(ctx context.Context) {
 	// worker has stopped and Close may close the database handles
 	// without any pass still querying them.
 	var children sync.WaitGroup
-	children.Add(4)
+	children.Add(5)
 
 	// The public killmail stream (killfeed.go) is its own paced
 	// loop: one file every 100 ms while kills arrive, six seconds
@@ -169,6 +169,14 @@ func (app *Application) runWorker(ctx context.Context) {
 	go func() {
 		defer children.Done()
 		runGuarded("pilot backfill", func() { app.runPilotBackfill(ctx) })
+	}()
+
+	// The residue step (residue_model.go) reads what settled
+	// reports left unparsed, one report at a time, on the local
+	// reader, so a slow pass never competes with the web tier.
+	go func() {
+		defer children.Done()
+		runGuarded("residue step", func() { app.runResidueWorker(ctx) })
 	}()
 
 	// SDE maintenance runs alongside the ESI cycle: a first import

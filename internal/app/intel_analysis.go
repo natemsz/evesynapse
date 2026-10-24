@@ -628,6 +628,12 @@ func (app *Application) insertIntelReport(ctx context.Context, p db.InsertIntelR
 		// The pilots this reading named are met: each is offered
 		// a history backfill (pilot_activity.go).
 		app.noteAnalysisPilots(a)
+		// A report that settled on its first read offers its
+		// leftovers to the residue step (residue_model.go); a
+		// pending one offers them when the drain settles it.
+		if !pending {
+			app.noteResidueReport(id)
+		}
 	}
 	return id, err
 }
@@ -730,6 +736,7 @@ func (app *Application) drainIntelAnalysis(ctx context.Context) (limited bool) {
 			// Names that only resolved on this second read are
 			// met now, like any reading's pilots.
 			app.noteAnalysisPilots(a)
+			app.noteResidueReport(r.ID)
 			app.refreshReportGroup(ctx, r.ID)
 		}
 	}

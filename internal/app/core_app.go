@@ -210,6 +210,15 @@ type Application struct {
 	pilotBackfillCh     chan int64
 	pilotBackfillQueued map[int64]bool
 
+	// The residue step (residue_model.go): settled reports
+	// offered for a pass over what their readings left unparsed.
+	// The channel is made on first use; the engine is the local
+	// reader, started on first use and held for the process.
+	residueMu     sync.Mutex
+	residueCh     chan int64
+	residueQueued map[int64]bool
+	residueEng    *llamaEngine
+
 	// The stargate graph (intel_gangs.go): system adjacency
 	// for jump distances, loaded once from the SDE jumps and
 	// kept for the process's life (the SDE is static per

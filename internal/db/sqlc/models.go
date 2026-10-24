@@ -480,6 +480,27 @@ type IntelReport struct {
 	GroupID           int64     `json:"group_id"`
 }
 
+type IntelResidueCall struct {
+	ID        int64     `json:"id"`
+	ReportID  int64     `json:"report_id"`
+	Spans     string    `json:"spans"`
+	Output    string    `json:"output"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+type IntelResidueNote struct {
+	ID          int64     `json:"id"`
+	ReportID    int64     `json:"report_id"`
+	CallID      int64     `json:"call_id"`
+	Span        string    `json:"span"`
+	Kind        string    `json:"kind"`
+	EntityID    int64     `json:"entity_id"`
+	EntityName  string    `json:"entity_name"`
+	N           int32     `json:"n"`
+	Unconfirmed bool      `json:"unconfirmed"`
+	CreatedAt   time.Time `json:"created_at"`
+}
+
 type IntelToken struct {
 	ID         int64        `json:"id"`
 	UserID     int64        `json:"user_id"`

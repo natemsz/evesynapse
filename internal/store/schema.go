@@ -542,6 +542,13 @@ var pgIntelGangsSchema string
 //go:embed schema_pg/090_sde_celestials.sql
 var pgSDECelestialsSchema string
 
+// Step 091: the residue step's store -- every completed pass
+// over a settled reading's leftover spans, logged whole, and
+// the notes the pass leaves on the reading (residue_model.go).
+//
+//go:embed schema_pg/091_intel_residue.sql
+var pgIntelResidueSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -661,6 +668,7 @@ func schemaSteps() []schemaStep {
 		{88, "pilot_activity", pgPilotActivitySchema, ""},
 		{89, "intel_gangs", pgIntelGangsSchema, ""},
 		{90, "sde_celestials", pgSDECelestialsSchema, ""},
+		{91, "intel_residue", pgIntelResidueSchema, ""},
 	}
 }
 

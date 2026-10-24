@@ -94,6 +94,10 @@ type Config struct {
 	killfeedOff              bool           // KILLFEED=off: no public killmail stream
 	zkillAPIBaseURL          string         // zKillboard history API base URL (pilot_activity.go)
 	pilotBackfillOff         bool           // PILOT_BACKFILL=off: no pilot history backfills
+	residueOff               bool           // RESIDUE_MODEL=off: no residue step (residue_model.go)
+	residueModelPath         string         // RESIDUE_MODEL_PATH: the local reader's model file ("" = not installed, the step idles)
+	residueModelBin          string         // RESIDUE_MODEL_BIN: the local reader's runtime binary
+	residueModelAddr         string         // RESIDUE_MODEL_ADDR: where the local reader listens (loopback only)
 	adminCharIDs             map[int64]bool // EVE_ADMIN_CHARACTER_IDS (comma-separated)
 	tokenKey                 string         // TOKEN_ENCRYPTION_KEY: encrypts stored EVE tokens ("" = stored as they are)
 	tokenKeyProvider         string         // TOKEN_KEY_PROVIDER: where the token key comes from — env, http, oci or none ("" = derive: a set TOKEN_ENCRYPTION_KEY means env, none set means none)
@@ -335,6 +339,12 @@ func (c Config) ZKillAPIBaseURL() string {
 // by LoadConfig (the tests') never reaches the real API.
 func (c Config) PilotBackfillEnabled() bool { return !c.pilotBackfillOff && c.zkillAPIBaseURL != "" }
 
+// ResidueModelEnabled reports whether the residue step runs
+// (residue_model.go): RESIDUE_MODEL=off turns it off, and with
+// no model file configured there is nothing to run, so a Config
+// not built by LoadConfig (the tests') never starts it either.
+func (c Config) ResidueModelEnabled() bool { return !c.residueOff && c.residueModelPath != "" }
+
 // SDEBaseURL returns the base URL the SDE importer downloads the
 // CSV tables from, always with a trailing slash.
 func (c Config) SDEBaseURL() string {
@@ -386,6 +396,10 @@ func LoadConfig() (Config, error) {
 		killfeedOff:                strings.EqualFold(strings.TrimSpace(os.Getenv("KILLFEED")), "off"),
 		zkillAPIBaseURL:            getenvDefault("ZKILL_API_BASE_URL", defaultZKillAPIBaseURL),
 		pilotBackfillOff:           strings.EqualFold(strings.TrimSpace(os.Getenv("PILOT_BACKFILL")), "off"),
+		residueOff:                 strings.EqualFold(strings.TrimSpace(os.Getenv("RESIDUE_MODEL")), "off"),
+		residueModelPath:           os.Getenv("RESIDUE_MODEL_PATH"),
+		residueModelBin:            getenvDefault("RESIDUE_MODEL_BIN", "llama-server"),
+		residueModelAddr:           getenvDefault("RESIDUE_MODEL_ADDR", "127.0.0.1:18099"),
 		adminCharIDs:               parseAdminCharIDs(os.Getenv("EVE_ADMIN_CHARACTER_IDS")),
 		tokenKey:                   os.Getenv("TOKEN_ENCRYPTION_KEY"),
 		tokenKeyProvider:           os.Getenv("TOKEN_KEY_PROVIDER"),

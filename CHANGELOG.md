@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.5.8.0] - 2026-10-24
+
+Automated build of EveSynapse v0.5.8.0. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+
+## What's Changed
+### 🚀 Features
+* Intel Workbench: the per-report page (scan door built, inactive) by @natemsz in https://github.com/natemsz/evesynapse/pull/642
+### 🐛 Bug Fixes
+* Landing: restore hero geometry after the companion block move by @natemsz in https://github.com/natemsz/evesynapse/pull/640
+* Intel: rescue fused rosters on the chat-lines path, backfill stored reports by @natemsz in https://github.com/natemsz/evesynapse/pull/641
+### Other Changes
+* docs(changelog): review changelog for v0.5.7.9 by @github-actions[bot] in https://github.com/natemsz/evesynapse/pull/639
+
+
+**Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.7.9...v0.5.8.0
+
 ## [v0.5.7.9] - 2026-10-24
 
 Automated build of EveSynapse v0.5.7.9. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).

@@ -16,11 +16,43 @@
 <link rel="stylesheet" href="/static/landing.css?v={{.AssetVersion}}">
 </head>
 <body>
-<svg class="ld-filter-defs" width="0" height="0" aria-hidden="true"><defs><filter id="ld-liquid" x="0%" y="0%" width="100%" height="100%" color-interpolation-filters="sRGB"><feImage id="ld-liquid-map" x="0" y="0" preserveAspectRatio="none" result="map"/><feDisplacementMap in="SourceGraphic" in2="map" scale="18" xChannelSelector="R" yChannelSelector="G"/></filter></defs></svg>
+<svg class="ld-filter-defs" width="0" height="0" aria-hidden="true"><defs><filter id="ld-liquid" x="0%" y="0%" width="100%" height="100%" color-interpolation-filters="sRGB"><feImage id="ld-liquid-map" x="0" y="0" preserveAspectRatio="none" result="map"/><feDisplacementMap in="SourceGraphic" in2="map" scale="18" xChannelSelector="R" yChannelSelector="G"/></filter><filter id="ld-liquid-menu" x="0%" y="0%" width="100%" height="100%" color-interpolation-filters="sRGB"><feImage id="ld-liquid-menu-map" x="0" y="0" preserveAspectRatio="none" result="map"/><feDisplacementMap in="SourceGraphic" in2="map" scale="8" xChannelSelector="R" yChannelSelector="G"/></filter></defs></svg>
 <div class="ld-stars" aria-hidden="true"></div>
-<header class="ld-header"><div class="ld-wrap ld-hbar">
+<header class="ld-header"><div class="ld-hbar">
   <a class="wordmark ld-wordmark" href="/" aria-label="EveSynapse home"><img class="wordmark-glyph" src="/static/logo.svg?v={{.AssetVersion}}" alt="" width="64" height="64"><span>{{template "wordmark-svg"}}</span></a>
-  <nav class="ld-nav"><a href="/fittings/">Fitting Simulator</a><a href="/intel/scan/">D-Scan Parser</a><a href="/market/appraise/">Appraisal</a><a href="/map/">Universe Map</a></nav>
+  <nav class="ld-nav"><div class="ld-menu-wrap" data-tools-menu>
+    <button type="button" class="ld-menu-btn" data-open-tools-menu aria-haspopup="true" aria-expanded="false">Tools</button>
+    <div class="ld-menu" hidden>
+      <div class="ld-tm-group">
+        <h4>Fitting</h4>
+        <a href="/fittings/"><strong>Fitting Simulator</strong></a>
+        <a href="/fittings/public/"><strong>Public Fits</strong></a>
+      </div>
+      <div class="ld-tm-group">
+        <h4>Industry</h4>
+        <a href="/planner/"><strong>Build Planner</strong></a>
+      </div>
+      <div class="ld-tm-group">
+        <h4>Market</h4>
+        <a href="/market/appraise/"><strong>Appraisal</strong></a>
+        <a href="/market/scanner/"><strong>Spread Scanner</strong></a>
+        <a href="/market/tradefinder/"><strong>Tradefinder</strong></a>
+        <a href="/market/leaderboard/"><strong>Top Stations</strong></a>
+        <a href="/contracts/search/"><strong>Contract Search</strong></a>
+        <a href="/market/"><strong>Market Browser</strong></a>
+      </div>
+      <div class="ld-tm-group">
+        <h4>Intel and reference</h4>
+        <a href="/intel/scan/"><strong>D-Scan Parser</strong></a>
+        <a href="/map/"><strong>Universe Map</strong></a>
+        <a href="/intel/wars/"><strong>Wars</strong></a>
+        <a href="/intel/incursions/"><strong>Incursions</strong></a>
+        <a href="/intel/fw/"><strong>Faction Warfare</strong></a>
+        <a href="/intel/kills/"><strong>Killboard</strong></a>
+        <a href="/items/"><strong>Item Database</strong></a>
+      </div>
+    </div>
+  </div></nav>
   <div class="ld-hsp"></div>
   <a class="ld-btn ld-btn-ghost" href="/auth/login">Sign in</a>
   <a class="ld-btn ld-btn-ember" href="/auth/link">Link your characters</a>

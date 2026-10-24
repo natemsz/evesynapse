@@ -35,6 +35,7 @@ type Report struct {
 	SystemID   int64
 	SystemName string
 	Text       string // what is left: usually pilots' names
+	Raw        string // the message as written, before anything was taken out
 	Hostiles   int    // 0: no count given
 	Clear      bool
 	NoVisual   bool
@@ -43,11 +44,14 @@ type Report struct {
 // Outcome of Parse beyond the reports: lines that named no system,
 // and questions ("status?"), neither of which are reports. The
 // no-system lines are kept as written, so whoever pasted them can
-// be shown what was not read instead of it vanishing.
+// be shown what was not read instead of it vanishing, and as read
+// -- speaker, time and message -- for a reader that can still
+// make something of one.
 type Outcome struct {
 	Reports       []Report
 	NoSystem      int
 	NoSystemLines []string
+	NoSystemRead  []Report
 	Questions     int
 }
 
@@ -81,6 +85,7 @@ func Parse(raw string, lookup Lookup, now time.Time) Outcome {
 			r.Speaker = strings.TrimSpace(line[:i])
 			msg = strings.TrimSpace(line[i+3:])
 		}
+		r.Raw = msg
 		if r.Speaker == "EVE System" || msg == "" {
 			continue
 		}
@@ -134,8 +139,10 @@ func Parse(raw string, lookup Lookup, now time.Time) Outcome {
 			}
 		}
 		if r.SystemID == 0 {
+			r.Text = msg
 			out.NoSystem++
 			out.NoSystemLines = append(out.NoSystemLines, orig)
+			out.NoSystemRead = append(out.NoSystemRead, r)
 			continue
 		}
 		if question && !r.Clear && r.Hostiles == 0 {

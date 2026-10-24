@@ -24,6 +24,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -443,6 +444,80 @@ func (app *Application) rosterSetOf(ctx context.Context, text, analysisRaw, scan
 	return nil
 }
 
+// dscanSetOf reads a report's identity as a d-scan: its
+// reading's resolved tallies keyed by type, each with its total
+// and on-grid counts. Two readings of the same scan -- however
+// the text that carried them differed -- resolve to the same
+// set; a reading with no tallies at all has none.
+func (app *Application) dscanSetOf(ctx context.Context, scanID string) map[int64][2]int {
+	if scanID == "" {
+		return nil
+	}
+	row, err := app.queries.GetScan(ctx, scanID)
+	if err != nil {
+		return nil
+	}
+	var res scanResult
+	if json.Unmarshal([]byte(row.Result), &res) != nil || res.Kind != scan.KindDScan || res.DScan == nil {
+		return nil
+	}
+	set := map[int64][2]int{}
+	add := func(list []scanCount) {
+		for _, c := range list {
+			if c.ID > 0 {
+				v := set[c.ID]
+				v[0] += c.N
+				v[1] += c.Grid
+				set[c.ID] = v
+			}
+		}
+	}
+	d := res.DScan
+	add(d.Types)
+	add(d.Structures)
+	add(d.Deployables)
+	add(d.DroneTypes)
+	add(d.FighterTypes)
+	add(d.Objects)
+	if len(set) == 0 {
+		return nil
+	}
+	return set
+}
+
+func sameDScanSet(a, b map[int64][2]int) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for id, v := range a {
+		if b[id] != v {
+			return false
+		}
+	}
+	return true
+}
+
+// dscanDuplicate finds a standing d-scan report in the channel
+// and system whose resolved reading is this set, inside the
+// roster window: the same scan sent again is the same report.
+func (app *Application) dscanDuplicate(ctx context.Context, channelID, systemID int64, seenAt time.Time, set map[int64][2]int) int64 {
+	recent, err := app.queries.ListRecentRosterReports(ctx, db.ListRecentRosterReportsParams{
+		ChannelID: channelID, SystemID: systemID, ExcludeID: 0,
+		Since: seenAt.Add(-intelRosterDedupeWindow), Until: seenAt.Add(intelRosterDedupeWindow)})
+	if err != nil {
+		return 0
+	}
+	for _, r := range recent {
+		if r.ScanID == "" {
+			continue
+		}
+		if other := app.dscanSetOf(ctx, r.ScanID); other != nil && sameDScanSet(set, other) {
+			return r.ID
+		}
+	}
+	return 0
+}
+
 // countAlnum is a text's letters and digits: the denominator a
 // coverage is measured against.
 func countAlnum(s string) int {
@@ -532,6 +607,15 @@ func (app *Application) insertIntelReport(ctx context.Context, p db.InsertIntelR
 			return dup, errIntelDuplicate
 		}
 	}
+	// A d-scan is recognised by its resolved reading, not its
+	// text: the same scan arriving again -- a client resend, a
+	// copy truncated a little differently -- resolves to the
+	// same tallies and is one report.
+	if set := app.dscanSetOf(ctx, p.ScanID); set != nil {
+		if dup := app.dscanDuplicate(ctx, p.ChannelID, p.SystemID, p.SeenAt, set); dup > 0 {
+			return dup, errIntelDuplicate
+		}
+	}
 	return app.queries.InsertIntelReport(ctx, p)
 }
 
@@ -541,7 +625,7 @@ func (app *Application) insertIntelReport(ctx context.Context, p db.InsertIntelR
 func (app *Application) drainIntelAnalysis(ctx context.Context) (limited bool) {
 	now := time.Now().UTC()
 	rows, err := app.queries.ListPendingIntelReports(ctx, db.ListPendingIntelReportsParams{Since: now.Add(-intelAnalysisWindow), MaxRows: intelAnalysisBatch})
-	if err != nil || len(rows) == 0 {
+	if err != nil {
 		return false
 	}
 	input := func(r db.ListPendingIntelReportsRow) intelanalyze.Input {
@@ -630,7 +714,73 @@ func (app *Application) drainIntelAnalysis(ctx context.Context) (limited bool) {
 			logging.Warnf("intel: save analysis of report %d: %v", r.ID, err)
 		}
 	}
+	app.backfillStoredRosters(ctx, now)
 	return false
+}
+
+// rosterOfferedFlag marks, in a stored report's analysis, that
+// the roster re-read has been offered to it: the backfill below
+// makes the offer once, and the candidate list holds back any
+// report already carrying it.
+const rosterOfferedFlag = "rr"
+
+// backfillStoredRosters offers the roster re-read to settled
+// reports that never had it. The re-read runs at ingest and in
+// the pending drain above, so a report stored before it existed
+// -- or settled by a reading that had no roster to give --
+// stands forever as the prose its text was misread for, blob
+// and all. A candidate is a settled report with no scan of its
+// own, inside the retention window but older than the pending
+// one (a fresh report is the ingest paths' business), and the
+// pass takes the drain's usual batch. A report the re-read
+// converts is settled as a roster exactly as a pending one is
+// (settleRosterReport) and carries its scan from then on, so
+// it is never a candidate again. A report whose roster already
+// stands in the channel is left as it stands. Anything else
+// keeps the fresh plain reading, flagged as offered so it is
+// not offered again.
+func (app *Application) backfillStoredRosters(ctx context.Context, now time.Time) {
+	rows, err := app.queries.ListStoredRosterCandidates(ctx, db.ListStoredRosterCandidatesParams{
+		Since: now.Add(-intelRetention), Until: now.Add(-intelAnalysisWindow), MaxRows: intelAnalysisBatch})
+	if err != nil {
+		logging.Warnf("intel: list stored roster candidates: %v", err)
+		return
+	}
+	for _, c := range rows {
+		r := db.ListPendingIntelReportsRow(c)
+		var prev intelanalyze.Analysis
+		_ = json.Unmarshal([]byte(r.Analysis), &prev)
+		nv := false
+		for _, f := range prev.Flags {
+			nv = nv || f == "nv"
+		}
+		in := intelanalyze.Input{System: r.SystemID, Text: r.Text, Hostiles: int(r.Hostiles), Clear: r.Clear, NoVisual: nv}
+		a, roster, _ := app.analyzeIntel(ctx, r.ChannelID, in, r.AuthorCharacterID, false)
+		if roster != nil {
+			if set := pilotIDSet(roster.analysis.Pilots); set != nil &&
+				app.rosterDuplicate(ctx, r.ChannelID, r.SystemID, r.ID, r.SeenAt, set) > 0 {
+				roster = nil // the roster already stands in the channel: leave this one as it is
+			}
+		}
+		if roster != nil {
+			if err := app.settleRosterReport(ctx, r, roster); err != nil {
+				logging.Warnf("intel: settle stored roster report %d: %v", r.ID, err)
+			}
+			continue
+		}
+		offered := false
+		for _, f := range a.Flags {
+			offered = offered || f == rosterOfferedFlag
+		}
+		if !offered {
+			a.Flags = append(a.Flags, rosterOfferedFlag)
+			sort.Strings(a.Flags)
+		}
+		raw, _ := json.Marshal(a)
+		if err := app.queries.SetIntelReportAnalysis(ctx, db.SetIntelReportAnalysisParams{ID: r.ID, Kind: a.Kind, Analysis: string(raw), AnalysisPending: false}); err != nil {
+			logging.Warnf("intel: save analysis of stored report %d: %v", r.ID, err)
+		}
+	}
 }
 
 // settleRosterReport stores a pending report's roster re-read:

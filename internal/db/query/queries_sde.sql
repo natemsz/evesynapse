@@ -29,6 +29,12 @@ WHERE type_id = ANY(sqlc.arg(type_ids)::bigint[]);
 SELECT type_id FROM sde_types
 WHERE type_id = ANY(sqlc.arg(type_ids)::bigint[]);
 
+-- name: ListSDETypeNamesByIDs :many
+-- The SDE's own names for a batch of types, for reading text
+-- that names them (a fused d-scan's rows, above all).
+SELECT type_id, name FROM sde_types
+WHERE type_id = ANY(sqlc.arg(type_ids)::bigint[]);
+
 -- ---------------------------------------------------------------------
 -- SDE static data (schema 003): lookup getters, search, counts, meta.
 -- Bulk import inserts are hand-rolled prepared statements inside one

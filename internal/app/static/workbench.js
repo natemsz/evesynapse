@@ -156,19 +156,20 @@
   var openBtn = root.querySelector(".wb-open-parser");
   if (parser && openBtn) openBtn.addEventListener("click", function () { openDrawer(parser); });
   if (parser) {
-    var dscanTa = parser.querySelector("[data-wb-dscan]");
-    var localTa = parser.querySelector("[data-wb-local]");
+    var pasteTa = parser.querySelector("[data-wb-paste]");
     var msg = parser.querySelector("[data-wb-parser-msg]");
     function showMsg(text) { if (msg) { msg.textContent = text; msg.hidden = !text; } }
     var clearInputs = parser.querySelector("[data-wb-clear-inputs]");
     if (clearInputs) clearInputs.addEventListener("click", function () {
-      dscanTa.value = ""; localTa.value = ""; showMsg("");
+      pasteTa.value = ""; showMsg("");
     });
     var parseBtn = parser.querySelector("[data-wb-parse]");
     parseBtn.addEventListener("click", function () {
-      var parts = [dscanTa.value, localTa.value].filter(function (s) { return s.trim() !== ""; });
-      if (!parts.length) { showMsg("Paste a scan first."); return; }
-      var paste = parts.join("\n");
+      // One box, unsorted: the ingest classifies the paste
+      // itself — d-scan rows, a local list, probe results,
+      // or a mix — exactly as a channel paste is classified.
+      var paste = pasteTa.value;
+      if (!paste.trim()) { showMsg("Paste a scan first."); return; }
       if (parser.getAttribute("data-mode") === "scan") {
         // A plain form post: the scan tool's own submit, which
         // lands on the new scan's page.

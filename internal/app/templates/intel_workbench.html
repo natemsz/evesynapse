@@ -282,9 +282,8 @@
       <div><p class="wb-drawer-kind">Multi-Format Auto-Parser</p><h3>Raw Clipboard Input</h3></div>
       <button type="button" class="wb-x" data-wb-close aria-label="Close parser">✕</button>
     </div>
-    <p class="wb-box-sub">Paste a raw in-game Directional Scan, Local Pilot List, or Probe Scanner readout{{if .SysName}} — it is reported on {{.SysName}}, this snapshot's system{{end}}.</p>
-    <label class="wb-ta-label">Directional Scan<textarea data-wb-dscan rows="8" placeholder="Paste directional scan…"></textarea></label>
-    <label class="wb-ta-label">Local Pilot List<textarea data-wb-local rows="6" placeholder="Paste local pilot list…"></textarea></label>
+    <p class="wb-box-sub">Paste a raw in-game Directional Scan, Local Pilot List, or Probe Scanner readout — or a mix of them; the parser recognises which is which{{if .SysName}}. It is reported on {{.SysName}}, this snapshot's system{{end}}.</p>
+    <label class="wb-ta-label">Clipboard Paste<textarea data-wb-paste rows="12" placeholder="Paste a d-scan, a local pilot list, probe results, or a mix — the parser sorts it out…"></textarea></label>
     <p class="wb-parser-msg" data-wb-parser-msg hidden></p>
     <div class="wb-parser-actions">
       <button type="button" class="wb-mini" data-wb-clear-inputs>Clear Inputs</button>

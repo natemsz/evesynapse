@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.5.8.2] - 2026-10-24
+
+Automated build of EveSynapse v0.5.8.2. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+
+## What's Changed
+### 🚀 Features
+* Pilot activity profiles from kill data by @natemsz in https://github.com/natemsz/evesynapse/pull/648
+### Other Changes
+* docs(changelog): review changelog for v0.5.8.1 by @github-actions[bot] in https://github.com/natemsz/evesynapse/pull/645
+* Intel channels: report groups, stored composites, residue capture by @natemsz in https://github.com/natemsz/evesynapse/pull/646
+* Landing: hero lowered toward the planet, Tools opens public tools, top bar wears the liquid glass (demo) by @natemsz in https://github.com/natemsz/evesynapse/pull/647
+* Intel fusion P2: tracked gangs, confidence decay, likely ships from profiles by @natemsz in https://github.com/natemsz/evesynapse/pull/649
+
+
+**Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.8.1...v0.5.8.2
+
 ## [v0.5.8.1] - 2026-10-24
 
 Automated build of EveSynapse v0.5.8.1. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).

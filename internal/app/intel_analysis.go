@@ -23,13 +23,16 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/intelanalyze"
 	"evesynapse/internal/logging"
+	"evesynapse/internal/scan"
 )
 
 const (
@@ -220,12 +223,267 @@ func (app *Application) intelDict(ctx context.Context, channelID int64, missing 
 	}
 }
 
+// intelNameDict is the segmentation index over every pilot name
+// the site has verified, loaded like the other dictionaries and
+// kept a day; a name verified since (lookupIntelNames) marks it
+// dirty and the next read rebuilds it.
+type intelNameDict struct {
+	mu     sync.Mutex
+	index  *intelanalyze.NameIndex
+	loaded time.Time
+	dirty  bool
+}
+
+var intelNameDicts sync.Map // *Application -> *intelNameDict
+
+func (app *Application) intelNameIndex(ctx context.Context) *intelanalyze.NameIndex {
+	v, _ := intelNameDicts.LoadOrStore(app, &intelNameDict{})
+	d := v.(*intelNameDict)
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.index == nil || d.dirty || time.Since(d.loaded) > 24*time.Hour {
+		if rows, err := app.queries.ListIntelPilotNames(ctx); err == nil && len(rows) > 0 {
+			pilots := make([]intelanalyze.Pilot, len(rows))
+			for i, r := range rows {
+				pilots[i] = intelanalyze.Pilot{ID: r.CharacterID, Name: r.Name}
+			}
+			d.index = intelanalyze.NewNameIndex(pilots)
+			d.loaded = time.Now()
+			d.dirty = false
+		}
+	}
+	return d.index
+}
+
+func (app *Application) intelNamesChanged() {
+	if v, ok := intelNameDicts.Load(app); ok {
+		d := v.(*intelNameDict)
+		d.mu.Lock()
+		d.dirty = true
+		d.mu.Unlock()
+	}
+}
+
+// taggedCoverage is how much of a text's letters and digits the
+// plain reading's pilot tags account for: the length of each
+// tagged pilot's name that appears in the text. A fragment tag
+// ("Ice" read out of "RED ICE") accounts only for its fragment,
+// which is how a roster re-read knows it explains the text
+// better than the plain reading did.
+func taggedCoverage(text string, pilots []intelanalyze.Pilot) int {
+	lower := strings.ToLower(text)
+	n := 0
+	for _, p := range pilots {
+		if !strings.Contains(lower, strings.ToLower(p.Name)) {
+			continue
+		}
+		for _, r := range p.Name {
+			if unicode.IsLetter(r) || unicode.IsDigit(r) {
+				n++
+			}
+		}
+	}
+	return n
+}
+
+// rosterRead is a report re-read as the local roster its text
+// holds: the analysis the report carries, the reading (stored as
+// its scan, the raw text kept as the scan's paste), and the
+// interpreted sentence that becomes its headline.
+type rosterRead struct {
+	analysis intelanalyze.Analysis
+	result   scanResult
+	sentence string
+}
+
+// rosterReRead tries the roster reading of a report the plain
+// analysis could not make sense of: the text segmented against
+// the verified pilot names (intelanalyze.Segment), and only when
+// the segmentation clears the roster bar and accounts for more
+// of the text than the plain reading's tags do -- a roster the
+// plain reading already reads whole is left exactly as it is. The reading itself is the scan
+// tool's local reading of the segmented names, so a re-read
+// report is built exactly as a pasted roster is: fresh
+// affiliations, the channel's standing split, the roster
+// sentence. Nil when the text is not a roster the site can read.
+func (app *Application) rosterReRead(ctx context.Context, channelID int64, in intelanalyze.Input, plain intelanalyze.Analysis, posterID int64) *rosterRead {
+	if len(plain.Ships) > 0 || len(strings.Fields(in.Text)) < 6 {
+		return nil
+	}
+	ix := app.intelNameIndex(ctx)
+	if ix == nil {
+		return nil
+	}
+	seg, covered, total := ix.Segment(in.Text)
+	if !intelanalyze.PassesRosterBar(seg, covered, total) || covered <= taggedCoverage(in.Text, plain.Pilots) {
+		return nil
+	}
+	names := make([]string, len(seg))
+	for i, p := range seg {
+		names[i] = p.Name
+	}
+	lr := app.readLocal(ctx, names)
+	if lr == nil || len(lr.Pilots) < intelanalyze.FusedMinPilots {
+		return nil // EVE does not back the segmentation; leave the report as read
+	}
+	res := scanResult{Kind: scan.KindLocal, SystemID: in.System, Local: lr}
+	sentence, split := app.scanReportText(ctx, channelID, res, nil, posterID)
+	st := app.channelStandingOf(ctx, channelID)
+	a := intelanalyze.Analysis{Kind: intelanalyze.KindLocal, Count: in.Hostiles}
+	for _, lp := range lr.Pilots {
+		a.Pilots = append(a.Pilots, intelanalyze.Pilot{ID: lp.ID, Name: lp.Name,
+			Friendly: st.ofLocal(lp) == bucketFriendly, Red: st.watch[lp.ID]})
+	}
+	counts := intelanalyze.StandingCounts{Hostile: split[bucketHostile], Friendly: split[bucketFriendly],
+		Neutral: split[bucketNeutral], Unclassified: split[bucketUnknown]}
+	a.Counts = &counts
+	return &rosterRead{analysis: a, result: res, sentence: sentence}
+}
+
+// storeRosterScan stores a roster reading as a scan, its raw
+// text kept as the scan's paste, as scanReportOf stores a pasted
+// scan's reading; it returns the scan's ID.
+func (app *Application) storeRosterScan(ctx context.Context, userID int64, roster *rosterRead, raw string) (string, error) {
+	body, err := json.Marshal(roster.result)
+	if err != nil {
+		return "", err
+	}
+	id, err := newScanID()
+	if err != nil {
+		return "", err
+	}
+	err = app.queries.InsertScan(ctx, db.InsertScanParams{ID: id, Kind: string(roster.result.Kind),
+		SystemID: roster.result.SystemID, UserID: userID, Raw: raw, Result: string(body), CreatedAt: time.Now().UTC()})
+	return id, err
+}
+
 // analyzeIntel works out what a report says, and whether anything in
-// it is still to be looked up.
-func (app *Application) analyzeIntel(ctx context.Context, channelID int64, in intelanalyze.Input) (intelanalyze.Analysis, bool) {
+// it is still to be looked up. A report carrying a scan reading
+// (hasScan) is read as it stands; any other report whose text is a
+// roster the plain reading cannot place -- the lines fused on the
+// way in, or the names matched only in fragments -- is offered
+// the roster re-read (rosterReRead), returned beside the plain
+// analysis for the caller to apply.
+func (app *Application) analyzeIntel(ctx context.Context, channelID int64, in intelanalyze.Input, posterID int64, hasScan bool) (intelanalyze.Analysis, *rosterRead, bool) {
 	missing := map[int64]bool{}
 	a := intelanalyze.Analyze(in, app.intelDict(ctx, channelID, missing))
-	return a, len(a.Unknown) > 0 || len(missing) > 0
+	var roster *rosterRead
+	if !hasScan && !in.Clear {
+		roster = app.rosterReRead(ctx, channelID, in, a, posterID)
+	}
+	return a, roster, len(a.Unknown) > 0 || len(missing) > 0
+}
+
+// errIntelDuplicate is insertIntelReport's answer for a report
+// the channel already holds: a roster whose pilot set already
+// stands there (rosterDuplicate). Callers count it as a
+// duplicate, not a failure, and the ID returned is the standing
+// report's.
+var errIntelDuplicate = errors.New("intel: report already in the channel")
+
+// intelRosterDedupeWindow is how far apart two sightings of the
+// one local roster may land and still be the same snapshot: a
+// roster pictures a moment, and its re-sends -- an Axon restart,
+// a second character logging the same channel, the form -- land
+// within minutes of it, not half an hour later.
+const intelRosterDedupeWindow = 30 * time.Minute
+
+// pilotIDSet is a pilot list as a set of IDs, or nil below the
+// roster bar: a set too small names nothing worth matching on.
+func pilotIDSet(pilots []intelanalyze.Pilot) map[int64]bool {
+	set := make(map[int64]bool, len(pilots))
+	for _, p := range pilots {
+		if p.ID > 0 {
+			set[p.ID] = true
+		}
+	}
+	if len(set) < intelanalyze.FusedMinPilots {
+		return nil
+	}
+	return set
+}
+
+// rosterSetOf is a report's roster pilot set, from wherever its
+// reading keeps it: a roster reading's analysis, its scan
+// reading's own pilot list, or a plain reading whose pilots are
+// (nearly) the whole text -- a roster that needed no re-read
+// because every name was already known. The bar for the last is
+// the roster bar itself: the tagged pilots must cover as much
+// of the text as a segmentation would have to. Nil when the
+// report is no roster the site can name a set for.
+func (app *Application) rosterSetOf(ctx context.Context, text, analysisRaw, scanID string) map[int64]bool {
+	var a intelanalyze.Analysis
+	if analysisRaw != "" {
+		_ = json.Unmarshal([]byte(analysisRaw), &a)
+	}
+	if a.Kind == intelanalyze.KindLocal {
+		if set := pilotIDSet(a.Pilots); set != nil {
+			return set
+		}
+	}
+	if scanID != "" {
+		if row, err := app.queries.GetScan(ctx, scanID); err == nil {
+			var res scanResult
+			if json.Unmarshal([]byte(row.Result), &res) == nil && res.Kind == scan.KindLocal && res.Local != nil {
+				pilots := make([]intelanalyze.Pilot, len(res.Local.Pilots))
+				for i, lp := range res.Local.Pilots {
+					pilots[i] = intelanalyze.Pilot{ID: lp.ID}
+				}
+				if set := pilotIDSet(pilots); set != nil {
+					return set
+				}
+			}
+		}
+	}
+	if set := pilotIDSet(a.Pilots); set != nil && text != "" {
+		if total := countAlnum(text); total > 0 && taggedCoverage(text, a.Pilots)*100 >= total*intelanalyze.FusedMinCoverPct {
+			return set
+		}
+	}
+	return nil
+}
+
+// countAlnum is a text's letters and digits: the denominator a
+// coverage is measured against.
+func countAlnum(s string) int {
+	n := 0
+	for _, r := range s {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			n++
+		}
+	}
+	return n
+}
+
+// rosterDuplicate is the ID of a report already standing on the
+// channel for the system, seen within the dedupe window of
+// seenAt either way, whose roster pilot set is this one -- or 0.
+// excludeID is the report itself, when it already stands (the
+// drain re-reading one).
+func (app *Application) rosterDuplicate(ctx context.Context, channelID, systemID, excludeID int64, seenAt time.Time, set map[int64]bool) int64 {
+	rows, err := app.queries.ListRecentRosterReports(ctx, db.ListRecentRosterReportsParams{
+		ChannelID: channelID, SystemID: systemID, ExcludeID: excludeID,
+		Since: seenAt.Add(-intelRosterDedupeWindow), Until: seenAt.Add(intelRosterDedupeWindow)})
+	if err != nil {
+		return 0
+	}
+	for _, r := range rows {
+		other := app.rosterSetOf(ctx, r.Text, r.Analysis, r.ScanID)
+		if other == nil || len(other) != len(set) {
+			continue
+		}
+		same := true
+		for id := range set {
+			if !other[id] {
+				same = false
+				break
+			}
+		}
+		if same {
+			return r.ID
+		}
+	}
+	return 0
 }
 
 // insertIntelReport stores a report with what it says. nv is "no
@@ -233,9 +491,31 @@ func (app *Application) analyzeIntel(ctx context.Context, channelID int64, in in
 // counts, when given, are the standing split the report's own
 // reading counted (a scan's synthesis): they are stored over the
 // split the analysis of the headline derives, a reading's counts
-// being the exact ones.
+// being the exact ones. A report read as a roster whose pilot
+// set already stands on the channel is not stored again:
+// errIntelDuplicate, with the standing report's ID.
 func (app *Application) insertIntelReport(ctx context.Context, p db.InsertIntelReportParams, nv bool, counts *intelanalyze.StandingCounts) (int64, error) {
-	a, pending := app.analyzeIntel(ctx, p.ChannelID, intelanalyze.Input{System: p.SystemID, Text: p.Text, Hostiles: int(p.Hostiles), Clear: p.Clear, NoVisual: nv})
+	a, roster, pending := app.analyzeIntel(ctx, p.ChannelID, intelanalyze.Input{System: p.SystemID, Text: p.Text, Hostiles: int(p.Hostiles), Clear: p.Clear, NoVisual: nv}, p.AuthorCharacterID, p.ScanID != "")
+	if roster != nil {
+		// The report is the roster its text holds: store the
+		// reading as its scan (the raw text kept as the scan's
+		// paste) and let the headline be the reading's sentence,
+		// never the fused text itself. The re-read settles the
+		// report; a failure to store it leaves the plain read.
+		if id, err := app.storeRosterScan(ctx, p.AuthorUserID, roster, p.Text); err == nil {
+			a = roster.analysis
+			p.ScanID = id
+			p.Text = roster.sentence
+			p.Pilots = roster.sentence
+			if p.Hostiles == 0 {
+				p.Hostiles = scanHostiles(roster.result)
+			}
+			pending = false
+			counts = nil // the reading's own split is in its analysis
+		} else {
+			logging.Warnf("intel: store roster reading: %v", err)
+		}
+	}
 	if counts != nil && counts.Total() > 0 {
 		a.Counts = counts
 	}
@@ -244,6 +524,14 @@ func (app *Application) insertIntelReport(ctx context.Context, p db.InsertIntelR
 		p.Analysis = string(raw)
 	}
 	p.AnalysisPending = pending
+	// A roster is recognised by its pilot set, not its text:
+	// the same snapshot arriving fused, spaced and plain within
+	// the window is one report, however it was written.
+	if set := app.rosterSetOf(ctx, p.Text, p.Analysis, p.ScanID); set != nil {
+		if dup := app.rosterDuplicate(ctx, p.ChannelID, p.SystemID, 0, p.SeenAt, set); dup > 0 {
+			return dup, errIntelDuplicate
+		}
+	}
 	return app.queries.InsertIntelReport(ctx, p)
 }
 
@@ -273,6 +561,15 @@ func (app *Application) drainIntelAnalysis(ctx context.Context) (limited bool) {
 		for _, n := range a.Unknown {
 			names[n] = true
 		}
+		// A report no pilot could be read from may be a roster
+		// whose lines fused on the way in: propose the names its
+		// case boundaries give up, so the re-read at settle time
+		// segments against a verified dictionary.
+		if len(a.Pilots) == 0 {
+			for _, cand := range intelanalyze.FusedCandidates(r.Text) {
+				names[cand] = true
+			}
+		}
 		for id := range missing {
 			pilots[id] = true
 		}
@@ -298,7 +595,7 @@ func (app *Application) drainIntelAnalysis(ctx context.Context) (limited bool) {
 	// Analyse again with what was found. A report is settled now
 	// either way: what EVE does not know is not asked again.
 	for _, r := range rows {
-		a, _ := app.analyzeIntel(ctx, r.ChannelID, input(r))
+		a, roster, _ := app.analyzeIntel(ctx, r.ChannelID, input(r), r.AuthorCharacterID, r.ScanID != "")
 		// A scan report keeps the split its reading counted at
 		// ingest: re-reading its headline sentence can only
 		// approximate them.
@@ -307,12 +604,54 @@ func (app *Application) drainIntelAnalysis(ctx context.Context) (limited bool) {
 		if r.ScanID != "" && prev.Counts != nil {
 			a.Counts = prev.Counts
 		}
+		// A report re-read as a roster is settled as one: its
+		// reading stored as a scan, its headline the sentence.
+		// Settled as a roster it is recognised by its set like
+		// any roster at insert: if the roster already stands in
+		// the channel -- it arrived spaced while this one waited
+		// on its names -- this report goes away instead of
+		// standing twice.
+		if roster != nil {
+			if set := pilotIDSet(roster.analysis.Pilots); set != nil &&
+				app.rosterDuplicate(ctx, r.ChannelID, r.SystemID, r.ID, r.SeenAt, set) > 0 {
+				if err := app.queries.DeleteIntelReport(ctx, r.ID); err != nil {
+					logging.Warnf("intel: drop duplicate roster report %d: %v", r.ID, err)
+				}
+				continue
+			}
+			if err := app.settleRosterReport(ctx, r, roster); err == nil {
+				continue
+			} else {
+				logging.Warnf("intel: settle roster report %d: %v", r.ID, err)
+			}
+		}
 		raw, _ := json.Marshal(a)
 		if err := app.queries.SetIntelReportAnalysis(ctx, db.SetIntelReportAnalysisParams{ID: r.ID, Kind: a.Kind, Analysis: string(raw), AnalysisPending: false}); err != nil {
 			logging.Warnf("intel: save analysis of report %d: %v", r.ID, err)
 		}
 	}
 	return false
+}
+
+// settleRosterReport stores a pending report's roster re-read:
+// the reading as its scan (the report's text to date kept as the
+// scan's paste), the headline sentence in the text's place.
+func (app *Application) settleRosterReport(ctx context.Context, r db.ListPendingIntelReportsRow, roster *rosterRead) error {
+	id, err := app.storeRosterScan(ctx, r.AuthorUserID, roster, r.Text)
+	if err != nil {
+		return err
+	}
+	hostiles := r.Hostiles
+	if hostiles == 0 {
+		hostiles = scanHostiles(roster.result)
+	}
+	raw, err := json.Marshal(roster.analysis)
+	if err != nil {
+		return err
+	}
+	return app.queries.SetIntelReportRoster(ctx, db.SetIntelReportRosterParams{
+		ID: r.ID, Text: roster.sentence, Pilots: roster.sentence, Hostiles: hostiles,
+		ScanID: id, Kind: roster.analysis.Kind, Analysis: string(raw)})
 }
 
 // --- Showing it ---
@@ -427,6 +766,9 @@ func (app *Application) lookupIntelNames(ctx context.Context, names map[string]b
 			found[l] = true
 			app.esi.StoreCharacterName(c.ID, c.Name)
 			_ = app.queries.UpsertIntelPilotName(ctx, db.UpsertIntelPilotNameParams{NameLower: l, CharacterID: c.ID, Name: c.Name, CheckedAt: now})
+		}
+		if len(found) > 0 {
+			app.intelNamesChanged()
 		}
 		for _, n := range list[start:end] {
 			if !found[n] {

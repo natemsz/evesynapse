@@ -90,17 +90,46 @@ VALUES (sqlc.arg(channel_id), sqlc.arg(system_id), sqlc.arg(author_user_id), sql
     sqlc.arg(kind), sqlc.arg(analysis), sqlc.arg(analysis_pending))
 RETURNING id;
 
--- Intel analysis (schema 083).
+-- Intel analysis (schema 083). ListPendingIntelReports also
+-- carries the author: re-reading a report as a roster counts the
+-- poster the roster names as one of its own.
 -- name: ListPendingIntelReports :many
-SELECT id, channel_id, system_id, text, hostiles, clear, analysis, scan_id
+SELECT id, channel_id, system_id, text, hostiles, clear, analysis, scan_id, author_character_id, author_user_id, seen_at
 FROM intel_reports
 WHERE analysis_pending AND created_at >= sqlc.arg(since)::timestamptz
 ORDER BY created_at
 LIMIT sqlc.arg(max_rows)::bigint;
 
+-- The reports a roster re-send might already stand as: same
+-- channel and system, seen within the caller's window either
+-- way. The caller compares pilot sets in Go -- a roster sent
+-- fused, spaced and plain has three texts and one set.
+-- name: ListRecentRosterReports :many
+SELECT id, text, analysis, scan_id FROM intel_reports
+WHERE channel_id = sqlc.arg(channel_id) AND system_id = sqlc.arg(system_id)
+  AND id <> sqlc.arg(exclude_id)
+  AND seen_at >= sqlc.arg(since)::timestamptz AND seen_at <= sqlc.arg(until)::timestamptz
+ORDER BY seen_at DESC
+LIMIT 25;
+
 -- name: SetIntelReportAnalysis :exec
 UPDATE intel_reports SET kind = sqlc.arg(kind), analysis = sqlc.arg(analysis), analysis_pending = sqlc.arg(analysis_pending)
 WHERE id = sqlc.arg(id);
+
+-- A report re-read as a roster (its text had fused on the way in):
+-- the headline becomes the reading's sentence and the reading is
+-- linked as its scan, as for a pasted scan.
+-- name: SetIntelReportRoster :exec
+UPDATE intel_reports SET text = sqlc.arg(text), pilots = sqlc.arg(pilots), hostiles = sqlc.arg(hostiles),
+    scan_id = sqlc.arg(scan_id), kind = sqlc.arg(kind), analysis = sqlc.arg(analysis), analysis_pending = false
+WHERE id = sqlc.arg(id);
+
+-- Every pilot name the site has verified, for segmenting a fused
+-- roster against them. The analysis dictionaries load lists the
+-- same way (the SDE's ships and types); this is the looked-up
+-- names table, read whole and kept.
+-- name: ListIntelPilotNames :many
+SELECT character_id, name FROM intel_pilot_names WHERE character_id > 0;
 
 -- name: GetIntelPilotName :one
 SELECT name_lower, character_id, name, checked_at FROM intel_pilot_names WHERE name_lower = $1;

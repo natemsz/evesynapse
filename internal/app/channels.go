@@ -26,6 +26,7 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"sort"
@@ -39,6 +40,7 @@ import (
 
 	"evesynapse/internal/app/module"
 	db "evesynapse/internal/db/sqlc"
+	"evesynapse/internal/esi"
 	"evesynapse/internal/intelanalyze"
 	"evesynapse/internal/intelchat"
 	"evesynapse/internal/logging"
@@ -712,10 +714,6 @@ func (app *Application) handleChannelReport(w http.ResponseWriter, r *http.Reque
 			base.SystemID = s.SystemID
 		}
 	}
-	if base.SystemID == 0 {
-		reply(http.StatusUnprocessableEntity, "Name the system the report is about.", 0)
-		return
-	}
 	base.Source = "form"
 	base.Clear = r.PostForm.Get("clear") != ""
 	text := strings.TrimSpace(r.PostForm.Get("text"))
@@ -730,11 +728,13 @@ func (app *Application) handleChannelReport(w http.ResponseWriter, r *http.Reque
 	}
 	// A scan pasted into the report box is a scan, not prose:
 	// the report is the one its reading makes, on the system
-	// named here. (Classified on the text as pasted, before the
+	// named here -- or, naming none, on the one the paste names
+	// or the poster's own current system (scanReportOf's
+	// precedence). (Classified on the text as pasted, before the
 	// clip above shortened it.)
 	if !base.Clear {
 		if p, counts, ok := app.scanReportOf(ctx, base, text, base.SystemID); ok {
-			if _, err := app.insertIntelReport(ctx, p, false, counts); err != nil {
+			if _, err := app.insertIntelReport(ctx, p, false, counts); err != nil && !errors.Is(err, errIntelDuplicate) {
 				logging.Errorf("channels: insert report: %v", err)
 				reply(http.StatusInternalServerError, "That did not go through — please try again.", 0)
 				return
@@ -743,7 +743,11 @@ func (app *Application) handleChannelReport(w http.ResponseWriter, r *http.Reque
 			return
 		}
 	}
-	if _, err := app.insertIntelReport(ctx, base, false, nil); err != nil {
+	if base.SystemID == 0 {
+		reply(http.StatusUnprocessableEntity, "Name the system the report is about.", 0)
+		return
+	}
+	if _, err := app.insertIntelReport(ctx, base, false, nil); err != nil && !errors.Is(err, errIntelDuplicate) {
 		logging.Errorf("channels: insert report: %v", err)
 		reply(http.StatusInternalServerError, "That did not go through — please try again.", 0)
 		return
@@ -761,18 +765,38 @@ type chatPostResult struct {
 	SkippedLines []string `json:"skippedLines,omitempty"`
 }
 
+// posterSystemID is the system the poster's character is in, as
+// the site last synced it: their stored location snapshot. It is
+// the fallback system for a paste that names none -- the site
+// knows where its reporter is, and a roster from there is about
+// there. 0 when no location is on file: no location is ever
+// invented, and the paste is refused exactly as before.
+func (app *Application) posterSystemID(ctx context.Context, characterID int64) int64 {
+	if characterID <= 0 {
+		return 0
+	}
+	var loc esi.Location
+	if !app.loadCorpSnapshot(ctx, characterID, esi.SnapLocation, &loc) {
+		return 0
+	}
+	return loc.SolarSystemID
+}
+
 // scanReportOf reads raw as a scan paste, when it is one, and
 // makes the report a reading of it makes: the reading is stored
 // (as the scan tool stores it) and the report carries the
 // reading's interpreted sentence, its system and its headline
-// count -- never the raw paste. namedSystemID, when the poster named a system,
-// wins over the one the reading finds. ok is false when the
-// paste is no scan the tool knows, or names no system: a local
-// list on its own cannot be a report, reports being about a
-// system.
+// count -- never the raw paste. Which system, in order: the one
+// the reading finds in the paste, the one the poster named
+// (namedSystemID), and -- a paste needing a system and naming
+// none -- the poster's own current system, from their stored
+// location; the sentence then says so. ok is false when the
+// paste is no scan the tool knows, or no system is had any of
+// those ways: a local list on its own cannot be a report,
+// reports being about a system.
 func (app *Application) scanReportOf(ctx context.Context, base db.InsertIntelReportParams, raw string, namedSystemID int64) (db.InsertIntelReportParams, *intelanalyze.StandingCounts, bool) {
 	kind := scan.Detect(raw)
-	if kind == "" || (kind == scan.KindLocal && namedSystemID == 0) {
+	if kind == "" {
 		return base, nil, false
 	}
 	p, err := scan.Parse(raw)
@@ -780,6 +804,11 @@ func (app *Application) scanReportOf(ctx context.Context, base db.InsertIntelRep
 		return base, nil, false
 	}
 	res := app.readScan(ctx, p, namedSystemID)
+	fromPoster := false
+	if res.SystemID == 0 {
+		res.SystemID = app.posterSystemID(ctx, base.AuthorCharacterID)
+		fromPoster = res.SystemID != 0
+	}
 	if res.SystemID == 0 {
 		return base, nil, false
 	}
@@ -798,6 +827,11 @@ func (app *Application) scanReportOf(ctx context.Context, base db.InsertIntelRep
 	out := base
 	out.SystemID = res.SystemID
 	text, split := app.scanReportText(ctx, base.ChannelID, res, &p, base.AuthorCharacterID)
+	if fromPoster {
+		// The system came from the reporter's own location,
+		// not the paste: the sentence says so, quietly.
+		text = strings.TrimSuffix(text, ".") + " — system from the reporter's current location."
+	}
 	out.Text = text
 	counts := &intelanalyze.StandingCounts{Hostile: split[bucketHostile], Friendly: split[bucketFriendly], Neutral: split[bucketNeutral], Unclassified: split[bucketUnknown]}
 	out.Pilots = out.Text
@@ -827,6 +861,10 @@ func (app *Application) postChatLines(ctx context.Context, base db.InsertIntelRe
 	// reading the scan tool makes of it, reported as one report.
 	if p, counts, ok := app.scanReportOf(ctx, base, lines, 0); ok {
 		if _, err := app.insertIntelReport(ctx, p, false, counts); err != nil {
+			if errors.Is(err, errIntelDuplicate) {
+				res.Duplicates = 1
+				return res
+			}
 			logging.Errorf("channels: insert scan report: %v", err)
 			return res
 		}
@@ -853,6 +891,10 @@ func (app *Application) postChatLines(ctx context.Context, base db.InsertIntelRe
 			}
 		}
 		if _, err := app.insertIntelReport(ctx, p, rep.NoVisual, nil); err != nil {
+			if errors.Is(err, errIntelDuplicate) {
+				res.Duplicates++
+				continue
+			}
 			logging.Errorf("channels: insert chat report: %v", err)
 			continue
 		}
@@ -902,7 +944,7 @@ func (app *Application) handleScanPost(w http.ResponseWriter, r *http.Request) {
 	p := db.InsertIntelReportParams{ChannelID: c.ID, SystemID: row.SystemID, AuthorUserID: id.userID, AuthorCharacterID: id.posterID,
 		Reporter: id.posterName, Text: text, ScanID: scanID, Source: "scan", SeenAt: row.CreatedAt, CreatedAt: now}
 	p.Hostiles = scanHostiles(res)
-	if _, err := app.insertIntelReport(ctx, p, false, counts); err != nil {
+	if _, err := app.insertIntelReport(ctx, p, false, counts); err != nil && !errors.Is(err, errIntelDuplicate) {
 		logging.Errorf("channels: insert scan report: %v", err)
 		back("That did not go through — please try again.")
 		return

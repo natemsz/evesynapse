@@ -803,7 +803,35 @@ func (app *Application) scanReportOf(ctx context.Context, base db.InsertIntelRep
 	if err != nil {
 		return base, nil, false
 	}
-	res := app.readScan(ctx, p, namedSystemID)
+	return app.readingReportOf(ctx, base, app.readScan(ctx, p, namedSystemID), &p, raw)
+}
+
+// fusedScanReportOf is scanReportOf for a message whose scan the
+// client fused into one line: Detect cannot see it, so the rows
+// are reconstructed (reconstructFusedDScan) and the reading must
+// clear the roster re-read's standard -- it accounts for most
+// of the message, and more of it than the plain reading's tags
+// do -- before it is stored the same way as any scan report.
+func (app *Application) fusedScanReportOf(ctx context.Context, base db.InsertIntelReportParams, raw string, namedSystemID int64) (db.InsertIntelReportParams, *intelanalyze.StandingCounts, bool) {
+	parsed, covered, total := app.reconstructFusedDScan(ctx, raw)
+	if len(parsed.DScan) == 0 || total == 0 || covered*100 < total*intelanalyze.FusedMinCoverPct {
+		return base, nil, false
+	}
+	plain := intelanalyze.Analyze(intelanalyze.Input{Text: raw}, app.intelDict(ctx, base.ChannelID, map[int64]bool{}))
+	if covered <= taggedCoverage(raw, plain.Pilots) {
+		return base, nil, false
+	}
+	return app.readingReportOf(ctx, base, app.readScan(ctx, parsed, namedSystemID), &parsed, raw)
+}
+
+// readingReportOf stores one scan reading as a report in the
+// base's channel: the scan row under a fresh ID, the sentence
+// scanReportText writes for the reading, and the reading's own
+// counts. The system is the reading's, and -- a reading with
+// none -- the poster's own current system, from their stored
+// location; the sentence then says so. ok is false when no
+// system is had either way.
+func (app *Application) readingReportOf(ctx context.Context, base db.InsertIntelReportParams, res scanResult, p *scan.Result, raw string) (db.InsertIntelReportParams, *intelanalyze.StandingCounts, bool) {
 	fromPoster := false
 	if res.SystemID == 0 {
 		res.SystemID = app.posterSystemID(ctx, base.AuthorCharacterID)
@@ -826,7 +854,7 @@ func (app *Application) scanReportOf(ctx context.Context, base db.InsertIntelRep
 	}
 	out := base
 	out.SystemID = res.SystemID
-	text, split := app.scanReportText(ctx, base.ChannelID, res, &p, base.AuthorCharacterID)
+	text, split := app.scanReportText(ctx, base.ChannelID, res, p, base.AuthorCharacterID)
 	if fromPoster {
 		// The system came from the reporter's own location,
 		// not the paste: the sentence says so, quietly.
@@ -846,6 +874,54 @@ func (app *Application) scanReportOf(ctx context.Context, base db.InsertIntelRep
 	out.ScanID = id
 	out.Source = "scan"
 	return out, counts, true
+}
+
+// A chat message's fate when offered the scan readings.
+const (
+	msgNotScan = iota
+	msgPosted
+	msgDuplicate
+	msgFailed // a scan, but the store failed: handled, never prose
+)
+
+// postScanMessage offers one chat message the scan readings
+// before it is read as chat. A message carrying tabs gets the
+// scan tool's plain reading of it; a scan the client fused into
+// the message gets the fused re-reading; either is stored as
+// the scan report it is, not as prose. A message that is
+// neither falls through as msgNotScan, to be read as chat
+// exactly as before -- without tabs a single message cannot be
+// a tabbed paste, and the plain reading's one-line kinds (a
+// local list of one name, above all) must not swallow ordinary
+// chat. The speaker and moment are the message's own, as for
+// any chat report.
+func (app *Application) postScanMessage(ctx context.Context, base db.InsertIntelReportParams, raw string, systemID int64, speaker string, at time.Time) int {
+	b := base
+	if speaker != "" {
+		b.Reporter = clipRunes(speaker, 40)
+	}
+	if !at.IsZero() && at.Before(base.CreatedAt.Add(time.Minute)) && at.After(base.CreatedAt.Add(-intelRetention)) {
+		b.SeenAt = at
+	}
+	try := func(p db.InsertIntelReportParams, counts *intelanalyze.StandingCounts, ok bool) int {
+		if !ok {
+			return msgNotScan
+		}
+		if _, err := app.insertIntelReport(ctx, p, false, counts); err != nil {
+			if errors.Is(err, errIntelDuplicate) {
+				return msgDuplicate
+			}
+			logging.Errorf("channels: insert scan report from a chat message: %v", err)
+			return msgFailed
+		}
+		return msgPosted
+	}
+	if strings.Contains(raw, "\t") {
+		if fate := try(app.scanReportOf(ctx, b, raw, systemID)); fate != msgNotScan {
+			return fate
+		}
+	}
+	return try(app.fusedScanReportOf(ctx, b, raw, systemID))
 }
 
 // postChatLines reads intel chat lines into reports on base's channel,
@@ -873,13 +949,25 @@ func (app *Application) postChatLines(ctx context.Context, base db.InsertIntelRe
 	}
 	o := intelchat.Parse(lines, app.systemLookup(ctx), now)
 	res.Skipped = o.Questions
-	// A line that named no system is offered the roster rescue
-	// before it counts as skipped: a local roster whose lines
-	// fused on the way in names no system the chat parser can
-	// find, and the analysis pipeline only ever re-reads
-	// reports that were stored -- dropped here, it is never
-	// read at all.
+	// A line that named no system is offered the readings the
+	// chat parser cannot make before it counts as skipped: a
+	// scan it fused, read as a scan (postScanMessage), and a
+	// local roster fused the same way, stored by the roster
+	// rescue -- the analysis pipeline only ever re-reads
+	// reports that were stored, so a line dropped here is
+	// never read at all. A scan that failed to store counts
+	// neither way: it was a scan, never prose.
 	for i, nr := range o.NoSystemRead {
+		switch app.postScanMessage(ctx, base, nr.Raw, 0, nr.Speaker, nr.At) {
+		case msgPosted:
+			res.Posted++
+			continue
+		case msgDuplicate:
+			res.Duplicates++
+			continue
+		case msgFailed:
+			continue
+		}
 		switch app.rescueRosterLine(ctx, base, nr, source) {
 		case rosterStored:
 			res.Posted++
@@ -891,6 +979,18 @@ func (app *Application) postChatLines(ctx context.Context, base db.InsertIntelRe
 		}
 	}
 	for _, rep := range o.Reports {
+		// A message that is a scan is stored as one, not as the
+		// prose the chat parser made of its remains.
+		switch app.postScanMessage(ctx, base, rep.Raw, rep.SystemID, rep.Speaker, rep.At) {
+		case msgPosted:
+			res.Posted++
+			continue
+		case msgDuplicate:
+			res.Duplicates++
+			continue
+		case msgFailed:
+			continue
+		}
 		p := base
 		p.Source, p.SystemID, p.Clear, p.Hostiles = source, rep.SystemID, rep.Clear, int32(min(max(rep.Hostiles, 0), 999))
 		p.Text = clipRunes(rep.Text, intelMaxText)

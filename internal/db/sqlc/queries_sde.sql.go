@@ -2074,6 +2074,41 @@ func (q *Queries) ListSDETypeNames(ctx context.Context) ([]ListSDETypeNamesRow, 
 	return items, nil
 }
 
+const listSDETypeNamesByIDs = `-- name: ListSDETypeNamesByIDs :many
+SELECT type_id, name FROM sde_types
+WHERE type_id = ANY($1::bigint[])
+`
+
+type ListSDETypeNamesByIDsRow struct {
+	TypeID int64  `json:"type_id"`
+	Name   string `json:"name"`
+}
+
+// The SDE's own names for a batch of types, for reading text
+// that names them (a fused d-scan's rows, above all).
+func (q *Queries) ListSDETypeNamesByIDs(ctx context.Context, typeIds []int64) ([]ListSDETypeNamesByIDsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listSDETypeNamesByIDs, pq.Array(typeIds))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListSDETypeNamesByIDsRow
+	for rows.Next() {
+		var i ListSDETypeNamesByIDsRow
+		if err := rows.Scan(&i.TypeID, &i.Name); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listSDETypePhysicsByIDs = `-- name: ListSDETypePhysicsByIDs :many
 SELECT type_id, mass, volume, capacity, portion_size FROM sde_type_physics
 WHERE type_id = ANY($1::bigint[])

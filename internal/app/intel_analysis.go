@@ -444,6 +444,80 @@ func (app *Application) rosterSetOf(ctx context.Context, text, analysisRaw, scan
 	return nil
 }
 
+// dscanSetOf reads a report's identity as a d-scan: its
+// reading's resolved tallies keyed by type, each with its total
+// and on-grid counts. Two readings of the same scan -- however
+// the text that carried them differed -- resolve to the same
+// set; a reading with no tallies at all has none.
+func (app *Application) dscanSetOf(ctx context.Context, scanID string) map[int64][2]int {
+	if scanID == "" {
+		return nil
+	}
+	row, err := app.queries.GetScan(ctx, scanID)
+	if err != nil {
+		return nil
+	}
+	var res scanResult
+	if json.Unmarshal([]byte(row.Result), &res) != nil || res.Kind != scan.KindDScan || res.DScan == nil {
+		return nil
+	}
+	set := map[int64][2]int{}
+	add := func(list []scanCount) {
+		for _, c := range list {
+			if c.ID > 0 {
+				v := set[c.ID]
+				v[0] += c.N
+				v[1] += c.Grid
+				set[c.ID] = v
+			}
+		}
+	}
+	d := res.DScan
+	add(d.Types)
+	add(d.Structures)
+	add(d.Deployables)
+	add(d.DroneTypes)
+	add(d.FighterTypes)
+	add(d.Objects)
+	if len(set) == 0 {
+		return nil
+	}
+	return set
+}
+
+func sameDScanSet(a, b map[int64][2]int) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for id, v := range a {
+		if b[id] != v {
+			return false
+		}
+	}
+	return true
+}
+
+// dscanDuplicate finds a standing d-scan report in the channel
+// and system whose resolved reading is this set, inside the
+// roster window: the same scan sent again is the same report.
+func (app *Application) dscanDuplicate(ctx context.Context, channelID, systemID int64, seenAt time.Time, set map[int64][2]int) int64 {
+	recent, err := app.queries.ListRecentRosterReports(ctx, db.ListRecentRosterReportsParams{
+		ChannelID: channelID, SystemID: systemID, ExcludeID: 0,
+		Since: seenAt.Add(-intelRosterDedupeWindow), Until: seenAt.Add(intelRosterDedupeWindow)})
+	if err != nil {
+		return 0
+	}
+	for _, r := range recent {
+		if r.ScanID == "" {
+			continue
+		}
+		if other := app.dscanSetOf(ctx, r.ScanID); other != nil && sameDScanSet(set, other) {
+			return r.ID
+		}
+	}
+	return 0
+}
+
 // countAlnum is a text's letters and digits: the denominator a
 // coverage is measured against.
 func countAlnum(s string) int {
@@ -530,6 +604,15 @@ func (app *Application) insertIntelReport(ctx context.Context, p db.InsertIntelR
 	// the window is one report, however it was written.
 	if set := app.rosterSetOf(ctx, p.Text, p.Analysis, p.ScanID); set != nil {
 		if dup := app.rosterDuplicate(ctx, p.ChannelID, p.SystemID, 0, p.SeenAt, set); dup > 0 {
+			return dup, errIntelDuplicate
+		}
+	}
+	// A d-scan is recognised by its resolved reading, not its
+	// text: the same scan arriving again -- a client resend, a
+	// copy truncated a little differently -- resolves to the
+	// same tallies and is one report.
+	if set := app.dscanSetOf(ctx, p.ScanID); set != nil {
+		if dup := app.dscanDuplicate(ctx, p.ChannelID, p.SystemID, p.SeenAt, set); dup > 0 {
 			return dup, errIntelDuplicate
 		}
 	}

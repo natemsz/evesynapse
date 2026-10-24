@@ -35,6 +35,7 @@ type Report struct {
 	SystemID   int64
 	SystemName string
 	Text       string // what is left: usually pilots' names
+	Raw        string // the message as written, before anything was taken out
 	Hostiles   int    // 0: no count given
 	Clear      bool
 	NoVisual   bool
@@ -84,6 +85,7 @@ func Parse(raw string, lookup Lookup, now time.Time) Outcome {
 			r.Speaker = strings.TrimSpace(line[:i])
 			msg = strings.TrimSpace(line[i+3:])
 		}
+		r.Raw = msg
 		if r.Speaker == "EVE System" || msg == "" {
 			continue
 		}

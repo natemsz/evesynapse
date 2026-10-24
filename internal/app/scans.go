@@ -572,6 +572,124 @@ func (app *Application) readDScan(ctx context.Context, rows []scan.DScanRow) (*d
 	return d, 0
 }
 
+// fusedDistRe finds the figured distances a d-scan row ends
+// with, as they survive the client's fusing: kilometres, AU or
+// metres. The "-" of a row with no figure is found by the dash
+// scan in reconstructFusedDScan -- a name's own dashes must not
+// end a row, and only the walk can tell them apart.
+var fusedDistRe = regexp.MustCompile(`\d[\d,]*\s*km|\d+(?:[.,]\d+)?\s*AU|\d[\d,]*\s*m\b`)
+
+// splitFirstField splits s at its first run of spaces: the field
+// and the rest, both trimmed.
+func splitFirstField(s string) (string, string) {
+	s = strings.TrimSpace(s)
+	i := strings.IndexAny(s, " \t")
+	if i < 0 {
+		return s, ""
+	}
+	return s[:i], strings.TrimSpace(s[i+1:])
+}
+
+// reconstructFusedDScan re-reads a d-scan whose rows the client
+// fused into one line on its way through a chat channel. The
+// tabs are gone, but every row still begins with its type ID and
+// ends with its distance, and the type's own name -- the SDE's --
+// closes the row's middle off: what is left of the middle is the
+// row's name. A row counts only when its type resolves in the
+// SDE and the middle ends with that type's name; anything else
+// in the text is residue. covered and total count letters and
+// digits, as the roster bar counts them, so the caller holds
+// the reading to the same standard.
+func (app *Application) reconstructFusedDScan(ctx context.Context, text string) (scan.Result, int, int) {
+	// The row ends: the figured distances, and the dashes that
+	// are a row's no-figure marker -- a dash standing as its own
+	// field (a space before it) with the next row's type ID or
+	// the text's end after it. A name's dash ("System - Name")
+	// is followed by a letter and never qualifies.
+	type rowEnd struct{ start, end int }
+	ends := []rowEnd{}
+	for _, loc := range fusedDistRe.FindAllStringIndex(text, -1) {
+		ends = append(ends, rowEnd{loc[0], loc[1]})
+	}
+	for i := 0; i < len(text); i++ {
+		if text[i] != '-' || (i > 0 && text[i-1] != ' ' && text[i-1] != '\t') {
+			continue
+		}
+		j := i + 1
+		for j < len(text) && (text[j] == ' ' || text[j] == '\t') {
+			j++
+		}
+		if j == len(text) || (text[j] >= '0' && text[j] <= '9') {
+			ends = append(ends, rowEnd{i, i + 1})
+		}
+	}
+	if len(ends) == 0 {
+		return scan.Result{}, 0, 0
+	}
+	sort.Slice(ends, func(a, b int) bool { return ends[a].start < ends[b].start })
+	locs := make([][2]int, len(ends))
+	for i, e := range ends {
+		locs[i] = [2]int{e.start, e.end}
+	}
+	type seg struct {
+		head, dist string
+		id         int64
+		idOK       bool
+	}
+	segs := make([]seg, 0, len(locs))
+	ids, seen := []int64{}, map[int64]bool{}
+	prev := 0
+	for _, loc := range locs {
+		s := seg{head: text[prev:loc[0]], dist: text[loc[0]:loc[1]]}
+		if tok, rest := splitFirstField(s.head); rest != "" {
+			if id, err := strconv.ParseInt(tok, 10, 64); err == nil && id > 0 {
+				s.id, s.idOK = id, true
+				if !seen[id] {
+					seen[id] = true
+					ids = append(ids, id)
+				}
+			}
+		}
+		segs = append(segs, s)
+		prev = loc[1]
+	}
+	names := map[int64]string{}
+	rows, err := app.queries.ListSDETypeNamesByIDs(ctx, ids)
+	if err != nil {
+		return scan.Result{}, 0, 0
+	}
+	for _, r := range rows {
+		names[r.TypeID] = r.Name
+	}
+	out := scan.Result{Kind: scan.KindDScan}
+	covered := 0
+	for _, s := range segs {
+		if !s.idOK {
+			continue
+		}
+		tname, ok := names[s.id]
+		if !ok || tname == "" {
+			continue
+		}
+		_, chunk := splitFirstField(s.head)
+		var name string
+		switch {
+		case chunk == tname:
+			name = tname
+		case strings.HasSuffix(chunk, " "+tname):
+			name = strings.TrimSpace(chunk[:len(chunk)-len(tname)])
+		default:
+			continue
+		}
+		if name == "" {
+			name = tname
+		}
+		out.DScan = append(out.DScan, scan.DScanRow{TypeID: s.id, Name: name, TypeName: tname, DistKm: scan.ParseDistance(s.dist)})
+		covered += countAlnum(s.head) + countAlnum(s.dist)
+	}
+	return out, covered, countAlnum(text)
+}
+
 // rollupCounts folds type tallies into coarser buckets by a key
 // function, summing counts and on-grid counts.
 func rollupCounts(types []scanCount, pick func(scanCount) string) []scanCount {

@@ -403,4 +403,90 @@ func TestIntelFusedRoster(t *testing.T) {
 	if !ok || p2.SystemID != 30000142 || strings.Contains(p2.Text, "reporter's current location") {
 		t.Errorf("named system precedence: ok %v system %d text %q", ok, p2.SystemID, p2.Text)
 	}
+
+	// The chat-lines path (Axon and pasted lines): the fused
+	// roster arrives as ONE line naming no system the chat
+	// parser can find, and was dropped at classification --
+	// never stored, so the re-read above never saw it. The
+	// rescue reads it there, on the poster's system, in a
+	// second channel so its set stands apart from the first.
+	cid2, err := q.CreateIntelChannel(ctx, db.CreateIntelChannelParams{OwnerUserID: u.ID, Name: "Fused Lines", CreatedAt: time.Now()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rowsOf2 := func() []db.ListIntelReportsRow {
+		t.Helper()
+		rows, err := q.ListIntelReports(ctx, db.ListIntelReportsParams{ChannelID: cid2, BeforeAt: intelFeedTop(), BeforeID: 1 << 62, MaxRows: 100})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return rows
+	}
+	axonLine := now.Add(-time.Minute).Format("[ 2006.01.02 15:04:05 ] ") + "Burzrujat > " + fusedBlob
+	base2 := db.InsertIntelReportParams{ChannelID: cid2, AuthorUserID: u.ID,
+		AuthorCharacterID: 91000301, Reporter: "Hostile One", CreatedAt: now, SeenAt: now}
+
+	// (b) No location on file for the poster: skipped, as such
+	// lines always were, and nothing is stored.
+	if res := app.postChatLines(ctx, base2, axonLine, "axon"); res.Posted != 0 || res.Duplicates != 0 || res.Skipped != 1 {
+		t.Errorf("fused line, no known location: %+v, want it skipped", res)
+	} else if len(res.SkippedLines) != 1 || res.SkippedLines[0] != axonLine {
+		t.Errorf("skipped lines kept as written: %q", res.SkippedLines)
+	}
+	if n := len(rowsOf2()); n != 0 {
+		t.Fatalf("the lines channel holds %d reports, want 0", n)
+	}
+
+	// (a) The poster located (the snapshot seeded above): the
+	// line is stored as the roster it is, on the poster's
+	// system, the sentence saying where the system came from.
+	base2.AuthorCharacterID = poster
+	base2.Reporter = "Burzrujat"
+	if res := app.postChatLines(ctx, base2, axonLine, "axon"); res.Posted != 1 || res.Skipped != 0 {
+		t.Fatalf("fused line on the poster's system: %+v, want one posted", res)
+	}
+	rows2 := rowsOf2()
+	if len(rows2) != 1 {
+		t.Fatalf("the lines channel holds %d reports, want 1", len(rows2))
+	}
+	rowA2 := rows2[0]
+	if rowA2.SystemID != sysID || rowA2.Kind != intelanalyze.KindLocal || rowA2.ScanID == "" {
+		t.Errorf("rescued report: system %d kind %q scan %q, want a local reading on the poster's system", rowA2.SystemID, rowA2.Kind, rowA2.ScanID)
+	}
+	if !strings.HasPrefix(rowA2.Text, "28 in local: 0 hostiles, 2 friendly (incl. you), 26 neutral") ||
+		!strings.Contains(rowA2.Text, "no scan attached, ships unknown") ||
+		!strings.Contains(rowA2.Text, "system from the reporter's current location") ||
+		strings.Contains(rowA2.Text, "AltorrAstria") {
+		t.Errorf("rescued report headline: %q", rowA2.Text)
+	}
+	if got := pilotIDs(rowA2); !sameIDs(got, wantA) {
+		t.Errorf("rescued report pilots:\n got %v\nwant %v", got, wantA)
+	}
+	// The same line again is the same roster: one report.
+	if res := app.postChatLines(ctx, base2, axonLine, "axon"); res.Posted != 0 || res.Duplicates != 1 {
+		t.Errorf("fused line re-sent: %+v, want a duplicate", res)
+	}
+
+	// (c) Plain chatter naming no system still skips.
+	if res := app.postChatLines(ctx, base2, "anyone got eyes on the in-gate tonight", "chat"); res.Posted != 0 || res.Skipped != 1 {
+		t.Errorf("chatter line: %+v, want it skipped", res)
+	}
+
+	// (d) The blob with a system named in the line is read as
+	// it always was: a roster on that system, no fallback note.
+	if res := app.postChatLines(ctx, base2, "Jita "+fusedBlob, "axon"); res.Posted != 1 {
+		t.Fatalf("fused line naming its system: %+v, want one posted", res)
+	}
+	rows2 = rowsOf2()
+	if len(rows2) != 2 {
+		t.Fatalf("the lines channel holds %d reports, want 2", len(rows2))
+	}
+	for _, r := range rows2 {
+		if r.SystemID == 30000142 {
+			if r.ScanID == "" || !strings.HasPrefix(r.Text, "28 in local:") || strings.Contains(r.Text, "reporter's current location") {
+				t.Errorf("named-system report: scan %q text %q", r.ScanID, r.Text)
+			}
+		}
+	}
 }
+

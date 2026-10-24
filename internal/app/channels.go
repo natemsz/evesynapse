@@ -872,8 +872,24 @@ func (app *Application) postChatLines(ctx context.Context, base db.InsertIntelRe
 		return res
 	}
 	o := intelchat.Parse(lines, app.systemLookup(ctx), now)
-	res.Skipped = o.NoSystem + o.Questions
-	res.SkippedLines = o.NoSystemLines
+	res.Skipped = o.Questions
+	// A line that named no system is offered the roster rescue
+	// before it counts as skipped: a local roster whose lines
+	// fused on the way in names no system the chat parser can
+	// find, and the analysis pipeline only ever re-reads
+	// reports that were stored -- dropped here, it is never
+	// read at all.
+	for i, nr := range o.NoSystemRead {
+		switch app.rescueRosterLine(ctx, base, nr, source) {
+		case rosterStored:
+			res.Posted++
+		case rosterDuplicate:
+			res.Duplicates++
+		default:
+			res.Skipped++
+			res.SkippedLines = append(res.SkippedLines, o.NoSystemLines[i])
+		}
+	}
 	for _, rep := range o.Reports {
 		p := base
 		p.Source, p.SystemID, p.Clear, p.Hostiles = source, rep.SystemID, rep.Clear, int32(min(max(rep.Hostiles, 0), 999))
@@ -901,6 +917,79 @@ func (app *Application) postChatLines(ctx context.Context, base db.InsertIntelRe
 		res.Posted++
 	}
 	return res
+}
+
+// A roster line's fate in rescueRosterLine.
+const (
+	rosterSkipped = iota
+	rosterStored
+	rosterDuplicate
+)
+
+// rescueRosterLine is the chat-lines path's roster rescue: a
+// line the chat parser could not place, for naming no system,
+// is read as the local roster its text holds -- the same
+// analysis pipeline reading (analyzeIntel and its roster
+// re-read) that re-reads a stored report, so the segmentation,
+// the bar and the reading are the one implementation. The
+// system is scanReportOf's precedence as far as chat lines
+// reach: the line names none the chat parser could find (that
+// is why it is here) and a chat line names none in a form, so
+// what remains is the poster's own current system, and the
+// sentence says so, as it does for a scan paste. No known
+// location, or no roster in the text, and the line is skipped
+// exactly as it always was. A rescued report is stored as the
+// re-read is stored (insertIntelReport): the reading as its
+// scan with the line kept as the paste, the sentence for a
+// headline, recognised again by its pilot set.
+func (app *Application) rescueRosterLine(ctx context.Context, base db.InsertIntelReportParams, nr intelchat.Report, source string) int {
+	sysID := app.posterSystemID(ctx, base.AuthorCharacterID)
+	if sysID == 0 {
+		return rosterSkipped
+	}
+	_, roster, _ := app.analyzeIntel(ctx, base.ChannelID, intelanalyze.Input{
+		System: sysID, Text: nr.Text, Hostiles: nr.Hostiles, Clear: nr.Clear, NoVisual: nr.NoVisual,
+	}, base.AuthorCharacterID, false)
+	if roster == nil {
+		return rosterSkipped
+	}
+	scanID, err := app.storeRosterScan(ctx, base.AuthorUserID, roster, nr.Text)
+	if err != nil {
+		logging.Errorf("channels: store rescued roster reading: %v", err)
+		return rosterSkipped
+	}
+	p := base
+	p.Source = source
+	p.SystemID = sysID
+	p.ScanID = scanID
+	p.Text = strings.TrimSuffix(roster.sentence, ".") + " — system from the reporter's current location."
+	p.Pilots = p.Text
+	if p.Hostiles == 0 {
+		p.Hostiles = scanHostiles(roster.result)
+	}
+	p.Clear = false
+	if nr.Speaker != "" {
+		p.Reporter = clipRunes(nr.Speaker, 40)
+	}
+	if !nr.At.IsZero() && nr.At.Before(base.CreatedAt.Add(time.Minute)) && nr.At.After(base.CreatedAt.Add(-intelRetention)) {
+		p.SeenAt = nr.At
+	}
+	a := roster.analysis
+	p.Kind = a.Kind
+	if raw, err := json.Marshal(a); err == nil {
+		p.Analysis = string(raw)
+	}
+	p.AnalysisPending = false
+	if set := app.rosterSetOf(ctx, p.Text, p.Analysis, p.ScanID); set != nil {
+		if app.rosterDuplicate(ctx, p.ChannelID, p.SystemID, 0, p.SeenAt, set) > 0 {
+			return rosterDuplicate
+		}
+	}
+	if _, err := app.queries.InsertIntelReport(ctx, p); err != nil {
+		logging.Errorf("channels: insert rescued roster report: %v", err)
+		return rosterSkipped
+	}
+	return rosterStored
 }
 
 // handleScanPost is POST /intel/scan/{id}/post: a scan from the scan

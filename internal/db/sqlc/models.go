@@ -408,6 +408,16 @@ type IntelChannelRule struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
+type IntelGroupComposite struct {
+	GroupID    int64     `json:"group_id"`
+	ChannelID  int64     `json:"channel_id"`
+	SystemID   int64     `json:"system_id"`
+	Composite  string    `json:"composite"`
+	Previous   string    `json:"previous"`
+	Members    int32     `json:"members"`
+	ComputedAt time.Time `json:"computed_at"`
+}
+
 type IntelPairingCode struct {
 	ID        int64        `json:"id"`
 	UserID    int64        `json:"user_id"`
@@ -450,6 +460,7 @@ type IntelReport struct {
 	Kind              string    `json:"kind"`
 	Analysis          string    `json:"analysis"`
 	AnalysisPending   bool      `json:"analysis_pending"`
+	GroupID           int64     `json:"group_id"`
 }
 
 type IntelToken struct {

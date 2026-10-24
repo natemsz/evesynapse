@@ -34,6 +34,28 @@
     </div>
   </div>
 
+  {{if .Rail}}
+  <aside class="wb-rail" aria-label="Related reports">
+    <div class="wb-rail-head">
+      <h3>Related reports</h3>
+      {{if .RailKinds}}<span class="wb-rail-kinds">{{.RailKinds}}</span>{{end}}
+      <span class="wb-rail-note">This page shows the group picture</span>
+    </div>
+    <ul class="wb-rail-list">
+      {{range .Rail}}<li class="wb-rail-item{{if .Here}} is-here{{end}}">
+        <a href="/intel/workbench/{{.ReportID}}/">
+          <span class="wb-rail-kind">{{.Kind}}</span>
+          <span class="wb-rail-when">{{.Ago}}</span>
+          {{if .Reporter}}<span class="wb-rail-by">{{.Reporter}}</span>{{end}}
+          {{if .Delta}}<span class="wb-rail-delta">{{.Delta}}</span>{{end}}
+          {{if .Here}}<span class="wb-rail-here">(here)</span>{{end}}
+        </a>
+      </li>{{end}}
+      {{if .RailMore}}<li class="wb-rail-more">+ {{.RailMore}} earlier in this group</li>{{end}}
+    </ul>
+  </aside>
+  {{end}}
+
   <nav class="wb-tabs" aria-label="Workbench views">
     <button type="button" class="wb-tab is-active" data-wb-tab="intel">Workbench</button>
     <button type="button" class="wb-tab" data-wb-tab="diff">Timeline &amp; Diff</button>
@@ -204,7 +226,8 @@
 
   <section data-wb-view="diff" hidden>
     {{if .HasPrev}}
-    <p class="wb-meta">Compared against the previous report in this channel · {{.PrevAgo}}{{if .PrevBy}} · reported by {{.PrevBy}}{{end}}</p>
+    {{if .DiffGroup}}<p class="wb-meta">Compared against the group's previous picture · {{.PrevAgo}}{{if .PrevBy}} · newest report then by {{.PrevBy}}{{end}}</p>
+    {{else}}<p class="wb-meta">Compared against the previous report in this channel · {{.PrevAgo}}{{if .PrevBy}} · reported by {{.PrevBy}}{{end}}</p>{{end}}
     <h4 class="wb-sub-h">Hull changes</h4>
     {{if .HullDeltas}}<ul class="wb-deltas">
       {{range .HullDeltas}}<li class="wb-delta wb-delta-{{.Dir}}">
@@ -221,6 +244,7 @@
         {{else}}<span class="wb-d-sign wb-d-left">− Left:</span> {{if .ID}}<a href="/pilot/?character={{.ID}}">{{.Name}}</a>{{else}}{{.Name}}{{end}}{{end}}
       </li>{{end}}
     </ul>{{else}}<p class="wb-empty">No pilot changes against the previous report.</p>{{end}}
+    {{else if .Grouped}}<p class="wb-empty">This is the group's first picture: no earlier group picture to compare against.</p>
     {{else}}<p class="wb-empty">No earlier report in this channel and system to compare against.</p>{{end}}
   </section>
 

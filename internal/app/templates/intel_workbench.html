@@ -15,7 +15,6 @@
 {{else}}
   <header class="wb-head">
     <div class="wb-head-main">
-      <p class="wb-snap-label">Active Snapshot</p>
       <h2 class="wb-snap">{{.Snapshot}}</h2>
       <p class="wb-meta">
         <span>Captured {{.Ago}}</span>
@@ -28,7 +27,7 @@
       {{if .Headline}}<p class="wb-headline prose">{{.Headline}}</p>{{end}}
     </div>
     <div class="wb-head-actions">
-      {{if or .CanPost .FromScan}}<button type="button" class="btn wb-open-parser">Paste New Scan</button>{{end}}
+      {{if or .CanPost .FromScan}}<button type="button" class="btn wb-open-parser">Paste a scan</button>{{end}}
     </div>
   </header>
 
@@ -41,18 +40,18 @@
   <section data-wb-view="intel">
     <div class="wb-boxes">
       <article class="wb-box">
-        <h3><span class="wb-box-n">1.</span> Grid &amp; Range Split {{if .HasDScan}}<span class="wb-chip">D-Scan Parser</span>{{end}}</h3>
+        <h3><span class="wb-box-n">1.</span> Grid &amp; Range Split</h3>
         {{if .HasDScan}}
         <div class="wb-split-nums">
           <div><span class="wb-num wb-on">{{.OnGrid}}</span><span class="wb-num-l">On-Grid</span><span class="wb-num-s">&lt;10,000 km</span></div>
           <div><span class="wb-num wb-off">{{.OffGrid}}</span><span class="wb-num-l">Off-Grid</span><span class="wb-num-s">AU / Out of range</span></div>
-          <div><span class="wb-num wb-dep">{{.Deploy}}</span><span class="wb-num-l">Probes/Bub</span><span class="wb-num-s">Deployables</span></div>
+          <div><span class="wb-num wb-dep">{{.Deploy}}</span><span class="wb-num-l">Deployables</span></div>
         </div>
         <div class="wb-bar" role="img" aria-label="On grid {{.OnGrid}}, off grid {{.OffGrid}}, deployables {{.Deploy}}">
           <span class="wb-bar-on" data-w="{{.BarOn}}"></span><span class="wb-bar-off" data-w="{{.BarOff}}"></span><span class="wb-bar-dep" data-w="{{.BarDep}}"></span>
         </div>
         <p class="wb-box-foot">Point-Blank (&lt;50 km): <strong>{{.PointBlank}} hulls</strong>
-          <button type="button" class="wb-mini" data-wb-grid="all">Show All</button></p>
+          <button type="button" class="wb-mini" data-wb-grid="all">Show all</button></p>
         {{else}}<p class="wb-empty">No d-scan reading in this report.</p>{{end}}
       </article>
 
@@ -67,7 +66,7 @@
       </article>
 
       <article class="wb-box">
-        <h3><span class="wb-box-n">3.</span> Local &amp; Auth Standings</h3>
+        <h3><span class="wb-box-n">3.</span> Local Standings</h3>
         {{if .HasCounts}}
         <div class="wb-split-nums">
           <div><span class="wb-num wb-hostile">{{.Hostile}}</span><span class="wb-num-l">Hostile</span></div>
@@ -120,7 +119,7 @@
       </div>
       <div data-wb-dpanel="aggregated">
         <table class="wb-table">
-          <thead><tr><th>Hull &amp; Class</th><th>Tactical Role</th><th>Count</th><th>Grid &amp; Range</th></tr></thead>
+          <thead><tr><th>Hull &amp; Class</th><th>Role</th><th>Count</th><th>Grid &amp; Range</th></tr></thead>
           <tbody>
           {{range .Types}}<tr class="wb-clickable" data-wb-open-hull="{{.TypeID}}" tabindex="0" data-on="{{.Grid}}" data-n="{{.N}}" data-dep="{{if eq .RoleKey "probes"}}1{{else}}0{{end}}">
             <td><span class="wb-t-name">{{.Name}}</span><span class="wb-t-sub">{{.Sub}}</span></td>
@@ -133,7 +132,7 @@
       </div>
       <div data-wb-dpanel="individual" hidden>
         <table class="wb-table">
-          <thead><tr><th>Hull &amp; Class</th><th>Tactical Role</th><th>Distance</th></tr></thead>
+          <thead><tr><th>Hull &amp; Class</th><th>Role</th><th>Distance</th></tr></thead>
           <tbody>
           {{range .Rows}}<tr class="wb-clickable" data-wb-open-hull="{{.TypeID}}" tabindex="0" data-on="{{.Grid}}" data-n="1" data-dep="{{if eq .RoleKey "probes"}}1{{else}}0{{end}}">
             <td><span class="wb-t-name">{{.Name}}</span><span class="wb-t-sub">{{.Sub}}</span></td>
@@ -201,19 +200,18 @@
   </section>
 
   <section data-wb-view="diff" hidden>
-    <h3 class="wb-view-h">Snapshot Timeline &amp; Delta Comparison</h3>
     {{if .HasPrev}}
     <p class="wb-meta">Compared against the previous report in this channel · {{.PrevAgo}}{{if .PrevBy}} · reported by {{.PrevBy}}{{end}}</p>
-    <h4 class="wb-sub-h">D-Scan Hull Deltas (Current vs Previous)</h4>
+    <h4 class="wb-sub-h">Hull changes</h4>
     {{if .HullDeltas}}<ul class="wb-deltas">
       {{range .HullDeltas}}<li class="wb-delta wb-delta-{{.Dir}}">
-        {{if eq .Dir "added"}}<span class="wb-d-sign wb-d-add">+ Added on scan:</span> {{.Name}}{{if gt .N 1}} ×{{.N}}{{end}}
+        {{if eq .Dir "added"}}<span class="wb-d-sign wb-d-add">+ Added:</span> {{.Name}}{{if gt .N 1}} ×{{.N}}{{end}}
         {{else if eq .Dir "left"}}<span class="wb-d-sign wb-d-left">− Left:</span> {{.Name}}{{if gt .N 1}} ×{{.N}}{{end}}
         {{else}}<span class="wb-d-sign">Δ Grid:</span> {{.Name}}{{end}}
         {{if .Text}}<span class="wb-d-text">{{.Text}}</span>{{end}}
       </li>{{end}}
     </ul>{{else}}<p class="wb-empty">No hull changes against the previous report.</p>{{end}}
-    <h4 class="wb-sub-h">Local Channel Deltas (+Joined / −Left)</h4>
+    <h4 class="wb-sub-h">Local changes</h4>
     {{if .PilotDeltas}}<ul class="wb-deltas">
       {{range .PilotDeltas}}<li class="wb-delta wb-delta-{{.Dir}}">
         {{if eq .Dir "joined"}}<span class="wb-d-sign wb-d-add">+ Joined:</span> {{if .ID}}<a href="/pilot/?character={{.ID}}">{{.Name}}</a>{{else}}{{.Name}}{{end}}{{if .Bucket}} <span class="wb-d-bucket">({{.Bucket}})</span>{{end}}
@@ -240,7 +238,7 @@
   <div class="modal-backdrop wb-shade" data-wb-hull-drawer="{{.TypeID}}" hidden>
   <aside class="wb-drawer" aria-label="Hull inspector">
     <div class="wb-drawer-head">
-      <div><p class="wb-drawer-kind">Hull Inspector</p><h3>{{.Title}}</h3><p class="wb-box-sub">{{.Class}} · {{.Role}}</p></div>
+      <div><h3>{{.Title}}</h3><p class="wb-box-sub">{{.Class}} · {{.Role}}</p></div>
       <button type="button" class="wb-x" data-wb-close aria-label="Close inspector">✕</button>
     </div>
     {{if or .Slots .Warp .Mass .Sensor}}<dl class="wb-specs">
@@ -249,9 +247,9 @@
       {{if .Mass}}<div><dt>Mass</dt><dd>{{.Mass}}</dd></div>{{end}}
       {{if .Sensor}}<div><dt>Sensor</dt><dd>{{.Sensor}}</dd></div>{{end}}
     </dl>{{end}}
-    {{if .Caps}}<h4 class="wb-sub-h">Hull Role Capabilities</h4><ul class="wb-caps">{{range .Caps}}<li>{{.}}</li>{{end}}</ul>{{end}}
+    {{if .Caps}}<h4 class="wb-sub-h">Capabilities</h4><ul class="wb-caps">{{range .Caps}}<li>{{.}}</li>{{end}}</ul>{{end}}
     {{if .Desc}}<p class="wb-desc prose">{{.Desc}}</p>{{end}}
-    {{if .Instances}}<h4 class="wb-sub-h">Instances in This Scan</h4><ul class="wb-instances">{{range .Instances}}<li><span>{{.Name}}</span><span>{{.Dist}}{{if .On}} · on grid{{end}}</span></li>{{end}}</ul>{{end}}
+    {{if .Instances}}<h4 class="wb-sub-h">Instances in this scan</h4><ul class="wb-instances">{{range .Instances}}<li><span>{{.Name}}</span><span>{{.Dist}}{{if .On}} · on grid{{end}}</span></li>{{end}}</ul>{{end}}
   </aside>
   </div>
   {{end}}
@@ -259,7 +257,7 @@
   <div class="modal-backdrop wb-shade" data-wb-pilot-drawer="{{.ID}}" hidden>
   <aside class="wb-drawer" aria-label="Pilot dossier">
     <div class="wb-drawer-head">
-      <div><p class="wb-drawer-kind">Pilot Dossier</p><h3>{{.Name}}</h3>{{if .Standing}}<p class="wb-box-sub">{{.Standing}}</p>{{end}}</div>
+      <div><h3>{{.Name}}</h3>{{if .Standing}}<p class="wb-box-sub">{{.Standing}}</p>{{end}}</div>
       <button type="button" class="wb-x" data-wb-close aria-label="Close dossier">✕</button>
     </div>
     {{if or .AgeLine .Sec}}<dl class="wb-specs">
@@ -277,17 +275,17 @@
   {{if or .CanPost .FromScan}}
   <div class="modal-backdrop wb-shade" data-wb-parser hidden
     {{if .FromScan}}data-mode="scan" data-post="/intel/scan/" data-system-name="{{.SysName}}"{{else}}data-mode="channel" data-post="/intel/channels/{{.ChannelID}}/report" data-system-id="{{.SystemID}}"{{end}}>
-  <aside class="wb-drawer wb-parser" aria-label="Paste a new scan">
+  <aside class="wb-drawer wb-parser" aria-label="Paste a scan">
     <div class="wb-drawer-head">
-      <div><p class="wb-drawer-kind">Multi-Format Auto-Parser</p><h3>Raw Clipboard Input</h3></div>
+      <div><h3>Paste a scan</h3></div>
       <button type="button" class="wb-x" data-wb-close aria-label="Close parser">✕</button>
     </div>
-    <p class="wb-box-sub">Paste a raw in-game Directional Scan, Local Pilot List, or Probe Scanner readout — or a mix of them; the parser recognises which is which{{if .SysName}}. It is reported on {{.SysName}}, this snapshot's system{{end}}.</p>
-    <label class="wb-ta-label">Clipboard Paste<textarea data-wb-paste rows="12" placeholder="Paste a d-scan, a local pilot list, probe results, or a mix — the parser sorts it out…"></textarea></label>
+    <p class="wb-box-sub">D-scan, local, probe results, or overview, or a mix. The parser sorts it out. {{if .FromScan}}It posts as a new scan{{else}}It posts to this channel{{end}}{{if .SysName}}, on {{.SysName}}{{end}}.</p>
+    <div class="wb-ta-label"><textarea data-wb-paste rows="12" aria-label="Paste a scan" placeholder="Paste here…"></textarea></div>
     <p class="wb-parser-msg" data-wb-parser-msg hidden></p>
     <div class="wb-parser-actions">
-      <button type="button" class="wb-mini" data-wb-clear-inputs>Clear Inputs</button>
-      <button type="button" class="btn" data-wb-parse>{{if .FromScan}}Parse Scan{{else}}Parse &amp; Post Report{{end}}</button>
+      <button type="button" class="wb-mini" data-wb-clear-inputs>Clear</button>
+      <button type="button" class="btn" data-wb-parse>{{if .FromScan}}Post scan{{else}}Post report{{end}}</button>
     </div>
   </aside>
   </div>

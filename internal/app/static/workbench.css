@@ -14,7 +14,6 @@
 
 /* Header */
 .wb-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; flex-wrap: wrap; }
-.wb-snap-label { margin: 0; font-size: 0.72rem; letter-spacing: 0.22em; text-transform: uppercase; color: var(--muted); }
 .wb-snap { margin: 0.15rem 0 0; font-family: 'Rajdhani', sans-serif; font-weight: 700; font-size: 1.7rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-bright); }
 .wb-meta { margin: 0.3rem 0 0; color: var(--muted); font-size: 0.92rem; display: flex; flex-wrap: wrap; gap: 0.35rem; }
 .wb-headline { margin: 0.55rem 0 0; max-width: 62ch; font-size: 1.05rem; color: var(--text); }
@@ -35,7 +34,6 @@
 .wb-box { background: var(--row-alt); border: 1px solid var(--box-edge); border-radius: var(--r-lg); padding: 0.8rem 0.9rem; }
 .wb-box h3 { margin: 0 0 0.6rem; font-size: 0.78rem; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text); display: flex; align-items: center; gap: 0.45rem; flex-wrap: wrap; }
 .wb-box-n { color: var(--accent); }
-.wb-chip { font-size: 0.66rem; letter-spacing: 0.1em; color: var(--accent); border: 1px solid var(--glass-edge); border-radius: var(--r-xs); padding: 0.08rem 0.4rem; }
 .wb-split-nums { display: flex; gap: 1rem; flex-wrap: wrap; }
 .wb-split-nums > div { display: flex; flex-direction: column; }
 .wb-num { font-family: 'JetBrains Mono', monospace; font-size: 1.45rem; line-height: 1.1; color: var(--text-bright); }
@@ -149,7 +147,6 @@
 .wb-drawer { height: 100%; width: min(26rem, 94vw); background: var(--panel); border-left: 1px solid var(--glass-edge); padding: 1.1rem 1.2rem; overflow-y: auto; box-shadow: -0.5rem 0 2rem rgba(0, 0, 0, 0.45); }
 .wb-drawer-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 0.8rem; }
 .wb-drawer-head h3 { margin: 0.1rem 0 0; font-family: 'Rajdhani', sans-serif; font-size: 1.4rem; font-weight: 700; color: var(--text-bright); }
-.wb-drawer-kind { margin: 0; font-size: 0.68rem; letter-spacing: 0.2em; text-transform: uppercase; color: var(--accent); }
 .wb-x { background: none; border: 1px solid var(--box-edge); border-radius: var(--r-xs); color: var(--muted); font: inherit; padding: 0.15rem 0.5rem; cursor: pointer; flex: none; }
 .wb-x:hover { color: var(--text-bright); border-color: var(--glass-edge); }
 .wb-specs { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem 1rem; margin: 1rem 0 0; }

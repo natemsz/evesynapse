@@ -204,7 +204,7 @@
         if (j.ok) window.location.reload();
       }).catch(function () {
         parseBtn.disabled = false;
-        showMsg("That did not go through — please try again.");
+        showMsg("That did not go through. Please try again.");
       });
     });
   }

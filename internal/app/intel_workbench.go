@@ -538,7 +538,7 @@ func secClassWord(sec float64) string {
 func wbDist(km float64) string {
 	switch {
 	case km < 0:
-		return "—"
+		return "-"
 	case km < 1:
 		return strconv.FormatFloat(km*1000, 'f', 0, 64) + " m"
 	case km < scan.AUKm:

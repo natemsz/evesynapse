@@ -145,9 +145,9 @@ func TestWorkbenchReportPage(t *testing.T) {
 		"Sabre", "Guardian", "Interdictors / HICs", "Mobile Warp Disruptor",
 		"Wb Pilot One", "Wb Pilot Two", "Fixture Alliance", "Fixture Corp [FIXC]",
 		"2 corps in history", "Young alt",
-		"Added on scan", "Joined",
+		"+ Added:", "Joined",
 		"WB-GATE", "148",
-		"Paste New Scan",
+		"Paste a scan",
 	)
 
 	outCookie := apptest.SessionCookie(t, rig, outsider.ID, 90000402, "Wb Outsider")

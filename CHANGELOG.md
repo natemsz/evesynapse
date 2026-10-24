@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.5.9.0] - 2026-10-24
+
+Automated build of EveSynapse v0.5.9.0. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+
+## What's Changed
+### 🚀 Features
+* Intel: residue step reads the leftover spans of settled reports with a local reader by @natemsz in https://github.com/natemsz/evesynapse/pull/658
+### Other Changes
+* docs(changelog): review changelog for v0.5.8.3 by @github-actions[bot] in https://github.com/natemsz/evesynapse/pull/657
+* Landing menu: frost on its own backdrop-filter, bar glass on its own layer, thinner panel edge by @natemsz in https://github.com/natemsz/evesynapse/pull/659
+
+
+**Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.8.3...v0.5.9.0
+
 ## [v0.5.8.3] - 2026-10-24
 
 Automated build of EveSynapse v0.5.8.3. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).

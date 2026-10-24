@@ -99,7 +99,7 @@ func TestIntelChannels(t *testing.T) {
 	for _, r := range feed.Reports {
 		bySource[r.Source] = append(bySource[r.Source], r)
 	}
-	if f := bySource["form"]; len(f) != 1 || f[0].SystemName != "Jita" || f[0].Hostiles != 3 || f[0].Reporter != "Corp Mate" || f[0].Text != "Bad Guy" {
+	if f := bySource["scan"]; len(f) != 1 || f[0].SystemName != "Jita" || f[0].Hostiles != 3 || f[0].Reporter != "Corp Mate" || f[0].Text != "1 in local: 0 hostiles, 0 friendly, 1 neutral — no scan attached, ships unknown." {
 		t.Errorf("the form report: %+v", f)
 	}
 	if c := bySource["chat"]; len(c) != 2 || c[1].Reporter != "Scout" || c[1].Hostiles != 2 || c[1].At >= c[0].At {
@@ -220,7 +220,7 @@ func TestIntelFeedAccess(t *testing.T) {
 		}
 		return d.Reports
 	}
-	if rs := feed(mate); len(rs) != 1 || rs[0].Text != "Home Guy" || rs[0].ChName != "Home intel" {
+	if rs := feed(mate); len(rs) != 1 || rs[0].Text != "1 in local: 0 hostiles, 0 friendly, 0 neutral, 1 unresolved — no scan attached, ships unknown." || rs[0].ChName != "Home intel" {
 		t.Errorf("the mate's feed carries only the granted channel, named: %+v", rs)
 	}
 	if rs := feed(owner); len(rs) != 2 {
@@ -229,7 +229,7 @@ func TestIntelFeedAccess(t *testing.T) {
 	if rs := feed(stranger); len(rs) != 0 {
 		t.Errorf("a stranger's feed is empty: %+v", rs)
 	}
-	if code, body := getPage(t, app, mate, "/intel/feed/"); code != http.StatusOK || !strings.Contains(body, "Home Guy") || strings.Contains(body, "Secret Guy") {
+	if code, body := getPage(t, app, mate, "/intel/feed/"); code != http.StatusOK || !strings.Contains(body, "1 in local: 0 hostiles, 0 friendly, 0 neutral, 1 unresolved — no scan attached, ships unknown.") || strings.Contains(body, "Secret Guy") {
 		t.Errorf("the mate's feed page: %d, shows the granted channel's report only", code)
 	}
 	req := httptest.NewRequest(http.MethodGet, "/intel/feed/", nil)

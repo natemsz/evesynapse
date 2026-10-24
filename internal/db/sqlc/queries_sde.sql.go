@@ -2036,6 +2036,44 @@ func (q *Queries) ListSDETypeIDsByIDs(ctx context.Context, typeIds []int64) ([]i
 	return items, nil
 }
 
+const listSDETypeNames = `-- name: ListSDETypeNames :many
+SELECT t.type_id, t.name
+FROM sde_types t
+ORDER BY t.published DESC, t.type_id
+`
+
+type ListSDETypeNamesRow struct {
+	TypeID int64  `json:"type_id"`
+	Name   string `json:"name"`
+}
+
+// Every type by name, published or not, for reading intel
+// reports: a type's exact name in free-form text is the thing,
+// never a pilot. Unpublished types are in: the client shows
+// them on scan (a starbase's force field, 16103).
+func (q *Queries) ListSDETypeNames(ctx context.Context) ([]ListSDETypeNamesRow, error) {
+	rows, err := q.db.QueryContext(ctx, listSDETypeNames)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListSDETypeNamesRow
+	for rows.Next() {
+		var i ListSDETypeNamesRow
+		if err := rows.Scan(&i.TypeID, &i.Name); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listSDETypePhysicsByIDs = `-- name: ListSDETypePhysicsByIDs :many
 SELECT type_id, mass, volume, capacity, portion_size FROM sde_type_physics
 WHERE type_id = ANY($1::bigint[])

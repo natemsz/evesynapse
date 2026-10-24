@@ -71,6 +71,44 @@ func (app *Application) intelShips(ctx context.Context) map[string]intelShip {
 	return d.ships
 }
 
+type intelType struct {
+	id   int64
+	name string
+}
+
+type intelTypeDict struct {
+	mu     sync.Mutex
+	types  map[string]intelType
+	loaded time.Time
+}
+
+var intelTypeDicts sync.Map // *Application -> *intelTypeDict
+
+// intelTypes is every type by lower-cased name, loaded from the
+// SDE and kept a day, as intelShips loads the ships: a report's
+// exact type names are the things named, not pilots. Rows arrive
+// published first, so a name shared by two types keeps the
+// published one's ID.
+func (app *Application) intelTypes(ctx context.Context) map[string]intelType {
+	v, _ := intelTypeDicts.LoadOrStore(app, &intelTypeDict{})
+	d := v.(*intelTypeDict)
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.types == nil || time.Since(d.loaded) > 24*time.Hour {
+		if rows, err := app.queries.ListSDETypeNames(ctx); err == nil && len(rows) > 0 {
+			d.types = make(map[string]intelType, len(rows))
+			for _, r := range rows {
+				l := strings.ToLower(r.Name)
+				if _, dup := d.types[l]; !dup {
+					d.types[l] = intelType{id: r.TypeID, name: r.Name}
+				}
+			}
+			d.loaded = time.Now()
+		}
+	}
+	return d.types
+}
+
 // intelSide is a channel's own side: the corporations and alliances
 // whose pilots count as friendly in its reports.
 type intelSide struct {
@@ -123,14 +161,27 @@ func (app *Application) pilotAffiliation(ctx context.Context, id int64) (corp, a
 // missing collects the pilots whose affiliation is not known.
 func (app *Application) intelDict(ctx context.Context, channelID int64, missing map[int64]bool) intelanalyze.Dict {
 	ships := app.intelShips(ctx)
+	types := app.intelTypes(ctx)
 	systems := app.systemLookup(ctx)
 	side := app.intelSideOf(ctx, channelID)
+	// The channel's known hostiles are its set standing: a pilot
+	// on the watch list reads red whatever their affiliation says.
+	watch := map[int64]bool{}
+	if rows, err := app.queries.ListIntelWatch(ctx, []int64{channelID}); err == nil {
+		for _, r := range rows {
+			watch[r.CharacterID] = true
+		}
+	}
 	neighbours := map[int64]map[int64]bool{}
 	pilots := map[string][3]any{}
 	return intelanalyze.Dict{
 		Ship: func(l string) (int64, string, string, bool) {
 			s, ok := ships[l]
 			return s.id, s.name, s.class, ok
+		},
+		Type: func(l string) (int64, string, bool) {
+			t, ok := types[l]
+			return t.id, t.name, ok
 		},
 		Pilot: func(l string) (int64, string, bool, bool) {
 			if p, ok := pilots[l]; ok {
@@ -162,9 +213,9 @@ func (app *Application) intelDict(ctx context.Context, channelID int64, missing 
 				if missing != nil {
 					missing[id] = true
 				}
-				return false, false
+				return false, watch[id]
 			}
-			return side.corps[corp] || (alliance > 0 && side.alliances[alliance]), false
+			return side.corps[corp] || (alliance > 0 && side.alliances[alliance]), watch[id]
 		},
 	}
 }

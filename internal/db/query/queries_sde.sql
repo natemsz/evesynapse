@@ -621,5 +621,14 @@ FROM sde_types t
 JOIN sde_groups g ON g.group_id = t.group_id
 WHERE g.category_id = 6 AND t.published = 1;
 
+-- Every type by name, published or not, for reading intel
+-- reports: a type's exact name in free-form text is the thing,
+-- never a pilot. Unpublished types are in: the client shows
+-- them on scan (a starbase's force field, 16103).
+-- name: ListSDETypeNames :many
+SELECT t.type_id, t.name
+FROM sde_types t
+ORDER BY t.published DESC, t.type_id;
+
 -- name: ListSDESystemNeighbours :many
 SELECT to_system_id FROM sde_system_jumps WHERE from_system_id = $1;

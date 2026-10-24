@@ -12,9 +12,11 @@
 package intelanalyze
 
 import (
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
+	"unicode"
 )
 
 // Kinds of report, most pressing first (Rank). Stored: never rename.
@@ -123,6 +125,12 @@ type Input struct {
 type Dict struct {
 	// Ship finds a ship type by its exact name.
 	Ship func(lower string) (id int64, name, class string, ok bool)
+	// Type finds any inventory type by its exact name. A string
+	// that is a type's name is the thing, not a pilot: EVE has
+	// characters named after items ("Force Field", "Ibis"), and in
+	// free-form text the item reading wins. Ships are asked first,
+	// for their class.
+	Type func(lower string) (id int64, name string, ok bool)
 	// Pilot finds a pilot by exact name; known false is "no such
 	// pilot" (asked before), and both false is "not known yet".
 	Pilot func(lower string) (id int64, name string, ok, known bool)
@@ -148,7 +156,7 @@ var keywords = map[string]string{
 	"dic": "dictor", "dics": "dictor", "dictor": "dictor", "dictors": "dictor", "hic": "dictor", "hics": "dictor",
 	"recon": "hunter", "recons": "hunter", "t3": "hunter", "t3c": "hunter", "cloaky": "cloaky", "cloakies": "cloaky", "cloaked": "cloaky",
 	"neut": "local", "neuts": "local", "red": "local", "reds": "local", "local": "local", "spike": "local", "docked": "docked", "dock": "docked",
-	"gate": "", "on": "", "at": "", "in": "", "and": "", "the": "", "x": "", "+": "", "-": "", "/": "", "with": "",
+	"gate": "", "on": "", "at": "", "in": "", "and": "", "the": "", "x": "", "+": "", "-": "", "—": "", "–": "", "/": "", "with": "",
 }
 
 // Nicknamed classes, as ships the report names.
@@ -199,18 +207,27 @@ func Analyze(in Input, d Dict) Analysis {
 	}
 	seenPilot := map[int64]bool{}
 	for _, seg := range segs {
-		// A whole segment that is a pilot's name is one pilot.
 		whole := clean(strings.Join(seg, " "))
-		if id, name, ok, _ := lookupPilot(d, whole); ok && len(seg) <= 3 {
-			if !seenPilot[id] {
-				seenPilot[id] = true
-				a.Pilots = append(a.Pilots, Pilot{ID: id, Name: name})
+		if len(seg) <= 3 {
+			// A whole segment that is a type's name is the thing
+			// (asked before pilots: a character may share the
+			// name), and one that is a pilot's name is one pilot.
+			if s, ok := lookupType(d, whole); ok {
+				addShip(s, 0)
+				continue
 			}
-			continue
+			if id, name, ok, _ := lookupPilot(d, whole); ok {
+				if !seenPilot[id] {
+					seenPilot[id] = true
+					a.Pilots = append(a.Pilots, Pilot{ID: id, Name: name})
+				}
+				continue
+			}
 		}
 		// Otherwise word by word: ships (up to three words, longest
 		// first), gates ("X gate"), counts, keywords, then pilots.
 		used := make([]bool, len(seg))
+		markLocation(seg, used)
 		pending := 0 // a count said before its ship ("2 sabres")
 		for i := 0; i < len(seg); i++ {
 			if used[i] {
@@ -239,26 +256,36 @@ func Analyze(in Input, d Dict) Analysis {
 						break
 					}
 				}
-				if d.Ship != nil {
-					for _, cand := range []string{phrase, strings.TrimSuffix(phrase, "s")} {
-						if id, name, class, ok := d.Ship(cand); ok {
-							nn := pending
-							// "sabre x2" / "sabre 2x"
-							if i+n < len(seg) {
-								if c, ok := count(clean(seg[i+n])); ok {
-									nn = c
-									used[i+n] = true
-								}
-							}
-							addShip(Ship{TypeID: id, Name: name, Class: class}, nn)
-							pending = 0
-							for k := i; k < i+n; k++ {
-								used[k] = true
-							}
-							matched = true
-							break
+				// A ship by name, or any other type by name: the
+				// thing, claimed before the words can fall through
+				// to pilots.
+				var ship Ship
+				var isShip bool
+				for _, cand := range []string{phrase, strings.TrimSuffix(phrase, "s")} {
+					if id, name, class, ok := lookupShip(d, cand); ok {
+						ship, isShip = Ship{TypeID: id, Name: name, Class: class}, true
+						break
+					}
+					if id, name, ok := lookupInvType(d, cand); ok {
+						ship, isShip = Ship{TypeID: id, Name: name}, true
+						break
+					}
+				}
+				if isShip {
+					nn := pending
+					// "sabre x2" / "sabre 2x"
+					if i+n < len(seg) {
+						if c, ok := count(clean(seg[i+n])); ok {
+							nn = c
+							used[i+n] = true
 						}
 					}
+					addShip(ship, nn)
+					pending = 0
+					for k := i; k < i+n; k++ {
+						used[k] = true
+					}
+					matched = true
 				}
 			}
 			if matched {
@@ -335,7 +362,165 @@ func lookupPilot(d Dict, lower string) (int64, string, bool, bool) {
 	if d.Pilot == nil || lower == "" || len(lower) > 37 {
 		return 0, "", false, true
 	}
+	if !pilotCandidate(lower) {
+		// Settled, not unknown: never asked about, never a pilot.
+		return 0, "", false, true
+	}
 	return d.Pilot(lower)
+}
+
+func lookupShip(d Dict, lower string) (int64, string, string, bool) {
+	if d.Ship == nil || lower == "" {
+		return 0, "", "", false
+	}
+	return d.Ship(lower)
+}
+
+func lookupInvType(d Dict, lower string) (int64, string, bool) {
+	if d.Type == nil || lower == "" {
+		return 0, "", false
+	}
+	return d.Type(lower)
+}
+
+// lookupType finds a whole phrase as a thing: a ship (for its
+// class), else any inventory type. A phrase that misses is tried
+// once more without a trailing "s", the plural.
+func lookupType(d Dict, phrase string) (Ship, bool) {
+	for _, cand := range []string{phrase, strings.TrimSuffix(phrase, "s")} {
+		if id, name, class, ok := lookupShip(d, cand); ok {
+			return Ship{TypeID: id, Name: name, Class: class}, true
+		}
+		if id, name, ok := lookupInvType(d, cand); ok {
+			return Ship{TypeID: id, Name: name}, true
+		}
+	}
+	return Ship{}, false
+}
+
+// placeNouns are words for places and things in space, and the
+// distance units a mangled paste leaves behind. Bare, in free-form
+// text, they are never a pilot's name -- EVE has characters called
+// "Station" and "Moon", and a scout who writes "station" means the
+// station. (Typed lists -- a pasted Local, a killmail -- resolve
+// names elsewhere and are not bound by this.)
+var placeNouns = map[string]bool{
+	"station": true, "moon": true, "planet": true, "sun": true,
+	"star": true, "belt": true, "stargate": true, "outpost": true,
+	"citadel": true, "tower": true, "structure": true,
+	"km": true, "au": true,
+}
+
+// reportWords are the vocabulary of a report itself: standings
+// and the scaffolding of the interpreted sentence a scan report
+// carries ("hostiles", "neutral", "on grid", "ships unknown").
+// They are read as words, never as names -- a pilot named after
+// one resolves in typed lists, not in free-form text, exactly as
+// with the place nouns above.
+var reportWords = map[string]bool{
+	"hostile": true, "hostiles": true, "neutral": true, "neutrals": true,
+	"friendly": true, "friendlies": true, "unclassified": true,
+	"unresolved": true, "grid": true, "ship": true, "ships": true,
+	"scan": true, "attached": true, "unknown": true, "no": true,
+	"incl": true, "you": true, "more": true, "killed": true,
+	"here": true, "this": true, "week": true, "system": true,
+	"hot": true, "kills": true, "npc": true, "likely": true,
+	"ratting": true, "heavy": true, "traffic": true, "clusters": true,
+	"partial": true, "roster": true, "names": true, "last": true,
+	"hours": true,
+}
+
+// romanRe is a roman numeral, strictly: only numeral letters, in
+// numeral order ("civil", "vivid" and "mild" do not match).
+var romanRe = regexp.MustCompile(`^m{0,3}(cm|cd|d?c{0,3})(xc|xl|l?x{0,3})(ix|iv|v?i{0,3})$`)
+
+func isRomanNumeral(w string) bool { return w != "" && romanRe.MatchString(w) }
+
+// pilotCandidate is whether a phrase from free-form text may be a
+// pilot at all. Not candidates: a string with no letter (a number
+// or distance off a paste), a standalone roman numeral (a planet's
+// designator, "VIII"), a bare place noun, and a phrase ending in
+// one ("Minmatar Military Station").
+func pilotCandidate(name string) bool {
+	letter := false
+	for _, r := range name {
+		if unicode.IsLetter(r) {
+			letter = true
+			break
+		}
+	}
+	if !letter {
+		return false
+	}
+	if isRomanNumeral(name) || placeNouns[name] || reportWords[name] {
+		return false
+	}
+	if i := strings.LastIndex(name, " "); i >= 0 && placeNouns[clean(name[i+1:])] {
+		return false
+	}
+	// A phrase of nothing but numbers, designators, place nouns
+	// and units ("km 2498", "0 m") has no name in it either. The
+	// words are cleaned first: a phrase carries its punctuation
+	// inside ("(incl." is the word "incl").
+	for _, w := range strings.Fields(name) {
+		w = clean(w)
+		if !isDigits(w) && !isRomanNumeral(w) && !placeNouns[w] && !reportWords[w] && w != "-" && w != "—" && w != "–" {
+			return true
+		}
+	}
+	return false
+}
+
+func isDigits(w string) bool {
+	w = strings.ReplaceAll(w, ",", "")
+	if w == "" {
+		return false
+	}
+	for _, r := range w {
+		if !unicode.IsDigit(r) {
+			return false
+		}
+	}
+	return true
+}
+
+// markLocation marks a celestial's name in seg as read, so none of
+// it is offered as pilots or ships: "VII - Moon 1 - Vherokior
+// Tribe Treasury" -- a planet designator, its moon, and the
+// station's name, which runs to the segment's end or to the
+// distance a paste put after it. The system itself was already
+// taken out (or never in the text); what follows its designator
+// is one location, however many words the station's name runs to.
+func markLocation(seg []string, used []bool) {
+	for i := 0; i+2 < len(seg); i++ {
+		if used[i] || !isRomanNumeral(clean(seg[i])) || clean(seg[i+1]) != "-" {
+			continue
+		}
+		j := i + 2
+		moon := false
+		if j+1 < len(seg) && clean(seg[j]) == "moon" && isDigits(clean(seg[j+1])) {
+			moon, j = true, j+2
+		}
+		if j < len(seg) && clean(seg[j]) == "-" {
+			j++
+			// The station's name runs until a distance or the
+			// segment's end.
+			for j < len(seg) {
+				if isDigits(clean(seg[j])) && j+1 < len(seg) {
+					if u := clean(seg[j+1]); u == "km" || u == "m" || u == "au" {
+						break
+					}
+				}
+				j++
+			}
+		} else if !moon {
+			continue // a designator and a dash, but no location after it
+		}
+		for k := i; k < j; k++ {
+			used[k] = true
+		}
+		i = j - 1
+	}
 }
 
 func dedupe(s []string) []string {

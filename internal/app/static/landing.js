@@ -46,7 +46,6 @@
     if (menu.hidden === !v) return;
     menu.hidden = !v;
     btn.setAttribute("aria-expanded", v ? "true" : "false");
-    if (v) window.dispatchEvent(new Event("ld:menuopen"));
   }
   function isOpen() { return !menu.hidden; }
   btn.addEventListener("click", function () {
@@ -90,18 +89,18 @@
   });
 })();
 
-// The liquid glass surfaces: each marked surface gets a
+// The liquid glass surface: the header bar gets a
 // displacement map generated for its exact size, so the
 // refraction layer in landing.css can bend the backdrop at
 // its rim. The map is neutral in the interior; only the rim
 // band shifts, strongest at the edge. Maps are regenerated
-// when a surface changes size. If a map never lands, or the
-// browser has no backdrop-filter url() support, the surface
+// when the bar changes size. If a map never lands, or the
+// browser has no backdrop-filter url() support, the bar
 // keeps its frost and rim light un-displaced.
 //
-// Two surfaces, two depths of the same treatment: the
-// header bar (square corners, the shell top bar's shape) at
-// the full bend, and the Tools menu a lighter touch.
+// The Tools menu is not a liquid surface: its frost stands
+// on the menu's own backdrop-filter alone, with no filter
+// layer over it, so no filter machinery can take it down.
 (function () {
   function liquid(el, fe, opts) {
     if (!el || !fe) return function () {};
@@ -153,22 +152,13 @@
     return build;
   }
 
-  var builds = [
-    liquid(document.querySelector(".ld-hbar"), document.getElementById("ld-liquid-map"),
-      { radius: 0, rim: 16, maxoff: 9 })
-  ];
-  var buildMenu = liquid(document.querySelector(".ld-menu"), document.getElementById("ld-liquid-menu-map"),
-    { radius: 14, rim: 12, maxoff: 4 });
-  function buildAll() {
-    builds.forEach(function (b) { b(); });
-    buildMenu();
-  }
-  buildAll();
-  window.addEventListener("ld:menuopen", buildMenu);
+  var buildBar = liquid(document.querySelector(".ld-hbar"), document.getElementById("ld-liquid-map"),
+    { radius: 0, rim: 16, maxoff: 9 });
+  buildBar();
   var timer = null;
   window.addEventListener("resize", function () {
     if (timer) clearTimeout(timer);
-    timer = setTimeout(buildAll, 150);
+    timer = setTimeout(buildBar, 150);
   });
 })();
 

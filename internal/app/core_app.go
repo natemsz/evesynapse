@@ -727,7 +727,10 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	// unlisted link. Anyone may paste, throttled like the pages.
 	r.With(anonPages).Get("/intel/scan/", app.handleScanForm)
 	r.With(anonPages).Post("/intel/scan/", app.handleScanSubmit)
+	r.With(anonPages).Get("/intel/scan/compare/", app.handleScanCompare)
 	r.With(anonPages).Get("/intel/scan/{id}/", app.handleScanPage)
+	r.With(anonPages).Get("/intel/scan/{id}/og.png", app.handleScanOG)
+	r.With(anonPages).Post("/intel/scan/{id}/system", app.handleScanSystem)
 	// Intel channels (channels.go): the list explains itself to a
 	// visitor; everything else is an account's.
 	r.With(anonPages).Get("/intel/channels/", app.handleChannels)

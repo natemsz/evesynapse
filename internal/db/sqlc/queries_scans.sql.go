@@ -13,17 +13,29 @@ import (
 )
 
 const getScan = `-- name: GetScan :one
-SELECT id, kind, system_id, user_id, raw, result, created_at FROM scans WHERE id = $1
+SELECT id, kind, system_id, user_id, group_id, raw, result, created_at FROM scans WHERE id = $1
 `
 
-func (q *Queries) GetScan(ctx context.Context, id string) (Scan, error) {
+type GetScanRow struct {
+	ID        string    `json:"id"`
+	Kind      string    `json:"kind"`
+	SystemID  int64     `json:"system_id"`
+	UserID    int64     `json:"user_id"`
+	GroupID   string    `json:"group_id"`
+	Raw       string    `json:"raw"`
+	Result    string    `json:"result"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+func (q *Queries) GetScan(ctx context.Context, id string) (GetScanRow, error) {
 	row := q.db.QueryRowContext(ctx, getScan, id)
-	var i Scan
+	var i GetScanRow
 	err := row.Scan(
 		&i.ID,
 		&i.Kind,
 		&i.SystemID,
 		&i.UserID,
+		&i.GroupID,
 		&i.Raw,
 		&i.Result,
 		&i.CreatedAt,
@@ -33,8 +45,8 @@ func (q *Queries) GetScan(ctx context.Context, id string) (Scan, error) {
 
 const insertScan = `-- name: InsertScan :exec
 
-INSERT INTO scans (id, kind, system_id, user_id, raw, result, created_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
+INSERT INTO scans (id, kind, system_id, user_id, group_id, raw, result, created_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 `
 
 type InsertScanParams struct {
@@ -42,6 +54,7 @@ type InsertScanParams struct {
 	Kind      string    `json:"kind"`
 	SystemID  int64     `json:"system_id"`
 	UserID    int64     `json:"user_id"`
+	GroupID   string    `json:"group_id"`
 	Raw       string    `json:"raw"`
 	Result    string    `json:"result"`
 	CreatedAt time.Time `json:"created_at"`
@@ -57,6 +70,7 @@ func (q *Queries) InsertScan(ctx context.Context, arg InsertScanParams) error {
 		arg.Kind,
 		arg.SystemID,
 		arg.UserID,
+		arg.GroupID,
 		arg.Raw,
 		arg.Result,
 		arg.CreatedAt,
@@ -171,6 +185,127 @@ func (q *Queries) ListPilotKillActivity(ctx context.Context, arg ListPilotKillAc
 	return items, nil
 }
 
+const listRelatedScans = `-- name: ListRelatedScans :many
+SELECT id, kind, system_id, user_id, group_id, created_at, result FROM scans
+WHERE system_id = $1::bigint
+  AND id <> $2
+  AND ($3::text = '' OR (group_id <> $3 AND id <> $3))
+  AND created_at > $4::timestamptz
+ORDER BY created_at DESC
+LIMIT $5::int
+`
+
+type ListRelatedScansParams struct {
+	SystemID     int64     `json:"system_id"`
+	ExcludeID    string    `json:"exclude_id"`
+	ExcludeGroup string    `json:"exclude_group"`
+	Since        time.Time `json:"since"`
+	MaxRows      int32     `json:"max_rows"`
+}
+
+type ListRelatedScansRow struct {
+	ID        string    `json:"id"`
+	Kind      string    `json:"kind"`
+	SystemID  int64     `json:"system_id"`
+	UserID    int64     `json:"user_id"`
+	GroupID   string    `json:"group_id"`
+	CreatedAt time.Time `json:"created_at"`
+	Result    string    `json:"result"`
+}
+
+// Recent scans of one system, newest first, leaving out one
+// scan and, when it is set, every scan of its group: the
+// reading page's related-scans rail.
+func (q *Queries) ListRelatedScans(ctx context.Context, arg ListRelatedScansParams) ([]ListRelatedScansRow, error) {
+	rows, err := q.db.QueryContext(ctx, listRelatedScans,
+		arg.SystemID,
+		arg.ExcludeID,
+		arg.ExcludeGroup,
+		arg.Since,
+		arg.MaxRows,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListRelatedScansRow
+	for rows.Next() {
+		var i ListRelatedScansRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Kind,
+			&i.SystemID,
+			&i.UserID,
+			&i.GroupID,
+			&i.CreatedAt,
+			&i.Result,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listScanGroup = `-- name: ListScanGroup :many
+SELECT id, kind, system_id, user_id, created_at, result FROM scans
+WHERE group_id = $1 OR id = $1
+ORDER BY created_at ASC
+LIMIT $2::int
+`
+
+type ListScanGroupParams struct {
+	GroupID string `json:"group_id"`
+	MaxRows int32  `json:"max_rows"`
+}
+
+type ListScanGroupRow struct {
+	ID        string    `json:"id"`
+	Kind      string    `json:"kind"`
+	SystemID  int64     `json:"system_id"`
+	UserID    int64     `json:"user_id"`
+	CreatedAt time.Time `json:"created_at"`
+	Result    string    `json:"result"`
+}
+
+// A scan group (schema 086): every scan filed under one group
+// id, oldest first -- the group's timeline on a member's page.
+func (q *Queries) ListScanGroup(ctx context.Context, arg ListScanGroupParams) ([]ListScanGroupRow, error) {
+	rows, err := q.db.QueryContext(ctx, listScanGroup, arg.GroupID, arg.MaxRows)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListScanGroupRow
+	for rows.Next() {
+		var i ListScanGroupRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Kind,
+			&i.SystemID,
+			&i.UserID,
+			&i.CreatedAt,
+			&i.Result,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const pruneScans = `-- name: PruneScans :execrows
 DELETE FROM scans WHERE created_at < $1::timestamptz
 `
@@ -181,4 +316,21 @@ func (q *Queries) PruneScans(ctx context.Context, before time.Time) (int64, erro
 		return 0, err
 	}
 	return result.RowsAffected()
+}
+
+const updateScanSystem = `-- name: UpdateScanSystem :exec
+UPDATE scans SET system_id = $1, result = $2 WHERE id = $3
+`
+
+type UpdateScanSystemParams struct {
+	SystemID int64  `json:"system_id"`
+	Result   string `json:"result"`
+	ID       string `json:"id"`
+}
+
+// A reading's system, corrected after the paste: the column
+// and the stored reading move together.
+func (q *Queries) UpdateScanSystem(ctx context.Context, arg UpdateScanSystemParams) error {
+	_, err := q.db.ExecContext(ctx, updateScanSystem, arg.SystemID, arg.Result, arg.ID)
+	return err
 }

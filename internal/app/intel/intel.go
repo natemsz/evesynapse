@@ -36,7 +36,7 @@ var Module = module.Module{
 			// serve in every build, and lead this section's menu
 			// when the section exists.
 			{Href: "/intel/kills/", Label: "Killboard", Pages: []string{"killboard.html", "kill.html"}},
-			{Href: "/intel/scan/", Label: "D-Scan Parser", Pages: []string{"scans.html", "scan.html"}},
+			{Href: "/intel/scan/", Label: "D-Scan Parser", Pages: []string{"scans.html", "scan.html", "scan_compare.html"}},
 			{Href: "/intel/channels/", Label: "Intel Channels", Pages: []string{"channels.html", "channel.html"}},
 			{Href: "/intel/feed/", Label: "Intel Feed", Pages: []string{"feed.html"}},
 			{Href: "/intel/wars/", Label: "Wars", Pages: []string{"intel_wars.html"}},

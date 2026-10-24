@@ -32,7 +32,7 @@
 {{if eq .NavPage "fittings.html"}}<link rel="stylesheet" href="/static/fit.css?v={{.AssetVersion}}">{{end}}
 {{if eq .NavPage "map.html"}}<link rel="stylesheet" href="/static/map.css?v={{.AssetVersion}}">{{end}}
 {{if or (eq .NavPage "killboard.html") (eq .NavPage "kill.html")}}<link rel="stylesheet" href="/static/killboard.css?v={{.AssetVersion}}">{{end}}
-{{if or (eq .NavPage "scans.html") (eq .NavPage "scan.html")}}<link rel="stylesheet" href="/static/scans.css?v={{.AssetVersion}}">{{end}}
+{{if or (eq .NavPage "scans.html") (eq .NavPage "scan.html") (eq .NavPage "scan_compare.html")}}<link rel="stylesheet" href="/static/scans.css?v={{.AssetVersion}}">{{end}}
 {{if eq .NavPage "pilot.html"}}<link rel="stylesheet" href="/static/pilot.css?v={{.AssetVersion}}">{{end}}
 {{if or (eq .NavPage "channels.html") (eq .NavPage "channel.html") (eq .NavPage "system.html") (eq .NavPage "feed.html")}}<link rel="stylesheet" href="/static/channels.css?v={{.AssetVersion}}">{{end}}
 <link rel="stylesheet" href="/static/phone.css?v={{.AssetVersion}}" media="(max-width: 45rem), (hover: none), (pointer: coarse)">

@@ -85,6 +85,8 @@ type pageData struct {
 
 	// Scans (/intel/scan/, /intel/scan/{id}/).
 	Scan *scanPageView
+	// ScanCompare (/intel/scan/compare/).
+	ScanCompare *scanCompareView
 
 	// Intel channels (/intel/channels/, /intel/channels/{id}/).
 	Channels *channelListView
@@ -152,7 +154,7 @@ func sectionForPage(page string) string {
 		return "corporation"
 	case "map.html":
 		return "map"
-	case "killboard.html", "kill.html", "scans.html", "scan.html", "channels.html", "channel.html":
+	case "killboard.html", "kill.html", "scans.html", "scan.html", "scan_compare.html", "channels.html", "channel.html":
 		return "intel"
 	case "sync.html":
 		return "sync"

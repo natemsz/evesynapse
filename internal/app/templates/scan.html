@@ -22,6 +22,7 @@
       <input type="text" readonly value="/intel/scan/{{.ID}}/" data-scan-link aria-label="Link to this scan">
       <button type="button" class="btn small" data-scan-copy>Copy link</button>
       <a class="btn small" href="/intel/scan/{{if $r.SystemID}}?system={{$r.SystemID}}{{end}}">New scan</a>
+      {{if .CompareWith}}<a class="btn small" href="/intel/scan/compare/?a={{.CompareWith}}&b={{.ID}}">Compare</a>{{end}}
     </div>
     {{if .PostTo}}<form class="sc-post" method="post" action="/intel/scan/{{.ID}}/post">
       <label><span class="visually-hidden">Channel</span><select name="channel">{{range .PostTo}}<option value="{{.ID}}">{{.Name}}</option>{{end}}</select></label>
@@ -29,6 +30,7 @@
     </form>{{end}}
   </header>
 
+  {{if .HasRail}}<div class="sc-layout"><div class="sc-main">{{end}}
   {{with $r.DScan}}
   <section class="sc-stats" aria-label="Summary">
     <div class="sc-stat"><span class="sc-stat-v">{{.Ships}}</span><span class="sc-stat-l">ships</span></div>
@@ -36,10 +38,26 @@
     <div class="sc-stat"><span class="sc-stat-v">{{.ShipsOff}}</span><span class="sc-stat-l">off grid</span></div>
     <div class="sc-stat"><span class="sc-stat-v">{{len .Structures}}</span><span class="sc-stat-l">structure types</span></div>
     {{if or .Drones .Fighters}}<div class="sc-stat"><span class="sc-stat-v">{{.Drones}}{{if .Fighters}} · {{.Fighters}}{{end}}</span><span class="sc-stat-l">drones{{if .Fighters}} · fighters{{end}}</span></div>{{end}}
+    {{if $.Scan.ValueText}}<div class="sc-stat"><span class="sc-stat-v">{{$.Scan.ValueText}}</span><span class="sc-stat-l">hull value</span></div>{{end}}
   </section>
+  {{if $.Scan.StripComp}}<div class="sc-strips">
+    <div>
+      <div class="sc-strip" role="img" aria-label="Composition by hull class">{{range $.Scan.StripComp}}<span class="sc-seg sc-tone-{{.Tone}}" data-n="{{.N}}" title="{{.Name}} · {{.N}}"></span>{{end}}</div>
+      <ul class="sc-strip-legend">{{range $.Scan.StripComp}}<li><span class="sc-dot sc-tone-{{.Tone}}"></span>{{.Name}} <strong>{{.N}}</strong> <span class="muted">{{.Pct}}%</span></li>{{end}}</ul>
+    </div>
+    <div>
+      <div class="sc-strip" role="img" aria-label="On grid against off grid">{{range $.Scan.StripGrid}}<span class="sc-seg sc-tone-{{.Tone}}" data-n="{{.N}}" title="{{.Name}} · {{.N}}"></span>{{end}}</div>
+      <ul class="sc-strip-legend">{{range $.Scan.StripGrid}}<li><span class="sc-dot sc-tone-{{.Tone}}"></span>{{.Name}} <strong>{{.N}}</strong> <span class="muted">{{.Pct}}%</span></li>{{end}}</ul>
+    </div>
+  </div>{{end}}
   {{if .Notable}}<section class="sc-panel sc-notable">
     <h2>Notable</h2>
     <ul class="sc-notable-list">{{range .Notable}}<li>{{if .ID}}<img src="https://images.evetech.net/types/{{.ID}}/icon?size=32" alt="" width="20" height="20" loading="lazy">{{end}}<span class="sc-notable-n">{{.Name}}</span><span class="muted">{{.Class}}</span><span class="sc-bar-c">{{.N}}{{if .Grid}} <span class="sc-grid">on grid</span>{{end}}</span></li>{{end}}</ul>
+  </section>{{end}}
+  {{if $.Scan.TypeValues}}<section class="sc-panel">
+    <h2>Hull value</h2>
+    <ul class="sc-list">{{range $.Scan.TypeValues}}<li><img src="https://images.evetech.net/types/{{.ID}}/icon?size=32" alt="" width="20" height="20" loading="lazy"><span>{{.Name}} <span class="muted">{{.Class}} · {{.N}} × {{.UnitText}} · {{.TierLabel}}{{if .AsOf}} · {{.AsOf}}{{end}}</span></span><span class="sc-bar-c">{{.LineText}} ISK</span></li>{{end}}</ul>
+    <p class="sc-note muted">Priced {{.PricedShips}} of {{.Ships}} ships, valued when the scan was pasted. Hulls only — a d-scan never shows fittings. An estimated price carries its date; a hull with no price at any tier is not in the total.</p>
   </section>{{end}}
   <div class="sc-cols">
     <section class="sc-panel">
@@ -172,6 +190,47 @@
 
   {{if $r.Skipped}}<p class="sc-note muted prose">{{$r.Skipped}} {{if eq $r.Skipped 1}}line was{{else}}lines were{{end}} not part of the scan and were skipped.</p>{{end}}
   <details class="sc-panel sc-fold"><summary>The paste</summary><pre class="sc-raw">{{.Raw}}</pre></details>
+  {{if .HasRail}}</div>
+  <aside class="sc-rail">
+    {{with .Group}}{{if or (gt (len .Entries) 1) .CanAppend}}<section class="sc-panel">
+      <h2>Scan group</h2>
+      {{if .Pair}}<p class="sc-pair">{{.Pair}}</p>{{end}}
+      {{if gt (len .Entries) 1}}<ol class="sc-timeline">{{range .Entries}}<li{{if .Current}} class="now"{{end}}>
+        <span class="sc-tl-top">{{if .Current}}<span class="sc-tl-k">{{.Kind}}</span>{{else}}<a class="sc-tl-k" href="/intel/scan/{{.ID}}/">{{.Kind}}</a>{{end}}<time>{{.Ago}}</time></span>
+        <span class="sc-tl-t">{{.Title}}</span>
+        {{if .Delta}}<span class="sc-delta">{{.Delta}}</span>{{end}}
+        {{if .Notes}}<span class="sc-tl-n">{{range $i, $n := .Notes}}{{if $i}} · {{end}}{{$n}}{{end}}</span>{{end}}
+      </li>{{end}}</ol>{{end}}
+      {{if .CanAppend}}<form class="sc-append" method="post" action="/intel/scan/">
+        <label class="sc-label" for="sc-append-text">Add a scan to this group</label>
+        <textarea id="sc-append-text" name="scan" rows="4" spellcheck="false" autocomplete="off" required placeholder="Paste the next scan and it joins this group."></textarea>
+        <input type="hidden" name="group" value="{{.ID}}">
+        <div class="sc-paste-row">
+          <label class="sc-sys"><span>System <span class="muted">(optional)</span></span><input type="text" name="system" placeholder="Found from a d-scan" autocomplete="off" spellcheck="false" maxlength="40"></label>
+          <button type="submit" class="btn small">Add scan</button>
+        </div>
+      </form>{{end}}
+    </section>{{end}}{{end}}
+    {{if .Related}}<section class="sc-panel">
+      <h2>Related scans{{if .SysName}} in {{.SysName}}{{end}}</h2>
+      <ul class="sc-related">{{range .Related}}<li>
+        <span class="sc-tl-top"><a href="/intel/scan/{{.ID}}/">{{.Kind}}</a><time>{{.Ago}}</time></span>
+        <span class="sc-tl-t">{{.Title}}</span>
+        {{if .Delta}}<span class="sc-delta">{{.Delta}}</span>{{end}}
+        {{if .Notes}}<span class="sc-tl-n">{{range $i, $n := .Notes}}{{if $i}} · {{end}}{{$n}}{{end}}</span>{{end}}
+        {{if .SameKind}}<a class="sc-cmp-link" href="/intel/scan/compare/?a={{.ID}}&b={{$.Scan.ID}}">Compare with this scan</a>{{end}}
+      </li>{{end}}</ul>
+    </section>{{end}}
+    {{if .CanCorrect}}<section class="sc-panel">
+      <h2>System</h2>
+      <p class="sc-note">Filed under {{if .SysName}}{{.SysName}}{{else}}no system{{end}}.</p>
+      <form class="sc-fix" method="post" action="/intel/scan/{{.ID}}/system">
+        <label class="sc-sys"><span>Correct system</span><input type="text" name="system" value="{{.SysName}}" autocomplete="off" spellcheck="false" maxlength="40" required></label>
+        <button type="submit" class="btn small">Set system</button>
+      </form>
+    </section>{{end}}
+  </aside>
+  </div>{{end}}
 {{end}}
 </div>
 {{end}}

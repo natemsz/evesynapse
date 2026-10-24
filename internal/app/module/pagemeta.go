@@ -40,6 +40,12 @@ type PageMeta struct {
 	// is omitted entirely where the install has none. Moving it
 	// onto the helper must not change that output.
 	CanonicalURL string
+	// ImagePath, when set, is the page's social preview image
+	// ("/intel/scan/{id}/og.png"): emitted as an absolute
+	// og:image on the canonical host, and the twitter card
+	// upgrades to summary_large_image. Pages without one keep
+	// the plain summary card.
+	ImagePath string
 	// WebApplication asks for the front page's static
 	// WebApplication JSON-LD block.
 	WebApplication bool
@@ -96,7 +102,14 @@ func RenderPageMeta(m PageMeta) template.HTML {
 	if canonical != "" {
 		b.WriteString(`<meta property="og:url" content="` + esc(canonical) + `">` + "\n")
 	}
-	b.WriteString(`<meta name="twitter:card" content="summary">` + "\n")
+	if m.ImagePath != "" {
+		img := CanonicalHost + m.ImagePath
+		b.WriteString(`<meta property="og:image" content="` + esc(img) + `">` + "\n")
+		b.WriteString(`<meta name="twitter:image" content="` + esc(img) + `">` + "\n")
+		b.WriteString(`<meta name="twitter:card" content="summary_large_image">` + "\n")
+	} else {
+		b.WriteString(`<meta name="twitter:card" content="summary">` + "\n")
+	}
 	if m.WebApplication {
 		b.WriteString(`<script type="application/ld+json">` +
 			jsonLD(map[string]any{

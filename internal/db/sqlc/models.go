@@ -1017,6 +1017,7 @@ type Scan struct {
 	Raw       string    `json:"raw"`
 	Result    string    `json:"result"`
 	CreatedAt time.Time `json:"created_at"`
+	GroupID   string    `json:"group_id"`
 }
 
 type SdeAttributeType struct {

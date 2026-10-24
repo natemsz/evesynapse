@@ -37,6 +37,7 @@ import (
 
 	"evesynapse/internal/app/module"
 	db "evesynapse/internal/db/sqlc"
+	"evesynapse/internal/esi"
 	"evesynapse/internal/logging"
 	"evesynapse/internal/scan"
 )
@@ -237,6 +238,23 @@ type dscanReading struct {
 	// NPCs. Class carries the kind.
 	Objects    []scanCount `json:"objects,omitempty"`
 	Celestials int         `json:"celestials,omitempty"`
+	// Prices values the scan's ship hulls per type, priced at
+	// paste time through the house pricing order; Value is the
+	// priced hulls' total and PricedShips how many of the
+	// scan's ships it covers. Hulls only: a d-scan cannot see
+	// fittings, so none are ever counted.
+	Prices      map[int64]scanTypePrice `json:"prices,omitempty"`
+	Value       float64                 `json:"value,omitempty"`
+	PricedShips int                     `json:"priced_ships,omitempty"`
+}
+
+// scanTypePrice is one ship type's stored hull price: the
+// unit figure, the tier of the pricing order that spoke, and
+// when that tier's figure was current.
+type scanTypePrice struct {
+	Unit float64   `json:"unit"`
+	Tier string    `json:"tier"`
+	AsOf time.Time `json:"as_of,omitempty"`
 }
 
 type localPilot struct {
@@ -346,6 +364,73 @@ func (app *Application) readScan(ctx context.Context, p scan.Result, systemID in
 		res.Probe = readProbe(p.Probe)
 	}
 	return res
+}
+
+// priceScan values a fresh d-scan reading's hulls through
+// the house pricing order (AppraiseLines: own swept orders,
+// then stored estimates, then the labeled Fuzzwork fallback,
+// then an honest gap) and stores the outcome on the reading:
+// the per-type prices, their total, and how many of the
+// scan's ships they cover. Prices speak from stored rows
+// only, as of the paste; a pricing failure leaves the
+// reading unpriced rather than failing the paste.
+func (app *Application) priceScan(ctx context.Context, d *dscanReading) {
+	if d == nil || len(d.Types) == 0 {
+		return
+	}
+	lines := make([]module.AppraisalLine, 0, len(d.Types))
+	for _, c := range d.Types {
+		if c.ID > 0 && c.N > 0 {
+			lines = append(lines, module.AppraisalLine{TypeID: c.ID, Quantity: int64(c.N), Included: true})
+		}
+	}
+	if len(lines) == 0 {
+		return
+	}
+	res, err := app.AppraiseLines(ctx, lines)
+	if err != nil {
+		logging.Warnf("scans: price scan: %v", err)
+		return
+	}
+	prices, total, covered := scanPricesFromAppraisal(res.Lines)
+	if len(prices) == 0 {
+		return
+	}
+	d.Prices, d.Value, d.PricedShips = prices, total, covered
+}
+
+// scanPricesFromAppraisal folds appraised lines into a
+// reading's stored prices: priced lines only, keyed by type,
+// the total their sum, the coverage the ships they price.
+// Pure, so the math pins without a database.
+func scanPricesFromAppraisal(lines []module.AppraisedLine) (map[int64]scanTypePrice, float64, int) {
+	prices := map[int64]scanTypePrice{}
+	var total float64
+	covered := 0
+	for _, ln := range lines {
+		if !ln.Priced {
+			continue
+		}
+		prices[ln.TypeID] = scanTypePrice{Unit: ln.UnitPrice, Tier: ln.Tier, AsOf: ln.AsOf}
+		total += ln.LineValue
+		covered += int(ln.Quantity)
+	}
+	return prices, total, covered
+}
+
+// scanTierLabel words a stored price's tier for the reading
+// page, in the appraisal tool's own terms (the scan prices
+// on the default basis: The Forge, typical sell).
+func scanTierLabel(tier string) string {
+	switch tier {
+	case module.AppraisalTierTypical:
+		return "Forge typical"
+	case module.AppraisalTierEstimate:
+		return "Estimated sell"
+	case module.AppraisalTierFallback:
+		return "Fuzzwork aggregate"
+	}
+	return ""
 }
 
 // readDScan sorts a d-scan by category and ship class, and reads
@@ -1529,6 +1614,275 @@ func (app *Application) ownScans(ctx context.Context, systemID int64) []ownScan 
 
 var scanKindLabels = map[string]string{"dscan": "D-scan", "local": "Local", "fleet": "Fleet", "probe": "Probe scan"}
 
+// --- Groups and related scans ---
+
+const (
+	// scanGroupMax caps a group timeline on a reading's page.
+	scanGroupMax = 25
+	// scanRelatedMax caps the related-scans rail.
+	scanRelatedMax = 8
+	// scanRelatedWindow is how far back a same-system scan
+	// counts as related.
+	scanRelatedWindow = 7 * 24 * time.Hour
+)
+
+// scanGroupAppend decides whether a paste may join the group
+// named by a group id -- the founding scan's own id. A group
+// founded signed in takes appends only from its founder's
+// account; an anonymous group takes them from anyone holding
+// the link.
+func (app *Application) scanGroupAppend(ctx context.Context, groupID string) (string, bool) {
+	if !validScanID(groupID) {
+		return "", false
+	}
+	founder, err := app.queries.GetScan(ctx, groupID)
+	if err != nil {
+		return "", false
+	}
+	if founder.UserID > 0 && app.userID(ctx) != founder.UserID {
+		return "", false
+	}
+	return groupID, true
+}
+
+// scanRail builds a reading page's group timeline and
+// related-scans rail, and picks the scan its Compare button
+// diffs against: the previous scan of the same kind in the
+// group, else the nearest related one. Related means the
+// same system within the week, outside the group; every
+// delta is computed from the stored readings.
+func (app *Application) scanRail(ctx context.Context, row db.GetScanRow, cur scanResult) (*scanGroupView, []scanRailEntry, string) {
+	now := time.Now()
+	groupID := row.GroupID
+	if groupID == "" {
+		groupID = row.ID
+	}
+	var group *scanGroupView
+	compareWith := ""
+	if rows, err := app.queries.ListScanGroup(ctx, db.ListScanGroupParams{GroupID: groupID, MaxRows: scanGroupMax}); err == nil {
+		g := &scanGroupView{ID: groupID}
+		if _, ok := app.scanGroupAppend(ctx, groupID); ok {
+			g.CanAppend = true
+		}
+		type prevScan struct {
+			res scanResult
+			at  time.Time
+			id  string
+		}
+		prevByKind := map[scan.Kind]prevScan{}
+		var pairAt time.Duration = -1
+		for _, gr := range rows {
+			var res scanResult
+			if json.Unmarshal([]byte(gr.Result), &res) != nil {
+				continue
+			}
+			e := scanRailEntry{ID: gr.ID, Kind: scanKindLabels[gr.Kind], Title: scanTitle(res),
+				At: gr.CreatedAt, Ago: ageText(now, gr.CreatedAt), Current: gr.ID == row.ID, SameKind: res.Kind == cur.Kind}
+			if prev, ok := prevByKind[res.Kind]; ok {
+				e.Delta, e.Notes = scanDeltaBetween(prev.res, prev.at, res, gr.CreatedAt)
+				if e.Current {
+					compareWith = prev.id
+				}
+			}
+			if e.Current {
+				// The paired scan of another kind nearest
+				// this one in time, either way.
+				for _, orow := range rows {
+					if orow.ID == row.ID || orow.Kind == string(cur.Kind) {
+						continue
+					}
+					d := orow.CreatedAt.Sub(row.CreatedAt)
+					if d < 0 {
+						d = -d
+					}
+					if pairAt < 0 || d < pairAt {
+						pairAt = d
+						g.Pair = scanPairText(orow, row)
+					}
+				}
+			}
+			prevByKind[res.Kind] = prevScan{res, gr.CreatedAt, gr.ID}
+			g.Entries = append(g.Entries, e)
+		}
+		if len(g.Entries) > 1 || g.CanAppend {
+			group = g
+		}
+	}
+	var related []scanRailEntry
+	if row.SystemID > 0 {
+		if rows, err := app.queries.ListRelatedScans(ctx, db.ListRelatedScansParams{
+			SystemID: row.SystemID, ExcludeID: row.ID, ExcludeGroup: row.GroupID,
+			Since: now.Add(-scanRelatedWindow), MaxRows: scanRelatedMax,
+		}); err == nil {
+			for _, rr := range rows {
+				var res scanResult
+				if json.Unmarshal([]byte(rr.Result), &res) != nil {
+					continue
+				}
+				e := scanRailEntry{ID: rr.ID, Kind: scanKindLabels[rr.Kind], Title: scanTitle(res),
+					At: rr.CreatedAt, Ago: ageText(now, rr.CreatedAt), SameKind: res.Kind == cur.Kind}
+				if e.SameKind {
+					e.Delta, e.Notes = scanDeltaBetween(cur, row.CreatedAt, res, rr.CreatedAt)
+					if compareWith == "" {
+						compareWith = e.ID
+					}
+				}
+				related = append(related, e)
+			}
+		} else {
+			logging.Warnf("scans: related: %v", err)
+		}
+	}
+	return group, related, compareWith
+}
+
+// scanPairText names a group sibling of the other kind
+// against this scan: "Local from 12 min before this scan".
+func scanPairText(other db.ListScanGroupRow, row db.GetScanRow) string {
+	d := other.CreatedAt.Sub(row.CreatedAt)
+	when := "before"
+	if d > 0 {
+		when = "after"
+	} else {
+		d = -d
+	}
+	return scanKindLabels[other.Kind] + " from " + scanRelDur(d) + " " + when + " this scan"
+}
+
+// scanRelDur is a short duration for scan-to-scan text:
+// "45 sec", "12 min", "3 hr", "2 days".
+func scanRelDur(d time.Duration) string {
+	switch {
+	case d < time.Minute:
+		return strconv.Itoa(int(d.Seconds())) + " sec"
+	case d < time.Hour:
+		return strconv.Itoa(int(d.Minutes())) + " min"
+	case d < 24*time.Hour:
+		return strconv.Itoa(int(d.Hours())) + " hr"
+	default:
+		return strconv.Itoa(int(d.Hours()/24)) + " days"
+	}
+}
+
+// scanDeltaBetween words the difference between two
+// readings of the same kind: the headline delta of the
+// second against the first, and the notable moves between
+// them in time order (the earlier reading against the
+// later, whichever side of the page each sits on).
+func scanDeltaBetween(a scanResult, aAt time.Time, b scanResult, bAt time.Time) (string, []string) {
+	if a.Kind != b.Kind {
+		return "", nil
+	}
+	earlier, later := a, b
+	if bAt.Before(aAt) {
+		earlier, later = b, a
+	}
+	switch a.Kind {
+	case scan.KindDScan:
+		if a.DScan == nil || b.DScan == nil {
+			return "", nil
+		}
+		return signedScanDelta(b.DScan.Ships-a.DScan.Ships, "ship"), notableMoves(earlier.DScan, later.DScan)
+	case scan.KindLocal:
+		if a.Local == nil || b.Local == nil {
+			return "", nil
+		}
+		arrived, left := localMoves(earlier.Local, later.Local)
+		return signedScanDelta(len(b.Local.Pilots)-len(a.Local.Pilots), "pilot"), countMoves(arrived, left)
+	case scan.KindFleet:
+		if a.Fleet == nil || b.Fleet == nil {
+			return "", nil
+		}
+		return signedScanDelta(len(b.Fleet.Members)-len(a.Fleet.Members), "member"), nil
+	case scan.KindProbe:
+		if a.Probe == nil || b.Probe == nil {
+			return "", nil
+		}
+		return signedScanDelta(len(b.Probe.Sigs)-len(a.Probe.Sigs), "signature"), nil
+	}
+	return "", nil
+}
+
+// signedScanDelta words a count difference: "+7 ships",
+// "-2 ships", "" when even.
+func signedScanDelta(d int, noun string) string {
+	if d == 0 {
+		return ""
+	}
+	sign := "+"
+	if d < 0 {
+		sign = "-"
+		d = -d
+	}
+	return sign + plural(d, noun)
+}
+
+// notableMoves lists the notable-hull moves between two
+// d-scan readings, earlier first: hulls the later reading
+// has that the earlier did not ("Avatar arrived") and the
+// reverse ("Nyx left"). Capped at three.
+func notableMoves(a, b *dscanReading) []string {
+	inA := map[string]bool{}
+	for _, c := range a.Notable {
+		inA[c.Name] = true
+	}
+	inB := map[string]bool{}
+	for _, c := range b.Notable {
+		inB[c.Name] = true
+	}
+	var out []string
+	for _, c := range b.Notable {
+		if !inA[c.Name] {
+			out = append(out, c.Name+" arrived")
+		}
+	}
+	for _, c := range a.Notable {
+		if !inB[c.Name] {
+			out = append(out, c.Name+" left")
+		}
+	}
+	if len(out) > 3 {
+		out = out[:3]
+	}
+	return out
+}
+
+// localMoves counts pilots arriving and leaving between
+// two local readings, earlier first.
+func localMoves(a, b *localReading) (arrived, left int) {
+	inA := map[int64]bool{}
+	for _, p := range a.Pilots {
+		inA[p.ID] = true
+	}
+	inB := map[int64]bool{}
+	for _, p := range b.Pilots {
+		inB[p.ID] = true
+	}
+	for id := range inB {
+		if !inA[id] {
+			arrived++
+		}
+	}
+	for id := range inA {
+		if !inB[id] {
+			left++
+		}
+	}
+	return arrived, left
+}
+
+// countMoves words pilot moves between two local readings.
+func countMoves(arrived, left int) []string {
+	var out []string
+	if arrived > 0 {
+		out = append(out, plural(arrived, "arrived"))
+	}
+	if left > 0 {
+		out = append(out, plural(left, "left"))
+	}
+	return out
+}
+
 // --- Pages ---
 
 // scanPageView is /intel/scan/ (the paste box) and /intel/scan/{id}/
@@ -1564,6 +1918,84 @@ type scanPageView struct {
 	Sigs []probeSig
 	// PostTo are the channels the reader may post this scan to.
 	PostTo []channelRow
+	// Group is the scan's group (schema 086) as this page
+	// shows it, Related the same system's recent scans
+	// outside the group; both carry deltas against this
+	// reading or the group's previous scan of a kind.
+	Group   *scanGroupView
+	Related []scanRailEntry
+	// CompareWith is a nearby scan of the same kind this one
+	// can be diffed against, "" when there is none.
+	CompareWith string
+	// CanCorrect: the reader pasted this scan (their account
+	// or their session) and may fix its system.
+	CanCorrect bool
+	// HasRail: the reading renders with the group, related
+	// and tools rail beside it — set when any of them shows.
+	HasRail bool
+	// TypeValues is a d-scan's priced hulls, biggest first;
+	// ValueText the total, short.
+	TypeValues []scanTypeValue
+	ValueText  string
+	// StripComp and StripGrid are the glanceable strips
+	// under a d-scan's summary: the hull composition and
+	// the on/off-grid split as proportional segments of the
+	// stored totals, counts labeled in their legends.
+	StripComp []scanStripSeg
+	StripGrid []scanStripSeg
+}
+
+// scanStripSeg is one segment of a proportional strip: its
+// label, its count, its share of the whole in percent
+// (the legend's figure; the segment's width is its count
+// against the others, set by flex), and its tone — an
+// index into the strip palette classes in scans.css (the
+// CSP keeps style attributes out of the markup, so colors
+// and widths arrive as classes and custom properties).
+type scanStripSeg struct {
+	Name string
+	N    int
+	Pct  int
+	Tone int
+}
+
+// scanRailEntry is one scan in a group timeline or the
+// related-scans rail: its headline, and how it differs from
+// the scan it is listed beside.
+type scanRailEntry struct {
+	ID       string
+	Kind     string // "D-scan", "Local", ...
+	Title    string
+	At       time.Time
+	Ago      string
+	Current  bool
+	SameKind bool
+	Delta    string   // "+7 ships" against the reference scan
+	Notes    []string // "Avatar arrived", "3 left"
+}
+
+// scanGroupView is a scan group as one member's page shows
+// it: the timeline, oldest first, the paired scan of the
+// other kind when one sits near this one in time, and
+// whether the reader may append to the group.
+type scanGroupView struct {
+	ID        string // the founding scan's id
+	Entries   []scanRailEntry
+	Pair      string
+	CanAppend bool
+}
+
+// scanTypeValue is one priced hull type on the reading page.
+type scanTypeValue struct {
+	ID        int64
+	Name      string
+	Class     string
+	N         int
+	UnitText  string
+	LineText  string
+	TierLabel string
+	AsOf      string // the tier figure's date, estimates and the fallback only
+	line      float64
 }
 
 // probeSig is one probe result as the page shows it.
@@ -1593,6 +2025,37 @@ func prepScanView(v *scanPageView) {
 		d.Classes, d.Types = withPct(d.Classes), withPct(d.Types)
 		d.Hulls, d.Roles = withPct(d.Hulls), withPct(d.Roles)
 		d.ShipsOff = d.Ships - d.ShipsGrid
+		if d.Ships > 0 {
+			// The glanceable strips: composition from the
+			// stored hull tallies (classes for a reading
+			// stored before hulls), the grid split from the
+			// stored counts. Top five segments stand; the
+			// rest fold into Other.
+			src := d.Hulls
+			if len(src) == 0 {
+				src = d.Classes
+			}
+			for i, c := range src {
+				if i == 5 && len(src) > 6 {
+					other := 0
+					for _, rest := range src[5:] {
+						other += rest.N
+					}
+					v.StripComp = append(v.StripComp, scanStripSeg{Name: "Other", N: other,
+						Pct: other * 100 / d.Ships, Tone: 7})
+					break
+				}
+				if i >= 6 {
+					break
+				}
+				v.StripComp = append(v.StripComp, scanStripSeg{Name: c.Name, N: c.N,
+					Pct: c.N * 100 / d.Ships, Tone: i})
+			}
+			v.StripGrid = []scanStripSeg{
+				{Name: "On grid", N: d.ShipsGrid, Pct: d.ShipsGrid * 100 / d.Ships, Tone: 0},
+				{Name: "Off grid", N: d.ShipsOff, Pct: d.ShipsOff * 100 / d.Ships, Tone: 6},
+			}
+		}
 		for _, c := range d.Types {
 			if c.Grid > 0 {
 				v.TypesGrid = append(v.TypesGrid, scanCount{ID: c.ID, Name: c.Name, Class: c.Class, N: c.Grid})
@@ -1603,6 +2066,28 @@ func prepScanView(v *scanPageView) {
 		}
 		v.TypesGrid = withPct(sortCounts(v.TypesGrid))
 		v.TypesOff = withPct(sortCounts(v.TypesOff))
+		if d.Value > 0 && len(d.Prices) > 0 {
+			v.ValueText = formatISKShort(d.Value)
+			vals := make([]scanTypeValue, 0, len(d.Prices))
+			for _, c := range d.Types {
+				p, ok := d.Prices[c.ID]
+				if !ok {
+					continue
+				}
+				tv := scanTypeValue{ID: c.ID, Name: c.Name, Class: c.Class, N: c.N,
+					UnitText: esi.FormatISK(p.Unit), LineText: esi.FormatISK(p.Unit * float64(c.N)),
+					TierLabel: scanTierLabel(p.Tier), line: p.Unit * float64(c.N)}
+				if (p.Tier == module.AppraisalTierEstimate || p.Tier == module.AppraisalTierFallback) && !p.AsOf.IsZero() {
+					tv.AsOf = p.AsOf.Format("2006-01-02")
+				}
+				vals = append(vals, tv)
+			}
+			sort.SliceStable(vals, func(i, j int) bool { return vals[i].line > vals[j].line })
+			if len(vals) > 12 {
+				vals = vals[:12]
+			}
+			v.TypeValues = vals
+		}
 	}
 	if f := r.Fleet; f != nil {
 		f.Classes, f.Types, f.Systems, f.Wings = withPct(f.Classes), withPct(f.Types), withPct(f.Systems), withPct(f.Wings)
@@ -1719,6 +2204,17 @@ func (app *Application) handleScanSubmit(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	v := &scanPageView{Raw: r.PostForm.Get("scan"), SystemName: strings.TrimSpace(r.PostForm.Get("system"))}
+	// A group field files the paste under an existing scan
+	// group (schema 086) instead of starting a new one.
+	groupID := ""
+	if g := strings.TrimSpace(r.PostForm.Get("group")); g != "" {
+		var ok bool
+		groupID, ok = app.scanGroupAppend(ctx, g)
+		if !ok {
+			fail(http.StatusUnprocessableEntity, v, "That scan group does not take new scans from here.")
+			return
+		}
+	}
 	var systemID int64
 	if v.SystemName != "" {
 		sys, err := app.queries.GetSDESystemByName(ctx, v.SystemName)
@@ -1741,6 +2237,7 @@ func (app *Application) handleScanSubmit(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	res := app.readScan(ctx, p, systemID)
+	app.priceScan(ctx, res.DScan)
 	body, err := json.Marshal(res)
 	if err != nil {
 		fail(http.StatusInternalServerError, v, "That scan could not be saved. Please try again.")
@@ -1748,7 +2245,11 @@ func (app *Application) handleScanSubmit(w http.ResponseWriter, r *http.Request)
 	}
 	id, err := newScanID()
 	if err == nil {
-		err = app.queries.InsertScan(ctx, db.InsertScanParams{ID: id, Kind: string(res.Kind), SystemID: res.SystemID, UserID: app.userID(ctx), Raw: v.Raw, Result: string(body), CreatedAt: time.Now().UTC()})
+		if groupID == "" {
+			// A fresh paste starts a group named for itself.
+			groupID = id
+		}
+		err = app.queries.InsertScan(ctx, db.InsertScanParams{ID: id, Kind: string(res.Kind), SystemID: res.SystemID, UserID: app.userID(ctx), GroupID: groupID, Raw: v.Raw, Result: string(body), CreatedAt: time.Now().UTC()})
 	}
 	if err != nil {
 		logging.Errorf("scans: store: %v", err)
@@ -1764,7 +2265,7 @@ func (app *Application) handleScanPage(w http.ResponseWriter, r *http.Request) {
 	data := app.publicPage(ctx)
 	w.Header().Set("X-Robots-Tag", "noindex")
 	id := chi.URLParam(r, "id")
-	var row db.Scan
+	var row db.GetScanRow
 	var err error
 	if validScanID(id) {
 		row, err = app.queries.GetScan(ctx, id)
@@ -1835,8 +2336,98 @@ func (app *Application) handleScanPage(w http.ResponseWriter, r *http.Request) {
 			v.Mine = true
 		}
 	}
-	data.HeadMeta = app.HeadMeta(module.PageMeta{Title: v.Title, Description: "A scan shared from EveSynapse."})
+	v.CanCorrect = v.Mine
+	v.Group, v.Related, v.CompareWith = app.scanRail(ctx, row, v.Result)
+	v.HasRail = v.Group != nil || len(v.Related) > 0 || v.CanCorrect
+	metaTitle := v.Title
+	if v.SysName != "" {
+		metaTitle += " · " + v.SysName
+	}
+	data.HeadMeta = app.HeadMeta(module.PageMeta{Title: metaTitle, Description: scanDescription(v),
+		CanonicalPath: "/intel/scan/" + id + "/", ImagePath: "/intel/scan/" + id + "/og.png"})
 	app.render(ctx, w, http.StatusOK, "scan.html", data)
+}
+
+// scanDescription is a reading's one-line summary for link
+// unfurls: kind, place, and the headline counts.
+func scanDescription(v *scanPageView) string {
+	r := v.Result
+	place := "an unknown system"
+	if v.SysName != "" {
+		place = v.SysName
+	}
+	switch {
+	case r.DScan != nil:
+		s := "D-scan in " + place + ": " + plural(r.DScan.Ships, "ship") + ", " +
+			strconv.Itoa(r.DScan.ShipsGrid) + " on grid."
+		if r.DScan.Value > 0 {
+			s += " Hull value ≈ " + formatISKShort(r.DScan.Value) + " ISK."
+		}
+		return s
+	case r.Local != nil:
+		return "Local scan in " + place + ": " + plural(len(r.Local.Pilots)+len(r.Local.Unknown), "pilot") +
+			" in " + plural(len(r.Local.Alliances), "group") + "."
+	case r.Fleet != nil:
+		return "Fleet composition: " + plural(len(r.Fleet.Members), "member") + "."
+	case r.Probe != nil:
+		return "Probe scan in " + place + ": " + plural(len(r.Probe.Sigs), "signature") + "."
+	}
+	return "A scan shared from EveSynapse."
+}
+
+// handleScanSystem is POST /intel/scan/{id}/system: whoever
+// pasted the scan corrects its system. The scans row and the
+// stored reading move together, so the page, the map's scan
+// lists, the group and related rails and channel posting all
+// read the corrected system; reports already posted from
+// the scan keep the system they were filed under.
+func (app *Application) handleScanSystem(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	id := chi.URLParam(r, "id")
+	back := app.flashBack(w, r, "/intel/scan/"+id+"/")
+	if !validScanID(id) {
+		back("This scan does not exist.")
+		return
+	}
+	row, err := app.queries.GetScan(ctx, id)
+	if err != nil {
+		back("This scan does not exist.")
+		return
+	}
+	uid := app.userID(ctx)
+	mine := uid > 0 && row.UserID == uid
+	for _, own := range app.sessionScanIDs(ctx) {
+		if own == id {
+			mine = true
+		}
+	}
+	if !mine {
+		back("Only whoever pasted this scan can correct its system.")
+		return
+	}
+	name := strings.TrimSpace(r.PostFormValue("system"))
+	sys, err := app.queries.GetSDESystemByName(ctx, name)
+	if err != nil {
+		back("There is no system named “" + name + "”.")
+		return
+	}
+	var res scanResult
+	if json.Unmarshal([]byte(row.Result), &res) != nil {
+		back("This scan could not be read.")
+		return
+	}
+	res.SystemID = sys.SystemID
+	body, err := json.Marshal(res)
+	if err != nil {
+		back("That did not go through — please try again.")
+		return
+	}
+	if err := app.queries.UpdateScanSystem(ctx, db.UpdateScanSystemParams{ID: id, SystemID: sys.SystemID, Result: string(body)}); err != nil {
+		logging.Errorf("scans: correct system: %v", err)
+		back("That did not go through — please try again.")
+		return
+	}
+	back("System set to " + sys.Name + ".")
 }
 
 // handleMapScans is GET /map/scans.json?system=: the reader's own

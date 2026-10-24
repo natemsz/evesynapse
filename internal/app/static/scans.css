@@ -267,3 +267,70 @@ details > .sc-pilots { margin-left: 2.2rem; }
   font: inherit;
   font-size: 0.85rem;
 }
+
+/* --- Step 3: the group/related rail and compare --- */
+.sc-layout { display: grid; grid-template-columns: minmax(0, 1fr) 21rem; gap: 0.9rem; align-items: start; }
+.sc-main, .sc-rail { display: flex; flex-direction: column; gap: 0.9rem; min-width: 0; }
+@media (max-width: 64rem) { .sc-layout { grid-template-columns: minmax(0, 1fr); } }
+.sc-pair { margin: 0 0 0.4rem; font-size: 0.88rem; color: var(--text); }
+.sc-timeline, .sc-related { margin: 0; padding: 0; list-style: none; }
+.sc-timeline li, .sc-related li {
+  display: flex; flex-direction: column; gap: 0.1rem;
+  padding: 0.45rem 0; border-top: 1px solid var(--box-edge); font-size: 0.88rem;
+}
+.sc-timeline li:first-child, .sc-related li:first-child { border-top: 0; padding-top: 0.1rem; }
+.sc-timeline li.now { border-left: 3px solid var(--accent); padding-left: 0.5rem; }
+.sc-tl-top { display: flex; align-items: baseline; gap: 0.5rem; }
+.sc-tl-top time { margin-left: auto; color: var(--muted-2); font-size: 0.8rem; white-space: nowrap; }
+.sc-tl-k { font-weight: 600; }
+.sc-tl-t { color: var(--muted); }
+.sc-tl-n { color: var(--muted); font-size: 0.8rem; }
+.sc-delta { color: var(--accent); font-weight: 600; font-variant-numeric: tabular-nums; }
+.sc-cmp-link { font-size: 0.82rem; }
+.sc-append { display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.7rem; }
+.sc-append textarea {
+  width: 100%;
+  padding: 0.6rem 0.7rem;
+  border: 1px solid var(--box-edge);
+  border-radius: var(--r-md);
+  background: var(--row-alt);
+  color: var(--text);
+  font: 0.85rem/1.4 ui-monospace, "Cascadia Mono", Consolas, monospace;
+  resize: vertical;
+  box-sizing: border-box;
+}
+.sc-append textarea:focus { outline: none; border-color: var(--accent); }
+.sc-fix { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 0.6rem; }
+.sc-fix .btn { margin-left: auto; }
+
+/* Compare: the two-scan form, side headers and state chips. */
+.sc-cmp-form { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 0.6rem; }
+.sc-cmp-form .sc-sys { flex: 1 1 14rem; }
+.sc-cmp-form .sc-sys input { width: 100%; box-sizing: border-box; }
+.sc-cmp-btns { display: flex; align-items: center; gap: 0.5rem; margin-left: auto; }
+.sc-cmp-side h2 { margin-bottom: 0.2rem; }
+.sc-cmp-head { margin: 0.3rem 0 0; font-size: 1.05rem; font-weight: 600; color: var(--text-bright); }
+.sc-state {
+  display: inline-block; padding: 0 0.35rem; border-radius: var(--r-xs);
+  font-size: 0.75rem; font-weight: 600; color: var(--text-bright);
+  background: color-mix(in srgb, var(--muted) 30%, transparent);
+}
+.sc-state.new { background: color-mix(in srgb, var(--accent) 35%, transparent); }
+.sc-state.gone { background: color-mix(in srgb, var(--sc-hot) 35%, transparent); }
+
+/* The glanceable strips: composition and the grid split as
+   proportional segments of the stored totals. */
+.sc-strips { display: flex; flex-direction: column; gap: 0.6rem; }
+.sc-strip { display: flex; height: 1.05rem; border-radius: var(--r-xs); overflow: hidden; background: var(--row-alt); }
+.sc-seg { display: block; min-width: 2px; flex: var(--n, 1) 1 0; }
+.sc-tone-0 { background: #ff6a1a; }
+.sc-tone-1 { background: #e0301c; }
+.sc-tone-2 { background: #ff9a3c; }
+.sc-tone-3 { background: #d8a022; }
+.sc-tone-4 { background: #b39a7d; }
+.sc-tone-5 { background: #8a6f4d; }
+.sc-tone-6 { background: #6e5b40; }
+.sc-tone-7 { background: #4d4132; }
+.sc-strip-legend { display: flex; flex-wrap: wrap; gap: 0.2rem 0.9rem; margin: 0.3rem 0 0; padding: 0; list-style: none; font-size: 0.82rem; color: var(--muted); }
+.sc-strip-legend strong { color: var(--text); }
+.sc-dot { display: inline-block; width: 0.6rem; height: 0.6rem; border-radius: 2px; margin-right: 0.3rem; }

@@ -272,6 +272,27 @@ body::after { content: ""; position: absolute; top: 0; left: 0; right: 0; height
 .ld-tm-group a span { display: block; color: var(--ld-dim); font-size: 13px; }
 .ld-tm-group a:hover strong { color: var(--amber, #ffb35c); }
 
+/* The tool links widened the bar's contents: below the wrap's
+   full width the pill tightens its gaps and type so every link
+   and both header actions stay on it, and at the narrow end the
+   wordmark's text span yields to its glyph (the same trade the
+   phone width makes) until the nav itself steps aside at 900px. */
+@media (max-width: 1200px) {
+  .ld-hbar { gap: 14px; }
+  .ld-nav { gap: 12px; }
+  .ld-nav a { font-size: 13.5px; }
+  .ld-header .ld-btn { padding: 8px 13px; }
+}
+@media (max-width: 1080px) {
+  .ld-wordmark span { display: none; }
+}
+/* The last step before the phone layout: the nav steps aside
+   (the hero keeps its Public tools door) rather than squeeze
+   the pill's actions off its right edge. */
+@media (max-width: 960px) {
+  .ld-nav { display: none; }
+}
+
 @media (max-width: 560px) {
   /* The floating pill at phone width: the wordmark's text span
      yields to its glyph so both header actions stay on the pill. */

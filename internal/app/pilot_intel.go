@@ -126,6 +126,10 @@ type pilotIntelView struct {
 	Peak       string
 	Companions []pilotCompanion
 	Recent     []pilotKill
+	// Activity is the pilot's kill history (pilot_activity.go):
+	// the stored aggregates of their whole recorded kill record.
+	// Nil while the pilot has no profile.
+	Activity *pilotActivityView
 
 	SignedIn  bool
 	Reports   []pilotReport
@@ -222,6 +226,13 @@ func (app *Application) loadPilotIntel(ctx context.Context, id int64, name strin
 	}
 	v.Any = v.Kills+v.Losses > 0 || len(v.Recent) > 0
 	v.HasIntel = v.Any
+
+	// The kill history: stored aggregates of the whole record,
+	// present once the pilot has a profile (pilot_activity.go).
+	v.Activity = app.loadPilotActivity(ctx, id, names, now)
+	if v.Activity != nil && v.Activity.Any {
+		v.HasIntel = true
+	}
 
 	// The reader's own: channel reports naming the pilot, their scans
 	// with the pilot in them, the channels watching the pilot.

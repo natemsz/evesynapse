@@ -65,7 +65,7 @@ body::after { content: ""; position: absolute; top: 0; left: 0; right: 0; height
 .ld-main { display: block; }
 .ld-error { margin: 18px 0 0; padding: 0.6rem 0.9rem; border: 1px solid rgba(239, 68, 68, 0.45); border-radius: var(--r-md); background: rgba(60, 12, 8, 0.5); color: #ffb4a8; }
 
-.ld-hero { padding: 128px 0 calc(8px + clamp(170px, 30vh, 330px)); }
+.ld-hero { padding: 184px 0 calc(8px + clamp(170px, 30vh, 330px)); }
 .ld-kicker { color: var(--gold); letter-spacing: 0.34em; font-size: 12.5px; font-weight: 600; text-transform: uppercase; }
 .ld-hero h1 { font-size: clamp(36px, 5.5vw, 60px); line-height: 1.04; font-weight: 700; margin: 0; max-width: 15.5em; }
 /* The companion group (kicker, sub, calls to action, note)
@@ -262,7 +262,7 @@ body::after { content: ""; position: absolute; top: 0; left: 0; right: 0; height
 @media (max-width: 900px) {
   /* The stacked hero group is taller on a phone, so the band
      its height preserves shrinks to match. */
-  .ld-hero { padding-bottom: calc(8px + clamp(110px, 22vh, 210px)); }
+  .ld-hero { padding-top: 164px; padding-bottom: calc(8px + clamp(110px, 22vh, 210px)); }
   .ld-trust, .ld-tools { grid-template-columns: 1fr; }
   .ld-styles { grid-template-columns: 1fr; }
   .ld-feat { grid-template-columns: 1fr; gap: 22px; }

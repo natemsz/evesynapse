@@ -45,8 +45,21 @@ body::after { content: ""; position: absolute; top: 0; left: 0; right: 0; height
 
 .ld-wrap { max-width: 1180px; margin: 0 auto; padding: 0 22px; }
 
-.ld-header { position: fixed; top: 0; left: 0; right: 0; z-index: 40; }
-.ld-hbar { display: flex; align-items: center; gap: 22px; height: 56px; padding: 0 10px 0 18px; border-radius: 999px; background: linear-gradient(180deg, rgba(12, 8, 6, 0.58), rgba(12, 8, 6, 0) 52%), rgba(19, 14, 10, 0.84); backdrop-filter: blur(9px) saturate(1.15); -webkit-backdrop-filter: blur(9px) saturate(1.15); border: 1px solid rgba(255, 106, 0, 0.16); box-shadow: 0 14px 34px rgba(0, 0, 0, 0.45); }
+/* The header itself is a transparent positioning container:
+   the pill inside it carries all the paint. The site sheet's
+   bare header rule would otherwise lay its full-width bar
+   under the pill, so that paint is reset here in full. */
+.ld-header { position: fixed; top: 0; left: 0; right: 0; z-index: 40; background: none; border-bottom: none; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
+/* The header bar wears the approved liquid glass (v2 spec,
+   demo surface): the frost on the bar itself (30px blur,
+   saturate 1.45, the spec tint), a refraction layer over it
+   whose displacement map landing.js generates for the bar's
+   exact size, and the rim light riding the same layer.
+   Browsers without backdrop-filter url() support keep the
+   frost and the rim, un-displaced. */
+.ld-hbar { display: flex; align-items: center; gap: 22px; height: 56px; padding: 0 10px 0 18px; border-radius: 999px; position: relative; isolation: isolate; background: rgb(8 13 22 / 0.48); backdrop-filter: blur(30px) saturate(1.45); -webkit-backdrop-filter: blur(30px) saturate(1.45); border: 1px solid rgba(255, 106, 0, 0.16); box-shadow: 0 14px 34px rgba(0, 0, 0, 0.45); }
+.ld-hbar::before { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; z-index: 0; background: linear-gradient(180deg, rgb(255 255 255 / 0.13), rgb(255 255 255 / 0) 46%); box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.45), inset 0 -1px 0 rgb(255 255 255 / 0.10), inset 1px 0 0 rgb(255 255 255 / 0.12), inset -1px 0 0 rgb(255 255 255 / 0.12); backdrop-filter: url(#ld-liquid) saturate(1.35); -webkit-backdrop-filter: url(#ld-liquid) saturate(1.35); }
+.ld-hbar > * { position: relative; z-index: 1; }
 .ld-wordmark { display: inline-flex; align-items: center; flex: none; margin: 0; text-decoration: none; }
 .ld-wordmark .wordmark-glyph { height: 30px; width: 30px; margin-right: 9px; }
 .ld-nav { display: flex; gap: 18px; margin-left: 4px; }
@@ -65,7 +78,7 @@ body::after { content: ""; position: absolute; top: 0; left: 0; right: 0; height
 .ld-main { display: block; }
 .ld-error { margin: 18px 0 0; padding: 0.6rem 0.9rem; border: 1px solid rgba(239, 68, 68, 0.45); border-radius: var(--r-md); background: rgba(60, 12, 8, 0.5); color: #ffb4a8; }
 
-.ld-hero { padding: 128px 0 calc(8px + clamp(170px, 30vh, 330px)); }
+.ld-hero { padding: 184px 0 calc(8px + clamp(170px, 30vh, 330px)); }
 .ld-kicker { color: var(--gold); letter-spacing: 0.34em; font-size: 12.5px; font-weight: 600; text-transform: uppercase; }
 .ld-hero h1 { font-size: clamp(36px, 5.5vw, 60px); line-height: 1.04; font-weight: 700; margin: 0; max-width: 15.5em; }
 /* The companion group (kicker, sub, calls to action, note)
@@ -262,7 +275,7 @@ body::after { content: ""; position: absolute; top: 0; left: 0; right: 0; height
 @media (max-width: 900px) {
   /* The stacked hero group is taller on a phone, so the band
      its height preserves shrinks to match. */
-  .ld-hero { padding-bottom: calc(8px + clamp(110px, 22vh, 210px)); }
+  .ld-hero { padding-top: 164px; padding-bottom: calc(8px + clamp(110px, 22vh, 210px)); }
   .ld-trust, .ld-tools { grid-template-columns: 1fr; }
   .ld-styles { grid-template-columns: 1fr; }
   .ld-feat { grid-template-columns: 1fr; gap: 22px; }

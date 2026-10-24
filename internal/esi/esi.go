@@ -334,6 +334,14 @@ type Client struct {
 	placeMu    sync.Mutex
 	placeNames map[int64]string
 
+	// IDs ESI has definitively said have no station/system
+	// payload (400/404 from GET /universe/stations/{id}/ or
+	// /universe/systems/{id}/): a harvested snapshot keeps
+	// re-deriving the want from the same stored rows, so without
+	// this memory the warm-up pass would re-ask every cycle and
+	// spend the shared error budget on a settled answer.
+	placeNameMisses map[int64]bool
+
 	// In-process cache of character ID → name, warmed by the
 	// worker from killmail details so the killmail list can label
 	// victims and final-blow attackers. Public data.
@@ -422,6 +430,7 @@ func New(httpClient *http.Client, queries *db.Queries, tokens TokenFunc) *Client
 		typeGroups:         make(map[int64]int64),
 		groupNames:         make(map[int64]string),
 		placeNames:         make(map[int64]string),
+		placeNameMisses:    make(map[int64]bool),
 		charNames:          make(map[int64]string),
 		charNameMisses:     make(map[int64]bool),
 		corpNames:          make(map[int64]string),
@@ -3127,6 +3136,23 @@ func (c *Client) StoreGroupName(id int64, name string) {
 func (c *Client) StorePlaceName(id int64, name string) {
 	c.placeMu.Lock()
 	c.placeNames[id] = name
+	c.placeMu.Unlock()
+}
+
+// PlaceNameMissed reports whether ESI has already definitively
+// answered that this ID has no station/system payload (see
+// placeNameMisses).
+func (c *Client) PlaceNameMissed(id int64) bool {
+	c.placeMu.Lock()
+	defer c.placeMu.Unlock()
+	return c.placeNameMisses[id]
+}
+
+// StorePlaceNameMiss records a definitive "no such place" answer
+// for an ID so the warm-up pass skips it from now on.
+func (c *Client) StorePlaceNameMiss(id int64) {
+	c.placeMu.Lock()
+	c.placeNameMisses[id] = true
 	c.placeMu.Unlock()
 }
 

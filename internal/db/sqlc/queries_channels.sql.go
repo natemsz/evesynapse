@@ -673,6 +673,42 @@ func (q *Queries) ListIntelChannelSideCorps(ctx context.Context, arg ListIntelCh
 	return items, nil
 }
 
+const listIntelPilotNames = `-- name: ListIntelPilotNames :many
+SELECT character_id, name FROM intel_pilot_names WHERE character_id > 0
+`
+
+type ListIntelPilotNamesRow struct {
+	CharacterID int64  `json:"character_id"`
+	Name        string `json:"name"`
+}
+
+// Every pilot name the site has verified, for segmenting a fused
+// roster against them. The analysis dictionaries load lists the
+// same way (the SDE's ships and types); this is the looked-up
+// names table, read whole and kept.
+func (q *Queries) ListIntelPilotNames(ctx context.Context) ([]ListIntelPilotNamesRow, error) {
+	rows, err := q.db.QueryContext(ctx, listIntelPilotNames)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListIntelPilotNamesRow
+	for rows.Next() {
+		var i ListIntelPilotNamesRow
+		if err := rows.Scan(&i.CharacterID, &i.Name); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listIntelReports = `-- name: ListIntelReports :many
 SELECT id, channel_id, system_id, author_user_id, reporter, text, pilots, hostiles, clear, scan_id, source, seen_at, created_at, kind, analysis
 FROM intel_reports
@@ -1006,7 +1042,7 @@ func (q *Queries) ListOrgIntelChannels(ctx context.Context, arg ListOrgIntelChan
 }
 
 const listPendingIntelReports = `-- name: ListPendingIntelReports :many
-SELECT id, channel_id, system_id, text, hostiles, clear, analysis, scan_id
+SELECT id, channel_id, system_id, text, hostiles, clear, analysis, scan_id, author_character_id, author_user_id, seen_at
 FROM intel_reports
 WHERE analysis_pending AND created_at >= $1::timestamptz
 ORDER BY created_at
@@ -1019,17 +1055,22 @@ type ListPendingIntelReportsParams struct {
 }
 
 type ListPendingIntelReportsRow struct {
-	ID        int64  `json:"id"`
-	ChannelID int64  `json:"channel_id"`
-	SystemID  int64  `json:"system_id"`
-	Text      string `json:"text"`
-	Hostiles  int32  `json:"hostiles"`
-	Clear     bool   `json:"clear"`
-	Analysis  string `json:"analysis"`
-	ScanID    string `json:"scan_id"`
+	ID                int64     `json:"id"`
+	ChannelID         int64     `json:"channel_id"`
+	SystemID          int64     `json:"system_id"`
+	Text              string    `json:"text"`
+	Hostiles          int32     `json:"hostiles"`
+	Clear             bool      `json:"clear"`
+	Analysis          string    `json:"analysis"`
+	ScanID            string    `json:"scan_id"`
+	AuthorCharacterID int64     `json:"author_character_id"`
+	AuthorUserID      int64     `json:"author_user_id"`
+	SeenAt            time.Time `json:"seen_at"`
 }
 
-// Intel analysis (schema 083).
+// Intel analysis (schema 083). ListPendingIntelReports also
+// carries the author: re-reading a report as a roster counts the
+// poster the roster names as one of its own.
 func (q *Queries) ListPendingIntelReports(ctx context.Context, arg ListPendingIntelReportsParams) ([]ListPendingIntelReportsRow, error) {
 	rows, err := q.db.QueryContext(ctx, listPendingIntelReports, arg.Since, arg.MaxRows)
 	if err != nil {
@@ -1048,6 +1089,9 @@ func (q *Queries) ListPendingIntelReports(ctx context.Context, arg ListPendingIn
 			&i.Clear,
 			&i.Analysis,
 			&i.ScanID,
+			&i.AuthorCharacterID,
+			&i.AuthorUserID,
+			&i.SeenAt,
 		); err != nil {
 			return nil, err
 		}
@@ -1128,6 +1172,68 @@ func (q *Queries) ListRecentIntelReports(ctx context.Context, arg ListRecentInte
 	return items, nil
 }
 
+const listRecentRosterReports = `-- name: ListRecentRosterReports :many
+SELECT id, text, analysis, scan_id FROM intel_reports
+WHERE channel_id = $1 AND system_id = $2
+  AND id <> $3
+  AND seen_at >= $4::timestamptz AND seen_at <= $5::timestamptz
+ORDER BY seen_at DESC
+LIMIT 25
+`
+
+type ListRecentRosterReportsParams struct {
+	ChannelID int64     `json:"channel_id"`
+	SystemID  int64     `json:"system_id"`
+	ExcludeID int64     `json:"exclude_id"`
+	Since     time.Time `json:"since"`
+	Until     time.Time `json:"until"`
+}
+
+type ListRecentRosterReportsRow struct {
+	ID       int64  `json:"id"`
+	Text     string `json:"text"`
+	Analysis string `json:"analysis"`
+	ScanID   string `json:"scan_id"`
+}
+
+// The reports a roster re-send might already stand as: same
+// channel and system, seen within the caller's window either
+// way. The caller compares pilot sets in Go -- a roster sent
+// fused, spaced and plain has three texts and one set.
+func (q *Queries) ListRecentRosterReports(ctx context.Context, arg ListRecentRosterReportsParams) ([]ListRecentRosterReportsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listRecentRosterReports,
+		arg.ChannelID,
+		arg.SystemID,
+		arg.ExcludeID,
+		arg.Since,
+		arg.Until,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListRecentRosterReportsRow
+	for rows.Next() {
+		var i ListRecentRosterReportsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Text,
+			&i.Analysis,
+			&i.ScanID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listSDESystemNames = `-- name: ListSDESystemNames :many
 SELECT system_id, name FROM sde_systems
 `
@@ -1190,6 +1296,38 @@ func (q *Queries) SetIntelReportAnalysis(ctx context.Context, arg SetIntelReport
 		arg.Kind,
 		arg.Analysis,
 		arg.AnalysisPending,
+		arg.ID,
+	)
+	return err
+}
+
+const setIntelReportRoster = `-- name: SetIntelReportRoster :exec
+UPDATE intel_reports SET text = $1, pilots = $2, hostiles = $3,
+    scan_id = $4, kind = $5, analysis = $6, analysis_pending = false
+WHERE id = $7
+`
+
+type SetIntelReportRosterParams struct {
+	Text     string `json:"text"`
+	Pilots   string `json:"pilots"`
+	Hostiles int32  `json:"hostiles"`
+	ScanID   string `json:"scan_id"`
+	Kind     string `json:"kind"`
+	Analysis string `json:"analysis"`
+	ID       int64  `json:"id"`
+}
+
+// A report re-read as a roster (its text had fused on the way in):
+// the headline becomes the reading's sentence and the reading is
+// linked as its scan, as for a pasted scan.
+func (q *Queries) SetIntelReportRoster(ctx context.Context, arg SetIntelReportRosterParams) error {
+	_, err := q.db.ExecContext(ctx, setIntelReportRoster,
+		arg.Text,
+		arg.Pilots,
+		arg.Hostiles,
+		arg.ScanID,
+		arg.Kind,
+		arg.Analysis,
 		arg.ID,
 	)
 	return err

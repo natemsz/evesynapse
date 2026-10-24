@@ -97,7 +97,11 @@ html[data-theme="light"] .sc { --sc-hot: #b0302a; }
 
 /* --- A reading --- */
 .sc-missing { margin: 0; }
-.sc-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.6rem 1rem; }
+/* The head is a <header>, so the shell's bare header rule (style.css)
+ * would make it sticky at top: 0 with the top bar's z-index: it then
+ * sticks over the stats row on scroll and clips the tiles. It is a
+ * panel in the page flow, not a bar: it stays put. */
+.sc-head { position: static; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.6rem 1rem; }
 .sc-where { margin: 0; }
 .sc-share { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; }
 .sc-share input {

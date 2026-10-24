@@ -169,7 +169,7 @@ FROM pilot_activity_profiles
 WHERE character_id = $1
 `
 
-// Pilot activity profiles (schema 087, pilot_activity.go): the
+// Pilot activity profiles (schema 088, pilot_activity.go): the
 // stored aggregates the pilot page's kill history reads. Written
 // at ingest only: the one-time history backfill of a pilot met in
 // a reading, and the live kill stream for pilots who have one.

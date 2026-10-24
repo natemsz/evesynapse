@@ -95,7 +95,7 @@ SELECT channel_id, character_id, note, added_at FROM intel_watch
 WHERE channel_id = ANY(sqlc.arg(channel_ids)::bigint[])
 ORDER BY added_at DESC;
 
--- Pilot activity profiles (schema 087, pilot_activity.go): the
+-- Pilot activity profiles (schema 088, pilot_activity.go): the
 -- stored aggregates the pilot page's kill history reads. Written
 -- at ingest only: the one-time history backfill of a pilot met in
 -- a reading, and the live kill stream for pilots who have one.

@@ -1,7 +1,7 @@
 package app
 
 // ---------------------------------------------------------------------------
-// Pilot activity profiles (schema 087): what the public kill record
+// Pilot activity profiles (schema 088): what the public kill record
 // says about a pilot, kept as stored aggregates (the ships they fly
 // and lose, the systems they are active in, the hours, the usual
 // hull, the gang size) and read by the pilot page's kill history.

@@ -262,6 +262,16 @@ type workbenchView struct {
 	Hulls    int
 	PilotsN  int
 
+	// The group picture: set when the report's group has more
+	// than one member and the page renders the stored
+	// composite. Rail lists the members; RailKinds summarises
+	// them by kind for the rail's header.
+	Grouped   bool
+	GroupID   int64
+	Rail      []wbRailItem
+	RailMore  int // members beyond the rail's cap
+	RailKinds string
+
 	// Box 1: grid & range split.
 	HasDScan   bool
 	OnGrid     int
@@ -312,6 +322,7 @@ type workbenchView struct {
 	HasPrev     bool
 	PrevAgo     string
 	PrevBy      string
+	DiffGroup   bool // the other side is the group's previous composite
 	HullDeltas  []wbDelta
 	PilotDeltas []wbPilotDelta
 
@@ -400,12 +411,52 @@ func (app *Application) buildWorkbench(ctx context.Context, rep db.IntelReport, 
 		}
 	}
 
-	if res.DScan != nil {
-		app.wbFillDScan(ctx, v, res.DScan, rawRows)
+	// The group picture: when the report's group has more than
+	// one member, the page renders the stored composite (the
+	// newest d-scan governing, the locals merged) and the diff
+	// runs against the previous composite. A singleton renders
+	// exactly as it always has, from its own stored rows.
+	var comp, prevComp *intelComposite
+	grouped := false
+	if rep.GroupID > 0 {
+		var ok bool
+		comp, prevComp, ok = app.loadGroupComposite(ctx, rep.GroupID)
+		grouped = ok && len(comp.Members) > 1
 	}
-	app.wbFillLocal(ctx, v, rep.ChannelID, rep.SystemID, &analysis, res.Local, names)
+	fillAnalysis := &analysis
+	dscan, dscanRows, local := res.DScan, rawRows, res.Local
+	if grouped {
+		now := time.Now()
+		v.Grouped = true
+		v.GroupID = rep.GroupID
+		if comp.Headline != "" {
+			v.Headline = comp.Headline
+		}
+		if !comp.LatestAt.IsZero() {
+			v.Ago = ageText(now, comp.LatestAt)
+		}
+		v.Rail, v.RailMore = wbRail(now, comp, rep.ID)
+		v.RailKinds = wbRailKinds(comp)
+		if comp.Counts != nil {
+			v.HasCounts = true
+			v.Hostile, v.Friendly = comp.Counts.Hostile, comp.Counts.Friendly
+			v.Neutral, v.Unclass = comp.Counts.Neutral, comp.Counts.Unclassified
+		} else if comp.Local != nil {
+			v.HasCounts = false // wbFillLocal recounts from the union
+		}
+		if comp.DScan != nil {
+			dscan, dscanRows = comp.DScan, comp.DScanRows
+		}
+		local = comp.Local
+		fillAnalysis = &intelanalyze.Analysis{Pilots: comp.Pilots, Ships: comp.Ships, Counts: comp.Counts}
+	}
+
+	if dscan != nil {
+		app.wbFillDScan(ctx, v, dscan, dscanRows)
+	}
+	app.wbFillLocal(ctx, v, rep.ChannelID, rep.SystemID, fillAnalysis, local, names)
 	if v.Hulls == 0 {
-		for _, s := range analysis.Ships {
+		for _, s := range fillAnalysis.Ships {
 			n := s.N
 			if n == 0 {
 				n = 1
@@ -414,7 +465,23 @@ func (app *Application) buildWorkbench(ctx context.Context, rep db.IntelReport, 
 		}
 	}
 	app.wbFillSystem(ctx, v, rep.SystemID, names)
-	app.wbFillDiff(ctx, v, rep, &analysis, &res)
+	if grouped {
+		if prevComp != nil {
+			v.HasPrev = true
+			v.DiffGroup = true
+			if n := len(prevComp.Members); n > 0 {
+				last := prevComp.Members[n-1]
+				v.PrevAgo = ageText(time.Now(), last.SeenAt)
+				v.PrevBy = last.Reporter
+			}
+			curRes := &scanResult{DScan: comp.DScan, Local: comp.Local}
+			prevRes := &scanResult{DScan: prevComp.DScan, Local: prevComp.Local}
+			prevA := &intelanalyze.Analysis{Pilots: prevComp.Pilots, Ships: prevComp.Ships}
+			app.wbFillDiffSets(v, curRes, fillAnalysis, prevRes, prevA)
+		}
+	} else {
+		app.wbFillDiff(ctx, v, rep, &analysis, &res)
+	}
 	return v
 }
 
@@ -1337,8 +1404,15 @@ func (app *Application) wbFillDiff(ctx context.Context, v *workbenchView, rep db
 	v.PrevAgo = ageText(time.Now(), prev.SeenAt)
 	v.PrevBy = prev.Reporter
 	prevA, prevRes := app.wbReadStored(ctx, prev)
+	app.wbFillDiffSets(v, curRes, cur, &prevRes, &prevA)
+}
 
-	curT, prevT := wbTallies(curRes, cur), wbTallies(&prevRes, &prevA)
+// wbFillDiffSets computes the diff view's deltas between two
+// readings: hull tallies and rosters, current against previous.
+// The report diff calls it with the previous report's reading;
+// the group diff calls it with the previous composite's faces.
+func (app *Application) wbFillDiffSets(v *workbenchView, curRes *scanResult, cur *intelanalyze.Analysis, prevRes *scanResult, prev *intelanalyze.Analysis) {
+	curT, prevT := wbTallies(curRes, cur), wbTallies(prevRes, prev)
 	names := map[string]bool{}
 	for n := range curT {
 		names[n] = true
@@ -1375,7 +1449,7 @@ func (app *Application) wbFillDiff(ctx context.Context, v *workbenchView, rep db
 	byN(left)
 	v.HullDeltas = append(append(added, left...), grid...)
 
-	curR, prevR := wbRoster(curRes, cur), wbRoster(&prevRes, &prevA)
+	curR, prevR := wbRoster(curRes, cur), wbRoster(prevRes, prev)
 	buckets := map[int64]string{}
 	for _, p := range v.AllPilots {
 		buckets[p.ID] = p.Bucket

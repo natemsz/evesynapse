@@ -1,4 +1,4 @@
--- Pilot activity profiles (schema 087): what the public kill
+-- Pilot activity profiles (schema 088): what the public kill
 -- record says about one pilot, kept as stored aggregates
 -- (internal/app/pilot_activity.go). A pilot first met in an intel
 -- reading is backfilled once from zKillboard's history; after

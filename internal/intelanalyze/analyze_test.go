@@ -19,6 +19,11 @@ func dict() Dict {
 		"purifier": {12038, "Purifier", ClassBomber},
 		"ibis":     {601, "Ibis", ClassOther},
 		"velator":  {606, "Velator", ClassOther},
+		"gila":     {17715, "Gila", ClassOther},
+		"venture":  {32880, "Venture", ClassOther},
+		"golem":    {28710, "Golem", ClassOther},
+		"mackinaw": {22548, "Mackinaw", ClassOther},
+		"hulk":     {22544, "Hulk", ClassOther},
 	}
 	// Some of these pilots share their names with things and
 	// places, as EVE's do: characters called "Force Field",
@@ -26,8 +31,10 @@ func dict() Dict {
 	pilots := map[string]int64{"hostile one": 91000001, "hostile two": 91000002, "solo": 91000003, "friendly guy": 91000004,
 		"force field": 91000005, "viii": 91000006, "station": 91000007, "moon": 91000008,
 		"minmatar control tower": 91000009, "minmatar military": 91000010, "vherokior": 91000011, "treasury": 91000012,
-		"blackcatrus": 91000013, "legendmysticdragon": 91000014, "grid": 91000015, "unclassified": 91000016}
-	types := map[string]int64{"force field": 16103, "minmatar control tower": 16214}
+		"blackcatrus": 91000013, "legendmysticdragon": 91000014, "grid": 91000015, "unclassified": 91000016,
+		"wwwlening": 91000017, "hamalias": 91000018}
+	types := map[string]int64{"force field": 16103, "minmatar control tower": 16214,
+		"raitaru": 35825, "stargate (minmatar system)": 29633}
 	asked := map[string]bool{"some random words": true, "some random": true, "random words": true, "some": true, "random": true, "words": true}
 	return Dict{
 		Ship: func(l string) (int64, string, string, bool) {
@@ -41,7 +48,7 @@ func dict() Dict {
 		Pilot: func(l string) (int64, string, bool, bool) {
 			id, ok := pilots[l]
 			names := map[int64]string{91000001: "Hostile One", 91000002: "Hostile Two", 91000003: "Solo", 91000004: "Friendly Guy",
-				91000013: "BlackCatRus", 91000014: "LegendMysticDragon"}
+				91000013: "BlackCatRus", 91000014: "LegendMysticDragon", 91000017: "WWWLeninG", 91000018: "Hamalias"}
 			return id, names[id], ok, ok || asked[l]
 		},
 		Gate: func(sys int64, l string) (int64, bool) {
@@ -200,5 +207,97 @@ func TestAnalyzeResidue(t *testing.T) {
 	}
 	if len(pending.Residue) != 0 {
 		t.Errorf("text waiting on a lookup is not residue: %q", pending.Residue)
+	}
+}
+
+// TestAnalyzeScanBlobNames pins the reading of scan-shaped
+// text whose separators died on the way in (a d-scan relayed
+// through chat): the rows are read as rows, and a name span
+// standing in a row's name column -- a player-set ship or
+// structure name -- is never minted as a pilot, an unknown or
+// residue, however it shreds. The two blobs are the owner's
+// reported cards, reconstructed.
+func TestAnalyzeScanBlobNames(t *testing.T) {
+	d := dict()
+	fragments := []string{"ai's", "logistics", "agency", "perch", "free", "scorp",
+		"minmatar", "aeddin", "gulfonodi", "teonusude", "blowjob queen", "blowjob", "queen", "monster", "fb"}
+	clean := func(a Analysis) {
+		t.Helper()
+		for _, u := range append(append([]string{}, a.Unknown...), a.Residue...) {
+			for _, f := range fragments {
+				if u == f || strings.Contains(u, f) {
+					t.Errorf("fragment %q surfaced in %q (%+v)", f, u, a)
+				}
+			}
+		}
+	}
+	shipIDs := func(a Analysis) map[int64]bool {
+		ids := map[int64]bool{}
+		for _, s := range a.Ships {
+			ids[s.TypeID] = true
+		}
+		return ids
+	}
+
+	blob1 := "17715 fb Gila -35825 - AI's Logistics Agency HQ Raitaru 1,048,258 km35825 Teonusude - Eagle's Perch Raitaru 7.4 AU32880 Venture* — WWWLeninG Venture 2,220 m28710 free Golem -28710 scorp Golem -29633 Aeddin Stargate (Minmatar System) 8.0 AU29633 Gulfonodi Stargate (Minmatar System) 12.4 AU"
+	a := Analyze(Input{System: 1, Text: blob1}, d)
+	clean(a)
+	if len(a.Pilots) != 1 || a.Pilots[0].Name != "WWWLeninG" {
+		t.Errorf("blob 1 pilots %+v, want WWWLeninG only", a.Pilots)
+	}
+	for _, id := range []int64{17715, 35825, 32880, 28710, 29633} {
+		if !shipIDs(a)[id] {
+			t.Errorf("blob 1 ships %+v, want type %d among them", a.Ships, id)
+		}
+	}
+	if len(a.Unknown) != 0 || len(a.Residue) != 0 {
+		t.Errorf("blob 1 left unknown %q residue %q, want none", a.Unknown, a.Residue)
+	}
+
+	// The second card: "Blowjob queen" is the Mackinaw's
+	// player-set name and "monster" the Hulk's; both stand in
+	// name columns, so neither is an entity -- and the pilot
+	// fused into the Hulk's name span is not minted from it
+	// either.
+	blob2 := "35825 Teonusude - AI's Logistics Agency HQ Raitaru 1,048,257 km35825 Teonusude - Eagle's Perch Raitaru 7.4 AU22548 Blowjob queen Mackinaw -22544 monster Hamalias Hulk -22544"
+	a = Analyze(Input{System: 1, Text: blob2}, d)
+	clean(a)
+	if len(a.Pilots) != 0 {
+		t.Errorf("blob 2 pilots %+v, want none minted from name columns", a.Pilots)
+	}
+	for _, id := range []int64{35825, 22548, 22544} {
+		if !shipIDs(a)[id] {
+			t.Errorf("blob 2 ships %+v, want type %d among them", a.Ships, id)
+		}
+	}
+	if len(a.Unknown) != 0 || len(a.Residue) != 0 {
+		t.Errorf("blob 2 left unknown %q residue %q, want none", a.Unknown, a.Residue)
+	}
+
+	// An overview's rows read by their tails: the name column
+	// there names the pilot, and the tickers and velocity
+	// figures are the row's, not entities.
+	overview := "Hamalias Hulk 12 km 145 m/s -23 m/s 34 m/s [NAT.] WWWLeninG Venture 900 m 0 m/s 12 m/s 3 m/s"
+	a = Analyze(Input{System: 1, Text: overview}, d)
+	clean(a)
+	if len(a.Pilots) != 2 || a.Pilots[0].Name != "Hamalias" || a.Pilots[1].Name != "WWWLeninG" {
+		t.Errorf("overview pilots %+v, want Hamalias and WWWLeninG", a.Pilots)
+	}
+	if len(a.Unknown) != 0 || len(a.Residue) != 0 {
+		t.Errorf("overview left unknown %q residue %q, want none", a.Unknown, a.Residue)
+	}
+
+	// A structure name with its type column lost is one
+	// location; with the type still standing, the type is read
+	// and the name still set aside.
+	for _, text := range []string{"Teonusude - Eagle's Perch 7.4 AU", "Teonusude - Eagle's Perch Raitaru 7.4 AU"} {
+		a = Analyze(Input{System: 1, Text: text}, d)
+		clean(a)
+		if len(a.Pilots) != 0 || len(a.Unknown) != 0 || len(a.Residue) != 0 {
+			t.Errorf("%q: pilots %+v unknown %q residue %q, want none", text, a.Pilots, a.Unknown, a.Residue)
+		}
+	}
+	if a = Analyze(Input{System: 1, Text: "Teonusude - Eagle's Perch Raitaru 7.4 AU"}, d); !shipIDs(a)[35825] {
+		t.Errorf("typed structure: ships %+v, want the Raitaru", a.Ships)
 	}
 }

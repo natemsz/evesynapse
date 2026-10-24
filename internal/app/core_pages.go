@@ -93,6 +93,8 @@ type pageData struct {
 	Channel  *channelView
 	// IntelFeed is the cross-channel feed page (/intel/feed/).
 	IntelFeed *intelFeedView
+	// Workbench is the intel workbench page (/intel/workbench/{id}/).
+	Workbench *workbenchView
 
 	// Player structure page (/structure/): the local structure
 	// record.
@@ -154,7 +156,7 @@ func sectionForPage(page string) string {
 		return "corporation"
 	case "map.html":
 		return "map"
-	case "killboard.html", "kill.html", "scans.html", "scan.html", "scan_compare.html", "channels.html", "channel.html":
+	case "killboard.html", "kill.html", "scans.html", "scan.html", "scan_compare.html", "channels.html", "channel.html", "intel_workbench.html":
 		return "intel"
 	case "sync.html":
 		return "sync"

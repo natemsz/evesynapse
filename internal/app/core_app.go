@@ -738,6 +738,9 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 		r.Use(app.requireAuth)
 		r.Post("/intel/scan/{id}/post", app.handleScanPost)
 		r.Get("/intel/feed/", app.handleIntelFeed)
+		// The workbench's scan door (handleWorkbenchScan) is
+		// built but deliberately unrouted for now.
+		r.Get("/intel/workbench/{reportID}/", app.handleWorkbench)
 		r.Get("/intel/feed.json", app.handleIntelFeedJSON)
 		r.Post("/intel/channels/create", app.handleChannelCreate)
 		r.Get("/intel/channels/{channelID}/", app.handleChannel)

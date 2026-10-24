@@ -211,6 +211,32 @@ LIMIT sqlc.arg(max_rows)::int;
 -- name: GetIntelReport :one
 SELECT id, channel_id, author_user_id FROM intel_reports WHERE id = $1;
 
+-- A report in full: the workbench page renders from the stored
+-- row and its analysis.
+-- name: GetIntelReportFull :one
+SELECT id, channel_id, system_id, author_user_id, author_character_id, reporter, text, pilots, hostiles, clear, scan_id, source, seen_at, created_at, kind, analysis, analysis_pending
+FROM intel_reports
+WHERE id = $1;
+
+-- The report before one in its channel and system: the diff
+-- view's other side.
+-- name: GetPreviousIntelReport :one
+SELECT id, channel_id, system_id, author_user_id, author_character_id, reporter, text, pilots, hostiles, clear, scan_id, source, seen_at, created_at, kind, analysis, analysis_pending
+FROM intel_reports
+WHERE channel_id = sqlc.arg(channel_id)
+  AND system_id = sqlc.arg(system_id)
+  AND (seen_at, id) < (sqlc.arg(before_at)::timestamptz, sqlc.arg(before_id)::bigint)
+ORDER BY seen_at DESC, id DESC
+LIMIT 1;
+
+-- The newest report a scan stands behind, if it was ever posted
+-- to a channel: a duplicate paste opens the standing report.
+-- name: GetIntelReportByScanID :one
+SELECT id, channel_id FROM intel_reports
+WHERE scan_id = $1
+ORDER BY id DESC
+LIMIT 1;
+
 -- name: DeleteIntelReport :exec
 DELETE FROM intel_reports WHERE id = $1;
 

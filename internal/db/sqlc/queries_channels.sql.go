@@ -320,6 +320,60 @@ func (q *Queries) GetIntelReport(ctx context.Context, id int64) (GetIntelReportR
 	return i, err
 }
 
+const getIntelReportByScanID = `-- name: GetIntelReportByScanID :one
+SELECT id, channel_id FROM intel_reports
+WHERE scan_id = $1
+ORDER BY id DESC
+LIMIT 1
+`
+
+type GetIntelReportByScanIDRow struct {
+	ID        int64 `json:"id"`
+	ChannelID int64 `json:"channel_id"`
+}
+
+// The newest report a scan stands behind, if it was ever posted
+// to a channel: a duplicate paste opens the standing report.
+func (q *Queries) GetIntelReportByScanID(ctx context.Context, scanID string) (GetIntelReportByScanIDRow, error) {
+	row := q.db.QueryRowContext(ctx, getIntelReportByScanID, scanID)
+	var i GetIntelReportByScanIDRow
+	err := row.Scan(&i.ID, &i.ChannelID)
+	return i, err
+}
+
+const getIntelReportFull = `-- name: GetIntelReportFull :one
+SELECT id, channel_id, system_id, author_user_id, author_character_id, reporter, text, pilots, hostiles, clear, scan_id, source, seen_at, created_at, kind, analysis, analysis_pending
+FROM intel_reports
+WHERE id = $1
+`
+
+// A report in full: the workbench page renders from the stored
+// row and its analysis.
+func (q *Queries) GetIntelReportFull(ctx context.Context, id int64) (IntelReport, error) {
+	row := q.db.QueryRowContext(ctx, getIntelReportFull, id)
+	var i IntelReport
+	err := row.Scan(
+		&i.ID,
+		&i.ChannelID,
+		&i.SystemID,
+		&i.AuthorUserID,
+		&i.AuthorCharacterID,
+		&i.Reporter,
+		&i.Text,
+		&i.Pilots,
+		&i.Hostiles,
+		&i.Clear,
+		&i.ScanID,
+		&i.Source,
+		&i.SeenAt,
+		&i.CreatedAt,
+		&i.Kind,
+		&i.Analysis,
+		&i.AnalysisPending,
+	)
+	return i, err
+}
+
 const getIntelTokenByHash = `-- name: GetIntelTokenByHash :one
 SELECT id, user_id, public_key, device FROM intel_tokens WHERE token_hash = $1
 `
@@ -339,6 +393,55 @@ func (q *Queries) GetIntelTokenByHash(ctx context.Context, tokenHash string) (Ge
 		&i.UserID,
 		&i.PublicKey,
 		&i.Device,
+	)
+	return i, err
+}
+
+const getPreviousIntelReport = `-- name: GetPreviousIntelReport :one
+SELECT id, channel_id, system_id, author_user_id, author_character_id, reporter, text, pilots, hostiles, clear, scan_id, source, seen_at, created_at, kind, analysis, analysis_pending
+FROM intel_reports
+WHERE channel_id = $1
+  AND system_id = $2
+  AND (seen_at, id) < ($3::timestamptz, $4::bigint)
+ORDER BY seen_at DESC, id DESC
+LIMIT 1
+`
+
+type GetPreviousIntelReportParams struct {
+	ChannelID int64     `json:"channel_id"`
+	SystemID  int64     `json:"system_id"`
+	BeforeAt  time.Time `json:"before_at"`
+	BeforeID  int64     `json:"before_id"`
+}
+
+// The report before one in its channel and system: the diff
+// view's other side.
+func (q *Queries) GetPreviousIntelReport(ctx context.Context, arg GetPreviousIntelReportParams) (IntelReport, error) {
+	row := q.db.QueryRowContext(ctx, getPreviousIntelReport,
+		arg.ChannelID,
+		arg.SystemID,
+		arg.BeforeAt,
+		arg.BeforeID,
+	)
+	var i IntelReport
+	err := row.Scan(
+		&i.ID,
+		&i.ChannelID,
+		&i.SystemID,
+		&i.AuthorUserID,
+		&i.AuthorCharacterID,
+		&i.Reporter,
+		&i.Text,
+		&i.Pilots,
+		&i.Hostiles,
+		&i.Clear,
+		&i.ScanID,
+		&i.Source,
+		&i.SeenAt,
+		&i.CreatedAt,
+		&i.Kind,
+		&i.Analysis,
+		&i.AnalysisPending,
 	)
 	return i, err
 }

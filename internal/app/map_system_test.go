@@ -26,10 +26,11 @@ func TestMapSystem(t *testing.T) {
 	now := time.Now().UTC()
 	exec(`INSERT INTO sde_systems (system_id, name, region_id, security) VALUES (30003504, 'Rancer', 10000048, 0.4) ON CONFLICT DO NOTHING`)
 	exec(`INSERT INTO sde_types (type_id, name) VALUES (22456, 'Sabre'), (587, 'Rifter'), (17738, 'Machariel') ON CONFLICT DO NOTHING`)
-	kill := func(id int64, ago time.Duration, victimCorp int64, public bool, alliance int64, attackers ...int64) {
+	exec(`INSERT INTO sde_celestials (item_id, system_id, name) VALUES (50000001, 30003504, 'Stargate (Otou)') ON CONFLICT DO NOTHING`)
+	kill := func(id int64, ago time.Duration, victimCorp int64, public bool, alliance int64, loc int64, attackers ...int64) {
 		t.Helper()
-		exec(`INSERT INTO kills (killmail_id, killmail_time, system_id, victim_character_id, victim_corporation_id, ship_type_id, source, public, ingested_at, value_zkill)
-			VALUES ($1, $2, $3, $4, $5, 587, 'stream', $6, now(), 10000000)`, id, now.Add(-ago), rancer, 92000000+id, victimCorp, public)
+		exec(`INSERT INTO kills (killmail_id, killmail_time, system_id, victim_character_id, victim_corporation_id, ship_type_id, location_id, source, public, ingested_at, value_zkill)
+			VALUES ($1, $2, $3, $4, $5, 587, $7, 'stream', $6, now(), 10000000)`, id, now.Add(-ago), rancer, 92000000+id, victimCorp, public, loc)
 		for i, a := range attackers {
 			ship := int64(22456)
 			if i == 1 {
@@ -40,13 +41,15 @@ func TestMapSystem(t *testing.T) {
 		}
 	}
 	// A camp: five kills over forty minutes on passers-by, the same
-	// alliance on four. One private kill, never shown.
-	kill(10, 5*time.Minute, 1, true, 99000001, 91000001, 91000002)
-	kill(11, 15*time.Minute, 2, true, 99000001, 91000001)
-	kill(12, 25*time.Minute, 3, true, 99000001, 91000003)
-	kill(13, 35*time.Minute, 4, true, 99000002, 91000009)
-	kill(14, 40*time.Minute, 5, true, 99000001, 91000001)
-	kill(15, 2*time.Minute, 6, false, 99000001, 91000001)
+	// alliance on four, all four on the Otou gate. One private
+	// kill, never shown.
+	kill(10, 5*time.Minute, 1, true, 99000001, 50000001, 91000001, 91000002)
+	kill(11, 15*time.Minute, 2, true, 99000001, 50000001, 91000001)
+	kill(12, 25*time.Minute, 3, true, 99000001, 50000001, 91000003)
+	kill(13, 35*time.Minute, 4, true, 99000002, 50000002, 91000009)
+	kill(14, 40*time.Minute, 5, true, 99000001, 50000001, 91000001)
+	kill(15, 2*time.Minute, 6, false, 99000001, 50000001, 91000001)
+	app.esi.StoreCharacterName(91000001, "Camp Regular")
 
 	code, body := getPage(t, app, &http.Cookie{Name: "nobody", Value: "x"}, "/map/system.json?system=30003504")
 	if code != http.StatusOK {
@@ -86,6 +89,14 @@ func TestMapSystem(t *testing.T) {
 	}
 	if len(c.Victims) != 4 {
 		t.Errorf("camp victims = %d, want the alliance's 4", len(c.Victims))
+	}
+	// The camp sits on one gate, and the pilot on three of its
+	// four kills is named as its recurring crew.
+	if c.Celestial != "Stargate (Otou)" || c.Spread {
+		t.Errorf("camp place = %q, spread %v; want the Otou gate named", c.Celestial, c.Spread)
+	}
+	if len(c.Crew) != 1 || c.Crew[0] != "Camp Regular" {
+		t.Errorf("camp crew = %v, want [Camp Regular]", c.Crew)
 	}
 
 	// A quiet system: no kills, no camp.

@@ -511,7 +511,7 @@
       var s = G.byID[c.sys];
       if (s === undefined) return;
       J.campOf[s] = J.camps.length;
-      J.camps.push({ sys: s, n: c.n, kind: c.kind, gid: c.gid, group: c.group, since: c.since });
+      J.camps.push({ sys: s, n: c.n, kind: c.kind, gid: c.gid, group: c.group, since: c.since, cel: c.cel || "", spread: !!c.spread });
     });
     J.spill = new Float32Array(n);
     for (i = 0; i < n; i++) {
@@ -1931,7 +1931,7 @@
           }
           if (LY.campOf[i] >= 0) {
             var c = LY.camps[LY.campOf[i]];
-            rows.push(["Gate camp", (c.group ? c.group + " · " : "") + c.n + " kills since " + agoShort(c.since), c.gid ? "/intel/kills/?" + c.kind + "=" + c.gid : ""]);
+            rows.push(["Gate camp", (c.group ? c.group + " · " : "") + c.n + " kills since " + agoShort(c.since) + (c.cel ? " · on the " + c.cel : c.spread ? " · spread across the system" : ""), c.gid ? "/intel/kills/?" + c.kind + "=" + c.gid : ""]);
           }
           break;
         }
@@ -2333,10 +2333,11 @@
         ga.href = c.href;
         ga.textContent = c.group || "Unknown " + c.kind;
         who.appendChild(ga);
-        who.appendChild(root.createTextNode(" · " + plural(c.n, "kill") + " since " + agoShort(c.since) + " · " + plural(c.pilots, "pilot")));
-        cbox.querySelector("[data-map-camp-ships]").textContent = c.ships.length
+        who.appendChild(root.createTextNode(" · " + plural(c.n, "kill") + " since " + agoShort(c.since) + " · " + plural(c.pilots, "pilot")
+          + (c.cel ? " · on the " + c.cel : c.spread ? " · spread across the system" : "")));
+        cbox.querySelector("[data-map-camp-ships]").textContent = (c.ships.length
           ? "Flying " + c.ships.map(function (s) { return s.name + (s.n > 1 ? " ×" + s.n : ""); }).join(", ")
-          : "";
+          : "") + (c.crew && c.crew.length ? (c.ships.length ? " · " : "") + "Crew: " + c.crew.join(", ") : "");
         var vl = cbox.querySelector("ul");
         vl.textContent = "";
         c.victims.forEach(function (k) { vl.appendChild(killItem(k)); });

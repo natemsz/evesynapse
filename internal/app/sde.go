@@ -101,6 +101,13 @@ const (
 	sdeJumpsFileName          = "mapSolarSystemJumps.csv"
 )
 
+// The celestials file (schema 090): every named place in every
+// system, most of which the import drops -- it keeps the groups
+// a kill's location can point at (sun, planet, moon, asteroid
+// belt, stargate), so kills.location_id resolves to a name.
+// Best-effort like the map files above.
+const sdeCelestialsFileName = "mapDenormalize.csv"
+
 // sdeHTTPClient downloads the dump files. No total timeout (the
 // types table is ~20 MB); each request carries its own context
 // deadline instead. The shared loginHTTPClient's 10s timeout is
@@ -262,11 +269,13 @@ func (app *Application) sdeMaintenance(ctx context.Context) {
 	// modifier-less effects the fitting engine reads module
 	// states from, imports before version 9 lack the
 	// mutaplasmid roll ranges, imports before version 10
-	// lack the mutaplasmid applicability mappings, and
+	// lack the mutaplasmid applicability mappings,
 	// imports before version 11 lack the universe map's
-	// geometry, so re-import once (the store writes the marker
-	// when it lands). Retries on later ticks while an import
-	// keeps failing.
+	// geometry, and imports before version 13 lack the
+	// celestials a kill's location resolves against, so
+	// re-import once (the store writes the marker when it
+	// lands). Retries on later ticks while an import keeps
+	// failing.
 	if ver, _ := app.sdeMeta(ctx, "sde_import_version"); ver != sdeImportVersion {
 		logging.Infof("sde: static data predates current columns — re-importing to backfill")
 		app.startSDEImport("schema-029 backfill")
@@ -295,7 +304,7 @@ func (app *Application) sdeMaintenance(ctx context.Context) {
 
 // sdeImportVersion is the importer's column-set marker (see
 // sdeMaintenance): an import stored under an older one re-imports.
-const sdeImportVersion = "12"
+const sdeImportVersion = "13"
 
 // sdeMeta reads one sde_meta value ("" when absent).
 func (app *Application) sdeMeta(ctx context.Context, key string) (string, error) {
@@ -428,7 +437,7 @@ func (app *Application) importSDE(ctx context.Context) error {
 	} else {
 		parsed.markers[sdeMappingsFileName] = marker
 	}
-	for _, name := range []string{sdeConstellationsFileName, sdeJumpsFileName} {
+	for _, name := range []string{sdeConstellationsFileName, sdeJumpsFileName, sdeCelestialsFileName} {
 		if marker, err := app.fetchAndParseSDEFile(ctx, base, name, parsed); err != nil {
 			logging.Warnf("sde: optional %s unavailable, keeping the previous map data: %v", name, err)
 		} else {
@@ -541,6 +550,11 @@ type parsedSDE struct {
 	// stargate graph. Empty when the dump lacks the file.
 	constellations []sdeConstellationRow
 	jumps          []sdeJumpRow
+
+	// Celestials (schema 090): the named in-system places a
+	// kill's location can point at. Empty when the dump lacks
+	// the file.
+	celestials []sdeCelestialRow
 }
 
 // sdeReprocessRow is one reprocessing output: the quantity of
@@ -716,6 +730,13 @@ type sdeJumpRow struct {
 	from, to int64
 }
 
+// sdeCelestialRow is one named in-system place (schema 090).
+type sdeCelestialRow struct {
+	itemID   int64
+	systemID int64
+	name     string
+}
+
 type sdeRegionRow struct {
 	regionID int64
 	name     string
@@ -826,6 +847,8 @@ func parseSDEFile(name string, body io.Reader, parsed *parsedSDE) error {
 		err = parseSDEConstellations(cr, idx, parsed)
 	case sdeJumpsFileName:
 		err = parseSDEJumps(cr, idx, parsed)
+	case sdeCelestialsFileName:
+		err = parseSDEDenormalize(cr, idx, parsed)
 	case "dgmTypeAttributes.csv":
 		err = parseSDEDogmaAttributes(cr, idx, parsed)
 	case "dgmAttributeTypes.csv":
@@ -1156,6 +1179,41 @@ func parseSDEJumps(cr *csv.Reader, idx map[string]int, parsed *parsedSDE) error 
 			return errSkipRow
 		}
 		parsed.jumps = append(parsed.jumps, sdeJumpRow{from: from, to: to})
+		return nil
+	})
+	return err
+}
+
+// The denormalize groups the import keeps: the places a kill's
+// location can point at. Regions, constellations, systems and
+// stations have their own tables; the rest of the file (every
+// wreck-era landmark row) is not a place a victim died at.
+const (
+	denormSun          = 6
+	denormPlanet       = 7
+	denormMoon         = 8
+	denormAsteroidBelt = 9
+	denormStargate     = 10
+)
+
+func parseSDEDenormalize(cr *csv.Reader, idx map[string]int, parsed *parsedSDE) error {
+	_, err := eachCSVRow(cr, func(rec []string) error {
+		switch csvIDOrZero(rec, idx, "groupID") {
+		case denormSun, denormPlanet, denormMoon, denormAsteroidBelt, denormStargate:
+		default:
+			return errSkipRow
+		}
+		id, err := csvID(rec, idx, "itemID")
+		if err != nil {
+			return errSkipRow
+		}
+		name, err := csvField(rec, idx, "itemName")
+		if err != nil {
+			return err
+		}
+		parsed.celestials = append(parsed.celestials, sdeCelestialRow{
+			itemID: id, systemID: csvIDOrZero(rec, idx, "solarSystemID"), name: name,
+		})
 		return nil
 	})
 	return err
@@ -1848,6 +1906,19 @@ func (app *Application) storeSDE(ctx context.Context, base string, parsed *parse
 		if err := insert("INSERT INTO sde_system_jumps (from_system_id, to_system_id) VALUES ($1, $2) ON CONFLICT DO NOTHING", len(parsed.jumps), func(i int) []any {
 			r := parsed.jumps[i]
 			return []any{r.from, r.to}
+		}); err != nil {
+			return 0, err
+		}
+	}
+	// Celestials (schema 090), replaced only when this import
+	// carried the denormalize file, like the map data above.
+	if len(parsed.celestials) > 0 {
+		if _, err := tx.ExecContext(ctx, "DELETE FROM sde_celestials"); err != nil {
+			return 0, fmt.Errorf("clear sde_celestials: %w", err)
+		}
+		if err := insert("INSERT INTO sde_celestials (item_id, system_id, name) VALUES ($1, $2, $3)", len(parsed.celestials), func(i int) []any {
+			r := parsed.celestials[i]
+			return []any{r.itemID, r.systemID, r.name}
 		}); err != nil {
 			return 0, err
 		}

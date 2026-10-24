@@ -912,6 +912,14 @@ func (app *Application) buildFleet(ctx context.Context, bundles []*charSnaps) *f
 					} else {
 						row.NotTraining = true
 					}
+				} else {
+					// A paused queue's entries carry no finish
+					// dates, so the head's does not parse: not
+					// training, the same verdict queueState gives
+					// the briefing on this snapshot, and the row
+					// reads as an empty queue's does.
+					row.Training = ""
+					row.NotTraining = true
 				}
 			}
 		}

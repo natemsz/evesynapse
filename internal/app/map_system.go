@@ -59,6 +59,12 @@ type mapSystemCamp struct {
 	Pilots  int             `json:"pilots"`
 	Ships   []mapSystemShip `json:"ships"`
 	Victims []mapSystemKill `json:"victims"`
+	// Celestial names where the camp sits ("Stargate (Hrokkur)")
+	// when its located kills cluster on one; Spread reports the
+	// opposite finding. Crew is the camp's recurring pilots.
+	Celestial string   `json:"cel,omitempty"`
+	Spread    bool     `json:"spread,omitempty"`
+	Crew      []string `json:"crew,omitempty"`
 }
 
 type mapSystemData struct {
@@ -153,7 +159,7 @@ func (app *Application) mapSystemCamp(ctx context.Context, names *killNames, sys
 	structs := app.structureTypes(ctx, types)
 	kills := make([]threatKill, len(krows))
 	for i, r := range krows {
-		kills[i] = threatKill{ID: r.KillmailID, System: r.SystemID, Time: r.KillmailTime, Public: r.Public, VictimCorp: r.VictimCorporationID, Structure: structs[r.ShipTypeID]}
+		kills[i] = threatKill{ID: r.KillmailID, System: r.SystemID, Time: r.KillmailTime, Public: r.Public, VictimCorp: r.VictimCorporationID, Location: r.LocationID, Structure: structs[r.ShipTypeID]}
 	}
 	atk := make([]threatAttacker, len(arows))
 	for i, a := range arows {
@@ -177,8 +183,10 @@ func (app *Application) mapSystemCamp(ctx context.Context, names *killNames, sys
 	if c == nil {
 		return nil
 	}
+	app.dressCamps(ctx, names, th.Camps)
 	camp := &mapSystemCamp{Kind: c.Kind, GroupID: c.GroupID, Group: c.Group, Kills: c.Kills, Since: c.Since,
-		Href: "/intel/kills/?" + c.Kind + "=" + strconv.FormatInt(c.GroupID, 10), Ships: []mapSystemShip{}, Victims: []mapSystemKill{}}
+		Href: "/intel/kills/?" + c.Kind + "=" + strconv.FormatInt(c.GroupID, 10), Ships: []mapSystemShip{}, Victims: []mapSystemKill{},
+		Celestial: c.Celestial, Spread: c.Spread, Crew: c.Crew}
 	// The group's pilots and ships across the camp's kills.
 	member := func(a db.ListSystemKillAttackersRow) bool {
 		switch c.Kind {
@@ -232,4 +240,45 @@ func (app *Application) mapSystemCamp(ctx context.Context, names *killNames, sys
 		camp.Victims = camp.Victims[:8]
 	}
 	return camp
+}
+
+// dressCamps fills in what buildThreat leaves as IDs: each camp's
+// celestial name and its recurring crew's names. Celestials
+// resolve against the stored denormalize rows (schema 090) in one
+// batched read, stations against sde_stations; a celestial that
+// resolves nowhere keeps no name, and the camp simply says
+// nothing about place.
+func (app *Application) dressCamps(ctx context.Context, names *killNames, camps []mapCamp) {
+	seen := map[int64]bool{}
+	ids := []int64{}
+	for _, c := range camps {
+		if c.CelestialID > 0 && !seen[c.CelestialID] {
+			seen[c.CelestialID] = true
+			ids = append(ids, c.CelestialID)
+		}
+	}
+	resolved := map[int64]string{}
+	if len(ids) > 0 {
+		if rows, err := app.queries.ListCelestialNames(ctx, ids); err == nil {
+			for _, r := range rows {
+				resolved[r.ItemID] = r.Name
+			}
+		} else {
+			logging.Errorf("map: celestial names: %v", err)
+		}
+		for _, id := range ids {
+			if _, ok := resolved[id]; ok {
+				continue
+			}
+			if st, err := app.queries.GetSDEStation(ctx, id); err == nil {
+				resolved[id] = st.Name
+			}
+		}
+	}
+	for i := range camps {
+		camps[i].Celestial = resolved[camps[i].CelestialID]
+		for _, pid := range camps[i].CrewIDs {
+			camps[i].Crew = append(camps[i].Crew, names.character(pid))
+		}
+	}
 }

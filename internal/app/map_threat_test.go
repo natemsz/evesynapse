@@ -20,12 +20,13 @@ func TestBuildThreat(t *testing.T) {
 		{ID: 2, System: 30000142, Time: ago(45), Public: true},
 		{ID: 3, System: 30000142, Time: ago(200), Public: true},
 		// Rancer: a camp. Five public kills over half an hour, passers-by
-		// from different corps, the same alliance on four of them.
-		{ID: 10, System: 30003504, Time: ago(5), Public: true, VictimCorp: 1},
-		{ID: 11, System: 30003504, Time: ago(15), Public: true, VictimCorp: 2},
-		{ID: 12, System: 30003504, Time: ago(25), Public: true, VictimCorp: 3},
-		{ID: 13, System: 30003504, Time: ago(35), Public: true, VictimCorp: 4},
-		{ID: 14, System: 30003504, Time: ago(40), Public: true, VictimCorp: 5},
+		// from different corps, the same alliance on four of them. The
+		// four sit on one celestial; a pilot is on two of them.
+		{ID: 10, System: 30003504, Time: ago(5), Public: true, VictimCorp: 1, Location: 50000001},
+		{ID: 11, System: 30003504, Time: ago(15), Public: true, VictimCorp: 2, Location: 50000001},
+		{ID: 12, System: 30003504, Time: ago(25), Public: true, VictimCorp: 3, Location: 50000001},
+		{ID: 13, System: 30003504, Time: ago(35), Public: true, VictimCorp: 4, Location: 50000002},
+		{ID: 14, System: 30003504, Time: ago(40), Public: true, VictimCorp: 5, Location: 50000001},
 		// Tama: a fight, not a camp. Five kills inside three minutes,
 		// one fleet dying to one alliance.
 		{ID: 30, System: 30002813, Time: ago(10), Public: true, VictimCorp: 7},
@@ -82,6 +83,14 @@ func TestBuildThreat(t *testing.T) {
 	if c.Since != ago(40).Unix() {
 		t.Errorf("a camp runs from its window's first kill: %d", c.Since)
 	}
+	// The camp's four kills all sit on one celestial, and the
+	// pilot on two of them is its recurring crew.
+	if c.CelestialID != 50000001 || c.Spread {
+		t.Errorf("camp place: celestial %d, spread %v; want 50000001, not spread", c.CelestialID, c.Spread)
+	}
+	if len(c.CrewIDs) != 1 || c.CrewIDs[0] != 1 {
+		t.Errorf("camp crew = %v, want [1] (on kills 10 and 12)", c.CrewIDs)
+	}
 }
 
 // TestBuildThreatStructureKills: structure and deployable kills are
@@ -116,6 +125,14 @@ func TestBuildThreatStructureKills(t *testing.T) {
 		}
 		return id
 	}
+	addL := func(sys int64, minutes int, victimCorp int64, loc int64, attackers ...int64) int64 {
+		id++
+		kills = append(kills, threatKill{ID: id, System: sys, Time: ago(minutes), Public: true, VictimCorp: victimCorp, Location: loc})
+		for _, a := range attackers {
+			atk = append(atk, threatAttacker{Kill: id, Character: a, Corp: 98000001, Alliance: 99000001})
+		}
+		return id
+	}
 	// The farm: sixteen structure kills over thirty minutes, the
 	// victims from five different corporations, two pilots of one
 	// alliance alternating on all of them.
@@ -136,14 +153,21 @@ func TestBuildThreatStructureKills(t *testing.T) {
 	}
 	// A genuine camp: five ship kills on passers-by over forty
 	// minutes, the alliance on four -- plus ten structure kills by
-	// the same alliance, which must not inflate its count.
+	// the same alliance, which must not inflate its count. The
+	// camp's kills split between two gates, so no place is named:
+	// the flag reports the spread, and the pilot on all four is
+	// its recurring crew.
 	for i, m := range []int{5, 15, 25, 35, 40} {
 		if i == 3 {
 			odd := add(real, m, int64(11+i), false)
 			atk = append(atk, threatAttacker{Kill: odd, Character: 9, Corp: 1000125}) // an NPC corp: not the alliance
 			continue
 		}
-		add(real, m, int64(11+i), false, 1)
+		loc := int64(50000011)
+		if i >= 2 {
+			loc = 50000012
+		}
+		addL(real, m, int64(11+i), loc, 1)
 	}
 	for i := 0; i < 10; i++ {
 		add(real, 6+3*i, int64(1+i%5), true, 1)
@@ -162,5 +186,11 @@ func TestBuildThreatStructureKills(t *testing.T) {
 	c := th.Camps[0]
 	if c.System != real || c.Kills != 4 {
 		t.Errorf("camp = %+v, want the genuine camp with its 4 ship kills (structure kills uncounted)", c)
+	}
+	if !c.Spread || c.CelestialID != 0 {
+		t.Errorf("camp place: spread %v, celestial %d; want the split across two gates reported as spread, none named", c.Spread, c.CelestialID)
+	}
+	if len(c.CrewIDs) != 1 || c.CrewIDs[0] != 1 {
+		t.Errorf("camp crew = %v, want [1] (on all four of the camp's kills)", c.CrewIDs)
 	}
 }

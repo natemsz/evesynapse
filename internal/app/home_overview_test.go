@@ -105,6 +105,20 @@ func TestHomeOverviewMultiChar(t *testing.T) {
 	seedSnapshot(t, q, fixtureCharB, esi.SnapSkillqueue, esi.Skillqueue{})
 	seedSnapshot(t, q, fixtureCharB, esi.SnapWallet, 2000.0)
 
+	// --- Delta: a paused queue. Its entries carry no finish
+	// dates, so the fleet row reads not training and counts
+	// idle, the briefing's queueState verdict on the same
+	// snapshot. ---
+	seedOverviewCharacter(t, q, user.ID, 90000004, "Fixture Delta", "")
+	seedSnapshot(t, q, 90000004, esi.SnapProfile, esi.Character{
+		Name: "Fixture Delta", CorporationID: fixtureCorpA,
+		Birthday: "2011-05-05T00:00:00Z", SecurityStatus: 0.1,
+	})
+	seedSnapshot(t, q, 90000004, esi.SnapSkillqueue, esi.Skillqueue{
+		{SkillID: 3302, QueuePosition: 0, FinishedLevel: 4},
+		{SkillID: 3300, QueuePosition: 1, FinishedLevel: 5},
+	})
+
 	// --- Charlie: dead link. ---
 	dead := seedOverviewCharacter(t, q, user.ID, 90000003, "Fixture Charlie", "")
 	_ = dead
@@ -141,11 +155,19 @@ func TestHomeOverviewMultiChar(t *testing.T) {
 		`<span class="gt">Overview</span>`,
 		"Fleet Overview",
 		"Fixture Alpha", "Fixture Corp", "Trader",
-		"Fixture Bravo", "Fixture Charlie",
+		"Fixture Bravo", "Fixture Charlie", "Fixture Delta",
 		`id="fleet-filter"`, `data-tag="PI"`,
 		"Not training",   // Bravo's idle queue (Alpha trains)
 		"re-link needed", // Charlie's fleet flag
 	)
+
+	// Two characters are idle: Bravo's empty queue and Delta's
+	// paused one. The fleet's Not training count says both, and
+	// exactly their two rows carry the idle flag.
+	mustContain(t, "/", body, "Not training (2)")
+	if got := strings.Count(body, `data-idle="1"`); got != 2 {
+		t.Errorf("fleet rows flagged idle = %d, want 2 (Bravo's empty queue, Delta's paused queue)", got)
+	}
 
 	// What needs the user is the Briefing's now (Needs Attention is
 	// retired): the re-link shows there, and a contract assigned to

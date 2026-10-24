@@ -653,6 +653,39 @@ func (q *Queries) ListAllTypeNames(ctx context.Context) ([]TypeName, error) {
 	return items, nil
 }
 
+const listCelestialNames = `-- name: ListCelestialNames :many
+SELECT item_id, name FROM sde_celestials
+WHERE item_id = ANY($1::bigint[])
+`
+
+type ListCelestialNamesRow struct {
+	ItemID int64  `json:"item_id"`
+	Name   string `json:"name"`
+}
+
+func (q *Queries) ListCelestialNames(ctx context.Context, ids []int64) ([]ListCelestialNamesRow, error) {
+	rows, err := q.db.QueryContext(ctx, listCelestialNames, pq.Array(ids))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListCelestialNamesRow
+	for rows.Next() {
+		var i ListCelestialNamesRow
+		if err := rows.Scan(&i.ItemID, &i.Name); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listFitChargeTypes = `-- name: ListFitChargeTypes :many
 SELECT t.type_id, t.name
 FROM sde_types t

@@ -19,7 +19,7 @@
 
 {{if or .System.Kills .System.Camp}}
 <h2>Recent kills</h2>
-{{with .System.Camp}}<p class="err" title="{{.Tip}}">Gate camp{{if .Group}}: <a href="{{.Href}}">{{.Group}}</a>{{end}} · {{.Kills}} kills since {{.SinceText}} · {{.Pilots}} pilots</p>{{end}}
+{{with .System.Camp}}<p class="err" title="{{.Tip}}">Gate camp{{if .Group}}: <a href="{{.Href}}">{{.Group}}</a>{{end}} · {{.Kills}} kills since {{.SinceText}} · {{.Pilots}} pilots{{if .Celestial}} · on the {{.Celestial}}{{end}}</p>{{end}}
 {{if .System.Kills}}
 <div class="tw">
 <table>

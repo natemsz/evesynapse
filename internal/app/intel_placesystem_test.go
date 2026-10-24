@@ -69,10 +69,11 @@ func TestSystemPageKillsAndCamp(t *testing.T) {
 	now := time.Now().UTC()
 	exec(`INSERT INTO sde_systems (system_id, name, region_id, security) VALUES (30003504, 'Rancer', 10000048, 0.4) ON CONFLICT DO NOTHING`)
 	exec(`INSERT INTO sde_types (type_id, name) VALUES (22456, 'Sabre'), (587, 'Rifter'), (17738, 'Machariel') ON CONFLICT DO NOTHING`)
-	kill := func(id int64, ago time.Duration, victimCorp int64, public bool, alliance int64, attackers ...int64) {
+	exec(`INSERT INTO sde_celestials (item_id, system_id, name) VALUES (50000001, 30003504, 'Stargate (Otou)') ON CONFLICT DO NOTHING`)
+	kill := func(id int64, ago time.Duration, victimCorp int64, public bool, alliance int64, loc int64, attackers ...int64) {
 		t.Helper()
-		exec(`INSERT INTO kills (killmail_id, killmail_time, system_id, victim_character_id, victim_corporation_id, ship_type_id, source, public, ingested_at, value_zkill)
-			VALUES ($1, $2, $3, $4, $5, 587, 'stream', $6, now(), 10000000)`, id, now.Add(-ago), rancer, 92000000+id, victimCorp, public)
+		exec(`INSERT INTO kills (killmail_id, killmail_time, system_id, victim_character_id, victim_corporation_id, ship_type_id, location_id, source, public, ingested_at, value_zkill)
+			VALUES ($1, $2, $3, $4, $5, 587, $7, 'stream', $6, now(), 10000000)`, id, now.Add(-ago), rancer, 92000000+id, victimCorp, public, loc)
 		for i, a := range attackers {
 			ship := int64(22456)
 			if i == 1 {
@@ -83,17 +84,19 @@ func TestSystemPageKillsAndCamp(t *testing.T) {
 		}
 	}
 	// The TestMapSystem camp, plus two older public kills the
-	// five-row list must trim, and one private kill.
-	kill(10, 5*time.Minute, 1, true, 99000001, 91000001, 91000002)
-	kill(11, 15*time.Minute, 2, true, 99000001, 91000001)
-	kill(12, 25*time.Minute, 3, true, 99000001, 91000003)
-	kill(13, 35*time.Minute, 4, true, 99000002, 91000009)
-	kill(14, 40*time.Minute, 5, true, 99000001, 91000001)
-	kill(16, 2*time.Hour, 7, true, 99000003, 91000020)
-	kill(17, 3*time.Hour, 8, true, 99000003, 91000021)
-	kill(15, 2*time.Minute, 6, false, 99000001, 91000001)
-	// The camp's group has a name.
+	// five-row list must trim, and one private kill. The camp's
+	// kills sit on the Otou gate.
+	kill(10, 5*time.Minute, 1, true, 99000001, 50000001, 91000001, 91000002)
+	kill(11, 15*time.Minute, 2, true, 99000001, 50000001, 91000001)
+	kill(12, 25*time.Minute, 3, true, 99000001, 50000001, 91000003)
+	kill(13, 35*time.Minute, 4, true, 99000002, 50000002, 91000009)
+	kill(14, 40*time.Minute, 5, true, 99000001, 50000001, 91000001)
+	kill(16, 2*time.Hour, 7, true, 99000003, 0, 91000020)
+	kill(17, 3*time.Hour, 8, true, 99000003, 0, 91000021)
+	kill(15, 2*time.Minute, 6, false, 99000001, 50000001, 91000001)
+	// The camp's group has a name, and so does its recurring pilot.
 	app.esi.StoreAllianceName(99000001, "Gatekeepers")
+	app.esi.StoreCharacterName(91000001, "Camp Regular")
 
 	anon := &http.Cookie{Name: "nobody", Value: "x"}
 	code, body := getPage(t, app, anon, "/system/?system=30003504")
@@ -102,10 +105,12 @@ func TestSystemPageKillsAndCamp(t *testing.T) {
 	}
 	mustContain(t, "/system/ camp", body,
 		"Recent kills",
-		`<p class="err" title="Gate camp by Gatekeepers:`,
+		`<p class="err" title="Gate camp by Gatekeepers on the Stargate (Otou):`,
 		"4 kills in the last hour",
 		"Flying Sabre ×",
+		"Recurring crew: Camp Regular.",
 		"Gate camp",
+		" · on the Stargate (Otou)</p>",
 		`<a href="/intel/kill/10/">Rifter</a>`,
 		`<a href="/intel/kill/14/">Rifter</a>`,
 		`<a href="/intel/kills/?system=30003504">All kills in Rancer</a>`)

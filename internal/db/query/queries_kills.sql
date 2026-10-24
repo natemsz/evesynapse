@@ -242,7 +242,7 @@ WHERE k.public AND k.ingested_at >= sqlc.arg(since)::timestamptz;
 -- ---------------------------------------------------------------------
 
 -- name: ListThreatKills :many
-SELECT killmail_id, system_id, killmail_time, public, victim_corporation_id, ship_type_id
+SELECT killmail_id, system_id, killmail_time, public, victim_corporation_id, ship_type_id, location_id
 FROM kills
 WHERE killmail_time >= sqlc.arg(since)::timestamptz AND NOT npc
 ORDER BY killmail_time;
@@ -257,7 +257,7 @@ WHERE k.killmail_time >= sqlc.arg(since)::timestamptz AND NOT k.npc AND k.public
 SELECT COALESCE(MAX(ingested_at), 'epoch'::timestamptz)::timestamptz AS latest FROM kills;
 
 -- name: ListSystemThreatKills :many
-SELECT killmail_id, system_id, killmail_time, public, victim_corporation_id, ship_type_id
+SELECT killmail_id, system_id, killmail_time, public, victim_corporation_id, ship_type_id, location_id
 FROM kills
 WHERE system_id = sqlc.arg(system_id)::bigint AND killmail_time >= sqlc.arg(since)::timestamptz AND NOT npc
 ORDER BY killmail_time;

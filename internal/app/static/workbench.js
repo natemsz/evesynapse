@@ -175,7 +175,7 @@
         // lands on the new scan's page.
         var form = document.createElement("form");
         form.method = "post";
-        form.action = parser.getAttribute("data-post");
+        form.action = "/intel/scan/";
         var scanField = document.createElement("textarea");
         scanField.name = "scan"; scanField.value = paste; form.appendChild(scanField);
         var sysField = document.createElement("input");

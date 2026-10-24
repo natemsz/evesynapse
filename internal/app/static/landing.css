@@ -45,7 +45,11 @@ body::after { content: ""; position: absolute; top: 0; left: 0; right: 0; height
 
 .ld-wrap { max-width: 1180px; margin: 0 auto; padding: 0 22px; }
 
-.ld-header { position: fixed; top: 0; left: 0; right: 0; z-index: 40; }
+/* The header itself is a transparent positioning container:
+   the pill inside it carries all the paint. The site sheet's
+   bare header rule would otherwise lay its full-width bar
+   under the pill, so that paint is reset here in full. */
+.ld-header { position: fixed; top: 0; left: 0; right: 0; z-index: 40; background: none; border-bottom: none; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
 /* The header bar wears the approved liquid glass (v2 spec,
    demo surface): the frost on the bar itself (30px blur,
    saturate 1.45, the spec tint), a refraction layer over it

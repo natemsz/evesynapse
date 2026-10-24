@@ -515,6 +515,12 @@ var pgSystemPosition2DSchema string
 //go:embed schema_pg/086_scan_groups.sql
 var pgScanGroupsSchema string
 
+// Step 087: pilot activity profiles -- the stored aggregates of
+// a pilot's public kill record (pilot_activity.go).
+//
+//go:embed schema_pg/087_pilot_activity.sql
+var pgPilotActivitySchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -630,6 +636,7 @@ func schemaSteps() []schemaStep {
 		{84, "release_builds", pgReleaseBuildsSchema, ""},
 		{85, "system_position2d", pgSystemPosition2DSchema, ""},
 		{86, "scan_groups", pgScanGroupsSchema, ""},
+		{87, "pilot_activity", pgPilotActivitySchema, ""},
 	}
 }
 

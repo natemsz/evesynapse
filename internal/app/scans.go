@@ -2379,6 +2379,16 @@ func (app *Application) handleScanSubmit(w http.ResponseWriter, r *http.Request)
 		fail(http.StatusInternalServerError, v, "That scan could not be saved. Please try again.")
 		return
 	}
+	// The pilots this local named are met: each is offered a
+	// history backfill (pilot_activity.go). Channel postings of a
+	// scan meet theirs through the report's analysis instead.
+	if res.Local != nil {
+		ids := make([]int64, 0, len(res.Local.Pilots))
+		for _, lp := range res.Local.Pilots {
+			ids = append(ids, lp.ID)
+		}
+		app.notePilotsEncountered(ids)
+	}
 	app.rememberScan(ctx, id)
 	http.Redirect(w, r, "/intel/scan/"+id+"/", http.StatusSeeOther)
 }

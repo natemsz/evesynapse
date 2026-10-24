@@ -616,7 +616,13 @@ func (app *Application) insertIntelReport(ctx context.Context, p db.InsertIntelR
 			return dup, errIntelDuplicate
 		}
 	}
-	return app.queries.InsertIntelReport(ctx, p)
+	id, err := app.queries.InsertIntelReport(ctx, p)
+	if err == nil {
+		// The pilots this reading named are met: each is offered
+		// a history backfill (pilot_activity.go).
+		app.noteAnalysisPilots(a)
+	}
+	return id, err
 }
 
 // drainIntelAnalysis looks up, with EVE, the names and affiliations
@@ -704,6 +710,7 @@ func (app *Application) drainIntelAnalysis(ctx context.Context) (limited bool) {
 				continue
 			}
 			if err := app.settleRosterReport(ctx, r, roster); err == nil {
+				app.noteAnalysisPilots(roster.analysis)
 				continue
 			} else {
 				logging.Warnf("intel: settle roster report %d: %v", r.ID, err)
@@ -712,6 +719,10 @@ func (app *Application) drainIntelAnalysis(ctx context.Context) (limited bool) {
 		raw, _ := json.Marshal(a)
 		if err := app.queries.SetIntelReportAnalysis(ctx, db.SetIntelReportAnalysisParams{ID: r.ID, Kind: a.Kind, Analysis: string(raw), AnalysisPending: false}); err != nil {
 			logging.Warnf("intel: save analysis of report %d: %v", r.ID, err)
+		} else {
+			// Names that only resolved on this second read are
+			// met now, like any reading's pilots.
+			app.noteAnalysisPilots(a)
 		}
 	}
 	app.backfillStoredRosters(ctx, now)

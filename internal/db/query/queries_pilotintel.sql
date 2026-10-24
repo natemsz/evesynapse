@@ -95,6 +95,107 @@ SELECT channel_id, character_id, note, added_at FROM intel_watch
 WHERE channel_id = ANY(sqlc.arg(channel_ids)::bigint[])
 ORDER BY added_at DESC;
 
+-- Pilot activity profiles (schema 087, pilot_activity.go): the
+-- stored aggregates the pilot page's kill history reads. Written
+-- at ingest only: the one-time history backfill of a pilot met in
+-- a reading, and the live kill stream for pilots who have one.
+
+-- name: GetPilotActivityProfile :one
+SELECT character_id, backfilled_at, updated_at, kills, losses, final_blows,
+       gang_total, gang_samples, usual_ship_type_id, last_active_at
+FROM pilot_activity_profiles
+WHERE character_id = sqlc.arg(character_id);
+
+-- The backfill claims a pilot before fetching: the row's presence
+-- is what lets the live stream maintain the profile meanwhile.
+-- name: ClaimPilotActivityProfile :exec
+INSERT INTO pilot_activity_profiles (character_id, updated_at)
+VALUES (sqlc.arg(character_id), sqlc.arg(updated_at))
+ON CONFLICT (character_id) DO NOTHING;
+
+-- name: MarkPilotActivityBackfilled :exec
+UPDATE pilot_activity_profiles
+SET backfilled_at = sqlc.arg(backfilled_at), updated_at = sqlc.arg(backfilled_at)
+WHERE character_id = sqlc.arg(character_id);
+
+-- One marker per (kill, pilot) folded into the aggregates. A
+-- conflict (no row back) means the kill already counted.
+-- name: MarkPilotKillApplied :one
+INSERT INTO pilot_activity_applied (killmail_id, character_id, killmail_time)
+VALUES (sqlc.arg(killmail_id), sqlc.arg(character_id), sqlc.arg(killmail_time))
+ON CONFLICT DO NOTHING
+RETURNING killmail_id;
+
+-- name: ApplyPilotActivityKill :exec
+INSERT INTO pilot_activity_profiles (character_id, updated_at, kills, losses, final_blows,
+       gang_total, gang_samples, last_active_at)
+VALUES (sqlc.arg(character_id), sqlc.arg(applied_at), sqlc.arg(kills), sqlc.arg(losses),
+       sqlc.arg(final_blows), sqlc.arg(gang_total), sqlc.arg(gang_samples), sqlc.arg(killmail_time))
+ON CONFLICT (character_id) DO UPDATE SET
+    kills = pilot_activity_profiles.kills + EXCLUDED.kills,
+    losses = pilot_activity_profiles.losses + EXCLUDED.losses,
+    final_blows = pilot_activity_profiles.final_blows + EXCLUDED.final_blows,
+    gang_total = pilot_activity_profiles.gang_total + EXCLUDED.gang_total,
+    gang_samples = pilot_activity_profiles.gang_samples + EXCLUDED.gang_samples,
+    last_active_at = GREATEST(pilot_activity_profiles.last_active_at, EXCLUDED.last_active_at),
+    updated_at = EXCLUDED.updated_at;
+
+-- name: ApplyPilotActivityShip :exec
+INSERT INTO pilot_activity_ships (character_id, ship_type_id, flown, final_blows, lost)
+VALUES (sqlc.arg(character_id), sqlc.arg(ship_type_id), sqlc.arg(flown), sqlc.arg(final_blows), sqlc.arg(lost))
+ON CONFLICT (character_id, ship_type_id) DO UPDATE SET
+    flown = pilot_activity_ships.flown + EXCLUDED.flown,
+    final_blows = pilot_activity_ships.final_blows + EXCLUDED.final_blows,
+    lost = pilot_activity_ships.lost + EXCLUDED.lost;
+
+-- name: ApplyPilotActivitySystem :exec
+INSERT INTO pilot_activity_systems (character_id, system_id, events, last_at)
+VALUES (sqlc.arg(character_id), sqlc.arg(system_id), 1, sqlc.arg(killmail_time))
+ON CONFLICT (character_id, system_id) DO UPDATE SET
+    events = pilot_activity_systems.events + 1,
+    last_at = GREATEST(pilot_activity_systems.last_at, EXCLUDED.last_at);
+
+-- name: ApplyPilotActivityHour :exec
+INSERT INTO pilot_activity_hours (character_id, hour, events)
+VALUES (sqlc.arg(character_id), sqlc.arg(hour), 1)
+ON CONFLICT (character_id, hour) DO UPDATE SET
+    events = pilot_activity_hours.events + 1;
+
+-- The usual hull: the ship with the most final blows, kept on the
+-- profile row so the page reads it without a sort.
+-- name: RefreshPilotUsualShip :exec
+UPDATE pilot_activity_profiles p
+SET usual_ship_type_id = COALESCE((
+    SELECT s.ship_type_id FROM pilot_activity_ships s
+    WHERE s.character_id = p.character_id AND s.final_blows > 0
+    ORDER BY s.final_blows DESC, s.flown DESC, s.ship_type_id
+    LIMIT 1), 0)
+WHERE p.character_id = sqlc.arg(character_id);
+
+-- name: ListPilotActivityShips :many
+SELECT ship_type_id, flown, final_blows, lost
+FROM pilot_activity_ships
+WHERE character_id = sqlc.arg(character_id) AND (flown + lost) > 0
+ORDER BY (flown + lost) DESC, ship_type_id
+LIMIT sqlc.arg(max_rows)::int;
+
+-- name: ListPilotActivitySystems :many
+SELECT system_id, events, last_at
+FROM pilot_activity_systems
+WHERE character_id = sqlc.arg(character_id)
+ORDER BY events DESC, system_id
+LIMIT sqlc.arg(max_rows)::int;
+
+-- name: ListPilotActivityHours :many
+SELECT hour, events
+FROM pilot_activity_hours
+WHERE character_id = sqlc.arg(character_id);
+
+-- Markers older than the kill details' retention go with them.
+-- name: PrunePilotActivityApplied :execrows
+DELETE FROM pilot_activity_applied
+WHERE killmail_time < sqlc.arg(before)::timestamptz;
+
 -- Where each of some pilots was last seen on a public kill, since a
 -- moment: the map's "Watched pilots".
 -- name: ListPilotsLastSeen :many

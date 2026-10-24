@@ -536,6 +536,12 @@ var pgPilotActivitySchema string
 //go:embed schema_pg/089_intel_gangs.sql
 var pgIntelGangsSchema string
 
+// Step 090: celestials -- the SDE's named in-system places
+// (schema 090), what a kill's location_id resolves against.
+//
+//go:embed schema_pg/090_sde_celestials.sql
+var pgSDECelestialsSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -654,6 +660,7 @@ func schemaSteps() []schemaStep {
 		{87, "intel_report_groups", pgIntelReportGroupsSchema, ""},
 		{88, "pilot_activity", pgPilotActivitySchema, ""},
 		{89, "intel_gangs", pgIntelGangsSchema, ""},
+		{90, "sde_celestials", pgSDECelestialsSchema, ""},
 	}
 }
 

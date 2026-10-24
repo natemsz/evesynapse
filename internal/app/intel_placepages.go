@@ -123,14 +123,16 @@ type systemPageView struct {
 
 // systemCampView is the gate camp flag on a system page: the
 // map card's camp (map_system.go) in display form. Tip carries
-// the detail the mouseover shows: who holds the gate, the kills
-// behind the flag, the window, and what the campers fly.
+// the detail the mouseover shows: who holds the gate, where in
+// the system the kills cluster, the kills behind the flag, the
+// window, what the campers fly, and the recurring crew.
 type systemCampView struct {
 	Group     string
 	Href      string // the camp's group on the killboard
 	Kills     int
 	Pilots    int
 	SinceText string // "30 min ago"
+	Celestial string // "Stargate (Hrokkur)" when the camp sits on one
 	Tip       string
 }
 
@@ -493,22 +495,33 @@ func systemCampViewOf(c *mapSystemCamp, now time.Time) *systemCampView {
 	v := &systemCampView{
 		Group: c.Group, Href: c.Href, Kills: c.Kills, Pilots: c.Pilots,
 		SinceText: ageText(now, time.Unix(c.Since, 0).UTC()),
+		Celestial: c.Celestial,
 	}
 	ships := make([]string, len(c.Ships))
 	for i, s := range c.Ships {
 		ships[i] = fmt.Sprintf("%s ×%d", s.Name, s.N)
 	}
 	since := time.Unix(c.Since, 0).UTC().Format("15:04")
+	place := ""
+	if c.Celestial != "" {
+		place = " on the " + c.Celestial
+	}
 	switch {
 	case c.Group != "" && len(ships) > 0:
-		v.Tip = fmt.Sprintf("Gate camp by %s: %d kills in the last hour (first at %s EVE), %d pilots. Flying %s.",
-			c.Group, c.Kills, since, c.Pilots, strings.Join(ships, ", "))
+		v.Tip = fmt.Sprintf("Gate camp by %s%s: %d kills in the last hour (first at %s EVE), %d pilots. Flying %s.",
+			c.Group, place, c.Kills, since, c.Pilots, strings.Join(ships, ", "))
 	case c.Group != "":
-		v.Tip = fmt.Sprintf("Gate camp by %s: %d kills in the last hour (first at %s EVE), %d pilots.",
-			c.Group, c.Kills, since, c.Pilots)
+		v.Tip = fmt.Sprintf("Gate camp by %s%s: %d kills in the last hour (first at %s EVE), %d pilots.",
+			c.Group, place, c.Kills, since, c.Pilots)
 	default:
-		v.Tip = fmt.Sprintf("Gate camp: %d kills in the last hour (first at %s EVE), %d pilots.",
-			c.Kills, since, c.Pilots)
+		v.Tip = fmt.Sprintf("Gate camp%s: %d kills in the last hour (first at %s EVE), %d pilots.",
+			place, c.Kills, since, c.Pilots)
+	}
+	if c.Spread {
+		v.Tip += " Kills are spread across the system."
+	}
+	if len(c.Crew) > 0 {
+		v.Tip += " Recurring crew: " + strings.Join(c.Crew, ", ") + "."
 	}
 	return v
 }

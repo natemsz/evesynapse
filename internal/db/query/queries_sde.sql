@@ -63,6 +63,10 @@ WHERE category_id = $1;
 -- name: GetSDEStation :one
 SELECT station_id, name, system_id FROM sde_stations
 WHERE station_id = $1;
+
+-- name: ListCelestialNames :many
+SELECT item_id, name FROM sde_celestials
+WHERE item_id = ANY(sqlc.arg(ids)::bigint[]);
 -- name: ListSDEStationsBySystem :many
 SELECT station_id, name, system_id FROM sde_stations
 WHERE system_id = $1

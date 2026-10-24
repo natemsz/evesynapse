@@ -1122,6 +1122,12 @@ type SdeCategory struct {
 	Name       string `json:"name"`
 }
 
+type SdeCelestial struct {
+	ItemID   int64  `json:"item_id"`
+	SystemID int64  `json:"system_id"`
+	Name     string `json:"name"`
+}
+
 type SdeConstellation struct {
 	ConstellationID int64  `json:"constellation_id"`
 	Name            string `json:"name"`

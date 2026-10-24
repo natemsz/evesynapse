@@ -22,6 +22,17 @@ package app
 // kills are camp evidence: a structure or deployable dying (a tractor
 // unit farmed at a gate) counts toward the system's heat, never
 // toward a camp -- not its kill count, span, victim set or share.
+//
+// A camp also says where in the system it sits, when the kills'
+// locations (zKill's nearest celestial for each victim) support
+// it: one celestial holding most of the camp's located kills is
+// named, kills split across celestials are reported as spread,
+// and too little location evidence says nothing about place --
+// a wrong gate name is worse than none. And it names its
+// recurring crew: pilots on several of the camp's kills, whatever
+// their tags say, which is what makes twenty kills a camp by
+// known associates rather than twenty kills that happened in one
+// system.
 // ---------------------------------------------------------------------------
 
 import (
@@ -43,6 +54,19 @@ const (
 	// threatCampShare: the group on at least this share of the
 	// window's public kills is the camp.
 	threatCampShare = 0.6
+	// threatCampCelestialMin: a camp's kills must carry a known
+	// location at least this many times before the flag says
+	// anything about place, either way.
+	threatCampCelestialMin = 3
+	// threatCampCelestialShare: one celestial holding at least
+	// this share of the camp's located kills is where the camp
+	// sits; under it, the kills are spread across the system.
+	threatCampCelestialShare = 0.6
+	// threatCampCrewMin: a pilot on at least this many of the
+	// camp's kills is recurring crew.
+	threatCampCrewMin = 2
+	// threatCampCrewMax caps the crew a camp names.
+	threatCampCrewMax = 5
 )
 
 // mapLayerThreat is the threat layer, systems keyed by ID.
@@ -63,6 +87,15 @@ type mapCamp struct {
 	GroupID int64  `json:"gid"`
 	Group   string `json:"group"`
 	Since   int64  `json:"since"` // the window's first kill (unix)
+	// CelestialID is the celestial most of the camp's located
+	// kills point at, when one dominates; Celestial is its name,
+	// resolved by the caller (dressCamps). Spread is set when
+	// the located kills split across celestials instead.
+	CelestialID int64    `json:"-"`
+	Celestial   string   `json:"cel,omitempty"`
+	Spread      bool     `json:"spread,omitempty"`
+	CrewIDs     []int64  `json:"-"`
+	Crew        []string `json:"crew,omitempty"`
 }
 
 type threatKill struct {
@@ -71,6 +104,12 @@ type threatKill struct {
 	Time       time.Time
 	Public     bool
 	VictimCorp int64
+	// Location: the celestial the victim died at (kills.location_id,
+	// zKill's nearest celestial), 0 when no source supplied one.
+	// Kills only ESI ever carried have none: the killmail's victim
+	// position is not stored, so those kills never vote on where
+	// a camp sits.
+	Location int64
 	// Structure: the victim was a structure or deployable, by SDE
 	// category. Such kills are heat, not camp evidence.
 	Structure bool
@@ -144,6 +183,10 @@ func buildThreat(now time.Time, kills []threatKill, attackers []threatAttacker, 
 	sort.Slice(systems, func(i, j int) bool { return systems[i] < systems[j] })
 	for _, s := range systems {
 		ks := recent[s]
+		locOf := map[int64]int64{}
+		for _, k := range ks {
+			locOf[k.ID] = k.Location
+		}
 		first, last := ks[0].Time, ks[0].Time
 		victims := map[int64]bool{}
 		for _, k := range ks {
@@ -163,6 +206,7 @@ func buildThreat(now time.Time, kills []threatKill, attackers []threatAttacker, 
 			id   int64
 		}
 		count := map[key]int{}
+		groupKills := map[key][]int64{}
 		for _, k := range ks {
 			seen := map[key]bool{}
 			for _, a := range byKill[k.ID] {
@@ -176,6 +220,7 @@ func buildThreat(now time.Time, kills []threatKill, attackers []threatAttacker, 
 				if !seen[g] {
 					seen[g] = true
 					count[g]++
+					groupKills[g] = append(groupKills[g], k.ID)
 				}
 			}
 		}
@@ -189,10 +234,60 @@ func buildThreat(now time.Time, kills []threatKill, attackers []threatAttacker, 
 		if bestN < threatCampKills || float64(bestN) < threatCampShare*float64(len(ks)) {
 			continue
 		}
-		t.Camps = append(t.Camps, mapCamp{
+		camp := mapCamp{
 			System: s, Kills: bestN, Kind: best.kind, GroupID: best.id,
 			Group: name(best.kind, best.id), Since: first.Unix(),
+		}
+		// Where the camp sits: the group's kills by location.
+		// Kills without a location do not vote, either way.
+		byLoc := map[int64]int{}
+		located := 0
+		for _, id := range groupKills[best] {
+			if loc := locOf[id]; loc > 0 {
+				byLoc[loc]++
+				located++
+			}
+		}
+		if located >= threatCampCelestialMin {
+			top, topN := int64(0), 0
+			for loc, n := range byLoc {
+				if n > topN || (n == topN && loc < top) {
+					top, topN = loc, n
+				}
+			}
+			if float64(topN) >= threatCampCelestialShare*float64(located) {
+				camp.CelestialID = top
+			} else {
+				camp.Spread = true
+			}
+		}
+		// The recurring crew: pilots on several of the camp's
+		// kills, whatever their tags say.
+		appear := map[int64]int{}
+		for _, id := range groupKills[best] {
+			seenPilot := map[int64]bool{}
+			for _, a := range byKill[id] {
+				if a.Character > 0 && !seenPilot[a.Character] {
+					seenPilot[a.Character] = true
+					appear[a.Character]++
+				}
+			}
+		}
+		for pid, n := range appear {
+			if n >= threatCampCrewMin {
+				camp.CrewIDs = append(camp.CrewIDs, pid)
+			}
+		}
+		sort.Slice(camp.CrewIDs, func(i, j int) bool {
+			if appear[camp.CrewIDs[i]] != appear[camp.CrewIDs[j]] {
+				return appear[camp.CrewIDs[i]] > appear[camp.CrewIDs[j]]
+			}
+			return camp.CrewIDs[i] < camp.CrewIDs[j]
 		})
+		if len(camp.CrewIDs) > threatCampCrewMax {
+			camp.CrewIDs = camp.CrewIDs[:threatCampCrewMax]
+		}
+		t.Camps = append(t.Camps, camp)
 	}
 	return t
 }
@@ -253,7 +348,7 @@ func (app *Application) loadThreat(ctx context.Context, now time.Time) (mapLayer
 	structs := app.structureTypes(ctx, types)
 	kills := make([]threatKill, len(rows))
 	for i, r := range rows {
-		kills[i] = threatKill{ID: r.KillmailID, System: r.SystemID, Time: r.KillmailTime, Public: r.Public, VictimCorp: r.VictimCorporationID, Structure: structs[r.ShipTypeID]}
+		kills[i] = threatKill{ID: r.KillmailID, System: r.SystemID, Time: r.KillmailTime, Public: r.Public, VictimCorp: r.VictimCorporationID, Location: r.LocationID, Structure: structs[r.ShipTypeID]}
 	}
 	arows, err := app.queries.ListThreatAttackers(ctx, now.Add(-threatCampWindow))
 	if err != nil {
@@ -264,7 +359,7 @@ func (app *Application) loadThreat(ctx context.Context, now time.Time) (mapLayer
 		atk[i] = threatAttacker{Kill: a.KillmailID, Character: a.CharacterID, Corp: a.CorporationID, Alliance: a.AllianceID}
 	}
 	names := app.newKillNames(ctx)
-	return buildThreat(now, kills, atk, func(kind string, id int64) string {
+	th := buildThreat(now, kills, atk, func(kind string, id int64) string {
 		switch kind {
 		case "alliance":
 			return names.alliance(id)
@@ -272,7 +367,9 @@ func (app *Application) loadThreat(ctx context.Context, now time.Time) (mapLayer
 			return names.corp(id)
 		}
 		return names.character(id)
-	}), true
+	})
+	app.dressCamps(ctx, names, th.Camps)
+	return th, true
 }
 
 // threatFingerprint moves when a kill lands, and every five minutes

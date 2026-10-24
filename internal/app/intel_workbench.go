@@ -18,6 +18,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"net/http"
 	"sort"
 	"strconv"
@@ -88,6 +89,26 @@ func wbRoleOf(group string) string {
 	default:
 		return "subcap"
 	}
+}
+
+// doctrineFlags names a composition's doctrine from its role
+// tallies: the flags a distinctive composition earns, in the
+// order the workbench speaks them. A tally earning no flag
+// names no doctrine; the hulls are described instead. The
+// workbench's box 2 and the tracked gang's event line share
+// these words (gangDoctrineLabel, intel_gangs.go).
+func doctrineFlags(roleN map[string]int) []string {
+	var doc []string
+	if roleN["dictor"] > 0 {
+		doc = append(doc, "Bubble Camp")
+	}
+	if roleN["capital"] > 0 {
+		doc = append(doc, fmt.Sprintf("%d Capital(s)", roleN["capital"]))
+	}
+	if roleN["recon"] > 0 {
+		doc = append(doc, "Cyno")
+	}
+	return doc
 }
 
 // wbCaps are the capability lines a hull class carries in the
@@ -271,6 +292,21 @@ type workbenchView struct {
 	Rail      []wbRailItem
 	RailMore  int // members beyond the rail's cap
 	RailKinds string
+
+	// The tracked gang: set when fusion tracks the report's
+	// group as part of a gang sighted beyond this group alone
+	// (intel_gangs.go). The head carries the gang as an event:
+	// its composition, its doctrine where the hulls name one,
+	// the systems it has been sighted in, how fresh the
+	// tracking is, and its likely ships with their bases.
+	GangTracked  bool
+	GangComp     string
+	GangDoctrine string
+	GangTrail    string
+	GangSeen     string
+	GangConf     int
+	GangStale    bool
+	GangLikely   []wbGangLikely
 
 	// Box 1: grid & range split.
 	HasDScan   bool
@@ -465,6 +501,7 @@ func (app *Application) buildWorkbench(ctx context.Context, rep db.IntelReport, 
 		}
 	}
 	app.wbFillSystem(ctx, v, rep.SystemID, names)
+	app.wbFillGang(ctx, v, rep, names)
 	if grouped {
 		if prevComp != nil {
 			v.HasPrev = true
@@ -483,6 +520,58 @@ func (app *Application) buildWorkbench(ctx context.Context, rep db.IntelReport, 
 		app.wbFillDiff(ctx, v, rep, &analysis, &res)
 	}
 	return v
+}
+
+// wbGangLikely is one likely ship attribution on the gang
+// strip: the pilot, the ship, the probability where the
+// attribution carries one (an elimination link carries none),
+// and the basis stated in full.
+type wbGangLikely struct {
+	PilotID int64
+	Pilot   string
+	Ship    string
+	ShipID  int64
+	Prob    int // percent; 0 for an elimination link
+	Basis   string
+}
+
+// wbFillGang fills the tracked-gang strip from the gang the
+// report's group stands in, when fusion tracks one and it has
+// been sighted beyond this group alone. Everything reads the
+// stored gang row; the confidence decays from it at render.
+func (app *Application) wbFillGang(ctx context.Context, v *workbenchView, rep db.IntelReport, names *killNames) {
+	if rep.GroupID <= 0 {
+		return
+	}
+	g := app.gangForGroup(ctx, rep.GroupID)
+	if !g.showsAsEvent() {
+		return
+	}
+	now := time.Now()
+	jumps, jumpOK := app.jumpDistance(ctx, g.LastSystem, rep.SystemID)
+	conf := gangConfidenceAt(g, now, jumps, jumpOK)
+	v.GangTracked = true
+	v.GangComp = gangCompLine(g.Snap)
+	v.GangDoctrine = gangDoctrineLabel(g.Snap)
+	v.GangSeen = "last seen " + ageText(now, g.LastSeen)
+	v.GangConf = int(math.Round(100 * conf))
+	v.GangStale = conf < gangStaleConfidence
+	if len(g.Snap.Systems) > 1 {
+		parts := make([]string, 0, len(g.Snap.Systems))
+		for _, id := range g.Snap.Systems {
+			if s := names.system(id).Name; s != "" {
+				parts = append(parts, s)
+			}
+		}
+		v.GangTrail = strings.Join(parts, " → ")
+	}
+	for _, l := range g.Snap.Likely {
+		wl := wbGangLikely{PilotID: l.PilotID, Pilot: l.PilotName, Ship: l.ShipName, ShipID: l.TypeID, Basis: l.Basis}
+		if l.Prob > 0 {
+			wl.Prob = int(math.Round(100 * l.Prob))
+		}
+		v.GangLikely = append(v.GangLikely, wl)
+	}
 }
 
 // --- The scan door (built, not yet routed) ----------------------------------
@@ -707,17 +796,7 @@ func (app *Application) wbFillDScan(ctx context.Context, v *workbenchView, d *ds
 			v.Roles = append(v.Roles, wbRole{Slug: slug, Label: wbRoleLabel[slug], N: roleN[slug]})
 		}
 	}
-	var doc []string
-	if roleN["dictor"] > 0 {
-		doc = append(doc, "Bubble Camp")
-	}
-	if roleN["capital"] > 0 {
-		doc = append(doc, fmt.Sprintf("%d Capital(s)", roleN["capital"]))
-	}
-	if roleN["recon"] > 0 {
-		doc = append(doc, "Cyno")
-	}
-	v.Doctrine = strings.Join(doc, " + ")
+	v.Doctrine = strings.Join(doctrineFlags(roleN), " + ")
 
 	// The aggregated table: ship types in the reading's own
 	// order, then the deployables.

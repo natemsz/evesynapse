@@ -87,15 +87,19 @@ type compLink struct {
 	From      int64  `json:"from"`
 }
 
-// compLikely is a pilot-to-ship attribution made by
-// elimination: stored as likely, with the basis written out,
-// never as fact.
+// compLikely is a pilot-to-ship attribution stored as
+// likely, never as fact: from elimination in groupLikelyLinks
+// (the only possibility left, so Prob is unset) or from a
+// pilot's activity profile in groupProfileLikely
+// (intel_gangs.go: Prob carries the attribution's share of
+// the pilot's record). The basis is written out either way.
 type compLikely struct {
-	PilotID   int64  `json:"pilot,omitempty"`
-	PilotName string `json:"pilot_name"`
-	ShipName  string `json:"ship"`
-	TypeID    int64  `json:"type,omitempty"`
-	Basis     string `json:"basis"`
+	PilotID   int64   `json:"pilot,omitempty"`
+	PilotName string  `json:"pilot_name"`
+	ShipName  string  `json:"ship"`
+	TypeID    int64   `json:"type,omitempty"`
+	Prob      float64 `json:"prob,omitempty"`
+	Basis     string  `json:"basis"`
 }
 
 // intelComposite is a group's fused picture, stored as JSON on
@@ -275,6 +279,14 @@ func (app *Application) refreshGroupComposite(ctx context.Context, groupID int64
 		if err := app.queries.DeleteIntelGroupComposite(ctx, groupID); err != nil {
 			logging.Warnf("intel: drop composite of empty group %d: %v", groupID, err)
 		}
+		// The group is gone, so its gang claim goes with it;
+		// a gang left standing on nothing is pruned.
+		if err := app.queries.DeleteIntelGangGroupMembership(ctx, groupID); err != nil {
+			logging.Warnf("intel: drop gang claim of empty group %d: %v", groupID, err)
+		}
+		if _, err := app.queries.PruneIntelGangs(ctx); err != nil {
+			logging.Warnf("intel: prune gangs: %v", err)
+		}
 		return
 	}
 	comp := app.buildGroupComposite(ctx, members)
@@ -289,7 +301,11 @@ func (app *Application) refreshGroupComposite(ctx context.Context, groupID int64
 		GroupID: groupID, ChannelID: comp.ChannelID, SystemID: comp.SystemID,
 		Composite: string(raw), Members: int32(len(members)), ComputedAt: time.Now().UTC()}); err != nil {
 		logging.Warnf("intel: store composite of group %d: %v", groupID, err)
+		return
 	}
+	// Fusion weighs the group for gang identity on the stored
+	// composite (intel_gangs.go).
+	app.evaluateGang(ctx, comp)
 }
 
 // loadGroupComposite reads a group's stored composite and the
@@ -520,6 +536,12 @@ func (app *Application) buildGroupComposite(ctx context.Context, members []db.In
 
 	comp.Links = app.groupFactLinks(ctx, reads)
 	comp.Likely = groupLikelyLinks(comp)
+	// What elimination left over, a pilot's stored record can
+	// sometimes carry: profile attributions join the likely
+	// list, each with its probability and basis stated.
+	if extra := app.groupProfileLikely(ctx, comp); len(extra) > 0 {
+		comp.Likely = append(comp.Likely, extra...)
+	}
 
 	// The headline: the sentence the primary face's reading
 	// makes, over the composite's own faces (the local face is

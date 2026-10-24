@@ -316,6 +316,93 @@ DELETE FROM intel_group_composites WHERE group_id = $1;
 DELETE FROM intel_group_composites
 WHERE group_id NOT IN (SELECT group_id FROM intel_reports WHERE group_id > 0);
 
+-- Tracked gangs (schema 089, intel_gangs.go): fusion weighs a
+-- channel's open gangs when a group's composite lands, keeps
+-- the winner's picture current, and closes gangs whose last
+-- sighting has aged past the gang lifetime. Renders look gangs
+-- up by the groups on the page.
+
+-- name: ListOpenIntelGangs :many
+SELECT id, channel_id, first_seen_at, last_seen_at, last_system_id, sightings, strength, closed_at, snapshot
+FROM intel_gangs
+WHERE channel_id = sqlc.arg(channel_id) AND closed_at IS NULL
+ORDER BY last_seen_at DESC
+LIMIT sqlc.arg(max_rows)::int;
+
+-- name: GetIntelGang :one
+SELECT id, channel_id, first_seen_at, last_seen_at, last_system_id, sightings, strength, closed_at, snapshot
+FROM intel_gangs WHERE id = sqlc.arg(id);
+
+-- name: InsertIntelGang :one
+INSERT INTO intel_gangs (channel_id, first_seen_at, last_seen_at, last_system_id, sightings, strength, snapshot)
+VALUES (sqlc.arg(channel_id), sqlc.arg(first_seen_at)::timestamptz, sqlc.arg(last_seen_at)::timestamptz,
+        sqlc.arg(last_system_id), sqlc.arg(sightings), sqlc.arg(strength), sqlc.arg(snapshot))
+RETURNING id;
+
+-- name: UpdateIntelGang :exec
+UPDATE intel_gangs SET
+    first_seen_at = sqlc.arg(first_seen_at)::timestamptz,
+    last_seen_at = sqlc.arg(last_seen_at)::timestamptz,
+    last_system_id = sqlc.arg(last_system_id),
+    sightings = sqlc.arg(sightings),
+    strength = sqlc.arg(strength),
+    snapshot = sqlc.arg(snapshot)
+WHERE id = sqlc.arg(id);
+
+-- name: CloseIntelGang :exec
+UPDATE intel_gangs SET closed_at = sqlc.arg(closed_at)::timestamptz
+WHERE id = sqlc.arg(id) AND closed_at IS NULL;
+
+-- A provisional gang (below) is deleted when its only group
+-- moves to the gang it actually belongs to: its membership
+-- rows cascade away, and the sightings live on in the winner's
+-- recomputed picture.
+-- name: DeleteIntelGang :exec
+DELETE FROM intel_gangs WHERE id = sqlc.arg(id);
+
+-- Gangs whose last sighting is older than the lifetime close
+-- where they stand: the closed moment is the sighting plus the
+-- lifetime, not whenever the sweep happened to run.
+-- name: CloseStaleIntelGangs :execrows
+UPDATE intel_gangs SET closed_at = last_seen_at + (sqlc.arg(lifetime_secs)::bigint * interval '1 second')
+WHERE channel_id = sqlc.arg(channel_id) AND closed_at IS NULL
+  AND last_seen_at < sqlc.arg(before)::timestamptz;
+
+-- name: ListIntelGangGroups :many
+SELECT group_id FROM intel_gang_groups WHERE gang_id = sqlc.arg(gang_id)
+ORDER BY group_id;
+
+-- name: AddIntelGangGroup :exec
+INSERT INTO intel_gang_groups (gang_id, group_id) VALUES (sqlc.arg(gang_id), sqlc.arg(group_id))
+ON CONFLICT DO NOTHING;
+
+-- name: DeleteIntelGangGroups :exec
+DELETE FROM intel_gang_groups WHERE gang_id = sqlc.arg(gang_id);
+
+-- name: DeleteIntelGangGroupMembership :exec
+DELETE FROM intel_gang_groups WHERE group_id = sqlc.arg(group_id);
+
+-- The gangs standing behind several groups at once: the feed
+-- and channel pages fetch a whole page's gangs in one read.
+-- Every membership of a touched gang comes back, not only the
+-- page's own groups, so the gang's Groups list is whole.
+-- name: ListIntelGangsByGroups :many
+SELECT g.id, g.channel_id, g.first_seen_at, g.last_seen_at, g.last_system_id, g.sightings, g.strength, g.closed_at, g.snapshot, gg.group_id
+FROM intel_gangs g
+JOIN intel_gang_groups touch ON touch.gang_id = g.id AND touch.group_id = ANY(sqlc.arg(group_ids)::bigint[])
+JOIN intel_gang_groups gg ON gg.gang_id = g.id;
+
+-- Gangs whose groups have all been pruned go with them.
+-- name: PruneIntelGangs :execrows
+DELETE FROM intel_gangs
+WHERE id NOT IN (SELECT gang_id FROM intel_gang_groups);
+
+-- Gang claims on groups that no longer stand go first, so
+-- PruneIntelGangs can take the gangs they emptied.
+-- name: PruneIntelGangGroups :execrows
+DELETE FROM intel_gang_groups
+WHERE group_id NOT IN (SELECT group_id FROM intel_reports WHERE group_id > 0);
+
 -- Whether a report already stands: pasted and watched chat lines are
 -- sent again (a restart, two characters in one channel), and the same
 -- sighting is stored once.

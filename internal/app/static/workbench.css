@@ -18,6 +18,17 @@
 .wb-meta { margin: 0.3rem 0 0; color: var(--muted); font-size: 0.92rem; display: flex; flex-wrap: wrap; gap: 0.35rem; }
 .wb-headline { margin: 0.55rem 0 0; max-width: 62ch; font-size: 1.05rem; color: var(--text); }
 .wb-head-actions { flex: none; }
+/* The tracked gang's strip in the head: the gang this report's
+   group stands in, as an event, with its likely ships and the
+   basis for each. Stale reads muted. */
+.wb-gang { margin-top: 0.6rem; border-left: 3px solid var(--accent); padding-left: 0.7rem; }
+.wb-gang.stale { border-left-color: var(--box-edge); color: var(--muted); }
+.wb-gang-line { margin: 0; font-size: 0.98rem; }
+.wb-gang-line strong { color: var(--text-bright); }
+.wb-gang.stale .wb-gang-line strong { color: var(--muted); }
+.wb-gang-meta { margin: 0.15rem 0 0; color: var(--muted); font-size: 0.88rem; }
+.wb-gang-likely { margin: 0.15rem 0 0; font-size: 0.92rem; }
+.wb-gang-basis { color: var(--muted); }
 
 /* View tabs */
 /* The related rail: the opened report's group, member by

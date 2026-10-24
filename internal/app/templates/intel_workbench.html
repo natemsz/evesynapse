@@ -28,6 +28,11 @@
         {{if .ChannelName}}<span>· <a href="/intel/channels/{{.ChannelID}}/">{{.ChannelName}}</a></span>{{end}}
       </p>
       {{if .Headline}}<p class="wb-headline prose">{{.Headline}}</p>{{end}}
+      {{if .GangTracked}}<div class="wb-gang{{if .GangStale}} stale{{end}}">
+        <p class="wb-gang-line"><strong>{{if .GangStale}}Gang gone quiet{{else}}Tracked gang{{end}}</strong>{{if .GangComp}} · {{.GangComp}}{{end}}{{if .GangDoctrine}} · {{.GangDoctrine}}{{end}}</p>
+        <p class="wb-gang-meta">{{.GangSeen}} · confidence {{.GangConf}}%{{if .GangTrail}} · sighted in {{.GangTrail}}{{end}}</p>
+        {{range .GangLikely}}<p class="wb-gang-likely">Likely: {{if .PilotID}}<a href="/pilot/?character={{.PilotID}}">{{.Pilot}}</a>{{else}}{{.Pilot}}{{end}} in a {{if .ShipID}}<a href="/items/type/{{.ShipID}}/">{{.Ship}}</a>{{else}}{{.Ship}}{{end}}{{if .Prob}} ({{.Prob}}%){{end}} <span class="wb-gang-basis">{{.Basis}}</span></p>{{end}}
+      </div>{{end}}
     </div>
     <div class="wb-head-actions">
       {{if or .CanPost .FromScan}}<button type="button" class="btn wb-open-parser">Paste a scan</button>{{end}}

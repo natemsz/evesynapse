@@ -529,6 +529,13 @@ var pgIntelReportGroupsSchema string
 //go:embed schema_pg/088_pilot_activity.sql
 var pgPilotActivitySchema string
 
+// Step 089: tracked gangs -- the fusion layer over report
+// groups: one body of pilots tracked across the groups that
+// sight it, with its identity evidence and latest picture.
+//
+//go:embed schema_pg/089_intel_gangs.sql
+var pgIntelGangsSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -646,6 +653,7 @@ func schemaSteps() []schemaStep {
 		{86, "scan_groups", pgScanGroupsSchema, ""},
 		{87, "intel_report_groups", pgIntelReportGroupsSchema, ""},
 		{88, "pilot_activity", pgPilotActivitySchema, ""},
+		{89, "intel_gangs", pgIntelGangsSchema, ""},
 	}
 }
 

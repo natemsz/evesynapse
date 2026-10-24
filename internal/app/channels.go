@@ -249,6 +249,10 @@ type reportView struct {
 	// segments for the stats bar, from the counts stored with
 	// the report at ingest.
 	Split []reportSeg `json:"split,omitempty"`
+	// Gang is the tracked gang this report's group stands in,
+	// when fusion tracks one sighted beyond this group alone
+	// (intel_gangs.go): the card's gang event line.
+	Gang *reportGang `json:"gang,omitempty"`
 	// NoDoors is set when the card is shown on the report's own
 	// system page, where its system doors would point at the
 	// page itself.
@@ -442,6 +446,7 @@ func (app *Application) channelReports(ctx context.Context, id intelIdentity, ch
 		}
 	}
 	comps := app.groupCompositesFor(ctx, groupIDs)
+	gangs := app.gangsForGroups(ctx, groupIDs)
 	out := make([]reportView, 0, len(rows))
 	for _, r := range rows {
 		rv := reportView{ID: r.ID, Channel: r.ChannelID, SystemID: r.SystemID, Reporter: r.Reporter, Text: r.Text,
@@ -456,6 +461,9 @@ func (app *Application) channelReports(ctx context.Context, id intelIdentity, ch
 			app.applyCompositeCard(ctx, &rv, r.Kind, comp, names)
 		} else {
 			applyAnalysis(&rv, r.Kind, r.Analysis, names)
+		}
+		if g := gangs[r.GroupID]; g.showsAsEvent() {
+			rv.Gang = app.reportGangView(ctx, g, r.SystemID, now)
 		}
 		out = append(out, rv)
 	}
@@ -573,6 +581,7 @@ func (app *Application) feedReports(ctx context.Context, id intelIdentity, chann
 		}
 	}
 	comps := app.groupCompositesFor(ctx, groupIDs)
+	gangs := app.gangsForGroups(ctx, groupIDs)
 	out := make([]reportView, 0, len(rows))
 	for _, r := range rows {
 		rv := reportView{ID: r.ID, Channel: r.ChannelID, ChName: namesByID[r.ChannelID], SystemID: r.SystemID, Reporter: r.Reporter, Text: r.Text,
@@ -585,6 +594,9 @@ func (app *Application) feedReports(ctx context.Context, id intelIdentity, chann
 			app.applyCompositeCard(ctx, &rv, r.Kind, comp, names)
 		} else {
 			applyAnalysis(&rv, r.Kind, r.Analysis, names)
+		}
+		if g := gangs[r.GroupID]; g.showsAsEvent() {
+			rv.Gang = app.reportGangView(ctx, g, r.SystemID, now)
 		}
 		out = append(out, rv)
 	}
@@ -1535,5 +1547,11 @@ func (app *Application) pruneIntelReports(ctx context.Context) {
 	}
 	if _, err := app.queries.PruneIntelGroupComposites(ctx); err != nil {
 		logging.Warnf("channels: prune composites: %v", err)
+	}
+	if _, err := app.queries.PruneIntelGangGroups(ctx); err != nil {
+		logging.Warnf("channels: prune gang groups: %v", err)
+	}
+	if _, err := app.queries.PruneIntelGangs(ctx); err != nil {
+		logging.Warnf("channels: prune gangs: %v", err)
 	}
 }

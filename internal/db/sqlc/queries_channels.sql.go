@@ -13,6 +13,59 @@ import (
 	"github.com/lib/pq"
 )
 
+const addIntelGangGroup = `-- name: AddIntelGangGroup :exec
+INSERT INTO intel_gang_groups (gang_id, group_id) VALUES ($1, $2)
+ON CONFLICT DO NOTHING
+`
+
+type AddIntelGangGroupParams struct {
+	GangID  int64 `json:"gang_id"`
+	GroupID int64 `json:"group_id"`
+}
+
+func (q *Queries) AddIntelGangGroup(ctx context.Context, arg AddIntelGangGroupParams) error {
+	_, err := q.db.ExecContext(ctx, addIntelGangGroup, arg.GangID, arg.GroupID)
+	return err
+}
+
+const closeIntelGang = `-- name: CloseIntelGang :exec
+UPDATE intel_gangs SET closed_at = $1::timestamptz
+WHERE id = $2 AND closed_at IS NULL
+`
+
+type CloseIntelGangParams struct {
+	ClosedAt time.Time `json:"closed_at"`
+	ID       int64     `json:"id"`
+}
+
+func (q *Queries) CloseIntelGang(ctx context.Context, arg CloseIntelGangParams) error {
+	_, err := q.db.ExecContext(ctx, closeIntelGang, arg.ClosedAt, arg.ID)
+	return err
+}
+
+const closeStaleIntelGangs = `-- name: CloseStaleIntelGangs :execrows
+UPDATE intel_gangs SET closed_at = last_seen_at + ($1::bigint * interval '1 second')
+WHERE channel_id = $2 AND closed_at IS NULL
+  AND last_seen_at < $3::timestamptz
+`
+
+type CloseStaleIntelGangsParams struct {
+	LifetimeSecs int64     `json:"lifetime_secs"`
+	ChannelID    int64     `json:"channel_id"`
+	Before       time.Time `json:"before"`
+}
+
+// Gangs whose last sighting is older than the lifetime close
+// where they stand: the closed moment is the sighting plus the
+// lifetime, not whenever the sweep happened to run.
+func (q *Queries) CloseStaleIntelGangs(ctx context.Context, arg CloseStaleIntelGangsParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, closeStaleIntelGangs, arg.LifetimeSecs, arg.ChannelID, arg.Before)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const countIntelChannelGrants = `-- name: CountIntelChannelGrants :one
 SELECT COUNT(*) FROM intel_channel_grants WHERE channel_id = $1
 `
@@ -179,6 +232,37 @@ func (q *Queries) DeleteIntelChannelRule(ctx context.Context, arg DeleteIntelCha
 	return err
 }
 
+const deleteIntelGang = `-- name: DeleteIntelGang :exec
+DELETE FROM intel_gangs WHERE id = $1
+`
+
+// A provisional gang (below) is deleted when its only group
+// moves to the gang it actually belongs to: its membership
+// rows cascade away, and the sightings live on in the winner's
+// recomputed picture.
+func (q *Queries) DeleteIntelGang(ctx context.Context, id int64) error {
+	_, err := q.db.ExecContext(ctx, deleteIntelGang, id)
+	return err
+}
+
+const deleteIntelGangGroupMembership = `-- name: DeleteIntelGangGroupMembership :exec
+DELETE FROM intel_gang_groups WHERE group_id = $1
+`
+
+func (q *Queries) DeleteIntelGangGroupMembership(ctx context.Context, groupID int64) error {
+	_, err := q.db.ExecContext(ctx, deleteIntelGangGroupMembership, groupID)
+	return err
+}
+
+const deleteIntelGangGroups = `-- name: DeleteIntelGangGroups :exec
+DELETE FROM intel_gang_groups WHERE gang_id = $1
+`
+
+func (q *Queries) DeleteIntelGangGroups(ctx context.Context, gangID int64) error {
+	_, err := q.db.ExecContext(ctx, deleteIntelGangGroups, gangID)
+	return err
+}
+
 const deleteIntelGroupComposite = `-- name: DeleteIntelGroupComposite :exec
 DELETE FROM intel_group_composites WHERE group_id = $1
 `
@@ -251,6 +335,28 @@ func (q *Queries) GetIntelChannel(ctx context.Context, id int64) (IntelChannel, 
 		&i.CreatedAt,
 		&i.OwnerKind,
 		&i.OwnerID,
+	)
+	return i, err
+}
+
+const getIntelGang = `-- name: GetIntelGang :one
+SELECT id, channel_id, first_seen_at, last_seen_at, last_system_id, sightings, strength, closed_at, snapshot
+FROM intel_gangs WHERE id = $1
+`
+
+func (q *Queries) GetIntelGang(ctx context.Context, id int64) (IntelGang, error) {
+	row := q.db.QueryRowContext(ctx, getIntelGang, id)
+	var i IntelGang
+	err := row.Scan(
+		&i.ID,
+		&i.ChannelID,
+		&i.FirstSeenAt,
+		&i.LastSeenAt,
+		&i.LastSystemID,
+		&i.Sightings,
+		&i.Strength,
+		&i.ClosedAt,
+		&i.Snapshot,
 	)
 	return i, err
 }
@@ -475,6 +581,38 @@ func (q *Queries) GetPreviousIntelReport(ctx context.Context, arg GetPreviousInt
 		&i.GroupID,
 	)
 	return i, err
+}
+
+const insertIntelGang = `-- name: InsertIntelGang :one
+INSERT INTO intel_gangs (channel_id, first_seen_at, last_seen_at, last_system_id, sightings, strength, snapshot)
+VALUES ($1, $2::timestamptz, $3::timestamptz,
+        $4, $5, $6, $7)
+RETURNING id
+`
+
+type InsertIntelGangParams struct {
+	ChannelID    int64     `json:"channel_id"`
+	FirstSeenAt  time.Time `json:"first_seen_at"`
+	LastSeenAt   time.Time `json:"last_seen_at"`
+	LastSystemID int64     `json:"last_system_id"`
+	Sightings    int32     `json:"sightings"`
+	Strength     float64   `json:"strength"`
+	Snapshot     string    `json:"snapshot"`
+}
+
+func (q *Queries) InsertIntelGang(ctx context.Context, arg InsertIntelGangParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, insertIntelGang,
+		arg.ChannelID,
+		arg.FirstSeenAt,
+		arg.LastSeenAt,
+		arg.LastSystemID,
+		arg.Sightings,
+		arg.Strength,
+		arg.Snapshot,
+	)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
 }
 
 const insertIntelReport = `-- name: InsertIntelReport :one
@@ -868,6 +1006,92 @@ func (q *Queries) ListIntelChannelSideCorps(ctx context.Context, arg ListIntelCh
 			return nil, err
 		}
 		items = append(items, corporation_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listIntelGangGroups = `-- name: ListIntelGangGroups :many
+SELECT group_id FROM intel_gang_groups WHERE gang_id = $1
+ORDER BY group_id
+`
+
+func (q *Queries) ListIntelGangGroups(ctx context.Context, gangID int64) ([]int64, error) {
+	rows, err := q.db.QueryContext(ctx, listIntelGangGroups, gangID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []int64
+	for rows.Next() {
+		var group_id int64
+		if err := rows.Scan(&group_id); err != nil {
+			return nil, err
+		}
+		items = append(items, group_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listIntelGangsByGroups = `-- name: ListIntelGangsByGroups :many
+SELECT g.id, g.channel_id, g.first_seen_at, g.last_seen_at, g.last_system_id, g.sightings, g.strength, g.closed_at, g.snapshot, gg.group_id
+FROM intel_gangs g
+JOIN intel_gang_groups touch ON touch.gang_id = g.id AND touch.group_id = ANY($1::bigint[])
+JOIN intel_gang_groups gg ON gg.gang_id = g.id
+`
+
+type ListIntelGangsByGroupsRow struct {
+	ID           int64        `json:"id"`
+	ChannelID    int64        `json:"channel_id"`
+	FirstSeenAt  time.Time    `json:"first_seen_at"`
+	LastSeenAt   time.Time    `json:"last_seen_at"`
+	LastSystemID int64        `json:"last_system_id"`
+	Sightings    int32        `json:"sightings"`
+	Strength     float64      `json:"strength"`
+	ClosedAt     sql.NullTime `json:"closed_at"`
+	Snapshot     string       `json:"snapshot"`
+	GroupID      int64        `json:"group_id"`
+}
+
+// The gangs standing behind several groups at once: the feed
+// and channel pages fetch a whole page's gangs in one read.
+// Every membership of a touched gang comes back, not only the
+// page's own groups, so the gang's Groups list is whole.
+func (q *Queries) ListIntelGangsByGroups(ctx context.Context, groupIds []int64) ([]ListIntelGangsByGroupsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listIntelGangsByGroups, pq.Array(groupIds))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListIntelGangsByGroupsRow
+	for rows.Next() {
+		var i ListIntelGangsByGroupsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.ChannelID,
+			&i.FirstSeenAt,
+			&i.LastSeenAt,
+			&i.LastSystemID,
+			&i.Sightings,
+			&i.Strength,
+			&i.ClosedAt,
+			&i.Snapshot,
+			&i.GroupID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err
@@ -1303,6 +1527,58 @@ func (q *Queries) ListIntelTokens(ctx context.Context, userID int64) ([]ListInte
 	return items, nil
 }
 
+const listOpenIntelGangs = `-- name: ListOpenIntelGangs :many
+
+SELECT id, channel_id, first_seen_at, last_seen_at, last_system_id, sightings, strength, closed_at, snapshot
+FROM intel_gangs
+WHERE channel_id = $1 AND closed_at IS NULL
+ORDER BY last_seen_at DESC
+LIMIT $2::int
+`
+
+type ListOpenIntelGangsParams struct {
+	ChannelID int64 `json:"channel_id"`
+	MaxRows   int32 `json:"max_rows"`
+}
+
+// Tracked gangs (schema 089, intel_gangs.go): fusion weighs a
+// channel's open gangs when a group's composite lands, keeps
+// the winner's picture current, and closes gangs whose last
+// sighting has aged past the gang lifetime. Renders look gangs
+// up by the groups on the page.
+func (q *Queries) ListOpenIntelGangs(ctx context.Context, arg ListOpenIntelGangsParams) ([]IntelGang, error) {
+	rows, err := q.db.QueryContext(ctx, listOpenIntelGangs, arg.ChannelID, arg.MaxRows)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []IntelGang
+	for rows.Next() {
+		var i IntelGang
+		if err := rows.Scan(
+			&i.ID,
+			&i.ChannelID,
+			&i.FirstSeenAt,
+			&i.LastSeenAt,
+			&i.LastSystemID,
+			&i.Sightings,
+			&i.Strength,
+			&i.ClosedAt,
+			&i.Snapshot,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listOrgIntelChannels = `-- name: ListOrgIntelChannels :many
 SELECT id, owner_user_id, name, description, created_at, owner_kind, owner_id FROM intel_channels
 WHERE owner_kind = $1 AND owner_id = $2
@@ -1642,6 +1918,35 @@ func (q *Queries) ListStoredRosterCandidates(ctx context.Context, arg ListStored
 	return items, nil
 }
 
+const pruneIntelGangGroups = `-- name: PruneIntelGangGroups :execrows
+DELETE FROM intel_gang_groups
+WHERE group_id NOT IN (SELECT group_id FROM intel_reports WHERE group_id > 0)
+`
+
+// Gang claims on groups that no longer stand go first, so
+// PruneIntelGangs can take the gangs they emptied.
+func (q *Queries) PruneIntelGangGroups(ctx context.Context) (int64, error) {
+	result, err := q.db.ExecContext(ctx, pruneIntelGangGroups)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const pruneIntelGangs = `-- name: PruneIntelGangs :execrows
+DELETE FROM intel_gangs
+WHERE id NOT IN (SELECT gang_id FROM intel_gang_groups)
+`
+
+// Gangs whose groups have all been pruned go with them.
+func (q *Queries) PruneIntelGangs(ctx context.Context) (int64, error) {
+	result, err := q.db.ExecContext(ctx, pruneIntelGangs)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const pruneIntelGroupComposites = `-- name: PruneIntelGroupComposites :execrows
 DELETE FROM intel_group_composites
 WHERE group_id NOT IN (SELECT group_id FROM intel_reports WHERE group_id > 0)
@@ -1766,6 +2071,40 @@ type UpdateIntelChannelParams struct {
 
 func (q *Queries) UpdateIntelChannel(ctx context.Context, arg UpdateIntelChannelParams) error {
 	_, err := q.db.ExecContext(ctx, updateIntelChannel, arg.Name, arg.Description, arg.ID)
+	return err
+}
+
+const updateIntelGang = `-- name: UpdateIntelGang :exec
+UPDATE intel_gangs SET
+    first_seen_at = $1::timestamptz,
+    last_seen_at = $2::timestamptz,
+    last_system_id = $3,
+    sightings = $4,
+    strength = $5,
+    snapshot = $6
+WHERE id = $7
+`
+
+type UpdateIntelGangParams struct {
+	FirstSeenAt  time.Time `json:"first_seen_at"`
+	LastSeenAt   time.Time `json:"last_seen_at"`
+	LastSystemID int64     `json:"last_system_id"`
+	Sightings    int32     `json:"sightings"`
+	Strength     float64   `json:"strength"`
+	Snapshot     string    `json:"snapshot"`
+	ID           int64     `json:"id"`
+}
+
+func (q *Queries) UpdateIntelGang(ctx context.Context, arg UpdateIntelGangParams) error {
+	_, err := q.db.ExecContext(ctx, updateIntelGang,
+		arg.FirstSeenAt,
+		arg.LastSeenAt,
+		arg.LastSystemID,
+		arg.Sightings,
+		arg.Strength,
+		arg.Snapshot,
+		arg.ID,
+	)
 	return err
 }
 

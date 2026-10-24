@@ -55,6 +55,23 @@ func TestPilotIntel(t *testing.T) {
 		t.Errorf("a visitor gets no private intel")
 	}
 
+	// With a stored activity profile, the same section reads the
+	// profile's aggregates instead: the whole recorded record,
+	// usual hull and gang size included, labelled with that scope.
+	exec(`INSERT INTO pilot_activity_profiles (character_id, backfilled_at, updated_at, kills, losses, final_blows, gang_total, gang_samples, usual_ship_type_id, last_active_at)
+		VALUES ($1, $2, $3, 137, 42, 98, 480, 137, 22456, $3)`, hostile, now.Add(-24*time.Hour), now.Add(-2*time.Hour))
+	exec(`INSERT INTO pilot_activity_ships (character_id, ship_type_id, flown, final_blows, lost) VALUES ($1, 22456, 41, 27, 12)`, hostile)
+	exec(`INSERT INTO pilot_activity_systems (character_id, system_id, events, last_at) VALUES ($1, 30002187, 88, $2)`, hostile, now.Add(-2*time.Hour))
+	exec(`INSERT INTO pilot_activity_hours (character_id, hour, events) VALUES ($1, 21, 5)`, hostile)
+	_, body = getPage(t, app, &http.Cookie{Name: "nobody", Value: "x"}, "/pilot/?character="+strconv.FormatInt(hostile, 10))
+	for _, want := range []string{"every recorded kill and loss", `<span class="pi-v">137</span><span class="pi-l">kills`, `<span class="pi-v">42</span><span class="pi-l">losses`,
+		`<span class="pi-v">Sabre</span><span class="pi-l">usual hull</span>`, `<span class="pi-v">3.5</span><span class="pi-l">typical gang size</span>`,
+		`<span class="pi-l">last active</span>`, "41 flown · 27 final blows · 12 lost"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("profile-backed pilot intel lacks %q", want)
+		}
+	}
+
 	// A signed-in reader with a channel naming the pilot.
 	u, _ := q.CreateUser(ctx)
 	seedCharacter(t, q, u.ID, 90000501, "Intel Reader")

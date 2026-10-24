@@ -170,9 +170,10 @@ WHERE character_id = $1
 `
 
 // Pilot activity profiles (schema 088, pilot_activity.go): the
-// stored aggregates the pilot page's kill history reads. Written
-// at ingest only: the one-time history backfill of a pilot met in
-// a reading, and the live kill stream for pilots who have one.
+// stored aggregates the pilot page's activity section reads.
+// Written at ingest only: the one-time history backfill of a
+// pilot met in a reading, and the live kill stream for pilots
+// who have one.
 func (q *Queries) GetPilotActivityProfile(ctx context.Context, characterID int64) (PilotActivityProfile, error) {
 	row := q.db.QueryRowContext(ctx, getPilotActivityProfile, characterID)
 	var i PilotActivityProfile

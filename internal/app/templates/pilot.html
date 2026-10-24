@@ -26,16 +26,22 @@
      channels' known-hostiles lists. */}}
 {{define "pilot-intel"}}
 <section class="pi" aria-labelledby="pi-h">
-  <h2 id="pi-h">Activity <small class="muted">public kills, last 90 days</small></h2>
+  <h2 id="pi-h">Activity <small class="muted">{{if .ProfileBacked}}every recorded kill and loss{{if .UpdatedAgo}} · updated {{.UpdatedAgo}}{{end}}{{else}}public kills, last 90 days{{end}}</small></h2>
   {{if .Any}}
   <div class="pi-stats">
     <div class="pi-stat"><span class="pi-v">{{.Kills}}</span><span class="pi-l">kills{{if .Solo}} · {{.Solo}} solo{{end}}</span></div>
     <div class="pi-stat"><span class="pi-v">{{.Losses}}</span><span class="pi-l">losses</span></div>
+    {{if .ProfileBacked}}
+    {{if .UsualShip}}<div class="pi-stat"><span class="pi-v">{{.UsualShip}}</span><span class="pi-l">usual hull</span></div>{{end}}
+    {{if .Gang}}<div class="pi-stat"><span class="pi-v">{{.Gang}}</span><span class="pi-l">typical gang size</span></div>{{end}}
+    {{if .LastActive}}<div class="pi-stat"><span class="pi-v">{{.LastActive}}</span><span class="pi-l">last active</span></div>{{end}}
+    {{else}}
     {{if .ISK}}<div class="pi-stat"><span class="pi-v">{{.ISK}}</span><span class="pi-l">ISK destroyed</span></div>{{end}}
     {{with .LastSeen}}<a class="pi-stat pi-seen" href="/intel/kill/{{.KillmailID}}/"><span class="pi-v"><span class="sec sec-{{.SecTier}}">{{.SecText}}</span> {{.System}}</span><span class="pi-l">last seen {{.Ago}}{{if .Flew}} in a {{.Flew}}{{end}}{{if .Lost}} · lost a {{.Ship}}{{end}}</span></a>{{end}}
+    {{end}}
   </div>
   <div class="pi-cols">
-    {{if .Ships}}<div class="pi-panel"><h3>Flies</h3><ol class="pi-bars">{{range .Ships}}<li><span class="pi-bar" data-w="{{.Pct}}"></span><img src="https://images.evetech.net/types/{{.ID}}/icon?size=32" alt="" width="20" height="20" loading="lazy"><span class="pi-n">{{.Name}}</span><span class="pi-c">{{.N}}</span></li>{{end}}</ol></div>{{end}}
+    {{if .Ships}}<div class="pi-panel"><h3>Flies</h3><ol class="pi-bars">{{range .Ships}}<li><span class="pi-bar" data-w="{{.Pct}}"></span><img src="https://images.evetech.net/types/{{.ID}}/icon?size=32" alt="" width="20" height="20" loading="lazy"><span class="pi-n">{{.Name}}</span><span class="pi-c">{{if .Text}}{{.Text}}{{else}}{{.N}}{{end}}</span></li>{{end}}</ol></div>{{end}}
     {{if .Systems}}<div class="pi-panel"><h3>Hunts in</h3><ol class="pi-bars">{{range .Systems}}<li><span class="pi-bar" data-w="{{.Pct}}"></span><span class="pi-n"><span class="sec sec-{{.SecTier}}">{{.SecText}}</span> <a href="/map/?system={{.ID}}">{{.Name}}</a></span><span class="pi-c">{{.N}} <small class="muted">{{.Ago}}</small></span></li>{{end}}</ol></div>{{end}}
   </div>
   {{if .Hours}}<div class="pi-panel">
@@ -53,35 +59,6 @@
   </div>{{end}}
   {{else}}
   <p class="muted">No public kills or losses on our killboard in the last 90 days.</p>
-  {{end}}
-
-  {{/* The kill history (pilot_activity.go): stored aggregates of
-       the pilot's whole recorded kill record, backfilled from
-       zKillboard's history when the pilot is first met in a
-       reading and kept current by the kill stream. Pilots with
-       no profile yet show no block here. */}}
-  {{with .Activity}}
-  <h2 class="pi-h2">Kill history <small class="muted">every recorded kill and loss{{if .UpdatedAgo}} · updated {{.UpdatedAgo}}{{end}}</small></h2>
-  {{if .Any}}
-  <div class="pi-stats">
-    <div class="pi-stat"><span class="pi-v">{{.Kills}}</span><span class="pi-l">kills</span></div>
-    <div class="pi-stat"><span class="pi-v">{{.Losses}}</span><span class="pi-l">losses</span></div>
-    {{if .UsualShip}}<div class="pi-stat"><span class="pi-v">{{.UsualShip}}</span><span class="pi-l">usual hull</span></div>{{end}}
-    {{if .Gang}}<div class="pi-stat"><span class="pi-v">{{.Gang}}</span><span class="pi-l">typical gang size</span></div>{{end}}
-    {{if .LastActive}}<div class="pi-stat"><span class="pi-v">{{.LastActive}}</span><span class="pi-l">last active</span></div>{{end}}
-  </div>
-  <div class="pi-cols">
-    {{if .Ships}}<div class="pi-panel"><h3>Ships</h3><ol class="pi-bars">{{range .Ships}}<li><span class="pi-bar" data-w="{{.Pct}}"></span><img src="https://images.evetech.net/types/{{.ID}}/icon?size=32" alt="" width="20" height="20" loading="lazy"><span class="pi-n">{{.Name}}</span><span class="pi-c">{{.Text}}</span></li>{{end}}</ol></div>{{end}}
-    {{if .Systems}}<div class="pi-panel"><h3>Active in</h3><ol class="pi-bars">{{range .Systems}}<li><span class="pi-bar" data-w="{{.Pct}}"></span><span class="pi-n"><span class="sec sec-{{.SecTier}}">{{.SecText}}</span> <a href="/map/?system={{.ID}}">{{.Name}}</a></span><span class="pi-c">{{.N}} <small class="muted">{{.Ago}}</small></span></li>{{end}}</ol></div>{{end}}
-  </div>
-  {{if .Hours}}<div class="pi-panel">
-    <h3>Active hours <small class="muted">{{.Peak}}</small></h3>
-    <ol class="pi-hours" aria-label="Kills and losses by hour, EVE time">{{range .Hours}}<li title="{{printf "%02d" .Hour}}:00 EVE · {{.N}}"><span class="pi-hour" data-w="{{.Pct}}"></span></li>{{end}}</ol>
-    <p class="pi-hours-axis muted"><span>00</span><span>06</span><span>12</span><span>18</span><span>24</span></p>
-  </div>{{end}}
-  {{else}}
-  <p class="muted">No kills or losses recorded for this pilot yet.</p>
-  {{end}}
   {{end}}
 
   {{if .SignedIn}}

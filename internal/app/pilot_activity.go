@@ -4,8 +4,9 @@ package app
 // Pilot activity profiles (schema 088): what the public kill record
 // says about a pilot, kept as stored aggregates (the ships they fly
 // and lose, the systems they are active in, the hours, the usual
-// hull, the gang size) and read by the pilot page's kill history.
-// Pages read these rows only, never the raw kills.
+// hull, the gang size) and read by the pilot page's activity
+// section (pilot_intel.go). Pages read these rows only, never the
+// raw kills.
 //
 // A pilot first met in an intel reading (a channel report, a scan)
 // is backfilled once from zKillboard's history API: up to ten
@@ -384,7 +385,8 @@ func killfeedSleepCtx(ctx context.Context, d time.Duration) bool {
 	}
 }
 
-// pilotActivityShip is one row of a kill history's ships panel.
+// pilotActivityShip is one row of the activity section's ships
+// panel, in a profile's terms.
 type pilotActivityShip struct {
 	ID   int64
 	Name string
@@ -392,10 +394,10 @@ type pilotActivityShip struct {
 	Text string // the counts that are not zero, e.g. "12 flown · 3 final blows · 2 lost"
 }
 
-// pilotActivityView is a pilot's kill history for their page
-// (pilot_intel.go): the stored aggregates of every recorded kill
-// and loss, where the section above it reads only the last 90
-// days of the local board.
+// pilotActivityView is a pilot's stored kill record, read for
+// their page by pilot_intel.go: the aggregates of every recorded
+// kill and loss, which take over the activity section's numbers
+// when the pilot has a profile with a record.
 type pilotActivityView struct {
 	Any         bool
 	Kills       int64
@@ -411,11 +413,11 @@ type pilotActivityView struct {
 	Peak        string
 }
 
-// loadPilotActivity reads a pilot's stored kill history: the
+// loadPilotActivity reads a pilot's stored kill record: the
 // profile row and its top ships, systems and hours, all stored
 // aggregates with bounded reads. No profile (the pilot has not
-// been met in a reading yet) reads as nil, and the page shows no
-// history block for them.
+// been met in a reading yet) reads as nil, and the pilot's page
+// falls back to the killboard read.
 func (app *Application) loadPilotActivity(ctx context.Context, id int64, names *killNames, now time.Time) *pilotActivityView {
 	prof, err := app.queries.GetPilotActivityProfile(ctx, id)
 	if err != nil {

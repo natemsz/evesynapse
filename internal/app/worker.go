@@ -7,6 +7,7 @@ import (
 	"errors"
 	"evesynapse/internal/app/module"
 	"fmt"
+	"net/http"
 	"runtime/debug"
 	"sort"
 	"strconv"
@@ -1245,6 +1246,33 @@ func (app *Application) warmMissingGroupNames(ctx context.Context, typeIDs []int
 	})
 }
 
+// validPlaceID reports whether id sits in the ID space of its
+// warm kind: solar systems occupy 30M-40M, NPC stations 60M-70M.
+// Anything else (0 above all, or an ID from another entity space)
+// is not a place the /universe/ endpoints can name, and asking
+// ESI about it spends the shared error budget on a guaranteed
+// 404.
+func validPlaceID(kind string, id int64) bool {
+	switch kind {
+	case "solar_system":
+		return id >= 30_000_000 && id < 40_000_000
+	case "station":
+		return id >= 60_000_000 && id < 70_000_000
+	}
+	return false
+}
+
+// warmDefinitive reports whether an ESI failure settles a warm
+// target for good: a 400/404 is ESI saying the ID is not the
+// thing the endpoint names, the same classification the market
+// fetch state machine gives definitive failures. Transient
+// failures (5xx, network, error limit) never settle; they keep
+// the pass's ordinary retry-next-cycle behavior.
+func warmDefinitive(err error) bool {
+	code, ok := esi.StatusCode(err)
+	return ok && (code == http.StatusBadRequest || code == http.StatusNotFound)
+}
+
 // warmMissingPlaceNames resolves station and solar-system names
 // (asset locations, colony systems). places maps each id to
 // "station" or "solar_system".
@@ -1252,6 +1280,12 @@ func (app *Application) warmMissingPlaceNames(ctx context.Context, places map[in
 	pathByID := make(map[int64]string, len(places))
 	var missing []int64
 	for id, kind := range places {
+		if !validPlaceID(kind, id) {
+			continue // not an ID ESI can name; never enqueue it
+		}
+		if app.esi.PlaceNameMissed(id) {
+			continue // ESI already said this ID is not a place
+		}
 		if _, ok := app.esi.CachedPlaceName(ctx, id); ok {
 			continue
 		}
@@ -1268,14 +1302,36 @@ func (app *Application) warmMissingPlaceNames(ctx context.Context, places map[in
 	})
 }
 
+// planetMissSettled reports whether the planet_names store holds
+// a fresh definitive miss for id (see planetMissingWindow): the
+// queue pass in planets_worker.go trusts a 404 that long, and the
+// warm pass honors the same answer instead of re-asking inside
+// the window.
+func (app *Application) planetMissSettled(ctx context.Context, id int64) bool {
+	row, err := app.queries.GetPlanetName(ctx, id)
+	if err != nil || row.State != esi.PlanetMissing || !row.ResolvedAt.Valid {
+		return false
+	}
+	return time.Since(row.ResolvedAt.Time) < planetMissingWindow
+}
+
 // warmMissingPlanetNames resolves the names of the character's
 // colony planets (the place cache carries them; the network tier
 // is /universe/planets/).
 func (app *Application) warmMissingPlanetNames(ctx context.Context, planetIDs map[int64]bool, budget *warmBudget) int {
 	var missing []int64
 	for _, id := range sortedInt64Keys(planetIDs) {
+		if id <= 0 {
+			continue
+		}
 		if _, ok := app.esi.CachedPlaceName(ctx, id); ok {
 			continue
+		}
+		if _, ok := app.esi.CachedPlanetName(ctx, id); ok {
+			continue // the durable planet_names row already holds it
+		}
+		if app.planetMissSettled(ctx, id) {
+			continue // ESI already said this ID is not a planet
 		}
 		missing = append(missing, id)
 	}
@@ -1372,6 +1428,11 @@ func (app *Application) warmPlaceName(ctx context.Context, budget *warmBudget, p
 	if err := app.esi.Get(ctx, "", path, &place); err != nil {
 		if errors.Is(err, esi.ErrErrorLimit) {
 			budget.hitLimit()
+		} else if warmDefinitive(err) {
+			// Settled: remember the answer so the stored
+			// snapshots that keep re-deriving this want stop
+			// spending fetches (and error budget) on it.
+			app.esi.StorePlaceNameMiss(id)
 		} else if ctx.Err() == nil {
 			logging.Errorf("worker: warm place %s: %v", path, err)
 		}
@@ -1409,6 +1470,16 @@ func (app *Application) warmPlanetName(ctx context.Context, budget *warmBudget, 
 	if err := app.esi.Get(ctx, "", fmt.Sprintf("/universe/planets/%d/", id), &planet); err != nil {
 		if errors.Is(err, esi.ErrErrorLimit) {
 			budget.hitLimit()
+		} else if warmDefinitive(err) {
+			// Settled: record the miss in planet_names with
+			// the same state the queue pass writes, so both
+			// passes stop re-asking until the miss ages out.
+			if serr := app.queries.SetPlanetName(ctx, db.SetPlanetNameParams{
+				PlanetID: id, Name: "", State: esi.PlanetMissing,
+				ResolvedAt: timeSet(time.Now().UTC()),
+			}); serr != nil {
+				logging.Errorf("worker: record planet miss %d: %v", id, serr)
+			}
 		} else if ctx.Err() == nil {
 			logging.Errorf("worker: warm planet %d: %v", id, err)
 		}

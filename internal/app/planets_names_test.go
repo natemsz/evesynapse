@@ -284,3 +284,51 @@ func TestPlanetHomeNameResolves(t *testing.T) {
 		t.Fatalf("home (resolved) render made %d outbound calls, want 0", got)
 	}
 }
+
+// TestWarmPlanetNamesSettleDefinitive404 pins the per-character
+// warm pass's share of the planet_names store: a definitive 404
+// is recorded as a miss and not re-asked next cycle, a resolved
+// name is not re-asked, and a transient failure settles nothing
+// and is retried.
+func TestWarmPlanetNamesSettleDefinitive404(t *testing.T) {
+	transport := newPlanetTransport()
+	transport.names[40009077] = "Jita I"
+	transport.fail[40026208] = true // 500: transient failure
+	app, _, q := buildCorpTestApp(t, transport)
+	ctx := context.Background()
+
+	wants := map[int64]bool{0: true, 40026205: true, 40026208: true, 40009077: true}
+	budget := &warmBudget{left: 100}
+	app.warmMissingPlanetNames(ctx, wants, budget)
+
+	if got := transport.fetchCount(0); got != 0 {
+		t.Fatalf("planet 0 fetched %d times, want 0", got)
+	}
+	if got := transport.fetchCount(40026205); got != 1 {
+		t.Fatalf("dead planet fetched %d times, want 1", got)
+	}
+	row, err := q.GetPlanetName(ctx, 40026205)
+	if err != nil || row.State != esi.PlanetMissing {
+		t.Fatalf("dead planet row: %+v err=%v, want state %q", row, err, esi.PlanetMissing)
+	}
+	flakyBefore := transport.fetchCount(40026208)
+	if flakyBefore == 0 {
+		t.Fatal("transient planet was never fetched")
+	}
+	if _, err := q.GetPlanetName(ctx, 40026208); err == nil {
+		t.Fatal("transient failure settled a planet_names row, want none")
+	}
+
+	// Next cycle, same wants: the settled miss and the resolved
+	// name are not re-asked; the transient failure is.
+	app.warmMissingPlanetNames(ctx, wants, budget)
+	if got := transport.fetchCount(40026205); got != 1 {
+		t.Fatalf("settled miss re-asked: %d fetches, want 1", got)
+	}
+	if got := transport.fetchCount(40009077); got != 1 {
+		t.Fatalf("resolved planet re-asked: %d fetches, want 1", got)
+	}
+	if got := transport.fetchCount(40026208); got <= flakyBefore {
+		t.Fatalf("transient failure not retried: %d fetches, want more than %d", got, flakyBefore)
+	}
+}

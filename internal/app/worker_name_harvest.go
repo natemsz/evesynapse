@@ -138,7 +138,11 @@ func (h *nameHarvest) assets(payload, what string) {
 	}
 	for _, it := range items {
 		h.wants.types[it.TypeID] = true
-		if it.LocationType == "station" || it.LocationType == "solar_system" {
+		// A location id outside its kind's ID space (0 above
+		// all: an asset whose location never resolved) is not
+		// a place ESI can name; enqueueing it verbatim burned
+		// a /universe/stations/0/ 404 every cycle.
+		if validPlaceID(it.LocationType, it.LocationID) {
 			h.wants.places[it.LocationID] = it.LocationType
 		}
 		if it.LocationType == "structure" {

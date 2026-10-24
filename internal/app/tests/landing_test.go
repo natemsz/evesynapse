@@ -11,9 +11,8 @@ import (
 // The anonymous front door is the landing page: hero and heritage
 // copy verbatim, the hero's three doors (sign up, the demo, the
 // public tools), a sign-in link for existing members (plain login,
-// not the sign-up chooser), the tools inventory, then what sets
-// EveSynapse apart with the load-test stats and their fine print,
-// then the trust points, then the playstyles, and the closing
+// not the sign-up chooser), the tools inventory, then the trust
+// points, then the playstyles, and the closing
 // trust paragraph at the bottom, and no em dashes anywhere on
 // the page.
 func TestLandingAnonymous(t *testing.T) {
@@ -32,10 +31,6 @@ func TestLandingAnonymous(t *testing.T) {
 		"Linking asks only for the scopes behind the features you pick",
 		"EveSynapse is free to use forever.",
 		"No donation pop-ups.",
-		"concurrent pilots on one small server, load-tested",
-		"pilots kept fully current, sync load-tested",
-		"rosters of 12 to 14,800 pilots ran through the real sync cycle against a local ESI stub",
-		"The test ran on an 8-core ARM server with 24 GB of RAM",
 		"Rebuilt over <em>4 years</em>. Originating in <em>2013</em>. Built for <em>2026</em>.",
 		"href=\"/auth/login\"",        // existing members sign in plainly
 		"href=\"/auth/link\"",         // new members link characters
@@ -55,8 +50,6 @@ func TestLandingAnonymous(t *testing.T) {
 		"© 2026 Synap6.io LLC, dba Synap6",
 		"intellectual property of CCP Games hf",
 		"Ship Replacement",
-		"What sets us apart",
-		"One connected system.",
 		"Prices come from EveSynapse's own swept market data, and every price shows its source.",
 		"accurately prices items that aren't in market data, like abyssals, capital ships, and blueprints",
 		"Public data, no login",
@@ -95,17 +88,15 @@ func TestLandingAnonymous(t *testing.T) {
 			t.Errorf("landing is missing %q", want)
 		}
 	}
-	// The section order: the tools inventory sits above what
-	// sets EveSynapse apart, then the trust points, then the
-	// playstyles, and the closing trust paragraph at the
-	// bottom of the page.
+	// The section order: the tools inventory sits above the
+	// trust points, then the playstyles, and the closing
+	// trust paragraph at the bottom of the page.
 	toolsAt := strings.Index(body, "Every tool you need, in one place.")
-	apartAt := strings.Index(body, "One connected system.")
 	trustAt := strings.Index(body, "Your keys, your call.")
 	playstylesAt := strings.Index(body, "Three alts, or a hundred multiboxed characters.")
 	closingAt := strings.Index(body, "If you find it useful, my only ask is that you share it with your friends.")
-	if !(toolsAt >= 0 && toolsAt < apartAt && apartAt < trustAt && trustAt < playstylesAt && playstylesAt < closingAt) {
-		t.Error("landing sections out of order: want tools, what sets us apart, trust, playstyles, then the closing trust paragraph")
+	if !(toolsAt >= 0 && toolsAt < trustAt && trustAt < playstylesAt && playstylesAt < closingAt) {
+		t.Error("landing sections out of order: want tools, trust, playstyles, then the closing trust paragraph")
 	}
 	// The tools inventory is audited against the tree: features
 	// that do not exist yet are never claimed on the front door.
@@ -129,7 +120,7 @@ func TestLandingAnonymous(t *testing.T) {
 			t.Errorf("landing still carries the removed slogan %q", tell)
 		}
 	}
-	// The apart and closing copy is the owner's own wording;
+	// The closing copy is the owner's own wording;
 	// the stand-in sentences it replaced never appear.
 	for _, replaced := range []string{"Fitting in the browser", "A full fitting simulator in a browser tab", "full Dogma simulation", "Prices we compute ourselves", "Every price comes from our own swept market data", "Search every public contract in New Eden in one place", "Gate camps are counted from ship kills only.", "Directors can author doctrine fits in the fitting tool itself"} {
 		if strings.Contains(body, replaced) {

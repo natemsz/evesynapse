@@ -228,6 +228,16 @@ SELECT system_id, ship_kills_1h, pod_kills_1h, npc_kills_1h, jumps_1h,
 FROM system_activity_stats
 WHERE system_id = sqlc.arg(system_id)::bigint;
 
+-- The same distilled figures for a set of systems at once: a
+-- system's neighbours, for the workbench's gate cards.
+-- name: ListSystemActivityStatsByIDs :many
+SELECT system_id, ship_kills_1h, pod_kills_1h, npc_kills_1h, jumps_1h,
+       ship_kills_24h, pod_kills_24h, npc_kills_24h, jumps_24h,
+       ship_kills_day, pod_kills_day, npc_kills_day, jumps_day,
+       hours_covered, updated_at
+FROM system_activity_stats
+WHERE system_id = ANY(sqlc.arg(system_ids)::bigint[]);
+
 -- name: GetRegionActivityStats :one
 SELECT region_id, ship_kills_1h, pod_kills_1h, npc_kills_1h, jumps_1h,
        ship_kills_24h, pod_kills_24h, npc_kills_24h, jumps_24h,

@@ -266,6 +266,14 @@ LIMIT sqlc.arg(resolution_limit)::bigint;
 SELECT character_id, payload, state, fetched_at
 FROM pilot_records
 WHERE character_id = $1;
+
+-- Settled records for a set of pilots at once: a roster's
+-- dossiers, read in one bounded pass.
+-- name: ListPilotRecordsByIDs :many
+SELECT character_id, payload, state, fetched_at
+FROM pilot_records
+WHERE character_id = ANY(sqlc.arg(character_ids)::bigint[])
+  AND state = 'ready';
 -- A want's priority is how close the record is to somebody (see
 -- wantViewed and its fellows in worker_pagewants.go), and noted_at is
 -- when it was last asked for. A want that is asked for again keeps

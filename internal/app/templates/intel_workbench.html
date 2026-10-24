@@ -1,0 +1,303 @@
+{{define "title"}}{{with .Workbench}}{{if .SysName}}{{.SysName}} · {{end}}Intel Workbench{{end}}{{end}}
+{{define "pagetitle"}}<h1><span class="gt">Intel Workbench</span></h1>{{end}}
+{{define "pagetabs"}}{{template "sectiontabs" .}}{{end}}
+{{define "content"}}
+{{with .Workbench}}
+{{/* One report (or, through the scan door, one scan) opened up:
+     its stored reading broken down, its pilots with what the
+     site has stored about them, the difference against the
+     previous report, and the system's gates. Everything on the
+     page comes from stored rows; a field no stored source
+     speaks for is left out. */}}
+<div class="wb">
+{{if .Error}}
+  <p class="wb-missing prose">{{.Error}}</p>
+{{else}}
+  <header class="wb-head">
+    <div class="wb-head-main">
+      <h2 class="wb-snap">{{.Snapshot}}</h2>
+      <p class="wb-meta">
+        <span>Captured {{.Ago}}</span>
+        {{if .Hulls}}<span>· {{.Hulls}} Hulls</span>{{end}}
+        {{if .PilotsN}}<span>· {{.PilotsN}} Local Pilots</span>{{end}}
+        {{if .FromScan}}<span>· <a href="{{.ScanURL}}">Classic scan page</a></span>
+        {{else if .Reporter}}<span>· Reported by {{.Reporter}}</span>{{end}}
+        {{if .ChannelName}}<span>· <a href="/intel/channels/{{.ChannelID}}/">{{.ChannelName}}</a></span>{{end}}
+      </p>
+      {{if .Headline}}<p class="wb-headline prose">{{.Headline}}</p>{{end}}
+    </div>
+    <div class="wb-head-actions">
+      {{if or .CanPost .FromScan}}<button type="button" class="btn wb-open-parser">Paste a scan</button>{{end}}
+    </div>
+  </header>
+
+  <nav class="wb-tabs" aria-label="Workbench views">
+    <button type="button" class="wb-tab is-active" data-wb-tab="intel">Workbench</button>
+    <button type="button" class="wb-tab" data-wb-tab="diff">Timeline &amp; Diff</button>
+    <button type="button" class="wb-tab" data-wb-tab="system">System Jumps, Kills &amp; Sov</button>
+  </nav>
+
+  <section data-wb-view="intel">
+    <div class="wb-boxes">
+      <article class="wb-box">
+        <h3><span class="wb-box-n">1.</span> Grid &amp; Range Split</h3>
+        {{if .HasDScan}}
+        <div class="wb-split-nums">
+          <div><span class="wb-num wb-on">{{.OnGrid}}</span><span class="wb-num-l">On-Grid</span><span class="wb-num-s">&lt;10,000 km</span></div>
+          <div><span class="wb-num wb-off">{{.OffGrid}}</span><span class="wb-num-l">Off-Grid</span><span class="wb-num-s">AU / Out of range</span></div>
+          <div><span class="wb-num wb-dep">{{.Deploy}}</span><span class="wb-num-l">Deployables</span></div>
+        </div>
+        <div class="wb-bar" role="img" aria-label="On grid {{.OnGrid}}, off grid {{.OffGrid}}, deployables {{.Deploy}}">
+          <span class="wb-bar-on" data-w="{{.BarOn}}"></span><span class="wb-bar-off" data-w="{{.BarOff}}"></span><span class="wb-bar-dep" data-w="{{.BarDep}}"></span>
+        </div>
+        <p class="wb-box-foot">Point-Blank (&lt;50 km): <strong>{{.PointBlank}} hulls</strong>
+          <button type="button" class="wb-mini" data-wb-grid="all">Show all</button></p>
+        {{else}}<p class="wb-empty">No d-scan reading in this report.</p>{{end}}
+      </article>
+
+      <article class="wb-box">
+        <h3><span class="wb-box-n">2.</span> Tactical Hull Roles</h3>
+        {{if .Roles}}
+        <ul class="wb-roles">
+          {{range .Roles}}<li><span>{{.Label}}</span><strong>{{.N}}</strong></li>{{end}}
+        </ul>
+        {{if .Doctrine}}<p class="wb-box-foot"><strong>{{.Doctrine}}</strong></p>{{end}}
+        {{else}}<p class="wb-empty">No hulls counted in this report.</p>{{end}}
+      </article>
+
+      <article class="wb-box">
+        <h3><span class="wb-box-n">3.</span> Local Standings</h3>
+        {{if .HasCounts}}
+        <div class="wb-split-nums">
+          <div><span class="wb-num wb-hostile">{{.Hostile}}</span><span class="wb-num-l">Hostile</span></div>
+          <div><span class="wb-num">{{.Neutral}}</span><span class="wb-num-l">Neutral</span></div>
+          <div><span class="wb-num wb-friendly">{{.Friendly}}</span><span class="wb-num-l">Friendly</span></div>
+        </div>
+        {{if .Unclass}}<p class="wb-box-sub">Unclassified {{.Unclass}}</p>{{end}}
+        {{if .FlagsKnown}}<p class="wb-box-foot">
+          <button type="button" class="wb-mini" data-wb-flag="young">Young Alts (&lt;90d) <strong>{{.YoungAlts}}</strong></button>
+          <button type="button" class="wb-mini" data-wb-flag="recent">Corp Join &lt;7d <strong>{{.RecentJoins}}</strong></button>
+        </p>{{end}}
+        {{else}}<p class="wb-empty">No local roster in this report.</p>{{end}}
+      </article>
+
+      <article class="wb-box">
+        <h3><span class="wb-box-n">4.</span> System Context</h3>
+        {{if .SysName}}
+        <p class="wb-sys"><span class="sec sec-{{.SecTier}}">{{.SecText}}</span> <span class="wb-sys-name">{{.SysName}}</span></p>
+        {{if .SysLine}}<p class="wb-box-sub">{{.SysLine}}</p>{{end}}
+        {{if .HasStats}}<div class="wb-sys-stats">
+          <div><span class="wb-num">{{.Jumps1h}}</span><span class="wb-num-l">1H Jumps</span></div>
+          <div><span class="wb-num">{{.ShipPod}}</span><span class="wb-num-l">1H Ship/Pod</span></div>
+          <div><span class="wb-num">{{.NPC1h}}</span><span class="wb-num-l">1H NPC Kills</span></div>
+        </div>{{end}}
+        {{if .Sov}}<p class="wb-box-sub">{{.Sov}}</p>{{end}}
+        <p class="wb-box-foot"><button type="button" class="wb-mini" data-wb-tab="system">Gates &amp; Map →</button></p>
+        {{else}}<p class="wb-empty">No system recorded.</p>{{end}}
+      </article>
+    </div>
+
+    <p class="wb-filters" data-wb-filters hidden>Active filters: <span data-wb-filter-list></span>
+      <button type="button" class="wb-mini" data-wb-clear-filters>Clear filters</button></p>
+
+    {{if .HasDScan}}
+    <section class="wb-panel" aria-label="D-scan breakdown">
+      <div class="wb-panel-head">
+        <h3>D-Scan &amp; Grid Breakdown</h3>
+        <span class="wb-pill">{{.Objects}} objects</span>
+        <div class="wb-modes" role="group" aria-label="D-scan grouping">
+          <button type="button" class="wb-mode is-active" data-wb-dmode="aggregated">By Hull Type</button>
+          <button type="button" class="wb-mode" data-wb-dmode="individual">Individual Grid Rows</button>
+          <button type="button" class="wb-mode" data-wb-dmode="class">By Hull Class</button>
+        </div>
+        <div class="wb-modes" role="group" aria-label="Grid filter">
+          <button type="button" class="wb-mode is-active" data-wb-grid="all">All</button>
+          <button type="button" class="wb-mode" data-wb-grid="on">On Grid</button>
+          <button type="button" class="wb-mode" data-wb-grid="off">Off Grid</button>
+          <button type="button" class="wb-mode" data-wb-grid="dep">Structures &amp; Probes</button>
+        </div>
+      </div>
+      <div data-wb-dpanel="aggregated">
+        <table class="wb-table">
+          <thead><tr><th>Hull &amp; Class</th><th>Role</th><th>Count</th><th>Grid &amp; Range</th></tr></thead>
+          <tbody>
+          {{range .Types}}<tr class="wb-clickable" data-wb-open-hull="{{.TypeID}}" tabindex="0" data-on="{{.Grid}}" data-n="{{.N}}" data-dep="{{if eq .RoleKey "probes"}}1{{else}}0{{end}}">
+            <td><span class="wb-t-name">{{.Name}}</span><span class="wb-t-sub">{{.Sub}}</span></td>
+            <td><span class="wb-role-chip wb-role-{{.RoleKey}}">{{.Role}}</span></td>
+            <td class="wb-num-cell">{{.N}}</td>
+            <td>{{if .Grid}}{{.Grid}} on grid{{else}}Off grid{{end}}{{if .Range}} · {{.Range}}{{end}}</td>
+          </tr>{{end}}
+          </tbody>
+        </table>
+      </div>
+      <div data-wb-dpanel="individual" hidden>
+        <table class="wb-table">
+          <thead><tr><th>Hull &amp; Class</th><th>Role</th><th>Distance</th></tr></thead>
+          <tbody>
+          {{range .Rows}}<tr class="wb-clickable" data-wb-open-hull="{{.TypeID}}" tabindex="0" data-on="{{.Grid}}" data-n="1" data-dep="{{if eq .RoleKey "probes"}}1{{else}}0{{end}}">
+            <td><span class="wb-t-name">{{.Name}}</span><span class="wb-t-sub">{{.Sub}}</span></td>
+            <td><span class="wb-role-chip wb-role-{{.RoleKey}}">{{.Role}}</span></td>
+            <td>{{.Range}}{{if .Grid}} · on grid{{end}}</td>
+          </tr>{{end}}
+          </tbody>
+        </table>
+      </div>
+      <div data-wb-dpanel="class" hidden>
+        <table class="wb-table">
+          <thead><tr><th>Hull Class</th><th>Types</th><th>Count</th><th>Grid</th></tr></thead>
+          <tbody>
+          {{range .Classes}}<tr data-on="{{.Grid}}" data-n="{{.N}}" data-dep="0">
+            <td><span class="wb-t-name">{{.Class}}</span></td>
+            <td>{{.Names}}</td>
+            <td class="wb-num-cell">{{.N}}</td>
+            <td>{{.Grid}} on grid · {{.Off}} off</td>
+          </tr>{{end}}
+          </tbody>
+        </table>
+      </div>
+      <p class="wb-none" data-wb-dscan-none hidden>No hulls match the active filters.</p>
+    </section>
+    {{end}}
+
+    {{if not .NoLocal}}
+    <section class="wb-panel" aria-label="Local pilots">
+      <div class="wb-panel-head">
+        <h3>Local Affiliation &amp; Intel</h3>
+        <span class="wb-pill">{{.PilotsN}} pilots</span>
+        <div class="wb-modes" role="group" aria-label="Local grouping">
+          <button type="button" class="wb-mode is-active" data-wb-lmode="alliance">By Alliance</button>
+          <button type="button" class="wb-mode" data-wb-lmode="pilots">All Pilots</button>
+        </div>
+        <div class="wb-modes" role="group" aria-label="Standing filter">
+          <button type="button" class="wb-mode is-active" data-wb-standing="all">All</button>
+          <button type="button" class="wb-mode" data-wb-standing="hostile">Hostile</button>
+          <button type="button" class="wb-mode" data-wb-standing="neutral">Neutral</button>
+          <button type="button" class="wb-mode" data-wb-standing="friendly">Friendly</button>
+        </div>
+      </div>
+      <div data-wb-lpanel="alliance">
+        {{range .Alliances}}
+        <div class="wb-alli" data-wb-alli>
+          <div class="wb-alli-head">
+            <span class="wb-alli-name">{{.Name}}</span>
+            {{if .Badge}}<span class="wb-badge wb-badge-{{.BadgeKey}}">{{.Badge}}</span>{{end}}
+            <span class="wb-alli-n">{{.NPilots}} pilots</span>
+            {{if .CorpLine}}<span class="wb-alli-corps">{{.CorpLine}}</span>{{end}}
+            {{if .FlagsOK}}{{if or .Young .Recent}}<span class="wb-alli-flags">{{if .Young}}{{.Young}} young alts{{end}}{{if and .Young .Recent}} · {{end}}{{if .Recent}}{{.Recent}} recent joins{{end}}</span>{{end}}{{end}}
+          </div>
+          <ul class="wb-pilots">{{range .Pilots}}{{template "wb-pilot-row" .}}{{end}}</ul>
+        </div>
+        {{end}}
+        {{if not .Alliances}}<ul class="wb-pilots">{{range .AllPilots}}{{template "wb-pilot-row" .}}{{end}}</ul>{{end}}
+      </div>
+      <div data-wb-lpanel="pilots" hidden>
+        <ul class="wb-pilots">{{range .AllPilots}}{{template "wb-pilot-row" .}}{{end}}</ul>
+      </div>
+      {{if .Unknown}}<p class="wb-unknown">{{len .Unknown}} names could not be resolved: {{range $i, $n := .Unknown}}{{if $i}}, {{end}}{{$n}}{{end}}</p>{{end}}
+      <p class="wb-none" data-wb-local-none hidden>No pilots match the active filters.</p>
+    </section>
+    {{end}}
+  </section>
+
+  <section data-wb-view="diff" hidden>
+    {{if .HasPrev}}
+    <p class="wb-meta">Compared against the previous report in this channel · {{.PrevAgo}}{{if .PrevBy}} · reported by {{.PrevBy}}{{end}}</p>
+    <h4 class="wb-sub-h">Hull changes</h4>
+    {{if .HullDeltas}}<ul class="wb-deltas">
+      {{range .HullDeltas}}<li class="wb-delta wb-delta-{{.Dir}}">
+        {{if eq .Dir "added"}}<span class="wb-d-sign wb-d-add">+ Added:</span> {{.Name}}{{if gt .N 1}} ×{{.N}}{{end}}
+        {{else if eq .Dir "left"}}<span class="wb-d-sign wb-d-left">− Left:</span> {{.Name}}{{if gt .N 1}} ×{{.N}}{{end}}
+        {{else}}<span class="wb-d-sign">Δ Grid:</span> {{.Name}}{{end}}
+        {{if .Text}}<span class="wb-d-text">{{.Text}}</span>{{end}}
+      </li>{{end}}
+    </ul>{{else}}<p class="wb-empty">No hull changes against the previous report.</p>{{end}}
+    <h4 class="wb-sub-h">Local changes</h4>
+    {{if .PilotDeltas}}<ul class="wb-deltas">
+      {{range .PilotDeltas}}<li class="wb-delta wb-delta-{{.Dir}}">
+        {{if eq .Dir "joined"}}<span class="wb-d-sign wb-d-add">+ Joined:</span> {{if .ID}}<a href="/pilot/?character={{.ID}}">{{.Name}}</a>{{else}}{{.Name}}{{end}}{{if .Bucket}} <span class="wb-d-bucket">({{.Bucket}})</span>{{end}}
+        {{else}}<span class="wb-d-sign wb-d-left">− Left:</span> {{if .ID}}<a href="/pilot/?character={{.ID}}">{{.Name}}</a>{{else}}{{.Name}}{{end}}{{end}}
+      </li>{{end}}
+    </ul>{{else}}<p class="wb-empty">No pilot changes against the previous report.</p>{{end}}
+    {{else}}<p class="wb-empty">No earlier report in this channel and system to compare against.</p>{{end}}
+  </section>
+
+  <section data-wb-view="system" hidden>
+    <h3 class="wb-view-h">Solar System &amp; Adjacent Gates</h3>
+    {{if .Gates}}<div class="wb-gates">
+      {{range .Gates}}<article class="wb-gate">
+        <p class="wb-gate-head"><span class="sec sec-{{.SecTier}}">{{.SecText}}</span> <a href="/system/?system={{.SystemID}}">{{.Name}}</a></p>
+        <p class="wb-box-sub">{{.Class}}{{if .Region}} · {{.Region}}{{end}}</p>
+        {{if .HasStats}}<p class="wb-gate-stats"><span><strong>{{.Jumps}}</strong> jumps</span> <span><strong>{{.Ship}}</strong> ship kills</span> <span><strong>{{.Pod}}</strong> pod kills</span> <span class="wb-box-sub">last hour</span></p>
+        {{else}}<p class="wb-box-sub">No activity stored for the last hour.</p>{{end}}
+        <p class="wb-gate-links"><a href="/map/?system={{.SystemID}}">Map</a> · <a href="/intel/kills/?system={{.SystemID}}">Kills</a></p>
+      </article>{{end}}
+    </div>{{else}}<p class="wb-empty">No adjacent systems stored.</p>{{end}}
+  </section>
+
+  {{range .HullDrawers}}
+  <div class="modal-backdrop wb-shade" data-wb-hull-drawer="{{.TypeID}}" hidden>
+  <aside class="wb-drawer" aria-label="Hull inspector">
+    <div class="wb-drawer-head">
+      <div><h3>{{.Title}}</h3><p class="wb-box-sub">{{.Class}} · {{.Role}}</p></div>
+      <button type="button" class="wb-x" data-wb-close aria-label="Close inspector">✕</button>
+    </div>
+    {{if or .Slots .Warp .Mass .Sensor}}<dl class="wb-specs">
+      {{if .Slots}}<div><dt>Slot Layout</dt><dd>{{.Slots}}</dd></div>{{end}}
+      {{if .Warp}}<div><dt>Warp Speed</dt><dd>{{.Warp}}</dd></div>{{end}}
+      {{if .Mass}}<div><dt>Mass</dt><dd>{{.Mass}}</dd></div>{{end}}
+      {{if .Sensor}}<div><dt>Sensor</dt><dd>{{.Sensor}}</dd></div>{{end}}
+    </dl>{{end}}
+    {{if .Caps}}<h4 class="wb-sub-h">Capabilities</h4><ul class="wb-caps">{{range .Caps}}<li>{{.}}</li>{{end}}</ul>{{end}}
+    {{if .Desc}}<p class="wb-desc prose">{{.Desc}}</p>{{end}}
+    {{if .Instances}}<h4 class="wb-sub-h">Instances in this scan</h4><ul class="wb-instances">{{range .Instances}}<li><span>{{.Name}}</span><span>{{.Dist}}{{if .On}} · on grid{{end}}</span></li>{{end}}</ul>{{end}}
+  </aside>
+  </div>
+  {{end}}
+  {{range .PilotDrawers}}
+  <div class="modal-backdrop wb-shade" data-wb-pilot-drawer="{{.ID}}" hidden>
+  <aside class="wb-drawer" aria-label="Pilot dossier">
+    <div class="wb-drawer-head">
+      <div><h3>{{.Name}}</h3>{{if .Standing}}<p class="wb-box-sub">{{.Standing}}</p>{{end}}</div>
+      <button type="button" class="wb-x" data-wb-close aria-label="Close dossier">✕</button>
+    </div>
+    {{if or .AgeLine .Sec}}<dl class="wb-specs">
+      {{if .AgeLine}}<div><dt>Character Age</dt><dd>{{.AgeLine}}</dd></div>{{end}}
+      {{if .Sec}}<div><dt>Security Status</dt><dd>{{.Sec}}</dd></div>{{end}}
+    </dl>{{end}}
+    {{if .Warn}}<p class="wb-warn">{{.Warn}}</p>{{end}}
+    {{if .Sighting}}<p class="wb-box-sub">{{.Sighting}}</p>{{end}}
+    {{if .History}}<h4 class="wb-sub-h">Corporation History</h4><ul class="wb-history">{{range .History}}<li><span>{{.CorpName}}</span><span class="wb-hist-d">{{.From}} → {{.To}}</span></li>{{end}}</ul>{{end}}
+    <p><a href="/pilot/?character={{.ID}}">Full pilot page</a></p>
+  </aside>
+  </div>
+  {{end}}
+
+  {{if or .CanPost .FromScan}}
+  <div class="modal-backdrop wb-shade" data-wb-parser hidden
+    {{if .FromScan}}data-mode="scan" data-post="/intel/scan/" data-system-name="{{.SysName}}"{{else}}data-mode="channel" data-post="/intel/channels/{{.ChannelID}}/report" data-system-id="{{.SystemID}}"{{end}}>
+  <aside class="wb-drawer wb-parser" aria-label="Paste a scan">
+    <div class="wb-drawer-head">
+      <div><h3>Paste a scan</h3></div>
+      <button type="button" class="wb-x" data-wb-close aria-label="Close parser">✕</button>
+    </div>
+    <p class="wb-box-sub">D-scan, local, probe results, or overview, or a mix. The parser sorts it out. {{if .FromScan}}It posts as a new scan{{else}}It posts to this channel{{end}}{{if .SysName}}, on {{.SysName}}{{end}}.</p>
+    <div class="wb-ta-label"><textarea data-wb-paste rows="12" aria-label="Paste a scan" placeholder="Enter Local/Overview/Dscan here:"></textarea></div>
+    <p class="wb-parser-msg" data-wb-parser-msg hidden></p>
+    <div class="wb-parser-actions">
+      <button type="button" class="wb-mini" data-wb-clear-inputs>Clear</button>
+      <button type="button" class="btn" data-wb-parse>{{if .FromScan}}Post scan{{else}}Post report{{end}}</button>
+    </div>
+  </aside>
+  </div>
+  {{end}}
+{{end}}
+</div>
+{{end}}
+{{end}}
+
+{{define "wb-pilot-row"}}<li class="wb-pilot{{if .HasDrawer}} wb-clickable{{end}}" data-bucket="{{.Bucket}}"{{if .Young}} data-young="1"{{end}}{{if .Recent}} data-recent="1"{{end}}{{if .HasDrawer}} data-wb-open-pilot="{{.ID}}" tabindex="0"{{end}}>
+  <span class="wb-dot wb-dot-{{.Bucket}}"></span>
+  <span class="wb-pilot-main"><span class="wb-pilot-name">{{.Name}}</span>{{if .CorpLine}}<span class="wb-pilot-sub">{{.CorpLine}}</span>{{end}}</span>
+  {{if or .Young .Recent .KilledHere}}<span class="wb-pilot-flags">{{if .Young}}<span class="wb-flag wb-flag-young">Young alt &lt;90d</span>{{end}}{{if .Recent}}<span class="wb-flag wb-flag-recent">Joined &lt;7d</span>{{end}}{{if .KilledHere}}<span class="wb-flag wb-flag-kill">Killed here this week</span>{{end}}</span>{{end}}
+  {{if .Facts}}<span class="wb-pilot-facts">{{.Facts}}</span>{{end}}
+</li>{{end}}

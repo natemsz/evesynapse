@@ -2471,6 +2471,50 @@ func (q *Queries) ListPilotRecordIDs(ctx context.Context) ([]int64, error) {
 	return items, nil
 }
 
+const listPilotRecordsByIDs = `-- name: ListPilotRecordsByIDs :many
+SELECT character_id, payload, state, fetched_at
+FROM pilot_records
+WHERE character_id = ANY($1::bigint[])
+  AND state = 'ready'
+`
+
+type ListPilotRecordsByIDsRow struct {
+	CharacterID int64        `json:"character_id"`
+	Payload     string       `json:"payload"`
+	State       string       `json:"state"`
+	FetchedAt   sql.NullTime `json:"fetched_at"`
+}
+
+// Settled records for a set of pilots at once: a roster's
+// dossiers, read in one bounded pass.
+func (q *Queries) ListPilotRecordsByIDs(ctx context.Context, characterIds []int64) ([]ListPilotRecordsByIDsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listPilotRecordsByIDs, pq.Array(characterIds))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListPilotRecordsByIDsRow
+	for rows.Next() {
+		var i ListPilotRecordsByIDsRow
+		if err := rows.Scan(
+			&i.CharacterID,
+			&i.Payload,
+			&i.State,
+			&i.FetchedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listPlanetResolutions = `-- name: ListPlanetResolutions :many
 SELECT planet_id
 FROM planet_names

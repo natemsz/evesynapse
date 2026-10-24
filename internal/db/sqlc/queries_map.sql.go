@@ -8,6 +8,8 @@ package db
 import (
 	"context"
 	"time"
+
+	"github.com/lib/pq"
 )
 
 const clearRegionActivityStats = `-- name: ClearRegionActivityStats :exec
@@ -625,6 +627,56 @@ func (q *Queries) ListRegionSystemsWithActivity(ctx context.Context, regionID in
 			&i.Security,
 			&i.ShipKills24h,
 			&i.Jumps24h,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSystemActivityStatsByIDs = `-- name: ListSystemActivityStatsByIDs :many
+SELECT system_id, ship_kills_1h, pod_kills_1h, npc_kills_1h, jumps_1h,
+       ship_kills_24h, pod_kills_24h, npc_kills_24h, jumps_24h,
+       ship_kills_day, pod_kills_day, npc_kills_day, jumps_day,
+       hours_covered, updated_at
+FROM system_activity_stats
+WHERE system_id = ANY($1::bigint[])
+`
+
+// The same distilled figures for a set of systems at once: a
+// system's neighbours, for the workbench's gate cards.
+func (q *Queries) ListSystemActivityStatsByIDs(ctx context.Context, systemIds []int64) ([]SystemActivityStat, error) {
+	rows, err := q.db.QueryContext(ctx, listSystemActivityStatsByIDs, pq.Array(systemIds))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SystemActivityStat
+	for rows.Next() {
+		var i SystemActivityStat
+		if err := rows.Scan(
+			&i.SystemID,
+			&i.ShipKills1h,
+			&i.PodKills1h,
+			&i.NpcKills1h,
+			&i.Jumps1h,
+			&i.ShipKills24h,
+			&i.PodKills24h,
+			&i.NpcKills24h,
+			&i.Jumps24h,
+			&i.ShipKillsDay,
+			&i.PodKillsDay,
+			&i.NpcKillsDay,
+			&i.JumpsDay,
+			&i.HoursCovered,
+			&i.UpdatedAt,
 		); err != nil {
 			return nil, err
 		}

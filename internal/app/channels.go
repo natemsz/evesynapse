@@ -630,11 +630,19 @@ func (app *Application) handleChannelReport(w http.ResponseWriter, r *http.Reque
 	id := app.intelIdentity(ctx)
 	cid := channelIDParam(r)
 	page := fmt.Sprintf("/intel/channels/%d/", cid)
+	// postedReportID, once a post below lands one report, rides
+	// the JSON reply: the workbench's paste drawer navigates to
+	// the report it just made.
+	var postedReportID int64
 	reply := func(status int, msg string, n int) {
 		if wantsJSON(r) {
+			body := map[string]any{"ok": status < 300, "message": msg, "posted": n}
+			if postedReportID > 0 {
+				body["reportId"] = postedReportID
+			}
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(status)
-			_ = json.NewEncoder(w).Encode(map[string]any{"ok": status < 300, "message": msg, "posted": n})
+			_ = json.NewEncoder(w).Encode(body)
 			return
 		}
 		app.flashBack(w, r, page)(msg)
@@ -734,7 +742,17 @@ func (app *Application) handleChannelReport(w http.ResponseWriter, r *http.Reque
 	// clip above shortened it.)
 	if !base.Clear {
 		if p, counts, ok := app.scanReportOf(ctx, base, text, base.SystemID); ok {
-			if _, err := app.insertIntelReport(ctx, p, false, counts); err != nil && !errors.Is(err, errIntelDuplicate) {
+			id, err := app.insertIntelReport(ctx, p, false, counts)
+			switch {
+			case err == nil:
+				postedReportID = id
+			case errors.Is(err, errIntelDuplicate):
+				// The reading already stands in the channel:
+				// the drawer opens the standing report.
+				if standing, gerr := app.queries.GetIntelReportByScanID(ctx, p.ScanID); gerr == nil {
+					postedReportID = standing.ID
+				}
+			default:
 				logging.Errorf("channels: insert report: %v", err)
 				reply(http.StatusInternalServerError, "That did not go through — please try again.", 0)
 				return
@@ -747,7 +765,9 @@ func (app *Application) handleChannelReport(w http.ResponseWriter, r *http.Reque
 		reply(http.StatusUnprocessableEntity, "Name the system the report is about.", 0)
 		return
 	}
-	if _, err := app.insertIntelReport(ctx, base, false, nil); err != nil && !errors.Is(err, errIntelDuplicate) {
+	if id, err := app.insertIntelReport(ctx, base, false, nil); err == nil {
+		postedReportID = id
+	} else if !errors.Is(err, errIntelDuplicate) {
 		logging.Errorf("channels: insert report: %v", err)
 		reply(http.StatusInternalServerError, "That did not go through — please try again.", 0)
 		return

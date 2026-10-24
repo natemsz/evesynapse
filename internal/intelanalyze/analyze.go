@@ -214,15 +214,6 @@ func Analyze(in Input, d Dict) Analysis {
 	if in.NoVisual {
 		flags["nv"] = true
 	}
-	// Segments: names dragged from Local come two spaces apart, and
-	// commas or slashes part a list.
-	text := strings.NewReplacer(",", "  ", " / ", "  ", ";", "  ").Replace(in.Text)
-	var segs [][]string
-	for _, s := range strings.Split(text, "  ") {
-		if f := strings.Fields(s); len(f) > 0 {
-			segs = append(segs, f)
-		}
-	}
 	shipAt := map[string]int{}
 	addShip := func(s Ship, n int) {
 		key := s.Name
@@ -237,6 +228,19 @@ func Analyze(in Input, d Dict) Analysis {
 		a.Ships = append(a.Ships, s)
 	}
 	seenPilot := map[int64]bool{}
+	// Scan-shaped text is read as rows first (scanrows.go):
+	// what it consumes is blanked, so the prose reading below
+	// never sees a name column.
+	text := consumeScanText(in.Text, d, addShip)
+	// Segments: names dragged from Local come two spaces apart, and
+	// commas or slashes part a list.
+	text = strings.NewReplacer(",", "  ", " / ", "  ", ";", "  ").Replace(text)
+	var segs [][]string
+	for _, s := range strings.Split(text, "  ") {
+		if f := strings.Fields(s); len(f) > 0 {
+			segs = append(segs, f)
+		}
+	}
 	for _, seg := range segs {
 		whole := clean(strings.Join(seg, " "))
 		if len(seg) <= 3 {

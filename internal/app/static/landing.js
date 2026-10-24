@@ -99,12 +99,9 @@
 // browser has no backdrop-filter url() support, the surface
 // keeps its frost and rim light un-displaced.
 //
-// Three surfaces, three depths of the same treatment: the
+// Two surfaces, two depths of the same treatment: the
 // header bar (square corners, the shell top bar's shape) at
-// the full bend, the Tools menu a lighter touch, and the
-// main content container in the flat variant: a wide rim, a
-// 3px shift, and a map generated at quarter size, which a
-// smooth field wears invisibly.
+// the full bend, and the Tools menu a lighter touch.
 (function () {
   function liquid(el, fe, opts) {
     if (!el || !fe) return function () {};
@@ -158,9 +155,7 @@
 
   var builds = [
     liquid(document.querySelector(".ld-hbar"), document.getElementById("ld-liquid-map"),
-      { radius: 0, rim: 16, maxoff: 9 }),
-    liquid(document.querySelector(".ld-glass-flat"), document.getElementById("ld-liquid-flat-map"),
-      { radius: 24, rim: 20, maxoff: 3, scale: 0.25 })
+      { radius: 0, rim: 16, maxoff: 9 })
   ];
   var buildMenu = liquid(document.querySelector(".ld-menu"), document.getElementById("ld-liquid-menu-map"),
     { radius: 14, rim: 12, maxoff: 4 });

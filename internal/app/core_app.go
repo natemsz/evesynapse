@@ -210,6 +210,15 @@ type Application struct {
 	pilotBackfillCh     chan int64
 	pilotBackfillQueued map[int64]bool
 
+	// The stargate graph (intel_gangs.go): system adjacency
+	// for jump distances, loaded once from the SDE jumps and
+	// kept for the process's life (the SDE is static per
+	// deploy). A nil map with gateGraphDone set means the load
+	// failed and distances read as unknown.
+	gateGraphMu   sync.Mutex
+	gateGraph     map[int64][]int64
+	gateGraphDone bool
+
 	// The Forge's swept typical sells (market_guide_prices.go),
 	// the first tier of the house price order, cached in memory
 	// on the same window as the true values so renders reload

@@ -408,6 +408,23 @@ type IntelChannelRule struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
+type IntelGang struct {
+	ID           int64        `json:"id"`
+	ChannelID    int64        `json:"channel_id"`
+	FirstSeenAt  time.Time    `json:"first_seen_at"`
+	LastSeenAt   time.Time    `json:"last_seen_at"`
+	LastSystemID int64        `json:"last_system_id"`
+	Sightings    int32        `json:"sightings"`
+	Strength     float64      `json:"strength"`
+	ClosedAt     sql.NullTime `json:"closed_at"`
+	Snapshot     string       `json:"snapshot"`
+}
+
+type IntelGangGroup struct {
+	GangID  int64 `json:"gang_id"`
+	GroupID int64 `json:"group_id"`
+}
+
 type IntelGroupComposite struct {
 	GroupID    int64     `json:"group_id"`
 	ChannelID  int64     `json:"channel_id"`

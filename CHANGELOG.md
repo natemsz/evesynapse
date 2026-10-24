@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.5.7.8] - 2026-10-24
+
+Automated build of EveSynapse v0.5.7.8. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+
+## What's Changed
+### 🚀 Features
+* Intel feed: standing-split bar, linked hulls and gates, system doors by @natemsz in https://github.com/natemsz/evesynapse/pull/633
+### 🐛 Bug Fixes
+* Landing: adopt the owner's reference copy; restore his apart, trust and playstyles wording by @natemsz in https://github.com/natemsz/evesynapse/pull/634
+* Landing: remove the What sets us apart section by @natemsz in https://github.com/natemsz/evesynapse/pull/635
+* Intel: read fused and spaced local rosters as rosters; dedupe by pilot set; poster-location system fallback; scan page head fix by @natemsz in https://github.com/natemsz/evesynapse/pull/636
+### Other Changes
+* docs(changelog): review changelog for v0.5.7.7 by @github-actions[bot] in https://github.com/natemsz/evesynapse/pull/632
+
+
+**Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.7.7...v0.5.7.8
+
 ## [v0.5.7.7] - 2026-10-24
 
 Automated build of EveSynapse v0.5.7.7. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).

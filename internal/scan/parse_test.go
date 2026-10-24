@@ -2,6 +2,7 @@ package scan
 
 import (
 	"math"
+	"reflect"
 	"testing"
 )
 
@@ -72,5 +73,34 @@ func TestSystemFromCelestial(t *testing.T) {
 		if got := SystemFromCelestial(in); got != want {
 			t.Errorf("SystemFromCelestial(%q) = %q, want %q", in, got, want)
 		}
+	}
+}
+
+// TestParseResidue pins the residue capture: the lines of a
+// paste the parser did not consume are kept with the result,
+// exactly as written, and a paste it reads whole keeps none.
+func TestParseResidue(t *testing.T) {
+	mixed := "22456\tAlpha Sabre\tSabre\t-\n" +
+		"watch out they are baiting\n" +
+		"11987\tLogi One\tGuardian\t1,200 km\n" +
+		"they will bridge on top of us"
+	r, err := Parse(mixed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.Kind != KindDScan || len(r.DScan) != 2 || r.Skipped != 2 {
+		t.Fatalf("mixed paste: kind %q, %d rows, %d skipped", r.Kind, len(r.DScan), r.Skipped)
+	}
+	want := []string{"watch out they are baiting", "they will bridge on top of us"}
+	if !reflect.DeepEqual(r.Residue, want) {
+		t.Errorf("residue = %q, want %q", r.Residue, want)
+	}
+
+	clean, err := Parse("22456\tAlpha Sabre\tSabre\t-\n11987\tLogi One\tGuardian\t1,200 km")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if clean.Skipped != 0 || len(clean.Residue) != 0 {
+		t.Errorf("a fully read paste: %d skipped, residue %q, want none", clean.Skipped, clean.Residue)
 	}
 }

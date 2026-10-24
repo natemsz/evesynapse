@@ -172,3 +172,33 @@ func TestRank(t *testing.T) {
 		}
 	}
 }
+
+// TestAnalyzeResidue pins the residue capture: text the
+// analysis settles as nothing it knows (looked up, and no
+// pilot, ship, gate or keyword) is kept as residue spans,
+// exactly the words unread; text it reads whole keeps none.
+// What is still waiting on a lookup stands in Unknown, never
+// in Residue.
+func TestAnalyzeResidue(t *testing.T) {
+	d := dict()
+	a := Analyze(Input{System: 1, Text: "Hostile One in sabre, some random words"}, d)
+	if len(a.Pilots) != 1 || a.Pilots[0].ID != 91000001 || len(a.Ships) != 1 || a.Ships[0].TypeID != 22456 {
+		t.Fatalf("the read itself changed: %+v", a)
+	}
+	if want := []string{"some random words"}; !reflect.DeepEqual(a.Residue, want) {
+		t.Errorf("residue = %q, want %q", a.Residue, want)
+	}
+
+	full := Analyze(Input{System: 1, Text: "Hostile One in sabre"}, d)
+	if len(full.Residue) != 0 {
+		t.Errorf("a fully read report: residue %q, want none", full.Residue)
+	}
+
+	pending := Analyze(Input{System: 1, Text: "Hostile One in sabre, never asked name"}, d)
+	if len(pending.Unknown) == 0 {
+		t.Fatalf("an unasked name should stand unknown: %+v", pending)
+	}
+	if len(pending.Residue) != 0 {
+		t.Errorf("text waiting on a lookup is not residue: %q", pending.Residue)
+	}
+}

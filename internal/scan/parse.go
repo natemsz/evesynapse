@@ -41,6 +41,15 @@ const (
 	MaxLocal = 1500
 )
 
+// Bounds on the residue kept with a reading: the lines of a
+// paste the parser did not consume. The capture is bookkeeping
+// for later classification work, so it stays small: at most
+// MaxResidueSpans lines and MaxResidueBytes of text in all.
+const (
+	MaxResidueSpans = 40
+	MaxResidueBytes = 2048
+)
+
 // ErrEmpty and ErrUnknown are Parse's two refusals.
 var (
 	ErrEmpty   = errors.New("nothing to read")
@@ -82,6 +91,27 @@ type Result struct {
 	Probe []ProbeRow
 	// Skipped counts lines that did not read as the paste's kind.
 	Skipped int
+	// Residue is those skipped lines themselves, kept (bounded
+	// by MaxResidueSpans and MaxResidueBytes) with the reading
+	// they arrived in: the part of the input the parser did not
+	// consume, recorded as it stood. A line dropped only for
+	// running past MaxLocal was consumed and is not residue.
+	Residue []string
+}
+
+// addResidue keeps one unconsumed line, within the bounds.
+func (r *Result) addResidue(line string) {
+	if len(r.Residue) >= MaxResidueSpans {
+		return
+	}
+	n := 0
+	for _, s := range r.Residue {
+		n += len(s) + 1
+	}
+	if n+len(line) > MaxResidueBytes {
+		return
+	}
+	r.Residue = append(r.Residue, line)
 }
 
 var (
@@ -158,6 +188,7 @@ func Parse(raw string) (Result, error) {
 			c := strings.Split(l, "\t")
 			if len(c) < 4 || !isInt(c[0]) {
 				r.Skipped++
+				r.addResidue(l)
 				continue
 			}
 			id, _ := strconv.ParseInt(strings.TrimSpace(c[0]), 10, 64)
@@ -168,6 +199,7 @@ func Parse(raw string) (Result, error) {
 			c := strings.Split(l, "\t")
 			if !sigID.MatchString(strings.TrimSpace(c[0])) {
 				r.Skipped++
+				r.addResidue(l)
 				continue
 			}
 			for len(c) < 6 {
@@ -183,6 +215,7 @@ func Parse(raw string) (Result, error) {
 			c := strings.Split(l, "\t")
 			if len(c) < 5 {
 				r.Skipped++
+				r.addResidue(l)
 				continue
 			}
 			f := FleetRow{Name: strings.TrimSpace(c[0]), System: strings.TrimSpace(c[1]), Ship: strings.TrimSpace(c[2]),
@@ -197,6 +230,7 @@ func Parse(raw string) (Result, error) {
 		for _, l := range ls {
 			if !charName.MatchString(l) {
 				r.Skipped++
+				r.addResidue(l)
 				continue
 			}
 			k := strings.ToLower(l)

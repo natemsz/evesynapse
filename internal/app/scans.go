@@ -180,13 +180,16 @@ var specialHulls = map[int64]bool{
 
 // scanResult is a scan's reading, stored as JSON beside the paste.
 type scanResult struct {
-	Kind     scan.Kind     `json:"kind"`
-	SystemID int64         `json:"system,omitempty"`
-	Skipped  int           `json:"skipped,omitempty"`
-	DScan    *dscanReading `json:"dscan,omitempty"`
-	Local    *localReading `json:"local,omitempty"`
-	Fleet    *fleetReading `json:"fleet,omitempty"`
-	Probe    *probeReading `json:"probe,omitempty"`
+	Kind     scan.Kind `json:"kind"`
+	SystemID int64     `json:"system,omitempty"`
+	Skipped  int       `json:"skipped,omitempty"`
+	// Residue is the paste lines the parser did not consume,
+	// kept with the reading as the parser recorded them.
+	Residue []string      `json:"residue,omitempty"`
+	DScan   *dscanReading `json:"dscan,omitempty"`
+	Local   *localReading `json:"local,omitempty"`
+	Fleet   *fleetReading `json:"fleet,omitempty"`
+	Probe   *probeReading `json:"probe,omitempty"`
 }
 
 // scanCount is one tally: a ship class, a type, a system, a wing.
@@ -348,7 +351,7 @@ func (t *tally) sorted() []scanCount {
 // readScan enriches a parsed paste. systemID, when the reader named
 // one, wins over any system a d-scan's celestials suggest.
 func (app *Application) readScan(ctx context.Context, p scan.Result, systemID int64) scanResult {
-	res := scanResult{Kind: p.Kind, SystemID: systemID, Skipped: p.Skipped}
+	res := scanResult{Kind: p.Kind, SystemID: systemID, Skipped: p.Skipped, Residue: p.Residue}
 	switch p.Kind {
 	case scan.KindDScan:
 		var detected int64

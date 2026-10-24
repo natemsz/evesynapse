@@ -83,11 +83,11 @@ SELECT COUNT(*) FROM intel_channel_grants WHERE channel_id = $1;
 
 -- name: InsertIntelReport :one
 INSERT INTO intel_reports (channel_id, system_id, author_user_id, author_character_id, reporter,
-    text, pilots, hostiles, clear, scan_id, source, seen_at, created_at, kind, analysis, analysis_pending)
+    text, pilots, hostiles, clear, scan_id, source, seen_at, created_at, kind, analysis, analysis_pending, group_id)
 VALUES (sqlc.arg(channel_id), sqlc.arg(system_id), sqlc.arg(author_user_id), sqlc.arg(author_character_id),
     sqlc.arg(reporter), sqlc.arg(text), sqlc.arg(pilots), sqlc.arg(hostiles), sqlc.arg(clear),
     sqlc.arg(scan_id), sqlc.arg(source), sqlc.arg(seen_at), sqlc.arg(created_at),
-    sqlc.arg(kind), sqlc.arg(analysis), sqlc.arg(analysis_pending))
+    sqlc.arg(kind), sqlc.arg(analysis), sqlc.arg(analysis_pending), sqlc.arg(group_id))
 RETURNING id;
 
 -- Intel analysis (schema 083). ListPendingIntelReports also
@@ -179,7 +179,7 @@ WHERE cc.corporation_id > 0 AND cc.character_id IN (
 -- A channel's reports, latest seen first: a page before a (seen_at,
 -- id) key, or everything posted after after_id (the live feed's poll).
 -- name: ListIntelReports :many
-SELECT id, channel_id, system_id, author_user_id, reporter, text, pilots, hostiles, clear, scan_id, source, seen_at, created_at, kind, analysis
+SELECT id, channel_id, system_id, author_user_id, reporter, text, pilots, hostiles, clear, scan_id, source, seen_at, created_at, kind, analysis, group_id
 FROM intel_reports
 WHERE channel_id = sqlc.arg(channel_id)
   AND id > sqlc.arg(after_id)::bigint
@@ -214,7 +214,7 @@ LIMIT sqlc.arg(max_rows)::int;
 -- channels its reader can access (accessibleChannels), so the
 -- access check stays in one place.
 -- name: ListIntelReportsAcrossChannels :many
-SELECT id, channel_id, system_id, author_user_id, reporter, text, pilots, hostiles, clear, scan_id, source, seen_at, created_at, kind, analysis
+SELECT id, channel_id, system_id, author_user_id, reporter, text, pilots, hostiles, clear, scan_id, source, seen_at, created_at, kind, analysis, group_id
 FROM intel_reports
 WHERE channel_id = ANY(sqlc.arg(channel_ids)::bigint[])
   AND id > sqlc.arg(after_id)::bigint
@@ -228,14 +228,14 @@ SELECT id, channel_id, author_user_id FROM intel_reports WHERE id = $1;
 -- A report in full: the workbench page renders from the stored
 -- row and its analysis.
 -- name: GetIntelReportFull :one
-SELECT id, channel_id, system_id, author_user_id, author_character_id, reporter, text, pilots, hostiles, clear, scan_id, source, seen_at, created_at, kind, analysis, analysis_pending
+SELECT id, channel_id, system_id, author_user_id, author_character_id, reporter, text, pilots, hostiles, clear, scan_id, source, seen_at, created_at, kind, analysis, analysis_pending, group_id
 FROM intel_reports
 WHERE id = $1;
 
 -- The report before one in its channel and system: the diff
 -- view's other side.
 -- name: GetPreviousIntelReport :one
-SELECT id, channel_id, system_id, author_user_id, author_character_id, reporter, text, pilots, hostiles, clear, scan_id, source, seen_at, created_at, kind, analysis, analysis_pending
+SELECT id, channel_id, system_id, author_user_id, author_character_id, reporter, text, pilots, hostiles, clear, scan_id, source, seen_at, created_at, kind, analysis, analysis_pending, group_id
 FROM intel_reports
 WHERE channel_id = sqlc.arg(channel_id)
   AND system_id = sqlc.arg(system_id)
@@ -256,6 +256,65 @@ DELETE FROM intel_reports WHERE id = $1;
 
 -- name: PruneIntelReports :execrows
 DELETE FROM intel_reports WHERE seen_at < sqlc.arg(before)::timestamptz;
+
+-- Intel report groups (schema 087). A new report joins a group
+-- when channel and system match and the group's latest activity
+-- is inside the caller's window; these are the reports it picks
+-- from. The caller weighs overlap and nearness in Go.
+-- name: ListGroupCandidateReports :many
+SELECT id, group_id, reporter, text, scan_id, kind, analysis, seen_at FROM intel_reports
+WHERE channel_id = sqlc.arg(channel_id) AND system_id = sqlc.arg(system_id)
+  AND seen_at >= sqlc.arg(since)::timestamptz AND seen_at <= sqlc.arg(until)::timestamptz
+ORDER BY seen_at DESC
+LIMIT sqlc.arg(max_rows)::int;
+
+-- A founding report is its own group: the insert names the
+-- group it computed, and a founder's row is corrected to name
+-- itself once its id is known.
+-- name: SetIntelReportGroup :exec
+UPDATE intel_reports SET group_id = sqlc.arg(group_id) WHERE id = sqlc.arg(id);
+
+-- A group's members, newest first (the caller reverses): the
+-- composite is computed from these, and the cap keeps the
+-- newest members, whose readings govern the picture.
+-- name: ListIntelGroupMembers :many
+SELECT id, channel_id, system_id, author_user_id, author_character_id, reporter, text, pilots, hostiles, clear, scan_id, source, seen_at, created_at, kind, analysis, analysis_pending, group_id
+FROM intel_reports
+WHERE group_id = sqlc.arg(group_id)
+ORDER BY seen_at DESC, id DESC
+LIMIT sqlc.arg(max_rows)::int;
+
+-- Store a group's composite; the standing composite becomes
+-- the previous one the diff view compares against.
+-- name: UpsertIntelGroupComposite :exec
+INSERT INTO intel_group_composites (group_id, channel_id, system_id, composite, previous, members, computed_at)
+VALUES (sqlc.arg(group_id), sqlc.arg(channel_id), sqlc.arg(system_id), sqlc.arg(composite), '', sqlc.arg(members), sqlc.arg(computed_at)::timestamptz)
+ON CONFLICT (group_id) DO UPDATE SET
+    channel_id = EXCLUDED.channel_id,
+    system_id = EXCLUDED.system_id,
+    previous = intel_group_composites.composite,
+    composite = EXCLUDED.composite,
+    members = EXCLUDED.members,
+    computed_at = EXCLUDED.computed_at;
+
+-- name: GetIntelGroupComposite :one
+SELECT group_id, channel_id, system_id, composite, previous, members, computed_at
+FROM intel_group_composites WHERE group_id = $1;
+
+-- Composites for several groups at once: the feed and channel
+-- pages fetch a whole page's groups in one read.
+-- name: ListIntelGroupComposites :many
+SELECT group_id, channel_id, system_id, composite, previous, members, computed_at
+FROM intel_group_composites WHERE group_id = ANY(sqlc.arg(group_ids)::bigint[]);
+
+-- name: DeleteIntelGroupComposite :exec
+DELETE FROM intel_group_composites WHERE group_id = $1;
+
+-- Composites whose group has no reports left (the retention
+-- prune took them all) go with them.
+-- name: PruneIntelGroupComposites :execrows
+DELETE FROM intel_group_composites
+WHERE group_id NOT IN (SELECT group_id FROM intel_reports WHERE group_id > 0);
 
 -- Whether a report already stands: pasted and watched chat lines are
 -- sent again (a restart, two characters in one channel), and the same

@@ -20,6 +20,24 @@
 .wb-head-actions { flex: none; }
 
 /* View tabs */
+/* The related rail: the opened report's group, member by
+   member, above the views every member shares. */
+.wb-rail { background: var(--glass); border: 1px solid var(--glass-edge); border-radius: var(--r-lg); padding: 0.8rem 1.05rem; margin: 1.5rem 0; }
+.wb-rail-head { display: flex; align-items: baseline; gap: 0.8rem; flex-wrap: wrap; margin-bottom: 0.45rem; }
+.wb-rail-head h3 { margin: 0; font-size: 0.78rem; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text); }
+.wb-rail-kinds { font-size: 0.85rem; color: var(--accent); font-weight: 600; }
+.wb-rail-note { font-size: 0.85rem; color: var(--muted); }
+.wb-rail-list { list-style: none; margin: 0; padding: 0; }
+.wb-rail-item a { display: flex; gap: 0.7rem; align-items: baseline; flex-wrap: wrap; padding: 0.32rem 0.2rem; border-bottom: 1px solid var(--row-alt); color: var(--text); text-decoration: none; }
+.wb-rail-item a:hover { background: var(--row-alt); }
+.wb-rail-item.is-here a { color: var(--text-bright); font-weight: 600; }
+.wb-rail-kind { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--accent); min-width: 4.6rem; }
+.wb-rail-when { color: var(--muted); font-size: 0.88rem; min-width: 5.2rem; }
+.wb-rail-by { font-size: 0.92rem; }
+.wb-rail-delta { color: var(--muted); font-size: 0.88rem; margin-left: auto; }
+.wb-rail-here { color: var(--accent); font-size: 0.88rem; }
+.wb-rail-more { padding: 0.32rem 0.2rem; color: var(--muted); font-size: 0.88rem; }
+
 .wb-tabs { display: flex; gap: 0.4rem; flex-wrap: wrap; border-bottom: 1px solid var(--box-edge); padding-bottom: 0.5rem; }
 .wb-tab { background: none; border: 1px solid transparent; border-radius: var(--r-xs); color: var(--muted); font: inherit; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; font-size: 0.82rem; padding: 0.35rem 0.7rem; cursor: pointer; }
 .wb-tab:hover { color: var(--text); }

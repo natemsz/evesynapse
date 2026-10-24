@@ -17,6 +17,7 @@ import (
 	"strconv"
 	"strings"
 	"unicode"
+	"unicode/utf8"
 )
 
 // Kinds of report, most pressing first (Rank). Stored: never rename.
@@ -116,6 +117,15 @@ func (c StandingCounts) Total() int {
 	return c.Hostile + c.Friendly + c.Neutral + c.Unclassified
 }
 
+// Bounds on the residue kept with an analysis: the spans of a
+// report's text the analysis did not consume. Bookkeeping for
+// later classification work, so it stays small: at most
+// MaxResidueSpans spans and MaxResidueBytes of text in all.
+const (
+	MaxResidueSpans = 40
+	MaxResidueBytes = 2048
+)
+
 // Analysis is what a report says.
 type Analysis struct {
 	Kind    string          `json:"kind"`
@@ -126,6 +136,11 @@ type Analysis struct {
 	Count   int             `json:"count,omitempty"`
 	Counts  *StandingCounts `json:"counts,omitempty"` // the standing split, when it counts anyone
 	Unknown []string        `json:"-"`                // names to look up, then analyse again
+	// Residue is the text the analysis did not consume: word
+	// runs that matched no ship, gate, keyword or pilot and are
+	// not waiting on a lookup (those stand in Unknown). It is
+	// recorded, never read back: no output above changes for it.
+	Residue []string `json:"residue,omitempty"`
 }
 
 // Input is one report to analyse.
@@ -242,7 +257,13 @@ func Analyze(in Input, d Dict) Analysis {
 		}
 		// Otherwise word by word: ships (up to three words, longest
 		// first), gates ("X gate"), counts, keywords, then pilots.
+		// claimed and owed walk with used for the residue: a
+		// word the pilot pass takes is claimed, one a lookup is
+		// still owed on is owed, and a word in neither is text
+		// this reading did not consume.
 		used := make([]bool, len(seg))
+		claimed := make([]bool, len(seg))
+		owed := make([]bool, len(seg))
 		markLocation(seg, used)
 		pending := 0 // a count said before its ship ("2 sabres")
 		for i := 0; i < len(seg); i++ {
@@ -326,23 +347,33 @@ func Analyze(in Input, d Dict) Analysis {
 		}
 		// What is left: pilots, one to three words each, longest
 		// first; what no lookup knows is asked about later.
-		var left []string
+		var left []int
 		flush := func() {
 			for len(left) > 0 {
 				took := 0
 				for n := min(3, len(left)); n >= 1; n-- {
-					name := clean(strings.Join(left[:n], " "))
+					words := make([]string, n)
+					for k := 0; k < n; k++ {
+						words[k] = seg[left[k]]
+					}
+					name := clean(strings.Join(words, " "))
 					id, proper, ok, known := lookupPilot(d, name)
 					if ok {
 						if !seenPilot[id] {
 							seenPilot[id] = true
 							a.Pilots = append(a.Pilots, Pilot{ID: id, Name: proper})
 						}
+						for k := 0; k < n; k++ {
+							claimed[left[k]] = true
+						}
 						took = n
 						break
 					}
 					if !known {
 						a.Unknown = append(a.Unknown, name)
+						for k := 0; k < n; k++ {
+							owed[left[k]] = true
+						}
 					}
 				}
 				if took == 0 {
@@ -351,14 +382,40 @@ func Analyze(in Input, d Dict) Analysis {
 				left = left[took:]
 			}
 		}
-		for i, w := range seg {
+		for i := range seg {
 			if used[i] {
 				flush()
 				continue
 			}
-			left = append(left, w)
+			left = append(left, i)
 		}
 		flush()
+		// What no pass consumed and no lookup is still owed is
+		// the segment's residue: a run of such words, kept when
+		// at least one of them could have been a name. A run of
+		// nothing but place nouns, numerals and the report's
+		// own vocabulary was set aside knowingly, not left
+		// unread, and is not residue.
+		for i := 0; i < len(seg); {
+			if used[i] || claimed[i] || owed[i] {
+				i++
+				continue
+			}
+			j := i
+			var words []string
+			candidate := false
+			for j < len(seg) && !used[j] && !claimed[j] && !owed[j] {
+				words = append(words, seg[j])
+				if pilotCandidate(clean(seg[j])) {
+					candidate = true
+				}
+				j++
+			}
+			if candidate {
+				a.Residue = append(a.Residue, strings.Join(words, " "))
+			}
+			i = j
+		}
 	}
 	if d.Friend != nil {
 		for i := range a.Pilots {
@@ -391,8 +448,39 @@ func Analyze(in Input, d Dict) Analysis {
 	}
 	sort.Strings(a.Flags)
 	a.Unknown = dedupe(a.Unknown)
+	a.Residue = capResidue(dedupe(a.Residue))
 	a.Kind = kindOf(in, a, flags)
 	return a
+}
+
+// capResidue bounds residue spans to the package limits: whole
+// spans in order, first come first kept; one span that alone
+// runs past the byte bound is cut at it, on a rune boundary.
+func capResidue(spans []string) []string {
+	var out []string
+	n := 0
+	for _, s := range spans {
+		if len(out) >= MaxResidueSpans {
+			break
+		}
+		if n+len(s) > MaxResidueBytes {
+			s = s[:MaxResidueBytes-n]
+			for len(s) > 0 {
+				if r, size := utf8.DecodeLastRuneInString(s); r != utf8.RuneError || size == 3 {
+					break
+				}
+				s = s[:len(s)-1]
+			}
+			if s == "" {
+				break
+			}
+			out = append(out, s)
+			break
+		}
+		n += len(s) + 1
+		out = append(out, s)
+	}
+	return out
 }
 
 func lookupPilot(d Dict, lower string) (int64, string, bool, bool) {

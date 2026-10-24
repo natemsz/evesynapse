@@ -26,15 +26,19 @@
 .wb-tab.is-active { color: var(--accent); border-color: var(--glass-edge); background: var(--row-alt); }
 
 /* Summary boxes */
-.wb-boxes { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.8rem; }
-/* Inner surfaces take the site's inner-box recipe (style.css):
-   the flat --row-alt tint and the --box-edge hairline, no blur
-   of their own — the page body's glass is the one blurred
-   surface, and nested backdrop filters come off it. */
-.wb-box { background: var(--row-alt); border: 1px solid var(--box-edge); border-radius: var(--r-lg); padding: 0.8rem 0.9rem; }
+.wb-boxes { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 2rem; }
+/* The summary boxes and the panels below are the page's primary
+   cards, read at panel scale: they take the site's card surface
+   (style.css), the flat --glass fill and the --glass-edge border,
+   with no blur of their own: the page body's glass is the one
+   blurred surface, and nested backdrop filters come off it. The
+   --row-alt / --box-edge inner-box recipe is too faint at this
+   scale; its hairline and 3% tint left the cards reading as one
+   continuous panel. */
+.wb-box { background: var(--glass); border: 1px solid var(--glass-edge); border-radius: var(--r-lg); padding: 0.95rem 1.05rem; }
 .wb-box h3 { margin: 0 0 0.6rem; font-size: 0.78rem; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text); display: flex; align-items: center; gap: 0.45rem; flex-wrap: wrap; }
 .wb-box-n { color: var(--accent); }
-.wb-split-nums { display: flex; gap: 1rem; flex-wrap: wrap; }
+.wb-split-nums { display: flex; gap: 1.6rem; flex-wrap: wrap; }
 .wb-split-nums > div { display: flex; flex-direction: column; }
 .wb-num { font-family: 'JetBrains Mono', monospace; font-size: 1.45rem; line-height: 1.1; color: var(--text-bright); }
 .wb-num-l { font-size: 0.7rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
@@ -57,15 +61,21 @@
 .wb-roles strong { font-family: 'JetBrains Mono', monospace; color: var(--text-bright); }
 .wb-sys { margin: 0; display: flex; align-items: baseline; gap: 0.5rem; }
 .wb-sys-name { font-family: 'Rajdhani', sans-serif; font-size: 1.35rem; font-weight: 700; letter-spacing: 0.05em; color: var(--text-bright); }
-.wb-sys-stats { display: flex; gap: 1rem; margin-top: 0.5rem; flex-wrap: wrap; }
+.wb-sys-stats { display: flex; gap: 1.6rem; margin-top: 0.5rem; flex-wrap: wrap; }
 .wb-sys-stats > div { display: flex; flex-direction: column; }
 .wb-mini { background: var(--row-alt); border: 1px solid var(--box-edge); border-radius: var(--r-xs); color: var(--text); font: inherit; font-size: 0.8rem; padding: 0.22rem 0.55rem; cursor: pointer; }
 .wb-mini:hover { border-color: var(--glass-edge); color: var(--accent); }
 .wb-filters { margin: 0; font-size: 0.88rem; color: var(--muted); display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
 .wb-filters[hidden] { display: none; }
 
+/* Stacked sections in the intel view (the summary boxes, then
+   each panel in sequence) are separate cards, not one slab:
+   every section after the first carries a full panel-rhythm
+   margin above it. */
+[data-wb-view="intel"] > * + * { margin-top: 1.5rem; }
+
 /* Panels */
-.wb-panel { background: var(--row-alt); border: 1px solid var(--box-edge); border-radius: var(--r-lg); padding: 0.9rem 1rem; }
+.wb-panel { background: var(--glass); border: 1px solid var(--glass-edge); border-radius: var(--r-lg); padding: 0.9rem 1rem; }
 .wb-panel-head { display: flex; align-items: center; gap: 0.7rem; flex-wrap: wrap; margin-bottom: 0.7rem; }
 .wb-panel-head h3 { margin: 0; font-family: 'Rajdhani', sans-serif; font-size: 1.05rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-bright); }
 .wb-pill { font-family: 'JetBrains Mono', monospace; font-size: 0.78rem; color: var(--accent); border: 1px solid var(--glass-edge); border-radius: 2rem; padding: 0.1rem 0.55rem; }
@@ -132,7 +142,7 @@
 .wb-d-left { color: #e0301c; }
 .wb-d-text { margin-left: auto; font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; color: var(--muted); }
 .wb-d-bucket { color: var(--muted); font-size: 0.85rem; }
-.wb-gates { display: grid; grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr)); gap: 0.8rem; }
+.wb-gates { display: grid; grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr)); gap: 1.25rem; }
 .wb-gate { background: var(--row-alt); border: 1px solid var(--box-edge); border-radius: var(--r-lg); padding: 0.75rem 0.9rem; }
 .wb-gate-head { margin: 0; font-family: 'Rajdhani', sans-serif; font-size: 1.1rem; font-weight: 700; }
 .wb-gate-stats { margin: 0.5rem 0 0; display: flex; gap: 0.9rem; flex-wrap: wrap; font-size: 0.9rem; color: var(--muted); }
@@ -172,7 +182,7 @@
   .wb-boxes { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 820px) {
-  .wb-boxes { grid-template-columns: minmax(0, 1fr); }
+  .wb-boxes { grid-template-columns: minmax(0, 1fr); gap: 1.5rem; }
   .wb-table thead { display: none; }
   .wb-table, .wb-table tbody, .wb-table tr, .wb-table td { display: block; width: 100%; }
   .wb-table tr { padding: 0.45rem 0.2rem; border-bottom: 1px solid var(--box-edge); }

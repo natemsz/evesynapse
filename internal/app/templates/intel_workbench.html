@@ -13,7 +13,10 @@
 {{if .Error}}
   <p class="wb-missing prose">{{.Error}}</p>
 {{else}}
-  <header class="wb-head">
+  {{/* A div, not a <header>: style.css styles the bare header
+       element as the shell's fixed glass bar, and an in-page
+       header inherits that positioning and paints over the page. */}}
+  <div class="wb-head">
     <div class="wb-head-main">
       <h2 class="wb-snap">{{.Snapshot}}</h2>
       <p class="wb-meta">
@@ -29,7 +32,7 @@
     <div class="wb-head-actions">
       {{if or .CanPost .FromScan}}<button type="button" class="btn wb-open-parser">Paste a scan</button>{{end}}
     </div>
-  </header>
+  </div>
 
   <nav class="wb-tabs" aria-label="Workbench views">
     <button type="button" class="wb-tab is-active" data-wb-tab="intel">Workbench</button>

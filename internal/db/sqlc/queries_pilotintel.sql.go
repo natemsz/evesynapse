@@ -7,6 +7,7 @@ package db
 
 import (
 	"context"
+	"database/sql"
 	"time"
 
 	"github.com/lib/pq"
@@ -38,6 +39,159 @@ func (q *Queries) AddIntelWatch(ctx context.Context, arg AddIntelWatchParams) er
 	return err
 }
 
+const applyPilotActivityHour = `-- name: ApplyPilotActivityHour :exec
+INSERT INTO pilot_activity_hours (character_id, hour, events)
+VALUES ($1, $2, 1)
+ON CONFLICT (character_id, hour) DO UPDATE SET
+    events = pilot_activity_hours.events + 1
+`
+
+type ApplyPilotActivityHourParams struct {
+	CharacterID int64 `json:"character_id"`
+	Hour        int16 `json:"hour"`
+}
+
+func (q *Queries) ApplyPilotActivityHour(ctx context.Context, arg ApplyPilotActivityHourParams) error {
+	_, err := q.db.ExecContext(ctx, applyPilotActivityHour, arg.CharacterID, arg.Hour)
+	return err
+}
+
+const applyPilotActivityKill = `-- name: ApplyPilotActivityKill :exec
+INSERT INTO pilot_activity_profiles (character_id, updated_at, kills, losses, final_blows,
+       gang_total, gang_samples, last_active_at)
+VALUES ($1, $2, $3, $4,
+       $5, $6, $7, $8)
+ON CONFLICT (character_id) DO UPDATE SET
+    kills = pilot_activity_profiles.kills + EXCLUDED.kills,
+    losses = pilot_activity_profiles.losses + EXCLUDED.losses,
+    final_blows = pilot_activity_profiles.final_blows + EXCLUDED.final_blows,
+    gang_total = pilot_activity_profiles.gang_total + EXCLUDED.gang_total,
+    gang_samples = pilot_activity_profiles.gang_samples + EXCLUDED.gang_samples,
+    last_active_at = GREATEST(pilot_activity_profiles.last_active_at, EXCLUDED.last_active_at),
+    updated_at = EXCLUDED.updated_at
+`
+
+type ApplyPilotActivityKillParams struct {
+	CharacterID  int64        `json:"character_id"`
+	AppliedAt    time.Time    `json:"applied_at"`
+	Kills        int64        `json:"kills"`
+	Losses       int64        `json:"losses"`
+	FinalBlows   int64        `json:"final_blows"`
+	GangTotal    int64        `json:"gang_total"`
+	GangSamples  int64        `json:"gang_samples"`
+	KillmailTime sql.NullTime `json:"killmail_time"`
+}
+
+func (q *Queries) ApplyPilotActivityKill(ctx context.Context, arg ApplyPilotActivityKillParams) error {
+	_, err := q.db.ExecContext(ctx, applyPilotActivityKill,
+		arg.CharacterID,
+		arg.AppliedAt,
+		arg.Kills,
+		arg.Losses,
+		arg.FinalBlows,
+		arg.GangTotal,
+		arg.GangSamples,
+		arg.KillmailTime,
+	)
+	return err
+}
+
+const applyPilotActivityShip = `-- name: ApplyPilotActivityShip :exec
+INSERT INTO pilot_activity_ships (character_id, ship_type_id, flown, final_blows, lost)
+VALUES ($1, $2, $3, $4, $5)
+ON CONFLICT (character_id, ship_type_id) DO UPDATE SET
+    flown = pilot_activity_ships.flown + EXCLUDED.flown,
+    final_blows = pilot_activity_ships.final_blows + EXCLUDED.final_blows,
+    lost = pilot_activity_ships.lost + EXCLUDED.lost
+`
+
+type ApplyPilotActivityShipParams struct {
+	CharacterID int64 `json:"character_id"`
+	ShipTypeID  int64 `json:"ship_type_id"`
+	Flown       int64 `json:"flown"`
+	FinalBlows  int64 `json:"final_blows"`
+	Lost        int64 `json:"lost"`
+}
+
+func (q *Queries) ApplyPilotActivityShip(ctx context.Context, arg ApplyPilotActivityShipParams) error {
+	_, err := q.db.ExecContext(ctx, applyPilotActivityShip,
+		arg.CharacterID,
+		arg.ShipTypeID,
+		arg.Flown,
+		arg.FinalBlows,
+		arg.Lost,
+	)
+	return err
+}
+
+const applyPilotActivitySystem = `-- name: ApplyPilotActivitySystem :exec
+INSERT INTO pilot_activity_systems (character_id, system_id, events, last_at)
+VALUES ($1, $2, 1, $3)
+ON CONFLICT (character_id, system_id) DO UPDATE SET
+    events = pilot_activity_systems.events + 1,
+    last_at = GREATEST(pilot_activity_systems.last_at, EXCLUDED.last_at)
+`
+
+type ApplyPilotActivitySystemParams struct {
+	CharacterID  int64     `json:"character_id"`
+	SystemID     int64     `json:"system_id"`
+	KillmailTime time.Time `json:"killmail_time"`
+}
+
+func (q *Queries) ApplyPilotActivitySystem(ctx context.Context, arg ApplyPilotActivitySystemParams) error {
+	_, err := q.db.ExecContext(ctx, applyPilotActivitySystem, arg.CharacterID, arg.SystemID, arg.KillmailTime)
+	return err
+}
+
+const claimPilotActivityProfile = `-- name: ClaimPilotActivityProfile :exec
+INSERT INTO pilot_activity_profiles (character_id, updated_at)
+VALUES ($1, $2)
+ON CONFLICT (character_id) DO NOTHING
+`
+
+type ClaimPilotActivityProfileParams struct {
+	CharacterID int64     `json:"character_id"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
+// The backfill claims a pilot before fetching: the row's presence
+// is what lets the live stream maintain the profile meanwhile.
+func (q *Queries) ClaimPilotActivityProfile(ctx context.Context, arg ClaimPilotActivityProfileParams) error {
+	_, err := q.db.ExecContext(ctx, claimPilotActivityProfile, arg.CharacterID, arg.UpdatedAt)
+	return err
+}
+
+const getPilotActivityProfile = `-- name: GetPilotActivityProfile :one
+
+SELECT character_id, backfilled_at, updated_at, kills, losses, final_blows,
+       gang_total, gang_samples, usual_ship_type_id, last_active_at
+FROM pilot_activity_profiles
+WHERE character_id = $1
+`
+
+// Pilot activity profiles (schema 088, pilot_activity.go): the
+// stored aggregates the pilot page's activity section reads.
+// Written at ingest only: the one-time history backfill of a
+// pilot met in a reading, and the live kill stream for pilots
+// who have one.
+func (q *Queries) GetPilotActivityProfile(ctx context.Context, characterID int64) (PilotActivityProfile, error) {
+	row := q.db.QueryRowContext(ctx, getPilotActivityProfile, characterID)
+	var i PilotActivityProfile
+	err := row.Scan(
+		&i.CharacterID,
+		&i.BackfilledAt,
+		&i.UpdatedAt,
+		&i.Kills,
+		&i.Losses,
+		&i.FinalBlows,
+		&i.GangTotal,
+		&i.GangSamples,
+		&i.UsualShipTypeID,
+		&i.LastActiveAt,
+	)
+	return i, err
+}
+
 const listIntelWatch = `-- name: ListIntelWatch :many
 SELECT channel_id, character_id, note, added_at FROM intel_watch
 WHERE channel_id = ANY($1::bigint[])
@@ -66,6 +220,130 @@ func (q *Queries) ListIntelWatch(ctx context.Context, channelIds []int64) ([]Lis
 			&i.Note,
 			&i.AddedAt,
 		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPilotActivityHours = `-- name: ListPilotActivityHours :many
+SELECT hour, events
+FROM pilot_activity_hours
+WHERE character_id = $1
+`
+
+type ListPilotActivityHoursRow struct {
+	Hour   int16 `json:"hour"`
+	Events int64 `json:"events"`
+}
+
+func (q *Queries) ListPilotActivityHours(ctx context.Context, characterID int64) ([]ListPilotActivityHoursRow, error) {
+	rows, err := q.db.QueryContext(ctx, listPilotActivityHours, characterID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListPilotActivityHoursRow
+	for rows.Next() {
+		var i ListPilotActivityHoursRow
+		if err := rows.Scan(&i.Hour, &i.Events); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPilotActivityShips = `-- name: ListPilotActivityShips :many
+SELECT ship_type_id, flown, final_blows, lost
+FROM pilot_activity_ships
+WHERE character_id = $1 AND (flown + lost) > 0
+ORDER BY (flown + lost) DESC, ship_type_id
+LIMIT $2::int
+`
+
+type ListPilotActivityShipsParams struct {
+	CharacterID int64 `json:"character_id"`
+	MaxRows     int32 `json:"max_rows"`
+}
+
+type ListPilotActivityShipsRow struct {
+	ShipTypeID int64 `json:"ship_type_id"`
+	Flown      int64 `json:"flown"`
+	FinalBlows int64 `json:"final_blows"`
+	Lost       int64 `json:"lost"`
+}
+
+func (q *Queries) ListPilotActivityShips(ctx context.Context, arg ListPilotActivityShipsParams) ([]ListPilotActivityShipsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listPilotActivityShips, arg.CharacterID, arg.MaxRows)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListPilotActivityShipsRow
+	for rows.Next() {
+		var i ListPilotActivityShipsRow
+		if err := rows.Scan(
+			&i.ShipTypeID,
+			&i.Flown,
+			&i.FinalBlows,
+			&i.Lost,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPilotActivitySystems = `-- name: ListPilotActivitySystems :many
+SELECT system_id, events, last_at
+FROM pilot_activity_systems
+WHERE character_id = $1
+ORDER BY events DESC, system_id
+LIMIT $2::int
+`
+
+type ListPilotActivitySystemsParams struct {
+	CharacterID int64 `json:"character_id"`
+	MaxRows     int32 `json:"max_rows"`
+}
+
+type ListPilotActivitySystemsRow struct {
+	SystemID int64     `json:"system_id"`
+	Events   int64     `json:"events"`
+	LastAt   time.Time `json:"last_at"`
+}
+
+func (q *Queries) ListPilotActivitySystems(ctx context.Context, arg ListPilotActivitySystemsParams) ([]ListPilotActivitySystemsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listPilotActivitySystems, arg.CharacterID, arg.MaxRows)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListPilotActivitySystemsRow
+	for rows.Next() {
+		var i ListPilotActivitySystemsRow
+		if err := rows.Scan(&i.SystemID, &i.Events, &i.LastAt); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -471,6 +749,44 @@ func (q *Queries) ListScansWithPilot(ctx context.Context, arg ListScansWithPilot
 	return items, nil
 }
 
+const markPilotActivityBackfilled = `-- name: MarkPilotActivityBackfilled :exec
+UPDATE pilot_activity_profiles
+SET backfilled_at = $1, updated_at = $1
+WHERE character_id = $2
+`
+
+type MarkPilotActivityBackfilledParams struct {
+	BackfilledAt sql.NullTime `json:"backfilled_at"`
+	CharacterID  int64        `json:"character_id"`
+}
+
+func (q *Queries) MarkPilotActivityBackfilled(ctx context.Context, arg MarkPilotActivityBackfilledParams) error {
+	_, err := q.db.ExecContext(ctx, markPilotActivityBackfilled, arg.BackfilledAt, arg.CharacterID)
+	return err
+}
+
+const markPilotKillApplied = `-- name: MarkPilotKillApplied :one
+INSERT INTO pilot_activity_applied (killmail_id, character_id, killmail_time)
+VALUES ($1, $2, $3)
+ON CONFLICT DO NOTHING
+RETURNING killmail_id
+`
+
+type MarkPilotKillAppliedParams struct {
+	KillmailID   int64     `json:"killmail_id"`
+	CharacterID  int64     `json:"character_id"`
+	KillmailTime time.Time `json:"killmail_time"`
+}
+
+// One marker per (kill, pilot) folded into the aggregates. A
+// conflict (no row back) means the kill already counted.
+func (q *Queries) MarkPilotKillApplied(ctx context.Context, arg MarkPilotKillAppliedParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, markPilotKillApplied, arg.KillmailID, arg.CharacterID, arg.KillmailTime)
+	var killmail_id int64
+	err := row.Scan(&killmail_id)
+	return killmail_id, err
+}
+
 const pilotKillStats = `-- name: PilotKillStats :one
 
 SELECT
@@ -512,6 +828,37 @@ func (q *Queries) PilotKillStats(ctx context.Context, arg PilotKillStatsParams) 
 		&i.IskKilled,
 	)
 	return i, err
+}
+
+const prunePilotActivityApplied = `-- name: PrunePilotActivityApplied :execrows
+DELETE FROM pilot_activity_applied
+WHERE killmail_time < $1::timestamptz
+`
+
+// Markers older than the kill details' retention go with them.
+func (q *Queries) PrunePilotActivityApplied(ctx context.Context, before time.Time) (int64, error) {
+	result, err := q.db.ExecContext(ctx, prunePilotActivityApplied, before)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const refreshPilotUsualShip = `-- name: RefreshPilotUsualShip :exec
+UPDATE pilot_activity_profiles p
+SET usual_ship_type_id = COALESCE((
+    SELECT s.ship_type_id FROM pilot_activity_ships s
+    WHERE s.character_id = p.character_id AND s.final_blows > 0
+    ORDER BY s.final_blows DESC, s.flown DESC, s.ship_type_id
+    LIMIT 1), 0)
+WHERE p.character_id = $1
+`
+
+// The usual hull: the ship with the most final blows, kept on the
+// profile row so the page reads it without a sort.
+func (q *Queries) RefreshPilotUsualShip(ctx context.Context, characterID int64) error {
+	_, err := q.db.ExecContext(ctx, refreshPilotUsualShip, characterID)
+	return err
 }
 
 const removeIntelWatch = `-- name: RemoveIntelWatch :exec

@@ -92,6 +92,8 @@ type Config struct {
 	fuzzworkBaseURL          string         // Fuzzwork market aggregate base URL (fallback prices)
 	killfeedBaseURL          string         // zKillboard R2Z2 killmail stream base URL (killfeed.go)
 	killfeedOff              bool           // KILLFEED=off: no public killmail stream
+	zkillAPIBaseURL          string         // zKillboard history API base URL (pilot_activity.go)
+	pilotBackfillOff         bool           // PILOT_BACKFILL=off: no pilot history backfills
 	adminCharIDs             map[int64]bool // EVE_ADMIN_CHARACTER_IDS (comma-separated)
 	tokenKey                 string         // TOKEN_ENCRYPTION_KEY: encrypts stored EVE tokens ("" = stored as they are)
 	tokenKeyProvider         string         // TOKEN_KEY_PROVIDER: where the token key comes from — env, http, oci or none ("" = derive: a set TOKEN_ENCRYPTION_KEY means env, none set means none)
@@ -311,6 +313,28 @@ func (c Config) KillfeedBaseURL() string {
 // (the tests') never reaches the real stream.
 func (c Config) KillfeedEnabled() bool { return !c.killfeedOff && c.killfeedBaseURL != "" }
 
+// defaultZKillAPIBaseURL is zKillboard's history API: filtered
+// killmail queries, a pilot's kills and losses among them.
+const defaultZKillAPIBaseURL = "https://zkillboard.com/api/"
+
+// ZKillAPIBaseURL returns the history API's base URL, always with
+// a trailing slash.
+func (c Config) ZKillAPIBaseURL() string {
+	base := c.zkillAPIBaseURL
+	if base == "" {
+		base = defaultZKillAPIBaseURL
+	}
+	if !strings.HasSuffix(base, "/") {
+		base += "/"
+	}
+	return base
+}
+
+// PilotBackfillEnabled reports whether pilot activity backfills
+// run: PILOT_BACKFILL=off turns them off, and a Config not built
+// by LoadConfig (the tests') never reaches the real API.
+func (c Config) PilotBackfillEnabled() bool { return !c.pilotBackfillOff && c.zkillAPIBaseURL != "" }
+
 // SDEBaseURL returns the base URL the SDE importer downloads the
 // CSV tables from, always with a trailing slash.
 func (c Config) SDEBaseURL() string {
@@ -360,6 +384,8 @@ func LoadConfig() (Config, error) {
 		fuzzworkBaseURL:            getenvDefault("EVE_FUZZWORK_BASE_URL", defaultFuzzworkBaseURL),
 		killfeedBaseURL:            getenvDefault("KILLFEED_BASE_URL", defaultKillfeedBaseURL),
 		killfeedOff:                strings.EqualFold(strings.TrimSpace(os.Getenv("KILLFEED")), "off"),
+		zkillAPIBaseURL:            getenvDefault("ZKILL_API_BASE_URL", defaultZKillAPIBaseURL),
+		pilotBackfillOff:           strings.EqualFold(strings.TrimSpace(os.Getenv("PILOT_BACKFILL")), "off"),
 		adminCharIDs:               parseAdminCharIDs(os.Getenv("EVE_ADMIN_CHARACTER_IDS")),
 		tokenKey:                   os.Getenv("TOKEN_ENCRYPTION_KEY"),
 		tokenKeyProvider:           os.Getenv("TOKEN_KEY_PROVIDER"),

@@ -203,6 +203,13 @@ type Application struct {
 	killLastPruned time.Time
 	killStatsMemo  *killboardStatsMemo // the feed's headline, held a minute
 
+	// Pilot activity profiles (pilot_activity.go): the backfill
+	// queue and who is already on it. The channel is made on first
+	// use; the map keeps a much-reported pilot queued once.
+	pilotBackfillMu     sync.Mutex
+	pilotBackfillCh     chan int64
+	pilotBackfillQueued map[int64]bool
+
 	// The Forge's swept typical sells (market_guide_prices.go),
 	// the first tier of the house price order, cached in memory
 	// on the same window as the true values so renders reload

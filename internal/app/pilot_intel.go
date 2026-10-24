@@ -8,7 +8,10 @@ package app
 // 90 days: kills, solo kills, losses, ISK destroyed; where and when they
 // were last seen and in what; the ships they fly; where they hunt; the
 // hours (EVE time) they are active; who they fly with; their latest kills
-// and losses. Anyone can see this: it is all public.
+// and losses. Once the pilot has a stored activity profile
+// (pilot_activity.go), the section's aggregates are the profile's
+// instead: the whole recorded record, with their usual hull and the
+// gang size they fly with. Anyone can see this: it is all public.
 //
 // For a signed-in reader, from what is theirs to read: reports in their
 // intel channels that name the pilot (the last 7 days), their own local
@@ -44,6 +47,7 @@ type pilotCount struct {
 	ID      int64
 	Name    string
 	N       int64
+	Text    string // the count as prose, when one bare number is not the story (a profile's ship rows: flown, final blows, lost)
 	Pct     int
 	SecText string
 	SecTier int
@@ -126,6 +130,17 @@ type pilotIntelView struct {
 	Peak       string
 	Companions []pilotCompanion
 	Recent     []pilotKill
+	// ProfileBacked: the aggregates above come from the pilot's
+	// stored activity profile (pilot_activity.go), the whole of
+	// their recorded kills and losses, rather than the last 90
+	// days of the local board. Set only when a profile with a
+	// record exists; the template labels the section with the
+	// wider scope and the profile's own freshness (UpdatedAgo).
+	ProfileBacked bool
+	UpdatedAgo    string
+	UsualShip     string
+	Gang          string
+	LastActive    string
 
 	SignedIn  bool
 	Reports   []pilotReport
@@ -219,6 +234,28 @@ func (app *Application) loadPilotIntel(ctx context.Context, id int64, name strin
 			v.Companions = append(v.Companions, pilotCompanion{ID: r.CharacterID, Name: names.character(r.CharacterID), N: r.N,
 				CorpID: r.CorporationID, CorpName: names.corp(r.CorporationID), AllianceID: r.AllianceID, AllianceName: names.alliance(r.AllianceID)})
 		}
+	}
+	// The stored profile, when the pilot has one with a record:
+	// its aggregates cover the whole of their kill history and
+	// are kept current at ingest, so they take over the section's
+	// numbers from the 90-day board read above. The 90-day-only
+	// figures (solo kills, ISK destroyed) do not carry over; the
+	// latest kills and the companions stay board reads either way.
+	if act := app.loadPilotActivity(ctx, id, names, now); act != nil && act.Any {
+		v.Kills, v.Losses = act.Kills, act.Losses
+		v.Solo, v.ISK = 0, ""
+		v.Ships = nil
+		for _, s := range act.Ships {
+			v.Ships = append(v.Ships, pilotCount{ID: s.ID, Name: s.Name, Pct: s.Pct, Text: s.Text})
+		}
+		v.Systems = act.Systems
+		v.Hours = act.Hours
+		v.Peak = act.Peak
+		v.ProfileBacked = true
+		v.UpdatedAgo = act.UpdatedAgo
+		v.UsualShip = act.UsualShip
+		v.Gang = act.Gang
+		v.LastActive = act.LastActive
 	}
 	v.Any = v.Kills+v.Losses > 0 || len(v.Recent) > 0
 	v.HasIntel = v.Any

@@ -249,6 +249,11 @@ func (app *Application) ingestKillPackage(ctx context.Context, body []byte) erro
 	}
 	z := pkg.ZKB
 	_, err := app.ingestKill(ctx, pkg.ESI, pkg.Hash, &z, "zkill", true)
+	if err == nil {
+		// A stored kill also feeds the activity profiles of the
+		// pilots it headlines (pilot_activity.go).
+		app.maintainPilotActivity(ctx, pkg.ESI)
+	}
 	return err
 }
 
@@ -386,7 +391,8 @@ func (app *Application) killboardMaintenance(ctx context.Context) {
 		before := time.Now().UTC().Add(-killDetailRetention)
 		d, err1 := app.queries.PruneKillDetails(ctx, before)
 		a, err2 := app.queries.PruneKillAttackers(ctx, before)
-		if err := errors.Join(err1, err2); err != nil {
+		_, err3 := app.queries.PrunePilotActivityApplied(ctx, before)
+		if err := errors.Join(err1, err2, err3); err != nil {
 			logging.Errorf("killboard: prune: %v", err)
 		} else if d+a > 0 {
 			logging.Infof("killboard: pruned %d killmails and %d attacker rows past a year", d, a)

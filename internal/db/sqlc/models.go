@@ -849,6 +849,46 @@ type OrgGroupMember struct {
 	AddedAt     time.Time `json:"added_at"`
 }
 
+type PilotActivityApplied struct {
+	KillmailID   int64     `json:"killmail_id"`
+	CharacterID  int64     `json:"character_id"`
+	KillmailTime time.Time `json:"killmail_time"`
+}
+
+type PilotActivityHour struct {
+	CharacterID int64 `json:"character_id"`
+	Hour        int16 `json:"hour"`
+	Events      int64 `json:"events"`
+}
+
+type PilotActivityProfile struct {
+	CharacterID     int64        `json:"character_id"`
+	BackfilledAt    sql.NullTime `json:"backfilled_at"`
+	UpdatedAt       time.Time    `json:"updated_at"`
+	Kills           int64        `json:"kills"`
+	Losses          int64        `json:"losses"`
+	FinalBlows      int64        `json:"final_blows"`
+	GangTotal       int64        `json:"gang_total"`
+	GangSamples     int64        `json:"gang_samples"`
+	UsualShipTypeID int64        `json:"usual_ship_type_id"`
+	LastActiveAt    sql.NullTime `json:"last_active_at"`
+}
+
+type PilotActivityShip struct {
+	CharacterID int64 `json:"character_id"`
+	ShipTypeID  int64 `json:"ship_type_id"`
+	Flown       int64 `json:"flown"`
+	FinalBlows  int64 `json:"final_blows"`
+	Lost        int64 `json:"lost"`
+}
+
+type PilotActivitySystem struct {
+	CharacterID int64     `json:"character_id"`
+	SystemID    int64     `json:"system_id"`
+	Events      int64     `json:"events"`
+	LastAt      time.Time `json:"last_at"`
+}
+
 type PilotNameWant struct {
 	NormalizedName string       `json:"normalized_name"`
 	DisplayName    string       `json:"display_name"`

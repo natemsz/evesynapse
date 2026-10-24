@@ -152,7 +152,7 @@ func (app *Application) runWorker(ctx context.Context) {
 	// worker has stopped and Close may close the database handles
 	// without any pass still querying them.
 	var children sync.WaitGroup
-	children.Add(3)
+	children.Add(4)
 
 	// The public killmail stream (killfeed.go) is its own paced
 	// loop: one file every 100 ms while kills arrive, six seconds
@@ -160,6 +160,14 @@ func (app *Application) runWorker(ctx context.Context) {
 	go func() {
 		defer children.Done()
 		runGuarded("killfeed", func() { app.runKillfeed(ctx) })
+	}()
+
+	// The pilot activity backfill (pilot_activity.go) works
+	// through the pilots intel readings have met, one at a time,
+	// at zKillboard's pace.
+	go func() {
+		defer children.Done()
+		runGuarded("pilot backfill", func() { app.runPilotBackfill(ctx) })
 	}()
 
 	// SDE maintenance runs alongside the ESI cycle: a first import

@@ -368,6 +368,13 @@ func (app *Application) storeRosterScan(ctx context.Context, userID int64, roste
 func (app *Application) analyzeIntel(ctx context.Context, channelID int64, in intelanalyze.Input, posterID int64, hasScan bool) (intelanalyze.Analysis, *rosterRead, bool) {
 	missing := map[int64]bool{}
 	a := intelanalyze.Analyze(in, app.intelDict(ctx, channelID, missing))
+	if hasScan {
+		// A scan report's text is the reading's own generated
+		// headline, not input: what its paste left unconsumed
+		// stands on the reading itself, and the headline's
+		// leftovers are not residue.
+		a.Residue = nil
+	}
 	var roster *rosterRead
 	if !hasScan && !in.Clear {
 		roster = app.rosterReRead(ctx, channelID, in, a, posterID)
@@ -616,7 +623,7 @@ func (app *Application) insertIntelReport(ctx context.Context, p db.InsertIntelR
 			return dup, errIntelDuplicate
 		}
 	}
-	return app.queries.InsertIntelReport(ctx, p)
+	return app.storeIntelReport(ctx, p)
 }
 
 // drainIntelAnalysis looks up, with EVE, the names and affiliations
@@ -712,6 +719,8 @@ func (app *Application) drainIntelAnalysis(ctx context.Context) (limited bool) {
 		raw, _ := json.Marshal(a)
 		if err := app.queries.SetIntelReportAnalysis(ctx, db.SetIntelReportAnalysisParams{ID: r.ID, Kind: a.Kind, Analysis: string(raw), AnalysisPending: false}); err != nil {
 			logging.Warnf("intel: save analysis of report %d: %v", r.ID, err)
+		} else {
+			app.refreshReportGroup(ctx, r.ID)
 		}
 	}
 	app.backfillStoredRosters(ctx, now)
@@ -779,6 +788,8 @@ func (app *Application) backfillStoredRosters(ctx context.Context, now time.Time
 		raw, _ := json.Marshal(a)
 		if err := app.queries.SetIntelReportAnalysis(ctx, db.SetIntelReportAnalysisParams{ID: r.ID, Kind: a.Kind, Analysis: string(raw), AnalysisPending: false}); err != nil {
 			logging.Warnf("intel: save analysis of stored report %d: %v", r.ID, err)
+		} else {
+			app.refreshReportGroup(ctx, r.ID)
 		}
 	}
 }
@@ -799,9 +810,15 @@ func (app *Application) settleRosterReport(ctx context.Context, r db.ListPending
 	if err != nil {
 		return err
 	}
-	return app.queries.SetIntelReportRoster(ctx, db.SetIntelReportRosterParams{
+	if err := app.queries.SetIntelReportRoster(ctx, db.SetIntelReportRosterParams{
 		ID: r.ID, Text: roster.sentence, Pilots: roster.sentence, Hostiles: hostiles,
-		ScanID: id, Kind: roster.analysis.Kind, Analysis: string(raw)})
+		ScanID: id, Kind: roster.analysis.Kind, Analysis: string(raw)}); err != nil {
+		return err
+	}
+	// The report's reading changed under its group: the
+	// composite is recomputed with it.
+	app.refreshReportGroup(ctx, r.ID)
+	return nil
 }
 
 // --- Showing it ---
@@ -832,7 +849,9 @@ var intelKindLabels = map[string]string{
 }
 
 // applyAnalysis puts what a stored report says on its view.
-func applyAnalysis(rv *reportView, kind, raw string, names *killNames) {
+// applyKind sets a card's kind badge: the kind, its label and
+// its tone, from a report kind alone.
+func applyKind(rv *reportView, kind string) {
 	rv.Kind = kind
 	rv.KindLabel = intelKindLabels[kind]
 	switch kind {
@@ -843,6 +862,10 @@ func applyAnalysis(rv *reportView, kind, raw string, names *killNames) {
 	default:
 		rv.KindTone = "loss"
 	}
+}
+
+func applyAnalysis(rv *reportView, kind, raw string, names *killNames) {
+	applyKind(rv, kind)
 	if raw == "" {
 		return
 	}

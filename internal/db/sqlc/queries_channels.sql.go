@@ -179,6 +179,15 @@ func (q *Queries) DeleteIntelChannelRule(ctx context.Context, arg DeleteIntelCha
 	return err
 }
 
+const deleteIntelGroupComposite = `-- name: DeleteIntelGroupComposite :exec
+DELETE FROM intel_group_composites WHERE group_id = $1
+`
+
+func (q *Queries) DeleteIntelGroupComposite(ctx context.Context, groupID int64) error {
+	_, err := q.db.ExecContext(ctx, deleteIntelGroupComposite, groupID)
+	return err
+}
+
 const deleteIntelReport = `-- name: DeleteIntelReport :exec
 DELETE FROM intel_reports WHERE id = $1
 `
@@ -242,6 +251,26 @@ func (q *Queries) GetIntelChannel(ctx context.Context, id int64) (IntelChannel, 
 		&i.CreatedAt,
 		&i.OwnerKind,
 		&i.OwnerID,
+	)
+	return i, err
+}
+
+const getIntelGroupComposite = `-- name: GetIntelGroupComposite :one
+SELECT group_id, channel_id, system_id, composite, previous, members, computed_at
+FROM intel_group_composites WHERE group_id = $1
+`
+
+func (q *Queries) GetIntelGroupComposite(ctx context.Context, groupID int64) (IntelGroupComposite, error) {
+	row := q.db.QueryRowContext(ctx, getIntelGroupComposite, groupID)
+	var i IntelGroupComposite
+	err := row.Scan(
+		&i.GroupID,
+		&i.ChannelID,
+		&i.SystemID,
+		&i.Composite,
+		&i.Previous,
+		&i.Members,
+		&i.ComputedAt,
 	)
 	return i, err
 }
@@ -342,7 +371,7 @@ func (q *Queries) GetIntelReportByScanID(ctx context.Context, scanID string) (Ge
 }
 
 const getIntelReportFull = `-- name: GetIntelReportFull :one
-SELECT id, channel_id, system_id, author_user_id, author_character_id, reporter, text, pilots, hostiles, clear, scan_id, source, seen_at, created_at, kind, analysis, analysis_pending
+SELECT id, channel_id, system_id, author_user_id, author_character_id, reporter, text, pilots, hostiles, clear, scan_id, source, seen_at, created_at, kind, analysis, analysis_pending, group_id
 FROM intel_reports
 WHERE id = $1
 `
@@ -370,6 +399,7 @@ func (q *Queries) GetIntelReportFull(ctx context.Context, id int64) (IntelReport
 		&i.Kind,
 		&i.Analysis,
 		&i.AnalysisPending,
+		&i.GroupID,
 	)
 	return i, err
 }
@@ -398,7 +428,7 @@ func (q *Queries) GetIntelTokenByHash(ctx context.Context, tokenHash string) (Ge
 }
 
 const getPreviousIntelReport = `-- name: GetPreviousIntelReport :one
-SELECT id, channel_id, system_id, author_user_id, author_character_id, reporter, text, pilots, hostiles, clear, scan_id, source, seen_at, created_at, kind, analysis, analysis_pending
+SELECT id, channel_id, system_id, author_user_id, author_character_id, reporter, text, pilots, hostiles, clear, scan_id, source, seen_at, created_at, kind, analysis, analysis_pending, group_id
 FROM intel_reports
 WHERE channel_id = $1
   AND system_id = $2
@@ -442,17 +472,18 @@ func (q *Queries) GetPreviousIntelReport(ctx context.Context, arg GetPreviousInt
 		&i.Kind,
 		&i.Analysis,
 		&i.AnalysisPending,
+		&i.GroupID,
 	)
 	return i, err
 }
 
 const insertIntelReport = `-- name: InsertIntelReport :one
 INSERT INTO intel_reports (channel_id, system_id, author_user_id, author_character_id, reporter,
-    text, pilots, hostiles, clear, scan_id, source, seen_at, created_at, kind, analysis, analysis_pending)
+    text, pilots, hostiles, clear, scan_id, source, seen_at, created_at, kind, analysis, analysis_pending, group_id)
 VALUES ($1, $2, $3, $4,
     $5, $6, $7, $8, $9,
     $10, $11, $12, $13,
-    $14, $15, $16)
+    $14, $15, $16, $17)
 RETURNING id
 `
 
@@ -473,6 +504,7 @@ type InsertIntelReportParams struct {
 	Kind              string    `json:"kind"`
 	Analysis          string    `json:"analysis"`
 	AnalysisPending   bool      `json:"analysis_pending"`
+	GroupID           int64     `json:"group_id"`
 }
 
 func (q *Queries) InsertIntelReport(ctx context.Context, arg InsertIntelReportParams) (int64, error) {
@@ -493,6 +525,7 @@ func (q *Queries) InsertIntelReport(ctx context.Context, arg InsertIntelReportPa
 		arg.Kind,
 		arg.Analysis,
 		arg.AnalysisPending,
+		arg.GroupID,
 	)
 	var id int64
 	err := row.Scan(&id)
@@ -591,6 +624,75 @@ func (q *Queries) ListAccessibleChannels(ctx context.Context, arg ListAccessible
 			&i.OwnerKind,
 			&i.OwnerID,
 			&i.CanPost,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listGroupCandidateReports = `-- name: ListGroupCandidateReports :many
+SELECT id, group_id, reporter, text, scan_id, kind, analysis, seen_at FROM intel_reports
+WHERE channel_id = $1 AND system_id = $2
+  AND seen_at >= $3::timestamptz AND seen_at <= $4::timestamptz
+ORDER BY seen_at DESC
+LIMIT $5::int
+`
+
+type ListGroupCandidateReportsParams struct {
+	ChannelID int64     `json:"channel_id"`
+	SystemID  int64     `json:"system_id"`
+	Since     time.Time `json:"since"`
+	Until     time.Time `json:"until"`
+	MaxRows   int32     `json:"max_rows"`
+}
+
+type ListGroupCandidateReportsRow struct {
+	ID       int64     `json:"id"`
+	GroupID  int64     `json:"group_id"`
+	Reporter string    `json:"reporter"`
+	Text     string    `json:"text"`
+	ScanID   string    `json:"scan_id"`
+	Kind     string    `json:"kind"`
+	Analysis string    `json:"analysis"`
+	SeenAt   time.Time `json:"seen_at"`
+}
+
+// Intel report groups (schema 087). A new report joins a group
+// when channel and system match and the group's latest activity
+// is inside the caller's window; these are the reports it picks
+// from. The caller weighs overlap and nearness in Go.
+func (q *Queries) ListGroupCandidateReports(ctx context.Context, arg ListGroupCandidateReportsParams) ([]ListGroupCandidateReportsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listGroupCandidateReports,
+		arg.ChannelID,
+		arg.SystemID,
+		arg.Since,
+		arg.Until,
+		arg.MaxRows,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListGroupCandidateReportsRow
+	for rows.Next() {
+		var i ListGroupCandidateReportsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.GroupID,
+			&i.Reporter,
+			&i.Text,
+			&i.ScanID,
+			&i.Kind,
+			&i.Analysis,
+			&i.SeenAt,
 		); err != nil {
 			return nil, err
 		}
@@ -776,6 +878,102 @@ func (q *Queries) ListIntelChannelSideCorps(ctx context.Context, arg ListIntelCh
 	return items, nil
 }
 
+const listIntelGroupComposites = `-- name: ListIntelGroupComposites :many
+SELECT group_id, channel_id, system_id, composite, previous, members, computed_at
+FROM intel_group_composites WHERE group_id = ANY($1::bigint[])
+`
+
+// Composites for several groups at once: the feed and channel
+// pages fetch a whole page's groups in one read.
+func (q *Queries) ListIntelGroupComposites(ctx context.Context, groupIds []int64) ([]IntelGroupComposite, error) {
+	rows, err := q.db.QueryContext(ctx, listIntelGroupComposites, pq.Array(groupIds))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []IntelGroupComposite
+	for rows.Next() {
+		var i IntelGroupComposite
+		if err := rows.Scan(
+			&i.GroupID,
+			&i.ChannelID,
+			&i.SystemID,
+			&i.Composite,
+			&i.Previous,
+			&i.Members,
+			&i.ComputedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listIntelGroupMembers = `-- name: ListIntelGroupMembers :many
+SELECT id, channel_id, system_id, author_user_id, author_character_id, reporter, text, pilots, hostiles, clear, scan_id, source, seen_at, created_at, kind, analysis, analysis_pending, group_id
+FROM intel_reports
+WHERE group_id = $1
+ORDER BY seen_at DESC, id DESC
+LIMIT $2::int
+`
+
+type ListIntelGroupMembersParams struct {
+	GroupID int64 `json:"group_id"`
+	MaxRows int32 `json:"max_rows"`
+}
+
+// A group's members, newest first (the caller reverses): the
+// composite is computed from these, and the cap keeps the
+// newest members, whose readings govern the picture.
+func (q *Queries) ListIntelGroupMembers(ctx context.Context, arg ListIntelGroupMembersParams) ([]IntelReport, error) {
+	rows, err := q.db.QueryContext(ctx, listIntelGroupMembers, arg.GroupID, arg.MaxRows)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []IntelReport
+	for rows.Next() {
+		var i IntelReport
+		if err := rows.Scan(
+			&i.ID,
+			&i.ChannelID,
+			&i.SystemID,
+			&i.AuthorUserID,
+			&i.AuthorCharacterID,
+			&i.Reporter,
+			&i.Text,
+			&i.Pilots,
+			&i.Hostiles,
+			&i.Clear,
+			&i.ScanID,
+			&i.Source,
+			&i.SeenAt,
+			&i.CreatedAt,
+			&i.Kind,
+			&i.Analysis,
+			&i.AnalysisPending,
+			&i.GroupID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listIntelPilotNames = `-- name: ListIntelPilotNames :many
 SELECT character_id, name FROM intel_pilot_names WHERE character_id > 0
 `
@@ -813,7 +1011,7 @@ func (q *Queries) ListIntelPilotNames(ctx context.Context) ([]ListIntelPilotName
 }
 
 const listIntelReports = `-- name: ListIntelReports :many
-SELECT id, channel_id, system_id, author_user_id, reporter, text, pilots, hostiles, clear, scan_id, source, seen_at, created_at, kind, analysis
+SELECT id, channel_id, system_id, author_user_id, reporter, text, pilots, hostiles, clear, scan_id, source, seen_at, created_at, kind, analysis, group_id
 FROM intel_reports
 WHERE channel_id = $1
   AND id > $2::bigint
@@ -846,6 +1044,7 @@ type ListIntelReportsRow struct {
 	CreatedAt    time.Time `json:"created_at"`
 	Kind         string    `json:"kind"`
 	Analysis     string    `json:"analysis"`
+	GroupID      int64     `json:"group_id"`
 }
 
 // A channel's reports, latest seen first: a page before a (seen_at,
@@ -881,6 +1080,7 @@ func (q *Queries) ListIntelReports(ctx context.Context, arg ListIntelReportsPara
 			&i.CreatedAt,
 			&i.Kind,
 			&i.Analysis,
+			&i.GroupID,
 		); err != nil {
 			return nil, err
 		}
@@ -896,7 +1096,7 @@ func (q *Queries) ListIntelReports(ctx context.Context, arg ListIntelReportsPara
 }
 
 const listIntelReportsAcrossChannels = `-- name: ListIntelReportsAcrossChannels :many
-SELECT id, channel_id, system_id, author_user_id, reporter, text, pilots, hostiles, clear, scan_id, source, seen_at, created_at, kind, analysis
+SELECT id, channel_id, system_id, author_user_id, reporter, text, pilots, hostiles, clear, scan_id, source, seen_at, created_at, kind, analysis, group_id
 FROM intel_reports
 WHERE channel_id = ANY($1::bigint[])
   AND id > $2::bigint
@@ -929,6 +1129,7 @@ type ListIntelReportsAcrossChannelsRow struct {
 	CreatedAt    time.Time `json:"created_at"`
 	Kind         string    `json:"kind"`
 	Analysis     string    `json:"analysis"`
+	GroupID      int64     `json:"group_id"`
 }
 
 // The feed: reports across some channels, latest seen first -- a
@@ -967,6 +1168,7 @@ func (q *Queries) ListIntelReportsAcrossChannels(ctx context.Context, arg ListIn
 			&i.CreatedAt,
 			&i.Kind,
 			&i.Analysis,
+			&i.GroupID,
 		); err != nil {
 			return nil, err
 		}
@@ -1440,6 +1642,21 @@ func (q *Queries) ListStoredRosterCandidates(ctx context.Context, arg ListStored
 	return items, nil
 }
 
+const pruneIntelGroupComposites = `-- name: PruneIntelGroupComposites :execrows
+DELETE FROM intel_group_composites
+WHERE group_id NOT IN (SELECT group_id FROM intel_reports WHERE group_id > 0)
+`
+
+// Composites whose group has no reports left (the retention
+// prune took them all) go with them.
+func (q *Queries) PruneIntelGroupComposites(ctx context.Context) (int64, error) {
+	result, err := q.db.ExecContext(ctx, pruneIntelGroupComposites)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const pruneIntelReports = `-- name: PruneIntelReports :execrows
 DELETE FROM intel_reports WHERE seen_at < $1::timestamptz
 `
@@ -1471,6 +1688,23 @@ func (q *Queries) SetIntelReportAnalysis(ctx context.Context, arg SetIntelReport
 		arg.AnalysisPending,
 		arg.ID,
 	)
+	return err
+}
+
+const setIntelReportGroup = `-- name: SetIntelReportGroup :exec
+UPDATE intel_reports SET group_id = $1 WHERE id = $2
+`
+
+type SetIntelReportGroupParams struct {
+	GroupID int64 `json:"group_id"`
+	ID      int64 `json:"id"`
+}
+
+// A founding report is its own group: the insert names the
+// group it computed, and a founder's row is corrected to name
+// itself once its id is known.
+func (q *Queries) SetIntelReportGroup(ctx context.Context, arg SetIntelReportGroupParams) error {
+	_, err := q.db.ExecContext(ctx, setIntelReportGroup, arg.GroupID, arg.ID)
 	return err
 }
 
@@ -1581,6 +1815,41 @@ func (q *Queries) UpsertIntelChannelRule(ctx context.Context, arg UpsertIntelCha
 		arg.RuleRef,
 		arg.CanPost,
 		arg.CreatedAt,
+	)
+	return err
+}
+
+const upsertIntelGroupComposite = `-- name: UpsertIntelGroupComposite :exec
+INSERT INTO intel_group_composites (group_id, channel_id, system_id, composite, previous, members, computed_at)
+VALUES ($1, $2, $3, $4, '', $5, $6::timestamptz)
+ON CONFLICT (group_id) DO UPDATE SET
+    channel_id = EXCLUDED.channel_id,
+    system_id = EXCLUDED.system_id,
+    previous = intel_group_composites.composite,
+    composite = EXCLUDED.composite,
+    members = EXCLUDED.members,
+    computed_at = EXCLUDED.computed_at
+`
+
+type UpsertIntelGroupCompositeParams struct {
+	GroupID    int64     `json:"group_id"`
+	ChannelID  int64     `json:"channel_id"`
+	SystemID   int64     `json:"system_id"`
+	Composite  string    `json:"composite"`
+	Members    int32     `json:"members"`
+	ComputedAt time.Time `json:"computed_at"`
+}
+
+// Store a group's composite; the standing composite becomes
+// the previous one the diff view compares against.
+func (q *Queries) UpsertIntelGroupComposite(ctx context.Context, arg UpsertIntelGroupCompositeParams) error {
+	_, err := q.db.ExecContext(ctx, upsertIntelGroupComposite,
+		arg.GroupID,
+		arg.ChannelID,
+		arg.SystemID,
+		arg.Composite,
+		arg.Members,
+		arg.ComputedAt,
 	)
 	return err
 }

@@ -435,6 +435,13 @@ func (app *Application) channelReports(ctx context.Context, id intelIdentity, ch
 	}
 	names := app.newKillNames(ctx)
 	now := time.Now()
+	var groupIDs []int64
+	for _, r := range rows {
+		if r.GroupID > 0 {
+			groupIDs = append(groupIDs, r.GroupID)
+		}
+	}
+	comps := app.groupCompositesFor(ctx, groupIDs)
 	out := make([]reportView, 0, len(rows))
 	for _, r := range rows {
 		rv := reportView{ID: r.ID, Channel: r.ChannelID, SystemID: r.SystemID, Reporter: r.Reporter, Text: r.Text,
@@ -443,7 +450,13 @@ func (app *Application) channelReports(ctx context.Context, id intelIdentity, ch
 		sys := names.system(r.SystemID)
 		rv.SystemName = sys.Name
 		rv.SecText, rv.SecTier = secRound(sys.Security)
-		applyAnalysis(&rv, r.Kind, r.Analysis, names)
+		// A grouped report's card speaks for its group: the
+		// composite's headline and counts, not its own alone.
+		if comp, ok := comps[r.GroupID]; ok && len(comp.Members) > 1 {
+			app.applyCompositeCard(ctx, &rv, r.Kind, comp, names)
+		} else {
+			applyAnalysis(&rv, r.Kind, r.Analysis, names)
+		}
 		out = append(out, rv)
 	}
 	return out
@@ -553,6 +566,13 @@ func (app *Application) feedReports(ctx context.Context, id intelIdentity, chann
 	}
 	names := app.newKillNames(ctx)
 	now := time.Now()
+	var groupIDs []int64
+	for _, r := range rows {
+		if r.GroupID > 0 {
+			groupIDs = append(groupIDs, r.GroupID)
+		}
+	}
+	comps := app.groupCompositesFor(ctx, groupIDs)
 	out := make([]reportView, 0, len(rows))
 	for _, r := range rows {
 		rv := reportView{ID: r.ID, Channel: r.ChannelID, ChName: namesByID[r.ChannelID], SystemID: r.SystemID, Reporter: r.Reporter, Text: r.Text,
@@ -561,7 +581,11 @@ func (app *Application) feedReports(ctx context.Context, id intelIdentity, chann
 		sys := names.system(r.SystemID)
 		rv.SystemName = sys.Name
 		rv.SecText, rv.SecTier = secRound(sys.Security)
-		applyAnalysis(&rv, r.Kind, r.Analysis, names)
+		if comp, ok := comps[r.GroupID]; ok && len(comp.Members) > 1 {
+			app.applyCompositeCard(ctx, &rv, r.Kind, comp, names)
+		} else {
+			applyAnalysis(&rv, r.Kind, r.Analysis, names)
+		}
 		out = append(out, rv)
 	}
 	return out
@@ -1105,7 +1129,7 @@ func (app *Application) rescueRosterLine(ctx context.Context, base db.InsertInte
 			return rosterDuplicate
 		}
 	}
-	if _, err := app.queries.InsertIntelReport(ctx, p); err != nil {
+	if _, err := app.storeIntelReport(ctx, p); err != nil {
 		logging.Errorf("channels: insert rescued roster report: %v", err)
 		return rosterSkipped
 	}
@@ -1175,7 +1199,7 @@ func (app *Application) handleReportDelete(w http.ResponseWriter, r *http.Reques
 	back := app.flashBack(w, r, fmt.Sprintf("/intel/channels/%d/", cid))
 	c, ok := app.channelAccess(ctx, id, cid)
 	rid, _ := strconv.ParseInt(chi.URLParam(r, "reportID"), 10, 64)
-	rep, err := app.queries.GetIntelReport(ctx, rid)
+	rep, err := app.queries.GetIntelReportFull(ctx, rid)
 	if !ok || err != nil || rep.ChannelID != c.ID || (rep.AuthorUserID != id.userID && !c.Manage) {
 		back("You cannot remove that report.")
 		return
@@ -1183,6 +1207,10 @@ func (app *Application) handleReportDelete(w http.ResponseWriter, r *http.Reques
 	if err := app.queries.DeleteIntelReport(ctx, rid); err != nil {
 		back("That did not go through — please try again.")
 		return
+	}
+	// The group the report belonged to recomputes without it.
+	if rep.GroupID > 0 {
+		app.refreshGroupComposite(ctx, rep.GroupID)
 	}
 	back("Report removed.")
 }
@@ -1504,5 +1532,8 @@ func (app *Application) pruneIntelReports(ctx context.Context) {
 	}
 	if n > 0 {
 		logging.Infof("channels: pruned %d reports past 7 days", n)
+	}
+	if _, err := app.queries.PruneIntelGroupComposites(ctx); err != nil {
+		logging.Warnf("channels: prune composites: %v", err)
 	}
 }

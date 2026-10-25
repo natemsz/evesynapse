@@ -5239,7 +5239,7 @@ html[data-theme="light"] .suggest li:not(.sug-kind):not(.sug-empty):hover, html[
 }
 /* Rim light on the page pane: the inset highlights and the
    top sheen of the liquid construction (bg.css carries the
-   same recipe for the tab band and the shared pane layer),
+   same recipe for the shared pane layer),
    plus the pane's soft drop shadow. The sheen fades over a
    fixed run: at pane scale a percentage of the height would
    stretch it down the whole page. */

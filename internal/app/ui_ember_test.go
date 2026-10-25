@@ -91,7 +91,7 @@ func TestEmberGlassAndSkyRules(t *testing.T) {
 		!strings.Contains(base, "{{define \"pagetabs\"}}{{end}}") {
 		t.Error("base.html lost the pagetabs invocation above .page-body or its empty default")
 	}
-	// The tabs are flat segments on the band's own glass layer:
+	// The tabs are flat segments on the assembly's pane:
 	// no tint, blur or border of their own, hover answers with a
 	// flat row tint, and the active tab's only orange is its top
 	// stripe. The More panel's link hover keeps the saturate(1.5)
@@ -563,8 +563,12 @@ func TestPIPlannerColoniesAndControls(t *testing.T) {
 // and no backdrop filter on the pills over the already-blurred
 // glass. Where anchor positioning is available one shared pane
 // layer under the bar and the body carries the glass and the
-// bar's own slab glass comes off. Rail-mode end padding keeps
-// the first and last pills clear of the fade either way.
+// bar's own slab glass comes off; the pane spans from the tab
+// strip's top edge when the page carries a strip (the strip is
+// the pane's top row and carries no glass or rim of its own),
+// and the pane's refraction rides its ::after layer. Rail-mode
+// end padding keeps the first and last pills clear of the fade
+// either way.
 func TestSubtabBarSharesPanelGlass(t *testing.T) {
 	raw, err := fs.ReadFile(staticFS, "static/bg.css")
 	if err != nil {
@@ -622,6 +626,16 @@ func TestSubtabBarSharesPanelGlass(t *testing.T) {
 	paneOff, _ := block("#main-content > .section-subtabs {", afterAnchor)
 	if !strings.Contains(paneOff, "backdrop-filter: none;") {
 		t.Error("the pane-mode subtab bar keeps its own slab backdrop filter; the join to the body will seam")
+	}
+	// The pane spans from the strip's top edge: the strip is
+	// anchored as the pane's top (--pane-strip), and the
+	// refraction rides the pane's own ::after layer, gated on
+	// fx-on. The strip itself carries no layer of its own in
+	// the template or the sheet.
+	if !strings.Contains(bg, "#main-content > .section-tabs { anchor-name: --pane-strip; }") ||
+		!strings.Contains(bg, "top: anchor(--pane-strip top);") ||
+		!strings.Contains(bg, "#main-content:has(> .section-subtabs).fx-on::after") {
+		t.Error("bg.css lost the pane's strip-top span or its refraction layer")
 	}
 	mediaAt := strings.Index(bg, "@media (max-width: 1313px)")
 	if mediaAt < 0 {

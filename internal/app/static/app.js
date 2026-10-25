@@ -25,35 +25,40 @@
     window.EveSynapseContent.onReady(fn);
   }
 
-  // --- Tab band refraction -------------------------------------
-  // The section tab band is a marked liquid surface: its fx
-  // layer (bg.css) displaces the backdrop through the shared
-  // #liquid-filter, whose feImage map is generated here for the
-  // band's own box, the same construction as the landing bar's
-  // map in landing.js at the liquid spec's band scale (rim 22,
-  // max offset 13, the filter's scale 26). The map encodes the
-  // band's rounded-rect SDF: inside the rim band the channels
+  // --- Pane refraction ------------------------------------------
+  // The tab assembly's pane is a marked liquid surface: its fx
+  // layer (bg.css, the pane's ::after over its frost ::before)
+  // displaces the backdrop through the shared #liquid-filter,
+  // whose feImage map is generated here for the pane's own box,
+  // the same construction as the landing bar's map in
+  // landing.js at the liquid spec's scale (rim 22, max offset
+  // 13, the filter's scale 26). The pane's box runs from the tab
+  // strip's top edge to the page body's bottom edge; at rail
+  // width the strip detaches onto its own glass and the box
+  // starts at the subtab bar instead. The map encodes that
+  // box's rounded-rect SDF: inside the rim band the channels
   // push the sample outward along the SDF gradient, strongest
   // at the edge and easing to zero at the rim's inner boundary,
   // and the interior stays neutral, so only the rim bends the
-  // backdrop. The filter rides the fx layer only, never the
-  // band element carrying the links, so tab text stays crisp
-  // and clickable. Regenerated when a swap brings a fresh band
-  // and when the window resizes; without a band or a filter
-  // element the band simply keeps its frost and rim.
+  // backdrop. The filter rides the fx layer only, never an
+  // element that carries content, so text stays crisp.
+  // Regenerated when a swap brings a fresh assembly and when
+  // the window resizes; without an assembly or a filter element
+  // the pane simply keeps its frost and rim.
   (function () {
     var RIM = 22, MAXOFF = 13;
-    function buildMap(band) {
+    function buildMap(main, topEl, body) {
       var fe = document.getElementById("liquid-map");
-      if (!fe || !band) return;
-      var W = band.offsetWidth, H = band.offsetHeight;
-      if (!W || !H || (band._fxW === W && band._fxH === H)) return;
-      var R = parseFloat(getComputedStyle(band).borderTopLeftRadius) || 0;
+      if (!fe || !main || !topEl || !body) return;
+      var tr = topEl.getBoundingClientRect(), br = body.getBoundingClientRect();
+      var W = Math.round(tr.width), H = Math.round(br.bottom - tr.top);
+      if (!W || !H || (main._fxW === W && main._fxH === H)) return;
+      var R = parseFloat(getComputedStyle(body).borderBottomLeftRadius) || 0;
       var cv = document.createElement("canvas");
       cv.width = W; cv.height = H;
       var ctx = cv.getContext("2d");
       var img = ctx.createImageData(W, H), d = img.data;
-      // Signed distance to the band's border: negative inside.
+      // Signed distance to the pane's border: negative inside.
       function sd(x, y) {
         var qx = Math.abs(x - W / 2) - (W / 2 - R);
         var qy = Math.abs(y - H / 2) - (H / 2 - R);
@@ -84,27 +89,36 @@
       fe.setAttribute("href", cv.toDataURL());
       fe.setAttribute("width", W);
       fe.setAttribute("height", H);
-      band._fxW = W; band._fxH = H;
-      band.classList.add("fx-on");
+      main._fxW = W; main._fxH = H;
+      main.classList.add("fx-on");
     }
-    function run(root) {
+    function run() {
       try {
-        var scope = (root && root.querySelector) ? root : document;
-        var band = scope.querySelector ? scope.querySelector("#main-content > .section-tabs") : null;
-        if (!band && scope !== document) band = document.querySelector("#main-content > .section-tabs");
-        buildMap(band);
-      } catch (e) { /* the band keeps its frost and rim */ }
+        var main = document.getElementById("main-content");
+        if (!main) return;
+        var strip = main.querySelector(":scope > .section-tabs");
+        var bar = main.querySelector(":scope > .section-subtabs");
+        var body = main.querySelector(":scope > .page-body");
+        var rail = window.matchMedia("(max-width: 1313px)").matches;
+        var topEl = rail ? bar : strip;
+        if (!topEl || !body) {
+          main.classList.remove("fx-on");
+          main._fxW = 0; main._fxH = 0;
+          return;
+        }
+        buildMap(main, topEl, body);
+      } catch (e) { /* the pane keeps its frost and rim */ }
     }
     if (document.readyState === "loading") {
-      document.addEventListener("DOMContentLoaded", function () { run(document); });
+      document.addEventListener("DOMContentLoaded", function () { run(); });
     } else {
-      run(document);
+      run();
     }
-    onContentReady(function (root) { run(root); });
+    onContentReady(function () { run(); });
     var rzT = null;
     window.addEventListener("resize", function () {
       if (rzT) clearTimeout(rzT);
-      rzT = setTimeout(function () { run(document); }, 150);
+      rzT = setTimeout(function () { run(); }, 150);
     });
   })();
 

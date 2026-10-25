@@ -5239,10 +5239,10 @@ html[data-theme="light"] .suggest li:not(.sug-kind):not(.sug-empty):hover, html[
 }
 /* Rim light on the page pane: the inset highlights and the
    top sheen of the liquid construction (bg.css carries the
-   same recipe for the shared pane layer), plus the pane's
-   soft drop shadow. The sheen fades over a fixed run: at pane
-   scale a percentage of the height would stretch it down the
-   whole page. */
+   same recipe for the tab band and the shared pane layer),
+   plus the pane's soft drop shadow. The sheen fades over a
+   fixed run: at pane scale a percentage of the height would
+   stretch it down the whole page. */
 .page-body:not(:has(.home-grid)) {
   background-image: linear-gradient(180deg, rgb(255 255 255 / 0.13), rgb(255 255 255 / 0) 72px);
   box-shadow:
@@ -5252,10 +5252,10 @@ html[data-theme="light"] .suggest li:not(.sug-kind):not(.sug-empty):hover, html[
     inset -1px 0 0 rgb(255 255 255 / 0.12),
     0 24px 48px rgb(0 0 0 / 0.35);
 }
-/* Under a tab band the body's top edge is the assembly's
-   middle, not its rim, so the body drops its own top
-   highlight and sheen there and the join shows no doubled
-   line. */
+/* Under a tab band the pane's top edge is the assembly's
+   middle, not its rim: the band above carries the top
+   highlight and sheen, so the pane drops its own there and
+   the join shows no doubled line. */
 #main-content:has(> .section-tabs) > .page-body:not(:has(.home-grid)),
 #main-content:has(> .section-subtabs) > .page-body:not(:has(.home-grid)) {
   background-image: none;

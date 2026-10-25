@@ -25,47 +25,35 @@
     window.EveSynapseContent.onReady(fn);
   }
 
-  // --- Assembly pane refraction --------------------------------
-  // The tabbed assembly's shared pane is a marked liquid
-  // surface: its refraction layer (bg.css: the pane layer over
-  // the frost layer, on the pane's outer skin) displaces the
-  // backdrop through the shared #liquid-filter, whose feImage
-  // map is generated here for the pane's own box, the same
-  // construction as the landing bar's map in landing.js at the
-  // liquid spec's rim scale (rim 22, max offset 13, the
-  // filter's scale 26). The pane's box runs from the assembly's
-  // first row (the tab strip, or the subtab bar where a page
-  // has one and no strip) to the page body's bottom. The map
-  // encodes the pane's rounded-rect SDF: inside the rim band
-  // the channels push the sample outward along the SDF
-  // gradient, strongest at the edge and easing to zero at the
-  // rim's inner boundary, and the interior stays neutral, so
-  // only the rim bends the backdrop. The filter rides the
-  // pane's own layer only, never an element carrying content,
-  // so text stays crisp and clickable. Regenerated when a swap
-  // brings a fresh assembly and when the window resizes;
-  // without an assembly or a filter element the pane simply
-  // keeps its frost and rim.
+  // --- Tab band refraction -------------------------------------
+  // The section tab band is a marked liquid surface: its fx
+  // layer (bg.css) displaces the backdrop through the shared
+  // #liquid-filter, whose feImage map is generated here for the
+  // band's own box, the same construction as the landing bar's
+  // map in landing.js at the liquid spec's band scale (rim 22,
+  // max offset 13, the filter's scale 26). The map encodes the
+  // band's rounded-rect SDF: inside the rim band the channels
+  // push the sample outward along the SDF gradient, strongest
+  // at the edge and easing to zero at the rim's inner boundary,
+  // and the interior stays neutral, so only the rim bends the
+  // backdrop. The filter rides the fx layer only, never the
+  // band element carrying the links, so tab text stays crisp
+  // and clickable. Regenerated when a swap brings a fresh band
+  // and when the window resizes; without a band or a filter
+  // element the band simply keeps its frost and rim.
   (function () {
     var RIM = 22, MAXOFF = 13;
-    function buildMap(main) {
+    function buildMap(band) {
       var fe = document.getElementById("liquid-map");
-      if (!fe || !main) return;
-      var top = main.querySelector(":scope > .section-tabs") ||
-        main.querySelector(":scope > .section-subtabs");
-      var body = main.querySelector(":scope > .page-body");
-      if (!top || !body) return;
-      var tr = top.getBoundingClientRect(), br = body.getBoundingClientRect();
-      var W = Math.round(Math.max(tr.right, br.right) - Math.min(tr.left, br.left));
-      var H = Math.round(br.bottom - tr.top);
-      if (!W || !H || (main._fxW === W && main._fxH === H)) return;
-      var R = parseFloat(getComputedStyle(main, "::before").borderTopLeftRadius) ||
-        parseFloat(getComputedStyle(top).borderTopLeftRadius) || 0;
+      if (!fe || !band) return;
+      var W = band.offsetWidth, H = band.offsetHeight;
+      if (!W || !H || (band._fxW === W && band._fxH === H)) return;
+      var R = parseFloat(getComputedStyle(band).borderTopLeftRadius) || 0;
       var cv = document.createElement("canvas");
       cv.width = W; cv.height = H;
       var ctx = cv.getContext("2d");
       var img = ctx.createImageData(W, H), d = img.data;
-      // Signed distance to the pane's border: negative inside.
+      // Signed distance to the band's border: negative inside.
       function sd(x, y) {
         var qx = Math.abs(x - W / 2) - (W / 2 - R);
         var qy = Math.abs(y - H / 2) - (H / 2 - R);
@@ -77,16 +65,6 @@
         for (var x = 0; x < W; x++) {
           var px = x + 0.5, py = y + 0.5;
           var depth = -sd(px, py); // px inside the shape
-          var i = (y * W + x) * 4;
-          d[i + 2] = 128;
-          d[i + 3] = 255;
-          if (depth <= 0 || depth >= RIM) {
-            // Outside the shape or past the rim's inner
-            // boundary the sample stays neutral.
-            d[i] = 128;
-            d[i + 1] = 128;
-            continue;
-          }
           var t = Math.max(0, 1 - depth / RIM);
           var s = t * t * (3 - 2 * t); // smoothstep falloff
           var gx = sd(px + EPS, py) - sd(px - EPS, py);
@@ -95,32 +73,38 @@
           // The gradient points outward; push the sample outward.
           var ox = (gx / gl) * s * MAXOFF;
           var oy = (gy / gl) * s * MAXOFF;
+          var i = (y * W + x) * 4;
           d[i] = Math.max(0, Math.min(255, 128 + ox * (127 / MAXOFF)));
           d[i + 1] = Math.max(0, Math.min(255, 128 + oy * (127 / MAXOFF)));
+          d[i + 2] = 128;
+          d[i + 3] = 255;
         }
       }
       ctx.putImageData(img, 0, 0);
       fe.setAttribute("href", cv.toDataURL());
       fe.setAttribute("width", W);
       fe.setAttribute("height", H);
-      main._fxW = W; main._fxH = H;
-      main.classList.add("fx-on");
+      band._fxW = W; band._fxH = H;
+      band.classList.add("fx-on");
     }
-    function run() {
+    function run(root) {
       try {
-        buildMap(document.getElementById("main-content"));
-      } catch (e) { /* the pane keeps its frost and rim */ }
+        var scope = (root && root.querySelector) ? root : document;
+        var band = scope.querySelector ? scope.querySelector("#main-content > .section-tabs") : null;
+        if (!band && scope !== document) band = document.querySelector("#main-content > .section-tabs");
+        buildMap(band);
+      } catch (e) { /* the band keeps its frost and rim */ }
     }
     if (document.readyState === "loading") {
-      document.addEventListener("DOMContentLoaded", function () { run(); });
+      document.addEventListener("DOMContentLoaded", function () { run(document); });
     } else {
-      run();
+      run(document);
     }
-    onContentReady(function () { run(); });
+    onContentReady(function (root) { run(root); });
     var rzT = null;
     window.addEventListener("resize", function () {
       if (rzT) clearTimeout(rzT);
-      rzT = setTimeout(function () { run(); }, 150);
+      rzT = setTimeout(function () { run(document); }, 150);
     });
   })();
 

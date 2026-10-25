@@ -321,20 +321,22 @@ html[data-theme="light"] .btn.btn-quiet {
 
 /* Section tabs: base.html renders each page's section tab nav
    (its pagetabs block) between the page title and .page-body.
-   The strip is flat content on the tabbed assembly's pane (the
-   shared pane layer below): no glass, rim or refraction of its
-   own is traced around it. The tabs are flat segments (the
-   blur switch, above): no tint, no blur, no border of their
-   own; the active tab speaks with the nav bar's single-stripe
-   vocabulary, an accent stripe across its top and bright
-   text, and hover answers with a flat row tint and bright
-   text. The row overlaps the next surface's top edge by 1px,
-   and a tabbed panel squares its top corners (folder body);
-   pages without a tab row keep all four rounded. Where the
-   shared pane is unavailable (no anchor positioning) the
-   strip carries a plain frost of its own in the pane's tokens
-   as the assembly's top slab, its edge the unit's outline,
-   with no rim box around it. */
+   The strip is a marked liquid surface built the demo's way,
+   in stacked layers under the tabs (sectiontabs.html renders
+   the layer spans first): .tabs-base carries the v2 frost and
+   the band's edge, .tabs-fx carries the refraction (an SVG
+   displacement backdrop-filter fed an SDF map app.js generates
+   for the band's own size; it stays off until the first map
+   lands, so a browser without backdrop-filter url() support
+   keeps the frost and rim un-displaced), and .tabs-rim carries
+   the rim light. The tabs themselves are flat segments on the
+   band (the blur switch, above): no tint, no blur, no border
+   of their own; the active tab speaks with the nav bar's
+   single-stripe vocabulary, an accent stripe across its top
+   and bright text, and hover answers with a flat row tint and
+   bright text. The row overlaps the next surface's top edge
+   by 1px, and a tabbed panel squares its top corners (folder
+   body); pages without a tab row keep all four rounded. */
 #main-content > h1 { font-size: 1.75rem; }
 #main-content > .section-tabs {
   display: flex;
@@ -345,11 +347,46 @@ html[data-theme="light"] .btn.btn-quiet {
   position: relative;
   z-index: 1;
   border-radius: var(--r-lg) var(--r-lg) 0 0;
+}
+/* The band's stacked layers, in paint order under the tabs.
+   The rim layer is the demo's construction: inset highlights
+   and a screen-blend top sheen, at band scale (the sheen fades
+   across the band's own height). No drop shadow here: the
+   band sits on the assembly, and the pane below carries the
+   assembly's shadow. */
+#main-content > .section-tabs .tabs-base {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
   background: var(--glass-page);
   -webkit-backdrop-filter: blur(var(--glass-page-blur)) saturate(1.45);
   backdrop-filter: blur(var(--glass-page-blur)) saturate(1.45);
   border: 1px solid var(--glass-edge);
   border-bottom: none;
+}
+#main-content > .section-tabs .tabs-fx {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+}
+#main-content > .section-tabs.fx-on .tabs-fx {
+  -webkit-backdrop-filter: url(#liquid-filter) saturate(1.35);
+  backdrop-filter: url(#liquid-filter) saturate(1.35);
+}
+#main-content > .section-tabs .tabs-rim {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.45),
+    inset 0 -1px 0 rgb(255 255 255 / 0.10),
+    inset 1px 0 0 rgb(255 255 255 / 0.12),
+    inset -1px 0 0 rgb(255 255 255 / 0.12);
+  background: linear-gradient(180deg, rgb(255 255 255 / 0.13), rgb(255 255 255 / 0) 46%);
+  mix-blend-mode: screen;
 }
 #main-content > .section-tabs > a,
 #main-content > .section-tabs > .tabs-more { position: relative; z-index: 1; }
@@ -563,117 +600,43 @@ html[data-theme="light"] #main-content > .section-subtabs .tabs-more-btn {
   border-color: #d3c7ae;
 }
 
-/* The shared pane: on a tabbed page the whole assembly (the
-   tab strip, the subtab bar where the section is grouped, and
-   the page body) is one glass surface, not stacked slabs. One
-   layer under the assembly carries the pane's frost, tint and
-   edge, and the rim light rides that same layer, following the
-   pane's outer border only: nothing is traced around the strip
-   or the bar inside it. CSS anchor positioning pins the
-   layer's edges to the assembly's boxes, from the strip's top
-   (the bar's top on a page with a bar and no strip) to the
-   body's bottom, so every join has no second tint, no second
-   blur and no step: the strip and the bar read as the pane's
-   top rows, the bar divided from the body by a hairline only,
-   and each part's own glass comes off. The layer paints behind
-   the content (negative z-index in the root context) and above
-   nothing but the wallpaper. A second layer over the same box
-   carries the refraction on the same outer skin (below). Where
+/* The shared pane: on a grouped page the subtab bar and the
+   page body are one glass surface, not two stacked slabs.
+   One layer under both carries the pane's frost, tint, rim
+   and edge, spanning from the bar's top to the body's bottom
+   (CSS anchor positioning pins its edges to the two boxes),
+   so the join has no second tint, no second blur and no step:
+   the bar reads as the pane's top row, divided from the body
+   by a hairline only, and its own slab glass comes off, as
+   does the body's. The layer paints behind the content
+   (negative z-index in the root context) and above nothing
+   but the wallpaper. The pane's top corners stay square: the
+   folder strip above owns the assembly's rounded top. Where
    anchor positioning is unavailable the per-element glass
    above stands unchanged. */
 @supports (anchor-name: --pane-bar) {
-  #main-content:has(> .section-tabs),
   #main-content:has(> .section-subtabs) { position: relative; }
-  #main-content > .section-tabs { anchor-name: --pane-strip; }
   #main-content > .section-subtabs { anchor-name: --pane-bar; }
   #main-content > .page-body { anchor-name: --pane-body; }
-  #main-content:has(> .section-subtabs)::before,
-  #main-content:has(> .section-tabs)::before {
+  #main-content:has(> .section-subtabs)::before {
     content: "";
     position: absolute;
+    top: anchor(--pane-bar top);
+    bottom: anchor(--pane-body bottom);
+    left: anchor(--pane-bar left);
+    right: anchor(--pane-bar right);
     z-index: -1;
     background: linear-gradient(180deg, rgb(255 255 255 / 0.13), rgb(255 255 255 / 0) 72px), var(--glass-page);
     -webkit-backdrop-filter: blur(var(--glass-page-blur)) saturate(1.45);
     backdrop-filter: blur(var(--glass-page-blur)) saturate(1.45);
     border: 1px solid var(--glass-edge);
-    border-radius: var(--r-lg);
+    border-radius: 0 0 var(--r-lg) var(--r-lg);
     box-shadow:
       inset 0 1px 0 rgb(255 255 255 / 0.45),
       inset 0 -1px 0 rgb(255 255 255 / 0.10),
       inset 1px 0 0 rgb(255 255 255 / 0.12),
       inset -1px 0 0 rgb(255 255 255 / 0.12),
       0 24px 48px rgb(0 0 0 / 0.35);
-  }
-  #main-content:has(> .section-subtabs)::before {
-    top: anchor(--pane-bar top);
-    bottom: anchor(--pane-body bottom);
-    left: anchor(--pane-bar left);
-    right: anchor(--pane-bar right);
-  }
-  /* The refraction layer: the same box as the frost layer,
-     painted over it, displacing the backdrop through the
-     shared #liquid-filter. It stays off until app.js lands the
-     SDF map generated for the pane's own size (the fx-on class
-     on #main-content), so a browser without backdrop-filter
-     url() support keeps the frost and rim un-displaced. The
-     filter rides this layer only, never an element carrying
-     content, so text stays crisp and clickable. */
-  #main-content:has(> .section-subtabs)::after,
-  #main-content:has(> .section-tabs)::after {
-    content: "";
-    position: absolute;
-    z-index: -1;
-    border-radius: var(--r-lg);
-    pointer-events: none;
-  }
-  #main-content:has(> .section-subtabs)::after {
-    top: anchor(--pane-bar top);
-    bottom: anchor(--pane-body bottom);
-    left: anchor(--pane-bar left);
-    right: anchor(--pane-bar right);
-  }
-  #main-content.fx-on::after {
-    -webkit-backdrop-filter: url(#liquid-filter) saturate(1.35);
-    backdrop-filter: url(#liquid-filter) saturate(1.35);
-  }
-  /* Above the rail width the layer spans the whole assembly:
-     its top and sides pin to the strip, the assembly's first
-     row, and the body of a strip-only page gives up its own
-     glass to the layer. At rail width the strip detaches into
-     its own rail (below), so the strip geometry stands down
-     there: a grouped page's pane keeps the bar's geometry, and
-     a strip-only page paints no layer at all. */
-  @media (min-width: 1314px) {
-    #main-content:has(> .section-tabs)::before {
-      top: anchor(--pane-strip top);
-      bottom: anchor(--pane-body bottom);
-      left: anchor(--pane-strip left);
-      right: anchor(--pane-strip right);
-    }
-    #main-content:has(> .section-tabs)::after {
-      top: anchor(--pane-strip top);
-      bottom: anchor(--pane-body bottom);
-      left: anchor(--pane-strip left);
-      right: anchor(--pane-strip right);
-    }
-    #main-content:has(> .section-tabs):not(:has(> .section-subtabs)) > .page-body:not(:has(.home-grid)) {
-      background: none;
-      background-image: none;
-      -webkit-backdrop-filter: none;
-      backdrop-filter: none;
-      border: none;
-      box-shadow: none;
-      margin-top: 0;
-    }
-  }
-  /* The strip as the pane's first row: its own fallback glass
-     comes off in pane mode (the rail rules below restore its
-     detached glass at rail width). */
-  #main-content > .section-tabs {
-    background: none;
-    -webkit-backdrop-filter: none;
-    backdrop-filter: none;
-    border: none;
   }
   /* The bar as the pane's top row: its own glass comes off
      and a hairline divides it from the body. */
@@ -697,13 +660,17 @@ html[data-theme="light"] #main-content > .section-subtabs .tabs-more-btn {
     box-shadow: none;
     margin-top: 0;
   }
+  /* At rail width the bar detaches from the strip above it
+     (its top margin is the rail rhythm); the pane still spans
+     bar and body as one surface, and takes the rounded top
+     corners the folder join normally borrows from the strip. */
+  @media (max-width: 1313px) {
+    #main-content:has(> .section-subtabs)::before {
+      border-radius: var(--r-lg);
+    }
+  }
 }
 @media (max-width: 1313px) {
-  /* A strip-only page paints no shared pane layer at rail
-     width: the strip detaches into its rail and the body
-     keeps its own glass. */
-  #main-content:has(> .section-tabs):not(:has(> .section-subtabs))::before,
-  #main-content:has(> .section-tabs):not(:has(> .section-subtabs))::after { content: none; }
   /* Below the fit width, the folder strip becomes a detached
      glass rail: one row of pills on the panel's own glass,
      scrolling sideways with the scrollbar hidden and both ends
@@ -738,10 +705,13 @@ html[data-theme="light"] #main-content > .section-subtabs .tabs-more-btn {
     mask-image: linear-gradient(to right,
       transparent 0, #000 1.5rem, #000 calc(100% - 1.5rem), transparent 100%);
   }
-  /* The rail scrolls sideways, so at rail width the strip
-     carries its glass on the element itself (a detached
-     surface over unblurred content: the blur switch's
-     on-state), frost and rim in one rule. */
+  /* The rail scrolls sideways, and the band's stacked layers
+     are children of the strip: scrolled, they would slide off
+     with the content while the band's box stays. So at rail
+     width the band carries its own glass on the strip element
+     itself (a detached surface over unblurred content: the
+     blur switch's on-state), frost and rim in one rule, and
+     the stacked layers stand down. */
   #main-content > .section-tabs {
     background: linear-gradient(180deg, rgb(255 255 255 / 0.13), rgb(255 255 255 / 0) 46%), var(--glass-page);
     -webkit-backdrop-filter: blur(var(--glass-page-blur)) saturate(1.45);
@@ -753,6 +723,9 @@ html[data-theme="light"] #main-content > .section-subtabs .tabs-more-btn {
       inset 1px 0 0 rgb(255 255 255 / 0.12),
       inset -1px 0 0 rgb(255 255 255 / 0.12);
   }
+  #main-content > .section-tabs .tabs-base,
+  #main-content > .section-tabs .tabs-fx,
+  #main-content > .section-tabs .tabs-rim { display: none; }
   #main-content > .section-tabs::-webkit-scrollbar { display: none; }
   #main-content:has(> .section-tabs) > .page-body {
     border-top: 1px solid var(--glass-edge);

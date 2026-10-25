@@ -32,7 +32,7 @@ func dict() Dict {
 		"force field": 91000005, "viii": 91000006, "station": 91000007, "moon": 91000008,
 		"minmatar control tower": 91000009, "minmatar military": 91000010, "vherokior": 91000011, "treasury": 91000012,
 		"blackcatrus": 91000013, "legendmysticdragon": 91000014, "grid": 91000015, "unclassified": 91000016,
-		"wwwlening": 91000017, "hamalias": 91000018, "jito": 91000019}
+		"wwwlening": 91000017, "hamalias": 91000018, "jito": 91000019, "helid": 91000020}
 	types := map[string]int64{"force field": 16103, "minmatar control tower": 16214,
 		"raitaru": 35825, "stargate (minmatar system)": 29633}
 	asked := map[string]bool{"some random words": true, "some random": true, "random words": true, "some": true, "random": true, "words": true}
@@ -48,7 +48,8 @@ func dict() Dict {
 		Pilot: func(l string) (int64, string, bool, bool) {
 			id, ok := pilots[l]
 			names := map[int64]string{91000001: "Hostile One", 91000002: "Hostile Two", 91000003: "Solo", 91000004: "Friendly Guy",
-				91000013: "BlackCatRus", 91000014: "LegendMysticDragon", 91000017: "WWWLeninG", 91000018: "Hamalias", 91000019: "Jito"}
+				91000013: "BlackCatRus", 91000014: "LegendMysticDragon", 91000017: "WWWLeninG", 91000018: "Hamalias", 91000019: "Jito",
+				91000020: "helid"}
 			return id, names[id], ok, ok || asked[l]
 		},
 		Gate: func(sys int64, l string) (int64, bool) {
@@ -137,13 +138,23 @@ func TestAnalyze(t *testing.T) {
 // reads as the gate when the dictionary's near-miss hook knows
 // it, and never as the pilot who happens to carry that name:
 // EVE has a character called Jito, and in gate position the
-// word is the gate. Away from a gate the same word is the
-// pilot it names, as it should be.
+// word is the gate. The same holds wherever a line speaks of
+// a place: a system named with a slip in a bare location
+// ("helid" for Heild, in a line about a ship on a gate) reads
+// as the system, though a character carries the slipped
+// spelling exactly. Away from place speech the same words
+// are the pilots they name, as they should be.
 func TestAnalyzeGateNearMiss(t *testing.T) {
 	d := dict()
 	d.GateNear = func(sys int64, l string) (int64, bool) {
-		if sys == 1 && l == "jito" {
+		if sys != 1 {
+			return 0, false
+		}
+		switch l {
+		case "jito":
 			return 30000142, true
+		case "helid":
+			return 30002390, true
 		}
 		return 0, false
 	}
@@ -160,6 +171,20 @@ func TestAnalyzeGateNearMiss(t *testing.T) {
 	b := Analyze(Input{System: 1, Text: "Jito"}, dict())
 	if len(b.Pilots) != 1 || b.Pilots[0].Name != "Jito" {
 		t.Errorf("away from a gate, Jito is the pilot: %+v", b.Pilots)
+	}
+	c := Analyze(Input{System: 1, Text: "ship on gate in helid", Hostiles: 1}, d)
+	if c.Gate != 30002390 {
+		t.Errorf("location %+v, want Heild read from the near-miss", c)
+	}
+	if len(c.Pilots) != 0 {
+		t.Errorf("the location became a pilot: %+v", c.Pilots)
+	}
+	if c.Kind != KindSighting {
+		t.Errorf("kind %q, want the sighting kept", c.Kind)
+	}
+	e := Analyze(Input{System: 1, Text: "helid"}, d)
+	if len(e.Pilots) != 1 || e.Pilots[0].ID != 91000020 {
+		t.Errorf("away from place speech, helid is the pilot: %+v", e.Pilots)
 	}
 }
 

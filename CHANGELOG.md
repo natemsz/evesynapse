@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.5.9.2] - 2026-10-25
+
+Automated build of EveSynapse v0.5.9.2. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+
+## What's Changed
+### Other Changes
+* docs(changelog): review changelog for v0.5.9.1 by @github-actions[bot] in https://github.com/natemsz/evesynapse/pull/663
+* Cycle the page backdrop from the Theme button: Nebula, Muted, Ember glow by @natemsz in https://github.com/natemsz/evesynapse/pull/664
+
+
+**Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.9.1...v0.5.9.2
+
 ## [v0.5.9.1] - 2026-10-25
 
 Automated build of EveSynapse v0.5.9.1. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).

@@ -174,3 +174,99 @@ func TestResidueUnconfirmedStaysUnresolved(t *testing.T) {
 		}
 	}
 }
+
+// TestResidueBacklogSweep: the sweep selects settled reports
+// whose readings left residue and which no completed pass has
+// covered, newest first, and offers them through the queue. A
+// report a pass has covered is never selected again (the call
+// row is the durable record), a reading with no residue is not
+// selected, and a report still pending its analysis is not
+// settled and not selected. A second sweep while the first
+// offers stand queued offers nothing twice.
+func TestResidueBacklogSweep(t *testing.T) {
+	app, _, q := buildCorpTestApp(t, nil)
+	ctx := context.Background()
+	cid, userID := residueTestChannel(t, q)
+	app.cfg.residueModelPath = "fixture.gguf" // the step stands enabled
+
+	withResidue := intelanalyze.Analysis{Kind: intelanalyze.KindSighting,
+		Pilots:  []intelanalyze.Pilot{{ID: 91000301, Name: "Hostile One"}},
+		Residue: []string{"leftover words the reading could not place"}}
+
+	older := seedResidueReport(t, q, cid, userID, withResidue)
+	covered := seedResidueReport(t, q, cid, userID, withResidue)
+	if _, err := q.InsertIntelResidueCall(ctx, db.InsertIntelResidueCallParams{
+		ReportID: covered, Spans: "[]", Output: `{"claims":[]}`, CreatedAt: time.Now().UTC(),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	noResidue := intelanalyze.Analysis{Kind: intelanalyze.KindSighting,
+		Pilots: []intelanalyze.Pilot{{ID: 91000301, Name: "Hostile One"}}}
+	seedResidueReport(t, q, cid, userID, noResidue)
+	pending := seedResidueReport(t, q, cid, userID, withResidue)
+	row, err := q.GetIntelReportFull(ctx, pending)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := q.SetIntelReportAnalysis(ctx, db.SetIntelReportAnalysisParams{
+		ID: pending, Kind: row.Kind, Analysis: row.Analysis, AnalysisPending: true,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	newer := seedResidueReport(t, q, cid, userID, withResidue)
+
+	ids, err := q.ListResidueBacklogReports(ctx, residueSweepBatch)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(ids) != 2 || ids[0] != newer || ids[1] != older {
+		t.Fatalf("sweep selection: %v, want [%d %d] (covered %d excluded)", ids, newer, older, covered)
+	}
+
+	app.sweepResidueBacklog(ctx)
+	ch := app.residueQueueChan()
+	if len(ch) != 2 {
+		t.Fatalf("queued offers: %d, want 2", len(ch))
+	}
+	if got := <-ch; got != newer {
+		t.Fatalf("first offer: %d, want the newest %d", got, newer)
+	}
+	if got := <-ch; got != older {
+		t.Fatalf("second offer: %d, want %d", got, older)
+	}
+
+	app.sweepResidueBacklog(ctx)
+	if len(ch) != 0 {
+		t.Fatalf("a second sweep re-offered %d queued reports", len(ch))
+	}
+}
+
+// TestResidueSweepInertWhenDisabled: with no local reader
+// configured the step stays exactly as inert as the settle path
+// leaves it: offers queue nothing and the worker idles out at
+// once instead of sweeping.
+func TestResidueSweepInertWhenDisabled(t *testing.T) {
+	app, _, q := buildCorpTestApp(t, nil)
+	ctx := context.Background()
+	cid, userID := residueTestChannel(t, q)
+	if app.cfg.ResidueModelEnabled() {
+		t.Fatal("the fixture app stands enabled; the disabled case is not under test")
+	}
+	id := seedResidueReport(t, q, cid, userID, intelanalyze.Analysis{Kind: intelanalyze.KindSighting,
+		Residue: []string{"leftover words the reading could not place"}})
+
+	app.noteResidueReport(id)
+	if len(app.residueQueueChan()) != 0 {
+		t.Fatal("a disabled step queued an offer")
+	}
+	done := make(chan struct{})
+	go func() {
+		app.runResidueWorker(ctx)
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the disabled worker did not idle out")
+	}
+}

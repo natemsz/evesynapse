@@ -3,6 +3,10 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"net"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -268,5 +272,136 @@ func TestResidueSweepInertWhenDisabled(t *testing.T) {
 	case <-done:
 	case <-time.After(5 * time.Second):
 		t.Fatal("the disabled worker did not idle out")
+	}
+}
+
+// The stub reader the lifetime test runs: a python script
+// answering the health check and one canned completion, close
+// enough to the real runtime's shape for the engine to hold
+// it to the same contract.
+const stubReaderPy = `
+import sys, json
+from http.server import BaseHTTPRequestHandler, HTTPServer
+
+port = 18099
+args = sys.argv[1:]
+if "--port" in args:
+    port = int(args[args.index("--port") + 1])
+
+class H(BaseHTTPRequestHandler):
+    def do_GET(self):
+        if self.path == "/health":
+            body, code = b'{"status":"ok"}', 200
+        else:
+            body, code = b'{}', 404
+        self.send_response(code)
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def do_POST(self):
+        n = int(self.headers.get("Content-Length") or 0)
+        if n:
+            self.rfile.read(n)
+        body = json.dumps({"choices": [{"message": {"content": "{\"claims\":[]}"}}]}).encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def log_message(self, *a):
+        pass
+
+HTTPServer(("127.0.0.1", port), H).serve_forever()
+`
+
+// The reader's server is bound to the worker's life, never to
+// a pass: a pass's context ending leaves it up and a later
+// pass still completes against it, a server killed out from
+// under the engine is replaced by the next pass, and the
+// worker's context ending takes the server down with it.
+func TestResidueServerOutlivesPassContext(t *testing.T) {
+	if _, err := exec.LookPath("python3"); err != nil {
+		t.Skip("python3 not available for the stub reader")
+	}
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "stub_reader.py"), []byte(stubReaderPy), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	stub := filepath.Join(dir, "stub_reader.sh")
+	script := "#!/bin/sh\nexec python3 \"$(dirname \"$0\")/stub_reader.py\" \"$@\"\n"
+	if err := os.WriteFile(stub, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	model := filepath.Join(dir, "model.gguf")
+	if err := os.WriteFile(model, []byte("stub"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	addr := ln.Addr().String()
+	ln.Close()
+
+	serveCtx, stopServe := context.WithCancel(context.Background())
+	defer stopServe()
+	eng := newLlamaEngine(Config{
+		residueModelBin: stub, residueModelPath: model, residueModelAddr: addr,
+	}, serveCtx)
+
+	// The first pass runs under its own deadline context, and
+	// that context ends with the pass.
+	pass1, cancel1 := context.WithTimeout(context.Background(), 30*time.Second)
+	if _, err := eng.Complete(pass1, "prompt"); err != nil {
+		cancel1()
+		t.Fatalf("first pass: %v", err)
+	}
+	cancel1()
+
+	// The server is still up: a later pass completes.
+	pass2, cancel2 := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel2()
+	if _, err := eng.Complete(pass2, "prompt"); err != nil {
+		t.Fatalf("pass after the first pass's context ended: %v", err)
+	}
+
+	// Kill the server out from under the engine: the next
+	// pass finds it dead and completes against a fresh one.
+	eng.mu.Lock()
+	proc := eng.cmd.Process
+	eng.mu.Unlock()
+	if err := proc.Kill(); err != nil {
+		t.Fatalf("kill the stub server: %v", err)
+	}
+	deadline := time.Now().Add(20 * time.Second)
+	for {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		_, err := eng.Complete(ctx, "prompt")
+		cancel()
+		if err == nil {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("the engine did not recover after its server was killed: %v", err)
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	// The worker's context ending takes the server down:
+	// nothing is left listening on its port.
+	stopServe()
+	deadline = time.Now().Add(10 * time.Second)
+	for {
+		conn, err := net.DialTimeout("tcp", addr, 200*time.Millisecond)
+		if err != nil {
+			break
+		}
+		conn.Close()
+		if time.Now().After(deadline) {
+			t.Fatal("the server is still up after the worker's context ended")
+		}
+		time.Sleep(100 * time.Millisecond)
 	}
 }

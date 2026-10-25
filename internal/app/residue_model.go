@@ -177,7 +177,7 @@ func (app *Application) runResidueWorker(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case id := <-ch:
-			app.processResidue(ctx, app.residueEngine(), id)
+			app.processResidue(ctx, app.residueEngine(ctx), id)
 			app.residueMu.Lock()
 			delete(app.residueQueued, id)
 			app.residueMu.Unlock()
@@ -210,13 +210,15 @@ func (app *Application) sweepResidueBacklog(ctx context.Context) {
 	}
 }
 
-// residueEngine returns the local reader, made on first use and
-// held for the process's life.
-func (app *Application) residueEngine() residueEngine {
+// residueEngine returns the local reader, made on first use
+// and held for the process's life. The worker's context goes
+// with it: the reader's server lives and dies with the
+// worker, never with a single pass.
+func (app *Application) residueEngine(ctx context.Context) residueEngine {
 	app.residueMu.Lock()
 	defer app.residueMu.Unlock()
 	if app.residueEng == nil {
-		app.residueEng = newLlamaEngine(app.cfg)
+		app.residueEng = newLlamaEngine(app.cfg, ctx)
 	}
 	return app.residueEng
 }

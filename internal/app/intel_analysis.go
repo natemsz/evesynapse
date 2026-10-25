@@ -24,6 +24,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"sort"
 	"strings"
 	"sync"
@@ -177,6 +178,32 @@ func (app *Application) intelDict(ctx context.Context, channelID int64, missing 
 		}
 	}
 	neighbours := map[int64]map[int64]bool{}
+	neighbourNames := map[int64]map[int64]string{}
+	neighbourSet := func(sys int64) map[int64]bool {
+		if neighbours[sys] == nil {
+			neighbours[sys] = map[int64]bool{}
+			if rows, err := app.queries.ListSDESystemNeighbours(ctx, sys); err == nil {
+				for _, n := range rows {
+					neighbours[sys][n] = true
+				}
+			}
+		}
+		return neighbours[sys]
+	}
+	// The neighbours' names, for near-miss gate matching: a
+	// handful of stored reads per system, cached for the
+	// dictionary's life like the neighbour set itself.
+	neighbourNameSet := func(sys int64) map[int64]string {
+		if neighbourNames[sys] == nil {
+			neighbourNames[sys] = map[int64]string{}
+			for id := range neighbourSet(sys) {
+				if row, err := app.queries.GetSDESystem(ctx, id); err == nil {
+					neighbourNames[sys][id] = row.Name
+				}
+			}
+		}
+		return neighbourNames[sys]
+	}
 	pilots := map[string][3]any{}
 	return intelanalyze.Dict{
 		Ship: func(l string) (int64, string, string, bool) {
@@ -201,15 +228,32 @@ func (app *Application) intelDict(ctx context.Context, channelID int64, missing 
 			if !ok || id == sys {
 				return 0, false
 			}
-			if neighbours[sys] == nil {
-				neighbours[sys] = map[int64]bool{}
-				if rows, err := app.queries.ListSDESystemNeighbours(ctx, sys); err == nil {
-					for _, n := range rows {
-						neighbours[sys][n] = true
-					}
-				}
+			return id, neighbourSet(sys)[id]
+		},
+		// GateNear: a gate phrase's name slot that is one edit
+		// from a neighbour's name, or a shortened form of it
+		// (a prefix of at least four letters), is that gate.
+		// Two neighbours within reach of the same word is no
+		// reading at all, never a guess between them.
+		GateNear: func(sys int64, l string) (int64, bool) {
+			if len(l) < 3 {
+				return 0, false
 			}
-			return id, neighbours[sys][id]
+			var hit int64
+			for id, name := range neighbourNameSet(sys) {
+				ln := strings.ToLower(name)
+				if ln == l {
+					continue // an exact name is Gate's business
+				}
+				if !oneEditAway(l, ln) && !(len(l) >= 4 && strings.HasPrefix(ln, l)) {
+					continue
+				}
+				if hit != 0 && hit != id {
+					return 0, false
+				}
+				hit = id
+			}
+			return hit, hit != 0
 		},
 		Friend: func(id int64) (bool, bool) {
 			corp, alliance, ok := app.pilotAffiliation(ctx, id)
@@ -222,6 +266,40 @@ func (app *Application) intelDict(ctx context.Context, channelID int64, missing 
 			return side.corps[corp] || (alliance > 0 && side.alliances[alliance]), watch[id]
 		},
 	}
+}
+
+// oneEditAway reports whether b is exactly one insertion,
+// deletion or substitution away from a: the slip a hurried
+// scout makes in a system's name.
+func oneEditAway(a, b string) bool {
+	ra, rb := []rune(a), []rune(b)
+	if len(ra) > len(rb) {
+		ra, rb = rb, ra
+	}
+	if len(rb)-len(ra) > 1 {
+		return false
+	}
+	diffs := 0
+	i, j := 0, 0
+	for i < len(ra) && j < len(rb) {
+		if ra[i] == rb[j] {
+			i++
+			j++
+			continue
+		}
+		diffs++
+		if diffs > 1 {
+			return false
+		}
+		if len(ra) == len(rb) {
+			i++
+		}
+		j++
+	}
+	if j < len(rb) {
+		diffs++
+	}
+	return diffs == 1
 }
 
 // intelNameDict is the segmentation index over every pilot name
@@ -899,6 +977,16 @@ func applyAnalysis(rv *reportView, kind, raw string, names *killNames) {
 	if a.Gate > 0 {
 		rv.Gate = names.system(a.Gate).Name
 		rv.GateID = a.Gate
+		// A gate reading's stored text is the fragment the
+		// line left behind ("to bosena gate is"); its sentence
+		// is the reading itself, phrased from this system's
+		// side. A scan report keeps its reading's own
+		// sentence, which names its anchor in its own words.
+		if rv.ScanID == "" {
+			if s, ok := gateReadingSentence(kind, a, rv.SystemName, rv.Gate); ok {
+				rv.Text = s
+			}
+		}
 	}
 	// The stats bar: the standing split stored with the report.
 	// Questions and chatter carry no split worth a bar, as they
@@ -906,6 +994,27 @@ func applyAnalysis(rv *reportView, kind, raw string, names *killNames) {
 	if a.Counts != nil && kind != intelanalyze.KindQuestion && kind != intelanalyze.KindChatter {
 		rv.Split = standingSplit(a.Counts)
 	}
+}
+
+// gateReadingSentence phrases a gate-scoped reading from its
+// own system's side: the report is about the named gate, and
+// what it says holds on this side of it. A reading that names
+// pilots or ships says more than the gate alone, and keeps the
+// text it came with; ok is false then, and for a reading with
+// no gate at all.
+func gateReadingSentence(kind string, a intelanalyze.Analysis, sysName, gateName string) (string, bool) {
+	if a.Gate <= 0 || sysName == "" || gateName == "" || len(a.Pilots) > 0 || len(a.Ships) > 0 {
+		return "", false
+	}
+	switch {
+	case kind == intelanalyze.KindClear:
+		return fmt.Sprintf("No hostile ships on the %s side of the %s gate", sysName, gateName), true
+	case kind == intelanalyze.KindCamp:
+		return fmt.Sprintf("Gate camp on the %s side of the %s gate", sysName, gateName), true
+	case a.Count > 0:
+		return fmt.Sprintf("%d hostiles on the %s side of the %s gate", a.Count, sysName, gateName), true
+	}
+	return "", false
 }
 
 // standingSplit turns stored counts into bar segments, in the

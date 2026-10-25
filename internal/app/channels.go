@@ -1541,6 +1541,10 @@ func (app *Application) handleMapIntel(w http.ResponseWriter, r *http.Request) {
 		Scan  string `json:"scan,omitempty"`
 		At    int64  `json:"at"`
 		Kind  string `json:"kind,omitempty"` // what the report is (intel_analysis.go)
+		// Gate is the system the report's gate leads to, when
+		// its reading names one: a gate reading is intel about
+		// both systems, and the map pins it under each.
+		Gate int64 `json:"gate,omitempty"`
 	}
 	out := struct {
 		Now      int64     `json:"now"`
@@ -1558,8 +1562,21 @@ func (app *Application) handleMapIntel(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			logging.Warnf("channels: map reports: %v", err)
 		}
+		names := app.newKillNames(ctx)
 		for _, r := range rows {
-			out.Reports = append(out.Reports, report{ID: r.ID, Ch: r.ChannelID, Sys: r.SystemID, By: r.Reporter, Text: r.Text, N: r.Hostiles, Clear: r.Clear, Scan: r.ScanID, At: r.SeenAt.Unix(), Kind: r.Kind})
+			rep := report{ID: r.ID, Ch: r.ChannelID, Sys: r.SystemID, By: r.Reporter, Text: r.Text, N: r.Hostiles, Clear: r.Clear, Scan: r.ScanID, At: r.SeenAt.Unix(), Kind: r.Kind}
+			// The reading travels with the row already; the
+			// gate is read off it, never looked up per report.
+			var a intelanalyze.Analysis
+			if r.Analysis != "" && json.Unmarshal([]byte(r.Analysis), &a) == nil && a.Gate > 0 {
+				rep.Gate = a.Gate
+				if r.ScanID == "" {
+					if s, ok := gateReadingSentence(r.Kind, a, names.system(r.SystemID).Name, names.system(a.Gate).Name); ok {
+						rep.Text = s
+					}
+				}
+			}
+			out.Reports = append(out.Reports, rep)
 		}
 	}
 	w.Header().Set("Content-Type", "application/json")

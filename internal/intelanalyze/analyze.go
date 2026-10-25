@@ -128,14 +128,18 @@ const (
 
 // Analysis is what a report says.
 type Analysis struct {
-	Kind    string          `json:"kind"`
-	Pilots  []Pilot         `json:"pilots,omitempty"`
-	Ships   []Ship          `json:"ships,omitempty"`
-	Gate    int64           `json:"gate,omitempty"` // the system the gate named leads to
-	Flags   []string        `json:"flags,omitempty"`
-	Count   int             `json:"count,omitempty"`
-	Counts  *StandingCounts `json:"counts,omitempty"` // the standing split, when it counts anyone
-	Unknown []string        `json:"-"`                // names to look up, then analyse again
+	Kind   string  `json:"kind"`
+	Pilots []Pilot `json:"pilots,omitempty"`
+	Ships  []Ship  `json:"ships,omitempty"`
+	Gate   int64   `json:"gate,omitempty"` // the system the gate named leads to
+	// GateModel says the gate was proposed by the residue
+	// model pass and verified against the system's real gates
+	// (app side), not read by the deterministic passes here.
+	GateModel bool            `json:"gate_model,omitempty"`
+	Flags     []string        `json:"flags,omitempty"`
+	Count     int             `json:"count,omitempty"`
+	Counts    *StandingCounts `json:"counts,omitempty"` // the standing split, when it counts anyone
+	Unknown   []string        `json:"-"`                // names to look up, then analyse again
 	// Residue is the text the analysis did not consume: word
 	// runs that matched no ship, gate, keyword or pilot and are
 	// not waiting on a lookup (those stand in Unknown). It is
@@ -167,6 +171,12 @@ type Dict struct {
 	Pilot func(lower string) (id int64, name string, ok, known bool)
 	// Gate finds a system by name, when it is a neighbour of system.
 	Gate func(system int64, lower string) (id int64, ok bool)
+	// GateNear finds a neighbour system by a near-miss of its
+	// name (a letter slipped, or a shortened form). It is asked
+	// only for the name slot of a gate phrase, after Gate itself
+	// missed: a word that lands here is the gate, never a pilot,
+	// and is not offered to the pilot lookup.
+	GateNear func(system int64, lower string) (id int64, ok bool)
 	// Friend reports whether a pilot counts as friendly, and whether
 	// a set standing says they are hostile.
 	Friend func(id int64) (friendly, red bool)
@@ -286,9 +296,20 @@ func Analyze(in Input, d Dict) Analysis {
 					continue
 				}
 				phrase := clean(strings.Join(seg[i:i+n], " "))
-				// "X gate": the gate to a neighbour.
-				if i+n < len(seg) && clean(seg[i+n]) == "gate" && d.Gate != nil {
-					if g, ok := d.Gate(in.System, phrase); ok {
+				// "X gate": the gate to a neighbour. An exact
+				// name first; a near-miss of a neighbour's name
+				// (GateNear) after it, so a slipped or shortened
+				// gate name reads as the gate and the word never
+				// falls through to the pilot pass.
+				if i+n < len(seg) && clean(seg[i+n]) == "gate" {
+					g, ok := int64(0), false
+					if d.Gate != nil {
+						g, ok = d.Gate(in.System, phrase)
+					}
+					if !ok && d.GateNear != nil {
+						g, ok = d.GateNear(in.System, phrase)
+					}
+					if ok {
 						a.Gate = g
 						for k := i; k <= i+n; k++ {
 							used[k] = true

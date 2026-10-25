@@ -1407,6 +1407,87 @@ func (q *Queries) ListIntelReportsAcrossChannels(ctx context.Context, arg ListIn
 	return items, nil
 }
 
+const listIntelReportsByGateSystem = `-- name: ListIntelReportsByGateSystem :many
+SELECT id, channel_id, system_id, author_user_id, reporter, text, pilots, hostiles, clear, scan_id, source, seen_at, created_at, kind, analysis
+FROM intel_reports
+WHERE channel_id = ANY($1::bigint[])
+  AND system_id <> $2::bigint
+  AND COALESCE(substring(analysis from '"gate":\s*([0-9]+)')::bigint, 0) = $2::bigint
+ORDER BY seen_at DESC, id DESC
+LIMIT $3::int
+`
+
+type ListIntelReportsByGateSystemParams struct {
+	ChannelIds []int64 `json:"channel_ids"`
+	SystemID   int64   `json:"system_id"`
+	MaxRows    int32   `json:"max_rows"`
+}
+
+type ListIntelReportsByGateSystemRow struct {
+	ID           int64     `json:"id"`
+	ChannelID    int64     `json:"channel_id"`
+	SystemID     int64     `json:"system_id"`
+	AuthorUserID int64     `json:"author_user_id"`
+	Reporter     string    `json:"reporter"`
+	Text         string    `json:"text"`
+	Pilots       string    `json:"pilots"`
+	Hostiles     int32     `json:"hostiles"`
+	Clear        bool      `json:"clear"`
+	ScanID       string    `json:"scan_id"`
+	Source       string    `json:"source"`
+	SeenAt       time.Time `json:"seen_at"`
+	CreatedAt    time.Time `json:"created_at"`
+	Kind         string    `json:"kind"`
+	Analysis     string    `json:"analysis"`
+}
+
+// The gate-linked reports about one system: reports filed
+// under another system whose stored reading names this system
+// as its gate (the gate figure is read out of the analysis
+// text; no match reads as 0 and matches nothing). A gate
+// reading is intel about both systems, so the gate's own page
+// lists the far side's reports too. Same access shape as
+// ListIntelReportsBySystem: the caller passes only the
+// channels its reader can access.
+func (q *Queries) ListIntelReportsByGateSystem(ctx context.Context, arg ListIntelReportsByGateSystemParams) ([]ListIntelReportsByGateSystemRow, error) {
+	rows, err := q.db.QueryContext(ctx, listIntelReportsByGateSystem, pq.Array(arg.ChannelIds), arg.SystemID, arg.MaxRows)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListIntelReportsByGateSystemRow
+	for rows.Next() {
+		var i ListIntelReportsByGateSystemRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.ChannelID,
+			&i.SystemID,
+			&i.AuthorUserID,
+			&i.Reporter,
+			&i.Text,
+			&i.Pilots,
+			&i.Hostiles,
+			&i.Clear,
+			&i.ScanID,
+			&i.Source,
+			&i.SeenAt,
+			&i.CreatedAt,
+			&i.Kind,
+			&i.Analysis,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listIntelReportsBySystem = `-- name: ListIntelReportsBySystem :many
 SELECT id, channel_id, system_id, author_user_id, reporter, text, pilots, hostiles, clear, scan_id, source, seen_at, created_at, kind, analysis
 FROM intel_reports

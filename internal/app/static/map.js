@@ -746,8 +746,18 @@
       // friendlies named is calm, like a clear.
       if (r.kind === "chatter" || r.kind === "question") return;
       if (r.kind === "friendly") r.calm = true;
-      if (!I.bySys[i]) { I.bySys[i] = []; I.systems.push(i); }
-      I.bySys[i].push(r);
+      // A gate reading stands under both ends of its gate:
+      // the system it was reported from, and the system the
+      // gate leads to.
+      var pins = [i];
+      if (r.gate) {
+        var j = G.byID[r.gate];
+        if (j !== undefined && j !== i) pins.push(j);
+      }
+      pins.forEach(function (p) {
+        if (!I.bySys[p]) { I.bySys[p] = []; I.systems.push(p); }
+        I.bySys[p].push(r);
+      });
     });
     I.systems.forEach(function (i) {
       var list = I.bySys[i].sort(function (a, b) { return b.at - a.at || b.id - a.id; });

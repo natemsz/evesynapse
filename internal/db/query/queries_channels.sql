@@ -208,6 +208,23 @@ WHERE channel_id = ANY(sqlc.arg(channel_ids)::bigint[])
 ORDER BY seen_at DESC, id DESC
 LIMIT sqlc.arg(max_rows)::int;
 
+-- The gate-linked reports about one system: reports filed
+-- under another system whose stored reading names this system
+-- as its gate (the gate figure is read out of the analysis
+-- text; no match reads as 0 and matches nothing). A gate
+-- reading is intel about both systems, so the gate's own page
+-- lists the far side's reports too. Same access shape as
+-- ListIntelReportsBySystem: the caller passes only the
+-- channels its reader can access.
+-- name: ListIntelReportsByGateSystem :many
+SELECT id, channel_id, system_id, author_user_id, reporter, text, pilots, hostiles, clear, scan_id, source, seen_at, created_at, kind, analysis
+FROM intel_reports
+WHERE channel_id = ANY(sqlc.arg(channel_ids)::bigint[])
+  AND system_id <> sqlc.arg(system_id)::bigint
+  AND COALESCE(substring(analysis from '"gate":\s*([0-9]+)')::bigint, 0) = sqlc.arg(system_id)::bigint
+ORDER BY seen_at DESC, id DESC
+LIMIT sqlc.arg(max_rows)::int;
+
 -- The feed: reports across some channels, latest seen first -- a
 -- page before a (seen_at, id) key, or everything posted after
 -- after_id (the live feed's poll). The caller passes only the

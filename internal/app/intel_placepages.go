@@ -14,6 +14,7 @@ import (
 	"evesynapse/internal/app/module"
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
+	"evesynapse/internal/intelanalyze"
 	"evesynapse/internal/logging"
 )
 
@@ -531,6 +532,13 @@ func systemCampViewOf(c *mapSystemCamp, now time.Time) *systemCampView {
 // own access check (accessibleChannels over the reader's intel
 // identity), never a second one. A signed-out reader has no
 // identity and sees none.
+//
+// Gate readings are bilateral, so the list holds the system's
+// own reports and the gate-linked ones filed under the far
+// system whose reading names this system as its gate, merged
+// newest first under the same page bound. A gate-linked clear
+// is phrased from this side: the anchor system named, its
+// side stated.
 func (app *Application) systemIntelReports(ctx context.Context, names *killNames, systemID int64) []systemReportGroup {
 	id := app.intelIdentity(ctx)
 	chans := app.accessibleChannels(ctx, id)
@@ -550,10 +558,37 @@ func (app *Application) systemIntelReports(ctx context.Context, names *killNames
 		logging.Errorf("system page: intel reports for system %d: %v", systemID, err)
 		return nil
 	}
+	gateRows, err := app.queries.ListIntelReportsByGateSystem(ctx, db.ListIntelReportsByGateSystemParams{
+		ChannelIds: ids, SystemID: systemID, MaxRows: systemReportsMax,
+	})
+	if err != nil {
+		logging.Errorf("system page: gate reports for system %d: %v", systemID, err)
+	}
+	type sysReport struct {
+		row db.ListIntelReportsBySystemRow
+		far bool // filed under the far system, about this one's gate
+	}
+	all := make([]sysReport, 0, len(rows)+len(gateRows))
+	for _, r := range rows {
+		all = append(all, sysReport{row: r})
+	}
+	for _, r := range gateRows {
+		all = append(all, sysReport{row: db.ListIntelReportsBySystemRow(r), far: true})
+	}
+	sort.SliceStable(all, func(i, j int) bool {
+		if !all[i].row.SeenAt.Equal(all[j].row.SeenAt) {
+			return all[i].row.SeenAt.After(all[j].row.SeenAt)
+		}
+		return all[i].row.ID > all[j].row.ID
+	})
+	if len(all) > systemReportsMax {
+		all = all[:systemReportsMax]
+	}
 	now := time.Now()
 	var groups []systemReportGroup
 	at := map[int64]int{}
-	for _, r := range rows {
+	for _, sr := range all {
+		r := sr.row
 		rv := reportView{ID: r.ID, Channel: r.ChannelID, SystemID: r.SystemID, Reporter: r.Reporter, Text: r.Text,
 			Hostiles: r.Hostiles, Clear: r.Clear, ScanID: r.ScanID, Source: r.Source, At: r.SeenAt.Unix(), Time: r.SeenAt,
 			Ago: ageText(now, r.SeenAt), Mine: r.AuthorUserID == id.userID, NoDoors: true}
@@ -561,6 +596,12 @@ func (app *Application) systemIntelReports(ctx context.Context, names *killNames
 		rv.SystemName = sys.Name
 		rv.SecText, rv.SecTier = secRound(sys.Security)
 		applyAnalysis(&rv, r.Kind, r.Analysis, names)
+		if sr.far && r.Kind == intelanalyze.KindClear && rv.GateID == systemID {
+			// From this side the reading names the anchor
+			// system and states its side: "The Teonusude
+			// side is clear".
+			rv.Text = "The " + rv.SystemName + " side is clear"
+		}
 		gi, ok := at[r.ChannelID]
 		if !ok {
 			groups = append(groups, systemReportGroup{ChannelID: r.ChannelID, ChannelName: nameOf[r.ChannelID]})

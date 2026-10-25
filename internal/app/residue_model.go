@@ -19,11 +19,16 @@ package app
 // anywhere renders its notes. A note either links a span to an
 // entity the reading already resolved, or records a name the
 // reading did not know: those stand flagged unconfirmed, never
-// as a resolved entity. Every completed pass is logged whole
-// (spans in, raw reply out) as a residue call, the raw material
-// the label corpus is later built from. A reply that does not
-// parse in the strict shape is discarded whole, never partially
-// applied.
+// as a resolved entity. One exception, the gate fuse
+// (applyResidueGateReading): a gate phrase the deterministic
+// reading left unresolved is this step's home ground, and a
+// system claim the fuse verifies against the report system's
+// real gates is written into the stored analysis, marked as
+// model-read, so the bilateral surfaces use it. Every
+// completed pass is logged whole (spans in, raw reply out) as
+// a residue call, the raw material the label corpus is later
+// built from. A reply that does not parse in the strict shape
+// is discarded whole, never partially applied.
 //
 // Bounds, in the family pattern: a fixed-size queue with
 // drop-and-log, one worker, one report at a time, a per-report
@@ -93,6 +98,11 @@ type residueInput struct {
 	Pilots   []residueEntity
 	Ships    []residueEntity
 	Systems  []residueEntity // the report's system, and its gate's destination when one was named
+	// Neighbours are the systems the report system's gates
+	// lead to (sde_system_jumps): the only further systems a
+	// claim may name, and the fuse's verification set for a
+	// gate reading.
+	Neighbours []residueEntity
 }
 
 // residueClaim is one reading of one span, in the strict shape
@@ -223,10 +233,26 @@ func (app *Application) residueEngine(ctx context.Context) residueEngine {
 	return app.residueEng
 }
 
+// mentionsGate reports whether a text speaks of a gate: a
+// field that is the word itself, trimmed of the punctuation
+// a paste drags with it.
+func mentionsGate(text string) bool {
+	for _, f := range strings.Fields(strings.ToLower(text)) {
+		if strings.Trim(f, ",.;:*!()[]?\"'") == "gate" {
+			return true
+		}
+	}
+	return false
+}
+
 // processResidue runs one report's pass: the spans its settled
 // analysis left, read against what the analysis resolved, the
 // reply validated and stored. A reading with no residue never
-// reaches the engine.
+// reaches the engine, unless its text carries a gate phrase
+// the deterministic reading could not resolve: a loose gate
+// phrasing is the step's home ground, residue or none. Scan
+// reports are out of that trigger: their text is a reading's
+// own sentence, not a scout's line.
 func (app *Application) processResidue(ctx context.Context, eng residueEngine, reportID int64) {
 	row, err := app.queries.GetIntelReportFull(ctx, reportID)
 	if err != nil {
@@ -239,10 +265,23 @@ func (app *Application) processResidue(ctx context.Context, eng residueEngine, r
 	if row.Analysis == "" || json.Unmarshal([]byte(row.Analysis), &a) != nil {
 		return
 	}
-	if len(a.Residue) == 0 {
+	gateLoose := a.Gate == 0 && row.ScanID == "" && mentionsGate(row.Text)
+	if len(a.Residue) == 0 && !gateLoose {
 		return // the reading resolved everything: the step is skipped
 	}
 	in := residueInput{ReportID: reportID, SystemID: row.SystemID, Spans: a.Residue}
+	if gateLoose {
+		// The claims must be able to name the fragment the
+		// gate stands in: when no residue span carries it,
+		// the line itself is the span.
+		carried := false
+		for _, s := range in.Spans {
+			carried = carried || mentionsGate(s)
+		}
+		if !carried {
+			in.Spans = append(in.Spans, row.Text)
+		}
+	}
 	for _, p := range a.Pilots {
 		if p.ID > 0 {
 			in.Pilots = append(in.Pilots, residueEntity{ID: p.ID, Name: p.Name})
@@ -265,6 +304,19 @@ func (app *Application) processResidue(ctx context.Context, eng residueEngine, r
 		}
 		in.Systems = append(in.Systems, residueEntity{ID: id, Name: name})
 	}
+	// The systems the report's gates lead to, from the stored
+	// jumps: the only further systems a claim may name.
+	if rows, err := app.queries.ListSDESystemNeighbours(ctx, row.SystemID); err == nil {
+		for _, nid := range rows {
+			if nid <= 0 || seenSystems[nid] {
+				continue
+			}
+			seenSystems[nid] = true
+			if sys, err := app.queries.GetSDESystem(ctx, nid); err == nil && sys.Name != "" {
+				in.Neighbours = append(in.Neighbours, residueEntity{ID: nid, Name: sys.Name})
+			}
+		}
+	}
 	callCtx, cancel := context.WithTimeout(ctx, residueCallTimeout)
 	defer cancel()
 	raw, err := eng.Complete(callCtx, residuePrompt(in))
@@ -274,7 +326,70 @@ func (app *Application) processResidue(ctx context.Context, eng residueEngine, r
 		}
 		return
 	}
-	app.storeResiduePass(ctx, in, raw, validateResidueReply(in, raw))
+	notes := validateResidueReply(in, raw)
+	app.storeResiduePass(ctx, in, raw, notes)
+	app.applyResidueGateReading(ctx, row, a, in, notes)
+}
+
+// applyResidueGateReading is the fuse step for gate readings.
+// A system claim from the pass that names one of the report
+// system's neighbours, in a report whose text speaks of a
+// gate, is verified by construction: the neighbour list the
+// claim was checked against is built from sde_system_jumps,
+// so the named system is a real gate of the report's system.
+// A verified gate is written into the report's stored
+// analysis, marked as model-read, so the map, the place pages
+// and the sentences use it like a deterministic one. A clear
+// the deterministic reading could not scope becomes the gate
+// clear it always said. Anything else the pass said stays a
+// note, exactly as before.
+func (app *Application) applyResidueGateReading(ctx context.Context, row db.IntelReport, a intelanalyze.Analysis, in residueInput, notes []residueNote) {
+	if a.Gate > 0 || !mentionsGate(row.Text) {
+		return
+	}
+	neighbours := map[int64]bool{}
+	for _, e := range in.Neighbours {
+		neighbours[e.ID] = true
+	}
+	var gate int64
+	for _, n := range notes {
+		if n.Kind == "system" && !n.Unconfirmed && n.EntityID > 0 && n.EntityID != row.SystemID && neighbours[n.EntityID] {
+			gate = n.EntityID
+			break
+		}
+	}
+	if gate == 0 {
+		return
+	}
+	// Re-read before writing: the report may have settled
+	// further since the pass began, and its newest reading
+	// is the one the gate joins.
+	fresh, err := app.queries.GetIntelReportFull(ctx, row.ID)
+	if err != nil {
+		return
+	}
+	var na intelanalyze.Analysis
+	if fresh.Analysis == "" || json.Unmarshal([]byte(fresh.Analysis), &na) != nil || na.Gate > 0 {
+		return
+	}
+	na.Gate = gate
+	na.GateModel = true
+	kind := fresh.Kind
+	if fresh.Clear && len(na.Pilots) == 0 && len(na.Ships) == 0 && na.Count == 0 {
+		kind = intelanalyze.KindClear
+	}
+	raw, err := json.Marshal(na)
+	if err != nil {
+		return
+	}
+	if err := app.queries.SetIntelReportAnalysis(ctx, db.SetIntelReportAnalysisParams{
+		ID: row.ID, Kind: kind, Analysis: string(raw), AnalysisPending: false,
+	}); err != nil {
+		logging.Warnf("residue: write gate reading of report %d: %v", row.ID, err)
+		return
+	}
+	logging.Infof("residue: report %d's gate read as system %d by the model pass", row.ID, gate)
+	app.refreshReportGroup(ctx, row.ID)
 }
 
 // storeResiduePass logs one completed pass and its validated
@@ -331,6 +446,7 @@ func residuePrompt(in residueInput) string {
 	writeEntities("Pilots", in.Pilots)
 	writeEntities("Ships", in.Ships)
 	writeEntities("Systems", in.Systems)
+	writeEntities("Neighbouring systems", in.Neighbours)
 	b.WriteString("\nFragments:\n")
 	for _, s := range in.Spans {
 		b.WriteString("- " + s + "\n")
@@ -340,6 +456,7 @@ Answer with JSON in exactly this shape and nothing else: {"claims":[{"span":"...
 A claim reads one fragment. "span" is the fragment exactly as given. "kind" is one of: pilot, ship, system, count, direction, action, structure.
 For pilot, ship and system claims: "id" is the id of a listed entity the fragment names or plainly refers to, and "name" is that entity's name as listed. When the fragment names a pilot, ship or system the lists do not hold, set "id" to 0 and "name" to the name the fragment itself gives. Never invent an id; an id must come from the lists.
 For a count claim, "n" is the number the fragment states. For direction, action and structure claims, "name" is the reading in a word or two (for example "inbound", "landing", "anchored").
+A fragment may name the gate to a neighbouring system, exactly or in a shortened or misspelled form of that system's name: claim it as a system claim naming that neighbouring system.
 Leave out any fragment you cannot place.`)
 	return b.String()
 }
@@ -395,6 +512,9 @@ func validateResidueReply(in residueInput, raw string) []residueNote {
 		}
 		return m
 	}
+	systemsAll := make([]residueEntity, 0, len(in.Systems)+len(in.Neighbours))
+	systemsAll = append(systemsAll, in.Systems...)
+	systemsAll = append(systemsAll, in.Neighbours...)
 	entitySet := func(kind string) (map[int64]residueEntity, map[string]residueEntity) {
 		switch kind {
 		case "pilot":
@@ -402,7 +522,10 @@ func validateResidueReply(in residueInput, raw string) []residueNote {
 		case "ship":
 			return byID(in.Ships), byName(in.Ships)
 		default:
-			return byID(in.Systems), byName(in.Systems)
+			// A system claim may name the reading's systems
+			// or a neighbouring one: the gate a loose phrase
+			// meant is among the neighbours.
+			return byID(systemsAll), byName(systemsAll)
 		}
 	}
 	boundN := func(n int) int {

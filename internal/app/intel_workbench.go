@@ -487,6 +487,14 @@ func (app *Application) buildWorkbench(ctx context.Context, rep db.IntelReport, 
 		fillAnalysis = &intelanalyze.Analysis{Pilots: comp.Pilots, Ships: comp.Ships, Counts: comp.Counts}
 	}
 
+	// A lone gate reading's headline is its sentence, phrased
+	// from its own system's side, as on the feed (intel_analysis.go).
+	if !grouped && rep.ScanID == "" && analysis.Gate > 0 {
+		if s, ok := gateReadingSentence(rep.Kind, analysis, v.SysName, names.system(analysis.Gate).Name); ok {
+			v.Headline = s
+		}
+	}
+
 	if dscan != nil {
 		app.wbFillDScan(ctx, v, dscan, dscanRows)
 	}

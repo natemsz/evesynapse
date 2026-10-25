@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.5.9.3] - 2026-10-25
+
+Automated build of EveSynapse v0.5.9.3. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+
+## What's Changed
+### 🚀 Features
+* Add the residue corpus builder by @natemsz in https://github.com/natemsz/evesynapse/pull/668
+### 🐛 Bug Fixes
+* File gate readings under both systems and read loose gate phrasings by @natemsz in https://github.com/natemsz/evesynapse/pull/667
+### Other Changes
+* Resolve a name-less channel line's system from its speaker first; link workbench pilot names to their pilot pages by @natemsz in https://github.com/natemsz/evesynapse/pull/666
+* docs(changelog): review changelog for v0.5.9.2 by @github-actions[bot] in https://github.com/natemsz/evesynapse/pull/665
+
+
+**Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.9.2...v0.5.9.3
+
 ## [v0.5.9.2] - 2026-10-25
 
 Automated build of EveSynapse v0.5.9.2. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).

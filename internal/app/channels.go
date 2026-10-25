@@ -1121,29 +1121,35 @@ const (
 // is why it is here) and a chat line names none in a form, so
 // what remains is the speaker's own current system, and
 // failing that the poster's, and the sentence says so, as it
-// does for a scan paste. No known location, or no roster in
-// the text, and the line is skipped exactly as it always was.
-// A rescued report is stored as the re-read is stored
+// does for a scan paste. A rescued report is stored as the re-read is stored
 // (insertIntelReport): the reading as its scan with the line
 // kept as the paste, the sentence for a headline, recognised
-// again by its pilot set.
+// again by its pilot set. A roster the re-read cannot make --
+// its names are pilots the site has not verified yet, so the
+// segmentation cannot clear the bar however real they are --
+// is stored anyway by storeVerifiedRosterLine: storage does
+// not stand on the reading's bar. No known location is the
+// one refusal left, and every skip here logs its reason and
+// the line's first fragment.
 func (app *Application) rescueRosterLine(ctx context.Context, base db.InsertIntelReportParams, nr intelchat.Report, source string) int {
+	frag := clipRunes(nr.Text, 60)
 	sysID := app.speakerSystemID(ctx, nr.Speaker)
 	if sysID == 0 {
 		sysID = app.posterSystemID(ctx, base.AuthorCharacterID)
 	}
 	if sysID == 0 {
+		logging.Warnf("channels: roster line skipped, no location on file for its speaker or poster: %q", frag)
 		return rosterSkipped
 	}
-	_, roster, _ := app.analyzeIntel(ctx, base.ChannelID, intelanalyze.Input{
+	plain, roster, _ := app.analyzeIntel(ctx, base.ChannelID, intelanalyze.Input{
 		System: sysID, Text: nr.Text, Hostiles: nr.Hostiles, Clear: nr.Clear, NoVisual: nr.NoVisual,
 	}, base.AuthorCharacterID, false)
 	if roster == nil {
-		return rosterSkipped
+		return app.storeVerifiedRosterLine(ctx, base, nr, source, sysID, plain, frag)
 	}
 	scanID, err := app.storeRosterScan(ctx, base.AuthorUserID, roster, nr.Text)
 	if err != nil {
-		logging.Errorf("channels: store rescued roster reading: %v", err)
+		logging.Errorf("channels: store rescued roster reading: %v: %q", err, frag)
 		return rosterSkipped
 	}
 	p := base
@@ -1174,7 +1180,54 @@ func (app *Application) rescueRosterLine(ctx context.Context, base db.InsertInte
 		}
 	}
 	if _, err := app.storeIntelReport(ctx, p); err != nil {
-		logging.Errorf("channels: insert rescued roster report: %v", err)
+		logging.Errorf("channels: insert rescued roster report: %v: %q", err, frag)
+		return rosterSkipped
+	}
+	return rosterStored
+}
+
+// storeVerifiedRosterLine stores a no-system roster line the
+// roster re-read could not make: the names in its text are
+// verified with EVE first (verifyRosterNames), and the report
+// stands on the ones EVE backs, however few of them the site
+// knew before. The line itself is the report's text, kept as
+// written, with the location note the fallback carries; the
+// system is the speaker's or poster's the rescue settled. A
+// line no roster can be verified in is skipped, with the
+// reason logged like every skip on this path.
+func (app *Application) storeVerifiedRosterLine(ctx context.Context, base db.InsertIntelReportParams, nr intelchat.Report, source string, sysID int64, plain intelanalyze.Analysis, frag string) int {
+	pilots, counts, ok := app.verifyRosterNames(ctx, base.ChannelID, nr.Text, plain.Unknown)
+	if !ok {
+		logging.Warnf("channels: roster line skipped, no roster EVE verifies in it: %q", frag)
+		return rosterSkipped
+	}
+	p := base
+	p.Source = source
+	p.SystemID = sysID
+	p.Text = nr.Text + " — system from the reporter's current location."
+	p.Pilots = p.Text
+	p.Clear = false
+	if nr.Speaker != "" {
+		p.Reporter = clipRunes(nr.Speaker, 40)
+	}
+	if !nr.At.IsZero() && nr.At.Before(base.CreatedAt.Add(time.Minute)) && nr.At.After(base.CreatedAt.Add(-intelRetention)) {
+		p.SeenAt = nr.At
+	}
+	a := intelanalyze.Analysis{Kind: intelanalyze.KindLocal, Count: nr.Hostiles, Pilots: pilots, Counts: counts}
+	p.Kind = a.Kind
+	if raw, err := json.Marshal(a); err == nil {
+		p.Analysis = string(raw)
+	}
+	p.AnalysisPending = false
+	set := make(map[int64]bool, len(pilots))
+	for _, pl := range pilots {
+		set[pl.ID] = true
+	}
+	if app.rosterDuplicate(ctx, p.ChannelID, p.SystemID, 0, p.SeenAt, set) > 0 {
+		return rosterDuplicate
+	}
+	if _, err := app.storeIntelReport(ctx, p); err != nil {
+		logging.Errorf("channels: insert verified roster report: %v: %q", err, frag)
 		return rosterSkipped
 	}
 	return rosterStored

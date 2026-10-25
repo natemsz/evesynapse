@@ -18,3 +18,19 @@ FROM intel_residue_notes
 WHERE report_id = $1
 ORDER BY created_at, id
 LIMIT $2;
+
+-- The backlog sweep's candidates (residue_model.go): settled
+-- reports whose stored reading left residue and which no
+-- completed pass has covered, newest first. The CASE keeps the
+-- jsonb read off rows whose analysis was never stored.
+-- name: ListResidueBacklogReports :many
+SELECT r.id
+FROM intel_reports r
+WHERE r.analysis_pending = false
+  AND CASE WHEN r.analysis <> '' THEN
+        jsonb_typeof(r.analysis::jsonb -> 'residue') = 'array'
+        AND jsonb_array_length(r.analysis::jsonb -> 'residue') > 0
+      ELSE false END
+  AND NOT EXISTS (SELECT 1 FROM intel_residue_calls c WHERE c.report_id = r.id)
+ORDER BY r.id DESC
+LIMIT $1;

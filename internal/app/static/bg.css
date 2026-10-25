@@ -312,8 +312,8 @@ html[data-theme="light"] .btn.btn-quiet {
    The active tab is the panel's own tab: the glass recipe, no
    bottom border, and its only orange is a thicker accent stripe
    across the top (the nav bar's single-stripe vocabulary) with
-   bright text. Inactive tabs keep the warm translucent pill fill
-   in the tab silhouette. Hover removes the tab's background
+   bright text. Inactive tabs wear the same tint and frost in
+   the tab silhouette. Hover removes the tab's background
    color and raises saturation to 1.5 over a 150ms transition.
    A tabbed panel also squares its top corners (folder body);
    pages without a tab row keep all four rounded corners. */
@@ -338,9 +338,9 @@ html[data-theme="light"] .btn.btn-quiet {
 #main-content > .section-tabs a {
   border: 1px solid rgba(255, 110, 0, 0.22);
   border-radius: 0.5rem 0.5rem 0 0;
-  background: rgba(23, 17, 13, 0.55);
-  -webkit-backdrop-filter: blur(10px) saturate(1.2);
-  backdrop-filter: blur(10px) saturate(1.2);
+  background: var(--glass-page);
+  -webkit-backdrop-filter: blur(var(--glass-page-blur)) saturate(1.45);
+  backdrop-filter: blur(var(--glass-page-blur)) saturate(1.45);
   padding: 0.4rem 0.85rem;
   transition: background-color 150ms ease, border-color 150ms ease, filter 150ms ease;
 }
@@ -350,9 +350,9 @@ html[data-theme="light"] .btn.btn-quiet {
   filter: saturate(1.5);
 }
 #main-content > .section-tabs a.active {
-  background: var(--glass);
-  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(0.9);
-  backdrop-filter: blur(var(--glass-blur)) saturate(0.9);
+  background: var(--glass-page);
+  -webkit-backdrop-filter: blur(var(--glass-page-blur)) saturate(1.45);
+  backdrop-filter: blur(var(--glass-page-blur)) saturate(1.45);
   border-top: 3px solid var(--accent);
   border-left-color: var(--glass-edge);
   border-right-color: var(--glass-edge);
@@ -382,7 +382,7 @@ html[data-theme="light"] #main-content > .section-tabs a.active {
    border on a flat page, so the line runs behind the tabs and
    the active tab still merges line-free. The slab is the panel's
    own glass — same column margins, same background, same
-   --glass-blur — so the joins show no step, and the pills carry
+   --glass-page-blur — so the joins show no step, and the pills carry
    no backdrop filter of their own over the slab's already-blurred
    glass. The pills are the site's quiet pill recipe; the active
    one takes the accent fill and edge, and hover speaks the tab
@@ -394,9 +394,9 @@ html[data-theme="light"] #main-content > .section-tabs a.active {
   margin: 0 max(1.25rem, calc((100% - 1640px) / 2));
   padding: 0.55rem 1.25rem 0.65rem;
   position: relative;
-  background: var(--glass);
-  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(0.9);
-  backdrop-filter: blur(var(--glass-blur)) saturate(0.9);
+  background: var(--glass-page);
+  -webkit-backdrop-filter: blur(var(--glass-page-blur)) saturate(1.45);
+  backdrop-filter: blur(var(--glass-page-blur)) saturate(1.45);
   border: 1px solid var(--glass-edge);
   border-bottom: none;
 }
@@ -473,9 +473,9 @@ html[data-theme="light"] #main-content > .section-subtabs a.active {
   color: inherit;
   border: 1px solid rgba(255, 110, 0, 0.22);
   border-radius: 0.5rem 0.5rem 0 0;
-  background: rgba(23, 17, 13, 0.55);
-  -webkit-backdrop-filter: blur(10px) saturate(1.2);
-  backdrop-filter: blur(10px) saturate(1.2);
+  background: var(--glass-page);
+  -webkit-backdrop-filter: blur(var(--glass-page-blur)) saturate(1.45);
+  backdrop-filter: blur(var(--glass-page-blur)) saturate(1.45);
   padding: 0.4rem 0.85rem;
   cursor: pointer;
   transition: background-color 150ms ease, border-color 150ms ease, filter 150ms ease;
@@ -486,9 +486,9 @@ html[data-theme="light"] #main-content > .section-subtabs a.active {
   filter: saturate(1.5);
 }
 #main-content > .section-tabs .tabs-more.has-active .tabs-more-btn {
-  background: var(--glass);
-  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(0.9);
-  backdrop-filter: blur(var(--glass-blur)) saturate(0.9);
+  background: var(--glass-page);
+  -webkit-backdrop-filter: blur(var(--glass-page-blur)) saturate(1.45);
+  backdrop-filter: blur(var(--glass-page-blur)) saturate(1.45);
   border-top: 3px solid var(--accent);
   border-left-color: var(--glass-edge);
   border-right-color: var(--glass-edge);
@@ -527,9 +527,9 @@ html[data-theme="light"] #main-content > .section-subtabs a.active {
   flex-direction: column;
   gap: 0.15rem;
   padding: 0.35rem;
-  background: var(--glass);
-  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(0.9);
-  backdrop-filter: blur(var(--glass-blur)) saturate(0.9);
+  background: var(--glass-page);
+  -webkit-backdrop-filter: blur(var(--glass-page-blur)) saturate(1.45);
+  backdrop-filter: blur(var(--glass-page-blur)) saturate(1.45);
   border: 1px solid var(--glass-edge);
   border-radius: 0.5rem;
 }
@@ -607,9 +607,9 @@ html[data-theme="light"] #main-content > .section-tabs .tabs-more.has-active .ta
     gap: 0.4rem;
     margin: 0.6rem 1.25rem 0;
     padding: 0.55rem 0.7rem;
-    background: var(--glass);
-    -webkit-backdrop-filter: blur(25px) saturate(0.9);
-    backdrop-filter: blur(25px) saturate(0.9);
+    background: var(--glass-page);
+    -webkit-backdrop-filter: blur(var(--glass-page-blur)) saturate(1.45);
+    backdrop-filter: blur(var(--glass-page-blur)) saturate(1.45);
     border: 1px solid var(--glass-edge);
     border-radius: var(--r-lg);
     -webkit-mask-image: linear-gradient(to right,

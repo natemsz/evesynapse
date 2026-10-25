@@ -161,6 +161,11 @@
      fill. One token pair restyles every inset box. */
   --box-edge: color-mix(in srgb, var(--accent) 14%, transparent);
   --glass-blur: 24px;
+  /* The page wrapper's own frost (v2): the shared content
+     container and the tab assembly attached to it wear this
+     heavier, cooler frost; every other surface keeps --glass. */
+  --glass-page: rgb(8 13 22 / 0.48);
+  --glass-page-blur: 30px;
   --row: rgba(16, 13, 10, 0.55);
   --row-alt: rgba(255, 255, 255, 0.03);
   --row-hover: rgba(255, 140, 50, 0.09);
@@ -4263,6 +4268,9 @@ html[data-theme="light"] {
   --note: #8a5f24;
   --panel: #fdfbf6;
   --panel-head: #f0e9da;
+  /* The v2 page tint is a dark-theme value; the light theme's
+     page wrapper keeps the light panel tint it has today. */
+  --glass-page: color-mix(in srgb, var(--panel) 78%, transparent);
   --row: #f8f4ec;
   --row-alt: #f1ebdf;
   --row-hover: #e9e0cf;
@@ -5223,9 +5231,9 @@ html[data-theme="light"] .suggest li:not(.sug-kind):not(.sug-empty):hover, html[
      the column. */
   max-width: 1640px;
   margin: 1rem max(1.25rem, calc((100% - 1640px) / 2)) 1.25rem;
-  background: var(--glass);
-  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(0.9);
-  backdrop-filter: blur(var(--glass-blur)) saturate(0.9);
+  background: var(--glass-page);
+  -webkit-backdrop-filter: blur(var(--glass-page-blur)) saturate(1.45);
+  backdrop-filter: blur(var(--glass-page-blur)) saturate(1.45);
   border: 1px solid var(--glass-edge);
   border-radius: var(--r-lg);
 }

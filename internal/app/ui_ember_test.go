@@ -553,11 +553,11 @@ func TestPIPlannerColoniesAndControls(t *testing.T) {
 
 // TestSubtabBarSharesPanelGlass pins the subtab slab as one piece
 // of the panel's own glass: the same 1640px column margins as the
-// tab strip and .page-body, the shared --glass-blur (a hardcoded
-// blur of its own makes the slab a different material from the
-// panel it joins borderlessly), no backdrop filter on the pills
-// over the slab's already-blurred glass, and rail-mode end
-// padding that keeps the first and last pills clear of the fade.
+// tab strip and .page-body, the shared --glass-page-blur (a
+// different blur of its own makes the slab a different material
+// from the panel it joins borderlessly), no backdrop filter on
+// the pills over the slab's already-blurred glass, and rail-mode
+// end padding that keeps the first and last pills clear of the fade.
 func TestSubtabBarSharesPanelGlass(t *testing.T) {
 	raw, err := fs.ReadFile(staticFS, "static/bg.css")
 	if err != nil {
@@ -583,8 +583,8 @@ func TestSubtabBarSharesPanelGlass(t *testing.T) {
 	if !strings.Contains(slab, "margin: 0 max(1.25rem, calc((100% - 1640px) / 2));") {
 		t.Error("the subtab slab no longer shares the 1640px column margins with the tab strip and panel")
 	}
-	if !strings.Contains(slab, "backdrop-filter: blur(var(--glass-blur)) saturate(0.9);") {
-		t.Error("the subtab slab no longer blurs with the panel's shared --glass-blur")
+	if !strings.Contains(slab, "backdrop-filter: blur(var(--glass-page-blur)) saturate(1.45);") {
+		t.Error("the subtab slab no longer blurs with the panel's own page frost")
 	}
 	if strings.Contains(slab, "blur(25px)") {
 		t.Error("the subtab slab hardcodes its own blur again; the join to the panel will seam")

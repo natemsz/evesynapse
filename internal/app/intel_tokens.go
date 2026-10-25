@@ -12,7 +12,9 @@ package app
 // only:
 //
 //	GET  /api/intel/v1/channels              the channels it may post to
-//	POST /api/intel/v1/channels/{id}/lines   {"lines": [...]}: chat lines
+//	POST /api/intel/v1/channels/{id}/lines   {"lines": [...]}: chat lines;
+//	                                         an optional "speaker" names
+//	                                         the batch's pilot
 //
 // Lines go through the same reader as pasted ones (postChatLines), so an
 // Axon that restarts, or two characters logging one channel, store a
@@ -489,7 +491,8 @@ func (app *Application) handleAPILines(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body struct {
-		Lines []string `json:"lines"`
+		Lines   []string `json:"lines"`
+		Speaker string   `json:"speaker"`
 	}
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, intelMaxPaste)).Decode(&body); err != nil {
 		intelAPIError(w, http.StatusBadRequest, "send {\"lines\": [...]}, up to 64 KB")
@@ -504,7 +507,7 @@ func (app *Application) handleAPILines(w http.ResponseWriter, r *http.Request) {
 	for i, l := range body.Lines {
 		body.Lines[i] = strings.ReplaceAll(l, "\n", " ")
 	}
-	res := app.postChatLines(ctx, base, strings.Join(body.Lines, "\n"), "axon")
+	res := app.postChatLines(ctx, base, strings.Join(body.Lines, "\n"), "axon", body.Speaker)
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
 	_ = json.NewEncoder(w).Encode(struct {

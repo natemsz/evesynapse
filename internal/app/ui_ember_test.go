@@ -91,9 +91,11 @@ func TestEmberGlassAndSkyRules(t *testing.T) {
 		!strings.Contains(base, "{{define \"pagetabs\"}}{{end}}") {
 		t.Error("base.html lost the pagetabs invocation above .page-body or its empty default")
 	}
-	// The tabs are actual folder tabs on the panel's top edge, and
-	// hover is the owner's spec: background removed, saturate(1.5),
-	// 150ms. The active tab's only orange is its top stripe.
+	// The tabs are flat segments on the band's own glass layer:
+	// no tint, blur or border of their own, hover answers with a
+	// flat row tint, and the active tab's only orange is its top
+	// stripe. The More panel's link hover keeps the saturate(1.5)
+	// response on its flat rows.
 	for _, want := range []string{
 		"#main-content > .section-tabs a.active",
 		"border-top: 3px solid var(--accent);",
@@ -551,13 +553,18 @@ func TestPIPlannerColoniesAndControls(t *testing.T) {
 	}
 }
 
-// TestSubtabBarSharesPanelGlass pins the subtab slab as one piece
-// of the panel's own glass: the same 1640px column margins as the
-// tab strip and .page-body, the shared --glass-page-blur (a
+// TestSubtabBarSharesPanelGlass pins the subtab bar and the
+// page body as one glass unit in both of the bar's modes. Where
+// anchor positioning is unavailable the bar stands as its own
+// slab in the panel's glass: the same 1640px column margins as
+// the tab strip and .page-body, the shared --glass-page-blur (a
 // different blur of its own makes the slab a different material
-// from the panel it joins borderlessly), no backdrop filter on
-// the pills over the slab's already-blurred glass, and rail-mode
-// end padding that keeps the first and last pills clear of the fade.
+// from the panel it joins borderlessly), its top border kept,
+// and no backdrop filter on the pills over the already-blurred
+// glass. Where anchor positioning is available one shared pane
+// layer under the bar and the body carries the glass and the
+// bar's own slab glass comes off. Rail-mode end padding keeps
+// the first and last pills clear of the fade either way.
 func TestSubtabBarSharesPanelGlass(t *testing.T) {
 	raw, err := fs.ReadFile(staticFS, "static/bg.css")
 	if err != nil {
@@ -576,7 +583,7 @@ func TestSubtabBarSharesPanelGlass(t *testing.T) {
 		}
 		return bg[start : start+end+1], start + end + 1
 	}
-	slab, next := block("#main-content > .section-subtabs {", 0)
+	slab, _ := block("#main-content > .section-subtabs {", 0)
 	if slab == "" {
 		t.Fatal("bg.css lost the section-subtabs slab rule")
 	}
@@ -604,7 +611,23 @@ func TestSubtabBarSharesPanelGlass(t *testing.T) {
 	if strings.Contains(slab, "z-index") {
 		t.Error("the subtab slab asserts its own stacking again; it would paint over the tab strip's merge row")
 	}
-	rail, _ := block("#main-content > .section-subtabs {", next)
+	// The shared pane layer: under anchor positioning the bar
+	// and the body ride one layer, and the bar's slab glass and
+	// the body's own glass come off.
+	if !strings.Contains(bg, "@supports (anchor-name: --pane-bar)") ||
+		!strings.Contains(bg, "#main-content:has(> .section-subtabs)::before {") {
+		t.Error("bg.css lost the shared pane layer under the subtab bar and page body")
+	}
+	_, afterAnchor := block("#main-content > .section-subtabs {", strings.Index(bg, "@supports (anchor-name: --pane-bar)"))
+	paneOff, _ := block("#main-content > .section-subtabs {", afterAnchor)
+	if !strings.Contains(paneOff, "backdrop-filter: none;") {
+		t.Error("the pane-mode subtab bar keeps its own slab backdrop filter; the join to the body will seam")
+	}
+	mediaAt := strings.Index(bg, "@media (max-width: 1313px)")
+	if mediaAt < 0 {
+		t.Fatal("bg.css lost the tab rail media query")
+	}
+	rail, _ := block("#main-content > .section-subtabs {", mediaAt)
 	if rail == "" {
 		t.Fatal("bg.css lost the railed section-subtabs rule")
 	}

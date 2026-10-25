@@ -785,3 +785,141 @@ func TestIntelStoredRosterBackfill(t *testing.T) {
 		t.Errorf("the second drain changed the report:\nfirst  scan %q text %q\nsecond scan %q text %q", row.ScanID, row.Text, again.ScanID, again.Text)
 	}
 }
+
+// TestIntelRosterRescueVerifiedNames: a no-system roster line
+// whose names the site has not verified yet stores on the
+// speaker's system with the pilots EVE verifies, the line
+// itself as its text and the location note on it; the same
+// names one per line store as the local reading they are; with
+// no location on file for speaker or poster the line is
+// refused and nothing is stored.
+func TestIntelRosterRescueVerifiedNames(t *testing.T) {
+	app, conn, q := buildCorpTestApp(t, newFusedESI())
+	ctx := context.Background()
+	if _, err := conn.ExecContext(ctx, `INSERT INTO sde_systems (system_id, name, region_id, security) VALUES (30004759, '1DQ1-A', 10000060, -0.38) ON CONFLICT DO NOTHING`); err != nil {
+		t.Fatal(err)
+	}
+	const (
+		sysID   = int64(30004759)
+		poster  = int64(519225918) // Burzrujat
+		ownCorp = int64(98000301)
+	)
+	u, _ := q.CreateUser(ctx)
+	seedCharacter(t, q, u.ID, 90000301, "Channel Owner")
+	seedCharacter(t, q, u.ID, poster, "Burzrujat")
+	for _, id := range []int64{90000301, poster} {
+		if err := q.UpsertCharacterCorporation(ctx, db.UpsertCharacterCorporationParams{CharacterID: id, CorporationID: ownCorp, UpdatedAt: time.Now().UTC()}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	now := time.Now().UTC()
+	// The verified index knows the speaker only: none of the
+	// roster's names is in it, so no segmentation of the line
+	// can clear the roster bar from what the site already has.
+	if err := q.UpsertIntelPilotName(ctx, db.UpsertIntelPilotNameParams{NameLower: "burzrujat", CharacterID: poster, Name: "Burzrujat", CheckedAt: now}); err != nil {
+		t.Fatal(err)
+	}
+	if err := q.UpsertIntelPilotAffiliation(ctx, db.UpsertIntelPilotAffiliationParams{CharacterID: poster, CorporationID: ownCorp, CheckedAt: now}); err != nil {
+		t.Fatal(err)
+	}
+	seedSnapshot(t, q, poster, esi.SnapLocation, esi.Location{SolarSystemID: sysID})
+
+	rowsOf := func(cid int64) []db.ListIntelReportsRow {
+		t.Helper()
+		rows, err := q.ListIntelReports(ctx, db.ListIntelReportsParams{ChannelID: cid, BeforeAt: intelFeedTop(), BeforeID: 1 << 62, MaxRows: 100})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return rows
+	}
+	newChannel := func(name string) int64 {
+		t.Helper()
+		cid, err := q.CreateIntelChannel(ctx, db.CreateIntelChannelParams{OwnerUserID: u.ID, Name: name, CreatedAt: time.Now()})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return cid
+	}
+
+	// The fused rope, as the chat log records a pasted local:
+	// one line, the names run together, spoken by the located
+	// speaker and relayed by a poster with no location on file.
+	cid := newChannel("Unindexed Rope")
+	base := db.InsertIntelReportParams{ChannelID: cid, AuthorUserID: u.ID,
+		AuthorCharacterID: 91000301, Reporter: "Hostile One", CreatedAt: now, SeenAt: now}
+	line := now.Add(-time.Minute).Format("[ 2006.01.02 15:04:05 ] ") + "Burzrujat > " + miniBlob
+	if res := app.postChatLines(ctx, base, line, "axon"); res.Posted != 1 || res.Skipped != 0 {
+		t.Fatalf("unindexed roster line: %+v, want one posted", res)
+	}
+	rows := rowsOf(cid)
+	if len(rows) != 1 {
+		t.Fatalf("the channel holds %d reports, want 1", len(rows))
+	}
+	row := rows[0]
+	if row.SystemID != sysID || row.Reporter != "Burzrujat" || row.Kind != intelanalyze.KindLocal || row.ScanID != "" {
+		t.Errorf("stored report: system %d reporter %q kind %q scan %q, want a scanless local on the speaker's system", row.SystemID, row.Reporter, row.Kind, row.ScanID)
+	}
+	if want := miniBlob + " — system from the reporter's current location."; row.Text != want {
+		t.Errorf("stored report text:\n got %q\nwant %q", row.Text, want)
+	}
+	var a intelanalyze.Analysis
+	if err := json.Unmarshal([]byte(row.Analysis), &a); err != nil {
+		t.Fatalf("stored analysis: %v", err)
+	}
+	wantIDs := make([]int64, len(miniRoster))
+	for i, p := range miniRoster {
+		wantIDs[i] = p.id
+	}
+	gotIDs := make([]int64, len(a.Pilots))
+	for i, p := range a.Pilots {
+		gotIDs[i] = p.ID
+	}
+	if len(gotIDs) != len(wantIDs) {
+		t.Fatalf("stored pilots %v, want %v", gotIDs, wantIDs)
+	}
+	for i := range wantIDs {
+		if gotIDs[i] != wantIDs[i] {
+			t.Fatalf("stored pilots %v, want %v", gotIDs, wantIDs)
+		}
+	}
+	if a.Counts == nil || a.Counts.Neutral != len(miniRoster) || a.Counts.Hostile != 0 || a.Counts.Friendly != 0 {
+		t.Errorf("stored counts: %+v, want the verified pilots all neutral", a.Counts)
+	}
+	// The same line again is the same roster: one report.
+	if res := app.postChatLines(ctx, base, line, "axon"); res.Posted != 0 || res.Duplicates != 1 {
+		t.Errorf("unindexed roster re-sent: %+v, want a duplicate", res)
+	}
+
+	// The same names one per line, the clipboard's own shape.
+	cid2 := newChannel("Unindexed Lines")
+	base2 := db.InsertIntelReportParams{ChannelID: cid2, AuthorUserID: u.ID,
+		AuthorCharacterID: poster, Reporter: "Burzrujat", CreatedAt: now, SeenAt: now}
+	names := make([]string, len(miniRoster))
+	for i, p := range miniRoster {
+		names[i] = p.name
+	}
+	if res := app.postChatLines(ctx, base2, strings.Join(names, "\n"), "chat"); res.Posted != 1 || res.Skipped != 0 {
+		t.Fatalf("unindexed roster, one name a line: %+v, want one posted", res)
+	}
+	rows2 := rowsOf(cid2)
+	if len(rows2) != 1 {
+		t.Fatalf("the lines channel holds %d reports, want 1", len(rows2))
+	}
+	if row2 := rows2[0]; row2.SystemID != sysID || row2.Kind != intelanalyze.KindLocal || row2.ScanID == "" ||
+		!strings.HasPrefix(row2.Text, "6 in local:") {
+		t.Errorf("lines report: system %d kind %q scan %q text %q, want a local reading on the poster's system", row2.SystemID, row2.Kind, row2.ScanID, row2.Text)
+	}
+
+	// No location on file for the speaker or the poster: the
+	// line is refused and nothing is stored.
+	cid3 := newChannel("Unlocated Rope")
+	base3 := db.InsertIntelReportParams{ChannelID: cid3, AuthorUserID: u.ID,
+		AuthorCharacterID: 91000301, Reporter: "Hostile One", CreatedAt: now, SeenAt: now}
+	stranger := now.Add(-time.Minute).Format("[ 2006.01.02 15:04:05 ] ") + "Unverified Speaker > " + miniBlob
+	if res := app.postChatLines(ctx, base3, stranger, "axon"); res.Posted != 0 || res.Skipped != 1 {
+		t.Errorf("unlocated roster line: %+v, want it skipped", res)
+	}
+	if n := len(rowsOf(cid3)); n != 0 {
+		t.Errorf("the unlocated channel holds %d reports, want 0", n)
+	}
+}

@@ -436,6 +436,81 @@ func (app *Application) storeRosterScan(ctx context.Context, userID int64, roste
 	return id, err
 }
 
+// verifyRosterNames reads a roster line's names with EVE, for
+// a line the roster re-read could not make: the candidates --
+// the analysis's own unknowns, the fused text's case-boundary
+// candidates, and a spaced list's segments -- are verified in
+// bulk through lookupIntelNames, the drain's path, and the
+// text is then segmented against the index those answers
+// stand in. The pilots are the segmentation's, in text order,
+// with the channel's standing split read over them. ok is
+// false when the verified names are not a roster: fewer than
+// the roster bar's pilot count, or covering less than half
+// the text's letters and digits. The bar the re-read applies
+// (PassesRosterBar, against the names the site already knew)
+// is not re-applied here: a first-contact roster clears this
+// read on EVE's word alone.
+func (app *Application) verifyRosterNames(ctx context.Context, channelID int64, text string, unknown []string) ([]intelanalyze.Pilot, *intelanalyze.StandingCounts, bool) {
+	cand := map[string]bool{}
+	add := func(s string) {
+		s = strings.ToLower(strings.TrimSpace(s))
+		if s != "" && len([]rune(s)) <= 37 {
+			cand[s] = true
+		}
+	}
+	for _, u := range unknown {
+		add(u)
+	}
+	for _, c := range intelanalyze.FusedCandidates(text) {
+		add(c)
+	}
+	spaced := strings.NewReplacer(",", "  ", ";", "  ").Replace(text)
+	for _, seg := range strings.Split(spaced, "  ") {
+		add(seg)
+	}
+	if len(cand) == 0 {
+		return nil, nil, false
+	}
+	now := time.Now().UTC()
+	app.lookupIntelNames(ctx, cand, now)
+	ids := map[int64]bool{}
+	for n := range cand {
+		if row, err := app.queries.GetIntelPilotName(ctx, n); err == nil && row.CharacterID > 0 {
+			ids[row.CharacterID] = true
+		}
+	}
+	if len(ids) > 0 {
+		app.lookupIntelAffiliations(ctx, ids, now)
+	}
+	ix := app.intelNameIndex(ctx)
+	if ix == nil {
+		return nil, nil, false
+	}
+	seg, covered, total := ix.Segment(text)
+	if len(seg) < intelanalyze.FusedMinPilots || total == 0 || covered*100 < total*50 {
+		return nil, nil, false
+	}
+	st := app.channelStandingOf(ctx, channelID)
+	pilots := make([]intelanalyze.Pilot, 0, len(seg))
+	counts := intelanalyze.StandingCounts{}
+	for _, sp := range seg {
+		p := intelanalyze.Pilot{ID: sp.ID, Name: sp.Name, Red: st.watch[sp.ID]}
+		switch st.of(sp.ID) {
+		case bucketFriendly:
+			p.Friendly = true
+			counts.Friendly++
+		case bucketHostile:
+			counts.Hostile++
+		case bucketNeutral:
+			counts.Neutral++
+		default:
+			counts.Unclassified++
+		}
+		pilots = append(pilots, p)
+	}
+	return pilots, &counts, true
+}
+
 // analyzeIntel works out what a report says, and whether anything in
 // it is still to be looked up. A report carrying a scan reading
 // (hasScan) is read as it stands; any other report whose text is a

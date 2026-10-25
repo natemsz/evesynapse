@@ -131,7 +131,7 @@ type Analysis struct {
 	Kind   string  `json:"kind"`
 	Pilots []Pilot `json:"pilots,omitempty"`
 	Ships  []Ship  `json:"ships,omitempty"`
-	Gate   int64   `json:"gate,omitempty"` // the system the gate named leads to
+	Gate   int64   `json:"gate,omitempty"` // the neighbour system the reading names: its gate leads there, or the action is placed there
 	// GateModel says the gate was proposed by the residue
 	// model pass and verified against the system's real gates
 	// (app side), not read by the deterministic passes here.
@@ -173,9 +173,11 @@ type Dict struct {
 	Gate func(system int64, lower string) (id int64, ok bool)
 	// GateNear finds a neighbour system by a near-miss of its
 	// name (a letter slipped, or a shortened form). It is asked
-	// only for the name slot of a gate phrase, after Gate itself
-	// missed: a word that lands here is the gate, never a pilot,
-	// and is not offered to the pilot lookup.
+	// for the name slot of a gate phrase, after Gate itself
+	// missed, and wherever a line speaks of a place (a location
+	// preposition, a gate mention, a movement verb): a word
+	// that lands here is the system, a location, never a
+	// pilot, and is not offered to the pilot lookup.
 	GateNear func(system int64, lower string) (id int64, ok bool)
 	// Friend reports whether a pilot counts as friendly, and whether
 	// a set standing says they are hostile.
@@ -279,6 +281,7 @@ func Analyze(in Input, d Dict) Analysis {
 		claimed := make([]bool, len(seg))
 		owed := make([]bool, len(seg))
 		markLocation(seg, used)
+		placey := speaksOfPlace(seg)
 		pending := 0 // a count said before its ship ("2 sabres")
 		for i := 0; i < len(seg); i++ {
 			if used[i] {
@@ -348,6 +351,25 @@ func Analyze(in Input, d Dict) Analysis {
 						used[k] = true
 					}
 					matched = true
+				}
+				// The line speaks of a place and this phrase is
+				// a near-miss of a neighbour's name: the phrase
+				// is that system, a location, and is not offered
+				// to the pilot pass, even when a character
+				// carries the slipped spelling exactly. The
+				// hook is the gate slot's own: one neighbour in
+				// reach reads, two in reach is no reading. An
+				// explicit gate already read stands.
+				if !matched && placey && d.GateNear != nil {
+					if g, ok := d.GateNear(in.System, phrase); ok {
+						if a.Gate == 0 {
+							a.Gate = g
+						}
+						for k := i; k < i+n; k++ {
+							used[k] = true
+						}
+						matched = true
+					}
 				}
 			}
 			if matched {
@@ -632,6 +654,30 @@ func isDigits(w string) bool {
 		}
 	}
 	return true
+}
+
+// placeCues are the words that make a line speak of a place:
+// the location prepositions, the gate itself, and the movement
+// verbs of getting somewhere. A near-miss of a neighbour's name
+// only reads as that system where the line speaks of a place;
+// a bare name in a list of names stays a name.
+var placeCues = map[string]bool{
+	"in": true, "at": true, "to": true, "from": true, "into": true, "onto": true,
+	"gate": true, "gates": true,
+	"jump": true, "jumped": true, "jumps": true, "jumping": true,
+	"went": true, "gone": true, "going": true,
+	"moved": true, "moving": true, "heading": true, "headed": true,
+	"warped": true, "entered": true, "came": true, "through": true,
+}
+
+// speaksOfPlace is whether any word of seg is a place cue.
+func speaksOfPlace(seg []string) bool {
+	for _, w := range seg {
+		if placeCues[clean(w)] {
+			return true
+		}
+	}
+	return false
 }
 
 // markLocation marks a celestial's name in seg as read, so none of

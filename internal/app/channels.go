@@ -777,7 +777,7 @@ func (app *Application) handleChannelReport(w http.ResponseWriter, r *http.Reque
 	// precedence). (Classified on the text as pasted, before the
 	// clip above shortened it.)
 	if !base.Clear {
-		if p, counts, ok := app.scanReportOf(ctx, base, text, base.SystemID); ok {
+		if p, counts, ok := app.scanReportOf(ctx, base, text, base.SystemID, ""); ok {
 			id, err := app.insertIntelReport(ctx, p, false, counts)
 			switch {
 			case err == nil:
@@ -838,6 +838,26 @@ func (app *Application) posterSystemID(ctx context.Context, characterID int64) i
 	return loc.SolarSystemID
 }
 
+// speakerSystemID is the system a chat line's speaker is in, as
+// the site last synced it: the speaker's name resolved through
+// the verified pilot names to their character, then that
+// character's stored location, read as posterSystemID reads the
+// poster's. 0 when the speaker is no pilot the site has
+// verified, or has no location on file. A relayed log's lines
+// belong to their speaker, not to the character the relay posts
+// as: the roster the speaker pasted is about where the speaker
+// sits.
+func (app *Application) speakerSystemID(ctx context.Context, speaker string) int64 {
+	if speaker == "" {
+		return 0
+	}
+	row, err := app.queries.GetIntelPilotName(ctx, strings.ToLower(speaker))
+	if err != nil || row.CharacterID <= 0 {
+		return 0
+	}
+	return app.posterSystemID(ctx, row.CharacterID)
+}
+
 // scanReportOf reads raw as a scan paste, when it is one, and
 // makes the report a reading of it makes: the reading is stored
 // (as the scan tool stores it) and the report carries the
@@ -845,12 +865,13 @@ func (app *Application) posterSystemID(ctx context.Context, characterID int64) i
 // count -- never the raw paste. Which system, in order: the one
 // the reading finds in the paste, the one the poster named
 // (namedSystemID), and -- a paste needing a system and naming
-// none -- the poster's own current system, from their stored
-// location; the sentence then says so. ok is false when the
-// paste is no scan the tool knows, or no system is had any of
-// those ways: a local list on its own cannot be a report,
+// none -- the line's speaker's own current system when the
+// paste is a chat line with one, else the poster's, from their
+// stored locations; the sentence then says so. ok is false when
+// the paste is no scan the tool knows, or no system is had any
+// of those ways: a local list on its own cannot be a report,
 // reports being about a system.
-func (app *Application) scanReportOf(ctx context.Context, base db.InsertIntelReportParams, raw string, namedSystemID int64) (db.InsertIntelReportParams, *intelanalyze.StandingCounts, bool) {
+func (app *Application) scanReportOf(ctx context.Context, base db.InsertIntelReportParams, raw string, namedSystemID int64, speaker string) (db.InsertIntelReportParams, *intelanalyze.StandingCounts, bool) {
 	kind := scan.Detect(raw)
 	if kind == "" {
 		return base, nil, false
@@ -859,7 +880,7 @@ func (app *Application) scanReportOf(ctx context.Context, base db.InsertIntelRep
 	if err != nil {
 		return base, nil, false
 	}
-	return app.readingReportOf(ctx, base, app.readScan(ctx, p, namedSystemID), &p, raw)
+	return app.readingReportOf(ctx, base, app.readScan(ctx, p, namedSystemID), &p, raw, speaker)
 }
 
 // fusedScanReportOf is scanReportOf for a message whose scan the
@@ -868,7 +889,7 @@ func (app *Application) scanReportOf(ctx context.Context, base db.InsertIntelRep
 // clear the roster re-read's standard -- it accounts for most
 // of the message, and more of it than the plain reading's tags
 // do -- before it is stored the same way as any scan report.
-func (app *Application) fusedScanReportOf(ctx context.Context, base db.InsertIntelReportParams, raw string, namedSystemID int64) (db.InsertIntelReportParams, *intelanalyze.StandingCounts, bool) {
+func (app *Application) fusedScanReportOf(ctx context.Context, base db.InsertIntelReportParams, raw string, namedSystemID int64, speaker string) (db.InsertIntelReportParams, *intelanalyze.StandingCounts, bool) {
 	parsed, covered, total := app.reconstructFusedDScan(ctx, raw)
 	if len(parsed.DScan) == 0 || total == 0 || covered*100 < total*intelanalyze.FusedMinCoverPct {
 		return base, nil, false
@@ -877,20 +898,27 @@ func (app *Application) fusedScanReportOf(ctx context.Context, base db.InsertInt
 	if covered <= taggedCoverage(raw, plain.Pilots) {
 		return base, nil, false
 	}
-	return app.readingReportOf(ctx, base, app.readScan(ctx, parsed, namedSystemID), &parsed, raw)
+	return app.readingReportOf(ctx, base, app.readScan(ctx, parsed, namedSystemID), &parsed, raw, speaker)
 }
 
 // readingReportOf stores one scan reading as a report in the
 // base's channel: the scan row under a fresh ID, the sentence
 // scanReportText writes for the reading, and the reading's own
 // counts. The system is the reading's, and -- a reading with
-// none -- the poster's own current system, from their stored
-// location; the sentence then says so. ok is false when no
-// system is had either way.
-func (app *Application) readingReportOf(ctx context.Context, base db.InsertIntelReportParams, res scanResult, p *scan.Result, raw string) (db.InsertIntelReportParams, *intelanalyze.StandingCounts, bool) {
+// none -- the line's speaker's own current system when the
+// paste is a chat line with one, else the poster's, from their
+// stored locations; the sentence then says so. ok is false
+// when no system is had any of those ways.
+func (app *Application) readingReportOf(ctx context.Context, base db.InsertIntelReportParams, res scanResult, p *scan.Result, raw string, speaker string) (db.InsertIntelReportParams, *intelanalyze.StandingCounts, bool) {
 	fromPoster := false
 	if res.SystemID == 0 {
-		res.SystemID = app.posterSystemID(ctx, base.AuthorCharacterID)
+		// The speaker before the poster: a chat line is its
+		// speaker's report, and a relay posts it as another
+		// character entirely.
+		res.SystemID = app.speakerSystemID(ctx, speaker)
+		if res.SystemID == 0 {
+			res.SystemID = app.posterSystemID(ctx, base.AuthorCharacterID)
+		}
 		fromPoster = res.SystemID != 0
 	}
 	if res.SystemID == 0 {
@@ -973,11 +1001,11 @@ func (app *Application) postScanMessage(ctx context.Context, base db.InsertIntel
 		return msgPosted
 	}
 	if strings.Contains(raw, "\t") {
-		if fate := try(app.scanReportOf(ctx, b, raw, systemID)); fate != msgNotScan {
+		if fate := try(app.scanReportOf(ctx, b, raw, systemID, speaker)); fate != msgNotScan {
 			return fate
 		}
 	}
-	return try(app.fusedScanReportOf(ctx, b, raw, systemID))
+	return try(app.fusedScanReportOf(ctx, b, raw, systemID, speaker))
 }
 
 // postChatLines reads intel chat lines into reports on base's channel,
@@ -991,7 +1019,7 @@ func (app *Application) postChatLines(ctx context.Context, base db.InsertIntelRe
 	now := base.CreatedAt
 	// A scan pasted as chat lines is a scan, not chat: the same
 	// reading the scan tool makes of it, reported as one report.
-	if p, counts, ok := app.scanReportOf(ctx, base, lines, 0); ok {
+	if p, counts, ok := app.scanReportOf(ctx, base, lines, 0, ""); ok {
 		if _, err := app.insertIntelReport(ctx, p, false, counts); err != nil {
 			if errors.Is(err, errIntelDuplicate) {
 				res.Duplicates = 1
@@ -1091,15 +1119,19 @@ const (
 // system is scanReportOf's precedence as far as chat lines
 // reach: the line names none the chat parser could find (that
 // is why it is here) and a chat line names none in a form, so
-// what remains is the poster's own current system, and the
-// sentence says so, as it does for a scan paste. No known
-// location, or no roster in the text, and the line is skipped
-// exactly as it always was. A rescued report is stored as the
-// re-read is stored (insertIntelReport): the reading as its
-// scan with the line kept as the paste, the sentence for a
-// headline, recognised again by its pilot set.
+// what remains is the speaker's own current system, and
+// failing that the poster's, and the sentence says so, as it
+// does for a scan paste. No known location, or no roster in
+// the text, and the line is skipped exactly as it always was.
+// A rescued report is stored as the re-read is stored
+// (insertIntelReport): the reading as its scan with the line
+// kept as the paste, the sentence for a headline, recognised
+// again by its pilot set.
 func (app *Application) rescueRosterLine(ctx context.Context, base db.InsertIntelReportParams, nr intelchat.Report, source string) int {
-	sysID := app.posterSystemID(ctx, base.AuthorCharacterID)
+	sysID := app.speakerSystemID(ctx, nr.Speaker)
+	if sysID == 0 {
+		sysID = app.posterSystemID(ctx, base.AuthorCharacterID)
+	}
 	if sysID == 0 {
 		return rosterSkipped
 	}

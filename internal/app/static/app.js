@@ -3238,19 +3238,19 @@
 })();
 
 
-// --- Theme toggle (dark/light/factions) ------------------------------
-// A stored choice in localStorage wins and is written onto
-// document.documentElement.dataset.theme; with no stored
-// choice the attribute stays unset so the stylesheet's
-// prefers-color-scheme media query applies. The button only
-// renders while logged in (see base.html), so everything here
-// is guarded: no button, no work.
-// Simple dark/light toggle (faction themes deferred).
+// --- Backdrop cycle -------------------------------------------------
+// The sidebar's Theme button (and the phone sheet's matching
+// action) cycles the page backdrop through its three states:
+// Nebula (the interior art), Muted (the same art graded down),
+// and Ember glow (the signature horizon glow over warm black).
+// The choice rides html[data-backdrop]: bg.css keys the art
+// treatment off it, boot.js applies the saved value before
+// first paint, and the button only renders while logged in
+// (see base.html), so everything here is guarded: no button,
+// no work. The dark/light theme itself keeps its stored value;
+// this control no longer touches it.
 (function () {
   "use strict";
-  // The sidebar's toggle, plus any other the shell renders (the
-  // phone sections sheet carries one): every toggle flips the
-  // same theme.
   var btns = [];
   var byId = document.getElementById("theme-toggle");
   if (byId) btns.push(byId);
@@ -3258,39 +3258,37 @@
   for (var i = 0; i < extras.length; i++) btns.push(extras[i]);
   if (!btns.length) return;
   var root = document.documentElement;
-  var storageKey = "evesynapse-theme";
+  var storageKey = "evesynapse-backdrop";
+  var order = ["art", "muted", "glow"];
+  var names = { art: "Nebula", muted: "Muted nebula", glow: "Ember glow" };
 
-  function readSaved() {
-    try {
-      var v = window.localStorage.getItem(storageKey);
-      return (v === "dark" || v === "light") ? v : "";
-    } catch (e) { return ""; }
+  function current() {
+    var attr = root.getAttribute("data-backdrop");
+    return order.indexOf(attr) >= 0 ? attr : "art";
   }
-  function save(theme) {
+  function save(value) {
     try {
-      window.localStorage.setItem(storageKey, theme);
+      window.localStorage.setItem(storageKey, value);
     } catch (e) { /* private mode: the click still works this visit */ }
   }
-  // The theme in effect right now: a manually set attribute
-  // wins; otherwise dark is the default, whatever the OS prefers.
-  // Icon visibility is CSS-driven (html[data-theme] selectors).
-  function effective() {
-    var attr = root.getAttribute("data-theme");
-    if (attr === "dark" || attr === "light") return attr;
-    return "dark";
+  function apply(value) {
+    if (value === "art") root.removeAttribute("data-backdrop");
+    else root.setAttribute("data-backdrop", value);
+    btns.forEach(function (btn) {
+      btn.setAttribute("aria-label", "Backdrop: " + names[value] + ". Activate to change backdrop.");
+    });
   }
 
-  var saved = readSaved();
-  if (saved) root.setAttribute("data-theme", saved);
-
+  apply(current());
   btns.forEach(function (btn) {
     btn.addEventListener("click", function () {
-      var next = effective() === "dark" ? "light" : "dark";
-      root.setAttribute("data-theme", next);
+      var next = order[(order.indexOf(current()) + 1) % order.length];
+      apply(next);
       save(next);
     });
   });
 })();
+
 
 // Character selector dropdown with search/filter.
 (function() {

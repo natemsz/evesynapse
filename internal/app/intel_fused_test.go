@@ -372,7 +372,7 @@ func TestIntelFusedRoster(t *testing.T) {
 	lines := "Altorr\nKen117\nVild\nKhamez\nStrokes"
 	base := db.InsertIntelReportParams{ChannelID: cid, AuthorUserID: u.ID,
 		AuthorCharacterID: poster, Reporter: "Burzrujat", CreatedAt: now, SeenAt: now}
-	if res := app.postChatLines(ctx, base, lines, "chat"); res.Posted != 1 {
+	if res := app.postChatLines(ctx, base, lines, "chat", ""); res.Posted != 1 {
 		t.Fatalf("roster paste on the poster's system: %+v, want one posted", res)
 	}
 	rows, err := q.ListIntelReports(ctx, db.ListIntelReportsParams{ChannelID: cid, BeforeAt: intelFeedTop(), BeforeID: 1 << 62, MaxRows: 100})
@@ -393,7 +393,7 @@ func TestIntelFusedRoster(t *testing.T) {
 	}
 	base.AuthorCharacterID = 91000301
 	base.Reporter = "Hostile One"
-	if res := app.postChatLines(ctx, base, lines, "chat"); res.Posted != 0 || res.Duplicates != 0 {
+	if res := app.postChatLines(ctx, base, lines, "chat", ""); res.Posted != 0 || res.Duplicates != 0 {
 		t.Errorf("roster paste with no known location: %+v, want it refused", res)
 	}
 
@@ -430,7 +430,7 @@ func TestIntelFusedRoster(t *testing.T) {
 	// no pilot the site has verified: skipped, as such lines
 	// always were, and nothing is stored.
 	strangerLine := now.Add(-time.Minute).Format("[ 2006.01.02 15:04:05 ] ") + "Unverified Speaker > " + fusedBlob
-	if res := app.postChatLines(ctx, base2, strangerLine, "axon"); res.Posted != 0 || res.Duplicates != 0 || res.Skipped != 1 {
+	if res := app.postChatLines(ctx, base2, strangerLine, "axon", ""); res.Posted != 0 || res.Duplicates != 0 || res.Skipped != 1 {
 		t.Errorf("fused line, no known location: %+v, want it skipped", res)
 	} else if len(res.SkippedLines) != 1 || res.SkippedLines[0] != strangerLine {
 		t.Errorf("skipped lines kept as written: %q", res.SkippedLines)
@@ -444,7 +444,7 @@ func TestIntelFusedRoster(t *testing.T) {
 	// system, the sentence saying where the system came from.
 	base2.AuthorCharacterID = poster
 	base2.Reporter = "Burzrujat"
-	if res := app.postChatLines(ctx, base2, axonLine, "axon"); res.Posted != 1 || res.Skipped != 0 {
+	if res := app.postChatLines(ctx, base2, axonLine, "axon", ""); res.Posted != 1 || res.Skipped != 0 {
 		t.Fatalf("fused line on the poster's system: %+v, want one posted", res)
 	}
 	rows2 := rowsOf2()
@@ -465,18 +465,18 @@ func TestIntelFusedRoster(t *testing.T) {
 		t.Errorf("rescued report pilots:\n got %v\nwant %v", got, wantA)
 	}
 	// The same line again is the same roster: one report.
-	if res := app.postChatLines(ctx, base2, axonLine, "axon"); res.Posted != 0 || res.Duplicates != 1 {
+	if res := app.postChatLines(ctx, base2, axonLine, "axon", ""); res.Posted != 0 || res.Duplicates != 1 {
 		t.Errorf("fused line re-sent: %+v, want a duplicate", res)
 	}
 
 	// (c) Plain chatter naming no system still skips.
-	if res := app.postChatLines(ctx, base2, "anyone got eyes on the in-gate tonight", "chat"); res.Posted != 0 || res.Skipped != 1 {
+	if res := app.postChatLines(ctx, base2, "anyone got eyes on the in-gate tonight", "chat", ""); res.Posted != 0 || res.Skipped != 1 {
 		t.Errorf("chatter line: %+v, want it skipped", res)
 	}
 
 	// (d) The blob with a system named in the line is read as
 	// it always was: a roster on that system, no fallback note.
-	if res := app.postChatLines(ctx, base2, "Jita "+fusedBlob, "axon"); res.Posted != 1 {
+	if res := app.postChatLines(ctx, base2, "Jita "+fusedBlob, "axon", ""); res.Posted != 1 {
 		t.Fatalf("fused line naming its system: %+v, want one posted", res)
 	}
 	rows2 = rowsOf2()
@@ -502,7 +502,7 @@ func TestIntelFusedRoster(t *testing.T) {
 	}
 	base3 := db.InsertIntelReportParams{ChannelID: cid3, AuthorUserID: u.ID,
 		AuthorCharacterID: 91000301, Reporter: "Hostile One", CreatedAt: now, SeenAt: now}
-	if res := app.postChatLines(ctx, base3, axonLine, "axon"); res.Posted != 1 || res.Skipped != 0 {
+	if res := app.postChatLines(ctx, base3, axonLine, "axon", ""); res.Posted != 1 || res.Skipped != 0 {
 		t.Fatalf("relayed line on the speaker's system: %+v, want one posted", res)
 	}
 	rows3, err := q.ListIntelReports(ctx, db.ListIntelReportsParams{ChannelID: cid3, BeforeAt: intelFeedTop(), BeforeID: 1 << 62, MaxRows: 100})
@@ -612,7 +612,7 @@ func TestIntelChatScanMessages(t *testing.T) {
 	flush := stamp(-3*time.Minute) + "Burzrujat > " + prodScanA + "\n" +
 		stamp(-3*time.Minute+time.Second) + "Burzrujat > " + prodScanB + "\n" +
 		stamp(-3*time.Minute+2*time.Second) + "Burzrujat > " + prodScanA
-	if res := app.postChatLines(ctx, base, flush, "axon"); res.Posted != 1 || res.Duplicates != 2 {
+	if res := app.postChatLines(ctx, base, flush, "axon", ""); res.Posted != 1 || res.Duplicates != 2 {
 		t.Fatalf("the three copies of one scan: %+v, want one posted and two duplicates", res)
 	}
 	rows, err := q.ListIntelReports(ctx, db.ListIntelReportsParams{ChannelID: cid, BeforeAt: intelFeedTop(), BeforeID: 1 << 62, MaxRows: 100})
@@ -655,7 +655,7 @@ func TestIntelChatScanMessages(t *testing.T) {
 	// Report 17's roster, fused the same way: one roster
 	// report on the poster's system, the blob nowhere in it.
 	line := stamp(-2*time.Minute) + "Burzrujat > " + prodRoster17
-	if res := app.postChatLines(ctx, base, line, "axon"); res.Posted != 1 {
+	if res := app.postChatLines(ctx, base, line, "axon", ""); res.Posted != 1 {
 		t.Fatalf("the fused roster line: %+v, want one posted", res)
 	}
 	rows, err = q.ListIntelReports(ctx, db.ListIntelReportsParams{ChannelID: cid, BeforeAt: intelFeedTop(), BeforeID: 1 << 62, MaxRows: 100})
@@ -848,7 +848,7 @@ func TestIntelRosterRescueVerifiedNames(t *testing.T) {
 	base := db.InsertIntelReportParams{ChannelID: cid, AuthorUserID: u.ID,
 		AuthorCharacterID: 91000301, Reporter: "Hostile One", CreatedAt: now, SeenAt: now}
 	line := now.Add(-time.Minute).Format("[ 2006.01.02 15:04:05 ] ") + "Burzrujat > " + miniBlob
-	if res := app.postChatLines(ctx, base, line, "axon"); res.Posted != 1 || res.Skipped != 0 {
+	if res := app.postChatLines(ctx, base, line, "axon", ""); res.Posted != 1 || res.Skipped != 0 {
 		t.Fatalf("unindexed roster line: %+v, want one posted", res)
 	}
 	rows := rowsOf(cid)
@@ -886,7 +886,7 @@ func TestIntelRosterRescueVerifiedNames(t *testing.T) {
 		t.Errorf("stored counts: %+v, want the verified pilots all neutral", a.Counts)
 	}
 	// The same line again is the same roster: one report.
-	if res := app.postChatLines(ctx, base, line, "axon"); res.Posted != 0 || res.Duplicates != 1 {
+	if res := app.postChatLines(ctx, base, line, "axon", ""); res.Posted != 0 || res.Duplicates != 1 {
 		t.Errorf("unindexed roster re-sent: %+v, want a duplicate", res)
 	}
 
@@ -898,7 +898,7 @@ func TestIntelRosterRescueVerifiedNames(t *testing.T) {
 	for i, p := range miniRoster {
 		names[i] = p.name
 	}
-	if res := app.postChatLines(ctx, base2, strings.Join(names, "\n"), "chat"); res.Posted != 1 || res.Skipped != 0 {
+	if res := app.postChatLines(ctx, base2, strings.Join(names, "\n"), "chat", ""); res.Posted != 1 || res.Skipped != 0 {
 		t.Fatalf("unindexed roster, one name a line: %+v, want one posted", res)
 	}
 	rows2 := rowsOf(cid2)
@@ -916,10 +916,124 @@ func TestIntelRosterRescueVerifiedNames(t *testing.T) {
 	base3 := db.InsertIntelReportParams{ChannelID: cid3, AuthorUserID: u.ID,
 		AuthorCharacterID: 91000301, Reporter: "Hostile One", CreatedAt: now, SeenAt: now}
 	stranger := now.Add(-time.Minute).Format("[ 2006.01.02 15:04:05 ] ") + "Unverified Speaker > " + miniBlob
-	if res := app.postChatLines(ctx, base3, stranger, "axon"); res.Posted != 0 || res.Skipped != 1 {
+	if res := app.postChatLines(ctx, base3, stranger, "axon", ""); res.Posted != 0 || res.Skipped != 1 {
 		t.Errorf("unlocated roster line: %+v, want it skipped", res)
 	}
 	if n := len(rowsOf(cid3)); n != 0 {
 		t.Errorf("the unlocated channel holds %d reports, want 0", n)
+	}
+}
+
+// TestIntelBatchSpeaker: a batch naming its speaker files
+// under that pilot when the pilot is the posting account's
+// own: a scan-shaped batch reads on the speaker's system
+// though the poster has none on file, and a roster line
+// naming no speaker of its own is rescued as the batch
+// speaker's. A batch naming a verified pilot of another
+// account, or a name no pilot carries, is read exactly as
+// if it named no speaker.
+func TestIntelBatchSpeaker(t *testing.T) {
+	app, conn, q := buildCorpTestApp(t, newFusedESI())
+	ctx := context.Background()
+	for _, s := range []string{
+		`INSERT INTO sde_systems (system_id, name, region_id, security) VALUES (30004759, '1DQ1-A', 10000060, -0.38) ON CONFLICT DO NOTHING`,
+		`INSERT INTO sde_systems (system_id, name, region_id, security) VALUES (30000142, 'Jita', 10000002, 0.946) ON CONFLICT DO NOTHING`,
+	} {
+		if _, err := conn.ExecContext(ctx, s); err != nil {
+			t.Fatal(err)
+		}
+	}
+	const (
+		sysID    = int64(30004759) // the account pilot's system
+		jitaID   = int64(30000142) // the outside pilot's system
+		poster   = int64(90000301) // the account's poster, no location on file
+		alt      = int64(2115000001)
+		outsider = int64(2115000002)
+	)
+	u, _ := q.CreateUser(ctx)
+	seedCharacter(t, q, u.ID, poster, "Channel Owner")
+	seedCharacter(t, q, u.ID, alt, "Flying Alt")
+	other, _ := q.CreateUser(ctx)
+	seedCharacter(t, q, other.ID, outsider, "Outside Pilot")
+	now := time.Now().UTC()
+	// Both named pilots are verified, each with a location on
+	// file; only the alt is the posting account's.
+	for _, p := range []struct {
+		lower string
+		id    int64
+		name  string
+		sys   int64
+	}{
+		{"flying alt", alt, "Flying Alt", sysID},
+		{"outside pilot", outsider, "Outside Pilot", jitaID},
+	} {
+		if err := q.UpsertIntelPilotName(ctx, db.UpsertIntelPilotNameParams{NameLower: p.lower, CharacterID: p.id, Name: p.name, CheckedAt: now}); err != nil {
+			t.Fatal(err)
+		}
+		seedSnapshot(t, q, p.id, esi.SnapLocation, esi.Location{SolarSystemID: p.sys})
+	}
+
+	rowsOf := func(cid int64) []db.ListIntelReportsRow {
+		t.Helper()
+		rows, err := q.ListIntelReports(ctx, db.ListIntelReportsParams{ChannelID: cid, BeforeAt: intelFeedTop(), BeforeID: 1 << 62, MaxRows: 100})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return rows
+	}
+	post := func(name, batch, speaker string) (int64, chatPostResult) {
+		t.Helper()
+		cid, err := q.CreateIntelChannel(ctx, db.CreateIntelChannelParams{OwnerUserID: u.ID, Name: name, CreatedAt: time.Now()})
+		if err != nil {
+			t.Fatal(err)
+		}
+		base := db.InsertIntelReportParams{ChannelID: cid, AuthorUserID: u.ID,
+			AuthorCharacterID: poster, Reporter: "Channel Owner", CreatedAt: now, SeenAt: now}
+		return cid, app.postChatLines(ctx, base, batch, "axon", speaker)
+	}
+
+	// The roster as a scan-shaped batch, one name a line: it
+	// reads on the batch speaker's system, the poster having
+	// no location to give it.
+	names := make([]string, len(miniRoster))
+	for i, p := range miniRoster {
+		names[i] = p.name
+	}
+	cid, res := post("Batch Speaker Scan", strings.Join(names, "\n"), "Flying Alt")
+	if res.Posted != 1 || res.Skipped != 0 {
+		t.Fatalf("scan batch with a batch speaker: %+v, want one posted", res)
+	}
+	if rows := rowsOf(cid); len(rows) != 1 || rows[0].SystemID != sysID || rows[0].Kind != intelanalyze.KindLocal || rows[0].ScanID == "" {
+		t.Errorf("scan batch report: %+v, want a local reading on the speaker's system", rows)
+	}
+
+	// The fused rope naming no speaker of its own: rescued
+	// as the batch speaker's line, on the speaker's system.
+	cid, res = post("Batch Speaker Rope", miniBlob, "Flying Alt")
+	if res.Posted != 1 || res.Skipped != 0 {
+		t.Fatalf("speakerless rope with a batch speaker: %+v, want one posted", res)
+	}
+	if rows := rowsOf(cid); len(rows) != 1 || rows[0].SystemID != sysID || rows[0].Reporter != "Flying Alt" || rows[0].Kind != intelanalyze.KindLocal || rows[0].ScanID != "" {
+		t.Errorf("rope report: %+v, want a scanless local by the batch speaker on their system", rows)
+	}
+
+	// A verified pilot of another account is not the batch's
+	// speaker, however well located they are: with no location
+	// for the poster either, the line is refused.
+	cid, res = post("Outside Speaker Rope", miniBlob, "Outside Pilot")
+	if res.Posted != 0 || res.Skipped != 1 {
+		t.Errorf("rope naming an outside speaker: %+v, want it skipped", res)
+	}
+	if n := len(rowsOf(cid)); n != 0 {
+		t.Errorf("the outside-speaker channel holds %d reports, want 0", n)
+	}
+
+	// A name no pilot carries is no speaker either.
+	cid, res = post("Nameless Speaker Rope", miniBlob, "Unverified Name")
+	if res.Posted != 0 || res.Skipped != 1 {
+		t.Errorf("rope naming no pilot: %+v, want it skipped", res)
+	}
+	if n := len(rowsOf(cid)); n != 0 {
+		t.Errorf("the nameless-speaker channel holds %d reports, want 0", n)
 	}
 }

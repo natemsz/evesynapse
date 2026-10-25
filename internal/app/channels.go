@@ -727,7 +727,7 @@ func (app *Application) handleChannelReport(w http.ResponseWriter, r *http.Reque
 			}
 			app.flashBack(w, r, page)(msg)
 		}
-		res := app.postChatLines(ctx, base, lines, "chat")
+		res := app.postChatLines(ctx, base, lines, "chat", "")
 		posted := res.Posted
 		msg := fmt.Sprintf("Posted %s from the pasted lines.", plural(posted, "report"))
 		if res.Duplicates > 0 {
@@ -856,6 +856,36 @@ func (app *Application) speakerSystemID(ctx context.Context, speaker string) int
 		return 0
 	}
 	return app.posterSystemID(ctx, row.CharacterID)
+}
+
+// accountSpeaker checks a batch's claimed speaker against the
+// account posting it: the name resolves through the verified
+// pilot names, the way a chat line's speaker resolves, and the
+// character it names is one of the account's own. It returns
+// the name as verified, for the batch to be read as that
+// pilot's, or "" when the claim names no verified pilot, or a
+// pilot of another account: a batch files under the posting
+// account's own pilots only, and a claim that fails the check
+// leaves the batch exactly as if it named no speaker.
+func (app *Application) accountSpeaker(ctx context.Context, userID int64, speaker string) string {
+	speaker = strings.TrimSpace(speaker)
+	if speaker == "" || userID <= 0 {
+		return ""
+	}
+	row, err := app.queries.GetIntelPilotName(ctx, strings.ToLower(speaker))
+	if err != nil || row.CharacterID <= 0 {
+		return ""
+	}
+	chars, err := app.queries.ListCharactersByUser(ctx, userID)
+	if err != nil {
+		return ""
+	}
+	for _, ch := range chars {
+		if ch.CharacterID == row.CharacterID {
+			return row.Name
+		}
+	}
+	return ""
 }
 
 // scanReportOf reads raw as a scan paste, when it is one, and
@@ -1013,13 +1043,18 @@ func (app *Application) postScanMessage(ctx context.Context, base db.InsertIntel
 // are the report's; a report already in the channel (the same moment,
 // system, speaker and words) is not stored twice, so lines sent again
 // -- a pasted log overlapping the last, an Axon restarting, two
-// characters logging the same channel -- land once.
-func (app *Application) postChatLines(ctx context.Context, base db.InsertIntelReportParams, lines, source string) chatPostResult {
+// characters logging the same channel -- land once. batchSpeaker is
+// the speaker the batch as a whole claims (the overlay posting as the
+// character at the keyboard, whose lines carry no speaker of their
+// own): it counts only as the posting account's own pilot
+// (accountSpeaker), and everywhere else a line's own speaker stands.
+func (app *Application) postChatLines(ctx context.Context, base db.InsertIntelReportParams, lines, source, batchSpeaker string) chatPostResult {
 	var res chatPostResult
 	now := base.CreatedAt
+	batchSpeaker = app.accountSpeaker(ctx, base.AuthorUserID, batchSpeaker)
 	// A scan pasted as chat lines is a scan, not chat: the same
 	// reading the scan tool makes of it, reported as one report.
-	if p, counts, ok := app.scanReportOf(ctx, base, lines, 0, ""); ok {
+	if p, counts, ok := app.scanReportOf(ctx, base, lines, 0, batchSpeaker); ok {
 		if _, err := app.insertIntelReport(ctx, p, false, counts); err != nil {
 			if errors.Is(err, errIntelDuplicate) {
 				res.Duplicates = 1
@@ -1052,7 +1087,15 @@ func (app *Application) postChatLines(ctx context.Context, base db.InsertIntelRe
 		case msgFailed:
 			continue
 		}
-		switch app.rescueRosterLine(ctx, base, nr, source) {
+		// A line naming no speaker of its own is the batch
+		// speaker's line: the rescue reads it with that
+		// speaker's location before the poster's, as it does
+		// a spoken line.
+		rnr := nr
+		if rnr.Speaker == "" {
+			rnr.Speaker = batchSpeaker
+		}
+		switch app.rescueRosterLine(ctx, base, rnr, source) {
 		case rosterStored:
 			res.Posted++
 		case rosterDuplicate:

@@ -324,19 +324,20 @@ html[data-theme="light"] .btn.btn-quiet {
    The strip is flat content on the assembly's pane: the shared
    pane layer (the @supports pane block below) spans from the
    strip's top edge when a strip is present, so the strip
-   carries no glass, no border and no rim of its own — a second
-   traced rectangle inside the pane's frame reads as a tray
-   laid on the pane, and a frost of its own over the pane's
-   stacks tint on tint. The tabs are flat segments (the blur
-   switch, above): no tint, no blur, no border of their own;
-   the active tab speaks with the nav bar's single-stripe
-   vocabulary, an accent stripe across its top and bright text,
-   and hover answers with a flat row tint and bright text. The
-   row overlaps the next surface's top edge by 1px, and a
-   tabbed panel squares its top corners (folder body); pages
-   without a tab row keep all four rounded. At rail width the
-   strip detaches into its own rail and frosts itself (the
-   blur switch's on-state, in the rail block below). */
+   itself carries no band glass, no border and no rim of its
+   own — a second traced rectangle inside the pane's frame
+   reads as a tray laid on the pane, and a frost of its own
+   over the pane's stacks tint on tint. The tabs keep their
+   folder shape: bordered boxes with rounded top corners, the
+   inactive ones recessed on a dark tint, the active one in
+   the panel's own glass with an accent stripe across its top
+   and no bottom border, so it merges into the pane under it;
+   hover answers in the saturate vocabulary. The row overlaps
+   the next surface's top edge by 1px, and a tabbed panel
+   squares its top corners (folder body); pages without a tab
+   row keep all four rounded. At rail width the strip detaches
+   into its own rail and frosts itself (the blur switch's
+   on-state, in the rail block below). */
 #main-content > h1 { font-size: 1.75rem; }
 #main-content > .section-tabs {
   display: flex;
@@ -346,10 +347,7 @@ html[data-theme="light"] .btn.btn-quiet {
   padding: 0;
   position: relative;
   z-index: 1;
-  border-radius: var(--r-lg) var(--r-lg) 0 0;
 }
-#main-content > .section-tabs > a,
-#main-content > .section-tabs > .tabs-more { position: relative; z-index: 1; }
 #main-content:has(> .section-tabs) > .page-body { margin-top: 0; }
 /* A tabbed panel is a folder body: its top edge runs straight
    under the tab row. The panel's rounded top corners would curve
@@ -359,17 +357,39 @@ html[data-theme="light"] .btn.btn-quiet {
    the radius only at the bottom. */
 #main-content:has(> .section-tabs) > .page-body { border-top-left-radius: 0; border-top-right-radius: 0; }
 #main-content > .section-tabs a {
+  border: 1px solid rgba(255, 110, 0, 0.22);
+  border-radius: 0.5rem 0.5rem 0 0;
+  background: rgba(23, 17, 13, 0.55);
+  -webkit-backdrop-filter: blur(10px) saturate(1.2);
+  backdrop-filter: blur(10px) saturate(1.2);
   padding: 0.4rem 0.85rem;
-  transition: background-color 150ms ease, color 150ms ease;
+  transition: background-color 150ms ease, border-color 150ms ease, filter 150ms ease;
 }
 #main-content > .section-tabs a:hover {
-  background: var(--row-hover);
-  color: var(--text-bright);
+  background: transparent;
+  border-color: rgba(255, 130, 20, 0.45);
+  filter: saturate(1.5);
 }
 #main-content > .section-tabs a.active {
+  background: var(--glass);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(0.9);
+  backdrop-filter: blur(var(--glass-blur)) saturate(0.9);
   border-top: 3px solid var(--accent);
+  border-left-color: var(--glass-edge);
+  border-right-color: var(--glass-edge);
+  border-bottom: none;
   padding-top: calc(0.4rem - 2px);
   color: var(--text-bright);
+}
+html[data-theme="light"] #main-content > .section-tabs a {
+  background: rgba(253, 251, 246, 0.72);
+  border-color: #d3c7ae;
+}
+html[data-theme="light"] #main-content > .section-tabs a.active {
+  background: var(--glass);
+  border-top-color: var(--accent);
+  border-left-color: var(--glass-edge);
+  border-right-color: var(--glass-edge);
 }
 
 /* Grouped sections (corporation, market) carry a sub-row
@@ -472,20 +492,40 @@ html[data-theme="light"] #main-content > .section-subtabs a.active {
 }
 #main-content > .section-tabs .tabs-more-btn {
   color: inherit;
-  background: none;
-  border: none;
+  border: 1px solid rgba(255, 110, 0, 0.22);
+  border-radius: 0.5rem 0.5rem 0 0;
+  background: rgba(23, 17, 13, 0.55);
+  -webkit-backdrop-filter: blur(10px) saturate(1.2);
+  backdrop-filter: blur(10px) saturate(1.2);
   padding: 0.4rem 0.85rem;
   cursor: pointer;
-  transition: background-color 150ms ease, color 150ms ease;
+  transition: background-color 150ms ease, border-color 150ms ease, filter 150ms ease;
 }
 #main-content > .section-tabs .tabs-more-btn:hover {
-  background: var(--row-hover);
-  color: var(--text-bright);
+  background: transparent;
+  border-color: rgba(255, 130, 20, 0.45);
+  filter: saturate(1.5);
 }
 #main-content > .section-tabs .tabs-more.has-active .tabs-more-btn {
+  background: var(--glass);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(0.9);
+  backdrop-filter: blur(var(--glass-blur)) saturate(0.9);
   border-top: 3px solid var(--accent);
+  border-left-color: var(--glass-edge);
+  border-right-color: var(--glass-edge);
+  border-bottom: none;
   padding-top: calc(0.4rem - 2px);
   color: var(--text-bright);
+}
+html[data-theme="light"] #main-content > .section-tabs .tabs-more-btn {
+  background: rgba(253, 251, 246, 0.72);
+  border-color: #d3c7ae;
+}
+html[data-theme="light"] #main-content > .section-tabs .tabs-more.has-active .tabs-more-btn {
+  background: var(--glass);
+  border-top-color: var(--accent);
+  border-left-color: var(--glass-edge);
+  border-right-color: var(--glass-edge);
 }
 #main-content > .section-subtabs .tabs-more-btn {
   color: inherit;
@@ -570,8 +610,10 @@ html[data-theme="light"] #main-content > .section-subtabs .tabs-more-btn {
    by a hairline only, and its own slab glass comes off, as
    does the body's. The layer paints behind the content
    (negative z-index in the root context) and above nothing
-   but the wallpaper. The pane's top corners stay square: the
-   folder strip above owns the assembly's rounded top. Where
+   but the wallpaper. Where the pane starts at the subtab bar
+   its top corners stay square under the folder strip; the
+   strip-top span below gives it the rounded top instead.
+   Where
    anchor positioning is unavailable the per-element glass
    above stands unchanged. */
 @supports (anchor-name: --pane-bar) {

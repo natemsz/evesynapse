@@ -91,11 +91,12 @@ func TestEmberGlassAndSkyRules(t *testing.T) {
 		!strings.Contains(base, "{{define \"pagetabs\"}}{{end}}") {
 		t.Error("base.html lost the pagetabs invocation above .page-body or its empty default")
 	}
-	// The tabs are flat segments on the assembly's pane:
-	// no tint, blur or border of their own, hover answers with a
-	// flat row tint, and the active tab's only orange is its top
-	// stripe. The More panel's link hover keeps the saturate(1.5)
-	// response on its flat rows.
+	// The tabs keep their folder shape on the assembly's pane:
+	// bordered boxes with rounded top corners, the active one in
+	// the panel's glass with an accent top stripe and no bottom
+	// border where it merges into the pane, hover in the
+	// saturate(1.5) vocabulary. The More panel's link hover keeps
+	// the saturate(1.5) response on its flat rows.
 	for _, want := range []string{
 		"#main-content > .section-tabs a.active",
 		"border-top: 3px solid var(--accent);",

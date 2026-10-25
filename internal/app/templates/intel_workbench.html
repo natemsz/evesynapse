@@ -329,7 +329,7 @@
 
 {{define "wb-pilot-row"}}<li class="wb-pilot{{if .HasDrawer}} wb-clickable{{end}}" data-bucket="{{.Bucket}}"{{if .Young}} data-young="1"{{end}}{{if .Recent}} data-recent="1"{{end}}{{if .HasDrawer}} data-wb-open-pilot="{{.ID}}" tabindex="0"{{end}}>
   <span class="wb-dot wb-dot-{{.Bucket}}"></span>
-  <span class="wb-pilot-main"><span class="wb-pilot-name">{{.Name}}</span>{{if .CorpLine}}<span class="wb-pilot-sub">{{.CorpLine}}</span>{{end}}</span>
+  <span class="wb-pilot-main"><span class="wb-pilot-name">{{if .ID}}<a href="/pilot/?character={{.ID}}">{{.Name}}</a>{{else}}{{.Name}}{{end}}</span>{{if .CorpLine}}<span class="wb-pilot-sub">{{.CorpLine}}</span>{{end}}</span>
   {{if or .Young .Recent .KilledHere}}<span class="wb-pilot-flags">{{if .Young}}<span class="wb-flag wb-flag-young">Young alt &lt;90d</span>{{end}}{{if .Recent}}<span class="wb-flag wb-flag-recent">Joined &lt;7d</span>{{end}}{{if .KilledHere}}<span class="wb-flag wb-flag-kill">Killed here this week</span>{{end}}</span>{{end}}
   {{if .Facts}}<span class="wb-pilot-facts">{{.Facts}}</span>{{end}}
 </li>{{end}}

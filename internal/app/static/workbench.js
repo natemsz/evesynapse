@@ -145,7 +145,13 @@
   });
   qsa("[data-wb-open-pilot]").forEach(function (row) {
     function open() { openDrawer(document.querySelector('[data-wb-pilot-drawer="' + row.getAttribute("data-wb-open-pilot") + '"]')); }
-    row.addEventListener("click", open);
+    row.addEventListener("click", function (e) {
+      // The pilot's name is a link to their page: a click on
+      // it goes there, and only the rest of the row opens the
+      // drawer.
+      if (e.target.closest("a")) return;
+      open();
+    });
     row.addEventListener("keydown", function (e) { if (e.key === "Enter") open(); });
   });
   qsa("[data-wb-close]", document).forEach(function (b) { b.addEventListener("click", closeDrawers); });

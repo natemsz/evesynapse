@@ -153,8 +153,8 @@ func (s *fusedESI) RoundTrip(req *http.Request) (*http.Response, error) {
 // arriving again, in either face, is one report (its pilot set
 // is its identity). A roster nobody has looked up yet waits for
 // the drain and is re-read there. Plain prose is never re-read.
-// A scan paste naming no system falls back to the poster's own
-// current system.
+// A paste naming no system falls back to the line's speaker's
+// own current system, then the poster's.
 func TestIntelFusedRoster(t *testing.T) {
 	app, conn, q := buildCorpTestApp(t, newFusedESI())
 	ctx := context.Background()
@@ -399,7 +399,7 @@ func TestIntelFusedRoster(t *testing.T) {
 
 	// A system named with the paste beats the poster's location.
 	p2, _, ok := app.scanReportOf(ctx, db.InsertIntelReportParams{ChannelID: cid, AuthorUserID: u.ID,
-		AuthorCharacterID: poster, Reporter: "Burzrujat", CreatedAt: now, SeenAt: now}, lines, 30000142)
+		AuthorCharacterID: poster, Reporter: "Burzrujat", CreatedAt: now, SeenAt: now}, lines, 30000142, "")
 	if !ok || p2.SystemID != 30000142 || strings.Contains(p2.Text, "reporter's current location") {
 		t.Errorf("named system precedence: ok %v system %d text %q", ok, p2.SystemID, p2.Text)
 	}
@@ -426,11 +426,13 @@ func TestIntelFusedRoster(t *testing.T) {
 	base2 := db.InsertIntelReportParams{ChannelID: cid2, AuthorUserID: u.ID,
 		AuthorCharacterID: 91000301, Reporter: "Hostile One", CreatedAt: now, SeenAt: now}
 
-	// (b) No location on file for the poster: skipped, as such
-	// lines always were, and nothing is stored.
-	if res := app.postChatLines(ctx, base2, axonLine, "axon"); res.Posted != 0 || res.Duplicates != 0 || res.Skipped != 1 {
+	// (b) No location on file for the poster and the speaker
+	// no pilot the site has verified: skipped, as such lines
+	// always were, and nothing is stored.
+	strangerLine := now.Add(-time.Minute).Format("[ 2006.01.02 15:04:05 ] ") + "Unverified Speaker > " + fusedBlob
+	if res := app.postChatLines(ctx, base2, strangerLine, "axon"); res.Posted != 0 || res.Duplicates != 0 || res.Skipped != 1 {
 		t.Errorf("fused line, no known location: %+v, want it skipped", res)
-	} else if len(res.SkippedLines) != 1 || res.SkippedLines[0] != axonLine {
+	} else if len(res.SkippedLines) != 1 || res.SkippedLines[0] != strangerLine {
 		t.Errorf("skipped lines kept as written: %q", res.SkippedLines)
 	}
 	if n := len(rowsOf2()); n != 0 {
@@ -487,6 +489,31 @@ func TestIntelFusedRoster(t *testing.T) {
 				t.Errorf("named-system report: scan %q text %q", r.ScanID, r.Text)
 			}
 		}
+	}
+
+	// The speaker's system carries a line whose poster has
+	// none: the posting character (91000301) holds no location
+	// snapshot, so the stored system is the speaker's, from the
+	// snapshot seeded above. A third channel keeps its roster
+	// set apart from the identical line already stored above.
+	cid3, err := q.CreateIntelChannel(ctx, db.CreateIntelChannelParams{OwnerUserID: u.ID, Name: "Relayed Lines", CreatedAt: time.Now()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	base3 := db.InsertIntelReportParams{ChannelID: cid3, AuthorUserID: u.ID,
+		AuthorCharacterID: 91000301, Reporter: "Hostile One", CreatedAt: now, SeenAt: now}
+	if res := app.postChatLines(ctx, base3, axonLine, "axon"); res.Posted != 1 || res.Skipped != 0 {
+		t.Fatalf("relayed line on the speaker's system: %+v, want one posted", res)
+	}
+	rows3, err := q.ListIntelReports(ctx, db.ListIntelReportsParams{ChannelID: cid3, BeforeAt: intelFeedTop(), BeforeID: 1 << 62, MaxRows: 100})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows3) != 1 {
+		t.Fatalf("the relayed channel holds %d reports, want 1", len(rows3))
+	}
+	if row := rows3[0]; row.SystemID != sysID || row.Reporter != "Burzrujat" || row.Kind != intelanalyze.KindLocal || row.ScanID == "" {
+		t.Errorf("relayed report: system %d reporter %q kind %q scan %q, want the speaker's system and name on a local reading", row.SystemID, row.Reporter, row.Kind, row.ScanID)
 	}
 }
 

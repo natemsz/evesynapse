@@ -25,4 +25,8 @@ try {
   if (savedTheme === "light" || savedTheme === "dark") {
     document.documentElement.setAttribute("data-theme", savedTheme);
   }
+  var savedBackdrop = window.localStorage.getItem("evesynapse-backdrop");
+  if (savedBackdrop === "muted" || savedBackdrop === "glow") {
+    document.documentElement.setAttribute("data-backdrop", savedBackdrop);
+  }
 } catch (e) {}

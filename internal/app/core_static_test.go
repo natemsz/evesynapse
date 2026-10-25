@@ -54,7 +54,7 @@ func TestStaticAssetCaching(t *testing.T) {
 	if got := rec.Header().Get("Cache-Control"); got != cacheForever {
 		t.Errorf("versioned boot script Cache-Control = %q, want %q", got, cacheForever)
 	}
-	for _, want := range []string{"evesynapse-nav", "evesynapse-theme"} {
+	for _, want := range []string{"evesynapse-nav", "evesynapse-theme", "evesynapse-backdrop"} {
 		if !strings.Contains(rec.Body.String(), want) {
 			t.Errorf("boot.js is missing %q", want)
 		}

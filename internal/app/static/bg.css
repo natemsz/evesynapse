@@ -51,6 +51,24 @@ body::before {
   }
 }
 
+/* Backdrop choice: the Backdrop button cycles it (Nebula,
+   Muted, Ember glow) and boot.js applies the saved value as
+   html[data-backdrop] before first paint. The muted state
+   grades the art layer down where it sits. The glow state
+   swaps the art for the signature top horizon glow over the
+   warm black ground. The light theme paints no backdrop
+   layer at all, so the choice rests there. */
+html[data-backdrop="muted"] body::before {
+  filter: brightness(0.42) saturate(0.30) contrast(1.03);
+}
+html[data-backdrop="glow"] body::before {
+  background-color: #0b0806;
+  background-image:
+    radial-gradient(ellipse 760px 240px at 72% 42px, rgba(234, 88, 12, 0.20) 0%, rgba(180, 65, 10, 0.07) 48%, rgba(11, 8, 6, 0) 80%),
+    radial-gradient(circle at 18% 0%, rgba(120, 53, 15, 0.08) 0%, transparent 55%),
+    linear-gradient(180deg, #110c09 0%, #0b0806 100%);
+}
+
 /* The standing view-transition-name on #main-content (style.css)
    makes <main> a backdrop root, which silently disables every
    backdrop-filter inside it: the glass tint paints but nothing

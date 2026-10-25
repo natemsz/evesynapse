@@ -35,16 +35,67 @@
 // inside it, so its links are reachable by keyboard alone.
 // A click pins it open until a second click, an outside
 // click, or Escape puts it away.
+//
+// The panel is hoisted out of the bar to the end of the body
+// at init: a backdrop-filter surface nested inside the bar,
+// which carries its own backdrop-filter, gets no backdrop in
+// some engines, so the panel stands as a top-level surface
+// and is placed under the Tools button from the button's own
+// rect each time it opens. For hover, the button, the bridge
+// over the gap beneath it, and the panel are one region: the
+// panel closes only once the pointer has left all three, and
+// a short grace covers the travel between them.
 (function () {
   var wrap = document.querySelector("[data-tools-menu]");
   if (!wrap) return;
   var btn = wrap.querySelector("[data-open-tools-menu]");
   var menu = wrap.querySelector(".ld-menu");
   if (!btn || !menu) return;
+  document.body.appendChild(menu);
+  var bridge = document.createElement("div");
+  bridge.className = "ld-menu-bridge";
+  bridge.hidden = true;
+  document.body.appendChild(bridge);
   var pinned = false;
+  var closeTimer = null;
+  var CLOSE_GRACE = 280;
+  var phone = window.matchMedia("(max-width: 560px)");
+
+  // Places the panel under the Tools button (the sheet pins
+  // it by rule at phone widths instead) and sizes the bridge
+  // over the gap between the button and the panel's top edge.
+  function place() {
+    var wr = wrap.getBoundingClientRect();
+    var br = btn.getBoundingClientRect();
+    var menuTop;
+    if (phone.matches) {
+      menu.style.top = "";
+      menu.style.left = "";
+      menuTop = 64;
+    } else {
+      menuTop = wr.bottom + 14;
+      menu.style.top = menuTop + "px";
+      menu.style.left = (wr.left - 14) + "px";
+    }
+    var bLeft = Math.min(br.left, phone.matches ? 8 : wr.left - 14);
+    bridge.style.top = br.bottom + "px";
+    bridge.style.left = bLeft + "px";
+    bridge.style.width = (br.right - bLeft + 6) + "px";
+    bridge.style.height = Math.max(0, menuTop - br.bottom) + "px";
+  }
+  function cancelClose() {
+    if (closeTimer) { clearTimeout(closeTimer); closeTimer = null; }
+  }
+  function focusInside() {
+    var a = document.activeElement;
+    return !!a && (wrap.contains(a) || menu.contains(a));
+  }
   function setOpen(v) {
+    cancelClose();
     if (menu.hidden === !v) return;
+    if (v) place();
     menu.hidden = !v;
+    bridge.hidden = !v;
     btn.setAttribute("aria-expanded", v ? "true" : "false");
   }
   function isOpen() { return !menu.hidden; }
@@ -53,17 +104,28 @@
     setOpen(pinned);
   });
   if (window.matchMedia("(hover: hover)").matches) {
-    wrap.addEventListener("pointerenter", function () { setOpen(true); });
-    wrap.addEventListener("pointerleave", function () {
-      if (!pinned && !wrap.contains(document.activeElement)) setOpen(false);
+    [btn, bridge, menu].forEach(function (el) {
+      el.addEventListener("pointerenter", function () { setOpen(true); });
+      el.addEventListener("pointerleave", function () {
+        cancelClose();
+        closeTimer = setTimeout(function () {
+          closeTimer = null;
+          if (!pinned && !focusInside()) setOpen(false);
+        }, CLOSE_GRACE);
+      });
     });
   }
+  window.addEventListener("resize", function () { if (isOpen()) place(); });
+  window.addEventListener("scroll", function () { if (isOpen()) place(); }, { passive: true });
   wrap.addEventListener("focusin", function () { setOpen(true); });
-  wrap.addEventListener("focusout", function (e) {
-    if (!pinned && !wrap.contains(e.relatedTarget)) setOpen(false);
-  });
+  menu.addEventListener("focusin", function () { setOpen(true); });
+  function onFocusOut(e) {
+    if (!pinned && !wrap.contains(e.relatedTarget) && !menu.contains(e.relatedTarget)) setOpen(false);
+  }
+  wrap.addEventListener("focusout", onFocusOut);
+  menu.addEventListener("focusout", onFocusOut);
   document.addEventListener("click", function (e) {
-    if (!wrap.contains(e.target)) { pinned = false; setOpen(false); }
+    if (!wrap.contains(e.target) && !menu.contains(e.target) && !bridge.contains(e.target)) { pinned = false; setOpen(false); }
   });
   document.addEventListener("keydown", function (e) {
     if (e.key === "Escape" && isOpen()) {

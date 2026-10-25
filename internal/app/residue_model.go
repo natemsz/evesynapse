@@ -10,7 +10,10 @@ package app
 // walks the queue: for each report it hands the spans, beside
 // the entities the reading itself resolved, to the local reader
 // (residue_llama.go), and stores what comes back as notes on the
-// reading (schema 091).
+// reading (schema 091). A slow sweep inside the worker offers
+// the same pass to settled reports that predate the step (or
+// settled while it was off), newest first, so the backlog drains
+// through the same queue.
 //
 // The step adds nothing to the deterministic facts, and nothing
 // anywhere renders its notes. A note either links a span to an
@@ -58,6 +61,13 @@ const (
 	// reply past the caps is not the shape that was asked for.
 	residueMaxClaims        = 40
 	residueMaxClaimsPerSpan = 8
+	// The backlog sweep's shape: how many old reports one tick
+	// offers, and how often it looks. A pass takes tens of
+	// seconds at the reader's pace, so a small batch on a slow
+	// tick still drains the backlog over hours, and the batch
+	// is all a fresh settle can ever wait behind.
+	residueSweepBatch    = 4
+	residueSweepInterval = 2 * time.Minute
 )
 
 // residueKinds are the readings a span can carry: the label
@@ -152,33 +162,63 @@ func (app *Application) noteResidueReport(id int64) {
 }
 
 // runResidueWorker is the residue worker: one report at a time
-// until ctx ends.
+// until ctx ends. On a slow tick it also sweeps the backlog of
+// settled reports no pass has covered.
 func (app *Application) runResidueWorker(ctx context.Context) {
 	if !app.cfg.ResidueModelEnabled() {
 		logging.Infof("residue: step idle (RESIDUE_MODEL=off or no model file configured)")
 		return
 	}
 	ch := app.residueQueueChan()
+	sweep := time.NewTicker(residueSweepInterval)
+	defer sweep.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case id := <-ch:
-			app.processResidue(ctx, app.residueEngine(), id)
+			app.processResidue(ctx, app.residueEngine(ctx), id)
 			app.residueMu.Lock()
 			delete(app.residueQueued, id)
 			app.residueMu.Unlock()
+		case <-sweep.C:
+			app.sweepResidueBacklog(ctx)
 		}
 	}
 }
 
-// residueEngine returns the local reader, made on first use and
-// held for the process's life.
-func (app *Application) residueEngine() residueEngine {
+// sweepResidueBacklog offers the newest settled reports whose
+// readings left residue and which no completed pass has covered
+// (ListResidueBacklogReports): the backlog from before the step
+// was enabled, or from while it was off. Fresh settles keep
+// priority: the sweep offers only into an empty queue, one
+// small batch per tick, through the same offer path, so the
+// dedupe mark covers its offers and a report a pass has reached
+// is never offered again, across restarts as much as in-process
+// (the completed call is the durable record).
+func (app *Application) sweepResidueBacklog(ctx context.Context) {
+	if len(app.residueQueueChan()) > 0 {
+		return // fresh work is waiting; the backlog keeps
+	}
+	ids, err := app.queries.ListResidueBacklogReports(ctx, residueSweepBatch)
+	if err != nil {
+		logging.Warnf("residue: backlog sweep: %v", err)
+		return
+	}
+	for _, id := range ids {
+		app.noteResidueReport(id)
+	}
+}
+
+// residueEngine returns the local reader, made on first use
+// and held for the process's life. The worker's context goes
+// with it: the reader's server lives and dies with the
+// worker, never with a single pass.
+func (app *Application) residueEngine(ctx context.Context) residueEngine {
 	app.residueMu.Lock()
 	defer app.residueMu.Unlock()
 	if app.residueEng == nil {
-		app.residueEng = newLlamaEngine(app.cfg)
+		app.residueEng = newLlamaEngine(app.cfg, ctx)
 	}
 	return app.residueEng
 }

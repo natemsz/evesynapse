@@ -13,8 +13,10 @@ package app
 //
 // A box without the runtime or the model file is a graceful
 // absence: Complete answers errResidueAbsent and the step
-// idles. The server is tied to the first caller's context (the
-// worker's), so it stops when the worker stops.
+// idles. The server process is bound to the worker's context
+// (handed over when the engine is made), never to a pass's
+// own deadline context: a pass ending never stops it, and
+// the worker stopping always does.
 // ---------------------------------------------------------------------------
 
 import (
@@ -70,18 +72,22 @@ const residueReplySchema = `{
 type llamaEngine struct {
 	bin, model, addr string
 	client           *http.Client
+	serveCtx         context.Context // the worker's life: the server process is bound to it, never to a pass
 
 	mu      sync.Mutex
 	started bool // the server answered its health check
 	absent  bool // the runtime or the model file is not on this box
 	failed  bool // the last start attempt failed
 	lastTry time.Time
+	cmd     *exec.Cmd     // the server believed up, nil when none is
+	exited  chan struct{} // closed by the server's reaper once it has been waited
 }
 
-func newLlamaEngine(cfg Config) *llamaEngine {
+func newLlamaEngine(cfg Config, serveCtx context.Context) *llamaEngine {
 	return &llamaEngine{
 		bin: cfg.residueModelBin, model: cfg.residueModelPath, addr: cfg.residueModelAddr,
-		client: &http.Client{},
+		client:   &http.Client{},
+		serveCtx: serveCtx,
 	}
 }
 
@@ -139,8 +145,11 @@ func (e *llamaEngine) Complete(ctx context.Context, prompt string) (string, erro
 	return out.Choices[0].Message.Content, nil
 }
 
-// ensureStarted starts the server once and waits for its
-// health check. A missing runtime or model file marks the
+// ensureStarted starts the server if it is not up and waits
+// for its health check. The process runs under the worker's
+// context, so it outlives any one pass and dies with the
+// worker. A server found dead is started fresh for the pass
+// that finds it. A missing runtime or model file marks the
 // engine absent for the process's life (the owner installs,
 // then restarts the service); a failed start is retried at
 // most every five minutes.
@@ -148,7 +157,14 @@ func (e *llamaEngine) ensureStarted(ctx context.Context) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	if e.started {
-		return nil
+		if e.aliveLocked() {
+			return nil
+		}
+		// The server died on its own: the reaper has waited
+		// it, so the port is free. Fall through and start a
+		// fresh one.
+		logging.Warnf("residue: local reader exited; starting it again")
+		e.started, e.cmd, e.exited = false, nil, nil
 	}
 	if e.absent {
 		return errResidueAbsent
@@ -173,7 +189,7 @@ func (e *llamaEngine) ensureStarted(ctx context.Context) error {
 	}
 	// Two threads and a small context: the reader shares the
 	// box with the web tier and must never crowd it.
-	cmd := exec.CommandContext(ctx, e.bin,
+	cmd := exec.CommandContext(e.serveCtx, e.bin,
 		"-m", e.model,
 		"--host", "127.0.0.1", "--port", port,
 		"-c", "4096", "-t", "2", "--parallel", "1")
@@ -182,6 +198,9 @@ func (e *llamaEngine) ensureStarted(ctx context.Context) error {
 		logging.Warnf("residue: start local reader: %v", err)
 		return errResidueAbsent
 	}
+	exited := make(chan struct{})
+	e.cmd, e.exited = cmd, exited
+	go reapResidueServer(cmd, exited)
 	deadline := time.Now().Add(120 * time.Second)
 	for {
 		if e.healthy(ctx) {
@@ -189,17 +208,66 @@ func (e *llamaEngine) ensureStarted(ctx context.Context) error {
 			logging.Infof("residue: local reader up on %s", e.addr)
 			return nil
 		}
+		select {
+		case <-exited:
+			e.cmd, e.exited = nil, nil
+			e.failed = true
+			logging.Warnf("residue: local reader exited while starting")
+			return errResidueAbsent
+		default:
+		}
 		if time.Now().After(deadline) {
+			e.abandonStartLocked()
 			e.failed = true
 			logging.Warnf("residue: local reader did not become healthy on %s", e.addr)
 			return errResidueAbsent
 		}
 		select {
 		case <-ctx.Done():
+			// The caller gave up waiting: the start is
+			// abandoned whole, so a later pass retries from
+			// a clean slate rather than finding a server
+			// this engine never finished bringing up.
+			e.abandonStartLocked()
 			return ctx.Err()
 		case <-time.After(250 * time.Millisecond):
 		}
 	}
+}
+
+// aliveLocked reports whether the server believed up is still
+// running: its reaper closes the exit channel once the process
+// has been waited, so a closed channel is a certain death
+// with the port already free.
+func (e *llamaEngine) aliveLocked() bool {
+	if e.cmd == nil || e.exited == nil {
+		return false
+	}
+	select {
+	case <-e.exited:
+		return false
+	default:
+		return true
+	}
+}
+
+// abandonStartLocked kills a server whose start is being given
+// up on and clears the handles to it; the reaper still waits
+// it, so nothing is left running or unreaped.
+func (e *llamaEngine) abandonStartLocked() {
+	if e.cmd != nil && e.cmd.Process != nil {
+		_ = e.cmd.Process.Kill()
+	}
+	e.cmd, e.exited = nil, nil
+}
+
+// reapResidueServer waits one server process out and closes
+// its exit channel: the process is always reaped (never a
+// zombie), and the closed channel is how the engine learns
+// the server died.
+func reapResidueServer(cmd *exec.Cmd, exited chan struct{}) {
+	_ = cmd.Wait()
+	close(exited)
 }
 
 // healthy asks the server's health endpoint: llama.cpp answers

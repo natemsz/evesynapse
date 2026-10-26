@@ -64,7 +64,7 @@ html[data-backdrop="muted"] body::before {
 html[data-backdrop="glow"] body::before {
   background-color: #0b0806;
   background-image:
-    radial-gradient(ellipse 900px 300px at 88% -20px, rgba(234, 88, 12, 0.32) 0%, rgba(180, 65, 10, 0.13) 48%, rgba(11, 8, 6, 0) 80%),
+    radial-gradient(ellipse 62vw 32vh at 100% 0%, rgba(234, 88, 12, 0.32) 0%, rgba(180, 65, 10, 0.13) 48%, rgba(11, 8, 6, 0) 80%),
     radial-gradient(circle at 18% 0%, rgba(120, 53, 15, 0.08) 0%, transparent 55%),
     linear-gradient(180deg, #110c09 0%, #0b0806 100%);
 }
@@ -1075,7 +1075,7 @@ html[data-scheme][data-tier="muted"] body::before {
 html[data-scheme][data-tier="minimalistic"] body::before {
   background-color: var(--sch-ground);
   background-image:
-    radial-gradient(ellipse 900px 300px at 88% -20px, var(--sch-glow-1) 0%, var(--sch-glow-2) 48%, transparent 80%),
+    radial-gradient(ellipse 62vw 32vh at 100% 0%, var(--sch-glow-1) 0%, var(--sch-glow-2) 48%, transparent 80%),
     radial-gradient(circle at 18% 0%, var(--sch-glow-3) 0%, transparent 55%),
     linear-gradient(180deg, var(--sch-ground-2) 0%, var(--sch-ground) 100%);
 }
@@ -1155,20 +1155,21 @@ html[data-scheme="amarr"] .tier-seg button.on, html[data-scheme="edencom"] .tier
   .scheme-sub { order: 3; flex: 1 1 100%; }
   .tier-seg { order: 4; flex: 1 1 100%; }
   .tier-seg button { flex: 1 1 0; }
-  /* The glow scales to the narrow screen with it: one blob on
-     the top horizon, sized off the viewport instead of the
-     desktop's fixed pixels, in the same two colours. The
-     default's ember glow shares the geometry, so it adapts
-     the same way. */
+  /* The glow scales to the narrow screen with it: the same
+     corner-anchored lobe as the desktop, at a smaller
+     viewport-relative size, so it sits in the top-right
+     corner instead of hanging off the edge. The default's
+     ember glow shares the geometry, so it adapts the
+     same way. */
   html[data-scheme][data-tier="minimalistic"] body::before {
     background-image:
-      radial-gradient(ellipse 150vw 240px at 50% -80px, var(--sch-glow-1) 0%, var(--sch-glow-2) 48%, transparent 80%),
+      radial-gradient(ellipse 78vw 24vh at 100% 0%, var(--sch-glow-1) 0%, var(--sch-glow-2) 48%, transparent 80%),
       radial-gradient(circle at 18% 0%, var(--sch-glow-3) 0%, transparent 55%),
       linear-gradient(180deg, var(--sch-ground-2) 0%, var(--sch-ground) 100%);
   }
   html[data-backdrop="glow"] body::before {
     background-image:
-      radial-gradient(ellipse 150vw 240px at 50% -80px, rgba(234, 88, 12, 0.32) 0%, rgba(180, 65, 10, 0.13) 48%, rgba(11, 8, 6, 0) 80%),
+      radial-gradient(ellipse 78vw 24vh at 100% 0%, rgba(234, 88, 12, 0.32) 0%, rgba(180, 65, 10, 0.13) 48%, rgba(11, 8, 6, 0) 80%),
       radial-gradient(circle at 18% 0%, rgba(120, 53, 15, 0.08) 0%, transparent 55%),
       linear-gradient(180deg, #110c09 0%, #0b0806 100%);
   }

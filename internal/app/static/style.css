@@ -2805,15 +2805,6 @@ html[data-nav="rail"] #nav-collapse .nav-control-svg { transform: scaleX(-1); }
   stroke: #ffb84d;
 }
 .nav-icon svg[hidden] { display: none; }
-/* Theme toggle icons: dark shows the sun, light shows the moon. The
-   default rule names the html element so it outranks ".nav-icon svg {
-   display: block }"; as a bare class it lost, and both icons showed
-   until a theme was picked. */
-html:not([data-theme="light"]) .theme-icon-moon { display: none; }
-html[data-theme="light"] .theme-icon-sun { display: none; }
-html[data-theme="light"] .theme-icon-moon { display: block; }
-html[data-theme="dark"] .theme-icon-moon { display: none; }
-html[data-theme="dark"] .theme-icon-sun { display: block; }
 .sidebar .branch.active > summary .nav-icon svg,
 .sidenav a.navlink.active .nav-icon svg {
   filter: brightness(1.15);
@@ -4425,7 +4416,6 @@ html[data-theme="light"] .fit-tip-stats { color: #b39a7d; }
   background: rgba(255,255,255,0.04);
   color: var(--text-bright);
 }
-#theme-toggle,
 #install-app {
   background: transparent;
   border: none;
@@ -4437,7 +4427,6 @@ html[data-theme="light"] .fit-tip-stats { color: #b39a7d; }
   font-family: inherit;
   text-align: left;
 }
-#theme-toggle:hover { color: var(--text-bright); background: rgba(255,255,255,0.04); }
 #install-app:hover { color: var(--text-bright); background: rgba(255,255,255,0.04); }
 /* Shown by app.js only once the browser says the site can be installed. */
 #install-app[hidden] { display: none; }
@@ -4467,6 +4456,26 @@ input.charselector-input:focus {
   outline: none;
   box-shadow: 0 0 8px rgba(255, 106, 26, 0.35);
 }
+/* Under a colour scheme the magnifiers above are served in the
+   scheme's highlight instead of the ember tint. */
+html[data-scheme="jove"] input.charselector-input,
+html[data-scheme="jove"] input[type="search"]:not(.topsearch input),
+html[data-scheme="jove"] .searchwrap input[type="text"] { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23f472b6' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='10.8' cy='10.8' r='6.2'/%3E%3Cpath d='M15.2 15.2 20.4 20.4'/%3E%3C/svg%3E"); }
+html[data-scheme="caldari"] input.charselector-input,
+html[data-scheme="caldari"] input[type="search"]:not(.topsearch input),
+html[data-scheme="caldari"] .searchwrap input[type="text"] { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%237dd3fc' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='10.8' cy='10.8' r='6.2'/%3E%3Cpath d='M15.2 15.2 20.4 20.4'/%3E%3C/svg%3E"); }
+html[data-scheme="gallente"] input.charselector-input,
+html[data-scheme="gallente"] input[type="search"]:not(.topsearch input),
+html[data-scheme="gallente"] .searchwrap input[type="text"] { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23fb7185' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='10.8' cy='10.8' r='6.2'/%3E%3Cpath d='M15.2 15.2 20.4 20.4'/%3E%3C/svg%3E"); }
+html[data-scheme="amarr"] input.charselector-input,
+html[data-scheme="amarr"] input[type="search"]:not(.topsearch input),
+html[data-scheme="amarr"] .searchwrap input[type="text"] { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2393a5f5' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='10.8' cy='10.8' r='6.2'/%3E%3Cpath d='M15.2 15.2 20.4 20.4'/%3E%3C/svg%3E"); }
+html[data-scheme="triglavian"] input.charselector-input,
+html[data-scheme="triglavian"] input[type="search"]:not(.topsearch input),
+html[data-scheme="triglavian"] .searchwrap input[type="text"] { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23d41236' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='10.8' cy='10.8' r='6.2'/%3E%3Cpath d='M15.2 15.2 20.4 20.4'/%3E%3C/svg%3E"); }
+html[data-scheme="edencom"] input.charselector-input,
+html[data-scheme="edencom"] input[type="search"]:not(.topsearch input),
+html[data-scheme="edencom"] .searchwrap input[type="text"] { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23b7a6fa' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='10.8' cy='10.8' r='6.2'/%3E%3Cpath d='M15.2 15.2 20.4 20.4'/%3E%3C/svg%3E"); }
 .charselector-dropdown {
   position: absolute;
   top: calc(100% + 0.25rem);

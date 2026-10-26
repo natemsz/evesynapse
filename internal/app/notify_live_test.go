@@ -58,7 +58,7 @@ func TestNotifyBadgeEndpoint(t *testing.T) {
 	if empty.Code != http.StatusOK || empty.Header().Get(notifyBadgeHeader) != "1" || empty.Header().Get("X-Notify-Unread") != "0" {
 		t.Fatalf("empty badge: %d, headers %v", empty.Code, empty.Header())
 	}
-	mustContain(t, "empty badge", empty.Body.String(), `aria-label="Notifications: nothing new"`, "Nothing new.", `href="/notifications/settings"`)
+	mustContain(t, "empty badge", empty.Body.String(), `aria-label="Notifications: nothing new"`, "Nothing new.", `href="/settings#notifications"`)
 	if cc := empty.Header().Get("Cache-Control"); !strings.Contains(cc, "private") || !strings.Contains(cc, "no-cache") {
 		t.Errorf("Cache-Control = %q; the answer is one account's own and must be checked each time", cc)
 	}

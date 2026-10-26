@@ -382,9 +382,20 @@ func notifySettingRows(prefs notifyPrefs, characters []db.Character) []notifySet
 	return rows
 }
 
-func (app *Application) handleNotificationSettings(w http.ResponseWriter, r *http.Request) {
+// settingsPath is the one settings page; its Notifications tab is
+// where the notification settings live.
+const settingsPath = "/settings#notifications"
+
+// handleNotificationSettingsRedirect sends the old notification
+// settings address at the settings page's Notifications tab.
+func (app *Application) handleNotificationSettingsRedirect(w http.ResponseWriter, r *http.Request) {
+	http.Redirect(w, r, settingsPath, http.StatusSeeOther)
+}
+
+func (app *Application) handleSettings(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	data := app.page(ctx)
+	data.Scripts = []string{"/static/settings.js"}
 	userID := app.userID(ctx)
 	prefs := app.notifyPrefsFor(ctx, userID)
 	view := &notifySettingsView{
@@ -410,7 +421,7 @@ func (app *Application) handleNotificationSettings(w http.ResponseWriter, r *htt
 		}
 	}
 	data.NotifySettings = view
-	app.render(ctx, w, http.StatusOK, "notification_settings.html", data)
+	app.render(ctx, w, http.StatusOK, "settings.html", data)
 }
 
 // handleNotificationSettingsSave stores the settings. The form sends
@@ -422,7 +433,7 @@ func (app *Application) handleNotificationSettingsSave(w http.ResponseWriter, r 
 	ctx := r.Context()
 	userID := app.userID(ctx)
 	if err := r.ParseForm(); err != nil || userID == 0 {
-		http.Redirect(w, r, "/notifications/settings", http.StatusSeeOther)
+		http.Redirect(w, r, settingsPath, http.StatusSeeOther)
 		return
 	}
 	on := map[string]bool{}
@@ -479,7 +490,7 @@ func (app *Application) handleNotificationSettingsSave(w http.ResponseWriter, r 
 	} else {
 		app.flash(ctx, "Notification settings saved.")
 	}
-	http.Redirect(w, r, "/notifications/settings", http.StatusSeeOther)
+	http.Redirect(w, r, settingsPath, http.StatusSeeOther)
 }
 
 // ---------------------------------------------------------------------------

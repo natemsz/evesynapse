@@ -103,7 +103,7 @@ func TestNotifyPromptAnswerStoresTheChannels(t *testing.T) {
 
 	// The settings page shows the same state, and its own save can
 	// change it back — one store, two writers.
-	_, body := getPage(t, f.app, cookie, "/notifications/settings")
+	_, body := getPage(t, f.app, cookie, "/settings")
 	mustContain(t, "settings after the answer", body,
 		`<input type="checkbox" name="channel_inapp" value="1">`,
 		"In EveSynapse")

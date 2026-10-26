@@ -3238,58 +3238,6 @@
 })();
 
 
-// --- Backdrop cycle -------------------------------------------------
-// The sidebar's Theme button (and the phone sheet's matching
-// action) cycles the page backdrop through its three states:
-// Nebula (the interior art), Muted (the same art graded down),
-// and Ember glow (the signature horizon glow over warm black).
-// The choice rides html[data-backdrop]: bg.css keys the art
-// treatment off it, boot.js applies the saved value before
-// first paint, and the button only renders while logged in
-// (see base.html), so everything here is guarded: no button,
-// no work. The dark/light theme itself keeps its stored value;
-// this control no longer touches it.
-(function () {
-  "use strict";
-  var btns = [];
-  var byId = document.getElementById("theme-toggle");
-  if (byId) btns.push(byId);
-  var extras = document.querySelectorAll("[data-theme-toggle]");
-  for (var i = 0; i < extras.length; i++) btns.push(extras[i]);
-  if (!btns.length) return;
-  var root = document.documentElement;
-  var storageKey = "evesynapse-backdrop";
-  var order = ["art", "muted", "glow"];
-  var names = { art: "Nebula", muted: "Muted nebula", glow: "Ember glow" };
-
-  function current() {
-    var attr = root.getAttribute("data-backdrop");
-    return order.indexOf(attr) >= 0 ? attr : "art";
-  }
-  function save(value) {
-    try {
-      window.localStorage.setItem(storageKey, value);
-    } catch (e) { /* private mode: the click still works this visit */ }
-  }
-  function apply(value) {
-    if (value === "art") root.removeAttribute("data-backdrop");
-    else root.setAttribute("data-backdrop", value);
-    btns.forEach(function (btn) {
-      btn.setAttribute("aria-label", "Backdrop: " + names[value] + ". Activate to change backdrop.");
-    });
-  }
-
-  apply(current());
-  btns.forEach(function (btn) {
-    btn.addEventListener("click", function () {
-      var next = order[(order.indexOf(current()) + 1) % order.length];
-      apply(next);
-      save(next);
-    });
-  });
-})();
-
-
 // Character selector dropdown with search/filter.
 (function() {
   // Live selectors: the outside-click handler below is bound once

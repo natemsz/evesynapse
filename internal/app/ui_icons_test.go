@@ -9,18 +9,27 @@ import (
 	"testing"
 )
 
-// TestIconsAreTheCurrentLogo: the page header shows static/logo.svg,
-// the service worker's badge and the linked icons exist, and the PNG
-// icons are pictures of the current drawings: the light centre node on
-// the orange tile. (cmd/mkicons draws them from icon.svg and
-// favicon.svg, and its own test fails when they are out of date.)
+// TestIconsAreTheCurrentLogo: the page header shows the logo mark
+// inline (the logo.svg drawing, its gradient stops repaintable by a
+// colour scheme), the service worker's badge and the linked icons
+// exist, and the PNG icons are pictures of the current drawings: the
+// light centre node on the orange tile. (cmd/mkicons draws them from
+// icon.svg and favicon.svg, and its own test fails when they are out
+// of date.)
 func TestIconsAreTheCurrentLogo(t *testing.T) {
 	tpl, err := fs.ReadFile(templatesFS, "templates/base.html")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(tpl), `<img class="wordmark-glyph" src="/static/logo.svg?v={{.AssetVersion}}"`) {
-		t.Fatal("the page header does not show static/logo.svg")
+	if !strings.Contains(string(tpl), `{{template "logo-mark" "wordmark-glyph"}}`) {
+		t.Fatal("the page header does not show the inline logo mark")
+	}
+	mark, err := fs.ReadFile(templatesFS, "templates/wordmark.html")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(mark), `id="es-up"`) || !strings.Contains(string(mark), `id="es-dn"`) || !strings.Contains(string(mark), `id="es-glow"`) {
+		t.Fatal("the inline logo mark lost a gradient")
 	}
 	for _, name := range []string{"static/logo.svg", "static/icon.svg", "static/favicon.svg", "static/badge-96.png"} {
 		if raw, err := fs.ReadFile(staticFS, name); err != nil || len(raw) == 0 {

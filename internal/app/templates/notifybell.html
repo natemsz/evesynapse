@@ -7,7 +7,7 @@
       <div class="notify-menu">
         {{range .Rows}}<form method="post" action="/notifications/open"><input type="hidden" name="kind" value="{{.Kind}}"><button type="submit" class="notify-row"><span class="notify-row-label">{{.Label}}</span><span class="notify-row-latest">{{.Latest}}</span></button></form>
         {{else}}<p class="notify-empty">Nothing new.</p>
-        {{end}}<a class="notify-all" href="/notifications/">All notifications</a><a class="notify-all" href="/notifications/settings">Settings</a><button type="button" class="notify-all" data-notify-prompt-open>Notification choices</button>
+        {{end}}<a class="notify-all" href="/notifications/">All notifications</a><a class="notify-all" href="/settings#notifications">Settings</a><button type="button" class="notify-all" data-notify-prompt-open>Notification choices</button>
       </div>{{end}}
 
 {{/* The first-run prompt: a small card beside the bell (base.html
@@ -21,14 +21,14 @@
     <p class="notify-prompt-sub">EveSynapse can tell you when something happens: a skill finishes, mail lands, an extractor stops. Choose where it reaches you:</p>
     <div class="notify-prompt-rows">
       <label class="notify-prompt-row"><input type="checkbox" name="inapp" value="1"{{if .InApp}} checked{{end}}> <span class="notify-prompt-text"><span class="notify-prompt-name">In EveSynapse</span> <span class="notify-prompt-note">the bell at the top of the page</span></span></label>
-      {{if .DiscordOffered}}<input type="hidden" name="discord_shown" value="1">{{if .DiscordLinked}}<label class="notify-prompt-row"><input type="checkbox" name="discord" value="1"{{if .Discord}} checked{{end}}> <span class="notify-prompt-text"><span class="notify-prompt-name">On Discord</span> <span class="notify-prompt-note">direct messages to {{.DiscordName}}</span></span></label>{{else}}<p class="notify-prompt-row is-unavailable"><span class="notify-prompt-text"><span class="notify-prompt-name">On Discord</span> <span class="notify-prompt-note">not connected yet: <a href="/notifications/settings">connect it in Settings</a></span></span></p>{{end}}{{end}}
+      {{if .DiscordOffered}}<input type="hidden" name="discord_shown" value="1">{{if .DiscordLinked}}<label class="notify-prompt-row"><input type="checkbox" name="discord" value="1"{{if .Discord}} checked{{end}}> <span class="notify-prompt-text"><span class="notify-prompt-name">On Discord</span> <span class="notify-prompt-note">direct messages to {{.DiscordName}}</span></span></label>{{else}}<p class="notify-prompt-row is-unavailable"><span class="notify-prompt-text"><span class="notify-prompt-name">On Discord</span> <span class="notify-prompt-note">not connected yet: <a href="/settings#notifications">connect it in Settings</a></span></span></p>{{end}}{{end}}
       {{if .DesktopOffered}}<input type="hidden" name="desktop_shown" value="1"><label class="notify-prompt-row"><input type="checkbox" name="desktop" value="1"{{if .Desktop}} checked{{end}}> <span class="notify-prompt-text"><span class="notify-prompt-name">In your browser</span> <span class="notify-prompt-note">even with no EveSynapse tab open; each browser is switched on in Settings</span></span></label>{{end}}
     </div>
     <div class="notify-prompt-actions">
       <button type="submit" name="action" value="save" class="btn">Turn on</button>
       <button type="submit" name="action" value="dismiss" class="btn btn-quiet">Not now</button>
     </div>
-    <p class="notify-prompt-fine"><small>You can change these any time in <a href="/notifications/settings">notification settings</a>.</small></p>
+    <p class="notify-prompt-fine"><small>You can change these any time in <a href="/settings#notifications">notification settings</a>.</small></p>
   </form>
   <button type="button" class="notify-prompt-close" data-notify-prompt-close aria-label="Close">&times;</button>
 </div>{{end}}

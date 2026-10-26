@@ -51,12 +51,12 @@ body::before {
   }
 }
 
-/* Backdrop choice: the Backdrop button cycles it (Nebula,
-   Muted, Ember glow) and boot.js applies the saved value as
-   html[data-backdrop] before first paint. The muted state
-   grades the art layer down where it sits. The glow state
-   swaps the art for the signature top horizon glow over the
-   warm black ground. The light theme paints no backdrop
+/* Backdrop choice: the Settings page's Interface tab picks it
+   (Full, Muted, Minimalistic) and boot.js applies the saved
+   value as html[data-backdrop] before first paint. The muted
+   state grades the art layer down where it sits. The glow
+   state swaps the art for the signature top horizon glow over
+   the warm black ground. The light theme paints no backdrop
    layer at all, so the choice rests there. */
 html[data-backdrop="muted"] body::before {
   filter: brightness(0.42) saturate(0.30) contrast(1.03);
@@ -64,7 +64,7 @@ html[data-backdrop="muted"] body::before {
 html[data-backdrop="glow"] body::before {
   background-color: #0b0806;
   background-image:
-    radial-gradient(ellipse 760px 240px at 72% 42px, rgba(234, 88, 12, 0.20) 0%, rgba(180, 65, 10, 0.07) 48%, rgba(11, 8, 6, 0) 80%),
+    radial-gradient(ellipse 900px 300px at 88% -20px, rgba(234, 88, 12, 0.32) 0%, rgba(180, 65, 10, 0.13) 48%, rgba(11, 8, 6, 0) 80%),
     radial-gradient(circle at 18% 0%, rgba(120, 53, 15, 0.08) 0%, transparent 55%),
     linear-gradient(180deg, #110c09 0%, #0b0806 100%);
 }
@@ -902,3 +902,131 @@ html.js .notify-prompt.is-open { opacity: 1; transform: none; }
 @media (max-width: 45rem) {
   #main-content:has(> .section-subtabs) > .section-tabs { display: none; }
 }
+
+/* Colour schemes: the Settings page's Interface tab offers six
+   schemes beside the default Minmatar ember. The choice rides
+   html[data-scheme] with html[data-tier] for its strength, set
+   by boot.js before first paint and by settings.js on a click;
+   nothing is stored server-side. Only the ember roles take the
+   scheme colour: the glass tint, the accent family, highlights,
+   glow, links, the wordmark, the nav glyphs, gradient headings,
+   primary buttons and the section tab's active stripe. The
+   neutrals never move: the nav and top bar glass, the sidebar
+   and footer grounds, and the text colours stay as they are.
+   The tokens hang off the html element because --glass is
+   computed where it is declared: a narrower scope would leave
+   the glass on the default tint. Under a scheme the glass is
+   darker than the default mix and the panel tint is heavily
+   desaturated, a ghost of the hue rather than a coloured wash. */
+html[data-scheme="jove"] { --sch-hi: #f472b6; --sch-core: #8b5cf6; --sch-end: #3730a3; --sch-accent: #8b5cf6; --panel: #1a1620; --panel-head: rgba(18, 16, 23, .55); --input-bg: rgba(26, 22, 32, .5); --row-hover: rgba(139, 92, 246, .09); --sch-ground: #0d0716; --sch-ground-2: #170b2c; --sch-glow-1: rgba(139, 92, 246, .42); --sch-glow-2: rgba(55, 48, 163, .20); --sch-glow-3: rgba(244, 114, 182, .12); }
+html[data-scheme="caldari"] { --sch-hi: #7dd3fc; --sch-core: #60a5fa; --sch-end: #263242; --sch-accent: #60a5fa; --panel: #11161f; --panel-head: rgba(13, 17, 23, .55); --input-bg: rgba(17, 22, 31, .5); --row-hover: rgba(96, 165, 250, .09); --sch-ground: #0a0d12; --sch-ground-2: #0f141c; --sch-glow-1: rgba(96, 165, 250, .36); --sch-glow-2: rgba(38, 50, 66, .22); --sch-glow-3: rgba(125, 211, 252, .10); }
+html[data-scheme="gallente"] { --sch-hi: #fb7185; --sch-core: #2dd4bf; --sch-end: #155e75; --sch-accent: #2dd4bf; --panel: #101917; --panel-head: rgba(11, 16, 15, .55); --input-bg: rgba(16, 25, 23, .5); --row-hover: rgba(45, 212, 191, .09); --sch-ground: #04120e; --sch-ground-2: #07231c; --sch-glow-1: rgba(45, 212, 191, .36); --sch-glow-2: rgba(21, 94, 117, .20); --sch-glow-3: rgba(251, 113, 133, .12); }
+html[data-scheme="amarr"] { --sch-hi: #93a5f5; --sch-core: #f0b93f; --sch-end: #9a3412; --sch-accent: #f0b93f; --panel: #16120d; --panel-head: rgba(15, 12, 9, .55); --input-bg: rgba(22, 18, 13, .5); --row-hover: rgba(240, 185, 63, .09); --sch-ground: #120c03; --sch-ground-2: #241a06; --sch-glow-1: rgba(240, 185, 63, .40); --sch-glow-2: rgba(154, 52, 18, .18); --sch-glow-3: rgba(147, 165, 245, .12); }
+html[data-scheme="triglavian"] { --sch-hi: #d41236; --sch-core: #91100c; --sch-end: #480604; --sch-accent: #d41236; --panel: #191112; --panel-head: rgba(17, 12, 12, .55); --input-bg: rgba(25, 17, 18, .5); --row-hover: rgba(212, 18, 54, .09); --sch-ground: #120405; --sch-ground-2: #260709; --sch-glow-1: rgba(145, 16, 12, .42); --sch-glow-2: rgba(72, 6, 4, .22); --sch-glow-3: rgba(212, 18, 54, .12); }
+html[data-scheme="edencom"] { --sch-hi: #b7a6fa; --sch-core: #e9cf8f; --sch-end: #334155; --sch-accent: #e9cf8f; --panel: #191b1e; --panel-head: rgba(16, 18, 20, .55); --input-bg: rgba(25, 27, 30, .5); --row-hover: rgba(233, 207, 143, .09); --sch-ground: #0b0f14; --sch-ground-2: #18202b; --sch-glow-1: rgba(233, 207, 143, .38); --sch-glow-2: rgba(51, 65, 85, .20); --sch-glow-3: rgba(183, 166, 250, .12); }
+html[data-scheme] {
+  --accent: var(--sch-core);
+  --gold: var(--sch-hi);
+  --success: var(--sch-hi);
+  --glass: color-mix(in srgb, var(--panel) 90%, transparent);
+}
+/* Gradient carriers sweep all three hues, as the ember ones do. */
+html[data-scheme] h2, html[data-scheme] h3,
+html[data-scheme] .panel > h1:first-child > .gt {
+  background-image: linear-gradient(90deg, var(--sch-hi) 0%, var(--sch-core) 50%, var(--sch-end) 100%);
+}
+html[data-scheme] #nav-glyph-gradient stop:nth-child(1) { stop-color: var(--sch-hi); }
+html[data-scheme] #nav-glyph-gradient stop:nth-child(2) { stop-color: var(--sch-core); }
+html[data-scheme] #nav-glyph-gradient stop:nth-child(3) { stop-color: var(--sch-end); }
+/* The logo mark's gradients ride the same three hues: the up
+   face runs highlight to core, the down face core to end, and
+   the centre glow is the highlight. */
+html[data-scheme] .es-up stop:nth-child(1) { stop-color: var(--sch-hi); }
+html[data-scheme] .es-up stop:nth-child(2) { stop-color: var(--sch-core); }
+html[data-scheme] .es-dn stop:nth-child(1) { stop-color: var(--sch-core); }
+html[data-scheme] .es-dn stop:nth-child(2) { stop-color: var(--sch-end); }
+html[data-scheme] .es-glow stop { stop-color: var(--sch-hi); }
+/* The wordmark's letters carry the gradient stop by stop, the
+   way the ember letters do. Triglavian's wordmark rides the
+   crimson highlight throughout: its maroon core is too dark
+   against the bar. */
+html[data-scheme="jove"] .wordmark-svg .p-s1 { fill: #f472b6; }
+html[data-scheme="jove"] .wordmark-svg .p-s2 { fill: #d16bcb; }
+html[data-scheme="jove"] .wordmark-svg .p-s3 { fill: #ae63e1; }
+html[data-scheme="jove"] .wordmark-svg .p-s4 { fill: #8b5cf6; }
+html[data-scheme="jove"] .wordmark-svg .p-s5 { fill: #6f4dda; }
+html[data-scheme="jove"] .wordmark-svg .p-s6 { fill: #533fbf; }
+html[data-scheme="jove"] .wordmark-svg .p-s7 { fill: #3730a3; }
+html[data-scheme="caldari"] .wordmark-svg .p-s1 { fill: #7dd3fc; }
+html[data-scheme="caldari"] .wordmark-svg .p-s2 { fill: #73c4fb; }
+html[data-scheme="caldari"] .wordmark-svg .p-s3 { fill: #6ab4fb; }
+html[data-scheme="caldari"] .wordmark-svg .p-s4 { fill: #60a5fa; }
+html[data-scheme="caldari"] .wordmark-svg .p-s5 { fill: #4d7fbd; }
+html[data-scheme="caldari"] .wordmark-svg .p-s6 { fill: #39587f; }
+html[data-scheme="caldari"] .wordmark-svg .p-s7 { fill: #263242; }
+html[data-scheme="gallente"] .wordmark-svg .p-s1 { fill: #fb7185; }
+html[data-scheme="gallente"] .wordmark-svg .p-s2 { fill: #b69298; }
+html[data-scheme="gallente"] .wordmark-svg .p-s3 { fill: #72b3ac; }
+html[data-scheme="gallente"] .wordmark-svg .p-s4 { fill: #2dd4bf; }
+html[data-scheme="gallente"] .wordmark-svg .p-s5 { fill: #25ada6; }
+html[data-scheme="gallente"] .wordmark-svg .p-s6 { fill: #1d858e; }
+html[data-scheme="gallente"] .wordmark-svg .p-s7 { fill: #155e75; }
+html[data-scheme="amarr"] .wordmark-svg .p-s1 { fill: #93a5f5; }
+html[data-scheme="amarr"] .wordmark-svg .p-s2 { fill: #b2acb8; }
+html[data-scheme="amarr"] .wordmark-svg .p-s3 { fill: #d1b27c; }
+html[data-scheme="amarr"] .wordmark-svg .p-s4 { fill: #f0b93f; }
+html[data-scheme="amarr"] .wordmark-svg .p-s5 { fill: #d38d30; }
+html[data-scheme="amarr"] .wordmark-svg .p-s6 { fill: #b76021; }
+html[data-scheme="amarr"] .wordmark-svg .p-s7 { fill: #9a3412; }
+html[data-scheme="triglavian"] .wordmark-svg .p-syn { fill: #d41236; }
+html[data-scheme="edencom"] .wordmark-svg .p-s1 { fill: #b7a6fa; }
+html[data-scheme="edencom"] .wordmark-svg .p-s2 { fill: #c8b4d6; }
+html[data-scheme="edencom"] .wordmark-svg .p-s3 { fill: #d8c1b3; }
+html[data-scheme="edencom"] .wordmark-svg .p-s4 { fill: #e9cf8f; }
+html[data-scheme="edencom"] .wordmark-svg .p-s5 { fill: #aca07c; }
+html[data-scheme="edencom"] .wordmark-svg .p-s6 { fill: #707068; }
+html[data-scheme="edencom"] .wordmark-svg .p-s7 { fill: #334155; }
+html[data-scheme] .section-tabs a.active { color: var(--sch-hi); }
+html[data-scheme] .btn:not(.btn-danger):not(.btn-quiet),
+html[data-scheme] .form-actions button {
+  background-image: linear-gradient(180deg, var(--sch-hi) 0%, var(--sch-core) 55%, var(--sch-end) 100%);
+}
+/* The top bar's search magnifier takes the scheme highlight;
+   the baked data-uri magnifiers are restated per scheme in
+   style.css, beside the originals. */
+html[data-scheme] .search-glyph { fill: var(--sch-hi); stroke: var(--sch-hi); }
+/* Scheme strengths mirror the default's tiers: Muted is the
+   calm wallpaper under the same blackening grade as the
+   default's muted backdrop, with no glow; Minimalistic is the
+   scheme glow over its dark ground, with no art. The glow stack
+   shares the ember glow's geometry. */
+html[data-scheme][data-tier="muted"] body::before {
+  filter: brightness(0.42) saturate(0.30) contrast(1.03);
+}
+html[data-scheme][data-tier="minimalistic"] body::before {
+  background-color: var(--sch-ground);
+  background-image:
+    radial-gradient(ellipse 900px 300px at 88% -20px, var(--sch-glow-1) 0%, var(--sch-glow-2) 48%, transparent 80%),
+    radial-gradient(circle at 18% 0%, var(--sch-glow-3) 0%, transparent 55%),
+    linear-gradient(180deg, var(--sch-ground-2) 0%, var(--sch-ground) 100%);
+}
+
+/* The Settings page's theme picker: one row per look, a swatch,
+   a name, and the strength it can be worn at. */
+.scheme-group-label { font-family: Rajdhani, sans-serif; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; font-size: .78rem; opacity: .75; margin: 1.4rem 0 .5rem; }
+.theme-default, .scheme-row { display: flex; align-items: center; gap: 1rem; padding: .7rem .9rem; border: 1px solid rgba(255,255,255,.10); border-radius: 10px; background: rgba(255,255,255,.03); }
+.theme-default.current, .scheme-row.current { border-color: var(--sch-accent, #ff6a1a); box-shadow: 0 0 0 1px var(--sch-accent, #ff6a1a) inset, 0 0 18px -6px var(--sch-accent, #ff6a1a); }
+.scheme-list { display: flex; flex-direction: column; gap: .55rem; }
+.scheme-swatch { flex: 0 0 92px; height: 44px; border-radius: 7px; border: 1px solid rgba(255,255,255,.14); }
+.sw-default { background: radial-gradient(ellipse 130% 190% at 100% 0, rgba(255,150,60,.95) 0%, rgba(234,88,12,.55) 42%, rgba(90,30,5,.9) 78%), linear-gradient(180deg,#17100b,#0b0806); }
+.scheme-meta { flex: 1 1 auto; min-width: 0; }
+.scheme-name { font-family: Rajdhani, sans-serif; font-weight: 600; font-size: 1.08rem; letter-spacing: .05em; text-transform: uppercase; }
+.scheme-sub { font-size: .82rem; opacity: .72; }
+.current-badge { font-family: Rajdhani, sans-serif; font-weight: 600; font-size: .72rem; letter-spacing: .12em; text-transform: uppercase; padding: .18rem .5rem; border-radius: 999px; border: 1px solid var(--sch-accent, #ff6a1a); color: var(--sch-hi, #ffd27a); visibility: hidden; }
+.current .current-badge { visibility: visible; }
+.tier-seg { display: inline-flex; border: 1px solid rgba(255,255,255,.16); border-radius: 8px; overflow: hidden; flex: 0 0 auto; }
+.tier-seg button { appearance: none; border: 0; background: rgba(255,255,255,.04); color: inherit; font: inherit; font-size: .82rem; padding: .42rem .8rem; cursor: pointer; min-height: 0; }
+.tier-seg button + button { border-left: 1px solid rgba(255,255,255,.12); }
+.tier-seg button.on { background: var(--sch-accent, #ff6a1a); color: #fff; }
+.tier-seg button:disabled { opacity: .38; cursor: not-allowed; }
+html[data-scheme="amarr"] .tier-seg button.on, html[data-scheme="edencom"] .tier-seg button.on { color: #20180a; }

@@ -90,7 +90,7 @@ func TestPhoneShellStatic(t *testing.T) {
 		`id="phone-sheet-backdrop"`,
 		`{{range .BottomSections}}`,
 		`data-install-app`,
-		`data-theme-toggle`,
+		`<a class="phone-sheet-action" href="/settings">Settings</a>`,
 	} {
 		if !strings.Contains(base, want) {
 			t.Errorf("base.html is missing the phone-shell hook %q", want)
@@ -102,7 +102,6 @@ func TestPhoneShellStatic(t *testing.T) {
 		"initPhoneBar",
 		"syncPhoneBar",
 		"phoneSectionState",
-		`document.querySelectorAll("[data-theme-toggle]")`,
 		`document.querySelectorAll("[data-install-app]")`,
 	} {
 		if !strings.Contains(js, want) {

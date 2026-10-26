@@ -116,11 +116,11 @@ func TestNotifySettingsSectionsAreContributedAndSaved(t *testing.T) {
 	seedCharacter(t, q, user.ID, fixtureCharA, "Fixture Ceo")
 	cookie := sessionCookie(t, app, user.ID, fixtureCharA, "Fixture Ceo")
 
-	code, body := getPage(t, app, cookie, "/notifications/settings")
+	code, body := getPage(t, app, cookie, "/settings")
 	if code != http.StatusOK {
 		t.Fatalf("settings page: status %d", code)
 	}
-	mustContain(t, "/notifications/settings", body, `<p id="x-channel">box</p>`, `<h2 id="x-account">Channel X</h2>`)
+	mustContain(t, "/settings", body, `<p id="x-channel">box</p>`, `<h2 id="x-account">Channel X</h2>`)
 	if !strings.Contains(body[:strings.Index(body, `id="x-channel"`)], "<form") || strings.Index(body, `id="x-channel"`) > strings.Index(body, `id="x-account"`) {
 		t.Error("the channel box should sit inside the form, before the account section")
 	}
@@ -132,13 +132,13 @@ func TestNotifySettingsSectionsAreContributedAndSaved(t *testing.T) {
 	if saved.Get("x_field") != "1" {
 		t.Errorf("the module's Save saw %v, want the submitted form", saved)
 	}
-	_, body = getPage(t, app, cookie, "/notifications/settings")
+	_, body = getPage(t, app, cookie, "/settings")
 	if !strings.Contains(body, "Notification settings saved") {
 		t.Errorf("a clean save did not say so")
 	}
 	saveErr = errors.New("store down")
 	_, _ = postForm(t, app, cookie, "/notifications/settings", url.Values{"x_field": {"2"}})
-	_, body = getPage(t, app, cookie, "/notifications/settings")
+	_, body = getPage(t, app, cookie, "/settings")
 	if !strings.Contains(body, "could not be saved") {
 		t.Errorf("a failing module Save did not make the save report failure")
 	}

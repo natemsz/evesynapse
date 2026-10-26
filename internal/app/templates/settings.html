@@ -1,0 +1,137 @@
+{{define "title"}}Settings{{end}}
+{{define "pagetitle"}}<h1>Settings</h1>{{end}}
+{{define "pagetabs"}}<nav class="section-tabs" aria-label="Settings pages">
+  <a href="#notifications" data-tab="notifications" class="active" aria-current="page">Notifications</a><a href="#interface" data-tab="interface">Interface</a>
+</nav>{{end}}
+{{define "content"}}
+
+<div data-tabpanel="notifications">
+{{if .Error}}<p class="err">{{.Error}}</p>{{end}}
+<section class="card page-card">
+
+{{with .NotifySettings}}
+<p><small>Choose what EveSynapse tells you about, and for which of your characters. Notifications show in the top bar; what you switch off is not shown, and switching it back on starts from then, not from what you missed.</small></p>
+
+<form method="post" action="/notifications/settings">
+<input type="hidden" name="channels_shown" value="1">
+<h2>Notification Channels</h2>
+<p class="notify-channels">
+  <label><input type="checkbox" name="channel_inapp" value="1"{{if .InApp}} checked{{end}}> In EveSynapse <small>(the bell at the top of the page)</small></label>
+  {{if .DiscordOffered}}{{if .DiscordLinked}}<input type="hidden" name="discord_shown" value="1"><label><input type="checkbox" name="discord_dm" value="1"{{if .Discord}} checked{{end}}> On Discord <small>(direct messages to {{.DiscordName}})</small></label>{{else}}<span>On Discord <small>(not connected yet: <a href="#discord">connect it under Discord, below</a>)</small></span>{{end}}{{end}}
+  {{if .PushConfigured}}<label><input type="checkbox" name="channel_desktop" value="1"{{if .Desktop}} checked{{end}}> In my browsers <small>(each browser is switched on under Browser notifications, below)</small></label>{{end}}
+</p>
+<h2>Notification Types</h2>
+<div class="tw notify-settings-wrap">
+<table class="notify-settings" data-cards="off">
+  <thead>
+    <tr><th>Notify me about</th><th>Works for</th></tr>
+  </thead>
+  <tbody>
+    {{range .Rows}}
+    <tr>
+      <td><label><input type="checkbox" name="kind" value="{{.ID}}"{{if .On}} checked{{end}}> {{.Title}}</label>{{if .Minutes}} <label class="notify-minutes"><select name="op_reminder_minutes" aria-label="How long before an op starts to remind you">{{range .Minutes}}<option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>{{end}}</select> before it starts</label>{{end}}</td>
+      <td>{{$kind := .ID}}{{if .Characters}}
+        <div class="charselector checkselector" data-checkselector>
+          <input type="text" class="charselector-input" placeholder="{{.Summary}}" autocomplete="off" aria-label="Characters for {{.Title}}: {{.Summary}}. Type to search.">
+          <div class="charselector-dropdown" hidden>
+            {{range .Characters}}{{if .Locked}}<div class="charselector-option checkselector-locked" data-name="{{.Name}}"><span class="charselector-name">{{.Name}}</span> <span class="charselector-tags">no access &middot; <a href="{{.RelinkURL}}">sign in again</a></span></div>
+            {{else}}<label class="charselector-option" data-name="{{.Name}}"><input type="checkbox" name="char.{{$kind}}" value="{{.ID}}"{{if .On}} checked{{end}}> <span class="charselector-name">{{.Name}}</span></label>
+            {{end}}{{end}}
+          </div>
+        </div>{{else}}Your account{{end}}</td>
+    </tr>
+    {{end}}
+  </tbody>
+</table>
+</div>
+<h2>Browser notifications</h2>
+{{if .PushConfigured}}
+<p><small>Get the same notifications from your browser while no EveSynapse tab is open. This is per browser: turn it on in each one you want it in. What you switched off above stays off here too.</small></p>
+<div id="push-panel" data-vapid-key="{{.PushKey}}">
+  <p id="push-status" role="status">Checking this browser…</p>
+  <button type="button" class="btn" id="push-enable" hidden>Turn on in this browser</button>
+  <button type="button" class="btn" id="push-disable" hidden>Turn off in this browser</button>
+  <button type="button" class="btn" id="push-test" hidden>Send a test</button>
+</div>
+<p><small>{{if .PushDevices}}{{.PushDevices}} browser{{if ne .PushDevices 1}}s{{end}} on this account receive{{if eq .PushDevices 1}}s{{end}} notifications.{{else}}No browser on this account receives notifications yet.{{end}}</small></p>
+{{else}}
+<p><small>Browser notifications are not set up on this server. Notifications still show in the top bar.</small></p>
+{{end}}
+<div class="form-actions notify-save"><button type="submit">Save</button></div>
+{{range .ChannelSections}}{{.}}{{end}}
+</form>
+
+{{range .AccountSections}}{{.}}{{end}}
+
+<p><a href="/notifications/">Back to notifications</a></p>
+{{end}}
+</section>
+</div>
+
+<section class="card page-card" data-tabpanel="interface" hidden>
+  <h2>Theme</h2>
+  <p><small>How EveSynapse looks in this browser. Pick a scheme, then how strong it is. The default is Minmatar, the standard ember look. Full gives a scheme its wallpaper and the full glass treatment, and arrives for each scheme when its wallpapers are made.</small></p>
+
+  <div class="theme-default current" data-scheme-row="">
+    <div class="scheme-swatch sw-default" aria-hidden="true"></div>
+    <div class="scheme-meta"><div class="scheme-name">Default</div><div class="scheme-sub">Minmatar &middot; ember, the standard look</div></div>
+    <span class="current-badge">Current</span>
+    <div class="tier-seg" role="group" aria-label="Default backdrop">
+      <button type="button" data-bd="">Full</button><button type="button" data-bd="muted">Muted</button><button type="button" data-bd="glow">Minimalistic</button>
+    </div>
+  </div>
+
+  <p class="scheme-group-label">Schemes</p>
+  <div class="scheme-list">
+    <div class="scheme-row" data-scheme-row="jove">
+      <div class="scheme-swatch" style="background: radial-gradient(ellipse 130% 190% at 100% 0, rgba(196,181,253,.95) 0%, rgba(139,92,246,.55) 42%, rgba(30,16,51,.95) 80%), linear-gradient(180deg,#170b2c,#0d0716)" aria-hidden="true"></div>
+      <div class="scheme-meta"><div class="scheme-name">Jove</div><div class="scheme-sub">Purple and violet</div></div>
+      <span class="current-badge">Current</span>
+      <div class="tier-seg" role="group" aria-label="Jove strength">
+        <button type="button" disabled>Full</button><button type="button" data-tier="muted">Muted</button><button type="button" data-tier="minimalistic">Minimalistic</button>
+      </div>
+    </div>
+    <div class="scheme-row" data-scheme-row="caldari">
+      <div class="scheme-swatch" style="background: radial-gradient(ellipse 130% 190% at 100% 0, rgba(125,211,252,.95) 0%, rgba(96,165,250,.5) 42%, rgba(10,13,18,.95) 80%), linear-gradient(180deg,#11161f,#0a0d12)" aria-hidden="true"></div>
+      <div class="scheme-meta"><div class="scheme-name">Caldari</div><div class="scheme-sub">Steel blue</div></div>
+      <span class="current-badge">Current</span>
+      <div class="tier-seg" role="group" aria-label="Caldari strength">
+        <button type="button" disabled>Full</button><button type="button" data-tier="muted">Muted</button><button type="button" data-tier="minimalistic">Minimalistic</button>
+      </div>
+    </div>
+    <div class="scheme-row" data-scheme-row="gallente">
+      <div class="scheme-swatch" style="background: radial-gradient(ellipse 130% 190% at 100% 0, rgba(153,246,228,.9) 0%, rgba(45,212,191,.45) 42%, rgba(6,35,31,.95) 80%), linear-gradient(180deg,#07231c,#04120e)" aria-hidden="true"></div>
+      <div class="scheme-meta"><div class="scheme-name">Gallente</div><div class="scheme-sub">Teal and green</div></div>
+      <span class="current-badge">Current</span>
+      <div class="tier-seg" role="group" aria-label="Gallente strength">
+        <button type="button" disabled>Full</button><button type="button" data-tier="muted">Muted</button><button type="button" data-tier="minimalistic">Minimalistic</button>
+      </div>
+    </div>
+    <div class="scheme-row" data-scheme-row="amarr">
+      <div class="scheme-swatch" style="background: radial-gradient(ellipse 130% 190% at 100% 0, rgba(255,233,168,.95) 0%, rgba(240,185,63,.5) 42%, rgba(46,32,5,.95) 80%), linear-gradient(180deg,#241a06,#120c03)" aria-hidden="true"></div>
+      <div class="scheme-meta"><div class="scheme-name">Amarr</div><div class="scheme-sub">Gold</div></div>
+      <span class="current-badge">Current</span>
+      <div class="tier-seg" role="group" aria-label="Amarr strength">
+        <button type="button" disabled>Full</button><button type="button" data-tier="muted">Muted</button><button type="button" data-tier="minimalistic">Minimalistic</button>
+      </div>
+    </div>
+    <div class="scheme-row" data-scheme-row="triglavian">
+      <div class="scheme-swatch" style="background: radial-gradient(ellipse 130% 190% at 100% 0, rgba(212,18,54,.95) 0%, rgba(145,16,12,.62) 42%, rgba(24,2,2,.95) 80%), linear-gradient(180deg,#2b0303,#0f0101)" aria-hidden="true"></div>
+      <div class="scheme-meta"><div class="scheme-name">Triglavian</div><div class="scheme-sub">Crimson, maroon, blood red</div></div>
+      <span class="current-badge">Current</span>
+      <div class="tier-seg" role="group" aria-label="Triglavian strength">
+        <button type="button" disabled>Full</button><button type="button" data-tier="muted">Muted</button><button type="button" data-tier="minimalistic">Minimalistic</button>
+      </div>
+    </div>
+    <div class="scheme-row" data-scheme-row="edencom">
+      <div class="scheme-swatch" style="background: radial-gradient(ellipse 130% 190% at 100% 0, rgba(255,243,207,.95) 0%, rgba(233,207,143,.45) 42%, rgba(30,40,54,.95) 80%), linear-gradient(180deg,#18202b,#0b0f14)" aria-hidden="true"></div>
+      <div class="scheme-meta"><div class="scheme-name">EdenCom</div><div class="scheme-sub">Pale gold on slate</div></div>
+      <span class="current-badge">Current</span>
+      <div class="tier-seg" role="group" aria-label="EdenCom strength">
+        <button type="button" disabled>Full</button><button type="button" data-tier="muted">Muted</button><button type="button" data-tier="minimalistic">Minimalistic</button>
+      </div>
+    </div>
+  </div>
+  <p><small>Full is unavailable for a scheme until its wallpapers are made.</small></p>
+</section>
+{{end}}

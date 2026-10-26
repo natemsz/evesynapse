@@ -51,7 +51,7 @@ func (app *mod) discordLinkFor(r *http.Request, userID int64) (db.DiscordLink, b
 
 // discordSettingsPath is where the Discord section lives, and where
 // its actions come back to.
-const discordSettingsPath = "/notifications/settings"
+const discordSettingsPath = "/settings#notifications"
 
 func (app *mod) handleDiscordConnect(w http.ResponseWriter, r *http.Request) {
 	app.sessions.Remove(r.Context(), sessionDiscordInstall)

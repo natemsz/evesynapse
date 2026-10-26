@@ -143,7 +143,7 @@ func TestEmberGlassAndSkyRules(t *testing.T) {
 			t.Errorf("bg.css is missing the tab rail rule %q", want)
 		}
 	}
-	// The backdrop cycle's two painted states ride the art
+	// The backdrop's two painted states ride the art
 	// layer: the muted grade in place, and the glow swap with
 	// the horizon gradient over the warm black ground. The
 	// default state is the unmodified art, no rule at all.
@@ -151,7 +151,7 @@ func TestEmberGlassAndSkyRules(t *testing.T) {
 		`html[data-backdrop="muted"] body::before {`,
 		"filter: brightness(0.42) saturate(0.30) contrast(1.03);",
 		`html[data-backdrop="glow"] body::before {`,
-		"radial-gradient(ellipse 760px 240px at 72% 42px, rgba(234, 88, 12, 0.20) 0%, rgba(180, 65, 10, 0.07) 48%, rgba(11, 8, 6, 0) 80%)",
+		"radial-gradient(ellipse 900px 300px at 88% -20px, rgba(234, 88, 12, 0.32) 0%, rgba(180, 65, 10, 0.13) 48%, rgba(11, 8, 6, 0) 80%)",
 		"linear-gradient(180deg, #110c09 0%, #0b0806 100%);",
 	} {
 		if !strings.Contains(bg, want) {

@@ -3732,6 +3732,16 @@
     }
     // The wordmark as a self-contained image: its letters' colors come
     // from the stylesheet, so they are written into the copy.
+    function glyphImage() {
+      var glyph = el.querySelector(".map-mark-glyph");
+      if (!glyph) return Promise.reject(new Error("no glyph"));
+      if (!glyph.tagName || glyph.tagName.toLowerCase() !== "svg") return loadImage(glyph.src);
+      var copy = glyph.cloneNode(true);
+      copy.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+      var from = glyph.querySelectorAll("stop"), to = copy.querySelectorAll("stop");
+      for (var i = 0; i < from.length; i++) to[i].setAttribute("stop-color", getComputedStyle(from[i]).stopColor);
+      return loadImage("data:image/svg+xml;charset=utf-8," + encodeURIComponent(new XMLSerializer().serializeToString(copy)));
+    }
     function wordmarkImage() {
       var svg = el.querySelector(".map-mark .wordmark-svg");
       if (!svg) return Promise.reject(new Error("no wordmark"));
@@ -3757,9 +3767,8 @@
       o.fillStyle = getComputedStyle(stage).backgroundColor || "#070504";
       o.fillRect(0, 0, out.width, out.height);
       o.drawImage(canvas, 0, 0);
-      var glyph = el.querySelector(".map-mark-glyph");
       var fonts = root.fonts && root.fonts.load ? root.fonts.load("600 12px Rajdhani").catch(function () {}) : Promise.resolve();
-      Promise.all([loadImage(glyph.src).catch(function () { return null; }), wordmarkImage().catch(function () { return null; }), fonts]).then(function (got) {
+      Promise.all([glyphImage().catch(function () { return null; }), wordmarkImage().catch(function () { return null; }), fonts]).then(function (got) {
         var logo = got[0], word = got[1], pad = 14 * s, h = 18 * s;
         // The brand: glyph, wordmark, ".APP", right-aligned.
         o.save();

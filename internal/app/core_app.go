@@ -616,6 +616,11 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 		r.Get("/", app.handlePlanets)
 	})
 
+	// Settings (notify_pages.go): one page with Notifications and
+	// Interface tabs. The notification settings live on the first
+	// tab; the old address redirects there.
+	r.With(app.requireAuth).Get("/settings", app.handleSettings)
+
 	// Notifications (notify_pages.go): the list, and the two actions
 	// that change what is unread.
 	r.Route("/notifications", func(r chi.Router) {
@@ -625,7 +630,7 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 		r.Post("/read", app.handleNotificationsRead)
 		r.Post("/open", app.handleNotificationsOpen)
 		r.Post("/prompt", app.handleNotifyPrompt)
-		r.Get("/settings", app.handleNotificationSettings)
+		r.Get("/settings", app.handleNotificationSettingsRedirect)
 		r.Post("/settings", app.handleNotificationSettingsSave)
 		r.Post("/push/subscribe", app.handlePushSubscribe)
 		r.Post("/push/unsubscribe", app.handlePushUnsubscribe)

@@ -1019,6 +1019,12 @@ html[data-scheme][data-tier="minimalistic"] body::before {
 .scheme-list { display: flex; flex-direction: column; gap: .55rem; }
 .scheme-swatch { flex: 0 0 92px; height: 44px; border-radius: 7px; border: 1px solid rgba(255,255,255,.14); }
 .sw-default { background: radial-gradient(ellipse 130% 190% at 100% 0, rgba(255,150,60,.95) 0%, rgba(234,88,12,.55) 42%, rgba(90,30,5,.9) 78%), linear-gradient(180deg,#17100b,#0b0806); }
+.sw-jove { background: radial-gradient(ellipse 130% 190% at 100% 0, rgba(196,181,253,.95) 0%, rgba(139,92,246,.55) 42%, rgba(30,16,51,.95) 80%), linear-gradient(180deg,#170b2c,#0d0716); }
+.sw-caldari { background: radial-gradient(ellipse 130% 190% at 100% 0, rgba(125,211,252,.95) 0%, rgba(96,165,250,.5) 42%, rgba(10,13,18,.95) 80%), linear-gradient(180deg,#11161f,#0a0d12); }
+.sw-gallente { background: radial-gradient(ellipse 130% 190% at 100% 0, rgba(153,246,228,.9) 0%, rgba(45,212,191,.45) 42%, rgba(6,35,31,.95) 80%), linear-gradient(180deg,#07231c,#04120e); }
+.sw-amarr { background: radial-gradient(ellipse 130% 190% at 100% 0, rgba(255,233,168,.95) 0%, rgba(240,185,63,.5) 42%, rgba(46,32,5,.95) 80%), linear-gradient(180deg,#241a06,#120c03); }
+.sw-triglavian { background: radial-gradient(ellipse 130% 190% at 100% 0, rgba(212,18,54,.95) 0%, rgba(145,16,12,.62) 42%, rgba(24,2,2,.95) 80%), linear-gradient(180deg,#2b0303,#0f0101); }
+.sw-edencom { background: radial-gradient(ellipse 130% 190% at 100% 0, rgba(255,243,207,.95) 0%, rgba(233,207,143,.45) 42%, rgba(30,40,54,.95) 80%), linear-gradient(180deg,#18202b,#0b0f14); }
 .scheme-meta { flex: 1 1 auto; min-width: 0; }
 .scheme-name { font-family: Rajdhani, sans-serif; font-weight: 600; font-size: 1.08rem; letter-spacing: .05em; text-transform: uppercase; }
 .scheme-sub { font-size: .82rem; opacity: .72; }

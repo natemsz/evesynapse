@@ -125,9 +125,9 @@ func TestDiscordAddsMembersToTheirServer(t *testing.T) {
 	if err != nil || link.AccessToken != "" || link.RefreshToken != "" {
 		t.Fatalf("the unusable token was kept: %+v, %v", link, err)
 	}
-	_, body = getPage(t, f.app, thirds, "/notifications/settings")
+	_, body = getPage(t, f.app, thirds, "/settings")
 	mustContain(t, "settings after permission was taken back", body, "Connect Discord again")
-	if _, body = getPage(t, f.app, cookie, "/notifications/settings"); strings.Contains(body, "Connect Discord again") {
+	if _, body = getPage(t, f.app, cookie, "/settings"); strings.Contains(body, "Connect Discord again") {
 		t.Fatal("an account with a working token is asked to reconnect")
 	}
 

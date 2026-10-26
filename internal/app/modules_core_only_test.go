@@ -47,7 +47,7 @@ func TestCoreOnlyOmitsModules(t *testing.T) {
 	}
 
 	// The notification settings page has no Discord section.
-	if _, body := getPage(t, app, cookie, "/notifications/settings"); strings.Contains(body, "/discord/connect") || strings.Contains(strings.ToLower(body), "also send these to me on discord") {
+	if _, body := getPage(t, app, cookie, "/settings"); strings.Contains(body, "/discord/connect") || strings.Contains(strings.ToLower(body), "also send these to me on discord") {
 		t.Error("the notification settings still offer Discord in the core-only build")
 	}
 

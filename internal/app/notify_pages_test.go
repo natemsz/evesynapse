@@ -228,16 +228,16 @@ func TestNotificationSettings(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	code, body := getPage(t, f.app, cookie, "/notifications/settings")
+	code, body := getPage(t, f.app, cookie, "/settings")
 	if code != http.StatusOK {
 		t.Fatalf("GET settings = %d", code)
 	}
 	// Everything is on to begin with.
 	for _, kind := range notifyKindList() {
-		mustContain(t, "/notifications/settings", body,
+		mustContain(t, "/settings", body,
 			`<input type="checkbox" name="kind" value="`+kind.ID+`" checked> `+kind.Title)
 	}
-	mustContain(t, "/notifications/settings", body,
+	mustContain(t, "/settings", body,
 		`placeholder="On for 2 of 2 characters"`,                    // mail: both
 		`placeholder="On for 1 of 2 characters (1 without access)"`, // killmails: the alt has not granted it
 		`<input type="checkbox" name="char.mail" value="90000002" checked> <span class="charselector-name">Fixture Alt</span>`,
@@ -254,15 +254,15 @@ func TestNotificationSettings(t *testing.T) {
 			keep = append(keep, kind.ID)
 		}
 	}
-	if code, where := f.post(cookie, "/notifications/settings", url.Values{"kind": append(keep, "no-such-kind")}); code != http.StatusSeeOther || where != "/notifications/settings" {
+	if code, where := f.post(cookie, "/notifications/settings", url.Values{"kind": append(keep, "no-such-kind")}); code != http.StatusSeeOther || where != "/settings#notifications" {
 		t.Fatalf("save: %d to %q", code, where)
 	}
 	prefs := f.app.notifyPrefsFor(f.ctx, f.userID)
 	if len(prefs.Off) != 2 || !prefs.off(notifyMail) || !prefs.off(notifyKillmail) {
 		t.Fatalf("stored settings switch off %q, want mail and killmail", prefs.Off)
 	}
-	_, body = getPage(t, f.app, cookie, "/notifications/settings")
-	mustContain(t, "/notifications/settings", body,
+	_, body = getPage(t, f.app, cookie, "/settings")
+	mustContain(t, "/settings", body,
 		"Notification settings saved.",
 		`<input type="checkbox" name="kind" value="mail"> New mail`,
 		`<input type="checkbox" name="kind" value="skill" checked> Skill complete`)
@@ -327,7 +327,7 @@ func TestNotificationSettingsPerCharacter(t *testing.T) {
 		t.Fatalf("stored per-character settings %v, want only mail for the alt", prefs.OffFor)
 	}
 
-	_, body := getPage(t, f.app, cookie, "/notifications/settings")
+	_, body := getPage(t, f.app, cookie, "/settings")
 	mustContain(t, "settings after saving", body,
 		`placeholder="On for 1 of 2 characters"`,
 		`<input type="checkbox" name="char.mail" value="90000001" checked> <span class="charselector-name">Fixture Ceo</span>`,
@@ -450,7 +450,7 @@ func TestNotifyNewOps(t *testing.T) {
 	f.wantTitles("ops after switching back on", "Structure bash", "After switching on")
 
 	// The settings page lists it and the bell words it.
-	_, body := getPage(t, f.app, cookie, "/notifications/settings")
+	_, body := getPage(t, f.app, cookie, "/settings")
 	mustContain(t, "settings", body, `value="op" checked> New op on the calendar`, `value="calendar" checked> New in-game calendar event`)
 	mustContain(t, "bell", f.badge(cookie, "").Body.String(), "2 new ops")
 }
@@ -543,7 +543,7 @@ func TestNotifyOpReminder(t *testing.T) {
 	}
 
 	// A longer lead, chosen on the settings page.
-	_, body := getPage(t, f.app, cookie, "/notifications/settings")
+	_, body := getPage(t, f.app, cookie, "/settings")
 	mustContain(t, "settings", body,
 		`value="op_reminder" checked> Op starting soon</label>`,
 		`<select name="op_reminder_minutes"`, `<option value="30" selected>30 minutes</option>`, `<option value="120">2 hours</option>`)
@@ -558,7 +558,7 @@ func TestNotifyOpReminder(t *testing.T) {
 	if got := f.app.notifyPrefsFor(f.ctx, f.userID).reminderLead(); got != 2*time.Hour {
 		t.Fatalf("lead after saving 120: %v", got)
 	}
-	_, body = getPage(t, f.app, cookie, "/notifications/settings")
+	_, body = getPage(t, f.app, cookie, "/settings")
 	mustContain(t, "settings after saving", body, `<option value="120" selected>2 hours</option>`)
 	// A lead that is not offered is not stored.
 	form.Set("op_reminder_minutes", "7")

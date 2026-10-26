@@ -303,7 +303,9 @@ func (f *notifyFixture) roundTrip(cookie *http.Cookie, start string, form url.Va
 	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != landing {
 		f.t.Fatalf("callback: %d to %q, want %q", rec.Code, rec.Header().Get("Location"), landing)
 	}
-	_, body := getPage(f.t, f.app, cookie, landing)
+	// A browser never sends the fragment of the address it was
+	// sent to; the page it lands on is the part before it.
+	_, body := getPage(f.t, f.app, cookie, strings.SplitN(landing, "#", 2)[0])
 	return cookie, body
 }
 
@@ -311,7 +313,7 @@ func (f *notifyFixture) roundTrip(cookie *http.Cookie, start string, form url.Va
 // sign-in code.
 func (f *notifyFixture) connect(cookie *http.Cookie, code string) (*http.Cookie, string) {
 	f.t.Helper()
-	return f.roundTrip(cookie, "/discord/connect", nil, code, "/notifications/settings")
+	return f.roundTrip(cookie, "/discord/connect", nil, code, "/settings#notifications")
 }
 
 // addServer adds the bot to the server behind an install code, for an
@@ -384,12 +386,12 @@ func TestDiscordConnect(t *testing.T) {
 	cookie := sessionCookie(t, f.app, f.userID, f.ch.CharacterID, f.ch.Name)
 
 	// Not set up: nothing is offered.
-	_, body := getPage(t, f.app, cookie, "/notifications/settings")
+	_, body := getPage(t, f.app, cookie, "/settings")
 	if strings.Contains(body, "Connect Discord") {
 		t.Fatal("Discord is offered on a site that has not set it up")
 	}
 	fake := f.enableDiscord()
-	_, body = getPage(t, f.app, cookie, "/notifications/settings")
+	_, body = getPage(t, f.app, cookie, "/settings")
 	mustContain(t, "settings before connecting", body, `<a class="btn btn-discord" href="/discord/connect"><svg class="discord-glyph" viewBox="0 0 24 24" aria-hidden="true">`, ` Connect Discord</a>`, "it can do nothing else with your account")
 
 	// A return nobody started, or with the wrong state, changes nothing.
@@ -437,7 +439,7 @@ func TestDiscordConnect(t *testing.T) {
 
 	// Disconnecting.
 	cookie, _ = f.connect(cookie, "bob")
-	if code, where := f.post(cookie, "/discord/disconnect", url.Values{}); code != http.StatusSeeOther || where != "/notifications/settings" {
+	if code, where := f.post(cookie, "/discord/disconnect", url.Values{}); code != http.StatusSeeOther || where != "/settings#notifications" {
 		t.Fatalf("disconnect: %d to %q", code, where)
 	}
 	if _, err := f.q.GetDiscordLink(f.ctx, f.userID); err == nil {
@@ -490,7 +492,7 @@ func TestDiscordCallbackWithoutVerifier(t *testing.T) {
 	back.AddCookie(cookie)
 	rec = httptest.NewRecorder()
 	f.app.Handler().ServeHTTP(rec, back)
-	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/notifications/settings" {
+	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/settings#notifications" {
 		t.Fatalf("callback: %d to %q, want the settings page", rec.Code, rec.Header().Get("Location"))
 	}
 	if _, err := f.q.GetDiscordLink(f.ctx, f.userID); err == nil {
@@ -536,12 +538,12 @@ func TestDiscordDirectMessages(t *testing.T) {
 		}
 		return form
 	}
-	_, body := getPage(t, f.app, cookie, "/notifications/settings")
+	_, body := getPage(t, f.app, cookie, "/settings")
 	mustContain(t, "settings before ticking", body, `<input type="checkbox" name="discord_dm" value="1"> On Discord <small>(direct messages to pilot-alice)</small>`)
 	if code, _ := f.post(cookie, "/notifications/settings", settings(true)); code != http.StatusSeeOther {
 		t.Fatalf("save: %d", code)
 	}
-	_, body = getPage(t, f.app, cookie, "/notifications/settings")
+	_, body = getPage(t, f.app, cookie, "/settings")
 	mustContain(t, "settings with messages on", body, `name="discord_dm" value="1" checked>`, "Notifications by direct message are <strong>on</strong>")
 	mail(2, "Fleet tonight", now)
 	f.pass(now.Add(2 * time.Minute))
@@ -557,7 +559,7 @@ func TestDiscordDirectMessages(t *testing.T) {
 	}
 	fake.refuseDM = true
 	f.post(cookie, "/discord/test", url.Values{})
-	_, body = getPage(t, f.app, cookie, "/notifications/settings")
+	_, body = getPage(t, f.app, cookie, "/settings")
 	mustContain(t, "refused test", body, "Discord would not deliver the message.")
 	// A refusal loses nothing: the notification is still made. And
 	// the person is told on the settings page, not only the log.
@@ -565,13 +567,13 @@ func TestDiscordDirectMessages(t *testing.T) {
 	if n := f.pass(now.Add(3 * time.Minute)); n != 1 {
 		t.Fatalf("with Discord refusing: %d notification(s), want 1", n)
 	}
-	_, body = getPage(t, f.app, cookie, "/notifications/settings")
+	_, body = getPage(t, f.app, cookie, "/settings")
 	mustContain(t, "after a refused notification", body, `<p class="err">Discord refused to deliver your last notification.`)
 	// The next one that goes through clears it.
 	fake.refuseDM = false
 	mail(5, "Reachable again", now)
 	f.pass(now.Add(210 * time.Second))
-	if _, body = getPage(t, f.app, cookie, "/notifications/settings"); strings.Contains(body, "Discord refused to deliver") {
+	if _, body = getPage(t, f.app, cookie, "/settings"); strings.Contains(body, "Discord refused to deliver") {
 		t.Fatal("the refusal is still shown after a message went through")
 	}
 	sentSoFar := len(fake.messages)

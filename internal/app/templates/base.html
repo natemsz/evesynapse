@@ -136,7 +136,7 @@
     </div>
       {{if .LoggedIn}}<div class="sidebar-account-footer">
         <button type="button" id="install-app" class="install-app navlink" data-tip="Install App" hidden><span class="nav-icon" aria-hidden="true"><svg class="nav-icon-svg" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="url(#nav-glyph-gradient)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5v11"/><path d="M7.5 10.5 12 15l4.5-4.5"/><path d="M4.5 16.5v2a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2v-2"/></g></svg></span><span class="nav-label">Install App</span></button>
-        <button type="button" id="theme-toggle" class="theme-toggle navlink" data-tip="Backdrop" aria-label="Cycle backdrop"><span class="nav-icon" aria-hidden="true"><svg class="nav-icon-svg theme-icon-sun" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="url(#nav-glyph-gradient)" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4.5"/><path d="M12 2.5v2.5M12 19v2.5M2.5 12h2.5M19 12h2.5M5 5l1.8 1.8M17.2 17.2L19 19M19 5l-1.8 1.8M6.8 17.2L5 19"/></g></svg><svg class="nav-icon-svg theme-icon-moon" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="url(#nav-glyph-gradient)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5Z"/></g></svg></span><span class="nav-label">Backdrop</span></button>
+        <a class="navlink sidebar-settings" href="/settings" data-tip="Settings" aria-label="Settings"><span class="nav-icon" aria-hidden="true"><svg class="nav-icon-svg" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="url(#nav-glyph-gradient)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h0a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></g></svg></span><span class="nav-label">Settings</span></a>
         <form class="sidebar-signout-form" method="post" action="/auth/logout"><button class="navlink sidebar-signout" type="submit" data-tip="Sign Out"><span class="nav-icon" aria-hidden="true"><svg class="nav-icon-svg" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="url(#nav-glyph-gradient)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></g></svg></span><span class="nav-label">Sign Out</span></button></form>
       </div>{{else}}<div class="sidebar-account-footer">
         <a class="navlink sidebar-signin" href="/auth/login" data-tip="Sign In"><span class="nav-icon" aria-hidden="true"><svg class="nav-icon-svg" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="url(#nav-glyph-gradient)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><path d="M10 17l5-5-5-5"/><path d="M15 12H3"/></g></svg></span><span class="nav-label">Sign In</span></a>
@@ -148,7 +148,7 @@
   <nav class="topbar">
     <label class="nav-hamburger" for="nav-drawer-toggle" role="button" tabindex="0" aria-expanded="false" aria-controls="site-nav" aria-label="Menu" title="Menu"><svg class="nav-control-svg nav-hamburger-icon" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="url(#nav-glyph-gradient)" stroke-width="2.2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></g></svg></label>
     <button type="button" class="nav-reopen" id="nav-reopen" aria-label="Show navigation" aria-controls="site-nav" aria-expanded="false"><span aria-hidden="true">☰</span><span>Menu</span></button>
-    <a class="wordmark topbar-wordmark" href="/" aria-label="EveSynapse home"><img class="wordmark-glyph" src="/static/logo.svg?v={{.AssetVersion}}" alt="" width="64" height="64"><span>{{template "wordmark-svg"}}</span></a>
+    <a class="wordmark topbar-wordmark" href="/" aria-label="EveSynapse home">{{template "logo-mark" "wordmark-glyph"}}<span>{{template "wordmark-svg"}}</span></a>
     {{if .LoggedIn}}
     <span id="page-sync-indicator" class="page-sync" role="status" aria-live="polite" hidden><span class="loading-pulse" aria-hidden="true"></span><span data-page-sync-label>Loading page data…</span></span>
     <form class="topsearch" method="get" action="/items/" role="search">
@@ -224,7 +224,7 @@
     </ul>
     <div class="phone-sheet-actions">
       <button type="button" class="phone-sheet-action" data-install-app hidden>Install App</button>
-      <button type="button" class="phone-sheet-action" data-theme-toggle>Backdrop</button>
+      <a class="phone-sheet-action" href="/settings">Settings</a>
       <form class="sidebar-signout-form" method="post" action="/auth/logout"><button class="phone-sheet-action" type="submit">Sign Out</button></form>
     </div>
     {{else}}

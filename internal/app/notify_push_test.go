@@ -116,14 +116,14 @@ func TestPushSubscribeAndUnsubscribe(t *testing.T) {
 	if code, _ := f.postJSON(cookie, "/notifications/push/subscribe", sub); code != http.StatusServiceUnavailable {
 		t.Fatalf("subscribe with push off = %d, want 503", code)
 	}
-	_, body := getPage(t, f.app, cookie, "/notifications/settings")
+	_, body := getPage(t, f.app, cookie, "/settings")
 	mustContain(t, "settings (push off)", body, "Browser notifications are not set up on this server.")
 	if strings.Contains(body, "push.js") && strings.Contains(body, "push-panel") {
 		t.Fatal("the subscribe controls are offered with push off")
 	}
 
 	f.enablePush()
-	_, body = getPage(t, f.app, cookie, "/notifications/settings")
+	_, body = getPage(t, f.app, cookie, "/settings")
 	mustContain(t, "settings (push on)", body,
 		`<div id="push-panel" data-vapid-key="`+f.app.push.PublicKey+`">`,
 		`id="push-enable" hidden>`, `/static/push.js?v=`,
@@ -136,7 +136,7 @@ func TestPushSubscribeAndUnsubscribe(t *testing.T) {
 	if code, _ := f.postJSON(cookie, "/notifications/push/subscribe", sub); code != http.StatusNoContent || f.devices(f.userID) != 1 {
 		t.Fatalf("subscribing twice: %d, %d device(s)", code, f.devices(f.userID))
 	}
-	_, body = getPage(t, f.app, cookie, "/notifications/settings")
+	_, body = getPage(t, f.app, cookie, "/settings")
 	mustContain(t, "settings (one device)", body, "1 browser on this account receives notifications.")
 
 	// What is not a real subscription is refused and not stored. The

@@ -203,7 +203,7 @@ func (app *Application) handlePushTest(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "browser push is not set up on this server", http.StatusServiceUnavailable)
 		return
 	}
-	test := pushMessage{Title: "EveSynapse", Body: "Browser notifications are working.", URL: "/notifications/settings", Tag: "test"}
+	test := pushMessage{Title: "EveSynapse", Body: "Browser notifications are working.", URL: "/settings#notifications", Tag: "test"}
 	if posted, err := readPushSubscription(r); err == nil && posted.Endpoint != "" {
 		app.pushTestOne(ctx, w, userID, posted.Endpoint, test)
 		return

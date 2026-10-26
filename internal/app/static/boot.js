@@ -29,4 +29,16 @@ try {
   if (savedBackdrop === "muted" || savedBackdrop === "glow") {
     document.documentElement.setAttribute("data-backdrop", savedBackdrop);
   }
+  // A saved colour scheme (Settings, Interface tab) replaces the
+  // backdrop choice: the scheme carries its own strength, so the
+  // backdrop attribute comes off and the scheme's tier applies.
+  var savedScheme = window.localStorage.getItem("evesynapse-scheme");
+  if (savedScheme === "jove" || savedScheme === "caldari" || savedScheme === "gallente" ||
+      savedScheme === "amarr" || savedScheme === "triglavian" || savedScheme === "edencom") {
+    document.documentElement.setAttribute("data-scheme", savedScheme);
+    document.documentElement.removeAttribute("data-backdrop");
+    var savedTier = window.localStorage.getItem("evesynapse-tier");
+    document.documentElement.setAttribute("data-tier",
+      savedTier === "minimalistic" ? "minimalistic" : "muted");
+  }
 } catch (e) {}

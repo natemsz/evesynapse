@@ -44,7 +44,7 @@ func TestNotificationSettingsChannelsAndTypes(t *testing.T) {
 		t.Fatalf("subscribe: %d %q", code, msg)
 	}
 
-	_, body := getPage(t, f.app, cookie, "/notifications/settings")
+	_, body := getPage(t, f.app, cookie, "/settings")
 	mustContain(t, "settings channels", body,
 		"<h2>Notification Channels</h2>",
 		"<h2>Notification Types</h2>",
@@ -127,7 +127,7 @@ func TestNotificationSettingsChannelsUnlinkedAndNoPush(t *testing.T) {
 	f.enableDiscord() // the linking is offered; the account has not linked
 	cookie := sessionCookie(t, f.app, f.userID, f.ch.CharacterID, f.ch.Name)
 
-	_, body := getPage(t, f.app, cookie, "/notifications/settings")
+	_, body := getPage(t, f.app, cookie, "/settings")
 	mustContain(t, "settings channels (unlinked, no push)", body,
 		"<h2>Notification Channels</h2>",
 		"On Discord <small>(not connected yet: <a href=\"#discord\">connect it under Discord, below</a>)</small>",

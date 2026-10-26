@@ -143,7 +143,7 @@ func sectionForPage(page string) string {
 		return "home"
 	case "character.html", "characters.html", "skills.html",
 		"pilot.html", "assets.html",
-		"killmails.html", "notifications.html", "notification_settings.html", "op.html", "op_form.html", "op_paps.html":
+		"killmails.html", "notifications.html", "op.html", "op_form.html", "op_paps.html":
 		return "pilot"
 	case "industry.html", "industry_jobs.html", "industry_mining.html", "planets.html":
 		return "industry"

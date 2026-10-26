@@ -109,7 +109,7 @@ func TestHomeNetWorthShowsTheBreakdown(t *testing.T) {
 		t.Fatalf("home: status %d", code)
 	}
 	mustContain(t, "/", body,
-		`class="chart-band"`, `aria-label="Net worth over time, split into ISK and assets"`,
+		`class="chart-band band-isk"`, `class="chart-band band-assets"`, `aria-label="Net worth over time, split into ISK and assets"`,
 		`legend-isk`, `legend-assets`, `legend-total`, "Assets &amp; orders",
 		`data-isk="`, `data-assets="`)
 }

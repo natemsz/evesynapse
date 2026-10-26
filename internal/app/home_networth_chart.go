@@ -219,8 +219,8 @@ func buildNetWorthChart(days []netWorthDay) (balancechart.BalanceChart, bool) {
 		assetsPoly = append(assetsPoly, iskTop[i])
 	}
 	chart.Bands = []balancechart.BalanceBand{
-		{Label: "ISK", Fill: netWorthISKColour, Opacity: "0.55", Points: strings.Join(iskPoly, " ")},
-		{Label: "Assets and orders", Fill: netWorthAssetsColour, Opacity: "0.5", Points: strings.Join(assetsPoly, " ")},
+		{Label: "ISK", Class: "band-isk", Fill: netWorthISKColour, Opacity: "0.55", Points: strings.Join(iskPoly, " ")},
+		{Label: "Assets and orders", Class: "band-assets", Fill: netWorthAssetsColour, Opacity: "0.5", Points: strings.Join(assetsPoly, " ")},
 	}
 
 	chart.From = days[0].At.Format(markethistory.DateLayout)

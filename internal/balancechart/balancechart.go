@@ -156,6 +156,7 @@ type BalanceChart struct {
 // BalanceBand is one filled polygon of a stacked chart.
 type BalanceBand struct {
 	Label   string
+	Class   string // stylesheet hook, so a colour scheme can repaint the band
 	Fill    string // colour
 	Opacity string
 	Points  string // polygon points

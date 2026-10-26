@@ -2897,6 +2897,20 @@
       });
     })(hoverBranches[hoverIndex]);
   }
+  // The Settings gear: hover and focus keep the flyout with its
+  // Interface and Notifications jumps, but a click on the gear
+  // itself goes to the Settings page, in the wide sidebar and in
+  // the rail alike. The listener sits on the summary, so clicks
+  // on the menu's own links keep their targets.
+  if (settingsBranch) {
+    var settingsSummary = settingsBranch.querySelector("summary");
+    if (settingsSummary) {
+      settingsSummary.addEventListener("click", function (e) {
+        e.preventDefault();
+        window.location.assign("/settings");
+      });
+    }
+  }
   if (collapseButton) {
     collapseButton.addEventListener("click", function () {
       applyNavigationState(currentState() === "rail" ? "expanded" : "rail");

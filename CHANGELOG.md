@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.5.9.7] - 2026-10-26
+
+Automated build of EveSynapse v0.5.9.7. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+
+## What's Changed
+### 🚀 Features
+* Buttons take flat frosted glass, panel headings carry no scheme gradient, and the Settings gear gains a flyout menu by @natemsz in https://github.com/natemsz/evesynapse/pull/679
+* Theme is an account setting, rendered on signed-in loads by @natemsz in https://github.com/natemsz/evesynapse/pull/680
+### Other Changes
+* Plan fetches by per-kind scope and settle ESI refusals once per character and kind by @natemsz in https://github.com/natemsz/evesynapse/pull/678
+* docs(changelog): review changelog for v0.5.9.5 by @github-actions[bot] in https://github.com/natemsz/evesynapse/pull/675
+* docs(changelog): review changelog for v0.5.9.6 by @github-actions[bot] in https://github.com/natemsz/evesynapse/pull/677
+
+
+**Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.9.6...v0.5.9.7
+
 ## [v0.5.9.6] - 2026-10-26
 
 Automated build of EveSynapse v0.5.9.6. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).

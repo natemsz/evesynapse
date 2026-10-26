@@ -205,6 +205,15 @@ html[data-theme="light"] .btn.btn-quiet {
   backdrop-filter: none;
 }
 
+/* Flat glass buttons follow the same switch: inside the page
+   panel the pane's blur already did the work, so the button
+   keeps its tint and hairline and drops its own filter. */
+.page-body:not(:has(.home-grid)) .btn,
+.notify-menu .btn {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
 /* Quiet-button hover takes the same ember edge the section tabs
    use, so the pill family shares one hover vocabulary. */
 .btn.btn-quiet:hover {
@@ -935,6 +944,17 @@ html[data-scheme] h2, html[data-scheme] h3,
 html[data-scheme] .panel > h1:first-child > .gt {
   background-image: linear-gradient(90deg, var(--sch-hi) 0%, var(--sch-core) 50%, var(--sch-end) 100%);
 }
+/* Panel, card and foldable headings are solid text on the panel
+   head, never gradient carriers: the sweep above does not paint
+   them. These selectors outrank both the sweep and the strip
+   rules in style.css, so the heading keeps no background image
+   at any stylesheet order. Plain headings keep the gradient
+   text the sweep re-tints. */
+html[data-scheme] .panel > h2, html[data-scheme] .panel > h3,
+html[data-scheme] .card > h2:first-child, html[data-scheme] .card > h3:first-child,
+html[data-scheme] .foldable > h2:first-child, html[data-scheme] .foldable > h3:first-child {
+  background-image: none;
+}
 html[data-scheme] #nav-glyph-gradient stop:nth-child(1) { stop-color: var(--sch-hi); }
 html[data-scheme] #nav-glyph-gradient stop:nth-child(2) { stop-color: var(--sch-core); }
 html[data-scheme] #nav-glyph-gradient stop:nth-child(3) { stop-color: var(--sch-end); }
@@ -987,10 +1007,6 @@ html[data-scheme="edencom"] .wordmark-svg .p-s5 { fill: #aca07c; }
 html[data-scheme="edencom"] .wordmark-svg .p-s6 { fill: #707068; }
 html[data-scheme="edencom"] .wordmark-svg .p-s7 { fill: #334155; }
 html[data-scheme] .section-tabs a.active { color: var(--sch-hi); }
-html[data-scheme] .btn:not(.btn-danger):not(.btn-quiet),
-html[data-scheme] .form-actions button {
-  background-image: linear-gradient(180deg, var(--sch-hi) 0%, var(--sch-core) 55%, var(--sch-end) 100%);
-}
 /* The top bar's search magnifier takes the scheme highlight;
    the baked data-uri magnifiers are restated per scheme in
    style.css, beside the originals. */

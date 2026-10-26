@@ -2636,6 +2636,10 @@
   var drawerClose = document.querySelector(".nav-drawer-close");
   var expandAllButton = document.getElementById("nav-expand-all");
   var categoryBranches = sidebar ? sidebar.querySelectorAll(".sidenav details.branch") : [];
+  // The Settings branch in the sidebar footer is not a category:
+  // it stays out of the expand-all set, but its flyout opens and
+  // closes with the same rail hover treatment as the categories'.
+  var settingsBranch = sidebar ? sidebar.querySelector(".sidebar-account-footer details.branch") : null;
   var drawerQuery = window.matchMedia ? window.matchMedia("(max-width: 860px)") : { matches: false };
   var storageKey = "evesynapse-nav";
 
@@ -2683,6 +2687,9 @@
       if (categoryBranches[i] !== except) {
         categoryBranches[i].open = false;
       }
+    }
+    if (settingsBranch && settingsBranch !== except) {
+      settingsBranch.open = false;
     }
   }
   function railActive() {
@@ -2791,7 +2798,11 @@
       syncExpandAllButton();
     }, railHoverCloseMs);
   }
-  for (var hoverIndex = 0; hoverIndex < categoryBranches.length; hoverIndex++) {
+  var hoverBranches = Array.prototype.slice.call(categoryBranches);
+  if (settingsBranch) {
+    hoverBranches.push(settingsBranch);
+  }
+  for (var hoverIndex = 0; hoverIndex < hoverBranches.length; hoverIndex++) {
     (function (branch) {
       branch.addEventListener("mouseenter", function () {
         if (!railActive()) {
@@ -2818,7 +2829,7 @@
           e.preventDefault();
         }
       });
-    })(categoryBranches[hoverIndex]);
+    })(hoverBranches[hoverIndex]);
   }
   if (collapseButton) {
     collapseButton.addEventListener("click", function () {

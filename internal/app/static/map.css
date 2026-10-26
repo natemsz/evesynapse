@@ -7,6 +7,14 @@
  * in script. The system card docks top right on a wide screen and
  * rises from the bottom on a phone. */
 
+/* The space backdrop's two glow colours: the ember defaults.
+   A colour scheme overrides them from its token line in bg.css;
+   they sit on the root so the scheme values inherit into .map. */
+:root {
+  --map-glow-1: rgba(255, 106, 26, 0.08);
+  --map-glow-2: rgba(255, 184, 77, 0.05);
+}
+
 .map {
   /* Type: the body face for names and figures, the display face
      (Rajdhani, as the site's headings) for region and holder
@@ -59,8 +67,8 @@
   --map-d-posted: #e6dccb;
   --map-inc: #c64bd6;
   --map-inc-staging: #ff5ce0;
-  --map-space: radial-gradient(120% 90% at 30% 20%, rgba(255, 106, 26, 0.08), transparent 55%),
-    radial-gradient(90% 80% at 80% 85%, rgba(255, 184, 77, 0.05), transparent 60%),
+  --map-space: radial-gradient(120% 90% at 30% 20%, var(--map-glow-1), transparent 55%),
+    radial-gradient(90% 80% at 80% 85%, var(--map-glow-2), transparent 60%),
     #070504;
   display: flex;
   flex-direction: column;

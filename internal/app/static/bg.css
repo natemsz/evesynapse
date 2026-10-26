@@ -927,18 +927,63 @@ html.js .notify-prompt.is-open { opacity: 1; transform: none; }
    the glass on the default tint. Under a scheme the glass is
    darker than the default mix and the panel tint is heavily
    desaturated, a ghost of the hue rather than a coloured wash. */
-html[data-scheme="jove"] { --sch-hi: #f472b6; --sch-core: #8b5cf6; --sch-end: #3730a3; --sch-accent: #8b5cf6; --panel: #1a1620; --panel-head: rgba(18, 16, 23, .55); --input-bg: rgba(26, 22, 32, .5); --row-hover: rgba(139, 92, 246, .09); --sch-ground: #0d0716; --sch-ground-2: #170b2c; --sch-glow-1: rgba(139, 92, 246, .42); --sch-glow-2: rgba(55, 48, 163, .20); }
-html[data-scheme="caldari"] { --sch-hi: #7dd3fc; --sch-core: #60a5fa; --sch-end: #263242; --sch-accent: #60a5fa; --panel: #11161f; --panel-head: rgba(13, 17, 23, .55); --input-bg: rgba(17, 22, 31, .5); --row-hover: rgba(96, 165, 250, .09); --sch-ground: #0a0d12; --sch-ground-2: #0f141c; --sch-glow-1: rgba(96, 165, 250, .36); --sch-glow-2: rgba(38, 50, 66, .22); }
-html[data-scheme="gallente"] { --sch-hi: #4ade80; --sch-core: #2dd4bf; --sch-end: #155e75; --sch-accent: #2dd4bf; --panel: #101917; --panel-head: rgba(11, 16, 15, .55); --input-bg: rgba(16, 25, 23, .5); --row-hover: rgba(45, 212, 191, .09); --sch-ground: #04120e; --sch-ground-2: #07231c; --sch-glow-1: rgba(45, 212, 191, .36); --sch-glow-2: rgba(21, 94, 117, .20); }
-html[data-scheme="amarr"] { --sch-hi: #facc15; --sch-core: #f0b93f; --sch-end: #9a3412; --sch-accent: #f0b93f; --panel: #16120d; --panel-head: rgba(15, 12, 9, .55); --input-bg: rgba(22, 18, 13, .5); --row-hover: rgba(240, 185, 63, .09); --sch-ground: #120c03; --sch-ground-2: #241a06; --sch-glow-1: rgba(240, 185, 63, .40); --sch-glow-2: rgba(154, 52, 18, .18); }
-html[data-scheme="triglavian"] { --sch-hi: #d41236; --sch-core: #91100c; --sch-end: #480604; --sch-accent: #d41236; --panel: #191112; --panel-head: rgba(17, 12, 12, .55); --input-bg: rgba(25, 17, 18, .5); --row-hover: rgba(212, 18, 54, .09); --sch-ground: #120405; --sch-ground-2: #260709; --sch-glow-1: rgba(145, 16, 12, .42); --sch-glow-2: rgba(72, 6, 4, .22); }
-html[data-scheme="edencom"] { --sch-hi: #eab308; --sch-core: #e9cf8f; --sch-end: #334155; --sch-accent: #e9cf8f; --panel: #191b1e; --panel-head: rgba(16, 18, 20, .55); --input-bg: rgba(25, 27, 30, .5); --row-hover: rgba(233, 207, 143, .09); --sch-ground: #0b0f14; --sch-ground-2: #18202b; --sch-glow-1: rgba(233, 207, 143, .38); --sch-glow-2: rgba(51, 65, 85, .20); }
+html[data-scheme="jove"] { --sch-hi: #f472b6; --sch-core: #8b5cf6; --sch-end: #3730a3; --sch-accent: #8b5cf6; --panel: #1a1620; --panel-head: rgba(18, 16, 23, .55); --input-bg: rgba(26, 22, 32, .5); --row-hover: rgba(139, 92, 246, .09); --sch-ground: #0d0716; --sch-ground-2: #170b2c; --sch-glow-1: rgba(139, 92, 246, .42); --sch-glow-2: rgba(55, 48, 163, .20); --sch-glow-3: rgba(244, 114, 182, .12); --map-glow-1: rgba(164, 135, 255, .08); --map-glow-2: rgba(255, 170, 210, .05); }
+html[data-scheme="caldari"] { --sch-hi: #7dd3fc; --sch-core: #60a5fa; --sch-end: #263242; --sch-accent: #60a5fa; --panel: #11161f; --panel-head: rgba(13, 17, 23, .55); --input-bg: rgba(17, 22, 31, .5); --row-hover: rgba(96, 165, 250, .09); --sch-ground: #0a0d12; --sch-ground-2: #0f141c; --sch-glow-1: rgba(96, 165, 250, .36); --sch-glow-2: rgba(38, 50, 66, .22); --sch-glow-3: rgba(125, 211, 252, .10); --map-glow-1: rgba(83, 161, 255, .08); --map-glow-2: rgba(124, 212, 255, .05); }
+html[data-scheme="gallente"] { --sch-hi: #4ade80; --sch-core: #2dd4bf; --sch-end: #155e75; --sch-accent: #2dd4bf; --panel: #101917; --panel-head: rgba(11, 16, 15, .55); --input-bg: rgba(16, 25, 23, .5); --row-hover: rgba(45, 212, 191, .09); --sch-ground: #04120e; --sch-ground-2: #07231c; --sch-glow-1: rgba(45, 212, 191, .36); --sch-glow-2: rgba(21, 94, 117, .20); --sch-glow-3: rgba(251, 113, 133, .12); --map-glow-1: rgba(7, 184, 165, .08); --map-glow-2: rgba(120, 226, 152, .05); }
+html[data-scheme="amarr"] { --sch-hi: #facc15; --sch-core: #f0b93f; --sch-end: #9a3412; --sch-accent: #f0b93f; --panel: #16120d; --panel-head: rgba(15, 12, 9, .55); --input-bg: rgba(22, 18, 13, .5); --row-hover: rgba(240, 185, 63, .09); --sch-ground: #120c03; --sch-ground-2: #241a06; --sch-glow-1: rgba(240, 185, 63, .40); --sch-glow-2: rgba(154, 52, 18, .18); --sch-glow-3: rgba(147, 165, 245, .12); --map-glow-1: rgba(202, 149, 1, .08); --map-glow-2: rgba(234, 196, 71, .05); }
+html[data-scheme="triglavian"] { --sch-hi: #d41236; --sch-core: #91100c; --sch-end: #480604; --sch-accent: #d41236; --panel: #191112; --panel-head: rgba(17, 12, 12, .55); --input-bg: rgba(25, 17, 18, .5); --row-hover: rgba(212, 18, 54, .09); --sch-ground: #120405; --sch-ground-2: #260709; --sch-glow-1: rgba(145, 16, 12, .42); --sch-glow-2: rgba(72, 6, 4, .22); --sch-glow-3: rgba(212, 18, 54, .12); --map-glow-1: rgba(255, 102, 86, .08); --map-glow-2: rgba(255, 176, 173, .05); }
+html[data-scheme="edencom"] { --sch-hi: #eab308; --sch-core: #e9cf8f; --sch-end: #334155; --sch-accent: #e9cf8f; --panel: #191b1e; --panel-head: rgba(16, 18, 20, .55); --input-bg: rgba(25, 27, 30, .5); --row-hover: rgba(233, 207, 143, .09); --sch-ground: #0b0f14; --sch-ground-2: #18202b; --sch-glow-1: rgba(233, 207, 143, .38); --sch-glow-2: rgba(51, 65, 85, .20); --sch-glow-3: rgba(183, 166, 250, .12); --map-glow-1: rgba(196, 153, 3, .08); --map-glow-2: rgba(241, 192, 71, .05); }
 html[data-scheme] {
   --accent: var(--sch-core);
   --gold: var(--sch-hi);
   --success: var(--sch-hi);
   --glass: color-mix(in srgb, var(--panel) 90%, transparent);
 }
+/* Neutral chrome borders and text-box effects whose base rules
+   carry a literal ember value take the scheme colour at the
+   alpha the base rule already uses. The default look keeps the
+   literals; only a scheme reroutes the colour source. */
+html[data-scheme] .branch .menu,
+html[data-scheme] .suggest { border-color: color-mix(in srgb, var(--accent) 25%, transparent); }
+html[data-scheme] .kpi,
+html[data-scheme] .brief-card { border-color: color-mix(in srgb, var(--accent) 16%, transparent); }
+html[data-scheme] .page-body:not(:has(.home-grid)) .card,
+html[data-scheme] .page-body:not(:has(.home-grid)) .foldable,
+html[data-scheme] .page-body:not(:has(.home-grid)) .panel,
+html[data-scheme] .page-body:not(:has(.home-grid)) .searchpanel,
+html[data-scheme] .page-body:not(:has(.home-grid)) .kpi,
+html[data-scheme] .page-body:not(:has(.home-grid)) .brief-card { border-color: color-mix(in srgb, var(--accent) 14%, transparent); }
+html[data-scheme] .fit-stats,
+html[data-scheme] .fit-panel { border-color: color-mix(in srgb, var(--accent) 14%, transparent); }
+html[data-scheme] .fit-card:hover { border-color: color-mix(in srgb, var(--accent) 45%, transparent); }
+html[data-scheme] .ti-tabs button { border-color: color-mix(in srgb, var(--accent) 22%, transparent); }
+html[data-scheme] .ti-tabs button.active { border-color: color-mix(in srgb, var(--accent) 40%, transparent); }
+html[data-scheme] input[type="text"]:hover, html[data-scheme] input[type="search"]:hover,
+html[data-scheme] input[type="number"]:hover, html[data-scheme] input[type="url"]:hover,
+html[data-scheme] select:hover, html[data-scheme] textarea:hover { border-color: color-mix(in srgb, var(--accent) 55%, transparent); }
+html[data-scheme] input[type="text"]:focus, html[data-scheme] input[type="search"]:focus,
+html[data-scheme] input[type="number"]:focus, html[data-scheme] select:focus,
+html[data-scheme] textarea:focus,
+html[data-scheme] .fit-head select:focus { box-shadow: 0 0 8px color-mix(in srgb, var(--accent) 35%, transparent); }
+html[data-scheme] .branch > summary:focus-visible { box-shadow: 0 0 8px color-mix(in srgb, var(--accent) 55%, transparent); }
+html[data-scheme] .sidebar .branch > summary:focus-visible { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 35%, transparent); }
+html[data-scheme] .cardbtn:hover, html[data-scheme] .cardbtn:focus-visible { box-shadow: 0 0 8px color-mix(in srgb, var(--accent) 40%, transparent); }
+html[data-scheme] .grid.home-grid > .card[data-widget="fleet"] .fleet-foot { border-top-color: color-mix(in srgb, var(--accent) 14%, transparent); }
+html[data-scheme] .phone-sheet-groups a { border-color: color-mix(in srgb, var(--accent) 22%, transparent); }
+html[data-scheme] .phone-sheet-groups a.active { border-color: color-mix(in srgb, var(--accent) 40%, transparent); }
+html[data-scheme] .phone-sheet-switch a { border-color: color-mix(in srgb, var(--accent) 16%, transparent); }
+html[data-scheme] .phone-sheet-switch a.active { border-color: color-mix(in srgb, var(--accent) 40%, transparent); }
+html[data-scheme] .phone-sheet-action { border-color: color-mix(in srgb, var(--accent) 22%, transparent); }
+html[data-scheme] .cs-dcard { border-color: color-mix(in srgb, var(--accent) 22%, transparent); }
+html[data-scheme] .cs-aline { border-bottom-color: color-mix(in srgb, var(--accent) 5%, transparent); }
+html[data-scheme] .plan-tip { border-color: color-mix(in srgb, var(--accent) 35%, transparent); }
+html[data-scheme] .foldbtn { border-color: color-mix(in srgb, var(--accent) 30%, black); }
+html[data-scheme] .modal { border-color: color-mix(in srgb, var(--accent) 42%, black); box-shadow: 0 24px 60px -12px rgba(0, 0, 0, 0.55), 0 0 22px color-mix(in srgb, var(--accent) 14%, transparent); }
+/* Card title links (fit names, ship names) sit at the gradient's
+   bright end, the way the hover state already does through
+   --success: the scheme highlight, not the core. */
+html[data-scheme] .fit-card h4 a,
+html[data-scheme] .fit-card-line a { color: var(--sch-hi); }
 /* Gradient carriers sweep all three hues, as the ember ones do. */
 html[data-scheme] h2, html[data-scheme] h3,
 html[data-scheme] .panel > h1:first-child > .gt {
@@ -953,6 +998,14 @@ html[data-scheme] .panel > h1:first-child > .gt {
 html[data-scheme] .panel > h2, html[data-scheme] .panel > h3,
 html[data-scheme] .card > h2:first-child, html[data-scheme] .card > h3:first-child,
 html[data-scheme] .foldable > h2:first-child, html[data-scheme] .foldable > h3:first-child {
+  background-image: none;
+}
+/* The killboard's small uppercase labels (the top lists and the
+   kill page's fit groups) are plain muted text by their own
+   rule, which resets the background with a shorthand: the sweep
+   above outranks that reset, so they take the same exclusion. */
+html[data-scheme] .kb-top h2,
+html[data-scheme] .kp-fit h3 {
   background-image: none;
 }
 html[data-scheme] #nav-glyph-gradient stop:nth-child(1) { stop-color: var(--sch-hi); }
@@ -1023,6 +1076,7 @@ html[data-scheme][data-tier="minimalistic"] body::before {
   background-color: var(--sch-ground);
   background-image:
     radial-gradient(ellipse 900px 300px at 88% -20px, var(--sch-glow-1) 0%, var(--sch-glow-2) 48%, transparent 80%),
+    radial-gradient(circle at 18% 0%, var(--sch-glow-3) 0%, transparent 55%),
     linear-gradient(180deg, var(--sch-ground-2) 0%, var(--sch-ground) 100%);
 }
 /* The nav glyphs' fallback paint: shapes that carry no paint of
@@ -1109,6 +1163,7 @@ html[data-scheme="amarr"] .tier-seg button.on, html[data-scheme="edencom"] .tier
   html[data-scheme][data-tier="minimalistic"] body::before {
     background-image:
       radial-gradient(ellipse 150vw 240px at 50% -80px, var(--sch-glow-1) 0%, var(--sch-glow-2) 48%, transparent 80%),
+      radial-gradient(circle at 18% 0%, var(--sch-glow-3) 0%, transparent 55%),
       linear-gradient(180deg, var(--sch-ground-2) 0%, var(--sch-ground) 100%);
   }
   html[data-backdrop="glow"] body::before {

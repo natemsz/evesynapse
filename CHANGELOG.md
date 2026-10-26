@@ -18,6 +18,21 @@ Automated build of EveSynapse v0.5.9.6. Update with: evesynapse -update -arm64 (
 
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.9.5...v0.5.9.6
+## [v0.5.9.5] - 2026-10-26
+
+Automated build of EveSynapse v0.5.9.5. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+
+## What's Changed
+### 🚀 Features
+* Add the tabbed Settings page with colour schemes by @natemsz in https://github.com/natemsz/evesynapse/pull/674
+### 🐛 Bug Fixes
+* Honor the Axon lines API's batch speaker by @natemsz in https://github.com/natemsz/evesynapse/pull/673
+### Other Changes
+* docs(changelog): review changelog for v0.5.9.4 by @github-actions[bot] in https://github.com/natemsz/evesynapse/pull/672
+
+
+**Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.9.4...v0.5.9.5
 
 ## [v0.5.9.4] - 2026-10-25
 

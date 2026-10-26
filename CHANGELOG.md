@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.5.9.6] - 2026-10-26
+
+Automated build of EveSynapse v0.5.9.6. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+
+## What's Changed
+### Other Changes
+* Schemes repaint borders, the wordmark, glyphs and charts; Settings tabs survive history navigation by @natemsz in https://github.com/natemsz/evesynapse/pull/676
+
+
+**Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.9.5...v0.5.9.6
 ## [v0.5.9.5] - 2026-10-26
 
 Automated build of EveSynapse v0.5.9.5. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).

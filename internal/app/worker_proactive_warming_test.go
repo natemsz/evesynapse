@@ -157,6 +157,56 @@ func TestHistoryCandidatesCoverageTiers(t *testing.T) {
 	}
 }
 
+// TestHistoryCandidatesFetchableGate: the queue holds only
+// types ESI market history can know -- a published SDE type,
+// or a type the sweeps have stored stats for. A want naming a
+// type in neither set is never queued, so it never costs the
+// one fetch that could only be answered 404.
+func TestHistoryCandidatesFetchableGate(t *testing.T) {
+	transport := &countingTransport{}
+	app, conn, q := buildCorpTestApp(t, transport)
+	ctx := context.Background()
+
+	// One published type in the SDE makes the fetchable set
+	// real (an empty set gates nothing).
+	for _, stmt := range []string{
+		`INSERT INTO sde_categories (category_id, name) VALUES (900, 'Fixture')`,
+		`INSERT INTO sde_groups (group_id, name, category_id) VALUES (910, 'Fixture Goods', 900)`,
+		`INSERT INTO sde_types (type_id, name, group_id, market_group_id, published) VALUES (1008, 'Fixture Published', 910, 2, 1)`,
+	} {
+		if _, err := conn.ExecContext(ctx, stmt); err != nil {
+			t.Fatalf("seed sde: %v", err)
+		}
+	}
+	// One unpublished type with stored sweep stats.
+	if err := q.UpsertMarketRegionStat(ctx, db.UpsertMarketRegionStatParams{
+		RegionID: forge, TypeID: 1009, TypicalSell: 10, AvgDailyVolume: 100, UpdatedAt: time.Now().UTC(),
+	}); err != nil {
+		t.Fatalf("seed stats: %v", err)
+	}
+	for _, typeID := range []int64{1008, 1009, 999999} {
+		if err := q.UpsertMarketHistoryWant(ctx, db.UpsertMarketHistoryWantParams{
+			RegionID: forge, TypeID: typeID, LastRequestedAt: time.Now().UTC(), Priority: wantViewed,
+		}); err != nil {
+			t.Fatalf("seed want %d: %v", typeID, err)
+		}
+	}
+
+	keys, err := app.historyCandidates(ctx)
+	if err != nil {
+		t.Fatalf("candidates: %v", err)
+	}
+	if keyIndex(keys, forge, 1008) < 0 {
+		t.Fatalf("published type 1008 missing from candidates: %v", keys)
+	}
+	if keyIndex(keys, forge, 1009) < 0 {
+		t.Fatalf("stats-backed type 1009 missing from candidates: %v", keys)
+	}
+	if keyIndex(keys, forge, 999999) >= 0 {
+		t.Fatalf("unknown type 999999 queued for a history fetch: %v", keys)
+	}
+}
+
 // ---------------------------------------------------------------------------
 // Liquid core: ranked from stored history (ISK velocity over the
 // region's newest seven stored days), bounded, and supplemented

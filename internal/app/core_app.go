@@ -183,6 +183,13 @@ type Application struct {
 	storedPricesCache map[int64]esi.MarketPrice
 	storedPricesStamp time.Time
 
+	// The types ESI market history can know (market_worker.go),
+	// cached briefly under its load time: the history candidate
+	// gate reads it on the cycle and on urgent ticks alike.
+	historyTypesMu sync.Mutex
+	historyTypes   map[int64]bool
+	historyTypesAt time.Time
+
 	// The worker's true values (truevalue.go), cached in
 	// memory for a short window so renders and valuation
 	// reload the table only a few times an hour; and the

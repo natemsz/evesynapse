@@ -140,11 +140,118 @@ func SwarmTrust(good, bad int64) float64 {
 }
 
 // AddSwarmCounter bumps one Sync-page counter (best effort,
-// like the snapshot fetch-state log).
+// like the snapshot fetch-state log). A write that fails is
+// logged once per run of failures, not once per bump: the
+// bumps ride passes that run every cycle, so a counter store
+// that is down would otherwise write the same error line on
+// every one of them until it recovered.
 func (app *Mod) AddSwarmCounter(ctx context.Context, name string, n int64) {
 	if err := app.Queries.AddSwarmCounter(ctx, db.AddSwarmCounterParams{Name: name, Value: n}); err != nil {
-		logging.Errorf("swarm: counter %s: %v", name, err)
+		app.SwarmCounterLogMu.Lock()
+		down := app.SwarmCounterLogDown[name]
+		if !down {
+			if app.SwarmCounterLogDown == nil {
+				app.SwarmCounterLogDown = make(map[string]bool)
+			}
+			app.SwarmCounterLogDown[name] = true
+		}
+		app.SwarmCounterLogMu.Unlock()
+		if !down {
+			logging.Errorf("swarm: counter %s: %v", name, err)
+		}
+		return
 	}
+	app.SwarmCounterLogMu.Lock()
+	delete(app.SwarmCounterLogDown, name)
+	app.SwarmCounterLogMu.Unlock()
+}
+
+// noteSwarmPullOutcome bumps the counter for one pull's
+// outcome. The write runs on a context detached from the
+// pull's own deadline: a pull that spent its whole deadline
+// failing has none left for the write, so riding the pull's
+// context made the write fail with the pull's own error --
+// one log line per attempt, and the failure itself never
+// counted.
+func (app *Mod) noteSwarmPullOutcome(ctx context.Context, ok bool) {
+	name := SwarmCounterPullsFailed
+	if ok {
+		name = SwarmCounterPullsOK
+	}
+	app.AddSwarmCounter(context.WithoutCancel(ctx), name, 1)
+}
+
+// swarmPullRest is one peer's pull failure rest: how many
+// pulls in a row have failed, and when it may be asked again.
+type swarmPullRest struct {
+	fails int
+	until time.Time
+}
+
+// The pull failure rest. A peer whose pulls fail
+// swarmPullSettleAfter times in a row is left alone for a
+// while, the rest doubling per further failure up to
+// swarmPullRestMax, instead of being asked again on the next
+// cycle round or the next urgent want forever. One answer
+// clears the run, and a peer that answers is asked at the
+// usual cadence. The shape is the market fetch states'
+// settle (marketFetchErrorGate, the refusal recheck): record
+// the failure, skip inside the window, and log the settled
+// state once, when it settles.
+const (
+	swarmPullSettleAfter = 3
+	swarmPullRestBase    = 10 * time.Minute
+	swarmPullRestMax     = 6 * time.Hour
+)
+
+// swarmPullResting reports whether a peer is inside its
+// failure rest right now.
+func (app *Mod) swarmPullResting(peerID string, now time.Time) bool {
+	app.SwarmPullRestMu.Lock()
+	defer app.SwarmPullRestMu.Unlock()
+	rest, ok := app.SwarmPullRest[peerID]
+	return ok && now.Before(rest.until)
+}
+
+// noteSwarmPullFailure records one failed pull from a peer.
+// The failure that settles the peer into its rest logs the
+// rest once; failures that extend an existing rest are
+// silent, like the attempts themselves.
+func (app *Mod) noteSwarmPullFailure(peerID string, now time.Time) {
+	app.SwarmPullRestMu.Lock()
+	if app.SwarmPullRest == nil {
+		app.SwarmPullRest = make(map[string]*swarmPullRest)
+	}
+	rest := app.SwarmPullRest[peerID]
+	if rest == nil {
+		rest = &swarmPullRest{}
+		app.SwarmPullRest[peerID] = rest
+	}
+	rest.fails++
+	settled := false
+	if rest.fails >= swarmPullSettleAfter {
+		d := swarmPullRestBase
+		for i := swarmPullSettleAfter; i < rest.fails && d < swarmPullRestMax; i++ {
+			d *= 2
+		}
+		if d > swarmPullRestMax {
+			d = swarmPullRestMax
+		}
+		rest.until = now.Add(d)
+		settled = rest.fails == swarmPullSettleAfter
+	}
+	fails, until := rest.fails, rest.until
+	app.SwarmPullRestMu.Unlock()
+	if settled {
+		logging.Warnf("swarm: pulls from %s failed %d times in a row; resting it until %s", ShortenSwarmID(peerID), fails, until.UTC().Format(time.RFC3339))
+	}
+}
+
+// noteSwarmPullSuccess clears a peer's pull failure run.
+func (app *Mod) noteSwarmPullSuccess(peerID string) {
+	app.SwarmPullRestMu.Lock()
+	delete(app.SwarmPullRest, peerID)
+	app.SwarmPullRestMu.Unlock()
 }
 
 // SwarmCheckDraw reports whether one entry is ESI-verified:
@@ -743,7 +850,8 @@ func SwarmPeerPullable(good, bad int64) bool {
 // to the next pullable peer when one errors, stopping at the
 // first peer that answers. Returns how many entries staged.
 // Failures stay silent per attempt; the ESI fallback covers
-// them.
+// them. A peer resting after repeated failures (the pull
+// failure rest above) is skipped like an unpullable one.
 func (app *Mod) SwarmPullOne(ctx context.Context, kind, key string) int {
 	if !app.Cfg.Enabled() || app.SwarmID == nil || app.SwarmCli == nil {
 		return 0
@@ -766,13 +874,18 @@ func (app *Mod) SwarmPullOne(ctx context.Context, kind, key string) int {
 		if !SwarmPeerPullable(p.GoodChecks, p.BadChecks) {
 			continue
 		}
+		if app.swarmPullResting(p.InstanceID, time.Now()) {
+			continue
+		}
 		keys := []SwarmPullKey{{Kind: kind, Key: key}}
 		entries, err := app.SwarmCli.PullEntries(ctx, p.BaseUrl, keys)
 		if err != nil {
-			app.AddSwarmCounter(ctx, SwarmCounterPullsFailed, 1)
+			app.noteSwarmPullFailure(p.InstanceID, time.Now())
+			app.noteSwarmPullOutcome(ctx, false)
 			continue
 		}
-		app.AddSwarmCounter(ctx, SwarmCounterPullsOK, 1)
+		app.noteSwarmPullSuccess(p.InstanceID)
+		app.noteSwarmPullOutcome(ctx, true)
 		return app.SwarmStagePulled(ctx, p.InstanceID, p.BaseUrl, keys, entries, time.Now())
 	}
 	return 0
@@ -967,6 +1080,9 @@ func (app *Mod) SwarmPull(ctx context.Context, now time.Time) {
 		if !SwarmPeerPullable(p.GoodChecks, p.BadChecks) {
 			continue
 		}
+		if app.swarmPullResting(p.InstanceID, now) {
+			continue
+		}
 		if warm[p.InstanceID] {
 			if warmTaken >= MaxSwarmWarmPeers {
 				continue
@@ -997,10 +1113,12 @@ func (app *Mod) SwarmPull(ctx context.Context, now time.Time) {
 	})
 	for i, p := range picked {
 		if answers[i].Err != nil {
-			app.AddSwarmCounter(ctx, SwarmCounterPullsFailed, 1)
+			app.noteSwarmPullFailure(p.InstanceID, now)
+			app.noteSwarmPullOutcome(ctx, false)
 			continue
 		}
-		app.AddSwarmCounter(ctx, SwarmCounterPullsOK, 1)
+		app.noteSwarmPullSuccess(p.InstanceID)
+		app.noteSwarmPullOutcome(ctx, true)
 		app.SwarmStagePulled(ctx, p.InstanceID, p.BaseUrl, keys, answers[i].entries, now)
 	}
 }

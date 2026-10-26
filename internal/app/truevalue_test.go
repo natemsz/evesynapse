@@ -349,6 +349,92 @@ func TestTrueValueWorkerPass(t *testing.T) {
 	}
 }
 
+// TestTrueValuePassIdlesOnUnchangedInputs: a completed pass
+// does not run again while its inputs (the guide's vintage,
+// the sweep's stamp) are unchanged -- a row deleted behind
+// its back stays deleted -- and runs again as soon as an
+// input moves.
+func TestTrueValuePassIdlesOnUnchangedInputs(t *testing.T) {
+	transport := &countingTransport{}
+	app, conn, q := buildCorpTestApp(t, transport)
+	ctx := context.Background()
+	now := time.Now().UTC()
+
+	for _, stmt := range []string{
+		`INSERT INTO sde_categories (category_id, name) VALUES (6, 'Ship'), (900, 'Fixture')`,
+		`INSERT INTO sde_groups (group_id, name, category_id) VALUES (25, 'Titan', 6), (910, 'Fixture Goods', 900)`,
+		`INSERT INTO sde_types (type_id, name, group_id, market_group_id, published) VALUES
+			(34, 'Tritanium', 910, 2, 1),
+			(5001, 'Fixture Component', 910, 2, 1),
+			(6001, 'Fixture Widget', 910, 2, 1)`,
+		`INSERT INTO sde_blueprints (blueprint_type_id, product_type_id, product_quantity, max_production_limit, manufacturing_time_seconds) VALUES
+			(7001, 5001, 1, 100, 300),
+			(7006, 6001, 1, 100, 60)`,
+		`INSERT INTO sde_blueprint_materials (blueprint_type_id, material_type_id, quantity) VALUES
+			(7001, 34, 100),
+			(7006, 34, 2)`,
+		`INSERT INTO sde_type_attributes (type_id, attribute_id, value) VALUES
+			(35827, 2600, 0.99), (35827, 2601, 0.95),
+			(37147, 2594, -2.4), (37147, 2357, 2.1)`,
+	} {
+		if _, err := conn.ExecContext(ctx, stmt); err != nil {
+			t.Fatalf("seed sde: %v", err)
+		}
+	}
+	for _, g := range []db.UpsertGuidePriceParams{
+		{TypeID: 34, AveragePrice: 5.5, AdjustedPrice: 4},
+		{TypeID: 5001, AveragePrice: 0, AdjustedPrice: 500},
+		{TypeID: 6001, AveragePrice: 100, AdjustedPrice: 90},
+	} {
+		if err := q.UpsertGuidePrice(ctx, g); err != nil {
+			t.Fatalf("seed guide: %v", err)
+		}
+	}
+	if err := q.UpsertGuidePricesMeta(ctx, db.UpsertGuidePricesMetaParams{
+		FetchedAt: now, CachedUntil: mustTime("2999-01-01T00:00:00Z"),
+	}); err != nil {
+		t.Fatalf("seed guide meta: %v", err)
+	}
+	for _, s := range []db.UpsertMarketRegionStatParams{
+		{RegionID: 10000002, TypeID: 34, TypicalSell: 5, AvgDailyVolume: 1_000_000, UpdatedAt: now},
+		{RegionID: 10000002, TypeID: 6001, TypicalSell: 95, AvgDailyVolume: 5000, UpdatedAt: now},
+	} {
+		if err := q.UpsertMarketRegionStat(ctx, s); err != nil {
+			t.Fatalf("seed stats: %v", err)
+		}
+	}
+	if err := q.UpsertIndustryCostIndex(ctx, db.UpsertIndustryCostIndexParams{
+		SolarSystemID: trueValueReferenceSystemID, Activity: "manufacturing", CostIndex: 0.02,
+	}); err != nil {
+		t.Fatalf("seed cost index: %v", err)
+	}
+
+	app.refreshTrueValues(ctx)
+	if _, err := q.GetTrueValue(ctx, 6001); err != nil {
+		t.Fatalf("first pass stored no widget row: %v", err)
+	}
+	if _, err := conn.ExecContext(ctx, `DELETE FROM true_values WHERE type_id = 6001`); err != nil {
+		t.Fatalf("delete widget row: %v", err)
+	}
+
+	// Unchanged inputs: the pass idles, so the deleted row is
+	// not recomputed.
+	app.refreshTrueValues(ctx)
+	if _, err := q.GetTrueValue(ctx, 6001); err != sql.ErrNoRows {
+		t.Fatalf("unchanged inputs: widget row err = %v, want no row (the pass ran)", err)
+	}
+
+	// The sweep's stamp moves: the pass runs again and the
+	// row returns.
+	if _, err := conn.ExecContext(ctx, `UPDATE market_region_stats SET updated_at = $1 WHERE region_id = 10000002`, now.Add(2*time.Hour)); err != nil {
+		t.Fatalf("move sweep stamp: %v", err)
+	}
+	app.refreshTrueValues(ctx)
+	if _, err := q.GetTrueValue(ctx, 6001); err != nil {
+		t.Fatalf("moved inputs: widget row not recomputed: %v", err)
+	}
+}
+
 // TestTrueValueCorpusPricing: the stored public-contract
 // corpus is the listing tier's price of record, and ships
 // price from it the abyssal way (truevalue_learn.go). Two

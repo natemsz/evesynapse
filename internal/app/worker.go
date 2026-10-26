@@ -1230,7 +1230,17 @@ func (app *Application) warmMissingTypeNames(ctx context.Context, typeIDs []int6
 		if _, ok := have[id]; ok {
 			continue
 		}
-		// Swarm first: a dedicated node's budget before this one's.
+		// Swarm first: the warming cycle's own misses are pull
+		// demand too, not only a reader's. Noting the miss is
+		// what lets the next swarm pull ask a peer for the name
+		// before this instance spends its own ESI budget on it;
+		// with no peer the note is inert (no pull ever reads it)
+		// and the fetch below runs exactly as it always has.
+		app.esi.NoteTypeNameMiss(id)
+		// A dedicated node's budget before this one's: defer
+		// only while a covering peer may deliver, never past
+		// the grace — the own fetch below is the fallback and
+		// it is not made to wait on a peer that cannot serve.
 		if app.deferFetch(ctx, module.FetchKindTypeName, strconv.FormatInt(id, 10), now) {
 			continue
 		}

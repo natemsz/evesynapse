@@ -36,6 +36,72 @@
     window.open("http://127.0.0.1:47611/open", "_blank", "noopener");
   }, true);
 
+  // --- Account theme sync --------------------------------------
+  // The theme is an account setting: the server renders the
+  // account's saved theme onto <html> (see ui_theme.go), and the
+  // meta tag in the head says whether this signed-in load carried
+  // one ("stored") or the account has none yet ("none"). Stored:
+  // mirror the rendered values into localStorage, which stays
+  // boot.js's pre-paint cache and the signed-out behaviour. None:
+  // adopt this browser's local choice into the account, unless the
+  // local copy is itself a mirror of another account's theme
+  // (evesynapse-theme-src), which must never bleed across accounts.
+  // No meta tag means a signed-out load: nothing to do.
+  (function syncAccountTheme() {
+    var meta = document.querySelector('meta[name="es-theme-account"]');
+    if (!meta) return;
+    var root = document.documentElement;
+    function store(key, value) {
+      try {
+        if (value === null) window.localStorage.removeItem(key);
+        else window.localStorage.setItem(key, value);
+      } catch (e) { /* private mode: the account still carries it */ }
+    }
+    function read(key) {
+      try { return window.localStorage.getItem(key); } catch (e) { return null; }
+    }
+    function backdropWire(value) {
+      return value === "muted" || value === "glow" ? value : "";
+    }
+    if (meta.getAttribute("content") === "stored") {
+      var scheme = root.getAttribute("data-scheme");
+      if (scheme) {
+        store("evesynapse-scheme", scheme);
+        store("evesynapse-tier", root.getAttribute("data-tier") || "muted");
+      } else {
+        store("evesynapse-scheme", null);
+        store("evesynapse-tier", null);
+        store("evesynapse-backdrop", backdropWire(root.getAttribute("data-backdrop")) || "art");
+      }
+      store("evesynapse-theme-src", "account");
+      return;
+    }
+    if (read("evesynapse-theme-src") === "account" || !window.fetch) return;
+    var body = new URLSearchParams();
+    var savedScheme = read("evesynapse-scheme");
+    if (savedScheme === "jove" || savedScheme === "caldari" || savedScheme === "gallente" ||
+        savedScheme === "amarr" || savedScheme === "triglavian" || savedScheme === "edencom") {
+      body.set("scheme", savedScheme);
+      body.set("tier", read("evesynapse-tier") === "minimalistic" ? "minimalistic" : "muted");
+      body.set("backdrop", backdropWire(read("evesynapse-backdrop")));
+    } else if (backdropWire(read("evesynapse-backdrop"))) {
+      body.set("scheme", "");
+      body.set("tier", "");
+      body.set("backdrop", backdropWire(read("evesynapse-backdrop")));
+    } else {
+      return; // no local choice to adopt
+    }
+    fetch("/settings/theme", {
+      method: "POST",
+      headers: { "X-Requested-With": "XMLHttpRequest" },
+      body: body,
+      credentials: "same-origin",
+      keepalive: true
+    }).then(function (resp) {
+      if (resp.ok) store("evesynapse-theme-src", "account");
+    }, function () {});
+  })();
+
   // --- Modal dialogs ---------------------------------------------
   // One implementation behind every pop-up — add a module, the fit
   // picker, the planner's ME and settings dialogs, quick jump: a

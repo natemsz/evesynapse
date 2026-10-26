@@ -213,6 +213,17 @@ func (app *Application) fillShell(ctx context.Context, shell *module.ShellData, 
 	if shell.NavState == "" {
 		shell.NavState = navStateFrom(ctx)
 	}
+	if !shell.ThemeAccount {
+		if userID := app.userID(ctx); userID != 0 {
+			shell.ThemeAccount = true
+			if prefs, stored := app.themePrefsFor(ctx, userID); stored {
+				shell.ThemeStored = true
+				shell.ThemeScheme = prefs.Scheme
+				shell.ThemeTier = prefs.Tier
+				shell.ThemeBackdrop = prefs.Backdrop
+			}
+		}
+	}
 	if shell.Notice == "" {
 		shell.Notice = app.sessions.PopString(ctx, sessionFlash)
 	}

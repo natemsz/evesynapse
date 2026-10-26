@@ -25,9 +25,12 @@ import (
 // (state "role_missing" plus the role label), the kind backs off
 // for roleMissingBackoff instead of retrying every minute, the
 // snapshot cache is left untouched, and the pages render a plain
-// "needs the role" state from the record. Other errors are
-// recorded as "error" and the pass moves on; only CCP's error
-// limit (420/429) stops it, like every other worker pass.
+// "needs the role" state from the record. A refusal that names
+// the login instead (a 401, or a 403 naming the scope) settles
+// under the shared refusal policy (fetch_refusal.go). Other
+// errors are recorded as "error" and the pass moves on; only
+// CCP's error limit (420/429) stops it, like every other
+// worker pass.
 // ---------------------------------------------------------------------------
 
 const (
@@ -109,8 +112,8 @@ func (app *Application) refreshCorpSnapshotsFor(ctx context.Context, ch db.Chara
 }
 
 // fetchCorpKind refreshes one corporation snapshot kind when it is
-// due, recording the outcome. A fresh snapshot or an active
-// role-missing backoff skips the ESI call entirely.
+// due, recording the outcome. A fresh snapshot or a recorded
+// refusal still in its window skips the ESI call entirely.
 func (app *Application) fetchCorpKind(ctx context.Context, ch db.Character, corpID int64, kind string) corpFetchOutcome {
 	snap, serr := app.queries.GetSnapshot(ctx, db.GetSnapshotParams{CharacterID: ch.CharacterID, Kind: kind})
 	switch {
@@ -120,13 +123,11 @@ func (app *Application) fetchCorpKind(ctx context.Context, ch db.Character, corp
 		logging.Errorf("worker: read %s snapshot for character %d: %v", kind, ch.CharacterID, serr)
 	}
 
-	// A recorded role refusal backs this kind off instead of
-	// retrying every minute; the pages keep showing the role
-	// state from the record in the meantime.
-	if state, err := app.queries.GetSnapshotFetchState(ctx, db.GetSnapshotFetchStateParams{CharacterID: ch.CharacterID, Kind: kind}); err == nil && state.State == fetchStateRoleMissing {
-		if time.Since(state.AttemptedAt) < roleMissingBackoff {
-			return corpFetchSkipped
-		}
+	// A recorded refusal backs this kind off instead of retrying
+	// every minute; the pages keep showing the refusal state from
+	// the record in the meantime (fetch_refusal.go).
+	if app.refusalSettled(ctx, ch.CharacterID, kind) {
+		return corpFetchSkipped
 	}
 
 	if err := app.esi.FetchAndStoreCorpSnapshot(ctx, ch, corpID, kind); err != nil {
@@ -134,6 +135,12 @@ func (app *Application) fetchCorpKind(ctx context.Context, ch db.Character, corp
 		case errors.Is(err, esi.ErrErrorLimit):
 			logging.Warnf("worker: ESI error limit hit refreshing %s for character %d; backing off until next cycle", kind, ch.CharacterID)
 			return corpFetchLimited
+		case scopeNamedRefusal(err):
+			// A 401 (or a 403 naming the scope) is the login's
+			// grant, not an in-game role: it settles under the
+			// shared refusal policy.
+			app.recordFetchRefusal(ctx, ch.CharacterID, kind, err)
+			return corpFetchFailed
 		case esi.IsForbidden(err):
 			role := corpKindRole(kind)
 			if role == "" {
@@ -253,7 +260,12 @@ func (app *Application) warmCorpAssetNames(ctx context.Context, ch db.Character,
 	// no longer resolves, e.g. a snapshot outlived its assets)
 	// won't heal by retrying every minute either. Either way the
 	// next attempt waits out the usual backoff, which also keeps
-	// the failure log to one line per backoff window.
+	// the failure log to one line per backoff window. A recorded
+	// refusal (401, or a 403 naming the scope) settles under the
+	// shared policy's longer window (fetch_refusal.go).
+	if app.refusalSettled(ctx, ch.CharacterID, corpAssetNamesKind) {
+		return
+	}
 	if state, err := app.queries.GetSnapshotFetchState(ctx, db.GetSnapshotFetchStateParams{CharacterID: ch.CharacterID, Kind: corpAssetNamesKind}); err == nil &&
 		(state.State == fetchStateRoleMissing || state.State == fetchStateError) {
 		if time.Since(state.AttemptedAt) < roleMissingBackoff {
@@ -287,6 +299,8 @@ func (app *Application) warmCorpAssetNames(ctx context.Context, ch db.Character,
 	names, err := app.esi.FetchCorpAssetNames(ctx, ch, corpID, missing)
 	if err != nil {
 		switch {
+		case scopeNamedRefusal(err):
+			app.recordFetchRefusal(ctx, ch.CharacterID, corpAssetNamesKind, err)
 		case esi.IsForbidden(err):
 			app.recordCorpFetchState(ctx, ch.CharacterID, corpAssetNamesKind, fetchStateRoleMissing, corpKindRole(esi.SnapCorpAssets))
 			logging.Infof("worker: corp asset names for corporation %d refused by ESI (403); needs the %s role in-game", corpID, corpKindRole(esi.SnapCorpAssets))

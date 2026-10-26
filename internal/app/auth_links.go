@@ -114,6 +114,11 @@ func (app *Application) linkVerifiedCharacter(ctx context.Context, in linkCharac
 	}); err != nil {
 		return result, err
 	}
+
+	// The fresh token and grant set supersede every fetch refusal
+	// recorded against the old ones: the character's kinds are
+	// fetchable again on the next worker cycle (fetch_refusal.go).
+	app.clearCharacterFetchStates(ctx, in.CharacterID)
 	return result, nil
 }
 

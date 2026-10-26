@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"net/http"
-	"strings"
 	"time"
 
 	db "evesynapse/internal/db/sqlc"
@@ -25,9 +24,10 @@ import (
 // 401 for others (a token lacking the scope is "unauthorized" for
 // the endpoint), so both statuses classify as the scope missing.
 // The refusal is recorded in snapshot_fetch_state like the
-// economy stale-scope refusals, the kind backs off for
-// roleMissingBackoff instead of retrying every minute, and the
-// pages say "PI not enabled — re-link" from the record. It is
+// economy stale-scope refusals, the kind settles under the
+// shared refusal policy (fetch_refusal.go) instead of retrying
+// every minute, and the pages say "PI not enabled — re-link"
+// from the record. It is
 // never a dead token: the cycle's validAccessToken gate runs
 // before this pass, so a 401 here means the (valid) token simply
 // lacks the planetary scope, and link_state is never touched.
@@ -94,13 +94,8 @@ func (app *Application) fetchPlanetsKind(ctx context.Context, ch db.Character, a
 	// A recorded scope refusal backs the kind off — unless the
 	// character has since re-linked with the scope, in which
 	// case retrying now is exactly what the user is waiting for.
-	if !characterHasScope(ch, planetScope) {
-		if state, err := app.queries.GetSnapshotFetchState(ctx, db.GetSnapshotFetchStateParams{CharacterID: ch.CharacterID, Kind: esi.SnapPlanets}); err == nil &&
-			state.State == fetchStateError && strings.HasPrefix(state.Detail, piScopeDetail) {
-			if time.Since(state.AttemptedAt) < roleMissingBackoff {
-				return corpFetchSkipped
-			}
-		}
+	if !characterHasScope(ch, planetScope) && app.refusalSettled(ctx, ch.CharacterID, esi.SnapPlanets) {
+		return corpFetchSkipped
 	}
 
 	if !allowance.take() {
@@ -161,13 +156,8 @@ func (app *Application) warmPlanetLayouts(ctx context.Context, ch db.Character, 
 		// The same scope refusal the list records applies to
 		// every layout (same endpoint family); honor its backoff
 		// per layout instead of 403ing the whole set each cycle.
-		if !hasScope {
-			if state, err := app.queries.GetSnapshotFetchState(ctx, db.GetSnapshotFetchStateParams{CharacterID: ch.CharacterID, Kind: kind}); err == nil &&
-				state.State == fetchStateError && strings.HasPrefix(state.Detail, piScopeDetail) {
-				if time.Since(state.AttemptedAt) < roleMissingBackoff {
-					continue
-				}
-			}
+		if !hasScope && app.refusalSettled(ctx, ch.CharacterID, kind) {
+			continue
 		}
 
 		if !allowance.take() {

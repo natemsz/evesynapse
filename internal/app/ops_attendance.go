@@ -88,6 +88,9 @@ func (app *Application) captureOneOp(ctx context.Context, op db.Op, now time.Tim
 	if !scopeSet(fc.Scopes)[fleetScope] {
 		return captureNoScope, 0, false
 	}
+	if app.refusalSettled(ctx, fc.CharacterID, opFleetKind) {
+		return captureNoScope, 0, false // the fleet read is refused and settled for this login
+	}
 	token, err := app.validAccessToken(ctx, fc)
 	if err != nil {
 		return captureNoFC, 0, false
@@ -100,6 +103,9 @@ func (app *Application) captureOneOp(ctx context.Context, op db.Op, now time.Tim
 		}
 		if code, ok := esi.StatusCode(err); ok && code == http.StatusNotFound {
 			return captureNoFleet, 0, false
+		}
+		if app.recordFetchRefusal(ctx, fc.CharacterID, opFleetKind, err) {
+			return captureNoScope, 0, false
 		}
 		logging.Warnf("worker: op %d: fleet of character %d: %v", op.ID, fc.CharacterID, err)
 		return captureError, 0, false

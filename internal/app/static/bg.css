@@ -89,7 +89,7 @@ html[data-backdrop="glow"] body::before {
 }
 .page-body:not(:has(.home-grid)) .legal-stack > .card {
   background: rgba(255, 255, 255, 0.05);
-  border-color: rgba(255, 110, 0, 0.22);
+  border-color: color-mix(in srgb, var(--accent) 22%, transparent);
   box-shadow: 0 4px 18px rgba(0, 0, 0, 0.35);
 }
 [data-theme="light"] .page-body:not(:has(.home-grid)) .legal-stack > .card {
@@ -116,7 +116,7 @@ html[data-backdrop="glow"] body::before {
    specificity games. */
 .charselector-dropdown {
   background-color: rgba(13, 10, 8, 0.94);
-  border-color: rgba(255, 110, 0, 0.25);
+  border-color: color-mix(in srgb, var(--accent) 25%, transparent);
   box-shadow: 0 10px 24px rgba(0, 0, 0, 0.65);
   -webkit-backdrop-filter: blur(25px) saturate(0.9);
   backdrop-filter: blur(25px) saturate(0.9);
@@ -137,7 +137,7 @@ html[data-theme="light"] .charselector-dropdown {
    floating blur stays for where it can sample. */
 .switcher .menu {
   background-color: rgba(13, 10, 8, 0.94);
-  border-color: rgba(255, 110, 0, 0.25);
+  border-color: color-mix(in srgb, var(--accent) 25%, transparent);
   box-shadow: 0 10px 24px rgba(0, 0, 0, 0.65);
   -webkit-backdrop-filter: blur(25px) saturate(0.9);
   backdrop-filter: blur(25px) saturate(0.9);
@@ -150,7 +150,7 @@ html[data-theme="light"] .charselector-dropdown {
    dropdowns match. */
 .notify-menu {
   background-color: rgba(13, 10, 8, 0.94);
-  border-color: rgba(255, 110, 0, 0.25);
+  border-color: color-mix(in srgb, var(--accent) 25%, transparent);
   box-shadow: 0 10px 24px rgba(0, 0, 0, 0.65);
   -webkit-backdrop-filter: blur(25px) saturate(0.9);
   backdrop-filter: blur(25px) saturate(0.9);
@@ -187,7 +187,7 @@ body:has(main .suggest:not([hidden])) main {
    border, light blur. */
 .btn.btn-quiet {
   background: rgba(23, 17, 13, 0.55);
-  border-color: rgba(255, 110, 0, 0.22);
+  border-color: color-mix(in srgb, var(--accent) 22%, transparent);
   -webkit-backdrop-filter: blur(10px) saturate(1.2);
   backdrop-filter: blur(10px) saturate(1.2);
 }
@@ -208,7 +208,7 @@ html[data-theme="light"] .btn.btn-quiet {
 /* Quiet-button hover takes the same ember edge the section tabs
    use, so the pill family shares one hover vocabulary. */
 .btn.btn-quiet:hover {
-  border-color: rgba(255, 130, 20, 0.45);
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
 }
 
 /* The home header row: the page title and its action bar (Link
@@ -244,13 +244,13 @@ html[data-theme="light"] .btn.btn-quiet {
   font-family: "Rajdhani", "Inter", sans-serif; font-weight: 600; font-size: 0.82rem;
   letter-spacing: 0.09em; text-transform: uppercase; text-decoration: none;
   color: var(--muted); padding: 0.34rem 0.85rem; border-radius: 999px;
-  background: rgba(23, 17, 13, 0.55); border: 1px solid rgba(255, 110, 0, 0.22);
+  background: rgba(23, 17, 13, 0.55); border: 1px solid color-mix(in srgb, var(--accent) 22%, transparent);
   transition: filter 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
-.region-pills a:hover { filter: saturate(1.45) brightness(1.07); border-color: rgba(255, 130, 20, 0.45); color: var(--text-bright); }
+.region-pills a:hover { filter: saturate(1.45) brightness(1.07); border-color: color-mix(in srgb, var(--accent) 45%, transparent); color: var(--text-bright); }
 .region-pills a.active {
   color: var(--text-bright); background: rgba(255, 106, 0, 0.20);
-  border-color: rgba(255, 106, 0, 0.40);
+  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
 }
 .btn-quiet .glyph { width: 16px; height: 16px; vertical-align: -3px; margin-right: 0.35rem; }
 .mkt-kpis { margin-bottom: 1.25rem; }
@@ -354,7 +354,7 @@ html[data-theme="light"] .btn.btn-quiet {
    the radius only at the bottom. */
 #main-content:has(> .section-tabs) > .page-body { border-top-left-radius: 0; border-top-right-radius: 0; }
 #main-content > .section-tabs a {
-  border: 1px solid rgba(255, 110, 0, 0.22);
+  border: 1px solid color-mix(in srgb, var(--accent) 22%, transparent);
   border-radius: 0.5rem 0.5rem 0 0;
   background: rgba(23, 17, 13, 0.55);
   -webkit-backdrop-filter: blur(10px) saturate(1.2);
@@ -364,7 +364,7 @@ html[data-theme="light"] .btn.btn-quiet {
 }
 #main-content > .section-tabs a:hover {
   background: transparent;
-  border-color: rgba(255, 130, 20, 0.45);
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
   filter: saturate(1.5);
 }
 #main-content > .section-tabs a.active {
@@ -419,7 +419,7 @@ html[data-theme="light"] #main-content > .section-tabs a.active {
   border-bottom: none;
 }
 #main-content > .section-subtabs a {
-  border: 1px solid rgba(255, 110, 0, 0.22);
+  border: 1px solid color-mix(in srgb, var(--accent) 22%, transparent);
   border-radius: var(--r-sm);
   background: rgba(23, 17, 13, 0.55);
   padding: 0.35rem 0.8rem;
@@ -429,12 +429,12 @@ html[data-theme="light"] #main-content > .section-tabs a.active {
 }
 #main-content > .section-subtabs a:hover {
   background: transparent;
-  border-color: rgba(255, 130, 20, 0.45);
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
   filter: saturate(1.5);
 }
 #main-content > .section-subtabs a.active {
   background: rgba(255, 106, 0, 0.20);
-  border-color: rgba(255, 106, 0, 0.40);
+  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
   color: var(--text-bright);
 }
 #main-content:has(> .section-subtabs) > .page-body { border-top: none; }
@@ -489,7 +489,7 @@ html[data-theme="light"] #main-content > .section-subtabs a.active {
 }
 #main-content > .section-tabs .tabs-more-btn {
   color: inherit;
-  border: 1px solid rgba(255, 110, 0, 0.22);
+  border: 1px solid color-mix(in srgb, var(--accent) 22%, transparent);
   border-radius: 0.5rem 0.5rem 0 0;
   background: rgba(23, 17, 13, 0.55);
   -webkit-backdrop-filter: blur(10px) saturate(1.2);
@@ -500,7 +500,7 @@ html[data-theme="light"] #main-content > .section-subtabs a.active {
 }
 #main-content > .section-tabs .tabs-more-btn:hover {
   background: transparent;
-  border-color: rgba(255, 130, 20, 0.45);
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
   filter: saturate(1.5);
 }
 #main-content > .section-tabs .tabs-more.has-active .tabs-more-btn {
@@ -516,7 +516,7 @@ html[data-theme="light"] #main-content > .section-subtabs a.active {
 }
 #main-content > .section-subtabs .tabs-more-btn {
   color: inherit;
-  border: 1px solid rgba(255, 110, 0, 0.22);
+  border: 1px solid color-mix(in srgb, var(--accent) 22%, transparent);
   border-radius: var(--r-sm);
   background: rgba(23, 17, 13, 0.55);
   padding: 0.35rem 0.8rem;
@@ -527,12 +527,12 @@ html[data-theme="light"] #main-content > .section-subtabs a.active {
 }
 #main-content > .section-subtabs .tabs-more-btn:hover {
   background: transparent;
-  border-color: rgba(255, 130, 20, 0.45);
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
   filter: saturate(1.5);
 }
 #main-content > .section-subtabs .tabs-more.has-active .tabs-more-btn {
   background: rgba(255, 106, 0, 0.20);
-  border-color: rgba(255, 106, 0, 0.40);
+  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
   color: var(--text-bright);
 }
 #main-content .tabs-more-panel {
@@ -576,13 +576,13 @@ html[data-theme="light"] #main-content > .section-subtabs a.active {
 #main-content > .section-tabs .tabs-more-panel a:hover,
 #main-content > .section-subtabs .tabs-more-panel a:hover {
   background: transparent;
-  border-color: rgba(255, 130, 20, 0.45);
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
   filter: saturate(1.5);
 }
 #main-content > .section-tabs .tabs-more-panel a.active,
 #main-content > .section-subtabs .tabs-more-panel a.active {
   background: rgba(255, 106, 0, 0.20);
-  border-color: rgba(255, 106, 0, 0.40);
+  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
   color: var(--text-bright);
 }
 html[data-theme="light"] #main-content > .section-tabs .tabs-more-btn,
@@ -650,10 +650,10 @@ html[data-theme="light"] #main-content > .section-tabs .tabs-more.has-active .ta
   }
   #main-content > .section-tabs a.active {
     background: rgba(255, 106, 0, 0.20);
-    border-top: 1px solid rgba(255, 106, 0, 0.40);
-    border-bottom: 1px solid rgba(255, 106, 0, 0.40);
-    border-left-color: rgba(255, 106, 0, 0.40);
-    border-right-color: rgba(255, 106, 0, 0.40);
+    border-top: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
+    border-bottom: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
+    border-left-color: color-mix(in srgb, var(--accent) 40%, transparent);
+    border-right-color: color-mix(in srgb, var(--accent) 40%, transparent);
     padding-top: 0.5rem;
   }
   /* On the rail the More button is a pill like the tabs it
@@ -669,10 +669,10 @@ html[data-theme="light"] #main-content > .section-tabs .tabs-more.has-active .ta
   }
   #main-content > .section-tabs .tabs-more.has-active .tabs-more-btn {
     background: rgba(255, 106, 0, 0.20);
-    border-top: 1px solid rgba(255, 106, 0, 0.40);
-    border-bottom: 1px solid rgba(255, 106, 0, 0.40);
-    border-left-color: rgba(255, 106, 0, 0.40);
-    border-right-color: rgba(255, 106, 0, 0.40);
+    border-top: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
+    border-bottom: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
+    border-left-color: color-mix(in srgb, var(--accent) 40%, transparent);
+    border-right-color: color-mix(in srgb, var(--accent) 40%, transparent);
     padding-top: 0.5rem;
     color: var(--text-bright);
   }
@@ -724,7 +724,7 @@ html[data-theme="light"] #main-content > .section-tabs .tabs-more.has-active .ta
 .item-lead { display: flex; gap: 1rem; align-items: stretch; margin: 0.6rem 0 1.1rem; }
 .item-art {
   flex: 0 0 auto; width: 128px; height: 128px; border-radius: 0.5rem;
-  border: 1px solid rgba(255, 110, 0, 0.22); background: rgba(0, 0, 0, 0.35);
+  border: 1px solid color-mix(in srgb, var(--accent) 22%, transparent); background: rgba(0, 0, 0, 0.35);
   display: flex; align-items: center; justify-content: center; overflow: hidden;
 }
 .item-art img { width: 128px; height: 128px; display: block; }
@@ -918,12 +918,12 @@ html.js .notify-prompt.is-open { opacity: 1; transform: none; }
    the glass on the default tint. Under a scheme the glass is
    darker than the default mix and the panel tint is heavily
    desaturated, a ghost of the hue rather than a coloured wash. */
-html[data-scheme="jove"] { --sch-hi: #f472b6; --sch-core: #8b5cf6; --sch-end: #3730a3; --sch-accent: #8b5cf6; --panel: #1a1620; --panel-head: rgba(18, 16, 23, .55); --input-bg: rgba(26, 22, 32, .5); --row-hover: rgba(139, 92, 246, .09); --sch-ground: #0d0716; --sch-ground-2: #170b2c; --sch-glow-1: rgba(139, 92, 246, .42); --sch-glow-2: rgba(55, 48, 163, .20); --sch-glow-3: rgba(244, 114, 182, .12); }
-html[data-scheme="caldari"] { --sch-hi: #7dd3fc; --sch-core: #60a5fa; --sch-end: #263242; --sch-accent: #60a5fa; --panel: #11161f; --panel-head: rgba(13, 17, 23, .55); --input-bg: rgba(17, 22, 31, .5); --row-hover: rgba(96, 165, 250, .09); --sch-ground: #0a0d12; --sch-ground-2: #0f141c; --sch-glow-1: rgba(96, 165, 250, .36); --sch-glow-2: rgba(38, 50, 66, .22); --sch-glow-3: rgba(125, 211, 252, .10); }
-html[data-scheme="gallente"] { --sch-hi: #fb7185; --sch-core: #2dd4bf; --sch-end: #155e75; --sch-accent: #2dd4bf; --panel: #101917; --panel-head: rgba(11, 16, 15, .55); --input-bg: rgba(16, 25, 23, .5); --row-hover: rgba(45, 212, 191, .09); --sch-ground: #04120e; --sch-ground-2: #07231c; --sch-glow-1: rgba(45, 212, 191, .36); --sch-glow-2: rgba(21, 94, 117, .20); --sch-glow-3: rgba(251, 113, 133, .12); }
-html[data-scheme="amarr"] { --sch-hi: #93a5f5; --sch-core: #f0b93f; --sch-end: #9a3412; --sch-accent: #f0b93f; --panel: #16120d; --panel-head: rgba(15, 12, 9, .55); --input-bg: rgba(22, 18, 13, .5); --row-hover: rgba(240, 185, 63, .09); --sch-ground: #120c03; --sch-ground-2: #241a06; --sch-glow-1: rgba(240, 185, 63, .40); --sch-glow-2: rgba(154, 52, 18, .18); --sch-glow-3: rgba(147, 165, 245, .12); }
-html[data-scheme="triglavian"] { --sch-hi: #d41236; --sch-core: #91100c; --sch-end: #480604; --sch-accent: #d41236; --panel: #191112; --panel-head: rgba(17, 12, 12, .55); --input-bg: rgba(25, 17, 18, .5); --row-hover: rgba(212, 18, 54, .09); --sch-ground: #120405; --sch-ground-2: #260709; --sch-glow-1: rgba(145, 16, 12, .42); --sch-glow-2: rgba(72, 6, 4, .22); --sch-glow-3: rgba(212, 18, 54, .12); }
-html[data-scheme="edencom"] { --sch-hi: #b7a6fa; --sch-core: #e9cf8f; --sch-end: #334155; --sch-accent: #e9cf8f; --panel: #191b1e; --panel-head: rgba(16, 18, 20, .55); --input-bg: rgba(25, 27, 30, .5); --row-hover: rgba(233, 207, 143, .09); --sch-ground: #0b0f14; --sch-ground-2: #18202b; --sch-glow-1: rgba(233, 207, 143, .38); --sch-glow-2: rgba(51, 65, 85, .20); --sch-glow-3: rgba(183, 166, 250, .12); }
+html[data-scheme="jove"] { --sch-hi: #f472b6; --sch-core: #8b5cf6; --sch-end: #3730a3; --sch-accent: #8b5cf6; --panel: #1a1620; --panel-head: rgba(18, 16, 23, .55); --input-bg: rgba(26, 22, 32, .5); --row-hover: rgba(139, 92, 246, .09); --sch-ground: #0d0716; --sch-ground-2: #170b2c; --sch-glow-1: rgba(139, 92, 246, .42); --sch-glow-2: rgba(55, 48, 163, .20); }
+html[data-scheme="caldari"] { --sch-hi: #7dd3fc; --sch-core: #60a5fa; --sch-end: #263242; --sch-accent: #60a5fa; --panel: #11161f; --panel-head: rgba(13, 17, 23, .55); --input-bg: rgba(17, 22, 31, .5); --row-hover: rgba(96, 165, 250, .09); --sch-ground: #0a0d12; --sch-ground-2: #0f141c; --sch-glow-1: rgba(96, 165, 250, .36); --sch-glow-2: rgba(38, 50, 66, .22); }
+html[data-scheme="gallente"] { --sch-hi: #4ade80; --sch-core: #2dd4bf; --sch-end: #155e75; --sch-accent: #2dd4bf; --panel: #101917; --panel-head: rgba(11, 16, 15, .55); --input-bg: rgba(16, 25, 23, .5); --row-hover: rgba(45, 212, 191, .09); --sch-ground: #04120e; --sch-ground-2: #07231c; --sch-glow-1: rgba(45, 212, 191, .36); --sch-glow-2: rgba(21, 94, 117, .20); }
+html[data-scheme="amarr"] { --sch-hi: #facc15; --sch-core: #f0b93f; --sch-end: #9a3412; --sch-accent: #f0b93f; --panel: #16120d; --panel-head: rgba(15, 12, 9, .55); --input-bg: rgba(22, 18, 13, .5); --row-hover: rgba(240, 185, 63, .09); --sch-ground: #120c03; --sch-ground-2: #241a06; --sch-glow-1: rgba(240, 185, 63, .40); --sch-glow-2: rgba(154, 52, 18, .18); }
+html[data-scheme="triglavian"] { --sch-hi: #d41236; --sch-core: #91100c; --sch-end: #480604; --sch-accent: #d41236; --panel: #191112; --panel-head: rgba(17, 12, 12, .55); --input-bg: rgba(25, 17, 18, .5); --row-hover: rgba(212, 18, 54, .09); --sch-ground: #120405; --sch-ground-2: #260709; --sch-glow-1: rgba(145, 16, 12, .42); --sch-glow-2: rgba(72, 6, 4, .22); }
+html[data-scheme="edencom"] { --sch-hi: #eab308; --sch-core: #e9cf8f; --sch-end: #334155; --sch-accent: #e9cf8f; --panel: #191b1e; --panel-head: rgba(16, 18, 20, .55); --input-bg: rgba(25, 27, 30, .5); --row-hover: rgba(233, 207, 143, .09); --sch-ground: #0b0f14; --sch-ground-2: #18202b; --sch-glow-1: rgba(233, 207, 143, .38); --sch-glow-2: rgba(51, 65, 85, .20); }
 html[data-scheme] {
   --accent: var(--sch-core);
   --gold: var(--sch-hi);
@@ -964,24 +964,24 @@ html[data-scheme="caldari"] .wordmark-svg .p-s4 { fill: #60a5fa; }
 html[data-scheme="caldari"] .wordmark-svg .p-s5 { fill: #4d7fbd; }
 html[data-scheme="caldari"] .wordmark-svg .p-s6 { fill: #39587f; }
 html[data-scheme="caldari"] .wordmark-svg .p-s7 { fill: #263242; }
-html[data-scheme="gallente"] .wordmark-svg .p-s1 { fill: #fb7185; }
-html[data-scheme="gallente"] .wordmark-svg .p-s2 { fill: #b69298; }
-html[data-scheme="gallente"] .wordmark-svg .p-s3 { fill: #72b3ac; }
+html[data-scheme="gallente"] .wordmark-svg .p-s1 { fill: #4ade80; }
+html[data-scheme="gallente"] .wordmark-svg .p-s2 { fill: #40db95; }
+html[data-scheme="gallente"] .wordmark-svg .p-s3 { fill: #37d7aa; }
 html[data-scheme="gallente"] .wordmark-svg .p-s4 { fill: #2dd4bf; }
 html[data-scheme="gallente"] .wordmark-svg .p-s5 { fill: #25ada6; }
 html[data-scheme="gallente"] .wordmark-svg .p-s6 { fill: #1d858e; }
 html[data-scheme="gallente"] .wordmark-svg .p-s7 { fill: #155e75; }
-html[data-scheme="amarr"] .wordmark-svg .p-s1 { fill: #93a5f5; }
-html[data-scheme="amarr"] .wordmark-svg .p-s2 { fill: #b2acb8; }
-html[data-scheme="amarr"] .wordmark-svg .p-s3 { fill: #d1b27c; }
+html[data-scheme="amarr"] .wordmark-svg .p-s1 { fill: #facc15; }
+html[data-scheme="amarr"] .wordmark-svg .p-s2 { fill: #f7c623; }
+html[data-scheme="amarr"] .wordmark-svg .p-s3 { fill: #f3bf31; }
 html[data-scheme="amarr"] .wordmark-svg .p-s4 { fill: #f0b93f; }
 html[data-scheme="amarr"] .wordmark-svg .p-s5 { fill: #d38d30; }
 html[data-scheme="amarr"] .wordmark-svg .p-s6 { fill: #b76021; }
 html[data-scheme="amarr"] .wordmark-svg .p-s7 { fill: #9a3412; }
 html[data-scheme="triglavian"] .wordmark-svg .p-syn { fill: #d41236; }
-html[data-scheme="edencom"] .wordmark-svg .p-s1 { fill: #b7a6fa; }
-html[data-scheme="edencom"] .wordmark-svg .p-s2 { fill: #c8b4d6; }
-html[data-scheme="edencom"] .wordmark-svg .p-s3 { fill: #d8c1b3; }
+html[data-scheme="edencom"] .wordmark-svg .p-s1 { fill: #eab308; }
+html[data-scheme="edencom"] .wordmark-svg .p-s2 { fill: #eabc35; }
+html[data-scheme="edencom"] .wordmark-svg .p-s3 { fill: #e9c662; }
 html[data-scheme="edencom"] .wordmark-svg .p-s4 { fill: #e9cf8f; }
 html[data-scheme="edencom"] .wordmark-svg .p-s5 { fill: #aca07c; }
 html[data-scheme="edencom"] .wordmark-svg .p-s6 { fill: #707068; }
@@ -1007,9 +1007,43 @@ html[data-scheme][data-tier="minimalistic"] body::before {
   background-color: var(--sch-ground);
   background-image:
     radial-gradient(ellipse 900px 300px at 88% -20px, var(--sch-glow-1) 0%, var(--sch-glow-2) 48%, transparent 80%),
-    radial-gradient(circle at 18% 0%, var(--sch-glow-3) 0%, transparent 55%),
     linear-gradient(180deg, var(--sch-ground-2) 0%, var(--sch-ground) 100%);
 }
+/* The nav glyphs' fallback paint: shapes that carry no paint of
+   their own inherit the svg's fill and stroke, so the fallback
+   itself takes the scheme. Gradient-painted shapes keep their
+   gradient, whose stops ride the scheme above. */
+html[data-scheme] .nav-icon svg { fill: var(--sch-core); stroke: var(--sch-core); }
+/* The home KPI icons are baked ember strokes in the template;
+   the scheme repaints them the way it repaints the search
+   magnifier. */
+html[data-scheme] .kpi-icon svg { stroke: var(--sch-hi); }
+/* The shell controls' focus ring is a baked gold outline in
+   style.css; under a scheme it takes the highlight. */
+html[data-scheme] .nav-hamburger:focus-visible,
+html[data-scheme] .nav-state-btn:focus-visible,
+html[data-scheme] .nav-reopen:focus-visible,
+html[data-scheme] .nav-drawer-close:focus-visible,
+html[data-scheme] .nav-expand-btn:focus-visible,
+html[data-scheme] .sidebar .branch > summary:focus-visible { outline-color: var(--sch-hi); }
+/* Chart series ride the scheme the way the KPI bars do: the
+   primary series from the core, the stacked total from the
+   highlight, the secondary series (assets, volume) from the
+   end stop. Legend swatches follow their series. */
+html[data-scheme] .legend-price { background: var(--sch-core); }
+html[data-scheme] .legend-volume { background: var(--sch-end); }
+html[data-scheme] .legend-isk { background: var(--sch-core); }
+html[data-scheme] .legend-assets { background: var(--sch-end); }
+html[data-scheme] .legend-total { background: var(--sch-hi); }
+html[data-scheme] .pchart .chart-line { stroke: var(--sch-core); }
+html[data-scheme] .pchart .chart-line-stacked { stroke: var(--sch-hi); }
+html[data-scheme] .pchart .chart-dot { fill: var(--sch-core); }
+html[data-scheme] .pchart .chart-dot-stacked { fill: var(--sch-hi); }
+html[data-scheme] .pchart .cdot { fill: var(--sch-core); }
+html[data-scheme] .pchart .cdot-stacked { fill: var(--sch-hi); }
+html[data-scheme] .pchart .chart-band.band-isk { fill: var(--sch-core); }
+html[data-scheme] .pchart .chart-band.band-assets { fill: var(--sch-end); }
+html[data-scheme] .pchart .chart-volbar { fill: var(--sch-end); }
 
 /* The Settings page's theme picker: one row per look, a swatch,
    a name, and the strength it can be worn at. */
@@ -1036,3 +1070,35 @@ html[data-scheme][data-tier="minimalistic"] body::before {
 .tier-seg button.on { background: var(--sch-accent, #ff6a1a); color: #fff; }
 .tier-seg button:disabled { opacity: .38; cursor: not-allowed; }
 html[data-scheme="amarr"] .tier-seg button.on, html[data-scheme="edencom"] .tier-seg button.on { color: #20180a; }
+
+/* Phone: the picker row stacks. Swatch, name and the Current
+   badge share a row, the description runs full width under
+   them, and the strength control takes its own full-width row
+   so no segment is clipped at the edge. The meta wrapper steps
+   aside (display: contents) so the name and the description
+   lay out as items of the row in their own right. */
+@media (max-width: 45rem) {
+  .theme-default, .scheme-row { flex-wrap: wrap; row-gap: 0.55rem; }
+  .scheme-meta { display: contents; }
+  .scheme-name { order: 1; flex: 1 1 auto; min-width: 0; align-self: center; }
+  .theme-default > .current-badge, .scheme-row > .current-badge { order: 2; flex: 0 0 auto; align-self: center; }
+  .scheme-sub { order: 3; flex: 1 1 100%; }
+  .tier-seg { order: 4; flex: 1 1 100%; }
+  .tier-seg button { flex: 1 1 0; }
+  /* The glow scales to the narrow screen with it: one blob on
+     the top horizon, sized off the viewport instead of the
+     desktop's fixed pixels, in the same two colours. The
+     default's ember glow shares the geometry, so it adapts
+     the same way. */
+  html[data-scheme][data-tier="minimalistic"] body::before {
+    background-image:
+      radial-gradient(ellipse 150vw 240px at 50% -80px, var(--sch-glow-1) 0%, var(--sch-glow-2) 48%, transparent 80%),
+      linear-gradient(180deg, var(--sch-ground-2) 0%, var(--sch-ground) 100%);
+  }
+  html[data-backdrop="glow"] body::before {
+    background-image:
+      radial-gradient(ellipse 150vw 240px at 50% -80px, rgba(234, 88, 12, 0.32) 0%, rgba(180, 65, 10, 0.13) 48%, rgba(11, 8, 6, 0) 80%),
+      radial-gradient(circle at 18% 0%, rgba(120, 53, 15, 0.08) 0%, transparent 55%),
+      linear-gradient(180deg, #110c09 0%, #0b0806 100%);
+  }
+}

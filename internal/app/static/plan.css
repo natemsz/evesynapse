@@ -3,7 +3,7 @@
    hues (build green, buy blue, risk red, critical ember) so the
    coding survives both themes; surfaces reuse theme variables. */
 #plan { --plan-build: #3fce7a; --plan-buy: #5eb8ff; --plan-risk: #ff5a4e; --plan-fee: #ffd27a; }
-.plan-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: rgba(255, 110, 0, 0.14); border: 1px solid rgba(255, 110, 0, 0.14); border-radius: 0.5rem; overflow: hidden; margin-bottom: 0.6rem; }
+.plan-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: rgba(255, 110, 0, 0.14); border: 1px solid color-mix(in srgb, var(--accent) 14%, transparent); border-radius: 0.5rem; overflow: hidden; margin-bottom: 0.6rem; }
 .plan-stats > div { background: rgba(255, 255, 255, 0.03); padding: 0.6rem 0.8rem; }
 .plan-stats .plan-k { display: block; font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
 .plan-stats .plan-basis { color: var(--muted); font-style: italic; }
@@ -366,13 +366,13 @@ html[data-theme="light"] #pi-wrap .pi-controls input[type="number"] { border-col
    blur of its own. */
 #pi-form button[type="submit"] {
   background: rgba(23, 17, 13, 0.55);
-  border: 1px solid rgba(255, 110, 0, 0.22);
+  border: 1px solid color-mix(in srgb, var(--accent) 22%, transparent);
   color: var(--text);
   text-shadow: none;
 }
 #pi-form button[type="submit"]:hover:not(:disabled) {
   background: rgba(23, 17, 13, 0.55);
-  border-color: rgba(255, 130, 20, 0.45);
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
   color: var(--text-bright);
 }
 html[data-theme="light"] #pi-form button[type="submit"] {

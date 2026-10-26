@@ -335,14 +335,23 @@ func displayPlanetType(raw string) string {
 }
 
 // piNotEnabled reports whether PI is dark for this character
-// because its login predates the planetary scope: a recorded
-// colonies refusal stands and the granted scopes still lack the
-// scope. A character that re-linked (scope present) is never
-// flagged — the worker retries within the cycle.
+// because its login lacks the planetary scope: known recorded
+// grants without the scope settle it on their own (the planner
+// never fetches, so no refusal is recorded); with grants
+// unrecorded, a recorded colonies refusal says so. A character
+// that re-linked (scope present) is never flagged.
 func (app *Application) piNotEnabled(ctx context.Context, ch db.Character) bool {
 	if characterHasScope(ch, planetScope) {
 		return false
 	}
+	if len(scopeSet(ch.Scopes)) > 0 {
+		// The recorded grants are known and do not include the
+		// scope: PI is not enabled for this login, and the planner
+		// never asks ESI about it (kind_scopes.go), so no refusal
+		// record is needed to say so.
+		return true
+	}
+	// Grants unrecorded: only a recorded refusal says.
 	state, detail, found := app.corpKindState(ctx, ch.CharacterID, esi.SnapPlanets)
 	return found && state == fetchStateError && strings.HasPrefix(detail, piScopeDetail)
 }

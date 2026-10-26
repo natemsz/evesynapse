@@ -76,9 +76,13 @@ func (app *Application) refreshCorpSnapshots(ctx context.Context, ch db.Characte
 // the members case below).
 func (app *Application) refreshCorpSnapshotsFor(ctx context.Context, ch db.Character, corpID int64, mayRetryMembers bool) int {
 	refreshed := 0
+	granted := scopeSet(ch.Scopes)
 	for _, kind := range corpSnapshotKinds() {
 		if ctx.Err() != nil {
 			return refreshed
+		}
+		if kindExcludedByGrants(granted, kind) {
+			continue // the login never granted this kind's scope: not planned
 		}
 		outcome := app.fetchCorpKind(ctx, ch, corpID, kind)
 		switch outcome {
@@ -254,6 +258,9 @@ func (app *Application) warmCorpAssetNames(ctx context.Context, ch db.Character,
 		return // no assets snapshot yet; nothing to name
 	}
 
+	if kindExcludedByGrants(scopeSet(ch.Scopes), esi.SnapCorpAssets) {
+		return // the login never granted the corp assets scope: not planned
+	}
 	// Respect a recent refusal or failure on the names endpoint
 	// itself. A 403 means the Director role is missing; a 404
 	// (ESI rejects the whole batch when even one submitted item

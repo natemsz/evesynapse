@@ -87,6 +87,9 @@ func (app *Application) warmCharacterAssetNames(ctx context.Context, ch db.Chara
 		return 0, false
 	}
 
+	if kindExcludedByGrants(scopeSet(ch.Scopes), esi.SnapAssets) {
+		return 0, false // the login never granted the assets scope: not planned
+	}
 	if app.refusalSettled(ctx, ch.CharacterID, charAssetNamesKind) {
 		return 0, false // the names login is refused and the refusal is still settled
 	}

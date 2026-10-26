@@ -67,6 +67,9 @@ func piScopeRefusal(err error) bool {
 // reports how many snapshots it stored and whether ESI's error
 // limit stopped it.
 func (app *Application) refreshPlanetarySnapshots(ctx context.Context, ch db.Character, allowance *fetchBudget) (refreshed int, limited bool) {
+	if kindExcludedByGrants(scopeSet(ch.Scopes), esi.SnapPlanets) {
+		return 0, false // the login never granted the planetary scope: not planned
+	}
 	switch app.fetchPlanetsKind(ctx, ch, allowance) {
 	case corpFetchOK:
 		refreshed++

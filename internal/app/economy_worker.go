@@ -46,9 +46,13 @@ func economySnapshotKinds() []string {
 // and reports how many snapshots it stored.
 func (app *Application) refreshEconomySnapshots(ctx context.Context, ch db.Character) int {
 	refreshed := 0
+	granted := scopeSet(ch.Scopes)
 	for _, kind := range economySnapshotKinds() {
 		if ctx.Err() != nil {
 			return refreshed
+		}
+		if kindExcludedByGrants(granted, kind) {
+			continue // the login never granted this kind's scope: not planned
 		}
 		switch app.fetchCharKind(ctx, ch, kind) {
 		case corpFetchOK:
@@ -114,6 +118,9 @@ const maxContractItemsPerCycle = 100
 // stored and whether ESI's error limit stopped the pass. Deleted
 // contracts are skipped (their item endpoint is gone for good).
 func (app *Application) warmContractItems(ctx context.Context, ch db.Character) (fetched int, limited bool) {
+	if kindExcludedByGrants(scopeSet(ch.Scopes), esi.SnapContracts) {
+		return 0, false // the login never granted the contracts scope: not planned
+	}
 	if app.refusalSettled(ctx, ch.CharacterID, esi.SnapContracts) {
 		return 0, false // the contracts login is refused; item lists would be too
 	}

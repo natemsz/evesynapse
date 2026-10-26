@@ -667,11 +667,11 @@ func (c *cycleState) refreshCoreSnapshots(ctx context.Context, ch db.Character, 
 		if fresh[kind] {
 			continue // inside ESI's cache window, or fetched recently enough for its tier
 		}
-		// A character that granted none of the owning module's scopes
-		// can only be refused; skipping spares the fetch and keeps
-		// one locked kind from ending the pass for the rest. A row with no
-		// recorded scopes is unknown, not locked, and fetches as before.
-		if len(granted) > 0 && kindLockedOut(granted, kind) {
+		// A kind whose required scope the character never granted
+		// is not planned at all (kind_scopes.go): ESI could only
+		// refuse it. A row with no recorded scopes is unknown, not
+		// locked, and fetches as before.
+		if kindExcludedByGrants(granted, kind) {
 			continue
 		}
 		if !statesLoaded {
@@ -1013,7 +1013,7 @@ func dueKeyFromMeta(snaps []db.ListSnapshotMetaForCharactersRow, granted map[str
 	}
 	var earliest time.Time
 	for _, kind := range coreSnapshotKinds {
-		if len(granted) > 0 && kindLockedOut(granted, kind) {
+		if kindExcludedByGrants(granted, kind) {
 			continue // can never be fetched: not something to be late with
 		}
 		if !seen[kind] {

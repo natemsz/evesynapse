@@ -47,9 +47,13 @@ func commsSnapshotKinds() []string {
 // one character and reports how many fetches stored data and
 // whether ESI's error limit stopped it.
 func (app *Application) refreshCommsSnapshots(ctx context.Context, ch db.Character, allowance *fetchBudget) (refreshed int, limited bool) {
+	granted := scopeSet(ch.Scopes)
 	for _, kind := range commsSnapshotKinds() {
 		if ctx.Err() != nil {
 			return refreshed, false
+		}
+		if kindExcludedByGrants(granted, kind) {
+			continue // the login never granted this kind's scope: not planned
 		}
 		switch app.fetchCommsKind(ctx, ch, kind, allowance) {
 		case corpFetchOK:
@@ -121,6 +125,9 @@ func (app *Application) fetchCommsKind(ctx context.Context, ch db.Character, kin
 // snapshot row is the whole freshness test. It reports how many
 // were stored and whether ESI's error limit stopped the pass.
 func (app *Application) warmMailBodies(ctx context.Context, ch db.Character, allowance *fetchBudget) (fetched int, limited bool) {
+	if kindExcludedByGrants(scopeSet(ch.Scopes), esi.SnapMail) {
+		return 0, false // the login never granted the mail scope: not planned
+	}
 	if app.refusalSettled(ctx, ch.CharacterID, esi.SnapMail) {
 		return 0, false // the mail login is refused; bodies would be too
 	}
@@ -183,6 +190,9 @@ func (app *Application) warmMailBodies(ctx context.Context, ch db.Character, all
 // chronological order (soonest events first). It reports how many
 // fetches stored data and whether ESI's error limit stopped it.
 func (app *Application) warmCalendarDetails(ctx context.Context, ch db.Character, allowance *fetchBudget) (fetched int, limited bool) {
+	if kindExcludedByGrants(scopeSet(ch.Scopes), esi.SnapCalendar) {
+		return 0, false // the login never granted the calendar scope: not planned
+	}
 	if app.refusalSettled(ctx, ch.CharacterID, esi.SnapCalendar) {
 		return 0, false // the calendar login is refused; details would be too
 	}

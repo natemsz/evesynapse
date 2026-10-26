@@ -196,6 +196,21 @@ func (app *Application) loadTVBlueprintGraph(ctx context.Context) (*tvBlueprintG
 	return graph, nil
 }
 
+// tvCrawlDue reports whether a region the crawl has already
+// visited is past its re-check interval. A region never
+// crawled in this process has no watched listings, so it
+// does not hold the gate open; its first crawl rides the
+// next pass an input move or the staleness bound starts.
+func tvCrawlDue(st *tvPassState, now time.Time) bool {
+	for _, regionID := range tvContractRegions {
+		last := st.lastCrawl[regionID]
+		if !last.IsZero() && now.Sub(last) >= tvContractCrawlInterval {
+			return true
+		}
+	}
+	return false
+}
+
 // refreshTrueValues runs one bounded chunk of the pass. It is
 // called from refreshCycle behind the guide refresh and the
 // cost-index refresh, whose outputs are its inputs.
@@ -217,8 +232,13 @@ func (app *Application) refreshTrueValues(ctx context.Context) {
 	// inputs frozen past trueValueStaleAfter (a stalled
 	// sweep, a dead ESI) start a fresh pass anyway, so the
 	// rows keep the staleness bound the age rule promises.
+	// The crawl is the one duty the gate never holds back:
+	// when a visited region's re-check comes due, the pass
+	// runs, because vanished listings are evidence only a
+	// crawl collects.
 	if st.fingerprint != "" && st.cursor == 0 &&
-		time.Since(st.passDoneAt) < trueValueStaleAfter {
+		time.Since(st.passDoneAt) < trueValueStaleAfter &&
+		!tvCrawlDue(st, time.Now()) {
 		if stamp, err := app.queries.GetMarketRegionStatsStamp(ctx, defaultMarketRegion); err == nil {
 			var statsStamp time.Time
 			if t, ok := stamp.Stamp.(time.Time); ok {

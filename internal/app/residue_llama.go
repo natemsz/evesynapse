@@ -30,6 +30,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"strings"
 	"sync"
 	"time"
 
@@ -79,8 +80,38 @@ type llamaEngine struct {
 	absent  bool // the runtime or the model file is not on this box
 	failed  bool // the last start attempt failed
 	lastTry time.Time
-	cmd     *exec.Cmd     // the server believed up, nil when none is
-	exited  chan struct{} // closed by the server's reaper once it has been waited
+	cmd     *exec.Cmd      // the server believed up, nil when none is
+	exited  chan struct{}  // closed by the server's reaper once it has been waited
+	stderr  *boundedStderr // the current child's captured stderr tail
+}
+
+// boundedStderr keeps the last bytes a child wrote to stderr,
+// so a death is diagnosable from the log without an unbounded
+// buffer growing beside the worker.
+type boundedStderr struct {
+	mu  sync.Mutex
+	buf []byte
+}
+
+const residueStderrCap = 8192
+
+func (b *boundedStderr) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.buf = append(b.buf, p...)
+	if len(b.buf) > residueStderrCap {
+		b.buf = append([]byte{}, b.buf[len(b.buf)-residueStderrCap:]...)
+	}
+	return len(p), nil
+}
+
+func (b *boundedStderr) String() string {
+	if b == nil {
+		return ""
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return string(b.buf)
 }
 
 func newLlamaEngine(cfg Config, serveCtx context.Context) *llamaEngine {
@@ -91,11 +122,25 @@ func newLlamaEngine(cfg Config, serveCtx context.Context) *llamaEngine {
 	}
 }
 
+// The pass's two budgets, kept separate: model load is slow
+// exactly once per server life, generation is the per-pass
+// cost. One shared budget let load time starve generation
+// under contention (and a warm server wasted none of it).
+const (
+	residueLoadTimeout       = 120 * time.Second
+	residueGenerationTimeout = 120 * time.Second
+)
+
 // Complete runs one pass: the server is started if it is not
-// already up, then one chat completion is asked for in the
-// strict shape and its text returned raw.
+// already up (under the load budget), then one chat completion
+// is asked for in the strict shape (under the generation
+// budget) and its text returned raw. A server already warm
+// spends no generation budget on load.
 func (e *llamaEngine) Complete(ctx context.Context, prompt string) (string, error) {
-	if err := e.ensureStarted(ctx); err != nil {
+	loadCtx, stopLoad := context.WithTimeout(ctx, residueLoadTimeout)
+	err := e.ensureStarted(loadCtx)
+	stopLoad()
+	if err != nil {
 		return "", err
 	}
 	body, err := json.Marshal(map[string]any{
@@ -115,7 +160,9 @@ func (e *llamaEngine) Complete(ctx context.Context, prompt string) (string, erro
 	if err != nil {
 		return "", err
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "http://"+e.addr+"/v1/chat/completions", bytes.NewReader(body))
+	genCtx, stopGen := context.WithTimeout(ctx, residueGenerationTimeout)
+	defer stopGen()
+	req, err := http.NewRequestWithContext(genCtx, http.MethodPost, "http://"+e.addr+"/v1/chat/completions", bytes.NewReader(body))
 	if err != nil {
 		return "", err
 	}
@@ -193,6 +240,8 @@ func (e *llamaEngine) ensureStarted(ctx context.Context) error {
 		"-m", e.model,
 		"--host", "127.0.0.1", "--port", port,
 		"-c", "4096", "-t", "2", "--parallel", "1")
+	e.stderr = &boundedStderr{}
+	cmd.Stderr = e.stderr
 	if err := cmd.Start(); err != nil {
 		e.failed = true
 		logging.Warnf("residue: start local reader: %v", err)
@@ -200,7 +249,7 @@ func (e *llamaEngine) ensureStarted(ctx context.Context) error {
 	}
 	exited := make(chan struct{})
 	e.cmd, e.exited = cmd, exited
-	go reapResidueServer(cmd, exited)
+	go reapResidueServer(cmd, exited, e.stderr)
 	deadline := time.Now().Add(120 * time.Second)
 	for {
 		if e.healthy(ctx) {
@@ -264,10 +313,31 @@ func (e *llamaEngine) abandonStartLocked() {
 // reapResidueServer waits one server process out and closes
 // its exit channel: the process is always reaped (never a
 // zombie), and the closed channel is how the engine learns
-// the server died.
-func reapResidueServer(cmd *exec.Cmd, exited chan struct{}) {
-	_ = cmd.Wait()
+// the server died. The wait's result and the child's stderr
+// tail are logged here, where the death is observed: why the
+// server exits per pass is a production question this log
+// line exists to answer, and fixing the exit itself is
+// deliberately not attempted here.
+func reapResidueServer(cmd *exec.Cmd, exited chan struct{}, stderr *boundedStderr) {
+	err := cmd.Wait()
+	if err != nil {
+		logging.Warnf("residue: local reader exited: %v; stderr tail: %s", err, stderrTail(stderr))
+	} else {
+		logging.Infof("residue: local reader exited cleanly; stderr tail: %s", stderrTail(stderr))
+	}
 	close(exited)
+}
+
+// stderrTail renders a captured stderr tail for one log line.
+func stderrTail(b *boundedStderr) string {
+	s := strings.TrimSpace(b.String())
+	if s == "" {
+		return "(none)"
+	}
+	if len(s) > 500 {
+		s = s[len(s)-500:]
+	}
+	return strings.Join(strings.Fields(s), " ")
 }
 
 // healthy asks the server's health endpoint: llama.cpp answers

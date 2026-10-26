@@ -480,12 +480,22 @@ type IntelReport struct {
 	GroupID           int64     `json:"group_id"`
 }
 
+type IntelResidueAttempt struct {
+	ReportID      int64        `json:"report_id"`
+	TextHash      string       `json:"text_hash"`
+	Attempts      int32        `json:"attempts"`
+	LastAttemptAt sql.NullTime `json:"last_attempt_at"`
+	NextAttemptAt sql.NullTime `json:"next_attempt_at"`
+	DeadReason    string       `json:"dead_reason"`
+}
+
 type IntelResidueCall struct {
 	ID        int64     `json:"id"`
 	ReportID  int64     `json:"report_id"`
 	Spans     string    `json:"spans"`
 	Output    string    `json:"output"`
 	CreatedAt time.Time `json:"created_at"`
+	TextHash  string    `json:"text_hash"`
 }
 
 type IntelResidueNote struct {

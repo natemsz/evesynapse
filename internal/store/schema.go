@@ -549,6 +549,13 @@ var pgSDECelestialsSchema string
 //go:embed schema_pg/091_intel_residue.sql
 var pgIntelResidueSchema string
 
+// Step 092: residue attempt accounting -- failed passes counted
+// per report with a backoff gate and a dead-letter reason, and
+// the report text hash on completed calls (residue_model.go).
+//
+//go:embed schema_pg/092_intel_residue_attempts.sql
+var pgIntelResidueAttemptsSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -669,6 +676,7 @@ func schemaSteps() []schemaStep {
 		{89, "intel_gangs", pgIntelGangsSchema, ""},
 		{90, "sde_celestials", pgSDECelestialsSchema, ""},
 		{91, "intel_residue", pgIntelResidueSchema, ""},
+		{92, "intel_residue_attempts", pgIntelResidueAttemptsSchema, ""},
 	}
 }
 

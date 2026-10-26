@@ -3,10 +3,12 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -219,7 +221,9 @@ func TestResidueBacklogSweep(t *testing.T) {
 	}
 	newer := seedResidueReport(t, q, cid, userID, withResidue)
 
-	ids, err := q.ListResidueBacklogReports(ctx, residueSweepBatch)
+	ids, err := q.ListResidueBacklogReports(ctx, db.ListResidueBacklogReportsParams{
+		Limit: residueSweepBatch, NextAttemptAt: timeSet(time.Now().UTC()),
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -403,5 +407,125 @@ func TestResidueServerOutlivesPassContext(t *testing.T) {
 			t.Fatal("the server is still up after the worker's context ended")
 		}
 		time.Sleep(100 * time.Millisecond)
+	}
+}
+
+// failResidueEngine always fails its pass.
+type failResidueEngine struct{ calls int }
+
+func (f *failResidueEngine) Complete(context.Context, string) (string, error) {
+	f.calls++
+	return "", errors.New("reader timed out")
+}
+
+func residueAttemptRow(t *testing.T, q *db.Queries, id int64) db.IntelResidueAttempt {
+	t.Helper()
+	row, err := q.GetResidueAttempt(context.Background(), id)
+	if err != nil {
+		t.Fatalf("attempt row for %d: %v", id, err)
+	}
+	return row
+}
+
+// TestResidueAttemptsDeadLetter: failed passes are counted
+// durably, back off, and at the cap the report leaves the
+// backlog with the reason recorded.
+func TestResidueAttemptsDeadLetter(t *testing.T) {
+	app, conn, q := buildCorpTestApp(t, nil)
+	ctx := context.Background()
+	cid, userID := residueTestChannel(t, q)
+	withResidue := intelanalyze.Analysis{Kind: intelanalyze.KindSighting,
+		Pilots:  []intelanalyze.Pilot{{ID: 91000301, Name: "Hostile One"}},
+		Residue: []string{"leftover words"}}
+	id := seedResidueReport(t, q, cid, userID, withResidue)
+	eng := &failResidueEngine{}
+	for i := 1; i <= residueMaxAttempts; i++ {
+		app.processResidue(ctx, eng, id)
+		if eng.calls != i {
+			t.Fatalf("pass %d: engine calls %d, want %d", i, eng.calls, i)
+		}
+		if _, err := conn.ExecContext(ctx, `UPDATE intel_residue_attempts SET next_attempt_at = now() - interval '1 hour' WHERE report_id = $1`, id); err != nil {
+			t.Fatal(err)
+		}
+	}
+	row := residueAttemptRow(t, q, id)
+	if row.Attempts != residueMaxAttempts || row.DeadReason == "" {
+		t.Fatalf("attempt row after cap: %+v, want %d attempts with a dead reason", row, residueMaxAttempts)
+	}
+	ids, err := q.ListResidueBacklogReports(ctx, db.ListResidueBacklogReportsParams{
+		Limit: residueSweepBatch, NextAttemptAt: timeSet(time.Now().UTC()),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, got := range ids {
+		if got == id {
+			t.Fatalf("dead-lettered report %d is still in the backlog", id)
+		}
+	}
+}
+
+// TestResidueFailureBacksOff: one failed pass is counted and
+// the report is not retried until its backoff runs out.
+func TestResidueFailureBacksOff(t *testing.T) {
+	app, _, q := buildCorpTestApp(t, nil)
+	ctx := context.Background()
+	cid, userID := residueTestChannel(t, q)
+	withResidue := intelanalyze.Analysis{Kind: intelanalyze.KindSighting,
+		Pilots:  []intelanalyze.Pilot{{ID: 91000301, Name: "Hostile One"}},
+		Residue: []string{"leftover words"}}
+	id := seedResidueReport(t, q, cid, userID, withResidue)
+	eng := &failResidueEngine{}
+	app.processResidue(ctx, eng, id)
+	app.processResidue(ctx, eng, id)
+	if eng.calls != 1 {
+		t.Fatalf("engine calls %d, want 1 (the second offer backs off)", eng.calls)
+	}
+	if row := residueAttemptRow(t, q, id); row.Attempts != 1 || !row.NextAttemptAt.Valid {
+		t.Fatalf("attempt row: %+v, want 1 attempt with a backoff gate", row)
+	}
+}
+
+// TestResidueIdenticalTextNotReRead: a second report carrying
+// byte-identical text is not read again; it leaves the backlog
+// as a duplicate with the reason recorded.
+func TestResidueIdenticalTextNotReRead(t *testing.T) {
+	app, _, q := buildCorpTestApp(t, nil)
+	ctx := context.Background()
+	cid, userID := residueTestChannel(t, q)
+	withResidue := intelanalyze.Analysis{Kind: intelanalyze.KindSighting,
+		Pilots:  []intelanalyze.Pilot{{ID: 91000301, Name: "Hostile One"}},
+		Residue: []string{"leftover words"}}
+	first := seedResidueReport(t, q, cid, userID, withResidue)
+	second := seedResidueReport(t, q, cid, userID, withResidue)
+	eng := &fakeResidueEngine{reply: `{"claims":[]}`}
+	app.processResidue(ctx, eng, first)
+	app.processResidue(ctx, eng, second)
+	if eng.calls != 1 {
+		t.Fatalf("engine calls %d, want 1 (identical text is read once)", eng.calls)
+	}
+	row := residueAttemptRow(t, q, second)
+	if !strings.Contains(row.DeadReason, "identical report text") {
+		t.Fatalf("duplicate dead reason: %q, want the identical-text reason", row.DeadReason)
+	}
+}
+
+// TestBoundedStderrKeepsTail: the child's stderr capture is
+// bounded and keeps the most recent bytes.
+func TestBoundedStderrKeepsTail(t *testing.T) {
+	b := &boundedStderr{}
+	for i := 0; i < residueStderrCap; i += 1024 {
+		if _, err := b.Write(make([]byte, 1024)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := b.Write([]byte("final words")); err != nil {
+		t.Fatal(err)
+	}
+	if got := len([]byte(b.String())); got > residueStderrCap {
+		t.Fatalf("captured stderr is %d bytes, cap is %d", got, residueStderrCap)
+	}
+	if !strings.HasSuffix(b.String(), "final words") {
+		t.Fatalf("captured stderr lost its tail")
 	}
 }

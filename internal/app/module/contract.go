@@ -918,6 +918,17 @@ type ShellData struct {
 	// address. Set by the shell fill; a device being paired says
 	// nothing about whether it is running right now.
 	AxonPaired bool
+	// The account theme (ui_theme.go), rendered onto <html> by
+	// base.html so a signed-in load paints it on any device.
+	// ThemeAccount says the render is a signed-in one; ThemeStored
+	// says the account has a saved theme, carried by ThemeScheme,
+	// ThemeTier and ThemeBackdrop. All unset is the anonymous
+	// render, where the browser's local choice rules as before.
+	ThemeScheme   string
+	ThemeTier     string
+	ThemeBackdrop string
+	ThemeAccount  bool
+	ThemeStored   bool
 }
 
 // Shell returns a pointer to the embedded ShellData so that

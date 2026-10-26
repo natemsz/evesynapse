@@ -1,10 +1,10 @@
 {{define "base"}}<!DOCTYPE html>
-<html lang="en"{{if .NavState}} data-nav="{{.NavState}}"{{end}}>
+<html lang="en"{{if .NavState}} data-nav="{{.NavState}}"{{end}}{{if .ThemeScheme}} data-scheme="{{.ThemeScheme}}" data-tier="{{.ThemeTier}}"{{else if .ThemeBackdrop}} data-backdrop="{{.ThemeBackdrop}}"{{end}}>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="dark">
-<script src="/static/boot.js?v={{.AssetVersion}}" data-cfasync="false"></script>
+{{if .ThemeAccount}}<meta name="es-theme-account" content="{{if .ThemeStored}}stored{{else}}none{{end}}">{{end}}<script src="/static/boot.js?v={{.AssetVersion}}" data-cfasync="false"></script>
 <title>{{template "title" .}} · EveSynapse</title>
 {{if .HeadMeta}}{{.HeadMeta}}{{end}}
 {{if .AutoRefresh}}<noscript><meta http-equiv="refresh" content="5"></noscript>{{end}}

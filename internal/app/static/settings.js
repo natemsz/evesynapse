@@ -1,12 +1,13 @@
 // Settings page: the tab switch and the Interface tab's theme
 // picker. Loaded on that page only.
 //
-// The theme choice is this browser's alone: it rides data
-// attributes on <html> (data-scheme and data-tier for a scheme,
-// data-backdrop for the default), is saved to localStorage, and
-// boot.js reapplies it before first paint. Nothing is stored
-// server-side. Picking a scheme leaves the saved backdrop alone,
-// so returning to the default brings back the backdrop strength
+// The theme is an account setting: every pick is posted to the
+// account (POST /settings/theme, ui_theme.go), which renders it
+// onto <html> on every signed-in load, on every device. The
+// localStorage copy stays as this browser's pre-paint cache and
+// the signed-out behaviour, and boot.js applies it before first
+// paint. Picking a scheme leaves the saved backdrop alone, so
+// returning to the default brings back the backdrop strength
 // the default was left at.
 //
 // The swap shell adopts this script once and never runs it
@@ -74,6 +75,33 @@
       } catch (e) { /* private mode: the click still works this visit */ }
     }
 
+    // saveAccount posts the pick to the account, which is what
+    // carries the theme across devices; the localStorage writes
+    // in the apply functions are this browser's cache of it. The
+    // wire shape is the whole state: the scheme, its tier, and
+    // the backdrop strength the default was left at.
+    function saveAccount() {
+      if (!window.fetch) return;
+      var st = currentState();
+      var body = new URLSearchParams();
+      body.set('scheme', st.scheme);
+      body.set('tier', st.scheme ? st.tier : '');
+      var bd = null;
+      try { bd = window.localStorage.getItem('evesynapse-backdrop'); } catch (e) {}
+      body.set('backdrop', st.scheme
+        ? (bd === 'muted' || bd === 'glow' ? bd : '')
+        : (st.tier === 'muted' ? 'muted' : st.tier === 'minimalistic' ? 'glow' : ''));
+      fetch('/settings/theme', {
+        method: 'POST',
+        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+        body: body,
+        credentials: 'same-origin',
+        keepalive: true
+      }).then(function (resp) {
+        if (resp.ok) store('evesynapse-theme-src', 'account');
+      }, function () {});
+    }
+
     function currentState() {
       var scheme = root.getAttribute('data-scheme') || '';
       if (scheme) {
@@ -112,6 +140,7 @@
       store('evesynapse-scheme', null);
       store('evesynapse-tier', null);
       store('evesynapse-backdrop', bd || 'art');
+      saveAccount();
       markCurrent();
     }
 
@@ -121,6 +150,7 @@
       root.removeAttribute('data-backdrop');
       store('evesynapse-scheme', scheme);
       store('evesynapse-tier', tier);
+      saveAccount();
       markCurrent();
     }
 

@@ -620,6 +620,7 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	// Interface tabs. The notification settings live on the first
 	// tab; the old address redirects there.
 	r.With(app.requireAuth).Get("/settings", app.handleSettings)
+	r.With(app.requireAuth).Post("/settings/theme", app.handleSettingsThemeSave)
 
 	// Notifications (notify_pages.go): the list, and the two actions
 	// that change what is unread.

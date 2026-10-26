@@ -85,3 +85,24 @@ func TestSwarmFirstWarming(t *testing.T) {
 		t.Fatal("B's fallback spent no ESI swarm.Call")
 	}
 }
+
+// TestSwarmWarmPeerLearnsPuller: B files its heartbeat with a
+// warming peer when it learns what the peer warms, so the peer
+// (a directory-verifying node like storm) can list B and verify
+// its signed pulls instead of falling back to the bearer.
+func TestSwarmWarmPeerLearnsPuller(t *testing.T) {
+	p := newSwarmPair(t, swarm.SwarmOpen)
+	ctx := context.Background()
+	now := time.Now().UTC()
+	swarm.StateFor(p.a).Cfg.Warms = swarm.ParseSwarmWarm("corporation_record")
+	p.b.cfg.eveCallbackURL = "https://b.example.org/auth/callback"
+	p.pinA(t)
+	swarm.StateFor(p.b).SwarmRefreshCoverage(ctx, now)
+	peer, err := p.a.queries.GetSwarmPeer(ctx, "instance-b")
+	if err != nil {
+		t.Fatalf("warm peer did not learn the puller: %v", err)
+	}
+	if peer.PublicKey != swarm.StateFor(p.b).SwarmID.PublicString() {
+		t.Fatalf("warm peer holds the wrong key for the puller")
+	}
+}

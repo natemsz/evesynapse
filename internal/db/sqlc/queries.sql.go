@@ -330,6 +330,16 @@ func (q *Queries) DeleteSkillPlanItem(ctx context.Context, arg DeleteSkillPlanIt
 	return err
 }
 
+const deleteSnapshotFetchStatesForCharacter = `-- name: DeleteSnapshotFetchStatesForCharacter :exec
+DELETE FROM snapshot_fetch_state
+WHERE character_id = $1
+`
+
+func (q *Queries) DeleteSnapshotFetchStatesForCharacter(ctx context.Context, characterID int64) error {
+	_, err := q.db.ExecContext(ctx, deleteSnapshotFetchStatesForCharacter, characterID)
+	return err
+}
+
 const deleteUser = `-- name: DeleteUser :execrows
 DELETE FROM users WHERE id = $1
 `

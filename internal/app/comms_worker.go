@@ -4,8 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"strings"
-	"time"
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
@@ -21,9 +19,10 @@ import (
 //
 // The scopes behind these endpoints (read_mail,
 // read_calendar_events, read_contacts) have been requested since
-// the scope list was built, so a 403 still means a login older
-// than the list: it is recorded and backed off exactly like the
-// economy cluster's stale-scope refusals.
+// the scope list was built, so a refusal still means a login
+// older than the list: it is recorded and settled under the
+// shared refusal policy (fetch_refusal.go), exactly like the
+// economy cluster.
 // ---------------------------------------------------------------------------
 
 // maxMailBodiesPerCycle bounds body fetches per character per
@@ -48,9 +47,13 @@ func commsSnapshotKinds() []string {
 // one character and reports how many fetches stored data and
 // whether ESI's error limit stopped it.
 func (app *Application) refreshCommsSnapshots(ctx context.Context, ch db.Character, allowance *fetchBudget) (refreshed int, limited bool) {
+	granted := scopeSet(ch.Scopes)
 	for _, kind := range commsSnapshotKinds() {
 		if ctx.Err() != nil {
 			return refreshed, false
+		}
+		if kindExcludedByGrants(granted, kind) {
+			continue // the login never granted this kind's scope: not planned
 		}
 		switch app.fetchCommsKind(ctx, ch, kind, allowance) {
 		case corpFetchOK:
@@ -87,13 +90,11 @@ func (app *Application) fetchCommsKind(ctx context.Context, ch db.Character, kin
 		logging.Errorf("worker: read %s snapshot for character %d: %v", kind, ch.CharacterID, serr)
 	}
 
-	// A recorded 403 backs the kind off instead of retrying
-	// every minute (same rule as the economy cluster).
-	if state, err := app.queries.GetSnapshotFetchState(ctx, db.GetSnapshotFetchStateParams{CharacterID: ch.CharacterID, Kind: kind}); err == nil &&
-		state.State == fetchStateError && strings.HasPrefix(state.Detail, forbiddenDetailPrefix) {
-		if time.Since(state.AttemptedAt) < roleMissingBackoff {
-			return corpFetchSkipped
-		}
+	// A recorded refusal backs the kind off instead of retrying
+	// every minute (same rule as the economy cluster,
+	// fetch_refusal.go).
+	if app.refusalSettled(ctx, ch.CharacterID, kind) {
+		return corpFetchSkipped
 	}
 
 	if !allowance.take() {
@@ -104,10 +105,7 @@ func (app *Application) fetchCommsKind(ctx context.Context, ch db.Character, kin
 		case errors.Is(err, esi.ErrErrorLimit):
 			logging.Warnf("worker: ESI error limit hit refreshing %s for character %d; backing off until next cycle", kind, ch.CharacterID)
 			return corpFetchLimited
-		case esi.IsForbidden(err):
-			detail := forbiddenDetailPrefix + " — this character's login predates the current scope list; sign in again to re-grant scopes."
-			app.recordCorpFetchState(ctx, ch.CharacterID, kind, fetchStateError, detail)
-			logging.Infof("worker: %s for character %d refused by ESI (403); recorded as a stale-scope login", kind, ch.CharacterID)
+		case app.recordFetchRefusal(ctx, ch.CharacterID, kind, err):
 			return corpFetchFailed
 		default:
 			logging.Errorf("worker: refresh %s for character %d: %v", kind, ch.CharacterID, err)
@@ -127,6 +125,12 @@ func (app *Application) fetchCommsKind(ctx context.Context, ch db.Character, kin
 // snapshot row is the whole freshness test. It reports how many
 // were stored and whether ESI's error limit stopped the pass.
 func (app *Application) warmMailBodies(ctx context.Context, ch db.Character, allowance *fetchBudget) (fetched int, limited bool) {
+	if kindExcludedByGrants(scopeSet(ch.Scopes), esi.SnapMail) {
+		return 0, false // the login never granted the mail scope: not planned
+	}
+	if app.refusalSettled(ctx, ch.CharacterID, esi.SnapMail) {
+		return 0, false // the mail login is refused; bodies would be too
+	}
 	var headers esi.MailHeaders
 	if !app.loadCorpSnapshot(ctx, ch.CharacterID, esi.SnapMail, &headers) {
 		return 0, false // no header list yet; nothing to warm
@@ -166,6 +170,9 @@ func (app *Application) warmMailBodies(ctx context.Context, ch db.Character, all
 			if errors.Is(err, esi.ErrErrorLimit) {
 				return fetched, true
 			}
+			if app.recordFetchRefusal(ctx, ch.CharacterID, esi.SnapMail, err) {
+				return fetched, false // settled under the mail kind; the rest would refuse too
+			}
 			if ctx.Err() == nil {
 				logging.Errorf("worker: mail body %d for character %d: %v", h.MailID, ch.CharacterID, err)
 			}
@@ -183,6 +190,12 @@ func (app *Application) warmMailBodies(ctx context.Context, ch db.Character, all
 // chronological order (soonest events first). It reports how many
 // fetches stored data and whether ESI's error limit stopped it.
 func (app *Application) warmCalendarDetails(ctx context.Context, ch db.Character, allowance *fetchBudget) (fetched int, limited bool) {
+	if kindExcludedByGrants(scopeSet(ch.Scopes), esi.SnapCalendar) {
+		return 0, false // the login never granted the calendar scope: not planned
+	}
+	if app.refusalSettled(ctx, ch.CharacterID, esi.SnapCalendar) {
+		return 0, false // the calendar login is refused; details would be too
+	}
 	var events esi.CalendarEventSummaries
 	if !app.loadCorpSnapshot(ctx, ch.CharacterID, esi.SnapCalendar, &events) {
 		return 0, false // no event list yet; nothing to detail
@@ -210,6 +223,9 @@ func (app *Application) warmCalendarDetails(ctx context.Context, ch db.Character
 			if err := app.esi.FetchAndStoreSnapshot(ctx, ch, kind); err != nil {
 				if errors.Is(err, esi.ErrErrorLimit) {
 					return fetched, true
+				}
+				if app.recordFetchRefusal(ctx, ch.CharacterID, esi.SnapCalendar, err) {
+					return fetched, false // settled under the calendar kind; the rest would refuse too
 				}
 				if ctx.Err() == nil {
 					logging.Errorf("worker: refresh %s for character %d: %v", kind, ch.CharacterID, err)

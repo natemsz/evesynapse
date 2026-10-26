@@ -150,11 +150,12 @@ func snapshotModule(kind string) (moduleDef, bool) {
 }
 
 // kindLockedOut reports whether the character granted none of the
-// scopes of the module that reads kind, so a fetch could only be
-// refused. A module with some of its scopes is not locked out: the
-// manifest does not say which scope gates which kind, and a kind
-// fetched under a partial grant may still succeed. Kinds with no
-// scoped owner are never locked out.
+// scopes of the module that reads kind. It drives page display
+// (a section whose module is wholly ungranted has no feeder).
+// The worker planner does not use it: planning excludes per
+// kind, by the scope that gates the kind itself
+// (kind_scopes.go), so a partial grant never plans the kinds
+// gated by the scopes it lacks.
 func kindLockedOut(granted map[string]bool, kind string) bool {
 	m, ok := snapshotModule(kind)
 	if !ok || len(m.Scopes) == 0 {

@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
-	"strings"
 	"time"
 
 	db "evesynapse/internal/db/sqlc"
@@ -19,12 +18,13 @@ import (
 // lists into contract_details.
 //
 // These endpoints take no in-game role, but a character whose SSO
-// login predates the current scope list gets a 403; that is
-// recorded in snapshot_fetch_state (state "error", detail naming
-// the refusal) and backed off like the corporation role states,
-// so the pages can say "sign in again" instead of warming
-// forever. Other errors are recorded too and the pass moves on;
-// only CCP's error limit (420/429) stops it.
+// login predates the current scope list is refused (ESI answers
+// 403 for some scope failures, 401 for others); the refusal is
+// recorded in snapshot_fetch_state under the shared refusal
+// policy (fetch_refusal.go) and backed off, so the pages can say
+// "sign in again" instead of warming forever. Other errors are
+// recorded too and the pass moves on; only CCP's error limit
+// (420/429) stops it.
 // ---------------------------------------------------------------------------
 
 // forbiddenDetailPrefix marks a recorded 403 in a fetch-state
@@ -46,9 +46,13 @@ func economySnapshotKinds() []string {
 // and reports how many snapshots it stored.
 func (app *Application) refreshEconomySnapshots(ctx context.Context, ch db.Character) int {
 	refreshed := 0
+	granted := scopeSet(ch.Scopes)
 	for _, kind := range economySnapshotKinds() {
 		if ctx.Err() != nil {
 			return refreshed
+		}
+		if kindExcludedByGrants(granted, kind) {
+			continue // the login never granted this kind's scope: not planned
 		}
 		switch app.fetchCharKind(ctx, ch, kind) {
 		case corpFetchOK:
@@ -71,14 +75,12 @@ func (app *Application) fetchCharKind(ctx context.Context, ch db.Character, kind
 		logging.Errorf("worker: read %s snapshot for character %d: %v", kind, ch.CharacterID, serr)
 	}
 
-	// A recorded 403 (stale-scope login) backs this kind off
-	// instead of retrying every minute; the pages explain from
-	// the record in the meantime.
-	if state, err := app.queries.GetSnapshotFetchState(ctx, db.GetSnapshotFetchStateParams{CharacterID: ch.CharacterID, Kind: kind}); err == nil &&
-		state.State == fetchStateError && strings.HasPrefix(state.Detail, forbiddenDetailPrefix) {
-		if time.Since(state.AttemptedAt) < roleMissingBackoff {
-			return corpFetchSkipped
-		}
+	// A recorded refusal (401 or 403: a stale-scope login, or a
+	// token ESI rejects) backs this kind off instead of retrying
+	// every minute; the pages explain from the record in the
+	// meantime (fetch_refusal.go).
+	if app.refusalSettled(ctx, ch.CharacterID, kind) {
+		return corpFetchSkipped
 	}
 
 	if err := app.esi.FetchAndStoreSnapshot(ctx, ch, kind); err != nil {
@@ -86,10 +88,7 @@ func (app *Application) fetchCharKind(ctx context.Context, ch db.Character, kind
 		case errors.Is(err, esi.ErrErrorLimit):
 			logging.Warnf("worker: ESI error limit hit refreshing %s for character %d; backing off until next cycle", kind, ch.CharacterID)
 			return corpFetchLimited
-		case esi.IsForbidden(err):
-			detail := forbiddenDetailPrefix + " — this character's login predates the current scope list; sign in again to re-grant scopes."
-			app.recordCorpFetchState(ctx, ch.CharacterID, kind, fetchStateError, detail)
-			logging.Infof("worker: %s for character %d refused by ESI (403); recorded as a stale-scope login", kind, ch.CharacterID)
+		case app.recordFetchRefusal(ctx, ch.CharacterID, kind, err):
 			return corpFetchFailed
 		default:
 			logging.Errorf("worker: refresh %s for character %d: %v", kind, ch.CharacterID, err)
@@ -119,6 +118,12 @@ const maxContractItemsPerCycle = 100
 // stored and whether ESI's error limit stopped the pass. Deleted
 // contracts are skipped (their item endpoint is gone for good).
 func (app *Application) warmContractItems(ctx context.Context, ch db.Character) (fetched int, limited bool) {
+	if kindExcludedByGrants(scopeSet(ch.Scopes), esi.SnapContracts) {
+		return 0, false // the login never granted the contracts scope: not planned
+	}
+	if app.refusalSettled(ctx, ch.CharacterID, esi.SnapContracts) {
+		return 0, false // the contracts login is refused; item lists would be too
+	}
 	payload, ok := app.snapshotPayload(ctx, ch.CharacterID, esi.SnapContracts)
 	if !ok {
 		return 0, false // no contracts list yet; nothing to warm
@@ -166,6 +171,9 @@ func (app *Application) warmContractItems(ctx context.Context, ch db.Character) 
 		if err != nil {
 			if errors.Is(err, esi.ErrErrorLimit) {
 				return fetched, true
+			}
+			if app.recordFetchRefusal(ctx, ch.CharacterID, esi.SnapContracts, err) {
+				return fetched, false // the login is refused; every remaining item would be too
 			}
 			if ctx.Err() == nil {
 				logging.Errorf("worker: contract items %d for character %d: %v", c.ContractID, ch.CharacterID, err)

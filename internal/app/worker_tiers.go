@@ -353,7 +353,7 @@ func (c *cycleState) coreFreshness(ctx context.Context, ch db.Character, tier wa
 	}
 	granted := scopeSet(ch.Scopes)
 	for _, kind := range coreSnapshotKinds {
-		if fresh[kind] || (len(granted) > 0 && kindLockedOut(granted, kind)) {
+		if fresh[kind] || kindExcludedByGrants(granted, kind) {
 			continue
 		}
 		return fresh, true

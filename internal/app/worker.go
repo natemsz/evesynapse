@@ -651,20 +651,42 @@ func (c *cycleState) refreshCharacter(ctx context.Context, ch db.Character) bool
 }
 
 // refreshCoreSnapshots fetches the character's core datasets that are
-// not fresh (coreFreshness), stopping at the first failure.
+// not fresh (coreFreshness), stopping at the first failure. A kind
+// ESI has definitively refused settles instead (fetch_refusal.go):
+// it is recorded once and skipped from then on, and the pass moves
+// to the next kind rather than ending on it.
 func (c *cycleState) refreshCoreSnapshots(ctx context.Context, ch db.Character, fresh map[string]bool) {
 	app := c.app
 	granted := scopeSet(ch.Scopes)
+	// The character's recorded fetch outcomes, read once for the
+	// whole pass: a settled refusal skips its kind before any
+	// fetch allowance is spent on it.
+	var states map[string]db.SnapshotFetchState
+	statesLoaded := false
 	for _, kind := range coreSnapshotKinds {
 		if fresh[kind] {
 			continue // inside ESI's cache window, or fetched recently enough for its tier
 		}
-		// A character that granted none of the owning module's scopes
-		// can only be refused; skipping spares the fetch and keeps
-		// one locked kind from ending the pass for the rest. A row with no
-		// recorded scopes is unknown, not locked, and fetches as before.
-		if len(granted) > 0 && kindLockedOut(granted, kind) {
+		// A kind whose required scope the character never granted
+		// is not planned at all (kind_scopes.go): ESI could only
+		// refuse it. A row with no recorded scopes is unknown, not
+		// locked, and fetches as before.
+		if kindExcludedByGrants(granted, kind) {
 			continue
+		}
+		if !statesLoaded {
+			statesLoaded = true
+			states = map[string]db.SnapshotFetchState{}
+			if rows, err := app.queries.ListSnapshotFetchStatesByCharacter(ctx, ch.CharacterID); err != nil {
+				logging.Errorf("worker: list fetch states for character %d: %v", ch.CharacterID, err)
+			} else {
+				for _, row := range rows {
+					states[row.Kind] = row
+				}
+			}
+		}
+		if state, ok := states[kind]; ok && fetchStateSettled(state) {
+			continue // refused before and still settled: no fetch, no log
 		}
 
 		if c.stopped() || !c.allowance.take() {
@@ -674,16 +696,19 @@ func (c *cycleState) refreshCoreSnapshots(ctx context.Context, ch db.Character, 
 			c.failed++
 			if errors.Is(err, esi.ErrErrorLimit) {
 				c.noteLimit("refreshing " + kind)
+				break // don't keep pushing this character this cycle
+			}
+			if app.recordFetchRefusal(ctx, ch.CharacterID, kind, err) {
+				continue // settled: the remaining kinds still get their turn
+			}
+			if isDefinitiveTokenFailure(err) {
+				// The access token itself was rejected:
+				// park the character rather than failing
+				// the same way every cycle.
+				app.markCharacterTokenDead(ctx, ch.CharacterID)
+				logging.Warnf("worker: character %d token rejected refreshing %s; parked until re-login", ch.CharacterID, kind)
 			} else {
-				if isDefinitiveTokenFailure(err) {
-					// The access token itself was rejected:
-					// park the character rather than failing
-					// the same way every cycle.
-					app.markCharacterTokenDead(ctx, ch.CharacterID)
-					logging.Warnf("worker: character %d token rejected refreshing %s; parked until re-login", ch.CharacterID, kind)
-				} else {
-					logging.Errorf("worker: refresh %s for character %d: %v", kind, ch.CharacterID, err)
-				}
+				logging.Errorf("worker: refresh %s for character %d: %v", kind, ch.CharacterID, err)
 			}
 			break // don't keep pushing this character this cycle
 		}
@@ -988,7 +1013,7 @@ func dueKeyFromMeta(snaps []db.ListSnapshotMetaForCharactersRow, granted map[str
 	}
 	var earliest time.Time
 	for _, kind := range coreSnapshotKinds {
-		if len(granted) > 0 && kindLockedOut(granted, kind) {
+		if kindExcludedByGrants(granted, kind) {
 			continue // can never be fetched: not something to be late with
 		}
 		if !seen[kind] {

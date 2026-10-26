@@ -87,6 +87,12 @@ func (app *Application) warmCharacterAssetNames(ctx context.Context, ch db.Chara
 		return 0, false
 	}
 
+	if kindExcludedByGrants(scopeSet(ch.Scopes), esi.SnapAssets) {
+		return 0, false // the login never granted the assets scope: not planned
+	}
+	if app.refusalSettled(ctx, ch.CharacterID, charAssetNamesKind) {
+		return 0, false // the names login is refused and the refusal is still settled
+	}
 	refresh := true
 	if state, err := app.queries.GetSnapshotFetchState(ctx, db.GetSnapshotFetchStateParams{CharacterID: ch.CharacterID, Kind: charAssetNamesKind}); err == nil {
 		age := time.Since(state.AttemptedAt)
@@ -123,6 +129,9 @@ func (app *Application) warmCharacterAssetNames(ctx context.Context, ch db.Chara
 		if errors.Is(err, esi.ErrErrorLimit) {
 			logging.Warnf("worker: ESI error limit hit warming asset names for character %d", ch.CharacterID)
 			return 0, true
+		}
+		if app.recordFetchRefusal(ctx, ch.CharacterID, charAssetNamesKind, err) {
+			return 0, false
 		}
 		logging.Errorf("worker: asset names for character %d: %v", ch.CharacterID, err)
 		app.recordCorpFetchState(ctx, ch.CharacterID, charAssetNamesKind, fetchStateError, err.Error())

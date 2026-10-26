@@ -89,6 +89,9 @@ func (app *Application) structureResolverCandidates(ctx context.Context, charact
 		if !app.characterMaySync(ctx, ch) || !characterHasScope(ch, structureScope) {
 			continue
 		}
+		if app.refusalSettled(ctx, ch.CharacterID, structureNamesKind) {
+			continue // this login's structure lookups are refused and settled
+		}
 		out = append(out, ch)
 		if row, err := app.queries.GetCharacterCorporation(ctx, ch.CharacterID); err == nil {
 			corpOf[ch.CharacterID] = row.CorporationID
@@ -159,6 +162,14 @@ idsLoop:
 				if errors.Is(err, esi.ErrErrorLimit) {
 					logging.Warnf("worker: structures: ESI error limit hit resolving structure %d; backing off until next cycle", id)
 					return resolved, true
+				}
+				if scopeNamedRefusal(err) {
+					// The login itself is refused (a 401, or a
+					// 403 naming the scope): settle it for this
+					// character and let another candidate try.
+					app.recordFetchRefusal(ctx, ch.CharacterID, structureNamesKind, err)
+					negatives++
+					continue
 				}
 				if code, has := esi.StatusCode(err); has && (code == 403 || code == 404) {
 					// This character can't name it; another

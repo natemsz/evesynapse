@@ -177,6 +177,9 @@ ON CONFLICT (character_id, kind) DO UPDATE SET
     state        = excluded.state,
     detail       = excluded.detail,
     attempted_at = excluded.attempted_at;
+-- name: DeleteSnapshotFetchStatesForCharacter :exec
+DELETE FROM snapshot_fetch_state
+WHERE character_id = $1;
 -- name: GetCharacterCorporation :one
 SELECT * FROM character_corporations
 WHERE character_id = $1;

@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.5.9.8] - 2026-10-26
+
+Automated build of EveSynapse v0.5.9.8. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+
+## What's Changed
+### 🐛 Bug Fixes
+* Restore the backdrop glow, put chrome borders and card links on the scheme colour, re-hue the map glow, unbar the killboard labels, and make the Settings gear navigate by @natemsz in https://github.com/natemsz/evesynapse/pull/682
+### Other Changes
+* docs(changelog): review changelog for v0.5.9.7 by @github-actions[bot] in https://github.com/natemsz/evesynapse/pull/681
+
+
+**Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.9.7...v0.5.9.8
+
 ## [v0.5.9.7] - 2026-10-26
 
 Automated build of EveSynapse v0.5.9.7. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).

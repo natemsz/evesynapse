@@ -1117,9 +1117,16 @@ h3 + .tw > table, h3 + table {
    heading follows an intro paragraph. */
 :is(h2, h3, h4):has(> .foldbtn) { position: relative; padding-right: 2.6rem; }
 
-/* --- buttons --- A plain <button> or submit/button <input> with no
-   class gets this look through :where(), which adds no specificity, so
-   a button with a class of its own keeps that class's styling. */
+/* --- buttons --- Flat frosted glass: a translucent tint of the
+   active accent under a quiet two-stop gradient, a hairline edge,
+   no bevel, gloss or shadow. The tint rides --accent and --gold, so
+   a scheme repaints every button with its own hues. The blur below
+   is the frost over unblurred content; inside the page glass the
+   pane already blurred, and bg.css drops the button's own filter
+   there (the same switch the quiet pills use). A plain <button> or
+   submit/button <input> with no class gets this look through
+   :where(), which adds no specificity, so a button with a class of
+   its own keeps that class's styling. */
 .btn,
 :where(button:not([class]), input[type="submit"]:not([class]), input[type="button"]:not([class])) {
   display: inline-flex;
@@ -1129,11 +1136,15 @@ h3 + .tw > table, h3 + table {
   min-height: var(--control-h);
   padding: 0.2rem 0.85rem;
   line-height: 1.2;
-  color: #2a1302;
-  background: #ff6a1a;
-  border: 1px solid #a12808;
+  color: var(--text-bright);
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--gold) 20%, transparent),
+    color-mix(in srgb, var(--accent) 16%, transparent));
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
   border-radius: var(--r-sm);
   cursor: pointer;
+  -webkit-backdrop-filter: blur(10px) saturate(1.2);
+  backdrop-filter: blur(10px) saturate(1.2);
 }
 /* Compact variant for inline actions beside body text (copy-link buttons). */
 .btn.small {
@@ -1143,23 +1154,37 @@ h3 + .tw > table, h3 + table {
 }
 .btn:hover,
 :where(button:not([class]), input[type="submit"]:not([class]), input[type="button"]:not([class])):hover:not(:disabled) {
-  background: #e04e12;
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--gold) 28%, transparent),
+    color-mix(in srgb, var(--accent) 24%, transparent));
+  border-color: color-mix(in srgb, var(--accent) 65%, transparent);
   color: var(--text-bright);
   text-decoration: none;
+}
+.btn:active,
+:where(button:not([class]), input[type="submit"]:not([class]), input[type="button"]:not([class])):active:not(:disabled) {
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--gold) 14%, transparent),
+    color-mix(in srgb, var(--accent) 22%, transparent));
 }
 .btn:focus-visible, a:focus-visible,
 :where(button:not([class]), input[type="submit"]:not([class]), input[type="button"]:not([class])):focus-visible {
   outline: none;
-  box-shadow: 0 0 8px rgba(255, 106, 26, 0.55);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--accent) 55%, transparent);
 }
-/* Destructive actions: the same button in the theme's red. */
+/* Destructive actions: the same flat glass in the theme's red. */
 .btn.btn-danger {
   color: #fff3ec;
-  background: #c62f10;
-  border-color: #6b1604;
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--danger) 26%, transparent),
+    color-mix(in srgb, var(--danger) 18%, transparent));
+  border-color: color-mix(in srgb, var(--danger) 55%, transparent);
 }
 .btn.btn-danger:hover:not(:disabled) {
-  background: #a02208;
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--danger) 36%, transparent),
+    color-mix(in srgb, var(--danger) 26%, transparent));
+  border-color: color-mix(in srgb, var(--danger) 75%, transparent);
   color: #fff3ec;
 }
 .btn:disabled, .btn[aria-disabled="true"],
@@ -1541,6 +1566,11 @@ footer .version-number {
    edge. */
 .switcher .menu { left: auto; right: 0; min-width: 15rem; }
 .switcher .menu a { display: flex; align-items: center; gap: 0.5rem; }
+/* The Settings branch sits in the sidebar footer, at the very
+   bottom of the nav: its menu opens upward, over the rows above
+   it. In the rail the shared rail rule takes the menu out to
+   the side instead. */
+.branch.sidebar-settings .menu { top: auto; bottom: calc(100% + 0.35rem); }
 .portrait { border-radius: var(--r-sm); vertical-align: middle; }
 
 /* --- Home overview widgets --- */
@@ -2963,6 +2993,10 @@ html[data-nav="rail"] .sidebar .branch .menu {
   box-shadow: 0 10px 28px rgba(0, 0, 0, 0.55);
 }
 html[data-nav="rail"] .sidebar .branch .menu a { white-space: nowrap; }
+/* The Settings footer's menu flies out to the side like the
+   categories'; the upward opening of the wide sidebar does
+   not apply here. */
+html[data-nav="rail"] .sidebar .branch.sidebar-settings .menu { bottom: auto; }
 /* In the rail a closed category paints no panel, and only the current
    page's category gets the active pill; an open flyout gets a faint
    wash. Wide screens only. */
@@ -4327,9 +4361,33 @@ html[data-theme="light"] .cardremove,
 html[data-theme="light"] .cardsize { background: #fffdf9; border-color: #d3c7ae; }
 html[data-theme="light"] .modal-close { background: #f1ebdf; border-color: #d3c7ae; color: #5c4a33; }
 html[data-theme="light"] .quickjump-btn { background: #f1ebdf; border-color: #d3c7ae; }
-/* The ember gradient button keeps its dark paint in light mode. */
+/* Flat glass buttons in light mode: a stronger ember tint over
+   the cream glass, dark text, no blur of their own. */
+html[data-theme="light"] .btn,
+html[data-theme="light"] :where(button:not([class]), input[type="submit"]:not([class]), input[type="button"]:not([class])) {
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--gold) 34%, #fffdf9),
+    color-mix(in srgb, var(--accent) 26%, #fffdf9));
+  border-color: color-mix(in srgb, var(--accent) 45%, #d3c7ae);
+  color: #2a1302;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
 html[data-theme="light"] .btn:hover,
-html[data-theme="light"] :where(button:not([class]), input[type="submit"]:not([class]), input[type="button"]:not([class])):hover:not(:disabled) { color: #fff6e6; }
+html[data-theme="light"] :where(button:not([class]), input[type="submit"]:not([class]), input[type="button"]:not([class])):hover:not(:disabled) {
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--gold) 44%, #fffdf9),
+    color-mix(in srgb, var(--accent) 36%, #fffdf9));
+  border-color: color-mix(in srgb, var(--accent) 65%, #d3c7ae);
+  color: #2a1302;
+}
+html[data-theme="light"] .btn.btn-danger {
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--danger) 30%, #fffdf9),
+    color-mix(in srgb, var(--danger) 22%, #fffdf9));
+  border-color: color-mix(in srgb, var(--danger) 55%, #d3c7ae);
+  color: #571503;
+}
 /* Tables. */
 html[data-theme="light"] table { border-color: #d9cfba; }
 html[data-theme="light"] th,

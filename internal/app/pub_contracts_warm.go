@@ -35,6 +35,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"sync"
 	"time"
 
 	db "evesynapse/internal/db/sqlc"
@@ -83,12 +84,13 @@ func (app *Application) warmPublicContractItems(ctx context.Context, allowance *
 		logging.Errorf("worker: public contracts: pending items: %v", err)
 		return 0, false
 	}
-	for _, pc := range pending {
-		if !allowance.Take() {
-			return stored, false
-		}
-		path := fmt.Sprintf("/contracts/public/items/%d/", pc.ContractID)
-		body, _, err := app.esi.FetchRaw(ctx, "", path)
+	paths := make([]string, len(pending))
+	for i, pc := range pending {
+		paths[i] = fmt.Sprintf("/contracts/public/items/%d/", pc.ContractID)
+	}
+	answers, spent := app.fetchPublicWindows(ctx, paths, allowance)
+	for i, pc := range pending[:spent] {
+		body, err := answers[i].body, answers[i].err
 		if err != nil {
 			if errors.Is(err, esi.ErrErrorLimit) {
 				return stored, true
@@ -130,6 +132,59 @@ func (app *Application) warmPublicContractItems(ctx context.Context, allowance *
 		stored++
 	}
 	return stored, false
+}
+
+// pubContractFetchWindow is how many of the warming passes' reads
+// are in flight at once. ESI's rate budgets are still enforced in
+// the client (esi/ratelimit.go); the window only stops the reads
+// waiting on one another.
+const pubContractFetchWindow = 6
+
+// publicAnswer is one read of a window: its body, or why not.
+type publicAnswer struct {
+	body []byte
+	err  error
+}
+
+// errPublicReadLost stands for a read whose goroutine panicked.
+var errPublicReadLost = errors.New("read did not finish")
+
+// fetchPublicWindows reads auth-free paths pubContractFetchWindow at
+// a time, each spending one fetch from allowance, and answers them in
+// path order. It stops at the first window that ran out of allowance
+// or met ESI's error limit; spent is how many paths were read (the
+// first spent answers), which the caller walks in order as it would
+// have walked one read after another.
+func (app *Application) fetchPublicWindows(ctx context.Context, paths []string, allowance *fetchBudget) (answers []publicAnswer, spent int) {
+	for start := 0; start < len(paths) && ctx.Err() == nil; start += pubContractFetchWindow {
+		end := min(start+pubContractFetchWindow, len(paths))
+		n := 0
+		for start+n < end && allowance.Take() {
+			n++
+		}
+		window := make([]publicAnswer, n)
+		var wg sync.WaitGroup
+		for i := range window {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				defer recoverWorkerPanic("public contract read")
+				window[i].err = errPublicReadLost
+				window[i].body, _, window[i].err = app.esi.FetchRaw(ctx, "", paths[start+i])
+			}()
+		}
+		wg.Wait()
+		answers = append(answers, window...)
+		if n < end-start {
+			break // allowance spent
+		}
+		for _, a := range window {
+			if errors.Is(a.err, esi.ErrErrorLimit) {
+				return answers, len(answers)
+			}
+		}
+	}
+	return answers, len(answers)
 }
 
 // storePublicContractItems stores one contract's item list
@@ -228,21 +283,22 @@ func (app *Application) warmPublicContractBids(ctx context.Context, allowance *f
 		logging.Errorf("worker: public contracts: live auctions: %v", err)
 		return 0, false
 	}
-	fetched := 0
+	var due []int64
+	var paths []string
 	for _, contractID := range auctions {
-		if fetched >= pubContractBidsPerCycle {
+		if len(due) >= pubContractBidsPerCycle {
 			break
 		}
-		kind := pubContractBidsKind(contractID)
-		if !app.marketFetchDue(ctx, kind, pubContractSweepGate) {
+		if !app.marketFetchDue(ctx, pubContractBidsKind(contractID), pubContractSweepGate) {
 			continue
 		}
-		if !allowance.Take() {
-			return stored, false
-		}
-		fetched++
-		path := fmt.Sprintf("/contracts/public/bids/%d/", contractID)
-		body, _, err := app.esi.FetchRaw(ctx, "", path)
+		due = append(due, contractID)
+		paths = append(paths, fmt.Sprintf("/contracts/public/bids/%d/", contractID))
+	}
+	answers, spent := app.fetchPublicWindows(ctx, paths, allowance)
+	for i, contractID := range due[:spent] {
+		kind := pubContractBidsKind(contractID)
+		body, err := answers[i].body, answers[i].err
 		if err != nil {
 			if errors.Is(err, esi.ErrErrorLimit) {
 				return stored, true
@@ -253,6 +309,9 @@ func (app *Application) warmPublicContractBids(ctx context.Context, allowance *f
 		var bids []esi.PublicContractBid
 		if err := json.Unmarshal(body, &bids); err != nil {
 			logging.Errorf("worker: public contracts: bids %d: decode: %v", contractID, err)
+			// An empty or torn answer waits out the error gate like a
+			// failed fetch, instead of being asked again every cycle.
+			app.recordMarketFetch(ctx, kind, fetchStateError, "contract bids decode failed")
 			continue
 		}
 		if err := app.storePublicContractBids(ctx, contractID, bids); err != nil {

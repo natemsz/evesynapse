@@ -562,6 +562,13 @@ var pgIntelResidueAttemptsSchema string
 //go:embed schema_pg/093_kill_line_prices.sql
 var pgKillLinePricesSchema string
 
+// Step 094: GIN index on the pilots array inside local scan
+// results, so the pilot page's scans-containing-a-pilot lookup
+// stops casting every scan's result per row (pilot_intel.go).
+//
+//go:embed schema_pg/094_scans_local_pilots_gin.sql
+var pgScansLocalPilotsGinSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -684,6 +691,7 @@ func schemaSteps() []schemaStep {
 		{91, "intel_residue", pgIntelResidueSchema, ""},
 		{92, "intel_residue_attempts", pgIntelResidueAttemptsSchema, ""},
 		{93, "kill_line_prices", pgKillLinePricesSchema, ""},
+		{94, "scans_local_pilots_gin", pgScansLocalPilotsGinSchema, ""},
 	}
 }
 

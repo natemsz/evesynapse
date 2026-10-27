@@ -32,6 +32,7 @@ import (
 	"unicode"
 
 	db "evesynapse/internal/db/sqlc"
+	"evesynapse/internal/esi"
 	"evesynapse/internal/intelanalyze"
 	"evesynapse/internal/logging"
 	"evesynapse/internal/scan"
@@ -1115,6 +1116,26 @@ func standingSplit(c *intelanalyze.StandingCounts) []reportSeg {
 	return out
 }
 
+// intelLookupLimited decides whether a failed bulk lookup
+// means "EVE did not answer", as opposed to "EVE answered about
+// the request itself". A 429/5xx, an error-limit response, or a
+// transport failure is transient: the caller keeps its batch
+// pending so the names are asked again, instead of settling
+// reports on answers EVE never gave. A definitive 4xx about
+// the request is not limited: settling stands.
+func intelLookupLimited(app *Application, err error) bool {
+	if app.esi.HardLimitActive(time.Now()) {
+		return true
+	}
+	if errors.Is(err, esi.ErrErrorLimit) || errors.Is(err, esi.ErrRateLimited) {
+		return true
+	}
+	if code, ok := esi.StatusCode(err); ok {
+		return code == 429 || code >= 500
+	}
+	return true // no status at all: the call never landed
+}
+
 // lookupIntelNames asks EVE which of the names are pilots (exact
 // names, in bulk) and keeps the answers, "no such pilot" included.
 func (app *Application) lookupIntelNames(ctx context.Context, names map[string]bool, now time.Time) (limited bool) {
@@ -1132,7 +1153,7 @@ func (app *Application) lookupIntelNames(ctx context.Context, names map[string]b
 		}
 		if err := app.esi.PostJSON(ctx, "/universe/ids/", list[start:end], &ids); err != nil {
 			logging.Warnf("intel: look up %d names: %v", end-start, err)
-			return app.esi.HardLimitActive(time.Now())
+			return intelLookupLimited(app, err)
 		}
 		found := map[string]bool{}
 		for _, c := range ids.Characters {
@@ -1169,7 +1190,7 @@ func (app *Application) lookupIntelAffiliations(ctx context.Context, pilots map[
 		}
 		if err := app.esi.PostJSON(ctx, "/characters/affiliation/", list[start:end], &rows); err != nil {
 			logging.Warnf("intel: affiliation of %d pilots: %v", end-start, err)
-			return app.esi.HardLimitActive(time.Now())
+			return intelLookupLimited(app, err)
 		}
 		for _, r := range rows {
 			_ = app.queries.UpsertIntelPilotAffiliation(ctx, db.UpsertIntelPilotAffiliationParams{CharacterID: r.CharacterID, CorporationID: r.CorporationID, AllianceID: r.AllianceID, CheckedAt: now})

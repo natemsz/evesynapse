@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -110,5 +111,22 @@ func TestIntelAnalysis(t *testing.T) {
 	}
 	if left, _ := q.ListPendingIntelReports(ctx, db.ListPendingIntelReportsParams{Since: now.Add(-time.Hour), MaxRows: 10}); len(left) != 0 {
 		t.Errorf("%d reports still pending", len(left))
+	}
+}
+
+// TestIntelLookupTransientStaysPending: an ESI 5xx answering a
+// bulk name lookup is "EVE did not answer", so the lookup
+// reports limited and the drain keeps its batch pending
+// instead of settling reports on answers never given.
+func TestIntelLookupTransientStaysPending(t *testing.T) {
+	app, _, _ := buildCorpTestApp(t, roundTripperFunc(func(req *http.Request) (*http.Response, error) {
+		return &http.Response{StatusCode: http.StatusBadGateway, Header: make(http.Header),
+			Body: io.NopCloser(strings.NewReader(`{"error":"bad gateway"}`)), Request: req}, nil
+	}))
+	if !app.lookupIntelNames(context.Background(), map[string]bool{"brand new": true}, time.Now().UTC()) {
+		t.Fatal("a 5xx name lookup did not report limited: the batch would settle unresolved")
+	}
+	if !app.lookupIntelAffiliations(context.Background(), map[int64]bool{91000301: true}, time.Now().UTC()) {
+		t.Fatal("a 5xx affiliation lookup did not report limited")
 	}
 }

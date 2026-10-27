@@ -1,0 +1,71 @@
+/* The intel dashboard (intel_dashboard.html, dashboard.js): the
+   thread rows, the details opened in place, the compact map and the
+   activity log. Linked for intel_dashboard.html only. */
+
+.wbd {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(18rem, 1fr);
+  grid-template-areas: "main map" "log log";
+  gap: 1rem;
+  align-items: start;
+}
+.wbd-threads, .wbd-detail { grid-area: main; min-width: 0; }
+/* A card sets its own display, which would beat the hidden
+   attribute dashboard.js swaps the threads and the details by. */
+.wbd > [hidden] { display: none !important; }
+.wbd-map { grid-area: map; min-width: 0; padding: 0; overflow: hidden; position: sticky; top: var(--sticky-top, 4rem); }
+.wbd-log { grid-area: log; min-width: 0; }
+
+/* --- Thread rows --- */
+.wbd-list { list-style: none; margin: 0; padding: 0; }
+.wbd-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25rem 0.6rem;
+  padding: 0.55rem 0.25rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--accent) 12%, transparent);
+}
+.wbd-row:last-child { border-bottom: 0; }
+.wbd-what b { font-weight: 700; }
+.wbd-sep { color: var(--muted, #8a8a8a); opacity: 0.6; }
+.wbd-by { color: var(--muted, #8a8a8a); }
+.wbd-by .sec { margin-right: 0.15rem; }
+.wbd-details { margin-left: auto; font-weight: 600; }
+.wbd-row.new { animation: wbd-arrive 2.4s ease-out 1; }
+@keyframes wbd-arrive {
+  0% { background: color-mix(in srgb, var(--accent) 22%, transparent); }
+  100% { background: transparent; }
+}
+
+/* --- Details in place --- */
+.wbd-detail-bar { display: flex; justify-content: flex-start; margin-bottom: 0.75rem; }
+.wbd-detail-body { min-height: 6rem; }
+
+/* --- The compact map: the canvas and its zoom, none of the page's
+   chrome. map.js knows it is compact (data-map-compact) and leaves
+   the page URL alone. --- */
+.wbd-map .map-bar,
+.wbd-map .map-layers,
+.wbd-map .map-legend,
+.wbd-map .map-layer-legend,
+.wbd-map .map-card,
+.wbd-map .map-keys,
+.wbd-map .map-share,
+.wbd-map .map-shot,
+.wbd-map .map-mark { display: none !important; }
+.wbd-map .map-stage { height: clamp(18rem, 42dvh, 30rem); }
+
+/* --- The activity log: the feed, scrolling in its own box --- */
+.wbd-feed { max-height: 24rem; overflow-y: auto; overscroll-behavior: contain; }
+
+@media (max-width: 45rem) {
+  .wbd { grid-template-columns: minmax(0, 1fr); grid-template-areas: "main" "map" "log"; }
+  .wbd-map { position: static; }
+  .wbd-details { margin-left: 0; }
+  .wbd-sep { display: none; }
+  .wbd-row { flex-direction: column; align-items: flex-start; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .wbd-row.new { animation: none; }
+}

@@ -1,0 +1,223 @@
+{{define "mapview"}}{{/* The map component (map.js): the universe map page renders it whole;
+     the intel dashboard renders it compact (.map-compact, with
+     data-map-compact), following the open thread. The data is
+     loadMapPageView's mapPageView. */}}
+<div class="map" data-map{{if .Ready}} data-src="{{.PayloadURL}}"{{end}}{{if .LayersURL}} data-layers="{{.LayersURL}}"{{end}}{{with .Route}}{{if .SignedIn}} data-route-signed-in{{end}}{{if .Waypoints}} data-route-can-send{{end}}{{if .Here}} data-route-here="{{.Here}}"{{end}}{{end}}>
+  <div class="map-bar">
+    <nav class="map-crumbs" aria-label="Map location">
+      <button type="button" class="map-crumb" data-map-universe>New Eden</button>
+      <span class="map-crumb-sep" aria-hidden="true" hidden>›</span>
+      <span class="map-crumb-region" hidden></span>
+    </nav>
+    <div class="map-find">
+      <input type="search" class="map-find-input" placeholder="Find a system or region" aria-label="Find a system or region" autocomplete="off" spellcheck="false" aria-controls="map-find-list" aria-expanded="false" role="combobox" disabled>
+      <ul class="map-find-list" id="map-find-list" role="listbox" hidden></ul>
+    </div>
+    <div class="map-zoom" role="group" aria-label="Zoom">
+      <button type="button" class="btn small" data-map-zoom="in" aria-label="Zoom in" disabled>+</button>
+      <button type="button" class="btn small" data-map-zoom="out" aria-label="Zoom out" disabled>−</button>
+      <button type="button" class="btn small" data-map-zoom="fit" aria-label="Fit to view" disabled>Fit</button>
+      <button type="button" class="btn small map-full-btn" data-map-full aria-label="Full screen" aria-pressed="false" title="Full screen (Shift F)" disabled><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false"><path d="M2 6V2h4M10 2h4v4M14 10v4h-4M6 14H2v-4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      <button type="button" class="btn small map-keys-btn" data-map-keys aria-label="Map controls" aria-expanded="false" aria-controls="map-keys" disabled>?</button>
+    </div>
+    <label class="map-pref" title="When on, zooming deep into a region opens its tactical view. When off, click a region's name instead."><input type="checkbox" data-map-zoom-tactical disabled> Zoom to tactical</label>
+    <label class="map-pref" title="The universe in the game's own 2D layout, as the in-game map draws it. Turn it off for true 3D positions. Remembered until you change it."><input type="checkbox" data-map-proj disabled> Improved projection</label>
+    {{/* The intel overlay: the reader's channels' reports over any
+         layer. map.js shows it once it knows the reader has a
+         channel; the badge counts systems with hostiles. */}}
+    <button type="button" class="map-intel-toggle" data-map-intel aria-pressed="true" title="Reports from your intel channels, last 30 minutes" hidden>Intel <span data-map-intel-n></span></button>
+    {{/* Your data on the map (map_mine.go): pins that combine with
+         anything, and heat layers, one at a time, that color the
+         systems in place of the layer picker. Signed-in readers only;
+         map.js enables what applies and greys out what conflicts. */}}
+    {{if .Route.SignedIn}}<div class="map-data">
+      <button type="button" class="map-data-btn" data-map-data aria-expanded="false" aria-controls="map-data-menu">Data <span data-map-data-n></span></button>
+      <div class="map-data-menu" id="map-data-menu" role="group" aria-label="Your data on the map" hidden>
+        <fieldset>
+          <legend>Your pilots</legend>
+          <label><input type="checkbox" value="pilots"><i class="map-data-sw pilots"></i> Pilot locations</label>
+          <label><input type="checkbox" value="fleet"><i class="map-data-sw fleet"></i> Fleet</label>
+          <label><input type="checkbox" value="clones"><i class="map-data-sw clones"></i> Clones &amp; homes</label>
+        </fieldset>
+        <fieldset>
+          <legend>Your stuff</legend>
+          <label><input type="checkbox" value="assets"><i class="map-data-sw heat"></i> Assets <small>heat</small></label>
+          <label><input type="checkbox" value="market"><i class="map-data-sw market"></i> Orders &amp; contracts</label>
+          <label><input type="checkbox" value="industry"><i class="map-data-sw industry"></i> Industry &amp; PI</label>
+          <label><input type="checkbox" value="structures"><i class="map-data-sw structures"></i> Corp structures</label>
+        </fieldset>
+        <fieldset>
+          <legend>Your activity</legend>
+          <label><input type="checkbox" value="pvp"><i class="map-data-sw heat"></i> Kills &amp; losses <small>heat</small></label>
+          <label><input type="checkbox" value="mining"><i class="map-data-sw heat"></i> Mining <small>heat</small></label>
+          <label><input type="checkbox" value="posted"><i class="map-data-sw posted"></i> Scans &amp; intel you posted</label>
+          <label><input type="checkbox" value="watched"><i class="map-data-sw watched"></i> Watched pilots</label>
+        </fieldset>
+        <p class="map-data-note muted">Heat layers color the systems, one at a time, in place of the layers above. Pins combine with everything.</p>
+      </div>
+    </div>{{end}}
+    {{/* The layer picker: what the map colors by. Security needs
+         no live data; the rest unlock once the layers payload has
+         loaded (map.js). */}}
+    <div class="map-layers" role="radiogroup" aria-label="Map layer">
+      <button type="button" role="radio" aria-checked="true" data-map-layer="security">Security</button>
+      <button type="button" role="radio" aria-checked="false" data-map-layer="threat" disabled>Threat</button>
+      <button type="button" role="radio" aria-checked="false" data-map-layer="kills" disabled>Kills</button>
+      <button type="button" role="radio" aria-checked="false" data-map-layer="npc" disabled>NPC kills</button>
+      <button type="button" role="radio" aria-checked="false" data-map-layer="jumps" disabled>Jumps</button>
+      <button type="button" role="radio" aria-checked="false" data-map-layer="sov" disabled>Sovereignty</button>
+      <button type="button" role="radio" aria-checked="false" data-map-layer="fw" disabled>Faction Warfare</button>
+      <button type="button" role="radio" aria-checked="false" data-map-layer="inc" disabled>Incursions</button>
+    </div>
+  </div>
+  <div class="map-stage">
+    <canvas class="map-canvas" tabindex="0" role="img" aria-label="Star map of New Eden's known space. Drag to pan, scroll or pinch to zoom, select a system for its details, or a region name for that region's tactical view."></canvas>
+    <p class="map-status" role="status">{{if .Ready}}Charting New Eden…{{else}}The map is drawn from the static data export, and this server has not imported its star geometry yet. It appears after the next static data update.{{end}}</p>
+    <noscript><p class="map-status">The interactive map needs JavaScript. Every region is listed below.</p></noscript>
+    <div class="map-hint" hidden></div>
+    {{/* The brand, faint in a corner of the full-screen map (and
+         drawn into every screenshot by map.js), and the screenshot
+         button beside it. */}}
+    <div class="map-mark" aria-hidden="true">
+      {{template "logo-mark" "map-mark-glyph"}}
+      <span class="map-mark-word">{{template "wordmark-svg"}}<span class="map-mark-tld">.APP</span></span>
+    </div>
+    <button type="button" class="map-share" data-map-share aria-label="Copy a link to this map view" title="Share this view" disabled><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><path d="M10 14a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1.7 1.7" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><path d="M14 10a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7L12.7 18.3" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></button>
+    <button type="button" class="map-shot" data-map-shot aria-label="Save a screenshot of the map" title="Screenshot" disabled><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><circle cx="12" cy="13" r="3.5" fill="none" stroke="currentColor" stroke-width="1.7"/></svg></button>
+    {{/* The hover popover (mouse only): the system under the cursor
+         and the figures of the layer showing. Filled by map.js. */}}
+    <div class="map-tip" role="tooltip" aria-hidden="true" hidden></div>
+    <section class="map-keys" id="map-keys" aria-label="Map controls" hidden>
+      <h2>Map controls</h2>
+      <dl>
+        <div><dt>Drag · two-finger scroll · arrows / WASD</dt><dd>Pan</dd></div>
+        <div><dt>Wheel · pinch · + − / E Q</dt><dd>Zoom</dd></div>
+        <div><dt>Double-click · double-tap</dt><dd>Zoom in there</dd></div>
+        <div><dt>Click a region name</dt><dd>Tactical view</dd></div>
+        <div><dt>Zoom into a region</dt><dd>Tactical view, with “Zoom to tactical” on</dd></div>
+        <div><dt>Zoom out · Esc</dt><dd>Back to New Eden</dd></div>
+        <div><dt>Enter</dt><dd>Tactical view of the selected system</dd></div>
+        <div><dt>0 · F</dt><dd>Fit</dd></div>
+        <div><dt>Shift F</dt><dd>Full screen</dd></div>
+        <div><dt>/</dt><dd>Find</dd></div>
+        <div><dt>L · Shift L</dt><dd>Next · previous layer</dd></div>
+        <div><dt>R · Shift R</dt><dd>Route to · from the selected system</dd></div>
+        <div><dt>?</dt><dd>These controls</dd></div>
+      </dl>
+    </section>
+    {{/* The side column: the route planner over the system card.
+         Stacked in one column they share the height and never
+         cover each other; on a phone the column is one sheet
+         rising from the bottom. */}}
+    <div class="map-side">
+    {{/* The route planner, filled by map.js once a route has an
+         end. Routes are planned in the browser from the gates and
+         the live threat layer; the buttons hand one to the game's
+         autopilot (POST /map/route, map_route.go). */}}
+    <section class="map-route" aria-label="Route" hidden>
+      <div class="map-route-head">
+        <h2 class="map-route-title">Route</h2>
+        <button type="button" class="map-card-close" data-route-close aria-label="Clear the route">×</button>
+      </div>
+      <div class="map-route-ends">
+        <span class="map-route-lbl">From</span><span class="map-route-end" data-route-end="from"></span>
+        <button type="button" class="map-route-swap" data-route-swap aria-label="Swap start and destination" title="Swap">⇅</button>
+        <span class="map-route-lbl">To</span><span class="map-route-end" data-route-end="to"></span>
+      </div>
+      {{/* How to travel: through stargates (and the corporation's
+           Ansiblex bridges, when known), or by jump drive, cyno to
+           cyno, with the ship and the pilot's Jump Drive Calibration
+           setting the range (map_jump.go). */}}
+      <div class="map-route-travel" role="radiogroup" aria-label="Travel by">
+        <button type="button" role="radio" aria-checked="true" data-route-travel="gates">Gates</button>
+        <button type="button" role="radio" aria-checked="false" data-route-travel="jump">Jump drive</button>
+      </div>
+      <label class="map-route-opt" data-route-bridges hidden><input type="checkbox" checked> Use jump bridges <span class="muted" data-route-bridges-n></span></label>
+      <div class="map-route-jump" hidden>
+        <label><span>Ship</span><select data-route-ship></select></label>
+        <label><span>Pilot</span><select data-route-pilot><option value="jdc:5">Jump Drive Calibration V</option><option value="jdc:4">Jump Drive Calibration IV</option><option value="jdc:3">Jump Drive Calibration III</option><option value="jdc:0">No calibration skill</option></select></label>
+        <p class="map-route-range"><span data-route-range></span></p>
+      </div>
+      <div class="map-route-modes" role="radiogroup" aria-label="Route preference">
+        <button type="button" role="radio" aria-checked="true" data-route-mode="short" title="The fewest jumps">Shortest</button>
+        <button type="button" role="radio" aria-checked="false" data-route-mode="safe" title="High-sec wherever it can, and around trouble">Safer</button>
+        <button type="button" role="radio" aria-checked="false" data-route-mode="calm" title="Few jumps, skirting active threat and gate camps">Avoid danger</button>
+      </div>
+      <p class="map-route-sum" aria-live="polite"></p>
+      <p class="map-route-strip" aria-hidden="true" hidden></p>
+      <ul class="map-route-warn"></ul>
+      <details class="map-route-steps">
+        <summary>Systems</summary>
+        <ol class="map-route-list"></ol>
+      </details>
+      <div class="map-route-actions">
+        <button type="button" class="btn small" data-route-send="dest">Set destination</button>
+        <button type="button" class="btn small" data-route-send="route">Send route</button>
+      </div>
+      <p class="map-route-note muted" aria-live="polite"></p>
+    </section>
+    <aside class="map-card" aria-live="polite" hidden>
+      <button type="button" class="map-card-close" data-map-close aria-label="Close system details">×</button>
+      <h2 class="map-card-name"></h2>
+      <p class="map-card-where"><span class="map-card-sec sec"></span> <span class="map-card-path"></span></p>
+      <dl class="map-card-live" hidden></dl>
+      {{/* The data behind the kills and threat layers
+           (/map/system.json), filled by map.js: a camp on now, then
+           the latest kills, each opening on the killboard. */}}
+      <div class="map-card-camp" hidden>
+        <p class="map-card-scans-h">Gate camp now</p>
+        <p class="map-card-camp-who" data-map-camp-who></p>
+        <p class="map-card-camp-ships muted" data-map-camp-ships></p>
+        <ul class="map-card-kill-list"></ul>
+      </div>
+      <div class="map-card-kills" hidden>
+        <p class="map-card-scans-h">Latest kills</p>
+        <ul class="map-card-kill-list"></ul>
+        <a class="map-card-more" data-map-kills-more href="/intel/kills/">All kills here on the killboard</a>
+      </div>
+      <p class="map-card-gates muted"></p>
+      <ul class="map-card-links"></ul>
+      <div class="map-card-actions">
+        <a class="btn small" data-map-system-page href="/system/">System page</a>
+        <button type="button" class="btn small" data-map-enter>Tactical view</button>
+        <a class="btn small" data-map-scan href="/intel/scan/">Paste a scan</a>
+      </div>
+      {{/* The reader's own scans of this system (/map/scans.json),
+           filled by map.js; unlisted scans are never shown to
+           anyone else. */}}
+      <div class="map-card-scans" hidden>
+        <p class="map-card-scans-h">Your scans here</p>
+        <ul></ul>
+      </div>
+      {{/* Report from the map into one of the reader's intel
+           channels (channels.go); map.js fills the channels and
+           shows it only where the reader may post. */}}
+      <form class="map-card-intel" data-map-report hidden>
+        <p class="map-card-intel-h">Report intel</p>
+        <div class="map-card-intel-ch"><label><span class="visually-hidden">Channel</span><select name="channel"></select></label></div>
+        <div class="map-card-intel-row">
+          <input type="text" name="text" maxlength="300" placeholder="Pilots, ships…" aria-label="What was seen" autocomplete="off">
+          <input type="number" name="hostiles" min="0" max="999" inputmode="numeric" placeholder="#" aria-label="Hostiles">
+        </div>
+        <div class="map-card-intel-row">
+          <button type="submit" class="btn small" value="hostile">Report</button>
+          <button type="submit" class="btn small" value="clear">Clear</button>
+        </div>
+        <p class="map-card-intel-msg" aria-live="polite"></p>
+      </form>
+      <div class="map-card-route" role="group" aria-label="Route">
+        <button type="button" class="btn small" data-route-set="from">Route from here</button>
+        <button type="button" class="btn small" data-route-set="to">Route to here</button>
+      </div>
+    </aside>
+    </div>
+    <ol class="map-legend" aria-label="Security status colors">
+      {{range $t := mapSecTiers}}<li><span class="map-swatch sec sec-{{$t}}" data-tier="{{$t}}"></span><span class="map-legend-v">{{if eq $t 10}}1.0{{else if eq $t 5}}0.5{{else if eq $t 0}}0.0{{end}}</span></li>{{end}}
+    </ol>
+    {{/* The live layers' legend, filled by map.js for whichever
+         layer is showing; the security legend above stands in for
+         the Security layer. */}}
+    <div class="map-layer-legend" aria-live="polite" hidden></div>
+  </div>
+</div>
+{{end}}

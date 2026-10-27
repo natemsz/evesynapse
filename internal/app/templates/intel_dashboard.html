@@ -1,0 +1,44 @@
+{{define "title"}}Intel Workbench{{end}}
+{{define "pagetitle"}}<h1><span class="gt">Intel Workbench</span></h1>{{end}}
+{{define "pagetabs"}}{{template "sectiontabs" .}}{{end}}
+{{define "content"}}
+{{with .IntelDashboard}}
+{{/* The intel dashboard (intel_dashboard.go): one row per recent
+     thread, the map following what is open, the feed as the
+     activity log. dashboard.js opens a row's Details here, without
+     a reload, and pings the map as reports arrive; without JS each
+     Details is a link to the report's own workbench page. */}}
+<div class="wbd" data-wbd data-wbd-threads-url="/intel/threads.json" data-wbd-recent="{{.RecentSec}}">
+  <section class="card wbd-threads" data-fold="never">
+    <h2>Threads</h2>
+    <ol class="wbd-list" data-wbd-list>
+      {{range .Threads}}
+      <li class="wbd-row" data-thread="{{.ID}}" data-report="{{.ReportID}}" data-sys="{{.SystemID}}" data-at="{{.At}}">
+        <span class="wbd-what">{{if .Clear}}Clear{{else if .Hostiles}}{{.Hostiles}} {{if eq .Hostiles 1}}hostile{{else}}hostiles{{end}}{{else if .Count}}{{.Count}} {{.Noun}}{{if ne .Count 1}}s{{end}}{{else}}Hostiles{{end}} in <b>{{.SystemName}}</b>{{if gt .Systems 1}} <span class="muted">· {{.Systems}} systems</span>{{end}}</span>
+        <span class="wbd-sep" aria-hidden="true">|</span>
+        <span class="wbd-by">{{.Kind}}{{with .Reporter}} by {{.}}{{end}} in <span class="sec sec-{{.SecTier}}">{{.SecText}}</span> {{.SystemName}} at <time datetime="{{.Time.Format "2006-01-02T15:04:05Z07:00"}}">{{.Time.UTC.Format "15:04"}}</time>{{with .ChName}} <span class="muted">· {{.}}</span>{{end}}</span>
+        <span class="wbd-sep" aria-hidden="true">|</span>
+        <a class="wbd-details" href="/intel/workbench/{{.ReportID}}/" data-wbd-open>Details</a>
+      </li>
+      {{else}}
+      <li class="wbd-empty hint" data-wbd-empty>{{if eq $.IntelDashboard.Channels 0}}You are not in any intel channels yet. <a href="/intel/channels/">Make one or ask for a grant</a> and its reports will gather here.{{else}}Nothing reported in the last six hours. New reports land here as they come in.{{end}}</li>
+      {{end}}
+    </ol>
+  </section>
+
+  <section class="card wbd-detail" data-wbd-detail hidden>
+    <div class="wbd-detail-bar"><button type="button" class="btn btn-quiet small" data-wbd-close>Back to threads</button></div>
+    <div class="wbd-detail-body" data-wbd-detail-body aria-live="polite"></div>
+  </section>
+
+  {{with .Map}}<section class="card wbd-map" data-map-compact aria-label="Map">{{template "mapview" .}}</section>{{end}}
+
+  <section class="card wbd-log" data-fold="never">
+    <h2>Activity <span class="badge kill" data-ch-live hidden>Live</span></h2>
+    <ol class="ch-feed wbd-feed" data-ch-feed="/intel/feed.json" data-ch-after="{{.LastID}}">
+      {{range .Reports}}{{template "ch-report" .}}{{else}}<li class="ch-empty hint" data-ch-empty>No reports yet.</li>{{end}}
+    </ol>
+  </section>
+</div>
+{{end}}
+{{end}}

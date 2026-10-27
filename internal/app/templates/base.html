@@ -30,11 +30,11 @@
 {{if eq .NavPage "link.html"}}<link rel="stylesheet" href="/static/link.css?v={{.AssetVersion}}">{{end}}
 {{if eq .NavPage "market_appraise.html"}}<link rel="stylesheet" href="/static/appraisal.css?v={{.AssetVersion}}">{{end}}
 {{if eq .NavPage "fittings.html"}}<link rel="stylesheet" href="/static/fit.css?v={{.AssetVersion}}">{{end}}
-{{if eq .NavPage "map.html"}}<link rel="stylesheet" href="/static/map.css?v={{.AssetVersion}}">{{end}}
+{{if or (eq .NavPage "map.html") (eq .NavPage "intel_dashboard.html")}}<link rel="stylesheet" href="/static/map.css?v={{.AssetVersion}}">{{end}}{{if eq .NavPage "intel_dashboard.html"}}<link rel="stylesheet" href="/static/dashboard.css?v={{.AssetVersion}}">{{end}}
 {{if or (eq .NavPage "killboard.html") (eq .NavPage "kill.html")}}<link rel="stylesheet" href="/static/killboard.css?v={{.AssetVersion}}">{{end}}
-{{if or (eq .NavPage "scans.html") (eq .NavPage "scan.html") (eq .NavPage "scan_compare.html")}}<link rel="stylesheet" href="/static/scans.css?v={{.AssetVersion}}">{{end}}{{if eq .NavPage "intel_workbench.html"}}<link rel="stylesheet" href="/static/workbench.css?v={{.AssetVersion}}">{{end}}
+{{if or (eq .NavPage "scans.html") (eq .NavPage "scan.html") (eq .NavPage "scan_compare.html")}}<link rel="stylesheet" href="/static/scans.css?v={{.AssetVersion}}">{{end}}{{if or (eq .NavPage "intel_workbench.html") (eq .NavPage "intel_dashboard.html")}}<link rel="stylesheet" href="/static/workbench.css?v={{.AssetVersion}}">{{end}}
 {{if eq .NavPage "pilot.html"}}<link rel="stylesheet" href="/static/pilot.css?v={{.AssetVersion}}">{{end}}
-{{if or (eq .NavPage "channels.html") (eq .NavPage "channel.html") (eq .NavPage "system.html") (eq .NavPage "feed.html")}}<link rel="stylesheet" href="/static/channels.css?v={{.AssetVersion}}">{{end}}
+{{if or (eq .NavPage "channels.html") (eq .NavPage "channel.html") (eq .NavPage "system.html") (eq .NavPage "feed.html") (eq .NavPage "intel_dashboard.html")}}<link rel="stylesheet" href="/static/channels.css?v={{.AssetVersion}}">{{end}}
 <link rel="stylesheet" href="/static/phone.css?v={{.AssetVersion}}" media="(max-width: 45rem), (hover: none), (pointer: coarse)">
 </head>
 <body{{if .AutoRefresh}} data-autorefresh="5"{{end}}>
@@ -245,9 +245,9 @@
 <script src="/static/swap.js?v={{.AssetVersion}}" defer></script>
 {{if eq .Section "fitting"}}<script src="/static/fit.js?v={{.AssetVersion}}" defer></script>{{end}}
 {{if eq .NavPage "planner.html"}}<script src="/static/plan.js?v={{.AssetVersion}}" defer></script>{{end}}
-{{if eq .NavPage "map.html"}}<script src="/static/map.js?v={{.AssetVersion}}" defer></script>{{end}}
-{{if or (eq .NavPage "scan.html") (eq .NavPage "pilot.html")}}<script src="/static/scans.js?v={{.AssetVersion}}" defer></script>{{end}}{{if eq .NavPage "intel_workbench.html"}}<script src="/static/workbench.js?v={{.AssetVersion}}" defer></script>{{end}}
-{{if or (eq .NavPage "channel.html") (eq .NavPage "feed.html")}}<script src="/static/channels.js?v={{.AssetVersion}}" defer></script>{{end}}
+{{if or (eq .NavPage "map.html") (eq .NavPage "intel_dashboard.html")}}<script src="/static/map.js?v={{.AssetVersion}}" defer></script>{{end}}{{if eq .NavPage "intel_dashboard.html"}}<script src="/static/dashboard.js?v={{.AssetVersion}}" defer></script>{{end}}
+{{if or (eq .NavPage "scan.html") (eq .NavPage "pilot.html")}}<script src="/static/scans.js?v={{.AssetVersion}}" defer></script>{{end}}{{if or (eq .NavPage "intel_workbench.html") (eq .NavPage "intel_dashboard.html")}}<script src="/static/workbench.js?v={{.AssetVersion}}" defer></script>{{end}}
+{{if or (eq .NavPage "channel.html") (eq .NavPage "feed.html") (eq .NavPage "intel_dashboard.html")}}<script src="/static/channels.js?v={{.AssetVersion}}" defer></script>{{end}}
 {{if or (eq .NavPage "contract_search.html") (eq .NavPage "contract_detail.html")}}<script src="/static/contracts.js?v={{.AssetVersion}}" defer></script>{{end}}
 {{range .Scripts}}<script src="{{.}}?v={{$.AssetVersion}}" defer></script>{{end}}
 {{if .NotifySettings}}<script src="/static/push.js?v={{.AssetVersion}}" defer></script>{{end}}

@@ -192,48 +192,100 @@ func (app *Application) advanceRegionSweep(ctx context.Context, regionID int64, 
 		return out
 	}
 
+pageLoop:
 	for out.pages < maxRegionSweepPagesPerCycle {
 		if ctx.Err() != nil || limitHit.Load() {
 			break
 		}
-		if !allowance.take() {
+		// The next few pages are read at once and staged in page
+		// order, so a book of hundreds of pages is not hundreds of
+		// round trips one after another.
+		pages := make([]sweepPage, 0, sweepPageWindow)
+		for n := 0; n < sweepPageCount(state, maxRegionSweepPagesPerCycle-out.pages) && allowance.take(); n++ {
+			pages = append(pages, sweepPage{page: int(state.NextPage) + n})
+		}
+		if len(pages) == 0 {
 			break
 		}
-		orders, totalPages, err := app.fetchRegionBookPage(ctx, regionID, int(state.NextPage))
-		if err != nil {
-			if errors.Is(err, esi.ErrErrorLimit) {
-				limitHit.Store(true)
-				logging.Warnf("worker: region sweep: %s cut short by ESI error limit on page %d", marketRegionLabel(regionID), state.NextPage)
-				out.limited = true
-				return out
+		var wg sync.WaitGroup
+		for i := range pages {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				defer recoverWorkerPanic("region sweep page")
+				p := &pages[i]
+				p.err = errSweepPageLost
+				p.orders, p.totalPages, p.err = app.fetchRegionBookPage(ctx, regionID, p.page)
+			}()
+		}
+		wg.Wait()
+		for _, p := range pages {
+			if p.err != nil {
+				if errors.Is(p.err, esi.ErrErrorLimit) {
+					limitHit.Store(true)
+					logging.Warnf("worker: region sweep: %s cut short by ESI error limit on page %d", marketRegionLabel(regionID), p.page)
+					out.limited = true
+					return out
+				}
+				// Transient failure: the pages staged before it
+				// stay staged, the cursor stops at it, and it is
+				// retried next cycle; nothing after it is stored.
+				logging.Warnf("worker: region sweep: %s page %d unavailable: %v", marketRegionLabel(regionID), p.page, p.err)
+				break pageLoop
 			}
-			// Transient failure: the staged pages and the
-			// cursor stay put, and this page is retried next
-			// cycle; nothing was stored.
-			logging.Warnf("worker: region sweep: %s page %d unavailable: %v", marketRegionLabel(regionID), state.NextPage, err)
-			break
-		}
-		if int64(totalPages) > state.PagesTotal {
-			state.PagesTotal = int64(totalPages)
-		}
-		state.NextPage++
-		if err := app.stageSweepPage(ctx, state, orders); err != nil {
-			logging.Errorf("worker: region sweep: stage %s page %d: %v", marketRegionLabel(regionID), state.NextPage-1, err)
-			break
-		}
-		out.pages++
-		if sweepBookStaged(state) {
-			break
-		}
-		if state.NextPage > maxRegionSweepPagesTotal {
-			logging.Warnf("worker: region sweep: %s passed the %d-page safety stop; storing what was read", marketRegionLabel(regionID), maxRegionSweepPagesTotal)
-			break
+			if int64(p.totalPages) > state.PagesTotal {
+				state.PagesTotal = int64(p.totalPages)
+			}
+			state.NextPage++
+			if err := app.stageSweepPage(ctx, state, p.orders); err != nil {
+				logging.Errorf("worker: region sweep: stage %s page %d: %v", marketRegionLabel(regionID), p.page, err)
+				break pageLoop
+			}
+			out.pages++
+			if sweepBookStaged(state) {
+				break pageLoop
+			}
+			if state.NextPage > maxRegionSweepPagesTotal {
+				logging.Warnf("worker: region sweep: %s passed the %d-page safety stop; storing what was read", marketRegionLabel(regionID), maxRegionSweepPagesTotal)
+				break pageLoop
+			}
 		}
 	}
 	if sweepBookStaged(state) || state.NextPage > maxRegionSweepPagesTotal {
 		app.completeRegionSweep(ctx, state)
 	}
 	return out
+}
+
+// sweepPageWindow is how many of one region's book pages are read
+// at once. Six regions sweep side by side, so a busy cycle has a few
+// dozen requests in flight; ESI's rate budgets, seen coming in the
+// client (esi/ratelimit.go), still refuse any that would overdraw.
+const sweepPageWindow = 6
+
+// sweepPage is one book page read in a window: the page asked for
+// and its answer.
+type sweepPage struct {
+	page       int
+	orders     []esi.MarketOrder
+	totalPages int
+	err        error
+}
+
+// errSweepPageLost stands for a page whose read panicked, so it is
+// treated as unavailable rather than staged empty.
+var errSweepPageLost = errors.New("page read did not finish")
+
+// sweepPageCount is how many pages the next window asks for: one
+// while the book's size is unknown (page 1 tells it), then up to
+// sweepPageWindow, never past the book's end, the safety stop, or
+// the left pages of this cycle's per-region budget.
+func sweepPageCount(state db.MarketSweepState, left int) int {
+	if state.PagesTotal == 0 {
+		return min(1, left)
+	}
+	n := min(sweepPageWindow, left, int(state.PagesTotal-state.NextPage+1), int(maxRegionSweepPagesTotal-state.NextPage+1))
+	return max(n, 1)
 }
 
 // sweepBookStaged reports whether the staged rows cover the

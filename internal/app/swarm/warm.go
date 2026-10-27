@@ -178,6 +178,14 @@ func (app *Mod) SwarmRefreshCoverage(ctx context.Context, now time.Time) {
 		}
 		app.SwarmCover.ByPeer[p.InstanceID] = cover
 		app.SwarmCover.Mu.Unlock()
+		if len(cover.Kinds) > 0 {
+			// A warming node verifies pull signatures
+			// against its own directory, where only a
+			// heartbeat lists a puller (swarm/seed.go):
+			// file this instance there on the same
+			// cadence its coverage is re-learned.
+			app.SwarmAnnounceToWarmPeer(ctx, p.BaseUrl, now)
+		}
 	}
 }
 

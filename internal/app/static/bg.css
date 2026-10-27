@@ -135,9 +135,11 @@ html[data-theme="light"] .charselector-dropdown {
    blur only bites where the panel's ancestry lets it sample the
    page: the header and the sidebar are backdrop roots, so the
    header flyouts are hoisted to the body (app.js) and the
-   sidebar's own frost moves to a pseudo-element below. */
+   sidebar's own frost moves to a pseudo-element below. The tint
+   is light enough for that frost to read: at 88% the paint hid
+   it and the glass looked solid. */
 :root {
-  --flyout-bg: color-mix(in srgb, var(--panel) 88%, transparent);
+  --flyout-bg: color-mix(in srgb, var(--panel) 55%, transparent);
   --flyout-edge: color-mix(in srgb, var(--accent) 25%, transparent);
   --flyout-shadow: 0 10px 24px rgba(0, 0, 0, 0.65);
   --flyout-frost: blur(30px) saturate(1.45);

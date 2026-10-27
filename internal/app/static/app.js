@@ -1241,7 +1241,13 @@
         method: "POST",
         headers: { "X-Requested-With": "XMLHttpRequest" },
         body: body
-      }).then(function (resp) { return resp.ok; }, function () { return false; });
+      }).then(function (resp) {
+        // The save changed what the home pages render; the
+        // shell's fetched-page cache predates it and must not
+        // swap a stale copy back in over the saved layout.
+        if (resp.ok) document.dispatchEvent(new CustomEvent("evesynapse:content-mutated"));
+        return resp.ok;
+      }, function () { return false; });
     }
 
     function moduleCards() {

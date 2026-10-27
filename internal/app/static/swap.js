@@ -320,6 +320,16 @@
     pageCache[url] = entry;
   }
 
+  // A page that changes server state without navigating (the
+  // home customize saves post their layout and stay put) says
+  // so here: every cached copy predates the change, so the
+  // cache empties instead of a later swap painting the stale
+  // page back over the saved one.
+  document.addEventListener("evesynapse:content-mutated", function () {
+    pageCache = {};
+    pageCacheOrder = [];
+  });
+
   var inflight = {}; // url -> true while a prefetch is running
   var navController = null; // AbortController for the live navigation
   var navSeq = 0; // bumped per navigation; stale swaps stop quietly

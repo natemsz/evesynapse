@@ -156,6 +156,14 @@
   document.addEventListener("click", function (ev) {
     var t = ev.target;
     if (!t || !t.classList) return;
+    var themeOpener = t.closest && t.closest("[data-open-theme-modal]");
+    if (themeOpener) {
+      var themeModal = document.getElementById("theme-modal");
+      var pop = themeOpener.closest("details");
+      if (pop) pop.removeAttribute("open");
+      if (themeModal) EveSynapseModal.open(themeModal);
+      return;
+    }
     if (t.classList.contains("modal-backdrop")) { EveSynapseModal.close(t); return; }
     var closer = t.closest && t.closest("[data-close-modal]");
     var box = closer && closer.closest(".modal-backdrop");

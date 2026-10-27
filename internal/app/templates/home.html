@@ -6,10 +6,11 @@
   <a class="btn btn-quiet" href="/auth/link">Link another character</a>
   {{if .Home.Customize}}<a class="btn" href="/" title="Done (\)" aria-keyshortcuts="\">Done <kbd>\</kbd></a>{{end}}
   <details class="menu-pop home-settings">
-    <summary class="btn btn-quiet" title="Overview settings: arrange, add or reset modules" aria-label="Overview settings"><svg class="glyph" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></g></svg><span>Overview</span></summary>
+    <summary class="btn btn-quiet" title="Customize: arrange, add, theme or reset modules" aria-label="Customize"><svg class="glyph" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></g></svg><span>Customize</span></summary>
     <div class="menu-pop-body" role="menu">
       {{if not .Home.Customize}}<a role="menuitem" href="/?customize=1" aria-keyshortcuts="\">Arrange and resize modules <kbd>\</kbd></a>{{end}}
       <a role="menuitem" href="/?customize=1&amp;add=1" id="add-module-btn">Add a module</a>
+      <button type="button" role="menuitem" data-open-theme-modal>Theme</button>
       <form method="post" action="/home/layout" data-confirm="Put every module back to the default layout?">
         <input type="hidden" name="action" value="reset">
         <button type="submit" role="menuitem">Reset to the default layout</button>
@@ -29,7 +30,7 @@
 <p>No characters are linked to this account yet. Every character you sign in with shows up here. Link one to start.</p>
 <p><a class="btn" href="/auth/link">Link your first character</a></p>
 {{else}}
-{{if .Home.Customize}}{{if not .Home.Widgets}}<p><small>Your home is empty. Add a module from the Overview menu.</small></p>{{end}}{{end}}
+{{if .Home.Customize}}{{if not .Home.Widgets}}<p><small>Your home is empty. Add a module from the Customize menu.</small></p>{{end}}{{end}}
 
 <div class="grid home-grid{{if .Home.Customize}} home-custom{{end}}"{{if .Home.Customize}} id="home-grid" data-customize="1"{{end}}>
 {{range .Home.Widgets}}
@@ -465,7 +466,6 @@
     <p class="modal-empty" hidden>Every module is already on your home.</p>
   </div>
 </div>
-
 <noscript>
 <div id="home-module-list">
 <h3>Modules</h3>
@@ -505,6 +505,19 @@
 </div>
 </noscript>
 {{end}}
+{{if and .Home (not .Home.LoadFailed) .Home.HasChars}}
+<div class="modal-backdrop" id="theme-modal" hidden>
+  <div class="modal theme-modal" role="dialog" aria-modal="true" aria-labelledby="theme-modal-title">
+    <div class="modal-head">
+      <h2 id="theme-modal-title">Theme</h2>
+      <button type="button" class="modal-close" data-close-modal aria-label="Close">×</button>
+    </div>
+    <p><small>Preferences are saved to your account automatically.</small></p>
+    {{template "theme-picker" .}}
+  </div>
+</div>
+{{end}}
+
 {{end}}
 {{end}}
 

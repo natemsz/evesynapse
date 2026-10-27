@@ -1119,6 +1119,9 @@ html[data-scheme] .pchart .chart-volbar { fill: var(--sch-end); }
 /* The Settings page's theme picker: one row per look, a swatch,
    a name, and the strength it can be worn at. */
 .scheme-group-label { font-family: Rajdhani, sans-serif; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; font-size: .78rem; opacity: .75; margin: 1.4rem 0 .5rem; }
+/* The home Theme modal gives the picker room: at the standard
+   modal width the rows squeeze their text into a ribbon. */
+.modal.theme-modal { width: min(46rem, 100%); }
 .theme-default, .scheme-row { display: flex; align-items: center; gap: 1rem; padding: .7rem .9rem; border: 1px solid rgba(255,255,255,.10); border-radius: 10px; background: rgba(255,255,255,.03); }
 .theme-default.current, .scheme-row.current { border-color: var(--sch-accent, #ff6a1a); box-shadow: 0 0 0 1px var(--sch-accent, #ff6a1a) inset, 0 0 18px -6px var(--sch-accent, #ff6a1a); }
 .scheme-list { display: flex; flex-direction: column; gap: .55rem; }

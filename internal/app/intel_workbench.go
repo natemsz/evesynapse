@@ -276,12 +276,17 @@ type workbenchView struct {
 
 	// Header snapshot.
 	Snapshot string // "HED-GP Gatecamp (Catch)"
-	SysName  string
-	Ago      string
-	Headline string
-	Reporter string
-	Hulls    int
-	PilotsN  int
+	// The verdict strip: the report's kind as the feed badges it,
+	// and its moment (the group's latest when grouped).
+	KindLabel string
+	KindTone  string
+	SeenAt    time.Time
+	SysName   string
+	Ago       string
+	Headline  string
+	Reporter  string
+	Hulls     int
+	PilotsN   int
 
 	// The group picture: set when the report's group has more
 	// than one member and the page renders the stored
@@ -384,11 +389,13 @@ func (app *Application) handleWorkbench(w http.ResponseWriter, r *http.Request) 
 	}
 	if err != nil || !access {
 		data.Workbench = &workbenchView{Error: "This report does not exist, or you have no access to its channel."}
+		data.IntelDashboard = app.workbenchDashboard(ctx, id, 0)
 		app.render(ctx, w, http.StatusNotFound, "intel_workbench.html", data)
 		return
 	}
 	v := app.buildWorkbench(ctx, rep, c)
 	data.Workbench = v
+	data.IntelDashboard = app.workbenchDashboard(ctx, id, app.reportThread(ctx, rep.GroupID))
 	title := v.SysName
 	if title == "" {
 		title = "Report"
@@ -406,6 +413,9 @@ func (app *Application) buildWorkbench(ctx context.Context, rep db.IntelReport, 
 		Headline: rep.Text, Reporter: rep.Reporter,
 		Ago: ageText(time.Now(), rep.SeenAt),
 	}
+	var kind reportView
+	applyKind(&kind, rep.Kind)
+	v.KindLabel, v.KindTone, v.SeenAt = kind.KindLabel, kind.KindTone, rep.SeenAt
 	sys := names.system(rep.SystemID)
 	v.SysName = sys.Name
 	v.SecText, v.SecTier = secRound(sys.Security)
@@ -470,6 +480,7 @@ func (app *Application) buildWorkbench(ctx context.Context, rep db.IntelReport, 
 		}
 		if !comp.LatestAt.IsZero() {
 			v.Ago = ageText(now, comp.LatestAt)
+			v.SeenAt = comp.LatestAt
 		}
 		v.Rail, v.RailMore = wbRail(now, comp, rep.ID)
 		v.RailKinds = wbRailKinds(comp)

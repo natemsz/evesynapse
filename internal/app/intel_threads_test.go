@@ -8,8 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-chi/chi/v5"
-
 	db "evesynapse/internal/db/sqlc"
 )
 
@@ -91,16 +89,17 @@ func TestIntelDashboardRows(t *testing.T) {
 		t.Errorf("row: %+v, want the newest report on GE-8JZ, spanning 2 systems", rows[0])
 	}
 
-	r := chi.NewRouter()
-	r.Use(f.app.sessions.LoadAndSave)
-	r.Get("/intel/workbench/", f.app.handleIntelDashboard)
+	req := httptest.NewRequest(http.MethodGet, "/intel/workbench/", nil)
+	req.AddCookie(sessionCookie(t, f.app, f.ownerID, f.charID, "Group Owner"))
 	rec := httptest.NewRecorder()
-	r.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/intel/workbench/", nil))
+	f.app.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("dashboard: status %d", rec.Code)
 	}
 	body := rec.Body.String()
-	for _, want := range []string{"data-wbd", "data-map-compact", "data-ch-feed", "/static/dashboard.js"} {
+	// The bare workbench opens the newest thread: its row marked,
+	// its report broken down below with the verdict strip.
+	for _, want := range []string{"data-wbd", "data-map-compact", "data-ch-feed", "/static/dashboard.js", "wbd-row is-open", "wb-verdict", "/static/workbench.js"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("dashboard page lacks %q", want)
 		}

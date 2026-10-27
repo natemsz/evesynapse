@@ -2,6 +2,15 @@
 {{define "pagetitle"}}<h1><span class="gt">Intel Workbench</span></h1>{{end}}
 {{define "pagetabs"}}{{template "sectiontabs" .}}{{end}}
 {{define "content"}}
+{{/* The workbench (intel_dashboard.go, intel_workbench.go): the
+     recent threads across the reader's channels with the map beside
+     them, the open report broken down below, and the feed as the
+     activity log at the bottom. dashboard.js opens a row's report in
+     place; without JS each Details loads this page with it open. */}}
+<div class="wbd" data-wbd data-wbd-threads-url="/intel/threads.json" data-wbd-recent="{{with .IntelDashboard}}{{.RecentSec}}{{end}}">
+{{with .IntelDashboard}}{{template "wbd-threads" .}}
+{{with .Map}}<section class="card wbd-map" data-map-compact aria-label="Map">{{template "mapview" .}}</section>{{end}}{{end}}
+<div class="wbd-main" data-wbd-main>
 {{with .Workbench}}
 {{/* One report (or, through the scan door, one scan) opened up:
      its stored reading broken down, its pilots with what the
@@ -13,6 +22,19 @@
 {{if .Error}}
   <p class="wb-missing prose">{{.Error}}</p>
 {{else}}
+  {{/* The verdict: how many, what, where and how fresh, in one
+       line before any breakdown. Each figure stands only when a
+       stored reading speaks for it. */}}
+  <div class="wb-verdict" role="group" aria-label="At a glance">
+    {{if .HasCounts}}<div class="wb-v{{if .Hostile}} wb-v-hostile{{end}}"><span class="wb-v-n">{{.Hostile}}</span><span class="wb-v-l">{{if eq .Hostile 1}}hostile{{else}}hostiles{{end}}</span></div>{{end}}
+    {{if .Hulls}}<div class="wb-v"><span class="wb-v-n">{{.Hulls}}</span><span class="wb-v-l">{{if eq .Hulls 1}}ship{{else}}ships{{end}}{{if .HasDScan}} · {{.OnGrid}} on grid{{end}}</span></div>{{end}}
+    {{if .PilotsN}}<div class="wb-v"><span class="wb-v-n">{{.PilotsN}}</span><span class="wb-v-l">in local</span></div>{{end}}
+    <div class="wb-v wb-v-what">
+      {{if .KindLabel}}<span class="badge {{.KindTone}}">{{.KindLabel}}</span>{{end}}
+      {{if .SysName}}<span class="wb-v-where"><span class="sec sec-{{.SecTier}}">{{.SecText}}</span> {{.SysName}}</span>{{end}}
+      <span class="wb-v-when">{{.Ago}}{{if not .SeenAt.IsZero}} · <time datetime="{{.SeenAt.UTC.Format "2006-01-02T15:04:05Z"}}">{{.SeenAt.UTC.Format "15:04"}} EVE</time>{{end}}</span>
+    </div>
+  </div>
   {{/* A div, not a <header>: style.css styles the bare header
        element as the shell's fixed glass bar, and an in-page
        header inherits that positioning and paints over the page. */}}
@@ -69,9 +91,8 @@
 
   <section data-wb-view="intel">
     <div class="wb-boxes">
-      <article class="wb-box">
-        <h3><span class="wb-box-n">1.</span> Grid &amp; Range Split</h3>
-        {{if .HasDScan}}
+      {{if .HasDScan}}<article class="wb-box">
+        <h3>Grid &amp; Range Split</h3>
         <div class="wb-split-nums">
           <div><span class="wb-num wb-on">{{.OnGrid}}</span><span class="wb-num-l">On-Grid</span><span class="wb-num-s">&lt;10,000 km</span></div>
           <div><span class="wb-num wb-off">{{.OffGrid}}</span><span class="wb-num-l">Off-Grid</span><span class="wb-num-s">AU / Out of range</span></div>
@@ -82,22 +103,18 @@
         </div>
         <p class="wb-box-foot">Point-Blank (&lt;50 km): <strong>{{.PointBlank}} hulls</strong>
           <button type="button" class="wb-mini" data-wb-grid="all">Show all</button></p>
-        {{else}}<p class="wb-empty">No d-scan reading in this report.</p>{{end}}
-      </article>
+      </article>{{end}}
 
-      <article class="wb-box">
-        <h3><span class="wb-box-n">2.</span> Tactical Hull Roles</h3>
-        {{if .Roles}}
+      {{if .Roles}}<article class="wb-box">
+        <h3>Hull Roles</h3>
         <ul class="wb-roles">
           {{range .Roles}}<li><span>{{.Label}}</span><strong>{{.N}}</strong></li>{{end}}
         </ul>
         {{if .Doctrine}}<p class="wb-box-foot"><strong>{{.Doctrine}}</strong></p>{{end}}
-        {{else}}<p class="wb-empty">No hulls counted in this report.</p>{{end}}
-      </article>
+      </article>{{end}}
 
-      <article class="wb-box">
-        <h3><span class="wb-box-n">3.</span> Local Standings</h3>
-        {{if .HasCounts}}
+      {{if .HasCounts}}<article class="wb-box">
+        <h3>Local Standings</h3>
         <div class="wb-split-nums">
           <div><span class="wb-num wb-hostile">{{.Hostile}}</span><span class="wb-num-l">Hostile</span></div>
           <div><span class="wb-num">{{.Neutral}}</span><span class="wb-num-l">Neutral</span></div>
@@ -108,12 +125,10 @@
           <button type="button" class="wb-mini" data-wb-flag="young">Young Alts (&lt;90d) <strong>{{.YoungAlts}}</strong></button>
           <button type="button" class="wb-mini" data-wb-flag="recent">Corp Join &lt;7d <strong>{{.RecentJoins}}</strong></button>
         </p>{{end}}
-        {{else}}<p class="wb-empty">No local roster in this report.</p>{{end}}
-      </article>
+      </article>{{end}}
 
-      <article class="wb-box">
-        <h3><span class="wb-box-n">4.</span> System Context</h3>
-        {{if .SysName}}
+      {{if .SysName}}<article class="wb-box">
+        <h3>System Context</h3>
         <p class="wb-sys"><span class="sec sec-{{.SecTier}}">{{.SecText}}</span> <span class="wb-sys-name">{{.SysName}}</span></p>
         {{if .SysLine}}<p class="wb-box-sub">{{.SysLine}}</p>{{end}}
         {{if .HasStats}}<div class="wb-sys-stats">
@@ -123,8 +138,7 @@
         </div>{{end}}
         {{if .Sov}}<p class="wb-box-sub">{{.Sov}}</p>{{end}}
         <p class="wb-box-foot"><button type="button" class="wb-mini" data-wb-tab="system">Gates &amp; Map →</button></p>
-        {{else}}<p class="wb-empty">No system recorded.</p>{{end}}
-      </article>
+      </article>{{end}}
     </div>
 
     <p class="wb-filters" data-wb-filters hidden>Active filters: <span data-wb-filter-list></span>
@@ -324,7 +338,19 @@
   {{end}}
 {{end}}
 </div>
+{{else}}
+<p class="hint wbd-none">Nothing open. Pick a thread above to see its report here.</p>
 {{end}}
+</div>
+{{with .IntelDashboard}}
+<section class="card wbd-log" data-fold="never">
+  <h2>Activity <span class="badge kill" data-ch-live hidden>Live</span></h2>
+  <ol class="ch-feed wbd-feed" data-ch-feed="/intel/feed.json" data-ch-after="{{.LastID}}">
+    {{range .Reports}}{{template "ch-report" .}}{{else}}<li class="ch-empty hint" data-ch-empty>No reports yet.</li>{{end}}
+  </ol>
+</section>
+{{end}}
+</div>
 {{end}}
 
 {{define "wb-pilot-row"}}<li class="wb-pilot{{if .HasDrawer}} wb-clickable{{end}}" data-bucket="{{.Bucket}}"{{if .Young}} data-young="1"{{end}}{{if .Recent}} data-recent="1"{{end}}{{if .HasDrawer}} data-wb-open-pilot="{{.ID}}" tabindex="0"{{end}}>
@@ -333,3 +359,26 @@
   {{if or .Young .Recent .KilledHere}}<span class="wb-pilot-flags">{{if .Young}}<span class="wb-flag wb-flag-young">Young alt &lt;90d</span>{{end}}{{if .Recent}}<span class="wb-flag wb-flag-recent">Joined &lt;7d</span>{{end}}{{if .KilledHere}}<span class="wb-flag wb-flag-kill">Killed here this week</span>{{end}}</span>{{end}}
   {{if .Facts}}<span class="wb-pilot-facts">{{.Facts}}</span>{{end}}
 </li>{{end}}
+
+{{/* The thread rows (intel_dashboard.go threadRow): "5 ships in
+     1DQ1-A | D-Scan by Scout in 1DQ1-A at 14:10 | Details". The
+     open report's thread is marked. dashboard.js builds the same
+     row from /intel/threads.json (rowEl). */}}
+{{define "wbd-threads"}}
+<section class="card wbd-threads" data-fold="never">
+  <h2>Threads</h2>
+  <ol class="wbd-list" data-wbd-list>
+    {{range .Threads}}
+    <li class="wbd-row{{if eq .ID $.OpenThread}} is-open{{end}}" data-thread="{{.ID}}" data-report="{{.ReportID}}" data-sys="{{.SystemID}}" data-at="{{.At}}">
+      <span class="wbd-what">{{if .Clear}}Clear{{else if .Hostiles}}{{.Hostiles}} {{if eq .Hostiles 1}}hostile{{else}}hostiles{{end}}{{else if .Count}}{{.Count}} {{.Noun}}{{if ne .Count 1}}s{{end}}{{else}}Hostiles{{end}} in <b>{{.SystemName}}</b>{{if gt .Systems 1}} <span class="muted">· {{.Systems}} systems</span>{{end}}</span>
+      <span class="wbd-sep" aria-hidden="true">|</span>
+      <span class="wbd-by">{{.Kind}}{{with .Reporter}} by {{.}}{{end}} in <span class="sec sec-{{.SecTier}}">{{.SecText}}</span> {{.SystemName}} at <time datetime="{{.Time.UTC.Format "2006-01-02T15:04:05Z"}}">{{.Time.UTC.Format "15:04"}}</time> <span class="muted">· {{.Ago}}{{with .ChName}} · {{.}}{{end}}</span></span>
+      <span class="wbd-sep" aria-hidden="true">|</span>
+      <a class="wbd-details" href="/intel/workbench/{{.ReportID}}/" data-wbd-open>Details</a>
+    </li>
+    {{else}}
+    <li class="wbd-empty hint" data-wbd-empty>{{if eq .Channels 0}}You are not in any intel channels yet. <a href="/intel/channels/">Make one or ask for a grant</a> and its reports will gather here.{{else}}Nothing reported in the last six hours. New reports land here as they come in.{{end}}</li>
+    {{end}}
+  </ol>
+</section>
+{{end}}

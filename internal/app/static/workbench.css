@@ -66,7 +66,6 @@
    continuous panel. */
 .wb-box { background: var(--glass); border: 1px solid var(--glass-edge); border-radius: var(--r-lg); padding: 0.95rem 1.05rem; }
 .wb-box h3 { margin: 0 0 0.6rem; font-size: 0.78rem; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text); display: flex; align-items: center; gap: 0.45rem; flex-wrap: wrap; }
-.wb-box-n { color: var(--accent); }
 .wb-split-nums { display: flex; gap: 1.6rem; flex-wrap: wrap; }
 .wb-split-nums > div { display: flex; flex-direction: column; }
 .wb-num { font-family: 'JetBrains Mono', monospace; font-size: 1.45rem; line-height: 1.1; color: var(--text-bright); }
@@ -219,4 +218,31 @@
   .wb-pilot-facts { margin-left: 0; text-align: left; width: 100%; padding-left: 1.15rem; }
   .wb-pilot-main { min-width: 0; }
   .wb-specs { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* --- The verdict: the report in one line, before any breakdown ---
+   The figures read first and large; what, where and when sit beside
+   them in the site's badge and security colours. */
+.wb-verdict {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1.5rem;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+  border-radius: 0.6rem;
+  background: color-mix(in srgb, var(--accent) 7%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 22%, transparent);
+}
+.wb-v { display: flex; align-items: baseline; gap: 0.4rem; }
+.wb-v-n { font-size: 2rem; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
+.wb-v-l { color: var(--muted); font-size: 0.9rem; }
+.wb-v-hostile .wb-v-n { color: var(--danger); }
+.wb-v-what { align-items: center; flex-wrap: wrap; gap: 0.35rem 0.75rem; margin-left: auto; }
+.wb-v-where { font-weight: 700; }
+.wb-v-when { color: var(--muted); font-variant-numeric: tabular-nums; }
+@media (max-width: 45rem) {
+  .wb-verdict { gap: 0.5rem 1rem; }
+  .wb-v-n { font-size: 1.6rem; }
+  .wb-v-what { margin-left: 0; }
 }

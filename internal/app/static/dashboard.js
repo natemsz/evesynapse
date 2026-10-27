@@ -1,7 +1,7 @@
-// The intel dashboard (/intel/workbench/, intel_dashboard.html): the
-// thread rows' live poll, Details opened in place, and the map that
-// follows them. The page works without this file: every Details is a
-// plain link to the report's own workbench page.
+// The intel workbench as a dashboard (intel_workbench.html): the
+// thread rows' live poll, a row's report opened in place below them,
+// and the map that follows. The page works without this file: every
+// Details is a plain link to the same page with that report open.
 (function () {
   "use strict";
 
@@ -96,9 +96,7 @@
   function bind(root, wbd) {
     var doc = root.ownerDocument || root;
     var list = wbd.querySelector("[data-wbd-list]");
-    var detail = wbd.querySelector("[data-wbd-detail]");
-    var body = wbd.querySelector("[data-wbd-detail-body]");
-    var threadsCard = wbd.querySelector(".wbd-threads");
+    var main = wbd.querySelector("[data-wbd-main]");
     var mapEl = wbd.querySelector("[data-map]");
     var url = wbd.getAttribute("data-wbd-threads-url");
     var recent = +wbd.getAttribute("data-wbd-recent") || 1800;
@@ -130,61 +128,64 @@
       var r = rowOf(li);
       if (shouldPing(r, seen, nowSec, recent)) ping(r, false);
     });
-    if (rows.length) toMap("evesynapse:map-focus", { system: rowOf(rows[0]).sys });
+    // The map opens on the open report's thread, else the newest.
+    var first = list && (list.querySelector("li.is-open") || rows[0]);
+    if (first) toMap("evesynapse:map-focus", { system: rowOf(first).sys });
 
     // --- Details, in place ---
-    var opening = 0;
+    // A row's Details loads that report's page and puts its
+    // breakdown where the open one stands, below the list: the
+    // list, the map and the log stay put. The address follows (it
+    // is the report's own page), replaced rather than pushed, so
+    // Back leaves the workbench as it came.
+    var opening = 0, openThread = 0;
+    function markOpen(thread) {
+      openThread = thread;
+      if (!list) return;
+      list.querySelectorAll("li.is-open").forEach(function (li) { li.classList.remove("is-open"); });
+      var li = thread && list.querySelector('li[data-thread="' + thread + '"]');
+      if (li) li.classList.add("is-open");
+    }
+    function viewed(r) {
+      markSeen(r.id, r.report);
+      toMap("evesynapse:map-viewed", { id: r.id });
+      toMap("evesynapse:map-focus", { system: r.sys });
+    }
     function open(href, r) {
       var n = ++opening;
-      body.textContent = "Loading…";
-      detail.hidden = false;
-      if (threadsCard) threadsCard.hidden = true;
+      var cur = main.querySelector(".wb, .wbd-none");
+      main.setAttribute("aria-busy", "true");
+      markOpen(r.id);
+      viewed(r);
+      try { history.replaceState(history.state, "", href); } catch (e) { /* sandboxed */ }
       fetch(href, { credentials: "same-origin" }).then(function (resp) {
         return resp.ok ? resp.text() : Promise.reject(resp.status);
       }).then(function (html) {
-        if (n !== opening || !body.isConnected) return;
-        var page = new DOMParser().parseFromString(html, "text/html");
-        var wb = page.querySelector(".wb");
-        body.textContent = "";
-        if (!wb) { body.textContent = "This report could not be opened here."; return; }
-        body.appendChild(doc.importNode(wb, true));
-        // The workbench's own widgets bind to what was just placed.
-        doc.dispatchEvent(new CustomEvent("evesynapse:content-ready", { detail: { root: body } }));
+        if (n !== opening || !main.isConnected) return;
+        var wb = new DOMParser().parseFromString(html, "text/html").querySelector("[data-wbd-main] .wb");
+        if (!wb) return Promise.reject(0);
+        var fresh = doc.importNode(wb, true);
+        if (cur && cur.parentNode === main) main.replaceChild(fresh, cur); else main.appendChild(fresh);
+        main.removeAttribute("aria-busy");
+        // The breakdown's own widgets (workbench.js) bind to it.
+        doc.dispatchEvent(new CustomEvent("evesynapse:content-ready", { detail: { root: main } }));
+        if (main.getBoundingClientRect().top > window.innerHeight * 0.6) main.scrollIntoView({ block: "start", behavior: "smooth" });
       }).catch(function () {
-        if (n === opening) body.textContent = "This report could not be opened. Try again, or open it on its own page.";
+        // A failed fetch falls back to the plain page load.
+        if (n === opening) location.href = href;
       });
-      if (r) {
-        markSeen(r.id, r.report);
-        toMap("evesynapse:map-viewed", { id: r.id });
-        toMap("evesynapse:map-focus", { system: r.sys });
-        try { history.replaceState(history.state, "", location.pathname + "?open=" + r.report); } catch (e) { /* sandboxed */ }
-      }
-    }
-    function close() {
-      opening++;
-      detail.hidden = true;
-      body.textContent = "";
-      if (threadsCard) threadsCard.hidden = false;
-      try { history.replaceState(history.state, "", location.pathname); } catch (e) { /* sandboxed */ }
     }
     wbd.addEventListener("click", function (e) {
       var a = e.target.closest && e.target.closest("a[data-wbd-open]");
-      if (a) {
-        if (e.button || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return; // a new tab is a plain link
-        e.preventDefault();
-        e.stopPropagation(); // the shell's swap would otherwise navigate
-        var li = a.closest("li[data-thread]");
-        open(a.getAttribute("href"), li ? rowOf(li) : null);
-        return;
-      }
-      if (e.target.closest && e.target.closest("[data-wbd-close]")) close();
+      if (!a || e.button || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return; // a new tab is a plain link
+      var li = a.closest("li[data-thread]");
+      if (!li) return;
+      e.preventDefault();
+      open(a.getAttribute("href"), rowOf(li));
     }, true);
-    // ?open=<report> on arrival reopens what was open.
-    var want = +new URLSearchParams(location.search).get("open");
-    if (want) {
-      var li = list && list.querySelector('li[data-report="' + want + '"]');
-      open("/intel/workbench/" + want + "/", li ? rowOf(li) : null);
-    }
+    // The report open on arrival counts as viewed.
+    var openLi = list && list.querySelector("li.is-open");
+    if (openLi) { openThread = rowOf(openLi).id; viewed(rowOf(openLi)); }
 
     // --- The live poll ---
     var polling = false;
@@ -215,6 +216,7 @@
         });
         list.textContent = "";
         list.appendChild(frag);
+        markOpen(openThread);
       }).catch(function () { /* the next poll tries again */ })
         .then(function () { polling = false; });
     }

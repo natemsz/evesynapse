@@ -1,12 +1,14 @@
 package app
 
 // ---------------------------------------------------------------------------
-// The intel workbench as a dashboard (/intel/workbench/): one row per
-// recent thread (intel_threads.go) across the reader's channels, the
-// map following whatever is open, and the feed as the activity log
-// at the bottom. A row's Details opens that thread's newest report in
-// the workbench in place (dashboard.js); without JS it is a plain
-// link to the report's own workbench page.
+// The intel workbench as a dashboard (/intel/workbench/, and every
+// report's /intel/workbench/{id}/): one row per recent thread
+// (intel_threads.go) across the reader's channels, the map beside
+// them following whatever is open, the open report's breakdown
+// below (intel_workbench.go), and the feed as the activity log at
+// the bottom. A row's Details opens that thread's newest report in
+// place (dashboard.js); without JS it is a plain link to the same
+// page with that report open.
 //
 // Everything renders from stored rows: each thread's newest group
 // composite carries the count, the reporter and the moment, so the
@@ -62,7 +64,9 @@ type threadRow struct {
 	Time       time.Time `json:"-"`
 }
 
-// intelDashboardView is the dashboard page.
+// intelDashboardView is the workbench page's dashboard: the thread
+// rows above the open report, the map beside them, the activity log
+// below.
 type intelDashboardView struct {
 	Channels  int
 	Threads   []threadRow
@@ -70,6 +74,9 @@ type intelDashboardView struct {
 	LastID    int64
 	RecentSec int // dashRecent, for the map's pings
 	Map       *mapPageView
+	// OpenThread is the thread of the report open below the list:
+	// its row is marked.
+	OpenThread int64
 }
 
 // dashboardThreads builds the rows for the reader's channels.
@@ -159,22 +166,52 @@ func dashKindLabel(m compMember) string {
 	return "Report"
 }
 
-// handleIntelDashboard is GET /intel/workbench/.
-func (app *Application) handleIntelDashboard(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-	id := app.intelIdentity(ctx)
+// workbenchDashboard is the workbench page's thread list, map and
+// activity log for the reader, with openThread (the open report's
+// thread, 0 for none) marked.
+func (app *Application) workbenchDashboard(ctx context.Context, id intelIdentity, openThread int64) *intelDashboardView {
 	channels := app.accessibleChannels(ctx, id)
-	now := time.Now()
-	v := &intelDashboardView{Channels: len(channels), RecentSec: int(dashRecent / time.Second), Map: app.loadMapPageView(ctx)}
-	v.Threads = app.dashboardThreads(ctx, channels, now)
+	v := &intelDashboardView{Channels: len(channels), RecentSec: int(dashRecent / time.Second),
+		Map: app.loadMapPageView(ctx), OpenThread: openThread}
+	v.Threads = app.dashboardThreads(ctx, channels, time.Now())
 	v.Reports = app.feedReports(ctx, id, channels, 0, intelFeedTop(), 1<<62, intelFeedPage)
 	for _, rep := range v.Reports {
 		v.LastID = max(v.LastID, rep.ID)
 	}
+	return v
+}
+
+// reportThread is the thread a stored report's group stands in, 0
+// when none is recorded.
+func (app *Application) reportThread(ctx context.Context, groupID int64) int64 {
+	if groupID <= 0 {
+		return 0
+	}
+	tid, err := app.queries.GetIntelGroupThread(ctx, groupID)
+	if err != nil {
+		return 0
+	}
+	return tid
+}
+
+// handleIntelDashboard is GET /intel/workbench/: the workbench with
+// the newest thread open, or with none when nothing is recent.
+func (app *Application) handleIntelDashboard(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	id := app.intelIdentity(ctx)
+	dash := app.workbenchDashboard(ctx, id, 0)
 	data := app.publicPage(ctx)
-	data.IntelDashboard = v
+	if len(dash.Threads) > 0 {
+		if rep, err := app.queries.GetIntelReportFull(ctx, dash.Threads[0].ReportID); err == nil {
+			if c, ok := app.channelAccess(ctx, id, rep.ChannelID); ok {
+				data.Workbench = app.buildWorkbench(ctx, rep, c)
+				dash.OpenThread = dash.Threads[0].ID
+			}
+		}
+	}
+	data.IntelDashboard = dash
 	data.HeadMeta = app.HeadMeta(module.PageMeta{Title: "Intel Workbench", Description: "Recent intel across your channels, threaded by engagement, on the map.", CanonicalPath: "/intel/workbench/"})
-	app.render(ctx, w, http.StatusOK, "intel_dashboard.html", data)
+	app.render(ctx, w, http.StatusOK, "intel_workbench.html", data)
 }
 
 // handleIntelThreadsJSON is GET /intel/threads.json: the dashboard's

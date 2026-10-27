@@ -63,6 +63,11 @@ type Application struct {
 	// lines are read against (channels.go).
 	intelSystems systemDict
 
+	// Parsed scan results, remembered (scans are immutable once
+	// stored; intel_analysis.go).
+	scanMemoMu sync.Mutex
+	scanMemo   map[string]scanResult
+
 	// esi is the ESI client: HTTP access, the snapshot cache, and
 	// the type/group/place name-resolution caches.
 	esi *esi.Client

@@ -1682,6 +1682,13 @@ func (app *Application) handleMapIntel(w http.ResponseWriter, r *http.Request) {
 
 // pruneIntelReports drops reports past their 7 days.
 func (app *Application) pruneIntelReports(ctx context.Context) {
+	// Seven-day retention changes its answer at most once a
+	// day; the kill prune's daily stamp is the shape to copy,
+	// not four DELETEs a minute.
+	if time.Since(app.intelLastPruned) < 24*time.Hour {
+		return
+	}
+	app.intelLastPruned = time.Now()
 	n, err := app.queries.PruneIntelReports(ctx, time.Now().Add(-intelRetention))
 	if err != nil {
 		logging.Warnf("channels: prune: %v", err)

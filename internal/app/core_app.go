@@ -209,6 +209,10 @@ type Application struct {
 	killRegions    map[int64]int64
 	killLastPruned time.Time
 	killStatsMemo  *killboardStatsMemo // the feed's headline, held a minute
+	// Kill-name misses that must not be re-asked every minute,
+	// and when intel retention last pruned (channels.go).
+	killNameMisses  map[int64]time.Time
+	intelLastPruned time.Time
 
 	// Pilot activity profiles (pilot_activity.go): the backfill
 	// queue and who is already on it. The channel is made on first

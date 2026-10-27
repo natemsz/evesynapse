@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.6.0.7] - 2026-10-27
+
+Automated build of EveSynapse v0.6.0.7. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+
+## What's Changed
+### Other Changes
+* docs(changelog): review changelog for v0.6.0.6 by @github-actions[bot] in https://github.com/natemsz/evesynapse/pull/743
+
+
+**Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.6.0.6...v0.6.0.7
+
 ## [v0.6.0.6] - 2026-10-27
 
 Automated build of EveSynapse v0.6.0.6. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).

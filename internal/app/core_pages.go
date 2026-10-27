@@ -158,7 +158,7 @@ func sectionForPage(page string) string {
 		return "corporation"
 	case "map.html":
 		return "map"
-	case "killboard.html", "kill.html", "scans.html", "scan.html", "scan_compare.html", "channels.html", "channel.html", "intel_workbench.html":
+	case "killboard.html", "kill.html", "scans.html", "scan.html", "scan_compare.html", "channels.html", "channel.html", "feed.html", "intel_workbench.html":
 		return "intel"
 	case "sync.html":
 		return "sync"

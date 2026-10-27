@@ -426,13 +426,15 @@ type IntelGangGroup struct {
 }
 
 type IntelGroupComposite struct {
-	GroupID    int64     `json:"group_id"`
-	ChannelID  int64     `json:"channel_id"`
-	SystemID   int64     `json:"system_id"`
-	Composite  string    `json:"composite"`
-	Previous   string    `json:"previous"`
-	Members    int32     `json:"members"`
-	ComputedAt time.Time `json:"computed_at"`
+	GroupID    int64        `json:"group_id"`
+	ChannelID  int64        `json:"channel_id"`
+	SystemID   int64        `json:"system_id"`
+	Composite  string       `json:"composite"`
+	Previous   string       `json:"previous"`
+	Members    int32        `json:"members"`
+	ComputedAt time.Time    `json:"computed_at"`
+	ThreadID   int64        `json:"thread_id"`
+	LatestAt   sql.NullTime `json:"latest_at"`
 }
 
 type IntelPairingCode struct {

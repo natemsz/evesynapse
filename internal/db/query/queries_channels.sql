@@ -308,9 +308,10 @@ LIMIT sqlc.arg(max_rows)::int;
 -- Store a group's composite; the standing composite becomes
 -- the previous one the diff view compares against.
 -- name: UpsertIntelGroupComposite :exec
-INSERT INTO intel_group_composites (group_id, channel_id, system_id, composite, previous, members, computed_at)
-VALUES (sqlc.arg(group_id), sqlc.arg(channel_id), sqlc.arg(system_id), sqlc.arg(composite), '', sqlc.arg(members), sqlc.arg(computed_at)::timestamptz)
+INSERT INTO intel_group_composites (group_id, channel_id, system_id, composite, previous, members, computed_at, latest_at)
+VALUES (sqlc.arg(group_id), sqlc.arg(channel_id), sqlc.arg(system_id), sqlc.arg(composite), '', sqlc.arg(members), sqlc.arg(computed_at)::timestamptz, sqlc.arg(latest_at)::timestamptz)
 ON CONFLICT (group_id) DO UPDATE SET
+    latest_at = EXCLUDED.latest_at,
     channel_id = EXCLUDED.channel_id,
     system_id = EXCLUDED.system_id,
     previous = intel_group_composites.composite,
@@ -484,3 +485,33 @@ SELECT COUNT(*) FROM intel_tokens WHERE user_id = $1;
 -- Every system's name: the chat-line reader's dictionary.
 -- name: ListSDESystemNames :many
 SELECT system_id, name FROM sde_systems;
+
+-- Intel threads (schema 095, intel_threads.go): the groups a new
+-- group may join the thread of, newest first -- the channel's
+-- groups on the given systems whose latest moment falls inside
+-- the window, the group itself left out.
+-- name: ListThreadCandidates :many
+SELECT group_id, thread_id, system_id, latest_at FROM intel_group_composites
+WHERE channel_id = sqlc.arg(channel_id) AND group_id <> sqlc.arg(group_id) AND thread_id > 0
+  AND system_id = ANY(sqlc.arg(system_ids)::bigint[])
+  AND latest_at >= sqlc.arg(since)::timestamptz AND latest_at <= sqlc.arg(until)::timestamptz
+ORDER BY latest_at DESC
+LIMIT 20;
+
+-- name: GetIntelGroupThread :one
+SELECT thread_id FROM intel_group_composites WHERE group_id = $1;
+
+-- A thread's span: its earliest and latest group moments.
+-- name: GetIntelThreadSpan :one
+SELECT min(latest_at)::timestamptz AS first_at, max(latest_at)::timestamptz AS last_at
+FROM intel_group_composites WHERE thread_id = $1;
+
+-- A group's thread is set once, when it is first stored.
+-- name: SetIntelGroupThread :exec
+UPDATE intel_group_composites SET thread_id = sqlc.arg(thread_id)
+WHERE group_id = sqlc.arg(group_id) AND thread_id = 0;
+
+-- A thread's groups, newest first.
+-- name: ListIntelThreadGroups :many
+SELECT group_id, system_id, latest_at FROM intel_group_composites
+WHERE thread_id = $1 ORDER BY latest_at DESC;

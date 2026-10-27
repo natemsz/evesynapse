@@ -1263,6 +1263,39 @@ func (q *Queries) ListIntelPilotNames(ctx context.Context) ([]ListIntelPilotName
 	return items, nil
 }
 
+const listIntelPilotNamesByLower = `-- name: ListIntelPilotNamesByLower :many
+SELECT name_lower, character_id, name, checked_at FROM intel_pilot_names
+WHERE name_lower = ANY($1::text[])
+`
+
+func (q *Queries) ListIntelPilotNamesByLower(ctx context.Context, nameLowers []string) ([]IntelPilotName, error) {
+	rows, err := q.db.QueryContext(ctx, listIntelPilotNamesByLower, pq.Array(nameLowers))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []IntelPilotName
+	for rows.Next() {
+		var i IntelPilotName
+		if err := rows.Scan(
+			&i.NameLower,
+			&i.CharacterID,
+			&i.Name,
+			&i.CheckedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listIntelReports = `-- name: ListIntelReports :many
 SELECT id, channel_id, system_id, author_user_id, reporter, text, pilots, hostiles, clear, scan_id, source, seen_at, created_at, kind, analysis, group_id
 FROM intel_reports

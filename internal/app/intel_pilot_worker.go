@@ -347,9 +347,43 @@ func (app *Application) notePilotOrbit(ctx context.Context) {
 		have[id] = true
 	}
 
+	// A character's orbit can only gain counterparties when
+	// one of the snapshots it is read from is refreshed, so a
+	// character whose newest orbit snapshot stamp is unchanged
+	// since the last scan is skipped: the ungated pass used to
+	// re-walk every ledger, roster, and division of every
+	// character every minute and re-note what it found.
+	orbitKinds := map[string]bool{
+		esi.SnapWalletJournal: true, esi.SnapWalletTxns: true,
+		esi.SnapContracts: true, esi.SnapContacts: true,
+		esi.SnapMail: true, esi.SnapCorpMembers: true,
+	}
+	for d := int64(1); d <= 7; d++ {
+		orbitKinds[esi.CorpJournalKind(d)] = true
+		orbitKinds[esi.CorpTxnsKind(d)] = true
+	}
+	charIDs := make([]int64, 0, len(characters))
+	for _, ch := range characters {
+		charIDs = append(charIDs, ch.CharacterID)
+	}
+	latest := make(map[int64]time.Time, len(characters))
+	if metas, err := app.queries.ListSnapshotMetaForCharacters(ctx, charIDs); err == nil {
+		for _, m := range metas {
+			if orbitKinds[m.Kind] && m.FetchedAt.After(latest[m.CharacterID]) {
+				latest[m.CharacterID] = m.FetchedAt
+			}
+		}
+	}
+	if app.pilotOrbitSeen == nil {
+		app.pilotOrbitSeen = map[int64]time.Time{}
+	}
 	found := make(map[int64]bool)
 	for _, ch := range characters {
+		if seen, ok := app.pilotOrbitSeen[ch.CharacterID]; ok && seen.Equal(latest[ch.CharacterID]) {
+			continue
+		}
 		app.pilotCounterpartyIDs(ctx, ch.CharacterID, found)
+		app.pilotOrbitSeen[ch.CharacterID] = latest[ch.CharacterID]
 	}
 	ids := make([]int64, 0, len(found))
 	for id := range found {

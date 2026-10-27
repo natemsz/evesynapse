@@ -216,6 +216,10 @@ type Application struct {
 	pilotBackfillMu     sync.Mutex
 	pilotBackfillCh     chan int64
 	pilotBackfillQueued map[int64]bool
+	// The pilot orbit's per-character snapshot stamp: a
+	// character whose orbit snapshots have not moved since
+	// the last scan is not walked again (intel_pilot_worker.go).
+	pilotOrbitSeen map[int64]time.Time
 
 	// The residue step (residue_model.go): settled reports
 	// offered for a pass over what their readings left unparsed.

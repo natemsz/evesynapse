@@ -264,20 +264,23 @@ func (app *Application) applyPilotKill(ctx context.Context, characterID int64, k
 	if !isVictim && !isAttacker {
 		return false, nil
 	}
-	tx, err := app.db.BeginTx(ctx, nil)
-	if err != nil {
-		return false, err
-	}
-	defer tx.Rollback()
-	q := db.New(tx)
 	if requireProfile {
-		if _, err := q.GetPilotActivityProfile(ctx, characterID); err != nil {
+		// Most pilots have no profile: check before opening
+		// the transaction, so the common case costs one
+		// indexed lookup instead of a tx that rolls back.
+		if _, err := app.queries.GetPilotActivityProfile(ctx, characterID); err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				return false, nil
 			}
 			return false, err
 		}
 	}
+	tx, err := app.db.BeginTx(ctx, nil)
+	if err != nil {
+		return false, err
+	}
+	defer tx.Rollback()
+	q := db.New(tx)
 	if _, err := q.MarkPilotKillApplied(ctx, db.MarkPilotKillAppliedParams{
 		KillmailID: km.KillmailID, CharacterID: characterID, KillmailTime: km.KillmailTime.UTC(),
 	}); err != nil {
@@ -332,8 +335,12 @@ func (app *Application) applyPilotKill(ctx context.Context, characterID int64, k
 	}); err != nil {
 		return false, err
 	}
-	if err := q.RefreshPilotUsualShip(ctx, characterID); err != nil {
-		return false, err
+	// The usual ship is derived from the ship rows: only
+	// re-sort it when this kill actually moved one.
+	if (isVictim && victimShip > 0) || (isAttacker && attackerShip > 0) {
+		if err := q.RefreshPilotUsualShip(ctx, characterID); err != nil {
+			return false, err
+		}
 	}
 	if err := tx.Commit(); err != nil {
 		return false, err

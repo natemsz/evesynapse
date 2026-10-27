@@ -240,7 +240,7 @@ h1, h2, h3, h4, .wordmark, .btn, thead th, .badge,
 .branch > summary {
   text-transform: uppercase;
 }
-header a.navlink, .branch .menu a, .switcher .menu a {
+header a.navlink, .branch .menu a, .switcher .menu a, .switcher-menu a {
   font-family: "Rajdhani", "Segoe UI", sans-serif;
   font-weight: 600;
   font-synthesis-weight: none;
@@ -394,7 +394,7 @@ header a.navlink.utility { font-size: 0.9em; color: var(--muted); }
 }
 .branch[open] > summary { color: var(--text-bright); }
 .branch[open] > summary::after { transform: rotate(180deg); }
-.branch .menu {
+.branch .menu, .switcher-menu {
   position: absolute;
   top: calc(100% + 0.35rem);
   left: 0;
@@ -410,15 +410,15 @@ header a.navlink.utility { font-size: 0.9em; color: var(--muted); }
   -webkit-backdrop-filter: blur(20px) saturate(1.25);
   backdrop-filter: blur(20px) saturate(1.25);
 }
-.branch .menu a {
+.branch .menu a, .switcher-menu a {
   color: #d8c3a5;
   padding: 0.35rem 0.6rem;
   border-radius: var(--r-sm);
   white-space: nowrap;
 }
-.branch .menu a:hover { color: var(--text-bright); background: #1b1b1b; text-decoration: none; }
-.branch .menu a.active { color: var(--gold); background: rgba(255, 106, 26, 0.18); }
-.branch .menu .nav-group-label {
+.branch .menu a:hover, .switcher-menu a:hover { color: var(--text-bright); background: #1b1b1b; text-decoration: none; }
+.branch .menu a.active, .switcher-menu a.active { color: var(--gold); background: rgba(255, 106, 26, 0.18); }
+.branch .menu .nav-group-label, .switcher-menu .nav-group-label {
   margin: 0.5rem 0 0.1rem;
   padding: 0.35rem 0.6rem 0;
   font-family: "Rajdhani", "Segoe UI", sans-serif;
@@ -428,7 +428,7 @@ header a.navlink.utility { font-size: 0.9em; color: var(--muted); }
   text-transform: uppercase;
   color: var(--muted);
 }
-.branch .menu .nav-group-label:first-child { margin-top: 0; padding-top: 0.1rem; }
+.branch .menu .nav-group-label:first-child, .switcher-menu .nav-group-label:first-child { margin-top: 0; padding-top: 0.1rem; }
 .sidebar .branch .menu .nav-group-label { padding-left: 0.45rem; padding-right: 0.45rem; }
 
 /* --- layout + panels --- */
@@ -1553,11 +1553,11 @@ footer .version-number {
      header: the branch stops being the menu's positioning context, so
      the menu spans the header. */
   .branch { position: static; }
-  .branch .menu { left: 0; right: 0; top: 100%; min-width: 0; }
+  .branch .menu, .switcher-menu { left: 0; right: 0; top: 100%; min-width: 0; }
   .topbar { flex-wrap: wrap; }
   header a.navlink, .branch > summary { padding: 0.5rem 0.65rem; }
-  .branch .menu { padding: 0.4rem; }
-  .branch .menu a { padding: 0.65rem 0.8rem; }
+  .branch .menu, .switcher-menu { padding: 0.4rem; }
+  .branch .menu a, .switcher-menu a { padding: 0.65rem 0.8rem; }
   .branch[open] > summary { background: rgba(255, 106, 26, 0.15); }
   .searchwrap { width: calc(100vw - 9.5rem); }
   th, td { padding: 0.35rem 0.45rem; }
@@ -1566,8 +1566,8 @@ footer .version-number {
 /* --- header character switcher + /characters/ page --- The switcher is
    a nav .branch in the top bar; its menu aligns to the bar's right
    edge. */
-.switcher .menu { left: auto; right: 0; min-width: 15rem; }
-.switcher .menu a { display: flex; align-items: center; gap: 0.5rem; }
+.switcher .menu, .switcher-menu { left: auto; right: 0; min-width: 15rem; }
+.switcher .menu a, .switcher-menu a { display: flex; align-items: center; gap: 0.5rem; }
 /* The Settings branch sits in the sidebar footer, at the very
    bottom of the nav: its menu opens upward, over the rows above
    it. In the rail the shared rail rule takes the menu out to

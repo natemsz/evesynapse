@@ -135,7 +135,7 @@ html[data-theme="light"] .charselector-dropdown {
    verbatim, like the character selector's dropdown above:
    near-opaque paint does the legibility work, the standard
    floating blur stays for where it can sample. */
-.switcher .menu {
+.switcher .menu, .switcher-menu {
   background-color: color-mix(in srgb, var(--panel) 88%, transparent);
   border-color: color-mix(in srgb, var(--accent) 25%, transparent);
   box-shadow: 0 10px 24px rgba(0, 0, 0, 0.65);
@@ -154,6 +154,34 @@ html[data-theme="light"] .charselector-dropdown {
   box-shadow: 0 10px 24px rgba(0, 0, 0, 0.65);
   -webkit-backdrop-filter: blur(30px) saturate(1.45);
   backdrop-filter: blur(30px) saturate(1.45);
+}
+
+/* The header flyouts as top-level surfaces: app.js moves them to
+   the body and places them under their toggles, so their
+   backdrop-filter samples the page under the open panel instead
+   of the header's backdrop image. The fixed position and the
+   raised layer live here, and so does the open-state motion,
+   whose style.css rules key off ancestors the panels have left;
+   the panels carry the is-open class themselves. */
+body > .flyout {
+  position: fixed;
+  z-index: 80;
+  margin: 0;
+}
+html.js body > .notify-menu.flyout,
+html.js body > .switcher-menu.flyout {
+  opacity: 0;
+  transform: translateY(-0.25rem);
+  transition: opacity 140ms ease-out, transform 180ms ease-out;
+}
+html.js body > .notify-menu.flyout.is-open,
+html.js body > .switcher-menu.flyout.is-open {
+  opacity: 1;
+  transform: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  html.js body > .notify-menu.flyout,
+  html.js body > .switcher-menu.flyout { transition: none; }
 }
 
 /* My Loadouts: the training-plan action is a skill-book glyph,

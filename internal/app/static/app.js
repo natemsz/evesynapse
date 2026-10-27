@@ -4033,6 +4033,104 @@
   }
 })();
 
+// The header flyouts (the notification list, the character
+// switcher's menu, the search suggestions) stand as top-level
+// surfaces: nested inside the header, itself a backdrop root,
+// their backdrop-filter samples the header's backdrop image and
+// the page under the open panel never blurs (the landing menu
+// hoists for the same reason). Each panel moves to the body and
+// is placed under its toggle from the toggle's own rect, on open
+// and again while it stands open over a moving page. Open state
+// stays with the <details>: a panel mirrors its open attribute
+// and is-open class, so the motion and the closing paths are the
+// ones the two dances below already run.
+(function () {
+  "use strict";
+  var placed = [];
+  function placeAll() {
+    for (var i = 0; i < placed.length; i++) {
+      if (!placed[i].el.hidden) placed[i].place();
+    }
+  }
+  window.addEventListener("resize", placeAll);
+  document.addEventListener("scroll", placeAll, true);
+
+  function hoist(el, place) {
+    el.classList.add("flyout");
+    document.body.appendChild(el);
+    placed.push({ el: el, place: place });
+  }
+  function unplace(el) {
+    for (var i = placed.length - 1; i >= 0; i--) {
+      if (placed[i].el === el) placed.splice(i, 1);
+    }
+    if (el.parentNode) el.parentNode.removeChild(el);
+  }
+
+  function hoistDetails(details, panelSelector, narrow) {
+    if (!details) return;
+    var panel = null;
+    function place() {
+      if (!panel || panel.hidden) return;
+      var summary = details.querySelector("summary");
+      if (!summary) return;
+      var r = summary.getBoundingClientRect();
+      if (narrow && window.matchMedia && window.matchMedia(narrow.query).matches) {
+        var head = document.querySelector("header");
+        panel.style.top = ((head ? head.getBoundingClientRect().bottom : r.bottom) + narrow.gap) + "px";
+        panel.style.left = narrow.left;
+        panel.style.right = narrow.right;
+        panel.style.width = "auto";
+      } else {
+        panel.style.top = (r.bottom + 6) + "px";
+        panel.style.left = "auto";
+        panel.style.right = Math.max(8, window.innerWidth - r.right) + "px";
+        panel.style.width = "";
+      }
+    }
+    function sync() {
+      var fresh = details.querySelector(panelSelector);
+      if (fresh && fresh !== panel) {
+        if (panel) unplace(panel);
+        panel = fresh;
+        details.flyoutPanel = panel;
+        hoist(panel, place);
+      }
+      if (!panel) return;
+      panel.hidden = !details.open;
+      panel.classList.toggle("is-open", details.classList.contains("is-open"));
+      place();
+    }
+    new MutationObserver(sync).observe(details, {
+      childList: true, attributes: true, attributeFilter: ["open", "class"],
+    });
+    sync();
+  }
+
+  hoistDetails(document.getElementById("notify-menu"), ".notify-menu",
+    { query: "(max-width: 860px)", gap: 6, left: "0.5rem", right: "0.5rem" });
+  hoistDetails(document.querySelector("details.topbar-switcher"), ".menu",
+    { query: "(max-width: 640px)", gap: 0, left: "0", right: "0" });
+
+  var suggest = document.getElementById("topbar-suggest");
+  var search = document.getElementById("topbar-q");
+  if (suggest && search) {
+    hoist(suggest, placeSuggest);
+    new MutationObserver(placeSuggest).observe(suggest, {
+      attributes: true, attributeFilter: ["hidden"],
+    });
+  }
+  function placeSuggest() {
+    if (!suggest || suggest.hidden) return;
+    var wrap = search.closest ? search.closest(".searchwrap") : null;
+    var r = (wrap || search).getBoundingClientRect();
+    suggest.style.top = (r.bottom + 4) + "px";
+    suggest.style.left = r.left + "px";
+    suggest.style.right = "auto";
+    suggest.style.width = r.width + "px";
+  }
+})();
+
 // The notification list in the top bar: it closes on a click or tap
 // anywhere else and on Escape, and opens and closes with the
 // navigation's motion (the CSS transition on .notify.is-open). The
@@ -4091,7 +4189,7 @@
     if (menu.open && !closing) { close(); } else { open(); }
   });
   document.addEventListener("click", function (ev) {
-    if (!menu.contains(ev.target)) close();
+    if (!menu.contains(ev.target) && !(menu.flyoutPanel && menu.flyoutPanel.contains(ev.target))) close();
   });
   // A swap replaces the page under an open list: fold it away
   // through the same path as an outside click.
@@ -4352,7 +4450,7 @@
     if (switcher.open && !closing) { close(); } else { open(); }
   });
   document.addEventListener("click", function (ev) {
-    if (!switcher.contains(ev.target)) close();
+    if (!switcher.contains(ev.target) && !(switcher.flyoutPanel && switcher.flyoutPanel.contains(ev.target))) close();
   });
   // A swap replaces the page under an open switcher: fold it
   // away through the same path as an outside click.

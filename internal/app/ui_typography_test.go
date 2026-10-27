@@ -16,7 +16,7 @@ func TestMenuTextIsAllCapsRajdhani(t *testing.T) {
 		// The display-face rows state their capitals in the menu rule.
 		".sidenav a.navlink,\n.sidebar-account-footer .navlink,\n.branch > summary {\n  text-transform: uppercase;\n}",
 		// Header links and dropdown items take the same face.
-		"header a.navlink, .branch .menu a, .switcher .menu a {\n  font-family: \"Rajdhani\", \"Segoe UI\", sans-serif;\n  font-weight: 600;\n  font-synthesis-weight: none;\n  text-transform: uppercase;",
+		"header a.navlink, .branch .menu a, .switcher .menu a, .switcher-menu a {\n  font-family: \"Rajdhani\", \"Segoe UI\", sans-serif;\n  font-weight: 600;\n  font-synthesis-weight: none;\n  text-transform: uppercase;",
 		// Pop-menu items too.
 		".menu-pop-body a, .menu-pop-body button {\n  display: block;\n  width: 100%;\n  text-align: left;\n  padding: 0.45rem 0.6rem;\n  font-family: \"Rajdhani\", \"Segoe UI\", sans-serif;\n  font-weight: 600;\n  text-transform: uppercase;",
 		// The sidenav layout rule carries no casing of its own: the

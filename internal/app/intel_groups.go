@@ -660,6 +660,7 @@ func mergeGroupLocals(reads []memberReading) *localReading {
 // the link stands on the names alone where none does.
 func (app *Application) groupFactLinks(ctx context.Context, reads []memberReading) []compLink {
 	byPilot := map[string]*compLink{}
+	shipNames := map[string]bool{}
 	for _, mr := range reads {
 		if !mr.hasRes || mr.res.Fleet == nil {
 			continue
@@ -677,12 +678,40 @@ func (app *Application) groupFactLinks(ctx context.Context, reads []memberReadin
 			l.ShipName = m.Ship
 			l.From = mr.rep.ID
 			l.TypeID = 0
-			if row, err := app.queries.GetSDETypeByName(ctx, m.Ship); err == nil {
-				l.TypeID = row.TypeID
+			shipNames[strings.ToLower(m.Ship)] = true
+		}
+	}
+	// Names resolve in one query per kind for the whole
+	// composite, not two queries per fleet member.
+	if len(byPilot) > 0 {
+		shipList := make([]string, 0, len(shipNames))
+		for n := range shipNames {
+			shipList = append(shipList, n)
+		}
+		typeByName := map[string]int64{}
+		if rows, err := app.queries.ListSDETypesByLowerNames(ctx, shipList); err == nil {
+			for _, r := range rows {
+				k := strings.ToLower(r.Name)
+				if _, seen := typeByName[k]; !seen {
+					typeByName[k] = r.TypeID
+				}
 			}
-			if row, err := app.queries.GetIntelPilotName(ctx, key); err == nil && row.CharacterID > 0 {
-				l.PilotID = row.CharacterID
+		}
+		pilotKeys := make([]string, 0, len(byPilot))
+		for k := range byPilot {
+			pilotKeys = append(pilotKeys, k)
+		}
+		pilotByLower := map[string]int64{}
+		if rows, err := app.queries.ListIntelPilotNamesByLower(ctx, pilotKeys); err == nil {
+			for _, r := range rows {
+				if r.CharacterID > 0 {
+					pilotByLower[r.NameLower] = r.CharacterID
+				}
 			}
+		}
+		for key, l := range byPilot {
+			l.TypeID = typeByName[strings.ToLower(l.ShipName)]
+			l.PilotID = pilotByLower[key]
 		}
 	}
 	out := make([]compLink, 0, len(byPilot))

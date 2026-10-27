@@ -148,6 +148,10 @@ SELECT character_id, name FROM intel_pilot_names WHERE character_id > 0;
 -- name: GetIntelPilotName :one
 SELECT name_lower, character_id, name, checked_at FROM intel_pilot_names WHERE name_lower = $1;
 
+-- name: ListIntelPilotNamesByLower :many
+SELECT name_lower, character_id, name, checked_at FROM intel_pilot_names
+WHERE name_lower = ANY(sqlc.arg(name_lowers)::text[]);
+
 -- name: UpsertIntelPilotName :exec
 INSERT INTO intel_pilot_names (name_lower, character_id, name, checked_at)
 VALUES (sqlc.arg(name_lower), sqlc.arg(character_id), sqlc.arg(name), sqlc.arg(checked_at))

@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.6.0.4] - 2026-10-27
+
+Automated build of EveSynapse v0.6.0.4. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+
+## What's Changed
+### 🚀 Features
+* Sign-up theme step and Axon offer, landing frost on the header flyouts, Customize Theme modal by @natemsz in https://github.com/natemsz/evesynapse/pull/728
+### 🐛 Bug Fixes
+* Themes the wordmark for the Servant Sisters of EVE scheme by @natemsz in https://github.com/natemsz/evesynapse/pull/727
+### Other Changes
+* docs(changelog): review changelog for v0.6.0.2 by @github-actions[bot] in https://github.com/natemsz/evesynapse/pull/722
+* Keep chat shorthand and place words out of pilot readings; ask the model about doubtful ones by @natemsz in https://github.com/natemsz/evesynapse/pull/723
+* Axon preview endpoint and send overrides for kind and system by @natemsz in https://github.com/natemsz/evesynapse/pull/724
+* Intel threads: link report groups across neighbouring systems by @natemsz in https://github.com/natemsz/evesynapse/pull/725
+* Gives every flyout the bell's glass, tinted by the colour scheme by @natemsz in https://github.com/natemsz/evesynapse/pull/730
+* Moves the theme and Axon steps to after the first character is added by @natemsz in https://github.com/natemsz/evesynapse/pull/731
+
+
+**Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.6.0.2...v0.6.0.4
+
 ## [v0.6.0.2] - 2026-10-27
 
 Automated build of EveSynapse v0.6.0.2. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).

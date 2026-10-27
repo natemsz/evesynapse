@@ -89,6 +89,22 @@ func (app *Application) refreshIntel(ctx context.Context, budget *warmBudget) (s
 	return stored, names, false
 }
 
+// warDetailMemoEntry is one war's state as the last pass left
+// it: finished wars never need another look, and an active
+// war's payload is fresh until warDetailMaxAge.
+type warDetailMemoEntry struct {
+	finished  bool
+	fetchedAt time.Time
+}
+
+// noteWarDetail records one war's state for the memo.
+func (app *Application) noteWarDetail(warID int64, finished bool, fetchedAt time.Time) {
+	if app.warDetailMemo == nil {
+		app.warDetailMemo = map[int64]warDetailMemoEntry{}
+	}
+	app.warDetailMemo[warID] = warDetailMemoEntry{finished: finished, fetchedAt: fetchedAt}
+}
+
 // warmWarDetails fetches detail payloads for the war ID list:
 // missing ones, plus active wars whose stored payload has aged
 // past warDetailMaxAge, at most maxWarDetailsPerCycle fetches.
@@ -107,6 +123,14 @@ func (app *Application) warmWarDetails(ctx context.Context, list esi.WarList) (f
 			continue
 		}
 
+		// The memo answers for wars the last pass settled:
+		// finished, or fetched inside the max age. Without
+		// it every cycle re-read and re-decoded the whole
+		// list's payloads just to learn nothing changed.
+		if memo, ok := app.warDetailMemo[warID]; ok &&
+			(memo.finished || time.Since(memo.fetchedAt) <= warDetailMaxAge) {
+			continue
+		}
 		need := false
 		if row, err := app.queries.GetWarDetail(ctx, warID); err != nil {
 			if !errors.Is(err, sql.ErrNoRows) {
@@ -118,8 +142,9 @@ func (app *Application) warmWarDetails(ctx context.Context, list esi.WarList) (f
 			var war esi.War
 			if err := json.Unmarshal([]byte(row.Payload), &war); err != nil {
 				need = true // undecodable payload: replace it
-			} else if war.Finished == "" {
-				if time.Since(row.FetchedAt) > warDetailMaxAge {
+			} else {
+				app.noteWarDetail(warID, war.Finished != "", row.FetchedAt)
+				if war.Finished == "" && time.Since(row.FetchedAt) > warDetailMaxAge {
 					need = true // still running; counters move
 				}
 			}
@@ -138,14 +163,18 @@ func (app *Application) warmWarDetails(ctx context.Context, list esi.WarList) (f
 			}
 			continue
 		}
+		storedAt := time.Now().UTC()
 		if err := app.queries.UpsertWarDetail(ctx, db.UpsertWarDetailParams{
 			WarID:     warID,
 			Payload:   string(body),
-			FetchedAt: time.Now().UTC(),
+			FetchedAt: storedAt,
 		}); err != nil {
 			logging.Errorf("worker: intel: store war detail %d: %v", warID, err)
 			continue
 		}
+		var war esi.War
+		_ = json.Unmarshal(body, &war)
+		app.noteWarDetail(warID, war.Finished != "", storedAt)
 		fetched++
 	}
 	return fetched, false

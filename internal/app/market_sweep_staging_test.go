@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -92,8 +93,9 @@ func (s *pagedBookTransport) RoundTrip(req *http.Request) (*http.Response, error
 	}, nil
 }
 
-// pagesFor returns the pages requested for one region, in
-// request order.
+// pagesFor returns the pages requested for one region, in page
+// order: a sweep reads a window of pages at once, so the order
+// they were asked in is not fixed.
 func (s *pagedBookTransport) pagesFor(regionID int64) []int64 {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -103,6 +105,7 @@ func (s *pagedBookTransport) pagesFor(regionID int64) []int64 {
 			out = append(out, r[1])
 		}
 	}
+	slices.Sort(out)
 	return out
 }
 

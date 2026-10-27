@@ -110,20 +110,42 @@ func (app *Mod) SwarmAnnounceToSeeds(ctx context.Context, now time.Time) {
 	if !ok {
 		return
 	}
-	seeds := app.Cfg.Seeds
-	errs := make([]error, len(seeds))
-	SwarmFanOut(ctx, len(seeds), func(rctx context.Context, i int) {
-		errs[i] = app.SwarmCli.SendSeedAnnounce(rctx, seeds[i], entry)
+	if kept := app.announceTo(ctx, entry, app.Cfg.Seeds); kept > 0 {
+		logging.Infof("swarm: announced to %d seed(s)", kept)
+	}
+}
+
+// SwarmAnnounceToWarmPeer files the same heartbeat with one
+// dedicated warming node: a node that is not a configured seed
+// verifies pull signatures against its own seed directory
+// (the register endpoint is how a puller gets listed there),
+// and a puller that only ever gossips with it is never listed —
+// every signed pull it sends falls back to the bearer. The
+// coverage refresh calls this when it (re)learns what the node
+// warms, so the listing is renewed on that cadence, well
+// inside the directory's 48h TTL. Best-effort like the seed
+// heartbeat: a refusal only logs.
+func (app *Mod) SwarmAnnounceToWarmPeer(ctx context.Context, baseURL string, now time.Time) {
+	entry, ok := app.BuildSeedAnnounce(now)
+	if !ok {
+		return
+	}
+	app.announceTo(ctx, entry, []string{baseURL})
+}
+
+// announceTo sends one heartbeat entry to each URL and reports
+// how many kept it. A refused heartbeat only logs.
+func (app *Mod) announceTo(ctx context.Context, entry SwarmSignedEntry, urls []string) (kept int) {
+	errs := make([]error, len(urls))
+	SwarmFanOut(ctx, len(urls), func(rctx context.Context, i int) {
+		errs[i] = app.SwarmCli.SendSeedAnnounce(rctx, urls[i], entry)
 	})
-	kept := 0
 	for i, err := range errs {
 		if err != nil {
-			logging.Warnf("swarm: announce %s: %v", seeds[i], err)
+			logging.Warnf("swarm: announce %s: %v", urls[i], err)
 			continue
 		}
 		kept++
 	}
-	if kept > 0 {
-		logging.Infof("swarm: announced to %d seed(s)", kept)
-	}
+	return kept
 }

@@ -134,10 +134,16 @@ func (app *Application) drainUrgentWants(ctx context.Context) (limited bool) {
 		if err != nil {
 			logging.Errorf("worker: urgent drain: list history wants: %v", err)
 		} else {
+			// The candidate gate, as in the cycle pass: a type
+			// ESI does not know can only ever be answered 404.
+			fetchable := app.historyFetchableTypes(ctx)
 			fetched := 0
 			for _, wn := range wants {
 				if fetched >= urgentHistoryPerNudge || ctx.Err() != nil {
 					break
+				}
+				if fetchable != nil && !fetchable[wn.TypeID] {
+					continue
 				}
 				key := marketKey{RegionID: wn.RegionID, TypeID: wn.TypeID}
 				if !app.marketFetchDue(ctx, marketFetchKind("history", key), historyRefetchGate) {

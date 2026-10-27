@@ -49,9 +49,10 @@ const tvPassChunk = 400
 // worker touches it (refreshCycle is serial), so it needs no
 // lock of its own.
 type tvPassState struct {
-	cursor         int    // next product index to evaluate
-	evidenceCursor int    // next evidence-only type to evaluate
-	fingerprint    string // inputs the stored rows were computed under
+	cursor         int       // next product index to evaluate
+	evidenceCursor int       // next evidence-only type to evaluate
+	fingerprint    string    // inputs the stored rows were computed under
+	passDoneAt     time.Time // when the walk last completed a pass
 	graph          *tvBlueprintGraph
 	profile        trueValueProfile
 
@@ -195,15 +196,66 @@ func (app *Application) loadTVBlueprintGraph(ctx context.Context) (*tvBlueprintG
 	return graph, nil
 }
 
+// tvCrawlDue reports whether a region the crawl has already
+// visited is past its re-check interval. A region never
+// crawled in this process has no watched listings, so it
+// does not hold the gate open; its first crawl rides the
+// next pass an input move or the staleness bound starts.
+func tvCrawlDue(st *tvPassState, now time.Time) bool {
+	for _, regionID := range tvContractRegions {
+		last := st.lastCrawl[regionID]
+		if !last.IsZero() && now.Sub(last) >= tvContractCrawlInterval {
+			return true
+		}
+	}
+	return false
+}
+
 // refreshTrueValues runs one bounded chunk of the pass. It is
 // called from refreshCycle behind the guide refresh and the
 // cost-index refresh, whose outputs are its inputs.
 func (app *Application) refreshTrueValues(ctx context.Context) {
+	meta, ok := app.guideMeta(ctx)
+	if !ok {
+		return // no guide yet: nothing honest to price from
+	}
+	st := &app.trueValuePass
+
+	// A pass runs when its inputs have moved since the last
+	// completed pass, and the cycle idles otherwise. The
+	// fingerprint is read cheaply (the guide's meta row and
+	// the sweep's stamp query), and a cycle that finds it
+	// unchanged returns before the stats rows, the graph, the
+	// exit probes and the evidence reads are loaded at all:
+	// rerunning them on frozen inputs only recomputes the
+	// values already stored. A completed pass also ages out:
+	// inputs frozen past trueValueStaleAfter (a stalled
+	// sweep, a dead ESI) start a fresh pass anyway, so the
+	// rows keep the staleness bound the age rule promises.
+	// The crawl is the one duty the gate never holds back:
+	// when a visited region's re-check comes due, the pass
+	// runs, because vanished listings are evidence only a
+	// crawl collects.
+	if st.fingerprint != "" && st.cursor == 0 &&
+		time.Since(st.passDoneAt) < trueValueStaleAfter &&
+		!tvCrawlDue(st, time.Now()) {
+		if stamp, err := app.queries.GetMarketRegionStatsStamp(ctx, defaultMarketRegion); err == nil {
+			var statsStamp time.Time
+			if t, ok := stamp.Stamp.(time.Time); ok {
+				statsStamp = t
+			}
+			fingerprint := fmt.Sprintf("%d|%s|%d", trueValueProfileVersion,
+				meta.FetchedAt.UTC().Format(time.RFC3339Nano), statsStamp.Unix())
+			if fingerprint == st.fingerprint {
+				return
+			}
+		}
+	}
+
 	guide := app.storedGuidePrices(ctx)
 	if guide == nil {
 		return // no guide yet: nothing honest to price from
 	}
-	st := &app.trueValuePass
 	if st.samples == nil {
 		st.samples = make(map[int64][]tvContractSample)
 		st.lastCrawl = make(map[int64]time.Time)
@@ -236,7 +288,6 @@ func (app *Application) refreshTrueValues(ctx context.Context) {
 
 	// The fingerprint of everything a stored row was computed
 	// from: profile version, guide vintage, sweep vintage.
-	meta, _ := app.guideMeta(ctx)
 	fingerprint := fmt.Sprintf("%d|%s|%d", trueValueProfileVersion,
 		meta.FetchedAt.UTC().Format(time.RFC3339Nano), statsStamp.Unix())
 	inputsChanged := fingerprint != st.fingerprint
@@ -457,6 +508,7 @@ func (app *Application) refreshTrueValues(ctx context.Context) {
 	if end >= len(graph.products) {
 		st.cursor = 0
 		st.fingerprint = fingerprint
+		st.passDoneAt = now
 	}
 	if computed > 0 || unpriced > 0 {
 		logging.Infof("true values: priced %d types (%d unpriced) at chunk %d-%d of %d",

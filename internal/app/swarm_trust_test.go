@@ -17,6 +17,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -669,6 +670,63 @@ func TestSwarmOnePeerRoundPerCycle(t *testing.T) {
 	}
 	if hits["/swarm/pull"] != 1 {
 		t.Fatalf("peer was pulled %d times in one cycle, want 1", hits["/swarm/pull"])
+	}
+}
+
+// TestSwarmPullRestsFailingPeer: a peer whose pulls keep
+// failing is rested instead of being asked again on every
+// want, and its failures are still counted even though each
+// pull spent its whole deadline -- the counter write no
+// longer rides the pull's expired context.
+func TestSwarmPullRestsFailingPeer(t *testing.T) {
+	ctx := context.Background()
+	app := swarmTestApp(t)
+	peer, err := swarm.MintSwarmIdentity()
+	if err != nil {
+		t.Fatalf("mint peer: %v", err)
+	}
+	peer.ID = "peer-silent"
+	now := time.Now().UTC()
+	var hits atomic.Int64
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits.Add(1)
+		// Answer only after any urgent deadline has passed:
+		// every pull fails on its own context, the shape
+		// behind the failing counter writes.
+		time.Sleep(400 * time.Millisecond)
+		swarm.WriteSwarmJSON(w, map[string]any{"entries": []swarm.SwarmSignedEntry{}})
+	}))
+	t.Cleanup(srv.Close)
+	if _, err := app.queries.UpsertSwarmPeer(ctx, db.UpsertSwarmPeerParams{
+		InstanceID: peer.ID, BaseUrl: srv.URL, PublicKey: peer.PublicString(),
+		Source: "manual", FirstSeen: now,
+	}); err != nil {
+		t.Fatalf("pin peer: %v", err)
+	}
+	if err := app.queries.SetSwarmPeerApproved(ctx, db.SetSwarmPeerApprovedParams{InstanceID: peer.ID, Approved: true}); err != nil {
+		t.Fatalf("approve peer: %v", err)
+	}
+	mod := swarm.StateFor(app)
+	for i := 0; i < 6; i++ {
+		pctx, cancel := context.WithTimeout(ctx, 150*time.Millisecond)
+		mod.SwarmPullOne(pctx, swarm.SwarmKindCorporation, "98000001")
+		cancel()
+	}
+	if got := hits.Load(); got != 3 {
+		t.Fatalf("failing peer was pulled %d times in six wants, want 3 (then rested)", got)
+	}
+	counters, err := app.queries.GetSwarmCounters(ctx)
+	if err != nil {
+		t.Fatalf("counters: %v", err)
+	}
+	var failed int64
+	for _, c := range counters {
+		if c.Name == swarm.SwarmCounterPullsFailed {
+			failed = c.Value
+		}
+	}
+	if failed != 3 {
+		t.Fatalf("pulls_failed = %d, want 3: failures under spent deadlines still count", failed)
 	}
 }
 

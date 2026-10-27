@@ -537,3 +537,19 @@ test("the boot page's own sheet is pruned when the shell swaps away", async func
     env.headEl.children.map(function (el) { return el.href; }),
     ["/static/style.css?v=1", "/static/bg.css?v=1", "/static/phone.css?v=1"]);
 });
+
+test("a content-mutated event drops the fetched-page cache", async function () {
+  const env = makeEnv();
+  loadSwap(env);
+  clickOn(env, "/market/");
+  await waitFor(function () { return env.mainEl.innerHTML.includes("MARKET"); }, "swap paint");
+  const fetches = env.win.fetched.length;
+  // The page changed server state without navigating (a home
+  // layout save): cached copies predate it, so going back must
+  // fetch fresh instead of painting the stale page.
+  (env.listeners["evesynapse:content-mutated"] || []).forEach(function (fn) { fn({ type: "evesynapse:content-mutated" }); });
+  env.win.location.href = "https://app.test/characters/";
+  env.firePopstate({ esSwap: 1, scroll: 0 });
+  await waitFor(function () { return env.win.fetched.length > fetches; }, "refetch after mutation");
+  await waitFor(function () { return env.mainEl.innerHTML.includes("MARKET"); }, "fresh page painted");
+});

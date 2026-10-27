@@ -33,7 +33,7 @@ type themePrefs struct {
 // are the values boot.js accepts for the evesynapse-scheme key.
 var themeSchemes = map[string]bool{
 	"jove": true, "caldari": true, "gallente": true,
-	"amarr": true, "triglavian": true, "edencom": true,
+	"amarr": true, "triglavian": true, "edencom": true, "soe": true,
 }
 
 func validThemeScheme(s string) bool { return s == "" || themeSchemes[s] }

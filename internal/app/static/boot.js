@@ -51,7 +51,7 @@ try {
     // comes off and the scheme's tier applies.
     var savedScheme = window.localStorage.getItem("evesynapse-scheme");
     if (savedScheme === "jove" || savedScheme === "caldari" || savedScheme === "gallente" ||
-        savedScheme === "amarr" || savedScheme === "triglavian" || savedScheme === "edencom") {
+        savedScheme === "amarr" || savedScheme === "triglavian" || savedScheme === "edencom" || savedScheme === "soe") {
       document.documentElement.setAttribute("data-scheme", savedScheme);
       document.documentElement.removeAttribute("data-backdrop");
       var savedTier = window.localStorage.getItem("evesynapse-tier");

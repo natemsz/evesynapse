@@ -178,7 +178,7 @@ var (
 // pageSharedTemplates are the files every full page is parsed with:
 // the layout and the partials any page may use. One list, so that
 // nothing else parsing a page into the same cache can leave one out.
-var pageSharedTemplates = []string{"templates/base.html", "templates/wordmark.html", "templates/notifybell.html", "templates/balancechart.html", "templates/walletflow.html", "templates/charselector.html", "templates/fitbrowser.html", "templates/fit_workbench.html", "templates/locked.html", "templates/sectiontabs.html", "templates/historysection.html", "templates/abyssalhowto.html", "templates/contractcards.html", "templates/reportcard.html"}
+var pageSharedTemplates = []string{"templates/base.html", "templates/wordmark.html", "templates/notifybell.html", "templates/balancechart.html", "templates/walletflow.html", "templates/charselector.html", "templates/fitbrowser.html", "templates/fit_workbench.html", "templates/locked.html", "templates/sectiontabs.html", "templates/historysection.html", "templates/abyssalhowto.html", "templates/contractcards.html", "templates/reportcard.html", "templates/themepicker.html"}
 
 // parsedTemplate returns the cached set for page, parsing it (with
 // the shared files first) the first time it is asked for.
@@ -392,6 +392,10 @@ func (app *Application) handleHome(w http.ResponseWriter, r *http.Request) {
 		app.renderLanding(ctx, w, landing)
 		return
 	}
+	// The Customize menu's Theme option opens the theme picker in
+	// a modal on this page: the Settings picker's own script
+	// drives it (it binds the picker's rows wherever they are).
+	data.Scripts = append(data.Scripts, "/static/settings.js")
 	app.render(ctx, w, http.StatusOK, "home.html", data)
 }
 

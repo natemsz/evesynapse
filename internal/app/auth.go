@@ -312,6 +312,21 @@ func (app *Application) handleEVELogin(w http.ResponseWriter, r *http.Request) {
 		} else if blob, err := json.Marshal(choice); err == nil {
 			app.sessions.Put(r.Context(), sessionLinkChoice, string(blob))
 		}
+		// The sign-up theme step rides the same way: stored now for
+		// a signed-in account, waiting in the session for a new one.
+		// A theme never blocks a sign-up: an unreadable one is
+		// simply not carried.
+		if _, present := r.URL.Query()["tscheme"]; present {
+			if prefs, ok := signupThemePrefs(r.URL.Query().Get("tscheme"), r.URL.Query().Get("ttype")); ok {
+				if userID := app.userID(r.Context()); userID != 0 {
+					if err := app.storeThemePrefs(r.Context(), userID, prefs); err != nil {
+						logging.Errorf("link: store theme for user %d: %v", userID, err)
+					}
+				} else if blob, err := json.Marshal(prefs); err == nil {
+					app.sessions.Put(r.Context(), sessionThemeChoice, string(blob))
+				}
+			}
+		}
 	} else {
 		// No choice: every feature this build has, as before the chooser.
 		cfg.Scopes = app.requestableScopes()
@@ -563,6 +578,19 @@ func (app *Application) handleEVECallback(w http.ResponseWriter, r *http.Request
 		var c linkChoice
 		if json.Unmarshal([]byte(blob), &c) == nil {
 			app.rememberLink(ctx, userID, c)
+		}
+	}
+
+	// The theme the player picked at sign-up, saved to the account
+	// it just created (or returned to), so the first page inside
+	// already wears it.
+	if blob := app.sessions.GetString(ctx, sessionThemeChoice); blob != "" {
+		app.sessions.Remove(ctx, sessionThemeChoice)
+		var prefs themePrefs
+		if json.Unmarshal([]byte(blob), &prefs) == nil {
+			if err := app.storeThemePrefs(ctx, userID, prefs); err != nil {
+				logging.Errorf("sso callback: store sign-up theme for user %d: %v", userID, err)
+			}
 		}
 	}
 

@@ -35,9 +35,16 @@ import (
 
 const sessionLinkChoice = "link_choice"
 
+// sessionThemeChoice is the session key the sign-up theme step's
+// answer waits under between /auth/eve and the SSO callback, next
+// to the link choice it rides with.
+const sessionThemeChoice = "theme_choice"
+
 // linkView is the chooser page.
 type linkView struct {
-	Step       string // "cards" or "reveal"
+	Step       string // "cards", "reveal", "theme" or "axon"
+	Signup     bool   // a signed-out visitor: the reveal runs on to the theme and Axon steps
+	StepBack   string // where a step page's Go back link lands, choice carried
 	Activities []linkActivityCard
 	Features   []linkFeatureView
 	Groups     []linkGroupView // the chosen features by kind of play, with what each permission is for
@@ -54,6 +61,81 @@ type linkView struct {
 	AllPicked  bool   // every card picked (pick=all)
 	Error      string
 	Hidden     []linkHidden // choices to carry across a form
+
+	// Sign-up only (a signed-out visitor): the theme step on the
+	// reveal, and the Axon offer when the choice turns on the
+	// location feature the intel channels file reports by.
+	Theme         *signupThemeView
+	Axon          bool
+	AxonDownloads []intelDownload
+}
+
+// signupThemeView is the sign-up theme step: the types first, the
+// schemes under the chosen type, with the Settings picker's names
+// and order.
+type signupThemeView struct {
+	Types   []signupThemeType
+	Schemes []signupThemeScheme
+	Full    bool // the full type is picked: scheme rows show their wallpaper note
+}
+
+type signupThemeType struct {
+	ID, Title, Blurb string
+	Selected         bool
+}
+
+type signupThemeScheme struct {
+	ID, Name, Sub string
+	Selected      bool
+	Pending       bool // a scheme at the full type: its wallpaper has not landed yet
+}
+
+var signupThemeTypes = []signupThemeType{
+	{ID: "full", Title: "Full", Blurb: "Wallpaper with glass effects. Takes more system resources."},
+	{ID: "muted", Title: "Muted", Blurb: "Less distracting, darker wallpaper."},
+	{ID: "minimalistic", Title: "Minimalistic", Blurb: "Light on system resources, best for multiboxing."},
+}
+
+var signupThemeSchemes = []signupThemeScheme{
+	{ID: "", Name: "Default", Sub: "Minmatar · ember, the standard look"},
+	{ID: "jove", Name: "Jove", Sub: "Purple and violet"},
+	{ID: "caldari", Name: "Caldari", Sub: "Steel blue"},
+	{ID: "gallente", Name: "Gallente", Sub: "Teal and green"},
+	{ID: "amarr", Name: "Amarr", Sub: "Gold"},
+	{ID: "triglavian", Name: "Triglavian", Sub: "Crimson, maroon, blood red"},
+	{ID: "edencom", Name: "EdenCom", Sub: "Pale gold on slate"},
+	{ID: "soe", Name: "Servant Sisters of EVE", Sub: "Coral red and pale cyan"},
+}
+
+// signupThemeViewFor is the theme step as the visitor left it (the
+// reveal carries its own answers, so a re-render keeps them),
+// defaulting to the out-of-box look: the default scheme at full.
+func signupThemeViewFor(q url.Values) *signupThemeView {
+	tierType := q.Get("ttype")
+	valid := false
+	for _, t := range signupThemeTypes {
+		if t.ID == tierType {
+			valid = true
+		}
+	}
+	if !valid {
+		tierType = "full"
+	}
+	scheme := q.Get("tscheme")
+	if !validThemeScheme(scheme) {
+		scheme = ""
+	}
+	view := &signupThemeView{Full: tierType == "full"}
+	for _, t := range signupThemeTypes {
+		t.Selected = t.ID == tierType
+		view.Types = append(view.Types, t)
+	}
+	for _, s := range signupThemeSchemes {
+		s.Selected = s.ID == scheme
+		s.Pending = view.Full && s.ID != ""
+		view.Schemes = append(view.Schemes, s)
+	}
+	return view
 }
 
 type linkActivityCard struct {
@@ -158,6 +240,39 @@ func (app *Application) handleLinkChoose(w http.ResponseWriter, r *http.Request)
 		app.render(ctx, w, http.StatusBadRequest, "link.html", data)
 		return
 	}
+	// The sign-up runs on from the reveal in two steps of its own: the
+	// theme step, then the Axon step when the choice carries the
+	// location feature. A signed-in linker skips both.
+	if step := q.Get("step"); app.userID(ctx) == 0 && (step == "theme" || step == "axon") {
+		view.Step = step
+		view.Signup = true
+		fillCarriedHidden(view, res)
+		location := false
+		for _, row := range res.Features {
+			if row.ID == "location" {
+				location = true
+			}
+		}
+		if step == "theme" {
+			view.Theme = signupThemeViewFor(q)
+			view.Axon = location
+			view.StepBack = carriedChooseURL(view.Hidden, "")
+		} else {
+			if tt, ts := q.Get("ttype"), q.Get("tscheme"); signupThemeChoiceValid(tt, ts) {
+				view.Hidden = append(view.Hidden, linkHidden{"ttype", tt}, linkHidden{"tscheme", ts})
+			}
+			if !location {
+				http.Redirect(w, r, carriedEVEURL(view.Hidden), http.StatusSeeOther)
+				return
+			}
+			view.StepBack = carriedChooseURL(view.Hidden, "theme")
+			for _, d := range axonDownloads {
+				view.AxonDownloads = append(view.AxonDownloads, intelDownload{Label: d.Label, URL: axonReleases + d.File})
+			}
+		}
+		app.render(ctx, w, http.StatusOK, "link.html", data)
+		return
+	}
 	if view.Step == "reveal" && !submitted && !view.Remembered && len(choice.Activities) > 0 {
 		// Arriving from the playstyle cards: every permission of the
 		// chosen features starts ticked, the ones that used to be
@@ -172,6 +287,7 @@ func (app *Application) handleLinkChoose(w http.ResponseWriter, r *http.Request)
 	}
 	fillLinkView(view, res)
 	fillAdvanced(view, res)
+	view.Signup = app.userID(ctx) == 0
 	view.Back = linkChooseURL(url.Values{"cards": {"1"}, "activity": q["activity"]}, view.Character)
 	app.render(ctx, w, http.StatusOK, "link.html", data)
 }
@@ -505,4 +621,63 @@ func linkAccent(activities []string) int {
 		}
 	}
 	return 6
+}
+
+// signupThemeChoiceValid reports whether a ttype/tscheme pair names a
+// real theme, so a step can carry it onward.
+func signupThemeChoiceValid(tierType, scheme string) bool {
+	ok := false
+	for _, t := range signupThemeTypes {
+		if t.ID == tierType {
+			ok = true
+		}
+	}
+	return ok && validThemeScheme(scheme)
+}
+
+// fillCarriedHidden records a resolved choice as hidden form fields,
+// so a sign-up step hands the choice to the next step unchanged.
+func fillCarriedHidden(view *linkView, res linkResolved) {
+	for _, row := range res.Features {
+		view.Hidden = append(view.Hidden, linkHidden{"feature", row.ID})
+	}
+	chosen := func(scope string, on bool) {
+		if on {
+			view.Hidden = append(view.Hidden, linkHidden{"enhance", scope})
+		}
+	}
+	for _, e := range res.Enhancements {
+		chosen(e.Scope, e.Chosen)
+	}
+	for _, e := range res.RoleOptIns {
+		chosen(e.Scope, e.Chosen)
+	}
+	for _, e := range res.ServerExtras {
+		chosen(e.Scope, e.Chosen)
+	}
+}
+
+// carriedChooseURL is a chooser URL carrying hidden fields: back to
+// the reveal (step ""), or on to the named step.
+func carriedChooseURL(hidden []linkHidden, step string) string {
+	vals := url.Values{"submitted": {"1"}}
+	if step != "" {
+		vals.Set("step", step)
+	}
+	for _, h := range hidden {
+		vals.Add(h.Name, h.Value)
+	}
+	return "/auth/link?" + vals.Encode()
+}
+
+// carriedEVEURL is the sign-up URL carrying hidden fields.
+func carriedEVEURL(hidden []linkHidden) string {
+	vals := url.Values{}
+	for _, h := range hidden {
+		vals.Add(h.Name, h.Value)
+	}
+	if len(vals) == 0 {
+		return "/auth/eve"
+	}
+	return "/auth/eve?" + vals.Encode()
 }

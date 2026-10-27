@@ -366,9 +366,19 @@ SELECT group_id, channel_id, system_id, composite, previous, members, computed_a
 FROM intel_group_composites WHERE group_id = $1
 `
 
-func (q *Queries) GetIntelGroupComposite(ctx context.Context, groupID int64) (IntelGroupComposite, error) {
+type GetIntelGroupCompositeRow struct {
+	GroupID    int64     `json:"group_id"`
+	ChannelID  int64     `json:"channel_id"`
+	SystemID   int64     `json:"system_id"`
+	Composite  string    `json:"composite"`
+	Previous   string    `json:"previous"`
+	Members    int32     `json:"members"`
+	ComputedAt time.Time `json:"computed_at"`
+}
+
+func (q *Queries) GetIntelGroupComposite(ctx context.Context, groupID int64) (GetIntelGroupCompositeRow, error) {
 	row := q.db.QueryRowContext(ctx, getIntelGroupComposite, groupID)
-	var i IntelGroupComposite
+	var i GetIntelGroupCompositeRow
 	err := row.Scan(
 		&i.GroupID,
 		&i.ChannelID,
@@ -379,6 +389,17 @@ func (q *Queries) GetIntelGroupComposite(ctx context.Context, groupID int64) (In
 		&i.ComputedAt,
 	)
 	return i, err
+}
+
+const getIntelGroupThread = `-- name: GetIntelGroupThread :one
+SELECT thread_id FROM intel_group_composites WHERE group_id = $1
+`
+
+func (q *Queries) GetIntelGroupThread(ctx context.Context, groupID int64) (int64, error) {
+	row := q.db.QueryRowContext(ctx, getIntelGroupThread, groupID)
+	var thread_id int64
+	err := row.Scan(&thread_id)
+	return thread_id, err
 }
 
 const getIntelPairingCodeByHash = `-- name: GetIntelPairingCodeByHash :one
@@ -507,6 +528,24 @@ func (q *Queries) GetIntelReportFull(ctx context.Context, id int64) (IntelReport
 		&i.AnalysisPending,
 		&i.GroupID,
 	)
+	return i, err
+}
+
+const getIntelThreadSpan = `-- name: GetIntelThreadSpan :one
+SELECT min(latest_at)::timestamptz AS first_at, max(latest_at)::timestamptz AS last_at
+FROM intel_group_composites WHERE thread_id = $1
+`
+
+type GetIntelThreadSpanRow struct {
+	FirstAt time.Time `json:"first_at"`
+	LastAt  time.Time `json:"last_at"`
+}
+
+// A thread's span: its earliest and latest group moments.
+func (q *Queries) GetIntelThreadSpan(ctx context.Context, threadID int64) (GetIntelThreadSpanRow, error) {
+	row := q.db.QueryRowContext(ctx, getIntelThreadSpan, threadID)
+	var i GetIntelThreadSpanRow
+	err := row.Scan(&i.FirstAt, &i.LastAt)
 	return i, err
 }
 
@@ -1136,17 +1175,27 @@ SELECT group_id, channel_id, system_id, composite, previous, members, computed_a
 FROM intel_group_composites WHERE group_id = ANY($1::bigint[])
 `
 
+type ListIntelGroupCompositesRow struct {
+	GroupID    int64     `json:"group_id"`
+	ChannelID  int64     `json:"channel_id"`
+	SystemID   int64     `json:"system_id"`
+	Composite  string    `json:"composite"`
+	Previous   string    `json:"previous"`
+	Members    int32     `json:"members"`
+	ComputedAt time.Time `json:"computed_at"`
+}
+
 // Composites for several groups at once: the feed and channel
 // pages fetch a whole page's groups in one read.
-func (q *Queries) ListIntelGroupComposites(ctx context.Context, groupIds []int64) ([]IntelGroupComposite, error) {
+func (q *Queries) ListIntelGroupComposites(ctx context.Context, groupIds []int64) ([]ListIntelGroupCompositesRow, error) {
 	rows, err := q.db.QueryContext(ctx, listIntelGroupComposites, pq.Array(groupIds))
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []IntelGroupComposite
+	var items []ListIntelGroupCompositesRow
 	for rows.Next() {
-		var i IntelGroupComposite
+		var i ListIntelGroupCompositesRow
 		if err := rows.Scan(
 			&i.GroupID,
 			&i.ChannelID,
@@ -1626,6 +1675,41 @@ func (q *Queries) ListIntelReportsBySystem(ctx context.Context, arg ListIntelRep
 	return items, nil
 }
 
+const listIntelThreadGroups = `-- name: ListIntelThreadGroups :many
+SELECT group_id, system_id, latest_at FROM intel_group_composites
+WHERE thread_id = $1 ORDER BY latest_at DESC
+`
+
+type ListIntelThreadGroupsRow struct {
+	GroupID  int64        `json:"group_id"`
+	SystemID int64        `json:"system_id"`
+	LatestAt sql.NullTime `json:"latest_at"`
+}
+
+// A thread's groups, newest first.
+func (q *Queries) ListIntelThreadGroups(ctx context.Context, threadID int64) ([]ListIntelThreadGroupsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listIntelThreadGroups, threadID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListIntelThreadGroupsRow
+	for rows.Next() {
+		var i ListIntelThreadGroupsRow
+		if err := rows.Scan(&i.GroupID, &i.SystemID, &i.LatestAt); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listIntelTokens = `-- name: ListIntelTokens :many
 SELECT id, name, prefix, created_at, last_used_at, device FROM intel_tokens
 WHERE user_id = $1 ORDER BY created_at DESC, id DESC
@@ -2061,6 +2145,68 @@ func (q *Queries) ListStoredRosterCandidates(ctx context.Context, arg ListStored
 	return items, nil
 }
 
+const listThreadCandidates = `-- name: ListThreadCandidates :many
+SELECT group_id, thread_id, system_id, latest_at FROM intel_group_composites
+WHERE channel_id = $1 AND group_id <> $2 AND thread_id > 0
+  AND system_id = ANY($3::bigint[])
+  AND latest_at >= $4::timestamptz AND latest_at <= $5::timestamptz
+ORDER BY latest_at DESC
+LIMIT 20
+`
+
+type ListThreadCandidatesParams struct {
+	ChannelID int64     `json:"channel_id"`
+	GroupID   int64     `json:"group_id"`
+	SystemIds []int64   `json:"system_ids"`
+	Since     time.Time `json:"since"`
+	Until     time.Time `json:"until"`
+}
+
+type ListThreadCandidatesRow struct {
+	GroupID  int64        `json:"group_id"`
+	ThreadID int64        `json:"thread_id"`
+	SystemID int64        `json:"system_id"`
+	LatestAt sql.NullTime `json:"latest_at"`
+}
+
+// Intel threads (schema 095, intel_threads.go): the groups a new
+// group may join the thread of, newest first -- the channel's
+// groups on the given systems whose latest moment falls inside
+// the window, the group itself left out.
+func (q *Queries) ListThreadCandidates(ctx context.Context, arg ListThreadCandidatesParams) ([]ListThreadCandidatesRow, error) {
+	rows, err := q.db.QueryContext(ctx, listThreadCandidates,
+		arg.ChannelID,
+		arg.GroupID,
+		pq.Array(arg.SystemIds),
+		arg.Since,
+		arg.Until,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListThreadCandidatesRow
+	for rows.Next() {
+		var i ListThreadCandidatesRow
+		if err := rows.Scan(
+			&i.GroupID,
+			&i.ThreadID,
+			&i.SystemID,
+			&i.LatestAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const pruneIntelGangGroups = `-- name: PruneIntelGangGroups :execrows
 DELETE FROM intel_gang_groups
 WHERE group_id NOT IN (SELECT group_id FROM intel_reports WHERE group_id > 0)
@@ -2115,6 +2261,22 @@ func (q *Queries) PruneIntelReports(ctx context.Context, before time.Time) (int6
 		return 0, err
 	}
 	return result.RowsAffected()
+}
+
+const setIntelGroupThread = `-- name: SetIntelGroupThread :exec
+UPDATE intel_group_composites SET thread_id = $1
+WHERE group_id = $2 AND thread_id = 0
+`
+
+type SetIntelGroupThreadParams struct {
+	ThreadID int64 `json:"thread_id"`
+	GroupID  int64 `json:"group_id"`
+}
+
+// A group's thread is set once, when it is first stored.
+func (q *Queries) SetIntelGroupThread(ctx context.Context, arg SetIntelGroupThreadParams) error {
+	_, err := q.db.ExecContext(ctx, setIntelGroupThread, arg.ThreadID, arg.GroupID)
+	return err
 }
 
 const setIntelReportAnalysis = `-- name: SetIntelReportAnalysis :exec
@@ -2302,9 +2464,10 @@ func (q *Queries) UpsertIntelChannelRule(ctx context.Context, arg UpsertIntelCha
 }
 
 const upsertIntelGroupComposite = `-- name: UpsertIntelGroupComposite :exec
-INSERT INTO intel_group_composites (group_id, channel_id, system_id, composite, previous, members, computed_at)
-VALUES ($1, $2, $3, $4, '', $5, $6::timestamptz)
+INSERT INTO intel_group_composites (group_id, channel_id, system_id, composite, previous, members, computed_at, latest_at)
+VALUES ($1, $2, $3, $4, '', $5, $6::timestamptz, $7::timestamptz)
 ON CONFLICT (group_id) DO UPDATE SET
+    latest_at = EXCLUDED.latest_at,
     channel_id = EXCLUDED.channel_id,
     system_id = EXCLUDED.system_id,
     previous = intel_group_composites.composite,
@@ -2320,6 +2483,7 @@ type UpsertIntelGroupCompositeParams struct {
 	Composite  string    `json:"composite"`
 	Members    int32     `json:"members"`
 	ComputedAt time.Time `json:"computed_at"`
+	LatestAt   time.Time `json:"latest_at"`
 }
 
 // Store a group's composite; the standing composite becomes
@@ -2332,6 +2496,7 @@ func (q *Queries) UpsertIntelGroupComposite(ctx context.Context, arg UpsertIntel
 		arg.Composite,
 		arg.Members,
 		arg.ComputedAt,
+		arg.LatestAt,
 	)
 	return err
 }

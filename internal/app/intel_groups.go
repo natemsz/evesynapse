@@ -332,10 +332,12 @@ func (app *Application) refreshGroupComposite(ctx context.Context, groupID int64
 	}
 	if err := app.queries.UpsertIntelGroupComposite(ctx, db.UpsertIntelGroupCompositeParams{
 		GroupID: groupID, ChannelID: comp.ChannelID, SystemID: comp.SystemID,
-		Composite: string(raw), Members: int32(len(members)), ComputedAt: time.Now().UTC()}); err != nil {
+		Composite: string(raw), Members: int32(len(members)), ComputedAt: time.Now().UTC(), LatestAt: comp.LatestAt}); err != nil {
 		logging.Warnf("intel: store composite of group %d: %v", groupID, err)
 		return
 	}
+	// A newly stored group settles its thread (intel_threads.go).
+	app.assignGroupThread(ctx, comp)
 	// Fusion weighs the group for gang identity on the stored
 	// composite (intel_gangs.go).
 	app.evaluateGang(ctx, comp)

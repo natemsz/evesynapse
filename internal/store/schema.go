@@ -562,6 +562,13 @@ var pgIntelResidueAttemptsSchema string
 //go:embed schema_pg/093_kill_line_prices.sql
 var pgKillLinePricesSchema string
 
+// Step 095: intel threads -- report groups on one system or on
+// neighbouring ones, close in time, linked as one engagement
+// (intel_threads.go).
+//
+//go:embed schema_pg/095_intel_threads.sql
+var pgIntelThreadsSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -684,6 +691,7 @@ func schemaSteps() []schemaStep {
 		{91, "intel_residue", pgIntelResidueSchema, ""},
 		{92, "intel_residue_attempts", pgIntelResidueAttemptsSchema, ""},
 		{93, "kill_line_prices", pgKillLinePricesSchema, ""},
+		{95, "intel_threads", pgIntelThreadsSchema, ""},
 	}
 }
 

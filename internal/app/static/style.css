@@ -1376,7 +1376,7 @@ input[type="text"]:focus, input[type="search"]:focus, input[type="number"]:focus
      the dropdown's own blur cannot always reach the content
      behind it, so legibility comes from the paint, with the
      blur as a bonus where it can sample. */
-  background: color-mix(in srgb, var(--panel) 88%, transparent);
+  background: color-mix(in srgb, var(--panel) 55%, transparent);
   border: 1px solid rgba(255, 110, 0, 0.25);
   border-radius: var(--r-md);
   box-shadow: 0 10px 24px rgba(0, 0, 0, 0.65);

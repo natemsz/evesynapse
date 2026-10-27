@@ -2404,6 +2404,58 @@ func (q *Queries) ListOrderLifecycleByUser(ctx context.Context, userID int64) ([
 	return items, nil
 }
 
+const listOrderLifecycleStates = `-- name: ListOrderLifecycleStates :many
+SELECT l.character_id, l.order_id, l.closed_at, l.outbid_events, l.beaten_now
+FROM order_lifecycle l
+JOIN (SELECT unnest($1::bigint[]) AS character_id,
+             unnest($2::bigint[]) AS order_id) k
+  ON l.character_id = k.character_id AND l.order_id = k.order_id
+`
+
+type ListOrderLifecycleStatesParams struct {
+	CharacterIds []int64 `json:"character_ids"`
+	OrderIds     []int64 `json:"order_ids"`
+}
+
+type ListOrderLifecycleStatesRow struct {
+	CharacterID  int64        `json:"character_id"`
+	OrderID      int64        `json:"order_id"`
+	ClosedAt     sql.NullTime `json:"closed_at"`
+	OutbidEvents int64        `json:"outbid_events"`
+	BeatenNow    int64        `json:"beaten_now"`
+}
+
+// The ledger rows of many (character, order) pairs in one read: what
+// the order-health pass needs of each before it upserts them.
+func (q *Queries) ListOrderLifecycleStates(ctx context.Context, arg ListOrderLifecycleStatesParams) ([]ListOrderLifecycleStatesRow, error) {
+	rows, err := q.db.QueryContext(ctx, listOrderLifecycleStates, pq.Array(arg.CharacterIds), pq.Array(arg.OrderIds))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListOrderLifecycleStatesRow
+	for rows.Next() {
+		var i ListOrderLifecycleStatesRow
+		if err := rows.Scan(
+			&i.CharacterID,
+			&i.OrderID,
+			&i.ClosedAt,
+			&i.OutbidEvents,
+			&i.BeatenNow,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listPilotDrains = `-- name: ListPilotDrains :many
 SELECT character_id
 FROM (
@@ -3938,6 +3990,56 @@ func (q *Queries) UpsertOrderLifecycle(ctx context.Context, arg UpsertOrderLifec
 		arg.VolumeRemainLast,
 		arg.FirstSeenAt,
 		arg.LastSeenAt,
+	)
+	return err
+}
+
+const upsertOrderLifecycles = `-- name: UpsertOrderLifecycles :exec
+INSERT INTO order_lifecycle (character_id, order_id, type_id, location_id, region_id, is_buy_order, listed_price, volume_total, volume_remain_last, first_seen_at, last_seen_at, closed_at, close_kind, outbid_events, beaten_now)
+SELECT unnest($1::bigint[]), unnest($2::bigint[]),
+    unnest($3::bigint[]), unnest($4::bigint[]),
+    unnest($5::bigint[]), unnest($6::bigint[]),
+    unnest($7::float8[]), unnest($8::bigint[]),
+    unnest($9::bigint[]),
+    $10::timestamptz, $10::timestamptz, NULL, '', 0, 0
+ON CONFLICT (character_id, order_id) DO UPDATE SET
+    type_id            = excluded.type_id,
+    location_id        = excluded.location_id,
+    region_id          = excluded.region_id,
+    is_buy_order       = excluded.is_buy_order,
+    listed_price       = excluded.listed_price,
+    volume_total       = excluded.volume_total,
+    volume_remain_last = excluded.volume_remain_last,
+    last_seen_at       = excluded.last_seen_at
+`
+
+type UpsertOrderLifecyclesParams struct {
+	CharacterIds  []int64   `json:"character_ids"`
+	OrderIds      []int64   `json:"order_ids"`
+	TypeIds       []int64   `json:"type_ids"`
+	LocationIds   []int64   `json:"location_ids"`
+	RegionIds     []int64   `json:"region_ids"`
+	IsBuyOrders   []int64   `json:"is_buy_orders"`
+	ListedPrices  []float64 `json:"listed_prices"`
+	VolumeTotals  []int64   `json:"volume_totals"`
+	VolumeRemains []int64   `json:"volume_remains"`
+	SeenAt        time.Time `json:"seen_at"`
+}
+
+// UpsertOrderLifecycle for every open order of a pass in one
+// statement. The (character, order) pairs must be distinct.
+func (q *Queries) UpsertOrderLifecycles(ctx context.Context, arg UpsertOrderLifecyclesParams) error {
+	_, err := q.db.ExecContext(ctx, upsertOrderLifecycles,
+		pq.Array(arg.CharacterIds),
+		pq.Array(arg.OrderIds),
+		pq.Array(arg.TypeIds),
+		pq.Array(arg.LocationIds),
+		pq.Array(arg.RegionIds),
+		pq.Array(arg.IsBuyOrders),
+		pq.Array(arg.ListedPrices),
+		pq.Array(arg.VolumeTotals),
+		pq.Array(arg.VolumeRemains),
+		arg.SeenAt,
 	)
 	return err
 }

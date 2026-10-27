@@ -125,16 +125,25 @@ ORDER BY type_id;
 -- can judge a contract's shape from the corpus exactly as it
 -- judges a crawl fetch. Departed rows (schema 096) are left
 -- out, so a contract's last_seen is its ask standing now.
+--
+-- The type's contracts are found from the item type index first and
+-- only then sorted. Asked the other way round (newest contracts
+-- first, each probed for the type), the planner walks the whole
+-- corpus for a type on thousands of contracts: 24 ms a type against
+-- 0.3 ms, and ~400 types a cycle.
 -- name: ListTrueValueCorpusContracts :many
-WITH cand AS (
+WITH typed AS MATERIALIZED (
+    SELECT DISTINCT x.contract_id
+    FROM pub_contract_items x
+    WHERE x.type_id = $1 AND x.is_included
+),
+cand AS (
     SELECT c.contract_id, c.price, c.last_seen, c.region_id, c.date_expired, c.first_seen
-    FROM pub_contracts c
+    FROM typed
+    JOIN pub_contracts c ON c.contract_id = typed.contract_id
     WHERE c.type = 'item_exchange' AND c.items_state = 'stored'
       AND c.departed_at IS NULL
       AND c.price >= $2
-      AND EXISTS (SELECT 1 FROM pub_contract_items x
-                  WHERE x.contract_id = c.contract_id
-                    AND x.type_id = $1 AND x.is_included)
     ORDER BY c.last_seen DESC
     LIMIT $3
 )

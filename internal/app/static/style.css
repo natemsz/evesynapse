@@ -4351,8 +4351,7 @@ html[data-theme="light"] .panel {
 html[data-theme="light"] input[type="text"],
 html[data-theme="light"] input[type="search"] { background: #fffdf9; border-color: #d3c7ae; }
 html[data-theme="light"] .suggest,
-html[data-theme="light"] .branch .menu,
-html[data-theme="light"][data-nav="rail"] .sidebar .branch .menu {
+html[data-theme="light"] .branch .menu {
   background: #fdfbf6;
   border-color: #d9cfba;
   box-shadow: 0 10px 24px rgba(90, 70, 40, 0.22);
@@ -4844,7 +4843,6 @@ html[data-theme="light"] tr.asset-inside table { border-left-color: #d8cdb8; }
 .notify-all { display: block; margin-top: 0.25rem; padding: 0.45rem 0.55rem; border-top: 1px solid #1c1c1c; }
 .notify-all + .notify-all { margin-top: 0; border-top: 0; padding-top: 0; }
 tr.notify-unread td:first-child a { font-weight: 700; }
-html[data-theme="light"] .notify-menu { border-color: #d8cdb8; box-shadow: 0 6px 22px rgba(60, 40, 10, 0.25); }
 html[data-theme="light"] .notify-all { border-top-color: #e4dac6; }
 #push-panel { margin: 0 0 0.75rem; }
 /* The buttons are shown and hidden by push.js with the hidden

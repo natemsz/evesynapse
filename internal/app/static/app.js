@@ -4112,6 +4112,28 @@
   hoistDetails(document.querySelector("details.topbar-switcher"), ".menu",
     { query: "(max-width: 640px)", gap: 0, left: "0", right: "0" });
 
+  // The first-run notification prompt hangs below the bar the same
+  // way. Its sides come from the stylesheet; only the drop is
+  // measured. On phones it is a bottom sheet (phone.css), so the
+  // measured top is cleared there.
+  var prompt = document.getElementById("notify-prompt");
+  if (prompt) {
+    hoist(prompt, placePrompt);
+    new MutationObserver(placePrompt).observe(prompt, {
+      attributes: true, attributeFilter: ["hidden"],
+    });
+    placePrompt();
+  }
+  function placePrompt() {
+    if (!prompt || prompt.hidden) return;
+    if (window.matchMedia && window.matchMedia("(max-width: 45rem)").matches) {
+      prompt.style.top = "";
+      return;
+    }
+    var head = document.querySelector("header");
+    prompt.style.top = ((head ? head.getBoundingClientRect().bottom : 0) + 8) + "px";
+  }
+
   var suggest = document.getElementById("topbar-suggest");
   var search = document.getElementById("topbar-q");
   if (suggest && search) {

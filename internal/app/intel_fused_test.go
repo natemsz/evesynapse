@@ -13,6 +13,7 @@ import (
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
 	"evesynapse/internal/intelanalyze"
+	"evesynapse/internal/scan"
 )
 
 // The fixture pilots: the production fused blob's roster, the
@@ -686,6 +687,44 @@ func TestIntelChatScanMessages(t *testing.T) {
 	}
 	if len(a.Pilots) < 20 {
 		t.Errorf("roster analysis names %d pilots, want at least 20 of report 17's names", len(a.Pilots))
+	}
+}
+
+// TestReadScanGateDestinationYields: a d-scan read with a system
+// named for it keeps that system, unless the scan names the
+// system only as a gate's destination -- then the system its
+// celestials vote for stands, because a gate's name is where it
+// leads, not where the scan was taken.
+func TestReadScanGateDestinationYields(t *testing.T) {
+	app, conn, _ := buildCorpTestApp(t, newFusedESI())
+	ctx := context.Background()
+	exec := func(s string, args ...any) {
+		t.Helper()
+		if _, err := conn.ExecContext(ctx, s, args...); err != nil {
+			t.Fatal(err)
+		}
+	}
+	exec(`INSERT INTO sde_systems (system_id, name, region_id, security) VALUES (30002385, 'Teonusude', 10000060, -0.38), (30002387, 'Bosena', 10000060, -0.34), (30000142, 'Jita', 10000002, 0.95) ON CONFLICT DO NOTHING`)
+	exec(`INSERT INTO sde_groups (group_id, name, category_id) VALUES (10, 'Stargate', 2), (15, 'Station', 3), (6, 'Sun', 2) ON CONFLICT DO NOTHING`)
+	exec(`INSERT INTO sde_types (type_id, name, group_id) VALUES (3875, 'Stargate (Gallente System)', 10), (3867, 'Gallente Industrial Station', 15), (3797, 'Sun G5 (Pink)', 6) ON CONFLICT DO NOTHING`)
+	const (
+		teoID    = int64(30002385)
+		bosenaID = int64(30002387)
+		jitaID   = int64(30000142)
+	)
+	parsed := scan.Result{Kind: scan.KindDScan, DScan: []scan.DScanRow{
+		{TypeID: 3875, Name: "Bosena", TypeName: "Stargate (Gallente System)", DistKm: 2124347000},
+		{TypeID: 3867, Name: "Teonusude III - Moon 13 - Duvolle Laboratories Factory", TypeName: "Gallente Industrial Station", DistKm: 2004},
+		{TypeID: 3797, Name: "Teonusude - Star", TypeName: "Sun G5 (Pink)", DistKm: 1646000000},
+	}}
+	if got := app.readScan(ctx, parsed, bosenaID); got.SystemID != teoID {
+		t.Errorf("named for its gate destination: system %d, want Teonusude %d", got.SystemID, teoID)
+	}
+	if got := app.readScan(ctx, parsed, jitaID); got.SystemID != jitaID {
+		t.Errorf("named for a system the scan never names: system %d, want Jita %d", got.SystemID, jitaID)
+	}
+	if got := app.readScan(ctx, parsed, 0); got.SystemID != teoID {
+		t.Errorf("unnamed: system %d, want Teonusude %d", got.SystemID, teoID)
 	}
 }
 

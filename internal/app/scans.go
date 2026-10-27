@@ -349,15 +349,23 @@ func (t *tally) sorted() []scanCount {
 }
 
 // readScan enriches a parsed paste. systemID, when the reader named
-// one, wins over any system a d-scan's celestials suggest.
+// one, wins over any system a d-scan's celestials suggest -- unless
+// the scan names that system only as a gate's destination, in which
+// case the celestials' system stands: a gate's name is where it
+// leads, not where the scan was taken.
 func (app *Application) readScan(ctx context.Context, p scan.Result, systemID int64) scanResult {
 	res := scanResult{Kind: p.Kind, SystemID: systemID, Skipped: p.Skipped, Residue: p.Residue}
 	switch p.Kind {
 	case scan.KindDScan:
 		var detected int64
-		res.DScan, detected = app.readDScan(ctx, p.DScan)
+		var gateOnly map[string]bool
+		res.DScan, detected, gateOnly = app.readDScan(ctx, p.DScan)
 		if res.SystemID == 0 {
 			res.SystemID = detected
+		} else if detected != 0 && detected != res.SystemID {
+			if sys, err := app.queries.GetSDESystem(ctx, res.SystemID); err == nil && gateOnly[sys.Name] {
+				res.SystemID = detected
+			}
 		}
 	case scan.KindLocal:
 		res.Local = app.readLocal(ctx, p.Local)
@@ -438,7 +446,7 @@ func scanTierLabel(tier string) string {
 
 // readDScan sorts a d-scan by category and ship class, and reads
 // the system off its celestials' names.
-func (app *Application) readDScan(ctx context.Context, rows []scan.DScanRow) (*dscanReading, int64) {
+func (app *Application) readDScan(ctx context.Context, rows []scan.DScanRow) (*dscanReading, int64, map[string]bool) {
 	ids := make([]int64, 0, len(rows))
 	seen := map[int64]bool{}
 	for _, r := range rows {
@@ -467,6 +475,7 @@ func (app *Application) readDScan(ctx context.Context, rows []scan.DScanRow) (*d
 	// full of citadels named for it must not outvote its own sun),
 	// and stargates never vote -- a gate's name is its destination.
 	sysVotes := map[string]int{}
+	gateDests := map[string]bool{}
 	for _, r := range rows {
 		grid := r.DistKm >= 0 && r.DistKm <= scanGridKm
 		gname := class[r.TypeID]
@@ -509,6 +518,9 @@ func (app *Application) readDScan(ctx context.Context, rows []scan.DScanRow) (*d
 			fighterTypes.add(r.TypeID, r.TypeName, gname, grid)
 		case catCelestial:
 			if kind, ok := objectKindByGroup[gname]; ok {
+				if gname == "Stargate" {
+					gateDests[r.Name] = true
+				}
 				objects.add(r.TypeID, r.TypeName, kind, grid)
 				break
 			}
@@ -552,6 +564,14 @@ func (app *Application) readDScan(ctx context.Context, rows []scan.DScanRow) (*d
 		return "DPS"
 	})
 	d.Notable = notableCallouts(d)
+	// The systems this scan names only as gate destinations: a
+	// gate's name no celestial voted for.
+	gateOnly := map[string]bool{}
+	for name := range gateDests {
+		if _, voted := sysVotes[name]; !voted {
+			gateOnly[name] = true
+		}
+	}
 	// The system: the name the weighted vote carries, if the SDE
 	// knows it (a few lookups at most).
 	cands := make([]string, 0, len(sysVotes))
@@ -569,10 +589,10 @@ func (app *Application) readDScan(ctx context.Context, rows []scan.DScanRow) (*d
 			break
 		}
 		if sys, err := app.queries.GetSDESystemByName(ctx, s); err == nil {
-			return d, sys.SystemID
+			return d, sys.SystemID, gateOnly
 		}
 	}
-	return d, 0
+	return d, 0, gateOnly
 }
 
 // fusedDistRe finds the figured distances a d-scan row ends

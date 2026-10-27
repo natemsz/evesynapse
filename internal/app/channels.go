@@ -1107,9 +1107,7 @@ func (app *Application) postChatLinesWith(ctx context.Context, base db.InsertInt
 	if ov.SystemID > 0 {
 		// The player named the system: every line is about it,
 		// the ones that named none as much as the rest.
-		for _, nr := range o.NoSystemRead {
-			o.Reports = append(o.Reports, nr)
-		}
+		o.Reports = append(o.Reports, o.NoSystemRead...)
 		o.NoSystemRead, o.NoSystemLines = nil, nil
 		for i := range o.Reports {
 			o.Reports[i].SystemID = ov.SystemID

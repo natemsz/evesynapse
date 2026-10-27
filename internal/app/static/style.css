@@ -1370,13 +1370,15 @@ input[type="text"]:focus, input[type="search"]:focus, input[type="number"]:focus
   margin: 0;
   padding: 0.3rem;
   list-style: none;
-  /* The landing flyout's frost (blur 30px, saturate 1.45), with
-     the tint deepened to the top bar's panel colour: nested
-     inside the page's glass wrapper (itself a backdrop layer),
-     the dropdown's own blur cannot always reach the content
-     behind it, so legibility comes from the paint, with the
-     blur as a bonus where it can sample. */
-  background: color-mix(in srgb, var(--panel) 55%, transparent);
+  /* The landing flyout's frost (blur 30px, saturate 1.45) over
+     the landing's neutral dark glass, a step deeper: the glass
+     itself stays neutral under every scheme, and theming rides
+     on the border. Nested inside the page's glass wrapper
+     (itself a backdrop layer), the dropdown's own blur cannot
+     always reach the content behind it, so legibility comes
+     from the paint, with the blur as a bonus where it can
+     sample. */
+  background: rgb(8 13 22 / 0.55);
   border: 1px solid rgba(255, 110, 0, 0.25);
   border-radius: var(--r-md);
   box-shadow: 0 10px 24px rgba(0, 0, 0, 0.65);

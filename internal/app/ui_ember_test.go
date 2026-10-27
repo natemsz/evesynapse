@@ -218,7 +218,7 @@ func TestEmberGlassAndSkyRules(t *testing.T) {
 	// the top bar's panel colour); pinned here for the same
 	// reason as the override above.
 	if !strings.Contains(bg, ".charselector-dropdown {") ||
-		!strings.Contains(bg, "background-color: color-mix(in srgb, var(--panel) 55%, transparent);") {
+		!strings.Contains(bg, "background-color: rgb(8 13 22 / 0.55);") {
 		t.Error("bg.css lost the charselector dropdown's deep paint; the open list is illegible over content again")
 	}
 	// The home KPI tiles carry the mockup's Lucide glyphs in their

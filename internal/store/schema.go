@@ -556,6 +556,12 @@ var pgIntelResidueSchema string
 //go:embed schema_pg/092_intel_residue_attempts.sql
 var pgIntelResidueAttemptsSchema string
 
+// Step 093: per-line kill prices, stored at ingest
+// (killfeed.go).
+//
+//go:embed schema_pg/093_kill_line_prices.sql
+var pgKillLinePricesSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -677,6 +683,7 @@ func schemaSteps() []schemaStep {
 		{90, "sde_celestials", pgSDECelestialsSchema, ""},
 		{91, "intel_residue", pgIntelResidueSchema, ""},
 		{92, "intel_residue_attempts", pgIntelResidueAttemptsSchema, ""},
+		{93, "kill_line_prices", pgKillLinePricesSchema, ""},
 	}
 }
 

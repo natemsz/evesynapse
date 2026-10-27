@@ -79,6 +79,39 @@ func (q *Queries) GetKillDetail(ctx context.Context, killmailID int64) ([]byte, 
 	return payload, err
 }
 
+const getKillLinePrices = `-- name: GetKillLinePrices :many
+SELECT type_id, unit_price FROM kill_line_prices
+WHERE killmail_id = $1::bigint
+`
+
+type GetKillLinePricesRow struct {
+	TypeID    int64   `json:"type_id"`
+	UnitPrice float64 `json:"unit_price"`
+}
+
+func (q *Queries) GetKillLinePrices(ctx context.Context, killmailID int64) ([]GetKillLinePricesRow, error) {
+	rows, err := q.db.QueryContext(ctx, getKillLinePrices, killmailID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetKillLinePricesRow
+	for rows.Next() {
+		var i GetKillLinePricesRow
+		if err := rows.Scan(&i.TypeID, &i.UnitPrice); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getKillStats = `-- name: GetKillStats :one
 SELECT
     COUNT(*) FILTER (WHERE killmail_time >= $1::timestamptz)::bigint AS kills_hour,
@@ -236,6 +269,24 @@ type InsertKillDetailParams struct {
 
 func (q *Queries) InsertKillDetail(ctx context.Context, arg InsertKillDetailParams) error {
 	_, err := q.db.ExecContext(ctx, insertKillDetail, arg.KillmailID, arg.Payload, arg.StoredAt)
+	return err
+}
+
+const insertKillLinePrices = `-- name: InsertKillLinePrices :exec
+INSERT INTO kill_line_prices (killmail_id, type_id, unit_price)
+SELECT $1::bigint,
+    unnest($2::bigint[]), unnest($3::float8[])
+ON CONFLICT (killmail_id, type_id) DO NOTHING
+`
+
+type InsertKillLinePricesParams struct {
+	KillmailID int64     `json:"killmail_id"`
+	TypeIds    []int64   `json:"type_ids"`
+	UnitPrices []float64 `json:"unit_prices"`
+}
+
+func (q *Queries) InsertKillLinePrices(ctx context.Context, arg InsertKillLinePricesParams) error {
+	_, err := q.db.ExecContext(ctx, insertKillLinePrices, arg.KillmailID, pq.Array(arg.TypeIds), pq.Array(arg.UnitPrices))
 	return err
 }
 

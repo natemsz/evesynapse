@@ -587,6 +587,12 @@ type KillDetail struct {
 	StoredAt   time.Time `json:"stored_at"`
 }
 
+type KillLinePrice struct {
+	KillmailID int64   `json:"killmail_id"`
+	TypeID     int64   `json:"type_id"`
+	UnitPrice  float64 `json:"unit_price"`
+}
+
 type KillfeedState struct {
 	ID        int32     `json:"id"`
 	Sequence  int64     `json:"sequence"`

@@ -821,6 +821,7 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 		r.Use(app.intelTokenAuth)
 		r.Get("/channels", app.handleAPIChannels)
 		r.Post("/channels/{channelID}/lines", app.handleAPILines)
+		r.Post("/preview", app.handleAPIPreview)
 	})
 
 	r.Route("/map", func(r chi.Router) {

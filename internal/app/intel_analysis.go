@@ -453,9 +453,12 @@ func (app *Application) storeRosterScan(ctx context.Context, userID int64, roste
 // read on EVE's word alone.
 func (app *Application) verifyRosterNames(ctx context.Context, channelID int64, text string, unknown []string) ([]intelanalyze.Pilot, *intelanalyze.StandingCounts, bool) {
 	cand := map[string]bool{}
+	// The line is free-form text, so a candidate is only what
+	// may be a pilot there: "station" or "clr" is never asked
+	// of EVE, though a character carries the name.
 	add := func(s string) {
 		s = strings.ToLower(strings.TrimSpace(s))
-		if s != "" && len([]rune(s)) <= 37 {
+		if s != "" && len([]rune(s)) <= 37 && intelanalyze.PilotCandidate(s) {
 			cand[s] = true
 		}
 	}

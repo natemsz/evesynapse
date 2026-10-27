@@ -61,3 +61,16 @@ func TestParse(t *testing.T) {
 		t.Errorf("bare count, rest kept: %+v", n)
 	}
 }
+
+// A line naming no system is read like a report: its shorthand is
+// taken out of Text, and Raw keeps the line.
+func TestParseNoSystemText(t *testing.T) {
+	o := Parse("[ 2026.10.21 11:20:05 ] Scout > clr +2", func(string) (int64, string, bool) { return 0, "", false }, time.Now())
+	if len(o.NoSystemRead) != 1 {
+		t.Fatalf("no-system reads: %+v", o.NoSystemRead)
+	}
+	r := o.NoSystemRead[0]
+	if r.Text != "" || r.Raw != "clr +2" || !r.Clear || r.Hostiles != 2 {
+		t.Errorf("read %+v", r)
+	}
+}

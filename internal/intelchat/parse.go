@@ -139,7 +139,10 @@ func Parse(raw string, lookup Lookup, now time.Time) Outcome {
 			}
 		}
 		if r.SystemID == 0 {
-			r.Text = msg
+			// Read like a report's: the clear, the no visual and
+			// the counts are taken out, so a reader of what is
+			// left never takes "clr" for a name. Raw keeps it all.
+			r.Text = restText(msg, used)
 			out.NoSystem++
 			out.NoSystemLines = append(out.NoSystemLines, orig)
 			out.NoSystemRead = append(out.NoSystemRead, r)

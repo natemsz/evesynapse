@@ -45,6 +45,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -108,6 +109,9 @@ type residueInput struct {
 	// claim may name, and the fuse's verification set for a
 	// gate reading.
 	Neighbours []residueEntity
+	// Suspect are the spans the reading took for a pilot on a
+	// doubtful word (Analysis.Suspect), carried among Spans too.
+	Suspect []string
 }
 
 // residueClaim is one reading of one span, in the strict shape
@@ -273,8 +277,8 @@ func (app *Application) processResidue(ctx context.Context, eng residueEngine, r
 		return
 	}
 	gateLoose := a.Gate == 0 && row.ScanID == "" && mentionsGate(row.Text)
-	if len(a.Residue) == 0 && !gateLoose {
-		return // the reading resolved everything: the step is skipped
+	if len(a.Residue) == 0 && !gateLoose && len(a.Suspect) == 0 {
+		return // the reading resolved everything, and surely: the step is skipped
 	}
 	// Identical report text is read once, ever: a completed
 	// pass over the same text already produced this reading's
@@ -306,7 +310,14 @@ func (app *Application) processResidue(ctx context.Context, eng residueEngine, r
 		}
 		return
 	}
-	in := residueInput{ReportID: reportID, SystemID: row.SystemID, Spans: a.Residue}
+	in := residueInput{ReportID: reportID, SystemID: row.SystemID, Spans: a.Residue, Suspect: a.Suspect}
+	// A suspect pilot's span is a fragment like any other: the
+	// claim on it says whether it is the pilot or the word.
+	for _, s := range a.Suspect {
+		if !slices.Contains(in.Spans, s) {
+			in.Spans = append(in.Spans, s)
+		}
+	}
 	if gateLoose {
 		// The claims must be able to name the fragment the
 		// gate stands in: when no residue span carries it,
@@ -365,6 +376,90 @@ func (app *Application) processResidue(ctx context.Context, eng residueEngine, r
 	notes := validateResidueReply(in, raw)
 	app.storeResiduePass(ctx, in, raw, hash, notes)
 	app.applyResidueGateReading(ctx, row, a, in, notes)
+	app.applyResiduePilotDoubts(ctx, row.ID, in, notes)
+}
+
+// applyResiduePilotDoubts is the fuse step for suspect pilots: a
+// pilot the reading resolved on a doubtful word (Analysis.Suspect)
+// is taken out of the stored reading when the pass reads its span
+// as something else, a count or an action, and never as a pilot.
+// A span the pass left out, or read as the pilot, stands as it
+// was: only a contrary reading takes a pilot back. The kind is
+// decided again without the pilot, and the standing split loses
+// it.
+func (app *Application) applyResiduePilotDoubts(ctx context.Context, reportID int64, in residueInput, notes []residueNote) {
+	if len(in.Suspect) == 0 {
+		return
+	}
+	pilotSpan, otherSpan := map[string]bool{}, map[string]bool{}
+	for _, n := range notes {
+		if n.Kind == "pilot" {
+			pilotSpan[n.Span] = true
+		} else {
+			otherSpan[n.Span] = true
+		}
+	}
+	drop := map[string]bool{}
+	for _, s := range in.Suspect {
+		if otherSpan[s] && !pilotSpan[s] {
+			drop[strings.ToLower(s)] = true
+		}
+	}
+	if len(drop) == 0 {
+		return
+	}
+	// Re-read before writing, as the gate fuse does.
+	fresh, err := app.queries.GetIntelReportFull(ctx, reportID)
+	if err != nil {
+		return
+	}
+	var na intelanalyze.Analysis
+	if fresh.Analysis == "" || json.Unmarshal([]byte(fresh.Analysis), &na) != nil {
+		return
+	}
+	kept := na.Pilots[:0:0]
+	var gone []string
+	for _, p := range na.Pilots {
+		if drop[strings.ToLower(p.Name)] {
+			gone = append(gone, p.Name)
+			if na.Counts != nil {
+				switch {
+				case p.Red:
+					na.Counts.Hostile = max(na.Counts.Hostile-1, 0)
+				case p.Friendly:
+					na.Counts.Friendly = max(na.Counts.Friendly-1, 0)
+				default:
+					na.Counts.Neutral = max(na.Counts.Neutral-1, 0)
+				}
+			}
+			continue
+		}
+		kept = append(kept, p)
+	}
+	if len(gone) == 0 {
+		return
+	}
+	na.Pilots = kept
+	if na.Counts != nil && na.Counts.Total() == 0 {
+		na.Counts = nil
+	}
+	na.Suspect = nil
+	kind := intelanalyze.KindOf(intelanalyze.Input{
+		System: fresh.SystemID, Hostiles: int(fresh.Hostiles), Clear: fresh.Clear,
+		NoVisual: slices.Contains(na.Flags, "nv"),
+	}, na)
+	raw, err := json.Marshal(na)
+	if err != nil {
+		return
+	}
+	if err := app.queries.SetIntelReportAnalysis(ctx, db.SetIntelReportAnalysisParams{
+		ID: reportID, Kind: kind, Analysis: string(raw), AnalysisPending: false,
+	}); err != nil {
+		logging.Warnf("residue: drop doubted pilots of report %d: %v", reportID, err)
+		return
+	}
+	logging.Infof("residue: report %d: %s read as words, not pilots, by the model pass", reportID, strings.Join(gone, ", "))
+	app.refreshReportGroup(ctx, reportID)
 }
 
 // residueTextHash is a report text's content identity: two
@@ -537,6 +632,9 @@ func residuePrompt(in residueInput) string {
 	b.WriteString("\nFragments:\n")
 	for _, s := range in.Spans {
 		b.WriteString("- " + s + "\n")
+	}
+	if len(in.Suspect) > 0 {
+		b.WriteString("\nThe reading took these fragments for the pilot of the same name, but each is also an everyday word: " + strings.Join(in.Suspect, "; ") + ". For each, claim it as that pilot only when the report plainly names a pilot there; when it is the word (a count, an action, a direction), claim that instead.\n")
 	}
 	b.WriteString(`
 Answer with JSON in exactly this shape and nothing else: {"claims":[{"span":"...","kind":"...","id":0,"name":"...","n":0}]}

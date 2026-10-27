@@ -356,3 +356,50 @@ func TestAnalyzeScanBlobNames(t *testing.T) {
 		t.Errorf("typed structure: ships %+v, want the Raitaru", a.Ships)
 	}
 }
+
+// Chat shorthand is never a pilot in free-form text, though EVE
+// has characters called "Clr" and "Nv"; a short or everyday word
+// that does read as a pilot is kept, and marked suspect.
+func TestAnalyzeChatWordsAndSuspects(t *testing.T) {
+	d := dict()
+	base := d.Pilot
+	d.Pilot = func(l string) (int64, string, bool, bool) {
+		switch l {
+		case "clr":
+			return 92000001, "Clr", true, true
+		case "nv":
+			return 92000002, "Nv", true, true
+		case "ess":
+			return 92000003, "Ess", true, true
+		}
+		return base(l)
+	}
+	a := Analyze(Input{System: 1, Text: "Clr"}, d)
+	if len(a.Pilots) != 0 {
+		t.Errorf("clr read as a pilot: %+v", a.Pilots)
+	}
+	a = Analyze(Input{System: 1, Text: "Hostile One  nv"}, d)
+	if len(a.Pilots) != 1 || a.Pilots[0].Name != "Hostile One" {
+		t.Errorf("nv read as a pilot: %+v", a.Pilots)
+	}
+	if len(a.Suspect) != 0 {
+		t.Errorf("a two-word pilot marked suspect: %q", a.Suspect)
+	}
+	a = Analyze(Input{System: 1, Text: "Hostile One  Ess"}, d)
+	if len(a.Pilots) != 2 {
+		t.Fatalf("pilots: %+v", a.Pilots)
+	}
+	if !reflect.DeepEqual(a.Suspect, []string{"Ess"}) {
+		t.Errorf("suspect = %q, want [Ess]", a.Suspect)
+	}
+}
+
+// The segmentation index never anchors on a name free-form text
+// refuses: a fused d-scan's "Station" and "Moon" stay unread.
+func TestNameIndexSkipsNonCandidates(t *testing.T) {
+	ix := NewNameIndex([]Pilot{{ID: 1, Name: "Station"}, {ID: 2, Name: "Moon"}, {ID: 3, Name: "Clr"}, {ID: 4, Name: "Hamalias"}})
+	got, _, _ := ix.Segment("StationMoonClrHamalias")
+	if len(got) != 1 || got[0].Name != "Hamalias" {
+		t.Errorf("segmented %+v, want only Hamalias", got)
+	}
+}

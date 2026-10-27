@@ -24,22 +24,22 @@
   align-items: baseline;
   gap: 0.25rem 0.6rem;
   padding: 0.55rem 0.25rem;
-  border-bottom: 1px solid color-mix(in srgb, var(--accent) 12%, transparent);
+  border-bottom: 1px solid var(--row-alt);
 }
 .wbd-row:last-child { border-bottom: 0; }
 .wbd-what b { font-weight: 700; }
-.wbd-sep { color: var(--muted, #8a8a8a); opacity: 0.6; }
-.wbd-by { color: var(--muted, #8a8a8a); }
+.wbd-sep { color: var(--muted); opacity: 0.6; }
+.wbd-by { color: var(--muted); }
 .wbd-by .sec { margin-right: 0.15rem; }
 .wbd-details { margin-left: auto; font-weight: 600; }
 .wbd-row.new { animation: wbd-arrive 2.4s ease-out 1; }
 @keyframes wbd-arrive {
-  0% { background: color-mix(in srgb, var(--accent) 22%, transparent); }
+  0% { background: var(--row-hover); }
   100% { background: transparent; }
 }
 
 /* The open report's row. */
-.wbd-row.is-open { box-shadow: inset 3px 0 0 var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.wbd-row.is-open { box-shadow: inset 3px 0 0 var(--accent); background: var(--row-alt); padding-left: 0.6rem; }
 .wbd-row.is-open .wbd-details { visibility: hidden; }
 
 /* --- The compact map: the canvas and its zoom, none of the page's

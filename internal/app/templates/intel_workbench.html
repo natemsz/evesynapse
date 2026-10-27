@@ -26,7 +26,7 @@
        line before any breakdown. Each figure stands only when a
        stored reading speaks for it. */}}
   <div class="wb-verdict" role="group" aria-label="At a glance">
-    {{if .HasCounts}}<div class="wb-v{{if .Hostile}} wb-v-hostile{{end}}"><span class="wb-v-n">{{.Hostile}}</span><span class="wb-v-l">{{if eq .Hostile 1}}hostile{{else}}hostiles{{end}}</span></div>{{end}}
+    {{if .HasCounts}}<div class="wb-v"><span class="wb-v-n{{if .Hostile}} wb-hostile{{end}}">{{.Hostile}}</span><span class="wb-v-l">{{if eq .Hostile 1}}hostile{{else}}hostiles{{end}}</span></div>{{end}}
     {{if .Hulls}}<div class="wb-v"><span class="wb-v-n">{{.Hulls}}</span><span class="wb-v-l">{{if eq .Hulls 1}}ship{{else}}ships{{end}}{{if .HasDScan}} · {{.OnGrid}} on grid{{end}}</span></div>{{end}}
     {{if .PilotsN}}<div class="wb-v"><span class="wb-v-n">{{.PilotsN}}</span><span class="wb-v-l">in local</span></div>{{end}}
     <div class="wb-v wb-v-what">

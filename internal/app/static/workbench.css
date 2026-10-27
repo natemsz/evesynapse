@@ -222,22 +222,22 @@
 
 /* --- The verdict: the report in one line, before any breakdown ---
    The figures read first and large; what, where and when sit beside
-   them in the site's badge and security colours. */
+   them in the site's badge and security colours. The panel is the
+   boxes' own glass recipe, and a hostile count takes .wb-hostile. */
 .wb-verdict {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 0.5rem 1.5rem;
-  padding: 0.75rem 1rem;
+  padding: 0.8rem 1.05rem;
   margin-bottom: 1rem;
-  border-radius: 0.6rem;
-  background: color-mix(in srgb, var(--accent) 7%, transparent);
-  border: 1px solid color-mix(in srgb, var(--accent) 22%, transparent);
+  background: var(--glass);
+  border: 1px solid var(--glass-edge);
+  border-radius: var(--r-lg);
 }
 .wb-v { display: flex; align-items: baseline; gap: 0.4rem; }
 .wb-v-n { font-size: 2rem; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
 .wb-v-l { color: var(--muted); font-size: 0.9rem; }
-.wb-v-hostile .wb-v-n { color: var(--danger); }
 .wb-v-what { align-items: center; flex-wrap: wrap; gap: 0.35rem 0.75rem; margin-left: auto; }
 .wb-v-where { font-weight: 700; }
 .wb-v-when { color: var(--muted); font-variant-numeric: tabular-nums; }

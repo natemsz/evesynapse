@@ -416,8 +416,8 @@
     bottom: calc(var(--phone-bar-h, 0px) + env(safe-area-inset-bottom, 0px) + 0.4rem);
     width: auto;
     z-index: 95;
-    background: color-mix(in srgb, var(--panel) 97%, transparent);
   }
+  body > .notify-prompt.flyout { z-index: 95; }
 }
 
 @keyframes sheet-rise { from { transform: translateY(1.5rem); opacity: 0.4; } }

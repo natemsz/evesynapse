@@ -115,45 +115,99 @@ html[data-backdrop="glow"] body::before {
    file, which loads after style.css, so the override needs no
    specificity games. */
 .charselector-dropdown {
-  background-color: rgba(13, 10, 8, 0.94);
+  background-color: color-mix(in srgb, var(--panel) 88%, transparent);
   border-color: color-mix(in srgb, var(--accent) 25%, transparent);
   box-shadow: 0 10px 24px rgba(0, 0, 0, 0.65);
-  -webkit-backdrop-filter: blur(25px) saturate(0.9);
-  backdrop-filter: blur(25px) saturate(0.9);
+  -webkit-backdrop-filter: blur(30px) saturate(1.45);
+  backdrop-filter: blur(30px) saturate(1.45);
 }
 html[data-theme="light"] .charselector-dropdown {
   background-color: #fdfbf6;
   border-color: #d9cfba;
 }
 
-/* The character switcher's menu (style.css) hangs from the header,
-   whose own backdrop-filter makes the header a backdrop root: the
-   blur the menu declares samples the header's backdrop image, not
-   the page under the menu (the same measurement as the notify
-   prompt below), and its 0.82 paint lets the page text behind the
-   open menu read straight through. It gets the .suggest treatment,
-   verbatim, like the character selector's dropdown above:
-   near-opaque paint does the legibility work, the standard
-   floating blur stays for where it can sample. */
-.switcher .menu {
-  background-color: rgba(13, 10, 8, 0.94);
-  border-color: color-mix(in srgb, var(--accent) 25%, transparent);
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.65);
-  -webkit-backdrop-filter: blur(25px) saturate(0.9);
-  backdrop-filter: blur(25px) saturate(0.9);
+/* The flyout glass: one recipe for every panel that floats over
+   the page from the chrome (the notifications menu, the character
+   switcher's menu, the first-run notification prompt, the rail's
+   category flyouts). The tokens hang off the html element, where
+   the colour schemes and the light theme set --panel and
+   --accent, so each scheme tints the glass and its edge. The
+   blur only bites where the panel's ancestry lets it sample the
+   page: the header and the sidebar are backdrop roots, so the
+   header flyouts are hoisted to the body (app.js) and the
+   sidebar's own frost moves to a pseudo-element below. The tint
+   is light enough for that frost to read: at 88% the paint hid
+   it and the glass looked solid. */
+:root {
+  --flyout-bg: color-mix(in srgb, var(--panel) 55%, transparent);
+  --flyout-edge: color-mix(in srgb, var(--accent) 25%, transparent);
+  --flyout-shadow: 0 10px 24px rgba(0, 0, 0, 0.65);
+  --flyout-frost: blur(30px) saturate(1.45);
+}
+html[data-theme="light"] {
+  --flyout-edge: #d8cdb8;
+  --flyout-shadow: 0 6px 22px rgba(60, 40, 10, 0.25);
+}
+.switcher .menu, .switcher-menu, .notify-menu, .notify-prompt {
+  background: var(--flyout-bg);
+  border: 1px solid var(--flyout-edge);
+  border-radius: var(--r-md);
+  box-shadow: var(--flyout-shadow);
+  -webkit-backdrop-filter: var(--flyout-frost);
+  backdrop-filter: var(--flyout-frost);
+}
+@media (min-width: 861px) {
+  html[data-nav="rail"] .sidebar .branch .menu {
+    background: var(--flyout-bg);
+    border-color: var(--flyout-edge);
+    box-shadow: var(--flyout-shadow);
+    -webkit-backdrop-filter: var(--flyout-frost);
+    backdrop-filter: var(--flyout-frost);
+  }
+  /* The sidebar's frost on a layer behind its content, so the
+     sidebar itself is no backdrop root and a rail flyout hanging
+     past its edge blurs the page under it. */
+  .sidebar {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+  .sidebar::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    -webkit-backdrop-filter: blur(18px);
+    backdrop-filter: blur(18px);
+  }
 }
 
-/* The notifications menu hangs from the header too, off the same
-   backdrop root, and its var(--panel) paint is fully opaque where
-   the switcher's menu beside it wears the floating treatment.
-   It gets the same .suggest treatment, verbatim, so the header's
-   dropdowns match. */
-.notify-menu {
-  background-color: rgba(13, 10, 8, 0.94);
-  border-color: color-mix(in srgb, var(--accent) 25%, transparent);
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.65);
-  -webkit-backdrop-filter: blur(25px) saturate(0.9);
-  backdrop-filter: blur(25px) saturate(0.9);
+/* The header flyouts as top-level surfaces: app.js moves them to
+   the body and places them under their toggles, so their
+   backdrop-filter samples the page under the open panel instead
+   of the header's backdrop image. The fixed position and the
+   raised layer live here, and so does the open-state motion,
+   whose style.css rules key off ancestors the panels have left;
+   the panels carry the is-open class themselves. */
+body > .flyout {
+  position: fixed;
+  z-index: 80;
+  margin: 0;
+}
+html.js body > .notify-menu.flyout,
+html.js body > .switcher-menu.flyout {
+  opacity: 0;
+  transform: translateY(-0.25rem);
+  transition: opacity 140ms ease-out, transform 180ms ease-out;
+}
+html.js body > .notify-menu.flyout.is-open,
+html.js body > .switcher-menu.flyout.is-open {
+  opacity: 1;
+  transform: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  html.js body > .notify-menu.flyout,
+  html.js body > .switcher-menu.flyout { transition: none; }
 }
 
 /* My Loadouts: the training-plan action is a skill-book glyph,
@@ -814,9 +868,11 @@ html[data-theme="light"] #main-content > .section-tabs .tabs-more.has-active .ta
    A small card that drops down from the bell (base.html renders it
    right after the bell, positioned against the sticky header: top
    100% is the header's own bottom edge, so it hangs from the bar
-   wherever the bar wraps). Ember glass like the other floating
-   surfaces. Without script it simply appears on the first view;
-   html.js gives it the bell list's drop. */
+   wherever the bar wraps). It wears the flyout glass above; with
+   script, app.js hoists it to the body like the bell's list so
+   that glass blurs the page under it. Without script it simply
+   appears on the first view; html.js gives it the bell list's
+   drop. */
 .notify-prompt {
   position: absolute;
   top: calc(100% + 8px);
@@ -824,20 +880,9 @@ html[data-theme="light"] #main-content > .section-tabs .tabs-more.has-active .ta
   z-index: 40;
   width: min(24rem, calc(100vw - 2rem));
   padding: 0.9rem 1rem 0.8rem;
-  /* Deeper than --glass: the header's own backdrop-filter makes
-     it a backdrop root, and this card hangs below the header's
-     box, outside that root's backdrop image — the blur declared
-     below samples nothing here (measured: page text behind the
-     card stays at full sharpness). Legibility comes from the
-     paint instead; the blur stays for the day the card's
-     ancestry changes. */
-  background: color-mix(in srgb, var(--panel) 93%, transparent);
-  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(0.9);
-  backdrop-filter: blur(var(--glass-blur)) saturate(0.9);
-  border: 1px solid var(--glass-edge);
-  border-radius: var(--r-lg);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55);
 }
+/* Hoisted, it stands below the bell's list, which opens over it. */
+body > .notify-prompt.flyout { z-index: 60; }
 .notify-prompt form { margin: 0; }
 .notify-prompt-title { margin: 0 1.2rem 0.3rem 0; font-size: 1.05rem; font-weight: 600; color: var(--text-bright); }
 .notify-prompt-sub { margin: 0 0 0.55rem; color: var(--muted); font-size: 0.9rem; }
@@ -980,6 +1025,24 @@ html[data-scheme] .cs-aline { border-bottom-color: color-mix(in srgb, var(--acce
 html[data-scheme] .plan-tip { border-color: color-mix(in srgb, var(--accent) 35%, transparent); }
 html[data-scheme] .foldbtn { border-color: color-mix(in srgb, var(--accent) 30%, black); }
 html[data-scheme] .modal { border-color: color-mix(in srgb, var(--accent) 42%, black); box-shadow: 0 24px 60px -12px rgba(0, 0, 0, 0.55), 0 0 22px color-mix(in srgb, var(--accent) 14%, transparent); }
+/* Hover and selected rows in the lists that float (quick jump,
+   search suggestions, the menus) and the chrome buttons beside
+   them: the base rules bake the ember wash. #2a1a0c is the
+   ember at 8% over the default panel, so the scheme rows mix the
+   same way. */
+html[data-scheme] .quickjump-results li.sel,
+html[data-scheme] .sidebar .branch .menu a.active { background-color: color-mix(in srgb, var(--accent) 8%, var(--panel)); }
+html[data-scheme] .suggest li:not(.sug-kind):not(.sug-empty):hover,
+html[data-scheme] .suggest li.sel { background: color-mix(in srgb, var(--accent) 13%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent), 0 0 14px color-mix(in srgb, var(--accent) 18%, transparent); }
+html[data-scheme] .branch .menu a.active,
+html[data-scheme] .switcher-menu a.active { background: color-mix(in srgb, var(--accent) 18%, transparent); }
+html[data-scheme] .nav-reopen:hover,
+html[data-scheme] .nav-hamburger:hover,
+html[data-scheme] .fit-solve-apply:hover { background: color-mix(in srgb, var(--accent) 14%, transparent); }
+html[data-scheme] .notify > summary:hover,
+html[data-scheme] .notify[open] > summary { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+html[data-scheme] tbody tr:hover td,
+html[data-scheme] tbody tr:hover th { background: color-mix(in srgb, var(--accent) 4.5%, transparent); }
 /* Card title links (fit names, ship names) sit at the gradient's
    bright end, the way the hover state already does through
    --success: the scheme highlight, not the core. */
@@ -1060,6 +1123,13 @@ html[data-scheme="edencom"] .wordmark-svg .p-s4 { fill: #e9cf8f; }
 html[data-scheme="edencom"] .wordmark-svg .p-s5 { fill: #aca07c; }
 html[data-scheme="edencom"] .wordmark-svg .p-s6 { fill: #707068; }
 html[data-scheme="edencom"] .wordmark-svg .p-s7 { fill: #334155; }
+html[data-scheme="soe"] .wordmark-svg .p-s1 { fill: #57d7e7; }
+html[data-scheme="soe"] .wordmark-svg .p-s2 { fill: #7ab6c2; }
+html[data-scheme="soe"] .wordmark-svg .p-s3 { fill: #9e959d; }
+html[data-scheme="soe"] .wordmark-svg .p-s4 { fill: #c17377; }
+html[data-scheme="soe"] .wordmark-svg .p-s5 { fill: #e55252; }
+html[data-scheme="soe"] .wordmark-svg .p-s6 { fill: #bc3939; }
+html[data-scheme="soe"] .wordmark-svg .p-s7 { fill: #922020; }
 html[data-scheme] .section-tabs a.active { color: var(--sch-hi); }
 /* The top bar's search magnifier takes the scheme highlight;
    the baked data-uri magnifiers are restated per scheme in
@@ -1119,6 +1189,9 @@ html[data-scheme] .pchart .chart-volbar { fill: var(--sch-end); }
 /* The Settings page's theme picker: one row per look, a swatch,
    a name, and the strength it can be worn at. */
 .scheme-group-label { font-family: Rajdhani, sans-serif; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; font-size: .78rem; opacity: .75; margin: 1.4rem 0 .5rem; }
+/* The home Theme modal gives the picker room: at the standard
+   modal width the rows squeeze their text into a ribbon. */
+.modal.theme-modal { width: min(46rem, 100%); }
 .theme-default, .scheme-row { display: flex; align-items: center; gap: 1rem; padding: .7rem .9rem; border: 1px solid rgba(255,255,255,.10); border-radius: 10px; background: rgba(255,255,255,.03); }
 .theme-default.current, .scheme-row.current { border-color: var(--sch-accent, #ff6a1a); box-shadow: 0 0 0 1px var(--sch-accent, #ff6a1a) inset, 0 0 18px -6px var(--sch-accent, #ff6a1a); }
 .scheme-list { display: flex; flex-direction: column; gap: .55rem; }

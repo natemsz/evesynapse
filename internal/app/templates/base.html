@@ -174,7 +174,7 @@
       {{if .Switcher}}
       <details class="branch switcher topbar-switcher">
         <summary>Switch Character</summary>
-        <div class="menu">
+        <div class="menu switcher-menu">
           {{range .Switcher}}
           <a href="/characters/switch?character={{.ID}}"{{if .Active}} class="active"{{end}}><img class="portrait" src="{{.PortraitURL}}" alt="" width="24" height="24"> {{.Name}}{{if .Tags}} <small>· {{.Tags}}</small>{{end}}{{if .Relink}} <small>· re-link needed</small>{{end}}</a>
           {{end}}

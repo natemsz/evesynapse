@@ -4,7 +4,7 @@
 
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
 
-<p><small>Already have an EveSynapse account? <a href="/auth/login">Log in</a> instead: no setup, and logging in asks EVE for no permissions at all. Your grants stay exactly as you left them.</small></p>
+<p><small>Already have an EveSynapse account? <a href="/auth/login">Log in</a></small></p>
 
 {{with .Link}}
 {{if eq .Step "cards"}}
@@ -27,15 +27,60 @@
     <p class="lk-actions"><button class="btn" type="submit">Continue</button> <a href="?cards=1&amp;pick=all{{if .Character}}&amp;character={{.Character}}{{end}}" data-select-all>Select all</a></p>
   </form>
 </section>
+{{else if eq .Step "theme"}}
+<section class="card" data-fold="never">
+  <h2>Pick your theme</h2>
+  <p><small>How EveSynapse looks, picked now and changeable later in Settings. Your theme is saved to your account and follows you across devices. First the type, then the look it applies to.</small></p>
+  <form method="get" action="{{if .Axon}}/auth/link{{else}}/auth/eve{{end}}" data-su-theme>
+    <input type="hidden" name="submitted" value="1">
+    {{if .Axon}}<input type="hidden" name="step" value="axon">{{end}}
+    {{range .Hidden}}<input type="hidden" name="{{.Name}}" value="{{.Value}}">
+    {{end}}
+    <div class="su-tiers">
+      {{range .Theme.Types}}
+      <label class="su-tier">
+        <input type="radio" name="ttype" value="{{.ID}}"{{if .Selected}} checked{{end}}>
+        <span class="su-tier-name">{{.Title}}</span>
+        <span class="su-tier-blurb">{{.Blurb}}</span>
+      </label>
+      {{end}}
+    </div>
+    <div class="scheme-list su-schemes">
+      {{range .Theme.Schemes}}
+      <label class="scheme-row" data-su-scheme="{{.ID}}">
+        <input type="radio" name="tscheme" value="{{.ID}}"{{if .Selected}} checked{{end}}>
+        <span class="scheme-swatch sw-{{if .ID}}{{.ID}}{{else}}default{{end}}" aria-hidden="true"></span>
+        <span class="scheme-meta"><span class="scheme-name">{{.Name}}</span><span class="scheme-sub">{{.Sub}}</span></span>
+        {{if .ID}}<small class="su-soon" data-su-soon{{if not .Pending}} hidden{{end}}>Wallpaper coming soon</small>{{end}}
+      </label>
+      {{end}}
+    </div>
+    <p class="su-fullnote" data-su-fullnote{{if not .Theme.Full}} hidden{{end}}><small>Scheme wallpapers are still on the way: a scheme picked at Full applies at Muted until its wallpaper lands.</small></p>
+    <p class="lk-actions"><button class="btn" type="submit">Continue</button> <a href="{{.StepBack}}">Go back</a></p>
+  </form>
+</section>
+{{else if eq .Step "axon"}}
+<section class="card" data-fold="never">
+  <h2>Take intel with you: Axon</h2>
+  <p>Axon is the desktop companion for EveSynapse intel, and this sign-up turns on the character location it files reports by. It watches your EVE chat logs and sends new lines to your intel channels while you play, so sightings reach the map on their own. Its overlay puts reporting on a shortcut: a small translucent paste field where an empty send files what is on your clipboard, showing the report type and system it detected before anything is sent, either of them yours to override. A second shortcut opens the intel dashboard. Axon is still cooking and the overlay is on its way; the current release already covers the channel reporting.</p>
+  <p class="lk-axon-dl">{{range .AxonDownloads}}<a class="btn" href="{{.URL}}" rel="noopener">{{.Label}}</a>{{end}}</p>
+  <p><small>Axon is <a href="https://github.com/natemsz/axon" rel="noopener">open source</a>. Once you are in, pair it from your Intel Channels page.</small></p>
+  <form method="get" action="/auth/eve">
+    <input type="hidden" name="submitted" value="1">
+    {{range .Hidden}}<input type="hidden" name="{{.Name}}" value="{{.Value}}">
+    {{end}}
+    <p class="lk-actions"><button class="btn" type="submit">Complete sign up</button> <a href="{{.StepBack}}">Go back</a></p>
+  </form>
+</section>
 {{else}}
 <section class="card" data-fold="never">
   <h2>This is what will be turned on</h2>
   <p class="lk-top"><a href="#lk-actions">Jump to bottom <span aria-hidden="true">&darr;</span></a></p>
   {{if .Remembered}}<p><small>These are the choices you made last time. Change anything, or continue as they are.</small></p>{{end}}
   <p class="lk-count">EVE will ask for <strong data-lk-count>{{.Count}}</strong> permission{{if ne .Count 1}}s{{end}}{{if .Count}}, <span data-lk-required>{{.Required}}</span> of them needed by the features below{{else}}: you only sign in, and nothing about your characters is read{{end}}.</p>
-  <form method="get" action="/auth/eve" data-lk-form>
+  <form method="get" action="{{if .Signup}}/auth/link{{else}}/auth/eve{{end}}" data-lk-form>
     <input type="hidden" name="submitted" value="1">
-    
+    {{if .Signup}}<input type="hidden" name="step" value="theme">{{end}}
     {{if .Character}}<input type="hidden" name="character" value="{{.Character}}">{{end}}
 
     {{if .Roles}}<p><small>Corporation permissions are shown under their feature, framed by the in-game role EVE needs for them. Tick what this character can do in its corporation; if you are not sure, leave it unticked and add it later.</small></p>{{end}}
@@ -67,11 +112,12 @@
     {{end}}
 
     <p class="lk-actions" id="lk-actions">
-      <button class="btn" type="submit">Complete sign up</button>
+      <button class="btn" type="submit">{{if .Signup}}Continue{{else}}Complete sign up{{end}}</button>
       <a href="{{.Back}}">Go back</a>
       <a href="{{.Full}}#lk-actions" data-tick-all>Tick every permission</a>
     </p>
   </form>
+
 </section>
 {{end}}
 {{end}}

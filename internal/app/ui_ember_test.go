@@ -214,11 +214,12 @@ func TestEmberGlassAndSkyRules(t *testing.T) {
 	// The character selector's open list floats over page content;
 	// painted at --input-bg's 60% the text underneath bleeds
 	// through and the names are unreadable. bg.css carries its
-	// near-opaque override (the .suggest recipe); pinned here for
-	// the same reason as the override above.
+	// deep override (the .suggest recipe: the landing frost over
+	// the top bar's panel colour); pinned here for the same
+	// reason as the override above.
 	if !strings.Contains(bg, ".charselector-dropdown {") ||
-		!strings.Contains(bg, "background-color: rgba(13, 10, 8, 0.94);") {
-		t.Error("bg.css lost the charselector dropdown's near-opaque paint; the open list is illegible over content again")
+		!strings.Contains(bg, "background-color: color-mix(in srgb, var(--panel) 88%, transparent);") {
+		t.Error("bg.css lost the charselector dropdown's deep paint; the open list is illegible over content again")
 	}
 	// The home KPI tiles carry the mockup's Lucide glyphs in their
 	// top right (the .brief-icon treatment at tile scale). The

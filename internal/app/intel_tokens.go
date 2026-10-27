@@ -502,6 +502,9 @@ func (app *Application) handleAPILines(w http.ResponseWriter, r *http.Request) {
 		// the paste is, and the system it is about.
 		Kind   string `json:"kind"`
 		System int64  `json:"system"`
+		// SystemName is the system as the player typed it in the
+		// overlay, resolved here; System wins when both are sent.
+		SystemName string `json:"system_name"`
 	}
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, intelMaxPaste)).Decode(&body); err != nil {
 		intelAPIError(w, http.StatusBadRequest, "send {\"lines\": [...]}, up to 64 KB")
@@ -517,6 +520,14 @@ func (app *Application) handleAPILines(w http.ResponseWriter, r *http.Request) {
 	}
 	if body.System < 0 {
 		body.System = 0
+	}
+	if name := strings.TrimSpace(body.SystemName); body.System == 0 && name != "" {
+		id, _, ok := app.systemLookup(ctx)(strings.ToLower(name))
+		if !ok {
+			intelAPIError(w, http.StatusBadRequest, fmt.Sprintf("no system is called %q", name))
+			return
+		}
+		body.System = id
 	}
 	if body.System > 0 {
 		if _, err := app.queries.GetSDESystem(ctx, body.System); err != nil {

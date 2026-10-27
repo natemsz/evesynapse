@@ -584,9 +584,8 @@ func (app *Application) rosterSetOf(ctx context.Context, text, analysisRaw, scan
 		}
 	}
 	if scanID != "" {
-		if row, err := app.queries.GetScan(ctx, scanID); err == nil {
-			var res scanResult
-			if json.Unmarshal([]byte(row.Result), &res) == nil && res.Kind == scan.KindLocal && res.Local != nil {
+		if res, ok := app.scanResultOf(ctx, scanID); ok {
+			if res.Kind == scan.KindLocal && res.Local != nil {
 				pilots := make([]intelanalyze.Pilot, len(res.Local.Pilots))
 				for i, lp := range res.Local.Pilots {
 					pilots[i] = intelanalyze.Pilot{ID: lp.ID}
@@ -614,12 +613,8 @@ func (app *Application) dscanSetOf(ctx context.Context, scanID string) map[int64
 	if scanID == "" {
 		return nil
 	}
-	row, err := app.queries.GetScan(ctx, scanID)
-	if err != nil {
-		return nil
-	}
-	var res scanResult
-	if json.Unmarshal([]byte(row.Result), &res) != nil || res.Kind != scan.KindDScan || res.DScan == nil {
+	res, ok := app.scanResultOf(ctx, scanID)
+	if !ok || res.Kind != scan.KindDScan || res.DScan == nil {
 		return nil
 	}
 	set := map[int64][2]int{}
@@ -644,6 +639,37 @@ func (app *Application) dscanSetOf(ctx context.Context, scanID string) map[int64
 		return nil
 	}
 	return set
+}
+
+// scanResultOf reads one stored scan's parsed result,
+// remembering it: a scan's result never changes once stored,
+// and the duplicate checks ask for the same scan once per
+// candidate report. The memo is bounded; when it fills it
+// simply starts over.
+func (app *Application) scanResultOf(ctx context.Context, scanID string) (scanResult, bool) {
+	app.scanMemoMu.Lock()
+	if app.scanMemo != nil {
+		if res, ok := app.scanMemo[scanID]; ok {
+			app.scanMemoMu.Unlock()
+			return res, true
+		}
+	}
+	app.scanMemoMu.Unlock()
+	row, err := app.queries.GetScan(ctx, scanID)
+	if err != nil {
+		return scanResult{}, false
+	}
+	var res scanResult
+	if json.Unmarshal([]byte(row.Result), &res) != nil {
+		return scanResult{}, false
+	}
+	app.scanMemoMu.Lock()
+	if app.scanMemo == nil || len(app.scanMemo) >= 512 {
+		app.scanMemo = map[string]scanResult{}
+	}
+	app.scanMemo[scanID] = res
+	app.scanMemoMu.Unlock()
+	return res, true
 }
 
 func sameDScanSet(a, b map[int64][2]int) bool {

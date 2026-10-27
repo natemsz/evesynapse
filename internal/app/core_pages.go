@@ -93,6 +93,8 @@ type pageData struct {
 	Channel  *channelView
 	// IntelFeed is the cross-channel feed page (/intel/feed/).
 	IntelFeed *intelFeedView
+	// IntelDashboard is the intel workbench dashboard (/intel/workbench/).
+	IntelDashboard *intelDashboardView
 	// Workbench is the intel workbench page (/intel/workbench/{id}/).
 	Workbench *workbenchView
 
@@ -178,7 +180,7 @@ var (
 // pageSharedTemplates are the files every full page is parsed with:
 // the layout and the partials any page may use. One list, so that
 // nothing else parsing a page into the same cache can leave one out.
-var pageSharedTemplates = []string{"templates/base.html", "templates/wordmark.html", "templates/notifybell.html", "templates/balancechart.html", "templates/walletflow.html", "templates/charselector.html", "templates/fitbrowser.html", "templates/fit_workbench.html", "templates/locked.html", "templates/sectiontabs.html", "templates/historysection.html", "templates/abyssalhowto.html", "templates/contractcards.html", "templates/reportcard.html", "templates/themepicker.html"}
+var pageSharedTemplates = []string{"templates/base.html", "templates/wordmark.html", "templates/notifybell.html", "templates/balancechart.html", "templates/walletflow.html", "templates/charselector.html", "templates/fitbrowser.html", "templates/fit_workbench.html", "templates/locked.html", "templates/sectiontabs.html", "templates/historysection.html", "templates/abyssalhowto.html", "templates/contractcards.html", "templates/reportcard.html", "templates/mapview.html", "templates/themepicker.html"}
 
 // parsedTemplate returns the cached set for page, parsing it (with
 // the shared files first) the first time it is asked for.

@@ -88,6 +88,7 @@ jobs:
           internal/app/jstest/tabs.more.test.js
           internal/app/jstest/phonebar.test.js
           internal/app/jstest/map.test.js
+          internal/app/jstest/dashboard.test.js
 
   # The same suite under the race detector, as its own job so the
   # plain run above stays fast.

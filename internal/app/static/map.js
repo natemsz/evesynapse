@@ -786,6 +786,10 @@
     var findList = el.querySelector(".map-find-list");
     var zoomPref = el.querySelector("[data-map-zoom-tactical]");
     var root = el.ownerDocument;
+    // Compact: the intel dashboard's copy (data-map-compact on a
+    // wrapper). It follows the dashboard's events, never the page
+    // URL: it neither opens on ?system= nor writes it back.
+    var compact = !!(el.closest && el.closest("[data-map-compact]"));
 
     // The one preference: whether zooming deep into a region
     // enters its tactical view. Off by default -- clicking the
@@ -1176,6 +1180,7 @@
       });
       drawJumpRange(k, ox, oy, r);
       drawIntel(k, ox, oy, r);
+      drawPings(k, ox, oy, r);
       drawRouteEnds(k, ox, oy, r);
 
       drawLabels(k, ox, oy, r);
@@ -1339,7 +1344,7 @@
     var layer = "security", LY = null;
     // The layer the URL asked for, read before anything rewrites the
     // URL, and kept in it until the layers payload arrives.
-    var startQuery = new URLSearchParams(location.search);
+    var startQuery = new URLSearchParams(compact ? "" : location.search);
     var wantLayer = startQuery.get("layer");
     var HEAT = { kills: 1, npc: 1, jumps: 1, threat: 1 };
     var heatOrder = {};
@@ -2205,6 +2210,7 @@
       hintTimer = setTimeout(function () { hintEl.hidden = true; }, 3200);
     }
     function syncURL() {
+      if (compact) return;
       // Not before the first draw has read the URL (restore): the
       // layers can arrive first, and would wipe what it asked for.
       if (!fitted || !window.history || !history.replaceState) return;
@@ -2885,6 +2891,68 @@
         }
       });
     }
+    // --- Pings (the intel dashboard) ---
+    // A report's system gets a ping when the report arrives: one
+    // plain echo, five softer pulses, then a slow faint breath
+    // while the report is recent (pingRing). It goes quiet when the
+    // report is viewed or stops being recent. The dashboard sends
+    // evesynapse:map-ping {system, id, at, recent, fresh} and
+    // evesynapse:map-viewed {id} to this element.
+    var pings = [], pingTimer = 0;
+    var reduceMotion = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+    function drawPings(k, ox, oy, r) {
+      clearTimeout(pingTimer);
+      if (!pings.length) return;
+      var now = Date.now(), live = false, fast = false;
+      pings = pings.filter(function (p) { return !p.viewed && now / 1000 - p.at < p.recent; });
+      pings.forEach(function (p) {
+        live = true;
+        if (now - p.t0 < PING_SETTLE_MS) fast = true;
+        if (mode !== "universe" && S.r[p.i] !== region) return;
+        var x = wx(p.i) * k + ox, y = wy(p.i) * k + oy;
+        if (x < -60 || y < -60 || x > cw + 60 || y > ch + 60) return;
+        var g = pingRing(now - p.t0, reduceMotion);
+        ctx.beginPath();
+        ctx.arc(x, y, r + 2 + g.size * g.grow, 0, Math.PI * 2);
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = intelRGBA(colors.intel, g.alpha);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(x, y, r + 1.5, 0, Math.PI * 2);
+        ctx.fillStyle = intelRGBA(colors.intel, 0.9);
+        ctx.fill();
+      });
+      // The plain echo and the pulses run at frame rate; the slow
+      // breath needs far fewer frames.
+      if (live && !reduceMotion) pingTimer = setTimeout(schedule, fast ? 16 : 80);
+    }
+    el.addEventListener("evesynapse:map-ping", function (e) {
+      var d = e.detail || {}, i = G.byID[+d.system];
+      if (i === undefined) return;
+      pings = pings.filter(function (p) { return p.id !== d.id; });
+      // A ping for a report already on the page when it loaded
+      // starts at the slow breath: only an arrival echoes.
+      var now = Date.now();
+      pings.push({ i: i, id: d.id, at: +d.at || now / 1000, recent: +d.recent || 1800,
+        t0: d.fresh === false ? now - PING_SETTLE_MS : now, viewed: false });
+      schedule();
+    });
+    el.addEventListener("evesynapse:map-viewed", function (e) {
+      var id = e.detail && e.detail.id;
+      pings.forEach(function (p) { if (p.id === id) p.viewed = true; });
+      schedule();
+    });
+    // The dashboard's open thread: its system, with its region
+    // around it.
+    el.addEventListener("evesynapse:map-focus", function (e) {
+      var i = G.byID[+((e.detail || {}).system)];
+      if (i === undefined) return;
+      sel = i;
+      enterRegion(S.r[i], i);
+      updateCard();
+      schedule();
+    });
+
     // A report's count and age beside its system, once the view is
     // close enough to read it.
     function intelLabels(k, ox, oy, label, inPlaceFirst) {
@@ -4149,12 +4217,38 @@
       root.removeEventListener("visibilitychange", onIntelVisible);
       if (raf) cancelAnimationFrame(raf);
       clearTimeout(hintTimer);
+      clearTimeout(pingTimer);
       root.removeEventListener("fullscreenchange", onFullChange);
       root.removeEventListener("webkitfullscreenchange", onFullChange);
       if (el.classList.contains("map-full")) toggleFull(false);
       root.removeEventListener("evesynapse:content-will-swap", teardown);
     }
     root.addEventListener("evesynapse:content-will-swap", teardown);
+    // Ready for the dashboard's events (pings, focus).
+    el.setAttribute("data-map-ready", "1");
+    el.dispatchEvent(new CustomEvent("evesynapse:map-ready"));
+  }
+
+  // pingRing is a ping's ring t ms after it arrived: how far out
+  // it reaches (size, in px, times grow) and how strongly it shows.
+  // One plain echo (PING_ECHO_MS), five softer pulses, then a slow
+  // faint breath for as long as the report stays recent. Reduced
+  // motion holds one still, faint ring instead.
+  var PING_ECHO_MS = 1600, PING_PULSE_MS = 1800, PING_PULSES = 5, PING_BREATH_MS = 6000;
+  var PING_SETTLE_MS = PING_ECHO_MS + PING_PULSES * PING_PULSE_MS;
+  function pingRing(t, still) {
+    if (still) return { size: 6, grow: 1, alpha: 0.35 };
+    var g;
+    if (t < PING_ECHO_MS) {
+      g = t / PING_ECHO_MS;
+      return { size: 26, grow: g, alpha: 0.9 * (1 - g) };
+    }
+    if (t < PING_SETTLE_MS) {
+      g = ((t - PING_ECHO_MS) % PING_PULSE_MS) / PING_PULSE_MS;
+      return { size: 14, grow: g, alpha: 0.45 * (1 - g) };
+    }
+    g = ((t - PING_SETTLE_MS) % PING_BREATH_MS) / PING_BREATH_MS;
+    return { size: 10, grow: g, alpha: 0.16 * (1 - g) };
   }
 
   function init(rootEl) {
@@ -4192,6 +4286,7 @@
       frameX: frameX, frameY: frameY, sovFieldKey: sovFieldKey, resolveProj: resolveProj, PROJ_PREF_KEY: PROJ_PREF_KEY,
       joinLayers: joinLayers, heatT: heatT, allianceHue: allianceHue, threatLevel: threatLevel,
       routeCost: routeCost, planRoute: planRoute, routeSummary: routeSummary, joinIntel: joinIntel,
-      jumpRange: jumpRange, joinJump: joinJump, jumpNeighbours: jumpNeighbours, jumpFatigue: jumpFatigue };
+      jumpRange: jumpRange, joinJump: joinJump, jumpNeighbours: jumpNeighbours, jumpFatigue: jumpFatigue,
+      pingRing: pingRing, PING_SETTLE_MS: PING_SETTLE_MS };
   }
 })();

@@ -37,7 +37,8 @@ var Module = module.Module{
 			// when the section exists.
 			{Href: "/intel/kills/", Label: "Killboard", Pages: []string{"killboard.html", "kill.html"}},
 			{Href: "/intel/scan/", Label: "D-Scan Parser", Pages: []string{"scans.html", "scan.html", "scan_compare.html"}},
-			{Href: "/intel/channels/", Label: "Intel Channels", Pages: []string{"channels.html", "channel.html", "intel_workbench.html"}},
+			{Href: "/intel/channels/", Label: "Intel Channels", Pages: []string{"channels.html", "channel.html"}},
+			{Href: "/intel/workbench/", Label: "Intel Workbench", Pages: []string{"intel_workbench.html"}},
 			{Href: "/intel/feed/", Label: "Intel Feed", Pages: []string{"feed.html"}},
 			{Href: "/intel/wars/", Label: "Wars", Pages: []string{"intel_wars.html"}},
 			{Href: "/intel/incursions/", Label: "Incursions", Pages: []string{"intel_incursions.html"}},

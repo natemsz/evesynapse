@@ -2042,6 +2042,60 @@ func (q *Queries) ListRecentRosterReports(ctx context.Context, arg ListRecentRos
 	return items, nil
 }
 
+const listRecentThreads = `-- name: ListRecentThreads :many
+SELECT DISTINCT ON (thread_id) thread_id, group_id, channel_id, system_id, latest_at, composite
+FROM intel_group_composites
+WHERE channel_id = ANY($1::bigint[]) AND thread_id > 0
+  AND latest_at >= $2::timestamptz
+ORDER BY thread_id, latest_at DESC
+`
+
+type ListRecentThreadsParams struct {
+	ChannelIds []int64   `json:"channel_ids"`
+	Since      time.Time `json:"since"`
+}
+
+type ListRecentThreadsRow struct {
+	ThreadID  int64        `json:"thread_id"`
+	GroupID   int64        `json:"group_id"`
+	ChannelID int64        `json:"channel_id"`
+	SystemID  int64        `json:"system_id"`
+	LatestAt  sql.NullTime `json:"latest_at"`
+	Composite string       `json:"composite"`
+}
+
+// The intel dashboard's rows (intel_dashboard.go): each recent
+// thread in the given channels, by its newest group.
+func (q *Queries) ListRecentThreads(ctx context.Context, arg ListRecentThreadsParams) ([]ListRecentThreadsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listRecentThreads, pq.Array(arg.ChannelIds), arg.Since)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListRecentThreadsRow
+	for rows.Next() {
+		var i ListRecentThreadsRow
+		if err := rows.Scan(
+			&i.ThreadID,
+			&i.GroupID,
+			&i.ChannelID,
+			&i.SystemID,
+			&i.LatestAt,
+			&i.Composite,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listSDESystemNames = `-- name: ListSDESystemNames :many
 SELECT system_id, name FROM sde_systems
 `
@@ -2194,6 +2248,41 @@ func (q *Queries) ListThreadCandidates(ctx context.Context, arg ListThreadCandid
 			&i.SystemID,
 			&i.LatestAt,
 		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listThreadsSystems = `-- name: ListThreadsSystems :many
+SELECT thread_id, system_id FROM intel_group_composites
+WHERE thread_id = ANY($1::bigint[])
+`
+
+type ListThreadsSystemsRow struct {
+	ThreadID int64 `json:"thread_id"`
+	SystemID int64 `json:"system_id"`
+}
+
+// The systems of several threads' groups, for the rows' system
+// counts.
+func (q *Queries) ListThreadsSystems(ctx context.Context, threadIds []int64) ([]ListThreadsSystemsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listThreadsSystems, pq.Array(threadIds))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListThreadsSystemsRow
+	for rows.Next() {
+		var i ListThreadsSystemsRow
+		if err := rows.Scan(&i.ThreadID, &i.SystemID); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

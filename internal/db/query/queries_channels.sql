@@ -515,3 +515,18 @@ WHERE group_id = sqlc.arg(group_id) AND thread_id = 0;
 -- name: ListIntelThreadGroups :many
 SELECT group_id, system_id, latest_at FROM intel_group_composites
 WHERE thread_id = $1 ORDER BY latest_at DESC;
+
+-- The intel dashboard's rows (intel_dashboard.go): each recent
+-- thread in the given channels, by its newest group.
+-- name: ListRecentThreads :many
+SELECT DISTINCT ON (thread_id) thread_id, group_id, channel_id, system_id, latest_at, composite
+FROM intel_group_composites
+WHERE channel_id = ANY(sqlc.arg(channel_ids)::bigint[]) AND thread_id > 0
+  AND latest_at >= sqlc.arg(since)::timestamptz
+ORDER BY thread_id, latest_at DESC;
+
+-- The systems of several threads' groups, for the rows' system
+-- counts.
+-- name: ListThreadsSystems :many
+SELECT thread_id, system_id FROM intel_group_composites
+WHERE thread_id = ANY(sqlc.arg(thread_ids)::bigint[]);

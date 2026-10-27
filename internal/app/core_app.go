@@ -793,6 +793,9 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 		r.Use(app.requireAuth)
 		r.Post("/intel/scan/{id}/post", app.handleScanPost)
 		r.Get("/intel/feed/", app.handleIntelFeed)
+		// The workbench dashboard (intel_dashboard.go) and its rows.
+		r.Get("/intel/workbench/", app.handleIntelDashboard)
+		r.Get("/intel/threads.json", app.handleIntelThreadsJSON)
 		// The workbench's scan door (handleWorkbenchScan) is
 		// built but deliberately unrouted for now.
 		r.Get("/intel/workbench/{reportID}/", app.handleWorkbench)

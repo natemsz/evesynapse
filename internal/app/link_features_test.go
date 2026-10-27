@@ -298,10 +298,10 @@ func TestChooserPages(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("/auth/link: status %d", rec.Code)
 	}
-	// The plain login is identity-only: the page says so plainly,
+	// The plain login is offered as the question and the link alone,
 	// and never promises it preserves a chosen permission set.
-	if !strings.Contains(body, "logging in asks EVE for no permissions at all") {
-		t.Error("the chooser does not describe the plain login as asking for no permissions")
+	if !strings.Contains(body, `Already have an EveSynapse account? <a href="/auth/login">Log in</a>`) {
+		t.Error("the chooser does not offer the plain login")
 	}
 	if strings.Contains(body, "you keep the permissions you chose") {
 		t.Error("the chooser still describes the plain login as keeping chosen permissions")
@@ -317,13 +317,19 @@ func TestChooserPages(t *testing.T) {
 
 	rec = get(app, nil, "/auth/link?activity=market")
 	body = rec.Body.String()
-	if !strings.Contains(body, "This is what will be turned on") || !strings.Contains(body, "Spread Scanner") || !strings.Contains(body, "Complete sign up") || strings.Contains(body, "Update the list") || !strings.Contains(body, "Go back") || !strings.Contains(body, "Jump to bottom") {
+	if !strings.Contains(body, "This is what will be turned on") || !strings.Contains(body, "Spread Scanner") || strings.Contains(body, "Update the list") || !strings.Contains(body, "Go back") || !strings.Contains(body, "Jump to bottom") {
 		t.Errorf("the reveal for the market is missing its parts:\n%s", body)
 	}
-	// Nothing on the summary is labelled an extra, and Complete sign
-	// up is a plain submit of the form, which posts straight to EVE.
-	if strings.Contains(body, "Extra: ") || strings.Contains(body, "formaction") || !strings.Contains(body, `<form method="get" action="/auth/eve" data-lk-form>`) {
-		t.Error("the reveal still marks extras, or its form does not post straight to /auth/eve")
+	// Nothing on the summary is labelled an extra. Signed out, the
+	// summary is a plain submit that runs on to the theme step.
+	if strings.Contains(body, "Extra: ") || strings.Contains(body, "formaction") || !strings.Contains(body, `<form method="get" action="/auth/link" data-lk-form>`) || !strings.Contains(body, `<input type="hidden" name="step" value="theme">`) {
+		t.Error("the reveal still marks extras, or its form does not run on to the theme step")
+	}
+	// The last sign-up step's Complete sign up posts straight to EVE.
+	rec = get(app, nil, "/auth/link?submitted=1&activity=market&feature=location&step=axon")
+	body = rec.Body.String()
+	if rec.Code != http.StatusOK || !strings.Contains(body, "Complete sign up") || !strings.Contains(body, `<form method="get" action="/auth/eve">`) {
+		t.Errorf("the Axon step does not complete the sign-up at /auth/eve (status %d)", rec.Code)
 	}
 
 	// There is no features-myself page anymore: its link is gone from

@@ -1060,12 +1060,12 @@ html[data-scheme="edencom"] .wordmark-svg .p-s4 { fill: #e9cf8f; }
 html[data-scheme="edencom"] .wordmark-svg .p-s5 { fill: #aca07c; }
 html[data-scheme="edencom"] .wordmark-svg .p-s6 { fill: #707068; }
 html[data-scheme="edencom"] .wordmark-svg .p-s7 { fill: #334155; }
-html[data-scheme="soe"] .wordmark-svg .p-s1 { fill: #a1dde0; }
-html[data-scheme="soe"] .wordmark-svg .p-s2 { fill: #b8afb1; }
-html[data-scheme="soe"] .wordmark-svg .p-s3 { fill: #ce8081; }
-html[data-scheme="soe"] .wordmark-svg .p-s4 { fill: #e55252; }
-html[data-scheme="soe"] .wordmark-svg .p-s5 { fill: #c94141; }
-html[data-scheme="soe"] .wordmark-svg .p-s6 { fill: #ae3131; }
+html[data-scheme="soe"] .wordmark-svg .p-s1 { fill: #57d7e7; }
+html[data-scheme="soe"] .wordmark-svg .p-s2 { fill: #7ab6c2; }
+html[data-scheme="soe"] .wordmark-svg .p-s3 { fill: #9e959d; }
+html[data-scheme="soe"] .wordmark-svg .p-s4 { fill: #c17377; }
+html[data-scheme="soe"] .wordmark-svg .p-s5 { fill: #e55252; }
+html[data-scheme="soe"] .wordmark-svg .p-s6 { fill: #bc3939; }
 html[data-scheme="soe"] .wordmark-svg .p-s7 { fill: #922020; }
 html[data-scheme] .section-tabs a.active { color: var(--sch-hi); }
 /* The top bar's search magnifier takes the scheme highlight;

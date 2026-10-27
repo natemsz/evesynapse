@@ -50,6 +50,11 @@ const (
 	killfeedStepWait    = 100 * time.Millisecond
 	killfeedIdleWait    = 6 * time.Second
 	killfeedBlockedWait = time.Minute
+	// killfeedCursorBatch coalesces the cursor write: one
+	// SetKillfeedState per batch of sequences instead of one
+	// per kill at stream pace. Ingest is idempotent, so
+	// replaying an unsaved tail after a crash is safe.
+	killfeedCursorBatch = 25
 	// killfeedJumpGap: a cursor this far behind the stream's latest
 	// is past the files' day-long retention; it jumps to the latest.
 	killfeedJumpGap = 20000
@@ -130,6 +135,7 @@ func (app *Application) runKillfeed(ctx context.Context) {
 	}
 	ingested, skipped := 0, 0
 	report := time.Now()
+	lastLatestCheck := time.Time{}
 	for ctx.Err() == nil {
 		if seq == 0 {
 			latest, err := killfeedLatest(ctx, client, base)
@@ -150,15 +156,35 @@ func (app *Application) runKillfeed(ctx context.Context) {
 			killfeedSleep(ctx, killfeedIdleWait)
 		case status == http.StatusOK:
 			if err := app.ingestKillPackage(ctx, body); err != nil {
-				logging.Errorf("killfeed: sequence %d: %v", seq, err)
-			} else {
-				ingested++
+				// The cursor does not advance past a kill
+				// that did not land: advancing here used to
+				// skip it silently and permanently. The same
+				// sequence is retried after the idle wait;
+				// ingest is idempotent, and a package that
+				// can never land blocks loudly here instead
+				// of leaving a silent hole.
+				logging.Errorf("killfeed: sequence %d: %v (will retry)", seq, err)
+				killfeedSleep(ctx, killfeedIdleWait)
+				continue
 			}
+			ingested++
 			seq++
-			app.saveKillfeedCursor(ctx, seq)
+			if seq%killfeedCursorBatch == 0 {
+				app.saveKillfeedCursor(ctx, seq)
+			}
 			killfeedSleep(ctx, killfeedStepWait)
 		case status == http.StatusNotFound:
-			// Not written yet, or expired: the latest says which.
+			// Not written yet, or expired: the latest says
+			// which — but asking on every 404 doubles the
+			// idle request rate forever; the latest only
+			// matters when a gap may have expired, so it is
+			// re-asked at most every half minute.
+			if time.Since(lastLatestCheck) < 30*time.Second {
+				app.saveKillfeedCursor(ctx, seq)
+				killfeedSleep(ctx, killfeedIdleWait)
+				continue
+			}
+			lastLatestCheck = time.Now()
 			latest, lerr := killfeedLatest(ctx, client, base)
 			switch {
 			case lerr == nil && latest-seq > killfeedJumpGap:
@@ -182,6 +208,7 @@ func (app *Application) runKillfeed(ctx context.Context) {
 			killfeedSleep(ctx, killfeedIdleWait)
 		}
 		if time.Since(report) >= 10*time.Minute {
+			app.saveKillfeedCursor(ctx, seq)
 			logging.Infof("killfeed: %d kills ingested, %d sequence gaps skipped in the last 10 minutes", ingested, skipped)
 			ingested, skipped, report = 0, 0, time.Now()
 		}

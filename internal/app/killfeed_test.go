@@ -237,3 +237,60 @@ func TestKillboardPages(t *testing.T) {
 		t.Errorf("a private kill's page must not exist: %d", code)
 	}
 }
+
+// TestKillfeedRetriesFailedIngest: a package whose ingest
+// fails is not skipped — the cursor stays on its sequence and
+// the same file is asked again until it lands.
+func TestKillfeedRetriesFailedIngest(t *testing.T) {
+	var mu sync.Mutex
+	asks := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("User-Agent") == "" {
+			w.WriteHeader(http.StatusForbidden)
+			return
+		}
+		if r.URL.Path == "/1002.json" {
+			mu.Lock()
+			asks++
+			n := asks
+			mu.Unlock()
+			if n == 1 {
+				fmt.Fprint(w, `not a kill package`)
+				return
+			}
+			fmt.Fprint(w, killPackageJSON(500002, 1002))
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer srv.Close()
+
+	app, _, q := buildCorpTestApp(t, nil)
+	app.cfg.killfeedBaseURL = srv.URL + "/"
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	if err := q.SetKillfeedState(ctx, db.SetKillfeedStateParams{Sequence: 1002, UpdatedAt: time.Now()}); err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan struct{})
+	go func() { app.runKillfeed(ctx); close(done) }()
+	deadline := time.Now().Add(30 * time.Second)
+	for {
+		var n int
+		_ = app.db.QueryRow(`SELECT COUNT(*) FROM kills WHERE killmail_id = 500002`).Scan(&n)
+		if n == 1 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("the failed kill was never retried into the store (asks so far: %d)", asks)
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	cancel()
+	<-done
+	mu.Lock()
+	defer mu.Unlock()
+	if asks < 2 {
+		t.Fatalf("sequence asked %d times, want a retry after the failed ingest", asks)
+	}
+}

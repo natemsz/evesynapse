@@ -148,6 +148,18 @@ func (app *Application) warmMailBodies(ctx context.Context, ch db.Character, all
 		}
 	}
 
+	// Which bodies already stand, in one query for the whole
+	// mailbox: bodies are immutable, so existence is all the
+	// loop below needs — not one snapshot read per header.
+	have := map[string]bool{}
+	if metas, err := app.queries.ListSnapshotMetaByCharacter(ctx, ch.CharacterID); err == nil {
+		for _, m := range metas {
+			have[m.Kind] = true
+		}
+	} else {
+		logging.Errorf("worker: list snapshots for character %d: %v", ch.CharacterID, err)
+		return 0, false
+	}
 	for _, h := range ordered {
 		if fetched >= maxMailBodiesPerCycle {
 			break
@@ -156,11 +168,8 @@ func (app *Application) warmMailBodies(ctx context.Context, ch db.Character, all
 			continue
 		}
 		kind := esi.MailBodyKind(h.MailID)
-		if _, err := app.queries.GetSnapshot(ctx, db.GetSnapshotParams{CharacterID: ch.CharacterID, Kind: kind}); err == nil {
+		if have[kind] {
 			continue // immutable: already stored
-		} else if !errors.Is(err, sql.ErrNoRows) {
-			logging.Errorf("worker: read %s snapshot for character %d: %v", kind, ch.CharacterID, err)
-			continue
 		}
 
 		if !allowance.take() {
@@ -201,6 +210,18 @@ func (app *Application) warmCalendarDetails(ctx context.Context, ch db.Character
 		return 0, false // no event list yet; nothing to detail
 	}
 
+	// Freshness of every stored kind, in one query for the
+	// whole calendar instead of one snapshot read per kind
+	// per event.
+	fresh := map[string]bool{}
+	if metas, err := app.queries.ListSnapshotMetaByCharacter(ctx, ch.CharacterID); err == nil {
+		for _, m := range metas {
+			fresh[m.Kind] = esi.CacheWindowOpen(m.CachedUntil)
+		}
+	} else {
+		logging.Errorf("worker: list snapshots for character %d: %v", ch.CharacterID, err)
+		return 0, false
+	}
 	for _, ev := range events {
 		if ev.EventID <= 0 {
 			continue
@@ -209,12 +230,7 @@ func (app *Application) warmCalendarDetails(ctx context.Context, ch db.Character
 			if fetched >= maxCalendarDetailsPerCycle {
 				return fetched, false
 			}
-			snap, serr := app.queries.GetSnapshot(ctx, db.GetSnapshotParams{CharacterID: ch.CharacterID, Kind: kind})
-			switch {
-			case serr == nil && esi.SnapshotFresh(snap):
-				continue
-			case serr != nil && !errors.Is(serr, sql.ErrNoRows):
-				logging.Errorf("worker: read %s snapshot for character %d: %v", kind, ch.CharacterID, serr)
+			if fresh[kind] {
 				continue
 			}
 			if !allowance.take() {

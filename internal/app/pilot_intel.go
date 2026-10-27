@@ -170,13 +170,21 @@ func (app *Application) loadPilotIntel(ctx context.Context, id int64, name strin
 	if v.Name == "" {
 		v.Name = names.character(id)
 	}
-	if st, err := app.queries.PilotKillStats(ctx, db.PilotKillStatsParams{CharacterID: id, Since: since}); err == nil {
-		v.Kills, v.Solo, v.Losses = st.Kills, st.Solo, st.Losses
-		if st.IskKilled > 0 {
-			v.ISK = iskShortGo(st.IskKilled)
+	// The stored profile first: when it backs the page, its
+	// aggregates replace the 90-day ones below, so computing
+	// those only to throw them away is waste on every view of
+	// a profiled pilot.
+	act := app.loadPilotActivity(ctx, id, names, now)
+	profileBacked := act != nil && act.Any
+	if !profileBacked {
+		if st, err := app.queries.PilotKillStats(ctx, db.PilotKillStatsParams{CharacterID: id, Since: since}); err == nil {
+			v.Kills, v.Solo, v.Losses = st.Kills, st.Solo, st.Losses
+			if st.IskKilled > 0 {
+				v.ISK = iskShortGo(st.IskKilled)
+			}
+		} else {
+			logging.Warnf("pilot intel %d: stats: %v", id, err)
 		}
-	} else {
-		logging.Warnf("pilot intel %d: stats: %v", id, err)
 	}
 	if rows, err := app.queries.ListPilotRecentKills(ctx, db.ListPilotRecentKillsParams{CharacterID: id, MaxRows: 10}); err == nil {
 		for _, r := range rows {
@@ -197,37 +205,39 @@ func (app *Application) loadPilotIntel(ctx context.Context, id int64, name strin
 			v.LastSeen = &last
 		}
 	}
-	if rows, err := app.queries.ListPilotShips(ctx, db.ListPilotShipsParams{CharacterID: id, Since: since}); err == nil && len(rows) > 0 {
-		for _, r := range rows {
-			v.Ships = append(v.Ships, pilotCount{ID: r.ShipTypeID, Name: names.typeName(r.ShipTypeID), N: r.N, Pct: pctOf(r.N, rows[0].N)})
-		}
-	}
-	if rows, err := app.queries.ListPilotSystems(ctx, db.ListPilotSystemsParams{CharacterID: id, Since: since}); err == nil && len(rows) > 0 {
-		for _, r := range rows {
-			sys := names.system(r.SystemID)
-			c := pilotCount{ID: r.SystemID, Name: sys.Name, N: r.N, Pct: pctOf(r.N, rows[0].N), Ago: ageText(now, r.LastAt)}
-			c.SecText, c.SecTier = secRound(sys.Security)
-			v.Systems = append(v.Systems, c)
-		}
-	}
-	if rows, err := app.queries.ListPilotHours(ctx, db.ListPilotHoursParams{CharacterID: id, Since: since}); err == nil && len(rows) > 0 {
-		v.Hours = make([]pilotHour, 24)
-		var top int64
-		for h := range v.Hours {
-			v.Hours[h].Hour = h
-		}
-		for _, r := range rows {
-			if r.Hour >= 0 && r.Hour < 24 {
-				v.Hours[r.Hour].N = r.N
-				top = max(top, r.N)
+	if !profileBacked {
+		if rows, err := app.queries.ListPilotShips(ctx, db.ListPilotShipsParams{CharacterID: id, Since: since}); err == nil && len(rows) > 0 {
+			for _, r := range rows {
+				v.Ships = append(v.Ships, pilotCount{ID: r.ShipTypeID, Name: names.typeName(r.ShipTypeID), N: r.N, Pct: pctOf(r.N, rows[0].N)})
 			}
 		}
-		for h := range v.Hours {
-			if v.Hours[h].N > 0 {
-				v.Hours[h].Pct = pctOf(v.Hours[h].N, top)
+		if rows, err := app.queries.ListPilotSystems(ctx, db.ListPilotSystemsParams{CharacterID: id, Since: since}); err == nil && len(rows) > 0 {
+			for _, r := range rows {
+				sys := names.system(r.SystemID)
+				c := pilotCount{ID: r.SystemID, Name: sys.Name, N: r.N, Pct: pctOf(r.N, rows[0].N), Ago: ageText(now, r.LastAt)}
+				c.SecText, c.SecTier = secRound(sys.Security)
+				v.Systems = append(v.Systems, c)
 			}
 		}
-		v.Peak = peakHours(v.Hours)
+		if rows, err := app.queries.ListPilotHours(ctx, db.ListPilotHoursParams{CharacterID: id, Since: since}); err == nil && len(rows) > 0 {
+			v.Hours = make([]pilotHour, 24)
+			var top int64
+			for h := range v.Hours {
+				v.Hours[h].Hour = h
+			}
+			for _, r := range rows {
+				if r.Hour >= 0 && r.Hour < 24 {
+					v.Hours[r.Hour].N = r.N
+					top = max(top, r.N)
+				}
+			}
+			for h := range v.Hours {
+				if v.Hours[h].N > 0 {
+					v.Hours[h].Pct = pctOf(v.Hours[h].N, top)
+				}
+			}
+			v.Peak = peakHours(v.Hours)
+		}
 	}
 	if rows, err := app.queries.ListPilotCompanions(ctx, db.ListPilotCompanionsParams{CharacterID: id, Since: since}); err == nil {
 		for _, r := range rows {
@@ -241,7 +251,7 @@ func (app *Application) loadPilotIntel(ctx context.Context, id int64, name strin
 	// numbers from the 90-day board read above. The 90-day-only
 	// figures (solo kills, ISK destroyed) do not carry over; the
 	// latest kills and the companions stay board reads either way.
-	if act := app.loadPilotActivity(ctx, id, names, now); act != nil && act.Any {
+	if profileBacked {
 		v.Kills, v.Losses = act.Kills, act.Losses
 		v.Solo, v.ISK = 0, ""
 		v.Ships = nil

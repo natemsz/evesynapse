@@ -50,7 +50,7 @@ func TestPhoneBarRules(t *testing.T) {
 	if !strings.Contains(string(rawTpl), `class="esi-pill esi-{{.State}}" title="{{.Title}}"`) {
 		t.Error("the ESI pill lost the title that carries its words when the label is hidden")
 	}
-	if !strings.Contains(string(rawTpl), `aria-label="Overview settings"`) {
-		t.Error("the Overview summary lost the aria-label that names it when its word is hidden")
+	if !strings.Contains(string(rawTpl), `aria-label="Customize settings"`) {
+		t.Error("the Customize summary lost the aria-label that names it when its word is hidden")
 	}
 }

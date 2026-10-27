@@ -545,7 +545,7 @@ func TestHomeCustomizeSurface(t *testing.T) {
 		`data-widget="fleet"`, `data-widget="market"`,
 		// The Customize menu: Done exits, Add a module, Theme and
 		// Reset live behind one settings button; nothing to save.
-		`aria-label="Customize"`, ">Done</a>", `id="add-module-btn"`, ">Add a module</a>",
+		`aria-label="Customize settings"`, ">Done</a>", `id="add-module-btn"`, ">Add a module</a>",
 		"Reset to the default layout", `data-open-theme-modal`, `id="theme-modal"`, `data-scheme-row="soe"`,
 		// The pop-up: full catalog, name + plain description.
 		`id="add-module-modal"`, `data-add-widget="watchlist"`,

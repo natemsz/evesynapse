@@ -52,12 +52,14 @@ ON CONFLICT (contract_id) DO UPDATE SET
     date_expired          = excluded.date_expired,
     days_to_complete      = excluded.days_to_complete,
     last_cycle            = excluded.last_cycle,
-    last_seen             = excluded.last_seen;
+    last_seen             = excluded.last_seen
+WHERE pub_contracts.departed_at IS NULL;
 
 -- name: UpsertPublicContracts :exec
 -- UpsertPublicContract for a whole list page in one statement (a
 -- page is up to a thousand contracts). The contract ids must be
--- distinct.
+-- distinct. A departed row the sweep lists again is live again:
+-- the departure stamp clears (a vanish is only ever an absence).
 INSERT INTO pub_contracts (
     contract_id, region_id, type, issuer_id, issuer_corporation_id,
     for_corporation, title, price, buyout, reward, collateral, volume,
@@ -91,7 +93,9 @@ ON CONFLICT (contract_id) DO UPDATE SET
     date_expired          = excluded.date_expired,
     days_to_complete      = excluded.days_to_complete,
     last_cycle            = excluded.last_cycle,
-    last_seen             = excluded.last_seen;
+    last_seen             = excluded.last_seen,
+    departed_at           = NULL,
+    depart_kind           = NULL;
 
 -- The contracts of one region that leave the live set when a
 -- sweep completes: expiry passed, or not seen in the completed
@@ -102,9 +106,35 @@ ON CONFLICT (contract_id) DO UPDATE SET
 SELECT contract_id,
     CASE WHEN date_expired <= $2 THEN 'expired' ELSE 'vanished' END AS depart_kind
 FROM pub_contracts
-WHERE region_id = $1
+WHERE region_id = $1 AND departed_at IS NULL
   AND (date_expired <= $2 OR last_cycle <= $3)
 ORDER BY contract_id;
+
+-- A completed sweep's departures leave the live set by stamp, not
+-- by delete (schema 096): the row, its items and its bids stay as
+-- the record of a listing that closed, with last_seen still the
+-- last sweep that saw it.
+-- name: MarkPublicContractsDeparted :exec
+UPDATE pub_contracts
+SET departed_at = sqlc.arg(departed_at)::timestamptz,
+    depart_kind = sqlc.arg(depart_kind)::text
+WHERE contract_id = ANY(sqlc.arg(contract_ids)::bigint[])
+  AND departed_at IS NULL;
+
+-- One region's departures past the retention window: the caller
+-- deletes their bids and items and then the rows themselves.
+-- name: ListPrunablePublicContracts :many
+SELECT contract_id FROM pub_contracts
+WHERE region_id = sqlc.arg(region_id)::bigint
+  AND departed_at < sqlc.arg(before)::timestamptz
+ORDER BY contract_id;
+
+-- A contract's departure record, departed or not. The swarm apply
+-- reads it so a peer's copy never revives a listing this instance
+-- saw leave; the tests read it to see the stamp.
+-- name: GetPublicContractDeparture :one
+SELECT departed_at, depart_kind, last_seen FROM pub_contracts
+WHERE contract_id = $1;
 
 -- name: DeletePublicContractsByIDs :exec
 DELETE FROM pub_contracts
@@ -126,8 +156,10 @@ WHERE contract_id = ANY(sqlc.arg(contract_ids)::bigint[]);
 DELETE FROM pub_contract_bids
 WHERE contract_id = ANY(sqlc.arg(contract_ids)::bigint[]);
 
+-- Every reader below that means open contracts leaves out the
+-- departed rows (schema 096): they are a record, never a listing.
 -- name: CountPublicContracts :one
-SELECT COUNT(*) FROM pub_contracts;
+SELECT COUNT(*) FROM pub_contracts WHERE departed_at IS NULL;
 
 -- name: GetPublicContract :one
 SELECT contract_id, region_id, type, issuer_id, issuer_corporation_id,
@@ -135,9 +167,10 @@ SELECT contract_id, region_id, type, issuer_id, issuer_corporation_id,
     start_location_id, end_location_id, date_issued, date_expired,
     days_to_complete, items_state, last_cycle, first_seen, last_seen,
     offered_value, want_value, deal_ratio, priced_lines, total_lines,
-    tier_mix, priced_at, items_attempts, items_error
+    tier_mix, priced_at, items_attempts, items_error,
+    departed_at, depart_kind
 FROM pub_contracts
-WHERE contract_id = $1;
+WHERE contract_id = $1 AND departed_at IS NULL;
 
 -- ---------------------------------------------------------------------
 -- Item lists: fetched once per contract, ever (a contract's
@@ -152,7 +185,7 @@ WHERE contract_id = $1;
 -- selection for good.
 -- name: ListPublicContractsPendingItems :many
 SELECT contract_id, type FROM pub_contracts
-WHERE items_state = 'pending'
+WHERE items_state = 'pending' AND departed_at IS NULL
 ORDER BY date_issued DESC, contract_id DESC
 LIMIT $1;
 
@@ -198,7 +231,9 @@ WHERE contract_id = $1
 ORDER BY record_id;
 
 -- name: CountPublicContractItems :one
-SELECT COUNT(*) FROM pub_contract_items;
+SELECT COUNT(*) FROM pub_contract_items i
+JOIN pub_contracts c ON c.contract_id = i.contract_id
+WHERE c.departed_at IS NULL;
 
 -- ---------------------------------------------------------------------
 -- Bids: live auctions only, refreshed on the list route's
@@ -207,7 +242,7 @@ SELECT COUNT(*) FROM pub_contract_items;
 
 -- name: ListPublicContractLiveAuctions :many
 SELECT contract_id FROM pub_contracts
-WHERE type = 'auction' AND date_expired > $1
+WHERE type = 'auction' AND date_expired > $1 AND departed_at IS NULL
 ORDER BY date_expired ASC, contract_id ASC
 LIMIT $2;
 
@@ -247,6 +282,7 @@ FROM pub_contract_items i
 JOIN pub_contracts c ON c.contract_id = i.contract_id
 LEFT JOIN abyssal_probes p ON p.item_id = i.item_id
 WHERE i.item_id IS NOT NULL AND p.item_id IS NULL
+  AND c.departed_at IS NULL
   AND EXISTS (SELECT 1 FROM abyssal_mappings m
               WHERE m.resulting_type_id = i.type_id)
 ORDER BY c.date_issued DESC, c.contract_id DESC, i.item_id DESC
@@ -308,7 +344,7 @@ SELECT i.item_id, c.contract_id, c.type, c.price, c.region_id,
 FROM pub_contracts c
 JOIN pub_contract_items i ON i.contract_id = c.contract_id
 JOIN abyssal_items a ON a.item_id = i.item_id
-WHERE c.contract_id = $1 AND i.item_id IS NOT NULL
+WHERE c.contract_id = $1 AND c.departed_at IS NULL AND i.item_id IS NOT NULL
 ON CONFLICT (item_id, contract_id) DO UPDATE SET
     price        = excluded.price,
     region_id    = excluded.region_id,
@@ -328,7 +364,8 @@ SELECT i.item_id, c.contract_id, c.type, c.price, c.region_id,
 FROM pub_contracts c
 JOIN pub_contract_items i ON i.contract_id = c.contract_id
 JOIN abyssal_items a ON a.item_id = i.item_id
-WHERE c.region_id = $1 AND c.last_cycle = $2 AND i.item_id IS NOT NULL
+WHERE c.region_id = $1 AND c.last_cycle = $2 AND c.departed_at IS NULL
+  AND i.item_id IS NOT NULL
 ON CONFLICT (item_id, contract_id) DO UPDATE SET
     price        = excluded.price,
     region_id    = excluded.region_id,
@@ -337,8 +374,8 @@ ON CONFLICT (item_id, contract_id) DO UPDATE SET
     last_seen_at = excluded.last_seen_at;
 
 -- The departure stamp also snapshots the listing's bid
--- state (an auction's rows in pub_contract_bids, counted
--- before the completion step deletes them): an exit with
+-- state (an auction's rows in pub_contract_bids as they stood
+-- at the departure): an exit with
 -- bids on it is a different fact from an exit without.
 -- Attribution (schema 069): what else shared each sighting's
 -- contract and who listed it, read from the stored contract and
@@ -370,7 +407,8 @@ LATERAL (
 ) m
 WHERE c.contract_id = s.contract_id
   AND (c.contract_id = sqlc.narg(contract_id)::bigint
-       OR (c.region_id = sqlc.narg(region_id)::bigint AND c.last_cycle = sqlc.narg(cycle)::bigint));
+       OR (c.region_id = sqlc.narg(region_id)::bigint AND c.last_cycle = sqlc.narg(cycle)::bigint
+           AND c.departed_at IS NULL));
 
 -- name: StampAbyssalSightingsDeparted :exec
 UPDATE abyssal_sightings s
@@ -404,7 +442,7 @@ ORDER BY first_seen_at, contract_id;
 -- first, so a capped pass drains the stalest numbers first.
 -- name: ListPublicContractsDueAppraisal :many
 SELECT contract_id FROM pub_contracts
-WHERE items_state = 'stored'
+WHERE items_state = 'stored' AND departed_at IS NULL
   AND (priced_at IS NULL OR priced_at < sqlc.arg(cutoff)::timestamptz)
 ORDER BY priced_at ASC NULLS FIRST, contract_id ASC
 LIMIT sqlc.arg(max_rows)::bigint;
@@ -457,6 +495,7 @@ ORDER BY item_id;
 SELECT DISTINCT c.region_id, COALESCE(r.name, '') AS region_name
 FROM pub_contracts c
 LEFT JOIN sde_regions r ON r.region_id = c.region_id
+WHERE c.departed_at IS NULL
 ORDER BY c.region_id;
 
 -- ---------------------------------------------------------------------
@@ -481,7 +520,8 @@ SELECT c.contract_id, c.region_id, c.type, c.issuer_id,
     (SELECT COUNT(*) FROM pub_contract_bids b
       WHERE b.contract_id = c.contract_id) AS bid_count
 FROM pub_contracts c
-WHERE (coalesce(cardinality(sqlc.arg(types)::text[]), 0) = 0
+WHERE c.departed_at IS NULL
+  AND (coalesce(cardinality(sqlc.arg(types)::text[]), 0) = 0
        OR c.type = ANY(sqlc.arg(types)::text[]))
   AND (coalesce(cardinality(sqlc.arg(region_ids)::bigint[]), 0) = 0
        OR c.region_id = ANY(sqlc.arg(region_ids)::bigint[]))
@@ -661,7 +701,8 @@ LIMIT sqlc.arg(max_rows)::bigint OFFSET sqlc.arg(row_offset)::bigint;
 
 -- name: CountPublicContractsSearch :one
 SELECT COUNT(*) FROM pub_contracts c
-WHERE (coalesce(cardinality(sqlc.arg(types)::text[]), 0) = 0
+WHERE c.departed_at IS NULL
+  AND (coalesce(cardinality(sqlc.arg(types)::text[]), 0) = 0
        OR c.type = ANY(sqlc.arg(types)::text[]))
   AND (coalesce(cardinality(sqlc.arg(region_ids)::bigint[]), 0) = 0
        OR c.region_id = ANY(sqlc.arg(region_ids)::bigint[]))
@@ -818,9 +859,8 @@ WHERE (coalesce(cardinality(sqlc.arg(types)::text[]), 0) = 0
                    THEN c.start_location_id END)
        ), -1) >= sqlc.arg(sec_min)::double precision);
 
--- The subtab telemetry: the live corpus size (pub_contracts
--- holds only live contracts, so the count is the indexed
--- set) and the freshest sweep stamp across regions. One
+-- The subtab telemetry: the live corpus size (the rows not
+-- stamped departed, schema 096) and the freshest sweep stamp across regions. One
 -- row, two stored reads -- no corpus aggregation at render
 -- beyond the count itself. The stamp expression carries a
 -- cast and a coalesce on purpose: the pinned sqlc types a
@@ -832,7 +872,8 @@ WHERE (coalesce(cardinality(sqlc.arg(types)::text[]), 0) = 0
 SELECT COUNT(*) AS open_contracts,
        COALESCE((SELECT MAX(updated_at) FROM pub_contract_sweep_state),
                 '0001-01-01 00:00:00+00'::timestamptz)::timestamptz AS last_sweep_at
-FROM pub_contracts;
+FROM pub_contracts
+WHERE departed_at IS NULL;
 
 -- The public structures set (schema 068): one replace per
 -- worker refresh of ESI's public structures route. Rows the
@@ -968,7 +1009,7 @@ WHERE item_id = sqlc.arg(item_id)::bigint;
 -- item due for repricing on the next appraisal pass.
 -- name: TouchPublicContractsForItemIDs :exec
 UPDATE pub_contracts SET priced_at = NULL
-WHERE contract_id IN (
+WHERE departed_at IS NULL AND contract_id IN (
     SELECT contract_id FROM pub_contract_items
     WHERE item_id = ANY(sqlc.arg(item_ids)::bigint[]));
 
@@ -1047,6 +1088,7 @@ SELECT i.type_id AS type_id, i.runs AS runs,
 FROM pub_contract_items i
 JOIN pub_contracts c ON c.contract_id = i.contract_id
 WHERE c.type = 'item_exchange'
+  AND c.departed_at IS NULL
   AND c.price > 0
   AND i.is_included
   AND i.is_blueprint_copy

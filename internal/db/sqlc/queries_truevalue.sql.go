@@ -92,7 +92,8 @@ FROM true_value_contract_observations o
 WHERE o.vanished_at IS NULL
   AND o.type_id = ANY($1::bigint[])
   AND o.expires_at > $2::timestamptz
-  AND NOT EXISTS (SELECT 1 FROM pub_contracts c WHERE c.contract_id = o.contract_id)
+  AND NOT EXISTS (SELECT 1 FROM pub_contracts c WHERE c.contract_id = o.contract_id
+                  AND c.departed_at IS NULL)
 ORDER BY o.last_seen_at DESC
 LIMIT $3::bigint
 `
@@ -114,8 +115,8 @@ type ListTVShipSaleProbesRow struct {
 // Departed ship contracts awaiting their exit probe: watched
 // observations (the crawl's, and the ones the corpus miner
 // records) whose contract has left the stored public-contract
-// corpus -- the corpus holds live contracts only, so absence
-// is a departure -- and whose expiry is still near enough for
+// corpus -- gone from it, or kept there stamped departed
+// (schema 096) -- and whose expiry is still near enough for
 // ESI to answer whether it was accepted (a 204 before expiry
 // is a sale; see pub_contracts_sales.go). Freshest departures
 // first: ESI's memory of an accepted contract fades.
@@ -197,6 +198,7 @@ WITH cand AS (
     SELECT c.contract_id, c.price, c.last_seen, c.region_id, c.date_expired, c.first_seen
     FROM pub_contracts c
     WHERE c.type = 'item_exchange' AND c.items_state = 'stored'
+      AND c.departed_at IS NULL
       AND c.price >= $2
       AND EXISTS (SELECT 1 FROM pub_contract_items x
                   WHERE x.contract_id = c.contract_id
@@ -233,9 +235,8 @@ type ListTrueValueCorpusContractsRow struct {
 // carrying one type: the newest-seen contracts first, capped,
 // with every stored item line of each, so the true-value pass
 // can judge a contract's shape from the corpus exactly as it
-// judges a crawl fetch. The corpus holds live contracts only
-// (the sweep retires them once they close), so a contract's
-// last_seen is its ask standing now.
+// judges a crawl fetch. Departed rows (schema 096) are left
+// out, so a contract's last_seen is its ask standing now.
 func (q *Queries) ListTrueValueCorpusContracts(ctx context.Context, arg ListTrueValueCorpusContractsParams) ([]ListTrueValueCorpusContractsRow, error) {
 	rows, err := q.db.QueryContext(ctx, listTrueValueCorpusContracts, arg.TypeID, arg.Price, arg.Limit)
 	if err != nil {

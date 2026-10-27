@@ -575,6 +575,13 @@ var pgIntelSubmitLabelsSchema string
 //go:embed schema_pg/095_intel_threads.sql
 var pgIntelThreadsSchema string
 
+// Step 096: public contract departures -- a completed sweep keeps
+// the contracts that left, stamped with when and how, and prunes
+// them after a retention window (pub_contracts.go).
+//
+//go:embed schema_pg/096_pub_contract_departures.sql
+var pgPubContractDeparturesSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -699,6 +706,7 @@ func schemaSteps() []schemaStep {
 		{93, "kill_line_prices", pgKillLinePricesSchema, ""},
 		{94, "intel_submit_labels", pgIntelSubmitLabelsSchema, ""},
 		{95, "intel_threads", pgIntelThreadsSchema, ""},
+		{96, "pub_contract_departures", pgPubContractDeparturesSchema, ""},
 	}
 }
 

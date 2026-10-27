@@ -361,7 +361,22 @@ func TestPublicContractsSweepDeathAndItems(t *testing.T) {
 		t.Fatalf("contracts after retirements = %d, want 2 (auction + courier)", n)
 	}
 	if n, _ := q.CountPublicContractItems(ctx); n != 0 {
-		t.Fatalf("item rows after retirements = %d, want 0", n)
+		t.Fatalf("live item rows after retirements = %d, want 0", n)
+	}
+	// The departures stay on record (schema 096): the row with
+	// how it left and its last sighting, and its items, out of
+	// every live reader.
+	for id, kind := range map[int64]string{101: "expired", 104: "vanished"} {
+		dep, err := q.GetPublicContractDeparture(ctx, id)
+		if err != nil || !dep.DepartedAt.Valid || dep.DepartKind.String != kind || dep.LastSeen.IsZero() {
+			t.Fatalf("departure record of %d = %+v, %v; want departed as %s", id, dep, err, kind)
+		}
+	}
+	if kept, err := q.ListPublicContractItems(ctx, 101); err != nil || len(kept) != 4 {
+		t.Fatalf("items of departed 101 = %d, %v; want 4 kept", len(kept), err)
+	}
+	if regions, err := q.ListPublicContractRegions(ctx); err != nil || len(regions) != 1 {
+		t.Fatalf("search regions = %+v, %v; want only the live region", regions, err)
 	}
 	if _, err := q.GetAbyssalItem(ctx, 9002); err != nil {
 		t.Fatalf("abyssal corpus lost item 9002 with its contract: %v", err)
@@ -416,6 +431,29 @@ func TestPublicContractsSweepDeathAndItems(t *testing.T) {
 	}
 	if s1[1].FirstSeenAt.Before(s1[0].DepartedAt.Time) {
 		t.Fatal("relist sighting opens before the first listing departed: sequence broken")
+	}
+
+	// ---- Pass 6: past the retention window the departures are
+	// pruned, items and bids with them; the sightings stay.
+	if _, err := app.db.ExecContext(ctx,
+		`UPDATE pub_contracts SET departed_at = departed_at - INTERVAL '8 days' WHERE departed_at IS NOT NULL`); err != nil {
+		t.Fatalf("age departures: %v", err)
+	}
+	agePubFetchStates(t, app)
+	runPubPass(t, app)
+	for _, id := range []int64{101, 104} {
+		if _, err := q.GetPublicContractDeparture(ctx, id); err == nil {
+			t.Fatalf("departed %d survived the retention window", id)
+		}
+	}
+	if kept, err := q.ListPublicContractItems(ctx, 101); err != nil || len(kept) != 0 {
+		t.Fatalf("items of pruned 101 = %d, %v; want 0", len(kept), err)
+	}
+	if b, err := q.ListPublicContractBids(ctx, 104); err != nil || len(b) != 0 {
+		t.Fatalf("bids of pruned 104 = %d, %v; want 0", len(b), err)
+	}
+	if s, err := q.ListAbyssalSightingsForItem(ctx, 9002); err != nil || len(s) != 1 {
+		t.Fatalf("sightings of 9002 after prune = %d, %v; want 1 kept", len(s), err)
 	}
 }
 

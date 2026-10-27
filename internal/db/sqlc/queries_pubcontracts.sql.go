@@ -37,7 +37,9 @@ func (q *Queries) CountAbyssalRanges(ctx context.Context) (int64, error) {
 }
 
 const countPublicContractItems = `-- name: CountPublicContractItems :one
-SELECT COUNT(*) FROM pub_contract_items
+SELECT COUNT(*) FROM pub_contract_items i
+JOIN pub_contracts c ON c.contract_id = i.contract_id
+WHERE c.departed_at IS NULL
 `
 
 func (q *Queries) CountPublicContractItems(ctx context.Context) (int64, error) {
@@ -48,9 +50,11 @@ func (q *Queries) CountPublicContractItems(ctx context.Context) (int64, error) {
 }
 
 const countPublicContracts = `-- name: CountPublicContracts :one
-SELECT COUNT(*) FROM pub_contracts
+SELECT COUNT(*) FROM pub_contracts WHERE departed_at IS NULL
 `
 
+// Every reader below that means open contracts leaves out the
+// departed rows (schema 096): they are a record, never a listing.
 func (q *Queries) CountPublicContracts(ctx context.Context) (int64, error) {
 	row := q.db.QueryRowContext(ctx, countPublicContracts)
 	var count int64
@@ -60,7 +64,8 @@ func (q *Queries) CountPublicContracts(ctx context.Context) (int64, error) {
 
 const countPublicContractsSearch = `-- name: CountPublicContractsSearch :one
 SELECT COUNT(*) FROM pub_contracts c
-WHERE (coalesce(cardinality($1::text[]), 0) = 0
+WHERE c.departed_at IS NULL
+  AND (coalesce(cardinality($1::text[]), 0) = 0
        OR c.type = ANY($1::text[]))
   AND (coalesce(cardinality($2::bigint[]), 0) = 0
        OR c.region_id = ANY($2::bigint[]))
@@ -479,9 +484,10 @@ SELECT contract_id, region_id, type, issuer_id, issuer_corporation_id,
     start_location_id, end_location_id, date_issued, date_expired,
     days_to_complete, items_state, last_cycle, first_seen, last_seen,
     offered_value, want_value, deal_ratio, priced_lines, total_lines,
-    tier_mix, priced_at, items_attempts, items_error
+    tier_mix, priced_at, items_attempts, items_error,
+    departed_at, depart_kind
 FROM pub_contracts
-WHERE contract_id = $1
+WHERE contract_id = $1 AND departed_at IS NULL
 `
 
 func (q *Queries) GetPublicContract(ctx context.Context, contractID int64) (PubContract, error) {
@@ -518,6 +524,8 @@ func (q *Queries) GetPublicContract(ctx context.Context, contractID int64) (PubC
 		&i.PricedAt,
 		&i.ItemsAttempts,
 		&i.ItemsError,
+		&i.DepartedAt,
+		&i.DepartKind,
 	)
 	return i, err
 }
@@ -527,6 +535,7 @@ SELECT COUNT(*) AS open_contracts,
        COALESCE((SELECT MAX(updated_at) FROM pub_contract_sweep_state),
                 '0001-01-01 00:00:00+00'::timestamptz)::timestamptz AS last_sweep_at
 FROM pub_contracts
+WHERE departed_at IS NULL
 `
 
 type GetPublicContractCorpusStatsRow struct {
@@ -534,9 +543,8 @@ type GetPublicContractCorpusStatsRow struct {
 	LastSweepAt   time.Time `json:"last_sweep_at"`
 }
 
-// The subtab telemetry: the live corpus size (pub_contracts
-// holds only live contracts, so the count is the indexed
-// set) and the freshest sweep stamp across regions. One
+// The subtab telemetry: the live corpus size (the rows not
+// stamped departed, schema 096) and the freshest sweep stamp across regions. One
 // row, two stored reads -- no corpus aggregation at render
 // beyond the count itself. The stamp expression carries a
 // cast and a coalesce on purpose: the pinned sqlc types a
@@ -548,6 +556,27 @@ func (q *Queries) GetPublicContractCorpusStats(ctx context.Context) (GetPublicCo
 	row := q.db.QueryRowContext(ctx, getPublicContractCorpusStats)
 	var i GetPublicContractCorpusStatsRow
 	err := row.Scan(&i.OpenContracts, &i.LastSweepAt)
+	return i, err
+}
+
+const getPublicContractDeparture = `-- name: GetPublicContractDeparture :one
+SELECT departed_at, depart_kind, last_seen FROM pub_contracts
+WHERE contract_id = $1
+`
+
+type GetPublicContractDepartureRow struct {
+	DepartedAt sql.NullTime   `json:"departed_at"`
+	DepartKind sql.NullString `json:"depart_kind"`
+	LastSeen   time.Time      `json:"last_seen"`
+}
+
+// A contract's departure record, departed or not. The swarm apply
+// reads it so a peer's copy never revives a listing this instance
+// saw leave; the tests read it to see the stamp.
+func (q *Queries) GetPublicContractDeparture(ctx context.Context, contractID int64) (GetPublicContractDepartureRow, error) {
+	row := q.db.QueryRowContext(ctx, getPublicContractDeparture, contractID)
+	var i GetPublicContractDepartureRow
+	err := row.Scan(&i.DepartedAt, &i.DepartKind, &i.LastSeen)
 	return i, err
 }
 
@@ -1158,6 +1187,7 @@ FROM pub_contract_items i
 JOIN pub_contracts c ON c.contract_id = i.contract_id
 LEFT JOIN abyssal_probes p ON p.item_id = i.item_id
 WHERE i.item_id IS NOT NULL AND p.item_id IS NULL
+  AND c.departed_at IS NULL
   AND EXISTS (SELECT 1 FROM abyssal_mappings m
               WHERE m.resulting_type_id = i.type_id)
 ORDER BY c.date_issued DESC, c.contract_id DESC, i.item_id DESC
@@ -1512,6 +1542,7 @@ SELECT i.type_id AS type_id, i.runs AS runs,
 FROM pub_contract_items i
 JOIN pub_contracts c ON c.contract_id = i.contract_id
 WHERE c.type = 'item_exchange'
+  AND c.departed_at IS NULL
   AND c.price > 0
   AND i.is_included
   AND i.is_blueprint_copy
@@ -1611,7 +1642,7 @@ const listDepartedPublicContracts = `-- name: ListDepartedPublicContracts :many
 SELECT contract_id,
     CASE WHEN date_expired <= $2 THEN 'expired' ELSE 'vanished' END AS depart_kind
 FROM pub_contracts
-WHERE region_id = $1
+WHERE region_id = $1 AND departed_at IS NULL
   AND (date_expired <= $2 OR last_cycle <= $3)
 ORDER BY contract_id
 `
@@ -1645,6 +1676,43 @@ func (q *Queries) ListDepartedPublicContracts(ctx context.Context, arg ListDepar
 			return nil, err
 		}
 		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPrunablePublicContracts = `-- name: ListPrunablePublicContracts :many
+SELECT contract_id FROM pub_contracts
+WHERE region_id = $1::bigint
+  AND departed_at < $2::timestamptz
+ORDER BY contract_id
+`
+
+type ListPrunablePublicContractsParams struct {
+	RegionID int64     `json:"region_id"`
+	Before   time.Time `json:"before"`
+}
+
+// One region's departures past the retention window: the caller
+// deletes their bids and items and then the rows themselves.
+func (q *Queries) ListPrunablePublicContracts(ctx context.Context, arg ListPrunablePublicContractsParams) ([]int64, error) {
+	rows, err := q.db.QueryContext(ctx, listPrunablePublicContracts, arg.RegionID, arg.Before)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []int64
+	for rows.Next() {
+		var contract_id int64
+		if err := rows.Scan(&contract_id); err != nil {
+			return nil, err
+		}
+		items = append(items, contract_id)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err
@@ -1789,7 +1857,7 @@ func (q *Queries) ListPublicContractItemsForContracts(ctx context.Context, contr
 const listPublicContractLiveAuctions = `-- name: ListPublicContractLiveAuctions :many
 
 SELECT contract_id FROM pub_contracts
-WHERE type = 'auction' AND date_expired > $1
+WHERE type = 'auction' AND date_expired > $1 AND departed_at IS NULL
 ORDER BY date_expired ASC, contract_id ASC
 LIMIT $2
 `
@@ -1830,6 +1898,7 @@ const listPublicContractRegions = `-- name: ListPublicContractRegions :many
 SELECT DISTINCT c.region_id, COALESCE(r.name, '') AS region_name
 FROM pub_contracts c
 LEFT JOIN sde_regions r ON r.region_id = c.region_id
+WHERE c.departed_at IS NULL
 ORDER BY c.region_id
 `
 
@@ -1866,7 +1935,7 @@ func (q *Queries) ListPublicContractRegions(ctx context.Context) ([]ListPublicCo
 const listPublicContractsDueAppraisal = `-- name: ListPublicContractsDueAppraisal :many
 
 SELECT contract_id FROM pub_contracts
-WHERE items_state = 'stored'
+WHERE items_state = 'stored' AND departed_at IS NULL
   AND (priced_at IS NULL OR priced_at < $1::timestamptz)
 ORDER BY priced_at ASC NULLS FIRST, contract_id ASC
 LIMIT $2::bigint
@@ -1912,7 +1981,7 @@ func (q *Queries) ListPublicContractsDueAppraisal(ctx context.Context, arg ListP
 const listPublicContractsPendingItems = `-- name: ListPublicContractsPendingItems :many
 
 SELECT contract_id, type FROM pub_contracts
-WHERE items_state = 'pending'
+WHERE items_state = 'pending' AND departed_at IS NULL
 ORDER BY date_issued DESC, contract_id DESC
 LIMIT $1
 `
@@ -2025,6 +2094,29 @@ func (q *Queries) MarkAbyssalSightingsSold(ctx context.Context, arg MarkAbyssalS
 	return err
 }
 
+const markPublicContractsDeparted = `-- name: MarkPublicContractsDeparted :exec
+UPDATE pub_contracts
+SET departed_at = $1::timestamptz,
+    depart_kind = $2::text
+WHERE contract_id = ANY($3::bigint[])
+  AND departed_at IS NULL
+`
+
+type MarkPublicContractsDepartedParams struct {
+	DepartedAt  time.Time `json:"departed_at"`
+	DepartKind  string    `json:"depart_kind"`
+	ContractIds []int64   `json:"contract_ids"`
+}
+
+// A completed sweep's departures leave the live set by stamp, not
+// by delete (schema 096): the row, its items and its bids stay as
+// the record of a listing that closed, with last_seen still the
+// last sweep that saw it.
+func (q *Queries) MarkPublicContractsDeparted(ctx context.Context, arg MarkPublicContractsDepartedParams) error {
+	_, err := q.db.ExecContext(ctx, markPublicContractsDeparted, arg.DepartedAt, arg.DepartKind, pq.Array(arg.ContractIds))
+	return err
+}
+
 const notePublicContractItemsFailure = `-- name: NotePublicContractItemsFailure :exec
 UPDATE pub_contracts
 SET items_attempts = items_attempts + 1,
@@ -2062,7 +2154,7 @@ SELECT i.item_id, c.contract_id, c.type, c.price, c.region_id,
 FROM pub_contracts c
 JOIN pub_contract_items i ON i.contract_id = c.contract_id
 JOIN abyssal_items a ON a.item_id = i.item_id
-WHERE c.contract_id = $1 AND i.item_id IS NOT NULL
+WHERE c.contract_id = $1 AND c.departed_at IS NULL AND i.item_id IS NOT NULL
 ON CONFLICT (item_id, contract_id) DO UPDATE SET
     price        = excluded.price,
     region_id    = excluded.region_id,
@@ -2095,7 +2187,8 @@ SELECT i.item_id, c.contract_id, c.type, c.price, c.region_id,
 FROM pub_contracts c
 JOIN pub_contract_items i ON i.contract_id = c.contract_id
 JOIN abyssal_items a ON a.item_id = i.item_id
-WHERE c.region_id = $1 AND c.last_cycle = $2 AND i.item_id IS NOT NULL
+WHERE c.region_id = $1 AND c.last_cycle = $2 AND c.departed_at IS NULL
+  AND i.item_id IS NOT NULL
 ON CONFLICT (item_id, contract_id) DO UPDATE SET
     price        = excluded.price,
     region_id    = excluded.region_id,
@@ -2157,7 +2250,8 @@ SELECT c.contract_id, c.region_id, c.type, c.issuer_id,
     (SELECT COUNT(*) FROM pub_contract_bids b
       WHERE b.contract_id = c.contract_id) AS bid_count
 FROM pub_contracts c
-WHERE (coalesce(cardinality($1::text[]), 0) = 0
+WHERE c.departed_at IS NULL
+  AND (coalesce(cardinality($1::text[]), 0) = 0
        OR c.type = ANY($1::text[]))
   AND (coalesce(cardinality($2::bigint[]), 0) = 0
        OR c.region_id = ANY($2::bigint[]))
@@ -2558,7 +2652,8 @@ LATERAL (
 ) m
 WHERE c.contract_id = s.contract_id
   AND (c.contract_id = $1::bigint
-       OR (c.region_id = $2::bigint AND c.last_cycle = $3::bigint))
+       OR (c.region_id = $2::bigint AND c.last_cycle = $3::bigint
+           AND c.departed_at IS NULL))
 `
 
 type StampAbyssalSightingAttributionParams struct {
@@ -2568,8 +2663,8 @@ type StampAbyssalSightingAttributionParams struct {
 }
 
 // The departure stamp also snapshots the listing's bid
-// state (an auction's rows in pub_contract_bids, counted
-// before the completion step deletes them): an exit with
+// state (an auction's rows in pub_contract_bids as they stood
+// at the departure): an exit with
 // bids on it is a different fact from an exit without.
 // Attribution (schema 069): what else shared each sighting's
 // contract and who listed it, read from the stored contract and
@@ -2609,7 +2704,7 @@ func (q *Queries) StampAbyssalSightingsDeparted(ctx context.Context, arg StampAb
 
 const touchPublicContractsForItemIDs = `-- name: TouchPublicContractsForItemIDs :exec
 UPDATE pub_contracts SET priced_at = NULL
-WHERE contract_id IN (
+WHERE departed_at IS NULL AND contract_id IN (
     SELECT contract_id FROM pub_contract_items
     WHERE item_id = ANY($1::bigint[]))
 `
@@ -2916,6 +3011,7 @@ ON CONFLICT (contract_id) DO UPDATE SET
     days_to_complete      = excluded.days_to_complete,
     last_cycle            = excluded.last_cycle,
     last_seen             = excluded.last_seen
+WHERE pub_contracts.departed_at IS NULL
 `
 
 type UpsertPublicContractParams struct {
@@ -3032,7 +3128,9 @@ ON CONFLICT (contract_id) DO UPDATE SET
     date_expired          = excluded.date_expired,
     days_to_complete      = excluded.days_to_complete,
     last_cycle            = excluded.last_cycle,
-    last_seen             = excluded.last_seen
+    last_seen             = excluded.last_seen,
+    departed_at           = NULL,
+    depart_kind           = NULL
 `
 
 type UpsertPublicContractsParams struct {
@@ -3059,7 +3157,8 @@ type UpsertPublicContractsParams struct {
 
 // UpsertPublicContract for a whole list page in one statement (a
 // page is up to a thousand contracts). The contract ids must be
-// distinct.
+// distinct. A departed row the sweep lists again is live again:
+// the departure stamp clears (a vanish is only ever an absence).
 func (q *Queries) UpsertPublicContracts(ctx context.Context, arg UpsertPublicContractsParams) error {
 	_, err := q.db.ExecContext(ctx, upsertPublicContracts,
 		pq.Array(arg.ContractIds),

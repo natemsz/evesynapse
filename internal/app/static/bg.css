@@ -933,6 +933,7 @@ html[data-scheme="gallente"] { --sch-hi: #4ade80; --sch-core: #2dd4bf; --sch-end
 html[data-scheme="amarr"] { --sch-hi: #facc15; --sch-core: #f0b93f; --sch-end: #9a3412; --sch-accent: #f0b93f; --panel: #16120d; --panel-head: rgba(15, 12, 9, .55); --input-bg: rgba(22, 18, 13, .5); --row-hover: rgba(240, 185, 63, .09); --sch-ground: #120c03; --sch-ground-2: #241a06; --sch-glow-1: rgba(240, 185, 63, .43); --sch-glow-2: rgba(152, 102, 20, .20); --sch-glow-3: rgba(147, 165, 245, .12); --map-glow-1: rgba(202, 149, 1, .08); --map-glow-2: rgba(234, 196, 71, .05); }
 html[data-scheme="triglavian"] { --sch-hi: #d41236; --sch-core: #ac160a; --sch-end: #570a04; --sch-accent: #d41236; --panel: #191112; --panel-head: rgba(17, 12, 12, .55); --input-bg: rgba(25, 17, 18, .5); --row-hover: rgba(212, 18, 54, .09); --sch-ground: #120405; --sch-ground-2: #260709; --sch-glow-1: rgba(172, 22, 10, .42); --sch-glow-2: rgba(128, 18, 10, .24); --sch-glow-3: rgba(212, 18, 54, .12); --map-glow-1: rgba(255, 102, 86, .08); --map-glow-2: rgba(255, 176, 173, .05); }
 html[data-scheme="edencom"] { --sch-hi: #eab308; --sch-core: #e9cf8f; --sch-end: #334155; --sch-accent: #e9cf8f; --panel: #191b1e; --panel-head: rgba(16, 18, 20, .55); --input-bg: rgba(25, 27, 30, .5); --row-hover: rgba(233, 207, 143, .09); --sch-ground: #0b0f14; --sch-ground-2: #18202b; --sch-glow-1: rgba(233, 207, 143, .38); --sch-glow-2: rgba(51, 65, 85, .20); --sch-glow-3: rgba(183, 166, 250, .12); --map-glow-1: rgba(196, 153, 3, .08); --map-glow-2: rgba(241, 192, 71, .05); }
+html[data-scheme="soe"] { --sch-hi: #a1dde0; --sch-core: #e55252; --sch-end: #922020; --sch-accent: #e55252; --panel: #101a20; --panel-head: rgba(9, 15, 19, .55); --input-bg: rgba(16, 26, 32, .5); --row-hover: rgba(229, 82, 82, .09); --sch-ground: #070d11; --sch-ground-2: #0c171d; --sch-glow-1: rgba(229, 82, 82, .42); --sch-glow-2: rgba(146, 32, 32, .24); --sch-glow-3: rgba(161, 221, 224, .12); --map-glow-1: rgba(229, 82, 82, .08); --map-glow-2: rgba(161, 221, 224, .05); }
 html[data-scheme] {
   --accent: var(--sch-core);
   --gold: var(--sch-hi);
@@ -1129,6 +1130,7 @@ html[data-scheme] .pchart .chart-volbar { fill: var(--sch-end); }
 .sw-amarr { background: radial-gradient(ellipse 130% 190% at 100% 0, rgba(255,233,168,.95) 0%, rgba(240,185,63,.5) 42%, rgba(46,32,5,.95) 80%), linear-gradient(180deg,#241a06,#120c03); }
 .sw-triglavian { background: radial-gradient(ellipse 130% 190% at 100% 0, rgba(212,18,54,.95) 0%, rgba(145,16,12,.62) 42%, rgba(24,2,2,.95) 80%), linear-gradient(180deg,#2b0303,#0f0101); }
 .sw-edencom { background: radial-gradient(ellipse 130% 190% at 100% 0, rgba(255,243,207,.95) 0%, rgba(233,207,143,.45) 42%, rgba(30,40,54,.95) 80%), linear-gradient(180deg,#18202b,#0b0f14); }
+.sw-soe { background: radial-gradient(ellipse 130% 190% at 100% 0, rgba(161,221,224,.95) 0%, rgba(229,82,82,.5) 42%, rgba(7,13,17,.95) 80%), linear-gradient(180deg,#0c171d,#070d11); }
 .scheme-meta { flex: 1 1 auto; min-width: 0; }
 .scheme-name { font-family: Rajdhani, sans-serif; font-weight: 600; font-size: 1.08rem; letter-spacing: .05em; text-transform: uppercase; }
 .scheme-sub { font-size: .82rem; opacity: .72; }

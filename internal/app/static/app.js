@@ -80,7 +80,7 @@
     var body = new URLSearchParams();
     var savedScheme = read("evesynapse-scheme");
     if (savedScheme === "jove" || savedScheme === "caldari" || savedScheme === "gallente" ||
-        savedScheme === "amarr" || savedScheme === "triglavian" || savedScheme === "edencom") {
+        savedScheme === "amarr" || savedScheme === "triglavian" || savedScheme === "edencom" || savedScheme === "soe") {
       body.set("scheme", savedScheme);
       body.set("tier", read("evesynapse-tier") === "minimalistic" ? "minimalistic" : "muted");
       body.set("backdrop", backdropWire(read("evesynapse-backdrop")));

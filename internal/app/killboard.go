@@ -681,6 +681,9 @@ func (app *Application) warmKillNames(ctx context.Context) {
 		if _, ok := app.esi.CachedAllianceName(id); ok {
 			continue
 		}
+		if t, bad := app.killNameMisses[id]; bad && time.Since(t) < time.Hour {
+			continue // asked within the hour; EVE had no answer
+		}
 		missing = append(missing, id)
 		if len(missing) >= 3*universeNamesChunk {
 			break
@@ -690,6 +693,14 @@ func (app *Application) warmKillNames(ctx context.Context) {
 		return
 	}
 	got, _ := app.resolveUniverseNamesLimited(ctx, &fetchBudget{left: 6}, missing)
+	if app.killNameMisses == nil {
+		app.killNameMisses = map[int64]time.Time{}
+	}
+	for _, id := range missing {
+		if _, ok := got[id]; !ok {
+			app.killNameMisses[id] = time.Now()
+		}
+	}
 	if len(got) > 0 {
 		logging.Debugf("killboard: resolved %d of %d names", len(got), len(missing))
 	}

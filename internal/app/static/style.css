@@ -1607,6 +1607,20 @@ footer .version-number {
 .home-custom .card[data-widget="glance"] { background: var(--glass); border-color: var(--glass-edge); box-shadow: 0 4px 18px rgba(0, 0, 0, 0.6); -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(0.9); backdrop-filter: blur(var(--glass-blur)) saturate(0.9); }
 #main-content .grid.home-grid.home-custom > .card[data-widget="glance"] > h3:first-child { display: flex; }
 .home-custom .card[data-widget="glance"] .kpi { background: rgba(255, 255, 255, 0.03); border-color: color-mix(in srgb, var(--accent) 16%, transparent); box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
+/* Briefing floats the same way: no enclosing panel in normal
+   view — the brief cards carry the glass themselves over the
+   sky. The title and the severity filters stay where they are,
+   so the section keeps its padding and its heading. Customize
+   mode brings the container back so the widget stays
+   grabbable, and the cards return to their flat tint over it
+   (one blur layer either way). The cards keep their severity
+   borders; the hover halo outranks the resting shadow. */
+.card[data-widget="briefing"] { background: none; border-color: transparent; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
+.card[data-widget="briefing"] .brief-card { background: rgba(255, 255, 255, 0.03); box-shadow: 0 4px 18px rgba(0, 0, 0, 0.6); -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(0.9); backdrop-filter: blur(var(--glass-blur)) saturate(0.9); }
+.card[data-widget="briefing"] .brief-card:hover, .card[data-widget="briefing"] .brief-card:focus-within { box-shadow: 0 0 22px color-mix(in srgb, var(--sev-glow, var(--accent)) 55%, transparent), 0 6px 14px rgba(20, 8, 2, 0.55); }
+html[data-theme="light"] .card[data-widget="briefing"] .brief-card:hover, html[data-theme="light"] .card[data-widget="briefing"] .brief-card:focus-within { box-shadow: 0 6px 14px rgba(90, 70, 40, 0.25); }
+.home-custom .card[data-widget="briefing"] { background: var(--glass); border-color: var(--glass-edge); box-shadow: 0 4px 18px rgba(0, 0, 0, 0.6); -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(0.9); backdrop-filter: blur(var(--glass-blur)) saturate(0.9); }
+.home-custom .card[data-widget="briefing"] .brief-card { background: rgba(255, 255, 255, 0.03); box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
 .home-grid { margin-top: 0.3rem; }
 /* Home links read as text, not as links: names in the home
    tables and briefing cards take the surrounding weight and

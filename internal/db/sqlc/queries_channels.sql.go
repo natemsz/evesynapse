@@ -1044,6 +1044,35 @@ func (q *Queries) ListIntelGangGroups(ctx context.Context, gangID int64) ([]int6
 	return items, nil
 }
 
+const listIntelGangGroupsForGangs = `-- name: ListIntelGangGroupsForGangs :many
+SELECT gang_id, group_id FROM intel_gang_groups
+WHERE gang_id = ANY($1::bigint[])
+ORDER BY gang_id, group_id
+`
+
+func (q *Queries) ListIntelGangGroupsForGangs(ctx context.Context, gangIds []int64) ([]IntelGangGroup, error) {
+	rows, err := q.db.QueryContext(ctx, listIntelGangGroupsForGangs, pq.Array(gangIds))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []IntelGangGroup
+	for rows.Next() {
+		var i IntelGangGroup
+		if err := rows.Scan(&i.GangID, &i.GroupID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listIntelGangsByGroups = `-- name: ListIntelGangsByGroups :many
 SELECT g.id, g.channel_id, g.first_seen_at, g.last_seen_at, g.last_system_id, g.sightings, g.strength, g.closed_at, g.snapshot, gg.group_id
 FROM intel_gangs g

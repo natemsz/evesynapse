@@ -389,6 +389,11 @@ WHERE channel_id = sqlc.arg(channel_id) AND closed_at IS NULL
 SELECT group_id FROM intel_gang_groups WHERE gang_id = sqlc.arg(gang_id)
 ORDER BY group_id;
 
+-- name: ListIntelGangGroupsForGangs :many
+SELECT gang_id, group_id FROM intel_gang_groups
+WHERE gang_id = ANY(sqlc.arg(gang_ids)::bigint[])
+ORDER BY gang_id, group_id;
+
 -- name: AddIntelGangGroup :exec
 INSERT INTO intel_gang_groups (gang_id, group_id) VALUES (sqlc.arg(gang_id), sqlc.arg(group_id))
 ON CONFLICT DO NOTHING;

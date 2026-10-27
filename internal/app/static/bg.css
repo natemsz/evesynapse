@@ -1025,6 +1025,24 @@ html[data-scheme] .cs-aline { border-bottom-color: color-mix(in srgb, var(--acce
 html[data-scheme] .plan-tip { border-color: color-mix(in srgb, var(--accent) 35%, transparent); }
 html[data-scheme] .foldbtn { border-color: color-mix(in srgb, var(--accent) 30%, black); }
 html[data-scheme] .modal { border-color: color-mix(in srgb, var(--accent) 42%, black); box-shadow: 0 24px 60px -12px rgba(0, 0, 0, 0.55), 0 0 22px color-mix(in srgb, var(--accent) 14%, transparent); }
+/* Hover and selected rows in the lists that float (quick jump,
+   search suggestions, the menus) and the chrome buttons beside
+   them: the base rules bake the ember wash. #2a1a0c is the
+   ember at 8% over the default panel, so the scheme rows mix the
+   same way. */
+html[data-scheme] .quickjump-results li.sel,
+html[data-scheme] .sidebar .branch .menu a.active { background-color: color-mix(in srgb, var(--accent) 8%, var(--panel)); }
+html[data-scheme] .suggest li:not(.sug-kind):not(.sug-empty):hover,
+html[data-scheme] .suggest li.sel { background: color-mix(in srgb, var(--accent) 13%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent), 0 0 14px color-mix(in srgb, var(--accent) 18%, transparent); }
+html[data-scheme] .branch .menu a.active,
+html[data-scheme] .switcher-menu a.active { background: color-mix(in srgb, var(--accent) 18%, transparent); }
+html[data-scheme] .nav-reopen:hover,
+html[data-scheme] .nav-hamburger:hover,
+html[data-scheme] .fit-solve-apply:hover { background: color-mix(in srgb, var(--accent) 14%, transparent); }
+html[data-scheme] .notify > summary:hover,
+html[data-scheme] .notify[open] > summary { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+html[data-scheme] tbody tr:hover td,
+html[data-scheme] tbody tr:hover th { background: color-mix(in srgb, var(--accent) 4.5%, transparent); }
 /* Card title links (fit names, ship names) sit at the gradient's
    bright end, the way the hover state already does through
    --success: the scheme highlight, not the core. */

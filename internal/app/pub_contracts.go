@@ -16,8 +16,10 @@ package app
 // last page lands; completion is what retires contracts --
 // expiry passed, or absent from two consecutive completed
 // sweeps (one absence can be a torn read while ESI republishes
-// its cache). Departed contracts take their items and bids
-// with them; abyssal sightings keep the departure on record
+// its cache). A departed contract stays stored with its items
+// and bids, stamped with when and how it left, and is pruned
+// after a week (schema 096); every live reader leaves it out.
+// Abyssal sightings keep the departure on record too
 // (pub_contracts_warm.go keeps the corpus itself).
 //
 // Heat decides the sweep's order, never its coverage: hub
@@ -59,6 +61,13 @@ const (
 	// reporting more is treated as complete at the stop
 	// rather than paged forever.
 	pubContractMaxPagesTotal = 200
+	// pubContractDepartureRetention is how long a departed
+	// contract stays on record (schema 096). The true values
+	// crawl reads departures on its 12h per-region cadence, so a
+	// week covers that with days of slack for a stopped worker,
+	// while a month would hold several times the live corpus in
+	// every live reader's scan.
+	pubContractDepartureRetention = 7 * 24 * time.Hour
 )
 
 // pubContractRegionKind names a region's sweep row in
@@ -413,12 +422,13 @@ func (app *Application) completePublicContractRegion(ctx context.Context, region
 // completePublicContractRegionTx is a completed sweep's
 // retirement step, inside the caller's transaction: contracts
 // whose expiry passed, and contracts unseen in this cycle and
-// the one before it, leave the live tables -- their bids and
-// items go with them, and any abyssal sightings on them are
-// stamped with how they left (expired, or vanished early: the
-// record carries the fact, never a guess at accepted versus
-// cancelled). The sightings of everything this cycle saw are
-// then refreshed from the stored rows.
+// the one before it, leave the live set. The row stays, with
+// its items and bids, stamped with when and how it left
+// (expired, or vanished early: the record carries the fact,
+// never a guess at accepted versus cancelled), and so do any
+// abyssal sightings on it. Departures older than the retention
+// window are pruned. The sightings of everything this cycle
+// saw are then refreshed from the stored rows.
 func completePublicContractRegionTx(ctx context.Context, q *db.Queries, regionID, cycle int64, now time.Time) error {
 	departed, err := q.ListDepartedPublicContracts(ctx, db.ListDepartedPublicContractsParams{
 		RegionID: regionID, DateExpired: now, LastCycle: cycle - 2,
@@ -426,29 +436,24 @@ func completePublicContractRegionTx(ctx context.Context, q *db.Queries, regionID
 	if err != nil {
 		return fmt.Errorf("list departed %d: %w", regionID, err)
 	}
-	if len(departed) > 0 {
-		byKind := map[string][]int64{}
-		all := make([]int64, 0, len(departed))
-		for _, d := range departed {
-			byKind[d.DepartKind] = append(byKind[d.DepartKind], d.ContractID)
-			all = append(all, d.ContractID)
+	byKind := map[string][]int64{}
+	for _, d := range departed {
+		byKind[d.DepartKind] = append(byKind[d.DepartKind], d.ContractID)
+	}
+	for kind, ids := range byKind {
+		if err := q.StampAbyssalSightingsDeparted(ctx, db.StampAbyssalSightingsDepartedParams{
+			DepartedAt: now, DepartKind: kind, ContractIds: ids,
+		}); err != nil {
+			return fmt.Errorf("stamp sightings departed %d: %w", regionID, err)
 		}
-		for kind, ids := range byKind {
-			if err := q.StampAbyssalSightingsDeparted(ctx, db.StampAbyssalSightingsDepartedParams{
-				DepartedAt: now, DepartKind: kind, ContractIds: ids,
-			}); err != nil {
-				return fmt.Errorf("stamp sightings departed %d: %w", regionID, err)
-			}
+		if err := q.MarkPublicContractsDeparted(ctx, db.MarkPublicContractsDepartedParams{
+			DepartedAt: now, DepartKind: kind, ContractIds: ids,
+		}); err != nil {
+			return fmt.Errorf("mark departed %d: %w", regionID, err)
 		}
-		if err := q.DeletePublicContractBidsByContracts(ctx, all); err != nil {
-			return fmt.Errorf("delete departed bids %d: %w", regionID, err)
-		}
-		if err := q.DeletePublicContractItemsByContracts(ctx, all); err != nil {
-			return fmt.Errorf("delete departed items %d: %w", regionID, err)
-		}
-		if err := q.DeletePublicContractsByIDs(ctx, all); err != nil {
-			return fmt.Errorf("delete departed contracts %d: %w", regionID, err)
-		}
+	}
+	if err := prunePublicContractDepartures(ctx, q, regionID, now); err != nil {
+		return err
 	}
 	if err := q.RefreshAbyssalSightingsForRegionCycle(ctx, db.RefreshAbyssalSightingsForRegionCycleParams{
 		RegionID: regionID, LastCycle: cycle, LastSeenAt: now,
@@ -461,6 +466,31 @@ func completePublicContractRegionTx(ctx context.Context, q *db.Queries, regionID
 		RegionID: sql.NullInt64{Int64: regionID, Valid: true}, Cycle: sql.NullInt64{Int64: cycle, Valid: true},
 	}); err != nil {
 		return fmt.Errorf("stamp sightings %d: %w", regionID, err)
+	}
+	return nil
+}
+
+// prunePublicContractDepartures deletes one region's departed
+// contracts older than pubContractDepartureRetention, with their
+// bids and items, inside the completion step's transaction.
+func prunePublicContractDepartures(ctx context.Context, q *db.Queries, regionID int64, now time.Time) error {
+	ids, err := q.ListPrunablePublicContracts(ctx, db.ListPrunablePublicContractsParams{
+		RegionID: regionID, Before: now.Add(-pubContractDepartureRetention),
+	})
+	if err != nil {
+		return fmt.Errorf("list prunable %d: %w", regionID, err)
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	if err := q.DeletePublicContractBidsByContracts(ctx, ids); err != nil {
+		return fmt.Errorf("prune departed bids %d: %w", regionID, err)
+	}
+	if err := q.DeletePublicContractItemsByContracts(ctx, ids); err != nil {
+		return fmt.Errorf("prune departed items %d: %w", regionID, err)
+	}
+	if err := q.DeletePublicContractsByIDs(ctx, ids); err != nil {
+		return fmt.Errorf("prune departed contracts %d: %w", regionID, err)
 	}
 	return nil
 }

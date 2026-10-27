@@ -840,6 +840,16 @@ func (app *Mod) ApplySwarmEntry(ctx context.Context, kind, key, payload string, 
 			}
 		} else if !errors.Is(err, sql.ErrNoRows) {
 			return fmt.Errorf("swarm: apply %s %s: %w", kind, key, err)
+		} else if _, derr := app.Queries.GetPublicContractDeparture(ctx, body.ContractID); derr == nil {
+			// Not live but on record: this instance saw the
+			// listing leave (schema 096), and a peer's copy
+			// never brings it back.
+			if err := app.Queries.DeleteStagingEntry(ctx, db.DeleteStagingEntryParams{Kind: kind, Key: key}); err != nil {
+				logging.Errorf("swarm: apply %s %s: unstaged: %v", kind, key, err)
+			}
+			return nil
+		} else if !errors.Is(derr, sql.ErrNoRows) {
+			return fmt.Errorf("swarm: apply %s %s: %w", kind, key, derr)
 		}
 		// The header lands under the region's current sweep
 		// cycle (0 when the region has no sweep state yet), with

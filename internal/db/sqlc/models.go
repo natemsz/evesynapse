@@ -1022,6 +1022,8 @@ type PubContract struct {
 	PricedAt            sql.NullTime    `json:"priced_at"`
 	ItemsAttempts       int64           `json:"items_attempts"`
 	ItemsError          string          `json:"items_error"`
+	DepartedAt          sql.NullTime    `json:"departed_at"`
+	DepartKind          sql.NullString  `json:"depart_kind"`
 }
 
 type PubContractBid struct {

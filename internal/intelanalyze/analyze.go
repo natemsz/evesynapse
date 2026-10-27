@@ -145,6 +145,12 @@ type Analysis struct {
 	// not waiting on a lookup (those stand in Unknown). It is
 	// recorded, never read back: no output above changes for it.
 	Residue []string `json:"residue,omitempty"`
+	// Suspect is the text, as written, of pilots this reading
+	// resolved on a name that is as likely a word as a
+	// character (SuspectPilot): "Ok", "Ess", "Help". The pilot
+	// stands in Pilots; the residue step is asked about the
+	// span and may take it back.
+	Suspect []string `json:"suspect,omitempty"`
 }
 
 // Input is one report to analyse.
@@ -267,6 +273,9 @@ func Analyze(in Input, d Dict) Analysis {
 				if !seenPilot[id] {
 					seenPilot[id] = true
 					a.Pilots = append(a.Pilots, Pilot{ID: id, Name: name})
+					if SuspectPilot(whole) {
+						a.Suspect = append(a.Suspect, asWritten(seg))
+					}
 				}
 				continue
 			}
@@ -409,6 +418,9 @@ func Analyze(in Input, d Dict) Analysis {
 						if !seenPilot[id] {
 							seenPilot[id] = true
 							a.Pilots = append(a.Pilots, Pilot{ID: id, Name: proper})
+							if SuspectPilot(name) {
+								a.Suspect = append(a.Suspect, asWritten(words))
+							}
 						}
 						for k := 0; k < n; k++ {
 							claimed[left[k]] = true
@@ -453,7 +465,7 @@ func Analyze(in Input, d Dict) Analysis {
 			candidate := false
 			for j < len(seg) && !used[j] && !claimed[j] && !owed[j] {
 				words = append(words, seg[j])
-				if pilotCandidate(clean(seg[j])) {
+				if PilotCandidate(clean(seg[j])) {
 					candidate = true
 				}
 				j++
@@ -496,8 +508,27 @@ func Analyze(in Input, d Dict) Analysis {
 	sort.Strings(a.Flags)
 	a.Unknown = dedupe(a.Unknown)
 	a.Residue = capResidue(dedupe(a.Residue))
+	a.Suspect = dedupe(a.Suspect)
 	a.Kind = kindOf(in, a, flags)
 	return a
+}
+
+// asWritten is a span's words as the scout wrote them, trimmed of
+// the punctuation around them: what a suspect pilot is asked
+// about under.
+func asWritten(words []string) string {
+	return strings.Trim(strings.Join(words, " "), ",.;:*!()[]?\"'")
+}
+
+// KindOf decides a stored reading's kind again, after a pilot was
+// taken out of it: the flags are the reading's own, and in is the
+// report's headline facts.
+func KindOf(in Input, a Analysis) string {
+	flags := map[string]bool{}
+	for _, f := range a.Flags {
+		flags[f] = true
+	}
+	return kindOf(in, a, flags)
 }
 
 // capResidue bounds residue spans to the package limits: whole
@@ -534,7 +565,7 @@ func lookupPilot(d Dict, lower string) (int64, string, bool, bool) {
 	if d.Pilot == nil || lower == "" || len(lower) > 37 {
 		return 0, "", false, true
 	}
-	if !pilotCandidate(lower) {
+	if !PilotCandidate(lower) {
 		// Settled, not unknown: never asked about, never a pilot.
 		return 0, "", false, true
 	}
@@ -608,12 +639,56 @@ var romanRe = regexp.MustCompile(`^m{0,3}(cm|cd|d?c{0,3})(xc|xl|l?x{0,3})(ix|iv|
 
 func isRomanNumeral(w string) bool { return w != "" && romanRe.MatchString(w) }
 
-// pilotCandidate is whether a phrase from free-form text may be a
-// pilot at all. Not candidates: a string with no letter (a number
-// or distance off a paste), a standalone roman numeral (a planet's
-// designator, "VIII"), a bare place noun, and a phrase ending in
-// one ("Minmatar Military Station").
-func pilotCandidate(name string) bool {
+// chatWords are intel chat's own shorthand: the clear, the no
+// visual, the question and the sign-offs a scout types alone on a
+// line. EVE has characters called "Clr" and "Nv", and a line of
+// nothing but "clr" means the system is clear. Like the place
+// nouns, they are words in free-form text, never names.
+var chatWords = map[string]bool{
+	"clr": true, "clear": true, "cleared": true, "nv": true, "novis": true,
+	"novisual": true, "status": true, "stat": true, "upd": true, "update": true,
+	"inc": true, "incoming": true, "gg": true, "o7": true, "o/": true, "ty": true,
+	"thx": true, "np": true, "lol": true, "ok": true, "kk": true, "yes": true,
+	"gone": true, "left": true, "still": true, "same": true, "safe": true,
+}
+
+// suspectWords are everyday words that are also some pilot's name.
+// Read out of free-form text they are as likely the word as the
+// pilot, so the reading keeps the pilot and asks.
+var suspectWords = map[string]bool{
+	"help": true, "test": true, "wtf": true, "bro": true, "dude": true,
+	"sure": true, "fine": true, "nope": true, "now": true, "soon": true,
+	"again": true, "just": true, "only": true, "there": true, "back": true,
+	"out": true, "up": true, "down": true, "off": true, "over": true,
+	"come": true, "go": true, "get": true, "look": true, "see": true,
+	"seen": true, "watch": true, "careful": true, "hunter": true,
+	"hunting": true, "roam": true, "roaming": true, "ess": true,
+	"anom": true, "site": true, "rat": true, "rats": true, "ping": true,
+	"probe": true, "probes": true, "warp": true, "align": true,
+	"aligned": true, "tackle": true, "tackled": true, "dead": true,
+	"died": true, "kill": true, "loss": true, "pod": true, "podded": true,
+}
+
+// SuspectPilot is whether a pilot read out of free-form text on
+// this lower-cased phrase is doubtful: one short word (three
+// letters or fewer) or an everyday word. Such a pilot stands, and
+// its span goes to the residue step to confirm.
+func SuspectPilot(name string) bool {
+	if strings.ContainsRune(name, ' ') {
+		return false
+	}
+	return utf8.RuneCountInString(name) <= 3 || suspectWords[name]
+}
+
+// PilotCandidate is whether a lower-cased phrase from free-form
+// text may be a pilot at all. Not candidates: a string with no
+// letter (a number or distance off a paste), a standalone roman
+// numeral (a planet's designator, "VIII"), a bare place noun or
+// chat shorthand ("clr"), and a phrase ending in a place noun
+// ("Minmatar Military Station"). Every reading of free-form text
+// asks it, the roster readings of fused text included; only a
+// typed list (a Local paste, one name a line) does not.
+func PilotCandidate(name string) bool {
 	letter := false
 	for _, r := range name {
 		if unicode.IsLetter(r) {
@@ -624,7 +699,7 @@ func pilotCandidate(name string) bool {
 	if !letter {
 		return false
 	}
-	if isRomanNumeral(name) || placeNouns[name] || reportWords[name] {
+	if isRomanNumeral(name) || placeNouns[name] || reportWords[name] || chatWords[name] {
 		return false
 	}
 	if i := strings.LastIndex(name, " "); i >= 0 && placeNouns[clean(name[i+1:])] {
@@ -636,7 +711,7 @@ func pilotCandidate(name string) bool {
 	// inside ("(incl." is the word "incl").
 	for _, w := range strings.Fields(name) {
 		w = clean(w)
-		if !isDigits(w) && !isRomanNumeral(w) && !placeNouns[w] && !reportWords[w] && w != "-" && w != "—" && w != "–" {
+		if !isDigits(w) && !isRomanNumeral(w) && !placeNouns[w] && !reportWords[w] && !chatWords[w] && w != "-" && w != "—" && w != "–" {
 			return true
 		}
 	}

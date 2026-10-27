@@ -513,6 +513,19 @@ type IntelResidueNote struct {
 	CreatedAt   time.Time `json:"created_at"`
 }
 
+type IntelSubmitLabel struct {
+	ID               int64     `json:"id"`
+	ChannelID        int64     `json:"channel_id"`
+	UserID           int64     `json:"user_id"`
+	Raw              string    `json:"raw"`
+	DetectedKind     string    `json:"detected_kind"`
+	DetectedSystemID int64     `json:"detected_system_id"`
+	OverrideKind     string    `json:"override_kind"`
+	OverrideSystemID int64     `json:"override_system_id"`
+	Posted           int32     `json:"posted"`
+	CreatedAt        time.Time `json:"created_at"`
+}
+
 type IntelToken struct {
 	ID         int64        `json:"id"`
 	UserID     int64        `json:"user_id"`

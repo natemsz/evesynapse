@@ -529,3 +529,43 @@ func TestBoundedStderrKeepsTail(t *testing.T) {
 		t.Fatalf("captured stderr lost its tail")
 	}
 }
+
+// TestResiduePilotDoubts: a suspect pilot the pass reads as a word
+// leaves the stored reading, and its kind is decided again; a
+// suspect the pass reads as the pilot, or leaves out, stands.
+func TestResiduePilotDoubts(t *testing.T) {
+	app, _, q := buildCorpTestApp(t, nil)
+	ctx := context.Background()
+	cid, userID := residueTestChannel(t, q)
+
+	a := intelanalyze.Analysis{Kind: intelanalyze.KindSighting,
+		Pilots:  []intelanalyze.Pilot{{ID: 92000003, Name: "Ess"}, {ID: 92000004, Name: "Up"}},
+		Counts:  &intelanalyze.StandingCounts{Neutral: 2},
+		Suspect: []string{"Ess", "Up"}}
+	id := seedResidueReport(t, q, cid, userID, a)
+	eng := &fakeResidueEngine{reply: `{"claims":[
+		{"span":"Ess","kind":"structure","name":"encounter surveillance system"},
+		{"span":"Up","kind":"pilot","id":92000004,"name":"Up"}
+	]}`}
+	app.processResidue(ctx, eng, id)
+	if eng.calls != 1 {
+		t.Fatalf("a reading with only suspects: %d passes, want 1", eng.calls)
+	}
+	after, err := q.GetIntelReportFull(ctx, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var na intelanalyze.Analysis
+	if err := json.Unmarshal([]byte(after.Analysis), &na); err != nil {
+		t.Fatal(err)
+	}
+	if len(na.Pilots) != 1 || na.Pilots[0].Name != "Up" {
+		t.Fatalf("pilots after the pass: %+v", na.Pilots)
+	}
+	if na.Counts == nil || na.Counts.Neutral != 1 {
+		t.Fatalf("counts after the pass: %+v", na.Counts)
+	}
+	if len(na.Suspect) != 0 {
+		t.Fatalf("suspects kept after the pass: %q", na.Suspect)
+	}
+}

@@ -170,7 +170,13 @@ func Detect(raw string) Kind {
 }
 
 // Parse reads raw as whichever paste it is.
-func Parse(raw string) (Result, error) {
+func Parse(raw string) (Result, error) { return ParseAs(raw, "") }
+
+// ParseAs reads raw as the paste kind says it is, or as whichever
+// it is when kind is "": a player who knows the paste is a d-scan
+// has it read as one, whatever most of its lines look like. Lines
+// that are not of the kind are skipped, as Parse skips strays.
+func ParseAs(raw string, kind Kind) (Result, error) {
 	if len(raw) > MaxBytes {
 		return Result{}, ErrTooBig
 	}
@@ -181,7 +187,10 @@ func Parse(raw string) (Result, error) {
 	if len(ls) > MaxLines {
 		return Result{}, ErrTooBig
 	}
-	r := Result{Kind: Detect(raw)}
+	if kind == "" {
+		kind = Detect(raw)
+	}
+	r := Result{Kind: kind}
 	switch r.Kind {
 	case KindDScan:
 		for _, l := range ls {
@@ -245,6 +254,11 @@ func Parse(raw string) (Result, error) {
 			r.Local = append(r.Local, l)
 		}
 	default:
+		return Result{}, ErrUnknown
+	}
+	// A paste none of whose lines is of the kind is no scan of
+	// it: a kind forced on chat does not read as an empty scan.
+	if r.Skipped >= len(ls) {
 		return Result{}, ErrUnknown
 	}
 	return r, nil

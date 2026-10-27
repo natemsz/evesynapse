@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.6.0.2] - 2026-10-27
+
+Automated build of EveSynapse v0.6.0.2. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+
+## What's Changed
+### 🐛 Bug Fixes
+* Files a d-scan under its celestials' system when the named system is only a gate destination by @natemsz in https://github.com/natemsz/evesynapse/pull/720
+### Other Changes
+* docs(changelog): review changelog for v0.6.0.1 by @github-actions[bot] in https://github.com/natemsz/evesynapse/pull/719
+
+
+**Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.6.0.1...v0.6.0.2
+
 ## [v0.6.0.1] - 2026-10-27
 
 Automated build of EveSynapse v0.6.0.1. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).

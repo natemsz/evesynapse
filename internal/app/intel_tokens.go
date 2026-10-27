@@ -14,7 +14,12 @@ package app
 //	GET  /api/intel/v1/channels              the channels it may post to
 //	POST /api/intel/v1/channels/{id}/lines   {"lines": [...]}: chat lines;
 //	                                         an optional "speaker" names
-//	                                         the batch's pilot
+//	                                         the batch's pilot,
+//	                                         and "kind" and "system"
+//	                                         override the reading
+//	POST /api/intel/v1/preview               {"text": ...}: what the site
+//	                                         would make of it, stored
+//	                                         nowhere (intel_preview.go)
 //
 // Lines go through the same reader as pasted ones (postChatLines), so an
 // Axon that restarts, or two characters logging one channel, store a
@@ -493,6 +498,10 @@ func (app *Application) handleAPILines(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Lines   []string `json:"lines"`
 		Speaker string   `json:"speaker"`
+		// The overlay's overrides (intel_preview.go): the kind
+		// the paste is, and the system it is about.
+		Kind   string `json:"kind"`
+		System int64  `json:"system"`
 	}
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, intelMaxPaste)).Decode(&body); err != nil {
 		intelAPIError(w, http.StatusBadRequest, "send {\"lines\": [...]}, up to 64 KB")
@@ -502,12 +511,34 @@ func (app *Application) handleAPILines(w http.ResponseWriter, r *http.Request) {
 		intelAPIError(w, http.StatusRequestEntityTooLarge, fmt.Sprintf("send up to %d lines at a time", intelAPIMaxLines))
 		return
 	}
+	if !validSubmitKind(body.Kind) {
+		intelAPIError(w, http.StatusBadRequest, "kind is one of dscan, local, fleet, probe or chat")
+		return
+	}
+	if body.System < 0 {
+		body.System = 0
+	}
+	if body.System > 0 {
+		if _, err := app.queries.GetSDESystem(ctx, body.System); err != nil {
+			intelAPIError(w, http.StatusBadRequest, "system is not a solar system the site knows")
+			return
+		}
+	}
+	ov := submitOverride{Kind: body.Kind, SystemID: body.System}
 	now := time.Now().UTC()
 	base := db.InsertIntelReportParams{ChannelID: c.ID, AuthorUserID: id.userID, AuthorCharacterID: id.posterID, Reporter: id.posterName, CreatedAt: now, SeenAt: now}
 	for i, l := range body.Lines {
 		body.Lines[i] = strings.ReplaceAll(l, "\n", " ")
 	}
-	res := app.postChatLines(ctx, base, strings.Join(body.Lines, "\n"), "axon", body.Speaker)
+	text := strings.Join(body.Lines, "\n")
+	var detected intelPreview
+	if ov.any() {
+		detected = app.previewSubmission(ctx, text, app.accountSpeaker(ctx, id.userID, body.Speaker), id.posterID)
+	}
+	res := app.postChatLinesWith(ctx, base, text, "axon", body.Speaker, ov)
+	if ov.any() {
+		app.logSubmitLabel(ctx, c.ID, id.userID, text, detected, ov, res.Posted)
+	}
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
 	_ = json.NewEncoder(w).Encode(struct {

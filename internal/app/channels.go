@@ -902,15 +902,29 @@ func (app *Application) accountSpeaker(ctx context.Context, userID int64, speake
 // of those ways: a local list on its own cannot be a report,
 // reports being about a system.
 func (app *Application) scanReportOf(ctx context.Context, base db.InsertIntelReportParams, raw string, namedSystemID int64, speaker string) (db.InsertIntelReportParams, *intelanalyze.StandingCounts, bool) {
-	kind := scan.Detect(raw)
-	if kind == "" {
+	return app.scanReportAs(ctx, base, raw, submitOverride{}, namedSystemID, speaker)
+}
+
+// scanReportAs is scanReportOf under a submission's overrides
+// (submitOverride): a kind read the paste as that kind, and a
+// system files the reading there, over anything the paste says.
+func (app *Application) scanReportAs(ctx context.Context, base db.InsertIntelReportParams, raw string, ov submitOverride, namedSystemID int64, speaker string) (db.InsertIntelReportParams, *intelanalyze.StandingCounts, bool) {
+	kind := ov.scanKind()
+	if kind == "" && scan.Detect(raw) == "" {
 		return base, nil, false
 	}
-	p, err := scan.Parse(raw)
+	p, err := scan.ParseAs(raw, kind)
 	if err != nil {
 		return base, nil, false
 	}
-	return app.readingReportOf(ctx, base, app.readScan(ctx, p, namedSystemID), &p, raw, speaker)
+	if ov.SystemID > 0 {
+		namedSystemID = ov.SystemID
+	}
+	res := app.readScan(ctx, p, namedSystemID)
+	if ov.SystemID > 0 {
+		res.SystemID = ov.SystemID
+	}
+	return app.readingReportOf(ctx, base, res, &p, raw, speaker)
 }
 
 // fusedScanReportOf is scanReportOf for a message whose scan the
@@ -1049,25 +1063,58 @@ func (app *Application) postScanMessage(ctx context.Context, base db.InsertIntel
 // own): it counts only as the posting account's own pilot
 // (accountSpeaker), and everywhere else a line's own speaker stands.
 func (app *Application) postChatLines(ctx context.Context, base db.InsertIntelReportParams, lines, source, batchSpeaker string) chatPostResult {
+	return app.postChatLinesWith(ctx, base, lines, source, batchSpeaker, submitOverride{})
+}
+
+// postChatLinesWith is postChatLines under a submission's overrides
+// (submitOverride). A scan kind reads the batch as that scan or not
+// at all; "chat" reads it as chat lines only, never as a scan; a
+// system files every report the batch makes there, the lines that
+// named none included.
+func (app *Application) postChatLinesWith(ctx context.Context, base db.InsertIntelReportParams, lines, source, batchSpeaker string, ov submitOverride) chatPostResult {
 	var res chatPostResult
 	now := base.CreatedAt
 	batchSpeaker = app.accountSpeaker(ctx, base.AuthorUserID, batchSpeaker)
+	asChat := ov.Kind == submitKindChat
 	// A scan pasted as chat lines is a scan, not chat: the same
 	// reading the scan tool makes of it, reported as one report.
-	if p, counts, ok := app.scanReportOf(ctx, base, lines, 0, batchSpeaker); ok {
-		if _, err := app.insertIntelReport(ctx, p, false, counts); err != nil {
-			if errors.Is(err, errIntelDuplicate) {
-				res.Duplicates = 1
+	if !asChat {
+		if p, counts, ok := app.scanReportAs(ctx, base, lines, ov, 0, batchSpeaker); ok {
+			if _, err := app.insertIntelReport(ctx, p, false, counts); err != nil {
+				if errors.Is(err, errIntelDuplicate) {
+					res.Duplicates = 1
+					return res
+				}
+				logging.Errorf("channels: insert scan report: %v", err)
 				return res
 			}
-			logging.Errorf("channels: insert scan report: %v", err)
+			res.Posted = 1
 			return res
 		}
-		res.Posted = 1
+	}
+	if ov.scanKind() != "" {
+		// The player said which scan this is, and it does not
+		// read as one: it is not read as chat behind their back.
+		for _, l := range strings.Split(lines, "\n") {
+			if strings.TrimSpace(l) != "" {
+				res.Skipped++
+			}
+		}
 		return res
 	}
 	o := intelchat.Parse(lines, app.systemLookup(ctx), now)
 	res.Skipped = o.Questions
+	if ov.SystemID > 0 {
+		// The player named the system: every line is about it,
+		// the ones that named none as much as the rest.
+		for _, nr := range o.NoSystemRead {
+			o.Reports = append(o.Reports, nr)
+		}
+		o.NoSystemRead, o.NoSystemLines = nil, nil
+		for i := range o.Reports {
+			o.Reports[i].SystemID = ov.SystemID
+		}
+	}
 	// A line that named no system is offered the readings the
 	// chat parser cannot make before it counts as skipped: a
 	// scan it fused, read as a scan (postScanMessage), and a
@@ -1077,7 +1124,11 @@ func (app *Application) postChatLines(ctx context.Context, base db.InsertIntelRe
 	// never read at all. A scan that failed to store counts
 	// neither way: it was a scan, never prose.
 	for i, nr := range o.NoSystemRead {
-		switch app.postScanMessage(ctx, base, nr.Raw, 0, nr.Speaker, nr.At) {
+		fate := msgNotScan
+		if !asChat {
+			fate = app.postScanMessage(ctx, base, nr.Raw, 0, nr.Speaker, nr.At)
+		}
+		switch fate {
 		case msgPosted:
 			res.Posted++
 			continue
@@ -1108,7 +1159,11 @@ func (app *Application) postChatLines(ctx context.Context, base db.InsertIntelRe
 	for _, rep := range o.Reports {
 		// A message that is a scan is stored as one, not as the
 		// prose the chat parser made of its remains.
-		switch app.postScanMessage(ctx, base, rep.Raw, rep.SystemID, rep.Speaker, rep.At) {
+		fate := msgNotScan
+		if !asChat {
+			fate = app.postScanMessage(ctx, base, rep.Raw, rep.SystemID, rep.Speaker, rep.At)
+		}
+		switch fate {
 		case msgPosted:
 			res.Posted++
 			continue

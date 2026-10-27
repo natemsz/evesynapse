@@ -562,6 +562,12 @@ var pgIntelResidueAttemptsSchema string
 //go:embed schema_pg/093_kill_line_prices.sql
 var pgKillLinePricesSchema string
 
+// Step 094: Axon submission labels -- a submission sent with an
+// override, beside what the site detected (intel_preview.go).
+//
+//go:embed schema_pg/094_intel_submit_labels.sql
+var pgIntelSubmitLabelsSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -684,6 +690,7 @@ func schemaSteps() []schemaStep {
 		{91, "intel_residue", pgIntelResidueSchema, ""},
 		{92, "intel_residue_attempts", pgIntelResidueAttemptsSchema, ""},
 		{93, "kill_line_prices", pgKillLinePricesSchema, ""},
+		{94, "intel_submit_labels", pgIntelSubmitLabelsSchema, ""},
 	}
 }
 

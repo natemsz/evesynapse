@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.5.9.11] - 2026-10-27
+
+Automated build of EveSynapse v0.5.9.11. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+
+## What's Changed
+### 🐛 Bug Fixes
+* Checks for a pilot profile before opening the fold transaction by @natemsz in https://github.com/natemsz/evesynapse/pull/697
+* Retries a kill whose ingest fails instead of skipping it, and coalesces the killfeed cursor write by @natemsz in https://github.com/natemsz/evesynapse/pull/695
+* Compares the map layers fingerprint before building the layers by @natemsz in https://github.com/natemsz/evesynapse/pull/698
+### Other Changes
+* docs(changelog): review changelog for v0.5.9.10 by @github-actions[bot] in https://github.com/natemsz/evesynapse/pull/696
+
+
+**Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.9.10...v0.5.9.11
+
 ## [v0.5.9.10] - 2026-10-27
 
 Automated build of EveSynapse v0.5.9.10. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).

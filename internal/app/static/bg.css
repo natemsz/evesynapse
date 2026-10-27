@@ -1135,7 +1135,7 @@ html[data-scheme] .pchart .chart-volbar { fill: var(--sch-end); }
 .current-badge { font-family: Rajdhani, sans-serif; font-weight: 600; font-size: .72rem; letter-spacing: .12em; text-transform: uppercase; padding: .18rem .5rem; border-radius: 999px; border: 1px solid var(--sch-accent, #ff6a1a); color: var(--sch-hi, #ffd27a); visibility: hidden; }
 .current .current-badge { visibility: visible; }
 .tier-seg { display: inline-flex; border: 1px solid rgba(255,255,255,.16); border-radius: 8px; overflow: hidden; flex: 0 0 auto; }
-.tier-seg button { appearance: none; border: 0; background: rgba(255,255,255,.04); color: inherit; font: inherit; font-size: .82rem; padding: .42rem .8rem; cursor: pointer; min-height: 0; }
+.tier-seg button { appearance: none; border: 0; background: rgba(255,255,255,.04); color: inherit; font: inherit; font-size: .82rem; padding: .42rem .8rem; cursor: pointer; min-height: 0; text-transform: uppercase; letter-spacing: .06em; }
 .tier-seg button + button { border-left: 1px solid rgba(255,255,255,.12); }
 .tier-seg button.on { background: var(--sch-accent, #ff6a1a); color: #fff; }
 .tier-seg button:disabled { opacity: .38; cursor: not-allowed; }

@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.6.0.0] - 2026-10-27
+
+Automated build of EveSynapse v0.6.0.0. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+
+## What's Changed
+### 🚀 Features
+* Mirrors the minimalistic glow to the left side shape and bumps version to v0.6.0.0 by @natemsz in https://github.com/natemsz/evesynapse/pull/715
+### 🐛 Bug Fixes
+* Tier buttons keep their capitals in the selected state by @natemsz in https://github.com/natemsz/evesynapse/pull/700
+* Prunes intel retention daily and stops re-asking for unresolvable kill names every minute by @natemsz in https://github.com/natemsz/evesynapse/pull/701
+* Skips the pilot orbit walk for characters whose snapshots have not moved by @natemsz in https://github.com/natemsz/evesynapse/pull/703
+* Weighs gang candidates with two batched reads instead of two per candidate by @natemsz in https://github.com/natemsz/evesynapse/pull/704
+* Trims the live intel feed to one page and gates its tick on visibility by @natemsz in https://github.com/natemsz/evesynapse/pull/705
+* Reads faction names from the global snapshot instead of fetching per pilot by @natemsz in https://github.com/natemsz/evesynapse/pull/706
+* Parses each stored scan once for the duplicate checks by @natemsz in https://github.com/natemsz/evesynapse/pull/707
+* Skips the 90-day aggregates a pilot profile replaces by @natemsz in https://github.com/natemsz/evesynapse/pull/708
+* Prices kill lines once at ingest and reads the stored prices on renders by @natemsz in https://github.com/natemsz/evesynapse/pull/709
+* Derives a group composite once per input change instead of rebuilding per report by @natemsz in https://github.com/natemsz/evesynapse/pull/710
+* Resolves composite fleet-link names in one query per kind by @natemsz in https://github.com/natemsz/evesynapse/pull/711
+* Checks mail and calendar snapshot existence in one query per batch by @natemsz in https://github.com/natemsz/evesynapse/pull/712
+* Sorts and bounds the workbench dossier read in SQL by @natemsz in https://github.com/natemsz/evesynapse/pull/713
+* Batches the demo seed type resolution and multi-row inserts by @natemsz in https://github.com/natemsz/evesynapse/pull/714
+* Remembers war detail state between cycles instead of re-reading every payload by @natemsz in https://github.com/natemsz/evesynapse/pull/702
+### Other Changes
+* docs(changelog): review changelog for v0.5.9.11 by @github-actions[bot] in https://github.com/natemsz/evesynapse/pull/699
+
+
+**Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.9.11...v0.6.0.0
+
 ## [v0.5.9.11] - 2026-10-27
 
 Automated build of EveSynapse v0.5.9.11. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).

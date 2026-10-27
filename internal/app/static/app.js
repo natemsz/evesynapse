@@ -4761,17 +4761,10 @@
     for (var b = 0; b < boxes.length; b++) boxes[b].checked = !allOn;
     recount(form);
   });
-  function syncAxon(form) {
-    var offer = document.querySelector("[data-axon-offer]");
-    if (!offer || !form) return;
-    var loc = form.querySelector('input[name="feature"][value="location"]');
-    offer.hidden = !(loc && loc.checked);
-  }
   document.addEventListener("change", function (ev) {
     var form = ev.target && ev.target.closest ? ev.target.closest("[data-lk-form]") : null;
-    if (form) { recount(form); syncAxon(form); }
+    if (form) { recount(form); }
   });
-  syncAxon(document.querySelector("[data-lk-form]"));
 
   // The sign-up theme step: the type decides which scheme rows
   // carry the wallpaper note, swapped in place, no reload.

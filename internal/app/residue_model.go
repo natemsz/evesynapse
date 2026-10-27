@@ -40,7 +40,9 @@ package app
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"strconv"
@@ -57,10 +59,13 @@ const (
 	// than one reader at CPU pace can ever take them, and a
 	// dropped offer costs one report's notes, logged as it goes.
 	residueQueueSize = 128
-	// One pass's deadline: a small reader on CPU takes seconds
-	// over a report's spans; the cap keeps a wedged runtime
-	// from holding the worker forever.
-	residueCallTimeout = 120 * time.Second
+	// Failed passes are counted per report (schema 092) and a
+	// report leaves the backlog at this many, with the last
+	// failure recorded as the reason.
+	residueMaxAttempts = 5
+	// The backoff between failed passes doubles from this base:
+	// 2, 4, 8, 16 minutes, then the cap above dead-letters.
+	residueBackoffBase = 2 * time.Minute
 	// A reply may carry at most this many claims, and this many
 	// on any one span: a reading's leftovers are few, and a
 	// reply past the caps is not the shape that was asked for.
@@ -210,7 +215,9 @@ func (app *Application) sweepResidueBacklog(ctx context.Context) {
 	if len(app.residueQueueChan()) > 0 {
 		return // fresh work is waiting; the backlog keeps
 	}
-	ids, err := app.queries.ListResidueBacklogReports(ctx, residueSweepBatch)
+	ids, err := app.queries.ListResidueBacklogReports(ctx, db.ListResidueBacklogReportsParams{
+		Limit: residueSweepBatch, NextAttemptAt: timeSet(time.Now().UTC()),
+	})
 	if err != nil {
 		logging.Warnf("residue: backlog sweep: %v", err)
 		return
@@ -269,6 +276,36 @@ func (app *Application) processResidue(ctx context.Context, eng residueEngine, r
 	if len(a.Residue) == 0 && !gateLoose {
 		return // the reading resolved everything: the step is skipped
 	}
+	// Identical report text is read once, ever: a completed
+	// pass over the same text already produced this reading's
+	// notes, and re-reading it only burns the reader. The
+	// report leaves the backlog as a duplicate, with the
+	// reason recorded, instead of being re-offered forever.
+	hash := residueTextHash(row.Text)
+	now := time.Now().UTC()
+	attempt, attemptErr := app.queries.GetResidueAttempt(ctx, reportID)
+	if attemptErr == nil && attempt.TextHash == hash {
+		if attempt.DeadReason != "" {
+			return
+		}
+		if attempt.NextAttemptAt.Valid && now.Before(attempt.NextAttemptAt.Time) {
+			return // backing off after a failed pass
+		}
+	}
+	if done, err := app.queries.ResidueCallExistsForHash(ctx, hash); err == nil && done {
+		attempts := int32(0)
+		if attemptErr == nil && attempt.TextHash == hash {
+			attempts = attempt.Attempts
+		}
+		if err := app.queries.MarkResidueDead(ctx, db.MarkResidueDeadParams{
+			ReportID: reportID, TextHash: hash, Attempts: attempts,
+			LastAttemptAt: timeSet(now),
+			DeadReason:    "identical report text already read (sha256 " + hash[:12] + ")",
+		}); err != nil {
+			logging.Warnf("residue: mark duplicate report %d: %v", reportID, err)
+		}
+		return
+	}
 	in := residueInput{ReportID: reportID, SystemID: row.SystemID, Spans: a.Residue}
 	if gateLoose {
 		// The claims must be able to name the fragment the
@@ -317,18 +354,68 @@ func (app *Application) processResidue(ctx context.Context, eng residueEngine, r
 			}
 		}
 	}
-	callCtx, cancel := context.WithTimeout(ctx, residueCallTimeout)
-	defer cancel()
-	raw, err := eng.Complete(callCtx, residuePrompt(in))
+	raw, err := eng.Complete(ctx, residuePrompt(in))
 	if err != nil {
 		if !errors.Is(err, errResidueAbsent) {
 			logging.Warnf("residue: report %d: %v", reportID, err)
+			app.recordResidueFailure(ctx, reportID, hash, attempt, attemptErr, err)
 		}
 		return
 	}
 	notes := validateResidueReply(in, raw)
-	app.storeResiduePass(ctx, in, raw, notes)
+	app.storeResiduePass(ctx, in, raw, hash, notes)
 	app.applyResidueGateReading(ctx, row, a, in, notes)
+}
+
+// residueTextHash is a report text's content identity: two
+// reports carrying the same text are the same reading work.
+func residueTextHash(text string) string {
+	sum := sha256.Sum256([]byte(text))
+	return hex.EncodeToString(sum[:])
+}
+
+// residueBackoff is the wait after the nth failed pass.
+func residueBackoff(attempts int32) time.Duration {
+	if attempts < 1 {
+		attempts = 1
+	}
+	if attempts > 5 {
+		attempts = 5
+	}
+	return residueBackoffBase << (attempts - 1)
+}
+
+// recordResidueFailure counts one failed pass durably. At the
+// cap the report dead-letters with the failure recorded;
+// otherwise the next attempt waits out the backoff. A pass
+// over changed text starts the count over.
+func (app *Application) recordResidueFailure(ctx context.Context, reportID int64, hash string, prev db.IntelResidueAttempt, prevErr error, passErr error) {
+	now := time.Now().UTC()
+	attempts := int32(1)
+	if prevErr == nil && prev.TextHash == hash {
+		attempts = prev.Attempts + 1
+	}
+	reason := passErr.Error()
+	if len(reason) > 300 {
+		reason = reason[:300]
+	}
+	if attempts >= residueMaxAttempts {
+		if err := app.queries.MarkResidueDead(ctx, db.MarkResidueDeadParams{
+			ReportID: reportID, TextHash: hash, Attempts: attempts,
+			LastAttemptAt: timeSet(now), DeadReason: reason,
+		}); err != nil {
+			logging.Warnf("residue: dead-letter report %d: %v", reportID, err)
+			return
+		}
+		logging.Warnf("residue: report %d leaves the backlog after %d failed passes: %s", reportID, attempts, reason)
+		return
+	}
+	if err := app.queries.UpsertResidueAttempt(ctx, db.UpsertResidueAttemptParams{
+		ReportID: reportID, TextHash: hash, Attempts: attempts,
+		LastAttemptAt: timeSet(now), NextAttemptAt: timeSet(now.Add(residueBackoff(attempts))),
+	}); err != nil {
+		logging.Warnf("residue: count failed pass for report %d: %v", reportID, err)
+	}
 }
 
 // applyResidueGateReading is the fuse step for gate readings.
@@ -396,7 +483,7 @@ func (app *Application) applyResidueGateReading(ctx context.Context, row db.Inte
 // notes in one transaction. The call is logged even when the
 // reply parsed to nothing: the pair is the corpus's material
 // either way.
-func (app *Application) storeResiduePass(ctx context.Context, in residueInput, raw string, notes []residueNote) {
+func (app *Application) storeResiduePass(ctx context.Context, in residueInput, raw, textHash string, notes []residueNote) {
 	spans, _ := json.Marshal(in.Spans)
 	tx, err := app.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -407,7 +494,7 @@ func (app *Application) storeResiduePass(ctx context.Context, in residueInput, r
 	q := db.New(tx)
 	now := time.Now().UTC()
 	callID, err := q.InsertIntelResidueCall(ctx, db.InsertIntelResidueCallParams{
-		ReportID: in.ReportID, Spans: string(spans), Output: raw, CreatedAt: now,
+		ReportID: in.ReportID, Spans: string(spans), Output: raw, CreatedAt: now, TextHash: textHash,
 	})
 	if err != nil {
 		logging.Warnf("residue: store pass for report %d: %v", in.ReportID, err)

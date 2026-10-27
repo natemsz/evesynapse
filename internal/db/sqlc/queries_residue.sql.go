@@ -7,13 +7,34 @@ package db
 
 import (
 	"context"
+	"database/sql"
 	"time"
 )
 
+const getResidueAttempt = `-- name: GetResidueAttempt :one
+SELECT report_id, text_hash, attempts, last_attempt_at, next_attempt_at, dead_reason
+FROM intel_residue_attempts
+WHERE report_id = $1
+`
+
+func (q *Queries) GetResidueAttempt(ctx context.Context, reportID int64) (IntelResidueAttempt, error) {
+	row := q.db.QueryRowContext(ctx, getResidueAttempt, reportID)
+	var i IntelResidueAttempt
+	err := row.Scan(
+		&i.ReportID,
+		&i.TextHash,
+		&i.Attempts,
+		&i.LastAttemptAt,
+		&i.NextAttemptAt,
+		&i.DeadReason,
+	)
+	return i, err
+}
+
 const insertIntelResidueCall = `-- name: InsertIntelResidueCall :one
 
-INSERT INTO intel_residue_calls (report_id, spans, output, created_at)
-VALUES ($1, $2, $3, $4)
+INSERT INTO intel_residue_calls (report_id, spans, output, created_at, text_hash)
+VALUES ($1, $2, $3, $4, $5)
 RETURNING id
 `
 
@@ -22,6 +43,7 @@ type InsertIntelResidueCallParams struct {
 	Spans     string    `json:"spans"`
 	Output    string    `json:"output"`
 	CreatedAt time.Time `json:"created_at"`
+	TextHash  string    `json:"text_hash"`
 }
 
 // The residue step's store (schema 091): completed passes and
@@ -34,6 +56,7 @@ func (q *Queries) InsertIntelResidueCall(ctx context.Context, arg InsertIntelRes
 		arg.Spans,
 		arg.Output,
 		arg.CreatedAt,
+		arg.TextHash,
 	)
 	var id int64
 	err := row.Scan(&id)
@@ -122,22 +145,30 @@ func (q *Queries) ListIntelResidueNotes(ctx context.Context, arg ListIntelResidu
 const listResidueBacklogReports = `-- name: ListResidueBacklogReports :many
 SELECT r.id
 FROM intel_reports r
+LEFT JOIN intel_residue_attempts a ON a.report_id = r.id
 WHERE r.analysis_pending = false
   AND CASE WHEN r.analysis <> '' THEN
         jsonb_typeof(r.analysis::jsonb -> 'residue') = 'array'
         AND jsonb_array_length(r.analysis::jsonb -> 'residue') > 0
       ELSE false END
   AND NOT EXISTS (SELECT 1 FROM intel_residue_calls c WHERE c.report_id = r.id)
+  AND (a.dead_reason IS NULL OR a.dead_reason = '')
+  AND (a.next_attempt_at IS NULL OR a.next_attempt_at <= $2)
 ORDER BY r.id DESC
 LIMIT $1
 `
+
+type ListResidueBacklogReportsParams struct {
+	Limit         int32        `json:"limit"`
+	NextAttemptAt sql.NullTime `json:"next_attempt_at"`
+}
 
 // The backlog sweep's candidates (residue_model.go): settled
 // reports whose stored reading left residue and which no
 // completed pass has covered, newest first. The CASE keeps the
 // jsonb read off rows whose analysis was never stored.
-func (q *Queries) ListResidueBacklogReports(ctx context.Context, limit int32) ([]int64, error) {
-	rows, err := q.db.QueryContext(ctx, listResidueBacklogReports, limit)
+func (q *Queries) ListResidueBacklogReports(ctx context.Context, arg ListResidueBacklogReportsParams) ([]int64, error) {
+	rows, err := q.db.QueryContext(ctx, listResidueBacklogReports, arg.Limit, arg.NextAttemptAt)
 	if err != nil {
 		return nil, err
 	}
@@ -157,4 +188,74 @@ func (q *Queries) ListResidueBacklogReports(ctx context.Context, limit int32) ([
 		return nil, err
 	}
 	return items, nil
+}
+
+const markResidueDead = `-- name: MarkResidueDead :exec
+INSERT INTO intel_residue_attempts (report_id, text_hash, attempts, last_attempt_at, next_attempt_at, dead_reason)
+VALUES ($1, $2, $3, $4, NULL, $5)
+ON CONFLICT (report_id) DO UPDATE SET
+    text_hash = EXCLUDED.text_hash,
+    attempts = EXCLUDED.attempts,
+    last_attempt_at = EXCLUDED.last_attempt_at,
+    next_attempt_at = NULL,
+    dead_reason = EXCLUDED.dead_reason
+`
+
+type MarkResidueDeadParams struct {
+	ReportID      int64        `json:"report_id"`
+	TextHash      string       `json:"text_hash"`
+	Attempts      int32        `json:"attempts"`
+	LastAttemptAt sql.NullTime `json:"last_attempt_at"`
+	DeadReason    string       `json:"dead_reason"`
+}
+
+func (q *Queries) MarkResidueDead(ctx context.Context, arg MarkResidueDeadParams) error {
+	_, err := q.db.ExecContext(ctx, markResidueDead,
+		arg.ReportID,
+		arg.TextHash,
+		arg.Attempts,
+		arg.LastAttemptAt,
+		arg.DeadReason,
+	)
+	return err
+}
+
+const residueCallExistsForHash = `-- name: ResidueCallExistsForHash :one
+SELECT EXISTS (SELECT 1 FROM intel_residue_calls WHERE text_hash = $1)
+`
+
+func (q *Queries) ResidueCallExistsForHash(ctx context.Context, textHash string) (bool, error) {
+	row := q.db.QueryRowContext(ctx, residueCallExistsForHash, textHash)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
+const upsertResidueAttempt = `-- name: UpsertResidueAttempt :exec
+INSERT INTO intel_residue_attempts (report_id, text_hash, attempts, last_attempt_at, next_attempt_at, dead_reason)
+VALUES ($1, $2, $3, $4, $5, '')
+ON CONFLICT (report_id) DO UPDATE SET
+    text_hash = EXCLUDED.text_hash,
+    attempts = EXCLUDED.attempts,
+    last_attempt_at = EXCLUDED.last_attempt_at,
+    next_attempt_at = EXCLUDED.next_attempt_at
+`
+
+type UpsertResidueAttemptParams struct {
+	ReportID      int64        `json:"report_id"`
+	TextHash      string       `json:"text_hash"`
+	Attempts      int32        `json:"attempts"`
+	LastAttemptAt sql.NullTime `json:"last_attempt_at"`
+	NextAttemptAt sql.NullTime `json:"next_attempt_at"`
+}
+
+func (q *Queries) UpsertResidueAttempt(ctx context.Context, arg UpsertResidueAttemptParams) error {
+	_, err := q.db.ExecContext(ctx, upsertResidueAttempt,
+		arg.ReportID,
+		arg.TextHash,
+		arg.Attempts,
+		arg.LastAttemptAt,
+		arg.NextAttemptAt,
+	)
+	return err
 }

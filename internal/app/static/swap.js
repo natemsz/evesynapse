@@ -267,7 +267,6 @@
       stale[i].parentNode.removeChild(stale[i]);
     }
   }
-  hoistModals(document);
 
   // Image fallbacks: EVE's image server answers a render only
   // for types that have one, so a page leads with the render and
@@ -811,12 +810,17 @@
   // Remember where this shell started: popping back past the first
   // swap restores it from here instead of reloading. Its assets
   // ride along so the restore prunes and adopts like any swap.
+  // The snapshot reads main as the server rendered it, modals
+  // inside, the shape every fetched page's entry has: the first
+  // hoist runs after it, because a snapshot taken once the modals
+  // had left main would restore a page with no modals at all.
   cachePut(window.location.href, {
     main: main.innerHTML,
     title: document.title,
     styles: pageStyles(document),
     scripts: pageScripts(document)
   });
+  hoistModals(document);
   try {
     window.history.replaceState({ esSwap: 1, scroll: window.scrollY }, "", window.location.href);
   } catch (e) { /* private mode: back button still fetches */ }

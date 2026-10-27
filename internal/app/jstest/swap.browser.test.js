@@ -36,6 +36,7 @@ const MAP_HTML = "<html><head><title>Map · EveSynapse</title>" +
   "<body><main id=\"main-content\"><div class=\"map\">MAP</div></main></body></html>";
 const LOGIN_HTML = "<html><head><title>Home · EveSynapse</title></head>" +
   "<body><main id=\"main-content\">LANDING</main></body></html>";
+const MODAL_HTML = "<div class=\"modal-backdrop\" id=\"theme-modal\">THEME</div>";
 
 function waitFor(cond, label) {
   const deadline = Date.now() + 4000;
@@ -260,8 +261,63 @@ function makeEnv(opts) {
     AbortController: AbortController
   };
   win.DOMParser.prototype.parseFromString = function (html) { return fetchedDoc(html); };
+  // A start page whose main carries a modal backdrop (opts.modal):
+  // the fake modal lives in main until the shell hoists it to the
+  // body, and main's innerHTML reads as the live tree would — the
+  // modal's markup is in it exactly while the modal is in main.
+  let modalEl = null;
+  let bodyEl = null;
+  if (opts.modal) {
+    modalEl = {
+      attrs: {},
+      parentNode: null,
+      setAttribute: function (k, v) { this.attrs[k] = v; },
+      getAttribute: function (k) {
+        return Object.prototype.hasOwnProperty.call(this.attrs, k) ? this.attrs[k] : null;
+      }
+    };
+    bodyEl = {
+      children: [],
+      appendChild: function (el) {
+        el.parentNode = bodyEl;
+        this.children.push(el);
+        return el;
+      },
+      removeChild: function (el) {
+        const i = this.children.indexOf(el);
+        if (i >= 0) this.children.splice(i, 1);
+        if (el.parentNode === bodyEl) el.parentNode = null;
+        return el;
+      }
+    };
+    let storedMain = "HOME" + MODAL_HTML;
+    modalEl.parentNode = mainEl;
+    Object.defineProperty(mainEl, "innerHTML", {
+      get: function () {
+        return modalEl.parentNode === mainEl ? storedMain : storedMain.split(MODAL_HTML).join("");
+      },
+      set: function (v) {
+        storedMain = v;
+        if (v.indexOf(MODAL_HTML) !== -1) modalEl.parentNode = mainEl;
+      }
+    });
+    mainEl.querySelectorAll = function (sel) {
+      if (sel === ".modal-backdrop") return modalEl.parentNode === mainEl ? [modalEl] : [];
+      return [];
+    };
+    const docQueryAll = mainDoc.querySelectorAll;
+    mainDoc.querySelectorAll = function (sel) {
+      if (sel === ".modal-backdrop") return modalEl.parentNode ? [modalEl] : [];
+      if (sel === "body > .modal-backdrop[data-hoisted]") {
+        return modalEl.parentNode === bodyEl && modalEl.attrs["data-hoisted"] ? [modalEl] : [];
+      }
+      return docQueryAll.call(mainDoc, sel);
+    };
+    mainDoc.body = bodyEl;
+  }
   return {
     listeners: listeners, mainEl: mainEl, mainDoc: mainDoc, drawer: drawer,
+    modalEl: modalEl, bodyEl: bodyEl,
     win: win, pushes: pushes, scrolls: scrolls,
     events: events, headEl: headEl, created: created,
     firePopstate: function (state) {
@@ -417,6 +473,21 @@ test("back to a cached page restores without fetching or pushing", async functio
   assert.deepEqual(env.scrolls[env.scrolls.length - 1], [0, 123]);
   assert.equal(env.win.fetched.length, fetches, "back to cache must not fetch");
   assert.equal(env.pushes.length, pushes, "back must not push state");
+});
+
+test("the first page's modals survive a swap away and back", async function () {
+  const env = makeEnv({ modal: true, pages: { "/intel/kills/": KB_HTML } });
+  loadSwap(env);
+  // The boot hoists the start page's modal out of main to the body.
+  assert.equal(env.modalEl.parentNode, env.bodyEl);
+  clickOn(env, "/intel/kills/");
+  await waitFor(function () { return env.mainEl.innerHTML.includes("KILLS"); }, "swap paint");
+  // Away on the killboard the modal is gone with its page.
+  assert.equal(env.modalEl.parentNode, null);
+  env.win.location.href = "https://app.test/characters/";
+  env.firePopstate({ esSwap: 1, scroll: 0 });
+  await waitFor(function () { return env.modalEl.parentNode === env.bodyEl; }, "modal restored and hoisted");
+  assert.ok(env.mainEl.innerHTML.includes("HOME"), "start page restored");
 });
 
 test("back to an uncached page fetches and swaps without pushing", async function () {

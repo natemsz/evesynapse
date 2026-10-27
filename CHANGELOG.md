@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.5.9.10] - 2026-10-27
+
+Automated build of EveSynapse v0.5.9.10. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+
+## What's Changed
+### 🚀 Features
+* Warming cycle: skip repeat work, rest failing swarm pulls, split phase timing by @natemsz in https://github.com/natemsz/evesynapse/pull/684
+* Float the briefing cards like At a Glance by @natemsz in https://github.com/natemsz/evesynapse/pull/693
+### 🐛 Bug Fixes
+* Files its heartbeat with warming peers so their directories can verify its signed pulls by @natemsz in https://github.com/natemsz/evesynapse/pull/688
+* Resolves warming-cycle type names from the swarm before spending ESI by @natemsz in https://github.com/natemsz/evesynapse/pull/689
+* Counts residue attempts with backoff and a dead-letter, captures the reader child stderr, splits its budgets, and reads identical report text once by @natemsz in https://github.com/natemsz/evesynapse/pull/690
+* Stops the shell swapping the pre-save home page back over a saved layout by @natemsz in https://github.com/natemsz/evesynapse/pull/691
+* Keeps intel reports pending when a bulk lookup fails transiently by @natemsz in https://github.com/natemsz/evesynapse/pull/694
+### 🧰 Maintenance & Dependencies
+* Bump github.com/tdewolff/minify/v2 from 2.24.22 to 2.24.23 by @dependabot[bot] in https://github.com/natemsz/evesynapse/pull/692
+### Other Changes
+* docs(changelog): review changelog for v0.5.9.9 by @github-actions[bot] in https://github.com/natemsz/evesynapse/pull/687
+
+
+**Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.9.9...v0.5.9.10
+
 ## [v0.5.9.9] - 2026-10-26
 
 Automated build of EveSynapse v0.5.9.9. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).

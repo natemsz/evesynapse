@@ -29,7 +29,8 @@ import (
 type regionBookTransport struct {
 	calls    atomic.Int64
 	books    map[int64][][]esi.MarketOrder
-	failWith int // when >0, every page answers with this status
+	failWith int          // when >0, every page answers with this status
+	failOnce atomic.Int64 // when >0, that page answers 404 once
 }
 
 func (s *regionBookTransport) RoundTrip(req *http.Request) (*http.Response, error) {
@@ -52,6 +53,12 @@ func (s *regionBookTransport) RoundTrip(req *http.Request) (*http.Response, erro
 	pages := s.books[regionID]
 	page := 1
 	fmt.Sscanf(req.URL.Query().Get("page"), "%d", &page)
+	if p := s.failOnce.Load(); p > 0 && int64(page) == p && s.failOnce.CompareAndSwap(p, 0) {
+		return &http.Response{
+			StatusCode: http.StatusNotFound, Header: header,
+			Body: io.NopCloser(strings.NewReader(`{"error":"page gone"}`)),
+		}, nil
+	}
 	header.Set("X-Pages", fmt.Sprintf("%d", len(pages)))
 	orders := []esi.MarketOrder{}
 	if page >= 1 && page <= len(pages) {
@@ -648,5 +655,44 @@ func TestAttachRegionStatsGlobalMarketFill(t *testing.T) {
 		if row.Age != "20 minutes ago" {
 			t.Errorf("hub row %d: age %q, want the global row's age", row.RegionID, row.Age)
 		}
+	}
+}
+
+// Pages are read a window at a time but staged in order: a page that
+// fails stops the cursor at it, the pages before it stay staged, and
+// the next pass resumes there and completes the whole book.
+func TestRegionSweepWindowStopsAtFailedPage(t *testing.T) {
+	transport := &regionBookTransport{books: map[int64][][]esi.MarketOrder{}}
+	app, _, q := buildCorpTestApp(t, transport)
+	ctx := context.Background()
+	for _, region := range marketRegions {
+		if region.ID != 10000002 {
+			markRegionFresh(t, q, region.ID)
+		}
+	}
+	var book [][]esi.MarketOrder
+	for i := int64(0); i < 10; i++ {
+		book = append(book, []esi.MarketOrder{{OrderID: 1 + i, TypeID: 1000 + i, Price: 5, VolumeRemain: 1, LocationID: 60003760, SystemID: 30000142}})
+	}
+	transport.books[10000002] = book
+	transport.failOnce.Store(5)
+
+	if _, limited := app.sweepRegionStats(ctx, &fetchBudget{left: 1000}); limited {
+		t.Fatal("limited on a 404")
+	}
+	state, err := q.GetMarketSweepState(ctx, 10000002)
+	if err != nil {
+		t.Fatalf("sweep state after the failed page: %v", err)
+	}
+	if state.NextPage != 5 {
+		t.Fatalf("cursor at page %d, want 5 (stopped at the failed page)", state.NextPage)
+	}
+	sweepUntilIdle(t, app)
+	var types int
+	if err := app.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM market_region_stats WHERE region_id = 10000002`).Scan(&types); err != nil {
+		t.Fatal(err)
+	}
+	if types != 10 {
+		t.Fatalf("stored %d types, want all 10 pages' types", types)
 	}
 }

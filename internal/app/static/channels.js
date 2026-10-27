@@ -211,8 +211,10 @@
     feed.querySelectorAll("li[data-id] time").forEach(function (t) {
       t.parentNode.parentNode.setAttribute("data-at", String(Date.parse(t.dateTime) / 1000));
     });
+    var polling = false;
     function poll() {
-      if (document.visibilityState !== "visible" || !feed.isConnected) return;
+      if (polling || document.visibilityState !== "visible" || !feed.isConnected) return;
+      polling = true;
       fetch(url + "?after=" + after, { credentials: "same-origin" }).then(function (r) {
         return r.ok ? r.json() : { reports: [] };
       }).then(function (d) {
@@ -222,14 +224,26 @@
         if (empty) empty.remove();
         // Newest first from the server: insert oldest first on top.
         for (var i = list.length - 1; i >= 0; i--) {
+          if (feed.querySelector('li[data-id="' + list[i].id + '"]')) {
+            after = Math.max(after, list[i].id);
+            continue // already on the page (an overlapping poll)
+          }
           var li = row(doc, list[i]);
           li.classList.add("new");
           feed.insertBefore(li, feed.firstChild);
           after = Math.max(after, list[i].id);
         }
-      }).catch(function () { /* the next poll tries again */ });
+        // The live page holds one page of reports: what
+        // prepends push past it leave from the bottom, so
+        // the feed (and the tick below) does not grow with
+        // the session.
+        var rows = feed.querySelectorAll("li[data-id]");
+        for (var j = 60; j < rows.length; j++) rows[j].remove();
+      }).catch(function () { /* the next poll tries again */ })
+        .then(function () { polling = false; });
     }
     function tick() {
+      if (document.visibilityState !== "visible" || !feed.isConnected) return;
       feed.querySelectorAll("li[data-at]").forEach(function (li) {
         var t = li.querySelector("time");
         if (t) t.textContent = ago(+li.getAttribute("data-at"));

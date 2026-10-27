@@ -231,8 +231,8 @@ func TestIntelFeedAccess(t *testing.T) {
 	if rs := feed(stranger); len(rs) != 0 {
 		t.Errorf("a stranger's feed is empty: %+v", rs)
 	}
-	if code, body := getPage(t, app, mate, "/intel/feed/"); code != http.StatusOK || !strings.Contains(body, "1 in local: 0 hostiles, 0 friendly, 0 neutral, 1 unresolved — no scan attached, ships unknown.") || strings.Contains(body, "Secret Guy") {
-		t.Errorf("the mate's feed page: %d, shows the granted channel's report only", code)
+	if code, body := getPage(t, app, mate, "/intel/feed/"); code != http.StatusOK || !strings.Contains(body, "1 in local: 0 hostiles, 0 friendly, 0 neutral, 1 unresolved — no scan attached, ships unknown.") || strings.Contains(body, "Secret Guy") || !strings.Contains(body, "section-tabs") {
+		t.Errorf("the mate's feed page: %d, shows the granted channel's report only, under the intel section tabs", code)
 	}
 	req := httptest.NewRequest(http.MethodGet, "/intel/feed/", nil)
 	rec := httptest.NewRecorder()

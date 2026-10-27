@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -96,4 +97,32 @@ func TestAccountThemeSaveAndRender(t *testing.T) {
 	mustContain(t, "default backdrop rendered", body,
 		`<html lang="en" data-nav="rail" data-backdrop="muted">`)
 	mustContain(t, "default still stored", body, `<meta name="es-theme-account" content="stored">`)
+}
+
+// TestSignupThemePrefs: the sign-up theme step's two answers map
+// onto the stored account theme: the default look's types are its
+// backdrop strengths, a scheme's types are its tiers, and a scheme
+// at full applies at muted until its wallpaper lands.
+func TestSignupThemePrefs(t *testing.T) {
+	cases := []struct {
+		scheme, tierType string
+		want             themePrefs
+		ok               bool
+	}{
+		{"", "full", themePrefs{}, true},
+		{"", "muted", themePrefs{Backdrop: "muted"}, true},
+		{"", "minimalistic", themePrefs{Backdrop: "glow"}, true},
+		{"soe", "muted", themePrefs{Scheme: "soe", Tier: "muted"}, true},
+		{"soe", "minimalistic", themePrefs{Scheme: "soe", Tier: "minimalistic"}, true},
+		{"soe", "full", themePrefs{Scheme: "soe", Tier: "muted"}, true},
+		{"nope", "muted", themePrefs{}, false},
+		{"soe", "loud", themePrefs{}, false},
+		{"", "", themePrefs{}, false},
+	}
+	for _, c := range cases {
+		got, ok := signupThemePrefs(c.scheme, c.tierType)
+		if ok != c.ok || !reflect.DeepEqual(got, c.want) {
+			t.Errorf("signupThemePrefs(%q, %q) = %v, %v; want %v, %v", c.scheme, c.tierType, got, ok, c.want, c.ok)
+		}
+	}
 }

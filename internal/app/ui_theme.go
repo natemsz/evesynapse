@@ -44,6 +44,37 @@ func validThemeBackdrop(s string) bool {
 	return s == "" || s == "muted" || s == "glow"
 }
 
+// signupThemePrefs turns the sign-up theme step's two answers (a
+// scheme, "" for the default look, and a type: full, muted or
+// minimalistic) into the stored account theme. The default look's
+// types are its backdrop strengths, the Settings mapping. A scheme
+// at full applies at muted until its wallpaper lands, the same
+// degrade parseThemePrefs applies to a tier it cannot honour.
+// ok is false when either answer is one the step cannot produce.
+func signupThemePrefs(scheme, tierType string) (themePrefs, bool) {
+	if !validThemeScheme(scheme) {
+		return themePrefs{}, false
+	}
+	switch tierType {
+	case "full", "muted", "minimalistic":
+	default:
+		return themePrefs{}, false
+	}
+	if scheme == "" {
+		switch tierType {
+		case "muted":
+			return themePrefs{Backdrop: "muted"}, true
+		case "minimalistic":
+			return themePrefs{Backdrop: "glow"}, true
+		}
+		return themePrefs{}, true
+	}
+	if tierType == "full" {
+		tierType = "muted"
+	}
+	return themePrefs{Scheme: scheme, Tier: tierType}, true
+}
+
 // parseThemePrefs decodes a stored theme, dropping any value the
 // picker cannot produce, so a stale or hand-edited blob degrades
 // to the default instead of painting something unknown.

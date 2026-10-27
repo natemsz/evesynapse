@@ -57,6 +57,33 @@
     </div>
     {{end}}
 
+    {{with .Theme}}
+    <div class="lk-group su-theme" data-su-theme>
+      <h3>Pick your theme</h3>
+      <p><small>First the type, then the look it applies to. Your theme is saved to your account and follows you across devices, and you can change it any time in Settings.</small></p>
+      <div class="su-tiers">
+        {{range .Types}}
+        <label class="su-tier">
+          <input type="radio" name="ttype" value="{{.ID}}"{{if .Selected}} checked{{end}}>
+          <span class="su-tier-name">{{.Title}}</span>
+          <span class="su-tier-blurb">{{.Blurb}}</span>
+        </label>
+        {{end}}
+      </div>
+      <div class="scheme-list su-schemes">
+        {{range .Schemes}}
+        <label class="scheme-row" data-su-scheme="{{.ID}}">
+          <input type="radio" name="tscheme" value="{{.ID}}"{{if .Selected}} checked{{end}}>
+          <span class="scheme-swatch sw-{{if .ID}}{{.ID}}{{else}}default{{end}}" aria-hidden="true"></span>
+          <span class="scheme-meta"><span class="scheme-name">{{.Name}}</span><span class="scheme-sub">{{.Sub}}</span></span>
+          {{if .ID}}<small class="su-soon" data-su-soon{{if not .Pending}} hidden{{end}}>Wallpaper coming soon</small>{{end}}
+        </label>
+        {{end}}
+      </div>
+      <p class="su-fullnote" data-su-fullnote{{if not .Full}} hidden{{end}}><small>Scheme wallpapers are still on the way: a scheme picked at Full applies at Muted until its wallpaper lands.</small></p>
+    </div>
+    {{end}}
+
     {{if .Server}}
     <h3 class="lk-sub">This server</h3>
     <div class="lk-rows">
@@ -72,6 +99,15 @@
       <a href="{{.Full}}#lk-actions" data-tick-all>Tick every permission</a>
     </p>
   </form>
+
+  {{if .Axon}}
+  <div class="lk-axon" data-axon-offer>
+    <h3>Take intel with you: Axon</h3>
+    <p>Axon is the desktop companion for EveSynapse intel, and this sign-up turns on the character location it files reports by. It watches your EVE chat logs and sends new lines to your intel channels while you play, so sightings reach the map on their own. Its overlay puts reporting on a shortcut: a small translucent paste field where an empty send files what is on your clipboard, showing the report type and system it detected before anything is sent, either of them yours to override. A second shortcut opens the intel dashboard. Axon is still cooking and the overlay is on its way; the current release already covers the channel reporting.</p>
+    <p class="lk-axon-dl">{{range .AxonDownloads}}<a class="btn" href="{{.URL}}" rel="noopener">{{.Label}}</a>{{end}}</p>
+    <p><small>Axon is <a href="https://github.com/natemsz/axon" rel="noopener">open source</a>. Once you are in, pair it from your Intel Channels page.</small></p>
+  </div>
+  {{end}}
 </section>
 {{end}}
 {{end}}

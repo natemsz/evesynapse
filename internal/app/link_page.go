@@ -35,6 +35,11 @@ import (
 
 const sessionLinkChoice = "link_choice"
 
+// sessionThemeChoice is the session key the sign-up theme step's
+// answer waits under between /auth/eve and the SSO callback, next
+// to the link choice it rides with.
+const sessionThemeChoice = "theme_choice"
+
 // linkView is the chooser page.
 type linkView struct {
 	Step       string // "cards" or "reveal"
@@ -54,6 +59,81 @@ type linkView struct {
 	AllPicked  bool   // every card picked (pick=all)
 	Error      string
 	Hidden     []linkHidden // choices to carry across a form
+
+	// Sign-up only (a signed-out visitor): the theme step on the
+	// reveal, and the Axon offer when the choice turns on the
+	// location feature the intel channels file reports by.
+	Theme         *signupThemeView
+	Axon          bool
+	AxonDownloads []intelDownload
+}
+
+// signupThemeView is the sign-up theme step: the types first, the
+// schemes under the chosen type, with the Settings picker's names
+// and order.
+type signupThemeView struct {
+	Types   []signupThemeType
+	Schemes []signupThemeScheme
+	Full    bool // the full type is picked: scheme rows show their wallpaper note
+}
+
+type signupThemeType struct {
+	ID, Title, Blurb string
+	Selected         bool
+}
+
+type signupThemeScheme struct {
+	ID, Name, Sub string
+	Selected      bool
+	Pending       bool // a scheme at the full type: its wallpaper has not landed yet
+}
+
+var signupThemeTypes = []signupThemeType{
+	{ID: "full", Title: "Full", Blurb: "Wallpaper with glass effects. Takes more system resources."},
+	{ID: "muted", Title: "Muted", Blurb: "Less distracting, darker wallpaper."},
+	{ID: "minimalistic", Title: "Minimalistic", Blurb: "Light on system resources, best for multiboxing."},
+}
+
+var signupThemeSchemes = []signupThemeScheme{
+	{ID: "", Name: "Default", Sub: "Minmatar · ember, the standard look"},
+	{ID: "jove", Name: "Jove", Sub: "Purple and violet"},
+	{ID: "caldari", Name: "Caldari", Sub: "Steel blue"},
+	{ID: "gallente", Name: "Gallente", Sub: "Teal and green"},
+	{ID: "amarr", Name: "Amarr", Sub: "Gold"},
+	{ID: "triglavian", Name: "Triglavian", Sub: "Crimson, maroon, blood red"},
+	{ID: "edencom", Name: "EdenCom", Sub: "Pale gold on slate"},
+	{ID: "soe", Name: "Servant Sisters of EVE", Sub: "Coral red and pale cyan"},
+}
+
+// signupThemeViewFor is the theme step as the visitor left it (the
+// reveal carries its own answers, so a re-render keeps them),
+// defaulting to the out-of-box look: the default scheme at full.
+func signupThemeViewFor(q url.Values) *signupThemeView {
+	tierType := q.Get("ttype")
+	valid := false
+	for _, t := range signupThemeTypes {
+		if t.ID == tierType {
+			valid = true
+		}
+	}
+	if !valid {
+		tierType = "full"
+	}
+	scheme := q.Get("tscheme")
+	if !validThemeScheme(scheme) {
+		scheme = ""
+	}
+	view := &signupThemeView{Full: tierType == "full"}
+	for _, t := range signupThemeTypes {
+		t.Selected = t.ID == tierType
+		view.Types = append(view.Types, t)
+	}
+	for _, s := range signupThemeSchemes {
+		s.Selected = s.ID == scheme
+		s.Pending = view.Full && s.ID != ""
+		view.Schemes = append(view.Schemes, s)
+	}
+	return view
 }
 
 type linkActivityCard struct {
@@ -172,6 +252,23 @@ func (app *Application) handleLinkChoose(w http.ResponseWriter, r *http.Request)
 	}
 	fillLinkView(view, res)
 	fillAdvanced(view, res)
+	if app.userID(ctx) == 0 {
+		// A sign-up, not a character link: the theme step, and the
+		// Axon offer when the choice includes the location feature,
+		// whose scopes the intel channels file a report by when the
+		// report itself names no system.
+		view.Theme = signupThemeViewFor(q)
+		for _, row := range res.Features {
+			if row.ID == "location" {
+				view.Axon = true
+			}
+		}
+		if view.Axon {
+			for _, d := range axonDownloads {
+				view.AxonDownloads = append(view.AxonDownloads, intelDownload{Label: d.Label, URL: axonReleases + d.File})
+			}
+		}
+	}
 	view.Back = linkChooseURL(url.Values{"cards": {"1"}, "activity": q["activity"]}, view.Character)
 	app.render(ctx, w, http.StatusOK, "link.html", data)
 }

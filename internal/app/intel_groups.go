@@ -26,7 +26,10 @@ package app
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"sort"
 	"strconv"
 	"strings"
@@ -124,6 +127,7 @@ type intelComposite struct {
 	Counts     *intelanalyze.StandingCounts `json:"counts,omitempty"`
 	Links      []compLink                   `json:"links,omitempty"`
 	Likely     []compLikely                 `json:"likely,omitempty"`
+	InputsHash string                       `json:"ih,omitempty"` // fingerprint of the member inputs this was built from
 }
 
 // --- Group assignment --------------------------------------------------------
@@ -261,6 +265,18 @@ func (app *Application) refreshReportGroup(ctx context.Context, reportID int64) 
 	app.refreshGroupComposite(ctx, rep.GroupID)
 }
 
+// groupInputsHash fingerprints the member inputs a composite
+// is derived from: member identity, moment, scan, and stored
+// reading. Any change to any of them rebuilds; none means the
+// standing composite already says it.
+func groupInputsHash(members []db.IntelReport) string {
+	h := sha256.New()
+	for _, m := range members {
+		fmt.Fprintf(h, "%d|%d|%s|%s|%s\n", m.ID, m.SeenAt.UnixNano(), m.ScanID, m.Kind, m.Analysis)
+	}
+	return hex.EncodeToString(h.Sum(nil))
+}
+
 // refreshGroupComposite recomputes a group's composite from its
 // standing members and stores it, the standing composite
 // rotating into the previous slot the diff view reads. A group
@@ -289,10 +305,27 @@ func (app *Application) refreshGroupComposite(ctx context.Context, groupID int64
 		}
 		return
 	}
+	// One bounded pass per change: the composite is derived
+	// from the stored member inputs, and when those inputs
+	// are unchanged since the standing composite was built
+	// the rebuild — every member re-read, re-decoded, and
+	// re-weighed — is skipped. A drain settling ten reports
+	// of one group used to rebuild the whole group ten
+	// times (quadratic over the group's life); now it
+	// builds once and the rest compare a fingerprint.
+	inputsHash := groupInputsHash(members)
+	if cur, _, ok := app.loadGroupComposite(ctx, groupID); ok && cur.InputsHash == inputsHash {
+		// No rebuild, but gang fusion is time-based (stale
+		// gangs close by the clock), so it still runs on
+		// the standing composite.
+		app.evaluateGang(ctx, cur)
+		return
+	}
 	comp := app.buildGroupComposite(ctx, members)
 	if comp == nil {
 		return
 	}
+	comp.InputsHash = inputsHash
 	raw, err := json.Marshal(comp)
 	if err != nil {
 		return

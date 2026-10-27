@@ -61,6 +61,17 @@ type Mod struct {
 	// SwarmStreakMu guards the consecutive-failure streaks.
 	SwarmStreakMu sync.Mutex
 	SwarmStreak   map[string]int
+	// SwarmPullRestMu guards the pull failure rests: a peer
+	// whose pulls keep failing is left alone for a growing
+	// while instead of being asked again every round
+	// (trust.go).
+	SwarmPullRestMu sync.Mutex
+	SwarmPullRest   map[string]*swarmPullRest
+	// SwarmCounterLogMu guards the set of Sync-page counters
+	// whose writes are currently failing: a failing write is
+	// logged once per run, not once per bump.
+	SwarmCounterLogMu   sync.Mutex
+	SwarmCounterLogDown map[string]bool
 	// SwarmCover is what peers warm for the swarm and which misses
 	// have been left to them (warm.go).
 	SwarmCover SwarmCoverage

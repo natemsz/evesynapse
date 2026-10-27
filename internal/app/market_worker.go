@@ -102,6 +102,25 @@ func (app *Application) refreshMarketData(ctx context.Context, characters []db.C
 	// starved of fetches logs nothing while it waits (the
 	// empty Scanner/Tradefinder stall of 2026-10-04).
 	allowance := &fetchBudget{left: maxMarketFetchesPerCycle}
+	stored, limited = app.refreshMarketWarm(ctx, characters, allowance)
+	if limited {
+		return stored, true
+	}
+	// Region stats: advance the whole-region book sweep with
+	// what is left of the cycle's allowance. Additive -- the
+	// passes above are untouched.
+	sPages, ltd := app.sweepRegionStats(ctx, allowance)
+	stored += sPages
+	return stored, ltd
+}
+
+// refreshMarketWarm is the market pass ahead of the region
+// sweep: history warming, then per-order health from the
+// regional books, both drawing on the pass's shared allowance.
+// The cycle times it apart from the sweep (worker.go), so it
+// is its own step; refreshMarketData is the two steps run
+// together.
+func (app *Application) refreshMarketWarm(ctx context.Context, characters []db.Character, allowance *fetchBudget) (stored int, limited bool) {
 	hStored, ltd := app.warmMarketHistory(ctx, allowance)
 	stored += hStored
 	if ltd {
@@ -112,12 +131,7 @@ func (app *Application) refreshMarketData(ctx context.Context, characters []db.C
 	if ltd {
 		return stored, true
 	}
-	// Region stats: advance the whole-region book sweep with
-	// what is left of the cycle's allowance. Additive -- the
-	// passes above are untouched.
-	sPages, ltd := app.sweepRegionStats(ctx, allowance)
-	stored += sPages
-	return stored, ltd
+	return stored, false
 }
 
 // warmMarketHistory downloads due history pairs, best-priority
@@ -206,15 +220,63 @@ func (app *Application) fetchAndStoreHistory(ctx context.Context, key marketKey)
 	return true, false
 }
 
+// historyFetchableCacheTTL bounds how long the fetchable-type
+// set is reused: the SDE changes only on reimport and the
+// sweep stats grow slowly, while the urgent drain reads the
+// set on every tick.
+const historyFetchableCacheTTL = 10 * time.Minute
+
+// historyFetchableTypes loads the set of types ESI market
+// history can know -- the published SDE types plus every type
+// with stored sweep stats -- cached briefly on the
+// application. It fails open: a nil set (the load failed, or
+// nothing is stored yet, as on a fresh instance before the
+// SDE import) gates nothing, so a candidate is never lost to
+// the gate's own state.
+func (app *Application) historyFetchableTypes(ctx context.Context) map[int64]bool {
+	app.historyTypesMu.Lock()
+	if app.historyTypes != nil && time.Since(app.historyTypesAt) < historyFetchableCacheTTL {
+		set := app.historyTypes
+		app.historyTypesMu.Unlock()
+		return set
+	}
+	app.historyTypesMu.Unlock()
+	rows, err := app.queries.ListHistoryFetchableTypeIDs(ctx)
+	if err != nil {
+		logging.Errorf("worker: market history: fetchable types: %v", err)
+		return nil
+	}
+	if len(rows) == 0 {
+		return nil
+	}
+	set := make(map[int64]bool, len(rows))
+	for _, id := range rows {
+		set[id] = true
+	}
+	app.historyTypesMu.Lock()
+	app.historyTypes, app.historyTypesAt = set, time.Now()
+	app.historyTypesMu.Unlock()
+	return set
+}
+
 // historyCandidates builds the prioritized fetch queue: viewed-item
 // wants first (someone is staring at that page — the strongest
 // signal the app gets), then watchlist pairs, then types with open
-// orders (the region each order sits in).
+// orders (the region each order sits in). A type outside the
+// fetchable set (historyFetchableTypes) is never queued: ESI
+// does not know the type at all, so its one fetch could only
+// ever be answered 404, however the pair was minted -- a
+// killmail item, an asset, a contract line naming a type with
+// no market existence.
 func (app *Application) historyCandidates(ctx context.Context) ([]marketKey, error) {
+	fetchable := app.historyFetchableTypes(ctx)
 	seen := make(map[marketKey]bool)
 	var out []marketKey
 	add := func(regionID, typeID int64) {
 		if regionID <= 0 || typeID <= 0 {
+			return
+		}
+		if fetchable != nil && !fetchable[typeID] {
 			return
 		}
 		k := marketKey{RegionID: regionID, TypeID: typeID}

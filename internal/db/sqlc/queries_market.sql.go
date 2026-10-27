@@ -1300,6 +1300,40 @@ func (q *Queries) ListGuidePrices(ctx context.Context) ([]GuidePrice, error) {
 	return items, nil
 }
 
+const listHistoryFetchableTypeIDs = `-- name: ListHistoryFetchableTypeIDs :many
+SELECT type_id FROM sde_types WHERE published = 1
+UNION
+SELECT type_id FROM market_region_stats
+`
+
+// The types ESI market history can know: every published SDE
+// type, plus every type the region sweeps have stored stats
+// for (a type ESI served orders for has history to ask for,
+// published or not). A candidate outside this set can only
+// be answered 404.
+func (q *Queries) ListHistoryFetchableTypeIDs(ctx context.Context) ([]int64, error) {
+	rows, err := q.db.QueryContext(ctx, listHistoryFetchableTypeIDs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []int64
+	for rows.Next() {
+		var type_id int64
+		if err := rows.Scan(&type_id); err != nil {
+			return nil, err
+		}
+		items = append(items, type_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listIndustryCostIndices = `-- name: ListIndustryCostIndices :many
 SELECT solar_system_id, activity, cost_index, fetched_at
 FROM industry_cost_indices

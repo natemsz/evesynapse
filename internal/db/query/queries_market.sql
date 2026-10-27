@@ -95,6 +95,15 @@ WHERE priority != sqlc.arg(typing_priority)::bigint OR typing_n <= sqlc.arg(typi
 ORDER BY priority DESC,
     CASE WHEN priority = sqlc.arg(typing_priority)::bigint THEN typing_n END ASC NULLS LAST,
     last_requested_at DESC;
+-- name: ListHistoryFetchableTypeIDs :many
+-- The types ESI market history can know: every published SDE
+-- type, plus every type the region sweeps have stored stats
+-- for (a type ESI served orders for has history to ask for,
+-- published or not). A candidate outside this set can only
+-- be answered 404.
+SELECT type_id FROM sde_types WHERE published = 1
+UNION
+SELECT type_id FROM market_region_stats;
 -- name: GetMarketFetchState :one
 SELECT kind, state, detail, attempted_at
 FROM market_fetch_state

@@ -343,6 +343,7 @@ func (app *Application) refreshCycle(ctx context.Context) {
 		logging.Warnf("worker: ESI error limit hit refreshing cost indices; backing off until next cycle")
 		c.limited = true
 	}
+	clock.mark("guide and indices", time.Now())
 
 	// True values ride behind both: the bottom-up price of
 	// everything manufacturable, computed from the stored
@@ -350,6 +351,7 @@ func (app *Application) refreshCycle(ctx context.Context) {
 	// (plus the bounded public-contracts crawl), ahead of
 	// the character pass so valuation reads fresh rows.
 	app.refreshTrueValues(ctx)
+	clock.mark("true values", time.Now())
 
 	// Fallback prices: the Fuzzwork aggregate mirror, the
 	// layer under our own sweeps for the regions they do not
@@ -397,7 +399,7 @@ func (app *Application) refreshCycle(ctx context.Context) {
 	// passes below find the shared entries already staged).
 	app.runCycleJobs(ctx, c, module.BeforePublicData, characters, clock)
 
-	c.refreshPublicData(ctx, characters)
+	c.refreshPublicData(ctx, characters, clock)
 	clock.mark("public data", time.Now())
 
 	// Module passes that follow the public-data passes (the swarm's
@@ -719,16 +721,25 @@ func (c *cycleState) refreshCoreSnapshots(ctx context.Context, ch db.Character, 
 // refreshPublicData runs the passes that are not about one
 // character: market data, the name queues, and the public records
 // pages have asked for.
-func (c *cycleState) refreshPublicData(ctx context.Context, characters []db.Character) {
+func (c *cycleState) refreshPublicData(ctx context.Context, characters []db.Character, clock *phaseClock) {
 	app := c.app
 
 	// Market pass: price-history warming for
 	// watchlists/wants/order types, and per-order health from
 	// regional books. Public data, spending from its own lane
-	// (refreshMarketData owns the market allowance).
+	// (one market allowance shared by both steps). The clock
+	// marks the steps apart -- history and books, then the
+	// region sweep -- so the public-data block's time shows
+	// its split on the Sync page instead of one figure.
+	marketAllowance := &fetchBudget{left: maxMarketFetchesPerCycle}
 	c.pass("refreshing market data", func() (int, bool) {
-		return app.refreshMarketData(ctx, characters)
+		return app.refreshMarketWarm(ctx, characters, marketAllowance)
 	})
+	clock.mark("market data", time.Now())
+	c.pass("sweeping region stats", func() (int, bool) {
+		return app.sweepRegionStats(ctx, marketAllowance)
+	})
+	clock.mark("region sweep", time.Now())
 
 	// Public contracts (schema 055): the region list sweeps and
 	// their item/bid/probe warming, on the routes' own cache

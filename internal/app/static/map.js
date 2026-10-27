@@ -1180,6 +1180,7 @@
       });
       drawJumpRange(k, ox, oy, r);
       drawIntel(k, ox, oy, r);
+      drawMarks(k, ox, oy, r);
       drawPings(k, ox, oy, r);
       drawRouteEnds(k, ox, oy, r);
 
@@ -1385,7 +1386,10 @@
     // an off stored under the pre-default key is not read.
     var PROJ_KEY = PROJ_PREF_KEY, projStored = null;
     try { projStored = window.localStorage.getItem(PROJ_KEY); } catch (e) { /* private mode */ }
-    var projOn = resolveProj(projStored, startQuery.get("proj"));
+    // The dashboard's compact map always draws the improved
+    // projection: it has no toggle, and the full map's preference
+    // is the full map's.
+    var projOn = compact ? true : resolveProj(projStored, startQuery.get("proj"));
     var projPref = el.querySelector("[data-map-proj]");
 
     // heatColor walks a three-stop ramp (the heat ramp unless one is
@@ -2943,15 +2947,45 @@
       schedule();
     });
     // The dashboard's open thread: its system, with its region
-    // around it.
-    el.addEventListener("evesynapse:map-focus", function (e) {
-      var i = G.byID[+((e.detail || {}).system)];
-      if (i === undefined) return;
+    // around it. A focus that arrives before the map's first fit
+    // waits for it: the fit would put the camera back on New Eden.
+    var pendingFocus = -1;
+    function focusOn(i) {
       sel = i;
       enterRegion(S.r[i], i);
       updateCard();
       schedule();
+    }
+    el.addEventListener("evesynapse:map-focus", function (e) {
+      var i = G.byID[+((e.detail || {}).system)];
+      if (i === undefined) return;
+      if (!fitted) { pendingFocus = i; return; }
+      focusOn(i);
     });
+    // Every thread on the dashboard marks its system, recent or
+    // not: a steady ring, where pings are the news. The dashboard
+    // sends the whole set (evesynapse:map-marks {systems: [id]}).
+    var marks = [];
+    el.addEventListener("evesynapse:map-marks", function (e) {
+      marks = [];
+      ((e.detail || {}).systems || []).forEach(function (id) {
+        var i = G.byID[+id];
+        if (i !== undefined && marks.indexOf(i) < 0) marks.push(i);
+      });
+      schedule();
+    });
+    function drawMarks(k, ox, oy, r) {
+      marks.forEach(function (i) {
+        if (mode !== "universe" && S.r[i] !== region) return;
+        var x = wx(i) * k + ox, y = wy(i) * k + oy;
+        if (x < -40 || y < -40 || x > cw + 40 || y > ch + 40) return;
+        ctx.beginPath();
+        ctx.arc(x, y, r + 4, 0, Math.PI * 2);
+        ctx.lineWidth = 1.6;
+        ctx.strokeStyle = intelRGBA(colors.intel, i === sel ? 0.95 : 0.55);
+        ctx.stroke();
+      });
+    }
 
     // A report's count and age beside its system, once the view is
     // close enough to read it.
@@ -4032,7 +4066,12 @@
       cw = w; ch = h;
       canvas.width = Math.round(w * dpr);
       canvas.height = Math.round(h * dpr);
-      if (!fitted) { fit(); fitted = true; restore(); }
+      if (!fitted) {
+        fit();
+        fitted = true;
+        restore();
+        if (pendingFocus >= 0) { focusOn(pendingFocus); pendingFocus = -1; }
+      }
       else if (hadK) cam.k = fitK() * hadK;
       draw();
     }

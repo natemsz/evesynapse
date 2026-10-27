@@ -116,6 +116,13 @@
         queued.splice(0).forEach(function (q) { mapEl.dispatchEvent(new CustomEvent(q[0], { detail: q[1] })); });
       });
     }
+    // Every thread on the list marks its system on the map.
+    function markAll() {
+      if (!list) return;
+      var ids = [];
+      list.querySelectorAll("li[data-thread]").forEach(function (li) { ids.push(rowOf(li).sys); });
+      toMap("evesynapse:map-marks", { systems: ids });
+    }
     function ping(r, fresh) {
       toMap("evesynapse:map-ping", { system: r.sys, id: r.id, at: r.at, recent: recent, fresh: fresh });
     }
@@ -131,6 +138,7 @@
     // The map opens on the open report's thread, else the newest.
     var first = list && (list.querySelector("li.is-open") || rows[0]);
     if (first) toMap("evesynapse:map-focus", { system: rowOf(first).sys });
+    markAll();
 
     // --- Details, in place ---
     // A row's Details loads that report's page and puts its
@@ -217,6 +225,7 @@
         list.textContent = "";
         list.appendChild(frag);
         markOpen(openThread);
+        markAll();
       }).catch(function () { /* the next poll tries again */ })
         .then(function () { polling = false; });
     }

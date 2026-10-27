@@ -367,7 +367,60 @@ func (app *Application) ingestKill(ctx context.Context, raw json.RawMessage, has
 			return false, fmt.Errorf("store detail %d: %w", km.KillmailID, err)
 		}
 	}
-	return inserted, tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return inserted, err
+	}
+	if inserted {
+		// Priced once, here at ingest: the kill's lines are
+		// appraised and stored, and renders read the stored
+		// prices instead of repricing per request. A pricing
+		// failure leaves the kill for the pricing pass, which
+		// covers kills held from before line prices existed.
+		if err := app.priceKillLines(ctx, km); err != nil {
+			logging.Warnf("killboard: price kill %d at ingest: %v", km.KillmailID, err)
+		}
+	}
+	return inserted, nil
+}
+
+// priceKillLines appraises one kill's lines once and stores
+// the per-line prices beside the kill's totals.
+func (app *Application) priceKillLines(ctx context.Context, km killmailFull) error {
+	lines := killLines(km)
+	types := map[int64]bool{}
+	for _, l := range lines {
+		types[l.typeID] = true
+	}
+	price, err := app.killUnitPrices(ctx, types)
+	if err != nil {
+		return err
+	}
+	return app.storeKillPrices(ctx, km.KillmailID, lines, price, time.Now().UTC())
+}
+
+// storeKillPrices persists one kill's per-line prices and its
+// totals from an appraisal's unit prices.
+func (app *Application) storeKillPrices(ctx context.Context, killmailID int64, lines []killLine, price map[int64]float64, now time.Time) error {
+	var typeIDs []int64
+	var unitPrices []float64
+	for _, l := range lines {
+		if p, ok := price[l.typeID]; ok {
+			typeIDs = append(typeIDs, l.typeID)
+			unitPrices = append(unitPrices, p)
+		}
+	}
+	if len(typeIDs) > 0 {
+		if err := app.queries.InsertKillLinePrices(ctx, db.InsertKillLinePricesParams{
+			KillmailID: killmailID, TypeIds: typeIDs, UnitPrices: unitPrices,
+		}); err != nil {
+			return err
+		}
+	}
+	total, dropped, cov := killValue(lines, price)
+	return app.queries.SetKillValue(ctx, db.SetKillValueParams{
+		KillmailID: killmailID, ValueOurs: total, ValueDroppedOurs: dropped,
+		ValueCoverage: float32(cov), PricedAt: now,
+	})
 }
 
 // killRegion is a system's region, from the SDE (cached once).
@@ -522,11 +575,7 @@ func (app *Application) priceKills(ctx context.Context) (int, error) {
 	now := time.Now().UTC()
 	n := 0
 	for _, w := range work {
-		total, dropped, cov := killValue(w.lines, price)
-		if err := app.queries.SetKillValue(ctx, db.SetKillValueParams{
-			KillmailID: w.id, ValueOurs: total, ValueDroppedOurs: dropped,
-			ValueCoverage: float32(cov), PricedAt: now,
-		}); err != nil {
+		if err := app.storeKillPrices(ctx, w.id, w.lines, price, now); err != nil {
 			return n, err
 		}
 		n++

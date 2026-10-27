@@ -147,6 +147,18 @@ func TestKillboardMergeAndPrice(t *testing.T) {
 	if math.Abs(dropped.Float64-10000) > 1 || cov.Float64 != 1 {
 		t.Errorf("dropped %v coverage %v", dropped.Float64, cov.Float64)
 	}
+	// The lines are priced once and stored: renders read these.
+	prices, err := q.GetKillLinePrices(ctx, 600001)
+	if err != nil || len(prices) == 0 {
+		t.Fatalf("stored line prices: %v (%d rows)", err, len(prices))
+	}
+	byType := map[int64]float64{}
+	for _, p := range prices {
+		byType[p.TypeID] = p.UnitPrice
+	}
+	if byType[587] != 400000 || byType[2873] != 50000 {
+		t.Errorf("stored line prices: %v, want hull 400000 and gun 50000", byType)
+	}
 
 	// The stream carries it: now public, zKillboard's figures added.
 	if err := app.ingestKillPackage(ctx, []byte(killPackageJSON(600001, 1))); err != nil {

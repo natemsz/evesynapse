@@ -559,18 +559,12 @@ func decodeKillDetail(gz []byte) (killmailFull, bool) {
 // damage, items priced at the same unit prices the kill's value
 // used.
 func (app *Application) fillKillDetail(ctx context.Context, names *killNames, v *killPageView, km killmailFull, damageTaken int64) {
+	// Stored at ingest, read here: a render never reprices.
 	price := map[int64]float64{}
-	types := map[int64]bool{}
-	var walk func(items []killItem)
-	walk = func(items []killItem) {
-		for _, it := range items {
-			types[it.ItemTypeID] = true
-			walk(it.Items)
+	if rows, err := app.queries.GetKillLinePrices(ctx, km.KillmailID); err == nil {
+		for _, r := range rows {
+			price[r.TypeID] = r.UnitPrice
 		}
-	}
-	walk(km.Victim.Items)
-	if len(types) > 0 {
-		price = app.killUnitPrices(ctx, types)
 	}
 	groups := map[string]*killSlotGroup{}
 	order := map[string]int{}
@@ -641,7 +635,7 @@ func (app *Application) fillKillDetail(ctx context.Context, names *killNames, v 
 }
 
 // killUnitPrices prices a kill's item types through the house order.
-func (app *Application) killUnitPrices(ctx context.Context, types map[int64]bool) map[int64]float64 {
+func (app *Application) killUnitPrices(ctx context.Context, types map[int64]bool) (map[int64]float64, error) {
 	out := map[int64]float64{}
 	lines := make([]module.AppraisalLine, 0, len(types))
 	for id := range types {
@@ -649,14 +643,14 @@ func (app *Application) killUnitPrices(ctx context.Context, types map[int64]bool
 	}
 	res, err := app.AppraiseLines(ctx, lines)
 	if err != nil {
-		return out
+		return out, err
 	}
 	for _, l := range res.Lines {
 		if l.Priced {
 			out[l.TypeID] = l.UnitPrice
 		}
 	}
-	return out
+	return out, nil
 }
 
 // warmKillNames resolves, in bulk, the names recent public kills

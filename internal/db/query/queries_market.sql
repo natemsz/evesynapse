@@ -848,6 +848,33 @@ ON CONFLICT (character_id, order_id) DO UPDATE SET
     volume_total       = excluded.volume_total,
     volume_remain_last = excluded.volume_remain_last,
     last_seen_at       = excluded.last_seen_at;
+-- name: ListOrderLifecycleStates :many
+-- The ledger rows of many (character, order) pairs in one read: what
+-- the order-health pass needs of each before it upserts them.
+SELECT l.character_id, l.order_id, l.closed_at, l.outbid_events, l.beaten_now
+FROM order_lifecycle l
+JOIN (SELECT unnest(sqlc.arg(character_ids)::bigint[]) AS character_id,
+             unnest(sqlc.arg(order_ids)::bigint[]) AS order_id) k
+  ON l.character_id = k.character_id AND l.order_id = k.order_id;
+-- name: UpsertOrderLifecycles :exec
+-- UpsertOrderLifecycle for every open order of a pass in one
+-- statement. The (character, order) pairs must be distinct.
+INSERT INTO order_lifecycle (character_id, order_id, type_id, location_id, region_id, is_buy_order, listed_price, volume_total, volume_remain_last, first_seen_at, last_seen_at, closed_at, close_kind, outbid_events, beaten_now)
+SELECT unnest(sqlc.arg(character_ids)::bigint[]), unnest(sqlc.arg(order_ids)::bigint[]),
+    unnest(sqlc.arg(type_ids)::bigint[]), unnest(sqlc.arg(location_ids)::bigint[]),
+    unnest(sqlc.arg(region_ids)::bigint[]), unnest(sqlc.arg(is_buy_orders)::bigint[]),
+    unnest(sqlc.arg(listed_prices)::float8[]), unnest(sqlc.arg(volume_totals)::bigint[]),
+    unnest(sqlc.arg(volume_remains)::bigint[]),
+    sqlc.arg(seen_at)::timestamptz, sqlc.arg(seen_at)::timestamptz, NULL, '', 0, 0
+ON CONFLICT (character_id, order_id) DO UPDATE SET
+    type_id            = excluded.type_id,
+    location_id        = excluded.location_id,
+    region_id          = excluded.region_id,
+    is_buy_order       = excluded.is_buy_order,
+    listed_price       = excluded.listed_price,
+    volume_total       = excluded.volume_total,
+    volume_remain_last = excluded.volume_remain_last,
+    last_seen_at       = excluded.last_seen_at;
 -- name: UpdateOrderLifecycleBeaten :exec
 UPDATE order_lifecycle
 SET beaten_now = $1, outbid_events = $2

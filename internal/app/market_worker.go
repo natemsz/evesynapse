@@ -608,38 +608,55 @@ func (app *Application) refreshOrderHealth(ctx context.Context, characters []db.
 	}
 	prevBeaten := make(map[lifecycleKey]int64)
 	prevOutbid := make(map[lifecycleKey]int64)
+	// What the ledger already holds for these orders, in one read; an
+	// order with no row (or an unreadable ledger) starts from zero.
+	var lookup db.ListOrderLifecycleStatesParams
+	for characterID, allOpen := range allOpenByChar {
+		for orderID := range allOpen {
+			lookup.CharacterIds = append(lookup.CharacterIds, characterID)
+			lookup.OrderIds = append(lookup.OrderIds, orderID)
+		}
+	}
+	closed := make(map[lifecycleKey]bool)
+	if len(lookup.OrderIds) > 0 {
+		rows, err := app.queries.ListOrderLifecycleStates(ctx, lookup)
+		if err != nil {
+			logging.Errorf("worker: order lifecycle: read ledger: %v", err)
+		}
+		for _, row := range rows {
+			key := lifecycleKey{characterID: row.CharacterID, orderID: row.OrderID}
+			if row.ClosedAt.Valid {
+				closed[key] = true
+				continue
+			}
+			prevBeaten[key] = row.BeatenNow
+			prevOutbid[key] = row.OutbidEvents
+		}
+	}
+	upsert := db.UpsertOrderLifecyclesParams{SeenAt: lifecycleNow}
 	for characterID, allOpen := range allOpenByChar {
 		for orderID, o := range allOpen {
-			key := lifecycleKey{characterID: characterID, orderID: orderID}
-			if existing, err := app.queries.GetOrderLifecycle(ctx, db.GetOrderLifecycleParams{CharacterID: characterID, OrderID: orderID}); err == nil {
-				if existing.ClosedAt.Valid {
-					continue // already closed history; never resurrect
-				}
-				prevBeaten[key] = existing.BeatenNow
-				prevOutbid[key] = existing.OutbidEvents
-			} else {
-				prevBeaten[key] = 0
-				prevOutbid[key] = 0
+			if closed[lifecycleKey{characterID: characterID, orderID: orderID}] {
+				continue // already closed history; never resurrect
 			}
 			isBuy := int64(0)
 			if o.IsBuyOrder {
 				isBuy = 1
 			}
-			if err := app.queries.UpsertOrderLifecycle(ctx, db.UpsertOrderLifecycleParams{
-				CharacterID:      characterID,
-				OrderID:          orderID,
-				TypeID:           o.TypeID,
-				LocationID:       o.LocationID,
-				RegionID:         o.RegionID,
-				IsBuyOrder:       isBuy,
-				ListedPrice:      o.Price,
-				VolumeTotal:      o.VolumeTotal,
-				VolumeRemainLast: o.VolumeRemain,
-				FirstSeenAt:      lifecycleNow,
-				LastSeenAt:       lifecycleNow,
-			}); err != nil {
-				logging.Errorf("worker: order lifecycle: upsert %d/%d: %v", characterID, orderID, err)
-			}
+			upsert.CharacterIds = append(upsert.CharacterIds, characterID)
+			upsert.OrderIds = append(upsert.OrderIds, orderID)
+			upsert.TypeIds = append(upsert.TypeIds, o.TypeID)
+			upsert.LocationIds = append(upsert.LocationIds, o.LocationID)
+			upsert.RegionIds = append(upsert.RegionIds, o.RegionID)
+			upsert.IsBuyOrders = append(upsert.IsBuyOrders, isBuy)
+			upsert.ListedPrices = append(upsert.ListedPrices, o.Price)
+			upsert.VolumeTotals = append(upsert.VolumeTotals, o.VolumeTotal)
+			upsert.VolumeRemains = append(upsert.VolumeRemains, o.VolumeRemain)
+		}
+	}
+	if len(upsert.OrderIds) > 0 {
+		if err := app.queries.UpsertOrderLifecycles(ctx, upsert); err != nil {
+			logging.Errorf("worker: order lifecycle: upsert %d orders: %v", len(upsert.OrderIds), err)
 		}
 	}
 

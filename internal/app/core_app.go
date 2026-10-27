@@ -929,6 +929,8 @@ func handleFavicon(w http.ResponseWriter, r *http.Request) {
 func (app *Application) requireAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !app.sessions.GetBool(r.Context(), sessionAuthenticated) {
+			// The page asked for waits for the sign-in (auth_return.go).
+			app.rememberReturnTo(r)
 			http.Redirect(w, r, "/", http.StatusSeeOther)
 			return
 		}

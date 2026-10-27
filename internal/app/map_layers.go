@@ -26,7 +26,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
 	"sort"
 	"strings"
@@ -130,17 +129,23 @@ func (app *Application) refreshMapLayers(ctx context.Context) {
 	}
 	now := time.Now().UTC()
 	fp = append(fp, app.threatFingerprint(ctx, now))
+	sources := strings.Join(fp, ";")
+	// The fingerprint above is cheap (snapshot stamps plus
+	// one latest-kill read); the build below it — the threat
+	// load and the layer build with their decodes and sorts —
+	// is not, and most cycles nothing it reads has moved.
+	// Compare first and build only on change: the payload is
+	// rebuilt from the same inputs at the same moment it
+	// would have been, so no layer is ever staler for this.
+	if meta, err := app.queries.GetMapLayersMeta(ctx); err == nil && meta.Sources == sources {
+		return
+	}
 	threat, _ := app.loadThreat(ctx, now)
 	if len(snaps) == 0 && len(threat.ID) == 0 {
 		return
 	}
-	payload, named := app.buildMapLayers(ctx, snaps)
+	payload, _ := app.buildMapLayers(ctx, snaps)
 	payload.Threat = threat
-	fp = append(fp, fmt.Sprintf("names=%d", named))
-	sources := strings.Join(fp, ";")
-	if meta, err := app.queries.GetMapLayersMeta(ctx); err == nil && meta.Sources == sources {
-		return
-	}
 	gz, etag, err := packMapJSON(payload)
 	if err != nil {
 		logging.Errorf("map: layers: %v", err)

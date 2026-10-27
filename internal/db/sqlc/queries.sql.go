@@ -2605,6 +2605,30 @@ func (q *Queries) UpsertSkillPlanItem(ctx context.Context, arg UpsertSkillPlanIt
 	return err
 }
 
+const upsertSkillPlanItems = `-- name: UpsertSkillPlanItems :exec
+INSERT INTO skill_plan_items (plan_id, skill_type_id, target_level, position)
+SELECT $1::bigint, unnest($2::bigint[]),
+    unnest($3::bigint[]), unnest($4::bigint[])
+ON CONFLICT(plan_id, skill_type_id) DO UPDATE SET target_level = excluded.target_level
+`
+
+type UpsertSkillPlanItemsParams struct {
+	PlanID       int64   `json:"plan_id"`
+	SkillTypeIds []int64 `json:"skill_type_ids"`
+	TargetLevels []int64 `json:"target_levels"`
+	Positions    []int64 `json:"positions"`
+}
+
+func (q *Queries) UpsertSkillPlanItems(ctx context.Context, arg UpsertSkillPlanItemsParams) error {
+	_, err := q.db.ExecContext(ctx, upsertSkillPlanItems,
+		arg.PlanID,
+		pq.Array(arg.SkillTypeIds),
+		pq.Array(arg.TargetLevels),
+		pq.Array(arg.Positions),
+	)
+	return err
+}
+
 const upsertSnapshot = `-- name: UpsertSnapshot :exec
 INSERT INTO character_snapshots (character_id, kind, payload, fetched_at, cached_until, etag)
 VALUES ($1, $2, $3, $4, $5, $6)
@@ -2690,6 +2714,38 @@ func (q *Queries) UpsertWalletHistorySample(ctx context.Context, arg UpsertWalle
 		arg.Balance,
 		arg.NetWorth,
 		arg.SampledAt,
+	)
+	return err
+}
+
+const upsertWalletHistorySamples = `-- name: UpsertWalletHistorySamples :exec
+INSERT INTO wallet_history (user_id, character_id, day, balance, net_worth, sampled_at)
+SELECT $1::bigint, unnest($2::bigint[]),
+    unnest($3::text[]), unnest($4::float8[]),
+    unnest($5::float8[]), unnest($6::timestamptz[])
+ON CONFLICT (user_id, character_id, day) DO UPDATE SET
+    balance    = excluded.balance,
+    net_worth   = excluded.net_worth,
+    sampled_at = excluded.sampled_at
+`
+
+type UpsertWalletHistorySamplesParams struct {
+	UserID       int64       `json:"user_id"`
+	CharacterIds []int64     `json:"character_ids"`
+	Days         []string    `json:"days"`
+	Balances     []float64   `json:"balances"`
+	NetWorths    []float64   `json:"net_worths"`
+	SampledAts   []time.Time `json:"sampled_ats"`
+}
+
+func (q *Queries) UpsertWalletHistorySamples(ctx context.Context, arg UpsertWalletHistorySamplesParams) error {
+	_, err := q.db.ExecContext(ctx, upsertWalletHistorySamples,
+		arg.UserID,
+		pq.Array(arg.CharacterIds),
+		pq.Array(arg.Days),
+		pq.Array(arg.Balances),
+		pq.Array(arg.NetWorths),
+		pq.Array(arg.SampledAts),
 	)
 	return err
 }

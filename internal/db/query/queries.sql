@@ -289,6 +289,15 @@ ON CONFLICT (user_id, character_id, day) DO UPDATE SET
     balance    = excluded.balance,
     net_worth   = excluded.net_worth,
     sampled_at = excluded.sampled_at;
+-- name: UpsertWalletHistorySamples :exec
+INSERT INTO wallet_history (user_id, character_id, day, balance, net_worth, sampled_at)
+SELECT sqlc.arg(user_id)::bigint, unnest(sqlc.arg(character_ids)::bigint[]),
+    unnest(sqlc.arg(days)::text[]), unnest(sqlc.arg(balances)::float8[]),
+    unnest(sqlc.arg(net_worths)::float8[]), unnest(sqlc.arg(sampled_ats)::timestamptz[])
+ON CONFLICT (user_id, character_id, day) DO UPDATE SET
+    balance    = excluded.balance,
+    net_worth   = excluded.net_worth,
+    sampled_at = excluded.sampled_at;
 -- name: ListWalletHistorySamples :many
 SELECT user_id, character_id, day, balance, net_worth, sampled_at
 FROM wallet_history
@@ -359,6 +368,11 @@ ORDER BY position, skill_type_id;
 -- name: UpsertSkillPlanItem :exec
 INSERT INTO skill_plan_items (plan_id, skill_type_id, target_level, position)
 VALUES ($1, $2, $3, $4)
+ON CONFLICT(plan_id, skill_type_id) DO UPDATE SET target_level = excluded.target_level;
+-- name: UpsertSkillPlanItems :exec
+INSERT INTO skill_plan_items (plan_id, skill_type_id, target_level, position)
+SELECT sqlc.arg(plan_id)::bigint, unnest(sqlc.arg(skill_type_ids)::bigint[]),
+    unnest(sqlc.arg(target_levels)::bigint[]), unnest(sqlc.arg(positions)::bigint[])
 ON CONFLICT(plan_id, skill_type_id) DO UPDATE SET target_level = excluded.target_level;
 -- name: NextSkillPlanPosition :one
 SELECT CAST(COALESCE(MAX(position), 0) + 1 AS BIGINT) FROM skill_plan_items WHERE plan_id = $1;

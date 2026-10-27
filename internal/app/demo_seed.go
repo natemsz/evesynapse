@@ -205,13 +205,29 @@ func (s *demoSeed) resolve(ctx context.Context) error {
 		"Broker Relations", "Accounting", "Cybernetics", "Biology",
 		"Capital Industrial Ships",
 	}
-	for _, name := range wanted {
-		id, err := typeIDByName(ctx, s.app.db, name)
-		if err != nil {
-			return fmt.Errorf("demo seed: resolve type %q: %w", name, err)
+	// Every wanted type in two queries (the SDE table, then
+	// the name cache for what it lacks) instead of up to two
+	// queries per name.
+	if rows, err := s.app.queries.ListSDETypesByNames(ctx, wanted); err == nil {
+		for _, r := range rows {
+			if cur, ok := s.types[r.Name]; !ok || r.TypeID < cur {
+				s.types[r.Name] = r.TypeID
+			}
 		}
-		if id != 0 {
-			s.types[name] = id
+	}
+	var missing []string
+	for _, name := range wanted {
+		if s.types[name] == 0 {
+			missing = append(missing, name)
+		}
+	}
+	if len(missing) > 0 {
+		if rows, err := s.app.queries.ListTypeNamesByNames(ctx, missing); err == nil {
+			for _, r := range rows {
+				if cur, ok := s.types[r.Name]; !ok || r.TypeID < cur {
+					s.types[r.Name] = r.TypeID
+				}
+			}
 		}
 	}
 
@@ -1516,6 +1532,7 @@ func (s *demoSeed) writeAccountRows(ctx context.Context) error {
 		return err
 	}
 	position := int64(0)
+	var skillIDs, levels, positions []int64
 	for _, target := range []struct {
 		name  string
 		level int64
@@ -1531,8 +1548,13 @@ func (s *demoSeed) writeAccountRows(ctx context.Context) error {
 			continue
 		}
 		position++
-		if err := q.UpsertSkillPlanItem(ctx, db.UpsertSkillPlanItemParams{
-			PlanID: plan.ID, SkillTypeID: typeID, TargetLevel: target.level, Position: position,
+		skillIDs = append(skillIDs, typeID)
+		levels = append(levels, target.level)
+		positions = append(positions, position)
+	}
+	if len(skillIDs) > 0 {
+		if err := q.UpsertSkillPlanItems(ctx, db.UpsertSkillPlanItemsParams{
+			PlanID: plan.ID, SkillTypeIds: skillIDs, TargetLevels: levels, Positions: positions,
 		}); err != nil {
 			return err
 		}
@@ -1568,18 +1590,25 @@ func (s *demoSeed) writeAccountRows(ctx context.Context) error {
 		{demoCharacter2ID, 96450210.75, 2.5},
 	}
 	for _, hRow := range history {
+		var charIDs []int64
+		var days []string
+		var balances, worths []float64
+		var sampled []time.Time
 		for i := 29; i >= 0; i-- {
 			dayAt := now.Add(-time.Duration(i) * day)
 			drift := 1 - float64(i)*0.004
 			balance := hRow.balance * drift
-			if err := q.UpsertWalletHistorySample(ctx, db.UpsertWalletHistorySampleParams{
-				UserID: s.userID, CharacterID: hRow.charID,
-				Day: dayAt.Format("2006-01-02"), Balance: balance,
-				NetWorth:  sql.NullFloat64{Float64: balance * hRow.worth, Valid: true},
-				SampledAt: dayAt,
-			}); err != nil {
-				return err
-			}
+			charIDs = append(charIDs, hRow.charID)
+			days = append(days, dayAt.Format("2006-01-02"))
+			balances = append(balances, balance)
+			worths = append(worths, balance*hRow.worth)
+			sampled = append(sampled, dayAt)
+		}
+		if err := q.UpsertWalletHistorySamples(ctx, db.UpsertWalletHistorySamplesParams{
+			UserID: s.userID, CharacterIds: charIDs, Days: days,
+			Balances: balances, NetWorths: worths, SampledAts: sampled,
+		}); err != nil {
+			return err
 		}
 	}
 

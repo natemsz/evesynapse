@@ -15,6 +15,10 @@ LIMIT 20;
 SELECT type_id, name FROM type_names
 WHERE lower(name) = lower(sqlc.arg(name))
 ORDER BY type_id;
+-- name: ListTypeNamesByNames :many
+SELECT type_id, name FROM type_names
+WHERE name = ANY(sqlc.arg(names)::text[])
+ORDER BY type_id;
 -- name: ListAllTypeNames :many
 SELECT type_id, name FROM type_names
 ORDER BY type_id;

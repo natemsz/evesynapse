@@ -260,27 +260,6 @@ func (s *demoSeed) resolve(ctx context.Context) error {
 	return nil
 }
 
-// typeIDByName resolves one type by exact name from the SDE
-// type table, falling back to the type-name cache the SDE
-// import also fills.
-func typeIDByName(ctx context.Context, conn *sql.DB, name string) (int64, error) {
-	var id int64
-	err := conn.QueryRowContext(ctx,
-		`SELECT type_id FROM sde_types WHERE name = $1 ORDER BY type_id LIMIT 1`, name).Scan(&id)
-	if err == nil {
-		return id, nil
-	}
-	if !errors.Is(err, sql.ErrNoRows) {
-		return 0, err
-	}
-	err = conn.QueryRowContext(ctx,
-		`SELECT type_id FROM type_names WHERE name = $1 ORDER BY type_id LIMIT 1`, name).Scan(&id)
-	if errors.Is(err, sql.ErrNoRows) {
-		return 0, nil
-	}
-	return id, err
-}
-
 // stationIDByName resolves one NPC station by its full name.
 func stationIDByName(ctx context.Context, conn *sql.DB, name string) (int64, error) {
 	var id int64

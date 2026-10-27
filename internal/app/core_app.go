@@ -822,6 +822,10 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 		r.Get("/channels", app.handleAPIChannels)
 		r.Post("/channels/{channelID}/lines", app.handleAPILines)
 		r.Post("/preview", app.handleAPIPreview)
+		// Axon's intel windows (intel_api.go).
+		r.Get("/threads", app.handleAPIThreads)
+		r.Get("/feed", app.handleAPIFeed)
+		r.Get("/reports/{reportID}", app.handleAPIReport)
 	})
 
 	r.Route("/map", func(r chi.Router) {

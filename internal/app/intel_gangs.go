@@ -453,6 +453,24 @@ func (app *Application) bestGangMatch(ctx context.Context, comp *intelComposite,
 		logging.Warnf("intel: gang candidates in channel %d: %v", comp.ChannelID, err)
 		return nil, gangMatch{}
 	}
+	// Every candidate's groups and composites in two reads
+	// total, not two per candidate: the candidates share the
+	// batch the composites loader already knows how to take.
+	gangIDs := make([]int64, 0, len(rows))
+	for _, row := range rows {
+		if row.ID != exclude {
+			gangIDs = append(gangIDs, row.ID)
+		}
+	}
+	groupsByGang := map[int64][]int64{}
+	var allGroups []int64
+	if grows, err := app.queries.ListIntelGangGroupsForGangs(ctx, gangIDs); err == nil {
+		for _, gr := range grows {
+			groupsByGang[gr.GangID] = append(groupsByGang[gr.GangID], gr.GroupID)
+			allGroups = append(allGroups, gr.GroupID)
+		}
+	}
+	compsByGroup := app.groupCompositesFor(ctx, allGroups)
 	var best *trackedGang
 	var bestMatch gangMatch
 	for _, row := range rows {
@@ -460,12 +478,17 @@ func (app *Application) bestGangMatch(ctx context.Context, comp *intelComposite,
 			continue
 		}
 		cand := gangFromRow(row)
-		groups, err := app.queries.ListIntelGangGroups(ctx, cand.ID)
-		if err != nil || len(groups) == 0 {
+		groups := groupsByGang[cand.ID]
+		if len(groups) == 0 {
 			continue
 		}
 		cand.Groups = groups
-		comps := app.memberComposites(ctx, groups)
+		var comps []*intelComposite
+		for _, gid := range groups {
+			if c := compsByGroup[gid]; c != nil {
+				comps = append(comps, c)
+			}
+		}
 		if len(comps) == 0 {
 			continue
 		}

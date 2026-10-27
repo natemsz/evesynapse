@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.6.0.5] - 2026-10-27
+
+Automated build of EveSynapse v0.6.0.5. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+
+## What's Changed
+### 🐛 Bug Fixes
+* Files the intel feed page under the intel section so it renders the section tab strip by @natemsz in https://github.com/natemsz/evesynapse/pull/736
+### Other Changes
+* Intel workbench dashboard, onto main (#726 merged into the threads branch instead) by @natemsz in https://github.com/natemsz/evesynapse/pull/737
+* Stores market history in one statement per pair by @natemsz in https://github.com/natemsz/evesynapse/pull/733
+* Reads region book pages a window at a time by @natemsz in https://github.com/natemsz/evesynapse/pull/734
+* Reads contract items and bids a window at a time, stores list pages in one statement by @natemsz in https://github.com/natemsz/evesynapse/pull/735
+* Reads and writes the order lifecycle ledger in one statement each by @natemsz in https://github.com/natemsz/evesynapse/pull/738
+* docs(changelog): review changelog for v0.6.0.4 by @github-actions[bot] in https://github.com/natemsz/evesynapse/pull/732
+
+
+**Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.6.0.4...v0.6.0.5
+
 ## [v0.6.0.4] - 2026-10-27
 
 Automated build of EveSynapse v0.6.0.4. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).

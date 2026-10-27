@@ -115,11 +115,11 @@ html[data-backdrop="glow"] body::before {
    file, which loads after style.css, so the override needs no
    specificity games. */
 .charselector-dropdown {
-  background-color: rgba(13, 10, 8, 0.94);
+  background-color: color-mix(in srgb, var(--panel) 88%, transparent);
   border-color: color-mix(in srgb, var(--accent) 25%, transparent);
   box-shadow: 0 10px 24px rgba(0, 0, 0, 0.65);
-  -webkit-backdrop-filter: blur(25px) saturate(0.9);
-  backdrop-filter: blur(25px) saturate(0.9);
+  -webkit-backdrop-filter: blur(30px) saturate(1.45);
+  backdrop-filter: blur(30px) saturate(1.45);
 }
 html[data-theme="light"] .charselector-dropdown {
   background-color: #fdfbf6;
@@ -136,11 +136,11 @@ html[data-theme="light"] .charselector-dropdown {
    near-opaque paint does the legibility work, the standard
    floating blur stays for where it can sample. */
 .switcher .menu {
-  background-color: rgba(13, 10, 8, 0.94);
+  background-color: color-mix(in srgb, var(--panel) 88%, transparent);
   border-color: color-mix(in srgb, var(--accent) 25%, transparent);
   box-shadow: 0 10px 24px rgba(0, 0, 0, 0.65);
-  -webkit-backdrop-filter: blur(25px) saturate(0.9);
-  backdrop-filter: blur(25px) saturate(0.9);
+  -webkit-backdrop-filter: blur(30px) saturate(1.45);
+  backdrop-filter: blur(30px) saturate(1.45);
 }
 
 /* The notifications menu hangs from the header too, off the same
@@ -149,11 +149,11 @@ html[data-theme="light"] .charselector-dropdown {
    It gets the same .suggest treatment, verbatim, so the header's
    dropdowns match. */
 .notify-menu {
-  background-color: rgba(13, 10, 8, 0.94);
+  background-color: color-mix(in srgb, var(--panel) 88%, transparent);
   border-color: color-mix(in srgb, var(--accent) 25%, transparent);
   box-shadow: 0 10px 24px rgba(0, 0, 0, 0.65);
-  -webkit-backdrop-filter: blur(25px) saturate(0.9);
-  backdrop-filter: blur(25px) saturate(0.9);
+  -webkit-backdrop-filter: blur(30px) saturate(1.45);
+  backdrop-filter: blur(30px) saturate(1.45);
 }
 
 /* My Loadouts: the training-plan action is a skill-book glyph,

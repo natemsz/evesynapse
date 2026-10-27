@@ -1028,10 +1028,13 @@ func (app *Application) wbDossiers(ctx context.Context, ids []int64) map[int64]*
 	if len(ids) == 0 {
 		return out
 	}
-	if len(ids) > wbDossierCap {
-		ids = ids[:wbDossierCap]
-	}
-	rows, err := app.queries.ListPilotRecordsByIDs(ctx, ids)
+	// The page of records is sorted and bounded in SQL
+	// (ORDER BY + LIMIT): the handler reads about a page of
+	// rows, not the full matching set truncated in Go.
+	sort.Slice(ids, func(a, b int) bool { return ids[a] < ids[b] })
+	rows, err := app.queries.ListPilotRecordsByIDs(ctx, db.ListPilotRecordsByIDsParams{
+		CharacterIds: ids, MaxRows: wbDossierCap,
+	})
 	if err != nil {
 		logging.Warnf("workbench: pilot records: %v", err)
 		return out

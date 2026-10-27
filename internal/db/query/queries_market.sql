@@ -282,7 +282,9 @@ WHERE character_id = $1;
 SELECT character_id, payload, state, fetched_at
 FROM pilot_records
 WHERE character_id = ANY(sqlc.arg(character_ids)::bigint[])
-  AND state = 'ready';
+  AND state = 'ready'
+ORDER BY character_id
+LIMIT sqlc.arg(max_rows)::bigint;
 -- A want's priority is how close the record is to somebody (see
 -- wantViewed and its fellows in worker_pagewants.go), and noted_at is
 -- when it was last asked for. A want that is asked for again keeps

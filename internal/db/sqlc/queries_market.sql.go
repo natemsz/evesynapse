@@ -2510,7 +2510,14 @@ SELECT character_id, payload, state, fetched_at
 FROM pilot_records
 WHERE character_id = ANY($1::bigint[])
   AND state = 'ready'
+ORDER BY character_id
+LIMIT $2::bigint
 `
+
+type ListPilotRecordsByIDsParams struct {
+	CharacterIds []int64 `json:"character_ids"`
+	MaxRows      int64   `json:"max_rows"`
+}
 
 type ListPilotRecordsByIDsRow struct {
 	CharacterID int64        `json:"character_id"`
@@ -2521,8 +2528,8 @@ type ListPilotRecordsByIDsRow struct {
 
 // Settled records for a set of pilots at once: a roster's
 // dossiers, read in one bounded pass.
-func (q *Queries) ListPilotRecordsByIDs(ctx context.Context, characterIds []int64) ([]ListPilotRecordsByIDsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listPilotRecordsByIDs, pq.Array(characterIds))
+func (q *Queries) ListPilotRecordsByIDs(ctx context.Context, arg ListPilotRecordsByIDsParams) ([]ListPilotRecordsByIDsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listPilotRecordsByIDs, pq.Array(arg.CharacterIds), arg.MaxRows)
 	if err != nil {
 		return nil, err
 	}

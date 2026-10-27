@@ -219,6 +219,10 @@ type Application struct {
 	killNameMisses  map[int64]time.Time
 	intelLastPruned time.Time
 
+	// War details (intel_worker.go): what the last pass learned
+	// about each war, so settled wars cost no per-cycle read.
+	warDetailMemo map[int64]warDetailMemoEntry
+
 	// Pilot activity profiles (pilot_activity.go): the backfill
 	// queue and who is already on it. The channel is made on first
 	// use; the map keeps a much-reported pilot queued once.

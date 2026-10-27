@@ -60,7 +60,8 @@ type nameTrieNode struct {
 
 // NewNameIndex builds the index from pilots (their proper names).
 // A name of fewer than two letters or digits cannot anchor a
-// segmentation and is left out.
+// segmentation and is left out, as is a name PilotCandidate
+// refuses.
 func NewNameIndex(pilots []Pilot) *NameIndex {
 	ix := &NameIndex{root: &nameTrieNode{}}
 	for _, p := range pilots {
@@ -71,7 +72,10 @@ func NewNameIndex(pilots []Pilot) *NameIndex {
 				alnum++
 			}
 		}
-		if alnum < 2 {
+		// Fused text is free-form text: a name that is never a
+		// pilot there ("Station", "Moon", "Clr") cannot anchor a
+		// segmentation either, though a character carries it.
+		if alnum < 2 || !PilotCandidate(string(name)) {
 			continue
 		}
 		node := ix.root
@@ -206,7 +210,7 @@ func FusedCandidates(text string) []string {
 	var out []string
 	add := func(s string) {
 		s = clean(s)
-		if s == "" || len([]rune(s)) > 37 || !pilotCandidate(s) || seen[s] {
+		if s == "" || len([]rune(s)) > 37 || !PilotCandidate(s) || seen[s] {
 			return
 		}
 		seen[s] = true

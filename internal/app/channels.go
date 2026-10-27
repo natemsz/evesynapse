@@ -1175,7 +1175,13 @@ const (
 // one refusal left, and every skip here logs its reason and
 // the line's first fragment.
 func (app *Application) rescueRosterLine(ctx context.Context, base db.InsertIntelReportParams, nr intelchat.Report, source string) int {
-	frag := clipRunes(nr.Text, 60)
+	frag := clipRunes(nr.Raw, 60)
+	if strings.TrimSpace(nr.Text) == "" {
+		// Nothing but the chat's own shorthand ("clr", "nv",
+		// "+3"): with no system named, no roster stands in it.
+		logging.Warnf("channels: roster line skipped, no names in it: %q", frag)
+		return rosterSkipped
+	}
 	sysID := app.speakerSystemID(ctx, nr.Speaker)
 	if sysID == 0 {
 		sysID = app.posterSystemID(ctx, base.AuthorCharacterID)
@@ -1190,7 +1196,7 @@ func (app *Application) rescueRosterLine(ctx context.Context, base db.InsertInte
 	if roster == nil {
 		return app.storeVerifiedRosterLine(ctx, base, nr, source, sysID, plain, frag)
 	}
-	scanID, err := app.storeRosterScan(ctx, base.AuthorUserID, roster, nr.Text)
+	scanID, err := app.storeRosterScan(ctx, base.AuthorUserID, roster, nr.Raw)
 	if err != nil {
 		logging.Errorf("channels: store rescued roster reading: %v: %q", err, frag)
 		return rosterSkipped
@@ -1247,7 +1253,7 @@ func (app *Application) storeVerifiedRosterLine(ctx context.Context, base db.Ins
 	p := base
 	p.Source = source
 	p.SystemID = sysID
-	p.Text = nr.Text + " — system from the reporter's current location."
+	p.Text = nr.Raw + " — system from the reporter's current location."
 	p.Pilots = p.Text
 	p.Clear = false
 	if nr.Speaker != "" {

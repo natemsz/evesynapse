@@ -1463,6 +1463,42 @@ func (q *Queries) ListMarketBookOrders(ctx context.Context, arg ListMarketBookOr
 	return items, nil
 }
 
+const listMarketFetchStatesByKinds = `-- name: ListMarketFetchStatesByKinds :many
+SELECT kind, state, detail, attempted_at
+FROM market_fetch_state
+WHERE kind = ANY($1::text[])
+`
+
+// The fetch states of many kinds in one read, for a pass that
+// gates thousands of candidates (a kind with no row is absent).
+func (q *Queries) ListMarketFetchStatesByKinds(ctx context.Context, kinds []string) ([]MarketFetchState, error) {
+	rows, err := q.db.QueryContext(ctx, listMarketFetchStatesByKinds, pq.Array(kinds))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []MarketFetchState
+	for rows.Next() {
+		var i MarketFetchState
+		if err := rows.Scan(
+			&i.Kind,
+			&i.State,
+			&i.Detail,
+			&i.AttemptedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listMarketHistory = `-- name: ListMarketHistory :many
 SELECT region_id, type_id, date, average, highest, lowest, volume, order_count
 FROM market_history
@@ -3582,6 +3618,48 @@ func (q *Queries) UpsertMarketHistory(ctx context.Context, arg UpsertMarketHisto
 		arg.Lowest,
 		arg.Volume,
 		arg.OrderCount,
+	)
+	return err
+}
+
+const upsertMarketHistoryDays = `-- name: UpsertMarketHistoryDays :exec
+INSERT INTO market_history (region_id, type_id, date, average, highest, lowest, volume, order_count)
+SELECT $1::bigint, $2::bigint,
+    unnest($3::text[]), unnest($4::float8[]),
+    unnest($5::float8[]), unnest($6::float8[]),
+    unnest($7::bigint[]), unnest($8::bigint[])
+ON CONFLICT (region_id, type_id, date) DO UPDATE SET
+    average     = excluded.average,
+    highest     = excluded.highest,
+    lowest      = excluded.lowest,
+    volume      = excluded.volume,
+    order_count = excluded.order_count
+`
+
+type UpsertMarketHistoryDaysParams struct {
+	RegionID    int64     `json:"region_id"`
+	TypeID      int64     `json:"type_id"`
+	Dates       []string  `json:"dates"`
+	Averages    []float64 `json:"averages"`
+	Highests    []float64 `json:"highests"`
+	Lowests     []float64 `json:"lowests"`
+	Volumes     []int64   `json:"volumes"`
+	OrderCounts []int64   `json:"order_counts"`
+}
+
+// One pair's whole history payload in one statement: ESI answers
+// about a year of days per pair, and a statement per day was most
+// of the market pass's time. The days must be distinct.
+func (q *Queries) UpsertMarketHistoryDays(ctx context.Context, arg UpsertMarketHistoryDaysParams) error {
+	_, err := q.db.ExecContext(ctx, upsertMarketHistoryDays,
+		arg.RegionID,
+		arg.TypeID,
+		pq.Array(arg.Dates),
+		pq.Array(arg.Averages),
+		pq.Array(arg.Highests),
+		pq.Array(arg.Lowests),
+		pq.Array(arg.Volumes),
+		pq.Array(arg.OrderCounts),
 	)
 	return err
 }

@@ -148,12 +148,23 @@ func (app *Application) warmMarketHistory(ctx context.Context, allowance *fetchB
 		return 0, false
 	}
 	app.noteCoverageTypeDetails(ctx, candidates)
-	for _, key := range candidates {
+	// The candidates' fetch states in one read: there are thousands
+	// of them, nearly all inside their gate on any one cycle.
+	kinds := make([]string, len(candidates))
+	for i, key := range candidates {
+		kinds[i] = marketFetchKind("history", key)
+	}
+	states, statesOK := app.marketFetchStates(ctx, kinds)
+	for i, key := range candidates {
 		if stored >= maxHistoryFetchesPerCycle || ctx.Err() != nil {
 			break
 		}
-		kind := marketFetchKind("history", key)
-		if !app.marketFetchDue(ctx, kind, historyRefetchGate) {
+		kind := kinds[i]
+		if statesOK {
+			if state, ok := states[kind]; ok && !marketFetchStateDue(state, historyRefetchGate, time.Now()) {
+				continue
+			}
+		} else if !app.marketFetchDue(ctx, kind, historyRefetchGate) {
 			continue
 		}
 		// A fresh staged entry means the pull already covered
@@ -194,18 +205,9 @@ func (app *Application) fetchAndStoreHistory(ctx context.Context, key marketKey)
 		app.recordMarketFetch(ctx, kind, marketFetchFailureState(err), err.Error())
 		return false, false
 	}
-	for _, row := range rows {
-		if err := app.queries.UpsertMarketHistory(ctx, db.UpsertMarketHistoryParams{
-			RegionID:   key.RegionID,
-			TypeID:     key.TypeID,
-			Date:       row.Date,
-			Average:    row.Average,
-			Highest:    row.Highest,
-			Lowest:     row.Lowest,
-			Volume:     row.Volume,
-			OrderCount: row.OrderCount,
-		}); err != nil {
-			logging.Errorf("worker: market history: store %s day %s: %v", kind, row.Date, err)
+	if len(rows) > 0 {
+		if err := app.queries.UpsertMarketHistoryDays(ctx, historyDaysParams(key, rows)); err != nil {
+			logging.Errorf("worker: market history: store %s (%d days): %v", kind, len(rows), err)
 		}
 	}
 	// The region stat's sold-per-day figure follows the new history at
@@ -218,6 +220,29 @@ func (app *Application) fetchAndStoreHistory(ctx context.Context, key marketKey)
 	}
 	app.recordMarketFetch(ctx, kind, fetchStateOK, "")
 	return true, false
+}
+
+// historyDaysParams is one pair's history payload as the columns of
+// one upsert. A day ESI repeats is kept once, its last answer, since
+// one statement may not write the same row twice.
+func historyDaysParams(key marketKey, rows []esi.MarketHistoryDay) db.UpsertMarketHistoryDaysParams {
+	p := db.UpsertMarketHistoryDaysParams{RegionID: key.RegionID, TypeID: key.TypeID}
+	at := make(map[string]int, len(rows))
+	for _, row := range rows {
+		if i, seen := at[row.Date]; seen {
+			p.Averages[i], p.Highests[i], p.Lowests[i] = row.Average, row.Highest, row.Lowest
+			p.Volumes[i], p.OrderCounts[i] = row.Volume, row.OrderCount
+			continue
+		}
+		at[row.Date] = len(p.Dates)
+		p.Dates = append(p.Dates, row.Date)
+		p.Averages = append(p.Averages, row.Average)
+		p.Highests = append(p.Highests, row.Highest)
+		p.Lowests = append(p.Lowests, row.Lowest)
+		p.Volumes = append(p.Volumes, row.Volume)
+		p.OrderCounts = append(p.OrderCounts, row.OrderCount)
+	}
+	return p
 }
 
 // historyFetchableCacheTTL bounds how long the fetchable-type
@@ -830,10 +855,33 @@ func (app *Application) marketFetchDue(ctx context.Context, kind string, gate ti
 	if err != nil {
 		return true // no record (or unreadable): try
 	}
+	return marketFetchStateDue(state, gate, time.Now())
+}
+
+// marketFetchStateDue is marketFetchDue's rule for a record already
+// read.
+func marketFetchStateDue(state db.MarketFetchState, gate time.Duration, now time.Time) bool {
 	if state.State == fetchStateError {
-		return time.Since(state.AttemptedAt) >= marketFetchErrorGate
+		return now.Sub(state.AttemptedAt) >= marketFetchErrorGate
 	}
-	return time.Since(state.AttemptedAt) >= gate
+	return now.Sub(state.AttemptedAt) >= gate
+}
+
+// marketFetchStates reads the records of many fetch kinds at once,
+// keyed by kind; a kind with no record is absent, which is due. ok
+// is false when the read failed, and the caller then asks
+// marketFetchDue kind by kind.
+func (app *Application) marketFetchStates(ctx context.Context, kinds []string) (states map[string]db.MarketFetchState, ok bool) {
+	rows, err := app.queries.ListMarketFetchStatesByKinds(ctx, kinds)
+	if err != nil {
+		logging.Errorf("worker: market fetch-states: %v", err)
+		return nil, false
+	}
+	states = make(map[string]db.MarketFetchState, len(rows))
+	for _, row := range rows {
+		states[row.Kind] = row
+	}
+	return states, true
 }
 
 // marketFetchFailureState classifies a failed market fetch: a

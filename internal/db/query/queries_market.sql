@@ -53,6 +53,21 @@ ON CONFLICT (region_id, type_id, date) DO UPDATE SET
     lowest      = excluded.lowest,
     volume      = excluded.volume,
     order_count = excluded.order_count;
+-- name: UpsertMarketHistoryDays :exec
+-- One pair's whole history payload in one statement: ESI answers
+-- about a year of days per pair, and a statement per day was most
+-- of the market pass's time. The days must be distinct.
+INSERT INTO market_history (region_id, type_id, date, average, highest, lowest, volume, order_count)
+SELECT sqlc.arg(region_id)::bigint, sqlc.arg(type_id)::bigint,
+    unnest(sqlc.arg(dates)::text[]), unnest(sqlc.arg(averages)::float8[]),
+    unnest(sqlc.arg(highests)::float8[]), unnest(sqlc.arg(lowests)::float8[]),
+    unnest(sqlc.arg(volumes)::bigint[]), unnest(sqlc.arg(order_counts)::bigint[])
+ON CONFLICT (region_id, type_id, date) DO UPDATE SET
+    average     = excluded.average,
+    highest     = excluded.highest,
+    lowest      = excluded.lowest,
+    volume      = excluded.volume,
+    order_count = excluded.order_count;
 -- name: ListMarketHistory :many
 -- The history window is a row count, not a calendar span: the
 -- chart and change math read the newest N rows of recorded
@@ -108,6 +123,12 @@ SELECT type_id FROM market_region_stats;
 SELECT kind, state, detail, attempted_at
 FROM market_fetch_state
 WHERE kind = $1;
+-- name: ListMarketFetchStatesByKinds :many
+-- The fetch states of many kinds in one read, for a pass that
+-- gates thousands of candidates (a kind with no row is absent).
+SELECT kind, state, detail, attempted_at
+FROM market_fetch_state
+WHERE kind = ANY(sqlc.arg(kinds)::text[]);
 -- name: UpsertMarketFetchState :exec
 INSERT INTO market_fetch_state (kind, state, detail, attempted_at)
 VALUES ($1, $2, $3, $4)

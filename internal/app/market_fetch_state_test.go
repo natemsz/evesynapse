@@ -154,3 +154,68 @@ func TestRefreshMarketDataRunsSweepOnItsOwnLane(t *testing.T) {
 		t.Fatalf("stats for type 34 after market pass: rows=%d err=%v, want 1", len(rows), err)
 	}
 }
+
+// historyBodyTransport answers every history read with one body.
+type historyBodyTransport struct{ body string }
+
+func (h historyBodyTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	return &http.Response{
+		StatusCode: http.StatusOK,
+		Header:     http.Header{"Content-Type": []string{"application/json"}},
+		Body:       io.NopCloser(strings.NewReader(h.body)),
+	}, nil
+}
+
+// A pair's whole payload lands in one statement, and a day ESI
+// repeats is stored once with its last answer.
+func TestFetchAndStoreHistoryStoresEveryDayOnce(t *testing.T) {
+	app, _, q := buildCorpTestApp(t, historyBodyTransport{body: `[
+		{"date":"2026-10-01","average":10,"highest":11,"lowest":9,"volume":100,"order_count":5},
+		{"date":"2026-10-02","average":20,"highest":21,"lowest":19,"volume":200,"order_count":6},
+		{"date":"2026-10-02","average":30,"highest":31,"lowest":29,"volume":300,"order_count":7}
+	]`})
+	ctx := context.Background()
+	key := marketKey{RegionID: 10000002, TypeID: 34}
+	if fetched, limited := app.fetchAndStoreHistory(ctx, key); !fetched || limited {
+		t.Fatalf("fetched=%v limited=%v, want true/false", fetched, limited)
+	}
+	rows, err := q.ListMarketHistory(ctx, db.ListMarketHistoryParams{RegionID: key.RegionID, TypeID: key.TypeID, RowLimit: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 2 {
+		t.Fatalf("stored %d days, want 2", len(rows))
+	}
+	if rows[0].Date != "2026-10-02" || rows[0].Average != 30 || rows[0].Volume != 300 {
+		t.Fatalf("repeated day = %+v, want its last answer", rows[0])
+	}
+}
+
+// The batched gate read keeps marketFetchDue's rule: a pair inside
+// its gate is skipped, a missing or expired one is fetched.
+func TestWarmMarketHistoryBatchedGate(t *testing.T) {
+	transport := &historyStatusTransport{}
+	app, _, q := buildCorpTestApp(t, transport)
+	ctx := context.Background()
+	fresh := marketKey{RegionID: 10000002, TypeID: 34}
+	stale := marketKey{RegionID: 10000002, TypeID: 35}
+	for _, k := range []marketKey{fresh, stale} {
+		if err := q.UpsertMarketHistoryWant(ctx, db.UpsertMarketHistoryWantParams{
+			RegionID: k.RegionID, TypeID: k.TypeID, LastRequestedAt: time.Now().UTC(),
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for k, ago := range map[marketKey]time.Duration{fresh: time.Minute, stale: historyRefetchGate + time.Minute} {
+		if err := q.UpsertMarketFetchState(ctx, db.UpsertMarketFetchStateParams{
+			Kind: marketFetchKind("history", k), State: fetchStateOK,
+			AttemptedAt: time.Now().UTC().Add(-ago),
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	stored, limited := app.warmMarketHistory(ctx, &fetchBudget{left: 10})
+	if limited || stored != 1 || transport.calls.Load() != 1 {
+		t.Fatalf("stored=%d limited=%v calls=%d, want 1/false/1", stored, limited, transport.calls.Load())
+	}
+}

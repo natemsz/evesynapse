@@ -399,8 +399,10 @@ func (app *Application) refreshCycle(ctx context.Context) {
 	// passes below find the shared entries already staged).
 	app.runCycleJobs(ctx, c, module.BeforePublicData, characters, clock)
 
+	// refreshPublicData marks its own steps; this closes the last of
+	// them, the name queues and the public records.
 	c.refreshPublicData(ctx, characters, clock)
-	clock.mark("public data", time.Now())
+	clock.mark("public records", time.Now())
 
 	// Module passes that follow the public-data passes (the swarm's
 	// spot checks on what its fetch phase staged, from what is left of
@@ -750,6 +752,7 @@ func (c *cycleState) refreshPublicData(ctx context.Context, characters []db.Char
 	c.pass("refreshing public contracts", func() (int, bool) {
 		return app.refreshPublicContracts(ctx, contractAllowance)
 	})
+	clock.mark("public contracts", time.Now())
 
 	// Abyssal scoring (schema 057): rolls become scores and
 	// stored estimates, so the appraisal pass below can
@@ -774,6 +777,7 @@ func (c *cycleState) refreshPublicData(ctx context.Context, characters []db.Char
 	c.pass("appraising public contracts", func() (int, bool) {
 		return app.appraisePublicContracts(ctx), false
 	})
+	clock.mark("contract appraisal", time.Now())
 
 	// Module jobs that follow the market pass (Trade Ideas' model
 	// refresh, for one): it starts beside the cycle and returns at once,

@@ -135,7 +135,7 @@ func TestWorkerCycleIsTimed(t *testing.T) {
 	if moduleCompiledIn("swarm") {
 		want = append(want, "swarm fetch")
 	}
-	want = append(want, "market data", "region sweep", "public data")
+	want = append(want, "market data", "region sweep", "public contracts", "contract appraisal", "public records")
 	if moduleCompiledIn("swarm") {
 		want = append(want, "swarm")
 	}

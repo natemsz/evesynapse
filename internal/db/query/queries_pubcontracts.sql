@@ -54,6 +54,45 @@ ON CONFLICT (contract_id) DO UPDATE SET
     last_cycle            = excluded.last_cycle,
     last_seen             = excluded.last_seen;
 
+-- name: UpsertPublicContracts :exec
+-- UpsertPublicContract for a whole list page in one statement (a
+-- page is up to a thousand contracts). The contract ids must be
+-- distinct.
+INSERT INTO pub_contracts (
+    contract_id, region_id, type, issuer_id, issuer_corporation_id,
+    for_corporation, title, price, buyout, reward, collateral, volume,
+    start_location_id, end_location_id, date_issued, date_expired,
+    days_to_complete, last_cycle, first_seen, last_seen)
+SELECT unnest(sqlc.arg(contract_ids)::bigint[]), sqlc.arg(region_id)::bigint,
+    unnest(sqlc.arg(types)::text[]), unnest(sqlc.arg(issuer_ids)::bigint[]),
+    unnest(sqlc.arg(issuer_corporation_ids)::bigint[]), unnest(sqlc.arg(for_corporations)::boolean[]),
+    unnest(sqlc.arg(titles)::text[]), unnest(sqlc.arg(prices)::float8[]),
+    unnest(sqlc.arg(buyouts)::float8[]), unnest(sqlc.arg(rewards)::float8[]),
+    unnest(sqlc.arg(collaterals)::float8[]), unnest(sqlc.arg(volumes)::float8[]),
+    unnest(sqlc.arg(start_location_ids)::bigint[]), unnest(sqlc.arg(end_location_ids)::bigint[]),
+    unnest(sqlc.arg(dates_issued)::timestamptz[]), unnest(sqlc.arg(dates_expired)::timestamptz[]),
+    unnest(sqlc.arg(days_to_complete)::bigint[]), sqlc.arg(last_cycle)::bigint,
+    sqlc.arg(seen)::timestamptz, sqlc.arg(seen)::timestamptz
+ON CONFLICT (contract_id) DO UPDATE SET
+    region_id             = excluded.region_id,
+    type                  = excluded.type,
+    issuer_id             = excluded.issuer_id,
+    issuer_corporation_id = excluded.issuer_corporation_id,
+    for_corporation       = excluded.for_corporation,
+    title                 = excluded.title,
+    price                 = excluded.price,
+    buyout                = excluded.buyout,
+    reward                = excluded.reward,
+    collateral            = excluded.collateral,
+    volume                = excluded.volume,
+    start_location_id     = excluded.start_location_id,
+    end_location_id       = excluded.end_location_id,
+    date_issued           = excluded.date_issued,
+    date_expired          = excluded.date_expired,
+    days_to_complete      = excluded.days_to_complete,
+    last_cycle            = excluded.last_cycle,
+    last_seen             = excluded.last_seen;
+
 -- The contracts of one region that leave the live set when a
 -- sweep completes: expiry passed, or not seen in the completed
 -- cycle nor the one before it (last_cycle at or below the

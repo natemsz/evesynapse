@@ -92,6 +92,9 @@ func (app *Application) refreshPublicContracts(ctx context.Context, allowance *f
 		return stored, true
 	}
 	for _, regionID := range pubContractRegionOrder(regionIDs) {
+		if ctx.Err() != nil {
+			return stored, false // shutting down: no sense asking every region's state
+		}
 		pages, ltd := app.advancePublicContractRegion(ctx, regionID, allowance)
 		stored += pages
 		if ltd {
@@ -309,27 +312,9 @@ func (app *Application) storePublicContractPage(ctx context.Context, regionID in
 	defer tx.Rollback()
 	q := db.New(tx)
 
-	for _, row := range rows {
-		issued, err := time.Parse(time.RFC3339, row.DateIssued)
-		if err != nil {
-			continue // a row without its dates cannot be placed in time; skip it
-		}
-		expired, err := time.Parse(time.RFC3339, row.DateExpired)
-		if err != nil {
-			continue
-		}
-		if err := q.UpsertPublicContract(ctx, db.UpsertPublicContractParams{
-			ContractID: row.ContractID, RegionID: regionID, Type: row.Type,
-			IssuerID: row.IssuerID, IssuerCorporationID: row.IssuerCorporationID,
-			ForCorporation: row.ForCorporation, Title: row.Title,
-			Price: row.Price, Buyout: row.Buyout, Reward: row.Reward,
-			Collateral: row.Collateral, Volume: row.Volume,
-			StartLocationID: row.StartLocationID, EndLocationID: row.EndLocationID,
-			DateIssued: issued, DateExpired: expired,
-			DaysToComplete: row.DaysToComplete,
-			LastCycle:      cycle, FirstSeen: now,
-		}); err != nil {
-			return fmt.Errorf("upsert contract %d: %w", row.ContractID, err)
+	if page := publicContractPageParams(regionID, cycle, now, rows); len(page.ContractIds) > 0 {
+		if err := q.UpsertPublicContracts(ctx, page); err != nil {
+			return fmt.Errorf("upsert %d contracts: %w", len(page.ContractIds), err)
 		}
 	}
 
@@ -349,6 +334,56 @@ func (app *Application) storePublicContractPage(ctx context.Context, regionID in
 		return fmt.Errorf("advance sweep cursor %d: %w", regionID, err)
 	}
 	return tx.Commit()
+}
+
+// publicContractPageParams is one list page as the columns of one
+// upsert. A row without its dates cannot be placed in time and is
+// skipped; a contract the page lists twice is kept once, its last
+// listing, since one statement may not write the same row twice.
+func publicContractPageParams(regionID, cycle int64, now time.Time, rows []esi.PublicContract) db.UpsertPublicContractsParams {
+	p := db.UpsertPublicContractsParams{RegionID: regionID, LastCycle: cycle, Seen: now}
+	type contractRow struct {
+		esi.PublicContract
+		issued, expired time.Time
+	}
+	at := make(map[int64]int, len(rows))
+	var kept []contractRow
+	for _, row := range rows {
+		issued, err := time.Parse(time.RFC3339, row.DateIssued)
+		if err != nil {
+			continue
+		}
+		expired, err := time.Parse(time.RFC3339, row.DateExpired)
+		if err != nil {
+			continue
+		}
+		r := contractRow{row, issued, expired}
+		if i, seen := at[row.ContractID]; seen {
+			kept[i] = r
+			continue
+		}
+		at[row.ContractID] = len(kept)
+		kept = append(kept, r)
+	}
+	for _, r := range kept {
+		p.ContractIds = append(p.ContractIds, r.ContractID)
+		p.Types = append(p.Types, r.Type)
+		p.IssuerIds = append(p.IssuerIds, r.IssuerID)
+		p.IssuerCorporationIds = append(p.IssuerCorporationIds, r.IssuerCorporationID)
+		p.ForCorporations = append(p.ForCorporations, r.ForCorporation)
+		p.Titles = append(p.Titles, r.Title)
+		p.Prices = append(p.Prices, r.Price)
+		p.Buyouts = append(p.Buyouts, r.Buyout)
+		p.Rewards = append(p.Rewards, r.Reward)
+		p.Collaterals = append(p.Collaterals, r.Collateral)
+		p.Volumes = append(p.Volumes, r.Volume)
+		p.StartLocationIds = append(p.StartLocationIds, r.StartLocationID)
+		p.EndLocationIds = append(p.EndLocationIds, r.EndLocationID)
+		p.DatesIssued = append(p.DatesIssued, r.issued)
+		p.DatesExpired = append(p.DatesExpired, r.expired)
+		p.DaysToComplete = append(p.DaysToComplete, r.DaysToComplete)
+	}
+	return p
 }
 
 // completePublicContractRegion finishes a sweep whose pages

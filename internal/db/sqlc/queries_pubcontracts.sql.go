@@ -2997,3 +2997,90 @@ func (q *Queries) UpsertPublicContractSweepState(ctx context.Context, arg Upsert
 	)
 	return err
 }
+
+const upsertPublicContracts = `-- name: UpsertPublicContracts :exec
+INSERT INTO pub_contracts (
+    contract_id, region_id, type, issuer_id, issuer_corporation_id,
+    for_corporation, title, price, buyout, reward, collateral, volume,
+    start_location_id, end_location_id, date_issued, date_expired,
+    days_to_complete, last_cycle, first_seen, last_seen)
+SELECT unnest($1::bigint[]), $2::bigint,
+    unnest($3::text[]), unnest($4::bigint[]),
+    unnest($5::bigint[]), unnest($6::boolean[]),
+    unnest($7::text[]), unnest($8::float8[]),
+    unnest($9::float8[]), unnest($10::float8[]),
+    unnest($11::float8[]), unnest($12::float8[]),
+    unnest($13::bigint[]), unnest($14::bigint[]),
+    unnest($15::timestamptz[]), unnest($16::timestamptz[]),
+    unnest($17::bigint[]), $18::bigint,
+    $19::timestamptz, $19::timestamptz
+ON CONFLICT (contract_id) DO UPDATE SET
+    region_id             = excluded.region_id,
+    type                  = excluded.type,
+    issuer_id             = excluded.issuer_id,
+    issuer_corporation_id = excluded.issuer_corporation_id,
+    for_corporation       = excluded.for_corporation,
+    title                 = excluded.title,
+    price                 = excluded.price,
+    buyout                = excluded.buyout,
+    reward                = excluded.reward,
+    collateral            = excluded.collateral,
+    volume                = excluded.volume,
+    start_location_id     = excluded.start_location_id,
+    end_location_id       = excluded.end_location_id,
+    date_issued           = excluded.date_issued,
+    date_expired          = excluded.date_expired,
+    days_to_complete      = excluded.days_to_complete,
+    last_cycle            = excluded.last_cycle,
+    last_seen             = excluded.last_seen
+`
+
+type UpsertPublicContractsParams struct {
+	ContractIds          []int64     `json:"contract_ids"`
+	RegionID             int64       `json:"region_id"`
+	Types                []string    `json:"types"`
+	IssuerIds            []int64     `json:"issuer_ids"`
+	IssuerCorporationIds []int64     `json:"issuer_corporation_ids"`
+	ForCorporations      []bool      `json:"for_corporations"`
+	Titles               []string    `json:"titles"`
+	Prices               []float64   `json:"prices"`
+	Buyouts              []float64   `json:"buyouts"`
+	Rewards              []float64   `json:"rewards"`
+	Collaterals          []float64   `json:"collaterals"`
+	Volumes              []float64   `json:"volumes"`
+	StartLocationIds     []int64     `json:"start_location_ids"`
+	EndLocationIds       []int64     `json:"end_location_ids"`
+	DatesIssued          []time.Time `json:"dates_issued"`
+	DatesExpired         []time.Time `json:"dates_expired"`
+	DaysToComplete       []int64     `json:"days_to_complete"`
+	LastCycle            int64       `json:"last_cycle"`
+	Seen                 time.Time   `json:"seen"`
+}
+
+// UpsertPublicContract for a whole list page in one statement (a
+// page is up to a thousand contracts). The contract ids must be
+// distinct.
+func (q *Queries) UpsertPublicContracts(ctx context.Context, arg UpsertPublicContractsParams) error {
+	_, err := q.db.ExecContext(ctx, upsertPublicContracts,
+		pq.Array(arg.ContractIds),
+		arg.RegionID,
+		pq.Array(arg.Types),
+		pq.Array(arg.IssuerIds),
+		pq.Array(arg.IssuerCorporationIds),
+		pq.Array(arg.ForCorporations),
+		pq.Array(arg.Titles),
+		pq.Array(arg.Prices),
+		pq.Array(arg.Buyouts),
+		pq.Array(arg.Rewards),
+		pq.Array(arg.Collaterals),
+		pq.Array(arg.Volumes),
+		pq.Array(arg.StartLocationIds),
+		pq.Array(arg.EndLocationIds),
+		pq.Array(arg.DatesIssued),
+		pq.Array(arg.DatesExpired),
+		pq.Array(arg.DaysToComplete),
+		arg.LastCycle,
+		arg.Seen,
+	)
+	return err
+}

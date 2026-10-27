@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.6.0.6] - 2026-10-27
+
+Automated build of EveSynapse v0.6.0.6. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+
+## What's Changed
+### 🐛 Bug Fixes
+* Restores the first page with its modals when a swap returns to it by @natemsz in https://github.com/natemsz/evesynapse/pull/742
+### Other Changes
+* Finds a type's corpus contracts from the item type index before sorting them by @natemsz in https://github.com/natemsz/evesynapse/pull/739
+* docs(changelog): review changelog for v0.6.0.5 by @github-actions[bot] in https://github.com/natemsz/evesynapse/pull/740
+* Keep departed public contracts on record (schema 096) by @natemsz in https://github.com/natemsz/evesynapse/pull/741
+
+
+**Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.6.0.5...v0.6.0.6
+
 ## [v0.6.0.5] - 2026-10-27
 
 Automated build of EveSynapse v0.6.0.5. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).

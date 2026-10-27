@@ -4112,6 +4112,29 @@
   hoistDetails(document.querySelector("details.topbar-switcher"), ".menu",
     { query: "(max-width: 640px)", gap: 0, left: "0", right: "0" });
 
+  var prompt = document.getElementById("notify-prompt");
+  if (prompt) {
+    hoist(prompt, placePrompt);
+    placePrompt();
+    new MutationObserver(placePrompt).observe(prompt, {
+      attributes: true, attributeFilter: ["hidden"],
+    });
+  }
+  function placePrompt() {
+    if (!prompt || prompt.hidden) return;
+    var head = document.querySelector("header");
+    prompt.style.top = ((head ? head.getBoundingClientRect().bottom : 64) + 8) + "px";
+    if (window.matchMedia && window.matchMedia("(max-width: 860px)").matches) {
+      prompt.style.left = "0.5rem";
+      prompt.style.right = "0.5rem";
+      prompt.style.width = "auto";
+    } else {
+      prompt.style.left = "auto";
+      prompt.style.right = "0.75rem";
+      prompt.style.width = "";
+    }
+  }
+
   var suggest = document.getElementById("topbar-suggest");
   var search = document.getElementById("topbar-q");
   if (suggest && search) {

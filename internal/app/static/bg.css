@@ -166,6 +166,11 @@ body > .flyout {
   z-index: 80;
   margin: 0;
 }
+/* The notification prompt stands below the flyouts it belongs
+   to: the bell list opens over it. */
+body > .notify-prompt.flyout {
+  z-index: 60;
+}
 html.js body > .notify-menu.flyout,
 html.js body > .switcher-menu.flyout {
   opacity: 0;
@@ -850,17 +855,18 @@ html[data-theme="light"] #main-content > .section-tabs .tabs-more.has-active .ta
   z-index: 40;
   width: min(24rem, calc(100vw - 2rem));
   padding: 0.9rem 1rem 0.8rem;
-  /* Deeper than --glass: the header's own backdrop-filter makes
-     it a backdrop root, and this card hangs below the header's
-     box, outside that root's backdrop image — the blur declared
-     below samples nothing here (measured: page text behind the
-     card stays at full sharpness). Legibility comes from the
-     paint instead; the blur stays for the day the card's
-     ancestry changes. */
-  background: color-mix(in srgb, var(--panel) 93%, transparent);
-  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(0.9);
-  backdrop-filter: blur(var(--glass-blur)) saturate(0.9);
-  border: 1px solid var(--glass-edge);
+  /* The header's own backdrop-filter makes it a backdrop root,
+     and this card hangs below the header's box, outside that
+     root's backdrop image: nested there, its blur sampled
+     nothing (measured: page text behind the card stayed at full
+     sharpness). app.js hoists the card to a top-level surface
+     like the other header flyouts, so the landing frost declared
+     here samples the page itself, over the landing's neutral
+     dark glass. */
+  background: rgb(8 13 22 / 0.55);
+  -webkit-backdrop-filter: blur(30px) saturate(1.45);
+  backdrop-filter: blur(30px) saturate(1.45);
+  border: 1px solid color-mix(in srgb, var(--accent) 25%, transparent);
   border-radius: var(--r-lg);
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55);
 }

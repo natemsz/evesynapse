@@ -812,6 +812,10 @@ type searchView struct {
 
 func (app *mod) handleContractSearch(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+	// Every render of this page runs the search (the default
+	// listing included), so every render ticks the Admin
+	// analytics Activity counter.
+	app.deps.NoteActivity(module.ActivityContractSearch)
 	data := &PageData{ShellData: app.deps.PublicShell(ctx)}
 	data.ContractSearch = app.buildSearchView(ctx, r.URL.Query())
 	data.SubTabNote = app.sweepNote(ctx)

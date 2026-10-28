@@ -939,8 +939,22 @@ func (s *ShellData) Shell() *ShellData {
 
 // Deps is the narrow foundation interface consumed by module packages.
 // Modules consume this interface, never the concrete Application struct.
+// Activity kinds counted by the Admin analytics recorder.
+const (
+	ActivityContractSearch = "contract_search"
+	// ActivitySwarmBytes sums response bytes served to swarm
+	// peers, not occurrences.
+	ActivitySwarmBytes = "swarm_bytes"
+)
+
 type Deps interface {
 	DB() *db.Queries
+	// NoteActivity ticks one analytics event counter (a contract
+	// search, a sign-in) for the Admin page's Activity panel.
+	NoteActivity(kind string)
+	// NoteActivityN adds n to one analytics counter; the swarm's
+	// bytes-served counter uses it with byte counts.
+	NoteActivityN(kind string, n int64)
 	ValuationPrices(ctx context.Context) map[int64]esi.MarketPrice
 	// TypicalSells is the swept typical sell per type (The
 	// Forge's book, global-market types filled from their own

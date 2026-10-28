@@ -582,6 +582,13 @@ var pgIntelThreadsSchema string
 //go:embed schema_pg/096_pub_contract_departures.sql
 var pgPubContractDeparturesSchema string
 
+// Step 097: the Admin analytics recorder's aggregate tables
+// (per-minute rows, hourly rollups, cycle rows, the inventory
+// snapshot) plus created_at indexes for the Activity counts.
+//
+//go:embed schema_pg/097_admin_stats.sql
+var pgAdminStatsSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -707,6 +714,7 @@ func schemaSteps() []schemaStep {
 		{94, "intel_submit_labels", pgIntelSubmitLabelsSchema, ""},
 		{95, "intel_threads", pgIntelThreadsSchema, ""},
 		{96, "pub_contract_departures", pgPubContractDeparturesSchema, ""},
+		{97, "admin_stats", pgAdminStatsSchema, ""},
 	}
 }
 

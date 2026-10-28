@@ -38,6 +38,9 @@ type adminView struct {
 	Characters   string
 	Parked       string
 	AnyParked    bool
+	// Analytics is the first-party analytics section
+	// (admin_analytics.go), built on every admin page load.
+	Analytics *analyticsView
 	// The anonymous-market switch (market_anon.go): its live
 	// state, and whether a stored setting (rather than the
 	// MARKET_ANON boot default) is what decides it.
@@ -90,12 +93,14 @@ func (app *Application) handleAdmin(w http.ResponseWriter, r *http.Request) {
 	data.Admin = view
 	now := time.Now()
 
+	var anTotals analyticsTotals
 	if totals, err := app.queries.AdminTotals(ctx, db.AdminTotalsParams{DayAgo: now.Add(-24 * time.Hour), WeekAgo: now.Add(-7 * 24 * time.Hour)}); err != nil {
 		logging.Errorf("admin: totals: %v", err)
 		data.Error = "Could not load admin data; check the server log."
 	} else {
 		view.Accounts, view.SeenToday, view.SeenThisWeek = esi.FormatInt(totals.Accounts), esi.FormatInt(totals.SeenToday), esi.FormatInt(totals.SeenThisWeek)
 		view.Characters, view.Parked, view.AnyParked = esi.FormatInt(totals.Characters), esi.FormatInt(totals.Parked), totals.Parked > 0
+		anTotals = analyticsTotals{Accounts: totals.Accounts, Characters: totals.Characters, Parked: totals.Parked, SeenToday: totals.SeenToday, OK: true}
 	}
 	if rows, err := app.queries.ListNewestUsers(ctx, adminNewest); err != nil {
 		logging.Errorf("admin: newest accounts: %v", err)
@@ -160,6 +165,7 @@ func (app *Application) handleAdmin(w http.ResponseWriter, r *http.Request) {
 			view.Account = account
 		}
 	}
+	view.Analytics = app.buildAnalytics(ctx, r.URL.Query().Get("range"), anTotals)
 	app.render(ctx, w, http.StatusOK, "admin.html", data)
 }
 

@@ -53,6 +53,7 @@ import (
 	"strings"
 	"time"
 
+	"evesynapse/internal/app/module"
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/logging"
 )
@@ -426,7 +427,11 @@ func (app *Mod) HandleSwarmPull(w http.ResponseWriter, r *http.Request) {
 	case SwarmPullAuthLegacy:
 		app.AddSwarmCounter(ctx, SwarmCounterPullsAuthLegacy, 1)
 	}
-	WriteSwarmJSON(w, map[string]any{"entries": entries})
+	served := WriteSwarmJSON(w, map[string]any{"entries": entries})
+	// The bytes this pull served, for the Admin page's Swarm
+	// panel: the marshaled payload length, before any
+	// compression the outer middleware applies.
+	app.Deps.NoteActivityN(module.ActivitySwarmBytes, int64(served))
 }
 
 // ReadSwarmJSON strictly decodes one size-capped request body.
@@ -437,15 +442,18 @@ func ReadSwarmJSON(r *http.Request, into any) error {
 	return DecodeSwarmStrict(io.LimitReader(r.Body, MaxSwarmBodyBytes), into)
 }
 
-// WriteSwarmJSON writes one response envelope.
-func WriteSwarmJSON(w http.ResponseWriter, body any) {
+// WriteSwarmJSON writes one response envelope and returns the
+// payload length in bytes (0 when the body would not encode).
+func WriteSwarmJSON(w http.ResponseWriter, body any) int {
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(body); err != nil {
 		http.Error(w, "bad gateway", http.StatusBadGateway)
-		return
+		return 0
 	}
+	n := buf.Len()
 	w.Header().Set("Content-Type", "application/json")
 	_, _ = buf.WriteTo(w)
+	return n
 }
 
 // ValidSwarmBaseURL reports whether a peer URL may be dialed:

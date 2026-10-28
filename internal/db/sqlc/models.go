@@ -1365,6 +1365,127 @@ type SrpSetting struct {
 	UpdatedAt     time.Time `json:"updated_at"`
 }
 
+type StatsCycle struct {
+	At         time.Time `json:"at"`
+	TookMs     int64     `json:"took_ms"`
+	Fetches    int64     `json:"fetches"`
+	Budget     int64     `json:"budget"`
+	Deferred   int64     `json:"deferred"`
+	Characters int64     `json:"characters"`
+	EsiState   string    `json:"esi_state"`
+}
+
+type StatsCyclePhase struct {
+	CycleAt time.Time `json:"cycle_at"`
+	Phase   string    `json:"phase"`
+	TookMs  int64     `json:"took_ms"`
+}
+
+type StatsCyclePhasesHourly struct {
+	Hour      time.Time `json:"hour"`
+	Phase     string    `json:"phase"`
+	TookSumMs int64     `json:"took_sum_ms"`
+	Samples   int64     `json:"samples"`
+}
+
+type StatsCyclesHourly struct {
+	Hour        time.Time `json:"hour"`
+	Cycles      int64     `json:"cycles"`
+	TookSumMs   int64     `json:"took_sum_ms"`
+	TookMaxMs   int64     `json:"took_max_ms"`
+	FetchesSum  int64     `json:"fetches_sum"`
+	DeferredSum int64     `json:"deferred_sum"`
+}
+
+type StatsDurationsHourly struct {
+	Hour       time.Time `json:"hour"`
+	RouteGroup string    `json:"route_group"`
+	Bucket     int16     `json:"bucket"`
+	Hits       int64     `json:"hits"`
+}
+
+type StatsDurationsMinute struct {
+	Minute     time.Time `json:"minute"`
+	RouteGroup string    `json:"route_group"`
+	Bucket     int16     `json:"bucket"`
+	Hits       int64     `json:"hits"`
+}
+
+type StatsEsiHourly struct {
+	Hour   time.Time `json:"hour"`
+	Family string    `json:"family"`
+	Calls  int64     `json:"calls"`
+	Errors int64     `json:"errors"`
+}
+
+type StatsEsiMinute struct {
+	Minute time.Time `json:"minute"`
+	Family string    `json:"family"`
+	Calls  int64     `json:"calls"`
+	Errors int64     `json:"errors"`
+}
+
+type StatsEventsHourly struct {
+	Hour  time.Time `json:"hour"`
+	Kind  string    `json:"kind"`
+	Count int64     `json:"count"`
+}
+
+type StatsEventsMinute struct {
+	Minute time.Time `json:"minute"`
+	Kind   string    `json:"kind"`
+	Count  int64     `json:"count"`
+}
+
+type StatsHostHourly struct {
+	Hour           time.Time `json:"hour"`
+	Samples        int64     `json:"samples"`
+	Load1Sum       float64   `json:"load1_sum"`
+	Load5Sum       float64   `json:"load5_sum"`
+	Load15Sum      float64   `json:"load15_sum"`
+	MemUsedSum     int64     `json:"mem_used_sum"`
+	MemUsedMax     int64     `json:"mem_used_max"`
+	MemTotalBytes  int64     `json:"mem_total_bytes"`
+	AppRssSum      int64     `json:"app_rss_sum"`
+	GoroutinesMax  int64     `json:"goroutines_max"`
+	DiskUsedBytes  int64     `json:"disk_used_bytes"`
+	DiskTotalBytes int64     `json:"disk_total_bytes"`
+}
+
+type StatsHostMinute struct {
+	Minute         time.Time `json:"minute"`
+	Load1          float64   `json:"load1"`
+	Load5          float64   `json:"load5"`
+	Load15         float64   `json:"load15"`
+	MemUsedBytes   int64     `json:"mem_used_bytes"`
+	MemTotalBytes  int64     `json:"mem_total_bytes"`
+	AppRssBytes    int64     `json:"app_rss_bytes"`
+	Goroutines     int64     `json:"goroutines"`
+	DiskUsedBytes  int64     `json:"disk_used_bytes"`
+	DiskTotalBytes int64     `json:"disk_total_bytes"`
+}
+
+type StatsInventory struct {
+	Hour      time.Time `json:"hour"`
+	Name      string    `json:"name"`
+	RowsEst   int64     `json:"rows_est"`
+	SizeBytes int64     `json:"size_bytes"`
+}
+
+type StatsRequestsHourly struct {
+	Hour        time.Time `json:"hour"`
+	RouteGroup  string    `json:"route_group"`
+	StatusClass int16     `json:"status_class"`
+	Requests    int64     `json:"requests"`
+}
+
+type StatsRequestsMinute struct {
+	Minute      time.Time `json:"minute"`
+	RouteGroup  string    `json:"route_group"`
+	StatusClass int16     `json:"status_class"`
+	Requests    int64     `json:"requests"`
+}
+
 type StructureContext struct {
 	StructureID        int64     `json:"structure_id"`
 	OwnerCorporationID int64     `json:"owner_corporation_id"`

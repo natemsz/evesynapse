@@ -9,7 +9,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -260,11 +259,7 @@ func sampleHost() (statsHostSample, bool) {
 		}
 	}
 	s.goroutines = runtime.NumGoroutine()
-	var fs syscall.Statfs_t
-	if err := syscall.Statfs(".", &fs); err == nil && fs.Blocks > 0 {
-		s.diskTotal = int64(fs.Blocks) * int64(fs.Bsize)
-		s.diskUsed = s.diskTotal - int64(fs.Bfree)*int64(fs.Bsize)
-	}
+	s.diskUsed, s.diskTotal = diskUsage(".")
 	return s, true
 }
 

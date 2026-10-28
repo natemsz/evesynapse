@@ -353,9 +353,16 @@ type Client struct {
 	// from GET /characters/{id}/): corporation and alliance IDs
 	// share the numeric space and get harvested from ledger
 	// payloads, and without this negative cache the worker would
-	// re-ask about them every cycle. In-process only — a restart
-	// re-proves a handful of IDs once.
+	// re-ask about them every cycle. Stored durably too, and loaded
+	// once per process (name_misses.go), so a restart does not
+	// re-prove them.
 	charNameMisses map[int64]bool
+
+	// Type ids ESI has definitively refused to name, the same way
+	// (name_misses.go). nameMissOnce loads both from the table.
+	typeIDMissMu sync.Mutex
+	typeIDMisses map[int64]bool
+	nameMissOnce sync.Once
 
 	// In-process caches of corporation and alliance ID → name,
 	// warmed by the worker from war details so the Intel pages
@@ -3359,17 +3366,24 @@ func (c *Client) StoreCharacterName(id int64, name string) {
 // CharacterNameMissed reports whether ESI has already definitively
 // answered that this ID is not a character (see charNameMisses).
 func (c *Client) CharacterNameMissed(id int64) bool {
+	c.loadNameMisses()
 	c.charNamesMu.RLock()
 	defer c.charNamesMu.RUnlock()
 	return c.charNameMisses[id]
 }
 
 // StoreCharacterNameMiss records a definitive "not a character"
-// answer for an ID so the warm-up pass skips it from now on.
+// answer for an ID so the warm-up pass skips it from now on, in
+// process and in the durable table (name_misses.go).
 func (c *Client) StoreCharacterNameMiss(id int64) {
+	c.loadNameMisses()
 	c.charNamesMu.Lock()
+	known := c.charNameMisses[id]
 	c.charNameMisses[id] = true
 	c.charNamesMu.Unlock()
+	if !known {
+		c.storeNameMiss(nameMissCharacter, id)
+	}
 }
 
 // ---------------------------------------------------------------------------

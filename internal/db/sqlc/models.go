@@ -314,6 +314,12 @@ type EntityName struct {
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
+type EsiNameMiss struct {
+	Kind     string    `json:"kind"`
+	EntityID int64     `json:"entity_id"`
+	MissedAt time.Time `json:"missed_at"`
+}
+
 type FitRating struct {
 	FitID     int64     `json:"fit_id"`
 	UserID    int64     `json:"user_id"`

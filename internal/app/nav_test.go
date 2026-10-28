@@ -364,7 +364,7 @@ func TestNavGroupsMirror(t *testing.T) {
 			label string
 			hrefs []string
 		}{
-			{"Market Tools", []string{"/market/", "/market/scanner/", "/market/ideas/", "/market/tradefinder/", "/market/leaderboard/", "/market/restock/", "/contracts/search/"}},
+			{"Market Tools", []string{"/market/", "/market/scanner/", "/market/ideas/", "/market/tradefinder/", "/market/leaderboard/", "/market/restock/", "/contracts/search/", "/market/trends/", "/market/lp/"}},
 			{"My Finances", []string{"/orders/", "/contracts/"}},
 		}, 1, 0},
 	} {

@@ -217,3 +217,48 @@ func TestWarmCharacterNameRemembersNonCharacters(t *testing.T) {
 		t.Fatalf("character endpoint called %d times, want 1", got)
 	}
 }
+
+// nameMissTransport answers a non-character id with 422 and a
+// refused type id with 404, counting every call.
+type nameMissTransport struct{ calls atomic.Int64 }
+
+func (s *nameMissTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	s.calls.Add(1)
+	status := http.StatusInternalServerError
+	switch req.URL.Path {
+	case "/characters/1000051/":
+		status = http.StatusUnprocessableEntity
+	case "/universe/types/999999999/":
+		status = http.StatusNotFound
+	}
+	return &http.Response{StatusCode: status, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(`{"error":"fixture"}`))}, nil
+}
+
+// TestNameMissesSurviveARestart: a definitive refusal for a
+// character id and a type id is remembered by the next process on
+// the same database, which asks ESI about neither.
+func TestNameMissesSurviveARestart(t *testing.T) {
+	transport := &nameMissTransport{}
+	app, conn, _ := buildCorpTestApp(t, transport)
+	ctx := context.Background()
+
+	app.warmCharacterName(ctx, &warmBudget{left: 10}, 1000051)
+	app.warmTypeName(ctx, &warmBudget{left: 10}, 999999999)
+	if !app.esi.CharacterNameMissed(1000051) || !app.esi.TypeIDMissed(999999999) {
+		t.Fatal("first process did not remember its misses")
+	}
+	before := transport.calls.Load()
+
+	restarted := secondProcessApp(t, conn, app.pool, transport)
+	if !restarted.esi.CharacterNameMissed(1000051) {
+		t.Error("restarted process forgot the non-character id")
+	}
+	if !restarted.esi.TypeIDMissed(999999999) {
+		t.Error("restarted process forgot the refused type id")
+	}
+	restarted.warmCharacterName(ctx, &warmBudget{left: 10}, 1000051)
+	restarted.warmMissingTypeNames(ctx, []int64{999999999}, &warmBudget{left: 10})
+	if got := transport.calls.Load() - before; got != 0 {
+		t.Fatalf("restarted process made %d ESI calls for known misses, want 0", got)
+	}
+}

@@ -545,3 +545,14 @@ ON CONFLICT (character_id) DO NOTHING;
 
 -- name: DeleteAdminOwnersExcept :exec
 DELETE FROM admin_owners WHERE NOT (character_id = ANY(sqlc.arg(character_ids)::bigint[]));
+
+-- Durable name misses (schema 100): what ESI definitively refused
+-- to name, by kind ('character', 'type').
+-- name: UpsertNameMiss :exec
+INSERT INTO esi_name_misses (kind, entity_id, missed_at)
+VALUES (sqlc.arg(kind), sqlc.arg(entity_id), sqlc.arg(missed_at)::timestamptz)
+ON CONFLICT (kind, entity_id) DO UPDATE SET missed_at = excluded.missed_at;
+-- name: ListNameMissesSince :many
+SELECT kind, entity_id
+FROM esi_name_misses
+WHERE missed_at >= sqlc.arg(since)::timestamptz;

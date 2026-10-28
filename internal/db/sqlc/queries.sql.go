@@ -1354,6 +1354,40 @@ func (q *Queries) ListLocalFittings(ctx context.Context, userID int64) ([]ListLo
 	return items, nil
 }
 
+const listNameMissesSince = `-- name: ListNameMissesSince :many
+SELECT kind, entity_id
+FROM esi_name_misses
+WHERE missed_at >= $1::timestamptz
+`
+
+type ListNameMissesSinceRow struct {
+	Kind     string `json:"kind"`
+	EntityID int64  `json:"entity_id"`
+}
+
+func (q *Queries) ListNameMissesSince(ctx context.Context, since time.Time) ([]ListNameMissesSinceRow, error) {
+	rows, err := q.db.QueryContext(ctx, listNameMissesSince, since)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListNameMissesSinceRow
+	for rows.Next() {
+		var i ListNameMissesSinceRow
+		if err := rows.Scan(&i.Kind, &i.EntityID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listNewestUsers = `-- name: ListNewestUsers :many
 SELECT u.id, u.created_at, u.last_seen_at,
        (SELECT count(*) FROM characters c WHERE c.user_id = u.id)::bigint AS characters
@@ -2576,6 +2610,25 @@ func (q *Queries) UpsertKillmailDetail(ctx context.Context, arg UpsertKillmailDe
 		arg.Payload,
 		arg.FetchedAt,
 	)
+	return err
+}
+
+const upsertNameMiss = `-- name: UpsertNameMiss :exec
+INSERT INTO esi_name_misses (kind, entity_id, missed_at)
+VALUES ($1, $2, $3::timestamptz)
+ON CONFLICT (kind, entity_id) DO UPDATE SET missed_at = excluded.missed_at
+`
+
+type UpsertNameMissParams struct {
+	Kind     string    `json:"kind"`
+	EntityID int64     `json:"entity_id"`
+	MissedAt time.Time `json:"missed_at"`
+}
+
+// Durable name misses (schema 100): what ESI definitively refused
+// to name, by kind ('character', 'type').
+func (q *Queries) UpsertNameMiss(ctx context.Context, arg UpsertNameMissParams) error {
+	_, err := q.db.ExecContext(ctx, upsertNameMiss, arg.Kind, arg.EntityID, arg.MissedAt)
 	return err
 }
 

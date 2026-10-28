@@ -1247,6 +1247,9 @@ func (app *Application) warmMissingTypeNames(ctx context.Context, typeIDs []int6
 	now := time.Now().UTC()
 	var missing []int64
 	for _, id := range typeIDs {
+		if app.esi.TypeIDMissed(id) {
+			continue // ESI already refused this id (esi/name_misses.go)
+		}
 		if _, ok := have[id]; ok {
 			continue
 		}
@@ -1278,6 +1281,9 @@ func (app *Application) warmMissingTypeGroups(ctx context.Context, typeIDs []int
 	have := app.esi.CachedTypeGroups(ctx, typeIDs)
 	var missing []int64
 	for _, id := range typeIDs {
+		if app.esi.TypeIDMissed(id) {
+			continue
+		}
 		if _, ok := have[id]; !ok {
 			missing = append(missing, id)
 		}
@@ -1437,12 +1443,16 @@ func (app *Application) warmMissingCharacterNames(ctx context.Context, character
 }
 
 // fetchTypeForWarm GETs one type for the warm-up pass, translating
-// an ESI error-limit response into a budget stop.
+// an ESI error-limit response into a budget stop. A definitive
+// refusal is remembered (durably, esi/name_misses.go), so the type
+// passes never ask about that id again.
 func (app *Application) fetchTypeForWarm(ctx context.Context, budget *warmBudget, id int64) (esi.Type, bool) {
 	var t esi.Type
 	if err := app.esi.Get(ctx, "", fmt.Sprintf("/universe/types/%d/", id), &t); err != nil {
 		if errors.Is(err, esi.ErrErrorLimit) {
 			budget.hitLimit()
+		} else if warmDefinitive(err) {
+			app.esi.StoreTypeIDMiss(id)
 		} else if ctx.Err() == nil {
 			logging.Errorf("worker: warm type %d: %v", id, err)
 		}

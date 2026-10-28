@@ -595,6 +595,12 @@ var pgAdminStatsSchema string
 //go:embed schema_pg/098_webauthn.sql
 var pgWebAuthnSchema string
 
+// Step 100: durable name misses, the IDs ESI has definitively said
+// are not a character or a type, so a restart does not re-ask them.
+//
+//go:embed schema_pg/100_name_misses.sql
+var pgNameMissesSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -722,6 +728,7 @@ func schemaSteps() []schemaStep {
 		{96, "pub_contract_departures", pgPubContractDeparturesSchema, ""},
 		{97, "admin_stats", pgAdminStatsSchema, ""},
 		{98, "webauthn", pgWebAuthnSchema, ""},
+		{100, "name_misses", pgNameMissesSchema, ""},
 	}
 }
 

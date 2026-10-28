@@ -589,6 +589,12 @@ var pgPubContractDeparturesSchema string
 //go:embed schema_pg/097_admin_stats.sql
 var pgAdminStatsSchema string
 
+// Step 098: the WebAuthn second factor's tables (credentials,
+// one-time recovery codes, the audit trail).
+//
+//go:embed schema_pg/098_webauthn.sql
+var pgWebAuthnSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -715,6 +721,7 @@ func schemaSteps() []schemaStep {
 		{95, "intel_threads", pgIntelThreadsSchema, ""},
 		{96, "pub_contract_departures", pgPubContractDeparturesSchema, ""},
 		{97, "admin_stats", pgAdminStatsSchema, ""},
+		{98, "webauthn", pgWebAuthnSchema, ""},
 	}
 }
 

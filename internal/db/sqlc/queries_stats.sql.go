@@ -1175,7 +1175,7 @@ func (q *Queries) StatsInventoryLatest(ctx context.Context, lim int32) ([]StatsI
 }
 
 const statsMarketHistoryLatest = `-- name: StatsMarketHistoryLatest :one
-SELECT max(attempted_at) AS latest FROM market_fetch_state WHERE kind LIKE 'history:%'
+SELECT max(attempted_at) AS latest FROM market_fetch_state WHERE starts_with(kind, 'history_')
 `
 
 func (q *Queries) StatsMarketHistoryLatest(ctx context.Context) (interface{}, error) {

@@ -402,6 +402,36 @@ func TestArmSecondFactor(t *testing.T) {
 	}
 }
 
+// A sign-in whose credential count cannot be read waits at
+// the factor: the arming decision is never skipped on a
+// failed read.
+func TestArmSecondFactorFailsShut(t *testing.T) {
+	ctx := context.Background()
+	app, conn, q := buildCorpTestApp(t, &countingTransport{})
+	enrolled := factorTestUser(t, q)
+	if _, err := q.CreateWebAuthnCredential(ctx, db.CreateWebAuthnCredentialParams{
+		UserID: enrolled, CredentialID: []byte("cred-1"), PublicKey: []byte("pub-1"), Name: "Key",
+	}); err != nil {
+		t.Fatalf("seed credential: %v", err)
+	}
+	if _, err := conn.ExecContext(ctx, "DROP TABLE webauthn_credentials"); err != nil {
+		t.Fatalf("drop credentials table: %v", err)
+	}
+	var jar factorJar
+	factorAuthedSession(t, app, &jar, enrolled, nil)
+	req := httptest.NewRequest(http.MethodGet, "https://example.com/", nil)
+	req.TLS = &tls.ConnectionState{}
+	var pending, enroll bool
+	serveFactor(t, app, &jar, func(w http.ResponseWriter, r *http.Request) {
+		app.armSecondFactor(r.Context(), enrolled)
+		pending = app.sessions.GetBool(r.Context(), session2FAPending)
+		enroll = app.sessions.GetBool(r.Context(), session2FAMustEnroll)
+	}, req)
+	if !pending || enroll {
+		t.Fatalf("unreadable count arms: pending %v enroll %v, want a hold at the factor", pending, enroll)
+	}
+}
+
 // A recovery code spends once: it burns on use, and
 // regenerating the set kills the old codes outright.
 func TestRecoveryCodesBurnAndRegenerate(t *testing.T) {

@@ -453,6 +453,10 @@ func (app *Application) refreshCycle(ctx context.Context) {
 	timing.RateHeld = c.rateHeld
 	timing.Budgets = app.esi.TakeRateBudgets()
 	app.recordWorkerTiming(timing)
+	// The analytics flush rides the cycle's end: the per-minute
+	// counters land about once a minute and this cycle's row with
+	// them (stats_recorder.go).
+	app.flushStats(ctx, timing)
 
 	summary := cycleSummary(c.refreshed, c.namesResolved, c.failed, c.limited, parked, c.deferred)
 	app.updateWorkerStatus(func(s *workerStatus) {

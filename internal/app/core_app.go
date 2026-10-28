@@ -97,6 +97,12 @@ type Application struct {
 	workerCtx  context.Context // the worker's context, captured in New for background jobs (SDE import)
 	startedAt  time.Time       // when New built this application; /healthz measures a worker that never ran from here
 
+	// The Admin analytics recorder (stats_recorder.go): created
+	// lazily by recorder() so every Application construction has
+	// one.
+	statsMu sync.Mutex
+	stats   *statsRecorder
+
 	// /healthz's last check (core_health.go): the answer is
 	// cached for a few seconds, and its error logging throttled,
 	// so a flood of health checks cannot become a flood of
@@ -541,6 +547,7 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	pageThrottle, _ := app.anonThrottles()
 	anonPages := app.throttleAnon(pageThrottle)
 	r.Use(requestLogger)
+	r.Use(app.countRequests)
 	r.Use(middleware.Recoverer)
 	r.Use(app.securityHeaders)
 	r.Use(navStateMiddleware)

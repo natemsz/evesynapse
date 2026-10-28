@@ -387,6 +387,7 @@ func (app *Application) finishIdentityLogin(w http.ResponseWriter, r *http.Reque
 	app.sessions.Put(ctx, sessionUserID, int(userID))
 	putSessionCharID(app.sessions, ctx, characterID)
 	app.sessions.Put(ctx, sessionCharacterName, characterName)
+	app.recorder().tick(statsEventSignIn)
 	http.Redirect(w, r, app.takeReturnTo(ctx), http.StatusSeeOther)
 }
 
@@ -632,6 +633,7 @@ func (app *Application) handleEVECallback(w http.ResponseWriter, r *http.Request
 	app.sessions.Put(ctx, sessionUserID, int(userID))
 	putSessionCharID(app.sessions, ctx, characterID)
 	app.sessions.Put(ctx, sessionCharacterName, characterName)
+	app.recorder().tick(statsEventSignIn)
 
 	http.Redirect(w, r, app.takeReturnTo(ctx), http.StatusSeeOther)
 }

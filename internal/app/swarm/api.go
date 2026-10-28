@@ -53,6 +53,7 @@ import (
 	"strings"
 	"time"
 
+	"evesynapse/internal/app/module"
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/logging"
 )
@@ -426,7 +427,24 @@ func (app *Mod) HandleSwarmPull(w http.ResponseWriter, r *http.Request) {
 	case SwarmPullAuthLegacy:
 		app.AddSwarmCounter(ctx, SwarmCounterPullsAuthLegacy, 1)
 	}
-	WriteSwarmJSON(w, map[string]any{"entries": entries})
+	bw := &byteCountingWriter{ResponseWriter: w}
+	WriteSwarmJSON(bw, map[string]any{"entries": entries})
+	// The bytes this pull served, for the Admin page's Swarm
+	// panel: payload bytes as written, before any compression
+	// the outer middleware applies.
+	app.Deps.NoteActivityN(module.ActivitySwarmBytes, int64(bw.n))
+}
+
+// byteCountingWriter counts the bytes written through it.
+type byteCountingWriter struct {
+	http.ResponseWriter
+	n int
+}
+
+func (w *byteCountingWriter) Write(p []byte) (int, error) {
+	n, err := w.ResponseWriter.Write(p)
+	w.n += n
+	return n, err
 }
 
 // ReadSwarmJSON strictly decodes one size-capped request body.

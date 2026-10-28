@@ -307,9 +307,10 @@ type Client struct {
 	// ESI calls in the trailing day, for the Sync page's
 	// calls-per-pilot metric. Buckets by Unix hour; pruned
 	// as new calls land.
-	callsMu     sync.Mutex
-	callsByHour map[int64]int64
-	callsTotal  int64
+	callsMu       sync.Mutex
+	callsByHour   map[int64]int64
+	callsTotal    int64
+	callsByFamily map[string]*FamilyCount
 
 	// In-process cache of EVE type ID → name (backed by the
 	// type_names table).
@@ -1702,6 +1703,7 @@ func (c *Client) sendOnce(ctx context.Context, method, accessToken, path string,
 		return nil, nil, 0, err
 	}
 	c.noteCall()
+	defer func() { c.noteCallOutcome(path, err) }()
 	var reqBody io.Reader
 	if raw != nil {
 		reqBody = bytes.NewReader(raw)

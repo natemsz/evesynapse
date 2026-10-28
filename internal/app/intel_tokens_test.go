@@ -140,7 +140,12 @@ func TestIntelTokens(t *testing.T) {
 	if r := api(http.MethodGet, "/api/intel/v1/channels", "", token, priv); r.Code != http.StatusOK || !strings.Contains(r.Body.String(), `"name":"Home intel"`) || !strings.Contains(r.Body.String(), `"account":"Watcher Pilot"`) {
 		t.Fatalf("channels: %d %s", r.Code, r.Body.String())
 	}
-	lines := `{"lines":["[ 2026.10.21 11:20:05 ] Scout > Jita +3 Bad Guy","[ 2026.10.21 11:20:09 ] Scout > anyone?"]}`
+	// Line timestamps sit at now: dedupe scans a 7-day window, so a
+	// fixed past date ages out of it.
+	stamp := time.Now().UTC()
+	lines := `{"lines":[` +
+		strconv.Quote("[ "+stamp.Format("2006.01.02 15:04:05")+" ] Scout > Jita +3 Bad Guy") + "," +
+		strconv.Quote("[ "+stamp.Add(4*time.Second).Format("2006.01.02 15:04:05")+" ] Scout > anyone?") + `]}`
 	path := "/api/intel/v1/channels/" + strconv.FormatInt(cid, 10) + "/lines"
 	r := api(http.MethodPost, path, lines, token, priv)
 	if r.Code != http.StatusOK || !strings.Contains(r.Body.String(), `"posted":1`) || !strings.Contains(r.Body.String(), `"skipped":1`) {

@@ -130,6 +130,29 @@ func TestSystemAndStationPages(t *testing.T) {
 	_, body = getPage(t, app, cookie, "/search.json?q=forge")
 	mustContain(t, "/search.json region", body, `"kind":"region"`, `"name":"The Forge"`)
 
+	// The banner box ends with the results page; the palette's
+	// search (no all=1) does not.
+	_, body = getPage(t, app, cookie, "/search.json?all=1&q=jita")
+	mustContain(t, "/search.json all", body, `"kind":"all"`)
+	if _, body = getPage(t, app, cookie, "/search.json?q=jita"); strings.Contains(body, `"kind":"all"`) {
+		t.Error("/search.json without all=1 offered the results page row")
+	}
+
+	// The results page: a tab per kind found, systems linked with
+	// security and region, and the security filter narrowing them.
+	code, body = getPage(t, app, cookie, "/search/?q=jita")
+	if code != http.StatusOK {
+		t.Fatalf("GET /search/: status %d", code)
+	}
+	mustContain(t, "/search/", body, `<span class="gt">Search</span>`, "Systems 1",
+		`<a href="/system/?system=30000142">Jita</a>`, `<span class="sec sec-9">0.9</span>`,
+		`<a href="/region/?region=10000002">The Forge</a>`, `name="sec"`)
+	_, body = getPage(t, app, cookie, "/search/?q=jita&type=systems&sec=null")
+	mustContain(t, "/search/ null filter", body, "No systems match those filters.")
+	if strings.Contains(body, `<a href="/system/?system=30000142">Jita</a>`) {
+		t.Error("the null-sec filter kept high-sec Jita")
+	}
+
 	// Unknown ids: not-in-the-star-map states, still 200.
 	code, body = getPage(t, app, cookie, "/system/?system=39999999")
 	if code != http.StatusOK {

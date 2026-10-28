@@ -2103,9 +2103,11 @@
         for (var i = 0; i < items.length; i++) {
           if (isPending(items[i])) { hasPending = true; break; }
         }
-        if (hasPending && pendingRetries < 8) {
+        if (hasPending && pendingRetries < 14) {
           pendingRetries++;
-          retryTimer = window.setTimeout(function () { query(q); }, 2500);
+          // The lookup is woken the moment the name is noted, so
+          // the first answers come quickly; then it backs off.
+          retryTimer = window.setTimeout(function () { query(q); }, pendingRetries <= 6 ? 700 : 2500);
         } else if (!hasPending) {
           pendingRetries = 0;
         }
@@ -2121,7 +2123,8 @@
       retryTimer = null;
       pendingRetries = 0;
       if (q.length < 2) { close(); return; }
-      timer = window.setTimeout(function () { query(q); }, 150);
+      // Asked once typing pauses, not on every key.
+      timer = window.setTimeout(function () { query(q); }, 250);
     });
 
     input.addEventListener("keydown", function (ev) {
@@ -2297,10 +2300,12 @@
   attachSuggest(
     document.getElementById("topbar-q"),
     document.getElementById("topbar-suggest"),
-    function (q) { return "/search.json?q=" + encodeURIComponent(q); },
-    function (it) {
+    function (q) { return "/search.json?all=1&q=" + encodeURIComponent(q); },
+    function (it, input) {
       var url;
-      if (it.kind === "character") {
+      if (it.kind === "all") {
+        url = "/search/?q=" + encodeURIComponent(input.value.trim());
+      } else if (it.kind === "character") {
         url = "/character/?character=" + encodeURIComponent(it.id);
       } else if (it.kind === "pilot") {
         url = "/pilot/?character=" + encodeURIComponent(it.id);
@@ -3178,6 +3183,7 @@
       case "alliance": return "/alliance/?alliance=" + encodeURIComponent(hit.id);
       case "system": return "/system/?system=" + encodeURIComponent(hit.id);
       case "region": return "/region/?region=" + encodeURIComponent(hit.id);
+      case "all": return hit.url;
       default: return "/market/?type=" + encodeURIComponent(hit.id);
     }
   }
@@ -3186,6 +3192,9 @@
   var selected = -1;
   var timer = null;
   var querySerial = 0;
+  var retryTimer = null;
+  var retries = 0;
+  var typed = ""; // the query as typed, for the search and the results page
 
   function isOpen() { return !overlay.hidden; }
 
@@ -3286,21 +3295,41 @@
       }
       groups.push({ label: quickJumpGroups[g][1], hits: rows });
     }
+    // Last, the results page: every kind of match, with filters.
+    if (q.length >= 2) {
+      groups.push({ label: "Everything", hits: [{
+        kind: "all", name: "All results for “" + typed + "”",
+        url: "/search/?q=" + encodeURIComponent(typed)
+      }] });
+    }
     paint(groups);
   }
 
-  function ask(q) {
+  function ask(q, again) {
     var serial = ++querySerial;
-    render([], q); // page matches land instantly
+    if (retryTimer) window.clearTimeout(retryTimer);
+    retryTimer = null;
+    if (!again) {
+      retries = 0;
+      render([], q); // page matches land instantly
+    }
     if (q.length < 2) return;
-    window.fetch("/search.json?q=" + encodeURIComponent(q), {
+    window.fetch("/search.json?q=" + encodeURIComponent(typed), {
       cache: "no-store",
       headers: { "Accept": "application/json" }
     }).then(function (resp) {
       return resp.ok ? resp.json() : [];
     }).then(function (rows) {
       if (serial !== querySerial) return; // typed past this answer
-      render(Array.isArray(rows) ? rows : [], q);
+      rows = Array.isArray(rows) ? rows : [];
+      render(rows, q);
+      // A pilot name being looked up: ask again shortly, as the
+      // banner search does, until it lands or the palette moves on.
+      var pending = rows.some(function (r) { return r.kind === "pilot-pending"; });
+      if (pending && retries < 14) {
+        retries++;
+        retryTimer = window.setTimeout(function () { ask(q, true); }, retries <= 6 ? 700 : 2500);
+      }
     }).catch(function () { /* page matches already stand */ });
   }
 
@@ -3311,6 +3340,7 @@
     if (isOpen()) return;
     document.body.classList.add("quickjump-open");
     input.value = "";
+    typed = "";
     ask("");
     window.EveSynapseModal.open(overlay, { focus: false, onClose: paletteClosed });
     input.focus();
@@ -3322,6 +3352,8 @@
     querySerial++; // an answer in flight no longer matters
     if (timer) window.clearTimeout(timer);
     timer = null;
+    if (retryTimer) window.clearTimeout(retryTimer);
+    retryTimer = null;
   }
 
   function closePalette() {
@@ -3347,9 +3379,11 @@
   });
 
   input.addEventListener("input", function () {
-    var q = input.value.trim().toLowerCase();
+    typed = input.value.trim();
+    var q = typed.toLowerCase();
     if (timer) window.clearTimeout(timer);
-    timer = window.setTimeout(function () { ask(q); }, 150);
+    // Asked once typing pauses, not on every key.
+    timer = window.setTimeout(function () { ask(q); }, 250);
   });
 
   input.addEventListener("keydown", function (ev) {

@@ -206,7 +206,7 @@ func (app *Application) noteSuggested(ctx context.Context, box, pool string, ite
 // the not-yet-resolved name search: it carries no link and is
 // never offered as a pick.
 type searchHit struct {
-	Kind  string `json:"kind"` // "item" | "character" | "pilot" | "corporation" | "alliance" | "system" | "region" | "pilot-pending"
+	Kind  string `json:"kind"` // "item" | "character" | "pilot" | "corporation" | "alliance" | "system" | "region" | "pilot-pending" | "all"
 	ID    int64  `json:"id"`
 	Name  string `json:"name"`
 	Label string `json:"label,omitempty"`
@@ -236,219 +236,6 @@ func sortHitsByName(hits []searchHit, q string) {
 		}
 		return strings.ToLower(hits[i].Name) < strings.ToLower(hits[j].Name)
 	})
-}
-
-// handleTopbarSearch serves GET /search.json?q=: the signed-in
-// user's characters first (they're the highest-intent match),
-// then items, systems, regions, corporations, alliances, and
-// warmed pilot records. It also backs the Ctrl+K quick-jump palette, which
-// renders the same hits grouped by kind. Every item hit notes
-// the market-history prefetch wants the market page's search
-// notes, so whichever result the user jumps to already has its
-// chart warming.
-func (app *Application) handleTopbarSearch(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-	q := strings.TrimSpace(r.URL.Query().Get("q"))
-	hits := []searchHit{}
-	if len(q) < 2 {
-		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-		_ = json.NewEncoder(w).Encode(hits)
-		return
-	}
-	userID := app.userID(ctx)
-
-	ownIDs := map[int64]bool{}
-	ownHitCount := 0
-	if userID == 0 {
-		// Anonymous: no characters of its own to match.
-	} else if chars, err := app.queries.ListCharactersByUser(ctx, userID); err == nil {
-		charHits := []searchHit{}
-		for _, ch := range chars {
-			ownIDs[ch.CharacterID] = true
-			if _, ok := nameMatchTier(ch.Name, q); ok && ch.Name != "" {
-				charHits = append(charHits, searchHit{
-					Kind: "character", ID: ch.CharacterID, Name: ch.Name, Label: "Your character",
-				})
-			}
-		}
-		sortHitsByName(charHits, q)
-		if len(charHits) > 4 {
-			charHits = charHits[:4]
-		}
-		ownHitCount = len(charHits)
-		hits = append(hits, charHits...)
-	} else {
-		logging.Errorf("search: list characters for user %d: %v", userID, err)
-	}
-
-	itemHits := []searchHit{}
-	itemMatches := []marketMatch{}
-	for _, it := range app.suggestTypes(ctx, q, suggestPoolAll, 6) {
-		hit := searchHit{Kind: "item", ID: it.ID, Name: it.Name, Label: it.Label}
-		itemHits = append(itemHits, hit)
-		hits = append(hits, hit)
-		itemMatches = append(itemMatches, marketMatch{ID: it.ID, Name: it.Name})
-	}
-	// Guess, same as the search boxes: a jump to any of these
-	// items should land on a warming chart, not a cold one. Each
-	// keystroke replaces the box's previous guesses.
-	// The guesses are gathered as the searches below find them
-	// and written in one step at the end (setTypingGuesses): no
-	// lock is held while anything is being searched.
-	var guesses []typingGuess
-	for i, m := range itemMatches {
-		if i >= suggestedWarmed {
-			break
-		}
-		guesses = append(guesses, typingGuess{kind: pageWantHistory, id: m.ID, region: defaultMarketRegion})
-	}
-
-	// Systems and regions, from the local star map. A system names
-	// its region and carries its security status.
-	if rows, err := app.queries.SuggestSDESystems(ctx, db.SuggestSDESystemsParams{Q: q, Lim: 4}); err == nil {
-		for _, row := range rows {
-			sec, tier := secRound(row.Security)
-			hits = append(hits, searchHit{
-				Kind: "system", ID: row.SystemID, Name: row.Name, Label: "System · " + row.RegionName,
-				Sec: sec, SecTier: tier,
-			})
-		}
-	} else {
-		logging.Errorf("search: systems for %q: %v", q, err)
-	}
-	if rows, err := app.queries.SuggestSDERegions(ctx, db.SuggestSDERegionsParams{Q: q, Lim: 3}); err == nil {
-		for _, row := range rows {
-			hits = append(hits, searchHit{Kind: "region", ID: row.RegionID, Name: row.Name, Label: "Region"})
-		}
-	} else {
-		logging.Errorf("search: regions for %q: %v", q, err)
-	}
-
-	// Corporations and alliances whose public records have
-	// already been warmed answer here too, so a name the app
-	// knows links straight to its record page.
-	if rows, err := app.queries.SearchCorporationRecordsByName(ctx, q); err == nil {
-		corpHits := []searchHit{}
-		for _, row := range rows {
-			payload, ok := decodeCorpPayload(row.Payload)
-			if !ok {
-				continue
-			}
-			if _, ok := nameMatchTier(payload.Corp.Name, q); !ok {
-				continue
-			}
-			label := "Corporation"
-			if payload.Corp.Ticker != "" {
-				label = "[" + payload.Corp.Ticker + "]"
-			}
-			corpHits = append(corpHits, searchHit{
-				Kind: "corporation", ID: row.CorporationID, Name: payload.Corp.Name, Label: label,
-			})
-		}
-		sortHitsByName(corpHits, q)
-		if len(corpHits) > 4 {
-			corpHits = corpHits[:4]
-		}
-		hits = append(hits, corpHits...)
-		for _, h := range corpHits {
-			guesses = append(guesses, typingGuess{kind: pageWantCorporation, id: h.ID})
-		}
-	} else {
-		logging.Errorf("search: corporation records for %q: %v", q, err)
-	}
-
-	if rows, err := app.queries.SearchAllianceRecordsByName(ctx, q); err == nil {
-		allianceHits := []searchHit{}
-		for _, row := range rows {
-			payload, ok := decodeAlliancePayload(row.Payload)
-			if !ok {
-				continue
-			}
-			if _, ok := nameMatchTier(payload.Alliance.Name, q); !ok {
-				continue
-			}
-			label := "Alliance"
-			if payload.Alliance.Ticker != "" {
-				label = "[" + payload.Alliance.Ticker + "]"
-			}
-			allianceHits = append(allianceHits, searchHit{
-				Kind: "alliance", ID: row.AllianceID, Name: payload.Alliance.Name, Label: label,
-			})
-		}
-		sortHitsByName(allianceHits, q)
-		if len(allianceHits) > 4 {
-			allianceHits = allianceHits[:4]
-		}
-		hits = append(hits, allianceHits...)
-		for _, h := range allianceHits {
-			guesses = append(guesses, typingGuess{kind: pageWantAlliance, id: h.ID})
-		}
-	} else {
-		logging.Errorf("search: alliance records for %q: %v", q, err)
-	}
-
-	pilotHitCount := 0
-	if rows, err := app.queries.SearchPilotRecordsByName(ctx, q); err == nil {
-		pilotHits := []searchHit{}
-		for _, row := range rows {
-			if ownIDs[row.CharacterID] || row.Payload == "" {
-				continue
-			}
-			var payload pilotPayload
-			if jerr := json.Unmarshal([]byte(row.Payload), &payload); jerr != nil || payload.Profile.Name == "" {
-				continue
-			}
-			if _, ok := nameMatchTier(payload.Profile.Name, q); !ok {
-				continue
-			}
-			label := "Pilot"
-			if payload.Corp.Name != "" {
-				label = payload.Corp.Name
-			}
-			pilotHits = append(pilotHits, searchHit{
-				Kind: "pilot", ID: row.CharacterID, Name: payload.Profile.Name, Label: label,
-			})
-		}
-		sortHitsByName(pilotHits, q)
-		if len(pilotHits) > 4 {
-			pilotHits = pilotHits[:4]
-		}
-		pilotHitCount = len(pilotHits)
-		hits = append(hits, pilotHits...)
-		for _, h := range pilotHits {
-			guesses = append(guesses, typingGuess{kind: pageWantPilot, id: h.ID})
-		}
-	} else {
-		logging.Errorf("search: pilot records for %q: %v", q, err)
-	}
-
-	if userID > 0 { // anonymous typing warms nothing ahead of a visit
-		app.setTypingGuesses(ctx, app.typingBox(ctx, "topbar"), guesses, time.Now().UTC())
-	}
-
-	// No local character of either kind matched: if the query
-	// reads as a full pilot name, note the one-per-name
-	// resolution want and say the search is under way instead of
-	// silently offering nothing.
-	pendingNameSearch := false
-	if userID > 0 && ownHitCount == 0 && pilotHitCount == 0 && app.notePilotNameSearch(ctx, q, itemHits) {
-		pendingNameSearch = true
-		hits = append(hits, searchHit{
-			Kind:  "pilot-pending",
-			Name:  "Searching for “" + q + "”…",
-			Label: "Pilot",
-		})
-	}
-
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	if pendingNameSearch {
-		// The box re-asks while a name warms; a cached pending
-		// answer would hide the real suggestion when it lands.
-		w.Header().Set("Cache-Control", "no-store")
-	} else {
-		w.Header().Set("Cache-Control", "private, max-age=30")
-	}
-	_ = json.NewEncoder(w).Encode(hits)
 }
 
 // normalizePilotName folds a typed pilot name to the key its
@@ -484,19 +271,23 @@ func plausiblePilotName(name string) bool {
 }
 
 // notePilotNameSearch records (or consults) the name-resolution
-// want for one topbar query and reports whether the answer
-// should carry the "searching" row: a want under way, or one
-// resolved to a character whose record is still warming. A name
-// ESI has settled as unknown stays quiet. Writes only.
-func (app *Application) notePilotNameSearch(ctx context.Context, q string, itemHits []searchHit) bool {
+// want for one query. A want under way answers with the
+// "searching" row (pending) and nudges the name lookup awake, so
+// the name resolves within a moment rather than on the next pass;
+// a name already resolved to a character whose record is still
+// warming answers with that pilot at once (hit), the record
+// filling in behind it. A name ESI has settled as unknown stays
+// quiet. The handler itself never fetches: the lookup is the
+// worker's (urgentNameLookup).
+func (app *Application) notePilotNameSearch(ctx context.Context, q string, itemHits []searchHit) (pending bool, hit *searchHit) {
 	if !plausiblePilotName(q) {
-		return false
+		return false, nil
 	}
 	// An exact item match means the user is almost certainly
 	// after the item; don't spend a name lookup on it.
 	for _, hit := range itemHits {
 		if strings.EqualFold(hit.Name, q) {
-			return false
+			return false, nil
 		}
 	}
 	normalized := normalizePilotName(q)
@@ -504,23 +295,28 @@ func (app *Application) notePilotNameSearch(ctx context.Context, q string, itemH
 	if err == nil {
 		switch want.State {
 		case "missing":
-			return false
+			return false, nil
 		case "ready":
 			if want.CharacterID <= 0 {
-				return true
+				return true, nil
 			}
 			rec, rerr := app.queries.GetPilotRecord(ctx, want.CharacterID)
 			if rerr == nil && (rec.State == pilotStateMissing || rec.State == pilotStateReady) {
-				return false
+				return false, nil
 			}
-			return true
+			name, ok := app.esi.CachedCharacterName(want.CharacterID)
+			if !ok {
+				name = want.DisplayName
+			}
+			return false, &searchHit{Kind: "pilot", ID: want.CharacterID, Name: name, Label: "Pilot"}
 		default: // pending, or an error waiting out its backoff
-			return true
+			app.nudgeNameLookup()
+			return true, nil
 		}
 	}
 	if !errors.Is(err, sql.ErrNoRows) {
 		logging.Errorf("search: read pilot name want %q: %v", normalized, err)
-		return false
+		return false, nil
 	}
 	display := strings.Join(strings.Fields(q), " ")
 	if qerr := app.queries.UpsertPilotNameWant(ctx, db.UpsertPilotNameWantParams{
@@ -529,7 +325,8 @@ func (app *Application) notePilotNameSearch(ctx context.Context, q string, itemH
 		RequestedAt:    time.Now().UTC(),
 	}); qerr != nil {
 		logging.Errorf("search: note pilot name want %q: %v", normalized, qerr)
-		return false
+		return false, nil
 	}
-	return true
+	app.nudgeNameLookup()
+	return true, nil
 }

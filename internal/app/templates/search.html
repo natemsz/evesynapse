@@ -1,0 +1,71 @@
+{{define "title"}}{{if and .Search .Search.Query}}{{.Search.Query}} · Search{{else}}Search{{end}}{{end}}
+{{define "pagetitle"}}<h1><span class="gt">Search</span></h1>{{end}}
+{{define "pagetabs"}}{{template "sectiontabs" .}}{{end}}
+{{define "content"}}
+{{with .Search}}{{$v := .}}
+<form method="get" action="/search/" role="search">
+  <span class="searchwrap">
+    <input type="search" name="q" value="{{$v.Query}}" placeholder="Items, pilots, corporations, systems…" autocomplete="off" aria-label="Search">
+  </span>
+  {{if ne $v.Kind "all"}}<input type="hidden" name="type" value="{{$v.Kind}}">{{end}}
+  {{if or (eq $v.Kind "all") (eq $v.Kind "systems")}}{{if $v.Regions}}
+  <label><small>Security
+    <select name="sec" data-autosubmit>
+      <option value="">Any security</option>
+      {{range $v.SecBands}}<option value="{{index . 0}}"{{if eq (index . 0) $v.Sec}} selected{{end}}>{{index . 1}}</option>{{end}}
+    </select></small></label>
+  {{if gt (len $v.Regions) 1}}<label><small>Region
+    <select name="region" data-autosubmit>
+      <option value="">Any region</option>
+      {{range $v.Regions}}<option value="{{.ID}}"{{if eq .ID $v.RegionID}} selected{{end}}>{{.Name}}</option>{{end}}
+    </select></small></label>{{end}}
+  {{end}}{{end}}
+  <button class="btn" type="submit">Search</button>
+</form>
+
+{{if not $v.Query}}
+<p><small>Search every item, pilot, corporation, alliance, system and region by name.</small></p>
+{{else if lt (len $v.Query) 2}}
+<p><small>Type at least two letters.</small></p>
+{{else}}
+{{if $v.Pending}}<p class="muted"><small><span class="loading-pulse" aria-hidden="true"></span> Looking up “{{$v.Query}}” as a pilot. It shows here in a moment; <a href="">check again</a>.</small></p>{{end}}
+
+{{range $v.Sections}}
+<h3 class="item-section">{{.Title}}{{if .More}} <small>· <a href="{{.More}}">all {{.Total}}</a></small>{{end}}</h3>
+{{if eq .Key "items"}}<p><small>Filter items by category and group in the <a href="{{$v.ItemsURL}}">Item Database</a>.</small></p>{{end}}
+{{if eq .Key "systems"}}
+{{if .Systems}}
+<div class="tw">
+<table>
+  <thead><tr><th>System</th><th>Region</th></tr></thead>
+  <tbody>
+  {{range .Systems}}
+    <tr><td><span class="sec sec-{{.SecTier}}">{{.Sec}}</span> <a href="/system/?system={{.ID}}">{{.Name}}</a></td><td><a href="/region/?region={{.RegionID}}">{{.RegionName}}</a></td></tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+{{else}}<p><small>No systems match those filters.</small></p>{{end}}
+{{else if .Hits}}
+<div class="tw">
+<table>
+  <thead><tr><th>Name</th><th>{{if eq .Key "items"}}Kind{{else if or (eq .Key "pilots") (eq .Key "characters")}}Corporation{{else if eq .Key "regions"}}{{else}}Ticker{{end}}</th></tr></thead>
+  <tbody>
+  {{range .Hits}}
+    <tr>
+      <td>{{if eq .Kind "item"}}{{itemLink .ID .Name}}{{else if eq .Kind "character"}}<a href="/character/?character={{.ID}}">{{.Name}}</a>{{else if eq .Kind "pilot"}}<a href="/pilot/?character={{.ID}}">{{.Name}}</a>{{else if eq .Kind "corporation"}}<a href="/corporation/?corporation={{.ID}}">{{.Name}}</a>{{else if eq .Kind "alliance"}}<a href="/alliance/?alliance={{.ID}}">{{.Name}}</a>{{else if eq .Kind "region"}}<a href="/region/?region={{.ID}}">{{.Name}}</a>{{else}}{{.Name}}{{end}}</td>
+      <td><small>{{if and (ne .Kind "region") (ne .Label "Pilot") (ne .Label "Your character")}}{{.Label}}{{end}}</small></td>
+    </tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+{{else}}<p><small>Nothing found.</small></p>{{end}}
+{{end}}
+
+{{if and (eq $v.Total 0) (not $v.Pending)}}
+<p><small>Nothing matches “{{$v.Query}}”. Pilots, corporations and alliances show once the site has seen them; a full pilot name is looked up as you type it.</small></p>
+{{end}}
+{{end}}
+{{end}}
+{{end}}

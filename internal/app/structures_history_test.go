@@ -9,6 +9,7 @@ import (
 	"context"
 	"io"
 	"net/http"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -469,15 +470,21 @@ func TestHistoryWantsDrainPriority(t *testing.T) {
 			VolumeRemain: 5, VolumeTotal: 5, Issued: "2026-10-01T00:00:00Z", Duration: 90},
 	})
 
-	stored, limited := app.warmMarketHistory(ctx, &fetchBudget{left: 120})
-	if limited || stored != 3 {
-		t.Fatalf("drain: stored=%d limited=%v, want 3/false", stored, limited)
+	// Pairs are read a window at a time, so the order they are asked
+	// in is not fixed; the priority shows in who gets a short
+	// allowance: wants first, then the watchlist, then orders.
+	stored, limited := app.warmMarketHistory(ctx, &fetchBudget{left: 2})
+	if limited || stored != 2 {
+		t.Fatalf("drain: stored=%d limited=%v, want 2/false", stored, limited)
 	}
-	want := []int64{5001, 5002, 5003}
-	for i := range want {
-		if transport.fetched[i] != want[i] {
-			t.Fatalf("fetch order: got %v, want %v (wants first, then watchlist, then orders)", transport.fetched, want)
-		}
+	got := append([]int64(nil), transport.fetched...)
+	slices.Sort(got)
+	if !slices.Equal(got, []int64{5001, 5002}) {
+		t.Fatalf("with two fetches to spend: fetched %v, want [5001 5002] (wants first, then watchlist, then orders)", got)
+	}
+	stored, _ = app.warmMarketHistory(ctx, &fetchBudget{left: 120})
+	if stored != 1 || len(transport.fetched) != 3 || transport.fetched[2] != 5003 {
+		t.Fatalf("next pass: stored=%d fetched=%v, want the order's 5003 last", stored, transport.fetched)
 	}
 }
 

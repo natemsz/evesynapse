@@ -339,6 +339,9 @@ body::after { content: ""; position: absolute; top: 0; left: 0; right: 0; height
 .ld-gal-card [hidden] { display: none; }
 .ld-gal-card .ld-modal-x { background: rgba(19, 14, 10, 0.82); }
 .ld-gal-modal-cap { color: var(--ld-dim); font-size: 14.5px; text-align: center; margin: 12px 0 2px; }
+.ld-gallery.ld-gal-on .ld-gal-stage { touch-action: pan-y; }
+.ld-gallery.ld-gal-drag .ld-gal-track { transition: none; }
+.ld-gal-card { touch-action: pan-y; }
 @media (max-width: 560px) {
   .ld-gal-slide { flex-basis: 78%; }
   .ld-gal-arrow { width: 38px; height: 38px; }

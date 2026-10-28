@@ -226,8 +226,9 @@
 
 // Gallery: a film reel of short muted clips and stills. The focused
 // slide is centred in the stage at full size, its neighbours
-// smaller and dimmed on either side. The arrows step the reel;
-// a click on a side slide focuses it, and a click on the
+// smaller and dimmed on either side. The arrows step the reel,
+// and so does a horizontal swipe on the stage or on the open
+// modal's media; a click on a side slide focuses it, and a click on the
 // focused slide opens it full size in the gallery modal, where
 // the arrow keys step the reel behind the same clip. Only the
 // clip in focus ever plays: stepping the reel, opening the
@@ -295,12 +296,14 @@
     }
     modalCap.textContent = captionOf(cur);
   }
+  function centerX() {
+    var s = slides[cur];
+    return stage.clientWidth / 2 - s.offsetLeft - s.offsetWidth / 2;
+  }
   function focus(i) {
     cur = ((i % slides.length) + slides.length) % slides.length;
     slides.forEach(function (s, j) { s.classList.toggle("is-active", j === cur); });
-    var s = slides[cur];
-    var x = stage.clientWidth / 2 - s.offsetLeft - s.offsetWidth / 2;
-    track.style.transform = "translateX(" + x + "px)";
+    track.style.transform = "translateX(" + centerX() + "px)";
     if (cap) cap.textContent = captionOf(cur);
     if (modal && !modal.hidden) fillModal();
     syncPlay();
@@ -327,6 +330,70 @@
       if (j === cur) openModal(); else focus(j);
     });
   });
+  // Swipe: a horizontal drag steps the reel through the same
+  // focus() the arrows use. On the stage the track follows the
+  // pointer and the release either steps one slide or settles
+  // back; the click a drag ends with is swallowed so it cannot
+  // also focus or open the slide it landed on. Vertical pans
+  // stay with the page: the stage's touch-action hands them to
+  // the browser, which cancels the pointer, and a mostly
+  // vertical mouse drag simply never turns live.
+  var drag = null;
+  var swallowClick = false;
+  function swipeMove(e) {
+    if (!drag || e.pointerId !== drag.id) return;
+    var dx = e.clientX - drag.x;
+    var dy = e.clientY - drag.y;
+    if (!drag.live) {
+      if (Math.abs(dy) > Math.abs(dx)) { swipeAbort(); return; }
+      if (Math.abs(dx) < 8) return;
+      drag.live = true;
+      gal.classList.add("ld-gal-drag");
+    }
+    if (drag.follow) track.style.transform = "translateX(" + (centerX() + dx) + "px)";
+  }
+  function swipeEnd(e) {
+    if (!drag || e.pointerId !== drag.id) return;
+    var dx = e.clientX - drag.x;
+    var live = drag.live;
+    swipeAbort();
+    if (!live) return;
+    swallowClick = true;
+    setTimeout(function () { swallowClick = false; }, 250);
+    if (dx <= -56) focus(cur + 1);
+    else if (dx >= 56) focus(cur - 1);
+    else focus(cur);
+  }
+  function swipeAbort() {
+    if (!drag) return;
+    var follow = drag.follow;
+    drag = null;
+    gal.classList.remove("ld-gal-drag");
+    window.removeEventListener("pointermove", swipeMove);
+    window.removeEventListener("pointerup", swipeEnd);
+    window.removeEventListener("pointercancel", swipeAbort);
+    if (follow) focus(cur);
+  }
+  function addSwipe(el, follow) {
+    if (!el) return;
+    el.addEventListener("dragstart", function (e) { e.preventDefault(); });
+    el.addEventListener("click", function (e) {
+      if (!swallowClick) return;
+      swallowClick = false;
+      e.stopPropagation();
+      e.preventDefault();
+    }, true);
+    el.addEventListener("pointerdown", function (e) {
+      if (drag || e.isPrimary === false) return;
+      if (e.pointerType === "mouse" && e.button !== 0) return;
+      drag = { id: e.pointerId, x: e.clientX, y: e.clientY, live: false, follow: follow };
+      window.addEventListener("pointermove", swipeMove);
+      window.addEventListener("pointerup", swipeEnd);
+      window.addEventListener("pointercancel", swipeAbort);
+    });
+  }
+  addSwipe(stage, true);
+  if (modal) addSwipe(modal.querySelector(".ld-gal-card"), false);
   if ("IntersectionObserver" in window) {
     new IntersectionObserver(function (entries) {
       galVisible = entries[0].isIntersecting;

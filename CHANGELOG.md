@@ -7,7 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [v0.6.1.3] - 2026-10-28
+## [v0.6.1.4] - 2026-10-28
+
+Automated build of EveSynapse v0.6.1.4. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+
+## What's Changed
+### 🐛 Bug Fixes
+* Fail shut when the second-factor arming reads fail by @natemsz in https://github.com/natemsz/evesynapse/pull/762
+### Other Changes
+* docs(changelog): review changelog for v0.6.1.1 by @github-actions[bot] in https://github.com/natemsz/evesynapse/pull/754
+
+
+**Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.6.1.3...v0.6.1.4
+
+## [v0.6.1.1] - 2026-10-28
 
 Automated build of EveSynapse v0.6.1.3. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 ## [v0.6.1.2] - 2026-10-28

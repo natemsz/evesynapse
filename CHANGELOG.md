@@ -23,11 +23,27 @@ Automated build of EveSynapse v0.6.1.4. Update with: evesynapse -update -arm64 (
 
 ## [v0.6.1.1] - 2026-10-28
 
-Automated build of EveSynapse v0.6.1.1. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+Automated build of EveSynapse v0.6.1.3. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+## [v0.6.1.2] - 2026-10-28
+
+Automated build of EveSynapse v0.6.1.2. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
 
 ## What's Changed
 ### 🚀 Features
+* Add the landing gallery by @natemsz in https://github.com/natemsz/evesynapse/pull/758
+### 🐛 Bug Fixes
+* Fix the briefing filter spacing on narrow screens by @natemsz in https://github.com/natemsz/evesynapse/pull/759
+
+
+**Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.6.1.2...v0.6.1.3
+* Moves the Sync page into the Admin page as a tab by @natemsz in https://github.com/natemsz/evesynapse/pull/755
+* Add WebAuthn two-factor authentication by @natemsz in https://github.com/natemsz/evesynapse/pull/757
+### 🐛 Bug Fixes
+* Fix the market history freshness read in admin analytics by @natemsz in https://github.com/natemsz/evesynapse/pull/756
+
+
+**Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.6.1.1...v0.6.1.2
 * Add the admin analytics page by @natemsz in https://github.com/natemsz/evesynapse/pull/753
 ### Other Changes
 * docs(changelog): review changelog for v0.6.1.0 by @github-actions[bot] in https://github.com/natemsz/evesynapse/pull/752

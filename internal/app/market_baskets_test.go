@@ -1,0 +1,75 @@
+package app
+
+import (
+	"context"
+	"math"
+	"net/http"
+	"net/url"
+	"strconv"
+	"testing"
+	"time"
+)
+
+// A player's basket is theirs alone: another player gets a 404 for
+// it and cannot edit it, and its value history is rebuilt from the
+// stored daily rows as quantity times the typical sell.
+func TestMarketBasketOwnershipAndValue(t *testing.T) {
+	app, _, q := buildCorpTestApp(t, &countingTransport{})
+	ctx := context.Background()
+	owner, err := q.CreateUser(ctx)
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	other, err := q.CreateUser(ctx)
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	seedCharacter(t, q, owner.ID, fixtureCharA, "Owner")
+	seedCharacter(t, q, other.ID, fixtureCharB, "Other")
+	ownerCookie := sessionCookie(t, app, owner.ID, fixtureCharA, "Owner")
+	otherCookie := sessionCookie(t, app, other.ID, fixtureCharB, "Other")
+
+	day := time.Now().UTC().AddDate(0, 0, -1).Format("2006-01-02")
+	for _, s := range []struct {
+		id   int64
+		name string
+		sell float64
+	}{{900001, "Basket Test Alpha", 10}, {900002, "Basket Test Beta", 2.5}} {
+		if _, err := app.db.ExecContext(ctx, `INSERT INTO sde_types (type_id, name, group_id) VALUES ($1, $2, 1)`, s.id, s.name); err != nil {
+			t.Fatalf("seed type: %v", err)
+		}
+		if _, err := app.db.ExecContext(ctx, `INSERT INTO market_region_stats_daily (region_id, type_id, day, typical_sell, typical_buy) VALUES (10000002, $1, $2, $3, $3)`, s.id, day, s.sell); err != nil {
+			t.Fatalf("seed daily: %v", err)
+		}
+	}
+
+	code, _ := postForm(t, app, ownerCookie, "/market/baskets/", url.Values{
+		"name": {"Mine"}, "region": {"10000002"}, "items": {"basket test alpha 3\nBasket Test Beta x4\nNo Such Thing 1"},
+	})
+	if code != http.StatusSeeOther {
+		t.Fatalf("create: status %d, want 303", code)
+	}
+	var id int64
+	if err := app.db.QueryRowContext(ctx, `SELECT id FROM market_baskets WHERE user_id = $1`, owner.ID).Scan(&id); err != nil {
+		t.Fatalf("read basket: %v", err)
+	}
+	var value float64
+	var priced, count int64
+	if err := app.db.QueryRowContext(ctx, `SELECT value_sell, priced_items, item_count FROM market_basket_values_daily WHERE basket_id = $1 AND day = $2`, id, day).Scan(&value, &priced, &count); err != nil {
+		t.Fatalf("read value: %v", err)
+	}
+	if math.Abs(value-40) > 1e-9 || priced != 2 || count != 2 {
+		t.Errorf("value = %v (%d of %d priced), want 40 (3*10 + 4*2.5), 2 of 2", value, priced, count)
+	}
+
+	path := "/market/baskets/" + strconv.FormatInt(id, 10) + "/"
+	if code, _ := getPage(t, app, ownerCookie, path); code != http.StatusOK {
+		t.Errorf("owner GET: status %d, want 200", code)
+	}
+	if code, _ := getPage(t, app, otherCookie, path); code != http.StatusNotFound {
+		t.Errorf("other player GET: status %d, want 404", code)
+	}
+	if code, _ := postForm(t, app, otherCookie, path+"edit", url.Values{"name": {"Taken"}, "items": {""}}); code != http.StatusNotFound {
+		t.Errorf("other player edit: status %d, want 404", code)
+	}
+}

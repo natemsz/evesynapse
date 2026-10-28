@@ -622,6 +622,12 @@ var pgMarketStatPackSchema string
 //go:embed schema_pg/102_lp_stores.sql
 var pgLPStoresSchema string
 
+// Step 103: market baskets: presets and players' own lists of types,
+// and each basket's stored value per day, from the stat pack.
+//
+//go:embed schema_pg/103_market_baskets.sql
+var pgMarketBasketsSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -753,6 +759,7 @@ func schemaSteps() []schemaStep {
 		{100, "name_misses", pgNameMissesSchema, ""},
 		{101, "market_stat_pack", pgMarketStatPackSchema, ""},
 		{102, "lp_stores", pgLPStoresSchema, ""},
+		{103, "market_baskets", pgMarketBasketsSchema, ""},
 	}
 }
 

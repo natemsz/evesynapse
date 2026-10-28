@@ -160,7 +160,7 @@ func TestModuleNavKeepsItsPlace(t *testing.T) {
 	follows("tools", "/market/appraise/", "/items/")
 	for section, want := range map[string][]string{
 		"pilot":  {"/character/", "/characters/", "/skills/plans", "/assets/", "/wallet/", "/mail/", "/calendar/", "/contacts/", "/killmails/"},
-		"market": {"/market/", "/market/scanner/", "/market/ideas/", "/market/tradefinder/", "/market/leaderboard/", "/market/restock/", "/orders/", "/contracts/", "/contracts/search/", "/market/trends/", "/market/lp/"},
+		"market": {"/market/", "/market/scanner/", "/market/ideas/", "/market/tradefinder/", "/market/leaderboard/", "/market/restock/", "/orders/", "/contracts/", "/contracts/search/", "/market/trends/", "/market/lp/", "/market/baskets/"},
 		"tools":  {"/items/", "/market/appraise/"},
 	} {
 		var got []string

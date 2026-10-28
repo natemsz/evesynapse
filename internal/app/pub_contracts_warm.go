@@ -270,20 +270,6 @@ func nullInt64Ptr(v *int64) sql.NullInt64 {
 	return sql.NullInt64{Int64: *v, Valid: true}
 }
 
-// pubContractBidsFailureState classifies a failed bids fetch.
-// The shared classifier (marketFetchFailureState) settles 400
-// and 404 as dead; the bids route's refusal is a 403 ("Contract
-// not public") once an auction has finished, and it is just as
-// final: the contract never becomes public again, so its bids
-// settle dead here instead of retrying on the error gate until
-// the contract leaves the listing.
-func pubContractBidsFailureState(err error) string {
-	if code, ok := esi.StatusCode(err); ok && code == http.StatusForbidden {
-		return fetchStateDead
-	}
-	return marketFetchFailureState(err)
-}
-
 // warmPublicContractBids refreshes the bid lists of live
 // auctions whose refresh is due, soonest-ending first. Bids
 // are anonymous in ESI and stored as they arrive: an amount
@@ -317,7 +303,9 @@ func (app *Application) warmPublicContractBids(ctx context.Context, allowance *f
 			if errors.Is(err, esi.ErrErrorLimit) {
 				return stored, true
 			}
-			app.recordMarketFetch(ctx, kind, pubContractBidsFailureState(err), "contract bids failed")
+			// A finished auction answers 403 "Contract not public", which
+			// settles dead like a 404 (marketFetchFailureState).
+			app.recordMarketFetch(ctx, kind, marketFetchFailureState(err), "contract bids failed")
 			continue
 		}
 		var bids []esi.PublicContractBid

@@ -10,6 +10,7 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -738,9 +739,11 @@ func TestPublicContractItemsParking(t *testing.T) {
 	}
 }
 
-// A finished auction's bids refusal (403) settles dead like a
-// 404 does; a server error stays an ordinary gated failure.
-func TestPubContractBidsFailureState(t *testing.T) {
+// Every public market fetch settles a definitive refusal dead: a
+// finished auction's bids (403), an invalid id (422), a wrong one
+// (400, 404). A server error or a dropped connection stays an
+// ordinary gated failure.
+func TestMarketFetchFailureState(t *testing.T) {
 	cases := []struct {
 		name string
 		err  error
@@ -748,10 +751,14 @@ func TestPubContractBidsFailureState(t *testing.T) {
 	}{
 		{"not public", &esi.StatusError{Code: http.StatusForbidden}, fetchStateDead},
 		{"not found", &esi.StatusError{Code: http.StatusNotFound}, fetchStateDead},
+		{"invalid id", &esi.StatusError{Code: http.StatusUnprocessableEntity}, fetchStateDead},
+		{"bad request", &esi.StatusError{Code: http.StatusBadRequest}, fetchStateDead},
+		{"bad gateway", &esi.StatusError{Code: http.StatusBadGateway}, fetchStateError},
+		{"transport", errors.New("dial"), fetchStateError},
 		{"server error", &esi.StatusError{Code: http.StatusInternalServerError}, fetchStateError},
 	}
 	for _, c := range cases {
-		if got := pubContractBidsFailureState(c.err); got != c.want {
+		if got := marketFetchFailureState(c.err); got != c.want {
 			t.Errorf("%s: state %q, want %q", c.name, got, c.want)
 		}
 	}

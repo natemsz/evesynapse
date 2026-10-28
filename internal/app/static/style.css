@@ -2850,8 +2850,8 @@ html[data-nav="rail"] #nav-collapse .nav-control-svg { transform: scaleX(-1); }
    fill/stroke here is the fallback. */
 .nav-icon svg {
   display: block;
-  width: 1.05em;
-  height: 1.05em;
+  width: 1.05rem;
+  height: 1.05rem;
   margin: 0 auto;
   fill: #ffb84d;
   stroke: #ffb84d;
@@ -5238,7 +5238,7 @@ html[data-theme="light"] .doctrine-fits li:last-child { border-color: #e3d9c6; }
    instantly from swap.js instead, so there is nothing to undo. */
 ::view-transition-old(root), ::view-transition-new(root) { animation: none; }
 ::view-transition-old(main-content) { animation: es-swap-out 150ms ease-out both; }
-::view-transition-new(main-content) { animation: es-swap-in 260ms ease-out both; }
+::view-transition-new(main-content) { animation: es-swap-in 150ms ease-out both; }
 @keyframes es-swap-out { from { opacity: 1; } to { opacity: 0; } }
 @keyframes es-swap-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) {

@@ -658,9 +658,27 @@
   // navigation to the browser instead of stranding a half-styled
   // or inert page. isCurrent() reports whether a newer navigation
   // has superseded this one; a superseded swap stops quietly.
+  // fontsSettled resolves once the document's fonts have loaded,
+  // or after a short cap. The swap transition snapshots the new
+  // content as it stands, so text caught mid font swap is baked
+  // into the snapshot in the fallback face and pops when the real
+  // face lands. The fonts are preloaded and cached, so ready is
+  // normally already settled and this costs nothing; the cap
+  // keeps a stalled font from holding a navigation hostage.
+  function fontsSettled() {
+    if (!document.fonts || !document.fonts.ready) return Promise.resolve();
+    return Promise.race([
+      document.fonts.ready,
+      new Promise(function (resolve) { setTimeout(resolve, 120); })
+    ]);
+  }
+
   function performSwap(url, entry, push, isCurrent) {
     var current = function () { return !isCurrent || isCurrent(); };
     return adoptStyles(entry.styles).then(function () {
+      if (!current()) return false;
+      return fontsSettled();
+    }).then(function () {
       if (!current()) return false;
       return applySwapped(url, entry, push);
     }).then(function (painted) {

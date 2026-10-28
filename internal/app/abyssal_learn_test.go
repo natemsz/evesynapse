@@ -98,7 +98,8 @@ func TestAbyssalLearnTrim(t *testing.T) {
 	}
 }
 
-// TestContractExitFromStatus: only a 204 before expiry is a sale.
+// TestContractExitFromStatus: only a 204 before expiry is a sale,
+// and a 403 is final without being one.
 func TestContractExitFromStatus(t *testing.T) {
 	now := time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC)
 	status := func(code int) error { return &esi.StatusError{Method: "GET", Code: code} }
@@ -113,6 +114,7 @@ func TestContractExitFromStatus(t *testing.T) {
 		{"accepted, expiry unknown but ruled out", status(http.StatusNoContent), time.Time{}, exitSold},
 		{"204 after expiry", status(http.StatusNoContent), now.Add(-time.Hour), exitGone},
 		{"deleted", status(http.StatusNotFound), now.Add(48 * time.Hour), exitGone},
+		{"no longer public", status(http.StatusForbidden), now.Add(48 * time.Hour), exitClosed},
 		{"server error", status(http.StatusBadGateway), now.Add(48 * time.Hour), exitUnknown},
 		{"transport error", errors.New("dial"), now.Add(48 * time.Hour), exitUnknown},
 	}

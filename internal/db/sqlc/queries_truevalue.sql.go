@@ -45,9 +45,9 @@ func (q *Queries) GetTrueValue(ctx context.Context, typeID int64) (TrueValue, er
 }
 
 const listTVContractObservationsByRegion = `-- name: ListTVContractObservationsByRegion :many
-SELECT contract_id, region_id, type_id, shape, listed_price, sample_price, first_seen_at, last_seen_at, expires_at, vanished_at, sold
+SELECT contract_id, region_id, type_id, shape, listed_price, sample_price, first_seen_at, last_seen_at, expires_at, vanished_at, sold, exit_status, exit_probed_at
 FROM true_value_contract_observations
-WHERE region_id = $1 AND vanished_at IS NULL
+WHERE region_id = $1 AND vanished_at IS NULL AND exit_probed_at IS NULL
 ORDER BY last_seen_at
 `
 
@@ -72,6 +72,8 @@ func (q *Queries) ListTVContractObservationsByRegion(ctx context.Context, region
 			&i.ExpiresAt,
 			&i.VanishedAt,
 			&i.Sold,
+			&i.ExitStatus,
+			&i.ExitProbedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -89,7 +91,7 @@ func (q *Queries) ListTVContractObservationsByRegion(ctx context.Context, region
 const listTVShipSaleProbes = `-- name: ListTVShipSaleProbes :many
 SELECT o.contract_id, o.expires_at, o.type_id, o.sample_price, o.first_seen_at
 FROM true_value_contract_observations o
-WHERE o.vanished_at IS NULL
+WHERE o.vanished_at IS NULL AND o.exit_probed_at IS NULL
   AND o.type_id = ANY($1::bigint[])
   AND o.expires_at > $2::timestamptz
   AND NOT EXISTS (SELECT 1 FROM pub_contracts c WHERE c.contract_id = o.contract_id
@@ -352,6 +354,27 @@ func (q *Queries) ListTrueValuesForTypes(ctx context.Context, dollar_1 []int64) 
 		return nil, err
 	}
 	return items, nil
+}
+
+const markTVContractObservationExit = `-- name: MarkTVContractObservationExit :exec
+UPDATE true_value_contract_observations
+SET exit_status = $1::bigint, exit_probed_at = $2::timestamptz
+WHERE contract_id = $3::bigint
+`
+
+type MarkTVContractObservationExitParams struct {
+	Status     int64     `json:"status"`
+	ProbedAt   time.Time `json:"probed_at"`
+	ContractID int64     `json:"contract_id"`
+}
+
+// A watched listing whose exit probe got a final answer that is
+// neither a sale nor a vanish (schema 099): a 403, "Contract not
+// public". The row leaves the probe queues and never becomes a
+// sample; the status stays for a later reading of what 403 means.
+func (q *Queries) MarkTVContractObservationExit(ctx context.Context, arg MarkTVContractObservationExitParams) error {
+	_, err := q.db.ExecContext(ctx, markTVContractObservationExit, arg.Status, arg.ProbedAt, arg.ContractID)
+	return err
 }
 
 const markTVContractObservationSold = `-- name: MarkTVContractObservationSold :exec

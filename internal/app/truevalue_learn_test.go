@@ -362,7 +362,7 @@ func (s *tvExitTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 // left alone. Listings for other types, and listings still
 // in the corpus, are never asked about.
 func TestTVShipSaleProbes(t *testing.T) {
-	transport := &tvExitTransport{codes: map[int64]int{7001: 204, 7002: 404, 7003: 404, 7004: 200, 7005: 204, 7006: 204}}
+	transport := &tvExitTransport{codes: map[int64]int{7001: 204, 7002: 404, 7003: 404, 7004: 200, 7005: 204, 7006: 204, 7007: 403}}
 	app, conn, q := buildCorpTestApp(t, transport)
 	ctx := context.Background()
 	now := time.Now().UTC()
@@ -382,6 +382,7 @@ func TestTVShipSaleProbes(t *testing.T) {
 	observe(7004, 5003, now.Add(10*24*time.Hour)) // still listed
 	observe(7005, 9999, now.Add(10*24*time.Hour)) // not a ship type: never due
 	observe(7006, 5003, now.Add(10*24*time.Hour)) // still in the corpus: not departed
+	observe(7007, 5003, now.Add(10*24*time.Hour)) // no longer public: settled, no evidence
 	if _, err := conn.ExecContext(ctx,
 		`INSERT INTO pub_contracts (contract_id, region_id, type, price, date_issued, date_expired, items_state, first_seen, last_seen)
 		 VALUES (7006, 10000002, 'item_exchange', 5e9, $1, $2, 'stored', $1, $1)`,
@@ -426,5 +427,22 @@ func TestTVShipSaleProbes(t *testing.T) {
 	}
 	if liveIDs[7003] {
 		t.Error("observation 7003 still watched; it should have been forgotten")
+	}
+
+	// A 403 settles: it is no evidence of any kind, it leaves the
+	// watch, and the next pass does not ask about it again.
+	if _, ok := byID[7007]; ok {
+		t.Error("contract 7007 (403) counted as evidence; want neither sale nor vanish")
+	}
+	if liveIDs[7007] {
+		t.Error("observation 7007 (403) still watched; want it settled")
+	}
+	var exitStatus sql.NullInt64
+	if err := conn.QueryRowContext(ctx, `SELECT exit_status FROM true_value_contract_observations WHERE contract_id = 7007`).Scan(&exitStatus); err != nil || exitStatus.Int64 != 403 {
+		t.Errorf("contract 7007 exit_status = %v (err %v), want 403 kept on the record", exitStatus, err)
+	}
+	app.probeShipContractSales(ctx, []int64{5003}, now.Add(time.Minute))
+	if transport.calls[7007] != 1 {
+		t.Errorf("contract 7007 asked %d times over two passes, want once", transport.calls[7007])
 	}
 }

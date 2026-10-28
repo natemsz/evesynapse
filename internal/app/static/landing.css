@@ -309,6 +309,42 @@ body::after { content: ""; position: absolute; top: 0; left: 0; right: 0; height
 .ld-tm-group a span { display: block; color: var(--ld-dim); font-size: 13px; }
 .ld-tm-group a:hover strong { color: var(--amber, #ffb35c); }
 
+/* Gallery: a film reel. The focused image sits in the centre
+   at full size with its neighbours smaller and dimmed on
+   either side; the arrows on each side step the reel, a click
+   on a side image focuses it, and a click on the focused
+   image opens it full size in the gallery modal. The caption
+   under the stage belongs to the focused image. With the
+   script off the reel is a plain row the reader can scroll
+   sideways; landing.js adds ld-gal-on and drives the track's
+   transform instead. */
+.ld-gallery { margin-top: 26px; }
+.ld-gal-stage { position: relative; overflow: hidden; padding: 18px 0; }
+.ld-gal-track { display: flex; align-items: center; gap: 20px; overflow-x: auto; scrollbar-width: none; }
+.ld-gal-track::-webkit-scrollbar { display: none; }
+.ld-gallery.ld-gal-on .ld-gal-track { overflow: visible; transition: transform 0.45s ease; }
+.ld-gal-slide { flex: 0 0 58%; margin: 0; opacity: 0.55; transform: scale(0.84); transition: opacity 0.3s ease, transform 0.3s ease; }
+.ld-gal-slide.is-active { opacity: 1; transform: none; }
+.ld-gal-slide img, .ld-gal-slide video { display: block; width: 100%; height: auto; border-radius: 10px; cursor: pointer; }
+.ld-gallery.ld-gal-on .ld-gal-slide.is-active img, .ld-gallery.ld-gal-on .ld-gal-slide.is-active video { cursor: zoom-in; }
+.ld-gal-cap { color: var(--ld-dim); font-size: 14.5px; text-align: center; margin: 0; padding-top: 12px; }
+.ld-gal-arrow { display: none; position: absolute; top: 50%; transform: translateY(-50%); width: 46px; height: 46px; border-radius: 50%; border: 1px solid rgba(255, 255, 255, 0.07); background: rgba(19, 14, 10, 0.82); color: var(--text); font-size: 20px; line-height: 1; cursor: pointer; z-index: 2; }
+.ld-gallery.ld-gal-on .ld-gal-arrow { display: block; }
+.ld-gal-arrow:hover { border-color: rgba(255, 106, 0, 0.45); }
+.ld-gal-prev { left: 12px; }
+.ld-gal-next { right: 12px; }
+.ld-gal-card { width: min(1280px, 100%); padding: 18px; }
+.ld-gal-card img, .ld-gal-card video { display: block; width: 100%; height: auto; border-radius: 12px; }
+.ld-gal-card [hidden] { display: none; }
+.ld-gal-card .ld-modal-x { background: rgba(19, 14, 10, 0.82); }
+.ld-gal-modal-cap { color: var(--ld-dim); font-size: 14.5px; text-align: center; margin: 12px 0 2px; }
+@media (max-width: 560px) {
+  .ld-gal-slide { flex-basis: 78%; }
+  .ld-gal-arrow { width: 38px; height: 38px; font-size: 17px; }
+  .ld-gal-prev { left: 6px; }
+  .ld-gal-next { right: 6px; }
+}
+
 @media (max-width: 560px) {
   /* At phone width: the wordmark's text span yields to its
      glyph, and the bar's spacing tightens so the Tools button

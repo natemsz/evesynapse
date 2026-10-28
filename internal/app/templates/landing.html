@@ -177,6 +177,59 @@
     </div>
   </section>
 
+  <section class="ld-blk" id="gallery">
+    <h2>Gallery</h2>
+    <div class="ld-gallery" data-gallery>
+      <div class="ld-gal-stage ld-glass">
+        <button type="button" class="ld-gal-arrow ld-gal-prev" data-gal-prev aria-label="Previous image">&larr;</button>
+        <div class="ld-gal-track" data-gal-track>
+          <figure class="ld-gal-slide is-active" data-gal-slide>
+            <video src="/static/showcase/home-schemes.mp4?v={{.AssetVersion}}" poster="/static/showcase/home-schemes-poster.jpg?v={{.AssetVersion}}" width="1036" height="586" muted loop playsinline preload="metadata" aria-label="The EveSynapse home page cycling through seven color schemes" data-gal-vid></video>
+            <figcaption hidden>The home page, cycling through its color schemes.</figcaption>
+          </figure>
+          <figure class="ld-gal-slide" data-gal-slide>
+            <video src="/static/showcase/home-customize.mp4?v={{.AssetVersion}}" poster="/static/showcase/home-customize-poster.jpg?v={{.AssetVersion}}" width="1036" height="586" muted loop playsinline preload="metadata" aria-label="Moving and resizing the modules on the EveSynapse home page" data-gal-vid></video>
+            <figcaption hidden>Moving and resizing the modules on the home page.</figcaption>
+          </figure>
+          <figure class="ld-gal-slide" data-gal-slide>
+            <video src="/static/showcase/t3-sim.mp4?v={{.AssetVersion}}" poster="/static/showcase/t3-sim-poster.jpg?v={{.AssetVersion}}" width="1036" height="638" muted loop playsinline preload="metadata" aria-label="A Loki strategic cruiser in the fitting simulator, a module added and a hardener overheated" data-gal-vid></video>
+            <figcaption hidden>T3 cruiser fully simulated</figcaption>
+          </figure>
+          <figure class="ld-gal-slide" data-gal-slide>
+            <video src="/static/showcase/threat-map.mp4?v={{.AssetVersion}}" poster="/static/showcase/threat-map-poster.jpg?v={{.AssetVersion}}" width="1036" height="578" muted loop playsinline preload="metadata" aria-label="The universe map threat layer with a live gate camp" data-gal-vid></video>
+            <figcaption hidden>threat map in action</figcaption>
+          </figure>
+          <figure class="ld-gal-slide" data-gal-slide>
+            <video src="/static/showcase/smart-routing.mp4?v={{.AssetVersion}}" poster="/static/showcase/smart-routing-poster.jpg?v={{.AssetVersion}}" width="1036" height="582" muted loop playsinline preload="metadata" aria-label="Smart routing comparing the shortest route with safer routes around gate camps" data-gal-vid></video>
+            <figcaption hidden>smart routing based on actual recent threat levels</figcaption>
+          </figure>
+          <figure class="ld-gal-slide" data-gal-slide>
+            <video src="/static/showcase/axon-overlay.mp4?v={{.AssetVersion}}" poster="/static/showcase/axon-overlay-poster.jpg?v={{.AssetVersion}}" width="1036" height="652" muted loop playsinline preload="metadata" aria-label="The Axon overlay inside the EVE client posting intel to EveSynapse channels" data-gal-vid></video>
+            <figcaption hidden>showing in-game intel tool</figcaption>
+          </figure>
+          <figure class="ld-gal-slide" data-gal-slide>
+            <video src="/static/showcase/contracts.mp4?v={{.AssetVersion}}" poster="/static/showcase/contracts-poster.jpg?v={{.AssetVersion}}" width="1036" height="596" muted loop playsinline preload="metadata" aria-label="The public contracts search with a fitted Nyx contract and its appraised value" data-gal-vid></video>
+            <figcaption hidden>showing the deals search</figcaption>
+          </figure>
+          <figure class="ld-gal-slide" data-gal-slide>
+            <video src="/static/showcase/trade-ideas.mp4?v={{.AssetVersion}}" poster="/static/showcase/trade-ideas-poster.jpg?v={{.AssetVersion}}" width="1036" height="562" muted loop playsinline preload="metadata" aria-label="Trade Ideas, market trades ranked by daily profit, each with its reasoning" data-gal-vid></video>
+            <figcaption hidden>trade ideas</figcaption>
+          </figure>
+          <figure class="ld-gal-slide" data-gal-slide>
+            <video src="/static/showcase/build-planner.mp4?v={{.AssetVersion}}" poster="/static/showcase/build-planner-poster.jpg?v={{.AssetVersion}}" width="1036" height="604" muted loop playsinline preload="metadata" aria-label="The industry build planner working out materials, shopping and profit for a blueprint" data-gal-vid></video>
+            <figcaption hidden>build planner</figcaption>
+          </figure>
+          <figure class="ld-gal-slide" data-gal-slide>
+            <img src="/static/showcase/plex-market.jpg?v={{.AssetVersion}}" width="1036" height="598" alt="The PLEX item page, with 90 days of global market price history" data-gal-img>
+            <figcaption hidden>plex price history</figcaption>
+          </figure>
+        </div>
+        <button type="button" class="ld-gal-arrow ld-gal-next" data-gal-next aria-label="Next image">&rarr;</button>
+      </div>
+      <p class="ld-gal-cap" data-gal-cap aria-live="polite">The home page, cycling through its color schemes.</p>
+    </div>
+  </section>
+
   <div class="ld-heritage">
     <div class="ld-h-line">Rebuilt over <em>4 years</em>. Originating in <em>2013</em>. Built for <em>2026</em>.</div>
     <p>EveSynapse is free to use forever. No ads. No trackers. No donation pop-ups. If you find it useful, my only ask is that you share it with your friends.</p>
@@ -239,6 +292,15 @@ w  <p class="ld-legal">Developed in Seattle, WA by <a href="https://natems.dev" 
         <a href="/items/"><strong>Item Database</strong><span>For all of New Eden</span></a>
       </div>
     </div>
+  </div>
+</div>
+<div class="ld-modal" id="ldGalleryModal" hidden>
+  <div class="ld-modal-backdrop" data-gal-close></div>
+  <div class="ld-glass ld-modal-card ld-gal-card" role="dialog" aria-modal="true" aria-labelledby="ldGalCap">
+    <button type="button" class="ld-modal-x" data-gal-close aria-label="Close">&times;</button>
+    <video data-gal-modal-vid muted loop playsinline preload="metadata" aria-label=""></video>
+    <img data-gal-modal-img alt="" hidden>
+    <p class="ld-gal-modal-cap" id="ldGalCap" data-gal-modal-cap></p>
   </div>
 </div>
 <script src="/static/landing.js?v={{.AssetVersion}}" defer></script>

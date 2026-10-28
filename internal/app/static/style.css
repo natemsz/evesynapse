@@ -418,15 +418,18 @@ header a.navlink.utility { font-size: 0.9em; color: var(--muted); }
 }
 .branch .menu a:hover, .switcher-menu a:hover { color: var(--text-bright); background: #1b1b1b; text-decoration: none; }
 .branch .menu a.active, .switcher-menu a.active { color: var(--gold); background: rgba(255, 106, 26, 0.18); }
+/* A subcategory heading inside a nav menu: warm gold and a step up
+   in size from a muted micro-label, with air above it, so it reads
+   as a heading over its links and never as one of them. */
 .branch .menu .nav-group-label, .switcher-menu .nav-group-label {
-  margin: 0.5rem 0 0.1rem;
+  margin: 0.65rem 0 0.2rem;
   padding: 0.35rem 0.6rem 0;
   font-family: "Rajdhani", "Segoe UI", sans-serif;
   font-weight: 600;
-  font-size: 0.72rem;
-  letter-spacing: 0.09em;
+  font-size: 0.8rem;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: var(--muted);
+  color: color-mix(in srgb, var(--gold) 68%, var(--text));
 }
 .branch .menu .nav-group-label:first-child, .switcher-menu .nav-group-label:first-child { margin-top: 0; padding-top: 0.1rem; }
 .sidebar .branch .menu .nav-group-label { padding-left: 0.45rem; padding-right: 0.45rem; }

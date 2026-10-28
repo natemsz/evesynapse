@@ -151,37 +151,79 @@ LIMIT sqlc.arg(max_rows)::bigint;
 
 -- An entity's kills and losses: the victim side from kills, the
 -- attacker side from kill_attackers (a year deep).
+-- Each side asks for its own newest page through its own index (the
+-- victim side's (victim_*_id, killmail_time), the attacker side's
+-- kill_attackers index), and the two pages merge. One query with
+-- "victim = id OR killmail_id IN (attackers)" defeated both indexes
+-- and walked every kill newest first: 70 ms for a pilot with one
+-- kill, against 0.4 ms this way, and never slower for busy ones.
 -- name: ListKillsByCharacter :many
-SELECT * FROM kills k
-WHERE k.public
-  AND (k.victim_character_id = sqlc.arg(entity_id)::bigint
-       OR k.killmail_id IN (SELECT a.killmail_id FROM kill_attackers a WHERE a.character_id = sqlc.arg(entity_id)::bigint))
-  AND (k.killmail_time, k.killmail_id) < (sqlc.arg(before_time)::timestamptz, sqlc.arg(before_id)::bigint)
-  AND COALESCE(k.value_ours, 0) >= sqlc.arg(min_value)::double precision
-  AND (NOT sqlc.arg(solo_only)::boolean OR k.solo)
-ORDER BY k.killmail_time DESC, k.killmail_id DESC
+SELECT * FROM (
+    (SELECT k.* FROM kills k
+     WHERE k.victim_character_id = sqlc.arg(entity_id)::bigint
+       AND k.public
+       AND (k.killmail_time, k.killmail_id) < (sqlc.arg(before_time)::timestamptz, sqlc.arg(before_id)::bigint)
+       AND COALESCE(k.value_ours, 0) >= sqlc.arg(min_value)::double precision
+       AND (NOT sqlc.arg(solo_only)::boolean OR k.solo)
+     ORDER BY k.killmail_time DESC, k.killmail_id DESC
+     LIMIT sqlc.arg(max_rows)::bigint)
+    UNION
+    (SELECT k.* FROM kills k
+     WHERE k.killmail_id IN (SELECT a.killmail_id FROM kill_attackers a WHERE a.character_id = sqlc.arg(entity_id)::bigint)
+       AND k.public
+       AND (k.killmail_time, k.killmail_id) < (sqlc.arg(before_time)::timestamptz, sqlc.arg(before_id)::bigint)
+       AND COALESCE(k.value_ours, 0) >= sqlc.arg(min_value)::double precision
+       AND (NOT sqlc.arg(solo_only)::boolean OR k.solo)
+     ORDER BY k.killmail_time DESC, k.killmail_id DESC
+     LIMIT sqlc.arg(max_rows)::bigint)
+) u
+ORDER BY u.killmail_time DESC, u.killmail_id DESC
 LIMIT sqlc.arg(max_rows)::bigint;
 
 -- name: ListKillsByCorporation :many
-SELECT * FROM kills k
-WHERE k.public
-  AND (k.victim_corporation_id = sqlc.arg(entity_id)::bigint
-       OR k.killmail_id IN (SELECT a.killmail_id FROM kill_attackers a WHERE a.corporation_id = sqlc.arg(entity_id)::bigint))
-  AND (k.killmail_time, k.killmail_id) < (sqlc.arg(before_time)::timestamptz, sqlc.arg(before_id)::bigint)
-  AND COALESCE(k.value_ours, 0) >= sqlc.arg(min_value)::double precision
-  AND (NOT sqlc.arg(solo_only)::boolean OR k.solo)
-ORDER BY k.killmail_time DESC, k.killmail_id DESC
+SELECT * FROM (
+    (SELECT k.* FROM kills k
+     WHERE k.victim_corporation_id = sqlc.arg(entity_id)::bigint
+       AND k.public
+       AND (k.killmail_time, k.killmail_id) < (sqlc.arg(before_time)::timestamptz, sqlc.arg(before_id)::bigint)
+       AND COALESCE(k.value_ours, 0) >= sqlc.arg(min_value)::double precision
+       AND (NOT sqlc.arg(solo_only)::boolean OR k.solo)
+     ORDER BY k.killmail_time DESC, k.killmail_id DESC
+     LIMIT sqlc.arg(max_rows)::bigint)
+    UNION
+    (SELECT k.* FROM kills k
+     WHERE k.killmail_id IN (SELECT a.killmail_id FROM kill_attackers a WHERE a.corporation_id = sqlc.arg(entity_id)::bigint)
+       AND k.public
+       AND (k.killmail_time, k.killmail_id) < (sqlc.arg(before_time)::timestamptz, sqlc.arg(before_id)::bigint)
+       AND COALESCE(k.value_ours, 0) >= sqlc.arg(min_value)::double precision
+       AND (NOT sqlc.arg(solo_only)::boolean OR k.solo)
+     ORDER BY k.killmail_time DESC, k.killmail_id DESC
+     LIMIT sqlc.arg(max_rows)::bigint)
+) u
+ORDER BY u.killmail_time DESC, u.killmail_id DESC
 LIMIT sqlc.arg(max_rows)::bigint;
 
 -- name: ListKillsByAlliance :many
-SELECT * FROM kills k
-WHERE k.public
-  AND (k.victim_alliance_id = sqlc.arg(entity_id)::bigint
-       OR k.killmail_id IN (SELECT a.killmail_id FROM kill_attackers a WHERE a.alliance_id = sqlc.arg(entity_id)::bigint))
-  AND (k.killmail_time, k.killmail_id) < (sqlc.arg(before_time)::timestamptz, sqlc.arg(before_id)::bigint)
-  AND COALESCE(k.value_ours, 0) >= sqlc.arg(min_value)::double precision
-  AND (NOT sqlc.arg(solo_only)::boolean OR k.solo)
-ORDER BY k.killmail_time DESC, k.killmail_id DESC
+SELECT * FROM (
+    (SELECT k.* FROM kills k
+     WHERE k.victim_alliance_id = sqlc.arg(entity_id)::bigint
+       AND k.public
+       AND (k.killmail_time, k.killmail_id) < (sqlc.arg(before_time)::timestamptz, sqlc.arg(before_id)::bigint)
+       AND COALESCE(k.value_ours, 0) >= sqlc.arg(min_value)::double precision
+       AND (NOT sqlc.arg(solo_only)::boolean OR k.solo)
+     ORDER BY k.killmail_time DESC, k.killmail_id DESC
+     LIMIT sqlc.arg(max_rows)::bigint)
+    UNION
+    (SELECT k.* FROM kills k
+     WHERE k.killmail_id IN (SELECT a.killmail_id FROM kill_attackers a WHERE a.alliance_id = sqlc.arg(entity_id)::bigint)
+       AND k.public
+       AND (k.killmail_time, k.killmail_id) < (sqlc.arg(before_time)::timestamptz, sqlc.arg(before_id)::bigint)
+       AND COALESCE(k.value_ours, 0) >= sqlc.arg(min_value)::double precision
+       AND (NOT sqlc.arg(solo_only)::boolean OR k.solo)
+     ORDER BY k.killmail_time DESC, k.killmail_id DESC
+     LIMIT sqlc.arg(max_rows)::bigint)
+) u
+ORDER BY u.killmail_time DESC, u.killmail_id DESC
 LIMIT sqlc.arg(max_rows)::bigint;
 
 -- name: GetPublicKill :one

@@ -2070,9 +2070,15 @@ td.pos, .pos { color: #28c76f; }
    mode clears the band for the widget's own controls. */
 .brief-tabs { position: absolute; top: 0; right: 1rem; height: 2.94rem; display: flex; align-items: center; gap: 0.4rem; margin: 0; flex-wrap: wrap; }
 @media (max-width: 70rem) {
-  .brief-tabs { position: static; height: auto; padding-top: 0.1rem; }
+  .brief-tabs { position: static; height: auto; padding-top: 0.1rem; padding-bottom: 0.75rem; }
 }
 .home-custom .brief-tabs { display: none; }
+/* On phone and tablet widths the pills nearly fill the briefing
+   band, leaving them flush against its rule; the band stands a
+   little taller there so the pills clear it. */
+@media (max-width: 75rem) {
+  .grid.home-grid > .card[data-widget="briefing"] > h3:first-child { min-height: calc(3.3rem + 1px); }
+}
 .chip.sev-critical { border-color: rgba(198, 47, 16, 0.6); }
 .chip.sev-warning { border-color: rgba(255, 106, 26, 0.5); }
 .chip.sev-critical.on { color: #ff7a5c; border-color: #ff7a5c; }

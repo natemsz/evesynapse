@@ -128,23 +128,25 @@ func newVirtualKey(t *testing.T) *virtualKey {
 func b64url(b []byte) string { return base64.RawURLEncoding.EncodeToString(b) }
 
 // cosePublicKey is the ES256 COSE encoding of the key,
-// hand-built so the tests take no CBOR dependency.
-func (k *virtualKey) cosePublicKey() []byte {
-	x := k.priv.PublicKey.X.Bytes()
-	y := k.priv.PublicKey.Y.Bytes()
-	xb := make([]byte, 32)
-	yb := make([]byte, 32)
-	copy(xb[32-len(x):], x)
-	copy(yb[32-len(y):], y)
+// hand-built so the tests take no CBOR dependency. The
+// coordinates come from the uncompressed encoding, never
+// from the deprecated raw fields.
+func (k *virtualKey) cosePublicKey(t *testing.T) []byte {
+	t.Helper()
+	raw, err := k.priv.PublicKey.Bytes()
+	if err != nil {
+		t.Fatalf("encode test key: %v", err)
+	}
 	out := []byte{0xA5, 0x01, 0x02, 0x03, 0x26, 0x20, 0x01, 0x21, 0x58, 0x20}
-	out = append(out, xb...)
+	out = append(out, raw[1:33]...)
 	out = append(out, 0x22, 0x58, 0x20)
-	return append(out, yb...)
+	return append(out, raw[33:65]...)
 }
 
 // attestationObject is a fmt=none attestation for the
 // registration challenge.
-func (k *virtualKey) attestationObject(rpID string) []byte {
+func (k *virtualKey) attestationObject(t *testing.T, rpID string) []byte {
+	t.Helper()
 	rpHash := sha256.Sum256([]byte(rpID))
 	authData := append([]byte{}, rpHash[:]...)
 	authData = append(authData, 0x45) // UP, UV, AT
@@ -154,7 +156,7 @@ func (k *virtualKey) attestationObject(rpID string) []byte {
 	binary.BigEndian.PutUint16(l[:], uint16(len(k.credID)))
 	authData = append(authData, l[:]...)
 	authData = append(authData, k.credID...)
-	authData = append(authData, k.cosePublicKey()...)
+	authData = append(authData, k.cosePublicKey(t)...)
 	obj := []byte{0xA3, 0x63, 'f', 'm', 't', 0x64, 'n', 'o', 'n', 'e', 0x67, 'a', 't', 't', 'S', 't', 'm', 't', 0xA0, 0x68, 'a', 'u', 't', 'h', 'D', 'a', 't', 'a', 0x58, byte(len(authData))}
 	return append(obj, authData...)
 }
@@ -166,14 +168,15 @@ func clientDataJSON(kind, challengeB64, origin string) []byte {
 
 // registrationBody answers creation options with a complete
 // attestation response.
-func (k *virtualKey) registrationBody(challengeB64, rpID, origin string) map[string]any {
+func (k *virtualKey) registrationBody(t *testing.T, challengeB64, rpID, origin string) map[string]any {
+	t.Helper()
 	return map[string]any{
 		"id":    b64url(k.credID),
 		"rawId": b64url(k.credID),
 		"type":  "public-key",
 		"response": map[string]string{
 			"clientDataJSON":    b64url(clientDataJSON("webauthn.create", challengeB64, origin)),
-			"attestationObject": b64url(k.attestationObject(rpID)),
+			"attestationObject": b64url(k.attestationObject(t, rpID)),
 		},
 	}
 }
@@ -249,7 +252,7 @@ func TestFactorRegistrationAndAssertion(t *testing.T) {
 		t.Fatalf("register begin: status %d, body %s", rr.Code, rr.Body.String())
 	}
 	key := newVirtualKey(t)
-	rr = serveFactor(t, app, &jar, app.handleSecurityKeysFinish, factorJSONRequest("/settings/security/keys/finish", key.registrationBody(decodeChallenge(t, rr.Body.Bytes()), rpID, origin)))
+	rr = serveFactor(t, app, &jar, app.handleSecurityKeysFinish, factorJSONRequest("/settings/security/keys/finish", key.registrationBody(t, decodeChallenge(t, rr.Body.Bytes()), rpID, origin)))
 	if rr.Code != http.StatusOK {
 		t.Fatalf("register finish: status %d, body %s", rr.Code, rr.Body.String())
 	}
@@ -439,7 +442,7 @@ func TestSignCountRegressionRefused(t *testing.T) {
 	userID := factorTestUser(t, q)
 	key := newVirtualKey(t)
 	if _, err := q.CreateWebAuthnCredential(ctx, db.CreateWebAuthnCredentialParams{
-		UserID: userID, CredentialID: key.credID, PublicKey: key.cosePublicKey(), SignCount: 5, Name: "Key",
+		UserID: userID, CredentialID: key.credID, PublicKey: key.cosePublicKey(t), SignCount: 5, Name: "Key",
 	}); err != nil {
 		t.Fatalf("seed credential: %v", err)
 	}

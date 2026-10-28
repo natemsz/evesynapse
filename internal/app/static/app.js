@@ -36,6 +36,36 @@
     window.open("http://127.0.0.1:47611/open", "_blank", "noopener");
   }, true);
 
+  // --- Axon's site panel -----------------------------------------
+  // Inside Axon's site panel (Axon marks the page with __axonPanel and
+  // hosts it in WebView2), the panel has no frame: the top bar carries
+  // its window controls, and the bar's empty space moves the window.
+  // Everything here only messages Axon; nothing reaches the site.
+  // Shell code: the top bar survives swaps, so this binds once.
+  (function axonPanel() {
+    var wv = window.chrome && window.chrome.webview;
+    if (!wv || !window.__axonPanel) return;
+    var ctl = document.querySelector("[data-axon-winctl]");
+    if (ctl) ctl.hidden = false;
+    function tell(what) { wv.postMessage({ axon: what }); }
+    document.addEventListener("click", function (ev) {
+      var b = ev.target.closest && ev.target.closest("[data-axon]");
+      if (b) tell(b.getAttribute("data-axon"));
+    });
+    function onBarSpace(ev) {
+      var t = ev.target;
+      return t.closest && t.closest(".topbar") && !t.closest("a, button, input, label, summary, details, form, [role='button'], .topbar-character");
+    }
+    document.addEventListener("mousedown", function (ev) {
+      if (ev.button !== 0 || !onBarSpace(ev)) return;
+      ev.preventDefault();
+      tell("drag");
+    });
+    document.addEventListener("dblclick", function (ev) {
+      if (onBarSpace(ev)) tell("maximize");
+    });
+  })();
+
   // --- Account theme sync --------------------------------------
   // The theme is an account setting: the server renders the
   // account's saved theme onto <html> (see ui_theme.go), and the

@@ -19,6 +19,7 @@ import (
 	"testing"
 	"time"
 
+	"evesynapse/internal/app/module"
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
 )
@@ -103,7 +104,7 @@ func TestFetchAndStoreHistoryDefinitiveFailureSettles(t *testing.T) {
 		if err != nil || state.State != fetchStateDead {
 			t.Fatalf("type %d: state=%v err=%v, want dead", typeID, state.State, err)
 		}
-		if app.marketFetchDue(ctx, kind, historyRefetchGate) {
+		if app.historyFetchDue(ctx, key) {
 			t.Fatalf("type %d: dead pair due immediately, want gated", typeID)
 		}
 	}
@@ -117,7 +118,7 @@ func TestFetchAndStoreHistoryDefinitiveFailureSettles(t *testing.T) {
 	if err != nil || state.State != fetchStateError {
 		t.Fatalf("transient: state=%v err=%v, want error", state.State, err)
 	}
-	if app.marketFetchDue(ctx, kind, historyRefetchGate) {
+	if app.historyFetchDue(ctx, key) {
 		t.Fatal("transient: error due immediately, want error-gate backoff")
 	}
 }
@@ -191,8 +192,8 @@ func TestFetchAndStoreHistoryStoresEveryDayOnce(t *testing.T) {
 	}
 }
 
-// The batched gate read keeps marketFetchDue's rule: a pair inside
-// its gate is skipped, a missing or expired one is fetched.
+// The batched gate read keeps the history rule: a pair fetched since
+// ESI last published a day is skipped, an older or missing one fetched.
 func TestWarmMarketHistoryBatchedGate(t *testing.T) {
 	transport := &historyStatusTransport{}
 	app, _, q := buildCorpTestApp(t, transport)
@@ -206,10 +207,11 @@ func TestWarmMarketHistoryBatchedGate(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	for k, ago := range map[marketKey]time.Duration{fresh: time.Minute, stale: historyRefetchGate + time.Minute} {
+	now := time.Now().UTC()
+	for k, at := range map[marketKey]time.Time{fresh: now, stale: module.HistoryPublishedAt(now).Add(-time.Minute)} {
 		if err := q.UpsertMarketFetchState(ctx, db.UpsertMarketFetchStateParams{
 			Kind: marketFetchKind("history", k), State: fetchStateOK,
-			AttemptedAt: time.Now().UTC().Add(-ago),
+			AttemptedAt: at,
 		}); err != nil {
 			t.Fatal(err)
 		}
@@ -217,5 +219,30 @@ func TestWarmMarketHistoryBatchedGate(t *testing.T) {
 	stored, limited := app.warmMarketHistory(ctx, &fetchBudget{left: 10})
 	if limited || stored != 1 || transport.calls.Load() != 1 {
 		t.Fatalf("stored=%d limited=%v calls=%d, want 1/false/1", stored, limited, transport.calls.Load())
+	}
+}
+
+// A history fetch stays current until ESI next publishes a day: a
+// fetch just before the publish moment is due right after it, one
+// just after is not due again until the next day's.
+func TestHistoryCurrent(t *testing.T) {
+	day := time.Date(2026, 10, 28, 0, 0, 0, 0, time.UTC)
+	at := func(h, m int) time.Time { return day.Add(time.Duration(h)*time.Hour + time.Duration(m)*time.Minute) }
+	cases := []struct {
+		name           string
+		attempted, now time.Time
+		current        bool
+	}{
+		{"before publish, asked before publish", at(9, 0), at(10, 0), true},
+		{"before publish, asked after it", at(11, 0), at(12, 0), false},
+		{"after publish, same day", at(11, 31), at(23, 0), true},
+		{"after publish, next morning", at(11, 31), at(34, 0), true},
+		{"after publish, next day after publish", at(11, 31), at(36, 0), false},
+		{"yesterday evening, this morning", at(-4, 0), at(9, 0), true},
+	}
+	for _, c := range cases {
+		if got := module.HistoryCurrent(c.attempted, c.now); got != c.current {
+			t.Errorf("%s: current=%v, want %v", c.name, got, c.current)
+		}
 	}
 }

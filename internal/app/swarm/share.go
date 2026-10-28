@@ -169,7 +169,7 @@ func (app *Mod) ServeSwarmHistory(ctx context.Context, key string) (string, time
 	if err != nil || state.State != module.FetchStateOK || state.Detail == SwarmFetchDetail {
 		return "", time.Time{}, false
 	}
-	if time.Since(state.AttemptedAt) >= module.HistoryRefetchGate {
+	if !module.HistoryCurrent(state.AttemptedAt, time.Now()) {
 		return "", time.Time{}, false
 	}
 	rows, err := app.Queries.ListMarketHistory(ctx, db.ListMarketHistoryParams{

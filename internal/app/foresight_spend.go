@@ -94,7 +94,7 @@ func (app *Application) foresightStaleness(ctx context.Context, t db.ForesightTa
 		}
 		return 1, pages
 	case targetHistory:
-		if app.marketFetchDue(ctx, marketFetchKind("history", key), historyRefetchGate) {
+		if app.historyFetchDue(ctx, key) {
 			return 1, 1
 		}
 		return 0, 1

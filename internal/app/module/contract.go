@@ -487,7 +487,8 @@ func MarketFetchKind(prefix string, key MarketKey) string {
 const (
 	FetchStateOK           = "ok"
 	OrgStateReady          = "ready"
-	HistoryRefetchGate     = 20 * time.Hour
+	HistoryPublishHourUTC  = 11 // ESI publishes a day of market history at downtime, about 11:05 UTC
+	HistoryPublishMinute   = 30 // asked after 11:30 UTC, the new day is in the answer
 	StructureRenameWindow  = 30 * 24 * time.Hour
 	StructureMissingWindow = 24 * time.Hour
 	StructureScope         = "esi-universe.read_structures.v1"
@@ -1203,10 +1204,13 @@ type Deps interface {
 	PostESIPublic(ctx context.Context, path string, body, out any) error
 	// --- the fetch seam: what a module that shares fetched data (the swarm) may ask ---
 
-	// MarketFetchDue, RecordMarketFetchAt, HistoryCandidates and
+	// MarketFetchDue, HistoryFetchDue, RecordMarketFetchAt, HistoryCandidates and
 	// FetchMarketHistory are the market history bookkeeping; NoteStructureIDs,
 	// WantCorporation and WantAlliance queue what pages want resolved.
 	MarketFetchDue(ctx context.Context, kind string, gate time.Duration) bool
+	// HistoryFetchDue is MarketFetchDue for one history pair, under
+	// HistoryCurrent instead of an age gate.
+	HistoryFetchDue(ctx context.Context, key MarketKey) bool
 	RecordMarketFetchAt(ctx context.Context, kind, state, detail string, at time.Time)
 	HistoryCandidates(ctx context.Context) ([]MarketKey, error)
 	FetchMarketHistory(ctx context.Context, key MarketKey) ([]esi.MarketHistoryDay, error)
@@ -1388,4 +1392,25 @@ type Module struct {
 	// fits, for one); called when the sitemap is built.
 	SitemapRows func(ctx context.Context, deps Deps) ([]SitemapRow, error)
 	Pages       []Page
+}
+
+// HistoryPublishedAt is the latest moment at or before now by which
+// ESI has published a new day of market history: HistoryPublishHourUTC
+// and HistoryPublishMinute, every day.
+func HistoryPublishedAt(now time.Time) time.Time {
+	now = now.UTC()
+	at := time.Date(now.Year(), now.Month(), now.Day(), HistoryPublishHourUTC, HistoryPublishMinute, 0, 0, time.UTC)
+	if now.Before(at) {
+		at = at.AddDate(0, 0, -1)
+	}
+	return at
+}
+
+// HistoryCurrent reports whether a history fetch made at attempted
+// still holds every day ESI has published by now. The day changes
+// once, at publish, so a pair is fetched at most once a day and
+// never sits a day behind; a fixed age gate could miss the publish
+// by up to a day.
+func HistoryCurrent(attempted, now time.Time) bool {
+	return !attempted.Before(HistoryPublishedAt(now))
 }

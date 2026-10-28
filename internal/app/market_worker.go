@@ -51,9 +51,6 @@ const (
 	// worker cycle; a cold watchlist converges over a few
 	// one-minute cycles instead of bursting.
 	maxHistoryFetchesPerCycle = 200
-	// historyRefetchGate is the minimum age of a successful
-	// history fetch before the pair is fetched again.
-	historyRefetchGate = module.HistoryRefetchGate
 	// marketFetchErrorGate is the minimum age of a transiently
 	// failed market fetch before it retries. Without it a
 	// failed attempt is always due and one poisoned pair
@@ -161,10 +158,10 @@ func (app *Application) warmMarketHistory(ctx context.Context, allowance *fetchB
 		}
 		kind := kinds[i]
 		if statesOK {
-			if state, ok := states[kind]; ok && !marketFetchStateDue(state, historyRefetchGate, time.Now()) {
+			if state, ok := states[kind]; ok && !historyFetchStateDue(state, time.Now()) {
 				continue
 			}
-		} else if !app.marketFetchDue(ctx, kind, historyRefetchGate) {
+		} else if !app.historyFetchDue(ctx, key) {
 			continue
 		}
 		// A fresh staged entry means the pull already covered
@@ -882,6 +879,27 @@ func marketFetchStateDue(state db.MarketFetchState, gate time.Duration, now time
 		return now.Sub(state.AttemptedAt) >= marketFetchErrorGate
 	}
 	return now.Sub(state.AttemptedAt) >= gate
+}
+
+// historyFetchStateDue is marketFetchStateDue for a history pair: a
+// transient failure retries after marketFetchErrorGate, and any
+// other record is due once ESI has published a new day since it was
+// written (module.HistoryCurrent).
+func historyFetchStateDue(state db.MarketFetchState, now time.Time) bool {
+	if state.State == fetchStateError {
+		return now.Sub(state.AttemptedAt) >= marketFetchErrorGate
+	}
+	return !module.HistoryCurrent(state.AttemptedAt, now)
+}
+
+// historyFetchDue is marketFetchDue for one history pair, under
+// historyFetchStateDue; a missing record is due.
+func (app *Application) historyFetchDue(ctx context.Context, key marketKey) bool {
+	state, err := app.queries.GetMarketFetchState(ctx, marketFetchKind("history", key))
+	if err != nil {
+		return true
+	}
+	return historyFetchStateDue(state, time.Now())
 }
 
 // marketFetchStates reads the records of many fetch kinds at once,

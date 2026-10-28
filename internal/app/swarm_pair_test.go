@@ -236,7 +236,7 @@ func TestSwarmPairSharesHistory(t *testing.T) {
 	}
 	// B's worker now considers the pair fetched: the entry saved
 	// the ESI swarm.Call B would have spent.
-	if p.b.marketFetchDue(ctx, marketFetchKind("history", key), historyRefetchGate) {
+	if p.b.historyFetchDue(ctx, key) {
 		t.Fatalf("B still considers the pair due after applying the shared entry")
 	}
 }

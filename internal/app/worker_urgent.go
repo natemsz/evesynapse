@@ -146,7 +146,7 @@ func (app *Application) drainUrgentWants(ctx context.Context) (limited bool) {
 					continue
 				}
 				key := marketKey{RegionID: wn.RegionID, TypeID: wn.TypeID}
-				if !app.marketFetchDue(ctx, marketFetchKind("history", key), historyRefetchGate) {
+				if !app.historyFetchDue(ctx, key) {
 					continue
 				}
 				fetched++

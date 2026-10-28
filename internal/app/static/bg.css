@@ -54,12 +54,31 @@ body::before {
 /* Backdrop choice: the Settings page's Interface tab picks it
    (Full, Muted, Minimalistic) and boot.js applies the saved
    value as html[data-backdrop] before first paint. The muted
-   state grades the art layer down where it sits. The glow
-   state swaps the art for the signature top horizon glow over
-   the warm black ground. The light theme paints no backdrop
-   layer at all, so the choice rests there. */
-html[data-backdrop="muted"] body::before {
-  filter: brightness(0.42) saturate(0.30) contrast(1.03);
+   state swaps the art for its muted twins: the grade
+   (brightness 0.42, saturate 0.30, contrast 1.03) is baked
+   into those files, so no filter runs over the backdrop layer
+   at paint time. The scheme muted tier below rides the same
+   twins. The glow state swaps the art for the signature top
+   horizon glow over the warm black ground. The light theme
+   paints no backdrop layer at all, so the choice rests there. */
+html[data-backdrop="muted"] body::before,
+html[data-scheme][data-tier="muted"] body::before {
+  background-image: url("/static/bg-calm-muted.jpg?v=d056adc1ec88a9fa"), url("/static/bg-calm-muted-thumb.jpg?v=247f99893af7b2ad");
+  background-image: image-set(url("/static/bg-calm-muted.jxl?v=202f6aca4038a6bf") type("image/jxl"), url("/static/bg-calm-muted.jpg?v=d056adc1ec88a9fa") type("image/jpeg")), url("/static/bg-calm-muted-thumb.jpg?v=247f99893af7b2ad");
+}
+@media (min-width: 1501px), (min-width: 751px) and (min-resolution: 2dppx), (min-width: 751px) and (-webkit-min-device-pixel-ratio: 2) {
+  html[data-backdrop="muted"] body::before,
+  html[data-scheme][data-tier="muted"] body::before {
+    background-image: url("/static/bg-calm-muted-4k.jpg?v=fe12d353c8673a99"), url("/static/bg-calm-muted-thumb.jpg?v=247f99893af7b2ad");
+    background-image: image-set(url("/static/bg-calm-muted-4k.jxl?v=73ff76cacb449b10") type("image/jxl"), url("/static/bg-calm-muted-4k.jpg?v=fe12d353c8673a99") type("image/jpeg")), url("/static/bg-calm-muted-thumb.jpg?v=247f99893af7b2ad");
+  }
+}
+@media (min-width: 3201px), (min-width: 1601px) and (min-resolution: 2dppx), (min-width: 1601px) and (-webkit-min-device-pixel-ratio: 2) {
+  html[data-backdrop="muted"] body::before,
+  html[data-scheme][data-tier="muted"] body::before {
+    background-image: url("/static/bg-calm-muted-uhd.jpg?v=2ea6f95c86526cc1"), url("/static/bg-calm-muted-thumb.jpg?v=247f99893af7b2ad");
+    background-image: image-set(url("/static/bg-calm-muted-uhd.jxl?v=b7e4118004978f2e") type("image/jxl"), url("/static/bg-calm-muted-uhd.jpg?v=2ea6f95c86526cc1") type("image/jpeg")), url("/static/bg-calm-muted-thumb.jpg?v=247f99893af7b2ad");
+  }
 }
 html[data-backdrop="glow"] body::before {
   background-color: #0b0806;
@@ -1140,9 +1159,6 @@ html[data-scheme] .search-glyph { fill: var(--sch-hi); stroke: var(--sch-hi); }
    default's muted backdrop, with no glow; Minimalistic is the
    scheme glow over its dark ground, with no art. The glow stack
    shares the ember glow's geometry. */
-html[data-scheme][data-tier="muted"] body::before {
-  filter: brightness(0.42) saturate(0.30) contrast(1.03);
-}
 html[data-scheme][data-tier="minimalistic"] body::before {
   background-color: var(--sch-ground);
   background-image:

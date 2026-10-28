@@ -42,6 +42,13 @@ assets: ## Decode the fonts/wallpaper from ci-assets/ into the embedded asset di
 	ls ci-assets/bg-calm.jxl.b64.part-* | sort -V | xargs cat | base64 -d > internal/app/static/bg-calm.jxl
 	ls ci-assets/bg-calm-4k.jxl.b64.part-* | sort -V | xargs cat | base64 -d > internal/app/static/bg-calm-4k.jxl
 	ls ci-assets/bg-calm-uhd.jxl.b64.part-* | sort -V | xargs cat | base64 -d > internal/app/static/bg-calm-uhd.jxl
+	ls ci-assets/bg-calm-muted.jpg.b64.part-* | sort -V | xargs cat | base64 -d > internal/app/static/bg-calm-muted.jpg
+	ls ci-assets/bg-calm-muted-thumb.jpg.b64.part-* | sort -V | xargs cat | base64 -d > internal/app/static/bg-calm-muted-thumb.jpg
+	ls ci-assets/bg-calm-muted-4k.jpg.b64.part-* | sort -V | xargs cat | base64 -d > internal/app/static/bg-calm-muted-4k.jpg
+	ls ci-assets/bg-calm-muted-uhd.jpg.b64.part-* | sort -V | xargs cat | base64 -d > internal/app/static/bg-calm-muted-uhd.jpg
+	ls ci-assets/bg-calm-muted.jxl.b64.part-* | sort -V | xargs cat | base64 -d > internal/app/static/bg-calm-muted.jxl
+	ls ci-assets/bg-calm-muted-4k.jxl.b64.part-* | sort -V | xargs cat | base64 -d > internal/app/static/bg-calm-muted-4k.jxl
+	ls ci-assets/bg-calm-muted-uhd.jxl.b64.part-* | sort -V | xargs cat | base64 -d > internal/app/static/bg-calm-muted-uhd.jxl
 	ls ci-assets/shot-fitting.webp.b64.part-* | sort -V | xargs cat | base64 -d > internal/app/static/shot-fitting.webp
 	ls ci-assets/shot-planner.webp.b64.part-* | sort -V | xargs cat | base64 -d > internal/app/static/shot-planner.webp
 	ls ci-assets/shot-overview.webp.b64.part-* | sort -V | xargs cat | base64 -d > internal/app/static/shot-overview.webp

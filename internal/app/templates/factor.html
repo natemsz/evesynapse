@@ -1,0 +1,27 @@
+{{define "title"}}Second factor{{end}}
+{{define "pagetitle"}}<h1>Second factor</h1>{{end}}
+{{define "content"}}
+
+{{with .Factor}}
+{{if .Error}}<p class="err">{{.Error}}</p>{{end}}
+<section class="card page-card" id="factor-assert" data-begin="/auth/factor/begin" data-finish="/auth/factor/finish">
+  <h2>Use your key</h2>
+  <p><small>Plug in your security key or use this device's passkey, then continue. The key asks for its PIN or biometric.</small></p>
+  <p class="err" id="factor-status" role="alert" hidden></p>
+  <p><button type="button" class="btn" id="factor-go">Continue with key</button></p>
+</section>
+
+{{if .HasCodes}}
+<section class="card page-card">
+  <h2>Lost your key</h2>
+  <p><small>A recovery code signs you in once. It burns on use.</small></p>
+  <form method="post" action="/auth/factor/recover">
+    <p><label>Recovery code <input type="text" name="code" autocomplete="one-time-code" maxlength="11" required></label></p>
+    <p><button class="btn" type="submit">Sign in with code</button></p>
+  </form>
+</section>
+{{end}}
+
+<form method="post" action="/auth/logout"><p><button class="btn" type="submit">Sign out</button></p></form>
+{{end}}
+{{end}}

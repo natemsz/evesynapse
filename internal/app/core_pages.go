@@ -108,6 +108,15 @@ type pageData struct {
 
 	// Character management page (/characters/).
 	CharactersPage *charactersView
+
+	// Factor is the second-factor page (/auth/factor).
+	Factor *factorView
+	// Enroll is forced 2FA enrollment (/auth/enroll).
+	Enroll *enrollView
+	// Security is the settings Security section.
+	Security *securityView
+	// SecurityCodes is the shown-once recovery code page.
+	SecurityCodes *securityCodesView
 }
 
 func (p *pageData) Shell() *module.ShellData {

@@ -1,7 +1,7 @@
 {{define "title"}}Settings{{end}}
 {{define "pagetitle"}}<h1>Settings</h1>{{end}}
 {{define "pagetabs"}}<nav class="section-tabs" aria-label="Settings pages">
-  <a href="#notifications" data-tab="notifications" class="active" aria-current="page">Notifications</a><a href="#interface" data-tab="interface">Interface</a>
+  <a href="#notifications" data-tab="notifications" class="active" aria-current="page">Notifications</a><a href="#interface" data-tab="interface">Interface</a><a href="#security" data-tab="security">Security</a>
 </nav>{{end}}
 {{define "content"}}
 
@@ -73,6 +73,71 @@
   <p><small>Preferences are saved to your account automatically.</small></p>
 
   {{template "theme-picker" .}}
+</section>
+
+<section class="card page-card" data-tabpanel="security" hidden>
+{{with .Security}}
+  <h2>Two-factor sign-in</h2>
+  {{if .Enabled}}
+  <p><small>On. Every sign-in asks for a key after EVE SSO.</small></p>
+  <table>
+    <thead>
+      <tr><th>Name</th><th>Kind</th><th>Added</th><th>Last used</th><th></th></tr>
+    </thead>
+    <tbody>
+      {{range .Credentials}}
+      <tr>
+        <td>{{.Name}}</td>
+        <td>{{.Kind}}</td>
+        <td>{{.Created}}</td>
+        <td>{{.LastUsed}}</td>
+        <td><form method="post" action="/settings/security/keys/remove" data-needs-fresh><input type="hidden" name="id" value="{{.ID}}"><button class="btn" type="submit">Remove</button></form></td>
+      </tr>
+      {{end}}
+    </tbody>
+  </table>
+  {{if .IsAdmin}}
+  <p><small>Admin accounts keep at least one key. Removing the last one is refused.</small></p>
+  {{else}}
+  <p><small>Removing the last key turns two-factor sign-in off.</small></p>
+  {{end}}
+  <p><small>{{.CodesLeft}} recovery codes left.</small></p>
+  <form method="post" action="/settings/security/codes/regenerate" data-needs-fresh>
+    <p><button class="btn" type="submit">New recovery codes</button> <small>The old set stops working.</small></p>
+  </form>
+  {{else}}
+  <p><small>Off. Add a key to ask for it after EVE SSO at every sign-in.</small></p>
+  <p><small>A security key is a small device you plug in or tap, and a passkey lives on your phone or computer. This is separate from your EVE account's own two-factor sign-in: use a different key than the one guarding your EVE account. Keys are per hostname: a key enrolled here ({{.Host}}) does not work on any other EveSynapse address.</small></p>
+  {{end}}
+  <div id="security-register" data-begin="/settings/security/keys/begin" data-finish="/settings/security/keys/finish" data-fresh="{{.Fresh}}" data-enabled="{{.Enabled}}">
+    <p class="err" id="security-status" role="alert" hidden></p>
+    <div id="security-form">
+      <p><label>Key name <input type="text" id="security-name" value="Security key" maxlength="64" autocomplete="off"></label>
+      <button type="button" class="btn" id="security-add">{{if .Enabled}}Add another key{{else}}Add a key{{end}}</button></p>
+    </div>
+    <div id="security-codes" hidden>
+      <h2>Recovery codes</h2>
+      <p><small>Write these down now. This is the only time they are shown. Each code signs you in once, then burns.</small></p>
+      <ol id="security-code-list"></ol>
+      <p><button type="button" class="btn" id="security-done">Done</button></p>
+    </div>
+  </div>
+  <h2>Recent key activity</h2>
+  {{if .Events}}
+  <table>
+    <thead>
+      <tr><th>What</th><th>When</th></tr>
+    </thead>
+    <tbody>
+      {{range .Events}}
+      <tr><td>{{.Label}}</td><td>{{.At}}</td></tr>
+      {{end}}
+    </tbody>
+  </table>
+  {{else}}
+  <p><small>None yet.</small></p>
+  {{end}}
+{{end}}
 </section>
 {{end}}
 

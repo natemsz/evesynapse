@@ -61,7 +61,8 @@
           showTab(this.getAttribute('data-tab'));
         });
       }
-      showTab(window.location.hash === '#interface' ? 'interface' : 'notifications');
+      var hash = window.location.hash;
+      showTab(hash === '#interface' ? 'interface' : hash === '#security' ? 'security' : 'notifications');
     }
 
     // --- theme picker ---------------------------------------------

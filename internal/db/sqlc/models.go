@@ -1709,6 +1709,34 @@ type WarDetail struct {
 	FetchedAt time.Time `json:"fetched_at"`
 }
 
+type WebauthnCredential struct {
+	ID                int64        `json:"id"`
+	UserID            int64        `json:"user_id"`
+	CredentialID      []byte       `json:"credential_id"`
+	PublicKey         []byte       `json:"public_key"`
+	SignCount         int64        `json:"sign_count"`
+	Transports        string       `json:"transports"`
+	AttestationFormat string       `json:"attestation_format"`
+	Name              string       `json:"name"`
+	CreatedAt         time.Time    `json:"created_at"`
+	LastUsedAt        sql.NullTime `json:"last_used_at"`
+}
+
+type WebauthnEvent struct {
+	ID        int64     `json:"id"`
+	UserID    int64     `json:"user_id"`
+	Kind      string    `json:"kind"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+type WebauthnRecoveryCode struct {
+	ID        int64        `json:"id"`
+	UserID    int64        `json:"user_id"`
+	CodeHash  string       `json:"code_hash"`
+	UsedAt    sql.NullTime `json:"used_at"`
+	CreatedAt time.Time    `json:"created_at"`
+}
+
 type WidgetConfig struct {
 	UserID    int64     `json:"user_id"`
 	WidgetID  string    `json:"widget_id"`

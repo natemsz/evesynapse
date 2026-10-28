@@ -395,7 +395,7 @@ func (app *Application) handleNotificationSettingsRedirect(w http.ResponseWriter
 func (app *Application) handleSettings(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	data := app.page(ctx)
-	data.Scripts = []string{"/static/settings.js"}
+	data.Scripts = []string{"/static/settings.js", "/static/webauthn.js"}
 	userID := app.userID(ctx)
 	prefs := app.notifyPrefsFor(ctx, userID)
 	view := &notifySettingsView{
@@ -421,6 +421,7 @@ func (app *Application) handleSettings(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	data.NotifySettings = view
+	data.Security = app.securityViewFor(ctx, r, userID)
 	app.render(ctx, w, http.StatusOK, "settings.html", data)
 }
 

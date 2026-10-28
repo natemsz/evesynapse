@@ -388,7 +388,8 @@ func (app *Application) finishIdentityLogin(w http.ResponseWriter, r *http.Reque
 	putSessionCharID(app.sessions, ctx, characterID)
 	app.sessions.Put(ctx, sessionCharacterName, characterName)
 	app.recorder().tick(statsEventSignIn)
-	http.Redirect(w, r, app.takeReturnTo(ctx), http.StatusSeeOther)
+	app.armSecondFactor(ctx, userID)
+	http.Redirect(w, r, app.signInTarget(ctx), http.StatusSeeOther)
 }
 
 // relinkScopesFor resolves a targeted re-link request: the module must
@@ -634,8 +635,9 @@ func (app *Application) handleEVECallback(w http.ResponseWriter, r *http.Request
 	putSessionCharID(app.sessions, ctx, characterID)
 	app.sessions.Put(ctx, sessionCharacterName, characterName)
 	app.recorder().tick(statsEventSignIn)
+	app.armSecondFactor(ctx, userID)
 
-	http.Redirect(w, r, app.takeReturnTo(ctx), http.StatusSeeOther)
+	http.Redirect(w, r, app.signInTarget(ctx), http.StatusSeeOther)
 }
 
 // handleSignOut destroys the session server-side and expires the cookie.

@@ -614,6 +614,27 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	// tag on another page cannot sign the visitor out.
 	r.Post("/auth/logout", app.handleSignOut)
 
+	// Second factor (auth_webauthn.go): the assertion page and
+	// its ceremonies, plus forced enrollment for admins with no
+	// key yet. Pending sessions reach only these, sign-out, and
+	// the SSO round trip (factorGate).
+	r.Get("/auth/factor", app.handleFactor)
+	r.Post("/auth/factor/begin", app.handleFactorBegin)
+	r.Post("/auth/factor/finish", app.handleFactorFinish)
+	r.Post("/auth/factor/recover", app.handleFactorRecover)
+	r.Get("/auth/enroll", app.handleEnroll)
+	r.Post("/auth/enroll/begin", app.handleEnrollBegin)
+	r.Post("/auth/enroll/finish", app.handleEnrollFinish)
+	r.Post("/auth/enroll/confirm", app.handleEnrollConfirm)
+
+	// Settings security section (auth_webauthn.go): key
+	// management and recovery codes. Behind requireAuth, so
+	// pending sessions never reach them.
+	r.With(app.requireAuth).Post("/settings/security/keys/begin", app.handleSecurityKeysBegin)
+	r.With(app.requireAuth).Post("/settings/security/keys/finish", app.handleSecurityKeysFinish)
+	r.With(app.requireAuth).Post("/settings/security/keys/remove", app.handleSecurityKeysRemove)
+	r.With(app.requireAuth).Post("/settings/security/codes/regenerate", app.handleSecurityCodesRegenerate)
+
 	// Route hooks (dev entrypoint only) mount here.
 	for _, hook := range hooks {
 		hook(r, app)
@@ -953,6 +974,14 @@ func (app *Application) requireAuth(next http.Handler) http.Handler {
 			// The page asked for waits for the sign-in (auth_return.go).
 			app.rememberReturnTo(r)
 			http.Redirect(w, r, "/", http.StatusSeeOther)
+			return
+		}
+		if target, blocked := app.factorGate(r); blocked {
+			// A pending second factor: only the factor
+			// pages and sign-out are reachable until the
+			// ceremony completes (auth_webauthn.go).
+			app.rememberReturnTo(r)
+			http.Redirect(w, r, target, http.StatusSeeOther)
 			return
 		}
 		next.ServeHTTP(w, r)

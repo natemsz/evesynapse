@@ -234,8 +234,10 @@ func (app *Application) factorGate(r *http.Request) (target string, blocked bool
 // account with 2FA enabled (any credential stored) gets a
 // pending session until it asserts; an admin account with no
 // credential yet gets forced enrollment. Anything else signs
-// straight in. On a read failure it logs and signs in: the
-// database being unreachable already breaks every page.
+// straight in. A read the decision depends on fails shut: the
+// session waits at the factor (armPendingHold) rather than
+// through, because a session is never let in on a decision
+// that could not be made.
 func (app *Application) armSecondFactor(ctx context.Context, userID int64) {
 	app.sessions.Put(ctx, session2FAPending, false)
 	app.sessions.Put(ctx, session2FAMustEnroll, false)
@@ -245,19 +247,39 @@ func (app *Application) armSecondFactor(ctx context.Context, userID int64) {
 	n, err := app.queries.CountWebAuthnCredentialsByUser(ctx, userID)
 	if err != nil {
 		logging.Errorf("2fa: count credentials for user %d: %v", userID, err)
+		app.armPendingHold(ctx)
 		return
 	}
 	admin := false
 	if chars, err := app.queries.ListCharactersByUser(ctx, userID); err != nil {
 		logging.Errorf("2fa: list characters for user %d: %v", userID, err)
+		if n == 0 {
+			// Admin status unproven: the account may owe
+			// forced enrollment, so it waits at the factor
+			// too. With a credential enrolled the count
+			// alone already sets the pending state.
+			app.armPendingHold(ctx)
+			return
+		}
 	} else {
 		admin = app.adminAmong(chars)
 	}
 	if n == 0 && !admin {
 		return
 	}
-	app.sessions.Put(ctx, session2FAPending, true)
+	app.armPendingHold(ctx)
 	app.sessions.Put(ctx, session2FAMustEnroll, n == 0 && admin)
+}
+
+// armPendingHold sets the pending state with no enrollment
+// duty: the session waits at the factor page. It is both the
+// armed state of an enrolled account and the fail-shut state
+// for an unreadable arming decision. A key holder can still
+// assert from the hold; an account with nothing to assert
+// with signs out and retries once the read recovers.
+func (app *Application) armPendingHold(ctx context.Context) {
+	app.sessions.Put(ctx, session2FAPending, true)
+	app.sessions.Put(ctx, session2FAMustEnroll, false)
 	app.sessions.Put(ctx, session2FAPendingAt, time.Now().Unix())
 	app.sessions.Put(ctx, session2FAFailures, 0)
 }

@@ -776,7 +776,7 @@ func (app *Mod) SwarmDemandKeys(ctx context.Context) []SwarmPullKey {
 			if len(keys)-names >= MaxSwarmHistoryDemand {
 				break
 			}
-			if app.Deps.MarketFetchDue(ctx, module.MarketFetchKind("history", key), module.HistoryRefetchGate) {
+			if app.Deps.HistoryFetchDue(ctx, key) {
 				keys = append(keys, SwarmPullKey{Kind: SwarmKindHistory,
 					Key: fmt.Sprintf("%d/%d", key.RegionID, key.TypeID)})
 			}

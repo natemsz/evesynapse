@@ -1568,6 +1568,10 @@ func (app *Application) MarketFetchDue(ctx context.Context, kind string, gate ti
 	return app.marketFetchDue(ctx, kind, gate)
 }
 
+func (app *Application) HistoryFetchDue(ctx context.Context, key module.MarketKey) bool {
+	return app.historyFetchDue(ctx, key)
+}
+
 func (app *Application) RecordMarketFetchAt(ctx context.Context, kind, state, detail string, at time.Time) {
 	app.recordMarketFetchAt(ctx, kind, state, detail, at)
 }

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http"
 	"sort"
+	"sync"
 	"time"
 
 	db "evesynapse/internal/db/sqlc"
@@ -51,9 +52,6 @@ const (
 	// worker cycle; a cold watchlist converges over a few
 	// one-minute cycles instead of bursting.
 	maxHistoryFetchesPerCycle = 200
-	// historyRefetchGate is the minimum age of a successful
-	// history fetch before the pair is fetched again.
-	historyRefetchGate = module.HistoryRefetchGate
 	// marketFetchErrorGate is the minimum age of a transiently
 	// failed market fetch before it retries. Without it a
 	// failed attempt is always due and one poisoned pair
@@ -155,16 +153,26 @@ func (app *Application) warmMarketHistory(ctx context.Context, allowance *fetchB
 		kinds[i] = marketFetchKind("history", key)
 	}
 	states, statesOK := app.marketFetchStates(ctx, kinds)
+	// Due pairs are fetched historyFetchWindow at a time: they come
+	// due together once ESI publishes a day, and one after another
+	// the cap's worth would hold the cycle for most of a minute.
+	var window []marketKey
+	flush := func() (limited bool) {
+		fetched, limited := app.fetchHistoryWindow(ctx, window)
+		stored += fetched
+		window = window[:0]
+		return limited
+	}
 	for i, key := range candidates {
-		if stored >= maxHistoryFetchesPerCycle || ctx.Err() != nil {
+		if stored+len(window) >= maxHistoryFetchesPerCycle || ctx.Err() != nil {
 			break
 		}
 		kind := kinds[i]
 		if statesOK {
-			if state, ok := states[kind]; ok && !marketFetchStateDue(state, historyRefetchGate, time.Now()) {
+			if state, ok := states[kind]; ok && !historyFetchStateDue(state, time.Now()) {
 				continue
 			}
-		} else if !app.marketFetchDue(ctx, kind, historyRefetchGate) {
+		} else if !app.historyFetchDue(ctx, key) {
 			continue
 		}
 		// A fresh staged entry means the pull already covered
@@ -177,15 +185,48 @@ func (app *Application) warmMarketHistory(ctx context.Context, allowance *fetchB
 		if !allowance.take() {
 			break
 		}
-		fetched, limited := app.fetchAndStoreHistory(ctx, key)
-		if limited {
+		window = append(window, key)
+		if len(window) == historyFetchWindow && flush() {
 			return stored, true
 		}
-		if fetched {
-			stored++
-		}
+	}
+	if len(window) > 0 && flush() {
+		return stored, true
 	}
 	return stored, false
+}
+
+// historyFetchWindow is how many history pairs are read at once.
+// ESI's rate budgets are still enforced in the client
+// (esi/ratelimit.go); the window only stops the reads waiting on
+// one another.
+const historyFetchWindow = 6
+
+// fetchHistoryWindow fetches and stores keys at once, reporting how
+// many landed and whether ESI's error limit stopped any of them.
+func (app *Application) fetchHistoryWindow(ctx context.Context, keys []marketKey) (fetched int, limited bool) {
+	var (
+		wg      sync.WaitGroup
+		mu      sync.Mutex
+		landed  int
+		stopped bool
+	)
+	for _, key := range keys {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			defer recoverWorkerPanic("market history")
+			ok, ltd := app.fetchAndStoreHistory(ctx, key)
+			mu.Lock()
+			if ok {
+				landed++
+			}
+			stopped = stopped || ltd
+			mu.Unlock()
+		}()
+	}
+	wg.Wait()
+	return landed, stopped
 }
 
 // fetchAndStoreHistory downloads one pair's daily aggregates,
@@ -905,6 +946,27 @@ func marketFetchStateDue(state db.MarketFetchState, gate time.Duration, now time
 		return now.Sub(state.AttemptedAt) >= marketFetchErrorGate
 	}
 	return now.Sub(state.AttemptedAt) >= gate
+}
+
+// historyFetchStateDue is marketFetchStateDue for a history pair: a
+// transient failure retries after marketFetchErrorGate, and any
+// other record is due once ESI has published a new day since it was
+// written (module.HistoryCurrent).
+func historyFetchStateDue(state db.MarketFetchState, now time.Time) bool {
+	if state.State == fetchStateError {
+		return now.Sub(state.AttemptedAt) >= marketFetchErrorGate
+	}
+	return !module.HistoryCurrent(state.AttemptedAt, now)
+}
+
+// historyFetchDue is marketFetchDue for one history pair, under
+// historyFetchStateDue; a missing record is due.
+func (app *Application) historyFetchDue(ctx context.Context, key marketKey) bool {
+	state, err := app.queries.GetMarketFetchState(ctx, marketFetchKind("history", key))
+	if err != nil {
+		return true
+	}
+	return historyFetchStateDue(state, time.Now())
 }
 
 // marketFetchStates reads the records of many fetch kinds at once,

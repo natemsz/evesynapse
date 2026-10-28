@@ -5605,3 +5605,17 @@ html[data-theme="light"] .suggest li:not(.sug-kind):not(.sug-empty):hover, html[
     cursor: pointer;
   }
 }
+
+/* Axon's site panel: the window controls the panel's frame would
+   carry, at the end of the top bar (base.html, app.js). Drawn in the
+   theme's own tokens so they sit in the bar like its other controls. */
+.axon-winctl { display: flex; align-items: stretch; align-self: stretch; margin-left: 0.5rem; }
+.axon-winctl[hidden] { display: none; }
+.axon-winctl button {
+  width: 2.6rem; padding: 0;
+  display: grid; place-items: center;
+  color: var(--muted); background: none; border: 0; cursor: pointer;
+}
+.axon-winctl svg { width: 10px; height: 10px; fill: none; stroke: currentColor; stroke-width: 1.2; }
+.axon-winctl button:hover { color: var(--text); background: var(--row-hover); }
+.axon-winctl .axon-close:hover { color: #fff; background: var(--danger); }

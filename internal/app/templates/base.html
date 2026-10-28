@@ -184,6 +184,14 @@
       {{end}}
     </div>
     {{end}}
+    {{/* Axon's site panel: its window controls, in the top bar so the
+         panel has no frame of its own. Shown only inside the panel
+         (app.js, "Axon's site panel"); they message Axon, never the site. */}}
+    <span class="axon-winctl" data-axon-winctl hidden>
+      <button type="button" data-axon="minimize" aria-label="Minimize" title="Minimize"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1.5 5.5h7"/></svg></button>
+      <button type="button" data-axon="maximize" aria-label="Maximize" title="Maximize"><svg viewBox="0 0 10 10" aria-hidden="true"><rect x="1.5" y="1.5" width="7" height="7"/></svg></button>
+      <button type="button" data-axon="close" class="axon-close" aria-label="Close" title="Close"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M2 2l6 6M8 2l-6 6"/></svg></button>
+    </span>
   </nav>
 </header>
 <div class="page-shell">

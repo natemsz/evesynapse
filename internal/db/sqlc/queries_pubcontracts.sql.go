@@ -2059,18 +2059,20 @@ func (q *Queries) ListSDERegionIDs(ctx context.Context) ([]int64, error) {
 }
 
 const markAbyssalSaleProbed = `-- name: MarkAbyssalSaleProbed :exec
-UPDATE abyssal_sightings SET sale_probed_at = $1::timestamptz
-WHERE contract_id = $2::bigint
+UPDATE abyssal_sightings SET sale_probed_at = $1::timestamptz,
+    sale_probe_status = $2::bigint
+WHERE contract_id = $3::bigint
   AND sale_probed_at IS NULL
 `
 
 type MarkAbyssalSaleProbedParams struct {
 	ProbedAt   time.Time `json:"probed_at"`
+	Status     int64     `json:"status"`
 	ContractID int64     `json:"contract_id"`
 }
 
 func (q *Queries) MarkAbyssalSaleProbed(ctx context.Context, arg MarkAbyssalSaleProbedParams) error {
-	_, err := q.db.ExecContext(ctx, markAbyssalSaleProbed, arg.ProbedAt, arg.ContractID)
+	_, err := q.db.ExecContext(ctx, markAbyssalSaleProbed, arg.ProbedAt, arg.Status, arg.ContractID)
 	return err
 }
 

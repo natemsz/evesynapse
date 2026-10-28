@@ -902,14 +902,20 @@ func (app *Application) marketFetchStates(ctx context.Context, kinds []string) (
 }
 
 // marketFetchFailureState classifies a failed market fetch: a
-// definitive client error (400/404 -- the type id is wrong, or
-// the type simply has no such data in that region) settles as
-// dead and waits out the full refetch gate, because retrying
-// sooner can only fail the same way; anything else is a
-// transient error that retries after the error gate.
+// definitive client error settles as dead and waits out the full
+// refetch gate, because retrying sooner can only fail the same way;
+// anything else is a transient error that retries after the error
+// gate. Definitive means 400 or 404 (the id is wrong, or the type
+// has no such data in that region), 403 (every caller is a public
+// route, where a refusal cannot be a missing role or scope: ESI
+// says "not public", which never changes back) and 422 (ESI's
+// "invalid id"). ESI's limits are 420 and 429, never these.
 func marketFetchFailureState(err error) string {
-	if code, ok := esi.StatusCode(err); ok && (code == http.StatusBadRequest || code == http.StatusNotFound) {
-		return fetchStateDead
+	if code, ok := esi.StatusCode(err); ok {
+		switch code {
+		case http.StatusBadRequest, http.StatusForbidden, http.StatusNotFound, http.StatusUnprocessableEntity:
+			return fetchStateDead
+		}
 	}
 	return fetchStateError
 }

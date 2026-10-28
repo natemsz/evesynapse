@@ -87,27 +87,28 @@ type AbyssalRange struct {
 }
 
 type AbyssalSighting struct {
-	ItemID        int64           `json:"item_id"`
-	ContractID    int64           `json:"contract_id"`
-	ContractType  string          `json:"contract_type"`
-	Price         float64         `json:"price"`
-	RegionID      int64           `json:"region_id"`
-	LocationID    int64           `json:"location_id"`
-	DateExpired   sql.NullTime    `json:"date_expired"`
-	FirstSeenAt   time.Time       `json:"first_seen_at"`
-	LastSeenAt    time.Time       `json:"last_seen_at"`
-	DepartedAt    sql.NullTime    `json:"departed_at"`
-	DepartKind    sql.NullString  `json:"depart_kind"`
-	BidCount      sql.NullInt64   `json:"bid_count"`
-	TopBid        sql.NullFloat64 `json:"top_bid"`
-	IssuerID      sql.NullInt64   `json:"issuer_id"`
-	AbyssalLines  sql.NullInt64   `json:"abyssal_lines"`
-	WantedLines   sql.NullInt64   `json:"wanted_lines"`
-	OtherLines    sql.NullInt64   `json:"other_lines"`
-	OtherUnpriced sql.NullInt64   `json:"other_unpriced"`
-	OtherValue    sql.NullFloat64 `json:"other_value"`
-	SoldAt        sql.NullTime    `json:"sold_at"`
-	SaleProbedAt  sql.NullTime    `json:"sale_probed_at"`
+	ItemID          int64           `json:"item_id"`
+	ContractID      int64           `json:"contract_id"`
+	ContractType    string          `json:"contract_type"`
+	Price           float64         `json:"price"`
+	RegionID        int64           `json:"region_id"`
+	LocationID      int64           `json:"location_id"`
+	DateExpired     sql.NullTime    `json:"date_expired"`
+	FirstSeenAt     time.Time       `json:"first_seen_at"`
+	LastSeenAt      time.Time       `json:"last_seen_at"`
+	DepartedAt      sql.NullTime    `json:"departed_at"`
+	DepartKind      sql.NullString  `json:"depart_kind"`
+	BidCount        sql.NullInt64   `json:"bid_count"`
+	TopBid          sql.NullFloat64 `json:"top_bid"`
+	IssuerID        sql.NullInt64   `json:"issuer_id"`
+	AbyssalLines    sql.NullInt64   `json:"abyssal_lines"`
+	WantedLines     sql.NullInt64   `json:"wanted_lines"`
+	OtherLines      sql.NullInt64   `json:"other_lines"`
+	OtherUnpriced   sql.NullInt64   `json:"other_unpriced"`
+	OtherValue      sql.NullFloat64 `json:"other_value"`
+	SoldAt          sql.NullTime    `json:"sold_at"`
+	SaleProbedAt    sql.NullTime    `json:"sale_probed_at"`
+	SaleProbeStatus sql.NullInt64   `json:"sale_probe_status"`
 }
 
 type AccountLinkChoice struct {
@@ -1629,17 +1630,19 @@ type TrueValue struct {
 }
 
 type TrueValueContractObservation struct {
-	ContractID  int64        `json:"contract_id"`
-	RegionID    int64        `json:"region_id"`
-	TypeID      int64        `json:"type_id"`
-	Shape       string       `json:"shape"`
-	ListedPrice float64      `json:"listed_price"`
-	SamplePrice float64      `json:"sample_price"`
-	FirstSeenAt time.Time    `json:"first_seen_at"`
-	LastSeenAt  time.Time    `json:"last_seen_at"`
-	ExpiresAt   time.Time    `json:"expires_at"`
-	VanishedAt  sql.NullTime `json:"vanished_at"`
-	Sold        bool         `json:"sold"`
+	ContractID   int64         `json:"contract_id"`
+	RegionID     int64         `json:"region_id"`
+	TypeID       int64         `json:"type_id"`
+	Shape        string        `json:"shape"`
+	ListedPrice  float64       `json:"listed_price"`
+	SamplePrice  float64       `json:"sample_price"`
+	FirstSeenAt  time.Time     `json:"first_seen_at"`
+	LastSeenAt   time.Time     `json:"last_seen_at"`
+	ExpiresAt    time.Time     `json:"expires_at"`
+	VanishedAt   sql.NullTime  `json:"vanished_at"`
+	Sold         bool          `json:"sold"`
+	ExitStatus   sql.NullInt64 `json:"exit_status"`
+	ExitProbedAt sql.NullTime  `json:"exit_probed_at"`
 }
 
 type TypeDetail struct {

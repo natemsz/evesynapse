@@ -8,6 +8,8 @@ package app
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -150,9 +152,10 @@ func (s *names404Transport) RoundTrip(req *http.Request) (*http.Response, error)
 	}, nil
 }
 
-// TestWarmCorpAssetNames404BacksOff: a 404 from the names POST is
-// recorded and backed off — the second cycle makes no new call.
-func TestWarmCorpAssetNames404BacksOff(t *testing.T) {
+// TestWarmCorpAssetNamesSettlesARejectedItem: ESI rejects a
+// one-item batch (404, the item no longer resolves). The item is
+// settled as unnamed and the next cycle asks nothing.
+func TestWarmCorpAssetNamesSettlesARejectedItem(t *testing.T) {
 	transport := &names404Transport{}
 	app, _, q := buildCorpTestApp(t, transport)
 	ctx := context.Background()
@@ -168,14 +171,76 @@ func TestWarmCorpAssetNames404BacksOff(t *testing.T) {
 	})
 
 	app.warmCorpAssetNames(ctx, ch, fixtureCorpA)
-	state, detail, found := app.corpKindState(ctx, fixtureCharA, corpAssetNamesKind)
-	if !found || state != fetchStateError {
-		t.Fatalf("after 404: fetch state = (%q, %q, %v), want error recorded", state, detail, found)
+	if name, err := q.GetItemName(ctx, 123456789); err != nil || name != "" {
+		t.Fatalf("after 404: item name = (%q, %v), want settled unnamed", name, err)
 	}
-
 	app.warmCorpAssetNames(ctx, ch, fixtureCorpA)
 	if got := transport.posts.Load(); got != 1 {
-		t.Fatalf("names POST made %d calls across two cycles, want 1 (backoff)", got)
+		t.Fatalf("names POST made %d calls across two cycles, want 1", got)
+	}
+}
+
+// namesSplitTransport answers the corp asset-names POST like ESI: a
+// 404 for any batch holding the bad item, names for the rest.
+type namesSplitTransport struct {
+	bad   int64
+	posts atomic.Int64
+}
+
+func (s *namesSplitTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	if !strings.Contains(req.URL.Path, "/assets/names/") {
+		return &http.Response{StatusCode: http.StatusInternalServerError, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(`{}`))}, nil
+	}
+	s.posts.Add(1)
+	var ids []int64
+	_ = json.NewDecoder(req.Body).Decode(&ids)
+	var names []esi.AssetName
+	for _, id := range ids {
+		if id == s.bad {
+			return &http.Response{StatusCode: http.StatusNotFound, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(`{"error":"Invalid IDs in the request"}`))}, nil
+		}
+		names = append(names, esi.AssetName{ItemID: id, Name: fmt.Sprintf("Box %d", id)})
+	}
+	raw, _ := json.Marshal(names)
+	return &http.Response{StatusCode: http.StatusOK, Header: http.Header{"Content-Type": []string{"application/json"}}, Body: io.NopCloser(strings.NewReader(string(raw)))}, nil
+}
+
+// TestWarmCorpAssetNamesIsolatesTheBadItem: one item ESI no longer
+// resolves no longer fails its whole batch on every pass. The batch
+// is split down to it, the rest are named, it is settled unnamed,
+// and the next cycle asks nothing.
+func TestWarmCorpAssetNamesIsolatesTheBadItem(t *testing.T) {
+	transport := &namesSplitTransport{bad: 5005}
+	app, _, q := buildCorpTestApp(t, transport)
+	ctx := context.Background()
+
+	user, err := q.CreateUser(ctx)
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	ch := seedCharacter(t, q, user.ID, fixtureCharA, "Fixture Ceo")
+	var assets []esi.Asset
+	for id := int64(5000); id < 5016; id++ {
+		assets = append(assets, esi.Asset{ItemID: id, TypeID: 587, Quantity: 1, IsSingleton: true,
+			LocationID: 60003760, LocationType: "station", LocationFlag: "CorpSAG1"})
+	}
+	seedSnapshot(t, q, fixtureCharA, esi.SnapCorpAssets, assets)
+
+	app.warmCorpAssetNames(ctx, ch, fixtureCorpA)
+	for id := int64(5000); id < 5016; id++ {
+		name, err := q.GetItemName(ctx, id)
+		want := fmt.Sprintf("Box %d", id)
+		if id == 5005 {
+			want = ""
+		}
+		if err != nil || name != want {
+			t.Fatalf("item %d: name = (%q, %v), want %q", id, name, err, want)
+		}
+	}
+	first := transport.posts.Load()
+	app.warmCorpAssetNames(ctx, ch, fixtureCorpA)
+	if got := transport.posts.Load(); got != first {
+		t.Fatalf("second cycle made %d more names calls, want none", got-first)
 	}
 }
 

@@ -58,9 +58,9 @@ ON CONFLICT (contract_id) DO UPDATE SET
     expires_at = EXCLUDED.expires_at;
 
 -- name: ListTVContractObservationsByRegion :many
-SELECT contract_id, region_id, type_id, shape, listed_price, sample_price, first_seen_at, last_seen_at, expires_at, vanished_at, sold
+SELECT contract_id, region_id, type_id, shape, listed_price, sample_price, first_seen_at, last_seen_at, expires_at, vanished_at, sold, exit_status, exit_probed_at
 FROM true_value_contract_observations
-WHERE region_id = $1 AND vanished_at IS NULL
+WHERE region_id = $1 AND vanished_at IS NULL AND exit_probed_at IS NULL
 ORDER BY last_seen_at;
 
 -- name: TouchTVContractObservation :exec
@@ -100,7 +100,7 @@ ORDER BY type_id, vanished_at;
 -- name: ListTVShipSaleProbes :many
 SELECT o.contract_id, o.expires_at, o.type_id, o.sample_price, o.first_seen_at
 FROM true_value_contract_observations o
-WHERE o.vanished_at IS NULL
+WHERE o.vanished_at IS NULL AND o.exit_probed_at IS NULL
   AND o.type_id = ANY(sqlc.arg(ship_type_ids)::bigint[])
   AND o.expires_at > sqlc.arg(probe_after)::timestamptz
   AND NOT EXISTS (SELECT 1 FROM pub_contracts c WHERE c.contract_id = o.contract_id
@@ -152,3 +152,12 @@ SELECT cand.contract_id, cand.price, cand.last_seen, cand.region_id, cand.date_e
 FROM cand
 JOIN pub_contract_items i ON i.contract_id = cand.contract_id
 ORDER BY cand.contract_id, i.type_id;
+
+-- A watched listing whose exit probe got a final answer that is
+-- neither a sale nor a vanish (schema 099): a 403, "Contract not
+-- public". The row leaves the probe queues and never becomes a
+-- sample; the status stays for a later reading of what 403 means.
+-- name: MarkTVContractObservationExit :exec
+UPDATE true_value_contract_observations
+SET exit_status = sqlc.arg(status)::bigint, exit_probed_at = sqlc.arg(probed_at)::timestamptz
+WHERE contract_id = sqlc.arg(contract_id)::bigint;

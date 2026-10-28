@@ -595,6 +595,14 @@ var pgAdminStatsSchema string
 //go:embed schema_pg/098_webauthn.sql
 var pgWebAuthnSchema string
 
+// Step 099: the public items route's final answer about a departed
+// contract, kept on the abyssal sightings and the true-value
+// observations, so a 403 settles the exit probe without counting as
+// evidence either way.
+//
+//go:embed schema_pg/099_contract_exit_answers.sql
+var pgContractExitAnswersSchema string
+
 // Step 100: durable name misses, the IDs ESI has definitively said
 // are not a character or a type, so a restart does not re-ask them.
 //
@@ -728,6 +736,7 @@ func schemaSteps() []schemaStep {
 		{96, "pub_contract_departures", pgPubContractDeparturesSchema, ""},
 		{97, "admin_stats", pgAdminStatsSchema, ""},
 		{98, "webauthn", pgWebAuthnSchema, ""},
+		{99, "contract_exit_answers", pgContractExitAnswersSchema, ""},
 		{100, "name_misses", pgNameMissesSchema, ""},
 	}
 }

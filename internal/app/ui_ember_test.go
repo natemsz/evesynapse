@@ -144,12 +144,13 @@ func TestEmberGlassAndSkyRules(t *testing.T) {
 		}
 	}
 	// The backdrop's two painted states ride the art
-	// layer: the muted grade in place, and the glow swap with
-	// the horizon gradient over the warm black ground. The
-	// default state is the unmodified art, no rule at all.
+	// layer: the muted grade baked into the muted twins of
+	// the tiers, and the glow swap with the horizon gradient
+	// over the warm black ground. The default state is the
+	// unmodified art, no rule at all.
 	for _, want := range []string{
-		`html[data-backdrop="muted"] body::before {`,
-		"filter: brightness(0.42) saturate(0.30) contrast(1.03);",
+		`html[data-backdrop="muted"] body::before,`,
+		`background-image: url("/static/bg-calm-muted.jpg?v=d056adc1ec88a9fa"), url("/static/bg-calm-muted-thumb.jpg?v=247f99893af7b2ad");`,
 		`html[data-backdrop="glow"] body::before {`,
 		"radial-gradient(ellipse 95vw 58vh at 100% 0%, rgba(234, 88, 12, 0.32) 0%, rgba(180, 65, 10, 0.13) 52%, rgba(11, 8, 6, 0) 100%)",
 		"linear-gradient(180deg, #110c09 0%, #0b0806 100%);",

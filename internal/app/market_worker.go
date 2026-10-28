@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http"
 	"sort"
+	"sync"
 	"time"
 
 	db "evesynapse/internal/db/sqlc"
@@ -152,8 +153,18 @@ func (app *Application) warmMarketHistory(ctx context.Context, allowance *fetchB
 		kinds[i] = marketFetchKind("history", key)
 	}
 	states, statesOK := app.marketFetchStates(ctx, kinds)
+	// Due pairs are fetched historyFetchWindow at a time: they come
+	// due together once ESI publishes a day, and one after another
+	// the cap's worth would hold the cycle for most of a minute.
+	var window []marketKey
+	flush := func() (limited bool) {
+		fetched, limited := app.fetchHistoryWindow(ctx, window)
+		stored += fetched
+		window = window[:0]
+		return limited
+	}
 	for i, key := range candidates {
-		if stored >= maxHistoryFetchesPerCycle || ctx.Err() != nil {
+		if stored+len(window) >= maxHistoryFetchesPerCycle || ctx.Err() != nil {
 			break
 		}
 		kind := kinds[i]
@@ -174,15 +185,48 @@ func (app *Application) warmMarketHistory(ctx context.Context, allowance *fetchB
 		if !allowance.take() {
 			break
 		}
-		fetched, limited := app.fetchAndStoreHistory(ctx, key)
-		if limited {
+		window = append(window, key)
+		if len(window) == historyFetchWindow && flush() {
 			return stored, true
 		}
-		if fetched {
-			stored++
-		}
+	}
+	if len(window) > 0 && flush() {
+		return stored, true
 	}
 	return stored, false
+}
+
+// historyFetchWindow is how many history pairs are read at once.
+// ESI's rate budgets are still enforced in the client
+// (esi/ratelimit.go); the window only stops the reads waiting on
+// one another.
+const historyFetchWindow = 6
+
+// fetchHistoryWindow fetches and stores keys at once, reporting how
+// many landed and whether ESI's error limit stopped any of them.
+func (app *Application) fetchHistoryWindow(ctx context.Context, keys []marketKey) (fetched int, limited bool) {
+	var (
+		wg      sync.WaitGroup
+		mu      sync.Mutex
+		landed  int
+		stopped bool
+	)
+	for _, key := range keys {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			defer recoverWorkerPanic("market history")
+			ok, ltd := app.fetchAndStoreHistory(ctx, key)
+			mu.Lock()
+			if ok {
+				landed++
+			}
+			stopped = stopped || ltd
+			mu.Unlock()
+		}()
+	}
+	wg.Wait()
+	return landed, stopped
 }
 
 // fetchAndStoreHistory downloads one pair's daily aggregates,

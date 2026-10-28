@@ -1920,6 +1920,9 @@ func (app *Application) scoreAbyssalItems(ctx context.Context) int {
 			}
 		}
 		if err := q.UpdateAbyssalItemEstimate(ctx, params); err != nil {
+			if ctx.Err() != nil {
+				break // shutting down: one line per item would say nothing more
+			}
 			logging.Errorf("worker: abyssal scoring: store %d: %v", it.ItemID, err)
 			continue
 		}

@@ -140,7 +140,10 @@ func TestIntelTokens(t *testing.T) {
 	if r := api(http.MethodGet, "/api/intel/v1/channels", "", token, priv); r.Code != http.StatusOK || !strings.Contains(r.Body.String(), `"name":"Home intel"`) || !strings.Contains(r.Body.String(), `"account":"Watcher Pilot"`) {
 		t.Fatalf("channels: %d %s", r.Code, r.Body.String())
 	}
-	lines := `{"lines":["[ 2026.10.21 11:20:05 ] Scout > Jita +3 Bad Guy","[ 2026.10.21 11:20:09 ] Scout > anyone?"]}`
+	// Lines stamped a minute ago: with a fixed date the duplicate
+	// check below stopped matching once that date was a week old.
+	stamp := time.Now().UTC().Add(-time.Minute).Format("2006.01.02 15:04:05")
+	lines := `{"lines":["[ ` + stamp + ` ] Scout > Jita +3 Bad Guy","[ ` + stamp + ` ] Scout > anyone?"]}`
 	path := "/api/intel/v1/channels/" + strconv.FormatInt(cid, 10) + "/lines"
 	r := api(http.MethodPost, path, lines, token, priv)
 	if r.Code != http.StatusOK || !strings.Contains(r.Body.String(), `"posted":1`) || !strings.Contains(r.Body.String(), `"skipped":1`) {

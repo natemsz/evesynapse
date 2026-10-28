@@ -868,24 +868,30 @@ func (app *Application) speakerSystemID(ctx context.Context, speaker string) int
 // account's own pilots only, and a claim that fails the check
 // leaves the batch exactly as if it named no speaker.
 func (app *Application) accountSpeaker(ctx context.Context, userID int64, speaker string) string {
+	_, name := app.accountSpeakerChar(ctx, userID, speaker)
+	return name
+}
+
+// accountSpeakerChar is accountSpeaker with the character's ID.
+func (app *Application) accountSpeakerChar(ctx context.Context, userID int64, speaker string) (int64, string) {
 	speaker = strings.TrimSpace(speaker)
 	if speaker == "" || userID <= 0 {
-		return ""
+		return 0, ""
 	}
 	row, err := app.queries.GetIntelPilotName(ctx, strings.ToLower(speaker))
 	if err != nil || row.CharacterID <= 0 {
-		return ""
+		return 0, ""
 	}
 	chars, err := app.queries.ListCharactersByUser(ctx, userID)
 	if err != nil {
-		return ""
+		return 0, ""
 	}
 	for _, ch := range chars {
 		if ch.CharacterID == row.CharacterID {
-			return row.Name
+			return row.CharacterID, row.Name
 		}
 	}
-	return ""
+	return 0, ""
 }
 
 // scanReportOf reads raw as a scan paste, when it is one, and
@@ -1074,7 +1080,15 @@ func (app *Application) postChatLines(ctx context.Context, base db.InsertIntelRe
 func (app *Application) postChatLinesWith(ctx context.Context, base db.InsertIntelReportParams, lines, source, batchSpeaker string, ov submitOverride) chatPostResult {
 	var res chatPostResult
 	now := base.CreatedAt
-	batchSpeaker = app.accountSpeaker(ctx, base.AuthorUserID, batchSpeaker)
+	var speakerID int64
+	speakerID, batchSpeaker = app.accountSpeakerChar(ctx, base.AuthorUserID, batchSpeaker)
+	if speakerID > 0 {
+		// The batch is that pilot's (the overlay posting as the
+		// character at the keyboard): what it makes is filed as
+		// theirs, not the account's first character's, so a roster
+		// naming them counts them as the reporter.
+		base.AuthorCharacterID, base.Reporter = speakerID, clipRunes(batchSpeaker, 40)
+	}
 	asChat := ov.Kind == submitKindChat
 	// A scan pasted as chat lines is a scan, not chat: the same
 	// reading the scan tool makes of it, reported as one report.

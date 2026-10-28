@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -77,6 +78,9 @@ var fragmentPilots = []fusedPilot{
 	{"Red", 263160602, 98000777},
 }
 
+// fusedSystems are the solar systems the fake ESI names by name.
+var fusedSystems = map[string]int64{"1dq1-a": 30004759, "jita": 30000142}
+
 var miniRoster = []fusedPilot{
 	{"Pavel Tsukov", 2124000301, 98000999},
 	{"Rho Banu", 2124000302, 98000777},
@@ -129,7 +133,13 @@ func (s *fusedESI) RoundTrip(req *http.Request) (*http.Response, error) {
 				chars = append(chars, map[string]any{"id": p.id, "name": p.name})
 			}
 		}
-		return respond(http.StatusOK, map[string]any{"characters": chars})
+		systems := []map[string]any{}
+		for _, n := range names {
+			if id, ok := fusedSystems[strings.ToLower(n)]; ok {
+				systems = append(systems, map[string]any{"id": id, "name": n})
+			}
+		}
+		return respond(http.StatusOK, map[string]any{"characters": chars, "systems": systems})
 	case "/characters/affiliation/":
 		var ids []int64
 		_ = json.Unmarshal(body, &ids)
@@ -1044,6 +1054,19 @@ func TestIntelBatchSpeaker(t *testing.T) {
 	}
 	if rows := rowsOf(cid); len(rows) != 1 || rows[0].SystemID != sysID || rows[0].Kind != intelanalyze.KindLocal || rows[0].ScanID == "" {
 		t.Errorf("scan batch report: %+v, want a local reading on the speaker's system", rows)
+	} else if rows[0].Reporter != "Flying Alt" {
+		t.Errorf("scan batch reporter: %q, want the batch speaker Flying Alt", rows[0].Reporter)
+	}
+
+	// A system typed above the names is where the list is, not a
+	// pilot in it: the report files there and counts only pilots.
+	cid, res = post("Batch Speaker Typed System", "Jita\n"+strings.Join(names, "\n"), "Flying Alt")
+	if res.Posted != 1 {
+		t.Fatalf("roster under a typed system: %+v, want one posted", res)
+	}
+	if rows := rowsOf(cid); len(rows) != 1 || rows[0].SystemID != jitaID ||
+		!strings.HasPrefix(rows[0].Text, strconv.Itoa(len(names))+" in local:") || strings.Contains(rows[0].Text, "unresolved") {
+		t.Errorf("roster under a typed system: %+v, want %d in local on Jita, nothing unresolved", rows, len(names))
 	}
 
 	// The fused rope naming no speaker of its own: rescued

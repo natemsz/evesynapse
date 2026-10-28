@@ -291,6 +291,10 @@ type localReading struct {
 	Pilots    []localPilot `json:"pilots"`
 	Alliances []localGroup `json:"alliances"`
 	Unknown   []string     `json:"unknown,omitempty"`
+	// SystemID is a solar system the list named as one of its
+	// lines (a reporter typing the system above the names): it is
+	// where the list is, not a pilot in it.
+	SystemID int64 `json:"system_id,omitempty"`
 	// Partial is set when ESI could not resolve everything.
 	Partial bool `json:"partial,omitempty"`
 }
@@ -369,6 +373,9 @@ func (app *Application) readScan(ctx context.Context, p scan.Result, systemID in
 		}
 	case scan.KindLocal:
 		res.Local = app.readLocal(ctx, p.Local)
+		if res.SystemID == 0 && res.Local != nil {
+			res.SystemID = res.Local.SystemID
+		}
 	case scan.KindFleet:
 		res.Fleet = readFleet(p.Fleet)
 	case scan.KindProbe:
@@ -771,6 +778,7 @@ func (app *Application) readLocal(ctx context.Context, names []string) *localRea
 	l := &localReading{}
 	budget := &fetchBudget{left: 12}
 	byName := map[string]int64{}
+	systems := map[string]int64{}
 	for start := 0; start < len(names); start += 500 {
 		end := min(start+500, len(names))
 		if !budget.take() {
@@ -782,6 +790,10 @@ func (app *Application) readLocal(ctx context.Context, names []string) *localRea
 				ID   int64  `json:"id"`
 				Name string `json:"name"`
 			} `json:"characters"`
+			Systems []struct {
+				ID   int64  `json:"id"`
+				Name string `json:"name"`
+			} `json:"systems"`
 		}
 		if err := app.esi.PostJSON(ctx, "/universe/ids/", names[start:end], &ids); err != nil {
 			logging.Warnf("scans: resolve %d local names: %v", end-start, err)
@@ -792,10 +804,20 @@ func (app *Application) readLocal(ctx context.Context, names []string) *localRea
 			byName[strings.ToLower(c.Name)] = c.ID
 			app.esi.StoreCharacterName(c.ID, c.Name)
 		}
+		for _, s := range ids.Systems {
+			systems[strings.ToLower(s.Name)] = s.ID
+		}
 	}
 	var charIDs []int64
 	for _, n := range names {
 		id, ok := byName[strings.ToLower(n)]
+		if sys, isSys := systems[strings.ToLower(n)]; !ok && isSys {
+			// A system, not a pilot: the list is about it.
+			if l.SystemID == 0 {
+				l.SystemID = sys
+			}
+			continue
+		}
 		if !ok {
 			l.Unknown = append(l.Unknown, n)
 			continue

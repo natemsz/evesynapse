@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"net/http"
 	"sort"
 	"time"
 
@@ -303,7 +304,20 @@ func (app *Application) warmCorpAssetNames(ctx context.Context, ch db.Character,
 		missing = missing[:maxCorpAssetNameItemsPerCycle]
 	}
 
-	names, err := app.esi.FetchCorpAssetNames(ctx, ch, corpID, missing)
+	splits := corpAssetNameSplitCalls
+	names, invalid, err := app.fetchCorpAssetNamesIsolating(ctx, ch, corpID, missing, &splits)
+	// An item ESI rejects on its own is settled with an empty name,
+	// the unnamed marker every reader of item_names already skips
+	// (the character pass stores unnamed items the same way): its
+	// batch stops failing whole on every pass.
+	for _, id := range invalid {
+		if serr := app.queries.UpsertItemName(ctx, db.UpsertItemNameParams{ItemID: id, Name: ""}); serr != nil {
+			logging.Errorf("worker: settle invalid item %d: %v", id, serr)
+		}
+	}
+	if len(invalid) > 0 {
+		logging.Infof("worker: corp asset names for corporation %d: %d item(s) ESI no longer resolves, settled as unnamed", corpID, len(invalid))
+	}
 	if err != nil {
 		switch {
 		case scopeNamedRefusal(err):
@@ -335,6 +349,43 @@ func (app *Application) warmCorpAssetNames(ctx context.Context, ch db.Character,
 	if stored > 0 {
 		logging.Infof("worker: stored %d corp asset name(s) for corporation %d", stored, corpID)
 	}
+}
+
+// corpAssetNameSplitCalls bounds the extra names calls one pass may
+// spend finding the items that fail a batch: about two per halving,
+// so one bad item in a full batch of 1,000 is found well inside it.
+const corpAssetNameSplitCalls = 24
+
+// fetchCorpAssetNamesIsolating asks for the names of ids. ESI
+// rejects the whole batch with a 404 when even one item no longer
+// resolves, so a rejected batch is split in halves and each asked
+// again, down to the items that fail alone, which come back in
+// invalid. The splitting spends from *splits; once that is gone the
+// rejection is returned as it came.
+func (app *Application) fetchCorpAssetNamesIsolating(ctx context.Context, ch db.Character, corpID int64, ids []int64, splits *int) (names []esi.AssetName, invalid []int64, err error) {
+	names, err = app.esi.FetchCorpAssetNames(ctx, ch, corpID, ids)
+	if err == nil {
+		return names, nil, nil
+	}
+	if code, ok := esi.StatusCode(err); !ok || code != http.StatusNotFound {
+		return nil, nil, err
+	}
+	if len(ids) == 1 {
+		return nil, ids, nil
+	}
+	if *splits < 2 {
+		return nil, nil, err
+	}
+	*splits -= 2
+	mid := len(ids) / 2
+	for _, half := range [][]int64{ids[:mid], ids[mid:]} {
+		n, bad, herr := app.fetchCorpAssetNamesIsolating(ctx, ch, corpID, half, splits)
+		names, invalid = append(names, n...), append(invalid, bad...)
+		if herr != nil {
+			return names, invalid, herr
+		}
+	}
+	return names, invalid, nil
 }
 
 // warmCorpKillmailDetails warms killmail detail payloads for the

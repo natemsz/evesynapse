@@ -1326,14 +1326,14 @@ func validPlaceID(kind string, id int64) bool {
 }
 
 // warmDefinitive reports whether an ESI failure settles a warm
-// target for good: a 400/404 is ESI saying the ID is not the
+// target for good: a 400/404/422 is ESI saying the ID is not the
 // thing the endpoint names, the same classification the market
 // fetch state machine gives definitive failures. Transient
 // failures (5xx, network, error limit) never settle; they keep
 // the pass's ordinary retry-next-cycle behavior.
 func warmDefinitive(err error) bool {
 	code, ok := esi.StatusCode(err)
-	return ok && (code == http.StatusBadRequest || code == http.StatusNotFound)
+	return ok && (code == http.StatusBadRequest || code == http.StatusNotFound || code == http.StatusUnprocessableEntity)
 }
 
 // warmMissingPlaceNames resolves station and solar-system names

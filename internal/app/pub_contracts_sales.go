@@ -12,6 +12,16 @@ package app
 // pass that used to read "left early" as a likely sale asks this
 // once instead (probeContractExit), and only a 204 is ever read
 // as sold; a 404 is never read as "not sold", only as no answer.
+//
+// ESI also answers 403 "Contract not public" for most departed
+// contracts (9 of 12 sampled on 2026-10-28, none answering 204).
+// That answer is final, since a contract never becomes public
+// again, but it says nothing about a sale: it settles the probe as
+// closed, which ends the asking and adds no evidence either way.
+// Read as transient it was asked again every cycle until the probe
+// window closed, about 80 refused calls a minute. Each final
+// answer's status is stored with the probe (schema 099), so a later
+// finding about what 403 means can be read back from the record.
 // ---------------------------------------------------------------------------
 
 import (
@@ -35,6 +45,7 @@ const (
 	exitLive                        // 200: still listed after all
 	exitSold                        // 204 before expiry: accepted
 	exitGone                        // 404, or 204 at or after expiry: no sale to read
+	exitClosed                      // 403 "not public": final, and says nothing about a sale
 )
 
 // contractExitFromStatus classifies one items-route answer for a
@@ -55,18 +66,26 @@ func contractExitFromStatus(err error, expiresAt, now time.Time) contractExit {
 		return exitSold
 	case code == http.StatusNotFound:
 		return exitGone
+	case code == http.StatusForbidden:
+		return exitClosed
 	}
 	return exitUnknown
 }
 
-// probeContractExit asks the items route about one contract. The
-// error is ESI's error limit only: callers stop their pass on it.
-func (app *Application) probeContractExit(ctx context.Context, contractID int64, expiresAt, now time.Time) (contractExit, error) {
-	_, _, err := app.esi.FetchRaw(ctx, "", fmt.Sprintf("/contracts/public/items/%d/", contractID))
-	if errors.Is(err, esi.ErrErrorLimit) {
-		return exitUnknown, err
+// probeContractExit asks the items route about one contract, and
+// reports the status ESI answered with (200 for a listing) for the
+// record. The error is ESI's error limit only: callers stop their
+// pass on it.
+func (app *Application) probeContractExit(ctx context.Context, contractID int64, expiresAt, now time.Time) (exit contractExit, status int64, err error) {
+	_, _, ferr := app.esi.FetchRaw(ctx, "", fmt.Sprintf("/contracts/public/items/%d/", contractID))
+	if errors.Is(ferr, esi.ErrErrorLimit) {
+		return exitUnknown, 0, ferr
 	}
-	return contractExitFromStatus(err, expiresAt, now), nil
+	status = http.StatusOK
+	if code, ok := esi.StatusCode(ferr); ok {
+		status = int64(code)
+	}
+	return contractExitFromStatus(ferr, expiresAt, now), status, nil
 }
 
 const (
@@ -101,7 +120,7 @@ func (app *Application) probeAbyssalSales(ctx context.Context, allowance *fetchB
 		}
 		// The departure stamp already ruled expiry out
 		// ("vanished" means it left before date_expired).
-		exit, err := app.probeContractExit(ctx, d.ContractID, time.Time{}, now)
+		exit, status, err := app.probeContractExit(ctx, d.ContractID, time.Time{}, now)
 		if err != nil {
 			return stored, true
 		}
@@ -114,9 +133,9 @@ func (app *Application) probeAbyssalSales(ctx context.Context, allowance *fetchB
 				continue
 			}
 			sold++
-		case exitLive, exitGone:
+		case exitLive, exitGone, exitClosed:
 			if err := app.queries.MarkAbyssalSaleProbed(ctx, db.MarkAbyssalSaleProbedParams{
-				ProbedAt: now, ContractID: d.ContractID,
+				ProbedAt: now, Status: status, ContractID: d.ContractID,
 			}); err != nil {
 				logging.Errorf("worker: abyssal sales: mark %d probed: %v", d.ContractID, err)
 				continue

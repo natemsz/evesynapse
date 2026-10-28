@@ -1107,7 +1107,7 @@ func (app *Application) reconcileContractObservations(ctx context.Context, regio
 			break
 		}
 		spent++
-		exit, err := app.probeContractExit(ctx, obs.ContractID, obs.ExpiresAt, now)
+		exit, status, err := app.probeContractExit(ctx, obs.ContractID, obs.ExpiresAt, now)
 		if err != nil {
 			break // ESI's error limit: the rest wait for the next crawl
 		}
@@ -1128,6 +1128,19 @@ func (app *Application) reconcileContractObservations(ctx context.Context, regio
 			}
 			st.samples[obs.TypeID] = dropContractSample(st.samples[obs.TypeID], obs)
 			logging.Infof("true values: contract %d (type %d) accepted before expiry; counted as a recorded sale", obs.ContractID, obs.TypeID)
+			continue
+		case exitClosed:
+			// Final, but neither a sale nor a vanish: the row
+			// leaves the crawl's watch without joining any
+			// evidence tier, and its listing copy leaves the ask
+			// tier, since the contract is no longer listed.
+			if err := app.queries.MarkTVContractObservationExit(ctx, db.MarkTVContractObservationExitParams{
+				Status: status, ProbedAt: now, ContractID: obs.ContractID,
+			}); err != nil {
+				logging.Errorf("true values: settle observation %d: %v", obs.ContractID, err)
+				continue
+			}
+			st.samples[obs.TypeID] = dropContractSample(st.samples[obs.TypeID], obs)
 			continue
 		case exitUnknown:
 			continue // a transient answer says nothing either way

@@ -1143,7 +1143,8 @@ ORDER BY MAX(departed_at) DESC
 LIMIT sqlc.arg(max_rows)::bigint;
 
 -- name: MarkAbyssalSaleProbed :exec
-UPDATE abyssal_sightings SET sale_probed_at = sqlc.arg(probed_at)::timestamptz
+UPDATE abyssal_sightings SET sale_probed_at = sqlc.arg(probed_at)::timestamptz,
+    sale_probe_status = sqlc.arg(status)::bigint
 WHERE contract_id = sqlc.arg(contract_id)::bigint
   AND sale_probed_at IS NULL;
 

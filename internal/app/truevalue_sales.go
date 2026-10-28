@@ -74,7 +74,7 @@ func (app *Application) probeShipContractSales(ctx context.Context, shipIDs []in
 		if app.esi.ErrorBudgetLow() || !allowance.Take() {
 			break
 		}
-		exit, err := app.probeContractExit(ctx, d.ContractID, d.ExpiresAt, now)
+		exit, status, err := app.probeContractExit(ctx, d.ContractID, d.ExpiresAt, now)
 		if err != nil {
 			break // ESI's error limit: the rest wait for the next cycle
 		}
@@ -115,6 +115,20 @@ func (app *Application) probeShipContractSales(ctx context.Context, shipIDs []in
 				logging.Errorf("true values: ship sale probes: forget %d: %v", d.ContractID, err)
 				continue
 			}
+		case exitClosed:
+			// Final, but neither a sale nor a vanish: the row
+			// leaves the queue without joining any evidence tier,
+			// and its listing copy leaves the ask tier, since the
+			// contract is no longer listed.
+			if err := app.queries.MarkTVContractObservationExit(ctx, db.MarkTVContractObservationExitParams{
+				Status: status, ProbedAt: now, ContractID: d.ContractID,
+			}); err != nil {
+				logging.Errorf("true values: ship sale probes: settle %d: %v", d.ContractID, err)
+				continue
+			}
+			st.samples[d.TypeID] = dropContractSample(st.samples[d.TypeID], db.TrueValueContractObservation{
+				SamplePrice: d.SamplePrice, FirstSeenAt: d.FirstSeenAt,
+			})
 		default:
 			continue // a transient answer says nothing either way
 		}

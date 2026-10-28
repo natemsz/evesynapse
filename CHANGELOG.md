@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.6.1.9] - 2026-10-28
+
+Automated build of EveSynapse v0.6.1.9. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+
+## What's Changed
+### 🚀 Features
+* Make nav group labels read as headings in nav menus by @natemsz in https://github.com/natemsz/evesynapse/pull/786
+### Other Changes
+* Reads a system typed into a local list as the system, and files an Axon paste as the pilot at the keyboard by @natemsz in https://github.com/natemsz/evesynapse/pull/785
+* Search: names resolve as you stop typing, Enter opens every kind of result with filters by @natemsz in https://github.com/natemsz/evesynapse/pull/787
+
+
+**Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.6.1.8...v0.6.1.9
+
 ## [v0.6.1.5] - 2026-10-28
 
 Automated build of EveSynapse v0.6.1.5. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).

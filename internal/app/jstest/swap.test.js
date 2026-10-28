@@ -66,7 +66,7 @@ test("content pages qualify, including public fits and query strings", function 
     "/planner/?product=123",
     "/items/",
     "/character/",
-    "/sync/"
+    "/admin/sync/"
   ]) {
     assert.equal(swap.shouldSwapClick(click({ path: path })), true, path);
   }
@@ -81,8 +81,8 @@ test("deniedTarget covers the full-navigation pages", function () {
 });
 
 test("deniedPrefetch skips the auto-refresh page and the character switch", function () {
-  assert.equal(swap.deniedPrefetch("/sync/"), true);
-  assert.equal(swap.deniedPrefetch("/sync/?character=1"), true);
+  assert.equal(swap.deniedPrefetch("/admin/sync/"), true);
+  assert.equal(swap.deniedPrefetch("/admin/sync/?character=1"), true);
   assert.equal(swap.deniedPrefetch("/characters/switch"), true);
   assert.equal(swap.deniedPrefetch("/characters/switch?character=1"), true);
   assert.equal(swap.deniedPrefetch("/characters/"), false);

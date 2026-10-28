@@ -552,7 +552,6 @@
     if (on) {
       var href = on.getAttribute("href") || "";
       if (href === "/") return "home";
-      if (href.indexOf("/sync") === 0) return "sync";
       if (href.indexOf("/admin") === 0) return "admin";
     }
     return "";
@@ -2204,7 +2203,7 @@
       root.querySelector("#sync-character-q"),
       root.querySelector("#sync-character-suggest"),
       suggestURL("/admin/suggest", null),
-      function (it) { window.location.href = "/sync/?character=" + encodeURIComponent(it.id); });
+      function (it) { window.location.href = "/admin/sync/?character=" + encodeURIComponent(it.id); });
     attachSuggest(
       root.querySelector("#admin-q"),
       root.querySelector("#admin-suggest"),
@@ -3147,14 +3146,14 @@
     { name: "Wars", url: "/intel/wars/" },
     { name: "Incursions", url: "/intel/incursions/" },
     { name: "Faction Warfare", url: "/intel/fw/" },
-    { name: "Sync", url: "/sync/" },
+    { name: "Sync", url: "/admin/sync/" },
     { name: "Admin", url: "/admin/" }
   ];
 
   // Sync and Admin are for administrators: the menu only has them for
   // one (base.html), and the palette offers them on the same terms.
   // The server refuses the pages to anyone else either way.
-  var adminOnlyPages = { "/sync/": true, "/admin/": true };
+  var adminOnlyPages = { "/admin/sync/": true, "/admin/": true };
   var isAdmin = !!document.querySelector(".sidenav-utility");
 
   // Result groups, in display order; server hits carry these

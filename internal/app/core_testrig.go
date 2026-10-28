@@ -101,7 +101,7 @@ func (r *TestRig) RunPublicFitWork() int {
 func (r *TestRig) Close() { r.app.Close() }
 
 // GrantAdmin marks characterID as an admin in the rig's config
-// (Issues 23/24): /admin/ and /sync/ require admin character
+// (Issues 23/24): /admin/ and its Sync tab require admin character
 // identity, so tests asserting the full nav must opt in.
 func (r *TestRig) GrantAdmin(characterID int64) {
 	if r.app.cfg.adminCharIDs == nil {

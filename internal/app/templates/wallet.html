@@ -45,7 +45,7 @@
 {{if .Wallet.Journal.Note}}
 <p><small>{{.Wallet.Journal.Note}}</small></p>
 {{else if .Wallet.Journal.Warming}}
-<p><small>Still syncing.{{if .IsAdmin}} Progress is on the <a href="/sync/">Sync page</a>.{{end}}</small></p>
+<p><small>Still syncing.{{if .IsAdmin}} Progress is on the <a href="/admin/sync/">Sync page</a>.{{end}}</small></p>
 {{else if .Wallet.JournalRows}}
 <div class="tw">
 <table>
@@ -68,7 +68,7 @@
 {{if .Wallet.Txns.Note}}
 <p><small>{{.Wallet.Txns.Note}}</small></p>
 {{else if .Wallet.Txns.Warming}}
-<p><small>Still syncing.{{if .IsAdmin}} Progress is on the <a href="/sync/">Sync page</a>.{{end}}</small></p>
+<p><small>Still syncing.{{if .IsAdmin}} Progress is on the <a href="/admin/sync/">Sync page</a>.{{end}}</small></p>
 {{else if .Wallet.TxnRows}}
 <div class="tw">
 <table>

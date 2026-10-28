@@ -129,11 +129,11 @@ type workerTimingView struct {
 
 	// The same figures a row each, which is how the Sync page lays
 	// them out; the lines above are what the log and the tests read.
+	// The phase split and the recent-cycle averages are not rows
+	// here: the Admin analytics page carries both, and this page
+	// does not restate them.
 	LastRows   []statRow
-	PhaseRows  []statRow
 	BudgetRows []budgetRow
-	HourTitle  string // "Last 60 cycles"; "" with fewer than two
-	HourRows   []statRow
 	// Behind: the worker is not keeping up, and why, in words.
 	Behind string
 }
@@ -209,7 +209,6 @@ func workerTimingViewFor(s workerStatus) *workerTimingView {
 	for _, p := range phases {
 		if p.Took >= 50*time.Millisecond {
 			v.Phases = append(v.Phases, p.Name+" "+shortDuration(p.Took))
-			v.PhaseRows = append(v.PhaseRows, statRow{p.Name, shortDuration(p.Took)})
 		}
 	}
 
@@ -262,26 +261,6 @@ func workerTimingViewFor(s workerStatus) *workerTimingView {
 			lately = append(lately, "stalest data up to "+shortDuration(worst)+" late")
 		}
 		v.Lately = strings.Join(lately, " · ")
-
-		v.HourTitle = fmt.Sprintf("Last %d cycles", n)
-		mixRow := fmt.Sprintf("%s active, %s watched, %s recent, %s dormant", mean(active), mean(watched), mean(recent), mean(dormant))
-		if asleep > 0 {
-			mixRow += ", " + mean(asleep) + " asleep"
-		}
-		v.HourRows = []statRow{
-			{"Cycle time", "average " + shortDuration(total/time.Duration(n)) + ", longest " + shortDuration(longest)},
-			{"Fetches a cycle", fmt.Sprintf("average %s, most %d", mean(fetches), most)},
-			{"Characters on average", mixRow},
-		}
-		if spent > 0 {
-			v.HourRows = append(v.HourRows, statRow{"Allowance used up", "in " + plural(spent, "cycle")})
-		}
-		if deferred > 0 {
-			v.HourRows = append(v.HourRows, statRow{"Characters put off", "in " + plural(deferred, "cycle")})
-		}
-		if worst > 0 {
-			v.HourRows = append(v.HourRows, statRow{"Stalest active data", "up to " + shortDuration(worst) + " late"})
-		}
 
 		// Not keeping up: most recent cycles ran out of allowance or
 		// put characters off. One such cycle is a busy minute; most

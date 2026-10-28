@@ -64,11 +64,16 @@ func newFormRequest(t *testing.T, app *Application, cookie *http.Cookie, path st
 func TestSyncShowsOneCharacter(t *testing.T) {
 	f := newLookupFixture(t)
 
-	code, body := getPage(t, f.app, f.cookie, "/sync/")
+	code, body := getPage(t, f.app, f.cookie, "/admin/sync/")
 	if code != http.StatusOK {
-		t.Fatalf("GET /sync/: %d", code)
+		t.Fatalf("GET /admin/sync/: %d", code)
 	}
-	mustContain(t, "/sync/", body, "<h2>Worker</h2>", "ESI error budget: not reported yet", "<h2>Character data</h2>",
+	mustContain(t, "/admin/sync/", body, "<h2>Worker</h2>", "ESI error budget: not reported yet", "<h2>Character data</h2>",
+		// The Admin frame and the shared section-tab band, not
+		// the page's old hand-rolled nav.
+		`<a class="an-tab is-active" href="/admin/sync/">Sync</a>`,
+		`<nav class="section-tabs" aria-label="Pages in this section">`,
+		`<a href="#sync-worker" class="active" aria-current="page">Worker</a>`, `<a href="#sync-characters">Character data</a>`,
 		`<input type="search" name="character" id="sync-character-q"`, `<ul class="suggest" id="sync-character-suggest"`,
 		"<h3>Fixture Alpha</h3>", `<a href="/admin/?account=`, "Re-warm Fixture Alpha now")
 	if strings.Contains(body, "Zed Hauler") {
@@ -76,38 +81,38 @@ func TestSyncShowsOneCharacter(t *testing.T) {
 	}
 
 	// By exact name, though another name starts the same way.
-	_, body = getPage(t, f.app, f.cookie, "/sync/?character="+url.QueryEscape("zed hauler"))
+	_, body = getPage(t, f.app, f.cookie, "/admin/sync/?character="+url.QueryEscape("zed hauler"))
 	mustContain(t, "by exact name", body, "<h3>Zed Hauler</h3>", "1 fresh,", `value="Zed Hauler"`)
 	if strings.Contains(body, "<h3>Fixture Alpha</h3>") || strings.Contains(body, "Which one?") {
 		t.Fatal("an exact name did not go straight to that character alone")
 	}
 	// By id.
-	_, body = getPage(t, f.app, f.cookie, "/sync/?character=90000003")
+	_, body = getPage(t, f.app, f.cookie, "/admin/sync/?character=90000003")
 	mustContain(t, "by id", body, "<h3>Zed Hauler II</h3>")
 	// Part of a name that fits two: a list, and nobody's data.
-	_, body = getPage(t, f.app, f.cookie, "/sync/?character=zed")
-	mustContain(t, "ambiguous", body, "Which one?", `<a href="/sync/?character=90000002">Zed Hauler</a>`, `<a href="/sync/?character=90000003">Zed Hauler II</a>`)
+	_, body = getPage(t, f.app, f.cookie, "/admin/sync/?character=zed")
+	mustContain(t, "ambiguous", body, "Which one?", `<a href="/admin/sync/?character=90000002">Zed Hauler</a>`, `<a href="/admin/sync/?character=90000003">Zed Hauler II</a>`)
 	if strings.Contains(body, "<h3>") && strings.Contains(body, "<h3>Zed") {
 		t.Fatal("an ambiguous search showed a character's data")
 	}
 	// Nobody.
-	_, body = getPage(t, f.app, f.cookie, "/sync/?character=nobody+at+all")
+	_, body = getPage(t, f.app, f.cookie, "/admin/sync/?character=nobody+at+all")
 	mustContain(t, "not found", body, "No character is called that")
 	// What LIKE gives a meaning to is matched as typed.
-	_, body = getPage(t, f.app, f.cookie, "/sync/?character="+url.QueryEscape("%%"))
+	_, body = getPage(t, f.app, f.cookie, "/admin/sync/?character="+url.QueryEscape("%%"))
 	mustContain(t, "wildcards", body, "No character is called that")
 
 	// Re-warming one character works on anyone's, and comes back to it.
 	f.app.takePriorityCharacters()
-	req := newFormRequest(t, f.app, f.cookie, "/sync/warm?character=90000003", url.Values{})
-	if req.Code != http.StatusSeeOther || req.Header().Get("Location") != "/sync/?character=90000003" {
+	req := newFormRequest(t, f.app, f.cookie, "/admin/sync/warm?character=90000003", url.Values{})
+	if req.Code != http.StatusSeeOther || req.Header().Get("Location") != "/admin/sync/?character=90000003" {
 		t.Fatalf("warm one: %d to %q", req.Code, req.Header().Get("Location"))
 	}
 	if ids := f.app.takePriorityCharacters(); len(ids) != 1 || ids[0] != 90000003 {
 		t.Fatalf("warm one put %v first, want 90000003", ids)
 	}
 	// With no character it is the reader's own account, not everyone.
-	newFormRequest(t, f.app, f.cookie, "/sync/warm", url.Values{})
+	newFormRequest(t, f.app, f.cookie, "/admin/sync/warm", url.Values{})
 	if ids := f.app.takePriorityCharacters(); len(ids) != 1 || ids[0] != fixtureCharA {
 		t.Fatalf("warm mine put %v first, want only the reader's character", ids)
 	}
@@ -150,7 +155,8 @@ func TestAdminShowsOneAccount(t *testing.T) {
 		t.Fatalf("GET /admin/: %d", code)
 	}
 	mustContain(t, "/admin/", body, "<h2>Overview</h2>", "<tr><td>Accounts</td><td>2</td></tr>", "<tr><td>Linked characters</td><td>3</td></tr>",
-		"<h2>Find an account</h2>", `<input type="search" name="q" id="admin-q"`, "<h2>Newest accounts</h2>", `href="/sync/"`)
+		`<a class="an-tab is-active" href="/admin/">Analytics</a>`, `<a class="an-tab" href="/admin/sync/">Sync</a>`,
+		"<h2>Find an account</h2>", `<input type="search" name="q" id="admin-q"`, "<h2>Newest accounts</h2>", `href="/admin/sync/"`)
 	for _, gone := range []string{"Zed Hauler", "Fixture Alpha</td>", "esi-", "Snapshot cache", "Background jobs"} {
 		if strings.Contains(body, gone) {
 			t.Errorf("the Admin page prints %q without being asked", gone)
@@ -162,7 +168,7 @@ func TestAdminShowsOneAccount(t *testing.T) {
 	}
 	_, body = getPage(t, f.app, f.cookie, "/admin/?q=90000003")
 	mustContain(t, "an account", body, "<h3>Account ", "<strong>Zed Hauler II</strong>", "<td>Zed Hauler</td>",
-		`<a href="/sync/?character=90000002">Sync</a>`,
+		`<a href="/admin/sync/?character=90000002">Sync</a>`,
 		// What a character granted is there, folded away until asked for.
 		`<details class="scope-details"><summary>2 scopes</summary>`, "<li>esi-wallet.read_character_wallet.v1</li>", "none recorded")
 	if strings.Contains(body, "Fixture Alpha</td>") {
@@ -205,13 +211,6 @@ func TestWorkerFiguresAsRows(t *testing.T) {
 		if got := row(v.LastRows, label); got != want {
 			t.Errorf("last cycle, %s: %q, want %q", label, got, want)
 		}
-	}
-	if v.HourTitle != "Last 2 cycles" || row(v.HourRows, "Fetches a cycle") != "average 72.0, most 72" ||
-		row(v.HourRows, "Characters on average") != "1.0 active, 7.0 watched, 1.0 recent, 0.0 dormant" {
-		t.Errorf("recent cycles: %q %+v", v.HourTitle, v.HourRows)
-	}
-	if len(v.PhaseRows) != 2 || v.PhaseRows[0] != (statRow{"characters", "5.1s"}) {
-		t.Errorf("phases: %+v; want the two that took time, longest first", v.PhaseRows)
 	}
 	if len(v.BudgetRows) != 1 || v.BudgetRows[0] != (budgetRow{Group: "char-killmail", Left: 27, Limit: "30/15m"}) {
 		t.Errorf("budgets: %+v", v.BudgetRows)

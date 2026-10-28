@@ -51,7 +51,7 @@
 {{if .Mail.Headers.Note}}
 <p><small>{{.Mail.Headers.Note}}</small></p>
 {{else if .Mail.Headers.Warming}}
-<p><small>Still syncing.{{if .IsAdmin}} Progress is on the <a href="/sync/">Sync page</a>.{{end}}</small></p>
+<p><small>Still syncing.{{if .IsAdmin}} Progress is on the <a href="/admin/sync/">Sync page</a>.{{end}}</small></p>
 {{else if .Mail.Rows}}
 <div class="tw">
 <table>

@@ -33,23 +33,23 @@ func TestAdminBelongsToTheAccount(t *testing.T) {
 	// Acting as the alt, the account is still an admin's: the pages
 	// open and the nav offers them.
 	asAlt := sessionCookie(t, app, admin.ID, fixtureCharB, "Admin Alt")
-	for _, path := range []string{"/admin/", "/sync/"} {
+	for _, path := range []string{"/admin/", "/admin/sync/"} {
 		if code, _ := getPage(t, app, asAlt, path); code != http.StatusOK {
 			t.Errorf("GET %s acting as the admin's alt: status %d, want 200", path, code)
 		}
 	}
 	_, body := getPage(t, app, asAlt, "/characters/")
-	mustContain(t, "/characters/ (admin's alt)", body, `href="/admin/"`, `href="/sync/"`)
+	mustContain(t, "/characters/ (admin's alt)", body, `href="/admin/"`, `href="/admin/sync/"`)
 
 	// Another account gets neither the pages nor the links.
 	asOther := sessionCookie(t, app, other.ID, fixtureMember, "Plain Member")
-	for _, path := range []string{"/admin/", "/sync/"} {
+	for _, path := range []string{"/admin/", "/admin/sync/"} {
 		if code, _ := getPage(t, app, asOther, path); code != http.StatusForbidden {
 			t.Errorf("GET %s from a non-admin account: status %d, want 403", path, code)
 		}
 	}
 	_, body = getPage(t, app, asOther, "/characters/")
-	if strings.Contains(body, `href="/admin/"`) || strings.Contains(body, `href="/sync/"`) {
+	if strings.Contains(body, `href="/admin/"`) || strings.Contains(body, `href="/admin/sync/"`) {
 		t.Error("a non-admin account is shown the Admin/Sync nav links")
 	}
 

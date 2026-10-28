@@ -137,11 +137,11 @@ func TestSwarmAdminRoleColumn(t *testing.T) {
 
 func TestSwarmSyncCardOff(t *testing.T) {
 	app, cookie := swarmPageApp(t)
-	code, body := getPage(t, app, cookie, "/sync/")
+	code, body := getPage(t, app, cookie, "/admin/sync/")
 	if code != http.StatusOK {
 		t.Fatalf("/sync/: status %d", code)
 	}
-	mustContain(t, "/sync/", body, "Swarm Cache", "Off")
+	mustContain(t, "/admin/sync/", body, "Swarm Cache", "Off")
 }
 
 func TestSwarmAdminSectionOff(t *testing.T) {
@@ -294,11 +294,14 @@ func TestSwarmSyncCardEnabled(t *testing.T) {
 	if strings.Contains(alias, "peer-shown") {
 		t.Fatalf("alias %q leaks the instance id", alias)
 	}
-	code, body := getPage(t, app, cookie, "/sync/")
+	code, body := getPage(t, app, cookie, "/admin/sync/")
 	if code != http.StatusOK {
 		t.Fatalf("/sync/: status %d", code)
 	}
-	mustContain(t, "/sync/", body, "Swarm Cache", "Open", alias, "ESI calls saved")
+	// The Sync card carries the cache's verification outcomes;
+	// the peer list and the summary figures are the Admin
+	// page's (the analytics peer bars, the swarm section there).
+	mustContain(t, "/admin/sync/", body, "Swarm Cache", "Open", "Spot checks passed", "Spot checks failed")
 	if strings.Contains(body, "127.0.0.1:9") {
 		t.Fatalf("/sync/: page leaks the peer address")
 	}

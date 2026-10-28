@@ -258,15 +258,17 @@ environment win). Then open <http://localhost:8080>:
   the complete training queue, and every known skill grouped by
   category with per-group SP subtotals (requires login;
   `esi-skills.read_skills.v1` + `esi-skills.read_skillqueue.v1`)
-- `/sync/` — the worker and the data: the last cycle and the last
-  hour of cycles in figures (time, fetches against the allowance,
-  characters by tier, where the time went, ESI's rate-limit budgets),
-  the shared public data, the SDE static-data block (row counts,
-  import state, update check), and one character's snapshot freshness
-  and type-name coverage with a re-warm button. The character is the
-  reader's own until another is looked up by name or id; no page
-  prints every character. It auto-refreshes so an import can be
-  watched as it lands (requires an admin account)
+- `/admin/sync/` — the Admin page's Sync tab: the worker and the
+  data: the last cycle in figures (time, fetches against the
+  allowance, characters by tier, ESI's rate-limit budgets), what
+  was warmed ahead and how pages are served, the shared cache's
+  check outcomes, the shared public data, the SDE static-data
+  block (row counts, import state, update check), and one
+  character's snapshot freshness and type-name coverage with a
+  re-warm button. The character is the reader's own until another
+  is looked up by name or id; no page prints every character. It
+  auto-refreshes so an import can be watched as it lands (requires
+  an admin account); `/sync/` redirects here
 - `/intel/wars/` — current wars from the public war list and
   worker-warmed war details: aggressor/defender names, state,
   kill records, open-for-allies/mutual badges, and a flag on wars

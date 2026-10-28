@@ -1,21 +1,13 @@
 {{define "title"}}Sync{{end}}
+{{define "pagetitle"}}<h1><span class="gt">Admin</span></h1>{{end}}
+{{define "pagetabs"}}{{template "sectiontabs" .}}{{end}}
 {{define "content"}}
-<h1><span class="gt">Sync</span></h1>
-<p>What the background worker is doing and how fresh the stored data is. Accounts and who they belong to are on <a href="/admin/">Admin</a>. This page refreshes itself every few seconds.</p>
+{{template "admintabs" .}}
+<p>What the background worker is doing and how fresh the stored data is. Accounts and who they belong to are on the Accounts tab. This page refreshes itself every few seconds.</p>
 
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
 
 {{if .Sync}}
-<nav class="section-tabs" aria-label="Sections on this page">
-  <a href="#sync-worker">Worker</a>
-  {{if .Sync.Foresight}}<a href="#sync-warmed">Warmed ahead</a>{{end}}
-  {{if .Sync.Serving}}<a href="#sync-serving">Serving pages</a>{{end}}
-  {{range .Sync.Sections}}<a href="#{{.Anchor}}">{{.Title}}</a>{{end}}
-  <a href="#sync-characters">Character data</a>
-  {{if .Sync.Global}}<a href="#sync-public">Public data</a>{{end}}
-  {{if .Sync.SDE}}<a href="#sync-sde">Static data</a>{{end}}
-</nav>
-
 <section class="card spanall" id="sync-worker">
 <h2>Worker</h2>
 <p>{{.Sync.WorkerLine}}{{if .Sync.Warming}}. A cycle is running now…{{end}}</p>
@@ -31,22 +23,6 @@
       {{end}}</tbody>
     </table>
   </div>
-  {{if .HourRows}}<div>
-    <h3>{{.HourTitle}}</h3>
-    <table class="stat-table">
-      <tbody>
-      {{range .HourRows}}<tr><td>{{.Label}}</td><td>{{.Value}}</td></tr>
-      {{end}}</tbody>
-    </table>
-  </div>{{end}}
-  {{if .PhaseRows}}<div>
-    <h3>Where the time went</h3>
-    <table class="stat-table">
-      <tbody>
-      {{range .PhaseRows}}<tr><td>{{.Label}}</td><td>{{.Value}}</td></tr>
-      {{end}}</tbody>
-    </table>
-  </div>{{end}}
   {{if .BudgetRows}}<div>
     <h3>ESI rate limits, tightest first</h3>
     <table class="stat-table">
@@ -113,7 +89,7 @@
 <section class="card spanall" id="sync-characters">
 <h2>Character data</h2>
 <p><small>One character's stored data and how fresh it is. Type a name or a character id; any character on the site can be looked up.</small></p>
-<form method="get" action="/sync/" class="lookup-form">
+<form method="get" action="/admin/sync/" class="lookup-form">
   <span class="searchwrap">
     <input type="search" name="character" id="sync-character-q" value="{{.Sync.Lookup.Query}}" placeholder="Character name or id" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="sync-character-suggest" aria-autocomplete="list" aria-label="Find a character">
     <ul class="suggest" id="sync-character-suggest" role="listbox" hidden></ul>
@@ -124,7 +100,7 @@
 {{if .Sync.Lookup.Matches}}
 <p>More than one character fits. Which one?</p>
 <ul class="lookup-matches">
-  {{range .Sync.Lookup.Matches}}<li><a href="/sync/?character={{.ID}}">{{.Name}}</a> <small>account {{.UserID}}</small></li>
+  {{range .Sync.Lookup.Matches}}<li><a href="/admin/sync/?character={{.ID}}">{{.Name}}</a> <small>account {{.UserID}}</small></li>
   {{end}}
 </ul>
 {{if .Sync.Lookup.More}}<p><small>There are more; type more of the name.</small></p>{{end}}
@@ -152,9 +128,9 @@
   </tbody>
 </table>
 </div>
-<form method="post" action="/sync/warm?character={{.ID}}" class="inline-form"><button class="btn" type="submit">Re-warm {{.Name}} now</button></form>
+<form method="post" action="/admin/sync/warm?character={{.ID}}" class="inline-form"><button class="btn" type="submit">Re-warm {{.Name}} now</button></form>
 {{end}}
-<form method="post" action="/sync/warm" class="inline-form"><button class="btn" type="submit">Refresh all of my characters</button></form>
+<form method="post" action="/admin/sync/warm" class="inline-form"><button class="btn" type="submit">Refresh all of my characters</button></form>
 </section>
 
 {{if .Sync.Global}}
@@ -205,7 +181,7 @@
   </tbody>
 </table>
 </div>
-<form method="post" action="/sync/sde"><button class="btn" type="submit">Check for SDE update</button></form>
+<form method="post" action="/admin/sync/sde"><button class="btn" type="submit">Check for SDE update</button></form>
 </section>
 {{end}}
 {{end}}

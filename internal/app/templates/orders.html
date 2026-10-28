@@ -15,7 +15,7 @@
 {{if .Orders.Open.Note}}
 <p><small>{{.Orders.Open.Note}}</small></p>
 {{else if .Orders.Open.Warming}}
-<p><small>Still syncing.{{if .IsAdmin}} Progress is on the <a href="/sync/">Sync page</a>.{{end}}</small></p>
+<p><small>Still syncing.{{if .IsAdmin}} Progress is on the <a href="/admin/sync/">Sync page</a>.{{end}}</small></p>
 {{else if .Orders.OpenRows}}
 <div class="tw">
 <table>
@@ -37,7 +37,7 @@
 {{if .Orders.History.Note}}
 <p><small>{{.Orders.History.Note}}</small></p>
 {{else if .Orders.History.Warming}}
-<p><small>Still syncing.{{if .IsAdmin}} Progress is on the <a href="/sync/">Sync page</a>.{{end}}</small></p>
+<p><small>Still syncing.{{if .IsAdmin}} Progress is on the <a href="/admin/sync/">Sync page</a>.{{end}}</small></p>
 {{else if .Orders.HistoryRows}}
 <div class="tw">
 <table>

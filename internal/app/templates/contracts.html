@@ -12,7 +12,7 @@
 {{if .Contracts.Contracts.Note}}
 <p><small>{{.Contracts.Contracts.Note}}</small></p>
 {{else if .Contracts.Contracts.Warming}}
-<p><small>Still syncing.{{if .IsAdmin}} Progress is on the <a href="/sync/">Sync page</a>.{{end}}</small></p>
+<p><small>Still syncing.{{if .IsAdmin}} Progress is on the <a href="/admin/sync/">Sync page</a>.{{end}}</small></p>
 {{else if .Contracts.Rows}}
 <div class="tw">
 <table>

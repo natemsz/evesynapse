@@ -26,7 +26,7 @@
 <link rel="stylesheet" href="/static/bg.css?v={{.AssetVersion}}">
 {{if or (eq .NavPage "planner.html") (eq .NavPage "piplanner.html") (eq .NavPage "industry.html")}}<link rel="stylesheet" href="/static/plan.css?v={{.AssetVersion}}">{{end}}
 {{if or (eq .NavPage "contract_search.html") (eq .NavPage "contract_detail.html")}}<link rel="stylesheet" href="/static/contracts.css?v={{.AssetVersion}}">{{end}}
-{{if eq .NavPage "admin.html"}}<link rel="stylesheet" href="/static/admin.css?v={{.AssetVersion}}">{{end}}
+{{if or (eq .NavPage "admin.html") (eq .NavPage "sync.html")}}<link rel="stylesheet" href="/static/admin.css?v={{.AssetVersion}}">{{end}}
 {{if or (eq .NavPage "home.html") (eq .NavPage "market_tradeideas.html") (eq .NavPage "link.html")}}<link rel="stylesheet" href="/static/tradeideas.css?v={{.AssetVersion}}">{{end}}
 {{if eq .NavPage "link.html"}}<link rel="stylesheet" href="/static/link.css?v={{.AssetVersion}}">{{end}}
 {{if eq .NavPage "market_appraise.html"}}<link rel="stylesheet" href="/static/appraisal.css?v={{.AssetVersion}}">{{end}}
@@ -115,7 +115,7 @@
         </div>
       </details>
 {{if .IsAdmin}}<div class="sidenav-utility">
-        <a class="navlink utility{{if eq .Section "sync"}} active{{end}}" href="/sync/" data-tip="Sync"><span class="nav-icon" aria-hidden="true"><svg class="nav-icon-svg nav-icon-sync" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="url(#nav-glyph-gradient)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19.2 12a7.2 7.2 0 1 1-2.1-5.05"/><path d="M17.4 3.4v3.9h-3.9"/></g></svg></span><span class="nav-label">Sync</span></a>
+        <a class="navlink utility{{if eq .Section "sync"}} active{{end}}" href="/admin/sync/" data-tip="Sync"><span class="nav-icon" aria-hidden="true"><svg class="nav-icon-svg nav-icon-sync" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="url(#nav-glyph-gradient)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19.2 12a7.2 7.2 0 1 1-2.1-5.05"/><path d="M17.4 3.4v3.9h-3.9"/></g></svg></span><span class="nav-label">Sync</span></a>
         <a class="navlink utility{{if eq .Section "admin"}} active{{end}}" href="/admin/" data-tip="Admin"><span class="nav-icon" aria-hidden="true"><svg class="nav-icon-svg nav-icon-admin" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l2 7 7 2-7 2-2 7-2 7-2-7-7-2 7-2Z" fill="url(#nav-glyph-gradient)"/></svg></span><span class="nav-label">Admin</span></a>
       </div>{{end}}
     </nav>
@@ -234,7 +234,7 @@
     </ul>{{end}}
     <ul class="phone-sheet-links">
       <li><a href="/characters/">Manage Characters</a></li>
-      {{if .IsAdmin}}<li><a href="/sync/">Sync</a></li>
+      {{if .IsAdmin}}<li><a href="/admin/sync/">Sync</a></li>
       <li><a href="/admin/">Admin</a></li>{{end}}
     </ul>
     <div class="phone-sheet-actions">

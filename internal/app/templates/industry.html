@@ -15,7 +15,7 @@
 {{if .Industry.Blueprints.Note}}
 <p><small>{{.Industry.Blueprints.Note}}</small></p>
 {{else if .Industry.Blueprints.Warming}}
-<p><small>Still syncing.{{if .IsAdmin}} Progress is on the <a href="/sync/">Sync page</a>.{{end}}</small></p>
+<p><small>Still syncing.{{if .IsAdmin}} Progress is on the <a href="/admin/sync/">Sync page</a>.{{end}}</small></p>
 {{else if .Industry.BlueprintRows}}
 <p><input type="search" id="bp-search" placeholder="Search blueprints..." aria-label="Search blueprints" data-table-filter="bp-table" data-row-class="bp-row" data-header-class="bp-cat-header"></p>
 <div class="tw">

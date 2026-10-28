@@ -20,7 +20,7 @@
   {{else if .CorpWallets.NoFeeder}}
   <p>{{.CorpWallets.CharacterName}} hasn't granted the corporation permissions that feed the wallet balances, so nobody is sharing this corporation's data with EveSynapse yet. <a href="{{.CorpWallets.AddScopesURL}}">Add the corporation permissions</a>. EVE asks for them on top of what is already granted.</p>
   {{else if .CorpWallets.Warming}}
-  <p>Still syncing.{{if .IsAdmin}} Progress is on the <a href="/sync/">Sync page</a>.{{end}}</p>
+  <p>Still syncing.{{if .IsAdmin}} Progress is on the <a href="/admin/sync/">Sync page</a>.{{end}}</p>
   {{else if .CorpWallets.Loaded}}
   <div class="tw">
   <table>

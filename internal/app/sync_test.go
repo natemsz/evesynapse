@@ -50,24 +50,26 @@ func TestSyncNameCoverageFromBatchedLookups(t *testing.T) {
 	// (data-autorefresh), pausable and reduced-motion aware; only
 	// readers without JavaScript get the meta-refresh. The old
 	// always-on meta-refresh yanked focus and scroll mid-read.
-	code, body := getPage(t, app, cookie, "/sync/")
+	code, body := getPage(t, app, cookie, "/admin/sync/")
 	if code != http.StatusOK {
 		t.Fatalf("sync page: status %d", code)
 	}
-	mustContain(t, "/sync/", body,
+	mustContain(t, "/admin/sync/", body,
 		`<body data-autorefresh="5">`,
 		`<noscript><meta http-equiv="refresh" content="5"></noscript>`)
 	if got := strings.Count(body, `http-equiv="refresh"`); got != 1 {
-		t.Fatalf("/sync/ refreshes %d times in markup, want the one noscript fallback", got)
+		t.Fatalf("/admin/sync/ refreshes %d times in markup, want the one noscript fallback", got)
 	}
-	mustContain(t, "/sync/", body, "Names resolved 2 of 4 (50%)")
+	mustContain(t, "/admin/sync/", body, "Names resolved 2 of 4 (50%)")
 	if got := transport.calls.Load(); got != 0 {
 		t.Fatalf("sync page made %d outbound calls, want 0", got)
 	}
 }
 
 // TestSyncAdminOnlyButPageStatusForEveryone pins the split inside
-// /sync/: the Sync page and its buttons are admin-only, while
+// /sync/: the Sync page (a tab of the Admin page now, at
+// /admin/sync/) and its buttons are admin-only, and its old
+// address only redirects an admin onward, while
 // /sync/page-status — the banner indicator's poll, which every
 // signed-in page makes — answers any signed-in user. Gating the
 // poll on admin left every other user's pages polling a 403
@@ -99,10 +101,25 @@ func TestSyncAdminOnlyButPageStatusForEveryone(t *testing.T) {
 	}
 	mustContain(t, "page status (non-admin)", status, `"pending":0`, `"loading":false`)
 
-	// An admin gets the page.
+	// An admin gets the page at its new home, and the old
+	// address redirects there with the query carried over: a
+	// ?character= pick must survive the move.
 	grantTestAdmin(app, fixtureCharA)
-	if code, _ := getPage(t, app, cookie, "/sync/"); code != http.StatusOK {
-		t.Fatalf("GET /sync/ as an admin: status %d, want 200", code)
+	if code, _ := getPage(t, app, cookie, "/admin/sync/"); code != http.StatusOK {
+		t.Fatalf("GET /admin/sync/ as an admin: status %d, want 200", code)
+	}
+	for _, from := range []string{"/sync/", "/sync/?character=90000001"} {
+		want := "/admin/sync/"
+		if strings.Contains(from, "?") {
+			want += "?character=90000001"
+		}
+		req := httptest.NewRequest(http.MethodGet, from, nil)
+		req.AddCookie(cookie)
+		rec := httptest.NewRecorder()
+		app.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusMovedPermanently || rec.Header().Get("Location") != want {
+			t.Fatalf("GET %s as an admin: status %d to %q, want 301 to %q", from, rec.Code, rec.Header().Get("Location"), want)
+		}
 	}
 
 	// Signed out, the poll is not served: it bounces home like

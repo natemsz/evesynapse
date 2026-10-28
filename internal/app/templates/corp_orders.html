@@ -20,7 +20,7 @@
   {{else if .CorpOrders.NoFeeder}}
   <p>{{.CorpOrders.CharacterName}} hasn't granted the corporation permissions that feed the open orders, so nobody is sharing this corporation's data with EveSynapse yet. <a href="{{.CorpOrders.AddScopesURL}}">Add the corporation permissions</a>. EVE asks for them on top of what is already granted.</p>
   {{else if .CorpOrders.Warming}}
-  <p>Still syncing.{{if .IsAdmin}} Progress is on the <a href="/sync/">Sync page</a>.{{end}}</p>
+  <p>Still syncing.{{if .IsAdmin}} Progress is on the <a href="/admin/sync/">Sync page</a>.{{end}}</p>
   {{else if .CorpOrders.Loaded}}
   {{if .CorpOrders.Rows}}
   <p><small>{{len .CorpOrders.Rows}} open orders</small></p>

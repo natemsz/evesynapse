@@ -21,7 +21,7 @@ Automated build of EveSynapse v0.6.1.4. Update with: evesynapse -update -arm64 (
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.6.1.3...v0.6.1.4
 
-## [v0.6.1.1] - 2026-10-28
+## [v0.6.1.3] - 2026-10-28
 
 Automated build of EveSynapse v0.6.1.3. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 ## [v0.6.1.2] - 2026-10-28

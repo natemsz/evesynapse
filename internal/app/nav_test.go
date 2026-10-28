@@ -253,8 +253,8 @@ func TestSectionGroups(t *testing.T) {
 			t.Errorf("pilot group tab %d = %+v, want %+v", i, ptabs[i], want)
 		}
 	}
-	if len(psub) != 2 || psub[0].Href != "/assets/" || psub[1].Href != "/wallet/" || !psub[1].Active {
-		t.Errorf("pilot sub-row = %+v, want Assets and the active Wallet", psub)
+	if len(psub) != 3 || psub[0].Href != "/assets/" || psub[1].Href != "/wallet/" || psub[2].Href != "/profit/" || !psub[1].Active {
+		t.Errorf("pilot sub-row = %+v, want Assets, the active Wallet and Profit", psub)
 	}
 
 	// The industry strip: Production and Planetary, the
@@ -350,7 +350,7 @@ func TestNavGroupsMirror(t *testing.T) {
 			hrefs []string
 		}{
 			{"Character", []string{"/character/", "/characters/", "/skills/plans", "/killmails/"}},
-			{"Assets & Money", []string{"/assets/", "/wallet/"}},
+			{"Assets & Money", []string{"/assets/", "/wallet/", "/profit/"}},
 			{"Comms", []string{"/mail/", "/calendar/", "/contacts/"}},
 		}, 1, 1},
 		{"industry", "planets.html", []struct {

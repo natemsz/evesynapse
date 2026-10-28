@@ -677,6 +677,11 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 		r.Get("/killmails/", app.handleCorpKillmails)
 	})
 
+	r.Route("/profit", func(r chi.Router) {
+		r.Use(app.requireAuth)
+		r.Get("/", app.handleProfit)
+	})
+
 	r.Route("/assets", func(r chi.Router) {
 		r.Use(app.requireAuth)
 		r.Get("/", app.handleAssets)

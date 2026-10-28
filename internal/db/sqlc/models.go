@@ -629,6 +629,55 @@ type KillmailDetail struct {
 	FetchedAt   time.Time `json:"fetched_at"`
 }
 
+type LedgerJob struct {
+	OwnerKind     string    `json:"owner_kind"`
+	OwnerID       int64     `json:"owner_id"`
+	JobID         int64     `json:"job_id"`
+	At            time.Time `json:"at"`
+	ActivityID    int64     `json:"activity_id"`
+	ProductTypeID int64     `json:"product_type_id"`
+	Units         int64     `json:"units"`
+	OutputValue   float64   `json:"output_value"`
+	MaterialsCost float64   `json:"materials_cost"`
+	Priced        bool      `json:"priced"`
+}
+
+type LedgerJournal struct {
+	OwnerKind     string    `json:"owner_kind"`
+	OwnerID       int64     `json:"owner_id"`
+	EntryID       int64     `json:"entry_id"`
+	At            time.Time `json:"at"`
+	RefType       string    `json:"ref_type"`
+	Activity      string    `json:"activity"`
+	Amount        float64   `json:"amount"`
+	FirstPartyID  int64     `json:"first_party_id"`
+	SecondPartyID int64     `json:"second_party_id"`
+	ContextID     int64     `json:"context_id"`
+	ContextType   string    `json:"context_type"`
+}
+
+type LedgerState struct {
+	OwnerKind string       `json:"owner_kind"`
+	OwnerID   int64        `json:"owner_id"`
+	JournalAt sql.NullTime `json:"journal_at"`
+	TxnsAt    sql.NullTime `json:"txns_at"`
+	JobsAt    sql.NullTime `json:"jobs_at"`
+	FoldedAt  sql.NullTime `json:"folded_at"`
+}
+
+type LedgerTxn struct {
+	OwnerKind     string    `json:"owner_kind"`
+	OwnerID       int64     `json:"owner_id"`
+	TransactionID int64     `json:"transaction_id"`
+	At            time.Time `json:"at"`
+	TypeID        int64     `json:"type_id"`
+	Quantity      int64     `json:"quantity"`
+	UnitPrice     float64   `json:"unit_price"`
+	IsBuy         bool      `json:"is_buy"`
+	LocationID    int64     `json:"location_id"`
+	JournalRefID  int64     `json:"journal_ref_id"`
+}
+
 type LocalFitting struct {
 	ID           int64        `json:"id"`
 	UserID       int64        `json:"user_id"`
@@ -1100,6 +1149,15 @@ type PlanetName struct {
 	Name       string       `json:"name"`
 	State      string       `json:"state"`
 	ResolvedAt sql.NullTime `json:"resolved_at"`
+}
+
+type ProfitDaily struct {
+	OwnerKind string  `json:"owner_kind"`
+	OwnerID   int64   `json:"owner_id"`
+	Day       string  `json:"day"`
+	Activity  string  `json:"activity"`
+	Income    float64 `json:"income"`
+	Costs     float64 `json:"costs"`
 }
 
 type PubContract struct {
@@ -1721,6 +1779,29 @@ type TradeIdeasAttempt struct {
 	ID          int64     `json:"id"`
 	AttemptedAt time.Time `json:"attempted_at"`
 	Failures    int32     `json:"failures"`
+}
+
+type TradePosition struct {
+	OwnerKind string    `json:"owner_kind"`
+	OwnerID   int64     `json:"owner_id"`
+	TypeID    int64     `json:"type_id"`
+	Quantity  int64     `json:"quantity"`
+	Cost      float64   `json:"cost"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+type TradeRealized struct {
+	OwnerKind        string  `json:"owner_kind"`
+	OwnerID          int64   `json:"owner_id"`
+	TransactionID    int64   `json:"transaction_id"`
+	Day              string  `json:"day"`
+	TypeID           int64   `json:"type_id"`
+	Quantity         int64   `json:"quantity"`
+	Revenue          float64 `json:"revenue"`
+	Cost             float64 `json:"cost"`
+	UnmatchedQty     int64   `json:"unmatched_qty"`
+	UnmatchedRevenue float64 `json:"unmatched_revenue"`
+	Planetary        bool    `json:"planetary"`
 }
 
 type TrueValue struct {

@@ -637,3 +637,21 @@ func TestMigration016Reopen(t *testing.T) {
 		pool.Close()
 	}
 }
+
+// The urgent drain only serves wants from a page open now: a want
+// older than pageWantTTL waits for the cycle pass, and costs the
+// drain no fetch.
+func TestUrgentDrainSkipsOldWants(t *testing.T) {
+	transport := &countingTransport{}
+	app, _, q := buildCorpTestApp(t, transport)
+	ctx := context.Background()
+	if err := q.UpsertMarketHistoryWant(ctx, db.UpsertMarketHistoryWantParams{
+		RegionID: forge, TypeID: 35, LastRequestedAt: time.Now().UTC().Add(-pageWantTTL - time.Minute), Priority: wantViewed,
+	}); err != nil {
+		t.Fatalf("seed want: %v", err)
+	}
+	app.urgentDrain(ctx)
+	if n := transport.calls.Load(); n != 0 {
+		t.Fatalf("urgent drain made %d ESI calls for a want older than the page window, want 0", n)
+	}
+}

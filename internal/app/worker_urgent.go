@@ -119,12 +119,16 @@ func (app *Application) drainUrgentWants(ctx context.Context) (limited bool) {
 
 	// Market history next, under its own lock: the item page being
 	// looked at gets its chart within a tick even while a long cycle
-	// pass (a market sweep) holds the fetch lock.
+	// pass (a market sweep) holds the fetch lock. Only wants from the
+	// last pageWantTTL are urgent, a page open now; the week of older
+	// wants (tens of thousands on a public instance) is the cycle
+	// pass's queue, and listing and gating all of it every tick was
+	// most of the drain's database time.
 	if func() bool {
 		app.histFetchMu.Lock()
 		defer app.histFetchMu.Unlock()
 		wants, err := app.queries.ListMarketHistoryWants(ctx, db.ListMarketHistoryWantsParams{
-			LastRequestedAt: now.Add(-historyWantMaxAge),
+			LastRequestedAt: now.Add(-pageWantTTL),
 			TypingPriority:  wantTyping,
 			TypingAssumed:   typingAssumedHit,
 			TypingWeight:    typingAssumedWeight,

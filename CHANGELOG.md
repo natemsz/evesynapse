@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.6.1.0] - 2026-10-28
+
+Automated build of EveSynapse v0.6.1.0. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+
+## What's Changed
+### Other Changes
+* docs(changelog): review changelog for v0.6.0.9 by @github-actions[bot] in https://github.com/natemsz/evesynapse/pull/750
+* Axon site panel: window controls in the site's top bar, in the active theme by @natemsz in https://github.com/natemsz/evesynapse/pull/751
+
+
+**Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.6.0.9...v0.6.1.0
+
 ## [v0.6.0.9] - 2026-10-27
 
 Automated build of EveSynapse v0.6.0.9. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).

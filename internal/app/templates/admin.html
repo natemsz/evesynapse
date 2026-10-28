@@ -1,11 +1,100 @@
 {{define "title"}}Admin{{end}}
 {{define "pagetitle"}}<h1><span class="gt">Admin</span></h1>{{end}}
 {{define "content"}}
-<p>Accounts and the characters linked to them. What the background worker is doing, and how fresh anyone's data is, are on <a href="/sync/">Sync</a>.</p>
-
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
 
 {{with .Admin}}
+<nav class="an-tabs" aria-label="Admin sections">
+  <a class="an-tab is-active" href="/admin/">Analytics</a>
+  <a class="an-tab" href="#accounts">Accounts</a>
+  <a class="an-tab" href="#access">Access</a>
+  <span class="an-range">{{range .Analytics.Links}}{{if .Active}}<a class="is-active" href="/admin/?range={{.Key}}">{{.Label}}</a>{{else}}<a href="/admin/?range={{.Key}}">{{.Label}}</a>{{end}}{{end}}</span>
+</nav>
+<p class="an-note">First-party numbers only, from this instance's own records. This page reports; it cannot restart, deploy, or change anything on the host.</p>
+
+{{with .Analytics}}
+{{if .EmptyNote}}<p class="an-note">{{.EmptyNote}}</p>{{end}}
+<div class="an-kpis">
+{{range .KPIs}}<div class="an-kpi"><div class="k-l">{{.Label}}</div><div class="k-v">{{.Value}}</div><div class="k-s">{{.Sub}}</div></div>
+{{end}}</div>
+
+<section class="card spanall">
+<h2>Traffic</h2>
+{{if .Traffic}}{{.Traffic}}
+<div class="an-legend">{{range .Legend}}<span><i class="{{.Class}}"></i>{{.Label}}</span>{{end}}{{if .Mix}}<span class="an-mix">{{.Mix}}</span>{{end}}</div>
+{{else}}<p class="an-note">{{.TrafficNote}}</p>{{end}}
+</section>
+
+<section class="card spanall">
+<h2>Worker cycles</h2>
+{{if .CycleNote}}<p class="an-note">{{.CycleNote}}</p>{{else}}
+{{if .CycleChart}}{{.CycleChart}}{{end}}
+{{if .PhaseSegs}}<div class="an-phase">{{range .PhaseSegs}}<span class="{{.Class}}" style="width:{{printf "%.1f" .Pct}}%"></span>{{end}}</div>{{end}}
+{{if or .PhaseSegs .CycleSummary}}<div class="an-legend">{{range .PhaseSegs}}<span><i class="{{.Class}}"></i>{{.Label}}</span>{{end}}{{if .CycleSummary}}<span class="an-mix">{{.CycleSummary}}</span>{{end}}</div>{{end}}
+{{end}}
+</section>
+
+<section class="card spanall">
+<h2>Host</h2>
+{{if .HostNote}}<p class="an-note">{{.HostNote}}</p>{{else}}
+<div class="an-grid2">
+<div><p class="an-note">{{.HostLoadNote}}</p>{{.HostLoadChart}}</div>
+<div><p class="an-note">{{.HostMemNote}}</p>{{.HostMemChart}}</div>
+</div>
+{{if .HostFacts}}<div class="an-legend">{{range .HostFacts}}<span>{{.}}</span>{{end}}</div>{{end}}
+{{end}}
+</section>
+
+<div class="an-grid2">
+<section class="card">
+<h2>ESI calls · {{.Word}}</h2>
+{{range .ESIBars}}<div class="an-bar-row"><span class="an-bar-name">{{.Name}}</span><span class="an-bar-track"><span class="an-bar-fill" style="width:{{printf "%.1f" .Pct}}%"></span></span><span class="an-bar-val">{{.Value}}</span></div>
+{{end}}<p class="an-note">{{.ESINote}}</p>
+</section>
+<section class="card">
+<h2>Growth</h2>
+{{if .GrowthChart}}{{.GrowthChart}}{{end}}
+<p class="an-note">{{.GrowthNote}}</p>
+</section>
+</div>
+
+<div class="an-grid2">
+<section class="card">
+<h2>Top pages · {{.Word}}</h2>
+{{range .TopBars}}<div class="an-bar-row"><span class="an-bar-name{{if .Mono}} an-mono{{end}}">{{.Name}}</span><span class="an-bar-track"><span class="an-bar-fill" style="width:{{printf "%.1f" .Pct}}%"></span></span><span class="an-bar-val">{{.Value}}</span></div>
+{{end}}{{if .TopNote}}<p class="an-note">{{.TopNote}}</p>{{end}}
+</section>
+<section class="card">
+<h2>Activity · {{.Word}}</h2>
+{{range .ActivityBars}}<div class="an-bar-row"><span class="an-bar-name">{{.Name}}</span><span class="an-bar-track"><span class="an-bar-fill" style="width:{{printf "%.1f" .Pct}}%"></span></span><span class="an-bar-val">{{.Value}}</span></div>
+{{end}}<p class="an-note">What the site actually did in the window, counted from the tables and counters that own each kind.</p>
+</section>
+</div>
+
+<section class="card spanall">
+<h2>Data freshness</h2>
+<div class="an-fresh">{{range .Fresh}}<div class="an-feed"><span class="f-n">{{.Name}}</span><span class="f-a {{.Class}}">{{.Age}}</span></div>{{end}}</div>
+<p class="an-note">{{.FreshNote}}</p>
+</section>
+
+<div class="an-grid2">
+<section class="card">
+<h2>Swarm</h2>
+{{range .SwarmPeers}}<div class="an-bar-row"><span class="an-bar-name">{{.Name}}</span><span class="an-bar-track"><span class="an-bar-fill" style="width:{{printf "%.1f" .Pct}}%"></span></span><span class="an-bar-val">{{.Value}}</span></div>
+{{end}}<p class="an-note">{{.SwarmNote}}</p>
+</section>
+<section class="card">
+<h2>Data inventory</h2>
+{{range .InvBars}}<div class="an-bar-row"><span class="an-bar-name{{if .Mono}} an-mono{{end}}">{{.Name}}</span><span class="an-bar-track"><span class="an-bar-fill" style="width:{{printf "%.1f" .Pct}}%"></span></span><span class="an-bar-val">{{.Value}}</span></div>
+{{end}}<p class="an-note">{{.InvNote}}</p>
+</section>
+</div>
+
+<p class="an-note">{{.Cost}}</p>
+{{end}}
+
+<p id="accounts">Accounts and the characters linked to them. What the background worker is doing, and how fresh anyone's data is, are on <a href="/sync/">Sync</a>.</p>
+
 <section class="card spanall">
 <h2>Overview</h2>
 <div class="stat-grid">
@@ -31,7 +120,7 @@
 </div>
 </section>
 
-<section class="card spanall">
+<section class="card spanall" id="access">
 <h2>Anonymous market access</h2>
 <p>Anonymous visitors {{if .AnonMarketOff}}currently get <strong>no order book</strong> on the Market page (the live book loads for signed-in visitors only) and their market views queue no wants{{else}}currently get the Market page's <strong>stored order book</strong> from the latest region sweep, and their market views may queue <strong>market wants only</strong> (price history){{end}}. Signed-in visitors are never affected.</p>
 <p><small>{{if .AnonMarketStored}}This state is the saved setting, flipped from this page.{{else}}This state is the MARKET_ANON boot default; flipping it here saves the setting, which then wins over the environment.{{end}} Flipping takes effect immediately, with no restart -- turn it off here if anonymous market traffic is loading the server.</small></p>

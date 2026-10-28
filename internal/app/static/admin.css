@@ -1,0 +1,80 @@
+/* Admin analytics (admin.html only, loaded from base.html).
+   Every color comes from the theme tokens in style.css, the
+   chart fills included, so the page follows the account's
+   color scheme like the rest of the site. */
+
+/* Real spacing between the page's containers; cards never sit
+   flush against each other. */
+.page-body > .card { margin-bottom: 1rem; }
+.an-grid2 { margin-bottom: 1rem; }
+
+.an-tabs { display: flex; gap: .4rem; align-items: center; margin: .4rem 0 .6rem; flex-wrap: wrap; }
+.an-tab { padding: .32rem .8rem; border: 1px solid var(--box-edge); border-radius: 999px; color: var(--text); text-decoration: none; font-size: .85rem; }
+.an-tab.is-active { background: color-mix(in srgb, var(--accent) 15%, transparent); border-color: var(--accent); color: var(--text-bright); }
+.an-range { margin-left: auto; display: flex; gap: .35rem; }
+.an-range a { padding: .3rem .7rem; border-radius: .45rem; border: 1px solid var(--box-edge); color: var(--muted); font-size: .8rem; text-decoration: none; }
+.an-range a.is-active { color: var(--text-bright); border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
+
+.an-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(158px, 1fr)); gap: .7rem; margin-bottom: 1rem; }
+.an-kpi { border: 1px solid var(--glass-edge); border-radius: .6rem; padding: .7rem .8rem; background: var(--glass); }
+.an-kpi .k-l { font-size: .72rem; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.an-kpi .k-v { font-family: 'Synapse Numerals', 'JetBrains Mono', monospace; font-size: 1.55rem; color: var(--text-bright); margin: .15rem 0 .05rem; }
+.an-kpi .k-s { font-size: .78rem; color: var(--muted); }
+.an-kpi .up { color: var(--success); }
+.an-kpi .warn { color: var(--gold); }
+.an-kpi .bad { color: var(--danger); }
+
+.an-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+@media (max-width: 900px) { .an-grid2 { grid-template-columns: 1fr; } }
+
+.an-legend { display: flex; gap: 1rem; flex-wrap: wrap; font-size: .8rem; color: var(--muted); margin-top: .4rem; }
+.an-legend i { display: inline-block; width: .65rem; height: .65rem; border-radius: .15rem; margin-right: .35rem; }
+.an-mix { margin-left: auto; }
+
+.an-bar-row { display: flex; align-items: center; gap: .6rem; margin: .34rem 0; font-size: .85rem; }
+.an-bar-name { width: 11.5rem; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.an-mono { font-family: 'JetBrains Mono', monospace; font-size: .78rem; }
+.an-bar-track { flex: 1; height: .62rem; background: var(--row); border-radius: .3rem; overflow: hidden; }
+.an-bar-fill { display: block; height: 100%; background: linear-gradient(90deg, var(--danger), var(--accent)); }
+.an-bar-val { width: 12.5rem; text-align: right; color: var(--muted); font-size: .8rem; }
+
+.an-phase { display: flex; height: 1.1rem; border-radius: .3rem; overflow: hidden; margin: .5rem 0 .3rem; }
+
+.an-fresh { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: .55rem; }
+.an-feed { border: 1px solid var(--glass-edge); border-radius: .55rem; padding: .55rem .7rem; background: var(--glass); }
+.an-feed .f-n { font-size: .85rem; color: var(--text); }
+.an-feed .f-a { float: right; font-family: 'JetBrains Mono', monospace; font-size: .8rem; }
+.an-ok { color: var(--success); }
+.an-warn-t { color: var(--gold); }
+.an-bad-t { color: var(--danger); }
+
+.an-note { font-size: .82rem; color: var(--muted); }
+
+/* Chart series: SVG fills and strokes by class, never hex. */
+.an-s2 { fill: var(--accent); opacity: .95; }
+.an-s3 { fill: var(--muted-2); opacity: .85; }
+.an-s4 { fill: var(--gold); opacity: .85; }
+.an-s5 { fill: var(--danger); opacity: .85; }
+.an-grid { stroke: var(--box-edge); }
+.an-line-a { stroke: var(--accent); stroke-width: 1.6; }
+.an-line-a-fill { fill: var(--accent); opacity: .15; }
+.an-line-b { stroke: var(--gold); stroke-width: 1.6; }
+.an-line-b-fill { fill: var(--gold); opacity: .15; }
+.an-ref { stroke: var(--gold); stroke-width: 1; stroke-dasharray: 5 4; }
+.an-svg-note { fill: var(--muted); font-size: 10px; }
+.an-ref-t { fill: var(--gold); }
+
+/* Legend swatches for the traffic classes (the SVG rect fills
+   are the .an-sN rules above; an HTML swatch needs a background). */
+.an-legend i.an-s2 { background: var(--accent); }
+.an-legend i.an-s3 { background: var(--muted-2); }
+.an-legend i.an-s4 { background: var(--gold); }
+.an-legend i.an-s5 { background: var(--danger); }
+
+/* Phase bar segments and their legend swatches. */
+.an-ph-public { background: var(--accent); }
+.an-ph-warming { background: var(--success); }
+.an-ph-truevalues { background: var(--muted); }
+.an-ph-intel { background: var(--gold); }
+.an-ph-swarm { background: var(--note); }
+.an-ph-other { background: var(--muted-2); }

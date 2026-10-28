@@ -26,6 +26,7 @@
 <link rel="stylesheet" href="/static/bg.css?v={{.AssetVersion}}">
 {{if or (eq .NavPage "planner.html") (eq .NavPage "piplanner.html") (eq .NavPage "industry.html")}}<link rel="stylesheet" href="/static/plan.css?v={{.AssetVersion}}">{{end}}
 {{if or (eq .NavPage "contract_search.html") (eq .NavPage "contract_detail.html")}}<link rel="stylesheet" href="/static/contracts.css?v={{.AssetVersion}}">{{end}}
+{{if eq .NavPage "admin.html"}}<link rel="stylesheet" href="/static/admin.css?v={{.AssetVersion}}">{{end}}
 {{if or (eq .NavPage "home.html") (eq .NavPage "market_tradeideas.html") (eq .NavPage "link.html")}}<link rel="stylesheet" href="/static/tradeideas.css?v={{.AssetVersion}}">{{end}}
 {{if eq .NavPage "link.html"}}<link rel="stylesheet" href="/static/link.css?v={{.AssetVersion}}">{{end}}
 {{if eq .NavPage "market_appraise.html"}}<link rel="stylesheet" href="/static/appraisal.css?v={{.AssetVersion}}">{{end}}

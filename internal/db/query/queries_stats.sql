@@ -373,7 +373,7 @@ SELECT kind, attempted_at FROM market_fetch_state
 WHERE kind = ANY(sqlc.arg(kinds)::text[]);
 
 -- name: StatsMarketHistoryLatest :one
-SELECT max(attempted_at) AS latest FROM market_fetch_state WHERE kind LIKE 'history:%';
+SELECT max(attempted_at) AS latest FROM market_fetch_state WHERE starts_with(kind, 'history_');
 
 -- name: StatsPubContractSweeps :many
 SELECT region_id, updated_at FROM pub_contract_sweep_state

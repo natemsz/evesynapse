@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"evesynapse/internal/app/module"
 	db "evesynapse/internal/db/sqlc"
 )
 
@@ -256,4 +257,38 @@ func TestAdminAnalyticsRenders(t *testing.T) {
 		t.Fatalf("GET /admin/?range=30d: status %d, want 200", code)
 	}
 	mustContain(t, "/admin/?range=30d", body, "ESI calls · 30 days", "No requests recorded in this window yet")
+}
+
+// The Market history freshness tile reads the latest attempted_at
+// over the history fetch states. The kinds are whatever
+// module.MarketFetchKind builds, seeded here through that same
+// constructor so the read is pinned to the written format.
+func TestStatsMarketHistoryLatest(t *testing.T) {
+	_, _, q := NewCorpTestApp(t, &countingTransport{})
+	ctx := context.Background()
+
+	if _, ok := latestOf(q.StatsMarketHistoryLatest(ctx)); ok {
+		t.Fatal("market history latest with no fetch states: got a time, want none")
+	}
+
+	historyAt := time.Date(2026, 10, 27, 12, 0, 0, 0, time.UTC)
+	seed := func(kind string, at time.Time) {
+		t.Helper()
+		if err := q.UpsertMarketFetchState(ctx, db.UpsertMarketFetchStateParams{
+			Kind: kind, State: module.FetchStateOK, AttemptedAt: at,
+		}); err != nil {
+			t.Fatalf("seed fetch state %q: %v", kind, err)
+		}
+	}
+	// A later attempt on an unrelated kind must not win the max.
+	seed(regionSweepKind(10000043), historyAt.Add(2*time.Hour))
+	seed(module.MarketFetchKind("history", module.MarketKey{RegionID: 10000043, TypeID: 34}), historyAt)
+
+	at, ok := latestOf(q.StatsMarketHistoryLatest(ctx))
+	if !ok {
+		t.Fatal("market history latest: got no time, want the seeded history attempt")
+	}
+	if !at.Equal(historyAt) {
+		t.Errorf("market history latest: got %v, want %v", at, historyAt)
+	}
 }

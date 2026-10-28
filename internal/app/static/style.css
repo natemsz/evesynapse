@@ -4348,6 +4348,19 @@ html[data-theme="light"] .foldable { background: #fdfbf6; border-color: #ddd2bd;
    a page-card that follows another starts a step lower, never
    flush against it. A lone page-card is untouched. */
 .page-body:not(:has(.home-grid)) .page-card + .page-card { margin-top: 1.25rem; }
+/* Second factor (/auth/factor): the standard centered prompt.
+   One narrow card in the middle of the page: the key glyph,
+   the assertion, then the recovery path below a divider and
+   sign-out quiet underneath. */
+.factor-wrap { max-width: 27rem; margin: 2.25rem auto 0; }
+.factor-card { text-align: center; padding: 1.75rem 1.5rem 1.25rem; }
+.factor-glyph { margin: 0 0 0.25rem; color: var(--gold); }
+.factor-wide { width: 100%; }
+.factor-alt { margin-top: 1.5rem; padding-top: 1.25rem; border-top: 1px solid var(--box-edge); }
+.factor-alt summary { color: var(--accent); cursor: pointer; list-style: none; }
+.factor-alt summary::-webkit-details-marker { display: none; }
+.factor-alt summary:hover { text-decoration: underline; }
+.factor-signout { text-align: center; margin-top: 1rem; }
 html[data-theme="light"] .panel {
   background: linear-gradient(#fdfbf6, #f8f4ec) padding-box,
     linear-gradient(135deg, #e8d5b5 0%, #d9c19a 45%, #c9ad7f 100%) border-box;

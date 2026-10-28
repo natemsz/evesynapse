@@ -34,11 +34,13 @@
 .an-bar-row { display: flex; align-items: center; gap: .6rem; margin: .34rem 0; font-size: .85rem; }
 .an-bar-name { width: 11.5rem; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .an-mono { font-family: 'JetBrains Mono', monospace; font-size: .78rem; }
-.an-bar-track { flex: 1; height: .62rem; background: var(--row); border-radius: .3rem; overflow: hidden; }
-.an-bar-fill { display: block; height: 100%; background: linear-gradient(90deg, var(--danger), var(--accent)); }
+.an-bar-svg { flex: 1; height: .62rem; display: block; border-radius: .3rem; overflow: hidden; }
+.an-bar-bg { fill: var(--row); }
+.an-grad-a { stop-color: var(--danger); }
+.an-grad-b { stop-color: var(--accent); }
 .an-bar-val { width: 12.5rem; text-align: right; color: var(--muted); font-size: .8rem; }
 
-.an-phase { display: flex; height: 1.1rem; border-radius: .3rem; overflow: hidden; margin: .5rem 0 .3rem; }
+.an-phase-svg { display: block; width: 100%; height: 1.1rem; border-radius: .3rem; overflow: hidden; margin: .5rem 0 .3rem; }
 
 .an-fresh { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: .55rem; }
 .an-feed { border: 1px solid var(--glass-edge); border-radius: .55rem; padding: .55rem .7rem; background: var(--glass); }
@@ -71,10 +73,11 @@
 .an-legend i.an-s4 { background: var(--gold); }
 .an-legend i.an-s5 { background: var(--danger); }
 
-/* Phase bar segments and their legend swatches. */
-.an-ph-public { background: var(--accent); }
-.an-ph-warming { background: var(--success); }
-.an-ph-truevalues { background: var(--muted); }
-.an-ph-intel { background: var(--gold); }
-.an-ph-swarm { background: var(--note); }
-.an-ph-other { background: var(--muted-2); }
+/* Phase bar segments and their legend swatches: background
+   tints the HTML swatch, fill tints the SVG segment rect. */
+.an-ph-public { background: var(--accent); fill: var(--accent); }
+.an-ph-warming { background: var(--success); fill: var(--success); }
+.an-ph-truevalues { background: var(--muted); fill: var(--muted); }
+.an-ph-intel { background: var(--gold); fill: var(--gold); }
+.an-ph-swarm { background: var(--note); fill: var(--note); }
+.an-ph-other { background: var(--muted-2); fill: var(--muted-2); }

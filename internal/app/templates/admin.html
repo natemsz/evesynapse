@@ -29,7 +29,7 @@
 <h2>Worker cycles</h2>
 {{if .CycleNote}}<p class="an-note">{{.CycleNote}}</p>{{else}}
 {{if .CycleChart}}{{.CycleChart}}{{end}}
-{{if .PhaseSegs}}<div class="an-phase">{{range .PhaseSegs}}<span class="{{.Class}}" style="width:{{printf "%.1f" .Pct}}%"></span>{{end}}</div>{{end}}
+{{if .PhaseBar}}{{.PhaseBar}}{{end}}
 {{if or .PhaseSegs .CycleSummary}}<div class="an-legend">{{range .PhaseSegs}}<span><i class="{{.Class}}"></i>{{.Label}}</span>{{end}}{{if .CycleSummary}}<span class="an-mix">{{.CycleSummary}}</span>{{end}}</div>{{end}}
 {{end}}
 </section>
@@ -48,7 +48,7 @@
 <div class="an-grid2">
 <section class="card">
 <h2>ESI calls · {{.Word}}</h2>
-{{range .ESIBars}}<div class="an-bar-row"><span class="an-bar-name">{{.Name}}</span><span class="an-bar-track"><span class="an-bar-fill" style="width:{{printf "%.1f" .Pct}}%"></span></span><span class="an-bar-val">{{.Value}}</span></div>
+{{range .ESIBars}}<div class="an-bar-row"><span class="an-bar-name">{{.Name}}</span>{{.Bar}}<span class="an-bar-val">{{.Value}}</span></div>
 {{end}}<p class="an-note">{{.ESINote}}</p>
 </section>
 <section class="card">
@@ -61,12 +61,12 @@
 <div class="an-grid2">
 <section class="card">
 <h2>Top pages · {{.Word}}</h2>
-{{range .TopBars}}<div class="an-bar-row"><span class="an-bar-name{{if .Mono}} an-mono{{end}}">{{.Name}}</span><span class="an-bar-track"><span class="an-bar-fill" style="width:{{printf "%.1f" .Pct}}%"></span></span><span class="an-bar-val">{{.Value}}</span></div>
+{{range .TopBars}}<div class="an-bar-row"><span class="an-bar-name{{if .Mono}} an-mono{{end}}">{{.Name}}</span>{{.Bar}}<span class="an-bar-val">{{.Value}}</span></div>
 {{end}}{{if .TopNote}}<p class="an-note">{{.TopNote}}</p>{{end}}
 </section>
 <section class="card">
 <h2>Activity · {{.Word}}</h2>
-{{range .ActivityBars}}<div class="an-bar-row"><span class="an-bar-name">{{.Name}}</span><span class="an-bar-track"><span class="an-bar-fill" style="width:{{printf "%.1f" .Pct}}%"></span></span><span class="an-bar-val">{{.Value}}</span></div>
+{{range .ActivityBars}}<div class="an-bar-row"><span class="an-bar-name">{{.Name}}</span>{{.Bar}}<span class="an-bar-val">{{.Value}}</span></div>
 {{end}}<p class="an-note">What the site actually did in the window, counted from the tables and counters that own each kind.</p>
 </section>
 </div>
@@ -80,12 +80,12 @@
 <div class="an-grid2">
 <section class="card">
 <h2>Swarm</h2>
-{{range .SwarmPeers}}<div class="an-bar-row"><span class="an-bar-name">{{.Name}}</span><span class="an-bar-track"><span class="an-bar-fill" style="width:{{printf "%.1f" .Pct}}%"></span></span><span class="an-bar-val">{{.Value}}</span></div>
+{{range .SwarmPeers}}<div class="an-bar-row"><span class="an-bar-name">{{.Name}}</span>{{.Bar}}<span class="an-bar-val">{{.Value}}</span></div>
 {{end}}<p class="an-note">{{.SwarmNote}}</p>
 </section>
 <section class="card">
 <h2>Data inventory</h2>
-{{range .InvBars}}<div class="an-bar-row"><span class="an-bar-name{{if .Mono}} an-mono{{end}}">{{.Name}}</span><span class="an-bar-track"><span class="an-bar-fill" style="width:{{printf "%.1f" .Pct}}%"></span></span><span class="an-bar-val">{{.Value}}</span></div>
+{{range .InvBars}}<div class="an-bar-row"><span class="an-bar-name{{if .Mono}} an-mono{{end}}">{{.Name}}</span>{{.Bar}}<span class="an-bar-val">{{.Value}}</span></div>
 {{end}}<p class="an-note">{{.InvNote}}</p>
 </section>
 </div>

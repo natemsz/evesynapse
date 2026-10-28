@@ -71,6 +71,7 @@ type analyticsBar struct {
 	Mono  bool
 	Pct   float64 // bar width, 0..100
 	Value string
+	Bar   template.HTML // prebuilt SVG meter; geometry, not a style attribute
 }
 
 type analyticsPhaseSeg struct {
@@ -101,6 +102,7 @@ type analyticsView struct {
 
 	CycleChart   template.HTML
 	PhaseSegs    []analyticsPhaseSeg
+	PhaseBar     template.HTML // prebuilt SVG phase split; geometry, not a style attribute
 	CycleSummary string
 	CycleNote    string
 
@@ -191,10 +193,23 @@ func (app *Application) buildAnalytics(ctx context.Context, rangeKey string, tot
 	b.freshness(v)
 	b.swarmPanel(v)
 	b.inventory(v)
+	v.finishBars()
 
 	v.Cost = fmt.Sprintf("Analytics section: %d queries, %d ms to build. Counts are this instance's own records.",
 		b.queries, time.Since(b.started).Milliseconds())
 	return v
+}
+
+// finishBars prebuilds the SVG meter for every bar row and the
+// phase split for the cycle section: bar widths are SVG geometry,
+// never an inline style (the CSP allows none).
+func (v *analyticsView) finishBars() {
+	for _, bars := range [][]analyticsBar{v.ESIBars, v.TopBars, v.ActivityBars, v.SwarmPeers, v.InvBars} {
+		for i := range bars {
+			bars[i].Bar = barSVG(bars[i].Pct)
+		}
+	}
+	v.PhaseBar = phaseBarSVG(v.PhaseSegs)
 }
 
 func pctText(part, total int64) string {
@@ -576,6 +591,12 @@ func (b *analyticsBuild) kpis(v *analyticsView, traffic trafficData, sum cycleSu
 // --- Host ----------------------------------------------------------------------
 
 func uptimeText(since time.Time) string {
+	if since.IsZero() {
+		// No recorded start (a partially built Application):
+		// time.Since the zero time saturates at the maximum
+		// duration, which would print as a 292-year uptime.
+		return "unknown"
+	}
 	d := time.Since(since)
 	if days := int(d.Hours()) / 24; days > 0 {
 		return fmt.Sprintf("%dd %dh", days, int(d.Hours())%24)

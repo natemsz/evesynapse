@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"html/template"
 	"strings"
+	"sync/atomic"
 )
 
 // ---------------------------------------------------------------------------
@@ -118,6 +119,51 @@ func areaChartSVG(values []float64, max float64, lineClass string, width, height
 	if bottomRight != "" {
 		fmt.Fprintf(&sb, `<text x="%s" y="%s" class="an-svg-note" text-anchor="end">%s</text>`,
 			svgF(width-6), svgF(height-3), template.HTMLEscapeString(bottomRight))
+	}
+	sb.WriteString(`</svg>`)
+	return template.HTML(sb.String())
+}
+
+// barGradientSeq keeps each meter's gradient id unique within
+// the page (an SVG url(#id) reference resolves document-wide).
+var barGradientSeq atomic.Int64
+
+// barSVG renders one horizontal meter: a track rect and a
+// gradient-filled rect whose width is pure geometry, so the
+// markup needs no inline style. The gradient runs danger to
+// accent via CSS stop classes, exactly the fill the meter has
+// always had.
+func barSVG(pct float64) template.HTML {
+	if pct < 0 {
+		pct = 0
+	}
+	if pct > 100 {
+		pct = 100
+	}
+	id := fmt.Sprintf("anbg%d", barGradientSeq.Add(1))
+	return template.HTML(fmt.Sprintf(
+		`<svg viewBox="0 0 100 10" preserveAspectRatio="none" class="an-bar-svg" role="img"><defs><linearGradient id="%s" x1="0" y1="0" x2="1" y2="0"><stop offset="0" class="an-grad-a"/><stop offset="1" class="an-grad-b"/></linearGradient></defs><rect x="0" y="0" width="100" height="10" class="an-bar-bg"/><rect x="0" y="0" width="%s" height="10" fill="url(#%s)"/></svg>`,
+		id, svgF(pct), id))
+}
+
+// phaseBarSVG renders the worker-cycle phase split as one SVG
+// bar of proportional segments; the widths are geometry and the
+// segment classes carry the fills (the same classes tint the
+// legend swatches).
+func phaseBarSVG(segs []analyticsPhaseSeg) template.HTML {
+	if len(segs) == 0 {
+		return ""
+	}
+	var sb strings.Builder
+	sb.WriteString(`<svg viewBox="0 0 1000 22" preserveAspectRatio="none" class="an-phase-svg" role="img">`)
+	x := 0.0
+	for _, s := range segs {
+		w := s.Pct * 10
+		if w <= 0 {
+			continue
+		}
+		fmt.Fprintf(&sb, `<rect x="%s" y="0" width="%s" height="22" class="%s"/>`, svgF(x), svgF(w), s.Class)
+		x += w
 	}
 	sb.WriteString(`</svg>`)
 	return template.HTML(sb.String())

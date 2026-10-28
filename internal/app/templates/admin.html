@@ -3,13 +3,9 @@
 {{define "content"}}
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
 
+{{template "admintabs" .}}
+
 {{with .Admin}}
-<nav class="an-tabs" aria-label="Admin sections">
-  <a class="an-tab is-active" href="/admin/">Analytics</a>
-  <a class="an-tab" href="#accounts">Accounts</a>
-  <a class="an-tab" href="#access">Access</a>
-  <span class="an-range">{{range .Analytics.Links}}{{if .Active}}<a class="is-active" href="/admin/?range={{.Key}}">{{.Label}}</a>{{else}}<a href="/admin/?range={{.Key}}">{{.Label}}</a>{{end}}{{end}}</span>
-</nav>
 <p class="an-note">First-party numbers only, from this instance's own records. This page reports; it cannot restart, deploy, or change anything on the host.</p>
 
 {{with .Analytics}}
@@ -93,7 +89,7 @@
 <p class="an-note">{{.Cost}}</p>
 {{end}}
 
-<p id="accounts">Accounts and the characters linked to them. What the background worker is doing, and how fresh anyone's data is, are on <a href="/sync/">Sync</a>.</p>
+<p id="accounts">Accounts and the characters linked to them. What the background worker is doing, and how fresh anyone's data is, are on <a href="/admin/sync/">Sync</a>.</p>
 
 <section class="card spanall">
 <h2>Overview</h2>
@@ -170,7 +166,7 @@
       <td>{{if .Parked}}No: {{.Parked}}{{else}}{{.Tier}}{{end}}</td>
       <td>{{.TokenExpiry}}</td>
       <td>{{if .Scopes}}<details class="scope-details"><summary>{{len .Scopes}} scope{{if ne (len .Scopes) 1}}s{{end}}</summary><ul class="scope-list">{{range .Scopes}}<li>{{.}}</li>{{end}}</ul></details>{{else}}none recorded{{end}}</td>
-      <td><a href="/sync/?character={{.ID}}">Sync</a></td>
+      <td><a href="/admin/sync/?character={{.ID}}">Sync</a></td>
     </tr>
   {{end}}
   </tbody>

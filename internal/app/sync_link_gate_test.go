@@ -8,11 +8,12 @@ import (
 	"testing"
 )
 
-// The Sync page is admin-only, so a /sync/ link anywhere else is a
-// dead end for every other signed-in user: every href="/sync/" in a
-// template must sit inside the true branch of an {{if .IsAdmin}}.
-// admin.html and sync.html are exempt — both pages are themselves
-// behind requireAdmin, so their links cannot dead-end.
+// The Sync page is admin-only, so an /admin/sync/ link anywhere
+// else is a dead end for every other signed-in user: every
+// href="/admin/sync/" in a template must sit inside the true
+// branch of an {{if .IsAdmin}}. admin.html, sync.html and the
+// admintabs.html frame they share are exempt — both pages are
+// themselves behind requireAdmin, so their links cannot dead-end.
 func TestSyncLinksAreAdminGated(t *testing.T) {
 	entries, err := fs.ReadDir(templatesFS, "templates")
 	if err != nil {
@@ -20,7 +21,7 @@ func TestSyncLinksAreAdminGated(t *testing.T) {
 	}
 	for _, e := range entries {
 		name := e.Name()
-		if name == "admin.html" || name == "sync.html" {
+		if name == "admin.html" || name == "sync.html" || name == "admintabs.html" {
 			continue
 		}
 		raw, err := fs.ReadFile(templatesFS, "templates/"+name)
@@ -28,7 +29,7 @@ func TestSyncLinksAreAdminGated(t *testing.T) {
 			t.Fatal(err)
 		}
 		if bad := ungatedSyncLinks(string(raw)); len(bad) > 0 {
-			t.Errorf("%s: /sync/ link outside an admin gate: %s", name, bad[0])
+			t.Errorf("%s: /admin/sync/ link outside an admin gate: %s", name, bad[0])
 		}
 	}
 }
@@ -36,7 +37,7 @@ func TestSyncLinksAreAdminGated(t *testing.T) {
 var templateActionRe = regexp.MustCompile(`\{\{-?\s*(if|range|with|define|block|else|end)\b([^{}]*?)-?\}\}`)
 
 // ungatedSyncLinks walks a template's action stack and returns the
-// href="/sync/" occurrences that no enclosing admin gate covers. A
+// href="/admin/sync/" occurrences that no enclosing admin gate covers. A
 // gate covers an anchor only if it can actually read the flag where
 // it sits: an {{if}} inside a {{with}}/{{range}} evaluates against
 // the rebound dot, so there the gate must go through the root
@@ -87,7 +88,7 @@ func ungatedSyncLinks(src string) []string {
 		if m != nil {
 			segEnd = m[0]
 		}
-		if seg := rest[:segEnd]; strings.Contains(seg, `href="/sync/"`) && !gated(stack) {
+		if seg := rest[:segEnd]; strings.Contains(seg, `href="/admin/sync/"`) && !gated(stack) {
 			bad = append(bad, strings.TrimSpace(seg[max(0, len(seg)-80):]))
 		}
 		if m == nil {
@@ -127,7 +128,7 @@ func ungatedSyncLinks(src string) []string {
 }
 
 // A warming page shows the Sync-page direction only to admins:
-// everyone else gets the plain sentence and no /sync/ link anywhere.
+// everyone else gets the plain sentence and no Sync link anywhere.
 func TestWarmingSyncLinkFollowsAdmin(t *testing.T) {
 	transport := &countingTransport{}
 	app, conn, q := buildCorpTestApp(t, transport)
@@ -157,7 +158,7 @@ func TestWarmingSyncLinkFollowsAdmin(t *testing.T) {
 	if !strings.Contains(body, "Still syncing") {
 		t.Fatal("non-admin warming page lost the syncing sentence")
 	}
-	if strings.Contains(body, `href="/sync/"`) {
+	if strings.Contains(body, `href="/admin/sync/"`) {
 		t.Fatal("non-admin warming page links to the admin-only Sync page")
 	}
 
@@ -166,7 +167,7 @@ func TestWarmingSyncLinkFollowsAdmin(t *testing.T) {
 	if code != 200 {
 		t.Fatalf("industry (B) as admin: status %d", code)
 	}
-	if !strings.Contains(body, `Still syncing. Progress is on the <a href="/sync/">Sync page</a>.`) {
+	if !strings.Contains(body, `Still syncing. Progress is on the <a href="/admin/sync/">Sync page</a>.`) {
 		t.Fatal("admin warming page lost the Sync page link")
 	}
 }

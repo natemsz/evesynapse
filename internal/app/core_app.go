@@ -622,6 +622,11 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	r.Route("/admin", func(r chi.Router) {
 		r.Use(app.requireAdmin)
 		r.Get("/", app.handleAdmin)
+		// The Sync tab (sync.go): the worker and data-freshness
+		// page, living under Admin; /sync/ redirects here.
+		r.Get("/sync/", app.handleSync)
+		r.Post("/sync/warm", app.handleSyncWarm)
+		r.Post("/sync/sde", app.handleSyncSDE)
 		// What the Sync and Admin search boxes suggest while typing.
 		r.Get("/suggest", app.handleCharacterSuggest)
 		r.Post("/accounts/remove", app.handleAdminAccountRemove)
@@ -902,7 +907,12 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 		r.With(app.requireAuth).Get("/page-status", app.handlePageSyncStatus)
 		r.Group(func(r chi.Router) {
 			r.Use(app.requireAdmin)
-			r.Get("/", app.handleSync)
+			// The page itself moved to /admin/sync/; the old
+			// address redirects there with its query intact.
+			// The two actions keep answering here as well, so
+			// a form on a page rendered before the move still
+			// works; they bounce to the new page either way.
+			r.Get("/", app.handleSyncMoved)
 			r.Post("/warm", app.handleSyncWarm)
 			r.Post("/sde", app.handleSyncSDE)
 		})

@@ -20,7 +20,7 @@ import (
 // many there are, who is new, and one account looked up through the
 // search box, with its characters, their sign-in state and what they
 // granted. What the worker is doing and how fresh anyone's data is
-// belongs to the Sync page, and each character here links there.
+// belongs to this page's Sync tab, and each character here links there.
 //
 // ---------------------------------------------------------------------------
 
@@ -89,6 +89,7 @@ type adminCharacterRow struct {
 func (app *Application) handleAdmin(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	data := app.page(ctx)
+	data.AdminTab = "analytics"
 	view := &adminView{}
 	data.Admin = view
 	now := time.Now()

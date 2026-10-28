@@ -87,15 +87,17 @@ type syncView struct {
 	WarDetails string            // stored war detail count, formatted
 }
 
-// handleSync renders the Sync page: live worker status, the shared
-// data, and the snapshot freshness and type-name coverage of the one
-// character asked for (?character= a name or an id; the reader's own
-// selected character when nothing is asked). The page auto-refreshes
+// handleSync renders the Sync tab of the Admin page
+// (GET /admin/sync/): live worker status, the shared data, and the
+// snapshot freshness and type-name coverage of the one character
+// asked for (?character= a name or an id; the reader's own selected
+// character when nothing is asked). The page auto-refreshes
 // (pageData.AutoRefresh) so an import can be watched as it lands.
 func (app *Application) handleSync(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	data := app.page(ctx)
 	data.AutoRefresh = true
+	data.AdminTab = "sync"
 
 	status := app.snapshotWorkerStatus()
 	view := &syncView{
@@ -133,7 +135,41 @@ func (app *Application) handleSync(w http.ResponseWriter, r *http.Request) {
 	if ch != nil {
 		view.Character = app.syncCharacterDetail(ctx, *ch)
 	}
+
+	// The sub-section strip is the site's shared section tabs
+	// (the pagetabs band), one tab per section on the page, in
+	// the order they appear; the first is where the page opens.
+	tabs := []module.NavLink{{Href: "#sync-worker", Label: "Worker", Active: true}}
+	if view.Foresight != nil {
+		tabs = append(tabs, module.NavLink{Href: "#sync-warmed", Label: "Warmed ahead"})
+	}
+	if view.Serving != nil {
+		tabs = append(tabs, module.NavLink{Href: "#sync-serving", Label: "Serving pages"})
+	}
+	for _, sec := range view.Sections {
+		tabs = append(tabs, module.NavLink{Href: "#" + sec.Anchor, Label: sec.Title})
+	}
+	tabs = append(tabs, module.NavLink{Href: "#sync-characters", Label: "Character data"})
+	if len(view.Global) > 0 {
+		tabs = append(tabs, module.NavLink{Href: "#sync-public", Label: "Public data"})
+	}
+	if view.SDE != nil {
+		tabs = append(tabs, module.NavLink{Href: "#sync-sde", Label: "Static data"})
+	}
+	data.SectionTabs = tabs
+
 	app.render(ctx, w, http.StatusOK, "sync.html", data)
+}
+
+// handleSyncMoved sends the Sync page's old address to its home
+// as a tab of the Admin page, with the query string (a
+// ?character= pick, above all) carried over.
+func (app *Application) handleSyncMoved(w http.ResponseWriter, r *http.Request) {
+	to := "/admin/sync/"
+	if q := r.URL.RawQuery; q != "" {
+		to += "?" + q
+	}
+	http.Redirect(w, r, to, http.StatusMovedPermanently)
 }
 
 // syncCharacterDetail builds one character's block: every snapshot
@@ -298,7 +334,7 @@ func snapshotTypeIDs(byKind map[string]db.CharacterSnapshot) map[int64]bool {
 // reader's own account.
 func (app *Application) handleSyncWarm(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	back := "/sync/"
+	back := "/admin/sync/"
 
 	if raw := r.URL.Query().Get("character"); raw != "" {
 		want, err := strconv.ParseInt(raw, 10, 64)
@@ -311,7 +347,7 @@ func (app *Application) handleSyncWarm(w http.ResponseWriter, r *http.Request) {
 		}
 		if ch, err := app.queries.GetCharacter(ctx, want); err == nil {
 			app.markCharacterPriority(ch.CharacterID)
-			back = "/sync/?character=" + strconv.FormatInt(ch.CharacterID, 10)
+			back = "/admin/sync/?character=" + strconv.FormatInt(ch.CharacterID, 10)
 		}
 		http.Redirect(w, r, back, http.StatusSeeOther)
 		return
@@ -335,7 +371,7 @@ func (app *Application) handleSyncWarm(w http.ResponseWriter, r *http.Request) {
 // worker; this is its manual trigger.
 func (app *Application) handleSyncSDE(w http.ResponseWriter, r *http.Request) {
 	app.startSDECheck("manual")
-	http.Redirect(w, r, "/sync/", http.StatusSeeOther)
+	http.Redirect(w, r, "/admin/sync/", http.StatusSeeOther)
 }
 
 // errorBudgetWords says how much of ESI's error budget is left. The

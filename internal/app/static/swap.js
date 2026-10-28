@@ -36,7 +36,7 @@
   // through the normal fallback. The character switch is here
   // too: it changes who the session acts as, so it must never
   // run speculatively on a hover.
-  var PREFETCH_DENY_PREFIX = ["/sync/", "/characters/switch"];
+  var PREFETCH_DENY_PREFIX = ["/admin/sync/", "/characters/switch"];
 
   // Scripts the shell always carries. A fetched page needing
   // anything else (plan.js, map.js, push.js) has it adopted by the

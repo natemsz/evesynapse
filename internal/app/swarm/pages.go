@@ -1,11 +1,13 @@
 package swarm
 
 // ---------------------------------------------------------------------------
-// The swarm on the Sync and Admin pages. Sync shows what sharing
-// costs and earns (entries applied, ESI calls saved, spot checks
-// for and against); Admin shows the swarm itself — mode, peers,
-// trust, and the approve/exclude/admit actions. The secret never
-// appears anywhere: the page says only whether one is set.
+// The swarm on the Sync and Admin pages. Sync shows what the
+// shared cache's own checks did (spot checks for and against,
+// entries dropped unchecked or taken back); Admin shows the
+// swarm itself: mode, peers, trust, and the approve/exclude/admit
+// actions, with the summary figures on its analytics tab. The
+// secret never appears anywhere: the page says only whether one
+// is set.
 // ---------------------------------------------------------------------------
 
 import (
@@ -50,7 +52,6 @@ type SwarmMetricsView struct {
 	Status  string // Off, or Open/Allowlist with peer counts
 	Enabled bool
 	Rows    []SwarmMetricRow
-	Peers   []SwarmPeerRow
 }
 
 // SwarmMetricRow is one label/value line in the card.
@@ -187,7 +188,11 @@ func (app *Mod) SwarmCounterMap(ctx context.Context) map[string]int64 {
 }
 
 // LoadSwarmMetrics builds the Sync card. Rendered reads only,
-// bounded (100 peers), no fetches.
+// bounded (100 peers), no fetches. The rows are the cache's own
+// verification outcomes; the swarm's summary figures (the peers
+// and their trust, the pulls applied and failed, the bytes
+// served) are the Admin analytics page's, and are not restated
+// here.
 func (app *Mod) LoadSwarmMetrics(ctx context.Context) *SwarmMetricsView {
 	view := &SwarmMetricsView{}
 	if !app.Cfg.Enabled() {
@@ -196,7 +201,6 @@ func (app *Mod) LoadSwarmMetrics(ctx context.Context) *SwarmMetricsView {
 	}
 	view.Enabled = true
 	peers := app.LoadSwarmPeers(ctx)
-	view.Peers = peers
 	approved, excluded := 0, 0
 	for _, p := range peers {
 		if p.Excluded {
@@ -211,19 +215,11 @@ func (app *Mod) LoadSwarmMetrics(ctx context.Context) *SwarmMetricsView {
 	}
 	view.Status = mode + " — " + humanize.Plural(approved, "peer") + " sharing, " + humanize.Plural(excluded, "peer") + " excluded"
 	counters := app.SwarmCounterMap(ctx)
-	applied := counters[SwarmCounterAppliedHistory] + counters[SwarmCounterAppliedNames] + counters[SwarmCounterAppliedRecords] + counters[SwarmCounterAppliedContracts]
-	// Every applied entry is one ESI fetch this instance did not
-	// make: the worker settles the fetch state on apply, so the
-	// datum is never fetched twice.
 	view.Rows = []SwarmMetricRow{
-		{Label: "Entries applied from peers", Value: esi.FormatInt(applied)},
-		{Label: "ESI calls saved", Value: esi.FormatInt(applied)},
 		{Label: "Spot checks passed", Value: esi.FormatInt(counters[SwarmCounterSpotPassed])},
 		{Label: "Spot checks failed (discarded, signer flagged)", Value: esi.FormatInt(counters[SwarmCounterSpotFailed])},
 		{Label: "Entries dropped unchecked (expired or undecidable; nobody blamed)", Value: esi.FormatInt(counters[SwarmCounterDroppedUnchecked])},
 		{Label: "Entries taken back (signer excluded)", Value: esi.FormatInt(counters[SwarmCounterRolledBack])},
-		{Label: "Peer pulls succeeded", Value: esi.FormatInt(counters[SwarmCounterPullsOK])},
-		{Label: "Peer pulls failed", Value: esi.FormatInt(counters[SwarmCounterPullsFailed])},
 	}
 	return view
 }

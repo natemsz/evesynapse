@@ -27,15 +27,15 @@ func metricsTestApp(t *testing.T) (*Application, *http.Cookie) {
 	return app, sessionCookie(t, app, user.ID, fixtureCharA, "Fixture Alpha")
 }
 
-// TestSyncRendersCountComplete pins that the /sync/ page renders
+// TestSyncRendersCountComplete pins that the Sync tab renders
 // with its metrics card once an admin is signed in.
 func TestSyncRendersCountComplete(t *testing.T) {
 	app, cookie := metricsTestApp(t)
-	code, body := getPage(t, app, cookie, "/sync/")
+	code, body := getPage(t, app, cookie, "/admin/sync/")
 	if code != http.StatusOK {
 		t.Fatalf("/sync/: status %d", code)
 	}
-	mustContain(t, "/sync/", body, "Serving")
+	mustContain(t, "/admin/sync/", body, "Serving")
 }
 
 // TestSyncRecordsServedAges pins the Served-lines path: a full
@@ -44,11 +44,11 @@ func TestSyncRecordsServedAges(t *testing.T) {
 	app, cookie := metricsTestApp(t)
 	app.noteRender(true)
 	app.noteServedAge(5 * time.Minute)
-	code, body := getPage(t, app, cookie, "/sync/")
+	code, body := getPage(t, app, cookie, "/admin/sync/")
 	if code != http.StatusOK {
 		t.Fatalf("/sync/: status %d", code)
 	}
-	mustContain(t, "/sync/", body, "fully loaded", "under an hour old")
+	mustContain(t, "/admin/sync/", body, "fully loaded", "under an hour old")
 }
 
 // TestSyncGuessRates pins the guess-rate loader: a guessed pilot
@@ -73,20 +73,20 @@ func TestSyncGuessRates(t *testing.T) {
 	if view.GuessesLine == "" {
 		t.Fatalf("serveMetrics: empty guess line, want 1 guess 1 opened")
 	}
-	code, body := getPage(t, app, cookie, "/sync/")
+	code, body := getPage(t, app, cookie, "/admin/sync/")
 	if code != http.StatusOK {
 		t.Fatalf("/sync/: status %d", code)
 	}
-	mustContain(t, "/sync/", body, "Search-box guesses", "Pilots")
+	mustContain(t, "/admin/sync/", body, "Search-box guesses", "Pilots")
 }
 
 // TestSyncServingEmptyStates pins the idle Sync page: no renders
 // yet, so every Serving line shows its waiting copy.
 func TestSyncServingEmptyStates(t *testing.T) {
 	app, cookie := metricsTestApp(t)
-	code, body := getPage(t, app, cookie, "/sync/")
+	code, body := getPage(t, app, cookie, "/admin/sync/")
 	if code != http.StatusOK {
 		t.Fatalf("/sync/: status %d", code)
 	}
-	mustContain(t, "/sync/", body, "Renders fully loaded at first paint", "—")
+	mustContain(t, "/admin/sync/", body, "Renders fully loaded at first paint", "—")
 }

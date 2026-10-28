@@ -116,7 +116,7 @@ func TestWorkerCycleIsTimed(t *testing.T) {
 	f.app.cfg.adminCharIDs = map[int64]bool{f.ch.CharacterID: true}
 	cookie := sessionCookie(t, f.app, f.userID, f.ch.CharacterID, f.ch.Name)
 
-	_, body := getPage(t, f.app, cookie, "/sync/")
+	_, body := getPage(t, f.app, cookie, "/admin/sync/")
 	if strings.Contains(body, "<h3>Last cycle</h3>") {
 		t.Fatal("the Sync page shows a cycle before one has run")
 	}
@@ -149,7 +149,7 @@ func TestWorkerCycleIsTimed(t *testing.T) {
 	if timing.Fetches < 0 || timing.Fetches > maxFetchesPerCycle {
 		t.Fatalf("%d fetches counted against an allowance of %d", timing.Fetches, maxFetchesPerCycle)
 	}
-	_, body = getPage(t, f.app, cookie, "/sync/")
+	_, body = getPage(t, f.app, cookie, "/admin/sync/")
 	mustContain(t, "/sync/ after a cycle", body, "<h3>Last cycle</h3>", "<tr><td>Took</td><td>", "<tr><td>Characters</td><td>1: 1 active, 0 watched, 0 recent, 0 dormant</td></tr>", fmt.Sprintf(" of %d allowed</td>", maxFetchesPerCycle))
 
 	// Only the recent cycles are kept.

@@ -91,7 +91,7 @@ func buildCorpTestApp(t *testing.T, transport http.RoundTripper) (*Application, 
 }
 
 // grantTestAdmin marks characterID as an admin in the test app's
-// config (Issues 23/24): /admin/ and /sync/ now require admin
+// config (Issues 23/24): /admin/ and its Sync tab now require admin
 // character identity, so tests hitting those pages must opt in.
 func grantTestAdmin(app *Application, characterID int64) {
 	if app.cfg.adminCharIDs == nil {
@@ -444,11 +444,11 @@ func TestCorpPagesRenderFromSnapshots(t *testing.T) {
 		"Needs the", "Accountant or Junior Accountant", "role in game")
 
 	// The Sync page explains the same states.
-	code, body = getPage(t, app, cookie, "/sync/")
+	code, body = getPage(t, app, cookie, "/admin/sync/")
 	if code != http.StatusOK {
 		t.Fatalf("sync page: status %d", code)
 	}
-	mustContain(t, "/sync/", body, "corp_membertracking", "Role missing", "needs the Director role")
+	mustContain(t, "/admin/sync/", body, "corp_membertracking", "Role missing", "needs the Director role")
 
 	// The whole point: not one outbound call served any of this.
 	if got := transport.calls.Load(); got != 0 {

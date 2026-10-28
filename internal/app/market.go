@@ -188,6 +188,11 @@ type marketItem struct {
 	// a region never triggers a fetch. Empty until the item view
 	// is built with a type.
 	RegionStats []marketRegionStatRow
+	// AllRegions: the strip lists every region a stored row speaks
+	// for (?regions=all), not just the hubs.
+	AllRegions bool
+	// Pack is the region's stat pack section (market_trend_view.go).
+	Pack *statPackView
 }
 
 // spreadBookDepth is the deepest thin book, per side, whose
@@ -385,7 +390,13 @@ func (app *Application) handleMarket(w http.ResponseWriter, r *http.Request) {
 		if view.Item != nil || !anon {
 			app.attachHistory(ctx, view.Item, typeID, view.Region, userID)
 		}
-		app.attachRegionStats(ctx, view.Item)
+		if view.Item != nil && q.Get("regions") == "all" {
+			view.Item.AllRegions = true
+			app.attachAllRegionStats(ctx, view.Item)
+		} else {
+			app.attachRegionStats(ctx, view.Item)
+		}
+		app.attachStatPack(ctx, view.Item)
 		if !anon {
 			app.markGuessHit(ctx, pageWantHistory, typeID, view.Region)
 		}

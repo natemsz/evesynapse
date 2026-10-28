@@ -1200,3 +1200,45 @@ ORDER BY type_id;
 -- name: DeleteRestockTarget :exec
 DELETE FROM restock_targets
 WHERE user_id = $1 AND type_id = $2;
+-- name: ListMarketRegionStatsDailyRecent :many
+-- One (region, type)'s stat pack history from a start day on,
+-- oldest first: the item page's book trend chart (at most 90 rows).
+SELECT day, typical_sell, typical_buy, best_sell, best_buy, sell_orders, buy_orders, sell_volume, buy_volume
+FROM market_region_stats_daily
+WHERE region_id = sqlc.arg(region_id) AND type_id = sqlc.arg(type_id) AND day >= sqlc.arg(since)
+ORDER BY day
+LIMIT 90;
+-- name: ListMarketTrendTypes :many
+-- The Trends screen, ranked in SQL over the stat pack: the most
+-- volatile types (30-day volatility of the typical sell), or the
+-- biggest risers or fallers of the typical sell over 1, 7 or 30
+-- days. A row needs a book with some depth (min_orders sell
+-- orders) and real trade (30-day traded volume floor), so a
+-- one-order book's swing never tops the screen.
+SELECT type_id, typical_sell, typical_buy, sell_orders, avg_daily_volume_30d,
+       sell_chg_1d, sell_chg_7d, sell_chg_30d, volatility_30d, history_days, updated_at
+FROM (
+    SELECT s.*,
+           CASE sqlc.arg(mode)::text
+               WHEN 'volatile' THEN s.volatility_30d
+               WHEN 'rising' THEN CASE sqlc.arg(period)::int WHEN 1 THEN s.sell_chg_1d WHEN 30 THEN s.sell_chg_30d ELSE s.sell_chg_7d END
+               ELSE -(CASE sqlc.arg(period)::int WHEN 1 THEN s.sell_chg_1d WHEN 30 THEN s.sell_chg_30d ELSE s.sell_chg_7d END)
+           END AS score
+    FROM market_region_stats s
+    WHERE s.region_id = sqlc.arg(region_id)
+      AND s.typical_sell > 0
+      AND s.sell_orders >= sqlc.arg(min_orders)::bigint
+      AND s.avg_daily_volume_30d >= sqlc.arg(min_volume)::double precision
+) ranked
+WHERE score IS NOT NULL AND (sqlc.arg(mode)::text = 'volatile' OR score > 0)
+ORDER BY score DESC, type_id
+LIMIT sqlc.arg(row_cap)::bigint;
+-- name: GetMarketTrendStamp :one
+-- How much of a region's stat pack has trend figures yet: rows with
+-- a 7-day change, rows with a volatility figure, and the newest write.
+SELECT COUNT(*) FILTER (WHERE sell_chg_7d IS NOT NULL) AS with_change,
+       COUNT(*) FILTER (WHERE volatility_30d IS NOT NULL) AS with_volatility,
+       MAX(updated_at) AS stamp
+FROM market_region_stats WHERE region_id = $1;
+-- name: ListSDERegionNames :many
+SELECT region_id, name FROM sde_regions WHERE region_id = ANY(sqlc.arg(region_ids)::bigint[]);

@@ -648,6 +648,52 @@ type LocalFitting struct {
 	LastViewedAt sql.NullTime `json:"last_viewed_at"`
 }
 
+type LpOffer struct {
+	CorporationID int64   `json:"corporation_id"`
+	OfferID       int64   `json:"offer_id"`
+	TypeID        int64   `json:"type_id"`
+	Quantity      int64   `json:"quantity"`
+	LpCost        int64   `json:"lp_cost"`
+	IskCost       float64 `json:"isk_cost"`
+	AkCost        int64   `json:"ak_cost"`
+}
+
+type LpOfferRequirement struct {
+	CorporationID int64 `json:"corporation_id"`
+	OfferID       int64 `json:"offer_id"`
+	TypeID        int64 `json:"type_id"`
+	Quantity      int64 `json:"quantity"`
+}
+
+type LpOfferValue struct {
+	RegionID       int64           `json:"region_id"`
+	CorporationID  int64           `json:"corporation_id"`
+	OfferID        int64           `json:"offer_id"`
+	TypeID         int64           `json:"type_id"`
+	Quantity       int64           `json:"quantity"`
+	LpCost         int64           `json:"lp_cost"`
+	IskCost        float64         `json:"isk_cost"`
+	RequiredCost   float64         `json:"required_cost"`
+	UnitSell       float64         `json:"unit_sell"`
+	UnitBuy        float64         `json:"unit_buy"`
+	IskPerLpSell   sql.NullFloat64 `json:"isk_per_lp_sell"`
+	IskPerLpBuy    sql.NullFloat64 `json:"isk_per_lp_buy"`
+	UnpricedReason string          `json:"unpriced_reason"`
+	DailyVolume    float64         `json:"daily_volume"`
+	SellChg7d      sql.NullFloat64 `json:"sell_chg_7d"`
+	Volatility30d  sql.NullFloat64 `json:"volatility_30d"`
+	PricesAt       sql.NullTime    `json:"prices_at"`
+	UpdatedAt      time.Time       `json:"updated_at"`
+}
+
+type LpStoreCorp struct {
+	CorporationID int64        `json:"corporation_id"`
+	Name          string       `json:"name"`
+	State         string       `json:"state"`
+	OfferCount    int64        `json:"offer_count"`
+	FetchedAt     sql.NullTime `json:"fetched_at"`
+}
+
 type MapLayer struct {
 	ID      int32     `json:"id"`
 	Sources string    `json:"sources"`

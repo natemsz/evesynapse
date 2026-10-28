@@ -227,7 +227,7 @@ func TestSectionGroups(t *testing.T) {
 		t.Errorf("market sub-row = %+v, want My Orders (active) and My Contracts", msub)
 	}
 	_, msub = sectionTabsGrouped(navLinksFor("market", "market.html", 0), "market")
-	wantTools := []string{"/market/", "/market/scanner/", "/market/ideas/", "/market/tradefinder/", "/market/leaderboard/", "/market/restock/", "/contracts/search/"}
+	wantTools := []string{"/market/", "/market/scanner/", "/market/ideas/", "/market/tradefinder/", "/market/leaderboard/", "/market/restock/", "/contracts/search/", "/market/trends/", "/market/lp/"}
 	if len(msub) != len(wantTools) {
 		t.Fatalf("market tools sub-row has %d pages, want %d", len(msub), len(wantTools))
 	}

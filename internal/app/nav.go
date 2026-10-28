@@ -105,6 +105,8 @@ var sectionNav = map[string][]navEntry{
 	},
 	"market": {
 		{"/market/", "Market", []string{"market.html"}},
+		{"/market/trends/", "Trends", []string{"market_trends.html"}},
+		{"/market/lp/", "LP Store", []string{"market_lp.html"}},
 	},
 	"corporation": {
 		{"/corporations/", "Overview", []string{"corporations.html"}},
@@ -194,7 +196,7 @@ var sectionGroups = map[string][]navGroup{
 		{"Planetary", []string{"/planets/", "/industry/pi/"}},
 	},
 	"market": {
-		{"Market Tools", []string{"/market/", "/market/scanner/", "/market/ideas/", "/market/tradefinder/", "/market/leaderboard/", "/market/restock/", "/contracts/search/"}},
+		{"Market Tools", []string{"/market/", "/market/scanner/", "/market/ideas/", "/market/tradefinder/", "/market/leaderboard/", "/market/restock/", "/market/trends/", "/market/lp/", "/contracts/search/"}},
 		{"My Finances", []string{"/orders/", "/contracts/"}},
 	},
 	"corporation": {

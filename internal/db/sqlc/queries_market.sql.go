@@ -542,6 +542,28 @@ func (q *Queries) GetMarketSweepState(ctx context.Context, regionID int64) (Mark
 	return i, err
 }
 
+const getMarketTrendStamp = `-- name: GetMarketTrendStamp :one
+SELECT COUNT(*) FILTER (WHERE sell_chg_7d IS NOT NULL) AS with_change,
+       COUNT(*) FILTER (WHERE volatility_30d IS NOT NULL) AS with_volatility,
+       MAX(updated_at) AS stamp
+FROM market_region_stats WHERE region_id = $1
+`
+
+type GetMarketTrendStampRow struct {
+	WithChange     int64       `json:"with_change"`
+	WithVolatility int64       `json:"with_volatility"`
+	Stamp          interface{} `json:"stamp"`
+}
+
+// How much of a region's stat pack has trend figures yet: rows with
+// a 7-day change, rows with a volatility figure, and the newest write.
+func (q *Queries) GetMarketTrendStamp(ctx context.Context, regionID int64) (GetMarketTrendStampRow, error) {
+	row := q.db.QueryRowContext(ctx, getMarketTrendStamp, regionID)
+	var i GetMarketTrendStampRow
+	err := row.Scan(&i.WithChange, &i.WithVolatility, &i.Stamp)
+	return i, err
+}
+
 const getMarketTypePrice = `-- name: GetMarketTypePrice :one
 SELECT region_id, type_id, buy_price, sell_price, buy_volume, sell_volume, fetched_at
 FROM market_type_prices
@@ -1839,6 +1861,67 @@ func (q *Queries) ListMarketRegionStatsDaily(ctx context.Context, arg ListMarket
 	return items, nil
 }
 
+const listMarketRegionStatsDailyRecent = `-- name: ListMarketRegionStatsDailyRecent :many
+SELECT day, typical_sell, typical_buy, best_sell, best_buy, sell_orders, buy_orders, sell_volume, buy_volume
+FROM market_region_stats_daily
+WHERE region_id = $1 AND type_id = $2 AND day >= $3
+ORDER BY day
+LIMIT 90
+`
+
+type ListMarketRegionStatsDailyRecentParams struct {
+	RegionID int64  `json:"region_id"`
+	TypeID   int64  `json:"type_id"`
+	Since    string `json:"since"`
+}
+
+type ListMarketRegionStatsDailyRecentRow struct {
+	Day         string  `json:"day"`
+	TypicalSell float64 `json:"typical_sell"`
+	TypicalBuy  float64 `json:"typical_buy"`
+	BestSell    float64 `json:"best_sell"`
+	BestBuy     float64 `json:"best_buy"`
+	SellOrders  int64   `json:"sell_orders"`
+	BuyOrders   int64   `json:"buy_orders"`
+	SellVolume  int64   `json:"sell_volume"`
+	BuyVolume   int64   `json:"buy_volume"`
+}
+
+// One (region, type)'s stat pack history from a start day on,
+// oldest first: the item page's book trend chart (at most 90 rows).
+func (q *Queries) ListMarketRegionStatsDailyRecent(ctx context.Context, arg ListMarketRegionStatsDailyRecentParams) ([]ListMarketRegionStatsDailyRecentRow, error) {
+	rows, err := q.db.QueryContext(ctx, listMarketRegionStatsDailyRecent, arg.RegionID, arg.TypeID, arg.Since)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListMarketRegionStatsDailyRecentRow
+	for rows.Next() {
+		var i ListMarketRegionStatsDailyRecentRow
+		if err := rows.Scan(
+			&i.Day,
+			&i.TypicalSell,
+			&i.TypicalBuy,
+			&i.BestSell,
+			&i.BestBuy,
+			&i.SellOrders,
+			&i.BuyOrders,
+			&i.SellVolume,
+			&i.BuyVolume,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listMarketRegionStatsForTypes = `-- name: ListMarketRegionStatsForTypes :many
 SELECT region_id, type_id, best_sell, typical_sell, sell_band, best_buy, typical_buy, buy_band, sell_orders, buy_orders, sell_volume, buy_volume, updated_at, avg_daily_volume,
        sell_avg, sell_max, sell_p5, sell_stddev, buy_avg, buy_min, buy_p5, buy_stddev,
@@ -2275,6 +2358,98 @@ func (q *Queries) ListMarketSweepTypeOrders(ctx context.Context, arg ListMarketS
 			&i.VolumeRemain,
 			&i.LocationID,
 			&i.SystemID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listMarketTrendTypes = `-- name: ListMarketTrendTypes :many
+SELECT type_id, typical_sell, typical_buy, sell_orders, avg_daily_volume_30d,
+       sell_chg_1d, sell_chg_7d, sell_chg_30d, volatility_30d, history_days, updated_at
+FROM (
+    SELECT s.region_id, s.type_id, s.best_sell, s.typical_sell, s.sell_band, s.best_buy, s.typical_buy, s.buy_band, s.sell_orders, s.buy_orders, s.sell_volume, s.buy_volume, s.updated_at, s.avg_daily_volume, s.sell_avg, s.sell_max, s.sell_p5, s.sell_stddev, s.buy_avg, s.buy_min, s.buy_p5, s.buy_stddev, s.sell_chg_1d, s.sell_chg_7d, s.sell_chg_30d, s.buy_chg_1d, s.buy_chg_7d, s.buy_chg_30d, s.volatility_30d, s.history_days, s.avg_daily_volume_30d,
+           CASE $1::text
+               WHEN 'volatile' THEN s.volatility_30d
+               WHEN 'rising' THEN CASE $2::int WHEN 1 THEN s.sell_chg_1d WHEN 30 THEN s.sell_chg_30d ELSE s.sell_chg_7d END
+               ELSE -(CASE $2::int WHEN 1 THEN s.sell_chg_1d WHEN 30 THEN s.sell_chg_30d ELSE s.sell_chg_7d END)
+           END AS score
+    FROM market_region_stats s
+    WHERE s.region_id = $3
+      AND s.typical_sell > 0
+      AND s.sell_orders >= $4::bigint
+      AND s.avg_daily_volume_30d >= $5::double precision
+) ranked
+WHERE score IS NOT NULL AND ($1::text = 'volatile' OR score > 0)
+ORDER BY score DESC, type_id
+LIMIT $6::bigint
+`
+
+type ListMarketTrendTypesParams struct {
+	Mode      string  `json:"mode"`
+	Period    int32   `json:"period"`
+	RegionID  int64   `json:"region_id"`
+	MinOrders int64   `json:"min_orders"`
+	MinVolume float64 `json:"min_volume"`
+	RowCap    int64   `json:"row_cap"`
+}
+
+type ListMarketTrendTypesRow struct {
+	TypeID            int64           `json:"type_id"`
+	TypicalSell       float64         `json:"typical_sell"`
+	TypicalBuy        float64         `json:"typical_buy"`
+	SellOrders        int64           `json:"sell_orders"`
+	AvgDailyVolume30d float64         `json:"avg_daily_volume_30d"`
+	SellChg1d         sql.NullFloat64 `json:"sell_chg_1d"`
+	SellChg7d         sql.NullFloat64 `json:"sell_chg_7d"`
+	SellChg30d        sql.NullFloat64 `json:"sell_chg_30d"`
+	Volatility30d     sql.NullFloat64 `json:"volatility_30d"`
+	HistoryDays       int64           `json:"history_days"`
+	UpdatedAt         time.Time       `json:"updated_at"`
+}
+
+// The Trends screen, ranked in SQL over the stat pack: the most
+// volatile types (30-day volatility of the typical sell), or the
+// biggest risers or fallers of the typical sell over 1, 7 or 30
+// days. A row needs a book with some depth (min_orders sell
+// orders) and real trade (30-day traded volume floor), so a
+// one-order book's swing never tops the screen.
+func (q *Queries) ListMarketTrendTypes(ctx context.Context, arg ListMarketTrendTypesParams) ([]ListMarketTrendTypesRow, error) {
+	rows, err := q.db.QueryContext(ctx, listMarketTrendTypes,
+		arg.Mode,
+		arg.Period,
+		arg.RegionID,
+		arg.MinOrders,
+		arg.MinVolume,
+		arg.RowCap,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListMarketTrendTypesRow
+	for rows.Next() {
+		var i ListMarketTrendTypesRow
+		if err := rows.Scan(
+			&i.TypeID,
+			&i.TypicalSell,
+			&i.TypicalBuy,
+			&i.SellOrders,
+			&i.AvgDailyVolume30d,
+			&i.SellChg1d,
+			&i.SellChg7d,
+			&i.SellChg30d,
+			&i.Volatility30d,
+			&i.HistoryDays,
+			&i.UpdatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -2822,6 +2997,33 @@ func (q *Queries) ListRestockTargets(ctx context.Context, userID int64) ([]Resto
 			&i.MinMarginPct,
 			&i.UpdatedAt,
 		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSDERegionNames = `-- name: ListSDERegionNames :many
+SELECT region_id, name FROM sde_regions WHERE region_id = ANY($1::bigint[])
+`
+
+func (q *Queries) ListSDERegionNames(ctx context.Context, regionIds []int64) ([]SdeRegion, error) {
+	rows, err := q.db.QueryContext(ctx, listSDERegionNames, pq.Array(regionIds))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SdeRegion
+	for rows.Next() {
+		var i SdeRegion
+		if err := rows.Scan(&i.RegionID, &i.Name); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

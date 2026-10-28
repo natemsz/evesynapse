@@ -747,6 +747,14 @@ func (c *cycleState) refreshPublicData(ctx context.Context, characters []db.Char
 	})
 	clock.mark("region sweep", time.Now())
 
+	// LP stores (schema 102): the NPC loyalty stores on a daily
+	// gate and a fetch lane of their own; their offer values are
+	// rewritten from the stat pack when a store changes (and by
+	// each region's sweep completion above).
+	c.pass("refreshing LP stores", func() (int, bool) {
+		return app.refreshLPStores(ctx)
+	})
+
 	// Public contracts (schema 055): the region list sweeps and
 	// their item/bid/probe warming, on the routes' own cache
 	// cadence and a fetch lane of their own, so the contract

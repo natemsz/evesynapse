@@ -3120,6 +3120,8 @@
     { name: "PI Planner", url: "/industry/pi/" },
     { name: "Market", url: "/market/" },
     { name: "Spread Scanner", url: "/market/scanner/" },
+    { name: "Market Trends", url: "/market/trends/" },
+    { name: "LP Store", url: "/market/lp/" },
     { name: "Trade Ideas", url: "/market/ideas/" },
     { name: "Tradefinder", url: "/market/tradefinder/" },
     { name: "Top Stations", url: "/market/leaderboard/" },

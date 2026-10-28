@@ -160,11 +160,14 @@ func TestMarketPageHonestPrices(t *testing.T) {
 		// where the best-based card read -99.2% and banded red.
 		`class="kpi sp-blue"`,
 		"56.2%",
-		`kpi-k">Average price`,
-		"5.90 <small>ISK</small>",
+		`kpi-k">Traded average`,
 		`kpi-k">Adjusted price`,
 		"5.00 <small>ISK</small>",
 	)
+	// The guide average is never a price on this page.
+	if strings.Contains(body, "5.90") {
+		t.Error("market page quotes the CCP guide average (5.90)")
+	}
 }
 
 func TestSpreadBand(t *testing.T) {

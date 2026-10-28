@@ -32,6 +32,8 @@ type pageData struct {
 	Planets       *planetsView
 	PlanetsChars  []assetCharLink
 	Market        *marketView
+	MarketTrends  *marketTrendsView
+	MarketLP      *marketLPView
 	Items         *itemsView
 	Search        *searchPageView
 	Skills        *skillsView
@@ -163,7 +165,7 @@ func sectionForPage(page string) string {
 		return "pilot"
 	case "industry.html", "industry_jobs.html", "industry_mining.html", "planets.html":
 		return "industry"
-	case "market.html",
+	case "market.html", "market_trends.html", "market_lp.html",
 		"system.html", "station.html", "structure.html", "region.html":
 		return "market"
 	case "items.html", "ship_public.html":

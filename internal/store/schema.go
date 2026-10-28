@@ -616,6 +616,12 @@ var pgNameMissesSchema string
 //go:embed schema_pg/101_market_stat_pack.sql
 var pgMarketStatPackSchema string
 
+// Step 102: the LP store browser: the mirrored NPC loyalty stores
+// and each offer's value per swept hub region, from the stat pack.
+//
+//go:embed schema_pg/102_lp_stores.sql
+var pgLPStoresSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -746,6 +752,7 @@ func schemaSteps() []schemaStep {
 		{99, "contract_exit_answers", pgContractExitAnswersSchema, ""},
 		{100, "name_misses", pgNameMissesSchema, ""},
 		{101, "market_stat_pack", pgMarketStatPackSchema, ""},
+		{102, "lp_stores", pgLPStoresSchema, ""},
 	}
 }
 

@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.6.1.5] - 2026-10-28
+
+Automated build of EveSynapse v0.6.1.5. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+
+## What's Changed
+### 🚀 Features
+* Give the two factor page a centered prompt layout by @natemsz in https://github.com/natemsz/evesynapse/pull/765
+### 🐛 Bug Fixes
+* Settle bids for no longer public contracts as dead by @natemsz in https://github.com/natemsz/evesynapse/pull/764
+### Other Changes
+* docs(changelog): review changelog for v0.6.1.2 by @github-actions[bot] in https://github.com/natemsz/evesynapse/pull/760
+* docs(changelog): review changelog for v0.6.1.3 by @github-actions[bot] in https://github.com/natemsz/evesynapse/pull/761
+* docs(changelog): review changelog for v0.6.1.4 by @github-actions[bot] in https://github.com/natemsz/evesynapse/pull/763
+* docs(changelog): review changelog for v0.6.1.4 by @github-actions[bot] in https://github.com/natemsz/evesynapse/pull/766
+
+
+**Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.6.1.4...v0.6.1.5
+
 ## [v0.6.1.4] - 2026-10-28
 
 Automated build of EveSynapse v0.6.1.4. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).

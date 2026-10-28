@@ -244,6 +244,17 @@ func TestLiquidCoreRankingAndBound(t *testing.T) {
 	if core[len(core)-1] != 3204-liquidCoreSize+1 {
 		t.Fatalf("core tail = %d, want %d", core[len(core)-1], 3204-liquidCoreSize+1)
 	}
+
+	// A full ranking is reused inside its window: a new leader in the
+	// stored history shows only once the window has passed.
+	seedForgeHistory(t, q, ctx, 9999, 10, 1e9)
+	if got := app.liquidCoreTypeIDs(ctx)[0]; got != 3204 {
+		t.Fatalf("inside the window the leader = %d, want the cached 3204", got)
+	}
+	app.liquidCoreAt = time.Now().Add(-liquidCoreTTL - time.Minute)
+	if got := app.liquidCoreTypeIDs(ctx)[0]; got != 9999 {
+		t.Fatalf("after the window the leader = %d, want the new 9999", got)
+	}
 }
 
 func TestLiquidCoreKillmailSupplement(t *testing.T) {

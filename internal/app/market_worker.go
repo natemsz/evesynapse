@@ -390,12 +390,34 @@ func (app *Application) historyCandidates(ctx context.Context) ([]marketKey, err
 // liquidCoreSize. Before any history exists the ranking is empty,
 // so the tail is supplemented from the types in recent killmail
 // details — the ships and modules the deployment actually loses —
-// until the stored ranking can stand on its own. Recomputed from
-// the database on every candidate build, so the core tracks the
-// market as history accumulates.
+// until the stored ranking can stand on its own.
+//
+// The ranking scans the region's whole stored history (seconds,
+// and a gigabyte through the buffer cache, on a busy instance),
+// while its input moves once a day when ESI publishes a new day.
+// A full ranking is reused for liquidCoreTTL; a short one (the
+// cold start, still leaning on killmails) is recomputed on every
+// candidate build so the core fills in as history accumulates.
 func (app *Application) liquidCoreTypeIDs(ctx context.Context) []int64 {
+	app.liquidCoreMu.Lock()
+	defer app.liquidCoreMu.Unlock()
+	if app.liquidCore != nil && time.Since(app.liquidCoreAt) < liquidCoreTTL {
+		return app.liquidCore
+	}
+	out, full := app.rankLiquidCore(ctx)
+	if full {
+		app.liquidCore, app.liquidCoreAt = out, time.Now()
+	}
+	return out
+}
+
+// liquidCoreTTL is how long a full liquid-core ranking is reused.
+const liquidCoreTTL = time.Hour
+
+// rankLiquidCore computes the liquid core; full reports that the
+// stored ranking alone filled it.
+func (app *Application) rankLiquidCore(ctx context.Context) (out []int64, full bool) {
 	seen := make(map[int64]bool)
-	var out []int64
 	add := func(typeID int64) {
 		if typeID > 0 && !seen[typeID] {
 			seen[typeID] = true
@@ -413,27 +435,28 @@ func (app *Application) liquidCoreTypeIDs(ctx context.Context) []int64 {
 			add(r.TypeID)
 		}
 	}
-	if len(out) < liquidCoreSize {
-		payloads, err := app.queries.ListRecentKillmailDetails(ctx, liquidCoreKillmailScan)
-		if err != nil {
-			logging.Errorf("worker: market history: killmail core supplement: %v", err)
-			return out
+	if len(out) >= liquidCoreSize {
+		return out, true
+	}
+	payloads, err := app.queries.ListRecentKillmailDetails(ctx, liquidCoreKillmailScan)
+	if err != nil {
+		logging.Errorf("worker: market history: killmail core supplement: %v", err)
+		return out, false
+	}
+	for _, payload := range payloads {
+		var km esi.Killmail
+		if err := json.Unmarshal([]byte(payload), &km); err != nil {
+			continue
 		}
-		for _, payload := range payloads {
-			var km esi.Killmail
-			if err := json.Unmarshal([]byte(payload), &km); err != nil {
-				continue
-			}
-			add(km.Victim.ShipTypeID)
-			for _, item := range km.Victim.Items {
-				add(item.ItemTypeID)
-			}
-			if len(out) >= liquidCoreSize {
-				break
-			}
+		add(km.Victim.ShipTypeID)
+		for _, item := range km.Victim.Items {
+			add(item.ItemTypeID)
+		}
+		if len(out) >= liquidCoreSize {
+			break
 		}
 	}
-	return out
+	return out, false
 }
 
 // orbitForgeTypeIDs enumerates every type the deployment's

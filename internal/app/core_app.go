@@ -201,6 +201,13 @@ type Application struct {
 	historyTypes   map[int64]bool
 	historyTypesAt time.Time
 
+	// The Forge's liquid core (market_worker.go), cached under its
+	// ranking time: the ranking reads the whole history table, and
+	// every history candidate build asks for it.
+	liquidCoreMu sync.Mutex
+	liquidCore   []int64
+	liquidCoreAt time.Time
+
 	// The worker's true values (truevalue.go), cached in
 	// memory for a short window so renders and valuation
 	// reload the table only a few times an hour; and the

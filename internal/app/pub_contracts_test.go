@@ -737,3 +737,22 @@ func TestPublicContractItemsParking(t *testing.T) {
 			itemsEnd[401], pubContractItemsMaxAttempts)
 	}
 }
+
+// A finished auction's bids refusal (403) settles dead like a
+// 404 does; a server error stays an ordinary gated failure.
+func TestPubContractBidsFailureState(t *testing.T) {
+	cases := []struct {
+		name string
+		err  error
+		want string
+	}{
+		{"not public", &esi.StatusError{Code: http.StatusForbidden}, fetchStateDead},
+		{"not found", &esi.StatusError{Code: http.StatusNotFound}, fetchStateDead},
+		{"server error", &esi.StatusError{Code: http.StatusInternalServerError}, fetchStateError},
+	}
+	for _, c := range cases {
+		if got := pubContractBidsFailureState(c.err); got != c.want {
+			t.Errorf("%s: state %q, want %q", c.name, got, c.want)
+		}
+	}
+}

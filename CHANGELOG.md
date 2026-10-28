@@ -21,6 +21,12 @@ Automated build of EveSynapse v0.6.1.2. Update with: evesynapse -update -arm64 (
 
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.6.1.1...v0.6.1.2
+* Add the admin analytics page by @natemsz in https://github.com/natemsz/evesynapse/pull/753
+### Other Changes
+* docs(changelog): review changelog for v0.6.1.0 by @github-actions[bot] in https://github.com/natemsz/evesynapse/pull/752
+
+
+**Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.6.1.0...v0.6.1.1
 
 ## [v0.6.1.0] - 2026-10-28
 

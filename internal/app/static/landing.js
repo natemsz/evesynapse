@@ -224,3 +224,132 @@
   });
 })();
 
+// Gallery: a film reel of short muted clips and stills. The focused
+// slide is centred in the stage at full size, its neighbours
+// smaller and dimmed on either side. The arrows step the reel;
+// a click on a side slide focuses it, and a click on the
+// focused slide opens it full size in the gallery modal, where
+// the arrow keys step the reel behind the same clip. Only the
+// clip in focus ever plays: stepping the reel, opening the
+// modal, scrolling the gallery off screen or hiding the tab
+// pauses everything else. Without the script the reel is a
+// plain sideways-scrolling row of posters; the script adds
+// ld-gal-on and drives the track's transform instead.
+(function () {
+  var gal = document.querySelector("[data-gallery]");
+  if (!gal) return;
+  var stage = gal.querySelector(".ld-gal-stage");
+  var track = gal.querySelector("[data-gal-track]");
+  var slides = Array.prototype.slice.call(gal.querySelectorAll("[data-gal-slide]"));
+  if (!stage || !track || !slides.length) return;
+  var cap = gal.querySelector("[data-gal-cap]");
+  var modal = document.getElementById("ldGalleryModal");
+  var modalVid = modal ? modal.querySelector("[data-gal-modal-vid]") : null;
+  var modalImg = modal ? modal.querySelector("[data-gal-modal-img]") : null;
+  var modalCap = modal ? modal.querySelector("[data-gal-modal-cap]") : null;
+  var cur = 0;
+  var galVisible = true;
+  var reduced = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  gal.classList.add("ld-gal-on");
+  function vidOf(s) { return s.querySelector("[data-gal-vid]"); }
+  function mediaOf(s) { return s.querySelector("[data-gal-vid], [data-gal-img]"); }
+  function tryPlay(v) {
+    if (!v || !v.paused) return;
+    var p = v.play();
+    if (p && p.catch) p.catch(function () {});
+  }
+  function syncPlay() {
+    var modalOpen = !!(modal && !modal.hidden);
+    slides.forEach(function (s, j) {
+      var v = vidOf(s);
+      if (!v) return;
+      if (!reduced && galVisible && !document.hidden && !modalOpen && j === cur) tryPlay(v);
+      else if (!v.paused) v.pause();
+    });
+    if (modalVid) {
+      if (!reduced && !document.hidden && modalOpen && !modalVid.hidden) tryPlay(modalVid);
+      else if (!modalVid.paused) modalVid.pause();
+    }
+  }
+  function captionOf(i) {
+    var c = slides[i].querySelector("figcaption");
+    return c ? c.textContent : "";
+  }
+  function fillModal() {
+    var vid = vidOf(slides[cur]);
+    var img = slides[cur].querySelector("[data-gal-img]");
+    if (vid) {
+      if (modalVid.getAttribute("src") !== vid.getAttribute("src")) {
+        modalVid.src = vid.getAttribute("src");
+        modalVid.poster = vid.getAttribute("poster") || "";
+      }
+      modalVid.setAttribute("aria-label", vid.getAttribute("aria-label") || "");
+      modalVid.hidden = false;
+      if (modalImg) modalImg.hidden = true;
+    } else if (img && modalImg) {
+      modalImg.src = img.getAttribute("src");
+      modalImg.alt = img.getAttribute("alt") || "";
+      modalImg.hidden = false;
+      modalVid.hidden = true;
+      if (!modalVid.paused) modalVid.pause();
+    }
+    modalCap.textContent = captionOf(cur);
+  }
+  function focus(i) {
+    cur = ((i % slides.length) + slides.length) % slides.length;
+    slides.forEach(function (s, j) { s.classList.toggle("is-active", j === cur); });
+    var s = slides[cur];
+    var x = stage.clientWidth / 2 - s.offsetLeft - s.offsetWidth / 2;
+    track.style.transform = "translateX(" + x + "px)";
+    if (cap) cap.textContent = captionOf(cur);
+    if (modal && !modal.hidden) fillModal();
+    syncPlay();
+  }
+  function openModal() {
+    if (!modal) return;
+    fillModal();
+    modal.hidden = false;
+    document.body.style.overflow = "hidden";
+    syncPlay();
+  }
+  function closeModal() {
+    if (!modal) return;
+    modal.hidden = true;
+    document.body.style.overflow = "";
+    syncPlay();
+  }
+  gal.querySelector("[data-gal-prev]").addEventListener("click", function () { focus(cur - 1); });
+  gal.querySelector("[data-gal-next]").addEventListener("click", function () { focus(cur + 1); });
+  slides.forEach(function (s, j) {
+    var m = mediaOf(s);
+    if (!m) return;
+    m.addEventListener("click", function () {
+      if (j === cur) openModal(); else focus(j);
+    });
+  });
+  if ("IntersectionObserver" in window) {
+    new IntersectionObserver(function (entries) {
+      galVisible = entries[0].isIntersecting;
+      syncPlay();
+    }, { threshold: 0.1 }).observe(gal);
+  }
+  document.addEventListener("visibilitychange", syncPlay);
+  if (modal) {
+    modal.querySelectorAll("[data-gal-close]").forEach(function (el) {
+      el.addEventListener("click", closeModal);
+    });
+    document.addEventListener("keydown", function (e) {
+      if (modal.hidden) return;
+      if (e.key === "Escape") closeModal();
+      if (e.key === "ArrowLeft") focus(cur - 1);
+      if (e.key === "ArrowRight") focus(cur + 1);
+    });
+  }
+  var resizeTimer = null;
+  window.addEventListener("resize", function () {
+    if (resizeTimer) clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(function () { focus(cur); }, 120);
+  });
+  focus(0);
+})();
+

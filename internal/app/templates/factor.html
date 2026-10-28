@@ -1,27 +1,29 @@
-{{define "title"}}Second factor{{end}}
-{{define "pagetitle"}}<h1>Second factor</h1>{{end}}
+{{define "title"}}Two Factor Authentication{{end}}
+{{define "pagetitle"}}<h1>Two Factor Authentication</h1>{{end}}
 {{define "content"}}
 
 {{with .Factor}}
-{{if .Error}}<p class="err">{{.Error}}</p>{{end}}
-<section class="card page-card" id="factor-assert" data-begin="/auth/factor/begin" data-finish="/auth/factor/finish">
+<div class="factor-wrap">
+<section class="card page-card factor-card" id="factor-assert" data-fold="never" data-begin="/auth/factor/begin" data-finish="/auth/factor/finish">
+  <p class="factor-glyph" aria-hidden="true"><svg viewBox="0 0 48 48" width="54" height="54" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13V6h8v7"/><rect x="16" y="13" width="16" height="27" rx="7"/><circle cx="24" cy="26" r="4"/></svg></p>
   <h2>Use your key</h2>
   <p><small>Plug in your security key or use this device's passkey, then continue. The key asks for its PIN or biometric.</small></p>
+  {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
   <p class="err" id="factor-status" role="alert" hidden></p>
-  <p><button type="button" class="btn" id="factor-go">Continue with key</button></p>
-</section>
-
+  <p><button type="button" class="btn factor-wide" id="factor-go">Continue with key</button></p>
 {{if .HasCodes}}
-<section class="card page-card">
-  <h2>Lost your key</h2>
-  <p><small>A recovery code signs you in once. It burns on use.</small></p>
-  <form method="post" action="/auth/factor/recover">
-    <p><label>Recovery code <input type="text" name="code" autocomplete="one-time-code" maxlength="11" required></label></p>
-    <p><button class="btn" type="submit">Sign in with code</button></p>
-  </form>
-</section>
+  <details class="factor-alt">
+    <summary>Sign in with recovery code</summary>
+    <p><small>A recovery code signs you in once. It burns on use.</small></p>
+    <form method="post" action="/auth/factor/recover">
+      <p><label>Recovery code <input type="text" name="code" autocomplete="one-time-code" maxlength="11" required></label></p>
+      <p><button class="btn" type="submit">Sign in with code</button></p>
+    </form>
+  </details>
 {{end}}
+</section>
 
-<form method="post" action="/auth/logout"><p><button class="btn" type="submit">Sign out</button></p></form>
+<form method="post" action="/auth/logout" class="factor-signout"><p><button class="btn" type="submit">Sign out</button></p></form>
+</div>
 {{end}}
 {{end}}

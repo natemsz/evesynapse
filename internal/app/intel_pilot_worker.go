@@ -75,8 +75,13 @@ func (app *Application) refreshPilotNameWants(ctx context.Context, allowance *fe
 }
 
 // drainPilotNameWants is refreshPilotNameWants for callers that
-// already hold the shared fetch lock (the urgent drain).
+// already hold the shared fetch lock (the urgent drain), and for
+// the search box's nudge, which holds none: name lookups take their
+// own lock (nameFetchMu), so the three never ask about one name
+// twice at once.
 func (app *Application) drainPilotNameWants(ctx context.Context, allowance *fetchBudget) (resolved int, limited bool) {
+	app.nameFetchMu.Lock()
+	defer app.nameFetchMu.Unlock()
 	now := time.Now().UTC()
 	wants, err := app.queries.ListDuePilotNameWants(ctx, db.ListDuePilotNameWantsParams{
 		Now: now, Lim: maxPilotNameResolutions,

@@ -151,6 +151,13 @@ type Application struct {
 	// intelAnalysisMu serializes the intel reports' name and
 	// affiliation lookups (intel_analysis.go).
 	intelAnalysisMu sync.Mutex
+	// nameFetchMu serializes pilot name lookups (cycle, urgent drain
+	// and the search box's nudge) on their own, so a name being
+	// typed resolves within a moment whatever holds fetchMu.
+	nameFetchMu sync.Mutex
+	// nameNudge wakes the urgent drain's name lookup the moment a
+	// search notes a name no local tier knows (search.go).
+	nameNudge chan struct{}
 
 	// urgentMu guards urgentHoldUntil: after ESI pushes back, the
 	// urgent drain stays quiet for a while instead of nudging
@@ -398,6 +405,7 @@ func New(cfg Config) (*Application, error) {
 	warnIfServedInTheClear(cfg)
 
 	app := &Application{
+		nameNudge:     make(chan struct{}, 1),
 		cfg:           cfg,
 		push:          pushConfigFromEnv(cfg),
 		sessions:      sessionManager,
@@ -758,6 +766,8 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	// Top banner global search (items + own characters + warmed
 	// pilot records, all local).
 	r.With(anonPages).Get("/search.json", app.handleTopbarSearch)
+	// Enter in the top bar: every kind of result, with filters.
+	r.With(anonPages).Get("/search/", app.handleSearchPage)
 
 	r.Route("/skills", func(r chi.Router) {
 		r.Use(app.requireAuth)

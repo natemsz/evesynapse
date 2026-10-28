@@ -36,6 +36,7 @@ const (
 	urgentTypeDetailsPerNudge = 15
 	urgentErrorBackoff        = 2 * time.Minute
 	urgentPilotFetchAllowance = 150
+	urgentNamesPerNudge       = 5 // a search's names: one public lookup each
 )
 
 // runUrgentDrain polls the want queues on the short cadence
@@ -49,6 +50,8 @@ func (app *Application) runUrgentDrain(ctx context.Context) {
 			return
 		case <-ticker.C:
 			runGuarded("urgent drain", func() { app.urgentDrain(ctx) })
+		case <-app.nameNudge:
+			runGuarded("name lookup", func() { app.urgentNameLookup(ctx) })
 		}
 	}
 }
@@ -272,4 +275,34 @@ func (app *Application) drainGuidePriceWant(ctx context.Context) (limited bool) 
 		}
 	}
 	return false
+}
+
+// urgentNameLookup resolves the pilot names a search is waiting on
+// the moment the search notes one (nudgeNameLookup), not on the next
+// tick: the same lookups the drain makes, from the same small
+// allowance, under the name lock alone, so a market sweep holding
+// fetchMu never keeps a typed name waiting. A recent error limit
+// keeps it quiet like the drain; meeting the limit holds both.
+func (app *Application) urgentNameLookup(ctx context.Context) {
+	app.urgentMu.Lock()
+	held := time.Now().Before(app.urgentHoldUntil)
+	app.urgentMu.Unlock()
+	if held {
+		return
+	}
+	if _, ltd := app.drainPilotNameWants(ctx, &fetchBudget{left: urgentNamesPerNudge}); ltd && app.esi.HardLimitActive(time.Now()) {
+		app.urgentMu.Lock()
+		app.urgentHoldUntil = time.Now().Add(urgentErrorBackoff)
+		app.urgentMu.Unlock()
+		logging.Warnf("worker: name lookup: ESI error limit; holding nudges for %s", urgentErrorBackoff)
+	}
+}
+
+// nudgeNameLookup wakes urgentNameLookup without waiting on it: a
+// nudge already pending covers this one too.
+func (app *Application) nudgeNameLookup() {
+	select {
+	case app.nameNudge <- struct{}{}:
+	default:
+	}
 }

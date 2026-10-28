@@ -33,6 +33,7 @@ type pageData struct {
 	PlanetsChars  []assetCharLink
 	Market        *marketView
 	Items         *itemsView
+	Search        *searchPageView
 	Skills        *skillsView
 	SkillsChars   []assetCharLink
 	Sync          *syncView

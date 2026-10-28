@@ -532,11 +532,17 @@ ON CONFLICT (region_id, type_id) DO UPDATE SET
     avg_daily_volume = excluded.avg_daily_volume,
     updated_at   = excluded.updated_at;
 -- name: GetMarketRegionStat :one
-SELECT region_id, type_id, best_sell, typical_sell, sell_band, best_buy, typical_buy, buy_band, sell_orders, buy_orders, sell_volume, buy_volume, updated_at, avg_daily_volume
+SELECT region_id, type_id, best_sell, typical_sell, sell_band, best_buy, typical_buy, buy_band, sell_orders, buy_orders, sell_volume, buy_volume, updated_at, avg_daily_volume,
+       sell_avg, sell_max, sell_p5, sell_stddev, buy_avg, buy_min, buy_p5, buy_stddev,
+       sell_chg_1d, sell_chg_7d, sell_chg_30d, buy_chg_1d, buy_chg_7d, buy_chg_30d,
+       volatility_30d, history_days, avg_daily_volume_30d
 FROM market_region_stats
 WHERE region_id = $1 AND type_id = $2;
 -- name: ListMarketRegionStatsByType :many
-SELECT region_id, type_id, best_sell, typical_sell, sell_band, best_buy, typical_buy, buy_band, sell_orders, buy_orders, sell_volume, buy_volume, updated_at, avg_daily_volume
+SELECT region_id, type_id, best_sell, typical_sell, sell_band, best_buy, typical_buy, buy_band, sell_orders, buy_orders, sell_volume, buy_volume, updated_at, avg_daily_volume,
+       sell_avg, sell_max, sell_p5, sell_stddev, buy_avg, buy_min, buy_p5, buy_stddev,
+       sell_chg_1d, sell_chg_7d, sell_chg_30d, buy_chg_1d, buy_chg_7d, buy_chg_30d,
+       volatility_30d, history_days, avg_daily_volume_30d
 FROM market_region_stats
 WHERE type_id = $1
 ORDER BY region_id;
@@ -551,16 +557,19 @@ DELETE FROM market_stats_fallback;
 INSERT INTO market_stats_fallback (region_id, type_id, median_sell, fivepct_sell, median_buy, fivepct_buy, sell_orders, buy_orders, sell_volume, buy_volume, source, orderset_id, source_asof, fetched_at)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14);
 -- name: GetMarketStatsFallback :one
-SELECT region_id, type_id, median_sell, fivepct_sell, median_buy, fivepct_buy, sell_orders, buy_orders, sell_volume, buy_volume, source, orderset_id, source_asof, fetched_at
+SELECT region_id, type_id, median_sell, fivepct_sell, median_buy, fivepct_buy, sell_orders, buy_orders, sell_volume, buy_volume, source, orderset_id, source_asof, fetched_at,
+       wavg_sell, min_sell, max_sell, stddev_sell, wavg_buy, min_buy, max_buy, stddev_buy
 FROM market_stats_fallback
 WHERE region_id = $1 AND type_id = $2;
 -- name: ListMarketStatsFallbackByType :many
-SELECT region_id, type_id, median_sell, fivepct_sell, median_buy, fivepct_buy, sell_orders, buy_orders, sell_volume, buy_volume, source, orderset_id, source_asof, fetched_at
+SELECT region_id, type_id, median_sell, fivepct_sell, median_buy, fivepct_buy, sell_orders, buy_orders, sell_volume, buy_volume, source, orderset_id, source_asof, fetched_at,
+       wavg_sell, min_sell, max_sell, stddev_sell, wavg_buy, min_buy, max_buy, stddev_buy
 FROM market_stats_fallback
 WHERE type_id = $1
 ORDER BY region_id;
 -- name: ListMarketStatsFallbackForTypes :many
-SELECT region_id, type_id, median_sell, fivepct_sell, median_buy, fivepct_buy, sell_orders, buy_orders, sell_volume, buy_volume, source, orderset_id, source_asof, fetched_at
+SELECT region_id, type_id, median_sell, fivepct_sell, median_buy, fivepct_buy, sell_orders, buy_orders, sell_volume, buy_volume, source, orderset_id, source_asof, fetched_at,
+       wavg_sell, min_sell, max_sell, stddev_sell, wavg_buy, min_buy, max_buy, stddev_buy
 FROM market_stats_fallback
 WHERE region_id = $1 AND type_id = ANY($2::bigint[])
 ORDER BY type_id;
@@ -575,12 +584,18 @@ ON CONFLICT (id) DO UPDATE SET
     fetched_at  = excluded.fetched_at,
     row_count   = excluded.row_count;
 -- name: ListMarketRegionStatsByRegion :many
-SELECT region_id, type_id, best_sell, typical_sell, sell_band, best_buy, typical_buy, buy_band, sell_orders, buy_orders, sell_volume, buy_volume, updated_at, avg_daily_volume
+SELECT region_id, type_id, best_sell, typical_sell, sell_band, best_buy, typical_buy, buy_band, sell_orders, buy_orders, sell_volume, buy_volume, updated_at, avg_daily_volume,
+       sell_avg, sell_max, sell_p5, sell_stddev, buy_avg, buy_min, buy_p5, buy_stddev,
+       sell_chg_1d, sell_chg_7d, sell_chg_30d, buy_chg_1d, buy_chg_7d, buy_chg_30d,
+       volatility_30d, history_days, avg_daily_volume_30d
 FROM market_region_stats
 WHERE region_id = $1
 ORDER BY type_id;
 -- name: ListMarketRegionStatsForTypes :many
-SELECT region_id, type_id, best_sell, typical_sell, sell_band, best_buy, typical_buy, buy_band, sell_orders, buy_orders, sell_volume, buy_volume, updated_at, avg_daily_volume
+SELECT region_id, type_id, best_sell, typical_sell, sell_band, best_buy, typical_buy, buy_band, sell_orders, buy_orders, sell_volume, buy_volume, updated_at, avg_daily_volume,
+       sell_avg, sell_max, sell_p5, sell_stddev, buy_avg, buy_min, buy_p5, buy_stddev,
+       sell_chg_1d, sell_chg_7d, sell_chg_30d, buy_chg_1d, buy_chg_7d, buy_chg_30d,
+       volatility_30d, history_days, avg_daily_volume_30d
 FROM market_region_stats
 WHERE region_id = $1 AND type_id = ANY($2::bigint[]);
 -- name: ListMarketAvgDailyVolumes :many
@@ -618,10 +633,90 @@ ON CONFLICT (region_id, type_id, day) DO UPDATE SET
     sell_volume  = excluded.sell_volume,
     buy_volume   = excluded.buy_volume;
 -- name: ListMarketRegionStatsDaily :many
-SELECT region_id, type_id, day, best_sell, typical_sell, sell_band, best_buy, typical_buy, buy_band, sell_orders, buy_orders, sell_volume, buy_volume
+SELECT region_id, type_id, day, best_sell, typical_sell, sell_band, best_buy, typical_buy, buy_band, sell_orders, buy_orders, sell_volume, buy_volume,
+       sell_avg, sell_max, sell_p5, sell_stddev, buy_avg, buy_min, buy_p5, buy_stddev
 FROM market_region_stats_daily
 WHERE region_id = $1 AND type_id = $2
 ORDER BY day;
+-- name: RefreshMarketStatPackTrends :execrows
+-- The stat pack's trend figures (schema 101), derived for one
+-- region inside the sweep's own transaction, right after today's
+-- daily rows land. Each change compares the live typical price
+-- against the newest daily row inside its comparison window
+-- (1d: 1 to 3 days back, 7d: 7 to 10, 30d: 30 to 35), so a type
+-- with a gap in its history reads NULL instead of comparing
+-- against a far older day. Volatility is the sample standard
+-- deviation of the typical sell's daily log returns over the last
+-- 30 days, in percent, NULL under seven returns. The 30-day
+-- traded volume reads market_history over the 30 days ending on
+-- the type's newest recorded day.
+UPDATE market_region_stats s SET
+    sell_chg_1d          = CASE WHEN s.typical_sell > 0 AND t.s1 > 0 THEN (s.typical_sell - t.s1) / t.s1 * 100 END,
+    sell_chg_7d          = CASE WHEN s.typical_sell > 0 AND t.s7 > 0 THEN (s.typical_sell - t.s7) / t.s7 * 100 END,
+    sell_chg_30d         = CASE WHEN s.typical_sell > 0 AND t.s30 > 0 THEN (s.typical_sell - t.s30) / t.s30 * 100 END,
+    buy_chg_1d           = CASE WHEN s.typical_buy > 0 AND t.b1 > 0 THEN (s.typical_buy - t.b1) / t.b1 * 100 END,
+    buy_chg_7d           = CASE WHEN s.typical_buy > 0 AND t.b7 > 0 THEN (s.typical_buy - t.b7) / t.b7 * 100 END,
+    buy_chg_30d          = CASE WHEN s.typical_buy > 0 AND t.b30 > 0 THEN (s.typical_buy - t.b30) / t.b30 * 100 END,
+    volatility_30d       = t.vol,
+    history_days         = t.days,
+    avg_daily_volume_30d = t.vol30
+FROM (
+    SELECT r.type_id,
+           d1.typical_sell AS s1, d1.typical_buy AS b1,
+           d7.typical_sell AS s7, d7.typical_buy AS b7,
+           d30.typical_sell AS s30, d30.typical_buy AS b30,
+           v.vol, COALESCE(v.days, 0) AS days, COALESCE(h.vol30, 0) AS vol30
+    FROM market_region_stats r
+    LEFT JOIN LATERAL (
+        SELECT dd.typical_sell, dd.typical_buy FROM market_region_stats_daily dd
+        WHERE dd.region_id = r.region_id AND dd.type_id = r.type_id
+          AND dd.day <= to_char(sqlc.arg(today)::date - 1, 'YYYY-MM-DD')
+          AND dd.day >= to_char(sqlc.arg(today)::date - 3, 'YYYY-MM-DD')
+        ORDER BY dd.day DESC LIMIT 1
+    ) d1 ON true
+    LEFT JOIN LATERAL (
+        SELECT dd.typical_sell, dd.typical_buy FROM market_region_stats_daily dd
+        WHERE dd.region_id = r.region_id AND dd.type_id = r.type_id
+          AND dd.day <= to_char(sqlc.arg(today)::date - 7, 'YYYY-MM-DD')
+          AND dd.day >= to_char(sqlc.arg(today)::date - 10, 'YYYY-MM-DD')
+        ORDER BY dd.day DESC LIMIT 1
+    ) d7 ON true
+    LEFT JOIN LATERAL (
+        SELECT dd.typical_sell, dd.typical_buy FROM market_region_stats_daily dd
+        WHERE dd.region_id = r.region_id AND dd.type_id = r.type_id
+          AND dd.day <= to_char(sqlc.arg(today)::date - 30, 'YYYY-MM-DD')
+          AND dd.day >= to_char(sqlc.arg(today)::date - 35, 'YYYY-MM-DD')
+        ORDER BY dd.day DESC LIMIT 1
+    ) d30 ON true
+    LEFT JOIN (
+        SELECT x.type_id,
+               CASE WHEN COUNT(x.ret) >= 7 THEN STDDEV_SAMP(x.ret) * 100 END AS vol,
+               COUNT(*) AS days
+        FROM (
+            SELECT dd.type_id,
+                   LN(dd.typical_sell / NULLIF(LAG(dd.typical_sell) OVER (PARTITION BY dd.type_id ORDER BY dd.day), 0)) AS ret
+            FROM market_region_stats_daily dd
+            WHERE dd.region_id = sqlc.arg(region_id)
+              AND dd.day > to_char(sqlc.arg(today)::date - 30, 'YYYY-MM-DD')
+              AND dd.typical_sell > 0
+        ) x
+        GROUP BY x.type_id
+    ) v ON v.type_id = r.type_id
+    LEFT JOIN (
+        SELECT mh.type_id, CAST(AVG(mh.volume) AS DOUBLE PRECISION) AS vol30
+        FROM market_history mh
+        JOIN (
+            SELECT m.type_id, to_char(MAX(m.date)::date - INTERVAL '29 days', 'YYYY-MM-DD') AS window_start
+            FROM market_history m
+            WHERE m.region_id = sqlc.arg(region_id)
+            GROUP BY m.type_id
+        ) w ON w.type_id = mh.type_id
+        WHERE mh.region_id = sqlc.arg(region_id) AND mh.date >= w.window_start
+        GROUP BY mh.type_id
+    ) h ON h.type_id = r.type_id
+    WHERE r.region_id = sqlc.arg(region_id)
+) t
+WHERE s.region_id = sqlc.arg(region_id) AND s.type_id = t.type_id;
 
 -- ---------------------------------------------------------------------
 -- Station stats (schema 032): per-(station, type) book

@@ -2,20 +2,36 @@
      shared by the market item view and the item browser detail page.
      Rendered with a marketItem as dot. */}}
 {{define "history-section"}}
-<div class="history-body" data-poll-state="{{.HistoryState}}"{{if eq .HistoryState "pending"}} data-live-region data-poll-url="/market/history-fragment?region={{.RegionID}}&amp;type={{.TypeID}}"{{end}}>
+<div class="history-body" data-poll-state="{{.HistoryState}}"{{if eq .HistoryState "pending"}} data-live-region data-poll-url="/market/history-fragment?region={{.RegionID}}&amp;type={{.TypeID}}&amp;range={{.RangeKey}}"{{end}}>
   {{if eq .HistoryState "chart"}}
   {{if .Chart}}
   {{$c := .Chart}}
+  {{$ma := or (not .VizSet) .Viz.MAChannel}}
+  {{$wickOn := or (not .VizSet) .Viz.Wicks}}
+  {{$strip := or (not .VizSet) .Viz.VolumeStrip}}
+  <div class="viz-head">
+    <span class="mt-modes viz-ranges">
+      {{range .RangePills}}<a href="{{.URL}}"{{if .Active}} class="active" aria-current="true"{{end}}>{{.Label}}</a>{{end}}
+    </span>
+    {{if .ShowVizGear}}<button type="button" class="viz-gear" data-open-viz-modal aria-haspopup="dialog" aria-label="Visualization settings" title="Visualization settings"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="3.1"/><path d="M12 3v2.6M12 18.4V21M3 12h2.6M18.4 12H21M5.6 5.6l1.9 1.9M16.5 16.5l1.9 1.9M18.4 5.6l-1.9 1.9M7.5 16.5l-1.9 1.9"/></svg></button>{{end}}
+  </div>
   <div class="pchart" data-chart-scrub="true">
   <div class="chart-legend">
-    <span class="legend-item"><span class="legend-swatch legend-price" aria-hidden="true"></span>Average price</span>
-    <span class="legend-item"><span class="legend-swatch legend-volume" aria-hidden="true"></span>Volume</span>
-    <span class="legend-note">Price in ISK · volume in units traded</span>
+    <span class="legend-item"><span class="legend-swatch legend-price" aria-hidden="true"></span>Average</span>
+    {{if $ma}}<span class="legend-item"><span class="legend-swatch legend-ma5" aria-hidden="true"></span>5-day average</span>
+    <span class="legend-item"><span class="legend-swatch legend-ma20" aria-hidden="true"></span>20-day average</span>
+    <span class="legend-item"><span class="legend-swatch legend-channel" aria-hidden="true"></span>Donchian channel</span>{{end}}
+    {{if $wickOn}}<span class="legend-note">Daily wicks: lowest to highest trade</span>{{end}}
   </div>
-  <svg viewBox="0 0 {{$c.Width}} {{$c.Height}}" width="100%" role="img" aria-label="Daily average price and volume, last 90 days">
+  <svg viewBox="0 0 {{$c.Width}} {{$c.Height}}" width="100%" role="img" aria-label="Daily average price and volume, {{$c.From}} to {{$c.To}}">
     {{range $c.PriceTicks}}<line class="chart-gridline price-gridline {{.Class}}" x1="0" y1="{{.Y}}" x2="{{$c.Width}}" y2="{{.Y}}"/>{{end}}
     {{range $c.VolumeTicks}}<line class="chart-gridline volume-gridline {{.Class}}" x1="0" y1="{{.Y}}" x2="{{$c.Width}}" y2="{{.Y}}"/>{{end}}
+    {{if $c.ChannelPoints}}<polygon class="chart-channel" points="{{$c.ChannelPoints}}"/>{{end}}
+    {{range $c.Wicks}}<line class="chart-wick" x1="{{.X}}" y1="{{.Top}}" x2="{{.X}}" y2="{{.Bottom}}"/>{{end}}
     {{range $c.Bars}}<rect class="chart-volbar" x="{{.X}}" y="{{.Y}}" width="{{.W}}" height="{{.H}}" fill="#d63c14" fill-opacity="0.55"><title>{{.Title}}</title></rect>{{end}}
+    {{if $c.OrdersPoints}}<polyline class="chart-orders" points="{{$c.OrdersPoints}}"/>{{end}}
+    {{if $c.MA20Points}}<polyline class="chart-ma20" points="{{$c.MA20Points}}"/>{{end}}
+    {{if $c.MA5Points}}<polyline class="chart-ma5" points="{{$c.MA5Points}}"/>{{end}}
     {{if $c.Points}}<polyline class="chart-line" points="{{$c.Points}}" fill="none" stroke="#ffb84d" stroke-width="1.5"/>{{end}}
     {{range $c.Dots}}<circle class="chart-dot" cx="{{.X}}" cy="{{.Y}}" r="1.6" fill="#ffb84d"/>{{end}}
     {{range $c.Dots}}<circle class="cdot" cx="{{.X}}" cy="{{.Y}}" r="9" tabindex="0" aria-label="{{.Title}}" data-date="{{.Date}}" data-avg="{{.Average}}" data-high="{{.Highest}}" data-low="{{.Lowest}}" data-vol="{{.Volume}}"></circle>{{end}}
@@ -25,6 +41,24 @@
   </svg>
   <div class="ctip" hidden></div>
   </div>
+  {{if $strip}}<p><small>Bars: units traded. Line: orders per day.</small></p>{{end}}
+  {{if .ShowVizGear}}
+  <div class="modal-backdrop" id="viz-settings-modal" hidden>
+    <div class="modal viz-modal" role="dialog" aria-modal="true" aria-labelledby="viz-settings-title">
+      <div class="modal-head">
+        <h2 id="viz-settings-title">Visualizations</h2>
+        <button type="button" class="modal-close" data-close-modal aria-label="Close">×</button>
+      </div>
+      <form method="post" action="/settings/visualizations">
+        <p>Every chart is its own switch, saved to your account and carried across devices.</p>
+        <div class="viz-toggle"><span class="vt-name">Moving averages and channel<small>Item page, price history chart</small></span><label class="vt-switch"><input type="checkbox" name="ma_channel" value="1"{{if .Viz.MAChannel}} checked{{end}}><span class="vt-track"></span></label></div>
+        <div class="viz-toggle"><span class="vt-name">Daily wicks<small>Item page, price history chart</small></span><label class="vt-switch"><input type="checkbox" name="wicks" value="1"{{if .Viz.Wicks}} checked{{end}}><span class="vt-track"></span></label></div>
+        <div class="viz-toggle"><span class="vt-name">Volume and orders strip<small>Item page, under the price history chart</small></span><label class="vt-switch"><input type="checkbox" name="volume_strip" value="1"{{if .Viz.VolumeStrip}} checked{{end}}><span class="vt-track"></span></label></div>
+        <p><button class="btn" type="submit">Save</button></p>
+      </form>
+    </div>
+  </div>
+  {{end}}
   {{if .Stats}}
   <p><small>{{.Stats.Days}} days of recorded trades in {{.RegionName}}: average {{.Stats.Mean}} ISK · low {{.Stats.Min}} · high {{.Stats.Max}} · latest {{.Stats.Latest}} ({{.Stats.LastDay}}){{if .Change7}} · 7 days {{.Change7}}{{end}}{{if .Change30}} · 30 days {{.Change30}}{{end}}</small></p>
   {{end}}

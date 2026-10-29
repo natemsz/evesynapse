@@ -194,6 +194,12 @@
       if (themeModal) EveSynapseModal.open(themeModal);
       return;
     }
+    var vizOpener = t.closest && t.closest("[data-open-viz-modal]");
+    if (vizOpener) {
+      var vizModal = document.getElementById("viz-settings-modal");
+      if (vizModal) EveSynapseModal.open(vizModal);
+      return;
+    }
     if (t.classList.contains("modal-backdrop")) { EveSynapseModal.close(t); return; }
     var closer = t.closest && t.closest("[data-close-modal]");
     var box = closer && closer.closest(".modal-backdrop");

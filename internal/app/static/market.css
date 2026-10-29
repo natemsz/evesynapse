@@ -131,3 +131,31 @@
 .mbk-suggest-pick { display: block; width: 100%; text-align: left; background: none; border: 0; padding: 0.35rem 0.55rem; color: var(--text); cursor: pointer; }
 .mbk-suggest-pick:hover { background: var(--row-hover); }
 .mbk-suggest-pick small { color: var(--muted); }
+
+/* Visualization slice 1: the item chart's range pills and
+   settings gear, the extra chart layers, and the settings
+   modal's switches. Layer colors match the approved mockup. */
+.viz-head { display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; margin: 0.2rem 0 0.1rem; }
+.viz-head .mt-modes { margin: 0; }
+.viz-gear { display: inline-grid; place-items: center; width: 1.9rem; height: 1.9rem; flex: none; border-radius: 999px; border: 1px solid var(--box-edge); background: transparent; color: var(--muted); cursor: pointer; }
+.viz-gear:hover, .viz-gear:focus-visible { color: var(--accent); border-color: var(--accent); }
+.legend-ma5 { height: 2px; background: #ffd27a; }
+.legend-ma20 { height: 2px; background: #8a93a6; }
+.legend-channel { background: rgba(255, 184, 77, 0.25); }
+.pchart .chart-wick { stroke: rgba(230, 236, 245, 0.28); stroke-width: 1; }
+.pchart .chart-channel { fill: #ffb84d; fill-opacity: 0.07; stroke: rgba(255, 184, 77, 0.35); stroke-width: 1; }
+.pchart .chart-ma5 { fill: none; stroke: #ffd27a; stroke-width: 1.3; }
+.pchart .chart-ma20 { fill: none; stroke: #8a93a6; stroke-width: 1.3; stroke-dasharray: 5 4; }
+.pchart .chart-orders { fill: none; stroke: #7ac7ff; stroke-width: 1.2; }
+.viz-modal { max-width: 30rem; }
+.viz-toggle { display: flex; align-items: center; gap: 0.6rem; padding: 0.42rem 0; border-bottom: 1px solid rgba(255, 255, 255, 0.05); }
+.viz-toggle:last-of-type { border-bottom: 0; }
+.viz-toggle .vt-name { flex: 1; }
+.viz-toggle small { color: var(--muted); display: block; }
+.vt-switch { position: relative; width: 38px; height: 20px; flex: none; }
+.vt-switch input { opacity: 0; width: 100%; height: 100%; position: absolute; margin: 0; cursor: pointer; }
+.vt-track { position: absolute; inset: 0; border-radius: 999px; background: rgba(255, 255, 255, 0.14); transition: background 0.15s; pointer-events: none; }
+.vt-track::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #cfd6e4; transition: left 0.15s, background 0.15s; }
+.vt-switch input:checked + .vt-track { background: rgba(255, 106, 26, 0.55); }
+.vt-switch input:checked + .vt-track::after { left: 20px; background: #ffb84d; }
+.vt-switch input:focus-visible + .vt-track { outline: 2px solid var(--accent); outline-offset: 2px; }

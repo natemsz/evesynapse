@@ -172,8 +172,20 @@ type marketItem struct {
 	HistoryPending bool // true only in the pending state
 	Chart          *markethistory.PriceChart
 	Stats          *markethistory.Stats
-	Change7        string // "+8.2%", "" when not computable
-	Change30       string
+
+	// The chart's range and the account's visualization
+	// switches, carried onto the view by vizSetup before
+	// attachHistory runs. ChartRange is the raw ?range= value;
+	// RangeKey and RangePills are what attachHistory resolves
+	// from it for the template.
+	ChartRange  string
+	RangeKey    string
+	RangePills  []vizRangePill
+	Viz         vizPrefs
+	VizSet      bool
+	ShowVizGear bool   // signed-in and not a demo account
+	Change7     string // "+8.2%", "" when not computable
+	Change30    string
 	// HistoryLastDay is the newest recorded trade day, set when it
 	// is older than markethistory.StaleAfterDays so the section can say
 	// when trading stopped instead of implying the chart is
@@ -349,6 +361,7 @@ func (app *Application) handleMarket(w http.ResponseWriter, r *http.Request) {
 		} else {
 			view.Item = item
 		}
+		app.vizSetup(ctx, view.Item, q.Get("range"))
 		if view.Item != nil || !anon {
 			app.attachHistory(ctx, view.Item, typeID, view.Region, userID)
 		}
@@ -434,6 +447,61 @@ func (app *Application) recentHistoryRows(ctx context.Context, regionID, typeID 
 	return rows
 }
 
+// vizRangePill is one range choice over the item chart.
+type vizRangePill struct {
+	Key    string
+	Label  string
+	URL    string
+	Active bool
+}
+
+// The chart's ranges: key, pill label, displayed days. The
+// default is 3m.
+var vizRanges = []struct {
+	key, label string
+	days       int
+}{
+	{"5d", "5D", 5},
+	{"1m", "1M", 30},
+	{"3m", "3M", 90},
+	{"6m", "6M", 180},
+	{"1y", "1Y", 365},
+}
+
+// vizRangeDays resolves a range key to its canonical key and
+// displayed-day count; anything unrecognized is the default.
+func vizRangeDays(key string) (string, int) {
+	for _, r := range vizRanges {
+		if r.key == key {
+			return r.key, r.days
+		}
+	}
+	return "3m", 90
+}
+
+// vizWarmupRows ride in front of the displayed window so the
+// chart's moving averages and channel are correct from the first
+// displayed day.
+const vizWarmupRows = 20
+
+// vizSetup carries a request's chart inputs onto an item view:
+// the range parameter and, for a signed-in viewer, the account's
+// stored switches. The settings gear renders only for a real
+// account (never anonymous, never the demo account).
+func (app *Application) vizSetup(ctx context.Context, item *marketItem, rangeKey string) {
+	if item == nil {
+		return
+	}
+	item.ChartRange = rangeKey
+	userID := app.userID(ctx)
+	if userID == 0 {
+		return
+	}
+	item.Viz = app.vizPrefsFor(ctx, userID)
+	item.VizSet = true
+	item.ShowVizGear = !app.isDemoUser(ctx, userID)
+}
+
 // attachHistory fills an item view's history section from stored
 // rows (never the network) and sets HistoryState, which the
 // template turns into a deliberate body:
@@ -480,12 +548,39 @@ func (app *Application) noteSearchHistoryWants(ctx context.Context, regionID int
 
 // the user asked about this type either way.
 func (app *Application) attachHistory(ctx context.Context, item *marketItem, typeID, regionID, userID int64) {
-	rows := app.recentHistoryRows(ctx, regionID, typeID, markethistory.ChartRows)
+	// The chart's own read: the displayed days plus warmup, so
+	// its moving averages and channel are right from the first
+	// displayed day. Everything else in this section keeps its
+	// current window (the newest ChartRows rows of the read).
+	rangeKey, displayDays := vizRangeDays("")
 	if item != nil {
+		rangeKey, displayDays = vizRangeDays(item.ChartRange)
+	}
+	read := markethistory.ChartRows
+	if displayDays+vizWarmupRows > read {
+		read = displayDays + vizWarmupRows
+	}
+	if read > 385 {
+		read = 385
+	}
+	rows := app.recentHistoryRows(ctx, regionID, typeID, read)
+	win := rows
+	if len(win) > markethistory.ChartRows {
+		win = win[len(win)-markethistory.ChartRows:]
+	}
+	if item != nil {
+		item.RangeKey = rangeKey
+		for _, r := range vizRanges {
+			item.RangePills = append(item.RangePills, vizRangePill{
+				Key: r.key, Label: r.label,
+				URL:    fmt.Sprintf("/market/?type=%d&region=%d&range=%s", typeID, regionID, r.key),
+				Active: r.key == rangeKey,
+			})
+		}
 		// The trading snapshot rides on whatever rows exist
 		// (possibly none yet) plus the book's bests; missing
 		// figures render as dashes, never invented numbers.
-		item.Trader = markethistory.BuildTraderStats(rows, item.BestSellRaw, item.BestBuyRaw)
+		item.Trader = markethistory.BuildTraderStats(win, item.BestSellRaw, item.BestBuyRaw)
 	}
 	if len(rows) == 0 {
 		if item != nil {
@@ -515,7 +610,7 @@ func (app *Application) attachHistory(ctx context.Context, item *marketItem, typ
 	}
 	// The Average price card's sparkline: the last 30 stored
 	// days, from the same rows the chart below is drawn from.
-	sparkRows := rows
+	sparkRows := win
 	if len(sparkRows) > 30 {
 		sparkRows = sparkRows[len(sparkRows)-30:]
 	}
@@ -527,22 +622,33 @@ func (app *Application) attachHistory(ctx context.Context, item *marketItem, typ
 		item.HistoryState = markethistory.StateFew
 	} else {
 		item.HistoryState = markethistory.StateChart
-		if chart, ok := markethistory.BuildPriceChart(rows); ok {
+		chartRows := rows
+		if len(chartRows) > displayDays+vizWarmupRows {
+			chartRows = chartRows[len(chartRows)-(displayDays+vizWarmupRows):]
+		}
+		prefs := defaultVizPrefs()
+		if item.VizSet {
+			prefs = item.Viz
+		}
+		opts := markethistory.ChartOptions{
+			Wicks: prefs.Wicks, MAChannel: prefs.MAChannel, VolumeStrip: prefs.VolumeStrip,
+		}
+		if chart, ok := markethistory.BuildPriceChartRange(chartRows, displayDays, opts); ok {
 			c := chart
 			item.Chart = &c
 		}
 	}
-	if stats, ok := markethistory.Summarize(rows); ok {
+	if stats, ok := markethistory.Summarize(win); ok {
 		item.Stats = &stats
 	}
-	if newest, err := time.Parse(markethistory.DateLayout, rows[len(rows)-1].Date); err == nil &&
+	if newest, err := time.Parse(markethistory.DateLayout, win[len(win)-1].Date); err == nil &&
 		time.Since(newest) > markethistory.StaleAfterDays*24*time.Hour {
-		item.HistoryLastDay = rows[len(rows)-1].Date
+		item.HistoryLastDay = win[len(win)-1].Date
 	}
-	if pct, ok := markethistory.ChangePct(rows, 7); ok {
+	if pct, ok := markethistory.ChangePct(win, 7); ok {
 		item.Change7 = markethistory.FormatChangePct(pct)
 	}
-	if pct, ok := markethistory.ChangePct(rows, 30); ok {
+	if pct, ok := markethistory.ChangePct(win, 30); ok {
 		item.Change30 = markethistory.FormatChangePct(pct)
 	}
 	if userID > 0 {

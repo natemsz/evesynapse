@@ -660,6 +660,12 @@ var pgMarketAPISchema string
 //go:embed schema_pg/107_global_notices.sql
 var pgGlobalNoticesSchema string
 
+// Step 111: visualization preferences, one JSON object of chart
+// display switches on the account.
+//
+//go:embed schema_pg/111_viz_prefs.sql
+var pgVizPrefsSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -797,6 +803,7 @@ func schemaSteps() []schemaStep {
 		{106, "market_changes", pgMarketChangesSchema, ""},
 		{107, "global_notices", pgGlobalNoticesSchema, ""},
 		{108, "market_api", pgMarketAPISchema, ""},
+		{111, "viz_prefs", pgVizPrefsSchema, ""},
 	}
 }
 

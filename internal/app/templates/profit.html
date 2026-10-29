@@ -42,18 +42,20 @@
 {{with .Charts}}
 <section class="foldable">
 <h3>Charts</h3>
-{{if .Net}}{{template "pfchart" .Net}}{{end}}
-{{if .Activities}}{{template "pfchart" .Activities}}{{end}}
-{{if .Fees}}{{template "pfchart" .Fees}}{{end}}
-{{if .FeeShare}}{{template "pfchart" .FeeShare}}{{end}}
-{{if .Characters}}{{template "pfchart" .Characters}}{{end}}
-{{if .Margin}}{{template "pfchart" .Margin}}{{end}}
+<div class="pf-charts">
+{{if .Net}}<div class="pf-cell">{{template "pfchart" .Net}}</div>{{end}}
+{{if .Activities}}<div class="pf-cell">{{template "pfchart" .Activities}}</div>{{end}}
+{{if .Fees}}<div class="pf-cell">{{template "pfchart" .Fees}}{{if .FeeShare}}{{template "pfchart" .FeeShare}}{{end}}</div>{{end}}
+{{if .Characters}}<div class="pf-cell">{{template "pfchart" .Characters}}</div>{{end}}
+{{if .Margin}}<div class="pf-cell">{{template "pfchart" .Margin}}</div>{{end}}
+</div>
 <p><small>Amounts in ISK, by {{.Bucket}}. Hatched {{.Bucket}}s had sales with no known cost or no matched tax line, so their trading figures are partial.</small></p>
 </section>
 {{end}}
 
 <section class="foldable">
 <h3>By activity</h3>
+<div class="pf-act-grid">
 <div class="tw">
 <table>
   <thead><tr><th>Activity</th><th class="mt-num">In</th><th class="mt-num">Costs</th><th class="mt-num">Net</th><th class="mt-num">Share</th></tr></thead>
@@ -69,6 +71,20 @@
   {{end}}
   </tbody>
 </table>
+</div>
+{{with .Donut}}<div class="pf-card pf-donut-card">
+  <h4>Where the income came from</h4>
+  <div class="pchart pf-donut">
+    <svg viewBox="0 0 160 160" role="img" aria-label="Income by activity">
+      <g transform="rotate(-90 80 80)">
+        {{range .Slices}}<circle class="pf-slice cdot {{.Class}}" cx="80" cy="80" r="60" stroke-dasharray="{{.Dash}}" stroke-dashoffset="{{.Offset}}" tabindex="0" aria-label="{{.Label}}: {{.Share}} of income" data-date="{{.Label}}" data-tip-rows="{{.Rows}}"/>{{end}}
+      </g>
+    </svg>
+    <div class="pf-donut-total" aria-hidden="true"><strong>{{.Total}}</strong><small>ISK in</small></div>
+    <div class="ctip" hidden></div>
+  </div>
+  <ul class="pf-donut-legend">{{range .Slices}}<li><span class="legend-swatch pf-sw {{.Class}}" aria-hidden="true"></span><span>{{.Label}}</span><span class="mt-num">{{.Share}}</span></li>{{end}}</ul>
+</div>{{end}}
 </div>
 <p><small>Prices in ISK. Trading costs include {{.SalesTax}} in sales tax and {{.BrokerFees}} in broker fees. Industry counts a job when it delivers: what it made, at EveSynapse's prices that day, less its materials at the same prices. Built items then count as stock at that value, so selling them later is a trade.{{if .Corp}} Corporation figures cover every wallet division; corporations get no net worth line.{{end}}</small></p>
 </section>
@@ -249,13 +265,19 @@
 {{define "pfchart"}}
 <figure class="pf-chart">
   <figcaption><strong>{{.Title}}</strong>{{if .Sub}}<br><small class="mt-reqs">{{.Sub}}</small>{{end}}</figcaption>
-  {{if .Legend}}<div class="chart-legend">{{range .Legend}}<span class="legend-item"><span class="legend-swatch pf-sw {{.Class}}" aria-hidden="true"></span>{{.Label}}{{if .Value}} <small class="mt-reqs">{{.Value}}</small>{{end}}</span>{{end}}{{if .HasGaps}}<span class="legend-item"><span class="legend-swatch pf-sw pf-gap" aria-hidden="true"></span>Partly covered</span>{{end}}<span class="legend-note">{{.Low}} to {{.High}}</span></div>{{else}}<div class="chart-legend"><span class="legend-note">{{.Low}} to {{.High}}</span></div>{{end}}
-  <svg{{if lt .H 160}} class="pf-short"{{end}} viewBox="0 0 {{.W}} {{.H}}" width="100%" role="img" aria-label="{{.Label}}, {{.First}} to {{.Last}}" preserveAspectRatio="none">
-    {{range .Gaps}}<rect class="{{.Class}}" x="{{.X}}" y="{{.Y}}" width="{{.W}}" height="{{.H}}"><title>{{.Tip}}</title></rect>{{end}}
-    {{if .ShowZeroLine}}<line class="mt-zero" x1="0" y1="{{.ZeroY}}" x2="{{.W}}" y2="{{.ZeroY}}"/>{{end}}
-    {{range .Bars}}<rect class="{{.Class}}" x="{{.X}}" y="{{.Y}}" width="{{.W}}" height="{{.H}}"><title>{{.Tip}}</title></rect>{{end}}
-    {{range .Lines}}<polyline class="{{.Class}}" points="{{.Points}}"/>{{end}}
-  </svg>
-  <div class="mt-chart-dates"><small>{{.First}}</small><small>{{.Last}}</small></div>
+  {{if .Legend}}<div class="chart-legend">{{range .Legend}}<span class="legend-item"><span class="legend-swatch pf-sw {{.Class}}" aria-hidden="true"></span>{{.Label}}{{if .Value}} <small class="mt-reqs">{{.Value}}</small>{{end}}</span>{{end}}{{if .HasGaps}}<span class="legend-item"><span class="legend-swatch pf-sw pf-gap" aria-hidden="true"></span>Partly covered</span>{{end}}</div>{{end}}
+  <div class="pchart pf-plot" data-chart-scrub="true">
+    <svg{{if lt .H 160}} class="pf-short"{{end}} viewBox="0 0 {{.W}} {{.H}}" width="100%" role="img" aria-label="{{.Label}}, {{.First}} to {{.Last}}" preserveAspectRatio="none">
+      {{range .YTicks}}<line class="pf-grid" x1="0" y1="{{.Y}}" x2="{{$.W}}" y2="{{.Y}}"/>{{end}}
+      {{range .Gaps}}<rect class="{{.Class}}" x="{{.X}}" y="{{.Y}}" width="{{.W}}" height="{{.H}}"/>{{end}}
+      {{if .ShowZeroLine}}<line class="mt-zero" x1="0" y1="{{.ZeroY}}" x2="{{.W}}" y2="{{.ZeroY}}"/>{{end}}
+      {{range .Bars}}<rect class="{{.Class}}" x="{{.X}}" y="{{.Y}}" width="{{.W}}" height="{{.H}}"/>{{end}}
+      {{range .Lines}}<polyline class="{{.Class}}" points="{{.Points}}"/>{{end}}
+      {{range .Hits}}<rect class="cdot pf-hit" x="{{.X}}" y="0" width="{{.W}}" height="{{$.H}}" tabindex="0" aria-label="{{.Label}}" data-date="{{.Date}}" data-tip-rows="{{.Rows}}"/>{{end}}
+    </svg>
+    <div class="pf-axis-y" aria-hidden="true">{{range .YTicks}}<span class="pf-y-{{.Pos}}">{{.Label}}</span>{{end}}</div>
+    <div class="ctip" hidden></div>
+  </div>
+  <div class="pf-axis-x" aria-hidden="true">{{range .XTicks}}<span class="{{.Class}} pf-x-{{.Pos}}">{{.Label}}</span>{{end}}</div>
 </figure>
 {{end}}

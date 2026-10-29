@@ -2658,6 +2658,29 @@
     date.className = "ctip-date";
     date.textContent = dot.getAttribute("data-date");
     tip.appendChild(date);
+    // Generic rows (the Profit charts): a JSON list of [label, value,
+    // swatch class], each drawn with its series colour.
+    var generic = dot.getAttribute("data-tip-rows");
+    if (generic) {
+      var list = [];
+      try { list = JSON.parse(generic); } catch (e) { list = []; }
+      for (var g = 0; g < list.length; g++) {
+        var row = document.createElement("div");
+        row.className = "ctip-row";
+        var sw = document.createElement("span");
+        sw.className = "ctip-sw" + (list[g][2] ? " pf-sw " + list[g][2] : "");
+        row.appendChild(sw);
+        var name = document.createElement("span");
+        name.textContent = list[g][0];
+        row.appendChild(name);
+        var val = document.createElement("span");
+        val.className = "ctip-val";
+        val.textContent = list[g][1];
+        row.appendChild(val);
+        tip.appendChild(row);
+      }
+      return;
+    }
     var rows = [];
     // Balance charts carry one figure; the Net worth chart breaks
     // its total into ISK and assets; market history dots carry the
@@ -2693,7 +2716,7 @@
     dot.classList.add("is-selected");
   }
 
-  function show(dot, clientX) {
+  function show(dot, clientX, clientY) {
     var tip = tipOf(dot);
     if (!tip) return;
     markSelected(dot);
@@ -2709,7 +2732,13 @@
     if (left < half) left = half;
     if (left > crect.width - half) left = crect.width - half;
     tip.style.left = left + "px";
-    tip.style.top = (drect.top - crect.top) + "px";
+    // A tall hover column (the Profit charts) puts the tip at the
+    // pointer's height, so it never hides above the plot.
+    var top = drect.top - crect.top;
+    if (typeof clientY === "number" && dot.hasAttribute("data-tip-rows") && drect.height > 40) {
+      top = clientY - crect.top - 8;
+    }
+    tip.style.top = top + "px";
   }
 
   function hide(dot) {
@@ -2750,7 +2779,7 @@
     var dot = nearestDot(chart, ev.clientX);
     if (!dot) return;
     scrub = { chart: chart, pointerId: ev.pointerId, dot: dot, moved: false };
-    show(dot, ev.clientX);
+    show(dot, ev.clientX, ev.clientY);
   });
   document.addEventListener("pointermove", function (ev) {
     if (!scrub || ev.pointerId !== scrub.pointerId) return;
@@ -2758,7 +2787,7 @@
     if (!dot) return;
     scrub.moved = true;
     scrub.dot = dot;
-    show(dot, ev.clientX);
+    show(dot, ev.clientX, ev.clientY);
   });
   function endScrub(ev) {
     if (!scrub || ev.pointerId !== scrub.pointerId) return;
@@ -2776,7 +2805,7 @@
 
   document.addEventListener("mouseover", function (ev) {
     var dot = asDot(ev);
-    if (dot && pinned !== dot) show(dot);
+    if (dot && pinned !== dot) show(dot, undefined, ev.clientY);
   });
   document.addEventListener("mouseout", function (ev) {
     var dot = asDot(ev);

@@ -233,3 +233,255 @@
   .pf-chart .chart-legend { gap: 0.15rem 0.6rem; font-size: 0.72rem; }
   .pf-chart .legend-item { text-transform: none; letter-spacing: normal; }
 }
+
+/* Profit layout (profit v2 polish): charts two to a row on wide
+   screens, the activity table beside an income donut, axis labels as
+   HTML over the plots (crisp at any stretch), and the site's chart tip
+   with a swatch per row. */
+.pf-charts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.25rem 1.75rem; }
+@media (max-width: 1100px) { .pf-charts { grid-template-columns: minmax(0, 1fr); } }
+.pf-cell { min-width: 0; }
+.pf-chart svg { height: 180px; }
+.pf-chart svg.pf-short { height: 90px; }
+.pf-grid { stroke: var(--muted); stroke-opacity: 0.22; stroke-width: 1; vector-effect: non-scaling-stroke; }
+.pf-axis-y { position: absolute; inset: 0; pointer-events: none; }
+.pf-axis-y span { position: absolute; left: 2px; transform: translateY(-50%); font-size: 0.68rem; line-height: 1; color: var(--muted); background: color-mix(in srgb, var(--panel) 75%, transparent); padding: 1px 3px; border-radius: 3px; }
+.pf-axis-x { position: relative; height: 1.15rem; margin-top: 0.15rem; }
+.pf-axis-x span { position: absolute; top: 0; font-size: 0.7rem; color: var(--muted); white-space: nowrap; }
+.pf-axis-x .pf-x-mid { transform: translateX(-50%); }
+.pf-axis-x .pf-x-end { transform: translateX(-100%); }
+.pf-chart .cdot.pf-hit { fill: var(--accent); fill-opacity: 0; stroke: none; }
+.pf-chart .cdot.pf-hit:hover, .pf-chart .cdot.pf-hit:focus, .pf-chart .cdot.pf-hit.is-selected { fill-opacity: 0.12; stroke: none; outline: none; }
+.ctip .ctip-row { display: flex; align-items: center; gap: 0.45rem; }
+.ctip .ctip-sw { width: 0.6rem; height: 0.6rem; border-radius: 2px; flex: none; }
+.ctip .ctip-val { margin-left: auto; padding-left: 0.9rem; font-variant-numeric: tabular-nums; }
+.pf-act-grid { display: grid; grid-template-columns: minmax(0, 1fr) 17rem; gap: 1rem 1.5rem; align-items: start; }
+@media (max-width: 900px) { .pf-act-grid { grid-template-columns: minmax(0, 1fr); } }
+.pf-card { background: var(--panel); border: 1px solid var(--box-edge); border-radius: var(--r-md); padding: 0.8rem 0.9rem; }
+.pf-card h4 { margin: 0 0 0.5rem; font-size: 0.9rem; }
+.pf-donut { max-width: 220px; margin: 0 auto; }
+.pf-donut svg { width: 100%; height: auto; cursor: default; }
+.pf-donut .cdot.pf-slice { fill: none; fill-opacity: 0; stroke-width: 22; transition: stroke-width 0.12s; }
+.pf-donut .cdot.pf-slice:hover, .pf-donut .cdot.pf-slice:focus, .pf-donut .cdot.pf-slice.is-selected { stroke-width: 28; outline: none; }
+.pf-donut .cdot.pf-slice.pf-a-trading { stroke: var(--accent); }
+.pf-donut .cdot.pf-slice.pf-a-industry { stroke: var(--gold); }
+.pf-donut .cdot.pf-slice.pf-a-bounties { stroke: var(--text); }
+.pf-donut .cdot.pf-slice.pf-a-pi { stroke: var(--note); }
+.pf-donut .cdot.pf-slice.pf-a-contracts { stroke: color-mix(in srgb, var(--accent) 50%, var(--gold)); }
+.pf-donut .cdot.pf-slice.pf-a-sales { stroke: var(--muted-2); }
+.pf-donut .cdot.pf-slice.pf-a-lp { stroke: color-mix(in srgb, var(--note) 50%, var(--success)); }
+.pf-donut .cdot.pf-slice.pf-a-other { stroke: color-mix(in srgb, var(--muted) 70%, var(--text)); }
+.pf-donut .cdot.pf-slice.pf-a-upkeep { stroke: color-mix(in srgb, var(--danger) 60%, var(--muted)); }
+.pf-donut .cdot.pf-slice.pf-a-transfers { stroke: color-mix(in srgb, var(--muted) 50%, transparent); }
+.pf-donut-total { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; pointer-events: none; }
+.pf-donut-total strong { font-size: 1.15rem; }
+.pf-donut-total small { color: var(--muted); }
+.pf-donut-legend { list-style: none; padding: 0; margin: 0.7rem 0 0; display: grid; gap: 0.3rem; }
+.pf-donut-legend li { display: flex; align-items: center; gap: 0.45rem; font-size: 0.85rem; }
+.pf-donut-legend .mt-num { margin-left: auto; }
+@media (max-width: 640px) {
+  .pf-chart svg { height: 150px; }
+  .pf-chart svg.pf-short { height: 75px; }
+}
+.pf-y-0 { top: 0%; }
+.pf-y-1 { top: 1%; }
+.pf-y-2 { top: 2%; }
+.pf-y-3 { top: 3%; }
+.pf-y-4 { top: 4%; }
+.pf-y-5 { top: 5%; }
+.pf-y-6 { top: 6%; }
+.pf-y-7 { top: 7%; }
+.pf-y-8 { top: 8%; }
+.pf-y-9 { top: 9%; }
+.pf-y-10 { top: 10%; }
+.pf-y-11 { top: 11%; }
+.pf-y-12 { top: 12%; }
+.pf-y-13 { top: 13%; }
+.pf-y-14 { top: 14%; }
+.pf-y-15 { top: 15%; }
+.pf-y-16 { top: 16%; }
+.pf-y-17 { top: 17%; }
+.pf-y-18 { top: 18%; }
+.pf-y-19 { top: 19%; }
+.pf-y-20 { top: 20%; }
+.pf-y-21 { top: 21%; }
+.pf-y-22 { top: 22%; }
+.pf-y-23 { top: 23%; }
+.pf-y-24 { top: 24%; }
+.pf-y-25 { top: 25%; }
+.pf-y-26 { top: 26%; }
+.pf-y-27 { top: 27%; }
+.pf-y-28 { top: 28%; }
+.pf-y-29 { top: 29%; }
+.pf-y-30 { top: 30%; }
+.pf-y-31 { top: 31%; }
+.pf-y-32 { top: 32%; }
+.pf-y-33 { top: 33%; }
+.pf-y-34 { top: 34%; }
+.pf-y-35 { top: 35%; }
+.pf-y-36 { top: 36%; }
+.pf-y-37 { top: 37%; }
+.pf-y-38 { top: 38%; }
+.pf-y-39 { top: 39%; }
+.pf-y-40 { top: 40%; }
+.pf-y-41 { top: 41%; }
+.pf-y-42 { top: 42%; }
+.pf-y-43 { top: 43%; }
+.pf-y-44 { top: 44%; }
+.pf-y-45 { top: 45%; }
+.pf-y-46 { top: 46%; }
+.pf-y-47 { top: 47%; }
+.pf-y-48 { top: 48%; }
+.pf-y-49 { top: 49%; }
+.pf-y-50 { top: 50%; }
+.pf-y-51 { top: 51%; }
+.pf-y-52 { top: 52%; }
+.pf-y-53 { top: 53%; }
+.pf-y-54 { top: 54%; }
+.pf-y-55 { top: 55%; }
+.pf-y-56 { top: 56%; }
+.pf-y-57 { top: 57%; }
+.pf-y-58 { top: 58%; }
+.pf-y-59 { top: 59%; }
+.pf-y-60 { top: 60%; }
+.pf-y-61 { top: 61%; }
+.pf-y-62 { top: 62%; }
+.pf-y-63 { top: 63%; }
+.pf-y-64 { top: 64%; }
+.pf-y-65 { top: 65%; }
+.pf-y-66 { top: 66%; }
+.pf-y-67 { top: 67%; }
+.pf-y-68 { top: 68%; }
+.pf-y-69 { top: 69%; }
+.pf-y-70 { top: 70%; }
+.pf-y-71 { top: 71%; }
+.pf-y-72 { top: 72%; }
+.pf-y-73 { top: 73%; }
+.pf-y-74 { top: 74%; }
+.pf-y-75 { top: 75%; }
+.pf-y-76 { top: 76%; }
+.pf-y-77 { top: 77%; }
+.pf-y-78 { top: 78%; }
+.pf-y-79 { top: 79%; }
+.pf-y-80 { top: 80%; }
+.pf-y-81 { top: 81%; }
+.pf-y-82 { top: 82%; }
+.pf-y-83 { top: 83%; }
+.pf-y-84 { top: 84%; }
+.pf-y-85 { top: 85%; }
+.pf-y-86 { top: 86%; }
+.pf-y-87 { top: 87%; }
+.pf-y-88 { top: 88%; }
+.pf-y-89 { top: 89%; }
+.pf-y-90 { top: 90%; }
+.pf-y-91 { top: 91%; }
+.pf-y-92 { top: 92%; }
+.pf-y-93 { top: 93%; }
+.pf-y-94 { top: 94%; }
+.pf-y-95 { top: 95%; }
+.pf-y-96 { top: 96%; }
+.pf-y-97 { top: 97%; }
+.pf-y-98 { top: 98%; }
+.pf-y-99 { top: 99%; }
+.pf-y-100 { top: 100%; }
+.pf-x-0 { left: 0%; }
+.pf-x-1 { left: 1%; }
+.pf-x-2 { left: 2%; }
+.pf-x-3 { left: 3%; }
+.pf-x-4 { left: 4%; }
+.pf-x-5 { left: 5%; }
+.pf-x-6 { left: 6%; }
+.pf-x-7 { left: 7%; }
+.pf-x-8 { left: 8%; }
+.pf-x-9 { left: 9%; }
+.pf-x-10 { left: 10%; }
+.pf-x-11 { left: 11%; }
+.pf-x-12 { left: 12%; }
+.pf-x-13 { left: 13%; }
+.pf-x-14 { left: 14%; }
+.pf-x-15 { left: 15%; }
+.pf-x-16 { left: 16%; }
+.pf-x-17 { left: 17%; }
+.pf-x-18 { left: 18%; }
+.pf-x-19 { left: 19%; }
+.pf-x-20 { left: 20%; }
+.pf-x-21 { left: 21%; }
+.pf-x-22 { left: 22%; }
+.pf-x-23 { left: 23%; }
+.pf-x-24 { left: 24%; }
+.pf-x-25 { left: 25%; }
+.pf-x-26 { left: 26%; }
+.pf-x-27 { left: 27%; }
+.pf-x-28 { left: 28%; }
+.pf-x-29 { left: 29%; }
+.pf-x-30 { left: 30%; }
+.pf-x-31 { left: 31%; }
+.pf-x-32 { left: 32%; }
+.pf-x-33 { left: 33%; }
+.pf-x-34 { left: 34%; }
+.pf-x-35 { left: 35%; }
+.pf-x-36 { left: 36%; }
+.pf-x-37 { left: 37%; }
+.pf-x-38 { left: 38%; }
+.pf-x-39 { left: 39%; }
+.pf-x-40 { left: 40%; }
+.pf-x-41 { left: 41%; }
+.pf-x-42 { left: 42%; }
+.pf-x-43 { left: 43%; }
+.pf-x-44 { left: 44%; }
+.pf-x-45 { left: 45%; }
+.pf-x-46 { left: 46%; }
+.pf-x-47 { left: 47%; }
+.pf-x-48 { left: 48%; }
+.pf-x-49 { left: 49%; }
+.pf-x-50 { left: 50%; }
+.pf-x-51 { left: 51%; }
+.pf-x-52 { left: 52%; }
+.pf-x-53 { left: 53%; }
+.pf-x-54 { left: 54%; }
+.pf-x-55 { left: 55%; }
+.pf-x-56 { left: 56%; }
+.pf-x-57 { left: 57%; }
+.pf-x-58 { left: 58%; }
+.pf-x-59 { left: 59%; }
+.pf-x-60 { left: 60%; }
+.pf-x-61 { left: 61%; }
+.pf-x-62 { left: 62%; }
+.pf-x-63 { left: 63%; }
+.pf-x-64 { left: 64%; }
+.pf-x-65 { left: 65%; }
+.pf-x-66 { left: 66%; }
+.pf-x-67 { left: 67%; }
+.pf-x-68 { left: 68%; }
+.pf-x-69 { left: 69%; }
+.pf-x-70 { left: 70%; }
+.pf-x-71 { left: 71%; }
+.pf-x-72 { left: 72%; }
+.pf-x-73 { left: 73%; }
+.pf-x-74 { left: 74%; }
+.pf-x-75 { left: 75%; }
+.pf-x-76 { left: 76%; }
+.pf-x-77 { left: 77%; }
+.pf-x-78 { left: 78%; }
+.pf-x-79 { left: 79%; }
+.pf-x-80 { left: 80%; }
+.pf-x-81 { left: 81%; }
+.pf-x-82 { left: 82%; }
+.pf-x-83 { left: 83%; }
+.pf-x-84 { left: 84%; }
+.pf-x-85 { left: 85%; }
+.pf-x-86 { left: 86%; }
+.pf-x-87 { left: 87%; }
+.pf-x-88 { left: 88%; }
+.pf-x-89 { left: 89%; }
+.pf-x-90 { left: 90%; }
+.pf-x-91 { left: 91%; }
+.pf-x-92 { left: 92%; }
+.pf-x-93 { left: 93%; }
+.pf-x-94 { left: 94%; }
+.pf-x-95 { left: 95%; }
+.pf-x-96 { left: 96%; }
+.pf-x-97 { left: 97%; }
+.pf-x-98 { left: 98%; }
+.pf-x-99 { left: 99%; }
+.pf-x-100 { left: 100%; }

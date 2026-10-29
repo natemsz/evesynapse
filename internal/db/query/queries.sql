@@ -260,6 +260,16 @@ UPDATE users
 SET home_layout = $1
 WHERE id = $2;
 
+-- Visualization preferences (schema 111): the account's chart
+-- display switches as one JSON object.
+-- name: GetUserVizPrefs :one
+SELECT viz_prefs FROM users
+WHERE id = $1;
+-- name: SetUserVizPrefs :exec
+UPDATE users
+SET viz_prefs = $1
+WHERE id = $2;
+
 -- The Briefing module's window anchor.
 -- name: GetUserBriefingAnchor :one
 SELECT last_briefing_at FROM users

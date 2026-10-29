@@ -1986,6 +1986,7 @@ type User struct {
 	LastBriefingAt sql.NullTime `json:"last_briefing_at"`
 	LastSeenAt     time.Time    `json:"last_seen_at"`
 	IsDemo         int64        `json:"is_demo"`
+	VizPrefs       string       `json:"viz_prefs"`
 }
 
 type UserAppraisal struct {

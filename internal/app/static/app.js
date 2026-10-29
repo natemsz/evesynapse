@@ -1183,6 +1183,7 @@
     // until the travel lands.
     var mover = dir > 0 ? face : nxt;
     var flight = null;
+    var shifted = [];
     var settled = false;
     var done = function () {
       if (settled) return;
@@ -1192,12 +1193,22 @@
       mover.style.position = "";
       mover.style.inset = "";
       mover.style.display = "";
+      for (var s2 = 0; s2 < shifted.length; s2++) shifted[s2].style.transform = "";
       deck.classList.remove("flipping");
       deck.style.height = "";
       deck._face = nxt;
       briefLayout(deck);
     };
     if (dir > 0) {
+      // The stack steps up as the face lifts: the next card slides
+      // into the face slot and the sheet behind it takes its place,
+      // so the deck settles in one motion instead of two. done()
+      // clears the inline transforms in the same frame it assigns
+      // the matching positions, so nothing snaps.
+      var rear1 = deck.querySelector('.brief-flip-card[data-pos="1"]:not(.brief-off)');
+      var rear2 = deck.querySelector('.brief-flip-card[data-pos="2"]:not(.brief-off)');
+      if (rear1) { rear1.style.transform = "translate(0px, 0px)"; shifted.push(rear1); }
+      if (rear2) { rear2.style.transform = "translate(5px, 5px)"; shifted.push(rear2); }
       mover.style.position = "absolute";
       mover.style.inset = "0";
       try {
@@ -1209,6 +1220,13 @@
         ], { duration: 380, easing: "ease-in-out" });
       } catch (e) {}
     } else {
+      // The stack steps back as the incoming card travels: the
+      // face eases into the first rear slot and the sheet behind
+      // it into the second, settling in one motion.
+      var back1 = deck.querySelector('.brief-flip-card[data-pos="1"]:not(.brief-off)');
+      face.style.transform = "translate(5px, 5px)";
+      shifted.push(face);
+      if (back1 && back1 !== mover) { back1.style.transform = "translate(10px, 10px)"; shifted.push(back1); }
       // The incoming card can sit past the two visible rear slots,
       // where it is display:none: stage it at the rear slot so it
       // has geometry to travel from.

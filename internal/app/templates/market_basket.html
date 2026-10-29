@@ -50,7 +50,7 @@
   </section>
   <section>
     <h3>Moving outside it</h3>
-    {{if .Outside}}<ul>{{range .Outside}}<li><a href="/market/?type={{.TypeID}}&amp;region={{$v.RegionID}}">{{.Name}}</a> <span class="mt-chg {{.Chg.Dir}}">{{.Chg.Text}}</span> <small>{{.Unit}} ISK</small></li>{{end}}</ul><p><small>Similar items not in the basket, biggest moves first.</small></p>{{else}}<p><small>No similar items moved enough to show.</small></p>{{end}}
+    {{if .Outside}}<ul>{{range .Outside}}<li><a href="/market/?type={{.TypeID}}&amp;region={{$v.RegionID}}">{{.Name}}</a> <span class="mt-chg {{.Chg.Dir}}">{{.Chg.Text}}</span> <small>{{.Unit}} ISK</small>{{if $v.Own}} <form method="post" action="/market/baskets/{{$v.Basket.ID}}/add" class="mbk-add-form"><input type="hidden" name="type" value="{{.TypeID}}"><button class="btn btn-quiet" type="submit">Add</button></form>{{end}}</li>{{end}}</ul><p><small>Similar items not in the basket, biggest moves first.</small></p>{{else}}<p><small>No similar items moved enough to show.</small></p>{{end}}
   </section>
 </div>
 

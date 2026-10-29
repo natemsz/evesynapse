@@ -794,6 +794,7 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 		r.With(app.requireAuth).Post("/baskets/", app.handleMarketBasketCreate)
 		r.With(app.requireAuth).Post("/baskets/{basketID}/edit", app.handleMarketBasketEdit)
 		r.With(app.requireAuth).Post("/baskets/{basketID}/delete", app.handleMarketBasketDelete)
+		r.With(app.requireAuth).Post("/baskets/{basketID}/add", app.handleMarketBasketAddItem)
 		r.With(app.requireAuth).Get("/baskets/{basketID}/items.json", app.handleMarketBasketItemsJSON)
 		r.With(app.requireAuth).Get("/baskets/prices", app.handleMarketBasketPrices)
 		r.With(app.requireAuth).Get("/baskets/suggest", app.handleMarketBasketSuggest)

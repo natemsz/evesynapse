@@ -436,6 +436,56 @@ func (app *Application) handleMarketBasketEdit(w http.ResponseWriter, r *http.Re
 	}
 }
 
+// handleMarketBasketAddItem serves POST /market/baskets/{basketID}/add:
+// the basket page's Add button on a similar item, appending that
+// type at quantity 1 through the same replace-and-rebuild path
+// every other basket save uses.
+func (app *Application) handleMarketBasketAddItem(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	userID := app.userID(ctx)
+	b, ok := app.loadBasketFor(ctx, chi.URLParam(r, "basketID"), userID)
+	if !ok || !b.UserID.Valid {
+		http.NotFound(w, r)
+		return
+	}
+	path := fmt.Sprintf("/market/baskets/%d/", b.ID)
+	back := app.flashBack(w, r, path)
+	if err := r.ParseForm(); err != nil {
+		back("That form didn't come through. Try again.")
+		return
+	}
+	typeID, err := strconv.ParseInt(r.Form.Get("type"), 10, 64)
+	if err != nil || typeID <= 0 {
+		back("That item didn't come through. Try again.")
+		return
+	}
+	items, err := app.queries.ListMarketBasketItems(ctx, b.ID)
+	if err != nil {
+		logging.Errorf("baskets: items of %d: %v", b.ID, err)
+		back("Couldn't read that basket right now.")
+		return
+	}
+	next := make([]basketItemQty, 0, len(items)+1)
+	for _, it := range items {
+		if it.TypeID == typeID {
+			back("Already in the basket.")
+			return
+		}
+		next = append(next, basketItemQty{TypeID: it.TypeID, Quantity: it.Quantity})
+	}
+	if len(next) >= basketMaxItems {
+		back(fmt.Sprintf("A basket holds at most %d items.", basketMaxItems))
+		return
+	}
+	next = append(next, basketItemQty{TypeID: typeID, Quantity: 1})
+	if err := app.saveBasketItemsByID(ctx, b.ID, next); err != nil {
+		logging.Errorf("baskets: add item for %d: %v", b.ID, err)
+		back("Couldn't add that item right now.")
+		return
+	}
+	back("Added " + app.typeNameOrID(ctx, typeID) + ".")
+}
+
 func (app *Application) handleMarketBasketDelete(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	userID := app.userID(ctx)

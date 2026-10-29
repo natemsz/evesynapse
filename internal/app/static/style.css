@@ -2527,6 +2527,26 @@ tr.fleet-detail > td { background: #120d09; border-bottom: 1px solid color-mix(i
   0% { transform: scale(1); opacity: 0.75; }
   75%, 100% { transform: scale(2.6); opacity: 0; }
 }
+/* The sidebar status dot: the ESI pill's colours and glow, at
+   rest. No ping ring; the glow alone carries the state, and the
+   button's tooltip and the freshness modal behind it carry the
+   words. */
+.status-dot { display: inline-block; flex: none; width: 0.55rem; height: 0.55rem; border-radius: 50%; background: #6b6b6b; vertical-align: middle; }
+.status-dot.is-ok { background: #10b981; box-shadow: 0 0 8px rgba(16, 185, 129, 0.9); }
+.status-dot.is-limited { background: #ffb84d; box-shadow: 0 0 8px rgba(255, 184, 77, 0.85); }
+.status-dot.is-down { background: #ef4444; box-shadow: 0 0 8px rgba(239, 68, 68, 0.9); }
+.status-panel { max-width: 34rem; padding: 1rem 1.1rem; }
+.status-title { margin-top: 0; }
+.status-esi { display: flex; align-items: center; gap: 0.5rem; }
+.status-esi-tq { color: var(--muted); }
+.status-rows { list-style: none; margin: 0 0 1rem; padding: 0; max-height: 50vh; overflow-y: auto; }
+.status-rows li { display: flex; justify-content: space-between; gap: 1rem; padding: 0.4rem 0.2rem; border-bottom: 1px solid color-mix(in srgb, var(--accent) 7%, transparent); }
+.status-row-name { min-width: 0; }
+.status-rows-state { text-align: right; min-width: 0; }
+.status-rows .st-ok { color: var(--success); }
+.status-rows .st-warn { color: var(--gold); }
+.status-rows .st-bad { color: #f87171; }
+.status-rows .st-none { color: var(--muted); }
 @media (prefers-reduced-motion: reduce) {
   .esi-dot::after { animation: none !important; }
 }

@@ -5187,3 +5187,73 @@
     syncTheme();
   }
 })();
+
+// --- ESI status dot and freshness modal -------------------------
+// The sidebar footer's status button: its dot takes ESI's state
+// colour from /status/freshness (the Overview pill's own read),
+// its tooltip carries the state's words, and a click opens the
+// freshness modal the same endpoint feeds. The shell markup is
+// outside the swapped region, so one wiring at load is enough.
+(function () {
+  "use strict";
+  var openBtn = document.getElementById("status-open");
+  var modal = document.getElementById("status-modal");
+  if (!openBtn || !modal) return;
+  var dot = document.getElementById("status-dot");
+  var modalDot = document.getElementById("status-modal-dot");
+  var esiLabel = document.getElementById("status-esi-label");
+  var esiTq = document.getElementById("status-esi-tq");
+  var rowsBody = document.getElementById("status-rows");
+  var note = document.getElementById("status-note");
+  var closeBtn = document.getElementById("status-close");
+
+  function paintDot(el, state) {
+    if (!el) return;
+    el.className = "status-dot is-" + (state === "ok" || state === "limited" || state === "down" ? state : "pending");
+  }
+
+  function load() {
+    return fetch("/status/freshness", { credentials: "same-origin" })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (data) {
+        if (!data) return;
+        paintDot(dot, data.esi.state);
+        paintDot(modalDot, data.esi.state);
+        var tip = data.esi.title || data.esi.label;
+        if (data.esi.players) tip += " Tranquility: " + data.esi.players + " online.";
+        openBtn.setAttribute("data-tip", tip);
+        esiLabel.textContent = data.esi.label;
+        esiTq.textContent = data.esi.players ? "Tranquility " + data.esi.players + " online" : "";
+        rowsBody.innerHTML = "";
+        (data.rows || []).forEach(function (row) {
+          var li = document.createElement("li");
+          var name = document.createElement("span");
+          name.className = "status-row-name";
+          name.textContent = row.name;
+          var state = document.createElement("span");
+          state.className = "status-rows-state st-" + row.state;
+          state.textContent = row.text;
+          li.appendChild(name);
+          li.appendChild(state);
+          rowsBody.appendChild(li);
+        });
+        note.textContent = data.note || "";
+      })
+      .catch(function () { /* the dot stays grey; the modal says checking */ });
+  }
+
+  function open() {
+    modal.hidden = false;
+    load();
+    if (closeBtn) closeBtn.focus();
+  }
+  function close() { modal.hidden = true; openBtn.focus(); }
+
+  openBtn.addEventListener("click", open);
+  if (closeBtn) closeBtn.addEventListener("click", close);
+  modal.addEventListener("click", function (e) { if (e.target === modal) close(); });
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape" && !modal.hidden) close();
+  });
+  load();
+})();

@@ -634,10 +634,18 @@ func (app *Application) refreshOrderHealth(ctx context.Context, characters []db.
 	allOpenByChar := make(map[int64]map[int64]esi.CharOrder)
 	ownOrders := make(map[int64][]int64) // user -> every open order id their characters hold
 	for _, ch := range characters {
+		orders, ok := app.loadOrdersSnapshot(ctx, ch.CharacterID)
+		if ok {
+			// The owner's orders are never competition, including a
+			// parked character's: its snapshot joins the exclusion
+			// set even though its own verdicts stand down.
+			for _, o := range orders {
+				ownOrders[ch.UserID] = append(ownOrders[ch.UserID], o.OrderID)
+			}
+		}
 		if !app.characterMaySync(ctx, ch) {
 			continue // parked characters' orders are stale news, not alerts
 		}
-		orders, ok := app.loadOrdersSnapshot(ctx, ch.CharacterID)
 		if !ok {
 			// No orders snapshot yet: drop any stale health so
 			// the pages never show yesterday's verdict.
@@ -650,7 +658,6 @@ func (app *Application) refreshOrderHealth(ctx context.Context, characters []db.
 		allOpen := make(map[int64]esi.CharOrder)
 		for _, o := range orders {
 			allOpen[o.OrderID] = o
-			ownOrders[ch.UserID] = append(ownOrders[ch.UserID], o.OrderID)
 			if o.VolumeRemain <= 0 {
 				continue
 			}
@@ -678,6 +685,7 @@ func (app *Application) refreshOrderHealth(ctx context.Context, characters []db.
 	}
 	prevBeaten := make(map[lifecycleKey]int64)
 	prevOutbid := make(map[lifecycleKey]int64)
+	prevBook := make(map[lifecycleKey]db.ListOrderLifecycleStatesRow)
 	// What the ledger already holds for these orders, in one read; an
 	// order with no row (or an unreadable ledger) starts from zero.
 	var lookup db.ListOrderLifecycleStatesParams
@@ -701,6 +709,7 @@ func (app *Application) refreshOrderHealth(ctx context.Context, characters []db.
 			}
 			prevBeaten[key] = row.BeatenNow
 			prevOutbid[key] = row.OutbidEvents
+			prevBook[key] = row
 		}
 	}
 	upsert := db.UpsertOrderLifecyclesParams{SeenAt: lifecycleNow}
@@ -830,11 +839,30 @@ func (app *Application) refreshOrderHealth(ctx context.Context, characters []db.
 				outbid++
 			}
 			p.Beaten, p.OutbidEvents, p.CheckedAt = beaten, outbid, now
+			if prev, seen := prevBook[lkey]; seen && prev.BeatenNow == p.Beaten && prev.OutbidEvents == p.OutbidEvents &&
+				prev.BeatingPrice == p.BeatingPrice && prev.BeatingVolume == p.BeatingVolume &&
+				prev.SuggestedPrice == p.SuggestedPrice && prev.UnitCost == p.UnitCost &&
+				prev.TaxRate == p.TaxRate && prev.MarginPct == p.MarginPct {
+				// The verdict stands: only its freshness stamp moves.
+				if err := app.queries.TouchOrderLifecycleChecked(ctx, db.TouchOrderLifecycleCheckedParams{
+					CharacterID: ref.char.CharacterID, OrderID: ref.order.OrderID, CheckedAt: now,
+				}); err != nil {
+					logging.Errorf("worker: order lifecycle: touch %d/%d: %v", ref.char.CharacterID, ref.order.OrderID, err)
+				}
+				continue
+			}
 			if err := app.queries.UpdateOrderLifecycleBook(ctx, p); err != nil {
 				logging.Errorf("worker: order lifecycle: beaten %d/%d: %v", ref.char.CharacterID, ref.order.OrderID, err)
 			} else {
 				prevBeaten[lkey] = beaten
 				prevOutbid[lkey] = outbid
+				prevBook[lkey] = db.ListOrderLifecycleStatesRow{
+					CharacterID: ref.char.CharacterID, OrderID: ref.order.OrderID,
+					BeatenNow: p.Beaten, OutbidEvents: p.OutbidEvents,
+					BeatingPrice: p.BeatingPrice, BeatingVolume: p.BeatingVolume,
+					SuggestedPrice: p.SuggestedPrice, UnitCost: p.UnitCost,
+					TaxRate: p.TaxRate, MarginPct: p.MarginPct,
+				}
 			}
 		}
 	}

@@ -3247,7 +3247,8 @@ func (q *Queries) ListOrderLifecycleByUser(ctx context.Context, userID int64) ([
 }
 
 const listOrderLifecycleStates = `-- name: ListOrderLifecycleStates :many
-SELECT l.character_id, l.order_id, l.closed_at, l.outbid_events, l.beaten_now
+SELECT l.character_id, l.order_id, l.closed_at, l.outbid_events, l.beaten_now,
+       l.beating_price, l.beating_volume, l.suggested_price, l.unit_cost, l.margin_pct, l.tax_rate
 FROM order_lifecycle l
 JOIN (SELECT unnest($1::bigint[]) AS character_id,
              unnest($2::bigint[]) AS order_id) k
@@ -3260,11 +3261,17 @@ type ListOrderLifecycleStatesParams struct {
 }
 
 type ListOrderLifecycleStatesRow struct {
-	CharacterID  int64        `json:"character_id"`
-	OrderID      int64        `json:"order_id"`
-	ClosedAt     sql.NullTime `json:"closed_at"`
-	OutbidEvents int64        `json:"outbid_events"`
-	BeatenNow    int64        `json:"beaten_now"`
+	CharacterID    int64           `json:"character_id"`
+	OrderID        int64           `json:"order_id"`
+	ClosedAt       sql.NullTime    `json:"closed_at"`
+	OutbidEvents   int64           `json:"outbid_events"`
+	BeatenNow      int64           `json:"beaten_now"`
+	BeatingPrice   float64         `json:"beating_price"`
+	BeatingVolume  int64           `json:"beating_volume"`
+	SuggestedPrice float64         `json:"suggested_price"`
+	UnitCost       float64         `json:"unit_cost"`
+	MarginPct      sql.NullFloat64 `json:"margin_pct"`
+	TaxRate        float64         `json:"tax_rate"`
 }
 
 // The ledger rows of many (character, order) pairs in one read: what
@@ -3284,6 +3291,12 @@ func (q *Queries) ListOrderLifecycleStates(ctx context.Context, arg ListOrderLif
 			&i.ClosedAt,
 			&i.OutbidEvents,
 			&i.BeatenNow,
+			&i.BeatingPrice,
+			&i.BeatingVolume,
+			&i.SuggestedPrice,
+			&i.UnitCost,
+			&i.MarginPct,
+			&i.TaxRate,
 		); err != nil {
 			return nil, err
 		}
@@ -4359,6 +4372,24 @@ func (q *Queries) SetStructureName(ctx context.Context, arg SetStructureNamePara
 		arg.ResolvedAt,
 		arg.Source,
 	)
+	return err
+}
+
+const touchOrderLifecycleChecked = `-- name: TouchOrderLifecycleChecked :exec
+UPDATE order_lifecycle SET beaten_checked = $1::timestamptz
+WHERE character_id = $2 AND order_id = $3 AND closed_at IS NULL
+`
+
+type TouchOrderLifecycleCheckedParams struct {
+	CheckedAt   time.Time `json:"checked_at"`
+	CharacterID int64     `json:"character_id"`
+	OrderID     int64     `json:"order_id"`
+}
+
+// The book pass re-checked this order and its verdict stands: only
+// the freshness stamp moves, not the verdict columns.
+func (q *Queries) TouchOrderLifecycleChecked(ctx context.Context, arg TouchOrderLifecycleCheckedParams) error {
+	_, err := q.db.ExecContext(ctx, touchOrderLifecycleChecked, arg.CheckedAt, arg.CharacterID, arg.OrderID)
 	return err
 }
 

@@ -944,7 +944,8 @@ ON CONFLICT (character_id, order_id) DO UPDATE SET
 -- name: ListOrderLifecycleStates :many
 -- The ledger rows of many (character, order) pairs in one read: what
 -- the order-health pass needs of each before it upserts them.
-SELECT l.character_id, l.order_id, l.closed_at, l.outbid_events, l.beaten_now
+SELECT l.character_id, l.order_id, l.closed_at, l.outbid_events, l.beaten_now,
+       l.beating_price, l.beating_volume, l.suggested_price, l.unit_cost, l.margin_pct, l.tax_rate
 FROM order_lifecycle l
 JOIN (SELECT unnest(sqlc.arg(character_ids)::bigint[]) AS character_id,
              unnest(sqlc.arg(order_ids)::bigint[]) AS order_id) k
@@ -1304,6 +1305,12 @@ UPDATE order_lifecycle SET
     tax_rate        = sqlc.arg(tax_rate)::float8,
     beaten_checked  = sqlc.arg(checked_at)::timestamptz
 WHERE character_id = sqlc.arg(character_id) AND order_id = sqlc.arg(order_id) AND closed_at IS NULL;
+-- name: TouchOrderLifecycleChecked :exec
+-- The book pass re-checked this order and its verdict stands: only
+-- the freshness stamp moves, not the verdict columns.
+UPDATE order_lifecycle SET beaten_checked = sqlc.arg(checked_at)::timestamptz
+WHERE character_id = sqlc.arg(character_id) AND order_id = sqlc.arg(order_id) AND closed_at IS NULL;
+
 -- name: ListBeatenOrders :many
 -- The account's open orders beaten at their own station, most
 -- recently beaten first: the My Orders page's beaten section.

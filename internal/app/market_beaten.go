@@ -92,6 +92,26 @@ type beatenContext struct {
 	app   *Application
 	costs map[int64]map[int64]float64 // character -> type -> cost per unit
 	rates map[int64]float64
+	stats map[[2]int64]float64 // (region, type) -> typical sell for a beaten buy's resale basis
+}
+
+// regionTypicalSell is the stat pack's typical sell for a type in a
+// region, read at most once per pass however many beaten buys of
+// that type the pass prices.
+func (b *beatenContext) regionTypicalSell(ctx context.Context, regionID, typeID int64) float64 {
+	if b.stats == nil {
+		b.stats = map[[2]int64]float64{}
+	}
+	key := [2]int64{regionID, typeID}
+	if v, ok := b.stats[key]; ok {
+		return v
+	}
+	v := 0.0
+	if s, err := b.app.queries.GetMarketRegionStat(ctx, db.GetMarketRegionStatParams{RegionID: regionID, TypeID: typeID}); err == nil {
+		v = s.TypicalSell
+	}
+	b.stats[key] = v
+	return v
 }
 
 func (b *beatenContext) unitCost(ctx context.Context, characterID, typeID int64) float64 {
@@ -144,9 +164,7 @@ func (b *beatenContext) verdict(ctx context.Context, characterID int64, o esi.Ch
 	p.SuggestedPrice = nextPricePast(best, o.IsBuyOrder)
 	p.TaxRate = b.taxRate(ctx, characterID)
 	if o.IsBuyOrder {
-		if s, err := b.app.queries.GetMarketRegionStat(ctx, db.GetMarketRegionStatParams{RegionID: o.RegionID, TypeID: o.TypeID}); err == nil {
-			p.UnitCost = s.TypicalSell
-		}
+		p.UnitCost = b.regionTypicalSell(ctx, o.RegionID, o.TypeID)
 	} else {
 		p.UnitCost = b.unitCost(ctx, characterID, o.TypeID)
 	}

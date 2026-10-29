@@ -704,6 +704,12 @@ var pgProfitLPSchema string
 //go:embed schema_pg/115_intel_name_things.sql
 var pgIntelNameThingsSchema string
 
+// Step 116: profit fallbacks: LP drops solved across two offers by
+// the ISK leg, and open sell orders watched for a job's output.
+//
+//go:embed schema_pg/116_profit_fallbacks.sql
+var pgProfitFallbacksSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -848,6 +854,7 @@ func schemaSteps() []schemaStep {
 		{113, "profit_industry", pgProfitIndustrySchema, ""},
 		{114, "profit_lp", pgProfitLPSchema, ""},
 		{115, "intel_name_things", pgIntelNameThingsSchema, ""},
+		{116, "profit_fallbacks", pgProfitFallbacksSchema, ""},
 	}
 }
 

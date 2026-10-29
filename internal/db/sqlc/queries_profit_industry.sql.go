@@ -42,6 +42,42 @@ func (q *Queries) ApplyIndustryRecipeValues(ctx context.Context, arg ApplyIndust
 	return err
 }
 
+const countKillmailLossesOfType = `-- name: CountKillmailLossesOfType :one
+SELECT COALESCE(SUM(n), 0)::bigint AS units, COUNT(*) FILTER (WHERE n > 0)::bigint AS killmails
+FROM (
+    SELECT (CASE WHEN (k.p -> 'victim' ->> 'ship_type_id')::bigint = $1::bigint THEN 1 ELSE 0 END)
+         + COALESCE((SELECT SUM(COALESCE((i ->> 'quantity_destroyed')::bigint, 0) + COALESCE((i ->> 'quantity_dropped')::bigint, 0))
+                     FROM jsonb_array_elements(COALESCE(k.p -> 'victim' -> 'items', '[]'::jsonb)) i
+                     WHERE (i ->> 'item_type_id')::bigint = $1::bigint), 0) AS n
+    FROM (SELECT DISTINCT ON (killmail_id) payload::jsonb AS p FROM killmail_details
+          WHERE character_id = ANY($2::bigint[])) k
+    WHERE (k.p -> 'victim' ->> 'character_id')::bigint = ANY($2::bigint[])
+      AND (k.p ->> 'killmail_time')::timestamptz >= $3::timestamptz
+) x
+`
+
+type CountKillmailLossesOfTypeParams struct {
+	TypeID       int64     `json:"type_id"`
+	CharacterIds []int64   `json:"character_ids"`
+	Since        time.Time `json:"since"`
+}
+
+type CountKillmailLossesOfTypeRow struct {
+	Units     int64 `json:"units"`
+	Killmails int64 `json:"killmails"`
+}
+
+// Units of an item the pool's characters lost on killmails since a
+// moment: the ship itself when it was that type, and the item in the
+// wreck's cargo and fitting, destroyed or dropped. Each killmail once,
+// whoever fetched it.
+func (q *Queries) CountKillmailLossesOfType(ctx context.Context, arg CountKillmailLossesOfTypeParams) (CountKillmailLossesOfTypeRow, error) {
+	row := q.db.QueryRowContext(ctx, countKillmailLossesOfType, arg.TypeID, pq.Array(arg.CharacterIds), arg.Since)
+	var i CountKillmailLossesOfTypeRow
+	err := row.Scan(&i.Units, &i.Killmails)
+	return i, err
+}
+
 const deleteFacilityBonus = `-- name: DeleteFacilityBonus :exec
 DELETE FROM industry_facility_bonuses WHERE user_id = $1 AND facility_id = $2
 `
@@ -230,6 +266,30 @@ func (q *Queries) GetPoolJob(ctx context.Context, arg GetPoolJobParams) (GetPool
 	return i, err
 }
 
+const getPoolOpenSellOrder = `-- name: GetPoolOpenSellOrder :one
+SELECT character_id, order_id, type_id FROM order_lifecycle
+WHERE character_id = ANY($1::bigint[]) AND order_id = $2
+  AND is_buy_order = 0 AND closed_at IS NULL
+`
+
+type GetPoolOpenSellOrderParams struct {
+	CharacterIds []int64 `json:"character_ids"`
+	OrderID      int64   `json:"order_id"`
+}
+
+type GetPoolOpenSellOrderRow struct {
+	CharacterID int64 `json:"character_id"`
+	OrderID     int64 `json:"order_id"`
+	TypeID      int64 `json:"type_id"`
+}
+
+func (q *Queries) GetPoolOpenSellOrder(ctx context.Context, arg GetPoolOpenSellOrderParams) (GetPoolOpenSellOrderRow, error) {
+	row := q.db.QueryRowContext(ctx, getPoolOpenSellOrder, pq.Array(arg.CharacterIds), arg.OrderID)
+	var i GetPoolOpenSellOrderRow
+	err := row.Scan(&i.CharacterID, &i.OrderID, &i.TypeID)
+	return i, err
+}
+
 const getPoolSell = `-- name: GetPoolSell :one
 SELECT owner_id, transaction_id, at, type_id, quantity FROM ledger_txns
 WHERE owner_kind = $1 AND owner_id = ANY($2::bigint[])
@@ -322,6 +382,31 @@ func (q *Queries) InsertJobManualEvent(ctx context.Context, arg InsertJobManualE
 		arg.UnitPrice,
 		arg.TransactionID,
 		arg.At,
+	)
+	return err
+}
+
+const insertJobOrderWatch = `-- name: InsertJobOrderWatch :exec
+INSERT INTO job_order_watches (pool_kind, pool_id, job_id, character_id, order_id)
+VALUES ($1, $2, $3, $4, $5)
+ON CONFLICT (pool_kind, pool_id, character_id, order_id) DO UPDATE SET job_id = excluded.job_id, created_at = now()
+`
+
+type InsertJobOrderWatchParams struct {
+	PoolKind    string `json:"pool_kind"`
+	PoolID      int64  `json:"pool_id"`
+	JobID       int64  `json:"job_id"`
+	CharacterID int64  `json:"character_id"`
+	OrderID     int64  `json:"order_id"`
+}
+
+func (q *Queries) InsertJobOrderWatch(ctx context.Context, arg InsertJobOrderWatchParams) error {
+	_, err := q.db.ExecContext(ctx, insertJobOrderWatch,
+		arg.PoolKind,
+		arg.PoolID,
+		arg.JobID,
+		arg.CharacterID,
+		arg.OrderID,
 	)
 	return err
 }
@@ -489,6 +574,56 @@ func (q *Queries) ListIndustrySummary(ctx context.Context, arg ListIndustrySumma
 			&i.CFallback,
 			&i.CAsOf,
 			&i.FoldedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listJobOrderWatches = `-- name: ListJobOrderWatches :many
+SELECT w.job_id, w.order_id, w.created_at, o.location_id, o.closed_at
+FROM job_order_watches w
+LEFT JOIN order_lifecycle o ON o.character_id = w.character_id AND o.order_id = w.order_id
+WHERE w.pool_kind = $1 AND w.pool_id = $2 AND w.job_id = ANY($3::bigint[])
+`
+
+type ListJobOrderWatchesParams struct {
+	PoolKind string  `json:"pool_kind"`
+	PoolID   int64   `json:"pool_id"`
+	JobIds   []int64 `json:"job_ids"`
+}
+
+type ListJobOrderWatchesRow struct {
+	JobID      int64         `json:"job_id"`
+	OrderID    int64         `json:"order_id"`
+	CreatedAt  time.Time     `json:"created_at"`
+	LocationID sql.NullInt64 `json:"location_id"`
+	ClosedAt   sql.NullTime  `json:"closed_at"`
+}
+
+func (q *Queries) ListJobOrderWatches(ctx context.Context, arg ListJobOrderWatchesParams) ([]ListJobOrderWatchesRow, error) {
+	rows, err := q.db.QueryContext(ctx, listJobOrderWatches, arg.PoolKind, arg.PoolID, pq.Array(arg.JobIds))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListJobOrderWatchesRow
+	for rows.Next() {
+		var i ListJobOrderWatchesRow
+		if err := rows.Scan(
+			&i.JobID,
+			&i.OrderID,
+			&i.CreatedAt,
+			&i.LocationID,
+			&i.ClosedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -736,6 +871,58 @@ func (q *Queries) ListPoolJobsForBlueprint(ctx context.Context, arg ListPoolJobs
 			&i.Lost,
 			&i.Mixed,
 			&i.Revenue,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPoolOpenSellOrdersOfType = `-- name: ListPoolOpenSellOrdersOfType :many
+SELECT o.character_id, o.order_id, o.location_id, o.listed_price, o.volume_remain_last
+FROM order_lifecycle o
+WHERE o.character_id = ANY($1::bigint[]) AND o.type_id = $2
+  AND o.is_buy_order = 0 AND o.closed_at IS NULL
+ORDER BY o.first_seen_at DESC
+LIMIT 20
+`
+
+type ListPoolOpenSellOrdersOfTypeParams struct {
+	CharacterIds []int64 `json:"character_ids"`
+	TypeID       int64   `json:"type_id"`
+}
+
+type ListPoolOpenSellOrdersOfTypeRow struct {
+	CharacterID      int64   `json:"character_id"`
+	OrderID          int64   `json:"order_id"`
+	LocationID       int64   `json:"location_id"`
+	ListedPrice      float64 `json:"listed_price"`
+	VolumeRemainLast int64   `json:"volume_remain_last"`
+}
+
+// A pool's open sell orders of an item, for watching one for a job.
+func (q *Queries) ListPoolOpenSellOrdersOfType(ctx context.Context, arg ListPoolOpenSellOrdersOfTypeParams) ([]ListPoolOpenSellOrdersOfTypeRow, error) {
+	rows, err := q.db.QueryContext(ctx, listPoolOpenSellOrdersOfType, pq.Array(arg.CharacterIds), arg.TypeID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListPoolOpenSellOrdersOfTypeRow
+	for rows.Next() {
+		var i ListPoolOpenSellOrdersOfTypeRow
+		if err := rows.Scan(
+			&i.CharacterID,
+			&i.OrderID,
+			&i.LocationID,
+			&i.ListedPrice,
+			&i.VolumeRemainLast,
 		); err != nil {
 			return nil, err
 		}

@@ -1061,7 +1061,14 @@ FROM (
            COALESCE((SELECT -e.job_id FROM job_manual_events e
                      WHERE e.pool_kind = $1 AND e.pool_id = $2
                        AND e.kind = 'link' AND e.transaction_id = t.transaction_id
-                     ORDER BY e.id DESC LIMIT 1), 0)::bigint AS prefer_ref
+                     ORDER BY e.id DESC LIMIT 1),
+                    (SELECT -w.job_id FROM job_order_watches w
+                     JOIN order_lifecycle o ON o.character_id = w.character_id AND o.order_id = w.order_id
+                     WHERE w.pool_kind = $1 AND w.pool_id = $2
+                       AND t.owner_kind = 'char' AND w.character_id = t.owner_id AND o.type_id = t.type_id
+                       AND o.location_id = t.location_id AND t.at >= w.created_at
+                       AND (o.closed_at IS NULL OR t.at <= o.closed_at + interval '1 hour')
+                     ORDER BY w.id DESC LIMIT 1), 0)::bigint AS prefer_ref
     FROM ledger_txns t
     WHERE t.owner_kind = $3 AND t.owner_id = ANY($4::bigint[]) AND t.type_id = $5
     UNION ALL
@@ -1126,7 +1133,8 @@ type ListPoolLotsForTypeSinceRow struct {
 // members, oldest first, from a fold checkpoint on:
 //
 //	'txn'     market buys and sells, with the member that made them
-//	          (a sell the player linked to a job prefers that job's lot);
+//	          (a sell the player linked to a job, or one from an order the
+//	          player watches for a job, prefers that job's lot);
 //	'job'     delivered job output, at the house price the day it delivered;
 //	'basis'   the pool's manual cost basis entries;
 //	'consume' materials a job used, removed when it was installed;

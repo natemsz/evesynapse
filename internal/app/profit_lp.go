@@ -51,7 +51,8 @@ type lpCandidate struct {
 // solveLPDrop finds the offers that, bought some whole number of
 // times, spend exactly the LP that left the balance, and when the
 // journal shows the bracket's LP store payments, cost exactly that
-// ISK too. A bracket that mixed two offers finds none.
+// ISK too. A bracket that mixed two offers finds none here; see
+// solveLPPairs.
 func solveLPDrop(offers []db.ListLPOffersForCorpRow, lp int64, journalISK float64, journalSeen bool) []lpCandidate {
 	var out []lpCandidate
 	for _, o := range offers {
@@ -66,6 +67,37 @@ func solveLPDrop(offers []db.ListLPOffersForCorpRow, lp int64, journalISK float6
 			continue
 		}
 		out = append(out, lpCandidate{OfferID: o.OfferID, Quantity: k})
+	}
+	return out
+}
+
+// solveLPPairs finds pairs of offers that together spend exactly the
+// LP that left the balance and exactly the ISK the journal shows paid
+// in the bracket: two offers, two equations, so each quantity is
+// exact. Without the ISK leg a mixed bracket has too many answers to
+// claim any, so it is never tried.
+func solveLPPairs(offers []db.ListLPOffersForCorpRow, lp int64, isk float64) [][2]lpCandidate {
+	var out [][2]lpCandidate
+	for i := range offers {
+		for j := i + 1; j < len(offers); j++ {
+			a, b := offers[i], offers[j]
+			if a.LpCost <= 0 || b.LpCost <= 0 {
+				continue
+			}
+			det := float64(a.LpCost)*b.IskCost - float64(b.LpCost)*a.IskCost
+			if det == 0 {
+				continue
+			}
+			ka := math.Round((float64(lp)*b.IskCost - float64(b.LpCost)*isk) / det)
+			kb := math.Round((float64(a.LpCost)*isk - float64(lp)*a.IskCost) / det)
+			if ka < 1 || kb < 1 || ka > lpSolveMaxOffers || kb > lpSolveMaxOffers {
+				continue
+			}
+			if int64(ka)*a.LpCost+int64(kb)*b.LpCost != lp || math.Abs(ka*a.IskCost+kb*b.IskCost-isk) > 1 {
+				continue
+			}
+			out = append(out, [2]lpCandidate{{OfferID: a.OfferID, Quantity: int64(ka)}, {OfferID: b.OfferID, Quantity: int64(kb)}})
+		}
 	}
 	return out
 }
@@ -131,43 +163,66 @@ func (app *Application) landLPSamples(ctx context.Context, ch db.Character, now 
 }
 
 // inferLPPurchase stores what a drop at one store can claim, and
-// reports whether it makes stock lots.
+// reports whether it makes stock lots. A drop one offer explains is
+// one inferred purchase; a drop two offers explain together (by the
+// LP and the journal's ISK) is one inferred purchase per offer.
 func (app *Application) inferLPPurchase(ctx context.Context, ch db.Character, corp int64, from, to time.Time, lp int64) bool {
 	p := db.InsertLPPurchaseParams{CharacterID: ch.CharacterID, CorporationID: corp, FromAt: from, ToAt: to, LpSpent: lp, Tier: "unexplained"}
 	paid, err := app.queries.SumLPStorePaymentsBetween(ctx, db.SumLPStorePaymentsBetweenParams{OwnerID: ch.CharacterID, FromAt: from, ToAt: to})
+	journalSeen := err == nil && paid.N > 0
 	if err == nil {
 		p.JournalIsk = paid.Isk
 		p.IskPaid = paid.Isk
 	}
 	offers, _ := app.queries.ListLPOffersForCorp(ctx, corp)
-	cands := solveLPDrop(offers, lp, paid.Isk, err == nil && paid.N > 0)
+	byID := map[int64]db.ListLPOffersForCorpRow{}
+	for _, o := range offers {
+		byID[o.OfferID] = o
+	}
+	var assets *db.CharacterSnapshot
+	if snap, err := app.queries.GetSnapshot(ctx, db.GetSnapshotParams{CharacterID: ch.CharacterID, Kind: esi.SnapAssets}); err == nil {
+		assets = &snap
+	}
+	inferred := func(c lpCandidate) db.InsertLPPurchaseParams {
+		q := p
+		offer := byID[c.OfferID]
+		app.fillLPPurchase(ctx, &q, corp, offer, c.Quantity)
+		q.LpSpent = c.Quantity * offer.LpCost
+		q.Tier = "inferred"
+		if assets != nil {
+			q.AssetsBefore = heldOfType(assets.Payload, q.ProductTypeID)
+			q.AssetsAsOf = timeSet(assets.FetchedAt)
+		}
+		return q
+	}
+	rows := []db.InsertLPPurchaseParams{p}
+	cands := solveLPDrop(offers, lp, paid.Isk, journalSeen)
 	switch {
 	case len(cands) == 1:
-		var offer db.ListLPOffersForCorpRow
-		for _, o := range offers {
-			if o.OfferID == cands[0].OfferID {
-				offer = o
-			}
-		}
-		app.fillLPPurchase(ctx, &p, corp, offer, cands[0].Quantity)
-		p.Tier = "inferred"
-		if snap, err := app.queries.GetSnapshot(ctx, db.GetSnapshotParams{CharacterID: ch.CharacterID, Kind: esi.SnapAssets}); err == nil {
-			p.AssetsBefore = heldOfType(snap.Payload, p.ProductTypeID)
-			p.AssetsAsOf = timeSet(snap.FetchedAt)
-		}
+		rows = []db.InsertLPPurchaseParams{inferred(cands[0])}
 	case len(cands) > 1:
-		p.Tier = "ambiguous"
+		rows[0].Tier = "ambiguous"
 		if len(cands) > 10 {
 			cands = cands[:10]
 		}
 		b, _ := json.Marshal(cands)
-		p.Candidates = string(b)
+		rows[0].Candidates = string(b)
+	case journalSeen:
+		pairs := solveLPPairs(offers, lp, paid.Isk)
+		switch {
+		case len(pairs) == 1:
+			rows = []db.InsertLPPurchaseParams{inferred(pairs[0][0]), inferred(pairs[0][1])}
+		case len(pairs) > 1:
+			rows[0].Tier = "ambiguous" // several pairs fit: nothing to pick from one list
+		}
 	}
-	if err := app.queries.InsertLPPurchase(ctx, p); err != nil {
-		logging.Errorf("worker: lp purchase for character %d: %v", ch.CharacterID, err)
-		return false
+	for _, r := range rows {
+		if err := app.queries.InsertLPPurchase(ctx, r); err != nil {
+			logging.Errorf("worker: lp purchase for character %d: %v", ch.CharacterID, err)
+			return false
+		}
 	}
-	return p.Tier == "inferred"
+	return rows[0].Tier == "inferred"
 }
 
 // fillLPPurchase sets a purchase's offer, product, units, ISK and the

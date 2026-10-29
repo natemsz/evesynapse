@@ -713,6 +713,16 @@ type JobManualEvent struct {
 	CreatedAt     time.Time `json:"created_at"`
 }
 
+type JobOrderWatch struct {
+	ID          int64     `json:"id"`
+	PoolKind    string    `json:"pool_kind"`
+	PoolID      int64     `json:"pool_id"`
+	JobID       int64     `json:"job_id"`
+	CharacterID int64     `json:"character_id"`
+	OrderID     int64     `json:"order_id"`
+	CreatedAt   time.Time `json:"created_at"`
+}
+
 type JobOutputLink struct {
 	PoolKind string    `json:"pool_kind"`
 	PoolID   int64     `json:"pool_id"`

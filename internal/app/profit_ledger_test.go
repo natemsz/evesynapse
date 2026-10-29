@@ -443,3 +443,87 @@ func TestProfitLPPurchase(t *testing.T) {
 		t.Errorf("net LP on the daily rows = %d (%v), want -3000", lpDelta, err)
 	}
 }
+
+// Two offers bought in one bracket are solvable when the journal
+// shows the ISK: two equations give each offer's exact quantity; with
+// more than one pair fitting, no pair is claimed by the caller.
+func TestSolveLPPairs(t *testing.T) {
+	offers := []db.ListLPOffersForCorpRow{
+		{OfferID: 1, TypeID: 9100, Quantity: 1, LpCost: 1000, IskCost: 500000},
+		{OfferID: 2, TypeID: 9101, Quantity: 1, LpCost: 2500, IskCost: 0},
+		{OfferID: 3, TypeID: 9102, Quantity: 1, LpCost: 400, IskCost: 100000},
+	}
+	// 2 of offer 1 and 3 of offer 2: 2,000 + 7,500 LP, 1,000,000 ISK.
+	pairs := solveLPPairs(offers, 9500, 1_000_000)
+	found := false
+	for _, p := range pairs {
+		if p[0].OfferID == 1 && p[0].Quantity == 2 && p[1].OfferID == 2 && p[1].Quantity == 3 {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("pairs = %+v, want 2 of offer 1 with 3 of offer 2 among them", pairs)
+	}
+	if got := solveLPDrop(offers, 9500, 1_000_000, true); len(got) != 0 {
+		t.Errorf("single-offer solutions = %+v, want none for a mixed bracket", got)
+	}
+}
+
+// A job's output tied to an open sell order: that character's sale of
+// the item at the order's station after the watch links to the job;
+// the killmail count finds the item lost on the pool's own losses.
+func TestProfitJobFallbacks(t *testing.T) {
+	app, _, q := buildCorpTestApp(t, &countingTransport{})
+	ctx := context.Background()
+	user, err := q.CreateUser(ctx)
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	seedCharacter(t, q, user.ID, fixtureCharA, "Builder")
+	now := time.Now().UTC().Truncate(time.Second)
+	at := func(h int) string { return now.Add(time.Duration(-h) * time.Hour).Format(time.RFC3339) }
+	exec := func(s string, args ...any) {
+		t.Helper()
+		if _, err := app.db.ExecContext(ctx, s, args...); err != nil {
+			t.Fatalf("%s: %v", s, err)
+		}
+	}
+	exec(`INSERT INTO sde_blueprints (blueprint_type_id, product_type_id, product_quantity, max_production_limit, manufacturing_time_seconds) VALUES (9001, 9002, 1, 100, 600)`)
+	exec(`INSERT INTO sde_blueprint_materials (blueprint_type_id, material_type_id, quantity) VALUES (9001, 34, 10)`)
+	exec(`INSERT INTO market_region_stats (region_id, type_id, typical_sell, typical_buy, updated_at) VALUES (10000002, 34, 6, 5, $1), (10000002, 9002, 500, 450, $1)`, now.Add(-time.Hour))
+	// Bought stock of the item sits beside the job's: FIFO alone would
+	// call the sale mixed, or take the bought units first.
+	seedSnapshot(t, q, fixtureCharA, esi.SnapWalletTxns, esi.WalletTransactions{
+		{TransactionID: 1, Date: at(60), TypeID: 9002, Quantity: 5, UnitPrice: 300, IsBuy: true, LocationID: 60003760},
+	})
+	seedSnapshot(t, q, fixtureCharA, esi.SnapIndustryJobs, esi.IndustryJobs{{
+		JobID: 77, ActivityID: 1, BlueprintTypeID: 9001, BlueprintID: 555, ProductTypeID: 9002, Runs: 5, SuccessfulRuns: 5,
+		Status: "delivered", StartDate: at(40), EndDate: at(30), CompletedDate: at(30), Cost: 1000, FacilityID: 60003760,
+	}})
+	ch, err := q.GetCharacter(ctx, fixtureCharA)
+	if err != nil {
+		t.Fatalf("read character: %v", err)
+	}
+	app.refreshProfitLedger(ctx, ch, now.Add(-20*time.Hour))
+
+	exec(`INSERT INTO order_lifecycle (character_id, order_id, type_id, location_id, region_id, is_buy_order, listed_price, volume_total, volume_remain_last, first_seen_at, last_seen_at) VALUES ($1, 88, 9002, 60003760, 10000002, 0, 520, 5, 5, $2, $2)`, fixtureCharA, now.Add(-20*time.Hour))
+	exec(`INSERT INTO job_order_watches (pool_kind, pool_id, job_id, character_id, order_id, created_at) VALUES ('acct', $1, 77, $2, 88, $3)`, user.ID, fixtureCharA, now.Add(-19*time.Hour))
+	seedSnapshot(t, q, fixtureCharA, esi.SnapWalletTxns, esi.WalletTransactions{
+		{TransactionID: 1, Date: at(60), TypeID: 9002, Quantity: 5, UnitPrice: 300, IsBuy: true, LocationID: 60003760},
+		{TransactionID: 2, Date: at(10), TypeID: 9002, Quantity: 3, UnitPrice: 520, LocationID: 60003760},
+	})
+	app.refreshProfitLedger(ctx, ch, now)
+
+	var kind string
+	var units int64
+	if err := app.db.QueryRowContext(ctx, `SELECT link_kind, units FROM job_output_links WHERE job_id = 77 AND ref_id = 2`).Scan(&kind, &units); err != nil || kind != "linked" || units != 3 {
+		t.Errorf("sale from the watched order = %s, %d units (%v), want linked, 3", kind, units, err)
+	}
+
+	exec(`INSERT INTO killmail_details (killmail_id, character_id, hash, payload, fetched_at) VALUES (501, $1, 'h', $2, $3)`, fixtureCharA,
+		fmt.Sprintf(`{"killmail_id":501,"killmail_time":%q,"victim":{"character_id":%d,"ship_type_id":670,"items":[{"item_type_id":9002,"quantity_destroyed":2,"quantity_dropped":1}]}}`, at(5), fixtureCharA), now.Format(time.RFC3339))
+	k, err := q.CountKillmailLossesOfType(ctx, db.CountKillmailLossesOfTypeParams{TypeID: 9002, CharacterIds: []int64{fixtureCharA}, Since: now.Add(-30 * time.Hour)})
+	if err != nil || k.Units != 3 || k.Killmails != 1 {
+		t.Errorf("killmail losses = %+v (%v), want 3 units on 1 killmail", k, err)
+	}
+}

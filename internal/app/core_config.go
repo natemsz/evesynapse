@@ -104,6 +104,8 @@ type Config struct {
 	zkillAPIBaseURL          string         // zKillboard history API base URL (pilot_activity.go)
 	pilotBackfillOff         bool           // PILOT_BACKFILL=off: no pilot history backfills
 	residueOff               bool           // RESIDUE_MODEL=off: no residue step (residue_model.go)
+	intelTaggerOff           bool           // INTEL_TAGGER=off: read intel without the classifier (intel_tagger.go)
+	intelTaggerPath          string         // INTEL_TAGGER_WEIGHTS: a model file to read with instead of the embedded one
 	residueModelPath         string         // RESIDUE_MODEL_PATH: the local reader's model file ("" = not installed, the step idles)
 	residueModelBin          string         // RESIDUE_MODEL_BIN: the local reader's runtime binary
 	residueModelAddr         string         // RESIDUE_MODEL_ADDR: where the local reader listens (loopback only)
@@ -409,6 +411,8 @@ func LoadConfig() (Config, error) {
 		zkillAPIBaseURL:            getenvDefault("ZKILL_API_BASE_URL", defaultZKillAPIBaseURL),
 		pilotBackfillOff:           strings.EqualFold(strings.TrimSpace(os.Getenv("PILOT_BACKFILL")), "off"),
 		residueOff:                 strings.EqualFold(strings.TrimSpace(os.Getenv("RESIDUE_MODEL")), "off"),
+		intelTaggerOff:             strings.EqualFold(strings.TrimSpace(os.Getenv("INTEL_TAGGER")), "off"),
+		intelTaggerPath:            strings.TrimSpace(os.Getenv("INTEL_TAGGER_WEIGHTS")),
 		residueModelPath:           os.Getenv("RESIDUE_MODEL_PATH"),
 		residueModelBin:            getenvDefault("RESIDUE_MODEL_BIN", "llama-server"),
 		residueModelAddr:           getenvDefault("RESIDUE_MODEL_ADDR", "127.0.0.1:18099"),

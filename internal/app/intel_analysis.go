@@ -240,6 +240,7 @@ func (app *Application) intelDict(ctx context.Context, channelID int64, missing 
 			id, ok := areas[l]
 			return id, ok
 		},
+		Names: app.intelNamesHook(ctx, ships, systems, areas),
 		Gate: func(sys int64, l string) (int64, bool) {
 			id, _, ok := systems(l)
 			if !ok || id == sys {
@@ -326,6 +327,7 @@ func oneEditAway(a, b string) bool {
 type intelNameDict struct {
 	mu     sync.Mutex
 	index  *intelanalyze.NameIndex
+	known  map[string]bool // the same names, lower-cased: the classifier's pilot list
 	loaded time.Time
 	dirty  bool
 }
@@ -389,15 +391,29 @@ func (app *Application) intelNameIndex(ctx context.Context) *intelanalyze.NameIn
 	if d.index == nil || d.dirty || time.Since(d.loaded) > 24*time.Hour {
 		if rows, err := app.queries.ListIntelPilotNames(ctx); err == nil && len(rows) > 0 {
 			pilots := make([]intelanalyze.Pilot, len(rows))
+			known := make(map[string]bool, len(rows))
 			for i, r := range rows {
 				pilots[i] = intelanalyze.Pilot{ID: r.CharacterID, Name: r.Name}
+				known[strings.ToLower(r.Name)] = true
 			}
+			d.known = known
 			d.index = intelanalyze.NewNameIndex(pilots)
 			d.loaded = time.Now()
 			d.dirty = false
 		}
 	}
 	return d.index
+}
+
+// intelKnownNames is every pilot name EVE has confirmed, lower-cased,
+// loaded and refreshed with the segmentation index.
+func (app *Application) intelKnownNames(ctx context.Context) map[string]bool {
+	app.intelNameIndex(ctx)
+	v, _ := intelNameDicts.Load(app)
+	d := v.(*intelNameDict)
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.known
 }
 
 func (app *Application) intelNamesChanged() {

@@ -56,3 +56,18 @@ func TestSaveLoad(t *testing.T) {
 		t.Errorf("round trip changed the model")
 	}
 }
+
+// The embedded model loads and reads a plain report.
+func TestDefaultModel(t *testing.T) {
+	m, err := Default()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var kinds []string
+	for _, s := range m.TagWith("+3 Kara Venn  Tor Ash* on gate camp", nil) {
+		kinds = append(kinds, s.Kind)
+	}
+	if len(kinds) == 0 {
+		t.Fatalf("the embedded model read nothing")
+	}
+}

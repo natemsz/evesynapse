@@ -299,11 +299,8 @@ type Span struct {
 	Kind       string
 }
 
-// Tag labels a report's text.
-func (m *Model) Tag(text string) []Span {
-	toks := Tokenize(text)
-	return m.Spans(toks, m.Decode(Features(toks, m.Lex)))
-}
+// Tag labels a report's text with the model's own Lexicon.
+func (m *Model) Tag(text string) []Span { return m.TagWith(text, m.Lex) }
 
 // Spans turns a label sequence back into spans. A name dragged in
 // as a link ends before the client's star.

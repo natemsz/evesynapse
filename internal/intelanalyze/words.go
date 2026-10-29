@@ -332,3 +332,49 @@ func holdsThing(d Dict, seg []string) bool {
 	}
 	return false
 }
+
+// nameOrder is the order the pilot pass tries run lengths in at
+// the head of left: longest first, but a run the classifier read as
+// one name goes ahead of the rest.
+func nameOrder(seg []string, left []int, names map[string]bool) []int {
+	top := min(3, len(left))
+	order := make([]int, 0, top)
+	if len(names) > 0 {
+		for n := top; n >= 1; n-- {
+			words := make([]string, n)
+			for k := 0; k < n; k++ {
+				words[k] = seg[left[k]]
+			}
+			if names[clean(strings.Join(words, " "))] {
+				order = append(order, n)
+				break
+			}
+		}
+	}
+	for n := top; n >= 1; n-- {
+		if len(order) == 0 || order[0] != n {
+			order = append(order, n)
+		}
+	}
+	return order
+}
+
+// splitByNames is whether the classifier reads a short segment as
+// something other than one name: then it is read word by word, not
+// taken whole ("Sort Dragon Kanea" is two pilots).
+func splitByNames(seg []string, names map[string]bool) bool {
+	if len(names) == 0 || len(seg) < 2 {
+		return false
+	}
+	if names[clean(strings.Join(seg, " "))] {
+		return false
+	}
+	for i := range seg {
+		for n := 1; n <= len(seg)-i; n++ {
+			if names[clean(strings.Join(seg[i:i+n], " "))] {
+				return true
+			}
+		}
+	}
+	return false
+}

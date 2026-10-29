@@ -667,11 +667,11 @@ var pgGlobalNoticesSchema string
 //go:embed schema_pg/109_briefing_dismissals.sql
 var pgBriefingDismissalsSchema string
 
-// Step 110: per-item trading P&L on a pooled cost basis: account,
+// Step 112: per-item trading P&L on a pooled cost basis: account,
 // character and corporation pools, paired sales tax, allocated broker
 // fees, typed gaps, and the per-item daily and window rollups.
 //
-//go:embed schema_pg/110_profit_trading.sql
+//go:embed schema_pg/112_profit_trading.sql
 var pgProfitTradingSchema string
 
 // schemaStep is one numbered file in schema_pg. Steps apply in
@@ -812,7 +812,7 @@ func schemaSteps() []schemaStep {
 		{107, "global_notices", pgGlobalNoticesSchema, ""},
 		{108, "market_api", pgMarketAPISchema, ""},
 		{109, "briefing_dismissals", pgBriefingDismissalsSchema, ""},
-		{110, "profit_trading", pgProfitTradingSchema, ""},
+		{112, "profit_trading", pgProfitTradingSchema, ""},
 	}
 }
 

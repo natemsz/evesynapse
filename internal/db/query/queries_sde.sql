@@ -163,6 +163,37 @@ LIMIT sqlc.arg(row_limit)::bigint OFFSET sqlc.arg(row_offset)::bigint;
 -- name: CountSDETypesInMarketGroup :one
 SELECT COUNT(*) FROM sde_types
 WHERE market_group_id = $1 AND published = 1 AND market_group_id > 0;
+-- name: SuggestSDEMarketGroups :many
+-- Basket editor group search: market groups whose name mentions
+-- the text, prefix matches first, mirroring the type suggest.
+SELECT market_group_id, name FROM sde_market_groups
+WHERE strpos(lower(name), lower(@q)) > 0
+ORDER BY CASE WHEN strpos(lower(name), lower(@q)) = 1 THEN 0 ELSE 1 END, name
+LIMIT @lim::bigint;
+-- name: CountSDETypesInMarketGroupSubtree :one
+-- Every marketable type in a market group and all its descendant
+-- groups: the basket editor's bulk add and its size label.
+WITH RECURSIVE tree AS (
+  SELECT sde_market_groups.market_group_id FROM sde_market_groups WHERE sde_market_groups.market_group_id = $1
+  UNION ALL
+  SELECT g.market_group_id FROM sde_market_groups g
+  JOIN tree t ON g.parent_group_id = t.market_group_id
+)
+SELECT COUNT(*) FROM sde_types
+WHERE sde_types.market_group_id IN (SELECT market_group_id FROM tree)
+  AND sde_types.published = 1 AND sde_types.market_group_id > 0;
+-- name: ListSDETypesInMarketGroupSubtree :many
+WITH RECURSIVE tree AS (
+  SELECT sde_market_groups.market_group_id FROM sde_market_groups WHERE sde_market_groups.market_group_id = sqlc.arg(group_id)
+  UNION ALL
+  SELECT g.market_group_id FROM sde_market_groups g
+  JOIN tree t ON g.parent_group_id = t.market_group_id
+)
+SELECT sde_types.type_id, sde_types.name FROM sde_types
+WHERE sde_types.market_group_id IN (SELECT market_group_id FROM tree)
+  AND sde_types.published = 1 AND sde_types.market_group_id > 0
+ORDER BY sde_types.name
+LIMIT sqlc.arg(row_limit)::bigint;
 -- name: CountSDEMarketGroups :one
 SELECT COUNT(*) FROM sde_market_groups;
 -- name: GetSDEMeta :one

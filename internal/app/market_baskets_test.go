@@ -251,3 +251,74 @@ func TestWatchlistBasket(t *testing.T) {
 		t.Fatalf("after remove, rows = %+v, want none", view.BasketRows)
 	}
 }
+
+// The basket editor's search offers market groups beside single
+// items, and a group's bulk-add list is its whole subtree:
+// published marketable types only, counted the same way.
+func TestMarketBasketGroupSuggestAndTypes(t *testing.T) {
+	app, _, q := buildCorpTestApp(t, &countingTransport{})
+	ctx := context.Background()
+	owner, err := q.CreateUser(ctx)
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	seedCharacter(t, q, owner.ID, fixtureCharA, "Owner")
+	ownerCookie := sessionCookie(t, app, owner.ID, fixtureCharA, "Owner")
+
+	for _, g := range []struct {
+		id, parent int64
+		name       string
+	}{{9100, 0, "Test Clouds"}, {9101, 9100, "Test Cloud Scoops"}, {9200, 0, "Test Rocks"}} {
+		if _, err := app.db.ExecContext(ctx, `INSERT INTO sde_market_groups (market_group_id, parent_group_id, name) VALUES ($1, $2, $3)`, g.id, g.parent, g.name); err != nil {
+			t.Fatalf("seed group: %v", err)
+		}
+	}
+	for _, s := range []struct {
+		id, mg, pub int64
+		name        string
+	}{{900101, 9100, 1, "Test Cloud Alpha"}, {900102, 9101, 1, "Test Cloud Beta"}, {900103, 9101, 0, "Test Cloud Draft"}, {900104, 9200, 1, "Unrelated Rock"}} {
+		if _, err := app.db.ExecContext(ctx, `INSERT INTO sde_types (type_id, name, group_id, market_group_id, published) VALUES ($1, $2, 1, $3, $4)`, s.id, s.name, s.mg, s.pub); err != nil {
+			t.Fatalf("seed type: %v", err)
+		}
+	}
+
+	code, body := getPage(t, app, ownerCookie, "/market/baskets/suggest?q=cloud")
+	if code != http.StatusOK {
+		t.Fatalf("suggest: status %d, want 200", code)
+	}
+	var rows []suggestItem
+	if err := json.Unmarshal([]byte(body), &rows); err != nil {
+		t.Fatalf("suggest body: %v", err)
+	}
+	var group *suggestItem
+	types := map[int64]bool{}
+	for i := range rows {
+		if rows[i].Kind == "group" {
+			group = &rows[i]
+		} else {
+			types[rows[i].ID] = true
+		}
+	}
+	if group == nil || group.ID != 9100 || group.Label != "Group · 2 items" {
+		t.Fatalf("group row = %+v, want Test Clouds with label %q", group, "Group · 2 items")
+	}
+	if !types[900101] || !types[900102] || types[900103] {
+		t.Errorf("type rows = %v, want Alpha and Beta but not the unpublished Draft", types)
+	}
+
+	code, body = getPage(t, app, ownerCookie, "/market/baskets/group-types?id=9100")
+	if code != http.StatusOK {
+		t.Fatalf("group-types: status %d, want 200", code)
+	}
+	var gt basketGroupTypes
+	if err := json.Unmarshal([]byte(body), &gt); err != nil {
+		t.Fatalf("group-types body: %v", err)
+	}
+	if gt.Count != 2 || len(gt.Items) != 2 || gt.Items[0].ID != 900101 || gt.Items[1].ID != 900102 {
+		t.Errorf("group-types = %+v, want count 2 with Alpha then Beta", gt)
+	}
+
+	if code, _ := getPage(t, app, ownerCookie, "/market/baskets/group-types?id=999999"); code != http.StatusNotFound {
+		t.Errorf("missing group: status %d, want 404", code)
+	}
+}

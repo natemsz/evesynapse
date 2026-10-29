@@ -5447,6 +5447,12 @@ html[data-theme="light"] .suggest li:not(.sug-kind):not(.sug-empty):hover, html[
    (phone.css); everywhere else a data-sheet block is inline. */
 .sheet-head, .sheet-only, .sheet-backdrop { display: none; }
 @media (max-width: 45rem) {
+  .gn-banner { flex-wrap: wrap; row-gap: 0.3rem; padding-left: 0.65rem; }
+  .gn-title { flex-basis: calc(100% - 3rem); order: 3; }
+  .gn-tag { order: 1; }
+  .gn-dismiss { order: 2; margin-left: auto; }
+}
+@media (max-width: 45rem) {
   :root { --phone-bar-h: 3.6rem; }
   .nav-hamburger { display: none; }
   #nav-reopen { display: none; }
@@ -5738,9 +5744,3 @@ button.gn-title:hover .gn-more, button.gn-title:focus-visible .gn-more { color: 
 .gn-post a { color: var(--accent); }
 .gn-post hr { border: 0; border-top: 1px solid var(--box-edge); }
 .gn-muted { color: var(--muted); }
-@media (max-width: 45rem) {
-  .gn-banner { flex-wrap: wrap; row-gap: 0.3rem; padding-left: 0.65rem; }
-  .gn-title { flex-basis: calc(100% - 3rem); order: 3; }
-  .gn-tag { order: 1; }
-  .gn-dismiss { order: 2; margin-left: auto; }
-}

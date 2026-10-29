@@ -124,6 +124,7 @@ func (app *Application) handleAssets(w http.ResponseWriter, r *http.Request) {
 			ID:     ch.CharacterID,
 			Name:   ch.Name,
 			Active: ch.CharacterID == active.CharacterID,
+			Image:  portraitURL(ch.CharacterID, 64),
 		})
 	}
 

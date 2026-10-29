@@ -83,13 +83,8 @@ type profitPositionRow struct {
 	Source            string // price tier note when not our own swept price
 }
 
-type profitOwnerChoice struct {
-	Href, Label string
-	Active      bool
-}
-
 type profitView struct {
-	Owners       []profitOwnerChoice
+	Owners       []assetCharLink
 	Spans        []marketTrendChoice
 	OwnerLabel   string
 	Corp         bool
@@ -262,10 +257,10 @@ func (app *Application) buildProfitView(ctx context.Context, userID int64, owner
 		}
 		return h
 	}
-	view.Owners = append(view.Owners, profitOwnerChoice{Href: href("", view.Days), Label: "All your characters", Active: ownerParam == ""})
+	view.Owners = append(view.Owners, assetCharLink{Href: href("", view.Days), Name: "All your characters", Active: ownerParam == ""})
 	for _, ch := range chars {
 		o := strconv.FormatInt(ch.CharacterID, 10)
-		view.Owners = append(view.Owners, profitOwnerChoice{Href: href(o, view.Days), Label: ch.Name, Active: ownerParam == o})
+		view.Owners = append(view.Owners, assetCharLink{ID: ch.CharacterID, Href: href(o, view.Days), Name: ch.Name, Active: ownerParam == o, Image: portraitURL(ch.CharacterID, 64)})
 	}
 	corpIDs := make([]int64, 0, len(corps))
 	for id := range corps {
@@ -274,7 +269,7 @@ func (app *Application) buildProfitView(ctx context.Context, userID int64, owner
 	sort.Slice(corpIDs, func(i, j int) bool { return corpIDs[i] < corpIDs[j] })
 	for _, id := range corpIDs {
 		o := "corp-" + strconv.FormatInt(id, 10)
-		view.Owners = append(view.Owners, profitOwnerChoice{Href: href(o, view.Days), Label: app.CorpDisplayName(ctx, id), Active: ownerParam == o})
+		view.Owners = append(view.Owners, assetCharLink{ID: id, Href: href(o, view.Days), Name: app.CorpDisplayName(ctx, id), Active: ownerParam == o, Image: fmt.Sprintf("https://images.evetech.net/corporations/%d/logo?size=64", id)})
 	}
 	for _, d := range []int{7, 30, 90, 365} {
 		view.Spans = append(view.Spans, marketTrendChoice{Label: fmt.Sprintf("%d days", d), Href: href(ownerParam, d), Active: d == view.Days})

@@ -8,7 +8,7 @@
 {{with .Profit}}
 <p><small>Where your ISK came from, activity by activity, each after its own fees and costs.</small></p>
 
-<nav class="mt-modes" aria-label="Whose profit">{{range .Owners}}<a href="{{.Href}}"{{if .Active}} class="active" aria-current="true"{{end}}>{{.Label}}</a>{{end}}</nav>
+{{template "charselector" .Owners}}
 <nav class="mt-modes" aria-label="Span">{{range .Spans}}<a href="{{.Href}}"{{if .Active}} class="active" aria-current="true"{{end}}>{{.Label}}</a>{{end}}</nav>
 
 {{if .HasData}}

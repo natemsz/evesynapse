@@ -77,6 +77,7 @@ func (app *Application) pickCharacter(ctx context.Context, r *http.Request, path
 			Name:   ch.Name,
 			Active: ch.CharacterID == active.CharacterID,
 			Tags:   ch.Tags,
+			Image:  portraitURL(ch.CharacterID, 64),
 		})
 	}
 	return characters, active, links, nil

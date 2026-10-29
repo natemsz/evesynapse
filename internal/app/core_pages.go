@@ -232,6 +232,9 @@ func (app *Application) fillShell(ctx context.Context, shell *module.ShellData, 
 	if shell.AssetVersion == "" {
 		shell.AssetVersion = staticAssetVersion()
 	}
+	if shell.StatusPage == "" {
+		shell.StatusPage = app.cfg.statusPageOrigin
+	}
 	if shell.Section == "" {
 		shell.Section = sectionForPage(page)
 	}

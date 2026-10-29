@@ -123,27 +123,70 @@ func (app *Application) saveBasketItems(ctx context.Context, basketID int64, lin
 			merged[id] = basketMaxQuantity
 		}
 	}
+	if err := app.replaceBasketItems(ctx, basketID, order, merged); err != nil {
+		return nil, err
+	}
+	return unknown, nil
+}
+
+// basketItemQty is one type and quantity the basket builder picked.
+type basketItemQty struct {
+	TypeID   int64
+	Quantity int64
+}
+
+// saveBasketItemsByID replaces a basket's items from picked types,
+// merging repeats with the same saturation the pasted-line path
+// applies.
+func (app *Application) saveBasketItemsByID(ctx context.Context, basketID int64, items []basketItemQty) error {
+	if len(items) > basketMaxItems {
+		return fmt.Errorf("a basket holds at most %d items", basketMaxItems)
+	}
+	merged := map[int64]int64{}
+	var order []int64
+	for _, it := range items {
+		if it.TypeID <= 0 {
+			continue
+		}
+		qty := it.Quantity
+		if qty < 1 {
+			qty = 1
+		}
+		if _, seen := merged[it.TypeID]; !seen {
+			order = append(order, it.TypeID)
+		}
+		merged[it.TypeID] += qty
+		if merged[it.TypeID] > basketMaxQuantity {
+			merged[it.TypeID] = basketMaxQuantity
+		}
+	}
+	return app.replaceBasketItems(ctx, basketID, order, merged)
+}
+
+// replaceBasketItems swaps a basket's contents and rebuilds its
+// value history in one transaction.
+func (app *Application) replaceBasketItems(ctx context.Context, basketID int64, order []int64, merged map[int64]int64) error {
 	tx, err := app.db.BeginTx(ctx, nil)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	defer tx.Rollback()
 	qtx := app.queries.WithTx(tx)
 	if err := qtx.DeleteMarketBasketItems(ctx, basketID); err != nil {
-		return nil, err
+		return err
 	}
 	for _, id := range order {
 		if err := qtx.InsertMarketBasketItem(ctx, db.InsertMarketBasketItemParams{BasketID: basketID, TypeID: id, Quantity: merged[id]}); err != nil {
-			return nil, err
+			return err
 		}
 	}
 	if err := qtx.DeleteMarketBasketValues(ctx, basketID); err != nil {
-		return nil, err
+		return err
 	}
 	if _, err := qtx.RebuildMarketBasketValues(ctx, db.RebuildMarketBasketValuesParams{BasketID: basketID, Since: basketDay(time.Now().AddDate(0, 0, -bookTrendDays))}); err != nil {
-		return nil, err
+		return err
 	}
-	return unknown, tx.Commit()
+	return tx.Commit()
 }
 
 // basketDay is the stored day key for t.

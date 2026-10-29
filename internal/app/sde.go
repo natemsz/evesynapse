@@ -24,7 +24,7 @@ import (
 // ---------------------------------------------------------------------------
 // EVE static data (SDE): a local copy of CCP's static data export,
 // imported from Fuzzwork's community CSV conversion and refreshed
-// rarely (patch-day cadence: automatic weekly check, manual button
+// rarely (patch-day cadence: automatic daily check, manual button
 // on the Sync page). Type/group/station/system names resolve from
 // the sde_* tables first (see internal/esi); the ESI drip-feed
 // caches stay as fallback for anything the SDE lacks.
@@ -203,7 +203,7 @@ func (app *Application) startSDEImport(reason string) bool {
 // startSDECheck launches the update check in the background: HEAD
 // the remote files, compare ETag/Last-Modified against the stored
 // markers, and import only when something changed. This is the
-// weekly worker check and the Sync page's manual button alike.
+// daily worker check and the Sync page's manual button alike.
 func (app *Application) startSDECheck(reason string) bool {
 	if !app.sdeOpBegin("checking") {
 		return false
@@ -243,7 +243,7 @@ func (app *Application) startSDECheck(reason string) bool {
 }
 
 // sdeMaintenance is the worker's SDE hook (boot + hourly): import
-// when the tables are empty, otherwise run the weekly check when
+// when the tables are empty, otherwise run the daily check when
 // it falls due. It only ever starts background work.
 func (app *Application) sdeMaintenance(ctx context.Context) {
 	count, err := app.queries.CountSDETypes(ctx)
@@ -283,7 +283,7 @@ func (app *Application) sdeMaintenance(ctx context.Context) {
 	}
 	// Even with a current marker, an empty planner table (say the
 	// tables were cleared by hand) refills here rather than
-	// waiting for the weekly tick.
+	// waiting for the daily tick.
 	if n, err := app.queries.CountSDEBlueprints(ctx); err == nil && n == 0 {
 		logging.Infof("sde: planner tables empty — importing industry data")
 		app.startSDEImport("planner backfill")
@@ -295,11 +295,11 @@ func (app *Application) sdeMaintenance(ctx context.Context) {
 		return
 	}
 	if last, err := app.sdeMeta(ctx, "last_check_at"); err == nil && last != "" {
-		if t, perr := time.Parse(time.RFC3339, last); perr == nil && time.Since(t) < 7*24*time.Hour {
-			return // checked within the week
+		if t, perr := time.Parse(time.RFC3339, last); perr == nil && time.Since(t) < 24*time.Hour {
+			return // checked within the day
 		}
 	}
-	app.startSDECheck("weekly")
+	app.startSDECheck("daily")
 }
 
 // sdeImportVersion is the importer's column-set marker (see

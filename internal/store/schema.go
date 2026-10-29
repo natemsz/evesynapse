@@ -676,6 +676,13 @@ var pgBriefingDismissalsSchema string
 //go:embed schema_pg/111_viz_prefs.sql
 var pgVizPrefsSchema string
 
+// Step 112: per-item trading P&L on a pooled cost basis: account,
+// character and corporation pools, paired sales tax, allocated broker
+// fees, typed gaps, and the per-item daily and window rollups.
+//
+//go:embed schema_pg/112_profit_trading.sql
+var pgProfitTradingSchema string
+
 // Step 113: the non-character kind a looked-up intel name also
 // is, so a name that is a place or an item reads as one.
 //
@@ -822,6 +829,7 @@ func schemaSteps() []schemaStep {
 		{109, "briefing_dismissals", pgBriefingDismissalsSchema, ""},
 		{110, "watchlist_baskets", pgWatchlistBasketsSchema, ""},
 		{111, "viz_prefs", pgVizPrefsSchema, ""},
+		{112, "profit_trading", pgProfitTradingSchema, ""},
 		{113, "intel_name_things", pgIntelNameThingsSchema, ""},
 	}
 }

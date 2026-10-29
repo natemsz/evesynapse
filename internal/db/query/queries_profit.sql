@@ -47,63 +47,324 @@ RETURNING at;
 SELECT job_id FROM ledger_jobs
 WHERE owner_kind = $1 AND owner_id = $2 AND job_id = ANY(sqlc.arg(job_ids)::bigint[]);
 
--- name: ListLedgerLotsForType :many
--- Everything that adds or removes stock of one type for one owner,
--- oldest first: market buys and sells, and delivered job output
--- (valued at the house price the day it delivered).
-SELECT x.at, x.ref_id, x.is_sell, x.quantity, x.unit_price
-FROM (
-    SELECT t.at, t.transaction_id AS ref_id, NOT t.is_buy AS is_sell, t.quantity, t.unit_price
+
+-- name: GetUserProfitPrefs :one
+SELECT pooled, broker_in_margin FROM user_profit_prefs WHERE user_id = $1;
+
+-- name: UpsertUserProfitPrefs :exec
+INSERT INTO user_profit_prefs (user_id, pooled, broker_in_margin, updated_at)
+VALUES ($1, $2, $3, now())
+ON CONFLICT (user_id) DO UPDATE SET
+    pooled = excluded.pooled, broker_in_margin = excluded.broker_in_margin,
+    updated_at = excluded.updated_at;
+
+-- name: GetLedgerPoolState :one
+SELECT pool_kind, pool_id, members, folded_at, refolded_at, refold_reason
+FROM ledger_pool_state WHERE pool_kind = $1 AND pool_id = $2;
+
+-- name: UpsertLedgerPoolState :exec
+INSERT INTO ledger_pool_state (pool_kind, pool_id, members, folded_at, refolded_at, refold_reason)
+VALUES ($1, $2, $3, $4, $5, $6)
+ON CONFLICT (pool_kind, pool_id) DO UPDATE SET
+    members = excluded.members, folded_at = excluded.folded_at,
+    refolded_at = excluded.refolded_at, refold_reason = excluded.refold_reason;
+
+-- name: ClearLedgerPoolMembers :exec
+-- Forces the pool to refold from scratch on its next pass (a manual
+-- cost basis was added).
+UPDATE ledger_pool_state SET members = '' WHERE pool_kind = $1 AND pool_id = $2;
+
+-- name: InsertLedgerHole :exec
+INSERT INTO ledger_holes (owner_kind, owner_id, from_at, to_at)
+VALUES ($1, $2, $3, $4)
+ON CONFLICT DO NOTHING;
+
+-- name: ListLedgerHoles :many
+SELECT from_at, to_at FROM ledger_holes
+WHERE owner_kind = sqlc.arg(owner_kind) AND owner_id = ANY(sqlc.arg(owner_ids)::bigint[])
+ORDER BY from_at;
+
+-- name: GetLedgerCoverageStart :one
+-- The earliest moment the ledger holds anything for these owners.
+SELECT COALESCE(LEAST(
+    (SELECT MIN(at) FROM ledger_journal j WHERE j.owner_kind = sqlc.arg(owner_kind) AND j.owner_id = ANY(sqlc.arg(owner_ids)::bigint[])),
+    (SELECT MIN(at) FROM ledger_txns t WHERE t.owner_kind = sqlc.arg(owner_kind) AND t.owner_id = ANY(sqlc.arg(owner_ids)::bigint[]))
+), now())::timestamptz AS start;
+
+-- name: InsertLedgerOrderIssues :exec
+INSERT INTO ledger_order_issues (owner_kind, owner_id, order_id, issued, type_id)
+SELECT sqlc.arg(owner_kind)::text, sqlc.arg(owner_id)::bigint,
+       unnest(sqlc.arg(order_ids)::bigint[]), unnest(sqlc.arg(issueds)::text[])::timestamptz,
+       unnest(sqlc.arg(type_ids)::bigint[])
+ON CONFLICT DO NOTHING;
+
+-- name: DeleteSaleTaxFrom :exec
+DELETE FROM ledger_sale_tax
+WHERE owner_kind = $1 AND owner_id = $2 AND at >= sqlc.arg(from_at)::timestamptz;
+
+-- name: FoldSaleTax :exec
+-- Sales tax lines never name their transaction (context_id is 0), so
+-- they pair by time: an owner's sells and tax lines are grouped by the
+-- exact second, the group's tax is split across its sells pro rata by
+-- sale amount, and the group passes only when its rate agrees with a
+-- neighbouring group's (the rate is uniform at any moment and moves
+-- only when Accounting trains). A lone group passes on a plausible
+-- rate. Sells with no tax in their second, or in a failing group, are
+-- stored unpaired.
+WITH sells AS (
+    SELECT t.transaction_id, t.at, date_trunc('second', t.at) AS sec, t.quantity * t.unit_price AS rev
     FROM ledger_txns t
-    WHERE t.owner_kind = sqlc.arg(owner_kind) AND t.owner_id = sqlc.arg(owner_id) AND t.type_id = sqlc.arg(type_id)
-    UNION ALL
-    SELECT j.at, -j.job_id AS ref_id, false AS is_sell, j.units AS quantity,
-           CASE WHEN j.units > 0 THEN j.output_value / j.units ELSE 0 END AS unit_price
-    FROM ledger_jobs j
-    WHERE j.owner_kind = sqlc.arg(owner_kind) AND j.owner_id = sqlc.arg(owner_id)
-      AND j.product_type_id = sqlc.arg(type_id) AND j.priced
-) x
-ORDER BY x.at, x.ref_id;
+    WHERE t.owner_kind = sqlc.arg(owner_kind) AND t.owner_id = sqlc.arg(owner_id) AND NOT t.is_buy
+      AND t.at >= sqlc.arg(from_at)::timestamptz - interval '7 days'
+), grouped AS (
+    SELECT sec, SUM(rev) AS rev FROM sells GROUP BY sec
+), taxes AS (
+    SELECT date_trunc('second', j.at) AS sec, SUM(-j.amount) AS tax
+    FROM ledger_journal j
+    WHERE j.owner_kind = sqlc.arg(owner_kind) AND j.owner_id = sqlc.arg(owner_id) AND j.ref_type = 'transaction_tax'
+      AND j.at >= sqlc.arg(from_at)::timestamptz - interval '7 days'
+    GROUP BY 1
+), rated AS (
+    SELECT g.sec, g.rev, x.tax, x.tax / NULLIF(g.rev, 0) AS rate
+    FROM grouped g JOIN taxes x ON x.sec = g.sec
+), checked AS (
+    SELECT sec, rev, tax, rate,
+           LAG(rate) OVER w AS prev_rate, LEAD(rate) OVER w AS next_rate,
+           0.0005 + 0.02 / NULLIF(rev, 0) AS tol
+    FROM rated
+    WINDOW w AS (ORDER BY sec)
+)
+INSERT INTO ledger_sale_tax (owner_kind, owner_id, transaction_id, at, tax, paired)
+SELECT sqlc.arg(owner_kind)::text, sqlc.arg(owner_id)::bigint, s.transaction_id, s.at,
+       COALESCE(c.tax * s.rev / NULLIF(c.rev, 0), 0)::float8,
+       COALESCE(c.rate > 0 AND c.rate <= 0.15 AND (
+           (c.prev_rate IS NULL AND c.next_rate IS NULL)
+           OR abs(c.rate - c.prev_rate) <= c.tol OR abs(c.rate - c.next_rate) <= c.tol), false)
+FROM sells s
+LEFT JOIN checked c ON c.sec = s.sec
+WHERE s.at >= sqlc.arg(from_at)::timestamptz
+ON CONFLICT (owner_kind, owner_id, transaction_id) DO UPDATE SET
+    at = excluded.at, tax = excluded.tax, paired = excluded.paired;
 
--- name: DeleteTradeRealizedForType :exec
-DELETE FROM trade_realized WHERE owner_kind = $1 AND owner_id = $2 AND type_id = $3;
+-- name: DeleteBrokerAllocFrom :exec
+DELETE FROM ledger_broker_alloc
+WHERE owner_kind = $1 AND owner_id = $2 AND at >= sqlc.arg(from_at)::timestamptz;
 
--- name: ListLedgerLotsForTypeSince :many
--- The same lot stream as ListLedgerLotsForType from a fold
--- checkpoint on: the caller prepends the stored open lots at the
+-- name: FoldBrokerAlloc :exec
+-- Broker fee lines carry no order id: a fee is tied to an order's type
+-- only when exactly one of the owner's orders was placed or repriced
+-- within a minute of it. The rest stay period-level.
+INSERT INTO ledger_broker_alloc (owner_kind, owner_id, entry_id, at, order_id, type_id, amount)
+SELECT j.owner_kind, j.owner_id, j.entry_id, j.at, c.order_id, c.type_id, -j.amount
+FROM ledger_journal j
+CROSS JOIN LATERAL (
+    SELECT MIN(o.order_id)::bigint AS order_id, MIN(o.type_id)::bigint AS type_id, COUNT(DISTINCT o.order_id) AS n
+    FROM ledger_order_issues o
+    WHERE o.owner_kind = j.owner_kind AND o.owner_id = j.owner_id
+      AND o.issued BETWEEN j.at - interval '60 seconds' AND j.at + interval '60 seconds'
+) c
+WHERE j.owner_kind = sqlc.arg(owner_kind) AND j.owner_id = sqlc.arg(owner_id)
+  AND j.ref_type = 'brokers_fee' AND j.at >= sqlc.arg(from_at)::timestamptz AND c.n = 1
+ON CONFLICT (owner_kind, owner_id, entry_id) DO UPDATE SET
+    at = excluded.at, order_id = excluded.order_id, type_id = excluded.type_id, amount = excluded.amount;
+
+-- name: ListPoolLotsForTypeSince :many
+-- Everything that adds or removes stock of one type across a pool's
+-- members, oldest first, from a fold checkpoint on: market buys and
+-- sells (with the member that made them), delivered job output (at
+-- the house price the day it delivered), and the pool's manual cost
+-- basis entries. The caller prepends the stored open lots at the
 -- checkpoint, which stand in for everything older.
-SELECT x.at, x.ref_id, x.is_sell, x.quantity, x.unit_price
+SELECT x.at, x.ref_id, x.owner_id, x.is_sell, x.quantity, x.unit_price
 FROM (
-    SELECT t.at, t.transaction_id AS ref_id, NOT t.is_buy AS is_sell, t.quantity, t.unit_price
+    SELECT t.at, t.transaction_id AS ref_id, t.owner_id, NOT t.is_buy AS is_sell, t.quantity, t.unit_price
     FROM ledger_txns t
-    WHERE t.owner_kind = sqlc.arg(owner_kind) AND t.owner_id = sqlc.arg(owner_id) AND t.type_id = sqlc.arg(type_id)
+    WHERE t.owner_kind = sqlc.arg(owner_kind) AND t.owner_id = ANY(sqlc.arg(owner_ids)::bigint[]) AND t.type_id = sqlc.arg(type_id)
     UNION ALL
-    SELECT j.at, -j.job_id AS ref_id, false AS is_sell, j.units AS quantity,
+    SELECT j.at, -j.job_id AS ref_id, j.owner_id, false AS is_sell, j.units AS quantity,
            CASE WHEN j.units > 0 THEN j.output_value / j.units ELSE 0 END AS unit_price
     FROM ledger_jobs j
-    WHERE j.owner_kind = sqlc.arg(owner_kind) AND j.owner_id = sqlc.arg(owner_id)
+    WHERE j.owner_kind = sqlc.arg(owner_kind) AND j.owner_id = ANY(sqlc.arg(owner_ids)::bigint[])
       AND j.product_type_id = sqlc.arg(type_id) AND j.priced
+    UNION ALL
+    SELECT m.at, -(4000000000000000 + m.id) AS ref_id, 0::bigint AS owner_id, false AS is_sell, m.quantity, m.unit_cost
+    FROM ledger_cost_basis_manual m
+    WHERE m.pool_kind = sqlc.arg(pool_kind) AND m.pool_id = sqlc.arg(pool_id) AND m.type_id = sqlc.arg(type_id)
 ) x
 WHERE x.at >= sqlc.arg(since)::timestamptz
 ORDER BY x.at, x.ref_id;
 
--- name: DeleteTradeRealizedForTypeFrom :exec
+-- name: ListPoolTypes :many
+-- Every type a pool has bought, sold, built or entered a basis for.
+SELECT DISTINCT type_id FROM (
+    SELECT t.type_id FROM ledger_txns t
+    WHERE t.owner_kind = sqlc.arg(owner_kind) AND t.owner_id = ANY(sqlc.arg(owner_ids)::bigint[])
+    UNION
+    SELECT j.product_type_id FROM ledger_jobs j
+    WHERE j.owner_kind = sqlc.arg(owner_kind) AND j.owner_id = ANY(sqlc.arg(owner_ids)::bigint[]) AND j.priced
+    UNION
+    SELECT m.type_id FROM ledger_cost_basis_manual m
+    WHERE m.pool_kind = sqlc.arg(pool_kind) AND m.pool_id = sqlc.arg(pool_id)
+) x
+ORDER BY type_id;
+
+-- name: ListSoldTypesSince :many
+-- Types an owner sold from a moment on: their realized rows follow a
+-- change of paired tax, so the item rollups refold from there.
+SELECT DISTINCT type_id FROM ledger_txns
+WHERE owner_kind = $1 AND owner_id = $2 AND NOT is_buy AND at >= sqlc.arg(since)::timestamptz;
+
+-- name: DeleteTradeRealizedForPool :exec
+-- A pool refolding from scratch: its own rows and any its members left
+-- under an earlier pool.
 DELETE FROM trade_realized
-WHERE owner_kind = $1 AND owner_id = $2 AND type_id = $3 AND day >= sqlc.arg(from_day)::text;
+WHERE (pool_kind = sqlc.arg(pool_kind) AND pool_id = sqlc.arg(pool_id))
+   OR (owner_kind = sqlc.arg(owner_kind) AND owner_id = ANY(sqlc.arg(owner_ids)::bigint[]));
+
+-- name: DeletePoolCheckpoints :exec
+-- A pool key's checkpoints, open lots and positions, cleared before
+-- it refolds from scratch.
+DELETE FROM trade_fold_checkpoints WHERE owner_kind = sqlc.arg(pool_kind) AND owner_id = sqlc.arg(pool_id);
+
+-- name: DeletePoolOpenLots :exec
+DELETE FROM trade_open_lots WHERE owner_kind = sqlc.arg(pool_kind) AND owner_id = sqlc.arg(pool_id);
+
+-- name: DeletePoolPositions :exec
+DELETE FROM trade_positions WHERE owner_kind = sqlc.arg(pool_kind) AND owner_id = sqlc.arg(pool_id);
+
+-- name: DeleteTradeRealizedForPoolTypeFrom :exec
+DELETE FROM trade_realized
+WHERE pool_kind = sqlc.arg(pool_kind) AND pool_id = sqlc.arg(pool_id) AND type_id = sqlc.arg(type_id)
+  AND day >= sqlc.arg(from_day)::text;
 
 -- name: InsertTradeRealizedBatch :exec
-INSERT INTO trade_realized (owner_kind, owner_id, transaction_id, day, type_id, quantity, revenue, cost, unmatched_qty, unmatched_revenue, planetary)
-SELECT sqlc.arg(owner_kind)::text, sqlc.arg(owner_id)::bigint,
+INSERT INTO trade_realized (owner_kind, owner_id, transaction_id, day, type_id, quantity, revenue, cost,
+                            unmatched_qty, unmatched_revenue, planetary, pool_kind, pool_id, gap_kind)
+SELECT sqlc.arg(owner_kind)::text, unnest(sqlc.arg(owner_ids)::bigint[]),
        unnest(sqlc.arg(transaction_ids)::bigint[]), unnest(sqlc.arg(days)::text[]),
        sqlc.arg(type_id)::bigint,
        unnest(sqlc.arg(quantities)::bigint[]), unnest(sqlc.arg(revenues)::float8[]),
        unnest(sqlc.arg(costs)::float8[]), unnest(sqlc.arg(unmatched_qtys)::bigint[]),
-       unnest(sqlc.arg(unmatched_revenues)::float8[]), unnest(sqlc.arg(planetarys)::bool[])
+       unnest(sqlc.arg(unmatched_revenues)::float8[]), sqlc.arg(planetary)::bool,
+       sqlc.arg(pool_kind)::text, sqlc.arg(pool_id)::bigint, unnest(sqlc.arg(gap_kinds)::text[])
 ON CONFLICT (owner_kind, owner_id, transaction_id) DO UPDATE SET
     quantity = excluded.quantity, revenue = excluded.revenue, cost = excluded.cost,
     unmatched_qty = excluded.unmatched_qty, unmatched_revenue = excluded.unmatched_revenue,
-    planetary = excluded.planetary;
+    planetary = excluded.planetary, pool_kind = excluded.pool_kind, pool_id = excluded.pool_id,
+    gap_kind = excluded.gap_kind;
 
+-- name: DeleteTradeItemDailyFrom :exec
+DELETE FROM trade_item_daily WHERE owner_kind = $1 AND owner_id = $2 AND day >= sqlc.arg(from_day)::text;
+
+-- name: FoldTradeItemDaily :exec
+-- Per seller, day and type from the day on: units and revenue sold,
+-- the covered part (matched units of sales whose tax paired) with its
+-- cost and tax share, broker fees tied to the type, and the units
+-- left uncovered by reason.
+INSERT INTO trade_item_daily (owner_kind, owner_id, day, type_id, units, revenue, cov_units, cov_revenue, cov_cost,
+                              cov_tax, broker, gap_before_history, gap_ledger_hole, gap_no_buy, gap_no_tax)
+SELECT sqlc.arg(owner_kind)::text, sqlc.arg(owner_id)::bigint, day, type_id,
+       SUM(units), SUM(revenue), SUM(cov_units), SUM(cov_revenue), SUM(cov_cost), SUM(cov_tax), SUM(broker),
+       SUM(g_before), SUM(g_hole), SUM(g_buy), SUM(g_tax)
+FROM (
+    SELECT r.day, r.type_id,
+           r.quantity + r.unmatched_qty AS units, r.revenue + r.unmatched_revenue AS revenue,
+           CASE WHEN s.paired THEN r.quantity ELSE 0 END AS cov_units,
+           CASE WHEN s.paired THEN r.revenue ELSE 0 END AS cov_revenue,
+           CASE WHEN s.paired THEN r.cost ELSE 0 END AS cov_cost,
+           CASE WHEN s.paired AND r.quantity + r.unmatched_qty > 0
+                THEN s.tax * r.quantity / (r.quantity + r.unmatched_qty) ELSE 0 END AS cov_tax,
+           0::float8 AS broker,
+           CASE WHEN r.gap_kind = 'before_history' THEN r.unmatched_qty ELSE 0 END AS g_before,
+           CASE WHEN r.gap_kind = 'ledger_hole' THEN r.unmatched_qty ELSE 0 END AS g_hole,
+           CASE WHEN r.gap_kind = 'no_buy' THEN r.unmatched_qty ELSE 0 END AS g_buy,
+           CASE WHEN COALESCE(s.paired, false) THEN 0 ELSE r.quantity END AS g_tax
+    FROM trade_realized r
+    LEFT JOIN ledger_sale_tax s ON s.owner_kind = r.owner_kind AND s.owner_id = r.owner_id AND s.transaction_id = r.transaction_id
+    WHERE r.owner_kind = sqlc.arg(owner_kind) AND r.owner_id = sqlc.arg(owner_id) AND r.day >= sqlc.arg(from_day)::text
+    UNION ALL
+    SELECT to_char(b.at AT TIME ZONE 'UTC', 'YYYY-MM-DD'), b.type_id, 0, 0, 0, 0, 0, 0, b.amount, 0, 0, 0, 0
+    FROM ledger_broker_alloc b
+    WHERE b.owner_kind = sqlc.arg(owner_kind) AND b.owner_id = sqlc.arg(owner_id)
+      AND b.at >= sqlc.arg(from_day)::date::timestamptz
+) x
+GROUP BY day, type_id;
+
+-- name: GetTradeItemWindowAsOf :one
+SELECT COALESCE(MAX(as_of_day), '')::text FROM trade_item_window WHERE owner_kind = $1 AND owner_id = $2;
+
+-- name: DeleteTradeItemWindows :exec
+DELETE FROM trade_item_window WHERE owner_kind = $1 AND owner_id = $2;
+
+-- name: FoldTradeItemWindows :exec
+-- The daily rows summed over the last 7, 30, 90 and 365 days as of a
+-- day, with the previous window of equal length beside them.
+INSERT INTO trade_item_window (owner_kind, owner_id, win, type_id, as_of_day, units, revenue, cov_units, cov_revenue,
+                               cov_cost, cov_tax, broker, gap_before_history, gap_ledger_hole, gap_no_buy, gap_no_tax,
+                               prev_cov_net, prev_broker, prev_units, prev_cov_units)
+SELECT sqlc.arg(owner_kind)::text, sqlc.arg(owner_id)::bigint, w.win, d.type_id, sqlc.arg(as_of_day)::text,
+       SUM(CASE WHEN cur THEN d.units ELSE 0 END), SUM(CASE WHEN cur THEN d.revenue ELSE 0 END),
+       SUM(CASE WHEN cur THEN d.cov_units ELSE 0 END), SUM(CASE WHEN cur THEN d.cov_revenue ELSE 0 END),
+       SUM(CASE WHEN cur THEN d.cov_cost ELSE 0 END), SUM(CASE WHEN cur THEN d.cov_tax ELSE 0 END),
+       SUM(CASE WHEN cur THEN d.broker ELSE 0 END),
+       SUM(CASE WHEN cur THEN d.gap_before_history ELSE 0 END), SUM(CASE WHEN cur THEN d.gap_ledger_hole ELSE 0 END),
+       SUM(CASE WHEN cur THEN d.gap_no_buy ELSE 0 END), SUM(CASE WHEN cur THEN d.gap_no_tax ELSE 0 END),
+       SUM(CASE WHEN cur THEN 0 ELSE d.cov_revenue - d.cov_cost - d.cov_tax END),
+       SUM(CASE WHEN cur THEN 0 ELSE d.broker END),
+       SUM(CASE WHEN cur THEN 0 ELSE d.units END), SUM(CASE WHEN cur THEN 0 ELSE d.cov_units END)
+FROM (VALUES (7), (30), (90), (365)) AS w (win)
+JOIN LATERAL (
+    SELECT t.*, t.day >= to_char(sqlc.arg(as_of_day)::date - (w.win - 1), 'YYYY-MM-DD') AS cur
+    FROM trade_item_daily t
+    WHERE t.owner_kind = sqlc.arg(owner_kind) AND t.owner_id = sqlc.arg(owner_id)
+      AND t.day >= to_char(sqlc.arg(as_of_day)::date - (2 * w.win - 1), 'YYYY-MM-DD')
+      AND t.day <= sqlc.arg(as_of_day)::text
+) d ON true
+GROUP BY w.win, d.type_id
+HAVING SUM(CASE WHEN cur THEN d.units ELSE 0 END) > 0 OR SUM(CASE WHEN cur THEN d.broker ELSE 0 END) > 0;
+
+-- name: ListTradeItems :many
+-- The Trading tab: per type over a window for a set of sellers, fully
+-- covered items first, then by covered margin. Broker fees count in
+-- the margin unless the player set them aside.
+SELECT type_id,
+       SUM(units)::bigint AS units, SUM(revenue)::float8 AS revenue,
+       SUM(cov_units)::bigint AS cov_units, SUM(cov_revenue)::float8 AS cov_revenue,
+       SUM(cov_cost)::float8 AS cov_cost, SUM(cov_tax)::float8 AS cov_tax, SUM(broker)::float8 AS broker,
+       SUM(gap_before_history)::bigint AS gap_before_history, SUM(gap_ledger_hole)::bigint AS gap_ledger_hole,
+       SUM(gap_no_buy)::bigint AS gap_no_buy, SUM(gap_no_tax)::bigint AS gap_no_tax,
+       SUM(prev_cov_net)::float8 AS prev_cov_net, SUM(prev_broker)::float8 AS prev_broker,
+       SUM(prev_units)::bigint AS prev_units, SUM(prev_cov_units)::bigint AS prev_cov_units
+FROM trade_item_window
+WHERE owner_kind = sqlc.arg(owner_kind) AND owner_id = ANY(sqlc.arg(owner_ids)::bigint[]) AND win = sqlc.arg(win)::int
+GROUP BY type_id
+ORDER BY (SUM(units) > 0 AND SUM(cov_units) >= SUM(units)) DESC,
+         SUM(cov_revenue - cov_cost - cov_tax - CASE WHEN sqlc.arg(broker_in_margin)::bool THEN broker ELSE 0 END) DESC,
+         type_id
+LIMIT sqlc.arg(row_cap)::bigint;
+
+-- name: SumTradeItems :one
+-- The Trading tab's header: the same figures over every type.
+SELECT COALESCE(SUM(units), 0)::bigint AS units, COALESCE(SUM(cov_units), 0)::bigint AS cov_units,
+       COALESCE(SUM(cov_revenue - cov_cost - cov_tax), 0)::float8 AS cov_net,
+       COALESCE(SUM(broker), 0)::float8 AS broker,
+       COALESCE(SUM(prev_cov_net), 0)::float8 AS prev_cov_net, COALESCE(SUM(prev_broker), 0)::float8 AS prev_broker,
+       COALESCE(SUM(prev_units), 0)::bigint AS prev_units, COALESCE(SUM(prev_cov_units), 0)::bigint AS prev_cov_units,
+       COALESCE(MAX(as_of_day), '')::text AS as_of_day
+FROM trade_item_window
+WHERE owner_kind = sqlc.arg(owner_kind) AND owner_id = ANY(sqlc.arg(owner_ids)::bigint[]) AND win = sqlc.arg(win)::int;
+
+-- name: InsertManualCostBasis :exec
+INSERT INTO ledger_cost_basis_manual (pool_kind, pool_id, type_id, at, quantity, unit_cost, note)
+VALUES ($1, $2, $3, $4, $5, $6, $7);
+
+-- name: GetFirstUncoveredSale :one
+-- When a pool first sold units of a type that no lot covered: a
+-- manual basis is dated just before it.
+SELECT COALESCE(MIN(t.at), now())::timestamptz AS at
+FROM trade_realized r
+JOIN ledger_txns t ON t.owner_kind = r.owner_kind AND t.owner_id = r.owner_id AND t.transaction_id = r.transaction_id
+WHERE r.pool_kind = sqlc.arg(pool_kind) AND r.pool_id = sqlc.arg(pool_id) AND r.type_id = sqlc.arg(type_id) AND r.unmatched_qty > 0;
 -- name: GetTradeFoldCheckpoint :one
 SELECT checkpoint_at FROM trade_fold_checkpoints
 WHERE owner_kind = $1 AND owner_id = $2 AND type_id = $3;
@@ -127,14 +388,6 @@ INSERT INTO trade_open_lots (owner_kind, owner_id, type_id, seq, quantity, unit_
 SELECT sqlc.arg(owner_kind)::text, sqlc.arg(owner_id)::bigint, sqlc.arg(type_id)::bigint,
        unnest(sqlc.arg(seqs)::bigint[]), unnest(sqlc.arg(quantities)::bigint[]),
        unnest(sqlc.arg(unit_prices)::float8[]);
-
--- name: InsertTradeRealized :exec
-INSERT INTO trade_realized (owner_kind, owner_id, transaction_id, day, type_id, quantity, revenue, cost, unmatched_qty, unmatched_revenue, planetary)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-ON CONFLICT (owner_kind, owner_id, transaction_id) DO UPDATE SET
-    quantity = excluded.quantity, revenue = excluded.revenue, cost = excluded.cost,
-    unmatched_qty = excluded.unmatched_qty, unmatched_revenue = excluded.unmatched_revenue,
-    planetary = excluded.planetary;
 
 -- name: UpsertTradePosition :exec
 INSERT INTO trade_positions (owner_kind, owner_id, type_id, quantity, cost, updated_at)
@@ -233,17 +486,6 @@ GROUP BY day
 ORDER BY day
 LIMIT 400;
 
--- name: ListTopTradeTypes :many
--- What is actually making money in trading: realized profit per
--- type over the span, best first.
-SELECT type_id, SUM(quantity)::bigint AS quantity, SUM(revenue)::float8 AS revenue, SUM(cost)::float8 AS cost
-FROM trade_realized
-WHERE owner_kind = sqlc.arg(owner_kind) AND owner_id = ANY(sqlc.arg(owner_ids)::bigint[])
-  AND day >= sqlc.arg(from_day)::text AND quantity > 0
-GROUP BY type_id
-ORDER BY SUM(revenue - cost) DESC, type_id
-LIMIT sqlc.arg(row_cap)::bigint;
-
 -- name: ListTradePositions :many
 SELECT type_id, SUM(quantity)::bigint AS quantity, SUM(cost)::float8 AS cost
 FROM trade_positions
@@ -261,10 +503,10 @@ WHERE owner_kind = sqlc.arg(owner_kind) AND owner_id = ANY(sqlc.arg(owner_ids)::
   AND at >= sqlc.arg(from_at)::timestamptz AND activity = 'trading';
 
 -- name: ListPositionCostsForTypes :many
--- Open position cost per unit for a character's types: the basis a
--- beaten sell order's margin is measured against.
+-- Open position cost per unit for a pool's types: the basis a beaten
+-- sell order's margin is measured against.
 SELECT type_id, quantity, cost FROM trade_positions
-WHERE owner_kind = 'char' AND owner_id = $1 AND type_id = ANY(sqlc.arg(type_ids)::bigint[]) AND quantity > 0;
+WHERE owner_kind = $1 AND owner_id = $2 AND type_id = ANY(sqlc.arg(type_ids)::bigint[]) AND quantity > 0;
 
 -- name: GetObservedSalesTaxRate :one
 -- A character's effective sales tax rate over a span: transaction

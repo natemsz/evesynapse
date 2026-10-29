@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.7.0.5] - 2026-10-29
+
+Automated build of EveSynapse v0.7.0.5. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+
+## What's Changed
+### 🚀 Features
+* Replace the profit owner pills with the searchable character picker by @natemsz in https://github.com/natemsz/evesynapse/pull/828
+* Set dropdown menu items in Rajdhani Regular at 0.03em letter spacing by @natemsz in https://github.com/natemsz/evesynapse/pull/826
+* Give the market tree a type ladder, a working indent and a branches-first order by @natemsz in https://github.com/natemsz/evesynapse/pull/829
+* Check for SDE updates daily instead of weekly by @natemsz in https://github.com/natemsz/evesynapse/pull/830
+* Add market groups to the basket editor search with bulk add by @natemsz in https://github.com/natemsz/evesynapse/pull/832
+### 🐛 Bug Fixes
+* Fold briefing decks at the midpoint with one painted card per deck by @natemsz in https://github.com/natemsz/evesynapse/pull/831
+### Other Changes
+* Profit fallbacks: two-offer LP purchases, watched orders for job output, killmail losses by @natemsz in https://github.com/natemsz/evesynapse/pull/823
+* Profit per blueprint: invention cost on T2 builds, and contract sales of job output by @natemsz in https://github.com/natemsz/evesynapse/pull/825
+* Profit page: two charts per row, the site's chart tips and axis labels, income donut by @natemsz in https://github.com/natemsz/evesynapse/pull/827
+* docs(changelog): review changelog for v0.7.0.4 by @github-actions[bot] in https://github.com/natemsz/evesynapse/pull/824
+
+
+**Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.7.0.4...v0.7.0.5
+
 ## [v0.7.0.4] - 2026-10-29
 
 Automated build of EveSynapse v0.7.0.4. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).

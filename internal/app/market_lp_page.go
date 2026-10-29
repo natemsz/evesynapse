@@ -12,8 +12,8 @@ import (
 	"encoding/csv"
 	"encoding/json"
 	"math"
-	"net/url"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -56,22 +56,22 @@ type marketLPStore struct {
 }
 
 type marketLPView struct {
-	RegionID   int64
-	RegionName string
-	Regions    []marketRegionChoice
-	Stores     []marketLPStore
-	StoreID    int64
-	Instant    bool // value at the typical buy (sell at once) instead of the typical sell
-	MinVolume  int64
+	RegionID    int64
+	RegionName  string
+	Regions     []marketRegionChoice
+	Stores      []marketLPStore
+	StoreID     int64
+	Instant     bool // value at the typical buy (sell at once) instead of the typical sell
+	MinVolume   int64
 	MinISKPerLP float64
 	MaxISKPerLP float64
-	MinLP      int64
-	MaxLP      int64
-	Item       string // find-stores search text, as typed
+	MinLP       int64
+	MaxLP       int64
+	Item        string // find-stores search text, as typed
 	ExportQuery string // the active filters as a query string, for the export links
-	HasStores  bool
-	Unpriced   int64
-	Rows       []marketLPRow
+	HasStores   bool
+	Unpriced    int64
+	Rows        []marketLPRow
 }
 
 func (app *Application) handleMarketLP(w http.ResponseWriter, r *http.Request) {
@@ -352,17 +352,17 @@ func (app *Application) handleMarketLPExportJSON(w http.ResponseWriter, r *http.
 		return
 	}
 	type offer struct {
-		Item            string  `json:"item"`
-		TypeID          int64   `json:"type_id"`
-		Store           string  `json:"store"`
-		CorporationID   int64   `json:"corporation_id"`
-		Quantity        int64   `json:"quantity"`
-		LPCost          int64   `json:"lp_cost"`
-		ISKCost         float64 `json:"isk_cost"`
-		RequiredCost    float64 `json:"required_items_cost"`
-		Value           float64 `json:"value"`
-		ISKPerLP        float64 `json:"isk_per_lp"`
-		SoldPerDay      float64 `json:"sold_per_day"`
+		Item          string  `json:"item"`
+		TypeID        int64   `json:"type_id"`
+		Store         string  `json:"store"`
+		CorporationID int64   `json:"corporation_id"`
+		Quantity      int64   `json:"quantity"`
+		LPCost        int64   `json:"lp_cost"`
+		ISKCost       float64 `json:"isk_cost"`
+		RequiredCost  float64 `json:"required_items_cost"`
+		Value         float64 `json:"value"`
+		ISKPerLP      float64 `json:"isk_per_lp"`
+		SoldPerDay    float64 `json:"sold_per_day"`
 	}
 	out := make([]offer, 0, len(rows))
 	for _, row := range rows {

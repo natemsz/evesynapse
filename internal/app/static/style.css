@@ -68,7 +68,24 @@
   src: url('/static/fonts/saira-sc-700.woff2') format('woff2');
 }
 /* The heading face: Rajdhani SemiBold (and Bold), set in capitals.
-   SIL Open Font License; self-hosted (font-src 'self'). */
+   Regular rides along for the dropdown menu items. SIL Open Font
+   License; self-hosted (font-src 'self'). */
+@font-face {
+  font-family: 'Rajdhani';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/static/fonts/rajdhani-400.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Rajdhani';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/static/fonts/rajdhani-400-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
 @font-face {
   font-family: 'Rajdhani';
   font-style: normal;
@@ -240,12 +257,22 @@ h1, h2, h3, h4, .wordmark, .btn, thead th, .badge,
 .branch > summary {
   text-transform: uppercase;
 }
-header a.navlink, .branch .menu a, .switcher .menu a, .switcher-menu a {
+header a.navlink {
   font-family: "Rajdhani", "Segoe UI", sans-serif;
   font-weight: 600;
   font-synthesis-weight: none;
   text-transform: uppercase;
   letter-spacing: 0.04em;
+}
+/* Dropdown menu items ride a step lighter than the category and
+   group titles above them: Rajdhani Regular against their
+   SemiBold. */
+.branch .menu a, .switcher .menu a, .switcher-menu a {
+  font-family: "Rajdhani", "Segoe UI", sans-serif;
+  font-weight: 400;
+  font-synthesis-weight: none;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
 }
 .wordmark { font-weight: 600; }
 

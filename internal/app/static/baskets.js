@@ -353,7 +353,8 @@
           tbody.addEventListener("click", function (e) {
             var btn = e.target.closest("[data-mbk-edit]");
             if (!btn) return;
-            var id = btn.getAttribute("data-mbk-edit");
+            var id = parseInt(btn.getAttribute("data-mbk-edit"), 10);
+            if (!id) return;
             var row = tbody.querySelector('tr[data-mbk-row="' + id + '"]');
             if (!row) return;
             var open = tbody.querySelector('tr[data-mbk-editor-for="' + id + '"]');

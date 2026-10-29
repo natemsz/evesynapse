@@ -46,6 +46,39 @@ func (q *Queries) CloseOrderLifecycle(ctx context.Context, arg CloseOrderLifecyc
 	return err
 }
 
+const countMarketBrowseTypes = `-- name: CountMarketBrowseTypes :one
+WITH RECURSIVE tree AS (
+    SELECT g.market_group_id FROM sde_market_groups g
+    WHERE ($4::bigint = 0 AND g.parent_group_id = 0) OR g.market_group_id = $4::bigint
+    UNION ALL
+    SELECT c.market_group_id FROM sde_market_groups c JOIN tree t ON c.parent_group_id = t.market_group_id
+)
+SELECT COUNT(*) FROM sde_types t
+LEFT JOIN market_region_stats s ON s.region_id = $1::bigint AND s.type_id = t.type_id
+WHERE t.published = 1 AND t.market_group_id IN (SELECT market_group_id FROM tree)
+  AND ($2::text = '' OR t.name ILIKE $2::text)
+  AND COALESCE(s.avg_daily_volume_30d, 0) >= $3::float8
+`
+
+type CountMarketBrowseTypesParams struct {
+	RegionID  int64   `json:"region_id"`
+	NameLike  string  `json:"name_like"`
+	MinVolume float64 `json:"min_volume"`
+	GroupID   int64   `json:"group_id"`
+}
+
+func (q *Queries) CountMarketBrowseTypes(ctx context.Context, arg CountMarketBrowseTypesParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countMarketBrowseTypes,
+		arg.RegionID,
+		arg.NameLike,
+		arg.MinVolume,
+		arg.GroupID,
+	)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const deleteGuidePrices = `-- name: DeleteGuidePrices :exec
 DELETE FROM guide_prices
 `
@@ -1500,6 +1533,102 @@ func (q *Queries) ListMarketBookOrders(ctx context.Context, arg ListMarketBookOr
 			&i.LocationID,
 			&i.SystemID,
 			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listMarketBrowseTypes = `-- name: ListMarketBrowseTypes :many
+WITH RECURSIVE tree AS (
+    SELECT g.market_group_id FROM sde_market_groups g
+    WHERE ($7::bigint = 0 AND g.parent_group_id = 0) OR g.market_group_id = $7::bigint
+    UNION ALL
+    SELECT c.market_group_id FROM sde_market_groups c JOIN tree t ON c.parent_group_id = t.market_group_id
+)
+SELECT t.type_id, t.name,
+       COALESCE(s.typical_sell, 0)::float8 AS typical_sell,
+       COALESCE(s.typical_buy, 0)::float8 AS typical_buy,
+       s.sell_chg_7d, s.volatility_30d,
+       COALESCE(s.avg_daily_volume_30d, 0)::float8 AS traded_per_day,
+       COALESCE(s.sell_orders, 0)::bigint AS sell_orders
+FROM sde_types t
+LEFT JOIN market_region_stats s ON s.region_id = $1::bigint AND s.type_id = t.type_id
+WHERE t.published = 1 AND t.market_group_id IN (SELECT market_group_id FROM tree)
+  AND ($2::text = '' OR t.name ILIKE $2::text)
+  AND COALESCE(s.avg_daily_volume_30d, 0) >= $3::float8
+ORDER BY
+  CASE WHEN $4::text = 'name' THEN t.name END,
+  CASE WHEN $4::text = 'price' THEN s.typical_sell END DESC NULLS LAST,
+  CASE WHEN $4::text = 'cheap' THEN NULLIF(s.typical_sell, 0) END ASC NULLS LAST,
+  CASE WHEN $4::text = 'rising' THEN s.sell_chg_7d END DESC NULLS LAST,
+  CASE WHEN $4::text = 'falling' THEN s.sell_chg_7d END ASC NULLS LAST,
+  CASE WHEN $4::text = 'volume' THEN s.avg_daily_volume_30d END DESC NULLS LAST,
+  CASE WHEN $4::text = 'volatile' THEN s.volatility_30d END DESC NULLS LAST,
+  t.name, t.type_id
+LIMIT $6::bigint OFFSET $5::bigint
+`
+
+type ListMarketBrowseTypesParams struct {
+	RegionID  int64   `json:"region_id"`
+	NameLike  string  `json:"name_like"`
+	MinVolume float64 `json:"min_volume"`
+	Sort      string  `json:"sort"`
+	RowOffset int64   `json:"row_offset"`
+	RowLimit  int64   `json:"row_limit"`
+	GroupID   int64   `json:"group_id"`
+}
+
+type ListMarketBrowseTypesRow struct {
+	TypeID        int64           `json:"type_id"`
+	Name          string          `json:"name"`
+	TypicalSell   float64         `json:"typical_sell"`
+	TypicalBuy    float64         `json:"typical_buy"`
+	SellChg7d     sql.NullFloat64 `json:"sell_chg_7d"`
+	Volatility30d sql.NullFloat64 `json:"volatility_30d"`
+	TradedPerDay  float64         `json:"traded_per_day"`
+	SellOrders    int64           `json:"sell_orders"`
+}
+
+// The market browser's item list: every marketable type under a
+// market group (its whole subtree; 0 = every group), joined to the
+// region's stat pack row, filtered by name and traded volume, sorted
+// and paged in SQL. A type with no stat row lists with no figures
+// and sorts after priced ones.
+func (q *Queries) ListMarketBrowseTypes(ctx context.Context, arg ListMarketBrowseTypesParams) ([]ListMarketBrowseTypesRow, error) {
+	rows, err := q.db.QueryContext(ctx, listMarketBrowseTypes,
+		arg.RegionID,
+		arg.NameLike,
+		arg.MinVolume,
+		arg.Sort,
+		arg.RowOffset,
+		arg.RowLimit,
+		arg.GroupID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListMarketBrowseTypesRow
+	for rows.Next() {
+		var i ListMarketBrowseTypesRow
+		if err := rows.Scan(
+			&i.TypeID,
+			&i.Name,
+			&i.TypicalSell,
+			&i.TypicalBuy,
+			&i.SellChg7d,
+			&i.Volatility30d,
+			&i.TradedPerDay,
+			&i.SellOrders,
 		); err != nil {
 			return nil, err
 		}

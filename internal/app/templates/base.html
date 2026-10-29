@@ -259,6 +259,7 @@
 {{if or (eq .NavPage "scan.html") (eq .NavPage "pilot.html")}}<script src="/static/scans.js?v={{.AssetVersion}}" defer></script>{{end}}{{if eq .NavPage "intel_workbench.html"}}<script src="/static/workbench.js?v={{.AssetVersion}}" defer></script>{{end}}
 {{if or (eq .NavPage "channel.html") (eq .NavPage "feed.html") (eq .NavPage "intel_workbench.html")}}<script src="/static/channels.js?v={{.AssetVersion}}" defer></script>{{end}}
 {{if or (eq .NavPage "contract_search.html") (eq .NavPage "contract_detail.html")}}<script src="/static/contracts.js?v={{.AssetVersion}}" defer></script>{{end}}
+{{if eq .NavPage "market.html"}}<script src="/static/market.js?v={{.AssetVersion}}" defer></script>{{end}}
 {{range .Scripts}}<script src="{{.}}?v={{$.AssetVersion}}" defer></script>{{end}}
 {{if .NotifySettings}}<script src="/static/push.js?v={{.AssetVersion}}" defer></script>{{end}}
 {{if .LoggedIn}}

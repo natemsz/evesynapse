@@ -1242,3 +1242,48 @@ SELECT COUNT(*) FILTER (WHERE sell_chg_7d IS NOT NULL) AS with_change,
 FROM market_region_stats WHERE region_id = $1;
 -- name: ListSDERegionNames :many
 SELECT region_id, name FROM sde_regions WHERE region_id = ANY(sqlc.arg(region_ids)::bigint[]);
+-- name: ListMarketBrowseTypes :many
+-- The market browser's item list: every marketable type under a
+-- market group (its whole subtree; 0 = every group), joined to the
+-- region's stat pack row, filtered by name and traded volume, sorted
+-- and paged in SQL. A type with no stat row lists with no figures
+-- and sorts after priced ones.
+WITH RECURSIVE tree AS (
+    SELECT g.market_group_id FROM sde_market_groups g
+    WHERE (sqlc.arg(group_id)::bigint = 0 AND g.parent_group_id = 0) OR g.market_group_id = sqlc.arg(group_id)::bigint
+    UNION ALL
+    SELECT c.market_group_id FROM sde_market_groups c JOIN tree t ON c.parent_group_id = t.market_group_id
+)
+SELECT t.type_id, t.name,
+       COALESCE(s.typical_sell, 0)::float8 AS typical_sell,
+       COALESCE(s.typical_buy, 0)::float8 AS typical_buy,
+       s.sell_chg_7d, s.volatility_30d,
+       COALESCE(s.avg_daily_volume_30d, 0)::float8 AS traded_per_day,
+       COALESCE(s.sell_orders, 0)::bigint AS sell_orders
+FROM sde_types t
+LEFT JOIN market_region_stats s ON s.region_id = sqlc.arg(region_id)::bigint AND s.type_id = t.type_id
+WHERE t.published = 1 AND t.market_group_id IN (SELECT market_group_id FROM tree)
+  AND (sqlc.arg(name_like)::text = '' OR t.name ILIKE sqlc.arg(name_like)::text)
+  AND COALESCE(s.avg_daily_volume_30d, 0) >= sqlc.arg(min_volume)::float8
+ORDER BY
+  CASE WHEN sqlc.arg(sort)::text = 'name' THEN t.name END,
+  CASE WHEN sqlc.arg(sort)::text = 'price' THEN s.typical_sell END DESC NULLS LAST,
+  CASE WHEN sqlc.arg(sort)::text = 'cheap' THEN NULLIF(s.typical_sell, 0) END ASC NULLS LAST,
+  CASE WHEN sqlc.arg(sort)::text = 'rising' THEN s.sell_chg_7d END DESC NULLS LAST,
+  CASE WHEN sqlc.arg(sort)::text = 'falling' THEN s.sell_chg_7d END ASC NULLS LAST,
+  CASE WHEN sqlc.arg(sort)::text = 'volume' THEN s.avg_daily_volume_30d END DESC NULLS LAST,
+  CASE WHEN sqlc.arg(sort)::text = 'volatile' THEN s.volatility_30d END DESC NULLS LAST,
+  t.name, t.type_id
+LIMIT sqlc.arg(row_limit)::bigint OFFSET sqlc.arg(row_offset)::bigint;
+-- name: CountMarketBrowseTypes :one
+WITH RECURSIVE tree AS (
+    SELECT g.market_group_id FROM sde_market_groups g
+    WHERE (sqlc.arg(group_id)::bigint = 0 AND g.parent_group_id = 0) OR g.market_group_id = sqlc.arg(group_id)::bigint
+    UNION ALL
+    SELECT c.market_group_id FROM sde_market_groups c JOIN tree t ON c.parent_group_id = t.market_group_id
+)
+SELECT COUNT(*) FROM sde_types t
+LEFT JOIN market_region_stats s ON s.region_id = sqlc.arg(region_id)::bigint AND s.type_id = t.type_id
+WHERE t.published = 1 AND t.market_group_id IN (SELECT market_group_id FROM tree)
+  AND (sqlc.arg(name_like)::text = '' OR t.name ILIKE sqlc.arg(name_like)::text)
+  AND COALESCE(s.avg_daily_volume_30d, 0) >= sqlc.arg(min_volume)::float8;

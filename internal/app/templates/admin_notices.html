@@ -1,0 +1,92 @@
+{{define "title"}}Notices{{end}}
+{{define "pagetitle"}}<h1><span class="gt">Admin</span></h1>{{end}}
+{{define "pagetabs"}}{{template "sectiontabs" .}}{{end}}
+{{define "content"}}
+{{template "admintabs" .}}
+<p>Banners shown on every page until they end. Never sent to Discord.</p>
+
+{{if .Error}}<p class="err">{{.Error}}</p>{{end}}
+
+{{with .NoticeAdmin}}
+<section class="card spanall" id="notice-form">
+<h2>{{if .Form.ID}}Edit notice {{.Form.ID}}{{else}}Publish a notice{{end}}</h2>
+<p><small>{{.LiveCount}} of {{.LiveMax}} live. Publishing is limited to a few notices an hour.</small></p>
+<form method="post" action="/admin/notices/save" class="gn-form" data-gn-editor>
+  {{if .Form.ID}}<input type="hidden" name="id" value="{{.Form.ID}}">{{end}}
+  <label class="gn-field">
+    <span>Title</span>
+    <input type="text" name="title" value="{{.Form.Title}}" maxlength="{{.TitleMax}}" required autocomplete="off">
+  </label>
+  <div class="gn-row">
+    <label class="gn-field">
+      <span>Severity</span>
+      <select name="severity" data-gn-severity>
+        {{$sel := .Form.Severity}}{{range .Severities}}<option value="{{.ID}}"{{if eq .ID $sel}} selected{{end}}>{{.Label}}</option>{{end}}
+      </select>
+    </label>
+    <label class="gn-field">
+      <span>Ends (UTC)</span>
+      <input type="datetime-local" name="ends" value="{{.Form.Ends}}" required>
+    </label>
+  </div>
+  <div class="gn-editor">
+    <label class="gn-field">
+      <span>Detail post, optional. Markdown: **bold**, *italic*, [links](https://...), - lists, # headings.</span>
+      <textarea name="body" rows="10" maxlength="{{.BodyMax}}" data-gn-body>{{.Form.Body}}</textarea>
+    </label>
+    <div class="gn-field">
+      <span>Preview</span>
+      <div class="gn-preview gn-post" data-gn-preview aria-live="polite"><p class="gn-muted">Nothing to preview yet.</p></div>
+    </div>
+  </div>
+  {{if .Form.ID}}
+  <p><small>{{if .Form.UrgentSent}}App notifications went out {{.Form.UrgentSent}}.{{else}}No app notifications were sent for this notice.{{end}} Edits never send them.</small></p>
+  {{else}}
+  <label class="gn-check">
+    <input type="checkbox" name="urgent" data-gn-urgent>
+    <span>Also send app notifications. Warnings and critical notices only, once a day at most.</span>
+  </label>
+  {{end}}
+  <div class="gn-actions">
+    <button type="submit">{{if .Form.ID}}Save changes{{else}}Publish{{end}}</button>
+    {{if .Form.ID}}<a class="btn btn-quiet" href="/admin/notices/">Cancel</a>{{end}}
+  </div>
+</form>
+</section>
+
+<section class="card spanall" id="notice-list">
+<h2>Notices</h2>
+{{if .Rows}}
+<div class="tw">
+<table class="stat-table gn-table">
+  <thead><tr><th>Notice</th><th>State</th><th>Ends</th><th>App notifications</th><th></th></tr></thead>
+  <tbody>
+  {{range .Rows}}<tr>
+    <td><span class="gn-chip gn-{{.Severity}}">{{.Label}}</span> {{.Title}}{{if .HasPost}} <small class="gn-muted">with post</small>{{end}}<br><small class="gn-muted">#{{.ID}}, account {{.By}}, {{.Created}}</small></td>
+    <td>{{.State}}</td>
+    <td>{{.Ends}}</td>
+    <td>{{if .Urgent}}{{.Urgent}}{{else}}<span class="gn-muted">None</span>{{end}}</td>
+    <td class="gn-row-actions">{{if ne .State "Retired"}}<a class="btn btn-quiet" href="/admin/notices/?edit={{.ID}}#notice-form">Edit</a>
+      <form method="post" action="/admin/notices/retire"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" class="btn btn-danger">Retire</button></form>{{end}}</td>
+  </tr>
+  {{end}}</tbody>
+</table>
+</div>
+{{else}}<p class="gn-muted">No notices yet.</p>{{end}}
+</section>
+
+<section class="card spanall" id="notice-audit">
+<h2>Audit trail</h2>
+{{if .Audit}}
+<div class="tw">
+<table class="stat-table">
+  <thead><tr><th>When</th><th>What</th><th>Notice</th><th>Who</th></tr></thead>
+  <tbody>
+  {{range .Audit}}<tr><td>{{.At}}</td><td>{{.Action}}</td><td>#{{.NoticeID}} {{.Title}}</td><td>{{if .Character}}{{.Character}}, {{end}}account {{.Account}}</td></tr>
+  {{end}}</tbody>
+</table>
+</div>
+{{else}}<p class="gn-muted">Nothing yet.</p>{{end}}
+</section>
+{{end}}
+{{end}}

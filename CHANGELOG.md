@@ -10,6 +10,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [v0.6.1.9] - 2026-10-28
 
 Automated build of EveSynapse v0.6.1.9. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+## [v0.6.1.8] - 2026-10-28
+
+Automated build of EveSynapse v0.6.1.8. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+
+## What's Changed
+### Other Changes
+* Stops the abyssal scoring pass on shutdown instead of logging every item by @natemsz in https://github.com/natemsz/evesynapse/pull/783
+
+
+**Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.6.1.6...v0.6.1.8
+## [v0.6.1.7] - 2026-10-28
+
+Automated build of EveSynapse v0.6.1.7. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
 
 ## What's Changed
@@ -21,6 +35,24 @@ Automated build of EveSynapse v0.6.1.9. Update with: evesynapse -update -arm64 (
 
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.6.1.8...v0.6.1.9
+* Add swipe stepping to the landing gallery by @natemsz in https://github.com/natemsz/evesynapse/pull/768
+* Sizes nav glyphs in rem with explicit dimensions and shortens the swap transition by @natemsz in https://github.com/natemsz/evesynapse/pull/774
+* Bakes the muted backdrop grade into muted twins of the wallpaper tiers by @natemsz in https://github.com/natemsz/evesynapse/pull/775
+### Other Changes
+* docs(changelog): review changelog for v0.6.1.5 by @github-actions[bot] in https://github.com/natemsz/evesynapse/pull/767
+* Settles a 403 on a contract exit probe instead of asking again every cycle by @natemsz in https://github.com/natemsz/evesynapse/pull/769
+* Settles 403 and 422 as dead in the shared market fetch classifier by @natemsz in https://github.com/natemsz/evesynapse/pull/770
+* Splits a rejected corp asset-names batch down to the bad item by @natemsz in https://github.com/natemsz/evesynapse/pull/771
+* Keeps character and type name misses across restarts by @natemsz in https://github.com/natemsz/evesynapse/pull/772
+* Moves the host sampler's disk read into a Linux and macOS file so the app builds on Windows by @natemsz in https://github.com/natemsz/evesynapse/pull/773
+* Stamps the intel token test's chat lines with the current time by @natemsz in https://github.com/natemsz/evesynapse/pull/781
+* Reuses the Forge liquid-core ranking for an hour by @natemsz in https://github.com/natemsz/evesynapse/pull/777
+* Asks each side of an entity's killboard for its own page through its own index by @natemsz in https://github.com/natemsz/evesynapse/pull/778
+* Has the urgent drain serve only history wants from a page open now by @natemsz in https://github.com/natemsz/evesynapse/pull/779
+* Refetches market history once ESI has published a new day by @natemsz in https://github.com/natemsz/evesynapse/pull/780
+
+
+**Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.6.1.5...v0.6.1.7
 
 ## [v0.6.1.5] - 2026-10-28
 

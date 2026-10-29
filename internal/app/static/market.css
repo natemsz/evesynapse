@@ -1,0 +1,72 @@
+/* Advanced market tools: the item page's stat pack section, the
+   Trends screen and the LP store browser. Colors come from the
+   theme tokens only, so every theme (dark default and light)
+   carries them unchanged. */
+
+.mt-chg { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.mt-chg.up { color: var(--success); }
+.mt-chg.down { color: var(--danger); }
+
+.mt-regions-toggle { margin: 0 0 0.4rem; }
+
+.mt-stats td, .mt-stats th { white-space: nowrap; }
+.mt-stats td { font-variant-numeric: tabular-nums; }
+
+.mt-chart { margin: 0.5rem 0 0.25rem; }
+.mt-chart svg { display: block; width: 100%; height: 160px; }
+.mt-line-sell, .mt-line-buy { fill: none; stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+.mt-line-sell { stroke: var(--accent); }
+.mt-line-buy { stroke: var(--gold); }
+.mt-swatch-sell { background: var(--accent); }
+.mt-swatch-buy { background: var(--gold); }
+.mt-zero { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 3 3; vector-effect: non-scaling-stroke; opacity: 0.6; }
+.mt-chart-dates { display: flex; justify-content: space-between; color: var(--muted); }
+
+.mt-filters { display: flex; flex-wrap: wrap; gap: 0.5rem 0.75rem; align-items: flex-end; }
+.mt-modes { display: flex; flex-wrap: wrap; gap: 0.35rem; margin: 0.5rem 0; }
+.mt-modes a {
+  padding: 0.2rem 0.6rem;
+  border: 1px solid var(--box-edge);
+  border-radius: var(--r-xs);
+  color: var(--muted);
+  text-decoration: none;
+}
+.mt-modes a.active { color: var(--text-bright); border-color: var(--accent); }
+.mt-num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.mt-reqs { color: var(--muted); }
+
+.mt-movers { display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: 0.75rem 1.25rem; margin: 0.5rem 0 1rem; }
+.mt-movers h3 { margin: 0 0 0.35rem; }
+.mt-movers ul { list-style: none; margin: 0; padding: 0; }
+.mt-movers li { padding: 0.2rem 0; border-bottom: 1px solid var(--row-alt); }
+.mt-basket-form { display: flex; flex-wrap: wrap; gap: 0.5rem 0.75rem; align-items: flex-end; margin-bottom: 0.5rem; }
+.mt-basket-items { flex: 1 1 100%; display: flex; flex-direction: column; }
+.mt-basket-items textarea { width: 100%; font-family: "JetBrains Mono", monospace; }
+
+/* The market browser: category tree beside the item list. */
+.mb-layout { display: grid; grid-template-columns: minmax(12rem, 18rem) minmax(0, 1fr); gap: 1rem; align-items: start; }
+.mb-tree { max-height: 70vh; overflow-y: auto; border-right: 1px solid var(--box-edge); padding-right: 0.5rem; }
+.mb-tree ul { list-style: none; margin: 0; padding: 0; }
+.mb-node a { display: flex; align-items: center; gap: 0.4rem; padding: 0.22rem 0.35rem; border-radius: var(--r-xs); color: var(--text); text-decoration: none; }
+.mb-node a:hover { background: var(--row-hover); }
+.mb-node.open > a { color: var(--text-bright); }
+.mb-node.chosen > a { background: var(--row-hover); box-shadow: inset 2px 0 0 var(--accent); }
+.mb-node .market-group-icon svg { width: 1.1rem; height: 1.1rem; }
+.mb-depth-1 a { padding-left: 1.2rem; }
+.mb-depth-2 a { padding-left: 2rem; }
+.mb-depth-3 a { padding-left: 2.8rem; }
+.mb-depth-4 a, .mb-depth-5 a, .mb-depth-6 a { padding-left: 3.6rem; }
+.mb-node:not([class*="mb-depth-0"]) a { font-size: 0.9em; }
+[data-browse-root][aria-busy="true"] .mb-items { opacity: 0.6; transition: opacity 0.15s; }
+
+@media (max-width: 48rem) {
+  .mb-layout { grid-template-columns: minmax(0, 1fr); }
+  .mb-tree { max-height: 16rem; border-right: 0; border-bottom: 1px solid var(--box-edge); padding: 0 0 0.5rem; }
+}
+
+@media (max-width: 40rem) {
+  .mt-chart svg { height: 120px; }
+}
+
+.mt-changes { list-style: none; margin: 0.25rem 0 0; padding: 0; }
+.mt-changes li { padding: 0.3rem 0; border-bottom: 1px solid var(--row-alt); }

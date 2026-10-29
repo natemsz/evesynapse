@@ -8,6 +8,7 @@ package app
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -694,5 +695,113 @@ func TestRegionSweepWindowStopsAtFailedPage(t *testing.T) {
 	}
 	if types != 10 {
 		t.Fatalf("stored %d types, want all 10 pages' types", types)
+	}
+}
+
+// The stat pack's trend figures (schema 101) come from the daily
+// rows inside the sweep: each change compares against the newest
+// daily row inside its window, a type with no row in a window reads
+// NULL, and volatility stays NULL under seven daily returns.
+func TestRegionSweepStoresStatPackTrends(t *testing.T) {
+	transport := &regionBookTransport{books: map[int64][][]esi.MarketOrder{}}
+	app, _, q := buildCorpTestApp(t, transport)
+	ctx := context.Background()
+	for _, region := range marketRegions {
+		if region.ID != 10000002 {
+			markRegionFresh(t, q, region.ID)
+		}
+	}
+	now := time.Now().UTC()
+	seedDay := func(typeID int64, dayOffset int, sell float64) {
+		t.Helper()
+		if err := q.UpsertMarketRegionStatDaily(ctx, db.UpsertMarketRegionStatDailyParams{
+			RegionID: 10000002, TypeID: typeID,
+			Day:         now.AddDate(0, 0, -dayOffset).Format("2006-01-02"),
+			TypicalSell: sell, BestSell: sell, SellOrders: 1,
+		}); err != nil {
+			t.Fatalf("seed daily type %d: %v", typeID, err)
+		}
+	}
+	// Type 34 now sells at 10: 8 a day back, 5 a week back, 20 a
+	// month back. Type 35 has only a row 12 days back, outside
+	// every window.
+	seedDay(34, 1, 8)
+	seedDay(34, 7, 5)
+	seedDay(34, 30, 20)
+	seedDay(35, 12, 50)
+
+	transport.books[10000002] = [][]esi.MarketOrder{{
+		{OrderID: 1, TypeID: 34, Price: 10, VolumeRemain: 100},
+		{OrderID: 2, TypeID: 35, Price: 50, VolumeRemain: 100},
+	}}
+	sweepUntilIdle(t, app)
+
+	got, err := q.GetMarketRegionStat(ctx, db.GetMarketRegionStatParams{RegionID: 10000002, TypeID: 34})
+	if err != nil {
+		t.Fatalf("read type 34: %v", err)
+	}
+	for name, c := range map[string]struct {
+		v    sql.NullFloat64
+		want float64
+	}{"1d": {got.SellChg1d, 25}, "7d": {got.SellChg7d, 100}, "30d": {got.SellChg30d, -50}} {
+		if !c.v.Valid || c.v.Float64 < c.want-1e-9 || c.v.Float64 > c.want+1e-9 {
+			t.Errorf("type 34 sell change %s = %+v, want %v", name, c.v, c.want)
+		}
+	}
+	if got.BuyChg1d.Valid || got.Volatility30d.Valid {
+		t.Errorf("type 34: buy change %+v / volatility %+v, want NULL", got.BuyChg1d, got.Volatility30d)
+	}
+	other, err := q.GetMarketRegionStat(ctx, db.GetMarketRegionStatParams{RegionID: 10000002, TypeID: 35})
+	if err != nil {
+		t.Fatalf("read type 35: %v", err)
+	}
+	if other.SellChg1d.Valid || other.SellChg7d.Valid || other.SellChg30d.Valid {
+		t.Errorf("type 35 changes = %+v %+v %+v, want NULL (no row in any window)", other.SellChg1d, other.SellChg7d, other.SellChg30d)
+	}
+}
+
+// The change feed (schema 106) records a sharp move against the last
+// stored day, and leaves a small one out.
+func TestRegionSweepDetectsMarketChanges(t *testing.T) {
+	transport := &regionBookTransport{books: map[int64][][]esi.MarketOrder{}}
+	app, _, q := buildCorpTestApp(t, transport)
+	ctx := context.Background()
+	for _, region := range marketRegions {
+		if region.ID != 10000002 {
+			markRegionFresh(t, q, region.ID)
+		}
+	}
+	now := time.Now().UTC()
+	yesterday := now.AddDate(0, 0, -1).Format("2006-01-02")
+	for _, s := range []struct {
+		typeID int64
+		sell   float64
+	}{{34, 10}, {35, 100}} {
+		if err := q.UpsertMarketRegionStatDaily(ctx, db.UpsertMarketRegionStatDailyParams{
+			RegionID: 10000002, TypeID: s.typeID, Day: yesterday, TypicalSell: s.sell, BestSell: s.sell, SellOrders: 6, SellVolume: 600,
+		}); err != nil {
+			t.Fatalf("seed daily: %v", err)
+		}
+		if err := q.UpsertMarketHistory(ctx, db.UpsertMarketHistoryParams{
+			RegionID: 10000002, TypeID: s.typeID, Date: yesterday, Average: s.sell, Highest: s.sell, Lowest: s.sell, Volume: 50, OrderCount: 5,
+		}); err != nil {
+			t.Fatalf("seed history: %v", err)
+		}
+	}
+	var book []esi.MarketOrder
+	for i := int64(0); i < 6; i++ {
+		book = append(book,
+			esi.MarketOrder{OrderID: 100 + i, TypeID: 34, Price: 15, VolumeRemain: 100},  // +50%
+			esi.MarketOrder{OrderID: 200 + i, TypeID: 35, Price: 103, VolumeRemain: 100}) // +3%
+	}
+	transport.books[10000002] = [][]esi.MarketOrder{book}
+	sweepUntilIdle(t, app)
+
+	rows, err := q.ListMarketChangesForRegion(ctx, db.ListMarketChangesForRegionParams{RegionID: 10000002, Since: yesterday})
+	if err != nil {
+		t.Fatalf("list changes: %v", err)
+	}
+	if len(rows) != 1 || rows[0].TypeID != 34 || rows[0].Kind != "price_up" || rows[0].Before != 10 || rows[0].After != 15 {
+		t.Fatalf("changes = %+v, want one price_up for type 34 from 10 to 15", rows)
 	}
 }

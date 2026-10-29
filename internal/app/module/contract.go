@@ -350,6 +350,12 @@ const (
 	// from, because every type-level price for a blueprint
 	// type is its original's price.
 	AppraisalTierCopyMedian = "copy_median"
+	// AppraisalTierResearchMedian: the stored median ask of
+	// single-blueprint contracts for a researched original's type
+	// at its exact material and time efficiency (schema 108). The
+	// market sells only unresearched originals, so a researched one
+	// prices here first.
+	AppraisalTierResearchMedian = "research_median"
 	// AppraisalTierFallback: the labeled Fuzzwork aggregate,
 	// inside its hard expiry, with its as-of stamp.
 	AppraisalTierFallback = "fallback"
@@ -430,6 +436,10 @@ type AppraisedLine struct {
 	// the hub's name. Zero when the basis region's own book
 	// (or a basis-independent tier) spoke.
 	SourceRegionID int64
+	// ResearchUnmatched: a researched original (ME or TE above zero)
+	// that no stored research median covers, so it priced at the
+	// unresearched original's figure; readers say so.
+	ResearchUnmatched bool
 }
 
 // Appraisal is a priced line list: the lines, the offered and
@@ -930,6 +940,9 @@ type ShellData struct {
 	ThemeBackdrop string
 	ThemeAccount  bool
 	ThemeStored   bool
+	// Banners is the administrators' global notices this render
+	// shows above the page body (notices.go); nil when none.
+	Banners any
 }
 
 // Shell returns a pointer to the embedded ShellData so that

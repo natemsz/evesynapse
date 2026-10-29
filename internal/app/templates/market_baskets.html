@@ -1,0 +1,50 @@
+{{define "title"}}Market Baskets{{end}}
+{{define "pagetitle"}}<h1><span class="gt">Market Baskets</span></h1>{{end}}
+{{define "pagetabs"}}{{template "sectiontabs" .}}{{end}}
+{{define "content"}}
+
+{{if .Error}}<p class="err">{{.Error}}</p>{{end}}
+
+{{with .MarketBaskets}}
+<p><small>A basket is a list of items priced together in one hub region, tracked day by day.</small></p>
+
+<div class="tw">
+<table>
+  <thead><tr><th>Basket</th><th>Region</th><th class="mt-num">Items</th><th class="mt-num">Worth now</th><th></th></tr></thead>
+  <tbody>
+  {{range .List}}
+    <tr>
+      <td><a href="/market/baskets/{{.ID}}/">{{.Name}}</a></td>
+      <td>{{.RegionName}}</td>
+      <td class="mt-num">{{.Items}}</td>
+      <td class="mt-num">{{if .Value}}{{.Value}} ISK{{if .Partial}} <small>(some unpriced)</small>{{end}}{{else}}—{{end}}</td>
+      <td><small>{{if .Preset}}Preset{{else}}Yours{{end}}</small></td>
+    </tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+
+{{if .SignedIn}}
+<section class="foldable">
+<h3>New basket</h3>
+{{if .AtLimit}}
+<p><small>You have the most baskets one player can keep. Delete one to make another.</small></p>
+{{else}}
+<form method="post" action="/market/baskets/" class="mt-basket-form">
+  <label><small>Name</small> <input type="text" name="name" maxlength="60" required></label>
+  <label><small>Priced in</small>
+    <select name="region">{{range .Regions}}<option value="{{.ID}}"{{if .Active}} selected{{end}}>{{.Name}}</option>{{end}}</select>
+  </label>
+  <label class="mt-basket-items"><small>Items, one per line, with a quantity (Tritanium 1000)</small>
+    <textarea name="items" rows="8" required></textarea>
+  </label>
+  <button class="btn" type="submit">Create basket</button>
+</form>
+{{end}}
+</section>
+{{else}}
+<p><small>Sign in to keep baskets of your own.</small></p>
+{{end}}
+{{end}}
+{{end}}

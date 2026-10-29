@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"math"
+	"strings"
 	"testing"
 	"time"
 
@@ -62,5 +63,69 @@ func TestRefreshLPOfferValues(t *testing.T) {
 	n, err := q.CountLPOfferValuesUnpriced(ctx, db.CountLPOfferValuesUnpricedParams{RegionID: 10000002})
 	if err != nil || n != 2 {
 		t.Errorf("unpriced = %d (%v), want 2 (blueprint copy, unpriced requirement)", n, err)
+	}
+}
+
+// The browser's Fuzzwork-parity surface: ISK-per-LP and LP-cost
+// range filters bind in SQL, an item name finds the stores selling
+// it across corporations, and the CSV and JSON exports carry the
+// same filters at the export cap.
+func TestMarketLPFiltersAndExports(t *testing.T) {
+	app, _, q := buildCorpTestApp(t, &countingTransport{})
+	ctx := context.Background()
+	exec := func(s string, args ...any) {
+		t.Helper()
+		if _, err := app.db.ExecContext(ctx, s, args...); err != nil {
+			t.Fatalf("%v: %s", err, s)
+		}
+	}
+	exec(`INSERT INTO sde_groups (group_id, name, category_id) VALUES (1, 'Charges', 8) ON CONFLICT DO NOTHING`)
+	exec(`INSERT INTO sde_types (type_id, name, group_id, market_group_id, published) VALUES (100, 'Ammo', 1, 1, 1), (200, 'Implant', 1, 1, 1) ON CONFLICT DO NOTHING`)
+	exec(`INSERT INTO lp_store_corps (corporation_id, name, offer_count) VALUES (1, 'Store One', 2), (2, 'Store Two', 1)`)
+	// Ammo at Store One: 3.0 ISK/LP for 1,000 LP. Implant at Store
+	// One: 900 ISK/LP for 50,000 LP. Ammo also at Store Two: 2.5.
+	now := time.Now().UTC()
+	exec(`INSERT INTO lp_offer_values (region_id, corporation_id, offer_id, type_id, quantity, lp_cost, isk_cost, required_cost, unit_sell, unit_buy, isk_per_lp_sell, isk_per_lp_buy, daily_volume, prices_at, updated_at) VALUES
+		(10000002, 1, 1, 100, 100, 1000, 1000, 0, 50, 40, 3.0, 2.0, 500, $1, $1),
+		(10000002, 1, 2, 200, 1, 50000, 0, 0, 45000000, 44000000, 900.0, 880.0, 30, $1, $1),
+		(10000002, 2, 1, 100, 100, 1000, 1000, 0, 45, 38, 2.5, 1.8, 500, $1, $1)`, now)
+
+	view := app.buildMarketLPView(ctx, map[string][]string{})
+	if len(view.Rows) != 3 {
+		t.Fatalf("unfiltered rows = %d, want 3", len(view.Rows))
+	}
+	if view.Rows[0].ISKPerLPDir != "up" {
+		t.Fatalf("best row dir = %q, want up", view.Rows[0].ISKPerLPDir)
+	}
+	view = app.buildMarketLPView(ctx, map[string][]string{"minisklp": {"100"}})
+	if len(view.Rows) != 1 || view.Rows[0].TypeID != 200 {
+		t.Fatalf("minisklp rows = %+v, want only the implant", view.Rows)
+	}
+	view = app.buildMarketLPView(ctx, map[string][]string{"maxlp": {"5000"}})
+	if len(view.Rows) != 2 {
+		t.Fatalf("maxlp rows = %d, want the two 1,000 LP offers", len(view.Rows))
+	}
+	view = app.buildMarketLPView(ctx, map[string][]string{"item": {"Ammo"}})
+	if len(view.Rows) != 2 || view.Rows[0].StoreID != 1 || view.Rows[1].StoreID != 2 {
+		t.Fatalf("find-stores rows = %+v, want Ammo at both stores", view.Rows)
+	}
+	view = app.buildMarketLPView(ctx, map[string][]string{"item": {"No Such Item"}})
+	if len(view.Rows) != 0 {
+		t.Fatalf("unknown item rows = %d, want 0", len(view.Rows))
+	}
+
+	user, err := q.CreateUser(ctx)
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	_ = user
+	cookie := sessionCookie(t, app, user.ID, fixtureCharA, "Tester")
+	code, body := getPage(t, app, cookie, "/market/lp/export.csv?minisklp=100")
+	if code != 200 || !strings.Contains(body, "Implant") || strings.Contains(body, "Ammo") {
+		t.Fatalf("csv export: code %d body %.200q", code, body)
+	}
+	code, body = getPage(t, app, cookie, "/market/lp/export.json?item=Ammo")
+	if code != 200 || !strings.Contains(body, `"isk_per_lp": 3`) || !strings.Contains(body, "Store Two") {
+		t.Fatalf("json export: code %d body %.300q", code, body)
 	}
 }

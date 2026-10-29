@@ -237,16 +237,26 @@ WHERE v.region_id = $1
   AND v.unpriced_reason = ''
   AND v.daily_volume >= $3::double precision
   AND (CASE WHEN $4::bool THEN v.isk_per_lp_buy ELSE v.isk_per_lp_sell END) IS NOT NULL
+  AND ($5::double precision IS NULL OR (CASE WHEN $4::bool THEN v.isk_per_lp_buy ELSE v.isk_per_lp_sell END) >= $5::double precision)
+  AND ($6::double precision IS NULL OR (CASE WHEN $4::bool THEN v.isk_per_lp_buy ELSE v.isk_per_lp_sell END) <= $6::double precision)
+  AND ($7::bigint IS NULL OR v.lp_cost >= $7::bigint)
+  AND ($8::bigint IS NULL OR v.lp_cost <= $8::bigint)
+  AND (cardinality($9::bigint[]) = 0 OR v.type_id = ANY($9::bigint[]))
 ORDER BY (CASE WHEN $4::bool THEN v.isk_per_lp_buy ELSE v.isk_per_lp_sell END) DESC, v.type_id, v.corporation_id
-LIMIT $5::bigint
+LIMIT $10::bigint
 `
 
 type ListLPOfferValuesParams struct {
-	RegionID      int64   `json:"region_id"`
-	CorporationID int64   `json:"corporation_id"`
-	MinVolume     float64 `json:"min_volume"`
-	Instant       bool    `json:"instant"`
-	RowCap        int64   `json:"row_cap"`
+	RegionID      int64           `json:"region_id"`
+	CorporationID int64           `json:"corporation_id"`
+	MinVolume     float64         `json:"min_volume"`
+	Instant       bool            `json:"instant"`
+	MinIskLp      sql.NullFloat64 `json:"min_isk_lp"`
+	MaxIskLp      sql.NullFloat64 `json:"max_isk_lp"`
+	MinLp         sql.NullInt64   `json:"min_lp"`
+	MaxLp         sql.NullInt64   `json:"max_lp"`
+	TypeIds       []int64         `json:"type_ids"`
+	RowCap        int64           `json:"row_cap"`
 }
 
 type ListLPOfferValuesRow struct {
@@ -277,6 +287,11 @@ func (q *Queries) ListLPOfferValues(ctx context.Context, arg ListLPOfferValuesPa
 		arg.CorporationID,
 		arg.MinVolume,
 		arg.Instant,
+		arg.MinIskLp,
+		arg.MaxIskLp,
+		arg.MinLp,
+		arg.MaxLp,
+		pq.Array(arg.TypeIds),
 		arg.RowCap,
 	)
 	if err != nil {

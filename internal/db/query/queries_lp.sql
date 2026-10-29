@@ -124,6 +124,11 @@ WHERE v.region_id = sqlc.arg(region_id)
   AND v.unpriced_reason = ''
   AND v.daily_volume >= sqlc.arg(min_volume)::double precision
   AND (CASE WHEN sqlc.arg(instant)::bool THEN v.isk_per_lp_buy ELSE v.isk_per_lp_sell END) IS NOT NULL
+  AND (sqlc.narg(min_isk_lp)::double precision IS NULL OR (CASE WHEN sqlc.arg(instant)::bool THEN v.isk_per_lp_buy ELSE v.isk_per_lp_sell END) >= sqlc.narg(min_isk_lp)::double precision)
+  AND (sqlc.narg(max_isk_lp)::double precision IS NULL OR (CASE WHEN sqlc.arg(instant)::bool THEN v.isk_per_lp_buy ELSE v.isk_per_lp_sell END) <= sqlc.narg(max_isk_lp)::double precision)
+  AND (sqlc.narg(min_lp)::bigint IS NULL OR v.lp_cost >= sqlc.narg(min_lp)::bigint)
+  AND (sqlc.narg(max_lp)::bigint IS NULL OR v.lp_cost <= sqlc.narg(max_lp)::bigint)
+  AND (cardinality(sqlc.arg(type_ids)::bigint[]) = 0 OR v.type_id = ANY(sqlc.arg(type_ids)::bigint[]))
 ORDER BY (CASE WHEN sqlc.arg(instant)::bool THEN v.isk_per_lp_buy ELSE v.isk_per_lp_sell END) DESC, v.type_id, v.corporation_id
 LIMIT sqlc.arg(row_cap)::bigint;
 

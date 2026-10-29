@@ -62,7 +62,7 @@
         });
       }
       var hash = window.location.hash;
-      showTab(hash === '#interface' ? 'interface' : hash === '#security' ? 'security' : 'notifications');
+      showTab(hash === '#interface' ? 'interface' : hash === '#security' ? 'security' : hash === '#api' ? 'api' : 'notifications');
     }
 
     // --- theme picker ---------------------------------------------

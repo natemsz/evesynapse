@@ -61,28 +61,51 @@
 </section>
 
 <section class="foldable">
-<h3>What made the most in trading</h3>
-{{if .TopTypes}}
+<h3>Trading by item</h3>
+{{if .Recomputed}}<p class="pf-note"><small>{{if eq .RecomputedWhy "members"}}Your characters changed, so trading figures were recomputed on {{.Recomputed}}.{{else}}Trading figures were recomputed on {{.Recomputed}}: sales now match against stock across all your characters, with sales tax paired to each sale and broker fees tied to the item where they can be.{{end}}</small></p>{{end}}
+{{if .ItemsNet}}
+<p><strong class="mt-chg {{.ItemsNetDir}}">{{.ItemsNet}}</strong> ISK margin on covered sales{{if .ItemsDelta}}, <span class="mt-chg {{.ItemsDeltaDir}}">{{.ItemsDelta}}</span> against the {{.Days}} days before{{end}}. {{if .ItemsCoverage}}{{.ItemsCoverage}} of units sold are covered.{{end}}{{if .BrokerLoose}} Broker fees tied to no item: {{.BrokerLoose}} ISK.{{end}} <small class="mt-reqs">As of {{.ItemsAsOf}}.</small></p>
+{{end}}
+{{if .Items}}
 <div class="tw">
 <table>
-  <thead><tr><th>Item</th><th class="mt-num">Sold</th><th class="mt-num">Sold for</th><th class="mt-num">Cost</th><th class="mt-num">Profit</th><th class="mt-num">Margin</th></tr></thead>
+  <thead><tr><th>Item</th><th class="mt-num">Sold</th><th class="mt-num">Sold for</th><th class="mt-num">Margin</th><th class="mt-num">Margin %</th><th class="mt-num">vs before</th></tr></thead>
   <tbody>
-  {{range .TopTypes}}
+  {{range .Items}}
     <tr>
-      <td><a href="/market/?type={{.TypeID}}">{{.Name}}</a></td>
-      <td class="mt-num">{{.Quantity}}</td>
+      <td><a href="/market/?type={{.TypeID}}">{{.Name}}</a>
+        {{range .Gaps}}<br><small class="mt-reqs">{{.Units}} units: {{.Label}}</small>{{end}}
+        {{if .CanEnterBasis}}<details class="pf-basis"><summary><small>Enter what these cost you</small></summary>
+          <form method="post" action="/profit/basis" class="pf-basis-form">
+            <input type="hidden" name="pool" value="{{$.Profit.BasisPool}}"><input type="hidden" name="type_id" value="{{.TypeID}}">
+            <label>Units <input name="quantity" inputmode="numeric" required></label>
+            <label>Cost per unit, ISK <input name="unit_cost" inputmode="decimal" required></label>
+            <label>Note <input name="note" maxlength="200"></label>
+            <button class="btn" type="submit">Save</button>
+          </form></details>{{end}}
+      </td>
+      <td class="mt-num">{{.Sold}}</td>
       <td class="mt-num">{{.Revenue}}</td>
-      <td class="mt-num">{{.Cost}}</td>
-      <td class="mt-num"><span class="mt-chg {{.ProfitDir}}">{{.Profit}}</span></td>
-      <td class="mt-num">{{.Margin}}</td>
+      <td class="mt-num"><strong class="mt-chg {{.MarginDir}}">{{.Margin}}</strong>{{if .CoveredOf}}<br><small class="mt-reqs">{{.CoveredOf}}</small>{{end}}</td>
+      <td class="mt-num">{{.MarginPct}}</td>
+      <td class="mt-num">{{if .Delta}}<span class="mt-chg {{.DeltaDir}}">{{.Delta}}</span>{{else}}<small class="mt-reqs">new</small>{{end}}</td>
     </tr>
   {{end}}
   </tbody>
 </table>
 </div>
-<p><small>Each sale is matched to the oldest stock you still had of that item. Before sales tax and broker fees, which the trading line above includes.</small></p>
+<p><small>Each sale is matched to the oldest stock {{if .Pooled}}any of your characters{{else}}that character{{end}} still had of the item. The margin is after what the units cost, their sales tax{{if .BrokerInMargin}} and the broker fees tied to the item{{end}}. A margin covers only units with a known cost and a matched tax line; the rest are listed with the reason. Fully covered items come first.</small></p>
 {{else}}
-<p><small>No sales matched to earlier buys in this span.</small></p>
+<p><small>No sales in this span.</small></p>
+{{end}}
+{{if not .Corp}}
+<details class="pf-prefs"><summary><small>How trading is counted</small></summary>
+<form method="post" action="/profit/prefs" class="pf-prefs-form">
+  <label><input type="checkbox" name="pooled" value="1"{{if .Pooled}} checked{{end}}> Match sales against stock across all my characters (off: each character's own stock)</label>
+  <label><input type="checkbox" name="broker_in_margin" value="1"{{if .BrokerInMargin}} checked{{end}}> Count broker fees in each item's margin</label>
+  <button class="btn" type="submit">Save</button>
+</form>
+</details>
 {{end}}
 </section>
 

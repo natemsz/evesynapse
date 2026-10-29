@@ -70,7 +70,7 @@ func TestProfitLedgerFold(t *testing.T) {
 	if _, ok := got[actMarket]; ok {
 		t.Error("market_transaction journal rows counted; the transactions speak for trade")
 	}
-	pos, err := q.ListTradePositions(ctx, db.ListTradePositionsParams{OwnerKind: ownerChar, OwnerIds: []int64{fixtureCharA}})
+	pos, err := q.ListTradePositions(ctx, db.ListTradePositionsParams{OwnerKind: poolAcct, OwnerIds: []int64{user.ID}})
 	if err != nil {
 		t.Fatalf("positions: %v", err)
 	}
@@ -170,7 +170,7 @@ func TestProfitRefoldFromCheckpointMatchesFullFold(t *testing.T) {
 			t.Errorf("sale 6 cost = %v, want 940 after the late buy re-settles it", r[3])
 		}
 	}
-	posA, err := qA.ListTradePositions(ctx, db.ListTradePositionsParams{OwnerKind: ownerChar, OwnerIds: []int64{fixtureCharA}})
+	posA, err := qA.ListTradePositions(ctx, db.ListTradePositionsParams{OwnerKind: poolAcct, OwnerIds: []int64{chA.UserID}})
 	if err != nil {
 		t.Fatalf("positions: %v", err)
 	}
@@ -200,5 +200,73 @@ func TestProfitCorpNeedsWalletAccess(t *testing.T) {
 	}
 	if strings.Contains(body, "123,456,789") || strings.Contains(body, "corp-98000077") {
 		t.Error("profit page shows a corporation the player has no wallet access to")
+	}
+}
+
+// Pooled trading by item: an alt's buy prices the main's sale, the
+// sale's tax pairs by its second, a broker fee ties to the one order
+// placed within the minute, units no lot covers are typed, and a fill
+// between the two characters is no trade at all.
+func TestProfitPooledTradingItems(t *testing.T) {
+	app, _, q := buildCorpTestApp(t, &countingTransport{})
+	ctx := context.Background()
+	user, err := q.CreateUser(ctx)
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	seedCharacter(t, q, user.ID, fixtureCharA, "Main")
+	seedCharacter(t, q, user.ID, fixtureCharB, "Alt")
+	now := time.Now().UTC().Truncate(time.Second)
+	at := func(h int) string { return now.Add(time.Duration(-h) * time.Hour).Format(time.RFC3339) }
+
+	seedSnapshot(t, q, fixtureCharB, esi.SnapWalletTxns, esi.WalletTransactions{
+		{TransactionID: 1, Date: at(30), TypeID: 34, Quantity: 10, UnitPrice: 100, IsBuy: true},
+		{TransactionID: 5, Date: at(3), TypeID: 36, Quantity: 2, UnitPrice: 50, IsBuy: true},
+	})
+	seedSnapshot(t, q, fixtureCharA, esi.SnapWalletTxns, esi.WalletTransactions{
+		{TransactionID: 2, Date: at(10), TypeID: 34, Quantity: 6, UnitPrice: 150},
+		{TransactionID: 3, Date: at(5), TypeID: 35, Quantity: 4, UnitPrice: 50},
+		{TransactionID: 4, Date: at(3), TypeID: 36, Quantity: 2, UnitPrice: 50},
+	})
+	seedSnapshot(t, q, fixtureCharA, esi.SnapWalletJournal, esi.WalletJournal{
+		{ID: 11, Date: at(10), RefType: "transaction_tax", Amount: -18},
+		{ID: 12, Date: at(5), RefType: "transaction_tax", Amount: -4},
+		{ID: 13, Date: at(3), RefType: "transaction_tax", Amount: -2},
+		{ID: 14, Date: at(12), RefType: "brokers_fee", Amount: -12},
+	})
+	seedSnapshot(t, q, fixtureCharA, esi.SnapOrdersHistory, esi.CharOrderHistory{
+		{CharOrder: esi.CharOrder{OrderID: 77, TypeID: 34, Issued: now.Add(-12*time.Hour + 20*time.Second).Format(time.RFC3339)}, State: "expired"},
+	})
+	for _, id := range []int64{fixtureCharB, fixtureCharA} {
+		ch, err := q.GetCharacter(ctx, id)
+		if err != nil {
+			t.Fatalf("read character: %v", err)
+		}
+		app.refreshProfitLedger(ctx, ch, now)
+	}
+
+	var cost float64
+	if err := app.db.QueryRowContext(ctx, `SELECT cost FROM trade_realized WHERE owner_kind = 'char' AND owner_id = $1 AND transaction_id = 2`, fixtureCharA).Scan(&cost); err != nil || cost != 600 {
+		t.Fatalf("main's sale cost = %v (%v), want 600 from the alt's buy", cost, err)
+	}
+	rows, err := q.ListTradeItems(ctx, db.ListTradeItemsParams{OwnerKind: ownerChar, OwnerIds: []int64{fixtureCharA, fixtureCharB}, Win: 7, BrokerInMargin: true, RowCap: 100})
+	if err != nil {
+		t.Fatalf("items: %v", err)
+	}
+	items := map[int64]db.ListTradeItemsRow{}
+	for _, r := range rows {
+		items[r.TypeID] = r
+	}
+	if r := items[34]; r.Units != 6 || r.CovUnits != 6 || math.Abs(r.CovRevenue-r.CovCost-r.CovTax-r.Broker-270) > 1e-6 {
+		t.Errorf("type 34 = %+v, want 6 covered units at 900 - 600 - 18 tax - 12 broker = 270", r)
+	}
+	if r := items[35]; r.CovUnits != 0 || r.GapBeforeHistory != 4 {
+		t.Errorf("type 35 = %+v, want 4 units bought before the history began", r)
+	}
+	if _, ok := items[36]; ok {
+		t.Error("a fill between the main and the alt counted as a trade")
+	}
+	if len(rows) == 0 || rows[0].TypeID != 34 {
+		t.Errorf("first row = %+v, want the fully covered item first", rows)
 	}
 }

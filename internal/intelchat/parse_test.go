@@ -74,3 +74,56 @@ func TestParseNoSystemText(t *testing.T) {
 		t.Errorf("read %+v", r)
 	}
 }
+
+// The shapes the synthetic reports (internal/intelsynth) showed
+// the reader getting wrong: questions with the mark on the system,
+// "cleared", a ship's multiplier taken for hostiles, links that
+// spell a word, and a pilot named like a system ahead of the
+// system the scout is in.
+func TestParseReportShapes(t *testing.T) {
+	now := time.Date(2026, 10, 21, 11, 30, 0, 0, time.UTC)
+	look := func(n string) (int64, string, bool) {
+		switch n {
+		case "1dq1-a":
+			return 30004759, "1DQ1-A", true
+		case "jita":
+			return 30000142, "Jita", true
+		case "hath":
+			return 30000001, "Hath", true
+		case "perimeter":
+			return 30000144, "Perimeter", true
+		}
+		return 0, "", false
+	}
+	one := func(line string) Outcome { return Parse("[ 11:20:00 ] Scout > "+line, look, now) }
+
+	for _, q := range []string{"status 1dq1-a?", "anyone in 1DQ1-A?", "stat 1DQ1-A?", "1DQ1-A?"} {
+		if o := one(q); o.Questions != 1 || len(o.Reports) != 0 {
+			t.Errorf("%q: %d questions, %d reports, want a question", q, o.Questions, len(o.Reports))
+		}
+	}
+	if o := one("1DQ1-A cleared"); len(o.Reports) != 1 || !o.Reports[0].Clear {
+		t.Errorf("cleared: %+v", o.Reports)
+	}
+	if o := one("1DQ1-A hulk x3 +3"); len(o.Reports) != 1 || o.Reports[0].Hostiles != 3 {
+		t.Errorf("ship multiplier: %+v, want 3 hostiles", o.Reports)
+	}
+	if o := one("Jita 5x"); len(o.Reports) != 1 || o.Reports[0].Hostiles != 5 {
+		t.Errorf("a count alone: %+v, want 5 hostiles", o.Reports)
+	}
+	if o := one("1DQ1-A Clear* 5 Red* sabre"); len(o.Reports) != 1 || o.Reports[0].Clear || o.Reports[0].Hostiles != 0 {
+		t.Errorf("linked names read as shorthand: %+v", o.Reports)
+	}
+	if o := one("1DQ1-A no vis"); len(o.Reports) != 1 || !o.Reports[0].NoVisual {
+		t.Errorf("no vis: %+v", o.Reports)
+	}
+	if o := one("Hath Kavao vengeance roaming in Jita"); len(o.Reports) != 1 || o.Reports[0].SystemID != 30000142 {
+		t.Errorf("system after in: %+v, want Jita", o.Reports)
+	}
+	if o := one("2 neuts in Jita gate camp"); len(o.Reports) != 1 || o.Reports[0].SystemID != 30000142 {
+		t.Errorf("a camp in Jita: %+v", o.Reports)
+	}
+	if o := one("Jita @ Perimeter gate camped"); len(o.Reports) != 1 || o.Reports[0].SystemID != 30000142 {
+		t.Errorf("Perimeter gate camped from Jita: %+v", o.Reports)
+	}
+}

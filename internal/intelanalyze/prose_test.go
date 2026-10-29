@@ -142,3 +142,37 @@ func TestProseShipsRatsAreas(t *testing.T) {
 		t.Errorf("flags %q, want [npc]", a.Flags)
 	}
 }
+
+// A region after "from" beats the ship of the same name; "in" a
+// ship stays the ship. A word dragged in as a link is a pilot. A
+// short segment holding a ship is read word by word.
+func TestProseLinksAndTwins(t *testing.T) {
+	d := intelanalyze.Dict{
+		Ship: func(l string) (int64, string, string, bool) {
+			switch l {
+			case "curse":
+				return 20444, "Curse", "hunter", true
+			case "kryos":
+				return 654, "Kryos", "", true
+			}
+			return 0, "", "", false
+		},
+		Pilot: func(l string) (int64, string, bool, bool) { return nameID(l), l, true, true },
+		Area:  func(l string) (int64, bool) { return 10000012, l == "curse" },
+	}
+	read := func(text string) intelanalyze.Analysis {
+		return intelanalyze.Analyze(intelanalyze.Input{System: 1, Text: text}, d)
+	}
+	if a := read("gang came from Curse"); len(a.Ships) != 0 || !reflect.DeepEqual(a.Areas, []int64{10000012}) {
+		t.Errorf("from Curse: ships %+v areas %v, want the region", a.Ships, a.Areas)
+	}
+	if a := read("Vex Toro in Curse"); len(a.Ships) != 1 || len(a.Areas) != 0 {
+		t.Errorf("in Curse: ships %+v areas %v, want the ship", a.Ships, a.Areas)
+	}
+	if a := read("Gate*  Sun* cloaky"); len(a.Pilots) != 2 || a.Location != "" {
+		t.Errorf("linked words: pilots %+v location %q, want two pilots", a.Pilots, a.Location)
+	}
+	if a := read("Vex Toro  Mirx88 Kryos"); len(a.Ships) != 1 || len(a.Pilots) != 2 {
+		t.Errorf("segment with a ship: pilots %+v ships %+v", a.Pilots, a.Ships)
+	}
+}

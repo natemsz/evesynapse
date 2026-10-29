@@ -143,9 +143,12 @@ SELECT COUNT(*) FROM sde_regions;
 SELECT market_group_id, parent_group_id, name, icon_id, has_types FROM sde_market_groups
 WHERE market_group_id = $1;
 -- name: ListSDEMarketGroupsByParent :many
-SELECT market_group_id, parent_group_id, name, icon_id, has_types FROM sde_market_groups
-WHERE parent_group_id = $1
-ORDER BY name;
+-- One tree level, branches before leaves: groups that have child
+-- groups sort first, name order inside each half, so a level reads
+-- as subcategories over contents.
+SELECT market_group_id, parent_group_id, name, icon_id, has_types FROM sde_market_groups g
+WHERE g.parent_group_id = $1
+ORDER BY EXISTS (SELECT 1 FROM sde_market_groups c WHERE c.parent_group_id = g.market_group_id) DESC, name;
 -- name: ListSDETypesInMarketGroup :many
 SELECT type_id, name FROM sde_types
 WHERE market_group_id = $1 AND published = 1 AND market_group_id > 0

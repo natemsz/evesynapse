@@ -1463,11 +1463,14 @@ func (q *Queries) ListSDEGroupsInCategory(ctx context.Context, categoryID int64)
 }
 
 const listSDEMarketGroupsByParent = `-- name: ListSDEMarketGroupsByParent :many
-SELECT market_group_id, parent_group_id, name, icon_id, has_types FROM sde_market_groups
-WHERE parent_group_id = $1
-ORDER BY name
+SELECT market_group_id, parent_group_id, name, icon_id, has_types FROM sde_market_groups g
+WHERE g.parent_group_id = $1
+ORDER BY EXISTS (SELECT 1 FROM sde_market_groups c WHERE c.parent_group_id = g.market_group_id) DESC, name
 `
 
+// One tree level, branches before leaves: groups that have child
+// groups sort first, name order inside each half, so a level reads
+// as subcategories over contents.
 func (q *Queries) ListSDEMarketGroupsByParent(ctx context.Context, parentGroupID int64) ([]SdeMarketGroup, error) {
 	rows, err := q.db.QueryContext(ctx, listSDEMarketGroupsByParent, parentGroupID)
 	if err != nil {

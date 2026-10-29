@@ -797,6 +797,17 @@ type MarketBookOrder struct {
 	UpdatedAt    time.Time `json:"updated_at"`
 }
 
+type MarketChange struct {
+	RegionID   int64     `json:"region_id"`
+	TypeID     int64     `json:"type_id"`
+	Day        string    `json:"day"`
+	Kind       string    `json:"kind"`
+	Before     float64   `json:"before"`
+	After      float64   `json:"after"`
+	Pct        float64   `json:"pct"`
+	DetectedAt time.Time `json:"detected_at"`
+}
+
 type MarketFetchState struct {
 	Kind        string    `json:"kind"`
 	State       string    `json:"state"`

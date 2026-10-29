@@ -144,6 +144,12 @@
     <div class="mt-chart-dates"><small>{{.First}}</small><small>{{.Last}}</small></div>
   </div>
   {{end}}
+  {{if .Changes}}
+  <h4>Recent changes</h4>
+  <ul class="mt-changes">
+  {{range .Changes}}<li><span class="mt-chg {{.Dir}}">{{.Label}}</span> <small>{{.Day}}</small><br><small class="mt-reqs">{{.Detail}}</small></li>{{end}}
+  </ul>
+  {{end}}
   {{else}}
   <p><small>No sweep of {{$item.RegionName}} has covered this item yet.</small></p>
   {{end}}

@@ -71,6 +71,7 @@ type statPackView struct {
 	HistoryDays  int64
 	TradedPerDay string // 30-day average traded volume, "" when none recorded
 	Chart        *bookTrendChart
+	Changes      []marketChangeRow // the change feed for this type and region (schema 106)
 }
 
 const bookTrendDays = 90

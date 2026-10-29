@@ -360,6 +360,7 @@ func (app *Application) handleMarket(w http.ResponseWriter, r *http.Request) {
 			app.attachRegionStats(ctx, view.Item)
 		}
 		app.attachStatPack(ctx, view.Item)
+		app.attachMarketChanges(ctx, view.Item)
 		if !anon {
 			app.markGuessHit(ctx, pageWantHistory, typeID, view.Region)
 		}
@@ -1070,19 +1071,22 @@ func (app *Application) watchlistRows(ctx context.Context, entries []db.MarketWa
 			Change30:  "—",
 			Threshold: fmt.Sprintf("%g", e.ThresholdPct),
 		}
-		rows := app.recentHistoryRows(ctx, marketRegionForType(e.TypeID, e.RegionID), e.TypeID, markethistory.ChartRows)
-		if len(rows) > 0 {
-			row.Current = esi.FormatISK(rows[len(rows)-1].Average)
+		// The stat pack's typical sell where a sweep covers the
+		// region, the traded averages elsewhere (watchMove): the
+		// same figures the watch alerts fire on.
+		m := app.watchMove(ctx, e.TypeID, marketRegionForType(e.TypeID, e.RegionID))
+		if m.Has {
+			row.Current = esi.FormatISK(m.Current)
 		}
-		if pct, ok := markethistory.ChangePct(rows, 7); ok {
-			row.Change7 = markethistory.FormatChangePct(pct)
-			if math.Abs(pct) >= e.ThresholdPct {
+		if m.Has7 {
+			row.Change7 = markethistory.FormatChangePct(m.Chg7)
+			if math.Abs(m.Chg7) >= e.ThresholdPct {
 				row.Moving = true
-				row.MoveText = markethistory.ChangeDirection(pct) + " over 7 days"
+				row.MoveText = markethistory.ChangeDirection(m.Chg7) + " over 7 days"
 			}
 		}
-		if pct, ok := markethistory.ChangePct(rows, 30); ok {
-			row.Change30 = markethistory.FormatChangePct(pct)
+		if m.Has30 {
+			row.Change30 = markethistory.FormatChangePct(m.Chg30)
 		}
 		out = append(out, row)
 	}

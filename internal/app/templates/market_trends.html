@@ -6,7 +6,7 @@
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
 
 {{with .MarketTrends}}
-<p><small>Items whose typical sell price swings the most, or moved the most, in a hub region. Figures come from each sweep of the whole regional book.</small></p>
+<p><small>Items whose typical sell price swings the most, moved the most, or changed sharply in a hub region. Figures come from each sweep of the whole regional book.</small></p>
 
 <form method="get" action="/market/trends/" class="mt-filters">
   <input type="hidden" name="mode" value="{{.Mode}}">
@@ -28,7 +28,30 @@
 <nav class="mt-modes" aria-label="Ranking">{{range .Modes}}<a href="{{.Href}}"{{if .Active}} class="active" aria-current="true"{{end}}>{{.Label}}</a>{{end}}</nav>
 {{if ne .Mode "volatile"}}<nav class="mt-modes" aria-label="Period">{{range .Periods}}<a href="{{.Href}}"{{if .Active}} class="active" aria-current="true"{{end}}>{{.Label}}</a>{{end}}</nav>{{end}}
 
-{{if .HasData}}
+{{if eq .Mode "changes"}}<nav class="mt-modes" aria-label="Kind of change">{{range .Kinds}}<a href="{{.Href}}"{{if .Active}} class="active" aria-current="true"{{end}}>{{.Label}}</a>{{end}}</nav>{{end}}
+
+{{if eq .Mode "changes"}}
+{{if .Changes}}
+<div class="tw">
+<table>
+  <thead><tr><th>Item</th><th>What changed</th><th>Day</th><th>Seen</th></tr></thead>
+  <tbody>
+  {{range .Changes}}
+    <tr>
+      <td><a href="/market/?type={{.TypeID}}&amp;region={{$.MarketTrends.RegionID}}">{{.Name}}</a></td>
+      <td><span class="mt-chg {{.Dir}}">{{.Label}}</span><br><small class="mt-reqs">{{.Detail}}</small></td>
+      <td>{{.Day}}</td>
+      <td><small>{{.Detected}}</small></td>
+    </tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+<p><small>What each sweep finds against the day before, kept for 30 days. A price move counts at 10% or more, and at three times the item's usual daily swing. Only books with at least five sell orders and recorded trade count. Watch an item to be told when it changes.</small></p>
+{{else}}
+<p>Nothing in {{.RegionName}} changed enough to list in that span.</p>
+{{end}}
+{{else if .HasData}}
 <p><small>{{.RegionName}} · updated {{.Age}} · up to 100 items.</small></p>
 {{if .Rows}}
 <div class="tw">

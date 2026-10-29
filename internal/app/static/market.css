@@ -67,3 +67,6 @@
 @media (max-width: 40rem) {
   .mt-chart svg { height: 120px; }
 }
+
+.mt-changes { list-style: none; margin: 0.25rem 0 0; padding: 0; }
+.mt-changes li { padding: 0.3rem 0; border-bottom: 1px solid var(--row-alt); }

@@ -52,12 +52,24 @@ func marketGroupIconKey(name string, id int64) string {
 		return "structures"
 	case "manufacture & research", "materials", "raw materials":
 		return "materials"
+	case "blueprints":
+		return "blueprints"
+	case "skills":
+		return "skills"
+	case "trade goods":
+		return "tradegoods"
 	}
 
 	// Child-appropriate reuse for subgroups below the mapped
 	// top level. Order matters: the specific words win before
 	// the broad ones.
 	switch {
+	case strings.Contains(normalized, "blueprint"):
+		return "blueprints"
+	case strings.Contains(normalized, "skill"):
+		return "skills"
+	case strings.Contains(normalized, "trade good"):
+		return "tradegoods"
 	case strings.Contains(normalized, "implant"), strings.Contains(normalized, "booster"):
 		return "implants"
 	case strings.Contains(normalized, "drone"), strings.Contains(normalized, "fighter"):
@@ -112,6 +124,13 @@ var marketGroupIconArt = map[string]string{
 	"structures": `<g ` + marketIconPaint + `><path d="M9 20.4v-9.8L12 7l3 3.6v9.8"/><path d="M4.8 20.4h14.4M12 7V4"/></g><circle cx="12" cy="3.2" r="1.1" ` + marketIconFill + `/>`,
 	// Three stacked raw ingots.
 	"materials": `<g ` + marketIconPaint + `><path d="M12 4.2 18 7.4l-6 3.2-6-3.2Z"/><path d="M6.2 12.2 12 15.4l5.8-3.2M6.2 16.6 12 19.8l5.8-3.2"/></g>`,
+	// A rolled sheet whose paper carries a grid of filled squares;
+	// the gaps between the squares read as the grid lines.
+	"blueprints": `<g ` + marketIconPaint + `><rect x="8.4" y="5" width="11.8" height="13.4" rx="1"/><rect x="4.2" y="3.2" width="4.2" height="17" rx="2.1"/><path d="M4.2 6.6h4.2"/></g><g ` + marketIconFill + `><rect x="10.2" y="7.6" width="1.7" height="1.7" rx="0.3"/><rect x="12.5" y="7.6" width="1.7" height="1.7" rx="0.3"/><rect x="14.8" y="7.6" width="1.7" height="1.7" rx="0.3"/><rect x="17.1" y="7.6" width="1.7" height="1.7" rx="0.3"/><rect x="10.2" y="9.9" width="1.7" height="1.7" rx="0.3"/><rect x="12.5" y="9.9" width="1.7" height="1.7" rx="0.3"/><rect x="14.8" y="9.9" width="1.7" height="1.7" rx="0.3"/><rect x="17.1" y="9.9" width="1.7" height="1.7" rx="0.3"/><rect x="10.2" y="12.2" width="1.7" height="1.7" rx="0.3"/><rect x="12.5" y="12.2" width="1.7" height="1.7" rx="0.3"/><rect x="14.8" y="12.2" width="1.7" height="1.7" rx="0.3"/><rect x="17.1" y="12.2" width="1.7" height="1.7" rx="0.3"/><rect x="10.2" y="14.5" width="1.7" height="1.7" rx="0.3"/><rect x="12.5" y="14.5" width="1.7" height="1.7" rx="0.3"/><rect x="14.8" y="14.5" width="1.7" height="1.7" rx="0.3"/><rect x="17.1" y="14.5" width="1.7" height="1.7" rx="0.3"/></g>`,
+	// An open book with a marker dot above the spine.
+	"skills": `<g ` + marketIconPaint + `><path d="M12 6.2C9.8 4.8 6.6 4.4 4.2 5.1v13c2.4-.7 5.6-.3 7.8 1.1 2.2-1.4 5.4-1.8 7.8-1.1v-13c-2.4-.7-5.6-.3-7.8 1.1Z"/><path d="M12 6.2v13.1"/></g><circle cx="12" cy="3" r="1.1" ` + marketIconFill + `/>`,
+	// An isometric parcel: a cube outline with its face edges.
+	"tradegoods": `<g ` + marketIconPaint + `><path d="M12 3.6 19 7.7v8.6l-7 4.1-7-4.1V7.7Z"/><path d="M12 12 19 7.7M12 12 5 7.7M12 12v8.4"/></g>`,
 	// Fallback: a lone market node.
 	"generic": `<g ` + marketIconPaint + `><path d="M12 4.6 18.4 12 12 19.4 5.6 12Z"/></g><circle cx="12" cy="12" r="1.6" ` + marketIconFill + `/>`,
 }

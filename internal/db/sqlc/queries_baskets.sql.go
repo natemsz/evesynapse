@@ -75,6 +75,21 @@ func (q *Queries) DeleteMarketBasketValues(ctx context.Context, basketID int64) 
 	return err
 }
 
+const deleteWatchlistBasket = `-- name: DeleteWatchlistBasket :exec
+DELETE FROM market_watchlist_baskets
+WHERE user_id = $1 AND basket_id = $2
+`
+
+type DeleteWatchlistBasketParams struct {
+	UserID   int64 `json:"user_id"`
+	BasketID int64 `json:"basket_id"`
+}
+
+func (q *Queries) DeleteWatchlistBasket(ctx context.Context, arg DeleteWatchlistBasketParams) error {
+	_, err := q.db.ExecContext(ctx, deleteWatchlistBasket, arg.UserID, arg.BasketID)
+	return err
+}
+
 const getMarketBasket = `-- name: GetMarketBasket :one
 SELECT id, user_id, preset_key, name, region_id, created_at, updated_at
 FROM market_baskets WHERE id = $1
@@ -366,6 +381,52 @@ func (q *Queries) ListMarketBasketsWithoutHistory(ctx context.Context, regionID 
 	return items, nil
 }
 
+const listWatchlistBasketsByUser = `-- name: ListWatchlistBasketsByUser :many
+SELECT w.basket_id, b.name, b.region_id, w.threshold_pct
+FROM market_watchlist_baskets w
+JOIN market_baskets b ON b.id = w.basket_id
+WHERE w.user_id = $1
+  AND (b.user_id IS NULL OR b.user_id = $1)
+ORDER BY b.name, w.basket_id
+`
+
+type ListWatchlistBasketsByUserRow struct {
+	BasketID     int64   `json:"basket_id"`
+	Name         string  `json:"name"`
+	RegionID     int64   `json:"region_id"`
+	ThresholdPct float64 `json:"threshold_pct"`
+}
+
+// The baskets a player watches that they can still see: their own
+// and the presets. A basket that stops being visible drops off.
+func (q *Queries) ListWatchlistBasketsByUser(ctx context.Context, userID int64) ([]ListWatchlistBasketsByUserRow, error) {
+	rows, err := q.db.QueryContext(ctx, listWatchlistBasketsByUser, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListWatchlistBasketsByUserRow
+	for rows.Next() {
+		var i ListWatchlistBasketsByUserRow
+		if err := rows.Scan(
+			&i.BasketID,
+			&i.Name,
+			&i.RegionID,
+			&i.ThresholdPct,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const rebuildMarketBasketValues = `-- name: RebuildMarketBasketValues :execrows
 INSERT INTO market_basket_values_daily (basket_id, day, value_sell, value_buy, priced_items, item_count)
 SELECT b.id, d.day,
@@ -494,5 +555,23 @@ func (q *Queries) UpdateMarketBasket(ctx context.Context, arg UpdateMarketBasket
 		arg.Name,
 		arg.RegionID,
 	)
+	return err
+}
+
+const upsertWatchlistBasket = `-- name: UpsertWatchlistBasket :exec
+INSERT INTO market_watchlist_baskets (user_id, basket_id, threshold_pct)
+VALUES ($1, $2, $3)
+ON CONFLICT (user_id, basket_id) DO UPDATE SET
+    threshold_pct = excluded.threshold_pct
+`
+
+type UpsertWatchlistBasketParams struct {
+	UserID       int64   `json:"user_id"`
+	BasketID     int64   `json:"basket_id"`
+	ThresholdPct float64 `json:"threshold_pct"`
+}
+
+func (q *Queries) UpsertWatchlistBasket(ctx context.Context, arg UpsertWatchlistBasketParams) error {
+	_, err := q.db.ExecContext(ctx, upsertWatchlistBasket, arg.UserID, arg.BasketID, arg.ThresholdPct)
 	return err
 }

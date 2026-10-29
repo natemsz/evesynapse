@@ -654,6 +654,9 @@ var pgMarketChangesSchema string
 //go:embed schema_pg/108_market_api.sql
 var pgMarketAPISchema string
 
+//go:embed schema_pg/110_watchlist_baskets.sql
+var pgWatchlistBasketsSchema string
+
 // Step 107: global notices, the banners an administrator posts to
 // every visitor, their per-account dismissals and the audit trail.
 //
@@ -667,19 +670,25 @@ var pgGlobalNoticesSchema string
 //go:embed schema_pg/109_briefing_dismissals.sql
 var pgBriefingDismissalsSchema string
 
-// Step 110: per-item trading P&L on a pooled cost basis: account,
+// Step 111: visualization preferences, one JSON object of chart
+// display switches on the account.
+//
+//go:embed schema_pg/111_viz_prefs.sql
+var pgVizPrefsSchema string
+
+// Step 112: per-item trading P&L on a pooled cost basis: account,
 // character and corporation pools, paired sales tax, allocated broker
 // fees, typed gaps, and the per-item daily and window rollups.
 //
-//go:embed schema_pg/110_profit_trading.sql
+//go:embed schema_pg/112_profit_trading.sql
 var pgProfitTradingSchema string
 
-// Step 111: per-blueprint industry P&L: recipe facts on landed jobs,
+// Step 113: per-blueprint industry P&L: recipe facts on landed jobs,
 // the materials each consumed from the pool's stock, what became of
 // the output, shared recipe values at today's prices, and the
 // per-blueprint summary.
 //
-//go:embed schema_pg/111_profit_industry.sql
+//go:embed schema_pg/113_profit_industry.sql
 var pgProfitIndustrySchema string
 
 // schemaStep is one numbered file in schema_pg. Steps apply in
@@ -820,8 +829,10 @@ func schemaSteps() []schemaStep {
 		{107, "global_notices", pgGlobalNoticesSchema, ""},
 		{108, "market_api", pgMarketAPISchema, ""},
 		{109, "briefing_dismissals", pgBriefingDismissalsSchema, ""},
-		{110, "profit_trading", pgProfitTradingSchema, ""},
-		{111, "profit_industry", pgProfitIndustrySchema, ""},
+		{110, "watchlist_baskets", pgWatchlistBasketsSchema, ""},
+		{111, "viz_prefs", pgVizPrefsSchema, ""},
+		{112, "profit_trading", pgProfitTradingSchema, ""},
+		{113, "profit_industry", pgProfitIndustrySchema, ""},
 	}
 }
 

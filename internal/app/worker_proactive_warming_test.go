@@ -527,7 +527,7 @@ func TestLiveRegionFragments(t *testing.T) {
 	}
 	mustContain(t, "history fragment (pending)", body,
 		`data-live-region`, `data-poll-state="pending"`,
-		`data-poll-url="/market/history-fragment?region=10000002&amp;type=34"`,
+		`data-poll-url="/market/history-fragment?region=10000002&amp;type=34&amp;range=3m"`,
 		"This item is queued")
 
 	// Trader fragment: the averages carry the same live-fill
@@ -614,7 +614,7 @@ func TestLiveRegionFragments(t *testing.T) {
 	if code != http.StatusOK {
 		t.Fatalf("market item page: status %d", code)
 	}
-	mustContain(t, "/market/?type=35 (pending)", body, `data-poll-url="/market/history-fragment?region=10000002&amp;type=35"`,
+	mustContain(t, "/market/?type=35 (pending)", body, `data-poll-url="/market/history-fragment?region=10000002&amp;type=35&amp;range=3m"`,
 		`class="trader-body"`, `data-poll-url="/market/trader-fragment?region=10000002&amp;type=35`)
 }
 

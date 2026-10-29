@@ -104,7 +104,7 @@ type profitView struct {
 	SalesTax     string
 	BrokerFees   string
 
-	// Trading tab (schema 110).
+	// Trading tab (schema 112).
 	Items          []profitItemRow
 	ItemsNet       string // covered margin over every item
 	ItemsNetDir    string
@@ -119,7 +119,7 @@ type profitView struct {
 	Recomputed     string // day the pool refolded under a new method or members
 	RecomputedWhy  string
 
-	// Industry section (schema 111).
+	// Industry section (schema 113).
 	Blueprints      []profitBlueprintRow
 	Facilities      []profitFacilityRow
 	Regions         []profitRegionChoice

@@ -1,6 +1,6 @@
 package app
 
-// The Profit page's Trading tab (schema 110): per item over the
+// The Profit page's Trading tab (schema 112): per item over the
 // span, the covered margin (matched units of sales whose tax paired,
 // less their cost, their tax share and, by default, the broker fees
 // tied to the item), how much of what sold is covered, and every

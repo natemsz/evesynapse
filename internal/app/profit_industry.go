@@ -1,6 +1,6 @@
 package app
 
-// Per-blueprint industry P&L (schema 111). Three figures per
+// Per-blueprint industry P&L (schema 113). Three figures per
 // blueprint over the same runs:
 //
 //   - (a) realized: what the units actually sold (or marked lost)

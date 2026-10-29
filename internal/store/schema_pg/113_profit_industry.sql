@@ -1,4 +1,4 @@
--- Schema step 111: per-blueprint industry P&L.
+-- Schema step 113: per-blueprint industry P&L.
 --
 -- Three figures per blueprint over the same runs:
 --   (a) realized: units actually sold (or marked lost), less what

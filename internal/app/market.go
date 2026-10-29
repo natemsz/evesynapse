@@ -172,8 +172,20 @@ type marketItem struct {
 	HistoryPending bool // true only in the pending state
 	Chart          *markethistory.PriceChart
 	Stats          *markethistory.Stats
-	Change7        string // "+8.2%", "" when not computable
-	Change30       string
+
+	// The chart's range and the account's visualization
+	// switches, carried onto the view by vizSetup before
+	// attachHistory runs. ChartRange is the raw ?range= value;
+	// RangeKey and RangePills are what attachHistory resolves
+	// from it for the template.
+	ChartRange  string
+	RangeKey    string
+	RangePills  []vizRangePill
+	Viz         vizPrefs
+	VizSet      bool
+	ShowVizGear bool   // signed-in and not a demo account
+	Change7     string // "+8.2%", "" when not computable
+	Change30    string
 	// HistoryLastDay is the newest recorded trade day, set when it
 	// is older than markethistory.StaleAfterDays so the section can say
 	// when trading stopped instead of implying the chart is
@@ -270,9 +282,38 @@ type watchlistRow struct {
 
 // watchlistView is the /market/ watchlist section.
 type watchlistView struct {
-	Rows    []watchlistRow
-	Query   string        // watch-search box value (wq)
-	Matches []marketMatch // local candidates for the watch
+	Rows          []watchlistRow
+	Query         string        // watch-search box value (wq)
+	Matches       []marketMatch // local candidates for the watch
+	BasketMatches []watchBasketMatch
+	BasketRows    []watchlistBasketRow
+	NoMatches     bool // a search ran and neither items nor baskets matched
+}
+
+// watchBasketMatch is one basket in the watch search results.
+type watchBasketMatch struct {
+	ID      int64
+	Name    string
+	Items   int64
+	Value   string // latest stored total sell value, em dash before the first sweep prices it
+	Watched bool
+}
+
+// watchlistBasketRow is one watched basket, display-ready: its
+// stored daily total and the moves against the totals a week and a
+// month back. Changes show only when both ends priced every item,
+// so a basket whose contents changed does not fake a jump.
+type watchlistBasketRow struct {
+	BasketID  int64
+	Name      string
+	RegionID  int64
+	Region    string
+	Current   string
+	Change7   string
+	Change30  string
+	Moving    bool
+	MoveText  string
+	Threshold string
 }
 
 // yourOrderRow is one of the user's open sell orders with its
@@ -349,6 +390,7 @@ func (app *Application) handleMarket(w http.ResponseWriter, r *http.Request) {
 		} else {
 			view.Item = item
 		}
+		app.vizSetup(ctx, view.Item, q.Get("range"))
 		if view.Item != nil || !anon {
 			app.attachHistory(ctx, view.Item, typeID, view.Region, userID)
 		}
@@ -434,6 +476,61 @@ func (app *Application) recentHistoryRows(ctx context.Context, regionID, typeID 
 	return rows
 }
 
+// vizRangePill is one range choice over the item chart.
+type vizRangePill struct {
+	Key    string
+	Label  string
+	URL    string
+	Active bool
+}
+
+// The chart's ranges: key, pill label, displayed days. The
+// default is 3m.
+var vizRanges = []struct {
+	key, label string
+	days       int
+}{
+	{"5d", "5D", 5},
+	{"1m", "1M", 30},
+	{"3m", "3M", 90},
+	{"6m", "6M", 180},
+	{"1y", "1Y", 365},
+}
+
+// vizRangeDays resolves a range key to its canonical key and
+// displayed-day count; anything unrecognized is the default.
+func vizRangeDays(key string) (string, int) {
+	for _, r := range vizRanges {
+		if r.key == key {
+			return r.key, r.days
+		}
+	}
+	return "3m", 90
+}
+
+// vizWarmupRows ride in front of the displayed window so the
+// chart's moving averages and channel are correct from the first
+// displayed day.
+const vizWarmupRows = 20
+
+// vizSetup carries a request's chart inputs onto an item view:
+// the range parameter and, for a signed-in viewer, the account's
+// stored switches. The settings gear renders only for a real
+// account (never anonymous, never the demo account).
+func (app *Application) vizSetup(ctx context.Context, item *marketItem, rangeKey string) {
+	if item == nil {
+		return
+	}
+	item.ChartRange = rangeKey
+	userID := app.userID(ctx)
+	if userID == 0 {
+		return
+	}
+	item.Viz = app.vizPrefsFor(ctx, userID)
+	item.VizSet = true
+	item.ShowVizGear = !app.isDemoUser(ctx, userID)
+}
+
 // attachHistory fills an item view's history section from stored
 // rows (never the network) and sets HistoryState, which the
 // template turns into a deliberate body:
@@ -480,12 +577,39 @@ func (app *Application) noteSearchHistoryWants(ctx context.Context, regionID int
 
 // the user asked about this type either way.
 func (app *Application) attachHistory(ctx context.Context, item *marketItem, typeID, regionID, userID int64) {
-	rows := app.recentHistoryRows(ctx, regionID, typeID, markethistory.ChartRows)
+	// The chart's own read: the displayed days plus warmup, so
+	// its moving averages and channel are right from the first
+	// displayed day. Everything else in this section keeps its
+	// current window (the newest ChartRows rows of the read).
+	rangeKey, displayDays := vizRangeDays("")
 	if item != nil {
+		rangeKey, displayDays = vizRangeDays(item.ChartRange)
+	}
+	read := markethistory.ChartRows
+	if displayDays+vizWarmupRows > read {
+		read = displayDays + vizWarmupRows
+	}
+	if read > 385 {
+		read = 385
+	}
+	rows := app.recentHistoryRows(ctx, regionID, typeID, read)
+	win := rows
+	if len(win) > markethistory.ChartRows {
+		win = win[len(win)-markethistory.ChartRows:]
+	}
+	if item != nil {
+		item.RangeKey = rangeKey
+		for _, r := range vizRanges {
+			item.RangePills = append(item.RangePills, vizRangePill{
+				Key: r.key, Label: r.label,
+				URL:    fmt.Sprintf("/market/?type=%d&region=%d&range=%s", typeID, regionID, r.key),
+				Active: r.key == rangeKey,
+			})
+		}
 		// The trading snapshot rides on whatever rows exist
 		// (possibly none yet) plus the book's bests; missing
 		// figures render as dashes, never invented numbers.
-		item.Trader = markethistory.BuildTraderStats(rows, item.BestSellRaw, item.BestBuyRaw)
+		item.Trader = markethistory.BuildTraderStats(win, item.BestSellRaw, item.BestBuyRaw)
 	}
 	if len(rows) == 0 {
 		if item != nil {
@@ -515,7 +639,7 @@ func (app *Application) attachHistory(ctx context.Context, item *marketItem, typ
 	}
 	// The Average price card's sparkline: the last 30 stored
 	// days, from the same rows the chart below is drawn from.
-	sparkRows := rows
+	sparkRows := win
 	if len(sparkRows) > 30 {
 		sparkRows = sparkRows[len(sparkRows)-30:]
 	}
@@ -527,22 +651,33 @@ func (app *Application) attachHistory(ctx context.Context, item *marketItem, typ
 		item.HistoryState = markethistory.StateFew
 	} else {
 		item.HistoryState = markethistory.StateChart
-		if chart, ok := markethistory.BuildPriceChart(rows); ok {
+		chartRows := rows
+		if len(chartRows) > displayDays+vizWarmupRows {
+			chartRows = chartRows[len(chartRows)-(displayDays+vizWarmupRows):]
+		}
+		prefs := defaultVizPrefs()
+		if item.VizSet {
+			prefs = item.Viz
+		}
+		opts := markethistory.ChartOptions{
+			Wicks: prefs.Wicks, MAChannel: prefs.MAChannel, VolumeStrip: prefs.VolumeStrip,
+		}
+		if chart, ok := markethistory.BuildPriceChartRange(chartRows, displayDays, opts); ok {
 			c := chart
 			item.Chart = &c
 		}
 	}
-	if stats, ok := markethistory.Summarize(rows); ok {
+	if stats, ok := markethistory.Summarize(win); ok {
 		item.Stats = &stats
 	}
-	if newest, err := time.Parse(markethistory.DateLayout, rows[len(rows)-1].Date); err == nil &&
+	if newest, err := time.Parse(markethistory.DateLayout, win[len(win)-1].Date); err == nil &&
 		time.Since(newest) > markethistory.StaleAfterDays*24*time.Hour {
-		item.HistoryLastDay = rows[len(rows)-1].Date
+		item.HistoryLastDay = win[len(win)-1].Date
 	}
-	if pct, ok := markethistory.ChangePct(rows, 7); ok {
+	if pct, ok := markethistory.ChangePct(win, 7); ok {
 		item.Change7 = markethistory.FormatChangePct(pct)
 	}
-	if pct, ok := markethistory.ChangePct(rows, 30); ok {
+	if pct, ok := markethistory.ChangePct(win, 30); ok {
 		item.Change30 = markethistory.FormatChangePct(pct)
 	}
 	if userID > 0 {
@@ -1042,6 +1177,12 @@ func (app *Application) marketRegionLabel(ctx context.Context, regionID int64) s
 // Stored rows only.
 func (app *Application) buildWatchlistView(ctx context.Context, userID int64, watchQuery string) *watchlistView {
 	view := &watchlistView{Query: watchQuery}
+	watchedBaskets, err := app.queries.ListWatchlistBasketsByUser(ctx, userID)
+	if err != nil {
+		logging.Errorf("market: list basket watchlist for user %d: %v", userID, err)
+		watchedBaskets = nil
+	}
+	view.BasketRows = app.watchlistBasketRows(ctx, watchedBaskets)
 	if len(watchQuery) >= 2 {
 		if rows, err := app.queries.SuggestSDETypes(ctx, watchQuery); err != nil {
 			logging.Errorf("market: watch search %q: %v", watchQuery, err)
@@ -1053,6 +1194,30 @@ func (app *Application) buildWatchlistView(ctx context.Context, userID int64, wa
 			// match should land on a chart.
 			app.noteSearchHistoryWants(ctx, defaultMarketRegion, view.Matches)
 		}
+		// Baskets match by name next to the items: the player's own
+		// and the presets, the same set the baskets page lists.
+		watched := make(map[int64]bool, len(watchedBaskets))
+		for _, wb := range watchedBaskets {
+			watched[wb.BasketID] = true
+		}
+		if baskets, err := app.queries.ListMarketBasketsFor(ctx, userID); err != nil {
+			logging.Errorf("market: watch basket search for user %d: %v", userID, err)
+		} else {
+			q := strings.ToLower(watchQuery)
+			for _, b := range baskets {
+				if !strings.Contains(strings.ToLower(b.Name), q) {
+					continue
+				}
+				m := watchBasketMatch{ID: b.ID, Name: b.Name, Items: b.ItemCount, Value: "—", Watched: watched[b.ID]}
+				if b.ValueDay != "" && b.PricedItems == b.ItemCount && b.ItemCount > 0 {
+					m.Value = esi.FormatISK(b.ValueSell)
+				}
+				view.BasketMatches = append(view.BasketMatches, m)
+			}
+		}
+	}
+	if watchQuery != "" && len(view.Matches) == 0 && len(view.BasketMatches) == 0 {
+		view.NoMatches = true
 	}
 	entries, err := app.queries.ListWatchlistByUser(ctx, userID)
 	if err != nil {
@@ -1061,6 +1226,78 @@ func (app *Application) buildWatchlistView(ctx context.Context, userID int64, wa
 	}
 	view.Rows = app.watchlistRows(ctx, entries)
 	return view
+}
+
+// watchlistBasketRows renders watched baskets from their stored
+// daily totals. Each basket's values read once, bounded to the
+// recent window the two changes need.
+func (app *Application) watchlistBasketRows(ctx context.Context, watched []db.ListWatchlistBasketsByUserRow) []watchlistBasketRow {
+	var out []watchlistBasketRow
+	since := basketDay(time.Now().AddDate(0, 0, -40))
+	for _, wb := range watched {
+		row := watchlistBasketRow{
+			BasketID:  wb.BasketID,
+			Name:      wb.Name,
+			RegionID:  wb.RegionID,
+			Region:    app.marketRegionLabel(ctx, wb.RegionID),
+			Current:   "—",
+			Change7:   "—",
+			Change30:  "—",
+			Threshold: fmt.Sprintf("%g", wb.ThresholdPct),
+		}
+		values, err := app.queries.ListMarketBasketValues(ctx, db.ListMarketBasketValuesParams{BasketID: wb.BasketID, Since: since})
+		if err != nil {
+			logging.Errorf("market: basket watch values for basket %d: %v", wb.BasketID, err)
+			out = append(out, row)
+			continue
+		}
+		if n := len(values); n > 0 {
+			latest := values[n-1]
+			if latest.ItemCount > 0 && latest.PricedItems == latest.ItemCount {
+				row.Current = esi.FormatISK(latest.ValueSell)
+				if chg, ok := basketValueChange(values, 7); ok {
+					row.Change7 = markethistory.FormatChangePct(chg)
+					if math.Abs(chg) >= wb.ThresholdPct {
+						row.Moving = true
+						row.MoveText = markethistory.ChangeDirection(chg) + " over 7 days"
+					}
+				}
+				if chg, ok := basketValueChange(values, 30); ok {
+					row.Change30 = markethistory.FormatChangePct(chg)
+				}
+			}
+		}
+		out = append(out, row)
+	}
+	return out
+}
+
+// basketValueChange is the percent move of a basket's stored total
+// against the newest fully priced day at least daysBack before the
+// latest one. False when either end is missing, partially priced,
+// or priced a different set of items.
+func basketValueChange(values []db.ListMarketBasketValuesRow, daysBack int) (float64, bool) {
+	latest := values[len(values)-1]
+	if latest.ValueSell <= 0 {
+		return 0, false
+	}
+	latestDay, err := time.Parse("2006-01-02", latest.Day)
+	if err != nil {
+		return 0, false
+	}
+	target := latestDay.AddDate(0, 0, -daysBack)
+	for i := len(values) - 2; i >= 0; i-- {
+		v := values[i]
+		day, err := time.Parse("2006-01-02", v.Day)
+		if err != nil || day.After(target) {
+			continue
+		}
+		if v.PricedItems != v.ItemCount || v.ItemCount != latest.ItemCount || v.ValueSell <= 0 {
+			return 0, false
+		}
+		return (latest.ValueSell - v.ValueSell) / v.ValueSell * 100, true
+	}
+	return 0, false
 }
 
 // watchlistRows renders stored watchlist entries: latest
@@ -1100,6 +1337,42 @@ func (app *Application) watchlistRows(ctx context.Context, entries []db.MarketWa
 		out = append(out, row)
 	}
 	return out
+}
+
+// applyWatchBasketChange applies one basket watch change: add or
+// update sets the alert threshold, remove clears the watch. Only
+// baskets the player can see (their own, or a preset) can be
+// watched; anything else is ignored. Thresholds clamp like the
+// item watch's, 1 to 50 percent.
+func (app *Application) applyWatchBasketChange(ctx context.Context, userID, basketID int64, action, thresholdText string) {
+	switch action {
+	case "add-basket", "update-basket":
+		basket, err := app.queries.GetMarketBasket(ctx, basketID)
+		if err != nil || (basket.UserID.Valid && basket.UserID.Int64 != userID) {
+			return
+		}
+		threshold := 5.0
+		if v, err := strconv.ParseFloat(thresholdText, 64); err == nil && !math.IsNaN(v) {
+			threshold = v
+		}
+		if threshold < 1 {
+			threshold = 1
+		}
+		if threshold > 50 {
+			threshold = 50
+		}
+		if err := app.queries.UpsertWatchlistBasket(ctx, db.UpsertWatchlistBasketParams{
+			UserID: userID, BasketID: basketID, ThresholdPct: threshold,
+		}); err != nil {
+			logging.Errorf("market: basket watch upsert basket %d for user %d: %v", basketID, userID, err)
+		}
+	case "remove-basket":
+		if err := app.queries.DeleteWatchlistBasket(ctx, db.DeleteWatchlistBasketParams{
+			UserID: userID, BasketID: basketID,
+		}); err != nil {
+			logging.Errorf("market: basket watch remove basket %d for user %d: %v", basketID, userID, err)
+		}
+	}
 }
 
 // buildYourOrders assembles the "Your orders" section: every open
@@ -1194,6 +1467,11 @@ func (app *Application) handleMarketWatch(w http.ResponseWriter, r *http.Request
 			next = n
 		}
 		if userID > 0 {
+			if basketID, _ := strconv.ParseInt(r.Form.Get("basket"), 10, 64); basketID > 0 && strings.HasSuffix(r.Form.Get("action"), "-basket") {
+				app.applyWatchBasketChange(ctx, userID, basketID, r.Form.Get("action"), r.Form.Get("threshold"))
+				http.Redirect(w, r, next, http.StatusSeeOther)
+				return
+			}
 			typeID, _ := strconv.ParseInt(r.Form.Get("type"), 10, 64)
 			regionID, _ := strconv.ParseInt(r.Form.Get("region"), 10, 64)
 			if regionID <= 0 {

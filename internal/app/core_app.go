@@ -721,6 +721,7 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	// tab; the old address redirects there.
 	r.With(app.requireAuth).Get("/settings", app.handleSettings)
 	r.With(app.requireAuth).Post("/settings/theme", app.handleSettingsThemeSave)
+	r.With(app.requireAuth).Post("/settings/visualizations", app.handleSettingsVisualizationsSave)
 	r.With(app.requireAuth).Post("/settings/api-keys", app.handleAPIKeyCreate)
 	r.With(app.requireAuth).Post("/settings/api-keys/revoke", app.handleAPIKeyRevoke)
 	// A signed-in visitor dismissing a global notice (notices.go);
@@ -784,6 +785,8 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 		r.With(anonPages).Get("/browse-children", app.handleMarketBrowseChildren)
 		r.With(anonPages).Get("/trends/", app.handleMarketTrends)
 		r.With(anonPages).Get("/lp/", app.handleMarketLP)
+		r.With(anonPages).Get("/lp/export.csv", app.handleMarketLPExportCSV)
+		r.With(anonPages).Get("/lp/export.json", app.handleMarketLPExportJSON)
 		r.With(anonPages).Get("/baskets/", app.handleMarketBaskets)
 		r.With(anonPages).Get("/baskets/{basketID}/", app.handleMarketBasket)
 		r.With(app.requireAuth).Post("/baskets/", app.handleMarketBasketCreate)

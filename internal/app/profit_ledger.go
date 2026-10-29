@@ -281,7 +281,7 @@ type ledgerSource struct {
 	userID        int64 // the account, for a character: its industry preferences
 }
 
-// Pool kinds (schema 110). A character's sales match against the
+// Pool kinds (schema 112). A character's sales match against the
 // stock of its whole account by default ('acct', keyed by user id), or
 // against its own alone ('char') when the player keeps per-character
 // books; a corporation is always its own pool.
@@ -304,7 +304,7 @@ func (p ledgerPool) memberKey() string {
 	return strings.Join(parts, ",")
 }
 
-// profitPrefs are a player's profit preferences (schemas 110, 111),
+// profitPrefs are a player's profit preferences (schemas 112, 113),
 // with the defaults when none are stored: pooled books, broker fees in
 // the item margin, industry priced in The Forge at sell typicals.
 type profitPrefs struct {

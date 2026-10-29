@@ -294,8 +294,32 @@
   </tbody>
 </table>
 </div>
-{{else if $wl.Query}}
-<p><small>No items match “{{$wl.Query}}”.</small></p>
+{{end}}
+{{if $wl.BasketMatches}}
+<div class="tw">
+<table class="watch-matches">
+  <thead><tr><th>Baskets matching “{{$wl.Query}}”</th><th>Items</th><th>Total value</th><th></th></tr></thead>
+  <tbody>
+  {{range $wl.BasketMatches}}
+    <tr>
+      <td><a href="/market/baskets/">{{.Name}}</a></td>
+      <td>{{.Items}}</td>
+      <td>{{.Value}}</td>
+      <td>{{if .Watched}}<small>Watching</small>{{else}}<form method="post" action="/market/watch" class="inline-form">
+        <input type="hidden" name="action" value="add-basket">
+        <input type="hidden" name="basket" value="{{.ID}}">
+        <input type="hidden" name="threshold" value="5">
+        <input type="hidden" name="next" value="/market/">
+        <button class="btn" type="submit">Watch</button>
+      </form>{{end}}</td>
+    </tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+{{end}}
+{{if $wl.NoMatches}}
+<p><small>No items or baskets match “{{$wl.Query}}”.</small></p>
 {{end}}
 {{if $wl.Rows}}
 <div class="tw">
@@ -334,8 +358,45 @@
   </tbody>
 </table>
 </div>
-{{else}}
-<p><small>Nothing watched yet. Watch an item to hear about its price moves here and on Home.</small></p>
+{{end}}
+{{if $wl.BasketRows}}
+<div class="tw">
+<table>
+  <thead><tr><th>Basket</th><th>Region</th><th>Total value</th><th>7 days</th><th>30 days</th><th>Status</th><th>Alert at</th><th></th></tr></thead>
+  <tbody>
+  {{range $wl.BasketRows}}
+    <tr>
+      <td><a href="/market/baskets/">{{.Name}}</a></td>
+      <td>{{.Region}}</td>
+      <td>{{.Current}}</td>
+      <td>{{.Change7}}</td>
+      <td>{{.Change30}}</td>
+      <td>{{if .Moving}}<strong>{{.MoveText}}</strong>{{else}}Calm{{end}}</td>
+      <td>
+        <form method="post" action="/market/watch">
+          <input type="hidden" name="action" value="update-basket">
+          <input type="hidden" name="basket" value="{{.BasketID}}">
+          <input type="hidden" name="next" value="/market/">
+          <input type="number" name="threshold" min="1" max="50" step="any" value="{{.Threshold}}" size="4">%
+          <button class="btn" type="submit">Set</button>
+        </form>
+      </td>
+      <td>
+        <form method="post" action="/market/watch">
+          <input type="hidden" name="action" value="remove-basket">
+          <input type="hidden" name="basket" value="{{.BasketID}}">
+          <input type="hidden" name="next" value="/market/">
+          <button class="btn" type="submit">Remove</button>
+        </form>
+      </td>
+    </tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+{{end}}
+{{if and (not $wl.Rows) (not $wl.BasketRows)}}
+<p><small>Nothing watched yet. Watch an item or a basket to hear about its price moves here and on Home.</small></p>
 {{end}}
 </div>
 {{end}}

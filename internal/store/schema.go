@@ -654,6 +654,9 @@ var pgMarketChangesSchema string
 //go:embed schema_pg/108_market_api.sql
 var pgMarketAPISchema string
 
+//go:embed schema_pg/110_watchlist_baskets.sql
+var pgWatchlistBasketsSchema string
+
 // Step 107: global notices, the banners an administrator posts to
 // every visitor, their per-account dismissals and the audit trail.
 //
@@ -805,6 +808,7 @@ func schemaSteps() []schemaStep {
 		{107, "global_notices", pgGlobalNoticesSchema, ""},
 		{108, "market_api", pgMarketAPISchema, ""},
 		{109, "briefing_dismissals", pgBriefingDismissalsSchema, ""},
+		{110, "watchlist_baskets", pgWatchlistBasketsSchema, ""},
 	}
 }
 

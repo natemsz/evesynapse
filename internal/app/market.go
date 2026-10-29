@@ -270,9 +270,38 @@ type watchlistRow struct {
 
 // watchlistView is the /market/ watchlist section.
 type watchlistView struct {
-	Rows    []watchlistRow
-	Query   string        // watch-search box value (wq)
-	Matches []marketMatch // local candidates for the watch
+	Rows          []watchlistRow
+	Query         string        // watch-search box value (wq)
+	Matches       []marketMatch // local candidates for the watch
+	BasketMatches []watchBasketMatch
+	BasketRows    []watchlistBasketRow
+	NoMatches     bool // a search ran and neither items nor baskets matched
+}
+
+// watchBasketMatch is one basket in the watch search results.
+type watchBasketMatch struct {
+	ID      int64
+	Name    string
+	Items   int64
+	Value   string // latest stored total sell value, em dash before the first sweep prices it
+	Watched bool
+}
+
+// watchlistBasketRow is one watched basket, display-ready: its
+// stored daily total and the moves against the totals a week and a
+// month back. Changes show only when both ends priced every item,
+// so a basket whose contents changed does not fake a jump.
+type watchlistBasketRow struct {
+	BasketID  int64
+	Name      string
+	RegionID  int64
+	Region    string
+	Current   string
+	Change7   string
+	Change30  string
+	Moving    bool
+	MoveText  string
+	Threshold string
 }
 
 // yourOrderRow is one of the user's open sell orders with its
@@ -1042,6 +1071,12 @@ func (app *Application) marketRegionLabel(ctx context.Context, regionID int64) s
 // Stored rows only.
 func (app *Application) buildWatchlistView(ctx context.Context, userID int64, watchQuery string) *watchlistView {
 	view := &watchlistView{Query: watchQuery}
+	watchedBaskets, err := app.queries.ListWatchlistBasketsByUser(ctx, userID)
+	if err != nil {
+		logging.Errorf("market: list basket watchlist for user %d: %v", userID, err)
+		watchedBaskets = nil
+	}
+	view.BasketRows = app.watchlistBasketRows(ctx, watchedBaskets)
 	if len(watchQuery) >= 2 {
 		if rows, err := app.queries.SuggestSDETypes(ctx, watchQuery); err != nil {
 			logging.Errorf("market: watch search %q: %v", watchQuery, err)
@@ -1053,6 +1088,30 @@ func (app *Application) buildWatchlistView(ctx context.Context, userID int64, wa
 			// match should land on a chart.
 			app.noteSearchHistoryWants(ctx, defaultMarketRegion, view.Matches)
 		}
+		// Baskets match by name next to the items: the player's own
+		// and the presets, the same set the baskets page lists.
+		watched := make(map[int64]bool, len(watchedBaskets))
+		for _, wb := range watchedBaskets {
+			watched[wb.BasketID] = true
+		}
+		if baskets, err := app.queries.ListMarketBasketsFor(ctx, userID); err != nil {
+			logging.Errorf("market: watch basket search for user %d: %v", userID, err)
+		} else {
+			q := strings.ToLower(watchQuery)
+			for _, b := range baskets {
+				if !strings.Contains(strings.ToLower(b.Name), q) {
+					continue
+				}
+				m := watchBasketMatch{ID: b.ID, Name: b.Name, Items: b.ItemCount, Value: "—", Watched: watched[b.ID]}
+				if b.ValueDay != "" && b.PricedItems == b.ItemCount && b.ItemCount > 0 {
+					m.Value = esi.FormatISK(b.ValueSell)
+				}
+				view.BasketMatches = append(view.BasketMatches, m)
+			}
+		}
+	}
+	if watchQuery != "" && len(view.Matches) == 0 && len(view.BasketMatches) == 0 {
+		view.NoMatches = true
 	}
 	entries, err := app.queries.ListWatchlistByUser(ctx, userID)
 	if err != nil {
@@ -1061,6 +1120,78 @@ func (app *Application) buildWatchlistView(ctx context.Context, userID int64, wa
 	}
 	view.Rows = app.watchlistRows(ctx, entries)
 	return view
+}
+
+// watchlistBasketRows renders watched baskets from their stored
+// daily totals. Each basket's values read once, bounded to the
+// recent window the two changes need.
+func (app *Application) watchlistBasketRows(ctx context.Context, watched []db.ListWatchlistBasketsByUserRow) []watchlistBasketRow {
+	var out []watchlistBasketRow
+	since := basketDay(time.Now().AddDate(0, 0, -40))
+	for _, wb := range watched {
+		row := watchlistBasketRow{
+			BasketID:  wb.BasketID,
+			Name:      wb.Name,
+			RegionID:  wb.RegionID,
+			Region:    app.marketRegionLabel(ctx, wb.RegionID),
+			Current:   "—",
+			Change7:   "—",
+			Change30:  "—",
+			Threshold: fmt.Sprintf("%g", wb.ThresholdPct),
+		}
+		values, err := app.queries.ListMarketBasketValues(ctx, db.ListMarketBasketValuesParams{BasketID: wb.BasketID, Since: since})
+		if err != nil {
+			logging.Errorf("market: basket watch values for basket %d: %v", wb.BasketID, err)
+			out = append(out, row)
+			continue
+		}
+		if n := len(values); n > 0 {
+			latest := values[n-1]
+			if latest.ItemCount > 0 && latest.PricedItems == latest.ItemCount {
+				row.Current = esi.FormatISK(latest.ValueSell)
+				if chg, ok := basketValueChange(values, 7); ok {
+					row.Change7 = markethistory.FormatChangePct(chg)
+					if math.Abs(chg) >= wb.ThresholdPct {
+						row.Moving = true
+						row.MoveText = markethistory.ChangeDirection(chg) + " over 7 days"
+					}
+				}
+				if chg, ok := basketValueChange(values, 30); ok {
+					row.Change30 = markethistory.FormatChangePct(chg)
+				}
+			}
+		}
+		out = append(out, row)
+	}
+	return out
+}
+
+// basketValueChange is the percent move of a basket's stored total
+// against the newest fully priced day at least daysBack before the
+// latest one. False when either end is missing, partially priced,
+// or priced a different set of items.
+func basketValueChange(values []db.ListMarketBasketValuesRow, daysBack int) (float64, bool) {
+	latest := values[len(values)-1]
+	if latest.ValueSell <= 0 {
+		return 0, false
+	}
+	latestDay, err := time.Parse("2006-01-02", latest.Day)
+	if err != nil {
+		return 0, false
+	}
+	target := latestDay.AddDate(0, 0, -daysBack)
+	for i := len(values) - 2; i >= 0; i-- {
+		v := values[i]
+		day, err := time.Parse("2006-01-02", v.Day)
+		if err != nil || day.After(target) {
+			continue
+		}
+		if v.PricedItems != v.ItemCount || v.ItemCount != latest.ItemCount || v.ValueSell <= 0 {
+			return 0, false
+		}
+		return (latest.ValueSell - v.ValueSell) / v.ValueSell * 100, true
+	}
+	return 0, false
 }
 
 // watchlistRows renders stored watchlist entries: latest
@@ -1100,6 +1231,42 @@ func (app *Application) watchlistRows(ctx context.Context, entries []db.MarketWa
 		out = append(out, row)
 	}
 	return out
+}
+
+// applyWatchBasketChange applies one basket watch change: add or
+// update sets the alert threshold, remove clears the watch. Only
+// baskets the player can see (their own, or a preset) can be
+// watched; anything else is ignored. Thresholds clamp like the
+// item watch's, 1 to 50 percent.
+func (app *Application) applyWatchBasketChange(ctx context.Context, userID, basketID int64, action, thresholdText string) {
+	switch action {
+	case "add-basket", "update-basket":
+		basket, err := app.queries.GetMarketBasket(ctx, basketID)
+		if err != nil || (basket.UserID.Valid && basket.UserID.Int64 != userID) {
+			return
+		}
+		threshold := 5.0
+		if v, err := strconv.ParseFloat(thresholdText, 64); err == nil && !math.IsNaN(v) {
+			threshold = v
+		}
+		if threshold < 1 {
+			threshold = 1
+		}
+		if threshold > 50 {
+			threshold = 50
+		}
+		if err := app.queries.UpsertWatchlistBasket(ctx, db.UpsertWatchlistBasketParams{
+			UserID: userID, BasketID: basketID, ThresholdPct: threshold,
+		}); err != nil {
+			logging.Errorf("market: basket watch upsert basket %d for user %d: %v", basketID, userID, err)
+		}
+	case "remove-basket":
+		if err := app.queries.DeleteWatchlistBasket(ctx, db.DeleteWatchlistBasketParams{
+			UserID: userID, BasketID: basketID,
+		}); err != nil {
+			logging.Errorf("market: basket watch remove basket %d for user %d: %v", basketID, userID, err)
+		}
+	}
 }
 
 // buildYourOrders assembles the "Your orders" section: every open
@@ -1194,6 +1361,11 @@ func (app *Application) handleMarketWatch(w http.ResponseWriter, r *http.Request
 			next = n
 		}
 		if userID > 0 {
+			if basketID, _ := strconv.ParseInt(r.Form.Get("basket"), 10, 64); basketID > 0 && strings.HasSuffix(r.Form.Get("action"), "-basket") {
+				app.applyWatchBasketChange(ctx, userID, basketID, r.Form.Get("action"), r.Form.Get("threshold"))
+				http.Redirect(w, r, next, http.StatusSeeOther)
+				return
+			}
 			typeID, _ := strconv.ParseInt(r.Form.Get("type"), 10, 64)
 			regionID, _ := strconv.ParseInt(r.Form.Get("region"), 10, 64)
 			if regionID <= 0 {

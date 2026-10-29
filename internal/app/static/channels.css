@@ -46,6 +46,7 @@
 a.ch-tag:hover { border-color: var(--accent); }
 .ch-tag.friendly { border-color: var(--success); color: var(--muted); }
 .ch-tag.ship { color: var(--muted); }
+.ch-tag.place { color: var(--muted); border-style: dashed; }
 /* The standing-split bar under a report's sentence: the same
  * proportional read as the scan pages' strips, in the standing
  * colours -- hostiles red, friendly amber, neutral grey-blue,

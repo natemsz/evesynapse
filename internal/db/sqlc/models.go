@@ -607,6 +607,7 @@ type IntelPilotName struct {
 	CharacterID int64     `json:"character_id"`
 	Name        string    `json:"name"`
 	CheckedAt   time.Time `json:"checked_at"`
+	Thing       string    `json:"thing"`
 }
 
 type IntelReport struct {

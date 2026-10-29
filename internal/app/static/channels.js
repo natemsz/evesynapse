@@ -59,7 +59,7 @@
       what.appendChild(sa);
     }
     // The pilots (each opening their page), ships and gate read from it.
-    if ((r.pilots && r.pilots.length) || (r.ships && r.ships.length) || r.gate) {
+    if ((r.pilots && r.pilots.length) || (r.ships && r.ships.length) || r.gate || r.location || (r.places && r.places.length)) {
       var tags = doc.createElement("span");
       tags.className = "ch-rep-tags";
       (r.pilots || []).forEach(function (p) {
@@ -90,6 +90,20 @@
         g.textContent = r.gate + " gate";
         tags.appendChild(g);
       }
+      // Where in the system, and the other places it names.
+      if (r.location) {
+        var lo = doc.createElement("span");
+        lo.className = "ch-tag place";
+        lo.textContent = r.location;
+        tags.appendChild(lo);
+      }
+      (r.places || []).forEach(function (pl) {
+        var pe = doc.createElement(pl.href ? "a" : "span");
+        if (pl.href) pe.href = pl.href;
+        pe.className = "ch-tag place";
+        pe.textContent = pl.name;
+        tags.appendChild(pe);
+      });
       what.appendChild(tags);
     }
     // The standing split as a proportional bar, its counts in

@@ -91,7 +91,13 @@ func Parse(raw string, lookup Lookup, now time.Time) Outcome {
 		}
 		words := strings.Fields(msg)
 		used := make([]bool, len(words))
-		// The system: the longest name found, earliest first.
+		// The system: the longest name found, earliest first. A
+		// name followed by "gate" is the gate's far side, not
+		// where the scout is ("on bosena gate in helid" is in
+		// Helid): it is the system only when no other is named.
+		gateI, gateN := -1, 0
+		var gateID int64
+		var gateName string
 	find:
 		for n := maxSystemWords; n >= 1; n-- {
 			for i := 0; i+n <= len(words); i++ {
@@ -100,12 +106,24 @@ func Parse(raw string, lookup Lookup, now time.Time) Outcome {
 					continue
 				}
 				if id, proper, ok := lookup(name); ok {
+					if i+n < len(words) && strings.HasPrefix(strings.ToLower(trim(words[i+n])), "gate") {
+						if gateI < 0 {
+							gateI, gateN, gateID, gateName = i, n, id, proper
+						}
+						continue
+					}
 					r.SystemID, r.SystemName = id, proper
 					for k := i; k < i+n; k++ {
 						used[k] = true
 					}
 					break find
 				}
+			}
+		}
+		if r.SystemID == 0 && gateI >= 0 {
+			r.SystemID, r.SystemName = gateID, gateName
+			for k := gateI; k < gateI+gateN; k++ {
+				used[k] = true
 			}
 		}
 		question := false

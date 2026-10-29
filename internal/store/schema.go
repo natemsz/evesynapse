@@ -698,6 +698,12 @@ var pgProfitIndustrySchema string
 //go:embed schema_pg/114_profit_lp.sql
 var pgProfitLPSchema string
 
+// Step 115: the non-character kind a looked-up intel name also
+// is, so a name that is a place or an item reads as one.
+//
+//go:embed schema_pg/115_intel_name_things.sql
+var pgIntelNameThingsSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -841,6 +847,7 @@ func schemaSteps() []schemaStep {
 		{112, "profit_trading", pgProfitTradingSchema, ""},
 		{113, "profit_industry", pgProfitIndustrySchema, ""},
 		{114, "profit_lp", pgProfitLPSchema, ""},
+		{115, "intel_name_things", pgIntelNameThingsSchema, ""},
 	}
 }
 

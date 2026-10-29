@@ -256,7 +256,7 @@ func TestAnalyzeResidue(t *testing.T) {
 		t.Errorf("a fully read report: residue %q, want none", full.Residue)
 	}
 
-	pending := Analyze(Input{System: 1, Text: "Hostile One in sabre, never asked name"}, d)
+	pending := Analyze(Input{System: 1, Text: "Hostile One in sabre, Never Asked Name"}, d)
 	if len(pending.Unknown) == 0 {
 		t.Fatalf("an unasked name should stand unknown: %+v", pending)
 	}
@@ -369,8 +369,8 @@ func TestAnalyzeChatWordsAndSuspects(t *testing.T) {
 			return 92000001, "Clr", true, true
 		case "nv":
 			return 92000002, "Nv", true, true
-		case "ess":
-			return 92000003, "Ess", true, true
+		case "help":
+			return 92000003, "Help", true, true
 		}
 		return base(l)
 	}
@@ -385,12 +385,12 @@ func TestAnalyzeChatWordsAndSuspects(t *testing.T) {
 	if len(a.Suspect) != 0 {
 		t.Errorf("a two-word pilot marked suspect: %q", a.Suspect)
 	}
-	a = Analyze(Input{System: 1, Text: "Hostile One  Ess"}, d)
+	a = Analyze(Input{System: 1, Text: "Hostile One  Help"}, d)
 	if len(a.Pilots) != 2 {
 		t.Fatalf("pilots: %+v", a.Pilots)
 	}
-	if !reflect.DeepEqual(a.Suspect, []string{"Ess"}) {
-		t.Errorf("suspect = %q, want [Ess]", a.Suspect)
+	if !reflect.DeepEqual(a.Suspect, []string{"Help"}) {
+		t.Errorf("suspect = %q, want [Help]", a.Suspect)
 	}
 }
 

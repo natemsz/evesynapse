@@ -140,6 +140,7 @@ type profitView struct {
 	Unrealized string
 	UnrealDir  string
 	Chart      *profitChart
+	Charts     *pfCharts
 }
 
 func dirOf(v float64) string {
@@ -375,6 +376,13 @@ func (app *Application) buildProfitView(ctx context.Context, userID int64, owner
 		return view, err
 	}
 	view.Chart = buildProfitChart(daily, !view.Corp)
+	names := map[int64]string{}
+	for _, ch := range chars {
+		names[ch.CharacterID] = ch.Name
+	}
+	if view.Charts, err = app.buildProfitCharts(ctx, view, kind, ids, names, fromDay, prefs.BrokerInMargin); err != nil {
+		return view, err
+	}
 	return view, nil
 }
 

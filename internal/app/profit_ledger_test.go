@@ -270,6 +270,19 @@ func TestProfitPooledTradingItems(t *testing.T) {
 	if len(rows) == 0 || rows[0].TypeID != 34 {
 		t.Errorf("first row = %+v, want the fully covered item first", rows)
 	}
+	// The chart set draws from the same rows: a bar per day, the
+	// split by activity, the fee share, and the hatch where type 35 went
+	// uncovered (the alt only bought, so no per-character lines).
+	cookie := sessionCookie(t, app, user.ID, fixtureCharA, "Main")
+	code, body := getPage(t, app, cookie, "/profit/?days=7")
+	if code != 200 {
+		t.Fatalf("GET /profit/: status %d", code)
+	}
+	for _, want := range []string{`class="pf-chart"`, "brought the most", `class="pf-gap"`, "Trading fees took"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("profit page charts lack %q", want)
+		}
+	}
 }
 
 // A blueprint's three figures: the job consumes the material lots it

@@ -297,6 +297,45 @@ func (q *Queries) ListAPIKeys(ctx context.Context, arg ListAPIKeysParams) ([]Lis
 	return items, nil
 }
 
+const listAbyssalWantsByItems = `-- name: ListAbyssalWantsByItems :many
+SELECT item_id, type_id, state, attempts FROM abyssal_wants WHERE item_id = ANY($1::bigint[])
+`
+
+type ListAbyssalWantsByItemsRow struct {
+	ItemID   int64  `json:"item_id"`
+	TypeID   int64  `json:"type_id"`
+	State    string `json:"state"`
+	Attempts int64  `json:"attempts"`
+}
+
+func (q *Queries) ListAbyssalWantsByItems(ctx context.Context, itemIds []int64) ([]ListAbyssalWantsByItemsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listAbyssalWantsByItems, pq.Array(itemIds))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListAbyssalWantsByItemsRow
+	for rows.Next() {
+		var i ListAbyssalWantsByItemsRow
+		if err := rows.Scan(
+			&i.ItemID,
+			&i.TypeID,
+			&i.State,
+			&i.Attempts,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listBlueprintResearchMedianCandidates = `-- name: ListBlueprintResearchMedianCandidates :many
 SELECT i.type_id AS type_id, i.material_efficiency AS me, i.time_efficiency AS te,
     percentile_cont(0.5) WITHIN GROUP (ORDER BY c.price) AS median_price,

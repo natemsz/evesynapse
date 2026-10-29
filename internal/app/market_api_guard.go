@@ -175,7 +175,9 @@ func writeMarketAPIJSON(w http.ResponseWriter, status int, v any) {
 	h := w.Header()
 	h.Set("Content-Type", "application/json; charset=utf-8")
 	h.Set("X-Content-Type-Options", "nosniff")
-	h.Set("Cache-Control", "private, max-age=30")
+	if h.Get("Cache-Control") == "" {
+		h.Set("Cache-Control", "private, max-age=30")
+	}
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(v)
 }

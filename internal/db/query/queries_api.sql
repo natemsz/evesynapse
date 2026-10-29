@@ -62,6 +62,9 @@ SELECT COUNT(*) FROM abyssal_wants WHERE state = 'pending';
 -- name: GetAbyssalWant :one
 SELECT item_id, type_id, state, attempts FROM abyssal_wants WHERE item_id = $1;
 
+-- name: ListAbyssalWantsByItems :many
+SELECT item_id, type_id, state, attempts FROM abyssal_wants WHERE item_id = ANY(sqlc.arg(item_ids)::bigint[]);
+
 -- name: ListPendingAbyssalWants :many
 SELECT item_id, type_id, attempts FROM abyssal_wants
 WHERE state = 'pending' AND (tried_at IS NULL OR tried_at < sqlc.arg(retry_before)::timestamptz)

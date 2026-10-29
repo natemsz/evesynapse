@@ -367,6 +367,7 @@ func (app *Application) handleMarketAPIAppraise(w http.ResponseWriter, r *http.R
 	}
 	out := marketwire.Appraisal{RegionID: region, Mode: mode, Lines: make([]marketwire.AppraisedLine, 0, len(res.Lines))}
 	key := apiKeyFrom(ctx)
+	pending := app.wantAbyssalPending(ctx, key, res.Lines, req.Lines)
 	for i, al := range res.Lines {
 		line := marketwire.AppraisedLine{TypeID: al.TypeID, Quantity: al.Quantity, ItemID: al.ItemID,
 			UnitPrice: al.UnitPrice, LineValue: al.LineValue, Priced: al.Priced, Tier: al.Tier,
@@ -377,11 +378,86 @@ func (app *Application) handleMarketAPIAppraise(w http.ResponseWriter, r *http.R
 			out.PricedLines++
 		}
 		if !al.Priced && req.Lines[i].ItemID > 0 && al.Tier == module.AppraisalTierUnpriced {
-			line.Pending = app.wantAbyssal(ctx, key, req.Lines[i].ItemID, req.Lines[i].TypeID) == abyssalWantPending
+			line.Pending = pending[req.Lines[i].ItemID]
 		}
 		out.Lines = append(out.Lines, line)
 	}
 	writeMarketAPIData(w, out, "Lines with an item_id are priced as that one mutated item; pending ones are queued, ask again in a few minutes.")
+}
+
+// wantAbyssalPending resolves the queue state of every unpriced
+// item line in one appraisal with batched reads: the wants and the
+// known items load as sets, and the two cap counts are read once per
+// request, never once per line. Items the corpus has not seen are
+// queued while both caps allow, mirroring wantAbyssal's per-item
+// rules. The result maps item id to "queued or already queued".
+func (app *Application) wantAbyssalPending(ctx context.Context, key apiKeyRef, appraised []module.AppraisedLine, requested []marketwire.AppraiseLine) map[int64]bool {
+	out := make(map[int64]bool)
+	type candidate struct{ itemID, typeID int64 }
+	var cands []candidate
+	seen := make(map[int64]bool)
+	for i, al := range appraised {
+		if al.Priced || requested[i].ItemID <= 0 || al.Tier != module.AppraisalTierUnpriced {
+			continue
+		}
+		if id := requested[i].ItemID; !seen[id] {
+			seen[id] = true
+			cands = append(cands, candidate{id, requested[i].TypeID})
+		}
+	}
+	if len(cands) == 0 {
+		return out
+	}
+	ids := make([]int64, len(cands))
+	for i, c := range cands {
+		ids[i] = c.itemID
+	}
+	wantState := make(map[int64]string)
+	if rows, err := app.queries.ListAbyssalWantsByItems(ctx, ids); err == nil {
+		for _, row := range rows {
+			wantState[row.ItemID] = row.State
+		}
+	}
+	known := make(map[int64]bool)
+	if items, err := app.queries.ListAbyssalItemsByIDs(ctx, ids); err == nil {
+		for _, item := range items {
+			known[item.ItemID] = true
+		}
+	}
+	keyLeft, globalLeft := -1, -1
+	for _, c := range cands {
+		if state, ok := wantState[c.itemID]; ok {
+			out[c.itemID] = state == abyssalWantPending
+			continue
+		}
+		if known[c.itemID] {
+			continue
+		}
+		if keyLeft < 0 {
+			keyLeft, globalLeft = 0, 0
+			if n, err := app.queries.CountAbyssalWantsSince(ctx, db.CountAbyssalWantsSinceParams{KeyID: key.ID, Since: time.Now().UTC().Add(-24 * time.Hour)}); err == nil {
+				if left := apiAbyssalWantsPerKeyDay - n; left > 0 {
+					keyLeft = int(left)
+				}
+			}
+			if n, err := app.queries.CountPendingAbyssalWants(ctx); err == nil {
+				if left := apiAbyssalWantsPending - n; left > 0 {
+					globalLeft = int(left)
+				}
+			}
+		}
+		if keyLeft == 0 || globalLeft == 0 {
+			continue
+		}
+		if _, err := app.queries.AddAbyssalWant(ctx, db.AddAbyssalWantParams{ItemID: c.itemID, TypeID: c.typeID, KeyID: key.ID, RequestedAt: time.Now().UTC()}); err != nil {
+			logging.Errorf("market api: queue abyssal %d: %v", c.itemID, err)
+			continue
+		}
+		keyLeft--
+		globalLeft--
+		out[c.itemID] = true
+	}
+	return out
 }
 
 // wantAbyssal queues a mutated item the corpus has not seen, within

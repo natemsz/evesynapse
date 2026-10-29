@@ -24,6 +24,10 @@ const (
 	// basketMaxPerUser bounds how many baskets one player keeps.
 	basketMaxPerUser = 25
 	basketNameMax    = 60
+	// basketMaxQuantity bounds one type's quantity in a basket: far
+	// past any real stack, and low enough that summing a basket's
+	// lines can never overflow the quantity column.
+	basketMaxQuantity = 1_000_000_000_000_000
 )
 
 // refreshBasketValues writes today's value for every basket priced in
@@ -34,8 +38,12 @@ func refreshBasketValues(ctx context.Context, q *db.Queries, regionID int64, day
 	if err != nil {
 		return err
 	}
+	since := day
+	if t, err := time.Parse("2006-01-02", day); err == nil {
+		since = basketDay(t.AddDate(0, 0, -bookTrendDays))
+	}
 	for _, id := range fresh {
-		if _, err := q.RebuildMarketBasketValues(ctx, id); err != nil {
+		if _, err := q.RebuildMarketBasketValues(ctx, db.RebuildMarketBasketValuesParams{BasketID: id, Since: since}); err != nil {
 			return err
 		}
 	}
@@ -67,6 +75,9 @@ func parseBasketLines(text string) []basketLine {
 				name, qty = strings.TrimSpace(line[:i]), n
 			}
 		}
+		if qty > basketMaxQuantity {
+			qty = basketMaxQuantity
+		}
 		if name != "" {
 			out = append(out, basketLine{Name: name, Quantity: qty})
 		}
@@ -96,6 +107,22 @@ func (app *Application) saveBasketItems(ctx context.Context, basketID int64, lin
 	for _, r := range resolved {
 		ids[strings.ToLower(r.Name)] = r.TypeID
 	}
+	merged := map[int64]int64{}
+	var order []int64
+	for _, l := range lines {
+		id, ok := ids[strings.ToLower(l.Name)]
+		if !ok {
+			unknown = append(unknown, l.Name)
+			continue
+		}
+		if _, seen := merged[id]; !seen {
+			order = append(order, id)
+		}
+		merged[id] += l.Quantity
+		if merged[id] > basketMaxQuantity {
+			merged[id] = basketMaxQuantity
+		}
+	}
 	tx, err := app.db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, err
@@ -105,20 +132,15 @@ func (app *Application) saveBasketItems(ctx context.Context, basketID int64, lin
 	if err := qtx.DeleteMarketBasketItems(ctx, basketID); err != nil {
 		return nil, err
 	}
-	for _, l := range lines {
-		id, ok := ids[strings.ToLower(l.Name)]
-		if !ok {
-			unknown = append(unknown, l.Name)
-			continue
-		}
-		if err := qtx.InsertMarketBasketItem(ctx, db.InsertMarketBasketItemParams{BasketID: basketID, TypeID: id, Quantity: l.Quantity}); err != nil {
+	for _, id := range order {
+		if err := qtx.InsertMarketBasketItem(ctx, db.InsertMarketBasketItemParams{BasketID: basketID, TypeID: id, Quantity: merged[id]}); err != nil {
 			return nil, err
 		}
 	}
 	if err := qtx.DeleteMarketBasketValues(ctx, basketID); err != nil {
 		return nil, err
 	}
-	if _, err := qtx.RebuildMarketBasketValues(ctx, basketID); err != nil {
+	if _, err := qtx.RebuildMarketBasketValues(ctx, db.RebuildMarketBasketValuesParams{BasketID: basketID, Since: basketDay(time.Now().AddDate(0, 0, -bookTrendDays))}); err != nil {
 		return nil, err
 	}
 	return unknown, tx.Commit()

@@ -55,9 +55,10 @@ LIMIT 500;
 DELETE FROM market_basket_values_daily WHERE basket_id = $1;
 
 -- name: RebuildMarketBasketValues :execrows
--- One basket's whole value history, from the stat pack's daily rows
--- in the basket's region (the global book's rows for a type that
--- region does not carry).
+-- One basket's value history inside the window the pages read
+-- (bookTrendDays), from the stat pack's daily rows in the basket's
+-- region (the global book's rows for a type that region does not
+-- carry). Older values are never read back, so they are not rebuilt.
 INSERT INTO market_basket_values_daily (basket_id, day, value_sell, value_buy, priced_items, item_count)
 SELECT b.id, d.day,
        SUM(i.quantity * d.typical_sell),
@@ -72,7 +73,7 @@ JOIN market_region_stats_daily d
       OR (d.region_id = 19000001 AND NOT EXISTS (
           SELECT 1 FROM market_region_stats_daily dd
           WHERE dd.region_id = b.region_id AND dd.type_id = i.type_id AND dd.day = d.day)))
-WHERE b.id = sqlc.arg(basket_id)
+WHERE b.id = sqlc.arg(basket_id) AND d.day >= sqlc.arg(since)::text
 GROUP BY b.id, d.day
 ON CONFLICT (basket_id, day) DO UPDATE SET
     value_sell = excluded.value_sell, value_buy = excluded.value_buy,
@@ -138,6 +139,7 @@ ORDER BY lower(name), (market_group_id > 0) DESC, published DESC, type_id;
 -- rebuilt from the daily rows before today's value lands.
 SELECT b.id FROM market_baskets b
 WHERE b.region_id = $1
+  AND EXISTS (SELECT 1 FROM market_basket_items i WHERE i.basket_id = b.id)
   AND NOT EXISTS (SELECT 1 FROM market_basket_values_daily v WHERE v.basket_id = b.id)
 ORDER BY b.id
 LIMIT 200;

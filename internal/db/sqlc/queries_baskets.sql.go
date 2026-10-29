@@ -334,6 +334,7 @@ func (q *Queries) ListMarketBasketsFor(ctx context.Context, userID int64) ([]Lis
 const listMarketBasketsWithoutHistory = `-- name: ListMarketBasketsWithoutHistory :many
 SELECT b.id FROM market_baskets b
 WHERE b.region_id = $1
+  AND EXISTS (SELECT 1 FROM market_basket_items i WHERE i.basket_id = b.id)
   AND NOT EXISTS (SELECT 1 FROM market_basket_values_daily v WHERE v.basket_id = b.id)
 ORDER BY b.id
 LIMIT 200
@@ -380,18 +381,24 @@ JOIN market_region_stats_daily d
       OR (d.region_id = 19000001 AND NOT EXISTS (
           SELECT 1 FROM market_region_stats_daily dd
           WHERE dd.region_id = b.region_id AND dd.type_id = i.type_id AND dd.day = d.day)))
-WHERE b.id = $1
+WHERE b.id = $1 AND d.day >= $2::text
 GROUP BY b.id, d.day
 ON CONFLICT (basket_id, day) DO UPDATE SET
     value_sell = excluded.value_sell, value_buy = excluded.value_buy,
     priced_items = excluded.priced_items, item_count = excluded.item_count
 `
 
-// One basket's whole value history, from the stat pack's daily rows
-// in the basket's region (the global book's rows for a type that
-// region does not carry).
-func (q *Queries) RebuildMarketBasketValues(ctx context.Context, basketID int64) (int64, error) {
-	result, err := q.db.ExecContext(ctx, rebuildMarketBasketValues, basketID)
+type RebuildMarketBasketValuesParams struct {
+	BasketID int64  `json:"basket_id"`
+	Since    string `json:"since"`
+}
+
+// One basket's value history inside the window the pages read
+// (bookTrendDays), from the stat pack's daily rows in the basket's
+// region (the global book's rows for a type that region does not
+// carry). Older values are never read back, so they are not rebuilt.
+func (q *Queries) RebuildMarketBasketValues(ctx context.Context, arg RebuildMarketBasketValuesParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, rebuildMarketBasketValues, arg.BasketID, arg.Since)
 	if err != nil {
 		return 0, err
 	}

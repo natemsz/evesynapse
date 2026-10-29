@@ -150,6 +150,9 @@ type profitBlueprintView struct {
 	Pool, Name, Back string
 	Jobs             []profitJobRow
 	Sells            []profitSellChoice
+	Orders           []profitSellChoice // open sell orders of the item a job can watch
+	KillLost         string             // units of the item lost on killmails since the first job delivered
+	KillMarked       string             // units already marked lost here
 	TypeID           int64
 	BP               int64
 }
@@ -159,6 +162,7 @@ type profitJobRow struct {
 	Delivered, Runs, Units, Sold   string
 	Lost, Mixed, Revenue, Unsold   string
 	Recipe, Cost, AtTime, Facility string
+	Watching                       string // the order watched for this job
 	HasUnsold                      bool
 }
 
@@ -227,6 +231,7 @@ func (app *Application) handleProfitBlueprint(w http.ResponseWriter, r *http.Req
 		}
 		view.Jobs = append(view.Jobs, row)
 	}
+	app.attachJobFallbacks(ctx, view, pool, jobs, now)
 	if view.TypeID > 0 {
 		if sells, err := app.queries.ListRecentSellsOfType(ctx, db.ListRecentSellsOfTypeParams{OwnerKind: pool.ownerKind, OwnerIds: pool.members, TypeID: view.TypeID}); err == nil {
 			for _, s := range sells {
@@ -281,6 +286,20 @@ func (app *Application) handleProfitJobEvent(w http.ResponseWriter, r *http.Requ
 			}
 			ev.UnitPrice = price
 		}
+	case "watch":
+		orderID, _ := strconv.ParseInt(r.Form.Get("order_id"), 10, 64)
+		o, err := app.queries.GetPoolOpenSellOrder(ctx, db.GetPoolOpenSellOrderParams{CharacterIds: pool.members, OrderID: orderID})
+		if err != nil || o.TypeID != job.ProductTypeID || pool.ownerKind != ownerChar {
+			back("That isn't an open sell order of this job's output.")
+			return
+		}
+		if err := app.queries.InsertJobOrderWatch(ctx, db.InsertJobOrderWatchParams{PoolKind: pool.kind, PoolID: pool.id, JobID: jobID, CharacterID: o.CharacterID, OrderID: o.OrderID}); err != nil {
+			logging.Errorf("profit: order watch for user %d: %v", userID, err)
+			back("Couldn't save that right now.")
+			return
+		}
+		back("Watching. What that order sells from now on counts as this job's output.")
+		return
 	case "link":
 		txID, _ := strconv.ParseInt(r.Form.Get("transaction_id"), 10, 64)
 		sell, err := app.queries.GetPoolSell(ctx, db.GetPoolSellParams{OwnerKind: pool.ownerKind, OwnerIds: pool.members, TransactionID: txID})
@@ -363,4 +382,48 @@ func (app *Application) handleProfitFacility(w http.ResponseWriter, r *http.Requ
 		_ = app.queries.ClearLedgerPoolMembers(ctx, db.ClearLedgerPoolMembersParams{PoolKind: ownerChar, PoolID: id})
 	}
 	back("Saved. Industry figures are recomputed on the next sync.")
+}
+
+// attachJobFallbacks adds what the blueprint page offers where FIFO
+// matching isn't the right answer: the open sell orders of the item a
+// job's output can be tied to (and which one each job watches), and
+// how many of the item the pool's characters lost on killmails since
+// the first of these jobs delivered, beside how many are marked lost.
+func (app *Application) attachJobFallbacks(ctx context.Context, view *profitBlueprintView, pool ledgerPool, jobs []db.ListPoolJobsForBlueprintRow, now time.Time) {
+	if view.TypeID == 0 || len(jobs) == 0 || pool.ownerKind != ownerChar {
+		return
+	}
+	if orders, err := app.queries.ListPoolOpenSellOrdersOfType(ctx, db.ListPoolOpenSellOrdersOfTypeParams{CharacterIds: pool.members, TypeID: view.TypeID}); err == nil {
+		for _, o := range orders {
+			view.Orders = append(view.Orders, profitSellChoice{ID: o.OrderID,
+				Label: fmt.Sprintf("%s left at %s ISK, %s", esi.FormatInt(o.VolumeRemainLast), esi.FormatISK(o.ListedPrice), app.econLocationTitle(ctx, o.LocationID))})
+		}
+	}
+	ids := make([]int64, len(jobs))
+	first := jobs[0].At
+	var marked int64
+	for i, j := range jobs {
+		ids[i] = j.JobID
+		if j.At.Before(first) {
+			first = j.At
+		}
+		marked += j.Lost
+	}
+	if watches, err := app.queries.ListJobOrderWatches(ctx, db.ListJobOrderWatchesParams{PoolKind: pool.kind, PoolID: pool.id, JobIds: ids}); err == nil {
+		byJob := map[int64]string{}
+		for _, w := range watches {
+			state := "open"
+			if w.ClosedAt.Valid {
+				state = "closed"
+			}
+			byJob[w.JobID] = fmt.Sprintf("order %d (%s), since %s", w.OrderID, state, ageText(now, w.CreatedAt))
+		}
+		for i := range view.Jobs {
+			view.Jobs[i].Watching = byJob[view.Jobs[i].JobID]
+		}
+	}
+	if k, err := app.queries.CountKillmailLossesOfType(ctx, db.CountKillmailLossesOfTypeParams{TypeID: view.TypeID, CharacterIds: pool.members, Since: first}); err == nil && k.Units > 0 {
+		view.KillLost = fmt.Sprintf("%s on %s killmails", esi.FormatInt(k.Units), esi.FormatInt(k.Killmails))
+		view.KillMarked = esi.FormatInt(marked)
+	}
 }

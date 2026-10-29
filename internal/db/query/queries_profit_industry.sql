@@ -256,3 +256,45 @@ UPDATE ledger_jobs j SET inputs_at_time = COALESCE((
     SELECT SUM(m.quantity * m.unit_at_time) FROM ledger_job_materials m
     WHERE m.owner_kind = j.owner_kind AND m.owner_id = j.owner_id AND m.job_id = j.job_id), 0)
 WHERE j.owner_kind = $1 AND j.owner_id = $2 AND j.job_id = $3;
+
+-- name: ListPoolOpenSellOrdersOfType :many
+-- A pool's open sell orders of an item, for watching one for a job.
+SELECT o.character_id, o.order_id, o.location_id, o.listed_price, o.volume_remain_last
+FROM order_lifecycle o
+WHERE o.character_id = ANY(sqlc.arg(character_ids)::bigint[]) AND o.type_id = sqlc.arg(type_id)
+  AND o.is_buy_order = 0 AND o.closed_at IS NULL
+ORDER BY o.first_seen_at DESC
+LIMIT 20;
+
+-- name: InsertJobOrderWatch :exec
+INSERT INTO job_order_watches (pool_kind, pool_id, job_id, character_id, order_id)
+VALUES ($1, $2, $3, $4, $5)
+ON CONFLICT (pool_kind, pool_id, character_id, order_id) DO UPDATE SET job_id = excluded.job_id, created_at = now();
+
+-- name: GetPoolOpenSellOrder :one
+SELECT character_id, order_id, type_id FROM order_lifecycle
+WHERE character_id = ANY(sqlc.arg(character_ids)::bigint[]) AND order_id = sqlc.arg(order_id)
+  AND is_buy_order = 0 AND closed_at IS NULL;
+
+-- name: ListJobOrderWatches :many
+SELECT w.job_id, w.order_id, w.created_at, o.location_id, o.closed_at
+FROM job_order_watches w
+LEFT JOIN order_lifecycle o ON o.character_id = w.character_id AND o.order_id = w.order_id
+WHERE w.pool_kind = $1 AND w.pool_id = $2 AND w.job_id = ANY(sqlc.arg(job_ids)::bigint[]);
+
+-- name: CountKillmailLossesOfType :one
+-- Units of an item the pool's characters lost on killmails since a
+-- moment: the ship itself when it was that type, and the item in the
+-- wreck's cargo and fitting, destroyed or dropped. Each killmail once,
+-- whoever fetched it.
+SELECT COALESCE(SUM(n), 0)::bigint AS units, COUNT(*) FILTER (WHERE n > 0)::bigint AS killmails
+FROM (
+    SELECT (CASE WHEN (k.p -> 'victim' ->> 'ship_type_id')::bigint = sqlc.arg(type_id)::bigint THEN 1 ELSE 0 END)
+         + COALESCE((SELECT SUM(COALESCE((i ->> 'quantity_destroyed')::bigint, 0) + COALESCE((i ->> 'quantity_dropped')::bigint, 0))
+                     FROM jsonb_array_elements(COALESCE(k.p -> 'victim' -> 'items', '[]'::jsonb)) i
+                     WHERE (i ->> 'item_type_id')::bigint = sqlc.arg(type_id)::bigint), 0) AS n
+    FROM (SELECT DISTINCT ON (killmail_id) payload::jsonb AS p FROM killmail_details
+          WHERE character_id = ANY(sqlc.arg(character_ids)::bigint[])) k
+    WHERE (k.p -> 'victim' ->> 'character_id')::bigint = ANY(sqlc.arg(character_ids)::bigint[])
+      AND (k.p ->> 'killmail_time')::timestamptz >= sqlc.arg(since)::timestamptz
+) x;

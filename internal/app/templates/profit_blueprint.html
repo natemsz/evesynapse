@@ -5,6 +5,7 @@
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
 {{with .ProfitBlueprint}}
 <p><small><a href="{{.Back}}">Back to Profit</a>. Each delivered job, what it made and what became of it. Sales are matched to a job's output oldest first; where that isn't right, say what happened.</small></p>
+{{if .KillLost}}<p class="pf-note"><small>Your killmails show {{.KillLost}} of this item lost since these jobs delivered; {{.KillMarked}} are marked lost here. Mark any that were from these jobs below.</small></p>{{end}}
 {{if .Jobs}}
 <div class="tw">
 <table>
@@ -14,6 +15,7 @@
     <tr>
       <td>{{.Delivered}}<br><small class="mt-reqs">{{.Facility}} · {{.Recipe}}</small>
         {{if .Mixed}}<br><small class="mt-reqs">{{.Mixed}} units sold beside bought stock of the item</small>{{end}}
+        {{if .Watching}}<br><small class="mt-reqs">Watching {{.Watching}}</small>{{end}}
         {{if .HasUnsold}}<details class="pf-basis"><summary><small>{{.Unsold}} units not sold: say what happened</small></summary>
           <form method="post" action="/profit/job-event" class="pf-basis-form">
             <input type="hidden" name="pool" value="{{$.ProfitBlueprint.Pool}}"><input type="hidden" name="bp" value="{{$.ProfitBlueprint.BP}}"><input type="hidden" name="job_id" value="{{.JobID}}"><input type="hidden" name="kind" value="sale">
@@ -26,6 +28,13 @@
             <label>Units lost or used <input name="units" inputmode="numeric" required></label>
             <button class="btn" type="submit">Mark lost</button>
           </form>
+          {{if $.ProfitBlueprint.Orders}}
+          <form method="post" action="/profit/job-event" class="pf-basis-form">
+            <input type="hidden" name="pool" value="{{$.ProfitBlueprint.Pool}}"><input type="hidden" name="bp" value="{{$.ProfitBlueprint.BP}}"><input type="hidden" name="job_id" value="{{.JobID}}"><input type="hidden" name="kind" value="watch">
+            <label>This open order is selling it <select name="order_id">{{range $.ProfitBlueprint.Orders}}<option value="{{.ID}}">{{.Label}}</option>{{end}}</select></label>
+            <button class="btn" type="submit">Watch</button>
+          </form>
+          {{end}}
           {{if $.ProfitBlueprint.Sells}}
           <form method="post" action="/profit/job-event" class="pf-basis-form">
             <input type="hidden" name="pool" value="{{$.ProfitBlueprint.Pool}}"><input type="hidden" name="bp" value="{{$.ProfitBlueprint.BP}}"><input type="hidden" name="job_id" value="{{.JobID}}"><input type="hidden" name="kind" value="link">

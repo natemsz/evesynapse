@@ -290,7 +290,7 @@ const insertLPPurchase = `-- name: InsertLPPurchase :exec
 INSERT INTO lp_purchases (character_id, corporation_id, from_at, to_at, lp_spent, isk_paid, tier, offer_id, quantity,
                           product_type_id, units, req_value, candidates, journal_isk, assets_before, assets_as_of)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
-ON CONFLICT (character_id, corporation_id, to_at) DO NOTHING
+ON CONFLICT (character_id, corporation_id, to_at, offer_id) DO NOTHING
 `
 
 type InsertLPPurchaseParams struct {

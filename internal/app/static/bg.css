@@ -1067,10 +1067,11 @@ html[data-scheme] tbody tr:hover th { background: color-mix(in srgb, var(--accen
    --success: the scheme highlight, not the core. */
 html[data-scheme] .fit-card h4 a,
 html[data-scheme] .fit-card-line a { color: var(--sch-hi); }
-/* Gradient carriers sweep all three hues, as the ember ones do. */
+/* Heading text is solid in every scheme: the gradient's light
+   end, the scheme highlight. */
 html[data-scheme] h2, html[data-scheme] h3,
 html[data-scheme] .panel > h1:first-child > .gt {
-  background-image: linear-gradient(90deg, var(--sch-hi) 0%, var(--sch-core) 50%, var(--sch-end) 100%);
+  color: var(--sch-hi);
 }
 /* Panel, card and foldable headings are solid text on the panel
    head, never gradient carriers: the sweep above does not paint

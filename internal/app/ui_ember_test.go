@@ -390,11 +390,11 @@ func TestLandingMockupFidelity(t *testing.T) {
 		// The header is one glass pill pinned flush to the top of the
 		// viewport over the art: no gap above it.
 		".ld-header { position: fixed; top: 0;",
-		// The site gradient on the two landing spots that carry
-		// it outside an h2/h3: the hero's tail and the
-		// playstyle labels.
+		// The site gradient survives on the landing in one
+		// spot, the hero's tail. The playstyle labels are the
+		// same hue solid.
 		".ld-hero h1 .ld-amp { background: linear-gradient(90deg, #ffd27a 0%, #ff6a1a 50%, #d63c14 100%);",
-		".ld-scard .ld-who { background: linear-gradient(90deg, #ffd27a 0%, #ff6a1a 50%, #d63c14 100%);",
+		".ld-scard .ld-who { color: #ffd27a;",
 		// The design's glass: dark gradient surface, 9px blur,
 		// ember-tinted edge, 14px radius.
 		".ld-glass { background: linear-gradient(180deg, rgba(12, 8, 6, 0.58), rgba(12, 8, 6, 0) 52%), rgba(19, 14, 10, 0.84); backdrop-filter: blur(9px) saturate(1.15); -webkit-backdrop-filter: blur(9px) saturate(1.15); border: 1px solid rgba(255, 106, 0, 0.16); border-radius: 14px;",

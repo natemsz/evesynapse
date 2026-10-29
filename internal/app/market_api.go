@@ -268,6 +268,7 @@ func (app *Application) handleMarketAPIHistory(w http.ResponseWriter, r *http.Re
 	}
 	rows, err := app.queries.ListMarketRegionStatsDailyRecent(ctx, db.ListMarketRegionStatsDailyRecentParams{
 		RegionID: region, TypeID: typeID, Since: time.Now().UTC().AddDate(0, 0, -days).Format("2006-01-02"),
+		RowLimit: 90,
 	})
 	if err != nil {
 		logging.Errorf("market api: history: %v", err)

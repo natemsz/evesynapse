@@ -4,7 +4,9 @@ package app
 // hand-computed fixture (moving averages, the Donchian channel and
 // the wicks, with the warmup rows in front of the displayed
 // window), the prefs defaults and parsing, and a save/load round
-// trip through the real router.
+// trip through the real router. Slice 2 adds the book chart set's
+// geometry (best lines, band, depth strip, spread series) and the
+// book_depth switch to the same prefs pins.
 
 import (
 	"context"
@@ -146,8 +148,11 @@ func TestVizChartMathAndPrefs(t *testing.T) {
 	if p := parseVizPrefs(""); p != defaultVizPrefs() {
 		t.Fatalf("empty prefs: got %+v, want defaults", p)
 	}
-	if p := parseVizPrefs(`{"wicks": false, "later_slice": true}`); p.Wicks || !p.MAChannel || !p.VolumeStrip {
+	if p := parseVizPrefs(`{"wicks": false, "later_slice": true}`); p.Wicks || !p.MAChannel || !p.VolumeStrip || p.BookDepth {
 		t.Fatalf("stored prefs: got %+v, want only wicks off", p)
+	}
+	if p := parseVizPrefs(`{"book_depth": true}`); !p.BookDepth || !p.MAChannel {
+		t.Fatalf("book depth prefs: got %+v, want book_depth on over the defaults", p)
 	}
 	if p := parseVizPrefs("{not json"); p != defaultVizPrefs() {
 		t.Fatalf("corrupt prefs: got %+v, want defaults", p)
@@ -179,5 +184,129 @@ func TestVizChartMathAndPrefs(t *testing.T) {
 	}
 	if got := app.vizPrefsFor(ctx, user.ID); got != defaultVizPrefs() {
 		t.Fatalf("round trip all-on: got %+v, want defaults", got)
+	}
+	code, _ = postForm(t, app, cookie, "/settings/visualizations", url.Values{
+		"ma_channel": {"1"}, "wicks": {"1"}, "volume_strip": {"1"}, "book_depth": {"1"},
+	})
+	if code != http.StatusSeeOther {
+		t.Fatalf("save book depth prefs: status %d, want 303", code)
+	}
+	if got := app.vizPrefsFor(ctx, user.ID); got != (vizPrefs{MAChannel: true, Wicks: true, VolumeStrip: true, BookDepth: true}) {
+		t.Fatalf("round trip book depth: got %+v, want every switch on", got)
+	}
+}
+
+// Slice 2: the extended book chart set against a hand-computed
+// fixture. The fixture's bests sit inside the typicals' range, so
+// the price scale (80 to 130, y(v) = 8 + (130-v)/50*144) is the
+// same with the set on or off.
+func vizBookFixtureRows() []db.ListMarketRegionStatsDailyRecentRow {
+	return []db.ListMarketRegionStatsDailyRecentRow{
+		{Day: "2026-10-01", TypicalSell: 110, TypicalBuy: 90, BestSell: 105, BestBuy: 95, SellOrders: 10, BuyOrders: 20},
+		{Day: "2026-10-02", TypicalSell: 120, TypicalBuy: 100, BestSell: 112, BestBuy: 104, SellOrders: 30, BuyOrders: 10},
+		{Day: "2026-10-03", TypicalSell: 100, TypicalBuy: 80, BestSell: 98, BestBuy: 88, SellOrders: 0, BuyOrders: 40},
+		{Day: "2026-10-04", TypicalSell: 130, TypicalBuy: 110, BestSell: 124, BestBuy: 116, SellOrders: 20, BuyOrders: 0},
+	}
+}
+
+func TestVizBookChartSet(t *testing.T) {
+	rows := vizBookFixtureRows()
+
+	chart := buildBookChart(rows, true)
+	if chart == nil || !chart.Extended {
+		t.Fatal("extended book chart not built")
+	}
+	if chart.Days != 4 || chart.First != "2026-10-01" || chart.Last != "2026-10-04" {
+		t.Fatalf("chart span: %d days, %s to %s", chart.Days, chart.First, chart.Last)
+	}
+	if chart.SellPoints != "0.0,65.6 200.0,36.8 400.0,94.4 600.0,8.0" {
+		t.Fatalf("typical sell: got %s", chart.SellPoints)
+	}
+	if chart.BuyPoints != "0.0,123.2 200.0,94.4 400.0,152.0 600.0,65.6" {
+		t.Fatalf("typical buy: got %s", chart.BuyPoints)
+	}
+	if chart.BestSellPoints != "0.0,80.0 200.0,59.8 400.0,100.2 600.0,25.3" {
+		t.Fatalf("best sell: got %s", chart.BestSellPoints)
+	}
+	if chart.BestBuyPoints != "0.0,108.8 200.0,82.9 400.0,129.0 600.0,48.3" {
+		t.Fatalf("best buy: got %s", chart.BestBuyPoints)
+	}
+	// The band runs forward along the best sell and back along
+	// the best buy.
+	if chart.BandPoints != "0.0,80.0 200.0,59.8 400.0,100.2 600.0,25.3 600.0,48.3 400.0,129.0 200.0,82.9 0.0,108.8" {
+		t.Fatalf("band: got %s", chart.BandPoints)
+	}
+
+	// Depth strip: paired bars on one count scale (max 40).
+	// Zero-count sides draw no bar, so 6 bars for 4 days.
+	if len(chart.DepthBars) != 6 {
+		t.Fatalf("depth bars: got %d, want 6", len(chart.DepthBars))
+	}
+	if b := chart.DepthBars[0]; b.X != "12.0" || b.Y != "60.0" || b.W != "57.0" || b.H != "18.0" ||
+		b.Side != "sell" || b.Title != "2026-10-01: 10 sell orders" {
+		t.Fatalf("first depth bar: got %+v", b)
+	}
+	if b := chart.DepthBars[4]; b.X != "381.0" || b.Y != "6.0" || b.H != "72.0" || b.Side != "buy" {
+		t.Fatalf("full-height depth bar: got %+v", b)
+	}
+	if chart.DepthMax != "40" {
+		t.Fatalf("depth max: got %q, want 40", chart.DepthMax)
+	}
+
+	// Spread percent on its own scale (18.2% to 25.0%).
+	if chart.SpreadPoints != "0.0,27.2 200.0,44.1 400.0,6.0 600.0,58.0" {
+		t.Fatalf("spread points: got %s", chart.SpreadPoints)
+	}
+	if chart.SpreadHigh != "25.0%" || chart.SpreadLow != "18.2%" {
+		t.Fatalf("spread labels: got %s to %s", chart.SpreadLow, chart.SpreadHigh)
+	}
+
+	// Off: the plain chart is the two typical lines and nothing
+	// else, on the same geometry.
+	plain := buildBookTrendChart(rows)
+	if plain == nil || plain.Extended {
+		t.Fatal("plain book chart not built")
+	}
+	if plain.SellPoints != chart.SellPoints || plain.BuyPoints != chart.BuyPoints {
+		t.Fatal("plain chart typical lines differ from the extended chart's")
+	}
+	if plain.BestSellPoints != "" || plain.BestBuyPoints != "" || plain.BandPoints != "" ||
+		plain.SpreadPoints != "" || len(plain.DepthBars) != 0 {
+		t.Fatal("plain chart carries part of the extended set")
+	}
+
+	// A day with no bests drops out of the best lines and the
+	// band closes over the gap. Scale here: 80 to 120.
+	gap := []db.ListMarketRegionStatsDailyRecentRow{
+		{Day: "2026-11-01", TypicalSell: 100, TypicalBuy: 100, BestSell: 110, BestBuy: 90, SellOrders: 5, BuyOrders: 5},
+		{Day: "2026-11-02", TypicalSell: 100, TypicalBuy: 100, SellOrders: 5, BuyOrders: 5},
+		{Day: "2026-11-03", TypicalSell: 100, TypicalBuy: 100, BestSell: 120, BestBuy: 80, SellOrders: 5, BuyOrders: 5},
+	}
+	g := buildBookChart(gap, true)
+	if g.BestSellPoints != "0.0,44.0 600.0,8.0" {
+		t.Fatalf("gap best sell: got %s", g.BestSellPoints)
+	}
+	if g.BandPoints != "0.0,44.0 600.0,8.0 600.0,152.0 0.0,116.0" {
+		t.Fatalf("gap band: got %s", g.BandPoints)
+	}
+
+	// A flat spread (the same ratio every day, differing only in
+	// float noise) draws as a flat line at the strip's middle,
+	// with the labels at the true value.
+	flat := []db.ListMarketRegionStatsDailyRecentRow{
+		{Day: "2026-12-01", TypicalSell: 110, TypicalBuy: 100},
+		{Day: "2026-12-02", TypicalSell: 220, TypicalBuy: 200},
+		{Day: "2026-12-03", TypicalSell: 55, TypicalBuy: 50},
+	}
+	f := buildBookChart(flat, true)
+	if f.SpreadPoints != "0.0,32.0 300.0,32.0 600.0,32.0" {
+		t.Fatalf("flat spread points: got %s", f.SpreadPoints)
+	}
+	if f.SpreadHigh != "10.0%" || f.SpreadLow != "10.0%" {
+		t.Fatalf("flat spread labels: got %s to %s", f.SpreadLow, f.SpreadHigh)
+	}
+
+	if buildBookChart(rows[:1], true) != nil {
+		t.Fatal("one row built a chart")
 	}
 }

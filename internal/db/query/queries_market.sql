@@ -1201,12 +1201,13 @@ DELETE FROM restock_targets
 WHERE user_id = $1 AND type_id = $2;
 -- name: ListMarketRegionStatsDailyRecent :many
 -- One (region, type)'s stat pack history from a start day on,
--- oldest first: the item page's book trend chart (at most 90 rows).
+-- oldest first: the item page's book trend chart. The caller
+-- bounds the window: at most row_limit rows.
 SELECT day, typical_sell, typical_buy, best_sell, best_buy, sell_orders, buy_orders, sell_volume, buy_volume
 FROM market_region_stats_daily
 WHERE region_id = sqlc.arg(region_id) AND type_id = sqlc.arg(type_id) AND day >= sqlc.arg(since)
 ORDER BY day
-LIMIT 90;
+LIMIT sqlc.arg(row_limit);
 -- name: ListMarketTrendTypes :many
 -- The Trends screen, ranked in SQL over the stat pack: the most
 -- volatile types (30-day volatility of the typical sell), or the

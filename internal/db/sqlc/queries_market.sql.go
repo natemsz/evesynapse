@@ -2359,13 +2359,14 @@ SELECT day, typical_sell, typical_buy, best_sell, best_buy, sell_orders, buy_ord
 FROM market_region_stats_daily
 WHERE region_id = $1 AND type_id = $2 AND day >= $3
 ORDER BY day
-LIMIT 90
+LIMIT $4
 `
 
 type ListMarketRegionStatsDailyRecentParams struct {
 	RegionID int64  `json:"region_id"`
 	TypeID   int64  `json:"type_id"`
 	Since    string `json:"since"`
+	RowLimit int32  `json:"row_limit"`
 }
 
 type ListMarketRegionStatsDailyRecentRow struct {
@@ -2381,9 +2382,15 @@ type ListMarketRegionStatsDailyRecentRow struct {
 }
 
 // One (region, type)'s stat pack history from a start day on,
-// oldest first: the item page's book trend chart (at most 90 rows).
+// oldest first: the item page's book trend chart. The caller
+// bounds the window: at most row_limit rows.
 func (q *Queries) ListMarketRegionStatsDailyRecent(ctx context.Context, arg ListMarketRegionStatsDailyRecentParams) ([]ListMarketRegionStatsDailyRecentRow, error) {
-	rows, err := q.db.QueryContext(ctx, listMarketRegionStatsDailyRecent, arg.RegionID, arg.TypeID, arg.Since)
+	rows, err := q.db.QueryContext(ctx, listMarketRegionStatsDailyRecent,
+		arg.RegionID,
+		arg.TypeID,
+		arg.Since,
+		arg.RowLimit,
+	)
 	if err != nil {
 		return nil, err
 	}

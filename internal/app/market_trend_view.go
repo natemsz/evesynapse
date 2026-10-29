@@ -2,8 +2,8 @@ package app
 
 // The item page's stat pack section: the region's stored book
 // statistics, its trend figures and the daily book chart, all read
-// from stored rows (the stat pack row and up to 90 of its daily
-// copies). Nothing here computes a statistic; the sweep did.
+// from stored rows (the stat pack row and its daily copies).
+// Nothing here computes a statistic; the sweep did.
 
 import (
 	"context"
@@ -50,8 +50,19 @@ type statSideRow struct {
 	Chg1, Chg7, Chg30                      trendFigure
 }
 
-// bookTrendChart is the daily typical sell and buy over up to 90
-// stored days, as SVG geometry.
+// bookDepthBar is one day's order count for one side of the book,
+// as SVG geometry in the depth strip.
+type bookDepthBar struct {
+	X, Y, W, H string
+	Side       string // "sell" or "buy"
+	Title      string
+}
+
+// bookTrendChart is the daily typical sell and buy over the stored
+// days, as SVG geometry. With Extended set (the account's
+// book_depth switch), it also carries the daily best sell and buy
+// as dashed lines, the band between them, a depth strip of the
+// per-day order counts, and the daily spread percent series.
 type bookTrendChart struct {
 	Width, Height int
 	SellPoints    string
@@ -59,6 +70,20 @@ type bookTrendChart struct {
 	High, Low     string // axis labels, ISK
 	First, Last   string // date labels
 	Days          int
+
+	Extended       bool
+	BestSellPoints string
+	BestBuyPoints  string
+	BandPoints     string // polygon between the two best lines
+	DepthWidth     int
+	DepthHeight    int
+	DepthBars      []bookDepthBar
+	DepthMax       string // the depth strip's top count, formatted
+	SpreadWidth    int
+	SpreadHeight   int
+	SpreadPoints   string
+	SpreadHigh     string // axis labels, percent
+	SpreadLow      string
 }
 
 // statPackView is the item page's stat pack section.
@@ -122,30 +147,53 @@ func (app *Application) attachStatPack(ctx context.Context, item *marketItem) {
 	if own.AvgDailyVolume30d > 0 {
 		view.TradedPerDay = esi.FormatInt(int64(math.Round(own.AvgDailyVolume30d)))
 	}
+	// The book chart's read window: with the account's book_depth
+	// switch on, the chart set follows the item page's shared range
+	// parameter; off, the read is the standing 90 days, exactly as
+	// before.
+	days := bookTrendDays
+	extended := item.Viz.BookDepth
+	if extended {
+		_, days = vizRangeDays(item.ChartRange)
+	}
 	rows, err := app.queries.ListMarketRegionStatsDailyRecent(ctx, db.ListMarketRegionStatsDailyRecentParams{
 		RegionID: own.RegionID, TypeID: item.TypeID,
-		Since: time.Now().UTC().AddDate(0, 0, -bookTrendDays).Format("2006-01-02"),
+		Since:    time.Now().UTC().AddDate(0, 0, -days).Format("2006-01-02"),
+		RowLimit: int32(days),
 	})
 	if err != nil {
 		logging.Errorf("market: book trend for type %d: %v", item.TypeID, err)
 		return
 	}
-	view.Chart = buildBookTrendChart(rows)
+	view.Chart = buildBookChart(rows, extended)
 }
 
 // buildBookTrendChart shapes the daily rows into two polylines on a
 // shared price scale; nil under two days.
 func buildBookTrendChart(rows []db.ListMarketRegionStatsDailyRecentRow) *bookTrendChart {
+	return buildBookChart(rows, false)
+}
+
+// buildBookChart is buildBookTrendChart plus, when extended, the
+// best-price lines and band (the price scale widens to the daily
+// bests so the band fits), the depth strip and the spread series.
+func buildBookChart(rows []db.ListMarketRegionStatsDailyRecentRow, extended bool) *bookTrendChart {
 	if len(rows) < 2 {
 		return nil
 	}
 	const w, h, pad = 600, 160, 8
 	lo, hi := math.Inf(1), math.Inf(-1)
+	consider := func(v float64) {
+		if v > 0 {
+			lo, hi = math.Min(lo, v), math.Max(hi, v)
+		}
+	}
 	for _, r := range rows {
-		for _, v := range []float64{r.TypicalSell, r.TypicalBuy} {
-			if v > 0 {
-				lo, hi = math.Min(lo, v), math.Max(hi, v)
-			}
+		consider(r.TypicalSell)
+		consider(r.TypicalBuy)
+		if extended {
+			consider(r.BestSell)
+			consider(r.BestBuy)
 		}
 	}
 	if math.IsInf(lo, 0) {
@@ -173,13 +221,133 @@ func buildBookTrendChart(rows []db.ListMarketRegionStatsDailyRecentRow) *bookTre
 		}
 		return b.String()
 	}
-	return &bookTrendChart{
+	chart := &bookTrendChart{
 		Width: w, Height: h, Days: n,
 		SellPoints: line(func(r db.ListMarketRegionStatsDailyRecentRow) float64 { return r.TypicalSell }),
 		BuyPoints:  line(func(r db.ListMarketRegionStatsDailyRecentRow) float64 { return r.TypicalBuy }),
 		High:       esi.FormatISK(hi), Low: esi.FormatISK(lo),
 		First: rows[0].Day, Last: rows[n-1].Day,
+		Extended: extended,
 	}
+	if !extended {
+		return chart
+	}
+	chart.BestSellPoints = line(func(r db.ListMarketRegionStatsDailyRecentRow) float64 { return r.BestSell })
+	chart.BestBuyPoints = line(func(r db.ListMarketRegionStatsDailyRecentRow) float64 { return r.BestBuy })
+	chart.BandPoints = bookBandPoints(rows, x, y)
+	chart.DepthWidth, chart.DepthHeight, chart.DepthBars, chart.DepthMax = bookDepthStrip(rows)
+	chart.SpreadWidth, chart.SpreadHeight, chart.SpreadPoints, chart.SpreadHigh, chart.SpreadLow = bookSpreadSeries(rows)
+	return chart
+}
+
+// bookBandPoints is the polygon between the daily best sell and
+// best buy lines: forward along the best sell, back along the best
+// buy. Only days carrying both bests take part; under two such days
+// there is no band.
+func bookBandPoints(rows []db.ListMarketRegionStatsDailyRecentRow, x func(int) float64, y func(float64) float64) string {
+	var top, bottom []string
+	for i, r := range rows {
+		if r.BestSell <= 0 || r.BestBuy <= 0 {
+			continue
+		}
+		pt := func(v float64) string {
+			return strconv.FormatFloat(x(i), 'f', 1, 64) + "," + strconv.FormatFloat(y(v), 'f', 1, 64)
+		}
+		top = append(top, pt(r.BestSell))
+		bottom = append(bottom, pt(r.BestBuy))
+	}
+	if len(top) < 2 {
+		return ""
+	}
+	for i, j := 0, len(bottom)-1; i < j; i, j = i+1, j-1 {
+		bottom[i], bottom[j] = bottom[j], bottom[i]
+	}
+	return strings.Join(append(top, bottom...), " ")
+}
+
+// bookDepthStrip shapes the per-day order counts into paired bars,
+// sell then buy for each day, on one shared count scale.
+func bookDepthStrip(rows []db.ListMarketRegionStatsDailyRecentRow) (int, int, []bookDepthBar, string) {
+	const w, h, pad = 600, 84, 6
+	var maxCount int64
+	for _, r := range rows {
+		maxCount = max(maxCount, r.SellOrders, r.BuyOrders)
+	}
+	if maxCount <= 0 {
+		return w, h, nil, ""
+	}
+	n := len(rows)
+	slot := float64(w) / float64(n)
+	barW := slot * 0.38
+	base := float64(h - pad)
+	plot := float64(h - 2*pad)
+	num := func(v float64) string { return strconv.FormatFloat(v, 'f', 1, 64) }
+	bars := make([]bookDepthBar, 0, 2*n)
+	for i, r := range rows {
+		bar := func(side string, count int64, xOff float64) bookDepthBar {
+			bh := float64(count) / float64(maxCount) * plot
+			return bookDepthBar{
+				X: num(float64(i)*slot + xOff), Y: num(base - bh),
+				W: num(barW), H: num(bh),
+				Side:  side,
+				Title: fmt.Sprintf("%s: %s %s orders", r.Day, esi.FormatInt(count), side),
+			}
+		}
+		if r.SellOrders > 0 {
+			bars = append(bars, bar("sell", r.SellOrders, slot*0.08))
+		}
+		if r.BuyOrders > 0 {
+			bars = append(bars, bar("buy", r.BuyOrders, slot*0.54))
+		}
+	}
+	return w, h, bars, esi.FormatInt(maxCount)
+}
+
+// bookSpreadSeries is the daily spread percent, (typical sell less
+// typical buy) over typical buy, across the days carrying both
+// typicals, drawn on its own scale.
+func bookSpreadSeries(rows []db.ListMarketRegionStatsDailyRecentRow) (int, int, string, string, string) {
+	const w, h, pad = 600, 64, 6
+	vals := make([]float64, len(rows))
+	ok := make([]bool, len(rows))
+	lo, hi := math.Inf(1), math.Inf(-1)
+	count := 0
+	for i, r := range rows {
+		if r.TypicalSell <= 0 || r.TypicalBuy <= 0 {
+			continue
+		}
+		v := (r.TypicalSell - r.TypicalBuy) / r.TypicalBuy * 100
+		vals[i], ok[i] = v, true
+		lo, hi = math.Min(lo, v), math.Max(hi, v)
+		count++
+	}
+	if count < 2 {
+		return w, h, "", "", ""
+	}
+	// The plot scale spans at least two tenths of a point: a
+	// series flatter than that is a flat line at the middle, not
+	// float noise stretched over the whole strip. The labels keep
+	// the true extremes.
+	slo, shi := lo, hi
+	if shi-slo < 0.2 {
+		mid := (hi + lo) / 2
+		shi, slo = mid+0.1, mid-0.1
+	}
+	n := len(rows)
+	num := func(v float64) string { return strconv.FormatFloat(v, 'f', 1, 64) }
+	var b strings.Builder
+	for i := range rows {
+		if !ok[i] {
+			continue
+		}
+		if b.Len() > 0 {
+			b.WriteByte(' ')
+		}
+		b.WriteString(num(float64(i) * float64(w) / float64(n-1)))
+		b.WriteByte(',')
+		b.WriteString(num(pad + (shi-vals[i])/(shi-slo)*float64(h-2*pad)))
+	}
+	return w, h, b.String(), fmt.Sprintf("%.1f%%", hi), fmt.Sprintf("%.1f%%", lo)
 }
 
 // allRegionsCap bounds the all-regions strip.

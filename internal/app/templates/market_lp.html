@@ -1,0 +1,66 @@
+{{define "title"}}LP Store{{end}}
+{{define "pagetitle"}}<h1><span class="gt">LP Store</span></h1>{{end}}
+{{define "pagetabs"}}{{template "sectiontabs" .}}{{end}}
+{{define "content"}}
+
+{{if .Error}}<p class="err">{{.Error}}</p>{{end}}
+
+{{with .MarketLP}}
+<p><small>What each loyalty point turns into, offer by offer, priced from the latest sweep of a hub region.</small></p>
+
+<form method="get" action="/market/lp/" class="mt-filters">
+  <label><small>Sell in</small>
+    <select name="region">
+      {{range .Regions}}<option value="{{.ID}}"{{if .Active}} selected{{end}}>{{.Name}}</option>{{end}}
+    </select>
+  </label>
+  <label><small>Store</small>
+    <select name="corp">
+      <option value="0"{{if eq .StoreID 0}} selected{{end}}>Every store</option>
+      {{range .Stores}}<option value="{{.ID}}"{{if .Active}} selected{{end}}>{{.Name}}</option>{{end}}
+    </select>
+  </label>
+  <label><small>Sell by</small>
+    <select name="side">
+      <option value="sell"{{if not .Instant}} selected{{end}}>Listing a sell order</option>
+      <option value="buy"{{if .Instant}} selected{{end}}>Selling to buy orders now</option>
+    </select>
+  </label>
+  <label><small>At least sold per day</small>
+    <input type="number" name="minvol" min="0" step="1" value="{{.MinVolume}}" size="6">
+  </label>
+  <button class="btn" type="submit">Show</button>
+</form>
+
+{{if .HasStores}}
+{{if .Rows}}
+<div class="tw">
+<table>
+  <thead><tr><th>Item</th><th>Store</th><th class="mt-num">Qty</th><th class="mt-num">LP</th><th class="mt-num">ISK</th><th>Also needs</th><th class="mt-num">Worth</th><th class="mt-num">ISK per LP</th><th class="mt-num">Sold per day</th><th class="mt-num">7 days</th></tr></thead>
+  <tbody>
+  {{range .Rows}}
+    <tr>
+      <td><a href="/market/?type={{.TypeID}}&amp;region={{$.MarketLP.RegionID}}">{{.Name}}</a></td>
+      <td><a href="/market/lp/?region={{$.MarketLP.RegionID}}&amp;corp={{.StoreID}}">{{.Store}}</a></td>
+      <td class="mt-num">{{.Quantity}}</td>
+      <td class="mt-num">{{.LPCost}}</td>
+      <td class="mt-num">{{.ISKCost}}</td>
+      <td class="mt-reqs">{{range $i, $r := .Requirements}}{{if $i}}, {{end}}{{$r.Quantity}}× <a href="/market/?type={{$r.TypeID}}&amp;region={{$.MarketLP.RegionID}}">{{$r.Name}}</a>{{else}}—{{end}}{{if .RequiredCost}} <small>({{.RequiredCost}})</small>{{end}}</td>
+      <td class="mt-num">{{.Value}}</td>
+      <td class="mt-num"><strong>{{.ISKPerLP}}</strong></td>
+      <td class="mt-num">{{.TradedDay}}</td>
+      <td class="mt-num">{{if .Chg7.Text}}<span class="mt-chg {{.Chg7.Dir}}">{{.Chg7.Text}}</span>{{else}}—{{end}}</td>
+    </tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+<p><small>Prices in ISK, typical (median) prices in {{.RegionName}}{{with index .Rows 0}}{{if .Age}}, as of {{.Age}}{{end}}{{end}}. ISK per LP is what the items sell for, less the ISK cost and the items the offer also needs (bought at their typical sell), divided by the LP. Before broker fees and sales tax. Showing up to 100 offers.{{if .Unpriced}} {{.Unpriced}} {{if eq .Unpriced 1}}offer has{{else}}offers have{{end}} no price here: blueprint copies, or an item with no market in {{.RegionName}}.{{end}}</small></p>
+{{else}}
+<p>No priced offers clear those filters in {{.RegionName}}. Try a lower sold-per-day.</p>
+{{end}}
+{{else}}
+<p>Still reading the loyalty stores. They fill in over the next few minutes.</p>
+{{end}}
+{{end}}
+{{end}}

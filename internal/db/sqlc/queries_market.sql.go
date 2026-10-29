@@ -46,6 +46,39 @@ func (q *Queries) CloseOrderLifecycle(ctx context.Context, arg CloseOrderLifecyc
 	return err
 }
 
+const countMarketBrowseTypes = `-- name: CountMarketBrowseTypes :one
+WITH RECURSIVE tree AS (
+    SELECT g.market_group_id FROM sde_market_groups g
+    WHERE ($4::bigint = 0 AND g.parent_group_id = 0) OR g.market_group_id = $4::bigint
+    UNION ALL
+    SELECT c.market_group_id FROM sde_market_groups c JOIN tree t ON c.parent_group_id = t.market_group_id
+)
+SELECT COUNT(*) FROM sde_types t
+LEFT JOIN market_region_stats s ON s.region_id = $1::bigint AND s.type_id = t.type_id
+WHERE t.published = 1 AND t.market_group_id IN (SELECT market_group_id FROM tree)
+  AND ($2::text = '' OR t.name ILIKE $2::text)
+  AND COALESCE(s.avg_daily_volume_30d, 0) >= $3::float8
+`
+
+type CountMarketBrowseTypesParams struct {
+	RegionID  int64   `json:"region_id"`
+	NameLike  string  `json:"name_like"`
+	MinVolume float64 `json:"min_volume"`
+	GroupID   int64   `json:"group_id"`
+}
+
+func (q *Queries) CountMarketBrowseTypes(ctx context.Context, arg CountMarketBrowseTypesParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countMarketBrowseTypes,
+		arg.RegionID,
+		arg.NameLike,
+		arg.MinVolume,
+		arg.GroupID,
+	)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const deleteGuidePrices = `-- name: DeleteGuidePrices :exec
 DELETE FROM guide_prices
 `
@@ -207,6 +240,69 @@ func (q *Queries) DeleteWatchlistEntry(ctx context.Context, arg DeleteWatchlistE
 	return err
 }
 
+const detectMarketChanges = `-- name: DetectMarketChanges :execrows
+INSERT INTO market_changes (region_id, type_id, day, kind, before, after, pct, detected_at)
+SELECT $1::bigint, c.type_id, $2::text, c.kind, c.before, c.after, c.pct, $3::timestamptz
+FROM (
+    SELECT s.type_id, k.kind, k.before, k.after, k.pct
+    FROM market_region_stats s
+    JOIN LATERAL (
+        SELECT dd.typical_sell, dd.typical_buy, dd.sell_volume FROM market_region_stats_daily dd
+        WHERE dd.region_id = s.region_id AND dd.type_id = s.type_id
+          AND dd.day < $2::text
+          AND dd.day >= to_char($2::date - 3, 'YYYY-MM-DD')
+        ORDER BY dd.day DESC LIMIT 1
+    ) d ON true
+    CROSS JOIN LATERAL (VALUES
+        (CASE WHEN s.typical_sell > d.typical_sell THEN 'price_up' ELSE 'price_down' END,
+         d.typical_sell, s.typical_sell,
+         CASE WHEN d.typical_sell > 0 THEN (s.typical_sell - d.typical_sell) / d.typical_sell * 100 END),
+        ('supply_down', d.sell_volume::float8, s.sell_volume::float8,
+         CASE WHEN d.sell_volume > 0 THEN (s.sell_volume - d.sell_volume)::float8 / d.sell_volume * 100 END),
+        ('spread_wide',
+         CASE WHEN d.typical_buy > 0 THEN (d.typical_sell - d.typical_buy) / d.typical_buy * 100 END,
+         CASE WHEN s.typical_buy > 0 THEN (s.typical_sell - s.typical_buy) / s.typical_buy * 100 END,
+         CASE WHEN s.typical_buy > 0 AND d.typical_buy > 0
+              THEN ((s.typical_sell - s.typical_buy) / s.typical_buy - (d.typical_sell - d.typical_buy) / d.typical_buy) * 100 END)
+    ) AS k (kind, before, after, pct)
+    WHERE s.region_id = $1::bigint
+      AND s.sell_orders >= 5 AND s.avg_daily_volume_30d >= 1
+      AND s.typical_sell > 0 AND d.typical_sell > 0
+) c
+WHERE c.before IS NOT NULL AND c.after IS NOT NULL AND c.pct IS NOT NULL AND (
+       (c.kind IN ('price_up', 'price_down') AND ABS(c.pct) >= GREATEST($4::float8,
+            3 * COALESCE((SELECT v.volatility_30d FROM market_region_stats v
+                          WHERE v.region_id = $1::bigint AND v.type_id = c.type_id), 0)))
+    OR (c.kind = 'supply_down' AND c.before >= 10 AND c.pct <= -50)
+    OR (c.kind = 'spread_wide' AND c.before > 0 AND c.after >= 10 AND c.after >= 2 * c.before)
+)
+ON CONFLICT (region_id, type_id, day, kind) DO UPDATE SET
+    before = excluded.before, after = excluded.after, pct = excluded.pct
+`
+
+type DetectMarketChangesParams struct {
+	RegionID int64     `json:"region_id"`
+	Day      string    `json:"day"`
+	Now      time.Time `json:"now"`
+	MinMove  float64   `json:"min_move"`
+}
+
+// The change feed (schema 106) for one region, inside its sweep
+// transaction after the trend figures: each stat pack row against
+// the newest stored day before today (within three days).
+func (q *Queries) DetectMarketChanges(ctx context.Context, arg DetectMarketChangesParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, detectMarketChanges,
+		arg.RegionID,
+		arg.Day,
+		arg.Now,
+		arg.MinMove,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const getAllianceRecord = `-- name: GetAllianceRecord :one
 SELECT alliance_id, payload, state, fetched_at, priority
 FROM alliance_records
@@ -352,7 +448,10 @@ func (q *Queries) GetMarketFetchState(ctx context.Context, kind string) (MarketF
 }
 
 const getMarketRegionStat = `-- name: GetMarketRegionStat :one
-SELECT region_id, type_id, best_sell, typical_sell, sell_band, best_buy, typical_buy, buy_band, sell_orders, buy_orders, sell_volume, buy_volume, updated_at, avg_daily_volume
+SELECT region_id, type_id, best_sell, typical_sell, sell_band, best_buy, typical_buy, buy_band, sell_orders, buy_orders, sell_volume, buy_volume, updated_at, avg_daily_volume,
+       sell_avg, sell_max, sell_p5, sell_stddev, buy_avg, buy_min, buy_p5, buy_stddev,
+       sell_chg_1d, sell_chg_7d, sell_chg_30d, buy_chg_1d, buy_chg_7d, buy_chg_30d,
+       volatility_30d, history_days, avg_daily_volume_30d
 FROM market_region_stats
 WHERE region_id = $1 AND type_id = $2
 `
@@ -380,6 +479,23 @@ func (q *Queries) GetMarketRegionStat(ctx context.Context, arg GetMarketRegionSt
 		&i.BuyVolume,
 		&i.UpdatedAt,
 		&i.AvgDailyVolume,
+		&i.SellAvg,
+		&i.SellMax,
+		&i.SellP5,
+		&i.SellStddev,
+		&i.BuyAvg,
+		&i.BuyMin,
+		&i.BuyP5,
+		&i.BuyStddev,
+		&i.SellChg1d,
+		&i.SellChg7d,
+		&i.SellChg30d,
+		&i.BuyChg1d,
+		&i.BuyChg7d,
+		&i.BuyChg30d,
+		&i.Volatility30d,
+		&i.HistoryDays,
+		&i.AvgDailyVolume30d,
 	)
 	return i, err
 }
@@ -400,6 +516,37 @@ func (q *Queries) GetMarketRegionStatsStamp(ctx context.Context, regionID int64)
 	row := q.db.QueryRowContext(ctx, getMarketRegionStatsStamp, regionID)
 	var i GetMarketRegionStatsStampRow
 	err := row.Scan(&i.Stamp, &i.RowCount)
+	return i, err
+}
+
+const getMarketStatChange7 = `-- name: GetMarketStatChange7 :one
+SELECT sell_chg_7d, sell_chg_30d, typical_sell, updated_at FROM market_region_stats
+WHERE region_id = $1 AND type_id = $2
+`
+
+type GetMarketStatChange7Params struct {
+	RegionID int64 `json:"region_id"`
+	TypeID   int64 `json:"type_id"`
+}
+
+type GetMarketStatChange7Row struct {
+	SellChg7d   sql.NullFloat64 `json:"sell_chg_7d"`
+	SellChg30d  sql.NullFloat64 `json:"sell_chg_30d"`
+	TypicalSell float64         `json:"typical_sell"`
+	UpdatedAt   time.Time       `json:"updated_at"`
+}
+
+// A watched item's 7- and 30-day change of the typical sell from the
+// stat pack, with when the row was written.
+func (q *Queries) GetMarketStatChange7(ctx context.Context, arg GetMarketStatChange7Params) (GetMarketStatChange7Row, error) {
+	row := q.db.QueryRowContext(ctx, getMarketStatChange7, arg.RegionID, arg.TypeID)
+	var i GetMarketStatChange7Row
+	err := row.Scan(
+		&i.SellChg7d,
+		&i.SellChg30d,
+		&i.TypicalSell,
+		&i.UpdatedAt,
+	)
 	return i, err
 }
 
@@ -436,7 +583,8 @@ func (q *Queries) GetMarketStationStatsStamp(ctx context.Context, regionID int64
 }
 
 const getMarketStatsFallback = `-- name: GetMarketStatsFallback :one
-SELECT region_id, type_id, median_sell, fivepct_sell, median_buy, fivepct_buy, sell_orders, buy_orders, sell_volume, buy_volume, source, orderset_id, source_asof, fetched_at
+SELECT region_id, type_id, median_sell, fivepct_sell, median_buy, fivepct_buy, sell_orders, buy_orders, sell_volume, buy_volume, source, orderset_id, source_asof, fetched_at,
+       wavg_sell, min_sell, max_sell, stddev_sell, wavg_buy, min_buy, max_buy, stddev_buy
 FROM market_stats_fallback
 WHERE region_id = $1 AND type_id = $2
 `
@@ -464,6 +612,14 @@ func (q *Queries) GetMarketStatsFallback(ctx context.Context, arg GetMarketStats
 		&i.OrdersetID,
 		&i.SourceAsof,
 		&i.FetchedAt,
+		&i.WavgSell,
+		&i.MinSell,
+		&i.MaxSell,
+		&i.StddevSell,
+		&i.WavgBuy,
+		&i.MinBuy,
+		&i.MaxBuy,
+		&i.StddevBuy,
 	)
 	return i, err
 }
@@ -513,6 +669,28 @@ func (q *Queries) GetMarketSweepState(ctx context.Context, regionID int64) (Mark
 	return i, err
 }
 
+const getMarketTrendStamp = `-- name: GetMarketTrendStamp :one
+SELECT COUNT(*) FILTER (WHERE sell_chg_7d IS NOT NULL) AS with_change,
+       COUNT(*) FILTER (WHERE volatility_30d IS NOT NULL) AS with_volatility,
+       MAX(updated_at) AS stamp
+FROM market_region_stats WHERE region_id = $1
+`
+
+type GetMarketTrendStampRow struct {
+	WithChange     int64       `json:"with_change"`
+	WithVolatility int64       `json:"with_volatility"`
+	Stamp          interface{} `json:"stamp"`
+}
+
+// How much of a region's stat pack has trend figures yet: rows with
+// a 7-day change, rows with a volatility figure, and the newest write.
+func (q *Queries) GetMarketTrendStamp(ctx context.Context, regionID int64) (GetMarketTrendStampRow, error) {
+	row := q.db.QueryRowContext(ctx, getMarketTrendStamp, regionID)
+	var i GetMarketTrendStampRow
+	err := row.Scan(&i.WithChange, &i.WithVolatility, &i.Stamp)
+	return i, err
+}
+
 const getMarketTypePrice = `-- name: GetMarketTypePrice :one
 SELECT region_id, type_id, buy_price, sell_price, buy_volume, sell_volume, fetched_at
 FROM market_type_prices
@@ -540,7 +718,7 @@ func (q *Queries) GetMarketTypePrice(ctx context.Context, arg GetMarketTypePrice
 }
 
 const getOrderLifecycle = `-- name: GetOrderLifecycle :one
-SELECT id, character_id, order_id, type_id, location_id, region_id, is_buy_order, listed_price, volume_total, volume_remain_last, first_seen_at, last_seen_at, closed_at, close_kind, outbid_events, beaten_now
+SELECT id, character_id, order_id, type_id, location_id, region_id, is_buy_order, listed_price, volume_total, volume_remain_last, first_seen_at, last_seen_at, closed_at, close_kind, outbid_events, beaten_now, beaten_at, beating_price, beating_volume, suggested_price, unit_cost, margin_pct, tax_rate, beaten_checked
 FROM order_lifecycle
 WHERE character_id = $1 AND order_id = $2
 `
@@ -576,6 +754,14 @@ func (q *Queries) GetOrderLifecycle(ctx context.Context, arg GetOrderLifecyclePa
 		&i.CloseKind,
 		&i.OutbidEvents,
 		&i.BeatenNow,
+		&i.BeatenAt,
+		&i.BeatingPrice,
+		&i.BeatingVolume,
+		&i.SuggestedPrice,
+		&i.UnitCost,
+		&i.MarginPct,
+		&i.TaxRate,
+		&i.BeatenChecked,
 	)
 	return i, err
 }
@@ -1014,6 +1200,90 @@ func (q *Queries) ListAllianceDrains(ctx context.Context, arg ListAllianceDrains
 	return items, nil
 }
 
+const listBeatenOrders = `-- name: ListBeatenOrders :many
+SELECT l.character_id, c.name AS character_name, l.order_id, l.type_id, l.location_id, l.region_id,
+       l.is_buy_order, l.listed_price, l.volume_total, l.volume_remain_last, l.beaten_at, l.outbid_events,
+       l.beating_price, l.beating_volume, l.suggested_price, l.unit_cost, l.margin_pct, l.tax_rate, l.beaten_checked
+FROM order_lifecycle l
+JOIN characters c ON c.character_id = l.character_id
+WHERE c.user_id = $1 AND l.beaten_now = 1 AND l.closed_at IS NULL
+  AND ($2::bigint = 0 OR l.character_id = $2::bigint)
+ORDER BY l.beaten_at DESC NULLS LAST, l.order_id
+LIMIT 100
+`
+
+type ListBeatenOrdersParams struct {
+	UserID      int64 `json:"user_id"`
+	CharacterID int64 `json:"character_id"`
+}
+
+type ListBeatenOrdersRow struct {
+	CharacterID      int64           `json:"character_id"`
+	CharacterName    string          `json:"character_name"`
+	OrderID          int64           `json:"order_id"`
+	TypeID           int64           `json:"type_id"`
+	LocationID       int64           `json:"location_id"`
+	RegionID         int64           `json:"region_id"`
+	IsBuyOrder       int64           `json:"is_buy_order"`
+	ListedPrice      float64         `json:"listed_price"`
+	VolumeTotal      int64           `json:"volume_total"`
+	VolumeRemainLast int64           `json:"volume_remain_last"`
+	BeatenAt         sql.NullTime    `json:"beaten_at"`
+	OutbidEvents     int64           `json:"outbid_events"`
+	BeatingPrice     float64         `json:"beating_price"`
+	BeatingVolume    int64           `json:"beating_volume"`
+	SuggestedPrice   float64         `json:"suggested_price"`
+	UnitCost         float64         `json:"unit_cost"`
+	MarginPct        sql.NullFloat64 `json:"margin_pct"`
+	TaxRate          float64         `json:"tax_rate"`
+	BeatenChecked    sql.NullTime    `json:"beaten_checked"`
+}
+
+// The account's open orders beaten at their own station, most
+// recently beaten first: the My Orders page's beaten section.
+func (q *Queries) ListBeatenOrders(ctx context.Context, arg ListBeatenOrdersParams) ([]ListBeatenOrdersRow, error) {
+	rows, err := q.db.QueryContext(ctx, listBeatenOrders, arg.UserID, arg.CharacterID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListBeatenOrdersRow
+	for rows.Next() {
+		var i ListBeatenOrdersRow
+		if err := rows.Scan(
+			&i.CharacterID,
+			&i.CharacterName,
+			&i.OrderID,
+			&i.TypeID,
+			&i.LocationID,
+			&i.RegionID,
+			&i.IsBuyOrder,
+			&i.ListedPrice,
+			&i.VolumeTotal,
+			&i.VolumeRemainLast,
+			&i.BeatenAt,
+			&i.OutbidEvents,
+			&i.BeatingPrice,
+			&i.BeatingVolume,
+			&i.SuggestedPrice,
+			&i.UnitCost,
+			&i.MarginPct,
+			&i.TaxRate,
+			&i.BeatenChecked,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listBestBuyStations = `-- name: ListBestBuyStations :many
 SELECT DISTINCT ON (type_id) type_id, location_id, best_buy
 FROM market_station_stats
@@ -1103,7 +1373,7 @@ func (q *Queries) ListCheapestSellStations(ctx context.Context, arg ListCheapest
 }
 
 const listClosedOrderLifecycleByCharacter = `-- name: ListClosedOrderLifecycleByCharacter :many
-SELECT id, character_id, order_id, type_id, location_id, region_id, is_buy_order, listed_price, volume_total, volume_remain_last, first_seen_at, last_seen_at, closed_at, close_kind, outbid_events, beaten_now
+SELECT id, character_id, order_id, type_id, location_id, region_id, is_buy_order, listed_price, volume_total, volume_remain_last, first_seen_at, last_seen_at, closed_at, close_kind, outbid_events, beaten_now, beaten_at, beating_price, beating_volume, suggested_price, unit_cost, margin_pct, tax_rate, beaten_checked
 FROM order_lifecycle
 WHERE character_id = $1 AND closed_at IS NOT NULL
 ORDER BY closed_at DESC, order_id DESC
@@ -1141,6 +1411,14 @@ func (q *Queries) ListClosedOrderLifecycleByCharacter(ctx context.Context, arg L
 			&i.CloseKind,
 			&i.OutbidEvents,
 			&i.BeatenNow,
+			&i.BeatenAt,
+			&i.BeatingPrice,
+			&i.BeatingVolume,
+			&i.SuggestedPrice,
+			&i.UnitCost,
+			&i.MarginPct,
+			&i.TaxRate,
+			&i.BeatenChecked,
 		); err != nil {
 			return nil, err
 		}
@@ -1463,6 +1741,272 @@ func (q *Queries) ListMarketBookOrders(ctx context.Context, arg ListMarketBookOr
 	return items, nil
 }
 
+const listMarketBrowseTypes = `-- name: ListMarketBrowseTypes :many
+WITH RECURSIVE tree AS (
+    SELECT g.market_group_id FROM sde_market_groups g
+    WHERE ($7::bigint = 0 AND g.parent_group_id = 0) OR g.market_group_id = $7::bigint
+    UNION ALL
+    SELECT c.market_group_id FROM sde_market_groups c JOIN tree t ON c.parent_group_id = t.market_group_id
+)
+SELECT t.type_id, t.name,
+       COALESCE(s.typical_sell, 0)::float8 AS typical_sell,
+       COALESCE(s.typical_buy, 0)::float8 AS typical_buy,
+       s.sell_chg_7d, s.volatility_30d,
+       COALESCE(s.avg_daily_volume_30d, 0)::float8 AS traded_per_day,
+       COALESCE(s.sell_orders, 0)::bigint AS sell_orders
+FROM sde_types t
+LEFT JOIN market_region_stats s ON s.region_id = $1::bigint AND s.type_id = t.type_id
+WHERE t.published = 1 AND t.market_group_id IN (SELECT market_group_id FROM tree)
+  AND ($2::text = '' OR t.name ILIKE $2::text)
+  AND COALESCE(s.avg_daily_volume_30d, 0) >= $3::float8
+ORDER BY
+  CASE WHEN $4::text = 'name' THEN t.name END,
+  CASE WHEN $4::text = 'price' THEN s.typical_sell END DESC NULLS LAST,
+  CASE WHEN $4::text = 'cheap' THEN NULLIF(s.typical_sell, 0) END ASC NULLS LAST,
+  CASE WHEN $4::text = 'buy' THEN s.typical_buy END DESC NULLS LAST,
+  CASE WHEN $4::text = 'buycheap' THEN NULLIF(s.typical_buy, 0) END ASC NULLS LAST,
+  CASE WHEN $4::text = 'rising' THEN s.sell_chg_7d END DESC NULLS LAST,
+  CASE WHEN $4::text = 'falling' THEN s.sell_chg_7d END ASC NULLS LAST,
+  CASE WHEN $4::text = 'volume' THEN s.avg_daily_volume_30d END DESC NULLS LAST,
+  CASE WHEN $4::text = 'volatile' THEN s.volatility_30d END DESC NULLS LAST,
+  t.name, t.type_id
+LIMIT $6::bigint OFFSET $5::bigint
+`
+
+type ListMarketBrowseTypesParams struct {
+	RegionID  int64   `json:"region_id"`
+	NameLike  string  `json:"name_like"`
+	MinVolume float64 `json:"min_volume"`
+	Sort      string  `json:"sort"`
+	RowOffset int64   `json:"row_offset"`
+	RowLimit  int64   `json:"row_limit"`
+	GroupID   int64   `json:"group_id"`
+}
+
+type ListMarketBrowseTypesRow struct {
+	TypeID        int64           `json:"type_id"`
+	Name          string          `json:"name"`
+	TypicalSell   float64         `json:"typical_sell"`
+	TypicalBuy    float64         `json:"typical_buy"`
+	SellChg7d     sql.NullFloat64 `json:"sell_chg_7d"`
+	Volatility30d sql.NullFloat64 `json:"volatility_30d"`
+	TradedPerDay  float64         `json:"traded_per_day"`
+	SellOrders    int64           `json:"sell_orders"`
+}
+
+// The market browser's item list: every marketable type under a
+// market group (its whole subtree; 0 = every group), joined to the
+// region's stat pack row, filtered by name and traded volume, sorted
+// and paged in SQL. A type with no stat row lists with no figures
+// and sorts after priced ones.
+func (q *Queries) ListMarketBrowseTypes(ctx context.Context, arg ListMarketBrowseTypesParams) ([]ListMarketBrowseTypesRow, error) {
+	rows, err := q.db.QueryContext(ctx, listMarketBrowseTypes,
+		arg.RegionID,
+		arg.NameLike,
+		arg.MinVolume,
+		arg.Sort,
+		arg.RowOffset,
+		arg.RowLimit,
+		arg.GroupID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListMarketBrowseTypesRow
+	for rows.Next() {
+		var i ListMarketBrowseTypesRow
+		if err := rows.Scan(
+			&i.TypeID,
+			&i.Name,
+			&i.TypicalSell,
+			&i.TypicalBuy,
+			&i.SellChg7d,
+			&i.Volatility30d,
+			&i.TradedPerDay,
+			&i.SellOrders,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listMarketChangesForRegion = `-- name: ListMarketChangesForRegion :many
+SELECT type_id, day, kind, before, after, pct, detected_at
+FROM market_changes
+WHERE region_id = $1 AND day >= $2::text
+  AND ($3::text = '' OR kind = $3::text)
+ORDER BY day DESC, ABS(pct) DESC, type_id
+LIMIT 100
+`
+
+type ListMarketChangesForRegionParams struct {
+	RegionID int64  `json:"region_id"`
+	Since    string `json:"since"`
+	Kind     string `json:"kind"`
+}
+
+type ListMarketChangesForRegionRow struct {
+	TypeID     int64     `json:"type_id"`
+	Day        string    `json:"day"`
+	Kind       string    `json:"kind"`
+	Before     float64   `json:"before"`
+	After      float64   `json:"after"`
+	Pct        float64   `json:"pct"`
+	DetectedAt time.Time `json:"detected_at"`
+}
+
+// The Trends page's change feed: a region's changes from a day on,
+// newest day first, biggest moves first within it.
+func (q *Queries) ListMarketChangesForRegion(ctx context.Context, arg ListMarketChangesForRegionParams) ([]ListMarketChangesForRegionRow, error) {
+	rows, err := q.db.QueryContext(ctx, listMarketChangesForRegion, arg.RegionID, arg.Since, arg.Kind)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListMarketChangesForRegionRow
+	for rows.Next() {
+		var i ListMarketChangesForRegionRow
+		if err := rows.Scan(
+			&i.TypeID,
+			&i.Day,
+			&i.Kind,
+			&i.Before,
+			&i.After,
+			&i.Pct,
+			&i.DetectedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listMarketChangesForType = `-- name: ListMarketChangesForType :many
+SELECT day, kind, before, after, pct, detected_at
+FROM market_changes
+WHERE region_id = $1 AND type_id = $2
+ORDER BY day DESC, kind
+LIMIT 20
+`
+
+type ListMarketChangesForTypeParams struct {
+	RegionID int64 `json:"region_id"`
+	TypeID   int64 `json:"type_id"`
+}
+
+type ListMarketChangesForTypeRow struct {
+	Day        string    `json:"day"`
+	Kind       string    `json:"kind"`
+	Before     float64   `json:"before"`
+	After      float64   `json:"after"`
+	Pct        float64   `json:"pct"`
+	DetectedAt time.Time `json:"detected_at"`
+}
+
+// One type's recent changes in a region: the item page.
+func (q *Queries) ListMarketChangesForType(ctx context.Context, arg ListMarketChangesForTypeParams) ([]ListMarketChangesForTypeRow, error) {
+	rows, err := q.db.QueryContext(ctx, listMarketChangesForType, arg.RegionID, arg.TypeID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListMarketChangesForTypeRow
+	for rows.Next() {
+		var i ListMarketChangesForTypeRow
+		if err := rows.Scan(
+			&i.Day,
+			&i.Kind,
+			&i.Before,
+			&i.After,
+			&i.Pct,
+			&i.DetectedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listMarketChangesForWatchlist = `-- name: ListMarketChangesForWatchlist :many
+SELECT m.type_id, m.region_id, m.day, m.kind, m.before, m.after, m.pct
+FROM market_changes m
+JOIN market_watchlist w ON w.type_id = m.type_id AND w.region_id = m.region_id
+WHERE w.user_id = $1 AND m.day >= $2::text
+ORDER BY m.day DESC, m.type_id
+LIMIT 100
+`
+
+type ListMarketChangesForWatchlistParams struct {
+	UserID int64  `json:"user_id"`
+	Since  string `json:"since"`
+}
+
+type ListMarketChangesForWatchlistRow struct {
+	TypeID   int64   `json:"type_id"`
+	RegionID int64   `json:"region_id"`
+	Day      string  `json:"day"`
+	Kind     string  `json:"kind"`
+	Before   float64 `json:"before"`
+	After    float64 `json:"after"`
+	Pct      float64 `json:"pct"`
+}
+
+// Today's changes on a user's watched items (each in its watched
+// region): the notification pass.
+func (q *Queries) ListMarketChangesForWatchlist(ctx context.Context, arg ListMarketChangesForWatchlistParams) ([]ListMarketChangesForWatchlistRow, error) {
+	rows, err := q.db.QueryContext(ctx, listMarketChangesForWatchlist, arg.UserID, arg.Since)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListMarketChangesForWatchlistRow
+	for rows.Next() {
+		var i ListMarketChangesForWatchlistRow
+		if err := rows.Scan(
+			&i.TypeID,
+			&i.RegionID,
+			&i.Day,
+			&i.Kind,
+			&i.Before,
+			&i.After,
+			&i.Pct,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listMarketFetchStatesByKinds = `-- name: ListMarketFetchStatesByKinds :many
 SELECT kind, state, detail, attempted_at
 FROM market_fetch_state
@@ -1623,7 +2167,10 @@ func (q *Queries) ListMarketHistoryWants(ctx context.Context, arg ListMarketHist
 }
 
 const listMarketRegionStatsByRegion = `-- name: ListMarketRegionStatsByRegion :many
-SELECT region_id, type_id, best_sell, typical_sell, sell_band, best_buy, typical_buy, buy_band, sell_orders, buy_orders, sell_volume, buy_volume, updated_at, avg_daily_volume
+SELECT region_id, type_id, best_sell, typical_sell, sell_band, best_buy, typical_buy, buy_band, sell_orders, buy_orders, sell_volume, buy_volume, updated_at, avg_daily_volume,
+       sell_avg, sell_max, sell_p5, sell_stddev, buy_avg, buy_min, buy_p5, buy_stddev,
+       sell_chg_1d, sell_chg_7d, sell_chg_30d, buy_chg_1d, buy_chg_7d, buy_chg_30d,
+       volatility_30d, history_days, avg_daily_volume_30d
 FROM market_region_stats
 WHERE region_id = $1
 ORDER BY type_id
@@ -1653,6 +2200,23 @@ func (q *Queries) ListMarketRegionStatsByRegion(ctx context.Context, regionID in
 			&i.BuyVolume,
 			&i.UpdatedAt,
 			&i.AvgDailyVolume,
+			&i.SellAvg,
+			&i.SellMax,
+			&i.SellP5,
+			&i.SellStddev,
+			&i.BuyAvg,
+			&i.BuyMin,
+			&i.BuyP5,
+			&i.BuyStddev,
+			&i.SellChg1d,
+			&i.SellChg7d,
+			&i.SellChg30d,
+			&i.BuyChg1d,
+			&i.BuyChg7d,
+			&i.BuyChg30d,
+			&i.Volatility30d,
+			&i.HistoryDays,
+			&i.AvgDailyVolume30d,
 		); err != nil {
 			return nil, err
 		}
@@ -1668,7 +2232,10 @@ func (q *Queries) ListMarketRegionStatsByRegion(ctx context.Context, regionID in
 }
 
 const listMarketRegionStatsByType = `-- name: ListMarketRegionStatsByType :many
-SELECT region_id, type_id, best_sell, typical_sell, sell_band, best_buy, typical_buy, buy_band, sell_orders, buy_orders, sell_volume, buy_volume, updated_at, avg_daily_volume
+SELECT region_id, type_id, best_sell, typical_sell, sell_band, best_buy, typical_buy, buy_band, sell_orders, buy_orders, sell_volume, buy_volume, updated_at, avg_daily_volume,
+       sell_avg, sell_max, sell_p5, sell_stddev, buy_avg, buy_min, buy_p5, buy_stddev,
+       sell_chg_1d, sell_chg_7d, sell_chg_30d, buy_chg_1d, buy_chg_7d, buy_chg_30d,
+       volatility_30d, history_days, avg_daily_volume_30d
 FROM market_region_stats
 WHERE type_id = $1
 ORDER BY region_id
@@ -1698,6 +2265,23 @@ func (q *Queries) ListMarketRegionStatsByType(ctx context.Context, typeID int64)
 			&i.BuyVolume,
 			&i.UpdatedAt,
 			&i.AvgDailyVolume,
+			&i.SellAvg,
+			&i.SellMax,
+			&i.SellP5,
+			&i.SellStddev,
+			&i.BuyAvg,
+			&i.BuyMin,
+			&i.BuyP5,
+			&i.BuyStddev,
+			&i.SellChg1d,
+			&i.SellChg7d,
+			&i.SellChg30d,
+			&i.BuyChg1d,
+			&i.BuyChg7d,
+			&i.BuyChg30d,
+			&i.Volatility30d,
+			&i.HistoryDays,
+			&i.AvgDailyVolume30d,
 		); err != nil {
 			return nil, err
 		}
@@ -1713,7 +2297,8 @@ func (q *Queries) ListMarketRegionStatsByType(ctx context.Context, typeID int64)
 }
 
 const listMarketRegionStatsDaily = `-- name: ListMarketRegionStatsDaily :many
-SELECT region_id, type_id, day, best_sell, typical_sell, sell_band, best_buy, typical_buy, buy_band, sell_orders, buy_orders, sell_volume, buy_volume
+SELECT region_id, type_id, day, best_sell, typical_sell, sell_band, best_buy, typical_buy, buy_band, sell_orders, buy_orders, sell_volume, buy_volume,
+       sell_avg, sell_max, sell_p5, sell_stddev, buy_avg, buy_min, buy_p5, buy_stddev
 FROM market_region_stats_daily
 WHERE region_id = $1 AND type_id = $2
 ORDER BY day
@@ -1747,6 +2332,75 @@ func (q *Queries) ListMarketRegionStatsDaily(ctx context.Context, arg ListMarket
 			&i.BuyOrders,
 			&i.SellVolume,
 			&i.BuyVolume,
+			&i.SellAvg,
+			&i.SellMax,
+			&i.SellP5,
+			&i.SellStddev,
+			&i.BuyAvg,
+			&i.BuyMin,
+			&i.BuyP5,
+			&i.BuyStddev,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listMarketRegionStatsDailyRecent = `-- name: ListMarketRegionStatsDailyRecent :many
+SELECT day, typical_sell, typical_buy, best_sell, best_buy, sell_orders, buy_orders, sell_volume, buy_volume
+FROM market_region_stats_daily
+WHERE region_id = $1 AND type_id = $2 AND day >= $3
+ORDER BY day
+LIMIT 90
+`
+
+type ListMarketRegionStatsDailyRecentParams struct {
+	RegionID int64  `json:"region_id"`
+	TypeID   int64  `json:"type_id"`
+	Since    string `json:"since"`
+}
+
+type ListMarketRegionStatsDailyRecentRow struct {
+	Day         string  `json:"day"`
+	TypicalSell float64 `json:"typical_sell"`
+	TypicalBuy  float64 `json:"typical_buy"`
+	BestSell    float64 `json:"best_sell"`
+	BestBuy     float64 `json:"best_buy"`
+	SellOrders  int64   `json:"sell_orders"`
+	BuyOrders   int64   `json:"buy_orders"`
+	SellVolume  int64   `json:"sell_volume"`
+	BuyVolume   int64   `json:"buy_volume"`
+}
+
+// One (region, type)'s stat pack history from a start day on,
+// oldest first: the item page's book trend chart (at most 90 rows).
+func (q *Queries) ListMarketRegionStatsDailyRecent(ctx context.Context, arg ListMarketRegionStatsDailyRecentParams) ([]ListMarketRegionStatsDailyRecentRow, error) {
+	rows, err := q.db.QueryContext(ctx, listMarketRegionStatsDailyRecent, arg.RegionID, arg.TypeID, arg.Since)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListMarketRegionStatsDailyRecentRow
+	for rows.Next() {
+		var i ListMarketRegionStatsDailyRecentRow
+		if err := rows.Scan(
+			&i.Day,
+			&i.TypicalSell,
+			&i.TypicalBuy,
+			&i.BestSell,
+			&i.BestBuy,
+			&i.SellOrders,
+			&i.BuyOrders,
+			&i.SellVolume,
+			&i.BuyVolume,
 		); err != nil {
 			return nil, err
 		}
@@ -1762,7 +2416,10 @@ func (q *Queries) ListMarketRegionStatsDaily(ctx context.Context, arg ListMarket
 }
 
 const listMarketRegionStatsForTypes = `-- name: ListMarketRegionStatsForTypes :many
-SELECT region_id, type_id, best_sell, typical_sell, sell_band, best_buy, typical_buy, buy_band, sell_orders, buy_orders, sell_volume, buy_volume, updated_at, avg_daily_volume
+SELECT region_id, type_id, best_sell, typical_sell, sell_band, best_buy, typical_buy, buy_band, sell_orders, buy_orders, sell_volume, buy_volume, updated_at, avg_daily_volume,
+       sell_avg, sell_max, sell_p5, sell_stddev, buy_avg, buy_min, buy_p5, buy_stddev,
+       sell_chg_1d, sell_chg_7d, sell_chg_30d, buy_chg_1d, buy_chg_7d, buy_chg_30d,
+       volatility_30d, history_days, avg_daily_volume_30d
 FROM market_region_stats
 WHERE region_id = $1 AND type_id = ANY($2::bigint[])
 `
@@ -1796,6 +2453,23 @@ func (q *Queries) ListMarketRegionStatsForTypes(ctx context.Context, arg ListMar
 			&i.BuyVolume,
 			&i.UpdatedAt,
 			&i.AvgDailyVolume,
+			&i.SellAvg,
+			&i.SellMax,
+			&i.SellP5,
+			&i.SellStddev,
+			&i.BuyAvg,
+			&i.BuyMin,
+			&i.BuyP5,
+			&i.BuyStddev,
+			&i.SellChg1d,
+			&i.SellChg7d,
+			&i.SellChg30d,
+			&i.BuyChg1d,
+			&i.BuyChg7d,
+			&i.BuyChg30d,
+			&i.Volatility30d,
+			&i.HistoryDays,
+			&i.AvgDailyVolume30d,
 		); err != nil {
 			return nil, err
 		}
@@ -1892,7 +2566,8 @@ func (q *Queries) ListMarketStationStatsByRegion(ctx context.Context, regionID i
 }
 
 const listMarketStatsFallbackByType = `-- name: ListMarketStatsFallbackByType :many
-SELECT region_id, type_id, median_sell, fivepct_sell, median_buy, fivepct_buy, sell_orders, buy_orders, sell_volume, buy_volume, source, orderset_id, source_asof, fetched_at
+SELECT region_id, type_id, median_sell, fivepct_sell, median_buy, fivepct_buy, sell_orders, buy_orders, sell_volume, buy_volume, source, orderset_id, source_asof, fetched_at,
+       wavg_sell, min_sell, max_sell, stddev_sell, wavg_buy, min_buy, max_buy, stddev_buy
 FROM market_stats_fallback
 WHERE type_id = $1
 ORDER BY region_id
@@ -1922,6 +2597,14 @@ func (q *Queries) ListMarketStatsFallbackByType(ctx context.Context, typeID int6
 			&i.OrdersetID,
 			&i.SourceAsof,
 			&i.FetchedAt,
+			&i.WavgSell,
+			&i.MinSell,
+			&i.MaxSell,
+			&i.StddevSell,
+			&i.WavgBuy,
+			&i.MinBuy,
+			&i.MaxBuy,
+			&i.StddevBuy,
 		); err != nil {
 			return nil, err
 		}
@@ -1937,7 +2620,8 @@ func (q *Queries) ListMarketStatsFallbackByType(ctx context.Context, typeID int6
 }
 
 const listMarketStatsFallbackForTypes = `-- name: ListMarketStatsFallbackForTypes :many
-SELECT region_id, type_id, median_sell, fivepct_sell, median_buy, fivepct_buy, sell_orders, buy_orders, sell_volume, buy_volume, source, orderset_id, source_asof, fetched_at
+SELECT region_id, type_id, median_sell, fivepct_sell, median_buy, fivepct_buy, sell_orders, buy_orders, sell_volume, buy_volume, source, orderset_id, source_asof, fetched_at,
+       wavg_sell, min_sell, max_sell, stddev_sell, wavg_buy, min_buy, max_buy, stddev_buy
 FROM market_stats_fallback
 WHERE region_id = $1 AND type_id = ANY($2::bigint[])
 ORDER BY type_id
@@ -1972,6 +2656,14 @@ func (q *Queries) ListMarketStatsFallbackForTypes(ctx context.Context, arg ListM
 			&i.OrdersetID,
 			&i.SourceAsof,
 			&i.FetchedAt,
+			&i.WavgSell,
+			&i.MinSell,
+			&i.MaxSell,
+			&i.StddevSell,
+			&i.WavgBuy,
+			&i.MinBuy,
+			&i.MaxBuy,
+			&i.StddevBuy,
 		); err != nil {
 			return nil, err
 		}
@@ -2173,6 +2865,98 @@ func (q *Queries) ListMarketSweepTypeOrders(ctx context.Context, arg ListMarketS
 	return items, nil
 }
 
+const listMarketTrendTypes = `-- name: ListMarketTrendTypes :many
+SELECT type_id, typical_sell, typical_buy, sell_orders, avg_daily_volume_30d,
+       sell_chg_1d, sell_chg_7d, sell_chg_30d, volatility_30d, history_days, updated_at
+FROM (
+    SELECT s.region_id, s.type_id, s.best_sell, s.typical_sell, s.sell_band, s.best_buy, s.typical_buy, s.buy_band, s.sell_orders, s.buy_orders, s.sell_volume, s.buy_volume, s.updated_at, s.avg_daily_volume, s.sell_avg, s.sell_max, s.sell_p5, s.sell_stddev, s.buy_avg, s.buy_min, s.buy_p5, s.buy_stddev, s.sell_chg_1d, s.sell_chg_7d, s.sell_chg_30d, s.buy_chg_1d, s.buy_chg_7d, s.buy_chg_30d, s.volatility_30d, s.history_days, s.avg_daily_volume_30d,
+           CASE $1::text
+               WHEN 'volatile' THEN s.volatility_30d
+               WHEN 'rising' THEN CASE $2::int WHEN 1 THEN s.sell_chg_1d WHEN 30 THEN s.sell_chg_30d ELSE s.sell_chg_7d END
+               ELSE -(CASE $2::int WHEN 1 THEN s.sell_chg_1d WHEN 30 THEN s.sell_chg_30d ELSE s.sell_chg_7d END)
+           END AS score
+    FROM market_region_stats s
+    WHERE s.region_id = $3
+      AND s.typical_sell > 0
+      AND s.sell_orders >= $4::bigint
+      AND s.avg_daily_volume_30d >= $5::double precision
+) ranked
+WHERE score IS NOT NULL AND ($1::text = 'volatile' OR score > 0)
+ORDER BY score DESC, type_id
+LIMIT $6::bigint
+`
+
+type ListMarketTrendTypesParams struct {
+	Mode      string  `json:"mode"`
+	Period    int32   `json:"period"`
+	RegionID  int64   `json:"region_id"`
+	MinOrders int64   `json:"min_orders"`
+	MinVolume float64 `json:"min_volume"`
+	RowCap    int64   `json:"row_cap"`
+}
+
+type ListMarketTrendTypesRow struct {
+	TypeID            int64           `json:"type_id"`
+	TypicalSell       float64         `json:"typical_sell"`
+	TypicalBuy        float64         `json:"typical_buy"`
+	SellOrders        int64           `json:"sell_orders"`
+	AvgDailyVolume30d float64         `json:"avg_daily_volume_30d"`
+	SellChg1d         sql.NullFloat64 `json:"sell_chg_1d"`
+	SellChg7d         sql.NullFloat64 `json:"sell_chg_7d"`
+	SellChg30d        sql.NullFloat64 `json:"sell_chg_30d"`
+	Volatility30d     sql.NullFloat64 `json:"volatility_30d"`
+	HistoryDays       int64           `json:"history_days"`
+	UpdatedAt         time.Time       `json:"updated_at"`
+}
+
+// The Trends screen, ranked in SQL over the stat pack: the most
+// volatile types (30-day volatility of the typical sell), or the
+// biggest risers or fallers of the typical sell over 1, 7 or 30
+// days. A row needs a book with some depth (min_orders sell
+// orders) and real trade (30-day traded volume floor), so a
+// one-order book's swing never tops the screen.
+func (q *Queries) ListMarketTrendTypes(ctx context.Context, arg ListMarketTrendTypesParams) ([]ListMarketTrendTypesRow, error) {
+	rows, err := q.db.QueryContext(ctx, listMarketTrendTypes,
+		arg.Mode,
+		arg.Period,
+		arg.RegionID,
+		arg.MinOrders,
+		arg.MinVolume,
+		arg.RowCap,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListMarketTrendTypesRow
+	for rows.Next() {
+		var i ListMarketTrendTypesRow
+		if err := rows.Scan(
+			&i.TypeID,
+			&i.TypicalSell,
+			&i.TypicalBuy,
+			&i.SellOrders,
+			&i.AvgDailyVolume30d,
+			&i.SellChg1d,
+			&i.SellChg7d,
+			&i.SellChg30d,
+			&i.Volatility30d,
+			&i.HistoryDays,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listMarketTypePricesForTypes = `-- name: ListMarketTypePricesForTypes :many
 SELECT region_id, type_id, buy_price, sell_price, buy_volume, sell_volume, fetched_at
 FROM market_type_prices
@@ -2216,7 +3000,7 @@ func (q *Queries) ListMarketTypePricesForTypes(ctx context.Context, arg ListMark
 }
 
 const listOpenOrderLifecycleByCharacter = `-- name: ListOpenOrderLifecycleByCharacter :many
-SELECT id, character_id, order_id, type_id, location_id, region_id, is_buy_order, listed_price, volume_total, volume_remain_last, first_seen_at, last_seen_at, closed_at, close_kind, outbid_events, beaten_now
+SELECT id, character_id, order_id, type_id, location_id, region_id, is_buy_order, listed_price, volume_total, volume_remain_last, first_seen_at, last_seen_at, closed_at, close_kind, outbid_events, beaten_now, beaten_at, beating_price, beating_volume, suggested_price, unit_cost, margin_pct, tax_rate, beaten_checked
 FROM order_lifecycle
 WHERE character_id = $1 AND closed_at IS NULL
 ORDER BY order_id
@@ -2248,6 +3032,14 @@ func (q *Queries) ListOpenOrderLifecycleByCharacter(ctx context.Context, charact
 			&i.CloseKind,
 			&i.OutbidEvents,
 			&i.BeatenNow,
+			&i.BeatenAt,
+			&i.BeatingPrice,
+			&i.BeatingVolume,
+			&i.SuggestedPrice,
+			&i.UnitCost,
+			&i.MarginPct,
+			&i.TaxRate,
+			&i.BeatenChecked,
 		); err != nil {
 			return nil, err
 		}
@@ -2346,7 +3138,7 @@ func (q *Queries) ListOrderHealthByUser(ctx context.Context, userID int64) ([]Or
 }
 
 const listOrderLifecycleByCharacter = `-- name: ListOrderLifecycleByCharacter :many
-SELECT id, character_id, order_id, type_id, location_id, region_id, is_buy_order, listed_price, volume_total, volume_remain_last, first_seen_at, last_seen_at, closed_at, close_kind, outbid_events, beaten_now
+SELECT id, character_id, order_id, type_id, location_id, region_id, is_buy_order, listed_price, volume_total, volume_remain_last, first_seen_at, last_seen_at, closed_at, close_kind, outbid_events, beaten_now, beaten_at, beating_price, beating_volume, suggested_price, unit_cost, margin_pct, tax_rate, beaten_checked
 FROM order_lifecycle
 WHERE character_id = $1
 ORDER BY first_seen_at DESC, order_id DESC
@@ -2378,6 +3170,14 @@ func (q *Queries) ListOrderLifecycleByCharacter(ctx context.Context, characterID
 			&i.CloseKind,
 			&i.OutbidEvents,
 			&i.BeatenNow,
+			&i.BeatenAt,
+			&i.BeatingPrice,
+			&i.BeatingVolume,
+			&i.SuggestedPrice,
+			&i.UnitCost,
+			&i.MarginPct,
+			&i.TaxRate,
+			&i.BeatenChecked,
 		); err != nil {
 			return nil, err
 		}
@@ -2393,7 +3193,7 @@ func (q *Queries) ListOrderLifecycleByCharacter(ctx context.Context, characterID
 }
 
 const listOrderLifecycleByUser = `-- name: ListOrderLifecycleByUser :many
-SELECT ol.id, ol.character_id, ol.order_id, ol.type_id, ol.location_id, ol.region_id, ol.is_buy_order, ol.listed_price, ol.volume_total, ol.volume_remain_last, ol.first_seen_at, ol.last_seen_at, ol.closed_at, ol.close_kind, ol.outbid_events, ol.beaten_now
+SELECT ol.id, ol.character_id, ol.order_id, ol.type_id, ol.location_id, ol.region_id, ol.is_buy_order, ol.listed_price, ol.volume_total, ol.volume_remain_last, ol.first_seen_at, ol.last_seen_at, ol.closed_at, ol.close_kind, ol.outbid_events, ol.beaten_now, ol.beaten_at, ol.beating_price, ol.beating_volume, ol.suggested_price, ol.unit_cost, ol.margin_pct, ol.tax_rate, ol.beaten_checked
 FROM order_lifecycle ol
 JOIN characters c ON c.character_id = ol.character_id
 WHERE c.user_id = $1
@@ -2426,6 +3226,14 @@ func (q *Queries) ListOrderLifecycleByUser(ctx context.Context, userID int64) ([
 			&i.CloseKind,
 			&i.OutbidEvents,
 			&i.BeatenNow,
+			&i.BeatenAt,
+			&i.BeatingPrice,
+			&i.BeatingVolume,
+			&i.SuggestedPrice,
+			&i.UnitCost,
+			&i.MarginPct,
+			&i.TaxRate,
+			&i.BeatenChecked,
 		); err != nil {
 			return nil, err
 		}
@@ -2441,7 +3249,8 @@ func (q *Queries) ListOrderLifecycleByUser(ctx context.Context, userID int64) ([
 }
 
 const listOrderLifecycleStates = `-- name: ListOrderLifecycleStates :many
-SELECT l.character_id, l.order_id, l.closed_at, l.outbid_events, l.beaten_now
+SELECT l.character_id, l.order_id, l.closed_at, l.outbid_events, l.beaten_now,
+       l.beating_price, l.beating_volume, l.suggested_price, l.unit_cost, l.margin_pct, l.tax_rate
 FROM order_lifecycle l
 JOIN (SELECT unnest($1::bigint[]) AS character_id,
              unnest($2::bigint[]) AS order_id) k
@@ -2454,11 +3263,17 @@ type ListOrderLifecycleStatesParams struct {
 }
 
 type ListOrderLifecycleStatesRow struct {
-	CharacterID  int64        `json:"character_id"`
-	OrderID      int64        `json:"order_id"`
-	ClosedAt     sql.NullTime `json:"closed_at"`
-	OutbidEvents int64        `json:"outbid_events"`
-	BeatenNow    int64        `json:"beaten_now"`
+	CharacterID    int64           `json:"character_id"`
+	OrderID        int64           `json:"order_id"`
+	ClosedAt       sql.NullTime    `json:"closed_at"`
+	OutbidEvents   int64           `json:"outbid_events"`
+	BeatenNow      int64           `json:"beaten_now"`
+	BeatingPrice   float64         `json:"beating_price"`
+	BeatingVolume  int64           `json:"beating_volume"`
+	SuggestedPrice float64         `json:"suggested_price"`
+	UnitCost       float64         `json:"unit_cost"`
+	MarginPct      sql.NullFloat64 `json:"margin_pct"`
+	TaxRate        float64         `json:"tax_rate"`
 }
 
 // The ledger rows of many (character, order) pairs in one read: what
@@ -2478,6 +3293,12 @@ func (q *Queries) ListOrderLifecycleStates(ctx context.Context, arg ListOrderLif
 			&i.ClosedAt,
 			&i.OutbidEvents,
 			&i.BeatenNow,
+			&i.BeatingPrice,
+			&i.BeatingVolume,
+			&i.SuggestedPrice,
+			&i.UnitCost,
+			&i.MarginPct,
+			&i.TaxRate,
 		); err != nil {
 			return nil, err
 		}
@@ -2706,6 +3527,33 @@ func (q *Queries) ListRestockTargets(ctx context.Context, userID int64) ([]Resto
 			&i.MinMarginPct,
 			&i.UpdatedAt,
 		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSDERegionNames = `-- name: ListSDERegionNames :many
+SELECT region_id, name FROM sde_regions WHERE region_id = ANY($1::bigint[])
+`
+
+func (q *Queries) ListSDERegionNames(ctx context.Context, regionIds []int64) ([]SdeRegion, error) {
+	rows, err := q.db.QueryContext(ctx, listSDERegionNames, pq.Array(regionIds))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SdeRegion
+	for rows.Next() {
+		var i SdeRegion
+		if err := rows.Scan(&i.RegionID, &i.Name); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -3129,6 +3977,20 @@ func (q *Queries) NoteGuidePriceWant(ctx context.Context, wantedAt time.Time) er
 	return err
 }
 
+const pruneMarketChanges = `-- name: PruneMarketChanges :exec
+DELETE FROM market_changes WHERE region_id = $1 AND day < $2::text
+`
+
+type PruneMarketChangesParams struct {
+	RegionID  int64  `json:"region_id"`
+	BeforeDay string `json:"before_day"`
+}
+
+func (q *Queries) PruneMarketChanges(ctx context.Context, arg PruneMarketChangesParams) error {
+	_, err := q.db.ExecContext(ctx, pruneMarketChanges, arg.RegionID, arg.BeforeDay)
+	return err
+}
+
 const pruneOldOrderLifecycle = `-- name: PruneOldOrderLifecycle :exec
 DELETE FROM order_lifecycle
 WHERE id IN (
@@ -3205,6 +4067,98 @@ type RefreshMarketRegionStatAvgVolumesParams struct {
 // but whose sold-per-day figure has not caught up.
 func (q *Queries) RefreshMarketRegionStatAvgVolumes(ctx context.Context, arg RefreshMarketRegionStatAvgVolumesParams) (int64, error) {
 	result, err := q.db.ExecContext(ctx, refreshMarketRegionStatAvgVolumes, arg.RegionID, pq.Array(arg.TypeIds))
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const refreshMarketStatPackTrends = `-- name: RefreshMarketStatPackTrends :execrows
+UPDATE market_region_stats s SET
+    sell_chg_1d          = CASE WHEN s.typical_sell > 0 AND t.s1 > 0 THEN (s.typical_sell - t.s1) / t.s1 * 100 END,
+    sell_chg_7d          = CASE WHEN s.typical_sell > 0 AND t.s7 > 0 THEN (s.typical_sell - t.s7) / t.s7 * 100 END,
+    sell_chg_30d         = CASE WHEN s.typical_sell > 0 AND t.s30 > 0 THEN (s.typical_sell - t.s30) / t.s30 * 100 END,
+    buy_chg_1d           = CASE WHEN s.typical_buy > 0 AND t.b1 > 0 THEN (s.typical_buy - t.b1) / t.b1 * 100 END,
+    buy_chg_7d           = CASE WHEN s.typical_buy > 0 AND t.b7 > 0 THEN (s.typical_buy - t.b7) / t.b7 * 100 END,
+    buy_chg_30d          = CASE WHEN s.typical_buy > 0 AND t.b30 > 0 THEN (s.typical_buy - t.b30) / t.b30 * 100 END,
+    volatility_30d       = t.vol,
+    history_days         = t.days,
+    avg_daily_volume_30d = t.vol30
+FROM (
+    SELECT r.type_id,
+           d1.typical_sell AS s1, d1.typical_buy AS b1,
+           d7.typical_sell AS s7, d7.typical_buy AS b7,
+           d30.typical_sell AS s30, d30.typical_buy AS b30,
+           v.vol, COALESCE(v.days, 0) AS days, COALESCE(h.vol30, 0) AS vol30
+    FROM market_region_stats r
+    LEFT JOIN LATERAL (
+        SELECT dd.typical_sell, dd.typical_buy FROM market_region_stats_daily dd
+        WHERE dd.region_id = r.region_id AND dd.type_id = r.type_id
+          AND dd.day <= to_char($2::date - 1, 'YYYY-MM-DD')
+          AND dd.day >= to_char($2::date - 3, 'YYYY-MM-DD')
+        ORDER BY dd.day DESC LIMIT 1
+    ) d1 ON true
+    LEFT JOIN LATERAL (
+        SELECT dd.typical_sell, dd.typical_buy FROM market_region_stats_daily dd
+        WHERE dd.region_id = r.region_id AND dd.type_id = r.type_id
+          AND dd.day <= to_char($2::date - 7, 'YYYY-MM-DD')
+          AND dd.day >= to_char($2::date - 10, 'YYYY-MM-DD')
+        ORDER BY dd.day DESC LIMIT 1
+    ) d7 ON true
+    LEFT JOIN LATERAL (
+        SELECT dd.typical_sell, dd.typical_buy FROM market_region_stats_daily dd
+        WHERE dd.region_id = r.region_id AND dd.type_id = r.type_id
+          AND dd.day <= to_char($2::date - 30, 'YYYY-MM-DD')
+          AND dd.day >= to_char($2::date - 35, 'YYYY-MM-DD')
+        ORDER BY dd.day DESC LIMIT 1
+    ) d30 ON true
+    LEFT JOIN (
+        SELECT x.type_id,
+               CASE WHEN COUNT(x.ret) >= 7 THEN STDDEV_SAMP(x.ret) * 100 END AS vol,
+               COUNT(*) AS days
+        FROM (
+            SELECT dd.type_id,
+                   LN(dd.typical_sell / NULLIF(LAG(dd.typical_sell) OVER (PARTITION BY dd.type_id ORDER BY dd.day), 0)) AS ret
+            FROM market_region_stats_daily dd
+            WHERE dd.region_id = $1
+              AND dd.day > to_char($2::date - 30, 'YYYY-MM-DD')
+              AND dd.typical_sell > 0
+        ) x
+        GROUP BY x.type_id
+    ) v ON v.type_id = r.type_id
+    LEFT JOIN LATERAL (
+        SELECT CAST(AVG(mh.volume) AS DOUBLE PRECISION) AS vol30
+        FROM market_history mh
+        WHERE mh.region_id = r.region_id AND mh.type_id = r.type_id
+          AND mh.date >= (
+              SELECT to_char(MAX(m.date)::date - INTERVAL '29 days', 'YYYY-MM-DD')
+              FROM market_history m
+              WHERE m.region_id = r.region_id AND m.type_id = r.type_id
+          )
+    ) h ON true
+    WHERE r.region_id = $1
+) t
+WHERE s.region_id = $1 AND s.type_id = t.type_id
+`
+
+type RefreshMarketStatPackTrendsParams struct {
+	RegionID int64     `json:"region_id"`
+	Today    time.Time `json:"today"`
+}
+
+// The stat pack's trend figures (schema 101), derived for one
+// region inside the sweep's own transaction, right after today's
+// daily rows land. Each change compares the live typical price
+// against the newest daily row inside its comparison window
+// (1d: 1 to 3 days back, 7d: 7 to 10, 30d: 30 to 35), so a type
+// with a gap in its history reads NULL instead of comparing
+// against a far older day. Volatility is the sample standard
+// deviation of the typical sell's daily log returns over the last
+// 30 days, in percent, NULL under seven returns. The 30-day
+// traded volume reads market_history over the 30 days ending on
+// the type's newest recorded day.
+func (q *Queries) RefreshMarketStatPackTrends(ctx context.Context, arg RefreshMarketStatPackTrendsParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, refreshMarketStatPackTrends, arg.RegionID, arg.Today)
 	if err != nil {
 		return 0, err
 	}
@@ -3423,6 +4377,24 @@ func (q *Queries) SetStructureName(ctx context.Context, arg SetStructureNamePara
 	return err
 }
 
+const touchOrderLifecycleChecked = `-- name: TouchOrderLifecycleChecked :exec
+UPDATE order_lifecycle SET beaten_checked = $1::timestamptz
+WHERE character_id = $2 AND order_id = $3 AND closed_at IS NULL
+`
+
+type TouchOrderLifecycleCheckedParams struct {
+	CheckedAt   time.Time `json:"checked_at"`
+	CharacterID int64     `json:"character_id"`
+	OrderID     int64     `json:"order_id"`
+}
+
+// The book pass re-checked this order and its verdict stands: only
+// the freshness stamp moves, not the verdict columns.
+func (q *Queries) TouchOrderLifecycleChecked(ctx context.Context, arg TouchOrderLifecycleCheckedParams) error {
+	_, err := q.db.ExecContext(ctx, touchOrderLifecycleChecked, arg.CheckedAt, arg.CharacterID, arg.OrderID)
+	return err
+}
+
 const updateMarketSweepState = `-- name: UpdateMarketSweepState :exec
 UPDATE market_sweep_state
 SET next_page = $1, pages_total = $2, updated_at = $3
@@ -3463,6 +4435,58 @@ func (q *Queries) UpdateOrderLifecycleBeaten(ctx context.Context, arg UpdateOrde
 	_, err := q.db.ExecContext(ctx, updateOrderLifecycleBeaten,
 		arg.BeatenNow,
 		arg.OutbidEvents,
+		arg.CharacterID,
+		arg.OrderID,
+	)
+	return err
+}
+
+const updateOrderLifecycleBook = `-- name: UpdateOrderLifecycleBook :exec
+UPDATE order_lifecycle SET
+    beaten_at = CASE
+        WHEN $1::bigint = 1 AND (beaten_now = 0 OR beaten_at IS NULL) THEN $2::timestamptz
+        WHEN $1::bigint = 0 THEN NULL
+        ELSE beaten_at END,
+    beaten_now      = $1::bigint,
+    outbid_events   = $3::bigint,
+    beating_price   = $4::float8,
+    beating_volume  = $5::bigint,
+    suggested_price = $6::float8,
+    unit_cost       = $7::float8,
+    margin_pct      = $8::float8,
+    tax_rate        = $9::float8,
+    beaten_checked  = $2::timestamptz
+WHERE character_id = $10 AND order_id = $11 AND closed_at IS NULL
+`
+
+type UpdateOrderLifecycleBookParams struct {
+	Beaten         int64           `json:"beaten"`
+	CheckedAt      time.Time       `json:"checked_at"`
+	OutbidEvents   int64           `json:"outbid_events"`
+	BeatingPrice   float64         `json:"beating_price"`
+	BeatingVolume  int64           `json:"beating_volume"`
+	SuggestedPrice float64         `json:"suggested_price"`
+	UnitCost       float64         `json:"unit_cost"`
+	MarginPct      sql.NullFloat64 `json:"margin_pct"`
+	TaxRate        float64         `json:"tax_rate"`
+	CharacterID    int64           `json:"character_id"`
+	OrderID        int64           `json:"order_id"`
+}
+
+// The order-health pass's verdict on one open order's station book
+// (schema 105): beaten state and count, when it was beaten, what
+// beat it, the suggested reprice, and the margin at that price.
+func (q *Queries) UpdateOrderLifecycleBook(ctx context.Context, arg UpdateOrderLifecycleBookParams) error {
+	_, err := q.db.ExecContext(ctx, updateOrderLifecycleBook,
+		arg.Beaten,
+		arg.CheckedAt,
+		arg.OutbidEvents,
+		arg.BeatingPrice,
+		arg.BeatingVolume,
+		arg.SuggestedPrice,
+		arg.UnitCost,
+		arg.MarginPct,
+		arg.TaxRate,
 		arg.CharacterID,
 		arg.OrderID,
 	)

@@ -123,3 +123,11 @@ ORDER BY line_key;
 
 -- name: DeleteBriefingDismissal :exec
 DELETE FROM briefing_dismissals WHERE user_id = $1 AND line_key = $2;
+-- name: PushDeliverySummary :one
+-- The public status summary's push line (core_status.go): how
+-- many browsers are subscribed, how many of them refused their
+-- last send, and when any send was last accepted (epoch: never).
+SELECT COUNT(*)::bigint AS total,
+       COUNT(*) FILTER (WHERE failures > 0)::bigint AS failing,
+       COALESCE(MAX(last_ok_at), 'epoch'::timestamptz)::timestamptz AS last_ok_at
+FROM push_subscriptions;

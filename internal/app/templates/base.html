@@ -26,7 +26,8 @@
 <link rel="stylesheet" href="/static/bg.css?v={{.AssetVersion}}">
 {{if or (eq .NavPage "planner.html") (eq .NavPage "piplanner.html") (eq .NavPage "industry.html")}}<link rel="stylesheet" href="/static/plan.css?v={{.AssetVersion}}">{{end}}
 {{if or (eq .NavPage "contract_search.html") (eq .NavPage "contract_detail.html")}}<link rel="stylesheet" href="/static/contracts.css?v={{.AssetVersion}}">{{end}}
-{{if or (eq .NavPage "admin.html") (eq .NavPage "sync.html")}}<link rel="stylesheet" href="/static/admin.css?v={{.AssetVersion}}">{{end}}
+{{if or (eq .NavPage "market.html") (eq .NavPage "market_trends.html") (eq .NavPage "market_lp.html") (eq .NavPage "market_baskets.html") (eq .NavPage "market_basket.html") (eq .NavPage "profit.html") (eq .NavPage "orders.html")}}<link rel="stylesheet" href="/static/market.css?v={{.AssetVersion}}">{{end}}
+{{if or (eq .NavPage "admin.html") (eq .NavPage "sync.html") (eq .NavPage "admin_notices.html")}}<link rel="stylesheet" href="/static/admin.css?v={{.AssetVersion}}">{{end}}
 {{if or (eq .NavPage "home.html") (eq .NavPage "market_tradeideas.html") (eq .NavPage "link.html")}}<link rel="stylesheet" href="/static/tradeideas.css?v={{.AssetVersion}}">{{end}}
 {{if eq .NavPage "link.html"}}<link rel="stylesheet" href="/static/link.css?v={{.AssetVersion}}">{{end}}
 {{if eq .NavPage "market_appraise.html"}}<link rel="stylesheet" href="/static/appraisal.css?v={{.AssetVersion}}">{{end}}
@@ -200,6 +201,7 @@
 {{template "pagetitle" .}}
 {{template "pagetabs" .}}
   <div class="page-body">
+{{with .Banners}}{{template "noticebanners" .}}{{end}}
 {{if .Notice}}<p class="notice" role="status">{{.Notice}}</p>{{end}}
 {{template "content" .}}
   </div>
@@ -258,8 +260,10 @@
 {{if or (eq .NavPage "scan.html") (eq .NavPage "pilot.html")}}<script src="/static/scans.js?v={{.AssetVersion}}" defer></script>{{end}}{{if eq .NavPage "intel_workbench.html"}}<script src="/static/workbench.js?v={{.AssetVersion}}" defer></script>{{end}}
 {{if or (eq .NavPage "channel.html") (eq .NavPage "feed.html") (eq .NavPage "intel_workbench.html")}}<script src="/static/channels.js?v={{.AssetVersion}}" defer></script>{{end}}
 {{if or (eq .NavPage "contract_search.html") (eq .NavPage "contract_detail.html")}}<script src="/static/contracts.js?v={{.AssetVersion}}" defer></script>{{end}}
+{{if eq .NavPage "market.html"}}<script src="/static/market.js?v={{.AssetVersion}}" defer></script>{{end}}
 {{range .Scripts}}<script src="{{.}}?v={{$.AssetVersion}}" defer></script>{{end}}
 {{if .NotifySettings}}<script src="/static/push.js?v={{.AssetVersion}}" defer></script>{{end}}
+{{if .Banners}}<script src="/static/notices.js?v={{.AssetVersion}}" defer></script>{{end}}
 {{if .LoggedIn}}
 <div class="modal-backdrop modal-top quickjump" id="quickjump" hidden>
   <div class="modal quickjump-panel" role="dialog" aria-modal="true" aria-label="Quick jump">

@@ -49,6 +49,9 @@ type ordersView struct {
 	// active character, computed from order_lifecycle rows only.
 	LifecycleSummary *orderLifecycleSummary
 	LifecycleRows    []orderLifecycleRow
+	// Beaten: the account's open orders beaten at their own
+	// station (schema 105), every character, newest first.
+	Beaten []beatenRow
 }
 
 // orderLifecycleSummary is the summary strip for one
@@ -321,6 +324,7 @@ func (app *mod) handleOrders(w http.ResponseWriter, r *http.Request) {
 	// Order history: stored lifecycle rows for the active
 	// character (see buildOrderLifecycle -- cache-only).
 	view.LifecycleSummary, view.LifecycleRows = app.buildOrderLifecycle(ctx, active.CharacterID)
+	view.Beaten = app.buildBeatenOrders(ctx, app.deps.UserID(ctx))
 
 	app.deps.Render(ctx, w, http.StatusOK, "orders.html", data)
 }

@@ -159,8 +159,8 @@ func TestModuleNavKeepsItsPlace(t *testing.T) {
 	// Appraisal sits under Tools, after the Item Browser.
 	follows("tools", "/market/appraise/", "/items/")
 	for section, want := range map[string][]string{
-		"pilot":  {"/character/", "/characters/", "/skills/plans", "/assets/", "/wallet/", "/mail/", "/calendar/", "/contacts/", "/killmails/"},
-		"market": {"/market/", "/market/scanner/", "/market/ideas/", "/market/tradefinder/", "/market/leaderboard/", "/market/restock/", "/orders/", "/contracts/", "/contracts/search/"},
+		"pilot":  {"/character/", "/characters/", "/skills/plans", "/assets/", "/wallet/", "/mail/", "/calendar/", "/contacts/", "/profit/", "/killmails/"},
+		"market": {"/market/", "/market/scanner/", "/market/ideas/", "/market/tradefinder/", "/market/leaderboard/", "/market/restock/", "/orders/", "/contracts/", "/contracts/search/", "/market/trends/", "/market/lp/", "/market/baskets/"},
 		"tools":  {"/items/", "/market/appraise/"},
 	} {
 		var got []string
@@ -227,7 +227,7 @@ func TestModuleDeclaredCatalogsKeepTheirOrder(t *testing.T) {
 	for _, k := range notifyKindList() {
 		kinds = append(kinds, k.ID)
 	}
-	wantKinds := "watch skill mail calendar op op_reminder srp_new srp_done killmail pi industry"
+	wantKinds := "watch market_change skill mail calendar op op_reminder srp_new srp_done killmail pi industry notice"
 	if got := strings.Join(kinds, " "); got != wantKinds {
 		t.Errorf("notification kinds = %q, want %q", got, wantKinds)
 	}

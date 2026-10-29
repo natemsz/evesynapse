@@ -4,6 +4,7 @@ package app
 // worker, not merely that the process answers.
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -119,5 +120,77 @@ func TestHTTPServerBoundsEveryPhase(t *testing.T) {
 		if d <= 0 {
 			t.Errorf("%s is unset: that phase of a request could hang forever", name)
 		}
+	}
+}
+
+// The public service summary is open without a session and says,
+// for each service, a state and an age and nothing else: no error
+// text, hosts, versions or counts, healthy or not.
+func TestStatusSummaryIsPublicAndCarriesOnlyStateAndAge(t *testing.T) {
+	app, conn, _ := buildCorpTestApp(t, &countingTransport{})
+	app.cfg.statusOrigin = "https://status.example.com"
+
+	check := func(phase string) map[string]any {
+		t.Helper()
+		app.status.mu.Lock()
+		app.status.body = nil
+		app.status.mu.Unlock()
+		req := httptest.NewRequest(http.MethodGet, statusPath, nil)
+		rec := httptest.NewRecorder()
+		app.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("%s: status %d without a session, want 200", phase, rec.Code)
+		}
+		if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "https://status.example.com" {
+			t.Errorf("%s: Access-Control-Allow-Origin %q, want the status page's origin only", phase, got)
+		}
+		if rec.Header().Get("Set-Cookie") != "" {
+			t.Errorf("%s: the summary set a cookie", phase)
+		}
+		var top map[string]any
+		if err := json.Unmarshal(rec.Body.Bytes(), &top); err != nil {
+			t.Fatalf("%s: body %q: %v", phase, rec.Body.String(), err)
+		}
+		states := map[any]bool{statusOK: true, statusDegraded: true, statusDown: true}
+		for k := range top {
+			if k != "state" && k != "checked_at" && k != "services" {
+				t.Errorf("%s: unexpected top-level field %q", phase, k)
+			}
+		}
+		if !states[top["state"]] {
+			t.Errorf("%s: overall state %v", phase, top["state"])
+		}
+		services, _ := top["services"].([]any)
+		if len(services) == 0 {
+			t.Fatalf("%s: no services in %s", phase, rec.Body.String())
+		}
+		for _, raw := range services {
+			svc, _ := raw.(map[string]any)
+			for k, v := range svc {
+				switch k {
+				case "id":
+					if _, ok := v.(string); !ok {
+						t.Errorf("%s: id %v", phase, v)
+					}
+				case "state":
+					if !states[v] {
+						t.Errorf("%s: state %v", phase, v)
+					}
+				case "age":
+					if _, ok := v.(float64); v != nil && !ok {
+						t.Errorf("%s: age %v", phase, v)
+					}
+				default:
+					t.Errorf("%s: service field %q leaks beyond state and age", phase, k)
+				}
+			}
+		}
+		return top
+	}
+
+	check("healthy")
+	conn.Close()
+	if top := check("database closed"); top["state"] != statusDown {
+		t.Errorf("database closed: overall state %v, want down", top["state"])
 	}
 }

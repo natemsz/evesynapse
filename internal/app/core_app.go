@@ -287,6 +287,7 @@ type Application struct {
 	activity    activityLog
 	admins      adminOwners
 	notifyQuiet notifyQuietLog // which accounts' data the notification pass has read lately (notify_quiet.go)
+	notices     noticeState    // global notices: the banner cache and the write lock (notices.go)
 	// foresight is what warming on game events keeps between cycles
 	// (foresight.go), and books the order books fetched lately
 	// (market_book.go).
@@ -304,6 +305,10 @@ type Application struct {
 	anonThrottleOnce sync.Once
 	anonPageThrottle *anonThrottle
 	anonSimThrottle  *anonThrottle
+
+	// The public service summary's cache and throttle
+	// (core_status.go).
+	status statusCache
 
 	// The worker's user-visible status (Sync/Admin pages).
 	workerMu sync.Mutex
@@ -565,6 +570,8 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	r.Use(app.countRequests)
 	r.Use(middleware.Recoverer)
 	r.Use(app.securityHeaders)
+	// The market API's own host answers /api/ only (market_api.go).
+	r.Use(app.marketAPIHostGate)
 	r.Use(navStateMiddleware)
 	// Pages, the stylesheet and the scripts are text and compress to
 	// a fraction of their size; fonts and images are left alone.
@@ -589,6 +596,10 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 		r.Post("/briefing/restore", app.handleBriefingRestore)
 	})
 	r.Get("/healthz", app.handleHealthz)
+	// The market API (market_api.go): read-only, key-gated, rate-limited.
+	app.mountMarketAPI(r)
+	// The public service summary the status page reads (core_status.go).
+	r.Get(statusPath, app.handleStatus)
 	r.Get("/favicon.ico", handleFavicon)
 	// The push service worker, from the root so it can act for the
 	// whole site (notify_push.go).
@@ -669,6 +680,11 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 		r.Get("/suggest", app.handleCharacterSuggest)
 		r.Post("/accounts/remove", app.handleAdminAccountRemove)
 		r.Post("/market-anon", app.handleAdminMarketAnon)
+		// The Notices tab (notices.go): global banners and their audit trail.
+		r.Get("/notices/", app.handleAdminNotices)
+		r.Post("/notices/save", app.handleAdminNoticeSave)
+		r.Post("/notices/retire", app.handleAdminNoticeRetire)
+		r.Post("/notices/preview", app.handleAdminNoticePreview)
 	})
 
 	r.Route("/corporations", func(r chi.Router) {
@@ -677,6 +693,11 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 		r.Get("/settings/", app.handleCorpSettings)
 		r.Post("/settings/save", app.handleCorpSettingsSave)
 		r.Get("/killmails/", app.handleCorpKillmails)
+	})
+
+	r.Route("/profit", func(r chi.Router) {
+		r.Use(app.requireAuth)
+		r.Get("/", app.handleProfit)
 	})
 
 	r.Route("/assets", func(r chi.Router) {
@@ -695,6 +716,11 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	// tab; the old address redirects there.
 	r.With(app.requireAuth).Get("/settings", app.handleSettings)
 	r.With(app.requireAuth).Post("/settings/theme", app.handleSettingsThemeSave)
+	r.With(app.requireAuth).Post("/settings/api-keys", app.handleAPIKeyCreate)
+	r.With(app.requireAuth).Post("/settings/api-keys/revoke", app.handleAPIKeyRevoke)
+	// A signed-in visitor dismissing a global notice (notices.go);
+	// anonymous visitors keep theirs in a cookie only.
+	r.With(app.requireAuth).Post("/notices/dismiss", app.handleNoticeDismiss)
 
 	// Notifications (notify_pages.go): the list, and the two actions
 	// that change what is unread.
@@ -749,6 +775,15 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 		r.With(anonPages).Get("/suggest", app.handleMarketSuggest)
 		r.With(anonPages).Get("/history-fragment", app.handleMarketHistoryFragment)
 		r.With(anonPages).Get("/trader-fragment", app.handleMarketTraderFragment)
+		r.With(anonPages).Get("/browse-fragment", app.handleMarketBrowseFragment)
+		r.With(anonPages).Get("/browse-children", app.handleMarketBrowseChildren)
+		r.With(anonPages).Get("/trends/", app.handleMarketTrends)
+		r.With(anonPages).Get("/lp/", app.handleMarketLP)
+		r.With(anonPages).Get("/baskets/", app.handleMarketBaskets)
+		r.With(anonPages).Get("/baskets/{basketID}/", app.handleMarketBasket)
+		r.With(app.requireAuth).Post("/baskets/", app.handleMarketBasketCreate)
+		r.With(app.requireAuth).Post("/baskets/{basketID}/edit", app.handleMarketBasketEdit)
+		r.With(app.requireAuth).Post("/baskets/{basketID}/delete", app.handleMarketBasketDelete)
 		r.With(app.requireAuth).Post("/watch", app.handleMarketWatch)
 	})
 

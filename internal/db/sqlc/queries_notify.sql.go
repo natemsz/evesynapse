@@ -480,6 +480,29 @@ func (q *Queries) PruneNotifications(ctx context.Context, arg PruneNotifications
 	return err
 }
 
+const pushDeliverySummary = `-- name: PushDeliverySummary :one
+SELECT COUNT(*)::bigint AS total,
+       COUNT(*) FILTER (WHERE failures > 0)::bigint AS failing,
+       COALESCE(MAX(last_ok_at), 'epoch'::timestamptz)::timestamptz AS last_ok_at
+FROM push_subscriptions
+`
+
+type PushDeliverySummaryRow struct {
+	Total    int64     `json:"total"`
+	Failing  int64     `json:"failing"`
+	LastOkAt time.Time `json:"last_ok_at"`
+}
+
+// The public status summary's push line (core_status.go): how
+// many browsers are subscribed, how many of them refused their
+// last send, and when any send was last accepted (epoch: never).
+func (q *Queries) PushDeliverySummary(ctx context.Context) (PushDeliverySummaryRow, error) {
+	row := q.db.QueryRowContext(ctx, pushDeliverySummary)
+	var i PushDeliverySummaryRow
+	err := row.Scan(&i.Total, &i.Failing, &i.LastOkAt)
+	return i, err
+}
+
 const touchNotificationSeen = `-- name: TouchNotificationSeen :exec
 UPDATE notification_seen SET seen_at = $1
 WHERE user_id = $2

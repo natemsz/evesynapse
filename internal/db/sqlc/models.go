@@ -111,6 +111,16 @@ type AbyssalSighting struct {
 	SaleProbeStatus sql.NullInt64   `json:"sale_probe_status"`
 }
 
+type AbyssalWant struct {
+	ItemID      int64        `json:"item_id"`
+	TypeID      int64        `json:"type_id"`
+	KeyID       int64        `json:"key_id"`
+	RequestedAt time.Time    `json:"requested_at"`
+	State       string       `json:"state"`
+	Attempts    int64        `json:"attempts"`
+	TriedAt     sql.NullTime `json:"tried_at"`
+}
+
 type AccountLinkChoice struct {
 	UserID    int64     `json:"user_id"`
 	Choice    string    `json:"choice"`
@@ -132,6 +142,25 @@ type AllianceRecord struct {
 	NotedAt    sql.NullTime `json:"noted_at"`
 }
 
+type ApiKey struct {
+	ID         int64        `json:"id"`
+	UserID     int64        `json:"user_id"`
+	Name       string       `json:"name"`
+	Prefix     string       `json:"prefix"`
+	KeyHash    string       `json:"key_hash"`
+	DailyQuota int64        `json:"daily_quota"`
+	CreatedAt  time.Time    `json:"created_at"`
+	LastUsedAt sql.NullTime `json:"last_used_at"`
+	RevokedAt  sql.NullTime `json:"revoked_at"`
+}
+
+type ApiKeyUsage struct {
+	KeyID    int64  `json:"key_id"`
+	Day      string `json:"day"`
+	Requests int64  `json:"requests"`
+	Refused  int64  `json:"refused"`
+}
+
 type AppraisalAnonymousOwner struct {
 	ID     int64 `json:"id"`
 	UserID int64 `json:"user_id"`
@@ -146,6 +175,15 @@ type AppraisalCookieSecret struct {
 type BlueprintCopyMedian struct {
 	TypeID      int64     `json:"type_id"`
 	Runs        int64     `json:"runs"`
+	MedianPrice float64   `json:"median_price"`
+	SampleCount int64     `json:"sample_count"`
+	ComputedAt  time.Time `json:"computed_at"`
+}
+
+type BlueprintResearchMedian struct {
+	TypeID      int64     `json:"type_id"`
+	Me          int64     `json:"me"`
+	Te          int64     `json:"te"`
 	MedianPrice float64   `json:"median_price"`
 	SampleCount int64     `json:"sample_count"`
 	ComputedAt  time.Time `json:"computed_at"`
@@ -361,6 +399,42 @@ type ForesightTarget struct {
 	WarmedAt    sql.NullTime `json:"warmed_at"`
 	Calls       int64        `json:"calls"`
 	OpenedAt    sql.NullTime `json:"opened_at"`
+}
+
+type GlobalNotice struct {
+	ID           int64        `json:"id"`
+	Title        string       `json:"title"`
+	Severity     string       `json:"severity"`
+	BodyMd       string       `json:"body_md"`
+	BodyHtml     string       `json:"body_html"`
+	Urgent       bool         `json:"urgent"`
+	UrgentSentAt sql.NullTime `json:"urgent_sent_at"`
+	StartsAt     time.Time    `json:"starts_at"`
+	EndsAt       time.Time    `json:"ends_at"`
+	RetiredAt    sql.NullTime `json:"retired_at"`
+	CreatedBy    int64        `json:"created_by"`
+	CreatedAt    time.Time    `json:"created_at"`
+	UpdatedAt    time.Time    `json:"updated_at"`
+}
+
+type GlobalNoticeAudit struct {
+	ID            int64     `json:"id"`
+	NoticeID      int64     `json:"notice_id"`
+	Action        string    `json:"action"`
+	UserID        int64     `json:"user_id"`
+	CharacterID   int64     `json:"character_id"`
+	CharacterName string    `json:"character_name"`
+	Title         string    `json:"title"`
+	Severity      string    `json:"severity"`
+	BodyMd        string    `json:"body_md"`
+	EndsAt        time.Time `json:"ends_at"`
+	At            time.Time `json:"at"`
+}
+
+type GlobalNoticeDismissal struct {
+	UserID      int64     `json:"user_id"`
+	NoticeID    int64     `json:"notice_id"`
+	DismissedAt time.Time `json:"dismissed_at"`
 }
 
 type GlobalSnapshot struct {
@@ -635,6 +709,58 @@ type KillmailDetail struct {
 	FetchedAt   time.Time `json:"fetched_at"`
 }
 
+type LedgerJob struct {
+	OwnerKind     string    `json:"owner_kind"`
+	OwnerID       int64     `json:"owner_id"`
+	JobID         int64     `json:"job_id"`
+	At            time.Time `json:"at"`
+	ActivityID    int64     `json:"activity_id"`
+	ProductTypeID int64     `json:"product_type_id"`
+	Units         int64     `json:"units"`
+	OutputValue   float64   `json:"output_value"`
+	MaterialsCost float64   `json:"materials_cost"`
+	Priced        bool      `json:"priced"`
+}
+
+type LedgerJournal struct {
+	OwnerKind     string    `json:"owner_kind"`
+	OwnerID       int64     `json:"owner_id"`
+	EntryID       int64     `json:"entry_id"`
+	At            time.Time `json:"at"`
+	RefType       string    `json:"ref_type"`
+	Activity      string    `json:"activity"`
+	Amount        float64   `json:"amount"`
+	FirstPartyID  int64     `json:"first_party_id"`
+	SecondPartyID int64     `json:"second_party_id"`
+	ContextID     int64     `json:"context_id"`
+	ContextType   string    `json:"context_type"`
+}
+
+type LedgerState struct {
+	OwnerKind   string       `json:"owner_kind"`
+	OwnerID     int64        `json:"owner_id"`
+	JournalAt   sql.NullTime `json:"journal_at"`
+	TxnsAt      sql.NullTime `json:"txns_at"`
+	JobsAt      sql.NullTime `json:"jobs_at"`
+	JournalHash string       `json:"journal_hash"`
+	TxnsHash    string       `json:"txns_hash"`
+	JobsHash    string       `json:"jobs_hash"`
+	FoldedAt    sql.NullTime `json:"folded_at"`
+}
+
+type LedgerTxn struct {
+	OwnerKind     string    `json:"owner_kind"`
+	OwnerID       int64     `json:"owner_id"`
+	TransactionID int64     `json:"transaction_id"`
+	At            time.Time `json:"at"`
+	TypeID        int64     `json:"type_id"`
+	Quantity      int64     `json:"quantity"`
+	UnitPrice     float64   `json:"unit_price"`
+	IsBuy         bool      `json:"is_buy"`
+	LocationID    int64     `json:"location_id"`
+	JournalRefID  int64     `json:"journal_ref_id"`
+}
+
 type LocalFitting struct {
 	ID           int64        `json:"id"`
 	UserID       int64        `json:"user_id"`
@@ -654,6 +780,52 @@ type LocalFitting struct {
 	LastViewedAt sql.NullTime `json:"last_viewed_at"`
 }
 
+type LpOffer struct {
+	CorporationID int64   `json:"corporation_id"`
+	OfferID       int64   `json:"offer_id"`
+	TypeID        int64   `json:"type_id"`
+	Quantity      int64   `json:"quantity"`
+	LpCost        int64   `json:"lp_cost"`
+	IskCost       float64 `json:"isk_cost"`
+	AkCost        int64   `json:"ak_cost"`
+}
+
+type LpOfferRequirement struct {
+	CorporationID int64 `json:"corporation_id"`
+	OfferID       int64 `json:"offer_id"`
+	TypeID        int64 `json:"type_id"`
+	Quantity      int64 `json:"quantity"`
+}
+
+type LpOfferValue struct {
+	RegionID       int64           `json:"region_id"`
+	CorporationID  int64           `json:"corporation_id"`
+	OfferID        int64           `json:"offer_id"`
+	TypeID         int64           `json:"type_id"`
+	Quantity       int64           `json:"quantity"`
+	LpCost         int64           `json:"lp_cost"`
+	IskCost        float64         `json:"isk_cost"`
+	RequiredCost   float64         `json:"required_cost"`
+	UnitSell       float64         `json:"unit_sell"`
+	UnitBuy        float64         `json:"unit_buy"`
+	IskPerLpSell   sql.NullFloat64 `json:"isk_per_lp_sell"`
+	IskPerLpBuy    sql.NullFloat64 `json:"isk_per_lp_buy"`
+	UnpricedReason string          `json:"unpriced_reason"`
+	DailyVolume    float64         `json:"daily_volume"`
+	SellChg7d      sql.NullFloat64 `json:"sell_chg_7d"`
+	Volatility30d  sql.NullFloat64 `json:"volatility_30d"`
+	PricesAt       sql.NullTime    `json:"prices_at"`
+	UpdatedAt      time.Time       `json:"updated_at"`
+}
+
+type LpStoreCorp struct {
+	CorporationID int64        `json:"corporation_id"`
+	Name          string       `json:"name"`
+	State         string       `json:"state"`
+	OfferCount    int64        `json:"offer_count"`
+	FetchedAt     sql.NullTime `json:"fetched_at"`
+}
+
 type MapLayer struct {
 	ID      int32     `json:"id"`
 	Sources string    `json:"sources"`
@@ -671,6 +843,31 @@ type MapUniverse struct {
 	BuiltAt time.Time `json:"built_at"`
 }
 
+type MarketBasket struct {
+	ID        int64         `json:"id"`
+	UserID    sql.NullInt64 `json:"user_id"`
+	PresetKey string        `json:"preset_key"`
+	Name      string        `json:"name"`
+	RegionID  int64         `json:"region_id"`
+	CreatedAt time.Time     `json:"created_at"`
+	UpdatedAt time.Time     `json:"updated_at"`
+}
+
+type MarketBasketItem struct {
+	BasketID int64 `json:"basket_id"`
+	TypeID   int64 `json:"type_id"`
+	Quantity int64 `json:"quantity"`
+}
+
+type MarketBasketValuesDaily struct {
+	BasketID    int64   `json:"basket_id"`
+	Day         string  `json:"day"`
+	ValueSell   float64 `json:"value_sell"`
+	ValueBuy    float64 `json:"value_buy"`
+	PricedItems int64   `json:"priced_items"`
+	ItemCount   int64   `json:"item_count"`
+}
+
 type MarketBookOrder struct {
 	RegionID     int64     `json:"region_id"`
 	TypeID       int64     `json:"type_id"`
@@ -681,6 +878,17 @@ type MarketBookOrder struct {
 	LocationID   int64     `json:"location_id"`
 	SystemID     int64     `json:"system_id"`
 	UpdatedAt    time.Time `json:"updated_at"`
+}
+
+type MarketChange struct {
+	RegionID   int64     `json:"region_id"`
+	TypeID     int64     `json:"type_id"`
+	Day        string    `json:"day"`
+	Kind       string    `json:"kind"`
+	Before     float64   `json:"before"`
+	After      float64   `json:"after"`
+	Pct        float64   `json:"pct"`
+	DetectedAt time.Time `json:"detected_at"`
 }
 
 type MarketFetchState struct {
@@ -709,20 +917,37 @@ type MarketHistoryWant struct {
 }
 
 type MarketRegionStat struct {
-	RegionID       int64     `json:"region_id"`
-	TypeID         int64     `json:"type_id"`
-	BestSell       float64   `json:"best_sell"`
-	TypicalSell    float64   `json:"typical_sell"`
-	SellBand       float64   `json:"sell_band"`
-	BestBuy        float64   `json:"best_buy"`
-	TypicalBuy     float64   `json:"typical_buy"`
-	BuyBand        float64   `json:"buy_band"`
-	SellOrders     int64     `json:"sell_orders"`
-	BuyOrders      int64     `json:"buy_orders"`
-	SellVolume     int64     `json:"sell_volume"`
-	BuyVolume      int64     `json:"buy_volume"`
-	UpdatedAt      time.Time `json:"updated_at"`
-	AvgDailyVolume float64   `json:"avg_daily_volume"`
+	RegionID          int64           `json:"region_id"`
+	TypeID            int64           `json:"type_id"`
+	BestSell          float64         `json:"best_sell"`
+	TypicalSell       float64         `json:"typical_sell"`
+	SellBand          float64         `json:"sell_band"`
+	BestBuy           float64         `json:"best_buy"`
+	TypicalBuy        float64         `json:"typical_buy"`
+	BuyBand           float64         `json:"buy_band"`
+	SellOrders        int64           `json:"sell_orders"`
+	BuyOrders         int64           `json:"buy_orders"`
+	SellVolume        int64           `json:"sell_volume"`
+	BuyVolume         int64           `json:"buy_volume"`
+	UpdatedAt         time.Time       `json:"updated_at"`
+	AvgDailyVolume    float64         `json:"avg_daily_volume"`
+	SellAvg           float64         `json:"sell_avg"`
+	SellMax           float64         `json:"sell_max"`
+	SellP5            float64         `json:"sell_p5"`
+	SellStddev        float64         `json:"sell_stddev"`
+	BuyAvg            float64         `json:"buy_avg"`
+	BuyMin            float64         `json:"buy_min"`
+	BuyP5             float64         `json:"buy_p5"`
+	BuyStddev         float64         `json:"buy_stddev"`
+	SellChg1d         sql.NullFloat64 `json:"sell_chg_1d"`
+	SellChg7d         sql.NullFloat64 `json:"sell_chg_7d"`
+	SellChg30d        sql.NullFloat64 `json:"sell_chg_30d"`
+	BuyChg1d          sql.NullFloat64 `json:"buy_chg_1d"`
+	BuyChg7d          sql.NullFloat64 `json:"buy_chg_7d"`
+	BuyChg30d         sql.NullFloat64 `json:"buy_chg_30d"`
+	Volatility30d     sql.NullFloat64 `json:"volatility_30d"`
+	HistoryDays       int64           `json:"history_days"`
+	AvgDailyVolume30d float64         `json:"avg_daily_volume_30d"`
 }
 
 type MarketRegionStatsDaily struct {
@@ -739,6 +964,14 @@ type MarketRegionStatsDaily struct {
 	BuyOrders   int64   `json:"buy_orders"`
 	SellVolume  int64   `json:"sell_volume"`
 	BuyVolume   int64   `json:"buy_volume"`
+	SellAvg     float64 `json:"sell_avg"`
+	SellMax     float64 `json:"sell_max"`
+	SellP5      float64 `json:"sell_p5"`
+	SellStddev  float64 `json:"sell_stddev"`
+	BuyAvg      float64 `json:"buy_avg"`
+	BuyMin      float64 `json:"buy_min"`
+	BuyP5       float64 `json:"buy_p5"`
+	BuyStddev   float64 `json:"buy_stddev"`
 }
 
 type MarketStationLeaderboard struct {
@@ -781,6 +1014,14 @@ type MarketStatsFallback struct {
 	OrdersetID  int64     `json:"orderset_id"`
 	SourceAsof  time.Time `json:"source_asof"`
 	FetchedAt   time.Time `json:"fetched_at"`
+	WavgSell    float64   `json:"wavg_sell"`
+	MinSell     float64   `json:"min_sell"`
+	MaxSell     float64   `json:"max_sell"`
+	StddevSell  float64   `json:"stddev_sell"`
+	WavgBuy     float64   `json:"wavg_buy"`
+	MinBuy      float64   `json:"min_buy"`
+	MaxBuy      float64   `json:"max_buy"`
+	StddevBuy   float64   `json:"stddev_buy"`
 }
 
 type MarketStatsFallbackMetum struct {
@@ -896,22 +1137,30 @@ type OrderHealth struct {
 }
 
 type OrderLifecycle struct {
-	ID               sql.NullInt64 `json:"id"`
-	CharacterID      int64         `json:"character_id"`
-	OrderID          int64         `json:"order_id"`
-	TypeID           int64         `json:"type_id"`
-	LocationID       int64         `json:"location_id"`
-	RegionID         int64         `json:"region_id"`
-	IsBuyOrder       int64         `json:"is_buy_order"`
-	ListedPrice      float64       `json:"listed_price"`
-	VolumeTotal      int64         `json:"volume_total"`
-	VolumeRemainLast int64         `json:"volume_remain_last"`
-	FirstSeenAt      time.Time     `json:"first_seen_at"`
-	LastSeenAt       time.Time     `json:"last_seen_at"`
-	ClosedAt         sql.NullTime  `json:"closed_at"`
-	CloseKind        string        `json:"close_kind"`
-	OutbidEvents     int64         `json:"outbid_events"`
-	BeatenNow        int64         `json:"beaten_now"`
+	ID               sql.NullInt64   `json:"id"`
+	CharacterID      int64           `json:"character_id"`
+	OrderID          int64           `json:"order_id"`
+	TypeID           int64           `json:"type_id"`
+	LocationID       int64           `json:"location_id"`
+	RegionID         int64           `json:"region_id"`
+	IsBuyOrder       int64           `json:"is_buy_order"`
+	ListedPrice      float64         `json:"listed_price"`
+	VolumeTotal      int64           `json:"volume_total"`
+	VolumeRemainLast int64           `json:"volume_remain_last"`
+	FirstSeenAt      time.Time       `json:"first_seen_at"`
+	LastSeenAt       time.Time       `json:"last_seen_at"`
+	ClosedAt         sql.NullTime    `json:"closed_at"`
+	CloseKind        string          `json:"close_kind"`
+	OutbidEvents     int64           `json:"outbid_events"`
+	BeatenNow        int64           `json:"beaten_now"`
+	BeatenAt         sql.NullTime    `json:"beaten_at"`
+	BeatingPrice     float64         `json:"beating_price"`
+	BeatingVolume    int64           `json:"beating_volume"`
+	SuggestedPrice   float64         `json:"suggested_price"`
+	UnitCost         float64         `json:"unit_cost"`
+	MarginPct        sql.NullFloat64 `json:"margin_pct"`
+	TaxRate          float64         `json:"tax_rate"`
+	BeatenChecked    sql.NullTime    `json:"beaten_checked"`
 }
 
 type OrgGroup struct {
@@ -1002,6 +1251,15 @@ type PlanetName struct {
 	Name       string       `json:"name"`
 	State      string       `json:"state"`
 	ResolvedAt sql.NullTime `json:"resolved_at"`
+}
+
+type ProfitDaily struct {
+	OwnerKind string  `json:"owner_kind"`
+	OwnerID   int64   `json:"owner_id"`
+	Day       string  `json:"day"`
+	Activity  string  `json:"activity"`
+	Income    float64 `json:"income"`
+	Costs     float64 `json:"costs"`
 }
 
 type PubContract struct {
@@ -1611,6 +1869,13 @@ type SystemSovereignty struct {
 	UpdatedAt     time.Time `json:"updated_at"`
 }
 
+type TradeFoldCheckpoint struct {
+	OwnerKind    string    `json:"owner_kind"`
+	OwnerID      int64     `json:"owner_id"`
+	TypeID       int64     `json:"type_id"`
+	CheckpointAt time.Time `json:"checkpoint_at"`
+}
+
 type TradeIdea struct {
 	ID    int64          `json:"id"`
 	Body  string         `json:"body"`
@@ -1623,6 +1888,38 @@ type TradeIdeasAttempt struct {
 	ID          int64     `json:"id"`
 	AttemptedAt time.Time `json:"attempted_at"`
 	Failures    int32     `json:"failures"`
+}
+
+type TradeOpenLot struct {
+	OwnerKind string  `json:"owner_kind"`
+	OwnerID   int64   `json:"owner_id"`
+	TypeID    int64   `json:"type_id"`
+	Seq       int64   `json:"seq"`
+	Quantity  int64   `json:"quantity"`
+	UnitPrice float64 `json:"unit_price"`
+}
+
+type TradePosition struct {
+	OwnerKind string    `json:"owner_kind"`
+	OwnerID   int64     `json:"owner_id"`
+	TypeID    int64     `json:"type_id"`
+	Quantity  int64     `json:"quantity"`
+	Cost      float64   `json:"cost"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+type TradeRealized struct {
+	OwnerKind        string  `json:"owner_kind"`
+	OwnerID          int64   `json:"owner_id"`
+	TransactionID    int64   `json:"transaction_id"`
+	Day              string  `json:"day"`
+	TypeID           int64   `json:"type_id"`
+	Quantity         int64   `json:"quantity"`
+	Revenue          float64 `json:"revenue"`
+	Cost             float64 `json:"cost"`
+	UnmatchedQty     int64   `json:"unmatched_qty"`
+	UnmatchedRevenue float64 `json:"unmatched_revenue"`
+	Planetary        bool    `json:"planetary"`
 }
 
 type TrueValue struct {

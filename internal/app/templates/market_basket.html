@@ -1,0 +1,104 @@
+{{define "title"}}{{with .MarketBaskets}}{{with .Basket}}{{.Name}}{{end}}{{end}} · Market Baskets{{end}}
+{{define "pagetitle"}}<h1><span class="gt">{{with .MarketBaskets}}{{with .Basket}}{{.Name}}{{end}}{{end}}</span></h1>{{end}}
+{{define "pagetabs"}}{{template "sectiontabs" .}}{{end}}
+{{define "content"}}
+
+{{if .Error}}<p class="err">{{.Error}}</p>{{end}}
+
+{{with .MarketBaskets}}
+{{$v := .}}
+<p><small><a href="/market/baskets/">All baskets</a> · {{.Basket.Items}} items priced in {{.Basket.RegionName}}{{if .Basket.Preset}} · preset{{end}}</small></p>
+
+<div class="kpis kpis-small">
+  <div class="kpi"><span class="kpi-k">Worth now</span><span class="kpi-v">{{if .Value}}{{.Value}} <small>ISK</small>{{else}}—{{end}}</span><span class="kpi-sub">At typical sell{{if .Basket.Partial}}, some items unpriced{{end}}</span></div>
+  <div class="kpi"><span class="kpi-k">Sell now</span><span class="kpi-v">{{if .ValueBuy}}{{.ValueBuy}} <small>ISK</small>{{else}}—{{end}}</span><span class="kpi-sub">At typical buy</span></div>
+  <div class="kpi"><span class="kpi-k">1 day</span><span class="kpi-v">{{if .Chg1.Text}}<span class="mt-chg {{.Chg1.Dir}}">{{.Chg1.Text}}</span>{{else}}—{{end}}</span></div>
+  <div class="kpi"><span class="kpi-k">7 days</span><span class="kpi-v">{{if .Chg7.Text}}<span class="mt-chg {{.Chg7.Dir}}">{{.Chg7.Text}}</span>{{else}}—{{end}}</span></div>
+  <div class="kpi"><span class="kpi-k">30 days</span><span class="kpi-v">{{if .Chg30.Text}}<span class="mt-chg {{.Chg30.Dir}}">{{.Chg30.Text}}</span>{{else}}—{{end}}</span></div>
+</div>
+
+<section class="foldable">
+<h3>Value over time</h3>
+{{with .Chart}}
+<div class="mt-chart">
+  <div class="chart-legend">
+    <span class="legend-item"><span class="legend-swatch mt-swatch-sell" aria-hidden="true"></span>At typical sell</span>
+    <span class="legend-item"><span class="legend-swatch mt-swatch-buy" aria-hidden="true"></span>At typical buy</span>
+    <span class="legend-note">{{.Days}} days · {{.Low}} to {{.High}} ISK</span>
+  </div>
+  <svg viewBox="0 0 {{.Width}} {{.Height}}" width="100%" role="img" aria-label="Basket value by day, {{.First}} to {{.Last}}" preserveAspectRatio="none">
+    {{if .SellPoints}}<polyline class="mt-line-sell" points="{{.SellPoints}}"/>{{end}}
+    {{if .BuyPoints}}<polyline class="mt-line-buy" points="{{.BuyPoints}}"/>{{end}}
+  </svg>
+  <div class="mt-chart-dates"><small>{{.First}}</small><small>{{.Last}}</small></div>
+</div>
+{{else}}
+<p><small>The value history fills in as {{.Basket.RegionName}} is swept, one point a day.</small></p>
+{{end}}
+</section>
+
+<nav class="mt-modes" aria-label="Period">{{range .Periods}}<a href="{{.Href}}"{{if .Active}} class="active" aria-current="true"{{end}}>{{.Label}}</a>{{end}}</nav>
+
+<div class="mt-movers">
+  <section>
+    <h3>Pushing it up</h3>
+    {{if .MoversUp}}<ul>{{range .MoversUp}}<li><a href="/market/?type={{.TypeID}}&amp;region={{$v.RegionID}}">{{.Name}}</a> <span class="mt-chg {{.Chg.Dir}}">{{.Chg.Text}}</span> <small>+{{.Impact}} ISK</small></li>{{end}}</ul>{{else}}<p><small>Nothing in the basket rose.</small></p>{{end}}
+  </section>
+  <section>
+    <h3>Dragging it down</h3>
+    {{if .MoversDown}}<ul>{{range .MoversDown}}<li><a href="/market/?type={{.TypeID}}&amp;region={{$v.RegionID}}">{{.Name}}</a> <span class="mt-chg {{.Chg.Dir}}">{{.Chg.Text}}</span> <small>-{{.Impact}} ISK</small></li>{{end}}</ul>{{else}}<p><small>Nothing in the basket fell.</small></p>{{end}}
+  </section>
+  <section>
+    <h3>Moving outside it</h3>
+    {{if .Outside}}<ul>{{range .Outside}}<li><a href="/market/?type={{.TypeID}}&amp;region={{$v.RegionID}}">{{.Name}}</a> <span class="mt-chg {{.Chg.Dir}}">{{.Chg.Text}}</span> <small>{{.Unit}} ISK</small></li>{{end}}</ul><p><small>Similar items not in the basket, biggest moves first.</small></p>{{else}}<p><small>No similar items moved enough to show.</small></p>{{end}}
+  </section>
+</div>
+
+<section class="foldable">
+<h3>Items</h3>
+<div class="tw">
+<table>
+  <thead><tr><th>Item</th><th class="mt-num">Qty</th><th class="mt-num">Typical sell</th><th class="mt-num">Worth</th><th class="mt-num">Share</th><th class="mt-num">Change</th><th class="mt-num">Effect</th></tr></thead>
+  <tbody>
+  {{range .Items}}
+    <tr>
+      <td><a href="/market/?type={{.TypeID}}&amp;region={{$v.RegionID}}">{{.Name}}</a></td>
+      <td class="mt-num">{{.Quantity}}</td>
+      <td class="mt-num">{{if .Unit}}{{.Unit}}{{else}}—{{end}}</td>
+      <td class="mt-num">{{if .Value}}{{.Value}}{{else}}<small>No price</small>{{end}}</td>
+      <td class="mt-num">{{if .Share}}{{.Share}}{{else}}—{{end}}</td>
+      <td class="mt-num">{{if .Chg.Text}}<span class="mt-chg {{.Chg.Dir}}">{{.Chg.Text}}</span>{{else}}—{{end}}</td>
+      <td class="mt-num">{{if .Impact}}{{if .ImpactUp}}+{{else}}-{{end}}{{.Impact}}{{else}}—{{end}}</td>
+    </tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+<p><small>Prices in ISK, typical (median) sell in {{.Basket.RegionName}}. Effect is how much each item moved the basket's worth over the period.{{if .Unpriced}} {{.Unpriced}} {{if eq .Unpriced 1}}item has{{else}}items have{{end}} no price there yet.{{end}}</small></p>
+</section>
+
+{{if .Own}}
+<section class="foldable">
+<h3>Edit</h3>
+<form method="post" action="/market/baskets/{{.Basket.ID}}/edit" class="mt-basket-form">
+  <label><small>Name</small> <input type="text" name="name" maxlength="60" value="{{.Basket.Name}}" required></label>
+  <label><small>Priced in</small>
+    <select name="region">{{range .Regions}}<option value="{{.ID}}"{{if .Active}} selected{{end}}>{{.Name}}</option>{{end}}</select>
+  </label>
+  <label class="mt-basket-items"><small>Items, one per line, with a quantity</small>
+    <textarea name="items" rows="10">{{.EditText}}</textarea>
+  </label>
+  <button class="btn" type="submit">Save</button>
+</form>
+<form method="post" action="/market/baskets/{{.Basket.ID}}/delete">
+  <button class="btn btn-quiet" type="submit">Delete basket</button>
+</form>
+</section>
+{{else if .SignedIn}}
+<form method="post" action="/market/baskets/">
+  <input type="hidden" name="from" value="{{.Basket.ID}}">
+  <button class="btn" type="submit">Copy to my baskets</button>
+</form>
+{{end}}
+{{end}}
+{{end}}

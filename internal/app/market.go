@@ -188,6 +188,11 @@ type marketItem struct {
 	// a region never triggers a fetch. Empty until the item view
 	// is built with a type.
 	RegionStats []marketRegionStatRow
+	// AllRegions: the strip lists every region a stored row speaks
+	// for (?regions=all), not just the hubs.
+	AllRegions bool
+	// Pack is the region's stat pack section (market_trend_view.go).
+	Pack *statPackView
 }
 
 // spreadBookDepth is the deepest thin book, per side, whose
@@ -287,7 +292,6 @@ type yourOrderRow struct {
 type marketView struct {
 	Query      string
 	Region     int64 // active region (search results link into it)
-	Matches    []marketMatch
 	Item       *marketItem
 	Watchlist  *watchlistView
 	YourOrders []yourOrderRow
@@ -303,43 +307,6 @@ type marketBrowseGroup struct {
 	IconKey  string
 	HasTypes bool
 }
-
-// marketBrowseType is one type listed in a leaf market group.
-type marketBrowseType struct {
-	ID   int64
-	Name string
-}
-
-// marketBrowseCrumb is one breadcrumb step (an ancestor group).
-type marketBrowseCrumb struct {
-	ID   int64
-	Name string
-}
-
-// marketBrowseView is the category browser: the top-level groups,
-// or one group with its children, breadcrumbs, and leaf types.
-// Built entirely from the local SDE tables — rendering it never
-// touches the network.
-type marketBrowseView struct {
-	Current     *marketBrowseGroup
-	Breadcrumbs []marketBrowseCrumb
-	Groups      []marketBrowseGroup
-	Types       []marketBrowseType
-	// Pagination for leaf-group type lists: big groups page
-	// like the items-group page instead of pulling thousands
-	// of rows per load.
-	GroupID    int64
-	Page       int
-	TotalPages int
-	TotalTypes int64
-	HasPrev    bool
-	HasNext    bool
-	PrevPage   int
-	NextPage   int
-}
-
-// marketBrowseTypesPerPage paginates a leaf group's type list.
-const marketBrowseTypesPerPage = 100
 
 // handleMarket renders the Market page: a name search (local
 // type-name cache plus exact ESI resolution) and, with ?type=, the
@@ -385,7 +352,14 @@ func (app *Application) handleMarket(w http.ResponseWriter, r *http.Request) {
 		if view.Item != nil || !anon {
 			app.attachHistory(ctx, view.Item, typeID, view.Region, userID)
 		}
-		app.attachRegionStats(ctx, view.Item)
+		if view.Item != nil && q.Get("regions") == "all" {
+			view.Item.AllRegions = true
+			app.attachAllRegionStats(ctx, view.Item)
+		} else {
+			app.attachRegionStats(ctx, view.Item)
+		}
+		app.attachStatPack(ctx, view.Item)
+		app.attachMarketChanges(ctx, view.Item)
 		if !anon {
 			app.markGuessHit(ctx, pageWantHistory, typeID, view.Region)
 		}
@@ -393,13 +367,17 @@ func (app *Application) handleMarket(w http.ResponseWriter, r *http.Request) {
 			app.notePageWant(ctx, pageWantHistory, typeID, view.Region)
 		}
 	} else if view.Query != "" {
-		view.Matches = app.searchTypes(ctx, view.Query, anon)
-		// Prefetch: every result's history is wanted now, so a
-		// tap on any of them lands on a chart instead of a wait.
-		// Anonymous searches prefetch too while the market switch
-		// is on: these are market wants like any other.
+		// A search no longer renders a matches panel: the name
+		// filters the category browser's list below instead. The
+		// search itself still runs for its side effects: the
+		// exact-name lookup starts resolving an unknown name from
+		// ESI in the background, and every result's history is
+		// wanted now, so a tap on any of them lands on a chart
+		// instead of a wait. Anonymous searches prefetch too
+		// while the market switch is on.
+		matches := app.searchTypes(ctx, view.Query, anon)
 		if !anon || anonMarket {
-			app.noteSearchHistoryWants(ctx, view.Region, view.Matches)
+			app.noteSearchHistoryWants(ctx, view.Region, matches)
 		}
 	}
 
@@ -408,9 +386,13 @@ func (app *Application) handleMarket(w http.ResponseWriter, r *http.Request) {
 	// children, breadcrumbs and leaf types when ?group= is in
 	// play. Pure local SDE reads either way.
 	if view.Item == nil {
-		groupID, _ := strconv.ParseInt(q.Get("group"), 10, 64)
-		browsePage, _ := strconv.Atoi(q.Get("page"))
-		view.Browse = app.buildMarketBrowse(ctx, groupID, browsePage)
+		browseQuery := q
+		if view.Query != "" {
+			// The one search bar feeds the browser's name filter.
+			browseQuery = q.Clone()
+			browseQuery.Set("bq", view.Query)
+		}
+		view.Browse = app.buildMarketBrowse(ctx, view.Region, browseQuery)
 	}
 
 	if userID > 0 {
@@ -419,94 +401,6 @@ func (app *Application) handleMarket(w http.ResponseWriter, r *http.Request) {
 	}
 
 	app.render(ctx, w, http.StatusOK, "market.html", data)
-}
-
-// buildMarketBrowse assembles the category browser from the
-// local market-group tree. groupID <= 0 (or an unknown id) renders
-// the top level; a known group renders its breadcrumb trail, its
-// child groups, and — for leaf groups — its types, already
-// filtered to the marketable floor (published = 1 AND
-// market_group_id > 0) by the query. Cache-only: local SDE reads,
-// never the network.
-func (app *Application) buildMarketBrowse(ctx context.Context, groupID int64, page int) *marketBrowseView {
-	view := &marketBrowseView{GroupID: groupID, Page: page}
-	if view.Page < 1 {
-		view.Page = 1
-	}
-	current, err := app.queries.GetSDEMarketGroup(ctx, groupID)
-	if groupID <= 0 || err != nil {
-		rows, err := app.queries.ListSDEMarketGroupsByParent(ctx, 0)
-		if err != nil {
-			logging.Errorf("market: list top market groups: %v", err)
-			return view
-		}
-		for _, row := range rows {
-			view.Groups = append(view.Groups, marketBrowseGroupRow(row))
-		}
-		return view
-	}
-
-	currentRow := marketBrowseGroupRow(current)
-	view.Current = &currentRow
-
-	// Breadcrumb trail: walk parents to the root (cycle-guarded;
-	// real trees are a handful of levels deep).
-	seen := map[int64]bool{groupID: true}
-	var trail []marketBrowseCrumb
-	parentID := current.ParentGroupID
-	for parentID > 0 && !seen[parentID] && len(trail) < 16 {
-		seen[parentID] = true
-		parent, err := app.queries.GetSDEMarketGroup(ctx, parentID)
-		if err != nil {
-			break
-		}
-		trail = append(trail, marketBrowseCrumb{ID: parent.MarketGroupID, Name: parent.Name})
-		parentID = parent.ParentGroupID
-	}
-	for i, j := 0, len(trail)-1; i < j; i, j = i+1, j-1 {
-		trail[i], trail[j] = trail[j], trail[i]
-	}
-	view.Breadcrumbs = trail
-
-	children, err := app.queries.ListSDEMarketGroupsByParent(ctx, groupID)
-	if err != nil {
-		logging.Errorf("market: list child groups of %d: %v", groupID, err)
-	} else {
-		for _, row := range children {
-			view.Groups = append(view.Groups, marketBrowseGroupRow(row))
-		}
-	}
-
-	total, err := app.queries.CountSDETypesInMarketGroup(ctx, groupID)
-	if err != nil {
-		logging.Errorf("market: count types of market group %d: %v", groupID, err)
-	} else {
-		view.TotalTypes = total
-		view.TotalPages = int((total + marketBrowseTypesPerPage - 1) / marketBrowseTypesPerPage)
-		if view.TotalPages < 1 {
-			view.TotalPages = 1
-		}
-		if view.Page > view.TotalPages {
-			view.Page = view.TotalPages
-		}
-		view.HasPrev = view.Page > 1
-		view.HasNext = view.Page < view.TotalPages
-		view.PrevPage = view.Page - 1
-		view.NextPage = view.Page + 1
-	}
-	types, err := app.queries.ListSDETypesInMarketGroupPaged(ctx, db.ListSDETypesInMarketGroupPagedParams{
-		MarketGroupID: groupID,
-		RowLimit:      int64(marketBrowseTypesPerPage),
-		RowOffset:     int64((view.Page - 1) * marketBrowseTypesPerPage),
-	})
-	if err != nil {
-		logging.Errorf("market: list types of market group %d: %v", groupID, err)
-	} else {
-		for _, row := range types {
-			view.Types = append(view.Types, marketBrowseType{ID: row.TypeID, Name: row.Name})
-		}
-	}
-	return view
 }
 
 // marketBrowseGroupRow adapts one sqlc market-group row to its
@@ -1186,19 +1080,22 @@ func (app *Application) watchlistRows(ctx context.Context, entries []db.MarketWa
 			Change30:  "—",
 			Threshold: fmt.Sprintf("%g", e.ThresholdPct),
 		}
-		rows := app.recentHistoryRows(ctx, marketRegionForType(e.TypeID, e.RegionID), e.TypeID, markethistory.ChartRows)
-		if len(rows) > 0 {
-			row.Current = esi.FormatISK(rows[len(rows)-1].Average)
+		// The stat pack's typical sell where a sweep covers the
+		// region, the traded averages elsewhere (watchMove): the
+		// same figures the watch alerts fire on.
+		m := app.watchMove(ctx, e.TypeID, marketRegionForType(e.TypeID, e.RegionID))
+		if m.Has {
+			row.Current = esi.FormatISK(m.Current)
 		}
-		if pct, ok := markethistory.ChangePct(rows, 7); ok {
-			row.Change7 = markethistory.FormatChangePct(pct)
-			if math.Abs(pct) >= e.ThresholdPct {
+		if m.Has7 {
+			row.Change7 = markethistory.FormatChangePct(m.Chg7)
+			if math.Abs(m.Chg7) >= e.ThresholdPct {
 				row.Moving = true
-				row.MoveText = markethistory.ChangeDirection(pct) + " over 7 days"
+				row.MoveText = markethistory.ChangeDirection(m.Chg7) + " over 7 days"
 			}
 		}
-		if pct, ok := markethistory.ChangePct(rows, 30); ok {
-			row.Change30 = markethistory.FormatChangePct(pct)
+		if m.Has30 {
+			row.Change30 = markethistory.FormatChangePct(m.Chg30)
 		}
 		out = append(out, row)
 	}

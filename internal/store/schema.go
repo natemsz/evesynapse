@@ -609,6 +609,57 @@ var pgContractExitAnswersSchema string
 //go:embed schema_pg/100_name_misses.sql
 var pgNameMissesSchema string
 
+// Step 101: the market stat pack: the full order-book statistics set
+// and the trend figures on the per-(region, type) stats row, the same
+// set on its daily copy, and the Fuzzwork mirror's full columns.
+//
+//go:embed schema_pg/101_market_stat_pack.sql
+var pgMarketStatPackSchema string
+
+// Step 102: the LP store browser: the mirrored NPC loyalty stores
+// and each offer's value per swept hub region, from the stat pack.
+//
+//go:embed schema_pg/102_lp_stores.sql
+var pgLPStoresSchema string
+
+// Step 103: market baskets: presets and players' own lists of types,
+// and each basket's stored value per day, from the stat pack.
+//
+//go:embed schema_pg/103_market_baskets.sql
+var pgMarketBasketsSchema string
+
+// Step 104: the profit ledger: every wallet journal row, transaction
+// and delivered job ever seen, and the profit attribution written
+// from them at ingest.
+//
+//go:embed schema_pg/104_profit_ledger.sql
+var pgProfitLedgerSchema string
+
+// Step 105: beaten orders: what beat each open order at its station,
+// the suggested reprice and the margin at it, on order_lifecycle.
+//
+//go:embed schema_pg/105_beaten_orders.sql
+var pgBeatenOrdersSchema string
+
+// Step 106: the market change feed, written from the stat pack when a
+// region's sweep completes.
+//
+//go:embed schema_pg/106_market_changes.sql
+var pgMarketChangesSchema string
+
+// Step 108: the market API: hashed read-only keys and their daily
+// usage, abyssal items callers asked to have priced, and the
+// researched-original blueprint medians.
+//
+//go:embed schema_pg/108_market_api.sql
+var pgMarketAPISchema string
+
+// Step 107: global notices, the banners an administrator posts to
+// every visitor, their per-account dismissals and the audit trail.
+//
+//go:embed schema_pg/107_global_notices.sql
+var pgGlobalNoticesSchema string
+
 // Step 109: briefing dismissals, the briefing lines an account has
 // hidden (they still render, in the dismissed list, while they
 // apply).
@@ -745,6 +796,14 @@ func schemaSteps() []schemaStep {
 		{98, "webauthn", pgWebAuthnSchema, ""},
 		{99, "contract_exit_answers", pgContractExitAnswersSchema, ""},
 		{100, "name_misses", pgNameMissesSchema, ""},
+		{101, "market_stat_pack", pgMarketStatPackSchema, ""},
+		{102, "lp_stores", pgLPStoresSchema, ""},
+		{103, "market_baskets", pgMarketBasketsSchema, ""},
+		{104, "profit_ledger", pgProfitLedgerSchema, ""},
+		{105, "beaten_orders", pgBeatenOrdersSchema, ""},
+		{106, "market_changes", pgMarketChangesSchema, ""},
+		{107, "global_notices", pgGlobalNoticesSchema, ""},
+		{108, "market_api", pgMarketAPISchema, ""},
 		{109, "briefing_dismissals", pgBriefingDismissalsSchema, ""},
 	}
 }

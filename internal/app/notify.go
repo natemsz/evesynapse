@@ -48,6 +48,7 @@ import (
 // one.
 const (
 	notifyWatch      = "watch"
+	notifyMarket     = "market_change"
 	notifySkill      = "skill"
 	notifyMail       = "mail"
 	notifyCalendar   = "calendar"
@@ -58,6 +59,9 @@ const (
 	notifyOpReminder = "op_reminder"
 	notifySRPNew     = "srp_new"
 	notifySRPDone    = "srp_done"
+	// notifyNotice is an administrator's urgent global notice
+	// (notices.go); it is never produced by the worker pass.
+	notifyNotice = "notice"
 )
 
 // notifyKind describes one kind of notification.
@@ -76,6 +80,7 @@ type notifyKind struct {
 // notifyKinds is every kind, in the order the settings page lists them.
 var coreNotifyKinds = []notifyKind{
 	{ID: notifyWatch, Title: "Watch list alerts", Module: "market_public", Standing: true, Account: true},
+	{ID: notifyMarket, Title: "Market changes on watched items and baskets", Module: "market_public", Account: true},
 	{ID: notifySkill, Title: "Skill complete", Module: "skills"},
 	// Ops are EveSynapse's own (ops.go): any character sees its
 	// corporation's, with no access to grant.
@@ -85,6 +90,8 @@ var coreNotifyKinds = []notifyKind{
 	{ID: notifyKillmail, Title: "New killmail", Module: "killmails"},
 	{ID: notifyPI, Title: "Stopped planetary extractors", Module: "planets"},
 	{ID: notifyIndustry, Title: "Industry job complete", Module: "industry"},
+	// Urgent service notices from the EveSynapse team (notices.go).
+	{ID: notifyNotice, Title: "Urgent service notices", Account: true},
 }
 
 // notifyKindList is every kind this build has, in the order the settings
@@ -190,6 +197,7 @@ func (app *Application) collectNotifyEvents(ctx context.Context, userID int64, b
 		app.notifyIndustryEvents(ctx, c, b, now)
 	}
 	app.notifyWatchEvents(ctx, c, userID)
+	app.notifyMarketEvents(ctx, c, userID)
 	return c
 }
 
@@ -374,8 +382,8 @@ func (app *Application) notifyWatchEvents(ctx context.Context, c *notifyCollecto
 	src := c.source(notifyWatch, userID)
 	for _, e := range entries {
 		regionID := marketRegionForType(e.TypeID, e.RegionID)
-		rows := app.recentHistoryRows(ctx, regionID, e.TypeID, markethistory.ChartRows)
-		pct, ok := markethistory.ChangePct(rows, 7)
+		m := app.watchMove(ctx, e.TypeID, regionID)
+		pct, ok := m.Chg7, m.Has7
 		if !ok || absFloat(pct) < e.ThresholdPct {
 			continue
 		}

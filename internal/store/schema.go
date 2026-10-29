@@ -654,6 +654,12 @@ var pgMarketChangesSchema string
 //go:embed schema_pg/108_market_api.sql
 var pgMarketAPISchema string
 
+// Step 107: global notices, the banners an administrator posts to
+// every visitor, their per-account dismissals and the audit trail.
+//
+//go:embed schema_pg/107_global_notices.sql
+var pgGlobalNoticesSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -789,6 +795,7 @@ func schemaSteps() []schemaStep {
 		{104, "profit_ledger", pgProfitLedgerSchema, ""},
 		{105, "beaten_orders", pgBeatenOrdersSchema, ""},
 		{106, "market_changes", pgMarketChangesSchema, ""},
+		{107, "global_notices", pgGlobalNoticesSchema, ""},
 		{108, "market_api", pgMarketAPISchema, ""},
 	}
 }

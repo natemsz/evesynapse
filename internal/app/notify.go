@@ -59,6 +59,9 @@ const (
 	notifyOpReminder = "op_reminder"
 	notifySRPNew     = "srp_new"
 	notifySRPDone    = "srp_done"
+	// notifyNotice is an administrator's urgent global notice
+	// (notices.go); it is never produced by the worker pass.
+	notifyNotice = "notice"
 )
 
 // notifyKind describes one kind of notification.
@@ -87,6 +90,8 @@ var coreNotifyKinds = []notifyKind{
 	{ID: notifyKillmail, Title: "New killmail", Module: "killmails"},
 	{ID: notifyPI, Title: "Stopped planetary extractors", Module: "planets"},
 	{ID: notifyIndustry, Title: "Industry job complete", Module: "industry"},
+	// Urgent service notices from the EveSynapse team (notices.go).
+	{ID: notifyNotice, Title: "Urgent service notices", Account: true},
 }
 
 // notifyKindList is every kind this build has, in the order the settings

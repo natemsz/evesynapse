@@ -395,6 +395,42 @@ type ForesightTarget struct {
 	OpenedAt    sql.NullTime `json:"opened_at"`
 }
 
+type GlobalNotice struct {
+	ID           int64        `json:"id"`
+	Title        string       `json:"title"`
+	Severity     string       `json:"severity"`
+	BodyMd       string       `json:"body_md"`
+	BodyHtml     string       `json:"body_html"`
+	Urgent       bool         `json:"urgent"`
+	UrgentSentAt sql.NullTime `json:"urgent_sent_at"`
+	StartsAt     time.Time    `json:"starts_at"`
+	EndsAt       time.Time    `json:"ends_at"`
+	RetiredAt    sql.NullTime `json:"retired_at"`
+	CreatedBy    int64        `json:"created_by"`
+	CreatedAt    time.Time    `json:"created_at"`
+	UpdatedAt    time.Time    `json:"updated_at"`
+}
+
+type GlobalNoticeAudit struct {
+	ID            int64     `json:"id"`
+	NoticeID      int64     `json:"notice_id"`
+	Action        string    `json:"action"`
+	UserID        int64     `json:"user_id"`
+	CharacterID   int64     `json:"character_id"`
+	CharacterName string    `json:"character_name"`
+	Title         string    `json:"title"`
+	Severity      string    `json:"severity"`
+	BodyMd        string    `json:"body_md"`
+	EndsAt        time.Time `json:"ends_at"`
+	At            time.Time `json:"at"`
+}
+
+type GlobalNoticeDismissal struct {
+	UserID      int64     `json:"user_id"`
+	NoticeID    int64     `json:"notice_id"`
+	DismissedAt time.Time `json:"dismissed_at"`
+}
+
 type GlobalSnapshot struct {
 	Kind        string    `json:"kind"`
 	Payload     string    `json:"payload"`

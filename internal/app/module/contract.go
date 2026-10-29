@@ -940,6 +940,9 @@ type ShellData struct {
 	ThemeBackdrop string
 	ThemeAccount  bool
 	ThemeStored   bool
+	// Banners is the administrators' global notices this render
+	// shows above the page body (notices.go); nil when none.
+	Banners any
 }
 
 // Shell returns a pointer to the embedded ShellData so that

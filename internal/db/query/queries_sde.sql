@@ -646,3 +646,7 @@ ORDER BY t.published DESC, t.type_id;
 
 -- name: ListSDESystemNeighbours :many
 SELECT to_system_id FROM sde_system_jumps WHERE from_system_id = $1;
+
+-- name: ListMarketGroupParentIDs :many
+SELECT DISTINCT parent_group_id FROM sde_market_groups
+WHERE parent_group_id > 0;

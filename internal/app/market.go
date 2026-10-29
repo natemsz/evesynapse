@@ -292,7 +292,6 @@ type yourOrderRow struct {
 type marketView struct {
 	Query      string
 	Region     int64 // active region (search results link into it)
-	Matches    []marketMatch
 	Item       *marketItem
 	Watchlist  *watchlistView
 	YourOrders []yourOrderRow
@@ -368,13 +367,17 @@ func (app *Application) handleMarket(w http.ResponseWriter, r *http.Request) {
 			app.notePageWant(ctx, pageWantHistory, typeID, view.Region)
 		}
 	} else if view.Query != "" {
-		view.Matches = app.searchTypes(ctx, view.Query, anon)
-		// Prefetch: every result's history is wanted now, so a
-		// tap on any of them lands on a chart instead of a wait.
-		// Anonymous searches prefetch too while the market switch
-		// is on: these are market wants like any other.
+		// A search no longer renders a matches panel: the name
+		// filters the category browser's list below instead. The
+		// search itself still runs for its side effects: the
+		// exact-name lookup starts resolving an unknown name from
+		// ESI in the background, and every result's history is
+		// wanted now, so a tap on any of them lands on a chart
+		// instead of a wait. Anonymous searches prefetch too
+		// while the market switch is on.
+		matches := app.searchTypes(ctx, view.Query, anon)
 		if !anon || anonMarket {
-			app.noteSearchHistoryWants(ctx, view.Region, view.Matches)
+			app.noteSearchHistoryWants(ctx, view.Region, matches)
 		}
 	}
 
@@ -383,7 +386,13 @@ func (app *Application) handleMarket(w http.ResponseWriter, r *http.Request) {
 	// children, breadcrumbs and leaf types when ?group= is in
 	// play. Pure local SDE reads either way.
 	if view.Item == nil {
-		view.Browse = app.buildMarketBrowse(ctx, view.Region, q)
+		browseQuery := q
+		if view.Query != "" {
+			// The one search bar feeds the browser's name filter.
+			browseQuery = q.Clone()
+			browseQuery.Set("bq", view.Query)
+		}
+		view.Browse = app.buildMarketBrowse(ctx, view.Region, browseQuery)
 	}
 
 	if userID > 0 {

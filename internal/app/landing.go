@@ -43,7 +43,7 @@ func (app *Application) buildLanding(ctx context.Context) landingData {
 
 func (app *Application) renderLanding(ctx context.Context, w http.ResponseWriter, data landingData) {
 	app.fillShell(ctx, &data.ShellData, "landing.html")
-	ts, err := parsedTemplate(&pageTemplates, "landing", "landing.html", "templates/wordmark.html")
+	ts, err := parsedTemplate(&pageTemplates, "landing", "landing.html", "templates/wordmark.html", "templates/noticebanners.html")
 	if err != nil {
 		logging.Errorf("parse template landing.html: %v", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)

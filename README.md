@@ -309,6 +309,7 @@ gaps; real environment variables win over the file):
 | `EVESYNAPSE_UPDATE_REPO` | no | `natemsz/evesynapse` | GitHub repo (owner/repo) the updater checks |
 | `EVE_SDE_BASE_URL` | no | Fuzzwork's dump | Base URL of the SDE CSV dump the importer downloads |
 | `ESI_CONTACT` | no | — | How CCP can reach whoever runs this instance (an email address, a Discord handle, a character name). Sent in the User-Agent of every ESI request, as CCP asks of third-party apps |
+| `STATUS_PAGE_ORIGIN` | no | — | The status page's origin (`https://status.example.com`): the one site whose pages may read `/status.json`, the public summary of how the database, worker, notifications, ESI, market sweeps and push are doing (a state and an age each, nothing more) |
 | `LOG_LEVEL` | no | `info` | Least severe kind of log line written: `debug`, `info`, `warn` or `error` (see "Logging") |
 | `LOG_FORMAT` | no | `text` | `text` for the classic line, `json` for one object per line |
 | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` | no | — | The key pair that turns on browser push notifications (see "Notifications and browser push"). Make one with `evesynapse -push-keys`. Unset, notifications show in the top bar only |

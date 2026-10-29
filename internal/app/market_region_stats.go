@@ -8,6 +8,13 @@ package app
 // phases read starts here, and pages only ever SELECT these rows;
 // aggregation happens at sweep time, never at render time.
 //
+// That row is the stat pack (schema 101): the full order-book
+// statistics set per side (summarizeSide) and the trend figures
+// derived from the daily copy (RefreshMarketStatPackTrends) ride
+// on it, so the scanner, item pages, baskets, the LP store,
+// alerts and trade ideas all read one canonical row per
+// (region, type) instead of deriving their own.
+//
 // The sweep is incremental and disk-staged (schema 034): every
 // hub region may sweep at once, each advancing at most
 // maxRegionSweepPagesPerCycle pages per worker cycle. Every
@@ -407,10 +414,8 @@ func (app *Application) storeRegionSweep(ctx context.Context, regionID int64) (t
 	// single sequential read instead of 15,000 per-type queries.
 	var typeIDs []int64
 	type regionTypeStats struct {
-		bestSell, typicalSell, sellBand float64
-		bestBuy, typicalBuy, buyBand    float64
-		sellOrders, buyOrders           int64
-		sellVolume, buyVolume           int64
+		sell, buy             sideStats
+		sellVolume, buyVolume int64
 	}
 	// bookRow is one stored-book row: the top orders per side the
 	// sweep keeps for the Market page (schema 050), in display
@@ -463,20 +468,8 @@ func (app *Application) storeRegionSweep(ctx context.Context, regionID int64) (t
 			top = append(top, b)
 		}
 		bookByType[curTypeID] = top
-		curSt.sellOrders = int64(len(sellPrices))
-		curSt.buyOrders = int64(len(buyPrices))
-		if len(sellPrices) > 0 {
-			stats := summarizePrices(sellPrices) // sorts in place
-			curSt.bestSell = sellPrices[0]
-			curSt.typicalSell = stats.Median
-			curSt.sellBand = stats.High90
-		}
-		if len(buyPrices) > 0 {
-			stats := summarizePrices(buyPrices) // sorts in place
-			curSt.bestBuy = buyPrices[len(buyPrices)-1]
-			curSt.typicalBuy = stats.Median
-			curSt.buyBand = stats.Low90
-		}
+		curSt.sell = summarizeSide(sellPrices, false) // sorts in place
+		curSt.buy = summarizeSide(buyPrices, true)    // sorts in place
 		statsByType[curTypeID] = curSt
 	}
 
@@ -661,23 +654,41 @@ func (app *Application) storeRegionSweep(ctx context.Context, regionID int64) (t
 		sellVols := make([]int64, n)
 		buyVols := make([]int64, n)
 		avgVols := make([]float64, n)
+		sellAvgs := make([]float64, n)
+		sellMaxes := make([]float64, n)
+		sellP5s := make([]float64, n)
+		sellDevs := make([]float64, n)
+		buyAvgs := make([]float64, n)
+		buyMins := make([]float64, n)
+		buyP5s := make([]float64, n)
+		buyDevs := make([]float64, n)
 		for i, typeID := range chunk {
 			st := statsByType[typeID]
-			bestSells[i] = st.bestSell
-			typSells[i] = st.typicalSell
-			sellBands[i] = st.sellBand
-			bestBuys[i] = st.bestBuy
-			typBuys[i] = st.typicalBuy
-			buyBands[i] = st.buyBand
-			sellOrds[i] = st.sellOrders
-			buyOrds[i] = st.buyOrders
+			bestSells[i] = st.sell.Best
+			typSells[i] = st.sell.Median
+			sellBands[i] = st.sell.High90
+			bestBuys[i] = st.buy.Best
+			typBuys[i] = st.buy.Median
+			buyBands[i] = st.buy.Low90
+			sellOrds[i] = st.sell.Orders
+			buyOrds[i] = st.buy.Orders
 			sellVols[i] = st.sellVolume
 			buyVols[i] = st.buyVolume
 			avgVols[i] = avgDailyVolume[typeID]
+			sellAvgs[i] = st.sell.Avg
+			sellMaxes[i] = st.sell.Far
+			sellP5s[i] = st.sell.P5
+			sellDevs[i] = st.sell.StdDev
+			buyAvgs[i] = st.buy.Avg
+			buyMins[i] = st.buy.Far
+			buyP5s[i] = st.buy.P5
+			buyDevs[i] = st.buy.StdDev
 		}
 		if _, err := tx.ExecContext(ctx, `
-			INSERT INTO market_region_stats (region_id, type_id, best_sell, typical_sell, sell_band, best_buy, typical_buy, buy_band, sell_orders, buy_orders, sell_volume, buy_volume, avg_daily_volume, updated_at)
-			SELECT $1, unnest($2::bigint[]), unnest($3::float8[]), unnest($4::float8[]), unnest($5::float8[]), unnest($6::float8[]), unnest($7::float8[]), unnest($8::float8[]), unnest($9::bigint[]), unnest($10::bigint[]), unnest($11::bigint[]), unnest($12::bigint[]), unnest($13::float8[]), $14
+			INSERT INTO market_region_stats (region_id, type_id, best_sell, typical_sell, sell_band, best_buy, typical_buy, buy_band, sell_orders, buy_orders, sell_volume, buy_volume, avg_daily_volume, updated_at,
+				sell_avg, sell_max, sell_p5, sell_stddev, buy_avg, buy_min, buy_p5, buy_stddev)
+			SELECT $1, unnest($2::bigint[]), unnest($3::float8[]), unnest($4::float8[]), unnest($5::float8[]), unnest($6::float8[]), unnest($7::float8[]), unnest($8::float8[]), unnest($9::bigint[]), unnest($10::bigint[]), unnest($11::bigint[]), unnest($12::bigint[]), unnest($13::float8[]), $14,
+				unnest($15::float8[]), unnest($16::float8[]), unnest($17::float8[]), unnest($18::float8[]), unnest($19::float8[]), unnest($20::float8[]), unnest($21::float8[]), unnest($22::float8[])
 			ON CONFLICT (region_id, type_id) DO UPDATE SET
 				best_sell        = excluded.best_sell,
 				typical_sell     = excluded.typical_sell,
@@ -690,15 +701,27 @@ func (app *Application) storeRegionSweep(ctx context.Context, regionID int64) (t
 				sell_volume      = excluded.sell_volume,
 				buy_volume       = excluded.buy_volume,
 				avg_daily_volume = excluded.avg_daily_volume,
-				updated_at       = excluded.updated_at
+				updated_at       = excluded.updated_at,
+				sell_avg         = excluded.sell_avg,
+				sell_max         = excluded.sell_max,
+				sell_p5          = excluded.sell_p5,
+				sell_stddev      = excluded.sell_stddev,
+				buy_avg          = excluded.buy_avg,
+				buy_min          = excluded.buy_min,
+				buy_p5           = excluded.buy_p5,
+				buy_stddev       = excluded.buy_stddev
 		`, regionID, pq.Array(chunk), pq.Array(bestSells), pq.Array(typSells), pq.Array(sellBands),
 			pq.Array(bestBuys), pq.Array(typBuys), pq.Array(buyBands), pq.Array(sellOrds),
-			pq.Array(buyOrds), pq.Array(sellVols), pq.Array(buyVols), pq.Array(avgVols), now); err != nil {
+			pq.Array(buyOrds), pq.Array(sellVols), pq.Array(buyVols), pq.Array(avgVols), now,
+			pq.Array(sellAvgs), pq.Array(sellMaxes), pq.Array(sellP5s), pq.Array(sellDevs),
+			pq.Array(buyAvgs), pq.Array(buyMins), pq.Array(buyP5s), pq.Array(buyDevs)); err != nil {
 			return 0, 0, err
 		}
 		if _, err := tx.ExecContext(ctx, `
-			INSERT INTO market_region_stats_daily (region_id, type_id, day, best_sell, typical_sell, sell_band, best_buy, typical_buy, buy_band, sell_orders, buy_orders, sell_volume, buy_volume)
-			SELECT $1, unnest($2::bigint[]), $3, unnest($4::float8[]), unnest($5::float8[]), unnest($6::float8[]), unnest($7::float8[]), unnest($8::float8[]), unnest($9::float8[]), unnest($10::bigint[]), unnest($11::bigint[]), unnest($12::bigint[]), unnest($13::bigint[])
+			INSERT INTO market_region_stats_daily (region_id, type_id, day, best_sell, typical_sell, sell_band, best_buy, typical_buy, buy_band, sell_orders, buy_orders, sell_volume, buy_volume,
+				sell_avg, sell_max, sell_p5, sell_stddev, buy_avg, buy_min, buy_p5, buy_stddev)
+			SELECT $1, unnest($2::bigint[]), $3, unnest($4::float8[]), unnest($5::float8[]), unnest($6::float8[]), unnest($7::float8[]), unnest($8::float8[]), unnest($9::float8[]), unnest($10::bigint[]), unnest($11::bigint[]), unnest($12::bigint[]), unnest($13::bigint[]),
+				unnest($14::float8[]), unnest($15::float8[]), unnest($16::float8[]), unnest($17::float8[]), unnest($18::float8[]), unnest($19::float8[]), unnest($20::float8[]), unnest($21::float8[])
 			ON CONFLICT (region_id, type_id, day) DO UPDATE SET
 				best_sell    = excluded.best_sell,
 				typical_sell = excluded.typical_sell,
@@ -709,12 +732,62 @@ func (app *Application) storeRegionSweep(ctx context.Context, regionID int64) (t
 				sell_orders  = excluded.sell_orders,
 				buy_orders   = excluded.buy_orders,
 				sell_volume  = excluded.sell_volume,
-				buy_volume   = excluded.buy_volume
+				buy_volume   = excluded.buy_volume,
+				sell_avg     = excluded.sell_avg,
+				sell_max     = excluded.sell_max,
+				sell_p5      = excluded.sell_p5,
+				sell_stddev  = excluded.sell_stddev,
+				buy_avg      = excluded.buy_avg,
+				buy_min      = excluded.buy_min,
+				buy_p5       = excluded.buy_p5,
+				buy_stddev   = excluded.buy_stddev
 		`, regionID, pq.Array(chunk), day, pq.Array(bestSells), pq.Array(typSells), pq.Array(sellBands),
 			pq.Array(bestBuys), pq.Array(typBuys), pq.Array(buyBands), pq.Array(sellOrds),
-			pq.Array(buyOrds), pq.Array(sellVols), pq.Array(buyVols)); err != nil {
+			pq.Array(buyOrds), pq.Array(sellVols), pq.Array(buyVols),
+			pq.Array(sellAvgs), pq.Array(sellMaxes), pq.Array(sellP5s), pq.Array(sellDevs),
+			pq.Array(buyAvgs), pq.Array(buyMins), pq.Array(buyP5s), pq.Array(buyDevs)); err != nil {
 			return 0, 0, err
 		}
+	}
+	// The stat pack's trend figures (schema 101) derive from the
+	// daily rows just written, inside the same transaction, so a
+	// reader never sees today's prices beside yesterday's trends.
+	if _, err := qtx.RefreshMarketStatPackTrends(ctx, db.RefreshMarketStatPackTrendsParams{
+		RegionID: regionID, Today: now,
+	}); err != nil {
+		return 0, 0, fmt.Errorf("stat pack trends: %w", err)
+	}
+	// The change feed (schema 106) compares the rows just written
+	// with their last stored day, and forgets what is a month old.
+	if _, err := qtx.DetectMarketChanges(ctx, db.DetectMarketChangesParams{
+		RegionID: regionID, Day: day, Now: now, MinMove: marketChangeMinMove,
+	}); err != nil {
+		return 0, 0, fmt.Errorf("change feed: %w", err)
+	}
+	if err := qtx.PruneMarketChanges(ctx, db.PruneMarketChangesParams{
+		RegionID: regionID, BeforeDay: now.AddDate(0, 0, -marketChangeKeepDays).Format("2006-01-02"),
+	}); err != nil {
+		return 0, 0, fmt.Errorf("change feed prune: %w", err)
+	}
+	// LP offer values (schema 102) read the stat pack just written,
+	// in the same transaction, behind a savepoint: the LP rebuild is
+	// a secondary surface, and its failure must not roll back the
+	// region's whole sweep.
+	if _, err := tx.ExecContext(ctx, "SAVEPOINT lp_values"); err != nil {
+		return 0, 0, err
+	}
+	if err := app.refreshLPOfferValues(ctx, qtx, regionID, now); err != nil {
+		logging.Errorf("worker: lp offer values in sweep of %s: %v", marketRegionLabel(regionID), err)
+		if _, err := tx.ExecContext(ctx, "ROLLBACK TO SAVEPOINT lp_values"); err != nil {
+			return 0, 0, fmt.Errorf("lp offer values: %w", err)
+		}
+	} else if _, err := tx.ExecContext(ctx, "RELEASE SAVEPOINT lp_values"); err != nil {
+		return 0, 0, err
+	}
+	// Basket values (schema 103): today's value of every basket
+	// priced in this region, from the same rows.
+	if err := refreshBasketValues(ctx, qtx, regionID, day); err != nil {
+		return 0, 0, fmt.Errorf("basket values: %w", err)
 	}
 	for start := 0; start < len(stationKeys); start += sweepBatchSize {
 		end := start + sweepBatchSize

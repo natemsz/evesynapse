@@ -11,6 +11,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"math"
 	"net/http"
 	"strings"
 	"sync/atomic"
@@ -65,6 +66,26 @@ func TestSummarizeBook(t *testing.T) {
 	}
 	if buys.Low90 != 3 {
 		t.Errorf("buy 9-in-10 band = %v, want 3", buys.Low90)
+	}
+}
+
+// The stat pack's per-side set: extremes on the right ends, the
+// five-percent edge on the best side, and the population mean and
+// deviation per order row.
+func TestSummarizeSide(t *testing.T) {
+	if got := summarizeSide(nil, false); got != (sideStats{}) {
+		t.Fatalf("empty side = %+v, want zero", got)
+	}
+	sell := summarizeSide([]float64{8, 4, 6, 2}, false)
+	if sell.Best != 2 || sell.Far != 8 || sell.P5 != 2 || sell.Avg != 5 || sell.Orders != 4 {
+		t.Errorf("sell side = %+v", sell)
+	}
+	if want := math.Sqrt(5); math.Abs(sell.StdDev-want) > 1e-9 {
+		t.Errorf("sell stddev = %v, want %v", sell.StdDev, want)
+	}
+	buy := summarizeSide([]float64{2, 8, 4, 6}, true)
+	if buy.Best != 8 || buy.Far != 2 || buy.P5 != 8 || buy.Median != 5 {
+		t.Errorf("buy side = %+v", buy)
 	}
 }
 
@@ -139,11 +160,14 @@ func TestMarketPageHonestPrices(t *testing.T) {
 		// where the best-based card read -99.2% and banded red.
 		`class="kpi sp-blue"`,
 		"56.2%",
-		`kpi-k">Average price`,
-		"5.90 <small>ISK</small>",
+		`kpi-k">Traded average`,
 		`kpi-k">Adjusted price`,
 		"5.00 <small>ISK</small>",
 	)
+	// The guide average is never a price on this page.
+	if strings.Contains(body, "5.90") {
+		t.Error("market page quotes the CCP guide average (5.90)")
+	}
 }
 
 func TestSpreadBand(t *testing.T) {

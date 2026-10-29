@@ -225,57 +225,26 @@ func (app *Application) AppraiseLinesWithBasis(ctx context.Context, lines []modu
 			typeIDs = append(typeIDs, ln.TypeID)
 		}
 	}
-	ownRows, err := app.queries.ListMarketRegionStatsForTypes(ctx, db.ListMarketRegionStatsForTypesParams{
-		RegionID: regionID, Column2: typeIDs,
-	})
+	// The stat pack loader reads the three pricing tables once
+	// for the distinct types, global-market rows included (see
+	// the basis doc above).
+	packs, err := app.loadStatPacks(ctx, regionID, typeIDs)
 	if err != nil {
-		return out, fmt.Errorf("appraisal: forge typicals: %w", err)
+		return out, fmt.Errorf("appraisal: %w", err)
 	}
-	tvRows, err := app.queries.ListTrueValuesForTypes(ctx, typeIDs)
-	if err != nil {
-		return out, fmt.Errorf("appraisal: true values: %w", err)
-	}
-	fbRows, err := app.queries.ListMarketStatsFallbackForTypes(ctx, db.ListMarketStatsFallbackForTypesParams{
-		RegionID: regionID, Column2: typeIDs,
-	})
-	if err != nil {
-		return out, fmt.Errorf("appraisal: fallback: %w", err)
-	}
-	own := make(map[int64]*db.MarketRegionStat, len(ownRows))
-	for i := range ownRows {
-		own[ownRows[i].TypeID] = &ownRows[i]
-	}
-	// The global market serves where the basis region has no
-	// stat at all (see the basis doc above): any requested
-	// type the hub carries no row for reads its global row
-	// instead, so a global-market type prices at every hub
-	// while a type the hub does carry keeps its hub row.
-	if regionID != globalMarketRegion {
-		var missing []int64
-		for _, id := range typeIDs {
-			if _, ok := own[id]; !ok {
-				missing = append(missing, id)
-			}
+	own := make(map[int64]*db.MarketRegionStat, len(packs))
+	tvs := make(map[int64]*db.TrueValue, len(packs))
+	fbs := make(map[int64]*db.MarketStatsFallback, len(packs))
+	for id, p := range packs {
+		if p.Own != nil {
+			own[id] = p.Own
 		}
-		if len(missing) > 0 {
-			gRows, err := app.queries.ListMarketRegionStatsForTypes(ctx, db.ListMarketRegionStatsForTypesParams{
-				RegionID: globalMarketRegion, Column2: missing,
-			})
-			if err != nil {
-				return out, fmt.Errorf("appraisal: global typicals: %w", err)
-			}
-			for i := range gRows {
-				own[gRows[i].TypeID] = &gRows[i]
-			}
+		if p.Estimate != nil {
+			tvs[id] = p.Estimate
 		}
-	}
-	tvs := make(map[int64]*db.TrueValue, len(tvRows))
-	for i := range tvRows {
-		tvs[tvRows[i].TypeID] = &tvRows[i]
-	}
-	fbs := make(map[int64]*db.MarketStatsFallback, len(fbRows))
-	for i := range fbRows {
-		fbs[fbRows[i].TypeID] = &fbRows[i]
+		if p.Fallback != nil {
+			fbs[id] = p.Fallback
+		}
 	}
 
 	// Stored abyssal estimates for the singleton lines: a
@@ -328,13 +297,46 @@ func (app *Application) AppraiseLinesWithBasis(ctx context.Context, lines []modu
 		}
 	}
 
+	// Stored research medians for the researched originals: a
+	// researched blueprint prices from its exact (type, ME, TE)
+	// median, ahead of the market's unresearched figure.
+	type researchKey struct{ typeID, me, te int64 }
+	research := map[researchKey]db.BlueprintResearchMedian{}
+	{
+		var ids []int64
+		seenRes := map[int64]bool{}
+		for _, ln := range lines {
+			if !ln.BlueprintCopy && (ln.MaterialEfficiency > 0 || ln.TimeEfficiency > 0) && !seenRes[ln.TypeID] {
+				seenRes[ln.TypeID] = true
+				ids = append(ids, ln.TypeID)
+			}
+		}
+		if len(ids) > 0 {
+			rows, err := app.queries.ListBlueprintResearchMediansForTypes(ctx, ids)
+			if err != nil {
+				return out, fmt.Errorf("appraisal: research medians: %w", err)
+			}
+			for _, r := range rows {
+				research[researchKey{r.TypeID, r.Me, r.Te}] = r
+			}
+		}
+	}
+
 	now := time.Now().UTC()
 	for _, ln := range lines {
 		al := module.AppraisedLine{
 			TypeID: ln.TypeID, Quantity: ln.Quantity, ItemID: ln.ItemID,
 			Included: ln.Included, Tier: module.AppraisalTierUnpriced,
 		}
-		if ln.BlueprintCopy {
+		researched := !ln.BlueprintCopy && (ln.MaterialEfficiency > 0 || ln.TimeEfficiency > 0)
+		rm, hasResearch := research[researchKey{ln.TypeID, ln.MaterialEfficiency, ln.TimeEfficiency}]
+		if researched && hasResearch {
+			al.UnitPrice = rm.MedianPrice
+			al.LineValue = al.UnitPrice * float64(ln.Quantity)
+			al.Tier = module.AppraisalTierResearchMedian
+			al.AsOf = rm.ComputedAt
+			al.Priced = true
+		} else if ln.BlueprintCopy {
 			if cm, ok := copyMedians[copyMedianKey{ln.TypeID, ln.Runs}]; ok {
 				al.UnitPrice = cm.MedianPrice
 				al.LineValue = al.UnitPrice * float64(ln.Quantity)
@@ -358,6 +360,9 @@ func (app *Application) AppraiseLinesWithBasis(ctx context.Context, lines []modu
 				// reader words it as the basis hub's price.
 				al.SourceRegionID = row.RegionID
 			}
+		}
+		if researched && al.Tier != module.AppraisalTierResearchMedian {
+			al.ResearchUnmatched = true
 		}
 		if al.Priced && pct != 100 {
 			al.UnitPrice *= pct / 100
@@ -498,19 +503,20 @@ func (app *Application) appraiseOnePublicContract(ctx context.Context, contractI
 		if it.ItemID.Valid {
 			ln.ItemID = it.ItemID.Int64
 		}
+		// Blueprint facts ride to the core: a copy without them
+		// would price at its original's figure, and a researched
+		// original at the unresearched market price.
 		if it.IsBlueprintCopy {
-			// The copy facts ride to the core: without them
-			// the line would price at its original's figure.
 			ln.BlueprintCopy = true
 			if it.Runs.Valid {
 				ln.Runs = it.Runs.Int64
 			}
-			if it.MaterialEfficiency.Valid {
-				ln.MaterialEfficiency = it.MaterialEfficiency.Int64
-			}
-			if it.TimeEfficiency.Valid {
-				ln.TimeEfficiency = it.TimeEfficiency.Int64
-			}
+		}
+		if it.MaterialEfficiency.Valid {
+			ln.MaterialEfficiency = it.MaterialEfficiency.Int64
+		}
+		if it.TimeEfficiency.Valid {
+			ln.TimeEfficiency = it.TimeEfficiency.Int64
 		}
 		lines = append(lines, ln)
 	}
@@ -617,6 +623,27 @@ func (app *Application) recomputeBlueprintCopyMedians(ctx context.Context, now t
 			SampleCount: c.SampleCount, ComputedAt: now,
 		}); err != nil {
 			return 0, fmt.Errorf("store median %d/%d: %w", c.TypeID, c.Runs.Int64, err)
+		}
+		stored++
+	}
+	// Researched originals (schema 108), from the same corpus at the
+	// same minimum sample, replaced in the same transaction.
+	research, err := q.ListBlueprintResearchMedianCandidates(ctx, copyMedianMinSample)
+	if err != nil {
+		return 0, fmt.Errorf("research candidates: %w", err)
+	}
+	if err := q.DeleteBlueprintResearchMedians(ctx); err != nil {
+		return 0, fmt.Errorf("clear research medians: %w", err)
+	}
+	for _, c := range research {
+		if !c.Me.Valid || !c.Te.Valid {
+			continue
+		}
+		if err := q.InsertBlueprintResearchMedian(ctx, db.InsertBlueprintResearchMedianParams{
+			TypeID: c.TypeID, Me: c.Me.Int64, Te: c.Te.Int64, MedianPrice: c.MedianPrice,
+			SampleCount: c.SampleCount, ComputedAt: now,
+		}); err != nil {
+			return 0, fmt.Errorf("store research median %d/%d/%d: %w", c.TypeID, c.Me.Int64, c.Te.Int64, err)
 		}
 		stored++
 	}

@@ -181,6 +181,48 @@ func summarizePrices(prices []float64) bookStats {
 	}
 }
 
+// sideStats is the full order-book statistics set for one side of
+// a book, the stat pack's per-side figures (schema 101). Every
+// figure is per order row, like bookStats. Best is the near
+// extreme (lowest sell, highest buy) and Far the other one; P5 is
+// the five-percent edge on the best side (5 in 100 sells at or
+// under it, 5 in 100 buys at or over it).
+type sideStats struct {
+	bookStats
+	Avg, Best, Far, P5, StdDev float64
+	Orders                     int64
+}
+
+// summarizeSide computes the full statistics set over one side's
+// raw order prices. prices is sorted in place. The zero value is
+// returned for an empty side.
+func summarizeSide(prices []float64, buy bool) sideStats {
+	n := len(prices)
+	if n == 0 {
+		return sideStats{}
+	}
+	out := sideStats{bookStats: summarizePrices(prices), Orders: int64(n)}
+	var sum float64
+	for _, p := range prices {
+		sum += p
+	}
+	out.Avg = sum / float64(n)
+	var sq float64
+	for _, p := range prices {
+		d := p - out.Avg
+		sq += d * d
+	}
+	out.StdDev = math.Sqrt(sq / float64(n))
+	if buy {
+		out.Best, out.Far = prices[n-1], prices[0]
+		out.P5 = pricePercentileNR(prices, 95)
+	} else {
+		out.Best, out.Far = prices[0], prices[n-1]
+		out.P5 = pricePercentileNR(prices, 5)
+	}
+	return out
+}
+
 // medianPrice is the middle of ascending prices, averaging the
 // two middle values on an even count.
 func medianPrice(sorted []float64) float64 {

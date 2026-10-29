@@ -227,7 +227,7 @@ func TestSectionGroups(t *testing.T) {
 		t.Errorf("market sub-row = %+v, want My Orders (active) and My Contracts", msub)
 	}
 	_, msub = sectionTabsGrouped(navLinksFor("market", "market.html", 0), "market")
-	wantTools := []string{"/market/", "/market/scanner/", "/market/ideas/", "/market/tradefinder/", "/market/leaderboard/", "/market/restock/", "/contracts/search/"}
+	wantTools := []string{"/market/", "/market/scanner/", "/market/ideas/", "/market/tradefinder/", "/market/leaderboard/", "/market/restock/", "/contracts/search/", "/market/trends/", "/market/lp/", "/market/baskets/"}
 	if len(msub) != len(wantTools) {
 		t.Fatalf("market tools sub-row has %d pages, want %d", len(msub), len(wantTools))
 	}
@@ -253,8 +253,8 @@ func TestSectionGroups(t *testing.T) {
 			t.Errorf("pilot group tab %d = %+v, want %+v", i, ptabs[i], want)
 		}
 	}
-	if len(psub) != 2 || psub[0].Href != "/assets/" || psub[1].Href != "/wallet/" || !psub[1].Active {
-		t.Errorf("pilot sub-row = %+v, want Assets and the active Wallet", psub)
+	if len(psub) != 3 || psub[0].Href != "/assets/" || psub[1].Href != "/wallet/" || psub[2].Href != "/profit/" || !psub[1].Active {
+		t.Errorf("pilot sub-row = %+v, want Assets, the active Wallet and Profit", psub)
 	}
 
 	// The industry strip: Production and Planetary, the
@@ -350,7 +350,7 @@ func TestNavGroupsMirror(t *testing.T) {
 			hrefs []string
 		}{
 			{"Character", []string{"/character/", "/characters/", "/skills/plans", "/killmails/"}},
-			{"Assets & Money", []string{"/assets/", "/wallet/"}},
+			{"Assets & Money", []string{"/assets/", "/wallet/", "/profit/"}},
 			{"Comms", []string{"/mail/", "/calendar/", "/contacts/"}},
 		}, 1, 1},
 		{"industry", "planets.html", []struct {
@@ -364,7 +364,7 @@ func TestNavGroupsMirror(t *testing.T) {
 			label string
 			hrefs []string
 		}{
-			{"Market Tools", []string{"/market/", "/market/scanner/", "/market/ideas/", "/market/tradefinder/", "/market/leaderboard/", "/market/restock/", "/contracts/search/"}},
+			{"Market Tools", []string{"/market/", "/market/scanner/", "/market/ideas/", "/market/tradefinder/", "/market/leaderboard/", "/market/restock/", "/contracts/search/", "/market/trends/", "/market/lp/", "/market/baskets/"}},
 			{"My Finances", []string{"/orders/", "/contracts/"}},
 		}, 1, 0},
 	} {

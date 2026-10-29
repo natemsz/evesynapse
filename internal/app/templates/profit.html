@@ -1,0 +1,116 @@
+{{define "title"}}Profit{{end}}
+{{define "pagetitle"}}<h1><span class="gt">Profit</span></h1>{{end}}
+{{define "pagetabs"}}{{template "sectiontabs" .}}{{end}}
+{{define "content"}}
+
+{{if .Error}}<p class="err">{{.Error}}</p>{{end}}
+
+{{with .Profit}}
+<p><small>Where your ISK came from, activity by activity, each after its own fees and costs.</small></p>
+
+<nav class="mt-modes" aria-label="Whose profit">{{range .Owners}}<a href="{{.Href}}"{{if .Active}} class="active" aria-current="true"{{end}}>{{.Label}}</a>{{end}}</nav>
+<nav class="mt-modes" aria-label="Span">{{range .Spans}}<a href="{{.Href}}"{{if .Active}} class="active" aria-current="true"{{end}}>{{.Label}}</a>{{end}}</nav>
+
+{{if .HasData}}
+<div class="kpis kpis-small">
+  <div class="kpi"><span class="kpi-k">Earned</span><span class="kpi-v"><span class="mt-chg {{.EarnedDir}}">{{.Earned}}</span> <small>ISK</small></span><span class="kpi-sub">{{.OwnerLabel}} · last {{.Days}} days</span></div>
+  {{if .Change}}
+  <div class="kpi"><span class="kpi-k">Net worth change</span><span class="kpi-v"><span class="mt-chg {{.ChangeDir}}">{{.Change}}</span> <small>ISK</small></span><span class="kpi-sub">On days with a net worth sample</span></div>
+  <div class="kpi"><span class="kpi-k">Not explained</span><span class="kpi-v"><span class="mt-chg {{.RemainderDir}}">{{.Remainder}}</span> <small>ISK</small></span><span class="kpi-sub">Price moves on what you hold, losses, and what the wallet doesn't show</span></div>
+  {{end}}
+  {{if .OpenValue}}
+  <div class="kpi"><span class="kpi-k">Open positions</span><span class="kpi-v">{{.OpenValue}} <small>ISK</small></span><span class="kpi-sub">Cost {{.OpenCost}} · <span class="mt-chg {{.UnrealDir}}">{{.Unrealized}}</span> not yet sold</span></div>
+  {{end}}
+</div>
+
+{{with .Chart}}
+<div class="mt-chart">
+  <div class="chart-legend">
+    <span class="legend-item"><span class="legend-swatch mt-swatch-sell" aria-hidden="true"></span>Earned, running total</span>
+    {{if .ChangePoints}}<span class="legend-item"><span class="legend-swatch mt-swatch-buy" aria-hidden="true"></span>Net worth change, running total</span>{{end}}
+    <span class="legend-note">{{.Low}} to {{.High}} ISK</span>
+  </div>
+  <svg viewBox="0 0 {{.Width}} {{.Height}}" width="100%" role="img" aria-label="Running totals by day, {{.First}} to {{.Last}}" preserveAspectRatio="none">
+    <line class="mt-zero" x1="0" y1="{{.ZeroY}}" x2="{{.Width}}" y2="{{.ZeroY}}"/>
+    {{if .ChangePoints}}<polyline class="mt-line-buy" points="{{.ChangePoints}}"/>{{end}}
+    <polyline class="mt-line-sell" points="{{.EarnedPoints}}"/>
+  </svg>
+  <div class="mt-chart-dates"><small>{{.First}}</small><small>{{.Last}}</small></div>
+</div>
+{{end}}
+
+<section class="foldable">
+<h3>By activity</h3>
+<div class="tw">
+<table>
+  <thead><tr><th>Activity</th><th class="mt-num">In</th><th class="mt-num">Costs</th><th class="mt-num">Net</th><th class="mt-num">Share</th></tr></thead>
+  <tbody>
+  {{range .Activities}}
+    <tr>
+      <td>{{.Label}}<br><small class="mt-reqs">{{.Note}}</small></td>
+      <td class="mt-num">{{.Income}}</td>
+      <td class="mt-num">{{.Costs}}</td>
+      <td class="mt-num"><strong class="mt-chg {{.NetDir}}">{{.Net}}</strong></td>
+      <td class="mt-num">{{.Share}}</td>
+    </tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+<p><small>Prices in ISK. Trading costs include {{.SalesTax}} in sales tax and {{.BrokerFees}} in broker fees. Industry counts a job when it delivers: what it made, at EveSynapse's prices that day, less its materials at the same prices. Built items then count as stock at that value, so selling them later is a trade.{{if .Corp}} Corporation figures cover every wallet division; corporations get no net worth line.{{end}}</small></p>
+</section>
+
+<section class="foldable">
+<h3>What made the most in trading</h3>
+{{if .TopTypes}}
+<div class="tw">
+<table>
+  <thead><tr><th>Item</th><th class="mt-num">Sold</th><th class="mt-num">Sold for</th><th class="mt-num">Cost</th><th class="mt-num">Profit</th><th class="mt-num">Margin</th></tr></thead>
+  <tbody>
+  {{range .TopTypes}}
+    <tr>
+      <td><a href="/market/?type={{.TypeID}}">{{.Name}}</a></td>
+      <td class="mt-num">{{.Quantity}}</td>
+      <td class="mt-num">{{.Revenue}}</td>
+      <td class="mt-num">{{.Cost}}</td>
+      <td class="mt-num"><span class="mt-chg {{.ProfitDir}}">{{.Profit}}</span></td>
+      <td class="mt-num">{{.Margin}}</td>
+    </tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+<p><small>Each sale is matched to the oldest stock you still had of that item. Before sales tax and broker fees, which the trading line above includes.</small></p>
+{{else}}
+<p><small>No sales matched to earlier buys in this span.</small></p>
+{{end}}
+</section>
+
+{{if .Positions}}
+<section class="foldable">
+<h3>Open positions</h3>
+<div class="tw">
+<table>
+  <thead><tr><th>Item</th><th class="mt-num">Held</th><th class="mt-num">Cost</th><th class="mt-num">Worth now</th><th class="mt-num">Not yet sold</th></tr></thead>
+  <tbody>
+  {{range .Positions}}
+    <tr>
+      <td><a href="/market/?type={{.TypeID}}">{{.Name}}</a>{{if .Source}} <small class="mt-reqs">({{.Source}})</small>{{end}}</td>
+      <td class="mt-num">{{.Quantity}}</td>
+      <td class="mt-num">{{.Cost}}</td>
+      <td class="mt-num">{{if .Value}}{{.Value}}{{else}}<small>No price</small>{{end}}</td>
+      <td class="mt-num">{{if .Unrealized}}<span class="mt-chg {{.Dir}}">{{.Unrealized}}</span>{{else}}—{{end}}</td>
+    </tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+<p><small>Stock you bought or built and still hold, at typical sell in The Forge. Stock used up, lost or moved away no longer counts.</small></p>
+</section>
+{{end}}
+
+{{else}}
+<p>Nothing recorded yet for {{.OwnerLabel}}. Profit fills in as your wallets sync, and builds up from then on.</p>
+{{end}}
+{{end}}
+{{end}}

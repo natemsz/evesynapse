@@ -10,11 +10,11 @@ package app
 // market_stats_fallback -- its own table, never the sweep
 // tables, with the provenance on every row.
 //
-// The mirror is deliberately narrow about what it keeps: the
+// The mirror quotes only two of its figures as a price: the
 // median and the five-percent band average, the two figures
-// joke orders cannot move. The file's weighted average (one
-// huge lowball drags it) and its extremes are never read into
-// a stored field, so they can never be quoted anywhere.
+// joke orders cannot move. The weighted average (one huge
+// lowball drags it), the extremes and the deviation are stored
+// as dispersion context (schema 101) and never enter the price order.
 //
 // The read side swaps per (type, region): our sweep's row
 // while it is fresh (fallbackOwnFresh), else the fallback row
@@ -40,6 +40,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"sort"
 	"strconv"
@@ -117,8 +118,13 @@ type fallbackKey struct {
 type fallbackAggregate struct {
 	MedianSell, FivePctSell float64
 	MedianBuy, FivePctBuy   float64
-	SellOrders, BuyOrders   int64
-	SellVolume, BuyVolume   float64
+	// The file's remaining statistics (schema 101): dispersion and
+	// depth context shown beside the mirror's provenance. None of
+	// them is ever quoted as a price.
+	WAvgSell, MinSell, MaxSell, StdDevSell float64
+	WAvgBuy, MinBuy, MaxBuy, StdDevBuy     float64
+	SellOrders, BuyOrders                  int64
+	SellVolume, BuyVolume                  float64
 }
 
 // resolvedTypicals is one (type, region)'s typical prices as
@@ -260,6 +266,10 @@ func (app *Application) refreshFallbackPrices(ctx context.Context) bool {
 		buyOrds := make([]int64, n)
 		sellVols := make([]float64, n)
 		buyVols := make([]float64, n)
+		extras := make([][]float64, 8) // wavg/min/max/stddev, sell then buy
+		for k := range extras {
+			extras[k] = make([]float64, n)
+		}
 		for i, key := range chunk {
 			row := rows[key]
 			regIDs[i] = key.RegionID
@@ -272,13 +282,21 @@ func (app *Application) refreshFallbackPrices(ctx context.Context) bool {
 			buyOrds[i] = row.BuyOrders
 			sellVols[i] = row.SellVolume
 			buyVols[i] = row.BuyVolume
+			for k, v := range [8]float64{row.WAvgSell, row.MinSell, row.MaxSell, row.StdDevSell,
+				row.WAvgBuy, row.MinBuy, row.MaxBuy, row.StdDevBuy} {
+				extras[k][i] = v
+			}
 		}
 		if _, err := tx.ExecContext(ctx, `
-			INSERT INTO market_stats_fallback (region_id, type_id, median_sell, fivepct_sell, median_buy, fivepct_buy, sell_orders, buy_orders, sell_volume, buy_volume, source, orderset_id, source_asof, fetched_at)
-			SELECT unnest($1::bigint[]), unnest($2::bigint[]), unnest($3::float8[]), unnest($4::float8[]), unnest($5::float8[]), unnest($6::float8[]), unnest($7::bigint[]), unnest($8::bigint[]), unnest($9::float8[]), unnest($10::float8[]), $11, $12, $13, $14
+			INSERT INTO market_stats_fallback (region_id, type_id, median_sell, fivepct_sell, median_buy, fivepct_buy, sell_orders, buy_orders, sell_volume, buy_volume, source, orderset_id, source_asof, fetched_at,
+				wavg_sell, min_sell, max_sell, stddev_sell, wavg_buy, min_buy, max_buy, stddev_buy)
+			SELECT unnest($1::bigint[]), unnest($2::bigint[]), unnest($3::float8[]), unnest($4::float8[]), unnest($5::float8[]), unnest($6::float8[]), unnest($7::bigint[]), unnest($8::bigint[]), unnest($9::float8[]), unnest($10::float8[]), $11, $12, $13, $14,
+				unnest($15::float8[]), unnest($16::float8[]), unnest($17::float8[]), unnest($18::float8[]), unnest($19::float8[]), unnest($20::float8[]), unnest($21::float8[]), unnest($22::float8[])
 		`, pq.Array(regIDs), pq.Array(typeIDs), pq.Array(medSells), pq.Array(fiveSells),
 			pq.Array(medBuys), pq.Array(fiveBuys), pq.Array(sellOrds), pq.Array(buyOrds),
-			pq.Array(sellVols), pq.Array(buyVols), fallbackSource, fileOrderset, asof, now); err != nil {
+			pq.Array(sellVols), pq.Array(buyVols), fallbackSource, fileOrderset, asof, now,
+			pq.Array(extras[0]), pq.Array(extras[1]), pq.Array(extras[2]), pq.Array(extras[3]),
+			pq.Array(extras[4]), pq.Array(extras[5]), pq.Array(extras[6]), pq.Array(extras[7])); err != nil {
 			logging.Errorf("worker: fallback prices: store batch: %v", err)
 			return false
 		}
@@ -384,10 +402,11 @@ func (app *Application) downloadFuzzworkAggregates(ctx context.Context) (map[fal
 
 // parseFuzzworkAggregates reads the aggregate CSV stream into
 // merged (region, type) rows. The file's columns are matched
-// by header name; only median, fivepercent, volume and
-// numorders are read -- weightedaverage, maxval, minval and
-// stddev are never looked at, so nothing downstream can quote
-// them. A side whose numorders is zero contributes nothing:
+// by header name. median and fivepercent are the only figures
+// a reader may quote as a price; weightedaverage, maxval,
+// minval and stddev are kept as dispersion context (schema
+// 101) and never enter the price order. A side whose numorders
+// is zero contributes nothing:
 // no orders is absent data, not a price of zero. The whole
 // file must carry one orderset; a mixed file is mid-regeneration
 // at the source and is refused whole rather than stored torn.
@@ -467,12 +486,18 @@ func parseFuzzworkAggregates(r io.Reader) (map[fallbackKey]*fallbackAggregate, i
 			row = &fallbackAggregate{}
 			out[key] = row
 		}
+		// The context columns are optional: a file without one (or
+		// with an unreadable value) stores zero, absent data.
+		wavg, minv, maxv, dev := optFloat(field(rec, "weightedaverage")), optFloat(field(rec, "minval")),
+			optFloat(field(rec, "maxval")), optFloat(field(rec, "stddev"))
 		if parts[2] == "true" { // buy side
 			row.MedianBuy, row.FivePctBuy = median, fivePct
 			row.BuyOrders, row.BuyVolume = orders, volume
+			row.WAvgBuy, row.MinBuy, row.MaxBuy, row.StdDevBuy = wavg, minv, maxv, dev
 		} else {
 			row.MedianSell, row.FivePctSell = median, fivePct
 			row.SellOrders, row.SellVolume = orders, volume
+			row.WAvgSell, row.MinSell, row.MaxSell, row.StdDevSell = wavg, minv, maxv, dev
 		}
 	}
 	if foreignRows > 0 {
@@ -485,6 +510,16 @@ func parseFuzzworkAggregates(r io.Reader) (map[fallbackKey]*fallbackAggregate, i
 		return nil, 0, fmt.Errorf("aggregate csv: no usable rows")
 	}
 	return out, orderset, nil
+}
+
+// optFloat reads an optional non-negative statistic; missing or
+// unreadable is zero.
+func optFloat(s string) float64 {
+	f, err := strconv.ParseFloat(s, 64)
+	if err != nil || f < 0 || math.IsNaN(f) || math.IsInf(f, 0) {
+		return 0
+	}
+	return f
 }
 
 // parseFuzzworkCount reads a count field that arrives as a

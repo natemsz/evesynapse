@@ -81,3 +81,46 @@
 .an-ph-intel { background: var(--gold); fill: var(--gold); }
 .an-ph-swarm { background: var(--note); fill: var(--note); }
 .an-ph-other { background: var(--muted-2); fill: var(--muted-2); }
+
+/* Notices tab (notices.go): the publish form, its editor beside the
+   live preview, and the list. */
+.gn-form { display: grid; gap: 0.85rem; max-width: 70rem; }
+.gn-field { display: grid; gap: 0.3rem; min-width: 0; }
+.gn-field > span { font-size: 0.85rem; color: var(--muted); }
+.gn-field input[type="text"], .gn-field textarea, .gn-field select, .gn-field input[type="datetime-local"] { width: 100%; box-sizing: border-box; }
+.gn-field textarea { font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; min-height: 14rem; resize: vertical; }
+.gn-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: 0.85rem; }
+.gn-editor { display: grid; grid-template-columns: 1fr 1fr; gap: 0.85rem; }
+.gn-preview {
+  min-height: 14rem;
+  max-height: 28rem;
+  overflow: auto;
+  padding: 0.6rem 0.8rem;
+  background: var(--input-bg);
+  border: 1px solid var(--box-edge);
+  border-radius: var(--r-sm);
+  box-sizing: border-box;
+}
+.gn-check { display: flex; gap: 0.5rem; align-items: flex-start; }
+.gn-check input { margin-top: 0.2rem; }
+.gn-check input:disabled + span { color: var(--muted); }
+.gn-actions { display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap; }
+.gn-chip {
+  display: inline-block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--gn-c);
+  border: 1px solid currentColor;
+  border-radius: var(--r-xs);
+  padding: 0 0.35rem;
+}
+.gn-row-actions { white-space: nowrap; }
+.gn-row-actions form { display: inline; margin-left: 0.35rem; }
+@media (max-width: 45rem) {
+  .gn-editor { grid-template-columns: 1fr; }
+}
+/* The phone sheet's shared form rule (phone.css) flows labelled
+   fields into wrapping rows; this form keeps its own grid. */
+#main-content #notice-form .gn-form { display: grid; }

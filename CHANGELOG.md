@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.7.0.3] - 2026-10-29
+
+Automated build of EveSynapse v0.7.0.3. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+
+## What's Changed
+### 🚀 Features
+* Add the order book chart set behind the book_depth visualization switch by @natemsz in https://github.com/natemsz/evesynapse/pull/817
+### Other Changes
+* docs(changelog): review changelog for v0.7.0.2 by @github-actions[bot] in https://github.com/natemsz/evesynapse/pull/815
+* Profit per blueprint: realized, at the time, and at today's prices by @natemsz in https://github.com/natemsz/evesynapse/pull/814
+* Profit from LP stores: inferred purchases with confidence tiers, LP income and net LP beside ISK by @natemsz in https://github.com/natemsz/evesynapse/pull/816
+* Profit page charts: daily net, activity split, fees, per character, rolling margin by @natemsz in https://github.com/natemsz/evesynapse/pull/818
+* Intel reader: stop reading scouts' words as pilots by @natemsz in https://github.com/natemsz/evesynapse/pull/819
+
+
+**Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.7.0.2...v0.7.0.3
+
 ## [v0.7.0.2] - 2026-10-29
 
 Automated build of EveSynapse v0.7.0.2. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).

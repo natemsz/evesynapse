@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.6.1.8] - 2026-10-28
+
+Automated build of EveSynapse v0.6.1.8. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+
+## What's Changed
+### Other Changes
+* Stops the abyssal scoring pass on shutdown instead of logging every item by @natemsz in https://github.com/natemsz/evesynapse/pull/783
+
+
+**Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.6.1.6...v0.6.1.8
 ## [v0.6.1.7] - 2026-10-28
 
 Automated build of EveSynapse v0.6.1.7. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).

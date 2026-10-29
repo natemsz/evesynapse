@@ -145,6 +145,16 @@ type Analysis struct {
 	// not waiting on a lookup (those stand in Unknown). It is
 	// recorded, never read back: no output above changes for it.
 	Residue []string `json:"residue,omitempty"`
+	// Systems are the other systems the text names by their
+	// exact names that are not the gate: places spoken of
+	// ("NOL-M9 -> 1DQ1-A" from a system one jump further), never
+	// names. Location is a celestial said in shorthand ("moon 4",
+	// "P3M2"), as the site names it ("Planet 3 Moon 2").
+	Systems  []int64 `json:"systems,omitempty"`
+	Location string  `json:"location,omitempty"`
+	// Areas are the regions and constellations the text names:
+	// places, never names.
+	Areas []int64 `json:"areas,omitempty"`
 	// Suspect is the text, as written, of pilots this reading
 	// resolved on a name that is as likely a word as a
 	// character (SuspectPilot): "Ok", "Ess", "Help". The pilot
@@ -185,6 +195,13 @@ type Dict struct {
 	// that lands here is the system, a location, never a
 	// pilot, and is not offered to the pilot lookup.
 	GateNear func(system int64, lower string) (id int64, ok bool)
+	// System finds any system by its exact name. A system the
+	// text names is a place wherever it stands: a neighbour is
+	// the gate (through Gate), any other is one of the systems
+	// spoken of, and neither is offered as a pilot.
+	System func(lower string) (id int64, ok bool)
+	// Area finds a region or a constellation by its exact name.
+	Area func(lower string) (id int64, ok bool)
 	// Friend reports whether a pilot counts as friendly, and whether
 	// a set standing says they are hostile.
 	Friend func(id int64) (friendly, red bool)
@@ -205,7 +222,10 @@ var keywords = map[string]string{
 	"dic": "dictor", "dics": "dictor", "dictor": "dictor", "dictors": "dictor", "hic": "dictor", "hics": "dictor",
 	"recon": "hunter", "recons": "hunter", "t3": "hunter", "t3c": "hunter", "cloaky": "cloaky", "cloakies": "cloaky", "cloaked": "cloaky",
 	"neut": "local", "neuts": "local", "red": "local", "reds": "local", "local": "local", "spike": "local", "docked": "docked", "dock": "docked",
+	"npc": "npc", "npcs": "npc", "guristas": "npc", "serpentis": "npc", "sansha": "npc", "sanshas": "npc", "angels": "npc",
+	"trig": "npc", "trigs": "npc", "triglavian": "npc", "triglavians": "npc", "drifter": "npc", "drifters": "npc", "edencom": "npc",
 	"gate": "", "on": "", "at": "", "in": "", "and": "", "the": "", "x": "", "+": "", "-": "", "—": "", "–": "", "/": "", "with": "",
+	"->": "", "=>": "", "-->": "", "<-": "", "→": "",
 }
 
 // Nicknamed classes, as ships the report names.
@@ -264,16 +284,20 @@ func Analyze(in Input, d Dict) Analysis {
 		if len(seg) <= 3 {
 			// A whole segment that is a type's name is the thing
 			// (asked before pilots: a character may share the
-			// name), and one that is a pilot's name is one pilot.
+			// name), and one that is a pilot's name is one pilot
+			// when it is shaped like one (nameShaped): a short
+			// phrase between commas ("still there") is not.
 			if s, ok := lookupType(d, whole); ok {
 				addShip(s, 0)
 				continue
 			}
-			if id, name, ok, _ := lookupPilot(d, whole); ok {
+			if !nameShaped(seg) || isSystem(d, whole) {
+				// read word by word below
+			} else if id, name, ok, _ := lookupPilot(d, whole); ok {
 				if !seenPilot[id] {
 					seenPilot[id] = true
 					a.Pilots = append(a.Pilots, Pilot{ID: id, Name: name})
-					if SuspectPilot(whole) {
+					if SuspectPilot(whole) && !linkEnd(seg[len(seg)-1]) {
 						a.Suspect = append(a.Suspect, asWritten(seg))
 					}
 				}
@@ -290,6 +314,9 @@ func Analyze(in Input, d Dict) Analysis {
 		claimed := make([]bool, len(seg))
 		owed := make([]bool, len(seg))
 		markLocation(seg, used)
+		if loc := markCelestial(seg, used); loc != "" && a.Location == "" {
+			a.Location = loc
+		}
 		placey := speaksOfPlace(seg)
 		pending := 0 // a count said before its ship ("2 sabres")
 		for i := 0; i < len(seg); i++ {
@@ -335,7 +362,7 @@ func Analyze(in Input, d Dict) Analysis {
 				// to pilots.
 				var ship Ship
 				var isShip bool
-				for _, cand := range []string{phrase, strings.TrimSuffix(phrase, "s")} {
+				for _, cand := range shipCands(phrase) {
 					if id, name, class, ok := lookupShip(d, cand); ok {
 						ship, isShip = Ship{TypeID: id, Name: name, Class: class}, true
 						break
@@ -360,6 +387,41 @@ func Analyze(in Input, d Dict) Analysis {
 						used[k] = true
 					}
 					matched = true
+				}
+				// A system by its exact name is a place wherever
+				// it stands: a neighbour is the gate (unless one
+				// was read already), the report's own system said
+				// again is read, and any other is a system spoken
+				// of. None of them is a pilot.
+				if !matched && d.System != nil {
+					if id, ok := d.System(phrase); ok {
+						switch {
+						case id == in.System:
+						case d.Gate != nil && gateTo(d, in.System, phrase, id):
+							if a.Gate == 0 {
+								a.Gate = id
+							} else if a.Gate != id {
+								a.Systems = appendID(a.Systems, id)
+							}
+						default:
+							a.Systems = appendID(a.Systems, id)
+						}
+						for k := i; k < i+n; k++ {
+							used[k] = true
+						}
+						matched = true
+					}
+				}
+				// A region or a constellation by its exact name: a
+				// place spoken of, never a pilot.
+				if !matched && d.Area != nil {
+					if id, ok := d.Area(phrase); ok {
+						a.Areas = appendID(a.Areas, id)
+						for k := i; k < i+n; k++ {
+							used[k] = true
+						}
+						matched = true
+					}
 				}
 				// The line speaks of a place and this phrase is
 				// a near-miss of a neighbour's name: the phrase
@@ -402,15 +464,25 @@ func Analyze(in Input, d Dict) Analysis {
 			}
 		}
 		// What is left: pilots, one to three words each, longest
-		// first; what no lookup knows is asked about later.
+		// first; what no lookup knows is asked about later. Only
+		// words shaped like a name are offered (NameLike), and a
+		// name never runs past a link's star: the scout's own
+		// words stay unread, never become characters.
 		var left []int
 		flush := func() {
 			for len(left) > 0 {
 				took := 0
 				for n := min(3, len(left)); n >= 1; n-- {
 					words := make([]string, n)
+					shaped := true
 					for k := 0; k < n; k++ {
 						words[k] = seg[left[k]]
+						if !NameLike(words[k]) || (k < n-1 && linkEnd(words[k])) {
+							shaped = false
+						}
+					}
+					if !shaped {
+						continue
 					}
 					name := clean(strings.Join(words, " "))
 					id, proper, ok, known := lookupPilot(d, name)
@@ -418,7 +490,7 @@ func Analyze(in Input, d Dict) Analysis {
 						if !seenPilot[id] {
 							seenPilot[id] = true
 							a.Pilots = append(a.Pilots, Pilot{ID: id, Name: proper})
-							if SuspectPilot(name) {
+							if SuspectPilot(name) && !linkEnd(words[n-1]) {
 								a.Suspect = append(a.Suspect, asWritten(words))
 							}
 						}
@@ -590,7 +662,7 @@ func lookupInvType(d Dict, lower string) (int64, string, bool) {
 // class), else any inventory type. A phrase that misses is tried
 // once more without a trailing "s", the plural.
 func lookupType(d Dict, phrase string) (Ship, bool) {
-	for _, cand := range []string{phrase, strings.TrimSuffix(phrase, "s")} {
+	for _, cand := range shipCands(phrase) {
 		if id, name, class, ok := lookupShip(d, cand); ok {
 			return Ship{TypeID: id, Name: name, Class: class}, true
 		}
@@ -743,6 +815,7 @@ var placeCues = map[string]bool{
 	"went": true, "gone": true, "going": true,
 	"moved": true, "moving": true, "heading": true, "headed": true,
 	"warped": true, "entered": true, "came": true, "through": true,
+	"->": true, "=>": true, "-->": true, "<-": true, "→": true,
 }
 
 // speaksOfPlace is whether any word of seg is a place cue.

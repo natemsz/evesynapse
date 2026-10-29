@@ -169,6 +169,7 @@ func (app *Application) intelDict(ctx context.Context, channelID int64, missing 
 	ships := app.intelShips(ctx)
 	types := app.intelTypes(ctx)
 	systems := app.systemLookup(ctx)
+	areas := app.intelAreas(ctx)
 	side := app.intelSideOf(ctx, channelID)
 	// The channel's known hostiles are its set standing: a pilot
 	// on the watch list reads red whatever their affiliation says.
@@ -221,8 +222,23 @@ func (app *Application) intelDict(ctx context.Context, channelID int64, missing 
 			}
 			row, err := app.queries.GetIntelPilotName(ctx, l)
 			known := err == nil
+			if row.Thing != "" {
+				// EVE knows the name as a place, an item, a
+				// faction or an alliance too: in a scout's
+				// text it is that thing, as with the SDE's
+				// item names, never the character carrying it.
+				row.CharacterID, row.Name = 0, ""
+			}
 			pilots[l] = [3]any{row.CharacterID, row.Name, known}
 			return row.CharacterID, row.Name, known && row.CharacterID > 0, known
+		},
+		System: func(l string) (int64, bool) {
+			id, _, ok := systems(l)
+			return id, ok
+		},
+		Area: func(l string) (int64, bool) {
+			id, ok := areas[l]
+			return id, ok
 		},
 		Gate: func(sys int64, l string) (int64, bool) {
 			id, _, ok := systems(l)
@@ -315,6 +331,55 @@ type intelNameDict struct {
 }
 
 var intelNameDicts sync.Map // *Application -> *intelNameDict
+
+// intelAreaDict is every region's and constellation's name,
+// lower-cased, to its ID: the places bigger than a system a
+// scout names. Loaded like the other SDE dictionaries, kept six
+// hours.
+type intelAreaDict struct {
+	mu     sync.Mutex
+	ids    map[string]int64
+	names  map[int64]string
+	loaded time.Time
+}
+
+var intelAreaDicts sync.Map // *Application -> *intelAreaDict
+
+func (app *Application) intelAreas(ctx context.Context) map[string]int64 {
+	return app.intelAreaDict(ctx).ids
+}
+
+// intelAreaName is a region's or constellation's proper name.
+func (app *Application) intelAreaName(ctx context.Context, id int64) string {
+	return app.intelAreaDict(ctx).names[id]
+}
+
+func (app *Application) intelAreaDict(ctx context.Context) *intelAreaDict {
+	v, _ := intelAreaDicts.LoadOrStore(app, &intelAreaDict{})
+	d := v.(*intelAreaDict)
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.ids == nil || time.Since(d.loaded) > 6*time.Hour {
+		ids, names := map[string]int64{}, map[int64]string{}
+		if rows, err := app.queries.ListMapRegions(ctx); err == nil {
+			for _, r := range rows {
+				ids[strings.ToLower(r.Name)], names[r.RegionID] = r.RegionID, r.Name
+			}
+		}
+		if rows, err := app.queries.ListMapConstellations(ctx); err == nil {
+			for _, c := range rows {
+				names[c.ConstellationID] = c.Name
+				if _, taken := ids[strings.ToLower(c.Name)]; !taken {
+					ids[strings.ToLower(c.Name)] = c.ConstellationID
+				}
+			}
+		}
+		if len(ids) > 0 {
+			d.ids, d.names, d.loaded = ids, names, time.Now()
+		}
+	}
+	return &intelAreaDict{ids: d.ids, names: d.names}
+}
 
 func (app *Application) intelNameIndex(ctx context.Context) *intelanalyze.NameIndex {
 	v, _ := intelNameDicts.LoadOrStore(app, &intelNameDict{})
@@ -1035,6 +1100,38 @@ type reportShip struct {
 	N    int    `json:"n,omitempty"`
 }
 
+// reportPlace is a system, region or constellation a report
+// names besides its own system and gate; Href is its page, or
+// "" for a place the site has none for.
+type reportPlace struct {
+	Name string `json:"name"`
+	Href string `json:"href,omitempty"`
+}
+
+// reportPlaces names a reading's other systems and areas.
+// Region IDs run in the 10 millions, constellations' in the 20
+// millions: a region links to its page, a constellation stands
+// as a name.
+func reportPlaces(a intelanalyze.Analysis, names *killNames) []reportPlace {
+	var out []reportPlace
+	for _, id := range a.Systems {
+		if s := names.system(id); s.Name != "" {
+			out = append(out, reportPlace{Name: s.Name, Href: fmt.Sprintf("/map/?system=%d", id)})
+		}
+	}
+	for _, id := range a.Areas {
+		name := names.app.intelAreaName(names.ctx, id)
+		switch {
+		case name == "":
+		case id >= 10000000 && id < 20000000:
+			out = append(out, reportPlace{Name: name, Href: fmt.Sprintf("/region/?region=%d", id)})
+		default:
+			out = append(out, reportPlace{Name: name})
+		}
+	}
+	return out
+}
+
 // intelKindLabels says each kind of report in words; chatter and
 // questions get no label.
 var intelKindLabels = map[string]string{
@@ -1093,6 +1190,8 @@ func applyAnalysis(rv *reportView, kind, raw string, names *killNames) {
 			}
 		}
 	}
+	rv.Location = a.Location
+	rv.Places = reportPlaces(a, names)
 	// The stats bar: the standing split stored with the report.
 	// Questions and chatter carry no split worth a bar, as they
 	// carry no kind label.
@@ -1165,8 +1264,64 @@ func intelLookupLimited(app *Application, err error) bool {
 	return true // no status at all: the call never landed
 }
 
-// lookupIntelNames asks EVE which of the names are pilots (exact
-// names, in bulk) and keeps the answers, "no such pilot" included.
+// esiNamed is one entry of a /universe/ids/ answer.
+type esiNamed struct {
+	ID   int64  `json:"id"`
+	Name string `json:"name"`
+}
+
+// esiIDs is a /universe/ids/ answer: every kind of thing EVE
+// found under the names asked, not only characters.
+type esiIDs struct {
+	Characters     []esiNamed `json:"characters"`
+	Regions        []esiNamed `json:"regions"`
+	Constellations []esiNamed `json:"constellations"`
+	Systems        []esiNamed `json:"systems"`
+	Stations       []esiNamed `json:"stations"`
+	InventoryTypes []esiNamed `json:"inventory_types"`
+	Factions       []esiNamed `json:"factions"`
+	Alliances      []esiNamed `json:"alliances"`
+}
+
+// things is each lower-cased name's first non-character kind in
+// the answer, in the order a scout most likely means it: a place,
+// then an item, then a faction or alliance.
+func (ids esiIDs) things() map[string]string {
+	out := map[string]string{}
+	for _, k := range []struct {
+		kind string
+		list []esiNamed
+	}{
+		{intelThingSystem, ids.Systems}, {intelThingRegion, ids.Regions},
+		{intelThingConstellation, ids.Constellations}, {intelThingStation, ids.Stations},
+		{intelThingType, ids.InventoryTypes}, {intelThingFaction, ids.Factions},
+		{intelThingAlliance, ids.Alliances},
+	} {
+		for _, e := range k.list {
+			l := strings.ToLower(e.Name)
+			if _, ok := out[l]; !ok {
+				out[l] = k.kind
+			}
+		}
+	}
+	return out
+}
+
+// The kinds intel_pilot_names.thing records (schema 113).
+const (
+	intelThingSystem        = "system"
+	intelThingRegion        = "region"
+	intelThingConstellation = "constellation"
+	intelThingStation       = "station"
+	intelThingType          = "inventory_type"
+	intelThingFaction       = "faction"
+	intelThingAlliance      = "alliance"
+)
+
+// lookupIntelNames asks EVE what the names are (exact names, in
+// bulk) and keeps the answers: the pilot, "no such pilot", and
+// what else EVE says the name is (a region, an item, a faction),
+// so a name that is also a thing reads as the thing in prose.
 func (app *Application) lookupIntelNames(ctx context.Context, names map[string]bool, now time.Time) (limited bool) {
 	list := make([]string, 0, len(names))
 	for n := range names {
@@ -1174,29 +1329,25 @@ func (app *Application) lookupIntelNames(ctx context.Context, names map[string]b
 	}
 	for start := 0; start < len(list); start += 500 {
 		end := min(start+500, len(list))
-		var ids struct {
-			Characters []struct {
-				ID   int64  `json:"id"`
-				Name string `json:"name"`
-			} `json:"characters"`
-		}
+		var ids esiIDs
 		if err := app.esi.PostJSON(ctx, "/universe/ids/", list[start:end], &ids); err != nil {
 			logging.Warnf("intel: look up %d names: %v", end-start, err)
 			return intelLookupLimited(app, err)
 		}
+		things := ids.things()
 		found := map[string]bool{}
 		for _, c := range ids.Characters {
 			l := strings.ToLower(c.Name)
 			found[l] = true
 			app.esi.StoreCharacterName(c.ID, c.Name)
-			_ = app.queries.UpsertIntelPilotName(ctx, db.UpsertIntelPilotNameParams{NameLower: l, CharacterID: c.ID, Name: c.Name, CheckedAt: now})
+			_ = app.queries.UpsertIntelPilotName(ctx, db.UpsertIntelPilotNameParams{NameLower: l, CharacterID: c.ID, Name: c.Name, CheckedAt: now, Thing: things[l]})
 		}
 		if len(found) > 0 {
 			app.intelNamesChanged()
 		}
 		for _, n := range list[start:end] {
 			if !found[n] {
-				_ = app.queries.UpsertIntelPilotName(ctx, db.UpsertIntelPilotNameParams{NameLower: n, CheckedAt: now})
+				_ = app.queries.UpsertIntelPilotName(ctx, db.UpsertIntelPilotNameParams{NameLower: n, CheckedAt: now, Thing: things[n]})
 			}
 		}
 	}

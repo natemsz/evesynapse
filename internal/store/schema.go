@@ -676,6 +676,12 @@ var pgBriefingDismissalsSchema string
 //go:embed schema_pg/111_viz_prefs.sql
 var pgVizPrefsSchema string
 
+// Step 113: the non-character kind a looked-up intel name also
+// is, so a name that is a place or an item reads as one.
+//
+//go:embed schema_pg/113_intel_name_things.sql
+var pgIntelNameThingsSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -816,6 +822,7 @@ func schemaSteps() []schemaStep {
 		{109, "briefing_dismissals", pgBriefingDismissalsSchema, ""},
 		{110, "watchlist_baskets", pgWatchlistBasketsSchema, ""},
 		{111, "viz_prefs", pgVizPrefsSchema, ""},
+		{113, "intel_name_things", pgIntelNameThingsSchema, ""},
 	}
 }
 

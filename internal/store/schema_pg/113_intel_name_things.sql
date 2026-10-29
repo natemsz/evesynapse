@@ -1,0 +1,11 @@
+-- Schema step 113: what else a looked-up name is.
+--
+-- intel_pilot_names.thing: EVE's name lookup answers every kind
+-- of thing a string names, not only characters. thing records the
+-- first non-character kind ESI gave for the name ("region",
+-- "constellation", "system", "station", "inventory_type",
+-- "faction", "alliance"), or '' when it named none. A name that is
+-- a character and also such a thing reads as the thing in a
+-- scout's free-form text (intel_analysis.go), as the SDE's item
+-- names already do.
+ALTER TABLE intel_pilot_names ADD COLUMN IF NOT EXISTS thing TEXT NOT NULL DEFAULT '';

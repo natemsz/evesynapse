@@ -124,6 +124,9 @@ type intelComposite struct {
 	Pilots     []intelanalyze.Pilot         `json:"pilots,omitempty"` // analysis union, the no-local fallback
 	Ships      []intelanalyze.Ship          `json:"ships,omitempty"`  // analysis union, the no-dscan fallback
 	Gate       int64                        `json:"gate,omitempty"`
+	Location   string                       `json:"location,omitempty"` // the newest member's celestial
+	Systems    []int64                      `json:"systems,omitempty"`  // other systems the members name
+	Areas      []int64                      `json:"areas,omitempty"`    // regions and constellations they name
 	Counts     *intelanalyze.StandingCounts `json:"counts,omitempty"`
 	Links      []compLink                   `json:"links,omitempty"`
 	Likely     []compLikely                 `json:"likely,omitempty"`
@@ -522,6 +525,15 @@ func (app *Application) buildGroupComposite(ctx context.Context, members []db.In
 		if mr.analysis.Gate > 0 {
 			comp.Gate = mr.analysis.Gate
 		}
+		if comp.Location == "" {
+			comp.Location = mr.analysis.Location
+		}
+		for _, id := range mr.analysis.Systems {
+			comp.Systems = appendUniqueID(comp.Systems, id)
+		}
+		for _, id := range mr.analysis.Areas {
+			comp.Areas = appendUniqueID(comp.Areas, id)
+		}
 	}
 	for _, p := range pilotByID {
 		if len(comp.Pilots) < intelGroupPilotCap {
@@ -874,6 +886,8 @@ func (app *Application) applyCompositeCard(ctx context.Context, rv *reportView, 
 		rv.Gate = names.system(comp.Gate).Name
 		rv.GateID = comp.Gate
 	}
+	rv.Location = comp.Location
+	rv.Places = reportPlaces(intelanalyze.Analysis{Systems: comp.Systems, Areas: comp.Areas}, names)
 	if comp.Counts != nil && kind != intelanalyze.KindQuestion && kind != intelanalyze.KindChatter {
 		rv.Split = standingSplit(comp.Counts)
 		rv.Hostiles = int32(comp.Counts.Hostile)
@@ -1016,4 +1030,14 @@ func compMemberDelta(comp *intelComposite, m compMember) string {
 		return "matches the group picture"
 	}
 	return strings.Join(parts, ", ")
+}
+
+// appendUniqueID adds id to ids once.
+func appendUniqueID(ids []int64, id int64) []int64 {
+	for _, v := range ids {
+		if v == id {
+			return ids
+		}
+	}
+	return append(ids, id)
 }

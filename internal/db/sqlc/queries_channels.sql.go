@@ -444,7 +444,7 @@ func (q *Queries) GetIntelPilotAffiliation(ctx context.Context, characterID int6
 }
 
 const getIntelPilotName = `-- name: GetIntelPilotName :one
-SELECT name_lower, character_id, name, checked_at FROM intel_pilot_names WHERE name_lower = $1
+SELECT name_lower, character_id, name, checked_at, thing FROM intel_pilot_names WHERE name_lower = $1
 `
 
 func (q *Queries) GetIntelPilotName(ctx context.Context, nameLower string) (IntelPilotName, error) {
@@ -455,6 +455,7 @@ func (q *Queries) GetIntelPilotName(ctx context.Context, nameLower string) (Inte
 		&i.CharacterID,
 		&i.Name,
 		&i.CheckedAt,
+		&i.Thing,
 	)
 	return i, err
 }
@@ -1317,15 +1318,22 @@ SELECT name_lower, character_id, name, checked_at FROM intel_pilot_names
 WHERE name_lower = ANY($1::text[])
 `
 
-func (q *Queries) ListIntelPilotNamesByLower(ctx context.Context, nameLowers []string) ([]IntelPilotName, error) {
+type ListIntelPilotNamesByLowerRow struct {
+	NameLower   string    `json:"name_lower"`
+	CharacterID int64     `json:"character_id"`
+	Name        string    `json:"name"`
+	CheckedAt   time.Time `json:"checked_at"`
+}
+
+func (q *Queries) ListIntelPilotNamesByLower(ctx context.Context, nameLowers []string) ([]ListIntelPilotNamesByLowerRow, error) {
 	rows, err := q.db.QueryContext(ctx, listIntelPilotNamesByLower, pq.Array(nameLowers))
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []IntelPilotName
+	var items []ListIntelPilotNamesByLowerRow
 	for rows.Next() {
-		var i IntelPilotName
+		var i ListIntelPilotNamesByLowerRow
 		if err := rows.Scan(
 			&i.NameLower,
 			&i.CharacterID,
@@ -2614,9 +2622,9 @@ func (q *Queries) UpsertIntelPilotAffiliation(ctx context.Context, arg UpsertInt
 }
 
 const upsertIntelPilotName = `-- name: UpsertIntelPilotName :exec
-INSERT INTO intel_pilot_names (name_lower, character_id, name, checked_at)
-VALUES ($1, $2, $3, $4)
-ON CONFLICT (name_lower) DO UPDATE SET character_id = EXCLUDED.character_id, name = EXCLUDED.name, checked_at = EXCLUDED.checked_at
+INSERT INTO intel_pilot_names (name_lower, character_id, name, checked_at, thing)
+VALUES ($1, $2, $3, $4, $5)
+ON CONFLICT (name_lower) DO UPDATE SET character_id = EXCLUDED.character_id, name = EXCLUDED.name, checked_at = EXCLUDED.checked_at, thing = EXCLUDED.thing
 `
 
 type UpsertIntelPilotNameParams struct {
@@ -2624,6 +2632,7 @@ type UpsertIntelPilotNameParams struct {
 	CharacterID int64     `json:"character_id"`
 	Name        string    `json:"name"`
 	CheckedAt   time.Time `json:"checked_at"`
+	Thing       string    `json:"thing"`
 }
 
 func (q *Queries) UpsertIntelPilotName(ctx context.Context, arg UpsertIntelPilotNameParams) error {
@@ -2632,6 +2641,7 @@ func (q *Queries) UpsertIntelPilotName(ctx context.Context, arg UpsertIntelPilot
 		arg.CharacterID,
 		arg.Name,
 		arg.CheckedAt,
+		arg.Thing,
 	)
 	return err
 }

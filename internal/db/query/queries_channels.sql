@@ -146,16 +146,16 @@ WHERE id = sqlc.arg(id);
 SELECT character_id, name FROM intel_pilot_names WHERE character_id > 0;
 
 -- name: GetIntelPilotName :one
-SELECT name_lower, character_id, name, checked_at FROM intel_pilot_names WHERE name_lower = $1;
+SELECT name_lower, character_id, name, checked_at, thing FROM intel_pilot_names WHERE name_lower = $1;
 
 -- name: ListIntelPilotNamesByLower :many
 SELECT name_lower, character_id, name, checked_at FROM intel_pilot_names
 WHERE name_lower = ANY(sqlc.arg(name_lowers)::text[]);
 
 -- name: UpsertIntelPilotName :exec
-INSERT INTO intel_pilot_names (name_lower, character_id, name, checked_at)
-VALUES (sqlc.arg(name_lower), sqlc.arg(character_id), sqlc.arg(name), sqlc.arg(checked_at))
-ON CONFLICT (name_lower) DO UPDATE SET character_id = EXCLUDED.character_id, name = EXCLUDED.name, checked_at = EXCLUDED.checked_at;
+INSERT INTO intel_pilot_names (name_lower, character_id, name, checked_at, thing)
+VALUES (sqlc.arg(name_lower), sqlc.arg(character_id), sqlc.arg(name), sqlc.arg(checked_at), sqlc.arg(thing))
+ON CONFLICT (name_lower) DO UPDATE SET character_id = EXCLUDED.character_id, name = EXCLUDED.name, checked_at = EXCLUDED.checked_at, thing = EXCLUDED.thing;
 
 -- name: GetIntelPilotAffiliation :one
 SELECT character_id, corporation_id, alliance_id, checked_at FROM intel_pilot_affiliations WHERE character_id = $1;

@@ -245,6 +245,12 @@ type reportView struct {
 	Ships     []reportShip  `json:"ships,omitempty"`
 	Gate      string        `json:"gate,omitempty"`
 	GateID    int64         `json:"gateId,omitempty"`
+	// Location is the celestial the text placed the report at
+	// ("Planet 3 Moon 2"); Places are the other systems, regions
+	// and constellations it named, each linking to its page where
+	// it has one.
+	Location string        `json:"location,omitempty"`
+	Places   []reportPlace `json:"places,omitempty"`
 	// Split is the report's standing split as proportional
 	// segments for the stats bar, from the counts stored with
 	// the report at ingest.

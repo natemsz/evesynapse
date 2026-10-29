@@ -2187,8 +2187,6 @@ html[data-theme="light"] .brief-card.sev-info { --brief-tint: #b2cddd; }
 .brief-flip-card[data-pos="1"] { transform: translate(5px, 5px); z-index: 2; }
 .brief-flip-card[data-pos="2"] { transform: translate(10px, 10px); z-index: 1; }
 .brief-flip-card:not([data-pos="0"]):not([data-pos="1"]):not([data-pos="2"]) { display: none; }
-.brief-flip-card.tucking { z-index: 0 !important; }
-.brief-flip-card.rising { z-index: 5 !important; }
 .brief-flip-card.brief-off { display: none !important; }
 .brief-deck.brief-off { display: none; }
 .brief-deck.has-flip .brief-flip-card { padding-bottom: 2.15rem; }

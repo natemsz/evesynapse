@@ -1167,46 +1167,68 @@
     var idx = vis.indexOf(face);
     var nxt = vis[(idx + dir + vis.length) % vis.length];
     var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    deck._face = nxt;
-    if (reduce || !deck.animate) { briefLayout(deck); return; }
+    if (reduce || !deck.animate) { deck._face = nxt; briefLayout(deck); return; }
     deck.classList.add("flipping");
     var h0 = face.offsetHeight;
     var h1 = briefMeasure(nxt);
     deck.style.height = h0 + "px";
     var heightAnim = null;
     try {
-      heightAnim = deck.animate([{ height: h0 + "px" }, { height: h1 + "px" }], { duration: 300, easing: "ease-in-out" });
+      heightAnim = deck.animate([{ height: h0 + "px" }, { height: h1 + "px" }], { duration: 380, easing: "ease-in-out" });
     } catch (e) {}
+    // The moving card travels on top of the stack, where the eye can
+    // follow it: forward, the face lifts off the front, arcs up and
+    // sweeps back into the rear slot; backward, the rear card makes
+    // the same trip in reverse onto the front. The layout swap waits
+    // until the travel lands.
+    var mover = dir > 0 ? face : nxt;
+    var flight = null;
     var settled = false;
     var done = function () {
       if (settled) return;
       settled = true;
-      face.classList.remove("tucking");
-      face.style.position = "";
-      face.style.inset = "";
-      nxt.classList.remove("rising");
+      if (flight) flight.cancel();
+      if (heightAnim) heightAnim.cancel();
+      mover.style.position = "";
+      mover.style.inset = "";
+      mover.style.display = "";
       deck.classList.remove("flipping");
       deck.style.height = "";
-      if (heightAnim) heightAnim.cancel();
+      deck._face = nxt;
       briefLayout(deck);
     };
     if (dir > 0) {
-      face.classList.add("tucking");
-      face.style.position = "absolute";
-      face.style.inset = "0";
+      mover.style.position = "absolute";
+      mover.style.inset = "0";
       try {
-        var a = face.animate([
-          { transform: "translate(0, 0) scale(1)" },
-          { transform: "translate(3px, 18px) scale(0.97)", offset: 0.55 },
-          { transform: "translate(10px, 10px) scale(0.97)" }
-        ], { duration: 300, easing: "ease-in-out" });
-        a.finished.then(done, done);
-      } catch (e) { done(); }
+        flight = mover.animate([
+          { transform: "translate(0, 0) rotate(0deg) scale(1)", zIndex: 6 },
+          { transform: "translate(-18px, -12px) rotate(-1.8deg) scale(1.02)", zIndex: 6, offset: 0.32 },
+          { transform: "translate(16px, 18px) rotate(0.9deg) scale(0.98)", zIndex: 2, offset: 0.78 },
+          { transform: "translate(10px, 10px) rotate(0deg) scale(0.97)", zIndex: 1 }
+        ], { duration: 380, easing: "ease-in-out" });
+      } catch (e) {}
     } else {
-      nxt.classList.add("rising");
+      // The incoming card can sit past the two visible rear slots,
+      // where it is display:none: stage it at the rear slot so it
+      // has geometry to travel from.
+      if (window.getComputedStyle(mover).display === "none") {
+        mover.style.display = "block";
+        mover.style.position = "absolute";
+        mover.style.inset = "0";
+      }
+      try {
+        flight = mover.animate([
+          { transform: "translate(10px, 10px) rotate(0deg) scale(0.97)", zIndex: 1 },
+          { transform: "translate(16px, 18px) rotate(0.9deg) scale(0.98)", zIndex: 2, offset: 0.22 },
+          { transform: "translate(-18px, -12px) rotate(-1.8deg) scale(1.02)", zIndex: 6, offset: 0.68 },
+          { transform: "translate(0, 0) rotate(0deg) scale(1)", zIndex: 6 }
+        ], { duration: 380, easing: "ease-in-out" });
+      } catch (e) {}
     }
-    briefLayout(deck, dir > 0 ? face : null);
-    setTimeout(done, 360);
+    if (flight && flight.finished) flight.finished.then(done, done);
+    else done();
+    setTimeout(done, 460);
   }
   function initBriefFlip(root) {
     var buttons = root.querySelectorAll("[data-brief-flip]");

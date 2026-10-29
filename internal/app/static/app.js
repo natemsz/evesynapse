@@ -1139,8 +1139,9 @@
 
   // --- Briefing stack flip -----------------------------------------
   // A stack shows one line at a time. The more button (bottom
-  // right) and horizontal swipes flip through the rest with a
-  // slide; the sheets behind the card count down as you advance.
+  // right) and horizontal swipes flip through the rest: the face
+  // card tucks behind the stack and the next sheet steps up. The
+  // sheets behind the card count down as you advance.
   function briefVisible(card) {
     var rows = card.querySelectorAll(".brief-row");
     var out = [];
@@ -1183,20 +1184,32 @@
       if (settled) return;
       settled = true;
       cur.classList.remove("brief-active");
+      cur.style.zIndex = "";
       nxt.classList.remove("brief-in");
       nxt.classList.add("brief-active");
+      nxt.style.zIndex = "";
       card.classList.remove("flipping");
       briefSheets(card);
     };
     try {
-      var out = cur.animate(
-        [{ opacity: 1, transform: "translateX(0)" }, { opacity: 0, transform: "translateX(" + (-dir * 26) + "px)" }],
-        { duration: 190, easing: "ease-in" });
-      var inn = nxt.animate(
-        [{ opacity: 0, transform: "translateX(" + (dir * 26) + "px)" }, { opacity: 1, transform: "translateX(0)" }],
-        { duration: 190, easing: "ease-out" });
+      // Deck cycle: forward, the face card tucks down-right into
+      // the sheets behind the stack while the next sheet steps up
+      // to the face; backward, the back card comes up and the face
+      // lifts away.
+      var outK, inK;
+      if (dir > 0) {
+        outK = [{ opacity: 1, transform: "translate(0, 0) scale(1)" }, { opacity: 0, transform: "translate(10px, 10px) scale(0.96)" }];
+        inK = [{ opacity: 0.4, transform: "translate(5px, 5px) scale(0.98)" }, { opacity: 1, transform: "translate(0, 0) scale(1)" }];
+      } else {
+        outK = [{ opacity: 1, transform: "translate(0, 0) scale(1)" }, { opacity: 0, transform: "translate(-14px, 0) scale(1.01)" }];
+        inK = [{ opacity: 0, transform: "translate(10px, 10px) scale(0.96)" }, { opacity: 1, transform: "translate(0, 0) scale(1)" }];
+      }
+      cur.style.zIndex = "1";
+      nxt.style.zIndex = "2";
+      var out = cur.animate(outK, { duration: 260, easing: "ease-in" });
+      var inn = nxt.animate(inK, { duration: 260, easing: "ease-out" });
       Promise.all([out.finished, inn.finished]).then(done, done);
-      setTimeout(done, 300);
+      setTimeout(done, 340);
     } catch (e) {
       done();
     }

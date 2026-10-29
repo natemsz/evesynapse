@@ -1120,6 +1120,7 @@
         }
         for (var s = 0; s < decks.length; s++) {
           var vis = briefLayout(decks[s]);
+          briefFitDeck(decks[s]);
           decks[s].classList.toggle("brief-off", !vis.length);
         }
       });
@@ -1129,11 +1130,12 @@
   initBriefTabs(document);
 
   // --- Briefing deck flip ------------------------------------------
-  // Each kind is a deck of full cards: the face card in front, the
-  // next two peeking behind it. The more button (bottom right) and
-  // horizontal swipes flip through the deck: the whole face card
-  // dips and tucks behind the stack while the next card steps up,
-  // and the deck's height eases to the new face.
+  // Each kind is a deck with one painted card: the face, over two
+  // empty shells that suggest the stack behind it. The more button
+  // (bottom right) and horizontal swipes flip through the deck:
+  // the face folds edge-on, swaps under the fold, and the next
+  // card unfolds (briefFlip). The deck holds one height
+  // throughout (briefFitDeck).
   function briefDeckVisible(deck) {
     var cards = deck.querySelectorAll(".brief-flip-card");
     var out = [];
@@ -1155,6 +1157,16 @@
       if (vis[i] === except) continue;
       vis[i].setAttribute("data-pos", String((i - start + vis.length) % vis.length));
     }
+    // The deck's empty shells (style.css ::before/::after) show
+    // only while the face has company, and they wear the face's
+    // colors: copy its tint and edge onto the deck.
+    deck.classList.toggle("has-stack", vis.length > 1);
+    try {
+      var cs = getComputedStyle(face);
+      var tint = cs.getPropertyValue("--brief-tint");
+      if (tint) deck.style.setProperty("--brief-tint", tint.trim());
+      if (cs.borderLeftColor) deck.style.setProperty("--brief-edge", cs.borderLeftColor);
+    } catch (e) {}
     return vis;
   }
   function briefMeasure(card) {
@@ -1164,6 +1176,20 @@
     var h = card.offsetHeight;
     card.style.cssText = prev;
     return h;
+  }
+  // A deck with a stack holds one height, its tallest visible
+  // card's, so flipping never grows or shrinks the deck and the
+  // sheets behind the face show the same amount under every card.
+  function briefFitDeck(deck) {
+    deck.style.height = "";
+    var vis = briefDeckVisible(deck);
+    if (vis.length < 2) return;
+    var max = 0;
+    for (var i = 0; i < vis.length; i++) {
+      var h = briefMeasure(vis[i]);
+      if (h > max) max = h;
+    }
+    if (max) deck.style.height = max + "px";
   }
   function briefFlip(deck, dir) {
     if (deck.classList.contains("flipping")) return;
@@ -1175,84 +1201,42 @@
     var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     if (reduce || !deck.animate) { deck._face = nxt; briefLayout(deck); return; }
     deck.classList.add("flipping");
-    var h0 = face.offsetHeight;
-    var h1 = briefMeasure(nxt);
-    deck.style.height = h0 + "px";
-    var heightAnim = null;
-    try {
-      heightAnim = deck.animate([{ height: h0 + "px" }, { height: h1 + "px" }], { duration: 470, easing: "ease-in-out" });
-    } catch (e) {}
-    // The moving card travels on top of the stack, where the eye can
-    // follow it: forward, the face lifts off the front, arcs up and
-    // sweeps back into the rear slot; backward, the rear card makes
-    // the same trip in reverse onto the front. The layout swap waits
-    // until the travel lands.
-    var mover = dir > 0 ? face : nxt;
-    var flight = null;
-    var shifted = [];
+    // Midpoint flip: the face folds edge-on around its center,
+    // the deck swaps the face under the fold, and the new face
+    // unfolds. Only one card is ever painted (see style.css), so
+    // nothing travels and nothing can bleed; the swap happens at
+    // 90 degrees, where the card is a line.
+    var fold = null, unfold = null;
     var settled = false;
     var done = function () {
       if (settled) return;
       settled = true;
-      if (flight) flight.cancel();
-      if (heightAnim) heightAnim.cancel();
-      mover.style.position = "";
-      mover.style.inset = "";
-      mover.style.display = "";
-      for (var s2 = 0; s2 < shifted.length; s2++) shifted[s2].style.transform = "";
+      if (fold) fold.cancel();
+      if (unfold) unfold.cancel();
       deck.classList.remove("flipping");
-      deck.style.height = "";
       deck._face = nxt;
       briefLayout(deck);
     };
-    if (dir > 0) {
-      // The stack steps up as the face lifts: the next card slides
-      // into the face slot and the sheet behind it takes its place,
-      // so the deck settles in one motion instead of two. done()
-      // clears the inline transforms in the same frame it assigns
-      // the matching positions, so nothing snaps.
-      var rear1 = deck.querySelector('.brief-flip-card[data-pos="1"]:not(.brief-off)');
-      var rear2 = deck.querySelector('.brief-flip-card[data-pos="2"]:not(.brief-off)');
-      if (rear1) { rear1.style.transform = "translate(0px, 0px)"; shifted.push(rear1); }
-      if (rear2) { rear2.style.transform = "translate(5px, 5px)"; shifted.push(rear2); }
-      mover.style.position = "absolute";
-      mover.style.inset = "0";
+    try {
+      fold = face.animate([
+        { transform: "rotateX(0deg)", opacity: "1" },
+        { transform: "rotateX(90deg)", opacity: "0.55" }
+      ], { duration: 160, easing: "cubic-bezier(.4,0,.7,.4)", fill: "forwards" });
+    } catch (e) { done(); return; }
+    fold.onfinish = function () {
+      deck._face = nxt;
+      briefLayout(deck);
+      if (fold) fold.cancel();
       try {
-        flight = mover.animate([
-          { transform: "translate(0, 0) rotate(0deg) scale(1)", zIndex: 6 },
-          { transform: "translate(-18px, -12px) rotate(-1.8deg) scale(1.02)", zIndex: 6, offset: 0.32 },
-          { transform: "translate(16px, 18px) rotate(0.9deg) scale(0.98)", zIndex: 2, offset: 0.78 },
-          { transform: "translate(10px, 10px) rotate(0deg) scale(0.97)", zIndex: 1 }
-        ], { duration: 470, easing: "ease-in-out" });
-      } catch (e) {}
-    } else {
-      // The stack steps back as the incoming card travels: the
-      // face eases into the first rear slot and the sheet behind
-      // it into the second, settling in one motion.
-      var back1 = deck.querySelector('.brief-flip-card[data-pos="1"]:not(.brief-off)');
-      face.style.transform = "translate(5px, 5px)";
-      shifted.push(face);
-      if (back1 && back1 !== mover) { back1.style.transform = "translate(10px, 10px)"; shifted.push(back1); }
-      // The incoming card can sit past the two visible rear slots,
-      // where it is display:none: stage it at the rear slot so it
-      // has geometry to travel from.
-      if (window.getComputedStyle(mover).display === "none") {
-        mover.style.display = "block";
-        mover.style.position = "absolute";
-        mover.style.inset = "0";
-      }
-      try {
-        flight = mover.animate([
-          { transform: "translate(10px, 10px) rotate(0deg) scale(0.97)", zIndex: 1 },
-          { transform: "translate(16px, 18px) rotate(0.9deg) scale(0.98)", zIndex: 2, offset: 0.22 },
-          { transform: "translate(-18px, -12px) rotate(-1.8deg) scale(1.02)", zIndex: 6, offset: 0.68 },
-          { transform: "translate(0, 0) rotate(0deg) scale(1)", zIndex: 6 }
-        ], { duration: 470, easing: "ease-in-out" });
-      } catch (e) {}
-    }
-    if (flight && flight.finished) flight.finished.then(done, done);
-    else done();
-    setTimeout(done, 560);
+        unfold = nxt.animate([
+          { transform: "rotateX(90deg)", opacity: "0.55" },
+          { transform: "rotateX(0deg)", opacity: "1" }
+        ], { duration: 200, easing: "cubic-bezier(.2,.6,.3,1)", fill: "forwards" });
+        unfold.onfinish = function () { done(); };
+      } catch (e) { done(); }
+    };
+    // Safety: if a finish event is ever dropped, settle anyway.
+    setTimeout(done, 600);
   }
   function initBriefFlip(root) {
     var buttons = root.querySelectorAll("[data-brief-flip]");
@@ -1266,6 +1250,7 @@
     for (var c = 0; c < decks.length; c++) {
       (function (deck) {
         briefLayout(deck);
+        briefFitDeck(deck);
         var sx = 0, sy = 0, tracking = false;
         deck.addEventListener("pointerdown", function (e) {
           if (e.button !== undefined && e.button !== 0) return;
@@ -1292,6 +1277,19 @@
   }
   onContentReady(initBriefFlip);
   initBriefFlip(document);
+
+  // Card heights ride the layout width and the loaded faces:
+  // refit every deck when either settles.
+  var briefRefitTimer = 0;
+  function briefRefitAll() {
+    var decks = document.querySelectorAll(".brief-cards .brief-deck");
+    for (var i = 0; i < decks.length; i++) briefFitDeck(decks[i]);
+  }
+  window.addEventListener("resize", function () {
+    clearTimeout(briefRefitTimer);
+    briefRefitTimer = setTimeout(briefRefitAll, 150);
+  });
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(briefRefitAll);
 
   // --- Briefing dismissed list -------------------------------------
   // The Dismissed (n) button opens the modal of hidden lines.

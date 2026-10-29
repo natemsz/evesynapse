@@ -2164,21 +2164,28 @@ html[data-theme="light"] .brief-card.sev-critical { --brief-tint: #dfbab2; }
 html[data-theme="light"] .brief-card.sev-warning { --brief-tint: #e6cfa0; }
 html[data-theme="light"] .brief-card.sev-info { --brief-tint: #b2cddd; }
 
-/* Briefing decks: one deck per kind, one full card per line.
-   The face card sits in flow; the next two cards peek behind it
-   as the deck's sheets, offset down-right. The whole card is a
-   link (the face anchor stretches over it) while the line's own
-   links and the dismiss button stay clickable above the overlay.
-   Flipping (the more button, or a swipe) sends the whole face
-   card behind the deck; see app.js. */
+/* Briefing decks: one deck per kind, one painted card per deck.
+   The face card sits in flow over two empty shells (the deck's
+   ::before and ::after, below) that suggest the stack behind it,
+   offset down-right; every other card in the deck stays
+   display:none, so no content can ever show under the face. The
+   whole card is a link (the face anchor stretches over it) while
+   the line's own links and the dismiss button stay clickable
+   above the overlay. Flipping (the more button, or a swipe)
+   folds the face edge-on and swaps it under the fold; see
+   app.js. */
 .brief-deck { position: relative; flex: 1 1 0; min-width: min(100%, 22rem); max-width: calc((100% - 1.5rem) / 3); touch-action: pan-y; }
 .brief-deck .brief-card { flex: none; min-width: 0; max-width: none; width: 100%; }
 .brief-flip-card { transition: transform 360ms ease, opacity 360ms ease; }
-.brief-flip-card[data-pos="0"] { position: relative; z-index: 3; }
-.brief-flip-card[data-pos="1"], .brief-flip-card[data-pos="2"] { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
-.brief-flip-card[data-pos="1"] { transform: translate(5px, 5px); z-index: 2; }
-.brief-flip-card[data-pos="2"] { transform: translate(10px, 10px); z-index: 1; }
-.brief-flip-card:not([data-pos="0"]):not([data-pos="1"]):not([data-pos="2"]) { display: none; }
+.brief-flip-card[data-pos="0"] { position: relative; z-index: 3; height: 100%; transform-origin: center; backface-visibility: hidden; }
+.brief-flip-card:not([data-pos="0"]) { display: none; }
+/* The shells wear the face card's colors: app.js copies its
+   --brief-tint and border edge onto the deck as --brief-tint
+   and --brief-edge whenever the face changes. */
+.brief-deck.has-stack { perspective: 900px; }
+.brief-deck.has-stack::before, .brief-deck.has-stack::after { content: ""; position: absolute; inset: 0; border-radius: var(--r-md); border: 1px solid color-mix(in srgb, var(--brief-edge, rgba(255, 110, 0, 0.16)) 35%, transparent); border-left: 3px solid var(--brief-edge, var(--muted)); background: color-mix(in srgb, var(--brief-tint, var(--panel)) 45%, var(--panel) 17%, transparent); pointer-events: none; }
+.brief-deck.has-stack::before { transform: translate(5px, 5px); z-index: 2; }
+.brief-deck.has-stack::after { transform: translate(10px, 10px); z-index: 1; }
 .brief-flip-card.brief-off { display: none !important; }
 .brief-deck.brief-off { display: none; }
 .brief-deck.has-flip .brief-flip-card { padding-bottom: 2.15rem; }

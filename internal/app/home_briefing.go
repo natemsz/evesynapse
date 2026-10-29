@@ -248,9 +248,9 @@ func briefingKind(rank int) string {
 		return "pi"
 	case briefingOrderExpired, briefingOrderExpiring, briefingUndercut:
 		return "orders"
-	case briefingJobReady:
+	case briefingJobReady, briefingIdleSlots:
 		return "industry"
-	case briefingSkillEnding, briefingNotTraining, briefingIdleSlots:
+	case briefingSkillEnding, briefingNotTraining:
 		return "skills"
 	case briefingCourier, briefingContract:
 		return "contract"

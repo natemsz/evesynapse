@@ -1128,6 +1128,24 @@
   onContentReady(initBriefTabs);
   initBriefTabs(document);
 
+  // --- Briefing stack expand ---------------------------------------
+  // A stack's count chip opens it: every line lays out and the
+  // hidden sheets go away. Clicking again folds it back to its
+  // top line.
+  function initBriefExpand(root) {
+    var toggles = root.querySelectorAll("[data-brief-expand]");
+    for (var i = 0; i < toggles.length; i++) {
+      toggles[i].addEventListener("click", function () {
+        var stack = this.closest(".brief-stack");
+        if (!stack) return;
+        var open = stack.classList.toggle("expanded");
+        this.setAttribute("aria-expanded", open ? "true" : "false");
+      });
+    }
+  }
+  onContentReady(initBriefExpand);
+  initBriefExpand(document);
+
   // --- Briefing dismissed list -------------------------------------
   // The Dismissed (n) button opens the modal of hidden lines.
   function initBriefDismissed(root) {

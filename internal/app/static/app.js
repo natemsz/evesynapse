@@ -1094,13 +1094,13 @@
   initFleetFilter(document);
 
   // --- Briefing severity tabs ------------------------------------
-  // All / Critical / Warning / Info swap which lines show; a stack
-  // whose lines are all filtered out hides with them.
+  // All / Critical / Warning / Info swap which cards show; a deck
+  // whose cards are all filtered out hides with them.
   function initBriefTabs(root) {
     var tabs = root.querySelectorAll("[data-brief]");
     if (!tabs.length) return;
-    var rows = root.querySelectorAll(".brief-cards .brief-row");
-    var stacks = root.querySelectorAll(".brief-cards .brief-stack");
+    var cards = root.querySelectorAll(".brief-cards .brief-flip-card");
+    var decks = root.querySelectorAll(".brief-cards .brief-deck");
     for (var i = 0; i < tabs.length; i++) {
       tabs[i].addEventListener("click", function () {
         var sev = this.getAttribute("data-brief");
@@ -1109,27 +1109,12 @@
           tabs[j].classList.toggle("on", on);
           tabs[j].setAttribute("aria-pressed", on ? "true" : "false");
         }
-        for (var k = 0; k < rows.length; k++) {
-          rows[k].classList.toggle("brief-off", sev !== "all" && rows[k].getAttribute("data-sev") !== sev);
+        for (var k = 0; k < cards.length; k++) {
+          cards[k].classList.toggle("brief-off", sev !== "all" && cards[k].getAttribute("data-sev") !== sev);
         }
-        for (var s = 0; s < stacks.length; s++) {
-          var any = sev === "all";
-          if (!any) {
-            var rs = stacks[s].querySelectorAll(".brief-row");
-            for (var q = 0; q < rs.length; q++) {
-              if (!rs[q].classList.contains("brief-off")) { any = true; break; }
-            }
-          }
-          stacks[s].classList.toggle("brief-off", !any);
-          var act = stacks[s].querySelector(".brief-row.brief-active");
-          if (act && act.classList.contains("brief-off")) {
-            var vis = briefVisible(stacks[s]);
-            if (vis.length) {
-              act.classList.remove("brief-active");
-              vis[0].classList.add("brief-active");
-            }
-          }
-          briefSheets(stacks[s]);
+        for (var s = 0; s < decks.length; s++) {
+          var vis = briefLayout(decks[s]);
+          decks[s].classList.toggle("brief-off", !vis.length);
         }
       });
     }
@@ -1137,116 +1122,126 @@
   onContentReady(initBriefTabs);
   initBriefTabs(document);
 
-  // --- Briefing stack flip -----------------------------------------
-  // A stack shows one line at a time. The more button (bottom
-  // right) and horizontal swipes flip through the rest: the face
-  // card tucks behind the stack and the next sheet steps up. The
-  // sheets behind the card count down as you advance.
-  function briefVisible(card) {
-    var rows = card.querySelectorAll(".brief-row");
+  // --- Briefing deck flip ------------------------------------------
+  // Each kind is a deck of full cards: the face card in front, the
+  // next two peeking behind it. The more button (bottom right) and
+  // horizontal swipes flip through the deck: the whole face card
+  // dips and tucks behind the stack while the next card steps up,
+  // and the deck's height eases to the new face.
+  function briefDeckVisible(deck) {
+    var cards = deck.querySelectorAll(".brief-flip-card");
     var out = [];
-    for (var i = 0; i < rows.length; i++) {
-      if (!rows[i].classList.contains("brief-off")) out.push(rows[i]);
+    for (var i = 0; i < cards.length; i++) {
+      if (!cards[i].classList.contains("brief-off")) out.push(cards[i]);
     }
     return out;
   }
-  function briefSheets(card) {
-    var vis = briefVisible(card);
-    var idx = -1;
+  // Positions run from the face: 0 in front, 1 and 2 the sheets
+  // behind, the rest hidden at the back. except keeps its current
+  // position (the leaving face, mid-flip).
+  function briefLayout(deck, except) {
+    var vis = briefDeckVisible(deck);
+    if (!vis.length) return vis;
+    var face = deck._face && vis.indexOf(deck._face) >= 0 ? deck._face : vis[0];
+    deck._face = face;
+    var start = vis.indexOf(face);
     for (var i = 0; i < vis.length; i++) {
-      if (vis[i].classList.contains("brief-active")) idx = i;
+      if (vis[i] === except) continue;
+      vis[i].setAttribute("data-pos", String((i - start + vis.length) % vis.length));
     }
-    var left = vis.length - 1 - idx;
-    card.classList.toggle("has-stack", left >= 1);
-    card.classList.toggle("has-stack-2", left >= 2);
+    return vis;
   }
-  function briefFlip(card, dir) {
-    if (card.classList.contains("flipping")) return;
-    var vis = briefVisible(card);
+  function briefMeasure(card) {
+    if (card.getAttribute("data-pos") === "0") return card.offsetHeight;
+    var prev = card.style.cssText;
+    card.style.cssText = prev + ";display:block;position:absolute;visibility:hidden;height:auto;max-height:none;overflow:visible;";
+    var h = card.offsetHeight;
+    card.style.cssText = prev;
+    return h;
+  }
+  function briefFlip(deck, dir) {
+    if (deck.classList.contains("flipping")) return;
+    var vis = briefLayout(deck);
     if (vis.length < 2) return;
-    var cur = null, idx = -1;
-    for (var i = 0; i < vis.length; i++) {
-      if (vis[i].classList.contains("brief-active")) { cur = vis[i]; idx = i; }
-    }
-    if (!cur) { cur = vis[0]; idx = 0; }
+    var face = deck._face;
+    var idx = vis.indexOf(face);
     var nxt = vis[(idx + dir + vis.length) % vis.length];
     var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    if (reduce || !cur.animate) {
-      cur.classList.remove("brief-active");
-      nxt.classList.add("brief-active");
-      briefSheets(card);
-      return;
-    }
-    card.classList.add("flipping");
-    nxt.classList.add("brief-in");
+    deck._face = nxt;
+    if (reduce || !deck.animate) { briefLayout(deck); return; }
+    deck.classList.add("flipping");
+    var h0 = face.offsetHeight;
+    var h1 = briefMeasure(nxt);
+    deck.style.height = h0 + "px";
+    var heightAnim = null;
+    try {
+      heightAnim = deck.animate([{ height: h0 + "px" }, { height: h1 + "px" }], { duration: 300, easing: "ease-in-out" });
+    } catch (e) {}
     var settled = false;
     var done = function () {
       if (settled) return;
       settled = true;
-      cur.classList.remove("brief-active");
-      cur.style.zIndex = "";
-      nxt.classList.remove("brief-in");
-      nxt.classList.add("brief-active");
-      nxt.style.zIndex = "";
-      card.classList.remove("flipping");
-      briefSheets(card);
+      face.classList.remove("tucking");
+      face.style.position = "";
+      face.style.inset = "";
+      nxt.classList.remove("rising");
+      deck.classList.remove("flipping");
+      deck.style.height = "";
+      if (heightAnim) heightAnim.cancel();
+      briefLayout(deck);
     };
-    try {
-      // Deck cycle: forward, the face card tucks down-right into
-      // the sheets behind the stack while the next sheet steps up
-      // to the face; backward, the back card comes up and the face
-      // lifts away.
-      var outK, inK;
-      if (dir > 0) {
-        outK = [{ opacity: 1, transform: "translate(0, 0) scale(1)" }, { opacity: 0, transform: "translate(10px, 10px) scale(0.96)" }];
-        inK = [{ opacity: 0.4, transform: "translate(5px, 5px) scale(0.98)" }, { opacity: 1, transform: "translate(0, 0) scale(1)" }];
-      } else {
-        outK = [{ opacity: 1, transform: "translate(0, 0) scale(1)" }, { opacity: 0, transform: "translate(-14px, 0) scale(1.01)" }];
-        inK = [{ opacity: 0, transform: "translate(10px, 10px) scale(0.96)" }, { opacity: 1, transform: "translate(0, 0) scale(1)" }];
-      }
-      cur.style.zIndex = "1";
-      nxt.style.zIndex = "2";
-      var out = cur.animate(outK, { duration: 260, easing: "ease-in" });
-      var inn = nxt.animate(inK, { duration: 260, easing: "ease-out" });
-      Promise.all([out.finished, inn.finished]).then(done, done);
-      setTimeout(done, 340);
-    } catch (e) {
-      done();
+    if (dir > 0) {
+      face.classList.add("tucking");
+      face.style.position = "absolute";
+      face.style.inset = "0";
+      try {
+        var a = face.animate([
+          { transform: "translate(0, 0) scale(1)" },
+          { transform: "translate(3px, 18px) scale(0.97)", offset: 0.55 },
+          { transform: "translate(10px, 10px) scale(0.97)" }
+        ], { duration: 300, easing: "ease-in-out" });
+        a.finished.then(done, done);
+      } catch (e) { done(); }
+    } else {
+      nxt.classList.add("rising");
     }
+    briefLayout(deck, dir > 0 ? face : null);
+    setTimeout(done, 360);
   }
   function initBriefFlip(root) {
     var buttons = root.querySelectorAll("[data-brief-flip]");
     for (var i = 0; i < buttons.length; i++) {
       buttons[i].addEventListener("click", function () {
-        var card = this.closest(".brief-stack");
-        if (card) briefFlip(card, 1);
+        var deck = this.closest(".brief-deck");
+        if (deck) briefFlip(deck, 1);
       });
     }
-    var cards = root.querySelectorAll(".brief-cards .brief-stack");
-    for (var c = 0; c < cards.length; c++) {
-      (function (card) {
+    var decks = root.querySelectorAll(".brief-cards .brief-deck");
+    for (var c = 0; c < decks.length; c++) {
+      (function (deck) {
+        briefLayout(deck);
         var sx = 0, sy = 0, tracking = false;
-        card.addEventListener("pointerdown", function (e) {
+        deck.addEventListener("pointerdown", function (e) {
           if (e.button !== undefined && e.button !== 0) return;
           if (e.target && e.target.closest && e.target.closest("a, button, form, input")) return;
           sx = e.clientX; sy = e.clientY; tracking = true;
         });
-        card.addEventListener("pointerup", function (e) {
+        deck.addEventListener("pointerup", function (e) {
           if (!tracking) return;
           tracking = false;
           var dx = e.clientX - sx, dy = e.clientY - sy;
           if (Math.abs(dx) > 48 && Math.abs(dx) > Math.abs(dy) * 1.4) {
-            card._briefSwipedAt = Date.now();
-            briefFlip(card, dx < 0 ? 1 : -1);
+            deck._briefSwipedAt = Date.now();
+            briefFlip(deck, dx < 0 ? 1 : -1);
           }
         });
-        card.addEventListener("click", function (e) {
-          if (card._briefSwipedAt && Date.now() - card._briefSwipedAt < 350) {
+        deck.addEventListener("click", function (e) {
+          if (deck._briefSwipedAt && Date.now() - deck._briefSwipedAt < 350) {
             e.preventDefault();
             e.stopPropagation();
           }
         }, true);
-      })(cards[c]);
+      })(decks[c]);
     }
   }
   onContentReady(initBriefFlip);

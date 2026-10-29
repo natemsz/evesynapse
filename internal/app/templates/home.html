@@ -87,13 +87,15 @@
     {{if .Counts.Info}}<button type="button" class="chip sev-info" data-brief="info" aria-pressed="false">Info ({{.Counts.Info}})</button>{{end}}
   </div>
   <ul class="briefing brief-cards">
-  {{/* One stack per kind: the stack's face links where its first
-       line links, and each line can be hidden (not deleted) into
-       the dismissed list below. */}}
-  {{range .Stacks}}<li class="brief-card brief-stack sev-{{.Severity}}{{if gt (len .Items) 1}} has-stack has-flip{{end}}{{if gt (len .Items) 2}} has-stack-2{{end}}">
-    <span class="brief-head"><a class="brief-card-link" href="{{.Href}}"><span class="brief-icon brief-icon-{{.Kind}}" aria-hidden="true"></span><span class="brief-stack-title">{{.Title}}</span></a><span class="brief-meta">{{if gt (len .Items) 1}}<span class="brief-count">{{len .Items}} alerts</span>{{end}}</span></span>
-    <div class="brief-rows">{{range $i, $it := .Items}}<div class="brief-row{{if eq $i 0}} brief-active{{end}}" data-sev="{{$it.Severity}}"><div class="brief-row-main">{{if $it.Title}}<h4 class="brief-title">{{$it.Title}}</h4>{{end}}<span class="brief-text">{{$it.HTML}}</span></div><span class="brief-row-side"><span class="sev">{{$it.Severity}}</span>{{if $it.Count}}<span class="brief-count">{{$it.Count}}</span>{{end}}{{if $it.Key}}<form class="brief-dismiss" method="post" action="/home/briefing/dismiss"><input type="hidden" name="key" value="{{$it.Key}}"><button type="submit" class="brief-x" aria-label="Dismiss this alert" title="Dismiss — hide it; it stays under Dismissed while it applies">×</button></form>{{end}}</span></div>{{end}}</div>
-    {{if gt (len .Items) 1}}<button type="button" class="brief-more-btn" data-brief-flip aria-label="Show the next alert in this stack">more <span class="brief-arrow" aria-hidden="true">→</span></button>{{end}}
+  {{/* One deck per kind: every line is a full card, the face card
+       in front and the rest stacked behind it. Each line can be
+       hidden (not deleted) into the dismissed list below. */}}
+  {{range $s := .Stacks}}<li class="brief-deck{{if gt (len $s.Items) 1}} has-flip{{end}}">
+    {{range $i, $it := $s.Items}}<div class="brief-card brief-flip-card sev-{{$it.Severity}}" data-pos="{{$i}}" data-sev="{{$it.Severity}}">
+      <span class="brief-head"><a class="brief-card-link" href="{{$s.Href}}"><span class="brief-icon brief-icon-{{$s.Kind}}" aria-hidden="true"></span><span class="brief-stack-title">{{$s.Title}}</span></a><span class="brief-meta">{{if gt (len $s.Items) 1}}<span class="brief-count">{{len $s.Items}} alerts</span>{{end}}</span></span>
+      <div class="brief-row"><div class="brief-row-main">{{if $it.Title}}<h4 class="brief-title">{{$it.Title}}</h4>{{end}}<span class="brief-text">{{$it.HTML}}</span></div><span class="brief-row-side"><span class="sev">{{$it.Severity}}</span>{{if $it.Count}}<span class="brief-count">{{$it.Count}}</span>{{end}}{{if $it.Key}}<form class="brief-dismiss" method="post" action="/home/briefing/dismiss"><input type="hidden" name="key" value="{{$it.Key}}"><button type="submit" class="brief-x" aria-label="Dismiss this alert" title="Dismiss — hide it; it stays under Dismissed while it applies">×</button></form>{{end}}</span></div>
+      {{if gt (len $s.Items) 1}}<button type="button" class="brief-more-btn" data-brief-flip aria-label="Show the next alert in this stack">more <span class="brief-arrow" aria-hidden="true">→</span></button>{{end}}
+    </div>{{end}}
   </li>{{end}}
   </ul>
   {{if .More}}<p><small>+{{.More}} more need{{if eq .More 1}}s{{end}} your attention.</small></p>{{end}}

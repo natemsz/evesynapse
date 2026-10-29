@@ -2172,33 +2172,27 @@ html[data-theme="light"] .brief-card.sev-critical { --brief-tint: #dfbab2; }
 html[data-theme="light"] .brief-card.sev-warning { --brief-tint: #e6cfa0; }
 html[data-theme="light"] .brief-card.sev-info { --brief-tint: #b2cddd; }
 
-/* Briefing stacks: one card per kind, its lines as rows. A stack
-   with more than one line shows the sheets behind it; the whole
-   card is a link (the face anchor stretches over it) while the
-   lines' own links and the dismiss buttons stay clickable above
-   the overlay. */
-.brief-stack { position: relative; }
-.brief-stack.has-stack::before, .brief-stack.has-stack-2::after {
-  content: ""; position: absolute; inset: 0; z-index: -1;
-  border-radius: inherit; border: 1px solid rgba(255, 110, 0, 0.10);
-  background: color-mix(in srgb, var(--brief-tint, var(--panel)) 30%, transparent);
-  transition: opacity 140ms ease;
-}
-.brief-stack.has-stack::before { transform: translate(5px, 5px); }
-.brief-stack.has-stack-2::after { transform: translate(10px, 10px); }
-/* A stack shows one line at a time; the sheets behind it are the
-   lines still to flip through, and they deplete as you advance.
-   Flip with the more button or a swipe; mid-flip the two rows
-   share a grid cell so the card never jumps. */
-.brief-stack { touch-action: pan-y; }
-.brief-rows { position: relative; }
-.brief-stack .brief-row { display: none; border-top: none; }
-.brief-stack .brief-row.brief-active { display: flex; }
-.brief-stack .brief-row.brief-off { display: none !important; }
-.brief-stack.flipping .brief-rows { display: grid; }
-.brief-stack.flipping .brief-row { grid-area: 1 / 1; }
-.brief-stack.flipping .brief-row.brief-active, .brief-stack.flipping .brief-row.brief-in { display: flex; }
-.brief-stack.has-flip { padding-bottom: 2.15rem; }
+/* Briefing decks: one deck per kind, one full card per line.
+   The face card sits in flow; the next two cards peek behind it
+   as the deck's sheets, offset down-right. The whole card is a
+   link (the face anchor stretches over it) while the line's own
+   links and the dismiss button stay clickable above the overlay.
+   Flipping (the more button, or a swipe) sends the whole face
+   card behind the deck; see app.js. */
+.brief-deck { position: relative; flex: 1 1 0; min-width: min(100%, 22rem); max-width: calc((100% - 1.5rem) / 3); touch-action: pan-y; }
+.brief-deck .brief-card { flex: none; min-width: 0; max-width: none; width: 100%; }
+.brief-flip-card { transition: transform 280ms ease, opacity 280ms ease; }
+.brief-flip-card[data-pos="0"] { position: relative; z-index: 3; }
+.brief-flip-card[data-pos="1"], .brief-flip-card[data-pos="2"] { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+.brief-flip-card[data-pos="1"] { transform: translate(5px, 5px); z-index: 2; }
+.brief-flip-card[data-pos="2"] { transform: translate(10px, 10px); z-index: 1; }
+.brief-flip-card:not([data-pos="0"]):not([data-pos="1"]):not([data-pos="2"]) { display: none; }
+.brief-flip-card.tucking { z-index: 0 !important; }
+.brief-flip-card.rising { z-index: 5 !important; }
+.brief-flip-card.brief-off { display: none !important; }
+.brief-deck.brief-off { display: none; }
+.brief-deck.has-flip .brief-flip-card { padding-bottom: 2.15rem; }
+.brief-deck.noanim .brief-flip-card { transition: none; }
 .brief-more-btn { position: absolute; right: 0.6rem; bottom: 0.55rem; z-index: 1; display: inline-flex; align-items: center; gap: 0.3rem; padding: 0.22rem 0.6rem; border-radius: 999px; border: 1px solid rgba(255, 255, 255, 0.16); background: color-mix(in srgb, var(--brief-tint, var(--panel)) 30%, rgba(10, 14, 20, 0.35)); color: var(--text); font-family: "Rajdhani", "Segoe UI", sans-serif; font-size: 0.8rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; cursor: pointer; }
 .brief-more-btn:hover, .brief-more-btn:focus-visible { border-color: var(--accent); color: var(--text-bright); }
 .brief-more-btn .brief-arrow { transition: transform 160ms ease; }
@@ -2208,9 +2202,9 @@ html[data-theme="light"] .brief-card.sev-info { --brief-tint: #b2cddd; }
 .brief-card-link::after { content: ""; position: absolute; inset: 0; border-radius: inherit; }
 .brief-cards .brief-row a, .brief-cards .brief-row button, .brief-cards .brief-row form, .brief-cards .brief-head button { position: relative; z-index: 1; }
 .brief-card-link { display: inline-flex; align-items: center; gap: 0.5rem; }
-.brief-stack .brief-head { margin-bottom: 0.15rem; }
+.brief-deck .brief-head { margin-bottom: 0.15rem; }
 .brief-stack-title { font-family: "Rajdhani", "Segoe UI", sans-serif; font-size: 1.3rem; font-weight: 700; line-height: 1.05; letter-spacing: 0.01em; }
-.brief-stack .brief-count { border: 1px solid rgba(255, 255, 255, 0.14); border-radius: 999px; padding: 0.08rem 0.45rem; }
+.brief-deck .brief-count { border: 1px solid rgba(255, 255, 255, 0.14); border-radius: 999px; padding: 0.08rem 0.45rem; }
 .brief-row { display: flex; align-items: flex-start; gap: 0.6rem; padding: 0.55rem 0; border-top: 1px solid color-mix(in srgb, var(--brief-tint, transparent) 30%, rgba(255, 255, 255, 0.05)); }
 .brief-cards .brief-row:first-of-type { border-top: none; }
 .brief-row-main { flex: 1 1 auto; min-width: 0; }

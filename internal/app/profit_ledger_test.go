@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"fmt"
 	"math"
 	"strings"
 	"testing"
@@ -268,5 +269,76 @@ func TestProfitPooledTradingItems(t *testing.T) {
 	}
 	if len(rows) == 0 || rows[0].TypeID != 34 {
 		t.Errorf("first row = %+v, want the fully covered item first", rows)
+	}
+}
+
+// A blueprint's three figures: the job consumes the material lots it
+// was built from (at their bought cost), the output's sale links to
+// the job, realized nets the job's share of cost and the sale's tax,
+// and today's figure reruns the recipe at the stat pack.
+func TestProfitIndustryBlueprint(t *testing.T) {
+	app, _, q := buildCorpTestApp(t, &countingTransport{})
+	ctx := context.Background()
+	user, err := q.CreateUser(ctx)
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	seedCharacter(t, q, user.ID, fixtureCharA, "Builder")
+	now := time.Now().UTC().Truncate(time.Second)
+	at := func(h int) string { return now.Add(time.Duration(-h) * time.Hour).Format(time.RFC3339) }
+	for _, s := range []string{
+		`INSERT INTO sde_blueprints (blueprint_type_id, product_type_id, product_quantity, max_production_limit, manufacturing_time_seconds) VALUES (9001, 9002, 1, 100, 600)`,
+		`INSERT INTO sde_blueprint_materials (blueprint_type_id, material_type_id, quantity) VALUES (9001, 34, 10)`,
+	} {
+		if _, err := app.db.ExecContext(ctx, s); err != nil {
+			t.Fatalf("seed sde: %v", err)
+		}
+	}
+	if _, err := app.db.ExecContext(ctx, `INSERT INTO market_region_stats (region_id, type_id, typical_sell, typical_buy, updated_at) VALUES
+		(10000002, 34, 6, 5, $1), (10000002, 9002, 500, 450, $1)`, now.Add(-time.Hour)); err != nil {
+		t.Fatalf("seed stats: %v", err)
+	}
+	seedSnapshot(t, q, fixtureCharA, esi.SnapWalletTxns, esi.WalletTransactions{
+		{TransactionID: 1, Date: at(50), TypeID: 34, Quantity: 100, UnitPrice: 5, IsBuy: true},
+		{TransactionID: 2, Date: at(10), TypeID: 9002, Quantity: 3, UnitPrice: 400},
+	})
+	seedSnapshot(t, q, fixtureCharA, esi.SnapWalletJournal, esi.WalletJournal{
+		{ID: 11, Date: at(10), RefType: "transaction_tax", Amount: -24},
+	})
+	seedSnapshot(t, q, fixtureCharA, esi.SnapBlueprints, esi.Blueprints{{ItemID: 555, TypeID: 9001, MaterialEfficiency: 10}})
+	seedSnapshot(t, q, fixtureCharA, esi.SnapIndustryJobs, esi.IndustryJobs{{
+		JobID: 77, ActivityID: 1, BlueprintTypeID: 9001, BlueprintID: 555, ProductTypeID: 9002, Runs: 5, SuccessfulRuns: 5,
+		Status: "delivered", StartDate: at(40), EndDate: at(30), CompletedDate: at(30), Cost: 1000, FacilityID: 60003760,
+	}})
+	ch, err := q.GetCharacter(ctx, fixtureCharA)
+	if err != nil {
+		t.Fatalf("read character: %v", err)
+	}
+	app.refreshProfitLedger(ctx, ch, now)
+
+	var fifoQty int64
+	var fifoCost float64
+	if err := app.db.QueryRowContext(ctx, `SELECT fifo_qty, fifo_cost FROM ledger_job_materials WHERE job_id = 77 AND type_id = 34`).Scan(&fifoQty, &fifoCost); err != nil || fifoQty != 45 || fifoCost != 225 {
+		t.Fatalf("job materials = %d at %v (%v), want 45 at 225 (ME 10 on 5 runs of 10, bought at 5)", fifoQty, fifoCost, err)
+	}
+	rows, err := q.ListIndustrySummary(ctx, db.ListIndustrySummaryParams{PoolKind: poolAcct, PoolIds: []int64{user.ID}, RowCap: 10})
+	if err != nil || len(rows) != 1 {
+		t.Fatalf("summary = %+v (%v), want one blueprint", rows, err)
+	}
+	s := rows[0]
+	near := func(a, b float64) bool { return math.Abs(a-b) < 1e-6 }
+	// 3 sold at 400 = 1200, tax 24, cost 3/5 of (225 materials + 1000 job).
+	if s.UnitsSold != 3 || !near(s.ARevenue, 1200) || !near(s.ATax, 24) || !near(s.ACost, 735) {
+		t.Errorf("realized = sold %d, revenue %v, tax %v, cost %v; want 3, 1200, 24, 735", s.UnitsSold, s.ARevenue, s.ATax, s.ACost)
+	}
+	// Today, per run: 500 x (1 - 2% tax) - 9 x 6 - 200 job cost = 236; 5 runs.
+	if !s.CPriced || !near(s.CTotal, 1180) {
+		t.Errorf("today = %v (priced %v), want 1180", s.CTotal, s.CPriced)
+	}
+	cookie := sessionCookie(t, app, user.ID, fixtureCharA, "Builder")
+	for _, path := range []string{"/profit/", fmt.Sprintf("/profit/blueprint/?pool=acct-%d&bp=9001", user.ID)} {
+		if code, body := getPage(t, app, cookie, path); code != 200 || !strings.Contains(body, "1,180") && !strings.Contains(body, "job-event") {
+			t.Errorf("GET %s: status %d, want the blueprint figures or its jobs", path, code)
+		}
 	}
 }

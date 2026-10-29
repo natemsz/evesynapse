@@ -37,25 +37,21 @@ SELECT sqlc.arg(owner_kind)::text, sqlc.arg(owner_id)::bigint,
 ON CONFLICT DO NOTHING
 RETURNING at, type_id;
 
--- name: InsertLedgerJob :one
-INSERT INTO ledger_jobs (owner_kind, owner_id, job_id, at, activity_id, product_type_id, units, output_value, materials_cost, priced)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-ON CONFLICT DO NOTHING
-RETURNING at;
-
 -- name: ListLedgerJobIDs :many
+-- Jobs already landed with their recipe facts.
 SELECT job_id FROM ledger_jobs
-WHERE owner_kind = $1 AND owner_id = $2 AND job_id = ANY(sqlc.arg(job_ids)::bigint[]);
+WHERE owner_kind = $1 AND owner_id = $2 AND job_id = ANY(sqlc.arg(job_ids)::bigint[]) AND blueprint_type_id > 0;
 
 
 -- name: GetUserProfitPrefs :one
-SELECT pooled, broker_in_margin FROM user_profit_prefs WHERE user_id = $1;
+SELECT pooled, broker_in_margin, industry_region, industry_side FROM user_profit_prefs WHERE user_id = $1;
 
 -- name: UpsertUserProfitPrefs :exec
-INSERT INTO user_profit_prefs (user_id, pooled, broker_in_margin, updated_at)
-VALUES ($1, $2, $3, now())
+INSERT INTO user_profit_prefs (user_id, pooled, broker_in_margin, industry_region, industry_side, updated_at)
+VALUES ($1, $2, $3, $4, $5, now())
 ON CONFLICT (user_id) DO UPDATE SET
     pooled = excluded.pooled, broker_in_margin = excluded.broker_in_margin,
+    industry_region = excluded.industry_region, industry_side = excluded.industry_side,
     updated_at = excluded.updated_at;
 
 -- name: GetLedgerPoolState :one
@@ -170,26 +166,46 @@ ON CONFLICT (owner_kind, owner_id, entry_id) DO UPDATE SET
 
 -- name: ListPoolLotsForTypeSince :many
 -- Everything that adds or removes stock of one type across a pool's
--- members, oldest first, from a fold checkpoint on: market buys and
--- sells (with the member that made them), delivered job output (at
--- the house price the day it delivered), and the pool's manual cost
--- basis entries. The caller prepends the stored open lots at the
--- checkpoint, which stand in for everything older.
-SELECT x.at, x.ref_id, x.owner_id, x.is_sell, x.quantity, x.unit_price
+-- members, oldest first, from a fold checkpoint on:
+--   'txn'     market buys and sells, with the member that made them
+--             (a sell the player linked to a job prefers that job's lot);
+--   'job'     delivered job output, at the house price the day it delivered;
+--   'basis'   the pool's manual cost basis entries;
+--   'consume' materials a job used, removed when it was installed;
+--   'msale', 'lost' units of a job's output the player sold off-market
+--             or marked lost.
+-- The caller prepends the stored open lots at the checkpoint, which
+-- stand in for everything older.
+SELECT x.at, x.ref_id, x.owner_id, x.is_sell, x.quantity, x.unit_price, x.kind, x.prefer_ref
 FROM (
-    SELECT t.at, t.transaction_id AS ref_id, t.owner_id, NOT t.is_buy AS is_sell, t.quantity, t.unit_price
+    SELECT t.at, t.transaction_id AS ref_id, t.owner_id, NOT t.is_buy AS is_sell, t.quantity, t.unit_price, 'txn' AS kind,
+           COALESCE((SELECT -e.job_id FROM job_manual_events e
+                     WHERE e.pool_kind = sqlc.arg(pool_kind) AND e.pool_id = sqlc.arg(pool_id)
+                       AND e.kind = 'link' AND e.transaction_id = t.transaction_id
+                     ORDER BY e.id DESC LIMIT 1), 0)::bigint AS prefer_ref
     FROM ledger_txns t
     WHERE t.owner_kind = sqlc.arg(owner_kind) AND t.owner_id = ANY(sqlc.arg(owner_ids)::bigint[]) AND t.type_id = sqlc.arg(type_id)
     UNION ALL
-    SELECT j.at, -j.job_id AS ref_id, j.owner_id, false AS is_sell, j.units AS quantity,
-           CASE WHEN j.units > 0 THEN j.output_value / j.units ELSE 0 END AS unit_price
+    SELECT j.at, -j.job_id, j.owner_id, false, j.units,
+           CASE WHEN j.units > 0 THEN j.output_value / j.units ELSE 0 END, 'job', 0::bigint
     FROM ledger_jobs j
     WHERE j.owner_kind = sqlc.arg(owner_kind) AND j.owner_id = ANY(sqlc.arg(owner_ids)::bigint[])
       AND j.product_type_id = sqlc.arg(type_id) AND j.priced
     UNION ALL
-    SELECT m.at, -(4000000000000000 + m.id) AS ref_id, 0::bigint AS owner_id, false AS is_sell, m.quantity, m.unit_cost
+    SELECT m.at, -(4000000000000000 + m.id), 0::bigint, false, m.quantity, m.unit_cost, 'basis', 0::bigint
     FROM ledger_cost_basis_manual m
     WHERE m.pool_kind = sqlc.arg(pool_kind) AND m.pool_id = sqlc.arg(pool_id) AND m.type_id = sqlc.arg(type_id)
+    UNION ALL
+    SELECT COALESCE(j.installed_at, j.at), -j.job_id, j.owner_id, true, m.quantity, 0::float8, 'consume', 0::bigint
+    FROM ledger_job_materials m
+    JOIN ledger_jobs j ON j.owner_kind = m.owner_kind AND j.owner_id = m.owner_id AND j.job_id = m.job_id
+    WHERE m.owner_kind = sqlc.arg(owner_kind) AND m.owner_id = ANY(sqlc.arg(owner_ids)::bigint[]) AND m.type_id = sqlc.arg(type_id)
+    UNION ALL
+    SELECT e.at, e.id, j.owner_id, true, e.units, e.unit_price, CASE WHEN e.kind = 'sale' THEN 'msale' ELSE 'lost' END, -e.job_id
+    FROM job_manual_events e
+    JOIN ledger_jobs j ON j.job_id = e.job_id AND j.owner_kind = sqlc.arg(owner_kind) AND j.owner_id = ANY(sqlc.arg(owner_ids)::bigint[])
+    WHERE e.pool_kind = sqlc.arg(pool_kind) AND e.pool_id = sqlc.arg(pool_id) AND e.kind IN ('sale', 'lost')
+      AND j.product_type_id = sqlc.arg(type_id)
 ) x
 WHERE x.at >= sqlc.arg(since)::timestamptz
 ORDER BY x.at, x.ref_id;
@@ -202,6 +218,9 @@ SELECT DISTINCT type_id FROM (
     UNION
     SELECT j.product_type_id FROM ledger_jobs j
     WHERE j.owner_kind = sqlc.arg(owner_kind) AND j.owner_id = ANY(sqlc.arg(owner_ids)::bigint[]) AND j.priced
+    UNION
+    SELECT m.type_id FROM ledger_job_materials m
+    WHERE m.owner_kind = sqlc.arg(owner_kind) AND m.owner_id = ANY(sqlc.arg(owner_ids)::bigint[])
     UNION
     SELECT m.type_id FROM ledger_cost_basis_manual m
     WHERE m.pool_kind = sqlc.arg(pool_kind) AND m.pool_id = sqlc.arg(pool_id)
@@ -376,7 +395,7 @@ ON CONFLICT (owner_kind, owner_id, type_id) DO UPDATE SET
     checkpoint_at = excluded.checkpoint_at;
 
 -- name: ListTradeOpenLots :many
-SELECT quantity, unit_price FROM trade_open_lots
+SELECT quantity, unit_price, ref_id FROM trade_open_lots
 WHERE owner_kind = $1 AND owner_id = $2 AND type_id = $3
 ORDER BY seq;
 
@@ -384,10 +403,10 @@ ORDER BY seq;
 DELETE FROM trade_open_lots WHERE owner_kind = $1 AND owner_id = $2 AND type_id = $3;
 
 -- name: InsertTradeOpenLotsBatch :exec
-INSERT INTO trade_open_lots (owner_kind, owner_id, type_id, seq, quantity, unit_price)
+INSERT INTO trade_open_lots (owner_kind, owner_id, type_id, seq, quantity, unit_price, ref_id)
 SELECT sqlc.arg(owner_kind)::text, sqlc.arg(owner_id)::bigint, sqlc.arg(type_id)::bigint,
        unnest(sqlc.arg(seqs)::bigint[]), unnest(sqlc.arg(quantities)::bigint[]),
-       unnest(sqlc.arg(unit_prices)::float8[]);
+       unnest(sqlc.arg(unit_prices)::float8[]), unnest(sqlc.arg(ref_ids)::bigint[]);
 
 -- name: UpsertTradePosition :exec
 INSERT INTO trade_positions (owner_kind, owner_id, type_id, quantity, cost, updated_at)

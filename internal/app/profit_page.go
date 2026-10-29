@@ -104,7 +104,7 @@ type profitView struct {
 	SalesTax     string
 	BrokerFees   string
 
-	// Trading tab (schema 110).
+	// Trading tab (schema 112).
 	Items          []profitItemRow
 	ItemsNet       string // covered margin over every item
 	ItemsNetDir    string
@@ -118,12 +118,19 @@ type profitView struct {
 	BasisPool      string // "acct-1" etc. when a cost basis can be entered here
 	Recomputed     string // day the pool refolded under a new method or members
 	RecomputedWhy  string
-	Positions      []profitPositionRow
-	OpenCost       string
-	OpenValue      string
-	Unrealized     string
-	UnrealDir      string
-	Chart          *profitChart
+
+	// Industry section (schema 113).
+	Blueprints      []profitBlueprintRow
+	Facilities      []profitFacilityRow
+	Regions         []profitRegionChoice
+	IndustryRegion  string
+	IndustrySideBuy bool
+	Positions       []profitPositionRow
+	OpenCost        string
+	OpenValue       string
+	Unrealized      string
+	UnrealDir       string
+	Chart           *profitChart
 }
 
 func dirOf(v float64) string {
@@ -335,6 +342,11 @@ func (app *Application) buildProfitView(ctx context.Context, userID int64, owner
 		return view, err
 	}
 
+	if kind == ownerChar {
+		if err := app.attachIndustry(ctx, view, userID, poolKind, poolIDs, prefs); err != nil {
+			return view, err
+		}
+	}
 	if err := app.attachProfitPositions(ctx, view, poolKind, poolIDs); err != nil {
 		return view, err
 	}

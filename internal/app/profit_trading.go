@@ -1,6 +1,6 @@
 package app
 
-// The Profit page's Trading tab (schema 110): per item over the
+// The Profit page's Trading tab (schema 112): per item over the
 // span, the covered margin (matched units of sales whose tax paired,
 // less their cost, their tax share and, by default, the broker fees
 // tied to the item), how much of what sold is covered, and every
@@ -16,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	"evesynapse/internal/app/module"
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
 	"evesynapse/internal/logging"
@@ -110,13 +111,35 @@ func (app *Application) handleProfitPrefs(w http.ResponseWriter, r *http.Request
 	pooled := r.Form.Get("pooled") == "1"
 	broker := r.Form.Get("broker_in_margin") == "1"
 	was := app.profitPrefsFor(ctx, userID)
-	if err := app.queries.UpsertUserProfitPrefs(ctx, db.UpsertUserProfitPrefsParams{UserID: userID, Pooled: pooled, BrokerInMargin: broker}); err != nil {
+	region := was.IndustryRegion
+	if id, err := strconv.ParseInt(r.Form.Get("industry_region"), 10, 64); err == nil {
+		if _, ok := marketRegionName(id); ok && id != globalMarketRegion {
+			region = id
+		}
+	}
+	side := module.AppraisalModeSell
+	if r.Form.Get("industry_side") == module.AppraisalModeBuy {
+		side = module.AppraisalModeBuy
+	}
+	if err := app.queries.UpsertUserProfitPrefs(ctx, db.UpsertUserProfitPrefsParams{
+		UserID: userID, Pooled: pooled, BrokerInMargin: broker, IndustryRegion: region, IndustrySide: side,
+	}); err != nil {
 		logging.Errorf("profit: save prefs for user %d: %v", userID, err)
 		back("Couldn't save that right now.")
 		return
 	}
 	if was.Pooled != pooled {
 		back("Saved. Your trading figures are recomputed on the next sync.")
+		return
+	}
+	if was.IndustryRegion != region || was.IndustrySide != side {
+		_ = app.queries.ClearLedgerPoolMembers(ctx, db.ClearLedgerPoolMembersParams{PoolKind: poolAcct, PoolID: userID})
+		if chars, err := app.queries.ListCharactersByUser(ctx, userID); err == nil {
+			for _, c := range chars {
+				_ = app.queries.ClearLedgerPoolMembers(ctx, db.ClearLedgerPoolMembersParams{PoolKind: ownerChar, PoolID: c.CharacterID})
+			}
+		}
+		back("Saved. Industry figures are recomputed on the next sync.")
 		return
 	}
 	back("Saved.")

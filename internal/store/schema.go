@@ -683,6 +683,14 @@ var pgVizPrefsSchema string
 //go:embed schema_pg/112_profit_trading.sql
 var pgProfitTradingSchema string
 
+// Step 113: per-blueprint industry P&L: recipe facts on landed jobs,
+// the materials each consumed from the pool's stock, what became of
+// the output, shared recipe values at today's prices, and the
+// per-blueprint summary.
+//
+//go:embed schema_pg/113_profit_industry.sql
+var pgProfitIndustrySchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -824,6 +832,7 @@ func schemaSteps() []schemaStep {
 		{110, "watchlist_baskets", pgWatchlistBasketsSchema, ""},
 		{111, "viz_prefs", pgVizPrefsSchema, ""},
 		{112, "profit_trading", pgProfitTradingSchema, ""},
+		{113, "profit_industry", pgProfitIndustrySchema, ""},
 	}
 }
 

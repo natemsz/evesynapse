@@ -1233,7 +1233,6 @@ func (app *Application) watchlistRows(ctx context.Context, entries []db.MarketWa
 	return out
 }
 
-
 // applyWatchBasketChange applies one basket watch change: add or
 // update sets the alert threshold, remove clears the watch. Only
 // baskets the player can see (their own, or a preset) can be

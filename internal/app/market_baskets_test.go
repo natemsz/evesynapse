@@ -3,8 +3,8 @@ package app
 import (
 	"context"
 
-	"evesynapse/internal/markethistory"
 	"encoding/json"
+	"evesynapse/internal/markethistory"
 	"math"
 	"net/http"
 	"net/http/httptest"

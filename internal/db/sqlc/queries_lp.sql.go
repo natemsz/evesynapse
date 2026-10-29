@@ -151,6 +151,41 @@ func (q *Queries) ListDueLPStoreCorps(ctx context.Context, arg ListDueLPStoreCor
 	return items, nil
 }
 
+const listLPOfferRequirementsByCorp = `-- name: ListLPOfferRequirementsByCorp :many
+SELECT offer_id, type_id, quantity FROM lp_offer_requirements
+WHERE corporation_id = $1
+ORDER BY offer_id, type_id
+`
+
+type ListLPOfferRequirementsByCorpRow struct {
+	OfferID  int64 `json:"offer_id"`
+	TypeID   int64 `json:"type_id"`
+	Quantity int64 `json:"quantity"`
+}
+
+func (q *Queries) ListLPOfferRequirementsByCorp(ctx context.Context, corporationID int64) ([]ListLPOfferRequirementsByCorpRow, error) {
+	rows, err := q.db.QueryContext(ctx, listLPOfferRequirementsByCorp, corporationID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListLPOfferRequirementsByCorpRow
+	for rows.Next() {
+		var i ListLPOfferRequirementsByCorpRow
+		if err := rows.Scan(&i.OfferID, &i.TypeID, &i.Quantity); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listLPOfferRequirementsFor = `-- name: ListLPOfferRequirementsFor :many
 SELECT corporation_id, offer_id, type_id, quantity FROM lp_offer_requirements
 WHERE corporation_id = ANY($1::bigint[])
@@ -268,6 +303,51 @@ func (q *Queries) ListLPOfferValues(ctx context.Context, arg ListLPOfferValuesPa
 			&i.SellChg7d,
 			&i.Volatility30d,
 			&i.PricesAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listLPOffersByCorp = `-- name: ListLPOffersByCorp :many
+SELECT offer_id, type_id, quantity, lp_cost, isk_cost, ak_cost FROM lp_offers
+WHERE corporation_id = $1
+ORDER BY offer_id
+`
+
+type ListLPOffersByCorpRow struct {
+	OfferID  int64   `json:"offer_id"`
+	TypeID   int64   `json:"type_id"`
+	Quantity int64   `json:"quantity"`
+	LpCost   int64   `json:"lp_cost"`
+	IskCost  float64 `json:"isk_cost"`
+	AkCost   int64   `json:"ak_cost"`
+}
+
+func (q *Queries) ListLPOffersByCorp(ctx context.Context, corporationID int64) ([]ListLPOffersByCorpRow, error) {
+	rows, err := q.db.QueryContext(ctx, listLPOffersByCorp, corporationID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListLPOffersByCorpRow
+	for rows.Next() {
+		var i ListLPOffersByCorpRow
+		if err := rows.Scan(
+			&i.OfferID,
+			&i.TypeID,
+			&i.Quantity,
+			&i.LpCost,
+			&i.IskCost,
+			&i.AkCost,
 		); err != nil {
 			return nil, err
 		}

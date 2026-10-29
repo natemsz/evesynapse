@@ -137,8 +137,60 @@ func (app *Application) refreshLPStores(ctx context.Context) (stored int, limite
 	return stored, limited
 }
 
+// lpOfferSame reports whether a store's stored offers already match
+// the fetched set, comparing the rows the inserts would write.
+func lpOffersSame(stored []db.ListLPOffersByCorpRow, storedReqs []db.ListLPOfferRequirementsByCorpRow, offers []lpOffer) bool {
+	type offerKey struct {
+		offerID, typeID, quantity, lpCost, akCost int64
+		iskCost                                   float64
+	}
+	want := make(map[offerKey]int)
+	for _, o := range offers {
+		if o.OfferID <= 0 || o.TypeID <= 0 {
+			continue
+		}
+		want[offerKey{o.OfferID, o.TypeID, max(o.Quantity, 1), o.LPCost, o.AKCost, o.ISKCost}]++
+	}
+	if len(stored) != len(want) {
+		return false
+	}
+	for _, r := range stored {
+		k := offerKey{r.OfferID, r.TypeID, r.Quantity, r.LpCost, r.AkCost, r.IskCost}
+		if want[k] == 0 {
+			return false
+		}
+		want[k]--
+	}
+	type reqKey struct{ offerID, typeID, quantity int64 }
+	wantReqs := make(map[reqKey]int)
+	for _, o := range offers {
+		if o.OfferID <= 0 || o.TypeID <= 0 {
+			continue
+		}
+		for _, req := range o.RequiredItems {
+			if req.TypeID <= 0 || req.Quantity <= 0 {
+				continue
+			}
+			wantReqs[reqKey{o.OfferID, req.TypeID, req.Quantity}]++
+		}
+	}
+	if len(storedReqs) != len(wantReqs) {
+		return false
+	}
+	for _, r := range storedReqs {
+		k := reqKey{r.OfferID, r.TypeID, r.Quantity}
+		if wantReqs[k] == 0 {
+			return false
+		}
+		wantReqs[k]--
+	}
+	return true
+}
+
 // storeLPOffers replaces one store's offers in one transaction and
-// stamps the store. It reports whether the offers were replaced.
+// stamps the store. It reports whether the stored offers actually
+// changed: a refetch that returns the same set only stamps the
+// store, so the offer values are not rebuilt for a no-op.
 func (app *Application) storeLPOffers(ctx context.Context, corpID int64, offers []lpOffer, state string, now time.Time) bool {
 	tx, err := app.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -147,6 +199,27 @@ func (app *Application) storeLPOffers(ctx context.Context, corpID int64, offers 
 	}
 	defer tx.Rollback()
 	qtx := app.queries.WithTx(tx)
+	stored, err := qtx.ListLPOffersByCorp(ctx, corpID)
+	if err != nil {
+		logging.Errorf("worker: lp stores: read %d: %v", corpID, err)
+		return false
+	}
+	storedReqs, err := qtx.ListLPOfferRequirementsByCorp(ctx, corpID)
+	if err != nil {
+		logging.Errorf("worker: lp stores: read requirements %d: %v", corpID, err)
+		return false
+	}
+	if lpOffersSame(stored, storedReqs, offers) {
+		if err := qtx.MarkLPStoreCorp(ctx, db.MarkLPStoreCorpParams{
+			CorporationID: corpID, State: state, OfferCount: int64(len(offers)), FetchedAt: sql.NullTime{Time: now, Valid: true},
+		}); err != nil {
+			logging.Errorf("worker: lp stores: stamp %d: %v", corpID, err)
+			return false
+		}
+		// Unchanged: the stamp above is the whole write.
+		_ = tx.Commit()
+		return false
+	}
 	if err := qtx.DeleteLPOffersByCorp(ctx, corpID); err != nil {
 		logging.Errorf("worker: lp stores: clear %d: %v", corpID, err)
 		return false

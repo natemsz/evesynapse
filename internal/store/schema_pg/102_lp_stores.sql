@@ -66,3 +66,4 @@ CREATE TABLE IF NOT EXISTS lp_offer_values (
 
 CREATE INDEX IF NOT EXISTS lp_offer_values_rank_idx
     ON lp_offer_values (region_id, isk_per_lp_sell DESC NULLS LAST);
+CREATE INDEX IF NOT EXISTS lp_offer_values_rank_buy_idx ON lp_offer_values (region_id, isk_per_lp_buy DESC NULLS LAST);

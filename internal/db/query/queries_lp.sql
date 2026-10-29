@@ -28,6 +28,16 @@ LIMIT 500;
 -- name: SetLPStoreCorpName :exec
 UPDATE lp_store_corps SET name = $2 WHERE corporation_id = $1;
 
+-- name: ListLPOffersByCorp :many
+SELECT offer_id, type_id, quantity, lp_cost, isk_cost, ak_cost FROM lp_offers
+WHERE corporation_id = $1
+ORDER BY offer_id;
+
+-- name: ListLPOfferRequirementsByCorp :many
+SELECT offer_id, type_id, quantity FROM lp_offer_requirements
+WHERE corporation_id = $1
+ORDER BY offer_id, type_id;
+
 -- name: DeleteLPOffersByCorp :exec
 DELETE FROM lp_offers WHERE corporation_id = $1;
 

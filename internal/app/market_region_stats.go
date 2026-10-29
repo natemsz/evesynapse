@@ -770,9 +770,19 @@ func (app *Application) storeRegionSweep(ctx context.Context, regionID int64) (t
 		return 0, 0, fmt.Errorf("change feed prune: %w", err)
 	}
 	// LP offer values (schema 102) read the stat pack just written,
-	// in the same transaction.
+	// in the same transaction, behind a savepoint: the LP rebuild is
+	// a secondary surface, and its failure must not roll back the
+	// region's whole sweep.
+	if _, err := tx.ExecContext(ctx, "SAVEPOINT lp_values"); err != nil {
+		return 0, 0, err
+	}
 	if err := app.refreshLPOfferValues(ctx, qtx, regionID, now); err != nil {
-		return 0, 0, fmt.Errorf("lp offer values: %w", err)
+		logging.Errorf("worker: lp offer values in sweep of %s: %v", marketRegionLabel(regionID), err)
+		if _, err := tx.ExecContext(ctx, "ROLLBACK TO SAVEPOINT lp_values"); err != nil {
+			return 0, 0, fmt.Errorf("lp offer values: %w", err)
+		}
+	} else if _, err := tx.ExecContext(ctx, "RELEASE SAVEPOINT lp_values"); err != nil {
+		return 0, 0, err
 	}
 	// Basket values (schema 103): today's value of every basket
 	// priced in this region, from the same rows.

@@ -65,9 +65,20 @@
 .mb-toggle-none { flex: none; width: 1.05rem; }
 .mb-items { transition: opacity 0.15s; }
 [data-browse-items][aria-busy="true"] { opacity: 0.6; }
-.mb-filters { align-items: center; }
-.mb-filter-note { display: inline-flex; align-items: center; gap: 0.45rem; }
-.mb-minvol { margin-left: auto; }
+/* The row above the browser: the search form takes whatever
+   width is left; the trades filter rides at its right end. */
+.mb-toprow { display: flex; align-items: center; gap: 0.7rem; flex-wrap: wrap; }
+.mb-searchform { display: flex; align-items: center; gap: 0.5rem; flex: 1 1 18rem; min-width: 0; }
+.mb-searchform .searchwrap { flex: 1 1 auto; min-width: 0; }
+.mb-searchform .searchwrap > input { width: 100%; }
+.mb-filters { display: flex; align-items: center; gap: 0.5rem; margin-left: auto; }
+.mb-minvol { display: inline-flex; align-items: center; gap: 0.45rem; }
+.mb-filter-note { margin: 0.2rem 0 0.6rem; }
+/* The filter row no longer sits above the table, so the header
+   row takes back its breathing room: the gap between the table
+   box's top edge and the header text matches the one between
+   the text and the header's bottom border. */
+.mb-items thead th { padding-top: 0.9rem; }
 /* Sortable headers, in the contracts table's voice: the link
    inherits the header color, the chevron carries the state. */
 .mb-sorthead { color: inherit; text-decoration: none; white-space: nowrap; display: inline-flex; align-items: baseline; gap: 0.35rem; }

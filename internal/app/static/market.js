@@ -56,6 +56,7 @@
           if (again) again.focus({ preventScroll: true });
         }
         markChosen(url.searchParams.get("group"));
+        syncChrome(url);
         if (push === "replace") history.replaceState({ esSwap: 1, scroll: window.scrollY }, "", url.pathname + url.search);
         else if (push) history.pushState({ esSwap: 1, scroll: window.scrollY }, "", url.pathname + url.search);
       })
@@ -64,6 +65,41 @@
         location.assign(url.href);
       })
       .then(function () { box.removeAttribute("aria-busy"); });
+  }
+
+  // syncChrome mirrors the list's state into the static row
+  // above the browser (the filter form's hidden fields and
+  // volume box, the search box), which never re-renders.
+  function setHidden(form, name, value) {
+    var el = form.querySelector('input[type="hidden"][name="' + name + '"]');
+    if (!value) {
+      if (el) el.remove();
+      return;
+    }
+    if (!el) {
+      el = document.createElement("input");
+      el.type = "hidden";
+      el.name = name;
+      form.appendChild(el);
+    }
+    el.value = value;
+  }
+
+  function syncChrome(url) {
+    var form = document.querySelector("form[data-browse-form]");
+    if (form) {
+      setHidden(form, "group", url.searchParams.get("group"));
+      setHidden(form, "region", url.searchParams.get("region"));
+      setHidden(form, "sort", url.searchParams.get("sort"));
+      setHidden(form, "bq", url.searchParams.get("bq"));
+      var mv = form.querySelector('[name="minvol"]');
+      if (mv && document.activeElement !== mv) mv.value = url.searchParams.get("minvol") || "";
+    }
+    var q = document.querySelector("#market-q");
+    if (q && document.activeElement !== q) q.value = url.searchParams.get("bq") || "";
+    var reg = document.querySelector("#market-region");
+    var region = url.searchParams.get("region");
+    if (reg && region) reg.value = region;
   }
 
   // slide unfolds or folds one tree level: a 130ms height
@@ -147,6 +183,24 @@
   }, true);
 
   document.addEventListener("submit", function (e) {
+    var sf = e.target.closest("#market-search");
+    if (sf) {
+      // On the browser page the search filters the list in
+      // place, keeping the category, sort and volume state;
+      // anywhere else the form submits as it always has.
+      if (!document.querySelector("[data-browse-items]")) return;
+      e.preventDefault();
+      e.stopPropagation();
+      var params = new URLSearchParams(location.search);
+      var input = sf.querySelector('[name="q"]');
+      var q = input ? input.value.trim() : "";
+      if (q) params.set("bq", q);
+      else params.delete("bq");
+      params.delete("q");
+      params.delete("page");
+      loadItems("/market/?" + params.toString(), true);
+      return;
+    }
     var form = e.target.closest("form[data-browse-form]");
     if (!form) return;
     e.preventDefault();

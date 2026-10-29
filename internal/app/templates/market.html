@@ -6,14 +6,38 @@
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
 
 {{if .Market}}
+{{$m := .Market}}
+{{if $m.Browse}}
+<div class="searchpanel mb-toprow">
+  <form method="get" action="/market/" id="market-search" class="mb-searchform">
+    <span class="searchwrap">
+      <input type="text" name="q" id="market-q" value="{{$m.Query}}" placeholder="Item name, e.g. Tritanium" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="market-suggest" aria-autocomplete="list">
+      <ul class="suggest" id="market-suggest" role="listbox" hidden></ul>
+    </span>
+    <input type="hidden" name="region" id="market-region" value="{{$m.Region}}">
+    <button class="btn" type="submit">Search</button>
+  </form>
+  {{with $m.Browse}}
+  <form method="get" action="/market/" class="mb-filters" data-browse-form>
+    {{if .GroupID}}<input type="hidden" name="group" value="{{.GroupID}}">{{end}}
+    <input type="hidden" name="region" value="{{.Region}}">
+    {{if .Query}}<input type="hidden" name="bq" value="{{.Query}}">{{end}}
+    {{if ne .Sort "name"}}<input type="hidden" name="sort" value="{{.Sort}}">{{end}}
+    <label class="mb-minvol"><small>&gt; Trades per day</small> <input type="number" name="minvol" min="0" step="1" value="{{if .MinVolume}}{{.MinVolume}}{{end}}" size="6"></label>
+    <button class="btn" type="submit">Apply</button>
+  </form>
+  {{end}}
+</div>
+{{else}}
 <form method="get" action="/market/" id="market-search" class="searchpanel">
   <span class="searchwrap">
-    <input type="text" name="q" id="market-q" value="{{.Market.Query}}" placeholder="Item name, e.g. Tritanium" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="market-suggest" aria-autocomplete="list">
+    <input type="text" name="q" id="market-q" value="{{$m.Query}}" placeholder="Item name, e.g. Tritanium" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="market-suggest" aria-autocomplete="list">
     <ul class="suggest" id="market-suggest" role="listbox" hidden></ul>
   </span>
-  <input type="hidden" name="region" id="market-region" value="{{.Market.Region}}">
+  <input type="hidden" name="region" id="market-region" value="{{$m.Region}}">
   <button class="btn" type="submit">Search</button>
 </form>
+{{end}}
 
 {{if .Market.Item}}
   {{$item := .Market.Item}}
@@ -407,15 +431,7 @@
 {{else}}
 <h3>Browse categories</h3>
 {{end}}
-<form method="get" action="/market/" class="mt-filters mb-filters" data-browse-form>
-  {{if .GroupID}}<input type="hidden" name="group" value="{{.GroupID}}">{{end}}
-  <input type="hidden" name="region" value="{{.Region}}">
-  {{if .Query}}<input type="hidden" name="bq" value="{{.Query}}">{{end}}
-  {{if ne .Sort "name"}}<input type="hidden" name="sort" value="{{.Sort}}">{{end}}
-  {{if .Query}}<span class="mb-filter-note"><small>Matching “{{.Query}}”</small> <a href="{{.ClearQueryHref}}" data-browse-link><small>Clear</small></a></span>{{end}}
-  <label class="mb-minvol"><small>Traded per day at least</small> <input type="number" name="minvol" min="0" step="1" value="{{if .MinVolume}}{{.MinVolume}}{{end}}" size="6"></label>
-  <button class="btn" type="submit">Show</button>
-</form>
+{{if .Query}}<p class="mb-filter-note"><small>Matching “{{.Query}}”</small> <a href="{{.ClearQueryHref}}" data-browse-link><small>Clear</small></a></p>{{end}}
 {{if .AwaitingPick}}
 <p><small>Pick a category from the tree to see its items, or search by name above.</small></p>
 {{else if .Types}}

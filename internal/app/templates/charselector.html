@@ -4,8 +4,8 @@
   <input type="text" class="charselector-input" placeholder="Select character..." autocomplete="off" aria-label="Select character">
   <div class="charselector-dropdown" hidden>
     {{range .}}
-    <a href="?character={{.ID}}" class="charselector-option{{if .Active}} active{{end}}" data-name="{{.Name}}" data-tags="{{.Tags}}" data-id="{{.ID}}">
-      <span class="charselector-name">{{.Name}}</span>{{if .Tags}} <span class="charselector-tags">{{.Tags}}</span>{{end}}
+    <a href="{{if .Href}}{{.Href}}{{else}}?character={{.ID}}{{end}}" class="charselector-option{{if .Active}} active{{end}}" data-name="{{.Name}}" data-tags="{{.Tags}}" data-id="{{.ID}}">
+      <span class="charselector-name">{{.Name}}</span>{{if .Tags}} <span class="charselector-tags">{{.Tags}}</span>{{end}}{{if .Image}} <img class="charselector-portrait" src="{{.Image}}" alt="" width="26" height="26" loading="lazy">{{end}}
     </a>
     {{end}}
   </div>

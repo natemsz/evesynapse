@@ -853,11 +853,16 @@ type SwitcherEntry struct {
 }
 
 // CharLink is one entry in a character picker or switcher.
+// Href, when set, is the pick's destination; empty means the
+// picker's default ?character= link. Image, when set, is the
+// entry's portrait or logo, shown at the row's right edge.
 type CharLink struct {
 	ID     int64
 	Name   string
 	Active bool
 	Tags   string
+	Href   string
+	Image  string
 }
 
 // BottomNavItem is one slot in the phone bottom bar: a section

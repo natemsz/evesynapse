@@ -4642,11 +4642,18 @@ html[data-scheme="soe"] .searchwrap input[type="text"] { background-image: url("
 }
 .charselector-dropdown[hidden] { display: none; }
 .charselector-option {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
   padding: 0.5rem 0.6rem;
   color: var(--text);
   text-decoration: none;
   border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+.charselector-portrait {
+  margin-left: auto;
+  flex: none;
+  border-radius: 4px;
 }
 .charselector-option:last-child { border-bottom: none; }
 .charselector-option:hover {

@@ -2186,15 +2186,24 @@ html[data-theme="light"] .brief-card.sev-info { --brief-tint: #bfd9ea; }
 }
 .brief-stack.has-stack::before { transform: translate(5px, 5px); }
 .brief-stack.has-stack-2::after { transform: translate(10px, 10px); }
-/* A stack shows its top line only; the sheets behind it are the
-   lines it still hides. Expanding the stack lays every line out
-   and the sheets go away: nothing is both shown and hidden. */
-.brief-stack:not(.expanded) .brief-row.brief-extra { display: none; }
-.brief-stack.expanded::before, .brief-stack.expanded::after { opacity: 0; }
-.brief-more { background: none; cursor: pointer; font-family: inherit; color: var(--muted); }
-.brief-more:hover, .brief-more:focus-visible { color: var(--text); }
-.brief-caret { display: inline-block; transition: transform 140ms ease; }
-.brief-stack.expanded .brief-caret { transform: rotate(180deg); }
+/* A stack shows one line at a time; the sheets behind it are the
+   lines still to flip through, and they deplete as you advance.
+   Flip with the more button or a swipe; mid-flip the two rows
+   share a grid cell so the card never jumps. */
+.brief-stack { touch-action: pan-y; }
+.brief-rows { position: relative; }
+.brief-stack .brief-row { display: none; border-top: none; }
+.brief-stack .brief-row.brief-active { display: flex; }
+.brief-stack .brief-row.brief-off { display: none !important; }
+.brief-stack.flipping .brief-rows { display: grid; }
+.brief-stack.flipping .brief-row { grid-area: 1 / 1; }
+.brief-stack.flipping .brief-row.brief-active, .brief-stack.flipping .brief-row.brief-in { display: flex; }
+.brief-stack.has-flip { padding-bottom: 2.15rem; }
+.brief-more-btn { position: absolute; right: 0.6rem; bottom: 0.55rem; z-index: 1; display: inline-flex; align-items: center; gap: 0.3rem; padding: 0.22rem 0.6rem; border-radius: 999px; border: 1px solid rgba(255, 255, 255, 0.16); background: color-mix(in srgb, var(--brief-tint, var(--panel)) 30%, rgba(10, 14, 20, 0.35)); color: var(--text); font-family: "Rajdhani", "Segoe UI", sans-serif; font-size: 0.8rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; cursor: pointer; }
+.brief-more-btn:hover, .brief-more-btn:focus-visible { border-color: var(--accent); color: var(--text-bright); }
+.brief-more-btn .brief-arrow { transition: transform 160ms ease; }
+.brief-more-btn:hover .brief-arrow { transform: translateX(2px); }
+@media (prefers-reduced-motion: reduce) { .brief-more-btn .brief-arrow { transition: none; } }
 .brief-card-link { display: block; color: inherit; text-decoration: none; }
 .brief-card-link::after { content: ""; position: absolute; inset: 0; border-radius: inherit; }
 .brief-cards .brief-row a, .brief-cards .brief-row button, .brief-cards .brief-row form, .brief-cards .brief-head button { position: relative; z-index: 1; }

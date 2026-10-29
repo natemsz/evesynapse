@@ -1121,6 +1121,15 @@
             }
           }
           stacks[s].classList.toggle("brief-off", !any);
+          var act = stacks[s].querySelector(".brief-row.brief-active");
+          if (act && act.classList.contains("brief-off")) {
+            var vis = briefVisible(stacks[s]);
+            if (vis.length) {
+              act.classList.remove("brief-active");
+              vis[0].classList.add("brief-active");
+            }
+          }
+          briefSheets(stacks[s]);
         }
       });
     }
@@ -1128,23 +1137,107 @@
   onContentReady(initBriefTabs);
   initBriefTabs(document);
 
-  // --- Briefing stack expand ---------------------------------------
-  // A stack's count chip opens it: every line lays out and the
-  // hidden sheets go away. Clicking again folds it back to its
-  // top line.
-  function initBriefExpand(root) {
-    var toggles = root.querySelectorAll("[data-brief-expand]");
-    for (var i = 0; i < toggles.length; i++) {
-      toggles[i].addEventListener("click", function () {
-        var stack = this.closest(".brief-stack");
-        if (!stack) return;
-        var open = stack.classList.toggle("expanded");
-        this.setAttribute("aria-expanded", open ? "true" : "false");
-      });
+  // --- Briefing stack flip -----------------------------------------
+  // A stack shows one line at a time. The more button (bottom
+  // right) and horizontal swipes flip through the rest with a
+  // slide; the sheets behind the card count down as you advance.
+  function briefVisible(card) {
+    var rows = card.querySelectorAll(".brief-row");
+    var out = [];
+    for (var i = 0; i < rows.length; i++) {
+      if (!rows[i].classList.contains("brief-off")) out.push(rows[i]);
+    }
+    return out;
+  }
+  function briefSheets(card) {
+    var vis = briefVisible(card);
+    var idx = -1;
+    for (var i = 0; i < vis.length; i++) {
+      if (vis[i].classList.contains("brief-active")) idx = i;
+    }
+    var left = vis.length - 1 - idx;
+    card.classList.toggle("has-stack", left >= 1);
+    card.classList.toggle("has-stack-2", left >= 2);
+  }
+  function briefFlip(card, dir) {
+    if (card.classList.contains("flipping")) return;
+    var vis = briefVisible(card);
+    if (vis.length < 2) return;
+    var cur = null, idx = -1;
+    for (var i = 0; i < vis.length; i++) {
+      if (vis[i].classList.contains("brief-active")) { cur = vis[i]; idx = i; }
+    }
+    if (!cur) { cur = vis[0]; idx = 0; }
+    var nxt = vis[(idx + dir + vis.length) % vis.length];
+    var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reduce || !cur.animate) {
+      cur.classList.remove("brief-active");
+      nxt.classList.add("brief-active");
+      briefSheets(card);
+      return;
+    }
+    card.classList.add("flipping");
+    nxt.classList.add("brief-in");
+    var settled = false;
+    var done = function () {
+      if (settled) return;
+      settled = true;
+      cur.classList.remove("brief-active");
+      nxt.classList.remove("brief-in");
+      nxt.classList.add("brief-active");
+      card.classList.remove("flipping");
+      briefSheets(card);
+    };
+    try {
+      var out = cur.animate(
+        [{ opacity: 1, transform: "translateX(0)" }, { opacity: 0, transform: "translateX(" + (-dir * 26) + "px)" }],
+        { duration: 190, easing: "ease-in" });
+      var inn = nxt.animate(
+        [{ opacity: 0, transform: "translateX(" + (dir * 26) + "px)" }, { opacity: 1, transform: "translateX(0)" }],
+        { duration: 190, easing: "ease-out" });
+      Promise.all([out.finished, inn.finished]).then(done, done);
+      setTimeout(done, 300);
+    } catch (e) {
+      done();
     }
   }
-  onContentReady(initBriefExpand);
-  initBriefExpand(document);
+  function initBriefFlip(root) {
+    var buttons = root.querySelectorAll("[data-brief-flip]");
+    for (var i = 0; i < buttons.length; i++) {
+      buttons[i].addEventListener("click", function () {
+        var card = this.closest(".brief-stack");
+        if (card) briefFlip(card, 1);
+      });
+    }
+    var cards = root.querySelectorAll(".brief-cards .brief-stack");
+    for (var c = 0; c < cards.length; c++) {
+      (function (card) {
+        var sx = 0, sy = 0, tracking = false;
+        card.addEventListener("pointerdown", function (e) {
+          if (e.button !== undefined && e.button !== 0) return;
+          if (e.target && e.target.closest && e.target.closest("a, button, form, input")) return;
+          sx = e.clientX; sy = e.clientY; tracking = true;
+        });
+        card.addEventListener("pointerup", function (e) {
+          if (!tracking) return;
+          tracking = false;
+          var dx = e.clientX - sx, dy = e.clientY - sy;
+          if (Math.abs(dx) > 48 && Math.abs(dx) > Math.abs(dy) * 1.4) {
+            card._briefSwipedAt = Date.now();
+            briefFlip(card, dx < 0 ? 1 : -1);
+          }
+        });
+        card.addEventListener("click", function (e) {
+          if (card._briefSwipedAt && Date.now() - card._briefSwipedAt < 350) {
+            e.preventDefault();
+            e.stopPropagation();
+          }
+        }, true);
+      })(cards[c]);
+    }
+  }
+  onContentReady(initBriefFlip);
+  initBriefFlip(document);
 
   // --- Briefing dismissed list -------------------------------------
   // The Dismissed (n) button opens the modal of hidden lines.

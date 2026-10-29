@@ -59,7 +59,7 @@ func (app *Application) landDeliveredJobs(ctx context.Context, src ledgerSource,
 	var delivered []esi.IndustryJob
 	var ids []int64
 	for _, j := range jobs {
-		if j.Status == "delivered" && (j.ActivityID == 1 || j.ActivityID == 11) && j.ProductTypeID > 0 && j.BlueprintTypeID > 0 {
+		if j.Status == "delivered" && (j.ActivityID == 1 || j.ActivityID == 11 || j.ActivityID == 8) && j.ProductTypeID > 0 && j.BlueprintTypeID > 0 {
 			delivered = append(delivered, j)
 			ids = append(ids, j.JobID)
 		}
@@ -128,10 +128,17 @@ func (app *Application) landDeliveredJobs(ctx context.Context, src ledgerSource,
 		if b, ok := bonuses[p.FacilityID]; ok {
 			p.MaterialBonus, p.BonusSource = b, "user_declared"
 		}
+		if j.ActivityID == 8 {
+			// Invention takes its datacores whole: no ME, no structure bonus.
+			p.Me, p.MeSource, p.MaterialBonus, p.BonusSource = 0, "unknown", 0, "none_assumed"
+		}
 		mats, units, err := app.jobRecipe(ctx, j, p.Me, p.MaterialBonus)
 		p.Units = units
 		if err == nil {
 			app.priceJob(ctx, &p, mats, priceNow, prefs)
+		}
+		if j.ActivityID == 8 {
+			p.Priced = false // a blueprint copy is never stock to sell
 		}
 		if err := app.queries.UpsertLedgerJob(ctx, p); err != nil {
 			return nil, time.Time{}, err
@@ -168,6 +175,9 @@ type jobMaterial struct {
 
 // jobRecipe derives a job's inputs and output units from the SDE.
 func (app *Application) jobRecipe(ctx context.Context, j esi.IndustryJob, me int64, bonus float64) ([]jobMaterial, int64, error) {
+	if j.ActivityID == 8 {
+		return app.inventionRecipe(ctx, j)
+	}
 	bp, err := app.queries.GetSDEBlueprint(ctx, j.BlueprintTypeID)
 	if err != nil {
 		return nil, 0, err
@@ -284,6 +294,12 @@ func writeJobSettlements(ctx context.Context, qtx *db.Queries, pool ledgerPool, 
 					kind = "fifo_mixed"
 				}
 				link(-t.RefID, kind, s.RefID, s.Owner, s.At, t.Quantity, float64(t.Quantity)*s.Unit)
+			}
+		case lotContract:
+			for _, t := range s.Takes {
+				if isJobRef(t.RefID) {
+					link(-t.RefID, "contract", s.RefID, s.Owner, s.At, t.Quantity, float64(t.Quantity)*s.Unit)
+				}
 			}
 		case lotManualSale, lotLost:
 			units := s.Quantity + s.UnmatchedQty
@@ -438,4 +454,109 @@ func (app *Application) refreshIndustryRecipeValues(ctx context.Context, regionI
 	if err := app.queries.ApplyIndustryRecipeValues(ctx, db.ApplyIndustryRecipeValuesParams{RegionID: regionID}); err != nil {
 		logging.Errorf("worker: industry today's figures for %s: %v", marketRegionLabel(regionID), err)
 	}
+}
+
+// inventionRecipe derives an invention job's inputs and output from
+// the SDE's invention rows: every attempt takes its datacores, and
+// each success makes one T2 blueprint copy of the SDE's runs, so the
+// output is copy runs (what a T2 build spends). Its product, a copy,
+// has no market price: the job never stands as stock.
+func (app *Application) inventionRecipe(ctx context.Context, j esi.IndustryJob) ([]jobMaterial, int64, error) {
+	runs, err := app.queries.GetSDEInvention(ctx, db.GetSDEInventionParams{BlueprintTypeID: j.BlueprintTypeID, ProductTypeID: j.ProductTypeID})
+	if err != nil {
+		return nil, 0, err
+	}
+	rows, err := app.queries.ListSDEInventionMaterials(ctx, j.BlueprintTypeID)
+	if err != nil {
+		return nil, 0, err
+	}
+	mats := make([]jobMaterial, 0, len(rows))
+	for _, m := range rows {
+		mats = append(mats, jobMaterial{typeID: m.MaterialTypeID, base: m.Quantity, qty: m.Quantity * j.Runs})
+	}
+	return mats, max(j.SuccessfulRuns, 0) * max(runs, 1), nil
+}
+
+// landContractSales stores the lines of the character's completed item
+// exchange contracts it issued (not for its corporation) that it sold
+// items on: each included item leaves the pool's stock when the
+// contract completed. ESI prices a contract whole, so its price is
+// split across the lines by their house value, or by quantity when no
+// line has one. It returns the types they move and the earliest
+// completion among the new ones.
+func (app *Application) landContractSales(ctx context.Context, src ledgerSource) ([]int64, time.Time, error) {
+	if src.kind != ownerChar {
+		return nil, time.Time{}, nil
+	}
+	var contracts esi.Contracts
+	if json.Unmarshal([]byte(src.contracts.Payload), &contracts) != nil {
+		return nil, time.Time{}, nil
+	}
+	typicals := app.TypicalSells(ctx)
+	estimates := app.storedTrueValues(ctx)
+	touched := map[int64]bool{}
+	var earliest time.Time
+	for _, c := range contracts {
+		if c.Type != "item_exchange" || c.Status != "finished" || c.IssuerID != src.ownerID || c.ForCorporation || c.Price <= 0 {
+			continue
+		}
+		at, err := time.Parse(time.RFC3339, c.DateCompleted)
+		if err != nil {
+			continue
+		}
+		detail, err := app.queries.GetContractDetail(ctx, c.ContractID)
+		if err != nil {
+			continue // its items have not been fetched yet
+		}
+		var items []esi.ContractItem
+		if json.Unmarshal([]byte(detail.Payload), &items) != nil {
+			continue
+		}
+		qty := map[int64]int64{}
+		for _, it := range items {
+			if it.IsIncluded && it.Quantity > 0 {
+				qty[it.TypeID] += it.Quantity
+			}
+		}
+		if len(qty) == 0 {
+			continue
+		}
+		p := db.InsertLedgerContractItemsBatchParams{OwnerKind: src.kind, OwnerID: src.ownerID, ContractID: c.ContractID, At: at, SplitBy: "value"}
+		value, units := 0.0, int64(0)
+		weight := map[int64]float64{}
+		for t, n := range qty {
+			if price, ok := pickValuationPrice(typicals[t], estSellOf(estimates, t)); ok {
+				weight[t] = price * float64(n)
+				value += weight[t]
+			}
+			units += n
+		}
+		if value <= 0 {
+			p.SplitBy = "quantity"
+		}
+		for t, n := range qty {
+			share := float64(n) / float64(units)
+			if value > 0 {
+				share = weight[t] / value
+			}
+			p.TypeIds = append(p.TypeIds, t)
+			p.Quantities = append(p.Quantities, n)
+			p.PriceShares = append(p.PriceShares, c.Price*share)
+		}
+		rows, err := app.queries.InsertLedgerContractItemsBatch(ctx, p)
+		if err != nil {
+			return nil, time.Time{}, err
+		}
+		for _, t := range rows {
+			touched[t] = true
+		}
+		if len(rows) > 0 && (earliest.IsZero() || at.Before(earliest)) {
+			earliest = at
+		}
+	}
+	types := make([]int64, 0, len(touched))
+	for t := range touched {
+		types = append(types, t)
+	}
+	return types, earliest, nil
 }

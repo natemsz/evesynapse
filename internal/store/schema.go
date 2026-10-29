@@ -710,6 +710,13 @@ var pgIntelNameThingsSchema string
 //go:embed schema_pg/116_profit_fallbacks.sql
 var pgProfitFallbacksSchema string
 
+// Step 117: contract sales and invention in profit per blueprint: the
+// SDE's invention products and materials, completed item exchange
+// contracts' lines, and invention cost on the blueprint summary.
+//
+//go:embed schema_pg/117_profit_contracts_invention.sql
+var pgProfitContractsInventionSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -855,6 +862,7 @@ func schemaSteps() []schemaStep {
 		{114, "profit_lp", pgProfitLPSchema, ""},
 		{115, "intel_name_things", pgIntelNameThingsSchema, ""},
 		{116, "profit_fallbacks", pgProfitFallbacksSchema, ""},
+		{117, "profit_contracts_invention", pgProfitContractsInventionSchema, ""},
 	}
 }
 

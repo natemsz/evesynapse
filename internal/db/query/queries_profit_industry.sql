@@ -74,8 +74,10 @@ DELETE FROM industry_bp_summary WHERE pool_kind = $1 AND pool_id = $2;
 --       consumed them, the rest at their install-day price, plus the
 --       job cost);
 --   (b) from the jobs: output at delivery, inputs at install, job cost.
+-- A T2 blueprint's runs also carry what the pool's inventions of it
+-- cost per copy run, in all three figures (today's at that cost).
 -- The latest job sets the recipe (ME, bonus) today's figure reruns.
-WITH jobs AS (
+WITH all_jobs AS (
     SELECT j.*,
            COALESCE((SELECT SUM(m.fifo_cost + GREATEST(m.quantity - m.fifo_qty, 0) * m.unit_at_time)
                      FROM ledger_job_materials m
@@ -85,6 +87,16 @@ WITH jobs AS (
                      AND m.fifo_qty < m.quantity) AS mat_at_market
     FROM ledger_jobs j
     WHERE j.owner_kind = sqlc.arg(owner_kind) AND j.owner_id = ANY(sqlc.arg(owner_ids)::bigint[]) AND j.blueprint_type_id > 0
+), inv AS (
+    -- What the pool's inventions of each T2 blueprint cost per copy run
+    -- they made: datacores as consumed and job fees, failures included.
+    SELECT product_type_id AS t2_blueprint, SUM(mat_actual + job_cost) / NULLIF(SUM(units), 0) AS per_run
+    FROM all_jobs WHERE activity_id = 8
+    GROUP BY product_type_id
+), jobs AS (
+    SELECT a.*, COALESCE(inv.per_run, 0) AS inv_per_run, inv.per_run IS NOT NULL AS inv_found
+    FROM all_jobs a LEFT JOIN inv ON inv.t2_blueprint = a.blueprint_type_id
+    WHERE a.activity_id IN (1, 11)
 ), links AS (
     SELECT l.job_id, l.link_kind, l.units, l.revenue,
            COALESCE(s.tax * l.units / NULLIF(t.quantity, 0), 0) AS tax
@@ -100,7 +112,7 @@ WITH jobs AS (
            SUM(CASE WHEN l.link_kind = 'fifo_mixed' THEN l.units ELSE 0 END) AS mixed,
            SUM(CASE WHEN j.mat_at_market THEN l.units ELSE 0 END) AS at_market,
            SUM(l.revenue) AS revenue, SUM(l.tax) AS tax,
-           SUM(l.units * (j.mat_actual + j.job_cost) / NULLIF(j.units, 0)) AS cost
+           SUM(l.units * (j.mat_actual + j.job_cost + j.inv_per_run * j.runs) / NULLIF(j.units, 0)) AS cost
     FROM jobs j JOIN links l ON l.job_id = j.job_id
     GROUP BY j.job_id, j.blueprint_type_id
 ), latest AS (
@@ -110,16 +122,20 @@ WITH jobs AS (
 )
 INSERT INTO industry_bp_summary (pool_kind, pool_id, blueprint_type_id, product_type_id, region_id, side, me, bonus_bp,
     jobs, runs, units, units_sold, units_lost, units_mixed, units_at_market, a_revenue, a_tax, a_cost,
-    b_output, b_inputs, b_job, b_priced, b_at_landing, job_cost_per_run, eiv_per_run, tax_rate, broker_rate, folded_at)
+    b_output, b_inputs, b_job, b_priced, b_at_landing, job_cost_per_run, eiv_per_run, tax_rate, broker_rate, folded_at, invention_cost,
+    invention_per_run, invention)
 SELECT sqlc.arg(pool_kind)::text, sqlc.arg(pool_id)::bigint, j.blueprint_type_id, MAX(lt.product_type_id),
        sqlc.arg(region_id)::bigint, sqlc.arg(side)::text, MAX(lt.me), MAX(round(lt.material_bonus * 100))::int,
        COUNT(*), SUM(j.runs), SUM(j.units),
        COALESCE(MAX(p.sold), 0), COALESCE(MAX(p.lost), 0), COALESCE(MAX(p.mixed), 0), COALESCE(MAX(p.at_market), 0),
        COALESCE(MAX(p.revenue), 0), COALESCE(MAX(p.tax), 0), COALESCE(MAX(p.cost), 0),
-       SUM(j.output_value), SUM(j.inputs_at_time), SUM(j.job_cost),
+       SUM(j.output_value), SUM(j.inputs_at_time), SUM(j.job_cost) + SUM(j.runs * j.inv_per_run),
        bool_and(j.priced AND j.inputs_source <> 'unpriced'), bool_or(j.inputs_source = 'at_landing'),
        COALESCE(MAX(lt.job_cost_per_run), 0), COALESCE(MAX(lt.eiv_per_run), 0),
-       sqlc.arg(tax_rate)::float8, sqlc.arg(broker_rate)::float8, sqlc.arg(folded_at)::timestamptz
+       sqlc.arg(tax_rate)::float8, sqlc.arg(broker_rate)::float8, sqlc.arg(folded_at)::timestamptz,
+       SUM(j.runs * j.inv_per_run), MAX(j.inv_per_run),
+       CASE WHEN EXISTS (SELECT 1 FROM sde_invention si WHERE si.product_type_id = j.blueprint_type_id)
+            THEN CASE WHEN bool_or(j.inv_found) THEN 'found' ELSE 'missing' END ELSE 'none' END
 FROM jobs j
 JOIN latest lt ON lt.blueprint_type_id = j.blueprint_type_id
 LEFT JOIN (
@@ -161,7 +177,8 @@ UPDATE industry_bp_summary s SET
     c_total = s.runs * (
         CASE WHEN s.side = 'buy' THEN r.output_buy * (1 - s.tax_rate) - r.inputs_buy
              ELSE r.output_sell * (1 - s.tax_rate - s.broker_rate) - r.inputs_sell END
-        - CASE WHEN s.eiv_per_run > 0 THEN s.job_cost_per_run * r.eiv / s.eiv_per_run ELSE s.job_cost_per_run END),
+        - CASE WHEN s.eiv_per_run > 0 THEN s.job_cost_per_run * r.eiv / s.eiv_per_run ELSE s.job_cost_per_run END
+        - s.invention_per_run),
     c_priced = r.priced, c_missing_type_id = r.missing_type_id, c_fallback = r.fallback_used, c_as_of = r.computed_at
 FROM industry_recipe_values r
 WHERE r.region_id = s.region_id AND r.blueprint_type_id = s.blueprint_type_id AND r.me = s.me AND r.bonus_bp = s.bonus_bp
@@ -187,10 +204,13 @@ SELECT j.owner_id, j.job_id, j.at, j.installed_at, j.runs, j.units, j.me, j.me_s
                  WHERE l.pool_kind = sqlc.arg(pool_kind) AND l.pool_id = sqlc.arg(pool_id) AND l.job_id = j.job_id AND l.link_kind = 'lost'), 0)::bigint AS lost,
        COALESCE((SELECT SUM(l.units) FROM job_output_links l
                  WHERE l.pool_kind = sqlc.arg(pool_kind) AND l.pool_id = sqlc.arg(pool_id) AND l.job_id = j.job_id AND l.link_kind = 'fifo_mixed'), 0)::bigint AS mixed,
+       COALESCE((SELECT SUM(l.units) FROM job_output_links l
+                 WHERE l.pool_kind = sqlc.arg(pool_kind) AND l.pool_id = sqlc.arg(pool_id) AND l.job_id = j.job_id AND l.link_kind = 'contract'), 0)::bigint AS on_contract,
        COALESCE((SELECT SUM(l.revenue) FROM job_output_links l
                  WHERE l.pool_kind = sqlc.arg(pool_kind) AND l.pool_id = sqlc.arg(pool_id) AND l.job_id = j.job_id), 0)::float8 AS revenue
 FROM ledger_jobs j
 WHERE j.owner_kind = sqlc.arg(owner_kind) AND j.owner_id = ANY(sqlc.arg(owner_ids)::bigint[]) AND j.blueprint_type_id = sqlc.arg(blueprint_type_id)
+  AND j.activity_id IN (1, 11)
 ORDER BY j.at DESC
 LIMIT 50;
 
@@ -298,3 +318,17 @@ FROM (
     WHERE (k.p -> 'victim' ->> 'character_id')::bigint = ANY(sqlc.arg(character_ids)::bigint[])
       AND (k.p ->> 'killmail_time')::timestamptz >= sqlc.arg(since)::timestamptz
 ) x;
+
+-- name: GetSDEInvention :one
+SELECT runs FROM sde_invention WHERE blueprint_type_id = $1 AND product_type_id = $2;
+
+-- name: ListSDEInventionMaterials :many
+SELECT material_type_id, quantity FROM sde_invention_materials WHERE blueprint_type_id = $1 ORDER BY material_type_id;
+
+-- name: InsertLedgerContractItemsBatch :many
+INSERT INTO ledger_contract_items (owner_kind, owner_id, contract_id, type_id, at, quantity, price_share, split_by)
+SELECT sqlc.arg(owner_kind)::text, sqlc.arg(owner_id)::bigint, sqlc.arg(contract_id)::bigint,
+       unnest(sqlc.arg(type_ids)::bigint[]), sqlc.arg(at)::timestamptz, unnest(sqlc.arg(quantities)::bigint[]),
+       unnest(sqlc.arg(price_shares)::float8[]), sqlc.arg(split_by)::text
+ON CONFLICT DO NOTHING
+RETURNING type_id;

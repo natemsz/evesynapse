@@ -304,7 +304,7 @@ func (app *Application) sdeMaintenance(ctx context.Context) {
 
 // sdeImportVersion is the importer's column-set marker (see
 // sdeMaintenance): an import stored under an older one re-imports.
-const sdeImportVersion = "13"
+const sdeImportVersion = "14"
 
 // sdeMeta reads one sde_meta value ("" when absent).
 func (app *Application) sdeMeta(ctx context.Context, key string) (string, error) {
@@ -445,6 +445,7 @@ func (app *Application) importSDE(ctx context.Context) error {
 		}
 	}
 	parsed.buildIndustryRows()
+	parsed.buildInventionRows()
 	parsed.buildSkillRows()
 
 	// A real dump never has an empty table; an empty parse means
@@ -514,6 +515,14 @@ type parsedSDE struct {
 	blueprints  []sdeBlueprintRow
 	bpMaterials []sdeBlueprintMaterialRow
 	bpSkills    []sdeBlueprintSkillRow
+
+	// Invention (schema 117): activityID 8 in the same files, the T2
+	// blueprint copy an invention makes (runs per copy) and the
+	// datacores it takes per attempt, for profit per blueprint.
+	invProduct   map[[2]int64]int64 // (T1 blueprint, T2 blueprint) -> runs per copy
+	invMats      map[[2]int64]int64 // (T1 blueprint, material) -> qty per attempt
+	invention    []sdeInventionRow
+	invMaterials []sdeBlueprintMaterialRow
 
 	// Skill graph (schema 012): the dogma attribute rows that
 	// matter, keyed type → attribute → value, flattened by
@@ -1285,8 +1294,11 @@ func parseSDEIndustryActivityProducts(cr *csv.Reader, idx map[string]int, parsed
 		parsed.indProduct = make(map[int64]sdeIndustryProduct)
 	}
 	_, err := eachCSVRow(cr, func(rec []string) error {
+		if csvIDOrZero(rec, idx, "activityID") == 8 {
+			return parsed.noteInventionProduct(rec, idx)
+		}
 		if csvIDOrZero(rec, idx, "activityID") != 1 {
-			return nil // manufacturing only
+			return nil // manufacturing, and invention above
 		}
 		id, err := csvID(rec, idx, "typeID")
 		if err != nil {
@@ -1315,8 +1327,11 @@ func parseSDEIndustryActivityMaterials(cr *csv.Reader, idx map[string]int, parse
 		parsed.indMats = make(map[[2]int64]int64)
 	}
 	_, err := eachCSVRow(cr, func(rec []string) error {
+		if csvIDOrZero(rec, idx, "activityID") == 8 {
+			return parsed.noteInventionMaterial(rec, idx)
+		}
 		if csvIDOrZero(rec, idx, "activityID") != 1 {
-			return nil // manufacturing only
+			return nil // manufacturing, and invention above
 		}
 		bpID, err := csvID(rec, idx, "typeID")
 		if err != nil {
@@ -1815,7 +1830,7 @@ func (app *Application) storeSDE(ctx context.Context, base string, parsed *parse
 	defer tx.Rollback()
 
 	for _, table := range []string{"sde_types", "sde_type_physics", "sde_reprocessing", "sde_groups", "sde_categories", "sde_market_groups", "sde_stations", "sde_systems", "sde_regions",
-		"sde_blueprints", "sde_blueprint_materials", "sde_blueprint_skills",
+		"sde_blueprints", "sde_blueprint_materials", "sde_blueprint_skills", "sde_invention", "sde_invention_materials",
 		"sde_skill_meta", "sde_requirements",
 		"sde_type_attributes", "sde_attribute_types", "sde_effects", "sde_effect_modifiers", "sde_type_effects"} {
 		if _, err := tx.ExecContext(ctx, "DELETE FROM "+table); err != nil {
@@ -1944,6 +1959,18 @@ func (app *Application) storeSDE(ctx context.Context, base string, parsed *parse
 	if err := insert("INSERT INTO sde_blueprint_skills (blueprint_type_id, skill_type_id, level) VALUES ($1, $2, $3)", len(parsed.bpSkills), func(i int) []any {
 		r := parsed.bpSkills[i]
 		return []any{r.blueprintTypeID, r.skillTypeID, r.level}
+	}); err != nil {
+		return 0, err
+	}
+	if err := insert("INSERT INTO sde_invention (blueprint_type_id, product_type_id, runs) VALUES ($1, $2, $3)", len(parsed.invention), func(i int) []any {
+		r := parsed.invention[i]
+		return []any{r.blueprintTypeID, r.productTypeID, r.runs}
+	}); err != nil {
+		return 0, err
+	}
+	if err := insert("INSERT INTO sde_invention_materials (blueprint_type_id, material_type_id, quantity) VALUES ($1, $2, $3)", len(parsed.invMaterials), func(i int) []any {
+		r := parsed.invMaterials[i]
+		return []any{r.blueprintTypeID, r.materialTypeID, r.quantity}
 	}); err != nil {
 		return 0, err
 	}
@@ -2178,4 +2205,70 @@ func (app *Application) loadSDEView(ctx context.Context) *sdeView {
 		view.State = "Not imported yet"
 	}
 	return view
+}
+
+// sdeInventionRow is one invention: a T1 blueprint, the T2 blueprint
+// copy it makes, and that copy's runs.
+type sdeInventionRow struct {
+	blueprintTypeID, productTypeID, runs int64
+}
+
+func (parsed *parsedSDE) noteInventionProduct(rec []string, idx map[string]int) error {
+	if parsed.invProduct == nil {
+		parsed.invProduct = make(map[[2]int64]int64)
+	}
+	bpID, err := csvID(rec, idx, "typeID")
+	if err != nil {
+		return errSkipRow
+	}
+	product := csvIDOrZero(rec, idx, "productTypeID")
+	if product == 0 {
+		return errSkipRow
+	}
+	parsed.invProduct[[2]int64{bpID, product}] = max(csvIDOrZero(rec, idx, "quantity"), 1)
+	return nil
+}
+
+func (parsed *parsedSDE) noteInventionMaterial(rec []string, idx map[string]int) error {
+	if parsed.invMats == nil {
+		parsed.invMats = make(map[[2]int64]int64)
+	}
+	bpID, err := csvID(rec, idx, "typeID")
+	if err != nil {
+		return errSkipRow
+	}
+	matID := csvIDOrZero(rec, idx, "materialTypeID")
+	if matID == 0 {
+		return errSkipRow
+	}
+	parsed.invMats[[2]int64{bpID, matID}] += csvIDOrZero(rec, idx, "quantity")
+	return nil
+}
+
+// buildInventionRows flattens the invention maps into sorted rows.
+func (parsed *parsedSDE) buildInventionRows() {
+	parsed.invention = parsed.invention[:0]
+	for key, runs := range parsed.invProduct {
+		parsed.invention = append(parsed.invention, sdeInventionRow{blueprintTypeID: key[0], productTypeID: key[1], runs: runs})
+	}
+	sort.Slice(parsed.invention, func(i, j int) bool {
+		a, b := parsed.invention[i], parsed.invention[j]
+		if a.blueprintTypeID != b.blueprintTypeID {
+			return a.blueprintTypeID < b.blueprintTypeID
+		}
+		return a.productTypeID < b.productTypeID
+	})
+	parsed.invMaterials = parsed.invMaterials[:0]
+	for key, qty := range parsed.invMats {
+		if qty > 0 {
+			parsed.invMaterials = append(parsed.invMaterials, sdeBlueprintMaterialRow{blueprintTypeID: key[0], materialTypeID: key[1], quantity: qty})
+		}
+	}
+	sort.Slice(parsed.invMaterials, func(i, j int) bool {
+		a, b := parsed.invMaterials[i], parsed.invMaterials[j]
+		if a.blueprintTypeID != b.blueprintTypeID {
+			return a.blueprintTypeID < b.blueprintTypeID
+		}
+		return a.materialTypeID < b.materialTypeID
+	})
 }

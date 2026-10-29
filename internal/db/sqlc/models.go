@@ -111,6 +111,16 @@ type AbyssalSighting struct {
 	SaleProbeStatus sql.NullInt64   `json:"sale_probe_status"`
 }
 
+type AbyssalWant struct {
+	ItemID      int64        `json:"item_id"`
+	TypeID      int64        `json:"type_id"`
+	KeyID       int64        `json:"key_id"`
+	RequestedAt time.Time    `json:"requested_at"`
+	State       string       `json:"state"`
+	Attempts    int64        `json:"attempts"`
+	TriedAt     sql.NullTime `json:"tried_at"`
+}
+
 type AccountLinkChoice struct {
 	UserID    int64     `json:"user_id"`
 	Choice    string    `json:"choice"`
@@ -132,6 +142,25 @@ type AllianceRecord struct {
 	NotedAt    sql.NullTime `json:"noted_at"`
 }
 
+type ApiKey struct {
+	ID         int64        `json:"id"`
+	UserID     int64        `json:"user_id"`
+	Name       string       `json:"name"`
+	Prefix     string       `json:"prefix"`
+	KeyHash    string       `json:"key_hash"`
+	DailyQuota int64        `json:"daily_quota"`
+	CreatedAt  time.Time    `json:"created_at"`
+	LastUsedAt sql.NullTime `json:"last_used_at"`
+	RevokedAt  sql.NullTime `json:"revoked_at"`
+}
+
+type ApiKeyUsage struct {
+	KeyID    int64  `json:"key_id"`
+	Day      string `json:"day"`
+	Requests int64  `json:"requests"`
+	Refused  int64  `json:"refused"`
+}
+
 type AppraisalAnonymousOwner struct {
 	ID     int64 `json:"id"`
 	UserID int64 `json:"user_id"`
@@ -146,6 +175,15 @@ type AppraisalCookieSecret struct {
 type BlueprintCopyMedian struct {
 	TypeID      int64     `json:"type_id"`
 	Runs        int64     `json:"runs"`
+	MedianPrice float64   `json:"median_price"`
+	SampleCount int64     `json:"sample_count"`
+	ComputedAt  time.Time `json:"computed_at"`
+}
+
+type BlueprintResearchMedian struct {
+	TypeID      int64     `json:"type_id"`
+	Me          int64     `json:"me"`
+	Te          int64     `json:"te"`
 	MedianPrice float64   `json:"median_price"`
 	SampleCount int64     `json:"sample_count"`
 	ComputedAt  time.Time `json:"computed_at"`

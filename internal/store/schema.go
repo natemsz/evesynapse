@@ -647,6 +647,13 @@ var pgBeatenOrdersSchema string
 //go:embed schema_pg/106_market_changes.sql
 var pgMarketChangesSchema string
 
+// Step 108: the market API: hashed read-only keys and their daily
+// usage, abyssal items callers asked to have priced, and the
+// researched-original blueprint medians.
+//
+//go:embed schema_pg/108_market_api.sql
+var pgMarketAPISchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -782,6 +789,7 @@ func schemaSteps() []schemaStep {
 		{104, "profit_ledger", pgProfitLedgerSchema, ""},
 		{105, "beaten_orders", pgBeatenOrdersSchema, ""},
 		{106, "market_changes", pgMarketChangesSchema, ""},
+		{108, "market_api", pgMarketAPISchema, ""},
 	}
 }
 

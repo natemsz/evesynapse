@@ -34,6 +34,8 @@ type marketBasketListRow struct {
 	Items      int64
 	Value      string // latest stored value at typical sell, "" before the first
 	Partial    bool   // the latest value misses some items' prices
+	Chg1       trendFigure
+	Chg7       trendFigure
 }
 
 type marketBasketItemRow struct {
@@ -109,6 +111,37 @@ func (app *Application) handleMarketBaskets(w http.ResponseWriter, r *http.Reque
 			own++
 		}
 		view.List = append(view.List, row)
+	}
+	// The basic stats: each basket's 1-day and 7-day change, from
+	// the same stored daily values and the same change rule the
+	// basket page's figures use.
+	var valued []int64
+	for _, row := range view.List {
+		if row.Value != "" {
+			valued = append(valued, row.ID)
+		}
+	}
+	if len(valued) > 0 {
+		series, err := app.queries.ListMarketBasketValuesForBaskets(ctx, db.ListMarketBasketValuesForBasketsParams{
+			BasketIds: valued, Since: basketDay(time.Now().AddDate(0, 0, -14)),
+		})
+		if err != nil {
+			logging.Errorf("baskets: list values: %v", err)
+		} else {
+			byBasket := make(map[int64][]db.ListMarketBasketValuesRow, len(valued))
+			for _, v := range series {
+				byBasket[v.BasketID] = append(byBasket[v.BasketID], db.ListMarketBasketValuesRow{
+					Day: v.Day, ValueSell: v.ValueSell, ValueBuy: v.ValueBuy,
+					PricedItems: v.PricedItems, ItemCount: v.ItemCount,
+				})
+			}
+			for i := range view.List {
+				if s := byBasket[view.List[i].ID]; len(s) > 0 {
+					view.List[i].Chg1 = basketChange(s, 1)
+					view.List[i].Chg7 = basketChange(s, 7)
+				}
+			}
+		}
 	}
 	view.AtLimit = own >= basketMaxPerUser
 	data.MarketBaskets = view

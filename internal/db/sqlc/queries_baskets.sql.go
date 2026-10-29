@@ -279,6 +279,51 @@ func (q *Queries) ListMarketBasketValues(ctx context.Context, arg ListMarketBask
 	return items, nil
 }
 
+const listMarketBasketValuesForBaskets = `-- name: ListMarketBasketValuesForBaskets :many
+SELECT basket_id, day, value_sell, value_buy, priced_items, item_count
+FROM market_basket_values_daily
+WHERE basket_id = ANY($1::bigint[]) AND day >= $2
+ORDER BY basket_id, day
+LIMIT 2000
+`
+
+type ListMarketBasketValuesForBasketsParams struct {
+	BasketIds []int64 `json:"basket_ids"`
+	Since     string  `json:"since"`
+}
+
+// Recent stored values for a set of baskets at once (the list
+// page's change figures), oldest first per basket.
+func (q *Queries) ListMarketBasketValuesForBaskets(ctx context.Context, arg ListMarketBasketValuesForBasketsParams) ([]MarketBasketValuesDaily, error) {
+	rows, err := q.db.QueryContext(ctx, listMarketBasketValuesForBaskets, pq.Array(arg.BasketIds), arg.Since)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []MarketBasketValuesDaily
+	for rows.Next() {
+		var i MarketBasketValuesDaily
+		if err := rows.Scan(
+			&i.BasketID,
+			&i.Day,
+			&i.ValueSell,
+			&i.ValueBuy,
+			&i.PricedItems,
+			&i.ItemCount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listMarketBasketsFor = `-- name: ListMarketBasketsFor :many
 
 SELECT b.id, b.user_id, b.preset_key, b.name, b.region_id, b.updated_at,

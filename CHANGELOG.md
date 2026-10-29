@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.7.0.1] - 2026-10-29
+
+Automated build of EveSynapse v0.7.0.1. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+
+## What's Changed
+### 🚀 Features
+* Ship Advanced Market Tools, the market API, admin notifications, and the service status summary at 0.7.0.1 by @natemsz in https://github.com/natemsz/evesynapse/pull/801
+* Stores the market stat pack on each region stat row by @natemsz in https://github.com/natemsz/evesynapse/pull/788
+* Adds a public service status summary at /status.json by @natemsz in https://github.com/natemsz/evesynapse/pull/798
+* Admin global notices with sanitized posts and rate-limited publishing by @natemsz in https://github.com/natemsz/evesynapse/pull/800
+### 🧰 Maintenance & Dependencies
+* Bumps version to 0.7.0.0 by @natemsz in https://github.com/natemsz/evesynapse/pull/796
+
+
+**Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.6.1.9...v0.7.0.1
+
 ## [v0.6.1.5] - 2026-10-28
 
 Automated build of EveSynapse v0.6.1.5. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).

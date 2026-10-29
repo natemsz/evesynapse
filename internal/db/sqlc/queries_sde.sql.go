@@ -247,6 +247,27 @@ func (q *Queries) CountSDETypesInMarketGroup(ctx context.Context, marketGroupID 
 	return count, err
 }
 
+const countSDETypesInMarketGroupSubtree = `-- name: CountSDETypesInMarketGroupSubtree :one
+WITH RECURSIVE tree AS (
+  SELECT sde_market_groups.market_group_id FROM sde_market_groups WHERE sde_market_groups.market_group_id = $1
+  UNION ALL
+  SELECT g.market_group_id FROM sde_market_groups g
+  JOIN tree t ON g.parent_group_id = t.market_group_id
+)
+SELECT COUNT(*) FROM sde_types
+WHERE sde_types.market_group_id IN (SELECT market_group_id FROM tree)
+  AND sde_types.published = 1 AND sde_types.market_group_id > 0
+`
+
+// Every marketable type in a market group and all its descendant
+// groups: the basket editor's bulk add and its size label.
+func (q *Queries) CountSDETypesInMarketGroupSubtree(ctx context.Context, marketGroupID int64) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countSDETypesInMarketGroupSubtree, marketGroupID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const getItemName = `-- name: GetItemName :one
 SELECT name FROM item_names
 WHERE item_id = $1
@@ -2374,6 +2395,53 @@ func (q *Queries) ListSDETypesInMarketGroupPaged(ctx context.Context, arg ListSD
 	return items, nil
 }
 
+const listSDETypesInMarketGroupSubtree = `-- name: ListSDETypesInMarketGroupSubtree :many
+WITH RECURSIVE tree AS (
+  SELECT sde_market_groups.market_group_id FROM sde_market_groups WHERE sde_market_groups.market_group_id = $2
+  UNION ALL
+  SELECT g.market_group_id FROM sde_market_groups g
+  JOIN tree t ON g.parent_group_id = t.market_group_id
+)
+SELECT sde_types.type_id, sde_types.name FROM sde_types
+WHERE sde_types.market_group_id IN (SELECT market_group_id FROM tree)
+  AND sde_types.published = 1 AND sde_types.market_group_id > 0
+ORDER BY sde_types.name
+LIMIT $1::bigint
+`
+
+type ListSDETypesInMarketGroupSubtreeParams struct {
+	RowLimit int64 `json:"row_limit"`
+	GroupID  int64 `json:"group_id"`
+}
+
+type ListSDETypesInMarketGroupSubtreeRow struct {
+	TypeID int64  `json:"type_id"`
+	Name   string `json:"name"`
+}
+
+func (q *Queries) ListSDETypesInMarketGroupSubtree(ctx context.Context, arg ListSDETypesInMarketGroupSubtreeParams) ([]ListSDETypesInMarketGroupSubtreeRow, error) {
+	rows, err := q.db.QueryContext(ctx, listSDETypesInMarketGroupSubtree, arg.RowLimit, arg.GroupID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListSDETypesInMarketGroupSubtreeRow
+	for rows.Next() {
+		var i ListSDETypesInMarketGroupSubtreeRow
+		if err := rows.Scan(&i.TypeID, &i.Name); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listTypeDetailWants = `-- name: ListTypeDetailWants :many
 SELECT type_id
 FROM (
@@ -3006,6 +3074,48 @@ type SetTypeDetailParams struct {
 func (q *Queries) SetTypeDetail(ctx context.Context, arg SetTypeDetailParams) error {
 	_, err := q.db.ExecContext(ctx, setTypeDetail, arg.TypeID, arg.Description, arg.FetchedAt)
 	return err
+}
+
+const suggestSDEMarketGroups = `-- name: SuggestSDEMarketGroups :many
+SELECT market_group_id, name FROM sde_market_groups
+WHERE strpos(lower(name), lower($1)) > 0
+ORDER BY CASE WHEN strpos(lower(name), lower($1)) = 1 THEN 0 ELSE 1 END, name
+LIMIT $2::bigint
+`
+
+type SuggestSDEMarketGroupsParams struct {
+	Q   string `json:"q"`
+	Lim int64  `json:"lim"`
+}
+
+type SuggestSDEMarketGroupsRow struct {
+	MarketGroupID int64  `json:"market_group_id"`
+	Name          string `json:"name"`
+}
+
+// Basket editor group search: market groups whose name mentions
+// the text, prefix matches first, mirroring the type suggest.
+func (q *Queries) SuggestSDEMarketGroups(ctx context.Context, arg SuggestSDEMarketGroupsParams) ([]SuggestSDEMarketGroupsRow, error) {
+	rows, err := q.db.QueryContext(ctx, suggestSDEMarketGroups, arg.Q, arg.Lim)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SuggestSDEMarketGroupsRow
+	for rows.Next() {
+		var i SuggestSDEMarketGroupsRow
+		if err := rows.Scan(&i.MarketGroupID, &i.Name); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const suggestSDERegions = `-- name: SuggestSDERegions :many

@@ -211,3 +211,85 @@ func (app *Application) handleMarketBasketEditAPI(w http.ResponseWriter, r *http
 	}
 	writeBasketJSON(w, http.StatusOK, map[string]any{"ok": true, "items": len(in.Items)})
 }
+
+// handleMarketBasketSuggest serves GET /market/baskets/suggest:
+// the basket editor's search. Item rows come from the shared
+// market feed; market group rows ride on top of them, labelled
+// with the size of the group's whole subtree. Picking a group
+// row bulk-adds its types (handleMarketBasketGroupTypes).
+func (app *Application) handleMarketBasketSuggest(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	q := strings.TrimSpace(r.URL.Query().Get("q"))
+	out := []suggestItem{}
+	if len(q) < 2 {
+		writeSuggestJSON(w, out)
+		return
+	}
+	groups, err := app.queries.SuggestSDEMarketGroups(ctx, db.SuggestSDEMarketGroupsParams{Q: q, Lim: 4})
+	if err != nil {
+		logging.Errorf("baskets: group suggest %q: %v", q, err)
+	}
+	for _, g := range groups {
+		n, err := app.queries.CountSDETypesInMarketGroupSubtree(ctx, g.MarketGroupID)
+		if err != nil {
+			logging.Errorf("baskets: group count %d: %v", g.MarketGroupID, err)
+			continue
+		}
+		if n == 0 {
+			continue
+		}
+		label := fmt.Sprintf("Group · %d items", n)
+		if n == 1 {
+			label = "Group · 1 item"
+		}
+		out = append(out, suggestItem{ID: g.MarketGroupID, Name: g.Name, Kind: "group", Label: label})
+	}
+	out = append(out, app.suggestTypes(ctx, q, suggestPoolMarket, 8)...)
+	writeSuggestJSON(w, out)
+}
+
+type basketGroupTypes struct {
+	ID    int64         `json:"id"`
+	Name  string        `json:"name"`
+	Count int64         `json:"count"`
+	Items []suggestItem `json:"items"`
+}
+
+// handleMarketBasketGroupTypes serves GET
+// /market/baskets/group-types?id=: every marketable type in a
+// market group's subtree, name order, for the editor's bulk
+// add. The list stops past the basket cap's reach; Count always
+// carries the subtree's true size so the editor can refuse a
+// group that cannot fit before adding anything.
+func (app *Application) handleMarketBasketGroupTypes(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	id, err := strconv.ParseInt(r.URL.Query().Get("id"), 10, 64)
+	if err != nil || id <= 0 {
+		basketJSONError(w, http.StatusBadRequest, "That group could not be loaded.")
+		return
+	}
+	g, err := app.queries.GetSDEMarketGroup(ctx, id)
+	if err != nil {
+		basketJSONError(w, http.StatusNotFound, "That group could not be loaded.")
+		return
+	}
+	count, err := app.queries.CountSDETypesInMarketGroupSubtree(ctx, id)
+	if err != nil {
+		logging.Errorf("baskets: group count %d: %v", id, err)
+		basketJSONError(w, http.StatusInternalServerError, "That group could not be loaded.")
+		return
+	}
+	rows, err := app.queries.ListSDETypesInMarketGroupSubtree(ctx, db.ListSDETypesInMarketGroupSubtreeParams{
+		GroupID: id, RowLimit: 1000,
+	})
+	if err != nil {
+		logging.Errorf("baskets: group types %d: %v", id, err)
+		basketJSONError(w, http.StatusInternalServerError, "That group could not be loaded.")
+		return
+	}
+	items := make([]suggestItem, 0, len(rows))
+	for _, row := range rows {
+		items = append(items, suggestItem{ID: row.TypeID, Name: row.Name})
+	}
+	writeBasketJSON(w, http.StatusOK, basketGroupTypes{ID: g.MarketGroupID, Name: g.Name, Count: count, Items: items})
+}

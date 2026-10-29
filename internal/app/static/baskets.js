@@ -108,6 +108,44 @@
       fetchPrices();
     }
 
+    // addGroup bulk-adds a market group's whole subtree (the
+    // suggest feed's group rows). Types already in the basket
+    // are skipped, never incremented. A group whose new items
+    // outnumber the room left adds nothing: a partial bulk add
+    // would be an arbitrary slice of the group.
+    function addGroup(id, name) {
+      fetch("/market/baskets/group-types?id=" + encodeURIComponent(id), { credentials: "same-origin" })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (data) {
+          if (!data || !data.items) {
+            showErr(err, "That group could not be loaded.");
+            return;
+          }
+          var have = {};
+          items.forEach(function (it) { have[it.id] = true; });
+          var fresh = [];
+          var skipped = 0;
+          data.items.forEach(function (row) {
+            if (have[row.id]) skipped++;
+            else fresh.push(row);
+          });
+          // Past the fetched rows the tail is all new items.
+          var totalNew = fresh.length + Math.max(0, (data.count || 0) - data.items.length);
+          var room = 200 - items.length;
+          if (totalNew > room) {
+            showErr(err, name + " adds " + totalNew.toLocaleString("en-US") + " new items, but only " + room + " fit. A basket holds at most 200 items.");
+            return;
+          }
+          fresh.forEach(function (row) {
+            items.push({ id: row.id, name: row.name, qty: 1, price: "" });
+          });
+          showErr(err, skipped ? "Added " + fresh.length + " items from " + name + "; " + skipped + " already in the basket." : "");
+          render();
+          fetchPrices();
+        })
+        .catch(function () { showErr(err, "That group could not be loaded."); });
+    }
+
     function hideSuggest() {
       suggest.hidden = true;
       suggest.innerHTML = "";
@@ -123,7 +161,7 @@
       }
       debounce = setTimeout(function () {
         var mine = ++seq;
-        fetch("/market/suggest?q=" + encodeURIComponent(q), { credentials: "same-origin" })
+        fetch("/market/baskets/suggest?q=" + encodeURIComponent(q), { credentials: "same-origin" })
           .then(function (r) { return r.ok ? r.json() : []; })
           .then(function (rows) {
             if (mine !== seq) return;
@@ -140,7 +178,8 @@
                 btn.appendChild(small);
               }
               btn.addEventListener("click", function () {
-                addItem(row.id, row.name);
+                if (row.kind === "group") addGroup(row.id, row.name);
+                else addItem(row.id, row.name);
                 search.value = "";
                 hideSuggest();
                 search.focus();

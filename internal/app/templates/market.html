@@ -502,7 +502,7 @@
 {{/* One tree node: a toggle for its children (fetched on first
      open), its own link, and the children it already carries. */}}
 {{define "mb-node"}}
-<li class="mb-node{{if .Expanded}} open{{end}}{{if .Chosen}} chosen{{end}}" data-group="{{.ID}}"><span class="mb-row">{{if .HasChildren}}<button type="button" class="mb-toggle" data-browse-toggle aria-expanded="{{if .Expanded}}true{{else}}false{{end}}" aria-label="Toggle {{.Name}}"></button>{{else}}<span class="mb-toggle-none"></span>{{end}}<a href="/market/?group={{.ID}}&region={{.Region}}" data-browse-link{{if .Chosen}} aria-current="true"{{end}}>{{if eq .Depth 0}}<span class="market-group-icon" aria-hidden="true">{{.Icon}}</span>{{end}}<span class="market-group-name">{{.Name}}</span></a></span>{{if .Children}}<ul class="mb-children" data-loaded="1">{{range .Children}}{{template "mb-node" .}}{{end}}</ul>{{end}}</li>
+<li class="mb-node{{if eq .Depth 0}} mb-cat{{else if .HasChildren}} mb-subcat{{end}}{{if .Expanded}} open{{end}}{{if .Chosen}} chosen{{end}}" data-group="{{.ID}}"><span class="mb-row">{{if .HasChildren}}<button type="button" class="mb-toggle" data-browse-toggle aria-expanded="{{if .Expanded}}true{{else}}false{{end}}" aria-label="Toggle {{.Name}}"></button>{{else}}<span class="mb-toggle-none"></span>{{end}}<a href="/market/?group={{.ID}}&region={{.Region}}" data-browse-link{{if .Chosen}} aria-current="true"{{end}}>{{if eq .Depth 0}}<span class="market-group-icon" aria-hidden="true">{{.Icon}}</span>{{end}}<span class="market-group-name">{{.Name}}</span></a></span>{{if .Children}}<ul class="mb-children" data-loaded="1">{{range .Children}}{{template "mb-node" .}}{{end}}</ul>{{end}}</li>
 {{end}}
 
 {{/* One fetched tree level, for /market/browse-children. */}}

@@ -7,6 +7,35 @@
 
 {{template "charselector" .OrdersChars}}
 
+{{if .Orders}}{{if .Orders.Beaten}}
+<section class="foldable">
+<h3>Beaten at their station</h3>
+<p><small>Orders of yours, on every character, that another player beats at the same station. Copy the suggested price and paste it when you change the order in game.</small></p>
+<div class="tw">
+<table>
+  <thead><tr><th>Item</th><th>Side</th><th>Station</th><th class="mt-num">Your price</th><th class="mt-num">Beaten by</th><th class="mt-num">Gap</th><th class="mt-num">Left</th><th>Beaten</th><th class="mt-num">Suggested</th><th>Margin there</th></tr></thead>
+  <tbody>
+  {{range .Orders.Beaten}}
+    <tr>
+      <td><a href="/market/?type={{.TypeID}}">{{.Item}}</a><br><small class="mt-reqs">{{.Character}}</small></td>
+      <td>{{.Side}}</td>
+      <td>{{placeLink .Loc}}</td>
+      <td class="mt-num">{{.MyPrice}}</td>
+      <td class="mt-num">{{.Beating}}<br><small class="mt-reqs">{{.BeatingQty}} there</small></td>
+      <td class="mt-num">{{.Gap}}<br><small class="mt-reqs">{{.GapPct}}</small></td>
+      <td class="mt-num">{{.Remaining}}</td>
+      <td>{{if .BeatenAgo}}{{.BeatenAgo}}{{else}}—{{end}}{{if gt .Times 1}}<br><small class="mt-reqs">{{.Times}} times</small>{{end}}</td>
+      <td class="mt-num">{{if .Suggested}}<strong>{{.Suggested}}</strong> <button type="button" class="btn btn-quiet" data-copy data-copy-text="{{.SuggestedRaw}}" aria-label="Copy {{.SuggestedRaw}}">Copy</button>{{else}}—{{end}}</td>
+      <td>{{if .Margin}}<span class="mt-chg {{.MarginDir}}">{{.Margin}}</span><br>{{end}}<small class="mt-reqs">{{.MarginBasis}}</small></td>
+    </tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+<p><small>Prices in ISK. Suggested is the next price the game allows past the competition: one step under for a sell, one step over for a bid. Margins on sells use what the stock cost you; on bids, what it resells for at the typical sell. Changing a price also costs a broker fee, not counted here.</small></p>
+</section>
+{{end}}{{end}}
+
 {{if .Orders}}
 <h2>{{.Orders.CharacterName}}</h2>
 

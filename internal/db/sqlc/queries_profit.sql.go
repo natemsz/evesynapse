@@ -182,6 +182,34 @@ func (q *Queries) GetLedgerState(ctx context.Context, arg GetLedgerStateParams) 
 	return i, err
 }
 
+const getObservedSalesTaxRate = `-- name: GetObservedSalesTaxRate :one
+SELECT COALESCE((SELECT SUM(-j.amount) FROM ledger_journal j
+                 WHERE j.owner_kind = 'char' AND j.owner_id = $1::bigint
+                   AND j.ref_type = 'transaction_tax' AND j.at >= $2::timestamptz), 0)::float8 AS tax,
+       COALESCE((SELECT SUM(t.quantity * t.unit_price) FROM ledger_txns t
+                 WHERE t.owner_kind = 'char' AND t.owner_id = $1::bigint
+                   AND NOT t.is_buy AND t.at >= $2::timestamptz), 0)::float8 AS revenue
+`
+
+type GetObservedSalesTaxRateParams struct {
+	CharacterID int64     `json:"character_id"`
+	Since       time.Time `json:"since"`
+}
+
+type GetObservedSalesTaxRateRow struct {
+	Tax     float64 `json:"tax"`
+	Revenue float64 `json:"revenue"`
+}
+
+// A character's effective sales tax rate over a span: transaction
+// tax paid over market sell revenue in the ledger.
+func (q *Queries) GetObservedSalesTaxRate(ctx context.Context, arg GetObservedSalesTaxRateParams) (GetObservedSalesTaxRateRow, error) {
+	row := q.db.QueryRowContext(ctx, getObservedSalesTaxRate, arg.CharacterID, arg.Since)
+	var i GetObservedSalesTaxRateRow
+	err := row.Scan(&i.Tax, &i.Revenue)
+	return i, err
+}
+
 const insertLedgerJob = `-- name: InsertLedgerJob :one
 INSERT INTO ledger_jobs (owner_kind, owner_id, job_id, at, activity_id, product_type_id, units, output_value, materials_cost, priced)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
@@ -483,6 +511,47 @@ func (q *Queries) ListLedgerLotsForType(ctx context.Context, arg ListLedgerLotsF
 			&i.Quantity,
 			&i.UnitPrice,
 		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPositionCostsForTypes = `-- name: ListPositionCostsForTypes :many
+SELECT type_id, quantity, cost FROM trade_positions
+WHERE owner_kind = 'char' AND owner_id = $1 AND type_id = ANY($2::bigint[]) AND quantity > 0
+`
+
+type ListPositionCostsForTypesParams struct {
+	OwnerID int64   `json:"owner_id"`
+	TypeIds []int64 `json:"type_ids"`
+}
+
+type ListPositionCostsForTypesRow struct {
+	TypeID   int64   `json:"type_id"`
+	Quantity int64   `json:"quantity"`
+	Cost     float64 `json:"cost"`
+}
+
+// Open position cost per unit for a character's types: the basis a
+// beaten sell order's margin is measured against.
+func (q *Queries) ListPositionCostsForTypes(ctx context.Context, arg ListPositionCostsForTypesParams) ([]ListPositionCostsForTypesRow, error) {
+	rows, err := q.db.QueryContext(ctx, listPositionCostsForTypes, arg.OwnerID, pq.Array(arg.TypeIds))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListPositionCostsForTypesRow
+	for rows.Next() {
+		var i ListPositionCostsForTypesRow
+		if err := rows.Scan(&i.TypeID, &i.Quantity, &i.Cost); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

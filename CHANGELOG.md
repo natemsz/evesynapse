@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.7.0.4] - 2026-10-29
+
+Automated build of EveSynapse v0.7.0.4. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+
+## What's Changed
+### 🐛 Bug Fixes
+* Drop the stale fresh-assertion flag from the API key creation form by @natemsz in https://github.com/natemsz/evesynapse/pull/821
+### Other Changes
+* Profit charts polish: LP income in the activity list, a margin line that shows covered sales, phone heights by @natemsz in https://github.com/natemsz/evesynapse/pull/822
+* docs(changelog): review changelog for v0.7.0.3 by @github-actions[bot] in https://github.com/natemsz/evesynapse/pull/820
+
+
+**Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.7.0.3...v0.7.0.4
+
 ## [v0.7.0.3] - 2026-10-29
 
 Automated build of EveSynapse v0.7.0.3. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).

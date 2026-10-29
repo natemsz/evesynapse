@@ -171,7 +171,7 @@
   {{if .AtLimit}}
   <p><small>You have the most keys one account can hold. Revoke one to make another.</small></p>
   {{else}}
-  <form method="post" action="/settings/api-keys#api" data-needs-fresh>
+  <form method="post" action="/settings/api-keys#api">
     <p><label>Key name <input type="text" name="name" maxlength="40" required autocomplete="off" placeholder="My spreadsheet"></label>
     <button class="btn" type="submit">Make a key</button></p>
   </form>

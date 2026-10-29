@@ -628,6 +628,13 @@ var pgLPStoresSchema string
 //go:embed schema_pg/103_market_baskets.sql
 var pgMarketBasketsSchema string
 
+// Step 104: the profit ledger: every wallet journal row, transaction
+// and delivered job ever seen, and the profit attribution written
+// from them at ingest.
+//
+//go:embed schema_pg/104_profit_ledger.sql
+var pgProfitLedgerSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -760,6 +767,7 @@ func schemaSteps() []schemaStep {
 		{101, "market_stat_pack", pgMarketStatPackSchema, ""},
 		{102, "lp_stores", pgLPStoresSchema, ""},
 		{103, "market_baskets", pgMarketBasketsSchema, ""},
+		{104, "profit_ledger", pgProfitLedgerSchema, ""},
 	}
 }
 

@@ -3112,6 +3112,7 @@
     { name: "Calendar", url: "/calendar/" },
     { name: "Contacts", url: "/contacts/" },
     { name: "Assets", url: "/assets/" },
+    { name: "Profit", url: "/profit/" },
     { name: "Blueprints", url: "/industry/" },
     { name: "My Jobs", url: "/industry/jobs/" },
     { name: "Mining Ledger", url: "/industry/mining/" },

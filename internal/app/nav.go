@@ -94,6 +94,7 @@ var sectionNav = map[string][]navEntry{
 		{"/character/", "Overview", []string{"character.html"}},
 		{"/characters/", "Characters", []string{"characters.html"}},
 		{"/assets/", "Assets", []string{"assets.html"}},
+		{"/profit/", "Profit", []string{"profit.html"}},
 		{"/killmails/", "Killmails", []string{"killmails.html"}},
 	},
 	"fitting": {},
@@ -189,7 +190,7 @@ type navGroup struct {
 var sectionGroups = map[string][]navGroup{
 	"pilot": {
 		{"Character", []string{"/character/", "/characters/", "/skills/plans", "/killmails/"}},
-		{"Assets & Money", []string{"/assets/", "/wallet/"}},
+		{"Assets & Money", []string{"/assets/", "/wallet/", "/profit/"}},
 		{"Comms", []string{"/mail/", "/calendar/", "/contacts/"}},
 	},
 	"industry": {

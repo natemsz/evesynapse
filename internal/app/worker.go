@@ -655,6 +655,11 @@ func (c *cycleState) refreshCharacter(ctx context.Context, ch db.Character) bool
 	// the snapshots just stored. Pure local reads — no fetch
 	// budget spent, no extra ESI calls.
 	app.sampleWalletHistory(ctx, ch, time.Now())
+
+	// Profit ledger (schema 104): fold the journal, transaction and
+	// job snapshots just stored into the durable ledger and its
+	// attribution, after the day's net worth sample it reads.
+	app.refreshProfitLedger(ctx, ch, time.Now())
 	return true
 }
 

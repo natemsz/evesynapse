@@ -35,6 +35,7 @@ type pageData struct {
 	MarketTrends  *marketTrendsView
 	MarketLP      *marketLPView
 	MarketBaskets *marketBasketView
+	Profit        *profitView
 	Items         *itemsView
 	Search        *searchPageView
 	Skills        *skillsView
@@ -160,7 +161,7 @@ func sectionForPage(page string) string {
 	switch page {
 	case "home.html":
 		return "home"
-	case "character.html", "characters.html", "skills.html",
+	case "character.html", "characters.html", "skills.html", "profit.html",
 		"pilot.html", "assets.html",
 		"killmails.html", "notifications.html", "op.html", "op_form.html", "op_paps.html":
 		return "pilot"

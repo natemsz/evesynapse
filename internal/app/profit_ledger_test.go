@@ -342,3 +342,91 @@ func TestProfitIndustryBlueprint(t *testing.T) {
 		}
 	}
 }
+
+// An LP store purchase from a balance drop: one offer fits the LP and
+// the bracket's LP store payment, so it is inferred; the assets
+// fetched after it show the items, so it is corroborated; its units'
+// sale is LP income at the ISK they cost, LP at 0, and no trade.
+func TestProfitLPPurchase(t *testing.T) {
+	app, _, q := buildCorpTestApp(t, &countingTransport{})
+	ctx := context.Background()
+	user, err := q.CreateUser(ctx)
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	seedCharacter(t, q, user.ID, fixtureCharA, "Runner")
+	ch, err := q.GetCharacter(ctx, fixtureCharA)
+	if err != nil {
+		t.Fatalf("read character: %v", err)
+	}
+	const corp = 1000035
+	exec := func(s string, args ...any) {
+		t.Helper()
+		if _, err := app.db.ExecContext(ctx, s, args...); err != nil {
+			t.Fatalf("%s: %v", s, err)
+		}
+	}
+	exec(`INSERT INTO lp_offers (corporation_id, offer_id, type_id, quantity, lp_cost, isk_cost) VALUES
+		($1, 1, 9100, 1, 1000, 500000), ($1, 2, 9101, 1, 3000, 0)`, corp)
+	t0 := time.Now().UTC().Add(-5 * time.Hour).Truncate(time.Second)
+	t1 := t0.Add(time.Hour)
+	stamp := func(kind string, at time.Time) {
+		exec(`UPDATE character_snapshots SET fetched_at = $3, cached_until = $3 WHERE character_id = $1 AND kind = $2`, fixtureCharA, kind, at)
+	}
+
+	// The first reading, and the assets before the purchase.
+	seedSnapshot(t, q, fixtureCharA, esi.SnapLoyalty, esi.LoyaltyBalances{{CorporationID: corp, LoyaltyPoints: 10000}})
+	stamp(esi.SnapLoyalty, t0)
+	seedSnapshot(t, q, fixtureCharA, esi.SnapAssets, []esi.Asset{{ItemID: 1, TypeID: 34, Quantity: 1}})
+	stamp(esi.SnapAssets, t0)
+	app.refreshProfitLedger(ctx, ch, t0)
+
+	// 3,000 LP gone and 1.5M ISK paid: three of offer 1, not one of offer 2.
+	seedSnapshot(t, q, fixtureCharA, esi.SnapLoyalty, esi.LoyaltyBalances{{CorporationID: corp, LoyaltyPoints: 7000}})
+	stamp(esi.SnapLoyalty, t1)
+	seedSnapshot(t, q, fixtureCharA, esi.SnapWalletJournal, esi.WalletJournal{
+		{ID: 21, Date: t0.Add(30 * time.Minute).Format(time.RFC3339), RefType: "lp_store", Amount: -1500000},
+	})
+	app.refreshProfitLedger(ctx, ch, t1)
+	var tier string
+	var units int64
+	if err := app.db.QueryRowContext(ctx, `SELECT tier, units FROM lp_purchases WHERE character_id = $1`, fixtureCharA).Scan(&tier, &units); err != nil || tier != "inferred" || units != 3 {
+		t.Fatalf("purchase = %s, %d units (%v), want inferred, 3", tier, units, err)
+	}
+
+	// The assets fetched after it show the three; then they sell.
+	sold := t1.Add(time.Hour)
+	seedSnapshot(t, q, fixtureCharA, esi.SnapAssets, []esi.Asset{{ItemID: 1, TypeID: 34, Quantity: 1}, {ItemID: 2, TypeID: 9100, Quantity: 3}})
+	stamp(esi.SnapAssets, t1.Add(30*time.Minute))
+	seedSnapshot(t, q, fixtureCharA, esi.SnapWalletTxns, esi.WalletTransactions{
+		{TransactionID: 5, Date: sold.Format(time.RFC3339), TypeID: 9100, Quantity: 3, UnitPrice: 600000},
+	})
+	seedSnapshot(t, q, fixtureCharA, esi.SnapWalletJournal, esi.WalletJournal{
+		{ID: 21, Date: t0.Add(30 * time.Minute).Format(time.RFC3339), RefType: "lp_store", Amount: -1500000},
+		{ID: 22, Date: sold.Format(time.RFC3339), RefType: "transaction_tax", Amount: -36000},
+	})
+	app.refreshProfitLedger(ctx, ch, sold.Add(time.Minute))
+	if err := app.db.QueryRowContext(ctx, `SELECT tier FROM lp_purchases WHERE character_id = $1`, fixtureCharA).Scan(&tier); err != nil || tier != "corroborated" {
+		t.Errorf("after the asset check, tier = %s (%v), want corroborated", tier, err)
+	}
+	app.refreshProfitLedger(ctx, ch, sold.Add(2*time.Minute)) // the refold the purchase asked for
+
+	rows, err := q.ListLPStoreSummary(ctx, db.ListLPStoreSummaryParams{PoolKind: poolAcct, PoolIds: []int64{user.ID}})
+	if err != nil || len(rows) != 1 {
+		t.Fatalf("stores = %+v (%v), want one", rows, err)
+	}
+	s := rows[0]
+	near := func(a, b float64) bool { return math.Abs(a-b) < 1e-6 }
+	// 3 sold at 600,000 against 1.5M ISK paid and 36,000 tax, on 3,000 LP.
+	if s.UnitsSold != 3 || !near(s.Revenue, 1.8e6) || !near(s.SoldCost, 1.5e6) || !near(s.Tax, 36000) || !near(s.LpSold, 3000) || s.LpEarned != 0 || s.LpCorroborated != 3000 {
+		t.Errorf("store = %+v, want 3 sold for 1.8M against 1.5M and 36,000 tax on 3,000 corroborated LP", s)
+	}
+	var tradeQty int64
+	if err := app.db.QueryRowContext(ctx, `SELECT quantity FROM trade_realized WHERE transaction_id = 5`).Scan(&tradeQty); err != nil || tradeQty != 0 {
+		t.Errorf("trade row quantity = %d (%v), want 0: LP units are LP income", tradeQty, err)
+	}
+	var lpDelta int64
+	if err := app.db.QueryRowContext(ctx, `SELECT COALESCE(SUM(lp_delta), 0) FROM profit_daily WHERE owner_id = $1 AND activity = 'lp'`, fixtureCharA).Scan(&lpDelta); err != nil || lpDelta != -3000 {
+		t.Errorf("net LP on the daily rows = %d (%v), want -3000", lpDelta, err)
+	}
+}

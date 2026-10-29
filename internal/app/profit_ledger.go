@@ -66,8 +66,10 @@ const (
 	actUpkeep       = "upkeep"
 	actOther        = "other"
 	actUnattributed = "unattributed"
-	actMarket       = "market" // market buys and sells: the transactions speak for them
-	actEscrow       = "escrow" // cash parked in buy orders: net worth counts escrow
+	actMarket       = "market"   // market buys and sells: the transactions speak for them
+	actEscrow       = "escrow"   // cash parked in buy orders: net worth counts escrow
+	actLPStore      = "lp_store" // LP store payments: the cost of LP lots, counted when they sell
+	actLP           = "lp"       // LP store items sold, net of what they cost in ISK (LP at 0)
 )
 
 // journalActivity files a journal entry type under its activity.
@@ -77,6 +79,8 @@ func journalActivity(refType string, amount float64) string {
 		return actMarket
 	case "market_escrow":
 		return actEscrow
+	case "lp_store":
+		return actLPStore
 	case "transaction_tax", "brokers_fee", "market_provider_tax":
 		return actTrading
 	case "bounty_prizes", "bounty_prize", "agent_mission_reward", "agent_mission_time_bonus_reward",
@@ -130,11 +134,20 @@ const (
 	lotConsume    = "consume"
 	lotManualSale = "msale"
 	lotLost       = "lost"
+	lotLP         = "lp"
+	lotLPReq      = "lpreq"
 )
 
 // manualBasisRef is where entered cost basis lots' ref ids start
 // (below every job's).
 const manualBasisRef = -4000000000000000
+
+// lpPurchaseRef is where LP store purchases' lot ref ids start
+// (minus the purchase id below it).
+const lpPurchaseRef = -5000000000000000
+
+// isLPRef reports whether a lot's ref id is an LP store purchase.
+func isLPRef(ref int64) bool { return ref <= lpPurchaseRef }
 
 // isJobRef reports whether a lot's ref id is a job's output.
 func isJobRef(ref int64) bool { return ref < 0 && ref > manualBasisRef }
@@ -310,7 +323,8 @@ func (p ledgerPool) memberKey() string {
 type profitPrefs struct {
 	Pooled, BrokerInMargin bool
 	IndustryRegion         int64
-	IndustrySide           string // module.AppraisalModeSell or AppraisalModeBuy
+	IndustrySide           string  // module.AppraisalModeSell or AppraisalModeBuy
+	LPValue                float64 // the player's own ISK per LP, 0 when unset
 }
 
 func (app *Application) profitPrefsFor(ctx context.Context, userID int64) profitPrefs {
@@ -318,7 +332,7 @@ func (app *Application) profitPrefsFor(ctx context.Context, userID int64) profit
 	if err != nil {
 		return profitPrefs{Pooled: true, BrokerInMargin: true, IndustryRegion: defaultMarketRegion, IndustrySide: module.AppraisalModeSell}
 	}
-	return profitPrefs{Pooled: p.Pooled, BrokerInMargin: p.BrokerInMargin, IndustryRegion: p.IndustryRegion, IndustrySide: p.IndustrySide}
+	return profitPrefs{Pooled: p.Pooled, BrokerInMargin: p.BrokerInMargin, IndustryRegion: p.IndustryRegion, IndustrySide: p.IndustrySide, LPValue: p.LpIskValue}
 }
 
 // profitPoolFor is the pool a character's trades match in.
@@ -379,8 +393,19 @@ func (app *Application) refreshProfitLedger(ctx context.Context, ch db.Character
 	if s := get(esi.SnapWalletTxns); s != nil {
 		src.txns = append(src.txns, *s)
 	}
-	if err := app.foldLedger(ctx, src, app.profitPoolFor(ctx, ch), now); err != nil {
+	pool := app.profitPoolFor(ctx, ch)
+	if err := app.foldLedger(ctx, src, pool, now); err != nil {
 		logging.Errorf("worker: profit ledger for character %d: %v", ch.CharacterID, err)
+	}
+	// LP balances read the journal just landed (its LP store payments
+	// narrow a drop to one offer). A purchase that makes stock lots
+	// has the pool refold from scratch on its next pass.
+	if lots, changed := app.landLPSamples(ctx, ch, now); lots {
+		_ = app.queries.ClearLedgerPoolMembers(ctx, db.ClearLedgerPoolMembersParams{PoolKind: pool.kind, PoolID: pool.id})
+	} else if changed {
+		if err := app.foldLPSummary(ctx, pool, now); err != nil {
+			logging.Errorf("worker: lp summary for %s %d: %v", pool.kind, pool.id, err)
+		}
 	}
 
 	corp, err := app.queries.GetCharacterCorporation(ctx, ch.CharacterID)
@@ -627,6 +652,9 @@ func (app *Application) foldLedger(ctx context.Context, src ledgerSource, pool l
 		if err := app.foldIndustrySummary(ctx, pool, now); err != nil {
 			logging.Errorf("worker: industry summary for %s %d: %v", pool.kind, pool.id, err)
 		}
+		if err := app.foldLPSummary(ctx, pool, now); err != nil {
+			logging.Errorf("worker: lp summary for %s %d: %v", pool.kind, pool.id, err)
+		}
 	}
 	return nil
 }
@@ -653,6 +681,9 @@ func foldOwnerRollups(ctx context.Context, qtx *db.Queries, kind string, id int6
 		return err
 	}
 	if kind == ownerChar {
+		if err := qtx.FoldProfitLP(ctx, db.FoldProfitLPParams{CharacterID: id, FromDay: fromAt}); err != nil {
+			return fmt.Errorf("lp: %w", err)
+		}
 		return qtx.FoldProfitRemainder(ctx, db.FoldProfitRemainderParams{CharacterID: id, FromDay: fromDay})
 	}
 	return nil
@@ -843,6 +874,9 @@ func (app *Application) landOrderIssues(ctx context.Context, src ledgerSource) e
 // keys its members may have folded under before (their account, or
 // each of them alone).
 func (app *Application) resetPool(ctx context.Context, pool ledgerPool) error {
+	if err := app.queries.DeleteLPSaleLinksForPool(ctx, db.DeleteLPSaleLinksForPoolParams{PoolKind: pool.kind, PoolID: pool.id}); err != nil {
+		return err
+	}
 	if err := app.queries.DeleteJobOutputLinksForPool(ctx, db.DeleteJobOutputLinksForPoolParams{PoolKind: pool.kind, PoolID: pool.id}); err != nil {
 		return err
 	}
@@ -1045,12 +1079,22 @@ func (app *Application) refoldType(ctx context.Context, pool ledgerPool, typeID,
 			if s.UnmatchedQty > 0 {
 				gap = gaps.gapKind(s.At)
 			}
+			// Units an LP store purchase supplied are LP income, not
+			// trading: they leave the trade row for lp_sale_links.
+			qty, rev, cost := s.Quantity, s.Revenue, s.Cost
+			for _, t := range s.Takes {
+				if isLPRef(t.RefID) {
+					qty -= t.Quantity
+					rev -= float64(t.Quantity) * s.Unit
+					cost -= float64(t.Quantity) * t.Unit
+				}
+			}
 			p.OwnerIds = append(p.OwnerIds, s.Owner)
 			p.TransactionIds = append(p.TransactionIds, s.RefID)
 			p.Days = append(p.Days, s.At.UTC().Format("2006-01-02"))
-			p.Quantities = append(p.Quantities, s.Quantity)
-			p.Revenues = append(p.Revenues, s.Revenue)
-			p.Costs = append(p.Costs, s.Cost)
+			p.Quantities = append(p.Quantities, qty)
+			p.Revenues = append(p.Revenues, rev)
+			p.Costs = append(p.Costs, cost)
 			p.UnmatchedQtys = append(p.UnmatchedQtys, s.UnmatchedQty)
 			p.UnmatchedRevenues = append(p.UnmatchedRevenues, s.UnmatchedRevenue)
 			p.GapKinds = append(p.GapKinds, gap)
@@ -1060,6 +1104,9 @@ func (app *Application) refoldType(ctx context.Context, pool ledgerPool, typeID,
 		}
 	}
 	if err := writeJobSettlements(ctx, qtx, pool, typeID, cp, sales); err != nil {
+		return err
+	}
+	if err := writeLPSettlements(ctx, qtx, pool, typeID, cp, sales); err != nil {
 		return err
 	}
 	if err := qtx.DeleteTradeOpenLots(ctx, db.DeleteTradeOpenLotsParams{OwnerKind: pool.kind, OwnerID: pool.id, TypeID: typeID}); err != nil {

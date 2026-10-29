@@ -125,12 +125,21 @@ type profitView struct {
 	Regions         []profitRegionChoice
 	IndustryRegion  string
 	IndustrySideBuy bool
-	Positions       []profitPositionRow
-	OpenCost        string
-	OpenValue       string
-	Unrealized      string
-	UnrealDir       string
-	Chart           *profitChart
+
+	// LP section (schema 114).
+	LPStores   []profitLPRow
+	LPPicks    []profitLPPick
+	LPValue    string // the player's own ISK per LP
+	LPMedian   string // their usual realized ISK per LP
+	LPDelta    string // net LP over the span
+	WithLP     string // earned with that LP at the player's value
+	WithLPDir  string
+	Positions  []profitPositionRow
+	OpenCost   string
+	OpenValue  string
+	Unrealized string
+	UnrealDir  string
+	Chart      *profitChart
 }
 
 func dirOf(v float64) string {
@@ -345,6 +354,16 @@ func (app *Application) buildProfitView(ctx context.Context, userID int64, owner
 	if kind == ownerChar {
 		if err := app.attachIndustry(ctx, view, userID, poolKind, poolIDs, prefs); err != nil {
 			return view, err
+		}
+		if err := app.attachLP(ctx, view, poolKind, poolIDs, ids, prefs); err != nil {
+			return view, err
+		}
+		if lp, err := app.queries.SumProfitLPDelta(ctx, db.SumProfitLPDeltaParams{OwnerKind: kind, OwnerIds: ids, FromDay: fromDay}); err == nil && lp != 0 {
+			view.LPDelta = esi.FormatInt(lp)
+			if prefs.LPValue > 0 {
+				v := earned + prefs.LPValue*float64(lp)
+				view.WithLP, view.WithLPDir = signedISK(v), dirOf(v)
+			}
 		}
 	}
 	if err := app.attachProfitPositions(ctx, view, poolKind, poolIDs); err != nil {

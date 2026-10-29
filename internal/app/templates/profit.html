@@ -73,9 +73,9 @@
 </table>
 </div>
 {{with .Donut}}<div class="pf-card pf-donut-card">
-  <h4>Where the income came from</h4>
+  <h4>Income sources</h4>
   <div class="pchart pf-donut">
-    <svg viewBox="0 0 160 160" role="img" aria-label="Income by activity">
+    <svg viewBox="0 0 160 160" role="img" aria-label="Income sources">
       <g transform="rotate(-90 80 80)">
         {{range .Slices}}<circle class="pf-slice cdot {{.Class}}" cx="80" cy="80" r="60" stroke-dasharray="{{.Dash}}" stroke-dashoffset="{{.Offset}}" tabindex="0" aria-label="{{.Label}}: {{.Share}} of income" data-date="{{.Label}}" data-tip-rows="{{.Rows}}"/>{{end}}
       </g>

@@ -154,6 +154,9 @@ func TestVizChartMathAndPrefs(t *testing.T) {
 	if p := parseVizPrefs(`{"book_depth": true}`); !p.BookDepth || !p.MAChannel {
 		t.Fatalf("book depth prefs: got %+v, want book_depth on over the defaults", p)
 	}
+	if p := parseVizPrefs(`{"spark_hover": false}`); p.SparkHover || !p.MAChannel {
+		t.Fatalf("spark prefs: got %+v, want spark_hover off over the defaults", p)
+	}
 	if p := parseVizPrefs("{not json"); p != defaultVizPrefs() {
 		t.Fatalf("corrupt prefs: got %+v, want defaults", p)
 	}
@@ -177,7 +180,7 @@ func TestVizChartMathAndPrefs(t *testing.T) {
 		t.Fatalf("round trip: got %+v, want only ma_channel on", got)
 	}
 	code, _ = postForm(t, app, cookie, "/settings/visualizations", url.Values{
-		"ma_channel": {"1"}, "wicks": {"1"}, "volume_strip": {"1"},
+		"ma_channel": {"1"}, "wicks": {"1"}, "volume_strip": {"1"}, "spark_hover": {"1"},
 	})
 	if code != http.StatusSeeOther {
 		t.Fatalf("save all-on prefs: status %d, want 303", code)

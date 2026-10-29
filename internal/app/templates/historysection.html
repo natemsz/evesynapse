@@ -59,6 +59,7 @@
         <div class="viz-toggle"><span class="vt-name">Daily wicks<small>Item page, price history chart</small></span><label class="vt-switch"><input type="checkbox" name="wicks" value="1"{{if .Viz.Wicks}} checked{{end}}><span class="vt-track"></span></label></div>
         <div class="viz-toggle"><span class="vt-name">Volume and orders strip<small>Item page, under the price history chart</small></span><label class="vt-switch"><input type="checkbox" name="volume_strip" value="1"{{if .Viz.VolumeStrip}} checked{{end}}><span class="vt-track"></span></label></div>
         <div class="viz-toggle"><span class="vt-name">Book depth and spread<small>Item page, order book section</small></span><label class="vt-switch"><input type="checkbox" name="book_depth" value="1"{{if .Viz.BookDepth}} checked{{end}}><span class="vt-track"></span></label></div>
+        <div class="viz-toggle"><span class="vt-name">Hover sparklines<small>Watchlist: hover an average for its 30-day chart</small></span><label class="vt-switch"><input type="checkbox" name="spark_hover" value="1"{{if .Viz.SparkHover}} checked{{end}}><span class="vt-track"></span></label></div>
         <p><button class="btn" type="submit">Save</button></p>
       </form>
     </div>

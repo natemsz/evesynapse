@@ -25,10 +25,11 @@ type vizPrefs struct {
 	Wicks       bool `json:"wicks"`
 	VolumeStrip bool `json:"volume_strip"`
 	BookDepth   bool `json:"book_depth"`
+	SparkHover  bool `json:"spark_hover"`
 }
 
 func defaultVizPrefs() vizPrefs {
-	return vizPrefs{MAChannel: true, Wicks: true, VolumeStrip: true}
+	return vizPrefs{MAChannel: true, Wicks: true, VolumeStrip: true, SparkHover: true}
 }
 
 // parseVizPrefs reads a stored blob over the defaults: a switch
@@ -45,6 +46,7 @@ func parseVizPrefs(blob string) vizPrefs {
 		Wicks       *bool `json:"wicks"`
 		VolumeStrip *bool `json:"volume_strip"`
 		BookDepth   *bool `json:"book_depth"`
+		SparkHover  *bool `json:"spark_hover"`
 	}
 	if err := json.Unmarshal([]byte(blob), &raw); err != nil {
 		return defaultVizPrefs()
@@ -60,6 +62,9 @@ func parseVizPrefs(blob string) vizPrefs {
 	}
 	if raw.BookDepth != nil {
 		prefs.BookDepth = *raw.BookDepth
+	}
+	if raw.SparkHover != nil {
+		prefs.SparkHover = *raw.SparkHover
 	}
 	return prefs
 }
@@ -109,6 +114,7 @@ func (app *Application) handleSettingsVisualizationsSave(w http.ResponseWriter, 
 		Wicks:       r.FormValue("wicks") == "1",
 		VolumeStrip: r.FormValue("volume_strip") == "1",
 		BookDepth:   r.FormValue("book_depth") == "1",
+		SparkHover:  r.FormValue("spark_hover") == "1",
 	}
 	if err := app.storeVizPrefs(ctx, userID, prefs); err != nil {
 		logging.Errorf("viz: save prefs for user %d: %v", userID, err)

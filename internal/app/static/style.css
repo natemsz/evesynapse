@@ -262,23 +262,18 @@ h1, h2, h3, h4 {
 }
 h1 { font-size: 1.5rem; font-weight: 700; letter-spacing: 0.1em; }
 h2, h3 {
-  background: linear-gradient(90deg, #ffd27a 0%, #ff6a1a 50%, #d63c14 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
+  color: #ffd27a;
   text-shadow: none;
-  /* Inline-block so the gradient maps across the heading's own text
-     width, not the full container. */
   display: inline-block;
 }
 h2 { font-size: 1.15rem; }
 h3 { font-size: 1rem; margin: 1.4rem 0 0.15rem; }
 h4 { font-size: 0.92rem; }
-/* Gradient text needs a solid fallback: where background-clip: text is
-   unsupported, and in forced-colors mode, a transparent fill would be
-   invisible. */
+/* Heading text is solid (the old gradient's light end). The
+   forced-colors rule below keeps headings readable where the
+   platform overrides page colors. */
 @supports not (background-clip: text) {
-  h2, h3 { background: none; color: var(--text-bright); -webkit-text-fill-color: currentColor; }
+  h2, h3 { background: none; color: #ffd27a; -webkit-text-fill-color: currentColor; }
 }
 @media (forced-colors: active) {
   h2, h3 { background: none; color: CanvasText; text-shadow: none; -webkit-text-fill-color: currentColor; }
@@ -522,10 +517,7 @@ main {
   font-size: 1.35rem;
 }
 .panel > h1:first-child > .gt {
-  background: linear-gradient(90deg, #ffd27a 0%, #ff6a1a 50%, #d63c14 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
+  color: #ffd27a;
 }
 
 /* --- responsive widget grid + cards (Home, Sync, Intel) --- */
@@ -3922,10 +3914,7 @@ html[data-theme="light"] .fit-head select {
   letter-spacing: 0.22em;
   text-indent: 0.22em;
   white-space: nowrap;
-  background: linear-gradient(90deg, #ffd27a 0%, #ff6a1a 60%, #d63c14 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
+  color: #ffd27a;
   opacity: 0.85;
   pointer-events: none;
 }

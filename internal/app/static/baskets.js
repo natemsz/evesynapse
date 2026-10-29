@@ -249,6 +249,7 @@
   // the same DOM from binding anything twice.
   var wiredBuilder = null;
   var wiredTbody = null;
+  var wiredDetail = null;
   function init() {
     // --- the create builder -----------------------------------
     var newBtn = document.getElementById("mbk-new");
@@ -414,6 +415,51 @@
               })
               .catch(function () { /* the editor simply does not open */ });
           });
+    }
+
+    // --- the basket page's standing editor --------------------
+    var detailMount = document.getElementById("mbk-detail-editor");
+    var detailTemplate = document.getElementById("mbk-editor-template");
+    if (detailMount && detailTemplate && detailMount !== wiredDetail) {
+      wiredDetail = detailMount;
+      var detailID = parseInt(detailMount.getAttribute("data-mbk-basket"), 10);
+      if (detailID) {
+        fetch("/market/baskets/" + detailID + "/items.json", { credentials: "same-origin" })
+          .then(function (r) { return r.ok ? r.json() : null; })
+          .then(function (data) {
+            if (!data) return;
+            detailMount.appendChild(detailTemplate.content.cloneNode(true));
+            var root = detailMount.querySelector(".mbk-editor");
+            var ed = wireEditor(root, function () { return data.region; });
+            var seedDetail = function () {
+              ed.seed(data.items.map(function (it) {
+                return { id: it.id, name: it.name, qty: it.qty, price: it.price || "" };
+              }));
+            };
+            seedDetail();
+            root.querySelector(".mbk-cancel").addEventListener("click", seedDetail);
+            root.querySelector(".mbk-save").addEventListener("click", function () {
+              postJSON("/market/baskets/" + detailID + "/api-edit", { items: ed.items() })
+                .then(function () { window.location.reload(); })
+                .catch(function (err) { ed.error(err.message); });
+            });
+            var textlink = root.querySelector(".mbk-textlink");
+            var textform = root.querySelector(".mbk-textform");
+            textform.action = "/market/baskets/" + detailID + "/edit";
+            textlink.addEventListener("click", function (ev) {
+              ev.preventDefault();
+              if (textform.hidden) {
+                textform.querySelector(".mbk-tf-name").value = data.name;
+                textform.querySelector(".mbk-tf-region").value = data.region;
+                textform.querySelector(".mbk-tf-items").value = data.items.map(function (it) {
+                  return it.qty > 1 ? it.name + " " + it.qty : it.name;
+                }).join("\n");
+              }
+              textform.hidden = !textform.hidden;
+            });
+          })
+          .catch(function () { /* the editor simply does not appear */ });
+      }
     }
   }
   init();

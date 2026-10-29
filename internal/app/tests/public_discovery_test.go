@@ -800,7 +800,7 @@ func TestPublicItemAndShipPages(t *testing.T) {
 		"The Forge", "Domain",
 		"Price history — The Forge",
 		`<div class="pchart" data-chart-scrub="true">`,
-		`stroke="#ffb84d"`,
+		`class="chart-line"`,
 		`class="item-lead"`,
 		// The art tile leads with the type's render; the icon is
 		// named as the fallback for types that have no render.

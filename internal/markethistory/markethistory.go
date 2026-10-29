@@ -220,6 +220,7 @@ type PriceChart struct {
 	To          string // newest date label
 	PriceTicks  []AxisTick
 	VolumeTicks []AxisTick
+	OrderTicks  []AxisTick
 	DateTicks   []DateTick
 
 	// The ranged chart's extra layers (BuildPriceChartRange);
@@ -434,6 +435,25 @@ func buildChart(rows []db.MarketHistory, display int, opts ChartOptions, legacy 
 			}
 		} else {
 			chart.VolumeTicks = []AxisTick{volumeTick(0, barBottom, "")}
+		}
+		if maxOrd > 0 {
+			// The orders line gets its own scale on the opposite
+			// side of the strip from the volume scale, so each
+			// series reads against its own numbers. Order counts
+			// are whole, so its labels round to whole numbers.
+			orderTick := func(value float64, y int, class string) AxisTick {
+				return AxisTick{
+					Label:  FormatCompactAxisNumber(math.Round(value)),
+					Y:      y,
+					LabelY: y + 3,
+					Class:  class,
+				}
+			}
+			chart.OrderTicks = []AxisTick{
+				orderTick(float64(maxOrd), barTop, ""),
+				orderTick(float64(maxOrd)/2, barTop+barH/2, "tick-mid"),
+				orderTick(0, barBottom, ""),
+			}
 		}
 	}
 

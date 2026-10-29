@@ -21,7 +21,7 @@
     {{if $ma}}<span class="legend-item"><span class="legend-swatch legend-ma5" aria-hidden="true"></span>5-day average</span>
     <span class="legend-item"><span class="legend-swatch legend-ma20" aria-hidden="true"></span>20-day average</span>
     <span class="legend-item"><span class="legend-swatch legend-channel" aria-hidden="true"></span>Donchian channel</span>{{end}}
-    {{if $wickOn}}<span class="legend-note">Daily wicks: lowest to highest trade</span>{{end}}
+    {{if $wickOn}}<span class="legend-item"><span class="legend-swatch legend-wick" aria-hidden="true"></span>Daily wicks</span>{{end}}
   </div>
   <svg viewBox="0 0 {{$c.Width}} {{$c.Height}}" width="100%" role="img" aria-label="Daily average price and volume, {{$c.From}} to {{$c.To}}">
     {{range $c.PriceTicks}}<line class="chart-gridline price-gridline {{.Class}}" x1="0" y1="{{.Y}}" x2="{{$c.Width}}" y2="{{.Y}}"/>{{end}}
@@ -37,11 +37,15 @@
     {{range $c.Dots}}<circle class="cdot" cx="{{.X}}" cy="{{.Y}}" r="9" tabindex="0" aria-label="{{.Title}}" data-date="{{.Date}}" data-avg="{{.Average}}" data-high="{{.Highest}}" data-low="{{.Lowest}}" data-vol="{{.Volume}}"></circle>{{end}}
     {{range $c.PriceTicks}}<text class="chart-axis-label price-axis {{.Class}}" x="2" y="{{.LabelY}}">{{.Label}}</text>{{end}}
     {{range $c.VolumeTicks}}<text class="chart-axis-label volume-axis {{.Class}}" x="{{$c.Width}}" y="{{.LabelY}}">{{.Label}}</text>{{end}}
+    {{range $c.OrderTicks}}<text class="chart-axis-label orders-axis {{.Class}}" x="2" y="{{.LabelY}}">{{.Label}}</text>{{end}}
     {{range $c.DateTicks}}<text class="chart-axis-label chart-date-tick {{.Class}}" x="{{.X}}" y="{{$c.Height}}" text-anchor="{{.Anchor}}">{{.Label}}</text>{{end}}
   </svg>
   <div class="ctip" hidden></div>
   </div>
-  {{if $strip}}<p><small>Bars: units traded. Line: orders per day.</small></p>{{end}}
+  {{if $strip}}<div class="chart-legend viz-strip-key">
+    <span class="legend-item"><span class="legend-swatch legend-volume" aria-hidden="true"></span>Units traded</span>
+    <span class="legend-item"><span class="legend-swatch legend-orders" aria-hidden="true"></span>Orders per day</span>
+  </div>{{end}}
   {{if .ShowVizGear}}
   <div class="modal-backdrop" id="viz-settings-modal" hidden>
     <div class="modal viz-modal" role="dialog" aria-modal="true" aria-labelledby="viz-settings-title">

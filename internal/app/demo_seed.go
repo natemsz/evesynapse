@@ -424,6 +424,19 @@ func (app *Application) seedDemoData(ctx context.Context, now time.Time) error {
 	if err := s.writeAccountRows(ctx); err != nil {
 		return err
 	}
+	// The worker folds a real pilot's snapshots into the profit
+	// ledger after each warm; the demo pilots never warm, so the
+	// seed folds theirs itself, in the worker's own order (the
+	// day's wallet sample first). Without this the Profit pages
+	// have no ledger to read and render empty.
+	for _, pilot := range demoPilots {
+		ch, err := app.queries.GetCharacter(ctx, pilot.ID)
+		if err != nil {
+			return fmt.Errorf("demo seed: load pilot %d for the profit fold: %w", pilot.ID, err)
+		}
+		app.sampleWalletHistory(ctx, ch, now)
+		app.refreshProfitLedger(ctx, ch, now)
+	}
 	logging.Infof("demo: seeded the demo account (%d skills at V for %s)", len(s.skills), demoCharName)
 	return nil
 }
@@ -496,18 +509,27 @@ func (s *demoSeed) writePilotOne(ctx context.Context) error {
 		return err
 	}
 	journal := []esi.WalletJournalEntry{
+		{ID: 8800001021, Date: s.rfc(now.Add(-1 * hour)), RefType: "transaction_tax", Amount: -922500, FirstPartyID: id, FirstPartyType: "character", SecondPartyID: demoCorpHaleID, SecondPartyType: "corporation", Description: "Transaction tax"},
 		{ID: 8800001012, Date: s.rfc(now.Add(-2 * hour)), RefType: "market_transaction", Amount: 18450000, FirstPartyID: demoCharSera, FirstPartyType: "character", SecondPartyID: id, SecondPartyType: "character", Description: "Market transaction"},
 		{ID: 8800001011, Date: s.rfc(now.Add(-7 * hour)), RefType: "bounty_prizes", Amount: 6240000, FirstPartyID: demoCorpHaleID, FirstPartyType: "corporation", SecondPartyID: id, SecondPartyType: "character", Description: "Bounty prizes for Tama"},
+		{ID: 8800001019, Date: s.rfc(now.Add(-11 * hour)), RefType: "transaction_tax", Amount: -260000, FirstPartyID: id, FirstPartyType: "character", SecondPartyID: demoCorpHaleID, SecondPartyType: "corporation", Description: "Transaction tax"},
+		{ID: 8800001016, Date: s.rfc(now.Add(-12 * hour)), RefType: "market_transaction", Amount: 5200000, FirstPartyID: demoCharSera, FirstPartyType: "character", SecondPartyID: id, SecondPartyType: "character", Description: "Market transaction"},
 		{ID: 8800001010, Date: s.rfc(now.Add(-20 * hour)), RefType: "player_donation", Amount: 5000000, FirstPartyID: demoCharMarcus, FirstPartyType: "character", SecondPartyID: id, SecondPartyType: "character", Description: "Player donation", Reason: "for the op fund"},
+		{ID: 8800001018, Date: s.rfc(now.Add(-23 * hour)), RefType: "transaction_tax", Amount: -93600, FirstPartyID: id, FirstPartyType: "character", SecondPartyID: demoCorpHaleID, SecondPartyType: "corporation", Description: "Transaction tax"},
+		{ID: 8800001015, Date: s.rfc(now.Add(-1 * day)), RefType: "market_transaction", Amount: 1872000, FirstPartyID: demoCharMina, FirstPartyType: "character", SecondPartyID: id, SecondPartyType: "character", Description: "Market transaction"},
 		{ID: 8800001009, Date: s.rfc(now.Add(-26 * hour)), RefType: "contract_reward", Amount: 8500000, FirstPartyID: demoCharMarcus, FirstPartyType: "character", SecondPartyID: id, SecondPartyType: "character", Description: "Courier contract reward"},
 		{ID: 8800001008, Date: s.rfc(now.Add(-30 * hour)), RefType: "market_transaction", Amount: -46240000, FirstPartyID: id, FirstPartyType: "character", SecondPartyID: demoCharMarcus, SecondPartyType: "character", Description: "Market transaction"},
 		{ID: 8800001007, Date: s.rfc(now.Add(-2 * day)), RefType: "market_escrow", Amount: -212499972, FirstPartyID: id, FirstPartyType: "character", SecondPartyID: id, SecondPartyType: "character", Description: "Market escrow for a buy order"},
 		{ID: 8800001006, Date: s.rfc(now.Add(-2 * day)), RefType: "broker_fee", Amount: -1240300, FirstPartyID: id, FirstPartyType: "character", SecondPartyID: demoCorpHaleID, SecondPartyType: "corporation", Description: "Broker fee"},
+		{ID: 8800001017, Date: s.rfc(now.Add(-71 * hour)), RefType: "transaction_tax", Amount: -447000, FirstPartyID: id, FirstPartyType: "character", SecondPartyID: demoCorpHaleID, SecondPartyType: "corporation", Description: "Transaction tax"},
 		{ID: 8800001005, Date: s.rfc(now.Add(-3 * day)), RefType: "manufacturing", Amount: -3850000, FirstPartyID: id, FirstPartyType: "character", SecondPartyID: demoCorpHaleID, SecondPartyType: "corporation", Description: "Manufacturing job", ContextID: 8800009001, ContextType: "industry_job_id"},
 		{ID: 8800001004, Date: s.rfc(now.Add(-4 * day)), RefType: "corporation_account_withdrawal", Amount: 50000000, FirstPartyID: demoCorpID, FirstPartyType: "corporation", SecondPartyID: id, SecondPartyType: "character", Description: "Corporation account withdrawal"},
 		{ID: 8800001003, Date: s.rfc(now.Add(-5 * day)), RefType: "research", Amount: -1150000, FirstPartyID: id, FirstPartyType: "character", SecondPartyID: demoCorpHaleID, SecondPartyType: "corporation", Description: "Research"},
+		{ID: 8800001020, Date: s.rfc(now.Add(-143 * hour)), RefType: "transaction_tax", Amount: -535500, FirstPartyID: id, FirstPartyType: "character", SecondPartyID: demoCorpHaleID, SecondPartyType: "corporation", Description: "Transaction tax"},
 		{ID: 8800001002, Date: s.rfc(now.Add(-6 * day)), RefType: "jump_clone_fee", Amount: -900000, FirstPartyID: id, FirstPartyType: "character", SecondPartyID: demoCorpHaleID, SecondPartyType: "corporation", Description: "Jump clone activation fee"},
+		{ID: 8800001014, Date: s.rfc(now.Add(-7 * day)), RefType: "market_transaction", Amount: -13800000, FirstPartyID: id, FirstPartyType: "character", SecondPartyID: demoCharPetra, SecondPartyType: "character", Description: "Market transaction"},
 		{ID: 8800001001, Date: s.rfc(now.Add(-8 * day)), RefType: "transaction_tax", Amount: -923400, FirstPartyID: id, FirstPartyType: "character", SecondPartyID: demoCorpHaleID, SecondPartyType: "corporation", Description: "Transaction tax"},
+		{ID: 8800001013, Date: s.rfc(now.Add(-9 * day)), RefType: "market_transaction", Amount: -13020000, FirstPartyID: id, FirstPartyType: "character", SecondPartyID: demoCharDario, SecondPartyType: "character", Description: "Market transaction"},
 	}
 	journalBalances(journal, wallet)
 	if err := s.snap(ctx, id, esi.SnapWalletJournal, esi.WalletJournal(journal)); err != nil {
@@ -515,11 +537,15 @@ func (s *demoSeed) writePilotOne(ctx context.Context) error {
 	}
 	txns := []esi.WalletTransaction{
 		{TransactionID: 7700001006, Date: s.rfc(now.Add(-2 * hour)), TypeID: s.typeID("Tritanium"), LocationID: s.jitaStationID, UnitPrice: 6.15, Quantity: 3000000, ClientID: demoCharSera, IsBuy: false, IsPersonal: true, JournalRefID: 8800001012},
+		{TransactionID: 7700001010, Date: s.rfc(now.Add(-12 * hour)), TypeID: s.typeID("Republic Fleet EMP S"), LocationID: s.jitaStationID, UnitPrice: 1040, Quantity: 5000, ClientID: demoCharSera, IsBuy: false, IsPersonal: true, JournalRefID: 8800001016},
 		{TransactionID: 7700001005, Date: s.rfc(now.Add(-30 * hour)), TypeID: s.typeID("Tritanium"), LocationID: s.jitaStationID, UnitPrice: 5.78, Quantity: 8000000, ClientID: demoCharMarcus, IsBuy: true, IsPersonal: true, JournalRefID: 8800001008},
+		{TransactionID: 7700001009, Date: s.rfc(now.Add(-1 * day)), TypeID: s.typeID("Scourge Heavy Missile"), LocationID: s.jitaStationID, UnitPrice: 468.00, Quantity: 4000, ClientID: demoCharMina, IsBuy: false, IsPersonal: true, JournalRefID: 8800001015},
 		{TransactionID: 7700001004, Date: s.rfc(now.Add(-2 * day)), TypeID: s.typeID("Scourge Heavy Missile"), LocationID: s.jitaStationID, UnitPrice: 412.50, Quantity: 4000, ClientID: demoCharPetra, IsBuy: true, IsPersonal: true, JournalRefID: 0},
 		{TransactionID: 7700001003, Date: s.rfc(now.Add(-3 * day)), TypeID: s.typeID("Damage Control II"), LocationID: s.jitaStationID, UnitPrice: 745000, Quantity: 12, ClientID: demoCharMina, IsBuy: false, IsPersonal: true, JournalRefID: 0},
 		{TransactionID: 7700001002, Date: s.rfc(now.Add(-4 * day)), TypeID: s.typeID("Republic Fleet EMP S"), LocationID: s.jitaStationID, UnitPrice: 890, Quantity: 5000, ClientID: demoCharDario, IsBuy: true, IsPersonal: true, JournalRefID: 0},
 		{TransactionID: 7700001001, Date: s.rfc(now.Add(-6 * day)), TypeID: s.typeID("Pyerite"), LocationID: s.jitaStationID, UnitPrice: 11.90, Quantity: 900000, ClientID: demoCharSera, IsBuy: false, IsPersonal: true, JournalRefID: 0},
+		{TransactionID: 7700001008, Date: s.rfc(now.Add(-7 * day)), TypeID: s.typeID("Damage Control II"), LocationID: s.jitaStationID, UnitPrice: 690000, Quantity: 20, ClientID: demoCharPetra, IsBuy: true, IsPersonal: true, JournalRefID: 8800001014},
+		{TransactionID: 7700001007, Date: s.rfc(now.Add(-9 * day)), TypeID: s.typeID("Pyerite"), LocationID: s.jitaStationID, UnitPrice: 10.85, Quantity: 1200000, ClientID: demoCharDario, IsBuy: true, IsPersonal: true, JournalRefID: 8800001013},
 	}
 	if err := s.snap(ctx, id, esi.SnapWalletTxns, esi.WalletTransactions(txns)); err != nil {
 		return err
@@ -1177,11 +1203,15 @@ func (s *demoSeed) writePilotTwo(ctx context.Context) error {
 		return err
 	}
 	journal := []esi.WalletJournalEntry{
+		{ID: 8800002019, Date: s.rfc(now.Add(-3 * hour)), RefType: "transaction_tax", Amount: -615000, FirstPartyID: id, FirstPartyType: "character", SecondPartyID: demoCorpHaleID, SecondPartyType: "corporation", Description: "Transaction tax"},
 		{ID: 8800002015, Date: s.rfc(now.Add(-4 * hour)), RefType: "market_transaction", Amount: 12300000, FirstPartyID: demoCharPetra, FirstPartyType: "character", SecondPartyID: id, SecondPartyType: "character", Description: "Market transaction"},
+		{ID: 8800002018, Date: s.rfc(now.Add(-23 * hour)), RefType: "transaction_tax", Amount: -384000, FirstPartyID: id, FirstPartyType: "character", SecondPartyID: demoCorpHaleID, SecondPartyType: "corporation", Description: "Transaction tax"},
 		{ID: 8800002014, Date: s.rfc(now.Add(-1 * day)), RefType: "corporation_account_withdrawal", Amount: 25000000, FirstPartyID: demoCorpID, FirstPartyType: "corporation", SecondPartyID: id, SecondPartyType: "character", Description: "Corporation account withdrawal"},
+		{ID: 8800002017, Date: s.rfc(now.Add(-25 * hour)), RefType: "market_transaction", Amount: 7680000, FirstPartyID: demoCharSera, FirstPartyType: "character", SecondPartyID: id, SecondPartyType: "character", Description: "Market transaction"},
 		{ID: 8800002013, Date: s.rfc(now.Add(-2 * day)), RefType: "manufacturing", Amount: -640000, FirstPartyID: id, FirstPartyType: "character", SecondPartyID: demoCorpHaleID, SecondPartyType: "corporation", Description: "Manufacturing job", ContextID: 8800009101, ContextType: "industry_job_id"},
 		{ID: 8800002012, Date: s.rfc(now.Add(-3 * day)), RefType: "market_transaction", Amount: -8940000, FirstPartyID: id, FirstPartyType: "character", SecondPartyID: demoCharSera, SecondPartyType: "character", Description: "Market transaction"},
 		{ID: 8800002011, Date: s.rfc(now.Add(-5 * day)), RefType: "broker_fee", Amount: -184200, FirstPartyID: id, FirstPartyType: "character", SecondPartyID: demoCorpHaleID, SecondPartyType: "corporation", Description: "Broker fee"},
+		{ID: 8800002016, Date: s.rfc(now.Add(-6 * day)), RefType: "market_transaction", Amount: -2975000, FirstPartyID: id, FirstPartyType: "character", SecondPartyID: demoCharMarcus, SecondPartyType: "character", Description: "Market transaction"},
 	}
 	journalBalances(journal, wallet)
 	if err := s.snap(ctx, id, esi.SnapWalletJournal, esi.WalletJournal(journal)); err != nil {
@@ -1189,8 +1219,9 @@ func (s *demoSeed) writePilotTwo(ctx context.Context) error {
 	}
 	txns := []esi.WalletTransaction{
 		{TransactionID: 7700002003, Date: s.rfc(now.Add(-4 * hour)), TypeID: s.typeID("Pyerite"), LocationID: s.amarrStationID, UnitPrice: 12.30, Quantity: 1000000, ClientID: demoCharPetra, IsBuy: false, IsPersonal: true, JournalRefID: 8800002015},
+		{TransactionID: 7700002004, Date: s.rfc(now.Add(-25 * hour)), TypeID: s.typeID("Mexallon"), LocationID: s.amarrStationID, UnitPrice: 51.20, Quantity: 150000, ClientID: demoCharSera, IsBuy: false, IsPersonal: true, JournalRefID: 8800002017},
 		{TransactionID: 7700002002, Date: s.rfc(now.Add(-3 * day)), TypeID: s.typeID("Mexallon"), LocationID: s.amarrStationID, UnitPrice: 44.70, Quantity: 200000, ClientID: demoCharSera, IsBuy: true, IsPersonal: true, JournalRefID: 8800002012},
-		{TransactionID: 7700002001, Date: s.rfc(now.Add(-6 * day)), TypeID: s.typeID("Tritanium"), LocationID: s.amarrStationID, UnitPrice: 5.95, Quantity: 500000, ClientID: demoCharMarcus, IsBuy: true, IsPersonal: true, JournalRefID: 0},
+		{TransactionID: 7700002001, Date: s.rfc(now.Add(-6 * day)), TypeID: s.typeID("Tritanium"), LocationID: s.amarrStationID, UnitPrice: 5.95, Quantity: 500000, ClientID: demoCharMarcus, IsBuy: true, IsPersonal: true, JournalRefID: 8800002016},
 	}
 	if err := s.snap(ctx, id, esi.SnapWalletTxns, esi.WalletTransactions(txns)); err != nil {
 		return err

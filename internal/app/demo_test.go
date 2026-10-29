@@ -182,6 +182,25 @@ func TestDemoSeedIsCompleteAndIdempotent(t *testing.T) {
 		t.Errorf("total_sp = %d, sum of skills = %d", skills.TotalSP, total)
 	}
 
+	// The seed folds the pilots' trades into the profit ledger
+	// itself (the worker never warms the demo), so the account
+	// pool has daily profit rows with real income to test the
+	// Profit pages against.
+	profitDays := func() (int, float64) {
+		var days int
+		var income float64
+		if err := conn.QueryRowContext(ctx,
+			`SELECT count(DISTINCT day), COALESCE(sum(income), 0) FROM profit_daily WHERE owner_kind = 'char' AND owner_id IN ($1, $2)`,
+			demoCharacterID, demoCharacter2ID).Scan(&days, &income); err != nil {
+			t.Fatal(err)
+		}
+		return days, income
+	}
+	daysBefore, incomeBefore := profitDays()
+	if daysBefore < 3 || incomeBefore <= 0 {
+		t.Errorf("seeded profit: %d days, %.0f income; want several days with income", daysBefore, incomeBefore)
+	}
+
 	// Seeding again lands on exactly the same state.
 	if err := app.seedDemoData(ctx, time.Now()); err != nil {
 		t.Fatalf("second seed: %v", err)
@@ -190,6 +209,11 @@ func TestDemoSeedIsCompleteAndIdempotent(t *testing.T) {
 	if snapsAfter != snapsBefore || fitsAfter != fitsBefore {
 		t.Errorf("second seed changed the state: snapshots %d -> %d, fits %d -> %d",
 			snapsBefore, snapsAfter, fitsBefore, fitsAfter)
+	}
+	daysAfter, incomeAfter := profitDays()
+	if daysAfter != daysBefore || incomeAfter != incomeBefore {
+		t.Errorf("second seed changed the profit ledger: days %d -> %d, income %.0f -> %.0f",
+			daysBefore, daysAfter, incomeBefore, incomeAfter)
 	}
 }
 

@@ -220,7 +220,7 @@ type ledgerSource struct {
 	ordersHistory *db.CharacterSnapshot
 }
 
-// Pool kinds (schema 109). A character's sales match against the
+// Pool kinds (schema 110). A character's sales match against the
 // stock of its whole account by default ('acct', keyed by user id), or
 // against its own alone ('char') when the player keeps per-character
 // books; a corporation is always its own pool.
@@ -243,7 +243,7 @@ func (p ledgerPool) memberKey() string {
 	return strings.Join(parts, ",")
 }
 
-// profitPrefs are a player's profit preferences (schema 109), with
+// profitPrefs are a player's profit preferences (schema 110), with
 // the defaults when none are stored: pooled books, broker fees in the
 // item margin.
 type profitPrefs struct {

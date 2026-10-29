@@ -1,4 +1,4 @@
--- Schema step 109: per-item trading P&L on a pooled cost basis.
+-- Schema step 110: per-item trading P&L on a pooled cost basis.
 --
 -- FIFO now matches inside a pool: by default every character of one
 -- account ('acct', user id), or one character alone ('char') when

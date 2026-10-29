@@ -57,7 +57,15 @@ func (app *Application) pickCharacter(ctx context.Context, r *http.Request, path
 		// character, so the header switcher and every other
 		// page agree on who is being viewed. A hover prefetch
 		// renders the pick without moving the pin.
-		app.pinSessionCharacter(ctx, active.CharacterID, active.Name)
+		//
+		// A view pick (?view=1) is the exception: notification
+		// and briefing links carry it, because following news
+		// about a character shows that character's page for
+		// this view only — the acting character moves only
+		// when the pilot picks one in the switcher.
+		if !viewPick(r) {
+			app.pinSessionCharacter(ctx, active.CharacterID, active.Name)
+		}
 	} else if sid := sessionCharID(app.sessions, ctx); sid == 0 || !pick(sid) {
 		active = characters[0]
 	}
@@ -72,6 +80,14 @@ func (app *Application) pickCharacter(ctx context.Context, r *http.Request, path
 		})
 	}
 	return characters, active, links, nil
+}
+
+// viewPick reports whether the request views a character without
+// acting as them: notification and briefing links carry ?view=1
+// beside ?character=, so following news about a pilot never moves
+// the session's acting character (see pickCharacter).
+func viewPick(r *http.Request) bool {
+	return r.URL.Query().Get("view") == "1"
 }
 
 // locationTitle renders a station, structure, or solar-system

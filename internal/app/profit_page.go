@@ -104,7 +104,7 @@ type profitView struct {
 	SalesTax     string
 	BrokerFees   string
 
-	// Trading tab (schema 109).
+	// Trading tab (schema 110).
 	Items          []profitItemRow
 	ItemsNet       string // covered margin over every item
 	ItemsNetDir    string

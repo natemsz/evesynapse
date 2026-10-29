@@ -702,18 +702,16 @@ FROM (
         ) x
         GROUP BY x.type_id
     ) v ON v.type_id = r.type_id
-    LEFT JOIN (
-        SELECT mh.type_id, CAST(AVG(mh.volume) AS DOUBLE PRECISION) AS vol30
+    LEFT JOIN LATERAL (
+        SELECT CAST(AVG(mh.volume) AS DOUBLE PRECISION) AS vol30
         FROM market_history mh
-        JOIN (
-            SELECT m.type_id, to_char(MAX(m.date)::date - INTERVAL '29 days', 'YYYY-MM-DD') AS window_start
-            FROM market_history m
-            WHERE m.region_id = sqlc.arg(region_id)
-            GROUP BY m.type_id
-        ) w ON w.type_id = mh.type_id
-        WHERE mh.region_id = sqlc.arg(region_id) AND mh.date >= w.window_start
-        GROUP BY mh.type_id
-    ) h ON h.type_id = r.type_id
+        WHERE mh.region_id = r.region_id AND mh.type_id = r.type_id
+          AND mh.date >= (
+              SELECT to_char(MAX(m.date)::date - INTERVAL '29 days', 'YYYY-MM-DD')
+              FROM market_history m
+              WHERE m.region_id = r.region_id AND m.type_id = r.type_id
+          )
+    ) h ON true
     WHERE r.region_id = sqlc.arg(region_id)
 ) t
 WHERE s.region_id = sqlc.arg(region_id) AND s.type_id = t.type_id;

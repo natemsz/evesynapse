@@ -144,7 +144,7 @@ func (app *Application) workerStatusText() string {
 // liveness is visible without spamming the console.
 //
 // The same goroutine also hosts the hourly SDE maintenance tick
-// (first import + weekly update check; sde.go).
+// (first import + daily update check; sde.go).
 func (app *Application) runWorker(ctx context.Context) {
 	logging.Infof("worker: started")
 
@@ -180,8 +180,8 @@ func (app *Application) runWorker(ctx context.Context) {
 	}()
 
 	// SDE maintenance runs alongside the ESI cycle: a first import
-	// when the static-data tables are empty, then a weekly update
-	// check (patch-day cadence) — see sdeMaintenance in sde.go. It
+	// when the static-data tables are empty, then a daily update
+	// check — see sdeMaintenance in sde.go. It
 	// only ever starts background operations, so it never delays
 	// snapshot refreshes.
 	go func() {

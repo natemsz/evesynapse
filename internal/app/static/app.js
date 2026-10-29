@@ -1174,7 +1174,7 @@
     deck.style.height = h0 + "px";
     var heightAnim = null;
     try {
-      heightAnim = deck.animate([{ height: h0 + "px" }, { height: h1 + "px" }], { duration: 380, easing: "ease-in-out" });
+      heightAnim = deck.animate([{ height: h0 + "px" }, { height: h1 + "px" }], { duration: 470, easing: "ease-in-out" });
     } catch (e) {}
     // The moving card travels on top of the stack, where the eye can
     // follow it: forward, the face lifts off the front, arcs up and
@@ -1217,7 +1217,7 @@
           { transform: "translate(-18px, -12px) rotate(-1.8deg) scale(1.02)", zIndex: 6, offset: 0.32 },
           { transform: "translate(16px, 18px) rotate(0.9deg) scale(0.98)", zIndex: 2, offset: 0.78 },
           { transform: "translate(10px, 10px) rotate(0deg) scale(0.97)", zIndex: 1 }
-        ], { duration: 380, easing: "ease-in-out" });
+        ], { duration: 470, easing: "ease-in-out" });
       } catch (e) {}
     } else {
       // The stack steps back as the incoming card travels: the
@@ -1241,12 +1241,12 @@
           { transform: "translate(16px, 18px) rotate(0.9deg) scale(0.98)", zIndex: 2, offset: 0.22 },
           { transform: "translate(-18px, -12px) rotate(-1.8deg) scale(1.02)", zIndex: 6, offset: 0.68 },
           { transform: "translate(0, 0) rotate(0deg) scale(1)", zIndex: 6 }
-        ], { duration: 380, easing: "ease-in-out" });
+        ], { duration: 470, easing: "ease-in-out" });
       } catch (e) {}
     }
     if (flight && flight.finished) flight.finished.then(done, done);
     else done();
-    setTimeout(done, 460);
+    setTimeout(done, 560);
   }
   function initBriefFlip(root) {
     var buttons = root.querySelectorAll("[data-brief-flip]");

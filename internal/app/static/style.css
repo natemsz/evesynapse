@@ -2181,7 +2181,7 @@ html[data-theme="light"] .brief-card.sev-info { --brief-tint: #b2cddd; }
    card behind the deck; see app.js. */
 .brief-deck { position: relative; flex: 1 1 0; min-width: min(100%, 22rem); max-width: calc((100% - 1.5rem) / 3); touch-action: pan-y; }
 .brief-deck .brief-card { flex: none; min-width: 0; max-width: none; width: 100%; }
-.brief-flip-card { transition: transform 280ms ease, opacity 280ms ease; }
+.brief-flip-card { transition: transform 360ms ease, opacity 360ms ease; }
 .brief-flip-card[data-pos="0"] { position: relative; z-index: 3; }
 .brief-flip-card[data-pos="1"], .brief-flip-card[data-pos="2"] { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
 .brief-flip-card[data-pos="1"] { transform: translate(5px, 5px); z-index: 2; }

@@ -592,6 +592,8 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 		r.Use(app.requireAuth)
 		r.Post("/layout", app.handleHomeLayout)
 		r.Post("/widget-config", app.handleWidgetConfig)
+		r.Post("/briefing/dismiss", app.handleBriefingDismiss)
+		r.Post("/briefing/restore", app.handleBriefingRestore)
 	})
 	r.Get("/healthz", app.handleHealthz)
 	// The market API (market_api.go): read-only, key-gated, rate-limited.

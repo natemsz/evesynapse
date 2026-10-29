@@ -48,8 +48,12 @@ func marketGroupIconKey(name string, id int64) string {
 		return "implants"
 	case "apparel":
 		return "apparel"
-	case "structures", "structure equipment", "structure modifications":
+	case "structures":
 		return "structures"
+	case "structure equipment":
+		return "structure-equipment"
+	case "structure modifications":
+		return "structure-modifications"
 	case "manufacture & research", "materials", "raw materials":
 		return "materials"
 	case "blueprints":
@@ -58,12 +62,22 @@ func marketGroupIconKey(name string, id int64) string {
 		return "skills"
 	case "trade goods":
 		return "tradegoods"
+	case "personalization":
+		return "personalization"
+	case "pilot's services":
+		return "services"
+	case "ship skins":
+		return "skins"
+	case "special edition assets":
+		return "special"
 	}
 
 	// Child-appropriate reuse for subgroups below the mapped
 	// top level. Order matters: the specific words win before
 	// the broad ones.
 	switch {
+	case strings.Contains(normalized, "skin"):
+		return "skins"
 	case strings.Contains(normalized, "blueprint"):
 		return "blueprints"
 	case strings.Contains(normalized, "skill"):
@@ -76,6 +90,10 @@ func marketGroupIconKey(name string, id int64) string {
 		return "drones"
 	case strings.Contains(normalized, "apparel"), strings.Contains(normalized, "clothing"):
 		return "apparel"
+	case strings.Contains(normalized, "structure equipment"):
+		return "structure-equipment"
+	case strings.Contains(normalized, "structure modification"), strings.Contains(normalized, "structure rig"):
+		return "structure-modifications"
 	case strings.Contains(normalized, "structure"):
 		return "structures"
 	case strings.Contains(normalized, "material"), strings.Contains(normalized, "mineral"), strings.Contains(normalized, " ore"):
@@ -131,6 +149,18 @@ var marketGroupIconArt = map[string]string{
 	"skills": `<g ` + marketIconPaint + `><path d="M12 6.2C9.8 4.8 6.6 4.4 4.2 5.1v13c2.4-.7 5.6-.3 7.8 1.1 2.2-1.4 5.4-1.8 7.8-1.1v-13c-2.4-.7-5.6-.3-7.8 1.1Z"/><path d="M12 6.2v13.1"/></g><circle cx="12" cy="3" r="1.1" ` + marketIconFill + `/>`,
 	// An isometric parcel: a cube outline with its face edges.
 	"tradegoods": `<g ` + marketIconPaint + `><path d="M12 3.6 19 7.7v8.6l-7 4.1-7-4.1V7.7Z"/><path d="M12 12 19 7.7M12 12 5 7.7M12 12v8.4"/></g>`,
+	// The station tower fitted with a module chip.
+	"structure-equipment": `<g ` + marketIconPaint + `><path d="M8.6 20.4v-8.6L12 8.4l3.4 3.4v8.6"/><path d="M4.4 20.4h15.2M12 8.4V5.2"/></g><circle cx="12" cy="4.4" r="1" ` + marketIconFill + `/><rect x="10" y="13.4" width="4" height="4" rx="0.8" ` + marketIconFill + `/>`,
+	// The station tower wearing a tilted calibration ring.
+	"structure-modifications": `<ellipse cx="12" cy="14.2" rx="6.8" ry="2.5" transform="rotate(-16 12 14.2)" ` + marketIconPaint + `/><g ` + marketIconPaint + `><path d="M9.2 20.4V11L12 7.6l2.8 3.4v9.4"/><path d="M4.8 20.4h14.4M12 7.6V4.6"/></g><circle cx="12" cy="3.8" r="1" ` + marketIconFill + `/>`,
+	// A pilot bust with a sparkle: making it yours.
+	"personalization": `<g ` + marketIconPaint + `><circle cx="10.8" cy="8" r="3.4"/><path d="M4.6 19.6c.7-3.3 3.1-5 6.2-5 2 0 3.7.7 4.9 2.1"/></g><path d="M18.4 3.2l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8Z" ` + marketIconFill + `/>`,
+	// A pilot license card: portrait mark and service lines.
+	"services": `<g ` + marketIconPaint + `><rect x="3.4" y="5.8" width="17.2" height="12.4" rx="1.8"/><circle cx="8.4" cy="10.6" r="1.7"/><path d="M5.9 15.4c.4-1.4 1.3-2.1 2.5-2.1s2.1.7 2.5 2.1M14.6 9.8h3.8M14.6 13h3.8"/></g>`,
+	// A hull wedge wearing a paint droplet.
+	"skins": `<g ` + marketIconPaint + `><path d="M11 3.4 14 7.8v5l4.2 4.5H3.8L8 12.8v-5Z"/></g><path d="M17.2 12.6c1.5 1.9 2.4 3.2 2.4 4.7a2.4 2.4 0 1 1-4.8 0c0-1.5.9-2.8 2.4-4.7Z" ` + marketIconFill + `/>`,
+	// A rosette seal with a star: rare and commemorative.
+	"special": `<g ` + marketIconPaint + `><circle cx="12" cy="9.8" r="5.4"/><path d="M8.9 14.2 7.2 19.8l3-1.5 1.8 1.9 1.8-1.9 3 1.5-1.7-5.6"/></g><path d="M12 6.6l.9 2.1 2.1.9-2.1.9-.9 2.1-.9-2.1-2.1-.9 2.1-.9Z" ` + marketIconFill + `/>`,
 	// Fallback: a lone market node.
 	"generic": `<g ` + marketIconPaint + `><path d="M12 4.6 18.4 12 12 19.4 5.6 12Z"/></g><circle cx="12" cy="12" r="1.6" ` + marketIconFill + `/>`,
 }

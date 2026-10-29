@@ -39,6 +39,19 @@
 </div>
 {{end}}
 
+{{with .Charts}}
+<section class="foldable">
+<h3>Charts</h3>
+{{if .Net}}{{template "pfchart" .Net}}{{end}}
+{{if .Activities}}{{template "pfchart" .Activities}}{{end}}
+{{if .Fees}}{{template "pfchart" .Fees}}{{end}}
+{{if .FeeShare}}{{template "pfchart" .FeeShare}}{{end}}
+{{if .Characters}}{{template "pfchart" .Characters}}{{end}}
+{{if .Margin}}{{template "pfchart" .Margin}}{{end}}
+<p><small>Amounts in ISK, by {{.Bucket}}. Hatched {{.Bucket}}s had sales with no known cost or no matched tax line, so their trading figures are partial.</small></p>
+</section>
+{{end}}
+
 <section class="foldable">
 <h3>By activity</h3>
 <div class="tw">
@@ -231,4 +244,18 @@
 <p>Nothing recorded yet for {{.OwnerLabel}}. Profit fills in as your wallets sync, and builds up from then on.</p>
 {{end}}
 {{end}}
+{{end}}
+
+{{define "pfchart"}}
+<figure class="pf-chart">
+  <figcaption><strong>{{.Title}}</strong>{{if .Sub}}<br><small class="mt-reqs">{{.Sub}}</small>{{end}}</figcaption>
+  {{if .Legend}}<div class="chart-legend">{{range .Legend}}<span class="legend-item"><span class="legend-swatch pf-sw {{.Class}}" aria-hidden="true"></span>{{.Label}}{{if .Value}} <small class="mt-reqs">{{.Value}}</small>{{end}}</span>{{end}}{{if .HasGaps}}<span class="legend-item"><span class="legend-swatch pf-sw pf-gap" aria-hidden="true"></span>Partly covered</span>{{end}}<span class="legend-note">{{.Low}} to {{.High}}</span></div>{{else}}<div class="chart-legend"><span class="legend-note">{{.Low}} to {{.High}}</span></div>{{end}}
+  <svg viewBox="0 0 {{.W}} {{.H}}" width="100%" role="img" aria-label="{{.Label}}, {{.First}} to {{.Last}}" preserveAspectRatio="none">
+    {{range .Gaps}}<rect class="{{.Class}}" x="{{.X}}" y="{{.Y}}" width="{{.W}}" height="{{.H}}"><title>{{.Tip}}</title></rect>{{end}}
+    {{if .ShowZeroLine}}<line class="mt-zero" x1="0" y1="{{.ZeroY}}" x2="{{.W}}" y2="{{.ZeroY}}"/>{{end}}
+    {{range .Bars}}<rect class="{{.Class}}" x="{{.X}}" y="{{.Y}}" width="{{.W}}" height="{{.H}}"><title>{{.Tip}}</title></rect>{{end}}
+    {{range .Lines}}<polyline class="{{.Class}}" points="{{.Points}}"/>{{end}}
+  </svg>
+  <div class="mt-chart-dates"><small>{{.First}}</small><small>{{.Last}}</small></div>
+</figure>
 {{end}}

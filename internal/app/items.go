@@ -602,6 +602,7 @@ func (app *Application) handleItemType(w http.ResponseWriter, r *http.Request) {
 			TypeID: typeID, RegionID: forge, RegionName: regionName,
 			Anonymous: !data.LoggedIn,
 		}
+		app.vizSetup(ctx, history, "")
 		app.attachHistory(ctx, history, typeID, forge, app.userID(ctx))
 		detail.HistoryView = history
 		// The same warming contract as the Market item view:

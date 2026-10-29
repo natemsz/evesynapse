@@ -45,7 +45,11 @@ func TestItemPageHistoryChart(t *testing.T) {
 		`data-chart-scrub="true"`,
 		"<polyline",
 		`stroke="#ffb84d"`,
-		"Average price",
+		"5-day average",
+		"Donchian channel",
+		"Daily wicks",
+		"Units traded",
+		"Orders per day",
 		"Volume",
 		"3 days of recorded trades in The Forge",
 		"Last recorded days",
@@ -104,7 +108,7 @@ func TestItemPageHistoryPendingQueuesWant(t *testing.T) {
 	apptest.MustContain(t, "/items/type/34/ (pending)", body,
 		"Price history — The Forge",
 		`data-poll-state="pending"`,
-		`data-poll-url="/market/history-fragment?region=10000002&amp;type=34"`,
+		`data-poll-url="/market/history-fragment?region=10000002&amp;type=34&amp;range=3m"`,
 		"This item is queued",
 	)
 	// And the view leaves the worker the same want a Market view

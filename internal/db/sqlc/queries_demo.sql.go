@@ -167,7 +167,7 @@ func (q *Queries) GetDemoLastReset(ctx context.Context) (time.Time, error) {
 
 const getDemoUser = `-- name: GetDemoUser :one
 
-SELECT id, created_at, home_layout, last_briefing_at, last_seen_at, is_demo FROM users WHERE is_demo <> 0 ORDER BY id LIMIT 1
+SELECT id, created_at, home_layout, last_briefing_at, last_seen_at, is_demo, viz_prefs FROM users WHERE is_demo <> 0 ORDER BY id LIMIT 1
 `
 
 // ---------------------------------------------------------------------
@@ -188,6 +188,7 @@ func (q *Queries) GetDemoUser(ctx context.Context) (User, error) {
 		&i.LastBriefingAt,
 		&i.LastSeenAt,
 		&i.IsDemo,
+		&i.VizPrefs,
 	)
 	return i, err
 }

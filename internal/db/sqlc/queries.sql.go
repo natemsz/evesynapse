@@ -231,7 +231,7 @@ func (q *Queries) CreateSkillPlan(ctx context.Context, arg CreateSkillPlanParams
 const createUser = `-- name: CreateUser :one
 INSERT INTO users (created_at)
 VALUES (now())
-RETURNING id, created_at, home_layout, last_briefing_at, last_seen_at, is_demo
+RETURNING id, created_at, home_layout, last_briefing_at, last_seen_at, is_demo, viz_prefs
 `
 
 func (q *Queries) CreateUser(ctx context.Context) (User, error) {
@@ -244,6 +244,7 @@ func (q *Queries) CreateUser(ctx context.Context) (User, error) {
 		&i.LastBriefingAt,
 		&i.LastSeenAt,
 		&i.IsDemo,
+		&i.VizPrefs,
 	)
 	return i, err
 }
@@ -679,7 +680,7 @@ func (q *Queries) GetSnapshotFetchState(ctx context.Context, arg GetSnapshotFetc
 }
 
 const getUser = `-- name: GetUser :one
-SELECT id, created_at, home_layout, last_briefing_at, last_seen_at, is_demo FROM users
+SELECT id, created_at, home_layout, last_briefing_at, last_seen_at, is_demo, viz_prefs FROM users
 WHERE id = $1
 `
 
@@ -693,6 +694,7 @@ func (q *Queries) GetUser(ctx context.Context, id int64) (User, error) {
 		&i.LastBriefingAt,
 		&i.LastSeenAt,
 		&i.IsDemo,
+		&i.VizPrefs,
 	)
 	return i, err
 }
@@ -760,6 +762,20 @@ func (q *Queries) GetUserHomeLayout(ctx context.Context, id int64) (string, erro
 	var home_layout string
 	err := row.Scan(&home_layout)
 	return home_layout, err
+}
+
+const getUserVizPrefs = `-- name: GetUserVizPrefs :one
+SELECT viz_prefs FROM users
+WHERE id = $1
+`
+
+// Visualization preferences (schema 111): the account's chart
+// display switches as one JSON object.
+func (q *Queries) GetUserVizPrefs(ctx context.Context, id int64) (string, error) {
+	row := q.db.QueryRowContext(ctx, getUserVizPrefs, id)
+	var viz_prefs string
+	err := row.Scan(&viz_prefs)
+	return viz_prefs, err
 }
 
 const getWalletHistorySample = `-- name: GetWalletHistorySample :one
@@ -1962,7 +1978,7 @@ func (q *Queries) ListUserWalletHistory(ctx context.Context, userID int64) ([]Wa
 }
 
 const listUsers = `-- name: ListUsers :many
-SELECT id, created_at, home_layout, last_briefing_at, last_seen_at, is_demo FROM users
+SELECT id, created_at, home_layout, last_briefing_at, last_seen_at, is_demo, viz_prefs FROM users
 ORDER BY id
 `
 
@@ -1982,6 +1998,7 @@ func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
 			&i.LastBriefingAt,
 			&i.LastSeenAt,
 			&i.IsDemo,
+			&i.VizPrefs,
 		); err != nil {
 			return nil, err
 		}
@@ -2333,6 +2350,22 @@ type SetUserHomeLayoutParams struct {
 
 func (q *Queries) SetUserHomeLayout(ctx context.Context, arg SetUserHomeLayoutParams) error {
 	_, err := q.db.ExecContext(ctx, setUserHomeLayout, arg.HomeLayout, arg.ID)
+	return err
+}
+
+const setUserVizPrefs = `-- name: SetUserVizPrefs :exec
+UPDATE users
+SET viz_prefs = $1
+WHERE id = $2
+`
+
+type SetUserVizPrefsParams struct {
+	VizPrefs string `json:"viz_prefs"`
+	ID       int64  `json:"id"`
+}
+
+func (q *Queries) SetUserVizPrefs(ctx context.Context, arg SetUserVizPrefsParams) error {
+	_, err := q.db.ExecContext(ctx, setUserVizPrefs, arg.VizPrefs, arg.ID)
 	return err
 }
 

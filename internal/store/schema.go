@@ -670,6 +670,12 @@ var pgGlobalNoticesSchema string
 //go:embed schema_pg/109_briefing_dismissals.sql
 var pgBriefingDismissalsSchema string
 
+// Step 111: visualization preferences, one JSON object of chart
+// display switches on the account.
+//
+//go:embed schema_pg/111_viz_prefs.sql
+var pgVizPrefsSchema string
+
 // Step 112: per-item trading P&L on a pooled cost basis: account,
 // character and corporation pools, paired sales tax, allocated broker
 // fees, typed gaps, and the per-item daily and window rollups.
@@ -816,6 +822,7 @@ func schemaSteps() []schemaStep {
 		{108, "market_api", pgMarketAPISchema, ""},
 		{109, "briefing_dismissals", pgBriefingDismissalsSchema, ""},
 		{110, "watchlist_baskets", pgWatchlistBasketsSchema, ""},
+		{111, "viz_prefs", pgVizPrefsSchema, ""},
 		{112, "profit_trading", pgProfitTradingSchema, ""},
 	}
 }

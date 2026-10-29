@@ -220,7 +220,33 @@ type PriceChart struct {
 	To          string // newest date label
 	PriceTicks  []AxisTick
 	VolumeTicks []AxisTick
+	OrderTicks  []AxisTick
 	DateTicks   []DateTick
+
+	// The ranged chart's extra layers (BuildPriceChartRange);
+	// empty when a layer is off or the legacy builder ran.
+	Wicks         []Wick // per-day lowest-to-highest lines
+	MA5Points     string // polyline of the 5-day moving average
+	MA20Points    string // polyline of the 20-day moving average
+	ChannelPoints string // polygon of the trailing 5-day Donchian band
+	OrdersPoints  string // polyline of order_count over the volume band
+}
+
+// Wick is one displayed day's price extent: a vertical line at X
+// from Top (the day's highest) to Bottom (its lowest).
+type Wick struct {
+	X      int
+	Top    int
+	Bottom int
+}
+
+// ChartOptions selects the ranged chart's optional layers. The
+// average line and the recent-days table always render; these
+// three are the account's visualization switches.
+type ChartOptions struct {
+	Wicks       bool
+	MAChannel   bool
+	VolumeStrip bool
 }
 
 // AxisTick is one labelled gridline on a price or volume
@@ -309,13 +335,36 @@ func FormatCompactAxisNumber(v float64) string {
 // row yields a lone dot (no polyline can be drawn through one
 // point, and faking one would invent shape).
 func BuildPriceChart(rows []db.MarketHistory) (PriceChart, bool) {
+	return buildChart(rows, len(rows), ChartOptions{VolumeStrip: true}, true)
+}
+
+// BuildPriceChartRange builds the item page chart over the last
+// `display` rows of rows (ascending). Rows before the displayed
+// window are warmup: the moving averages and the Donchian channel
+// read them, so their values are correct from the first displayed
+// day, but they draw nothing themselves. The price scale spans
+// the displayed days' lowest..highest (the wick extents); the
+// averages, both moving averages and the band share that scale.
+func BuildPriceChartRange(rows []db.MarketHistory, display int, opts ChartOptions) (PriceChart, bool) {
+	return buildChart(rows, display, opts, false)
+}
+
+func buildChart(rows []db.MarketHistory, display int, opts ChartOptions, legacy bool) (PriceChart, bool) {
 	if len(rows) == 0 {
 		return PriceChart{}, false
 	}
+	if display < 1 || display > len(rows) {
+		display = len(rows)
+	}
+	disp := rows[len(rows)-display:]
 	chart := PriceChart{Width: ChartWidth, Height: ChartHeight}
 	plotH := ChartHeight - ChartPadTop - ChartPadBottom
-	priceH := int(float64(plotH-ChartBarGap) * ChartPriceBand)
-	barH := plotH - ChartBarGap - priceH
+	priceH := plotH
+	barH := 0
+	if opts.VolumeStrip {
+		priceH = int(float64(plotH-ChartBarGap) * ChartPriceBand)
+		barH = plotH - ChartBarGap - priceH
+	}
 	priceTop := ChartPadTop
 	priceBottom := priceTop + priceH
 	barBottom := ChartHeight - ChartPadBottom
@@ -324,15 +373,23 @@ func BuildPriceChart(rows []db.MarketHistory) (PriceChart, bool) {
 
 	minP, maxP := math.Inf(1), math.Inf(-1)
 	var maxV int64
-	for _, r := range rows {
-		if r.Average < minP {
-			minP = r.Average
+	var maxOrd int64
+	for _, r := range disp {
+		lo, hi := r.Average, r.Average
+		if !legacy {
+			lo, hi = r.Lowest, r.Highest
 		}
-		if r.Average > maxP {
-			maxP = r.Average
+		if lo < minP {
+			minP = lo
+		}
+		if hi > maxP {
+			maxP = hi
 		}
 		if r.Volume > maxV {
 			maxV = r.Volume
+		}
+		if r.OrderCount > maxOrd {
+			maxOrd = r.OrderCount
 		}
 	}
 	// Flat windows (one distinct price, or one row) draw on a
@@ -361,29 +418,50 @@ func BuildPriceChart(rows []db.MarketHistory) (PriceChart, bool) {
 		priceTick((minP+maxP)/2, priceTop+priceH/2, "tick-mid"),
 		priceTick(minP, priceBottom, ""),
 	}
-	volumeTick := func(value float64, y int, class string) AxisTick {
-		return AxisTick{
-			Label:  FormatCompactAxisNumber(value),
-			Y:      y,
-			LabelY: y + 3,
-			Class:  class,
+	if opts.VolumeStrip {
+		volumeTick := func(value float64, y int, class string) AxisTick {
+			return AxisTick{
+				Label:  FormatCompactAxisNumber(value),
+				Y:      y,
+				LabelY: y + 3,
+				Class:  class,
+			}
 		}
-	}
-	if maxV > 0 {
-		chart.VolumeTicks = []AxisTick{
-			volumeTick(float64(maxV), barTop, ""),
-			volumeTick(float64(maxV)/2, barTop+barH/2, "tick-mid"),
-			volumeTick(0, barBottom, ""),
+		if maxV > 0 {
+			chart.VolumeTicks = []AxisTick{
+				volumeTick(float64(maxV), barTop, ""),
+				volumeTick(float64(maxV)/2, barTop+barH/2, "tick-mid"),
+				volumeTick(0, barBottom, ""),
+			}
+		} else {
+			chart.VolumeTicks = []AxisTick{volumeTick(0, barBottom, "")}
 		}
-	} else {
-		chart.VolumeTicks = []AxisTick{volumeTick(0, barBottom, "")}
+		if maxOrd > 0 {
+			// The orders line gets its own scale on the opposite
+			// side of the strip from the volume scale, so each
+			// series reads against its own numbers. Order counts
+			// are whole, so its labels round to whole numbers.
+			orderTick := func(value float64, y int, class string) AxisTick {
+				return AxisTick{
+					Label:  FormatCompactAxisNumber(math.Round(value)),
+					Y:      y,
+					LabelY: y + 3,
+					Class:  class,
+				}
+			}
+			chart.OrderTicks = []AxisTick{
+				orderTick(float64(maxOrd), barTop, ""),
+				orderTick(float64(maxOrd)/2, barTop+barH/2, "tick-mid"),
+				orderTick(0, barBottom, ""),
+			}
+		}
 	}
 
 	x := func(i int) int {
-		if len(rows) == 1 {
+		if len(disp) == 1 {
 			return ChartWidth / 2
 		}
-		return i * (ChartWidth - 1) / (len(rows) - 1)
+		return i * (ChartWidth - 1) / (len(disp) - 1)
 	}
 	y := func(avg float64) int {
 		frac := (avg - minP) / (maxP - minP)
@@ -391,18 +469,18 @@ func BuildPriceChart(rows []db.MarketHistory) (PriceChart, bool) {
 	}
 
 	var pts []string
-	for i, r := range rows {
+	for i, r := range disp {
 		px, py := x(i), y(r.Average)
 		chart.Dots = append(chart.Dots, Dot{X: px, Y: py, Day: dayFigures(r)})
 		pts = append(pts, fmt.Sprintf("%d,%d", px, py))
-		if maxV > 0 && r.Volume > 0 {
+		if opts.VolumeStrip && maxV > 0 && r.Volume > 0 {
 			h := int(float64(r.Volume) / float64(maxV) * float64(barH))
 			if h < 1 {
 				h = 1
 			}
 			chart.Bars = append(chart.Bars, Bar{
 				X: px, Y: barBottom - h,
-				W: barWidth(len(rows)), H: h,
+				W: barWidth(len(disp)), H: h,
 				Title: fmt.Sprintf("%s: volume %s", r.Date, esi.FormatInt(r.Volume)),
 			})
 		}
@@ -410,31 +488,124 @@ func BuildPriceChart(rows []db.MarketHistory) (PriceChart, bool) {
 	if len(pts) > 1 {
 		chart.Points = strings.Join(pts, " ")
 	}
-	// Recent days, newest first, for the table under the chart.
+	if !legacy {
+		start := len(rows) - display // global index of the first displayed day
+		if opts.Wicks {
+			for i, r := range disp {
+				top, bottom := y(r.Highest), y(r.Lowest)
+				if top > bottom {
+					top, bottom = bottom, top
+				}
+				chart.Wicks = append(chart.Wicks, Wick{X: x(i), Top: top, Bottom: bottom})
+			}
+		}
+		if opts.MAChannel {
+			chart.MA5Points, chart.MA20Points = movingAverages(rows, start, x, y)
+			chart.ChannelPoints = donchianBand(rows, start, x, y)
+		}
+		if opts.VolumeStrip && maxOrd > 0 {
+			var ord []string
+			for i, r := range disp {
+				oy := barBottom - int(float64(r.OrderCount)/float64(maxOrd)*float64(barH))
+				ord = append(ord, fmt.Sprintf("%d,%d", x(i), oy))
+			}
+			if len(ord) > 1 {
+				chart.OrdersPoints = strings.Join(ord, " ")
+			}
+		}
+	}
+	// Recent days, newest first, for the table under the chart:
+	// from every row read, warmup included, so the table keeps
+	// its full span whatever range the chart displays.
 	for i := len(rows) - 1; i >= 0 && len(chart.Recent) < RecentChartDays; i-- {
 		chart.Recent = append(chart.Recent, dayFigures(rows[i]))
 	}
-	chart.From = rows[0].Date
-	chart.To = rows[len(rows)-1].Date
-	if len(rows) == 1 {
+	chart.From = disp[0].Date
+	chart.To = disp[len(disp)-1].Date
+	if len(disp) == 1 {
 		chart.DateTicks = []DateTick{
-			{Label: rows[0].Date, X: x(0), Anchor: "middle"},
+			{Label: disp[0].Date, X: x(0), Anchor: "middle"},
 		}
 	} else {
 		chart.DateTicks = []DateTick{
-			{Label: rows[0].Date, X: x(0), Anchor: "start"},
+			{Label: disp[0].Date, X: x(0), Anchor: "start"},
 		}
-		if len(rows) > 2 {
-			mid := len(rows) / 2
+		if len(disp) > 2 {
+			mid := len(disp) / 2
 			chart.DateTicks = append(chart.DateTicks, DateTick{
-				Label: rows[mid].Date, X: x(mid), Anchor: "middle", Class: "tick-mid",
+				Label: disp[mid].Date, X: x(mid), Anchor: "middle", Class: "tick-mid",
 			})
 		}
 		chart.DateTicks = append(chart.DateTicks, DateTick{
-			Label: rows[len(rows)-1].Date, X: x(len(rows) - 1), Anchor: "end",
+			Label: disp[len(disp)-1].Date, X: x(len(disp) - 1), Anchor: "end",
 		})
 	}
 	return chart, true
+}
+
+// movingAverages computes the 5-day and 20-day moving averages of
+// the daily average for the displayed days (global indexes from
+// start), reading warmup rows before start so the first displayed
+// day is already correct. A day contributes a point only once its
+// full window exists; the polyline starts at the first such day.
+func movingAverages(rows []db.MarketHistory, start int, x func(int) int, y func(float64) int) (ma5, ma20 string) {
+	prefix := make([]float64, len(rows)+1)
+	for i, r := range rows {
+		prefix[i+1] = prefix[i] + r.Average
+	}
+	mean := func(g, n int) (float64, bool) {
+		if g+1 < n {
+			return 0, false
+		}
+		return (prefix[g+1] - prefix[g+1-n]) / float64(n), true
+	}
+	var p5, p20 []string
+	for g := start; g < len(rows); g++ {
+		i := g - start
+		if v, ok := mean(g, 5); ok {
+			p5 = append(p5, fmt.Sprintf("%d,%d", x(i), y(v)))
+		}
+		if v, ok := mean(g, 20); ok {
+			p20 = append(p20, fmt.Sprintf("%d,%d", x(i), y(v)))
+		}
+	}
+	if len(p5) > 1 {
+		ma5 = strings.Join(p5, " ")
+	}
+	if len(p20) > 1 {
+		ma20 = strings.Join(p20, " ")
+	}
+	return ma5, ma20
+}
+
+// donchianBand computes the trailing 5-day Donchian channel for
+// the displayed days: for each day, the maximum of Highest and
+// the minimum of Lowest over that day and the four stored days
+// before it (warmup rows included). Returned as one polygon:
+// the upper edge left to right, the lower edge back.
+func donchianBand(rows []db.MarketHistory, start int, x func(int) int, y func(float64) int) string {
+	var upper, lower []string
+	for g := start; g < len(rows); g++ {
+		lo, hi := math.Inf(1), math.Inf(-1)
+		for k := g; k >= 0 && k > g-5; k-- {
+			if rows[k].Lowest < lo {
+				lo = rows[k].Lowest
+			}
+			if rows[k].Highest > hi {
+				hi = rows[k].Highest
+			}
+		}
+		i := g - start
+		upper = append(upper, fmt.Sprintf("%d,%d", x(i), y(hi)))
+		lower = append(lower, fmt.Sprintf("%d,%d", x(i), y(lo)))
+	}
+	if len(upper) < 2 {
+		return ""
+	}
+	for i := len(lower) - 1; i >= 0; i-- {
+		upper = append(upper, lower[i])
+	}
+	return strings.Join(upper, " ")
 }
 
 // dayFigures formats one stored row for the tooltip and the

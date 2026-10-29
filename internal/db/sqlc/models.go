@@ -731,12 +731,15 @@ type LedgerJournal struct {
 }
 
 type LedgerState struct {
-	OwnerKind string       `json:"owner_kind"`
-	OwnerID   int64        `json:"owner_id"`
-	JournalAt sql.NullTime `json:"journal_at"`
-	TxnsAt    sql.NullTime `json:"txns_at"`
-	JobsAt    sql.NullTime `json:"jobs_at"`
-	FoldedAt  sql.NullTime `json:"folded_at"`
+	OwnerKind   string       `json:"owner_kind"`
+	OwnerID     int64        `json:"owner_id"`
+	JournalAt   sql.NullTime `json:"journal_at"`
+	TxnsAt      sql.NullTime `json:"txns_at"`
+	JobsAt      sql.NullTime `json:"jobs_at"`
+	JournalHash string       `json:"journal_hash"`
+	TxnsHash    string       `json:"txns_hash"`
+	JobsHash    string       `json:"jobs_hash"`
+	FoldedAt    sql.NullTime `json:"folded_at"`
 }
 
 type LedgerTxn struct {
@@ -1860,6 +1863,13 @@ type SystemSovereignty struct {
 	UpdatedAt     time.Time `json:"updated_at"`
 }
 
+type TradeFoldCheckpoint struct {
+	OwnerKind    string    `json:"owner_kind"`
+	OwnerID      int64     `json:"owner_id"`
+	TypeID       int64     `json:"type_id"`
+	CheckpointAt time.Time `json:"checkpoint_at"`
+}
+
 type TradeIdea struct {
 	ID    int64          `json:"id"`
 	Body  string         `json:"body"`
@@ -1872,6 +1882,15 @@ type TradeIdeasAttempt struct {
 	ID          int64     `json:"id"`
 	AttemptedAt time.Time `json:"attempted_at"`
 	Failures    int32     `json:"failures"`
+}
+
+type TradeOpenLot struct {
+	OwnerKind string  `json:"owner_kind"`
+	OwnerID   int64   `json:"owner_id"`
+	TypeID    int64   `json:"type_id"`
+	Seq       int64   `json:"seq"`
+	Quantity  int64   `json:"quantity"`
+	UnitPrice float64 `json:"unit_price"`
 }
 
 type TradePosition struct {

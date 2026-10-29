@@ -132,17 +132,35 @@ func (app *Application) handleProfit(w http.ResponseWriter, r *http.Request) {
 // which ESI allows only with the wallet roles.
 func (app *Application) profitCorpsFor(ctx context.Context, chars []db.Character) map[int64]bool {
 	out := map[int64]bool{}
+	if len(chars) == 0 {
+		return out
+	}
+	ids := make([]int64, len(chars))
+	for i, ch := range chars {
+		ids[i] = ch.CharacterID
+	}
+	corpOf := map[int64]int64{}
+	if rows, err := app.queries.ListCharacterCorporations(ctx, ids); err == nil {
+		for _, r := range rows {
+			corpOf[r.CharacterID] = r.CorporationID
+		}
+	}
+	kinds := make([]string, 0, walletDivisionCount)
+	for d := 1; d <= walletDivisionCount; d++ {
+		kinds = append(kinds, fmt.Sprintf("%s%d", esi.SnapCorpJournalPrefix, d))
+	}
+	withJournal := map[int64]bool{}
+	if rows, err := app.queries.ListCharactersWithSnapshots(ctx, db.ListCharactersWithSnapshotsParams{CharacterIds: ids, Kinds: kinds}); err == nil {
+		for _, id := range rows {
+			withJournal[id] = true
+		}
+	}
 	for _, ch := range chars {
-		corp, err := app.queries.GetCharacterCorporation(ctx, ch.CharacterID)
-		if err != nil || corp.CorporationID <= 0 || isNPCCorporation(corp.CorporationID) || out[corp.CorporationID] {
+		corp := corpOf[ch.CharacterID]
+		if corp <= 0 || isNPCCorporation(corp) || !withJournal[ch.CharacterID] {
 			continue
 		}
-		for d := 1; d <= walletDivisionCount; d++ {
-			if _, err := app.queries.GetSnapshot(ctx, db.GetSnapshotParams{CharacterID: ch.CharacterID, Kind: fmt.Sprintf("%s%d", esi.SnapCorpJournalPrefix, d)}); err == nil {
-				out[corp.CorporationID] = true
-				break
-			}
-		}
+		out[corp] = true
 	}
 	return out
 }
@@ -161,6 +179,7 @@ func (app *Application) buildProfitView(ctx context.Context, userID int64, owner
 	if err != nil {
 		return view, err
 	}
+	corps := app.profitCorpsFor(ctx, chars)
 	kind, ids := ownerChar, make([]int64, 0, len(chars))
 	for _, ch := range chars {
 		ids = append(ids, ch.CharacterID)
@@ -170,7 +189,7 @@ func (app *Application) buildProfitView(ctx context.Context, userID int64, owner
 	switch {
 	case strings.HasPrefix(ownerRaw, "corp-"):
 		id, _ := strconv.ParseInt(strings.TrimPrefix(ownerRaw, "corp-"), 10, 64)
-		if app.profitCorpsFor(ctx, chars)[id] {
+		if corps[id] {
 			kind, ids, view.Corp, ownerParam = ownerCorp, []int64{id}, true, ownerRaw
 			view.OwnerLabel = app.CorpDisplayName(ctx, id)
 		}
@@ -195,7 +214,6 @@ func (app *Application) buildProfitView(ctx context.Context, userID int64, owner
 		o := strconv.FormatInt(ch.CharacterID, 10)
 		view.Owners = append(view.Owners, profitOwnerChoice{Href: href(o, view.Days), Label: ch.Name, Active: ownerParam == o})
 	}
-	corps := app.profitCorpsFor(ctx, chars)
 	corpIDs := make([]int64, 0, len(corps))
 	for id := range corps {
 		corpIDs = append(corpIDs, id)

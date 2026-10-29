@@ -66,6 +66,31 @@ CREATE TABLE IF NOT EXISTS ledger_jobs (
     PRIMARY KEY (owner_kind, owner_id, job_id)
 );
 
+CREATE INDEX IF NOT EXISTS ledger_jobs_type_idx ON ledger_jobs (owner_kind, owner_id, product_type_id);
+
+-- The fold checkpoint per type: the day-aligned time the type's
+-- realized rows are final up to, and the open lots at that moment.
+-- A refold starts from the checkpoint instead of the owner's whole
+-- history: new lots land inside the ESI window, which the lag in
+-- profit_ledger.go clears by days, so nothing new can arrive behind
+-- a checkpoint.
+CREATE TABLE IF NOT EXISTS trade_fold_checkpoints (
+    owner_kind    TEXT NOT NULL,
+    owner_id      BIGINT NOT NULL,
+    type_id       BIGINT NOT NULL,
+    checkpoint_at TIMESTAMPTZ NOT NULL,
+    PRIMARY KEY (owner_kind, owner_id, type_id)
+);
+CREATE TABLE IF NOT EXISTS trade_open_lots (
+    owner_kind TEXT NOT NULL,
+    owner_id   BIGINT NOT NULL,
+    type_id    BIGINT NOT NULL,
+    seq        BIGINT NOT NULL,
+    quantity   BIGINT NOT NULL,
+    unit_price DOUBLE PRECISION NOT NULL,
+    PRIMARY KEY (owner_kind, owner_id, type_id, seq)
+);
+
 CREATE TABLE IF NOT EXISTS trade_realized (
     owner_kind        TEXT NOT NULL,
     owner_id          BIGINT NOT NULL,
@@ -111,6 +136,9 @@ CREATE TABLE IF NOT EXISTS ledger_state (
     journal_at  TIMESTAMPTZ,
     txns_at     TIMESTAMPTZ,
     jobs_at     TIMESTAMPTZ,
+    journal_hash TEXT NOT NULL DEFAULT '',
+    txns_hash    TEXT NOT NULL DEFAULT '',
+    jobs_hash    TEXT NOT NULL DEFAULT '',
     folded_at   TIMESTAMPTZ,
     PRIMARY KEY (owner_kind, owner_id)
 );

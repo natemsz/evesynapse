@@ -31,7 +31,9 @@ package app
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -133,7 +135,14 @@ type openLot struct {
 // be in time order. It returns every sell's settlement and the lots
 // left open, oldest first.
 func matchFIFO(lots []ledgerLot) ([]realizedSale, []openLot) {
-	var open []openLot
+	return matchFIFOFrom(nil, lots)
+}
+
+// matchFIFOFrom is matchFIFO starting from lots already open (a fold
+// checkpoint's remainder). The caller's slice is never mutated.
+func matchFIFOFrom(start []openLot, lots []ledgerLot) ([]realizedSale, []openLot) {
+	open := make([]openLot, len(start))
+	copy(open, start)
 	var sales []realizedSale
 	for _, l := range lots {
 		if l.Quantity <= 0 {
@@ -253,6 +262,21 @@ func (app *Application) refreshProfitLedger(ctx context.Context, ch db.Character
 // isNPCCorporation: NPC corporations hold the 1000000 to 2000000 range.
 func isNPCCorporation(id int64) bool { return id >= 1000000 && id < 2000000 }
 
+// snapshotHash fingerprints snapshot payloads, so the fold can tell
+// a refetched window from a changed one: ESI answers the same 30
+// days again on most passes, and only new content is worth landing.
+func snapshotHash(snaps ...*db.CharacterSnapshot) string {
+	h := sha256.New()
+	for _, s := range snaps {
+		if s == nil {
+			continue
+		}
+		h.Write([]byte(s.Payload))
+		h.Write([]byte{0})
+	}
+	return hex.EncodeToString(h.Sum(nil))
+}
+
 // newestFetch is the latest fetch among snapshots.
 func newestFetch(snaps ...*db.CharacterSnapshot) time.Time {
 	var t time.Time
@@ -283,9 +307,10 @@ func (app *Application) foldLedger(ctx context.Context, src ledgerSource, now ti
 	journalAt := newestFetch(ptrs(src.journals)...)
 	txnsAt := newestFetch(ptrs(src.txns)...)
 	jobsAt := newestFetch(src.jobs)
-	changed := !state.JournalAt.Valid || journalAt.After(state.JournalAt.Time) ||
-		!state.TxnsAt.Valid || txnsAt.After(state.TxnsAt.Time) ||
-		!state.JobsAt.Valid || jobsAt.After(state.JobsAt.Time)
+	journalHash := snapshotHash(ptrs(src.journals)...)
+	txnsHash := snapshotHash(ptrs(src.txns)...)
+	jobsHash := snapshotHash(src.jobs)
+	changed := journalHash != state.JournalHash || txnsHash != state.TxnsHash || jobsHash != state.JobsHash
 	today := now.UTC().Format("2006-01-02")
 	if !changed {
 		if src.kind == ownerChar {
@@ -295,6 +320,7 @@ func (app *Application) foldLedger(ctx context.Context, src ledgerSource, now ti
 	}
 
 	earliest := now.UTC()
+	landed := false
 	touchedTypes := map[int64]bool{}
 	note := func(t time.Time) {
 		if t.Before(earliest) {
@@ -329,6 +355,9 @@ func (app *Application) foldLedger(ctx context.Context, src ledgerSource, now ti
 		if err != nil {
 			return fmt.Errorf("journal: %w", err)
 		}
+		if len(ats) > 0 {
+			landed = true
+		}
 		for _, t := range ats {
 			note(t)
 		}
@@ -360,6 +389,9 @@ func (app *Application) foldLedger(ctx context.Context, src ledgerSource, now ti
 		if err != nil {
 			return fmt.Errorf("transactions: %w", err)
 		}
+		if len(rows) > 0 {
+			landed = true
+		}
 		for _, r := range rows {
 			note(r.At)
 			touchedTypes[r.TypeID] = true
@@ -375,8 +407,29 @@ func (app *Application) foldLedger(ctx context.Context, src ledgerSource, now ti
 			touchedTypes[id] = true
 		}
 		if !jobEarliest.IsZero() {
+			landed = true
 			note(jobEarliest)
 		}
+	}
+
+	if !landed {
+		// The windows moved but carried nothing the ledger had not
+		// seen: record the fingerprints so the next pass skips the
+		// landing too, and leave the attribution as it stands.
+		if err := app.queries.UpsertLedgerState(ctx, db.UpsertLedgerStateParams{
+			OwnerKind: src.kind, OwnerID: src.ownerID,
+			JournalAt:   sql.NullTime{Time: journalAt, Valid: !journalAt.IsZero()},
+			TxnsAt:      sql.NullTime{Time: txnsAt, Valid: !txnsAt.IsZero()},
+			JobsAt:      sql.NullTime{Time: jobsAt, Valid: !jobsAt.IsZero()},
+			JournalHash: journalHash, TxnsHash: txnsHash, JobsHash: jobsHash,
+			FoldedAt: sql.NullTime{Time: now.UTC(), Valid: true},
+		}); err != nil {
+			return err
+		}
+		if src.kind == ownerChar {
+			return app.foldRemainder(ctx, src.ownerID, now.UTC().AddDate(0, 0, -1).Format("2006-01-02"))
+		}
+		return nil
 	}
 
 	held := app.ledgerHoldings(src)
@@ -415,10 +468,11 @@ func (app *Application) foldLedger(ctx context.Context, src ledgerSource, now ti
 	}
 	if err := qtx.UpsertLedgerState(ctx, db.UpsertLedgerStateParams{
 		OwnerKind: src.kind, OwnerID: src.ownerID,
-		JournalAt: sql.NullTime{Time: journalAt, Valid: !journalAt.IsZero()},
-		TxnsAt:    sql.NullTime{Time: txnsAt, Valid: !txnsAt.IsZero()},
-		JobsAt:    sql.NullTime{Time: jobsAt, Valid: !jobsAt.IsZero()},
-		FoldedAt:  sql.NullTime{Time: now.UTC(), Valid: true},
+		JournalAt:   sql.NullTime{Time: journalAt, Valid: !journalAt.IsZero()},
+		TxnsAt:      sql.NullTime{Time: txnsAt, Valid: !txnsAt.IsZero()},
+		JobsAt:      sql.NullTime{Time: jobsAt, Valid: !jobsAt.IsZero()},
+		JournalHash: journalHash, TxnsHash: txnsHash, JobsHash: jobsHash,
+		FoldedAt: sql.NullTime{Time: now.UTC(), Valid: true},
 	}); err != nil {
 		return err
 	}
@@ -443,10 +497,25 @@ func (app *Application) foldRemainder(ctx context.Context, characterID int64, fr
 	return tx.Commit()
 }
 
-// refoldType rematches one type's whole history for an owner and
-// rewrites its realized sales and its open position.
+// foldCheckpointLag is how far behind the fold's checkpoint trails:
+// a type's realized rows are final once they are older than this,
+// and a refold only rematches from the checkpoint on. New lots reach
+// the ledger from ESI's 30-day windows, so nothing new can land
+// behind a checkpoint that trails by more than that window.
+const foldCheckpointLag = 40 * 24 * time.Hour
+
+// refoldType rematches one type's lots from its fold checkpoint on
+// and rewrites the realized sales in that span and the open
+// position. The lots still open at the new checkpoint are stored, so
+// the next refold starts there instead of at the owner's first
+// trade: the work per fold stays inside one ESI window plus the
+// stored remainder, however long the owner has traded.
 func (app *Application) refoldType(ctx context.Context, src ledgerSource, typeID, held int64, now time.Time) error {
-	rows, err := app.queries.ListLedgerLotsForType(ctx, db.ListLedgerLotsForTypeParams{OwnerKind: src.kind, OwnerID: src.ownerID, TypeID: typeID})
+	var cp time.Time
+	if at, err := app.queries.GetTradeFoldCheckpoint(ctx, db.GetTradeFoldCheckpointParams{OwnerKind: src.kind, OwnerID: src.ownerID, TypeID: typeID}); err == nil {
+		cp = at
+	}
+	rows, err := app.queries.ListLedgerLotsForTypeSince(ctx, db.ListLedgerLotsForTypeSinceParams{OwnerKind: src.kind, OwnerID: src.ownerID, TypeID: typeID, Since: cp})
 	if err != nil {
 		return err
 	}
@@ -454,7 +523,31 @@ func (app *Application) refoldType(ctx context.Context, src ledgerSource, typeID
 	for _, r := range rows {
 		lots = append(lots, ledgerLot{At: r.At, RefID: r.RefID, Sell: r.IsSell.Valid && r.IsSell.Bool, Quantity: r.Quantity, Unit: r.UnitPrice})
 	}
-	sales, open := matchFIFO(lots)
+	var prefix []ledgerLot
+	if !cp.IsZero() {
+		stored, err := app.queries.ListTradeOpenLots(ctx, db.ListTradeOpenLotsParams{OwnerKind: src.kind, OwnerID: src.ownerID, TypeID: typeID})
+		if err != nil {
+			return err
+		}
+		for _, r := range stored {
+			prefix = append(prefix, ledgerLot{At: cp, Quantity: r.Quantity, Unit: r.UnitPrice})
+		}
+	}
+	cut := now.UTC().Add(-foldCheckpointLag).Truncate(24 * time.Hour)
+	if cut.Before(cp) {
+		cut = cp
+	}
+	head := lots
+	var tail []ledgerLot
+	for i, l := range lots {
+		if !l.At.Before(cut) {
+			head, tail = lots[:i], lots[i:]
+			break
+		}
+	}
+	sales, openAtCut := matchFIFO(append(prefix, head...))
+	salesTail, open := matchFIFOFrom(openAtCut, tail)
+	sales = append(sales, salesTail...)
 	planetary, _ := app.queries.IsPlanetaryType(ctx, typeID)
 
 	tx, err := app.db.BeginTx(ctx, nil)
@@ -463,18 +556,41 @@ func (app *Application) refoldType(ctx context.Context, src ledgerSource, typeID
 	}
 	defer tx.Rollback()
 	qtx := app.queries.WithTx(tx)
-	if err := qtx.DeleteTradeRealizedForType(ctx, db.DeleteTradeRealizedForTypeParams{OwnerKind: src.kind, OwnerID: src.ownerID, TypeID: typeID}); err != nil {
+	if err := qtx.DeleteTradeRealizedForTypeFrom(ctx, db.DeleteTradeRealizedForTypeFromParams{OwnerKind: src.kind, OwnerID: src.ownerID, TypeID: typeID, FromDay: cp.UTC().Format("2006-01-02")}); err != nil {
 		return err
 	}
-	for _, s := range sales {
-		if err := qtx.InsertTradeRealized(ctx, db.InsertTradeRealizedParams{
-			OwnerKind: src.kind, OwnerID: src.ownerID, TransactionID: s.RefID,
-			Day: s.At.UTC().Format("2006-01-02"), TypeID: typeID,
-			Quantity: s.Quantity, Revenue: s.Revenue, Cost: s.Cost,
-			UnmatchedQty: s.UnmatchedQty, UnmatchedRevenue: s.UnmatchedRevenue, Planetary: planetary,
-		}); err != nil {
+	if len(sales) > 0 {
+		p := db.InsertTradeRealizedBatchParams{OwnerKind: src.kind, OwnerID: src.ownerID, TypeID: typeID}
+		for _, s := range sales {
+			p.TransactionIds = append(p.TransactionIds, s.RefID)
+			p.Days = append(p.Days, s.At.UTC().Format("2006-01-02"))
+			p.Quantities = append(p.Quantities, s.Quantity)
+			p.Revenues = append(p.Revenues, s.Revenue)
+			p.Costs = append(p.Costs, s.Cost)
+			p.UnmatchedQtys = append(p.UnmatchedQtys, s.UnmatchedQty)
+			p.UnmatchedRevenues = append(p.UnmatchedRevenues, s.UnmatchedRevenue)
+			p.Planetarys = append(p.Planetarys, planetary)
+		}
+		if err := qtx.InsertTradeRealizedBatch(ctx, p); err != nil {
 			return err
 		}
+	}
+	if err := qtx.DeleteTradeOpenLots(ctx, db.DeleteTradeOpenLotsParams{OwnerKind: src.kind, OwnerID: src.ownerID, TypeID: typeID}); err != nil {
+		return err
+	}
+	if len(openAtCut) > 0 {
+		p := db.InsertTradeOpenLotsBatchParams{OwnerKind: src.kind, OwnerID: src.ownerID, TypeID: typeID}
+		for i, l := range openAtCut {
+			p.Seqs = append(p.Seqs, int64(i))
+			p.Quantities = append(p.Quantities, l.Quantity)
+			p.UnitPrices = append(p.UnitPrices, l.Unit)
+		}
+		if err := qtx.InsertTradeOpenLotsBatch(ctx, p); err != nil {
+			return err
+		}
+	}
+	if err := qtx.UpsertTradeFoldCheckpoint(ctx, db.UpsertTradeFoldCheckpointParams{OwnerKind: src.kind, OwnerID: src.ownerID, TypeID: typeID, CheckpointAt: cut}); err != nil {
+		return err
 	}
 	qty, cost := capOpenLots(open, held)
 	if qty > 0 {

@@ -43,6 +43,21 @@ func (q *Queries) DeleteProfitRemainderFrom(ctx context.Context, arg DeleteProfi
 	return err
 }
 
+const deleteTradeOpenLots = `-- name: DeleteTradeOpenLots :exec
+DELETE FROM trade_open_lots WHERE owner_kind = $1 AND owner_id = $2 AND type_id = $3
+`
+
+type DeleteTradeOpenLotsParams struct {
+	OwnerKind string `json:"owner_kind"`
+	OwnerID   int64  `json:"owner_id"`
+	TypeID    int64  `json:"type_id"`
+}
+
+func (q *Queries) DeleteTradeOpenLots(ctx context.Context, arg DeleteTradeOpenLotsParams) error {
+	_, err := q.db.ExecContext(ctx, deleteTradeOpenLots, arg.OwnerKind, arg.OwnerID, arg.TypeID)
+	return err
+}
+
 const deleteTradePosition = `-- name: DeleteTradePosition :exec
 DELETE FROM trade_positions WHERE owner_kind = $1 AND owner_id = $2 AND type_id = $3
 `
@@ -70,6 +85,28 @@ type DeleteTradeRealizedForTypeParams struct {
 
 func (q *Queries) DeleteTradeRealizedForType(ctx context.Context, arg DeleteTradeRealizedForTypeParams) error {
 	_, err := q.db.ExecContext(ctx, deleteTradeRealizedForType, arg.OwnerKind, arg.OwnerID, arg.TypeID)
+	return err
+}
+
+const deleteTradeRealizedForTypeFrom = `-- name: DeleteTradeRealizedForTypeFrom :exec
+DELETE FROM trade_realized
+WHERE owner_kind = $1 AND owner_id = $2 AND type_id = $3 AND day >= $4::text
+`
+
+type DeleteTradeRealizedForTypeFromParams struct {
+	OwnerKind string `json:"owner_kind"`
+	OwnerID   int64  `json:"owner_id"`
+	TypeID    int64  `json:"type_id"`
+	FromDay   string `json:"from_day"`
+}
+
+func (q *Queries) DeleteTradeRealizedForTypeFrom(ctx context.Context, arg DeleteTradeRealizedForTypeFromParams) error {
+	_, err := q.db.ExecContext(ctx, deleteTradeRealizedForTypeFrom,
+		arg.OwnerKind,
+		arg.OwnerID,
+		arg.TypeID,
+		arg.FromDay,
+	)
 	return err
 }
 
@@ -157,7 +194,7 @@ func (q *Queries) FoldProfitRemainder(ctx context.Context, arg FoldProfitRemaind
 
 const getLedgerState = `-- name: GetLedgerState :one
 
-SELECT owner_kind, owner_id, journal_at, txns_at, jobs_at, folded_at
+SELECT owner_kind, owner_id, journal_at, txns_at, jobs_at, journal_hash, txns_hash, jobs_hash, folded_at
 FROM ledger_state WHERE owner_kind = $1 AND owner_id = $2
 `
 
@@ -177,6 +214,9 @@ func (q *Queries) GetLedgerState(ctx context.Context, arg GetLedgerStateParams) 
 		&i.JournalAt,
 		&i.TxnsAt,
 		&i.JobsAt,
+		&i.JournalHash,
+		&i.TxnsHash,
+		&i.JobsHash,
 		&i.FoldedAt,
 	)
 	return i, err
@@ -208,6 +248,24 @@ func (q *Queries) GetObservedSalesTaxRate(ctx context.Context, arg GetObservedSa
 	var i GetObservedSalesTaxRateRow
 	err := row.Scan(&i.Tax, &i.Revenue)
 	return i, err
+}
+
+const getTradeFoldCheckpoint = `-- name: GetTradeFoldCheckpoint :one
+SELECT checkpoint_at FROM trade_fold_checkpoints
+WHERE owner_kind = $1 AND owner_id = $2 AND type_id = $3
+`
+
+type GetTradeFoldCheckpointParams struct {
+	OwnerKind string `json:"owner_kind"`
+	OwnerID   int64  `json:"owner_id"`
+	TypeID    int64  `json:"type_id"`
+}
+
+func (q *Queries) GetTradeFoldCheckpoint(ctx context.Context, arg GetTradeFoldCheckpointParams) (time.Time, error) {
+	row := q.db.QueryRowContext(ctx, getTradeFoldCheckpoint, arg.OwnerKind, arg.OwnerID, arg.TypeID)
+	var checkpoint_at time.Time
+	err := row.Scan(&checkpoint_at)
+	return checkpoint_at, err
 }
 
 const insertLedgerJob = `-- name: InsertLedgerJob :one
@@ -374,6 +432,34 @@ func (q *Queries) InsertLedgerTxnBatch(ctx context.Context, arg InsertLedgerTxnB
 	return items, nil
 }
 
+const insertTradeOpenLotsBatch = `-- name: InsertTradeOpenLotsBatch :exec
+INSERT INTO trade_open_lots (owner_kind, owner_id, type_id, seq, quantity, unit_price)
+SELECT $1::text, $2::bigint, $3::bigint,
+       unnest($4::bigint[]), unnest($5::bigint[]),
+       unnest($6::float8[])
+`
+
+type InsertTradeOpenLotsBatchParams struct {
+	OwnerKind  string    `json:"owner_kind"`
+	OwnerID    int64     `json:"owner_id"`
+	TypeID     int64     `json:"type_id"`
+	Seqs       []int64   `json:"seqs"`
+	Quantities []int64   `json:"quantities"`
+	UnitPrices []float64 `json:"unit_prices"`
+}
+
+func (q *Queries) InsertTradeOpenLotsBatch(ctx context.Context, arg InsertTradeOpenLotsBatchParams) error {
+	_, err := q.db.ExecContext(ctx, insertTradeOpenLotsBatch,
+		arg.OwnerKind,
+		arg.OwnerID,
+		arg.TypeID,
+		pq.Array(arg.Seqs),
+		pq.Array(arg.Quantities),
+		pq.Array(arg.UnitPrices),
+	)
+	return err
+}
+
 const insertTradeRealized = `-- name: InsertTradeRealized :exec
 INSERT INTO trade_realized (owner_kind, owner_id, transaction_id, day, type_id, quantity, revenue, cost, unmatched_qty, unmatched_revenue, planetary)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
@@ -410,6 +496,51 @@ func (q *Queries) InsertTradeRealized(ctx context.Context, arg InsertTradeRealiz
 		arg.UnmatchedQty,
 		arg.UnmatchedRevenue,
 		arg.Planetary,
+	)
+	return err
+}
+
+const insertTradeRealizedBatch = `-- name: InsertTradeRealizedBatch :exec
+INSERT INTO trade_realized (owner_kind, owner_id, transaction_id, day, type_id, quantity, revenue, cost, unmatched_qty, unmatched_revenue, planetary)
+SELECT $1::text, $2::bigint,
+       unnest($3::bigint[]), unnest($4::text[]),
+       $5::bigint,
+       unnest($6::bigint[]), unnest($7::float8[]),
+       unnest($8::float8[]), unnest($9::bigint[]),
+       unnest($10::float8[]), unnest($11::bool[])
+ON CONFLICT (owner_kind, owner_id, transaction_id) DO UPDATE SET
+    quantity = excluded.quantity, revenue = excluded.revenue, cost = excluded.cost,
+    unmatched_qty = excluded.unmatched_qty, unmatched_revenue = excluded.unmatched_revenue,
+    planetary = excluded.planetary
+`
+
+type InsertTradeRealizedBatchParams struct {
+	OwnerKind         string    `json:"owner_kind"`
+	OwnerID           int64     `json:"owner_id"`
+	TransactionIds    []int64   `json:"transaction_ids"`
+	Days              []string  `json:"days"`
+	TypeID            int64     `json:"type_id"`
+	Quantities        []int64   `json:"quantities"`
+	Revenues          []float64 `json:"revenues"`
+	Costs             []float64 `json:"costs"`
+	UnmatchedQtys     []int64   `json:"unmatched_qtys"`
+	UnmatchedRevenues []float64 `json:"unmatched_revenues"`
+	Planetarys        []bool    `json:"planetarys"`
+}
+
+func (q *Queries) InsertTradeRealizedBatch(ctx context.Context, arg InsertTradeRealizedBatchParams) error {
+	_, err := q.db.ExecContext(ctx, insertTradeRealizedBatch,
+		arg.OwnerKind,
+		arg.OwnerID,
+		pq.Array(arg.TransactionIds),
+		pq.Array(arg.Days),
+		arg.TypeID,
+		pq.Array(arg.Quantities),
+		pq.Array(arg.Revenues),
+		pq.Array(arg.Costs),
+		pq.Array(arg.UnmatchedQtys),
+		pq.Array(arg.UnmatchedRevenues),
+		pq.Array(arg.Planetarys),
 	)
 	return err
 }
@@ -504,6 +635,75 @@ func (q *Queries) ListLedgerLotsForType(ctx context.Context, arg ListLedgerLotsF
 	var items []ListLedgerLotsForTypeRow
 	for rows.Next() {
 		var i ListLedgerLotsForTypeRow
+		if err := rows.Scan(
+			&i.At,
+			&i.RefID,
+			&i.IsSell,
+			&i.Quantity,
+			&i.UnitPrice,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listLedgerLotsForTypeSince = `-- name: ListLedgerLotsForTypeSince :many
+SELECT x.at, x.ref_id, x.is_sell, x.quantity, x.unit_price
+FROM (
+    SELECT t.at, t.transaction_id AS ref_id, NOT t.is_buy AS is_sell, t.quantity, t.unit_price
+    FROM ledger_txns t
+    WHERE t.owner_kind = $1 AND t.owner_id = $2 AND t.type_id = $3
+    UNION ALL
+    SELECT j.at, -j.job_id AS ref_id, false AS is_sell, j.units AS quantity,
+           CASE WHEN j.units > 0 THEN j.output_value / j.units ELSE 0 END AS unit_price
+    FROM ledger_jobs j
+    WHERE j.owner_kind = $1 AND j.owner_id = $2
+      AND j.product_type_id = $3 AND j.priced
+) x
+WHERE x.at >= $4::timestamptz
+ORDER BY x.at, x.ref_id
+`
+
+type ListLedgerLotsForTypeSinceParams struct {
+	OwnerKind string    `json:"owner_kind"`
+	OwnerID   int64     `json:"owner_id"`
+	TypeID    int64     `json:"type_id"`
+	Since     time.Time `json:"since"`
+}
+
+type ListLedgerLotsForTypeSinceRow struct {
+	At        time.Time    `json:"at"`
+	RefID     int64        `json:"ref_id"`
+	IsSell    sql.NullBool `json:"is_sell"`
+	Quantity  int64        `json:"quantity"`
+	UnitPrice float64      `json:"unit_price"`
+}
+
+// The same lot stream as ListLedgerLotsForType from a fold
+// checkpoint on: the caller prepends the stored open lots at the
+// checkpoint, which stand in for everything older.
+func (q *Queries) ListLedgerLotsForTypeSince(ctx context.Context, arg ListLedgerLotsForTypeSinceParams) ([]ListLedgerLotsForTypeSinceRow, error) {
+	rows, err := q.db.QueryContext(ctx, listLedgerLotsForTypeSince,
+		arg.OwnerKind,
+		arg.OwnerID,
+		arg.TypeID,
+		arg.Since,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListLedgerLotsForTypeSinceRow
+	for rows.Next() {
+		var i ListLedgerLotsForTypeSinceRow
 		if err := rows.Scan(
 			&i.At,
 			&i.RefID,
@@ -724,6 +924,46 @@ func (q *Queries) ListTopTradeTypes(ctx context.Context, arg ListTopTradeTypesPa
 	return items, nil
 }
 
+const listTradeOpenLots = `-- name: ListTradeOpenLots :many
+SELECT quantity, unit_price FROM trade_open_lots
+WHERE owner_kind = $1 AND owner_id = $2 AND type_id = $3
+ORDER BY seq
+`
+
+type ListTradeOpenLotsParams struct {
+	OwnerKind string `json:"owner_kind"`
+	OwnerID   int64  `json:"owner_id"`
+	TypeID    int64  `json:"type_id"`
+}
+
+type ListTradeOpenLotsRow struct {
+	Quantity  int64   `json:"quantity"`
+	UnitPrice float64 `json:"unit_price"`
+}
+
+func (q *Queries) ListTradeOpenLots(ctx context.Context, arg ListTradeOpenLotsParams) ([]ListTradeOpenLotsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listTradeOpenLots, arg.OwnerKind, arg.OwnerID, arg.TypeID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListTradeOpenLotsRow
+	for rows.Next() {
+		var i ListTradeOpenLotsRow
+		if err := rows.Scan(&i.Quantity, &i.UnitPrice); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listTradePositions = `-- name: ListTradePositions :many
 SELECT type_id, SUM(quantity)::bigint AS quantity, SUM(cost)::float8 AS cost
 FROM trade_positions
@@ -795,20 +1035,25 @@ func (q *Queries) SumTradingFeesFrom(ctx context.Context, arg SumTradingFeesFrom
 }
 
 const upsertLedgerState = `-- name: UpsertLedgerState :exec
-INSERT INTO ledger_state (owner_kind, owner_id, journal_at, txns_at, jobs_at, folded_at)
-VALUES ($1, $2, $3, $4, $5, $6)
+INSERT INTO ledger_state (owner_kind, owner_id, journal_at, txns_at, jobs_at, journal_hash, txns_hash, jobs_hash, folded_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 ON CONFLICT (owner_kind, owner_id) DO UPDATE SET
     journal_at = excluded.journal_at, txns_at = excluded.txns_at,
-    jobs_at = excluded.jobs_at, folded_at = excluded.folded_at
+    jobs_at = excluded.jobs_at, journal_hash = excluded.journal_hash,
+    txns_hash = excluded.txns_hash, jobs_hash = excluded.jobs_hash,
+    folded_at = excluded.folded_at
 `
 
 type UpsertLedgerStateParams struct {
-	OwnerKind string       `json:"owner_kind"`
-	OwnerID   int64        `json:"owner_id"`
-	JournalAt sql.NullTime `json:"journal_at"`
-	TxnsAt    sql.NullTime `json:"txns_at"`
-	JobsAt    sql.NullTime `json:"jobs_at"`
-	FoldedAt  sql.NullTime `json:"folded_at"`
+	OwnerKind   string       `json:"owner_kind"`
+	OwnerID     int64        `json:"owner_id"`
+	JournalAt   sql.NullTime `json:"journal_at"`
+	TxnsAt      sql.NullTime `json:"txns_at"`
+	JobsAt      sql.NullTime `json:"jobs_at"`
+	JournalHash string       `json:"journal_hash"`
+	TxnsHash    string       `json:"txns_hash"`
+	JobsHash    string       `json:"jobs_hash"`
+	FoldedAt    sql.NullTime `json:"folded_at"`
 }
 
 func (q *Queries) UpsertLedgerState(ctx context.Context, arg UpsertLedgerStateParams) error {
@@ -818,7 +1063,34 @@ func (q *Queries) UpsertLedgerState(ctx context.Context, arg UpsertLedgerStatePa
 		arg.JournalAt,
 		arg.TxnsAt,
 		arg.JobsAt,
+		arg.JournalHash,
+		arg.TxnsHash,
+		arg.JobsHash,
 		arg.FoldedAt,
+	)
+	return err
+}
+
+const upsertTradeFoldCheckpoint = `-- name: UpsertTradeFoldCheckpoint :exec
+INSERT INTO trade_fold_checkpoints (owner_kind, owner_id, type_id, checkpoint_at)
+VALUES ($1, $2, $3, $4)
+ON CONFLICT (owner_kind, owner_id, type_id) DO UPDATE SET
+    checkpoint_at = excluded.checkpoint_at
+`
+
+type UpsertTradeFoldCheckpointParams struct {
+	OwnerKind    string    `json:"owner_kind"`
+	OwnerID      int64     `json:"owner_id"`
+	TypeID       int64     `json:"type_id"`
+	CheckpointAt time.Time `json:"checkpoint_at"`
+}
+
+func (q *Queries) UpsertTradeFoldCheckpoint(ctx context.Context, arg UpsertTradeFoldCheckpointParams) error {
+	_, err := q.db.ExecContext(ctx, upsertTradeFoldCheckpoint,
+		arg.OwnerKind,
+		arg.OwnerID,
+		arg.TypeID,
+		arg.CheckpointAt,
 	)
 	return err
 }

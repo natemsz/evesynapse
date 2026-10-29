@@ -2,15 +2,17 @@
 -- delivered job seen per owner, and the attribution written from it.
 
 -- name: GetLedgerState :one
-SELECT owner_kind, owner_id, journal_at, txns_at, jobs_at, folded_at
+SELECT owner_kind, owner_id, journal_at, txns_at, jobs_at, journal_hash, txns_hash, jobs_hash, folded_at
 FROM ledger_state WHERE owner_kind = $1 AND owner_id = $2;
 
 -- name: UpsertLedgerState :exec
-INSERT INTO ledger_state (owner_kind, owner_id, journal_at, txns_at, jobs_at, folded_at)
-VALUES ($1, $2, $3, $4, $5, $6)
+INSERT INTO ledger_state (owner_kind, owner_id, journal_at, txns_at, jobs_at, journal_hash, txns_hash, jobs_hash, folded_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 ON CONFLICT (owner_kind, owner_id) DO UPDATE SET
     journal_at = excluded.journal_at, txns_at = excluded.txns_at,
-    jobs_at = excluded.jobs_at, folded_at = excluded.folded_at;
+    jobs_at = excluded.jobs_at, journal_hash = excluded.journal_hash,
+    txns_hash = excluded.txns_hash, jobs_hash = excluded.jobs_hash,
+    folded_at = excluded.folded_at;
 
 -- name: InsertLedgerJournalBatch :many
 -- New rows only; returns the days they fall on so the fold knows
@@ -65,6 +67,66 @@ ORDER BY x.at, x.ref_id;
 
 -- name: DeleteTradeRealizedForType :exec
 DELETE FROM trade_realized WHERE owner_kind = $1 AND owner_id = $2 AND type_id = $3;
+
+-- name: ListLedgerLotsForTypeSince :many
+-- The same lot stream as ListLedgerLotsForType from a fold
+-- checkpoint on: the caller prepends the stored open lots at the
+-- checkpoint, which stand in for everything older.
+SELECT x.at, x.ref_id, x.is_sell, x.quantity, x.unit_price
+FROM (
+    SELECT t.at, t.transaction_id AS ref_id, NOT t.is_buy AS is_sell, t.quantity, t.unit_price
+    FROM ledger_txns t
+    WHERE t.owner_kind = sqlc.arg(owner_kind) AND t.owner_id = sqlc.arg(owner_id) AND t.type_id = sqlc.arg(type_id)
+    UNION ALL
+    SELECT j.at, -j.job_id AS ref_id, false AS is_sell, j.units AS quantity,
+           CASE WHEN j.units > 0 THEN j.output_value / j.units ELSE 0 END AS unit_price
+    FROM ledger_jobs j
+    WHERE j.owner_kind = sqlc.arg(owner_kind) AND j.owner_id = sqlc.arg(owner_id)
+      AND j.product_type_id = sqlc.arg(type_id) AND j.priced
+) x
+WHERE x.at >= sqlc.arg(since)::timestamptz
+ORDER BY x.at, x.ref_id;
+
+-- name: DeleteTradeRealizedForTypeFrom :exec
+DELETE FROM trade_realized
+WHERE owner_kind = $1 AND owner_id = $2 AND type_id = $3 AND day >= sqlc.arg(from_day)::text;
+
+-- name: InsertTradeRealizedBatch :exec
+INSERT INTO trade_realized (owner_kind, owner_id, transaction_id, day, type_id, quantity, revenue, cost, unmatched_qty, unmatched_revenue, planetary)
+SELECT sqlc.arg(owner_kind)::text, sqlc.arg(owner_id)::bigint,
+       unnest(sqlc.arg(transaction_ids)::bigint[]), unnest(sqlc.arg(days)::text[]),
+       sqlc.arg(type_id)::bigint,
+       unnest(sqlc.arg(quantities)::bigint[]), unnest(sqlc.arg(revenues)::float8[]),
+       unnest(sqlc.arg(costs)::float8[]), unnest(sqlc.arg(unmatched_qtys)::bigint[]),
+       unnest(sqlc.arg(unmatched_revenues)::float8[]), unnest(sqlc.arg(planetarys)::bool[])
+ON CONFLICT (owner_kind, owner_id, transaction_id) DO UPDATE SET
+    quantity = excluded.quantity, revenue = excluded.revenue, cost = excluded.cost,
+    unmatched_qty = excluded.unmatched_qty, unmatched_revenue = excluded.unmatched_revenue,
+    planetary = excluded.planetary;
+
+-- name: GetTradeFoldCheckpoint :one
+SELECT checkpoint_at FROM trade_fold_checkpoints
+WHERE owner_kind = $1 AND owner_id = $2 AND type_id = $3;
+
+-- name: UpsertTradeFoldCheckpoint :exec
+INSERT INTO trade_fold_checkpoints (owner_kind, owner_id, type_id, checkpoint_at)
+VALUES ($1, $2, $3, $4)
+ON CONFLICT (owner_kind, owner_id, type_id) DO UPDATE SET
+    checkpoint_at = excluded.checkpoint_at;
+
+-- name: ListTradeOpenLots :many
+SELECT quantity, unit_price FROM trade_open_lots
+WHERE owner_kind = $1 AND owner_id = $2 AND type_id = $3
+ORDER BY seq;
+
+-- name: DeleteTradeOpenLots :exec
+DELETE FROM trade_open_lots WHERE owner_kind = $1 AND owner_id = $2 AND type_id = $3;
+
+-- name: InsertTradeOpenLotsBatch :exec
+INSERT INTO trade_open_lots (owner_kind, owner_id, type_id, seq, quantity, unit_price)
+SELECT sqlc.arg(owner_kind)::text, sqlc.arg(owner_id)::bigint, sqlc.arg(type_id)::bigint,
+       unnest(sqlc.arg(seqs)::bigint[]), unnest(sqlc.arg(quantities)::bigint[]),
+       unnest(sqlc.arg(unit_prices)::float8[]);
 
 -- name: InsertTradeRealized :exec
 INSERT INTO trade_realized (owner_kind, owner_id, transaction_id, day, type_id, quantity, revenue, cost, unmatched_qty, unmatched_revenue, planetary)

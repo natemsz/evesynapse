@@ -130,6 +130,7 @@ type Config struct {
 	metaAIKeyWrapped           string
 	signUp                     signUpPolicy // EVE_ALLOWED_*_IDS: who may create an account (empty = anyone)
 	esiContact                 string       // ESI_CONTACT: how CCP can reach the operator, sent in the User-Agent
+	statusOrigin               string       // STATUS_PAGE_ORIGIN: the status page's origin, the one site a browser may read /status.json from (core_status.go)
 	logLevel                   string       // LOG_LEVEL: debug, info (default), warn or error
 	logFormat                  string       // LOG_FORMAT: text (default) or json
 
@@ -422,6 +423,7 @@ func LoadConfig() (Config, error) {
 		metaAIKeyWrapped:           os.Getenv("MODEL_API_KEY_WRAPPED"),
 		signUp:                     loadSignUpPolicy(os.Getenv),
 		esiContact:                 os.Getenv("ESI_CONTACT"),
+		statusOrigin:               parseStatusOrigin(os.Getenv("STATUS_PAGE_ORIGIN")),
 		cloudflareAccountID:        strings.TrimSpace(os.Getenv("CLOUDFLARE_ACCOUNT_ID")),
 		cloudflareAuthToken:        strings.TrimSpace(os.Getenv("CLOUDFLARE_AUTH_TOKEN")),
 		metaAIKey:                  strings.TrimSpace(os.Getenv("MODEL_API_KEY")),

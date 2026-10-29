@@ -305,6 +305,10 @@ type Application struct {
 	anonPageThrottle *anonThrottle
 	anonSimThrottle  *anonThrottle
 
+	// The public service summary's cache and throttle
+	// (core_status.go).
+	status statusCache
+
 	// The worker's user-visible status (Sync/Admin pages).
 	workerMu sync.Mutex
 	worker   workerStatus
@@ -587,6 +591,8 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 		r.Post("/widget-config", app.handleWidgetConfig)
 	})
 	r.Get("/healthz", app.handleHealthz)
+	// The public service summary the status page reads (core_status.go).
+	r.Get(statusPath, app.handleStatus)
 	r.Get("/favicon.ico", handleFavicon)
 	// The push service worker, from the root so it can act for the
 	// whole site (notify_push.go).

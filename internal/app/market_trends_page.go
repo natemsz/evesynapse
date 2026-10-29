@@ -10,6 +10,7 @@ import (
 	"context"
 	"math"
 	"net/http"
+	"net/url"
 	"strconv"
 	"time"
 
@@ -73,7 +74,25 @@ func (app *Application) handleMarketTrends(w http.ResponseWriter, r *http.Reques
 	app.render(ctx, w, http.StatusOK, "market_trends.html", data)
 }
 
+var marketTrendsCache = newViewCache[marketTrendsView](30*time.Second, 128)
+
+// buildMarketTrendsView ranks the region's stat pack for the query.
+// The ranking scans the region's whole partition, and the view is a
+// pure function of the query over stored rows, so a built view is
+// reused for a few seconds.
 func (app *Application) buildMarketTrendsView(ctx context.Context, q map[string][]string) *marketTrendsView {
+	key := url.Values(q).Encode()
+	if view, ok := marketTrendsCache.get(key); ok {
+		return view
+	}
+	view := app.buildMarketTrendsViewFresh(ctx, q)
+	if view.HasData {
+		marketTrendsCache.put(key, view)
+	}
+	return view
+}
+
+func (app *Application) buildMarketTrendsViewFresh(ctx context.Context, q map[string][]string) *marketTrendsView {
 	get := func(k string) string {
 		if v := q[k]; len(v) > 0 {
 			return v[0]

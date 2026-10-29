@@ -15,6 +15,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
@@ -114,9 +115,26 @@ func (v *marketBrowseView) href(change func(url.Values)) string {
 	return "/market/?" + q.Encode()
 }
 
+var marketBrowseCache = newViewCache[marketBrowseView](30*time.Second, 256)
+
 // buildMarketBrowse assembles the browser for one region from the
-// query: group, bq (name filter), minvol, sort, page.
+// query: group, bq (name filter), minvol, sort, page. The view is a
+// pure function of the query over stored rows, so a built view is
+// reused for a few seconds: the subtree count and ranking under it
+// are the market's most expensive anonymous reads.
 func (app *Application) buildMarketBrowse(ctx context.Context, region int64, q url.Values) *marketBrowseView {
+	key := strconv.FormatInt(region, 10) + "?" + q.Encode()
+	if view, ok := marketBrowseCache.get(key); ok {
+		return view
+	}
+	view := app.buildMarketBrowseFresh(ctx, region, q)
+	if len(view.Tree) > 0 {
+		marketBrowseCache.put(key, view)
+	}
+	return view
+}
+
+func (app *Application) buildMarketBrowseFresh(ctx context.Context, region int64, q url.Values) *marketBrowseView {
 	view := &marketBrowseView{Region: region, Sort: "name", Page: 1}
 	view.RegionName, _ = marketRegionName(region)
 	view.GroupID, _ = strconv.ParseInt(q.Get("group"), 10, 64)

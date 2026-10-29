@@ -261,6 +261,7 @@
 {{if or (eq .NavPage "channel.html") (eq .NavPage "feed.html") (eq .NavPage "intel_workbench.html")}}<script src="/static/channels.js?v={{.AssetVersion}}" defer></script>{{end}}
 {{if or (eq .NavPage "contract_search.html") (eq .NavPage "contract_detail.html")}}<script src="/static/contracts.js?v={{.AssetVersion}}" defer></script>{{end}}
 {{if eq .NavPage "market.html"}}<script src="/static/market.js?v={{.AssetVersion}}" defer></script>{{end}}
+{{if eq .NavPage "market_baskets.html"}}<script src="/static/baskets.js?v={{.AssetVersion}}" defer></script>{{end}}
 {{range .Scripts}}<script src="{{.}}?v={{$.AssetVersion}}" defer></script>{{end}}
 {{if .NotifySettings}}<script src="/static/push.js?v={{.AssetVersion}}" defer></script>{{end}}
 {{if .Banners}}<script src="/static/notices.js?v={{.AssetVersion}}" defer></script>{{end}}

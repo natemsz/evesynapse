@@ -2,10 +2,13 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"math"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 )
@@ -71,5 +74,82 @@ func TestMarketBasketOwnershipAndValue(t *testing.T) {
 	}
 	if code, _ := postForm(t, app, otherCookie, path+"edit", url.Values{"name": {"Taken"}, "items": {""}}); code != http.StatusNotFound {
 		t.Errorf("other player edit: status %d, want 404", code)
+	}
+}
+
+func TestMarketBasketBuilderAPI(t *testing.T) {
+	app, _, q := buildCorpTestApp(t, &countingTransport{})
+	ctx := context.Background()
+	owner, err := q.CreateUser(ctx)
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	other, err := q.CreateUser(ctx)
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	seedCharacter(t, q, owner.ID, fixtureCharA, "Owner")
+	seedCharacter(t, q, other.ID, fixtureCharB, "Other")
+	ownerCookie := sessionCookie(t, app, owner.ID, fixtureCharA, "Owner")
+	otherCookie := sessionCookie(t, app, other.ID, fixtureCharB, "Other")
+	if _, err := app.db.ExecContext(ctx, `INSERT INTO sde_types (type_id, name, group_id) VALUES (900001, 'Basket Test Alpha', 1)`); err != nil {
+		t.Fatalf("seed type: %v", err)
+	}
+	if _, err := app.db.ExecContext(ctx, `INSERT INTO market_region_stats (region_id, type_id, typical_sell, typical_buy, updated_at) VALUES (10000002, 900001, 10, 9, now())`); err != nil {
+		t.Fatalf("seed stats: %v", err)
+	}
+
+	post := func(cookie *http.Cookie, path, body string) (int, []byte) {
+		req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.AddCookie(cookie)
+		rec := httptest.NewRecorder()
+		app.Handler().ServeHTTP(rec, req)
+		return rec.Code, rec.Body.Bytes()
+	}
+	get := func(cookie *http.Cookie, path string) (int, []byte) {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		req.AddCookie(cookie)
+		rec := httptest.NewRecorder()
+		app.Handler().ServeHTTP(rec, req)
+		return rec.Code, rec.Body.Bytes()
+	}
+
+	code, body := post(ownerCookie, "/market/baskets/api", `{"name":"Built","region":10000002,"items":[{"id":900001,"qty":3},{"id":900001,"qty":2}]}`)
+	if code != http.StatusCreated {
+		t.Fatalf("api create: status %d, body %s", code, body)
+	}
+	var created struct {
+		ID int64 `json:"id"`
+	}
+	if err := json.Unmarshal(body, &created); err != nil || created.ID == 0 {
+		t.Fatalf("api create body: %s", body)
+	}
+	var qty int64
+	if err := app.db.QueryRowContext(ctx, `SELECT quantity FROM market_basket_items WHERE basket_id = $1 AND type_id = 900001`, created.ID).Scan(&qty); err != nil || qty != 5 {
+		t.Errorf("merged quantity = %d, err %v; want 5", qty, err)
+	}
+
+	itemsPath := "/market/baskets/" + strconv.FormatInt(created.ID, 10) + "/items.json"
+	code, body = get(ownerCookie, itemsPath)
+	if code != http.StatusOK || !strings.Contains(string(body), `"Basket Test Alpha"`) || !strings.Contains(string(body), `"qty":5`) || !strings.Contains(string(body), `"10.00"`) {
+		t.Errorf("items.json owner: status %d, body %s", code, body)
+	}
+	if code, _ := get(otherCookie, itemsPath); code != http.StatusNotFound {
+		t.Errorf("items.json other player: status %d, want 404", code)
+	}
+
+	code, _ = post(ownerCookie, "/market/baskets/"+strconv.FormatInt(created.ID, 10)+"/api-edit", `{"items":[]}`)
+	if code != http.StatusOK {
+		t.Fatalf("api edit: status %d", code)
+	}
+	var n int64
+	if err := app.db.QueryRowContext(ctx, `SELECT count(*) FROM market_basket_items WHERE basket_id = $1`, created.ID).Scan(&n); err != nil || n != 0 {
+		t.Errorf("items after clearing edit = %d, err %v; want 0", n, err)
+	}
+
+	code, body = get(ownerCookie, "/market/baskets/prices?region=10000002&types=900001")
+	if code != http.StatusOK || !strings.Contains(string(body), `"10.00"`) {
+		t.Errorf("prices: status %d, body %s", code, body)
 	}
 }

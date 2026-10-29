@@ -70,3 +70,36 @@
 
 .mt-changes { list-style: none; margin: 0.25rem 0 0; padding: 0; }
 .mt-changes li { padding: 0.3rem 0; border-bottom: 1px solid var(--row-alt); }
+
+/* The basket builder and row editor: a suggest search, the
+   picked items with icons and typical prices, and the naming
+   step that takes the search bar's place. */
+.mbk-edit-btn { background: none; border: 0; padding: 0.15rem; cursor: pointer; color: var(--muted); }
+.mbk-edit-btn:hover { color: var(--accent); }
+.mbk-builder { margin: 0.5rem 0 1rem; }
+.mbk-pickrow { display: flex; align-items: flex-end; gap: 0.7rem; flex-wrap: wrap; }
+.mbk-searchwrap { flex: 1 1 16rem; min-width: 0; position: relative; }
+.mbk-searchwrap > input { width: 100%; }
+.mbk-textlink-row { margin: 0.3rem 0 0; }
+.mbk-items { list-style: none; margin: 0.6rem 0; padding: 0; display: grid; gap: 0.3rem; max-width: 34rem; }
+.mbk-item { display: flex; align-items: center; gap: 0.55rem; padding: 0.25rem 0.45rem; border: 1px solid var(--box-edge); border-radius: var(--r-xs); }
+.mbk-item img { border-radius: 4px; }
+.mbk-item-name { flex: 1 1 auto; min-width: 0; }
+.mbk-item-price { color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.mbk-remove { background: none; border: 0; color: var(--muted); font-size: 1.05rem; line-height: 1; padding: 0.1rem 0.3rem; cursor: pointer; }
+.mbk-remove:hover { color: var(--accent); }
+.mbk-empty { color: var(--muted); }
+.mbk-actions { display: flex; align-items: center; gap: 0.55rem; margin-top: 0.5rem; }
+.mbk-actions .mbk-textlink { margin-left: auto; }
+.mbk-naming { display: grid; gap: 0.5rem; max-width: 34rem; }
+.mbk-naming[hidden] { display: none; }
+/* The builder and editor toggle their pieces with the hidden
+   attribute; the component display rules above must not win
+   over it. */
+#mbk-new[hidden], .mbk-builder [hidden], .mbk-editor [hidden] { display: none !important; }
+.mbk-err { color: var(--danger, #ff7a6b); margin: 0.4rem 0 0; }
+.mbk-editor-row > td { background: var(--row-hover); }
+.mbk-editor { display: grid; gap: 0.4rem; padding: 0.4rem 0.2rem; }
+.mbk-suggest-pick { display: block; width: 100%; text-align: left; background: none; border: 0; padding: 0.35rem 0.55rem; color: var(--text); cursor: pointer; }
+.mbk-suggest-pick:hover { background: var(--row-hover); }
+.mbk-suggest-pick small { color: var(--muted); }

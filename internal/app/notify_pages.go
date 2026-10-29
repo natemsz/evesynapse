@@ -45,6 +45,7 @@ var notifyKindWording = map[string][2]string{
 	notifyIndustry:   {"industry job finished", "industry jobs finished"},
 	notifyOp:         {"new op", "new ops"},
 	notifyOpReminder: {"op starting soon", "ops starting soon"},
+	notifyNotice:     {"service notice", "service notices"},
 }
 
 // notifyBadge is the top-bar icon and the summarized list behind it.

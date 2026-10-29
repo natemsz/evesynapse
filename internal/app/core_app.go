@@ -287,6 +287,7 @@ type Application struct {
 	activity    activityLog
 	admins      adminOwners
 	notifyQuiet notifyQuietLog // which accounts' data the notification pass has read lately (notify_quiet.go)
+	notices     noticeState    // global notices: the banner cache and the write lock (notices.go)
 	// foresight is what warming on game events keeps between cycles
 	// (foresight.go), and books the order books fetched lately
 	// (market_book.go).
@@ -667,6 +668,11 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 		r.Get("/suggest", app.handleCharacterSuggest)
 		r.Post("/accounts/remove", app.handleAdminAccountRemove)
 		r.Post("/market-anon", app.handleAdminMarketAnon)
+		// The Notices tab (notices.go): global banners and their audit trail.
+		r.Get("/notices/", app.handleAdminNotices)
+		r.Post("/notices/save", app.handleAdminNoticeSave)
+		r.Post("/notices/retire", app.handleAdminNoticeRetire)
+		r.Post("/notices/preview", app.handleAdminNoticePreview)
 	})
 
 	r.Route("/corporations", func(r chi.Router) {
@@ -693,6 +699,9 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	// tab; the old address redirects there.
 	r.With(app.requireAuth).Get("/settings", app.handleSettings)
 	r.With(app.requireAuth).Post("/settings/theme", app.handleSettingsThemeSave)
+	// A signed-in visitor dismissing a global notice (notices.go);
+	// anonymous visitors keep theirs in a cookie only.
+	r.With(app.requireAuth).Post("/notices/dismiss", app.handleNoticeDismiss)
 
 	// Notifications (notify_pages.go): the list, and the two actions
 	// that change what is unread.

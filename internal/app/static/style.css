@@ -5654,3 +5654,93 @@ html[data-theme="light"] .suggest li:not(.sug-kind):not(.sug-empty):hover, html[
 .axon-winctl svg { width: 10px; height: 10px; fill: none; stroke: currentColor; stroke-width: 1.2; }
 .axon-winctl button:hover { color: var(--text); background: var(--row-hover); }
 .axon-winctl .axon-close:hover { color: #fff; background: var(--danger); }
+
+/* --- Global notices (notices.go) ------------------------------------
+   The administrators' banners above every page body: a flat tinted
+   strip inside the pane (cells inside a pane are not glass), its
+   severity carried by the left edge and the tag. The detail post
+   opens in the shared modal. */
+.gn-banners { display: grid; gap: 0.5rem; margin: 0 0 1rem; }
+.gn-banners[hidden] { display: none; }
+.gn-banner {
+  --gn-c: var(--note);
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.5rem 0.5rem 0.5rem 0.8rem;
+  background: color-mix(in srgb, var(--gn-c) 13%, transparent);
+  border: 1px solid color-mix(in srgb, var(--gn-c) 45%, transparent);
+  border-left: 3px solid var(--gn-c);
+  border-radius: var(--r-sm);
+  color: var(--text-bright);
+}
+.gn-banner[hidden] { display: none; }
+.gn-info { --gn-c: var(--note); }
+.gn-promo { --gn-c: var(--gold); }
+.gn-warning { --gn-c: var(--accent); }
+.gn-critical { --gn-c: var(--danger); }
+.gn-tag {
+  flex: none;
+  font-family: 'Rajdhani', sans-serif;
+  font-weight: 700;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--gn-c, var(--note));
+  border: 1px solid currentColor;
+  border-radius: var(--r-xs);
+  padding: 0.05rem 0.4rem;
+  line-height: 1.3;
+}
+.gn-critical .gn-tag { color: var(--text-bright); background: var(--danger); border-color: var(--danger); }
+.gn-title { flex: 1 1 auto; min-width: 0; font-weight: 600; overflow-wrap: anywhere; }
+button.gn-title {
+  text-align: left;
+  background: none;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-height: 0;
+  box-shadow: none;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.gn-more { margin-left: 0.35rem; font-weight: 400; color: var(--gn-c); text-decoration: underline; text-underline-offset: 2px; white-space: nowrap; }
+button.gn-title:hover .gn-more, button.gn-title:focus-visible .gn-more { color: var(--text-bright); }
+.gn-dismiss {
+  flex: none;
+  width: 2rem;
+  height: 2rem;
+  min-height: 0;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
+  box-shadow: none;
+  color: var(--muted);
+  font-size: 1.2rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.gn-dismiss:hover, .gn-dismiss:focus-visible { color: var(--text-bright); border-color: var(--gn-c); }
+.gn-modal { max-width: 40rem; border-top: 3px solid var(--gn-c); }
+.gn-modal h2 { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+.gn-post { font-family: 'Inter', sans-serif; line-height: 1.55; overflow-wrap: anywhere; }
+.gn-post > :first-child { margin-top: 0; }
+.gn-post > :last-child { margin-bottom: 0; }
+.gn-post h3, .gn-post h4, .gn-post h5 { margin: 1rem 0 0.4rem; font-family: 'Saira Semi Condensed', sans-serif; }
+.gn-post blockquote { margin: 0.6rem 0; padding: 0.1rem 0 0.1rem 0.8rem; border-left: 2px solid var(--box-edge); color: var(--muted); }
+.gn-post pre { white-space: pre-wrap; font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; padding: 0.6rem 0.75rem; background: var(--input-bg); border: 1px solid var(--box-edge); border-radius: var(--r-sm); }
+.gn-post a { color: var(--accent); }
+.gn-post hr { border: 0; border-top: 1px solid var(--box-edge); }
+.gn-muted { color: var(--muted); }
+@media (max-width: 45rem) {
+  .gn-banner { flex-wrap: wrap; row-gap: 0.3rem; padding-left: 0.65rem; }
+  .gn-title { flex-basis: calc(100% - 3rem); order: 3; }
+  .gn-tag { order: 1; }
+  .gn-dismiss { order: 2; margin-left: auto; }
+}

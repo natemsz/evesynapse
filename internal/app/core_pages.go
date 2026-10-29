@@ -42,6 +42,8 @@ type pageData struct {
 	// ("analytics" for the Admin page itself, "sync" for its
 	// Sync tab); the admintabs bar marks it active.
 	AdminTab string
+	// NoticeAdmin is the Admin page's Notices tab (notices.go).
+	NoticeAdmin *noticesAdminView
 
 	// Legal is the /license/ page (license_page.go).
 	Legal *legalView
@@ -178,7 +180,7 @@ func sectionForPage(page string) string {
 		// The Sync page is a tab of the Admin page now; it
 		// reads as part of that section.
 		return "admin"
-	case "admin.html":
+	case "admin.html", "admin_notices.html":
 		return "admin"
 	}
 	return ""
@@ -196,7 +198,7 @@ var (
 // pageSharedTemplates are the files every full page is parsed with:
 // the layout and the partials any page may use. One list, so that
 // nothing else parsing a page into the same cache can leave one out.
-var pageSharedTemplates = []string{"templates/base.html", "templates/wordmark.html", "templates/notifybell.html", "templates/balancechart.html", "templates/walletflow.html", "templates/charselector.html", "templates/fitbrowser.html", "templates/fit_workbench.html", "templates/locked.html", "templates/sectiontabs.html", "templates/admintabs.html", "templates/historysection.html", "templates/abyssalhowto.html", "templates/contractcards.html", "templates/reportcard.html", "templates/mapview.html", "templates/themepicker.html"}
+var pageSharedTemplates = []string{"templates/base.html", "templates/wordmark.html", "templates/notifybell.html", "templates/balancechart.html", "templates/walletflow.html", "templates/charselector.html", "templates/fitbrowser.html", "templates/fit_workbench.html", "templates/locked.html", "templates/sectiontabs.html", "templates/admintabs.html", "templates/historysection.html", "templates/abyssalhowto.html", "templates/contractcards.html", "templates/reportcard.html", "templates/mapview.html", "templates/themepicker.html", "templates/noticebanners.html"}
 
 // parsedTemplate returns the cached set for page, parsing it (with
 // the shared files first) the first time it is asked for.
@@ -294,6 +296,11 @@ func (app *Application) fillShell(ctx context.Context, shell *module.ShellData, 
 	if shell.LoggedIn && !shell.AxonPaired {
 		if n, err := app.queries.CountIntelTokens(ctx, app.userID(ctx)); err == nil && n > 0 {
 			shell.AxonPaired = true
+		}
+	}
+	if shell.Banners == nil {
+		if b := app.noticeBannersFor(ctx, shell.LoggedIn); b != nil {
+			shell.Banners = b
 		}
 	}
 	if shell.LoggedIn && shell.ViewerChars == nil {

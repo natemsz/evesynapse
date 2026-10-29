@@ -1,0 +1,16 @@
+{{define "noticebanners"}}<div class="gn-banners" data-gn-banners{{if .Account}} data-gn-account{{end}}>
+{{range .Items}}  <div class="gn-banner gn-{{.Severity}}" data-gn-id="{{.ID}}" role="{{if .Critical}}alert{{else}}status{{end}}">
+    <span class="gn-tag">{{.Label}}</span>
+    {{if .Body}}<button type="button" class="gn-title gn-open" data-gn-open="gn-post-{{.ID}}" aria-haspopup="dialog">{{.Title}} <span class="gn-more">Read more</span></button>{{else}}<span class="gn-title">{{.Title}}</span>{{end}}
+    <button type="button" class="gn-dismiss" data-gn-dismiss="{{.ID}}" aria-label="Dismiss this notice" title="Dismiss">&times;</button>
+  </div>
+{{if .Body}}  <div class="modal-backdrop" id="gn-post-{{.ID}}" hidden>
+    <div class="modal gn-modal gn-{{.Severity}}" role="dialog" aria-modal="true" aria-labelledby="gn-post-{{.ID}}-title">
+      <div class="modal-head">
+        <h2 id="gn-post-{{.ID}}-title"><span class="gn-tag">{{.Label}}</span> {{.Title}}</h2>
+        <button type="button" class="modal-close" data-close-modal aria-label="Close">&times;</button>
+      </div>
+      <div class="gn-post">{{.Body}}</div>
+    </div>
+  </div>
+{{end}}{{end}}</div>{{end}}

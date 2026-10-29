@@ -609,6 +609,12 @@ var pgContractExitAnswersSchema string
 //go:embed schema_pg/100_name_misses.sql
 var pgNameMissesSchema string
 
+// Step 107: global notices, the banners an administrator posts to
+// every visitor, their per-account dismissals and the audit trail.
+//
+//go:embed schema_pg/107_global_notices.sql
+var pgGlobalNoticesSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -738,6 +744,7 @@ func schemaSteps() []schemaStep {
 		{98, "webauthn", pgWebAuthnSchema, ""},
 		{99, "contract_exit_answers", pgContractExitAnswersSchema, ""},
 		{100, "name_misses", pgNameMissesSchema, ""},
+		{107, "global_notices", pgGlobalNoticesSchema, ""},
 	}
 }
 

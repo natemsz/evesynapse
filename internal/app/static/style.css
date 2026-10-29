@@ -4653,7 +4653,7 @@ html[data-scheme="soe"] .searchwrap input[type="text"] { background-image: url("
 .charselector-portrait {
   margin-left: auto;
   flex: none;
-  border-radius: 4px;
+  border-radius: var(--r-xs);
 }
 .charselector-option:last-child { border-bottom: none; }
 .charselector-option:hover {

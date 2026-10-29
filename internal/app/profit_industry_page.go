@@ -97,6 +97,12 @@ func (app *Application) attachIndustry(ctx context.Context, view *profitView, us
 		if s.UnitsAtMarket > 0 {
 			row.RealizedNotes = append(row.RealizedNotes, esi.FormatInt(s.UnitsAtMarket)+" units used materials you didn't buy here, priced at the install day")
 		}
+		switch s.Invention {
+		case "found":
+			row.RealizedNotes = append(row.RealizedNotes, fmt.Sprintf("includes %s ISK of invention, %s per run", esi.FormatISK(s.InventionCost), esi.FormatISK(s.InventionPerRun)))
+		case "missing":
+			row.RealizedNotes = append(row.RealizedNotes, "no invention of this blueprint in your history (copies bought, or invented earlier), so invention isn't counted")
+		}
 		b := s.BOutput - s.BInputs - s.BJob
 		if s.BPriced {
 			row.AtTime, row.AtTimeDir = signedISK(b), dirOf(b)
@@ -161,6 +167,7 @@ type profitJobRow struct {
 	JobID                          int64
 	Delivered, Runs, Units, Sold   string
 	Lost, Mixed, Revenue, Unsold   string
+	OnContract                     string
 	Recipe, Cost, AtTime, Facility string
 	Watching                       string // the order watched for this job
 	HasUnsold                      bool
@@ -207,6 +214,9 @@ func (app *Application) handleProfitBlueprint(w http.ResponseWriter, r *http.Req
 		}
 		if j.Mixed > 0 {
 			row.Mixed = esi.FormatInt(j.Mixed)
+		}
+		if j.OnContract > 0 {
+			row.OnContract = esi.FormatInt(j.OnContract)
 		}
 		if u := j.Units - j.Sold - j.Lost; u > 0 {
 			row.Unsold, row.HasUnsold = esi.FormatInt(u), true

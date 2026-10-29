@@ -16,6 +16,7 @@
       <td>{{.Delivered}}<br><small class="mt-reqs">{{.Facility}} · {{.Recipe}}</small>
         {{if .Mixed}}<br><small class="mt-reqs">{{.Mixed}} units sold beside bought stock of the item</small>{{end}}
         {{if .Watching}}<br><small class="mt-reqs">Watching {{.Watching}}</small>{{end}}
+        {{if .OnContract}}<br><small class="mt-reqs">{{.OnContract}} units sold on contracts, at their share of each contract's price by item value</small>{{end}}
         {{if .HasUnsold}}<details class="pf-basis"><summary><small>{{.Unsold}} units not sold: say what happened</small></summary>
           <form method="post" action="/profit/job-event" class="pf-basis-form">
             <input type="hidden" name="pool" value="{{$.ProfitBlueprint.Pool}}"><input type="hidden" name="bp" value="{{$.ProfitBlueprint.BP}}"><input type="hidden" name="job_id" value="{{.JobID}}"><input type="hidden" name="kind" value="sale">

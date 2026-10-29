@@ -18,7 +18,8 @@ UPDATE industry_bp_summary s SET
     c_total = s.runs * (
         CASE WHEN s.side = 'buy' THEN r.output_buy * (1 - s.tax_rate) - r.inputs_buy
              ELSE r.output_sell * (1 - s.tax_rate - s.broker_rate) - r.inputs_sell END
-        - CASE WHEN s.eiv_per_run > 0 THEN s.job_cost_per_run * r.eiv / s.eiv_per_run ELSE s.job_cost_per_run END),
+        - CASE WHEN s.eiv_per_run > 0 THEN s.job_cost_per_run * r.eiv / s.eiv_per_run ELSE s.job_cost_per_run END
+        - s.invention_per_run),
     c_priced = r.priced, c_missing_type_id = r.missing_type_id, c_fallback = r.fallback_used, c_as_of = r.computed_at
 FROM industry_recipe_values r
 WHERE r.region_id = s.region_id AND r.blueprint_type_id = s.blueprint_type_id AND r.me = s.me AND r.bonus_bp = s.bonus_bp
@@ -143,7 +144,7 @@ func (q *Queries) DeleteJobOutputLinksFrom(ctx context.Context, arg DeleteJobOut
 }
 
 const foldIndustrySummary = `-- name: FoldIndustrySummary :exec
-WITH jobs AS (
+WITH all_jobs AS (
     SELECT j.owner_kind, j.owner_id, j.job_id, j.at, j.activity_id, j.product_type_id, j.units, j.output_value, j.materials_cost, j.priced, j.blueprint_type_id, j.runs, j.me, j.me_source, j.material_bonus, j.bonus_source, j.facility_id, j.installed_at, j.job_cost, j.eiv, j.price_region, j.inputs_at_time, j.inputs_source,
            COALESCE((SELECT SUM(m.fifo_cost + GREATEST(m.quantity - m.fifo_qty, 0) * m.unit_at_time)
                      FROM ledger_job_materials m
@@ -153,6 +154,16 @@ WITH jobs AS (
                      AND m.fifo_qty < m.quantity) AS mat_at_market
     FROM ledger_jobs j
     WHERE j.owner_kind = $8 AND j.owner_id = ANY($9::bigint[]) AND j.blueprint_type_id > 0
+), inv AS (
+    -- What the pool's inventions of each T2 blueprint cost per copy run
+    -- they made: datacores as consumed and job fees, failures included.
+    SELECT product_type_id AS t2_blueprint, SUM(mat_actual + job_cost) / NULLIF(SUM(units), 0) AS per_run
+    FROM all_jobs WHERE activity_id = 8
+    GROUP BY product_type_id
+), jobs AS (
+    SELECT a.owner_kind, a.owner_id, a.job_id, a.at, a.activity_id, a.product_type_id, a.units, a.output_value, a.materials_cost, a.priced, a.blueprint_type_id, a.runs, a.me, a.me_source, a.material_bonus, a.bonus_source, a.facility_id, a.installed_at, a.job_cost, a.eiv, a.price_region, a.inputs_at_time, a.inputs_source, a.mat_actual, a.mat_at_market, COALESCE(inv.per_run, 0) AS inv_per_run, inv.per_run IS NOT NULL AS inv_found
+    FROM all_jobs a LEFT JOIN inv ON inv.t2_blueprint = a.blueprint_type_id
+    WHERE a.activity_id IN (1, 11)
 ), links AS (
     SELECT l.job_id, l.link_kind, l.units, l.revenue,
            COALESCE(s.tax * l.units / NULLIF(t.quantity, 0), 0) AS tax
@@ -168,7 +179,7 @@ WITH jobs AS (
            SUM(CASE WHEN l.link_kind = 'fifo_mixed' THEN l.units ELSE 0 END) AS mixed,
            SUM(CASE WHEN j.mat_at_market THEN l.units ELSE 0 END) AS at_market,
            SUM(l.revenue) AS revenue, SUM(l.tax) AS tax,
-           SUM(l.units * (j.mat_actual + j.job_cost) / NULLIF(j.units, 0)) AS cost
+           SUM(l.units * (j.mat_actual + j.job_cost + j.inv_per_run * j.runs) / NULLIF(j.units, 0)) AS cost
     FROM jobs j JOIN links l ON l.job_id = j.job_id
     GROUP BY j.job_id, j.blueprint_type_id
 ), latest AS (
@@ -178,16 +189,20 @@ WITH jobs AS (
 )
 INSERT INTO industry_bp_summary (pool_kind, pool_id, blueprint_type_id, product_type_id, region_id, side, me, bonus_bp,
     jobs, runs, units, units_sold, units_lost, units_mixed, units_at_market, a_revenue, a_tax, a_cost,
-    b_output, b_inputs, b_job, b_priced, b_at_landing, job_cost_per_run, eiv_per_run, tax_rate, broker_rate, folded_at)
+    b_output, b_inputs, b_job, b_priced, b_at_landing, job_cost_per_run, eiv_per_run, tax_rate, broker_rate, folded_at, invention_cost,
+    invention_per_run, invention)
 SELECT $1::text, $2::bigint, j.blueprint_type_id, MAX(lt.product_type_id),
        $3::bigint, $4::text, MAX(lt.me), MAX(round(lt.material_bonus * 100))::int,
        COUNT(*), SUM(j.runs), SUM(j.units),
        COALESCE(MAX(p.sold), 0), COALESCE(MAX(p.lost), 0), COALESCE(MAX(p.mixed), 0), COALESCE(MAX(p.at_market), 0),
        COALESCE(MAX(p.revenue), 0), COALESCE(MAX(p.tax), 0), COALESCE(MAX(p.cost), 0),
-       SUM(j.output_value), SUM(j.inputs_at_time), SUM(j.job_cost),
+       SUM(j.output_value), SUM(j.inputs_at_time), SUM(j.job_cost) + SUM(j.runs * j.inv_per_run),
        bool_and(j.priced AND j.inputs_source <> 'unpriced'), bool_or(j.inputs_source = 'at_landing'),
        COALESCE(MAX(lt.job_cost_per_run), 0), COALESCE(MAX(lt.eiv_per_run), 0),
-       $5::float8, $6::float8, $7::timestamptz
+       $5::float8, $6::float8, $7::timestamptz,
+       SUM(j.runs * j.inv_per_run), MAX(j.inv_per_run),
+       CASE WHEN EXISTS (SELECT 1 FROM sde_invention si WHERE si.product_type_id = j.blueprint_type_id)
+            THEN CASE WHEN bool_or(j.inv_found) THEN 'found' ELSE 'missing' END ELSE 'none' END
 FROM jobs j
 JOIN latest lt ON lt.blueprint_type_id = j.blueprint_type_id
 LEFT JOIN (
@@ -218,6 +233,8 @@ type FoldIndustrySummaryParams struct {
 //	    job cost);
 //	(b) from the jobs: output at delivery, inputs at install, job cost.
 //
+// A T2 blueprint's runs also carry what the pool's inventions of it
+// cost per copy run, in all three figures (today's at that cost).
 // The latest job sets the recipe (ME, bonus) today's figure reruns.
 func (q *Queries) FoldIndustrySummary(ctx context.Context, arg FoldIndustrySummaryParams) error {
 	_, err := q.db.ExecContext(ctx, foldIndustrySummary,
@@ -356,6 +373,22 @@ func (q *Queries) GetPoolTradeRates(ctx context.Context, arg GetPoolTradeRatesPa
 	return i, err
 }
 
+const getSDEInvention = `-- name: GetSDEInvention :one
+SELECT runs FROM sde_invention WHERE blueprint_type_id = $1 AND product_type_id = $2
+`
+
+type GetSDEInventionParams struct {
+	BlueprintTypeID int64 `json:"blueprint_type_id"`
+	ProductTypeID   int64 `json:"product_type_id"`
+}
+
+func (q *Queries) GetSDEInvention(ctx context.Context, arg GetSDEInventionParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, getSDEInvention, arg.BlueprintTypeID, arg.ProductTypeID)
+	var runs int64
+	err := row.Scan(&runs)
+	return runs, err
+}
+
 const insertJobManualEvent = `-- name: InsertJobManualEvent :exec
 INSERT INTO job_manual_events (pool_kind, pool_id, job_id, kind, units, unit_price, transaction_id, at)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
@@ -449,6 +482,58 @@ func (q *Queries) InsertJobOutputLinksBatch(ctx context.Context, arg InsertJobOu
 	return err
 }
 
+const insertLedgerContractItemsBatch = `-- name: InsertLedgerContractItemsBatch :many
+INSERT INTO ledger_contract_items (owner_kind, owner_id, contract_id, type_id, at, quantity, price_share, split_by)
+SELECT $1::text, $2::bigint, $3::bigint,
+       unnest($4::bigint[]), $5::timestamptz, unnest($6::bigint[]),
+       unnest($7::float8[]), $8::text
+ON CONFLICT DO NOTHING
+RETURNING type_id
+`
+
+type InsertLedgerContractItemsBatchParams struct {
+	OwnerKind   string    `json:"owner_kind"`
+	OwnerID     int64     `json:"owner_id"`
+	ContractID  int64     `json:"contract_id"`
+	TypeIds     []int64   `json:"type_ids"`
+	At          time.Time `json:"at"`
+	Quantities  []int64   `json:"quantities"`
+	PriceShares []float64 `json:"price_shares"`
+	SplitBy     string    `json:"split_by"`
+}
+
+func (q *Queries) InsertLedgerContractItemsBatch(ctx context.Context, arg InsertLedgerContractItemsBatchParams) ([]int64, error) {
+	rows, err := q.db.QueryContext(ctx, insertLedgerContractItemsBatch,
+		arg.OwnerKind,
+		arg.OwnerID,
+		arg.ContractID,
+		pq.Array(arg.TypeIds),
+		arg.At,
+		pq.Array(arg.Quantities),
+		pq.Array(arg.PriceShares),
+		arg.SplitBy,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []int64
+	for rows.Next() {
+		var type_id int64
+		if err := rows.Scan(&type_id); err != nil {
+			return nil, err
+		}
+		items = append(items, type_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listAdjustedPrices = `-- name: ListAdjustedPrices :many
 SELECT type_id, adjusted_price FROM guide_prices WHERE type_id = ANY($1::bigint[])
 `
@@ -517,7 +602,7 @@ func (q *Queries) ListIndustryRecipeKeys(ctx context.Context, regionID int64) ([
 }
 
 const listIndustrySummary = `-- name: ListIndustrySummary :many
-SELECT pool_kind, pool_id, blueprint_type_id, product_type_id, region_id, side, me, bonus_bp, jobs, runs, units, units_sold, units_lost, units_mixed, units_at_market, a_revenue, a_tax, a_cost, b_output, b_inputs, b_job, b_priced, b_at_landing, job_cost_per_run, eiv_per_run, tax_rate, broker_rate, c_total, c_priced, c_missing_type_id, c_fallback, c_as_of, folded_at FROM industry_bp_summary
+SELECT pool_kind, pool_id, blueprint_type_id, product_type_id, region_id, side, me, bonus_bp, jobs, runs, units, units_sold, units_lost, units_mixed, units_at_market, a_revenue, a_tax, a_cost, b_output, b_inputs, b_job, b_priced, b_at_landing, job_cost_per_run, eiv_per_run, tax_rate, broker_rate, c_total, c_priced, c_missing_type_id, c_fallback, c_as_of, folded_at, invention_cost, invention_per_run, invention FROM industry_bp_summary
 WHERE pool_kind = $1 AND pool_id = ANY($2::bigint[])
 ORDER BY a_revenue - a_tax - a_cost DESC, b_output - b_inputs - b_job DESC, blueprint_type_id
 LIMIT $3::bigint
@@ -574,6 +659,9 @@ func (q *Queries) ListIndustrySummary(ctx context.Context, arg ListIndustrySumma
 			&i.CFallback,
 			&i.CAsOf,
 			&i.FoldedAt,
+			&i.InventionCost,
+			&i.InventionPerRun,
+			&i.Invention,
 		); err != nil {
 			return nil, err
 		}
@@ -794,10 +882,13 @@ SELECT j.owner_id, j.job_id, j.at, j.installed_at, j.runs, j.units, j.me, j.me_s
                  WHERE l.pool_kind = $1 AND l.pool_id = $2 AND l.job_id = j.job_id AND l.link_kind = 'lost'), 0)::bigint AS lost,
        COALESCE((SELECT SUM(l.units) FROM job_output_links l
                  WHERE l.pool_kind = $1 AND l.pool_id = $2 AND l.job_id = j.job_id AND l.link_kind = 'fifo_mixed'), 0)::bigint AS mixed,
+       COALESCE((SELECT SUM(l.units) FROM job_output_links l
+                 WHERE l.pool_kind = $1 AND l.pool_id = $2 AND l.job_id = j.job_id AND l.link_kind = 'contract'), 0)::bigint AS on_contract,
        COALESCE((SELECT SUM(l.revenue) FROM job_output_links l
                  WHERE l.pool_kind = $1 AND l.pool_id = $2 AND l.job_id = j.job_id), 0)::float8 AS revenue
 FROM ledger_jobs j
 WHERE j.owner_kind = $3 AND j.owner_id = ANY($4::bigint[]) AND j.blueprint_type_id = $5
+  AND j.activity_id IN (1, 11)
 ORDER BY j.at DESC
 LIMIT 50
 `
@@ -830,6 +921,7 @@ type ListPoolJobsForBlueprintRow struct {
 	Sold          int64        `json:"sold"`
 	Lost          int64        `json:"lost"`
 	Mixed         int64        `json:"mixed"`
+	OnContract    int64        `json:"on_contract"`
 	Revenue       float64      `json:"revenue"`
 }
 
@@ -870,6 +962,7 @@ func (q *Queries) ListPoolJobsForBlueprint(ctx context.Context, arg ListPoolJobs
 			&i.Sold,
 			&i.Lost,
 			&i.Mixed,
+			&i.OnContract,
 			&i.Revenue,
 		); err != nil {
 			return nil, err
@@ -1017,6 +1110,38 @@ func (q *Queries) ListRegionStatsDailyForTypes(ctx context.Context, arg ListRegi
 	for rows.Next() {
 		var i ListRegionStatsDailyForTypesRow
 		if err := rows.Scan(&i.TypeID, &i.TypicalSell, &i.TypicalBuy); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSDEInventionMaterials = `-- name: ListSDEInventionMaterials :many
+SELECT material_type_id, quantity FROM sde_invention_materials WHERE blueprint_type_id = $1 ORDER BY material_type_id
+`
+
+type ListSDEInventionMaterialsRow struct {
+	MaterialTypeID int64 `json:"material_type_id"`
+	Quantity       int64 `json:"quantity"`
+}
+
+func (q *Queries) ListSDEInventionMaterials(ctx context.Context, blueprintTypeID int64) ([]ListSDEInventionMaterialsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listSDEInventionMaterials, blueprintTypeID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListSDEInventionMaterialsRow
+	for rows.Next() {
+		var i ListSDEInventionMaterialsRow
+		if err := rows.Scan(&i.MaterialTypeID, &i.Quantity); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

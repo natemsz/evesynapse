@@ -496,6 +496,9 @@ type IndustryBpSummary struct {
 	CFallback       bool         `json:"c_fallback"`
 	CAsOf           sql.NullTime `json:"c_as_of"`
 	FoldedAt        time.Time    `json:"folded_at"`
+	InventionCost   float64      `json:"invention_cost"`
+	InventionPerRun float64      `json:"invention_per_run"`
+	Invention       string       `json:"invention"`
 }
 
 type IndustryCostIndex struct {
@@ -815,6 +818,17 @@ type LedgerBrokerAlloc struct {
 	OrderID   int64     `json:"order_id"`
 	TypeID    int64     `json:"type_id"`
 	Amount    float64   `json:"amount"`
+}
+
+type LedgerContractItem struct {
+	OwnerKind  string    `json:"owner_kind"`
+	OwnerID    int64     `json:"owner_id"`
+	ContractID int64     `json:"contract_id"`
+	TypeID     int64     `json:"type_id"`
+	At         time.Time `json:"at"`
+	Quantity   int64     `json:"quantity"`
+	PriceShare float64   `json:"price_share"`
+	SplitBy    string    `json:"split_by"`
 }
 
 type LedgerCostBasisManual struct {
@@ -1728,6 +1742,18 @@ type SdeGroup struct {
 	GroupID    int64  `json:"group_id"`
 	Name       string `json:"name"`
 	CategoryID int64  `json:"category_id"`
+}
+
+type SdeInvention struct {
+	BlueprintTypeID int64 `json:"blueprint_type_id"`
+	ProductTypeID   int64 `json:"product_type_id"`
+	Runs            int64 `json:"runs"`
+}
+
+type SdeInventionMaterial struct {
+	BlueprintTypeID int64 `json:"blueprint_type_id"`
+	MaterialTypeID  int64 `json:"material_type_id"`
+	Quantity        int64 `json:"quantity"`
 }
 
 type SdeMarketGroup struct {

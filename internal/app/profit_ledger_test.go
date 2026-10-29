@@ -527,3 +527,76 @@ func TestProfitJobFallbacks(t *testing.T) {
 		t.Errorf("killmail losses = %+v (%v), want 3 units on 1 killmail", k, err)
 	}
 }
+
+// Invention and contracts in profit per blueprint: an invention's
+// datacores come out of stock and its cost spreads over the copy runs
+// it made; a T2 build from those copies carries that cost per run;
+// the build's output sold on an item exchange contract links to the
+// job at its share of the contract's price.
+func TestProfitInventionAndContracts(t *testing.T) {
+	app, _, q := buildCorpTestApp(t, &countingTransport{})
+	ctx := context.Background()
+	user, err := q.CreateUser(ctx)
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	seedCharacter(t, q, user.ID, fixtureCharA, "Inventor")
+	now := time.Now().UTC().Truncate(time.Second)
+	at := func(h int) string { return now.Add(time.Duration(-h) * time.Hour).Format(time.RFC3339) }
+	exec := func(s string, args ...any) {
+		t.Helper()
+		if _, err := app.db.ExecContext(ctx, s, args...); err != nil {
+			t.Fatalf("%s: %v", s, err)
+		}
+	}
+	exec(`INSERT INTO sde_blueprints (blueprint_type_id, product_type_id, product_quantity, max_production_limit, manufacturing_time_seconds) VALUES (9011, 9012, 1, 10, 600)`)
+	exec(`INSERT INTO sde_blueprint_materials (blueprint_type_id, material_type_id, quantity) VALUES (9011, 34, 10)`)
+	exec(`INSERT INTO sde_invention (blueprint_type_id, product_type_id, runs) VALUES (9001, 9011, 10)`)
+	exec(`INSERT INTO sde_invention_materials (blueprint_type_id, material_type_id, quantity) VALUES (9001, 20410, 2)`)
+	exec(`INSERT INTO market_region_stats (region_id, type_id, typical_sell, typical_buy, updated_at) VALUES
+		(10000002, 34, 6, 5, $1), (10000002, 9012, 1600, 1400, $1), (10000002, 20410, 1100, 1000, $1)`, now.Add(-time.Hour))
+	seedSnapshot(t, q, fixtureCharA, esi.SnapWalletTxns, esi.WalletTransactions{
+		{TransactionID: 1, Date: at(90), TypeID: 34, Quantity: 100, UnitPrice: 5, IsBuy: true},
+		{TransactionID: 2, Date: at(90), TypeID: 20410, Quantity: 10, UnitPrice: 1000, IsBuy: true},
+	})
+	seedSnapshot(t, q, fixtureCharA, esi.SnapIndustryJobs, esi.IndustryJobs{
+		{JobID: 50, ActivityID: 8, BlueprintTypeID: 9001, ProductTypeID: 9011, Runs: 2, SuccessfulRuns: 1,
+			Status: "delivered", StartDate: at(80), EndDate: at(70), CompletedDate: at(70), Cost: 500},
+		{JobID: 51, ActivityID: 1, BlueprintTypeID: 9011, ProductTypeID: 9012, Runs: 2, SuccessfulRuns: 2,
+			Status: "delivered", StartDate: at(60), EndDate: at(50), CompletedDate: at(50), Cost: 200},
+	})
+	seedSnapshot(t, q, fixtureCharA, esi.SnapContracts, esi.Contracts{
+		{ContractID: 700, IssuerID: fixtureCharA, Type: "item_exchange", Status: "finished", Price: 3000, DateCompleted: at(20)},
+	})
+	if err := q.UpsertContractDetail(ctx, db.UpsertContractDetailParams{ContractID: 700, CharacterID: fixtureCharA,
+		Payload: `[{"record_id":1,"type_id":9012,"quantity":2,"is_included":true}]`, FetchedAt: now}); err != nil {
+		t.Fatalf("seed contract items: %v", err)
+	}
+	ch, err := q.GetCharacter(ctx, fixtureCharA)
+	if err != nil {
+		t.Fatalf("read character: %v", err)
+	}
+	app.refreshProfitLedger(ctx, ch, now)
+
+	var fifo float64
+	if err := app.db.QueryRowContext(ctx, `SELECT fifo_cost FROM ledger_job_materials WHERE job_id = 50 AND type_id = 20410`).Scan(&fifo); err != nil || fifo != 4000 {
+		t.Errorf("invention datacores = %v (%v), want 4000 (2 attempts of 2 at 1,000)", fifo, err)
+	}
+	var kind string
+	var units int64
+	var revenue float64
+	if err := app.db.QueryRowContext(ctx, `SELECT link_kind, units, revenue FROM job_output_links WHERE job_id = 51`).Scan(&kind, &units, &revenue); err != nil || kind != "contract" || units != 2 || revenue != 3000 {
+		t.Errorf("output link = %s, %d units for %v (%v), want contract, 2 for 3000", kind, units, revenue, err)
+	}
+	rows, err := q.ListIndustrySummary(ctx, db.ListIndustrySummaryParams{PoolKind: poolAcct, PoolIds: []int64{user.ID}, RowCap: 10})
+	if err != nil || len(rows) != 1 {
+		t.Fatalf("summary = %+v (%v), want the T2 blueprint alone (the invention is not a row)", rows, err)
+	}
+	s := rows[0]
+	near := func(a, b float64) bool { return math.Abs(a-b) < 1e-6 }
+	// Invention: (4,000 datacores + 500 fee) over 10 copy runs = 450 a run.
+	// The build: 20 Tritanium at 5 + 200 fee + 2 runs of invention = 1,200.
+	if s.Invention != "found" || !near(s.InventionPerRun, 450) || !near(s.ACost, 1200) || !near(s.ARevenue, 3000) {
+		t.Errorf("summary = invention %s at %v a run, cost %v, revenue %v; want found, 450, 1200, 3000", s.Invention, s.InventionPerRun, s.ACost, s.ARevenue)
+	}
+}

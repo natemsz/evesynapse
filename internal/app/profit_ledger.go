@@ -136,6 +136,7 @@ const (
 	lotLost       = "lost"
 	lotLP         = "lp"
 	lotLPReq      = "lpreq"
+	lotContract   = "contract"
 )
 
 // manualBasisRef is where entered cost basis lots' ref ids start
@@ -291,6 +292,7 @@ type ledgerSource struct {
 	assets        *db.CharacterSnapshot
 	orders        *db.CharacterSnapshot
 	ordersHistory *db.CharacterSnapshot
+	contracts     *db.CharacterSnapshot
 	userID        int64 // the account, for a character: its industry preferences
 }
 
@@ -386,7 +388,8 @@ func (app *Application) refreshProfitLedger(ctx context.Context, ch db.Character
 	}
 	src := ledgerSource{kind: ownerChar, ownerID: ch.CharacterID, userID: ch.UserID,
 		jobs: get(esi.SnapIndustryJobs), blueprint: get(esi.SnapBlueprints),
-		assets: get(esi.SnapAssets), orders: get(esi.SnapOrders), ordersHistory: get(esi.SnapOrdersHistory)}
+		assets: get(esi.SnapAssets), orders: get(esi.SnapOrders), ordersHistory: get(esi.SnapOrdersHistory),
+		contracts: get(esi.SnapContracts)}
 	if s := get(esi.SnapWalletJournal); s != nil {
 		src.journals = append(src.journals, *s)
 	}
@@ -816,6 +819,20 @@ func (app *Application) landLedgerRows(ctx context.Context, src ledgerSource, st
 		if !jobEarliest.IsZero() {
 			landed = true
 			note(jobEarliest)
+		}
+	}
+
+	if src.contracts != nil {
+		contractTypes, contractEarliest, err := app.landContractSales(ctx, src)
+		if err != nil {
+			return false, fmt.Errorf("contracts: %w", err)
+		}
+		for _, id := range contractTypes {
+			touched[id] = true
+		}
+		if !contractEarliest.IsZero() {
+			landed = true
+			note(contractEarliest)
 		}
 	}
 

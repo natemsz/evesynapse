@@ -1093,6 +1093,10 @@ FROM (
     WHERE e.pool_kind = $1 AND e.pool_id = $2 AND e.kind IN ('sale', 'lost')
       AND j.product_type_id = $5
     UNION ALL
+    SELECT c.at, c.contract_id, c.owner_id, true, c.quantity, c.price_share / NULLIF(c.quantity, 0), 'contract', 0::bigint
+    FROM ledger_contract_items c
+    WHERE c.owner_kind = $3 AND c.owner_id = ANY($4::bigint[]) AND c.type_id = $5
+    UNION ALL
     SELECT p.from_at, -(5000000000000000 + p.id), p.character_id, false, p.units,
            (p.isk_paid + p.req_value) / NULLIF(p.units, 0), 'lp', 0::bigint
     FROM lp_purchases p
@@ -1143,6 +1147,8 @@ type ListPoolLotsForTypeSinceRow struct {
 //	'lp'      units of an LP store purchase, at its ISK and required items
 //	          (LP at 0), from the start of the bracket it was bought in;
 //	'lpreq'   items an LP store purchase took in exchange.
+//	'contract' items sold on a completed item exchange contract, at their
+//	          share of its price.
 //
 // The caller prepends the stored open lots at the checkpoint, which
 // stand in for everything older.
@@ -1192,6 +1198,9 @@ SELECT DISTINCT type_id FROM (
     UNION
     SELECT j.product_type_id FROM ledger_jobs j
     WHERE j.owner_kind = $1 AND j.owner_id = ANY($2::bigint[]) AND j.priced
+    UNION
+    SELECT c.type_id FROM ledger_contract_items c
+    WHERE c.owner_kind = $1 AND c.owner_id = ANY($2::bigint[])
     UNION
     SELECT p.product_type_id FROM lp_purchases p
     WHERE $1::text = 'char' AND p.character_id = ANY($2::bigint[]) AND p.product_type_id > 0

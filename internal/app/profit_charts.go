@@ -448,19 +448,22 @@ func (app *Application) buildProfitCharts(ctx context.Context, view *profitView,
 		}
 	}
 
-	// 5. The trading margin over the last 30 days, day by day, only
-	// where every unit sold in those 30 days is covered.
+	// 5. The trading margin over the last 30 days, day by day, on
+	// covered sales only: solid where every unit sold in those 30 days
+	// is covered, dashed where some are not (the margin then speaks
+	// for the covered part alone), absent where nothing covered sold.
 	if len(cov) > 0 {
 		days := pfBuckets(fromDay, "day", now)
 		byDay := map[string]db.ListTradeCoverageDailyRow{}
 		for _, r := range cov {
 			byDay[r.Day] = r
 		}
-		margin := make([]float64, len(days))
+		full := make([]float64, len(days))
+		part := make([]float64, len(days))
 		hi, lo := 0.0, 0.0
-		lastMargin := math.NaN()
+		lastMargin, lastShare := math.NaN(), 1.0
 		for i, d := range days {
-			margin[i] = math.NaN()
+			full[i], part[i] = math.NaN(), math.NaN()
 			day, _ := time.Parse("2006-01-02", d)
 			var units, covUnits int64
 			var rev, cost float64
@@ -476,26 +479,57 @@ func (app *Application) buildProfitCharts(ctx context.Context, view *profitView,
 					cost += r.Broker
 				}
 			}
-			if units > 0 && covUnits >= units && rev > 0 {
-				margin[i] = (rev - cost) / rev * 100
-				hi, lo = math.Max(hi, margin[i]), math.Min(lo, margin[i])
-				lastMargin = margin[i]
+			if units == 0 || rev <= 0 {
+				continue
+			}
+			m := (rev - cost) / rev * 100
+			hi, lo = math.Max(hi, m), math.Min(lo, m)
+			lastMargin, lastShare = m, float64(covUnits)/float64(units)
+			if covUnits >= units {
+				full[i] = m
+			} else {
+				part[i] = m
 			}
 		}
-		sm := newPFScale(lo, hi)
+		// Each run joins the next at the day the coverage changed, so
+		// the line reads as one.
+		for i := 1; i < len(days); i++ {
+			switch {
+			case !math.IsNaN(full[i]) && !math.IsNaN(part[i-1]):
+				part[i] = full[i]
+			case !math.IsNaN(part[i]) && !math.IsNaN(full[i-1]):
+				full[i] = part[i]
+			}
+		}
+		if math.IsNaN(lastMargin) && hi == 0 && lo == 0 {
+			return set, nil
+		}
+		// A margin line fits its own range; zero stays in view only when
+		// a margin went below it.
+		lo, hi = math.Inf(1), math.Inf(-1)
+		for i := range days {
+			for _, v := range []float64{full[i], part[i]} {
+				if !math.IsNaN(v) {
+					lo, hi = math.Min(lo, v), math.Max(hi, v)
+				}
+			}
+		}
+		if lo < 0 && hi < 0 {
+			hi = 0
+		}
+		pad := math.Max((hi-lo)*0.15, 0.5)
+		sm := pfScale{lo: lo - pad, hi: hi + pad}
 		dband, _ := pfBand(len(days))
-		cm := &pfChart{W: pfChartW, H: pfChartH, ZeroY: sm.y(0), First: days[0], Last: days[len(days)-1], ShowZeroLine: true,
+		cm := &pfChart{W: pfChartW, H: pfChartH, ZeroY: sm.y(0), First: days[0], Last: days[len(days)-1], ShowZeroLine: lo < 0,
 			Label: "Trading margin over the last 30 days", Low: fmt.Sprintf("%.1f%%", sm.lo), High: fmt.Sprintf("%.1f%%", sm.hi),
-			Sub: "On covered sales only; the line breaks where any unit sold in those 30 days has no known cost or tax line."}
-		cm.Lines = pfBrokenLines(margin, dband, sm.y, "pf-margin")
-		if !math.IsNaN(lastMargin) {
-			cm.Title = fmt.Sprintf("30-day trading margin: %.1f%%", lastMargin)
-		} else {
-			cm.Title = "30-day trading margin: not every recent sale is covered"
+			Sub:    "On covered sales only. Dashed where some units sold in those 30 days had no known cost or tax line, so the margin covers the rest.",
+			Legend: []pfLegend{{Class: "pf-roll", Label: "Every sale covered"}, {Class: "pf-dash", Label: "Some sales not covered"}}}
+		cm.Lines = append(pfBrokenLines(full, dband, sm.y, "pf-margin"), pfBrokenLines(part, dband, sm.y, "pf-margin pf-margin-part")...)
+		cm.Title = fmt.Sprintf("30-day trading margin: %.1f%%", lastMargin)
+		if lastShare < 1 {
+			cm.Title += fmt.Sprintf(" on the %.0f%% of units covered", math.Floor(lastShare*100))
 		}
-		if len(cm.Lines) > 0 || math.IsNaN(lastMargin) {
-			set.Margin = cm
-		}
+		set.Margin = cm
 	}
 	return set, nil
 }

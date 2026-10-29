@@ -32,6 +32,7 @@ var profitActivityLabels = []struct{ key, label, note string }{
 	{actPI, "Planetary industry", "Planetary goods sold, less import and export taxes"},
 	{actContracts, "Contracts", "Contract prices, rewards and collateral, less contract fees"},
 	{actSales, "Other item sales", "Items sold that you never bought or built here: loot, salvage, gifts"},
+	{actLP, "LP stores", "LP store items sold, less the ISK and items they cost (LP counted as free)"},
 	{actOther, "Other income", "Insurance and anything else paid in"},
 	{actUpkeep, "Running costs", "Clones, skills, offices and other fees"},
 	{actTransfers, "Transfers", "ISK moved between players and corporation wallets"},

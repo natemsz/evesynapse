@@ -196,10 +196,12 @@
 .pf-gap { fill: color-mix(in srgb, var(--muted) 14%, transparent); }
 .pf-roll, .pf-share, .pf-margin, .pf-ch { fill: none; stroke-width: 1.75; vector-effect: non-scaling-stroke; }
 .pf-roll, .pf-share, .pf-margin { stroke: var(--accent); }
+.pf-margin-part { stroke-dasharray: 5 4; }
+.pf-sw.pf-dash { background: repeating-linear-gradient(90deg, var(--accent) 0 5px, transparent 5px 9px); }
 .pf-cost { opacity: 0.55; }
 .pf-a-trading { fill: var(--accent); background: var(--accent); }
 .pf-a-industry { fill: var(--gold); background: var(--gold); }
-.pf-a-bounties { fill: var(--success); background: var(--success); }
+.pf-a-bounties { fill: var(--text); background: var(--text); }
 .pf-a-pi { fill: var(--note); background: var(--note); }
 .pf-a-contracts { fill: color-mix(in srgb, var(--accent) 50%, var(--gold)); background: color-mix(in srgb, var(--accent) 50%, var(--gold)); }
 .pf-a-sales { fill: var(--muted-2); background: var(--muted-2); }
@@ -222,3 +224,12 @@
 .pf-sw.pf-loss { background: var(--danger); }
 .pf-sw.pf-roll { background: var(--accent); height: 3px; }
 .pf-sw.pf-gap { background: color-mix(in srgb, var(--muted) 30%, transparent); }
+
+/* Phones: the plots keep a readable height instead of their desktop
+   proportions, and the legends wrap tighter. */
+@media (max-width: 640px) {
+  .pf-chart svg { height: 150px; }
+  .pf-chart svg.pf-short { height: 75px; }
+  .pf-chart .chart-legend { gap: 0.15rem 0.6rem; font-size: 0.72rem; }
+  .pf-chart .legend-item { text-transform: none; letter-spacing: normal; }
+}

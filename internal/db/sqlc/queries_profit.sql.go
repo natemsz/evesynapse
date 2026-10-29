@@ -280,7 +280,7 @@ FROM (
            GREATEST(j.amount, 0) AS income, GREATEST(-j.amount, 0) AS costs
     FROM ledger_journal j
     WHERE j.owner_kind = $1 AND j.owner_id = $2
-      AND j.at >= $3::timestamptz AND j.activity NOT IN ('market', 'escrow')
+      AND j.at >= $3::timestamptz AND j.activity NOT IN ('market', 'escrow', 'lp_store')
     UNION ALL
     SELECT r.day, 'trading', r.revenue, r.cost
     FROM trade_realized r
@@ -654,18 +654,27 @@ func (q *Queries) GetTradeItemWindowAsOf(ctx context.Context, arg GetTradeItemWi
 }
 
 const getUserProfitPrefs = `-- name: GetUserProfitPrefs :one
-SELECT pooled, broker_in_margin FROM user_profit_prefs WHERE user_id = $1
+SELECT pooled, broker_in_margin, industry_region, industry_side, lp_isk_value FROM user_profit_prefs WHERE user_id = $1
 `
 
 type GetUserProfitPrefsRow struct {
-	Pooled         bool `json:"pooled"`
-	BrokerInMargin bool `json:"broker_in_margin"`
+	Pooled         bool    `json:"pooled"`
+	BrokerInMargin bool    `json:"broker_in_margin"`
+	IndustryRegion int64   `json:"industry_region"`
+	IndustrySide   string  `json:"industry_side"`
+	LpIskValue     float64 `json:"lp_isk_value"`
 }
 
 func (q *Queries) GetUserProfitPrefs(ctx context.Context, userID int64) (GetUserProfitPrefsRow, error) {
 	row := q.db.QueryRowContext(ctx, getUserProfitPrefs, userID)
 	var i GetUserProfitPrefsRow
-	err := row.Scan(&i.Pooled, &i.BrokerInMargin)
+	err := row.Scan(
+		&i.Pooled,
+		&i.BrokerInMargin,
+		&i.IndustryRegion,
+		&i.IndustrySide,
+		&i.LpIskValue,
+	)
 	return i, err
 }
 
@@ -690,44 +699,6 @@ func (q *Queries) InsertLedgerHole(ctx context.Context, arg InsertLedgerHolePara
 		arg.ToAt,
 	)
 	return err
-}
-
-const insertLedgerJob = `-- name: InsertLedgerJob :one
-INSERT INTO ledger_jobs (owner_kind, owner_id, job_id, at, activity_id, product_type_id, units, output_value, materials_cost, priced)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-ON CONFLICT DO NOTHING
-RETURNING at
-`
-
-type InsertLedgerJobParams struct {
-	OwnerKind     string    `json:"owner_kind"`
-	OwnerID       int64     `json:"owner_id"`
-	JobID         int64     `json:"job_id"`
-	At            time.Time `json:"at"`
-	ActivityID    int64     `json:"activity_id"`
-	ProductTypeID int64     `json:"product_type_id"`
-	Units         int64     `json:"units"`
-	OutputValue   float64   `json:"output_value"`
-	MaterialsCost float64   `json:"materials_cost"`
-	Priced        bool      `json:"priced"`
-}
-
-func (q *Queries) InsertLedgerJob(ctx context.Context, arg InsertLedgerJobParams) (time.Time, error) {
-	row := q.db.QueryRowContext(ctx, insertLedgerJob,
-		arg.OwnerKind,
-		arg.OwnerID,
-		arg.JobID,
-		arg.At,
-		arg.ActivityID,
-		arg.ProductTypeID,
-		arg.Units,
-		arg.OutputValue,
-		arg.MaterialsCost,
-		arg.Priced,
-	)
-	var at time.Time
-	err := row.Scan(&at)
-	return at, err
 }
 
 const insertLedgerJournalBatch = `-- name: InsertLedgerJournalBatch :many
@@ -912,10 +883,10 @@ func (q *Queries) InsertManualCostBasis(ctx context.Context, arg InsertManualCos
 }
 
 const insertTradeOpenLotsBatch = `-- name: InsertTradeOpenLotsBatch :exec
-INSERT INTO trade_open_lots (owner_kind, owner_id, type_id, seq, quantity, unit_price)
+INSERT INTO trade_open_lots (owner_kind, owner_id, type_id, seq, quantity, unit_price, ref_id)
 SELECT $1::text, $2::bigint, $3::bigint,
        unnest($4::bigint[]), unnest($5::bigint[]),
-       unnest($6::float8[])
+       unnest($6::float8[]), unnest($7::bigint[])
 `
 
 type InsertTradeOpenLotsBatchParams struct {
@@ -925,6 +896,7 @@ type InsertTradeOpenLotsBatchParams struct {
 	Seqs       []int64   `json:"seqs"`
 	Quantities []int64   `json:"quantities"`
 	UnitPrices []float64 `json:"unit_prices"`
+	RefIds     []int64   `json:"ref_ids"`
 }
 
 func (q *Queries) InsertTradeOpenLotsBatch(ctx context.Context, arg InsertTradeOpenLotsBatchParams) error {
@@ -935,6 +907,7 @@ func (q *Queries) InsertTradeOpenLotsBatch(ctx context.Context, arg InsertTradeO
 		pq.Array(arg.Seqs),
 		pq.Array(arg.Quantities),
 		pq.Array(arg.UnitPrices),
+		pq.Array(arg.RefIds),
 	)
 	return err
 }
@@ -1048,7 +1021,7 @@ func (q *Queries) ListLedgerHoles(ctx context.Context, arg ListLedgerHolesParams
 
 const listLedgerJobIDs = `-- name: ListLedgerJobIDs :many
 SELECT job_id FROM ledger_jobs
-WHERE owner_kind = $1 AND owner_id = $2 AND job_id = ANY($3::bigint[])
+WHERE owner_kind = $1 AND owner_id = $2 AND job_id = ANY($3::bigint[]) AND blueprint_type_id > 0
 `
 
 type ListLedgerJobIDsParams struct {
@@ -1057,6 +1030,7 @@ type ListLedgerJobIDsParams struct {
 	JobIds    []int64 `json:"job_ids"`
 }
 
+// Jobs already landed with their recipe facts.
 func (q *Queries) ListLedgerJobIDs(ctx context.Context, arg ListLedgerJobIDsParams) ([]int64, error) {
 	rows, err := q.db.QueryContext(ctx, listLedgerJobIDs, arg.OwnerKind, arg.OwnerID, pq.Array(arg.JobIds))
 	if err != nil {
@@ -1081,32 +1055,59 @@ func (q *Queries) ListLedgerJobIDs(ctx context.Context, arg ListLedgerJobIDsPara
 }
 
 const listPoolLotsForTypeSince = `-- name: ListPoolLotsForTypeSince :many
-SELECT x.at, x.ref_id, x.owner_id, x.is_sell, x.quantity, x.unit_price
+SELECT x.at, x.ref_id, x.owner_id, x.is_sell, x.quantity, x.unit_price, x.kind, x.prefer_ref
 FROM (
-    SELECT t.at, t.transaction_id AS ref_id, t.owner_id, NOT t.is_buy AS is_sell, t.quantity, t.unit_price
+    SELECT t.at, t.transaction_id AS ref_id, t.owner_id, NOT t.is_buy AS is_sell, t.quantity, t.unit_price, 'txn' AS kind,
+           COALESCE((SELECT -e.job_id FROM job_manual_events e
+                     WHERE e.pool_kind = $1 AND e.pool_id = $2
+                       AND e.kind = 'link' AND e.transaction_id = t.transaction_id
+                     ORDER BY e.id DESC LIMIT 1), 0)::bigint AS prefer_ref
     FROM ledger_txns t
-    WHERE t.owner_kind = $1 AND t.owner_id = ANY($2::bigint[]) AND t.type_id = $3
+    WHERE t.owner_kind = $3 AND t.owner_id = ANY($4::bigint[]) AND t.type_id = $5
     UNION ALL
-    SELECT j.at, -j.job_id AS ref_id, j.owner_id, false AS is_sell, j.units AS quantity,
-           CASE WHEN j.units > 0 THEN j.output_value / j.units ELSE 0 END AS unit_price
+    SELECT j.at, -j.job_id, j.owner_id, false, j.units,
+           CASE WHEN j.units > 0 THEN j.output_value / j.units ELSE 0 END, 'job', 0::bigint
     FROM ledger_jobs j
-    WHERE j.owner_kind = $1 AND j.owner_id = ANY($2::bigint[])
-      AND j.product_type_id = $3 AND j.priced
+    WHERE j.owner_kind = $3 AND j.owner_id = ANY($4::bigint[])
+      AND j.product_type_id = $5 AND j.priced
     UNION ALL
-    SELECT m.at, -(4000000000000000 + m.id) AS ref_id, 0::bigint AS owner_id, false AS is_sell, m.quantity, m.unit_cost
+    SELECT m.at, -(4000000000000000 + m.id), 0::bigint, false, m.quantity, m.unit_cost, 'basis', 0::bigint
     FROM ledger_cost_basis_manual m
-    WHERE m.pool_kind = $4 AND m.pool_id = $5 AND m.type_id = $3
+    WHERE m.pool_kind = $1 AND m.pool_id = $2 AND m.type_id = $5
+    UNION ALL
+    SELECT COALESCE(j.installed_at, j.at), -j.job_id, j.owner_id, true, m.quantity, 0::float8, 'consume', 0::bigint
+    FROM ledger_job_materials m
+    JOIN ledger_jobs j ON j.owner_kind = m.owner_kind AND j.owner_id = m.owner_id AND j.job_id = m.job_id
+    WHERE m.owner_kind = $3 AND m.owner_id = ANY($4::bigint[]) AND m.type_id = $5
+    UNION ALL
+    SELECT e.at, e.id, j.owner_id, true, e.units, e.unit_price, CASE WHEN e.kind = 'sale' THEN 'msale' ELSE 'lost' END, -e.job_id
+    FROM job_manual_events e
+    JOIN ledger_jobs j ON j.job_id = e.job_id AND j.owner_kind = $3 AND j.owner_id = ANY($4::bigint[])
+    WHERE e.pool_kind = $1 AND e.pool_id = $2 AND e.kind IN ('sale', 'lost')
+      AND j.product_type_id = $5
+    UNION ALL
+    SELECT p.from_at, -(5000000000000000 + p.id), p.character_id, false, p.units,
+           (p.isk_paid + p.req_value) / NULLIF(p.units, 0), 'lp', 0::bigint
+    FROM lp_purchases p
+    WHERE $3::text = 'char' AND p.character_id = ANY($4::bigint[])
+      AND p.product_type_id = $5 AND p.units > 0 AND p.tier IN ('corroborated', 'inferred', 'user_confirmed')
+    UNION ALL
+    SELECT p.from_at, -(5000000000000000 + p.id), p.character_id, true, r.quantity * p.quantity, 0::float8, 'lpreq', 0::bigint
+    FROM lp_purchases p
+    JOIN lp_offer_requirements r ON r.corporation_id = p.corporation_id AND r.offer_id = p.offer_id
+    WHERE $3::text = 'char' AND p.character_id = ANY($4::bigint[])
+      AND r.type_id = $5 AND p.tier IN ('corroborated', 'inferred', 'user_confirmed')
 ) x
 WHERE x.at >= $6::timestamptz
 ORDER BY x.at, x.ref_id
 `
 
 type ListPoolLotsForTypeSinceParams struct {
+	PoolKind  string    `json:"pool_kind"`
+	PoolID    int64     `json:"pool_id"`
 	OwnerKind string    `json:"owner_kind"`
 	OwnerIds  []int64   `json:"owner_ids"`
 	TypeID    int64     `json:"type_id"`
-	PoolKind  string    `json:"pool_kind"`
-	PoolID    int64     `json:"pool_id"`
 	Since     time.Time `json:"since"`
 }
 
@@ -1117,21 +1118,33 @@ type ListPoolLotsForTypeSinceRow struct {
 	IsSell    sql.NullBool `json:"is_sell"`
 	Quantity  int64        `json:"quantity"`
 	UnitPrice float64      `json:"unit_price"`
+	Kind      string       `json:"kind"`
+	PreferRef int64        `json:"prefer_ref"`
 }
 
 // Everything that adds or removes stock of one type across a pool's
-// members, oldest first, from a fold checkpoint on: market buys and
-// sells (with the member that made them), delivered job output (at
-// the house price the day it delivered), and the pool's manual cost
-// basis entries. The caller prepends the stored open lots at the
-// checkpoint, which stand in for everything older.
+// members, oldest first, from a fold checkpoint on:
+//
+//	'txn'     market buys and sells, with the member that made them
+//	          (a sell the player linked to a job prefers that job's lot);
+//	'job'     delivered job output, at the house price the day it delivered;
+//	'basis'   the pool's manual cost basis entries;
+//	'consume' materials a job used, removed when it was installed;
+//	'msale', 'lost' units of a job's output the player sold off-market
+//	          or marked lost.
+//	'lp'      units of an LP store purchase, at its ISK and required items
+//	          (LP at 0), from the start of the bracket it was bought in;
+//	'lpreq'   items an LP store purchase took in exchange.
+//
+// The caller prepends the stored open lots at the checkpoint, which
+// stand in for everything older.
 func (q *Queries) ListPoolLotsForTypeSince(ctx context.Context, arg ListPoolLotsForTypeSinceParams) ([]ListPoolLotsForTypeSinceRow, error) {
 	rows, err := q.db.QueryContext(ctx, listPoolLotsForTypeSince,
+		arg.PoolKind,
+		arg.PoolID,
 		arg.OwnerKind,
 		pq.Array(arg.OwnerIds),
 		arg.TypeID,
-		arg.PoolKind,
-		arg.PoolID,
 		arg.Since,
 	)
 	if err != nil {
@@ -1148,6 +1161,8 @@ func (q *Queries) ListPoolLotsForTypeSince(ctx context.Context, arg ListPoolLots
 			&i.IsSell,
 			&i.Quantity,
 			&i.UnitPrice,
+			&i.Kind,
+			&i.PreferRef,
 		); err != nil {
 			return nil, err
 		}
@@ -1169,6 +1184,12 @@ SELECT DISTINCT type_id FROM (
     UNION
     SELECT j.product_type_id FROM ledger_jobs j
     WHERE j.owner_kind = $1 AND j.owner_id = ANY($2::bigint[]) AND j.priced
+    UNION
+    SELECT p.product_type_id FROM lp_purchases p
+    WHERE $1::text = 'char' AND p.character_id = ANY($2::bigint[]) AND p.product_type_id > 0
+    UNION
+    SELECT m.type_id FROM ledger_job_materials m
+    WHERE m.owner_kind = $1 AND m.owner_id = ANY($2::bigint[])
     UNION
     SELECT m.type_id FROM ledger_cost_basis_manual m
     WHERE m.pool_kind = $3 AND m.pool_id = $4
@@ -1485,7 +1506,7 @@ func (q *Queries) ListTradeItems(ctx context.Context, arg ListTradeItemsParams) 
 }
 
 const listTradeOpenLots = `-- name: ListTradeOpenLots :many
-SELECT quantity, unit_price FROM trade_open_lots
+SELECT quantity, unit_price, ref_id FROM trade_open_lots
 WHERE owner_kind = $1 AND owner_id = $2 AND type_id = $3
 ORDER BY seq
 `
@@ -1499,6 +1520,7 @@ type ListTradeOpenLotsParams struct {
 type ListTradeOpenLotsRow struct {
 	Quantity  int64   `json:"quantity"`
 	UnitPrice float64 `json:"unit_price"`
+	RefID     int64   `json:"ref_id"`
 }
 
 func (q *Queries) ListTradeOpenLots(ctx context.Context, arg ListTradeOpenLotsParams) ([]ListTradeOpenLotsRow, error) {
@@ -1510,7 +1532,7 @@ func (q *Queries) ListTradeOpenLots(ctx context.Context, arg ListTradeOpenLotsPa
 	var items []ListTradeOpenLotsRow
 	for rows.Next() {
 		var i ListTradeOpenLotsRow
-		if err := rows.Scan(&i.Quantity, &i.UnitPrice); err != nil {
+		if err := rows.Scan(&i.Quantity, &i.UnitPrice, &i.RefID); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -1760,20 +1782,29 @@ func (q *Queries) UpsertTradePosition(ctx context.Context, arg UpsertTradePositi
 }
 
 const upsertUserProfitPrefs = `-- name: UpsertUserProfitPrefs :exec
-INSERT INTO user_profit_prefs (user_id, pooled, broker_in_margin, updated_at)
-VALUES ($1, $2, $3, now())
+INSERT INTO user_profit_prefs (user_id, pooled, broker_in_margin, industry_region, industry_side, updated_at)
+VALUES ($1, $2, $3, $4, $5, now())
 ON CONFLICT (user_id) DO UPDATE SET
     pooled = excluded.pooled, broker_in_margin = excluded.broker_in_margin,
+    industry_region = excluded.industry_region, industry_side = excluded.industry_side,
     updated_at = excluded.updated_at
 `
 
 type UpsertUserProfitPrefsParams struct {
-	UserID         int64 `json:"user_id"`
-	Pooled         bool  `json:"pooled"`
-	BrokerInMargin bool  `json:"broker_in_margin"`
+	UserID         int64  `json:"user_id"`
+	Pooled         bool   `json:"pooled"`
+	BrokerInMargin bool   `json:"broker_in_margin"`
+	IndustryRegion int64  `json:"industry_region"`
+	IndustrySide   string `json:"industry_side"`
 }
 
 func (q *Queries) UpsertUserProfitPrefs(ctx context.Context, arg UpsertUserProfitPrefsParams) error {
-	_, err := q.db.ExecContext(ctx, upsertUserProfitPrefs, arg.UserID, arg.Pooled, arg.BrokerInMargin)
+	_, err := q.db.ExecContext(ctx, upsertUserProfitPrefs,
+		arg.UserID,
+		arg.Pooled,
+		arg.BrokerInMargin,
+		arg.IndustryRegion,
+		arg.IndustrySide,
+	)
 	return err
 }

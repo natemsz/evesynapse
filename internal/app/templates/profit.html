@@ -39,6 +39,19 @@
 </div>
 {{end}}
 
+{{with .Charts}}
+<section class="foldable">
+<h3>Charts</h3>
+{{if .Net}}{{template "pfchart" .Net}}{{end}}
+{{if .Activities}}{{template "pfchart" .Activities}}{{end}}
+{{if .Fees}}{{template "pfchart" .Fees}}{{end}}
+{{if .FeeShare}}{{template "pfchart" .FeeShare}}{{end}}
+{{if .Characters}}{{template "pfchart" .Characters}}{{end}}
+{{if .Margin}}{{template "pfchart" .Margin}}{{end}}
+<p><small>Amounts in ISK, by {{.Bucket}}. Hatched {{.Bucket}}s had sales with no known cost or no matched tax line, so their trading figures are partial.</small></p>
+</section>
+{{end}}
+
 <section class="foldable">
 <h3>By activity</h3>
 <div class="tw">
@@ -98,16 +111,111 @@
 {{else}}
 <p><small>No sales in this span.</small></p>
 {{end}}
+</section>
+
 {{if not .Corp}}
-<details class="pf-prefs"><summary><small>How trading is counted</small></summary>
-<form method="post" action="/profit/prefs" class="pf-prefs-form">
-  <label><input type="checkbox" name="pooled" value="1"{{if .Pooled}} checked{{end}}> Match sales against stock across all my characters (off: each character's own stock)</label>
-  <label><input type="checkbox" name="broker_in_margin" value="1"{{if .BrokerInMargin}} checked{{end}}> Count broker fees in each item's margin</label>
+<section class="foldable">
+<h3>Industry by blueprint</h3>
+{{if .Blueprints}}
+<div class="tw">
+<table>
+  <thead><tr><th>Blueprint output</th><th class="mt-num">Runs</th><th class="mt-num">Built</th><th class="mt-num">Sold</th><th class="mt-num">Realized</th><th class="mt-num">At the time</th><th class="mt-num">At today's prices</th><th class="mt-num">Since then</th></tr></thead>
+  <tbody>
+  {{range .Blueprints}}
+    <tr>
+      <td><a href="{{.Href}}">{{.Name}}</a>{{range .RealizedNotes}}<br><small class="mt-reqs">{{.}}</small>{{end}}</td>
+      <td class="mt-num">{{.Runs}}</td>
+      <td class="mt-num">{{.Built}}</td>
+      <td class="mt-num">{{.Sold}}{{if .Lost}}<br><small class="mt-reqs">{{.Lost}} lost</small>{{end}}</td>
+      <td class="mt-num">{{if .Realized}}<strong class="mt-chg {{.RealizedDir}}">{{.Realized}}</strong>{{else}}<small class="mt-reqs">nothing sold yet</small>{{end}}</td>
+      <td class="mt-num">{{if .AtTime}}<span class="mt-chg {{.AtTimeDir}}">{{.AtTime}}</span>{{if .AtTimeNote}}<br><small class="mt-reqs">{{.AtTimeNote}}</small>{{end}}{{else}}<small class="mt-reqs">{{.AtTimeNo}}</small>{{end}}</td>
+      <td class="mt-num">{{if .Today}}<span class="mt-chg {{.TodayDir}}">{{.Today}}</span><br><small class="mt-reqs">{{.TodayNote}}</small>{{else}}<small class="mt-reqs">{{.TodayNo}}</small>{{end}}</td>
+      <td class="mt-num">{{if .Change}}<span class="mt-chg {{.ChangeDir}}">{{.Change}}</span>{{end}}</td>
+    </tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+<p><small>All three figures cover the same runs. <strong>Realized</strong> is what sold units brought, less their sales tax and their share of the job: the materials as they came out of your stock (any you didn't buy here at their install-day price) and the job cost. <strong>At the time</strong> prices the inputs on the day each job was installed and the output on the day it delivered, less the job cost paid. <strong>At today's prices</strong> reruns the same recipe in {{.IndustryRegion}} at {{if .IndustrySideBuy}}buy{{else}}sell{{end}} typicals, less your usual sales tax{{if not .IndustrySideBuy}} and broker fees{{end}}, with the job cost scaled by how the inputs' value moved; it is what the recipe is worth now, not a profit you made. ESI doesn't report the materials a job used: they come from the recipe, the blueprint's ME and the structure bonus you set below.</small></p>
+{{else}}
+<p><small>No delivered manufacturing or reaction jobs recorded yet.</small></p>
+{{end}}
+{{if .Facilities}}
+<details class="pf-prefs"><summary><small>Structure material bonuses</small></summary>
+<p><small>ESI can't read a structure's rigs unless you own it. Set the material bonus each facility gives (in percent, blank for none); jobs there are recounted on the next sync.</small></p>
+{{range .Facilities}}
+<form method="post" action="/profit/facility" class="pf-basis-form">
+  <input type="hidden" name="facility_id" value="{{.ID}}">
+  <label>{{.Name}} <small class="mt-reqs">({{.Jobs}} jobs)</small> <input name="bonus" inputmode="decimal" value="{{.Bonus}}" placeholder="0"></label>
   <button class="btn" type="submit">Save</button>
 </form>
+{{end}}
 </details>
 {{end}}
 </section>
+
+<section class="foldable">
+<h3>LP stores</h3>
+{{if .LPDelta}}<p><small>Net LP over these {{.Days}} days: {{.LPDelta}}.{{if .WithLP}} Counting that LP at {{.LPValue}} ISK each, you earned <strong class="mt-chg {{.WithLPDir}}">{{.WithLP}}</strong> ISK.{{end}}</small></p>{{end}}
+{{if .LPStores}}
+<div class="tw">
+<table>
+  <thead><tr><th>Store</th><th class="mt-num">LP earned</th><th class="mt-num">LP spent</th><th class="mt-num">ISK paid</th><th class="mt-num">Items got / sold</th><th class="mt-num">Net ISK</th><th class="mt-num">ISK per LP</th><th class="mt-num">Unsold, worth</th></tr></thead>
+  <tbody>
+  {{range .LPStores}}
+    <tr>
+      <td>{{.Name}}{{if .Tiers}}<br><small class="mt-reqs">spent: {{.Tiers}}</small>{{end}}
+        {{if .Net}}<br><small class="mt-reqs">If LP cost: nothing, {{.Net}}{{if .AtBest}}; the store's best offer now ({{.BestRate}}), <span class="mt-chg {{.AtBestDir}}">{{.AtBest}}</span>{{end}}{{if .AtMedian}}; your usual rate, <span class="mt-chg {{.AtMedianDir}}">{{.AtMedian}}</span>{{end}}{{if .AtCustom}}; your value, <span class="mt-chg {{.AtCustomDir}}">{{.AtCustom}}</span>{{end}}</small>{{end}}
+      </td>
+      <td class="mt-num">{{.Earned}}</td>
+      <td class="mt-num">{{.Spent}}</td>
+      <td class="mt-num">{{.ISKPaid}}</td>
+      <td class="mt-num">{{.Acquired}} / {{.Sold}}</td>
+      <td class="mt-num">{{if .Net}}<strong class="mt-chg {{.NetDir}}">{{.Net}}</strong>{{else}}<small class="mt-reqs">nothing sold yet</small>{{end}}</td>
+      <td class="mt-num">{{.PerLP}}</td>
+      <td class="mt-num">{{.Unsold}}</td>
+    </tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+<p><small>ESI shows your LP balances but no LP store purchases, so each purchase is worked out from a drop in a balance between two hourly readings, and can't be timed closer than that. <strong>Corroborated</strong>: one offer fits the LP (and the ISK, when the wallet shows it) and the items turned up in your assets. <strong>Inferred</strong>: one offer fits but the items weren't seen, perhaps already sold or moved. <strong>Ambiguous</strong>: several offers fit; pick one below. <strong>Unexplained</strong>: no single offer fits, so only the LP spent is counted. Net ISK and ISK per LP cover items sold, from corroborated, inferred and picked purchases, with LP costing nothing: LP is earned, not bought. The other lines show the same net if each LP had cost that much, which is what the LP could have made elsewhere. Corporation LP isn't available from ESI.</small></p>
+{{else}}
+<p><small>No LP balances recorded yet. They fill in once a character has granted access to loyalty points and synced.</small></p>
+{{end}}
+{{if .LPPicks}}
+<details class="pf-prefs"><summary><small>{{len .LPPicks}} LP spends to settle</small></summary>
+{{range .LPPicks}}
+<div class="pf-basis-form"><small>{{.LP}} LP at {{.Store}}, {{.When}}{{if not .Candidates}}: no single offer fits, so this stays counted as LP spent only.{{end}}</small></div>
+{{if .Candidates}}
+<form method="post" action="/profit/lp-pick" class="pf-basis-form">
+  <input type="hidden" name="id" value="{{.ID}}">
+  <label>What you bought <select name="choice">{{range .Candidates}}<option value="{{.Value}}">{{.Label}}</option>{{end}}</select></label>
+  <button class="btn" type="submit">Save</button>
+</form>
+{{end}}
+{{end}}
+</details>
+{{end}}
+<form method="post" action="/profit/lp-value" class="pf-basis-form">
+  <label>Your own value for LP, ISK each <input name="lp_value" inputmode="decimal" value="{{.LPValue}}" placeholder="unset"></label>
+  <button class="btn" type="submit">Save</button>
+  {{if .LPMedian}}<small class="mt-reqs">Your usual realized rate is {{.LPMedian}} ISK per LP.</small>{{end}}
+</form>
+</section>
+
+<section class="foldable">
+<h3>How profit is counted</h3>
+<form method="post" action="/profit/prefs" class="pf-prefs-form">
+  <label><input type="checkbox" name="pooled" value="1"{{if .Pooled}} checked{{end}}> Match sales against stock across all my characters (off: each character's own stock)</label>
+  <label><input type="checkbox" name="broker_in_margin" value="1"{{if .BrokerInMargin}} checked{{end}}> Count broker fees in each item's margin</label>
+  <label>Price industry at today's prices in <select name="industry_region">{{range .Regions}}<option value="{{.ID}}"{{if .Selected}} selected{{end}}>{{.Name}}</option>{{end}}</select></label>
+  <label><input type="radio" name="industry_side" value="sell"{{if not .IndustrySideBuy}} checked{{end}}> at sell typicals (buy inputs from sell orders, list output as sell orders)</label>
+  <label><input type="radio" name="industry_side" value="buy"{{if .IndustrySideBuy}} checked{{end}}> at buy typicals (inputs through buy orders, output sold to buy orders)</label>
+  <button class="btn" type="submit">Save</button>
+</form>
+</section>
+{{end}}
 
 {{if .Positions}}
 <section class="foldable">
@@ -136,4 +244,18 @@
 <p>Nothing recorded yet for {{.OwnerLabel}}. Profit fills in as your wallets sync, and builds up from then on.</p>
 {{end}}
 {{end}}
+{{end}}
+
+{{define "pfchart"}}
+<figure class="pf-chart">
+  <figcaption><strong>{{.Title}}</strong>{{if .Sub}}<br><small class="mt-reqs">{{.Sub}}</small>{{end}}</figcaption>
+  {{if .Legend}}<div class="chart-legend">{{range .Legend}}<span class="legend-item"><span class="legend-swatch pf-sw {{.Class}}" aria-hidden="true"></span>{{.Label}}{{if .Value}} <small class="mt-reqs">{{.Value}}</small>{{end}}</span>{{end}}{{if .HasGaps}}<span class="legend-item"><span class="legend-swatch pf-sw pf-gap" aria-hidden="true"></span>Partly covered</span>{{end}}<span class="legend-note">{{.Low}} to {{.High}}</span></div>{{else}}<div class="chart-legend"><span class="legend-note">{{.Low}} to {{.High}}</span></div>{{end}}
+  <svg viewBox="0 0 {{.W}} {{.H}}" width="100%" role="img" aria-label="{{.Label}}, {{.First}} to {{.Last}}" preserveAspectRatio="none">
+    {{range .Gaps}}<rect class="{{.Class}}" x="{{.X}}" y="{{.Y}}" width="{{.W}}" height="{{.H}}"><title>{{.Tip}}</title></rect>{{end}}
+    {{if .ShowZeroLine}}<line class="mt-zero" x1="0" y1="{{.ZeroY}}" x2="{{.W}}" y2="{{.ZeroY}}"/>{{end}}
+    {{range .Bars}}<rect class="{{.Class}}" x="{{.X}}" y="{{.Y}}" width="{{.W}}" height="{{.H}}"><title>{{.Tip}}</title></rect>{{end}}
+    {{range .Lines}}<polyline class="{{.Class}}" points="{{.Points}}"/>{{end}}
+  </svg>
+  <div class="mt-chart-dates"><small>{{.First}}</small><small>{{.Last}}</small></div>
+</figure>
 {{end}}

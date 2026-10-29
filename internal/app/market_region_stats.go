@@ -364,6 +364,9 @@ func (app *Application) completeRegionSweep(ctx context.Context, state db.Market
 		return
 	}
 	logging.Infof("worker: region sweep: %s done: %d types, %d station rows over %d pages", marketRegionLabel(state.RegionID), types, stations, state.NextPage-1)
+	// Industry recipe values (schema 111) read the stat pack just
+	// committed: today's figure on every blueprint priced here.
+	app.refreshIndustryRecipeValues(ctx, state.RegionID, time.Now())
 }
 
 // fetchRegionBookPage reads one page of a region's whole book

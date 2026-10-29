@@ -94,7 +94,7 @@ var sectionNav = map[string][]navEntry{
 		{"/character/", "Overview", []string{"character.html"}},
 		{"/characters/", "Characters", []string{"characters.html"}},
 		{"/assets/", "Assets", []string{"assets.html"}},
-		{"/profit/", "Profit", []string{"profit.html"}},
+		{"/profit/", "Profit", []string{"profit.html", "profit_blueprint.html"}},
 		{"/killmails/", "Killmails", []string{"killmails.html"}},
 	},
 	"fitting": {},

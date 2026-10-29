@@ -683,10 +683,25 @@ var pgVizPrefsSchema string
 //go:embed schema_pg/112_profit_trading.sql
 var pgProfitTradingSchema string
 
-// Step 113: the non-character kind a looked-up intel name also
+// Step 113: per-blueprint industry P&L: recipe facts on landed jobs,
+// the materials each consumed from the pool's stock, what became of
+// the output, shared recipe values at today's prices, and the
+// per-blueprint summary.
+//
+//go:embed schema_pg/113_profit_industry.sql
+var pgProfitIndustrySchema string
+
+// Step 114: LP earnings per store: LP balance samples, purchases
+// inferred from them with confidence tiers, what the units sold for,
+// the per-store summary, and the LP delta on the daily rows.
+//
+//go:embed schema_pg/114_profit_lp.sql
+var pgProfitLPSchema string
+
+// Step 115: the non-character kind a looked-up intel name also
 // is, so a name that is a place or an item reads as one.
 //
-//go:embed schema_pg/113_intel_name_things.sql
+//go:embed schema_pg/115_intel_name_things.sql
 var pgIntelNameThingsSchema string
 
 // schemaStep is one numbered file in schema_pg. Steps apply in
@@ -830,7 +845,9 @@ func schemaSteps() []schemaStep {
 		{110, "watchlist_baskets", pgWatchlistBasketsSchema, ""},
 		{111, "viz_prefs", pgVizPrefsSchema, ""},
 		{112, "profit_trading", pgProfitTradingSchema, ""},
-		{113, "intel_name_things", pgIntelNameThingsSchema, ""},
+		{113, "profit_industry", pgProfitIndustrySchema, ""},
+		{114, "profit_lp", pgProfitLPSchema, ""},
+		{115, "intel_name_things", pgIntelNameThingsSchema, ""},
 	}
 }
 

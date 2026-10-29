@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.7.0.2] - 2026-10-29
+
+Automated build of EveSynapse v0.7.0.2. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+
+## What's Changed
+### 🚀 Features
+* Market browser opens on the tree alone, unfolds categories in place, sorts by column header by @natemsz in https://github.com/natemsz/evesynapse/pull/803
+* Baskets build and edit in place without a page load by @natemsz in https://github.com/natemsz/evesynapse/pull/805
+* Notification links view without switching the acting character; briefing stacks with dismissals by @natemsz in https://github.com/natemsz/evesynapse/pull/795
+* Market category glyphs for Blueprints, Skills and Trade Goods by @natemsz in https://github.com/natemsz/evesynapse/pull/810
+* LP store: range filters, find-stores by item, coloured ISK per LP, CSV/JSON exports by @natemsz in https://github.com/natemsz/evesynapse/pull/809
+* Watch list search finds baskets; a basket can be watched as a whole by @natemsz in https://github.com/natemsz/evesynapse/pull/808
+* Price history chart layers, ranges and visualization switches by @natemsz in https://github.com/natemsz/evesynapse/pull/812
+### 🐛 Bug Fixes
+* Landing notices clear the fixed header; footer links to Service Health by @natemsz in https://github.com/natemsz/evesynapse/pull/804
+* API key creation no longer asks for a fresh security-key assertion by @natemsz in https://github.com/natemsz/evesynapse/pull/807
+* Solid heading text; gradient text only on the landing hero by @natemsz in https://github.com/natemsz/evesynapse/pull/811
+### Other Changes
+* docs(changelog): review changelog for v0.6.1.7 by @github-actions[bot] in https://github.com/natemsz/evesynapse/pull/782
+* docs(changelog): review changelog for v0.6.1.8 by @github-actions[bot] in https://github.com/natemsz/evesynapse/pull/784
+* docs(changelog): review changelog for v0.6.1.9 by @github-actions[bot] in https://github.com/natemsz/evesynapse/pull/789
+* docs(changelog): review changelog for v0.7.0.1 by @github-actions[bot] in https://github.com/natemsz/evesynapse/pull/802
+* Profit per item: pooled trading P&L with paired tax, tied broker fees and typed gaps by @natemsz in https://github.com/natemsz/evesynapse/pull/813
+
+
+**Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.7.0.1...v0.7.0.2
+
 ## [v0.7.0.1] - 2026-10-29
 
 Automated build of EveSynapse v0.7.0.1. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).

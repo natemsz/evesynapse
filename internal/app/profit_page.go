@@ -104,7 +104,7 @@ type profitView struct {
 	SalesTax     string
 	BrokerFees   string
 
-	// Trading tab (schema 110).
+	// Trading tab (schema 112).
 	Items          []profitItemRow
 	ItemsNet       string // covered margin over every item
 	ItemsNetDir    string
@@ -118,12 +118,29 @@ type profitView struct {
 	BasisPool      string // "acct-1" etc. when a cost basis can be entered here
 	Recomputed     string // day the pool refolded under a new method or members
 	RecomputedWhy  string
-	Positions      []profitPositionRow
-	OpenCost       string
-	OpenValue      string
-	Unrealized     string
-	UnrealDir      string
-	Chart          *profitChart
+
+	// Industry section (schema 113).
+	Blueprints      []profitBlueprintRow
+	Facilities      []profitFacilityRow
+	Regions         []profitRegionChoice
+	IndustryRegion  string
+	IndustrySideBuy bool
+
+	// LP section (schema 114).
+	LPStores   []profitLPRow
+	LPPicks    []profitLPPick
+	LPValue    string // the player's own ISK per LP
+	LPMedian   string // their usual realized ISK per LP
+	LPDelta    string // net LP over the span
+	WithLP     string // earned with that LP at the player's value
+	WithLPDir  string
+	Positions  []profitPositionRow
+	OpenCost   string
+	OpenValue  string
+	Unrealized string
+	UnrealDir  string
+	Chart      *profitChart
+	Charts     *pfCharts
 }
 
 func dirOf(v float64) string {
@@ -335,6 +352,21 @@ func (app *Application) buildProfitView(ctx context.Context, userID int64, owner
 		return view, err
 	}
 
+	if kind == ownerChar {
+		if err := app.attachIndustry(ctx, view, userID, poolKind, poolIDs, prefs); err != nil {
+			return view, err
+		}
+		if err := app.attachLP(ctx, view, poolKind, poolIDs, ids, prefs); err != nil {
+			return view, err
+		}
+		if lp, err := app.queries.SumProfitLPDelta(ctx, db.SumProfitLPDeltaParams{OwnerKind: kind, OwnerIds: ids, FromDay: fromDay}); err == nil && lp != 0 {
+			view.LPDelta = esi.FormatInt(lp)
+			if prefs.LPValue > 0 {
+				v := earned + prefs.LPValue*float64(lp)
+				view.WithLP, view.WithLPDir = signedISK(v), dirOf(v)
+			}
+		}
+	}
 	if err := app.attachProfitPositions(ctx, view, poolKind, poolIDs); err != nil {
 		return view, err
 	}
@@ -344,6 +376,13 @@ func (app *Application) buildProfitView(ctx context.Context, userID int64, owner
 		return view, err
 	}
 	view.Chart = buildProfitChart(daily, !view.Corp)
+	names := map[int64]string{}
+	for _, ch := range chars {
+		names[ch.CharacterID] = ch.Name
+	}
+	if view.Charts, err = app.buildProfitCharts(ctx, view, kind, ids, names, fromDay, prefs.BrokerInMargin); err != nil {
+		return view, err
+	}
 	return view, nil
 }
 

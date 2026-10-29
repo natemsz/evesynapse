@@ -170,3 +170,40 @@
 .vt-switch input:checked + .vt-track { background: rgba(255, 106, 26, 0.55); }
 .vt-switch input:checked + .vt-track::after { left: 20px; background: #ffb84d; }
 .vt-switch input:focus-visible + .vt-track { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Profit charts (profit v2, part 4). Colours only from theme tokens,
+   so both themes follow; each activity keeps its colour everywhere. */
+.pf-chart { margin: 0.75rem 0 1.25rem; }
+.pf-chart svg { display: block; max-width: 100%; }
+.pf-chart rect { stroke: none; }
+.pf-gain { fill: color-mix(in srgb, var(--success) 70%, transparent); }
+.pf-loss { fill: color-mix(in srgb, var(--danger) 70%, transparent); }
+.pf-gap { fill: color-mix(in srgb, var(--muted) 14%, transparent); }
+.pf-roll, .pf-share, .pf-margin, .pf-ch { fill: none; stroke-width: 1.75; vector-effect: non-scaling-stroke; }
+.pf-roll, .pf-share, .pf-margin { stroke: var(--accent); }
+.pf-cost { opacity: 0.55; }
+.pf-a-trading { fill: var(--accent); background: var(--accent); }
+.pf-a-industry { fill: var(--gold); background: var(--gold); }
+.pf-a-bounties { fill: var(--success); background: var(--success); }
+.pf-a-pi { fill: var(--note); background: var(--note); }
+.pf-a-contracts { fill: color-mix(in srgb, var(--accent) 50%, var(--gold)); background: color-mix(in srgb, var(--accent) 50%, var(--gold)); }
+.pf-a-sales { fill: var(--muted-2); background: var(--muted-2); }
+.pf-a-lp { fill: color-mix(in srgb, var(--note) 50%, var(--success)); background: color-mix(in srgb, var(--note) 50%, var(--success)); }
+.pf-a-other { fill: color-mix(in srgb, var(--muted) 70%, var(--text)); background: color-mix(in srgb, var(--muted) 70%, var(--text)); }
+.pf-a-upkeep { fill: color-mix(in srgb, var(--danger) 60%, var(--muted)); background: color-mix(in srgb, var(--danger) 60%, var(--muted)); }
+.pf-a-transfers { fill: color-mix(in srgb, var(--muted) 50%, transparent); background: color-mix(in srgb, var(--muted) 50%, transparent); }
+.pf-a-unattributed { fill: color-mix(in srgb, var(--muted) 35%, transparent); background: repeating-linear-gradient(45deg, var(--muted) 0 2px, transparent 2px 5px); }
+.pf-f-tax { fill: var(--accent); background: var(--accent); }
+.pf-f-broker { fill: var(--gold); background: var(--gold); }
+.pf-f-industry { fill: var(--note); background: var(--note); }
+.pf-f-lp { fill: color-mix(in srgb, var(--note) 50%, var(--success)); background: color-mix(in srgb, var(--note) 50%, var(--success)); }
+.pf-ch-1 { stroke: var(--accent); background: var(--accent); }
+.pf-ch-2 { stroke: var(--gold); background: var(--gold); }
+.pf-ch-3 { stroke: var(--note); background: var(--note); }
+.pf-ch-4 { stroke: var(--success); background: var(--success); }
+.pf-ch-5 { stroke: var(--muted-2); background: var(--muted-2); }
+.pf-ch-6 { stroke: var(--danger); background: var(--danger); }
+.pf-sw.pf-gain { background: var(--success); }
+.pf-sw.pf-loss { background: var(--danger); }
+.pf-sw.pf-roll { background: var(--accent); height: 3px; }
+.pf-sw.pf-gap { background: color-mix(in srgb, var(--muted) 30%, transparent); }

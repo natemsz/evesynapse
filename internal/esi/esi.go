@@ -128,6 +128,9 @@ const (
 	SnapIndustryJobs  = "industry_jobs"
 	SnapBlueprints    = "blueprints"
 	SnapMining        = "mining"
+	// GET /characters/{id}/loyalty/points/: every corporation's LP
+	// balance in one call, cached an hour (schema 114).
+	SnapLoyalty = "loyalty_points"
 
 	// Planetary industry: the colonies list, plus one
 	// layout snapshot per planet keyed by planet id in the kind
@@ -1006,6 +1009,15 @@ type CharOrderHistoryEntry struct {
 
 // CharOrderHistory is GET /characters/{id}/orders/history/.
 type CharOrderHistory []CharOrderHistoryEntry
+
+// LoyaltyBalance is one entry of GET /characters/{id}/loyalty/points/.
+type LoyaltyBalance struct {
+	CorporationID int64 `json:"corporation_id"`
+	LoyaltyPoints int64 `json:"loyalty_points"`
+}
+
+// LoyaltyBalances is GET /characters/{id}/loyalty/points/.
+type LoyaltyBalances []LoyaltyBalance
 
 // Contract is one entry of GET /characters/{id}/contracts/ (all
 // pages merged). AssigneeID is 0 for public contracts; AcceptorID
@@ -2008,6 +2020,8 @@ func snapshotPath(characterID int64, kind string) string {
 		return fmt.Sprintf("/characters/%d/blueprints/", characterID)
 	case SnapMining:
 		return fmt.Sprintf("/characters/%d/mining/", characterID)
+	case SnapLoyalty:
+		return fmt.Sprintf("/characters/%d/loyalty/points/", characterID)
 	case SnapPlanets:
 		return fmt.Sprintf("/characters/%d/planets/", characterID)
 	case SnapMail:

@@ -462,11 +462,72 @@ type GuidePricesMetum struct {
 	CachedUntil time.Time `json:"cached_until"`
 }
 
+type IndustryBpSummary struct {
+	PoolKind        string       `json:"pool_kind"`
+	PoolID          int64        `json:"pool_id"`
+	BlueprintTypeID int64        `json:"blueprint_type_id"`
+	ProductTypeID   int64        `json:"product_type_id"`
+	RegionID        int64        `json:"region_id"`
+	Side            string       `json:"side"`
+	Me              int64        `json:"me"`
+	BonusBp         int32        `json:"bonus_bp"`
+	Jobs            int64        `json:"jobs"`
+	Runs            int64        `json:"runs"`
+	Units           int64        `json:"units"`
+	UnitsSold       int64        `json:"units_sold"`
+	UnitsLost       int64        `json:"units_lost"`
+	UnitsMixed      int64        `json:"units_mixed"`
+	UnitsAtMarket   int64        `json:"units_at_market"`
+	ARevenue        float64      `json:"a_revenue"`
+	ATax            float64      `json:"a_tax"`
+	ACost           float64      `json:"a_cost"`
+	BOutput         float64      `json:"b_output"`
+	BInputs         float64      `json:"b_inputs"`
+	BJob            float64      `json:"b_job"`
+	BPriced         bool         `json:"b_priced"`
+	BAtLanding      bool         `json:"b_at_landing"`
+	JobCostPerRun   float64      `json:"job_cost_per_run"`
+	EivPerRun       float64      `json:"eiv_per_run"`
+	TaxRate         float64      `json:"tax_rate"`
+	BrokerRate      float64      `json:"broker_rate"`
+	CTotal          float64      `json:"c_total"`
+	CPriced         bool         `json:"c_priced"`
+	CMissingTypeID  int64        `json:"c_missing_type_id"`
+	CFallback       bool         `json:"c_fallback"`
+	CAsOf           sql.NullTime `json:"c_as_of"`
+	FoldedAt        time.Time    `json:"folded_at"`
+}
+
 type IndustryCostIndex struct {
 	SolarSystemID int64     `json:"solar_system_id"`
 	Activity      string    `json:"activity"`
 	CostIndex     float64   `json:"cost_index"`
 	FetchedAt     time.Time `json:"fetched_at"`
+}
+
+type IndustryFacilityBonuse struct {
+	UserID        int64     `json:"user_id"`
+	FacilityID    int64     `json:"facility_id"`
+	MaterialBonus float64   `json:"material_bonus"`
+	UpdatedAt     time.Time `json:"updated_at"`
+}
+
+type IndustryRecipeValue struct {
+	RegionID        int64     `json:"region_id"`
+	BlueprintTypeID int64     `json:"blueprint_type_id"`
+	Me              int64     `json:"me"`
+	BonusBp         int32     `json:"bonus_bp"`
+	ProductTypeID   int64     `json:"product_type_id"`
+	UnitsPerRun     int64     `json:"units_per_run"`
+	InputsSell      float64   `json:"inputs_sell"`
+	InputsBuy       float64   `json:"inputs_buy"`
+	OutputSell      float64   `json:"output_sell"`
+	OutputBuy       float64   `json:"output_buy"`
+	Eiv             float64   `json:"eiv"`
+	Priced          bool      `json:"priced"`
+	MissingTypeID   int64     `json:"missing_type_id"`
+	FallbackUsed    bool      `json:"fallback_used"`
+	ComputedAt      time.Time `json:"computed_at"`
 }
 
 type IntelChannel struct {
@@ -639,6 +700,32 @@ type ItemName struct {
 	Name   string `json:"name"`
 }
 
+type JobManualEvent struct {
+	ID            int64     `json:"id"`
+	PoolKind      string    `json:"pool_kind"`
+	PoolID        int64     `json:"pool_id"`
+	JobID         int64     `json:"job_id"`
+	Kind          string    `json:"kind"`
+	Units         int64     `json:"units"`
+	UnitPrice     float64   `json:"unit_price"`
+	TransactionID int64     `json:"transaction_id"`
+	At            time.Time `json:"at"`
+	CreatedAt     time.Time `json:"created_at"`
+}
+
+type JobOutputLink struct {
+	PoolKind string    `json:"pool_kind"`
+	PoolID   int64     `json:"pool_id"`
+	JobID    int64     `json:"job_id"`
+	TypeID   int64     `json:"type_id"`
+	LinkKind string    `json:"link_kind"`
+	RefID    int64     `json:"ref_id"`
+	OwnerID  int64     `json:"owner_id"`
+	At       time.Time `json:"at"`
+	Units    int64     `json:"units"`
+	Revenue  float64   `json:"revenue"`
+}
+
 type Kill struct {
 	KillmailID          int64           `json:"killmail_id"`
 	Hash                string          `json:"hash"`
@@ -740,16 +827,40 @@ type LedgerHole struct {
 }
 
 type LedgerJob struct {
-	OwnerKind     string    `json:"owner_kind"`
-	OwnerID       int64     `json:"owner_id"`
-	JobID         int64     `json:"job_id"`
-	At            time.Time `json:"at"`
-	ActivityID    int64     `json:"activity_id"`
-	ProductTypeID int64     `json:"product_type_id"`
-	Units         int64     `json:"units"`
-	OutputValue   float64   `json:"output_value"`
-	MaterialsCost float64   `json:"materials_cost"`
-	Priced        bool      `json:"priced"`
+	OwnerKind       string       `json:"owner_kind"`
+	OwnerID         int64        `json:"owner_id"`
+	JobID           int64        `json:"job_id"`
+	At              time.Time    `json:"at"`
+	ActivityID      int64        `json:"activity_id"`
+	ProductTypeID   int64        `json:"product_type_id"`
+	Units           int64        `json:"units"`
+	OutputValue     float64      `json:"output_value"`
+	MaterialsCost   float64      `json:"materials_cost"`
+	Priced          bool         `json:"priced"`
+	BlueprintTypeID int64        `json:"blueprint_type_id"`
+	Runs            int64        `json:"runs"`
+	Me              int64        `json:"me"`
+	MeSource        string       `json:"me_source"`
+	MaterialBonus   float64      `json:"material_bonus"`
+	BonusSource     string       `json:"bonus_source"`
+	FacilityID      int64        `json:"facility_id"`
+	InstalledAt     sql.NullTime `json:"installed_at"`
+	JobCost         float64      `json:"job_cost"`
+	Eiv             float64      `json:"eiv"`
+	PriceRegion     int64        `json:"price_region"`
+	InputsAtTime    float64      `json:"inputs_at_time"`
+	InputsSource    string       `json:"inputs_source"`
+}
+
+type LedgerJobMaterial struct {
+	OwnerKind  string  `json:"owner_kind"`
+	OwnerID    int64   `json:"owner_id"`
+	JobID      int64   `json:"job_id"`
+	TypeID     int64   `json:"type_id"`
+	Quantity   int64   `json:"quantity"`
+	UnitAtTime float64 `json:"unit_at_time"`
+	FifoQty    int64   `json:"fifo_qty"`
+	FifoCost   float64 `json:"fifo_cost"`
 }
 
 type LedgerJournal struct {
@@ -836,6 +947,13 @@ type LocalFitting struct {
 	LastViewedAt sql.NullTime `json:"last_viewed_at"`
 }
 
+type LpBalanceSample struct {
+	CharacterID   int64     `json:"character_id"`
+	CorporationID int64     `json:"corporation_id"`
+	SampledAt     time.Time `json:"sampled_at"`
+	Points        int64     `json:"points"`
+}
+
 type LpOffer struct {
 	CorporationID int64   `json:"corporation_id"`
 	OfferID       int64   `json:"offer_id"`
@@ -874,12 +992,68 @@ type LpOfferValue struct {
 	UpdatedAt      time.Time       `json:"updated_at"`
 }
 
+type LpPurchase struct {
+	ID            int64        `json:"id"`
+	CharacterID   int64        `json:"character_id"`
+	CorporationID int64        `json:"corporation_id"`
+	FromAt        time.Time    `json:"from_at"`
+	ToAt          time.Time    `json:"to_at"`
+	LpSpent       int64        `json:"lp_spent"`
+	IskPaid       float64      `json:"isk_paid"`
+	Tier          string       `json:"tier"`
+	OfferID       int64        `json:"offer_id"`
+	Quantity      int64        `json:"quantity"`
+	ProductTypeID int64        `json:"product_type_id"`
+	Units         int64        `json:"units"`
+	ReqValue      float64      `json:"req_value"`
+	Candidates    string       `json:"candidates"`
+	JournalIsk    float64      `json:"journal_isk"`
+	AssetsBefore  int64        `json:"assets_before"`
+	AssetsAsOf    sql.NullTime `json:"assets_as_of"`
+	Checked       bool         `json:"checked"`
+	CreatedAt     time.Time    `json:"created_at"`
+}
+
+type LpSaleLink struct {
+	PoolKind      string    `json:"pool_kind"`
+	PoolID        int64     `json:"pool_id"`
+	PurchaseID    int64     `json:"purchase_id"`
+	TypeID        int64     `json:"type_id"`
+	OwnerID       int64     `json:"owner_id"`
+	TransactionID int64     `json:"transaction_id"`
+	At            time.Time `json:"at"`
+	Units         int64     `json:"units"`
+	Revenue       float64   `json:"revenue"`
+	Cost          float64   `json:"cost"`
+}
+
 type LpStoreCorp struct {
 	CorporationID int64        `json:"corporation_id"`
 	Name          string       `json:"name"`
 	State         string       `json:"state"`
 	OfferCount    int64        `json:"offer_count"`
 	FetchedAt     sql.NullTime `json:"fetched_at"`
+}
+
+type LpStoreSummary struct {
+	PoolKind       string    `json:"pool_kind"`
+	PoolID         int64     `json:"pool_id"`
+	CorporationID  int64     `json:"corporation_id"`
+	LpEarned       int64     `json:"lp_earned"`
+	LpCorroborated int64     `json:"lp_corroborated"`
+	LpInferred     int64     `json:"lp_inferred"`
+	LpAmbiguous    int64     `json:"lp_ambiguous"`
+	LpUnexplained  int64     `json:"lp_unexplained"`
+	IskPaid        float64   `json:"isk_paid"`
+	UnitsAcquired  int64     `json:"units_acquired"`
+	UnitsSold      int64     `json:"units_sold"`
+	Revenue        float64   `json:"revenue"`
+	Tax            float64   `json:"tax"`
+	SoldCost       float64   `json:"sold_cost"`
+	LpSold         float64   `json:"lp_sold"`
+	UnsoldValue    float64   `json:"unsold_value"`
+	UnsoldPriced   bool      `json:"unsold_priced"`
+	FoldedAt       time.Time `json:"folded_at"`
 }
 
 type MapLayer struct {
@@ -1323,6 +1497,7 @@ type ProfitDaily struct {
 	Activity  string  `json:"activity"`
 	Income    float64 `json:"income"`
 	Costs     float64 `json:"costs"`
+	LpDelta   int64   `json:"lp_delta"`
 }
 
 type PubContract struct {
@@ -2001,6 +2176,7 @@ type TradeOpenLot struct {
 	Seq       int64   `json:"seq"`
 	Quantity  int64   `json:"quantity"`
 	UnitPrice float64 `json:"unit_price"`
+	RefID     int64   `json:"ref_id"`
 }
 
 type TradePosition struct {
@@ -2119,6 +2295,9 @@ type UserProfitPref struct {
 	Pooled         bool      `json:"pooled"`
 	BrokerInMargin bool      `json:"broker_in_margin"`
 	UpdatedAt      time.Time `json:"updated_at"`
+	IndustryRegion int64     `json:"industry_region"`
+	IndustrySide   string    `json:"industry_side"`
+	LpIskValue     float64   `json:"lp_isk_value"`
 }
 
 type WalletHistory struct {

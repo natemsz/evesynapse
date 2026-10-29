@@ -1,4 +1,4 @@
--- Schema step 113: what else a looked-up name is.
+-- Schema step 115: what else a looked-up name is.
 --
 -- intel_pilot_names.thing: EVE's name lookup answers every kind
 -- of thing a string names, not only characters. thing records the

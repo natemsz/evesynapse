@@ -672,7 +672,6 @@ var pgBriefingDismissalsSchema string
 //
 //go:embed schema_pg/111_viz_prefs.sql
 var pgVizPrefsSchema string
->>>>>>> origin/main
 
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations

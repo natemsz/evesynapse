@@ -609,6 +609,13 @@ var pgContractExitAnswersSchema string
 //go:embed schema_pg/100_name_misses.sql
 var pgNameMissesSchema string
 
+// Step 101: the market stat pack: the full order-book statistics set
+// and the trend figures on the per-(region, type) stats row, the same
+// set on its daily copy, and the Fuzzwork mirror's full columns.
+//
+//go:embed schema_pg/101_market_stat_pack.sql
+var pgMarketStatPackSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -738,6 +745,7 @@ func schemaSteps() []schemaStep {
 		{98, "webauthn", pgWebAuthnSchema, ""},
 		{99, "contract_exit_answers", pgContractExitAnswersSchema, ""},
 		{100, "name_misses", pgNameMissesSchema, ""},
+		{101, "market_stat_pack", pgMarketStatPackSchema, ""},
 	}
 }
 

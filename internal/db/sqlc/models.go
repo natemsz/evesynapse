@@ -703,20 +703,37 @@ type MarketHistoryWant struct {
 }
 
 type MarketRegionStat struct {
-	RegionID       int64     `json:"region_id"`
-	TypeID         int64     `json:"type_id"`
-	BestSell       float64   `json:"best_sell"`
-	TypicalSell    float64   `json:"typical_sell"`
-	SellBand       float64   `json:"sell_band"`
-	BestBuy        float64   `json:"best_buy"`
-	TypicalBuy     float64   `json:"typical_buy"`
-	BuyBand        float64   `json:"buy_band"`
-	SellOrders     int64     `json:"sell_orders"`
-	BuyOrders      int64     `json:"buy_orders"`
-	SellVolume     int64     `json:"sell_volume"`
-	BuyVolume      int64     `json:"buy_volume"`
-	UpdatedAt      time.Time `json:"updated_at"`
-	AvgDailyVolume float64   `json:"avg_daily_volume"`
+	RegionID          int64           `json:"region_id"`
+	TypeID            int64           `json:"type_id"`
+	BestSell          float64         `json:"best_sell"`
+	TypicalSell       float64         `json:"typical_sell"`
+	SellBand          float64         `json:"sell_band"`
+	BestBuy           float64         `json:"best_buy"`
+	TypicalBuy        float64         `json:"typical_buy"`
+	BuyBand           float64         `json:"buy_band"`
+	SellOrders        int64           `json:"sell_orders"`
+	BuyOrders         int64           `json:"buy_orders"`
+	SellVolume        int64           `json:"sell_volume"`
+	BuyVolume         int64           `json:"buy_volume"`
+	UpdatedAt         time.Time       `json:"updated_at"`
+	AvgDailyVolume    float64         `json:"avg_daily_volume"`
+	SellAvg           float64         `json:"sell_avg"`
+	SellMax           float64         `json:"sell_max"`
+	SellP5            float64         `json:"sell_p5"`
+	SellStddev        float64         `json:"sell_stddev"`
+	BuyAvg            float64         `json:"buy_avg"`
+	BuyMin            float64         `json:"buy_min"`
+	BuyP5             float64         `json:"buy_p5"`
+	BuyStddev         float64         `json:"buy_stddev"`
+	SellChg1d         sql.NullFloat64 `json:"sell_chg_1d"`
+	SellChg7d         sql.NullFloat64 `json:"sell_chg_7d"`
+	SellChg30d        sql.NullFloat64 `json:"sell_chg_30d"`
+	BuyChg1d          sql.NullFloat64 `json:"buy_chg_1d"`
+	BuyChg7d          sql.NullFloat64 `json:"buy_chg_7d"`
+	BuyChg30d         sql.NullFloat64 `json:"buy_chg_30d"`
+	Volatility30d     sql.NullFloat64 `json:"volatility_30d"`
+	HistoryDays       int64           `json:"history_days"`
+	AvgDailyVolume30d float64         `json:"avg_daily_volume_30d"`
 }
 
 type MarketRegionStatsDaily struct {
@@ -733,6 +750,14 @@ type MarketRegionStatsDaily struct {
 	BuyOrders   int64   `json:"buy_orders"`
 	SellVolume  int64   `json:"sell_volume"`
 	BuyVolume   int64   `json:"buy_volume"`
+	SellAvg     float64 `json:"sell_avg"`
+	SellMax     float64 `json:"sell_max"`
+	SellP5      float64 `json:"sell_p5"`
+	SellStddev  float64 `json:"sell_stddev"`
+	BuyAvg      float64 `json:"buy_avg"`
+	BuyMin      float64 `json:"buy_min"`
+	BuyP5       float64 `json:"buy_p5"`
+	BuyStddev   float64 `json:"buy_stddev"`
 }
 
 type MarketStationLeaderboard struct {
@@ -775,6 +800,14 @@ type MarketStatsFallback struct {
 	OrdersetID  int64     `json:"orderset_id"`
 	SourceAsof  time.Time `json:"source_asof"`
 	FetchedAt   time.Time `json:"fetched_at"`
+	WavgSell    float64   `json:"wavg_sell"`
+	MinSell     float64   `json:"min_sell"`
+	MaxSell     float64   `json:"max_sell"`
+	StddevSell  float64   `json:"stddev_sell"`
+	WavgBuy     float64   `json:"wavg_buy"`
+	MinBuy      float64   `json:"min_buy"`
+	MaxBuy      float64   `json:"max_buy"`
+	StddevBuy   float64   `json:"stddev_buy"`
 }
 
 type MarketStatsFallbackMetum struct {

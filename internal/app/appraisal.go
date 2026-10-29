@@ -225,57 +225,26 @@ func (app *Application) AppraiseLinesWithBasis(ctx context.Context, lines []modu
 			typeIDs = append(typeIDs, ln.TypeID)
 		}
 	}
-	ownRows, err := app.queries.ListMarketRegionStatsForTypes(ctx, db.ListMarketRegionStatsForTypesParams{
-		RegionID: regionID, Column2: typeIDs,
-	})
+	// The stat pack loader reads the three pricing tables once
+	// for the distinct types, global-market rows included (see
+	// the basis doc above).
+	packs, err := app.loadStatPacks(ctx, regionID, typeIDs)
 	if err != nil {
-		return out, fmt.Errorf("appraisal: forge typicals: %w", err)
+		return out, fmt.Errorf("appraisal: %w", err)
 	}
-	tvRows, err := app.queries.ListTrueValuesForTypes(ctx, typeIDs)
-	if err != nil {
-		return out, fmt.Errorf("appraisal: true values: %w", err)
-	}
-	fbRows, err := app.queries.ListMarketStatsFallbackForTypes(ctx, db.ListMarketStatsFallbackForTypesParams{
-		RegionID: regionID, Column2: typeIDs,
-	})
-	if err != nil {
-		return out, fmt.Errorf("appraisal: fallback: %w", err)
-	}
-	own := make(map[int64]*db.MarketRegionStat, len(ownRows))
-	for i := range ownRows {
-		own[ownRows[i].TypeID] = &ownRows[i]
-	}
-	// The global market serves where the basis region has no
-	// stat at all (see the basis doc above): any requested
-	// type the hub carries no row for reads its global row
-	// instead, so a global-market type prices at every hub
-	// while a type the hub does carry keeps its hub row.
-	if regionID != globalMarketRegion {
-		var missing []int64
-		for _, id := range typeIDs {
-			if _, ok := own[id]; !ok {
-				missing = append(missing, id)
-			}
+	own := make(map[int64]*db.MarketRegionStat, len(packs))
+	tvs := make(map[int64]*db.TrueValue, len(packs))
+	fbs := make(map[int64]*db.MarketStatsFallback, len(packs))
+	for id, p := range packs {
+		if p.Own != nil {
+			own[id] = p.Own
 		}
-		if len(missing) > 0 {
-			gRows, err := app.queries.ListMarketRegionStatsForTypes(ctx, db.ListMarketRegionStatsForTypesParams{
-				RegionID: globalMarketRegion, Column2: missing,
-			})
-			if err != nil {
-				return out, fmt.Errorf("appraisal: global typicals: %w", err)
-			}
-			for i := range gRows {
-				own[gRows[i].TypeID] = &gRows[i]
-			}
+		if p.Estimate != nil {
+			tvs[id] = p.Estimate
 		}
-	}
-	tvs := make(map[int64]*db.TrueValue, len(tvRows))
-	for i := range tvRows {
-		tvs[tvRows[i].TypeID] = &tvRows[i]
-	}
-	fbs := make(map[int64]*db.MarketStatsFallback, len(fbRows))
-	for i := range fbRows {
-		fbs[fbRows[i].TypeID] = &fbRows[i]
+		if p.Fallback != nil {
+			fbs[id] = p.Fallback
+		}
 	}
 
 	// Stored abyssal estimates for the singleton lines: a

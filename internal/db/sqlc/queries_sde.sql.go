@@ -992,6 +992,34 @@ func (q *Queries) ListItemNamesByIDs(ctx context.Context, itemIds []int64) ([]It
 	return items, nil
 }
 
+const listMarketGroupParentIDs = `-- name: ListMarketGroupParentIDs :many
+SELECT DISTINCT parent_group_id FROM sde_market_groups
+WHERE parent_group_id > 0
+`
+
+func (q *Queries) ListMarketGroupParentIDs(ctx context.Context) ([]int64, error) {
+	rows, err := q.db.QueryContext(ctx, listMarketGroupParentIDs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []int64
+	for rows.Next() {
+		var parent_group_id int64
+		if err := rows.Scan(&parent_group_id); err != nil {
+			return nil, err
+		}
+		items = append(items, parent_group_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listSDEAttributeTypesByIDs = `-- name: ListSDEAttributeTypesByIDs :many
 SELECT attribute_id, name, stackable, high_is_good, unit_id, default_value FROM sde_attribute_types
 WHERE attribute_id = ANY($1::bigint[])

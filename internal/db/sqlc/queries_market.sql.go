@@ -1763,6 +1763,8 @@ ORDER BY
   CASE WHEN $4::text = 'name' THEN t.name END,
   CASE WHEN $4::text = 'price' THEN s.typical_sell END DESC NULLS LAST,
   CASE WHEN $4::text = 'cheap' THEN NULLIF(s.typical_sell, 0) END ASC NULLS LAST,
+  CASE WHEN $4::text = 'buy' THEN s.typical_buy END DESC NULLS LAST,
+  CASE WHEN $4::text = 'buycheap' THEN NULLIF(s.typical_buy, 0) END ASC NULLS LAST,
   CASE WHEN $4::text = 'rising' THEN s.sell_chg_7d END DESC NULLS LAST,
   CASE WHEN $4::text = 'falling' THEN s.sell_chg_7d END ASC NULLS LAST,
   CASE WHEN $4::text = 'volume' THEN s.avg_daily_volume_30d END DESC NULLS LAST,

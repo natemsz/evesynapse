@@ -3,10 +3,14 @@ package app
 // The market browser on /market/: a category tree (the root groups,
 // with the path to the chosen group opened level by level) beside
 // every item under the chosen group, its whole subtree included,
-// with the region's stat pack figures. Filters (name, traded volume)
-// and the sort run in SQL with a LIMIT; navigating and filtering
-// swap in /market/browse-fragment (market.js) without reloading the
-// page, and the URL follows, so a view is shareable and Back works.
+// with the region's stat pack figures. The tree lives in the page:
+// opening a category fetches just its children from
+// /market/browse-children and unfolds them in place, and picking a
+// group swaps only the item list from /market/browse-fragment, so
+// the tree never re-renders or jumps. With nothing picked yet the
+// list stays empty until a category or a search is chosen. Filters
+// (name, traded volume) and the sort run in SQL with a LIMIT, and
+// the URL follows picks, so a view is shareable and Back works.
 // Local reads only: SDE tables and the stat pack.
 
 import (
@@ -27,9 +31,12 @@ const marketBrowseTypesPerPage = 100
 // marketBrowseNode is one row of the category tree.
 type marketBrowseNode struct {
 	marketBrowseGroup
-	Depth  int
-	Open   bool // on the path to the chosen group
-	Chosen bool
+	Depth       int
+	Expanded    bool // on the path to the chosen group
+	Chosen      bool
+	HasChildren bool
+	Region      int64
+	Children    []marketBrowseNode
 }
 
 // marketBrowseType is one item row with its stat pack figures.
@@ -43,12 +50,6 @@ type marketBrowseType struct {
 	Swing       string
 }
 
-// marketBrowseSort is one sort choice.
-type marketBrowseSort struct {
-	Key, Label string
-	Active     bool
-}
-
 // marketBrowseView is the browser panel.
 type marketBrowseView struct {
 	Region      int64
@@ -57,7 +58,6 @@ type marketBrowseView struct {
 	Breadcrumbs []marketBrowseCrumb
 	Tree        []marketBrowseNode
 	Types       []marketBrowseType
-	Sorts       []marketBrowseSort
 	Query       string
 	MinVolume   int64
 	Sort        string
@@ -65,8 +65,9 @@ type marketBrowseView struct {
 	Page        int
 	TotalPages  int
 	TotalTypes  int64
-	PrevHref    string
-	NextHref    string
+	PrevHref     string
+	NextHref     string
+	AwaitingPick bool // nothing chosen or searched yet: no item list
 }
 
 // marketBrowseCrumb is one breadcrumb step (an ancestor group).
@@ -75,12 +76,14 @@ type marketBrowseCrumb struct {
 	Name string
 }
 
-var marketBrowseSorts = []struct{ key, label string }{
-	{"name", "Name"}, {"price", "Priciest"}, {"cheap", "Cheapest"}, {"volume", "Most traded"},
-	{"rising", "Rising"}, {"falling", "Falling"}, {"volatile", "Swings most"},
+// marketBrowseSortKeys are the item list's sort keys, picked by
+// clicking the table headers (see SortHref and its toggles).
+var marketBrowseSortKeys = []string{
+	"name", "price", "cheap", "buy", "buycheap", "volume", "rising", "falling", "volatile",
 }
 
-// handleMarketBrowseFragment answers the browser's in-page swaps.
+// handleMarketBrowseFragment answers the browser's item-list swaps:
+// only the list column, never the tree around it.
 func (app *Application) handleMarketBrowseFragment(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	region := defaultMarketRegion
@@ -89,7 +92,87 @@ func (app *Application) handleMarketBrowseFragment(w http.ResponseWriter, r *htt
 			region = id
 		}
 	}
-	app.renderFragment(w, "market.html", "market-browse", app.buildMarketBrowse(ctx, region, r.URL.Query()))
+	app.renderFragment(w, "market.html", "market-browse-items", app.buildMarketBrowse(ctx, region, r.URL.Query()))
+}
+
+// marketBrowseChildren carries one level of the tree for the
+// children endpoint.
+type marketBrowseChildren struct {
+	Region int64
+	Nodes  []marketBrowseNode
+}
+
+var marketBrowseChildrenCache = newViewCache[[]marketBrowseNode](5*time.Minute, 512)
+
+// handleMarketBrowseChildren answers one tree level: the children
+// of one group, for market.js to unfold in place.
+func (app *Application) handleMarketBrowseChildren(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	region := defaultMarketRegion
+	if id, err := strconv.ParseInt(r.URL.Query().Get("region"), 10, 64); err == nil {
+		if _, ok := marketRegionName(id); ok {
+			region = id
+		}
+	}
+	groupID, err := strconv.ParseInt(r.URL.Query().Get("group"), 10, 64)
+	if err != nil || groupID <= 0 {
+		http.Error(w, "unknown group", http.StatusBadRequest)
+		return
+	}
+	key := strconv.FormatInt(groupID, 10)
+	var nodes []marketBrowseNode
+	if cached, ok := marketBrowseChildrenCache.get(key); ok {
+		nodes = *cached
+	} else {
+		parents, err := app.marketGroupParents(ctx)
+		if err != nil {
+			logging.Errorf("market: browse children parents: %v", err)
+			http.Error(w, "unavailable", http.StatusInternalServerError)
+			return
+		}
+		nodes = app.buildMarketBrowseLevel(ctx, groupID, 1, region, map[int64]bool{}, 0, parents)
+		marketBrowseChildrenCache.put(key, &nodes)
+	}
+	app.renderFragment(w, "market.html", "market-browse-children", marketBrowseChildren{Region: region, Nodes: nodes})
+}
+
+// marketGroupParents is the set of group IDs that have child groups.
+func (app *Application) marketGroupParents(ctx context.Context) (map[int64]bool, error) {
+	rows, err := app.queries.ListMarketGroupParentIDs(ctx)
+	if err != nil {
+		return nil, err
+	}
+	set := make(map[int64]bool, len(rows))
+	for _, id := range rows {
+		set[id] = true
+	}
+	return set, nil
+}
+
+// buildMarketBrowseLevel builds one tree level; nodes on the path
+// to the chosen group recurse into their children, expanded.
+func (app *Application) buildMarketBrowseLevel(ctx context.Context, parent int64, depth int, region int64, onPath map[int64]bool, chosen int64, parents map[int64]bool) []marketBrowseNode {
+	rows, err := app.queries.ListSDEMarketGroupsByParent(ctx, parent)
+	if err != nil {
+		logging.Errorf("market: list market groups under %d: %v", parent, err)
+		return nil
+	}
+	nodes := make([]marketBrowseNode, 0, len(rows))
+	for _, row := range rows {
+		node := marketBrowseNode{
+			marketBrowseGroup: marketBrowseGroupRow(row),
+			Depth:             depth,
+			Expanded:          onPath[row.MarketGroupID],
+			Chosen:            row.MarketGroupID == chosen,
+			HasChildren:       parents[row.MarketGroupID],
+			Region:            region,
+		}
+		if node.Expanded && depth < 16 {
+			node.Children = app.buildMarketBrowseLevel(ctx, row.MarketGroupID, depth+1, region, onPath, chosen, parents)
+		}
+		nodes = append(nodes, node)
+	}
+	return nodes
 }
 
 // href is the browser's URL for this view with one change.
@@ -113,6 +196,48 @@ func (v *marketBrowseView) href(change func(url.Values)) string {
 	}
 	change(q)
 	return "/market/?" + q.Encode()
+}
+
+// SortHref is the list URL under another sort, back on page one.
+func (v *marketBrowseView) SortHref(key string) string {
+	return v.href(func(q url.Values) {
+		q.Set("sort", key)
+		q.Del("page")
+	})
+}
+
+// SellSortHref toggles the sell column: priciest first, then
+// cheapest first.
+func (v *marketBrowseView) SellSortHref() string {
+	if v.Sort == "price" {
+		return v.SortHref("cheap")
+	}
+	return v.SortHref("price")
+}
+
+// BuySortHref toggles the buy column the same way.
+func (v *marketBrowseView) BuySortHref() string {
+	if v.Sort == "buy" {
+		return v.SortHref("buycheap")
+	}
+	return v.SortHref("buy")
+}
+
+// ChgSortHref toggles the 7-day column: biggest risers first, then
+// biggest fallers.
+func (v *marketBrowseView) ChgSortHref() string {
+	if v.Sort == "rising" {
+		return v.SortHref("falling")
+	}
+	return v.SortHref("rising")
+}
+
+// ClearQueryHref is the list URL with the name filter dropped.
+func (v *marketBrowseView) ClearQueryHref() string {
+	return v.href(func(q url.Values) {
+		q.Del("bq")
+		q.Del("page")
+	})
 }
 
 var marketBrowseCache = newViewCache[marketBrowseView](30*time.Second, 256)
@@ -145,9 +270,9 @@ func (app *Application) buildMarketBrowseFresh(ctx context.Context, region int64
 	if v, err := strconv.ParseInt(q.Get("minvol"), 10, 64); err == nil && v > 0 {
 		view.MinVolume = v
 	}
-	for _, s := range marketBrowseSorts {
-		if q.Get("sort") == s.key {
-			view.Sort = s.key
+	for _, key := range marketBrowseSortKeys {
+		if q.Get("sort") == key {
+			view.Sort = key
 		}
 	}
 	if p, err := strconv.Atoi(q.Get("page")); err == nil && p > 1 {
@@ -185,29 +310,23 @@ func (app *Application) buildMarketBrowseFresh(ctx context.Context, region int64
 	for _, g := range path {
 		onPath[g.MarketGroupID] = true
 	}
-	var walk func(parent int64, depth int)
-	walk = func(parent int64, depth int) {
-		rows, err := app.queries.ListSDEMarketGroupsByParent(ctx, parent)
-		if err != nil {
-			logging.Errorf("market: list market groups under %d: %v", parent, err)
-			return
-		}
-		for _, row := range rows {
-			node := marketBrowseNode{marketBrowseGroup: marketBrowseGroupRow(row), Depth: depth,
-				Open: onPath[row.MarketGroupID], Chosen: row.MarketGroupID == view.GroupID}
-			view.Tree = append(view.Tree, node)
-			if node.Open && depth < 16 {
-				walk(row.MarketGroupID, depth+1)
-			}
-		}
+	parents, err := app.marketGroupParents(ctx)
+	if err != nil {
+		logging.Errorf("market: browse tree parents: %v", err)
+		return view
 	}
-	walk(0, 0)
+	view.Tree = app.buildMarketBrowseLevel(ctx, 0, 0, region, onPath, view.GroupID, parents)
 
-	for _, s := range marketBrowseSorts {
-		view.Sorts = append(view.Sorts, marketBrowseSort{Key: s.key, Label: s.label, Active: s.key == view.Sort})
-	}
 	if len(view.Tree) == 0 {
 		return view // no static data yet
+	}
+
+	if view.GroupID == 0 && view.Query == "" && view.MinVolume == 0 {
+		// Open on the tree alone: listing every item in the game
+		// under no category at all is noise, not a starting point.
+		view.AwaitingPick = true
+		view.TotalPages = 1
+		return view
 	}
 
 	like := ""

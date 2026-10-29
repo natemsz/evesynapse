@@ -43,21 +43,38 @@
 .mt-basket-items { flex: 1 1 100%; display: flex; flex-direction: column; }
 .mt-basket-items textarea { width: 100%; font-family: "JetBrains Mono", monospace; }
 
-/* The market browser: category tree beside the item list. */
+/* The market browser: category tree beside the item list. The
+   tree unfolds in place: each level is a nested list whose height
+   market.js animates briefly, and indentation comes from the
+   nesting itself. */
 .mb-layout { display: grid; grid-template-columns: minmax(12rem, 18rem) minmax(0, 1fr); gap: 1rem; align-items: start; }
 .mb-tree { max-height: 70vh; overflow-y: auto; border-right: 1px solid var(--box-edge); padding-right: 0.5rem; }
 .mb-tree ul { list-style: none; margin: 0; padding: 0; }
-.mb-node a { display: flex; align-items: center; gap: 0.4rem; padding: 0.22rem 0.35rem; border-radius: var(--r-xs); color: var(--text); text-decoration: none; }
-.mb-node a:hover { background: var(--row-hover); }
-.mb-node.open > a { color: var(--text-bright); }
-.mb-node.chosen > a { background: var(--row-hover); box-shadow: inset 2px 0 0 var(--accent); }
+.mb-children { padding-left: 0.85rem; overflow: hidden; }
+.mb-row { display: flex; align-items: center; gap: 0.15rem; }
+.mb-row > a { display: flex; align-items: center; gap: 0.4rem; flex: 1 1 auto; min-width: 0; padding: 0.22rem 0.35rem; border-radius: var(--r-xs); color: var(--text); text-decoration: none; }
+.mb-row > a:hover { background: var(--row-hover); }
+.mb-node.open > .mb-row > a { color: var(--text-bright); }
+.mb-node.chosen > .mb-row > a { background: var(--row-hover); box-shadow: inset 2px 0 0 var(--accent); }
+.mb-children .mb-row > a { font-size: 0.92rem; }
 .mb-node .market-group-icon svg { width: 1.1rem; height: 1.1rem; }
-.mb-depth-1 a { padding-left: 1.2rem; }
-.mb-depth-2 a { padding-left: 2rem; }
-.mb-depth-3 a { padding-left: 2.8rem; }
-.mb-depth-4 a, .mb-depth-5 a, .mb-depth-6 a { padding-left: 3.6rem; }
-.mb-node:not([class*="mb-depth-0"]) a { font-size: 0.9em; }
-[data-browse-root][aria-busy="true"] .mb-items { opacity: 0.6; transition: opacity 0.15s; }
+.mb-toggle { flex: none; width: 1.05rem; height: 1.05rem; padding: 0; background: none; border: 0; cursor: pointer; position: relative; color: var(--muted); }
+.mb-toggle::before { content: ""; position: absolute; inset: 0.3rem; border-right: 1.6px solid currentColor; border-bottom: 1.6px solid currentColor; transform: rotate(-45deg); transition: transform 120ms ease; }
+.mb-toggle:hover { color: var(--accent); }
+.mb-node.open > .mb-row .mb-toggle::before { transform: rotate(45deg); }
+.mb-toggle-none { flex: none; width: 1.05rem; }
+.mb-items { transition: opacity 0.15s; }
+[data-browse-items][aria-busy="true"] { opacity: 0.6; }
+.mb-filters { align-items: center; }
+.mb-filter-note { display: inline-flex; align-items: center; gap: 0.45rem; }
+.mb-minvol { margin-left: auto; }
+/* Sortable headers, in the contracts table's voice: the link
+   inherits the header color, the chevron carries the state. */
+.mb-sorthead { color: inherit; text-decoration: none; white-space: nowrap; display: inline-flex; align-items: baseline; gap: 0.35rem; }
+.mb-sorthead:hover { color: var(--accent); }
+.mb-sorthead .mb-sortchev { color: var(--muted-2, var(--muted)); font-size: 0.85em; }
+.mb-sorthead.on { color: var(--text-bright); }
+.mb-sorthead.on .mb-sortchev { color: var(--accent); }
 
 @media (max-width: 48rem) {
   .mb-layout { grid-template-columns: minmax(0, 1fr); }

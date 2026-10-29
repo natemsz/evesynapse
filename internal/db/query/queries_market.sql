@@ -1268,6 +1268,8 @@ ORDER BY
   CASE WHEN sqlc.arg(sort)::text = 'name' THEN t.name END,
   CASE WHEN sqlc.arg(sort)::text = 'price' THEN s.typical_sell END DESC NULLS LAST,
   CASE WHEN sqlc.arg(sort)::text = 'cheap' THEN NULLIF(s.typical_sell, 0) END ASC NULLS LAST,
+  CASE WHEN sqlc.arg(sort)::text = 'buy' THEN s.typical_buy END DESC NULLS LAST,
+  CASE WHEN sqlc.arg(sort)::text = 'buycheap' THEN NULLIF(s.typical_buy, 0) END ASC NULLS LAST,
   CASE WHEN sqlc.arg(sort)::text = 'rising' THEN s.sell_chg_7d END DESC NULLS LAST,
   CASE WHEN sqlc.arg(sort)::text = 'falling' THEN s.sell_chg_7d END ASC NULLS LAST,
   CASE WHEN sqlc.arg(sort)::text = 'volume' THEN s.avg_daily_volume_30d END DESC NULLS LAST,

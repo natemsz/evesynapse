@@ -171,8 +171,8 @@ func TestMarketGroupIconMapping(t *testing.T) {
 		{"Blueprints", 0, "blueprints"},
 		{"Skills", 0, "skills"},
 		{"Trade Goods", 0, "tradegoods"},
-		{"Ship Blueprints", 0, "blueprints"}, // child-appropriate reuse
-		{"Skill Books", 0, "skills"},        // child-appropriate reuse
+		{"Ship Blueprints", 0, "blueprints"},   // child-appropriate reuse
+		{"Skill Books", 0, "skills"},           // child-appropriate reuse
 		{"Combat Drones", 0, "drones"},         // child-appropriate reuse
 		{"Armor Rigs", 0, "rigs"},              // child-appropriate reuse
 		{"Unmapped Oddity", 999999, "generic"}, // fallback

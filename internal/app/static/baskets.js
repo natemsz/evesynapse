@@ -1,8 +1,8 @@
 // Market baskets: the list page builds and edits baskets in
-// place. The New basket button gives its spot to a builder with
-// a suggest search; picked items collect in a list with icons
-// and typical prices; Save asks for the basket's name in the
-// search bar's place, and the finished basket joins the table.
+// place. The New basket button gives its spot to a builder that
+// asks for the basket's name first; then a suggest search picks
+// the items, which collect in a list with icons and typical
+// prices, and Save posts the named basket into the table.
 // Each basket row's pencil opens the same editor under the row,
 // seeded with the basket's items, each removable, with the
 // search on hand to add more. Both editors keep the classic
@@ -279,24 +279,26 @@
             builder.hidden = true;
             newBtn.hidden = false;
             editor.reset();
-            setNaming(false);
+            setNaming(true);
             showErr(nameErr, "");
             nameInput.value = "";
           }
           newBtn.addEventListener("click", function () {
             builder.hidden = false;
             newBtn.hidden = true;
-            editor.focus();
+            setNaming(true);
           });
-          document.getElementById("mbk-cancel").addEventListener("click", closeBuilder);
-          document.getElementById("mbk-back").addEventListener("click", function () { setNaming(false); });
-          document.getElementById("mbk-to-name").addEventListener("click", function () {
-            if (!editor.items().length) {
-              editor.error("Add at least one item first.");
+          document.getElementById("mbk-name-cancel").addEventListener("click", closeBuilder);
+          document.getElementById("mbk-back").addEventListener("click", function () { setNaming(true); });
+          document.getElementById("mbk-to-items").addEventListener("click", function () {
+            if (!nameInput.value.trim()) {
+              showErr(nameErr, "Give the basket a name.");
+              nameInput.focus();
               return;
             }
-            editor.error("");
-            setNaming(true);
+            showErr(nameErr, "");
+            setNaming(false);
+            editor.focus();
           });
           document.getElementById("mbk-textlink").addEventListener("click", function (e) {
             e.preventDefault();
@@ -306,11 +308,15 @@
           document.getElementById("mbk-save").addEventListener("click", function () {
             var name = nameInput.value.trim();
             if (!name) {
+              setNaming(true);
               showErr(nameErr, "Give the basket a name.");
-              nameInput.focus();
               return;
             }
-            showErr(nameErr, "");
+            if (!editor.items().length) {
+              editor.error("Add at least one item first.");
+              return;
+            }
+            editor.error("");
             postJSON("/market/baskets/api", { name: name, region: parseInt(regionSel.value, 10), items: editor.items() })
               .then(function (data) {
                 var tbody = document.getElementById("mbk-tbody");
@@ -341,7 +347,7 @@
                 tbody.appendChild(tr);
                 closeBuilder();
               })
-              .catch(function (err) { showErr(nameErr, err.message); });
+              .catch(function (err) { editor.error(err.message); });
           });
     }
 

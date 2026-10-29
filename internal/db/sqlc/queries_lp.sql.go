@@ -241,7 +241,7 @@ WHERE v.region_id = $1
   AND ($6::double precision IS NULL OR (CASE WHEN $4::bool THEN v.isk_per_lp_buy ELSE v.isk_per_lp_sell END) <= $6::double precision)
   AND ($7::bigint IS NULL OR v.lp_cost >= $7::bigint)
   AND ($8::bigint IS NULL OR v.lp_cost <= $8::bigint)
-  AND (cardinality($9::bigint[]) = 0 OR v.type_id = ANY($9::bigint[]))
+  AND ($9::bigint[] IS NULL OR cardinality($9::bigint[]) = 0 OR v.type_id = ANY($9::bigint[]))
 ORDER BY (CASE WHEN $4::bool THEN v.isk_per_lp_buy ELSE v.isk_per_lp_sell END) DESC, v.type_id, v.corporation_id
 LIMIT $10::bigint
 `

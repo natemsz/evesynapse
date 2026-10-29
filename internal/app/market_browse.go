@@ -52,19 +52,19 @@ type marketBrowseType struct {
 
 // marketBrowseView is the browser panel.
 type marketBrowseView struct {
-	Region      int64
-	RegionName  string
-	Current     *marketBrowseGroup
-	Breadcrumbs []marketBrowseCrumb
-	Tree        []marketBrowseNode
-	Types       []marketBrowseType
-	Query       string
-	MinVolume   int64
-	Sort        string
-	GroupID     int64
-	Page        int
-	TotalPages  int
-	TotalTypes  int64
+	Region       int64
+	RegionName   string
+	Current      *marketBrowseGroup
+	Breadcrumbs  []marketBrowseCrumb
+	Tree         []marketBrowseNode
+	Types        []marketBrowseType
+	Query        string
+	MinVolume    int64
+	Sort         string
+	GroupID      int64
+	Page         int
+	TotalPages   int
+	TotalTypes   int64
 	PrevHref     string
 	NextHref     string
 	AwaitingPick bool // nothing chosen or searched yet: no item list

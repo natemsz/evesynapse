@@ -142,6 +142,7 @@ type profitView struct {
 	UnrealDir  string
 	Chart      *profitChart
 	Charts     *pfCharts
+	Donut      *pfDonut
 }
 
 func dirOf(v float64) string {
@@ -319,6 +320,7 @@ func (app *Application) buildProfitView(ctx context.Context, userID int64, owner
 	}
 	sort.SliceStable(view.Activities, func(i, j int) bool { return view.Activities[i].net > view.Activities[j].net })
 	view.HasData = len(view.Activities) > 0
+	view.Donut = buildIncomeDonut(acts)
 	view.Earned, view.EarnedDir = signedISK(earned), dirOf(earned)
 	if r, ok := byAct[actUnattributed]; ok && !view.Corp {
 		remainder = r.Income - r.Costs

@@ -22,6 +22,21 @@
 .mt-zero { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 3 3; vector-effect: non-scaling-stroke; opacity: 0.6; }
 .mt-chart-dates { display: flex; justify-content: space-between; color: var(--muted); }
 
+/* The book_depth chart set: dashed best lines over the band
+   between them, the depth strip and the spread series. */
+.mt-line-best-sell, .mt-line-best-buy { fill: none; stroke-width: 1.2; stroke-dasharray: 4 3; vector-effect: non-scaling-stroke; }
+.mt-line-best-sell { stroke: var(--accent); }
+.mt-line-best-buy { stroke: var(--gold); }
+.mt-band { fill: var(--gold); fill-opacity: 0.08; }
+.mt-swatch-best-sell { height: 2px; background: repeating-linear-gradient(90deg, var(--accent) 0 4px, transparent 4px 7px); }
+.mt-swatch-best-buy { height: 2px; background: repeating-linear-gradient(90deg, var(--gold) 0 4px, transparent 4px 7px); }
+.mt-chart svg.mt-depth { height: 84px; }
+.mt-chart svg.mt-spread { height: 56px; }
+.mt-depth-sell { fill: var(--accent); fill-opacity: 0.55; }
+.mt-depth-buy { fill: var(--gold); fill-opacity: 0.55; }
+.mt-line-spread { fill: none; stroke: var(--gold); stroke-width: 1.4; vector-effect: non-scaling-stroke; }
+.mt-swatch-spread { height: 2px; background: var(--gold); }
+
 .mt-filters { display: flex; flex-wrap: wrap; gap: 0.5rem 0.75rem; align-items: flex-end; }
 .mt-modes { display: flex; flex-wrap: wrap; gap: 0.35rem; margin: 0.5rem 0; }
 .mt-modes a {

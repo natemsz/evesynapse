@@ -15,14 +15,16 @@ import (
 
 // ---------------------------------------------------------------------------
 // Visualization preferences: one account's chart display switches,
-// stored as a JSON object in users.viz_prefs. Every switch defaults
-// on; later chart slices add their keys to the same object.
+// stored as a JSON object in users.viz_prefs. The price history
+// switches default on; book_depth defaults off. Later chart slices
+// add their keys to the same object.
 // ---------------------------------------------------------------------------
 
 type vizPrefs struct {
 	MAChannel   bool `json:"ma_channel"`
 	Wicks       bool `json:"wicks"`
 	VolumeStrip bool `json:"volume_strip"`
+	BookDepth   bool `json:"book_depth"`
 }
 
 func defaultVizPrefs() vizPrefs {
@@ -42,6 +44,7 @@ func parseVizPrefs(blob string) vizPrefs {
 		MAChannel   *bool `json:"ma_channel"`
 		Wicks       *bool `json:"wicks"`
 		VolumeStrip *bool `json:"volume_strip"`
+		BookDepth   *bool `json:"book_depth"`
 	}
 	if err := json.Unmarshal([]byte(blob), &raw); err != nil {
 		return defaultVizPrefs()
@@ -54,6 +57,9 @@ func parseVizPrefs(blob string) vizPrefs {
 	}
 	if raw.VolumeStrip != nil {
 		prefs.VolumeStrip = *raw.VolumeStrip
+	}
+	if raw.BookDepth != nil {
+		prefs.BookDepth = *raw.BookDepth
 	}
 	return prefs
 }
@@ -102,6 +108,7 @@ func (app *Application) handleSettingsVisualizationsSave(w http.ResponseWriter, 
 		MAChannel:   r.FormValue("ma_channel") == "1",
 		Wicks:       r.FormValue("wicks") == "1",
 		VolumeStrip: r.FormValue("volume_strip") == "1",
+		BookDepth:   r.FormValue("book_depth") == "1",
 	}
 	if err := app.storeVizPrefs(ctx, userID, prefs); err != nil {
 		logging.Errorf("viz: save prefs for user %d: %v", userID, err)

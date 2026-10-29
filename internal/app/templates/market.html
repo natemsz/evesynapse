@@ -159,13 +159,40 @@
     <div class="chart-legend">
       <span class="legend-item"><span class="legend-swatch mt-swatch-sell" aria-hidden="true"></span>Typical sell</span>
       <span class="legend-item"><span class="legend-swatch mt-swatch-buy" aria-hidden="true"></span>Typical buy</span>
+      {{if .Extended}}<span class="legend-item"><span class="legend-swatch mt-swatch-best-sell" aria-hidden="true"></span>Best sell</span>
+      <span class="legend-item"><span class="legend-swatch mt-swatch-best-buy" aria-hidden="true"></span>Best buy</span>{{end}}
       <span class="legend-note">{{.Days}} days · {{.Low}} to {{.High}} ISK</span>
     </div>
     <svg viewBox="0 0 {{.Width}} {{.Height}}" width="100%" role="img" aria-label="Typical sell and buy price by day, {{.First}} to {{.Last}}" preserveAspectRatio="none">
+      {{if .BandPoints}}<polygon class="mt-band" points="{{.BandPoints}}"/>{{end}}
+      {{if .BestSellPoints}}<polyline class="mt-line-best-sell" points="{{.BestSellPoints}}"/>{{end}}
+      {{if .BestBuyPoints}}<polyline class="mt-line-best-buy" points="{{.BestBuyPoints}}"/>{{end}}
       {{if .SellPoints}}<polyline class="mt-line-sell" points="{{.SellPoints}}"/>{{end}}
       {{if .BuyPoints}}<polyline class="mt-line-buy" points="{{.BuyPoints}}"/>{{end}}
     </svg>
     <div class="mt-chart-dates"><small>{{.First}}</small><small>{{.Last}}</small></div>
+    {{if .Extended}}
+    {{if .DepthBars}}
+    <div class="chart-legend viz-strip-key">
+      <span class="legend-item"><span class="legend-swatch mt-swatch-sell" aria-hidden="true"></span>Sell orders</span>
+      <span class="legend-item"><span class="legend-swatch mt-swatch-buy" aria-hidden="true"></span>Buy orders</span>
+      <span class="legend-note">Orders per day, up to {{.DepthMax}}</span>
+    </div>
+    <svg class="mt-depth" viewBox="0 0 {{.DepthWidth}} {{.DepthHeight}}" width="100%" role="img" aria-label="Sell and buy orders per day, {{.First}} to {{.Last}}" preserveAspectRatio="none">
+      {{range .DepthBars}}<rect class="mt-depth-{{.Side}}" x="{{.X}}" y="{{.Y}}" width="{{.W}}" height="{{.H}}"><title>{{.Title}}</title></rect>{{end}}
+    </svg>
+    {{end}}
+    {{if .SpreadPoints}}
+    <div class="chart-legend viz-strip-key">
+      <span class="legend-item"><span class="legend-swatch mt-swatch-spread" aria-hidden="true"></span>Spread, typical sell over typical buy</span>
+      <span class="legend-note">{{.SpreadLow}} to {{.SpreadHigh}}</span>
+    </div>
+    <svg class="mt-spread" viewBox="0 0 {{.SpreadWidth}} {{.SpreadHeight}}" width="100%" role="img" aria-label="Spread percent by day, {{.First}} to {{.Last}}" preserveAspectRatio="none">
+      <polyline class="mt-line-spread" points="{{.SpreadPoints}}"/>
+    </svg>
+    <div class="mt-chart-dates"><small>{{.First}}</small><small>{{.Last}}</small></div>
+    {{end}}
+    {{end}}
   </div>
   {{end}}
   {{if .Changes}}

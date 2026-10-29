@@ -632,11 +632,20 @@ func (app *Application) refreshOrderHealth(ctx context.Context, characters []db.
 	groups := make(map[marketKey][]orderRef)
 	openByChar := make(map[int64]map[int64]bool)
 	allOpenByChar := make(map[int64]map[int64]esi.CharOrder)
+	ownOrders := make(map[int64][]int64) // user -> every open order id their characters hold
 	for _, ch := range characters {
+		orders, ok := app.loadOrdersSnapshot(ctx, ch.CharacterID)
+		if ok {
+			// The owner's orders are never competition, including a
+			// parked character's: its snapshot joins the exclusion
+			// set even though its own verdicts stand down.
+			for _, o := range orders {
+				ownOrders[ch.UserID] = append(ownOrders[ch.UserID], o.OrderID)
+			}
+		}
 		if !app.characterMaySync(ctx, ch) {
 			continue // parked characters' orders are stale news, not alerts
 		}
-		orders, ok := app.loadOrdersSnapshot(ctx, ch.CharacterID)
 		if !ok {
 			// No orders snapshot yet: drop any stale health so
 			// the pages never show yesterday's verdict.
@@ -649,10 +658,14 @@ func (app *Application) refreshOrderHealth(ctx context.Context, characters []db.
 		allOpen := make(map[int64]esi.CharOrder)
 		for _, o := range orders {
 			allOpen[o.OrderID] = o
-			if o.IsBuyOrder || o.VolumeRemain <= 0 {
+			if o.VolumeRemain <= 0 {
 				continue
 			}
-			open[o.OrderID] = true
+			// Both sides join the book reads (beaten orders, schema 105);
+			// only sells carry an order-health verdict.
+			if !o.IsBuyOrder {
+				open[o.OrderID] = true
+			}
 			k := marketKey{RegionID: o.RegionID, TypeID: o.TypeID}
 			groups[k] = append(groups[k], orderRef{char: ch, order: o})
 		}
@@ -672,6 +685,7 @@ func (app *Application) refreshOrderHealth(ctx context.Context, characters []db.
 	}
 	prevBeaten := make(map[lifecycleKey]int64)
 	prevOutbid := make(map[lifecycleKey]int64)
+	prevBook := make(map[lifecycleKey]db.ListOrderLifecycleStatesRow)
 	// What the ledger already holds for these orders, in one read; an
 	// order with no row (or an unreadable ledger) starts from zero.
 	var lookup db.ListOrderLifecycleStatesParams
@@ -695,6 +709,7 @@ func (app *Application) refreshOrderHealth(ctx context.Context, characters []db.
 			}
 			prevBeaten[key] = row.BeatenNow
 			prevOutbid[key] = row.OutbidEvents
+			prevBook[key] = row
 		}
 	}
 	upsert := db.UpsertOrderLifecyclesParams{SeenAt: lifecycleNow}
@@ -735,6 +750,20 @@ func (app *Application) refreshOrderHealth(ctx context.Context, characters []db.
 		return keys[i].TypeID < keys[j].TypeID
 	})
 
+	bctx := &beatenContext{app: app}
+	ownSets := make(map[int64]map[int64]bool)
+	ownSet := func(userID int64) map[int64]bool {
+		if s, ok := ownSets[userID]; ok {
+			return s
+		}
+		s := make(map[int64]bool, len(ownOrders[userID]))
+		for _, id := range ownOrders[userID] {
+			s[id] = true
+		}
+		ownSets[userID] = s
+		return s
+	}
+
 	books := 0
 	for _, key := range keys {
 		if ctx.Err() != nil {
@@ -747,7 +776,7 @@ func (app *Application) refreshOrderHealth(ctx context.Context, characters []db.
 		if books >= maxBookFetchesPerCycle || !allowance.take() {
 			break
 		}
-		sells, _, _, err := app.fetchOrderBookFresh(ctx, key, key.RegionID, key.TypeID)
+		sells, buys, _, err := app.fetchOrderBookFresh(ctx, key, key.RegionID, key.TypeID)
 		if err != nil {
 			if errors.Is(err, esi.ErrErrorLimit) {
 				logging.Warnf("worker: order health: ESI error limit hit reading book %s; backing off until next cycle", kind)
@@ -772,29 +801,35 @@ func (app *Application) refreshOrderHealth(ctx context.Context, characters []db.
 		}
 		now := time.Now().UTC()
 		for _, ref := range groups[key] {
-			status, stationBest, regionBest := computeOrderHealth(ref.order, sells)
-			if err := app.queries.UpsertOrderHealth(ctx, db.UpsertOrderHealthParams{
-				CharacterID: ref.char.CharacterID,
-				OrderID:     ref.order.OrderID,
-				TypeID:      ref.order.TypeID,
-				RegionID:    ref.order.RegionID,
-				LocationID:  ref.order.LocationID,
-				MyPrice:     ref.order.Price,
-				StationBest: stationBest,
-				RegionBest:  regionBest,
-				Status:      status,
-				ComputedAt:  now,
-			}); err != nil {
-				logging.Errorf("worker: order health: store order %d: %v", ref.order.OrderID, err)
+			if !ref.order.IsBuyOrder {
+				status, stationBest, regionBest := computeOrderHealth(ref.order, sells)
+				if err := app.queries.UpsertOrderHealth(ctx, db.UpsertOrderHealthParams{
+					CharacterID: ref.char.CharacterID,
+					OrderID:     ref.order.OrderID,
+					TypeID:      ref.order.TypeID,
+					RegionID:    ref.order.RegionID,
+					LocationID:  ref.order.LocationID,
+					MyPrice:     ref.order.Price,
+					StationBest: stationBest,
+					RegionBest:  regionBest,
+					Status:      status,
+					ComputedAt:  now,
+				}); err != nil {
+					logging.Errorf("worker: order health: store order %d: %v", ref.order.OrderID, err)
+				}
 			}
-			// Beaten tracking: only a station-level undercut
-			// counts as beaten -- someone cheaper at the order's
-			// own station. Region-only cheapness
-			// (undercut_region, best_region_cheaper) does not.
-			// Buy orders carry no health verdict, so they are
-			// never marked beaten.
+			// Beaten tracking (schema 105): only a station-level
+			// loss counts -- another player cheaper at a sell's own
+			// station, or bidding more at a buy's. Region-only
+			// cheapness does not, and the owner's own characters'
+			// orders are never competition.
+			book := sells
+			if ref.order.IsBuyOrder {
+				book = buys
+			}
+			p, isBeaten := bctx.verdict(ctx, ref.char.CharacterID, ref.order, book, ownSet(ref.char.UserID))
 			beaten := int64(0)
-			if status == "undercut_station" {
+			if isBeaten {
 				beaten = 1
 			}
 			lkey := lifecycleKey{characterID: ref.char.CharacterID, orderID: ref.order.OrderID}
@@ -803,17 +838,30 @@ func (app *Application) refreshOrderHealth(ctx context.Context, characters []db.
 			if prevB == 0 && beaten == 1 {
 				outbid++
 			}
-			if beaten != prevB || outbid != prevO {
-				if err := app.queries.UpdateOrderLifecycleBeaten(ctx, db.UpdateOrderLifecycleBeatenParams{
-					BeatenNow:    beaten,
-					OutbidEvents: outbid,
-					CharacterID:  ref.char.CharacterID,
-					OrderID:      ref.order.OrderID,
+			p.Beaten, p.OutbidEvents, p.CheckedAt = beaten, outbid, now
+			if prev, seen := prevBook[lkey]; seen && prev.BeatenNow == p.Beaten && prev.OutbidEvents == p.OutbidEvents &&
+				prev.BeatingPrice == p.BeatingPrice && prev.BeatingVolume == p.BeatingVolume &&
+				prev.SuggestedPrice == p.SuggestedPrice && prev.UnitCost == p.UnitCost &&
+				prev.TaxRate == p.TaxRate && prev.MarginPct == p.MarginPct {
+				// The verdict stands: only its freshness stamp moves.
+				if err := app.queries.TouchOrderLifecycleChecked(ctx, db.TouchOrderLifecycleCheckedParams{
+					CharacterID: ref.char.CharacterID, OrderID: ref.order.OrderID, CheckedAt: now,
 				}); err != nil {
-					logging.Errorf("worker: order lifecycle: beaten %d/%d: %v", ref.char.CharacterID, ref.order.OrderID, err)
-				} else {
-					prevBeaten[lkey] = beaten
-					prevOutbid[lkey] = outbid
+					logging.Errorf("worker: order lifecycle: touch %d/%d: %v", ref.char.CharacterID, ref.order.OrderID, err)
+				}
+				continue
+			}
+			if err := app.queries.UpdateOrderLifecycleBook(ctx, p); err != nil {
+				logging.Errorf("worker: order lifecycle: beaten %d/%d: %v", ref.char.CharacterID, ref.order.OrderID, err)
+			} else {
+				prevBeaten[lkey] = beaten
+				prevOutbid[lkey] = outbid
+				prevBook[lkey] = db.ListOrderLifecycleStatesRow{
+					CharacterID: ref.char.CharacterID, OrderID: ref.order.OrderID,
+					BeatenNow: p.Beaten, OutbidEvents: p.OutbidEvents,
+					BeatingPrice: p.BeatingPrice, BeatingVolume: p.BeatingVolume,
+					SuggestedPrice: p.SuggestedPrice, UnitCost: p.UnitCost,
+					TaxRate: p.TaxRate, MarginPct: p.MarginPct,
 				}
 			}
 		}

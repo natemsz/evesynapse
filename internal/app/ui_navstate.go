@@ -30,6 +30,7 @@ func navStateMiddleware(next http.Handler) http.Handler {
 			}
 		}
 		ctx := context.WithValue(r.Context(), navStateKey{}, state)
+		ctx = withHiddenNotices(ctx, r)
 		if id, err := strconv.ParseInt(r.URL.Query().Get("character"), 10, 64); err == nil && id > 0 {
 			ctx = context.WithValue(ctx, navCharacterKey{}, id)
 		}

@@ -946,6 +946,39 @@ func (q *Queries) ListAllCorporationIDs(ctx context.Context) ([]int64, error) {
 	return items, nil
 }
 
+const listCharacterCorporations = `-- name: ListCharacterCorporations :many
+SELECT character_id, corporation_id FROM character_corporations
+WHERE character_id = ANY($1::bigint[])
+`
+
+type ListCharacterCorporationsRow struct {
+	CharacterID   int64 `json:"character_id"`
+	CorporationID int64 `json:"corporation_id"`
+}
+
+func (q *Queries) ListCharacterCorporations(ctx context.Context, characterIds []int64) ([]ListCharacterCorporationsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listCharacterCorporations, pq.Array(characterIds))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListCharacterCorporationsRow
+	for rows.Next() {
+		var i ListCharacterCorporationsRow
+		if err := rows.Scan(&i.CharacterID, &i.CorporationID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listCharactersByUser = `-- name: ListCharactersByUser :many
 SELECT character_id, user_id, name, access_token, refresh_token, token_expiry, scopes, cached_until, created_at, updated_at, owner_hash, tags, link_state, link_state_at FROM characters
 WHERE user_id = $1
@@ -980,6 +1013,40 @@ func (q *Queries) ListCharactersByUser(ctx context.Context, userID int64) ([]Cha
 			return nil, err
 		}
 		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listCharactersWithSnapshots = `-- name: ListCharactersWithSnapshots :many
+SELECT DISTINCT character_id FROM character_snapshots
+WHERE character_id = ANY($1::bigint[])
+  AND kind = ANY($2::text[])
+`
+
+type ListCharactersWithSnapshotsParams struct {
+	CharacterIds []int64  `json:"character_ids"`
+	Kinds        []string `json:"kinds"`
+}
+
+func (q *Queries) ListCharactersWithSnapshots(ctx context.Context, arg ListCharactersWithSnapshotsParams) ([]int64, error) {
+	rows, err := q.db.QueryContext(ctx, listCharactersWithSnapshots, pq.Array(arg.CharacterIds), pq.Array(arg.Kinds))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []int64
+	for rows.Next() {
+		var character_id int64
+		if err := rows.Scan(&character_id); err != nil {
+			return nil, err
+		}
+		items = append(items, character_id)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err

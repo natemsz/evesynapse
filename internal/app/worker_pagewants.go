@@ -114,7 +114,7 @@ func pageScopeExemptPath(p string) bool {
 	return strings.HasPrefix(p, "/static/") ||
 		strings.Contains(p, "fragment") ||
 		strings.HasSuffix(p, "/page-status") ||
-		p == "/healthz"
+		p == "/healthz" || p == statusPath
 }
 
 // pageWantScopeMiddleware stamps every signed-in page GET with

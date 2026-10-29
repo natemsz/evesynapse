@@ -1,0 +1,85 @@
+{{define "title"}}Market Trends{{end}}
+{{define "pagetitle"}}<h1><span class="gt">Market Trends</span></h1>{{end}}
+{{define "pagetabs"}}{{template "sectiontabs" .}}{{end}}
+{{define "content"}}
+
+{{if .Error}}<p class="err">{{.Error}}</p>{{end}}
+
+{{with .MarketTrends}}
+<p><small>Items whose typical sell price swings the most, moved the most, or changed sharply in a hub region. Figures come from each sweep of the whole regional book.</small></p>
+
+<form method="get" action="/market/trends/" class="mt-filters">
+  <input type="hidden" name="mode" value="{{.Mode}}">
+  <input type="hidden" name="period" value="{{.Period}}">
+  <label><small>Region</small>
+    <select name="region">
+      {{range .Regions}}<option value="{{.ID}}"{{if .Active}} selected{{end}}>{{.Name}}</option>{{end}}
+    </select>
+  </label>
+  <label><small>At least traded per day</small>
+    <input type="number" name="minvol" min="0" step="1" value="{{.MinVolume}}" size="6">
+  </label>
+  <label><small>At least sell orders</small>
+    <input type="number" name="minorders" min="1" step="1" value="{{.MinOrders}}" size="4">
+  </label>
+  <button class="btn" type="submit">Show</button>
+</form>
+
+<nav class="mt-modes" aria-label="Ranking">{{range .Modes}}<a href="{{.Href}}"{{if .Active}} class="active" aria-current="true"{{end}}>{{.Label}}</a>{{end}}</nav>
+{{if ne .Mode "volatile"}}<nav class="mt-modes" aria-label="Period">{{range .Periods}}<a href="{{.Href}}"{{if .Active}} class="active" aria-current="true"{{end}}>{{.Label}}</a>{{end}}</nav>{{end}}
+
+{{if eq .Mode "changes"}}<nav class="mt-modes" aria-label="Kind of change">{{range .Kinds}}<a href="{{.Href}}"{{if .Active}} class="active" aria-current="true"{{end}}>{{.Label}}</a>{{end}}</nav>{{end}}
+
+{{if eq .Mode "changes"}}
+{{if .Changes}}
+<div class="tw">
+<table>
+  <thead><tr><th>Item</th><th>What changed</th><th>Day</th><th>Seen</th></tr></thead>
+  <tbody>
+  {{range .Changes}}
+    <tr>
+      <td><a href="/market/?type={{.TypeID}}&amp;region={{$.MarketTrends.RegionID}}">{{.Name}}</a></td>
+      <td><span class="mt-chg {{.Dir}}">{{.Label}}</span><br><small class="mt-reqs">{{.Detail}}</small></td>
+      <td>{{.Day}}</td>
+      <td><small>{{.Detected}}</small></td>
+    </tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+<p><small>What each sweep finds against the day before, kept for 30 days. A price move counts at 10% or more, and at three times the item's usual daily swing. Only books with at least five sell orders and recorded trade count. Watch an item to be told when it changes.</small></p>
+{{else}}
+<p>Nothing in {{.RegionName}} changed enough to list in that span.</p>
+{{end}}
+{{else if .HasData}}
+<p><small>{{.RegionName}} · updated {{.Age}} · up to 100 items.</small></p>
+{{if .Rows}}
+<div class="tw">
+<table>
+  <thead><tr><th>Item</th><th class="mt-num">Typical sell</th><th class="mt-num">Typical buy</th><th class="mt-num">1 day</th><th class="mt-num">7 days</th><th class="mt-num">30 days</th><th class="mt-num">Daily swing</th><th class="mt-num">Sell orders</th><th class="mt-num">Traded per day</th></tr></thead>
+  <tbody>
+  {{range .Rows}}
+    <tr>
+      <td><a href="/market/?type={{.TypeID}}&amp;region={{$.MarketTrends.RegionID}}">{{.Name}}</a></td>
+      <td class="mt-num">{{.TypicalSell}}</td>
+      <td class="mt-num">{{if .TypicalBuy}}{{.TypicalBuy}}{{else}}—{{end}}</td>
+      <td class="mt-num">{{if .Chg1.Text}}<span class="mt-chg {{.Chg1.Dir}}">{{.Chg1.Text}}</span>{{else}}—{{end}}</td>
+      <td class="mt-num">{{if .Chg7.Text}}<span class="mt-chg {{.Chg7.Dir}}">{{.Chg7.Text}}</span>{{else}}—{{end}}</td>
+      <td class="mt-num">{{if .Chg30.Text}}<span class="mt-chg {{.Chg30.Dir}}">{{.Chg30.Text}}</span>{{else}}—{{end}}</td>
+      <td class="mt-num">{{if .Volatility}}{{.Volatility}}{{else}}—{{end}}</td>
+      <td class="mt-num">{{.Orders}}</td>
+      <td class="mt-num">{{.TradedDay}}</td>
+    </tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+<p><small>Prices in ISK. Daily swing is how far the typical sell moves from one day to the next, on average over the last 30 days. A change shows only when a stored day sits in its window.</small></p>
+{{else}}
+<p>Nothing in {{.RegionName}} clears those filters. Try a lower traded-per-day or order count.</p>
+{{end}}
+{{else}}
+<p>Still building price history for {{.RegionName}}. Changes appear once a day of sweeps is stored, swings after a week.</p>
+{{end}}
+{{end}}
+{{end}}

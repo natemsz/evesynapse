@@ -183,6 +183,15 @@ WHERE character_id = $1;
 -- name: GetCharacterCorporation :one
 SELECT * FROM character_corporations
 WHERE character_id = $1;
+
+-- name: ListCharacterCorporations :many
+SELECT character_id, corporation_id FROM character_corporations
+WHERE character_id = ANY(sqlc.arg(character_ids)::bigint[]);
+
+-- name: ListCharactersWithSnapshots :many
+SELECT DISTINCT character_id FROM character_snapshots
+WHERE character_id = ANY(sqlc.arg(character_ids)::bigint[])
+  AND kind = ANY(sqlc.arg(kinds)::text[]);
 -- name: UpsertCharacterCorporation :exec
 INSERT INTO character_corporations (character_id, corporation_id, updated_at)
 VALUES ($1, $2, $3)

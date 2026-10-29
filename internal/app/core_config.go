@@ -81,6 +81,15 @@ type Config struct {
 	discordClientID, discordClientSecret string
 	discordBotToken                      string
 
+	// The market API's own host (MARKET_API_HOST, e.g. api.example.com):
+	// requests for it reach /api/ only, never the site's pages or
+	// sessions. "" serves the API on the site's host alone.
+	marketAPIHost string
+	// The public status page's origin (STATUS_PAGE_ORIGIN, e.g.
+	// https://status.example.com): the one origin the health answers
+	// allow cross-origin reads from. "" allows none.
+	statusPageOrigin string
+
 	addr                     string         // listen address
 	databaseURL              string         // Postgres connection URL (DATABASE_URL)
 	eveClientID              string         // EVE SSO application client ID
@@ -130,6 +139,7 @@ type Config struct {
 	metaAIKeyWrapped           string
 	signUp                     signUpPolicy // EVE_ALLOWED_*_IDS: who may create an account (empty = anyone)
 	esiContact                 string       // ESI_CONTACT: how CCP can reach the operator, sent in the User-Agent
+	statusOrigin               string       // STATUS_PAGE_ORIGIN: the status page's origin, the one site a browser may read /status.json from (core_status.go)
 	logLevel                   string       // LOG_LEVEL: debug, info (default), warn or error
 	logFormat                  string       // LOG_FORMAT: text (default) or json
 
@@ -383,6 +393,8 @@ func LoadConfig() (Config, error) {
 		discordClientID:            os.Getenv("DISCORD_CLIENT_ID"),
 		discordClientSecret:        os.Getenv("DISCORD_CLIENT_SECRET"),
 		discordBotToken:            os.Getenv("DISCORD_BOT_TOKEN"),
+		marketAPIHost:              strings.ToLower(strings.TrimSpace(os.Getenv("MARKET_API_HOST"))),
+		statusPageOrigin:           strings.TrimRight(strings.TrimSpace(os.Getenv("STATUS_PAGE_ORIGIN")), "/"),
 		addr:                       getenvDefault("ADDR", ":8080"),
 		databaseURL:                getenvDefault("DATABASE_URL", "postgres://evesynapse@localhost:5432/evesynapse?sslmode=disable"),
 		eveClientID:                os.Getenv("EVE_CLIENT_ID"),
@@ -422,6 +434,7 @@ func LoadConfig() (Config, error) {
 		metaAIKeyWrapped:           os.Getenv("MODEL_API_KEY_WRAPPED"),
 		signUp:                     loadSignUpPolicy(os.Getenv),
 		esiContact:                 os.Getenv("ESI_CONTACT"),
+		statusOrigin:               parseStatusOrigin(os.Getenv("STATUS_PAGE_ORIGIN")),
 		cloudflareAccountID:        strings.TrimSpace(os.Getenv("CLOUDFLARE_ACCOUNT_ID")),
 		cloudflareAuthToken:        strings.TrimSpace(os.Getenv("CLOUDFLARE_AUTH_TOKEN")),
 		metaAIKey:                  strings.TrimSpace(os.Getenv("MODEL_API_KEY")),

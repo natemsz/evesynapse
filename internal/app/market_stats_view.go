@@ -20,12 +20,14 @@ import (
 type marketRegionStatRow struct {
 	RegionID    int64
 	RegionName  string
-	Active      bool   // the region the page is currently showing
-	HasData     bool   // a stored row speaks for this type in this region
-	TypicalSell string // esi.FormatISK, "" when no sell orders
-	TypicalBuy  string // esi.FormatISK, "" when no buy orders
-	Age         string // "12 minutes ago", "" when HasData is false
-	Source      string // fallbackSourceLabel on fallback rows, "Global PLEX market" on global-book rows, "" on our own
+	Active      bool        // the region the page is currently showing
+	HasData     bool        // a stored row speaks for this type in this region
+	TypicalSell string      // esi.FormatISK, "" when no sell orders
+	TypicalBuy  string      // esi.FormatISK, "" when no buy orders
+	Age         string      // "12 minutes ago", "" when HasData is false
+	Source      string      // fallbackSourceLabel on fallback rows, "Global PLEX market" on global-book rows, "" on our own
+	Hub         bool        // a hub region (its market page exists); the all-regions strip also lists others
+	Chg7        trendFigure // 7-day change of the typical sell, from the stat pack (own rows only)
 }
 
 // attachRegionStats fills an item view's hub-regions strip from
@@ -59,6 +61,7 @@ func (app *Application) attachRegionStats(ctx context.Context, item *marketItem)
 		row := marketRegionStatRow{
 			RegionID:   region.ID,
 			RegionName: region.Name,
+			Hub:        true,
 			Active:     region.ID == item.RegionID,
 		}
 		ownRow := ownByRegion[region.ID]
@@ -85,6 +88,9 @@ func (app *Application) attachRegionStats(ctx context.Context, item *marketItem)
 				row.Source = fallbackSourceLabel
 			} else if fromGlobal {
 				row.Source = "Global PLEX market"
+			}
+			if !res.Fallback {
+				row.Chg7 = newTrendFigure(ownRow.SellChg7d)
 			}
 		}
 		item.RegionStats = append(item.RegionStats, row)

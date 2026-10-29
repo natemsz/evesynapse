@@ -60,6 +60,7 @@
 
 <main class="ld-main">
 <div class="ld-wrap">
+  {{with .Banners}}{{template "noticebanners" .}}{{end}}
   {{if .Error}}<p class="ld-error">{{.Error}}</p>{{end}}
   <div class="ld-hero">
     <h1>Everything your fleet needs, in <span class="ld-amp">one connected system.</span></h1>
@@ -304,6 +305,7 @@ w  <p class="ld-legal">Developed in Seattle, WA by <a href="https://natems.dev" 
   </div>
 </div>
 <script src="/static/landing.js?v={{.AssetVersion}}" defer></script>
+{{if .Banners}}<script src="/static/notices.js?v={{.AssetVersion}}" defer></script>{{end}}
 </body>
 </html>
 {{end}}

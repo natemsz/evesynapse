@@ -3,5 +3,6 @@
   <a class="an-tab" href="/admin/#accounts">Accounts</a>
   <a class="an-tab" href="/admin/#access">Access</a>
   <a class="an-tab{{if eq .AdminTab "sync"}} is-active{{end}}" href="/admin/sync/">Sync</a>
+  <a class="an-tab{{if eq .AdminTab "notices"}} is-active{{end}}" href="/admin/notices/">Notices</a>
   {{with .Admin}}{{with .Analytics}}<span class="an-range">{{range .Links}}{{if .Active}}<a class="is-active" href="/admin/?range={{.Key}}">{{.Label}}</a>{{else}}<a href="/admin/?range={{.Key}}">{{.Label}}</a>{{end}}{{end}}</span>{{end}}{{end}}
 </nav>{{end}}

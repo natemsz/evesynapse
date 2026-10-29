@@ -655,6 +655,11 @@ func (c *cycleState) refreshCharacter(ctx context.Context, ch db.Character) bool
 	// the snapshots just stored. Pure local reads — no fetch
 	// budget spent, no extra ESI calls.
 	app.sampleWalletHistory(ctx, ch, time.Now())
+
+	// Profit ledger (schema 104): fold the journal, transaction and
+	// job snapshots just stored into the durable ledger and its
+	// attribution, after the day's net worth sample it reads.
+	app.refreshProfitLedger(ctx, ch, time.Now())
 	return true
 }
 
@@ -747,6 +752,14 @@ func (c *cycleState) refreshPublicData(ctx context.Context, characters []db.Char
 	})
 	clock.mark("region sweep", time.Now())
 
+	// LP stores (schema 102): the NPC loyalty stores on a daily
+	// gate and a fetch lane of their own; their offer values are
+	// rewritten from the stat pack when a store changes (and by
+	// each region's sweep completion above).
+	c.pass("refreshing LP stores", func() (int, bool) {
+		return app.refreshLPStores(ctx)
+	})
+
 	// Public contracts (schema 055): the region list sweeps and
 	// their item/bid/probe warming, on the routes' own cache
 	// cadence and a fetch lane of their own, so the contract
@@ -761,6 +774,15 @@ func (c *cycleState) refreshPublicData(ctx context.Context, characters []db.Char
 	// Abyssal scoring (schema 057): rolls become scores and
 	// stored estimates, so the appraisal pass below can
 	// price mutated lines from them in the same cycle.
+	// Market API usage (schema 108): counted in memory per request,
+	// stored here once a cycle.
+	app.flushMarketAPIUsage(ctx)
+	// Abyssal wants (schema 108): items API callers asked to have
+	// priced, read on their own small lane ahead of scoring so they
+	// price in the same cycle.
+	c.pass("reading requested abyssal items", func() (int, bool) {
+		return app.refreshAbyssalWants(ctx)
+	})
 	c.pass("scoring abyssal items", func() (int, bool) {
 		return app.scoreAbyssalItems(ctx), false
 	})

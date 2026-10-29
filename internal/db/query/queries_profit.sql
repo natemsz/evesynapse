@@ -197,3 +197,19 @@ SELECT COALESCE(SUM(CASE WHEN ref_type = 'transaction_tax' THEN -amount ELSE 0 E
 FROM ledger_journal
 WHERE owner_kind = sqlc.arg(owner_kind) AND owner_id = ANY(sqlc.arg(owner_ids)::bigint[])
   AND at >= sqlc.arg(from_at)::timestamptz AND activity = 'trading';
+
+-- name: ListPositionCostsForTypes :many
+-- Open position cost per unit for a character's types: the basis a
+-- beaten sell order's margin is measured against.
+SELECT type_id, quantity, cost FROM trade_positions
+WHERE owner_kind = 'char' AND owner_id = $1 AND type_id = ANY(sqlc.arg(type_ids)::bigint[]) AND quantity > 0;
+
+-- name: GetObservedSalesTaxRate :one
+-- A character's effective sales tax rate over a span: transaction
+-- tax paid over market sell revenue in the ledger.
+SELECT COALESCE((SELECT SUM(-j.amount) FROM ledger_journal j
+                 WHERE j.owner_kind = 'char' AND j.owner_id = sqlc.arg(character_id)::bigint
+                   AND j.ref_type = 'transaction_tax' AND j.at >= sqlc.arg(since)::timestamptz), 0)::float8 AS tax,
+       COALESCE((SELECT SUM(t.quantity * t.unit_price) FROM ledger_txns t
+                 WHERE t.owner_kind = 'char' AND t.owner_id = sqlc.arg(character_id)::bigint
+                   AND NOT t.is_buy AND t.at >= sqlc.arg(since)::timestamptz), 0)::float8 AS revenue;

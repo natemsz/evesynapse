@@ -624,7 +624,7 @@ func (q *Queries) GetMarketTypePrice(ctx context.Context, arg GetMarketTypePrice
 }
 
 const getOrderLifecycle = `-- name: GetOrderLifecycle :one
-SELECT id, character_id, order_id, type_id, location_id, region_id, is_buy_order, listed_price, volume_total, volume_remain_last, first_seen_at, last_seen_at, closed_at, close_kind, outbid_events, beaten_now
+SELECT id, character_id, order_id, type_id, location_id, region_id, is_buy_order, listed_price, volume_total, volume_remain_last, first_seen_at, last_seen_at, closed_at, close_kind, outbid_events, beaten_now, beaten_at, beating_price, beating_volume, suggested_price, unit_cost, margin_pct, tax_rate, beaten_checked
 FROM order_lifecycle
 WHERE character_id = $1 AND order_id = $2
 `
@@ -660,6 +660,14 @@ func (q *Queries) GetOrderLifecycle(ctx context.Context, arg GetOrderLifecyclePa
 		&i.CloseKind,
 		&i.OutbidEvents,
 		&i.BeatenNow,
+		&i.BeatenAt,
+		&i.BeatingPrice,
+		&i.BeatingVolume,
+		&i.SuggestedPrice,
+		&i.UnitCost,
+		&i.MarginPct,
+		&i.TaxRate,
+		&i.BeatenChecked,
 	)
 	return i, err
 }
@@ -1098,6 +1106,90 @@ func (q *Queries) ListAllianceDrains(ctx context.Context, arg ListAllianceDrains
 	return items, nil
 }
 
+const listBeatenOrders = `-- name: ListBeatenOrders :many
+SELECT l.character_id, c.name AS character_name, l.order_id, l.type_id, l.location_id, l.region_id,
+       l.is_buy_order, l.listed_price, l.volume_total, l.volume_remain_last, l.beaten_at, l.outbid_events,
+       l.beating_price, l.beating_volume, l.suggested_price, l.unit_cost, l.margin_pct, l.tax_rate, l.beaten_checked
+FROM order_lifecycle l
+JOIN characters c ON c.character_id = l.character_id
+WHERE c.user_id = $1 AND l.beaten_now = 1 AND l.closed_at IS NULL
+  AND ($2::bigint = 0 OR l.character_id = $2::bigint)
+ORDER BY l.beaten_at DESC NULLS LAST, l.order_id
+LIMIT 100
+`
+
+type ListBeatenOrdersParams struct {
+	UserID      int64 `json:"user_id"`
+	CharacterID int64 `json:"character_id"`
+}
+
+type ListBeatenOrdersRow struct {
+	CharacterID      int64           `json:"character_id"`
+	CharacterName    string          `json:"character_name"`
+	OrderID          int64           `json:"order_id"`
+	TypeID           int64           `json:"type_id"`
+	LocationID       int64           `json:"location_id"`
+	RegionID         int64           `json:"region_id"`
+	IsBuyOrder       int64           `json:"is_buy_order"`
+	ListedPrice      float64         `json:"listed_price"`
+	VolumeTotal      int64           `json:"volume_total"`
+	VolumeRemainLast int64           `json:"volume_remain_last"`
+	BeatenAt         sql.NullTime    `json:"beaten_at"`
+	OutbidEvents     int64           `json:"outbid_events"`
+	BeatingPrice     float64         `json:"beating_price"`
+	BeatingVolume    int64           `json:"beating_volume"`
+	SuggestedPrice   float64         `json:"suggested_price"`
+	UnitCost         float64         `json:"unit_cost"`
+	MarginPct        sql.NullFloat64 `json:"margin_pct"`
+	TaxRate          float64         `json:"tax_rate"`
+	BeatenChecked    sql.NullTime    `json:"beaten_checked"`
+}
+
+// The account's open orders beaten at their own station, most
+// recently beaten first: the My Orders page's beaten section.
+func (q *Queries) ListBeatenOrders(ctx context.Context, arg ListBeatenOrdersParams) ([]ListBeatenOrdersRow, error) {
+	rows, err := q.db.QueryContext(ctx, listBeatenOrders, arg.UserID, arg.CharacterID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListBeatenOrdersRow
+	for rows.Next() {
+		var i ListBeatenOrdersRow
+		if err := rows.Scan(
+			&i.CharacterID,
+			&i.CharacterName,
+			&i.OrderID,
+			&i.TypeID,
+			&i.LocationID,
+			&i.RegionID,
+			&i.IsBuyOrder,
+			&i.ListedPrice,
+			&i.VolumeTotal,
+			&i.VolumeRemainLast,
+			&i.BeatenAt,
+			&i.OutbidEvents,
+			&i.BeatingPrice,
+			&i.BeatingVolume,
+			&i.SuggestedPrice,
+			&i.UnitCost,
+			&i.MarginPct,
+			&i.TaxRate,
+			&i.BeatenChecked,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listBestBuyStations = `-- name: ListBestBuyStations :many
 SELECT DISTINCT ON (type_id) type_id, location_id, best_buy
 FROM market_station_stats
@@ -1187,7 +1279,7 @@ func (q *Queries) ListCheapestSellStations(ctx context.Context, arg ListCheapest
 }
 
 const listClosedOrderLifecycleByCharacter = `-- name: ListClosedOrderLifecycleByCharacter :many
-SELECT id, character_id, order_id, type_id, location_id, region_id, is_buy_order, listed_price, volume_total, volume_remain_last, first_seen_at, last_seen_at, closed_at, close_kind, outbid_events, beaten_now
+SELECT id, character_id, order_id, type_id, location_id, region_id, is_buy_order, listed_price, volume_total, volume_remain_last, first_seen_at, last_seen_at, closed_at, close_kind, outbid_events, beaten_now, beaten_at, beating_price, beating_volume, suggested_price, unit_cost, margin_pct, tax_rate, beaten_checked
 FROM order_lifecycle
 WHERE character_id = $1 AND closed_at IS NOT NULL
 ORDER BY closed_at DESC, order_id DESC
@@ -1225,6 +1317,14 @@ func (q *Queries) ListClosedOrderLifecycleByCharacter(ctx context.Context, arg L
 			&i.CloseKind,
 			&i.OutbidEvents,
 			&i.BeatenNow,
+			&i.BeatenAt,
+			&i.BeatingPrice,
+			&i.BeatingVolume,
+			&i.SuggestedPrice,
+			&i.UnitCost,
+			&i.MarginPct,
+			&i.TaxRate,
+			&i.BeatenChecked,
 		); err != nil {
 			return nil, err
 		}
@@ -2636,7 +2736,7 @@ func (q *Queries) ListMarketTypePricesForTypes(ctx context.Context, arg ListMark
 }
 
 const listOpenOrderLifecycleByCharacter = `-- name: ListOpenOrderLifecycleByCharacter :many
-SELECT id, character_id, order_id, type_id, location_id, region_id, is_buy_order, listed_price, volume_total, volume_remain_last, first_seen_at, last_seen_at, closed_at, close_kind, outbid_events, beaten_now
+SELECT id, character_id, order_id, type_id, location_id, region_id, is_buy_order, listed_price, volume_total, volume_remain_last, first_seen_at, last_seen_at, closed_at, close_kind, outbid_events, beaten_now, beaten_at, beating_price, beating_volume, suggested_price, unit_cost, margin_pct, tax_rate, beaten_checked
 FROM order_lifecycle
 WHERE character_id = $1 AND closed_at IS NULL
 ORDER BY order_id
@@ -2668,6 +2768,14 @@ func (q *Queries) ListOpenOrderLifecycleByCharacter(ctx context.Context, charact
 			&i.CloseKind,
 			&i.OutbidEvents,
 			&i.BeatenNow,
+			&i.BeatenAt,
+			&i.BeatingPrice,
+			&i.BeatingVolume,
+			&i.SuggestedPrice,
+			&i.UnitCost,
+			&i.MarginPct,
+			&i.TaxRate,
+			&i.BeatenChecked,
 		); err != nil {
 			return nil, err
 		}
@@ -2766,7 +2874,7 @@ func (q *Queries) ListOrderHealthByUser(ctx context.Context, userID int64) ([]Or
 }
 
 const listOrderLifecycleByCharacter = `-- name: ListOrderLifecycleByCharacter :many
-SELECT id, character_id, order_id, type_id, location_id, region_id, is_buy_order, listed_price, volume_total, volume_remain_last, first_seen_at, last_seen_at, closed_at, close_kind, outbid_events, beaten_now
+SELECT id, character_id, order_id, type_id, location_id, region_id, is_buy_order, listed_price, volume_total, volume_remain_last, first_seen_at, last_seen_at, closed_at, close_kind, outbid_events, beaten_now, beaten_at, beating_price, beating_volume, suggested_price, unit_cost, margin_pct, tax_rate, beaten_checked
 FROM order_lifecycle
 WHERE character_id = $1
 ORDER BY first_seen_at DESC, order_id DESC
@@ -2798,6 +2906,14 @@ func (q *Queries) ListOrderLifecycleByCharacter(ctx context.Context, characterID
 			&i.CloseKind,
 			&i.OutbidEvents,
 			&i.BeatenNow,
+			&i.BeatenAt,
+			&i.BeatingPrice,
+			&i.BeatingVolume,
+			&i.SuggestedPrice,
+			&i.UnitCost,
+			&i.MarginPct,
+			&i.TaxRate,
+			&i.BeatenChecked,
 		); err != nil {
 			return nil, err
 		}
@@ -2813,7 +2929,7 @@ func (q *Queries) ListOrderLifecycleByCharacter(ctx context.Context, characterID
 }
 
 const listOrderLifecycleByUser = `-- name: ListOrderLifecycleByUser :many
-SELECT ol.id, ol.character_id, ol.order_id, ol.type_id, ol.location_id, ol.region_id, ol.is_buy_order, ol.listed_price, ol.volume_total, ol.volume_remain_last, ol.first_seen_at, ol.last_seen_at, ol.closed_at, ol.close_kind, ol.outbid_events, ol.beaten_now
+SELECT ol.id, ol.character_id, ol.order_id, ol.type_id, ol.location_id, ol.region_id, ol.is_buy_order, ol.listed_price, ol.volume_total, ol.volume_remain_last, ol.first_seen_at, ol.last_seen_at, ol.closed_at, ol.close_kind, ol.outbid_events, ol.beaten_now, ol.beaten_at, ol.beating_price, ol.beating_volume, ol.suggested_price, ol.unit_cost, ol.margin_pct, ol.tax_rate, ol.beaten_checked
 FROM order_lifecycle ol
 JOIN characters c ON c.character_id = ol.character_id
 WHERE c.user_id = $1
@@ -2846,6 +2962,14 @@ func (q *Queries) ListOrderLifecycleByUser(ctx context.Context, userID int64) ([
 			&i.CloseKind,
 			&i.OutbidEvents,
 			&i.BeatenNow,
+			&i.BeatenAt,
+			&i.BeatingPrice,
+			&i.BeatingVolume,
+			&i.SuggestedPrice,
+			&i.UnitCost,
+			&i.MarginPct,
+			&i.TaxRate,
+			&i.BeatenChecked,
 		); err != nil {
 			return nil, err
 		}
@@ -4004,6 +4128,58 @@ func (q *Queries) UpdateOrderLifecycleBeaten(ctx context.Context, arg UpdateOrde
 	_, err := q.db.ExecContext(ctx, updateOrderLifecycleBeaten,
 		arg.BeatenNow,
 		arg.OutbidEvents,
+		arg.CharacterID,
+		arg.OrderID,
+	)
+	return err
+}
+
+const updateOrderLifecycleBook = `-- name: UpdateOrderLifecycleBook :exec
+UPDATE order_lifecycle SET
+    beaten_at = CASE
+        WHEN $1::bigint = 1 AND (beaten_now = 0 OR beaten_at IS NULL) THEN $2::timestamptz
+        WHEN $1::bigint = 0 THEN NULL
+        ELSE beaten_at END,
+    beaten_now      = $1::bigint,
+    outbid_events   = $3::bigint,
+    beating_price   = $4::float8,
+    beating_volume  = $5::bigint,
+    suggested_price = $6::float8,
+    unit_cost       = $7::float8,
+    margin_pct      = $8::float8,
+    tax_rate        = $9::float8,
+    beaten_checked  = $2::timestamptz
+WHERE character_id = $10 AND order_id = $11 AND closed_at IS NULL
+`
+
+type UpdateOrderLifecycleBookParams struct {
+	Beaten         int64           `json:"beaten"`
+	CheckedAt      time.Time       `json:"checked_at"`
+	OutbidEvents   int64           `json:"outbid_events"`
+	BeatingPrice   float64         `json:"beating_price"`
+	BeatingVolume  int64           `json:"beating_volume"`
+	SuggestedPrice float64         `json:"suggested_price"`
+	UnitCost       float64         `json:"unit_cost"`
+	MarginPct      sql.NullFloat64 `json:"margin_pct"`
+	TaxRate        float64         `json:"tax_rate"`
+	CharacterID    int64           `json:"character_id"`
+	OrderID        int64           `json:"order_id"`
+}
+
+// The order-health pass's verdict on one open order's station book
+// (schema 105): beaten state and count, when it was beaten, what
+// beat it, the suggested reprice, and the margin at that price.
+func (q *Queries) UpdateOrderLifecycleBook(ctx context.Context, arg UpdateOrderLifecycleBookParams) error {
+	_, err := q.db.ExecContext(ctx, updateOrderLifecycleBook,
+		arg.Beaten,
+		arg.CheckedAt,
+		arg.OutbidEvents,
+		arg.BeatingPrice,
+		arg.BeatingVolume,
+		arg.SuggestedPrice,
+		arg.UnitCost,
+		arg.MarginPct,
+		arg.TaxRate,
 		arg.CharacterID,
 		arg.OrderID,
 	)

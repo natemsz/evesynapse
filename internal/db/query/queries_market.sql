@@ -1287,3 +1287,34 @@ LEFT JOIN market_region_stats s ON s.region_id = sqlc.arg(region_id)::bigint AND
 WHERE t.published = 1 AND t.market_group_id IN (SELECT market_group_id FROM tree)
   AND (sqlc.arg(name_like)::text = '' OR t.name ILIKE sqlc.arg(name_like)::text)
   AND COALESCE(s.avg_daily_volume_30d, 0) >= sqlc.arg(min_volume)::float8;
+-- name: UpdateOrderLifecycleBook :exec
+-- The order-health pass's verdict on one open order's station book
+-- (schema 105): beaten state and count, when it was beaten, what
+-- beat it, the suggested reprice, and the margin at that price.
+UPDATE order_lifecycle SET
+    beaten_at = CASE
+        WHEN sqlc.arg(beaten)::bigint = 1 AND (beaten_now = 0 OR beaten_at IS NULL) THEN sqlc.arg(checked_at)::timestamptz
+        WHEN sqlc.arg(beaten)::bigint = 0 THEN NULL
+        ELSE beaten_at END,
+    beaten_now      = sqlc.arg(beaten)::bigint,
+    outbid_events   = sqlc.arg(outbid_events)::bigint,
+    beating_price   = sqlc.arg(beating_price)::float8,
+    beating_volume  = sqlc.arg(beating_volume)::bigint,
+    suggested_price = sqlc.arg(suggested_price)::float8,
+    unit_cost       = sqlc.arg(unit_cost)::float8,
+    margin_pct      = sqlc.narg(margin_pct)::float8,
+    tax_rate        = sqlc.arg(tax_rate)::float8,
+    beaten_checked  = sqlc.arg(checked_at)::timestamptz
+WHERE character_id = sqlc.arg(character_id) AND order_id = sqlc.arg(order_id) AND closed_at IS NULL;
+-- name: ListBeatenOrders :many
+-- The account's open orders beaten at their own station, most
+-- recently beaten first: the My Orders page's beaten section.
+SELECT l.character_id, c.name AS character_name, l.order_id, l.type_id, l.location_id, l.region_id,
+       l.is_buy_order, l.listed_price, l.volume_total, l.volume_remain_last, l.beaten_at, l.outbid_events,
+       l.beating_price, l.beating_volume, l.suggested_price, l.unit_cost, l.margin_pct, l.tax_rate, l.beaten_checked
+FROM order_lifecycle l
+JOIN characters c ON c.character_id = l.character_id
+WHERE c.user_id = sqlc.arg(user_id) AND l.beaten_now = 1 AND l.closed_at IS NULL
+  AND (sqlc.arg(character_id)::bigint = 0 OR l.character_id = sqlc.arg(character_id)::bigint)
+ORDER BY l.beaten_at DESC NULLS LAST, l.order_id
+LIMIT 100;

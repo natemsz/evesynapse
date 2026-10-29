@@ -1043,22 +1043,30 @@ type OrderHealth struct {
 }
 
 type OrderLifecycle struct {
-	ID               sql.NullInt64 `json:"id"`
-	CharacterID      int64         `json:"character_id"`
-	OrderID          int64         `json:"order_id"`
-	TypeID           int64         `json:"type_id"`
-	LocationID       int64         `json:"location_id"`
-	RegionID         int64         `json:"region_id"`
-	IsBuyOrder       int64         `json:"is_buy_order"`
-	ListedPrice      float64       `json:"listed_price"`
-	VolumeTotal      int64         `json:"volume_total"`
-	VolumeRemainLast int64         `json:"volume_remain_last"`
-	FirstSeenAt      time.Time     `json:"first_seen_at"`
-	LastSeenAt       time.Time     `json:"last_seen_at"`
-	ClosedAt         sql.NullTime  `json:"closed_at"`
-	CloseKind        string        `json:"close_kind"`
-	OutbidEvents     int64         `json:"outbid_events"`
-	BeatenNow        int64         `json:"beaten_now"`
+	ID               sql.NullInt64   `json:"id"`
+	CharacterID      int64           `json:"character_id"`
+	OrderID          int64           `json:"order_id"`
+	TypeID           int64           `json:"type_id"`
+	LocationID       int64           `json:"location_id"`
+	RegionID         int64           `json:"region_id"`
+	IsBuyOrder       int64           `json:"is_buy_order"`
+	ListedPrice      float64         `json:"listed_price"`
+	VolumeTotal      int64           `json:"volume_total"`
+	VolumeRemainLast int64           `json:"volume_remain_last"`
+	FirstSeenAt      time.Time       `json:"first_seen_at"`
+	LastSeenAt       time.Time       `json:"last_seen_at"`
+	ClosedAt         sql.NullTime    `json:"closed_at"`
+	CloseKind        string          `json:"close_kind"`
+	OutbidEvents     int64           `json:"outbid_events"`
+	BeatenNow        int64           `json:"beaten_now"`
+	BeatenAt         sql.NullTime    `json:"beaten_at"`
+	BeatingPrice     float64         `json:"beating_price"`
+	BeatingVolume    int64           `json:"beating_volume"`
+	SuggestedPrice   float64         `json:"suggested_price"`
+	UnitCost         float64         `json:"unit_cost"`
+	MarginPct        sql.NullFloat64 `json:"margin_pct"`
+	TaxRate          float64         `json:"tax_rate"`
+	BeatenChecked    sql.NullTime    `json:"beaten_checked"`
 }
 
 type OrgGroup struct {

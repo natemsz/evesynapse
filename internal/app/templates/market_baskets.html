@@ -10,15 +10,16 @@
 
 <div class="tw">
 <table>
-  <thead><tr><th>Basket</th><th>Region</th><th class="mt-num">Items</th><th class="mt-num">Worth now</th><th></th></tr></thead>
-  <tbody>
+  <thead><tr><th>Basket</th><th>Region</th><th class="mt-num">Items</th><th class="mt-num">Worth now</th><th></th><th></th></tr></thead>
+  <tbody id="mbk-tbody">
   {{range .List}}
-    <tr>
+    <tr data-mbk-row="{{.ID}}">
       <td><a href="/market/baskets/{{.ID}}/">{{.Name}}</a></td>
       <td>{{.RegionName}}</td>
-      <td class="mt-num">{{.Items}}</td>
+      <td class="mt-num" data-mbk-count>{{.Items}}</td>
       <td class="mt-num">{{if .Value}}{{.Value}} ISK{{if .Partial}} <small>(some unpriced)</small>{{end}}{{else}}—{{end}}</td>
       <td><small>{{if .Preset}}Preset{{else}}Yours{{end}}</small></td>
+      <td class="mt-num">{{if and $.MarketBaskets.SignedIn (not .Preset)}}<button type="button" class="mbk-edit-btn" data-mbk-edit="{{.ID}}" aria-label="Edit {{.Name}}" title="Edit basket"><svg class="glyph" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="url(#nav-glyph-gradient)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.8 2.8 0 1 1 4 4L8 20l-5 1 1-5Z"/><path d="M15 5l4 4"/></g></svg></button>{{end}}</td>
     </tr>
   {{end}}
   </tbody>
@@ -26,23 +27,71 @@
 </div>
 
 {{if .SignedIn}}
-<section class="foldable">
-<h3>New basket</h3>
+<template id="mbk-editor-template">
+  <div class="mbk-editor">
+    <span class="searchwrap mbk-searchwrap">
+      <input type="text" class="mbk-search" placeholder="Search items to add" autocomplete="off" role="combobox" aria-expanded="false" aria-autocomplete="list">
+      <ul class="suggest mbk-suggest" role="listbox" hidden></ul>
+    </span>
+    <ul class="mbk-items"></ul>
+    <p class="mbk-err" role="alert" hidden></p>
+    <div class="mbk-actions">
+      <button class="btn mbk-save" type="button">Save</button>
+      <button class="btn btn-quiet mbk-cancel" type="button">Cancel</button>
+      <a href="#" class="mbk-textlink"><small>or edit by typing item names</small></a>
+    </div>
+    <form method="post" class="mt-basket-form mbk-textform" hidden>
+      <input type="hidden" name="name" class="mbk-tf-name">
+      <input type="hidden" name="region" class="mbk-tf-region">
+      <label class="mt-basket-items"><small>Items, one per line, with a quantity (Tritanium 1000)</small>
+        <textarea name="items" rows="8" class="mbk-tf-items"></textarea>
+      </label>
+      <button class="btn" type="submit">Save basket</button>
+    </form>
+  </div>
+</template>
+
 {{if .AtLimit}}
 <p><small>You have the most baskets one player can keep. Delete one to make another.</small></p>
 {{else}}
-<form method="post" action="/market/baskets/" class="mt-basket-form">
-  <label><small>Name</small> <input type="text" name="name" maxlength="60" required></label>
-  <label><small>Priced in</small>
-    <select name="region">{{range .Regions}}<option value="{{.ID}}"{{if .Active}} selected{{end}}>{{.Name}}</option>{{end}}</select>
-  </label>
-  <label class="mt-basket-items"><small>Items, one per line, with a quantity (Tritanium 1000)</small>
-    <textarea name="items" rows="8" required></textarea>
-  </label>
-  <button class="btn" type="submit">Create basket</button>
-</form>
+<p><button class="btn" type="button" id="mbk-new">New basket</button></p>
+<div class="mbk-builder" id="mbk-builder" hidden>
+  <div class="mbk-pickrow">
+    <label><small>Priced in</small>
+      <select id="mbk-region">{{range .Regions}}<option value="{{.ID}}"{{if .Active}} selected{{end}}>{{.Name}}</option>{{end}}</select>
+    </label>
+    <span class="searchwrap mbk-searchwrap">
+      <input type="text" id="mbk-search" class="mbk-search" placeholder="Search items to add" autocomplete="off" role="combobox" aria-expanded="false" aria-autocomplete="list">
+      <ul class="suggest mbk-suggest" id="mbk-suggest" role="listbox" hidden></ul>
+    </span>
+  </div>
+  <p class="mbk-textlink-row"><a href="#" id="mbk-textlink"><small>or add items by typing their names</small></a></p>
+  <ul class="mbk-items" id="mbk-items"></ul>
+  <p class="mbk-err" id="mbk-err" role="alert" hidden></p>
+  <form method="post" action="/market/baskets/" class="mt-basket-form mbk-textform" id="mbk-textform" hidden>
+    <label><small>Name</small> <input type="text" name="name" maxlength="60" required></label>
+    <label><small>Priced in</small>
+      <select name="region">{{range .Regions}}<option value="{{.ID}}"{{if .Active}} selected{{end}}>{{.Name}}</option>{{end}}</select>
+    </label>
+    <label class="mt-basket-items"><small>Items, one per line, with a quantity (Tritanium 1000)</small>
+      <textarea name="items" rows="8" required></textarea>
+    </label>
+    <button class="btn" type="submit">Create basket</button>
+  </form>
+  <div class="mbk-actions" id="mbk-actions">
+    <button class="btn" type="button" id="mbk-to-name">Save</button>
+    <button class="btn btn-quiet" type="button" id="mbk-cancel">Cancel</button>
+  </div>
+  <div class="mbk-naming" id="mbk-naming" hidden>
+    <label><small>Name this basket</small> <input type="text" id="mbk-name" maxlength="60" required></label>
+    <p class="mbk-err" id="mbk-name-err" role="alert" hidden></p>
+    <div class="mbk-actions">
+      <button class="btn" type="button" id="mbk-save">Save basket</button>
+      <button class="btn btn-quiet" type="button" id="mbk-back">Back</button>
+    </div>
+  </div>
+</div>
 {{end}}
-</section>
 {{else}}
 <p><small>Sign in to keep baskets of your own.</small></p>
 {{end}}

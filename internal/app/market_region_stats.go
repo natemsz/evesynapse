@@ -757,6 +757,11 @@ func (app *Application) storeRegionSweep(ctx context.Context, regionID int64) (t
 	}); err != nil {
 		return 0, 0, fmt.Errorf("stat pack trends: %w", err)
 	}
+	// LP offer values (schema 102) read the stat pack just written,
+	// in the same transaction.
+	if err := app.refreshLPOfferValues(ctx, qtx, regionID, now); err != nil {
+		return 0, 0, fmt.Errorf("lp offer values: %w", err)
+	}
 	for start := 0; start < len(stationKeys); start += sweepBatchSize {
 		end := start + sweepBatchSize
 		if end > len(stationKeys) {

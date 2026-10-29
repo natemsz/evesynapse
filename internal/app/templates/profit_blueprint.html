@@ -1,0 +1,54 @@
+{{define "title"}}{{with .ProfitBlueprint}}{{.Name}} · {{end}}Profit{{end}}
+{{define "pagetitle"}}<h1><span class="gt">{{with .ProfitBlueprint}}{{.Name}}{{else}}Blueprint{{end}}</span></h1>{{end}}
+{{define "pagetabs"}}{{template "sectiontabs" .}}{{end}}
+{{define "content"}}
+{{if .Error}}<p class="err">{{.Error}}</p>{{end}}
+{{with .ProfitBlueprint}}
+<p><small><a href="{{.Back}}">Back to Profit</a>. Each delivered job, what it made and what became of it. Sales are matched to a job's output oldest first; where that isn't right, say what happened.</small></p>
+{{if .Jobs}}
+<div class="tw">
+<table>
+  <thead><tr><th>Delivered</th><th class="mt-num">Runs</th><th class="mt-num">Made</th><th class="mt-num">Sold</th><th class="mt-num">Brought</th><th class="mt-num">Inputs then</th><th class="mt-num">Job cost</th></tr></thead>
+  <tbody>
+  {{range .Jobs}}
+    <tr>
+      <td>{{.Delivered}}<br><small class="mt-reqs">{{.Facility}} · {{.Recipe}}</small>
+        {{if .Mixed}}<br><small class="mt-reqs">{{.Mixed}} units sold beside bought stock of the item</small>{{end}}
+        {{if .HasUnsold}}<details class="pf-basis"><summary><small>{{.Unsold}} units not sold: say what happened</small></summary>
+          <form method="post" action="/profit/job-event" class="pf-basis-form">
+            <input type="hidden" name="pool" value="{{$.ProfitBlueprint.Pool}}"><input type="hidden" name="bp" value="{{$.ProfitBlueprint.BP}}"><input type="hidden" name="job_id" value="{{.JobID}}"><input type="hidden" name="kind" value="sale">
+            <label>Units sold elsewhere <input name="units" inputmode="numeric" required></label>
+            <label>At, ISK each <input name="unit_price" inputmode="decimal" required></label>
+            <button class="btn" type="submit">Save sale</button>
+          </form>
+          <form method="post" action="/profit/job-event" class="pf-basis-form">
+            <input type="hidden" name="pool" value="{{$.ProfitBlueprint.Pool}}"><input type="hidden" name="bp" value="{{$.ProfitBlueprint.BP}}"><input type="hidden" name="job_id" value="{{.JobID}}"><input type="hidden" name="kind" value="lost">
+            <label>Units lost or used <input name="units" inputmode="numeric" required></label>
+            <button class="btn" type="submit">Mark lost</button>
+          </form>
+          {{if $.ProfitBlueprint.Sells}}
+          <form method="post" action="/profit/job-event" class="pf-basis-form">
+            <input type="hidden" name="pool" value="{{$.ProfitBlueprint.Pool}}"><input type="hidden" name="bp" value="{{$.ProfitBlueprint.BP}}"><input type="hidden" name="job_id" value="{{.JobID}}"><input type="hidden" name="kind" value="link">
+            <label>This market sale was this job's output <select name="transaction_id">{{range $.ProfitBlueprint.Sells}}<option value="{{.ID}}">{{.Label}}</option>{{end}}</select></label>
+            <button class="btn" type="submit">Link</button>
+          </form>
+          {{end}}
+        </details>{{end}}
+      </td>
+      <td class="mt-num">{{.Runs}}</td>
+      <td class="mt-num">{{.Units}}</td>
+      <td class="mt-num">{{.Sold}}{{if .Lost}}<br><small class="mt-reqs">{{.Lost}} lost</small>{{end}}</td>
+      <td class="mt-num">{{.Revenue}}</td>
+      <td class="mt-num">{{.AtTime}}</td>
+      <td class="mt-num">{{.Cost}}</td>
+    </tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+<p><small>Prices in ISK. ESI doesn't report the materials a job used or the ME it ran at: they come from the recipe, the ME the blueprint showed when the job delivered, and the structure bonus you set on the Profit page.</small></p>
+{{else}}
+<p><small>No delivered jobs for this blueprint in these books.</small></p>
+{{end}}
+{{end}}
+{{end}}

@@ -14,34 +14,35 @@ import (
 // pageData is the view model shared by the templates.
 type pageData struct {
 	module.ShellData
-	Home          *homeView
-	CharChars     []assetCharLink
-	CharacterPage *characterView
-	Killmails     *killmailsView
-	KillmailChars []assetCharLink
-	Industry      *industryView
-	IndustryChars []assetCharLink
-	ServerStatus  *serverStatusView
-	ESIHealth     *esiHealthView // Overview bar: ESI health and Tranquility players (signed-in Home only)
-	Corps         []corpView
-	CorpOptions   []corpOption // the corporations the Corporation page can show
-	CorpChars     []assetCharLink
-	Assets        *assetsView
-	AssetsChars   []assetCharLink
-	AssetsSearch  *assetsSearchView
-	Planets       *planetsView
-	PlanetsChars  []assetCharLink
-	Market        *marketView
-	MarketTrends  *marketTrendsView
-	MarketLP      *marketLPView
-	MarketBaskets *marketBasketView
-	Profit        *profitView
-	Items         *itemsView
-	Search        *searchPageView
-	Skills        *skillsView
-	SkillsChars   []assetCharLink
-	Sync          *syncView
-	Admin         *adminView
+	Home            *homeView
+	CharChars       []assetCharLink
+	CharacterPage   *characterView
+	Killmails       *killmailsView
+	KillmailChars   []assetCharLink
+	Industry        *industryView
+	IndustryChars   []assetCharLink
+	ServerStatus    *serverStatusView
+	ESIHealth       *esiHealthView // Overview bar: ESI health and Tranquility players (signed-in Home only)
+	Corps           []corpView
+	CorpOptions     []corpOption // the corporations the Corporation page can show
+	CorpChars       []assetCharLink
+	Assets          *assetsView
+	AssetsChars     []assetCharLink
+	AssetsSearch    *assetsSearchView
+	Planets         *planetsView
+	PlanetsChars    []assetCharLink
+	Market          *marketView
+	MarketTrends    *marketTrendsView
+	MarketLP        *marketLPView
+	MarketBaskets   *marketBasketView
+	Profit          *profitView
+	ProfitBlueprint *profitBlueprintView
+	Items           *itemsView
+	Search          *searchPageView
+	Skills          *skillsView
+	SkillsChars     []assetCharLink
+	Sync            *syncView
+	Admin           *adminView
 	// AdminTab names the Admin page tab the page belongs to
 	// ("analytics" for the Admin page itself, "sync" for its
 	// Sync tab); the admintabs bar marks it active.

@@ -674,6 +674,14 @@ var pgBriefingDismissalsSchema string
 //go:embed schema_pg/110_profit_trading.sql
 var pgProfitTradingSchema string
 
+// Step 111: per-blueprint industry P&L: recipe facts on landed jobs,
+// the materials each consumed from the pool's stock, what became of
+// the output, shared recipe values at today's prices, and the
+// per-blueprint summary.
+//
+//go:embed schema_pg/111_profit_industry.sql
+var pgProfitIndustrySchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -813,6 +821,7 @@ func schemaSteps() []schemaStep {
 		{108, "market_api", pgMarketAPISchema, ""},
 		{109, "briefing_dismissals", pgBriefingDismissalsSchema, ""},
 		{110, "profit_trading", pgProfitTradingSchema, ""},
+		{111, "profit_industry", pgProfitIndustrySchema, ""},
 	}
 }
 

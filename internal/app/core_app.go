@@ -700,6 +700,9 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 		r.Get("/", app.handleProfit)
 		r.Post("/prefs", app.handleProfitPrefs)
 		r.Post("/basis", app.handleProfitBasis)
+		r.Get("/blueprint/", app.handleProfitBlueprint)
+		r.Post("/job-event", app.handleProfitJobEvent)
+		r.Post("/facility", app.handleProfitFacility)
 	})
 
 	r.Route("/assets", func(r chi.Router) {

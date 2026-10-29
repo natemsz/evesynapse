@@ -98,16 +98,61 @@
 {{else}}
 <p><small>No sales in this span.</small></p>
 {{end}}
+</section>
+
 {{if not .Corp}}
-<details class="pf-prefs"><summary><small>How trading is counted</small></summary>
-<form method="post" action="/profit/prefs" class="pf-prefs-form">
-  <label><input type="checkbox" name="pooled" value="1"{{if .Pooled}} checked{{end}}> Match sales against stock across all my characters (off: each character's own stock)</label>
-  <label><input type="checkbox" name="broker_in_margin" value="1"{{if .BrokerInMargin}} checked{{end}}> Count broker fees in each item's margin</label>
+<section class="foldable">
+<h3>Industry by blueprint</h3>
+{{if .Blueprints}}
+<div class="tw">
+<table>
+  <thead><tr><th>Blueprint output</th><th class="mt-num">Runs</th><th class="mt-num">Built</th><th class="mt-num">Sold</th><th class="mt-num">Realized</th><th class="mt-num">At the time</th><th class="mt-num">At today's prices</th><th class="mt-num">Since then</th></tr></thead>
+  <tbody>
+  {{range .Blueprints}}
+    <tr>
+      <td><a href="{{.Href}}">{{.Name}}</a>{{range .RealizedNotes}}<br><small class="mt-reqs">{{.}}</small>{{end}}</td>
+      <td class="mt-num">{{.Runs}}</td>
+      <td class="mt-num">{{.Built}}</td>
+      <td class="mt-num">{{.Sold}}{{if .Lost}}<br><small class="mt-reqs">{{.Lost}} lost</small>{{end}}</td>
+      <td class="mt-num">{{if .Realized}}<strong class="mt-chg {{.RealizedDir}}">{{.Realized}}</strong>{{else}}<small class="mt-reqs">nothing sold yet</small>{{end}}</td>
+      <td class="mt-num">{{if .AtTime}}<span class="mt-chg {{.AtTimeDir}}">{{.AtTime}}</span>{{if .AtTimeNote}}<br><small class="mt-reqs">{{.AtTimeNote}}</small>{{end}}{{else}}<small class="mt-reqs">{{.AtTimeNo}}</small>{{end}}</td>
+      <td class="mt-num">{{if .Today}}<span class="mt-chg {{.TodayDir}}">{{.Today}}</span><br><small class="mt-reqs">{{.TodayNote}}</small>{{else}}<small class="mt-reqs">{{.TodayNo}}</small>{{end}}</td>
+      <td class="mt-num">{{if .Change}}<span class="mt-chg {{.ChangeDir}}">{{.Change}}</span>{{end}}</td>
+    </tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+<p><small>All three figures cover the same runs. <strong>Realized</strong> is what sold units brought, less their sales tax and their share of the job: the materials as they came out of your stock (any you didn't buy here at their install-day price) and the job cost. <strong>At the time</strong> prices the inputs on the day each job was installed and the output on the day it delivered, less the job cost paid. <strong>At today's prices</strong> reruns the same recipe in {{.IndustryRegion}} at {{if .IndustrySideBuy}}buy{{else}}sell{{end}} typicals, less your usual sales tax{{if not .IndustrySideBuy}} and broker fees{{end}}, with the job cost scaled by how the inputs' value moved; it is what the recipe is worth now, not a profit you made. ESI doesn't report the materials a job used: they come from the recipe, the blueprint's ME and the structure bonus you set below.</small></p>
+{{else}}
+<p><small>No delivered manufacturing or reaction jobs recorded yet.</small></p>
+{{end}}
+{{if .Facilities}}
+<details class="pf-prefs"><summary><small>Structure material bonuses</small></summary>
+<p><small>ESI can't read a structure's rigs unless you own it. Set the material bonus each facility gives (in percent, blank for none); jobs there are recounted on the next sync.</small></p>
+{{range .Facilities}}
+<form method="post" action="/profit/facility" class="pf-basis-form">
+  <input type="hidden" name="facility_id" value="{{.ID}}">
+  <label>{{.Name}} <small class="mt-reqs">({{.Jobs}} jobs)</small> <input name="bonus" inputmode="decimal" value="{{.Bonus}}" placeholder="0"></label>
   <button class="btn" type="submit">Save</button>
 </form>
+{{end}}
 </details>
 {{end}}
 </section>
+
+<section class="foldable">
+<h3>How profit is counted</h3>
+<form method="post" action="/profit/prefs" class="pf-prefs-form">
+  <label><input type="checkbox" name="pooled" value="1"{{if .Pooled}} checked{{end}}> Match sales against stock across all my characters (off: each character's own stock)</label>
+  <label><input type="checkbox" name="broker_in_margin" value="1"{{if .BrokerInMargin}} checked{{end}}> Count broker fees in each item's margin</label>
+  <label>Price industry at today's prices in <select name="industry_region">{{range .Regions}}<option value="{{.ID}}"{{if .Selected}} selected{{end}}>{{.Name}}</option>{{end}}</select></label>
+  <label><input type="radio" name="industry_side" value="sell"{{if not .IndustrySideBuy}} checked{{end}}> at sell typicals (buy inputs from sell orders, list output as sell orders)</label>
+  <label><input type="radio" name="industry_side" value="buy"{{if .IndustrySideBuy}} checked{{end}}> at buy typicals (inputs through buy orders, output sold to buy orders)</label>
+  <button class="btn" type="submit">Save</button>
+</form>
+</section>
+{{end}}
 
 {{if .Positions}}
 <section class="foldable">

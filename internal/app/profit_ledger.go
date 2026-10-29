@@ -37,13 +37,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"math"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	"evesynapse/internal/app/module"
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
 	"evesynapse/internal/logging"
@@ -108,43 +108,78 @@ func journalActivity(refType string, amount float64) string {
 // First-in first-out matching.
 // ---------------------------------------------------------------------------
 
-// ledgerLot is one stock movement of a type: a buy or job output
-// (adds), or a sell (removes).
+// ledgerLot is one stock movement of a type: a buy, job output or
+// entered basis (adds), or a sell, a job's material use, or units the
+// player sold off-market or lost (removes).
 type ledgerLot struct {
-	At       time.Time
-	RefID    int64 // transaction id; minus the job id for job output
-	Owner    int64 // the pool member that traded it (0 for a stored or entered lot)
-	Sell     bool
-	Quantity int64
-	Unit     float64
+	At        time.Time
+	RefID     int64  // transaction id; minus the job id for job output and material use
+	Owner     int64  // the pool member that traded it (0 for a stored or entered lot)
+	Kind      string // lotTxn, lotJob, lotBasis, lotConsume, lotManualSale, lotLost
+	PreferRef int64  // a removal the player tied to a job takes that job's lot first
+	Sell      bool
+	Quantity  int64
+	Unit      float64
 }
 
-// realizedSale is one sell as the matching settled it.
+// Lot kinds, as ListPoolLotsForTypeSince names them.
+const (
+	lotTxn        = "txn"
+	lotJob        = "job"
+	lotBasis      = "basis"
+	lotConsume    = "consume"
+	lotManualSale = "msale"
+	lotLost       = "lost"
+)
+
+// manualBasisRef is where entered cost basis lots' ref ids start
+// (below every job's).
+const manualBasisRef = -4000000000000000
+
+// isJobRef reports whether a lot's ref id is a job's output.
+func isJobRef(ref int64) bool { return ref < 0 && ref > manualBasisRef }
+
+// lotTake is part of a removal settled against one open lot. Mixed
+// says bought or entered stock sat open beside the job lot it took.
+type lotTake struct {
+	RefID    int64
+	Quantity int64
+	Unit     float64
+	Mixed    bool
+}
+
+// realizedSale is one removal as the matching settled it.
 type realizedSale struct {
 	RefID            int64
 	Owner            int64
+	Kind             string
+	PreferRef        int64
 	At               time.Time
+	Unit             float64
 	Quantity         int64 // covered by earlier lots
 	Revenue, Cost    float64
 	UnmatchedQty     int64
 	UnmatchedRevenue float64
+	Takes            []lotTake
 }
 
-// openLot is stock still held from a buy or job output.
+// openLot is stock still held from a buy, job output or entered basis.
 type openLot struct {
 	Quantity int64
 	Unit     float64
+	RefID    int64
 }
 
-// matchFIFO settles sells against the earliest open lots. Lots must
-// be in time order. It returns every sell's settlement and the lots
-// left open, oldest first.
+// matchFIFO settles removals against the earliest open lots. Lots
+// must be in time order. It returns every removal's settlement and
+// the lots left open, oldest first.
 func matchFIFO(lots []ledgerLot) ([]realizedSale, []openLot) {
 	return matchFIFOFrom(nil, lots)
 }
 
 // matchFIFOFrom is matchFIFO starting from lots already open (a fold
-// checkpoint's remainder). The caller's slice is never mutated.
+// checkpoint's remainder). The caller's slice is never mutated. A
+// removal tied to a job takes from that job's lot first, then FIFO.
 func matchFIFOFrom(start []openLot, lots []ledgerLot) ([]realizedSale, []openLot) {
 	open := make([]openLot, len(start))
 	copy(open, start)
@@ -154,18 +189,43 @@ func matchFIFOFrom(start []openLot, lots []ledgerLot) ([]realizedSale, []openLot
 			continue
 		}
 		if !l.Sell {
-			open = append(open, openLot{Quantity: l.Quantity, Unit: l.Unit})
+			open = append(open, openLot{Quantity: l.Quantity, Unit: l.Unit, RefID: l.RefID})
 			continue
 		}
-		s := realizedSale{RefID: l.RefID, Owner: l.Owner, At: l.At}
+		s := realizedSale{RefID: l.RefID, Owner: l.Owner, Kind: l.Kind, PreferRef: l.PreferRef, At: l.At, Unit: l.Unit}
+		mixed := false
+		for _, o := range open {
+			if !isJobRef(o.RefID) {
+				mixed = true
+				break
+			}
+		}
 		left := l.Quantity
+		take := func(i int) {
+			n := min(left, open[i].Quantity)
+			s.Quantity += n
+			s.Revenue += float64(n) * l.Unit
+			s.Cost += float64(n) * open[i].Unit
+			s.Takes = append(s.Takes, lotTake{RefID: open[i].RefID, Quantity: n, Unit: open[i].Unit, Mixed: mixed})
+			open[i].Quantity -= n
+			left -= n
+		}
+		if l.PreferRef != 0 {
+			for i := 0; i < len(open) && left > 0; i++ {
+				if open[i].RefID == l.PreferRef {
+					take(i)
+				}
+			}
+			kept := open[:0]
+			for _, o := range open {
+				if o.Quantity > 0 {
+					kept = append(kept, o)
+				}
+			}
+			open = kept
+		}
 		for left > 0 && len(open) > 0 {
-			take := min(left, open[0].Quantity)
-			s.Quantity += take
-			s.Revenue += float64(take) * l.Unit
-			s.Cost += float64(take) * open[0].Unit
-			open[0].Quantity -= take
-			left -= take
+			take(0)
 			if open[0].Quantity == 0 {
 				open = open[1:]
 			}
@@ -218,6 +278,7 @@ type ledgerSource struct {
 	assets        *db.CharacterSnapshot
 	orders        *db.CharacterSnapshot
 	ordersHistory *db.CharacterSnapshot
+	userID        int64 // the account, for a character: its industry preferences
 }
 
 // Pool kinds (schema 110). A character's sales match against the
@@ -243,19 +304,21 @@ func (p ledgerPool) memberKey() string {
 	return strings.Join(parts, ",")
 }
 
-// profitPrefs are a player's profit preferences (schema 110), with
-// the defaults when none are stored: pooled books, broker fees in the
-// item margin.
+// profitPrefs are a player's profit preferences (schemas 110, 111),
+// with the defaults when none are stored: pooled books, broker fees in
+// the item margin, industry priced in The Forge at sell typicals.
 type profitPrefs struct {
 	Pooled, BrokerInMargin bool
+	IndustryRegion         int64
+	IndustrySide           string // module.AppraisalModeSell or AppraisalModeBuy
 }
 
 func (app *Application) profitPrefsFor(ctx context.Context, userID int64) profitPrefs {
 	p, err := app.queries.GetUserProfitPrefs(ctx, userID)
 	if err != nil {
-		return profitPrefs{Pooled: true, BrokerInMargin: true}
+		return profitPrefs{Pooled: true, BrokerInMargin: true, IndustryRegion: defaultMarketRegion, IndustrySide: module.AppraisalModeSell}
 	}
-	return profitPrefs{Pooled: p.Pooled, BrokerInMargin: p.BrokerInMargin}
+	return profitPrefs{Pooled: p.Pooled, BrokerInMargin: p.BrokerInMargin, IndustryRegion: p.IndustryRegion, IndustrySide: p.IndustrySide}
 }
 
 // profitPoolFor is the pool a character's trades match in.
@@ -307,7 +370,7 @@ func (app *Application) refreshProfitLedger(ctx context.Context, ch db.Character
 		}
 		return &snap
 	}
-	src := ledgerSource{kind: ownerChar, ownerID: ch.CharacterID,
+	src := ledgerSource{kind: ownerChar, ownerID: ch.CharacterID, userID: ch.UserID,
 		jobs: get(esi.SnapIndustryJobs), blueprint: get(esi.SnapBlueprints),
 		assets: get(esi.SnapAssets), orders: get(esi.SnapOrders), ordersHistory: get(esi.SnapOrdersHistory)}
 	if s := get(esi.SnapWalletJournal); s != nil {
@@ -557,7 +620,15 @@ func (app *Application) foldLedger(ctx context.Context, src ledgerSource, pool l
 	if err := qtx.UpsertLedgerPoolState(ctx, ps); err != nil {
 		return err
 	}
-	return tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	if len(touchedTypes) > 0 {
+		if err := app.foldIndustrySummary(ctx, pool, now); err != nil {
+			logging.Errorf("worker: industry summary for %s %d: %v", pool.kind, pool.id, err)
+		}
+	}
+	return nil
 }
 
 // foldOwnerRollups rewrites one owner's item rollups and daily
@@ -772,6 +843,9 @@ func (app *Application) landOrderIssues(ctx context.Context, src ledgerSource) e
 // keys its members may have folded under before (their account, or
 // each of them alone).
 func (app *Application) resetPool(ctx context.Context, pool ledgerPool) error {
+	if err := app.queries.DeleteJobOutputLinksForPool(ctx, db.DeleteJobOutputLinksForPoolParams{PoolKind: pool.kind, PoolID: pool.id}); err != nil {
+		return err
+	}
 	if err := app.queries.DeleteTradeRealizedForPool(ctx, db.DeleteTradeRealizedForPoolParams{
 		PoolKind: pool.kind, PoolID: pool.id, OwnerKind: pool.ownerKind, OwnerIds: pool.members,
 	}); err != nil {
@@ -873,14 +947,14 @@ func dropInternalTrades(lots []ledgerLot) []ledgerLot {
 	}
 	buys := map[fill][]int{}
 	for i, l := range lots {
-		if !l.Sell && l.RefID > 0 && l.Owner != 0 {
+		if !l.Sell && l.Kind == lotTxn && l.Owner != 0 {
 			k := fill{l.At.Unix(), l.Quantity, l.Unit}
 			buys[k] = append(buys[k], i)
 		}
 	}
 	used := make([]bool, len(lots))
 	for i, s := range lots {
-		if !s.Sell || s.RefID <= 0 {
+		if !s.Sell || s.Kind != lotTxn {
 			continue
 		}
 		k := fill{s.At.Unix(), s.Quantity, s.Unit}
@@ -919,7 +993,8 @@ func (app *Application) refoldType(ctx context.Context, pool ledgerPool, typeID,
 	}
 	lots := make([]ledgerLot, 0, len(rows))
 	for _, r := range rows {
-		lots = append(lots, ledgerLot{At: r.At, RefID: r.RefID, Owner: r.OwnerID, Sell: r.IsSell.Valid && r.IsSell.Bool, Quantity: r.Quantity, Unit: r.UnitPrice})
+		lots = append(lots, ledgerLot{At: r.At, RefID: r.RefID, Owner: r.OwnerID, Kind: r.Kind, PreferRef: r.PreferRef,
+			Sell: r.IsSell.Valid && r.IsSell.Bool, Quantity: r.Quantity, Unit: r.UnitPrice})
 	}
 	if len(pool.members) > 1 {
 		lots = dropInternalTrades(lots)
@@ -931,7 +1006,7 @@ func (app *Application) refoldType(ctx context.Context, pool ledgerPool, typeID,
 			return err
 		}
 		for _, r := range stored {
-			prefix = append(prefix, ledgerLot{At: cp, Quantity: r.Quantity, Unit: r.UnitPrice})
+			prefix = append(prefix, ledgerLot{At: cp, RefID: r.RefID, Quantity: r.Quantity, Unit: r.UnitPrice})
 		}
 	}
 	cut := now.UTC().Add(-foldCheckpointLag).Truncate(24 * time.Hour)
@@ -963,6 +1038,9 @@ func (app *Application) refoldType(ctx context.Context, pool ledgerPool, typeID,
 	if len(sales) > 0 {
 		p := db.InsertTradeRealizedBatchParams{OwnerKind: pool.ownerKind, TypeID: typeID, Planetary: planetary, PoolKind: pool.kind, PoolID: pool.id}
 		for _, s := range sales {
+			if s.Kind != lotTxn {
+				continue
+			}
 			gap := ""
 			if s.UnmatchedQty > 0 {
 				gap = gaps.gapKind(s.At)
@@ -981,6 +1059,9 @@ func (app *Application) refoldType(ctx context.Context, pool ledgerPool, typeID,
 			return err
 		}
 	}
+	if err := writeJobSettlements(ctx, qtx, pool, typeID, cp, sales); err != nil {
+		return err
+	}
 	if err := qtx.DeleteTradeOpenLots(ctx, db.DeleteTradeOpenLotsParams{OwnerKind: pool.kind, OwnerID: pool.id, TypeID: typeID}); err != nil {
 		return err
 	}
@@ -990,6 +1071,7 @@ func (app *Application) refoldType(ctx context.Context, pool ledgerPool, typeID,
 			p.Seqs = append(p.Seqs, int64(i))
 			p.Quantities = append(p.Quantities, l.Quantity)
 			p.UnitPrices = append(p.UnitPrices, l.Unit)
+			p.RefIds = append(p.RefIds, l.RefID)
 		}
 		if err := qtx.InsertTradeOpenLotsBatch(ctx, p); err != nil {
 			return err
@@ -1059,111 +1141,4 @@ func ledgerHoldings(src ledgerSource) map[int64]int64 {
 		}
 	}
 	return held
-}
-
-// landDeliveredJobs values the owner's newly delivered manufacturing
-// and reaction jobs at today's house prices and stores them. It
-// returns the product types they add stock of and the earliest
-// delivery among them.
-func (app *Application) landDeliveredJobs(ctx context.Context, src ledgerSource, now time.Time) ([]int64, time.Time, error) {
-	var jobs esi.IndustryJobs
-	if json.Unmarshal([]byte(src.jobs.Payload), &jobs) != nil {
-		return nil, time.Time{}, nil
-	}
-	var delivered []esi.IndustryJob
-	var ids []int64
-	for _, j := range jobs {
-		if j.Status == "delivered" && (j.ActivityID == 1 || j.ActivityID == 11) && j.ProductTypeID > 0 {
-			delivered = append(delivered, j)
-			ids = append(ids, j.JobID)
-		}
-	}
-	if len(delivered) == 0 {
-		return nil, time.Time{}, nil
-	}
-	known, err := app.queries.ListLedgerJobIDs(ctx, db.ListLedgerJobIDsParams{OwnerKind: src.kind, OwnerID: src.ownerID, JobIds: ids})
-	if err != nil {
-		return nil, time.Time{}, err
-	}
-	seen := map[int64]bool{}
-	for _, id := range known {
-		seen[id] = true
-	}
-	me := map[int64]int64{}
-	if src.blueprint != nil {
-		var bps esi.Blueprints
-		if json.Unmarshal([]byte(src.blueprint.Payload), &bps) == nil {
-			for _, b := range bps {
-				me[b.ItemID] = b.MaterialEfficiency
-			}
-		}
-	}
-	typicals := app.TypicalSells(ctx)
-	estimates := app.storedTrueValues(ctx)
-	price := func(typeID int64) (float64, bool) {
-		return pickValuationPrice(typicals[typeID], estSellOf(estimates, typeID))
-	}
-	var types []int64
-	var earliest time.Time
-	for _, j := range delivered {
-		if seen[j.JobID] {
-			continue
-		}
-		at, err := time.Parse(time.RFC3339, j.CompletedDate)
-		if err != nil {
-			if at, err = time.Parse(time.RFC3339, j.EndDate); err != nil {
-				at = now.UTC()
-			}
-		}
-		units, outValue, matCost, priced := app.valueJob(ctx, j, me[j.BlueprintID], price)
-		if _, err := app.queries.InsertLedgerJob(ctx, db.InsertLedgerJobParams{
-			OwnerKind: src.kind, OwnerID: src.ownerID, JobID: j.JobID, At: at,
-			ActivityID: j.ActivityID, ProductTypeID: j.ProductTypeID, Units: units,
-			OutputValue: outValue, MaterialsCost: matCost, Priced: priced,
-		}); err != nil && !errors.Is(err, sql.ErrNoRows) {
-			return nil, time.Time{}, err
-		}
-		if priced {
-			types = append(types, j.ProductTypeID)
-		}
-		if earliest.IsZero() || at.Before(earliest) {
-			earliest = at
-		}
-	}
-	return types, earliest, nil
-}
-
-// valueJob prices one delivered job: the units it made, their value,
-// and its materials after material efficiency (each line at least one
-// unit per run). priced is false when the blueprint, the output, or
-// any material has no house price: the job is then kept but not
-// counted, an honest gap.
-func (app *Application) valueJob(ctx context.Context, j esi.IndustryJob, me int64, price func(int64) (float64, bool)) (units int64, output, materials float64, priced bool) {
-	bp, err := app.queries.GetSDEBlueprint(ctx, j.BlueprintTypeID)
-	if err != nil {
-		return 0, 0, 0, false
-	}
-	runs := j.SuccessfulRuns
-	if runs <= 0 {
-		runs = j.Runs
-	}
-	units = runs * max(bp.ProductQuantity, 1)
-	unit, ok := price(j.ProductTypeID)
-	if !ok || units <= 0 {
-		return units, 0, 0, false
-	}
-	mats, err := app.queries.ListSDEBlueprintMaterials(ctx, j.BlueprintTypeID)
-	if err != nil || len(mats) == 0 {
-		return units, 0, 0, false
-	}
-	factor := 1 - float64(min(max(me, 0), 10))/100
-	for _, m := range mats {
-		p, ok := price(m.MaterialTypeID)
-		if !ok {
-			return units, 0, 0, false
-		}
-		qty := max(runs, int64(math.Ceil(float64(m.Quantity*j.Runs)*factor)))
-		materials += float64(qty) * p
-	}
-	return units, float64(units) * unit, materials, true
 }

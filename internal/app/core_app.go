@@ -752,6 +752,7 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 		r.With(anonPages).Get("/suggest", app.handleMarketSuggest)
 		r.With(anonPages).Get("/history-fragment", app.handleMarketHistoryFragment)
 		r.With(anonPages).Get("/trader-fragment", app.handleMarketTraderFragment)
+		r.With(anonPages).Get("/browse-fragment", app.handleMarketBrowseFragment)
 		r.With(anonPages).Get("/trends/", app.handleMarketTrends)
 		r.With(anonPages).Get("/lp/", app.handleMarketLP)
 		r.With(anonPages).Get("/baskets/", app.handleMarketBaskets)

@@ -239,43 +239,7 @@
   <p><small>Search for an item to see its guide prices and regional order books.</small></p>
 {{end}}
 
-{{if .Market.Browse}}
-{{$b := .Market.Browse}}
-<div class="panel market-browse">
-{{if $b.Current}}
-<p class="market-crumbs"><small><a href="/market/">Market</a>{{range $b.Breadcrumbs}} › <a href="/market/?group={{.ID}}&region={{$.Market.Region}}">{{.Name}}</a>{{end}} › {{$b.Current.Name}}</small></p>
-<h3>{{$b.Current.Name}}</h3>
-{{else}}
-<h3>Browse categories</h3>
-{{end}}
-{{if $b.Groups}}
-<div class="market-group-grid">
-{{range $b.Groups}}
-  <a class="market-group-card" href="/market/?group={{.ID}}&region={{$.Market.Region}}"><span class="market-group-icon" aria-hidden="true">{{.Icon}}</span><span class="market-group-name">{{.Name}}</span></a>
-{{end}}
-</div>
-{{else if not $b.Types}}
-<p><small>{{if $b.Current}}Nothing lists here yet.{{else}}Market categories fill in once the static data import lands.{{end}}</small></p>
-{{end}}
-{{if $b.Types}}
-<div class="tw">
-<table>
-  <thead><tr><th>Item</th></tr></thead>
-  <tbody>
-  {{range $b.Types}}
-    <tr><td><a href="/market/?type={{.ID}}&region={{$.Market.Region}}">{{.Name}}</a></td></tr>
-  {{end}}
-  </tbody>
-</table>
-</div>
-{{if gt $b.TotalPages 1}}
-<p><small>{{$b.TotalTypes}} items · page {{$b.Page}} of {{$b.TotalPages}}</small>
-{{if $b.HasPrev}} · <a href="/market/?group={{$b.GroupID}}&region={{$.Market.Region}}&page={{$b.PrevPage}}">← Prev</a>{{end}}
-{{if $b.HasNext}} · <a href="/market/?group={{$b.GroupID}}&region={{$.Market.Region}}&page={{$b.NextPage}}">Next →</a>{{end}}</p>
-{{end}}
-{{end}}
-</div>
-{{end}}
+{{with .Market.Browse}}{{template "market-browse" .}}{{end}}
 
 {{if .Market.Watchlist}}
 {{$wl := .Market.Watchlist}}
@@ -398,5 +362,66 @@
   </div>
   <p><small>From recorded daily trades in {{.RegionName}} plus today's best orders. Margin is before broker fees and sales tax.</small></p>
   {{end}}
+</div>
+{{end}}
+
+{{/* The market browser: the category tree beside the chosen group's
+     items with their stat pack figures. Rendered whole on the page
+     and alone by /market/browse-fragment, which market.js swaps in. */}}
+{{define "market-browse"}}
+<div class="panel market-browse" id="market-browse" data-browse-root>
+{{if .Current}}
+<p class="market-crumbs"><small><a href="/market/" data-browse-link>Market</a>{{range .Breadcrumbs}} › <a href="/market/?group={{.ID}}&region={{$.Region}}" data-browse-link>{{.Name}}</a>{{end}} › {{.Current.Name}}</small></p>
+<h3>{{.Current.Name}}</h3>
+{{else}}
+<h3>Browse categories</h3>
+{{end}}
+{{if .Tree}}
+<div class="mb-layout">
+  <nav class="mb-tree" aria-label="Market categories">
+    <ul>
+    {{range .Tree}}
+      <li class="mb-node mb-depth-{{.Depth}}{{if .Open}} open{{end}}{{if .Chosen}} chosen{{end}}"><a href="/market/?group={{.ID}}&region={{$.Region}}" data-browse-link{{if .Chosen}} aria-current="true"{{end}}>{{if eq .Depth 0}}<span class="market-group-icon" aria-hidden="true">{{.Icon}}</span>{{end}}<span class="market-group-name">{{.Name}}</span></a></li>
+    {{end}}
+    </ul>
+  </nav>
+  <div class="mb-items">
+    <form method="get" action="/market/" class="mt-filters" data-browse-form>
+      {{if .GroupID}}<input type="hidden" name="group" value="{{.GroupID}}">{{end}}
+      <input type="hidden" name="region" value="{{.Region}}">
+      <label><small>Name has</small> <input type="search" name="bq" value="{{.Query}}" maxlength="60" size="14" autocomplete="off"></label>
+      <label><small>Traded per day at least</small> <input type="number" name="minvol" min="0" step="1" value="{{if .MinVolume}}{{.MinVolume}}{{end}}" size="6"></label>
+      <label><small>Sort</small>
+        <select name="sort">{{range .Sorts}}<option value="{{.Key}}"{{if .Active}} selected{{end}}>{{.Label}}</option>{{end}}</select>
+      </label>
+      <button class="btn" type="submit">Show</button>
+    </form>
+    {{if .Types}}
+    <div class="tw">
+    <table>
+      <thead><tr><th>Item</th><th class="mt-num">Typical sell</th><th class="mt-num">Typical buy</th><th class="mt-num">7 days</th><th class="mt-num">Traded per day</th><th class="mt-num">Daily swing</th></tr></thead>
+      <tbody>
+      {{range .Types}}
+        <tr>
+          <td><a href="/market/?type={{.ID}}&region={{$.Region}}">{{.Name}}</a></td>
+          <td class="mt-num">{{if .TypicalSell}}{{.TypicalSell}}{{else}}—{{end}}</td>
+          <td class="mt-num">{{if .TypicalBuy}}{{.TypicalBuy}}{{else}}—{{end}}</td>
+          <td class="mt-num">{{if .Chg7.Text}}<span class="mt-chg {{.Chg7.Dir}}">{{.Chg7.Text}}</span>{{else}}—{{end}}</td>
+          <td class="mt-num">{{if .TradedDay}}{{.TradedDay}}{{else}}—{{end}}</td>
+          <td class="mt-num">{{if .Swing}}{{.Swing}}{{else}}—{{end}}</td>
+        </tr>
+      {{end}}
+      </tbody>
+    </table>
+    </div>
+    <p><small>{{.TotalTypes}} items{{if .Current}} in {{.Current.Name}}{{end}}, prices in ISK from the latest {{.RegionName}} sweep.{{if gt .TotalPages 1}} Page {{.Page}} of {{.TotalPages}}.{{end}}{{if .PrevHref}} <a href="{{.PrevHref}}" data-browse-link>Previous</a>{{end}}{{if .NextHref}} <a href="{{.NextHref}}" data-browse-link>Next</a>{{end}}</small></p>
+    {{else}}
+    <p><small>No items here match those filters.</small></p>
+    {{end}}
+  </div>
+</div>
+{{else}}
+<p><small>Market categories fill in once the static data import lands.</small></p>
+{{end}}
 </div>
 {{end}}

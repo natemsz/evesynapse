@@ -885,8 +885,13 @@ type BottomSection struct {
 // ShellData holds all the layout, session, nav, and shell state
 // needed by base.html and shared partials.
 type ShellData struct {
-	Version       string
-	AssetVersion  string
+	Version      string
+	AssetVersion string
+	// StatusPage is the configured public status page's URL
+	// (STATUS_PAGE_ORIGIN), linked from the footer as Service
+	// Health. Empty when no status page is configured, and the
+	// footer offers no link then.
+	StatusPage    string
 	LoggedIn      bool
 	IsAdmin       bool
 	Demo          bool // the session is the shared demo account (demo.go)

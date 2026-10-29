@@ -143,3 +143,23 @@ WHERE b.region_id = $1
   AND NOT EXISTS (SELECT 1 FROM market_basket_values_daily v WHERE v.basket_id = b.id)
 ORDER BY b.id
 LIMIT 200;
+
+-- name: UpsertWatchlistBasket :exec
+INSERT INTO market_watchlist_baskets (user_id, basket_id, threshold_pct)
+VALUES ($1, $2, $3)
+ON CONFLICT (user_id, basket_id) DO UPDATE SET
+    threshold_pct = excluded.threshold_pct;
+
+-- name: DeleteWatchlistBasket :exec
+DELETE FROM market_watchlist_baskets
+WHERE user_id = $1 AND basket_id = $2;
+
+-- name: ListWatchlistBasketsByUser :many
+-- The baskets a player watches that they can still see: their own
+-- and the presets. A basket that stops being visible drops off.
+SELECT w.basket_id, b.name, b.region_id, w.threshold_pct
+FROM market_watchlist_baskets w
+JOIN market_baskets b ON b.id = w.basket_id
+WHERE w.user_id = $1
+  AND (b.user_id IS NULL OR b.user_id = $1)
+ORDER BY b.name, w.basket_id;

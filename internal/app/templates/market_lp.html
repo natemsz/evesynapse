@@ -29,6 +29,21 @@
   <label><small>At least sold per day</small>
     <input type="number" name="minvol" min="0" step="1" value="{{.MinVolume}}" size="6">
   </label>
+  <label><small>ISK per LP, at least</small>
+    <input type="number" name="minisklp" min="0" step="any" value="{{if .MinISKPerLP}}{{.MinISKPerLP}}{{end}}" size="7">
+  </label>
+  <label><small>ISK per LP, at most</small>
+    <input type="number" name="maxisklp" min="0" step="any" value="{{if .MaxISKPerLP}}{{.MaxISKPerLP}}{{end}}" size="7">
+  </label>
+  <label><small>LP cost, at least</small>
+    <input type="number" name="minlp" min="0" step="1" value="{{if .MinLP}}{{.MinLP}}{{end}}" size="7">
+  </label>
+  <label><small>LP cost, at most</small>
+    <input type="number" name="maxlp" min="0" step="1" value="{{if .MaxLP}}{{.MaxLP}}{{end}}" size="7">
+  </label>
+  <label><small>Find stores for an item</small>
+    <input type="text" name="item" value="{{.Item}}" size="18" placeholder="Item name">
+  </label>
   <button class="btn" type="submit">Show</button>
 </form>
 
@@ -47,7 +62,7 @@
       <td class="mt-num">{{.ISKCost}}</td>
       <td class="mt-reqs">{{range $i, $r := .Requirements}}{{if $i}}, {{end}}{{$r.Quantity}}× <a href="/market/?type={{$r.TypeID}}&amp;region={{$.MarketLP.RegionID}}">{{$r.Name}}</a>{{else}}—{{end}}{{if .RequiredCost}} <small>({{.RequiredCost}})</small>{{end}}</td>
       <td class="mt-num">{{.Value}}</td>
-      <td class="mt-num"><strong>{{.ISKPerLP}}</strong></td>
+      <td class="mt-num">{{if .ISKPerLPDir}}<span class="mt-chg {{.ISKPerLPDir}}"><strong>{{.ISKPerLP}}</strong></span>{{else}}<strong>{{.ISKPerLP}}</strong>{{end}}</td>
       <td class="mt-num">{{.TradedDay}}</td>
       <td class="mt-num">{{if .Chg7.Text}}<span class="mt-chg {{.Chg7.Dir}}">{{.Chg7.Text}}</span>{{else}}—{{end}}</td>
     </tr>
@@ -55,9 +70,10 @@
   </tbody>
 </table>
 </div>
+<p><small>Export this view: <a href="/market/lp/export.csv?{{.ExportQuery}}">CSV</a> · <a href="/market/lp/export.json?{{.ExportQuery}}">JSON</a></small></p>
 <p><small>Prices in ISK, typical (median) prices in {{.RegionName}}{{with index .Rows 0}}{{if .Age}}, as of {{.Age}}{{end}}{{end}}. ISK per LP is what the items sell for, less the ISK cost and the items the offer also needs (bought at their typical sell), divided by the LP. Before broker fees and sales tax. Showing up to 100 offers.{{if .Unpriced}} {{.Unpriced}} {{if eq .Unpriced 1}}offer has{{else}}offers have{{end}} no price here: blueprint copies, or an item with no market in {{.RegionName}}.{{end}}</small></p>
 {{else}}
-<p>No priced offers clear those filters in {{.RegionName}}. Try a lower sold-per-day.</p>
+<p>No priced offers clear those filters in {{.RegionName}}.{{if .Item}} No store in this view sells “{{.Item}}”, or its price is missing here.{{else}} Try a lower sold-per-day.{{end}}</p>
 {{end}}
 {{else}}
 <p>Still reading the loyalty stores. They fill in over the next few minutes.</p>

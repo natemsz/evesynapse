@@ -189,6 +189,12 @@ type BlueprintResearchMedian struct {
 	ComputedAt  time.Time `json:"computed_at"`
 }
 
+type BriefingDismissal struct {
+	UserID      int64     `json:"user_id"`
+	LineKey     string    `json:"line_key"`
+	DismissedAt time.Time `json:"dismissed_at"`
+}
+
 type Character struct {
 	CharacterID  int64        `json:"character_id"`
 	UserID       int64        `json:"user_id"`

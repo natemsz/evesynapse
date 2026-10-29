@@ -663,6 +663,13 @@ var pgWatchlistBasketsSchema string
 //go:embed schema_pg/107_global_notices.sql
 var pgGlobalNoticesSchema string
 
+// Step 109: briefing dismissals, the briefing lines an account has
+// hidden (they still render, in the dismissed list, while they
+// apply).
+//
+//go:embed schema_pg/109_briefing_dismissals.sql
+var pgBriefingDismissalsSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -800,6 +807,7 @@ func schemaSteps() []schemaStep {
 		{106, "market_changes", pgMarketChangesSchema, ""},
 		{107, "global_notices", pgGlobalNoticesSchema, ""},
 		{108, "market_api", pgMarketAPISchema, ""},
+		{109, "briefing_dismissals", pgBriefingDismissalsSchema, ""},
 		{110, "watchlist_baskets", pgWatchlistBasketsSchema, ""},
 	}
 }

@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"regexp"
 	"strings"
 	"testing"
@@ -120,7 +121,7 @@ func TestBriefingDigestRules(t *testing.T) {
 	}
 	section := briefingSection(t, body)
 	mustContain(t, "briefing", section,
-		"/character/?character=90000001", // own character links to its sheet
+		"/character/?character=90000001&view=1", // own character links to its sheet, as a view
 		"2 extractors have stopped across 1 planet",
 		"runs dry in",
 		"1 market order expired since you last looked",
@@ -142,13 +143,13 @@ func TestBriefingDigestRules(t *testing.T) {
 		// skill lines on the sheet's skills section, and the
 		// per-character pages for jobs, planets, contracts,
 		// calendar and mail.
-		"<a href=\"/orders/?character=90000001\">Orders</a>",
-		"<a href=\"/character/?character=90000001#skills\">Skills</a>",
-		"<a href=\"/industry/jobs/?character=90000001\">My Jobs</a>",
-		"<a href=\"/planets/?character=90000001\">Colonies</a>",
-		"<a href=\"/contracts/?character=90000001\">Contracts</a>",
-		"<a href=\"/calendar/?character=90000001\">Calendar</a>",
-		"<a href=\"/mail/?character=90000001\">Mail</a>",
+		"<a href=\"/orders/?character=90000001&view=1\">Orders</a>",
+		"<a href=\"/character/?character=90000001&view=1#skills\">Skills</a>",
+		"<a href=\"/industry/jobs/?character=90000001&view=1\">My Jobs</a>",
+		"<a href=\"/planets/?character=90000001&view=1\">Colonies</a>",
+		"<a href=\"/contracts/?character=90000001&view=1\">Contracts</a>",
+		"<a href=\"/calendar/?character=90000001&view=1\">Calendar</a>",
+		"<a href=\"/mail/?character=90000001&view=1\">Mail</a>",
 	)
 	if strings.Contains(section, "Next week") {
 		t.Error("calendar event three days out appears in the briefing")
@@ -324,11 +325,11 @@ func TestBriefingCapAndDedupe(t *testing.T) {
 	if n := strings.Count(visibleText, "contract"); n > 2 {
 		t.Errorf("briefing repeats the contract rule (%d mentions), want one aggregated line", n)
 	}
-	li := strings.Count(section, `<li class="brief-card`)
-	if li > briefingCap {
-		t.Errorf("briefing lists %d lines, want at most %d", li, briefingCap)
+	rows := strings.Count(section, `<div class="brief-row"`)
+	if rows > briefingCap {
+		t.Errorf("briefing lists %d lines, want at most %d", rows, briefingCap)
 	}
-	if li == 0 {
+	if rows == 0 {
 		t.Fatal("briefing lists no lines despite the flood")
 	}
 	mustContain(t, "briefing cap", section, "more need your attention")
@@ -561,5 +562,62 @@ func TestBriefingAggregatesDeepLinks(t *testing.T) {
 	}
 	if strings.Contains(joined, "sheet:") {
 		t.Errorf("combined cards fell back to sheet segments:\n%s", joined)
+	}
+}
+
+// TestBriefingDismissedLines: the briefing groups its lines into
+// one stack per kind; a dismissed line leaves the stacks and
+// renders in the dismissed list while it still applies, and
+// restoring it brings it back.
+func TestBriefingDismissedLines(t *testing.T) {
+	transport := &countingTransport{}
+	app, _, q := buildCorpTestApp(t, transport)
+	ctx := context.Background()
+	now := time.Now()
+
+	user, err := q.CreateUser(ctx)
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	seedCharacter(t, q, user.ID, fixtureCharA, "Fixture Alpha")
+	seedBriefingFixture(t, app, q, user.ID, now)
+	cookie := sessionCookie(t, app, user.ID, fixtureCharA, "Fixture Alpha")
+
+	post := func(path, key string) int {
+		form := "key=" + url.QueryEscape(key)
+		req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(form))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.AddCookie(cookie)
+		rec := httptest.NewRecorder()
+		app.Handler().ServeHTTP(rec, req)
+		return rec.Code
+	}
+	mailKey := briefingKey(fixtureCharA, "mail")
+
+	_, body := getPage(t, app, cookie, "/")
+	section := briefingSection(t, body)
+	mustContain(t, "briefing stacks", section, "brief-stack", ">Mail<", "has 3 unread mail")
+	if strings.Contains(section, "Dismissed (") {
+		t.Fatal("dismissed list offered before anything was dismissed")
+	}
+
+	if code := post("/home/briefing/dismiss", mailKey); code != http.StatusSeeOther {
+		t.Fatalf("dismiss: status %d, want %d", code, http.StatusSeeOther)
+	}
+	_, body = getPage(t, app, cookie, "/")
+	section = briefingSection(t, body)
+	mustContain(t, "briefing dismissed", section, "Dismissed (1)", "brief-dismissed-modal")
+	if n := strings.Count(section, "has 3 unread mail"); n != 1 {
+		t.Errorf("mail line appears %d times after dismissal, want 1 (the dismissed list only)", n)
+	}
+
+	if code := post("/home/briefing/restore", mailKey); code != http.StatusSeeOther {
+		t.Fatalf("restore: status %d, want %d", code, http.StatusSeeOther)
+	}
+	_, body = getPage(t, app, cookie, "/")
+	section = briefingSection(t, body)
+	mustContain(t, "briefing restored", section, "has 3 unread mail")
+	if strings.Contains(section, "Dismissed (") {
+		t.Error("dismissed list still offered after the restore")
 	}
 }

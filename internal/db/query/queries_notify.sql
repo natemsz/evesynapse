@@ -110,3 +110,16 @@ UPDATE push_subscriptions SET last_ok_at = sqlc.arg(at), failures = 0 WHERE id =
 -- name: MarkPushSubscriptionFailed :one
 UPDATE push_subscriptions SET failures = failures + 1 WHERE id = $1
 RETURNING failures;
+
+-- name: DismissBriefingLine :exec
+INSERT INTO briefing_dismissals (user_id, line_key)
+VALUES ($1, $2)
+ON CONFLICT (user_id, line_key) DO NOTHING;
+
+-- name: ListBriefingDismissals :many
+SELECT line_key FROM briefing_dismissals
+WHERE user_id = $1
+ORDER BY line_key;
+
+-- name: DeleteBriefingDismissal :exec
+DELETE FROM briefing_dismissals WHERE user_id = $1 AND line_key = $2;

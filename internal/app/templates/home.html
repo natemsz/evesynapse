@@ -87,11 +87,27 @@
     {{if .Counts.Info}}<button type="button" class="chip sev-info" data-brief="info" aria-pressed="false">Info ({{.Counts.Info}})</button>{{end}}
   </div>
   <ul class="briefing brief-cards">
-  {{/* The briefing always shows every item it has: no More toggle. */}}
-  {{range .Items}}<li class="brief-card sev-{{.Severity}}" data-sev="{{.Severity}}"><div class="brief-head"><span class="sev">{{.Severity}}</span><span class="brief-meta"><span class="brief-icon brief-icon-{{.Kind}}" aria-hidden="true"></span>{{if .Count}}<span class="brief-count">{{.Count}}</span>{{end}}</span></div>{{if .Title}}<h4 class="brief-title">{{.Title}}</h4>{{end}}<span class="brief-text">{{.HTML}}</span></li>{{end}}
+  {{/* One stack per kind: the stack's face links where its first
+       line links, and each line can be hidden (not deleted) into
+       the dismissed list below. */}}
+  {{range .Stacks}}<li class="brief-card brief-stack sev-{{.Severity}}{{if gt (len .Items) 1}} has-stack{{end}}{{if gt (len .Items) 2}} has-stack-2{{end}}">
+    <a class="brief-card-link" href="{{.Href}}"><span class="brief-head"><span class="brief-icon brief-icon-{{.Kind}}" aria-hidden="true"></span><span class="brief-stack-title">{{.Title}}</span><span class="brief-meta">{{if gt (len .Items) 1}}<span class="brief-count">{{len .Items}} alerts</span>{{end}}</span></span></a>
+    {{range .Items}}<div class="brief-row" data-sev="{{.Severity}}"><div class="brief-row-main">{{if .Title}}<h4 class="brief-title">{{.Title}}</h4>{{end}}<span class="brief-text">{{.HTML}}</span></div><span class="brief-row-side"><span class="sev">{{.Severity}}</span>{{if .Count}}<span class="brief-count">{{.Count}}</span>{{end}}{{if .Key}}<form class="brief-dismiss" method="post" action="/home/briefing/dismiss"><input type="hidden" name="key" value="{{.Key}}"><button type="submit" class="brief-x" aria-label="Dismiss this alert" title="Dismiss — hide it; it stays under Dismissed while it applies">×</button></form>{{end}}</span></div>{{end}}
+  </li>{{end}}
   </ul>
   {{if .More}}<p><small>+{{.More}} more need{{if eq .More 1}}s{{end}} your attention.</small></p>{{end}}
-  <p><small>Since {{.SinceLabel}}</small></p>
+  <p><small>Since {{.SinceLabel}}</small>{{if .Dismissed}} · <button type="button" class="brief-dismissed-open" data-open-brief-dismissed>Dismissed ({{len .Dismissed}})</button>{{end}}</p>
+  {{if .Dismissed}}
+  <div class="modal-backdrop" id="brief-dismissed-modal" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="brief-dismissed-title">
+      <div class="modal-head"><h3 id="brief-dismissed-title">Dismissed alerts</h3><button type="button" class="modal-close" data-close-modal aria-label="Close">×</button></div>
+      <p><small>Hidden, not deleted. These still apply; one that stops applying drops off this list on its own.</small></p>
+      <ul class="brief-dismissed-list">
+      {{range .Dismissed}}<li class="brief-row" data-sev="{{.Severity}}"><div class="brief-row-main">{{if .Title}}<h4 class="brief-title">{{.Title}}</h4>{{end}}<span class="brief-text">{{.HTML}}</span></div><form class="brief-restore" method="post" action="/home/briefing/restore"><input type="hidden" name="key" value="{{.Key}}"><button type="submit">Restore</button></form></li>{{end}}
+      </ul>
+    </div>
+  </div>
+  {{end}}
   {{else}}
   <p>Nothing needs your attention right now.</p>
   {{end}}

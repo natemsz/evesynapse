@@ -1094,12 +1094,13 @@
   initFleetFilter(document);
 
   // --- Briefing severity tabs ------------------------------------
-  // All / Critical / Warning / Info swap which cards show; the
-  // module's More/Less still decides how far down the list goes.
+  // All / Critical / Warning / Info swap which lines show; a stack
+  // whose lines are all filtered out hides with them.
   function initBriefTabs(root) {
     var tabs = root.querySelectorAll("[data-brief]");
     if (!tabs.length) return;
-    var cards = root.querySelectorAll(".brief-card");
+    var rows = root.querySelectorAll(".brief-cards .brief-row");
+    var stacks = root.querySelectorAll(".brief-cards .brief-stack");
     for (var i = 0; i < tabs.length; i++) {
       tabs[i].addEventListener("click", function () {
         var sev = this.getAttribute("data-brief");
@@ -1108,14 +1109,38 @@
           tabs[j].classList.toggle("on", on);
           tabs[j].setAttribute("aria-pressed", on ? "true" : "false");
         }
-        for (var k = 0; k < cards.length; k++) {
-          cards[k].classList.toggle("brief-off", sev !== "all" && cards[k].getAttribute("data-sev") !== sev);
+        for (var k = 0; k < rows.length; k++) {
+          rows[k].classList.toggle("brief-off", sev !== "all" && rows[k].getAttribute("data-sev") !== sev);
+        }
+        for (var s = 0; s < stacks.length; s++) {
+          var any = sev === "all";
+          if (!any) {
+            var rs = stacks[s].querySelectorAll(".brief-row");
+            for (var q = 0; q < rs.length; q++) {
+              if (!rs[q].classList.contains("brief-off")) { any = true; break; }
+            }
+          }
+          stacks[s].classList.toggle("brief-off", !any);
         }
       });
     }
   }
   onContentReady(initBriefTabs);
   initBriefTabs(document);
+
+  // --- Briefing dismissed list -------------------------------------
+  // The Dismissed (n) button opens the modal of hidden lines.
+  function initBriefDismissed(root) {
+    var openers = root.querySelectorAll("[data-open-brief-dismissed]");
+    for (var i = 0; i < openers.length; i++) {
+      openers[i].addEventListener("click", function () {
+        var modal = document.getElementById("brief-dismissed-modal");
+        if (modal && window.EveSynapseModal) EveSynapseModal.open(modal);
+      });
+    }
+  }
+  onContentReady(initBriefDismissed);
+  initBriefDismissed(document);
 
   // --- Widget settings (orders scope picker) ------------------
   // A change applies at once: the form IS the plain submit (the

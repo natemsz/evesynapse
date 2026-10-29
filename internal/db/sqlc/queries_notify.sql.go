@@ -24,6 +24,20 @@ func (q *Queries) CountPushSubscriptionsByUser(ctx context.Context, userID int64
 	return column_1, err
 }
 
+const deleteBriefingDismissal = `-- name: DeleteBriefingDismissal :exec
+DELETE FROM briefing_dismissals WHERE user_id = $1 AND line_key = $2
+`
+
+type DeleteBriefingDismissalParams struct {
+	UserID  int64  `json:"user_id"`
+	LineKey string `json:"line_key"`
+}
+
+func (q *Queries) DeleteBriefingDismissal(ctx context.Context, arg DeleteBriefingDismissalParams) error {
+	_, err := q.db.ExecContext(ctx, deleteBriefingDismissal, arg.UserID, arg.LineKey)
+	return err
+}
+
 const deletePushSubscription = `-- name: DeletePushSubscription :exec
 DELETE FROM push_subscriptions WHERE user_id = $1 AND endpoint = $2
 `
@@ -44,6 +58,22 @@ DELETE FROM push_subscriptions WHERE id = $1
 
 func (q *Queries) DeletePushSubscriptionByID(ctx context.Context, id int64) error {
 	_, err := q.db.ExecContext(ctx, deletePushSubscriptionByID, id)
+	return err
+}
+
+const dismissBriefingLine = `-- name: DismissBriefingLine :exec
+INSERT INTO briefing_dismissals (user_id, line_key)
+VALUES ($1, $2)
+ON CONFLICT (user_id, line_key) DO NOTHING
+`
+
+type DismissBriefingLineParams struct {
+	UserID  int64  `json:"user_id"`
+	LineKey string `json:"line_key"`
+}
+
+func (q *Queries) DismissBriefingLine(ctx context.Context, arg DismissBriefingLineParams) error {
+	_, err := q.db.ExecContext(ctx, dismissBriefingLine, arg.UserID, arg.LineKey)
 	return err
 }
 
@@ -111,6 +141,35 @@ type InsertNotificationSeenParams struct {
 func (q *Queries) InsertNotificationSeen(ctx context.Context, arg InsertNotificationSeenParams) error {
 	_, err := q.db.ExecContext(ctx, insertNotificationSeen, arg.UserID, pq.Array(arg.EventKeys), arg.SeenAt)
 	return err
+}
+
+const listBriefingDismissals = `-- name: ListBriefingDismissals :many
+SELECT line_key FROM briefing_dismissals
+WHERE user_id = $1
+ORDER BY line_key
+`
+
+func (q *Queries) ListBriefingDismissals(ctx context.Context, userID int64) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, listBriefingDismissals, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var line_key string
+		if err := rows.Scan(&line_key); err != nil {
+			return nil, err
+		}
+		items = append(items, line_key)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listNotificationSeenKeys = `-- name: ListNotificationSeenKeys :many

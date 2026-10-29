@@ -445,16 +445,26 @@ func (app *Application) handleMarketBasketEdit(w http.ResponseWriter, r *http.Re
 		back("Give the basket a name.")
 		return
 	}
-	lines := parseBasketLines(r.Form.Get("items"))
-	if len(lines) > basketMaxItems {
-		back(fmt.Sprintf("A basket holds at most %d items.", basketMaxItems))
-		return
+	// The basket page's name-and-region form sends no items field;
+	// only a form carrying one replaces the basket's contents.
+	_, hasItems := r.PostForm["items"]
+	var lines []basketLine
+	if hasItems {
+		lines = parseBasketLines(r.Form.Get("items"))
+		if len(lines) > basketMaxItems {
+			back(fmt.Sprintf("A basket holds at most %d items.", basketMaxItems))
+			return
+		}
 	}
 	if err := app.queries.UpdateMarketBasket(ctx, db.UpdateMarketBasketParams{
 		ID: b.ID, UserID: b.UserID, Name: name, RegionID: basketRegion(r.Form.Get("region")),
 	}); err != nil {
 		logging.Errorf("baskets: update %d: %v", b.ID, err)
 		back("Couldn't save the basket right now.")
+		return
+	}
+	if !hasItems {
+		back("Saved.")
 		return
 	}
 	unknown, err := app.saveBasketItems(ctx, b.ID, lines)

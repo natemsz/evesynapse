@@ -422,6 +422,7 @@ func (app *Application) handleSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	data.NotifySettings = view
 	data.Security = app.securityViewFor(ctx, r, userID)
+	app.attachAPIKeys(ctx, &data, userID)
 	app.render(ctx, w, http.StatusOK, "settings.html", data)
 }
 

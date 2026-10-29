@@ -1,7 +1,7 @@
 {{define "title"}}Settings{{end}}
 {{define "pagetitle"}}<h1>Settings</h1>{{end}}
 {{define "pagetabs"}}<nav class="section-tabs" aria-label="Settings pages">
-  <a href="#notifications" data-tab="notifications" class="active" aria-current="page">Notifications</a><a href="#interface" data-tab="interface">Interface</a><a href="#security" data-tab="security">Security</a>
+  <a href="#notifications" data-tab="notifications" class="active" aria-current="page">Notifications</a><a href="#interface" data-tab="interface">Interface</a><a href="#security" data-tab="security">Security</a><a href="#api" data-tab="api">API</a>
 </nav>{{end}}
 {{define "content"}}
 
@@ -141,3 +141,52 @@
 </section>
 {{end}}
 
+<section class="card page-card" data-tabpanel="api" hidden>
+{{with .APIKeys}}
+  <h2>Market API</h2>
+  <p><small>Read EveSynapse's market prices from your own tools: prices, book statistics, trends, the change feed, and appraisals that handle abyssal modules, blueprint copies and researched blueprints. Keys only read market data; they can't see or change anything on your account.</small></p>
+  {{if .Error}}<p class="err" role="alert">{{.Error}}</p>{{end}}
+  {{if .NewKey}}
+  <div class="api-newkey" role="status">
+    <p><strong>Your new key.</strong> <small>Copy it now: this is the only time it is shown.</small></p>
+    <p><code id="api-new-key">{{.NewKey}}</code> <button type="button" class="btn" data-copy data-copy-from="api-new-key">Copy</button></p>
+  </div>
+  {{end}}
+  {{if .Keys}}
+  <table>
+    <thead><tr><th>Name</th><th>Key</th><th>Made</th><th>Last used</th><th>Today</th><th></th></tr></thead>
+    <tbody>
+      {{range .Keys}}
+      <tr>
+        <td>{{.Name}}</td>
+        <td><code>{{.Prefix}}</code></td>
+        <td>{{.Created}}</td>
+        <td>{{.LastUsed}}</td>
+        <td>{{.Today}} of {{.Quota}}</td>
+        <td><form method="post" action="/settings/api-keys/revoke"><input type="hidden" name="id" value="{{.ID}}"><button class="btn" type="submit">Revoke</button></form></td>
+      </tr>
+      {{end}}
+    </tbody>
+  </table>
+  {{end}}
+  {{if .AtLimit}}
+  <p><small>You have the most keys one account can hold. Revoke one to make another.</small></p>
+  {{else}}
+  <form method="post" action="/settings/api-keys#api" data-needs-fresh>
+    <p><label>Key name <input type="text" name="name" maxlength="40" required autocomplete="off" placeholder="My spreadsheet"></label>
+    <button class="btn" type="submit">Make a key</button></p>
+  </form>
+  {{end}}
+  <h2>Using it</h2>
+  <p><small>Send the key in a header: <code>Authorization: Bearer esk_…</code>. Each key gets {{.PerMinute}} requests a minute with a short burst, a daily allowance, and up to {{.MaxBatch}} items per request.</small></p>
+  <ul class="api-endpoints">
+    <li><code>GET {{.BaseURL}}/prices?region=10000002&amp;types=34,35</code><br><small>Prices with where each came from, the full order book statistics, and trends.</small></li>
+    <li><code>GET {{.BaseURL}}/history?region=10000002&amp;type=34&amp;days=90</code><br><small>A type's daily figures from our sweeps.</small></li>
+    <li><code>GET {{.BaseURL}}/changes?region=10000002&amp;days=1</code><br><small>Sharp price moves, supply drops and spreads widening.</small></li>
+    <li><code>POST {{.BaseURL}}/appraise</code><br><small>Price a list: <code>{"lines":[{"type_id":23919,"quantity":1,"me":10,"te":20},{"type_id":47781,"quantity":1,"item_id":1040000000000}]}</code>. Abyssal modules by item id, blueprint copies with <code>"copy":true</code> and runs, researched blueprints by ME and TE.</small></li>
+    <li><code>GET {{.BaseURL}}/abyssal/{type_id}/{item_id}</code><br><small>One abyssal module's estimate. A module we haven't seen yet is queued and priced within a few minutes.</small></li>
+    <li><code>GET {{.BaseURL}}/key</code><br><small>Your key's allowance and today's use.</small></li>
+  </ul>
+{{end}}
+</section>
+{{end}}

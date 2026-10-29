@@ -565,6 +565,8 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	r.Use(app.countRequests)
 	r.Use(middleware.Recoverer)
 	r.Use(app.securityHeaders)
+	// The market API's own host answers /api/ only (market_api.go).
+	r.Use(app.marketAPIHostGate)
 	r.Use(navStateMiddleware)
 	// Pages, the stylesheet and the scripts are text and compress to
 	// a fraction of their size; fonts and images are left alone.
@@ -587,6 +589,8 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 		r.Post("/widget-config", app.handleWidgetConfig)
 	})
 	r.Get("/healthz", app.handleHealthz)
+	// The market API (market_api.go): read-only, key-gated, rate-limited.
+	app.mountMarketAPI(r)
 	r.Get("/favicon.ico", handleFavicon)
 	// The push service worker, from the root so it can act for the
 	// whole site (notify_push.go).
@@ -698,6 +702,8 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	// tab; the old address redirects there.
 	r.With(app.requireAuth).Get("/settings", app.handleSettings)
 	r.With(app.requireAuth).Post("/settings/theme", app.handleSettingsThemeSave)
+	r.With(app.requireAuth).Post("/settings/api-keys", app.handleAPIKeyCreate)
+	r.With(app.requireAuth).Post("/settings/api-keys/revoke", app.handleAPIKeyRevoke)
 
 	// Notifications (notify_pages.go): the list, and the two actions
 	// that change what is unread.

@@ -774,6 +774,15 @@ func (c *cycleState) refreshPublicData(ctx context.Context, characters []db.Char
 	// Abyssal scoring (schema 057): rolls become scores and
 	// stored estimates, so the appraisal pass below can
 	// price mutated lines from them in the same cycle.
+	// Market API usage (schema 108): counted in memory per request,
+	// stored here once a cycle.
+	app.flushMarketAPIUsage(ctx)
+	// Abyssal wants (schema 108): items API callers asked to have
+	// priced, read on their own small lane ahead of scoring so they
+	// price in the same cycle.
+	c.pass("reading requested abyssal items", func() (int, bool) {
+		return app.refreshAbyssalWants(ctx)
+	})
 	c.pass("scoring abyssal items", func() (int, bool) {
 		return app.scoreAbyssalItems(ctx), false
 	})

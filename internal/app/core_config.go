@@ -81,6 +81,15 @@ type Config struct {
 	discordClientID, discordClientSecret string
 	discordBotToken                      string
 
+	// The market API's own host (MARKET_API_HOST, e.g. api.example.com):
+	// requests for it reach /api/ only, never the site's pages or
+	// sessions. "" serves the API on the site's host alone.
+	marketAPIHost string
+	// The public status page's origin (STATUS_PAGE_ORIGIN, e.g.
+	// https://status.example.com): the one origin the health answers
+	// allow cross-origin reads from. "" allows none.
+	statusPageOrigin string
+
 	addr                     string         // listen address
 	databaseURL              string         // Postgres connection URL (DATABASE_URL)
 	eveClientID              string         // EVE SSO application client ID
@@ -383,6 +392,8 @@ func LoadConfig() (Config, error) {
 		discordClientID:            os.Getenv("DISCORD_CLIENT_ID"),
 		discordClientSecret:        os.Getenv("DISCORD_CLIENT_SECRET"),
 		discordBotToken:            os.Getenv("DISCORD_BOT_TOKEN"),
+		marketAPIHost:              strings.ToLower(strings.TrimSpace(os.Getenv("MARKET_API_HOST"))),
+		statusPageOrigin:           strings.TrimRight(strings.TrimSpace(os.Getenv("STATUS_PAGE_ORIGIN")), "/"),
 		addr:                       getenvDefault("ADDR", ":8080"),
 		databaseURL:                getenvDefault("DATABASE_URL", "postgres://evesynapse@localhost:5432/evesynapse?sslmode=disable"),
 		eveClientID:                os.Getenv("EVE_CLIENT_ID"),

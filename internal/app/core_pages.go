@@ -120,6 +120,7 @@ type pageData struct {
 	Enroll *enrollView
 	// Security is the settings Security section.
 	Security *securityView
+	APIKeys  *apiKeysView // Settings, API tab (market_api_keys.go)
 	// SecurityCodes is the shown-once recovery code page.
 	SecurityCodes *securityCodesView
 }

@@ -38,6 +38,13 @@
 .mt-swatch-spread { height: 2px; background: var(--gold); }
 
 .mt-filters { display: flex; flex-wrap: wrap; gap: 0.5rem 0.75rem; align-items: flex-end; }
+/* The LP store's filter panel: the contracts search's box
+   treatment (a titled inset panel) around the shared filter row,
+   with the item search leading as a full-width field. */
+.lp-filters { margin: 0 0 1rem; }
+.lp-filters .mt-filters { margin-top: 0.55rem; }
+.lp-filters .lp-search { flex: 1 1 100%; }
+.lp-filters .lp-search input { width: 100%; }
 .mt-modes { display: flex; flex-wrap: wrap; gap: 0.35rem; margin: 0.5rem 0; }
 .mt-modes a {
   padding: 0.2rem 0.6rem;

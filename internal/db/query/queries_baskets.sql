@@ -106,6 +106,15 @@ WHERE basket_id = sqlc.arg(basket_id) AND day >= sqlc.arg(since)
 ORDER BY day
 LIMIT 400;
 
+-- name: ListMarketBasketValuesForBaskets :many
+-- Recent stored values for a set of baskets at once (the list
+-- page's change figures), oldest first per basket.
+SELECT basket_id, day, value_sell, value_buy, priced_items, item_count
+FROM market_basket_values_daily
+WHERE basket_id = ANY(sqlc.arg(basket_ids)::bigint[]) AND day >= sqlc.arg(since)
+ORDER BY basket_id, day
+LIMIT 2000;
+
 -- name: ListMarketBasketOutsideMovers :many
 -- The biggest movers outside a basket: types in the same market
 -- groups as its items, in its region, that it does not hold, ranked

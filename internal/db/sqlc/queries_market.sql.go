@@ -240,6 +240,69 @@ func (q *Queries) DeleteWatchlistEntry(ctx context.Context, arg DeleteWatchlistE
 	return err
 }
 
+const detectMarketChanges = `-- name: DetectMarketChanges :execrows
+INSERT INTO market_changes (region_id, type_id, day, kind, before, after, pct, detected_at)
+SELECT $1::bigint, c.type_id, $2::text, c.kind, c.before, c.after, c.pct, $3::timestamptz
+FROM (
+    SELECT s.type_id, k.kind, k.before, k.after, k.pct
+    FROM market_region_stats s
+    JOIN LATERAL (
+        SELECT dd.typical_sell, dd.typical_buy, dd.sell_volume FROM market_region_stats_daily dd
+        WHERE dd.region_id = s.region_id AND dd.type_id = s.type_id
+          AND dd.day < $2::text
+          AND dd.day >= to_char($2::date - 3, 'YYYY-MM-DD')
+        ORDER BY dd.day DESC LIMIT 1
+    ) d ON true
+    CROSS JOIN LATERAL (VALUES
+        (CASE WHEN s.typical_sell > d.typical_sell THEN 'price_up' ELSE 'price_down' END,
+         d.typical_sell, s.typical_sell,
+         CASE WHEN d.typical_sell > 0 THEN (s.typical_sell - d.typical_sell) / d.typical_sell * 100 END),
+        ('supply_down', d.sell_volume::float8, s.sell_volume::float8,
+         CASE WHEN d.sell_volume > 0 THEN (s.sell_volume - d.sell_volume)::float8 / d.sell_volume * 100 END),
+        ('spread_wide',
+         CASE WHEN d.typical_buy > 0 THEN (d.typical_sell - d.typical_buy) / d.typical_buy * 100 END,
+         CASE WHEN s.typical_buy > 0 THEN (s.typical_sell - s.typical_buy) / s.typical_buy * 100 END,
+         CASE WHEN s.typical_buy > 0 AND d.typical_buy > 0
+              THEN ((s.typical_sell - s.typical_buy) / s.typical_buy - (d.typical_sell - d.typical_buy) / d.typical_buy) * 100 END)
+    ) AS k (kind, before, after, pct)
+    WHERE s.region_id = $1::bigint
+      AND s.sell_orders >= 5 AND s.avg_daily_volume_30d >= 1
+      AND s.typical_sell > 0 AND d.typical_sell > 0
+) c
+WHERE c.before IS NOT NULL AND c.after IS NOT NULL AND c.pct IS NOT NULL AND (
+       (c.kind IN ('price_up', 'price_down') AND ABS(c.pct) >= GREATEST($4::float8,
+            3 * COALESCE((SELECT v.volatility_30d FROM market_region_stats v
+                          WHERE v.region_id = $1::bigint AND v.type_id = c.type_id), 0)))
+    OR (c.kind = 'supply_down' AND c.before >= 10 AND c.pct <= -50)
+    OR (c.kind = 'spread_wide' AND c.before > 0 AND c.after >= 10 AND c.after >= 2 * c.before)
+)
+ON CONFLICT (region_id, type_id, day, kind) DO UPDATE SET
+    before = excluded.before, after = excluded.after, pct = excluded.pct
+`
+
+type DetectMarketChangesParams struct {
+	RegionID int64     `json:"region_id"`
+	Day      string    `json:"day"`
+	Now      time.Time `json:"now"`
+	MinMove  float64   `json:"min_move"`
+}
+
+// The change feed (schema 106) for one region, inside its sweep
+// transaction after the trend figures: each stat pack row against
+// the newest stored day before today (within three days).
+func (q *Queries) DetectMarketChanges(ctx context.Context, arg DetectMarketChangesParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, detectMarketChanges,
+		arg.RegionID,
+		arg.Day,
+		arg.Now,
+		arg.MinMove,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const getAllianceRecord = `-- name: GetAllianceRecord :one
 SELECT alliance_id, payload, state, fetched_at, priority
 FROM alliance_records
@@ -453,6 +516,37 @@ func (q *Queries) GetMarketRegionStatsStamp(ctx context.Context, regionID int64)
 	row := q.db.QueryRowContext(ctx, getMarketRegionStatsStamp, regionID)
 	var i GetMarketRegionStatsStampRow
 	err := row.Scan(&i.Stamp, &i.RowCount)
+	return i, err
+}
+
+const getMarketStatChange7 = `-- name: GetMarketStatChange7 :one
+SELECT sell_chg_7d, sell_chg_30d, typical_sell, updated_at FROM market_region_stats
+WHERE region_id = $1 AND type_id = $2
+`
+
+type GetMarketStatChange7Params struct {
+	RegionID int64 `json:"region_id"`
+	TypeID   int64 `json:"type_id"`
+}
+
+type GetMarketStatChange7Row struct {
+	SellChg7d   sql.NullFloat64 `json:"sell_chg_7d"`
+	SellChg30d  sql.NullFloat64 `json:"sell_chg_30d"`
+	TypicalSell float64         `json:"typical_sell"`
+	UpdatedAt   time.Time       `json:"updated_at"`
+}
+
+// A watched item's 7- and 30-day change of the typical sell from the
+// stat pack, with when the row was written.
+func (q *Queries) GetMarketStatChange7(ctx context.Context, arg GetMarketStatChange7Params) (GetMarketStatChange7Row, error) {
+	row := q.db.QueryRowContext(ctx, getMarketStatChange7, arg.RegionID, arg.TypeID)
+	var i GetMarketStatChange7Row
+	err := row.Scan(
+		&i.SellChg7d,
+		&i.SellChg30d,
+		&i.TypicalSell,
+		&i.UpdatedAt,
+	)
 	return i, err
 }
 
@@ -1729,6 +1823,174 @@ func (q *Queries) ListMarketBrowseTypes(ctx context.Context, arg ListMarketBrows
 			&i.Volatility30d,
 			&i.TradedPerDay,
 			&i.SellOrders,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listMarketChangesForRegion = `-- name: ListMarketChangesForRegion :many
+SELECT type_id, day, kind, before, after, pct, detected_at
+FROM market_changes
+WHERE region_id = $1 AND day >= $2::text
+  AND ($3::text = '' OR kind = $3::text)
+ORDER BY day DESC, ABS(pct) DESC, type_id
+LIMIT 100
+`
+
+type ListMarketChangesForRegionParams struct {
+	RegionID int64  `json:"region_id"`
+	Since    string `json:"since"`
+	Kind     string `json:"kind"`
+}
+
+type ListMarketChangesForRegionRow struct {
+	TypeID     int64     `json:"type_id"`
+	Day        string    `json:"day"`
+	Kind       string    `json:"kind"`
+	Before     float64   `json:"before"`
+	After      float64   `json:"after"`
+	Pct        float64   `json:"pct"`
+	DetectedAt time.Time `json:"detected_at"`
+}
+
+// The Trends page's change feed: a region's changes from a day on,
+// newest day first, biggest moves first within it.
+func (q *Queries) ListMarketChangesForRegion(ctx context.Context, arg ListMarketChangesForRegionParams) ([]ListMarketChangesForRegionRow, error) {
+	rows, err := q.db.QueryContext(ctx, listMarketChangesForRegion, arg.RegionID, arg.Since, arg.Kind)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListMarketChangesForRegionRow
+	for rows.Next() {
+		var i ListMarketChangesForRegionRow
+		if err := rows.Scan(
+			&i.TypeID,
+			&i.Day,
+			&i.Kind,
+			&i.Before,
+			&i.After,
+			&i.Pct,
+			&i.DetectedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listMarketChangesForType = `-- name: ListMarketChangesForType :many
+SELECT day, kind, before, after, pct, detected_at
+FROM market_changes
+WHERE region_id = $1 AND type_id = $2
+ORDER BY day DESC, kind
+LIMIT 20
+`
+
+type ListMarketChangesForTypeParams struct {
+	RegionID int64 `json:"region_id"`
+	TypeID   int64 `json:"type_id"`
+}
+
+type ListMarketChangesForTypeRow struct {
+	Day        string    `json:"day"`
+	Kind       string    `json:"kind"`
+	Before     float64   `json:"before"`
+	After      float64   `json:"after"`
+	Pct        float64   `json:"pct"`
+	DetectedAt time.Time `json:"detected_at"`
+}
+
+// One type's recent changes in a region: the item page.
+func (q *Queries) ListMarketChangesForType(ctx context.Context, arg ListMarketChangesForTypeParams) ([]ListMarketChangesForTypeRow, error) {
+	rows, err := q.db.QueryContext(ctx, listMarketChangesForType, arg.RegionID, arg.TypeID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListMarketChangesForTypeRow
+	for rows.Next() {
+		var i ListMarketChangesForTypeRow
+		if err := rows.Scan(
+			&i.Day,
+			&i.Kind,
+			&i.Before,
+			&i.After,
+			&i.Pct,
+			&i.DetectedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listMarketChangesForWatchlist = `-- name: ListMarketChangesForWatchlist :many
+SELECT m.type_id, m.region_id, m.day, m.kind, m.before, m.after, m.pct
+FROM market_changes m
+JOIN market_watchlist w ON w.type_id = m.type_id AND w.region_id = m.region_id
+WHERE w.user_id = $1 AND m.day >= $2::text
+ORDER BY m.day DESC, m.type_id
+LIMIT 100
+`
+
+type ListMarketChangesForWatchlistParams struct {
+	UserID int64  `json:"user_id"`
+	Since  string `json:"since"`
+}
+
+type ListMarketChangesForWatchlistRow struct {
+	TypeID   int64   `json:"type_id"`
+	RegionID int64   `json:"region_id"`
+	Day      string  `json:"day"`
+	Kind     string  `json:"kind"`
+	Before   float64 `json:"before"`
+	After    float64 `json:"after"`
+	Pct      float64 `json:"pct"`
+}
+
+// Today's changes on a user's watched items (each in its watched
+// region): the notification pass.
+func (q *Queries) ListMarketChangesForWatchlist(ctx context.Context, arg ListMarketChangesForWatchlistParams) ([]ListMarketChangesForWatchlistRow, error) {
+	rows, err := q.db.QueryContext(ctx, listMarketChangesForWatchlist, arg.UserID, arg.Since)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListMarketChangesForWatchlistRow
+	for rows.Next() {
+		var i ListMarketChangesForWatchlistRow
+		if err := rows.Scan(
+			&i.TypeID,
+			&i.RegionID,
+			&i.Day,
+			&i.Kind,
+			&i.Before,
+			&i.After,
+			&i.Pct,
 		); err != nil {
 			return nil, err
 		}
@@ -3697,6 +3959,20 @@ ON CONFLICT (id) DO UPDATE SET
 // ---------------------------------------------------------------------
 func (q *Queries) NoteGuidePriceWant(ctx context.Context, wantedAt time.Time) error {
 	_, err := q.db.ExecContext(ctx, noteGuidePriceWant, wantedAt)
+	return err
+}
+
+const pruneMarketChanges = `-- name: PruneMarketChanges :exec
+DELETE FROM market_changes WHERE region_id = $1 AND day < $2::text
+`
+
+type PruneMarketChangesParams struct {
+	RegionID  int64  `json:"region_id"`
+	BeforeDay string `json:"before_day"`
+}
+
+func (q *Queries) PruneMarketChanges(ctx context.Context, arg PruneMarketChangesParams) error {
+	_, err := q.db.ExecContext(ctx, pruneMarketChanges, arg.RegionID, arg.BeforeDay)
 	return err
 }
 

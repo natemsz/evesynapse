@@ -48,6 +48,7 @@ import (
 // one.
 const (
 	notifyWatch      = "watch"
+	notifyMarket     = "market_change"
 	notifySkill      = "skill"
 	notifyMail       = "mail"
 	notifyCalendar   = "calendar"
@@ -76,6 +77,7 @@ type notifyKind struct {
 // notifyKinds is every kind, in the order the settings page lists them.
 var coreNotifyKinds = []notifyKind{
 	{ID: notifyWatch, Title: "Watch list alerts", Module: "market_public", Standing: true, Account: true},
+	{ID: notifyMarket, Title: "Market changes on watched items and baskets", Module: "market_public", Account: true},
 	{ID: notifySkill, Title: "Skill complete", Module: "skills"},
 	// Ops are EveSynapse's own (ops.go): any character sees its
 	// corporation's, with no access to grant.
@@ -190,6 +192,7 @@ func (app *Application) collectNotifyEvents(ctx context.Context, userID int64, b
 		app.notifyIndustryEvents(ctx, c, b, now)
 	}
 	app.notifyWatchEvents(ctx, c, userID)
+	app.notifyMarketEvents(ctx, c, userID)
 	return c
 }
 
@@ -374,8 +377,8 @@ func (app *Application) notifyWatchEvents(ctx context.Context, c *notifyCollecto
 	src := c.source(notifyWatch, userID)
 	for _, e := range entries {
 		regionID := marketRegionForType(e.TypeID, e.RegionID)
-		rows := app.recentHistoryRows(ctx, regionID, e.TypeID, markethistory.ChartRows)
-		pct, ok := markethistory.ChangePct(rows, 7)
+		m := app.watchMove(ctx, e.TypeID, regionID)
+		pct, ok := m.Chg7, m.Has7
 		if !ok || absFloat(pct) < e.ThresholdPct {
 			continue
 		}

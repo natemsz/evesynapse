@@ -759,3 +759,49 @@ func TestRegionSweepStoresStatPackTrends(t *testing.T) {
 		t.Errorf("type 35 changes = %+v %+v %+v, want NULL (no row in any window)", other.SellChg1d, other.SellChg7d, other.SellChg30d)
 	}
 }
+
+// The change feed (schema 106) records a sharp move against the last
+// stored day, and leaves a small one out.
+func TestRegionSweepDetectsMarketChanges(t *testing.T) {
+	transport := &regionBookTransport{books: map[int64][][]esi.MarketOrder{}}
+	app, _, q := buildCorpTestApp(t, transport)
+	ctx := context.Background()
+	for _, region := range marketRegions {
+		if region.ID != 10000002 {
+			markRegionFresh(t, q, region.ID)
+		}
+	}
+	now := time.Now().UTC()
+	yesterday := now.AddDate(0, 0, -1).Format("2006-01-02")
+	for _, s := range []struct {
+		typeID int64
+		sell   float64
+	}{{34, 10}, {35, 100}} {
+		if err := q.UpsertMarketRegionStatDaily(ctx, db.UpsertMarketRegionStatDailyParams{
+			RegionID: 10000002, TypeID: s.typeID, Day: yesterday, TypicalSell: s.sell, BestSell: s.sell, SellOrders: 6, SellVolume: 600,
+		}); err != nil {
+			t.Fatalf("seed daily: %v", err)
+		}
+		if err := q.UpsertMarketHistory(ctx, db.UpsertMarketHistoryParams{
+			RegionID: 10000002, TypeID: s.typeID, Date: yesterday, Average: s.sell, Highest: s.sell, Lowest: s.sell, Volume: 50, OrderCount: 5,
+		}); err != nil {
+			t.Fatalf("seed history: %v", err)
+		}
+	}
+	var book []esi.MarketOrder
+	for i := int64(0); i < 6; i++ {
+		book = append(book,
+			esi.MarketOrder{OrderID: 100 + i, TypeID: 34, Price: 15, VolumeRemain: 100},  // +50%
+			esi.MarketOrder{OrderID: 200 + i, TypeID: 35, Price: 103, VolumeRemain: 100}) // +3%
+	}
+	transport.books[10000002] = [][]esi.MarketOrder{book}
+	sweepUntilIdle(t, app)
+
+	rows, err := q.ListMarketChangesForRegion(ctx, db.ListMarketChangesForRegionParams{RegionID: 10000002, Since: yesterday})
+	if err != nil {
+		t.Fatalf("list changes: %v", err)
+	}
+	if len(rows) != 1 || rows[0].TypeID != 34 || rows[0].Kind != "price_up" || rows[0].Before != 10 || rows[0].After != 15 {
+		t.Fatalf("changes = %+v, want one price_up for type 34 from 10 to 15", rows)
+	}
+}

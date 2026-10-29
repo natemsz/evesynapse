@@ -53,6 +53,10 @@ type marketTrendsView struct {
 	HasData    bool // the region's stat pack carries trend figures
 	Age        string
 	Rows       []marketTrendRow
+	// The change feed (mode "changes", schema 106) and its kind filter.
+	Changes []marketChangeRow
+	Kind    string
+	Kinds   []marketTrendChoice
 }
 
 // marketRegionChoice is a hub region as a filter shows it.
@@ -84,7 +88,7 @@ func (app *Application) buildMarketTrendsView(ctx context.Context, q map[string]
 	}
 	view.RegionName, _ = marketRegionName(view.RegionID)
 	switch get("mode") {
-	case "rising", "falling":
+	case "rising", "falling", "changes":
 		view.Mode = get("mode")
 	}
 	switch get("period") {
@@ -107,7 +111,7 @@ func (app *Application) buildMarketTrendsView(ctx context.Context, q map[string]
 			"&period=" + strconv.Itoa(period) + "&minvol=" + strconv.FormatInt(view.MinVolume, 10) +
 			"&minorders=" + strconv.FormatInt(view.MinOrders, 10)
 	}
-	for _, m := range []struct{ key, label string }{{"volatile", "Most volatile"}, {"rising", "Rising"}, {"falling", "Falling"}} {
+	for _, m := range []struct{ key, label string }{{"volatile", "Most volatile"}, {"rising", "Rising"}, {"falling", "Falling"}, {"changes", "What changed"}} {
 		view.Modes = append(view.Modes, marketTrendChoice{Label: m.label, Href: href(m.key, view.Period), Active: m.key == view.Mode})
 	}
 	for _, p := range []struct {
@@ -115,6 +119,24 @@ func (app *Application) buildMarketTrendsView(ctx context.Context, q map[string]
 		label string
 	}{{1, "1 day"}, {7, "7 days"}, {30, "30 days"}} {
 		view.Periods = append(view.Periods, marketTrendChoice{Label: p.label, Href: href(view.Mode, p.days), Active: p.days == view.Period})
+	}
+
+	if view.Mode == "changes" {
+		for _, k := range marketChangeKinds {
+			if get("kind") == k.key {
+				view.Kind = k.key
+			}
+		}
+		for _, k := range marketChangeKinds {
+			h := href("changes", view.Period)
+			if k.key != "" {
+				h += "&kind=" + k.key
+			}
+			view.Kinds = append(view.Kinds, marketTrendChoice{Label: k.label, Href: h, Active: k.key == view.Kind})
+		}
+		view.HasData = true
+		view.Changes = app.marketChangesForRegion(ctx, view.RegionID, view.Kind, view.Period)
+		return view
 	}
 
 	stamp, err := app.queries.GetMarketTrendStamp(ctx, view.RegionID)

@@ -1318,3 +1318,76 @@ WHERE c.user_id = sqlc.arg(user_id) AND l.beaten_now = 1 AND l.closed_at IS NULL
   AND (sqlc.arg(character_id)::bigint = 0 OR l.character_id = sqlc.arg(character_id)::bigint)
 ORDER BY l.beaten_at DESC NULLS LAST, l.order_id
 LIMIT 100;
+-- name: DetectMarketChanges :execrows
+-- The change feed (schema 106) for one region, inside its sweep
+-- transaction after the trend figures: each stat pack row against
+-- the newest stored day before today (within three days).
+INSERT INTO market_changes (region_id, type_id, day, kind, before, after, pct, detected_at)
+SELECT sqlc.arg(region_id)::bigint, c.type_id, sqlc.arg(day)::text, c.kind, c.before, c.after, c.pct, sqlc.arg(now)::timestamptz
+FROM (
+    SELECT s.type_id, k.kind, k.before, k.after, k.pct
+    FROM market_region_stats s
+    JOIN LATERAL (
+        SELECT dd.typical_sell, dd.typical_buy, dd.sell_volume FROM market_region_stats_daily dd
+        WHERE dd.region_id = s.region_id AND dd.type_id = s.type_id
+          AND dd.day < sqlc.arg(day)::text
+          AND dd.day >= to_char(sqlc.arg(day)::date - 3, 'YYYY-MM-DD')
+        ORDER BY dd.day DESC LIMIT 1
+    ) d ON true
+    CROSS JOIN LATERAL (VALUES
+        (CASE WHEN s.typical_sell > d.typical_sell THEN 'price_up' ELSE 'price_down' END,
+         d.typical_sell, s.typical_sell,
+         CASE WHEN d.typical_sell > 0 THEN (s.typical_sell - d.typical_sell) / d.typical_sell * 100 END),
+        ('supply_down', d.sell_volume::float8, s.sell_volume::float8,
+         CASE WHEN d.sell_volume > 0 THEN (s.sell_volume - d.sell_volume)::float8 / d.sell_volume * 100 END),
+        ('spread_wide',
+         CASE WHEN d.typical_buy > 0 THEN (d.typical_sell - d.typical_buy) / d.typical_buy * 100 END,
+         CASE WHEN s.typical_buy > 0 THEN (s.typical_sell - s.typical_buy) / s.typical_buy * 100 END,
+         CASE WHEN s.typical_buy > 0 AND d.typical_buy > 0
+              THEN ((s.typical_sell - s.typical_buy) / s.typical_buy - (d.typical_sell - d.typical_buy) / d.typical_buy) * 100 END)
+    ) AS k (kind, before, after, pct)
+    WHERE s.region_id = sqlc.arg(region_id)::bigint
+      AND s.sell_orders >= 5 AND s.avg_daily_volume_30d >= 1
+      AND s.typical_sell > 0 AND d.typical_sell > 0
+) c
+WHERE c.before IS NOT NULL AND c.after IS NOT NULL AND c.pct IS NOT NULL AND (
+       (c.kind IN ('price_up', 'price_down') AND ABS(c.pct) >= GREATEST(sqlc.arg(min_move)::float8,
+            3 * COALESCE((SELECT v.volatility_30d FROM market_region_stats v
+                          WHERE v.region_id = sqlc.arg(region_id)::bigint AND v.type_id = c.type_id), 0)))
+    OR (c.kind = 'supply_down' AND c.before >= 10 AND c.pct <= -50)
+    OR (c.kind = 'spread_wide' AND c.before > 0 AND c.after >= 10 AND c.after >= 2 * c.before)
+)
+ON CONFLICT (region_id, type_id, day, kind) DO UPDATE SET
+    before = excluded.before, after = excluded.after, pct = excluded.pct;
+-- name: PruneMarketChanges :exec
+DELETE FROM market_changes WHERE region_id = $1 AND day < sqlc.arg(before_day)::text;
+-- name: ListMarketChangesForRegion :many
+-- The Trends page's change feed: a region's changes from a day on,
+-- newest day first, biggest moves first within it.
+SELECT type_id, day, kind, before, after, pct, detected_at
+FROM market_changes
+WHERE region_id = sqlc.arg(region_id) AND day >= sqlc.arg(since)::text
+  AND (sqlc.arg(kind)::text = '' OR kind = sqlc.arg(kind)::text)
+ORDER BY day DESC, ABS(pct) DESC, type_id
+LIMIT 100;
+-- name: ListMarketChangesForType :many
+-- One type's recent changes in a region: the item page.
+SELECT day, kind, before, after, pct, detected_at
+FROM market_changes
+WHERE region_id = $1 AND type_id = $2
+ORDER BY day DESC, kind
+LIMIT 20;
+-- name: ListMarketChangesForWatchlist :many
+-- Today's changes on a user's watched items (each in its watched
+-- region): the notification pass.
+SELECT m.type_id, m.region_id, m.day, m.kind, m.before, m.after, m.pct
+FROM market_changes m
+JOIN market_watchlist w ON w.type_id = m.type_id AND w.region_id = m.region_id
+WHERE w.user_id = sqlc.arg(user_id) AND m.day >= sqlc.arg(since)::text
+ORDER BY m.day DESC, m.type_id
+LIMIT 100;
+-- name: GetMarketStatChange7 :one
+-- A watched item's 7- and 30-day change of the typical sell from the
+-- stat pack, with when the row was written.
+SELECT sell_chg_7d, sell_chg_30d, typical_sell, updated_at FROM market_region_stats
+WHERE region_id = $1 AND type_id = $2;

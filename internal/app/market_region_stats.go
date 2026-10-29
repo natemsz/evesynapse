@@ -757,6 +757,18 @@ func (app *Application) storeRegionSweep(ctx context.Context, regionID int64) (t
 	}); err != nil {
 		return 0, 0, fmt.Errorf("stat pack trends: %w", err)
 	}
+	// The change feed (schema 106) compares the rows just written
+	// with their last stored day, and forgets what is a month old.
+	if _, err := qtx.DetectMarketChanges(ctx, db.DetectMarketChangesParams{
+		RegionID: regionID, Day: day, Now: now, MinMove: marketChangeMinMove,
+	}); err != nil {
+		return 0, 0, fmt.Errorf("change feed: %w", err)
+	}
+	if err := qtx.PruneMarketChanges(ctx, db.PruneMarketChangesParams{
+		RegionID: regionID, BeforeDay: now.AddDate(0, 0, -marketChangeKeepDays).Format("2006-01-02"),
+	}); err != nil {
+		return 0, 0, fmt.Errorf("change feed prune: %w", err)
+	}
 	// LP offer values (schema 102) read the stat pack just written,
 	// in the same transaction.
 	if err := app.refreshLPOfferValues(ctx, qtx, regionID, now); err != nil {

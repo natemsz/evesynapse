@@ -641,6 +641,12 @@ var pgProfitLedgerSchema string
 //go:embed schema_pg/105_beaten_orders.sql
 var pgBeatenOrdersSchema string
 
+// Step 106: the market change feed, written from the stat pack when a
+// region's sweep completes.
+//
+//go:embed schema_pg/106_market_changes.sql
+var pgMarketChangesSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -775,6 +781,7 @@ func schemaSteps() []schemaStep {
 		{103, "market_baskets", pgMarketBasketsSchema, ""},
 		{104, "profit_ledger", pgProfitLedgerSchema, ""},
 		{105, "beaten_orders", pgBeatenOrdersSchema, ""},
+		{106, "market_changes", pgMarketChangesSchema, ""},
 	}
 }
 

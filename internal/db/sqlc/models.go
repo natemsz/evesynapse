@@ -1122,6 +1122,13 @@ type MarketWatchlist struct {
 	CreatedAt    time.Time `json:"created_at"`
 }
 
+type MarketWatchlistBasket struct {
+	UserID       int64     `json:"user_id"`
+	BasketID     int64     `json:"basket_id"`
+	ThresholdPct float64   `json:"threshold_pct"`
+	CreatedAt    time.Time `json:"created_at"`
+}
+
 type Notification struct {
 	ID          int64        `json:"id"`
 	UserID      int64        `json:"user_id"`

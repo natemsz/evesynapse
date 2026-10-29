@@ -709,6 +709,35 @@ type KillmailDetail struct {
 	FetchedAt   time.Time `json:"fetched_at"`
 }
 
+type LedgerBrokerAlloc struct {
+	OwnerKind string    `json:"owner_kind"`
+	OwnerID   int64     `json:"owner_id"`
+	EntryID   int64     `json:"entry_id"`
+	At        time.Time `json:"at"`
+	OrderID   int64     `json:"order_id"`
+	TypeID    int64     `json:"type_id"`
+	Amount    float64   `json:"amount"`
+}
+
+type LedgerCostBasisManual struct {
+	ID        int64     `json:"id"`
+	PoolKind  string    `json:"pool_kind"`
+	PoolID    int64     `json:"pool_id"`
+	TypeID    int64     `json:"type_id"`
+	At        time.Time `json:"at"`
+	Quantity  int64     `json:"quantity"`
+	UnitCost  float64   `json:"unit_cost"`
+	Note      string    `json:"note"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+type LedgerHole struct {
+	OwnerKind string    `json:"owner_kind"`
+	OwnerID   int64     `json:"owner_id"`
+	FromAt    time.Time `json:"from_at"`
+	ToAt      time.Time `json:"to_at"`
+}
+
 type LedgerJob struct {
 	OwnerKind     string    `json:"owner_kind"`
 	OwnerID       int64     `json:"owner_id"`
@@ -734,6 +763,32 @@ type LedgerJournal struct {
 	SecondPartyID int64     `json:"second_party_id"`
 	ContextID     int64     `json:"context_id"`
 	ContextType   string    `json:"context_type"`
+}
+
+type LedgerOrderIssue struct {
+	OwnerKind string    `json:"owner_kind"`
+	OwnerID   int64     `json:"owner_id"`
+	OrderID   int64     `json:"order_id"`
+	Issued    time.Time `json:"issued"`
+	TypeID    int64     `json:"type_id"`
+}
+
+type LedgerPoolState struct {
+	PoolKind     string    `json:"pool_kind"`
+	PoolID       int64     `json:"pool_id"`
+	Members      string    `json:"members"`
+	FoldedAt     time.Time `json:"folded_at"`
+	RefoldedAt   time.Time `json:"refolded_at"`
+	RefoldReason string    `json:"refold_reason"`
+}
+
+type LedgerSaleTax struct {
+	OwnerKind     string    `json:"owner_kind"`
+	OwnerID       int64     `json:"owner_id"`
+	TransactionID int64     `json:"transaction_id"`
+	At            time.Time `json:"at"`
+	Tax           float64   `json:"tax"`
+	Paired        bool      `json:"paired"`
 }
 
 type LedgerState struct {
@@ -1897,6 +1952,47 @@ type TradeIdeasAttempt struct {
 	Failures    int32     `json:"failures"`
 }
 
+type TradeItemDaily struct {
+	OwnerKind        string  `json:"owner_kind"`
+	OwnerID          int64   `json:"owner_id"`
+	Day              string  `json:"day"`
+	TypeID           int64   `json:"type_id"`
+	Units            int64   `json:"units"`
+	Revenue          float64 `json:"revenue"`
+	CovUnits         int64   `json:"cov_units"`
+	CovRevenue       float64 `json:"cov_revenue"`
+	CovCost          float64 `json:"cov_cost"`
+	CovTax           float64 `json:"cov_tax"`
+	Broker           float64 `json:"broker"`
+	GapBeforeHistory int64   `json:"gap_before_history"`
+	GapLedgerHole    int64   `json:"gap_ledger_hole"`
+	GapNoBuy         int64   `json:"gap_no_buy"`
+	GapNoTax         int64   `json:"gap_no_tax"`
+}
+
+type TradeItemWindow struct {
+	OwnerKind        string  `json:"owner_kind"`
+	OwnerID          int64   `json:"owner_id"`
+	Win              int32   `json:"win"`
+	TypeID           int64   `json:"type_id"`
+	AsOfDay          string  `json:"as_of_day"`
+	Units            int64   `json:"units"`
+	Revenue          float64 `json:"revenue"`
+	CovUnits         int64   `json:"cov_units"`
+	CovRevenue       float64 `json:"cov_revenue"`
+	CovCost          float64 `json:"cov_cost"`
+	CovTax           float64 `json:"cov_tax"`
+	Broker           float64 `json:"broker"`
+	GapBeforeHistory int64   `json:"gap_before_history"`
+	GapLedgerHole    int64   `json:"gap_ledger_hole"`
+	GapNoBuy         int64   `json:"gap_no_buy"`
+	GapNoTax         int64   `json:"gap_no_tax"`
+	PrevCovNet       float64 `json:"prev_cov_net"`
+	PrevBroker       float64 `json:"prev_broker"`
+	PrevUnits        int64   `json:"prev_units"`
+	PrevCovUnits     int64   `json:"prev_cov_units"`
+}
+
 type TradeOpenLot struct {
 	OwnerKind string  `json:"owner_kind"`
 	OwnerID   int64   `json:"owner_id"`
@@ -1927,6 +2023,9 @@ type TradeRealized struct {
 	UnmatchedQty     int64   `json:"unmatched_qty"`
 	UnmatchedRevenue float64 `json:"unmatched_revenue"`
 	Planetary        bool    `json:"planetary"`
+	PoolKind         string  `json:"pool_kind"`
+	PoolID           int64   `json:"pool_id"`
+	GapKind          string  `json:"gap_kind"`
 }
 
 type TrueValue struct {
@@ -2012,6 +2111,13 @@ type UserAppraisalPref struct {
 	UpdatedAt  time.Time `json:"updated_at"`
 	RefineRate float64   `json:"refine_rate"`
 	PruneOres  bool      `json:"prune_ores"`
+}
+
+type UserProfitPref struct {
+	UserID         int64     `json:"user_id"`
+	Pooled         bool      `json:"pooled"`
+	BrokerInMargin bool      `json:"broker_in_margin"`
+	UpdatedAt      time.Time `json:"updated_at"`
 }
 
 type WalletHistory struct {

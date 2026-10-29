@@ -698,6 +698,8 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	r.Route("/profit", func(r chi.Router) {
 		r.Use(app.requireAuth)
 		r.Get("/", app.handleProfit)
+		r.Post("/prefs", app.handleProfitPrefs)
+		r.Post("/basis", app.handleProfitBasis)
 	})
 
 	r.Route("/assets", func(r chi.Router) {

@@ -91,6 +91,7 @@ func beatenMargin(suggested, unitCost, taxRate float64, buy bool) (float64, bool
 type beatenContext struct {
 	app   *Application
 	costs map[int64]map[int64]float64 // character -> type -> cost per unit
+	pools map[int64]ledgerPool        // character -> the pool its positions sit in
 	rates map[int64]float64
 	stats map[[2]int64]float64 // (region, type) -> typical sell for a beaten buy's resale basis
 }
@@ -126,7 +127,15 @@ func (b *beatenContext) unitCost(ctx context.Context, characterID, typeID int64)
 	if c, ok := m[typeID]; ok {
 		return c
 	}
-	rows, err := b.app.queries.ListPositionCostsForTypes(ctx, db.ListPositionCostsForTypesParams{OwnerID: characterID, TypeIds: []int64{typeID}})
+	if b.pools == nil {
+		b.pools = map[int64]ledgerPool{}
+	}
+	pool, ok := b.pools[characterID]
+	if !ok {
+		pool = b.app.profitPoolForCharacter(ctx, characterID)
+		b.pools[characterID] = pool
+	}
+	rows, err := b.app.queries.ListPositionCostsForTypes(ctx, db.ListPositionCostsForTypesParams{OwnerKind: pool.kind, OwnerID: pool.id, TypeIds: []int64{typeID}})
 	c := 0.0
 	if err == nil && len(rows) > 0 && rows[0].Quantity > 0 {
 		c = rows[0].Cost / float64(rows[0].Quantity)

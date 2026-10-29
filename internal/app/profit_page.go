@@ -45,12 +45,32 @@ type profitActivityRow struct {
 	net                float64
 }
 
-type profitTypeRow struct {
-	TypeID                  int64
-	Name                    string
-	Quantity, Revenue, Cost string
-	Profit, Margin          string
-	ProfitDir               string
+// profitItemRow is one item on the Trading tab over the window.
+type profitItemRow struct {
+	TypeID            int64
+	Name              string
+	Sold, Revenue     string
+	Margin, MarginDir string
+	MarginPct         string
+	Covered           bool   // every unit sold is covered
+	CoveredOf         string // "80 of 100 units" when not
+	Delta, DeltaDir   string // against the previous window of equal length
+	Gaps              []profitGap
+	CanEnterBasis     bool
+}
+
+// profitGap is one reason units of an item have no margin, with how
+// many.
+type profitGap struct {
+	Units, Label string
+}
+
+// tradeGapLabels names each typed gap for the page.
+var tradeGapLabels = map[string]string{
+	"before_history": "most likely bought before your wallet history here began",
+	"ledger_hole":    "a gap in the wallet history: sync paused for over 30 days",
+	"no_buy":         "no buy, build or entered cost: loot, contract items, gifts",
+	"no_tax":         "no sales tax line matched the sale",
 }
 
 type profitPositionRow struct {
@@ -83,13 +103,27 @@ type profitView struct {
 	Activities   []profitActivityRow
 	SalesTax     string
 	BrokerFees   string
-	TopTypes     []profitTypeRow
-	Positions    []profitPositionRow
-	OpenCost     string
-	OpenValue    string
-	Unrealized   string
-	UnrealDir    string
-	Chart        *profitChart
+
+	// Trading tab (schema 110).
+	Items          []profitItemRow
+	ItemsNet       string // covered margin over every item
+	ItemsNetDir    string
+	ItemsDelta     string
+	ItemsDeltaDir  string
+	ItemsCoverage  string // share of units sold that are covered
+	BrokerLoose    string // broker fees tied to no item
+	ItemsAsOf      string
+	Pooled         bool
+	BrokerInMargin bool
+	BasisPool      string // "acct-1" etc. when a cost basis can be entered here
+	Recomputed     string // day the pool refolded under a new method or members
+	RecomputedWhy  string
+	Positions      []profitPositionRow
+	OpenCost       string
+	OpenValue      string
+	Unrealized     string
+	UnrealDir      string
+	Chart          *profitChart
 }
 
 func dirOf(v float64) string {
@@ -274,27 +308,34 @@ func (app *Application) buildProfitView(ctx context.Context, userID int64, owner
 		view.Change, view.ChangeDir = signedISK(earned+remainder), dirOf(earned+remainder)
 	}
 
+	feesBroker := 0.0
 	if fees, err := app.queries.SumTradingFeesFrom(ctx, db.SumTradingFeesFromParams{OwnerKind: kind, OwnerIds: ids, FromAt: fromAt}); err == nil {
 		view.SalesTax, view.BrokerFees = esi.FormatISK(fees.SalesTax), esi.FormatISK(fees.BrokerFees)
+		feesBroker = fees.BrokerFees
 	}
 
-	top, err := app.queries.ListTopTradeTypes(ctx, db.ListTopTradeTypesParams{OwnerKind: kind, OwnerIds: ids, FromDay: fromDay, RowCap: 15})
-	if err != nil {
+	prefs := app.profitPrefsFor(ctx, userID)
+	view.Pooled, view.BrokerInMargin = prefs.Pooled, prefs.BrokerInMargin
+	// Positions and fold state sit with the pool: the account when
+	// books are pooled, else each character alone; a corporation is
+	// its own.
+	poolKind, poolIDs := kind, ids
+	if kind == ownerChar && prefs.Pooled {
+		poolKind, poolIDs = poolAcct, []int64{userID}
+	}
+	if len(poolIDs) == 1 {
+		view.BasisPool = poolKind + "-" + strconv.FormatInt(poolIDs[0], 10)
+	}
+	if st, err := app.queries.GetLedgerPoolState(ctx, db.GetLedgerPoolStateParams{PoolKind: poolKind, PoolID: poolIDs[0]}); err == nil &&
+		(st.RefoldReason == "method" || st.RefoldReason == "members") && time.Since(st.RefoldedAt) < 14*24*time.Hour {
+		view.Recomputed = st.RefoldedAt.UTC().Format("2006-01-02")
+		view.RecomputedWhy = st.RefoldReason
+	}
+	if err := app.attachTradeItems(ctx, view, kind, ids, feesBroker, prefs.BrokerInMargin); err != nil {
 		return view, err
 	}
-	for _, t := range top {
-		profit := t.Revenue - t.Cost
-		row := profitTypeRow{
-			TypeID: t.TypeID, Name: app.typeNameOrID(ctx, t.TypeID), Quantity: esi.FormatInt(t.Quantity),
-			Revenue: esi.FormatISK(t.Revenue), Cost: esi.FormatISK(t.Cost), Profit: signedISK(profit), ProfitDir: dirOf(profit),
-		}
-		if t.Revenue > 0 {
-			row.Margin = fmt.Sprintf("%.1f%%", profit/t.Revenue*100)
-		}
-		view.TopTypes = append(view.TopTypes, row)
-	}
 
-	if err := app.attachProfitPositions(ctx, view, kind, ids); err != nil {
+	if err := app.attachProfitPositions(ctx, view, poolKind, poolIDs); err != nil {
 		return view, err
 	}
 

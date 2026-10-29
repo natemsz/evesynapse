@@ -214,7 +214,7 @@ func (app *Application) notifySkillEvents(ctx context.Context, c *notifyCollecto
 			Kind: notifySkill, CharacterID: id, Source: src,
 			Key:   fmt.Sprintf("skill|%d|%d|%d", id, e.SkillID, e.FinishedLevel),
 			Title: fmt.Sprintf("%s finished training %s %s", b.ch.Name, app.typeNameOrID(ctx, e.SkillID), esi.RomanLevel(e.FinishedLevel)),
-			URL:   fmt.Sprintf("/character/?character=%d", id),
+			URL:   fmt.Sprintf("/character/?character=%d&view=1", id),
 		})
 	}
 }
@@ -241,7 +241,7 @@ func (app *Application) notifyMailEvents(c *notifyCollector, b *charSnaps) {
 			Kind: notifyMail, CharacterID: id, Source: src,
 			Key:   fmt.Sprintf("mail|%d|%d", id, h.MailID),
 			Title: title,
-			URL:   fmt.Sprintf("/mail/?character=%d", id),
+			URL:   fmt.Sprintf("/mail/?character=%d&view=1", id),
 		})
 	}
 }
@@ -267,7 +267,7 @@ func (app *Application) notifyCalendarEvents(c *notifyCollector, b *charSnaps, n
 			Kind: notifyCalendar, CharacterID: id, Source: src,
 			Key:   fmt.Sprintf("calendar|%d|%d", id, ev.EventID),
 			Title: fmt.Sprintf("%s has a new calendar event: %s, %s", b.ch.Name, name, at.UTC().Format("Jan 2 15:04")),
-			URL:   fmt.Sprintf("/calendar/?character=%d", id),
+			URL:   fmt.Sprintf("/calendar/?character=%d&view=1", id),
 		})
 	}
 }
@@ -294,7 +294,7 @@ func (app *Application) notifyKillmailEvents(ctx context.Context, c *notifyColle
 			Kind: notifyKillmail, CharacterID: id, Source: src,
 			Key:   fmt.Sprintf("killmail|%d|%d", id, ref.KillmailID),
 			Title: b.ch.Name + " has a new killmail",
-			URL:   fmt.Sprintf("/killmails/?character=%d", id),
+			URL:   fmt.Sprintf("/killmails/?character=%d&view=1", id),
 		})
 	}
 }
@@ -325,7 +325,7 @@ func (app *Application) notifyPIEvents(ctx context.Context, c *notifyCollector, 
 				Kind: notifyPI, CharacterID: id, Source: src,
 				Key:   fmt.Sprintf("pi|%d|%d|%d", id, colony.PlanetID, expiry.Unix()/3600),
 				Title: fmt.Sprintf("%s: extractors have stopped on %s", b.ch.Name, app.planetDisplayName(ctx, colony.PlanetID)),
-				URL:   fmt.Sprintf("/planets/?character=%d", id),
+				URL:   fmt.Sprintf("/planets/?character=%d&view=1", id),
 			})
 		}
 	}
@@ -357,7 +357,7 @@ func (app *Application) notifyIndustryEvents(ctx context.Context, c *notifyColle
 			Kind: notifyIndustry, CharacterID: id, Source: src,
 			Key:   fmt.Sprintf("industry|%d|%d", id, j.JobID),
 			Title: fmt.Sprintf("%s: the %s job has finished", b.ch.Name, app.typeNameOrID(ctx, nameID)),
-			URL:   fmt.Sprintf("/industry/jobs/?character=%d", id),
+			URL:   fmt.Sprintf("/industry/jobs/?character=%d&view=1", id),
 		})
 	}
 }

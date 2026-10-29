@@ -204,7 +204,7 @@ body::after { content: ""; position: absolute; top: 0; left: 0; right: 0; height
    terms, each card naming the modules that loop runs on. */
 .ld-styles { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-top: 26px; }
 .ld-scard { padding: 22px; }
-.ld-scard .ld-who { background: linear-gradient(90deg, #ffd27a 0%, #ff6a1a 50%, #d63c14 100%); -webkit-background-clip: text; background-clip: text; color: transparent; letter-spacing: 0.22em; font-size: 12px; font-weight: 600; text-transform: uppercase; }
+.ld-scard .ld-who { color: #ffd27a; letter-spacing: 0.22em; font-size: 12px; font-weight: 600; text-transform: uppercase; }
 .ld-scard h3 { font-size: 21px; margin: 6px 0 7px; }
 .ld-scard p { color: var(--ld-dim); font-size: 15.5px; }
 .ld-chips { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }

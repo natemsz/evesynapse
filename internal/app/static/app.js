@@ -1100,12 +1100,13 @@
   initFleetFilter(document);
 
   // --- Briefing severity tabs ------------------------------------
-  // All / Critical / Warning / Info swap which cards show; the
-  // module's More/Less still decides how far down the list goes.
+  // All / Critical / Warning / Info swap which cards show; a deck
+  // whose cards are all filtered out hides with them.
   function initBriefTabs(root) {
     var tabs = root.querySelectorAll("[data-brief]");
     if (!tabs.length) return;
-    var cards = root.querySelectorAll(".brief-card");
+    var cards = root.querySelectorAll(".brief-cards .brief-flip-card");
+    var decks = root.querySelectorAll(".brief-cards .brief-deck");
     for (var i = 0; i < tabs.length; i++) {
       tabs[i].addEventListener("click", function () {
         var sev = this.getAttribute("data-brief");
@@ -1117,11 +1118,194 @@
         for (var k = 0; k < cards.length; k++) {
           cards[k].classList.toggle("brief-off", sev !== "all" && cards[k].getAttribute("data-sev") !== sev);
         }
+        for (var s = 0; s < decks.length; s++) {
+          var vis = briefLayout(decks[s]);
+          decks[s].classList.toggle("brief-off", !vis.length);
+        }
       });
     }
   }
   onContentReady(initBriefTabs);
   initBriefTabs(document);
+
+  // --- Briefing deck flip ------------------------------------------
+  // Each kind is a deck of full cards: the face card in front, the
+  // next two peeking behind it. The more button (bottom right) and
+  // horizontal swipes flip through the deck: the whole face card
+  // dips and tucks behind the stack while the next card steps up,
+  // and the deck's height eases to the new face.
+  function briefDeckVisible(deck) {
+    var cards = deck.querySelectorAll(".brief-flip-card");
+    var out = [];
+    for (var i = 0; i < cards.length; i++) {
+      if (!cards[i].classList.contains("brief-off")) out.push(cards[i]);
+    }
+    return out;
+  }
+  // Positions run from the face: 0 in front, 1 and 2 the sheets
+  // behind, the rest hidden at the back. except keeps its current
+  // position (the leaving face, mid-flip).
+  function briefLayout(deck, except) {
+    var vis = briefDeckVisible(deck);
+    if (!vis.length) return vis;
+    var face = deck._face && vis.indexOf(deck._face) >= 0 ? deck._face : vis[0];
+    deck._face = face;
+    var start = vis.indexOf(face);
+    for (var i = 0; i < vis.length; i++) {
+      if (vis[i] === except) continue;
+      vis[i].setAttribute("data-pos", String((i - start + vis.length) % vis.length));
+    }
+    return vis;
+  }
+  function briefMeasure(card) {
+    if (card.getAttribute("data-pos") === "0") return card.offsetHeight;
+    var prev = card.style.cssText;
+    card.style.cssText = prev + ";display:block;position:absolute;visibility:hidden;height:auto;max-height:none;overflow:visible;";
+    var h = card.offsetHeight;
+    card.style.cssText = prev;
+    return h;
+  }
+  function briefFlip(deck, dir) {
+    if (deck.classList.contains("flipping")) return;
+    var vis = briefLayout(deck);
+    if (vis.length < 2) return;
+    var face = deck._face;
+    var idx = vis.indexOf(face);
+    var nxt = vis[(idx + dir + vis.length) % vis.length];
+    var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reduce || !deck.animate) { deck._face = nxt; briefLayout(deck); return; }
+    deck.classList.add("flipping");
+    var h0 = face.offsetHeight;
+    var h1 = briefMeasure(nxt);
+    deck.style.height = h0 + "px";
+    var heightAnim = null;
+    try {
+      heightAnim = deck.animate([{ height: h0 + "px" }, { height: h1 + "px" }], { duration: 470, easing: "ease-in-out" });
+    } catch (e) {}
+    // The moving card travels on top of the stack, where the eye can
+    // follow it: forward, the face lifts off the front, arcs up and
+    // sweeps back into the rear slot; backward, the rear card makes
+    // the same trip in reverse onto the front. The layout swap waits
+    // until the travel lands.
+    var mover = dir > 0 ? face : nxt;
+    var flight = null;
+    var shifted = [];
+    var settled = false;
+    var done = function () {
+      if (settled) return;
+      settled = true;
+      if (flight) flight.cancel();
+      if (heightAnim) heightAnim.cancel();
+      mover.style.position = "";
+      mover.style.inset = "";
+      mover.style.display = "";
+      for (var s2 = 0; s2 < shifted.length; s2++) shifted[s2].style.transform = "";
+      deck.classList.remove("flipping");
+      deck.style.height = "";
+      deck._face = nxt;
+      briefLayout(deck);
+    };
+    if (dir > 0) {
+      // The stack steps up as the face lifts: the next card slides
+      // into the face slot and the sheet behind it takes its place,
+      // so the deck settles in one motion instead of two. done()
+      // clears the inline transforms in the same frame it assigns
+      // the matching positions, so nothing snaps.
+      var rear1 = deck.querySelector('.brief-flip-card[data-pos="1"]:not(.brief-off)');
+      var rear2 = deck.querySelector('.brief-flip-card[data-pos="2"]:not(.brief-off)');
+      if (rear1) { rear1.style.transform = "translate(0px, 0px)"; shifted.push(rear1); }
+      if (rear2) { rear2.style.transform = "translate(5px, 5px)"; shifted.push(rear2); }
+      mover.style.position = "absolute";
+      mover.style.inset = "0";
+      try {
+        flight = mover.animate([
+          { transform: "translate(0, 0) rotate(0deg) scale(1)", zIndex: 6 },
+          { transform: "translate(-18px, -12px) rotate(-1.8deg) scale(1.02)", zIndex: 6, offset: 0.32 },
+          { transform: "translate(16px, 18px) rotate(0.9deg) scale(0.98)", zIndex: 2, offset: 0.78 },
+          { transform: "translate(10px, 10px) rotate(0deg) scale(0.97)", zIndex: 1 }
+        ], { duration: 470, easing: "ease-in-out" });
+      } catch (e) {}
+    } else {
+      // The stack steps back as the incoming card travels: the
+      // face eases into the first rear slot and the sheet behind
+      // it into the second, settling in one motion.
+      var back1 = deck.querySelector('.brief-flip-card[data-pos="1"]:not(.brief-off)');
+      face.style.transform = "translate(5px, 5px)";
+      shifted.push(face);
+      if (back1 && back1 !== mover) { back1.style.transform = "translate(10px, 10px)"; shifted.push(back1); }
+      // The incoming card can sit past the two visible rear slots,
+      // where it is display:none: stage it at the rear slot so it
+      // has geometry to travel from.
+      if (window.getComputedStyle(mover).display === "none") {
+        mover.style.display = "block";
+        mover.style.position = "absolute";
+        mover.style.inset = "0";
+      }
+      try {
+        flight = mover.animate([
+          { transform: "translate(10px, 10px) rotate(0deg) scale(0.97)", zIndex: 1 },
+          { transform: "translate(16px, 18px) rotate(0.9deg) scale(0.98)", zIndex: 2, offset: 0.22 },
+          { transform: "translate(-18px, -12px) rotate(-1.8deg) scale(1.02)", zIndex: 6, offset: 0.68 },
+          { transform: "translate(0, 0) rotate(0deg) scale(1)", zIndex: 6 }
+        ], { duration: 470, easing: "ease-in-out" });
+      } catch (e) {}
+    }
+    if (flight && flight.finished) flight.finished.then(done, done);
+    else done();
+    setTimeout(done, 560);
+  }
+  function initBriefFlip(root) {
+    var buttons = root.querySelectorAll("[data-brief-flip]");
+    for (var i = 0; i < buttons.length; i++) {
+      buttons[i].addEventListener("click", function () {
+        var deck = this.closest(".brief-deck");
+        if (deck) briefFlip(deck, 1);
+      });
+    }
+    var decks = root.querySelectorAll(".brief-cards .brief-deck");
+    for (var c = 0; c < decks.length; c++) {
+      (function (deck) {
+        briefLayout(deck);
+        var sx = 0, sy = 0, tracking = false;
+        deck.addEventListener("pointerdown", function (e) {
+          if (e.button !== undefined && e.button !== 0) return;
+          if (e.target && e.target.closest && e.target.closest("a, button, form, input")) return;
+          sx = e.clientX; sy = e.clientY; tracking = true;
+        });
+        deck.addEventListener("pointerup", function (e) {
+          if (!tracking) return;
+          tracking = false;
+          var dx = e.clientX - sx, dy = e.clientY - sy;
+          if (Math.abs(dx) > 48 && Math.abs(dx) > Math.abs(dy) * 1.4) {
+            deck._briefSwipedAt = Date.now();
+            briefFlip(deck, dx < 0 ? 1 : -1);
+          }
+        });
+        deck.addEventListener("click", function (e) {
+          if (deck._briefSwipedAt && Date.now() - deck._briefSwipedAt < 350) {
+            e.preventDefault();
+            e.stopPropagation();
+          }
+        }, true);
+      })(decks[c]);
+    }
+  }
+  onContentReady(initBriefFlip);
+  initBriefFlip(document);
+
+  // --- Briefing dismissed list -------------------------------------
+  // The Dismissed (n) button opens the modal of hidden lines.
+  function initBriefDismissed(root) {
+    var openers = root.querySelectorAll("[data-open-brief-dismissed]");
+    for (var i = 0; i < openers.length; i++) {
+      openers[i].addEventListener("click", function () {
+        var modal = document.getElementById("brief-dismissed-modal");
+        if (modal && window.EveSynapseModal) EveSynapseModal.open(modal);
+      });
+    }
+  }
+  onContentReady(initBriefDismissed);
+  initBriefDismissed(document);
 
   // --- Widget settings (orders scope picker) ------------------
   // A change applies at once: the form IS the plain submit (the

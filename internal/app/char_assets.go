@@ -111,8 +111,11 @@ func (app *Application) handleAssets(w http.ResponseWriter, r *http.Request) {
 	}
 	if want, _ := strconv.ParseInt(r.URL.Query().Get("character"), 10, 64); want != 0 && pick(want) {
 		// An explicit pick becomes the session's acting
-		// character (see pickCharacter in char_pages.go).
-		app.pinSessionCharacter(ctx, active.CharacterID, active.Name)
+		// character (see pickCharacter in char_pages.go); a
+		// view pick (?view=1) renders without moving the pin.
+		if !viewPick(r) {
+			app.pinSessionCharacter(ctx, active.CharacterID, active.Name)
+		}
 	} else if sid := sessionCharID(app.sessions, ctx); sid == 0 || !pick(sid) {
 		active = characters[0]
 	}

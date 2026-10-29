@@ -2,9 +2,10 @@ package app
 
 // Market API keys on the Settings page (the API tab). A player makes a
 // named key and sees it once; only its SHA-256 is kept. Making a key
-// is held to the same bar as other security actions (a completed
-// two-factor sign-in, and a fresh one when the account has keys), at
-// most apiMaxKeysPerUser live and apiMaxKeysPerDay made in a day.
+// needs a signed-in session that completed its two-factor sign-in;
+// the keys are read-only and revocable, so no fresh assertion is
+// asked (freshness stays on managing the factor itself). At most
+// apiMaxKeysPerUser live and apiMaxKeysPerDay made in a day.
 // Revoking a key stops it at once.
 
 import (
@@ -76,9 +77,6 @@ func (app *Application) marketAPIBaseURL() string {
 func (app *Application) handleAPIKeyCreate(w http.ResponseWriter, r *http.Request) {
 	ctx, userID, ok := app.securityAuthed(w, r, false)
 	if !ok {
-		return
-	}
-	if app.securityNeedsFresh(w, r, ctx, userID, false) {
 		return
 	}
 	show := func(newKey, msg string) {

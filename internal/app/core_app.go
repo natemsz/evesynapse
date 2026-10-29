@@ -592,6 +592,8 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 		r.Use(app.requireAuth)
 		r.Post("/layout", app.handleHomeLayout)
 		r.Post("/widget-config", app.handleWidgetConfig)
+		r.Post("/briefing/dismiss", app.handleBriefingDismiss)
+		r.Post("/briefing/restore", app.handleBriefingRestore)
 	})
 	r.Get("/healthz", app.handleHealthz)
 	// The market API (market_api.go): read-only, key-gated, rate-limited.
@@ -778,6 +780,8 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 		r.With(anonPages).Get("/browse-children", app.handleMarketBrowseChildren)
 		r.With(anonPages).Get("/trends/", app.handleMarketTrends)
 		r.With(anonPages).Get("/lp/", app.handleMarketLP)
+		r.With(anonPages).Get("/lp/export.csv", app.handleMarketLPExportCSV)
+		r.With(anonPages).Get("/lp/export.json", app.handleMarketLPExportJSON)
 		r.With(anonPages).Get("/baskets/", app.handleMarketBaskets)
 		r.With(anonPages).Get("/baskets/{basketID}/", app.handleMarketBasket)
 		r.With(app.requireAuth).Post("/baskets/", app.handleMarketBasketCreate)

@@ -280,7 +280,7 @@ FROM (
            GREATEST(j.amount, 0) AS income, GREATEST(-j.amount, 0) AS costs
     FROM ledger_journal j
     WHERE j.owner_kind = $1 AND j.owner_id = $2
-      AND j.at >= $3::timestamptz AND j.activity NOT IN ('market', 'escrow')
+      AND j.at >= $3::timestamptz AND j.activity NOT IN ('market', 'escrow', 'lp_store')
     UNION ALL
     SELECT r.day, 'trading', r.revenue, r.cost
     FROM trade_realized r
@@ -654,14 +654,15 @@ func (q *Queries) GetTradeItemWindowAsOf(ctx context.Context, arg GetTradeItemWi
 }
 
 const getUserProfitPrefs = `-- name: GetUserProfitPrefs :one
-SELECT pooled, broker_in_margin, industry_region, industry_side FROM user_profit_prefs WHERE user_id = $1
+SELECT pooled, broker_in_margin, industry_region, industry_side, lp_isk_value FROM user_profit_prefs WHERE user_id = $1
 `
 
 type GetUserProfitPrefsRow struct {
-	Pooled         bool   `json:"pooled"`
-	BrokerInMargin bool   `json:"broker_in_margin"`
-	IndustryRegion int64  `json:"industry_region"`
-	IndustrySide   string `json:"industry_side"`
+	Pooled         bool    `json:"pooled"`
+	BrokerInMargin bool    `json:"broker_in_margin"`
+	IndustryRegion int64   `json:"industry_region"`
+	IndustrySide   string  `json:"industry_side"`
+	LpIskValue     float64 `json:"lp_isk_value"`
 }
 
 func (q *Queries) GetUserProfitPrefs(ctx context.Context, userID int64) (GetUserProfitPrefsRow, error) {
@@ -672,6 +673,7 @@ func (q *Queries) GetUserProfitPrefs(ctx context.Context, userID int64) (GetUser
 		&i.BrokerInMargin,
 		&i.IndustryRegion,
 		&i.IndustrySide,
+		&i.LpIskValue,
 	)
 	return i, err
 }
@@ -1083,6 +1085,18 @@ FROM (
     JOIN ledger_jobs j ON j.job_id = e.job_id AND j.owner_kind = $3 AND j.owner_id = ANY($4::bigint[])
     WHERE e.pool_kind = $1 AND e.pool_id = $2 AND e.kind IN ('sale', 'lost')
       AND j.product_type_id = $5
+    UNION ALL
+    SELECT p.from_at, -(5000000000000000 + p.id), p.character_id, false, p.units,
+           (p.isk_paid + p.req_value) / NULLIF(p.units, 0), 'lp', 0::bigint
+    FROM lp_purchases p
+    WHERE $3::text = 'char' AND p.character_id = ANY($4::bigint[])
+      AND p.product_type_id = $5 AND p.units > 0 AND p.tier IN ('corroborated', 'inferred', 'user_confirmed')
+    UNION ALL
+    SELECT p.from_at, -(5000000000000000 + p.id), p.character_id, true, r.quantity * p.quantity, 0::float8, 'lpreq', 0::bigint
+    FROM lp_purchases p
+    JOIN lp_offer_requirements r ON r.corporation_id = p.corporation_id AND r.offer_id = p.offer_id
+    WHERE $3::text = 'char' AND p.character_id = ANY($4::bigint[])
+      AND r.type_id = $5 AND p.tier IN ('corroborated', 'inferred', 'user_confirmed')
 ) x
 WHERE x.at >= $6::timestamptz
 ORDER BY x.at, x.ref_id
@@ -1118,6 +1132,9 @@ type ListPoolLotsForTypeSinceRow struct {
 //	'consume' materials a job used, removed when it was installed;
 //	'msale', 'lost' units of a job's output the player sold off-market
 //	          or marked lost.
+//	'lp'      units of an LP store purchase, at its ISK and required items
+//	          (LP at 0), from the start of the bracket it was bought in;
+//	'lpreq'   items an LP store purchase took in exchange.
 //
 // The caller prepends the stored open lots at the checkpoint, which
 // stand in for everything older.
@@ -1167,6 +1184,9 @@ SELECT DISTINCT type_id FROM (
     UNION
     SELECT j.product_type_id FROM ledger_jobs j
     WHERE j.owner_kind = $1 AND j.owner_id = ANY($2::bigint[]) AND j.priced
+    UNION
+    SELECT p.product_type_id FROM lp_purchases p
+    WHERE $1::text = 'char' AND p.character_id = ANY($2::bigint[]) AND p.product_type_id > 0
     UNION
     SELECT m.type_id FROM ledger_job_materials m
     WHERE m.owner_kind = $1 AND m.owner_id = ANY($2::bigint[])

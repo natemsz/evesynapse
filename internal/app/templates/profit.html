@@ -142,6 +142,56 @@
 </section>
 
 <section class="foldable">
+<h3>LP stores</h3>
+{{if .LPDelta}}<p><small>Net LP over these {{.Days}} days: {{.LPDelta}}.{{if .WithLP}} Counting that LP at {{.LPValue}} ISK each, you earned <strong class="mt-chg {{.WithLPDir}}">{{.WithLP}}</strong> ISK.{{end}}</small></p>{{end}}
+{{if .LPStores}}
+<div class="tw">
+<table>
+  <thead><tr><th>Store</th><th class="mt-num">LP earned</th><th class="mt-num">LP spent</th><th class="mt-num">ISK paid</th><th class="mt-num">Items got / sold</th><th class="mt-num">Net ISK</th><th class="mt-num">ISK per LP</th><th class="mt-num">Unsold, worth</th></tr></thead>
+  <tbody>
+  {{range .LPStores}}
+    <tr>
+      <td>{{.Name}}{{if .Tiers}}<br><small class="mt-reqs">spent: {{.Tiers}}</small>{{end}}
+        {{if .Net}}<br><small class="mt-reqs">If LP cost: nothing, {{.Net}}{{if .AtBest}}; the store's best offer now ({{.BestRate}}), <span class="mt-chg {{.AtBestDir}}">{{.AtBest}}</span>{{end}}{{if .AtMedian}}; your usual rate, <span class="mt-chg {{.AtMedianDir}}">{{.AtMedian}}</span>{{end}}{{if .AtCustom}}; your value, <span class="mt-chg {{.AtCustomDir}}">{{.AtCustom}}</span>{{end}}</small>{{end}}
+      </td>
+      <td class="mt-num">{{.Earned}}</td>
+      <td class="mt-num">{{.Spent}}</td>
+      <td class="mt-num">{{.ISKPaid}}</td>
+      <td class="mt-num">{{.Acquired}} / {{.Sold}}</td>
+      <td class="mt-num">{{if .Net}}<strong class="mt-chg {{.NetDir}}">{{.Net}}</strong>{{else}}<small class="mt-reqs">nothing sold yet</small>{{end}}</td>
+      <td class="mt-num">{{.PerLP}}</td>
+      <td class="mt-num">{{.Unsold}}</td>
+    </tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+<p><small>ESI shows your LP balances but no LP store purchases, so each purchase is worked out from a drop in a balance between two hourly readings, and can't be timed closer than that. <strong>Corroborated</strong>: one offer fits the LP (and the ISK, when the wallet shows it) and the items turned up in your assets. <strong>Inferred</strong>: one offer fits but the items weren't seen, perhaps already sold or moved. <strong>Ambiguous</strong>: several offers fit; pick one below. <strong>Unexplained</strong>: no single offer fits, so only the LP spent is counted. Net ISK and ISK per LP cover items sold, from corroborated, inferred and picked purchases, with LP costing nothing: LP is earned, not bought. The other lines show the same net if each LP had cost that much, which is what the LP could have made elsewhere. Corporation LP isn't available from ESI.</small></p>
+{{else}}
+<p><small>No LP balances recorded yet. They fill in once a character has granted access to loyalty points and synced.</small></p>
+{{end}}
+{{if .LPPicks}}
+<details class="pf-prefs"><summary><small>{{len .LPPicks}} LP spends to settle</small></summary>
+{{range .LPPicks}}
+<div class="pf-basis-form"><small>{{.LP}} LP at {{.Store}}, {{.When}}{{if not .Candidates}}: no single offer fits, so this stays counted as LP spent only.{{end}}</small></div>
+{{if .Candidates}}
+<form method="post" action="/profit/lp-pick" class="pf-basis-form">
+  <input type="hidden" name="id" value="{{.ID}}">
+  <label>What you bought <select name="choice">{{range .Candidates}}<option value="{{.Value}}">{{.Label}}</option>{{end}}</select></label>
+  <button class="btn" type="submit">Save</button>
+</form>
+{{end}}
+{{end}}
+</details>
+{{end}}
+<form method="post" action="/profit/lp-value" class="pf-basis-form">
+  <label>Your own value for LP, ISK each <input name="lp_value" inputmode="decimal" value="{{.LPValue}}" placeholder="unset"></label>
+  <button class="btn" type="submit">Save</button>
+  {{if .LPMedian}}<small class="mt-reqs">Your usual realized rate is {{.LPMedian}} ISK per LP.</small>{{end}}
+</form>
+</section>
+
+<section class="foldable">
 <h3>How profit is counted</h3>
 <form method="post" action="/profit/prefs" class="pf-prefs-form">
   <label><input type="checkbox" name="pooled" value="1"{{if .Pooled}} checked{{end}}> Match sales against stock across all my characters (off: each character's own stock)</label>

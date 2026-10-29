@@ -282,6 +282,8 @@ func (s *econStubTransport) RoundTrip(req *http.Request) (*http.Response, error)
 		return s.respond(http.StatusOK, `[]`)
 	case path == base+"/mining/":
 		return s.respond(http.StatusOK, `[]`)
+	case path == base+"/loyalty/points/":
+		return s.respond(http.StatusOK, `[{"corporation_id":1000035,"loyalty_points":1200}]`)
 	default:
 		return s.respond(http.StatusNotFound, `{"error":"unexpected path `+path+`"}`)
 	}

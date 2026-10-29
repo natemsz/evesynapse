@@ -58,6 +58,7 @@ var kindScopes = map[string]string{
 	esi.SnapIndustryJobs:  "esi-industry.read_character_jobs.v1",
 	esi.SnapBlueprints:    "esi-characters.read_blueprints.v1",
 	esi.SnapMining:        "esi-industry.read_character_mining.v1",
+	esi.SnapLoyalty:       "esi-characters.read_loyalty.v1",
 	esi.SnapPlanets:       planetScope,
 	esi.SnapMail:          "esi-mail.read_mail.v1",
 	esi.SnapMailLabels:    "esi-mail.read_mail.v1",

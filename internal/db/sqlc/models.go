@@ -946,6 +946,13 @@ type LocalFitting struct {
 	LastViewedAt sql.NullTime `json:"last_viewed_at"`
 }
 
+type LpBalanceSample struct {
+	CharacterID   int64     `json:"character_id"`
+	CorporationID int64     `json:"corporation_id"`
+	SampledAt     time.Time `json:"sampled_at"`
+	Points        int64     `json:"points"`
+}
+
 type LpOffer struct {
 	CorporationID int64   `json:"corporation_id"`
 	OfferID       int64   `json:"offer_id"`
@@ -984,12 +991,68 @@ type LpOfferValue struct {
 	UpdatedAt      time.Time       `json:"updated_at"`
 }
 
+type LpPurchase struct {
+	ID            int64        `json:"id"`
+	CharacterID   int64        `json:"character_id"`
+	CorporationID int64        `json:"corporation_id"`
+	FromAt        time.Time    `json:"from_at"`
+	ToAt          time.Time    `json:"to_at"`
+	LpSpent       int64        `json:"lp_spent"`
+	IskPaid       float64      `json:"isk_paid"`
+	Tier          string       `json:"tier"`
+	OfferID       int64        `json:"offer_id"`
+	Quantity      int64        `json:"quantity"`
+	ProductTypeID int64        `json:"product_type_id"`
+	Units         int64        `json:"units"`
+	ReqValue      float64      `json:"req_value"`
+	Candidates    string       `json:"candidates"`
+	JournalIsk    float64      `json:"journal_isk"`
+	AssetsBefore  int64        `json:"assets_before"`
+	AssetsAsOf    sql.NullTime `json:"assets_as_of"`
+	Checked       bool         `json:"checked"`
+	CreatedAt     time.Time    `json:"created_at"`
+}
+
+type LpSaleLink struct {
+	PoolKind      string    `json:"pool_kind"`
+	PoolID        int64     `json:"pool_id"`
+	PurchaseID    int64     `json:"purchase_id"`
+	TypeID        int64     `json:"type_id"`
+	OwnerID       int64     `json:"owner_id"`
+	TransactionID int64     `json:"transaction_id"`
+	At            time.Time `json:"at"`
+	Units         int64     `json:"units"`
+	Revenue       float64   `json:"revenue"`
+	Cost          float64   `json:"cost"`
+}
+
 type LpStoreCorp struct {
 	CorporationID int64        `json:"corporation_id"`
 	Name          string       `json:"name"`
 	State         string       `json:"state"`
 	OfferCount    int64        `json:"offer_count"`
 	FetchedAt     sql.NullTime `json:"fetched_at"`
+}
+
+type LpStoreSummary struct {
+	PoolKind       string    `json:"pool_kind"`
+	PoolID         int64     `json:"pool_id"`
+	CorporationID  int64     `json:"corporation_id"`
+	LpEarned       int64     `json:"lp_earned"`
+	LpCorroborated int64     `json:"lp_corroborated"`
+	LpInferred     int64     `json:"lp_inferred"`
+	LpAmbiguous    int64     `json:"lp_ambiguous"`
+	LpUnexplained  int64     `json:"lp_unexplained"`
+	IskPaid        float64   `json:"isk_paid"`
+	UnitsAcquired  int64     `json:"units_acquired"`
+	UnitsSold      int64     `json:"units_sold"`
+	Revenue        float64   `json:"revenue"`
+	Tax            float64   `json:"tax"`
+	SoldCost       float64   `json:"sold_cost"`
+	LpSold         float64   `json:"lp_sold"`
+	UnsoldValue    float64   `json:"unsold_value"`
+	UnsoldPriced   bool      `json:"unsold_priced"`
+	FoldedAt       time.Time `json:"folded_at"`
 }
 
 type MapLayer struct {
@@ -1433,6 +1496,7 @@ type ProfitDaily struct {
 	Activity  string  `json:"activity"`
 	Income    float64 `json:"income"`
 	Costs     float64 `json:"costs"`
+	LpDelta   int64   `json:"lp_delta"`
 }
 
 type PubContract struct {
@@ -2232,6 +2296,7 @@ type UserProfitPref struct {
 	UpdatedAt      time.Time `json:"updated_at"`
 	IndustryRegion int64     `json:"industry_region"`
 	IndustrySide   string    `json:"industry_side"`
+	LpIskValue     float64   `json:"lp_isk_value"`
 }
 
 type WalletHistory struct {

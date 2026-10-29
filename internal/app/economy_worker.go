@@ -39,6 +39,7 @@ func economySnapshotKinds() []string {
 		esi.SnapOrders, esi.SnapOrdersHistory,
 		esi.SnapContracts,
 		esi.SnapIndustryJobs, esi.SnapBlueprints, esi.SnapMining,
+		esi.SnapLoyalty,
 	})
 }
 

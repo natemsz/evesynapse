@@ -691,6 +691,13 @@ var pgProfitTradingSchema string
 //go:embed schema_pg/113_profit_industry.sql
 var pgProfitIndustrySchema string
 
+// Step 114: LP earnings per store: LP balance samples, purchases
+// inferred from them with confidence tiers, what the units sold for,
+// the per-store summary, and the LP delta on the daily rows.
+//
+//go:embed schema_pg/114_profit_lp.sql
+var pgProfitLPSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -833,6 +840,7 @@ func schemaSteps() []schemaStep {
 		{111, "viz_prefs", pgVizPrefsSchema, ""},
 		{112, "profit_trading", pgProfitTradingSchema, ""},
 		{113, "profit_industry", pgProfitIndustrySchema, ""},
+		{114, "profit_lp", pgProfitLPSchema, ""},
 	}
 }
 

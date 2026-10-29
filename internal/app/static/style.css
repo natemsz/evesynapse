@@ -2165,12 +2165,12 @@ ul.brief-cards {
 .brief-icon-calendar { background-image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffa25e' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><rect x='3' y='4' width='18' height='17' rx='2'/><path d='M16 2v4'/><path d='M8 2v4'/><path d='M3 9h18'/></svg>"); }
 .brief-icon-market { background-image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffa25e' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='m22 7-8.5 8.5-5-5L2 17'/><path d='M16 7h6v6'/></svg>"); }
 .brief-icon-link { background-image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffa25e' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71'/><path d='M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71'/></svg>"); }
-.brief-card.sev-critical { border-left-color: var(--danger); border-color: rgba(239, 68, 68, 0.35); --sev-glow: #ef4444; --brief-tint: #5f3230; }
-.brief-card.sev-warning { border-left-color: var(--accent); --sev-glow: var(--accent); --brief-tint: #5f462a; }
-.brief-card.sev-info { border-left-color: #38bdf8; border-color: rgba(56, 189, 248, 0.30); --sev-glow: #38bdf8; --brief-tint: #31424f; }
-html[data-theme="light"] .brief-card.sev-critical { --brief-tint: #e8c4bc; }
-html[data-theme="light"] .brief-card.sev-warning { --brief-tint: #eed9ae; }
-html[data-theme="light"] .brief-card.sev-info { --brief-tint: #bfd9ea; }
+.brief-card.sev-critical { border-left-color: var(--danger); border-color: rgba(239, 68, 68, 0.35); --sev-glow: #ef4444; --brief-tint: #50302e; }
+.brief-card.sev-warning { border-left-color: var(--accent); --sev-glow: var(--accent); --brief-tint: #52402a; }
+.brief-card.sev-info { border-left-color: #38bdf8; border-color: rgba(56, 189, 248, 0.30); --sev-glow: #38bdf8; --brief-tint: #2f3d48; }
+html[data-theme="light"] .brief-card.sev-critical { --brief-tint: #dfbab2; }
+html[data-theme="light"] .brief-card.sev-warning { --brief-tint: #e6cfa0; }
+html[data-theme="light"] .brief-card.sev-info { --brief-tint: #b2cddd; }
 
 /* Briefing stacks: one card per kind, its lines as rows. A stack
    with more than one line shows the sheets behind it; the whole

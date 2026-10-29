@@ -749,6 +749,11 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 		r.With(anonPages).Get("/trader-fragment", app.handleMarketTraderFragment)
 		r.With(anonPages).Get("/trends/", app.handleMarketTrends)
 		r.With(anonPages).Get("/lp/", app.handleMarketLP)
+		r.With(anonPages).Get("/baskets/", app.handleMarketBaskets)
+		r.With(anonPages).Get("/baskets/{basketID}/", app.handleMarketBasket)
+		r.With(app.requireAuth).Post("/baskets/", app.handleMarketBasketCreate)
+		r.With(app.requireAuth).Post("/baskets/{basketID}/edit", app.handleMarketBasketEdit)
+		r.With(app.requireAuth).Post("/baskets/{basketID}/delete", app.handleMarketBasketDelete)
 		r.With(app.requireAuth).Post("/watch", app.handleMarketWatch)
 	})
 

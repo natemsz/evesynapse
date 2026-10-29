@@ -711,6 +711,31 @@ type MapUniverse struct {
 	BuiltAt time.Time `json:"built_at"`
 }
 
+type MarketBasket struct {
+	ID        int64         `json:"id"`
+	UserID    sql.NullInt64 `json:"user_id"`
+	PresetKey string        `json:"preset_key"`
+	Name      string        `json:"name"`
+	RegionID  int64         `json:"region_id"`
+	CreatedAt time.Time     `json:"created_at"`
+	UpdatedAt time.Time     `json:"updated_at"`
+}
+
+type MarketBasketItem struct {
+	BasketID int64 `json:"basket_id"`
+	TypeID   int64 `json:"type_id"`
+	Quantity int64 `json:"quantity"`
+}
+
+type MarketBasketValuesDaily struct {
+	BasketID    int64   `json:"basket_id"`
+	Day         string  `json:"day"`
+	ValueSell   float64 `json:"value_sell"`
+	ValueBuy    float64 `json:"value_buy"`
+	PricedItems int64   `json:"priced_items"`
+	ItemCount   int64   `json:"item_count"`
+}
+
 type MarketBookOrder struct {
 	RegionID     int64     `json:"region_id"`
 	TypeID       int64     `json:"type_id"`

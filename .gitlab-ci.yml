@@ -101,6 +101,11 @@ test:
       useradd --create-home --shell /bin/bash tester
       mkdir -p /tmp/gopath /tmp/gocache /tmp/gomodcache
       chown -R tester:tester /tmp/gopath /tmp/gocache /tmp/gomodcache "$CI_PROJECT_DIR"
+      # Steps after this one still build as root, and git
+      # refuses a checkout owned by somebody else (the VCS
+      # stamping in go build fails with it); whitelist the
+      # checkout for root's git.
+      git config --global --add safe.directory "$CI_PROJECT_DIR"
     # internal/app runs a few minutes; the default 10m
     # per-package limit leaves too little headroom on a slow
     # runner.
@@ -141,6 +146,11 @@ race:
       useradd --create-home --shell /bin/bash tester
       mkdir -p /tmp/gopath /tmp/gocache /tmp/gomodcache
       chown -R tester:tester /tmp/gopath /tmp/gocache /tmp/gomodcache "$CI_PROJECT_DIR"
+      # Steps after this one still build as root, and git
+      # refuses a checkout owned by somebody else (the VCS
+      # stamping in go build fails with it); whitelist the
+      # checkout for root's git.
+      git config --global --add safe.directory "$CI_PROJECT_DIR"
     # Under the race detector internal/app takes 5-10 minutes,
     # depending on the runner: past go test's default 10m
     # limit on a slow one.
@@ -168,6 +178,11 @@ core-only:
       useradd --create-home --shell /bin/bash tester
       mkdir -p /tmp/gopath /tmp/gocache /tmp/gomodcache
       chown -R tester:tester /tmp/gopath /tmp/gocache /tmp/gomodcache "$CI_PROJECT_DIR"
+      # Steps after this one still build as root, and git
+      # refuses a checkout owned by somebody else (the VCS
+      # stamping in go build fails with it); whitelist the
+      # checkout for root's git.
+      git config --global --add safe.directory "$CI_PROJECT_DIR"
     - runuser -u tester -- env HOME=/home/tester GOPATH=/tmp/gopath GOCACHE=/tmp/gocache GOMODCACHE=/tmp/gomodcache PATH="$PATH" go test -tags core_only -timeout 20m -run 'TestCoreOnly' ./internal/app/
     # The module build tool: the default file is what it writes
     # for every module, and each module compiles and vets on

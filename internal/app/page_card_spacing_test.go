@@ -30,3 +30,20 @@ func TestStackedPageCardsCarryTheSectionGap(t *testing.T) {
 		t.Errorf("phone.css missing stacked-card rule %q", want)
 	}
 }
+
+// TestBriefingCardsStackTheSideChipsOnPhones pins the phone
+// layout of a briefing card's row: at phone widths the severity
+// pill and tally sit on their own line under the text instead
+// of sharing its row, where they squeezed the text into a
+// column a few letters wide.
+func TestBriefingCardsStackTheSideChipsOnPhones(t *testing.T) {
+	style := readStatic(t, "style.css")
+	for _, want := range []string{
+		".brief-cards .brief-row { flex-direction: column; gap: 0.35rem; }",
+		".brief-cards .brief-row-side { margin-left: 0; }",
+	} {
+		if !strings.Contains(style, want) {
+			t.Errorf("style.css missing phone briefing-row rule %q", want)
+		}
+	}
+}

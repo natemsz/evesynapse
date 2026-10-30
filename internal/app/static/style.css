@@ -2320,6 +2320,13 @@ html[data-theme="light"] .brief-card:hover, html[data-theme="light"] .brief-card
   ul.brief-cards { gap: 0.6rem; }
   .brief-card { padding: 0.85rem 0.9rem; }
   .brief-title { font-size: 1.3rem; }
+  /* The severity pill and tally leave the text's row at phone
+     widths: side by side they squeezed the text into a column
+     a few letters wide. They drop to their own line under the
+     text, in the head's chip order, and the text takes the
+     card's full width. */
+  .brief-cards .brief-row { flex-direction: column; gap: 0.35rem; }
+  .brief-cards .brief-row-side { margin-left: 0; }
 }
 @media (max-width: 400px) {
   .brief-title { font-size: 1.18rem; }

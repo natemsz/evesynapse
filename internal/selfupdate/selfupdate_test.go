@@ -412,6 +412,12 @@ func TestReleaseUpdateInstallsNewer(t *testing.T) {
 	if !strings.Contains(out.String(), "A new version is available: v9.9.9.9") {
 		t.Fatalf("output %q missing the new-version note", out.String())
 	}
+	if !strings.Contains(out.String(), "Checked GitLab: it has v9.9.9.9.") {
+		t.Fatalf("output %q missing the provider read-out", out.String())
+	}
+	if !strings.Contains(out.String(), "Downloading it from GitLab.") {
+		t.Fatalf("output %q missing the download source", out.String())
+	}
 	if !strings.Contains(out.String(), "now on v9.9.9.9") {
 		t.Fatalf("output %q missing the new-version readout", out.String())
 	}
@@ -1574,14 +1580,26 @@ func TestChainPicksNewestForge(t *testing.T) {
 	releaseMirrorBaseURL = "http://127.0.0.1:1"
 	t.Cleanup(func() { releaseMirrorBaseURL = oldMirror })
 
-	m, binaryURL, err := fetchReleaseManifest(context.Background(), "arm64", false)
+	var out bytes.Buffer
+	m, provider, binaryURL, err := fetchReleaseManifest(context.Background(), &out, "arm64", false)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if m.Version != "9.9.9.9" {
 		t.Fatalf("chain picked version %q, want 9.9.9.9 from GitLab", m.Version)
 	}
+	if provider != "gitlab" {
+		t.Fatalf("chain picked provider %q, want gitlab", provider)
+	}
 	if binaryURL != glSrv.URL+"/evesynapse-arm64" {
 		t.Fatalf("chain picked binary %q, want GitLab's", binaryURL)
+	}
+	// The read-out names each forge as it is checked, in the
+	// default chain's order, and what each one found.
+	ghLine := strings.Index(out.String(), "Checked GitHub: no usable release.")
+	glLine := strings.Index(out.String(), "Checked GitLab: it has v9.9.9.9.")
+	fjLine := strings.Index(out.String(), "Checked Forgejo: it has v9.9.9.0.")
+	if ghLine < 0 || glLine < ghLine || fjLine < glLine {
+		t.Fatalf("read-out %q: want GitHub (no usable release), then GitLab (v9.9.9.9), then Forgejo (v9.9.9.0)", out.String())
 	}
 }

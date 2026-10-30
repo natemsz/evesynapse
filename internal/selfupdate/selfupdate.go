@@ -97,13 +97,13 @@ const (
 // release wins, with the mirror as the last resort when no
 // forge answers:
 //
-//	forgejo: the project's releases on its own Forgejo
-//	    (natems.dev), read through its API.
-//	gitlab: the project's releases on a GitLab, listed through
-//	    its API.
 //	github: the repository's releases on GitHub — the stable
 //	    channel from its "latest" download address, the dev
 //	    channel from its API.
+//	gitlab: the project's releases on a GitLab, listed through
+//	    its API.
+//	forgejo: the project's releases on its own Forgejo
+//	    (natems.dev), read through its API.
 //	mirror: a static mirror of the releases (the project's is
 //	    served from synap6.io), laid out as the channel pointer
 //	    manifests beside the binaries they describe. In the
@@ -366,12 +366,12 @@ func updateProviders() []string {
 // binary asset URLs of the release the channel (stable, or dev
 // when dev is set) currently installs from, from the first
 // provider the install is configured to read — the chain's
-// first forge, Forgejo, when none is named. All three come
+// first forge, GitHub, when none is named. All three come
 // from that one release, so the signature is the manifest's
 // own and the checksum in the manifest always describes the
 // binary downloaded beside it.
 func latestReleaseAssets(ctx context.Context, arch string, dev bool) (manifestURL, sigURL, binaryURL string, err error) {
-	provider := "forgejo"
+	provider := "github"
 	if providers := updateProviders(); len(providers) > 0 {
 		provider = providers[0]
 	}
@@ -766,14 +766,47 @@ func verifyReleaseSignature(ctx context.Context, manifest []byte, sigURL string)
 	return nil
 }
 
+// providerDisplayName is how a provider is named in the
+// updater's read-out to the user.
+func providerDisplayName(provider string) string {
+	switch provider {
+	case "github":
+		return "GitHub"
+	case "gitlab":
+		return "GitLab"
+	case "forgejo":
+		return "Forgejo"
+	case "mirror":
+		return "the mirror"
+	}
+	return provider
+}
+
+// reportProviderCheck reads out one provider consultation to
+// w: the provider's name and what it found, the version of the
+// genuine manifest it served or that it had no usable release.
+// The checks themselves happen in fetchProviderManifest; this
+// only reports their outcome.
+func reportProviderCheck(w io.Writer, provider string, m releaseManifest, err error) {
+	if w == nil {
+		return
+	}
+	if err != nil {
+		fmt.Fprintf(w, "Checked %s: no usable release.\n", providerDisplayName(provider))
+		return
+	}
+	fmt.Fprintf(w, "Checked %s: it has %s.\n", providerDisplayName(provider), "v"+strings.TrimPrefix(m.Version, "v"))
+}
+
 // fetchReleaseManifest downloads the manifest for arch from the
 // release channel (the dev channel when dev is set), checks its
-// signature, and returns it parsed with the address of the binary
-// it describes.
+// signature, and returns it parsed with the name of the provider
+// that served it and the address of the binary it describes.
+// Each provider consulted is read out to w as it is checked.
 //
 // An install that names one or more providers walks those, in
 // the order named. An install that names none walks the
-// default chain: Forgejo, GitLab and GitHub are each asked for
+// default chain: GitHub, GitLab and Forgejo are each asked for
 // the channel's release, and the newest genuine manifest among
 // them wins. A source that has no such release, or cannot be
 // reached, is passed over; a source that answers with a
@@ -782,36 +815,41 @@ func verifyReleaseSignature(ctx context.Context, manifest []byte, sigURL string)
 // being offered. Only on the default chain, and only when no
 // forge produces a genuine manifest, is the static mirror
 // asked, last.
-func fetchReleaseManifest(ctx context.Context, arch string, dev bool) (releaseManifest, string, error) {
+func fetchReleaseManifest(ctx context.Context, w io.Writer, arch string, dev bool) (releaseManifest, string, string, error) {
 	if providers := updateProviders(); len(providers) > 0 {
-		return walkProviders(ctx, providers, arch, dev)
+		return walkProviders(ctx, w, providers, arch, dev)
 	}
-	m, binaryURL, err := walkProviders(ctx, []string{"forgejo", "gitlab", "github"}, arch, dev)
+	m, provider, binaryURL, err := walkProviders(ctx, w, []string{"github", "gitlab", "forgejo"}, arch, dev)
 	if err == nil {
-		return m, binaryURL, nil
+		return m, provider, binaryURL, nil
 	}
 	var refused *refusal
 	if errors.As(err, &refused) {
-		return m, "", err
+		return m, "", "", err
 	}
-	return fetchProviderManifest(ctx, "mirror", arch, dev)
+	m, binaryURL, err = fetchProviderManifest(ctx, "mirror", arch, dev)
+	reportProviderCheck(w, "mirror", m, err)
+	return m, "mirror", binaryURL, err
 }
 
 // walkProviders asks each named provider for the channel's
-// release and returns the newest genuine manifest among them.
-// A refusal aborts the walk. When no provider answers, the
-// first provider's error stands for the rest.
-func walkProviders(ctx context.Context, providers []string, arch string, dev bool) (releaseManifest, string, error) {
+// release and returns the newest genuine manifest among them,
+// with the name of the provider that served it. A refusal
+// aborts the walk. When no provider answers, the first
+// provider's error stands for the rest.
+func walkProviders(ctx context.Context, w io.Writer, providers []string, arch string, dev bool) (releaseManifest, string, string, error) {
 	var best releaseManifest
+	var bestProvider string
 	var bestBinary string
 	var firstErr error
 	found := false
 	for _, provider := range providers {
 		m, binaryURL, err := fetchProviderManifest(ctx, provider, arch, dev)
+		reportProviderCheck(w, provider, m, err)
 		if err != nil {
 			var refused *refusal
 			if errors.As(err, &refused) {
-				return best, "", err
+				return best, "", "", err
 			}
 			if firstErr == nil {
 				firstErr = err
@@ -819,13 +857,13 @@ func walkProviders(ctx context.Context, providers []string, arch string, dev boo
 			continue
 		}
 		if !found || compareVersions(m.Version, best.Version) > 0 {
-			best, bestBinary, found = m, binaryURL, true
+			best, bestProvider, bestBinary, found = m, provider, binaryURL, true
 		}
 	}
 	if found {
-		return best, bestBinary, nil
+		return best, bestProvider, bestBinary, nil
 	}
-	return best, "", firstErr
+	return best, "", "", firstErr
 }
 
 // fetchProviderManifest is fetchReleaseManifest against one
@@ -882,7 +920,7 @@ func runReleaseUpdate(current, target, arch string, stdout, stderr io.Writer, de
 	}
 	fmt.Fprintf(stdout, "Checking for updates… you're on %s.\n", current)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	m, source, err := fetchReleaseManifest(ctx, arch, dev)
+	m, provider, source, err := fetchReleaseManifest(ctx, stdout, arch, dev)
 	cancel()
 	if err != nil {
 		var refused *refusal
@@ -908,6 +946,7 @@ func runReleaseUpdate(current, target, arch string, stdout, stderr io.Writer, de
 	}
 	fmt.Fprintf(stdout, "A new version is available: %s.\n", latest)
 	fmt.Fprintln(stdout, "Release signature verified.")
+	fmt.Fprintf(stdout, "Downloading it from %s.\n", providerDisplayName(provider))
 	if code := installUpdate(target, source, m.SHA256, machine, stdout, stderr); code != 0 {
 		return code
 	}

@@ -154,8 +154,8 @@
   </table>
   </div>
   <p><small>{{if .Volatility}}Typical sell moves {{.Volatility}} on average over the last 30 days. {{else}}Not enough days stored yet to measure how much the price moves. {{end}}{{.HistoryDays}} {{if eq .HistoryDays 1}}day{{else}}days{{end}} of book history in the last 30.{{if .TradedPerDay}} About {{.TradedPerDay}} units traded a day.{{end}} Prices in ISK. The 5% edge is the price the best 5 in 100 orders beat.</small></p>
-  {{with .Chart}}
-  <div class="mt-chart">
+  {{with .Chart}}{{$bc := .}}
+  <div class="mt-chart pchart" data-chart-scrub="true">
     <div class="chart-legend">
       <span class="legend-item"><span class="legend-swatch mt-swatch-sell" aria-hidden="true"></span>Typical sell</span>
       <span class="legend-item"><span class="legend-swatch mt-swatch-buy" aria-hidden="true"></span>Typical buy</span>
@@ -163,14 +163,19 @@
       <span class="legend-item"><span class="legend-swatch mt-swatch-best-buy" aria-hidden="true"></span>Best buy</span>{{end}}
       <span class="legend-note">{{.Days}} days · {{.Low}} to {{.High}} ISK</span>
     </div>
-    <svg viewBox="0 0 {{.Width}} {{.Height}}" width="100%" role="img" aria-label="Typical sell and buy price by day, {{.First}} to {{.Last}}" preserveAspectRatio="none">
+    <svg class="mt-book" viewBox="0 0 {{.Width}} {{.Height}}" width="100%" role="img" aria-label="Typical sell and buy price by day, {{.First}} to {{.Last}}">
+      {{range .PriceTicks}}<line class="chart-gridline price-gridline" x1="0" y1="{{.Y}}" x2="{{$bc.Width}}" y2="{{.Y}}"/>{{end}}
       {{if .BandPoints}}<polygon class="mt-band" points="{{.BandPoints}}"/>{{end}}
       {{if .BestSellPoints}}<polyline class="mt-line-best-sell" points="{{.BestSellPoints}}"/>{{end}}
       {{if .BestBuyPoints}}<polyline class="mt-line-best-buy" points="{{.BestBuyPoints}}"/>{{end}}
       {{if .SellPoints}}<polyline class="mt-line-sell" points="{{.SellPoints}}"/>{{end}}
       {{if .BuyPoints}}<polyline class="mt-line-buy" points="{{.BuyPoints}}"/>{{end}}
+      {{range .SellDots}}<circle class="mt-dot-sell" cx="{{.X}}" cy="{{.Y}}" r="2"/>{{end}}
+      {{range .BuyDots}}<circle class="mt-dot-buy" cx="{{.X}}" cy="{{.Y}}" r="2"/>{{end}}
+      {{range .Hits}}<rect class="cdot mt-hit" x="{{.X}}" y="0" width="{{.W}}" height="{{$bc.Height}}" tabindex="0" aria-label="{{.Label}}" data-date="{{.Date}}" data-tip-rows="{{.Rows}}"/>{{end}}
+      {{range .PriceTicks}}<text class="chart-axis-label price-axis" x="2" y="{{.LabelY}}">{{.Label}}</text>{{end}}
+      {{range .DateTicks}}<text class="chart-axis-label chart-date-tick" x="{{.X}}" y="{{.LabelY}}" text-anchor="{{.Anchor}}">{{.Label}}</text>{{end}}
     </svg>
-    <div class="mt-chart-dates"><small>{{.First}}</small><small>{{.Last}}</small></div>
     {{if .Extended}}
     {{if .DepthBars}}
     <div class="chart-legend viz-strip-key">
@@ -179,7 +184,7 @@
       <span class="legend-note">Orders per day, up to {{.DepthMax}}</span>
     </div>
     <svg class="mt-depth" viewBox="0 0 {{.DepthWidth}} {{.DepthHeight}}" width="100%" role="img" aria-label="Sell and buy orders per day, {{.First}} to {{.Last}}" preserveAspectRatio="none">
-      {{range .DepthBars}}<rect class="mt-depth-{{.Side}}" x="{{.X}}" y="{{.Y}}" width="{{.W}}" height="{{.H}}"><title>{{.Title}}</title></rect>{{end}}
+      {{range .DepthBars}}<rect class="mt-depth-{{.Side}}" x="{{.X}}" y="{{.Y}}" width="{{.W}}" height="{{.H}}"/>{{end}}
     </svg>
     {{end}}
     {{if .SpreadPoints}}
@@ -193,6 +198,7 @@
     <div class="mt-chart-dates"><small>{{.First}}</small><small>{{.Last}}</small></div>
     {{end}}
     {{end}}
+    <div class="ctip" hidden></div>
   </div>
   {{end}}
   {{if .Changes}}

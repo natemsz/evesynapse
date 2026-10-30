@@ -8,7 +8,12 @@
 {{with .MarketLP}}
 <p><small>What each loyalty point turns into, offer by offer, priced from the latest sweep of a hub region.</small></p>
 
-<form method="get" action="/market/lp/" class="mt-filters">
+<form method="get" action="/market/lp/" class="box lp-filters">
+  <div class="box-head"><h3 class="box-title">Filters</h3></div>
+  <div class="mt-filters">
+  <label class="lp-search"><small>Find stores for an item</small>
+    <input type="text" name="item" value="{{.Item}}" size="18" placeholder="Item name">
+  </label>
   <label><small>Sell in</small>
     <select name="region">
       {{range .Regions}}<option value="{{.ID}}"{{if .Active}} selected{{end}}>{{.Name}}</option>{{end}}
@@ -41,10 +46,8 @@
   <label><small>LP cost, at most</small>
     <input type="number" name="maxlp" min="0" step="1" value="{{if .MaxLP}}{{.MaxLP}}{{end}}" size="7">
   </label>
-  <label><small>Find stores for an item</small>
-    <input type="text" name="item" value="{{.Item}}" size="18" placeholder="Item name">
-  </label>
   <button class="btn" type="submit">Show</button>
+  </div>
 </form>
 
 {{if .HasStores}}

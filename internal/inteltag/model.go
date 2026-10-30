@@ -1,7 +1,9 @@
 package inteltag
 
 import (
+	"bytes"
 	"compress/gzip"
+	_ "embed"
 	"encoding/gob"
 	"io"
 )
@@ -35,4 +37,23 @@ func Load(r io.Reader) (*Model, error) {
 		return nil, err
 	}
 	return &Model{Labels: f.Labels, Trans: f.Trans, W: f.W}, nil
+}
+
+// The model the site reads with: trained outside this repository on
+// synthetic reports only, and replaced by a release like any other
+// file. INTEL_TAGGER_WEIGHTS points the site at another one to try.
+//
+//go:embed tagger.gob.gz
+var defaultModel []byte
+
+// Default loads the embedded model.
+func Default() (*Model, error) {
+	return Load(bytes.NewReader(defaultModel))
+}
+
+// TagWith labels a report's text with lex as the name lists, so one
+// loaded model can serve readers with different lists at once.
+func (m *Model) TagWith(text string, lex Lexicon) []Span {
+	toks := Tokenize(text)
+	return m.Spans(toks, m.Decode(Features(toks, lex)))
 }

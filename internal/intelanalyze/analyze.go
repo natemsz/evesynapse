@@ -202,6 +202,11 @@ type Dict struct {
 	System func(lower string) (id int64, ok bool)
 	// Area finds a region or a constellation by its exact name.
 	Area func(lower string) (id int64, ok bool)
+	// Names, when set, is the intel classifier's reading of the
+	// text: the runs it takes for pilots' names, as written. The
+	// pilot pass tries those runs first; nil keeps the plain
+	// longest-first reading.
+	Names func(text string) []string
 	// Friend reports whether a pilot counts as friendly, and whether
 	// a set standing says they are hostile.
 	Friend func(id int64) (friendly, red bool)
@@ -266,6 +271,17 @@ func Analyze(in Input, d Dict) Analysis {
 		a.Ships = append(a.Ships, s)
 	}
 	seenPilot := map[int64]bool{}
+	// The classifier's name runs, when one is wired: where one
+	// name ends and the next begins among words typed with single
+	// spaces. They only order the pilot pass; every name is still
+	// looked up and every rule below still holds.
+	var names map[string]bool
+	if d.Names != nil {
+		names = map[string]bool{}
+		for _, n := range d.Names(in.Text) {
+			names[clean(strings.Join(strings.Fields(n), " "))] = true
+		}
+	}
 	// Scan-shaped text is read as rows first (scanrows.go):
 	// what it consumes is blanked, so the prose reading below
 	// never sees a name column.
@@ -291,7 +307,7 @@ func Analyze(in Input, d Dict) Analysis {
 				addShip(s, 0)
 				continue
 			}
-			if !nameShaped(seg) || holdsThing(d, seg) {
+			if !nameShaped(seg) || holdsThing(d, seg) || splitByNames(seg, names) {
 				// read word by word below
 			} else if id, name, ok, _ := lookupPilot(d, whole); ok {
 				if !seenPilot[id] {
@@ -498,7 +514,7 @@ func Analyze(in Input, d Dict) Analysis {
 		flush := func() {
 			for len(left) > 0 {
 				took := 0
-				for n := min(3, len(left)); n >= 1; n-- {
+				for _, n := range nameOrder(seg, left, names) {
 					words := make([]string, n)
 					shaped := true
 					for k := 0; k < n; k++ {

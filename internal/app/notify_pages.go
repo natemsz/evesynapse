@@ -37,6 +37,9 @@ var notifyKindIcons = map[string]bool{notifyMail: true, notifyPI: true}
 // "1 new mail", "3 new mails".
 var notifyKindWording = map[string][2]string{
 	notifyWatch:      {"watch list alert", "watch list alerts"},
+	notifyMarket:     {"market change", "market changes"},
+	notifySRPNew:     {"new SRP request", "new SRP requests"},
+	notifySRPDone:    {"SRP request settled", "SRP requests settled"},
 	notifySkill:      {"skill finished", "skills finished"},
 	notifyMail:       {"new mail", "new mails"},
 	notifyCalendar:   {"new calendar event", "new calendar events"},
@@ -96,6 +99,11 @@ func (app *Application) notifyBadgeFor(ctx context.Context, userID int64) *notif
 		word := words[1]
 		if row.Unread == 1 {
 			word = words[0]
+		}
+		if word == "" {
+			// A kind with no wording entry must still read as
+			// words, never as a bare count.
+			word = kind.Title
 		}
 		badge.Unread += row.Unread
 		badge.Rows = append(badge.Rows, notifyBadgeRow{

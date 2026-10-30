@@ -50,6 +50,18 @@ func (f *notifyFixture) badge(cookie *http.Cookie, etag string) *httptest.Respon
 // same ones a page load draws; an unchanged icon is answered with no
 // body; a new notification changes the answer; and a visitor who is
 // not signed in gets nothing that could be taken for an icon.
+// TestNotifyKindWordingComplete: every kind the registry can
+// produce has flyout wording, so a badge row can never render as
+// a bare count.
+func TestNotifyKindWordingComplete(t *testing.T) {
+	for _, kind := range notifyKindList() {
+		words, ok := notifyKindWording[kind.ID]
+		if !ok || words[0] == "" || words[1] == "" {
+			t.Errorf("kind %s has no flyout wording", kind.ID)
+		}
+	}
+}
+
 func TestNotifyBadgeEndpoint(t *testing.T) {
 	f := newNotifyFixture(t)
 	cookie := sessionCookie(t, f.app, f.userID, f.ch.CharacterID, f.ch.Name)
@@ -90,6 +102,13 @@ func TestNotifyBadgeEndpoint(t *testing.T) {
 	if !strings.Contains(page, strings.TrimSpace(fragment)) {
 		t.Error("the page draws the icon differently from what the check returns")
 	}
+
+	// A market change reads as words, not as a bare count: the
+	// kind once had no wording entry and its row showed just "1".
+	f.add(f.userID, f.ch.CharacterID, notifyMarket, "PLEX moved 6.2% in The Forge", "/market/")
+	fresh = f.badge(cookie, "")
+	mustContain(t, "badge after a market change", fresh.Body.String(),
+		"1 market change", "PLEX moved 6.2% in The Forge")
 
 	// Another account's notifications are not this one's.
 	other, err := f.q.CreateUser(f.ctx)

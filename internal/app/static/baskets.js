@@ -394,8 +394,8 @@
                 ed.seed(data.items.map(function (it) {
                   return { id: it.id, name: it.name, qty: it.qty, price: it.price || "" };
                 }));
-                root.querySelector(".mbk-cancel").addEventListener("click", function () { er.remove(); });
-                root.querySelector(".mbk-save").addEventListener("click", function () {
+                root.querySelector("[data-mbk-action=\"cancel\"]").addEventListener("click", function () { er.remove(); });
+                root.querySelector("[data-mbk-action=\"save\"]").addEventListener("click", function () {
                   postJSON("/market/baskets/" + id + "/api-edit", { items: ed.items() })
                     .then(function (res) {
                       var count = row.querySelector("[data-mbk-count]");
@@ -443,8 +443,8 @@
               }));
             };
             seedDetail();
-            root.querySelector(".mbk-cancel").addEventListener("click", seedDetail);
-            root.querySelector(".mbk-save").addEventListener("click", function () {
+            root.querySelector("[data-mbk-action=\"cancel\"]").addEventListener("click", seedDetail);
+            root.querySelector("[data-mbk-action=\"save\"]").addEventListener("click", function () {
               postJSON("/market/baskets/" + detailID + "/api-edit", { items: ed.items() })
                 .then(function () { window.location.reload(); })
                 .catch(function (err) { ed.error(err.message); });

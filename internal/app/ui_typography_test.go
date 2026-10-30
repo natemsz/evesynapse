@@ -7,9 +7,10 @@ import (
 )
 
 // TestMenuTextIsAllCapsRajdhani pins the menu face: every menu
-// surface (sidenav rows, branch summaries, header links, dropdown
-// items, pop menus) reads in Rajdhani full capitals, never the body
-// face and never small caps.
+// surface (sidenav rows, branch summaries, header links, pop menus)
+// reads in Rajdhani full capitals, never the body face and never
+// small caps. Dropdown items are the one exception: Rajdhani
+// Medium in their labels' own case, under capital group labels.
 func TestMenuTextIsAllCapsRajdhani(t *testing.T) {
 	style := readStatic(t, "style.css")
 	for _, want := range []string{
@@ -17,9 +18,9 @@ func TestMenuTextIsAllCapsRajdhani(t *testing.T) {
 		".sidenav a.navlink,\n.sidebar-account-footer .navlink,\n.branch > summary {\n  text-transform: uppercase;\n}",
 		// Header links keep the SemiBold face.
 		"header a.navlink {\n  font-family: \"Rajdhani\", \"Segoe UI\", sans-serif;\n  font-weight: 600;\n  font-synthesis-weight: none;\n  text-transform: uppercase;",
-		// Dropdown items ride a step lighter: Regular weight,
-		// tighter letter spacing.
-		".branch .menu a, .switcher .menu a, .switcher-menu a {\n  font-family: \"Rajdhani\", \"Segoe UI\", sans-serif;\n  font-weight: 400;\n  font-synthesis-weight: none;\n  text-transform: uppercase;\n  letter-spacing: 0.03em;",
+		// Dropdown items ride a step lighter: Medium weight, in
+		// their labels' own case, tighter letter spacing.
+		".branch .menu a, .switcher .menu a, .switcher-menu a {\n  font-family: \"Rajdhani\", \"Segoe UI\", sans-serif;\n  font-weight: 500;\n  font-synthesis-weight: none;\n  text-transform: none;\n  letter-spacing: 0.03em;",
 		// Pop-menu items too.
 		".menu-pop-body a, .menu-pop-body button {\n  display: block;\n  width: 100%;\n  text-align: left;\n  padding: 0.45rem 0.6rem;\n  font-family: \"Rajdhani\", \"Segoe UI\", sans-serif;\n  font-weight: 600;\n  text-transform: uppercase;",
 		// The sidenav layout rule carries no casing of its own: the

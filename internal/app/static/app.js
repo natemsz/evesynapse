@@ -5251,8 +5251,8 @@
   if (!openBtn || !modal) return;
   var dot = document.getElementById("status-dot");
   var modalDot = document.getElementById("status-modal-dot");
-  var esiLabel = document.getElementById("status-esi-label");
-  var esiTq = document.getElementById("status-esi-tq");
+  var esiLabel = document.getElementById("status-api-label");
+  var esiTq = document.getElementById("status-api-players");
   var rowsBody = document.getElementById("status-rows");
   var note = document.getElementById("status-note");
   var closeBtn = document.getElementById("status-close");

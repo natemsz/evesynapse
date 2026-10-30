@@ -92,10 +92,19 @@ test:
         exit 1
       fi
     - go vet ./...
+    # The suites run an embedded Postgres, whose initdb
+    # refuses to run as root; this image runs its jobs as root
+    # (GitHub's runners did not), so the test commands below
+    # run as an unprivileged user with its own Go caches and
+    # the checkout handed over to it.
+    - |
+      useradd --create-home --shell /bin/bash tester
+      mkdir -p /tmp/gopath /tmp/gocache /tmp/gomodcache
+      chown -R tester:tester /tmp/gopath /tmp/gocache /tmp/gomodcache "$CI_PROJECT_DIR"
     # internal/app runs a few minutes; the default 10m
     # per-package limit leaves too little headroom on a slow
     # runner.
-    - go test -timeout 20m ./...
+    - runuser -u tester -- env HOME=/home/tester GOPATH=/tmp/gopath GOCACHE=/tmp/gocache GOMODCACHE=/tmp/gomodcache PATH="$PATH" go test -timeout 20m ./...
     # File list is explicit, not a glob: node --test only
     # expands globs on Node 21+, and a quoted glob that matches
     # nothing would pass the step with zero tests run. A
@@ -123,10 +132,19 @@ race:
     - .go-cache
   script:
     - make assets
+    # The suites run an embedded Postgres, whose initdb
+    # refuses to run as root; this image runs its jobs as root
+    # (GitHub's runners did not), so the test commands below
+    # run as an unprivileged user with its own Go caches and
+    # the checkout handed over to it.
+    - |
+      useradd --create-home --shell /bin/bash tester
+      mkdir -p /tmp/gopath /tmp/gocache /tmp/gomodcache
+      chown -R tester:tester /tmp/gopath /tmp/gocache /tmp/gomodcache "$CI_PROJECT_DIR"
     # Under the race detector internal/app takes 5-10 minutes,
     # depending on the runner: past go test's default 10m
     # limit on a slow one.
-    - go test -race -timeout 30m ./...
+    - runuser -u tester -- env HOME=/home/tester GOPATH=/tmp/gopath GOCACHE=/tmp/gocache GOMODCACHE=/tmp/gomodcache PATH="$PATH" go test -race -timeout 30m ./...
 
 # The core-only configuration: no optional module imported. It
 # must compile and vet, and the module-exclusion tests must
@@ -141,7 +159,16 @@ core-only:
     - make assets
     - go build -tags core_only ./...
     - go vet -tags core_only ./...
-    - go test -tags core_only -timeout 20m -run 'TestCoreOnly' ./internal/app/
+    # The suites run an embedded Postgres, whose initdb
+    # refuses to run as root; this image runs its jobs as root
+    # (GitHub's runners did not), so the test commands below
+    # run as an unprivileged user with its own Go caches and
+    # the checkout handed over to it.
+    - |
+      useradd --create-home --shell /bin/bash tester
+      mkdir -p /tmp/gopath /tmp/gocache /tmp/gomodcache
+      chown -R tester:tester /tmp/gopath /tmp/gocache /tmp/gomodcache "$CI_PROJECT_DIR"
+    - runuser -u tester -- env HOME=/home/tester GOPATH=/tmp/gopath GOCACHE=/tmp/gocache GOMODCACHE=/tmp/gomodcache PATH="$PATH" go test -tags core_only -timeout 20m -run 'TestCoreOnly' ./internal/app/
     # The module build tool: the default file is what it writes
     # for every module, and each module compiles and vets on
     # its own (with what it requires), so no module depends on
@@ -528,11 +555,23 @@ android:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes:
         - android/**/*
-        - .gitlab-ci.yml
     - if: $CI_PIPELINE_SOURCE == "web"
       when: manual
     - if: $CI_PIPELINE_SOURCE == "api"
       when: manual
+  before_script:
+    # The Gradle image carries no Android SDK (GitHub's
+    # runners provided one); install the platform this app
+    # compiles against (compileSdk 36).
+    - |
+      apt-get update -qq && apt-get install -y -qq --no-install-recommends curl unzip >/dev/null
+      export ANDROID_HOME=/opt/android-sdk ANDROID_SDK_ROOT=/opt/android-sdk
+      mkdir -p "$ANDROID_HOME/cmdline-tools"
+      curl -fsSL -o /tmp/cmdtools.zip https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
+      unzip -q /tmp/cmdtools.zip -d "$ANDROID_HOME/cmdline-tools"
+      mv "$ANDROID_HOME/cmdline-tools/cmdline-tools" "$ANDROID_HOME/cmdline-tools/latest"
+      yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null 2>&1 || true
+      "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36" "build-tools;36.0.0" "platform-tools"
   script:
     - cd android
     - |

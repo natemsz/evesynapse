@@ -225,7 +225,7 @@ var keywords = map[string]string{
 	"npc": "npc", "npcs": "npc", "guristas": "npc", "serpentis": "npc", "sansha": "npc", "sanshas": "npc", "angels": "npc",
 	"trig": "npc", "trigs": "npc", "triglavian": "npc", "triglavians": "npc", "drifter": "npc", "drifters": "npc", "edencom": "npc",
 	"gate": "", "on": "", "at": "", "in": "", "and": "", "the": "", "x": "", "+": "", "-": "", "—": "", "–": "", "/": "", "with": "",
-	"->": "", "=>": "", "-->": "", "<-": "", "→": "",
+	"->": "", "=>": "", "-->": "", "<-": "", "→": "", "@": "",
 }
 
 // Nicknamed classes, as ships the report names.
@@ -291,7 +291,7 @@ func Analyze(in Input, d Dict) Analysis {
 				addShip(s, 0)
 				continue
 			}
-			if !nameShaped(seg) || isSystem(d, whole) {
+			if !nameShaped(seg) || holdsThing(d, seg) {
 				// read word by word below
 			} else if id, name, ok, _ := lookupPilot(d, whole); ok {
 				if !seenPilot[id] {
@@ -330,6 +330,17 @@ func Analyze(in Input, d Dict) Analysis {
 				continue
 			}
 			matched := false
+			// A four-word region ("Vale of the Silent") runs past
+			// the three-word phrases below.
+			if d.Area != nil && i+4 <= len(seg) {
+				if id, ok := d.Area(clean(strings.Join(seg[i:i+4], " "))); ok {
+					a.Areas = appendID(a.Areas, id)
+					for k := i; k < i+4; k++ {
+						used[k] = true
+					}
+					matched = true
+				}
+			}
 			for n := 3; n >= 1 && !matched; n-- {
 				if i+n > len(seg) {
 					continue
@@ -351,6 +362,19 @@ func Analyze(in Input, d Dict) Analysis {
 					if ok {
 						a.Gate = g
 						for k := i; k <= i+n; k++ {
+							used[k] = true
+						}
+						matched = true
+						break
+					}
+				}
+				// A region or constellation said as where pilots came
+				// from or are going ("came from Curse") is the place,
+				// ahead of a ship that shares its name.
+				if d.Area != nil && i > 0 && areaCues[clean(seg[i-1])] {
+					if id, ok := d.Area(phrase); ok {
+						a.Areas = appendID(a.Areas, id)
+						for k := i; k < i+n; k++ {
 							used[k] = true
 						}
 						matched = true
@@ -446,7 +470,9 @@ func Analyze(in Input, d Dict) Analysis {
 			if matched {
 				continue
 			}
-			if f, ok := keywords[w]; ok {
+			// A word dragged in as a link is a name, not the
+			// report's vocabulary: "Gate*" is a pilot.
+			if f, ok := keywords[w]; ok && !linkEnd(seg[i]) {
 				used[i] = true
 				if s, isClass := classNick[f]; isClass {
 					nn := pending
@@ -486,6 +512,11 @@ func Analyze(in Input, d Dict) Analysis {
 					}
 					name := clean(strings.Join(words, " "))
 					id, proper, ok, known := lookupPilot(d, name)
+					if !ok && known && linkEnd(words[n-1]) && d.Pilot != nil {
+						// A linked name is a name even when it is
+						// also a word free text refuses ("Sun*").
+						id, proper, ok, known = d.Pilot(name)
+					}
 					if ok {
 						if !seenPilot[id] {
 							seenPilot[id] = true
@@ -702,7 +733,7 @@ var reportWords = map[string]bool{
 	"hot": true, "kills": true, "npc": true, "likely": true,
 	"ratting": true, "heavy": true, "traffic": true, "clusters": true,
 	"partial": true, "roster": true, "names": true, "last": true,
-	"hours": true,
+	"hours": true, "local": true,
 }
 
 // romanRe is a roman numeral, strictly: only numeral letters, in
@@ -815,7 +846,7 @@ var placeCues = map[string]bool{
 	"went": true, "gone": true, "going": true,
 	"moved": true, "moving": true, "heading": true, "headed": true,
 	"warped": true, "entered": true, "came": true, "through": true,
-	"->": true, "=>": true, "-->": true, "<-": true, "→": true,
+	"->": true, "=>": true, "-->": true, "<-": true, "→": true, "@": true,
 }
 
 // speaksOfPlace is whether any word of seg is a place cue.

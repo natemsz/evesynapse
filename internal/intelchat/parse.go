@@ -19,9 +19,11 @@ package intelchat
 
 import (
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 )
 
 // Lookup finds a system by its lowercased name: its ID and proper
@@ -91,69 +93,112 @@ func Parse(raw string, lookup Lookup, now time.Time) Outcome {
 		}
 		words := strings.Fields(msg)
 		used := make([]bool, len(words))
-		// The system: the longest name found, earliest first. A
-		// name followed by "gate" is the gate's far side, not
-		// where the scout is ("on bosena gate in helid" is in
-		// Helid): it is the system only when no other is named.
-		gateI, gateN := -1, 0
-		var gateID int64
-		var gateName string
-	find:
+		// The system. Every name in the message is a candidate,
+		// a longer name covering the shorter ones inside it, and
+		// the scout's own system is the best placed of them:
+		//   - not followed by "gate": that is the gate's far side
+		//     ("on bosena gate in helid" is in Helid);
+		//   - said to be "in" or "@" the system;
+		//   - the message's first word, where scouts put it;
+		//   - else the longest, then the earliest.
+		// A name dragged in as a link counts like a typed one.
+		type cand struct {
+			i, n     int
+			id       int64
+			proper   string
+			gate, in bool
+			first    bool
+		}
+		var cands []cand
+		covered := make([]bool, len(words))
 		for n := maxSystemWords; n >= 1; n-- {
 			for i := 0; i+n <= len(words); i++ {
+				if slices.Contains(covered[i:i+n], true) {
+					continue
+				}
 				name := strings.ToLower(strings.Join(trimAll(words[i:i+n]), " "))
 				if name == "" {
 					continue
 				}
 				if id, proper, ok := lookup(name); ok {
-					if i+n < len(words) && strings.HasPrefix(strings.ToLower(trim(words[i+n])), "gate") {
-						if gateI < 0 {
-							gateI, gateN, gateID, gateName = i, n, id, proper
-						}
-						continue
+					c := cand{i: i, n: n, id: id, proper: proper, first: i == 0}
+					c.gate = i+n < len(words) && strings.HasPrefix(strings.ToLower(trim(words[i+n])), "gate")
+					// "in Y gate camp" is a camp in Y, not Y's gate
+					// ("@ X gate camped" stays X's gate).
+					if c.gate && i > 0 && strings.EqualFold(words[i-1], "in") && i+n+1 < len(words) && strings.HasPrefix(strings.ToLower(trim(words[i+n+1])), "camp") {
+						c.gate = false
 					}
-					r.SystemID, r.SystemName = id, proper
+					c.in = i > 0 && (strings.EqualFold(words[i-1], "in") || words[i-1] == "@")
+					cands = append(cands, c)
 					for k := i; k < i+n; k++ {
-						used[k] = true
+						covered[k] = true
 					}
-					break find
 				}
 			}
 		}
-		if r.SystemID == 0 && gateI >= 0 {
-			r.SystemID, r.SystemName = gateID, gateName
-			for k := gateI; k < gateI+gateN; k++ {
+		if len(cands) > 0 {
+			rank := func(c cand) [4]int {
+				return [4]int{boolRank(!c.gate), boolRank(c.in), boolRank(c.first), c.n}
+			}
+			best := cands[0]
+			for _, c := range cands[1:] {
+				rb, rc := rank(best), rank(c)
+				if slices.Compare(rc[:], rb[:]) > 0 || (rc == rb && c.i < best.i) {
+					best = c
+				}
+			}
+			r.SystemID, r.SystemName = best.id, best.proper
+			for k := best.i; k < best.i+best.n; k++ {
 				used[k] = true
 			}
 		}
-		question := false
+		// A short message ending in a question mark asks ("anyone
+		// in BY-7PY?"), wherever the mark sits.
+		question := strings.HasSuffix(msg, "?") && len(words) <= 4
+		// "3x" and "x3" multiply a ship ("sabre x3") wherever a
+		// word stands beside them; they count hostiles only on a
+		// line with nothing else to count ("Jita 5x"). "+3" always
+		// counts hostiles.
+		var times []int
 		for i, w := range words {
-			if used[i] {
+			// A word dragged in as a link ("Clear*", "Red*") is a
+			// name, never the channel's shorthand.
+			if used[i] || isLink(w) {
 				continue
 			}
 			lw := strings.ToLower(trim(w))
 			switch {
-			case lw == "clr" || lw == "clear":
+			case lw == "clr" || lw == "clear" || lw == "cleared":
 				r.Clear, used[i] = true, true
 			case lw == "nv" || lw == "novis" || lw == "novisual":
 				r.NoVisual, used[i] = true, true
-			case i+1 < len(words) && !used[i+1] && bareCount(lw) > 0 && hostileNoun(strings.ToLower(trim(words[i+1]))):
+			case lw == "no" && i+1 < len(words) && !used[i+1] && (strings.EqualFold(trim(words[i+1]), "vis") || strings.EqualFold(trim(words[i+1]), "visual")):
+				r.NoVisual, used[i], used[i+1] = true, true, true
+			case i+1 < len(words) && !used[i+1] && !isLink(words[i+1]) && bareCount(lw) > 0 && hostileNoun(strings.ToLower(trim(words[i+1]))):
 				// "5 reds": a bare number counts when who they are
 				// follows it; the pair is the count, not text.
 				r.Hostiles += bareCount(lw)
 				used[i], used[i+1] = true, true
-			case lw == "status" || lw == "status?" || strings.HasSuffix(w, "?") && len(words) <= 3:
+			case lw == "status" || lw == "stat" || strings.HasSuffix(w, "?") && len(words) <= 3:
 				question = true
 			default:
 				if m := countRe.FindStringSubmatch(lw); m != nil {
-					for _, g := range m[1:] {
-						if g != "" {
-							n, _ := strconv.Atoi(g)
-							r.Hostiles += n
-						}
+					if m[1] == "" {
+						times = append(times, i)
+						continue
 					}
+					n, _ := strconv.Atoi(m[1])
+					r.Hostiles += n
 					used[i] = true
 				}
+			}
+		}
+		if len(times) > 0 && !hasWords(words, used, times) {
+			for _, i := range times {
+				m := countRe.FindStringSubmatch(strings.ToLower(trim(words[i])))
+				n, _ := strconv.Atoi(m[2] + m[3])
+				r.Hostiles += n
+				used[i] = true
 			}
 		}
 		if r.SystemID == 0 {
@@ -229,7 +274,7 @@ func hostileNoun(w string) bool {
 
 var wordRe = regexp.MustCompile(`\S+`)
 
-func trim(w string) string { return strings.Trim(w, ",.;:*!()[]") }
+func trim(w string) string { return strings.Trim(w, ",.;:*!()[]?") }
 
 func trimAll(ws []string) []string {
 	out := make([]string, len(ws))
@@ -259,4 +304,33 @@ func stampTime(m []string, now time.Time) time.Time {
 		t = t.AddDate(0, 0, -1)
 	}
 	return t
+}
+
+// hasWords is whether any word not yet read, other than those at
+// skip, has a letter in it: something a count could belong to.
+func hasWords(words []string, used []bool, skip []int) bool {
+	for i, w := range words {
+		if used[i] || slices.Contains(skip, i) {
+			continue
+		}
+		for _, r := range w {
+			if unicode.IsLetter(r) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// isLink is whether a word closes a name dragged in as a link: the
+// client writes a star after it.
+func isLink(w string) bool {
+	return strings.HasSuffix(strings.TrimRight(w, ",.;:!()[]?"), "*")
+}
+
+func boolRank(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
 }

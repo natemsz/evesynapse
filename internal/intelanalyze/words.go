@@ -51,7 +51,7 @@ she should since so some someone something soon still such sure take taken than 
 them then there theres there's these they theyre they're thing things think this those though through thru to
 too took toward towards try trying two under until up upon us very via was wasnt wasn't watch way we well
 went were what whats what's when where which while who whole whos who's why will with within without wont won't
-would yet you your youre you're yours
+would yet you your youre you're yours pls plz lit up vis fyi camper campers inc ty thx
 also anyone away
 jump jumped jumping jumps warp warped warping warps land landed landing lands align aligned aligning
 dock docked docking undock undocked undocking log logged logging logoff logon login
@@ -98,7 +98,7 @@ func NameLike(word string) bool {
 		return true
 	}
 	w := clean(word)
-	if w == "" || objectNouns[w] {
+	if w == "" || objectNouns[w] || chatWords[w] {
 		return false
 	}
 	for _, r := range strings.Trim(word, ",.;:!()[]?\"'") {
@@ -173,7 +173,7 @@ func markCelestial(seg []string, used []bool) string {
 		return n, err == nil && n > 0 && n < 100
 	}
 	for i := 0; i < len(seg); i++ {
-		if used[i] {
+		if used[i] || linkEnd(seg[i]) {
 			continue
 		}
 		w := clean(seg[i])
@@ -287,4 +287,48 @@ func shipCands(phrase string) []string {
 		}
 	}
 	return out
+}
+
+// ShipNicknames is the nickname table, short name to the hull's
+// full name (lower-cased), for tools that write reports the way
+// scouts do.
+func ShipNicknames() map[string]string {
+	out := make(map[string]string, len(shipNicks))
+	for k, v := range shipNicks {
+		out[k] = v
+	}
+	return out
+}
+
+// areaCues are the words before a region that make it where pilots
+// came from or are going, read ahead of a ship of the same name
+// ("came from Curse"). "in" is not one: "in Curse" is the ship.
+var areaCues = map[string]bool{"from": true, "to": true, "into": true, "toward": true, "towards": true}
+
+// holdsThing is whether any run of seg's words is a ship, an item,
+// a system or an area, or any word a celestial in shorthand: then
+// the segment is read word by word, never taken whole as one
+// pilot ("Mirx88 Kryos" is a pilot and a Kryos).
+func holdsThing(d Dict, seg []string) bool {
+	probe := make([]bool, len(seg))
+	if markCelestial(seg, probe) != "" {
+		return true
+	}
+	for i := range seg {
+		for n := 1; n <= 3 && i+n <= len(seg); n++ {
+			phrase := clean(strings.Join(seg[i:i+n], " "))
+			if _, ok := lookupType(d, phrase); ok {
+				return true
+			}
+			if isSystem(d, phrase) {
+				return true
+			}
+			if d.Area != nil {
+				if _, ok := d.Area(phrase); ok {
+					return true
+				}
+			}
+		}
+	}
+	return false
 }

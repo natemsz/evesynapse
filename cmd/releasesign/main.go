@@ -20,12 +20,18 @@
 //	releasesign verify <manifest>...
 //	    Check each manifest against the <manifest>.sig beside it, the
 //	    way the updater does.
+//
+//	releasesign openssh -out <file>
+//	    Write the signing key in OpenSSH form, with its public half
+//	    beside it at <file>.pub, so git can sign the release tag
+//	    with the same key.
 package main
 
 import (
 	"bytes"
 	"crypto/ed25519"
 	"crypto/rand"
+	"encoding/pem"
 	"flag"
 	"fmt"
 	"io"
@@ -36,6 +42,7 @@ import (
 	"strings"
 
 	"evesynapse/internal/releasesig"
+	"golang.org/x/crypto/ssh"
 )
 
 const (
@@ -58,6 +65,11 @@ const usage = `releasesign makes the release key and signs releases with it.
   releasesign sign <manifest>...
       Sign each update manifest with the key in ` + signingKeyEnv + `,
       writing <manifest>.sig beside it.
+
+  releasesign openssh -out <file>
+      Write the key in ` + signingKeyEnv + ` in OpenSSH form, with its
+      public half beside it at <file>.pub, so git can sign the
+      release tag with the same key that signs the manifests.
 
   releasesign verify <manifest>...
       Check each manifest against the <manifest>.sig beside it.
@@ -87,6 +99,8 @@ func (t tool) run(args []string) int {
 		return t.keygen(args[1:])
 	case "sign":
 		return t.sign(args[1:])
+	case "openssh":
+		return t.openssh(args[1:])
 	case "verify":
 		return t.verify(args[1:])
 	case "help", "-h", "-help", "--help":
@@ -207,6 +221,73 @@ func writeNewFile(path string, data []byte) error {
 		_ = os.Remove(path)
 	}
 	return err
+}
+
+// openssh writes the signing key in the form git signs tags with, so
+// the release tag is signed by the same key as the manifests. The
+// files are written the way keygen writes a private half: new files
+// only, never printed, and the pair or nothing.
+func (t tool) openssh(args []string) int {
+	fs := flag.NewFlagSet("releasesign openssh", flag.ContinueOnError)
+	fs.SetOutput(t.stderr)
+	outPath := fs.String("out", "", "write the OpenSSH private key to this new `file`, its public half beside it with .pub added")
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+	if *outPath == "" {
+		fmt.Fprint(t.stderr, "releasesign openssh: name the file to write with -out.\n\n"+usage)
+		return 2
+	}
+	keyPEM := t.getenv(signingKeyEnv)
+	if strings.TrimSpace(keyPEM) == "" {
+		fmt.Fprintf(t.stderr, "releasesign openssh: %s is not set, so there is no key to write.\nIn the release job it comes from the CI/CD variable of that name.\nNothing was written.\n", signingKeyEnv)
+		return 1
+	}
+	keys, err := releasesig.ParsePrivateKeys([]byte(keyPEM))
+	if err != nil || len(keys) == 0 {
+		fmt.Fprintf(t.stderr, "releasesign openssh: %s does not hold a signing key as keygen writes it: %v\nNothing was written.\n", signingKeyEnv, err)
+		return 1
+	}
+	trusted, err := t.trusted()
+	if err != nil {
+		fmt.Fprintf(t.stderr, "releasesign openssh: the trusted keys in this build can't be read: %v\nNothing was written.\n", err)
+		return 1
+	}
+	var key ed25519.PrivateKey
+	for _, k := range keys {
+		pub := k.Public().(ed25519.PublicKey)
+		if slices.ContainsFunc(trusted, func(trustedKey ed25519.PublicKey) bool { return trustedKey.Equal(pub) }) {
+			key = k
+			break
+		}
+	}
+	if key == nil {
+		pub := keys[0].Public().(ed25519.PublicKey)
+		fmt.Fprintf(t.stderr, "releasesign openssh: the signing key is not one this build trusts.\nIts public half is not in %s:\n    %s\nNothing was written.\n", trustedKeysPath, releasesig.KeyLine(pub))
+		return 1
+	}
+	privBlock, err := ssh.MarshalPrivateKey(key, "evesynapse release key")
+	if err != nil {
+		fmt.Fprintf(t.stderr, "releasesign openssh: the key can't be written in OpenSSH form: %v\nNothing was written.\n", err)
+		return 1
+	}
+	privPEM := pem.EncodeToMemory(privBlock)
+	pubKey, err := ssh.NewPublicKey(key.Public())
+	if err != nil {
+		fmt.Fprintf(t.stderr, "releasesign openssh: the key's public half can't be written in OpenSSH form: %v\nNothing was written.\n", err)
+		return 1
+	}
+	if err := writeNewFile(*outPath, privPEM); err != nil {
+		fmt.Fprintf(t.stderr, "releasesign openssh: %v\nNothing was written.\n", err)
+		return 1
+	}
+	if err := writeNewFile(*outPath+".pub", ssh.MarshalAuthorizedKey(pubKey)); err != nil {
+		_ = os.Remove(*outPath)
+		fmt.Fprintf(t.stderr, "releasesign openssh: %v\nThe private half was removed again, so the pair is never half written.\n", err)
+		return 1
+	}
+	fmt.Fprintf(t.stdout, "Wrote %s and %s.\n", *outPath, *outPath+".pub")
+	return 0
 }
 
 // sign writes the signature file beside each manifest. Every manifest

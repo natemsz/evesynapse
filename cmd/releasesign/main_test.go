@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"evesynapse/internal/releasesig"
+	"golang.org/x/crypto/ssh"
 )
 
 // helperEnv turns this test binary into the command keygen hands the
@@ -556,5 +557,31 @@ func TestUsage(t *testing.T) {
 	tt := newTestTool(t)
 	if code := tt.run([]string{"help"}); code != 0 || !strings.Contains(tt.out.String(), "keygen") {
 		t.Errorf("help: code %d, stdout %q", code, tt.out.String())
+	}
+}
+
+func TestOpenSSHWritesTheSigningKeyInOpenSSHForm(t *testing.T) {
+	tt, pub := keyedTool(t)
+	out := filepath.Join(t.TempDir(), "release-key")
+
+	if code := tt.run([]string{"openssh", "-out", out}); code != 0 {
+		t.Fatalf("openssh: code %d, output %q", code, tt.output())
+	}
+	parsed, err := ssh.ParsePrivateKey(readFile(t, out))
+	if err != nil {
+		t.Fatalf("the private half does not parse as an OpenSSH key: %v", err)
+	}
+	want, err := ssh.NewPublicKey(pub)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(parsed.PublicKey().Marshal(), want.Marshal()) {
+		t.Fatal("the OpenSSH key's public half is not the signing key's")
+	}
+	if pubLine := readFile(t, out+".pub"); string(pubLine) != string(ssh.MarshalAuthorizedKey(want)) {
+		t.Fatalf("the .pub file holds %q", pubLine)
+	}
+	if strings.Contains(tt.output(), "PRIVATE KEY") {
+		t.Fatalf("openssh printed the signing key: %q", tt.output())
 	}
 }

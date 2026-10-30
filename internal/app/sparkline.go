@@ -71,3 +71,29 @@ func (app *Application) watchSpark(ctx context.Context, typeID, regionID int64) 
 	}
 	return sparkPop(values, "Typical sell, 30 days", esi.FormatISK(lo), esi.FormatISK(hi))
 }
+
+// basketSpark builds the hover card for one basket's Value
+// figure from the daily values the list page already read for
+// its change figures: the value at typical sell over the last
+// 30 days. Empty when under two priced days are stored.
+func basketSpark(series []db.ListMarketBasketValuesRow) template.HTML {
+	values := make([]float64, 0, len(series))
+	for _, v := range series {
+		if v.ValueSell > 0 {
+			values = append(values, v.ValueSell)
+		}
+	}
+	if len(values) < 2 {
+		return ""
+	}
+	lo, hi := values[0], values[0]
+	for _, v := range values {
+		if v < lo {
+			lo = v
+		}
+		if v > hi {
+			hi = v
+		}
+	}
+	return sparkPop(values, "Basket value at typical sell, 30 days", esi.FormatISK(lo), esi.FormatISK(hi))
+}

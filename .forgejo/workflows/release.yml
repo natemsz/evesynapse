@@ -1,6 +1,6 @@
 # EveSynapse releases on Forgejo Actions: the Forgejo port of
-# the GitLab release and mirror jobs (.gitlab-ci.yml). A push
-# to main or the dev branch builds both architectures, signs
+# the GitLab release and mirror jobs (.gitlab-ci.yml). A dispatch
+# from the GitHub gates, or a manual one, builds both architectures, signs
 # the manifests, and publishes the release here; the mirror
 # job then copies the same signed files to the R2 mirror the
 # updater reads as its last resort.
@@ -15,21 +15,16 @@
 # uploaded to it, and only then is it published, so no reader
 # ever sees a release whose files are not all there.
 #
-# The gate job runs nothing itself: the check gates (test,
-# race, core-only, analysis) run on GitHub's runners, and each
-# reports its result back here as a commit status. The gate
-# waits for the test, race and core-only statuses to come
-# back green, so a release never ships on a tree those gates
-# have not passed; analysis stays advisory, as it was when
-# it ran here. Only then does the build below run.
+# The check gates (test, race, core-only, analysis) run on
+# GitHub's runners, and the heavy-gates workflow there
+# dispatches this workflow once its blocking gates pass on a
+# release branch, so a release never ships on a tree those
+# gates have not passed; analysis stays advisory, as it was
+# when it ran here. This workflow only builds and publishes.
 
 name: release
 
 on:
-  push:
-    branches:
-      - main
-      - evesynapse-dev
   workflow_dispatch:
 
 # One release per branch at a time: two pushes in quick
@@ -43,47 +38,8 @@ env:
   GOMODCACHE: ${{ github.workspace }}/.cache/gomod
 
 jobs:
-  gate:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Install the toolbox
-        run: |
-          apt-get update -qq && apt-get install -y -qq --no-install-recommends curl ca-certificates python3 >/dev/null
-      - name: Wait for the GitHub gates
-        run: |
-          GATE_TOKEN="${{ secrets.GITHUB_TOKEN }}"
-          GATE_SHA="${{ github.sha }}"
-          python3 - "$GATE_SHA" "$GATE_TOKEN" <<'PYEOF'
-          import json, sys, time, urllib.request
-          sha, token = sys.argv[1], sys.argv[2]
-          url = "https://natems.dev/api/v1/repos/EveSynapse/evesynapse/commits/" + sha + "/status"
-          want = ["github/test", "github/race", "github/core-only"]
-          deadline = time.time() + 45 * 60
-          seen = {}
-          while time.time() < deadline:
-              req = urllib.request.Request(url, headers={"Authorization": "token " + token, "User-Agent": "evesynapse-release-gate"})
-              try:
-                  with urllib.request.urlopen(req, timeout=30) as resp:
-                      data = json.load(resp)
-                  seen = {s.get("context"): s.get("status") for s in data.get("statuses", [])}
-              except Exception as e:
-                  print("status read failed, retrying:", e, flush=True)
-              failed = [c for c in want if seen.get(c) == "failure"]
-              if failed:
-                  print("GitHub gates failed:", ", ".join(failed))
-                  sys.exit(1)
-              if all(seen.get(c) == "success" for c in want):
-                  print("GitHub gates green:", ", ".join(want))
-                  sys.exit(0)
-              print("waiting for GitHub gates:", {c: seen.get(c, "missing") for c in want}, flush=True)
-              time.sleep(30)
-          print("GitHub gates did not report green in time:", {c: seen.get(c, "missing") for c in want})
-          sys.exit(1)
-          PYEOF
-
   release:
     runs-on: ubuntu-latest
-    needs: gate
     outputs:
       version: ${{ steps.decide.outputs.version }}
       publish: ${{ steps.decide.outputs.publish }}

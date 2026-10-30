@@ -1,18 +1,21 @@
 # EveSynapse check gates on GitHub-hosted runners: all four
 # of the project's check gates (test, race, core-only and
 # analysis) run here, on GitHub's runners, so the project's
-# app box only builds and publishes releases. Forgejo has no
-# CI workflow of its own any more; the release pipeline there
-# reads these gates' results as commit statuses.
+# app box only builds and publishes releases. When the three
+# blocking gates pass on a release branch, the release-gate
+# job below dispatches the release workflow on Forgejo,
+# which only builds and publishes.
 #
 # Forgejo also reads .github/workflows, so every job carries a
 # guard that only passes on GitHub itself; on Forgejo the jobs
 # skip. Each job reports its result back to Forgejo as a
 # commit status, so the verdict shows on the commit at
-# natems.dev where the work is reviewed. The report step needs
-# a FORGEJO_TOKEN repository secret (a Forgejo token with
-# repository write scope); until it exists the step fails
-# softly and the gate result stands on GitHub alone.
+# natems.dev where the work is reviewed. The report steps and
+# the release dispatch need a FORGEJO_TOKEN repository secret
+# (a Forgejo token with repository write scope); without it
+# the report steps fail softly, but the release-gate fails
+# loudly, since a release that was never handed over must not
+# read as a success.
 
 name: heavy-gates
 
@@ -242,3 +245,28 @@ jobs:
             -H "Content-Type: application/json" \
             -d "{\"state\":\"$state\",\"context\":\"github/analysis\",\"description\":\"Analysis gate on GitHub runners\",\"target_url\":\"${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\"}" \
             "https://natems.dev/api/v1/repos/EveSynapse/evesynapse/statuses/${{ github.sha }}"
+  # The gate for the release itself: once the three blocking
+  # gates pass on a release branch, hand the release to
+  # Forgejo, whose release workflow only builds and publishes.
+  # A failed dispatch fails this job, so a release that was
+  # never handed over never reads as green.
+  release-gate:
+    if: github.server_url == 'https://github.com' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/evesynapse-dev')
+    runs-on: ubuntu-latest
+    needs: [test, race, core-only]
+    env:
+      FORGEJO_TOKEN: ${{ secrets.FORGEJO_TOKEN }}
+    steps:
+      - name: Hand the release to Forgejo
+        run: |
+          code="$(curl -s -o /tmp/dispatch.out -w '%{http_code}' -X POST \
+            -H "Authorization: token $FORGEJO_TOKEN" \
+            -H 'Content-Type: application/json' \
+            -d "{\"ref\":\"$GITHUB_REF_NAME\"}" \
+            'https://natems.dev/api/v1/repos/EveSynapse/evesynapse/actions/workflows/release.yml/dispatches')"
+          cat /tmp/dispatch.out
+          if [ "$code" != "204" ]; then
+            echo "Forgejo refused the release dispatch (HTTP $code)."
+            exit 1
+          fi
+          echo "Release workflow dispatched on Forgejo for $GITHUB_REF_NAME."

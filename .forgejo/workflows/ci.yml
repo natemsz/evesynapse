@@ -1,0 +1,241 @@
+# EveSynapse CI on Forgejo Actions: the same check gates the
+# GitLab pipeline (.gitlab-ci.yml) runs — every push and pull
+# request is checked. The publish side (release + mirror) is
+# ported separately in release.yml; the GitLab file stays in
+# the tree while GitLab is the fallback forge.
+#
+# Jobs run on the project's own runner (the app box), in the
+# same pinned golang image the GitLab jobs use; the runner's
+# ubuntu-latest label maps to that image.
+
+name: ci
+
+on:
+  push:
+  pull_request:
+
+env:
+  GOCACHE: ${{ github.workspace }}/.cache/go-build
+  GOMODCACHE: ${{ github.workspace }}/.cache/gomod
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Cache Go builds and modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            .cache/go-build
+            .cache/gomod
+          key: go-${{ hashFiles('go.sum') }}
+      - name: Install the toolbox
+        run: |
+          apt-get update -qq && apt-get install -y -qq --no-install-recommends curl ca-certificates xz-utils git make python3 >/dev/null
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          curl -fsSL "https://nodejs.org/dist/v22.14.0/node-v22.14.0-linux-$(uname -m | sed -e 's/aarch64/arm64/' -e 's/x86_64/x64/').tar.xz" | tar -xJ -C /usr/local --strip-components=1
+          node --version
+      # The generated database code (internal/db/sqlc) must
+      # match what the pinned sqlc makes of the schema and
+      # query sources. Schema or query edits that skip the
+      # regeneration step fail here instead of drifting
+      # silently.
+      - name: Check the generated database code is fresh
+        run: |
+          build="$(mktemp -d)"
+          case "$(uname -m)" in
+            aarch64) sqlc_arch=arm64; sqlc_sum="b7cae247740d0c51a1e657479e5b2d21e6fef428f596682a01bc55bf4ab8a23d" ;;
+            *) sqlc_arch=amd64; sqlc_sum="497ae4fcdfa64c5b0c311ffe4c2bd991e43991e82e5367792ed78bc2dca27354" ;;
+          esac
+          curl -fsSL -o "$build/sqlc.tar.gz" "https://github.com/sqlc-dev/sqlc/releases/download/v1.31.1/sqlc_1.31.1_linux_${sqlc_arch}.tar.gz"
+          echo "$sqlc_sum  $build/sqlc.tar.gz" | sha256sum -c -
+          tar -xzf "$build/sqlc.tar.gz" -C "$build" sqlc
+          "$build/sqlc" version
+          "$build/sqlc" generate
+          if ! git diff --exit-code internal/db/sqlc; then
+            echo "internal/db/sqlc is stale: run 'sqlc generate' (sqlc v1.31.1) and commit the result."
+            exit 1
+          fi
+          untracked="$(git ls-files --others --exclude-standard internal/db/sqlc)"
+          if [ -n "$untracked" ]; then
+            echo "sqlc generate produced files that are not committed:"
+            echo "$untracked"
+            exit 1
+          fi
+      - name: Decode the embedded assets
+        run: make assets
+      - name: Check formatting
+        run: |
+          unformatted="$(gofmt -l cmd internal)"
+          if [ -n "$unformatted" ]; then
+            echo "These files are not gofmt-formatted (run: make fmt):"
+            echo "$unformatted"
+            exit 1
+          fi
+      - name: Vet
+        run: go vet ./...
+      # The suites run an embedded Postgres, whose initdb
+      # refuses to run as root; the job container runs as
+      # root, so the test commands below run as an
+      # unprivileged user with its own Go caches and the
+      # checkout handed over to it.
+      - name: Hand the checkout to the test user
+        run: |
+          useradd --create-home --shell /bin/bash tester
+          mkdir -p /tmp/gopath /tmp/gocache /tmp/gomodcache
+          chown -R tester:tester /tmp/gopath /tmp/gocache /tmp/gomodcache "$GITHUB_WORKSPACE"
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      # internal/app runs a few minutes; the default 10m
+      # per-package limit leaves too little headroom on a
+      # slow runner.
+      - name: Run the test suite
+        run: runuser -u tester -- env HOME=/home/tester GOPATH=/tmp/gopath GOCACHE=/tmp/gocache GOMODCACHE=/tmp/gomodcache PATH="$PATH" go test -timeout 20m ./...
+      # File list is explicit, not a glob: node --test only
+      # expands globs on Node 21+, and a quoted glob that
+      # matches nothing would pass the step with zero tests
+      # run. A missing file fails loudly instead.
+      - name: Run the JavaScript tests
+        run: >-
+          node --test
+          internal/app/jstest/swap.test.js
+          internal/app/jstest/swap.browser.test.js
+          internal/app/jstest/plan.firstload.test.js
+          internal/app/jstest/pi.test.js
+          internal/app/jstest/fit.tip.test.js
+          internal/app/jstest/fit.loadoutpreview.test.js
+          internal/app/jstest/fit.phoneviews.test.js
+          internal/app/jstest/tabs.more.test.js
+          internal/app/jstest/phonebar.test.js
+          internal/app/jstest/map.test.js
+          internal/app/jstest/dashboard.test.js
+
+  # The same suite under the race detector, as its own job so
+  # the plain run above stays fast.
+  race:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Cache Go builds and modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            .cache/go-build
+            .cache/gomod
+          key: go-${{ hashFiles('go.sum') }}
+      - name: Install the toolbox
+        run: |
+          apt-get update -qq && apt-get install -y -qq --no-install-recommends curl ca-certificates git make python3 >/dev/null
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - name: Decode the embedded assets
+        run: make assets
+      - name: Hand the checkout to the test user
+        run: |
+          useradd --create-home --shell /bin/bash tester
+          mkdir -p /tmp/gopath /tmp/gocache /tmp/gomodcache
+          chown -R tester:tester /tmp/gopath /tmp/gocache /tmp/gomodcache "$GITHUB_WORKSPACE"
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      # Under the race detector internal/app takes 5-10
+      # minutes, depending on the runner: past go test's
+      # default 10m limit on a slow one.
+      - name: Run the test suite under the race detector
+        run: runuser -u tester -- env HOME=/home/tester GOPATH=/tmp/gopath GOCACHE=/tmp/gocache GOMODCACHE=/tmp/gomodcache PATH="$PATH" go test -race -timeout 30m ./...
+
+  # The core-only configuration: no optional module imported.
+  # It must compile and vet, and the module-exclusion tests
+  # must pass, so that adding a module can never make the
+  # core depend on it.
+  core-only:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Cache Go builds and modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            .cache/go-build
+            .cache/gomod
+          key: go-${{ hashFiles('go.sum') }}
+      - name: Install the toolbox
+        run: |
+          apt-get update -qq && apt-get install -y -qq --no-install-recommends curl ca-certificates git make python3 >/dev/null
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - name: Decode the embedded assets
+        run: make assets
+      - name: Build and vet core-only
+        run: |
+          go build -tags core_only ./...
+          go vet -tags core_only ./...
+      - name: Hand the checkout to the test user
+        run: |
+          useradd --create-home --shell /bin/bash tester
+          mkdir -p /tmp/gopath /tmp/gocache /tmp/gomodcache
+          chown -R tester:tester /tmp/gopath /tmp/gocache /tmp/gomodcache "$GITHUB_WORKSPACE"
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - name: Run the core-only tests
+        run: runuser -u tester -- env HOME=/home/tester GOPATH=/tmp/gopath GOCACHE=/tmp/gocache GOMODCACHE=/tmp/gomodcache PATH="$PATH" go test -tags core_only -timeout 20m -run 'TestCoreOnly' ./internal/app/
+      # The module build tool: the default file is what it
+      # writes for every module, and each module compiles
+      # and vets on its own (with what it requires), so no
+      # module depends on another one that it did not
+      # declare. The checkout is throwaway, so the loop may
+      # rewrite the file.
+      - name: Check every module builds on its own
+        run: |
+          go run ./cmd/modbuild -all -check
+          for id in $(go run ./cmd/modbuild -ids); do
+            go run ./cmd/modbuild -modules "$id" -write > /dev/null
+            echo "== $id"
+            go build ./cmd/evesynapse
+            go vet ./internal/app/
+          done
+
+  # Static analysis and the known-vulnerability check.
+  # Advisory: a finding shows up on the run without blocking
+  # a release, since both tools gain new checks over time.
+  analysis:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - name: Check out the source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Cache Go builds and modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            .cache/go-build
+            .cache/gomod
+          key: go-${{ hashFiles('go.sum') }}
+      - name: Install the toolbox
+        run: |
+          apt-get update -qq && apt-get install -y -qq --no-install-recommends curl ca-certificates git make python3 >/dev/null
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - name: Decode the embedded assets
+        run: make assets
+      # staticcheck is built here against the newest
+      # golang.org/x/tools rather than run with
+      # "go run …@latest", which builds it against the
+      # x/tools its own release pinned. That pinned copy
+      # cannot read the packages a newer Go compiles, and
+      # then staticcheck stops before it has looked at any
+      # code.
+      - name: Run staticcheck
+        run: |
+          build="$(mktemp -d)"
+          (cd "$build" && go mod init staticcheck-build \
+            && go get honnef.co/go/tools/cmd/staticcheck@latest golang.org/x/tools@latest \
+            && go build -o staticcheck honnef.co/go/tools/cmd/staticcheck)
+          "$build/staticcheck" ./...
+      - name: Run govulncheck
+        run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...

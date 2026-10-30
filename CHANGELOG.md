@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.7.0.8] - 2026-10-30
+
+Automated build of EveSynapse v0.7.0.8. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+## What's Changed
+### 🚀 Features
+* Profit charts: a running total by character, fees with their share of the take, and a cost of goods sold chart
+* The updater reads the project's own Forgejo first: with no source named it walks Forgejo, GitLab and GitHub and takes the newest genuine release, with the CDN mirror as the last resort, and EVESYNAPSE_UPDATE_PROVIDER can name one or more sources to walk in order
+### Other Changes
+* Your-orders pages show only the page's item, or a basket's items on basket pages
+* The landing page's section headlines carry the ember gradient again
+* The project's code, CI and releases live on its own Forgejo at natems.dev; signed releases publish there and mirror to the CDN
+
 ## [v0.7.0.5] - 2026-10-29
 
 Automated build of EveSynapse v0.7.0.5. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).

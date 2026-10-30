@@ -56,7 +56,6 @@ func (s *countingTransport) RoundTrip(req *http.Request) (*http.Response, error)
 	}, nil
 }
 
-
 // emptyESI is a fixture EVE that knows exactly one pilot: "Bad
 // Guy", the name the channel tests report, who is a real EVE
 // character (2117455235, corporation 1000170) the suite used to

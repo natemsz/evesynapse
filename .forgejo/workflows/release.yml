@@ -310,6 +310,7 @@ jobs:
         run: |
           if [ "${{ steps.decide.outputs.publish }}" != "true" ]; then echo "No release to create."; exit 0; fi
           if [ "$VERSION" != "${VERSION%%-*}" ]; then PRERELEASE=true; else PRERELEASE=false; fi
+          export PRERELEASE
           python3 - <<'PYEOF'
           import json, os, urllib.request
 

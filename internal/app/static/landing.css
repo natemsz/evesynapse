@@ -136,6 +136,9 @@ body::after { content: ""; position: absolute; top: 0; left: 0; right: 0; height
    everything below it keeps its position. */
 .ld-hero .ld-kicker { margin-bottom: 10px; }
 .ld-hero h1 .ld-amp { background: linear-gradient(90deg, #ffd27a 0%, #ff6a1a 50%, #d63c14 100%); -webkit-background-clip: text; background-clip: text; color: transparent; text-shadow: none; }
+/* The landing's section headlines carry the same gradient;
+   the app's headings are solid, the landing's are not. */
+.ld-main h2, .ld-main h3 { background: linear-gradient(90deg, #ffd27a 0%, #ff6a1a 50%, #d63c14 100%); -webkit-background-clip: text; background-clip: text; color: transparent; text-shadow: none; }
 .ld-sub { font-size: clamp(17px, 2vw, 20.5px); color: #e3d5c2; max-width: 37em; }
 .ld-sub b { color: var(--text); }
 .ld-ctas { display: flex; gap: 14px; margin: 28px 0 12px; flex-wrap: wrap; }
@@ -277,14 +280,14 @@ body::after { content: ""; position: absolute; top: 0; left: 0; right: 0; height
 .ld-legal { font-size: 12.5px; margin-bottom: 10px; }
 .ld-version { margin-top: 8px; }
 
-/* Gradient text fallback for the two landing spots that carry
-   the site gradient outside an h2/h3: the hero's tail and the
-   playstyle labels. Mirrors style.css's heading fallback. */
+/* Gradient text fallback for the landing's gradient text:
+   the section headlines, the hero's tail and the playstyle
+   labels. Mirrors style.css's heading fallback. */
 @supports not (background-clip: text) {
-  .ld-hero h1 .ld-amp, .ld-scard .ld-who { background: none; color: var(--gold); }
+  .ld-main h2, .ld-main h3, .ld-hero h1 .ld-amp, .ld-scard .ld-who { background: none; color: var(--gold); }
 }
 @media (forced-colors: active) {
-  .ld-hero h1 .ld-amp, .ld-scard .ld-who { background: none; color: CanvasText; }
+  .ld-main h2, .ld-main h3, .ld-hero h1 .ld-amp, .ld-scard .ld-who { background: none; color: CanvasText; }
 }
 
 /* The floating cluster, bottom right: the demo stays in reach

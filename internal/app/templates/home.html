@@ -300,7 +300,7 @@
   <table>
     <thead><tr><th>Item</th><th class="opt">Region</th><th>Average</th><th>7 days</th><th class="opt2">30 days</th><th>Status</th></tr></thead>
     <tbody>
-    {{range $i, $r := .Rows}}<tr{{if ge $i $cap}} data-wmore{{end}}><td><a href="/items/type/{{.TypeID}}/">{{.Name}}</a></td><td class="opt">{{.Region}}</td><td>{{.Current}}</td><td>{{.Change7}}</td><td class="opt2">{{.Change30}}</td><td>{{if .Moving}}<strong>{{.MoveText}}</strong>{{else}}Calm{{end}}</td></tr>{{end}}
+    {{range $i, $r := .Rows}}<tr{{if ge $i $cap}} data-wmore{{end}}><td><a href="/items/type/{{.TypeID}}/">{{.Name}}</a></td><td class="opt">{{.Region}}</td><td>{{if .Spark}}<span class="spark-hover" tabindex="0">{{.Current}}<span class="spark-pop">{{.Spark}}</span></span>{{else}}{{.Current}}{{end}}</td><td>{{.Change7}}</td><td class="opt2">{{.Change30}}</td><td>{{if .Moving}}<strong>{{.MoveText}}</strong>{{else}}Calm{{end}}</td></tr>{{end}}
     </tbody>
   </table>
   </div>

@@ -357,7 +357,7 @@
     <tr>
       <td><a href="/items/type/{{.TypeID}}/">{{.Name}}</a></td>
       <td>{{.Region}}</td>
-      <td>{{.Current}}</td>
+      <td>{{if .Spark}}<span class="spark-hover" tabindex="0">{{.Current}}<span class="spark-pop">{{.Spark}}</span></span>{{else}}{{.Current}}{{end}}</td>
       <td>{{.Change7}}</td>
       <td>{{.Change30}}</td>
       <td>{{if .Moving}}<strong>{{.MoveText}}</strong>{{else}}Calm{{end}}</td>

@@ -11,6 +11,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"html/template"
 	"math"
 	"net/http"
 	"sort"
@@ -36,6 +37,7 @@ type marketBasketListRow struct {
 	Partial    bool   // the latest value misses some items' prices
 	Chg1       trendFigure
 	Chg7       trendFigure
+	Spark      template.HTML // hover card for the Value figure, when the reader's hover sparklines are on
 }
 
 type marketBasketItemRow struct {
@@ -122,8 +124,16 @@ func (app *Application) handleMarketBaskets(w http.ResponseWriter, r *http.Reque
 		}
 	}
 	if len(valued) > 0 {
+		// The hover sparkline reads the same stored series over
+		// its 30-day window; with the switch off the read stays
+		// at the change figures' 14 days.
+		sparkOn := userID != 0 && app.vizPrefsFor(ctx, userID).SparkHover
+		window := -14
+		if sparkOn {
+			window = -31
+		}
 		series, err := app.queries.ListMarketBasketValuesForBaskets(ctx, db.ListMarketBasketValuesForBasketsParams{
-			BasketIds: valued, Since: basketDay(time.Now().AddDate(0, 0, -14)),
+			BasketIds: valued, Since: basketDay(time.Now().AddDate(0, 0, window)),
 		})
 		if err != nil {
 			logging.Errorf("baskets: list values: %v", err)
@@ -139,6 +149,9 @@ func (app *Application) handleMarketBaskets(w http.ResponseWriter, r *http.Reque
 				if s := byBasket[view.List[i].ID]; len(s) > 0 {
 					view.List[i].Chg1 = basketChange(s, 1)
 					view.List[i].Chg7 = basketChange(s, 7)
+					if sparkOn {
+						view.List[i].Spark = basketSpark(s)
+					}
 				}
 			}
 		}

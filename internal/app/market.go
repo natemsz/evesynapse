@@ -272,8 +272,9 @@ type watchlistRow struct {
 	Name      string
 	RegionID  int64
 	Region    string
-	Current   string // latest daily average, "—" when unknown
-	Change7   string // "+8.2%", "—" when not computable
+	Current   string        // latest daily average, "—" when unknown
+	Spark     template.HTML // hover card for Current (sparkPop), empty renders plain
+	Change7   string        // "+8.2%", "—" when not computable
 	Change30  string
 	Moving    bool   // currently past the user's threshold
 	MoveText  string // "up 8.2% over 7 days", Moving only
@@ -1224,7 +1225,7 @@ func (app *Application) buildWatchlistView(ctx context.Context, userID int64, wa
 		logging.Errorf("market: list watchlist for user %d: %v", userID, err)
 		return view
 	}
-	view.Rows = app.watchlistRows(ctx, entries)
+	view.Rows = app.watchlistRows(ctx, entries, app.vizPrefsFor(ctx, userID).SparkHover)
 	return view
 }
 
@@ -1304,7 +1305,7 @@ func basketValueChange(values []db.ListMarketBasketValuesRow, daysBack int) (flo
 // average, 7/30-day moves, and the moving flag past the user's
 // line. Split from buildWatchlistView so Home's watchlist widget
 // renders the render's shared fetch instead of asking again.
-func (app *Application) watchlistRows(ctx context.Context, entries []db.MarketWatchlist) []watchlistRow {
+func (app *Application) watchlistRows(ctx context.Context, entries []db.MarketWatchlist, sparkOn bool) []watchlistRow {
 	var out []watchlistRow
 	for _, e := range entries {
 		row := watchlistRow{
@@ -1333,6 +1334,9 @@ func (app *Application) watchlistRows(ctx context.Context, entries []db.MarketWa
 		}
 		if m.Has30 {
 			row.Change30 = markethistory.FormatChangePct(m.Chg30)
+		}
+		if sparkOn && m.Has {
+			row.Spark = app.watchSpark(ctx, e.TypeID, marketRegionForType(e.TypeID, e.RegionID))
 		}
 		out = append(out, row)
 	}

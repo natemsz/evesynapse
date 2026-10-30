@@ -1312,7 +1312,7 @@ func (app *Application) buildMarket(ctx context.Context, bundles []*charSnaps, c
 // the same stored rows the Market page renders: latest average,
 // 7/30-day moves, and the moving flag past the user's line.
 func (app *Application) buildWatchlistWidget(ctx context.Context, shared *homeMarketShared) *watchlistWidget {
-	return &watchlistWidget{Rows: app.watchlistRows(ctx, shared.watchlist(ctx))}
+	return &watchlistWidget{Rows: app.watchlistRows(ctx, shared.watchlist(ctx), app.vizPrefsFor(ctx, shared.userID).SparkHover)}
 }
 
 // marketHealthLine sums the market widget's one-line health

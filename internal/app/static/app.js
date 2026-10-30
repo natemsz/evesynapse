@@ -5187,3 +5187,53 @@
     syncTheme();
   }
 })();
+
+// Hover sparklines: a figure wrapped in .spark-hover carries a
+// hidden .spark-pop the server rendered (sparkline.go). On hover or
+// focus its contents are copied into one fixed layer, so a
+// scrollable table can never clip the card. Delegated listeners, so
+// the pattern survives in-app navigation untouched.
+(function () {
+  var layer = null, owner = null;
+  function ensure() {
+    if (!layer) {
+      layer = document.createElement("div");
+      layer.id = "spark-layer";
+      layer.hidden = true;
+      document.body.appendChild(layer);
+    }
+    return layer;
+  }
+  function hide() { if (layer) layer.hidden = true; owner = null; }
+  function show(fig) {
+    var pop = fig.querySelector(".spark-pop");
+    if (!pop) return;
+    var l = ensure();
+    l.innerHTML = pop.innerHTML;
+    l.hidden = false;
+    var r = fig.getBoundingClientRect();
+    var lw = l.offsetWidth, lh = l.offsetHeight;
+    var x = Math.min(Math.max(8, r.right - lw), window.innerWidth - lw - 8);
+    var y = r.top - lh - 8;
+    if (y < 8) y = r.bottom + 8;
+    l.style.left = x + "px";
+    l.style.top = y + "px";
+    owner = fig;
+  }
+  function figOf(e) {
+    return e.target && e.target.closest ? e.target.closest(".spark-hover") : null;
+  }
+  document.addEventListener("mouseover", function (e) {
+    var fig = figOf(e);
+    if (fig) { if (fig !== owner) show(fig); }
+    else if (owner) hide();
+  });
+  document.addEventListener("focusin", function (e) {
+    var fig = figOf(e);
+    if (fig) show(fig);
+  });
+  document.addEventListener("focusout", hide);
+  window.addEventListener("scroll", hide, true);
+  window.addEventListener("resize", hide);
+  document.addEventListener("evesynapse:content-ready", hide);
+})();

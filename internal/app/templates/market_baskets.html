@@ -17,7 +17,7 @@
       <td><a href="/market/baskets/{{.ID}}/">{{.Name}}</a></td>
       <td>{{.RegionName}}</td>
       <td class="mt-num" data-mbk-count>{{.Items}}</td>
-      <td class="mt-num">{{if .Value}}{{.Value}} ISK{{if .Partial}} <small>(some unpriced)</small>{{end}}{{else}}—{{end}}</td>
+      <td class="mt-num">{{if .Value}}{{if .Spark}}<span class="spark-hover" tabindex="0">{{.Value}} ISK<span class="spark-pop">{{.Spark}}</span></span>{{else}}{{.Value}} ISK{{end}}{{if .Partial}} <small>(some unpriced)</small>{{end}}{{else}}—{{end}}</td>
       <td class="mt-num">{{if .Chg1.Text}}<span class="mt-chg {{.Chg1.Dir}}">{{.Chg1.Text}}</span>{{else}}—{{end}}</td>
       <td class="mt-num">{{if .Chg7.Text}}<span class="mt-chg {{.Chg7.Dir}}">{{.Chg7.Text}}</span>{{else}}—{{end}}</td>
       <td><small>{{if .Preset}}Preset{{else}}Yours{{end}}</small></td>

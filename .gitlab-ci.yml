@@ -52,6 +52,11 @@ variables:
   image: golang:1.27.3-bookworm
   before_script:
     - apt-get update -qq && apt-get install -y -qq --no-install-recommends curl ca-certificates python3 >/dev/null
+    # The checkout lands owned by the runner host's user; root's
+    # git calls in the container refuse it (the VCS stamping in
+    # go build fails with exit status 128) until the checkout is
+    # whitelisted here, before any job step builds.
+    - git config --global --add safe.directory "$CI_PROJECT_DIR"
 
 test:
   stage: check
@@ -59,7 +64,8 @@ test:
   image: golang:1.27.3-bookworm
   before_script:
     - apt-get update -qq && apt-get install -y -qq --no-install-recommends curl ca-certificates xz-utils git make >/dev/null
-    - curl -fsSL https://nodejs.org/dist/v22.14.0/node-v22.14.0-linux-x64.tar.xz | tar -xJ -C /usr/local --strip-components=1
+    - git config --global --add safe.directory "$CI_PROJECT_DIR"
+    - curl -fsSL "https://nodejs.org/dist/v22.14.0/node-v22.14.0-linux-$(uname -m | sed -e 's/aarch64/arm64/' -e 's/x86_64/x64/').tar.xz" | tar -xJ -C /usr/local --strip-components=1
     - node --version
   script:
     # The generated database code (internal/db/sqlc) must match
@@ -68,8 +74,12 @@ test:
     # step fail here instead of drifting silently.
     - |
       build="$(mktemp -d)"
-      curl -fsSL -o "$build/sqlc.tar.gz" https://github.com/sqlc-dev/sqlc/releases/download/v1.31.1/sqlc_1.31.1_linux_amd64.tar.gz
-      echo "497ae4fcdfa64c5b0c311ffe4c2bd991e43991e82e5367792ed78bc2dca27354  $build/sqlc.tar.gz" | sha256sum -c -
+      case "$(uname -m)" in
+        aarch64) sqlc_arch=arm64; sqlc_sum="b7cae247740d0c51a1e657479e5b2d21e6fef428f596682a01bc55bf4ab8a23d" ;;
+        *) sqlc_arch=amd64; sqlc_sum="497ae4fcdfa64c5b0c311ffe4c2bd991e43991e82e5367792ed78bc2dca27354" ;;
+      esac
+      curl -fsSL -o "$build/sqlc.tar.gz" "https://github.com/sqlc-dev/sqlc/releases/download/v1.31.1/sqlc_1.31.1_linux_${sqlc_arch}.tar.gz"
+      echo "$sqlc_sum  $build/sqlc.tar.gz" | sha256sum -c -
       tar -xzf "$build/sqlc.tar.gz" -C "$build" sqlc
       "$build/sqlc" version
       "$build/sqlc" generate

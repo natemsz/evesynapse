@@ -15,9 +15,13 @@
 # uploaded to it, and only then is it published, so no reader
 # ever sees a release whose files are not all there.
 #
-# The gate job is the CI workflow's test job: a release never
-# ships on a tree the suite has not passed. The race and
-# core-only gates run in ci.yml on the same push.
+# The gate job runs nothing itself: the check gates (test,
+# race, core-only, analysis) run on GitHub's runners, and each
+# reports its result back here as a commit status. The gate
+# waits for the test, race and core-only statuses to come
+# back green, so a release never ships on a tree those gates
+# have not passed; analysis stays advisory, as it was when
+# it ran here. Only then does the build below run.
 
 name: release
 
@@ -42,108 +46,40 @@ jobs:
   gate:
     runs-on: ubuntu-latest
     steps:
-      - name: Check out the source
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Cache Go builds and modules
-        uses: actions/cache@v4
-        with:
-          path: |
-            .cache/go-build
-            .cache/gomod
-            .cache/dl
-          key: go-${{ hashFiles('go.sum') }}
-      - name: Install Go
-        run: |
-          case "$(uname -m)" in
-            aarch64) go_arch=arm64; go_sum="a06e99309dbcbdca1a8ccd2282c3ee146e55930886e26b4f1193269587165f49" ;;
-            *) go_arch=amd64; go_sum="65efbc80fdc1fa2cd2631cad5b481777a68e8725f34e89f50fc6ac714e379b40" ;;
-          esac
-          mkdir -p .cache/dl
-          if [ ! -f .cache/dl/go.tar.gz ]; then
-            curl -fsSL -o .cache/dl/go.tar.gz "https://go.dev/dl/go1.27.3.linux-${go_arch}.tar.gz"
-          fi
-          echo "$go_sum  .cache/dl/go.tar.gz" | sha256sum -c -
-          tar -xzf .cache/dl/go.tar.gz -C /usr/local
-          echo "/usr/local/go/bin" >> "$GITHUB_PATH"
-          /usr/local/go/bin/go version
       - name: Install the toolbox
         run: |
-          apt-get update -qq && apt-get install -y -qq --no-install-recommends curl ca-certificates git make python3 >/dev/null
-          git config --global --add safe.directory "$GITHUB_WORKSPACE"
-          node --version
-      - name: Check the generated database code is fresh
+          apt-get update -qq && apt-get install -y -qq --no-install-recommends curl ca-certificates python3 >/dev/null
+      - name: Wait for the GitHub gates
         run: |
-          build="$(mktemp -d)"
-          case "$(uname -m)" in
-            aarch64) sqlc_arch=arm64; sqlc_sum="b7cae247740d0c51a1e657479e5b2d21e6fef428f596682a01bc55bf4ab8a23d" ;;
-            *) sqlc_arch=amd64; sqlc_sum="497ae4fcdfa64c5b0c311ffe4c2bd991e43991e82e5367792ed78bc2dca27354" ;;
-          esac
-          mkdir -p .cache/dl
-          if [ ! -f ".cache/dl/sqlc-${sqlc_arch}.tar.gz" ]; then
-            curl -fsSL -o ".cache/dl/sqlc-${sqlc_arch}.tar.gz" "https://github.com/sqlc-dev/sqlc/releases/download/v1.31.1/sqlc_1.31.1_linux_${sqlc_arch}.tar.gz"
-          fi
-          echo "$sqlc_sum  .cache/dl/sqlc-${sqlc_arch}.tar.gz" | sha256sum -c -
-          tar -xzf ".cache/dl/sqlc-${sqlc_arch}.tar.gz" -C "$build" sqlc
-          "$build/sqlc" version
-          "$build/sqlc" generate
-          if ! git diff --exit-code internal/db/sqlc; then
-            echo "internal/db/sqlc is stale: run 'sqlc generate' (sqlc v1.31.1) and commit the result."
-            exit 1
-          fi
-          untracked="$(git ls-files --others --exclude-standard internal/db/sqlc)"
-          if [ -n "$untracked" ]; then
-            echo "sqlc generate produced files that are not committed:"
-            echo "$untracked"
-            exit 1
-          fi
-      - name: Decode the embedded assets
-        run: make assets
-      - name: Check formatting
-        run: |
-          unformatted="$(gofmt -l cmd internal)"
-          if [ -n "$unformatted" ]; then
-            echo "These files are not gofmt-formatted (run: make fmt):"
-            echo "$unformatted"
-            exit 1
-          fi
-      - name: Vet
-        run: go vet ./...
-      # The suites run an embedded Postgres, whose initdb
-      # refuses to run as root; the job container runs as
-      # root, so the test commands below run as an
-      # unprivileged user with its own Go caches and the
-      # checkout handed over to it.
-      - name: Hand the checkout to the test user
-        run: |
-          useradd --create-home --shell /bin/bash tester
-          mkdir -p /tmp/gopath /tmp/gocache /tmp/gomodcache
-          chown -R tester:tester /tmp/gopath /tmp/gocache /tmp/gomodcache "$GITHUB_WORKSPACE"
-          git config --global --add safe.directory "$GITHUB_WORKSPACE"
-      # internal/app runs a few minutes; the default 10m
-      # per-package limit leaves too little headroom on a
-      # slow runner.
-      - name: Run the test suite
-        run: runuser -u tester -- env HOME=/home/tester GOPATH=/tmp/gopath GOCACHE=/tmp/gocache GOMODCACHE=/tmp/gomodcache PATH="$PATH" go test -timeout 20m ./...
-      # File list is explicit, not a glob: node --test only
-      # expands globs on Node 21+, and a quoted glob that
-      # matches nothing would pass the step with zero tests
-      # run. A missing file fails loudly instead.
-      - name: Run the JavaScript tests
-        run: >-
-          node --test
-          internal/app/jstest/swap.test.js
-          internal/app/jstest/swap.browser.test.js
-          internal/app/jstest/plan.firstload.test.js
-          internal/app/jstest/pi.test.js
-          internal/app/jstest/fit.tip.test.js
-          internal/app/jstest/fit.loadoutpreview.test.js
-          internal/app/jstest/fit.phoneviews.test.js
-          internal/app/jstest/tabs.more.test.js
-          internal/app/jstest/phonebar.test.js
-          internal/app/jstest/map.test.js
-          internal/app/jstest/dashboard.test.js
+          GATE_TOKEN="${{ secrets.GITHUB_TOKEN }}"
+          GATE_SHA="${{ github.sha }}"
+          python3 - "$GATE_SHA" "$GATE_TOKEN" <<'PYEOF'
+          import json, sys, time, urllib.request
+          sha, token = sys.argv[1], sys.argv[2]
+          url = "https://natems.dev/api/v1/repos/EveSynapse/evesynapse/commits/" + sha + "/status"
+          want = ["github/test", "github/race", "github/core-only"]
+          deadline = time.time() + 45 * 60
+          seen = {}
+          while time.time() < deadline:
+              req = urllib.request.Request(url, headers={"Authorization": "token " + token, "User-Agent": "evesynapse-release-gate"})
+              try:
+                  with urllib.request.urlopen(req, timeout=30) as resp:
+                      data = json.load(resp)
+                  seen = {s.get("context"): s.get("status") for s in data.get("statuses", [])}
+              except Exception as e:
+                  print("status read failed, retrying:", e, flush=True)
+              failed = [c for c in want if seen.get(c) == "failure"]
+              if failed:
+                  print("GitHub gates failed:", ", ".join(failed))
+                  sys.exit(1)
+              if all(seen.get(c) == "success" for c in want):
+                  print("GitHub gates green:", ", ".join(want))
+                  sys.exit(0)
+              print("waiting for GitHub gates:", {c: seen.get(c, "missing") for c in want}, flush=True)
+              time.sleep(30)
+          print("GitHub gates did not report green in time:", {c: seen.get(c, "missing") for c in want})
+          sys.exit(1)
+          PYEOF
 
   release:
     runs-on: ubuntu-latest

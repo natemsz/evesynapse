@@ -1,8 +1,9 @@
 # EveSynapse releases on Forgejo Actions: the Forgejo port of
 # the GitLab release and mirror jobs (.gitlab-ci.yml). A dispatch
 # from the GitHub gates, or a manual one, builds both architectures, signs
-# the manifests and the release tag, and publishes the release here; the mirror
-# job then copies the same signed files to the R2 mirror the
+# the manifests and the release tag, and publishes the release here; a follow-on
+# job then creates the same release on GitHub and GitLab, and the mirror
+# job copies the same signed files to the R2 mirror the
 # updater reads as its last resort.
 #
 # Publishing rules, the same as the GitLab pipeline's: a
@@ -274,7 +275,10 @@ jobs:
             -d '{"draft": false}' \
             "$FORGEJO_API/releases/$REL_ID" > /dev/null
           echo "Release v$VERSION published."
-      - name: Keep the built files for the mirror job
+      - name: Add the release notes to the kept files
+        if: steps.decide.outputs.publish == 'true'
+        run: cp release-notes.md dist/release-notes.md
+      - name: Keep the built files for the follow-on jobs
         if: steps.decide.outputs.publish == 'true'
         uses: https://code.forgejo.org/forgejo/upload-artifact@v4
         with:
@@ -346,3 +350,177 @@ jobs:
             aws s3 cp "dist/latest-$a.json.sig" "s3://$R2_BUCKET/$CH-$a.json.sig" --endpoint-url "$EP"
           done
           echo "Mirrored v$VERSION to the $CH channel."
+
+  # Every published release is also created on GitHub and
+  # GitLab, under the signed tag the push mirrors already
+  # carried there, with the same release notes and the same
+  # six signed files, so the updater finds the same release
+  # whichever forge it asks. The GitHub release is created as
+  # a draft, filled, and then published, the commit point the
+  # Forgejo publish uses; the GitLab leg uploads the files to
+  # the project's Generic Package Registry first and creates
+  # the Release last, the shape .gitlab-ci.yml's release job
+  # uses, with the asset links named for the files they serve
+  # because the updater matches them by name. An existing
+  # release on either forge is left as it is, the rule the
+  # Forgejo publish follows. Each leg is gated on its token
+  # secret (GITHUB_TOKEN, GITLAB_TOKEN), the way the mirror
+  # job is gated on its R2 secrets: without one, the leg logs
+  # that it is skipped and steps aside. A leg that fails logs
+  # it and fails only its own step — the Forgejo release is
+  # already published by then, and trouble copying it must
+  # not fail its pipeline.
+  forges:
+    runs-on: ubuntu-latest
+    needs: release
+    if: needs.release.outputs.publish == 'true'
+    continue-on-error: true
+    env:
+      VERSION: ${{ needs.release.outputs.version }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
+    steps:
+      - name: Fetch the built files
+        uses: https://code.forgejo.org/forgejo/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+      - name: Install the toolbox
+        run: |
+          apt-get update -qq && apt-get install -y -qq --no-install-recommends curl ca-certificates python3 >/dev/null
+      - name: Create the GitHub release
+        continue-on-error: true
+        run: |
+          if [ -z "${GITHUB_TOKEN:-}" ]; then
+            echo "The GITHUB_TOKEN secret is not set; skipping the GitHub release."
+            exit 0
+          fi
+          if [ "$VERSION" != "${VERSION%%-*}" ]; then PRERELEASE=true; else PRERELEASE=false; fi
+          export PRERELEASE
+          python3 - <<'PYEOF' || { echo "The GitHub release leg FAILED; the Forgejo release stands. See the error above."; exit 1; }
+          import json, os, urllib.request
+
+          api = "https://api.github.com/repos/natemsz/evesynapse"
+          version = os.environ["VERSION"]
+          tag = "v" + version
+          headers = {"Authorization": "Bearer " + os.environ["GITHUB_TOKEN"],
+                     "Accept": "application/vnd.github+json",
+                     "X-GitHub-Api-Version": "2022-11-28",
+                     "User-Agent": "evesynapse-release-workflow"}
+
+          def call(method, url, data=None, content_type=None):
+              h = dict(headers)
+              if content_type:
+                  h["Content-Type"] = content_type
+              req = urllib.request.Request(url, data=data, method=method, headers=h)
+              return urllib.request.urlopen(req)
+
+          rel = None
+          with call("GET", api + "/releases?per_page=100") as resp:
+              for r in json.load(resp):
+                  if r.get("tag_name") == tag:
+                      rel = r
+                      break
+          if rel is not None:
+              print("Release %s already exists on GitHub; reusing it." % tag)
+          else:
+              body = {"tag_name": tag,
+                      "name": "EveSynapse v" + version,
+                      "body": open("dist/release-notes.md").read(),
+                      "draft": True,
+                      "prerelease": os.environ["PRERELEASE"] == "true"}
+              with call("POST", api + "/releases",
+                        data=json.dumps(body).encode(),
+                        content_type="application/json") as resp:
+                  rel = json.load(resp)
+              print("Draft release %s created on GitHub (id %s)." % (tag, rel["id"]))
+          upload_base = rel["upload_url"].split("{")[0]
+          have = {a["name"] for a in rel.get("assets") or []}
+          files = ["evesynapse-arm64", "evesynapse-amd64",
+                   "latest-arm64.json", "latest-amd64.json",
+                   "latest-arm64.json.sig", "latest-amd64.json.sig"]
+          for f in files:
+              if f in have:
+                  print("%s: already on the GitHub release; skipping." % f)
+                  continue
+              with open("dist/" + f, "rb") as fh:
+                  payload = fh.read()
+              with call("POST", upload_base + "?name=" + f, data=payload,
+                        content_type="application/octet-stream") as resp:
+                  resp.read()
+              print("%s: uploaded." % f)
+          if rel.get("draft"):
+              with call("PATCH", api + "/releases/" + str(rel["id"]),
+                        data=json.dumps({"draft": False}).encode(),
+                        content_type="application/json") as resp:
+                  resp.read()
+              print("Release %s published on GitHub." % tag)
+          PYEOF
+      - name: Create the GitLab release
+        continue-on-error: true
+        run: |
+          if [ -z "${GITLAB_TOKEN:-}" ]; then
+            echo "The GITLAB_TOKEN secret is not set; skipping the GitLab release."
+            exit 0
+          fi
+          GL_API="https://gitlab.com/api/v4"
+          GL_PROJECT="natemsz%2Fevesynapse"
+          code="$(curl -s -o /dev/null -w '%{http_code}' --header "PRIVATE-TOKEN: $GITLAB_TOKEN" "$GL_API/projects/$GL_PROJECT/releases/v$VERSION")"
+          if [ "$code" = "200" ]; then
+            echo "Release v$VERSION already exists on GitLab; leaving it as it is."
+            exit 0
+          fi
+          if [ "$code" != "404" ]; then
+            echo "The GitLab releases API answered $code; not creating the release on a guess."
+            exit 1
+          fi
+          PKG_BASE="$GL_API/projects/$GL_PROJECT/packages/generic/evesynapse/v$VERSION"
+          existing="$(curl -fsS --header "PRIVATE-TOKEN: $GITLAB_TOKEN" "$GL_API/projects/$GL_PROJECT/packages?package_type=generic&package_name=evesynapse&per_page=100" || echo '[]')"
+          pkg_id="$(printf '%s' "$existing" | VERSION="$VERSION" python3 -c 'import json,os,sys; pkgs=json.load(sys.stdin); print(next((p["id"] for p in pkgs if p.get("version")=="v"+os.environ["VERSION"]), ""))')"
+          declare -A have=()
+          if [ -n "$pkg_id" ]; then
+            files_json="$(curl -fsS --header "PRIVATE-TOKEN: $GITLAB_TOKEN" "$GL_API/projects/$GL_PROJECT/packages/$pkg_id/package_files?per_page=100")"
+            while IFS='=' read -r fname fsha; do
+              [ -n "$fname" ] && have["$fname"]="$fsha"
+            done < <(printf '%s' "$files_json" | python3 -c 'import json,sys; [print(f["file_name"]+"="+f["file_sha256"]) for f in json.load(sys.stdin)]')
+          fi
+          for f in evesynapse-arm64 evesynapse-amd64 latest-arm64.json latest-amd64.json latest-arm64.json.sig latest-amd64.json.sig; do
+            sha="$(sha256sum "dist/$f" | cut -d' ' -f1)"
+            if [ "${have[$f]:-}" = "$sha" ]; then
+              echo "$f: already in the GitLab registry under the same hash; skipping."
+              continue
+            fi
+            if [ -n "${have[$f]:-}" ]; then
+              echo "$f: the GitLab registry holds a different build under this version; refusing to replace it."
+              exit 1
+            fi
+            curl -fsS --header "PRIVATE-TOKEN: $GITLAB_TOKEN" --upload-file "dist/$f" "$PKG_BASE/$f"
+            echo "$f: uploaded."
+          done
+          GL_API="$GL_API" GL_PROJECT="$GL_PROJECT" VERSION="$VERSION" GITHUB_SHA="$GITHUB_SHA" python3 - <<'PYEOF' || { echo "The GitLab release leg FAILED; the Forgejo release stands. See the error above."; exit 1; }
+          import json, os, urllib.request
+
+          version = os.environ["VERSION"]
+          files = ["evesynapse-arm64", "evesynapse-amd64",
+                   "latest-arm64.json", "latest-amd64.json",
+                   "latest-arm64.json.sig", "latest-amd64.json.sig"]
+          api = os.environ["GL_API"]
+          project = os.environ["GL_PROJECT"]
+          body = {
+              "tag_name": "v" + version,
+              "ref": os.environ["GITHUB_SHA"],
+              "name": "EveSynapse v" + version,
+              "description": open("dist/release-notes.md").read(),
+              "assets": {"links": [
+                  {"name": f, "url": "%s/projects/%s/packages/generic/evesynapse/v%s/%s" % (
+                      api, project, version, f),
+                   "direct_asset_path": "/" + f, "link_type": "package"}
+                  for f in files]},
+          }
+          req = urllib.request.Request(
+              api + "/projects/" + project + "/releases",
+              data=json.dumps(body).encode(), method="POST",
+              headers={"PRIVATE-TOKEN": os.environ["GITLAB_TOKEN"], "Content-Type": "application/json"})
+          urllib.request.urlopen(req)
+          print("Release v%s created on GitLab." % version)
+          PYEOF

@@ -413,8 +413,8 @@ to it:
   `onReady` subscription scoped to `root`, teardown on
   will-swap for anything global, and a node test in
   `internal/app/jstest/` if it carries logic worth pinning —
-  the workflow's JS step names its files explicitly, so add new
-  test files to `.github/workflows/release.yml` too.
+  the pipeline's JS step names its files explicitly, so add new
+  test files to `.gitlab-ci.yml` too.
 - **A home widget:** manifest entry, registry entry, template
   block keyed by widget id, data from a stored source. Follow an
   existing widget end to end; the trade-ideas module is a recent

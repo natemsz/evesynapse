@@ -86,12 +86,25 @@ const (
 )
 
 // ---------------------------------------------------------------------------
-// The release channel: CI publishes every build as a GitHub
-// release carrying a tiny manifest per CPU kind — the version it
-// names and the checksum of the binary beside it — and that
-// manifest's signature. The updater reads its kind's manifest,
-// checks the signature, compares versions, and downloads only
-// when the release is newer.
+// The release channel: CI publishes every build as a release
+// whose assets are the package files — a tiny manifest per CPU
+// kind (the version it names and the checksum of the binary
+// beside it) and that manifest's signature. Where the updater
+// reads them from is a provider, chosen by
+// EVESYNAPSE_UPDATE_PROVIDER and never switched on its own:
+//
+//	gitlab (the default): the project's releases on a GitLab,
+//	    listed through its API.
+//	github: the repository's releases on GitHub — the stable
+//	    channel from its "latest" download address, the dev
+//	    channel from its API.
+//	mirror: a static mirror of the releases (the project's is
+//	    served from synap6.io), laid out as the channel pointer
+//	    manifests beside the binaries they describe.
+//
+// Whichever provider serves them, the updater reads its kind's
+// manifest, checks the signature, compares versions, and
+// downloads only when the release is newer.
 // ---------------------------------------------------------------------------
 
 const (
@@ -100,22 +113,37 @@ const (
 	elfMachineAMD64 = 62
 )
 
-// releaseBaseURL is where release manifests and binaries live
-// for the mainline project: GitHub's "latest release" download
-// shortcut, so the address stays the same as versions come and
-// go. A var so tests can point it at a local server.
-var releaseBaseURL = "https://github.com/natemsz/evesynapse/releases/latest/download"
+// releaseAPIBaseURL is the GitLab API root the updater lists
+// releases from. A var so tests can point it at a local server.
+var releaseAPIBaseURL = "https://gitlab.com/api/v4"
 
-// releaseChannelBase resolves the address updates are fetched
-// from. Setting EVESYNAPSE_UPDATE_REPO to a fork's owner/repo
-// (in the environment, or in the .env file beside the binary)
-// points the updater at that fork's releases instead of the
-// mainline ones.
-func releaseChannelBase() string {
-	if repo := strings.Trim(strings.TrimSpace(os.Getenv("EVESYNAPSE_UPDATE_REPO")), "/"); repo != "" {
-		return "https://github.com/" + repo + "/releases/latest/download"
+// defaultUpdateProject is the mainline project's path on
+// GitLab: the namespace and project the releases live under.
+const defaultUpdateProject = "natemsz/evesynapse"
+
+// updateProject resolves which GitLab project's releases the
+// updater reads. EVESYNAPSE_UPDATE_PROJECT names it (in the
+// environment, or in the .env file beside the binary). An
+// install made before that setting existed carries
+// EVESYNAPSE_UPDATE_REPO from the GitHub years; the project
+// kept its path in the move, so that value is read as the same
+// project's path when the new setting is absent.
+func updateProject() string {
+	for _, name := range []string{"EVESYNAPSE_UPDATE_PROJECT", "EVESYNAPSE_UPDATE_REPO"} {
+		if p := strings.Trim(strings.TrimSpace(os.Getenv(name)), "/"); p != "" {
+			return p
+		}
 	}
-	return releaseBaseURL
+	return defaultUpdateProject
+}
+
+// updateAPIBase resolves the GitLab API root, honouring
+// EVESYNAPSE_UPDATE_API_URL for a self-hosted GitLab.
+func updateAPIBase() string {
+	if u := strings.TrimSpace(os.Getenv("EVESYNAPSE_UPDATE_API_URL")); u != "" {
+		return strings.TrimRight(u, "/")
+	}
+	return releaseAPIBaseURL
 }
 
 // loadInstallEnv fills in configuration from the .env file
@@ -229,21 +257,213 @@ func versionParts(v string) []int {
 	return parts
 }
 
-// releaseAPIBaseURL is the GitHub API root the dev channel lists
-// releases from. A var so tests can point it at a local server.
-var releaseAPIBaseURL = "https://api.github.com"
+// gitlabRelease is one release in the GitLab API's payload,
+// cut to the fields the updater reads: the tag it was published
+// under, whether it is still upcoming (announced for a future
+// date, so not out yet), and its asset links.
+type gitlabRelease struct {
+	TagName  string `json:"tag_name"`
+	Upcoming bool   `json:"upcoming_release"`
+	Assets   struct {
+		Links []struct {
+			Name string `json:"name"`
+			URL  string `json:"url"`
+		} `json:"links"`
+	} `json:"assets"`
+}
 
-// latestDevRelease queries the GitHub API for releases and returns
-// the manifest, signature and binary asset URLs of the newest tag
-// ending in -dev. All three come from that one release, so the
-// signature is the manifest's own and the checksum in the manifest
-// always describes the binary downloaded beside it.
-func latestDevRelease(ctx context.Context, arch string) (manifestURL, sigURL, binaryURL string, err error) {
-	repo := "natemsz/evesynapse"
-	if r := strings.Trim(strings.TrimSpace(os.Getenv("EVESYNAPSE_UPDATE_REPO")), "/"); r != "" {
-		repo = r
+// listReleases fetches the update project's releases from the
+// GitLab API, following its pagination. The walk is capped:
+// the channels only ever want the newest releases, and the cap
+// keeps a misbehaving server from walking the updater forever.
+func listReleases(ctx context.Context) ([]gitlabRelease, error) {
+	project := url.PathEscape(updateProject())
+	client := &http.Client{Timeout: 30 * time.Second}
+	var all []gitlabRelease
+	for page := 1; page <= 10; page++ {
+		apiURL := fmt.Sprintf("%s/projects/%s/releases?per_page=100&page=%d", updateAPIBase(), project, page)
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("User-Agent", "EveSynapse-Updater")
+		resp, err := client.Do(req)
+		if err != nil {
+			return nil, err
+		}
+		if resp.StatusCode != http.StatusOK {
+			resp.Body.Close()
+			return nil, fmt.Errorf("the update server answered %s", resp.Status)
+		}
+		var releases []gitlabRelease
+		decodeErr := json.NewDecoder(io.LimitReader(resp.Body, 4<<20)).Decode(&releases)
+		next := resp.Header.Get("X-Next-Page")
+		resp.Body.Close()
+		if decodeErr != nil {
+			return nil, errors.New("the update information couldn't be read")
+		}
+		all = append(all, releases...)
+		if next == "" {
+			break
+		}
 	}
-	apiURL := releaseAPIBaseURL + "/repos/" + repo + "/releases?per_page=20"
+	return all, nil
+}
+
+// selectRelease picks the release a channel installs from.
+// GitLab orders its list by release date and knows nothing of
+// EveSynapse's channels, so the choice is made here, by
+// version: the stable channel takes the greatest version whose
+// tag carries no suffix, the dev channel the greatest whose
+// tag ends in -dev, as it always has. A release still upcoming
+// is not out yet, whichever channel asks.
+func selectRelease(releases []gitlabRelease, dev bool) (gitlabRelease, bool) {
+	var best gitlabRelease
+	found := false
+	for _, rel := range releases {
+		if rel.Upcoming || rel.TagName == "" {
+			continue
+		}
+		if dev {
+			if !strings.HasSuffix(rel.TagName, "-dev") {
+				continue
+			}
+		} else if versionIsPrerelease(rel.TagName) {
+			continue
+		}
+		if !found || compareVersions(rel.TagName, best.TagName) > 0 {
+			best, found = rel, true
+		}
+	}
+	return best, found
+}
+
+// updateProvider resolves which provider the updater reads
+// releases from: EVESYNAPSE_UPDATE_PROVIDER, in the
+// environment or the install's .env file. The choice is the
+// operator's, made in configuration; the updater never falls
+// back to another provider on its own.
+func updateProvider() string {
+	if p := strings.ToLower(strings.TrimSpace(os.Getenv("EVESYNAPSE_UPDATE_PROVIDER"))); p != "" {
+		return p
+	}
+	return "gitlab"
+}
+
+// latestReleaseAssets returns the manifest, signature and
+// binary asset URLs of the release the channel (stable, or dev
+// when dev is set) currently installs from, from the provider
+// the install is configured to read. All three come from that
+// one release, so the signature is the manifest's own and the
+// checksum in the manifest always describes the binary
+// downloaded beside it.
+func latestReleaseAssets(ctx context.Context, arch string, dev bool) (manifestURL, sigURL, binaryURL string, err error) {
+	switch updateProvider() {
+	case "gitlab":
+		return gitlabReleaseAssets(ctx, arch, dev)
+	case "github":
+		return githubReleaseAssets(ctx, arch, dev)
+	case "mirror":
+		return mirrorReleaseAssets(arch, dev)
+	}
+	return "", "", "", fmt.Errorf("unknown update provider %q (EVESYNAPSE_UPDATE_PROVIDER names gitlab, github or mirror)", updateProvider())
+}
+
+// gitlabReleaseAssets resolves the channel against the GitLab
+// project's release list.
+func gitlabReleaseAssets(ctx context.Context, arch string, dev bool) (manifestURL, sigURL, binaryURL string, err error) {
+	releases, err := listReleases(ctx)
+	if err != nil {
+		return "", "", "", err
+	}
+	rel, found := selectRelease(releases, dev)
+	if !found {
+		if dev {
+			return "", "", "", errors.New("no dev releases found")
+		}
+		return "", "", "", errors.New("no releases found")
+	}
+	wantManifest := "latest-" + arch + ".json"
+	wantSig := wantManifest + releasesig.SigSuffix
+	wantBinary := "evesynapse-" + arch
+	for _, a := range rel.Assets.Links {
+		switch a.Name {
+		case wantManifest:
+			manifestURL = a.URL
+		case wantSig:
+			sigURL = a.URL
+		case wantBinary:
+			binaryURL = a.URL
+		}
+	}
+	if manifestURL == "" {
+		return "", "", "", fmt.Errorf("release %s has no %s asset", rel.TagName, wantManifest)
+	}
+	if binaryURL == "" {
+		return "", "", "", fmt.Errorf("release %s has no %s asset", rel.TagName, wantBinary)
+	}
+	if sigURL == "" {
+		if dev {
+			return "", "", "", &refusal{fmt.Sprintf("the newest development release (%s) isn't signed, so there is no way to tell it from a forgery.", rel.TagName)}
+		}
+		return "", "", "", &refusal{"the newest release isn't signed, so there is no way to tell it from a forgery."}
+	}
+	return manifestURL, sigURL, binaryURL, nil
+}
+
+// releaseGitHubBaseURL is where GitHub release downloads
+// live. A var so tests can point it at a local server.
+var releaseGitHubBaseURL = "https://github.com"
+
+// releaseGitHubAPIBaseURL is the GitHub API root the dev
+// channel lists releases from. A var for the same reason.
+var releaseGitHubAPIBaseURL = "https://api.github.com"
+
+// updateGitHubRepo resolves the repository the github provider
+// reads: EVESYNAPSE_UPDATE_REPO, the setting's original
+// meaning. The project's path is the same on both services.
+func updateGitHubRepo() string {
+	if r := strings.Trim(strings.TrimSpace(os.Getenv("EVESYNAPSE_UPDATE_REPO")), "/"); r != "" {
+		return r
+	}
+	return defaultUpdateProject
+}
+
+// githubAPIBase resolves the GitHub API root, honouring the
+// same EVESYNAPSE_UPDATE_API_URL override as the gitlab
+// provider (an enterprise host names its own API root).
+func githubAPIBase() string {
+	if u := strings.TrimSpace(os.Getenv("EVESYNAPSE_UPDATE_API_URL")); u != "" {
+		return strings.TrimRight(u, "/")
+	}
+	return releaseGitHubAPIBaseURL
+}
+
+// githubRelease is one release in the GitHub API's payload,
+// cut to the fields the dev channel reads.
+type githubRelease struct {
+	TagName string `json:"tag_name"`
+	Draft   bool   `json:"draft"`
+	Assets  []struct {
+		Name string `json:"name"`
+		URL  string `json:"browser_download_url"`
+	} `json:"assets"`
+}
+
+// githubReleaseAssets resolves the channel against GitHub. The
+// stable channel needs no listing: the repository's "latest"
+// download address always serves the newest plain release's
+// files. The dev channel lists the releases and picks the
+// newest -dev one, as the gitlab provider picks from its list.
+func githubReleaseAssets(ctx context.Context, arch string, dev bool) (manifestURL, sigURL, binaryURL string, err error) {
+	wantManifest := "latest-" + arch + ".json"
+	wantSig := wantManifest + releasesig.SigSuffix
+	wantBinary := "evesynapse-" + arch
+	if !dev {
+		base := releaseGitHubBaseURL + "/" + updateGitHubRepo() + "/releases/latest/download"
+		return base + "/" + wantManifest, base + "/" + wantSig, base + "/" + wantBinary, nil
+	}
+	apiURL := fmt.Sprintf("%s/repos/%s/releases?per_page=100", githubAPIBase(), updateGitHubRepo())
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
 	if err != nil {
 		return "", "", "", err
@@ -259,45 +479,73 @@ func latestDevRelease(ctx context.Context, arch string) (manifestURL, sigURL, bi
 	if resp.StatusCode != http.StatusOK {
 		return "", "", "", fmt.Errorf("the update server answered %s", resp.Status)
 	}
-	var releases []struct {
-		TagName string `json:"tag_name"`
-		Assets  []struct {
-			Name               string `json:"name"`
-			BrowserDownloadURL string `json:"browser_download_url"`
-		} `json:"assets"`
-	}
-	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&releases); err != nil {
+	var releases []githubRelease
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 4<<20)).Decode(&releases); err != nil {
 		return "", "", "", errors.New("the update information couldn't be read")
 	}
-	wantManifest := "latest-" + arch + ".json"
-	wantSig := wantManifest + releasesig.SigSuffix
-	wantBinary := "evesynapse-" + arch
-	for _, rel := range releases {
-		if !strings.HasSuffix(rel.TagName, "-dev") {
+	var best *githubRelease
+	for i := range releases {
+		rel := &releases[i]
+		if rel.Draft || rel.TagName == "" || !strings.HasSuffix(rel.TagName, "-dev") {
 			continue
 		}
-		for _, a := range rel.Assets {
-			switch a.Name {
-			case wantManifest:
-				manifestURL = a.BrowserDownloadURL
-			case wantSig:
-				sigURL = a.BrowserDownloadURL
-			case wantBinary:
-				binaryURL = a.BrowserDownloadURL
-			}
+		if best == nil || compareVersions(rel.TagName, best.TagName) > 0 {
+			best = rel
 		}
-		if manifestURL == "" {
-			return "", "", "", fmt.Errorf("dev release %s has no %s asset", rel.TagName, wantManifest)
-		}
-		if binaryURL == "" {
-			return "", "", "", fmt.Errorf("dev release %s has no %s asset", rel.TagName, wantBinary)
-		}
-		if sigURL == "" {
-			return "", "", "", &refusal{fmt.Sprintf("the newest development release (%s) isn't signed, so there is no way to tell it from a forgery.", rel.TagName)}
-		}
-		return manifestURL, sigURL, binaryURL, nil
 	}
-	return "", "", "", errors.New("no dev releases found")
+	if best == nil {
+		return "", "", "", errors.New("no dev releases found")
+	}
+	for _, a := range best.Assets {
+		switch a.Name {
+		case wantManifest:
+			manifestURL = a.URL
+		case wantSig:
+			sigURL = a.URL
+		case wantBinary:
+			binaryURL = a.URL
+		}
+	}
+	if manifestURL == "" {
+		return "", "", "", fmt.Errorf("release %s has no %s asset", best.TagName, wantManifest)
+	}
+	if binaryURL == "" {
+		return "", "", "", fmt.Errorf("release %s has no %s asset", best.TagName, wantBinary)
+	}
+	if sigURL == "" {
+		return "", "", "", &refusal{fmt.Sprintf("the newest development release (%s) isn't signed, so there is no way to tell it from a forgery.", best.TagName)}
+	}
+	return manifestURL, sigURL, binaryURL, nil
+}
+
+// releaseMirrorBaseURL is the project's own release mirror. A
+// var so tests can point it at a local server.
+var releaseMirrorBaseURL = "https://cdn.synap6.io"
+
+// updateMirrorBase resolves the mirror's root, honouring
+// EVESYNAPSE_UPDATE_MIRROR_URL for a mirror served elsewhere.
+func updateMirrorBase() string {
+	if u := strings.TrimSpace(os.Getenv("EVESYNAPSE_UPDATE_MIRROR_URL")); u != "" {
+		return strings.TrimRight(u, "/")
+	}
+	return releaseMirrorBaseURL
+}
+
+// mirrorReleaseAssets resolves the channel against the static
+// mirror. The mirror keeps each channel's signed manifest at
+// its root as the channel pointer, with the binary it
+// describes beside it under the channel's directory; the
+// manifest's signature and checksum are checked exactly as
+// with any provider, so a mirror that serves stale or mixed
+// files fails the checksum and installs nothing.
+func mirrorReleaseAssets(arch string, dev bool) (manifestURL, sigURL, binaryURL string, err error) {
+	base := updateMirrorBase()
+	channel := "latest"
+	if dev {
+		channel = "latest-dev"
+	}
+	manifestURL = base + "/" + channel + "-" + arch + ".json"
+	return manifestURL, manifestURL + releasesig.SigSuffix, base + "/" + channel + "/evesynapse-" + arch, nil
 }
 
 // trustedReleaseKeys is the set of keys a release has to be signed
@@ -379,15 +627,9 @@ func verifyReleaseSignature(ctx context.Context, manifest []byte, sigURL string)
 // it describes.
 func fetchReleaseManifest(ctx context.Context, arch string, dev bool) (releaseManifest, string, error) {
 	var m releaseManifest
-	manifestURL := releaseChannelBase() + "/latest-" + arch + ".json"
-	sigURL := manifestURL + releasesig.SigSuffix
-	binaryURL := releaseChannelBase() + "/evesynapse-" + arch
-	if dev {
-		var err error
-		manifestURL, sigURL, binaryURL, err = latestDevRelease(ctx, arch)
-		if err != nil {
-			return m, "", err
-		}
+	manifestURL, sigURL, binaryURL, err := latestReleaseAssets(ctx, arch, dev)
+	if err != nil {
+		return m, "", err
 	}
 	raw, err := fetchReleaseFile(ctx, manifestURL, releasesig.MaxManifestBytes)
 	if err != nil {

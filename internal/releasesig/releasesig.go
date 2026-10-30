@@ -155,8 +155,16 @@ func ParsePublicKeys(pemData []byte) ([]ed25519.PublicKey, error) {
 
 // ParsePrivateKeys reads the signing key(s) the release job is given:
 // PEM "PRIVATE KEY" blocks (PKCS #8) holding Ed25519 keys, at least
-// one. Its errors never repeat any part of the input.
+// one. The value may instead be the PEM base64-encoded, whole: the
+// CI variable store that holds it masks single-line values only, so
+// the key is kept there encoded, and both forms are read here. Its
+// errors never repeat any part of the input.
 func ParsePrivateKeys(pemData []byte) ([]ed25519.PrivateKey, error) {
+	if !bytes.Contains(pemData, []byte("-----BEGIN ")) {
+		if decoded, err := base64.StdEncoding.DecodeString(strings.TrimSpace(string(pemData))); err == nil {
+			pemData = decoded
+		}
+	}
 	blocks, err := pemBlocks(pemData)
 	if err != nil {
 		return nil, err

@@ -14,9 +14,11 @@ package selfupdate
 
 import (
 	"bytes"
+	"context"
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/binary"
+	"encoding/json"
 	"errors"
 	"evesynapse/internal/pidfile"
 	"evesynapse/internal/pidfile/pidfiletest"
@@ -77,14 +79,65 @@ func writeTestFile(t *testing.T, path string, data []byte, perm os.FileMode) {
 	}
 }
 
-func TestReleaseChannelBase(t *testing.T) {
-	if got := releaseChannelBase(); got != releaseBaseURL {
-		t.Fatalf("default channel = %q, want %q", got, releaseBaseURL)
+func TestUpdateProject(t *testing.T) {
+	t.Setenv("EVESYNAPSE_UPDATE_PROJECT", "")
+	t.Setenv("EVESYNAPSE_UPDATE_REPO", "")
+	if got := updateProject(); got != defaultUpdateProject {
+		t.Fatalf("default project = %q, want %q", got, defaultUpdateProject)
 	}
+	// An install from the GitHub years carries only the old
+	// setting; its value is the same project's path.
 	t.Setenv("EVESYNAPSE_UPDATE_REPO", "someone/evesynapse")
-	want := "https://github.com/someone/evesynapse/releases/latest/download"
-	if got := releaseChannelBase(); got != want {
-		t.Fatalf("fork channel = %q, want %q", got, want)
+	if got := updateProject(); got != "someone/evesynapse" {
+		t.Fatalf("legacy project = %q, want the EVESYNAPSE_UPDATE_REPO value", got)
+	}
+	t.Setenv("EVESYNAPSE_UPDATE_PROJECT", "other/evesynapse")
+	if got := updateProject(); got != "other/evesynapse" {
+		t.Fatalf("project = %q, want the EVESYNAPSE_UPDATE_PROJECT value", got)
+	}
+}
+
+func TestUpdateAPIBase(t *testing.T) {
+	t.Setenv("EVESYNAPSE_UPDATE_API_URL", "")
+	if got := updateAPIBase(); got != releaseAPIBaseURL {
+		t.Fatalf("default API base = %q, want %q", got, releaseAPIBaseURL)
+	}
+	t.Setenv("EVESYNAPSE_UPDATE_API_URL", "https://gitlab.example.com/api/v4/")
+	if got := updateAPIBase(); got != "https://gitlab.example.com/api/v4" {
+		t.Fatalf("API base = %q, want the override without its trailing slash", got)
+	}
+}
+
+// TestSelectReleaseChannels pins the channel choice the move
+// to GitLab rests on: GitLab's list is ordered by release
+// date, not by version, and its newest entry may be a
+// development build or one not out yet. The stable channel
+// takes the greatest plain version; the dev channel takes
+// the greatest -dev one.
+func TestSelectReleaseChannels(t *testing.T) {
+	mk := func(tag string, upcoming bool) gitlabRelease {
+		var rel gitlabRelease
+		rel.TagName = tag
+		rel.Upcoming = upcoming
+		return rel
+	}
+	releases := []gitlabRelease{
+		mk("v0.7.0.9-dev", false), // newest by number, development
+		mk("v0.7.0.8", true),      // plain, but not out yet
+		mk("v0.7.0.6", false),
+		mk("v0.7.0.7-dev", false),
+		mk("v0.7.0.5", false),
+	}
+	stable, ok := selectRelease(releases, false)
+	if !ok || stable.TagName != "v0.7.0.6" {
+		t.Fatalf("stable channel picked %q (found %t), want v0.7.0.6", stable.TagName, ok)
+	}
+	dev, ok := selectRelease(releases, true)
+	if !ok || dev.TagName != "v0.7.0.9-dev" {
+		t.Fatalf("dev channel picked %q (found %t), want v0.7.0.9-dev", dev.TagName, ok)
+	}
+	if _, ok := selectRelease([]gitlabRelease{mk("v0.7.0.9-dev", false)}, false); ok {
+		t.Fatal("stable channel found a release in a dev-only list")
 	}
 }
 
@@ -206,13 +259,55 @@ func TestParseArchArg(t *testing.T) {
 	}
 }
 
-// withReleaseBase points the release channel at a test server
-// for the duration of one test.
-func withReleaseBase(t *testing.T, url string) {
-	t.Helper()
-	old := releaseBaseURL
-	releaseBaseURL = url
-	t.Cleanup(func() { releaseBaseURL = old })
+// channelRelease describes one release on the test channel:
+// its tag, and the paths on the test server its files are
+// served from. A field left empty is a file the release does
+// not carry among its assets.
+type channelRelease struct {
+	tag      string
+	arch     string // defaults to arm64
+	manifest string
+	sig      string
+	binary   string
+}
+
+// serveChannel registers the GitLab releases listing for the
+// given releases on mux, in the API's own shape. The asset
+// addresses are composed from the request's host, so the
+// listing can be registered before the server's address is
+// known.
+func serveChannel(mux *http.ServeMux, rels ...channelRelease) {
+	mux.HandleFunc("/projects/", func(w http.ResponseWriter, r *http.Request) {
+		base := "http://" + r.Host
+		var sb strings.Builder
+		sb.WriteString("[")
+		for i, rel := range rels {
+			if i > 0 {
+				sb.WriteString(",")
+			}
+			arch := rel.arch
+			if arch == "" {
+				arch = "arm64"
+			}
+			var links []string
+			link := func(name, path string) {
+				links = append(links, fmt.Sprintf(`{"name":%q,"url":%q}`, name, base+path))
+			}
+			if rel.manifest != "" {
+				link("latest-"+arch+".json", rel.manifest)
+			}
+			if rel.sig != "" {
+				link("latest-"+arch+".json"+releasesig.SigSuffix, rel.sig)
+			}
+			if rel.binary != "" {
+				link("evesynapse-"+arch, rel.binary)
+			}
+			fmt.Fprintf(&sb, `{"tag_name":%q,"upcoming_release":false,"assets":{"links":[%s]}}`,
+				rel.tag, strings.Join(links, ","))
+		}
+		sb.WriteString("]")
+		_, _ = io.WriteString(w, sb.String())
+	})
 }
 
 // trustTestKey has the updater under test trust a key made for this
@@ -266,9 +361,10 @@ func TestReleaseUpdateUpToDate(t *testing.T) {
 	bare := strings.TrimPrefix(testVersion, "v")
 	mux := http.NewServeMux()
 	publish(mux, "/latest-arm64.json", manifestJSON(bare, "arm64", strings.Repeat("0", 64)), key)
+	serveChannel(mux, channelRelease{tag: testVersion, manifest: "/latest-arm64.json", sig: "/latest-arm64.json" + releasesig.SigSuffix, binary: "/evesynapse-arm64"})
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
-	withReleaseBase(t, srv.URL)
+	withReleaseAPI(t, srv.URL)
 
 	dir := t.TempDir()
 	target := filepath.Join(dir, "evesynapse")
@@ -300,9 +396,10 @@ func TestReleaseUpdateInstallsNewer(t *testing.T) {
 	mux := http.NewServeMux()
 	publish(mux, "/latest-arm64.json", manifestJSON("9.9.9.9", "arm64", sum), key)
 	serve(mux, "/evesynapse-arm64", fresh)
+	serveChannel(mux, channelRelease{tag: "v9.9.9.9", manifest: "/latest-arm64.json", sig: "/latest-arm64.json" + releasesig.SigSuffix, binary: "/evesynapse-arm64"})
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
-	withReleaseBase(t, srv.URL)
+	withReleaseAPI(t, srv.URL)
 
 	dir := t.TempDir()
 	target := filepath.Join(dir, "evesynapse")
@@ -345,9 +442,10 @@ func TestReleaseUpdateX86Alias(t *testing.T) {
 	mux := http.NewServeMux()
 	publish(mux, "/latest-amd64.json", manifestJSON("9.9.9.9", "amd64", sum), key)
 	serve(mux, "/evesynapse-amd64", fresh)
+	serveChannel(mux, channelRelease{tag: "v9.9.9.9", arch: "amd64", manifest: "/latest-amd64.json", sig: "/latest-amd64.json" + releasesig.SigSuffix, binary: "/evesynapse-amd64"})
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
-	withReleaseBase(t, srv.URL)
+	withReleaseAPI(t, srv.URL)
 
 	dir := t.TempDir()
 	target := filepath.Join(dir, "evesynapse")
@@ -367,8 +465,11 @@ func TestReleaseUpdateX86Alias(t *testing.T) {
 }
 
 // TestReleaseUpdateLeavesDevBuildsAlone: a development build that
-// ends up published as the latest release is never installed by a
-// plain -update, whatever its number — nothing is even downloaded.
+// ends up published under a plain release tag — its manifest
+// naming the development version — is never installed by a plain
+// -update, whatever its number: nothing is even downloaded. The
+// channel's own selection already keeps -dev tags out; this is
+// the guard behind it, on the signed manifest itself.
 func TestReleaseUpdateLeavesDevBuildsAlone(t *testing.T) {
 	key := trustTestKey(t)
 	fresh := fakeELF(elfMachineAArch64, updateMinBytes+100)
@@ -383,9 +484,10 @@ func TestReleaseUpdateLeavesDevBuildsAlone(t *testing.T) {
 		downloads.Add(1)
 		_, _ = w.Write(fresh)
 	})
+	serveChannel(mux, channelRelease{tag: "v9.9.9.9", manifest: "/latest-arm64.json", sig: "/latest-arm64.json" + releasesig.SigSuffix, binary: "/evesynapse-arm64"})
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
-	withReleaseBase(t, srv.URL)
+	withReleaseAPI(t, srv.URL)
 
 	dir := t.TempDir()
 	target := filepath.Join(dir, "evesynapse")
@@ -410,7 +512,7 @@ func TestReleaseUpdateLeavesDevBuildsAlone(t *testing.T) {
 	}
 }
 
-// withReleaseAPI points the dev channel's release listing at a
+// withReleaseAPI points the updater's release listing at a
 // test server for the duration of one test.
 func withReleaseAPI(t *testing.T, url string) {
 	t.Helper()
@@ -419,33 +521,27 @@ func withReleaseAPI(t *testing.T, url string) {
 	t.Cleanup(func() { releaseAPIBaseURL = old })
 }
 
-// devListing is the GitHub release listing, newest first: a plain
-// release, then the development release the -dev channel is after.
-// Each asset is served by the test server under the given prefix
-// ("" for the plain release, "/dev" for the development one). The
-// development release's signature is left out of its assets when
-// devSigned is false.
-func devListing(base string, devSigned bool) string {
-	assets := func(prefix string, signed bool) string {
-		names := []string{"latest-arm64.json", "evesynapse-arm64"}
-		if signed {
-			names = append(names, "latest-arm64.json"+releasesig.SigSuffix)
-		}
-		var list []string
-		for _, name := range names {
-			list = append(list, fmt.Sprintf(`{"name":%q,"browser_download_url":%q}`, name, base+prefix+"/"+name))
-		}
-		return strings.Join(list, ",")
+// devChannel registers the two-release channel the -dev tests
+// run against: a plain release and the development release the
+// -dev channel is after, their files served under "" and "/dev"
+// respectively. The development release's signature is left out
+// of its assets when devSigned is false.
+func devChannel(mux *http.ServeMux, devSigned bool) {
+	devSig := ""
+	if devSigned {
+		devSig = "/dev/latest-arm64.json" + releasesig.SigSuffix
 	}
-	return fmt.Sprintf(`[{"tag_name":"v9.9.9.8","assets":[%s]},{"tag_name":"v9.9.9.9-dev","assets":[%s]}]`,
-		assets("", true), assets("/dev", devSigned))
+	serveChannel(mux,
+		channelRelease{tag: "v9.9.9.8", manifest: "/latest-arm64.json", sig: "/latest-arm64.json" + releasesig.SigSuffix, binary: "/evesynapse-arm64"},
+		channelRelease{tag: "v9.9.9.9-dev", manifest: "/dev/latest-arm64.json", sig: devSig, binary: "/dev/evesynapse-arm64"},
+	)
 }
 
 // TestDevUpdateInstallsTheDevReleasesOwnBinary: -update -dev takes
 // the manifest, its signature and the binary from the same -dev
-// release. The release channel's "latest" binary is a different
-// build here, so downloading from there — what -dev first did —
-// could only ever fail the dev manifest's checksum.
+// release. The plain release's binary is a different build here,
+// so downloading from there — what -dev first did — could only
+// ever fail the dev manifest's checksum.
 func TestDevUpdateInstallsTheDevReleasesOwnBinary(t *testing.T) {
 	key := trustTestKey(t)
 	devBuild := fakeELF(elfMachineAArch64, updateMinBytes+100)
@@ -454,20 +550,17 @@ func TestDevUpdateInstallsTheDevReleasesOwnBinary(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var srv *httptest.Server
 	mux := http.NewServeMux()
-	mux.HandleFunc("/repos/natemsz/evesynapse/releases", func(w http.ResponseWriter, r *http.Request) {
-		_, _ = io.WriteString(w, devListing(srv.URL, true))
-	})
+	devChannel(mux, true)
 	publish(mux, "/dev/latest-arm64.json", manifestJSON("9.9.9.9-dev", "arm64", sum), key)
 	serve(mux, "/dev/evesynapse-arm64", devBuild)
-	// The release channel's own files: another build entirely.
+	// The plain release's own files: another build entirely.
 	publish(mux, "/latest-arm64.json", manifestJSON("9.9.9.8", "arm64", strings.Repeat("0", 64)), key)
 	serve(mux, "/evesynapse-arm64", releaseBuild)
-	srv = httptest.NewServer(mux)
+	srv := httptest.NewServer(mux)
 	defer srv.Close()
-	withReleaseBase(t, srv.URL)
 	withReleaseAPI(t, srv.URL)
+	t.Setenv("EVESYNAPSE_UPDATE_PROJECT", "")
 	t.Setenv("EVESYNAPSE_UPDATE_REPO", "")
 
 	dir := t.TempDir()
@@ -493,7 +586,7 @@ func TestDevUpdateInstallsTheDevReleasesOwnBinary(t *testing.T) {
 func TestReleaseUpdateServerDown(t *testing.T) {
 	srv := httptest.NewServer(http.NotFoundHandler())
 	defer srv.Close()
-	withReleaseBase(t, srv.URL)
+	withReleaseAPI(t, srv.URL)
 
 	target := filepath.Join(t.TempDir(), "evesynapse")
 	var out, errOut bytes.Buffer
@@ -545,8 +638,8 @@ func attemptUpdate(t *testing.T, mux *http.ServeMux, args ...string) (code int, 
 	t.Helper()
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
-	withReleaseBase(t, srv.URL)
 	withReleaseAPI(t, srv.URL)
+	t.Setenv("EVESYNAPSE_UPDATE_PROJECT", "")
 	t.Setenv("EVESYNAPSE_UPDATE_REPO", "")
 
 	dir := t.TempDir()
@@ -592,7 +685,11 @@ func TestReleaseUpdateRefusesWhatItCannotVerify(t *testing.T) {
 		// publish puts a release on the channel. key is the half of the
 		// trusted key that signs; stranger is a key nobody trusts.
 		publish func(mux *http.ServeMux, key, stranger ed25519.PrivateKey) (served newerRelease)
-		want    string
+		// listed is whether the release carries its signature
+		// among its files; an unlisted signature does not count,
+		// however the server would answer for it.
+		listed bool
+		want   string
 	}{
 		{
 			name: "not signed",
@@ -608,7 +705,8 @@ func TestReleaseUpdateRefusesWhatItCannotVerify(t *testing.T) {
 				publish(mux, "/latest-arm64.json", forged.manifest, stranger)
 				return forged
 			},
-			want: "doesn't check out",
+			listed: true,
+			want:   "doesn't check out",
 		},
 		{
 			// The genuine release's signature, kept, with the manifest
@@ -619,7 +717,8 @@ func TestReleaseUpdateRefusesWhatItCannotVerify(t *testing.T) {
 				serve(mux, "/latest-arm64.json"+releasesig.SigSuffix, signedBy(key, genuine.manifest))
 				return forged
 			},
-			want: "doesn't check out",
+			listed: true,
+			want:   "doesn't check out",
 		},
 		{
 			name: "the version raised after signing",
@@ -629,7 +728,8 @@ func TestReleaseUpdateRefusesWhatItCannotVerify(t *testing.T) {
 				serve(mux, "/latest-arm64.json"+releasesig.SigSuffix, signedBy(key, older))
 				return genuine
 			},
-			want: "doesn't check out",
+			listed: true,
+			want:   "doesn't check out",
 		},
 		{
 			name: "one byte added to the manifest after signing",
@@ -638,7 +738,8 @@ func TestReleaseUpdateRefusesWhatItCannotVerify(t *testing.T) {
 				serve(mux, "/latest-arm64.json"+releasesig.SigSuffix, signedBy(key, genuine.manifest))
 				return genuine
 			},
-			want: "doesn't check out",
+			listed: true,
+			want:   "doesn't check out",
 		},
 		{
 			name: "an error page where the signature should be",
@@ -647,7 +748,8 @@ func TestReleaseUpdateRefusesWhatItCannotVerify(t *testing.T) {
 				serve(mux, "/latest-arm64.json"+releasesig.SigSuffix, page)
 				return genuine
 			},
-			want: "doesn't check out",
+			listed: true,
+			want:   "doesn't check out",
 		},
 		{
 			name: "an empty signature file",
@@ -656,7 +758,8 @@ func TestReleaseUpdateRefusesWhatItCannotVerify(t *testing.T) {
 				serve(mux, "/latest-arm64.json"+releasesig.SigSuffix, nil)
 				return genuine
 			},
-			want: "doesn't check out",
+			listed: true,
+			want:   "doesn't check out",
 		},
 		{
 			// An unsigned manifest is not believed about anything,
@@ -678,6 +781,11 @@ func TestReleaseUpdateRefusesWhatItCannotVerify(t *testing.T) {
 			}
 			mux := http.NewServeMux()
 			served := tc.publish(mux, key, stranger)
+			sigPath := ""
+			if tc.listed {
+				sigPath = "/latest-arm64.json" + releasesig.SigSuffix
+			}
+			serveChannel(mux, channelRelease{tag: "v9.9.9.9", manifest: "/latest-arm64.json", sig: sigPath, binary: "/evesynapse-arm64"})
 			downloads := countedBuild(mux, "/evesynapse-arm64", served.build)
 
 			code, stdout, stderr := attemptUpdate(t, mux, "-arm64")
@@ -725,6 +833,7 @@ func TestReleaseUpdateRefusesWithoutAReleaseKey(t *testing.T) {
 			withTrustedKeys(t, func() ([]ed25519.PublicKey, error) { return keys(pub) })
 			mux := http.NewServeMux()
 			publish(mux, "/latest-arm64.json", release.manifest, priv)
+			serveChannel(mux, channelRelease{tag: "v9.9.9.9", manifest: "/latest-arm64.json", sig: "/latest-arm64.json" + releasesig.SigSuffix, binary: "/evesynapse-arm64"})
 			downloads := countedBuild(mux, "/evesynapse-arm64", release.build)
 
 			code, stdout, stderr := attemptUpdate(t, mux, "-arm64")
@@ -754,6 +863,7 @@ func TestReleaseUpdateNeverGoesBackwards(t *testing.T) {
 	older.manifest = manifestJSON("1.4.2.002", "arm64", older.sum) // just behind testVersion
 	mux := http.NewServeMux()
 	publish(mux, "/latest-arm64.json", older.manifest, key)
+	serveChannel(mux, channelRelease{tag: "v1.4.2.002", manifest: "/latest-arm64.json", sig: "/latest-arm64.json" + releasesig.SigSuffix, binary: "/evesynapse-arm64"})
 	downloads := countedBuild(mux, "/evesynapse-arm64", older.build)
 
 	code, stdout, stderr := attemptUpdate(t, mux, "-arm64")
@@ -777,6 +887,7 @@ func TestReleaseUpdateRefusesAnotherKindsManifest(t *testing.T) {
 	arm := makeNewerRelease(t, 100)
 	mux := http.NewServeMux()
 	publish(mux, "/latest-amd64.json", arm.manifest, key)
+	serveChannel(mux, channelRelease{tag: "v9.9.9.9", arch: "amd64", manifest: "/latest-amd64.json", sig: "/latest-amd64.json" + releasesig.SigSuffix, binary: "/evesynapse-amd64"})
 	downloads := countedBuild(mux, "/evesynapse-amd64", arm.build)
 
 	code, stdout, stderr := attemptUpdate(t, mux, "-x86")
@@ -826,6 +937,7 @@ func TestReleaseUpdateDuringAKeyReplacement(t *testing.T) {
 			mux := http.NewServeMux()
 			serve(mux, "/latest-arm64.json", []byte(release.manifest))
 			serve(mux, "/latest-arm64.json"+releasesig.SigSuffix, tc.sig)
+			serveChannel(mux, channelRelease{tag: "v9.9.9.9", manifest: "/latest-arm64.json", sig: "/latest-arm64.json" + releasesig.SigSuffix, binary: "/evesynapse-arm64"})
 			downloads := countedBuild(mux, "/evesynapse-arm64", release.build)
 
 			if !tc.install {
@@ -837,7 +949,7 @@ func TestReleaseUpdateDuringAKeyReplacement(t *testing.T) {
 			}
 			srv := httptest.NewServer(mux)
 			defer srv.Close()
-			withReleaseBase(t, srv.URL)
+			withReleaseAPI(t, srv.URL)
 			target := filepath.Join(t.TempDir(), "evesynapse")
 			writeTestFile(t, target, []byte("old build"), 0o755)
 			var out, errOut bytes.Buffer
@@ -874,6 +986,7 @@ func TestReleaseUpdateSignatureThatCannotBeFetched(t *testing.T) {
 			mux := http.NewServeMux()
 			serve(mux, "/latest-arm64.json", []byte(release.manifest))
 			mux.HandleFunc("/latest-arm64.json"+releasesig.SigSuffix, handler)
+			serveChannel(mux, channelRelease{tag: "v9.9.9.9", manifest: "/latest-arm64.json", sig: "/latest-arm64.json" + releasesig.SigSuffix, binary: "/evesynapse-arm64"})
 			downloads := countedBuild(mux, "/evesynapse-arm64", release.build)
 
 			code, stdout, stderr := attemptUpdate(t, mux, "-arm64")
@@ -940,9 +1053,7 @@ func TestDevUpdateRefusesWhatItCannotVerify(t *testing.T) {
 				t.Fatal(err)
 			}
 			mux := http.NewServeMux()
-			mux.HandleFunc("/repos/natemsz/evesynapse/releases", func(w http.ResponseWriter, r *http.Request) {
-				_, _ = io.WriteString(w, devListing("http://"+r.Host, tc.listed))
-			})
+			devChannel(mux, tc.listed)
 			tc.publish(mux, key, stranger)
 			downloads := countedBuild(mux, "/dev/evesynapse-arm64", dev.build)
 			// The plain release beside it is in perfect order.
@@ -1270,5 +1381,94 @@ func TestRunUpdateRestartsRunningServer(t *testing.T) {
 	}
 	if pidfile.Alive(sleeper.Process.Pid) {
 		t.Fatal("the 'server' process is still alive after the restart hand-off")
+	}
+}
+
+func TestUpdateProvider(t *testing.T) {
+	t.Setenv("EVESYNAPSE_UPDATE_PROVIDER", "")
+	if got := updateProvider(); got != "gitlab" {
+		t.Fatalf("default provider = %q, want gitlab", got)
+	}
+	t.Setenv("EVESYNAPSE_UPDATE_PROVIDER", " Mirror ")
+	if got := updateProvider(); got != "mirror" {
+		t.Fatalf("provider = %q, want mirror", got)
+	}
+}
+
+func TestGitHubStableAssets(t *testing.T) {
+	t.Setenv("EVESYNAPSE_UPDATE_PROVIDER", "github")
+	t.Setenv("EVESYNAPSE_UPDATE_REPO", "someone/evesynapse")
+	m, s, b, err := latestReleaseAssets(context.Background(), "arm64", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	base := "https://github.com/someone/evesynapse/releases/latest/download"
+	if m != base+"/latest-arm64.json" || s != base+"/latest-arm64.json.sig" || b != base+"/evesynapse-arm64" {
+		t.Fatalf("stable assets = %q, %q, %q", m, s, b)
+	}
+}
+
+func TestGitHubDevAssets(t *testing.T) {
+	t.Setenv("EVESYNAPSE_UPDATE_PROVIDER", "github")
+	t.Setenv("EVESYNAPSE_UPDATE_REPO", "someone/evesynapse")
+	t.Setenv("EVESYNAPSE_UPDATE_API_URL", "")
+	mk := func(tag string, draft bool, signed bool) map[string]any {
+		assets := []map[string]string{
+			{"name": "latest-arm64.json", "browser_download_url": "https://dl.example/" + tag + "/latest-arm64.json"},
+			{"name": "evesynapse-arm64", "browser_download_url": "https://dl.example/" + tag + "/evesynapse-arm64"},
+		}
+		if signed {
+			assets = append(assets, map[string]string{"name": "latest-arm64.json.sig", "browser_download_url": "https://dl.example/" + tag + "/latest-arm64.json.sig"})
+		}
+		return map[string]any{"tag_name": tag, "draft": draft, "assets": assets}
+	}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/repos/someone/evesynapse/releases" {
+			http.NotFound(w, r)
+			return
+		}
+		_ = json.NewEncoder(w).Encode([]map[string]any{
+			mk("v0.8.0.0", false, true),
+			mk("v0.8.1.0-dev", false, true),
+			mk("v0.8.2.0-dev", true, true),
+			mk("v0.8.0.5-dev", false, true),
+		})
+	}))
+	defer srv.Close()
+	old := releaseGitHubAPIBaseURL
+	releaseGitHubAPIBaseURL = srv.URL
+	t.Cleanup(func() { releaseGitHubAPIBaseURL = old })
+	m, s, b, err := latestReleaseAssets(context.Background(), "arm64", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m != "https://dl.example/v0.8.1.0-dev/latest-arm64.json" || s != "https://dl.example/v0.8.1.0-dev/latest-arm64.json.sig" || b != "https://dl.example/v0.8.1.0-dev/evesynapse-arm64" {
+		t.Fatalf("dev assets = %q, %q, %q; want the v0.8.1.0-dev release's", m, s, b)
+	}
+}
+
+func TestMirrorAssets(t *testing.T) {
+	t.Setenv("EVESYNAPSE_UPDATE_PROVIDER", "mirror")
+	t.Setenv("EVESYNAPSE_UPDATE_MIRROR_URL", "https://mirror.example/releases/")
+	m, s, b, err := latestReleaseAssets(context.Background(), "amd64", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m != "https://mirror.example/releases/latest-amd64.json" || s != m+".sig" || b != "https://mirror.example/releases/latest/evesynapse-amd64" {
+		t.Fatalf("stable mirror assets = %q, %q, %q", m, s, b)
+	}
+	m, s, b, err = latestReleaseAssets(context.Background(), "amd64", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m != "https://mirror.example/releases/latest-dev-amd64.json" || s != m+".sig" || b != "https://mirror.example/releases/latest-dev/evesynapse-amd64" {
+		t.Fatalf("dev mirror assets = %q, %q, %q", m, s, b)
+	}
+}
+
+func TestUnknownProvider(t *testing.T) {
+	t.Setenv("EVESYNAPSE_UPDATE_PROVIDER", "carrier-pigeon")
+	if _, _, _, err := latestReleaseAssets(context.Background(), "arm64", false); err == nil {
+		t.Fatal("an unknown provider was accepted")
 	}
 }

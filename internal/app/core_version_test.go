@@ -59,7 +59,7 @@ func TestVersionFileAndFooter(t *testing.T) {
 	cookie := sessionCookie(t, app, user.ID, fixtureCharA, "Fixture Ceo")
 
 	_, body := getPage(t, app, cookie, "/market/")
-	mustContain(t, "/market/ footer", body, `<a href="https://github.com/natemsz/evesynapse" target="_blank" rel="noopener noreferrer">EveSynapse</a> <span class="version-number">`+appVersion+`</span> · Made in Seattle, WA by <a href="https://natems.dev" target="_blank" rel="noopener noreferrer">natemsz</a>`)
+	mustContain(t, "/market/ footer", body, `<a href="https://gitlab.com/natemsz/evesynapse" target="_blank" rel="noopener noreferrer">EveSynapse</a> <span class="version-number">`+appVersion+`</span> · Made in Seattle, WA by <a href="https://natems.dev" target="_blank" rel="noopener noreferrer">natemsz</a>`)
 	if strings.Contains(body, "0.2.0") {
 		t.Fatal("footer still shows the old hardcoded version")
 	}

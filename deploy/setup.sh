@@ -16,7 +16,7 @@
 #
 # Usage:
 #   sudo bash deploy/setup.sh
-#   sudo EVESYNAPSE_UPDATE_REPO=you/evesynapse bash deploy/setup.sh   # install from your fork
+#   sudo EVESYNAPSE_UPDATE_PROJECT=you/evesynapse bash deploy/setup.sh   # install from your fork
 #   sudo EVESYNAPSE_BINARY=./bin/evesynapse bash deploy/setup.sh      # install a build you made
 #   sudo EVESYNAPSE_TUNE_POSTGRES=0 bash deploy/setup.sh             # leave PostgreSQL's memory settings alone
 #
@@ -25,7 +25,15 @@
 # install from a fork, run the fork's copy of this script.
 set -euo pipefail
 
-REPO="${EVESYNAPSE_UPDATE_REPO:-natemsz/evesynapse}"
+# The GitLab project releases are fetched from. An install
+# made before EVESYNAPSE_UPDATE_PROJECT existed carries
+# EVESYNAPSE_UPDATE_REPO from the GitHub years; the project
+# kept its path in the move, so that value is read as the
+# same project's path when the new setting is absent.
+PROJECT="${EVESYNAPSE_UPDATE_PROJECT:-${EVESYNAPSE_UPDATE_REPO:-natemsz/evesynapse}}"
+API_BASE="${EVESYNAPSE_UPDATE_API_URL:-https://gitlab.com/api/v4}"
+API_BASE="${API_BASE%/}"
+ENC_PROJECT="$(printf '%s' "$PROJECT" | sed 's|/|%2F|g')"
 INSTALL_DIR=/opt/evesynapse
 SERVICE_USER=evesynapse
 # The link lives in /usr/bin, not /usr/local/bin: updates always
@@ -107,31 +115,82 @@ verify_release_signature() {
   return 1
 }
 
+# pick_release_assets RELEASES_JSON: choose the release a
+# fresh install takes — the greatest version whose tag
+# carries no suffix, among the releases that are out (not
+# upcoming) — and set MANIFEST_URL, SIG_URL, BINARY_URL and
+# RELEASE_TAG from that one release's asset links. GitLab
+# orders its list by release date and knows nothing of
+# EveSynapse's channels, so the choice is made here, the
+# same way `evesynapse -update` makes it.
+pick_release_assets() {
+  local json="$1" tsv tag up mu su bu best="" bestver=""
+  tsv="$TMP/releases.tsv"
+  awk -v arch="$ARCH" '
+    BEGIN { RS = "\"tag_name\":" }
+    NR > 1 {
+      rec = $0
+      if (!match(rec, /"[^"]*"/)) next
+      tag = substr(rec, RSTART + 1, RLENGTH - 2)
+      upcoming = (rec ~ /"upcoming_release": *true/) ? 1 : 0
+      mu = ""; su = ""; bu = ""
+      n = split(rec, parts, "\"name\":\"")
+      for (i = 2; i <= n; i++) {
+        name = parts[i]; sub(/".*/, "", name)
+        if (index(parts[i], "\",\"url\":\"") == 0) continue
+        url = parts[i]; sub(/^[^"]*","url":"/, "", url); sub(/".*/, "", url)
+        if (name == "latest-" arch ".json") mu = url
+        else if (name == "latest-" arch ".json.sig") su = url
+        else if (name == "evesynapse-" arch) bu = url
+      }
+      printf "%s\t%d\t%s\t%s\t%s\n", tag, upcoming, mu, su, bu
+    }' "$json" > "$tsv"
+  while IFS=$'\t' read -r tag up mu su bu; do
+    [ "$up" = "0" ] || continue
+    case "$tag" in
+      *-*) continue ;; # a suffixed tag is a development build
+    esac
+    [ -n "$mu" ] && [ -n "$bu" ] || continue
+    if [ -z "$best" ] || [ "$(printf '%s\n%s\n' "$bestver" "${tag#v}" | sort -V | tail -1)" = "${tag#v}" ]; then
+      best="$tag"; bestver="${tag#v}"
+      MANIFEST_URL="$mu"; SIG_URL="$su"; BINARY_URL="$bu"
+    fi
+  done < "$tsv"
+  [ -n "$best" ] || return 1
+  RELEASE_TAG="$best"
+}
+
 # --- 1. Get the binary: a signed release, verified against its checksum ---
 if [ -n "${EVESYNAPSE_BINARY:-}" ]; then
   [ -f "$EVESYNAPSE_BINARY" ] || die "EVESYNAPSE_BINARY=$EVESYNAPSE_BINARY does not exist"
   cp "$EVESYNAPSE_BINARY" "$TMP/evesynapse"
   echo "Installing your local build from $EVESYNAPSE_BINARY (you built it, so no checksum check)."
 else
-  BASE="https://github.com/$REPO/releases/latest/download"
-  echo "Downloading the latest $ARCH build from $REPO..."
-  curl -fsSL "$BASE/latest-$ARCH.json" -o "$TMP/manifest.json" || die "could not reach the latest release of $REPO"
+  echo "Downloading the latest $ARCH build from $PROJECT..."
+  curl -fsSL "$API_BASE/projects/$ENC_PROJECT/releases?per_page=100" -o "$TMP/releases.json" \
+    || die "could not reach the releases of $PROJECT"
+  pick_release_assets "$TMP/releases.json" \
+    || die "no published release of $PROJECT carries a build for this machine; not installing"
+  echo "The latest release is $RELEASE_TAG."
+  curl -fsSL "$MANIFEST_URL" -o "$TMP/manifest.json" || die "could not reach the manifest of $RELEASE_TAG"
   # The signature is checked before anything in the manifest is read
   # and before the build is downloaded.
   if can_check_signatures; then
     KEYS="$REPO_ROOT/internal/releasesig/trusted_keys.pem"
     if [ ! -f "$KEYS" ]; then
-      # Run on its own, outside a checkout: take the key from the repo.
+      # Run on its own, outside a checkout: take the key from the project.
       KEYS="$TMP/trusted_keys.pem"
-      curl -fsSL "https://raw.githubusercontent.com/$REPO/main/internal/releasesig/trusted_keys.pem" -o "$KEYS" \
-        || die "could not fetch the release key of $REPO, so its release cannot be checked; not installing"
+      curl -fsSL "https://gitlab.com/$PROJECT/-/raw/main/internal/releasesig/trusted_keys.pem" -o "$KEYS" \
+        || die "could not fetch the release key of $PROJECT, so its release cannot be checked; not installing"
     fi
     grep -q '^-----BEGIN PUBLIC KEY-----' "$KEYS" \
       || die "$KEYS holds no release key, so the release cannot be checked; not installing"
-    curl -fsSL "$BASE/latest-$ARCH.json.sig" -o "$TMP/manifest.json.sig" \
-      || die "the latest release of $REPO is not signed (or its signature could not be fetched); not installing"
+    [ -n "$SIG_URL" ] \
+      || die "the latest release of $PROJECT is not signed; not installing"
+    curl -fsSL "$SIG_URL" -o "$TMP/manifest.json.sig" \
+      || die "the signature of $RELEASE_TAG could not be fetched; not installing"
     verify_release_signature "$TMP/manifest.json" "$TMP/manifest.json.sig" "$KEYS" \
-      || die "the latest release of $REPO is not signed with the release key in $KEYS; not installing. (To install from a fork, run the fork's own copy of this script.)"
+      || die "the latest release of $PROJECT is not signed with the release key in $KEYS; not installing. (To install from a fork, run the fork's own copy of this script.)"
     echo "The release's signature checks out."
   else
     echo "NOTE: this machine's OpenSSL cannot check Ed25519 signatures (that takes OpenSSL 3.0 or newer),"
@@ -139,8 +198,8 @@ else
   fi
   VERSION="$(sed -n 's/.*"version":"\([^"]*\)".*/\1/p' "$TMP/manifest.json")"
   SHA="$(sed -n 's/.*"sha256":"\([0-9a-f]*\)".*/\1/p' "$TMP/manifest.json")"
-  [ -n "$SHA" ] || die "the latest release of $REPO has no readable checksum; not installing"
-  curl -fsSL "$BASE/evesynapse-$ARCH" -o "$TMP/evesynapse"
+  [ -n "$SHA" ] || die "the latest release of $PROJECT has no readable checksum; not installing"
+  curl -fsSL "$BINARY_URL" -o "$TMP/evesynapse"
   echo "$SHA  $TMP/evesynapse" | sha256sum -c - >/dev/null || die "the download did not match its published checksum; not installing"
   echo "Verified EveSynapse v$VERSION ($ARCH) against its published checksum."
 fi
@@ -260,11 +319,11 @@ else
   if [ -f "$REPO_ROOT/.env.example" ]; then
     cp "$REPO_ROOT/.env.example" "$INSTALL_DIR/.env"
   else
-    curl -fsSL "https://raw.githubusercontent.com/$REPO/main/.env.example" -o "$INSTALL_DIR/.env" \
+    curl -fsSL "https://gitlab.com/$PROJECT/-/raw/main/.env.example" -o "$INSTALL_DIR/.env" \
       || die "could not fetch .env.example; create $INSTALL_DIR/.env by hand (see the README)"
   fi
-  if ! grep -q '^EVESYNAPSE_UPDATE_REPO=' "$INSTALL_DIR/.env"; then
-    printf '\n# Which GitHub repo (owner/repo) the updater checks for new versions.\nEVESYNAPSE_UPDATE_REPO=%s\n' "$REPO" >> "$INSTALL_DIR/.env"
+  if ! grep -q '^EVESYNAPSE_UPDATE_PROJECT=' "$INSTALL_DIR/.env"; then
+    printf '\n# Which GitLab project (group/project) the updater checks for new versions.\nEVESYNAPSE_UPDATE_PROJECT=%s\n' "$PROJECT" >> "$INSTALL_DIR/.env"
   fi
   # A fresh install encrypts the EVE tokens it stores from the
   # first sign-in on.
@@ -444,7 +503,7 @@ if command -v systemctl >/dev/null; then
   if [ -f "$SCRIPT_DIR/evesynapse.service" ]; then
     cp "$SCRIPT_DIR/evesynapse.service" /etc/systemd/system/evesynapse.service
   else
-    curl -fsSL "https://raw.githubusercontent.com/$REPO/main/deploy/evesynapse.service" -o /etc/systemd/system/evesynapse.service
+    curl -fsSL "https://gitlab.com/$PROJECT/-/raw/main/deploy/evesynapse.service" -o /etc/systemd/system/evesynapse.service
   fi
   systemctl daemon-reload
   systemctl enable evesynapse >/dev/null 2>&1 || true

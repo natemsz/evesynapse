@@ -259,6 +259,9 @@ func TestParsePrivateKeys(t *testing.T) {
 		"Windows line endings":       strings.ReplaceAll(a, "\n", "\r\n"),
 		"no final newline":           strings.TrimRight(a, "\n"),
 		"blank lines around the key": "\n\n" + a + "\n\n",
+		// The CI variable store masks single-line values only,
+		// so the key is kept there base64-encoded, whole.
+		"base64-encoded": base64.StdEncoding.EncodeToString([]byte(a)),
 	} {
 		keys, err := ParsePrivateKeys([]byte(in))
 		if err != nil || len(keys) != 1 || !keys[0].Equal(privA) {

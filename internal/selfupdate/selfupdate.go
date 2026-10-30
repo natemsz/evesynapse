@@ -520,7 +520,7 @@ func githubReleaseAssets(ctx context.Context, arch string, dev bool) (manifestUR
 
 // releaseMirrorBaseURL is the project's own release mirror. A
 // var so tests can point it at a local server.
-var releaseMirrorBaseURL = "https://synap6.io/releases"
+var releaseMirrorBaseURL = "https://cdn.synap6.io"
 
 // updateMirrorBase resolves the mirror's root, honouring
 // EVESYNAPSE_UPDATE_MIRROR_URL for a mirror served elsewhere.

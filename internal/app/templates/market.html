@@ -434,27 +434,7 @@
 </div>
 {{end}}
 
-{{if .Market.YourOrders}}
-<section class="foldable">
-<h3>Your orders</h3>
-<div class="tw">
-<table>
-  <thead><tr><th>Character</th><th>Item</th><th>Price</th><th>Location</th><th>Status</th></tr></thead>
-  <tbody>
-  {{range .Market.YourOrders}}
-    <tr>
-      <td>{{charLink $.ViewerChars .CharID .Char}}</td>
-      <td>{{itemLink .TypeID .Item}}</td>
-      <td>{{.Price}}</td>
-      <td>{{placeLink .Loc}}</td>
-      <td>{{if .Bad}}<strong>{{.Status}}</strong>{{else}}{{.Status}}{{end}}</td>
-    </tr>
-  {{end}}
-  </tbody>
-</table>
-</div>
-</section>
-{{end}}
+{{template "your-orders" $.YourOrdersBlock}}
 {{end}}
 {{end}}
 

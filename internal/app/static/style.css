@@ -2429,12 +2429,12 @@ tr.fleet-detail > td { background: #120d09; border-bottom: 1px solid color-mix(i
   height: 0.45rem;
   border-radius: 2px;
 }
-.legend-price { height: 2px; background: #ffb84d; }
+.legend-price { height: 2px; background: var(--success); }
 .legend-volume { background: #d63c14; }
 /* Net worth chart colours (see home_networth_chart.go). */
-.legend-isk { background: #ffb84d; opacity: 0.9; }
-.legend-assets { background: #ff6a1a; opacity: 0.9; }
-.legend-total { height: 2px; background: #ffd27a; }
+.legend-isk { background: var(--success); opacity: 0.9; }
+.legend-assets { background: var(--accent); opacity: 0.9; }
+.legend-total { height: 2px; background: var(--gold); }
 .legend-note { margin-left: auto; color: #9d8668; }
 .pchart text {
   font-family: "JetBrains Mono", ui-monospace, monospace;
@@ -2443,7 +2443,7 @@ tr.fleet-detail > td { background: #120d09; border-bottom: 1px solid color-mix(i
 .chart-gridline { stroke: #241708; stroke-width: 1; }
 .volume-gridline { stroke: #2a1408; stroke-dasharray: 3 3; }
 .chart-axis-label {
-  fill: #c9a06a;
+  fill: var(--note);
   paint-order: stroke;
   stroke: #151515;
   stroke-width: 3px;
@@ -2451,8 +2451,20 @@ tr.fleet-detail > td { background: #120d09; border-bottom: 1px solid color-mix(i
 }
 .volume-axis { fill: #d98a6a; text-anchor: end; }
 .chart-date-tick { fill: #9d8668; }
+/* Chart line, dot and band colors ride the theme tokens (values
+   equal to the hexes they replace on the default theme), so the
+   light theme and the faction schemes recolor every chart the
+   same way the market trend charts already follow them. CSS wins
+   over the SVG presentation attributes the templates used to
+   carry, and over the band fills the Go chart builders set. */
+.pchart .chart-line { stroke: var(--success); }
+.pchart .chart-line-stacked { stroke: var(--gold); }
+.pchart .chart-dot { fill: var(--success); }
+.pchart .chart-dot-stacked { fill: var(--gold); }
+.pchart .chart-band.band-isk { fill: var(--success); }
+.pchart .chart-band.band-assets { fill: var(--accent); }
 .pchart .cdot {
-  fill: #ffb84d;
+  fill: var(--success);
   fill-opacity: 0;
   stroke: none;
   cursor: pointer;
@@ -2461,12 +2473,12 @@ tr.fleet-detail > td { background: #120d09; border-bottom: 1px solid color-mix(i
 .pchart .cdot:focus {
   outline: none;
   fill-opacity: 0.22;
-  stroke: #ffd27a;
+  stroke: var(--gold);
   stroke-width: 1.5;
 }
 .pchart .cdot.is-selected {
   fill-opacity: 0.28;
-  stroke: #ffd27a;
+  stroke: var(--gold);
   stroke-width: 1.5;
 }
 .ctip {

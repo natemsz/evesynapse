@@ -13,8 +13,8 @@
   <svg viewBox="0 0 {{$c.Width}} {{$c.Height}}" width="100%" role="img" aria-label="{{$c.Label}}">
     {{range $c.Ticks}}<line class="chart-gridline price-gridline {{.Class}}" x1="0" y1="{{.Y}}" x2="{{$c.Width}}" y2="{{.Y}}"/>{{end}}
     {{range $c.Bands}}<polygon class="chart-band {{.Class}}" points="{{.Points}}" fill="{{.Fill}}" fill-opacity="{{.Opacity}}" stroke="none" aria-hidden="true"/>{{end}}
-    {{if $c.Points}}<polyline class="chart-line{{if $c.Stacked}} chart-line-stacked{{end}}" points="{{$c.Points}}" fill="none" stroke="{{if $c.Stacked}}#ffd27a{{else}}#ffb84d{{end}}" stroke-width="1.5"/>{{end}}
-    {{range $c.Dots}}<circle class="chart-dot{{if $c.Stacked}} chart-dot-stacked{{end}}" cx="{{.X}}" cy="{{.Y}}" r="1.6" fill="{{if $c.Stacked}}#ffd27a{{else}}#ffb84d{{end}}"/>{{end}}
+    {{if $c.Points}}<polyline class="chart-line{{if $c.Stacked}} chart-line-stacked{{end}}" points="{{$c.Points}}" fill="none" stroke-width="1.5"/>{{end}}
+    {{range $c.Dots}}<circle class="chart-dot{{if $c.Stacked}} chart-dot-stacked{{end}}" cx="{{.X}}" cy="{{.Y}}" r="1.6"/>{{end}}
     {{range $c.Dots}}<circle class="cdot{{if $c.Stacked}} cdot-stacked{{end}}" cx="{{.X}}" cy="{{.Y}}" r="9" tabindex="0" aria-label="{{.Title}}" data-date="{{.Date}}" data-balance="{{.Balance}}"{{if $c.Stacked}} data-isk="{{.ISK}}" data-assets="{{.Assets}}"{{end}}></circle>{{end}}
     {{range $c.Ticks}}<text class="chart-axis-label price-axis {{.Class}}" x="2" y="{{.LabelY}}">{{.Label}}</text>{{end}}
     {{range $c.DateTicks}}<text class="chart-axis-label chart-date-tick {{.Class}}" x="{{.X}}" y="{{$c.Height}}" text-anchor="{{.Anchor}}">{{.Label}}</text>{{end}}

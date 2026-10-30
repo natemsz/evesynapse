@@ -32,8 +32,8 @@
     {{if $c.OrdersPoints}}<polyline class="chart-orders" points="{{$c.OrdersPoints}}"/>{{end}}
     {{if $c.MA20Points}}<polyline class="chart-ma20" points="{{$c.MA20Points}}"/>{{end}}
     {{if $c.MA5Points}}<polyline class="chart-ma5" points="{{$c.MA5Points}}"/>{{end}}
-    {{if $c.Points}}<polyline class="chart-line" points="{{$c.Points}}" fill="none" stroke="#ffb84d" stroke-width="1.5"/>{{end}}
-    {{range $c.Dots}}<circle class="chart-dot" cx="{{.X}}" cy="{{.Y}}" r="1.6" fill="#ffb84d"/>{{end}}
+    {{if $c.Points}}<polyline class="chart-line" points="{{$c.Points}}" fill="none" stroke-width="1.5"/>{{end}}
+    {{range $c.Dots}}<circle class="chart-dot" cx="{{.X}}" cy="{{.Y}}" r="1.6"/>{{end}}
     {{range $c.Dots}}<circle class="cdot" cx="{{.X}}" cy="{{.Y}}" r="9" tabindex="0" aria-label="{{.Title}}" data-date="{{.Date}}" data-avg="{{.Average}}" data-high="{{.Highest}}" data-low="{{.Lowest}}" data-vol="{{.Volume}}"></circle>{{end}}
     {{range $c.PriceTicks}}<text class="chart-axis-label price-axis {{.Class}}" x="2" y="{{.LabelY}}">{{.Label}}</text>{{end}}
     {{range $c.VolumeTicks}}<text class="chart-axis-label volume-axis {{.Class}}" x="{{$c.Width}}" y="{{.LabelY}}">{{.Label}}</text>{{end}}

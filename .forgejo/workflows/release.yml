@@ -364,7 +364,7 @@ jobs:
   # because the updater matches them by name. An existing
   # release on either forge is left as it is, the rule the
   # Forgejo publish follows. Each leg is gated on its token
-  # secret (GITHUB_TOKEN, GITLAB_TOKEN), the way the mirror
+  # secret (GH_TOKEN, GL_TOKEN), the way the mirror
   # job is gated on its R2 secrets: without one, the leg logs
   # that it is skipped and steps aside. A leg that fails logs
   # it and fails only its own step — the Forgejo release is
@@ -377,8 +377,8 @@ jobs:
     continue-on-error: true
     env:
       VERSION: ${{ needs.release.outputs.version }}
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
+      GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+      GITLAB_TOKEN: ${{ secrets.GL_TOKEN }}
     steps:
       - name: Fetch the built files
         uses: https://code.forgejo.org/forgejo/download-artifact@v4
@@ -392,7 +392,7 @@ jobs:
         continue-on-error: true
         run: |
           if [ -z "${GITHUB_TOKEN:-}" ]; then
-            echo "The GITHUB_TOKEN secret is not set; skipping the GitHub release."
+            echo "The GH_TOKEN secret is not set; skipping the GitHub release."
             exit 0
           fi
           if [ "$VERSION" != "${VERSION%%-*}" ]; then PRERELEASE=true; else PRERELEASE=false; fi
@@ -460,7 +460,7 @@ jobs:
         continue-on-error: true
         run: |
           if [ -z "${GITLAB_TOKEN:-}" ]; then
-            echo "The GITLAB_TOKEN secret is not set; skipping the GitLab release."
+            echo "The GL_TOKEN secret is not set; skipping the GitLab release."
             exit 0
           fi
           GL_API="https://gitlab.com/api/v4"

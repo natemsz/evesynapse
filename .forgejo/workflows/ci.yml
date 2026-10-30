@@ -4,9 +4,12 @@
 # ported separately in release.yml; the GitLab file stays in
 # the tree while GitLab is the fallback forge.
 #
-# Jobs run on the project's own runner (the app box), in the
-# same pinned golang image the GitLab jobs use; the runner's
-# ubuntu-latest label maps to that image.
+# Jobs run on the project's own runner (the app box). The
+# runner's ubuntu-latest label maps to a Node image, because
+# the JavaScript actions (checkout, cache) need Node in the
+# job container; each job then installs the pinned Go
+# toolchain itself, the same Go version the GitLab pipeline's
+# golang image carries.
 
 name: ci
 
@@ -33,11 +36,21 @@ jobs:
             .cache/go-build
             .cache/gomod
           key: go-${{ hashFiles('go.sum') }}
+      - name: Install Go
+        run: |
+          case "$(uname -m)" in
+            aarch64) go_arch=arm64; go_sum="a06e99309dbcbdca1a8ccd2282c3ee146e55930886e26b4f1193269587165f49" ;;
+            *) go_arch=amd64; go_sum="65efbc80fdc1fa2cd2631cad5b481777a68e8725f34e89f50fc6ac714e379b40" ;;
+          esac
+          curl -fsSL -o /tmp/go.tar.gz "https://go.dev/dl/go1.27.3.linux-${go_arch}.tar.gz"
+          echo "$go_sum  /tmp/go.tar.gz" | sha256sum -c -
+          tar -xzf /tmp/go.tar.gz -C /usr/local
+          echo "/usr/local/go/bin" >> "$GITHUB_PATH"
+          /usr/local/go/bin/go version
       - name: Install the toolbox
         run: |
-          apt-get update -qq && apt-get install -y -qq --no-install-recommends curl ca-certificates xz-utils git make python3 >/dev/null
+          apt-get update -qq && apt-get install -y -qq --no-install-recommends curl ca-certificates git make python3 >/dev/null
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
-          curl -fsSL "https://nodejs.org/dist/v22.14.0/node-v22.14.0-linux-$(uname -m | sed -e 's/aarch64/arm64/' -e 's/x86_64/x64/').tar.xz" | tar -xJ -C /usr/local --strip-components=1
           node --version
       # The generated database code (internal/db/sqlc) must
       # match what the pinned sqlc makes of the schema and
@@ -129,6 +142,17 @@ jobs:
             .cache/go-build
             .cache/gomod
           key: go-${{ hashFiles('go.sum') }}
+      - name: Install Go
+        run: |
+          case "$(uname -m)" in
+            aarch64) go_arch=arm64; go_sum="a06e99309dbcbdca1a8ccd2282c3ee146e55930886e26b4f1193269587165f49" ;;
+            *) go_arch=amd64; go_sum="65efbc80fdc1fa2cd2631cad5b481777a68e8725f34e89f50fc6ac714e379b40" ;;
+          esac
+          curl -fsSL -o /tmp/go.tar.gz "https://go.dev/dl/go1.27.3.linux-${go_arch}.tar.gz"
+          echo "$go_sum  /tmp/go.tar.gz" | sha256sum -c -
+          tar -xzf /tmp/go.tar.gz -C /usr/local
+          echo "/usr/local/go/bin" >> "$GITHUB_PATH"
+          /usr/local/go/bin/go version
       - name: Install the toolbox
         run: |
           apt-get update -qq && apt-get install -y -qq --no-install-recommends curl ca-certificates git make python3 >/dev/null
@@ -165,6 +189,17 @@ jobs:
             .cache/go-build
             .cache/gomod
           key: go-${{ hashFiles('go.sum') }}
+      - name: Install Go
+        run: |
+          case "$(uname -m)" in
+            aarch64) go_arch=arm64; go_sum="a06e99309dbcbdca1a8ccd2282c3ee146e55930886e26b4f1193269587165f49" ;;
+            *) go_arch=amd64; go_sum="65efbc80fdc1fa2cd2631cad5b481777a68e8725f34e89f50fc6ac714e379b40" ;;
+          esac
+          curl -fsSL -o /tmp/go.tar.gz "https://go.dev/dl/go1.27.3.linux-${go_arch}.tar.gz"
+          echo "$go_sum  /tmp/go.tar.gz" | sha256sum -c -
+          tar -xzf /tmp/go.tar.gz -C /usr/local
+          echo "/usr/local/go/bin" >> "$GITHUB_PATH"
+          /usr/local/go/bin/go version
       - name: Install the toolbox
         run: |
           apt-get update -qq && apt-get install -y -qq --no-install-recommends curl ca-certificates git make python3 >/dev/null
@@ -217,6 +252,17 @@ jobs:
             .cache/go-build
             .cache/gomod
           key: go-${{ hashFiles('go.sum') }}
+      - name: Install Go
+        run: |
+          case "$(uname -m)" in
+            aarch64) go_arch=arm64; go_sum="a06e99309dbcbdca1a8ccd2282c3ee146e55930886e26b4f1193269587165f49" ;;
+            *) go_arch=amd64; go_sum="65efbc80fdc1fa2cd2631cad5b481777a68e8725f34e89f50fc6ac714e379b40" ;;
+          esac
+          curl -fsSL -o /tmp/go.tar.gz "https://go.dev/dl/go1.27.3.linux-${go_arch}.tar.gz"
+          echo "$go_sum  /tmp/go.tar.gz" | sha256sum -c -
+          tar -xzf /tmp/go.tar.gz -C /usr/local
+          echo "/usr/local/go/bin" >> "$GITHUB_PATH"
+          /usr/local/go/bin/go version
       - name: Install the toolbox
         run: |
           apt-get update -qq && apt-get install -y -qq --no-install-recommends curl ca-certificates git make python3 >/dev/null

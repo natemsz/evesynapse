@@ -242,158 +242,172 @@
     return td;
   }
 
-  // --- the create builder ------------------------------------
-  var newBtn = document.getElementById("mbk-new");
-  var builder = document.getElementById("mbk-builder");
-  if (newBtn && builder) {
-    var regionSel = document.getElementById("mbk-region");
-    var editor = wireEditor(builder, function () { return regionSel.value; });
-    var pickRow = builder.querySelector(".mbk-pickrow");
-    var textlinkRow = builder.querySelector(".mbk-textlink-row");
-    var itemsList = document.getElementById("mbk-items");
-    var actions = document.getElementById("mbk-actions");
-    var naming = document.getElementById("mbk-naming");
-    var nameInput = document.getElementById("mbk-name");
-    var nameErr = document.getElementById("mbk-name-err");
-    var textform = document.getElementById("mbk-textform");
+  // --- wiring -------------------------------------------------
+  // A swapped-in page never re-runs this script, so the wiring
+  // runs once here and again whenever the shell announces new
+  // content. The wired-element guards keep a second pass over
+  // the same DOM from binding anything twice.
+  var wiredBuilder = null;
+  var wiredTbody = null;
+  function init() {
+    // --- the create builder -----------------------------------
+    var newBtn = document.getElementById("mbk-new");
+    var builder = document.getElementById("mbk-builder");
+    if (newBtn && builder && builder !== wiredBuilder) {
+      wiredBuilder = builder;
+          var regionSel = document.getElementById("mbk-region");
+          var editor = wireEditor(builder, function () { return regionSel.value; });
+          var pickRow = builder.querySelector(".mbk-pickrow");
+          var textlinkRow = builder.querySelector(".mbk-textlink-row");
+          var itemsList = document.getElementById("mbk-items");
+          var actions = document.getElementById("mbk-actions");
+          var naming = document.getElementById("mbk-naming");
+          var nameInput = document.getElementById("mbk-name");
+          var nameErr = document.getElementById("mbk-name-err");
+          var textform = document.getElementById("mbk-textform");
 
-    function setNaming(on) {
-      pickRow.hidden = on;
-      textlinkRow.hidden = on;
-      itemsList.hidden = on;
-      actions.hidden = on;
-      textform.hidden = true;
-      naming.hidden = !on;
-      if (on) nameInput.focus();
-    }
-    function closeBuilder() {
-      builder.hidden = true;
-      newBtn.hidden = false;
-      editor.reset();
-      setNaming(false);
-      showErr(nameErr, "");
-      nameInput.value = "";
-    }
-    newBtn.addEventListener("click", function () {
-      builder.hidden = false;
-      newBtn.hidden = true;
-      editor.focus();
-    });
-    document.getElementById("mbk-cancel").addEventListener("click", closeBuilder);
-    document.getElementById("mbk-back").addEventListener("click", function () { setNaming(false); });
-    document.getElementById("mbk-to-name").addEventListener("click", function () {
-      if (!editor.items().length) {
-        editor.error("Add at least one item first.");
-        return;
-      }
-      editor.error("");
-      setNaming(true);
-    });
-    document.getElementById("mbk-textlink").addEventListener("click", function (e) {
-      e.preventDefault();
-      textform.hidden = !textform.hidden;
-    });
-    regionSel.addEventListener("change", function () { editor.refreshPrices(); });
-    document.getElementById("mbk-save").addEventListener("click", function () {
-      var name = nameInput.value.trim();
-      if (!name) {
-        showErr(nameErr, "Give the basket a name.");
-        nameInput.focus();
-        return;
-      }
-      showErr(nameErr, "");
-      postJSON("/market/baskets/api", { name: name, region: parseInt(regionSel.value, 10), items: editor.items() })
-        .then(function (data) {
-          var tbody = document.getElementById("mbk-tbody");
-          var tr = document.createElement("tr");
-          tr.setAttribute("data-mbk-row", data.id);
-          var nameTd = document.createElement("td");
-          var a = document.createElement("a");
-          a.href = "/market/baskets/" + data.id + "/";
-          a.textContent = data.name;
-          nameTd.appendChild(a);
-          var regionTd = document.createElement("td");
-          regionTd.textContent = data.region_name;
-          var countTd = document.createElement("td");
-          countTd.className = "mt-num";
-          countTd.setAttribute("data-mbk-count", "");
-          countTd.textContent = data.items;
-          var worthTd = document.createElement("td");
-          worthTd.className = "mt-num";
-          worthTd.textContent = "—";
-          var yoursTd = document.createElement("td");
-          yoursTd.innerHTML = "<small>Yours</small>";
-          tr.appendChild(nameTd);
-          tr.appendChild(regionTd);
-          tr.appendChild(countTd);
-          tr.appendChild(worthTd);
-          tr.appendChild(yoursTd);
-          tr.appendChild(pencilCell(data.id));
-          tbody.appendChild(tr);
-          closeBuilder();
-        })
-        .catch(function (err) { showErr(nameErr, err.message); });
-    });
-  }
-
-  // --- the per-row editor -------------------------------------
-  var tbody = document.getElementById("mbk-tbody");
-  var template = document.getElementById("mbk-editor-template");
-  if (tbody && template) {
-    tbody.addEventListener("click", function (e) {
-      var btn = e.target.closest("[data-mbk-edit]");
-      if (!btn) return;
-      var id = btn.getAttribute("data-mbk-edit");
-      var row = tbody.querySelector('tr[data-mbk-row="' + id + '"]');
-      if (!row) return;
-      var open = tbody.querySelector('tr[data-mbk-editor-for="' + id + '"]');
-      if (open) {
-        open.remove();
-        return;
-      }
-      fetch("/market/baskets/" + id + "/items.json", { credentials: "same-origin" })
-        .then(function (r) { return r.ok ? r.json() : null; })
-        .then(function (data) {
-          if (!data) return;
-          var er = document.createElement("tr");
-          er.className = "mbk-editor-row";
-          er.setAttribute("data-mbk-editor-for", id);
-          var td = document.createElement("td");
-          td.colSpan = 6;
-          td.appendChild(template.content.cloneNode(true));
-          er.appendChild(td);
-          row.after(er);
-          var root = er.querySelector(".mbk-editor");
-          var ed = wireEditor(root, function () { return data.region; });
-          ed.seed(data.items.map(function (it) {
-            return { id: it.id, name: it.name, qty: it.qty, price: it.price || "" };
-          }));
-          root.querySelector(".mbk-cancel").addEventListener("click", function () { er.remove(); });
-          root.querySelector(".mbk-save").addEventListener("click", function () {
-            postJSON("/market/baskets/" + id + "/api-edit", { items: ed.items() })
-              .then(function (res) {
-                var count = row.querySelector("[data-mbk-count]");
-                if (count) count.textContent = res.items;
-                er.remove();
-              })
-              .catch(function (err) { ed.error(err.message); });
+          function setNaming(on) {
+            pickRow.hidden = on;
+            textlinkRow.hidden = on;
+            itemsList.hidden = on;
+            actions.hidden = on;
+            textform.hidden = true;
+            naming.hidden = !on;
+            if (on) nameInput.focus();
+          }
+          function closeBuilder() {
+            builder.hidden = true;
+            newBtn.hidden = false;
+            editor.reset();
+            setNaming(false);
+            showErr(nameErr, "");
+            nameInput.value = "";
+          }
+          newBtn.addEventListener("click", function () {
+            builder.hidden = false;
+            newBtn.hidden = true;
+            editor.focus();
           });
-          var textlink = root.querySelector(".mbk-textlink");
-          var textform = root.querySelector(".mbk-textform");
-          textform.action = "/market/baskets/" + id + "/edit";
-          textlink.addEventListener("click", function (ev) {
-            ev.preventDefault();
-            if (textform.hidden) {
-              textform.querySelector(".mbk-tf-name").value = data.name;
-              textform.querySelector(".mbk-tf-region").value = data.region;
-              textform.querySelector(".mbk-tf-items").value = data.items.map(function (it) {
-                return it.qty > 1 ? it.name + " " + it.qty : it.name;
-              }).join("\n");
+          document.getElementById("mbk-cancel").addEventListener("click", closeBuilder);
+          document.getElementById("mbk-back").addEventListener("click", function () { setNaming(false); });
+          document.getElementById("mbk-to-name").addEventListener("click", function () {
+            if (!editor.items().length) {
+              editor.error("Add at least one item first.");
+              return;
             }
+            editor.error("");
+            setNaming(true);
+          });
+          document.getElementById("mbk-textlink").addEventListener("click", function (e) {
+            e.preventDefault();
             textform.hidden = !textform.hidden;
           });
-        })
-        .catch(function () { /* the editor simply does not open */ });
-    });
+          regionSel.addEventListener("change", function () { editor.refreshPrices(); });
+          document.getElementById("mbk-save").addEventListener("click", function () {
+            var name = nameInput.value.trim();
+            if (!name) {
+              showErr(nameErr, "Give the basket a name.");
+              nameInput.focus();
+              return;
+            }
+            showErr(nameErr, "");
+            postJSON("/market/baskets/api", { name: name, region: parseInt(regionSel.value, 10), items: editor.items() })
+              .then(function (data) {
+                var tbody = document.getElementById("mbk-tbody");
+                var tr = document.createElement("tr");
+                tr.setAttribute("data-mbk-row", data.id);
+                var nameTd = document.createElement("td");
+                var a = document.createElement("a");
+                a.href = "/market/baskets/" + data.id + "/";
+                a.textContent = data.name;
+                nameTd.appendChild(a);
+                var regionTd = document.createElement("td");
+                regionTd.textContent = data.region_name;
+                var countTd = document.createElement("td");
+                countTd.className = "mt-num";
+                countTd.setAttribute("data-mbk-count", "");
+                countTd.textContent = data.items;
+                var worthTd = document.createElement("td");
+                worthTd.className = "mt-num";
+                worthTd.textContent = "—";
+                var yoursTd = document.createElement("td");
+                yoursTd.innerHTML = "<small>Yours</small>";
+                tr.appendChild(nameTd);
+                tr.appendChild(regionTd);
+                tr.appendChild(countTd);
+                tr.appendChild(worthTd);
+                tr.appendChild(yoursTd);
+                tr.appendChild(pencilCell(data.id));
+                tbody.appendChild(tr);
+                closeBuilder();
+              })
+              .catch(function (err) { showErr(nameErr, err.message); });
+          });
+    }
+
+    // --- the per-row editor -----------------------------------
+    var tbody = document.getElementById("mbk-tbody");
+    var template = document.getElementById("mbk-editor-template");
+    if (tbody && template && tbody !== wiredTbody) {
+      wiredTbody = tbody;
+          tbody.addEventListener("click", function (e) {
+            var btn = e.target.closest("[data-mbk-edit]");
+            if (!btn) return;
+            var id = parseInt(btn.getAttribute("data-mbk-edit"), 10);
+            if (!id) return;
+            var row = tbody.querySelector('tr[data-mbk-row="' + id + '"]');
+            if (!row) return;
+            var open = tbody.querySelector('tr[data-mbk-editor-for="' + id + '"]');
+            if (open) {
+              open.remove();
+              return;
+            }
+            fetch("/market/baskets/" + id + "/items.json", { credentials: "same-origin" })
+              .then(function (r) { return r.ok ? r.json() : null; })
+              .then(function (data) {
+                if (!data) return;
+                var er = document.createElement("tr");
+                er.className = "mbk-editor-row";
+                er.setAttribute("data-mbk-editor-for", id);
+                var td = document.createElement("td");
+                td.colSpan = 6;
+                td.appendChild(template.content.cloneNode(true));
+                er.appendChild(td);
+                row.after(er);
+                var root = er.querySelector(".mbk-editor");
+                var ed = wireEditor(root, function () { return data.region; });
+                ed.seed(data.items.map(function (it) {
+                  return { id: it.id, name: it.name, qty: it.qty, price: it.price || "" };
+                }));
+                root.querySelector(".mbk-cancel").addEventListener("click", function () { er.remove(); });
+                root.querySelector(".mbk-save").addEventListener("click", function () {
+                  postJSON("/market/baskets/" + id + "/api-edit", { items: ed.items() })
+                    .then(function (res) {
+                      var count = row.querySelector("[data-mbk-count]");
+                      if (count) count.textContent = res.items;
+                      er.remove();
+                    })
+                    .catch(function (err) { ed.error(err.message); });
+                });
+                var textlink = root.querySelector(".mbk-textlink");
+                var textform = root.querySelector(".mbk-textform");
+                textform.action = "/market/baskets/" + id + "/edit";
+                textlink.addEventListener("click", function (ev) {
+                  ev.preventDefault();
+                  if (textform.hidden) {
+                    textform.querySelector(".mbk-tf-name").value = data.name;
+                    textform.querySelector(".mbk-tf-region").value = data.region;
+                    textform.querySelector(".mbk-tf-items").value = data.items.map(function (it) {
+                      return it.qty > 1 ? it.name + " " + it.qty : it.name;
+                    }).join("\n");
+                  }
+                  textform.hidden = !textform.hidden;
+                });
+              })
+              .catch(function () { /* the editor simply does not open */ });
+          });
+    }
   }
+  init();
+  document.addEventListener("evesynapse:content-ready", init);
 })();

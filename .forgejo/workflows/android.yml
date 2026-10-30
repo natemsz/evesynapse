@@ -1,0 +1,103 @@
+name: android-wrapper
+
+# Builds the Android app (android/): a Trusted Web Activity
+# that opens the site. Run by hand to make a signed build to
+# install or publish; a pull request that touches the wrapper
+# gets a debug build, so that a broken one is caught before
+# it is merged. The Forgejo port of
+# .github/workflows/android.yml; the job runs in the Gradle
+# image the GitLab job used, which carries Java 17 and
+# Gradle but no Android SDK, so the platform is installed
+# first.
+on:
+  workflow_dispatch:
+    inputs:
+      host:
+        description: The site the app opens (default evesynapse.app)
+        required: false
+      package:
+        description: The app's package name (default app.evesynapse.twa)
+        required: false
+  pull_request:
+    paths:
+      - android/**
+      - .forgejo/workflows/android.yml
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container: gradle:8.11.1-jdk17
+    steps:
+      - name: Check out the source
+        uses: actions/checkout@v4
+
+      # The Gradle image carries no Android SDK (GitHub's
+      # runners provided one); install the platform this app
+      # compiles against (compileSdk 36).
+      - name: Install the Android SDK platform
+        run: |
+          apt-get update -qq && apt-get install -y -qq --no-install-recommends curl unzip >/dev/null
+          export ANDROID_HOME=/opt/android-sdk ANDROID_SDK_ROOT=/opt/android-sdk
+          mkdir -p "$ANDROID_HOME/cmdline-tools"
+          curl -fsSL -o /tmp/cmdtools.zip https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
+          unzip -q /tmp/cmdtools.zip -d "$ANDROID_HOME/cmdline-tools"
+          mv "$ANDROID_HOME/cmdline-tools/cmdline-tools" "$ANDROID_HOME/cmdline-tools/latest"
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null 2>&1 || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36" "build-tools;36.0.0" "platform-tools"
+
+      # The signing key is used only for a build somebody
+      # asked for by hand, never for a pull request's. The
+      # secret names match the GitLab variables:
+      # ANDROID_KEYSTORE_B64, ANDROID_KEYSTORE_PASSWORD,
+      # ANDROID_KEY_ALIAS.
+      - name: Build
+        working-directory: android
+        env:
+          TWA_HOST: ${{ inputs.host }}
+          TWA_PACKAGE: ${{ inputs.package }}
+          KEYSTORE_BASE64: ${{ github.event_name == 'workflow_dispatch' && secrets.ANDROID_KEYSTORE_B64 || '' }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ github.event_name == 'workflow_dispatch' && secrets.ANDROID_KEYSTORE_PASSWORD || '' }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          args=(--no-daemon)
+          if [ -n "$TWA_HOST" ]; then args+=("-PtwaHost=$TWA_HOST"); fi
+          if [ -n "$TWA_PACKAGE" ]; then args+=("-PtwaPackage=$TWA_PACKAGE"); fi
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            printf '%s' "$KEYSTORE_BASE64" | tr -d ' \r\n' | base64 -d > "$RUNNER_TEMP/release.p12"
+            export ANDROID_KEYSTORE_FILE="$RUNNER_TEMP/release.p12"
+            # Read the key the way the build will, and say
+            # plainly what is wrong with it: Gradle's own
+            # message does not.
+            alias="${ANDROID_KEY_ALIAS:-evesynapse}"
+            if ! found="$(keytool -list -keystore "$ANDROID_KEYSTORE_FILE" -storetype PKCS12 -storepass:env ANDROID_KEYSTORE_PASSWORD -alias "$alias" 2>&1)"; then
+              echo "::error::The signing key could not be read: $(printf '%s' "$found" | head -n 2 | tr '\n' ' ')"
+              echo "The key store is $(wc -c < "$ANDROID_KEYSTORE_FILE") bytes and starts with:$(head -c 4 "$ANDROID_KEYSTORE_FILE" | od -An -tx1) (a PKCS12 file starts with 30 82)."
+              echo "It has to be the android.p12 from the README, base64-encoded, with its password in ANDROID_KEYSTORE_PASSWORD and its key named \"$alias\"."
+              exit 1
+            fi
+            if ! printf '%s' "$found" | grep -q PrivateKeyEntry; then
+              echo "::error::The key store has \"$alias\" but no private key under it: it holds only the certificate. Make android.p12 again with both -inkey and -in."
+              exit 1
+            fi
+            gradle "${args[@]}" --stacktrace assembleRelease bundleRelease
+            store="$ANDROID_KEYSTORE_FILE"; pass="$ANDROID_KEYSTORE_PASSWORD"; kind="release"
+          else
+            gradle "${args[@]}" assembleDebug
+            store="$HOME/.android/debug.keystore"; pass="android"; kind="debug (a throwaway key: the app opens the site with the address bar showing)"
+          fi
+          echo "Android build: $kind"
+          echo "Certificate fingerprint, for the site's ANDROID_APP_FINGERPRINTS:"
+          keytool -list -v -keystore "$store" -storepass "$pass" 2>/dev/null | grep -m1 'SHA256:' | sed 's/^[[:space:]]*SHA256:[[:space:]]*//'
+
+      - name: Remove the key store
+        if: always()
+        run: rm -f "$RUNNER_TEMP/release.p12"
+
+      - name: Keep the build
+        uses: actions/upload-artifact@v4
+        with:
+          name: evesynapse-android
+          path: |
+            android/app/build/outputs/apk/**/*.apk
+            android/app/build/outputs/bundle/**/*.aab
+          if-no-files-found: error

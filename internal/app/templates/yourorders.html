@@ -1,0 +1,26 @@
+{{define "your-orders"}}
+{{if .Orders}}
+<section class="foldable">
+<h3>Your orders</h3>
+<div class="tw">
+<table>
+  <thead><tr><th>Character</th>{{if .ShowItem}}<th>Item</th>{{end}}<th>Side</th><th>Price</th><th class="mt-num">Left</th><th>Location</th><th>Status</th></tr></thead>
+  <tbody>
+  {{range .Orders}}
+    <tr>
+      <td>{{charLink $.ViewerChars .CharID .Char}}</td>
+      {{if $.ShowItem}}<td>{{itemLink .TypeID .Item}}</td>{{end}}
+      <td>{{.Side}}</td>
+      <td>{{.Price}}</td>
+      <td class="mt-num">{{.Left}}</td>
+      <td>{{placeLink .Loc}}</td>
+      <td>{{if .Bad}}<strong>{{.Status}}</strong>{{else}}{{.Status}}{{end}}</td>
+    </tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+<p><small>Your characters' open orders for {{if .ShowItem}}the items in this basket{{else}}this item{{end}}. Every order is on <a href="/orders/">My Orders</a>.</small></p>
+</section>
+{{end}}
+{{end}}

@@ -324,6 +324,8 @@ type yourOrderRow struct {
 	CharID int64
 	Item   string
 	TypeID int64
+	Side   string // "Sell" or "Buy"
+	Left   string // volume remaining
 	Price  string
 	Loc    placeRef
 	Status string
@@ -440,7 +442,9 @@ func (app *Application) handleMarket(w http.ResponseWriter, r *http.Request) {
 
 	if userID > 0 {
 		view.Watchlist = app.buildWatchlistView(ctx, userID, strings.TrimSpace(q.Get("wq")))
-		view.YourOrders = app.buildYourOrders(ctx, userID)
+		if view.Item != nil {
+			view.YourOrders = app.buildYourOrders(ctx, userID, map[int64]bool{view.Item.TypeID: true})
+		}
 	}
 
 	app.render(ctx, w, http.StatusOK, "market.html", data)
@@ -1379,11 +1383,15 @@ func (app *Application) applyWatchBasketChange(ctx context.Context, userID, bask
 	}
 }
 
-// buildYourOrders assembles the "Your orders" section: every open
-// sell order across the user's characters with the health verdict
-// the worker computed (or a "not checked yet" line before the
-// first book pass lands).
-func (app *Application) buildYourOrders(ctx context.Context, userID int64) []yourOrderRow {
+// buildYourOrders assembles the "Your orders" section for the page's
+// items (one on an item page, a basket's on a basket page): every open
+// order of those types across the user's characters, sells with the
+// health verdict the worker computed (or a "not checked yet" line
+// before the first book pass lands).
+func (app *Application) buildYourOrders(ctx context.Context, userID int64, types map[int64]bool) []yourOrderRow {
+	if len(types) == 0 {
+		return nil
+	}
 	chars, err := app.queries.ListCharactersByUser(ctx, userID)
 	if err != nil {
 		logging.Errorf("market: your orders: list characters for user %d: %v", userID, err)
@@ -1410,7 +1418,7 @@ func (app *Application) buildYourOrders(ctx context.Context, userID int64) []you
 			return orders[i].OrderID < orders[j].OrderID
 		})
 		for _, o := range orders {
-			if o.IsBuyOrder || o.VolumeRemain <= 0 {
+			if o.VolumeRemain <= 0 || !types[o.TypeID] {
 				continue
 			}
 			row := yourOrderRow{
@@ -1418,11 +1426,15 @@ func (app *Application) buildYourOrders(ctx context.Context, userID int64) []you
 				CharID: ch.CharacterID,
 				Item:   app.typeNameOrID(ctx, o.TypeID),
 				TypeID: o.TypeID,
+				Side:   "Sell",
+				Left:   esi.FormatInt(o.VolumeRemain),
 				Price:  esi.FormatISK(o.Price) + " ISK",
 				Loc:    app.linkPlace(ctx, o.LocationID, app.econLocationTitle(ctx, o.LocationID)),
 				Status: "Not checked against the order book yet",
 			}
-			if h, ok := health[o.OrderID]; ok && h.CharacterID == ch.CharacterID {
+			if o.IsBuyOrder {
+				row.Side, row.Status = "Buy", "Buying"
+			} else if h, ok := health[o.OrderID]; ok && h.CharacterID == ch.CharacterID {
 				row.Status, row.Bad = orderHealthText(h.MyPrice, h.Status, h.StationBest, h.RegionBest)
 			}
 			out = append(out, row)
@@ -1517,4 +1529,29 @@ func (app *Application) handleMarketWatch(w http.ResponseWriter, r *http.Request
 		}
 	}
 	http.Redirect(w, r, next, http.StatusSeeOther)
+}
+
+// yourOrdersBlock is what the shared "your-orders" partial renders:
+// the page's orders, whether to name the item on each (a basket's
+// several), and the viewer's characters for the character links.
+type yourOrdersBlock struct {
+	Orders      []yourOrderRow
+	ShowItem    bool
+	ViewerChars map[int64]bool
+}
+
+// YourOrdersBlock hands the market item page's orders to the partial.
+func (d pageData) YourOrdersBlock() yourOrdersBlock {
+	if d.Market == nil {
+		return yourOrdersBlock{}
+	}
+	return yourOrdersBlock{Orders: d.Market.YourOrders, ViewerChars: d.ViewerChars}
+}
+
+// BasketOrdersBlock hands a basket page's orders to the partial.
+func (d pageData) BasketOrdersBlock() yourOrdersBlock {
+	if d.MarketBaskets == nil {
+		return yourOrdersBlock{}
+	}
+	return yourOrdersBlock{Orders: d.MarketBaskets.YourOrders, ShowItem: true, ViewerChars: d.ViewerChars}
 }

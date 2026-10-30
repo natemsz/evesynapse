@@ -461,10 +461,20 @@ func TestMarketPageSectionsZeroOutbound(t *testing.T) {
 	}
 	mustContain(t, "/market/", body,
 		"Watchlist", "Tritanium", "&#43;8.0%", "up 8.0% over 7 days",
-		"Your orders", "Undercut by 0.50 ISK (5.0%) at this station",
 	)
 	if got := transport.calls.Load(); got != 0 {
 		t.Fatalf("market render made %d outbound calls, want 0", got)
+	}
+	// The landing lists no orders: "Your orders" belongs to an item's
+	// page, and shows only that item's.
+	if strings.Contains(body, "Your orders") {
+		t.Error("the market landing lists the player's orders; they belong on the item's page")
+	}
+	if rows := app.buildYourOrders(ctx, user.ID, map[int64]bool{34: true}); len(rows) != 1 || rows[0].Status != "Undercut by 0.50 ISK (5.0%) at this station" {
+		t.Errorf("Tritanium's orders = %+v, want the one undercut sell", rows)
+	}
+	if rows := app.buildYourOrders(ctx, user.ID, map[int64]bool{35: true}); len(rows) != 0 {
+		t.Errorf("Pyerite's orders = %+v, want none: the order is for Tritanium", rows)
 	}
 }
 

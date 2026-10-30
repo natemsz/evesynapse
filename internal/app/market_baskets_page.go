@@ -83,6 +83,7 @@ type marketBasketView struct {
 	Chg30      trendFigure
 	Chart      *bookTrendChart
 	Items      []marketBasketItemRow
+	YourOrders []yourOrderRow
 	Unpriced   int
 	MoversUp   []marketBasketMover
 	MoversDown []marketBasketMover
@@ -196,6 +197,13 @@ func (app *Application) handleMarketBasket(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	view := app.buildBasketView(ctx, b, userID, module.QueryValue(r.URL.Query(), "period"))
+	if userID > 0 && len(view.Items) > 0 {
+		types := make(map[int64]bool, len(view.Items))
+		for _, it := range view.Items {
+			types[it.TypeID] = true
+		}
+		view.YourOrders = app.buildYourOrders(ctx, userID, types)
+	}
 	data.MarketBaskets = view
 	app.render(ctx, w, http.StatusOK, "market_basket.html", data)
 }

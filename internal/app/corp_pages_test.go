@@ -56,6 +56,59 @@ func (s *countingTransport) RoundTrip(req *http.Request) (*http.Response, error)
 	}, nil
 }
 
+
+// emptyESI is a fixture EVE that knows exactly one pilot: "Bad
+// Guy", the name the channel tests report, who is a real EVE
+// character (2117455235, corporation 1000170) the suite used to
+// resolve against the live servers. Every other name resolves to
+// nothing and every other affiliation comes back blank, the
+// answers ESI gives for names and pilots it does not know. Any
+// other path is a test bug, so it answers 500 and the failure
+// names the path.
+type emptyESI struct{}
+
+var fixturePilotByName = map[string]struct {
+	id, corp, alliance int64
+}{
+	"bad guy": {2117455235, 1000170, 0},
+}
+
+func (emptyESI) RoundTrip(req *http.Request) (*http.Response, error) {
+	respond := func(status int, body string) (*http.Response, error) {
+		return &http.Response{StatusCode: status, Header: make(http.Header),
+			Body: io.NopCloser(strings.NewReader(body))}, nil
+	}
+	switch req.URL.Path {
+	case "/universe/ids/":
+		body, _ := io.ReadAll(req.Body)
+		var names []string
+		_ = json.Unmarshal(body, &names)
+		chars := []string{}
+		for _, n := range names {
+			if p, ok := fixturePilotByName[strings.ToLower(n)]; ok {
+				chars = append(chars, fmt.Sprintf(`{"id":%d,"name":%q}`, p.id, n))
+			}
+		}
+		return respond(http.StatusOK, `{"characters":[`+strings.Join(chars, ",")+`],"systems":[],"corporations":[],"alliances":[],"inventory_types":[]}`)
+	case "/characters/affiliation/":
+		body, _ := io.ReadAll(req.Body)
+		var ids []int64
+		_ = json.Unmarshal(body, &ids)
+		rows := make([]string, 0, len(ids))
+		for _, id := range ids {
+			corp, alliance := int64(0), int64(0)
+			for _, p := range fixturePilotByName {
+				if p.id == id {
+					corp, alliance = p.corp, p.alliance
+				}
+			}
+			rows = append(rows, fmt.Sprintf(`{"character_id":%d,"corporation_id":%d,"alliance_id":%d}`, id, corp, alliance))
+		}
+		return respond(http.StatusOK, "["+strings.Join(rows, ",")+"]")
+	}
+	return respond(http.StatusInternalServerError, `{"error":"unexpected path `+req.URL.Path+`"}`)
+}
+
 // buildCorpTestApp builds an Application over a fresh embedded-
 // Postgres test database with a stub ESI transport (no worker
 // goroutine — tests drive the worker functions directly).

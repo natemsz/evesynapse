@@ -21,7 +21,7 @@ import (
 // Reports come from the form and from pasted chat lines, show in the
 // feed and on the map's intel feed, and only the owner manages access.
 func TestIntelChannels(t *testing.T) {
-	app, conn, q := buildCorpTestApp(t, nil)
+	app, conn, q := buildCorpTestApp(t, emptyESI{})
 	ctx := context.Background()
 	if _, err := conn.ExecContext(ctx, `INSERT INTO sde_systems (system_id, name, region_id, security) VALUES
 		(30000142, 'Jita', 10000002, 0.946), (30004759, '1DQ1-A', 10000060, -0.38) ON CONFLICT DO NOTHING`); err != nil {
@@ -156,7 +156,7 @@ func TestIntelChannels(t *testing.T) {
 // channel nobody granted stays out of it entirely, and the page
 // itself needs a signed-in account.
 func TestIntelFeedAccess(t *testing.T) {
-	app, conn, q := buildCorpTestApp(t, nil)
+	app, conn, q := buildCorpTestApp(t, emptyESI{})
 	ctx := context.Background()
 	if _, err := conn.ExecContext(ctx, `INSERT INTO sde_systems (system_id, name, region_id, security) VALUES
 		(30000142, 'Jita', 10000002, 0.946), (30004759, '1DQ1-A', 10000060, -0.38) ON CONFLICT DO NOTHING`); err != nil {

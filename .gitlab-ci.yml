@@ -1,0 +1,516 @@
+# EveSynapse CI on GitLab: the same gates and the same release
+# contract the GitHub workflow (.github/workflows/release.yml)
+# enforced — every merge request and branch push is checked,
+# and only main and evesynapse-dev pushes go on to build and
+# publish. The GitHub workflow stays in the tree, inert, for
+# the return to GitHub.
+#
+# A release publishes the way it always has: the version in
+# internal/app/version.txt is the release event, a version
+# publishes once, plain versions publish only from main, and
+# only a signed release is published — the manifests are
+# signed with RELEASE_SIGNING_KEY (a protected CI/CD
+# variable), and `evesynapse -update` installs nothing whose
+# manifest is not signed by a release key compiled into it.
+# The six release files go to the Generic Package Registry
+# first and the Release object is created last, so a release
+# the updater can see is always complete.
+
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
+      when: never
+    - if: $CI_COMMIT_BRANCH
+
+stages:
+  - check
+  - publish
+  - followup
+
+variables:
+  GOCACHE: "$CI_PROJECT_DIR/.cache/go-build"
+  GOMODCACHE: "$CI_PROJECT_DIR/.cache/gomod"
+  # The GitLab equivalent of the release workflow's checkout:
+  # the changelog and notes steps compare against tags.
+  GIT_DEPTH: "0"
+
+.go-cache:
+  cache:
+    key:
+      files:
+        - go.sum
+    paths:
+      - .cache/go-build
+      - .cache/gomod
+
+# The runner image carries Go; the jobs add what else they
+# need (node for the JavaScript tests, python3 for the JSON
+# work in the publish steps) the same pinned way the GitHub
+# workflow fetched sqlc.
+.toolbox:
+  image: golang:1.27.3-bookworm
+  before_script:
+    - apt-get update -qq && apt-get install -y -qq --no-install-recommends curl ca-certificates python3 >/dev/null
+
+test:
+  stage: check
+  extends: .go-cache
+  image: golang:1.27.3-bookworm
+  before_script:
+    - apt-get update -qq && apt-get install -y -qq --no-install-recommends curl ca-certificates xz-utils git make >/dev/null
+    - curl -fsSL https://nodejs.org/dist/v22.14.0/node-v22.14.0-linux-x64.tar.xz | tar -xJ -C /usr/local --strip-components=1
+    - node --version
+  script:
+    # The generated database code (internal/db/sqlc) must match
+    # what the pinned sqlc makes of the schema and query
+    # sources. Schema or query edits that skip the regeneration
+    # step fail here instead of drifting silently.
+    - |
+      build="$(mktemp -d)"
+      curl -fsSL -o "$build/sqlc.tar.gz" https://github.com/sqlc-dev/sqlc/releases/download/v1.31.1/sqlc_1.31.1_linux_amd64.tar.gz
+      echo "497ae4fcdfa64c5b0c311ffe4c2bd991e43991e82e5367792ed78bc2dca27354  $build/sqlc.tar.gz" | sha256sum -c -
+      tar -xzf "$build/sqlc.tar.gz" -C "$build" sqlc
+      "$build/sqlc" version
+      "$build/sqlc" generate
+      if ! git diff --exit-code internal/db/sqlc; then
+        echo "internal/db/sqlc is stale: run 'sqlc generate' (sqlc v1.31.1) and commit the result."
+        exit 1
+      fi
+      untracked="$(git ls-files --others --exclude-standard internal/db/sqlc)"
+      if [ -n "$untracked" ]; then
+        echo "sqlc generate produced files that are not committed:"
+        echo "$untracked"
+        exit 1
+      fi
+    - make assets
+    - |
+      unformatted="$(gofmt -l cmd internal)"
+      if [ -n "$unformatted" ]; then
+        echo "These files are not gofmt-formatted (run: make fmt):"
+        echo "$unformatted"
+        exit 1
+      fi
+    - go vet ./...
+    # internal/app runs a few minutes; the default 10m
+    # per-package limit leaves too little headroom on a slow
+    # runner.
+    - go test -timeout 20m ./...
+    # File list is explicit, not a glob: node --test only
+    # expands globs on Node 21+, and a quoted glob that matches
+    # nothing would pass the step with zero tests run. A
+    # missing file fails loudly instead.
+    - >-
+      node --test
+      internal/app/jstest/swap.test.js
+      internal/app/jstest/swap.browser.test.js
+      internal/app/jstest/plan.firstload.test.js
+      internal/app/jstest/pi.test.js
+      internal/app/jstest/fit.tip.test.js
+      internal/app/jstest/fit.loadoutpreview.test.js
+      internal/app/jstest/fit.phoneviews.test.js
+      internal/app/jstest/tabs.more.test.js
+      internal/app/jstest/phonebar.test.js
+      internal/app/jstest/map.test.js
+      internal/app/jstest/dashboard.test.js
+
+# The same suite under the race detector, as its own job so
+# the plain run above stays fast.
+race:
+  stage: check
+  extends:
+    - .toolbox
+    - .go-cache
+  script:
+    - make assets
+    # Under the race detector internal/app takes 5-10 minutes,
+    # depending on the runner: past go test's default 10m
+    # limit on a slow one.
+    - go test -race -timeout 30m ./...
+
+# The core-only configuration: no optional module imported. It
+# must compile and vet, and the module-exclusion tests must
+# pass, so that adding a module can never make the core depend
+# on it.
+core-only:
+  stage: check
+  extends:
+    - .toolbox
+    - .go-cache
+  script:
+    - make assets
+    - go build -tags core_only ./...
+    - go vet -tags core_only ./...
+    - go test -tags core_only -timeout 20m -run 'TestCoreOnly' ./internal/app/
+    # The module build tool: the default file is what it writes
+    # for every module, and each module compiles and vets on
+    # its own (with what it requires), so no module depends on
+    # another one that it did not declare. The checkout is
+    # throwaway, so the loop may rewrite the file.
+    - go run ./cmd/modbuild -all -check
+    - |
+      for id in $(go run ./cmd/modbuild -ids); do
+        go run ./cmd/modbuild -modules "$id" -write > /dev/null
+        echo "== $id"
+        go build ./cmd/evesynapse
+        go vet ./internal/app/
+      done
+
+# Static analysis and the known-vulnerability check. Advisory:
+# a finding shows up on the run without blocking a release,
+# since both tools gain new checks over time.
+analysis:
+  stage: check
+  extends:
+    - .toolbox
+    - .go-cache
+  allow_failure: true
+  script:
+    - make assets
+    # staticcheck is built here against the newest
+    # golang.org/x/tools rather than run with "go run …@latest",
+    # which builds it against the x/tools its own release
+    # pinned. That pinned copy cannot read the packages a newer
+    # Go compiles, and then staticcheck stops before it has
+    # looked at any code.
+    - |
+      build="$(mktemp -d)"
+      (cd "$build" && go mod init staticcheck-build \
+        && go get honnef.co/go/tools/cmd/staticcheck@latest golang.org/x/tools@latest \
+        && go build -o staticcheck honnef.co/go/tools/cmd/staticcheck)
+      "$build/staticcheck" ./...
+    - go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+
+release:
+  stage: publish
+  extends:
+    - .toolbox
+    - .go-cache
+  needs:
+    - test
+    - race
+    - core-only
+  # Only branch pipelines on the two publishing branches ever
+  # reach this job (the workflow rules keep merge request
+  # pipelines separate), and only protected refs run it: the
+  # signing key is a protected variable, visible nowhere else.
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+    - if: $CI_COMMIT_BRANCH == "evesynapse-dev"
+  # One release job per branch at a time: two pushes in quick
+  # succession must not both try to create the same release.
+  resource_group: release-$CI_COMMIT_REF_NAME
+  script:
+    - make assets
+    - VERSION="$(tr -d '[:space:]' < internal/app/version.txt)"
+    - |
+      mkdir -p dist
+      CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o dist/evesynapse-arm64 ./cmd/evesynapse
+      CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o dist/evesynapse-amd64 ./cmd/evesynapse
+      cd dist
+      for a in arm64 amd64; do
+        sha=$(sha256sum "evesynapse-$a" | cut -d' ' -f1)
+        printf '{"version":"%s","arch":"%s","sha256":"%s"}\n' "$VERSION" "$a" "$sha" > "latest-$a.json"
+      done
+      cd ..
+    # A version carrying a suffix (0.4.1.4-dev) is a
+    # development build, reached with `evesynapse -update
+    # -dev`. Plain versions are releases and are only ever
+    # published from main, so another branch can't claim a
+    # release's tag first. A version publishes once: when the
+    # Release object exists, the push published nothing.
+    - |
+      publish=true
+      if [ "$VERSION" = "${VERSION%%-*}" ] && [ "$CI_COMMIT_BRANCH" != "main" ]; then
+        echo "Not publishing: $CI_COMMIT_BRANCH carries the plain version $VERSION, and plain versions are released from main only. Give this branch a suffixed version (for example $VERSION-dev) to publish development builds."
+        publish=false
+      fi
+      if [ "$publish" = "true" ]; then
+        code="$(curl -s -o /dev/null -w '%{http_code}' --header "JOB-TOKEN: $CI_JOB_TOKEN" "$CI_API_V4_URL/projects/$CI_PROJECT_ID/releases/v$VERSION")"
+        if [ "$code" = "200" ]; then
+          echo "Release v$VERSION already exists; leaving it as it is."
+          publish=false
+        elif [ "$code" != "404" ]; then
+          echo "The releases API answered $code; not publishing on a guess."
+          exit 1
+        fi
+      fi
+      echo "PUBLISH=$publish" > build.env
+      echo "VERSION=$VERSION" >> build.env
+    # Only a signed release is published. The step fails, and
+    # nothing is published, when the key is missing or is not
+    # the other half of a key listed in
+    # internal/releasesig/trusted_keys.pem. The variable holds
+    # the key base64-encoded (the store masks single-line
+    # values only) and releasesign reads it in that form; a
+    # file-type variable hands the job a path instead of the
+    # key itself, and is read in that case.
+    - |
+      if [ "$PUBLISH" != "true" ]; then echo "Nothing to sign."; exit 0; fi
+      if [ -n "$RELEASE_SIGNING_KEY" ] && [ -f "$RELEASE_SIGNING_KEY" ]; then
+        RELEASE_SIGNING_KEY="$(cat "$RELEASE_SIGNING_KEY")"
+        export RELEASE_SIGNING_KEY
+      fi
+      go run ./cmd/releasesign sign dist/latest-arm64.json dist/latest-amd64.json
+    # The release notes: the merge requests merged since the
+    # previous release, grouped by label the way
+    # .github/release.yml groups them.
+    - |
+      if [ "$PUBLISH" != "true" ]; then echo "No notes to write."; exit 0; fi
+      HOW="evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers)"
+      if [ "$VERSION" != "${VERSION%%-*}" ]; then HOW="evesynapse -update -dev"; fi
+      printf 'Automated build of EveSynapse v%s. Update with: %s.\n' "$VERSION" "$HOW" > release-notes.md
+      API="$CI_API_V4_URL/projects/$CI_PROJECT_ID" VERSION="$VERSION" python3 - <<'PYEOF'
+      import json, os, urllib.request
+
+      api = os.environ["API"]
+      version = os.environ["VERSION"]
+      req = urllib.request.Request(api + "/releases?per_page=100",
+                                   headers={"JOB-TOKEN": os.environ["CI_JOB_TOKEN"]})
+      releases = json.load(urllib.request.urlopen(req))
+      def vkey(tag):
+          parts = []
+          for piece in tag.lstrip("v").split("-")[0].split("."):
+              parts.append(int(piece) if piece.isdigit() else 0)
+          return parts
+      others = [r for r in releases if r["tag_name"] != "v" + version]
+      since = None
+      if others:
+          prev = max(others, key=lambda r: vkey(r["tag_name"]))
+          since = prev.get("released_at") or prev.get("created_at")
+      url = api + "/merge_requests?state=merged&per_page=100&order_by=updated_at&sort=desc"
+      req = urllib.request.Request(url, headers={"JOB-TOKEN": os.environ["CI_JOB_TOKEN"]})
+      merged = json.load(urllib.request.urlopen(req))
+      cats = [("🚀 Features", {"feature", "enhancement"}),
+              ("🐛 Bug Fixes", {"fix", "bug"}),
+              ("🧰 Maintenance & Dependencies", {"chore", "dependencies"}),
+              ("Other Changes", None)]
+      groups = {name: [] for name, _ in cats}
+      for mr in merged:
+          if since and (mr.get("merged_at") or "") <= since:
+              continue
+          labels = set(mr.get("labels") or [])
+          for name, wanted in cats:
+              if wanted is None or labels & wanted:
+                  groups[name].append(mr)
+                  break
+      notes = []
+      for name, _ in cats:
+          if not groups[name]:
+              continue
+          notes.append("### " + name)
+          for mr in groups[name]:
+              notes.append("* %s by @%s in !%s" % (mr["title"], mr["author"]["username"], mr["iid"]))
+          notes.append("")
+      if notes:
+          with open("release-notes.md", "a") as fh:
+              fh.write("\n## What's Changed\n\n" + "\n".join(notes))
+      PYEOF
+    # The files go to the package registry first, each skipped
+    # when the registry already holds it under the same hash
+    # and failed on a different one, so a re-run of this job
+    # after a partial failure continues instead of corrupting
+    # or duplicating. The Release object is created last: it
+    # is the commit point the updater reads.
+    - |
+      if [ "$PUBLISH" != "true" ]; then echo "Nothing to publish."; exit 0; fi
+      PKG_BASE="$CI_API_V4_URL/projects/$CI_PROJECT_ID/packages/generic/evesynapse/v$VERSION"
+      existing="$(curl -fsS --header "JOB-TOKEN: $CI_JOB_TOKEN" "$CI_API_V4_URL/projects/$CI_PROJECT_ID/packages?package_type=generic&package_name=evesynapse&per_page=100" || echo '[]')"
+      pkg_id="$(printf '%s' "$existing" | VERSION="$VERSION" python3 -c 'import json,os,sys; pkgs=json.load(sys.stdin); print(next((p["id"] for p in pkgs if p.get("version")=="v"+os.environ["VERSION"]), ""))')"
+      declare -A have=()
+      if [ -n "$pkg_id" ]; then
+        files="$(curl -fsS --header "JOB-TOKEN: $CI_JOB_TOKEN" "$CI_API_V4_URL/projects/$CI_PROJECT_ID/packages/$pkg_id/package_files?per_page=100")"
+        while IFS='=' read -r fname fsha; do
+          [ -n "$fname" ] && have["$fname"]="$fsha"
+        done < <(printf '%s' "$files" | python3 -c 'import json,sys; [print(f["file_name"]+"="+f["file_sha256"]) for f in json.load(sys.stdin)]')
+      fi
+      for f in evesynapse-arm64 evesynapse-amd64 latest-arm64.json latest-amd64.json latest-arm64.json.sig latest-amd64.json.sig; do
+        sha="$(sha256sum "dist/$f" | cut -d' ' -f1)"
+        if [ "${have[$f]:-}" = "$sha" ]; then
+          echo "$f: already in the registry under the same hash; skipping."
+          continue
+        fi
+        if [ -n "${have[$f]:-}" ]; then
+          echo "$f: the registry holds a different build under this version; refusing to replace it."
+          exit 1
+        fi
+        curl -fsS --header "JOB-TOKEN: $CI_JOB_TOKEN" --upload-file "dist/$f" "$PKG_BASE/$f"
+        echo "$f: uploaded."
+      done
+    - |
+      if [ "$PUBLISH" != "true" ]; then echo "No release to create."; exit 0; fi
+      API="$CI_API_V4_URL/projects/$CI_PROJECT_ID" VERSION="$VERSION" python3 - <<'PYEOF'
+      import json, os, urllib.request
+
+      version = os.environ["VERSION"]
+      files = ["evesynapse-arm64", "evesynapse-amd64",
+               "latest-arm64.json", "latest-amd64.json",
+               "latest-arm64.json.sig", "latest-amd64.json.sig"]
+      body = {
+          "tag_name": "v" + version,
+          "ref": os.environ["CI_COMMIT_SHA"],
+          "name": "EveSynapse v" + version,
+          "description": open("release-notes.md").read(),
+          "assets": {"links": [
+              {"name": f, "url": "%s/projects/%s/packages/generic/evesynapse/v%s/%s" % (
+                  os.environ["CI_API_V4_URL"], os.environ["CI_PROJECT_ID"], version, f),
+               "direct_asset_path": "/" + f, "link_type": "package"}
+              for f in files]},
+      }
+      req = urllib.request.Request(
+          os.environ["CI_API_V4_URL"] + "/projects/" + os.environ["CI_PROJECT_ID"] + "/releases",
+          data=json.dumps(body).encode(), method="POST",
+          headers={"JOB-TOKEN": os.environ["CI_JOB_TOKEN"], "Content-Type": "application/json"})
+      urllib.request.urlopen(req)
+      print("Release v%s created." % version)
+      PYEOF
+  artifacts:
+    reports:
+      dotenv: build.env
+    expire_in: 1 day
+
+# After a release publishes from main, its notes join
+# CHANGELOG.md on a merge request for review — the GitLab
+# form of the update-changelog workflow. The token is the
+# job token when the project's settings let it push and open
+# merge requests, and the CHANGELOG_TOKEN variable (a project
+# access token) where they do not.
+changelog:
+  stage: followup
+  extends: .toolbox
+  needs:
+    - job: release
+      artifacts: true
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+  script:
+    - |
+      if [ "${PUBLISH:-false}" != "true" ]; then
+        echo "This pipeline published no release; nothing to record."
+        exit 0
+      fi
+      if grep -qF "## [v$VERSION]" CHANGELOG.md; then
+        echo "CHANGELOG.md already documents v$VERSION; nothing to do."
+        exit 0
+      fi
+      if [ -n "$CHANGELOG_TOKEN" ]; then
+        AUTH_HEADER="PRIVATE-TOKEN: $CHANGELOG_TOKEN"
+        PUSH_TOKEN="$CHANGELOG_TOKEN"
+      else
+        AUTH_HEADER="JOB-TOKEN: $CI_JOB_TOKEN"
+        PUSH_TOKEN="$CI_JOB_TOKEN"
+      fi
+      export AUTH_HEADER PUSH_TOKEN
+      API="$CI_API_V4_URL/projects/$CI_PROJECT_ID" python3 - <<'PYEOF'
+      import json, os, urllib.request
+
+      version = os.environ["VERSION"]
+      auth = os.environ["AUTH_HEADER"].split(": ", 1)
+      req = urllib.request.Request(
+          os.environ["API"] + "/releases/v" + version,
+          headers={auth[0]: auth[1]})
+      release = json.load(urllib.request.urlopen(req))
+      body = release.get("description") or ""
+      body = "\n".join(line for line in body.splitlines() if not line.startswith("<!--"))
+      import datetime
+      section = "## [v%s] - %s\n\n%s\n\n" % (
+          version, datetime.date.today().isoformat(), body.strip())
+      with open("changelog-section.md", "w") as fh:
+          fh.write(section)
+      PYEOF
+      awk -v sec=changelog-section.md '
+        /^## \[v/ && !done {
+          while ((getline line < sec) > 0) print line
+          done = 1
+        }
+        { print }
+      ' CHANGELOG.md > CHANGELOG.new
+      mv CHANGELOG.new CHANGELOG.md
+    - |
+      git config user.name "EveSynapse CI"
+      git config user.email "ci@evesynapse.app"
+      branch="changelog-v$VERSION"
+      git checkout -b "$branch"
+      git add CHANGELOG.md
+      git commit -m "docs(changelog): update for v$VERSION"
+      git remote set-url origin "https://oauth2:${PUSH_TOKEN}@${CI_SERVER_HOST}/${CI_PROJECT_PATH}.git"
+      git push origin "$branch"
+      if [ -n "$CHANGELOG_TOKEN" ]; then AUTH_HEADER="PRIVATE-TOKEN: $CHANGELOG_TOKEN"; else AUTH_HEADER="JOB-TOKEN: $CI_JOB_TOKEN"; fi
+      API="$CI_API_V4_URL/projects/$CI_PROJECT_ID" AUTH_HEADER="$AUTH_HEADER" BRANCH="$branch" python3 - <<'PYEOF'
+      import json, os, urllib.request
+
+      version = os.environ["VERSION"]
+      auth = os.environ["AUTH_HEADER"].split(": ", 1)
+      body = {
+          "source_branch": os.environ["BRANCH"],
+          "target_branch": "main",
+          "title": "docs(changelog): review changelog for v" + version,
+          "description": "Automated changelog generation for release **v%s**.\n\n"
+                         "### Instructions:\n"
+                         "1. Review the changes to `CHANGELOG.md`.\n"
+                         "2. Edit directly if any formatting or text requires adjustment.\n"
+                         "3. Merge when ready." % version,
+          "remove_source_branch": True,
+      }
+      req = urllib.request.Request(
+          os.environ["API"] + "/merge_requests",
+          data=json.dumps(body).encode(), method="POST",
+          headers={auth[0]: auth[1], "Content-Type": "application/json"})
+      mr = json.load(urllib.request.urlopen(req))
+      print("Opened merge request !%s for the v%s changelog." % (mr["iid"], version))
+      PYEOF
+
+# The Android app (android/): a Trusted Web Activity that
+# opens the site. Run by hand from the pipelines page to make
+# a signed build to install or publish; a merge request that
+# touches the wrapper gets a debug build, so that a broken
+# one is caught before it is merged. The signing key is used
+# only for a build somebody asked for by hand, never for a
+# merge request's.
+android:
+  stage: check
+  image: gradle:8.11.1-jdk17
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        - android/**/*
+        - .gitlab-ci.yml
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: manual
+    - if: $CI_PIPELINE_SOURCE == "api"
+      when: manual
+  script:
+    - cd android
+    - |
+      args=(--no-daemon)
+      if [ -n "$TWA_HOST" ]; then args+=("-PtwaHost=$TWA_HOST"); fi
+      if [ -n "$TWA_PACKAGE" ]; then args+=("-PtwaPackage=$TWA_PACKAGE"); fi
+      if [ -n "$ANDROID_KEYSTORE_B64" ] && [ "$CI_PIPELINE_SOURCE" != "merge_request_event" ]; then
+        printf '%s' "$ANDROID_KEYSTORE_B64" | tr -d ' \r\n' | base64 -d > "$CI_PROJECT_DIR/release.p12"
+        export ANDROID_KEYSTORE_FILE="$CI_PROJECT_DIR/release.p12"
+        alias="${ANDROID_KEY_ALIAS:-evesynapse}"
+        if ! found="$(keytool -list -keystore "$ANDROID_KEYSTORE_FILE" -storetype PKCS12 -storepass:env ANDROID_KEYSTORE_PASSWORD -alias "$alias" 2>&1)"; then
+          echo "The signing key could not be read: $(printf '%s' "$found" | head -n 2 | tr '\n' ' ')"
+          echo "It has to be the android.p12 from the README, base64-encoded in ANDROID_KEYSTORE_B64, with its password in ANDROID_KEYSTORE_PASSWORD and its key named \"$alias\"."
+          exit 1
+        fi
+        if ! printf '%s' "$found" | grep -q PrivateKeyEntry; then
+          echo "The key store has \"$alias\" but no private key under it: it holds only the certificate. Make android.p12 again with both -inkey and -in."
+          exit 1
+        fi
+        ANDROID_KEY_ALIAS="$alias" gradle "${args[@]}" --stacktrace assembleRelease bundleRelease
+        store="$ANDROID_KEYSTORE_FILE"; pass="$ANDROID_KEYSTORE_PASSWORD"; kind="release"
+      else
+        gradle "${args[@]}" assembleDebug
+        store="$HOME/.android/debug.keystore"; pass="android"; kind="debug (a throwaway key: the app opens the site with the address bar showing)"
+      fi
+      echo "Android build: $kind"
+      echo "Certificate fingerprint, for the site's ANDROID_APP_FINGERPRINTS:"
+      keytool -list -v -keystore "$store" -storepass "$pass" 2>/dev/null | grep -m1 'SHA256:' | sed 's/^[[:space:]]*SHA256:[[:space:]]*//'
+      rm -f "$CI_PROJECT_DIR/release.p12"
+  artifacts:
+    name: evesynapse-android
+    paths:
+      - android/app/build/outputs/apk/**/*.apk
+      - android/app/build/outputs/bundle/**/*.aab
+    expire_in: 1 week

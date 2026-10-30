@@ -306,7 +306,7 @@ gaps; real environment variables win over the file):
 | `EVE_CLIENT_SECRET_WRAPPED`, `DISCORD_CLIENT_SECRET_WRAPPED`, `DISCORD_BOT_TOKEN_WRAPPED`, `MODEL_API_KEY_WRAPPED` | with `http` | — | Each working credential wrapped by the key service, unwrapped at startup through the same endpoint as the token key (http provider) |
 | `EVE_ADMIN_CHARACTER_IDS` | no | — | Comma-separated EVE character IDs whose accounts may open the Admin and Sync pages. Any character linked to an account makes that whole account an admin's. Empty = nobody. The status belongs to whoever owned the character when it was first seen as an admin: if the character is sold or transferred, its new owner does not get it. To give it to a new owner on purpose, remove the id, restart, add it back and restart |
 | `EVE_ALLOWED_CHARACTER_IDS`, `EVE_ALLOWED_CORPORATION_IDS`, `EVE_ALLOWED_ALLIANCE_IDS` | no | — | Limit who may create an account (see "Who can sign up"). All empty = anyone who can sign in with EVE |
-| `EVESYNAPSE_UPDATE_REPO` | no | `natemsz/evesynapse` | GitHub repo (owner/repo) the updater checks |
+| `EVESYNAPSE_UPDATE_PROJECT` | no | `natemsz/evesynapse` | GitLab project (group/project) the updater checks; `EVESYNAPSE_UPDATE_REPO`, set by older installs, is read as the same project's path |
 | `EVE_SDE_BASE_URL` | no | Fuzzwork's dump | Base URL of the SDE CSV dump the importer downloads |
 | `ESI_CONTACT` | no | — | How CCP can reach whoever runs this instance (an email address, a Discord handle, a character name). Sent in the User-Agent of every ESI request, as CCP asks of third-party apps |
 | `STATUS_PAGE_ORIGIN` | no | — | The status page's origin (`https://status.example.com`): the one site whose pages may read `/status.json`, the public summary of how the database, worker, notifications, ESI, market sweeps and push are doing (a state and an age each, nothing more) |
@@ -339,7 +339,7 @@ You need a Linux machine (ARM64 or x86-64) and an EVE app
 registration for sign-in ("EVE SSO flow" below). Then:
 
 1. **Get the program.** Easiest is the prebuilt binary from the
-   [releases page](https://github.com/natemsz/evesynapse/releases):
+   [releases page](https://gitlab.com/natemsz/evesynapse/-/releases):
    `evesynapse-arm64` for ARM machines (most ARM cloud instances),
    `evesynapse-amd64` for Intel/AMD ones. Or build it yourself
    ("Build from source" below).
@@ -518,8 +518,9 @@ push and everything else behave as they do there. It exists for people
 who would rather install an app than "Add to Home screen", and so the
 site can be put on Google Play.
 
-The "android-wrapper" workflow builds it. Run it from the Actions tab
-and download `evesynapse-android` from the run:
+The pipeline's `android` job builds it. Run it by hand from the
+project's pipelines page and download `evesynapse-android` from
+the job's artifacts:
 
 - With no signing key set up it makes a debug build, signed with a
   throwaway key. That installs and works, but shows the browser's
@@ -528,13 +529,15 @@ and download `evesynapse-android` from the run:
   and `.aab` (for Google Play).
 
 To set up the signing key, once, in Git Bash or any shell with OpenSSL
-(pick your own password; it is typed twice below):
+(pick your own password; it is typed twice below). The base64 line's
+output goes into the project's CI/CD variables (Settings > CI/CD >
+Variables) as `ANDROID_KEYSTORE_B64`, and the password as
+`ANDROID_KEYSTORE_PASSWORD`:
 
 ```bash
 MSYS_NO_PATHCONV=1 openssl req -x509 -newkey rsa:2048 -sha256 -days 10000 -nodes -subj "/CN=EveSynapse" -keyout android-key.pem -out android-cert.pem
 openssl pkcs12 -export -name evesynapse -inkey android-key.pem -in android-cert.pem -out android.p12
-base64 -w0 android.p12 | gh secret set ANDROID_KEYSTORE_BASE64
-gh secret set ANDROID_KEYSTORE_PASSWORD
+base64 -w0 android.p12
 openssl x509 -in android-cert.pem -noout -fingerprint -sha256
 ```
 
@@ -875,7 +878,7 @@ sudo EVESYNAPSE_BINARY=$PWD/bin/evesynapse bash deploy/setup.sh
 
 Builds are published automatically: every push to `main` runs the
 test suite in CI and, when `internal/app/version.txt` names a
-version that has no release yet, publishes a GitHub release with
+version that has no release yet, publishes a GitLab release with
 builds for ARM64 and AMD64 plus, for each build, a small manifest
 (the version and the build's SHA-256 checksum) and that manifest's
 signature.
@@ -950,7 +953,7 @@ not.
   Because the checksum is inside what is signed, the signature
   covers every byte of the build.
 - **With what.** An Ed25519 key. Its private half exists only as the
-  repository's `RELEASE_SIGNING_KEY` Actions secret, which the
+  project's `RELEASE_SIGNING_KEY` CI/CD variable, which the
   release job signs with. Its public half is
   `internal/releasesig/trusted_keys.pem`, compiled into every build.
 - **What the updater does with it.** It fetches the manifest and the
@@ -963,7 +966,7 @@ not.
 - **What it proves, and what it does not.** That the release was
   published by this repository's release job. Someone who can
   replace the files of a release, but cannot run that job with the
-  secret, can no longer get a build installed. It is no protection
+  key, can no longer get a build installed. It is no protection
   against someone who controls the repository itself, since they
   control what the job signs.
 
@@ -980,23 +983,30 @@ sha256sum evesynapse-arm64   # must be the "sha256" in latest-arm64.json
 check exactly as the updater does. OpenSSL reads only the first key
 in `trusted_keys.pem`.)
 
-**Making the key.** Once, from the repository root, signed in to
-`gh`:
+**Making the key.** Once, from the repository root:
 
 ```sh
-go run ./cmd/releasesign keygen -- gh secret set RELEASE_SIGNING_KEY
+go run ./cmd/releasesign keygen -out ~/evesynapse-release-key.pem
 ```
 
-It makes the key pair, hands the private half to `gh secret set` on
-its standard input without printing or saving it, and only when that
-has worked adds the public half to `trusted_keys.pem`. Commit that
-file. Add `-out <file>` to keep a copy of the private half as well.
-That is a trade: a copy is one more place the key can leak from, and
-without one, losing the secret means the manual update described
-under "If the key is lost".
+It makes the key pair, writes the private half to that file (the
+key is never printed), and only when that has worked adds the
+public half to `trusted_keys.pem`. Commit that file. The variable
+store masks single-line values only, so the key goes in encoded:
 
-The release job fails, and publishes nothing, when the secret is
-missing or is not the other half of a key in `trusted_keys.pem`.
+```sh
+base64 -w0 ~/evesynapse-release-key.pem
+```
+
+Paste that one line into the project's CI/CD variables (Settings >
+CI/CD > Variables) as `RELEASE_SIGNING_KEY`, protected and masked,
+and keep the file somewhere offline. `releasesign` reads the key
+in either form. That copy is one more place the key
+can leak from, and without one, losing the variable means the
+manual update described under "If the key is lost".
+
+The release job fails, and publishes nothing, when the variable
+is missing or is not the other half of a key in `trusted_keys.pem`.
 
 **Replacing the key.** An install only trusts the keys of the build
 it is running, so the new key has to reach installs in a release
@@ -1008,18 +1018,19 @@ signed with the old one:
    a release. It is still signed with the old key, and its updater
    trusts both.
 2. Once installs have had time to take that release, switch the
-   secret, `gh secret set RELEASE_SIGNING_KEY < ~/new-release-key.pem`,
-   then delete that file or move it somewhere offline.
+   variable: paste the new private half into `RELEASE_SIGNING_KEY`
+   in the project's CI/CD variables, then delete that file or move
+   it somewhere offline.
 3. Later, delete the old key's block from `trusted_keys.pem`.
 
 An install that skipped the release from step 1 needs the manual
 update below. If you kept a copy of the old private half you can
-avoid even that: put both keys in the secret for a while (one PEM
+avoid even that: put both keys in the variable for a while (one PEM
 block after the other) and every release carries both signatures,
 which an install knowing either key accepts. If the private half may
 have leaked, replace it the same way without waiting.
 
-**If the key is lost** (the secret deleted, and no copy kept), make
+**If the key is lost** (the variable deleted, and no copy kept), make
 a new one (delete the old block from `trusted_keys.pem`, then
 `keygen` as above) and publish a release. Existing installs cannot
 verify it, because the only key they trust is the lost one. Each
@@ -1027,25 +1038,24 @@ needs one manual update, with the address and checksum from the
 release page, and updates normally from then on:
 
 ```sh
-sudo evesynapse -update https://github.com/natemsz/evesynapse/releases/download/v<version>/evesynapse-arm64 <sha256>
+sudo evesynapse -update https://gitlab.com/api/v4/projects/natemsz%2Fevesynapse/packages/generic/evesynapse/v<version>/evesynapse-arm64 <sha256>
 ```
 
 ### Updating from your own fork
 
-By default the updater checks the mainline repo's releases. To
-have it check your fork instead, set this in
+By default the updater checks the mainline project's releases.
+To have it check your fork instead, set this in
 `/opt/evesynapse/.env` (the setup script writes it for you when
 you install from a fork):
 
 ```sh
-EVESYNAPSE_UPDATE_REPO=yourname/evesynapse
+EVESYNAPSE_UPDATE_PROJECT=yourname/evesynapse
 ```
 
-For your fork to publish releases the same way, enable Actions
-in the fork (GitHub turns them off on new forks): the workflow
-is already in the repo under `.github/workflows/`, and once it's
-allowed to run, your pushes get tested, built, and released
-exactly like the mainline ones.
+For your fork to publish releases the same way, the pipeline is
+already in the repo as `.gitlab-ci.yml`: your pushes get tested,
+built, and released exactly like the mainline ones, with the
+fork's own `RELEASE_SIGNING_KEY` variable (see "Release signing").
 
 A fork signs its releases with its own key. In the fork, delete the
 mainline key's block from `internal/releasesig/trusted_keys.pem`,

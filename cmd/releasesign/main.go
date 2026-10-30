@@ -6,11 +6,11 @@
 //	releasesign keygen [-add] [-pub file] [-out file] [-- command [args]]
 //	    Make a new release key. The private half is handed to the
 //	    command on its standard input (the one that stores it as the
-//	    release job's secret), written to the -out file, or both. It
+//	    release job's variable), written to the -out file, or both. It
 //	    is never printed. Only once that has worked is the public half
 //	    added to the trusted keys file, which is the change to commit:
 //
-//	        go run ./cmd/releasesign keygen -- gh secret set RELEASE_SIGNING_KEY
+//	        go run ./cmd/releasesign keygen -out ~/evesynapse-release-key.pem
 //
 //	releasesign sign <manifest>...
 //	    Sign each update manifest with the key in RELEASE_SIGNING_KEY,
@@ -53,7 +53,7 @@ const usage = `releasesign makes the release key and signs releases with it.
       input, to the -out file, or both, and is never printed. The public
       half is added to the trusted keys file, the change to commit.
 
-          go run ./cmd/releasesign keygen -- gh secret set ` + signingKeyEnv + `
+          go run ./cmd/releasesign keygen -out ~/evesynapse-release-key.pem
 
   releasesign sign <manifest>...
       Sign each update manifest with the key in ` + signingKeyEnv + `,
@@ -113,7 +113,7 @@ func (t tool) keygen(args []string) int {
 	}
 	command := fs.Args()
 	if *outPath == "" && len(command) == 0 {
-		fmt.Fprintf(t.stderr, "releasesign keygen: the private half has to go somewhere, and it is never printed.\nGive the command that stores it, a file to write it to (-out), or both:\n\n    go run ./cmd/releasesign keygen -- gh secret set %s\n\nNothing was changed.\n", signingKeyEnv)
+		fmt.Fprintf(t.stderr, "releasesign keygen: the private half has to go somewhere, and it is never printed.\nGive the command that stores it, a file to write it to (-out), or both:\n\n    go run ./cmd/releasesign keygen -out ~/evesynapse-release-key.pem\n\nNothing was changed.\n")
 		return 2
 	}
 
@@ -222,7 +222,7 @@ func (t tool) sign(paths []string) int {
 	}
 	keyPEM := t.getenv(signingKeyEnv)
 	if strings.TrimSpace(keyPEM) == "" {
-		fmt.Fprintf(t.stderr, "releasesign sign: %s is not set, so there is nothing to sign with, and a release is only published signed.\nIn the release job it comes from the repository secret of that name. To make a key and store it there:\n\n    go run ./cmd/releasesign keygen -- gh secret set %s\n\nNothing was signed.\n", signingKeyEnv, signingKeyEnv)
+		fmt.Fprintf(t.stderr, "releasesign sign: %s is not set, so there is nothing to sign with, and a release is only published signed.\nIn the release job it comes from the CI/CD variable of that name. To make a key and store it there:\n\n    go run ./cmd/releasesign keygen -out ~/evesynapse-release-key.pem\n\nNothing was signed.\n", signingKeyEnv)
 		return 1
 	}
 	keys, err := releasesig.ParsePrivateKeys([]byte(keyPEM))
@@ -238,7 +238,7 @@ func (t tool) sign(paths []string) int {
 	for _, key := range keys {
 		pub := key.Public().(ed25519.PublicKey)
 		if !slices.ContainsFunc(trusted, func(k ed25519.PublicKey) bool { return k.Equal(pub) }) {
-			fmt.Fprintf(t.stderr, "releasesign sign: the signing key is not one this build trusts.\nIts public half is not in %s:\n    %s\nso no updater built from this commit would install a release it signed. The secret and that file have to hold the two halves of the same key.\nNothing was signed.\n", trustedKeysPath, releasesig.KeyLine(pub))
+			fmt.Fprintf(t.stderr, "releasesign sign: the signing key is not one this build trusts.\nIts public half is not in %s:\n    %s\nso no updater built from this commit would install a release it signed. The variable and that file have to hold the two halves of the same key.\nNothing was signed.\n", trustedKeysPath, releasesig.KeyLine(pub))
 			return 1
 		}
 	}

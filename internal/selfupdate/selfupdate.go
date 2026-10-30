@@ -41,6 +41,7 @@ package selfupdate
 import (
 	"bytes"
 	"context"
+	"crypto/ed25519"
 	"crypto/sha256"
 	"encoding/binary"
 	"encoding/hex"
@@ -741,63 +742,94 @@ func fetchReleaseFile(ctx context.Context, fileURL string, limit int64) ([]byte,
 
 // verifyReleaseSignature fetches the signature published beside a
 // manifest and checks it against the release keys this build trusts.
-// The error is a *refusal when the release is not signed, or not by
-// one of those keys.
-func verifyReleaseSignature(ctx context.Context, manifest []byte, sigURL string) error {
+// It returns the signer the read-out names: the name the trusted
+// keys file records for the key that signed, when it records one,
+// and the key's fingerprint. The error is a *refusal when the
+// release is not signed, or not by one of those keys.
+func verifyReleaseSignature(ctx context.Context, manifest []byte, sigURL string) (string, error) {
 	keys, err := trustedReleaseKeys()
 	if err != nil || len(keys) == 0 {
-		return &refusal{"this copy of EveSynapse was built without a usable release key, so it can't tell a genuine release from a forgery. To install a build you trust yourself: evesynapse -update <download address> <sha256>"}
+		return "", &refusal{"this copy of EveSynapse was built without a usable release key, so it can't tell a genuine release from a forgery. To install a build you trust yourself: evesynapse -update <download address> <sha256>"}
 	}
 	sig, err := fetchReleaseFile(ctx, sigURL, releasesig.MaxSigBytes)
 	var status *releaseStatusError
 	if errors.As(err, &status) && status.code == http.StatusNotFound {
-		return &refusal{"the newest release isn't signed, so there is no way to tell it from a forgery."}
+		return "", &refusal{"the newest release isn't signed, so there is no way to tell it from a forgery."}
 	}
 	if err != nil {
-		return err
+		return "", err
 	}
-	if err := releasesig.Verify(keys, manifest, sig); err != nil {
-		return &refusal{"the newest release's signature doesn't check out: it was not signed with a release key this copy of EveSynapse trusts, or it was changed after it was signed."}
+	key, err := releasesig.VerifyingKey(keys, manifest, sig)
+	if err != nil {
+		return "", &refusal{"the newest release's signature doesn't check out: it was not signed with a release key this copy of EveSynapse trusts, or it was changed after it was signed."}
 	}
-	return nil
+	return signerReadout(key), nil
 }
 
-// providerDisplayName is how a provider is named in the
-// updater's read-out to the user.
-func providerDisplayName(provider string) string {
-	switch provider {
-	case "github":
-		return "GitHub"
-	case "gitlab":
-		return "GitLab"
-	case "forgejo":
-		return "Forgejo"
-	case "mirror":
-		return "the mirror"
+// signerName names a release key for the read-out: the label
+// the trusted keys file records for it, "" when it records
+// none. A var so tests can stand in a label of their own.
+var signerName = func(key ed25519.PublicKey) string {
+	labeled, err := releasesig.TrustedKeys()
+	if err != nil {
+		return ""
 	}
-	return provider
+	for _, tk := range labeled {
+		if tk.Key.Equal(key) {
+			return tk.Label
+		}
+	}
+	return ""
+}
+
+// signerReadout is how a verified release's signer is read
+// out: the key's recorded name when it has one, and its
+// fingerprint either way.
+func signerReadout(key ed25519.PublicKey) string {
+	if name := signerName(key); name != "" {
+		return name + ", " + releasesig.Fingerprint(key)
+	}
+	return releasesig.Fingerprint(key)
 }
 
 // reportProviderCheck reads out one provider consultation to
-// w: the provider's name and what it found, the version of the
-// genuine manifest it served or that it had no usable release.
-// The checks themselves happen in fetchProviderManifest; this
-// only reports their outcome.
+// w, in the package manager's idiom: the provider's name, the
+// endpoint it was asked at, and what it found, the version of
+// the genuine manifest it served or that it had no usable
+// release. The checks themselves happen in
+// fetchProviderManifest; this only reports their outcome.
 func reportProviderCheck(w io.Writer, provider string, m releaseManifest, err error) {
 	if w == nil {
 		return
 	}
-	if err != nil {
-		fmt.Fprintf(w, "Checked %s: no usable release.\n", providerDisplayName(provider))
-		return
+	found := "no usable release"
+	if err == nil {
+		found = "v" + strings.TrimPrefix(m.Version, "v")
 	}
-	fmt.Fprintf(w, "Checked %s: it has %s.\n", providerDisplayName(provider), "v"+strings.TrimPrefix(m.Version, "v"))
+	fmt.Fprintf(w, "%-10s%s    %s\n", provider, providerEndpoint(provider), found)
+}
+
+// providerEndpoint is the address a provider is read out as
+// being asked at: the root its releases are listed from.
+func providerEndpoint(provider string) string {
+	switch provider {
+	case "github":
+		return githubAPIBase() + "/repos/" + updateGitHubRepo()
+	case "gitlab":
+		return updateAPIBase() + "/projects/" + url.PathEscape(updateProject())
+	case "forgejo":
+		return forgejoAPIBase() + "/repos/" + updateForgejoRepo()
+	case "mirror":
+		return updateMirrorBase()
+	}
+	return ""
 }
 
 // fetchReleaseManifest downloads the manifest for arch from the
 // release channel (the dev channel when dev is set), checks its
 // signature, and returns it parsed with the name of the provider
-// that served it and the address of the binary it describes.
+// that served it, the signer its signature names, and the
+// address of the binary it describes.
 // Each provider consulted is read out to w as it is checked.
 //
 // An install that names one or more providers walks those, in
@@ -811,21 +843,21 @@ func reportProviderCheck(w io.Writer, provider string, m releaseManifest, err er
 // being offered. Only on the fallback list, and only when no
 // forge produces a genuine manifest, is the static mirror
 // asked, last.
-func fetchReleaseManifest(ctx context.Context, w io.Writer, arch string, dev bool) (releaseManifest, string, string, error) {
+func fetchReleaseManifest(ctx context.Context, w io.Writer, arch string, dev bool) (releaseManifest, string, string, string, error) {
 	if providers := updateProviders(); len(providers) > 0 {
 		return walkProviders(ctx, w, providers, arch, dev)
 	}
-	m, provider, binaryURL, err := walkProviders(ctx, w, []string{"github", "gitlab", "forgejo"}, arch, dev)
+	m, provider, signer, binaryURL, err := walkProviders(ctx, w, []string{"github", "gitlab", "forgejo"}, arch, dev)
 	if err == nil {
-		return m, provider, binaryURL, nil
+		return m, provider, signer, binaryURL, nil
 	}
 	var refused *refusal
 	if errors.As(err, &refused) {
-		return m, "", "", err
+		return m, "", "", "", err
 	}
-	m, binaryURL, err = fetchProviderManifest(ctx, "mirror", arch, dev)
+	m, signer, binaryURL, err = fetchProviderManifest(ctx, "mirror", arch, dev)
 	reportProviderCheck(w, "mirror", m, err)
-	return m, "mirror", binaryURL, err
+	return m, "mirror", signer, binaryURL, err
 }
 
 // walkProviders asks each named provider for the channel's
@@ -836,19 +868,20 @@ func fetchReleaseManifest(ctx context.Context, w io.Writer, arch string, dev boo
 // back with its manifest. A refusal aborts the walk. When no
 // provider answers, the first provider's error stands for the
 // rest.
-func walkProviders(ctx context.Context, w io.Writer, providers []string, arch string, dev bool) (releaseManifest, string, string, error) {
+func walkProviders(ctx context.Context, w io.Writer, providers []string, arch string, dev bool) (releaseManifest, string, string, string, error) {
 	var best releaseManifest
 	var bestProvider string
+	var bestSigner string
 	var bestBinary string
 	var firstErr error
 	found := false
 	for _, provider := range providers {
-		m, binaryURL, err := fetchProviderManifest(ctx, provider, arch, dev)
+		m, signer, binaryURL, err := fetchProviderManifest(ctx, provider, arch, dev)
 		reportProviderCheck(w, provider, m, err)
 		if err != nil {
 			var refused *refusal
 			if errors.As(err, &refused) {
-				return best, "", "", err
+				return best, "", "", "", err
 			}
 			if firstErr == nil {
 				firstErr = err
@@ -856,49 +889,50 @@ func walkProviders(ctx context.Context, w io.Writer, providers []string, arch st
 			continue
 		}
 		if !found || compareVersions(m.Version, best.Version) > 0 {
-			best, bestProvider, bestBinary, found = m, provider, binaryURL, true
+			best, bestProvider, bestSigner, bestBinary, found = m, provider, signer, binaryURL, true
 		}
 	}
 	if found {
-		return best, bestProvider, bestBinary, nil
+		return best, bestProvider, bestSigner, bestBinary, nil
 	}
-	return best, "", "", firstErr
+	return best, "", "", "", firstErr
 }
 
 // fetchProviderManifest is fetchReleaseManifest against one
 // named provider.
-func fetchProviderManifest(ctx context.Context, provider string, arch string, dev bool) (releaseManifest, string, error) {
+func fetchProviderManifest(ctx context.Context, provider string, arch string, dev bool) (releaseManifest, string, string, error) {
 	var m releaseManifest
 	manifestURL, sigURL, binaryURL, err := providerAssets(ctx, provider, arch, dev)
 	if err != nil {
-		return m, "", err
+		return m, "", "", err
 	}
 	raw, err := fetchReleaseFile(ctx, manifestURL, releasesig.MaxManifestBytes)
 	if err != nil {
-		return m, "", err
+		return m, "", "", err
 	}
-	if err := verifyReleaseSignature(ctx, raw, sigURL); err != nil {
-		return m, "", err
+	signer, err := verifyReleaseSignature(ctx, raw, sigURL)
+	if err != nil {
+		return m, "", "", err
 	}
 	// Only now is the manifest read. Nothing in it is acted on, or
 	// even parsed, before its signature has been checked, and what is
 	// parsed is the very bytes that were signed.
 	if err := json.NewDecoder(bytes.NewReader(raw)).Decode(&m); err != nil {
-		return m, "", errors.New("the update information couldn't be read")
+		return m, "", "", errors.New("the update information couldn't be read")
 	}
 	m.SHA256 = strings.ToLower(strings.TrimSpace(m.SHA256))
 	if _, err := hex.DecodeString(m.SHA256); err != nil || len(m.SHA256) != sha256.Size*2 {
-		return m, "", errors.New("the update information couldn't be read")
+		return m, "", "", errors.New("the update information couldn't be read")
 	}
 	if strings.TrimSpace(m.Version) == "" {
-		return m, "", errors.New("the update information couldn't be read")
+		return m, "", "", errors.New("the update information couldn't be read")
 	}
 	// The signature covers the kind of computer too, so a genuine
 	// manifest for another kind is not accepted in this one's place.
 	if m.Arch != arch {
-		return m, "", fmt.Errorf("the update information is for %q computers, not %q", m.Arch, arch)
+		return m, "", "", fmt.Errorf("the update information is for %q computers, not %q", m.Arch, arch)
 	}
-	return m, binaryURL, nil
+	return m, signer, binaryURL, nil
 }
 
 // runReleaseUpdate implements the release-channel forms of
@@ -919,7 +953,7 @@ func runReleaseUpdate(current, target, arch string, stdout, stderr io.Writer, de
 	}
 	fmt.Fprintf(stdout, "Checking for updates… you're on %s.\n", current)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	m, provider, source, err := fetchReleaseManifest(ctx, stdout, arch, dev)
+	m, provider, signer, source, err := fetchReleaseManifest(ctx, stdout, arch, dev)
 	cancel()
 	if err != nil {
 		var refused *refusal
@@ -944,9 +978,14 @@ func runReleaseUpdate(current, target, arch string, stdout, stderr io.Writer, de
 		return 0
 	}
 	fmt.Fprintf(stdout, "A new version is available: %s.\n", latest)
-	fmt.Fprintln(stdout, "Release signature verified.")
-	fmt.Fprintf(stdout, "Downloading it from %s.\n", providerDisplayName(provider))
-	if code := installUpdate(target, source, m.SHA256, machine, stdout, stderr); code != 0 {
+	fmt.Fprintf(stdout, "Signature verified: %s\n", signer)
+	display := &downloadDisplay{w: stdout, name: "evesynapse-" + arch, from: provider}
+	sizeCtx, sizeCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	if size, serr := downloadSize(sizeCtx, source); serr == nil {
+		display.total = size
+	}
+	sizeCancel()
+	if code := installUpdate(target, source, m.SHA256, machine, stdout, stderr, display); code != 0 {
 		return code
 	}
 	if got, ok := installedVersion(target); ok {
@@ -1041,7 +1080,7 @@ func runUpdate(current, target string, args []string, stdout, stderr io.Writer) 
 		return 2
 	}
 
-	return installUpdate(target, source, wantHash, machine, stdout, stderr)
+	return installUpdate(target, source, wantHash, machine, stdout, stderr, nil)
 }
 
 // updateSourceIsRemote reports whether an explicit update source
@@ -1051,19 +1090,118 @@ func updateSourceIsRemote(source string) bool {
 	return err == nil && (u.Scheme == "http" || u.Scheme == "https")
 }
 
+// downloadDisplay is the release channel's download read-out,
+// in the package manager's idiom: the total size and the Get
+// line before the fetch, progress lines while it runs. The
+// explicit-address form passes none and keeps the plain
+// "Downloading the update…" line.
+type downloadDisplay struct {
+	w     io.Writer
+	name  string // the artifact's file name: evesynapse-arm64
+	from  string // the provider the release came from, as configured
+	total int64  // the download's size in bytes, 0 while unknown
+}
+
+// printHeader reads out a download before it starts: its total
+// size when that is known, then the Get line.
+func (d *downloadDisplay) printHeader() {
+	if d.total > 0 {
+		fmt.Fprintf(d.w, "\nTotal download size: %s\n", formatBytes(d.total))
+		fmt.Fprintf(d.w, "Get: %s from %s [%s]\n", d.name, d.from, formatBytes(d.total))
+		return
+	}
+	fmt.Fprintf(d.w, "Get: %s from %s\n", d.name, d.from)
+}
+
+// downloadSize asks a release file's server how large the file
+// is, for the read-out's total. A server that will not say is
+// not an error: the download proceeds and the read-out goes
+// without the total.
+func downloadSize(ctx context.Context, fileURL string) (int64, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodHead, fileURL, nil)
+	if err != nil {
+		return 0, err
+	}
+	req.Header.Set("User-Agent", "EveSynapse-Updater")
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return 0, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return 0, fmt.Errorf("the update server answered %s", resp.Status)
+	}
+	if resp.ContentLength <= 0 {
+		return 0, errors.New("the update server did not give the download's size")
+	}
+	return resp.ContentLength, nil
+}
+
+// formatBytes sizes a download the way the read-out does: MiB
+// with one decimal.
+func formatBytes(n int64) string {
+	return fmt.Sprintf("%.1f MiB", float64(n)/(1<<20))
+}
+
+// progressInterval bounds how often the download read-out
+// prints a progress line; the last line always prints, so the
+// read-out ends on the completed state.
+const progressInterval = 250 * time.Millisecond
+
+// progressReader counts a download through and reads out its
+// progress as it goes: the share done, the bytes moved against
+// the total, and the speed, apt's bracketed line.
+type progressReader struct {
+	r     io.Reader
+	d     *downloadDisplay
+	done  int64
+	start time.Time
+	last  time.Time
+}
+
+func (p *progressReader) Read(b []byte) (int, error) {
+	n, err := p.r.Read(b)
+	p.done += int64(n)
+	if now := time.Now(); err == io.EOF || now.Sub(p.last) >= progressInterval {
+		p.last = now
+		p.print(now)
+	}
+	return n, err
+}
+
+func (p *progressReader) print(now time.Time) {
+	d := p.d
+	speed := 0.0
+	if elapsed := now.Sub(p.start).Seconds(); elapsed > 0 {
+		speed = float64(p.done) / elapsed / (1 << 20)
+	}
+	if d.total > 0 {
+		fmt.Fprintf(d.w, "%3d%% [%s %.1f/%.1f MiB] %.1f MB/s\n",
+			p.done*100/d.total, d.name, float64(p.done)/(1<<20), float64(d.total)/(1<<20), speed)
+		return
+	}
+	fmt.Fprintf(d.w, "     [%s %s] %.1f MB/s\n", d.name, formatBytes(p.done), speed)
+}
+
 // installUpdate downloads source, verifies it (size, ELF
 // machine kind, checksum when wantHash is set), swaps it into
 // place at target, and asks the running server to restart onto
-// it. Shared by the explicit-address and release-channel forms.
-func installUpdate(target, source, wantHash string, wantMachine uint16, stdout, stderr io.Writer) int {
+// it. Shared by the explicit-address and release-channel forms;
+// the release channel passes its download read-out as display.
+func installUpdate(target, source, wantHash string, wantMachine uint16, stdout, stderr io.Writer, display *downloadDisplay) int {
 	dir := filepath.Dir(target)
 	tmpPath := filepath.Join(dir, fmt.Sprintf(".evesynapse.update-%d", os.Getpid()))
 	defer os.Remove(tmpPath) // no-op once the temp file has been renamed into place
 
-	fmt.Fprintln(stdout, "Downloading the update…")
+	if display != nil {
+		display.printHeader()
+	} else {
+		fmt.Fprintln(stdout, "Downloading the update…")
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), updateDownloadTimeout)
 	defer cancel()
-	if err := fetchUpdate(ctx, source, tmpPath); err != nil {
+	if err := fetchUpdate(ctx, source, tmpPath, display); err != nil {
 		fmt.Fprintf(stderr, "Couldn't download the update: %v\nNothing was changed.\n", err)
 		return 1
 	}
@@ -1124,8 +1262,9 @@ func installUpdate(target, source, wantHash string, wantMachine uint16, stdout, 
 
 // fetchUpdate copies source (an http/https URL, a file:// URL,
 // or a plain local path) into dstPath, streaming so even a slow
-// link never holds the build in memory.
-func fetchUpdate(ctx context.Context, source, dstPath string) error {
+// link never holds the build in memory. A display is read out
+// progress against as the bytes move.
+func fetchUpdate(ctx context.Context, source, dstPath string, display *downloadDisplay) error {
 	out, err := os.OpenFile(dstPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
 	if err != nil {
 		return err
@@ -1150,6 +1289,9 @@ func fetchUpdate(ctx context.Context, source, dstPath string) error {
 		if resp.ContentLength > updateMaxBytes {
 			return fmt.Errorf("the download is larger than %d MB", updateMaxBytes>>20)
 		}
+		if display != nil && display.total <= 0 && resp.ContentLength > 0 {
+			display.total = resp.ContentLength
+		}
 		body = resp.Body
 	} else {
 		path := source
@@ -1169,6 +1311,9 @@ func fetchUpdate(ctx context.Context, source, dstPath string) error {
 		body = in
 	}
 
+	if display != nil {
+		body = &progressReader{r: body, d: display, start: time.Now()}
+	}
 	written, err := io.Copy(out, io.LimitReader(body, updateMaxBytes+1))
 	if err != nil {
 		return err

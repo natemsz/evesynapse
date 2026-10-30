@@ -12,6 +12,8 @@ import (
 	"errors"
 	"strings"
 	"testing"
+
+	"golang.org/x/crypto/ssh"
 )
 
 // newKey makes a key pair for one test. No test uses the real release
@@ -336,5 +338,111 @@ func TestTrustedKeysFile(t *testing.T) {
 	got[0] = nil
 	if again, _ := Trusted(); len(again) == 0 || again[0] == nil {
 		t.Fatal("changing the slice Trusted() returned changed the trusted keys")
+	}
+}
+
+func TestParseTrustedKeysLabels(t *testing.T) {
+	pubA, _ := newKey(t)
+	pubB, _ := newKey(t)
+	a, b := encodePub(t, pubA), encodePub(t, pubB)
+
+	// A Label line in the commentary directly above a block
+	// names that key alone; the key above it stays unnamed.
+	keys, err := ParseTrustedKeys([]byte("Notes about the keys.\n\n" + a + "\nLabel: the second signer\n" + b))
+	if err != nil {
+		t.Fatalf("two keys, one labelled: %v", err)
+	}
+	if len(keys) != 2 || !keys[0].Key.Equal(pubA) || !keys[1].Key.Equal(pubB) {
+		t.Fatalf("got %d keys, want the two that were written, in order", len(keys))
+	}
+	if keys[0].Label != "" {
+		t.Errorf("the first key's label is %q, want none", keys[0].Label)
+	}
+	if keys[1].Label != "the second signer" {
+		t.Errorf("the second key's label is %q, want %q", keys[1].Label, "the second signer")
+	}
+
+	// The last Label line in the commentary wins, prose that
+	// mentions a label mid-line is not one, and Windows line
+	// endings read the same.
+	labelled := "The Label: below names the key.\nLabel: an earlier name\nLabel: the name\r\n" +
+		strings.ReplaceAll(b, "\n", "\r\n")
+	keys, err = ParseTrustedKeys([]byte(labelled))
+	if err != nil || len(keys) != 1 {
+		t.Fatalf("one labelled key, CRLF: %d keys, %v", len(keys), err)
+	}
+	if keys[0].Label != "the name" {
+		t.Errorf("label is %q, want the last Label line's text", keys[0].Label)
+	}
+
+	// ParsePublicKeys reads the same file and drops the labels.
+	plain, err := ParsePublicKeys([]byte("Label: named\n" + a))
+	if err != nil || len(plain) != 1 || !plain[0].Equal(pubA) {
+		t.Fatalf("ParsePublicKeys of a labelled file: %d keys, %v", len(plain), err)
+	}
+}
+
+func TestVerifyingKeyNamesTheSigner(t *testing.T) {
+	pubA, privA := newKey(t)
+	pubB, privB := newKey(t)
+	both := Sign([]ed25519.PrivateKey{privA, privB}, sampleManifest)
+
+	// Both keys signed; the one that is trusted is named.
+	got, err := VerifyingKey([]ed25519.PublicKey{pubB}, sampleManifest, both)
+	if err != nil || !got.Equal(pubB) {
+		t.Fatalf("VerifyingKey with only the second key trusted: %v, %v", got, err)
+	}
+	// Both trusted: the signature file's first line is the
+	// first key's, and it is the one accepted.
+	got, err = VerifyingKey([]ed25519.PublicKey{pubA, pubB}, sampleManifest, both)
+	if err != nil || !got.Equal(pubA) {
+		t.Fatalf("VerifyingKey with both keys trusted: %v, %v", got, err)
+	}
+	// The refusals are Verify's own errors.
+	if _, err := VerifyingKey(nil, sampleManifest, both); err != ErrNoTrustedKeys {
+		t.Errorf("no trusted keys: err %v, want ErrNoTrustedKeys", err)
+	}
+	if _, err := VerifyingKey([]ed25519.PublicKey{pubA}, sampleManifest, []byte("not a signature\n")); err != ErrNoSignature {
+		t.Errorf("no readable signature: err %v, want ErrNoSignature", err)
+	}
+	other := Sign([]ed25519.PrivateKey{privB}, sampleManifest)
+	if _, err := VerifyingKey([]ed25519.PublicKey{pubA}, sampleManifest, other); err != ErrBadSignature {
+		t.Errorf("signed by an untrusted key: err %v, want ErrBadSignature", err)
+	}
+}
+
+func TestFingerprintIsTheSSHFingerprint(t *testing.T) {
+	pub, _ := newKey(t)
+	sshKey, err := ssh.NewPublicKey(pub)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := Fingerprint(pub), ssh.FingerprintSHA256(sshKey); got != want {
+		t.Fatalf("Fingerprint = %q, want %q, the fingerprint ssh-keygen prints for this key", got, want)
+	}
+}
+
+// TestTrustedKeysFileLabels checks the labels the compiled-in
+// file records: the current release key is named for the
+// updater's signer read-out, and the key it replaced is not.
+func TestTrustedKeysFileLabels(t *testing.T) {
+	keys, err := TrustedKeys()
+	if err != nil {
+		t.Fatalf("trusted_keys.pem can't be read: %v", err)
+	}
+	const current = "MCowBQYDK2VwAyEAmaFCxLtA1O3HxV8OTGGug+jPhpb+9x87SCdU+thQAmc="
+	seen := false
+	for _, tk := range keys {
+		if KeyLine(tk.Key) == current {
+			seen = true
+			if tk.Label != "nate@evesynapse.app / natemsz" {
+				t.Errorf("the current key's label is %q, want %q", tk.Label, "nate@evesynapse.app / natemsz")
+			}
+		} else if tk.Label != "" {
+			t.Errorf("key %s carries label %q, want none", KeyLine(tk.Key), tk.Label)
+		}
+	}
+	if !seen {
+		t.Fatal("the current release key is not in trusted_keys.pem")
 	}
 }

@@ -33,6 +33,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 )
 
 // testVersion is the version the updater under test believes it is
@@ -332,6 +333,15 @@ func withTrustedKeys(t *testing.T, keys func() ([]ed25519.PublicKey, error)) {
 	t.Cleanup(func() { trustedReleaseKeys = old })
 }
 
+// withSignerName stands in for the label the trusted keys
+// file records for the signing key, for one test.
+func withSignerName(t *testing.T, name string) {
+	t.Helper()
+	old := signerName
+	signerName = func(ed25519.PublicKey) string { return name }
+	t.Cleanup(func() { signerName = old })
+}
+
 // manifestJSON is a release manifest exactly as the release job
 // writes one.
 func manifestJSON(version, arch, sum string) string {
@@ -344,9 +354,13 @@ func signedBy(key ed25519.PrivateKey, manifest string) []byte {
 	return releasesig.Sign([]ed25519.PrivateKey{key}, []byte(manifest))
 }
 
-// serve answers path with body.
+// serve answers path with body. The length is named, as the
+// real providers name it, so a HEAD request reports the size.
 func serve(mux *http.ServeMux, path string, body []byte) {
-	mux.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write(body) })
+	mux.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Length", strconv.Itoa(len(body)))
+		_, _ = w.Write(body)
+	})
 }
 
 // publish serves a manifest at path and its signature by key beside
@@ -388,6 +402,7 @@ func TestReleaseUpdateUpToDate(t *testing.T) {
 
 func TestReleaseUpdateInstallsNewer(t *testing.T) {
 	key := trustTestKey(t)
+	withSignerName(t, "nate@evesynapse.app / natemsz")
 	fresh := fakeELF(elfMachineAArch64, updateMinBytes+100)
 	sum, err := sha256FileHexBytes(fresh)
 	if err != nil {
@@ -412,19 +427,25 @@ func TestReleaseUpdateInstallsNewer(t *testing.T) {
 	if !strings.Contains(out.String(), "A new version is available: v9.9.9.9") {
 		t.Fatalf("output %q missing the new-version note", out.String())
 	}
-	if !strings.Contains(out.String(), "Checked GitLab: it has v9.9.9.9.") {
-		t.Fatalf("output %q missing the provider read-out", out.String())
+	if want := fmt.Sprintf("gitlab    %s/projects/natemsz%%2Fevesynapse    v9.9.9.9", srv.URL); !strings.Contains(out.String(), want) {
+		t.Fatalf("output %q missing the provider read-out %q", out.String(), want)
 	}
-	if !strings.Contains(out.String(), "Downloading it from GitLab.") {
-		t.Fatalf("output %q missing the download source", out.String())
+	if !strings.Contains(out.String(), "Total download size: 1.0 MiB") {
+		t.Fatalf("output %q missing the download's total size", out.String())
+	}
+	if !strings.Contains(out.String(), "Get: evesynapse-arm64 from gitlab [1.0 MiB]") {
+		t.Fatalf("output %q missing the download's Get line", out.String())
+	}
+	if !strings.Contains(out.String(), "100% [evesynapse-arm64 1.0/1.0 MiB]") {
+		t.Fatalf("output %q missing the download's completed progress line", out.String())
 	}
 	if !strings.Contains(out.String(), "now on v9.9.9.9") {
 		t.Fatalf("output %q missing the new-version readout", out.String())
 	}
 	// Both checks are reported, the signature before anything is
 	// downloaded and the checksum after.
-	signature := strings.Index(out.String(), "Release signature verified.")
-	download := strings.Index(out.String(), "Downloading the update")
+	signature := strings.Index(out.String(), "Signature verified: nate@evesynapse.app / natemsz, SHA256:")
+	download := strings.Index(out.String(), "Get: evesynapse-arm64 from gitlab")
 	checksum := strings.Index(out.String(), "Download verified against its checksum.")
 	if signature < 0 || download < signature || checksum < download {
 		t.Fatalf("output %q: want the signature reported, then the download, then the checksum", out.String())
@@ -1575,7 +1596,7 @@ func TestChainPicksNewestForge(t *testing.T) {
 	t.Cleanup(func() { releaseMirrorBaseURL = oldMirror })
 
 	var out bytes.Buffer
-	m, provider, binaryURL, err := fetchReleaseManifest(context.Background(), &out, "arm64", false)
+	m, provider, signer, binaryURL, err := fetchReleaseManifest(context.Background(), &out, "arm64", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1585,16 +1606,20 @@ func TestChainPicksNewestForge(t *testing.T) {
 	if provider != "gitlab" {
 		t.Fatalf("chain picked provider %q, want gitlab", provider)
 	}
+	if !strings.HasPrefix(signer, "SHA256:") {
+		t.Fatalf("chain's signer is %q, want the signing key's fingerprint", signer)
+	}
 	if binaryURL != glSrv.URL+"/evesynapse-arm64" {
 		t.Fatalf("chain picked binary %q, want GitLab's", binaryURL)
 	}
 	// The read-out names each forge as it is checked, in the
-	// fallback list's order, and what each one found.
-	ghLine := strings.Index(out.String(), "Checked GitHub: no usable release.")
-	glLine := strings.Index(out.String(), "Checked GitLab: it has v9.9.9.9.")
-	fjLine := strings.Index(out.String(), "Checked Forgejo: it has v9.9.9.0.")
+	// fallback list's order, at its endpoint, and what each
+	// one found.
+	ghLine := strings.Index(out.String(), "github    https://api.github.com/repos/natemsz/evesynapse    no usable release")
+	glLine := strings.Index(out.String(), fmt.Sprintf("gitlab    %s/projects/natemsz%%2Fevesynapse    v9.9.9.9", glSrv.URL))
+	fjLine := strings.Index(out.String(), fmt.Sprintf("forgejo   %s/api/v1/repos/EveSynapse/evesynapse    v9.9.9.0", fjSrv.URL))
 	if ghLine < 0 || glLine < ghLine || fjLine < glLine {
-		t.Fatalf("read-out %q: want GitHub (no usable release), then GitLab (v9.9.9.9), then Forgejo (v9.9.9.0)", out.String())
+		t.Fatalf("read-out %q: want github (no usable release), then gitlab (v9.9.9.9), then forgejo (v9.9.9.0)", out.String())
 	}
 }
 
@@ -1624,7 +1649,7 @@ func TestNamedChainTieGoesToEarlierProvider(t *testing.T) {
 	withForgejo(t, fjSrv.URL)
 
 	var out bytes.Buffer
-	m, provider, binaryURL, err := fetchReleaseManifest(context.Background(), &out, "arm64", false)
+	m, provider, _, binaryURL, err := fetchReleaseManifest(context.Background(), &out, "arm64", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1637,9 +1662,58 @@ func TestNamedChainTieGoesToEarlierProvider(t *testing.T) {
 	if binaryURL != glSrv.URL+"/evesynapse-arm64" {
 		t.Fatalf("tie picked binary %q, want GitLab's, from the winning release", binaryURL)
 	}
-	glLine := strings.Index(out.String(), "Checked GitLab: it has v9.9.9.9.")
-	fjLine := strings.Index(out.String(), "Checked Forgejo: it has v9.9.9.9.")
+	glLine := strings.Index(out.String(), fmt.Sprintf("gitlab    %s/projects/natemsz%%2Fevesynapse    v9.9.9.9", glSrv.URL))
+	fjLine := strings.Index(out.String(), fmt.Sprintf("forgejo   %s/api/v1/repos/EveSynapse/evesynapse    v9.9.9.9", fjSrv.URL))
 	if glLine < 0 || fjLine < glLine {
-		t.Fatalf("read-out %q: want GitLab checked before Forgejo, in the listed order", out.String())
+		t.Fatalf("read-out %q: want gitlab checked before forgejo, in the listed order", out.String())
+	}
+}
+
+func TestDownloadDisplayHeader(t *testing.T) {
+	var out bytes.Buffer
+	d := &downloadDisplay{w: &out, name: "evesynapse-arm64", from: "github", total: 54 << 20}
+	d.printHeader()
+	want := "\nTotal download size: 54.0 MiB\nGet: evesynapse-arm64 from github [54.0 MiB]\n"
+	if out.String() != want {
+		t.Fatalf("header with a known size:\n%q\nwant:\n%q", out.String(), want)
+	}
+
+	out.Reset()
+	d = &downloadDisplay{w: &out, name: "evesynapse-arm64", from: "mirror"}
+	d.printHeader()
+	if want := "Get: evesynapse-arm64 from mirror\n"; out.String() != want {
+		t.Fatalf("header without a known size: %q, want %q", out.String(), want)
+	}
+}
+
+func TestProgressReaderReadout(t *testing.T) {
+	// Half of a 54.0 MiB download moved in four seconds: the
+	// share done, the bytes moved against the total, and the
+	// speed, in apt's bracketed line.
+	var out bytes.Buffer
+	d := &downloadDisplay{w: &out, name: "evesynapse-arm64", from: "github", total: 54 << 20}
+	now := time.Now()
+	p := &progressReader{d: d, done: 27 << 20, start: now.Add(-4 * time.Second)}
+	p.print(now)
+	if want := " 50% [evesynapse-arm64 27.0/54.0 MiB] 6.8 MB/s\n"; out.String() != want {
+		t.Fatalf("progress line: %q, want %q", out.String(), want)
+	}
+
+	// A stream read through the reader counts its bytes and
+	// the read-out ends on the completed state.
+	out.Reset()
+	src := &progressReader{
+		r:     bytes.NewReader(make([]byte, 2<<20)),
+		d:     &downloadDisplay{w: &out, name: "evesynapse-amd64", from: "gitlab", total: 2 << 20},
+		start: time.Now(),
+	}
+	if _, err := io.Copy(io.Discard, src); err != nil {
+		t.Fatal(err)
+	}
+	if src.done != 2<<20 {
+		t.Fatalf("the reader counted %d bytes, want %d", src.done, 2<<20)
+	}
+	if !strings.Contains(out.String(), "100% [evesynapse-amd64 2.0/2.0 MiB]") {
+		t.Fatalf("read-out %q does not end on the completed download", out.String())
 	}
 }

@@ -900,10 +900,30 @@ newest signed release across the sources wins, a tie goes to
 the earlier-listed source, and the manifest, its signature and
 the build all come from that one source's release, verified by
 the same signatures and checksums whichever source serves
-them. An update run prints each source it checks and the
-source it downloads from. With the setting unset, the updater
-walks a built-in fallback list (github, gitlab, forgejo) and
-asks the mirror only when no forge produced a signed release.
+them. An update run reads out in the package manager's idiom:
+each source it checks, at its endpoint, with the version it
+found there, the signing key's signer and fingerprint once
+the signature verifies, then the download's total size, the
+Get line naming the source it downloads from, and progress as
+it downloads:
+
+```
+github    https://api.github.com/repos/natemsz/evesynapse          v0.7.0.9
+gitlab    https://gitlab.com/api/v4/projects/natemsz%2Fevesynapse  v0.7.0.9
+forgejo   https://natems.dev/api/v1/repos/EveSynapse/evesynapse    no usable release
+mirror    https://cdn.synap6.io                                    v0.7.0.9
+A new version is available: v0.7.0.9.
+Signature verified: nate@evesynapse.app / natemsz, SHA256:KkV2PM3ej2aUVOkjfuCTzhibjMcydkO886VchqyxE+k
+
+Total download size: 54.0 MiB
+Get: evesynapse-amd64 from github [54.0 MiB]
+ 42% [evesynapse-amd64 22.7/54.0 MiB] 6.8 MB/s
+Download verified against its checksum.
+```
+
+With the setting unset, the updater walks a built-in fallback
+list (github, gitlab, forgejo) and asks the mirror only when
+no forge produced a signed release.
 
 A release is one edit: `internal/app/version.txt`. Nothing else in
 the repository repeats the version, and the tests read it from that

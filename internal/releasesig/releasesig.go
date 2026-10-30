@@ -31,9 +31,11 @@ package releasesig
 import (
 	"bytes"
 	"crypto/ed25519"
+	"crypto/sha256"
 	"crypto/x509"
 	_ "embed"
 	"encoding/base64"
+	"encoding/binary"
 	"encoding/pem"
 	"errors"
 	"fmt"
@@ -86,8 +88,16 @@ func Sign(keys []ed25519.PrivateKey, message []byte) []byte {
 // cannot read is passed over rather than treated as a failure, so a
 // later kind of signature can be published beside this one.
 func Verify(trusted []ed25519.PublicKey, message, sigFile []byte) error {
+	_, err := VerifyingKey(trusted, message, sigFile)
+	return err
+}
+
+// VerifyingKey is Verify that also says which of the trusted keys
+// made the signature it accepted, so a caller can name the signer.
+// The errors are Verify's.
+func VerifyingKey(trusted []ed25519.PublicKey, message, sigFile []byte) (ed25519.PublicKey, error) {
 	if len(trusted) == 0 {
-		return ErrNoTrustedKeys
+		return nil, ErrNoTrustedKeys
 	}
 	signatures := 0
 	for _, line := range bytes.Split(sigFile, []byte("\n")) {
@@ -98,29 +108,73 @@ func Verify(trusted []ed25519.PublicKey, message, sigFile []byte) error {
 		signatures++
 		for _, key := range trusted {
 			if len(key) == ed25519.PublicKeySize && ed25519.Verify(key, message, sig) {
-				return nil
+				return key, nil
 			}
 		}
 	}
 	if signatures == 0 {
-		return ErrNoSignature
+		return nil, ErrNoSignature
 	}
-	return ErrBadSignature
+	return nil, ErrBadSignature
+}
+
+// Fingerprint is the key's SSH fingerprint: "SHA256:" and the
+// base64, padding dropped, of the SHA-256 of the key's SSH wire
+// encoding. It is the fingerprint ssh-keygen prints for the same
+// key, so a signer named by it can be checked against the key
+// owner's own copy.
+func Fingerprint(key ed25519.PublicKey) string {
+	var blob bytes.Buffer
+	writeSSHString(&blob, []byte("ssh-ed25519"))
+	writeSSHString(&blob, key)
+	sum := sha256.Sum256(blob.Bytes())
+	return "SHA256:" + base64.RawStdEncoding.EncodeToString(sum[:])
+}
+
+// writeSSHString writes one length-prefixed string of the SSH
+// wire encoding.
+func writeSSHString(buf *bytes.Buffer, s []byte) {
+	_ = binary.Write(buf, binary.BigEndian, uint32(len(s)))
+	buf.Write(s)
 }
 
 //go:embed trusted_keys.pem
 var trustedPEM []byte
 
-var trustedOnce = sync.OnceValues(func() ([]ed25519.PublicKey, error) {
-	return ParsePublicKeys(trustedPEM)
+var trustedOnce = sync.OnceValues(func() ([]TrustedKey, error) {
+	return ParseTrustedKeys(trustedPEM)
 })
 
 // Trusted returns the release keys compiled into this build: the
 // public keys in trusted_keys.pem. A build made before a key was
 // added has none, and its updater then refuses every release.
 func Trusted() ([]ed25519.PublicKey, error) {
+	labeled, err := trustedOnce()
+	if err != nil {
+		return nil, err
+	}
+	keys := make([]ed25519.PublicKey, len(labeled))
+	for i, tk := range labeled {
+		keys[i] = tk.Key
+	}
+	return keys, nil
+}
+
+// TrustedKeys returns the release keys compiled into this build
+// with the labels trusted_keys.pem records beside them.
+func TrustedKeys() ([]TrustedKey, error) {
 	keys, err := trustedOnce()
 	return slices.Clone(keys), err
+}
+
+// A TrustedKey is one key from a trusted-keys file, with the
+// label the file records for it: the text of a "Label:" line in
+// the commentary directly above the key's block, which the
+// updater names the signer by. A key the file does not label
+// has an empty Label.
+type TrustedKey struct {
+	Key   ed25519.PublicKey
+	Label string
 }
 
 // ParsePublicKeys reads the public keys in a trusted-keys file: PEM
@@ -128,11 +182,27 @@ func Trusted() ([]ed25519.PublicKey, error) {
 // is commentary. A file with no blocks holds no keys, which is not an
 // error; anything in it that is not a readable Ed25519 public key is.
 func ParsePublicKeys(pemData []byte) ([]ed25519.PublicKey, error) {
-	blocks, err := pemBlocks(pemData)
+	labeled, err := ParseTrustedKeys(pemData)
 	if err != nil {
 		return nil, err
 	}
 	var keys []ed25519.PublicKey
+	for _, tk := range labeled {
+		keys = append(keys, tk.Key)
+	}
+	return keys, nil
+}
+
+// ParseTrustedKeys is ParsePublicKeys that keeps each key's
+// label: the text after "Label:" on the last line of that form
+// in the commentary directly above the key's block, "" when the
+// commentary names no label.
+func ParseTrustedKeys(pemData []byte) ([]TrustedKey, error) {
+	blocks, labels, err := keyBlocks(pemData)
+	if err != nil {
+		return nil, err
+	}
+	var keys []TrustedKey
 	for i, block := range blocks {
 		if strings.Contains(block.Type, "PRIVATE") {
 			return nil, fmt.Errorf("block %d is a private key: only public keys belong here, and a private key that was put here has to be treated as leaked and replaced", i+1)
@@ -148,9 +218,49 @@ func ParsePublicKeys(pemData []byte) ([]ed25519.PublicKey, error) {
 		if !ok {
 			return nil, fmt.Errorf("key %d is not an Ed25519 key", i+1)
 		}
-		keys = append(keys, key)
+		keys = append(keys, TrustedKey{Key: key, Label: labels[i]})
 	}
 	return keys, nil
+}
+
+// keyBlocks decodes the PEM blocks in data as pemBlocks does,
+// and reports with each block the label its preceding commentary
+// names: the text after "Label:" on the last line of that form
+// before the block, "" when there is none.
+func keyBlocks(data []byte) ([]*pem.Block, []string, error) {
+	var blocks []*pem.Block
+	var labels []string
+	for rest := data; ; {
+		idx := bytes.Index(rest, []byte("-----BEGIN "))
+		if idx < 0 {
+			break
+		}
+		commentary := rest[:idx]
+		block, after := pem.Decode(rest[idx:])
+		if block == nil {
+			break
+		}
+		blocks = append(blocks, block)
+		labels = append(labels, labelIn(commentary))
+		rest = after
+	}
+	if begins := bytes.Count(data, []byte("-----BEGIN ")); begins != len(blocks) {
+		return nil, nil, fmt.Errorf("%d of its %d PEM blocks can't be read", begins-len(blocks), begins)
+	}
+	return blocks, labels, nil
+}
+
+// labelIn reads the label a stretch of trusted-keys commentary
+// names: the text after "Label:" on its last line of that form,
+// "" when it has none.
+func labelIn(commentary []byte) string {
+	label := ""
+	for _, line := range strings.Split(string(commentary), "\n") {
+		if text, ok := strings.CutPrefix(strings.TrimSpace(line), "Label:"); ok {
+			label = strings.TrimSpace(text)
+		}
+	}
+	return label
 }
 
 // ParsePrivateKeys reads the signing key(s) the release job is given:

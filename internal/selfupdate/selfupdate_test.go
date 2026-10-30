@@ -516,6 +516,7 @@ func TestReleaseUpdateLeavesDevBuildsAlone(t *testing.T) {
 // test server for the duration of one test.
 func withReleaseAPI(t *testing.T, url string) {
 	t.Helper()
+	t.Setenv("EVESYNAPSE_UPDATE_PROVIDER", "gitlab")
 	old := releaseAPIBaseURL
 	releaseAPIBaseURL = url
 	t.Cleanup(func() { releaseAPIBaseURL = old })
@@ -1386,12 +1387,16 @@ func TestRunUpdateRestartsRunningServer(t *testing.T) {
 
 func TestUpdateProvider(t *testing.T) {
 	t.Setenv("EVESYNAPSE_UPDATE_PROVIDER", "")
-	if got := updateProvider(); got != "gitlab" {
-		t.Fatalf("default provider = %q, want gitlab", got)
+	if got := updateProviders(); len(got) != 0 {
+		t.Fatalf("providers = %q, want none (the default chain)", got)
 	}
 	t.Setenv("EVESYNAPSE_UPDATE_PROVIDER", " Mirror ")
-	if got := updateProvider(); got != "mirror" {
-		t.Fatalf("provider = %q, want mirror", got)
+	if got := updateProviders(); len(got) != 1 || got[0] != "mirror" {
+		t.Fatalf("providers = %q, want [mirror]", got)
+	}
+	t.Setenv("EVESYNAPSE_UPDATE_PROVIDER", "forgejo, gitlab ,")
+	if got := updateProviders(); len(got) != 2 || got[0] != "forgejo" || got[1] != "gitlab" {
+		t.Fatalf("providers = %q, want [forgejo gitlab]", got)
 	}
 }
 
@@ -1470,5 +1475,113 @@ func TestUnknownProvider(t *testing.T) {
 	t.Setenv("EVESYNAPSE_UPDATE_PROVIDER", "carrier-pigeon")
 	if _, _, _, err := latestReleaseAssets(context.Background(), "arm64", false); err == nil {
 		t.Fatal("an unknown provider was accepted")
+	}
+}
+
+// serveForgejoChannel answers the Forgejo release list the way
+// the project's Forgejo does: the given tags, each carrying the
+// three release assets under its own path on the same server.
+func serveForgejoChannel(mux *http.ServeMux, tags ...string) {
+	mux.HandleFunc("/api/v1/repos/EveSynapse/evesynapse/releases", func(w http.ResponseWriter, r *http.Request) {
+		base := "http://" + r.Host
+		var sb strings.Builder
+		sb.WriteString("[")
+		for i, tag := range tags {
+			if i > 0 {
+				sb.WriteString(",")
+			}
+			fmt.Fprintf(&sb, `{"tag_name":%q,"draft":false,"assets":[`+
+				`{"name":"latest-arm64.json","browser_download_url":%q},`+
+				`{"name":"latest-arm64.json.sig","browser_download_url":%q},`+
+				`{"name":"evesynapse-arm64","browser_download_url":%q}]}`,
+				tag, base+"/"+tag+"/latest-arm64.json", base+"/"+tag+"/latest-arm64.json.sig", base+"/"+tag+"/evesynapse-arm64")
+		}
+		sb.WriteString("]")
+		_, _ = io.WriteString(w, sb.String())
+	})
+}
+
+func withForgejo(t *testing.T, url string) {
+	t.Helper()
+	t.Setenv("EVESYNAPSE_UPDATE_API_URL", "")
+	t.Setenv("EVESYNAPSE_UPDATE_REPO", "")
+	old := releaseForgejoBaseURL
+	releaseForgejoBaseURL = url
+	t.Cleanup(func() { releaseForgejoBaseURL = old })
+}
+
+func TestForgejoStableAssets(t *testing.T) {
+	t.Setenv("EVESYNAPSE_UPDATE_PROVIDER", "forgejo")
+	mux := http.NewServeMux()
+	serveForgejoChannel(mux, "v0.7.0.9-dev", "v0.7.0.8", "v0.7.0.7")
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+	withForgejo(t, srv.URL)
+	m, s, b, err := latestReleaseAssets(context.Background(), "arm64", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	base := srv.URL + "/v0.7.0.8"
+	if m != base+"/latest-arm64.json" || s != base+"/latest-arm64.json.sig" || b != base+"/evesynapse-arm64" {
+		t.Fatalf("stable assets = %q, %q, %q; want the v0.7.0.8 release's", m, s, b)
+	}
+}
+
+func TestForgejoDevAssets(t *testing.T) {
+	t.Setenv("EVESYNAPSE_UPDATE_PROVIDER", "forgejo")
+	mux := http.NewServeMux()
+	serveForgejoChannel(mux, "v0.7.0.8", "v0.7.1.0-dev", "v0.7.0.5-dev")
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+	withForgejo(t, srv.URL)
+	m, s, b, err := latestReleaseAssets(context.Background(), "arm64", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	base := srv.URL + "/v0.7.1.0-dev"
+	if m != base+"/latest-arm64.json" || s != base+"/latest-arm64.json.sig" || b != base+"/evesynapse-arm64" {
+		t.Fatalf("dev assets = %q, %q, %q; want the v0.7.1.0-dev release's", m, s, b)
+	}
+}
+
+func TestChainPicksNewestForge(t *testing.T) {
+	key := trustTestKey(t)
+	t.Setenv("EVESYNAPSE_UPDATE_PROVIDER", "")
+	sum := strings.Repeat("0", 64)
+
+	fjMux := http.NewServeMux()
+	serveForgejoChannel(fjMux, "v9.9.9.0")
+	publish(fjMux, "/v9.9.9.0/latest-arm64.json", manifestJSON("9.9.9.0", "arm64", sum), key)
+	fjSrv := httptest.NewServer(fjMux)
+	defer fjSrv.Close()
+	withForgejo(t, fjSrv.URL)
+
+	glMux := http.NewServeMux()
+	serveChannel(glMux, channelRelease{tag: "v9.9.9.9", manifest: "/latest-arm64.json", sig: "/latest-arm64.json" + releasesig.SigSuffix, binary: "/evesynapse-arm64"})
+	publish(glMux, "/latest-arm64.json", manifestJSON("9.9.9.9", "arm64", sum), key)
+	glSrv := httptest.NewServer(glMux)
+	defer glSrv.Close()
+	oldAPI := releaseAPIBaseURL
+	releaseAPIBaseURL = glSrv.URL
+	t.Cleanup(func() { releaseAPIBaseURL = oldAPI })
+
+	// GitHub and the mirror are unreachable; the chain must
+	// still land on the newest forge that answers.
+	oldGH := releaseGitHubBaseURL
+	releaseGitHubBaseURL = "http://127.0.0.1:1"
+	t.Cleanup(func() { releaseGitHubBaseURL = oldGH })
+	oldMirror := releaseMirrorBaseURL
+	releaseMirrorBaseURL = "http://127.0.0.1:1"
+	t.Cleanup(func() { releaseMirrorBaseURL = oldMirror })
+
+	m, binaryURL, err := fetchReleaseManifest(context.Background(), "arm64", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m.Version != "9.9.9.9" {
+		t.Fatalf("chain picked version %q, want 9.9.9.9 from GitLab", m.Version)
+	}
+	if binaryURL != glSrv.URL+"/evesynapse-arm64" {
+		t.Fatalf("chain picked binary %q, want GitLab's", binaryURL)
 	}
 }

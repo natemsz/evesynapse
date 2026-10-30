@@ -277,6 +277,11 @@ release:
           exit 1
         fi
       fi
+      # The steps below read the decision as $PUBLISH in this
+      # job's own shell; the dotenv file alone would only hand
+      # it to later jobs, and the signing step would read it
+      # as unset and stop the job early.
+      export PUBLISH="$publish"
       echo "PUBLISH=$publish" > build.env
       echo "VERSION=$VERSION" >> build.env
     # Only a signed release is published. The step fails, and

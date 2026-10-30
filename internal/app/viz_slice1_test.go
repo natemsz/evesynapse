@@ -201,7 +201,7 @@ func TestVizChartMathAndPrefs(t *testing.T) {
 
 // Slice 2: the extended book chart set against a hand-computed
 // fixture. The fixture's bests sit inside the typicals' range, so
-// the price scale (80 to 130, y(v) = 8 + (130-v)/50*144) is the
+// the price scale (80 to 130, y(v) = 10 + (130-v)/50*168) is the
 // same with the set on or off.
 func vizBookFixtureRows() []db.ListMarketRegionStatsDailyRecentRow {
 	return []db.ListMarketRegionStatsDailyRecentRow{
@@ -222,21 +222,21 @@ func TestVizBookChartSet(t *testing.T) {
 	if chart.Days != 4 || chart.First != "2026-10-01" || chart.Last != "2026-10-04" {
 		t.Fatalf("chart span: %d days, %s to %s", chart.Days, chart.First, chart.Last)
 	}
-	if chart.SellPoints != "0.0,65.6 200.0,36.8 400.0,94.4 600.0,8.0" {
+	if chart.SellPoints != "6.0,77.2 242.0,43.6 478.0,110.8 714.0,10.0" {
 		t.Fatalf("typical sell: got %s", chart.SellPoints)
 	}
-	if chart.BuyPoints != "0.0,123.2 200.0,94.4 400.0,152.0 600.0,65.6" {
+	if chart.BuyPoints != "6.0,144.4 242.0,110.8 478.0,178.0 714.0,77.2" {
 		t.Fatalf("typical buy: got %s", chart.BuyPoints)
 	}
-	if chart.BestSellPoints != "0.0,80.0 200.0,59.8 400.0,100.2 600.0,25.3" {
+	if chart.BestSellPoints != "6.0,94.0 242.0,70.5 478.0,117.5 714.0,30.2" {
 		t.Fatalf("best sell: got %s", chart.BestSellPoints)
 	}
-	if chart.BestBuyPoints != "0.0,108.8 200.0,82.9 400.0,129.0 600.0,48.3" {
+	if chart.BestBuyPoints != "6.0,127.6 242.0,97.4 478.0,151.1 714.0,57.0" {
 		t.Fatalf("best buy: got %s", chart.BestBuyPoints)
 	}
 	// The band runs forward along the best sell and back along
 	// the best buy.
-	if chart.BandPoints != "0.0,80.0 200.0,59.8 400.0,100.2 600.0,25.3 600.0,48.3 400.0,129.0 200.0,82.9 0.0,108.8" {
+	if chart.BandPoints != "6.0,94.0 242.0,70.5 478.0,117.5 714.0,30.2 714.0,57.0 478.0,151.1 242.0,97.4 6.0,127.6" {
 		t.Fatalf("band: got %s", chart.BandPoints)
 	}
 
@@ -286,10 +286,10 @@ func TestVizBookChartSet(t *testing.T) {
 		{Day: "2026-11-03", TypicalSell: 100, TypicalBuy: 100, BestSell: 120, BestBuy: 80, SellOrders: 5, BuyOrders: 5},
 	}
 	g := buildBookChart(gap, true)
-	if g.BestSellPoints != "0.0,44.0 600.0,8.0" {
+	if g.BestSellPoints != "6.0,52.0 714.0,10.0" {
 		t.Fatalf("gap best sell: got %s", g.BestSellPoints)
 	}
-	if g.BandPoints != "0.0,44.0 600.0,8.0 600.0,152.0 0.0,116.0" {
+	if g.BandPoints != "6.0,52.0 714.0,10.0 714.0,178.0 6.0,136.0" {
 		t.Fatalf("gap band: got %s", g.BandPoints)
 	}
 

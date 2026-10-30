@@ -2696,6 +2696,9 @@
       rows.push(["High", dot.getAttribute("data-high") + " ISK"]);
       rows.push(["Low", dot.getAttribute("data-low") + " ISK"]);
       rows.push(["Volume", dot.getAttribute("data-vol")]);
+      if (dot.getAttribute("data-orders")) rows.push(["Orders", dot.getAttribute("data-orders")]);
+      if (dot.getAttribute("data-ma5")) rows.push(["5-day average", dot.getAttribute("data-ma5") + " ISK"]);
+      if (dot.getAttribute("data-ma20")) rows.push(["20-day average", dot.getAttribute("data-ma20") + " ISK"]);
     }
     for (var i = 0; i < rows.length; i++) {
       var line = document.createElement("div");
@@ -2737,12 +2740,43 @@
       top = clientY - crect.top - 8;
     }
     tip.style.top = top + "px";
+    crosshair(dot, true);
   }
 
   function hide(dot) {
     var tip = tipOf(dot);
     if (tip) tip.hidden = true;
     if (dot) dot.classList.remove("is-selected");
+    crosshair(dot, false);
+  }
+
+  // crosshair draws a vertical line through every panel of a
+  // scrubbable chart at the selected point, so the day reads across
+  // price, volume and any strip under them.
+  function crosshair(dot, on) {
+    var chart = dot && dot.closest ? dot.closest(".pchart") : null;
+    if (!chart || !chart.hasAttribute("data-chart-scrub")) return;
+    var line = chart.querySelector(".chart-crosshair");
+    if (!on) {
+      if (line) line.hidden = true;
+      return;
+    }
+    var svgs = chart.querySelectorAll("svg");
+    if (!svgs.length) return;
+    if (!line) {
+      line = document.createElement("div");
+      line.className = "chart-crosshair";
+      line.setAttribute("aria-hidden", "true");
+      chart.appendChild(line);
+    }
+    var crect = chart.getBoundingClientRect();
+    var drect = dot.getBoundingClientRect();
+    var first = svgs[0].getBoundingClientRect();
+    var last = svgs[svgs.length - 1].getBoundingClientRect();
+    line.style.left = (drect.left - crect.left + drect.width / 2) + "px";
+    line.style.top = (first.top - crect.top) + "px";
+    line.style.height = (last.bottom - first.top) + "px";
+    line.hidden = false;
   }
 
   function asDot(ev) {
@@ -2801,13 +2835,38 @@
   document.addEventListener("pointerup", endScrub);
   document.addEventListener("pointercancel", endScrub);
 
+  // On a scrubbable chart the pointer anywhere over its plots (any
+  // panel, any height) selects the nearest day; the points need not be
+  // hit. Other charts (a donut) answer their own marks only.
+  var hovered = null;
+  function scrubbable(dot) {
+    var chart = chartOf(dot);
+    return !!(chart && chart.hasAttribute("data-chart-scrub"));
+  }
+  document.addEventListener("mousemove", function (ev) {
+    if (scrub || pinned) return;
+    var chart = chartOf(ev.target);
+    var overPlot = chart && chart.hasAttribute("data-chart-scrub") && ev.target.closest && ev.target.closest("svg");
+    if (!overPlot) {
+      if (hovered) {
+        hide(hovered);
+        hovered = null;
+      }
+      return;
+    }
+    var dot = nearestDot(chart, ev.clientX);
+    if (!dot) return;
+    if (hovered && hovered !== dot) hide(hovered);
+    hovered = dot;
+    show(dot, undefined, ev.clientY);
+  });
   document.addEventListener("mouseover", function (ev) {
     var dot = asDot(ev);
-    if (dot && pinned !== dot) show(dot, undefined, ev.clientY);
+    if (dot && pinned !== dot && !scrubbable(dot)) show(dot, undefined, ev.clientY);
   });
   document.addEventListener("mouseout", function (ev) {
     var dot = asDot(ev);
-    if (dot && pinned !== dot) hide(dot);
+    if (dot && pinned !== dot && !scrubbable(dot)) hide(dot);
   });
   document.addEventListener("focusin", function (ev) {
     var dot = asDot(ev);
@@ -2824,6 +2883,7 @@
       return;
     }
     var dot = asDot(ev);
+    if (!dot && hovered && chartOf(ev.target) === chartOf(hovered)) dot = hovered;
     if (dot) {
       if (pinned === dot) {
         pinned = null;

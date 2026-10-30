@@ -281,6 +281,9 @@ type Day struct {
 	Highest string
 	Lowest  string
 	Volume  string // esi.FormatInt
+	Orders  string // esi.FormatInt: orders that traded that day
+	MA5     string // the 5-day average price, esi.FormatISK ("" before 5 days)
+	MA20    string // the 20-day average price, as MA5
 	Title   string // "<date>: average X ISK · high … · low … · volume …"
 }
 
@@ -468,10 +471,23 @@ func buildChart(rows []db.MarketHistory, display int, opts ChartOptions, legacy 
 		return priceBottom - int(frac*float64(priceH))
 	}
 
+	prefix := make([]float64, len(rows)+1)
+	for i, r := range rows {
+		prefix[i+1] = prefix[i] + r.Average
+	}
+	movingAt := func(g, n int) string {
+		if g+1 < n {
+			return ""
+		}
+		return esi.FormatISK((prefix[g+1] - prefix[g+1-n]) / float64(n))
+	}
 	var pts []string
 	for i, r := range disp {
 		px, py := x(i), y(r.Average)
-		chart.Dots = append(chart.Dots, Dot{X: px, Y: py, Day: dayFigures(r)})
+		day := dayFigures(r)
+		g := len(rows) - display + i // global index of the day
+		day.MA5, day.MA20 = movingAt(g, 5), movingAt(g, 20)
+		chart.Dots = append(chart.Dots, Dot{X: px, Y: py, Day: day})
 		pts = append(pts, fmt.Sprintf("%d,%d", px, py))
 		if opts.VolumeStrip && maxV > 0 && r.Volume > 0 {
 			h := int(float64(r.Volume) / float64(maxV) * float64(barH))
@@ -621,6 +637,7 @@ func dayFigures(r db.MarketHistory) Day {
 		Highest: high,
 		Lowest:  low,
 		Volume:  vol,
+		Orders:  esi.FormatInt(r.OrderCount),
 		Title: fmt.Sprintf("%s: average %s ISK · high %s · low %s · volume %s",
 			r.Date, avg, high, low, vol),
 	}

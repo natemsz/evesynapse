@@ -8,6 +8,7 @@ package app
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"math"
 	"sort"
@@ -84,6 +85,25 @@ type bookTrendChart struct {
 	SpreadPoints   string
 	SpreadHigh     string // axis labels, percent
 	SpreadLow      string
+
+	// The price plot's marks and words (drawn at its own aspect, like
+	// the price history chart, so labels stay crisp): a point per day
+	// on each typical line, a hover column per day for the site's chart
+	// tip (every figure that day), value gridlines and date labels.
+	SellDots   []bookDot
+	BuyDots    []bookDot
+	Hits       []pfHit
+	PriceTicks []bookTick
+	DateTicks  []bookTick
+}
+
+type bookDot struct{ X, Y float64 }
+
+// bookTick is one axis label: its gridline's Y and label baseline for
+// values, its X and text anchor for dates.
+type bookTick struct {
+	X, Y, LabelY  float64
+	Label, Anchor string
 }
 
 // statPackView is the item page's stat pack section.
@@ -181,7 +201,7 @@ func buildBookChart(rows []db.ListMarketRegionStatsDailyRecentRow, extended bool
 	if len(rows) < 2 {
 		return nil
 	}
-	const w, h, pad = 600, 160, 8
+	const w, h, padTop, padBottom, padX = 720, 200, 10, 22, 6
 	lo, hi := math.Inf(1), math.Inf(-1)
 	consider := func(v float64) {
 		if v > 0 {
@@ -203,8 +223,8 @@ func buildBookChart(rows []db.ListMarketRegionStatsDailyRecentRow, extended bool
 		hi, lo = hi*1.01+1, lo*0.99
 	}
 	n := len(rows)
-	x := func(i int) float64 { return float64(i) * float64(w) / float64(n-1) }
-	y := func(v float64) float64 { return pad + (hi-v)/(hi-lo)*float64(h-2*pad) }
+	x := func(i int) float64 { return padX + float64(i)*float64(w-2*padX)/float64(n-1) }
+	y := func(v float64) float64 { return padTop + (hi-v)/(hi-lo)*float64(h-padTop-padBottom) }
 	line := func(pick func(db.ListMarketRegionStatsDailyRecentRow) float64) string {
 		var b strings.Builder
 		for i, r := range rows {
@@ -229,6 +249,7 @@ func buildBookChart(rows []db.ListMarketRegionStatsDailyRecentRow, extended bool
 		First: rows[0].Day, Last: rows[n-1].Day,
 		Extended: extended,
 	}
+	decorateBookChart(chart, rows, x, y, lo, hi, extended, w, h, padBottom)
 	if !extended {
 		return chart
 	}
@@ -440,5 +461,75 @@ func (app *Application) attachAllRegionStats(ctx context.Context, item *marketIt
 	item.RegionStats = item.RegionStats[:0]
 	for _, r := range out {
 		item.RegionStats = append(item.RegionStats, r.row)
+	}
+}
+
+// decorateBookChart adds the price plot's points, per-day hover
+// columns (the site's chart tip: every figure that day), round value
+// gridlines and first, middle and last date labels.
+func decorateBookChart(c *bookTrendChart, rows []db.ListMarketRegionStatsDailyRecentRow, x func(int) float64, y func(float64) float64, lo, hi float64, extended bool, w, h, padBottom int) {
+	n := len(rows)
+	for i, r := range rows {
+		xi := x(i)
+		if r.TypicalSell > 0 {
+			c.SellDots = append(c.SellDots, bookDot{X: xi, Y: y(r.TypicalSell)})
+		}
+		if r.TypicalBuy > 0 {
+			c.BuyDots = append(c.BuyDots, bookDot{X: xi, Y: y(r.TypicalBuy)})
+		}
+		rowsTip := []pfTipRow{}
+		if r.TypicalSell > 0 {
+			rowsTip = append(rowsTip, pfTipRow{"Typical sell", esi.FormatISK(r.TypicalSell) + " ISK", "mt-swatch-sell"})
+		}
+		if r.TypicalBuy > 0 {
+			rowsTip = append(rowsTip, pfTipRow{"Typical buy", esi.FormatISK(r.TypicalBuy) + " ISK", "mt-swatch-buy"})
+		}
+		if r.TypicalSell > 0 && r.TypicalBuy > 0 {
+			rowsTip = append(rowsTip, pfTipRow{"Spread", fmt.Sprintf("%.1f%%", (r.TypicalSell-r.TypicalBuy)/r.TypicalBuy*100), "mt-swatch-spread"})
+		}
+		if extended {
+			if r.BestSell > 0 {
+				rowsTip = append(rowsTip, pfTipRow{"Best sell", esi.FormatISK(r.BestSell) + " ISK", "mt-swatch-best-sell"})
+			}
+			if r.BestBuy > 0 {
+				rowsTip = append(rowsTip, pfTipRow{"Best buy", esi.FormatISK(r.BestBuy) + " ISK", "mt-swatch-best-buy"})
+			}
+		}
+		rowsTip = append(rowsTip,
+			pfTipRow{"Sell orders", esi.FormatInt(r.SellOrders) + " for " + esi.FormatInt(r.SellVolume) + " units", ""},
+			pfTipRow{"Buy orders", esi.FormatInt(r.BuyOrders) + " for " + esi.FormatInt(r.BuyVolume) + " units", ""})
+		cells := make([][3]string, len(rowsTip))
+		for k, t := range rowsTip {
+			cells[k] = [3]string{t.Label, t.Value, t.Class}
+		}
+		js, _ := json.Marshal(cells)
+		left, right := 0.0, float64(w)
+		if i > 0 {
+			left = (x(i-1) + xi) / 2
+		}
+		if i < n-1 {
+			right = (xi + x(i+1)) / 2
+		}
+		heading := r.Day
+		if d, err := time.Parse("2006-01-02", r.Day); err == nil {
+			heading = d.Format("Mon, Jan 2 2006")
+		}
+		c.Hits = append(c.Hits, pfHit{X: left, W: right - left, Date: heading, Label: heading, Rows: string(js)})
+	}
+	step := pfNiceStep((hi - lo) / 4)
+	for v := math.Ceil(lo/step) * step; v <= hi+step*1e-9; v += step {
+		yy := y(v)
+		c.PriceTicks = append(c.PriceTicks, bookTick{Y: yy, LabelY: yy - 3, Label: pfShortISK(v)})
+	}
+	for k, i := range []int{0, n / 2, n - 1} {
+		if k == 1 && (i == 0 || i == n-1) {
+			continue
+		}
+		label := rows[i].Day
+		if d, err := time.Parse("2006-01-02", rows[i].Day); err == nil {
+			label = d.Format("Jan 2")
+		}
+		anchor := []string{"start", "middle", "end"}[k]
+		c.DateTicks = append(c.DateTicks, bookTick{X: x(i), LabelY: float64(h - 6), Label: label, Anchor: anchor})
 	}
 }

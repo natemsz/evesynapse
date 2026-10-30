@@ -2496,6 +2496,9 @@ tr.fleet-detail > td { background: #120d09; border-bottom: 1px solid color-mix(i
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.55);
 }
 .ctip .ctip-date { color: var(--gold); font-weight: 600; }
+/* The day under the pointer, drawn through every panel of a chart. */
+.chart-crosshair { position: absolute; width: 1px; margin-left: -0.5px; background: var(--gold); opacity: 0.45; pointer-events: none; z-index: 5; }
+.chart-crosshair[hidden] { display: none; }
 
 /* The Overview bar: a quiet strip above the grid. Arranging lives
    behind one settings menu, always to hand and never in the way. */

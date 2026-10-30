@@ -259,7 +259,8 @@ jobs:
 
           def get(path):
               req = urllib.request.Request(api + path,
-                                           headers={"Authorization": "token " + token})
+                                           headers={"Authorization": "token " + token,
+                                                    "User-Agent": "evesynapse-release-workflow"})
               return json.load(urllib.request.urlopen(req))
 
           def vkey(tag):
@@ -325,7 +326,8 @@ jobs:
           req = urllib.request.Request(
               api + "/releases", data=json.dumps(body).encode(), method="POST",
               headers={"Authorization": "token " + os.environ["FORGEJO_TOKEN"],
-                       "Content-Type": "application/json"})
+                       "Content-Type": "application/json",
+                       "User-Agent": "evesynapse-release-workflow"})
           rel = json.load(urllib.request.urlopen(req))
           with open("release-id.txt", "w") as fh:
               fh.write(str(rel["id"]))

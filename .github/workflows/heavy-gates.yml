@@ -1,0 +1,155 @@
+# EveSynapse heavy check gates on GitHub-hosted runners: the
+# race, core-only and analysis jobs from the project's own CI
+# (.forgejo/workflows/ci.yml), moved here so they run on
+# GitHub's runners instead of the project's app box. The plain
+# test gate and the release pipeline stay on Forgejo.
+#
+# Forgejo also reads .github/workflows, so every job carries a
+# guard that only passes on GitHub itself; on Forgejo the jobs
+# skip. Each job reports its result back to Forgejo as a
+# commit status, so the verdict shows on the commit at
+# natems.dev where the work is reviewed. The report step needs
+# a FORGEJO_TOKEN repository secret (a Forgejo token with
+# repository write scope); until it exists the step fails
+# softly and the gate result stands on GitHub alone.
+
+name: heavy-gates
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  race:
+    if: github.server_url == 'https://github.com'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.27.3'
+          cache: true
+      - name: Decode the embedded assets
+        run: make assets
+      # Under the race detector internal/app takes 5-10
+      # minutes: past go test's default 10m limit.
+      - name: Run the test suite under the race detector
+        run: go test -race -timeout 30m ./...
+      - name: Report the result to Forgejo
+        if: always()
+        continue-on-error: true
+        env:
+          FORGEJO_TOKEN: ${{ secrets.FORGEJO_TOKEN }}
+        run: |
+          case "${{ job.status }}" in
+            success) state=success ;;
+            failure) state=failure ;;
+            *) state=error ;;
+          esac
+          curl -fsS -X POST \
+            -H "Authorization: token $FORGEJO_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "{\"state\":\"$state\",\"context\":\"github/race\",\"description\":\"Race gate on GitHub runners\",\"target_url\":\"${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\"}" \
+            "https://natems.dev/api/v1/repos/EveSynapse/evesynapse/statuses/${{ github.sha }}"
+
+  core-only:
+    if: github.server_url == 'https://github.com'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.27.3'
+          cache: true
+      - name: Decode the embedded assets
+        run: make assets
+      - name: Build and vet core-only
+        run: |
+          go build -tags core_only ./...
+          go vet -tags core_only ./...
+      - name: Run the core-only tests
+        run: go test -tags core_only -timeout 20m -run 'TestCoreOnly' ./internal/app/
+      # The module build tool: every module must compile and
+      # vet on its own, with only what it declares.
+      - name: Check every module builds on its own
+        run: |
+          go run ./cmd/modbuild -all -check
+          for id in $(go run ./cmd/modbuild -ids); do
+            go run ./cmd/modbuild -modules "$id" -write > /dev/null
+            echo "== $id"
+            go build ./cmd/evesynapse
+            go vet ./internal/app/
+          done
+      - name: Report the result to Forgejo
+        if: always()
+        continue-on-error: true
+        env:
+          FORGEJO_TOKEN: ${{ secrets.FORGEJO_TOKEN }}
+        run: |
+          case "${{ job.status }}" in
+            success) state=success ;;
+            failure) state=failure ;;
+            *) state=error ;;
+          esac
+          curl -fsS -X POST \
+            -H "Authorization: token $FORGEJO_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "{\"state\":\"$state\",\"context\":\"github/core-only\",\"description\":\"Core-only gate on GitHub runners\",\"target_url\":\"${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\"}" \
+            "https://natems.dev/api/v1/repos/EveSynapse/evesynapse/statuses/${{ github.sha }}"
+
+  # Static analysis and the known-vulnerability check.
+  # Advisory, as in the Forgejo CI: a finding shows up on the
+  # run without blocking a release.
+  analysis:
+    if: github.server_url == 'https://github.com'
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - name: Check out the source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.27.3'
+          cache: true
+      - name: Decode the embedded assets
+        run: make assets
+      # staticcheck is built against the newest
+      # golang.org/x/tools, as in the Forgejo CI: the pinned
+      # copy in its own release cannot read packages a newer
+      # Go compiles.
+      - name: Run staticcheck
+        run: |
+          build="$(mktemp -d)"
+          (cd "$build" && go mod init staticcheck-build \
+            && go get honnef.co/go/tools/cmd/staticcheck@latest golang.org/x/tools@latest \
+            && go build -o staticcheck honnef.co/go/tools/cmd/staticcheck)
+          "$build/staticcheck" ./...
+      - name: Run govulncheck
+        run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+      - name: Report the result to Forgejo
+        if: always()
+        continue-on-error: true
+        env:
+          FORGEJO_TOKEN: ${{ secrets.FORGEJO_TOKEN }}
+        run: |
+          case "${{ job.status }}" in
+            success) state=success ;;
+            failure) state=failure ;;
+            *) state=error ;;
+          esac
+          curl -fsS -X POST \
+            -H "Authorization: token $FORGEJO_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "{\"state\":\"$state\",\"context\":\"github/analysis\",\"description\":\"Analysis gate on GitHub runners\",\"target_url\":\"${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\"}" \
+            "https://natems.dev/api/v1/repos/EveSynapse/evesynapse/statuses/${{ github.sha }}"

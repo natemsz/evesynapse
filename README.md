@@ -306,7 +306,7 @@ gaps; real environment variables win over the file):
 | `EVE_CLIENT_SECRET_WRAPPED`, `DISCORD_CLIENT_SECRET_WRAPPED`, `DISCORD_BOT_TOKEN_WRAPPED`, `MODEL_API_KEY_WRAPPED` | with `http` | — | Each working credential wrapped by the key service, unwrapped at startup through the same endpoint as the token key (http provider) |
 | `EVE_ADMIN_CHARACTER_IDS` | no | — | Comma-separated EVE character IDs whose accounts may open the Admin and Sync pages. Any character linked to an account makes that whole account an admin's. Empty = nobody. The status belongs to whoever owned the character when it was first seen as an admin: if the character is sold or transferred, its new owner does not get it. To give it to a new owner on purpose, remove the id, restart, add it back and restart |
 | `EVE_ALLOWED_CHARACTER_IDS`, `EVE_ALLOWED_CORPORATION_IDS`, `EVE_ALLOWED_ALLIANCE_IDS` | no | — | Limit who may create an account (see "Who can sign up"). All empty = anyone who can sign in with EVE |
-| `EVESYNAPSE_UPDATE_PROVIDER` | no | `gitlab` | Where the updater reads releases from: `gitlab`, `github`, or `mirror` (the project's static mirror); chosen in configuration, never switched automatically |
+| `EVESYNAPSE_UPDATE_PROVIDER` | no | `github, gitlab, forgejo` | The sources the updater reads releases from: one or more of `github`, `gitlab`, `forgejo`, `mirror` (the project's static mirror), comma-separated. The updater checks them in the order listed and prefers no source beyond that order: the newest signed release wins, and a tie goes to the earlier-listed source. Unset, it walks the default shown here and asks the mirror only when no forge produced a signed release |
 | `EVESYNAPSE_UPDATE_PROJECT` | no | `natemsz/evesynapse` | GitLab project (group/project) the updater checks; `EVESYNAPSE_UPDATE_REPO`, set by older installs, is read as the same project's path |
 | `EVESYNAPSE_UPDATE_MIRROR_URL` | no | `https://cdn.synap6.io` | The mirror provider's root |
 | `EVE_SDE_BASE_URL` | no | Fuzzwork's dump | Base URL of the SDE CSV dump the importer downloads |
@@ -880,20 +880,30 @@ sudo EVESYNAPSE_BINARY=$PWD/bin/evesynapse bash deploy/setup.sh
 
 Builds are published automatically: every push to `main` runs the
 test suite in CI and, when `internal/app/version.txt` names a
-version that has no release yet, publishes a GitLab release with
-builds for ARM64 and AMD64 plus, for each build, a small manifest
-(the version and the build's SHA-256 checksum) and that manifest's
-signature. Each published release is then mirrored to the
-project's static mirror (a Cloudflare R2 bucket served from
+version that has no release yet, publishes the release on the
+project's Forgejo, GitHub and GitLab with builds for ARM64 and
+AMD64 plus, for each build, a small manifest (the version and
+the build's SHA-256 checksum) and that manifest's signature.
+Each published release is then mirrored to the project's static
+mirror (a Cloudflare R2 bucket served from
 `https://cdn.synap6.io`): the version's files under
 `evesynapse/v<version>/`, the channel's binaries under `latest/`
 (or `latest-dev/`), and the channel's signed pointer manifests
-last. The updater reads releases from the provider named by
-`EVESYNAPSE_UPDATE_PROVIDER` (`gitlab` by default, or `github`,
-or `mirror` for that mirror), verifying the same signatures and
-checksums from any of them; the mirror job needs the
-`R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` and
-`R2_BUCKET` CI/CD variables, and skips without them.
+last; the mirror job needs the `R2_ACCOUNT_ID`,
+`R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` and `R2_BUCKET`
+CI/CD variables, and skips without them.
+
+The updater reads releases from the sources
+`EVESYNAPSE_UPDATE_PROVIDER` lists, and checks them in the
+order listed: no source is preferred beyond that order. The
+newest signed release across the sources wins, a tie goes to
+the earlier-listed source, and the manifest, its signature and
+the build all come from that one source's release, verified by
+the same signatures and checksums whichever source serves
+them. An update run prints each source it checks and the
+source it downloads from. With the setting unset, the updater
+walks a built-in fallback list (github, gitlab, forgejo) and
+asks the mirror only when no forge produced a signed release.
 
 A release is one edit: `internal/app/version.txt`. Nothing else in
 the repository repeats the version, and the tests read it from that

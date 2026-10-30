@@ -127,6 +127,7 @@
 /* The basket builder and row editor: a suggest search, the
    picked items with icons and typical prices, and the naming
    step that takes the search bar's place. */
+.mbk-add-form { display: inline; }
 .mbk-edit-btn { background: none; border: 0; padding: 0.15rem; cursor: pointer; color: var(--muted); }
 .mbk-edit-btn:hover { color: var(--accent); }
 .mbk-builder { margin: 0.5rem 0 1rem; }

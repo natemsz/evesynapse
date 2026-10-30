@@ -90,17 +90,24 @@ const (
 // whose assets are the package files — a tiny manifest per CPU
 // kind (the version it names and the checksum of the binary
 // beside it) and that manifest's signature. Where the updater
-// reads them from is a provider, chosen by
-// EVESYNAPSE_UPDATE_PROVIDER and never switched on its own:
+// reads them from is a provider. EVESYNAPSE_UPDATE_PROVIDER
+// can name one, and then that one alone is read; an install
+// that names none walks the default chain — the three forges
+// in the order below, newest genuine release wins, with the
+// mirror as the last resort when no forge answers:
 //
-//	gitlab (the default): the project's releases on a GitLab,
-//	    listed through its API.
+//	forgejo: the project's releases on its own Forgejo
+//	    (natems.dev), read through its API.
+//	gitlab: the project's releases on a GitLab, listed through
+//	    its API.
 //	github: the repository's releases on GitHub — the stable
 //	    channel from its "latest" download address, the dev
 //	    channel from its API.
 //	mirror: a static mirror of the releases (the project's is
 //	    served from synap6.io), laid out as the channel pointer
-//	    manifests beside the binaries they describe.
+//	    manifests beside the binaries they describe. In the
+//	    default chain it is asked only when no forge produced
+//	    a genuine manifest.
 //
 // Whichever provider serves them, the updater reads its kind's
 // manifest, checks the signature, compares versions, and
@@ -340,25 +347,36 @@ func selectRelease(releases []gitlabRelease, dev bool) (gitlabRelease, bool) {
 
 // updateProvider resolves which provider the updater reads
 // releases from: EVESYNAPSE_UPDATE_PROVIDER, in the
-// environment or the install's .env file. The choice is the
-// operator's, made in configuration; the updater never falls
-// back to another provider on its own.
+// environment or the install's .env file. An install that
+// names one reads that provider alone. An install that names
+// none reads the default chain (see fetchReleaseManifest):
+// the forges in order, the mirror last.
 func updateProvider() string {
-	if p := strings.ToLower(strings.TrimSpace(os.Getenv("EVESYNAPSE_UPDATE_PROVIDER"))); p != "" {
-		return p
-	}
-	return "gitlab"
+	return strings.ToLower(strings.TrimSpace(os.Getenv("EVESYNAPSE_UPDATE_PROVIDER")))
 }
 
 // latestReleaseAssets returns the manifest, signature and
 // binary asset URLs of the release the channel (stable, or dev
 // when dev is set) currently installs from, from the provider
-// the install is configured to read. All three come from that
-// one release, so the signature is the manifest's own and the
+// the install is configured to read — the chain's first forge,
+// Forgejo, when none is named. All three come from that one
+// release, so the signature is the manifest's own and the
 // checksum in the manifest always describes the binary
 // downloaded beside it.
 func latestReleaseAssets(ctx context.Context, arch string, dev bool) (manifestURL, sigURL, binaryURL string, err error) {
-	switch updateProvider() {
+	provider := updateProvider()
+	if provider == "" {
+		provider = "forgejo"
+	}
+	return providerAssets(ctx, provider, arch, dev)
+}
+
+// providerAssets resolves the channel's asset URLs against one
+// named provider.
+func providerAssets(ctx context.Context, provider string, arch string, dev bool) (manifestURL, sigURL, binaryURL string, err error) {
+	switch provider {
+	case "forgejo":
+		return forgejoReleaseAssets(ctx, arch, dev)
 	case "gitlab":
 		return gitlabReleaseAssets(ctx, arch, dev)
 	case "github":
@@ -366,7 +384,7 @@ func latestReleaseAssets(ctx context.Context, arch string, dev bool) (manifestUR
 	case "mirror":
 		return mirrorReleaseAssets(arch, dev)
 	}
-	return "", "", "", fmt.Errorf("unknown update provider %q (EVESYNAPSE_UPDATE_PROVIDER names gitlab, github or mirror)", updateProvider())
+	return "", "", "", fmt.Errorf("unknown update provider %q (EVESYNAPSE_UPDATE_PROVIDER names forgejo, gitlab, github or mirror)", provider)
 }
 
 // gitlabReleaseAssets resolves the channel against the GitLab
@@ -518,6 +536,126 @@ func githubReleaseAssets(ctx context.Context, arch string, dev bool) (manifestUR
 	return manifestURL, sigURL, binaryURL, nil
 }
 
+// releaseForgejoBaseURL is the project's own Forgejo, the
+// main home of its repositories. A var so tests can point it
+// at a local server.
+var releaseForgejoBaseURL = "https://natems.dev"
+
+// defaultForgejoProject is the project's path on that Forgejo:
+// the organisation and repository the releases live under.
+const defaultForgejoProject = "EveSynapse/evesynapse"
+
+// updateForgejoRepo resolves the repository the forgejo
+// provider reads: EVESYNAPSE_UPDATE_REPO when set, the
+// project's Forgejo path otherwise. The path kept its shape
+// across hosts, only the namespace differs from GitLab's.
+func updateForgejoRepo() string {
+	if r := strings.Trim(strings.TrimSpace(os.Getenv("EVESYNAPSE_UPDATE_REPO")), "/"); r != "" {
+		return r
+	}
+	return defaultForgejoProject
+}
+
+// forgejoAPIBase resolves the Forgejo API root, honouring the
+// same EVESYNAPSE_UPDATE_API_URL override as the other
+// providers (a Forgejo hosted elsewhere names its own root,
+// API path included).
+func forgejoAPIBase() string {
+	if u := strings.TrimSpace(os.Getenv("EVESYNAPSE_UPDATE_API_URL")); u != "" {
+		return strings.TrimRight(u, "/")
+	}
+	return releaseForgejoBaseURL + "/api/v1"
+}
+
+// forgejoRelease is one release in the Forgejo API's payload,
+// cut to the fields the updater reads.
+type forgejoRelease struct {
+	TagName string `json:"tag_name"`
+	Draft   bool   `json:"draft"`
+	Assets  []struct {
+		Name string `json:"name"`
+		URL  string `json:"browser_download_url"`
+	} `json:"assets"`
+}
+
+// forgejoReleaseAssets resolves the channel against the
+// project's Forgejo: it lists the releases and picks by
+// version, the stable channel the greatest tag carrying no
+// suffix, the dev channel the greatest -dev one, as the
+// gitlab provider picks from its list. (The API's "latest"
+// release is latest by date and can name a dev build, so the
+// stable channel does not take it on trust.)
+func forgejoReleaseAssets(ctx context.Context, arch string, dev bool) (manifestURL, sigURL, binaryURL string, err error) {
+	wantManifest := "latest-" + arch + ".json"
+	wantSig := wantManifest + releasesig.SigSuffix
+	wantBinary := "evesynapse-" + arch
+	apiURL := fmt.Sprintf("%s/repos/%s/releases?limit=100", forgejoAPIBase(), updateForgejoRepo())
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
+	if err != nil {
+		return "", "", "", err
+	}
+	req.Header.Set("User-Agent", "EveSynapse-Updater")
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", "", "", err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return "", "", "", fmt.Errorf("the update server answered %s", resp.Status)
+	}
+	var releases []forgejoRelease
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 4<<20)).Decode(&releases); err != nil {
+		return "", "", "", errors.New("the update information couldn't be read")
+	}
+	var rel *forgejoRelease
+	for i := range releases {
+		r := &releases[i]
+		if r.Draft || r.TagName == "" {
+			continue
+		}
+		if dev {
+			if !strings.HasSuffix(r.TagName, "-dev") {
+				continue
+			}
+		} else if versionIsPrerelease(r.TagName) {
+			continue
+		}
+		if rel == nil || compareVersions(r.TagName, rel.TagName) > 0 {
+			rel = r
+		}
+	}
+	if rel == nil {
+		if dev {
+			return "", "", "", errors.New("no dev releases found")
+		}
+		return "", "", "", errors.New("no releases found")
+	}
+	for _, a := range rel.Assets {
+		switch a.Name {
+		case wantManifest:
+			manifestURL = a.URL
+		case wantSig:
+			sigURL = a.URL
+		case wantBinary:
+			binaryURL = a.URL
+		}
+	}
+	if manifestURL == "" {
+		return "", "", "", fmt.Errorf("release %s has no %s asset", rel.TagName, wantManifest)
+	}
+	if binaryURL == "" {
+		return "", "", "", fmt.Errorf("release %s has no %s asset", rel.TagName, wantBinary)
+	}
+	if sigURL == "" {
+		if dev {
+			return "", "", "", &refusal{fmt.Sprintf("the newest development release (%s) isn't signed, so there is no way to tell it from a forgery.", rel.TagName)}
+		}
+		return "", "", "", &refusal{"the newest release isn't signed, so there is no way to tell it from a forgery."}
+	}
+	return manifestURL, sigURL, binaryURL, nil
+}
+
 // releaseMirrorBaseURL is the project's own release mirror. A
 // var so tests can point it at a local server.
 var releaseMirrorBaseURL = "https://cdn.synap6.io"
@@ -625,9 +763,48 @@ func verifyReleaseSignature(ctx context.Context, manifest []byte, sigURL string)
 // release channel (the dev channel when dev is set), checks its
 // signature, and returns it parsed with the address of the binary
 // it describes.
+//
+// An install that names a provider reads that provider alone.
+// An install that names none walks the default chain: Forgejo,
+// GitLab and GitHub are each asked for the channel's release,
+// and the newest genuine manifest among them wins. A source
+// that has no such release, or cannot be reached, is passed
+// over; a source that answers with a release whose signature
+// does not check out stops the walk, because that is not a
+// source being down, it is a forgery being offered. Only when
+// no forge produces a genuine manifest is the static mirror
+// asked, last.
 func fetchReleaseManifest(ctx context.Context, arch string, dev bool) (releaseManifest, string, error) {
+	if provider := updateProvider(); provider != "" {
+		return fetchProviderManifest(ctx, provider, arch, dev)
+	}
+	var best releaseManifest
+	var bestBinary string
+	found := false
+	for _, provider := range []string{"forgejo", "gitlab", "github"} {
+		m, binaryURL, err := fetchProviderManifest(ctx, provider, arch, dev)
+		if err != nil {
+			var refused *refusal
+			if errors.As(err, &refused) {
+				return best, "", err
+			}
+			continue
+		}
+		if !found || compareVersions(m.Version, best.Version) > 0 {
+			best, bestBinary, found = m, binaryURL, true
+		}
+	}
+	if found {
+		return best, bestBinary, nil
+	}
+	return fetchProviderManifest(ctx, "mirror", arch, dev)
+}
+
+// fetchProviderManifest is fetchReleaseManifest against one
+// named provider.
+func fetchProviderManifest(ctx context.Context, provider string, arch string, dev bool) (releaseManifest, string, error) {
 	var m releaseManifest
-	manifestURL, sigURL, binaryURL, err := latestReleaseAssets(ctx, arch, dev)
+	manifestURL, sigURL, binaryURL, err := providerAssets(ctx, provider, arch, dev)
 	if err != nil {
 		return m, "", err
 	}

@@ -91,10 +91,11 @@ const (
 // kind (the version it names and the checksum of the binary
 // beside it) and that manifest's signature. Where the updater
 // reads them from is a provider. EVESYNAPSE_UPDATE_PROVIDER
-// can name one, and then that one alone is read; an install
-// that names none walks the default chain — the three forges
-// in the order below, newest genuine release wins, with the
-// mirror as the last resort when no forge answers:
+// can name one or more, and then those are walked in the
+// order named; an install that names none walks the default
+// chain — the three forges in the order below, newest genuine
+// release wins, with the mirror as the last resort when no
+// forge answers:
 //
 //	forgejo: the project's releases on its own Forgejo
 //	    (natems.dev), read through its API.
@@ -345,28 +346,34 @@ func selectRelease(releases []gitlabRelease, dev bool) (gitlabRelease, bool) {
 	return best, found
 }
 
-// updateProvider resolves which provider the updater reads
+// updateProviders resolves which providers the updater reads
 // releases from: EVESYNAPSE_UPDATE_PROVIDER, in the
-// environment or the install's .env file. An install that
-// names one reads that provider alone. An install that names
-// none reads the default chain (see fetchReleaseManifest):
-// the forges in order, the mirror last.
-func updateProvider() string {
-	return strings.ToLower(strings.TrimSpace(os.Getenv("EVESYNAPSE_UPDATE_PROVIDER")))
+// environment or the install's .env file, holds one name or a
+// comma-separated list of them, walked in the order named. An
+// install that names none reads the default chain (see
+// fetchReleaseManifest): the forges in order, the mirror last.
+func updateProviders() []string {
+	var providers []string
+	for _, name := range strings.Split(os.Getenv("EVESYNAPSE_UPDATE_PROVIDER"), ",") {
+		if name = strings.ToLower(strings.TrimSpace(name)); name != "" {
+			providers = append(providers, name)
+		}
+	}
+	return providers
 }
 
 // latestReleaseAssets returns the manifest, signature and
 // binary asset URLs of the release the channel (stable, or dev
-// when dev is set) currently installs from, from the provider
-// the install is configured to read — the chain's first forge,
-// Forgejo, when none is named. All three come from that one
-// release, so the signature is the manifest's own and the
-// checksum in the manifest always describes the binary
-// downloaded beside it.
+// when dev is set) currently installs from, from the first
+// provider the install is configured to read — the chain's
+// first forge, Forgejo, when none is named. All three come
+// from that one release, so the signature is the manifest's
+// own and the checksum in the manifest always describes the
+// binary downloaded beside it.
 func latestReleaseAssets(ctx context.Context, arch string, dev bool) (manifestURL, sigURL, binaryURL string, err error) {
-	provider := updateProvider()
-	if provider == "" {
-		provider = "forgejo"
+	provider := "forgejo"
+	if providers := updateProviders(); len(providers) > 0 {
+		provider = providers[0]
 	}
 	return providerAssets(ctx, provider, arch, dev)
 }
@@ -764,29 +771,50 @@ func verifyReleaseSignature(ctx context.Context, manifest []byte, sigURL string)
 // signature, and returns it parsed with the address of the binary
 // it describes.
 //
-// An install that names a provider reads that provider alone.
-// An install that names none walks the default chain: Forgejo,
-// GitLab and GitHub are each asked for the channel's release,
-// and the newest genuine manifest among them wins. A source
-// that has no such release, or cannot be reached, is passed
-// over; a source that answers with a release whose signature
-// does not check out stops the walk, because that is not a
-// source being down, it is a forgery being offered. Only when
-// no forge produces a genuine manifest is the static mirror
+// An install that names one or more providers walks those, in
+// the order named. An install that names none walks the
+// default chain: Forgejo, GitLab and GitHub are each asked for
+// the channel's release, and the newest genuine manifest among
+// them wins. A source that has no such release, or cannot be
+// reached, is passed over; a source that answers with a
+// release whose signature does not check out stops the walk,
+// because that is not a source being down, it is a forgery
+// being offered. Only on the default chain, and only when no
+// forge produces a genuine manifest, is the static mirror
 // asked, last.
 func fetchReleaseManifest(ctx context.Context, arch string, dev bool) (releaseManifest, string, error) {
-	if provider := updateProvider(); provider != "" {
-		return fetchProviderManifest(ctx, provider, arch, dev)
+	if providers := updateProviders(); len(providers) > 0 {
+		return walkProviders(ctx, providers, arch, dev)
 	}
+	m, binaryURL, err := walkProviders(ctx, []string{"forgejo", "gitlab", "github"}, arch, dev)
+	if err == nil {
+		return m, binaryURL, nil
+	}
+	var refused *refusal
+	if errors.As(err, &refused) {
+		return m, "", err
+	}
+	return fetchProviderManifest(ctx, "mirror", arch, dev)
+}
+
+// walkProviders asks each named provider for the channel's
+// release and returns the newest genuine manifest among them.
+// A refusal aborts the walk. When no provider answers, the
+// first provider's error stands for the rest.
+func walkProviders(ctx context.Context, providers []string, arch string, dev bool) (releaseManifest, string, error) {
 	var best releaseManifest
 	var bestBinary string
+	var firstErr error
 	found := false
-	for _, provider := range []string{"forgejo", "gitlab", "github"} {
+	for _, provider := range providers {
 		m, binaryURL, err := fetchProviderManifest(ctx, provider, arch, dev)
 		if err != nil {
 			var refused *refusal
 			if errors.As(err, &refused) {
 				return best, "", err
+			}
+			if firstErr == nil {
+				firstErr = err
 			}
 			continue
 		}
@@ -797,7 +825,7 @@ func fetchReleaseManifest(ctx context.Context, arch string, dev bool) (releaseMa
 	if found {
 		return best, bestBinary, nil
 	}
-	return fetchProviderManifest(ctx, "mirror", arch, dev)
+	return best, "", firstErr
 }
 
 // fetchProviderManifest is fetchReleaseManifest against one

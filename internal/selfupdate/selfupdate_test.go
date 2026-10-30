@@ -1387,12 +1387,16 @@ func TestRunUpdateRestartsRunningServer(t *testing.T) {
 
 func TestUpdateProvider(t *testing.T) {
 	t.Setenv("EVESYNAPSE_UPDATE_PROVIDER", "")
-	if got := updateProvider(); got != "" {
-		t.Fatalf("provider = %q, want empty (the default chain)", got)
+	if got := updateProviders(); len(got) != 0 {
+		t.Fatalf("providers = %q, want none (the default chain)", got)
 	}
 	t.Setenv("EVESYNAPSE_UPDATE_PROVIDER", " Mirror ")
-	if got := updateProvider(); got != "mirror" {
-		t.Fatalf("provider = %q, want mirror", got)
+	if got := updateProviders(); len(got) != 1 || got[0] != "mirror" {
+		t.Fatalf("providers = %q, want [mirror]", got)
+	}
+	t.Setenv("EVESYNAPSE_UPDATE_PROVIDER", "forgejo, gitlab ,")
+	if got := updateProviders(); len(got) != 2 || got[0] != "forgejo" || got[1] != "gitlab" {
+		t.Fatalf("providers = %q, want [forgejo gitlab]", got)
 	}
 }
 

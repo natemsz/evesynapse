@@ -1,0 +1,417 @@
+# EveSynapse releases on Forgejo Actions: the Forgejo port of
+# the GitLab release and mirror jobs (.gitlab-ci.yml). A push
+# to main or the dev branch builds both architectures, signs
+# the manifests, and publishes the release here; the mirror
+# job then copies the same signed files to the R2 mirror the
+# updater reads as its last resort.
+#
+# Publishing rules, the same as the GitLab pipeline's: a
+# version publishes once (an existing release is left as it
+# is); plain versions publish from main only, a suffixed
+# version (0.4.1.4-dev) publishes from the dev branch and is
+# reached with `evesynapse -update -dev`; nothing publishes
+# unsigned. The release object is the commit point the
+# updater reads: it is created as a draft, the six assets are
+# uploaded to it, and only then is it published, so no reader
+# ever sees a release whose files are not all there.
+#
+# The gate job is the CI workflow's test job: a release never
+# ships on a tree the suite has not passed. The race and
+# core-only gates run in ci.yml on the same push.
+
+name: release
+
+on:
+  push:
+    branches:
+      - main
+      - evesynapse-dev
+  workflow_dispatch:
+
+# One release per branch at a time: two pushes in quick
+# succession must not both try to create the same release.
+concurrency:
+  group: release-${{ github.ref_name }}
+  cancel-in-progress: false
+
+env:
+  GOCACHE: ${{ github.workspace }}/.cache/go-build
+  GOMODCACHE: ${{ github.workspace }}/.cache/gomod
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Cache Go builds and modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            .cache/go-build
+            .cache/gomod
+            .cache/dl
+          key: go-${{ hashFiles('go.sum') }}
+      - name: Install Go
+        run: |
+          case "$(uname -m)" in
+            aarch64) go_arch=arm64; go_sum="a06e99309dbcbdca1a8ccd2282c3ee146e55930886e26b4f1193269587165f49" ;;
+            *) go_arch=amd64; go_sum="65efbc80fdc1fa2cd2631cad5b481777a68e8725f34e89f50fc6ac714e379b40" ;;
+          esac
+          mkdir -p .cache/dl
+          if [ ! -f .cache/dl/go.tar.gz ]; then
+            curl -fsSL -o .cache/dl/go.tar.gz "https://go.dev/dl/go1.27.3.linux-${go_arch}.tar.gz"
+          fi
+          echo "$go_sum  .cache/dl/go.tar.gz" | sha256sum -c -
+          tar -xzf .cache/dl/go.tar.gz -C /usr/local
+          echo "/usr/local/go/bin" >> "$GITHUB_PATH"
+          /usr/local/go/bin/go version
+      - name: Install the toolbox
+        run: |
+          apt-get update -qq && apt-get install -y -qq --no-install-recommends curl ca-certificates git make python3 >/dev/null
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          node --version
+      - name: Check the generated database code is fresh
+        run: |
+          build="$(mktemp -d)"
+          case "$(uname -m)" in
+            aarch64) sqlc_arch=arm64; sqlc_sum="b7cae247740d0c51a1e657479e5b2d21e6fef428f596682a01bc55bf4ab8a23d" ;;
+            *) sqlc_arch=amd64; sqlc_sum="497ae4fcdfa64c5b0c311ffe4c2bd991e43991e82e5367792ed78bc2dca27354" ;;
+          esac
+          mkdir -p .cache/dl
+          if [ ! -f ".cache/dl/sqlc-${sqlc_arch}.tar.gz" ]; then
+            curl -fsSL -o ".cache/dl/sqlc-${sqlc_arch}.tar.gz" "https://github.com/sqlc-dev/sqlc/releases/download/v1.31.1/sqlc_1.31.1_linux_${sqlc_arch}.tar.gz"
+          fi
+          echo "$sqlc_sum  .cache/dl/sqlc-${sqlc_arch}.tar.gz" | sha256sum -c -
+          tar -xzf ".cache/dl/sqlc-${sqlc_arch}.tar.gz" -C "$build" sqlc
+          "$build/sqlc" version
+          "$build/sqlc" generate
+          if ! git diff --exit-code internal/db/sqlc; then
+            echo "internal/db/sqlc is stale: run 'sqlc generate' (sqlc v1.31.1) and commit the result."
+            exit 1
+          fi
+          untracked="$(git ls-files --others --exclude-standard internal/db/sqlc)"
+          if [ -n "$untracked" ]; then
+            echo "sqlc generate produced files that are not committed:"
+            echo "$untracked"
+            exit 1
+          fi
+      - name: Decode the embedded assets
+        run: make assets
+      - name: Check formatting
+        run: |
+          unformatted="$(gofmt -l cmd internal)"
+          if [ -n "$unformatted" ]; then
+            echo "These files are not gofmt-formatted (run: make fmt):"
+            echo "$unformatted"
+            exit 1
+          fi
+      - name: Vet
+        run: go vet ./...
+      # The suites run an embedded Postgres, whose initdb
+      # refuses to run as root; the job container runs as
+      # root, so the test commands below run as an
+      # unprivileged user with its own Go caches and the
+      # checkout handed over to it.
+      - name: Hand the checkout to the test user
+        run: |
+          useradd --create-home --shell /bin/bash tester
+          mkdir -p /tmp/gopath /tmp/gocache /tmp/gomodcache
+          chown -R tester:tester /tmp/gopath /tmp/gocache /tmp/gomodcache "$GITHUB_WORKSPACE"
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      # internal/app runs a few minutes; the default 10m
+      # per-package limit leaves too little headroom on a
+      # slow runner.
+      - name: Run the test suite
+        run: runuser -u tester -- env HOME=/home/tester GOPATH=/tmp/gopath GOCACHE=/tmp/gocache GOMODCACHE=/tmp/gomodcache PATH="$PATH" go test -timeout 20m ./...
+      # File list is explicit, not a glob: node --test only
+      # expands globs on Node 21+, and a quoted glob that
+      # matches nothing would pass the step with zero tests
+      # run. A missing file fails loudly instead.
+      - name: Run the JavaScript tests
+        run: >-
+          node --test
+          internal/app/jstest/swap.test.js
+          internal/app/jstest/swap.browser.test.js
+          internal/app/jstest/plan.firstload.test.js
+          internal/app/jstest/pi.test.js
+          internal/app/jstest/fit.tip.test.js
+          internal/app/jstest/fit.loadoutpreview.test.js
+          internal/app/jstest/fit.phoneviews.test.js
+          internal/app/jstest/tabs.more.test.js
+          internal/app/jstest/phonebar.test.js
+          internal/app/jstest/map.test.js
+          internal/app/jstest/dashboard.test.js
+
+  release:
+    runs-on: ubuntu-latest
+    needs: gate
+    outputs:
+      version: ${{ steps.decide.outputs.version }}
+      publish: ${{ steps.decide.outputs.publish }}
+    env:
+      FORGEJO_API: ${{ github.server_url }}/api/v1/repos/${{ github.repository }}
+      FORGEJO_TOKEN: ${{ github.token }}
+    steps:
+      - name: Check out the source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Cache Go builds and modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            .cache/go-build
+            .cache/gomod
+            .cache/dl
+          key: go-${{ hashFiles('go.sum') }}
+      - name: Install Go
+        run: |
+          case "$(uname -m)" in
+            aarch64) go_arch=arm64; go_sum="a06e99309dbcbdca1a8ccd2282c3ee146e55930886e26b4f1193269587165f49" ;;
+            *) go_arch=amd64; go_sum="65efbc80fdc1fa2cd2631cad5b481777a68e8725f34e89f50fc6ac714e379b40" ;;
+          esac
+          mkdir -p .cache/dl
+          if [ ! -f .cache/dl/go.tar.gz ]; then
+            curl -fsSL -o .cache/dl/go.tar.gz "https://go.dev/dl/go1.27.3.linux-${go_arch}.tar.gz"
+          fi
+          echo "$go_sum  .cache/dl/go.tar.gz" | sha256sum -c -
+          tar -xzf .cache/dl/go.tar.gz -C /usr/local
+          echo "/usr/local/go/bin" >> "$GITHUB_PATH"
+          /usr/local/go/bin/go version
+      - name: Install the toolbox
+        run: |
+          apt-get update -qq && apt-get install -y -qq --no-install-recommends curl ca-certificates git make python3 >/dev/null
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - name: Build the release files
+        run: |
+          make assets
+          VERSION="$(tr -d '[:space:]' < internal/app/version.txt)"
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          mkdir -p dist
+          CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o dist/evesynapse-arm64 ./cmd/evesynapse
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o dist/evesynapse-amd64 ./cmd/evesynapse
+          cd dist
+          for a in arm64 amd64; do
+            sha=$(sha256sum "evesynapse-$a" | cut -d' ' -f1)
+            printf '{"version":"%s","arch":"%s","sha256":"%s"}\n' "$VERSION" "$a" "$sha" > "latest-$a.json"
+          done
+      # A version carrying a suffix (0.4.1.4-dev) is a
+      # development build, reached with `evesynapse -update
+      # -dev`. Plain versions are releases and are only ever
+      # published from main, so another branch can't claim a
+      # release's tag first. A version publishes once: when the
+      # release exists, the push published nothing.
+      - name: Decide whether this push publishes
+        id: decide
+        run: |
+          publish=true
+          if [ "$VERSION" = "${VERSION%%-*}" ] && [ "$GITHUB_REF_NAME" != "main" ]; then
+            echo "Not publishing: $GITHUB_REF_NAME carries the plain version $VERSION, and plain versions are released from main only. Give this branch a suffixed version (for example $VERSION-dev) to publish development builds."
+            publish=false
+          fi
+          if [ "$publish" = "true" ]; then
+            code="$(curl -s -o /dev/null -w '%{http_code}' --header "Authorization: token $FORGEJO_TOKEN" "$FORGEJO_API/releases/tags/v$VERSION")"
+            if [ "$code" = "200" ]; then
+              echo "Release v$VERSION already exists; leaving it as it is."
+              publish=false
+            elif [ "$code" != "404" ]; then
+              echo "The releases API answered $code; not publishing on a guess."
+              exit 1
+            fi
+          fi
+          echo "publish=$publish" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+      # Only a signed release is published. The step fails, and
+      # nothing is published, when the key is missing or is not
+      # the other half of a key listed in
+      # internal/releasesig/trusted_keys.pem. The secret holds
+      # the key base64-encoded and releasesign reads it in that
+      # form; a value that is a path to a file is read from that
+      # file instead, as in the GitLab job.
+      - name: Sign the manifests
+        env:
+          RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
+        run: |
+          if [ "${{ steps.decide.outputs.publish }}" != "true" ]; then echo "Nothing to sign."; exit 0; fi
+          if [ -n "$RELEASE_SIGNING_KEY" ] && [ -f "$RELEASE_SIGNING_KEY" ]; then
+            RELEASE_SIGNING_KEY="$(cat "$RELEASE_SIGNING_KEY")"
+            export RELEASE_SIGNING_KEY
+          fi
+          go run ./cmd/releasesign sign dist/latest-arm64.json dist/latest-amd64.json
+      # The release notes: the pull requests merged since the
+      # previous release, grouped by label the way
+      # .github/release.yml groups them.
+      - name: Write the release notes
+        run: |
+          if [ "${{ steps.decide.outputs.publish }}" != "true" ]; then echo "No notes to write."; exit 0; fi
+          HOW="evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers)"
+          if [ "$VERSION" != "${VERSION%%-*}" ]; then HOW="evesynapse -update -dev"; fi
+          printf 'Automated build of EveSynapse v%s. Update with: %s.\n' "$VERSION" "$HOW" > release-notes.md
+          python3 - <<'PYEOF'
+          import json, os, urllib.request
+
+          api = os.environ["FORGEJO_API"]
+          token = os.environ["FORGEJO_TOKEN"]
+          version = os.environ["VERSION"]
+
+          def get(path):
+              req = urllib.request.Request(api + path,
+                                           headers={"Authorization": "token " + token})
+              return json.load(urllib.request.urlopen(req))
+
+          def vkey(tag):
+              parts = []
+              for piece in tag.lstrip("v").split("-")[0].split("."):
+                  parts.append(int(piece) if piece.isdigit() else 0)
+              return parts
+
+          releases = get("/releases?limit=100")
+          others = [r for r in releases if r["tag_name"] != "v" + version]
+          since = None
+          if others:
+              prev = max(others, key=lambda r: vkey(r["tag_name"]))
+              since = prev.get("published_at") or prev.get("created_at")
+          merged = [p for p in get("/pulls?state=closed&limit=100&sort=updated&order=desc")
+                    if p.get("merged")]
+          cats = [("🚀 Features", {"feature", "enhancement"}),
+                  ("🐛 Bug Fixes", {"fix", "bug"}),
+                  ("🧰 Maintenance & Dependencies", {"chore", "dependencies"}),
+                  ("Other Changes", None)]
+          groups = {name: [] for name, _ in cats}
+          for pr in merged:
+              if since and (pr.get("merged_at") or "") <= since:
+                  continue
+              labels = {l["name"] for l in pr.get("labels") or []}
+              for name, wanted in cats:
+                  if wanted is None or labels & wanted:
+                      groups[name].append(pr)
+                      break
+          notes = []
+          for name, _ in cats:
+              if not groups[name]:
+                  continue
+              notes.append("### " + name)
+              for pr in groups[name]:
+                  notes.append("* %s by @%s in #%s" % (pr["title"], pr["user"]["login"], pr["number"]))
+              notes.append("")
+          if notes:
+              with open("release-notes.md", "a") as fh:
+                  fh.write("\n## What's Changed\n\n" + "\n".join(notes))
+          PYEOF
+      # The release is created as a draft, the six files are
+      # uploaded to it, and then it is published: the publish
+      # is the commit point, and the updater skips drafts, so
+      # no reader can see a half-uploaded release.
+      - name: Publish the release
+        run: |
+          if [ "${{ steps.decide.outputs.publish }}" != "true" ]; then echo "No release to create."; exit 0; fi
+          if [ "$VERSION" != "${VERSION%%-*}" ]; then PRERELEASE=true; else PRERELEASE=false; fi
+          python3 - <<'PYEOF'
+          import json, os, urllib.request
+
+          api = os.environ["FORGEJO_API"]
+          version = os.environ["VERSION"]
+          body = {
+              "tag_name": "v" + version,
+              "target_commitish": os.environ["GITHUB_SHA"],
+              "name": "EveSynapse v" + version,
+              "body": open("release-notes.md").read(),
+              "draft": True,
+              "prerelease": os.environ["PRERELEASE"] == "true",
+          }
+          req = urllib.request.Request(
+              api + "/releases", data=json.dumps(body).encode(), method="POST",
+              headers={"Authorization": "token " + os.environ["FORGEJO_TOKEN"],
+                       "Content-Type": "application/json"})
+          rel = json.load(urllib.request.urlopen(req))
+          with open("release-id.txt", "w") as fh:
+              fh.write(str(rel["id"]))
+          print("Draft release v%s created (id %s)." % (version, rel["id"]))
+          PYEOF
+          REL_ID="$(cat release-id.txt)"
+          for f in evesynapse-arm64 evesynapse-amd64 latest-arm64.json latest-amd64.json latest-arm64.json.sig latest-amd64.json.sig; do
+            curl -fsS --header "Authorization: token $FORGEJO_TOKEN" \
+              -F "attachment=@dist/$f" \
+              "$FORGEJO_API/releases/$REL_ID/assets?name=$f" > /dev/null
+            echo "$f: uploaded."
+          done
+          curl -fsS -X PATCH --header "Authorization: token $FORGEJO_TOKEN" \
+            --header "Content-Type: application/json" \
+            -d '{"draft": false}' \
+            "$FORGEJO_API/releases/$REL_ID" > /dev/null
+          echo "Release v$VERSION published."
+      - name: Keep the built files for the mirror job
+        if: steps.decide.outputs.publish == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+          retention-days: 1
+
+  # Every published release is mirrored to the project's own
+  # static mirror (a Cloudflare R2 bucket served from
+  # cdn.synap6.io), which the updater reads when an install
+  # names the mirror provider, and as the default chain's last
+  # resort. The mirror carries the release's own signed
+  # manifests, so an updater trusting the mirror trusts exactly
+  # what it trusts from any provider: the signature, not the
+  # host. Files land in the same order the updater relies on —
+  # the version's archive first, the channel's binaries next,
+  # and the channel pointer manifests last, so a pointer never
+  # names a file that is not there yet. The R2 secrets are the
+  # maintainer's to set; without them, and on any mirror
+  # failure, the job reports and steps aside — the release
+  # itself is already published by then, and a mirror problem
+  # must not fail its pipeline.
+  mirror:
+    runs-on: ubuntu-latest
+    needs: release
+    if: needs.release.outputs.publish == 'true'
+    continue-on-error: true
+    env:
+      VERSION: ${{ needs.release.outputs.version }}
+      R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      R2_BUCKET: ${{ secrets.R2_BUCKET }}
+    steps:
+      - name: Fetch the built files
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+      - name: Install the AWS CLI
+        run: |
+          apt-get update -qq && apt-get install -y -qq --no-install-recommends curl ca-certificates unzip >/dev/null
+          case "$(uname -m)" in
+            aarch64) aws_arch=aarch64 ;;
+            *) aws_arch=x86_64 ;;
+          esac
+          curl -fsSL -o /tmp/awscliv2.zip "https://awscli.amazonaws.com/awscli-exe-linux-${aws_arch}.zip"
+          unzip -q /tmp/awscliv2.zip -d /tmp
+          /tmp/aws/install
+          aws --version
+      - name: Mirror the release to R2
+        run: |
+          if [ -z "${R2_ACCOUNT_ID:-}" ] || [ -z "${R2_ACCESS_KEY_ID:-}" ] || [ -z "${R2_SECRET_ACCESS_KEY:-}" ] || [ -z "${R2_BUCKET:-}" ]; then
+            echo "The R2 mirror secrets are not set; skipping the mirror."
+            exit 0
+          fi
+          export AWS_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID" AWS_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY"
+          EP="https://$R2_ACCOUNT_ID.r2.cloudflarestorage.com"
+          FILES="evesynapse-arm64 evesynapse-amd64 latest-arm64.json latest-amd64.json latest-arm64.json.sig latest-amd64.json.sig"
+          for f in $FILES; do
+            aws s3 cp "dist/$f" "s3://$R2_BUCKET/evesynapse/v$VERSION/$f" --endpoint-url "$EP"
+          done
+          if [ "$VERSION" = "${VERSION%%-*}" ]; then CH="latest"; else CH="latest-dev"; fi
+          for a in arm64 amd64; do
+            aws s3 cp "dist/evesynapse-$a" "s3://$R2_BUCKET/$CH/evesynapse-$a" --endpoint-url "$EP"
+          done
+          for a in arm64 amd64; do
+            aws s3 cp "dist/latest-$a.json" "s3://$R2_BUCKET/$CH-$a.json" --endpoint-url "$EP" --content-type "application/json"
+            aws s3 cp "dist/latest-$a.json.sig" "s3://$R2_BUCKET/$CH-$a.json.sig" --endpoint-url "$EP"
+          done
+          echo "Mirrored v$VERSION to the $CH channel."

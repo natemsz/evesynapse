@@ -35,6 +35,7 @@ jobs:
           path: |
             .cache/go-build
             .cache/gomod
+            .cache/dl
           key: go-${{ hashFiles('go.sum') }}
       - name: Install Go
         run: |
@@ -42,9 +43,12 @@ jobs:
             aarch64) go_arch=arm64; go_sum="a06e99309dbcbdca1a8ccd2282c3ee146e55930886e26b4f1193269587165f49" ;;
             *) go_arch=amd64; go_sum="65efbc80fdc1fa2cd2631cad5b481777a68e8725f34e89f50fc6ac714e379b40" ;;
           esac
-          curl -fsSL -o /tmp/go.tar.gz "https://go.dev/dl/go1.27.3.linux-${go_arch}.tar.gz"
-          echo "$go_sum  /tmp/go.tar.gz" | sha256sum -c -
-          tar -xzf /tmp/go.tar.gz -C /usr/local
+          mkdir -p .cache/dl
+          if [ ! -f .cache/dl/go.tar.gz ]; then
+            curl -fsSL -o .cache/dl/go.tar.gz "https://go.dev/dl/go1.27.3.linux-${go_arch}.tar.gz"
+          fi
+          echo "$go_sum  .cache/dl/go.tar.gz" | sha256sum -c -
+          tar -xzf .cache/dl/go.tar.gz -C /usr/local
           echo "/usr/local/go/bin" >> "$GITHUB_PATH"
           /usr/local/go/bin/go version
       - name: Install the toolbox
@@ -64,9 +68,12 @@ jobs:
             aarch64) sqlc_arch=arm64; sqlc_sum="b7cae247740d0c51a1e657479e5b2d21e6fef428f596682a01bc55bf4ab8a23d" ;;
             *) sqlc_arch=amd64; sqlc_sum="497ae4fcdfa64c5b0c311ffe4c2bd991e43991e82e5367792ed78bc2dca27354" ;;
           esac
-          curl -fsSL -o "$build/sqlc.tar.gz" "https://github.com/sqlc-dev/sqlc/releases/download/v1.31.1/sqlc_1.31.1_linux_${sqlc_arch}.tar.gz"
-          echo "$sqlc_sum  $build/sqlc.tar.gz" | sha256sum -c -
-          tar -xzf "$build/sqlc.tar.gz" -C "$build" sqlc
+          mkdir -p .cache/dl
+          if [ ! -f ".cache/dl/sqlc-${sqlc_arch}.tar.gz" ]; then
+            curl -fsSL -o ".cache/dl/sqlc-${sqlc_arch}.tar.gz" "https://github.com/sqlc-dev/sqlc/releases/download/v1.31.1/sqlc_1.31.1_linux_${sqlc_arch}.tar.gz"
+          fi
+          echo "$sqlc_sum  .cache/dl/sqlc-${sqlc_arch}.tar.gz" | sha256sum -c -
+          tar -xzf ".cache/dl/sqlc-${sqlc_arch}.tar.gz" -C "$build" sqlc
           "$build/sqlc" version
           "$build/sqlc" generate
           if ! git diff --exit-code internal/db/sqlc; then
@@ -141,6 +148,7 @@ jobs:
           path: |
             .cache/go-build
             .cache/gomod
+            .cache/dl
           key: go-${{ hashFiles('go.sum') }}
       - name: Install Go
         run: |
@@ -148,9 +156,12 @@ jobs:
             aarch64) go_arch=arm64; go_sum="a06e99309dbcbdca1a8ccd2282c3ee146e55930886e26b4f1193269587165f49" ;;
             *) go_arch=amd64; go_sum="65efbc80fdc1fa2cd2631cad5b481777a68e8725f34e89f50fc6ac714e379b40" ;;
           esac
-          curl -fsSL -o /tmp/go.tar.gz "https://go.dev/dl/go1.27.3.linux-${go_arch}.tar.gz"
-          echo "$go_sum  /tmp/go.tar.gz" | sha256sum -c -
-          tar -xzf /tmp/go.tar.gz -C /usr/local
+          mkdir -p .cache/dl
+          if [ ! -f .cache/dl/go.tar.gz ]; then
+            curl -fsSL -o .cache/dl/go.tar.gz "https://go.dev/dl/go1.27.3.linux-${go_arch}.tar.gz"
+          fi
+          echo "$go_sum  .cache/dl/go.tar.gz" | sha256sum -c -
+          tar -xzf .cache/dl/go.tar.gz -C /usr/local
           echo "/usr/local/go/bin" >> "$GITHUB_PATH"
           /usr/local/go/bin/go version
       - name: Install the toolbox
@@ -188,6 +199,7 @@ jobs:
           path: |
             .cache/go-build
             .cache/gomod
+            .cache/dl
           key: go-${{ hashFiles('go.sum') }}
       - name: Install Go
         run: |
@@ -195,9 +207,12 @@ jobs:
             aarch64) go_arch=arm64; go_sum="a06e99309dbcbdca1a8ccd2282c3ee146e55930886e26b4f1193269587165f49" ;;
             *) go_arch=amd64; go_sum="65efbc80fdc1fa2cd2631cad5b481777a68e8725f34e89f50fc6ac714e379b40" ;;
           esac
-          curl -fsSL -o /tmp/go.tar.gz "https://go.dev/dl/go1.27.3.linux-${go_arch}.tar.gz"
-          echo "$go_sum  /tmp/go.tar.gz" | sha256sum -c -
-          tar -xzf /tmp/go.tar.gz -C /usr/local
+          mkdir -p .cache/dl
+          if [ ! -f .cache/dl/go.tar.gz ]; then
+            curl -fsSL -o .cache/dl/go.tar.gz "https://go.dev/dl/go1.27.3.linux-${go_arch}.tar.gz"
+          fi
+          echo "$go_sum  .cache/dl/go.tar.gz" | sha256sum -c -
+          tar -xzf .cache/dl/go.tar.gz -C /usr/local
           echo "/usr/local/go/bin" >> "$GITHUB_PATH"
           /usr/local/go/bin/go version
       - name: Install the toolbox
@@ -251,6 +266,7 @@ jobs:
           path: |
             .cache/go-build
             .cache/gomod
+            .cache/dl
           key: go-${{ hashFiles('go.sum') }}
       - name: Install Go
         run: |
@@ -258,9 +274,12 @@ jobs:
             aarch64) go_arch=arm64; go_sum="a06e99309dbcbdca1a8ccd2282c3ee146e55930886e26b4f1193269587165f49" ;;
             *) go_arch=amd64; go_sum="65efbc80fdc1fa2cd2631cad5b481777a68e8725f34e89f50fc6ac714e379b40" ;;
           esac
-          curl -fsSL -o /tmp/go.tar.gz "https://go.dev/dl/go1.27.3.linux-${go_arch}.tar.gz"
-          echo "$go_sum  /tmp/go.tar.gz" | sha256sum -c -
-          tar -xzf /tmp/go.tar.gz -C /usr/local
+          mkdir -p .cache/dl
+          if [ ! -f .cache/dl/go.tar.gz ]; then
+            curl -fsSL -o .cache/dl/go.tar.gz "https://go.dev/dl/go1.27.3.linux-${go_arch}.tar.gz"
+          fi
+          echo "$go_sum  .cache/dl/go.tar.gz" | sha256sum -c -
+          tar -xzf .cache/dl/go.tar.gz -C /usr/local
           echo "/usr/local/go/bin" >> "$GITHUB_PATH"
           /usr/local/go/bin/go version
       - name: Install the toolbox

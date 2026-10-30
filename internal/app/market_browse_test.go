@@ -165,7 +165,7 @@ func TestMarketGroupIconMapping(t *testing.T) {
 		{"Anything At All", 24, "implants"}, // verified ID anchor wins
 		{"Apparel", 0, "apparel"},
 		{"Structures", 0, "structures"},
-		{"Structure Equipment", 0, "structures"},
+		{"Structure Equipment", 0, "structure-equipment"},
 		{"Manufacture & Research", 0, "materials"},
 		{"Raw Materials", 0, "materials"},
 		{"Blueprints", 0, "blueprints"},

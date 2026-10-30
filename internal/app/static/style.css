@@ -2567,8 +2567,8 @@ tr.fleet-detail > td { background: #120d09; border-bottom: 1px solid color-mix(i
 .status-dot.is-down { background: #ef4444; box-shadow: 0 0 8px rgba(239, 68, 68, 0.9); }
 .status-panel { max-width: 34rem; padding: 1rem 1.1rem; }
 .status-title { margin-top: 0; }
-.status-esi { display: flex; align-items: center; gap: 0.5rem; }
-.status-esi-tq { color: var(--muted); }
+.status-api { display: flex; align-items: center; gap: 0.5rem; }
+.status-api-players { color: var(--muted); }
 .status-rows { list-style: none; margin: 0 0 1rem; padding: 0; max-height: 50vh; overflow-y: auto; }
 .status-rows li { display: flex; justify-content: space-between; gap: 1rem; padding: 0.4rem 0.2rem; border-bottom: 1px solid color-mix(in srgb, var(--accent) 7%, transparent); }
 .status-row-name { min-width: 0; }

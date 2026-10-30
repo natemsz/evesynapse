@@ -126,6 +126,7 @@
 
 @media (max-width: 40rem) {
   .mt-chart svg { height: 120px; }
+  .mt-chart svg.mt-book { height: auto; }
 }
 
 .mt-changes { list-style: none; margin: 0.25rem 0 0; padding: 0; }
@@ -503,3 +504,14 @@
 .pf-x-98 { left: 98%; }
 .pf-x-99 { left: 99%; }
 .pf-x-100 { left: 100%; }
+
+/* The book trend chart: drawn at its own aspect like the price
+   history chart, with a point per day, value and date labels, and the
+   site's chart tip over every strip under it. */
+.mt-chart svg.mt-book { display: block; width: 100%; height: auto; }
+.mt-dot-sell { fill: var(--accent); }
+.mt-dot-buy { fill: var(--gold); }
+.pchart .cdot.mt-hit { fill: var(--accent); fill-opacity: 0; stroke: none; }
+.pchart .cdot.mt-hit:hover, .pchart .cdot.mt-hit:focus, .pchart .cdot.mt-hit.is-selected { fill-opacity: 0.08; stroke: none; outline: none; }
+.ctip .pf-sw.mt-swatch-sell, .ctip .ctip-sw.mt-swatch-sell { background: var(--accent); }
+.ctip .ctip-sw.mt-swatch-buy { background: var(--gold); }

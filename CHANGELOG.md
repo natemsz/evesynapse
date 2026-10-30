@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.7.0.5] - 2026-10-29
+
+Automated build of EveSynapse v0.7.0.5. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+
+
+## What's Changed
+### 🚀 Features
+* Add market groups to the basket editor search with bulk add
+* Replace the profit owner pills with the searchable character picker
+* Profit fallbacks: LP drops that mixed two offers are solved by the LP store payment, a job's output can be tied to an open sell order, and the blueprint page shows the item lost on killmails
+* Count invention and contract sales in profit per blueprint: the SDE import keeps invention rows, inventions consume their datacores and charge their T2 blueprint's runs, and completed item exchange contracts take their items out of stock at their share of the price
+### Other Changes
+* Profit page: charts two to a row on wide screens, the site's chart tip and axis labels on every chart, and an income donut beside the activity table
+* Fold briefing decks at the midpoint with one painted card per deck
+* Market tree: a type ladder, a working indent and a branches-first order
+* Set dropdown menu items in Rajdhani Regular at 0.03em letter spacing
+* Check for SDE updates daily instead of weekly
+
 ## [v0.7.0.4] - 2026-10-29
 
 Automated build of EveSynapse v0.7.0.4. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).

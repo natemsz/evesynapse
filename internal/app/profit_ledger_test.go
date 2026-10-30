@@ -278,7 +278,7 @@ func TestProfitPooledTradingItems(t *testing.T) {
 	if code != 200 {
 		t.Fatalf("GET /profit/: status %d", code)
 	}
-	for _, want := range []string{`class="pf-chart"`, "brought the most", `class="pf-gap"`, "Trading fees took"} {
+	for _, want := range []string{`class="pf-chart"`, "brought the most", `class="pf-gap"`, "trading fees took", "Goods sold cost"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("profit page charts lack %q", want)
 		}

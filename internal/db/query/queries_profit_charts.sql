@@ -57,3 +57,13 @@ FROM trade_item_daily
 WHERE owner_kind = sqlc.arg(owner_kind) AND owner_id = ANY(sqlc.arg(owner_ids)::bigint[]) AND day >= sqlc.arg(from_day)::text
 GROUP BY day
 ORDER BY day;
+
+-- name: ListTradeCOGSBuckets :many
+-- Trading's sales per bucket: all that sold, the covered part (units
+-- with a known cost and a matched tax line), and what those goods cost.
+SELECT to_char(date_trunc(sqlc.arg(unit)::text, day::date), 'YYYY-MM-DD') AS bucket,
+       SUM(revenue)::float8 AS revenue, SUM(cov_revenue)::float8 AS cov_revenue, SUM(cov_cost)::float8 AS cov_cost
+FROM trade_item_daily
+WHERE owner_kind = sqlc.arg(owner_kind) AND owner_id = ANY(sqlc.arg(owner_ids)::bigint[]) AND day >= sqlc.arg(from_day)::text
+GROUP BY 1
+ORDER BY 1;

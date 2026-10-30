@@ -203,6 +203,64 @@ func (q *Queries) ListProfitOwnerBuckets(ctx context.Context, arg ListProfitOwne
 	return items, nil
 }
 
+const listTradeCOGSBuckets = `-- name: ListTradeCOGSBuckets :many
+SELECT to_char(date_trunc($1::text, day::date), 'YYYY-MM-DD') AS bucket,
+       SUM(revenue)::float8 AS revenue, SUM(cov_revenue)::float8 AS cov_revenue, SUM(cov_cost)::float8 AS cov_cost
+FROM trade_item_daily
+WHERE owner_kind = $2 AND owner_id = ANY($3::bigint[]) AND day >= $4::text
+GROUP BY 1
+ORDER BY 1
+`
+
+type ListTradeCOGSBucketsParams struct {
+	Unit      string  `json:"unit"`
+	OwnerKind string  `json:"owner_kind"`
+	OwnerIds  []int64 `json:"owner_ids"`
+	FromDay   string  `json:"from_day"`
+}
+
+type ListTradeCOGSBucketsRow struct {
+	Bucket     string  `json:"bucket"`
+	Revenue    float64 `json:"revenue"`
+	CovRevenue float64 `json:"cov_revenue"`
+	CovCost    float64 `json:"cov_cost"`
+}
+
+// Trading's sales per bucket: all that sold, the covered part (units
+// with a known cost and a matched tax line), and what those goods cost.
+func (q *Queries) ListTradeCOGSBuckets(ctx context.Context, arg ListTradeCOGSBucketsParams) ([]ListTradeCOGSBucketsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listTradeCOGSBuckets,
+		arg.Unit,
+		arg.OwnerKind,
+		pq.Array(arg.OwnerIds),
+		arg.FromDay,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListTradeCOGSBucketsRow
+	for rows.Next() {
+		var i ListTradeCOGSBucketsRow
+		if err := rows.Scan(
+			&i.Bucket,
+			&i.Revenue,
+			&i.CovRevenue,
+			&i.CovCost,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listTradeCoverageDaily = `-- name: ListTradeCoverageDaily :many
 SELECT day, SUM(units)::bigint AS units, SUM(cov_units)::bigint AS cov_units,
        SUM(cov_revenue)::float8 AS cov_revenue, SUM(cov_cost)::float8 AS cov_cost,

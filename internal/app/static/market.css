@@ -515,3 +515,22 @@
 .pchart .cdot.mt-hit:hover, .pchart .cdot.mt-hit:focus, .pchart .cdot.mt-hit.is-selected { fill-opacity: 0.08; stroke: none; outline: none; }
 .ctip .pf-sw.mt-swatch-sell, .ctip .ctip-sw.mt-swatch-sell { background: var(--accent); }
 .ctip .ctip-sw.mt-swatch-buy { background: var(--gold); }
+
+/* Profit charts v2: the running total in character bands, the fee
+   share on its own right-hand scale, and cost of goods sold. */
+.pf-area { stroke: none; fill-opacity: 0.55; }
+.pf-area.pf-ch-1 { fill: var(--accent); }
+.pf-area.pf-ch-2 { fill: var(--gold); }
+.pf-area.pf-ch-3 { fill: var(--note); }
+.pf-area.pf-ch-4 { fill: var(--success); }
+.pf-area.pf-ch-5 { fill: var(--muted-2); }
+.pf-area.pf-ch-6 { fill: var(--danger); }
+.pf-total { fill: none; stroke: var(--text); stroke-width: 1.75; vector-effect: non-scaling-stroke; }
+.pf-sw.pf-total { background: var(--text); height: 3px; }
+.pf-sw.pf-share { background: var(--text); height: 3px; }
+.pf-share { stroke: var(--text); }
+.pf-sold { fill: color-mix(in srgb, var(--gold) 55%, transparent); }
+.pf-cogs { fill: color-mix(in srgb, var(--accent) 80%, transparent); }
+.pf-sw.pf-sold { background: color-mix(in srgb, var(--gold) 55%, transparent); }
+.pf-sw.pf-cogs { background: color-mix(in srgb, var(--accent) 80%, transparent); }
+.pf-axis-right span { left: auto; right: 2px; }

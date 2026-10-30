@@ -38,6 +38,7 @@ type pfChart struct {
 	ZeroY        float64
 	Bars         []pfBar
 	Lines        []pfLine
+	Areas        []pfLine // stacked bands, drawn under the lines
 	Gaps         []pfBar
 	Legend       []pfLegend
 	Low, High    string
@@ -46,6 +47,7 @@ type pfChart struct {
 	ShowZeroLine bool
 	Hits         []pfHit  // one hover column per bucket, for the site's chart tip
 	YTicks       []pfTick // value gridlines and their labels
+	YTicksR      []pfTick // a second value scale, labelled on the right
 	XTicks       []pfTick // date labels under the plot
 }
 
@@ -87,8 +89,8 @@ type pfLegend struct {
 
 // pfCharts is the page's chart set.
 type pfCharts struct {
-	Net, Activities, Fees, FeeShare, Characters, Margin *pfChart
-	Bucket                                              string // "day" or "week"
+	Net, Activities, Fees, COGS, Margin *pfChart // Net: the running total earned, by character
+	Bucket                              string   // "day" or "week"
 }
 
 // pfActivityClass names each activity's colour class; the same
@@ -230,64 +232,125 @@ func (app *Application) buildProfitCharts(ctx context.Context, view *profitView,
 		return nil, err
 	}
 
-	// 1. Net per bucket, with a rolling average over 7 days or 4 weeks.
-	net := make([]float64, len(buckets))
-	for _, r := range rows {
-		if i, ok := index[r.Bucket]; ok && r.Activity != actUnattributed {
-			net[i] += r.Income - r.Costs
+	// 1. Earned over time: the running total of what every owner
+	// earned, stacked by character so each band is that character's
+	// part of it (one band for one owner). Bands sit above zero while a
+	// character is ahead and below while behind; the total runs on top.
+	owners, err := app.queries.ListProfitOwnerBuckets(ctx, db.ListProfitOwnerBucketsParams{Unit: unit, OwnerKind: kind, OwnerIds: ids, FromDay: fromDay})
+	if err != nil {
+		return nil, err
+	}
+	per := map[int64][]float64{}
+	stepNet := make([]float64, len(buckets))
+	for _, o := range owners {
+		i, ok := index[o.Bucket]
+		if !ok {
+			continue
 		}
-	}
-	window := 7
-	if unit == "week" {
-		window = 4
-	}
-	roll := make([]float64, len(net))
-	var total, best float64
-	bestAt := 0
-	for i := range net {
-		total += net[i]
-		if net[i] > best {
-			best, bestAt = net[i], i
+		if per[o.OwnerID] == nil {
+			per[o.OwnerID] = make([]float64, len(buckets))
 		}
-		lo, sum := max(0, i-window+1), 0.0
-		for j := lo; j <= i; j++ {
-			sum += net[j]
+		per[o.OwnerID][i] += o.Net
+		stepNet[i] += o.Net
+	}
+	if len(per) > 0 {
+		order := make([]int64, 0, len(per))
+		total := make([]float64, len(buckets))
+		for id, s := range per {
+			order = append(order, id)
+			run := 0.0
+			for i := range s {
+				run += s[i]
+				s[i] = run
+				total[i] += run
+			}
 		}
-		roll[i] = sum / float64(i-lo+1)
-	}
-	sc := newPFScale(append(append([]float64{}, net...), roll...)...)
-	c := &pfChart{W: pfChartW, H: pfChartH, ZeroY: sc.y(0), First: first, Last: last, ShowZeroLine: true,
-		Title: fmt.Sprintf("Earned %s ISK over %d days", signedISK(total), view.Days),
-		Label: "Net earned per " + unit, HasGaps: anyGap, Gaps: gaps(),
-		Low: signedISK(sc.lo), High: signedISK(sc.hi)}
-	if best > 0 {
-		c.Sub = fmt.Sprintf("Best %s: %s, %s ISK.", unit, label(buckets[bestAt]), esi.FormatISK(best))
-	}
-	xs, ys := make([]float64, len(roll)), make([]float64, len(roll))
-	for i, v := range net {
-		cls := "pf-gain"
-		if v < 0 {
-			cls = "pf-loss"
+		lastAt := len(buckets) - 1
+		sort.Slice(order, func(i, j int) bool {
+			if per[order[i]][lastAt] != per[order[j]][lastAt] {
+				return per[order[i]][lastAt] > per[order[j]][lastAt]
+			}
+			return order[i] < order[j]
+		})
+		pos, neg := make([]float64, len(buckets)), make([]float64, len(buckets))
+		lows, highs := map[int64][]float64{}, map[int64][]float64{}
+		for _, id := range order {
+			lo, hi := make([]float64, len(buckets)), make([]float64, len(buckets))
+			for i, v := range per[id] {
+				if v >= 0 {
+					lo[i], hi[i] = pos[i], pos[i]+v
+					pos[i] = hi[i]
+				} else {
+					lo[i], hi[i] = neg[i]+v, neg[i]
+					neg[i] = lo[i]
+				}
+			}
+			lows[id], highs[id] = lo, hi
 		}
-		c.Bars = append(c.Bars, sc.bar(float64(i)*band+(band-bw)/2, bw, 0, v, cls, fmt.Sprintf("%s: %s ISK", label(buckets[i]), signedISK(v))))
-		xs[i], ys[i] = float64(i)*band+band/2, sc.y(roll[i])
-	}
-	c.Lines = []pfLine{{Points: pfPoints(xs, ys), Class: "pf-roll"}}
-	c.Legend = []pfLegend{{Class: "pf-gain", Label: "Gain"}, {Class: "pf-loss", Label: "Loss"},
-		{Class: "pf-roll", Label: fmt.Sprintf("Average over %d %ss", window, unit)}}
-	netRows := make([][]pfTipRow, len(buckets))
-	for i, v := range net {
-		cls := "pf-gain"
-		if v < 0 {
-			cls = "pf-loss"
+		se := newPFScale(append(append(append([]float64{}, pos...), neg...), total...)...)
+		name := func(id int64) string {
+			if n, ok := names[id]; ok && n != "" {
+				return n
+			}
+			return view.OwnerLabel
 		}
-		netRows[i] = []pfTipRow{{"Net", signedISK(v) + " ISK", cls},
-			{fmt.Sprintf("Average over %d %ss", window, unit), signedISK(roll[i]) + " ISK", "pf-roll"}}
+		ce := &pfChart{W: pfChartW, H: pfChartH, ZeroY: se.y(0), First: first, Last: last, ShowZeroLine: true,
+			Label: "Running total earned, by character", HasGaps: anyGap, Gaps: gaps(),
+			Title: fmt.Sprintf("Earned %s ISK over %d days", signedISK(total[lastAt]), view.Days)}
+		if len(order) > 1 {
+			ce.Sub = "The running total, split by character: each band is one character's part of it."
+		} else {
+			ce.Sub = "The running total over the span."
+		}
+		x := func(i int) float64 { return float64(i)*band + band/2 }
+		for n, id := range order {
+			cls := fmt.Sprintf("pf-area pf-ch-%d", n%6+1)
+			var pts []string
+			for i := range buckets {
+				pts = append(pts, strconv.FormatFloat(x(i), 'f', 1, 64)+","+strconv.FormatFloat(se.y(highs[id][i]), 'f', 1, 64))
+			}
+			for i := len(buckets) - 1; i >= 0; i-- {
+				pts = append(pts, strconv.FormatFloat(x(i), 'f', 1, 64)+","+strconv.FormatFloat(se.y(lows[id][i]), 'f', 1, 64))
+			}
+			ce.Areas = append(ce.Areas, pfLine{Points: strings.Join(pts, " "), Class: cls})
+			share := ""
+			if total[lastAt] > 0 && per[id][lastAt] > 0 {
+				share = fmt.Sprintf(", %.0f%%", per[id][lastAt]/total[lastAt]*100)
+			}
+			ce.Legend = append(ce.Legend, pfLegend{Class: fmt.Sprintf("pf-ch-%d", n%6+1), Label: name(id), Value: signedISK(per[id][lastAt]) + share})
+		}
+		xs, ys := make([]float64, len(buckets)), make([]float64, len(buckets))
+		for i, v := range total {
+			xs[i], ys[i] = x(i), se.y(v)
+		}
+		if len(order) > 1 {
+			ce.Lines = []pfLine{{Points: pfPoints(xs, ys), Class: "pf-total"}}
+			ce.Legend = append(ce.Legend, pfLegend{Class: "pf-total", Label: "Total"})
+		}
+		earnedRows := make([][]pfTipRow, len(buckets))
+		for i := range buckets {
+			if len(order) > 1 {
+				earnedRows[i] = append(earnedRows[i], pfTipRow{"Total so far", signedISK(total[i]) + " ISK", "pf-total"})
+			}
+			for n, id := range order {
+				v := per[id][i]
+				value := signedISK(v) + " ISK"
+				if len(order) > 1 && total[i] > 0 && v > 0 {
+					value += fmt.Sprintf(" (%.0f%%)", v/total[i]*100)
+				}
+				label := name(id)
+				if len(order) == 1 {
+					label = "So far"
+				}
+				earnedRows[i] = append(earnedRows[i], pfTipRow{label, value, fmt.Sprintf("pf-ch-%d", n%6+1)})
+			}
+			earnedRows[i] = append(earnedRows[i], pfTipRow{"Earned that " + unit, signedISK(stepNet[i]) + " ISK", ""})
+		}
+		ce.setHits(buckets, band, label, earnedRows, uncovered)
+		ce.setYTicks(se.lo, se.hi, se.y, pfChartH, pfShortISK)
+		ce.setXTicks(buckets, band)
+		set.Net = ce
 	}
-	c.setHits(buckets, band, label, netRows, uncovered)
-	c.setYTicks(sc.lo, sc.hi, sc.y, pfChartH, pfShortISK)
-	c.setXTicks(buckets, band)
-	set.Net = c
 
 	// 2. By activity: income stacked above zero, costs below.
 	type stack struct{ up, down float64 }
@@ -381,7 +444,8 @@ func (app *Application) buildProfitCharts(ctx context.Context, view *profitView,
 		set.Activities = ca
 	}
 
-	// 3. Fees, and trading fees as a share of what sold.
+	// 3. Fees by kind, with trading fees as a share of what sold drawn
+	// over them on their own (right-hand) percent scale.
 	fees, err := app.queries.ListProfitFeeBuckets(ctx, db.ListProfitFeeBucketsParams{Unit: unit, OwnerKind: kind, OwnerIds: ids, FromAt: start})
 	if err != nil {
 		return nil, err
@@ -404,8 +468,12 @@ func (app *Application) buildProfitCharts(ctx context.Context, view *profitView,
 		}
 		sf := newPFScale(hs...)
 		cf := &pfChart{W: pfChartW, H: pfChartH, ZeroY: sf.y(0), First: first, Last: last,
-			Label: "Fees per " + unit, HasGaps: anyGap, Gaps: gaps(), Low: "0", High: esi.FormatISK(sf.hi),
+			Label: "Fees per " + unit + ", and trading fees as a share of sales", HasGaps: anyGap, Gaps: gaps(), Low: "0", High: esi.FormatISK(sf.hi),
 			Title: fmt.Sprintf("Paid %s ISK in fees", esi.FormatISK(feeTotal))}
+		if revenue > 0 {
+			cf.Title += fmt.Sprintf("; trading fees took %.1f%% of what sold", tradeFees/revenue*100)
+			cf.Sub = "Bars: fees by kind (left scale). Line: sales tax and broker fees as a share of market sales (right scale), with a gap where nothing sold."
+		}
 		parts := []struct {
 			class, name string
 			v           func(feeRow) float64
@@ -415,13 +483,22 @@ func (app *Application) buildProfitCharts(ctx context.Context, view *profitView,
 			{"pf-f-industry", "Industry fees", func(f feeRow) float64 { return f.industry }},
 			{"pf-f-lp", "LP store ISK", func(f feeRow) float64 { return f.lp }},
 		}
+		share := make([]float64, len(fr))
+		shareHi := 0.0
+		for i, f := range fr {
+			share[i] = math.NaN()
+			if f.revenue > 0 {
+				share[i] = (f.tax + f.broker) / f.revenue * 100
+				shareHi = math.Max(shareHi, share[i])
+			}
+		}
 		shown := map[string]float64{}
 		feeRows := make([][]pfTipRow, len(buckets))
 		for i, f := range fr {
 			base := 0.0
 			for _, p := range parts {
 				if v := p.v(f); v > 0 {
-					cf.Bars = append(cf.Bars, sf.bar(float64(i)*band+(band-bw)/2, bw, base, v, p.class, fmt.Sprintf("%s, %s: %s ISK", label(buckets[i]), p.name, esi.FormatISK(v))))
+					cf.Bars = append(cf.Bars, sf.bar(float64(i)*band+(band-bw)/2, bw, base, v, p.class, ""))
 					base += v
 					shown[p.class] += v
 					feeRows[i] = append(feeRows[i], pfTipRow{p.name, esi.FormatISK(v) + " ISK", p.class})
@@ -430,6 +507,14 @@ func (app *Application) buildProfitCharts(ctx context.Context, view *profitView,
 			if base > 0 {
 				feeRows[i] = append(feeRows[i], pfTipRow{"Total", esi.FormatISK(base) + " ISK", ""})
 			}
+			if !math.IsNaN(share[i]) {
+				feeRows[i] = append(feeRows[i], pfTipRow{"Trading fees of sales", fmt.Sprintf("%.2f%% of %s ISK", share[i], esi.FormatISK(f.revenue)), "pf-share"})
+			}
+		}
+		if shareHi > 0 {
+			ss := pfScale{lo: 0, hi: shareHi * 1.15}
+			cf.Lines = pfBrokenLines(share, band, ss.y, "pf-share")
+			cf.setYTicksRight(ss.lo, ss.hi, ss.y, pfChartH, func(v float64) string { return fmt.Sprintf("%.1f%%", v) })
 		}
 		cf.setHits(buckets, band, label, feeRows, uncovered)
 		cf.setYTicks(0, sf.hi, sf.y, pfChartH, pfShortISK)
@@ -439,94 +524,61 @@ func (app *Application) buildProfitCharts(ctx context.Context, view *profitView,
 				cf.Legend = append(cf.Legend, pfLegend{Class: p.class, Label: p.name, Value: esi.FormatISK(shown[p.class])})
 			}
 		}
-		set.Fees = cf
-
-		if revenue > 0 {
-			share := make([]float64, len(fr))
-			hi := 0.0
-			for i, f := range fr {
-				share[i] = math.NaN()
-				if f.revenue > 0 {
-					share[i] = (f.tax + f.broker) / f.revenue * 100
-					hi = math.Max(hi, share[i])
-				}
-			}
-			ss := newPFScale(0, hi)
-			cs := &pfChart{W: pfChartW, H: pfChartH / 2, First: first, Last: last, Label: "Trading fees as a share of sales per " + unit,
-				Low: "0%", High: fmt.Sprintf("%.1f%%", ss.hi),
-				Title: fmt.Sprintf("Trading fees took %.1f%% of what sold", tradeFees/revenue*100),
-				Sub:   "Sales tax and broker fees against market sales; a gap where nothing sold."}
-			half := func(v float64) float64 { return ss.y(v) / 2 }
-			cs.Lines = pfBrokenLines(share, band, half, "pf-share")
-			shareRows := make([][]pfTipRow, len(buckets))
-			for i, v := range share {
-				if !math.IsNaN(v) {
-					shareRows[i] = []pfTipRow{{"Trading fees", fmt.Sprintf("%.2f%% of sales", v), "pf-roll"},
-						{"Sold", esi.FormatISK(fr[i].revenue) + " ISK", ""}}
-				} else {
-					shareRows[i] = []pfTipRow{{"Sold", "nothing", ""}}
-				}
-			}
-			cs.setHits(buckets, band, label, shareRows, nil)
-			cs.setYTicks(0, ss.hi, half, pfChartH/2, func(v float64) string { return fmt.Sprintf("%.1f%%", v) })
-			cs.setXTicks(buckets, band)
-			set.FeeShare = cs
+		if shareHi > 0 {
+			cf.Legend = append(cf.Legend, pfLegend{Class: "pf-share", Label: "Share of sales"})
 		}
+		set.Fees = cf
 	}
 
-	// 4. A running line per character.
-	if kind == ownerChar && len(ids) > 1 {
-		owners, err := app.queries.ListProfitOwnerBuckets(ctx, db.ListProfitOwnerBucketsParams{Unit: unit, OwnerKind: kind, OwnerIds: ids, FromDay: fromDay})
-		if err != nil {
-			return nil, err
+	// 4. Cost of goods sold: per bucket, what the covered sales brought
+	// and, inside it, what those goods had cost; the rest is gross
+	// margin before tax and fees.
+	cogs, err := app.queries.ListTradeCOGSBuckets(ctx, db.ListTradeCOGSBucketsParams{Unit: unit, OwnerKind: kind, OwnerIds: ids, FromDay: fromDay})
+	if err != nil {
+		return nil, err
+	}
+	type cogsRow struct{ sold, covRev, cost float64 }
+	cr := make([]cogsRow, len(buckets))
+	var covRev, cost, sold float64
+	for _, r := range cogs {
+		if i, ok := index[r.Bucket]; ok {
+			cr[i] = cogsRow{r.Revenue, r.CovRevenue, r.CovCost}
+			covRev, cost, sold = covRev+r.CovRevenue, cost+r.CovCost, sold+r.Revenue
 		}
-		per := map[int64][]float64{}
-		for _, o := range owners {
-			if per[o.OwnerID] == nil {
-				per[o.OwnerID] = make([]float64, len(buckets))
-			}
-			if i, ok := index[o.Bucket]; ok {
-				per[o.OwnerID][i] += o.Net
-			}
+	}
+	if covRev > 0 {
+		var hs []float64
+		for _, r := range cr {
+			hs = append(hs, r.covRev)
 		}
-		if len(per) > 1 {
-			order := make([]int64, 0, len(per))
-			var all []float64
-			for id, s := range per {
-				order = append(order, id)
-				run := 0.0
-				for i := range s {
-					run += s[i]
-					s[i] = run
-				}
-				all = append(all, s...)
-			}
-			sort.Slice(order, func(i, j int) bool { return per[order[i]][len(buckets)-1] > per[order[j]][len(buckets)-1] })
-			so := newPFScale(all...)
-			co := &pfChart{W: pfChartW, H: pfChartH, ZeroY: so.y(0), First: first, Last: last, ShowZeroLine: true,
-				Label: "Running earned per character", HasGaps: anyGap, Gaps: gaps(), Low: signedISK(so.lo), High: signedISK(so.hi),
-				Title: fmt.Sprintf("%s earned the most: %s ISK", names[order[0]], signedISK(per[order[0]][len(buckets)-1])),
-				Sub:   "Each sale counts for the character that sold, whoever bought the stock."}
-			for n, id := range order {
-				cls := fmt.Sprintf("pf-ch pf-ch-%d", n%6+1)
-				xs, ys := make([]float64, len(buckets)), make([]float64, len(buckets))
-				for i, v := range per[id] {
-					xs[i], ys[i] = float64(i)*band+band/2, so.y(v)
-				}
-				co.Lines = append(co.Lines, pfLine{Points: pfPoints(xs, ys), Class: cls})
-				co.Legend = append(co.Legend, pfLegend{Class: cls, Label: names[id], Value: signedISK(per[id][len(buckets)-1])})
-			}
-			chRows := make([][]pfTipRow, len(buckets))
-			for i := range buckets {
-				for n, id := range order {
-					chRows[i] = append(chRows[i], pfTipRow{names[id], signedISK(per[id][i]) + " ISK so far", fmt.Sprintf("pf-ch-%d", n%6+1)})
+		sg := newPFScale(hs...)
+		cg := &pfChart{W: pfChartW, H: pfChartH, ZeroY: sg.y(0), First: first, Last: last,
+			Label: "Trading sales and the cost of the goods sold per " + unit, HasGaps: anyGap, Gaps: gaps(),
+			Title: fmt.Sprintf("Goods sold cost %s ISK: %.0f%% of covered sales", esi.FormatISK(cost), cost/covRev*100),
+			Sub:   "Trading sales with a known cost. The darker part of each bar is what those goods cost; the rest is gross margin, before tax and fees.",
+			Legend: []pfLegend{{Class: "pf-sold", Label: "Covered sales", Value: esi.FormatISK(covRev)},
+				{Class: "pf-cogs", Label: "Cost of goods", Value: esi.FormatISK(cost)}}}
+		cogsRows := make([][]pfTipRow, len(buckets))
+		for i, r := range cr {
+			x := float64(i)*band + (band-bw)/2
+			if r.covRev > 0 {
+				cg.Bars = append(cg.Bars, sg.bar(x, bw, 0, r.covRev, "pf-sold", ""))
+				cg.Bars = append(cg.Bars, sg.bar(x, bw, 0, math.Min(r.cost, r.covRev), "pf-cogs", ""))
+				gross := r.covRev - r.cost
+				cogsRows[i] = []pfTipRow{
+					{"Covered sales", esi.FormatISK(r.covRev) + " ISK", "pf-sold"},
+					{"Cost of goods", esi.FormatISK(r.cost) + " ISK", "pf-cogs"},
+					{"Gross margin", fmt.Sprintf("%s ISK, %.1f%%", signedISK(gross), gross/r.covRev*100), ""},
 				}
 			}
-			co.setHits(buckets, band, label, chRows, uncovered)
-			co.setYTicks(so.lo, so.hi, so.y, pfChartH, pfShortISK)
-			co.setXTicks(buckets, band)
-			set.Characters = co
+			if r.sold > r.covRev+0.5 {
+				cogsRows[i] = append(cogsRows[i], pfTipRow{"Sold with no known cost", esi.FormatISK(r.sold-r.covRev) + " ISK", ""})
+			}
 		}
+		cg.setHits(buckets, band, label, cogsRows, uncovered)
+		cg.setYTicks(0, sg.hi, sg.y, pfChartH, pfShortISK)
+		cg.setXTicks(buckets, band)
+		set.COGS = cg
 	}
 
 	// 5. The trading margin over the last 30 days, day by day, on
@@ -787,4 +839,14 @@ func buildIncomeDonut(acts []db.ListProfitByActivityRow) *pfDonut {
 		offset += length
 	}
 	return d
+}
+
+// setYTicksRight labels a second value scale on the plot's right edge
+// (no gridlines: the left scale owns those).
+func (c *pfChart) setYTicksRight(lo, hi float64, y func(float64) float64, h int, format func(float64) string) {
+	step := pfNiceStep((hi - lo) / 4)
+	for v := math.Ceil(lo/step) * step; v <= hi+step*1e-9; v += step {
+		yy := y(v)
+		c.YTicksR = append(c.YTicksR, pfTick{Y: yy, Pos: strconv.Itoa(int(math.Round(yy / float64(h) * 100))), Label: format(v)})
+	}
 }

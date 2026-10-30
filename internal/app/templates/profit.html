@@ -45,8 +45,8 @@
 <div class="pf-charts">
 {{if .Net}}<div class="pf-cell">{{template "pfchart" .Net}}</div>{{end}}
 {{if .Activities}}<div class="pf-cell">{{template "pfchart" .Activities}}</div>{{end}}
-{{if .Fees}}<div class="pf-cell">{{template "pfchart" .Fees}}{{if .FeeShare}}{{template "pfchart" .FeeShare}}{{end}}</div>{{end}}
-{{if .Characters}}<div class="pf-cell">{{template "pfchart" .Characters}}</div>{{end}}
+{{if .Fees}}<div class="pf-cell">{{template "pfchart" .Fees}}</div>{{end}}
+{{if .COGS}}<div class="pf-cell">{{template "pfchart" .COGS}}</div>{{end}}
 {{if .Margin}}<div class="pf-cell">{{template "pfchart" .Margin}}</div>{{end}}
 </div>
 <p><small>Amounts in ISK, by {{.Bucket}}. Hatched {{.Bucket}}s had sales with no known cost or no matched tax line, so their trading figures are partial.</small></p>
@@ -270,12 +270,14 @@
     <svg{{if lt .H 160}} class="pf-short"{{end}} viewBox="0 0 {{.W}} {{.H}}" width="100%" role="img" aria-label="{{.Label}}, {{.First}} to {{.Last}}" preserveAspectRatio="none">
       {{range .YTicks}}<line class="pf-grid" x1="0" y1="{{.Y}}" x2="{{$.W}}" y2="{{.Y}}"/>{{end}}
       {{range .Gaps}}<rect class="{{.Class}}" x="{{.X}}" y="{{.Y}}" width="{{.W}}" height="{{.H}}"/>{{end}}
+      {{range .Areas}}<polygon class="{{.Class}}" points="{{.Points}}"/>{{end}}
       {{if .ShowZeroLine}}<line class="mt-zero" x1="0" y1="{{.ZeroY}}" x2="{{.W}}" y2="{{.ZeroY}}"/>{{end}}
       {{range .Bars}}<rect class="{{.Class}}" x="{{.X}}" y="{{.Y}}" width="{{.W}}" height="{{.H}}"/>{{end}}
       {{range .Lines}}<polyline class="{{.Class}}" points="{{.Points}}"/>{{end}}
       {{range .Hits}}<rect class="cdot pf-hit" x="{{.X}}" y="0" width="{{.W}}" height="{{$.H}}" tabindex="0" aria-label="{{.Label}}" data-date="{{.Date}}" data-tip-rows="{{.Rows}}"/>{{end}}
     </svg>
     <div class="pf-axis-y" aria-hidden="true">{{range .YTicks}}<span class="pf-y-{{.Pos}}">{{.Label}}</span>{{end}}</div>
+    {{if .YTicksR}}<div class="pf-axis-y pf-axis-right" aria-hidden="true">{{range .YTicksR}}<span class="pf-y-{{.Pos}}">{{.Label}}</span>{{end}}</div>{{end}}
     <div class="ctip" hidden></div>
   </div>
   <div class="pf-axis-x" aria-hidden="true">{{range .XTicks}}<span class="{{.Class}} pf-x-{{.Pos}}">{{.Label}}</span>{{end}}</div>

@@ -1,7 +1,7 @@
 # EveSynapse releases on Forgejo Actions: the Forgejo port of
 # the GitLab release and mirror jobs (.gitlab-ci.yml). A dispatch
 # from the GitHub gates, or a manual one, builds both architectures, signs
-# the manifests, and publishes the release here; the mirror
+# the manifests and the release tag, and publishes the release here; the mirror
 # job then copies the same signed files to the R2 mirror the
 # updater reads as its last resort.
 #
@@ -198,6 +198,42 @@ jobs:
       # uploaded to it, and then it is published: the publish
       # is the commit point, and the updater skips drafts, so
       # no reader can see a half-uploaded release.
+      # The release tag is made here, before the release is
+      # created on it: a signed annotated tag, signed by the
+      # release key in the OpenSSH form git signs with, authored
+      # by the key's owner. Publishing then attaches the release
+      # to this tag instead of the API minting an unsigned
+      # lightweight one. A tag a died run left behind is reused
+      # when it is this commit's signed tag, and stops the run
+      # when it is anything else.
+      - name: Sign the release tag
+        env:
+          RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
+        run: |
+          if [ "${{ steps.decide.outputs.publish }}" != "true" ]; then echo "No tag to sign."; exit 0; fi
+          if [ -n "$RELEASE_SIGNING_KEY" ] && [ -f "$RELEASE_SIGNING_KEY" ]; then
+            RELEASE_SIGNING_KEY="$(cat "$RELEASE_SIGNING_KEY")"
+            export RELEASE_SIGNING_KEY
+          fi
+          go run ./cmd/releasesign openssh -out "$RUNNER_TEMP/release-key"
+          printf 'nate@evesynapse.app %s\n' "$(cat "$RUNNER_TEMP/release-key.pub")" > "$RUNNER_TEMP/allowed-signers"
+          git config gpg.ssh.allowedSignersFile "$RUNNER_TEMP/allowed-signers"
+          if git ls-remote --exit-code origin "refs/tags/v$VERSION" >/dev/null 2>&1; then
+            git fetch origin "refs/tags/v$VERSION:refs/tags/v$VERSION"
+            if [ "$(git cat-file -t "v$VERSION")" = "tag" ] && [ "$(git rev-list -n 1 "v$VERSION")" = "$GITHUB_SHA" ] && git tag -v "v$VERSION" >/dev/null 2>&1; then
+              echo "The signed tag v$VERSION is already pushed for this commit; reusing it."
+              exit 0
+            fi
+            echo "A tag v$VERSION already exists and is not the signed tag for this commit; not publishing over it."
+            exit 1
+          fi
+          git config user.name "Nate"
+          git config user.email "nate@evesynapse.app"
+          git config gpg.format ssh
+          git config user.signingkey "$RUNNER_TEMP/release-key"
+          git tag -s "v$VERSION" -m "EveSynapse v$VERSION" "$GITHUB_SHA"
+          git tag -v "v$VERSION"
+          git push origin "refs/tags/v$VERSION"
       - name: Publish the release
         run: |
           if [ "${{ steps.decide.outputs.publish }}" != "true" ]; then echo "No release to create."; exit 0; fi

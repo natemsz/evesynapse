@@ -5269,9 +5269,12 @@
         if (!data) return;
         paintDot(dot, data.esi.state);
         paintDot(modalDot, data.esi.state);
-        var tip = data.esi.title || data.esi.label;
-        if (data.esi.players) tip += " Tranquility: " + data.esi.players + " online.";
-        openBtn.setAttribute("data-tip", tip);
+        var tips = {
+          ok: "ESI is answering normally. Click for detailed stats.",
+          limited: "ESI is answering slowly. Click for detailed stats.",
+          down: "ESI is not answering. Click for detailed stats."
+        };
+        openBtn.setAttribute("data-tip", tips[data.esi.state] || "Checking ESI. Click for detailed stats.");
         esiLabel.textContent = data.esi.label;
         esiTq.textContent = data.esi.players ? "Tranquility " + data.esi.players + " online" : "";
         rowsBody.innerHTML = "";

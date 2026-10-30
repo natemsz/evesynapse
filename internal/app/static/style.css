@@ -2557,14 +2557,29 @@ tr.fleet-detail > td { background: #120d09; border-bottom: 1px solid color-mix(i
   0% { transform: scale(1); opacity: 0.75; }
   75%, 100% { transform: scale(2.6); opacity: 0; }
 }
-/* The sidebar status dot: the ESI pill's colours and glow, at
-   rest. No ping ring; the glow alone carries the state, and the
+/* The status dot: the ESI pill's colours and glow. The sidebar
+   button's dot also carries the pill's ping ring (the #status-open
+   rules below); the modal's dot rests on the glow alone, and the
    button's tooltip and the freshness modal behind it carry the
    words. */
 .status-dot { display: inline-block; flex: none; width: 0.55rem; height: 0.55rem; border-radius: 50%; background: #6b6b6b; vertical-align: middle; }
 .status-dot.is-ok { background: #10b981; box-shadow: 0 0 8px rgba(16, 185, 129, 0.9); }
 .status-dot.is-limited { background: #ffb84d; box-shadow: 0 0 8px rgba(255, 184, 77, 0.85); }
 .status-dot.is-down { background: #ef4444; box-shadow: 0 0 8px rgba(239, 68, 68, 0.9); }
+
+/* The sidebar status dot carries the ESI pill's ping ring, as on
+   the overview pill: same keyframes, same cadence per state. */
+#status-open .status-dot { position: relative; }
+#status-open .status-dot::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: inherit;
+  opacity: 0;
+}
+#status-open .status-dot.is-ok::after { animation: esi-ping 1.8s cubic-bezier(0, 0, 0.2, 1) infinite; }
+#status-open .status-dot.is-down::after { animation: esi-ping 1.1s cubic-bezier(0, 0, 0.2, 1) infinite; }
 .status-panel { max-width: 34rem; padding: 1rem 1.1rem; }
 .status-title { margin-top: 0; }
 .status-api { display: flex; align-items: center; gap: 0.5rem; }
@@ -4662,6 +4677,18 @@ html[data-theme="light"] .fit-tip-stats { color: #b39a7d; }
 #install-app:hover { color: var(--text-bright); background: rgba(255,255,255,0.04); }
 /* Shown by app.js only once the browser says the site can be installed. */
 #install-app[hidden] { display: none; }
+
+/* ESI status is a button dressed as a nav link, like Install App
+   above; without this reset it keeps the browser's button chrome. */
+#status-open {
+  background: transparent;
+  border: none;
+  border-radius: 0.4rem;
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
+}
+#status-open:hover { color: var(--text-bright); background: rgba(255,255,255,0.04); }
 
 /* --- character selector dropdown --- */
 .charselector {

@@ -150,12 +150,6 @@ func (app *Application) freshnessRows(ctx context.Context, now time.Time) ([]fre
 			add(freshSource{"Swarm pull", "pulls on the swarm cycle", 15 * time.Minute, 2 * time.Hour}, time.Time{}, false)
 		}
 	}
-	if at, ok := latestOf(app.queries.StatsIntelLatest(ctx)); ok {
-		add(freshSource{"Intel reports", "lands as reports arrive", time.Hour, 24 * time.Hour}, at, true)
-	} else {
-		add(freshSource{"Intel reports", "lands as reports arrive", time.Hour, 24 * time.Hour}, time.Time{}, false)
-	}
-
 	note := ""
 	if haveStalest && stalest < time.Duration(1)<<60 {
 		note = "Stalest active data right now: " + shortDuration(stalest) + "."

@@ -306,7 +306,9 @@ gaps; real environment variables win over the file):
 | `EVE_CLIENT_SECRET_WRAPPED`, `DISCORD_CLIENT_SECRET_WRAPPED`, `DISCORD_BOT_TOKEN_WRAPPED`, `MODEL_API_KEY_WRAPPED` | with `http` | — | Each working credential wrapped by the key service, unwrapped at startup through the same endpoint as the token key (http provider) |
 | `EVE_ADMIN_CHARACTER_IDS` | no | — | Comma-separated EVE character IDs whose accounts may open the Admin and Sync pages. Any character linked to an account makes that whole account an admin's. Empty = nobody. The status belongs to whoever owned the character when it was first seen as an admin: if the character is sold or transferred, its new owner does not get it. To give it to a new owner on purpose, remove the id, restart, add it back and restart |
 | `EVE_ALLOWED_CHARACTER_IDS`, `EVE_ALLOWED_CORPORATION_IDS`, `EVE_ALLOWED_ALLIANCE_IDS` | no | — | Limit who may create an account (see "Who can sign up"). All empty = anyone who can sign in with EVE |
+| `EVESYNAPSE_UPDATE_PROVIDER` | no | `gitlab` | Where the updater reads releases from: `gitlab`, `github`, or `mirror` (the project's static mirror); chosen in configuration, never switched automatically |
 | `EVESYNAPSE_UPDATE_PROJECT` | no | `natemsz/evesynapse` | GitLab project (group/project) the updater checks; `EVESYNAPSE_UPDATE_REPO`, set by older installs, is read as the same project's path |
+| `EVESYNAPSE_UPDATE_MIRROR_URL` | no | `https://synap6.io/releases` | The mirror provider's root |
 | `EVE_SDE_BASE_URL` | no | Fuzzwork's dump | Base URL of the SDE CSV dump the importer downloads |
 | `ESI_CONTACT` | no | — | How CCP can reach whoever runs this instance (an email address, a Discord handle, a character name). Sent in the User-Agent of every ESI request, as CCP asks of third-party apps |
 | `STATUS_PAGE_ORIGIN` | no | — | The status page's origin (`https://status.example.com`): the one site whose pages may read `/status.json`, the public summary of how the database, worker, notifications, ESI, market sweeps and push are doing (a state and an age each, nothing more) |
@@ -881,7 +883,17 @@ test suite in CI and, when `internal/app/version.txt` names a
 version that has no release yet, publishes a GitLab release with
 builds for ARM64 and AMD64 plus, for each build, a small manifest
 (the version and the build's SHA-256 checksum) and that manifest's
-signature.
+signature. Each published release is then mirrored to the
+project's static mirror (a Cloudflare R2 bucket served from
+`https://synap6.io/releases`): the version's files under
+`evesynapse/v<version>/`, the channel's binaries under `latest/`
+(or `latest-dev/`), and the channel's signed pointer manifests
+last. The updater reads releases from the provider named by
+`EVESYNAPSE_UPDATE_PROVIDER` (`gitlab` by default, or `github`,
+or `mirror` for that mirror), verifying the same signatures and
+checksums from any of them; the mirror job needs the
+`R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` and
+`R2_BUCKET` CI/CD variables, and skips without them.
 
 A release is one edit: `internal/app/version.txt`. Nothing else in
 the repository repeats the version, and the tests read it from that

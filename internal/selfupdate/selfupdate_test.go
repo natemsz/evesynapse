@@ -14,9 +14,11 @@ package selfupdate
 
 import (
 	"bytes"
+	"context"
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/binary"
+	"encoding/json"
 	"errors"
 	"evesynapse/internal/pidfile"
 	"evesynapse/internal/pidfile/pidfiletest"
@@ -1379,5 +1381,94 @@ func TestRunUpdateRestartsRunningServer(t *testing.T) {
 	}
 	if pidfile.Alive(sleeper.Process.Pid) {
 		t.Fatal("the 'server' process is still alive after the restart hand-off")
+	}
+}
+
+func TestUpdateProvider(t *testing.T) {
+	t.Setenv("EVESYNAPSE_UPDATE_PROVIDER", "")
+	if got := updateProvider(); got != "gitlab" {
+		t.Fatalf("default provider = %q, want gitlab", got)
+	}
+	t.Setenv("EVESYNAPSE_UPDATE_PROVIDER", " Mirror ")
+	if got := updateProvider(); got != "mirror" {
+		t.Fatalf("provider = %q, want mirror", got)
+	}
+}
+
+func TestGitHubStableAssets(t *testing.T) {
+	t.Setenv("EVESYNAPSE_UPDATE_PROVIDER", "github")
+	t.Setenv("EVESYNAPSE_UPDATE_REPO", "someone/evesynapse")
+	m, s, b, err := latestReleaseAssets(context.Background(), "arm64", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	base := "https://github.com/someone/evesynapse/releases/latest/download"
+	if m != base+"/latest-arm64.json" || s != base+"/latest-arm64.json.sig" || b != base+"/evesynapse-arm64" {
+		t.Fatalf("stable assets = %q, %q, %q", m, s, b)
+	}
+}
+
+func TestGitHubDevAssets(t *testing.T) {
+	t.Setenv("EVESYNAPSE_UPDATE_PROVIDER", "github")
+	t.Setenv("EVESYNAPSE_UPDATE_REPO", "someone/evesynapse")
+	t.Setenv("EVESYNAPSE_UPDATE_API_URL", "")
+	mk := func(tag string, draft bool, signed bool) map[string]any {
+		assets := []map[string]string{
+			{"name": "latest-arm64.json", "browser_download_url": "https://dl.example/" + tag + "/latest-arm64.json"},
+			{"name": "evesynapse-arm64", "browser_download_url": "https://dl.example/" + tag + "/evesynapse-arm64"},
+		}
+		if signed {
+			assets = append(assets, map[string]string{"name": "latest-arm64.json.sig", "browser_download_url": "https://dl.example/" + tag + "/latest-arm64.json.sig"})
+		}
+		return map[string]any{"tag_name": tag, "draft": draft, "assets": assets}
+	}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/repos/someone/evesynapse/releases" {
+			http.NotFound(w, r)
+			return
+		}
+		_ = json.NewEncoder(w).Encode([]map[string]any{
+			mk("v0.8.0.0", false, true),
+			mk("v0.8.1.0-dev", false, true),
+			mk("v0.8.2.0-dev", true, true),
+			mk("v0.8.0.5-dev", false, true),
+		})
+	}))
+	defer srv.Close()
+	old := releaseGitHubAPIBaseURL
+	releaseGitHubAPIBaseURL = srv.URL
+	t.Cleanup(func() { releaseGitHubAPIBaseURL = old })
+	m, s, b, err := latestReleaseAssets(context.Background(), "arm64", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m != "https://dl.example/v0.8.1.0-dev/latest-arm64.json" || s != "https://dl.example/v0.8.1.0-dev/latest-arm64.json.sig" || b != "https://dl.example/v0.8.1.0-dev/evesynapse-arm64" {
+		t.Fatalf("dev assets = %q, %q, %q; want the v0.8.1.0-dev release's", m, s, b)
+	}
+}
+
+func TestMirrorAssets(t *testing.T) {
+	t.Setenv("EVESYNAPSE_UPDATE_PROVIDER", "mirror")
+	t.Setenv("EVESYNAPSE_UPDATE_MIRROR_URL", "https://mirror.example/releases/")
+	m, s, b, err := latestReleaseAssets(context.Background(), "amd64", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m != "https://mirror.example/releases/latest-amd64.json" || s != m+".sig" || b != "https://mirror.example/releases/latest/evesynapse-amd64" {
+		t.Fatalf("stable mirror assets = %q, %q, %q", m, s, b)
+	}
+	m, s, b, err = latestReleaseAssets(context.Background(), "amd64", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m != "https://mirror.example/releases/latest-dev-amd64.json" || s != m+".sig" || b != "https://mirror.example/releases/latest-dev/evesynapse-amd64" {
+		t.Fatalf("dev mirror assets = %q, %q, %q", m, s, b)
+	}
+}
+
+func TestUnknownProvider(t *testing.T) {
+	t.Setenv("EVESYNAPSE_UPDATE_PROVIDER", "carrier-pigeon")
+	if _, _, _, err := latestReleaseAssets(context.Background(), "arm64", false); err == nil {
+		t.Fatal("an unknown provider was accepted")
 	}
 }

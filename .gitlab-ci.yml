@@ -367,7 +367,61 @@ release:
   artifacts:
     reports:
       dotenv: build.env
+    paths:
+      - dist/
     expire_in: 1 day
+
+# Every published release is mirrored to the project's own
+# static mirror (a Cloudflare R2 bucket served from synap6.io),
+# which the updater reads when an install names the mirror
+# provider. The mirror carries the release's own signed
+# manifests, so an updater trusting the mirror trusts exactly
+# what it trusts from any provider: the signature, not the
+# host. Files land in the same order the updater relies on —
+# the version's archive first, the channel's binaries next,
+# and the channel pointer manifests last, so a pointer never
+# names a file that is not there yet. The R2 variables
+# (R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY,
+# R2_BUCKET) are the maintainer's to set; without them, and on
+# any mirror failure, the job reports and steps aside — the
+# release itself is already published by then, and a mirror
+# problem must not fail its pipeline.
+mirror:
+  stage: followup
+  image:
+    name: amazon/aws-cli:latest
+    entrypoint: [""]
+  needs:
+    - job: release
+      artifacts: true
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main" || $CI_COMMIT_BRANCH == "evesynapse-dev"
+  allow_failure: true
+  script:
+    - |
+      if [ "${PUBLISH:-false}" != "true" ]; then
+        echo "This pipeline published no release; nothing to mirror."
+        exit 0
+      fi
+      if [ -z "${R2_ACCOUNT_ID:-}" ] || [ -z "${R2_ACCESS_KEY_ID:-}" ] || [ -z "${R2_SECRET_ACCESS_KEY:-}" ] || [ -z "${R2_BUCKET:-}" ]; then
+        echo "The R2 mirror variables are not set; skipping the mirror."
+        exit 0
+      fi
+      export AWS_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID" AWS_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY"
+      EP="https://$R2_ACCOUNT_ID.r2.cloudflarestorage.com"
+      FILES="evesynapse-arm64 evesynapse-amd64 latest-arm64.json latest-amd64.json latest-arm64.json.sig latest-amd64.json.sig"
+      for f in $FILES; do
+        aws s3 cp "dist/$f" "s3://$R2_BUCKET/evesynapse/v$VERSION/$f" --endpoint-url "$EP"
+      done
+      if [ "$VERSION" = "${VERSION%%-*}" ]; then CH="latest"; else CH="latest-dev"; fi
+      for a in arm64 amd64; do
+        aws s3 cp "dist/evesynapse-$a" "s3://$R2_BUCKET/$CH/evesynapse-$a" --endpoint-url "$EP"
+      done
+      for a in arm64 amd64; do
+        aws s3 cp "dist/latest-$a.json" "s3://$R2_BUCKET/$CH-$a.json" --endpoint-url "$EP" --content-type "application/json"
+        aws s3 cp "dist/latest-$a.json.sig" "s3://$R2_BUCKET/$CH-$a.json.sig" --endpoint-url "$EP"
+      done
+      echo "Mirrored v$VERSION to the $CH channel."
 
 # After a release publishes from main, its notes join
 # CHANGELOG.md on a merge request for review — the GitLab

@@ -32,16 +32,16 @@ func TestSectionTabs(t *testing.T) {
 	if tabsAt, bodyAt := strings.Index(body, `<nav class="section-tabs"`), strings.Index(body, `<div class="page-body">`); tabsAt < 0 || bodyAt < 0 || tabsAt > bodyAt {
 		t.Error("section tabs render inside .page-body; they belong above the glass, under the title")
 	}
-	// The market strip is grouped: the strip shows the two
+	// The market strip is grouped: the strip shows the
 	// clusters, Trade Ideas' own cluster marked, and the sub-row
 	// carries the cluster's pages with Trade Ideas itself marked.
-	mustContain(t, "market group tabs", tabs, `<a href="/market/" class="active" aria-current="page">Market Tools</a>`)
+	mustContain(t, "market group tabs", tabs, `<a href="/market/scanner/" class="active" aria-current="page">Find Trades</a>`)
 	mustContain(t, "market group tabs", tabs, `<a href="/orders/">My Finances</a>`)
 	if strings.Count(tabs, `class="active"`) != 1 {
 		t.Errorf("market group tabs mark %d clusters, want 1", strings.Count(tabs, `class="active"`))
 	}
 	sub := sectionSubTabsBlock(t, body)
-	for _, href := range []string{"/market/", "/market/scanner/", "/market/ideas/", "/market/tradefinder/", "/market/leaderboard/", "/market/restock/", "/contracts/search/"} {
+	for _, href := range []string{"/market/scanner/", "/market/ideas/", "/market/tradefinder/"} {
 		if !strings.Contains(sub, `href="`+href+`"`) {
 			t.Errorf("market subtabs miss %s", href)
 		}
@@ -50,9 +50,9 @@ func TestSectionTabs(t *testing.T) {
 	if strings.Count(sub, `class="active"`) != 1 {
 		t.Errorf("market subtabs mark %d pages, want 1", strings.Count(sub, `class="active"`))
 	}
-	// The sidebar menu renders the same groups: the two headings
-	// in order, the tools pages under the first, My Orders under
-	// the second.
+	// The sidebar menu renders the same groups: the headings
+	// in order, the restock page under its group, My Orders under
+	// the last.
 	mustContain(t, "sidebar", body, `<a href="/market/restock/">Restock Planner</a>`)
 	mat := strings.Index(body, `data-nav-category="market"`)
 	if mat < 0 {
@@ -62,7 +62,7 @@ func TestSectionTabs(t *testing.T) {
 	if end := strings.Index(mmenu, "</details>"); end >= 0 {
 		mmenu = mmenu[:end]
 	}
-	toolsAt := strings.Index(mmenu, `<p class="nav-group-label">Market Tools</p>`)
+	toolsAt := strings.Index(mmenu, `<p class="nav-group-label">Browse</p>`)
 	finAt := strings.Index(mmenu, `<p class="nav-group-label">My Finances</p>`)
 	restockAt := strings.Index(mmenu, `href="/market/restock/"`)
 	ordersAt := strings.Index(mmenu, `href="/orders/"`)
@@ -206,13 +206,16 @@ func TestSectionGroups(t *testing.T) {
 		t.Error("the wallets page is not marked in its sub-row")
 	}
 
-	// The market strip groups the owner's way: Market Tools
-	// first, linking at the market page itself, then My
-	// Finances at My Orders; the sub-row follows the viewed
-	// page's cluster.
+	// The market strip groups by job: Browse first, linking at
+	// the market page itself, then Find Trades, Baskets &
+	// Restock, LP & Contracts, and My Finances at My Orders;
+	// the sub-row follows the viewed page's cluster.
 	mtabs, msub := sectionTabsGrouped(navLinksFor("market", "orders.html", 0), "market")
 	wantMTabs := []navLink{
-		{Href: "/market/", Label: "Market Tools"},
+		{Href: "/market/", Label: "Browse"},
+		{Href: "/market/scanner/", Label: "Find Trades"},
+		{Href: "/market/restock/", Label: "Baskets & Restock"},
+		{Href: "/contracts/search/", Label: "LP & Contracts"},
 		{Href: "/orders/", Label: "My Finances", Active: true},
 	}
 	if len(mtabs) != len(wantMTabs) {
@@ -227,13 +230,13 @@ func TestSectionGroups(t *testing.T) {
 		t.Errorf("market sub-row = %+v, want My Orders (active) and My Contracts", msub)
 	}
 	_, msub = sectionTabsGrouped(navLinksFor("market", "market.html", 0), "market")
-	wantTools := []string{"/market/", "/market/scanner/", "/market/ideas/", "/market/tradefinder/", "/market/leaderboard/", "/market/restock/", "/contracts/search/", "/market/trends/", "/market/lp/", "/market/baskets/"}
+	wantTools := []string{"/market/", "/market/leaderboard/", "/market/trends/"}
 	if len(msub) != len(wantTools) {
-		t.Fatalf("market tools sub-row has %d pages, want %d", len(msub), len(wantTools))
+		t.Fatalf("market browse sub-row has %d pages, want %d", len(msub), len(wantTools))
 	}
 	for i, href := range wantTools {
 		if msub[i].Href != href {
-			t.Errorf("market tools sub-row page %d = %s, want %s", i, msub[i].Href, href)
+			t.Errorf("market browse sub-row page %d = %s, want %s", i, msub[i].Href, href)
 		}
 	}
 
@@ -364,9 +367,12 @@ func TestNavGroupsMirror(t *testing.T) {
 			label string
 			hrefs []string
 		}{
-			{"Market Tools", []string{"/market/", "/market/scanner/", "/market/ideas/", "/market/tradefinder/", "/market/leaderboard/", "/market/restock/", "/contracts/search/", "/market/trends/", "/market/lp/", "/market/baskets/"}},
+			{"Browse", []string{"/market/", "/market/leaderboard/", "/market/trends/"}},
+			{"Find Trades", []string{"/market/scanner/", "/market/ideas/", "/market/tradefinder/"}},
+			{"Baskets & Restock", []string{"/market/restock/", "/market/baskets/"}},
+			{"LP & Contracts", []string{"/contracts/search/", "/market/lp/"}},
 			{"My Finances", []string{"/orders/", "/contracts/"}},
-		}, 1, 0},
+		}, 4, 0},
 	} {
 		sgs := navGroupsFor(navLinksFor(tc.section, tc.page, 0))[tc.section]
 		if len(sgs) != len(tc.want) {

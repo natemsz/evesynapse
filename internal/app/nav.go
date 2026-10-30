@@ -198,7 +198,10 @@ var sectionGroups = map[string][]navGroup{
 		{"Planetary", []string{"/planets/", "/industry/pi/"}},
 	},
 	"market": {
-		{"Market Tools", []string{"/market/", "/market/scanner/", "/market/ideas/", "/market/tradefinder/", "/market/leaderboard/", "/market/restock/", "/market/trends/", "/market/lp/", "/market/baskets/", "/contracts/search/"}},
+		{"Browse", []string{"/market/", "/market/trends/", "/market/leaderboard/"}},
+		{"Find Trades", []string{"/market/scanner/", "/market/ideas/", "/market/tradefinder/"}},
+		{"Baskets & Restock", []string{"/market/baskets/", "/market/restock/"}},
+		{"LP & Contracts", []string{"/market/lp/", "/contracts/search/"}},
 		{"My Finances", []string{"/orders/", "/contracts/"}},
 	},
 	"corporation": {

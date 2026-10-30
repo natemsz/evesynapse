@@ -90,12 +90,20 @@ const (
 // whose assets are the package files — a tiny manifest per CPU
 // kind (the version it names and the checksum of the binary
 // beside it) and that manifest's signature. Where the updater
-// reads them from is a provider. EVESYNAPSE_UPDATE_PROVIDER
-// can name one or more, and then those are walked in the
-// order named; an install that names none walks the default
-// chain — the three forges in the order below, newest genuine
-// release wins, with the mirror as the last resort when no
-// forge answers:
+// reads them from is a provider. Which providers an install
+// reads, and in what order, is the install's own
+// configuration: EVESYNAPSE_UPDATE_PROVIDER names one or
+// more, and those are consulted in the order listed — the
+// listed order is the only preference there is, so a fork
+// points the updater at its own sources by listing them. The
+// newest genuine (signature-checked) release among the
+// consulted providers wins; when two report the same newest
+// version, the earlier-listed provider is the source, and the
+// manifest, its signature and the binary all come from that
+// one provider's release. An install that names none walks
+// an out-of-box fallback list — the three forges below, with
+// the mirror asked only when no forge produced a genuine
+// release:
 //
 //	github: the repository's releases on GitHub — the stable
 //	    channel from its "latest" download address, the dev
@@ -107,7 +115,7 @@ const (
 //	mirror: a static mirror of the releases (the project's is
 //	    served from synap6.io), laid out as the channel pointer
 //	    manifests beside the binaries they describe. In the
-//	    default chain it is asked only when no forge produced
+//	    fallback list it is asked only when no forge produced
 //	    a genuine manifest.
 //
 // Whichever provider serves them, the updater reads its kind's
@@ -349,9 +357,10 @@ func selectRelease(releases []gitlabRelease, dev bool) (gitlabRelease, bool) {
 // updateProviders resolves which providers the updater reads
 // releases from: EVESYNAPSE_UPDATE_PROVIDER, in the
 // environment or the install's .env file, holds one name or a
-// comma-separated list of them, walked in the order named. An
-// install that names none reads the default chain (see
-// fetchReleaseManifest): the forges in order, the mirror last.
+// comma-separated list of them, walked in the order named —
+// that order is the install's configuration, and the only
+// preference the updater has. An install that names none
+// reads the fallback list (see fetchReleaseManifest).
 func updateProviders() []string {
 	var providers []string
 	for _, name := range strings.Split(os.Getenv("EVESYNAPSE_UPDATE_PROVIDER"), ",") {
@@ -362,24 +371,11 @@ func updateProviders() []string {
 	return providers
 }
 
-// latestReleaseAssets returns the manifest, signature and
-// binary asset URLs of the release the channel (stable, or dev
-// when dev is set) currently installs from, from the first
-// provider the install is configured to read — the chain's
-// first forge, GitHub, when none is named. All three come
-// from that one release, so the signature is the manifest's
-// own and the checksum in the manifest always describes the
-// binary downloaded beside it.
-func latestReleaseAssets(ctx context.Context, arch string, dev bool) (manifestURL, sigURL, binaryURL string, err error) {
-	provider := "github"
-	if providers := updateProviders(); len(providers) > 0 {
-		provider = providers[0]
-	}
-	return providerAssets(ctx, provider, arch, dev)
-}
-
 // providerAssets resolves the channel's asset URLs against one
-// named provider.
+// named provider. The manifest walk (fetchReleaseManifest)
+// resolves them per provider, so a release's manifest,
+// signature and binary always come from the one release that
+// won the comparison, from the provider that reported it.
 func providerAssets(ctx context.Context, provider string, arch string, dev bool) (manifestURL, sigURL, binaryURL string, err error) {
 	switch provider {
 	case "forgejo":
@@ -806,13 +802,13 @@ func reportProviderCheck(w io.Writer, provider string, m releaseManifest, err er
 //
 // An install that names one or more providers walks those, in
 // the order named. An install that names none walks the
-// default chain: GitHub, GitLab and Forgejo are each asked for
+// fallback list: GitHub, GitLab and Forgejo are each asked for
 // the channel's release, and the newest genuine manifest among
 // them wins. A source that has no such release, or cannot be
 // reached, is passed over; a source that answers with a
 // release whose signature does not check out stops the walk,
 // because that is not a source being down, it is a forgery
-// being offered. Only on the default chain, and only when no
+// being offered. Only on the fallback list, and only when no
 // forge produces a genuine manifest, is the static mirror
 // asked, last.
 func fetchReleaseManifest(ctx context.Context, w io.Writer, arch string, dev bool) (releaseManifest, string, string, error) {
@@ -833,10 +829,13 @@ func fetchReleaseManifest(ctx context.Context, w io.Writer, arch string, dev boo
 }
 
 // walkProviders asks each named provider for the channel's
-// release and returns the newest genuine manifest among them,
-// with the name of the provider that served it. A refusal
-// aborts the walk. When no provider answers, the first
-// provider's error stands for the rest.
+// release, in the order given, and returns the newest genuine
+// manifest among them, with the name of the provider that
+// served it: a tie on version goes to the earlier provider
+// asked, and the winning release's own binary address comes
+// back with its manifest. A refusal aborts the walk. When no
+// provider answers, the first provider's error stands for the
+// rest.
 func walkProviders(ctx context.Context, w io.Writer, providers []string, arch string, dev bool) (releaseManifest, string, string, error) {
 	var best releaseManifest
 	var bestProvider string

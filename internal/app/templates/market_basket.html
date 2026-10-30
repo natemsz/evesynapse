@@ -85,11 +85,32 @@
   <label><small>Priced in</small>
     <select name="region">{{range .Regions}}<option value="{{.ID}}"{{if .Active}} selected{{end}}>{{.Name}}</option>{{end}}</select>
   </label>
-  <label class="mt-basket-items"><small>Items, one per line, with a quantity</small>
-    <textarea name="items" rows="10">{{.EditText}}</textarea>
-  </label>
   <button class="btn" type="submit">Save</button>
 </form>
+<template id="mbk-editor-template">
+  <div class="mbk-editor">
+    <span class="searchwrap mbk-searchwrap">
+      <input type="text" class="mbk-search" placeholder="Search items to add" autocomplete="off" role="combobox" aria-expanded="false" aria-autocomplete="list">
+      <ul class="suggest mbk-suggest" role="listbox" hidden></ul>
+    </span>
+    <ul class="mbk-items"></ul>
+    <p class="mbk-err" role="alert" hidden></p>
+    <div class="mbk-actions">
+      <button class="btn mbk-save" type="button">Save</button>
+      <button class="btn btn-quiet mbk-cancel" type="button">Cancel</button>
+      <a href="#" class="mbk-textlink"><small>or edit by typing item names</small></a>
+    </div>
+    <form method="post" class="mt-basket-form mbk-textform" hidden>
+      <input type="hidden" name="name" class="mbk-tf-name">
+      <input type="hidden" name="region" class="mbk-tf-region">
+      <label class="mt-basket-items"><small>Items, one per line, with a quantity (Tritanium 1000)</small>
+        <textarea name="items" rows="8" class="mbk-tf-items"></textarea>
+      </label>
+      <button class="btn" type="submit">Save basket</button>
+    </form>
+  </div>
+</template>
+<div id="mbk-detail-editor" data-mbk-basket="{{.Basket.ID}}"></div>
 <form method="post" action="/market/baskets/{{.Basket.ID}}/delete">
   <button class="btn btn-quiet" type="submit">Delete basket</button>
 </form>

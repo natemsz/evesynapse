@@ -1,4 +1,5 @@
-// Tests for the read-only module tooltip in ../static/fit.js:
+// Tests for the read-only module tooltip (the builder in
+// ../static/fittip.js, the wiring in ../static/fit.js):
 // on a public fit's page (a .fit-ro workbench, no editor),
 // hovering or tapping a module shows the shared themed
 // tooltip — name, the server's computed stat rows with their
@@ -9,6 +10,17 @@
 "use strict";
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const vm = require("node:vm");
+
+// The browser loads fittip.js and fit.js as classic scripts
+// sharing one global scope, the tooltip builder first; run
+// them the same way so fit.js sees the builder it calls.
+function loadFitScripts() {
+  for (const rel of ["../static/fittip.js", "../static/fit.js"]) {
+    vm.runInThisContext(fs.readFileSync(require.resolve(rel), "utf8"), { filename: rel });
+  }
+}
 
 function hasClass(el, cls) {
   return (el.className || "").split(/\s+/).indexOf(cls) >= 0;
@@ -147,9 +159,7 @@ function ev(target, extra) {
 function loadFitJS(env) {
   global.document = env.doc;
   global.window = global;
-  const path = require.resolve("../static/fit.js");
-  delete require.cache[path];
-  require(path);
+  loadFitScripts();
 }
 
 function delay(ms) {
@@ -474,9 +484,7 @@ function makeEditorEnv() {
       });
     });
   };
-  const path = require.resolve("../static/fit.js");
-  delete require.cache[path];
-  require(path);
+  loadFitScripts();
   env.editor = editor;
   env.picker = picker;
   env.dispatch = dispatch;

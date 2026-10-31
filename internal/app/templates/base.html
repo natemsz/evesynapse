@@ -273,13 +273,14 @@
 {{end}}
 <script src="/static/app.js?v={{.AssetVersion}}" defer></script>
 <script src="/static/swap.js?v={{.AssetVersion}}" defer></script>
-{{if eq .Section "fitting"}}<script src="/static/fit.js?v={{.AssetVersion}}" defer></script>{{end}}
+{{if eq .Section "fitting"}}<script src="/static/fittip.js?v={{.AssetVersion}}" defer></script><script src="/static/fit.js?v={{.AssetVersion}}" defer></script>{{end}}
 {{if eq .NavPage "planner.html"}}<script src="/static/plan.js?v={{.AssetVersion}}" defer></script>{{end}}
 {{if or (eq .NavPage "map.html") (eq .NavPage "intel_workbench.html")}}<script src="/static/map.js?v={{.AssetVersion}}" defer></script>{{end}}{{if eq .NavPage "intel_workbench.html"}}<script src="/static/dashboard.js?v={{.AssetVersion}}" defer></script>{{end}}
 {{if or (eq .NavPage "scan.html") (eq .NavPage "pilot.html")}}<script src="/static/scans.js?v={{.AssetVersion}}" defer></script>{{end}}{{if eq .NavPage "intel_workbench.html"}}<script src="/static/workbench.js?v={{.AssetVersion}}" defer></script>{{end}}
 {{if or (eq .NavPage "channel.html") (eq .NavPage "feed.html") (eq .NavPage "intel_workbench.html")}}<script src="/static/channels.js?v={{.AssetVersion}}" defer></script>{{end}}
 {{if or (eq .NavPage "contract_search.html") (eq .NavPage "contract_detail.html")}}<script src="/static/contracts.js?v={{.AssetVersion}}" defer></script>{{end}}
 {{if eq .NavPage "market.html"}}<script src="/static/market.js?v={{.AssetVersion}}" defer></script>{{end}}
+{{if eq .NavPage "market_lp.html"}}<script src="/static/fittip.js?v={{.AssetVersion}}" defer></script>{{end}}
 {{if or (eq .NavPage "market_baskets.html") (eq .NavPage "market_basket.html")}}<script src="/static/baskets.js?v={{.AssetVersion}}" defer></script>{{end}}
 {{range .Scripts}}<script src="{{.}}?v={{$.AssetVersion}}" defer></script>{{end}}
 {{if .NotifySettings}}<script src="/static/push.js?v={{.AssetVersion}}" defer></script>{{end}}

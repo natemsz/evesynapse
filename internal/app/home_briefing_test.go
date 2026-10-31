@@ -222,9 +222,8 @@ func TestBriefingWindowAnchorSemantics(t *testing.T) {
 	// Second look a moment later: the 1h-old expiry is now behind
 	// the anchor, so the digest quiets down on that rule.
 	_, body = getPage(t, app, cookie, "/")
-	section = briefingSection(t, body)
-	if strings.Contains(section, "market order expired since you last looked") {
-		t.Errorf("expired-order line still shown after the anchor passed it:\n%s", section)
+	if strings.Contains(body, `data-widget="briefing"`) {
+		t.Error("briefing module rendered after the anchor passed the only line; want it hidden while nothing applies")
 	}
 
 	// 7-day bound: an anchor 30 days old only reaches back a week.
@@ -353,8 +352,9 @@ func TestBriefingQuietAndSlots(t *testing.T) {
 	// Quiet account: nothing seeded, calm line, no rules fired.
 	cookie := sessionCookie(t, app, user.ID, fixtureCharA, "Fixture Alpha")
 	_, body := getPage(t, app, cookie, "/")
-	section := briefingSection(t, body)
-	mustContain(t, "briefing quiet", section, "Nothing needs your attention right now.")
+	if strings.Contains(body, `data-widget="briefing"`) || strings.Contains(body, "Nothing needs your attention right now.") {
+		t.Error("quiet home renders the briefing module; want it hidden while nothing applies")
+	}
 
 	// An industrially-active character whose slots stand idle:
 	// Mass Production IV → 5 manufacturing slots, none in use.
@@ -370,7 +370,7 @@ func TestBriefingQuietAndSlots(t *testing.T) {
 			EndDate: rfc(now.Add(-72 * time.Hour)), CompletedDate: rfc(now.Add(-72 * time.Hour))},
 	})
 	_, body = getPage(t, app, cookie, "/")
-	section = briefingSection(t, body)
+	section := briefingSection(t, body)
 	mustContain(t, "briefing slots", section, "has 5 of 5 manufacturing slots idle")
 
 	if got := transport.calls.Load(); got != 0 {

@@ -74,7 +74,7 @@
 </section>
 {{end}}
 
-{{if eq .ID "briefing"}}
+{{if eq .ID "briefing"}}{{if or .Customize .Briefing.Items}}
 <section class="card {{.SizeClass}}" data-widget="{{.ID}}" data-gw="{{.W}}" data-gh="{{.H}}"{{if gt .MinW 1}} data-minw="{{.MinW}}"{{end}}{{if gt .MinH 1}} data-minh="{{.MinH}}"{{end}}>{{$cap := .Cap}}
   <h3>{{.Title}}</h3>
   <div class="card-body">
@@ -117,7 +117,7 @@
   {{end}}
   </div>
 </section>
-{{end}}
+{{end}}{{end}}
 
 {{if eq .ID "fleet"}}
 <section class="card {{.SizeClass}}" data-widget="{{.ID}}" data-gw="{{.W}}" data-gh="{{.H}}"{{if gt .MinW 1}} data-minw="{{.MinW}}"{{end}}{{if gt .MinH 1}} data-minh="{{.MinH}}"{{end}}>{{$cap := .Cap}}

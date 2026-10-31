@@ -1,0 +1,1 @@
+{{define "reqicons"}}{{range .}}<a class="req-icon" href="{{.Href}}" data-tip-name="{{.Name}}" data-tip-lines="{{.TipLines}}"><img src="{{.IconURL}}" alt="{{.Name}}" width="28" height="28" loading="lazy"><span class="req-qty">{{.Quantity}}</span></a>{{else}}—{{end}}{{end}}

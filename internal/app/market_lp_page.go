@@ -29,6 +29,9 @@ type marketLPRequirement struct {
 	TypeID   int64
 	Name     string
 	Quantity string
+	IconURL  string // the item's icon on the EVE image server
+	Href     string // the item's market page, in the view's region
+	TipLines string // tooltip rows for the shared tooltip builder
 }
 
 type marketLPRow struct {
@@ -180,11 +183,50 @@ func (app *Application) buildMarketLPView(ctx context.Context, q map[string][]st
 		if err != nil {
 			logging.Errorf("lp store: requirements: %v", err)
 		}
+		// One stored-stat read prices every requirement on the
+		// page for the icons' tooltips: the stat pack's averages
+		// first, its typicals as the fallback, an honest gap
+		// when neither is stored.
+		prices := map[int64]db.ListLPRequirementPricesRow{}
+		if len(reqRows) > 0 {
+			ids := make([]int64, 0, len(reqRows))
+			seen := map[int64]bool{}
+			for _, q := range reqRows {
+				if !seen[q.TypeID] {
+					seen[q.TypeID] = true
+					ids = append(ids, q.TypeID)
+				}
+			}
+			if priceRows, err := app.queries.ListLPRequirementPrices(ctx, db.ListLPRequirementPricesParams{
+				RegionID: view.RegionID, TypeIds: ids,
+			}); err == nil {
+				for _, p := range priceRows {
+					prices[p.TypeID] = p
+				}
+			} else {
+				logging.Errorf("lp store: requirement prices: %v", err)
+			}
+		}
 		for _, q := range reqRows {
 			k := offerKey{q.CorporationID, q.OfferID}
-			reqs[k] = append(reqs[k], marketLPRequirement{
-				TypeID: q.TypeID, Name: app.typeNameOrID(ctx, q.TypeID), Quantity: esi.FormatInt(q.Quantity),
-			})
+			req := marketLPRequirement{
+				TypeID:   q.TypeID,
+				Name:     app.typeNameOrID(ctx, q.TypeID),
+				Quantity: esi.FormatInt(q.Quantity),
+				IconURL:  "https://images.evetech.net/types/" + strconv.FormatInt(q.TypeID, 10) + "/icon?size=32",
+				Href:     "/market/?type=" + strconv.FormatInt(q.TypeID, 10) + "&region=" + strconv.FormatInt(view.RegionID, 10),
+			}
+			sell, buy := "no market", "no market"
+			if p, ok := prices[q.TypeID]; ok {
+				if v := firstStoredPrice(p.SellAvg, p.TypicalSell); v > 0 {
+					sell = esi.FormatISK(v)
+				}
+				if v := firstStoredPrice(p.BuyAvg, p.TypicalBuy); v > 0 {
+					buy = esi.FormatISK(v)
+				}
+			}
+			req.TipLines = "Needs|" + req.Quantity + ";Avg sell|" + sell + ";Avg buy|" + buy
+			reqs[k] = append(reqs[k], req)
 		}
 	}
 	now := time.Now()
@@ -222,6 +264,15 @@ func (app *Application) buildMarketLPView(ctx context.Context, q map[string][]st
 		view.Rows = append(view.Rows, row)
 	}
 	return view
+}
+
+// firstStoredPrice is the first usable figure of a stored pair:
+// the stat pack's average where it stored one, else its typical.
+func firstStoredPrice(avg, typical float64) float64 {
+	if avg > 0 {
+		return avg
+	}
+	return typical
 }
 
 // lpParams is the stored-values query for this view at a row cap.

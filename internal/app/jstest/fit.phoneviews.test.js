@@ -8,15 +8,26 @@
 // module's card in Slot Racks cycles its state line-wide
 // through the states the module allows, committed as one
 // simulate payload. Above the band nothing is hidden or
-// folded. fit.js self-executes against whatever globals exist
-// when it is required, so each block below rebuilds the
-// globals it needs and requires the file fresh.
+// folded. The scripts self-execute against whatever globals
+// exist when they load, so each block below rebuilds the
+// globals it needs and loads the files fresh.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const path = require("node:path");
+const fs = require("node:fs");
+const vm = require("node:vm");
 
 const fitFile = path.join(__dirname, "..", "static", "fit.js");
+const tipFile = path.join(__dirname, "..", "static", "fittip.js");
+
+// Production loads fittip.js before fit.js as classic scripts
+// sharing one global scope; run them the same way.
+function loadFitScripts() {
+  for (const f of [tipFile, fitFile]) {
+    vm.runInThisContext(fs.readFileSync(f, "utf8"), { filename: f });
+  }
+}
 
 // ---------- minimal DOM (only what fit.js touches) ----------
 
@@ -407,8 +418,7 @@ function bootEditor(matches45) {
       json: () => Promise.resolve(null),
     });
   };
-  delete require.cache[require.resolve(fitFile)];
-  require(fitFile);
+  loadFitScripts();
   return {
     doc, page, fetches,
     setPhone(on) {
@@ -432,8 +442,8 @@ test("phone views: section map and state cycle", () => {
   global.location = { href: "" };
   global.addEventListener = function () {};
   global.fetch = undefined;
-  delete require.cache[require.resolve(fitFile)];
-  const { FitPhoneViews } = require(fitFile);
+  loadFitScripts();
+  const FitPhoneViews = global.FitPhoneViews;
 
   assert.deepEqual(FitPhoneViews.sections("radial"),
     { center: true, slots: false, bays: false, stats: false });

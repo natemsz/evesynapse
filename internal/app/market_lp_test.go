@@ -80,8 +80,12 @@ func TestMarketLPFiltersAndExports(t *testing.T) {
 		}
 	}
 	exec(`INSERT INTO sde_groups (group_id, name, category_id) VALUES (1, 'Charges', 8) ON CONFLICT DO NOTHING`)
-	exec(`INSERT INTO sde_types (type_id, name, group_id, market_group_id, published) VALUES (100, 'Ammo', 1, 1, 1), (200, 'Implant', 1, 1, 1) ON CONFLICT DO NOTHING`)
+	exec(`INSERT INTO sde_types (type_id, name, group_id, market_group_id, published) VALUES (100, 'Ammo', 1, 1, 1), (200, 'Implant', 1, 1, 1), (34, 'Tritanium', 1, 1, 1) ON CONFLICT DO NOTHING`)
 	exec(`INSERT INTO lp_store_corps (corporation_id, name, offer_count) VALUES (1, 'Store One', 2), (2, 'Store Two', 1)`)
+	// Store One's Ammo also needs 200 Tritanium, whose stored
+	// averages (not its typicals) are what the icon tooltip shows.
+	exec(`INSERT INTO lp_offer_requirements VALUES (1, 1, 34, 200)`)
+	exec(`INSERT INTO market_region_stats (region_id, type_id, typical_sell, typical_buy, sell_avg, buy_avg, updated_at) VALUES (10000002, 34, 5, 4, 6.5, 4.25, $1)`, time.Now().UTC())
 	// Ammo at Store One: 3.0 ISK/LP for 1,000 LP. Implant at Store
 	// One: 900 ISK/LP for 50,000 LP. Ammo also at Store Two: 2.5.
 	now := time.Now().UTC()
@@ -96,6 +100,21 @@ func TestMarketLPFiltersAndExports(t *testing.T) {
 	}
 	if view.Rows[0].ISKPerLPDir != "up" {
 		t.Fatalf("best row dir = %q, want up", view.Rows[0].ISKPerLPDir)
+	}
+	for _, row := range view.Rows {
+		if row.TypeID != 100 || row.StoreID != 1 {
+			continue
+		}
+		if len(row.Requirements) != 1 {
+			t.Fatalf("ammo requirements = %+v, want the one Tritanium need", row.Requirements)
+		}
+		req := row.Requirements[0]
+		if req.TipLines != "Needs|200;Avg sell|6.50;Avg buy|4.25" {
+			t.Errorf("requirement tooltip = %q, want the stored averages", req.TipLines)
+		}
+		if !strings.Contains(req.IconURL, "/types/34/icon") || !strings.Contains(req.Href, "type=34") {
+			t.Errorf("requirement icon/link = %q / %q, want type 34", req.IconURL, req.Href)
+		}
 	}
 	view = app.buildMarketLPView(ctx, map[string][]string{"minisklp": {"100"}})
 	if len(view.Rows) != 1 || view.Rows[0].TypeID != 200 {

@@ -145,3 +145,12 @@ SELECT corporation_id, offer_id, type_id, quantity FROM lp_offer_requirements
 WHERE corporation_id = ANY(sqlc.arg(corporation_ids)::bigint[])
   AND offer_id = ANY(sqlc.arg(offer_ids)::bigint[])
 ORDER BY corporation_id, offer_id, type_id;
+
+-- name: ListLPRequirementPrices :many
+-- The stat pack's stored prices for a set of items in one
+-- region: what the requirement icons' tooltips show. One bounded
+-- read prices every requirement on the page, however they
+-- spread across its offers.
+SELECT type_id, sell_avg, buy_avg, typical_sell, typical_buy
+FROM market_region_stats
+WHERE region_id = $1 AND type_id = ANY(sqlc.arg(type_ids)::bigint[]);

@@ -377,6 +377,58 @@ func (q *Queries) ListLPOffersByCorp(ctx context.Context, corporationID int64) (
 	return items, nil
 }
 
+const listLPRequirementPrices = `-- name: ListLPRequirementPrices :many
+SELECT type_id, sell_avg, buy_avg, typical_sell, typical_buy
+FROM market_region_stats
+WHERE region_id = $1 AND type_id = ANY($2::bigint[])
+`
+
+type ListLPRequirementPricesParams struct {
+	RegionID int64   `json:"region_id"`
+	TypeIds  []int64 `json:"type_ids"`
+}
+
+type ListLPRequirementPricesRow struct {
+	TypeID      int64   `json:"type_id"`
+	SellAvg     float64 `json:"sell_avg"`
+	BuyAvg      float64 `json:"buy_avg"`
+	TypicalSell float64 `json:"typical_sell"`
+	TypicalBuy  float64 `json:"typical_buy"`
+}
+
+// The stat pack's stored prices for a set of items in one
+// region: what the requirement icons' tooltips show. One bounded
+// read prices every requirement on the page, however they
+// spread across its offers.
+func (q *Queries) ListLPRequirementPrices(ctx context.Context, arg ListLPRequirementPricesParams) ([]ListLPRequirementPricesRow, error) {
+	rows, err := q.db.QueryContext(ctx, listLPRequirementPrices, arg.RegionID, pq.Array(arg.TypeIds))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListLPRequirementPricesRow
+	for rows.Next() {
+		var i ListLPRequirementPricesRow
+		if err := rows.Scan(
+			&i.TypeID,
+			&i.SellAvg,
+			&i.BuyAvg,
+			&i.TypicalSell,
+			&i.TypicalBuy,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listLPStoreCorps = `-- name: ListLPStoreCorps :many
 SELECT corporation_id, name, offer_count FROM lp_store_corps
 WHERE offer_count > 0

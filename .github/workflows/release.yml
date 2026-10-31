@@ -1,0 +1,90 @@
+# EveSynapse releases on GitHub are published here, by
+# GitHub itself, with the workflow's built-in token: no
+# GitHub credential is stored on any other forge. The files
+# published are the identical signed files the Forgejo
+# release made (Forgejo stays the one builder and signer):
+# this job waits for that release, downloads its six files,
+# checks both binaries' SHA256 against the signed manifests,
+# and only then creates the GitHub release under the same
+# tag, title and notes, so the updater finds the same signed
+# release whichever forge it asks.
+#
+# Forgejo also reads .github/workflows, so the job carries
+# the same guard as heavy-gates: it only runs on GitHub
+# itself and skips on Forgejo. The tag reaches GitHub by the
+# push mirror; a run can also be dispatched by hand for a tag
+# whose release already exists, in which case the files are
+# re-uploaded over themselves and nothing else changes.
+
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to publish, for example v0.7.1.0"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    if: github.server_url == 'https://github.com'
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      FORGEJO_API: https://natems.dev/api/v1/repos/EveSynapse/evesynapse
+    steps:
+      - name: Resolve the tag and wait for the Forgejo release
+        id: forgejo
+        run: |
+          TAG="${{ inputs.tag || github.ref_name }}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          for i in $(seq 1 45); do
+            if curl -sf "$FORGEJO_API/releases/tags/$TAG" -o release.json \
+              && [ "$(jq '.assets | length' release.json)" = "6" ]; then
+              echo "Forgejo release $TAG is published with all six files."
+              exit 0
+            fi
+            echo "Waiting for the Forgejo release $TAG (try $i of 45)."
+            sleep 60
+          done
+          echo "The Forgejo release $TAG never appeared; nothing to publish."
+          exit 1
+      - name: Download the signed files
+        run: |
+          mkdir -p dist
+          jq -r '.assets[].browser_download_url' release.json |
+            while read -r url; do curl -sfL "$url" -o "dist/$(basename "$url")"; done
+          ls -la dist
+      - name: Check the binaries against the signed manifests
+        run: |
+          for a in amd64 arm64; do
+            want=$(jq -r .sha256 "dist/latest-$a.json")
+            got=$(sha256sum "dist/evesynapse-$a" | cut -d' ' -f1)
+            if [ "$want" != "$got" ]; then
+              echo "evesynapse-$a does not match its signed manifest ($got != $want); refusing to publish."
+              exit 1
+            fi
+            echo "evesynapse-$a matches its signed manifest."
+          done
+      - name: Create the GitHub release
+        run: |
+          TAG="${{ steps.forgejo.outputs.tag }}"
+          TITLE=$(jq -r .name release.json)
+          jq -r '.body // ""' release.json > notes.md
+          PRERELEASE_FLAG=""
+          case "$TAG" in *-*) PRERELEASE_FLAG="--prerelease" ;; esac
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/* --clobber --repo "$GITHUB_REPOSITORY"
+            echo "Release $TAG already existed; its files were refreshed in place."
+          else
+            gh release create "$TAG" dist/* --repo "$GITHUB_REPOSITORY" \
+              --title "$TITLE" --notes-file notes.md $PRERELEASE_FLAG
+            echo "Release $TAG published on GitHub."
+          fi

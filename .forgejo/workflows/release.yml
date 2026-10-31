@@ -351,25 +351,25 @@ jobs:
           done
           echo "Mirrored v$VERSION to the $CH channel."
 
-  # Every published release is also created on GitHub and
-  # GitLab, under the signed tag the push mirrors already
-  # carried there, with the same release notes and the same
-  # six signed files, so the updater finds the same release
-  # whichever forge it asks. The GitHub release is created as
-  # a draft, filled, and then published, the commit point the
-  # Forgejo publish uses; the GitLab leg uploads the files to
-  # the project's Generic Package Registry first and creates
-  # the Release last, the shape .gitlab-ci.yml's release job
+  # Every published release is also created on GitLab, under
+  # the signed tag the push mirrors already carried there,
+  # with the same release notes and the same six signed
+  # files, so the updater finds the same release whichever
+  # forge it asks. The GitLab leg uploads the files to the
+  # project's Generic Package Registry first and creates the
+  # Release last, the shape .gitlab-ci.yml's release job
   # uses, with the asset links named for the files they serve
   # because the updater matches them by name. An existing
-  # release on either forge is left as it is, the rule the
-  # Forgejo publish follows. Each leg is gated on its token
-  # secret (GH_TOKEN, GL_TOKEN), the way the mirror
-  # job is gated on its R2 secrets: without one, the leg logs
-  # that it is skipped and steps aside. A leg that fails logs
-  # it and fails only its own step — the Forgejo release is
-  # already published by then, and trouble copying it must
-  # not fail its pipeline.
+  # release is left as it is, the rule the Forgejo publish
+  # follows. The leg is gated on its token secret (GL_TOKEN),
+  # the way the mirror job is gated on its R2 secrets:
+  # without one, the leg logs that it is skipped and steps
+  # aside. A leg that fails logs it and fails only its own
+  # step — the Forgejo release is already published by then,
+  # and trouble copying it must not fail its pipeline.
+  # The GitHub release is not made here: GitHub publishes its
+  # own from .github/workflows/release.yml, with its built-in
+  # token, so no GitHub credential is stored on this forge.
   forges:
     runs-on: ubuntu-latest
     needs: release
@@ -377,7 +377,6 @@ jobs:
     continue-on-error: true
     env:
       VERSION: ${{ needs.release.outputs.version }}
-      GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
       GITLAB_TOKEN: ${{ secrets.GL_TOKEN }}
     steps:
       - name: Fetch the built files
@@ -388,74 +387,6 @@ jobs:
       - name: Install the toolbox
         run: |
           apt-get update -qq && apt-get install -y -qq --no-install-recommends curl ca-certificates python3 >/dev/null
-      - name: Create the GitHub release
-        continue-on-error: true
-        run: |
-          if [ -z "${GITHUB_TOKEN:-}" ]; then
-            echo "The GH_TOKEN secret is not set; skipping the GitHub release."
-            exit 0
-          fi
-          if [ "$VERSION" != "${VERSION%%-*}" ]; then PRERELEASE=true; else PRERELEASE=false; fi
-          export PRERELEASE
-          python3 - <<'PYEOF' || { echo "The GitHub release leg FAILED; the Forgejo release stands. See the error above."; exit 1; }
-          import json, os, urllib.request
-
-          api = "https://api.github.com/repos/natemsz/evesynapse"
-          version = os.environ["VERSION"]
-          tag = "v" + version
-          headers = {"Authorization": "Bearer " + os.environ["GITHUB_TOKEN"],
-                     "Accept": "application/vnd.github+json",
-                     "X-GitHub-Api-Version": "2022-11-28",
-                     "User-Agent": "evesynapse-release-workflow"}
-
-          def call(method, url, data=None, content_type=None):
-              h = dict(headers)
-              if content_type:
-                  h["Content-Type"] = content_type
-              req = urllib.request.Request(url, data=data, method=method, headers=h)
-              return urllib.request.urlopen(req)
-
-          rel = None
-          with call("GET", api + "/releases?per_page=100") as resp:
-              for r in json.load(resp):
-                  if r.get("tag_name") == tag:
-                      rel = r
-                      break
-          if rel is not None:
-              print("Release %s already exists on GitHub; reusing it." % tag)
-          else:
-              body = {"tag_name": tag,
-                      "name": "EveSynapse v" + version,
-                      "body": open("dist/release-notes.md").read(),
-                      "draft": True,
-                      "prerelease": os.environ["PRERELEASE"] == "true"}
-              with call("POST", api + "/releases",
-                        data=json.dumps(body).encode(),
-                        content_type="application/json") as resp:
-                  rel = json.load(resp)
-              print("Draft release %s created on GitHub (id %s)." % (tag, rel["id"]))
-          upload_base = rel["upload_url"].split("{")[0]
-          have = {a["name"] for a in rel.get("assets") or []}
-          files = ["evesynapse-arm64", "evesynapse-amd64",
-                   "latest-arm64.json", "latest-amd64.json",
-                   "latest-arm64.json.sig", "latest-amd64.json.sig"]
-          for f in files:
-              if f in have:
-                  print("%s: already on the GitHub release; skipping." % f)
-                  continue
-              with open("dist/" + f, "rb") as fh:
-                  payload = fh.read()
-              with call("POST", upload_base + "?name=" + f, data=payload,
-                        content_type="application/octet-stream") as resp:
-                  resp.read()
-              print("%s: uploaded." % f)
-          if rel.get("draft"):
-              with call("PATCH", api + "/releases/" + str(rel["id"]),
-                        data=json.dumps({"draft": False}).encode(),
-                        content_type="application/json") as resp:
-                  resp.read()
-              print("Release %s published on GitHub." % tag)
-          PYEOF
       - name: Create the GitLab release
         continue-on-error: true
         run: |

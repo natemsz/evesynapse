@@ -43,7 +43,6 @@ type marketLPRow struct {
 	LPCost       string
 	ISKCost      string
 	Requirements []marketLPRequirement
-	RequiredCost string
 	Value        string // product value at the chosen side
 	ISKPerLP     string
 	ISKPerLPDir  string // "up" when the offer pays, "down" when it loses
@@ -256,7 +255,10 @@ func (app *Application) buildMarketLPView(ctx context.Context, q map[string][]st
 			row.ISKPerLPDir = "down"
 		}
 		if r.RequiredCost > 0 {
-			row.RequiredCost = esi.FormatISK(r.RequiredCost)
+			total := esi.FormatISK(r.RequiredCost)
+			for i := range row.Requirements {
+				row.Requirements[i].TipLines += ";Items total|" + total
+			}
 		}
 		if r.PricesAt.Valid {
 			row.Age = ageText(now, r.PricesAt.Time)

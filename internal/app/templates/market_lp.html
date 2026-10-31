@@ -63,7 +63,7 @@
       <td class="mt-num">{{.Quantity}}</td>
       <td class="mt-num">{{.LPCost}}</td>
       <td class="mt-num">{{.ISKCost}}</td>
-      <td class="mt-reqs">{{template "reqicons" .Requirements}}{{if .RequiredCost}}<small class="req-total">({{.RequiredCost}})</small>{{end}}</td>
+      <td class="mt-reqs">{{template "reqicons" .Requirements}}</td>
       <td class="mt-num">{{.Value}}</td>
       <td class="mt-num">{{if .ISKPerLPDir}}<span class="mt-chg {{.ISKPerLPDir}}"><strong>{{.ISKPerLP}}</strong></span>{{else}}<strong>{{.ISKPerLP}}</strong>{{end}}</td>
       <td class="mt-num">{{.TradedDay}}</td>

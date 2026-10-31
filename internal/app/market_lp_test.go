@@ -90,7 +90,7 @@ func TestMarketLPFiltersAndExports(t *testing.T) {
 	// One: 900 ISK/LP for 50,000 LP. Ammo also at Store Two: 2.5.
 	now := time.Now().UTC()
 	exec(`INSERT INTO lp_offer_values (region_id, corporation_id, offer_id, type_id, quantity, lp_cost, isk_cost, required_cost, unit_sell, unit_buy, isk_per_lp_sell, isk_per_lp_buy, daily_volume, prices_at, updated_at) VALUES
-		(10000002, 1, 1, 100, 100, 1000, 1000, 0, 50, 40, 3.0, 2.0, 500, $1, $1),
+		(10000002, 1, 1, 100, 100, 1000, 1000, 1300, 50, 40, 3.0, 2.0, 500, $1, $1),
 		(10000002, 1, 2, 200, 1, 50000, 0, 0, 45000000, 44000000, 900.0, 880.0, 30, $1, $1),
 		(10000002, 2, 1, 100, 100, 1000, 1000, 0, 45, 38, 2.5, 1.8, 500, $1, $1)`, now)
 
@@ -109,7 +109,7 @@ func TestMarketLPFiltersAndExports(t *testing.T) {
 			t.Fatalf("ammo requirements = %+v, want the one Tritanium need", row.Requirements)
 		}
 		req := row.Requirements[0]
-		if req.TipLines != "Needs|200;Avg sell|6.50;Avg buy|4.25" {
+		if req.TipLines != "Needs|200;Avg sell|6.50;Avg buy|4.25;Items total|1,300.00" {
 			t.Errorf("requirement tooltip = %q, want the stored averages", req.TipLines)
 		}
 		if !strings.Contains(req.IconURL, "/types/34/icon") || !strings.Contains(req.Href, "type=34") {

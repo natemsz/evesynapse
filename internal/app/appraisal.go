@@ -68,6 +68,16 @@ const appraisalRefreshAge = time.Hour
 // contract_id order instead of holding the worker.
 const appraisalBatchPerCycle = 400
 
+// appraisalBudgetPerCycle is the wall-clock budget of one
+// appraisal pass: a due slice that outgrows it stays partly
+// due for the next cycle instead of stretching this one.
+const appraisalBudgetPerCycle = 20 * time.Second
+
+// appraisalSweepDeferAbove is the region sweep length after
+// which the appraisal pass sits the cycle out: the two
+// heaviest passes never stack in one cycle.
+const appraisalSweepDeferAbove = 30 * time.Second
+
 // copyMedianMinSample is the thinnest corpus slice a stored
 // copy median may stand on -- the abyssal corpus's bucket
 // minimum, kept here too: below it a median is an anecdote,
@@ -458,6 +468,14 @@ func appraisalDealFlag(ratio sql.NullFloat64) bool {
 // Stored reads and writes only -- no ESI -- so it runs after
 // the public contracts pass in the same cycle.
 func (app *Application) appraisePublicContracts(ctx context.Context) int {
+	return app.appraisePublicContractsWithin(ctx, 0)
+}
+
+// appraisePublicContractsWithin is the pass with a wall-clock
+// budget: a positive budget stops the pass once it is spent,
+// between contracts, and what is left stays due for the next
+// cycle. A zero budget prices the whole due slice.
+func (app *Application) appraisePublicContractsWithin(ctx context.Context, budget time.Duration) int {
 	now := time.Now().UTC()
 	ids, err := app.queries.ListPublicContractsDueAppraisal(ctx, db.ListPublicContractsDueAppraisalParams{
 		Cutoff: now.Add(-appraisalRefreshAge), MaxRows: appraisalBatchPerCycle,
@@ -469,6 +487,9 @@ func (app *Application) appraisePublicContracts(ctx context.Context) int {
 	done := 0
 	for _, id := range ids {
 		if ctx.Err() != nil {
+			break
+		}
+		if budget > 0 && time.Since(now) >= budget {
 			break
 		}
 		if err := app.appraiseOnePublicContract(ctx, id, now); err != nil {

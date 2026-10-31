@@ -799,10 +799,14 @@ func (c *cycleState) refreshPublicData(ctx context.Context, characters []db.Char
 	// Contract appraisal (schema 056): prices the due slice of
 	// stored contract lines from stored pricing inputs alone
 	// (appraisal.go), so the search pages only ever read
-	// finished numbers.
-	c.pass("appraising public contracts", func() (int, bool) {
-		return app.appraisePublicContracts(ctx), false
-	})
+	// finished numbers. The pass runs on a wall-clock budget,
+	// and after a long region sweep it sits the cycle out, so
+	// the two heaviest passes never stack in one cycle.
+	if clock.took("region sweep") <= appraisalSweepDeferAbove {
+		c.pass("appraising public contracts", func() (int, bool) {
+			return app.appraisePublicContractsWithin(ctx, appraisalBudgetPerCycle), false
+		})
+	}
 	clock.mark("contract appraisal", time.Now())
 
 	// Module jobs that follow the market pass (Trade Ideas' model

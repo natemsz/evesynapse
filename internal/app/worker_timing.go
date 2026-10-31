@@ -69,6 +69,17 @@ func (c *phaseClock) mark(name string, now time.Time) {
 	c.last = now
 }
 
+// took reports how long a finished part of the cycle took, or
+// 0 when that part has not finished or did not run.
+func (c *phaseClock) took(name string) time.Duration {
+	for _, p := range c.phases {
+		if p.Name == name {
+			return p.Took
+		}
+	}
+	return 0
+}
+
 // used reports how much of a fetch allowance of size was spent.
 func (b *fetchBudget) used(size int) int {
 	b.mu.Lock()

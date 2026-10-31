@@ -5537,24 +5537,6 @@ html[data-theme="light"] .doctrine-fits li:last-child { border-color: #e3d9c6; }
 .loadout-preview-cols { display: flex; flex-wrap: wrap; gap: 0.25rem 1.75rem; }
 .loadout-preview-group { flex: 0 1 15rem; min-width: 11rem; }
 .loadout-preview-group h5 { margin-top: 0; }
-/* Persistent shell: only the main content takes part in the swap
-   transition — the top bar and nav are the same live chrome on
-   both pages, so snapshotting the whole document (root) made the
-   glass shell flicker as it flattened and re-composited. The root
-   pair never animates; the named content crossfades with a slight
-   rise, opacity/transform only. Browsers without the View
-   Transitions API (or readers who asked for less motion) swap
-   instantly from swap.js instead, so there is nothing to undo. */
-::view-transition-old(root), ::view-transition-new(root) { animation: none; }
-::view-transition-old(main-content) { animation: es-swap-out 150ms ease-out both; }
-::view-transition-new(main-content) { animation: es-swap-in 150ms ease-out both; }
-@keyframes es-swap-out { from { opacity: 1; } to { opacity: 0; } }
-@keyframes es-swap-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
-@media (prefers-reduced-motion: reduce) {
-  ::view-transition-old(root), ::view-transition-new(root),
-  ::view-transition-old(main-content), ::view-transition-new(main-content) { animation: none; }
-}
-
 /* Per-page pass (2026-10-16): the pinned column read as a solid
    slab beside the translucent rows, worst where the first column
    is wide (corp members, the home fleet table). Any paint on the

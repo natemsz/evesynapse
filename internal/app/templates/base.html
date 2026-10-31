@@ -59,6 +59,7 @@
             <details class="branch{{if eq .Section "pilot"}} active{{end}}"{{if and (eq .Section "pilot") (ne .NavState "rail")}} open{{end}} data-nav-category="pilot">
         <summary data-tip="Pilot"><span class="nav-icon" aria-hidden="true"><svg width="17" height="17" class="nav-icon-svg nav-icon-character" viewBox="0 0 24 24" aria-hidden="true"><g fill="url(#nav-glyph-gradient)"><circle cx="12" cy="8.2" r="3.8"/><path d="M3.8 21.2C3.8 16.6 7.4 14.2 12 14.2c4.6 0 8.2 2.4 8.2 7Z"/></g></svg></span><span class="nav-label">Pilot</span></summary>
         <div class="menu">
+          <div class="nav-flyout-head">Pilot</div>
           {{with index .NavGroups "pilot"}}{{range .}}<p class="nav-group-label">{{if .Icon}}{{.Icon}}{{end}}{{.Label}}</p>
           {{range .Links}}<a href="{{.Href}}"{{if .Active}} class="active"{{end}}>{{.Label}}</a>
           {{end}}{{end}}{{else}}{{range index .NavLinks "pilot"}}<a href="{{.Href}}"{{if .Active}} class="active"{{end}}>{{.Label}}</a>
@@ -68,6 +69,7 @@
       <details class="branch{{if eq .Section "fitting"}} active{{end}}"{{if and (eq .Section "fitting") (ne .NavState "rail")}} open{{end}} data-nav-category="fitting">
         <summary data-tip="Fitting"><span class="nav-icon" aria-hidden="true"><svg width="17" height="17" class="nav-icon-svg nav-icon-fitting" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="url(#nav-glyph-gradient)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.6 14.4 8.2v5l5.8 5.2v1.8l-5.8-1.6-1.2 2.4h-2.4l-1.2-2.4-5.8 1.6v-1.8l5.8-5.2v-5Z"/><path d="M12 8.8v3"/></g></svg></span><span class="nav-label">Fitting</span></summary>
         <div class="menu">
+          <div class="nav-flyout-head">Fitting</div>
           {{range index .NavLinks "fitting"}}<a href="{{.Href}}"{{if .Active}} class="active"{{end}}>{{.Label}}</a>
           {{end}}
         </div>
@@ -75,6 +77,7 @@
       <details class="branch{{if eq .Section "industry"}} active{{end}}"{{if and (eq .Section "industry") (ne .NavState "rail")}} open{{end}} data-nav-category="industry">
         <summary data-tip="Industry"><span class="nav-icon" aria-hidden="true"><svg width="17" height="17" class="nav-icon-svg" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="url(#nav-glyph-gradient)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18M5 21V10l4 3v-3l4 3V7l4 3v11"/></g></svg></span><span class="nav-label">Industry</span></summary>
         <div class="menu">
+          <div class="nav-flyout-head">Industry</div>
           {{with index .NavGroups "industry"}}{{range .}}<p class="nav-group-label">{{if .Icon}}{{.Icon}}{{end}}{{.Label}}</p>
           {{range .Links}}<a href="{{.Href}}"{{if .Active}} class="active"{{end}}>{{.Label}}</a>
           {{end}}{{end}}{{else}}{{range index .NavLinks "industry"}}<a href="{{.Href}}"{{if .Active}} class="active"{{end}}>{{.Label}}</a>
@@ -84,6 +87,7 @@
       <details class="branch{{if eq .Section "market"}} active{{end}}"{{if and (eq .Section "market") (ne .NavState "rail")}} open{{end}} data-nav-category="market">
         <summary data-tip="Market"><span class="nav-icon" aria-hidden="true"><svg width="17" height="17" class="nav-icon-svg nav-icon-economy" viewBox="0 0 24 24" aria-hidden="true"><g fill="url(#nav-glyph-gradient)"><rect x="3.5" y="15" width="4.2" height="5" rx="1"/><rect x="9.9" y="11" width="4.2" height="9" rx="1"/><rect x="16.3" y="7" width="4.2" height="13" rx="1"/></g><path d="M3 12.2 8.6 8.2 14 9.8 20.6 4.4" fill="none" stroke="url(#nav-glyph-gradient)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="nav-label">Market</span></summary>
         <div class="menu">
+          <div class="nav-flyout-head">Market</div>
           {{with index .NavGroups "market"}}{{range .}}<p class="nav-group-label">{{if .Icon}}{{.Icon}}{{end}}{{.Label}}</p>
           {{range .Links}}<a href="{{.Href}}"{{if .Active}} class="active"{{end}}>{{.Label}}</a>
           {{end}}{{end}}{{else}}{{range index .NavLinks "market"}}<a href="{{.Href}}"{{if .Active}} class="active"{{end}}>{{.Label}}</a>
@@ -93,6 +97,7 @@
       <details class="branch{{if eq .Section "corporation"}} active{{end}}"{{if and (eq .Section "corporation") (ne .NavState "rail")}} open{{end}} data-nav-category="corporation">
         <summary data-tip="Corporation"><span class="nav-icon" aria-hidden="true"><svg width="17" height="17" class="nav-icon-svg nav-icon-corporation" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.7l2.45 4.97 5.48.8-3.97 3.87.94 5.46L12 16.24l-4.9 2.56.94-5.46L4.07 9.47l5.48-.8Z" fill="url(#nav-glyph-gradient)"/></svg></span><span class="nav-label">Corporation</span></summary>
         <div class="menu">
+          <div class="nav-flyout-head">Corporation</div>
           {{with index .NavGroups "corporation"}}{{range .}}<p class="nav-group-label">{{if .Icon}}{{.Icon}}{{end}}{{.Label}}</p>
           {{range .Links}}<a href="{{.Href}}"{{if .Active}} class="active"{{end}}>{{.Label}}</a>
           {{end}}{{end}}{{else}}{{range index .NavLinks "corporation"}}<a href="{{.Href}}"{{if .Active}} class="active"{{end}}>{{.Label}}</a>
@@ -103,6 +108,7 @@
       <details class="branch{{if eq .Section "intel"}} active{{end}}"{{if and (eq .Section "intel") (ne .NavState "rail")}} open{{end}} data-nav-category="intel">
         <summary data-tip="Intel"><span class="nav-icon" aria-hidden="true"><svg width="17" height="17" class="nav-icon-svg nav-icon-intel" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="url(#nav-glyph-gradient)" stroke-width="2"><circle cx="12" cy="12" r="7.4"/><circle cx="12" cy="12" r="3.6"/></g><circle cx="12" cy="12" r="1.35" fill="url(#nav-glyph-gradient)"/></svg></span><span class="nav-label">Intel</span></summary>
         <div class="menu">
+          <div class="nav-flyout-head">Intel</div>
           {{range index .NavLinks "intel"}}<a href="{{.Href}}"{{if .Active}} class="active"{{end}}>{{.Label}}</a>
           {{end}}{{if .AxonPaired}}<a href="evesynapse-axon://open">EveSynapse Axon</a>{{end}}
         </div>
@@ -111,6 +117,7 @@
       <details class="branch{{if eq .Section "tools"}} active{{end}}"{{if and (eq .Section "tools") (ne .NavState "rail")}} open{{end}} data-nav-category="tools">
         <summary data-tip="Tools"><span class="nav-icon" aria-hidden="true"><svg width="17" height="17" class="nav-icon-svg" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="url(#nav-glyph-gradient)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a4.5 4.5 0 0 0-6 6L3 18l3 3 5.7-5.7a4.5 4.5 0 0 0 6-6L14 13l-3-3 3.7-3.7Z"/></g></svg></span><span class="nav-label">Tools</span></summary>
         <div class="menu">
+          <div class="nav-flyout-head">Tools</div>
           {{range index .NavLinks "tools"}}<a href="{{.Href}}"{{if .Active}} class="active"{{end}}>{{.Label}}</a>
           {{end}}
         </div>
@@ -142,6 +149,7 @@
         <details class="branch sidebar-settings">
           <summary class="navlink" data-tip="Settings" aria-label="Settings"><span class="nav-icon" aria-hidden="true"><svg width="17" height="17" class="nav-icon-svg" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="url(#nav-glyph-gradient)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h0a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></g></svg></span><span class="nav-label">Settings</span></summary>
           <div class="menu">
+            <div class="nav-flyout-head">Settings</div>
             <a href="/settings#api">API</a>
             <a href="/settings#interface">Interface</a>
             <a href="/settings#notifications">Notifications</a>

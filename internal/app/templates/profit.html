@@ -8,9 +8,31 @@
 {{with .Profit}}
 <p><small>Where your ISK came from, activity by activity, each after its own fees and costs.</small></p>
 
-{{template "charselector" .Owners}}
+<div class="pf-toprow">{{template "charselector" .Owners}}{{if not .Corp}}<button type="button" class="viz-gear" data-open-counted-modal aria-haspopup="dialog" aria-label="How profit is counted" title="How profit is counted"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="3.1"/><path d="M12 3v2.6M12 18.4V21M3 12h2.6M18.4 12H21M5.6 5.6l1.9 1.9M16.5 16.5l1.9 1.9M18.4 5.6l-1.9 1.9M7.5 16.5l-1.9 1.9"/></svg></button>{{end}}</div>
+<div class="pf-chiprows">
 <nav class="mt-modes" aria-label="Span">{{range .Spans}}<a href="{{.Href}}"{{if .Active}} class="active" aria-current="true"{{end}}>{{.Label}}</a>{{end}}</nav>
 {{if .Grains}}<nav class="mt-modes pf-modes-grain" aria-label="Breakdown">{{range .Grains}}<a href="{{.Href}}"{{if .Active}} class="active" aria-current="true"{{end}}>{{.Label}}</a>{{end}}</nav>{{end}}
+</div>
+
+{{if not .Corp}}
+<div class="modal-backdrop" id="counted-modal" hidden>
+  <div class="modal pf-counted-modal" role="dialog" aria-modal="true" aria-labelledby="counted-title">
+    <div class="modal-head">
+      <h2 id="counted-title">How profit is counted</h2>
+      <button type="button" class="modal-close" data-close-modal aria-label="Close">×</button>
+    </div>
+    <p><small>The rules every figure on this page follows. Change them here; the books refold on the next sync.</small></p>
+    <form method="post" action="/profit/prefs" class="pf-prefs-form">
+      <label><input type="checkbox" name="pooled" value="1"{{if .Pooled}} checked{{end}}> Match sales against stock across all my characters (off: each character's own stock)</label>
+      <label><input type="checkbox" name="broker_in_margin" value="1"{{if .BrokerInMargin}} checked{{end}}> Count broker fees in each item's margin</label>
+      <label>Price industry at today's prices in <select name="industry_region">{{range .Regions}}<option value="{{.ID}}"{{if .Selected}} selected{{end}}>{{.Name}}</option>{{end}}</select></label>
+      <label><input type="radio" name="industry_side" value="sell"{{if not .IndustrySideBuy}} checked{{end}}> at sell typicals (buy inputs from sell orders, list output as sell orders)</label>
+      <label><input type="radio" name="industry_side" value="buy"{{if .IndustrySideBuy}} checked{{end}}> at buy typicals (inputs through buy orders, output sold to buy orders)</label>
+      <button class="btn" type="submit">Save</button>
+    </form>
+  </div>
+</div>
+{{end}}
 
 {{if .HasData}}
 <div class="kpis kpis-small">
@@ -23,6 +45,7 @@
 </div>
 
 {{with .Hero}}{{$hero := .}}
+<section class="foldable pf-hero-panel" data-fold="never">
 <figure class="pf-chart pf-hero">
   <figcaption><strong>{{.Name}}</strong>{{if .Sub}}<br><small class="mt-reqs">{{.Sub}}</small>{{end}}</figcaption>
   <div class="viz-head">
@@ -53,11 +76,12 @@
   </div>
   <div class="pf-axis-x" aria-hidden="true">{{range .XTicks}}<span class="{{.Class}} pf-x-{{.Pos}}">{{.Label}}</span>{{end}}</div>
 </figure>
+</section>
 {{end}}
 
 {{with .Charts}}
 <section class="foldable">
-<h3>Charts</h3>
+<h3>Charts<span class="info-tip" tabindex="0"><span class="info-tip-dot" aria-hidden="true">i</span><span class="info-tip-pop">Amounts in ISK, by {{.Bucket}}. A hatched {{.Bucket}} had sales with no known cost or no matched tax line, so its trading figures are partial. The strip under Trading efficiency marks each {{.Bucket}}'s coverage; an amber segment opens that {{.Bucket}}'s uncovered sales in the item table.</span></span></h3>
 <div class="pf-charts">
 {{if .Waterfall}}<div class="pf-cell">{{template "pfwaterfall" .Waterfall}}</div>{{end}}
 <div class="pf-cell">
@@ -65,7 +89,6 @@
   {{if .Efficiency}}{{template "pfchart" .Efficiency}}{{else}}<figure class="pf-chart"><figcaption><strong>Trading efficiency</strong></figcaption><p><small>No trading in this span.</small></p></figure>{{end}}
 </div>
 </div>
-<p><small>Amounts in ISK, by {{.Bucket}}. Hatched {{.Bucket}}s had sales with no known cost or no matched tax line, so their trading figures are partial. The strip under the trading panel marks each {{.Bucket}}'s coverage; an unverified segment leads to that {{.Bucket}}'s uncovered sales in the item table.</small></p>
 </section>
 {{end}}
 
@@ -91,18 +114,17 @@
 </table>
 </div>
 {{with .Turnover}}<div class="pf-card">
-  <div class="viz-head"><h4>Turnover vs profit</h4><nav class="mt-modes" aria-label="Turnover readout">{{range $.Profit.BulLinks}}<a href="{{.Href}}"{{if .Active}} class="active" aria-current="true"{{end}}>{{.Label}}</a>{{end}}</nav></div>
-  <p><small class="mt-reqs">Wide track: all the ISK an activity moved. Bright bar: what it actually kept.</small></p>
+  <div class="viz-head"><h4>Turnover vs profit<span class="info-tip" tabindex="0"><span class="info-tip-dot" aria-hidden="true">i</span><span class="info-tip-pop">The wide track is all the ISK an activity moved. The bright bar is the part it kept.</span></span></h4><nav class="mt-modes" aria-label="Turnover readout">{{range $.Profit.BulLinks}}<a href="{{.Href}}"{{if .Active}} class="active" aria-current="true"{{end}}>{{.Label}}</a>{{end}}</nav></div>
   <div class="pf-bullets">
   {{range .}}<div class="pf-bullet"><span class="pf-bullet-name">{{.Label}}</span><svg viewBox="0 0 {{.W}} {{.H}}" preserveAspectRatio="none" aria-hidden="true"><rect class="bullet-track" x="0" y="0" width="{{.TrackW}}" height="{{.H}}"/><rect class="{{.NetClass}}" x="0" y="0" width="{{printf "%.1f" .NetW}}" height="{{.H}}"/></svg><span class="pf-bullet-val">{{.Readout}}<br><small class="mt-reqs">moved {{.Moved}}</small></span></div>{{end}}
   </div>
 </div>{{end}}
 </div>
-<p><small>Prices in ISK. Trading costs include {{.SalesTax}} in sales tax and {{.BrokerFees}} in broker fees. Industry counts a job when it delivers: what it made, at EveSynapse's prices that day, less its materials at the same prices. Built items then count as stock at that value, so selling them later is a trade. The counting rules in full: <a href="#counted">how profit is counted</a>.{{if .Corp}} Corporation figures cover every wallet division; corporations get no net worth line.{{end}}</small></p>
+<p><small>Prices in ISK. Trading costs include {{.SalesTax}} in sales tax and {{.BrokerFees}} in broker fees. Industry counts a job when it delivers: what it made, at EveSynapse's prices that day, less its materials at the same prices. Built items then count as stock at that value, so selling them later is a trade. The counting rules in full: <a href="#counted-modal" data-open-counted-modal>how profit is counted</a>.{{if .Corp}} Corporation figures cover every wallet division; corporations get no net worth line.{{end}}</small></p>
 </section>
 
 <section class="foldable" id="items">
-<h3>Trading by item</h3>
+<h3>Trading by item<span class="info-tip" tabindex="0"><span class="info-tip-dot" aria-hidden="true">i</span><span class="info-tip-pop">Each sale is matched to the oldest stock {{if .Pooled}}any of your characters{{else}}that character{{end}} still had of the item. A margin is what is left after the units' cost, their sales tax{{if .BrokerInMargin}} and the broker fees tied to the item{{end}}, and it covers only units with a known cost and a matched tax line; the rest are listed with the reason. Fully covered items come first.</span></span></h3>
 {{if .Recomputed}}<p class="pf-note"><small>{{if eq .RecomputedWhy "members"}}Your characters changed, so trading figures were recomputed on {{.Recomputed}}.{{else}}Trading figures were recomputed on {{.Recomputed}}: sales now match against stock across all your characters, with sales tax paired to each sale and broker fees tied to the item where they can be.{{end}}</small></p>{{end}}
 {{if .ItemsNet}}
 <p><strong class="mt-chg {{.ItemsNetDir}}">{{.ItemsNet}}</strong> ISK margin on covered sales{{if .ItemsDelta}}, <span class="mt-chg {{.ItemsDeltaDir}}">{{.ItemsDelta}}</span> against the {{.Days}} days before{{end}}. {{if .ItemsCoverage}}<a href="{{.CoverageHref}}">{{.ItemsCoverage}} of units sold are covered</a>.{{end}}{{if .BrokerLoose}} Broker fees tied to no item: {{.BrokerLoose}} ISK.{{end}} <small class="mt-reqs">As of {{.ItemsAsOf}}.</small></p>
@@ -136,15 +158,37 @@
   </tbody>
 </table>
 </div>
-<p><small>Each sale is matched to the oldest stock {{if .Pooled}}any of your characters{{else}}that character{{end}} still had of the item. The margin is after what the units cost, their sales tax{{if .BrokerInMargin}} and the broker fees tied to the item{{end}}. A margin covers only units with a known cost and a matched tax line; the rest are listed with the reason. Fully covered items come first.</small></p>
 {{else}}
 {{if .UncoveredRaw}}<p><small>Nothing uncovered{{.UncoveredWhen}}: every sale in this view has a known cost.</small></p>{{else}}<p><small>No sales in this span.</small></p>{{end}}
 {{end}}
 </section>
 
+{{if .Positions}}
+<section class="foldable" id="positions">
+<h3>Open positions<span class="info-tip" tabindex="0"><span class="info-tip-dot" aria-hidden="true">i</span><span class="info-tip-pop">Stock you bought or built and still hold, priced at typical sell in The Forge: the ISK sitting in the hero's gap. Stock used up, lost or moved away no longer counts. The totals tie to the hero's gap chip and to the prices behind the Not explained drift estimate.</span></span></h3>
+<div class="tw">
+<table class="pf-pos-table">
+  <thead><tr><th>Item</th><th class="mt-num">Held</th><th class="mt-num">Cost</th><th class="mt-num">Worth now</th><th class="mt-num">Not yet sold</th></tr></thead>
+  <tbody>
+  {{range .Positions}}
+    <tr id="pos-{{.TypeID}}">
+      <td><a href="/market/?type={{.TypeID}}">{{.Name}}</a>{{if .Source}} <small class="mt-reqs">({{.Source}})</small>{{end}}</td>
+      <td class="mt-num">{{.Quantity}}</td>
+      <td class="mt-num">{{.Cost}}</td>
+      <td class="mt-num">{{if .Value}}{{.Value}}<br><svg class="pf-sharebar" viewBox="0 0 90 6" width="90" height="6" aria-hidden="true"><rect class="pf-share-track" x="0" y="0" width="90" height="6"/><rect class="pf-share-fill" x="0" y="0" width="{{printf "%.1f" .ShareW}}" height="6"/></svg>{{else}}<small>No price</small>{{end}}</td>
+      <td class="mt-num">{{if .Unrealized}}<span class="mt-chg {{.Dir}}">{{.Unrealized}}</span>{{else}}—{{end}}</td>
+    </tr>
+  {{end}}
+  </tbody>
+  <tfoot><tr><td>Total</td><td></td><td class="mt-num">{{.OpenCost}}</td><td class="mt-num">{{.OpenValue}}</td><td class="mt-num"><span class="mt-chg {{.UnrealDir}}">{{.Unrealized}}</span></td></tr></tfoot>
+</table>
+</div>
+</section>
+{{end}}
+
 {{if not .Corp}}
 <section class="foldable">
-<h3>Industry by blueprint</h3>
+<h3>Industry by blueprint<span class="info-tip" tabindex="0"><span class="info-tip-dot" aria-hidden="true">i</span><span class="info-tip-pop">All three figures cover the same runs. Realized is what sold units brought, less their sales tax and their share of the job: the materials as they came out of your stock (any you did not buy here at their install-day price) and the job cost. At the time prices the inputs on the day each job was installed and the output on the day it delivered, less the job cost paid. At today's prices reruns the same recipe in {{.IndustryRegion}} at {{if .IndustrySideBuy}}buy{{else}}sell{{end}} typicals, less your usual sales tax{{if not .IndustrySideBuy}} and broker fees{{end}}, with the job cost scaled by how the inputs' value moved; it is what the recipe is worth now, not a profit you made. ESI does not report the materials a job used: they come from the recipe, the blueprint's ME and the structure bonus you set below.</span></span></h3>
 {{if .Blueprints}}
 <div class="tw">
 <table>
@@ -165,7 +209,6 @@
   </tbody>
 </table>
 </div>
-<p><small>All three figures cover the same runs. <strong>Realized</strong> is what sold units brought, less their sales tax and their share of the job: the materials as they came out of your stock (any you didn't buy here at their install-day price) and the job cost. <strong>At the time</strong> prices the inputs on the day each job was installed and the output on the day it delivered, less the job cost paid. <strong>At today's prices</strong> reruns the same recipe in {{.IndustryRegion}} at {{if .IndustrySideBuy}}buy{{else}}sell{{end}} typicals, less your usual sales tax{{if not .IndustrySideBuy}} and broker fees{{end}}, with the job cost scaled by how the inputs' value moved; it is what the recipe is worth now, not a profit you made. ESI doesn't report the materials a job used: they come from the recipe, the blueprint's ME and the structure bonus you set below.</small></p>
 {{else}}
 <p><small>No delivered manufacturing or reaction jobs recorded yet.</small></p>
 {{end}}
@@ -184,8 +227,7 @@
 </section>
 
 <section class="foldable">
-<h3>LP stores</h3>
-<p><small>What your loyalty points bought, and what those items earned when they sold.</small></p>
+<h3>LP stores<span class="info-tip" tabindex="0"><span class="info-tip-dot" aria-hidden="true">i</span><span class="info-tip-pop">What your loyalty points bought, and what those items earned when they sold. ESI shows your LP balances but no store purchases, so each purchase is worked out from a drop in a balance between two hourly readings and cannot be timed closer than that. Corroborated: one offer fits the LP (and the ISK, when the wallet shows it) and the items turned up in your assets. Inferred: one offer fits but the items were not seen, perhaps already sold or moved. Ambiguous: several offers fit; pick one below. Unexplained: no single offer fits, so only the LP spent counts. Net ISK and ISK per LP cover sold items from corroborated, inferred and picked purchases, with LP costing nothing: LP is earned, not bought. The other lines show the same net if each LP had cost that much, which is what the LP could have made elsewhere. Corporation LP is not available from ESI.</span></span></h3>
 {{if .LPDelta}}<p><small>Net LP over these {{.Days}} days: {{.LPDelta}}.{{if .WithLP}} Counting that LP at {{.LPValue}} ISK each, you earned <strong class="mt-chg {{.WithLPDir}}">{{.WithLP}}</strong> ISK.{{end}}</small></p>{{end}}
 {{if .LPStores}}
 <div class="tw">
@@ -209,7 +251,6 @@
   </tbody>
 </table>
 </div>
-<p><small>ESI shows your LP balances but no LP store purchases, so each purchase is worked out from a drop in a balance between two hourly readings, and can't be timed closer than that. <strong>Corroborated</strong>: one offer fits the LP (and the ISK, when the wallet shows it) and the items turned up in your assets. <strong>Inferred</strong>: one offer fits but the items weren't seen, perhaps already sold or moved. <strong>Ambiguous</strong>: several offers fit; pick one below. <strong>Unexplained</strong>: no single offer fits, so only the LP spent is counted. Net ISK and ISK per LP cover items sold, from corroborated, inferred and picked purchases, with LP costing nothing: LP is earned, not bought. The other lines show the same net if each LP had cost that much, which is what the LP could have made elsewhere. Corporation LP isn't available from ESI.</small></p>
 {{else}}
 <p><small>No LP balances recorded yet. They fill in once a character has granted access to loyalty points and synced. Set <a href="#lp-value">your own value for LP</a> so what you earn can be priced.</small></p>
 {{end}}
@@ -234,44 +275,9 @@
 </form>
 </section>
 
-<section class="foldable" id="counted">
-<h3>How profit is counted</h3>
-<p><small>The rules every figure on this page follows. Change them here; the books refold on the next sync.</small></p>
-<form method="post" action="/profit/prefs" class="pf-prefs-form">
-  <label><input type="checkbox" name="pooled" value="1"{{if .Pooled}} checked{{end}}> Match sales against stock across all my characters (off: each character's own stock)</label>
-  <label><input type="checkbox" name="broker_in_margin" value="1"{{if .BrokerInMargin}} checked{{end}}> Count broker fees in each item's margin</label>
-  <label>Price industry at today's prices in <select name="industry_region">{{range .Regions}}<option value="{{.ID}}"{{if .Selected}} selected{{end}}>{{.Name}}</option>{{end}}</select></label>
-  <label><input type="radio" name="industry_side" value="sell"{{if not .IndustrySideBuy}} checked{{end}}> at sell typicals (buy inputs from sell orders, list output as sell orders)</label>
-  <label><input type="radio" name="industry_side" value="buy"{{if .IndustrySideBuy}} checked{{end}}> at buy typicals (inputs through buy orders, output sold to buy orders)</label>
-  <button class="btn" type="submit">Save</button>
-</form>
-</section>
 {{end}}
 
-{{if .Positions}}
-<section class="foldable" id="positions">
-<h3>Open positions</h3>
-<p><small>Stock you bought or built and still hold: the ISK sitting in the hero's gap, priced at typical sell in The Forge.</small></p>
-<div class="tw">
-<table class="pf-pos-table">
-  <thead><tr><th>Item</th><th class="mt-num">Held</th><th class="mt-num">Cost</th><th class="mt-num">Worth now</th><th class="mt-num">Not yet sold</th></tr></thead>
-  <tbody>
-  {{range .Positions}}
-    <tr id="pos-{{.TypeID}}">
-      <td><a href="/market/?type={{.TypeID}}">{{.Name}}</a>{{if .Source}} <small class="mt-reqs">({{.Source}})</small>{{end}}</td>
-      <td class="mt-num">{{.Quantity}}</td>
-      <td class="mt-num">{{.Cost}}</td>
-      <td class="mt-num">{{if .Value}}{{.Value}}<br><svg class="pf-sharebar" viewBox="0 0 90 6" width="90" height="6" aria-hidden="true"><rect class="pf-share-track" x="0" y="0" width="90" height="6"/><rect class="pf-share-fill" x="0" y="0" width="{{printf "%.1f" .ShareW}}" height="6"/></svg>{{else}}<small>No price</small>{{end}}</td>
-      <td class="mt-num">{{if .Unrealized}}<span class="mt-chg {{.Dir}}">{{.Unrealized}}</span>{{else}}—{{end}}</td>
-    </tr>
-  {{end}}
-  </tbody>
-  <tfoot><tr><td>Total</td><td></td><td class="mt-num">{{.OpenCost}}</td><td class="mt-num">{{.OpenValue}}</td><td class="mt-num"><span class="mt-chg {{.UnrealDir}}">{{.Unrealized}}</span></td></tr></tfoot>
-</table>
-</div>
-<p><small>At typical sell in The Forge. Stock used up, lost or moved away no longer counts. The totals tie to the hero's gap chip and the prices behind the Not explained drift estimate.</small></p>
-</section>
-{{end}}
+
 
 <p><small>Colours on this page are semantic: <span class="legend-swatch sem-recycled" aria-hidden="true"></span> recycled capital that came back, <span class="legend-swatch sem-kept" aria-hidden="true"></span> kept profit, <span class="legend-swatch sem-lost" aria-hidden="true"></span> lost to fees, taxes and losses, <span class="legend-swatch sem-unverified" aria-hidden="true"></span> unverified, no known cost. Every colour scheme retunes the four, so they read the same in every theme.</small></p>
 
@@ -283,7 +289,7 @@
 
 {{define "pfchart"}}
 <figure class="pf-chart">
-  <figcaption><strong>{{.Name}}</strong>{{if .Sub}}<br><small class="mt-reqs">{{.Sub}}</small>{{end}}</figcaption>
+  <figcaption><strong>{{.Name}}</strong>{{if .Info}}<span class="info-tip" tabindex="0"><span class="info-tip-dot" aria-hidden="true">i</span><span class="info-tip-pop">{{.Info}}</span></span>{{end}}{{if .Sub}}<br><small class="mt-reqs">{{.Sub}}</small>{{end}}</figcaption>
   {{if .Legend}}<div class="chart-legend">{{range .Legend}}<span class="legend-item"><span class="legend-swatch pf-sw {{.Class}}" aria-hidden="true"></span>{{.Label}}{{if .Value}} <small class="mt-reqs">{{.Value}}</small>{{end}}</span>{{end}}{{if .HasGaps}}<span class="legend-item"><span class="legend-swatch pf-sw pf-gap" aria-hidden="true"></span>Partly covered</span>{{end}}</div>{{end}}
   <div class="pchart pf-plot" data-chart-scrub="true">
     <svg{{if lt .H 160}} class="pf-short"{{end}} viewBox="0 0 {{.W}} {{.H}}" width="100%" role="img" aria-label="{{.Label}}, {{.First}} to {{.Last}}" preserveAspectRatio="none">
@@ -308,7 +314,7 @@
 
 {{define "pfwaterfall"}}
 <figure class="pf-chart">
-  <figcaption><strong>{{.Name}}</strong>{{if .Sub}}<br><small class="mt-reqs">{{.Sub}}</small>{{end}}</figcaption>
+  <figcaption><strong>{{.Name}}</strong>{{if .Info}}<span class="info-tip" tabindex="0"><span class="info-tip-dot" aria-hidden="true">i</span><span class="info-tip-pop">{{.Info}}</span></span>{{end}}{{if .Sub}}<br><small class="mt-reqs">{{.Sub}}</small>{{end}}</figcaption>
   {{if .Legend}}<div class="chart-legend">{{range .Legend}}<span class="legend-item"><span class="legend-swatch pf-sw {{.Class}}" aria-hidden="true"></span>{{.Label}}{{if .Value}} <small class="mt-reqs">{{.Value}}</small>{{end}}</span>{{end}}</div>{{end}}
   <div class="pchart pf-plot">
     <svg viewBox="0 0 {{.W}} {{.H}}" width="100%" role="img" aria-label="{{.Label}}" preserveAspectRatio="none">

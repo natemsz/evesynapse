@@ -200,6 +200,12 @@
       if (vizModal) EveSynapseModal.open(vizModal);
       return;
     }
+    var countedOpener = t.closest && t.closest("[data-open-counted-modal]");
+    if (countedOpener) {
+      var countedModal = document.getElementById("counted-modal");
+      if (countedModal) { EveSynapseModal.open(countedModal); ev.preventDefault(); }
+      return;
+    }
     if (t.classList.contains("modal-backdrop")) { EveSynapseModal.close(t); return; }
     var closer = t.closest && t.closest("[data-close-modal]");
     var box = closer && closer.closest(".modal-backdrop");

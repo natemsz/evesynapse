@@ -37,6 +37,7 @@ const (
 // pfChart is one chart's geometry and words.
 type pfChart struct {
 	Name, Title, Sub string // the plain name; the finding, with its number; what it covers
+	Info             string // the explainer, carried by the info tip beside the name
 	AxisL, AxisR     string // captions under the left and right scales, where a chart has them
 	Label            string // aria-label
 	W, H             int
@@ -512,6 +513,7 @@ func (s heroScale) y(v float64) float64 {
 // buckets): part of the net whose cost is not verified.
 type pfWaterfall struct {
 	Name, Title, Sub string
+	Info             string // the explainer, carried by the info tip beside the name
 	Label            string
 	W, H             int
 	Bars             []pfWfBar
@@ -1180,7 +1182,8 @@ func buildWaterfall(view *profitView, gross, ind, earned, covCost, uncovRev floa
 		W:     w, H: h,
 		Title: fmt.Sprintf("Of %s ISK gross in, %s ISK stayed earned", pfShortISK(gross), pfShortISK(earned)),
 	}
-	wf.Sub = wf.Title + " Capital that came back rides in recycled tones, value that left for good in the lost tone, and what stayed in kept. The steps are the By activity table's own figures, so they sum to Earned exactly."
+	wf.Sub = wf.Title + "."
+	wf.Info = "All the ISK that came in this span, taken apart: what went back out as the cost of what sold, what industry consumed, what fees and taxes took for good, and what stayed as profit. The steps are the By activity table's own figures, so they add up to Earned exactly."
 	const barW = 64.0
 	stepX := []float64{30, 144, 258, 372, 486}
 	barFor := func(i int, top, bot float64, class string) pfWfBar {
@@ -1291,9 +1294,9 @@ func (app *Application) buildEfficiencyChart(ctx context.Context, view *profitVi
 			Title: fmt.Sprintf("Paid %s ISK in fees", esi.FormatISK(feeTotal))}
 		if revenue > 0 {
 			cf.Title += fmt.Sprintf("; trading fees took %.1f%% of what sold", tradeFees/revenue*100)
-			cf.Sub = "Bars: fees by kind (left scale). Line: sales tax and broker fees as a share of market sales (right scale), with a gap where nothing sold."
+			cf.Info = "Bars: fees by kind, on the left scale. Line: sales tax and broker fees as a share of market sales, on the right scale, with a gap where nothing sold."
 		}
-		cf.Sub = "Fee deep-dive. " + cf.Title + " " + cf.Sub
+		cf.Sub = cf.Title + "."
 		parts := []struct {
 			class, name string
 			v           func(feeRow) float64
@@ -1519,7 +1522,7 @@ func (app *Application) buildEfficiencyChart(ctx context.Context, view *profitVi
 	if !math.IsNaN(lastMargin) {
 		ce.Sub += fmt.Sprintf(" 30-day trading margin: %.1f%% on the %.0f%% of units covered.", lastMargin, math.Floor(lastShare*100))
 	}
-	ce.Sub += " Each bar is a " + unit + "'s gross trading sales: what the goods cost, what fees and tax took, and what was kept; the hatched part sold with no known cost. Where goods and fees pass the sales marker, the " + unit + " lost money."
+	ce.Info = "Each bar is a " + unit + "'s gross trading sales, split into what the goods cost, what fees and tax took, and what was kept. The hatched part sold with no known cost. Where goods and fees pass the top of the bar, the " + unit + " lost money."
 	ce.Legend = append([]pfLegend{
 		{Class: "sem-recycled", Label: "Cost of goods", Value: esi.FormatISK(totCost)},
 		{Class: "sem-lost", Label: "Fees and tax", Value: esi.FormatISK(totFees)},

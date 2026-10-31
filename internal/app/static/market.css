@@ -52,6 +52,11 @@
   border-radius: var(--r-xs);
   color: var(--muted);
   text-decoration: none;
+  font-family: "Rajdhani", "Segoe UI", sans-serif;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  font-size: 0.8rem;
 }
 .mt-modes a.active { color: var(--text-bright); border-color: var(--accent); }
 .mt-num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
@@ -276,6 +281,18 @@ td.mt-reqs { max-width: 12rem; }
 .pf-charts > .pf-cell:last-child:nth-child(odd) { grid-column: 1 / -1; }
 @media (max-width: 1100px) { .pf-charts { grid-template-columns: minmax(0, 1fr); } }
 .pf-modes-grain { margin-top: -0.3rem; }
+/* The profit module's head rows: the character selector with the
+   counted-rules gear at its right, lined up with it; the span and
+   grain chips right-aligned under them, like the page's other
+   option groups. */
+.pf-toprow { display: flex; align-items: center; gap: 0.75rem; }
+.pf-toprow .viz-gear { margin-left: auto; }
+.pf-chiprows { display: flex; flex-direction: column; align-items: flex-end; }
+.pf-chiprows .mt-modes { margin: 0.3rem 0 0; justify-content: flex-end; }
+/* The hero rides in the same foldable panel as the page's other
+   sections; its figure keeps no margin of its own inside it. */
+.pf-hero-panel .pf-hero { margin: 0; }
+
 .pf-mode-row { display: flex; justify-content: flex-end; margin: 0.5rem 0 -0.3rem; }
 .pf-mode-row .mt-modes { margin: 0; }
 .pf-axis-caps { display: flex; justify-content: space-between; gap: 1rem; font-size: 0.68rem; color: var(--muted); margin-top: 0.1rem; }

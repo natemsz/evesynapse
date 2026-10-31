@@ -1106,14 +1106,19 @@ h3 + .tw > table, h3 + table {
   width: 1.7rem;
   height: 1.7rem;
   padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   font-size: 1rem;
   line-height: 1;
   font-family: inherit;
   color: var(--gold);
-  background: #0e0e0e;
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--gold) 20%, transparent),
+    color-mix(in srgb, var(--accent) 16%, transparent));
   -webkit-background-clip: border-box;
   background-clip: border-box;
-  border: 1px solid #4a2408;
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
   border-radius: var(--r-sm);
   cursor: pointer;
 }
@@ -1129,16 +1134,51 @@ h3 + .tw > table, h3 + table {
   z-index: 2;
   height: 1.7rem;
   padding: 0 0.55rem;
+  display: inline-flex;
+  align-items: center;
   font: inherit;
   font-size: 0.72rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--gold);
-  background: #0e0e0e;
-  border: 1px solid #4a2408;
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--gold) 20%, transparent),
+    color-mix(in srgb, var(--accent) 16%, transparent));
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
   border-radius: var(--r-sm);
   cursor: pointer;
 }
+/* --- info tips: a filled circular "i" beside a panel or chart
+   name; its explainer rides in a styled bubble shown on hover or
+   keyboard focus, so panels carry no prose of their own. --- */
+.info-tip { position: relative; display: inline-flex; vertical-align: middle; margin-left: 0.4rem; cursor: help; outline: none; }
+.info-tip-dot {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 0.95rem; height: 0.95rem; border-radius: 50%;
+  background: color-mix(in srgb, var(--accent) 55%, transparent);
+  color: #fff; font-family: Georgia, "Times New Roman", serif; font-style: italic; font-weight: 700;
+  font-size: 0.68rem; line-height: 1; flex: none;
+  transition: background 120ms ease;
+}
+.info-tip:hover .info-tip-dot, .info-tip:focus-visible .info-tip-dot, .info-tip:focus-within .info-tip-dot { background: var(--accent); }
+.info-tip-pop {
+  position: absolute; left: 50%; bottom: calc(100% + 0.55rem); z-index: 70;
+  width: max-content; max-width: 19rem;
+  padding: 0.55rem 0.7rem;
+  background: var(--glass);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(0.95);
+  backdrop-filter: blur(var(--glass-blur)) saturate(0.95);
+  border: 1px solid var(--glass-edge); border-radius: var(--r-sm);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55);
+  color: var(--text); font-family: var(--font-body, inherit); font-size: 0.78rem; font-weight: 400;
+  letter-spacing: normal; text-transform: none; line-height: 1.45; text-align: left;
+  opacity: 0; transform: translateX(-50%) translateY(3px); pointer-events: none;
+  transition: opacity 120ms ease, transform 120ms ease;
+}
+.info-tip:hover .info-tip-pop, .info-tip:focus-visible .info-tip-pop, .info-tip:focus-within .info-tip-pop {
+  opacity: 1; transform: translateX(-50%) translateY(0); pointer-events: auto;
+}
+
 .cardexpand::after { content: " \25BE"; }
 .cardexpand[aria-expanded="true"]::after { content: " \25B4"; }
 .cardexpand:hover { color: var(--text-bright); border-color: var(--accent); }

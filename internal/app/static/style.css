@@ -2079,10 +2079,10 @@ td.pos, .pos { color: #28c76f; }
    size as its integer grows, so it always fits its card; the
    surface's plain size is the baseline for ordinary figures. */
 .iskfig { white-space: nowrap; font-variant-numeric: tabular-nums; }
-.iskfig .dec { font-size: 0.58em; line-height: 0; vertical-align: 0.62em; margin-left: 0.03em; }
+.iskfig .dec { font-size: 0.56em; line-height: 0; vertical-align: 0.34em; margin-left: 0.02em; }
 .kpi-v .iskhero.l1 { font-size: 1.27rem; }
-.kpi-v .iskhero.l2 { font-size: 1.18rem; }
-.kpi-v .iskhero.l3 { font-size: 1.02rem; }
+.kpi-v .iskhero.l2 { font-size: 1.14rem; }
+.kpi-v .iskhero.l3 { font-size: 0.99rem; }
 .kpi-v .iskhero.l4 { font-size: 0.93rem; }
 .kpis-small .kpi-v .iskhero.l1 { font-size: 0.94rem; }
 .kpis-small .kpi-v .iskhero.l2 { font-size: 0.87rem; }

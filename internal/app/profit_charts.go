@@ -3,10 +3,10 @@ package app
 // The Profit page's charts (profit v2, part 4): daily net with its
 // rolling average, the split by activity, fees beside fees as a share
 // of sales, a running line per character, and the rolling trading
-// margin. Each reads one grouped query over the span (day buckets up
-// to 90 days, week buckets beyond) and is drawn here as SVG geometry
-// the template only places: colours come from classes on theme
-// tokens, words from HTML around the marks. A bucket in which some
+// margin. Each reads one grouped query over the span, bucketed at
+// the page's grain (by day or by week), and is drawn here as SVG
+// geometry the template only places: colours come from classes on
+// theme tokens, words from HTML around the marks. A bucket in which
 // sales have no known cost or tax line is hatched on every chart, and
 // the margin line breaks there rather than drawing a partial figure.
 
@@ -32,23 +32,24 @@ const (
 
 // pfChart is one chart's geometry and words.
 type pfChart struct {
-	Title, Sub   string // the finding, with its number; what it covers
-	Label        string // aria-label
-	W, H         int
-	ZeroY        float64
-	Bars         []pfBar
-	Lines        []pfLine
-	Areas        []pfLine // stacked bands, drawn under the lines
-	Gaps         []pfBar
-	Legend       []pfLegend
-	Low, High    string
-	First, Last  string
-	HasGaps      bool
-	ShowZeroLine bool
-	Hits         []pfHit  // one hover column per bucket, for the site's chart tip
-	YTicks       []pfTick // value gridlines and their labels
-	YTicksR      []pfTick // a second value scale, labelled on the right
-	XTicks       []pfTick // date labels under the plot
+	Name, Title, Sub string // the plain name; the finding, with its number; what it covers
+	AxisL, AxisR     string // captions under the left and right scales, where a chart has them
+	Label            string // aria-label
+	W, H             int
+	ZeroY            float64
+	Bars             []pfBar
+	Lines            []pfLine
+	Areas            []pfLine // stacked bands, drawn under the lines
+	Gaps             []pfBar
+	Legend           []pfLegend
+	Low, High        string
+	First, Last      string
+	HasGaps          bool
+	ShowZeroLine     bool
+	Hits             []pfHit  // one hover column per bucket, for the site's chart tip
+	YTicks           []pfTick // value gridlines and their labels
+	YTicksR          []pfTick // a second value scale, labelled on the right
+	XTicks           []pfTick // date labels under the plot
 }
 
 // pfHit is one bucket's hover column: the tip's heading and its rows
@@ -163,9 +164,12 @@ func pfPoints(xs, ys []float64) string {
 
 func (app *Application) buildProfitCharts(ctx context.Context, view *profitView, kind string, ids []int64, names map[int64]string, fromDay string, brokerInMargin bool) (*pfCharts, error) {
 	now := time.Now().UTC()
-	unit := "day"
-	if view.Days > 90 {
-		unit = "week"
+	unit := view.Grain
+	if unit != "day" && unit != "week" {
+		unit = "day"
+		if view.Days > 90 {
+			unit = "week"
+		}
 	}
 	buckets := pfBuckets(fromDay, unit, now)
 	if len(buckets) < 2 {
@@ -296,11 +300,12 @@ func (app *Application) buildProfitCharts(ctx context.Context, view *profitView,
 		}
 		ce := &pfChart{W: pfChartW, H: pfChartH, ZeroY: se.y(0), First: first, Last: last, ShowZeroLine: true,
 			Label: "Running total earned, by character", HasGaps: anyGap, Gaps: gaps(),
+			Name:  "Earned, running total",
 			Title: fmt.Sprintf("Earned %s ISK over %d days", signedISK(total[lastAt]), view.Days)}
 		if len(order) > 1 {
-			ce.Sub = "The running total, split by character: each band is one character's part of it."
+			ce.Sub = ce.Title + " The running total, split by character: each band is one character's part of it."
 		} else {
-			ce.Sub = "The running total over the span."
+			ce.Sub = ce.Title + " The running total over the span."
 		}
 		x := func(i int) float64 { return float64(i)*band + band/2 }
 		for n, id := range order {
@@ -369,16 +374,13 @@ func (app *Application) buildProfitCharts(ctx context.Context, view *profitView,
 			continue
 		}
 		if r.Activity == actUnattributed {
-			// The remainder is a net figure, not income and costs.
-			if v := r.Income - r.Costs; v >= 0 {
-				segs = append(segs, seg{i, r.Activity, v, 0})
-			} else {
-				segs = append(segs, seg{i, r.Activity, 0, -v})
-			}
-		} else {
-			segs = append(segs, seg{i, r.Activity, r.Income, r.Costs})
-			netBy[r.Activity] += r.Income - r.Costs
+			// The remainder is a reconciliation figure, not an
+			// activity: it stays in the KPIs and the By activity
+			// table, and out of this chart.
+			continue
 		}
+		segs = append(segs, seg{i, r.Activity, r.Income, r.Costs})
+		netBy[r.Activity] += r.Income - r.Costs
 		present[r.Activity] = true
 	}
 	for _, s := range segs {
@@ -392,7 +394,8 @@ func (app *Application) buildProfitCharts(ctx context.Context, view *profitView,
 	sa := newPFScale(extent...)
 	ca := &pfChart{W: pfChartW, H: pfChartH, ZeroY: sa.y(0), First: first, Last: last, ShowZeroLine: true,
 		Label: "Income and costs per " + unit + " by activity", HasGaps: anyGap, Gaps: gaps(),
-		Low: signedISK(sa.lo), High: signedISK(sa.hi), Sub: "Income above the line, costs below."}
+		Name: "By activity",
+		Low:  signedISK(sa.lo), High: signedISK(sa.hi), Sub: "Income above the line, costs below."}
 	ups, downs := make([]float64, len(buckets)), make([]float64, len(buckets))
 	actRows := make([][]pfTipRow, len(buckets))
 	for _, s := range segs {
@@ -403,9 +406,6 @@ func (app *Application) buildProfitCharts(ctx context.Context, view *profitView,
 			if l.key == s.act {
 				name = l.label
 			}
-		}
-		if s.act == actUnattributed {
-			name = "Not explained"
 		}
 		if s.inc > 0 {
 			ca.Bars = append(ca.Bars, sa.bar(x, bw, ups[s.i], s.inc, cls, fmt.Sprintf("%s, %s: %s ISK in", label(buckets[s.i]), name, esi.FormatISK(s.inc))))
@@ -436,11 +436,9 @@ func (app *Application) buildProfitCharts(ctx context.Context, view *profitView,
 			}
 		}
 	}
-	if present[actUnattributed] {
-		ca.Legend = append(ca.Legend, pfLegend{Class: pfActivityClass[actUnattributed], Label: "Not explained"})
-	}
 	if top != "" {
 		ca.Title = fmt.Sprintf("%s brought the most: %s ISK net", top, signedISK(topNet))
+		ca.Sub = ca.Title + " " + ca.Sub
 		set.Activities = ca
 	}
 
@@ -469,10 +467,16 @@ func (app *Application) buildProfitCharts(ctx context.Context, view *profitView,
 		sf := newPFScale(hs...)
 		cf := &pfChart{W: pfChartW, H: pfChartH, ZeroY: sf.y(0), First: first, Last: last,
 			Label: "Fees per " + unit + ", and trading fees as a share of sales", HasGaps: anyGap, Gaps: gaps(), Low: "0", High: esi.FormatISK(sf.hi),
+			Name: "Fees and their share of sales", AxisL: "ISK per " + unit,
 			Title: fmt.Sprintf("Paid %s ISK in fees", esi.FormatISK(feeTotal))}
 		if revenue > 0 {
 			cf.Title += fmt.Sprintf("; trading fees took %.1f%% of what sold", tradeFees/revenue*100)
 			cf.Sub = "Bars: fees by kind (left scale). Line: sales tax and broker fees as a share of market sales (right scale), with a gap where nothing sold."
+		}
+		if cf.Sub != "" {
+			cf.Sub = cf.Title + " " + cf.Sub
+		} else {
+			cf.Sub = cf.Title
 		}
 		parts := []struct {
 			class, name string
@@ -514,6 +518,7 @@ func (app *Application) buildProfitCharts(ctx context.Context, view *profitView,
 		if shareHi > 0 {
 			ss := pfScale{lo: 0, hi: shareHi * 1.15}
 			cf.Lines = pfBrokenLines(share, band, ss.y, "pf-share")
+			cf.AxisR = "Share of sales"
 			cf.setYTicksRight(ss.lo, ss.hi, ss.y, pfChartH, func(v float64) string { return fmt.Sprintf("%.1f%%", v) })
 		}
 		cf.setHits(buckets, band, label, feeRows, uncovered)
@@ -554,10 +559,12 @@ func (app *Application) buildProfitCharts(ctx context.Context, view *profitView,
 		sg := newPFScale(hs...)
 		cg := &pfChart{W: pfChartW, H: pfChartH, ZeroY: sg.y(0), First: first, Last: last,
 			Label: "Trading sales and the cost of the goods sold per " + unit, HasGaps: anyGap, Gaps: gaps(),
+			Name:  "Cost of goods sold",
 			Title: fmt.Sprintf("Goods sold cost %s ISK: %.0f%% of covered sales", esi.FormatISK(cost), cost/covRev*100),
 			Sub:   "Trading sales with a known cost. The darker part of each bar is what those goods cost; the rest is gross margin, before tax and fees.",
 			Legend: []pfLegend{{Class: "pf-sold", Label: "Covered sales", Value: esi.FormatISK(covRev)},
 				{Class: "pf-cogs", Label: "Cost of goods", Value: esi.FormatISK(cost)}}}
+		cg.Sub = cg.Title + " " + cg.Sub
 		cogsRows := make([][]pfTipRow, len(buckets))
 		for i, r := range cr {
 			x := float64(i)*band + (band-bw)/2
@@ -660,6 +667,7 @@ func (app *Application) buildProfitCharts(ctx context.Context, view *profitView,
 		dband, _ := pfBand(len(days))
 		cm := &pfChart{W: pfChartW, H: pfChartH, ZeroY: sm.y(0), First: days[0], Last: days[len(days)-1], ShowZeroLine: lo < 0,
 			Label: "Trading margin over the last 30 days", Low: fmt.Sprintf("%.1f%%", sm.lo), High: fmt.Sprintf("%.1f%%", sm.hi),
+			Name: "Trading margin", AxisL: "Margin",
 			Sub:    "On covered sales only. Dashed where some units sold in those 30 days had no known cost or tax line, so the margin covers the rest.",
 			Legend: []pfLegend{{Class: "pf-roll", Label: "Every sale covered"}, {Class: "pf-dash", Label: "Some sales not covered"}}}
 		cm.Lines = append(pfBrokenLines(full, dband, sm.y, "pf-margin"), pfBrokenLines(part, dband, sm.y, "pf-margin pf-margin-part")...)
@@ -670,6 +678,7 @@ func (app *Application) buildProfitCharts(ctx context.Context, view *profitView,
 		if lastShare < 1 {
 			cm.Title += fmt.Sprintf(" on the %.0f%% of units covered", math.Floor(lastShare*100))
 		}
+		cm.Sub = cm.Title + " " + cm.Sub
 		set.Margin = cm
 	}
 	return set, nil

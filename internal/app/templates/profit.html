@@ -10,6 +10,7 @@
 
 {{template "charselector" .Owners}}
 <nav class="mt-modes" aria-label="Span">{{range .Spans}}<a href="{{.Href}}"{{if .Active}} class="active" aria-current="true"{{end}}>{{.Label}}</a>{{end}}</nav>
+{{if .Grains}}<nav class="mt-modes pf-modes-grain" aria-label="Breakdown">{{range .Grains}}<a href="{{.Href}}"{{if .Active}} class="active" aria-current="true"{{end}}>{{.Label}}</a>{{end}}</nav>{{end}}
 
 {{if .HasData}}
 <div class="kpis kpis-small">
@@ -24,18 +25,21 @@
 </div>
 
 {{with .Chart}}
-<div class="mt-chart">
-  <div class="chart-legend">
-    <span class="legend-item"><span class="legend-swatch mt-swatch-sell" aria-hidden="true"></span>Earned, running total</span>
-    {{if .ChangePoints}}<span class="legend-item"><span class="legend-swatch mt-swatch-buy" aria-hidden="true"></span>Net worth change, running total</span>{{end}}
-    <span class="legend-note">{{.Low}} to {{.High}} ISK</span>
-  </div>
-  <svg viewBox="0 0 {{.Width}} {{.Height}}" width="100%" role="img" aria-label="Running totals by day, {{.First}} to {{.Last}}" preserveAspectRatio="none">
-    <line class="mt-zero" x1="0" y1="{{.ZeroY}}" x2="{{.Width}}" y2="{{.ZeroY}}"/>
-    {{if .ChangePoints}}<polyline class="mt-line-buy" points="{{.ChangePoints}}"/>{{end}}
-    <polyline class="mt-line-sell" points="{{.EarnedPoints}}"/>
-  </svg>
-  <div class="mt-chart-dates"><small>{{.First}}</small><small>{{.Last}}</small></div>
+<div class="pf-hero">
+  {{range .Panels}}{{$p := .}}
+  <figure class="pf-hero-panel">
+    <figcaption><strong>{{.Caption}}</strong></figcaption>
+    <div class="pchart pf-plot">
+      <svg viewBox="0 0 {{.W}} {{.H}}" width="100%" role="img" aria-label="{{.Caption}}" preserveAspectRatio="none">
+        {{range .Ticks}}<line class="pf-grid" x1="0" y1="{{.Y}}" x2="{{$p.W}}" y2="{{.Y}}"/>{{end}}
+        {{if .ShowZero}}<line class="mt-zero" x1="0" y1="{{.ZeroY}}" x2="{{.W}}" y2="{{.ZeroY}}"/>{{end}}
+        <polyline class="{{.LineClass}}" points="{{.Points}}"/>
+      </svg>
+      <div class="pf-axis-y" aria-hidden="true">{{range .Ticks}}<span class="pf-y-{{.Pos}}">{{.Label}}</span>{{end}}</div>
+    </div>
+  </figure>
+  {{end}}
+  <div class="mt-chart-dates"><small>{{.First}}</small><small>{{.Mid}}</small><small>{{.Last}}</small></div>
 </div>
 {{end}}
 
@@ -264,10 +268,11 @@
 
 {{define "pfchart"}}
 <figure class="pf-chart">
-  <figcaption><strong>{{.Title}}</strong>{{if .Sub}}<br><small class="mt-reqs">{{.Sub}}</small>{{end}}</figcaption>
+  <figcaption><strong>{{.Name}}</strong>{{if .Sub}}<br><small class="mt-reqs">{{.Sub}}</small>{{end}}</figcaption>
   {{if .Legend}}<div class="chart-legend">{{range .Legend}}<span class="legend-item"><span class="legend-swatch pf-sw {{.Class}}" aria-hidden="true"></span>{{.Label}}{{if .Value}} <small class="mt-reqs">{{.Value}}</small>{{end}}</span>{{end}}{{if .HasGaps}}<span class="legend-item"><span class="legend-swatch pf-sw pf-gap" aria-hidden="true"></span>Partly covered</span>{{end}}</div>{{end}}
   <div class="pchart pf-plot" data-chart-scrub="true">
     <svg{{if lt .H 160}} class="pf-short"{{end}} viewBox="0 0 {{.W}} {{.H}}" width="100%" role="img" aria-label="{{.Label}}, {{.First}} to {{.Last}}" preserveAspectRatio="none">
+      <defs><pattern id="pf-hatch" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="7" height="7" class="pf-hatch-bg"/><line x1="0" y1="0" x2="0" y2="7" class="pf-hatch-line"/></pattern></defs>
       {{range .YTicks}}<line class="pf-grid" x1="0" y1="{{.Y}}" x2="{{$.W}}" y2="{{.Y}}"/>{{end}}
       {{range .Gaps}}<rect class="{{.Class}}" x="{{.X}}" y="{{.Y}}" width="{{.W}}" height="{{.H}}"/>{{end}}
       {{range .Areas}}<polygon class="{{.Class}}" points="{{.Points}}"/>{{end}}
@@ -281,5 +286,6 @@
     <div class="ctip" hidden></div>
   </div>
   <div class="pf-axis-x" aria-hidden="true">{{range .XTicks}}<span class="{{.Class}} pf-x-{{.Pos}}">{{.Label}}</span>{{end}}</div>
+  {{if or .AxisL .AxisR}}<div class="pf-axis-caps" aria-hidden="true"><span>{{.AxisL}}</span><span>{{.AxisR}}</span></div>{{end}}
 </figure>
 {{end}}

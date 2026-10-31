@@ -2223,6 +2223,12 @@ ul.brief-cards {
 html[data-theme="light"] .brief-card.sev-critical { --brief-tint: #dfbab2; }
 html[data-theme="light"] .brief-card.sev-warning { --brief-tint: #e6cfa0; }
 html[data-theme="light"] .brief-card.sev-info { --brief-tint: #b2cddd; }
+/* Theme glow on the KPI and briefing cards: the theme accent
+   pools at the card's base and fades to clear by 70% of its
+   height. A background-image layer over each surface's own
+   tint, so the briefing severity tints keep their color. */
+.kpi, .card[data-widget="glance"] .kpi, .card[data-widget="briefing"] .brief-card { background-image: linear-gradient(to top, color-mix(in srgb, var(--accent) 20%, transparent), transparent 70%); }
+.home-custom .card[data-widget="glance"] .kpi, .home-custom .card[data-widget="briefing"] .brief-card { background-image: linear-gradient(to top, color-mix(in srgb, var(--accent) 20%, transparent), transparent 70%); }
 
 /* Briefing decks: one deck per kind, one painted card per deck.
    The face card sits in flow over two empty shells (the deck's

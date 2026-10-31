@@ -1150,14 +1150,12 @@ h3 + .tw > table, h3 + table {
    keyboard focus, so panels carry no prose of their own. --- */
 .info-tip { position: relative; display: inline-flex; vertical-align: middle; margin-left: 0.4rem; cursor: help; outline: none; }
 .info-tip-dot {
-  display: inline-flex; align-items: center; justify-content: center;
-  width: 0.95rem; height: 0.95rem; border-radius: 50%;
-  background: color-mix(in srgb, var(--accent) 55%, transparent);
-  color: #fff; font-family: Georgia, "Times New Roman", serif; font-style: italic; font-weight: 700;
-  font-size: 0.68rem; line-height: 1; flex: none;
-  transition: background 120ms ease;
+  display: block;
+  width: 0.92rem; height: 0.92rem; flex: none;
+  color: color-mix(in srgb, var(--accent) 65%, var(--gold));
+  transition: color 120ms ease;
 }
-.info-tip:hover .info-tip-dot, .info-tip:focus-visible .info-tip-dot, .info-tip:focus-within .info-tip-dot { background: var(--accent); }
+.info-tip:hover .info-tip-dot, .info-tip:focus-visible .info-tip-dot, .info-tip:focus-within .info-tip-dot { color: var(--accent); }
 .info-tip-pop {
   position: absolute; left: 50%; bottom: calc(100% + 0.55rem); z-index: 70;
   width: max-content; max-width: 19rem;
@@ -1202,6 +1200,15 @@ h3 + .tw > table, h3 + table {
    the button centers on its own heading — not on a card whose
    heading follows an intro paragraph. */
 :is(h2, h3, h4):has(> .foldbtn) { position: relative; padding-right: 2.6rem; }
+/* A quiet link riding a section head's right end, where a fold
+   button would sit: the wallet Balance head carries one to the
+   Profit Analysis page. */
+:is(h2, h3, h4):has(> .head-link) { position: relative; }
+.head-link {
+  position: absolute; right: 0.7rem; top: 50%; transform: translateY(-50%);
+  font-size: 0.85rem; font-weight: 600; letter-spacing: 0.02em;
+  white-space: nowrap;
+}
 
 /* --- buttons --- Flat frosted glass: a translucent tint of the
    active accent under a quiet two-stop gradient, a hairline edge,

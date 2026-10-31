@@ -5122,7 +5122,8 @@
 // in CSS from its server-rendered pair. Two surfaces carry
 // figures with no compact form in the markup: the appraisal
 // buy card (its raw total rides the copy button) and the home
-// KPI band (the owner's clipped liquid-wallets figure). The
+// KPI band (the owner's clipped liquid-wallets figure; its
+// rendered money figure carries the value in data-v). The
 // compact format mirrors formatCompactISK in the appraisal
 // handler exactly; the exact figure always stays on the card,
 // and leaving the phone widths restores the original figures.
@@ -5161,18 +5162,17 @@
       }
     }
     document.querySelectorAll(".home-grid .kpi-v").forEach(function (v) {
-      var node = v.firstChild;
-      if (!node || node.nodeType !== 3) return;
-      var m = /^\s*([\d,]+(?:\.\d+)?)\s*$/.exec(node.textContent);
-      if (!m) return;
-      var num = parseFloat(m[1].replace(/,/g, ""));
+      var fig = v.querySelector(".iskfig[data-v]");
+      if (!fig) return;
+      var num = parseFloat(fig.getAttribute("data-v"));
       if (!isFinite(num) || num < 1e6) return;
-      var origText = node.textContent;
-      var line = exactLine("kpi-exact", m[1] + " ISK");
-      node.textContent = compactISK(num) + " ";
+      var hidden = fig.querySelector(".visually-hidden");
+      var line = exactLine("kpi-exact", hidden ? hidden.textContent : "");
+      var compact = document.createTextNode(compactISK(num) + " ");
+      fig.parentNode.replaceChild(compact, fig);
       v.parentNode.insertBefore(line, v.nextSibling);
       undos.push(function () {
-        node.textContent = origText;
+        compact.parentNode.replaceChild(fig, compact);
         line.parentNode.removeChild(line);
       });
     });

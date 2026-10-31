@@ -2073,6 +2073,21 @@ td.pos, .pos { color: #28c76f; }
 .kpi-trend { font-size: 0.7rem; vertical-align: 0.15em; cursor: default; }
 .kpi-trend.up { color: var(--success); }
 .kpi-trend.down { color: var(--danger); }
+/* The house money figure: the grouped integer at full size with
+   its cents as a superscript, and no unit (the surface's label
+   or column header carries it). A hero figure steps down in
+   size as its integer grows, so it always fits its card; the
+   surface's plain size is the baseline for ordinary figures. */
+.iskfig { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.iskfig .dec { font-size: 0.58em; line-height: 0; vertical-align: 0.62em; margin-left: 0.03em; }
+.kpi-v .iskhero.l1 { font-size: 1.27rem; }
+.kpi-v .iskhero.l2 { font-size: 1.18rem; }
+.kpi-v .iskhero.l3 { font-size: 1.02rem; }
+.kpi-v .iskhero.l4 { font-size: 0.93rem; }
+.kpis-small .kpi-v .iskhero.l1 { font-size: 0.94rem; }
+.kpis-small .kpi-v .iskhero.l2 { font-size: 0.87rem; }
+.kpis-small .kpi-v .iskhero.l3 { font-size: 0.76rem; }
+.kpis-small .kpi-v .iskhero.l4 { font-size: 0.69rem; }
 .kpi-sub { font-size: 0.75rem; color: var(--muted); }
 .kpi-bar { display: block; height: 4px; background: #1d1510; border-radius: 2px; overflow: hidden; }
 .kpi-bar > span { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--sch-end, #d63c14), var(--accent)); }
@@ -2339,7 +2354,7 @@ html[data-theme="light"] .brief-card:hover, html[data-theme="light"] .brief-card
    search row's rule above and the header rule below (the search
    row's bottom margin is zero for the same reason). */
 .fleet-table thead th { padding-top: 0.75rem; padding-bottom: 0.75rem; }
-.fleet-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+.fleet-table .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .fleet-row { cursor: pointer; }
 .pilot { position: relative; display: inline-block; vertical-align: middle; }
 .pilot .dot {

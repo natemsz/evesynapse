@@ -282,6 +282,10 @@ func linkFuncMap() template.FuncMap {
 		"structureLink":  structureLink,
 		"placeLink":      placeLink,
 		"skillLevel":     skillLevel,
+		// Not links: a formatted ISK amount in the house money
+		// format (see core_iskfig.go).
+		"iskFig":  iskFig,
+		"iskHero": iskHero,
 		// Not a link: an amount's sign as a class, "neg" or "pos".
 		"signClass": signClass,
 		// Not a link: how a stored time is written out (core_timestamps.go).

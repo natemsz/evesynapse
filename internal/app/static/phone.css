@@ -248,6 +248,12 @@
     font-weight: 600;
     color: var(--text-bright);
   }
+  /* A numeric cell is a figure, not a two-up fact: it takes the
+     card's full width and never wraps its unit onto a second line. */
+  #main-content table.cards-on > tbody > tr > td.num {
+    grid-column: 1 / -1;
+    white-space: nowrap;
+  }
   #main-content table.cards-on > tbody > tr > td[data-label]:not(:first-child)::before {
     content: attr(data-label);
     display: block;

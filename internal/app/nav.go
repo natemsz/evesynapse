@@ -95,7 +95,6 @@ var sectionNav = map[string][]navEntry{
 		{"/character/", "Overview", []string{"character.html"}},
 		{"/characters/", "Characters", []string{"characters.html"}},
 		{"/assets/", "Assets", []string{"assets.html"}},
-		{"/profit/", "Profit", []string{"profit.html", "profit_blueprint.html"}},
 		{"/killmails/", "Killmails", []string{"killmails.html"}},
 	},
 	"fitting": {},
@@ -110,6 +109,7 @@ var sectionNav = map[string][]navEntry{
 		{"/market/trends/", "Trends", []string{"market_trends.html"}},
 		{"/market/lp/", "LP Store", []string{"market_lp.html"}},
 		{"/market/baskets/", "Baskets", []string{"market_baskets.html", "market_basket.html"}},
+		{"/profit/", "Profit Analysis", []string{"profit.html", "profit_blueprint.html"}},
 	},
 	"corporation": {
 		{"/corporations/", "Overview", []string{"corporations.html"}},
@@ -168,11 +168,36 @@ func sectionTabsFor(links map[string][]navLink, section string) []navLink {
 }
 
 // navGroup is one cluster of a grouped section's pages. Membership
-// is by href; the order of pages inside a group is the section's
-// nav order, so module registration still decides it.
+// and order are both by href: the pages inside a group render in
+// the order the group lists them, so the map is the one place a
+// cluster's shape is decided, not module registration order.
 type navGroup struct {
 	Label string
 	Hrefs []string
+}
+
+// orderGroup orders one group's links by the group's declared
+// href order. A link whose href the group does not declare (the
+// coverage pins say there are none) keeps its place after the
+// declared ones, in nav order.
+func orderGroup(links []navLink, hrefs []string) []navLink {
+	rank := make(map[string]int, len(hrefs))
+	for i, h := range hrefs {
+		rank[h] = i
+	}
+	out := slices.Clone(links)
+	slices.SortStableFunc(out, func(a, b navLink) int {
+		ra, ok := rank[baseHref(a.Href)]
+		if !ok {
+			ra = len(hrefs)
+		}
+		rb, ok := rank[baseHref(b.Href)]
+		if !ok {
+			rb = len(hrefs)
+		}
+		return ra - rb
+	})
+	return out
 }
 
 // sectionGroups clusters a section's pages for the tab strip
@@ -191,7 +216,7 @@ type navGroup struct {
 var sectionGroups = map[string][]navGroup{
 	"pilot": {
 		{"Character", []string{"/character/", "/characters/", "/skills/plans", "/killmails/"}},
-		{"Assets & Money", []string{"/assets/", "/wallet/", "/profit/"}},
+		{"Assets & Money", []string{"/assets/", "/wallet/"}},
 		{"Comms", []string{"/mail/", "/calendar/", "/contacts/"}},
 	},
 	"industry": {
@@ -201,10 +226,10 @@ var sectionGroups = map[string][]navGroup{
 	"market": {
 		{"Browse", []string{"/market/", "/contracts/search/", "/market/lp/"}},
 		{"Tools & Analysis", []string{"/market/trends/", "/market/baskets/", "/market/ideas/", "/market/scanner/", "/market/tradefinder/", "/market/restock/", "/market/leaderboard/"}},
-		{"My Finances", []string{"/orders/", "/contracts/"}},
+		{"My Finances", []string{"/orders/", "/contracts/", "/profit/"}},
 	},
 	"corporation": {
-		{"People", []string{"/corporations/", "/corporations/members/", "/groups/", "/corporations/killmails/"}},
+		{"People", []string{"/corporations/", "/corporations/members/", "/corporations/killmails/", "/groups/"}},
 		{"Assets & Money", []string{"/corporations/wallets/", "/corporations/orders/", "/corporations/assets/", "/corporations/structures/"}},
 		{"Programs", []string{"/doctrines/", "/doctrines/fits/", "/srp/"}},
 		{"Comms & Admin", []string{"/discord/servers", "/corporations/settings/"}},
@@ -233,7 +258,7 @@ var navGroupIcons = map[string]template.HTML{
 // sectionTabsGrouped is a page's tab strip data: for an ungrouped
 // section, its pages and no sub-row. For a grouped one, the strip
 // shows the groups — labelled by cluster, linking at the cluster's
-// first page in nav order, active when one of its pages is — and
+// first page in the group's declared order, active when one of its pages is — and
 // the sub-row shows the active group's pages. A group with no
 // compiled-in pages is skipped. A strip the group map does not
 // cover exactly falls back to the flat strip whole, so a page no
@@ -262,7 +287,7 @@ func sectionTabsGrouped(links map[string][]navLink, section string) ([]navLink, 
 	}
 	var groupTabs, sub []navLink
 	for gi, g := range groups {
-		pages := buckets[gi]
+		pages := orderGroup(buckets[gi], g.Hrefs)
 		if len(pages) == 0 {
 			continue
 		}
@@ -283,7 +308,8 @@ func sectionTabsGrouped(links map[string][]navLink, section string) ([]navLink, 
 
 // navGroupsFor is the sidebar's view of sectionGroups: each
 // grouped section's flat links bucketed under their group
-// headings, in map order, pages inside a group in nav order —
+// headings, in map order, pages inside a group in the group's
+// declared order —
 // the tab strip's grouping mirrored, not a second opinion of
 // it. A section the map does not cover exactly (a page no
 // group claims, a group with no compiled-in pages) is left
@@ -321,7 +347,7 @@ func navGroupsFor(links map[string][]navLink) map[string][]module.NavGroup {
 			if len(buckets[gi]) == 0 {
 				continue
 			}
-			menu = append(menu, module.NavGroup{Label: g.Label, Icon: navGroupIcons[g.Label], Links: buckets[gi]})
+			menu = append(menu, module.NavGroup{Label: g.Label, Icon: navGroupIcons[g.Label], Links: orderGroup(buckets[gi], g.Hrefs)})
 		}
 		if len(menu) < 2 {
 			continue
@@ -383,7 +409,7 @@ func sectionLanding(links map[string][]navLink, section string) string {
 
 // sectionGroupTabs is a grouped section's group tabs without the
 // tab strip's active-page requirement: each group's first page
-// in nav order, labelled by the group. Ungrouped sections, and
+// in the group's declared order, labelled by the group. Ungrouped sections, and
 // group maps that do not cover the section exactly, return nil
 // (the sheet then carries the section's landing alone).
 func sectionGroupTabs(links map[string][]navLink, section string) []navLink {
@@ -411,7 +437,7 @@ func sectionGroupTabs(links map[string][]navLink, section string) []navLink {
 		if len(buckets[gi]) == 0 {
 			continue
 		}
-		gt := navLink{Href: baseHref(buckets[gi][0].Href), Label: g.Label}
+		gt := navLink{Href: baseHref(orderGroup(buckets[gi], g.Hrefs)[0].Href), Label: g.Label}
 		for _, p := range buckets[gi] {
 			if p.Active {
 				gt.Active = true

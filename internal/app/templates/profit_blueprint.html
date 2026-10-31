@@ -1,10 +1,10 @@
-{{define "title"}}{{with .ProfitBlueprint}}{{.Name}} · {{end}}Profit{{end}}
+{{define "title"}}{{with .ProfitBlueprint}}{{.Name}} · {{end}}Profit Analysis{{end}}
 {{define "pagetitle"}}<h1><span class="gt">{{with .ProfitBlueprint}}{{.Name}}{{else}}Blueprint{{end}}</span></h1>{{end}}
 {{define "pagetabs"}}{{template "sectiontabs" .}}{{end}}
 {{define "content"}}
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
 {{with .ProfitBlueprint}}
-<p><small><a href="{{.Back}}">Back to Profit</a>. Each delivered job, what it made and what became of it. Sales are matched to a job's output oldest first; where that isn't right, say what happened.</small></p>
+<p><small><a href="{{.Back}}">Back to Profit Analysis</a>. Each delivered job, what it made and what became of it. Sales are matched to a job's output oldest first; where that isn't right, say what happened.</small></p>
 {{if .KillLost}}<p class="pf-note"><small>Your killmails show {{.KillLost}} of this item lost since these jobs delivered; {{.KillMarked}} are marked lost here. Mark any that were from these jobs below.</small></p>{{end}}
 {{if .Jobs}}
 <div class="tw">
@@ -56,7 +56,7 @@
   </tbody>
 </table>
 </div>
-<p><small>Prices in ISK. ESI doesn't report the materials a job used or the ME it ran at: they come from the recipe, the ME the blueprint showed when the job delivered, and the structure bonus you set on the Profit page.</small></p>
+<p><small>Prices in ISK. ESI doesn't report the materials a job used or the ME it ran at: they come from the recipe, the ME the blueprint showed when the job delivered, and the structure bonus you set on the Profit Analysis page.</small></p>
 {{else}}
 <p><small>No delivered jobs for this blueprint in these books.</small></p>
 {{end}}

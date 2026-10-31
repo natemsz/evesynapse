@@ -80,7 +80,9 @@ td.mt-reqs { max-width: 12rem; }
    market.js animates briefly, and indentation comes from the
    nesting itself. */
 .mb-layout { display: grid; grid-template-columns: minmax(13rem, 21rem) minmax(0, 1fr); gap: 1rem; align-items: start; }
-.mb-tree { max-height: 70vh; overflow-y: auto; border-right: 1px solid var(--box-edge); padding-right: 0.5rem; scrollbar-width: thin; scrollbar-color: var(--muted) transparent; }
+.mb-tree { position: relative; max-height: 70vh; overflow-y: auto; border-right: 1px solid var(--box-edge); padding-left: 6px; padding-right: 0.5rem; scrollbar-width: thin; scrollbar-color: var(--muted) transparent; }
+.mb-guides { position: absolute; top: 0; left: 0; pointer-events: none; }
+.mb-guides path { fill: none; stroke: var(--gold); opacity: 0.26; stroke-width: 1; }
 .mb-tree::-webkit-scrollbar { width: 0.45rem; }
 .mb-tree::-webkit-scrollbar-track { background: transparent; }
 .mb-tree::-webkit-scrollbar-thumb { background: var(--muted); border-radius: var(--r-xs); }

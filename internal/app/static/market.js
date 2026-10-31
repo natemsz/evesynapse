@@ -102,6 +102,60 @@
     if (reg && region) reg.value = region;
   }
 
+  // drawGuides traces the tree's contour as one stroked SVG
+  // path: down beside each visible row, stepping right 16px
+  // per ancestor list, with a rounded turn wherever the path
+  // enters or leaves an open branch. It redraws from whatever
+  // rows are visible, so a closed branch leaves no dip behind
+  // and a fetched level gains one as it unfolds.
+  function drawGuides() {
+    var nav = document.querySelector(".mb-tree");
+    if (!nav) return;
+    var svg = nav.querySelector(".mb-guides");
+    var path = svg ? svg.querySelector("path") : null;
+    if (!svg || !path) return;
+    var navR = nav.getBoundingClientRect();
+    svg.setAttribute("width", nav.scrollWidth);
+    svg.setAttribute("height", nav.scrollHeight);
+    svg.setAttribute("viewBox", "0 0 " + nav.scrollWidth + " " + nav.scrollHeight);
+    var stops = [];
+    var rows = nav.querySelectorAll(".mb-row");
+    for (var i = 0; i < rows.length; i++) {
+      var rr = rows[i].getBoundingClientRect();
+      if (rr.height === 0) continue;
+      var depth = 0, el = rows[i].parentElement;
+      while (el && el !== nav) {
+        if (el.tagName === "UL") depth++;
+        el = el.parentElement;
+      }
+      stops.push({
+        x: 0.5 + (depth - 1) * 16,
+        top: rr.top - navR.top + nav.scrollTop,
+        bottom: rr.bottom - navR.top + nav.scrollTop
+      });
+    }
+    if (!stops.length) {
+      path.setAttribute("d", "");
+      return;
+    }
+    var R = 5, d = "M " + stops[0].x + " " + stops[0].top;
+    var cx = stops[0].x, cy = stops[0].top;
+    for (var i = 0; i < stops.length; i++) {
+      var s = stops[i], next = stops[i + 1];
+      var endY = s.bottom;
+      if (next && next.x !== s.x) endY = (s.bottom + next.top) / 2 - R;
+      if (endY > cy) { d += " L " + cx + " " + endY; cy = endY; }
+      if (next && next.x !== s.x) {
+        var sy = (s.bottom + next.top) / 2, dir = next.x > cx ? 1 : -1;
+        d += " Q " + cx + " " + sy + " " + (cx + dir * R) + " " + sy;
+        d += " L " + (next.x - dir * R) + " " + sy;
+        d += " Q " + next.x + " " + sy + " " + next.x + " " + (sy + R);
+        cx = next.x; cy = sy + R;
+      }
+    }
+    path.setAttribute("d", d);
+  }
+
   // slide unfolds or folds one tree level: a 130ms height
   // animation, nothing else on the page moves.
   function slide(ul, opening, li) {
@@ -111,17 +165,23 @@
     if (!ul.animate) {
       ul.hidden = !opening;
       if (!opening) li.classList.remove("open");
+      drawGuides();
       return;
     }
     if (opening) ul.hidden = false;
     var from = opening ? "0px" : ul.scrollHeight + "px";
     var to = opening ? ul.scrollHeight + "px" : "0px";
     var anim = ul.animate([{ height: from }, { height: to }], { duration: 130, easing: "ease-out" });
+    (function track() {
+      drawGuides();
+      if (anim.playState === "running") requestAnimationFrame(track);
+    })();
     anim.finished.then(function () {
       if (!opening) {
         ul.hidden = true;
         li.classList.remove("open");
       }
+      drawGuides();
     }, function () {});
   }
 
@@ -211,6 +271,11 @@
     delete form.dataset.live;
     loadItems("/market/?" + params.toString(), mode);
   }, true);
+
+  document.addEventListener("evesynapse:content-ready", drawGuides);
+  window.addEventListener("resize", drawGuides);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(drawGuides);
+  drawGuides();
 
   // The volume field applies after a short pause in typing.
   var typing = null;

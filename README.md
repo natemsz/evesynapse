@@ -1572,8 +1572,10 @@ result.
 ## Look & feel
 
 The UI echoes the 2013 EveSynapse theme — the original planet/nebula
-wallpaper, teal-blue accents have been changed to molten-ember reminiscent of the Dominion expansion from 2009, one which holds special meaning to us as it is the year our characters were born.
-(`#326b8c`), translucent dark nav and header panels over the art — rebuilt with a
+wallpaper, its teal-blue accents (#326b8c) changed to the molten ember
+of EVE's Dominion expansion (2009), a year that holds special meaning
+to us as it is the year our characters were born, and translucent dark
+nav and header panels over the art — rebuilt with a
 single dependency-free stylesheet (`internal/app/static/style.css`): no Bootstrap,
 no jQuery, it's not 2013 anymore :), no external fonts, responsive down to phone widths.
 

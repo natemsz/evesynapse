@@ -43,6 +43,10 @@ Contact: nate@synap6.io or in-game 'Burzrujat'
 - `cmd/releasesign/` — the maintainer's tool for release signing:
   makes the release key, signs the update manifests in the release
   job, checks a signature by hand. Never deployed either
+- `cmd/residue-corpus/` — builds labeled training examples for the
+  intel residue reader from production exports (the residue calls
+  and the reports they fed), with labels taken only from verified
+  outcomes. A maintainer tool; never deployed
 - `cmd/mkicons/` — draws the raster icons from the logo's SVG files in
   `internal/app/static/`: `logo.svg` (the mark, shown in the page
   header), `icon.svg` (the app icon) and `favicon.svg` (the simplified
@@ -82,6 +86,8 @@ Contact: nate@synap6.io or in-game 'Burzrujat'
   | `economy_` | wallet, orders, contracts |
   | `planets_` | planetary industry |
   | `comms_` | mail, calendar, contacts |
+  | `profit_` | the profit pages: per-item trading and per-blueprint industry profit and loss, and their charts |
+  | `map_` | the star map: systems, routes, character and intel layers |
   | `corp_` | corporation pages and special-interest groups |
   | `ops_` | the op calendar and attendance |
   | `market_` | market pages, scanners, price guide, restock |
@@ -114,7 +120,19 @@ Contact: nate@synap6.io or in-game 'Burzrujat'
   training speed, ordering targets with their prerequisites, the
   remap advisor. Pure; the skill pages supply the skill graph
 - `cmd/modbuild/`, `internal/app/modulecatalog/` — the module build tool and the list of every module it chooses from
-- `internal/app/scanner/`, `tradefinder/`, `leaderboard/`, `restock/` — the market page modules, each a page over stored rows read through `module.Deps`
+- `internal/app/swarm/` — the Swarm Cache module: the signed,
+  spot-checked sharing of public data between instances (see
+  "Swarm Cache" below)
+- `internal/app/scanner/`, `tradefinder/`, `leaderboard/`, `restock/`, `appraise/` — the market page modules, each a page over stored rows read through `module.Deps`
+- `internal/app/intel/` — the Intel module: the killboard, the d-scan
+  and intel parsers' pages, intel channels, the synthesized feed and
+  workbench, pilot dossiers, and the public wars, incursions and
+  faction-warfare pages. The parsers and synthesis live in core and
+  the `intelanalyze`/`intelchat` packages; the module is their pages
+- `internal/app/tradeideas/` — the Trade Ideas module: the page and
+  the stored model answers the worker refreshes
+- `internal/app/piplanner/` — the PI Planner module: colony chain
+  layouts over the SDE, beside the core colonies pages
 - `internal/htmlsanitize/` — makes text written by other players safe to show inside a page (mail, pilot bios, descriptions)
 - `internal/app/wallet/`, `mail/`, `calendar/`, `contacts/`, `orders/` (module id `market`), `contracts/` — the pilot economy and comms pages
 - `internal/balancechart/` — the balance-over-time chart builder shared by the wallet pages, the home net-worth card and the corporation wallets
@@ -182,20 +200,40 @@ see "Dev login" below. Never deploy the dev build.
 The app auto-loads `./.env` at startup (keys already set in the real
 environment win). Then open <http://localhost:8080>:
 
-- `/` — home; signed out it shows the EVE SSO login button, signed in
-  it shows the character sheet (identity, wallet, skills, skill queue,
-  plus a "Currently" block — system/station, active ship, online
-  state — and a live countdown to the training skill's finish)
+- `/` — home; signed out it shows the public landing page (what the
+  app does, sign-up, a demo with sample characters to look around
+  with, and the public tools), signed in it shows your home: a
+  customizable overview of widgets over every linked character
+  (the briefing, your pilots at a glance, net worth, market,
+  industry and more), in the layout the account chooses for itself
+- `/map/` — the map of New Eden: systems and their connections,
+  jump routes, your characters' locations, and the intel your
+  channels carry laid over it (requires login)
 - `/character/` — character live state for one character: online
   status and login history, location, active ship, jump fatigue,
   active implants, home/jump clones with their implants (requires
   login; `esi-location.*`, `esi-clones.*`, `esi-characters.read_fatigue.v1`)
-- `/fittings/` — saved ship fittings grouped by slot category
-  (requires login; `esi-fittings.read_fittings.v1`)
+- `/characters/` — every character linked to the account in one
+  list, with the way into each one's pages (requires login)
+- `/fittings/` — the Ship Workbench: the fitting simulator. Build
+  a fit on any hull and the dogma engine works out its statistics
+  (requires login)
+- `/fittings/saved/` — My Loadouts: your saved fittings, from the
+  game and from the workbench (requires login;
+  `esi-fittings.read_fittings.v1`)
+- `/fittings/public/` — the Public Loadouts Browser: fits other
+  players have published, with ratings
 - `/killmails/` — the 50 most recent kills/losses with KILL/LOSS
   badges, final-blow attacker, involved count and an estimated
   destroyed+dropped value (requires login;
   `esi-killmails.read_killmails.v1`; details warmed by the worker)
+- `/mail/` — EVE mail: read and search your characters' mail and
+  compose from the page (sending takes `esi-mail.send_mail.v1`;
+  requires login)
+- `/calendar/` — the calendar: upcoming events for your characters
+  and corporations, and the op calendar (requires login)
+- `/contacts/` — contacts and their standings across your
+  characters (requires login)
 - `/corporations/` — public corporation overviews for the user's
   characters' corporations (name, CEO, alliance, tax, home station;
   public ESI, cached per CCP's `Expires` header)
@@ -227,17 +265,46 @@ environment win). Then open <http://localhost:8080>:
   render from worker-warmed snapshots only, and show a plain
   "needs the role" state when ESI refused the dataset for want of
   an in-game role — see the caching section below.
+- `/doctrines/` — the corporation's doctrines: the fleet
+  compositions it flies (requires a character in the corporation)
+- `/doctrines/fits/` — Corporate Loadouts: the fittings behind
+  the doctrines (requires login)
+- `/srp/` — Ship Replacement (SRP): replacement requests and
+  their handling (requires login)
+- `/groups/` — Groups: the lists of characters a corporation's
+  or alliance's directors keep by hand, used by the Discord role
+  rules and more (see "Discord"; requires login)
+- `/corporations/settings/` — the corporation's own settings:
+  its Discord servers and related housekeeping (requires login)
 - `/auth/eve` — starts EVE SSO login (also "Link another character")
 - `/auth/callback` — OAuth2 callback (see SSO flow below)
 - `/auth/logout` — destroys the session (POST; the sidebar's Sign out button)
-- `/admin/` — accounts and the characters linked to them: totals, the
-  newest accounts, and one account looked up by any of its characters
-  (a search box that suggests as you type), with each character's
-  sign-in state and what it granted. Nothing about data freshness:
-  that is the Sync page (requires an admin account; see
+- `/admin/` — the admin page: an analytics tab of read-only site
+  statistics and charts, an accounts tab (accounts and the
+  characters linked to them: totals, the newest accounts, and one
+  account looked up by any of its characters, a search box that
+  suggests as you type, with each character's sign-in state and
+  what it granted), and a notices tab. Nothing about data
+  freshness: that is the Sync tab (requires an admin account; see
   `EVE_ADMIN_CHARACTER_IDS`)
 - `/assets/` — asset browser: every stack grouped by location for the
   signed-in user's characters (requires login; `esi-assets.read_assets.v1`)
+- `/wallet/` — the character wallet: balance, journal and
+  transactions, with the balance over time as a chart (requires
+  login; `esi-wallet.read_character_wallet.v1`)
+- `/orders/` — your characters' market orders, open and finished
+  (requires login)
+- `/contracts/` — your characters' contracts and what is inside
+  them (requires login)
+- `/contracts/search/` — search public contracts across New Eden
+  (requires login)
+- `/profit/` — profit: per-item trading profit and loss on a pooled
+  FIFO cost basis (sales tax paired, broker fees tied, and typed
+  gaps where a cost is not known), per-blueprint industry profit
+  three ways (realized, at the prices of their time, and rerun at
+  today's prices), LP earnings, and the chart set: running total by
+  character, fees with their share of sales, and cost of goods sold
+  (requires login)
 - `/market/` — market browser: item search (local name cache + exact
   ESI resolution), guide prices, and best/top orders for The Forge,
   Domain, Sinq Laison, Heimatar and Metropolis (requires login; all
@@ -254,10 +321,50 @@ environment win). Then open <http://localhost:8080>:
   without the link, or with no estimate on record, prices its base
   item and says so (no login required; signed-in appraisals are saved
   and shareable by link)
+- `/market/scanner/` — the Spread Scanner: buy and sell spreads
+  from EveSynapse's own swept order books, ranked and stored at
+  sweep time (requires login)
+- `/market/trends/` — Market Trends: price and volume movement
+  from the stored daily history (requires login)
+- `/market/lp/` — the LP Store browser: every loyalty point
+  store's offers, what each costs in LP, ISK and required items,
+  and what the reward is worth (requires login)
+- `/market/baskets/` — Market Baskets: saved groups of items,
+  watched and priced together (requires login)
+- `/market/ideas/` — Trade Ideas: trade opportunities written by
+  a model from the spread scanner's rows (needs a model
+  configured: `MODEL_API_KEY` or the Cloudflare settings under
+  Configuration; otherwise the page shows its empty state)
+- `/market/tradefinder/` — the Tradefinder: routes between
+  stations with the profit worked out from stored order books
+  (requires login)
+- `/market/leaderboard/` — Top Stations: stations ranked by open
+  orders and the ISK on their books (requires login)
+- `/market/restock/` — the Restock Planner: what a market or a
+  list needs bought to be whole again, and what it costs
+  (requires login)
+- `/items/` — the Item Browser: the item database, every type
+  with its group, attributes and market summary
 - `/skills/` — full skill sheet: total/unallocated SP, level-V count,
   the complete training queue, and every known skill grouped by
   category with per-group SP subtotals (requires login;
   `esi-skills.read_skills.v1` + `esi-skills.read_skillqueue.v1`)
+- `/skills/plans` — Skill Plans: build a training plan (or take
+  one from a fit) with prerequisites ordered for you and the
+  training time worked out (requires login)
+- `/industry/` — Blueprints: your blueprint library, originals
+  and copies with their research (requires login)
+- `/industry/jobs/` — My Jobs: your industry jobs, running and
+  delivered (requires login)
+- `/industry/mining/` — the Mining Ledger: what your characters
+  mined, by day and by item (requires login)
+- `/planner/` — the Build Planner: pick a product and see the
+  tree of everything it needs, what you already hold, and the
+  price of the rest (requires login)
+- `/planets/` — My Colonies: your planetary colonies and what
+  they extract and produce (requires login)
+- `/industry/pi/` — the PI Planner: lay out a colony chain on
+  paper before committing to it in the game (requires login)
 - `/admin/sync/` — the Admin page's Sync tab: the worker and the
   data: the last cycle in figures (time, fetches against the
   allowance, characters by tier, ESI's rate-limit budgets), what
@@ -281,6 +388,23 @@ environment win). Then open <http://localhost:8080>:
   (systems held, pilots, kills and victory points) and the most
   contested front-line systems with occupier/owner factions
   (requires login; public ESI)
+- `/intel/kills/` — the Killboard: kills and losses across New
+  Eden from the stored killmail data (requires login)
+- `/intel/scan/` — the D-Scan Parser: paste a directional scan
+  (or local, probe or overview text) and get the interpreted
+  reading: what is there and on grid, whose ships they likely
+  are, and the composition at a glance (requires login)
+- `/intel/channels/` — Intel Channels: the channels you run or
+  belong to. Reports posted to a channel are parsed and
+  synthesized as they land (requires login)
+- `/intel/feed/` — the Intel Feed: the synthesized reports from
+  every channel you can read, newest first, each element linking
+  deeper (to the pilot, the system on the map, related scans)
+  (requires login)
+- `/intel/workbench/` — the Intel Workbench: one pilot or gang
+  under the microscope: the synthesized headline, their
+  activity, sightings and threads (requires login)
+- `/license/` — the project's license and legal notices
 - `/healthz` — `ok` (200) when the database answers and the background
   worker is running; 503 with one line per problem otherwise
 - `/dev-login` — dev-only fake sign-in, registered **only** when
@@ -296,6 +420,7 @@ gaps; real environment variables win over the file):
 | `EVE_CLIENT_ID` | yes | — | EVE SSO application client ID |
 | `EVE_CLIENT_SECRET` | yes | — | EVE SSO application client secret |
 | `EVE_CALLBACK_URL` | yes | `http://localhost:8080/auth/callback` | OAuth2 redirect URI; must match the callback registered at developers.eveonline.com character-for-character |
+| `EVE_SSO_REVOKE_URL` | no | CCP's endpoint | Token revocation endpoint (RFC 7009); only changed to point the unlink flow's "revoke at EVE" call somewhere else, for example in tests |
 | `DATABASE_URL` | yes | `postgres://evesynapse@localhost:5432/evesynapse?sslmode=disable` | PostgreSQL connection URL |
 | `ADDR` | no | `:8080` | HTTP listen address |
 | `TOKEN_ENCRYPTION_KEY` | no | — | Encrypts the EVE tokens stored in the database (see "Token encryption") |
@@ -308,6 +433,7 @@ gaps; real environment variables win over the file):
 | `EVE_ALLOWED_CHARACTER_IDS`, `EVE_ALLOWED_CORPORATION_IDS`, `EVE_ALLOWED_ALLIANCE_IDS` | no | — | Limit who may create an account (see "Who can sign up"). All empty = anyone who can sign in with EVE |
 | `EVESYNAPSE_UPDATE_PROVIDER` | no | `github, gitlab, forgejo` | The sources the updater reads releases from: one or more of `github`, `gitlab`, `forgejo`, `mirror` (the project's static mirror), comma-separated. The updater checks them in the order listed and prefers no source beyond that order: the newest signed release wins, and a tie goes to the earlier-listed source. Unset, it walks the default shown here and asks the mirror only when no forge produced a signed release |
 | `EVESYNAPSE_UPDATE_PROJECT` | no | `natemsz/evesynapse` | GitLab project (group/project) the updater checks; `EVESYNAPSE_UPDATE_REPO`, set by older installs, is read as the same project's path |
+| `EVESYNAPSE_UPDATE_API_URL` | no | the provider's public API | The API address of the chosen provider the updater lists releases from; set it only for a self-hosted GitLab or a GitHub Enterprise host |
 | `EVESYNAPSE_UPDATE_MIRROR_URL` | no | `https://cdn.synap6.io` | The mirror provider's root |
 | `EVE_SDE_BASE_URL` | no | Fuzzwork's dump | Base URL of the SDE CSV dump the importer downloads |
 | `ESI_CONTACT` | no | — | How CCP can reach whoever runs this instance (an email address, a Discord handle, a character name). Sent in the User-Agent of every ESI request, as CCP asks of third-party apps |
@@ -332,7 +458,10 @@ gaps; real environment variables win over the file):
 | `DB_MAX_CONNS` | no | `20` | How many database connections the app may hold open (5 to 500). The session store keeps a few more of its own (at most 4, or one per CPU core if that is more). Raise it together with PostgreSQL's `max_connections` (100 unless changed), which must stay above the two added together; more than a few dozen is rarely useful on one machine |
 | `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET` | no | — | A Discord application's id and secret: turns on "Connect Discord" (see "Discord") |
 | `DISCORD_BOT_TOKEN` | no | — | That application's bot: lets it be added to Discord servers, where it gives roles and sends messages. What it does in each server is set on the site by that server's directors, not here |
-| `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_AUTH_TOKEN` | no | — | Cloudflare Workers AI credentials: turn on the Trade ideas page (Market > Trade ideas) and its optional home module, which ask the Gemma model for trade opportunities in The Forge from the spread scanner's rows, at most twice a day. Unset, the page shows its empty state. Keep the token secret |
+| `MODEL_API_KEY` | no | — | Turns on the Trade ideas page (Market > Trade ideas) and its optional home module with the hosted model (Meta's Muse Wonder): the worker asks it for trade opportunities in The Forge from the spread scanner's rows, at most twice a day. Keep the key secret |
+| `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_AUTH_TOKEN` | no | — | Cloudflare Workers AI credentials: the Trade ideas fallback when no `MODEL_API_KEY` is set, asking the Gemma model instead, on the same twice-a-day cadence. With neither configured, the page shows its empty state. Keep the token secret |
+| `INTEL_TAGGER` | no | on | The intel classifier: a small model built into the server that helps the intel reader tell where one pilot's name ends and the next begins. It runs on this machine and sends nothing anywhere. `off` reads intel without it |
+| `INTEL_TAGGER_WEIGHTS` | no | the built-in model | A model file to use for the intel classifier instead of the built-in one |
 | `DEV_LOGIN` | no | — | Dev build only: `1` registers the `/dev-login` route |
 
 ## Install
@@ -341,7 +470,10 @@ You need a Linux machine (ARM64 or x86-64) and an EVE app
 registration for sign-in ("EVE SSO flow" below). Then:
 
 1. **Get the program.** Easiest is the prebuilt binary from the
-   [releases page](https://gitlab.com/natemsz/evesynapse/-/releases):
+   project's releases, published on
+   [Forgejo](https://natems.dev/EveSynapse/evesynapse/releases),
+   [GitHub](https://github.com/natemsz/evesynapse/releases) and
+   [GitLab](https://gitlab.com/natemsz/evesynapse/-/releases):
    `evesynapse-arm64` for ARM machines (most ARM cloud instances),
    `evesynapse-amd64` for Intel/AMD ones. Or build it yourself
    ("Build from source" below).
@@ -532,8 +664,8 @@ the job's artifacts:
 
 To set up the signing key, once, in Git Bash or any shell with OpenSSL
 (pick your own password; it is typed twice below). The base64 line's
-output goes into the project's CI/CD variables (Settings > CI/CD >
-Variables) as `ANDROID_KEYSTORE_B64`, and the password as
+output goes into the project's CI secrets as
+`ANDROID_KEYSTORE_B64`, and the password as
 `ANDROID_KEYSTORE_PASSWORD`:
 
 ```bash
@@ -995,7 +1127,7 @@ not.
   Because the checksum is inside what is signed, the signature
   covers every byte of the build.
 - **With what.** An Ed25519 key. Its private half exists only as the
-  project's `RELEASE_SIGNING_KEY` CI/CD variable, which the
+  project's `RELEASE_SIGNING_KEY` CI secret, which the
   release job signs with. Its public half is
   `internal/releasesig/trusted_keys.pem`, compiled into every build.
 - **What the updater does with it.** It fetches the manifest and the
@@ -1040,9 +1172,10 @@ store masks single-line values only, so the key goes in encoded:
 base64 -w0 ~/evesynapse-release-key.pem
 ```
 
-Paste that one line into the project's CI/CD variables (Settings >
-CI/CD > Variables) as `RELEASE_SIGNING_KEY`, protected and masked,
-and keep the file somewhere offline. `releasesign` reads the key
+Paste that one line into the project's CI secrets (on the
+mainline's Forgejo: the repository's Settings > Actions >
+Secrets) as `RELEASE_SIGNING_KEY`, and keep the file somewhere
+offline. `releasesign` reads the key
 in either form. That copy is one more place the key
 can leak from, and without one, losing the variable means the
 manual update described under "If the key is lost".
@@ -1094,10 +1227,13 @@ you install from a fork):
 EVESYNAPSE_UPDATE_PROJECT=yourname/evesynapse
 ```
 
-For your fork to publish releases the same way, the pipeline is
-already in the repo as `.gitlab-ci.yml`: your pushes get tested,
-built, and released exactly like the mainline ones, with the
-fork's own `RELEASE_SIGNING_KEY` variable (see "Release signing").
+For your fork to publish releases the same way, the pipelines
+are already in the repo: the mainline publishes through the
+Forgejo release workflow (`.forgejo/workflows/release.yml`), and
+`.gitlab-ci.yml` carries the same release contract for a
+GitLab-hosted fork: your pushes get tested, built, and released
+the same way, with the fork's own `RELEASE_SIGNING_KEY` variable
+(see "Release signing").
 
 A fork signs its releases with its own key. In the fork, delete the
 mainline key's block from `internal/releasesig/trusted_keys.pem`,
@@ -1131,8 +1267,10 @@ evesynapse -h                       show this list
    callback URL from `EVE_CALLBACK_URL`, and put the issued client ID
    and secret in `.env`.
 2. **Login**: `GET /auth/eve` stores a random `state` in the session
-   and redirects to `login.eveonline.com` requesting 60 scopes (the
-   list is `eveScopes` in `internal/app/auth.go`): the read scopes
+   and redirects to `login.eveonline.com` requesting the scopes the
+   chosen features need (see "Choosing what to link"; a full link
+   requests all 61 scopes in `eveScopes`, in
+   `internal/app/auth.go`): the read scopes
    from the OAuth2 catalog in CCP's ESI OpenAPI document, plus four
    that are not read-only, each for one feature:
 
@@ -1263,7 +1401,7 @@ lacks — notably player-structure names, which aren't in the dump.
   a failed import leaves the previous data untouched.
 - **Cadence**: static data changes on patch days, not on ESI's
   cache clock. The worker checks the remote files' ETag /
-  Last-Modified weekly and re-imports only when they changed.
+  Last-Modified daily and re-imports only when they changed.
 - **Manual update**: the Sync page's "Check for SDE update" button
   runs the same check on demand (and imports when the dump moved);
   it also shows import state, per-table row counts, and each file's
@@ -1291,10 +1429,11 @@ the cycle stops and waits for the next tick. Logs stay quiet: one
 summary line per cycle only when something was refreshed or failed,
 plus a heartbeat every 10 minutes. The current status (last run,
 summary, cumulative names resolved) shows on the Admin and Sync
-pages. When the Cloudflare credentials are set, the same worker
+pages. When a Trade ideas model is configured (a `MODEL_API_KEY`, or
+the Cloudflare credentials as the fallback), the same worker
 also refreshes the Trade ideas page (Market > Trade ideas): it feeds
 the spread scanner's Forge rows (at most 60, same columns as the
-scanner page) to the Gemma model through Cloudflare Workers AI and
+scanner page) to the model and
 stores the answer, at most twice a day and spending no ESI budget.
 The call runs beside the worker cycle, not in it; a failed refresh
 keeps the previous answer and backs off before asking again.

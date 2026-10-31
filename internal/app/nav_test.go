@@ -40,7 +40,7 @@ func TestSectionTabs(t *testing.T) {
 		`<a href="/market/baskets/">Baskets</a>`,
 		`<a href="/market/ideas/" class="active" aria-current="page">Trade Ideas</a>`,
 		`<a href="/market/scanner/">Spread Scanner</a>`,
-		`<a href="/market/tradefinder/">Tradefinder</a>`,
+		`<a href="/market/tradefinder/">Trade Finder</a>`,
 		`<a href="/market/restock/">Restock Planner</a>`,
 		`<a href="/market/leaderboard/">Top Stations</a>`,
 	} {
@@ -235,7 +235,7 @@ func TestSectionGroups(t *testing.T) {
 			{Href: "/market/baskets/", Label: "Baskets"},
 			{Href: "/market/ideas/", Label: "Trade Ideas", Active: true},
 			{Href: "/market/scanner/", Label: "Spread Scanner"},
-			{Href: "/market/tradefinder/", Label: "Tradefinder"},
+			{Href: "/market/tradefinder/", Label: "Trade Finder"},
 			{Href: "/market/restock/", Label: "Restock Planner"},
 			{Href: "/market/leaderboard/", Label: "Top Stations"},
 		}},

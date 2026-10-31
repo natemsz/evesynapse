@@ -14,7 +14,7 @@ import (
 // Module is this module's registration.
 var Module = module.Module{
 	ID:            "tradefinder",
-	Title:         "Tradefinder",
+	Title:         "Trade Finder",
 	Requires:      []string{},
 	Scopes:        []module.Scope{},
 	EnhanceScopes: []module.Scope{},
@@ -22,7 +22,7 @@ var Module = module.Module{
 	Nav: []module.NavSection{{
 		Section: "toolsanalysis",
 		Entries: []module.NavEntry{
-			{Href: "/market/tradefinder/", Label: "Tradefinder", Pages: []string{"market_tradefinder.html"}, After: "/market/scanner/"},
+			{Href: "/market/tradefinder/", Label: "Trade Finder", Pages: []string{"market_tradefinder.html"}, After: "/market/scanner/"},
 		},
 	}},
 	Routes: func(r chi.Router, deps module.Deps) {

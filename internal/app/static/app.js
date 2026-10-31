@@ -3403,7 +3403,7 @@
     { name: "Market Baskets", url: "/market/baskets/" },
     { name: "Trade Ideas", url: "/market/ideas/" },
     { name: "Spread Scanner", url: "/market/scanner/" },
-    { name: "Tradefinder", url: "/market/tradefinder/" },
+    { name: "Trade Finder", url: "/market/tradefinder/" },
     { name: "Restock Planner", url: "/market/restock/" },
     { name: "Top Stations", url: "/market/leaderboard/" },
     { name: "My Orders", url: "/orders/" },

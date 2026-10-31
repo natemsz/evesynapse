@@ -2741,6 +2741,7 @@
     }
     tip.style.top = top + "px";
     crosshair(dot, true);
+    syncCursor(dot, true);
   }
 
   function hide(dot) {
@@ -2748,6 +2749,7 @@
     if (tip) tip.hidden = true;
     if (dot) dot.classList.remove("is-selected");
     crosshair(dot, false);
+    syncCursor(dot, false);
   }
 
   // crosshair draws a vertical line through every panel of a
@@ -2777,6 +2779,61 @@
     line.style.top = (first.top - crect.top) + "px";
     line.style.height = (last.bottom - first.top) + "px";
     line.hidden = false;
+  }
+
+  // Cursor sync across a page's time panels: a hit carrying a
+  // data-bucket lights the same bucket in every other chart
+  // that has it, cursor line and tip alike, so one bucket reads
+  // across the panels at once. Any chart whose hits carry
+  // data-bucket joins in; charts without it are untouched.
+  var syncedMarks = [];
+  function clearSynced() {
+    for (var i = 0; i < syncedMarks.length; i++) {
+      if (syncedMarks[i].line) syncedMarks[i].line.hidden = true;
+      if (syncedMarks[i].tip) syncedMarks[i].tip.hidden = true;
+    }
+    syncedMarks = [];
+  }
+  function syncCursor(dot, on) {
+    clearSynced();
+    if (!on || !dot || !dot.getAttribute) return;
+    var bucket = dot.getAttribute("data-bucket");
+    if (!bucket) return;
+    var own = chartOf(dot);
+    var hits = document.querySelectorAll('.pf-hit[data-bucket="' + bucket + '"]');
+    for (var j = 0; j < hits.length; j++) {
+      var chart = chartOf(hits[j]);
+      if (!chart || chart === own) continue;
+      var svgs = chart.querySelectorAll("svg");
+      if (!svgs.length) continue;
+      var line = chart.querySelector(".chart-crosshair");
+      if (!line) {
+        line = document.createElement("div");
+        line.className = "chart-crosshair";
+        line.setAttribute("aria-hidden", "true");
+        chart.appendChild(line);
+      }
+      var crect = chart.getBoundingClientRect();
+      var drect = hits[j].getBoundingClientRect();
+      var first = svgs[0].getBoundingClientRect();
+      var lastS = svgs[svgs.length - 1].getBoundingClientRect();
+      line.style.left = (drect.left - crect.left + drect.width / 2) + "px";
+      line.style.top = (first.top - crect.top) + "px";
+      line.style.height = (lastS.bottom - first.top) + "px";
+      line.hidden = false;
+      var tip = tipOf(hits[j]);
+      if (tip) {
+        fill(tip, hits[j]);
+        tip.hidden = false;
+        var left = drect.left - crect.left + drect.width / 2;
+        var half = tip.offsetWidth / 2;
+        if (left < half) left = half;
+        if (left > crect.width - half) left = crect.width - half;
+        tip.style.left = left + "px";
+        tip.style.top = (drect.top - crect.top) + "px";
+      }
+      syncedMarks.push({ line: line, tip: tip });
+    }
   }
 
   function asDot(ev) {

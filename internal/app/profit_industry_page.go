@@ -25,7 +25,10 @@ const industryRowCap = 100
 
 type profitBlueprintRow struct {
 	Name, Href                  string
+	TypeID                      int64
 	Runs, Built, Sold, Lost     string
+	SoldW                       float64 // sold share of built, as a bar width in a 120-wide plot
+	Stock, StockISK, StockHref  string  // built minus sold and lost, its at-the-time value, its Open positions anchor
 	Realized, RealizedDir       string
 	RealizedNotes               []string
 	AtTime, AtTimeDir, AtTimeNo string // AtTimeNo: why there is no figure
@@ -77,9 +80,13 @@ func (app *Application) attachIndustry(ctx context.Context, view *profitView, us
 	}
 	for _, s := range rows {
 		row := profitBlueprintRow{
-			Name: app.typeNameOrID(ctx, s.ProductTypeID),
-			Href: fmt.Sprintf("/profit/blueprint/?pool=%s-%d&bp=%d", s.PoolKind, s.PoolID, s.BlueprintTypeID),
-			Runs: esi.FormatInt(s.Runs), Built: esi.FormatInt(s.Units), Sold: esi.FormatInt(s.UnitsSold),
+			Name:   app.typeNameOrID(ctx, s.ProductTypeID),
+			TypeID: s.ProductTypeID,
+			Href:   fmt.Sprintf("/profit/blueprint/?pool=%s-%d&bp=%d", s.PoolKind, s.PoolID, s.BlueprintTypeID),
+			Runs:   esi.FormatInt(s.Runs), Built: esi.FormatInt(s.Units), Sold: esi.FormatInt(s.UnitsSold),
+		}
+		if s.Units > 0 {
+			row.SoldW = float64(s.UnitsSold) / float64(s.Units) * 120
 		}
 		if s.UnitsLost > 0 {
 			row.Lost = esi.FormatInt(s.UnitsLost)
@@ -90,6 +97,10 @@ func (app *Application) attachIndustry(ctx context.Context, view *profitView, us
 		}
 		if unsold := s.Units - s.UnitsSold - s.UnitsLost; unsold > 0 {
 			row.RealizedNotes = append(row.RealizedNotes, esi.FormatInt(unsold)+" units not sold yet")
+			row.Stock = esi.FormatInt(unsold)
+			if s.BPriced && s.BOutput > 0 {
+				row.StockISK = esi.FormatISK(float64(unsold) * s.BOutput / float64(s.Units))
+			}
 		}
 		if s.UnitsMixed > 0 {
 			row.RealizedNotes = append(row.RealizedNotes, esi.FormatInt(s.UnitsMixed)+" units sold beside bought stock of the item")

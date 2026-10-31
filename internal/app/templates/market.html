@@ -470,6 +470,7 @@
 {{if .Tree}}
 <div class="mb-layout">
   <nav class="mb-tree" aria-label="Market categories">
+    <svg class="mb-guides" aria-hidden="true"><path></path></svg>
     <ul>
     {{range .Tree}}{{template "mb-node" .}}{{end}}
     </ul>

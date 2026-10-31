@@ -159,6 +159,40 @@ func TestAppraisalDealRatioGating(t *testing.T) {
 // TestAppraisePublicContractsEndToEnd runs the worker pass
 // over seeded pricing tables and checks the stored results
 // line by line.
+// TestAppraisePublicContractsWithinBudget pins the wall-clock
+// budget: a pass whose budget is already spent prices nothing
+// and leaves the whole slice due, and an unbounded pass then
+// drains it.
+func TestAppraisePublicContractsWithinBudget(t *testing.T) {
+	app, conn, _ := buildCorpTestApp(t, roundTripperFunc(func(*http.Request) (*http.Response, error) {
+		return &http.Response{StatusCode: 404, Body: http.NoBody, Header: make(http.Header)}, nil
+	}))
+	ctx := context.Background()
+	now := time.Now().UTC()
+	exec := func(query string, args ...any) {
+		t.Helper()
+		if _, err := conn.ExecContext(ctx, query, args...); err != nil {
+			t.Fatalf("seed %q: %v", query, err)
+		}
+	}
+	exec(`INSERT INTO market_region_stats (region_id, type_id, typical_sell, updated_at) VALUES (10000002, 1001, 100, $1)`, now.Add(-time.Hour))
+	for i, id := range []int64{9201, 9202, 9203} {
+		exec(`INSERT INTO pub_contracts (contract_id, region_id, type, price, buyout,
+			date_issued, date_expired, items_state, last_cycle, first_seen, last_seen)
+			VALUES ($1, 10000002, 'item_exchange', 900, 0, $2, $3, 'stored', 1, $2, $2)`,
+			id, now.Add(-time.Hour), now.Add(7*24*time.Hour))
+		exec(`INSERT INTO pub_contract_items (record_id, contract_id, type_id, quantity, is_included)
+			VALUES ($1, $2, 1001, 10, true)`, int64(100+i), id)
+	}
+
+	if n := app.appraisePublicContractsWithin(ctx, time.Nanosecond); n != 0 {
+		t.Fatalf("budget-spent pass appraised %d contracts, want 0", n)
+	}
+	if n := app.appraisePublicContracts(ctx); n != 3 {
+		t.Fatalf("unbounded pass appraised %d contracts, want the 3 left due", n)
+	}
+}
+
 func TestAppraisePublicContractsEndToEnd(t *testing.T) {
 	app, conn, q := buildCorpTestApp(t, roundTripperFunc(func(*http.Request) (*http.Response, error) {
 		return &http.Response{StatusCode: 404, Body: http.NoBody, Header: make(http.Header)}, nil

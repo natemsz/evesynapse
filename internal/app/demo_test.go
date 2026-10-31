@@ -279,9 +279,9 @@ func TestDemoSeedIsCompleteAndIdempotent(t *testing.T) {
 	if charts == nil {
 		t.Fatal("buildProfitCharts returned no charts for the demo window")
 	}
-	if charts.Net == nil || charts.Activities == nil || charts.Fees == nil || charts.COGS == nil || charts.Margin == nil {
-		t.Errorf("demo chart set incomplete: net %v, activities %v, fees %v, cogs %v, margin %v",
-			charts.Net != nil, charts.Activities != nil, charts.Fees != nil, charts.COGS != nil, charts.Margin != nil)
+	if charts.Hero == nil || charts.Waterfall == nil || charts.Efficiency == nil {
+		t.Errorf("demo chart set incomplete: hero %v, waterfall %v, efficiency %v",
+			charts.Hero != nil, charts.Waterfall != nil, charts.Efficiency != nil)
 	}
 
 	// Seeding again lands on exactly the same state.
@@ -705,7 +705,7 @@ func TestDemoPilotNameRefreshReachesSeededInstalls(t *testing.T) {
 func TestDemoProfitCoherence(t *testing.T) {
 	app, _, _ := demoTestApp(t)
 	ctx := context.Background()
-	view, err := app.buildProfitView(ctx, app.demoUserID(ctx), "", "30", "")
+	view, err := app.buildProfitView(ctx, app.demoUserID(ctx), "", "30", "", profitModes{})
 	if err != nil {
 		t.Fatal(err)
 	}

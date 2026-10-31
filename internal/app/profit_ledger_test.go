@@ -270,16 +270,17 @@ func TestProfitPooledTradingItems(t *testing.T) {
 	if len(rows) == 0 || rows[0].TypeID != 34 {
 		t.Errorf("first row = %+v, want the fully covered item first", rows)
 	}
-	// The chart set draws from the same rows: a bar per day, the
-	// split by activity, the fee share, and the hatch where type 35 went
-	// uncovered (the alt only bought, so no per-character lines).
+	// The chart set draws from the same rows: the hero's running
+	// total, the waterfall, the efficiency panel with its hatch
+	// where type 35 went uncovered, and the mode controls.
 	cookie := sessionCookie(t, app, user.ID, fixtureCharA, "Main")
 	code, body := getPage(t, app, cookie, "/profit/?days=7")
 	if code != 200 {
 		t.Fatalf("GET /profit/: status %d", code)
 	}
-	for _, want := range []string{`class="pf-chart"`, "brought the most", `class="pf-gap"`, "trading fees took", "Goods sold cost",
-		"By activity", "Fees and their share of sales", "Cost of goods sold", "Trading margin", "Earned, running total", "By day", "By week"} {
+	for _, want := range []string{`class="pf-chart"`, `class="pf-gap"`, "running total",
+		"Where the ISK went", "Trading efficiency", "Fee deep-dive", "Daily net",
+		"Cost basis coverage", "Turnover vs profit", "By activity", "By day", "By week"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("profit page charts lack %q", want)
 		}
@@ -293,29 +294,38 @@ func TestProfitGrainBuckets(t *testing.T) {
 	app, _, _ := demoTestApp(t)
 	ctx := context.Background()
 
-	week, err := app.buildProfitView(ctx, app.demoUserID(ctx), "", "30", "week")
+	week, err := app.buildProfitView(ctx, app.demoUserID(ctx), "", "30", "week", profitModes{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if week.Charts == nil || week.Charts.Bucket != "week" {
 		t.Fatalf("grain=week: bucket = %v, want week", week.Charts)
 	}
-	if n := len(week.Charts.Net.Hits); n < 5 || n > 6 {
-		t.Errorf("grain=week over 30 days: %d net buckets, want 5 or 6", n)
+	if n := len(week.Charts.Efficiency.Hits); n < 5 || n > 6 {
+		t.Errorf("grain=week over 30 days: %d efficiency buckets, want 5 or 6", n)
 	}
-	if len(week.Chart.Panels) != 2 {
-		t.Errorf("demo hero panels = %d, want 2 (earned and net worth change)", len(week.Chart.Panels))
+	if week.Hero == nil {
+		t.Fatal("grain=week: no hero")
+	}
+	if n := len(week.Hero.Hits); n < 5 || n > 6 {
+		t.Errorf("grain=week over 30 days: %d hero buckets, want 5 or 6", n)
+	}
+	if len(week.Hero.Lines) != 2 {
+		t.Errorf("demo hero lines = %d, want 2 (earned and net worth change)", len(week.Hero.Lines))
 	}
 
-	day, err := app.buildProfitView(ctx, app.demoUserID(ctx), "", "30", "")
+	day, err := app.buildProfitView(ctx, app.demoUserID(ctx), "", "30", "", profitModes{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if day.Charts == nil || day.Charts.Bucket != "day" {
 		t.Fatalf("no grain at 30 days: bucket = %v, want day", day.Charts)
 	}
-	if n := len(day.Charts.Net.Hits); n != 30 {
-		t.Errorf("default day grain over 30 days: %d net buckets, want 30", n)
+	if n := len(day.Charts.Efficiency.Hits); n != 30 {
+		t.Errorf("default day grain over 30 days: %d efficiency buckets, want 30", n)
+	}
+	if n := len(day.Hero.Hits); n != 30 {
+		t.Errorf("default day grain over 30 days: %d hero buckets, want 30", n)
 	}
 }
 

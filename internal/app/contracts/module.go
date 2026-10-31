@@ -31,13 +31,20 @@ var Module = module.Module{
 	Snapshots:      []string{esi.SnapContracts},
 	BriefingTopics: []module.BriefingTopicDecl{{ID: "contracts", Title: "Contract deadlines"}},
 	Activities:     []string{"market"},
-	Nav: []module.NavSection{{
-		Section: "market",
-		Entries: []module.NavEntry{
-			{Href: "/contracts/", Label: "My Contracts", Pages: []string{"contracts.html"}, After: "/orders/"},
-			{Href: "/contracts/search/", Label: "Contract Search", Pages: []string{"contract_search.html", "contract_detail.html"}, After: "/contracts/"},
+	Nav: []module.NavSection{
+		{
+			Section: "finances",
+			Entries: []module.NavEntry{
+				{Href: "/contracts/", Label: "My Contracts", Pages: []string{"contracts.html"}, After: "/orders/"},
+			},
 		},
-	}},
+		{
+			Section: "market",
+			Entries: []module.NavEntry{
+				{Href: "/contracts/search/", Label: "Contract Search", Pages: []string{"contract_search.html", "contract_detail.html"}, After: "/market/"},
+			},
+		},
+	},
 	Routes: func(r chi.Router, deps module.Deps) {
 		h := func(f func(*mod, http.ResponseWriter, *http.Request)) http.HandlerFunc {
 			return func(w http.ResponseWriter, req *http.Request) { f(newMod(deps), w, req) }
@@ -56,7 +63,7 @@ var Module = module.Module{
 		auth.Post("/ui/openwindow/contract/{contractID}", h((*mod).handleOpenContractInGame))
 	},
 	Pages: []module.Page{
-		{Template: "contracts.html", Section: "market"},
+		{Template: "contracts.html", Section: "finances"},
 		{Template: "contract_search.html", Section: "market"},
 		{Template: "contract_detail.html", Section: "market"},
 	},

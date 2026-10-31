@@ -171,9 +171,11 @@ func sectionForPage(page string) string {
 		return "pilot"
 	case "industry.html", "industry_jobs.html", "industry_mining.html", "planets.html":
 		return "industry"
-	case "market.html", "market_trends.html", "market_lp.html", "market_baskets.html", "market_basket.html",
+	case "market.html", "market_lp.html",
 		"system.html", "station.html", "structure.html", "region.html":
 		return "market"
+	case "market_trends.html", "market_baskets.html", "market_basket.html":
+		return "toolsanalysis"
 	case "items.html", "ship_public.html":
 		return "tools"
 	case "corporations.html", "corporation.html", "alliance.html", "corp_settings.html":
@@ -204,7 +206,7 @@ var (
 // pageSharedTemplates are the files every full page is parsed with:
 // the layout and the partials any page may use. One list, so that
 // nothing else parsing a page into the same cache can leave one out.
-var pageSharedTemplates = []string{"templates/base.html", "templates/wordmark.html", "templates/notifybell.html", "templates/balancechart.html", "templates/walletflow.html", "templates/charselector.html", "templates/fitbrowser.html", "templates/fit_workbench.html", "templates/locked.html", "templates/sectiontabs.html", "templates/admintabs.html", "templates/historysection.html", "templates/abyssalhowto.html", "templates/contractcards.html", "templates/reportcard.html", "templates/mapview.html", "templates/themepicker.html", "templates/noticebanners.html", "templates/yourorders.html"}
+var pageSharedTemplates = []string{"templates/base.html", "templates/wordmark.html", "templates/notifybell.html", "templates/balancechart.html", "templates/walletflow.html", "templates/charselector.html", "templates/fitbrowser.html", "templates/fit_workbench.html", "templates/locked.html", "templates/sectiontabs.html", "templates/admintabs.html", "templates/historysection.html", "templates/abyssalhowto.html", "templates/contractcards.html", "templates/reportcard.html", "templates/mapview.html", "templates/themepicker.html", "templates/noticebanners.html", "templates/yourorders.html", "templates/reqicons.html"}
 
 // parsedTemplate returns the cached set for page, parsing it (with
 // the shared files first) the first time it is asked for.

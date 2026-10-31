@@ -234,7 +234,7 @@ func TestTradefinderPageRendersStoredRowsZeroOutbound(t *testing.T) {
 		t.Fatalf("tradefinder page: status %d", code)
 	}
 	mustContain(t, "/market/tradefinder/", body,
-		"Tradefinder",
+		"Trade Finder",
 		"Buy in",
 		"Sell in",
 		"Tritanium",
@@ -366,7 +366,7 @@ func TestTradefinderPageEmptyStates(t *testing.T) {
 		t.Fatalf("tradefinder empty page: status %d", code)
 	}
 	mustContain(t, "/market/tradefinder/ (no sweep)", body,
-		"Tradefinder",
+		"Trade Finder",
 		"Still gathering prices",
 	)
 	if strings.Contains(body, "Estimated profit per day") {
@@ -388,7 +388,7 @@ func TestTradefinderPageEmptyStates(t *testing.T) {
 		t.Fatalf("tradefinder no-routes page: status %d", code)
 	}
 	mustContain(t, "/market/tradefinder/ (no routes)", body,
-		"Tradefinder",
+		"Trade Finder",
 		"No profitable routes between these regions right now",
 	)
 	if strings.Contains(body, "Still gathering prices") {

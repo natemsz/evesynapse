@@ -14,15 +14,15 @@ import (
 // Module is this module's registration.
 var Module = module.Module{
 	ID:            "tradefinder",
-	Title:         "Tradefinder",
+	Title:         "Trade Finder",
 	Requires:      []string{},
 	Scopes:        []module.Scope{},
 	EnhanceScopes: []module.Scope{},
 	Activities:    []string{"market"},
 	Nav: []module.NavSection{{
-		Section: "market",
+		Section: "toolsanalysis",
 		Entries: []module.NavEntry{
-			{Href: "/market/tradefinder/", Label: "Tradefinder", Pages: []string{"market_tradefinder.html"}, After: "/market/scanner/"},
+			{Href: "/market/tradefinder/", Label: "Trade Finder", Pages: []string{"market_tradefinder.html"}, After: "/market/scanner/"},
 		},
 	}},
 	Routes: func(r chi.Router, deps module.Deps) {
@@ -32,7 +32,7 @@ var Module = module.Module{
 		r.With(deps.AnonPages()).Get("/market/tradefinder/", h((*page).handleMarketTradefinder))
 	},
 	Pages: []module.Page{
-		{Template: "market_tradefinder.html", Section: "market"},
+		{Template: "market_tradefinder.html", Section: "toolsanalysis"},
 	},
 }
 

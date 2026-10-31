@@ -137,16 +137,16 @@ func TestRenderedFileImportsOnlyTheSelection(t *testing.T) {
 // TestMenuWarning: a module whose menu entry follows one of a module left
 // out is told so.
 func TestMenuWarning(t *testing.T) {
-	sel, err := resolve([]string{"tradeideas"})
+	sel, err := resolve([]string{"calendar"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(sel.Warnings) != 1 || !strings.Contains(sel.Warnings[0], "/market/scanner/") {
-		t.Errorf("warnings = %v, want one about the scanner entry", sel.Warnings)
+	if len(sel.Warnings) != 1 || !strings.Contains(sel.Warnings[0], "/mail/") {
+		t.Errorf("warnings = %v, want one about the mail entry", sel.Warnings)
 	}
-	all, _ := resolve([]string{"tradeideas", "scanner"})
+	all, _ := resolve([]string{"calendar", "mail", "wallet"})
 	if len(all.Warnings) != 0 {
-		t.Errorf("warnings with the scanner built in = %v, want none", all.Warnings)
+		t.Errorf("warnings with the anchor chain built in = %v, want none", all.Warnings)
 	}
 }
 

@@ -82,7 +82,7 @@
         </div>
       </details>
       <details class="branch{{if eq .Section "market"}} active{{end}}"{{if and (eq .Section "market") (ne .NavState "rail")}} open{{end}} data-nav-category="market">
-        <summary data-tip="Market"><span class="nav-icon" aria-hidden="true"><svg width="17" height="17" class="nav-icon-svg nav-icon-economy" viewBox="0 0 24 24" aria-hidden="true"><g fill="url(#nav-glyph-gradient)"><rect x="3.5" y="15" width="4.2" height="5" rx="1"/><rect x="9.9" y="11" width="4.2" height="9" rx="1"/><rect x="16.3" y="7" width="4.2" height="13" rx="1"/></g><path d="M3 12.2 8.6 8.2 14 9.8 20.6 4.4" fill="none" stroke="url(#nav-glyph-gradient)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="nav-label">Market</span></summary>
+        <summary data-tip="Browse"><span class="nav-icon" aria-hidden="true"><svg width="17" height="17" class="nav-icon-svg nav-icon-economy" viewBox="0 0 24 24" aria-hidden="true"><g fill="url(#nav-glyph-gradient)"><rect x="3.5" y="15" width="4.2" height="5" rx="1"/><rect x="9.9" y="11" width="4.2" height="9" rx="1"/><rect x="16.3" y="7" width="4.2" height="13" rx="1"/></g><path d="M3 12.2 8.6 8.2 14 9.8 20.6 4.4" fill="none" stroke="url(#nav-glyph-gradient)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="nav-label">Browse</span></summary>
         <div class="menu">
           {{with index .NavGroups "market"}}{{range .}}<p class="nav-group-label">{{.Label}}</p>
           {{range .Links}}<a href="{{.Href}}"{{if .Active}} class="active"{{end}}>{{.Label}}</a>
@@ -90,6 +90,22 @@
           {{end}}{{end}}
         </div>
       </details>
+      <details class="branch{{if eq .Section "toolsanalysis"}} active{{end}}"{{if and (eq .Section "toolsanalysis") (ne .NavState "rail")}} open{{end}} data-nav-category="toolsanalysis">
+        <summary data-tip="Tools &amp; Analysis"><span class="nav-icon" aria-hidden="true"><svg width="17" height="17" class="nav-icon-svg" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="url(#nav-glyph-gradient)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4v15.5h16"/><path d="M7.5 15.5 11 10l3 2.5 4.5-5"/></g></svg></span><span class="nav-label">Tools &amp; Analysis</span></summary>
+        <div class="menu">
+          {{range index .NavLinks "toolsanalysis"}}<a href="{{.Href}}"{{if .Active}} class="active"{{end}}>{{.Label}}</a>
+          {{end}}
+        </div>
+      </details>
+      {{if index .NavLinks "finances"}}
+      <details class="branch{{if eq .Section "finances"}} active{{end}}"{{if and (eq .Section "finances") (ne .NavState "rail")}} open{{end}} data-nav-category="finances">
+        <summary data-tip="My Finances"><span class="nav-icon" aria-hidden="true"><svg width="17" height="17" class="nav-icon-svg" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="url(#nav-glyph-gradient)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="6.5" width="17" height="12" rx="2"/><path d="M3.5 10.5h17"/></g><circle cx="16.8" cy="14.5" r="1.3" fill="url(#nav-glyph-gradient)"/></svg></span><span class="nav-label">My Finances</span></summary>
+        <div class="menu">
+          {{range index .NavLinks "finances"}}<a href="{{.Href}}"{{if .Active}} class="active"{{end}}>{{.Label}}</a>
+          {{end}}
+        </div>
+      </details>
+      {{end}}
       <details class="branch{{if eq .Section "corporation"}} active{{end}}"{{if and (eq .Section "corporation") (ne .NavState "rail")}} open{{end}} data-nav-category="corporation">
         <summary data-tip="Corporation"><span class="nav-icon" aria-hidden="true"><svg width="17" height="17" class="nav-icon-svg nav-icon-corporation" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.7l2.45 4.97 5.48.8-3.97 3.87.94 5.46L12 16.24l-4.9 2.56.94-5.46L4.07 9.47l5.48-.8Z" fill="url(#nav-glyph-gradient)"/></svg></span><span class="nav-label">Corporation</span></summary>
         <div class="menu">
@@ -257,13 +273,14 @@
 {{end}}
 <script src="/static/app.js?v={{.AssetVersion}}" defer></script>
 <script src="/static/swap.js?v={{.AssetVersion}}" defer></script>
-{{if eq .Section "fitting"}}<script src="/static/fit.js?v={{.AssetVersion}}" defer></script>{{end}}
+{{if eq .Section "fitting"}}<script src="/static/fittip.js?v={{.AssetVersion}}" defer></script><script src="/static/fit.js?v={{.AssetVersion}}" defer></script>{{end}}
 {{if eq .NavPage "planner.html"}}<script src="/static/plan.js?v={{.AssetVersion}}" defer></script>{{end}}
 {{if or (eq .NavPage "map.html") (eq .NavPage "intel_workbench.html")}}<script src="/static/map.js?v={{.AssetVersion}}" defer></script>{{end}}{{if eq .NavPage "intel_workbench.html"}}<script src="/static/dashboard.js?v={{.AssetVersion}}" defer></script>{{end}}
 {{if or (eq .NavPage "scan.html") (eq .NavPage "pilot.html")}}<script src="/static/scans.js?v={{.AssetVersion}}" defer></script>{{end}}{{if eq .NavPage "intel_workbench.html"}}<script src="/static/workbench.js?v={{.AssetVersion}}" defer></script>{{end}}
 {{if or (eq .NavPage "channel.html") (eq .NavPage "feed.html") (eq .NavPage "intel_workbench.html")}}<script src="/static/channels.js?v={{.AssetVersion}}" defer></script>{{end}}
 {{if or (eq .NavPage "contract_search.html") (eq .NavPage "contract_detail.html")}}<script src="/static/contracts.js?v={{.AssetVersion}}" defer></script>{{end}}
 {{if eq .NavPage "market.html"}}<script src="/static/market.js?v={{.AssetVersion}}" defer></script>{{end}}
+{{if eq .NavPage "market_lp.html"}}<script src="/static/fittip.js?v={{.AssetVersion}}" defer></script>{{end}}
 {{if or (eq .NavPage "market_baskets.html") (eq .NavPage "market_basket.html")}}<script src="/static/baskets.js?v={{.AssetVersion}}" defer></script>{{end}}
 {{range .Scripts}}<script src="{{.}}?v={{$.AssetVersion}}" defer></script>{{end}}
 {{if .NotifySettings}}<script src="/static/push.js?v={{.AssetVersion}}" defer></script>{{end}}

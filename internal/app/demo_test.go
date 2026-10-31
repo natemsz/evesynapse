@@ -201,6 +201,63 @@ func TestDemoSeedIsCompleteAndIdempotent(t *testing.T) {
 		t.Errorf("seeded profit: %d days, %.0f income; want several days with income", daysBefore, incomeBefore)
 	}
 
+	// The seeded trading history carries covered sales: the
+	// fold matches sells to buys and pairs their tax, so the
+	// cost-of-goods data is populated across the demo window,
+	// with some days only partly covered.
+	now := time.Now().UTC()
+	fromDay := now.AddDate(0, 0, -29).Format("2006-01-02")
+	owners := []int64{demoCharacterID, demoCharacter2ID}
+	buckets, err := queries.ListTradeCOGSBuckets(ctx, db.ListTradeCOGSBucketsParams{
+		Unit: "day", OwnerKind: "char", OwnerIds: owners, FromDay: fromDay,
+	})
+	if err != nil {
+		t.Fatalf("ListTradeCOGSBuckets: %v", err)
+	}
+	var covRev float64
+	for _, b := range buckets {
+		covRev += b.CovRevenue
+	}
+	if covRev <= 0 {
+		t.Errorf("seeded covered sales revenue over the 30-day window = %.2f, want above zero", covRev)
+	}
+	coverage, err := queries.ListTradeCoverageDaily(ctx, db.ListTradeCoverageDailyParams{
+		OwnerKind: "char", OwnerIds: owners, FromDay: fromDay,
+	})
+	if err != nil {
+		t.Fatalf("ListTradeCoverageDaily: %v", err)
+	}
+	coveredDays := 0
+	partly := false
+	for _, c := range coverage {
+		if c.CovRevenue > 0 {
+			coveredDays++
+		}
+		if c.Units > c.CovUnits {
+			partly = true
+		}
+	}
+	if coveredDays < 10 {
+		t.Errorf("days with covered sales = %d, want at least 10", coveredDays)
+	}
+	if !partly {
+		t.Error("no partly covered day in the demo window: every sale matched, want some uncovered sales too")
+	}
+
+	// The demo profit view builds its full chart set.
+	names := map[int64]string{demoCharacterID: demoCharName, demoCharacter2ID: demoChar2Name}
+	charts, err := app.buildProfitCharts(ctx, &profitView{Days: 30}, "char", owners, names, fromDay, false)
+	if err != nil {
+		t.Fatalf("buildProfitCharts: %v", err)
+	}
+	if charts == nil {
+		t.Fatal("buildProfitCharts returned no charts for the demo window")
+	}
+	if charts.Net == nil || charts.Activities == nil || charts.Fees == nil || charts.COGS == nil || charts.Margin == nil {
+		t.Errorf("demo chart set incomplete: net %v, activities %v, fees %v, cogs %v, margin %v",
+			charts.Net != nil, charts.Activities != nil, charts.Fees != nil, charts.COGS != nil, charts.Margin != nil)
+	}
+
 	// Seeding again lands on exactly the same state.
 	if err := app.seedDemoData(ctx, time.Now()); err != nil {
 		t.Fatalf("second seed: %v", err)

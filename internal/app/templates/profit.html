@@ -135,7 +135,7 @@
 <table>
   <thead><tr><th>Item</th><th class="mt-num">Sold</th><th class="mt-num">Sold for</th><th class="mt-num">Margin</th><th class="mt-num">Margin %</th><th class="mt-num">vs before</th></tr></thead>
   <tbody>
-  {{range .ItemGroups}}{{if .Title}}<tr class="pf-group-row"><td colspan="6">{{.Title}}</td></tr>{{end}}{{range .Rows}}
+  {{range .ItemGroups}}{{if .Title}}<tr class="pf-group-row" data-sort-barrier><td colspan="6">{{.Title}}</td></tr>{{end}}{{range .Rows}}
     <tr{{if not .Covered}} class="pf-unc-row"{{end}}>
       <td><a href="/market/?type={{.TypeID}}">{{.Name}}</a>
         {{range .Gaps}}<br><small class="mt-reqs">{{.Units}} units: {{.Label}}</small>{{end}}

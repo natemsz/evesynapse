@@ -3948,8 +3948,10 @@
   // percentages, "1.2B") sorts numerically, else as text. A row's
   // detail rows (rows that are one wide cell, like the fleet table's)
   // move with it, and in a capped widget the rows past the cap
-  // (data-wmore) are re-marked by position. data-nosort opts a table
-  // out; empty headers do nothing.
+  // (data-wmore) are re-marked by position. A row marked
+  // data-sort-barrier is a group header instead: it never moves and
+  // sorting happens inside each group it bounds. data-nosort opts a
+  // table out; empty headers do nothing.
   function sortKey(cell) {
     var raw = (cell ? (cell.getAttribute("data-sort") || cell.textContent) : "").trim();
     var m = raw.replace(/ISK|,|\s|%|\+|×/g, "").replace(/^[−–]/, "-").match(/^(-?\d+(?:\.\d+)?)([KMBT]?)$/i);
@@ -3967,32 +3969,46 @@
     var body = table.tBodies[0];
     if (!body || body.rows.length < 2) return;
     var col = th.cellIndex;
-    // Rows with their attached detail rows.
-    var groups = [];
-    Array.prototype.forEach.call(body.rows, function (row) {
-      var single = row.cells.length === 1 && row.cells[0].colSpan > 1;
-      if (single && groups.length) groups[groups.length - 1].push(row);
-      else groups.push([row]);
-    });
     var dir = th.getAttribute("aria-sort") === "ascending" ? -1 : 1;
-    var keys = groups.map(function (g) { return sortKey(g[0].cells[col]); });
-    var numeric = keys.every(function (k) { return k.num !== null || k.text === "" || k.text === "—"; });
-    var order = groups.map(function (g, i) { return i; });
-    order.sort(function (a, b) {
-      var ka = keys[a], kb = keys[b], r;
-      if (numeric) {
-        var na = ka.num === null ? -Infinity : ka.num, nb = kb.num === null ? -Infinity : kb.num;
-        r = na - nb;
-      } else {
-        r = ka.text < kb.text ? -1 : ka.text > kb.text ? 1 : 0;
+    // Rows sort within the segments that barrier rows split the
+    // body into (data-sort-barrier: a group header, like the
+    // profit item table's covered/uncovered split). A barrier
+    // never moves and nothing crosses it. Any other row that is
+    // one wide cell is a detail row and travels with the row
+    // above it.
+    var segments = [{ barrier: null, groups: [] }];
+    Array.prototype.forEach.call(body.rows, function (row) {
+      if (row.hasAttribute("data-sort-barrier")) {
+        segments.push({ barrier: row, groups: [] });
+        return;
       }
-      return r * dir || a - b;
+      var seg = segments[segments.length - 1];
+      var single = row.cells.length === 1 && row.cells[0].colSpan > 1;
+      if (single && seg.groups.length) seg.groups[seg.groups.length - 1].push(row);
+      else seg.groups.push([row]);
     });
     var capped = body.querySelectorAll("tr[data-wmore]").length;
     var heads = [];
-    order.forEach(function (i) {
-      groups[i].forEach(function (row) { body.appendChild(row); });
-      heads.push(groups[i][0]);
+    segments.forEach(function (seg) {
+      var groups = seg.groups;
+      var keys = groups.map(function (g) { return sortKey(g[0].cells[col]); });
+      var numeric = keys.every(function (k) { return k.num !== null || k.text === "" || k.text === "—"; });
+      var order = groups.map(function (g, i) { return i; });
+      order.sort(function (a, b) {
+        var ka = keys[a], kb = keys[b], r;
+        if (numeric) {
+          var na = ka.num === null ? -Infinity : ka.num, nb = kb.num === null ? -Infinity : kb.num;
+          r = na - nb;
+        } else {
+          r = ka.text < kb.text ? -1 : ka.text > kb.text ? 1 : 0;
+        }
+        return r * dir || a - b;
+      });
+      if (seg.barrier) body.appendChild(seg.barrier);
+      order.forEach(function (i) {
+        groups[i].forEach(function (row) { body.appendChild(row); });
+        heads.push(groups[i][0]);
+      });
     });
     if (capped) {
       heads.forEach(function (row, i) {

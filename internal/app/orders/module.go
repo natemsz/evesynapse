@@ -29,9 +29,9 @@ var Module = module.Module{
 	BriefingTopics: []module.BriefingTopicDecl{{ID: "orders", Title: "Order expiries and undercuts"}},
 	Activities:     []string{"market"},
 	Nav: []module.NavSection{{
-		Section: "market",
+		Section: "finances",
 		Entries: []module.NavEntry{
-			{Href: "/orders/", Label: "My Orders", Pages: []string{"orders.html"}, After: "/market/restock/"},
+			{Href: "/orders/", Label: "My Orders", Pages: []string{"orders.html"}},
 		},
 	}},
 	Routes: func(r chi.Router, deps module.Deps) {
@@ -42,7 +42,7 @@ var Module = module.Module{
 		auth.Get("/orders/", h((*mod).handleOrders))
 	},
 	Pages: []module.Page{
-		{Template: "orders.html", Section: "market"},
+		{Template: "orders.html", Section: "finances"},
 	},
 }
 

@@ -106,10 +106,13 @@ var sectionNav = map[string][]navEntry{
 	},
 	"market": {
 		{"/market/", "Market", []string{"market.html"}},
-		{"/market/trends/", "Trends", []string{"market_trends.html"}},
 		{"/market/lp/", "LP Store", []string{"market_lp.html"}},
+	},
+	"toolsanalysis": {
+		{"/market/trends/", "Trends", []string{"market_trends.html"}},
 		{"/market/baskets/", "Baskets", []string{"market_baskets.html", "market_basket.html"}},
 	},
+	"finances": {},
 	"corporation": {
 		{"/corporations/", "Overview", []string{"corporations.html"}},
 		{"/corporations/killmails/", "Killmails", []string{"killmails.html"}},
@@ -180,7 +183,7 @@ type navGroup struct {
 // the pattern: at thirteen pages its strip was the widest in the
 // app by a third again, and no single row of folder tabs holds
 // it under a very wide window. The other wide sections follow
-// it: pilot, industry and market group the same way, each map
+// it: pilot and industry group the same way, each map
 // claiming every one of the section's pages exactly once
 // (TestSectionGroups pins that, so the runtime's flat fallback
 // stays a safety net). The short sections stay flat: fitting
@@ -196,13 +199,6 @@ var sectionGroups = map[string][]navGroup{
 	"industry": {
 		{"Production", []string{"/industry/", "/industry/jobs/", "/industry/mining/", "/planner/"}},
 		{"Planetary", []string{"/planets/", "/industry/pi/"}},
-	},
-	"market": {
-		{"Browse", []string{"/market/", "/market/trends/", "/market/leaderboard/"}},
-		{"Find Trades", []string{"/market/scanner/", "/market/ideas/", "/market/tradefinder/"}},
-		{"Baskets & Restock", []string{"/market/baskets/", "/market/restock/"}},
-		{"LP & Contracts", []string{"/market/lp/", "/contracts/search/"}},
-		{"My Finances", []string{"/orders/", "/contracts/"}},
 	},
 	"corporation": {
 		{"People", []string{"/corporations/", "/corporations/members/", "/groups/", "/corporations/killmails/"}},
@@ -346,7 +342,9 @@ var bottomSheetSections = []struct{ section, label string }{
 	{"pilot", "Pilot"},
 	{"fitting", "Fitting"},
 	{"industry", "Industry"},
-	{"market", "Market"},
+	{"market", "Browse"},
+	{"toolsanalysis", "Tools & Analysis"},
+	{"finances", "My Finances"},
 	{"corporation", "Corporation"},
 	{"intel", "Intel"},
 	{"tools", "Tools"},

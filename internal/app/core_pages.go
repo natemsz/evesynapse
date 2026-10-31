@@ -171,9 +171,11 @@ func sectionForPage(page string) string {
 		return "pilot"
 	case "industry.html", "industry_jobs.html", "industry_mining.html", "planets.html":
 		return "industry"
-	case "market.html", "market_trends.html", "market_lp.html", "market_baskets.html", "market_basket.html",
+	case "market.html", "market_lp.html",
 		"system.html", "station.html", "structure.html", "region.html":
 		return "market"
+	case "market_trends.html", "market_baskets.html", "market_basket.html":
+		return "toolsanalysis"
 	case "items.html", "ship_public.html":
 		return "tools"
 	case "corporations.html", "corporation.html", "alliance.html", "corp_settings.html":

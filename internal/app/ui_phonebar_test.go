@@ -157,8 +157,8 @@ func TestPhoneBottomBarRenders(t *testing.T) {
 		`<a class="phone-bar-item" href="/" data-section="home">`,
 		`<a class="phone-bar-item" href="/character/" data-section="pilot">`,
 		`<a class="phone-bar-item" href="/industry/" data-section="industry">`,
-		`<a class="phone-bar-item active" href="/market/" data-section="market" aria-current="page">`,
-		`<button type="button" class="phone-bar-item" id="phone-sections-btn"`,
+		`<a class="phone-bar-item" href="/market/" data-section="market">`,
+		`<button type="button" class="phone-bar-item active" id="phone-sections-btn"`,
 	} {
 		if !strings.Contains(bar, want) {
 			t.Errorf("leaderboard phone bar is missing %q", want)
@@ -169,11 +169,12 @@ func TestPhoneBottomBarRenders(t *testing.T) {
 		`<a class="phone-sheet-section" href="/character/" data-section="pilot">Pilot</a>`,
 		`<a class="phone-sheet-section" href="/fittings/" data-section="fitting">Fitting</a>`,
 		`<a class="phone-sheet-section" href="/industry/" data-section="industry">Industry</a>`,
-		`<a class="phone-sheet-section active" href="/market/" data-section="market" aria-current="page">Market</a>`,
+		`<a class="phone-sheet-section" href="/market/" data-section="market">Browse</a>`,
+		`<a class="phone-sheet-section active" href="/market/trends/" data-section="toolsanalysis" aria-current="page">Tools &amp; Analysis</a>`,
+		`<a class="phone-sheet-section" href="/orders/" data-section="finances">My Finances</a>`,
 		`<a class="phone-sheet-section" href="/corporations/" data-section="corporation">Corporation</a>`,
 		`<a class="phone-sheet-section" href="/intel/kills/" data-section="intel">Intel</a>`,
 		`<a class="phone-sheet-section" href="/items/" data-section="tools">Tools</a>`,
-		`<a href="/orders/">My Finances</a>`,
 		`<a href="/characters/">Manage Characters</a>`,
 		`action="/auth/logout"`,
 	} {

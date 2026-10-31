@@ -236,8 +236,7 @@ func TestSectionGroups(t *testing.T) {
 	for _, tc := range []struct {
 		section, page string
 		want          []navLink
-	}{
-	} {
+	}{} {
 		flat, flatSub := sectionTabsGrouped(navLinksFor(tc.section, tc.page, 0), tc.section)
 		if flatSub != nil {
 			t.Errorf("%s strip has a sub-row, want none", tc.section)

@@ -160,9 +160,9 @@ func TestModuleNavKeepsItsPlace(t *testing.T) {
 	// order. Appraisal sits under Tools, after the Item Browser.
 	follows("tools", "/market/appraise/", "/items/")
 	for section, want := range map[string][]string{
-		"pilot":         {"/character/", "/characters/", "/skills/plans", "/assets/", "/wallet/", "/mail/", "/calendar/", "/contacts/", "/profit/", "/killmails/"},
-		"market":        {"/market/", "/contracts/search/", "/market/trends/", "/market/lp/", "/market/baskets/", "/market/ideas/", "/market/scanner/", "/market/tradefinder/", "/market/restock/", "/market/leaderboard/", "/orders/", "/contracts/"},
-		"tools":         {"/items/", "/market/appraise/"},
+		"pilot":  {"/character/", "/characters/", "/skills/plans", "/assets/", "/wallet/", "/mail/", "/calendar/", "/contacts/", "/profit/", "/killmails/"},
+		"market": {"/market/", "/contracts/search/", "/market/trends/", "/market/lp/", "/market/baskets/", "/market/ideas/", "/market/scanner/", "/market/tradefinder/", "/market/restock/", "/market/leaderboard/", "/orders/", "/contracts/"},
+		"tools":  {"/items/", "/market/appraise/"},
 	} {
 		var got []string
 		for _, e := range sectionNav[section] {

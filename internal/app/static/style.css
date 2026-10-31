@@ -163,6 +163,15 @@
   --muted: #b39a7d;
   --muted-2: #b8a58c;
   --note: #c9a06a;
+  /* The Profit page's semantic tokens: capital that came back,
+     verified profit kept, value lost to fees and taxes, and sales
+     whose cost is unverified. Every scheme (bg.css) and the light
+     theme retune all four so kept and lost stay distinct at a
+     glance in each; chart rules name only these tokens. */
+  --recycled: #66707e;
+  --kept: #2fbf9a;
+  --lost: #e0483e;
+  --unverified: #e8a13a;
   --panel: #1a120b;
   --panel-head: rgba(10, 7, 4, 0.55);
   /* Glass (Ember Nebula): the shared card/panel surface — the panel
@@ -2102,6 +2111,21 @@ td.pos, .pos { color: #28c76f; }
 .kpi-spark { display: block; width: 100%; height: 28px; margin-top: 0.25rem; }
 .kpi-spark-line { fill: none; stroke: var(--accent); stroke-width: 1.5; }
 .kpi-spark-area { fill: color-mix(in srgb, var(--accent) 18%, transparent); stroke: none; }
+
+/* Semantic colour classes on the theme tokens (--recycled,
+   --kept, --lost, --unverified): one class paints an SVG mark
+   (fill) and an HTML swatch or bar (background) alike, so any
+   page can speak the same four meanings. The -tx forms colour
+   text, the -line forms stroke a line. */
+.sem-recycled { fill: var(--recycled); background: var(--recycled); }
+.sem-kept { fill: var(--kept); background: var(--kept); }
+.sem-lost { fill: var(--lost); background: var(--lost); }
+.sem-unverified { fill: var(--unverified); background: var(--unverified); }
+.sem-kept-tx { color: var(--kept); }
+.sem-lost-tx { color: var(--lost); }
+.sem-unverified-tx { color: var(--unverified); }
+.sem-kept-line { fill: none; stroke: var(--kept); }
+.sem-lost-line { fill: none; stroke: var(--lost); }
 /* Hover sparklines (sparkline.go): a listed figure carrying its own
    history. The server renders the card hidden inside the figure
    (.spark-pop); app.js lifts a copy into the fixed #spark-layer on
@@ -4526,6 +4550,10 @@ html[data-theme="light"] {
   --muted: #6e5a42;
   --muted-2: #5f4c36;
   --note: #8a5f24;
+  --recycled: #5d6874;
+  --kept: #0c7a5b;
+  --lost: #b3271e;
+  --unverified: #96660a;
   --panel: #fdfbf6;
   --panel-head: #f0e9da;
   --row: #f8f4ec;

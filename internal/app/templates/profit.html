@@ -80,7 +80,7 @@
   {{range .Activities}}
     <tr{{if .Active}} class="pf-act-on"{{end}}>
       <td><a href="{{.FilterHref}}">{{.Label}}</a><br><small class="mt-reqs">{{.Note}}</small></td>
-      <td>{{if .Rhythm}}<svg class="pf-rhythm" viewBox="0 0 {{.Rhythm.W}} {{.Rhythm.H}}" width="118" height="24" aria-hidden="true"><line class="pf-rhythm-zero" x1="0" y1="{{.Rhythm.ZeroY}}" x2="{{.Rhythm.W}}" y2="{{.Rhythm.ZeroY}}"/>{{range .Rhythm.Bars}}<rect class="{{.Class}}" x="{{.X}}" y="{{.Y}}" width="{{.W}}" height="{{.H}}"/>{{end}}</svg>{{end}}</td>
+      <td>{{if .Rhythm}}<svg class="pf-rhythm" viewBox="0 0 {{.Rhythm.W}} {{.Rhythm.H}}" width="104" height="24" aria-hidden="true"><line class="pf-rhythm-zero" x1="0" y1="{{.Rhythm.ZeroY}}" x2="{{.Rhythm.W}}" y2="{{.Rhythm.ZeroY}}"/>{{range .Rhythm.Bars}}<rect class="{{.Class}}" x="{{.X}}" y="{{.Y}}" width="{{.W}}" height="{{.H}}"/>{{end}}</svg>{{end}}</td>
       <td class="mt-num">{{.Income}}</td>
       <td class="mt-num">{{.Costs}}</td>
       <td class="mt-num"><strong class="{{if eq .NetDir "up"}}sem-kept-tx{{else if eq .NetDir "down"}}sem-lost-tx{{end}}">{{.Net}}</strong></td>

@@ -139,7 +139,7 @@ func buildRhythmSpark(nets []float64, upClass string, maxAbs float64) *rhythmSpa
 	if len(nets) == 0 || maxAbs <= 0 {
 		return nil
 	}
-	const w, h = 118, 24
+	const w, h = 104, 24
 	s := &rhythmSpark{W: w, H: h, ZeroY: h / 2}
 	band := float64(w) / float64(len(nets))
 	bw := math.Max(band*0.62, 1)

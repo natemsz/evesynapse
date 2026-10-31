@@ -310,7 +310,7 @@ func TestPlannerJudgeCharacterBuildable(t *testing.T) {
 		`class="plan-tip"`,
 		`plan-skillbadge" aria-hidden="true">✓`,
 		// 20 Tritanium needed, 15 on hand → 5 to buy at 5 ISK.
-		"Profit Analysis",
+		"<h3>Profit Analysis</h3>",
 		"25.00 ISK",
 		"975.00 ISK", // profit = 1,000.00 value − 25.00 cost
 		"97.5% of the sell value",
@@ -401,7 +401,7 @@ func TestPlannerJudgePricesIncomplete(t *testing.T) {
 	path := fmt.Sprintf("/planner/?product=1001&runs=1&judge=char:%d", fixtureCharA)
 	_, body := getPage(t, app, cookie, path)
 	mustContain(t, path, body,
-		"Profit Analysis",
+		"<h3>Profit Analysis</h3>",
 		"Prices incomplete",
 	)
 	if strings.Contains(body, "Profit per run") {
@@ -677,7 +677,7 @@ func TestPlannerDefaultScopeIsActiveCharacter(t *testing.T) {
 		fmt.Sprintf(`value="char:%d"`, fixtureCharA),
 		`aria-current="true"`,
 		"Can Fixture Ceo build this?",
-		"Profit Analysis",
+		"<h3>Profit Analysis</h3>",
 	)
 	// One character: nothing to say about spanning.
 	if strings.Contains(body, "Jobs timed and slotted as") {
@@ -705,7 +705,7 @@ func TestPlannerExplicitGeneralScope(t *testing.T) {
 		// are: the acting character.
 		"Jobs timed and slotted as Fixture Ceo; stock and blueprints pooled from 2 characters",
 	)
-	for _, absent := range []string{"build this?", "Profit Analysis"} {
+	for _, absent := range []string{"build this?", "<h3>Profit Analysis</h3>"} {
 		if strings.Contains(body, absent) {
 			t.Fatalf("general plan grew a scoped block: %q present", absent)
 		}

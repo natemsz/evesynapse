@@ -157,21 +157,23 @@ func TestPhoneBottomBarRenders(t *testing.T) {
 		`<a class="phone-bar-item" href="/" data-section="home">`,
 		`<a class="phone-bar-item" href="/character/" data-section="pilot">`,
 		`<a class="phone-bar-item" href="/industry/" data-section="industry">`,
-		`<a class="phone-bar-item" href="/market/" data-section="market">`,
-		`<button type="button" class="phone-bar-item active" id="phone-sections-btn"`,
+		`<a class="phone-bar-item active" href="/market/" data-section="market" aria-current="page">`,
 	} {
 		if !strings.Contains(bar, want) {
 			t.Errorf("leaderboard phone bar is missing %q", want)
 		}
+	}
+	if strings.Contains(bar, `class="phone-bar-item active" id="phone-sections-btn"`) {
+		t.Error("on a slotted section the Sections button should not carry the active mark")
 	}
 	sheet := phoneSheetBlock(t, body)
 	for _, want := range []string{
 		`<a class="phone-sheet-section" href="/character/" data-section="pilot">Pilot</a>`,
 		`<a class="phone-sheet-section" href="/fittings/" data-section="fitting">Fitting</a>`,
 		`<a class="phone-sheet-section" href="/industry/" data-section="industry">Industry</a>`,
-		`<a class="phone-sheet-section" href="/market/" data-section="market">Browse</a>`,
-		`<a class="phone-sheet-section active" href="/market/trends/" data-section="toolsanalysis" aria-current="page">Tools &amp; Analysis</a>`,
-		`<a class="phone-sheet-section" href="/orders/" data-section="finances">My Finances</a>`,
+		`<a class="phone-sheet-section active" href="/market/" data-section="market" aria-current="page">Market</a>`,
+		`<a href="/market/trends/" class="active">Tools &amp; Analysis</a>`,
+		`<a href="/orders/">My Finances</a>`,
 		`<a class="phone-sheet-section" href="/corporations/" data-section="corporation">Corporation</a>`,
 		`<a class="phone-sheet-section" href="/intel/kills/" data-section="intel">Intel</a>`,
 		`<a class="phone-sheet-section" href="/items/" data-section="tools">Tools</a>`,

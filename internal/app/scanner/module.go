@@ -20,7 +20,7 @@ var Module = module.Module{
 	EnhanceScopes: []module.Scope{},
 	Activities:    []string{"market"},
 	Nav: []module.NavSection{{
-		Section: "toolsanalysis",
+		Section: "market",
 		Entries: []module.NavEntry{
 			{Href: "/market/scanner/", Label: "Spread Scanner", Pages: []string{"market_scanner.html"}, After: "/market/baskets/"},
 		},
@@ -32,7 +32,7 @@ var Module = module.Module{
 		r.With(deps.AnonPages()).Get("/market/scanner/", h((*page).handleMarketScanner))
 	},
 	Pages: []module.Page{
-		{Template: "market_scanner.html", Section: "toolsanalysis"},
+		{Template: "market_scanner.html", Section: "market"},
 	},
 }
 

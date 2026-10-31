@@ -32,9 +32,21 @@ func TestSectionTabs(t *testing.T) {
 	if tabsAt, bodyAt := strings.Index(body, `<nav class="section-tabs"`), strings.Index(body, `<div class="page-body">`); tabsAt < 0 || bodyAt < 0 || tabsAt > bodyAt {
 		t.Error("section tabs render inside .page-body; they belong above the glass, under the title")
 	}
-	// Trade Ideas sits in Tools & Analysis: the strip is that
-	// section's flat list, in section order, with Trade Ideas
-	// itself marked and no sub-row under it.
+	// Trade Ideas sits in Tools & Analysis, one of the market
+	// section's three groups: the strip shows the groups, with
+	// Tools & Analysis marked, and the sub-row shows the
+	// group's pages with Trade Ideas itself marked.
+	for _, want := range []string{
+		`<a href="/market/">Browse</a>`,
+		`<a href="/market/trends/" class="active" aria-current="page">Tools &amp; Analysis</a>`,
+		`<a href="/orders/">My Finances</a>`,
+	} {
+		mustContain(t, "market group tabs", tabs, want)
+	}
+	if strings.Count(tabs, `class="active"`) != 1 {
+		t.Errorf("market group tabs mark %d clusters, want 1", strings.Count(tabs, `class="active"`))
+	}
+	sub := sectionSubTabsBlock(t, body)
 	for _, want := range []string{
 		`<a href="/market/trends/">Trends</a>`,
 		`<a href="/market/baskets/">Baskets</a>`,
@@ -44,17 +56,14 @@ func TestSectionTabs(t *testing.T) {
 		`<a href="/market/restock/">Restock Planner</a>`,
 		`<a href="/market/leaderboard/">Top Stations</a>`,
 	} {
-		mustContain(t, "tools & analysis tabs", tabs, want)
+		mustContain(t, "market subtabs", sub, want)
 	}
-	if strings.Count(tabs, `class="active"`) != 1 {
-		t.Errorf("tools & analysis tabs mark %d pages, want 1", strings.Count(tabs, `class="active"`))
+	if strings.Count(sub, `class="active"`) != 1 {
+		t.Errorf("market subtabs mark %d pages, want 1", strings.Count(sub, `class="active"`))
 	}
-	if strings.Contains(body, `<nav class="section-subtabs"`) {
-		t.Error("an ungrouped section renders a sub-row")
-	}
-	// The sidebar renders the same three sections the old
-	// market section split into: Browse, then Tools & Analysis,
-	// then My Finances, each with its pages in section order.
+	// The sidebar renders one market branch: its pages in
+	// group order, Browse first, then Tools & Analysis, then
+	// My Finances, and no branch for the groups themselves.
 	branch := func(category string) string {
 		at := strings.Index(body, `data-nav-category="`+category+`"`)
 		if at < 0 {
@@ -81,9 +90,12 @@ func TestSectionTabs(t *testing.T) {
 			last = at
 		}
 	}
-	inOrder(branch("market"), "/market/", "/contracts/search/", "/market/lp/")
-	inOrder(branch("toolsanalysis"), "/market/trends/", "/market/baskets/", "/market/ideas/", "/market/scanner/", "/market/tradefinder/", "/market/restock/", "/market/leaderboard/")
-	inOrder(branch("finances"), "/orders/", "/contracts/")
+	inOrder(branch("market"), "/market/", "/contracts/search/", "/market/lp/", "/market/trends/", "/market/baskets/", "/market/ideas/", "/market/scanner/", "/market/tradefinder/", "/market/restock/", "/market/leaderboard/", "/orders/", "/contracts/")
+	for _, gone := range []string{"toolsanalysis", "finances"} {
+		if strings.Contains(body, `data-nav-category="`+gone+`"`) {
+			t.Errorf("the sidebar still carries a %s branch", gone)
+		}
+	}
 
 	// The corporation strip is grouped: the strip shows the four
 	// clusters, and the page itself is marked in the sub-row under
@@ -103,7 +115,7 @@ func TestSectionTabs(t *testing.T) {
 	if strings.Count(tabs, `class="active"`) != 1 {
 		t.Errorf("corp group tabs mark %d clusters, want 1", strings.Count(tabs, `class="active"`))
 	}
-	sub := sectionSubTabsBlock(t, body)
+	sub = sectionSubTabsBlock(t, body)
 	mustContain(t, "corp killmails subtabs", sub, `<a href="/corporations/killmails/" class="active" aria-current="page">Killmails</a>`)
 	mustContain(t, "corp killmails subtabs", sub, `<a href="/corporations/">Overview</a>`)
 	mustContain(t, "corp killmails subtabs", sub, `<a href="/corporations/members/">Members</a>`)
@@ -224,26 +236,7 @@ func TestSectionGroups(t *testing.T) {
 	for _, tc := range []struct {
 		section, page string
 		want          []navLink
-	}{
-		{"market", "market.html", []navLink{
-			{Href: "/market/", Label: "Market", Active: true},
-			{Href: "/contracts/search/", Label: "Contract Search"},
-			{Href: "/market/lp/", Label: "LP Store"},
-		}},
-		{"toolsanalysis", "market_tradeideas.html", []navLink{
-			{Href: "/market/trends/", Label: "Trends"},
-			{Href: "/market/baskets/", Label: "Baskets"},
-			{Href: "/market/ideas/", Label: "Trade Ideas", Active: true},
-			{Href: "/market/scanner/", Label: "Spread Scanner"},
-			{Href: "/market/tradefinder/", Label: "Trade Finder"},
-			{Href: "/market/restock/", Label: "Restock Planner"},
-			{Href: "/market/leaderboard/", Label: "Top Stations"},
-		}},
-		{"finances", "orders.html", []navLink{
-			{Href: "/orders/", Label: "My Orders", Active: true},
-			{Href: "/contracts/", Label: "My Contracts"},
-		}},
-	} {
+	}{} {
 		flat, flatSub := sectionTabsGrouped(navLinksFor(tc.section, tc.page, 0), tc.section)
 		if flatSub != nil {
 			t.Errorf("%s strip has a sub-row, want none", tc.section)
@@ -295,6 +288,27 @@ func TestSectionGroups(t *testing.T) {
 	}
 	if len(isub) != 2 || isub[0].Href != "/planets/" || isub[1].Href != "/industry/pi/" || !isub[0].Active {
 		t.Errorf("industry sub-row = %+v, want My Colonies (active) and the PI Planner", isub)
+	}
+
+	// The market strip: Browse, Tools & Analysis and My
+	// Finances, the trade ideas page in Tools & Analysis's
+	// sub-row.
+	mtabs, msub := sectionTabsGrouped(navLinksFor("market", "market_tradeideas.html", 0), "market")
+	wantMTabs := []navLink{
+		{Href: "/market/", Label: "Browse"},
+		{Href: "/market/trends/", Label: "Tools & Analysis", Active: true},
+		{Href: "/orders/", Label: "My Finances"},
+	}
+	if len(mtabs) != len(wantMTabs) {
+		t.Fatalf("market strip has %d group tabs, want %d", len(mtabs), len(wantMTabs))
+	}
+	for i, want := range wantMTabs {
+		if mtabs[i] != want {
+			t.Errorf("market group tab %d = %+v, want %+v", i, mtabs[i], want)
+		}
+	}
+	if len(msub) != 7 || msub[0].Href != "/market/trends/" || msub[2].Href != "/market/ideas/" || msub[6].Href != "/market/leaderboard/" || !msub[2].Active {
+		t.Errorf("market sub-row = %+v, want the seven Tools & Analysis pages with Trade Ideas active", msub)
 	}
 
 	// An ungrouped section passes through flat, with no sub-row.
@@ -381,6 +395,14 @@ func TestNavGroupsMirror(t *testing.T) {
 			{"Production", []string{"/industry/", "/industry/jobs/", "/industry/mining/", "/planner/"}},
 			{"Planetary", []string{"/planets/", "/industry/pi/"}},
 		}, 1, 0},
+		{"market", "market_tradeideas.html", []struct {
+			label string
+			hrefs []string
+		}{
+			{"Browse", []string{"/market/", "/contracts/search/", "/market/lp/"}},
+			{"Tools & Analysis", []string{"/market/trends/", "/market/baskets/", "/market/ideas/", "/market/scanner/", "/market/tradefinder/", "/market/restock/", "/market/leaderboard/"}},
+			{"My Finances", []string{"/orders/", "/contracts/"}},
+		}, 1, 2},
 	} {
 		sgs := navGroupsFor(navLinksFor(tc.section, tc.page, 0))[tc.section]
 		if len(sgs) != len(tc.want) {
@@ -414,7 +436,7 @@ func TestNavGroupsMirror(t *testing.T) {
 
 	// No group map, no grouped menu: the short sections stay
 	// flat.
-	for _, section := range []string{"fitting", "intel", "tools", "market", "toolsanalysis", "finances"} {
+	for _, section := range []string{"fitting", "intel", "tools"} {
 		if _, ok := navGroupsFor(navLinksFor(section, "", 0))[section]; ok {
 			t.Errorf("the %s menu gained groups; only mapped sections group", section)
 		}
@@ -443,7 +465,7 @@ func TestNavGroupsMirror(t *testing.T) {
 	}
 	last := -1
 	for _, label := range []string{"People", "Assets &amp; Money", "Programs", "Comms &amp; Admin"} {
-		i := strings.Index(menu, `<p class="nav-group-label">`+label+`</p>`)
+		i := strings.Index(menu, label+`</p>`)
 		if i < 0 {
 			t.Errorf("sidebar corporation menu misses the %s heading", label)
 			continue
@@ -453,8 +475,8 @@ func TestNavGroupsMirror(t *testing.T) {
 		}
 		last = i
 	}
-	peopleAt := strings.Index(menu, `<p class="nav-group-label">People</p>`)
-	assetsAt := strings.Index(menu, `<p class="nav-group-label">Assets &amp; Money</p>`)
+	peopleAt := strings.Index(menu, `People</p>`)
+	assetsAt := strings.Index(menu, `Assets &amp; Money</p>`)
 	groupsAt := strings.Index(menu, `href="/groups/"`)
 	if peopleAt < 0 || assetsAt < 0 || groupsAt < 0 {
 		t.Fatalf("sidebar menu landmarks missing: people %d, assets %d, groups link %d", peopleAt, assetsAt, groupsAt)

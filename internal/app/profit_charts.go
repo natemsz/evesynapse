@@ -139,7 +139,7 @@ func buildRhythmSpark(nets []float64, upClass string, maxAbs float64) *rhythmSpa
 	if len(nets) == 0 || maxAbs <= 0 {
 		return nil
 	}
-	const w, h = 150, 24
+	const w, h = 118, 24
 	s := &rhythmSpark{W: w, H: h, ZeroY: h / 2}
 	band := float64(w) / float64(len(nets))
 	bw := math.Max(band*0.62, 1)
@@ -688,22 +688,16 @@ func (app *Application) buildProfitCharts(ctx context.Context, view *profitView,
 	}
 
 	// The By activity table's rhythm: each activity's bucket nets
-	// as spark-bars on one shared scale.
-	{
-		maxAbs := 0.0
-		for k, s := range actNet {
-			if k == actUnattributed {
-				continue
-			}
+	// as spark-bars on that activity's own scale, so every row's
+	// shape reads; the In and Net columns carry the magnitudes.
+	for ri := range view.Activities {
+		k := view.Activities[ri].Key
+		if s, ok := actNet[k]; ok {
+			maxAbs := 0.0
 			for _, v := range s {
 				maxAbs = math.Max(maxAbs, math.Abs(v))
 			}
-		}
-		for ri := range view.Activities {
-			k := view.Activities[ri].Key
-			if s, ok := actNet[k]; ok {
-				view.Activities[ri].Rhythm = buildRhythmSpark(s, pfActivityClass[k], maxAbs)
-			}
+			view.Activities[ri].Rhythm = buildRhythmSpark(s, pfActivityClass[k], maxAbs)
 		}
 	}
 
@@ -1102,6 +1096,13 @@ func buildProfitHero(view *profitView, buckets []string, band float64, unit stri
 		hero.Ends = append(hero.Ends, nwEnd)
 		hero.Legend = append(hero.Legend, pfLegend{Class: "pf-hero-sw-nw", Label: "Net worth change", Value: signedISK(nwCum[n-1])})
 	}
+	// End labels stay inside the plot: hard against the top or
+	// bottom edge a label sits half outside the panel and crowds
+	// the mode pills above it.
+	for i := range hero.Ends {
+		p, _ := strconv.Atoi(hero.Ends[i].Pos)
+		hero.Ends[i].Pos = strconv.Itoa(max(min(p, 96), 6))
+	}
 	for _, s := range series {
 		hero.Legend = append(hero.Legend, pfLegend{Class: s.legendClass, Label: s.label, Value: signedISK(s.cum[n-1])})
 	}
@@ -1160,14 +1161,15 @@ func buildWaterfall(view *profitView, gross, ind, earned, covCost, uncovRev floa
 	y := func(v float64) float64 { return 10 + (hi-v)/(hi-lo)*float64(h-20) }
 	steps := []struct {
 		name, class string
+		short       string  // the axis label: the full name rides the legend and hover rows
 		val         float64 // signed: what the step adds or takes
 		top, bot    float64 // the levels the bar spans
 	}{
-		{"Gross in", "pf-wf-gross", gross, gross, 0},
-		{"Cost of goods sold", "sem-recycled", -covCost, levels[0], levels[1]},
-		{"Industry costs", "pf-wf-industry", -ind, levels[1], levels[2]},
-		{"Fees, taxes and other outflows", "sem-lost", -fees, levels[2], levels[3]},
-		{"Net earned", "sem-kept", earned, earned, 0},
+		{"Gross in", "pf-wf-gross", "Gross in", gross, gross, 0},
+		{"Cost of goods sold", "sem-recycled", "COGS", -covCost, levels[0], levels[1]},
+		{"Industry costs", "pf-wf-industry", "Industry costs", -ind, levels[1], levels[2]},
+		{"Fees, taxes and other outflows", "sem-lost", "Fees & other out", -fees, levels[2], levels[3]},
+		{"Net earned", "sem-kept", "Net earned", earned, earned, 0},
 	}
 	if earned < 0 {
 		steps[4].class = "sem-lost"
@@ -1188,11 +1190,13 @@ func buildWaterfall(view *profitView, gross, ind, earned, covCost, uncovRev floa
 	for i, s := range steps {
 		wf.Bars = append(wf.Bars, barFor(i, s.top, s.bot, s.class))
 		// The step's value at its head: inside the bar when the
-		// bar is tall enough, just above it when not.
+		// bar is tall enough to hold the line, a full line above
+		// it when not (the label renders downward from its mark,
+		// so a short bar needs the whole line of clearance).
 		bar := wf.Bars[i]
 		vy := bar.Y + 11
-		if bar.H < 15 {
-			vy = bar.Y - 4
+		if bar.H < 26 {
+			vy = bar.Y - 13
 		}
 		val := pfShortISK(s.val)
 		wf.Values = append(wf.Values, pfWfLabel{Text: val,
@@ -1204,7 +1208,7 @@ func buildWaterfall(view *profitView, gross, ind, earned, covCost, uncovRev floa
 		} else if i == len(steps)-1 {
 			cls = "pf-x-end"
 		}
-		wf.Names = append(wf.Names, pfTick{Pos: strconv.Itoa(int(math.Round((stepX[i] + barW/2) / w * 100))), Label: s.name, Class: cls})
+		wf.Names = append(wf.Names, pfTick{Pos: strconv.Itoa(int(math.Round((stepX[i] + barW/2) / w * 100))), Label: s.short, Class: cls})
 		rows := [][3]string{{s.name, signedISK(s.val) + " ISK", s.class}}
 		if i == 4 && uncovRev > 0 {
 			rows = append(rows, [3]string{"Of which no known cost", esi.FormatISK(uncovRev) + " ISK", "sem-unverified"})

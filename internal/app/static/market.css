@@ -294,7 +294,7 @@ td.mt-reqs { max-width: 12rem; }
 .ctip .ctip-row { display: flex; align-items: center; gap: 0.45rem; }
 .ctip .ctip-sw { width: 0.6rem; height: 0.6rem; border-radius: 2px; flex: none; }
 .ctip .ctip-val { margin-left: auto; padding-left: 0.9rem; font-variant-numeric: tabular-nums; }
-.pf-act-grid { display: grid; grid-template-columns: minmax(0, 1fr) 21rem; gap: 1rem 1.5rem; align-items: start; }
+.pf-act-grid { display: grid; grid-template-columns: minmax(0, 1fr) 19.5rem; gap: 1rem 1.5rem; align-items: start; }
 @media (max-width: 900px) { .pf-act-grid { grid-template-columns: minmax(0, 1fr); } }
 .pf-card { background: var(--panel); border: 1px solid var(--box-edge); border-radius: var(--r-md); padding: 0.8rem 0.9rem; }
 .pf-card h4 { margin: 0 0 0.5rem; font-size: 0.9rem; }
@@ -536,7 +536,8 @@ td.mt-reqs { max-width: 12rem; }
    come from the theme tokens only, the semantic four first. */
 .pf-hero svg { height: 208px; }
 @media (max-width: 640px) { .pf-hero svg { height: 168px; } }
-.pf-hero-modes { display: flex; gap: 0.4rem; flex-wrap: wrap; justify-content: flex-end; }
+.pf-hero .viz-head { flex-wrap: wrap; row-gap: 0.35rem; }
+.pf-hero-modes { display: flex; gap: 0.4rem; flex-wrap: wrap; justify-content: flex-end; margin-left: auto; }
 .pf-hero-modes .mt-modes { margin: 0; }
 .pf-hero-area { fill: color-mix(in srgb, var(--accent) 34%, transparent); stroke: none; }
 .pf-area-a { stroke: none; fill-opacity: 0.55; }

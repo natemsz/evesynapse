@@ -645,6 +645,9 @@ func (app *Application) attachNotExplained(ctx context.Context, view *profitView
 	view.NEHas = true
 	view.NEUnaccounted, view.NEUnaccDir = signedISK(remainder), dirOf(remainder)
 	if len(view.Positions) == 0 {
+		// Nothing held, so nothing can reprice: the drift is
+		// zero, stated rather than left blank.
+		view.NEDrift, view.NEDriftDir = signedISK(0), dirOf(0)
 		return
 	}
 	held := make([]profitPositionRow, len(view.Positions))

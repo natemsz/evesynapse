@@ -31,9 +31,9 @@ func TestISKFigurePassthrough(t *testing.T) {
 }
 
 func TestISKHeroLengthSteps(t *testing.T) {
-	// 13 integer characters is the baseline: no step class.
-	if got := string(iskHero("1,234,567,890.12")); strings.Contains(got, "iskhero") {
-		t.Errorf("baseline figure got a size step: %s", got)
+	// 15 integer characters is still the baseline: no step class.
+	if got := string(iskHero("172,068,853,681.84")); strings.Contains(got, "iskhero") {
+		t.Errorf("15-char figure got a size step: %s", got)
 	}
 	// 18 characters steps to l2; 21 to l3.
 	if got := string(iskHero("10,059,808,708,475.29")); !strings.Contains(got, `class="iskfig iskhero l2"`) {

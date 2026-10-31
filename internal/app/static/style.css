@@ -2080,14 +2080,14 @@ td.pos, .pos { color: #28c76f; }
    surface's plain size is the baseline for ordinary figures. */
 .iskfig { white-space: nowrap; font-variant-numeric: tabular-nums; }
 .iskfig .dec { font-size: 0.56em; line-height: 0; vertical-align: 0.34em; margin-left: 0.02em; }
-.kpi-v .iskhero.l1 { font-size: 1.27rem; }
-.kpi-v .iskhero.l2 { font-size: 1.14rem; }
-.kpi-v .iskhero.l3 { font-size: 0.99rem; }
-.kpi-v .iskhero.l4 { font-size: 0.93rem; }
+.kpi-v .iskhero.l1 { font-size: 1.24rem; }
+.kpi-v .iskhero.l2 { font-size: 1.05rem; }
+.kpi-v .iskhero.l3 { font-size: 0.93rem; }
+.kpi-v .iskhero.l4 { font-size: 0.86rem; }
 .kpis-small .kpi-v .iskhero.l1 { font-size: 0.94rem; }
-.kpis-small .kpi-v .iskhero.l2 { font-size: 0.87rem; }
-.kpis-small .kpi-v .iskhero.l3 { font-size: 0.76rem; }
-.kpis-small .kpi-v .iskhero.l4 { font-size: 0.69rem; }
+.kpis-small .kpi-v .iskhero.l2 { font-size: 0.84rem; }
+.kpis-small .kpi-v .iskhero.l3 { font-size: 0.74rem; }
+.kpis-small .kpi-v .iskhero.l4 { font-size: 0.67rem; }
 .kpi-sub { font-size: 0.75rem; color: var(--muted); }
 .kpi-bar { display: block; height: 4px; background: #1d1510; border-radius: 2px; overflow: hidden; }
 .kpi-bar > span { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--sch-end, #d63c14), var(--accent)); }

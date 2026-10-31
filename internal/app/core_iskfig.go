@@ -41,10 +41,11 @@ func splitISKFigure(s string) (whole, cents string, ok bool) {
 // iskLengthBucket grades a hero figure's size by the length of
 // its integer part: 0 keeps the surface's plain size (the
 // baseline for ordinary figures), and each higher bucket steps
-// the size down so the figure always fits its card.
+// the size down. The thresholds leave room for the superscript
+// cents tail, so the whole figure fits its card with slack.
 func iskLengthBucket(intLen int) int {
 	switch {
-	case intLen <= 13:
+	case intLen <= 15:
 		return 0
 	case intLen <= 16:
 		return 1

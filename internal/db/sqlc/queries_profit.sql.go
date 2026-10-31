@@ -1522,6 +1522,109 @@ func (q *Queries) ListTradeItems(ctx context.Context, arg ListTradeItemsParams) 
 	return items, nil
 }
 
+const listTradeItemsRange = `-- name: ListTradeItemsRange :many
+SELECT type_id,
+       SUM(units)::bigint AS units, SUM(revenue)::float8 AS revenue,
+       SUM(cov_units)::bigint AS cov_units, SUM(cov_revenue)::float8 AS cov_revenue,
+       SUM(cov_cost)::float8 AS cov_cost, SUM(cov_tax)::float8 AS cov_tax, SUM(broker)::float8 AS broker,
+       SUM(gap_before_history)::bigint AS gap_before_history, SUM(gap_ledger_hole)::bigint AS gap_ledger_hole,
+       SUM(gap_no_buy)::bigint AS gap_no_buy, SUM(gap_no_tax)::bigint AS gap_no_tax,
+       0::float8 AS prev_cov_net, 0::float8 AS prev_broker,
+       0::bigint AS prev_units, 0::bigint AS prev_cov_units
+FROM trade_item_daily
+WHERE owner_kind = $1 AND owner_id = ANY($2::bigint[])
+  AND day >= $3::text AND day <= $4::text
+GROUP BY type_id
+HAVING (SUM(units) > 0 OR SUM(broker) > 0)
+   AND (NOT $5::bool OR SUM(cov_units) < SUM(units))
+ORDER BY (SUM(units) > 0 AND SUM(cov_units) >= SUM(units)) DESC,
+         SUM(cov_revenue - cov_cost - cov_tax - CASE WHEN $6::bool THEN broker ELSE 0 END) DESC,
+         type_id
+LIMIT $7::bigint
+`
+
+type ListTradeItemsRangeParams struct {
+	OwnerKind      string  `json:"owner_kind"`
+	OwnerIds       []int64 `json:"owner_ids"`
+	FromDay        string  `json:"from_day"`
+	ToDay          string  `json:"to_day"`
+	OnlyUncovered  bool    `json:"only_uncovered"`
+	BrokerInMargin bool    `json:"broker_in_margin"`
+	RowCap         int64   `json:"row_cap"`
+}
+
+type ListTradeItemsRangeRow struct {
+	TypeID           int64   `json:"type_id"`
+	Units            int64   `json:"units"`
+	Revenue          float64 `json:"revenue"`
+	CovUnits         int64   `json:"cov_units"`
+	CovRevenue       float64 `json:"cov_revenue"`
+	CovCost          float64 `json:"cov_cost"`
+	CovTax           float64 `json:"cov_tax"`
+	Broker           float64 `json:"broker"`
+	GapBeforeHistory int64   `json:"gap_before_history"`
+	GapLedgerHole    int64   `json:"gap_ledger_hole"`
+	GapNoBuy         int64   `json:"gap_no_buy"`
+	GapNoTax         int64   `json:"gap_no_tax"`
+	PrevCovNet       float64 `json:"prev_cov_net"`
+	PrevBroker       float64 `json:"prev_broker"`
+	PrevUnits        int64   `json:"prev_units"`
+	PrevCovUnits     int64   `json:"prev_cov_units"`
+}
+
+// The Trading by item figures over an explicit day range, summed
+// from the daily fold: the item table's uncovered filter reads this
+// (a whole span, or one bucket's days for a day filter), optionally
+// keeping only types with units no cost covered. No previous window
+// rides along, so the delta columns stay empty under the filter.
+func (q *Queries) ListTradeItemsRange(ctx context.Context, arg ListTradeItemsRangeParams) ([]ListTradeItemsRangeRow, error) {
+	rows, err := q.db.QueryContext(ctx, listTradeItemsRange,
+		arg.OwnerKind,
+		pq.Array(arg.OwnerIds),
+		arg.FromDay,
+		arg.ToDay,
+		arg.OnlyUncovered,
+		arg.BrokerInMargin,
+		arg.RowCap,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListTradeItemsRangeRow
+	for rows.Next() {
+		var i ListTradeItemsRangeRow
+		if err := rows.Scan(
+			&i.TypeID,
+			&i.Units,
+			&i.Revenue,
+			&i.CovUnits,
+			&i.CovRevenue,
+			&i.CovCost,
+			&i.CovTax,
+			&i.Broker,
+			&i.GapBeforeHistory,
+			&i.GapLedgerHole,
+			&i.GapNoBuy,
+			&i.GapNoTax,
+			&i.PrevCovNet,
+			&i.PrevBroker,
+			&i.PrevUnits,
+			&i.PrevCovUnits,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listTradeOpenLots = `-- name: ListTradeOpenLots :many
 SELECT quantity, unit_price, ref_id FROM trade_open_lots
 WHERE owner_kind = $1 AND owner_id = $2 AND type_id = $3

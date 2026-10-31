@@ -21,7 +21,7 @@ var Module = module.Module{
 	EnhanceScopes: []module.Scope{},
 	Activities:    []string{"market"},
 	Nav: []module.NavSection{{
-		Section: "toolsanalysis",
+		Section: "market",
 		Entries: []module.NavEntry{
 			{Href: "/market/leaderboard/", Label: "Top Stations", Pages: []string{"market_leaderboard.html"}, After: "/market/restock/"},
 		},
@@ -33,7 +33,7 @@ var Module = module.Module{
 		r.With(deps.AnonPages()).Get("/market/leaderboard/", h((*page).handleMarketLeaderboard))
 	},
 	Pages: []module.Page{
-		{Template: "market_leaderboard.html", Section: "toolsanalysis"},
+		{Template: "market_leaderboard.html", Section: "market"},
 	},
 }
 

@@ -1,6 +1,7 @@
 package app
 
 import (
+	"html/template"
 	"slices"
 	"strconv"
 	"strings"
@@ -106,13 +107,10 @@ var sectionNav = map[string][]navEntry{
 	},
 	"market": {
 		{"/market/", "Market", []string{"market.html"}},
-		{"/market/lp/", "LP Store", []string{"market_lp.html"}},
-	},
-	"toolsanalysis": {
 		{"/market/trends/", "Trends", []string{"market_trends.html"}},
+		{"/market/lp/", "LP Store", []string{"market_lp.html"}},
 		{"/market/baskets/", "Baskets", []string{"market_baskets.html", "market_basket.html"}},
 	},
-	"finances": {},
 	"corporation": {
 		{"/corporations/", "Overview", []string{"corporations.html"}},
 		{"/corporations/killmails/", "Killmails", []string{"killmails.html"}},
@@ -183,7 +181,7 @@ type navGroup struct {
 // the pattern: at thirteen pages its strip was the widest in the
 // app by a third again, and no single row of folder tabs holds
 // it under a very wide window. The other wide sections follow
-// it: pilot and industry group the same way, each map
+// it: pilot, industry and market group the same way, each map
 // claiming every one of the section's pages exactly once
 // (TestSectionGroups pins that, so the runtime's flat fallback
 // stays a safety net). The short sections stay flat: fitting
@@ -200,12 +198,36 @@ var sectionGroups = map[string][]navGroup{
 		{"Production", []string{"/industry/", "/industry/jobs/", "/industry/mining/", "/planner/"}},
 		{"Planetary", []string{"/planets/", "/industry/pi/"}},
 	},
+	"market": {
+		{"Browse", []string{"/market/", "/contracts/search/", "/market/lp/"}},
+		{"Tools & Analysis", []string{"/market/trends/", "/market/baskets/", "/market/ideas/", "/market/scanner/", "/market/tradefinder/", "/market/restock/", "/market/leaderboard/"}},
+		{"My Finances", []string{"/orders/", "/contracts/"}},
+	},
 	"corporation": {
 		{"People", []string{"/corporations/", "/corporations/members/", "/groups/", "/corporations/killmails/"}},
 		{"Assets & Money", []string{"/corporations/wallets/", "/corporations/orders/", "/corporations/assets/", "/corporations/structures/"}},
 		{"Programs", []string{"/doctrines/", "/doctrines/fits/", "/srp/"}},
 		{"Comms & Admin", []string{"/discord/servers", "/corporations/settings/"}},
 	},
+}
+
+// navGroupIcons is the small glyph each group heading carries in
+// the sidebar menu, keyed by group label: a 24-unit stroke glyph
+// drawn in the heading's own color at heading size, so a cluster
+// reads at a glance the way a section does by its summary icon.
+// A label with no entry renders its heading plain.
+var navGroupIcons = map[string]template.HTML{
+	"Character":        `<svg width="12" height="12" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4.8 20.2c1.1-3.2 3.9-4.9 7.2-4.9s6.1 1.7 7.2 4.9"/></g></svg>`,
+	"Assets & Money":   `<svg width="12" height="12" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><ellipse cx="12" cy="6.5" rx="7" ry="3"/><path d="M5 6.5v11c0 1.7 3.1 3 7 3s7-1.3 7-3v-11"/><path d="M5 12c0 1.7 3.1 3 7 3s7-1.3 7-3"/></g></svg>`,
+	"Comms":            `<svg width="12" height="12" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5.5" width="18" height="13" rx="2"/><path d="m4 7.5 8 6 8-6"/></g></svg>`,
+	"Production":       `<svg width="12" height="12" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 21h17"/><path d="M5.5 21v-9.5l5.5 3.7v-3.7l5.5 3.7V6h2v15"/></g></svg>`,
+	"Planetary":        `<svg width="12" height="12" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="4.5"/><path d="M3 16.8c5.8 2.8 12.2 2.8 18 0"/><path d="M3.8 8.6c1.9-.9 4-1.5 6.2-1.7"/></g></svg>`,
+	"Browse":           `<svg width="12" height="12" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5 21 21"/></g></svg>`,
+	"Tools & Analysis": `<svg width="12" height="12" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4v15.5h16"/><path d="M7.5 15.5 11 10l3 2.5 4.5-5"/></g></svg>`,
+	"My Finances":      `<svg width="12" height="12" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="6.5" width="17" height="12" rx="2"/><path d="M3.5 10.5h17"/></g><circle cx="16.8" cy="14.5" r="1.4" fill="currentColor"/></svg>`,
+	"People":           `<svg width="12" height="12" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="9" cy="9" r="3.4"/><path d="M3.2 19.6c.7-2.9 2.9-4.6 5.8-4.6 1.5 0 2.8.5 3.8 1.3"/><path d="M15.5 6.4a3.4 3.4 0 1 1 .9 4.5"/><path d="M16.8 15.3c2 .4 3.4 1.9 4 4.3"/></g></svg>`,
+	"Programs":         `<svg width="12" height="12" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5 19 6v5.2c0 4.4-2.9 7.5-7 9.3-4.1-1.8-7-4.9-7-9.3V6z"/></g></svg>`,
+	"Comms & Admin":    `<svg width="12" height="12" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 7h9"/><path d="M17 7h3"/><path d="M4 12h3"/><path d="M11 12h9"/><path d="M4 17h11"/><path d="M19 17h1"/></g><g fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="15" cy="7" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="17" r="2"/></g></svg>`,
 }
 
 // sectionTabsGrouped is a page's tab strip data: for an ungrouped
@@ -299,7 +321,7 @@ func navGroupsFor(links map[string][]navLink) map[string][]module.NavGroup {
 			if len(buckets[gi]) == 0 {
 				continue
 			}
-			menu = append(menu, module.NavGroup{Label: g.Label, Links: buckets[gi]})
+			menu = append(menu, module.NavGroup{Label: g.Label, Icon: navGroupIcons[g.Label], Links: buckets[gi]})
 		}
 		if len(menu) < 2 {
 			continue
@@ -342,9 +364,7 @@ var bottomSheetSections = []struct{ section, label string }{
 	{"pilot", "Pilot"},
 	{"fitting", "Fitting"},
 	{"industry", "Industry"},
-	{"market", "Browse"},
-	{"toolsanalysis", "Tools & Analysis"},
-	{"finances", "My Finances"},
+	{"market", "Market"},
 	{"corporation", "Corporation"},
 	{"intel", "Intel"},
 	{"tools", "Tools"},

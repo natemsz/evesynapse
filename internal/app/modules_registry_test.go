@@ -149,22 +149,19 @@ func TestModuleNavKeepsItsPlace(t *testing.T) {
 	follows("fitting", "/fittings/public/", "/fittings/saved/")
 	follows("pilot", "/skills/plans", "/characters/")
 	follows("market", "/contracts/search/", "/market/")
-	follows("toolsanalysis", "/market/ideas/", "/market/baskets/")
-	follows("toolsanalysis", "/market/scanner/", "/market/ideas/")
-	follows("toolsanalysis", "/market/tradefinder/", "/market/scanner/")
-	follows("toolsanalysis", "/market/restock/", "/market/tradefinder/")
-	follows("toolsanalysis", "/market/leaderboard/", "/market/restock/")
-	follows("finances", "/contracts/", "/orders/")
+	follows("market", "/market/ideas/", "/market/baskets/")
+	follows("market", "/market/scanner/", "/market/ideas/")
+	follows("market", "/market/tradefinder/", "/market/scanner/")
+	follows("market", "/market/restock/", "/market/tradefinder/")
+	follows("market", "/market/leaderboard/", "/market/restock/")
+	follows("market", "/contracts/", "/orders/")
 
-	// The whole pilot, browse, tools & analysis, finances and
-	// tools menus, in their order. Appraisal sits under Tools,
-	// after the Item Browser.
+	// The whole pilot, market and tools menus, in their
+	// order. Appraisal sits under Tools, after the Item Browser.
 	follows("tools", "/market/appraise/", "/items/")
 	for section, want := range map[string][]string{
 		"pilot":         {"/character/", "/characters/", "/skills/plans", "/assets/", "/wallet/", "/mail/", "/calendar/", "/contacts/", "/profit/", "/killmails/"},
-		"market":        {"/market/", "/contracts/search/", "/market/lp/"},
-		"toolsanalysis": {"/market/trends/", "/market/baskets/", "/market/ideas/", "/market/scanner/", "/market/tradefinder/", "/market/restock/", "/market/leaderboard/"},
-		"finances":      {"/orders/", "/contracts/"},
+		"market":        {"/market/", "/contracts/search/", "/market/trends/", "/market/lp/", "/market/baskets/", "/market/ideas/", "/market/scanner/", "/market/tradefinder/", "/market/restock/", "/market/leaderboard/", "/orders/", "/contracts/"},
 		"tools":         {"/items/", "/market/appraise/"},
 	} {
 		var got []string

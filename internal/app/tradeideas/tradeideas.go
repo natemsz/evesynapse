@@ -45,13 +45,13 @@ var Module = module.Module{
 	Activities:    []string{"market"},
 	Widgets:       []module.WidgetDecl{{ID: "tradeideas", Title: "Trade Ideas", Description: "A model's read on the Forge spread scanner, one tab per trade strategy. Refreshed twice a day; the Trade Ideas page has the full list.", W: 2, H: 1, After: "watchlist"}},
 	Nav: []module.NavSection{{
-		Section: "toolsanalysis",
+		Section: "market",
 		Entries: []module.NavEntry{
 			{Href: "/market/ideas/", Label: "Trade Ideas", Pages: []string{"market_tradeideas.html"}, After: "/market/baskets/"},
 		},
 	}},
 	Pages: []module.Page{
-		{Template: "market_tradeideas.html", Section: "toolsanalysis"},
+		{Template: "market_tradeideas.html", Section: "market"},
 	},
 	WorkerJobs: []module.WorkerJob{{Name: "trade ideas refresh", After: module.AfterMarket, Start: Start}},
 	Routes: func(r chi.Router, deps module.Deps) {

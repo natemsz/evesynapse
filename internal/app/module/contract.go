@@ -839,6 +839,7 @@ type NavLink struct {
 // their headings, mirroring the section's tab strip.
 type NavGroup struct {
 	Label string
+	Icon  template.HTML
 	Links []NavLink
 }
 

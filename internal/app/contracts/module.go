@@ -33,7 +33,7 @@ var Module = module.Module{
 	Activities:     []string{"market"},
 	Nav: []module.NavSection{
 		{
-			Section: "finances",
+			Section: "market",
 			Entries: []module.NavEntry{
 				{Href: "/contracts/", Label: "My Contracts", Pages: []string{"contracts.html"}, After: "/orders/"},
 			},
@@ -63,7 +63,7 @@ var Module = module.Module{
 		auth.Post("/ui/openwindow/contract/{contractID}", h((*mod).handleOpenContractInGame))
 	},
 	Pages: []module.Page{
-		{Template: "contracts.html", Section: "finances"},
+		{Template: "contracts.html", Section: "market"},
 		{Template: "contract_search.html", Section: "market"},
 		{Template: "contract_detail.html", Section: "market"},
 	},

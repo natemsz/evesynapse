@@ -29,7 +29,7 @@ var Module = module.Module{
 	BriefingTopics: []module.BriefingTopicDecl{{ID: "orders", Title: "Order expiries and undercuts"}},
 	Activities:     []string{"market"},
 	Nav: []module.NavSection{{
-		Section: "finances",
+		Section: "market",
 		Entries: []module.NavEntry{
 			{Href: "/orders/", Label: "My Orders", Pages: []string{"orders.html"}},
 		},
@@ -42,7 +42,7 @@ var Module = module.Module{
 		auth.Get("/orders/", h((*mod).handleOrders))
 	},
 	Pages: []module.Page{
-		{Template: "orders.html", Section: "finances"},
+		{Template: "orders.html", Section: "market"},
 	},
 }
 

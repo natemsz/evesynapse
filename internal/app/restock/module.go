@@ -21,7 +21,7 @@ var Module = module.Module{
 	},
 	Activities: []string{"market"},
 	Nav: []module.NavSection{{
-		Section: "toolsanalysis",
+		Section: "market",
 		Entries: []module.NavEntry{
 			{Href: "/market/restock/", Label: "Restock Planner", Pages: []string{"market_restock.html"}, After: "/market/tradefinder/"},
 		},
@@ -36,7 +36,7 @@ var Module = module.Module{
 		r.With(auth).Post("/market/restock/delete/", h((*page).handleRestockDelete))
 	},
 	Pages: []module.Page{
-		{Template: "market_restock.html", Section: "toolsanalysis"},
+		{Template: "market_restock.html", Section: "market"},
 	},
 }
 

@@ -2469,6 +2469,9 @@ tr.fleet-detail > td { background: #120d09; border-bottom: 1px solid color-mix(i
 .fleet-facts dt { font-size: 0.68rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
 .fleet-facts dd { margin: 0.1rem 0 0; }
 .fleet-foot { margin: 0.4rem 0 0; color: var(--muted); }
+/* A home widget with nothing to show says so quietly, in the
+   muted tone, with its way forward linked in the accent. */
+.wempty { color: var(--muted); }
 /* A fleet table taller than its module scrolls inside it, and the
    "Showing x of y" line stays pinned at the bottom. The line paints
    no surface of its own: the card's glass shows through it. A second

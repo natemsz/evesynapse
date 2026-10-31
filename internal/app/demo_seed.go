@@ -425,18 +425,52 @@ func (app *Application) seedDemoData(ctx context.Context, now time.Time) error {
 	if err := s.writeAccountRows(ctx); err != nil {
 		return err
 	}
+	if err := s.writeDemoPrices(ctx); err != nil {
+		return err
+	}
 	// The worker folds a real pilot's snapshots into the profit
 	// ledger after each warm; the demo pilots never warm, so the
-	// seed folds theirs itself, in the worker's own order (the
-	// day's wallet sample first). Without this the Profit pages
-	// have no ledger to read and render empty.
+	// seed folds theirs itself. Without this the Profit pages
+	// have no ledger to read and render empty. The fold runs
+	// before any wallet history exists, so it attributes the
+	// year and nothing more; the history is then derived from
+	// that attribution (writeDemoWalletHistory) and each pilot's
+	// remainder is folded against it, which is what keeps the
+	// page's Not explained small enough to believe.
 	for _, pilot := range demoPilots {
 		ch, err := app.queries.GetCharacter(ctx, pilot.ID)
 		if err != nil {
 			return fmt.Errorf("demo seed: load pilot %d for the profit fold: %w", pilot.ID, err)
 		}
-		app.sampleWalletHistory(ctx, ch, now)
 		app.refreshProfitLedger(ctx, ch, now)
+	}
+	// The two folds above land each pilot's rows in turn, so a
+	// type one pilot's jobs consume can checkpoint past history
+	// the other pilot's book would have filled. Clear the pool's
+	// member key to make the next pass refold the pool from
+	// scratch, the same remedy the LP path uses, now that both
+	// books are in.
+	if err := app.queries.ClearLedgerPoolMembers(ctx, db.ClearLedgerPoolMembersParams{PoolKind: poolAcct, PoolID: userID}); err != nil {
+		return fmt.Errorf("demo seed: clear the pool member key: %w", err)
+	}
+	for _, pilot := range demoPilots {
+		ch, err := app.queries.GetCharacter(ctx, pilot.ID)
+		if err != nil {
+			return fmt.Errorf("demo seed: load pilot %d for the pool refold: %w", pilot.ID, err)
+		}
+		app.refreshProfitLedger(ctx, ch, now)
+	}
+	for _, pilot := range demoPilots {
+		ch, err := app.queries.GetCharacter(ctx, pilot.ID)
+		if err != nil {
+			return fmt.Errorf("demo seed: load pilot %d for the wallet history: %w", pilot.ID, err)
+		}
+		if err := s.writeDemoWalletHistory(ctx, ch); err != nil {
+			return err
+		}
+		if err := app.foldRemainder(ctx, ch.CharacterID, s.now.AddDate(0, 0, -364).Format("2006-01-02")); err != nil {
+			return fmt.Errorf("demo seed: fold remainder for pilot %d: %w", pilot.ID, err)
+		}
 	}
 	logging.Infof("demo: seeded the demo account (%d skills at V for %s)", len(s.skills), demoCharName)
 	return nil
@@ -587,10 +621,13 @@ func (b *demoBookBuilder) trade(at time.Time, typeID int64, price float64, qty, 
 	})
 }
 
-// lane runs one trade lane back through the last forty days:
-// buy, sell most of it a day or two later at a higher price,
-// repeat. Part of every buy stays in stock, the way a real
-// book accumulates.
+// lane runs one trade lane back through the last year: buy,
+// sell most of it a day or two later at a higher price, repeat.
+// Part of every buy stays in stock, the way a real book
+// accumulates. The recent ninety days trade at full cadence;
+// older cycles space out to a weekly scale in smaller lots, so
+// the long span has shape without a year of daily rows. Weekends
+// run quiet, and one week a month back runs hot.
 func (b *demoBookBuilder) lane(l demoTradeLane, laneIdx int) {
 	typeID := b.s.typeID(l.typeName)
 	if typeID == 0 {
@@ -598,11 +635,27 @@ func (b *demoBookBuilder) lane(l demoTradeLane, laneIdx int) {
 	}
 	for c := 0; ; c++ {
 		daysAgo := l.phase + c*l.step
-		if daysAgo > 39 {
+		if daysAgo > 364 {
 			return
 		}
+		if daysAgo > 90 && c%3 != 0 {
+			continue // the sparse years: about one cycle in three
+		}
 		client := b.clients[(laneIdx+c)%len(b.clients)]
-		buyQty := demoRoundQty(float64(l.lot)*(0.8+0.5*b.jitter()), l.round)
+		scale := 1.0
+		if daysAgo > 90 {
+			scale = 0.55
+		}
+		if daysAgo >= 16 && daysAgo <= 22 {
+			scale *= 2.2 // the strong week
+		}
+		switch wd := b.s.now.Truncate(24*time.Hour).AddDate(0, 0, -daysAgo).Weekday(); wd {
+		case time.Saturday, time.Sunday:
+			scale *= 0.45
+		case time.Friday:
+			scale *= 0.8
+		}
+		buyQty := demoRoundQty(float64(l.lot)*scale*(0.8+0.5*b.jitter()), l.round)
 		sellQty := demoRoundQty(float64(buyQty)*(0.6+0.35*b.jitter()), l.round)
 		buyPrice := demoPrice(l.base * (0.95 + 0.05*b.jitter()))
 		sellPrice := demoPrice(l.base * (1.05 + 0.08*b.jitter()))
@@ -705,9 +758,9 @@ func (s *demoSeed) writePilotOne(ctx context.Context) error {
 		{ID: 8800001008, Date: s.rfc(now.Add(-30 * hour)), RefType: "market_transaction", Amount: -46240000, FirstPartyID: id, FirstPartyType: "character", SecondPartyID: demoCharMarcus, SecondPartyType: "character", Description: "Market transaction"},
 		{ID: 8800001007, Date: s.rfc(now.Add(-2 * day)), RefType: "market_escrow", Amount: -212499972, FirstPartyID: id, FirstPartyType: "character", SecondPartyID: id, SecondPartyType: "character", Description: "Market escrow for a buy order"},
 		{ID: 8800001006, Date: s.rfc(now.Add(-2 * day)), RefType: "broker_fee", Amount: -1240300, FirstPartyID: id, FirstPartyType: "character", SecondPartyID: demoCorpHaleID, SecondPartyType: "corporation", Description: "Broker fee"},
-		{ID: 8800001017, Date: s.rfc(now.Add(-3 * day)), RefType: "transaction_tax", Amount: -447000, FirstPartyID: id, FirstPartyType: "character", SecondPartyID: demoCorpHaleID, SecondPartyType: "corporation", Description: "Transaction tax"},
+		{ID: 8800001017, Date: s.rfc(now.Add(-3 * day)), RefType: "transaction_tax", Amount: -1117500, FirstPartyID: id, FirstPartyType: "character", SecondPartyID: demoCorpHaleID, SecondPartyType: "corporation", Description: "Transaction tax"},
 		{ID: 8800001005, Date: s.rfc(now.Add(-3 * day)), RefType: "manufacturing", Amount: -3850000, FirstPartyID: id, FirstPartyType: "character", SecondPartyID: demoCorpHaleID, SecondPartyType: "corporation", Description: "Manufacturing job", ContextID: 8800009001, ContextType: "industry_job_id"},
-		{ID: 8800001004, Date: s.rfc(now.Add(-4 * day)), RefType: "corporation_account_withdrawal", Amount: 50000000, FirstPartyID: demoCorpID, FirstPartyType: "corporation", SecondPartyID: id, SecondPartyType: "character", Description: "Corporation account withdrawal"},
+		{ID: 8800001004, Date: s.rfc(now.Add(-4 * day)), RefType: "corporation_account_withdrawal", Amount: 7250000, FirstPartyID: demoCorpID, FirstPartyType: "corporation", SecondPartyID: id, SecondPartyType: "character", Description: "Corporation account withdrawal"},
 		{ID: 8800001003, Date: s.rfc(now.Add(-5 * day)), RefType: "research", Amount: -1150000, FirstPartyID: id, FirstPartyType: "character", SecondPartyID: demoCorpHaleID, SecondPartyType: "corporation", Description: "Research"},
 		{ID: 8800001020, Date: s.rfc(now.Add(-6 * day)), RefType: "transaction_tax", Amount: -535500, FirstPartyID: id, FirstPartyType: "character", SecondPartyID: demoCorpHaleID, SecondPartyType: "corporation", Description: "Transaction tax"},
 		{ID: 8800001002, Date: s.rfc(now.Add(-6 * day)), RefType: "jump_clone_fee", Amount: -900000, FirstPartyID: id, FirstPartyType: "character", SecondPartyID: demoCorpHaleID, SecondPartyType: "corporation", Description: "Jump clone activation fee"},
@@ -716,8 +769,9 @@ func (s *demoSeed) writePilotOne(ctx context.Context) error {
 		{ID: 8800001013, Date: s.rfc(now.Add(-9 * day)), RefType: "market_transaction", Amount: -13020000, FirstPartyID: id, FirstPartyType: "character", SecondPartyID: demoCharDario, SecondPartyType: "character", Description: "Market transaction"},
 	}
 	// The generated trading history behind the hand-written
-	// entries: five weeks of working lanes in the minerals,
-	// ammunition and modules she trades, so the Profit page's
+	// entries: a year of working lanes in the minerals,
+	// ammunition and modules she trades, dense in the recent
+	// ninety days and sparse before that, so the Profit page's
 	// charts have a book to draw, not a vignette.
 	book := &demoBookBuilder{s: s, charID: id, station: s.jitaStationID,
 		clients: []int64{demoCharSera, demoCharMina, demoCharDario, demoCharPetra, demoCharMarcus},
@@ -726,14 +780,25 @@ func (s *demoSeed) writePilotOne(ctx context.Context) error {
 		{typeName: "Tritanium", base: 6.05, lot: 3500000, round: 1000, step: 3, phase: 4},
 		{typeName: "Pyerite", base: 11.90, lot: 900000, round: 1000, step: 3, phase: 5},
 		{typeName: "Mexallon", base: 49.50, lot: 260000, round: 100, step: 4, phase: 6},
-		{typeName: "Damage Control II", base: 735000, lot: 16, round: 1, step: 4, phase: 7},
+		{typeName: "Ballistic Control System II", base: 865000, lot: 14, round: 1, step: 4, phase: 7},
 		{typeName: "Republic Fleet EMP S", base: 990, lot: 6000, round: 100, step: 5, phase: 8},
 		{typeName: "Scourge Heavy Missile", base: 445, lot: 5000, round: 100, step: 5, phase: 3},
 	} {
 		book.lane(lane, i)
 	}
 	book.lootSale(demoLootSale{typeName: "Warrior II", daysAgo: 19, qty: 300, price: 620}, demoCharDario)
-	book.lootSale(demoLootSale{typeName: "Warrior II", daysAgo: 11, qty: 450, price: 655}, demoCharMina)
+	// The bad trade: a stack of Gyrostabilizers chased up one
+	// day and dumped well below cost the next, the month's one
+	// clear mistake.
+	if gyro := s.typeID("Gyrostabilizer II"); gyro != 0 {
+		buyAt := book.at(14, 8)
+		jrnlID := book.market(buyAt, demoCharPetra, -30*1150000, false)
+		book.trade(buyAt, gyro, 1150000, 30, demoCharPetra, true, jrnlID)
+		sellAt := book.at(13, 9)
+		jrnlID = book.market(sellAt, demoCharMina, 30*822000, true)
+		book.trade(sellAt, gyro, 822000, 30, demoCharMina, false, jrnlID)
+		book.tax(sellAt, 30*822000)
+	}
 	for _, line := range []struct {
 		daysAgo int
 		entry   esi.WalletJournalEntry
@@ -744,6 +809,9 @@ func (s *demoSeed) writePilotOne(ctx context.Context) error {
 		{18, esi.WalletJournalEntry{RefType: "contract_reward", Amount: 6500000, FirstPartyID: demoCharMarcus, FirstPartyType: "character", SecondPartyID: id, SecondPartyType: "character", Description: "Courier contract reward"}},
 		{15, esi.WalletJournalEntry{RefType: "manufacturing", Amount: -1900000, FirstPartyID: id, FirstPartyType: "character", SecondPartyID: demoCorpHaleID, SecondPartyType: "corporation", Description: "Manufacturing job", ContextID: 8800009205, ContextType: "industry_job_id"}},
 		{22, esi.WalletJournalEntry{RefType: "research", Amount: -840000, FirstPartyID: id, FirstPartyType: "character", SecondPartyID: demoCorpHaleID, SecondPartyType: "corporation", Description: "Research"}},
+		{16, esi.WalletJournalEntry{RefType: "corporation_account_withdrawal", Amount: 18500000, FirstPartyID: demoCorpID, FirstPartyType: "corporation", SecondPartyID: id, SecondPartyType: "character", Description: "Corporation account withdrawal"}},
+		{9, esi.WalletJournalEntry{RefType: "player_donation", Amount: -2750000, FirstPartyID: id, FirstPartyType: "character", SecondPartyID: demoCharMina, SecondPartyType: "character", Description: "Player donation", Reason: "for the replacement Drake"}},
+		{6, esi.WalletJournalEntry{RefType: "player_donation", Amount: -3400000, FirstPartyID: id, FirstPartyType: "character", SecondPartyID: demoCharacter2ID, SecondPartyType: "character", Description: "Player donation", Reason: "for materials"}},
 	} {
 		book.journalLine(line.daysAgo, line.entry)
 	}
@@ -759,7 +827,7 @@ func (s *demoSeed) writePilotOne(ctx context.Context) error {
 		{TransactionID: 7700001005, Date: s.rfc(now.Add(-30 * hour)), TypeID: s.typeID("Tritanium"), LocationID: s.jitaStationID, UnitPrice: 5.78, Quantity: 8000000, ClientID: demoCharMarcus, IsBuy: true, IsPersonal: true, JournalRefID: 8800001008},
 		{TransactionID: 7700001009, Date: s.rfc(now.Add(-1 * day)), TypeID: s.typeID("Scourge Heavy Missile"), LocationID: s.jitaStationID, UnitPrice: 468.00, Quantity: 4000, ClientID: demoCharMina, IsBuy: false, IsPersonal: true, JournalRefID: 8800001015},
 		{TransactionID: 7700001004, Date: s.rfc(now.Add(-2 * day)), TypeID: s.typeID("Scourge Heavy Missile"), LocationID: s.jitaStationID, UnitPrice: 412.50, Quantity: 4000, ClientID: demoCharPetra, IsBuy: true, IsPersonal: true, JournalRefID: 0},
-		{TransactionID: 7700001003, Date: s.rfc(now.Add(-3 * day)), TypeID: s.typeID("Damage Control II"), LocationID: s.jitaStationID, UnitPrice: 745000, Quantity: 12, ClientID: demoCharMina, IsBuy: false, IsPersonal: true, JournalRefID: 0},
+		{TransactionID: 7700001003, Date: s.rfc(now.Add(-3 * day)), TypeID: s.typeID("Damage Control II"), LocationID: s.jitaStationID, UnitPrice: 745000, Quantity: 30, ClientID: demoCharMina, IsBuy: false, IsPersonal: true, JournalRefID: 0},
 		{TransactionID: 7700001002, Date: s.rfc(now.Add(-4 * day)), TypeID: s.typeID("Republic Fleet EMP S"), LocationID: s.jitaStationID, UnitPrice: 890, Quantity: 5000, ClientID: demoCharDario, IsBuy: true, IsPersonal: true, JournalRefID: 0},
 		{TransactionID: 7700001001, Date: s.rfc(now.Add(-6 * day)), TypeID: s.typeID("Pyerite"), LocationID: s.jitaStationID, UnitPrice: 11.90, Quantity: 900000, ClientID: demoCharSera, IsBuy: false, IsPersonal: true, JournalRefID: 0},
 		{TransactionID: 7700001008, Date: s.rfc(now.Add(-7 * day)), TypeID: s.typeID("Damage Control II"), LocationID: s.jitaStationID, UnitPrice: 690000, Quantity: 20, ClientID: demoCharPetra, IsBuy: true, IsPersonal: true, JournalRefID: 8800001014},
@@ -1425,7 +1493,7 @@ func (s *demoSeed) writePilotTwo(ctx context.Context) error {
 	journal := []esi.WalletJournalEntry{
 		{ID: 8800002019, Date: s.rfc(now.Add(-4 * hour)), RefType: "transaction_tax", Amount: -615000, FirstPartyID: id, FirstPartyType: "character", SecondPartyID: demoCorpHaleID, SecondPartyType: "corporation", Description: "Transaction tax"},
 		{ID: 8800002015, Date: s.rfc(now.Add(-4 * hour)), RefType: "market_transaction", Amount: 12300000, FirstPartyID: demoCharPetra, FirstPartyType: "character", SecondPartyID: id, SecondPartyType: "character", Description: "Market transaction"},
-		{ID: 8800002014, Date: s.rfc(now.Add(-1 * day)), RefType: "corporation_account_withdrawal", Amount: 25000000, FirstPartyID: demoCorpID, FirstPartyType: "corporation", SecondPartyID: id, SecondPartyType: "character", Description: "Corporation account withdrawal"},
+		{ID: 8800002014, Date: s.rfc(now.Add(-11 * day)), RefType: "corporation_account_withdrawal", Amount: 9800000, FirstPartyID: demoCorpID, FirstPartyType: "corporation", SecondPartyID: id, SecondPartyType: "character", Description: "Corporation account withdrawal"},
 		{ID: 8800002018, Date: s.rfc(now.Add(-25 * hour)), RefType: "transaction_tax", Amount: -384000, FirstPartyID: id, FirstPartyType: "character", SecondPartyID: demoCorpHaleID, SecondPartyType: "corporation", Description: "Transaction tax"},
 		{ID: 8800002017, Date: s.rfc(now.Add(-25 * hour)), RefType: "market_transaction", Amount: 7680000, FirstPartyID: demoCharSera, FirstPartyType: "character", SecondPartyID: id, SecondPartyType: "character", Description: "Market transaction"},
 		{ID: 8800002013, Date: s.rfc(now.Add(-2 * day)), RefType: "manufacturing", Amount: -640000, FirstPartyID: id, FirstPartyType: "character", SecondPartyID: demoCorpHaleID, SecondPartyType: "corporation", Description: "Manufacturing job", ContextID: 8800009101, ContextType: "industry_job_id"},
@@ -1434,22 +1502,30 @@ func (s *demoSeed) writePilotTwo(ctx context.Context) error {
 		{ID: 8800002016, Date: s.rfc(now.Add(-6 * day)), RefType: "market_transaction", Amount: -2975000, FirstPartyID: id, FirstPartyType: "character", SecondPartyID: demoCharMarcus, SecondPartyType: "character", Description: "Market transaction"},
 	}
 	// Her generated trading history: the Amarr book of the same
-	// account pool, weighted to minerals and Isogen, with her
-	// factory's fees running through it.
+	// account pool, weighted to minerals and Isogen and lighter
+	// than Sable's Jita book; her ISK mostly comes from the
+	// factory and from missions, not from the market.
 	book := &demoBookBuilder{s: s, charID: id, station: s.amarrStationID,
 		clients: []int64{demoCharPetra, demoCharSera, demoCharMarcus, demoCharMina},
 		txnID:   7700020000, jrnlID: 8800020000}
 	for i, lane := range []demoTradeLane{
-		{typeName: "Tritanium", base: 6.15, lot: 2200000, round: 1000, step: 4, phase: 6},
-		{typeName: "Pyerite", base: 12.10, lot: 800000, round: 1000, step: 3, phase: 4},
-		{typeName: "Isogen", base: 520, lot: 42000, round: 100, step: 4, phase: 5},
-		{typeName: "Mexallon", base: 50.50, lot: 200000, round: 100, step: 5, phase: 7},
-		{typeName: "Damage Control II", base: 742000, lot: 12, round: 1, step: 5, phase: 9},
+		{typeName: "Tritanium", base: 6.15, lot: 1600000, round: 1000, step: 4, phase: 6},
+		{typeName: "Pyerite", base: 12.10, lot: 600000, round: 1000, step: 3, phase: 4},
+		{typeName: "Isogen", base: 520, lot: 30000, round: 100, step: 4, phase: 5},
+		{typeName: "Mexallon", base: 50.50, lot: 140000, round: 100, step: 5, phase: 7},
+		{typeName: "Stasis Webifier II", base: 2150000, lot: 5, round: 1, step: 6, phase: 10},
 	} {
 		book.lane(lane, i)
 	}
 	book.lootSale(demoLootSale{typeName: "Nocxium", daysAgo: 21, qty: 900, price: 1180}, demoCharPetra)
 	book.lootSale(demoLootSale{typeName: "Nocxium", daysAgo: 9, qty: 1400, price: 1245}, demoCharSera)
+	// One of her Vexors, sold a few days after it delivered.
+	if vexor := s.typeID("Vexor"); vexor != 0 {
+		sellAt := book.at(15, 14)
+		jrnlID := book.market(sellAt, demoCharSera, 58500000, true)
+		book.trade(sellAt, vexor, 58500000, 1, demoCharSera, false, jrnlID)
+		book.tax(sellAt, 58500000)
+	}
 	for _, line := range []struct {
 		daysAgo int
 		entry   esi.WalletJournalEntry
@@ -1460,6 +1536,18 @@ func (s *demoSeed) writePilotTwo(ctx context.Context) error {
 		{27, esi.WalletJournalEntry{RefType: "manufacturing", Amount: -610000, FirstPartyID: id, FirstPartyType: "character", SecondPartyID: demoCorpHaleID, SecondPartyType: "corporation", Description: "Manufacturing job", ContextID: 8800009203, ContextType: "industry_job_id"}},
 		{33, esi.WalletJournalEntry{RefType: "manufacturing", Amount: -455000, FirstPartyID: id, FirstPartyType: "character", SecondPartyID: demoCorpHaleID, SecondPartyType: "corporation", Description: "Manufacturing job", ContextID: 8800009204, ContextType: "industry_job_id"}},
 		{14, esi.WalletJournalEntry{RefType: "agent_mission_reward", Amount: 1850000, FirstPartyID: demoCorpHaleID, FirstPartyType: "corporation", SecondPartyID: id, SecondPartyType: "character", Description: "Agent mission reward"}},
+		{3, esi.WalletJournalEntry{RefType: "agent_mission_reward", Amount: 2740000, FirstPartyID: demoCorpHaleID, FirstPartyType: "corporation", SecondPartyID: id, SecondPartyType: "character", Description: "Agent mission reward"}},
+		{3, esi.WalletJournalEntry{RefType: "agent_mission_time_bonus_reward", Amount: 860000, FirstPartyID: demoCorpHaleID, FirstPartyType: "corporation", SecondPartyID: id, SecondPartyType: "character", Description: "Agent mission time bonus"}},
+		{6, esi.WalletJournalEntry{RefType: "agent_mission_reward", Amount: 3120000, FirstPartyID: demoCorpHaleID, FirstPartyType: "corporation", SecondPartyID: id, SecondPartyType: "character", Description: "Agent mission reward"}},
+		{10, esi.WalletJournalEntry{RefType: "agent_mission_reward", Amount: 2380000, FirstPartyID: demoCorpHaleID, FirstPartyType: "corporation", SecondPartyID: id, SecondPartyType: "character", Description: "Agent mission reward"}},
+		{17, esi.WalletJournalEntry{RefType: "agent_mission_reward", Amount: 3560000, FirstPartyID: demoCorpHaleID, FirstPartyType: "corporation", SecondPartyID: id, SecondPartyType: "character", Description: "Agent mission reward"}},
+		{17, esi.WalletJournalEntry{RefType: "agent_mission_time_bonus_reward", Amount: 1040000, FirstPartyID: demoCorpHaleID, FirstPartyType: "corporation", SecondPartyID: id, SecondPartyType: "character", Description: "Agent mission time bonus"}},
+		{20, esi.WalletJournalEntry{RefType: "agent_mission_reward", Amount: 2910000, FirstPartyID: demoCorpHaleID, FirstPartyType: "corporation", SecondPartyID: id, SecondPartyType: "character", Description: "Agent mission reward"}},
+		{24, esi.WalletJournalEntry{RefType: "agent_mission_reward", Amount: 3340000, FirstPartyID: demoCorpHaleID, FirstPartyType: "corporation", SecondPartyID: id, SecondPartyType: "character", Description: "Agent mission reward"}},
+		{28, esi.WalletJournalEntry{RefType: "agent_mission_reward", Amount: 2630000, FirstPartyID: demoCorpHaleID, FirstPartyType: "corporation", SecondPartyID: id, SecondPartyType: "character", Description: "Agent mission reward"}},
+		{28, esi.WalletJournalEntry{RefType: "agent_mission_time_bonus_reward", Amount: 720000, FirstPartyID: demoCorpHaleID, FirstPartyType: "corporation", SecondPartyID: id, SecondPartyType: "character", Description: "Agent mission time bonus"}},
+		{31, esi.WalletJournalEntry{RefType: "agent_mission_reward", Amount: 3080000, FirstPartyID: demoCorpHaleID, FirstPartyType: "corporation", SecondPartyID: id, SecondPartyType: "character", Description: "Agent mission reward"}},
+		{6, esi.WalletJournalEntry{RefType: "player_donation", Amount: 3400000, FirstPartyID: demoCharacterID, FirstPartyType: "character", SecondPartyID: id, SecondPartyType: "character", Description: "Player donation", Reason: "for materials"}},
 	} {
 		book.journalLine(line.daysAgo, line.entry)
 	}
@@ -1517,6 +1605,7 @@ func (s *demoSeed) writePilotTwo(ctx context.Context) error {
 		{JobID: 8800009101, ActivityID: 1, BlueprintTypeID: s.typeID("Thrasher Blueprint"), BlueprintID: demoItemBase + 602, BlueprintLocationID: s.amarrStationID, OutputLocationID: s.amarrStationID, FacilityID: s.amarrStationID, StationID: s.amarrStationID, InstallerID: id, Runs: 5, LicensedRuns: 5, Status: "active", StartDate: s.rfc(now.Add(-2 * day)), EndDate: s.rfc(now.Add(1 * day)), Duration: 259200, Cost: 640000, ProductTypeID: s.typeID("Thrasher")},
 		{JobID: 8800009102, ActivityID: 3, BlueprintTypeID: s.typeID("Covetor Blueprint"), BlueprintID: demoItemBase + 601, BlueprintLocationID: s.amarrStationID, OutputLocationID: s.amarrStationID, FacilityID: s.amarrStationID, StationID: s.amarrStationID, InstallerID: id, Runs: 1, LicensedRuns: 1, Status: "active", StartDate: s.rfc(now.Add(-3 * day)), EndDate: s.rfc(now.Add(4 * day)), Duration: 604800, Cost: 412000, ProductTypeID: s.typeID("Covetor Blueprint")},
 		{JobID: 8800009103, ActivityID: 1, BlueprintTypeID: s.typeID("Vexor Blueprint"), BlueprintID: demoItemBase + 603, BlueprintLocationID: s.amarrStationID, OutputLocationID: s.amarrStationID, FacilityID: s.amarrStationID, StationID: s.amarrStationID, InstallerID: id, Runs: 2, LicensedRuns: 2, SuccessfulRuns: 2, Status: "delivered", StartDate: s.rfc(now.Add(-6 * day)), EndDate: s.rfc(now.Add(-5 * day)), CompletedDate: s.rfc(now.Add(-5 * day)), Duration: 86400, Cost: 980000, ProductTypeID: s.typeID("Vexor"), CompletedCharacterID: id},
+		{JobID: 8800009104, ActivityID: 1, BlueprintTypeID: s.typeID("Vexor Blueprint"), BlueprintID: demoItemBase + 603, BlueprintLocationID: s.amarrStationID, OutputLocationID: s.amarrStationID, FacilityID: s.amarrStationID, StationID: s.amarrStationID, InstallerID: id, Runs: 3, LicensedRuns: 3, SuccessfulRuns: 3, Status: "delivered", StartDate: s.rfc(now.Add(-20 * day)), EndDate: s.rfc(now.Add(-19 * day)), CompletedDate: s.rfc(now.Add(-19 * day)), Duration: 86400, Cost: 1450000, ProductTypeID: s.typeID("Vexor"), CompletedCharacterID: id},
 	}
 	if err := s.snap(ctx, id, esi.SnapIndustryJobs, esi.IndustryJobs(jobs)); err != nil {
 		return err
@@ -1549,6 +1638,7 @@ func (s *demoSeed) writePilotTwo(ctx context.Context) error {
 		{ItemID: demoItemBase + 53, TypeID: s.typeID("Pyerite"), Quantity: 260000, LocationID: s.amarrStationID, LocationType: "station", LocationFlag: "Hangar"},
 		{ItemID: demoItemBase + 54, TypeID: s.typeID("Veldspar"), Quantity: 45000, LocationID: s.amarrStationID, LocationType: "station", LocationFlag: "Hangar"},
 		{ItemID: demoItemBase + 55, TypeID: s.typeID("Isogen"), Quantity: 12400, LocationID: s.amarrStationID, LocationType: "station", LocationFlag: "Hangar"},
+		{ItemID: demoItemBase + 56, TypeID: s.typeID("Vexor"), Quantity: 4, LocationID: s.amarrStationID, LocationType: "station", LocationFlag: "Hangar"},
 	}
 	if err := s.snap(ctx, id, esi.SnapAssets, assets); err != nil {
 		return err
@@ -1691,8 +1781,10 @@ func (s *demoSeed) writeCorpSnapshots(ctx context.Context, viewerID int64) error
 		{ID: 8800003005, Date: s.rfc(now.Add(-6 * hour)), RefType: "player_donation", Amount: 120000000, FirstPartyID: demoCharMarcus, FirstPartyType: "character", SecondPartyID: demoCorpID, SecondPartyType: "corporation", Description: "Player donation", Reason: "for the SRP fund"},
 		{ID: 8800003004, Date: s.rfc(now.Add(-1 * day)), RefType: "industry_job_tax", Amount: 842000, FirstPartyID: demoCharacter2ID, FirstPartyType: "character", SecondPartyID: demoCorpID, SecondPartyType: "corporation", Description: "Industry job tax"},
 		{ID: 8800003003, Date: s.rfc(now.Add(-2 * day)), RefType: "market_transaction", Amount: 6300000, FirstPartyID: demoCharSera, FirstPartyType: "character", SecondPartyID: demoCorpID, SecondPartyType: "corporation", Description: "Market transaction"},
-		{ID: 8800003002, Date: s.rfc(now.Add(-4 * day)), RefType: "corporation_account_withdrawal", Amount: -50000000, FirstPartyID: demoCorpID, FirstPartyType: "corporation", SecondPartyID: demoCharacterID, SecondPartyType: "character", Description: "Corporation account withdrawal"},
+		{ID: 8800003002, Date: s.rfc(now.Add(-4 * day)), RefType: "corporation_account_withdrawal", Amount: -7250000, FirstPartyID: demoCorpID, FirstPartyType: "corporation", SecondPartyID: demoCharacterID, SecondPartyType: "character", Description: "Corporation account withdrawal"},
 		{ID: 8800003001, Date: s.rfc(now.Add(-6 * day)), RefType: "office_rental_fee", Amount: -38500000, FirstPartyID: demoCorpID, FirstPartyType: "corporation", SecondPartyID: demoCorpHaleID, SecondPartyType: "corporation", Description: "Office rental fee"},
+		{ID: 8800003006, Date: s.rfc(now.Add(-11 * day)), RefType: "corporation_account_withdrawal", Amount: -9800000, FirstPartyID: demoCorpID, FirstPartyType: "corporation", SecondPartyID: demoCharacter2ID, SecondPartyType: "character", Description: "Corporation account withdrawal"},
+		{ID: 8800003007, Date: s.rfc(now.Add(-16 * day)), RefType: "corporation_account_withdrawal", Amount: -18500000, FirstPartyID: demoCorpID, FirstPartyType: "corporation", SecondPartyID: demoCharacterID, SecondPartyType: "character", Description: "Corporation account withdrawal"},
 	}
 	corpJournalBalances(journal, 812400553.10)
 	if err := s.snap(ctx, viewerID, esi.CorpJournalKind(1), esi.CorpJournal(journal)); err != nil {
@@ -1736,7 +1828,9 @@ func (s *demoSeed) writeCorpSnapshots(ctx context.Context, viewerID int64) error
 
 // writeAccountRows seeds what belongs to the account rather
 // than a pilot: saved fits, Juno's skill plan, a few
-// notifications, both pilots' wallet history, the watch list.
+// notifications and the watch list. The wallet history is
+// written later, once the fold has attributed the year (see
+// writeDemoWalletHistory).
 func (s *demoSeed) writeAccountRows(ctx context.Context) error {
 	now := s.now
 	hour := time.Hour
@@ -1843,39 +1937,6 @@ func (s *demoSeed) writeAccountRows(ctx context.Context) error {
 		}
 	}
 
-	// Thirty days of wallet history per pilot, trending to the
-	// seeded balances so the home graph has a line to draw.
-	history := []struct {
-		charID  int64
-		balance float64
-		worth   float64
-	}{
-		{demoCharacterID, 4281553120.44, 1.18},
-		{demoCharacter2ID, 96450210.75, 2.5},
-	}
-	for _, hRow := range history {
-		var charIDs []int64
-		var days []string
-		var balances, worths []float64
-		var sampled []time.Time
-		for i := 29; i >= 0; i-- {
-			dayAt := now.Add(-time.Duration(i) * day)
-			drift := 1 - float64(i)*0.004
-			balance := hRow.balance * drift
-			charIDs = append(charIDs, hRow.charID)
-			days = append(days, dayAt.Format("2006-01-02"))
-			balances = append(balances, balance)
-			worths = append(worths, balance*hRow.worth)
-			sampled = append(sampled, dayAt)
-		}
-		if err := q.UpsertWalletHistorySamples(ctx, db.UpsertWalletHistorySamplesParams{
-			UserID: s.userID, CharacterIds: charIDs, Days: days,
-			Balances: balances, NetWorths: worths, SampledAts: sampled,
-		}); err != nil {
-			return err
-		}
-	}
-
 	for _, watch := range []struct {
 		name      string
 		threshold float64
@@ -1892,4 +1953,149 @@ func (s *demoSeed) writeAccountRows(ctx context.Context) error {
 		}
 	}
 	return nil
+}
+
+// writeDemoPrices seeds the demo's own swept price rows in The
+// Forge for everything the pilots trade, build with or still
+// hold, at prices beside the lanes' own: the fold prices jobs
+// and open positions from these rows, and the wallet sampler
+// values the pilots' assets from them, so the demo's prices are
+// its own rather than an empty book.
+func (s *demoSeed) writeDemoPrices(ctx context.Context) error {
+	q := s.app.queries
+	prices := []struct {
+		name      string
+		sell, buy float64
+		dailyVol  float64
+	}{
+		{"Tritanium", 6.32, 5.94, 900000000},
+		{"Pyerite", 12.42, 11.66, 260000000},
+		{"Mexallon", 52.10, 48.90, 64000000},
+		{"Isogen", 548, 512, 21000000},
+		{"Nocxium", 1290, 1205, 2600000},
+		{"Damage Control II", 768000, 721000, 2600},
+		{"Republic Fleet EMP S", 1046, 982, 1900000},
+		{"Scourge Heavy Missile", 471, 442, 1500000},
+		{"Warrior II", 688, 640, 320000},
+		{"Gyrostabilizer II", 1185000, 1110000, 900},
+		{"Ballistic Control System II", 906000, 850000, 2100},
+		{"Stasis Webifier II", 2250000, 2110000, 700},
+		{"Vexor", 61500000, 57800000, 480},
+		{"Thrasher", 1460000, 1370000, 5200},
+		{"Rifter", 428000, 402000, 9600},
+		{"Covetor", 26400000, 24800000, 350},
+		{"Drake", 68500000, 64400000, 620},
+		{"Hobgoblin II", 512000, 481000, 14000},
+		{"PLEX", 4310000, 4050000, 26000},
+	}
+	for _, p := range prices {
+		typeID := s.typeID(p.name)
+		if typeID == 0 || s.forgeRegionID == 0 {
+			continue
+		}
+		if err := q.UpsertMarketRegionStat(ctx, db.UpsertMarketRegionStatParams{
+			RegionID: s.forgeRegionID, TypeID: typeID,
+			BestSell: demoPrice(p.sell * 0.99), TypicalSell: p.sell, SellBand: demoPrice(p.sell * 0.06),
+			BestBuy: demoPrice(p.buy * 1.01), TypicalBuy: p.buy, BuyBand: demoPrice(p.buy * 0.06),
+			SellOrders: 24, BuyOrders: 19,
+			SellVolume: int64(p.dailyVol * 0.6), BuyVolume: int64(p.dailyVol * 0.4),
+			AvgDailyVolume: p.dailyVol, UpdatedAt: s.now,
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// writeDemoWalletHistory writes one pilot's year of daily
+// wallet history. Today's row is the worker sampler's own (the
+// wallet, the assets at the demo's prices, the escrow); every
+// earlier day is walked back from it: the day's worth is the
+// next day's, less what the fold attributed to that day, less a
+// small drift for price moves on what the pilot holds. The
+// remainder the Profit page then derives is that drift and
+// nothing else, which is what makes it small and plausible.
+// Balances walk back through the pilot's own journal, so the
+// history and the journal tell the same story.
+func (s *demoSeed) writeDemoWalletHistory(ctx context.Context, ch db.Character) error {
+	q := s.app.queries
+	s.app.sampleWalletHistory(ctx, ch, s.now)
+	today := s.now.UTC().Truncate(24 * time.Hour)
+	sample, err := q.GetWalletHistorySample(ctx, db.GetWalletHistorySampleParams{
+		UserID: s.userID, CharacterID: ch.CharacterID, Day: today.Format("2006-01-02"),
+	})
+	if err != nil {
+		return fmt.Errorf("demo seed: read wallet sample for pilot %d: %w", ch.CharacterID, err)
+	}
+	if !sample.NetWorth.Valid {
+		return fmt.Errorf("demo seed: no net worth sample for pilot %d", ch.CharacterID)
+	}
+	firstDay := today.AddDate(0, 0, -364)
+	daily, err := q.ListProfitDaily(ctx, db.ListProfitDailyParams{
+		OwnerKind: ownerChar, OwnerIds: []int64{ch.CharacterID}, FromDay: firstDay.Format("2006-01-02"),
+	})
+	if err != nil {
+		return fmt.Errorf("demo seed: read attribution for pilot %d: %w", ch.CharacterID, err)
+	}
+	attr := map[string]float64{}
+	for _, r := range daily {
+		attr[r.Day] = r.Attributed
+	}
+	var journal esi.WalletJournal
+	if snap, err := q.GetSnapshot(ctx, db.GetSnapshotParams{CharacterID: ch.CharacterID, Kind: esi.SnapWalletJournal}); err == nil {
+		_ = json.Unmarshal([]byte(snap.Payload), &journal)
+	}
+	var wallet float64
+	if snap, err := q.GetSnapshot(ctx, db.GetSnapshotParams{CharacterID: ch.CharacterID, Kind: esi.SnapWallet}); err == nil {
+		_ = json.Unmarshal([]byte(snap.Payload), &wallet)
+	}
+	balanceOn := func(day time.Time) float64 {
+		bal := wallet
+		end := day.Add(24 * time.Hour)
+		for _, e := range journal {
+			if at, perr := time.Parse(time.RFC3339, e.Date); perr == nil && !at.Before(end) {
+				bal -= e.Amount
+			}
+		}
+		return bal
+	}
+	worth := sample.NetWorth.Float64
+	var charIDs []int64
+	var days []string
+	var balances, worths []float64
+	var sampled []time.Time
+	for d := 1; d <= 364; d++ {
+		day := today.AddDate(0, 0, -d)
+		next := day.AddDate(0, 0, 1).Format("2006-01-02")
+		worth -= attr[next] + demoDrift(ch.CharacterID, next, worth)
+		charIDs = append(charIDs, ch.CharacterID)
+		days = append(days, day.Format("2006-01-02"))
+		balances = append(balances, balanceOn(day))
+		worths = append(worths, worth)
+		sampled = append(sampled, day.Add(23*time.Hour))
+	}
+	if err := q.UpsertWalletHistorySamples(ctx, db.UpsertWalletHistorySamplesParams{
+		UserID: s.userID, CharacterIds: charIDs, Days: days,
+		Balances: balances, NetWorths: worths, SampledAts: sampled,
+	}); err != nil {
+		return fmt.Errorf("demo seed: write wallet history for pilot %d: %w", ch.CharacterID, err)
+	}
+	return nil
+}
+
+// demoDrift is one day's price move on what a pilot holds: a
+// small fraction of net worth, jittered by day, mostly up and
+// occasionally down. It is the only part of a day's net worth
+// change the journals never record.
+func demoDrift(charID int64, day string, worth float64) float64 {
+	t, err := time.Parse("2006-01-02", day)
+	if err != nil {
+		return 0
+	}
+	j := demoJitter(charID*131 + t.Unix()/86400)
+	rate := 0.000045 * (0.35 + 1.3*j)
+	if j > 0.93 {
+		rate = -0.00003 * j
+	}
+	return worth * rate
 }

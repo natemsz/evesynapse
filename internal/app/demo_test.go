@@ -13,8 +13,10 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -91,8 +93,32 @@ func seedDemoSDEFixture(t *testing.T, conn *sql.DB) {
 		"Lava Command Center", "Extractor Control Unit", "Storage Facility",
 		"Launchpad", "Basic Industry Facility", "Advanced Industry Facility",
 	}
+	itemIDs := map[string]int64{}
 	for i, name := range items {
-		exec(`INSERT INTO sde_types (type_id, name, group_id, published) VALUES ($1, $2, 25, 1)`, int64(920001+i), name)
+		id := int64(920001 + i)
+		itemIDs[name] = id
+		exec(`INSERT INTO sde_types (type_id, name, group_id, published) VALUES ($1, $2, 25, 1)`, id, name)
+	}
+	// The blueprints the seeded jobs run, with simple mineral
+	// recipes: without these the fold cannot say what a job
+	// built, and Industry by blueprint reads zero built.
+	blueprints := []struct {
+		name, product string
+		materials     map[string]int64
+	}{
+		{"Damage Control II Blueprint", "Damage Control II", map[string]int64{"Tritanium": 9000, "Pyerite": 2600, "Mexallon": 850, "Isogen": 300, "Nocxium": 90}},
+		{"Vexor Blueprint", "Vexor", map[string]int64{"Tritanium": 3200000, "Pyerite": 900000, "Mexallon": 160000, "Isogen": 12000}},
+		{"Rifter Blueprint", "Rifter", map[string]int64{"Tritanium": 26000, "Pyerite": 7000, "Mexallon": 950}},
+		{"Thrasher Blueprint", "Thrasher", map[string]int64{"Tritanium": 82000, "Pyerite": 24000, "Mexallon": 2600, "Isogen": 180}},
+		{"Covetor Blueprint", "Covetor", map[string]int64{"Tritanium": 1900000, "Pyerite": 380000, "Mexallon": 30000, "Isogen": 1600, "Nocxium": 300}},
+	}
+	for _, bp := range blueprints {
+		exec(`INSERT INTO sde_blueprints (blueprint_type_id, product_type_id, product_quantity, max_production_limit, manufacturing_time_seconds) VALUES ($1, $2, 1, 100, 600)`,
+			itemIDs[bp.name], itemIDs[bp.product])
+		for mat, qty := range bp.materials {
+			exec(`INSERT INTO sde_blueprint_materials (blueprint_type_id, material_type_id, quantity) VALUES ($1, $2, $3)`,
+				itemIDs[bp.name], itemIDs[mat], qty)
+		}
 	}
 }
 
@@ -669,5 +695,44 @@ func TestDemoPilotNameRefreshReachesSeededInstalls(t *testing.T) {
 	// A second pass over current data is a no-op that succeeds.
 	if err := app.ensureDemoAccount(ctx); err != nil {
 		t.Fatalf("second ensureDemoAccount: %v", err)
+	}
+}
+
+// The demo book hangs together on the Profit page: over 30 days the
+// part of the net worth change the ledger cannot explain stays a
+// small share of the change, the open positions carry a value, and
+// the headline blueprint's jobs deliver units.
+func TestDemoProfitCoherence(t *testing.T) {
+	app, _, _ := demoTestApp(t)
+	ctx := context.Background()
+	view, err := app.buildProfitView(ctx, app.demoUserID(ctx), "", "30", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	parse := func(s string) float64 {
+		v, err := strconv.ParseFloat(strings.ReplaceAll(s, ",", ""), 64)
+		if err != nil {
+			t.Fatalf("view figure %q does not parse: %v", s, err)
+		}
+		return v
+	}
+	change, remainder := parse(view.Change), parse(view.Remainder)
+	if change == 0 {
+		t.Fatal("demo net worth change over 30 days is zero; the coherence check has nothing to measure")
+	}
+	if math.Abs(remainder) > 0.25*math.Abs(change) {
+		t.Errorf("not explained = %s, over 25%% of the net worth change %s", view.Remainder, view.Change)
+	}
+	if v := parse(view.OpenValue); v <= 0 {
+		t.Errorf("open positions value = %s, want above zero", view.OpenValue)
+	}
+	built := int64(-1)
+	for _, bp := range view.Blueprints {
+		if bp.Name == "Damage Control II" {
+			built = int64(parse(bp.Built))
+		}
+	}
+	if built <= 0 {
+		t.Errorf("headline blueprint built = %d, want above zero", built)
 	}
 }

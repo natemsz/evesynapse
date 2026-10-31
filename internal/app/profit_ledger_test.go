@@ -278,10 +278,44 @@ func TestProfitPooledTradingItems(t *testing.T) {
 	if code != 200 {
 		t.Fatalf("GET /profit/: status %d", code)
 	}
-	for _, want := range []string{`class="pf-chart"`, "brought the most", `class="pf-gap"`, "trading fees took", "Goods sold cost"} {
+	for _, want := range []string{`class="pf-chart"`, "brought the most", `class="pf-gap"`, "trading fees took", "Goods sold cost",
+		"By activity", "Fees and their share of sales", "Cost of goods sold", "Trading margin", "Earned, running total", "By day", "By week"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("profit page charts lack %q", want)
 		}
+	}
+}
+
+// The grain control drives the charts' bucketing: an explicit week
+// grain over 30 days yields a handful of weekly buckets, and with no
+// grain chosen the same span stays daily.
+func TestProfitGrainBuckets(t *testing.T) {
+	app, _, _ := demoTestApp(t)
+	ctx := context.Background()
+
+	week, err := app.buildProfitView(ctx, app.demoUserID(ctx), "", "30", "week")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if week.Charts == nil || week.Charts.Bucket != "week" {
+		t.Fatalf("grain=week: bucket = %v, want week", week.Charts)
+	}
+	if n := len(week.Charts.Net.Hits); n < 5 || n > 6 {
+		t.Errorf("grain=week over 30 days: %d net buckets, want 5 or 6", n)
+	}
+	if len(week.Chart.Panels) != 2 {
+		t.Errorf("demo hero panels = %d, want 2 (earned and net worth change)", len(week.Chart.Panels))
+	}
+
+	day, err := app.buildProfitView(ctx, app.demoUserID(ctx), "", "30", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if day.Charts == nil || day.Charts.Bucket != "day" {
+		t.Fatalf("no grain at 30 days: bucket = %v, want day", day.Charts)
+	}
+	if n := len(day.Charts.Net.Hits); n != 30 {
+		t.Errorf("default day grain over 30 days: %d net buckets, want 30", n)
 	}
 }
 

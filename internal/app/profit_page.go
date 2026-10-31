@@ -86,6 +86,8 @@ type profitPositionRow struct {
 type profitView struct {
 	Owners       []assetCharLink
 	Spans        []marketTrendChoice
+	Grains       []marketTrendChoice
+	Grain        string // the charts' bucket unit: "day" or "week"
 	OwnerLabel   string
 	Corp         bool
 	Days         int
@@ -166,7 +168,7 @@ func (app *Application) handleProfit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	q := r.URL.Query()
-	view, err := app.buildProfitView(ctx, userID, module.QueryValue(q, "owner"), module.QueryValue(q, "days"))
+	view, err := app.buildProfitView(ctx, userID, module.QueryValue(q, "owner"), module.QueryValue(q, "days"), module.QueryValue(q, "grain"))
 	if err != nil {
 		logging.Errorf("profit: user %d: %v", userID, err)
 		data.Error = "Profit figures are unavailable right now. Try again shortly."
@@ -213,7 +215,7 @@ func (app *Application) profitCorpsFor(ctx context.Context, chars []db.Character
 	return out
 }
 
-func (app *Application) buildProfitView(ctx context.Context, userID int64, ownerRaw, daysRaw string) (*profitView, error) {
+func (app *Application) buildProfitView(ctx context.Context, userID int64, ownerRaw, daysRaw, grainRaw string) (*profitView, error) {
 	view := &profitView{Days: 30}
 	switch daysRaw {
 	case "7":
@@ -250,10 +252,24 @@ func (app *Application) buildProfitView(ctx context.Context, userID int64, owner
 		}
 	}
 
+	// The charts' grain: an explicit grain=day|week wins; absent
+	// one, spans up to 90 days read by day and the year by week.
+	view.Grain = grainRaw
+	chosen := view.Grain == "day" || view.Grain == "week"
+	if !chosen {
+		view.Grain = "day"
+		if view.Days > 90 {
+			view.Grain = "week"
+		}
+	}
+
 	href := func(owner string, days int) string {
 		h := "/profit/?days=" + strconv.Itoa(days)
 		if owner != "" {
 			h += "&owner=" + owner
+		}
+		if chosen {
+			h += "&grain=" + view.Grain
 		}
 		return h
 	}
@@ -273,6 +289,14 @@ func (app *Application) buildProfitView(ctx context.Context, userID int64, owner
 	}
 	for _, d := range []int{7, 30, 90, 365} {
 		view.Spans = append(view.Spans, marketTrendChoice{Label: fmt.Sprintf("%d days", d), Href: href(ownerParam, d), Active: d == view.Days})
+	}
+	for _, g := range []struct{ unit, label string }{{"day", "By day"}, {"week", "By week"}} {
+		h := "/profit/?days=" + strconv.Itoa(view.Days)
+		if ownerParam != "" {
+			h += "&owner=" + ownerParam
+		}
+		h += "&grain=" + g.unit
+		view.Grains = append(view.Grains, marketTrendChoice{Label: g.label, Href: h, Active: g.unit == view.Grain})
 	}
 	if len(ids) == 0 {
 		return view, nil
@@ -373,7 +397,7 @@ func (app *Application) buildProfitView(ctx context.Context, userID int64, owner
 	if err != nil {
 		return view, err
 	}
-	view.Chart = buildProfitChart(daily, !view.Corp)
+	view.Chart = buildProfitChart(daily, !view.Corp && view.Change != "")
 	names := map[int64]string{}
 	for _, ch := range chars {
 		names[ch.CharacterID] = ch.Name
@@ -426,53 +450,70 @@ func (app *Application) attachProfitPositions(ctx context.Context, view *profitV
 	return nil
 }
 
-// profitChart is the cumulative earned line and, for characters, the
-// cumulative net worth change line, on one signed scale.
+// profitHeroPanel is one of the hero's stacked running-total
+// panels: a series on its own scale, with gridlines and the
+// scale's low, middle and high labels.
+type profitHeroPanel struct {
+	Caption   string
+	W, H      int
+	Points    string
+	LineClass string
+	ZeroY     float64
+	ShowZero  bool
+	Ticks     []pfTick
+}
+
+// profitChart is the hero: the cumulative earned panel and, for
+// characters with net worth samples, the cumulative net worth
+// change panel under it, sharing one date axis.
 type profitChart struct {
-	Width, Height int
-	EarnedPoints  string
-	ChangePoints  string
-	ZeroY         float64
-	High, Low     string
-	First, Last   string
-	Days          int
+	Panels           []profitHeroPanel
+	First, Mid, Last string
+	Days             int
 }
 
 func buildProfitChart(rows []db.ListProfitDailyRow, withChange bool) *profitChart {
 	if len(rows) < 2 {
 		return nil
 	}
-	const w, h, pad = 600, 160, 8
+	const w, h, pad = 600, 110, 8
 	earned := make([]float64, len(rows))
 	change := make([]float64, len(rows))
 	var e, c float64
-	lo, hi := 0.0, 0.0
 	for i, r := range rows {
 		e += r.Attributed
 		c += r.Attributed + r.Unattributed
 		earned[i], change[i] = e, c
-		lo, hi = math.Min(lo, e), math.Max(hi, e)
-		if withChange {
-			lo, hi = math.Min(lo, c), math.Max(hi, c)
-		}
-	}
-	if hi == lo {
-		hi = lo + 1
 	}
 	n := len(rows)
-	x := func(i int) float64 { return float64(i) * float64(w) / float64(n-1) }
-	y := func(v float64) float64 { return pad + (hi-v)/(hi-lo)*float64(h-2*pad) }
-	line := func(vs []float64) string {
-		parts := make([]string, len(vs))
-		for i, v := range vs {
-			parts[i] = strconv.FormatFloat(x(i), 'f', 1, 64) + "," + strconv.FormatFloat(y(v), 'f', 1, 64)
+	panel := func(vs []float64, caption, class string) profitHeroPanel {
+		lo, hi := 0.0, 0.0
+		for _, v := range vs {
+			lo, hi = math.Min(lo, v), math.Max(hi, v)
 		}
-		return strings.Join(parts, " ")
+		if hi == lo {
+			hi = lo + 1
+		}
+		y := func(v float64) float64 { return pad + (hi-v)/(hi-lo)*float64(h-2*pad) }
+		parts := make([]string, n)
+		for i, v := range vs {
+			x := float64(i) * float64(w) / float64(n-1)
+			parts[i] = strconv.FormatFloat(x, 'f', 1, 64) + "," + strconv.FormatFloat(y(v), 'f', 1, 64)
+		}
+		p := profitHeroPanel{Caption: caption, W: w, H: h, Points: strings.Join(parts, " "),
+			LineClass: class, ZeroY: y(0), ShowZero: lo < 0}
+		for _, v := range []float64{lo, (lo + hi) / 2, hi} {
+			yy := y(v)
+			p.Ticks = append(p.Ticks, pfTick{Y: yy,
+				Pos:   strconv.Itoa(int(math.Round(yy / float64(h) * 100))),
+				Label: pfShortISK(v)})
+		}
+		return p
 	}
-	ch := &profitChart{Width: w, Height: h, Days: n, EarnedPoints: line(earned), ZeroY: y(0),
-		High: signedISK(hi), Low: signedISK(lo), First: rows[0].Day, Last: rows[n-1].Day}
+	ch := &profitChart{Days: n, First: rows[0].Day, Mid: rows[n/2].Day, Last: rows[n-1].Day}
+	ch.Panels = append(ch.Panels, panel(earned, "Earned, running total", "mt-line-sell"))
 	if withChange {
-		ch.ChangePoints = line(change)
+		ch.Panels = append(ch.Panels, panel(change, "Net worth change, running total", "mt-line-buy"))
 	}
 	return ch
 }

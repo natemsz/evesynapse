@@ -457,18 +457,21 @@ header a.navlink.utility { font-size: 0.9em; color: var(--muted); }
   font-size: 0.8rem;
   letter-spacing: 0.1em;
   text-transform: uppercase;
+  white-space: nowrap;
   color: color-mix(in srgb, var(--gold) 68%, var(--text));
 }
 .branch .menu .nav-group-label svg, .switcher-menu .nav-group-label svg { width: 12px; height: 12px; flex: none; }
 .branch .menu .nav-group-label::after, .switcher-menu .nav-group-label::after {
   content: "";
   flex: 1;
+  min-width: 1.5rem;
   height: 1px;
   background: color-mix(in srgb, var(--gold) 32%, transparent);
 }
 .branch .menu .nav-group-label ~ a, .switcher-menu .nav-group-label ~ a { padding-left: 0.95rem; }
 .sidebar .branch .menu .nav-group-label ~ a { padding-left: 0.8rem; }
-.branch .menu .nav-group-label:first-child, .switcher-menu .nav-group-label:first-child { margin-top: 0; padding-top: 0.1rem; }
+.branch .menu .nav-group-label:first-child, .branch .menu .nav-flyout-head + .nav-group-label, .switcher-menu .nav-group-label:first-child { margin-top: 0; padding-top: 0.1rem; }
+.nav-flyout-head { display: none; }
 .sidebar .branch .menu .nav-group-label { padding-left: 0.45rem; padding-right: 0.45rem; }
 
 /* --- layout + panels --- */
@@ -3170,6 +3173,17 @@ html[data-nav="rail"] .sidebar .branch > summary {
   html[data-nav="rail"] .sidenav details[open] > summary[data-tip]::before {
     display: none;
   }
+  /* One overlay at a time: while any flyout is open, no rail tooltip
+     shows at all, the ESI status tag included. */
+  html[data-nav="rail"] .sidebar:has(details[open]) [data-tip]::before {
+    display: none;
+  }
+  /* The status tag is a sentence, not a word: let it wrap. */
+  html[data-nav="rail"] .sidebar #status-open::before {
+    white-space: normal;
+    width: max-content;
+    max-width: 15rem;
+  }
 }
 html[data-nav="rail"] .sidebar .branch > summary::after { display: none; }
 html[data-nav="rail"] .sidebar .branch .menu {
@@ -3185,6 +3199,21 @@ html[data-nav="rail"] .sidebar .branch .menu {
   box-shadow: 0 10px 28px rgba(0, 0, 0, 0.55);
 }
 html[data-nav="rail"] .sidebar .branch .menu a { white-space: nowrap; }
+@media (min-width: 861px) {
+  html[data-nav="rail"] .sidebar .branch .menu .nav-flyout-head {
+    display: block;
+    font-family: "Rajdhani", "Segoe UI", sans-serif;
+    font-weight: 600;
+    font-size: 0.85rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    line-height: 1;
+    color: var(--text);
+    padding: 0.3rem 0.6rem 0;
+    margin-bottom: 0.6rem;
+  }
+  html[data-nav="rail"] .sidebar .branch .menu .nav-flyout-head + .nav-group-label { margin-top: 0.85rem; }
+}
 /* The Settings footer's menu flies out to the side like the
    categories'; the upward opening of the wide sidebar does
    not apply here. */

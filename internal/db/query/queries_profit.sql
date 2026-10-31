@@ -397,6 +397,31 @@ ORDER BY (SUM(units) > 0 AND SUM(cov_units) >= SUM(units)) DESC,
          type_id
 LIMIT sqlc.arg(row_cap)::bigint;
 
+-- name: ListTradeItemsRange :many
+-- The Trading by item figures over an explicit day range, summed
+-- from the daily fold: the item table's uncovered filter reads this
+-- (a whole span, or one bucket's days for a day filter), optionally
+-- keeping only types with units no cost covered. No previous window
+-- rides along, so the delta columns stay empty under the filter.
+SELECT type_id,
+       SUM(units)::bigint AS units, SUM(revenue)::float8 AS revenue,
+       SUM(cov_units)::bigint AS cov_units, SUM(cov_revenue)::float8 AS cov_revenue,
+       SUM(cov_cost)::float8 AS cov_cost, SUM(cov_tax)::float8 AS cov_tax, SUM(broker)::float8 AS broker,
+       SUM(gap_before_history)::bigint AS gap_before_history, SUM(gap_ledger_hole)::bigint AS gap_ledger_hole,
+       SUM(gap_no_buy)::bigint AS gap_no_buy, SUM(gap_no_tax)::bigint AS gap_no_tax,
+       0::float8 AS prev_cov_net, 0::float8 AS prev_broker,
+       0::bigint AS prev_units, 0::bigint AS prev_cov_units
+FROM trade_item_daily
+WHERE owner_kind = sqlc.arg(owner_kind) AND owner_id = ANY(sqlc.arg(owner_ids)::bigint[])
+  AND day >= sqlc.arg(from_day)::text AND day <= sqlc.arg(to_day)::text
+GROUP BY type_id
+HAVING (SUM(units) > 0 OR SUM(broker) > 0)
+   AND (NOT sqlc.arg(only_uncovered)::bool OR SUM(cov_units) < SUM(units))
+ORDER BY (SUM(units) > 0 AND SUM(cov_units) >= SUM(units)) DESC,
+         SUM(cov_revenue - cov_cost - cov_tax - CASE WHEN sqlc.arg(broker_in_margin)::bool THEN broker ELSE 0 END) DESC,
+         type_id
+LIMIT sqlc.arg(row_cap)::bigint;
+
 -- name: SumTradeItems :one
 -- The Trading tab's header: the same figures over every type.
 SELECT COALESCE(SUM(units), 0)::bigint AS units, COALESCE(SUM(cov_units), 0)::bigint AS cov_units,

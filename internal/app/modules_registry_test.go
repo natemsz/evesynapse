@@ -153,15 +153,16 @@ func TestModuleNavKeepsItsPlace(t *testing.T) {
 	follows("market", "/market/scanner/", "/market/ideas/")
 	follows("market", "/market/tradefinder/", "/market/scanner/")
 	follows("market", "/market/restock/", "/market/tradefinder/")
-	follows("market", "/market/leaderboard/", "/market/restock/")
+	follows("market", "/market/leaderboard/", "/profit/")
+	follows("market", "/profit/", "/market/restock/")
 	follows("market", "/contracts/", "/orders/")
 
 	// The whole pilot, market and tools menus, in their
 	// order. Appraisal sits under Tools, after the Item Browser.
 	follows("tools", "/market/appraise/", "/items/")
 	for section, want := range map[string][]string{
-		"pilot":  {"/character/", "/characters/", "/skills/plans", "/assets/", "/wallet/", "/mail/", "/calendar/", "/contacts/", "/profit/", "/killmails/"},
-		"market": {"/market/", "/contracts/search/", "/market/trends/", "/market/lp/", "/market/baskets/", "/market/ideas/", "/market/scanner/", "/market/tradefinder/", "/market/restock/", "/market/leaderboard/", "/orders/", "/contracts/"},
+		"pilot":  {"/character/", "/characters/", "/skills/plans", "/assets/", "/wallet/", "/mail/", "/calendar/", "/contacts/", "/killmails/"},
+		"market": {"/market/", "/contracts/search/", "/market/trends/", "/market/lp/", "/market/baskets/", "/market/ideas/", "/market/scanner/", "/market/tradefinder/", "/market/restock/", "/profit/", "/market/leaderboard/", "/orders/", "/contracts/"},
 		"tools":  {"/items/", "/market/appraise/"},
 	} {
 		var got []string

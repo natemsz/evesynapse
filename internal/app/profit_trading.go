@@ -35,9 +35,44 @@ func tradeWindowFor(days int) int32 {
 
 func (app *Application) attachTradeItems(ctx context.Context, view *profitView, kind string, ids []int64, brokerFees float64, brokerInMargin bool) error {
 	win := tradeWindowFor(view.Days)
-	rows, err := app.queries.ListTradeItems(ctx, db.ListTradeItemsParams{OwnerKind: kind, OwnerIds: ids, Win: win, BrokerInMargin: brokerInMargin, RowCap: tradeItemRowCap})
-	if err != nil {
-		return err
+	// Under the uncovered filter the rows come from the daily
+	// fold over the filter's day range (the span, or one bucket
+	// at the page grain), keeping only types with units no cost
+	// covered; the header figures below always cover the span.
+	var rows []db.ListTradeItemsRow
+	if view.Modes.Uncovered == "" {
+		var err error
+		rows, err = app.queries.ListTradeItems(ctx, db.ListTradeItemsParams{OwnerKind: kind, OwnerIds: ids, Win: win, BrokerInMargin: brokerInMargin, RowCap: tradeItemRowCap})
+		if err != nil {
+			return err
+		}
+	} else {
+		from, to := view.fromDay, time.Now().UTC().Format("2006-01-02")
+		if view.Modes.Uncovered != "1" {
+			from = view.Modes.Uncovered
+			to = from
+			if view.Grain == "week" {
+				if d, err := time.Parse("2006-01-02", from); err == nil {
+					to = d.AddDate(0, 0, 6).Format("2006-01-02")
+				}
+			}
+		}
+		rrows, err := app.queries.ListTradeItemsRange(ctx, db.ListTradeItemsRangeParams{
+			OwnerKind: kind, OwnerIds: ids, FromDay: from, ToDay: to,
+			OnlyUncovered: true, BrokerInMargin: brokerInMargin, RowCap: tradeItemRowCap,
+		})
+		if err != nil {
+			return err
+		}
+		for _, r := range rrows {
+			rows = append(rows, db.ListTradeItemsRow{
+				TypeID: r.TypeID, Units: r.Units, Revenue: r.Revenue,
+				CovUnits: r.CovUnits, CovRevenue: r.CovRevenue, CovCost: r.CovCost,
+				CovTax: r.CovTax, Broker: r.Broker,
+				GapBeforeHistory: r.GapBeforeHistory, GapLedgerHole: r.GapLedgerHole,
+				GapNoBuy: r.GapNoBuy, GapNoTax: r.GapNoTax,
+			})
+		}
 	}
 	broker := func(b float64) float64 {
 		if brokerInMargin {
@@ -90,11 +125,45 @@ func (app *Application) attachTradeItems(ctx context.Context, view *profitView, 
 	}
 	if sum.Units > 0 {
 		view.ItemsCoverage = fmt.Sprintf("%.0f%%", math.Floor(float64(sum.CovUnits)/float64(sum.Units)*100))
+		view.ItemsUnits, view.ItemsCovUnits = sum.Units, sum.CovUnits
+		view.CoveragePct = view.ItemsCoverage
+		if u := sum.Units - sum.CovUnits; u > 0 {
+			if u == 1 {
+				view.CoverageUncovered = "1 unit needs a cost"
+			} else {
+				view.CoverageUncovered = esi.FormatInt(u) + " units need a cost"
+			}
+		}
 	}
 	if loose := brokerFees - sum.Broker; loose > 0.5 {
 		view.BrokerLoose = esi.FormatISK(loose)
 	}
 	view.ItemsAsOf = sum.AsOfDay
+	// Group the rows for the template: with no filter, the
+	// uncovered rows (already last) sit under their own subhead;
+	// under the filter the table is the queue itself.
+	if len(view.Items) > 0 {
+		if view.Modes.Uncovered != "" {
+			view.ItemGroups = []profitItemGroup{{Rows: view.Items}}
+		} else {
+			var covered, unc []profitItemRow
+			for _, r := range view.Items {
+				if r.Covered {
+					covered = append(covered, r)
+				} else {
+					unc = append(unc, r)
+				}
+			}
+			switch {
+			case len(unc) == 0:
+				view.ItemGroups = []profitItemGroup{{Rows: view.Items}}
+			case len(covered) == 0:
+				view.ItemGroups = []profitItemGroup{{Title: "Uncovered: needs a cost", Rows: unc}}
+			default:
+				view.ItemGroups = []profitItemGroup{{Rows: covered}, {Title: "Uncovered: needs a cost", Rows: unc}}
+			}
+		}
+	}
 	return nil
 }
 

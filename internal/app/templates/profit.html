@@ -1,5 +1,5 @@
-{{define "title"}}Profit{{end}}
-{{define "pagetitle"}}<h1><span class="gt">Profit</span></h1>{{end}}
+{{define "title"}}Profit Analysis{{end}}
+{{define "pagetitle"}}<h1><span class="gt">Profit Analysis</span></h1>{{end}}
 {{define "pagetabs"}}{{template "sectiontabs" .}}{{end}}
 {{define "content"}}
 
@@ -8,107 +8,138 @@
 {{with .Profit}}
 <p><small>Where your ISK came from, activity by activity, each after its own fees and costs.</small></p>
 
-{{template "charselector" .Owners}}
+<div class="pf-toprow">{{template "charselector" .Owners}}{{if not .Corp}}<button type="button" class="viz-gear" data-open-counted-modal aria-haspopup="dialog" aria-label="How profit is counted" title="How profit is counted"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></svg></button>{{end}}</div>
+<div class="pf-chiprows">
 <nav class="mt-modes" aria-label="Span">{{range .Spans}}<a href="{{.Href}}"{{if .Active}} class="active" aria-current="true"{{end}}>{{.Label}}</a>{{end}}</nav>
 {{if .Grains}}<nav class="mt-modes pf-modes-grain" aria-label="Breakdown">{{range .Grains}}<a href="{{.Href}}"{{if .Active}} class="active" aria-current="true"{{end}}>{{.Label}}</a>{{end}}</nav>{{end}}
+</div>
+
+{{if not .Corp}}
+<div class="modal-backdrop" id="counted-modal" hidden>
+  <div class="modal pf-counted-modal" role="dialog" aria-modal="true" aria-labelledby="counted-title">
+    <div class="modal-head">
+      <h2 id="counted-title">How profit is counted</h2>
+      <button type="button" class="modal-close" data-close-modal aria-label="Close">×</button>
+    </div>
+    <p><small>The rules every figure on this page follows. Change them here; the books refold on the next sync.</small></p>
+    <form method="post" action="/profit/prefs" class="pf-prefs-form">
+      <label><input type="checkbox" name="pooled" value="1"{{if .Pooled}} checked{{end}}> Match sales against stock across all my characters (off: each character's own stock)</label>
+      <label><input type="checkbox" name="broker_in_margin" value="1"{{if .BrokerInMargin}} checked{{end}}> Count broker fees in each item's margin</label>
+      <label>Price industry at today's prices in <select name="industry_region">{{range .Regions}}<option value="{{.ID}}"{{if .Selected}} selected{{end}}>{{.Name}}</option>{{end}}</select></label>
+      <label><input type="radio" name="industry_side" value="sell"{{if not .IndustrySideBuy}} checked{{end}}> at sell typicals (buy inputs from sell orders, list output as sell orders)</label>
+      <label><input type="radio" name="industry_side" value="buy"{{if .IndustrySideBuy}} checked{{end}}> at buy typicals (inputs through buy orders, output sold to buy orders)</label>
+      <button class="btn" type="submit">Save</button>
+    </form>
+  </div>
+</div>
+{{end}}
 
 {{if .HasData}}
 <div class="kpis kpis-small">
-  <div class="kpi"><span class="kpi-k">Earned</span><span class="kpi-v"><span class="mt-chg {{.EarnedDir}}">{{.Earned}}</span> <small>ISK</small></span><span class="kpi-sub">{{.OwnerLabel}} · last {{.Days}} days</span></div>
+  <div class="kpi"><span class="kpi-k">Earned</span><span class="kpi-v"><span class="mt-chg {{.EarnedDir}}">{{.Earned}}</span> <small>ISK</small></span><span class="kpi-sub">{{.OwnerLabel}} · last {{.Days}} days</span>{{if .EarnedSparkLine}}<svg class="kpi-spark" viewBox="0 0 100 28" preserveAspectRatio="none" aria-hidden="true" focusable="false"><polygon class="kpi-spark-area" points="{{.EarnedSparkArea}}"/><polyline class="kpi-spark-line" points="{{.EarnedSparkLine}}"/></svg>{{end}}</div>
   {{if .Change}}
-  <div class="kpi"><span class="kpi-k">Net worth change</span><span class="kpi-v"><span class="mt-chg {{.ChangeDir}}">{{.Change}}</span> <small>ISK</small></span><span class="kpi-sub">On days with a net worth sample</span></div>
-  <div class="kpi"><span class="kpi-k">Not explained</span><span class="kpi-v"><span class="mt-chg {{.RemainderDir}}">{{.Remainder}}</span> <small>ISK</small></span><span class="kpi-sub">Price moves on what you hold, losses, and what the wallet doesn't show</span></div>
+  <div class="kpi pf-kpi-gold"><span class="kpi-k">Net worth change</span><span class="kpi-v"><span class="mt-chg {{.ChangeDir}}">{{.Change}}</span> <small>ISK</small></span><span class="kpi-sub">On days with a net worth sample{{if .ChangeNote}} · {{.ChangeNote}}{{end}}</span>{{if .ChangeSparkLine}}<svg class="kpi-spark" viewBox="0 0 100 28" preserveAspectRatio="none" aria-hidden="true" focusable="false"><polygon class="kpi-spark-area" points="{{.ChangeSparkArea}}"/><polyline class="kpi-spark-line" points="{{.ChangeSparkLine}}"/></svg>{{end}}</div>
+  <div class="kpi"><span class="kpi-k">Not explained</span><span class="kpi-v"><span class="mt-chg {{.RemainderDir}}">{{.Remainder}}</span> <small>ISK</small></span><span class="kpi-sub">Price moves on what you hold, losses, and what the wallet doesn't show</span>{{if .NEHas}}<details class="pf-ne"><summary>What is in it</summary>{{if .NEDrift}}<p>Market price drift on held stock: <strong class="mt-chg {{.NEDriftDir}}">{{.NEDrift}}</strong> ISK <small class="mt-reqs">estimate</small><br><small class="mt-reqs">Stock you hold now, repriced between the start of the span and now: value moves that never crossed the wallet.</small></p>{{else}}<p>Market price drift on held stock: <strong>no estimate for this span</strong><br><small class="mt-reqs">No stored prices for what you hold reach back to the start of the span, so the whole remainder sits in the delta below.</small></p>{{end}}<p>Unaccounted wallet delta: <strong class="mt-chg {{.NEUnaccDir}}">{{.NEUnaccounted}}</strong> ISK<br><small class="mt-reqs">What is left after drift: transfers, losses and moves no ledger entry explains.</small></p></details>{{end}}</div>
   {{end}}
-  {{if .OpenValue}}
-  <div class="kpi"><span class="kpi-k">Open positions</span><span class="kpi-v">{{.OpenValue}} <small>ISK</small></span><span class="kpi-sub">Cost {{.OpenCost}} · <span class="mt-chg {{.UnrealDir}}">{{.Unrealized}}</span> not yet sold</span></div>
-  {{end}}
+  <div class="kpi"><span class="kpi-k">Cost basis coverage</span>{{if .CoveragePct}}<span class="kpi-v">{{.CoveragePct}}</span><span class="kpi-sub">Of units sold have a known cost{{if .CoverageUncovered}} · <a class="pf-cov-pill" href="{{.CoverageHref}}">{{.CoverageUncovered}}</a>{{else}} · every sale has a known cost{{end}}</span>{{else}}<span class="kpi-v">—</span><span class="kpi-sub">No market sales in this span, so nothing to cover</span>{{end}}</div>
 </div>
 
-{{with .Chart}}
-<div class="pf-hero">
-  {{range .Panels}}{{$p := .}}
-  <figure class="pf-hero-panel">
-    <figcaption><strong>{{.Caption}}</strong></figcaption>
-    <div class="pchart pf-plot">
-      <svg viewBox="0 0 {{.W}} {{.H}}" width="100%" role="img" aria-label="{{.Caption}}" preserveAspectRatio="none">
-        {{range .Ticks}}<line class="pf-grid" x1="0" y1="{{.Y}}" x2="{{$p.W}}" y2="{{.Y}}"/>{{end}}
-        {{if .ShowZero}}<line class="mt-zero" x1="0" y1="{{.ZeroY}}" x2="{{.W}}" y2="{{.ZeroY}}"/>{{end}}
-        <polyline class="{{.LineClass}}" points="{{.Points}}"/>
-      </svg>
-      <div class="pf-axis-y" aria-hidden="true">{{range .Ticks}}<span class="pf-y-{{.Pos}}">{{.Label}}</span>{{end}}</div>
+{{with .Hero}}{{$hero := .}}
+<section class="foldable pf-hero-panel" data-fold="never">
+<figure class="pf-chart pf-hero">
+  <figcaption><strong>{{.Name}}</strong>{{if .Sub}}<br><small class="mt-reqs">{{.Sub}}</small>{{end}}</figcaption>
+  <div class="viz-head">
+    {{if .Legend}}<div class="chart-legend">{{range .Legend}}<span class="legend-item"><span class="legend-swatch pf-sw {{.Class}}" aria-hidden="true"></span>{{.Label}}{{if .Value}} <small class="mt-reqs">{{.Value}}</small>{{end}}</span>{{end}}</div>{{else}}<span></span>{{end}}
+    <div class="pf-hero-modes">
+      <nav class="mt-modes" aria-label="Split">{{range $.Profit.SplitLinks}}<a href="{{.Href}}"{{if .Active}} class="active" aria-current="true"{{end}}>{{.Label}}</a>{{end}}</nav>
+      {{if not .Daily}}<nav class="mt-modes" aria-label="Scale">{{range $.Profit.ScaleLinks}}<a href="{{.Href}}"{{if .Active}} class="active" aria-current="true"{{end}}>{{.Label}}</a>{{end}}</nav>{{end}}
+      <nav class="mt-modes" aria-label="Trend">{{range $.Profit.TrendLinks}}<a href="{{.Href}}"{{if .Active}} class="active" aria-current="true"{{end}}>{{.Label}}</a>{{end}}</nav>
     </div>
-  </figure>
-  {{end}}
-  <div class="mt-chart-dates"><small>{{.First}}</small><small>{{.Mid}}</small><small>{{.Last}}</small></div>
-</div>
+  </div>
+  <div class="pchart pf-plot" data-chart-scrub="true">
+    <svg viewBox="0 0 {{.W}} {{.H}}" width="100%" role="img" aria-label="{{.Label}}" preserveAspectRatio="none">
+      <defs><pattern id="pf-hatch" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="7" height="7" class="pf-hatch-bg"/><line x1="0" y1="0" x2="0" y2="7" class="pf-hatch-line"/></pattern></defs>
+      {{range .YTicks}}<line class="pf-grid" x1="0" y1="{{.Y}}" x2="{{$hero.W}}" y2="{{.Y}}"/>{{end}}
+      {{range .Gaps}}<rect class="{{.Class}}" x="{{.X}}" y="{{.Y}}" width="{{.W}}" height="{{.H}}"/>{{end}}
+      {{range .Areas}}<polygon class="{{.Class}}" points="{{.Points}}"/>{{end}}
+      {{if .GapQuads}}<a href="#positions">{{range .GapQuads}}<polygon class="pf-hero-gap" points="{{.}}"/>{{end}}</a>{{end}}
+      {{if .ShowZero}}<line class="mt-zero" x1="0" y1="{{.ZeroY}}" x2="{{$hero.W}}" y2="{{.ZeroY}}"/>{{end}}
+      {{range .Bars}}<rect class="{{.Class}}" x="{{.X}}" y="{{.Y}}" width="{{.W}}" height="{{.H}}"/>{{end}}
+      {{range .Lines}}<polyline class="{{.Class}}" points="{{.Points}}"/>{{end}}
+      {{range .Hits}}<rect class="cdot pf-hit" x="{{.X}}" y="0" width="{{.W}}" height="{{$hero.H}}" tabindex="0" aria-label="{{.Label}}" data-date="{{.Date}}" data-tip-rows="{{.Rows}}" data-bucket="{{.Bucket}}"/>{{end}}
+    </svg>
+    <div class="pf-axis-y" aria-hidden="true">{{range .YTicks}}<span class="pf-y-{{.Pos}}">{{.Label}}</span>{{end}}</div>
+    {{if .YTicksR}}<div class="pf-axis-y pf-axis-right" aria-hidden="true">{{range .YTicksR}}<span class="pf-y-{{.Pos}}">{{.Label}}</span>{{end}}</div>{{end}}
+    {{if .Ends}}<div class="pf-hero-ends" aria-hidden="true">{{range .Ends}}<span class="{{.Class}} pf-y-{{.Pos}}">{{.Text}}</span>{{end}}</div>{{end}}
+    {{if .GapChip}}<a class="pf-hero-chip" href="#positions">{{.GapChip}} ↓</a>{{end}}
+    <div class="ctip" hidden></div>
+  </div>
+  <div class="pf-axis-x" aria-hidden="true">{{range .XTicks}}<span class="{{.Class}} pf-x-{{.Pos}}">{{.Label}}</span>{{end}}</div>
+</figure>
+</section>
 {{end}}
 
 {{with .Charts}}
 <section class="foldable">
-<h3>Charts</h3>
+<h3>Charts<span class="info-tip" tabindex="0"><svg class="info-tip-dot" viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="11" r="6.2" fill="none" stroke="currentColor" stroke-width="4.6"/><path fill="currentColor" d="M25.5 25.5 L38.5 25.5 L38.5 46.5 C38.5 50.8 40.6 52.9 44.8 53.5 L51 54.4 L49.3 60 L23.5 60 L23.5 54.5 L28.6 54.5 C32.6 54.5 34.6 52.6 34.6 48.2 L34.6 32.2 C34.6 29.9 33.5 28.8 30.9 28.6 L25.5 28.2 Z"/></svg><span class="info-tip-pop">Amounts in ISK, by {{.Bucket}}. A hatched {{.Bucket}} had sales with no known cost or no matched tax line, so its trading figures are partial. The strip under Trading efficiency marks each {{.Bucket}}'s coverage; an amber segment opens that {{.Bucket}}'s uncovered sales in the item table.</span></span></h3>
 <div class="pf-charts">
-{{if .Net}}<div class="pf-cell">{{template "pfchart" .Net}}</div>{{end}}
-{{if .Activities}}<div class="pf-cell">{{template "pfchart" .Activities}}</div>{{end}}
-{{if .Fees}}<div class="pf-cell">{{template "pfchart" .Fees}}</div>{{end}}
-{{if .COGS}}<div class="pf-cell">{{template "pfchart" .COGS}}</div>{{end}}
-{{if .Margin}}<div class="pf-cell">{{template "pfchart" .Margin}}</div>{{end}}
+{{if .Waterfall}}<div class="pf-cell">{{template "pfwaterfall" .Waterfall}}</div>{{end}}
+<div class="pf-cell">
+  <div class="pf-mode-row"><nav class="mt-modes" aria-label="Trading panel mode">{{range $.Profit.EffLinks}}<a href="{{.Href}}"{{if .Active}} class="active" aria-current="true"{{end}}>{{.Label}}</a>{{end}}</nav></div>
+  {{if .Efficiency}}{{template "pfchart" .Efficiency}}{{else}}<figure class="pf-chart"><figcaption><strong>Trading efficiency</strong></figcaption><p><small>No trading in this span.</small></p></figure>{{end}}
 </div>
-<p><small>Amounts in ISK, by {{.Bucket}}. Hatched {{.Bucket}}s had sales with no known cost or no matched tax line, so their trading figures are partial.</small></p>
+</div>
 </section>
 {{end}}
 
 <section class="foldable">
 <h3>By activity</h3>
+{{if .ActivityLabel}}<p class="pf-note"><small>The hero is showing only <strong>{{.ActivityLabel}}</strong>. <a href="{{.ClearActHref}}">Clear the filter</a></small></p>{{end}}
 <div class="pf-act-grid">
 <div class="tw">
 <table>
-  <thead><tr><th>Activity</th><th class="mt-num">In</th><th class="mt-num">Costs</th><th class="mt-num">Net</th><th class="mt-num">Share</th></tr></thead>
+  <thead><tr><th>Activity</th><th>Rhythm</th><th class="mt-num">In</th><th class="mt-num">Costs</th><th class="mt-num">Net</th><th class="mt-num">Kept %</th></tr></thead>
   <tbody>
   {{range .Activities}}
-    <tr>
-      <td>{{.Label}}<br><small class="mt-reqs">{{.Note}}</small></td>
+    <tr{{if .Active}} class="pf-act-on"{{end}}>
+      <td><a href="{{.FilterHref}}">{{.Label}}</a><br><small class="mt-reqs">{{.Note}}</small></td>
+      <td>{{if .Rhythm}}<svg class="pf-rhythm" viewBox="0 0 {{.Rhythm.W}} {{.Rhythm.H}}" width="104" height="24" aria-hidden="true"><line class="pf-rhythm-zero" x1="0" y1="{{.Rhythm.ZeroY}}" x2="{{.Rhythm.W}}" y2="{{.Rhythm.ZeroY}}"/>{{range .Rhythm.Bars}}<rect class="{{.Class}}" x="{{.X}}" y="{{.Y}}" width="{{.W}}" height="{{.H}}"/>{{end}}</svg>{{end}}</td>
       <td class="mt-num">{{.Income}}</td>
       <td class="mt-num">{{.Costs}}</td>
-      <td class="mt-num"><strong class="mt-chg {{.NetDir}}">{{.Net}}</strong></td>
-      <td class="mt-num">{{.Share}}</td>
+      <td class="mt-num"><strong class="{{if eq .NetDir "up"}}sem-kept-tx{{else if eq .NetDir "down"}}sem-lost-tx{{end}}">{{.Net}}</strong></td>
+      <td class="mt-num">{{if .KeptPct}}{{.KeptPct}}{{else}}—{{end}}</td>
     </tr>
   {{end}}
   </tbody>
 </table>
 </div>
-{{with .Donut}}<div class="pf-card pf-donut-card">
-  <h4>Income sources</h4>
-  <div class="pchart pf-donut">
-    <svg viewBox="0 0 160 160" role="img" aria-label="Income sources">
-      <g transform="rotate(-90 80 80)">
-        {{range .Slices}}<circle class="pf-slice cdot {{.Class}}" cx="80" cy="80" r="60" stroke-dasharray="{{.Dash}}" stroke-dashoffset="{{.Offset}}" tabindex="0" aria-label="{{.Label}}: {{.Share}} of income" data-date="{{.Label}}" data-tip-rows="{{.Rows}}"/>{{end}}
-      </g>
-    </svg>
-    <div class="pf-donut-total" aria-hidden="true"><strong>{{.Total}}</strong><small>ISK in</small></div>
-    <div class="ctip" hidden></div>
+{{with .Turnover}}<div class="pf-card">
+  <div class="viz-head"><h4>Turnover vs profit<span class="info-tip" tabindex="0"><svg class="info-tip-dot" viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="11" r="6.2" fill="none" stroke="currentColor" stroke-width="4.6"/><path fill="currentColor" d="M25.5 25.5 L38.5 25.5 L38.5 46.5 C38.5 50.8 40.6 52.9 44.8 53.5 L51 54.4 L49.3 60 L23.5 60 L23.5 54.5 L28.6 54.5 C32.6 54.5 34.6 52.6 34.6 48.2 L34.6 32.2 C34.6 29.9 33.5 28.8 30.9 28.6 L25.5 28.2 Z"/></svg><span class="info-tip-pop">The wide track is all the ISK an activity moved. The bright bar is the part it kept.</span></span></h4><nav class="mt-modes" aria-label="Turnover readout">{{range $.Profit.BulLinks}}<a href="{{.Href}}"{{if .Active}} class="active" aria-current="true"{{end}}>{{.Label}}</a>{{end}}</nav></div>
+  <div class="pf-bullets">
+  {{range .}}<div class="pf-bullet"><span class="pf-bullet-name">{{.Label}}</span><svg viewBox="0 0 {{.W}} {{.H}}" preserveAspectRatio="none" aria-hidden="true"><rect class="bullet-track" x="0" y="0" width="{{.TrackW}}" height="{{.H}}"/><rect class="{{.NetClass}}" x="0" y="0" width="{{printf "%.1f" .NetW}}" height="{{.H}}"/></svg><span class="pf-bullet-val">{{.Readout}}<br><small class="mt-reqs">moved {{.Moved}}</small></span></div>{{end}}
   </div>
-  <ul class="pf-donut-legend">{{range .Slices}}<li><span class="legend-swatch pf-sw {{.Class}}" aria-hidden="true"></span><span>{{.Label}}</span><span class="mt-num">{{.Share}}</span></li>{{end}}</ul>
 </div>{{end}}
 </div>
-<p><small>Prices in ISK. Trading costs include {{.SalesTax}} in sales tax and {{.BrokerFees}} in broker fees. Industry counts a job when it delivers: what it made, at EveSynapse's prices that day, less its materials at the same prices. Built items then count as stock at that value, so selling them later is a trade.{{if .Corp}} Corporation figures cover every wallet division; corporations get no net worth line.{{end}}</small></p>
+<p><small>Prices in ISK. Trading costs include {{.SalesTax}} in sales tax and {{.BrokerFees}} in broker fees. Industry counts a job when it delivers: what it made, at EveSynapse's prices that day, less its materials at the same prices. Built items then count as stock at that value, so selling them later is a trade. The counting rules in full: <a href="#counted-modal" data-open-counted-modal>how profit is counted</a>.{{if .Corp}} Corporation figures cover every wallet division; corporations get no net worth line.{{end}}</small></p>
 </section>
 
-<section class="foldable">
-<h3>Trading by item</h3>
+<section class="foldable" id="items">
+<h3>Trading by item<span class="info-tip" tabindex="0"><svg class="info-tip-dot" viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="11" r="6.2" fill="none" stroke="currentColor" stroke-width="4.6"/><path fill="currentColor" d="M25.5 25.5 L38.5 25.5 L38.5 46.5 C38.5 50.8 40.6 52.9 44.8 53.5 L51 54.4 L49.3 60 L23.5 60 L23.5 54.5 L28.6 54.5 C32.6 54.5 34.6 52.6 34.6 48.2 L34.6 32.2 C34.6 29.9 33.5 28.8 30.9 28.6 L25.5 28.2 Z"/></svg><span class="info-tip-pop">Each sale is matched to the oldest stock {{if .Pooled}}any of your characters{{else}}that character{{end}} still had of the item. A margin is what is left after the units' cost, their sales tax{{if .BrokerInMargin}} and the broker fees tied to the item{{end}}, and it covers only units with a known cost and a matched tax line; the rest are listed with the reason. Fully covered items come first.</span></span></h3>
 {{if .Recomputed}}<p class="pf-note"><small>{{if eq .RecomputedWhy "members"}}Your characters changed, so trading figures were recomputed on {{.Recomputed}}.{{else}}Trading figures were recomputed on {{.Recomputed}}: sales now match against stock across all your characters, with sales tax paired to each sale and broker fees tied to the item where they can be.{{end}}</small></p>{{end}}
 {{if .ItemsNet}}
-<p><strong class="mt-chg {{.ItemsNetDir}}">{{.ItemsNet}}</strong> ISK margin on covered sales{{if .ItemsDelta}}, <span class="mt-chg {{.ItemsDeltaDir}}">{{.ItemsDelta}}</span> against the {{.Days}} days before{{end}}. {{if .ItemsCoverage}}{{.ItemsCoverage}} of units sold are covered.{{end}}{{if .BrokerLoose}} Broker fees tied to no item: {{.BrokerLoose}} ISK.{{end}} <small class="mt-reqs">As of {{.ItemsAsOf}}.</small></p>
+<p><strong class="mt-chg {{.ItemsNetDir}}">{{.ItemsNet}}</strong> ISK margin on covered sales{{if .ItemsDelta}}, <span class="mt-chg {{.ItemsDeltaDir}}">{{.ItemsDelta}}</span> against the {{.Days}} days before{{end}}. {{if .ItemsCoverage}}<a href="{{.CoverageHref}}">{{.ItemsCoverage}} of units sold are covered</a>.{{end}}{{if .BrokerLoose}} Broker fees tied to no item: {{.BrokerLoose}} ISK.{{end}} <small class="mt-reqs">As of {{.ItemsAsOf}}.</small></p>
 {{end}}
+{{if .UncoveredRaw}}<p class="pf-note"><small>Showing only sales with no known cost{{.UncoveredWhen}}: the resolution queue. <a href="{{.ClearUncHref}}">Clear the filter</a></small></p>{{end}}
 {{if .Items}}
 <div class="tw">
 <table>
   <thead><tr><th>Item</th><th class="mt-num">Sold</th><th class="mt-num">Sold for</th><th class="mt-num">Margin</th><th class="mt-num">Margin %</th><th class="mt-num">vs before</th></tr></thead>
   <tbody>
-  {{range .Items}}
-    <tr>
+  {{range .ItemGroups}}{{if .Title}}<tr class="pf-group-row" data-sort-barrier><td colspan="6">{{.Title}}</td></tr>{{end}}{{range .Rows}}
+    <tr{{if not .Covered}} class="pf-unc-row"{{end}}>
       <td><a href="/market/?type={{.TypeID}}">{{.Name}}</a>
         {{range .Gaps}}<br><small class="mt-reqs">{{.Units}} units: {{.Label}}</small>{{end}}
-        {{if .CanEnterBasis}}<details class="pf-basis"><summary><small>Enter what these cost you</small></summary>
+        {{if .CanEnterBasis}}<details class="pf-basis"><summary><small class="sem-unverified-tx">Enter what these cost you</small></summary>
           <form method="post" action="/profit/basis" class="pf-basis-form">
             <input type="hidden" name="pool" value="{{$.Profit.BasisPool}}"><input type="hidden" name="type_id" value="{{.TypeID}}">
             <label>Units <input name="quantity" inputmode="numeric" required></label>
@@ -119,23 +150,45 @@
       </td>
       <td class="mt-num">{{.Sold}}</td>
       <td class="mt-num">{{.Revenue}}</td>
-      <td class="mt-num"><strong class="mt-chg {{.MarginDir}}">{{.Margin}}</strong>{{if .CoveredOf}}<br><small class="mt-reqs">{{.CoveredOf}}</small>{{end}}</td>
-      <td class="mt-num">{{.MarginPct}}</td>
+      <td class="mt-num"><strong class="{{if eq .MarginDir "up"}}sem-kept-tx{{else if eq .MarginDir "down"}}sem-lost-tx{{end}}">{{.Margin}}</strong>{{if .CoveredOf}}<br><small class="mt-reqs">{{.CoveredOf}}</small>{{end}}</td>
+      <td class="mt-num"><span class="{{if eq .MarginDir "up"}}sem-kept-tx{{else if eq .MarginDir "down"}}sem-lost-tx{{end}}">{{.MarginPct}}</span></td>
       <td class="mt-num">{{if .Delta}}<span class="mt-chg {{.DeltaDir}}">{{.Delta}}</span>{{else}}<small class="mt-reqs">new</small>{{end}}</td>
     </tr>
-  {{end}}
+  {{end}}{{end}}
   </tbody>
 </table>
 </div>
-<p><small>Each sale is matched to the oldest stock {{if .Pooled}}any of your characters{{else}}that character{{end}} still had of the item. The margin is after what the units cost, their sales tax{{if .BrokerInMargin}} and the broker fees tied to the item{{end}}. A margin covers only units with a known cost and a matched tax line; the rest are listed with the reason. Fully covered items come first.</small></p>
 {{else}}
-<p><small>No sales in this span.</small></p>
+{{if .UncoveredRaw}}<p><small>Nothing uncovered{{.UncoveredWhen}}: every sale in this view has a known cost.</small></p>{{else}}<p><small>No sales in this span.</small></p>{{end}}
 {{end}}
 </section>
 
+{{if .Positions}}
+<section class="foldable" id="positions">
+<h3>Open positions<span class="info-tip" tabindex="0"><svg class="info-tip-dot" viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="11" r="6.2" fill="none" stroke="currentColor" stroke-width="4.6"/><path fill="currentColor" d="M25.5 25.5 L38.5 25.5 L38.5 46.5 C38.5 50.8 40.6 52.9 44.8 53.5 L51 54.4 L49.3 60 L23.5 60 L23.5 54.5 L28.6 54.5 C32.6 54.5 34.6 52.6 34.6 48.2 L34.6 32.2 C34.6 29.9 33.5 28.8 30.9 28.6 L25.5 28.2 Z"/></svg><span class="info-tip-pop">Stock you bought or built and still hold, priced at typical sell in The Forge: the ISK sitting in the hero's gap. Stock used up, lost or moved away no longer counts. The totals tie to the hero's gap chip and to the prices behind the Not explained drift estimate.</span></span></h3>
+<div class="tw">
+<table class="pf-pos-table">
+  <thead><tr><th>Item</th><th class="mt-num">Held</th><th class="mt-num">Cost</th><th class="mt-num">Worth now</th><th class="mt-num">Not yet sold</th></tr></thead>
+  <tbody>
+  {{range .Positions}}
+    <tr id="pos-{{.TypeID}}">
+      <td><a href="/market/?type={{.TypeID}}">{{.Name}}</a>{{if .Source}} <small class="mt-reqs">({{.Source}})</small>{{end}}</td>
+      <td class="mt-num">{{.Quantity}}</td>
+      <td class="mt-num">{{.Cost}}</td>
+      <td class="mt-num">{{if .Value}}{{.Value}}<br><svg class="pf-sharebar" viewBox="0 0 90 6" width="90" height="6" aria-hidden="true"><rect class="pf-share-track" x="0" y="0" width="90" height="6"/><rect class="pf-share-fill" x="0" y="0" width="{{printf "%.1f" .ShareW}}" height="6"/></svg>{{else}}<small>No price</small>{{end}}</td>
+      <td class="mt-num">{{if .Unrealized}}<span class="mt-chg {{.Dir}}">{{.Unrealized}}</span>{{else}}—{{end}}</td>
+    </tr>
+  {{end}}
+  </tbody>
+  <tfoot><tr><td>Total</td><td></td><td class="mt-num">{{.OpenCost}}</td><td class="mt-num">{{.OpenValue}}</td><td class="mt-num"><span class="mt-chg {{.UnrealDir}}">{{.Unrealized}}</span></td></tr></tfoot>
+</table>
+</div>
+</section>
+{{end}}
+
 {{if not .Corp}}
 <section class="foldable">
-<h3>Industry by blueprint</h3>
+<h3>Industry by blueprint<span class="info-tip" tabindex="0"><svg class="info-tip-dot" viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="11" r="6.2" fill="none" stroke="currentColor" stroke-width="4.6"/><path fill="currentColor" d="M25.5 25.5 L38.5 25.5 L38.5 46.5 C38.5 50.8 40.6 52.9 44.8 53.5 L51 54.4 L49.3 60 L23.5 60 L23.5 54.5 L28.6 54.5 C32.6 54.5 34.6 52.6 34.6 48.2 L34.6 32.2 C34.6 29.9 33.5 28.8 30.9 28.6 L25.5 28.2 Z"/></svg><span class="info-tip-pop">All three figures cover the same runs. Realized is what sold units brought, less their sales tax and their share of the job: the materials as they came out of your stock (any you did not buy here at their install-day price) and the job cost. At the time prices the inputs on the day each job was installed and the output on the day it delivered, less the job cost paid. At today's prices reruns the same recipe in {{.IndustryRegion}} at {{if .IndustrySideBuy}}buy{{else}}sell{{end}} typicals, less your usual sales tax{{if not .IndustrySideBuy}} and broker fees{{end}}, with the job cost scaled by how the inputs' value moved; it is what the recipe is worth now, not a profit you made. ESI does not report the materials a job used: they come from the recipe, the blueprint's ME and the structure bonus you set below.</span></span></h3>
 {{if .Blueprints}}
 <div class="tw">
 <table>
@@ -146,8 +199,8 @@
       <td><a href="{{.Href}}">{{.Name}}</a>{{range .RealizedNotes}}<br><small class="mt-reqs">{{.}}</small>{{end}}</td>
       <td class="mt-num">{{.Runs}}</td>
       <td class="mt-num">{{.Built}}</td>
-      <td class="mt-num">{{.Sold}}{{if .Lost}}<br><small class="mt-reqs">{{.Lost}} lost</small>{{end}}</td>
-      <td class="mt-num">{{if .Realized}}<strong class="mt-chg {{.RealizedDir}}">{{.Realized}}</strong>{{else}}<small class="mt-reqs">nothing sold yet</small>{{end}}</td>
+      <td class="mt-num">{{.Sold}}{{if .Lost}}<br><small class="mt-reqs">{{.Lost}} lost</small>{{end}}{{if .Built}}<br><svg class="pf-prop" viewBox="0 0 120 8" width="120" height="8" aria-hidden="true"><rect class="pf-prop-track" x="0" y="0" width="120" height="8"/><rect class="sem-kept" x="0" y="0" width="{{printf "%.1f" .SoldW}}" height="8"/></svg>{{end}}{{if .Stock}}<br><small class="mt-reqs">{{if .StockHref}}<a href="{{.StockHref}}">{{.Stock}} still in stock</a>{{else}}{{.Stock}} still in stock{{end}}{{if .StockISK}}, worth {{.StockISK}} at the time{{end}}</small>{{end}}</td>
+      <td class="mt-num">{{if .Realized}}<strong class="{{if eq .RealizedDir "up"}}sem-kept-tx{{else if eq .RealizedDir "down"}}sem-lost-tx{{end}}">{{.Realized}}</strong>{{else}}<small class="mt-reqs">nothing sold yet</small>{{end}}</td>
       <td class="mt-num">{{if .AtTime}}<span class="mt-chg {{.AtTimeDir}}">{{.AtTime}}</span>{{if .AtTimeNote}}<br><small class="mt-reqs">{{.AtTimeNote}}</small>{{end}}{{else}}<small class="mt-reqs">{{.AtTimeNo}}</small>{{end}}</td>
       <td class="mt-num">{{if .Today}}<span class="mt-chg {{.TodayDir}}">{{.Today}}</span><br><small class="mt-reqs">{{.TodayNote}}</small>{{else}}<small class="mt-reqs">{{.TodayNo}}</small>{{end}}</td>
       <td class="mt-num">{{if .Change}}<span class="mt-chg {{.ChangeDir}}">{{.Change}}</span>{{end}}</td>
@@ -156,7 +209,6 @@
   </tbody>
 </table>
 </div>
-<p><small>All three figures cover the same runs. <strong>Realized</strong> is what sold units brought, less their sales tax and their share of the job: the materials as they came out of your stock (any you didn't buy here at their install-day price) and the job cost. <strong>At the time</strong> prices the inputs on the day each job was installed and the output on the day it delivered, less the job cost paid. <strong>At today's prices</strong> reruns the same recipe in {{.IndustryRegion}} at {{if .IndustrySideBuy}}buy{{else}}sell{{end}} typicals, less your usual sales tax{{if not .IndustrySideBuy}} and broker fees{{end}}, with the job cost scaled by how the inputs' value moved; it is what the recipe is worth now, not a profit you made. ESI doesn't report the materials a job used: they come from the recipe, the blueprint's ME and the structure bonus you set below.</small></p>
 {{else}}
 <p><small>No delivered manufacturing or reaction jobs recorded yet.</small></p>
 {{end}}
@@ -175,7 +227,7 @@
 </section>
 
 <section class="foldable">
-<h3>LP stores</h3>
+<h3>LP stores<span class="info-tip" tabindex="0"><svg class="info-tip-dot" viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="11" r="6.2" fill="none" stroke="currentColor" stroke-width="4.6"/><path fill="currentColor" d="M25.5 25.5 L38.5 25.5 L38.5 46.5 C38.5 50.8 40.6 52.9 44.8 53.5 L51 54.4 L49.3 60 L23.5 60 L23.5 54.5 L28.6 54.5 C32.6 54.5 34.6 52.6 34.6 48.2 L34.6 32.2 C34.6 29.9 33.5 28.8 30.9 28.6 L25.5 28.2 Z"/></svg><span class="info-tip-pop">What your loyalty points bought, and what those items earned when they sold. ESI shows your LP balances but no store purchases, so each purchase is worked out from a drop in a balance between two hourly readings and cannot be timed closer than that. Corroborated: one offer fits the LP (and the ISK, when the wallet shows it) and the items turned up in your assets. Inferred: one offer fits but the items were not seen, perhaps already sold or moved. Ambiguous: several offers fit; pick one below. Unexplained: no single offer fits, so only the LP spent counts. Net ISK and ISK per LP cover sold items from corroborated, inferred and picked purchases, with LP costing nothing: LP is earned, not bought. The other lines show the same net if each LP had cost that much, which is what the LP could have made elsewhere. Corporation LP is not available from ESI.</span></span></h3>
 {{if .LPDelta}}<p><small>Net LP over these {{.Days}} days: {{.LPDelta}}.{{if .WithLP}} Counting that LP at {{.LPValue}} ISK each, you earned <strong class="mt-chg {{.WithLPDir}}">{{.WithLP}}</strong> ISK.{{end}}</small></p>{{end}}
 {{if .LPStores}}
 <div class="tw">
@@ -199,9 +251,8 @@
   </tbody>
 </table>
 </div>
-<p><small>ESI shows your LP balances but no LP store purchases, so each purchase is worked out from a drop in a balance between two hourly readings, and can't be timed closer than that. <strong>Corroborated</strong>: one offer fits the LP (and the ISK, when the wallet shows it) and the items turned up in your assets. <strong>Inferred</strong>: one offer fits but the items weren't seen, perhaps already sold or moved. <strong>Ambiguous</strong>: several offers fit; pick one below. <strong>Unexplained</strong>: no single offer fits, so only the LP spent is counted. Net ISK and ISK per LP cover items sold, from corroborated, inferred and picked purchases, with LP costing nothing: LP is earned, not bought. The other lines show the same net if each LP had cost that much, which is what the LP could have made elsewhere. Corporation LP isn't available from ESI.</small></p>
 {{else}}
-<p><small>No LP balances recorded yet. They fill in once a character has granted access to loyalty points and synced.</small></p>
+<p><small>No LP balances recorded yet. They fill in once a character has granted access to loyalty points and synced. Set <a href="#lp-value">your own value for LP</a> so what you earn can be priced.</small></p>
 {{end}}
 {{if .LPPicks}}
 <details class="pf-prefs"><summary><small>{{len .LPPicks}} LP spends to settle</small></summary>
@@ -218,47 +269,17 @@
 </details>
 {{end}}
 <form method="post" action="/profit/lp-value" class="pf-basis-form">
-  <label>Your own value for LP, ISK each <input name="lp_value" inputmode="decimal" value="{{.LPValue}}" placeholder="unset"></label>
+  <label>Your own value for LP, ISK each <input id="lp-value" name="lp_value" inputmode="decimal" value="{{.LPValue}}" placeholder="unset"></label>
   <button class="btn" type="submit">Save</button>
   {{if .LPMedian}}<small class="mt-reqs">Your usual realized rate is {{.LPMedian}} ISK per LP.</small>{{end}}
 </form>
 </section>
 
-<section class="foldable">
-<h3>How profit is counted</h3>
-<form method="post" action="/profit/prefs" class="pf-prefs-form">
-  <label><input type="checkbox" name="pooled" value="1"{{if .Pooled}} checked{{end}}> Match sales against stock across all my characters (off: each character's own stock)</label>
-  <label><input type="checkbox" name="broker_in_margin" value="1"{{if .BrokerInMargin}} checked{{end}}> Count broker fees in each item's margin</label>
-  <label>Price industry at today's prices in <select name="industry_region">{{range .Regions}}<option value="{{.ID}}"{{if .Selected}} selected{{end}}>{{.Name}}</option>{{end}}</select></label>
-  <label><input type="radio" name="industry_side" value="sell"{{if not .IndustrySideBuy}} checked{{end}}> at sell typicals (buy inputs from sell orders, list output as sell orders)</label>
-  <label><input type="radio" name="industry_side" value="buy"{{if .IndustrySideBuy}} checked{{end}}> at buy typicals (inputs through buy orders, output sold to buy orders)</label>
-  <button class="btn" type="submit">Save</button>
-</form>
-</section>
 {{end}}
 
-{{if .Positions}}
-<section class="foldable">
-<h3>Open positions</h3>
-<div class="tw">
-<table>
-  <thead><tr><th>Item</th><th class="mt-num">Held</th><th class="mt-num">Cost</th><th class="mt-num">Worth now</th><th class="mt-num">Not yet sold</th></tr></thead>
-  <tbody>
-  {{range .Positions}}
-    <tr>
-      <td><a href="/market/?type={{.TypeID}}">{{.Name}}</a>{{if .Source}} <small class="mt-reqs">({{.Source}})</small>{{end}}</td>
-      <td class="mt-num">{{.Quantity}}</td>
-      <td class="mt-num">{{.Cost}}</td>
-      <td class="mt-num">{{if .Value}}{{.Value}}{{else}}<small>No price</small>{{end}}</td>
-      <td class="mt-num">{{if .Unrealized}}<span class="mt-chg {{.Dir}}">{{.Unrealized}}</span>{{else}}—{{end}}</td>
-    </tr>
-  {{end}}
-  </tbody>
-</table>
-</div>
-<p><small>Stock you bought or built and still hold, at typical sell in The Forge. Stock used up, lost or moved away no longer counts.</small></p>
-</section>
-{{end}}
+
+
+<p><small>Colours on this page are semantic: <span class="legend-swatch sem-recycled" aria-hidden="true"></span> recycled capital that came back, <span class="legend-swatch sem-kept" aria-hidden="true"></span> kept profit, <span class="legend-swatch sem-lost" aria-hidden="true"></span> lost to fees, taxes and losses, <span class="legend-swatch sem-unverified" aria-hidden="true"></span> unverified, no known cost. Every colour scheme retunes the four, so they read the same in every theme.</small></p>
 
 {{else}}
 <p>Nothing recorded yet for {{.OwnerLabel}}. Profit fills in as your wallets sync, and builds up from then on.</p>
@@ -268,7 +289,7 @@
 
 {{define "pfchart"}}
 <figure class="pf-chart">
-  <figcaption><strong>{{.Name}}</strong>{{if .Sub}}<br><small class="mt-reqs">{{.Sub}}</small>{{end}}</figcaption>
+  <figcaption><strong>{{.Name}}</strong>{{if .Info}}<span class="info-tip" tabindex="0"><svg class="info-tip-dot" viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="11" r="6.2" fill="none" stroke="currentColor" stroke-width="4.6"/><path fill="currentColor" d="M25.5 25.5 L38.5 25.5 L38.5 46.5 C38.5 50.8 40.6 52.9 44.8 53.5 L51 54.4 L49.3 60 L23.5 60 L23.5 54.5 L28.6 54.5 C32.6 54.5 34.6 52.6 34.6 48.2 L34.6 32.2 C34.6 29.9 33.5 28.8 30.9 28.6 L25.5 28.2 Z"/></svg><span class="info-tip-pop">{{.Info}}</span></span>{{end}}{{if .Sub}}<br><small class="mt-reqs">{{.Sub}}</small>{{end}}</figcaption>
   {{if .Legend}}<div class="chart-legend">{{range .Legend}}<span class="legend-item"><span class="legend-swatch pf-sw {{.Class}}" aria-hidden="true"></span>{{.Label}}{{if .Value}} <small class="mt-reqs">{{.Value}}</small>{{end}}</span>{{end}}{{if .HasGaps}}<span class="legend-item"><span class="legend-swatch pf-sw pf-gap" aria-hidden="true"></span>Partly covered</span>{{end}}</div>{{end}}
   <div class="pchart pf-plot" data-chart-scrub="true">
     <svg{{if lt .H 160}} class="pf-short"{{end}} viewBox="0 0 {{.W}} {{.H}}" width="100%" role="img" aria-label="{{.Label}}, {{.First}} to {{.Last}}" preserveAspectRatio="none">
@@ -279,7 +300,7 @@
       {{if .ShowZeroLine}}<line class="mt-zero" x1="0" y1="{{.ZeroY}}" x2="{{.W}}" y2="{{.ZeroY}}"/>{{end}}
       {{range .Bars}}<rect class="{{.Class}}" x="{{.X}}" y="{{.Y}}" width="{{.W}}" height="{{.H}}"/>{{end}}
       {{range .Lines}}<polyline class="{{.Class}}" points="{{.Points}}"/>{{end}}
-      {{range .Hits}}<rect class="cdot pf-hit" x="{{.X}}" y="0" width="{{.W}}" height="{{$.H}}" tabindex="0" aria-label="{{.Label}}" data-date="{{.Date}}" data-tip-rows="{{.Rows}}"/>{{end}}
+      {{range .Hits}}<rect class="cdot pf-hit" x="{{.X}}" y="0" width="{{.W}}" height="{{$.H}}" tabindex="0" aria-label="{{.Label}}" data-date="{{.Date}}" data-tip-rows="{{.Rows}}" data-bucket="{{.Bucket}}"/>{{end}}
     </svg>
     <div class="pf-axis-y" aria-hidden="true">{{range .YTicks}}<span class="pf-y-{{.Pos}}">{{.Label}}</span>{{end}}</div>
     {{if .YTicksR}}<div class="pf-axis-y pf-axis-right" aria-hidden="true">{{range .YTicksR}}<span class="pf-y-{{.Pos}}">{{.Label}}</span>{{end}}</div>{{end}}
@@ -287,5 +308,25 @@
   </div>
   <div class="pf-axis-x" aria-hidden="true">{{range .XTicks}}<span class="{{.Class}} pf-x-{{.Pos}}">{{.Label}}</span>{{end}}</div>
   {{if or .AxisL .AxisR}}<div class="pf-axis-caps" aria-hidden="true"><span>{{.AxisL}}</span><span>{{.AxisR}}</span></div>{{end}}
+  {{if .Strip}}<div class="cover-strip">{{range .Strip}}{{if .Href}}<a class="{{.Class}}" href="{{.Href}}" title="{{.Label}}" aria-label="{{.Label}}"></a>{{else}}<span class="{{.Class}}" title="{{.Label}}"></span>{{end}}{{end}}</div>{{end}}
+</figure>
+{{end}}
+
+{{define "pfwaterfall"}}
+<figure class="pf-chart">
+  <figcaption><strong>{{.Name}}</strong>{{if .Info}}<span class="info-tip" tabindex="0"><svg class="info-tip-dot" viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="11" r="6.2" fill="none" stroke="currentColor" stroke-width="4.6"/><path fill="currentColor" d="M25.5 25.5 L38.5 25.5 L38.5 46.5 C38.5 50.8 40.6 52.9 44.8 53.5 L51 54.4 L49.3 60 L23.5 60 L23.5 54.5 L28.6 54.5 C32.6 54.5 34.6 52.6 34.6 48.2 L34.6 32.2 C34.6 29.9 33.5 28.8 30.9 28.6 L25.5 28.2 Z"/></svg><span class="info-tip-pop">{{.Info}}</span></span>{{end}}{{if .Sub}}<br><small class="mt-reqs">{{.Sub}}</small>{{end}}</figcaption>
+  {{if .Legend}}<div class="chart-legend">{{range .Legend}}<span class="legend-item"><span class="legend-swatch pf-sw {{.Class}}" aria-hidden="true"></span>{{.Label}}{{if .Value}} <small class="mt-reqs">{{.Value}}</small>{{end}}</span>{{end}}</div>{{end}}
+  <div class="pchart pf-plot">
+    <svg viewBox="0 0 {{.W}} {{.H}}" width="100%" role="img" aria-label="{{.Label}}" preserveAspectRatio="none">
+      <defs><pattern id="pf-hatch" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="7" height="7" class="pf-hatch-bg"/><line x1="0" y1="0" x2="0" y2="7" class="pf-hatch-line"/></pattern></defs>
+      {{range .Conns}}<line class="pf-wf-conn" x1="{{.X1}}" y1="{{.Y}}" x2="{{.X2}}" y2="{{.Y}}"/>{{end}}
+      {{range .Bars}}<rect class="{{.Class}}" x="{{.X}}" y="{{.Y}}" width="{{.W}}" height="{{.H}}"/>{{end}}
+      {{if .Cap}}<a href="{{.CapHref}}"><rect class="pf-wf-cap" x="{{.Cap.X}}" y="{{.Cap.Y}}" width="{{.Cap.W}}" height="{{.Cap.H}}"/></a>{{end}}
+      {{range .Hits}}<rect class="cdot pf-hit" x="{{.X}}" y="0" width="{{.W}}" height="{{$.H}}" tabindex="0" aria-label="{{.Label}}" data-date="{{.Date}}" data-tip-rows="{{.Rows}}"/>{{end}}
+    </svg>
+    <div class="pf-wf-values" aria-hidden="true">{{range .Values}}<span class="pf-x-{{.XPos}} pf-y-{{.YPos}}">{{.Text}}</span>{{end}}</div>
+    <div class="ctip" hidden></div>
+  </div>
+  <div class="pf-axis-x" aria-hidden="true">{{range .Names}}<span class="{{.Class}} pf-x-{{.Pos}}">{{.Label}}</span>{{end}}</div>
 </figure>
 {{end}}

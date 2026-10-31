@@ -163,6 +163,15 @@
   --muted: #b39a7d;
   --muted-2: #b8a58c;
   --note: #c9a06a;
+  /* The Profit page's semantic tokens: capital that came back,
+     verified profit kept, value lost to fees and taxes, and sales
+     whose cost is unverified. Every scheme (bg.css) and the light
+     theme retune all four so kept and lost stay distinct at a
+     glance in each; chart rules name only these tokens. */
+  --recycled: #66707e;
+  --kept: #2fbf9a;
+  --lost: #e0483e;
+  --unverified: #e8a13a;
   --panel: #1a120b;
   --panel-head: rgba(10, 7, 4, 0.55);
   /* Glass (Ember Nebula): the shared card/panel surface — the panel
@@ -1094,21 +1103,23 @@ h3 + .tw > table, h3 + table {
   transform: translateY(-50%);
   right: 0.7rem;
   z-index: 2;
-  width: 1.7rem;
-  height: 1.7rem;
+  width: 1.5rem;
+  height: 1.5rem;
   padding: 0;
-  font-size: 1rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.05rem;
   line-height: 1;
   font-family: inherit;
   color: var(--gold);
-  background: #0e0e0e;
+  background: none;
   -webkit-background-clip: border-box;
   background-clip: border-box;
-  border: 1px solid #4a2408;
-  border-radius: var(--r-sm);
+  border: 0;
   cursor: pointer;
 }
-.foldbtn:hover { color: var(--text-bright); border-color: var(--accent); }
+.foldbtn:hover { color: var(--text-bright); }
 /* A home module's More/Less toggle (app.js Expanders): the same
    seat in the heading as the fold button it replaces there. */
 .card.has-expand > h2:first-child, .card.has-expand > h3:first-child { padding-right: 5rem; position: relative; }
@@ -1120,16 +1131,49 @@ h3 + .tw > table, h3 + table {
   z-index: 2;
   height: 1.7rem;
   padding: 0 0.55rem;
+  display: inline-flex;
+  align-items: center;
   font: inherit;
   font-size: 0.72rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--gold);
-  background: #0e0e0e;
-  border: 1px solid #4a2408;
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--gold) 20%, transparent),
+    color-mix(in srgb, var(--accent) 16%, transparent));
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
   border-radius: var(--r-sm);
   cursor: pointer;
 }
+/* --- info tips: a filled circular "i" beside a panel or chart
+   name; its explainer rides in a styled bubble shown on hover or
+   keyboard focus, so panels carry no prose of their own. --- */
+.info-tip { position: relative; display: inline-flex; vertical-align: middle; margin-left: 0.4rem; cursor: help; outline: none; }
+.info-tip-dot {
+  display: block;
+  width: 0.92rem; height: 0.92rem; flex: none;
+  color: color-mix(in srgb, var(--accent) 65%, var(--gold));
+  transition: color 120ms ease;
+}
+.info-tip:hover .info-tip-dot, .info-tip:focus-visible .info-tip-dot, .info-tip:focus-within .info-tip-dot { color: var(--accent); }
+.info-tip-pop {
+  position: absolute; left: 50%; bottom: calc(100% + 0.55rem); z-index: 70;
+  width: max-content; max-width: 19rem;
+  padding: 0.55rem 0.7rem;
+  background: var(--glass);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(0.95);
+  backdrop-filter: blur(var(--glass-blur)) saturate(0.95);
+  border: 1px solid var(--glass-edge); border-radius: var(--r-sm);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55);
+  color: var(--text); font-family: var(--font-body, inherit); font-size: 0.78rem; font-weight: 400;
+  letter-spacing: normal; text-transform: none; line-height: 1.45; text-align: left;
+  opacity: 0; transform: translateX(-50%) translateY(3px); pointer-events: none;
+  transition: opacity 120ms ease, transform 120ms ease;
+}
+.info-tip:hover .info-tip-pop, .info-tip:focus-visible .info-tip-pop, .info-tip:focus-within .info-tip-pop {
+  opacity: 1; transform: translateX(-50%) translateY(0); pointer-events: auto;
+}
+
 .cardexpand::after { content: " \25BE"; }
 .cardexpand[aria-expanded="true"]::after { content: " \25B4"; }
 .cardexpand:hover { color: var(--text-bright); border-color: var(--accent); }
@@ -1156,6 +1200,15 @@ h3 + .tw > table, h3 + table {
    the button centers on its own heading — not on a card whose
    heading follows an intro paragraph. */
 :is(h2, h3, h4):has(> .foldbtn) { position: relative; padding-right: 2.6rem; }
+/* A quiet link riding a section head's right end, where a fold
+   button would sit: the wallet Balance head carries one to the
+   Profit Analysis page. */
+:is(h2, h3, h4):has(> .head-link) { position: relative; }
+.head-link {
+  position: absolute; right: 0.7rem; top: 50%; transform: translateY(-50%);
+  font-size: 0.85rem; font-weight: 600; letter-spacing: 0.02em;
+  white-space: nowrap;
+}
 
 /* --- buttons --- Flat frosted glass: a translucent tint of the
    active accent under a quiet two-stop gradient, a hairline edge,
@@ -2102,6 +2155,21 @@ td.pos, .pos { color: #28c76f; }
 .kpi-spark { display: block; width: 100%; height: 28px; margin-top: 0.25rem; }
 .kpi-spark-line { fill: none; stroke: var(--accent); stroke-width: 1.5; }
 .kpi-spark-area { fill: color-mix(in srgb, var(--accent) 18%, transparent); stroke: none; }
+
+/* Semantic colour classes on the theme tokens (--recycled,
+   --kept, --lost, --unverified): one class paints an SVG mark
+   (fill) and an HTML swatch or bar (background) alike, so any
+   page can speak the same four meanings. The -tx forms colour
+   text, the -line forms stroke a line. */
+.sem-recycled { fill: var(--recycled); background: var(--recycled); }
+.sem-kept { fill: var(--kept); background: var(--kept); }
+.sem-lost { fill: var(--lost); background: var(--lost); }
+.sem-unverified { fill: var(--unverified); background: var(--unverified); }
+.sem-kept-tx { color: var(--kept); }
+.sem-lost-tx { color: var(--lost); }
+.sem-unverified-tx { color: var(--unverified); }
+.sem-kept-line { fill: none; stroke: var(--kept); }
+.sem-lost-line { fill: none; stroke: var(--lost); }
 /* Hover sparklines (sparkline.go): a listed figure carrying its own
    history. The server renders the card hidden inside the figure
    (.spark-pop); app.js lifts a copy into the fixed #spark-layer on
@@ -4526,6 +4594,10 @@ html[data-theme="light"] {
   --muted: #6e5a42;
   --muted-2: #5f4c36;
   --note: #8a5f24;
+  --recycled: #5d6874;
+  --kept: #0c7a5b;
+  --lost: #b3271e;
+  --unverified: #96660a;
   --panel: #fdfbf6;
   --panel-head: #f0e9da;
   --row: #f8f4ec;

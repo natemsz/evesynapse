@@ -998,6 +998,19 @@ html[data-scheme="amarr"] { --sch-hi: #facc15; --sch-core: #f0b93f; --sch-end: #
 html[data-scheme="triglavian"] { --sch-hi: #d41236; --sch-core: #ac160a; --sch-end: #570a04; --sch-accent: #d41236; --panel: #191112; --panel-head: rgba(17, 12, 12, .55); --input-bg: rgba(25, 17, 18, .5); --row-hover: rgba(212, 18, 54, .09); --sch-ground: #120405; --sch-ground-2: #260709; --sch-glow-1: rgba(172, 22, 10, .42); --sch-glow-2: rgba(128, 18, 10, .24); --sch-glow-3: rgba(212, 18, 54, .12); --map-glow-1: rgba(255, 102, 86, .08); --map-glow-2: rgba(255, 176, 173, .05); }
 html[data-scheme="edencom"] { --sch-hi: #eab308; --sch-core: #e9cf8f; --sch-end: #334155; --sch-accent: #e9cf8f; --panel: #191b1e; --panel-head: rgba(16, 18, 20, .55); --input-bg: rgba(25, 27, 30, .5); --row-hover: rgba(233, 207, 143, .09); --sch-ground: #0b0f14; --sch-ground-2: #18202b; --sch-glow-1: rgba(233, 207, 143, .38); --sch-glow-2: rgba(51, 65, 85, .20); --sch-glow-3: rgba(183, 166, 250, .12); --map-glow-1: rgba(196, 153, 3, .08); --map-glow-2: rgba(241, 192, 71, .05); }
 html[data-scheme="soe"] { --sch-hi: #a1dde0; --sch-core: #e55252; --sch-end: #922020; --sch-accent: #e55252; --panel: #101a20; --panel-head: rgba(9, 15, 19, .55); --input-bg: rgba(16, 26, 32, .5); --row-hover: rgba(229, 82, 82, .09); --sch-ground: #070d11; --sch-ground-2: #0c171d; --sch-glow-1: rgba(229, 82, 82, .42); --sch-glow-2: rgba(146, 32, 32, .24); --sch-glow-3: rgba(161, 221, 224, .12); --map-glow-1: rgba(229, 82, 82, .08); --map-glow-2: rgba(161, 221, 224, .05); }
+/* The Profit page's semantic tokens, one tuned set per scheme:
+   kept (emerald family) and lost (crimson family) stay on opposite
+   sides of the scheme's own accent, unverified stays amber, and
+   recycled stays a desaturated slate, so the four read apart in
+   every scheme. The default ember set and the light set live in
+   style.css. */
+html[data-scheme="jove"] { --recycled: #7d7794; --kept: #2fd39a; --lost: #fb4d6d; --unverified: #f0b13e; }
+html[data-scheme="caldari"] { --recycled: #64748b; --kept: #2fbf9a; --lost: #f26d6d; --unverified: #f5b83d; }
+html[data-scheme="gallente"] { --recycled: #71857e; --kept: #4ade80; --lost: #fb7185; --unverified: #facc15; }
+html[data-scheme="amarr"] { --recycled: #857a6b; --kept: #2fbf9a; --lost: #ef5350; --unverified: #fb923c; }
+html[data-scheme="triglavian"] { --recycled: #8d8284; --kept: #2fbf9a; --lost: #ff6a4d; --unverified: #e8a13a; }
+html[data-scheme="edencom"] { --recycled: #64748b; --kept: #2fd39a; --lost: #f26d6d; --unverified: #f59e0b; }
+html[data-scheme="soe"] { --recycled: #71828c; --kept: #2fd39a; --lost: #ff7a59; --unverified: #f0b93f; }
 html[data-scheme] {
   --accent: var(--sch-core);
   --gold: var(--sch-hi);

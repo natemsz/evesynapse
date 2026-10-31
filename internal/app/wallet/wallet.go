@@ -47,6 +47,7 @@ type walletTxnRow struct {
 // walletView is the Wallet page body.
 type walletView struct {
 	CharacterName string
+	CharacterID   int64
 	BalanceOK     bool
 	Balance       string // esi.FormatISK, bare number
 	Graph         any
@@ -76,7 +77,7 @@ func (app *mod) handleWallet(w http.ResponseWriter, r *http.Request) {
 	}
 	data.WalletChars = links
 
-	view := &walletView{CharacterName: active.Name}
+	view := &walletView{CharacterName: active.Name, CharacterID: active.CharacterID}
 	data.Wallet = view
 
 	// Balance header reuses the existing wallet snapshot.

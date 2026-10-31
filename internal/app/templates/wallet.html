@@ -10,7 +10,7 @@
 {{if .Wallet}}
 <h2>{{.Wallet.CharacterName}}</h2>
 {{if .Wallet.BalanceOK}}<section class="foldable" data-fold="never">
-<h3>Balance</h3>
+<h3>Balance <a class="head-link" href="/profit/?character={{.Wallet.CharacterID}}">Profit Analysis</a></h3>
 <span class="kpi-v isk">{{.Wallet.Balance}} <small>ISK</small></span>
 </section>{{end}}
 

@@ -267,8 +267,8 @@ func TestSectionGroups(t *testing.T) {
 			t.Errorf("pilot group tab %d = %+v, want %+v", i, ptabs[i], want)
 		}
 	}
-	if len(psub) != 3 || psub[0].Href != "/assets/" || psub[1].Href != "/wallet/" || psub[2].Href != "/profit/" || !psub[1].Active {
-		t.Errorf("pilot sub-row = %+v, want Assets, the active Wallet and Profit", psub)
+	if len(psub) != 2 || psub[0].Href != "/assets/" || psub[1].Href != "/wallet/" || !psub[1].Active {
+		t.Errorf("pilot sub-row = %+v, want Assets and the active Wallet", psub)
 	}
 
 	// The industry strip: Production and Planetary, the
@@ -385,7 +385,7 @@ func TestNavGroupsMirror(t *testing.T) {
 			hrefs []string
 		}{
 			{"Character", []string{"/character/", "/characters/", "/skills/plans", "/killmails/"}},
-			{"Assets & Money", []string{"/assets/", "/wallet/", "/profit/"}},
+			{"Assets & Money", []string{"/assets/", "/wallet/"}},
 			{"Comms", []string{"/mail/", "/calendar/", "/contacts/"}},
 		}, 1, 1},
 		{"industry", "planets.html", []struct {
@@ -401,7 +401,7 @@ func TestNavGroupsMirror(t *testing.T) {
 		}{
 			{"Browse", []string{"/market/", "/contracts/search/", "/market/lp/"}},
 			{"Tools & Analysis", []string{"/market/trends/", "/market/baskets/", "/market/ideas/", "/market/scanner/", "/market/tradefinder/", "/market/restock/", "/market/leaderboard/"}},
-			{"My Finances", []string{"/orders/", "/contracts/"}},
+			{"My Finances", []string{"/orders/", "/contracts/", "/profit/"}},
 		}, 1, 2},
 	} {
 		sgs := navGroupsFor(navLinksFor(tc.section, tc.page, 0))[tc.section]

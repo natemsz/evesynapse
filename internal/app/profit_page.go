@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"math"
 	"net/http"
+	"net/url"
 	"sort"
 	"strconv"
 	"strings"
@@ -39,10 +40,15 @@ var profitActivityLabels = []struct{ key, label, note string }{
 }
 
 type profitActivityRow struct {
+	Key                string // the ledger activity key
 	Label, Note        string
 	Income, Costs, Net string
 	NetDir             string // up | down | ""
 	Share              string // of the absolute attributed total
+	KeptPct            string // net as a share of gross in, "" when nothing came in
+	FilterHref         string // sets activity=<key> on the page
+	Active             bool   // the page's activity filter names this row
+	Rhythm             *rhythmSpark
 	net                float64
 }
 
@@ -80,7 +86,11 @@ type profitPositionRow struct {
 	Quantity, Cost    string
 	Value, Unrealized string
 	Dir               string
-	Source            string // price tier note when not our own swept price
+	Source            string  // price tier note when not our own swept price
+	Share             float64 // worth now as a percent of the table's total worth
+	ShareW            float64 // the same share as a bar width in a 90-wide plot
+	qty               int64
+	value             float64
 }
 
 type profitView struct {
@@ -137,9 +147,76 @@ type profitView struct {
 	OpenValue  string
 	Unrealized string
 	UnrealDir  string
-	Chart      *profitChart
-	Charts     *pfCharts
-	Donut      *pfDonut
+
+	// The overhaul's modes and the figures they drive.
+	Modes         profitModes
+	SplitLinks    []marketTrendChoice
+	ScaleLinks    []marketTrendChoice
+	TrendLinks    []marketTrendChoice
+	EffLinks      []marketTrendChoice
+	BulLinks      []marketTrendChoice
+	ActivityLabel string // set when the activity filter is on
+	ClearActHref  string
+	UncoveredWhen string // "on Oct 14" under a bucket filter, "" for the whole span or no filter
+	ClearUncHref  string
+	Hero          *profitHero
+	Charts        *pfCharts
+	Turnover      []bulletBar
+
+	// KPI additions: sparklines on the Earned and Net worth
+	// change cards, the gap note, and the coverage card.
+	EarnedSparkLine, EarnedSparkArea string
+	ChangeSparkLine, ChangeSparkArea string
+	ChangeNote                       string
+	CoveragePct                      string // "" when nothing sold
+	CoverageUncovered                string // pill label: "3 units need a cost"
+	CoverageHref                     string
+	ItemsUnits, ItemsCovUnits        int64
+
+	// The Not Explained split: price drift on held stock
+	// (estimate) and the wallet delta left over.
+	NEDrift, NEDriftDir       string
+	NEUnaccounted, NEUnaccDir string
+	NEHas                     bool
+	ItemGroups                []profitItemGroup
+	UncoveredRaw              string // the raw uncovered= value, "" when off
+
+	// Working state for the builders below.
+	fromDay   string
+	openValue float64
+	assetsNow float64
+	hasAssets bool
+	hrefModes func(m profitModes) string // the page's link builder, bound to owner, span and grain
+}
+
+// modeHref builds a page link carrying the given modes, plus a
+// fragment. A view built outside the handler (tests, the chart
+// builder's own fixtures) has no link builder and gets "".
+func (v *profitView) modeHref(m profitModes, frag string) string {
+	if v.hrefModes == nil {
+		return ""
+	}
+	return v.hrefModes(m) + frag
+}
+
+// profitModes is the page's display state from the query string:
+// how the hero splits and scales, what the efficiency panel
+// shows, how the turnover panel reads out, and the two filters.
+type profitModes struct {
+	Split     string // total | character | activity
+	Scale     string // shared | indexed
+	Trend     string // cumulative | daily
+	Eff       string // efficiency | fees
+	Bul       string // abs | pct
+	Activity  string // activity key filter, "" for all
+	Uncovered string // "" | "1" | a bucket start day
+}
+
+// profitItemGroup is a run of item rows under one subhead (the
+// uncovered group), or the whole table under no subhead.
+type profitItemGroup struct {
+	Title string
+	Rows  []profitItemRow
 }
 
 func dirOf(v float64) string {
@@ -168,7 +245,13 @@ func (app *Application) handleProfit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	q := r.URL.Query()
-	view, err := app.buildProfitView(ctx, userID, module.QueryValue(q, "owner"), module.QueryValue(q, "days"), module.QueryValue(q, "grain"))
+	modes := profitModes{
+		Split: module.QueryValue(q, "split"), Scale: module.QueryValue(q, "scale"),
+		Trend: module.QueryValue(q, "trend"), Eff: module.QueryValue(q, "eff"),
+		Bul: module.QueryValue(q, "bul"), Activity: module.QueryValue(q, "activity"),
+		Uncovered: module.QueryValue(q, "uncovered"),
+	}
+	view, err := app.buildProfitView(ctx, userID, module.QueryValue(q, "owner"), module.QueryValue(q, "days"), module.QueryValue(q, "grain"), modes)
 	if err != nil {
 		logging.Errorf("profit: user %d: %v", userID, err)
 		data.Error = "Profit figures are unavailable right now. Try again shortly."
@@ -215,8 +298,43 @@ func (app *Application) profitCorpsFor(ctx context.Context, chars []db.Character
 	return out
 }
 
-func (app *Application) buildProfitView(ctx context.Context, userID int64, ownerRaw, daysRaw, grainRaw string) (*profitView, error) {
+func (app *Application) buildProfitView(ctx context.Context, userID int64, ownerRaw, daysRaw, grainRaw string, modes profitModes) (*profitView, error) {
 	view := &profitView{Days: 30}
+	// Mode values normalize to their defaults; anything else in
+	// the query is ignored rather than echoed into links.
+	switch modes.Split {
+	case "character", "activity":
+	default:
+		modes.Split = "total"
+	}
+	if modes.Scale != "indexed" {
+		modes.Scale = "shared"
+	}
+	if modes.Trend != "daily" {
+		modes.Trend = "cumulative"
+	}
+	if modes.Eff != "fees" {
+		modes.Eff = "efficiency"
+	}
+	if modes.Bul != "pct" {
+		modes.Bul = "abs"
+	}
+	if modes.Activity != "" {
+		ok := false
+		for _, l := range profitActivityLabels {
+			ok = ok || l.key == modes.Activity
+		}
+		if !ok {
+			modes.Activity = ""
+		}
+	}
+	if modes.Uncovered != "1" {
+		if _, err := time.Parse("2006-01-02", modes.Uncovered); err != nil {
+			modes.Uncovered = ""
+		}
+	}
+	view.Modes = modes
+	view.UncoveredRaw = modes.Uncovered
 	switch daysRaw {
 	case "7":
 		view.Days = 7
@@ -263,16 +381,62 @@ func (app *Application) buildProfitView(ctx context.Context, userID int64, owner
 		}
 	}
 
-	href := func(owner string, days int) string {
-		h := "/profit/?days=" + strconv.Itoa(days)
+	// One link builder for the whole page: every link carries the
+	// full current state (owner, span, grain, modes) and changes
+	// only what its group owns, so no control resets another.
+	mkHref := func(owner string, days int, grain string, grainChosen bool, m profitModes) string {
+		q := url.Values{}
+		q.Set("days", strconv.Itoa(days))
 		if owner != "" {
-			h += "&owner=" + owner
+			q.Set("owner", owner)
 		}
-		if chosen {
-			h += "&grain=" + view.Grain
+		if grainChosen {
+			q.Set("grain", grain)
 		}
-		return h
+		if m.Split != "total" {
+			q.Set("split", m.Split)
+		}
+		if m.Scale != "shared" {
+			q.Set("scale", m.Scale)
+		}
+		if m.Trend != "cumulative" {
+			q.Set("trend", m.Trend)
+		}
+		if m.Eff != "efficiency" {
+			q.Set("eff", m.Eff)
+		}
+		if m.Bul != "abs" {
+			q.Set("bul", m.Bul)
+		}
+		if m.Activity != "" {
+			q.Set("activity", m.Activity)
+		}
+		if m.Uncovered != "" {
+			q.Set("uncovered", m.Uncovered)
+		}
+		return "/profit/?" + q.Encode()
 	}
+	href := func(owner string, days int) string { return mkHref(owner, days, view.Grain, chosen, modes) }
+	view.hrefModes = func(m profitModes) string { return mkHref(ownerParam, view.Days, view.Grain, chosen, m) }
+	modeLinks := func(set func(m *profitModes, v string), opts [][2]string, cur string) []marketTrendChoice {
+		var out []marketTrendChoice
+		for _, o := range opts {
+			m := modes
+			set(&m, o[0])
+			out = append(out, marketTrendChoice{Label: o[1], Href: view.hrefModes(m), Active: o[0] == cur})
+		}
+		return out
+	}
+	view.SplitLinks = modeLinks(func(m *profitModes, v string) { m.Split = v },
+		[][2]string{{"total", "Total"}, {"character", "By character"}, {"activity", "By activity"}}, modes.Split)
+	view.ScaleLinks = modeLinks(func(m *profitModes, v string) { m.Scale = v },
+		[][2]string{{"shared", "Shared scale"}, {"indexed", "Indexed"}}, modes.Scale)
+	view.TrendLinks = modeLinks(func(m *profitModes, v string) { m.Trend = v },
+		[][2]string{{"cumulative", "Cumulative"}, {"daily", "Daily net"}}, modes.Trend)
+	view.EffLinks = modeLinks(func(m *profitModes, v string) { m.Eff = v },
+		[][2]string{{"efficiency", "Efficiency"}, {"fees", "Fee deep-dive"}}, modes.Eff)
+	view.BulLinks = modeLinks(func(m *profitModes, v string) { m.Bul = v },
+		[][2]string{{"abs", "Absolute ISK"}, {"pct", "Retention %"}}, modes.Bul)
 	view.Owners = append(view.Owners, assetCharLink{Href: href("", view.Days), Name: "All your characters", Active: ownerParam == ""})
 	for _, ch := range chars {
 		o := strconv.FormatInt(ch.CharacterID, 10)
@@ -291,19 +455,42 @@ func (app *Application) buildProfitView(ctx context.Context, userID int64, owner
 		view.Spans = append(view.Spans, marketTrendChoice{Label: fmt.Sprintf("%d days", d), Href: href(ownerParam, d), Active: d == view.Days})
 	}
 	for _, g := range []struct{ unit, label string }{{"day", "By day"}, {"week", "By week"}} {
-		h := "/profit/?days=" + strconv.Itoa(view.Days)
-		if ownerParam != "" {
-			h += "&owner=" + ownerParam
-		}
-		h += "&grain=" + g.unit
-		view.Grains = append(view.Grains, marketTrendChoice{Label: g.label, Href: h, Active: g.unit == view.Grain})
+		view.Grains = append(view.Grains, marketTrendChoice{Label: g.label, Href: mkHref(ownerParam, view.Days, g.unit, true, modes), Active: g.unit == view.Grain})
 	}
+	if modes.Activity != "" {
+		m := modes
+		m.Activity = ""
+		view.ClearActHref = view.hrefModes(m)
+		for _, l := range profitActivityLabels {
+			if l.key == modes.Activity {
+				view.ActivityLabel = l.label
+			}
+		}
+	}
+	if modes.Uncovered != "" {
+		m := modes
+		m.Uncovered = ""
+		view.ClearUncHref = view.hrefModes(m) + "#items"
+		if modes.Uncovered != "1" {
+			if d, err := time.Parse("2006-01-02", modes.Uncovered); err == nil {
+				if view.Grain == "week" {
+					view.UncoveredWhen = " in the week of " + d.Format("Jan 2")
+				} else {
+					view.UncoveredWhen = " on " + d.Format("Jan 2")
+				}
+			}
+		}
+	}
+	m := modes
+	m.Uncovered = "1"
+	view.CoverageHref = view.hrefModes(m) + "#items"
 	if len(ids) == 0 {
 		return view, nil
 	}
 
 	from := time.Now().UTC().AddDate(0, 0, -view.Days+1)
 	fromDay := from.Format("2006-01-02")
+	view.fromDay = fromDay
 	fromAt, _ := time.Parse("2006-01-02", fromDay)
 
 	acts, err := app.queries.ListProfitByActivity(ctx, db.ListProfitByActivityParams{OwnerKind: kind, OwnerIds: ids, FromDay: fromDay})
@@ -323,11 +510,19 @@ func (app *Application) buildProfitView(ctx context.Context, userID int64, owner
 		net := a.Income - a.Costs
 		earned += net
 		absTotal += math.Abs(net)
-		view.Activities = append(view.Activities, profitActivityRow{
-			Label: l.label, Note: l.note, Income: esi.FormatISK(a.Income), Costs: esi.FormatISK(a.Costs),
-			Net: signedISK(net), NetDir: dirOf(net), net: net,
-		})
+		row := profitActivityRow{
+			Key: l.key, Label: l.label, Note: l.note, Income: esi.FormatISK(a.Income), Costs: esi.FormatISK(a.Costs),
+			Net: signedISK(net), NetDir: dirOf(net), net: net, Active: modes.Activity == l.key,
+		}
+		if a.Income > 0 {
+			row.KeptPct = fmt.Sprintf("%.1f%%", net/a.Income*100)
+		}
+		fm := modes
+		fm.Activity = l.key
+		row.FilterHref = view.hrefModes(fm)
+		view.Activities = append(view.Activities, row)
 	}
+	view.Turnover = buildBullets(byAct, modes.Bul)
 	for i := range view.Activities {
 		if absTotal > 0 {
 			share := math.Abs(view.Activities[i].net) / absTotal * 100
@@ -339,12 +534,16 @@ func (app *Application) buildProfitView(ctx context.Context, userID int64, owner
 	}
 	sort.SliceStable(view.Activities, func(i, j int) bool { return view.Activities[i].net > view.Activities[j].net })
 	view.HasData = len(view.Activities) > 0
-	view.Donut = buildIncomeDonut(acts)
 	view.Earned, view.EarnedDir = signedISK(earned), dirOf(earned)
 	if r, ok := byAct[actUnattributed]; ok && !view.Corp {
 		remainder = r.Income - r.Costs
 		view.Remainder, view.RemainderDir = signedISK(remainder), dirOf(remainder)
 		view.Change, view.ChangeDir = signedISK(earned+remainder), dirOf(earned+remainder)
+		if remainder > 0 {
+			view.ChangeNote = "The lead over Earned is ISK now held as stock and assets"
+		} else if remainder < 0 {
+			view.ChangeNote = "Earned ran ahead of net worth: value left stock and assets, or losses landed"
+		}
 	}
 
 	feesBroker := 0.0
@@ -392,12 +591,37 @@ func (app *Application) buildProfitView(ctx context.Context, userID int64, owner
 	if err := app.attachProfitPositions(ctx, view, poolKind, poolIDs); err != nil {
 		return view, err
 	}
-
-	daily, err := app.queries.ListProfitDaily(ctx, db.ListProfitDailyParams{OwnerKind: kind, OwnerIds: ids, FromDay: fromDay})
-	if err != nil {
-		return view, err
+	// Blueprint rows with stock still held link to that item's
+	// row in Open positions.
+	if len(view.Positions) > 0 {
+		held := map[int64]bool{}
+		for _, p := range view.Positions {
+			held[p.TypeID] = true
+		}
+		for i := range view.Blueprints {
+			if view.Blueprints[i].Stock != "" && held[view.Blueprints[i].TypeID] {
+				view.Blueprints[i].StockHref = "#pos-" + strconv.FormatInt(view.Blueprints[i].TypeID, 10)
+			}
+		}
 	}
-	view.Chart = buildProfitChart(daily, !view.Corp && view.Change != "")
+	if !view.Corp && view.Change != "" {
+		app.attachNotExplained(ctx, view, remainder, fromDay)
+		// The latest net worth sample's split (wallets versus
+		// assets and escrow), the home chart's two parts, for the
+		// hero gap's composition.
+		if hist, err := app.queries.ListUserWalletHistory(ctx, userID); err == nil {
+			latest := map[int64]db.WalletHistory{}
+			for _, h := range hist {
+				if h.NetWorth.Valid {
+					latest[h.CharacterID] = h
+				}
+			}
+			for _, h := range latest {
+				view.assetsNow += h.NetWorth.Float64 - h.Balance
+				view.hasAssets = true
+			}
+		}
+	}
 	names := map[int64]string{}
 	for _, ch := range chars {
 		names[ch.CharacterID] = ch.Name
@@ -405,7 +629,52 @@ func (app *Application) buildProfitView(ctx context.Context, userID int64, owner
 	if view.Charts, err = app.buildProfitCharts(ctx, view, kind, ids, names, fromDay, prefs.BrokerInMargin); err != nil {
 		return view, err
 	}
+	if view.Charts != nil {
+		view.Hero = view.Charts.Hero
+	}
 	return view, nil
+}
+
+// attachNotExplained splits the Not Explained remainder into the
+// part repricing explains and the part nothing explains. The
+// drift estimate reprices the stock held now at the span's first
+// stat-pack prices against its current appraisal: a value move
+// that never crossed the wallet. It is an estimate, and the page
+// labels it one; the delta is whatever is left.
+func (app *Application) attachNotExplained(ctx context.Context, view *profitView, remainder float64, fromDay string) {
+	view.NEHas = true
+	view.NEUnaccounted, view.NEUnaccDir = signedISK(remainder), dirOf(remainder)
+	if len(view.Positions) == 0 {
+		// Nothing held, so nothing can reprice: the drift is
+		// zero, stated rather than left blank.
+		view.NEDrift, view.NEDriftDir = signedISK(0), dirOf(0)
+		return
+	}
+	held := make([]profitPositionRow, len(view.Positions))
+	copy(held, view.Positions)
+	sort.Slice(held, func(i, j int) bool { return held[i].value > held[j].value })
+	limit := min(len(held), 20)
+	var drift float64
+	priced := false
+	for _, p := range held[:limit] {
+		if p.qty <= 0 || p.value <= 0 {
+			continue
+		}
+		rows, err := app.queries.ListMarketRegionStatsDailyRecent(ctx, db.ListMarketRegionStatsDailyRecentParams{
+			RegionID: defaultMarketRegion, TypeID: p.TypeID, Since: fromDay, RowLimit: int32(view.Days) + 2,
+		})
+		if err != nil || len(rows) == 0 || rows[0].TypicalSell <= 0 {
+			continue
+		}
+		drift += float64(p.qty) * (p.value/float64(p.qty) - rows[0].TypicalSell)
+		priced = true
+	}
+	if !priced {
+		return
+	}
+	view.NEDrift, view.NEDriftDir = signedISK(drift), dirOf(drift)
+	rest := remainder - drift
+	view.NEUnaccounted, view.NEUnaccDir = signedISK(rest), dirOf(rest)
 }
 
 // attachProfitPositions marks the open positions at the house prices
@@ -426,13 +695,14 @@ func (app *Application) attachProfitPositions(ctx context.Context, view *profitV
 	now := time.Now()
 	var cost, value float64
 	for _, p := range pos {
-		row := profitPositionRow{TypeID: p.TypeID, Name: app.typeNameOrID(ctx, p.TypeID), Quantity: esi.FormatInt(p.Quantity), Cost: esi.FormatISK(p.Cost)}
+		row := profitPositionRow{TypeID: p.TypeID, Name: app.typeNameOrID(ctx, p.TypeID), Quantity: esi.FormatInt(p.Quantity), Cost: esi.FormatISK(p.Cost), qty: p.Quantity}
 		cost += p.Cost
 		if pk := packs[p.TypeID]; pk != nil {
 			price := resolveAppraisalPriceMode(pk.Own, pk.Estimate, pk.Fallback, now, module.AppraisalModeSell)
 			if price.ok {
 				v := price.unit * float64(p.Quantity)
 				value += v
+				row.value = v
 				row.Value = esi.FormatISK(v)
 				row.Unrealized, row.Dir = signedISK(v-p.Cost), dirOf(v-p.Cost)
 				switch price.tier {
@@ -445,75 +715,14 @@ func (app *Application) attachProfitPositions(ctx context.Context, view *profitV
 		}
 		view.Positions = append(view.Positions, row)
 	}
+	if value > 0 {
+		for i := range view.Positions {
+			view.Positions[i].Share = view.Positions[i].value / value * 100
+			view.Positions[i].ShareW = view.Positions[i].value / value * 90
+		}
+	}
+	view.openValue = value
 	view.OpenCost, view.OpenValue = esi.FormatISK(cost), esi.FormatISK(value)
 	view.Unrealized, view.UnrealDir = signedISK(value-cost), dirOf(value-cost)
 	return nil
-}
-
-// profitHeroPanel is one of the hero's stacked running-total
-// panels: a series on its own scale, with gridlines and the
-// scale's low, middle and high labels.
-type profitHeroPanel struct {
-	Caption   string
-	W, H      int
-	Points    string
-	LineClass string
-	ZeroY     float64
-	ShowZero  bool
-	Ticks     []pfTick
-}
-
-// profitChart is the hero: the cumulative earned panel and, for
-// characters with net worth samples, the cumulative net worth
-// change panel under it, sharing one date axis.
-type profitChart struct {
-	Panels           []profitHeroPanel
-	First, Mid, Last string
-	Days             int
-}
-
-func buildProfitChart(rows []db.ListProfitDailyRow, withChange bool) *profitChart {
-	if len(rows) < 2 {
-		return nil
-	}
-	const w, h, pad = 600, 110, 8
-	earned := make([]float64, len(rows))
-	change := make([]float64, len(rows))
-	var e, c float64
-	for i, r := range rows {
-		e += r.Attributed
-		c += r.Attributed + r.Unattributed
-		earned[i], change[i] = e, c
-	}
-	n := len(rows)
-	panel := func(vs []float64, caption, class string) profitHeroPanel {
-		lo, hi := 0.0, 0.0
-		for _, v := range vs {
-			lo, hi = math.Min(lo, v), math.Max(hi, v)
-		}
-		if hi == lo {
-			hi = lo + 1
-		}
-		y := func(v float64) float64 { return pad + (hi-v)/(hi-lo)*float64(h-2*pad) }
-		parts := make([]string, n)
-		for i, v := range vs {
-			x := float64(i) * float64(w) / float64(n-1)
-			parts[i] = strconv.FormatFloat(x, 'f', 1, 64) + "," + strconv.FormatFloat(y(v), 'f', 1, 64)
-		}
-		p := profitHeroPanel{Caption: caption, W: w, H: h, Points: strings.Join(parts, " "),
-			LineClass: class, ZeroY: y(0), ShowZero: lo < 0}
-		for _, v := range []float64{lo, (lo + hi) / 2, hi} {
-			yy := y(v)
-			p.Ticks = append(p.Ticks, pfTick{Y: yy,
-				Pos:   strconv.Itoa(int(math.Round(yy / float64(h) * 100))),
-				Label: pfShortISK(v)})
-		}
-		return p
-	}
-	ch := &profitChart{Days: n, First: rows[0].Day, Mid: rows[n/2].Day, Last: rows[n-1].Day}
-	ch.Panels = append(ch.Panels, panel(earned, "Earned, running total", "mt-line-sell"))
-	if withChange {
-		ch.Panels = append(ch.Panels, panel(change, "Net worth change, running total", "mt-line-buy"))
-	}
-	return ch
 }

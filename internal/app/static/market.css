@@ -52,6 +52,11 @@
   border-radius: var(--r-xs);
   color: var(--muted);
   text-decoration: none;
+  font-family: "Rajdhani", "Segoe UI", sans-serif;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  font-size: 0.8rem;
 }
 .mt-modes a.active { color: var(--text-bright); border-color: var(--accent); }
 .mt-num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
@@ -223,9 +228,11 @@ td.mt-reqs { max-width: 12rem; }
 .pf-chart rect { stroke: none; }
 .pf-gain { fill: color-mix(in srgb, var(--success) 70%, transparent); }
 .pf-loss { fill: color-mix(in srgb, var(--danger) 70%, transparent); }
+/* The hatch marks what is unverified (no known cost or tax
+   line), in the unverified token in every scheme. */
 .pf-gap { fill: url(#pf-hatch); }
-.pf-hatch-bg { fill: color-mix(in srgb, var(--muted) 5%, transparent); }
-.pf-hatch-line { stroke: var(--muted); stroke-opacity: 0.45; stroke-width: 1.4; }
+.pf-hatch-bg { fill: color-mix(in srgb, var(--unverified) 7%, transparent); }
+.pf-hatch-line { stroke: var(--unverified); stroke-opacity: 0.5; stroke-width: 1.4; }
 .pf-roll, .pf-share, .pf-margin, .pf-ch { fill: none; stroke-width: 1.75; vector-effect: non-scaling-stroke; }
 .pf-roll, .pf-share, .pf-margin { stroke: var(--accent); }
 .pf-margin-part { stroke-dasharray: 5 4; }
@@ -255,7 +262,7 @@ td.mt-reqs { max-width: 12rem; }
 .pf-sw.pf-gain { background: var(--success); }
 .pf-sw.pf-loss { background: var(--danger); }
 .pf-sw.pf-roll { background: var(--accent); height: 3px; }
-.pf-sw.pf-gap { background: color-mix(in srgb, var(--muted) 30%, transparent); }
+.pf-sw.pf-gap { background: repeating-linear-gradient(45deg, var(--unverified) 0 2px, transparent 2px 5px); }
 
 /* Phones: the plots keep a readable height instead of their desktop
    proportions, and the legends wrap tighter. */
@@ -274,9 +281,20 @@ td.mt-reqs { max-width: 12rem; }
 .pf-charts > .pf-cell:last-child:nth-child(odd) { grid-column: 1 / -1; }
 @media (max-width: 1100px) { .pf-charts { grid-template-columns: minmax(0, 1fr); } }
 .pf-modes-grain { margin-top: -0.3rem; }
-.pf-hero-panel { margin: 0.6rem 0 0.2rem; }
-.pf-hero-panel svg { display: block; width: 100%; height: 110px; }
-.pf-hero .mt-chart-dates { margin-top: 0.2rem; }
+/* The profit module's head rows: the character selector with the
+   counted-rules gear at its right, lined up with it; the span and
+   grain chips right-aligned under them, like the page's other
+   option groups. */
+.pf-toprow { display: flex; align-items: center; gap: 0.75rem; }
+.pf-toprow .viz-gear { margin-left: auto; }
+.pf-chiprows { display: flex; flex-direction: column; align-items: flex-end; }
+.pf-chiprows .mt-modes { margin: 0.3rem 0 0; justify-content: flex-end; }
+/* The hero rides in the same foldable panel as the page's other
+   sections; its figure keeps no margin of its own inside it. */
+.pf-hero-panel .pf-hero { margin: 0; }
+
+.pf-mode-row { display: flex; justify-content: flex-end; margin: 0.5rem 0 -0.3rem; }
+.pf-mode-row .mt-modes { margin: 0; }
 .pf-axis-caps { display: flex; justify-content: space-between; gap: 1rem; font-size: 0.68rem; color: var(--muted); margin-top: 0.1rem; }
 .pf-cell { min-width: 0; }
 .pf-chart svg { height: 180px; }
@@ -293,30 +311,10 @@ td.mt-reqs { max-width: 12rem; }
 .ctip .ctip-row { display: flex; align-items: center; gap: 0.45rem; }
 .ctip .ctip-sw { width: 0.6rem; height: 0.6rem; border-radius: 2px; flex: none; }
 .ctip .ctip-val { margin-left: auto; padding-left: 0.9rem; font-variant-numeric: tabular-nums; }
-.pf-act-grid { display: grid; grid-template-columns: minmax(0, 1fr) 17rem; gap: 1rem 1.5rem; align-items: start; }
+.pf-act-grid { display: grid; grid-template-columns: minmax(0, 1fr) 18.75rem; gap: 1rem 1.5rem; align-items: start; }
 @media (max-width: 900px) { .pf-act-grid { grid-template-columns: minmax(0, 1fr); } }
 .pf-card { background: var(--panel); border: 1px solid var(--box-edge); border-radius: var(--r-md); padding: 0.8rem 0.9rem; }
 .pf-card h4 { margin: 0 0 0.5rem; font-size: 0.9rem; }
-.pf-donut { max-width: 220px; margin: 0 auto; }
-.pf-donut svg { width: 100%; height: auto; cursor: default; }
-.pf-donut .cdot.pf-slice { fill: none; fill-opacity: 0; stroke-width: 22; transition: stroke-width 0.12s; }
-.pf-donut .cdot.pf-slice:hover, .pf-donut .cdot.pf-slice:focus, .pf-donut .cdot.pf-slice.is-selected { stroke-width: 28; outline: none; }
-.pf-donut .cdot.pf-slice.pf-a-trading { stroke: var(--accent); }
-.pf-donut .cdot.pf-slice.pf-a-industry { stroke: var(--gold); }
-.pf-donut .cdot.pf-slice.pf-a-bounties { stroke: var(--text); }
-.pf-donut .cdot.pf-slice.pf-a-pi { stroke: var(--note); }
-.pf-donut .cdot.pf-slice.pf-a-contracts { stroke: color-mix(in srgb, var(--accent) 50%, var(--gold)); }
-.pf-donut .cdot.pf-slice.pf-a-sales { stroke: var(--muted-2); }
-.pf-donut .cdot.pf-slice.pf-a-lp { stroke: color-mix(in srgb, var(--note) 50%, var(--success)); }
-.pf-donut .cdot.pf-slice.pf-a-other { stroke: color-mix(in srgb, var(--muted) 70%, var(--text)); }
-.pf-donut .cdot.pf-slice.pf-a-upkeep { stroke: color-mix(in srgb, var(--danger) 60%, var(--muted)); }
-.pf-donut .cdot.pf-slice.pf-a-transfers { stroke: color-mix(in srgb, var(--muted) 50%, transparent); }
-.pf-donut-total { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; pointer-events: none; }
-.pf-donut-total strong { font-size: 1.15rem; }
-.pf-donut-total small { color: var(--muted); }
-.pf-donut-legend { list-style: none; padding: 0; margin: 0.7rem 0 0; display: grid; gap: 0.3rem; }
-.pf-donut-legend li { display: flex; align-items: center; gap: 0.45rem; font-size: 0.85rem; }
-.pf-donut-legend .mt-num { margin-left: auto; }
 @media (max-width: 640px) {
   .pf-chart svg { height: 150px; }
   .pf-chart svg.pf-short { height: 75px; }
@@ -548,8 +546,90 @@ td.mt-reqs { max-width: 12rem; }
 .pf-sw.pf-total { background: var(--text); height: 3px; }
 .pf-sw.pf-share { background: var(--text); height: 3px; }
 .pf-share { stroke: var(--text); }
-.pf-sold { fill: color-mix(in srgb, var(--gold) 55%, transparent); }
-.pf-cogs { fill: color-mix(in srgb, var(--accent) 80%, transparent); }
-.pf-sw.pf-sold { background: color-mix(in srgb, var(--gold) 55%, transparent); }
-.pf-sw.pf-cogs { background: color-mix(in srgb, var(--accent) 80%, transparent); }
 .pf-axis-right span { left: auto; right: 2px; }
+
+/* Profit overhaul: the merged hero, the waterfall, the trading
+   efficiency panel and the small multiples around them. Colours
+   come from the theme tokens only, the semantic four first. */
+.pf-hero svg { height: 208px; }
+@media (max-width: 640px) { .pf-hero svg { height: 168px; } }
+.pf-hero .viz-head { flex-wrap: wrap; row-gap: 0.35rem; }
+.pf-hero-modes { display: flex; gap: 0.4rem; flex-wrap: wrap; justify-content: flex-end; margin-left: auto; }
+.pf-hero-modes .mt-modes { margin: 0; }
+.pf-hero-area { fill: color-mix(in srgb, var(--accent) 34%, transparent); stroke: none; }
+.pf-area-a { stroke: none; fill-opacity: 0.55; }
+.pf-hero-edge { fill: none; stroke: var(--accent); stroke-width: 2; vector-effect: non-scaling-stroke; }
+.pf-hero-nw { fill: none; stroke: var(--gold); stroke-width: 2; stroke-dasharray: 6 3; vector-effect: non-scaling-stroke; }
+.pf-hero-gap { fill: color-mix(in srgb, var(--unverified) 16%, transparent); stroke: none; }
+a:hover .pf-hero-gap, a:focus .pf-hero-gap { fill: color-mix(in srgb, var(--unverified) 30%, transparent); }
+.pf-hero-sw-e { background: var(--accent); }
+.pf-hero-sw-nw { background: var(--gold); }
+.pf-hero-ends { position: absolute; inset: 0; pointer-events: none; }
+.pf-hero-ends span { position: absolute; right: 4px; transform: translateY(-50%); font-size: 0.72rem; line-height: 1; background: color-mix(in srgb, var(--panel) 75%, transparent); padding: 1px 4px; border-radius: 3px; white-space: nowrap; }
+.pf-end-earned { color: var(--accent); }
+.pf-end-nw { color: var(--gold); }
+.pf-hero-chip { position: absolute; right: 0.5rem; bottom: 0.5rem; z-index: 2; background: color-mix(in srgb, var(--panel) 88%, transparent); border: 1px solid color-mix(in srgb, var(--unverified) 45%, transparent); border-radius: 999px; padding: 0.18rem 0.6rem; font-size: 0.75rem; color: var(--text); text-decoration: none; }
+.pf-hero-chip:hover, .pf-hero-chip:focus { border-color: var(--unverified); color: var(--text); text-decoration: none; }
+.pf-dim { opacity: 0.22; }
+
+/* The waterfall's own tones: mixes of the recycled token, so
+   the steps stay in the recycled family next to its pure tone
+   on the COGS step. */
+.pf-wf-gross { fill: color-mix(in srgb, var(--recycled) 65%, var(--text)); background: color-mix(in srgb, var(--recycled) 65%, var(--text)); }
+.pf-wf-industry { fill: color-mix(in srgb, var(--recycled) 55%, var(--note)); background: color-mix(in srgb, var(--recycled) 55%, var(--note)); }
+.pf-wf-cap { fill: url(#pf-hatch); }
+.pf-wf-conn { stroke: var(--muted); stroke-opacity: 0.6; stroke-width: 1; stroke-dasharray: 4 3; fill: none; vector-effect: non-scaling-stroke; }
+.pf-wf-values { position: absolute; inset: 0; pointer-events: none; }
+.pf-wf-values span { position: absolute; transform: translateX(-50%); font-size: 0.68rem; line-height: 1; color: var(--text-bright); text-shadow: 0 1px 3px var(--panel); white-space: nowrap; }
+
+/* Efficiency: the uncovered segment hatches, a loss bucket's
+   overrun takes the lost outline above the sales marker. */
+.pf-e-unc { fill: url(#pf-hatch); }
+.pf-chart rect.pf-e-loss { fill: color-mix(in srgb, var(--lost) 22%, transparent); stroke: var(--lost); stroke-width: 1; }
+.pf-e-marker { fill: none; stroke: var(--text); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+
+/* The coverage strip under a time chart: one segment per
+   bucket, kept where the bucket is fully covered, unverified
+   where it is not. Generic chart furniture, not profit-only. */
+.cover-strip { display: flex; gap: 1px; margin-top: 0.3rem; }
+.cover-strip > * { flex: 1 1 0; height: 4px; border-radius: 1px; min-width: 1px; }
+.cover-strip a:hover, .cover-strip a:focus { outline: 1px solid var(--unverified); outline-offset: 1px; }
+
+/* Turnover bullets and the table rhythm. */
+.bullet-track { fill: color-mix(in srgb, var(--muted) 28%, transparent); }
+.pf-bullets { display: grid; gap: 0.45rem; margin-top: 0.4rem; }
+.pf-bullet { display: grid; grid-template-columns: 6.2rem minmax(0, 1fr) 5.8rem; align-items: center; gap: 0.55rem; }
+.pf-bullet svg { display: block; width: 100%; height: 10px; }
+.pf-bullet-name { font-size: 0.82rem; }
+.pf-bullet-val { font-size: 0.82rem; text-align: right; font-variant-numeric: tabular-nums; }
+.pf-rhythm { display: block; }
+.pf-rhythm-zero { stroke: var(--muted); stroke-opacity: 0.5; stroke-width: 1; }
+.pf-act-on td { background: var(--row-hover); }
+
+/* KPI additions: the gold sparkline variant, the coverage pill,
+   the Not explained breakdown. */
+.pf-kpi-gold .kpi-spark-line { stroke: var(--gold); }
+.pf-kpi-gold .kpi-spark-area { fill: color-mix(in srgb, var(--gold) 18%, transparent); }
+.pf-cov-pill { display: inline-block; padding: 0 0.5rem; border-radius: 999px; border: 1px solid color-mix(in srgb, var(--unverified) 45%, transparent); background: color-mix(in srgb, var(--unverified) 16%, transparent); color: var(--unverified); font-size: 0.78rem; text-decoration: none; white-space: nowrap; }
+.pf-cov-pill:hover, .pf-cov-pill:focus { color: var(--unverified); border-color: var(--unverified); text-decoration: none; }
+.pf-ne { margin-top: 0.35rem; }
+.pf-ne summary { cursor: pointer; color: var(--muted); font-size: 0.78rem; }
+.pf-ne p { margin: 0.35rem 0 0; font-size: 0.85rem; }
+
+/* Item and blueprint tables: the uncovered group and its rows,
+   the built-versus-sold proportion, position shares. */
+.pf-group-row td { background: var(--row-alt); color: var(--unverified); font-weight: 600; }
+.pf-unc-row td:first-child { border-left: 3px solid var(--unverified); }
+.pf-prop { display: block; margin-top: 0.2rem; }
+.pf-prop-track { fill: var(--recycled); opacity: 0.45; }
+.pf-sharebar { display: block; margin-top: 0.2rem; }
+.pf-share-track { fill: color-mix(in srgb, var(--muted) 25%, transparent); }
+.pf-share-fill { fill: color-mix(in srgb, var(--kept) 55%, transparent); }
+
+/* Arrival highlight for the sections the hero links into. */
+#positions:target { animation: pf-target-pulse 1.1s ease-in-out 2; border-radius: var(--r-md); }
+@keyframes pf-target-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 transparent; }
+  50% { box-shadow: 0 0 0 5px color-mix(in srgb, var(--unverified) 30%, transparent); }
+}
+.pf-pos-table tr:target td { background: var(--row-hover); }

@@ -1044,6 +1044,57 @@ func (s *demoSeed) writePilotOneAssets(ctx context.Context) error {
 			esi.Asset{ItemID: demoItemBase + 37, TypeID: s.typeID("Scourge Heavy Missile"), Quantity: 1000, LocationID: canAmmo, LocationType: "item", LocationFlag: "Unlocked"},
 		)
 	}
+	// Sable's working archive at Jita: one can per commodity and
+	// purpose, the way a long-time organizer's hangar actually
+	// looks. The container strip has to stay usable at this
+	// count, so the demo carries the scale on purpose. Can types
+	// and fillers this install's SDE does not know are skipped,
+	// like the two cans above.
+	archiveNames := []string{
+		"Ammo - EMP S", "Ammo - Fusion S", "Ammo - Phased Plasma", "Ammo - Missiles Heavy", "Ammo - Missiles Light", "Ammo - Torpedoes",
+		"Blueprints - Ships", "Blueprints - Modules", "Blueprints - Ammo", "Blueprints - Copies To Run", "Blueprints - Research Queue",
+		"Components - T2 Build", "Components - Sleeper Loot", "Components - Salvaged Parts",
+		"Datacores - Mechanical", "Datacores - Starship", "Decryptors - All Types",
+		"Drones - Light Scouts", "Drones - Medium", "Drones - Sentries", "Drones - Mining",
+		"Fuel - Isotopes", "Fuel - Strontium", "Fuel - POS Leftovers",
+		"Implants - Loose Sets", "Loot - Mission Drops", "Loot - Rat Bounties",
+		"Minerals - Tritanium", "Minerals - Pyerite", "Minerals - Mexallon", "Minerals - Isogen", "Minerals - Nocxium", "Minerals - Zydrine", "Minerals - Megacyte", "Minerals - Morphite",
+		"Modules - Guns", "Modules - Launchers", "Modules - Tank Armor", "Modules - Tank Shield", "Modules - Propulsion", "Modules - EWAR",
+		"Ore - Veldspar", "Ore - Scordite", "Ore - Pyroxeres", "Ore - Plagioclase", "Ore - Ice Products",
+		"Personal - Keepsakes", "Personal - Sable Alt Gear",
+		"PI - Tier One", "PI - Tier Two", "PI - Coolant Stock",
+		"Salvage - Intact", "Salvage - Melted", "Salvage - Burned",
+		"Sell - Jita Listings", "Sell - Overflow", "Sell - Reprocess?",
+		"Ships - Spare Frigates", "Ships - Spare Cruisers",
+		"SKINs - Permanent", "Staging - Doctrine Fits", "Staging - Cap Charges",
+		"Trash - Sort Later", "Z - Archive 2024", "Z - Archive 2025",
+	}
+	var archiveTypes []int64
+	for _, n := range []string{"Station Container", "Small Standard Container", "Medium Standard Container", "Large Standard Container", "Station Warehouse Container"} {
+		if t := s.typeID(n); t != 0 {
+			archiveTypes = append(archiveTypes, t)
+		}
+	}
+	archiveFillers := []string{"Tritanium", "Pyerite", "Mexallon", "Isogen", "Republic Fleet EMP S", "Scourge Heavy Missile", "Hobgoblin II", "Damage Control II"}
+	type archiveCan struct {
+		id   int64
+		name string
+	}
+	var archive []archiveCan
+	if len(archiveTypes) > 0 {
+		for i, name := range archiveNames {
+			canID := demoItemBase + 1000 + int64(i)*4
+			assets = append(assets, esi.Asset{ItemID: canID, TypeID: archiveTypes[i%len(archiveTypes)], Quantity: 1, LocationID: s.jitaStationID, LocationType: "station", LocationFlag: "Hangar", IsSingleton: true})
+			for j := 0; j < 1+i%3; j++ {
+				ft := s.typeID(archiveFillers[(i+j)%len(archiveFillers)])
+				if ft == 0 {
+					continue
+				}
+				assets = append(assets, esi.Asset{ItemID: canID + 1 + int64(j), TypeID: ft, Quantity: int64(250*(i%7+1) + j*37 + 10), LocationID: canID, LocationType: "item", LocationFlag: "Unlocked"})
+			}
+			archive = append(archive, archiveCan{id: canID, name: name})
+		}
+	}
 	if err := s.snap(ctx, id, esi.SnapAssets, assets); err != nil {
 		return err
 	}
@@ -1057,6 +1108,11 @@ func (s *demoSeed) writePilotOneAssets(ctx context.Context) error {
 	}
 	if s.typeID("Small Standard Container") != 0 {
 		if err := q.UpsertItemName(ctx, db.UpsertItemNameParams{ItemID: canAmmo, Name: "Ammo Crate"}); err != nil {
+			return err
+		}
+	}
+	for _, can := range archive {
+		if err := q.UpsertItemName(ctx, db.UpsertItemNameParams{ItemID: can.id, Name: can.name}); err != nil {
 			return err
 		}
 	}

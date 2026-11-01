@@ -150,10 +150,21 @@
     {{template "assets-tools" $.Assets}}
     {{if .Cans}}
     <div class="canstrip">
-      <div class="canstrip-head"><span class="canstrip-t">Station containers: click to drill down like a folder</span><span class="canstrip-n">{{len .Cans}} containers · {{.CansStacks}} stacks inside</span></div>
-      <div class="cangrid">
-        {{range .Cans}}<a class="amx-can {{.HueClass}}" href="{{.Href}}"><span class="can-box">▦</span><span class="can-main"><span class="can-name">{{.Name}}{{if .TypeName}} <small>{{.TypeName}}</small>{{end}}</span><span class="can-sub">{{.Stacks}} {{if eq .Stacks 1}}stack{{else}}stacks{{end}} · {{if .ValueText}}{{.ValueText}} ISK{{else}}no price{{end}}</span></span><span class="can-go">›</span></a>{{end}}
+      <div class="canstrip-head">
+        <span class="canstrip-t">Station containers: click to drill down like a folder</span>
+        <span class="canstrip-tools">
+          <span class="searchwrap canfilter-wrap">
+            <input type="search" id="assets-canfilter" placeholder="Filter containers..." autocomplete="off" role="combobox" aria-expanded="false" aria-controls="assets-cansuggest" aria-autocomplete="list" aria-label="Filter containers by name">
+            <ul class="suggest" id="assets-cansuggest" role="listbox" hidden></ul>
+          </span>
+          <span class="canstrip-n">{{len .Cans}} containers · {{.CansStacks}} stacks inside</span>
+          <button type="button" class="btn sm canstrip-toggle" id="assets-cantoggle" aria-expanded="false" aria-controls="assets-cangrid" hidden>Show all {{len .Cans}} {{if eq (len .Cans) 1}}container{{else}}containers{{end}}</button>
+        </span>
       </div>
+      <div class="cangrid" id="assets-cangrid">
+        {{range .Cans}}<a class="amx-can {{.HueClass}}" href="{{.Href}}" data-name="{{.Name}} {{.TypeName}}"><span class="can-box">▦</span><span class="can-main"><span class="can-name">{{.Name}}{{if .TypeName}} <small>{{.TypeName}}</small>{{end}}</span><span class="can-sub">{{.Stacks}} {{if eq .Stacks 1}}stack{{else}}stacks{{end}} · {{if .ValueText}}{{.ValueText}} ISK{{else}}no price{{end}}</span></span><span class="can-go">›</span></a>{{end}}
+      </div>
+      <p class="can-none" id="assets-cannone" hidden>No containers here match that name.</p>
     </div>
     {{end}}
     {{$anyShip := false}}{{range .Rows}}{{if .Assembled}}{{$anyShip = true}}{{end}}{{end}}

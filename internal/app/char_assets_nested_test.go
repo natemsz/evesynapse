@@ -133,6 +133,17 @@ func TestAssetsMatrixFilesShipsAndCans(t *testing.T) {
 		// a row that names the container it sits in.
 		"1 stack · no price",
 		"Container: Small Secure Container",
+		// The strip's own filter and typeahead hooks: the box,
+		// the grid it narrows, and the name each card carries for
+		// the filter to match against.
+		`id="assets-canfilter"`,
+		`id="assets-cangrid"`,
+		`data-name="Small Secure Container`,
+		// The strip's expander control, labelled with the count;
+		// the script only reveals it when the cans overflow the
+		// compact strip.
+		`id="assets-cantoggle"`,
+		"Show all 1 container",
 	)
 	// The ship comes before the loose stack it outweighs in the
 	// reading order (with no prices, the name breaks the tie).

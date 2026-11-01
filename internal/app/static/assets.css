@@ -47,10 +47,36 @@
 /* The container strip above the table: one card per can, its
    icon box tinted by its place in the strip. */
 .canstrip { margin-top: 0.9rem; padding: 0.7rem 0.8rem; border: 1px solid var(--box-edge); border-radius: var(--r-sm); }
-.canstrip-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0.3rem 1rem; margin-bottom: 0.6rem; }
+.canstrip-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.3rem 1rem; margin-bottom: 0.6rem; }
 .canstrip-t { font-size: 0.85rem; font-weight: 600; }
 .canstrip-n { color: var(--muted); font-size: 0.8rem; }
-.cangrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr)); gap: 0.6rem; }
+/* The strip's own filter: a narrower searchwrap than the
+   toolbar's, with its typeahead capped like the fit picker's
+   list. The dropdown spans the wrap, so it stays inside the
+   pane (and the viewport) at any width. */
+.canstrip-tools { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 0.8rem; }
+.canfilter-wrap { width: min(15rem, 100%); }
+#assets-cansuggest { max-height: 16rem; overflow-y: auto; }
+/* The grid is capped and scrolls: a location can hold hundreds
+   of cans, and the strip must never push the matrix off the
+   page. Every card stays in the grid, reachable by scrolling
+   or by the filter above. */
+.cangrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr)); gap: 0.6rem; max-height: 16rem; overflow-y: auto; padding-right: 0.3rem; transition: max-height 200ms ease-out; }
+.amx-can[hidden] { display: none; }
+/* The strip's expander, and nothing else's: the toggle only
+   appears when the cans overflow the compact cap (the script
+   measures the grid and unhides it), and opening the strip
+   only grows the grid's own scroll area to a taller, still
+   bounded cap. The measuring class is the script's probe: it
+   forces the compact cap without the slide so the overflow
+   test reads the collapsed size even while open. */
+.canstrip-toggle[hidden] { display: none; }
+.canstrip.open .cangrid { max-height: 60vh; }
+.canstrip.measuring .cangrid { max-height: 16rem; transition: none; }
+@media (prefers-reduced-motion: reduce) {
+  .cangrid { transition: none; }
+}
+.can-none { margin: 0.2rem 0 0; color: var(--muted); font-size: 0.85rem; }
 .amx-can { display: flex; align-items: center; gap: 0.6rem; padding: 0.55rem 0.65rem; border: 1px solid var(--box-edge); border-radius: var(--r-sm); color: var(--text); text-decoration: none; }
 .amx-can:hover { border-color: var(--accent); }
 .can-box { flex: none; display: grid; place-items: center; width: 2.1rem; height: 2.1rem; border-radius: var(--r-xs); font-size: 1.05rem; }
@@ -128,7 +154,12 @@
   .mship-n { font-weight: 600; font-size: 0.88rem; }
   .mship-t { color: var(--muted); font-size: 0.78rem; }
   .mship-v { color: var(--gold); font-size: 0.82rem; font-weight: 700; font-variant-numeric: tabular-nums; }
-  .cangrid { grid-template-columns: minmax(0, 1fr); }
+  .cangrid { grid-template-columns: minmax(0, 1fr); max-height: 14rem; }
+  .canstrip.open .cangrid { max-height: 60vh; }
+  .canstrip.measuring .cangrid { max-height: 14rem; }
+  .canstrip-tools { flex: 1 1 100%; }
+  .canfilter-wrap { flex: 1 1 auto; width: auto; }
+  .canstrip-toggle { min-height: 2.4rem; padding: 0.5rem 0.9rem; }
   .amx-table th:nth-child(2), .amx-table td.amx-c-flag,
   .amx-table th:nth-child(3), .amx-table td.amx-c-load,
   .amx-table th:nth-child(5), .amx-table td:nth-child(5) { display: none; }

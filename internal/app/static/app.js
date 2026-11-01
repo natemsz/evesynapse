@@ -2886,10 +2886,24 @@
   });
   function endScrub(ev) {
     if (!scrub || ev.pointerId !== scrub.pointerId) return;
-    if (scrub.moved && ev.type !== "pointercancel") {
-      if (pinned && pinned !== scrub.dot) hide(pinned);
-      pinned = scrub.dot;
-      show(scrub.dot, ev.clientX);
+    if (ev.type !== "pointercancel") {
+      // A drag pins where it ends. A plain tap toggles: it pins
+      // a tip that is not pinned, and lets go of the one that
+      // is. Pinning the unmoved tap matters: without it the tap
+      // leaves a tip on screen that nothing tracks, and the
+      // click-off dismissal, which only answers for the pinned
+      // tip, can never close it.
+      if (!scrub.moved && pinned === scrub.dot) {
+        pinned = null;
+        hide(scrub.dot);
+      } else {
+        if (pinned && pinned !== scrub.dot) hide(pinned);
+        pinned = scrub.dot;
+        show(scrub.dot, ev.clientX);
+      }
+      // The press ends in a click on the same chart; it belongs
+      // to this gesture, not to the toggle rules, so it is
+      // swallowed either way.
       suppressClickChart = scrub.chart;
       suppressClickUntil = Date.now() + 500;
     }

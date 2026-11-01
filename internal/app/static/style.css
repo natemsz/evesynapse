@@ -3449,6 +3449,17 @@ html[data-nav="rail"] { --nav-axis: calc(2.5rem - 0.5px); }
 .badge.loss { background: #3d1409; }
 .suggest li.sel { background: #2a1a0c; }
 tbody tr.yours td { background-color: #2a2015; }
+/* My Orders: an open order beaten at its station carries a quiet
+   danger tint, restated per cell like tr.yours so the pinned first
+   column in .tw shows it too. The key swatch above the table uses
+   the same tint. */
+tbody tr.order-beaten td { background: color-mix(in srgb, var(--danger) 10%, transparent); }
+.beaten-swatch {
+  display: inline-block; width: 0.75rem; height: 0.75rem;
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--danger) 40%, transparent);
+  vertical-align: -0.08rem;
+}
 @supports not ((-webkit-background-clip: text) or (background-clip: text)) {
   h2,
   h3,

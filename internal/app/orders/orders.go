@@ -35,6 +35,11 @@ type orderRow struct {
 	Bad    bool   // Status is a needs-attention verdict (undercut)
 	State  string // history rows: humanized state
 	Corp   bool   // placed for the corporation
+	// Beaten: open rows only — the order is beaten at its own
+	// station per the stored lifecycle verdicts (both sides;
+	// the Status text above is sell-only). Drives the inline
+	// highlight and the Beaten only filter.
+	Beaten bool
 }
 
 // ordersView is the Orders page body.
@@ -52,6 +57,10 @@ type ordersView struct {
 	// Beaten: the account's open orders beaten at their own
 	// station (schema 105), every character, newest first.
 	Beaten []beatenRow
+	// HasBeaten: at least one of the active character's open
+	// rows is beaten; gates the filter checkbox and key above
+	// the open-orders table.
+	HasBeaten bool
 }
 
 // orderLifecycleSummary is the summary strip for one
@@ -259,6 +268,18 @@ func (app *mod) handleOrders(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Beaten verdicts for the whole account, built before the
+	// open rows: the section at the top of the page lists every
+	// character, and the open-orders table marks the active
+	// character's beaten rows inline from the same rows.
+	view.Beaten = app.buildBeatenOrders(ctx, app.deps.UserID(ctx))
+	beatenHere := make(map[int64]bool)
+	for _, b := range view.Beaten {
+		if b.CharacterID == active.CharacterID {
+			beatenHere[b.OrderID] = true
+		}
+	}
+
 	var open esi.CharOrders
 	view.Open = app.deps.EconSection(ctx, active.CharacterID, esi.SnapOrders, &open)
 	if view.Open.Loaded {
@@ -277,6 +298,10 @@ func (app *mod) handleOrders(w http.ResponseWriter, r *http.Request) {
 		}
 		for _, o := range open {
 			row := rowOf(o)
+			if beatenHere[o.OrderID] {
+				row.Beaten = true
+				view.HasBeaten = true
+			}
 			if t, err := time.Parse(time.RFC3339, o.Issued); err == nil && o.Duration > 0 {
 				row.Expires = humanize.Finish(t.Add(time.Duration(o.Duration) * 24 * time.Hour).Format(time.RFC3339))
 			}
@@ -324,7 +349,6 @@ func (app *mod) handleOrders(w http.ResponseWriter, r *http.Request) {
 	// Order history: stored lifecycle rows for the active
 	// character (see buildOrderLifecycle -- cache-only).
 	view.LifecycleSummary, view.LifecycleRows = app.buildOrderLifecycle(ctx, active.CharacterID)
-	view.Beaten = app.buildBeatenOrders(ctx, app.deps.UserID(ctx))
 
 	app.deps.Render(ctx, w, http.StatusOK, "orders.html", data)
 }

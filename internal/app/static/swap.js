@@ -806,6 +806,14 @@
     if (navController && navController.abort) navController.abort();
     var mySeq = ++navSeq;
     var isCurrent = function () { return mySeq === navSeq; };
+    // A link that only changes this page's query (a mode, span or
+    // filter switch) is a view change, not a trip to a new page:
+    // the reader keeps their place instead of landing at the top.
+    var samePage = false;
+    try {
+      samePage = new URL(url, window.location.href).pathname === window.location.pathname;
+    } catch (e) { /* an unparseable target navigates normally */ }
+    var landScroll = samePage ? window.scrollY : "top";
     var hit = cacheGet(url);
     if (hit) {
       if (hit.prefetched) {
@@ -818,10 +826,10 @@
         try {
           window.history.replaceState(
             { esSwap: 1, scroll: window.scrollY }, "", window.location.href);
-          window.history.pushState({ esSwap: 1, scroll: 0 }, "", url);
+          window.history.pushState({ esSwap: 1, scroll: samePage ? window.scrollY : 0 }, "", url);
         } catch (e) { /* private mode: the swap still lands */ }
       }
-      performSwap(url, hit, opts.push === false ? opts.scroll : "top", isCurrent);
+      performSwap(url, hit, opts.push === false ? opts.scroll : landScroll, isCurrent);
       return;
     }
     var controller = null;
@@ -840,10 +848,10 @@
         try {
           window.history.replaceState(
             { esSwap: 1, scroll: window.scrollY }, "", window.location.href);
-          window.history.pushState({ esSwap: 1, scroll: 0 }, "", url);
+          window.history.pushState({ esSwap: 1, scroll: samePage ? window.scrollY : 0 }, "", url);
         } catch (e) { /* the swap still lands */ }
       }
-      performSwap(url, page, opts.push === false ? opts.scroll : "top", isCurrent);
+      performSwap(url, page, opts.push === false ? opts.scroll : landScroll, isCurrent);
     }).catch(function (err) {
       if (err && err.name === "AbortError") return;
       fullNav(url);

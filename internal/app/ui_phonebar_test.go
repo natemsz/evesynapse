@@ -90,7 +90,7 @@ func TestPhoneShellStatic(t *testing.T) {
 		`id="phone-sheet-backdrop"`,
 		`{{range .BottomSections}}`,
 		`data-install-app`,
-		`<a class="phone-sheet-action" href="/settings">Settings</a>`,
+		`<a href="/settings#notifications">Notifications</a>`,
 	} {
 		if !strings.Contains(base, want) {
 			t.Errorf("base.html is missing the phone-shell hook %q", want)

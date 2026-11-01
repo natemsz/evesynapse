@@ -64,6 +64,26 @@ func publicItemLink(typeID int64, name string) template.HTML {
 	return template.HTML(fmt.Sprintf(`<a href="/items/type/%d/">%s</a>`, typeID, html.EscapeString(name)))
 }
 
+// itemSublink is itemLink carrying the sublink class: a link
+// that sits in a card directly under a header that is itself
+// a link (the ship line under a fit card's name) keeps the
+// plain secondary tone instead of the title's lighter shade.
+func itemSublink(typeID int64, name string) template.HTML {
+	if typeID <= 0 || name == "" {
+		return template.HTML(html.EscapeString(name))
+	}
+	return template.HTML(fmt.Sprintf(`<a class="sublink" href="/items/type/%d/">%s</a>`, typeID, html.EscapeString(name)))
+}
+
+// publicItemSublink is itemSublink for the crawler-safe
+// templates, the counterpart of publicItemLink.
+func publicItemSublink(typeID int64, name string) template.HTML {
+	if typeID <= 0 || name == "" {
+		return template.HTML(html.EscapeString(name))
+	}
+	return template.HTML(fmt.Sprintf(`<a class="sublink" href="/items/type/%d/">%s</a>`, typeID, html.EscapeString(name)))
+}
+
 // charLink renders a character name by the link policy above: own
 // characters to their sheet, strangers to the public pilot page.
 // viewer is the signed-in user's linked-character set (pageData's
@@ -284,6 +304,8 @@ func linkFuncMap() template.FuncMap {
 		"moduleOn":       moduleCompiledIn,
 		"itemLink":       itemLink,
 		"publicItemLink": publicItemLink,
+		"itemSublink":    itemSublink,
+		"publicItemSublink": publicItemSublink,
 		"charLink":       charLink,
 		"killCharLink":   killCharLink,
 		"killPageLink":   killPageLink,

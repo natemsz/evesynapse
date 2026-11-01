@@ -233,6 +233,11 @@ body::before {
    secondary tone (the loadout card titles), sit one shade
    lighter than that. */
 a { color: var(--gold); text-decoration: none; }
+/* A sublink sits in a card directly under a header that is
+   also a link (the ship line under a fit card's name): it
+   keeps the plain secondary tone while the header link
+   above it takes the lighter shade. */
+a.sublink { color: var(--gold); }
 a:hover { color: color-mix(in srgb, var(--gold) 80%, #ffffff); text-decoration: underline; }
 a:active { color: color-mix(in srgb, var(--gold) 80%, #ffffff); }
 
@@ -5790,10 +5795,11 @@ a.chip:hover { border-color: var(--accent); }
 .fit-card-ship { width: 64px; height: 64px; border-radius: var(--r-md); border: 1px solid #2a2a2a; background: #0e0e0e; }
 .fit-card-body { min-width: 0; }
 .fit-card h4 { margin: 0 0 0.2rem; font-size: 1rem; text-transform: none; letter-spacing: 0; overflow-wrap: anywhere; }
-/* The card's links (the fit name, the ship name) already
-   used the secondary tone before every link did, so they
-   keep their lead: one shade lighter than it. */
-.fit-card h4 a, .fit-card-line a { color: color-mix(in srgb, var(--gold) 80%, #ffffff); }
+/* The card's title link already used the secondary tone
+   before every link did, so it keeps its lead: one shade
+   lighter than it. The ship line under it carries the
+   sublink class and stays at the plain tone. */
+.fit-card h4 a { color: color-mix(in srgb, var(--gold) 80%, #ffffff); }
 .fit-card-line { margin: 0 0 0.2rem; color: var(--muted); overflow-wrap: anywhere; }
 .fit-card-line small { margin-left: 0.25rem; }
 .fit-card .tag-row { margin-top: 0.3rem; }

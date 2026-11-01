@@ -6094,12 +6094,6 @@ button.gn-title:hover .gn-more, button.gn-title:focus-visible .gn-more { color: 
 .fchip-form { display: inline-flex; align-items: center; gap: 0.4rem; }
 .fchip-form input[type="text"] { width: 10rem; }
 
-/* Character scope pills: whose data the page is showing. */
-.scopepills { display: flex; flex-wrap: wrap; gap: 0.4rem; }
-.scopepill { display: inline-flex; align-items: center; gap: 0.45rem; padding: 0.3rem 0.7rem 0.3rem 0.35rem; border: 1px solid var(--box-edge); border-radius: 999px; color: var(--muted); font-weight: 600; text-decoration: none; }
-.scopepill img { border-radius: 50%; }
-.scopepill.on { background: var(--glass); border-color: var(--accent); color: var(--text-bright); }
-
 /* Loadout chips: the small counted badges on a fitted thing's
    row (stacks inside, fitted counts by family, cargo). */
 .lchips { display: flex; flex-wrap: wrap; gap: 0.3rem; }

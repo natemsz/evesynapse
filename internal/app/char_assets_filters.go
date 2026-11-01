@@ -31,7 +31,24 @@ type assetSavedFilter struct {
 	Name  string `json:"name"`
 	Query string `json:"q,omitempty"`
 	Tab   string `json:"tab,omitempty"`
-	Scope int64  `json:"scope,omitempty"` // 0 = all characters
+	Scope int64  `json:"scope,omitempty"` // legacy: one character, 0 = all
+	// Scopes is the character set the scope selector picks; it
+	// supersedes Scope when present. Filters saved before the
+	// selector carried only Scope.
+	Scopes []int64 `json:"scopes,omitempty"`
+}
+
+// scopeSet is the filter's character scope as a set: the saved
+// set when there is one, else the legacy single character, else
+// nothing (all characters).
+func (f assetSavedFilter) scopeSet() []int64 {
+	if len(f.Scopes) > 0 {
+		return f.Scopes
+	}
+	if f.Scope > 0 {
+		return []int64{f.Scope}
+	}
+	return nil
 }
 
 type assetFiltersBlob struct {
@@ -40,7 +57,8 @@ type assetFiltersBlob struct {
 
 // href is the page URL this filter applies.
 func (f assetSavedFilter) href() string {
-	st := assetPageState{tab: "all", sort: "value", scopeAll: f.Scope == 0, scopeID: f.Scope, query: f.Query}
+	set := f.scopeSet()
+	st := assetPageState{tab: "all", sort: "value", scopeAll: len(set) == 0, scopeIDs: set, query: f.Query}
 	if f.Tab != "" {
 		st.tab = f.Tab
 	}
@@ -88,25 +106,32 @@ func (app *Application) storeAssetFilters(ctx context.Context, userID int64, fil
 }
 
 // validFilterScope keeps a posted scope honest: all characters,
-// or one character the account owns.
-func validFilterScope(ctx context.Context, app *Application, userID int64, raw string) int64 {
+// or the subset of the posted character IDs the account owns,
+// in account order.
+func validFilterScope(ctx context.Context, app *Application, userID int64, raw string) []int64 {
 	if raw == "" || raw == "all" {
-		return 0
-	}
-	id, err := strconv.ParseInt(raw, 10, 64)
-	if err != nil || id == 0 {
-		return 0
+		return nil
 	}
 	characters, err := app.queries.ListCharactersByUser(ctx, userID)
 	if err != nil {
-		return 0
+		return nil
 	}
-	for _, ch := range characters {
-		if ch.CharacterID == id {
-			return id
+	picked := make(map[int64]bool)
+	for _, part := range strings.Split(raw, ",") {
+		if id, err := strconv.ParseInt(strings.TrimSpace(part), 10, 64); err == nil {
+			picked[id] = true
 		}
 	}
-	return 0
+	var out []int64
+	for _, ch := range characters {
+		if picked[ch.CharacterID] {
+			out = append(out, ch.CharacterID)
+		}
+	}
+	if len(out) == len(characters) {
+		return nil
+	}
+	return out
 }
 
 // handleAssetsFilterSave stores the posted view under the posted
@@ -124,10 +149,10 @@ func (app *Application) handleAssetsFilterSave(w http.ResponseWriter, r *http.Re
 		return
 	}
 	f := assetSavedFilter{
-		Name:  strings.TrimSpace(r.FormValue("name")),
-		Query: strings.TrimSpace(r.FormValue("q")),
-		Tab:   r.FormValue("tab"),
-		Scope: validFilterScope(ctx, app, userID, r.FormValue("scope")),
+		Name:   strings.TrimSpace(r.FormValue("name")),
+		Query:  strings.TrimSpace(r.FormValue("q")),
+		Tab:    r.FormValue("tab"),
+		Scopes: validFilterScope(ctx, app, userID, r.FormValue("scope")),
 	}
 	if len(f.Name) > 40 {
 		f.Name = f.Name[:40]
@@ -192,8 +217,8 @@ func (app *Application) handleAssetsFilterDelete(w http.ResponseWriter, r *http.
 	if tab := r.FormValue("tab"); validAssetTab(tab) && tab != "all" {
 		back.Set("tab", tab)
 	}
-	if scope := validFilterScope(ctx, app, userID, r.FormValue("scope")); scope != 0 {
-		back.Set("scope", strconv.FormatInt(scope, 10))
+	if set := validFilterScope(ctx, app, userID, r.FormValue("scope")); len(set) > 0 {
+		back.Set("scope", joinIDList(set))
 	}
 	target := "/assets/"
 	if len(back) > 0 {

@@ -13,6 +13,7 @@ import (
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
 	"evesynapse/internal/logging"
+	"evesynapse/internal/tags"
 )
 
 // ---------------------------------------------------------------------------
@@ -22,10 +23,10 @@ import (
 // ship inspector on the right when an assembled ship is selected.
 //
 // State lives in the query string so every view is a link: scope
-// (all characters or one), loc, tab, can (a drilled-into
-// container), ship (the inspected ship), q (account search) and
-// sort. Saved quick filters (below) store a q/tab/scope triple
-// under a name the user chose.
+// (all characters, or a comma-separated set of character IDs),
+// loc, tab, can (a drilled-into container), ship (the inspected
+// ship), q (account search) and sort. Saved quick filters
+// (below) store a q/tab/scope triple under a name the user chose.
 // ---------------------------------------------------------------------------
 
 // maxMatrixRows caps one matrix render, the doctrine bound for a
@@ -58,13 +59,27 @@ type assetDirEntry struct {
 	Href       string
 }
 
-// assetScopeOption is one pill of the character scope switcher.
-type assetScopeOption struct {
-	ID     int64 // 0 = all characters
-	Name   string
-	Image  string
-	Active bool
-	Href   string
+// assetCharOption is one row of the character scope checklist:
+// the character, its custom tags as chips, and the URL that
+// toggles it in or out of the scope.
+type assetCharOption struct {
+	ID         int64
+	Name       string
+	Image      string
+	Tags       []string // the character's custom tags, split for chips
+	TagsText   string   // the stored tag string, for the search filter
+	Checked    bool
+	ToggleHref string
+}
+
+// assetScopeSelector is the character scope control: a button
+// naming the current selection over a searchable checklist of
+// the account's characters.
+type assetScopeSelector struct {
+	Label   string // "All characters", selected names, or "N characters"
+	All     bool
+	AllHref string // the reset: every character in scope
+	Chars   []assetCharOption
 }
 
 // assetTab is one hangar division pill of the matrix.
@@ -217,7 +232,7 @@ type assetsPageView struct {
 	HasTotal   bool
 	ActingName string
 	ScopeAll   bool
-	Scope      []assetScopeOption
+	Selector   assetScopeSelector
 	Directory  []assetDirEntry
 	Matrix     *assetMatrix
 	Search     *assetSearch
@@ -231,8 +246,8 @@ type assetsPageView struct {
 // assetPageState is the parsed query-string state of the page.
 type assetPageState struct {
 	scopeAll bool
-	scopeID  int64
-	loc      string // "", "all", or a location id
+	scopeIDs []int64 // the selected characters, in account order, when not scopeAll
+	loc      string  // "", "all", or a location id
 	tab      string
 	can      int64
 	ship     int64
@@ -240,6 +255,32 @@ type assetPageState struct {
 	query    string
 	sort     string
 }
+
+// inScope reports whether a character is in the page's scope.
+func (st assetPageState) inScope(id int64) bool {
+	if st.scopeAll {
+		return true
+	}
+	for _, s := range st.scopeIDs {
+		if s == id {
+			return true
+		}
+	}
+	return false
+}
+
+// joinIDList renders a character ID set the way the scope
+// parameter carries it: comma-separated.
+func joinIDList(ids []int64) string {
+	parts := make([]string, len(ids))
+	for i, id := range ids {
+		parts[i] = strconv.FormatInt(id, 10)
+	}
+	return strings.Join(parts, ",")
+}
+
+// scopeParam is the scope parameter's value for the current set.
+func (st assetPageState) scopeParam() string { return joinIDList(st.scopeIDs) }
 
 var assetTabs = []struct{ id, label string }{
 	{"all", "All Assets"},
@@ -262,18 +303,31 @@ func validAssetTab(id string) bool {
 func parseAssetPageState(q url.Values, characters []db.Character, active db.Character) assetPageState {
 	st := assetPageState{tab: "all", sort: "value", scopeAll: true}
 	if s := q.Get("scope"); s != "" && s != "all" {
-		if id, err := strconv.ParseInt(s, 10, 64); err == nil {
-			for _, ch := range characters {
-				if ch.CharacterID == id {
-					st.scopeAll, st.scopeID = false, id
-				}
+		// The scope is a set of character IDs, comma-separated;
+		// a lone ID is the one-character case the pills used to
+		// link to. Unknown IDs drop out, and a set covering the
+		// whole account (or nothing valid) reads as all.
+		picked := make(map[int64]bool)
+		for _, part := range strings.Split(s, ",") {
+			if id, err := strconv.ParseInt(strings.TrimSpace(part), 10, 64); err == nil {
+				picked[id] = true
 			}
+		}
+		for _, ch := range characters {
+			if picked[ch.CharacterID] {
+				st.scopeIDs = append(st.scopeIDs, ch.CharacterID)
+			}
+		}
+		if len(st.scopeIDs) > 0 && len(st.scopeIDs) < len(characters) {
+			st.scopeAll = false
+		} else {
+			st.scopeIDs = nil
 		}
 	}
 	// The search form's Only box, kept from the old page: it
 	// narrows the scope to the acting character.
 	if q.Get("only") == "1" {
-		st.scopeAll, st.scopeID = false, active.CharacterID
+		st.scopeAll, st.scopeIDs = false, []int64{active.CharacterID}
 	}
 	st.loc = q.Get("loc")
 	if tab := q.Get("tab"); validAssetTab(tab) {
@@ -295,7 +349,7 @@ func parseAssetPageState(q url.Values, characters []db.Character, active db.Char
 func (st assetPageState) href(mut map[string]string) string {
 	v := url.Values{}
 	if !st.scopeAll {
-		v.Set("scope", strconv.FormatInt(st.scopeID, 10))
+		v.Set("scope", st.scopeParam())
 	}
 	if st.loc != "" {
 		v.Set("loc", st.loc)
@@ -319,7 +373,10 @@ func (st assetPageState) href(mut map[string]string) string {
 	if len(v) == 0 {
 		return "/assets/"
 	}
-	return "/assets/?" + v.Encode()
+	// The scope set's commas stay readable in the address bar;
+	// a literal comma is a legal query character and decodes
+	// back to the same value.
+	return "/assets/?" + strings.ReplaceAll(v.Encode(), "%2C", ",")
 }
 
 // assetCharData is one character's prepared snapshot: the flat
@@ -397,7 +454,7 @@ func (app *Application) buildAssetsPage(ctx context.Context, userID int64, chara
 	// The characters in scope, in account order.
 	var scopeChars []db.Character
 	for _, ch := range characters {
-		if st.scopeAll || ch.CharacterID == st.scopeID {
+		if st.inScope(ch.CharacterID) {
 			scopeChars = append(scopeChars, ch)
 		}
 	}
@@ -487,17 +544,57 @@ func (app *Application) buildAssetsPage(ctx context.Context, userID int64, chara
 		}
 	}
 
-	// Scope pills: all characters, then one per character.
-	view.Scope = append(view.Scope, assetScopeOption{
-		Name: "All characters", Active: st.scopeAll,
-		Href: st.href(map[string]string{"scope": "", "can": "", "ship": "", "item": ""}),
-	})
+	// The scope selector: a reset row plus one checklist row per
+	// character, each row's link toggling that character in or
+	// out of the scope. Toggling from "all characters" starts
+	// from the whole account; an empty or complete set reads
+	// back as all.
+	view.Selector.All = st.scopeAll
+	view.Selector.AllHref = st.href(map[string]string{"scope": "", "can": "", "ship": "", "item": ""})
 	for _, ch := range characters {
-		on := !st.scopeAll && st.scopeID == ch.CharacterID
-		view.Scope = append(view.Scope, assetScopeOption{
-			ID: ch.CharacterID, Name: ch.Name, Image: portraitURL(ch.CharacterID, 64), Active: on,
-			Href: st.href(map[string]string{"scope": strconv.FormatInt(ch.CharacterID, 10), "can": "", "ship": "", "item": ""}),
+		set := make(map[int64]bool)
+		if st.scopeAll {
+			for _, other := range characters {
+				set[other.CharacterID] = true
+			}
+		} else {
+			for _, id := range st.scopeIDs {
+				set[id] = true
+			}
+		}
+		if set[ch.CharacterID] {
+			delete(set, ch.CharacterID)
+		} else {
+			set[ch.CharacterID] = true
+		}
+		var next []int64
+		for _, other := range characters {
+			if set[other.CharacterID] {
+				next = append(next, other.CharacterID)
+			}
+		}
+		param := ""
+		if len(next) > 0 && len(next) < len(characters) {
+			param = joinIDList(next)
+		}
+		charTags := tags.Split(ch.Tags)
+		view.Selector.Chars = append(view.Selector.Chars, assetCharOption{
+			ID: ch.CharacterID, Name: ch.Name, Image: portraitURL(ch.CharacterID, 64),
+			Tags: charTags, TagsText: ch.Tags, Checked: st.inScope(ch.CharacterID),
+			ToggleHref: st.href(map[string]string{"scope": param, "can": "", "ship": "", "item": ""}),
 		})
+	}
+	switch {
+	case st.scopeAll:
+		view.Selector.Label = "All characters"
+	case len(scopeChars) <= 2:
+		names := make([]string, len(scopeChars))
+		for i, ch := range scopeChars {
+			names[i] = ch.Name
+		}
+		view.Selector.Label = strings.Join(names, ", ")
+	default:
+		view.Selector.Label = fmt.Sprintf("%d characters", len(scopeChars))
 	}
 
 	// Saved quick filters.
@@ -509,7 +606,7 @@ func (app *Application) buildAssetsPage(ctx context.Context, userID int64, chara
 	if st.scopeAll {
 		view.FormScope = "all"
 	} else {
-		view.FormScope = strconv.FormatInt(st.scopeID, 10)
+		view.FormScope = st.scopeParam()
 	}
 
 	if st.query != "" {

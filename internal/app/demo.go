@@ -165,6 +165,21 @@ func (app *Application) ensureDemoAccount(ctx context.Context) error {
 			return err
 		}
 	}
+	// The pilots' custom tags, the same free text the Characters
+	// page edits: each pilot carries her role as a tag, so the
+	// tag searches (the Assets scope selector's, the home
+	// widgets') have something to find on the demo account.
+	demoPilotTags := map[int64]string{
+		demoCharacterID:  "main, trader",
+		demoCharacter2ID: "industry, PI",
+	}
+	for _, pilot := range demoPilots {
+		if err := app.queries.SetCharacterTags(ctx, db.SetCharacterTagsParams{
+			Tags: demoPilotTags[pilot.ID], CharacterID: pilot.ID, UserID: userID,
+		}); err != nil {
+			return err
+		}
+	}
 	if err := app.refreshDemoPilotName(ctx); err != nil {
 		return err
 	}

@@ -2,18 +2,41 @@
    lives here: the console surface, the page head, the toolbar,
    the container strip, the matrix table and the phone layout.
    The shared patterns (three-pane shell, directory rows, share
-   bars, pill tabs, filter chips, scope pills, loadout chips,
-   tech pips, flag chips, breadcrumbs, the inspector pane and
-   its estimate bar) are in style.css. Phone rules sit in the
-   same 45rem band the site's phone layer uses. */
+   bars, pill tabs, filter chips, the character selector's
+   dropdown and rows, loadout chips, tech pips, flag chips,
+   breadcrumbs, the inspector pane and its estimate bar) are
+   in style.css. Phone rules sit in the same 45rem band the
+   site's phone layer uses. */
 
-/* The page head: the summary line and scope pills left, the
+/* The page head: the summary line and scope selector left, the
    account's total estimated value right with its label. */
 .assets-head { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 0.6rem 1.5rem; margin-bottom: 0.9rem; }
 .assets-count { margin: 0 0 0.55rem; color: var(--muted); }
 .assets-net { text-align: right; }
 .assets-net-v { display: block; color: var(--gold); font-size: 1.4rem; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1.15; }
 .assets-net-l { color: var(--muted); font-size: 0.68rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+
+/* The character scope selector: a button naming the current
+   selection; its panel is the shared character selector's
+   dropdown holding a search field, the all-characters reset
+   and one checklist row per character with its custom tags
+   as chips. Each row is a link that toggles the character
+   in or out of the scope. */
+.asset-scope { margin: 0; max-width: 22rem; }
+.asset-scope-btn { display: inline-flex; align-items: center; gap: 0.5rem; max-width: 100%; padding: 0.42rem 0.75rem; border: 1px solid var(--box-edge); border-radius: 999px; background: var(--glass); color: var(--text-bright); font: inherit; font-weight: 600; cursor: pointer; }
+.asset-scope-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.asset-scope-caret { flex: none; color: var(--muted); font-size: 0.8rem; }
+.asset-scope-panel { padding: 0.4rem; }
+.asset-scope-search { margin-bottom: 0.4rem; }
+.asset-scope-box { flex: none; display: grid; place-items: center; width: 1.05rem; height: 1.05rem; border: 1px solid var(--box-edge); border-radius: var(--r-xs); color: transparent; font-size: 0.72rem; line-height: 1; }
+.asset-scope-box.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.asset-scope-row.on .charselector-name, .asset-scope-all.on .charselector-name { color: var(--text-bright); font-weight: 600; }
+.asset-scope-portrait { flex: none; border-radius: 50%; }
+.asset-scope-main { display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; }
+.asset-scope-tags { display: flex; flex-wrap: wrap; gap: 0.25rem; }
+.asset-scope-tags .tagchip { padding: 0.05rem 0.35rem; border: 1px solid var(--glass-edge); border-radius: 999px; background: var(--glass); color: var(--muted); font-size: 0.68rem; font-weight: 600; }
+.asset-scope-none { margin: 0.4rem 0.2rem 0.2rem; color: var(--muted); font-size: 0.85rem; }
+.asset-scope-none[hidden] { display: none; }
 
 /* The console: one bordered surface, the panes flush against
    hairline dividers instead of three separate cards. */
@@ -136,6 +159,9 @@
    matrix. */
 @media (max-width: 45rem) {
   .assets-net { text-align: left; }
+  .asset-scope { max-width: none; }
+  .asset-scope-btn { min-height: 2.4rem; }
+  .asset-scope-row, .asset-scope-all { min-height: 2.6rem; }
   .pane-dir .pane-h, .pane-dir #assets-dirfilter, .pane-dir .dirlist, .pane-dir .dir-foot { display: none; }
   .pane-dir { padding: 0.7rem 0.9rem; }
   .dirdrop { display: block; }

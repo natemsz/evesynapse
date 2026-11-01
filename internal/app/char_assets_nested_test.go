@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -164,6 +165,83 @@ func TestAssetsMatrixFilesShipsAndCans(t *testing.T) {
 		"Copy EFT",
 		"[Loki, Loki]",
 	)
+}
+
+// TestAssetsScopeSelectorChecklist pins the character scope
+// control: a button naming the current selection over a
+// checklist panel whose search field (in app.js) matches each
+// row's data-name or data-tags; every row carries the
+// character's custom tags as chips and links to the scope with
+// that character toggled; the scope parameter is a set of
+// character IDs.
+func TestAssetsScopeSelectorChecklist(t *testing.T) {
+	f := newAssetsFixture(t)
+	seedNestedAssets(t, f)
+	seedAssetGroups(t, f)
+	// A third character, so a two-character set is a real subset.
+	seedCharacter(t, f.q, f.userID, 90000003, "Fixture Third")
+	setCharTags(t, f.app, fixtureCharB, "indy, scout")
+	cookie := sessionCookie(t, f.app, f.userID, f.ch.CharacterID, f.ch.Name)
+
+	// The default view: all characters, every row ticked, the
+	// alt's tags on its row, and each row toggling itself out.
+	_, body := getPage(t, f.app, cookie, "/assets/")
+	mustContain(t, "scope selector", body,
+		`data-assetscope`,
+		`<span class="asset-scope-label">All characters</span>`,
+		`data-assetscope-q`,
+		`data-name="Fixture Ceo"`,
+		`data-name="Fixture Alt" data-tags="indy, scout"`,
+		`<span class="tagchip">indy</span>`,
+		`<span class="tagchip">scout</span>`,
+		// Toggling the CEO out of "all" leaves the other two.
+		`<a class="charselector-option asset-scope-row on" href="/assets/?scope=90000002,90000003" data-name="Fixture Ceo" data-tags="">`,
+		// Toggling the third character out leaves CEO and alt
+		// (the set is written in account order: alt, CEO, third).
+		`href="/assets/?scope=90000002,90000001"`,
+	)
+	if strings.Contains(body, "scopepill") {
+		t.Fatal("the character scope pills are still rendered")
+	}
+
+	// A set scope: the button names the pair, the page shows
+	// only their places, and the unticked row's link completes
+	// the set back to all.
+	_, body = getPage(t, f.app, cookie, "/assets/?scope=90000001,90000002")
+	mustContain(t, "scope set", body,
+		`<span class="asset-scope-label">Fixture Alt, Fixture Ceo</span>`,
+		// The unticked row completes the set, which reads as all.
+		`<a class="charselector-option asset-scope-row" href="/assets/" data-name="Fixture Third" data-tags="">`,
+		"Jita IV - Moon 4 - Caldari Navy Assembly Plant",
+	)
+	// A saved quick filter keeps the set it was saved under:
+	// its chip links back to the same scope.
+	code, _, _ := doReq(t, f.app, http.MethodPost, "/assets/filters", url.Values{
+		"name":  {"Pair"},
+		"scope": {"90000001,90000002"},
+	}, cookie)
+	if code != http.StatusSeeOther {
+		t.Fatalf("save filter = %d", code)
+	}
+	_, body = getPage(t, f.app, cookie, "/assets/")
+	mustContain(t, "saved filter scope", body,
+		`<a class="fchip" href="/assets/?scope=90000002,90000001">Pair</a>`)
+
+	// One character: the button names them, and only their
+	// place is on the page.
+	_, body = getPage(t, f.app, cookie, "/assets/?scope=90000002")
+	mustContain(t, "scope one", body,
+		`<span class="asset-scope-label">Fixture Alt</span>`,
+		"Amarr VIII (Oris) - Emperor Family Academy",
+	)
+	if strings.Contains(body, "Jita IV - Moon 4") {
+		t.Fatal("a one-character scope still shows another character's place")
+	}
+
+	// A set naming the whole account reads back as all.
+	_, body = getPage(t, f.app, cookie, "/assets/?scope=90000001,90000002,90000003")
+	mustContain(t, "scope full set", body,
+		`<span class="asset-scope-label">All characters</span>`)
 }
 
 func TestAssetSearchCoversTheAccountAndSaysWhere(t *testing.T) {

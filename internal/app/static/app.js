@@ -5043,6 +5043,94 @@
   wireCheckSelectors();
 })();
 
+// Assets: the character scope selector. The button opens a
+// checklist panel; the search field narrows the rows by the
+// character's name or by its custom tags (each row carries both
+// in its data attributes, the same match the character selector
+// uses). Rows are links that toggle the character in the scope,
+// so a pick reloads the page with the new set and the panel
+// starts shut. The panel closes on a click elsewhere or Escape.
+(function () {
+  "use strict";
+  var openRoots = [];
+  var docWired = false;
+
+  function closeRoot(root) {
+    var panel = root.querySelector("[data-assetscope-panel]");
+    var btn = root.querySelector("[data-assetscope-btn]");
+    if (panel) panel.hidden = true;
+    if (btn) btn.setAttribute("aria-expanded", "false");
+    openRoots = openRoots.filter(function (r) { return r !== root; });
+  }
+
+  function wireAssetScope(root) {
+    if (root.getAttribute("data-assetscope-wired") === "1") return;
+    root.setAttribute("data-assetscope-wired", "1");
+    var btn = root.querySelector("[data-assetscope-btn]");
+    var panel = root.querySelector("[data-assetscope-panel]");
+    var input = root.querySelector("[data-assetscope-q]");
+    var none = root.querySelector("[data-assetscope-none]");
+    if (!btn || !panel) return;
+    var rows = Array.prototype.slice.call(root.querySelectorAll(".asset-scope-row"));
+
+    function filter() {
+      var q = (input ? input.value : "").toLowerCase().trim();
+      var shown = 0;
+      rows.forEach(function (row) {
+        var name = (row.getAttribute("data-name") || "").toLowerCase();
+        var tags = (row.getAttribute("data-tags") || "").toLowerCase();
+        var hit = !q || name.indexOf(q) !== -1 || tags.indexOf(q) !== -1;
+        row.hidden = !hit;
+        if (hit) shown++;
+      });
+      if (none) none.hidden = shown !== 0;
+    }
+
+    btn.addEventListener("click", function () {
+      if (panel.hidden) {
+        openRoots.slice().forEach(closeRoot);
+        panel.hidden = false;
+        btn.setAttribute("aria-expanded", "true");
+        openRoots.push(root);
+        if (input) input.focus();
+      } else {
+        closeRoot(root);
+      }
+    });
+    if (input) {
+      input.addEventListener("input", filter);
+    }
+    root.addEventListener("keydown", function (ev) {
+      if (ev.key === "Escape") {
+        closeRoot(root);
+        btn.focus();
+      }
+    });
+  }
+
+  function wireAssetScopes(scope) {
+    var roots = (scope || document).querySelectorAll("[data-assetscope]");
+    for (var i = 0; i < roots.length; i++) wireAssetScope(roots[i]);
+    if (!docWired) {
+      docWired = true;
+      document.addEventListener("click", function (ev) {
+        openRoots = openRoots.filter(function (r) { return document.contains(r); });
+        openRoots.slice().forEach(function (root) {
+          if (!root.contains(ev.target)) closeRoot(root);
+        });
+      });
+      document.addEventListener("evesynapse:content-will-swap", function () {
+        openRoots.slice().forEach(closeRoot);
+      });
+    }
+  }
+
+  if (window.EveSynapseContent && window.EveSynapseContent.onReady) {
+    window.EveSynapseContent.onReady(wireAssetScopes);
+  }
+  wireAssetScopes(document);
+})();
+
 // The character switcher in the top bar: like the notification list,
 // it closes on a click or tap anywhere else and on Escape, and opens
 // and closes with the navigation's motion (the CSS transition on

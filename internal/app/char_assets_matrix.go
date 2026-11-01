@@ -166,7 +166,7 @@ type assetInspector struct {
 type assetMatrix struct {
 	Global     bool
 	Title      string
-	CrumbLoc   string // the selected place's name, for the breadcrumb (Title becomes the can's name inside one)
+	CrumbLoc   string   // the selected place's name, for the breadcrumb (Title becomes the can's name inside one)
 	Loc        placeRef // Title classified for the link policy
 	SecKnown   bool
 	SecText    string

@@ -267,8 +267,8 @@ td.mt-reqs { max-width: 12rem; }
 /* Phones: the plots keep a readable height instead of their desktop
    proportions, and the legends wrap tighter. */
 @media (max-width: 640px) {
-  .pf-chart svg { height: 150px; }
-  .pf-chart svg.pf-short { height: 75px; }
+  .pf-chart .pchart svg { height: 150px; }
+  .pf-chart .pchart svg.pf-short { height: 75px; }
   .pf-chart .chart-legend { gap: 0.15rem 0.6rem; font-size: 0.72rem; }
   .pf-chart .legend-item { text-transform: none; letter-spacing: normal; }
 }
@@ -297,8 +297,8 @@ td.mt-reqs { max-width: 12rem; }
 .pf-mode-row .mt-modes { margin: 0; }
 .pf-axis-caps { display: flex; justify-content: space-between; gap: 1rem; font-size: 0.68rem; color: var(--muted); margin-top: 0.1rem; }
 .pf-cell { min-width: 0; }
-.pf-chart svg { height: 180px; }
-.pf-chart svg.pf-short { height: 90px; }
+.pf-chart .pchart svg { height: 180px; }
+.pf-chart .pchart svg.pf-short { height: 90px; }
 .pf-grid { stroke: var(--muted); stroke-opacity: 0.22; stroke-width: 1; vector-effect: non-scaling-stroke; }
 .pf-axis-y { position: absolute; inset: 0; pointer-events: none; }
 .pf-axis-y span { position: absolute; left: 2px; transform: translateY(-50%); font-size: 0.68rem; line-height: 1; color: var(--muted); background: color-mix(in srgb, var(--panel) 75%, transparent); padding: 1px 3px; border-radius: 3px; }
@@ -316,8 +316,8 @@ td.mt-reqs { max-width: 12rem; }
 .pf-card { background: var(--panel); border: 1px solid var(--box-edge); border-radius: var(--r-md); padding: 0.8rem 0.9rem; }
 .pf-card h4 { margin: 0 0 0.5rem; font-size: 0.9rem; }
 @media (max-width: 640px) {
-  .pf-chart svg { height: 150px; }
-  .pf-chart svg.pf-short { height: 75px; }
+  .pf-chart .pchart svg { height: 150px; }
+  .pf-chart .pchart svg.pf-short { height: 75px; }
 }
 .pf-y-0 { top: 0%; }
 .pf-y-1 { top: 1%; }

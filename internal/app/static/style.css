@@ -226,8 +226,15 @@ body::before {
   transform: translateZ(0);
 }
 
-a { color: var(--accent); text-decoration: none; }
-a:hover { color: var(--success); text-decoration: underline; }
+/* Links take the theme's secondary tone (the scheme
+   highlight; gold on the default theme), the color the
+   loadout card titles already use. A link's highlight and
+   pressed states, and the links that already used the
+   secondary tone (the loadout card titles), sit one shade
+   lighter than that. */
+a { color: var(--gold); text-decoration: none; }
+a:hover { color: color-mix(in srgb, var(--gold) 80%, #ffffff); text-decoration: underline; }
+a:active { color: color-mix(in srgb, var(--gold) 80%, #ffffff); }
 
 /* Skip link: the first tab stop jumps past the nav sidebar to the
    page. Visually hidden until focused. */
@@ -5783,6 +5790,10 @@ a.chip:hover { border-color: var(--accent); }
 .fit-card-ship { width: 64px; height: 64px; border-radius: var(--r-md); border: 1px solid #2a2a2a; background: #0e0e0e; }
 .fit-card-body { min-width: 0; }
 .fit-card h4 { margin: 0 0 0.2rem; font-size: 1rem; text-transform: none; letter-spacing: 0; overflow-wrap: anywhere; }
+/* The card's links (the fit name, the ship name) already
+   used the secondary tone before every link did, so they
+   keep their lead: one shade lighter than it. */
+.fit-card h4 a, .fit-card-line a { color: color-mix(in srgb, var(--gold) 80%, #ffffff); }
 .fit-card-line { margin: 0 0 0.2rem; color: var(--muted); overflow-wrap: anywhere; }
 .fit-card-line small { margin-left: 0.25rem; }
 .fit-card .tag-row { margin-top: 0.3rem; }

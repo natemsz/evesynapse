@@ -1075,11 +1075,9 @@ html[data-scheme] .notify > summary:hover,
 html[data-scheme] .notify[open] > summary { background: color-mix(in srgb, var(--accent) 12%, transparent); }
 html[data-scheme] tbody tr:hover td,
 html[data-scheme] tbody tr:hover th { background: color-mix(in srgb, var(--accent) 4.5%, transparent); }
-/* Card title links (fit names, ship names) sit at the gradient's
-   bright end, the way the hover state already does through
-   --success: the scheme highlight, not the core. */
-html[data-scheme] .fit-card h4 a,
-html[data-scheme] .fit-card-line a { color: var(--sch-hi); }
+/* Card title links (fit names, ship names) sit one shade
+   lighter than the secondary tone every link now uses;
+   the rule itself lives with the card styles in style.css. */
 /* Heading text is solid in every scheme: the gradient's light
    end, the scheme highlight. */
 html[data-scheme] h2, html[data-scheme] h3,

@@ -937,7 +937,7 @@ func (app *page) buildResult(ctx context.Context, snap *snapshot) *resultView {
 		}
 		if len(typeIDs) > 0 {
 			rows, err := app.queries.ListMarketStationBestsByTypes(ctx, db.ListMarketStationBestsByTypesParams{
-				LocationID: stationID, TypeID: typeIDs,
+				LocationID: stationID, Column2: typeIDs,
 			})
 			if err != nil {
 				logging.Errorf("appraisal: station bests: %v", err)

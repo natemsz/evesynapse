@@ -581,6 +581,7 @@ a:hover .pf-hero-gap, a:focus .pf-hero-gap { fill: color-mix(in srgb, var(--unve
 .pf-wf-conn { stroke: var(--muted); stroke-opacity: 0.6; stroke-width: 1; stroke-dasharray: 4 3; fill: none; vector-effect: non-scaling-stroke; }
 .pf-wf-values { position: absolute; inset: 0; pointer-events: none; }
 .pf-wf-values span { position: absolute; transform: translateX(-50%); font-size: 0.68rem; line-height: 1; color: var(--text-bright); text-shadow: 0 1px 3px var(--panel); white-space: nowrap; }
+.pf-wf-values span:first-child { color: var(--panel); text-shadow: none; }
 
 /* Efficiency: the uncovered segment hatches, a loss bucket's
    overrun takes the lost outline above the sales marker. */

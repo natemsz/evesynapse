@@ -284,6 +284,9 @@ type notifySettingsView struct {
 	PushConfigured bool
 	PushKey        string
 	PushDevices    int64
+	// Watched is the watched systems modal's model: the camp row
+	// opens it, and the modal edits the same stored list.
+	Watched *watchedSystemsView
 	// ChannelSections and AccountSections are what the modules that
 	// deliver notifications add to the page: a box inside the form, and
 	// a section below it (module.SettingsSection).
@@ -317,6 +320,9 @@ type notifySettingRow struct {
 	// CampSystemsText is the watched-systems box content, one system
 	// name per line; empty for every other kind.
 	CampSystemsText string
+	// CampCount is how many systems the account watches, shown on
+	// the camp row beside the button that opens the modal.
+	CampCount int
 }
 
 // notifyFrequencyOption is one cap the undercut digest can be set to.
@@ -503,10 +509,12 @@ func (app *Application) handleSettings(w http.ResponseWriter, r *http.Request) {
 		Rows:    notifySettingRows(prefs, app.sessionCharacters(ctx)),
 		InApp:   !prefs.channelOff(notifyChannelInApp),
 		Desktop: !prefs.channelOff(notifyChannelDesktop),
+		Watched: app.watchedSystemsViewFor(ctx, prefs, settingsPath),
 	}
 	for i := range view.Rows {
 		if view.Rows[i].ID == notifyCamp {
 			view.Rows[i].CampSystemsText = app.campSystemsText(ctx, prefs.CampSystems)
+			view.Rows[i].CampCount = len(prefs.CampSystems)
 		}
 	}
 	view.DiscordOffered, view.DiscordLinked, view.Discord, view.DiscordName = app.discordChannelState(ctx, userID)
@@ -604,10 +612,16 @@ func (app *Application) handleNotificationSettingsSave(w http.ResponseWriter, r 
 		if n, err := strconv.Atoi(r.Form.Get("undercut_digest_hours")); err == nil && validUndercutDigestHours(n) {
 			prefs.UndercutDigestHours = n
 		}
-		systems, unknown := app.parseCampSystems(ctx, r.FormValue("camp_systems"))
-		prefs.CampSystems = systems
-		if len(unknown) > 0 {
-			saved = fmt.Sprintf("Notification settings saved. Unknown systems were left out: %s.", strings.Join(unknown, ", "))
+		// The camp list is edited in the watched systems modal
+		// now; a save that still carries the field (a page rendered
+		// before the swap) parses it as before, and a save without
+		// it leaves the stored list alone.
+		if _, sent := r.Form["camp_systems"]; sent {
+			systems, unknown := app.parseCampSystems(ctx, r.FormValue("camp_systems"))
+			prefs.CampSystems = systems
+			if len(unknown) > 0 {
+				saved = fmt.Sprintf("Notification settings saved. Unknown systems were left out: %s.", strings.Join(unknown, ", "))
+			}
 		}
 	}
 	// The briefing card switches follow the same rule as the

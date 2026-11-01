@@ -45,6 +45,7 @@ const (
 	widgetPI         = "pi"
 	widgetTradeIdeas = "tradeideas"
 	widgetTraining   = "training"
+	widgetIntelWatch = "intelwatch"
 	widgetPulse      = "pulse"
 	widgetWalletFlow = "walletflow"
 	widgetUpkeep     = "upkeep"
@@ -95,6 +96,7 @@ var coreWidgetCatalog = []widgetDef{
 	{widgetPI, "Planetary Industry", "Colonies across your characters: extractor timers, expired heads, and the next planet needing a visit.", 1, 2, "planets"},
 	{widgetWatchlist, "Market Watchlist", "The items you're watching: latest prices, 7- and 30-day moves, and a flag when one crosses your alert line.", 1, 1, "market_public"},
 	{widgetTraining, "Training Horizon", "The next 10 skill finishes across every character, plus who is sitting idle.", 1, 2, "skills"},
+	{widgetIntelWatch, "Intel Watch", "The latest filed intel for your watched systems: gate states, sightings, and kills involving your corporations.", 2, 2, "intel"},
 }
 
 // defaultHomeLayout is what accounts with no saved layout get, sized
@@ -317,6 +319,7 @@ var widgetSnapshotKinds = map[string][]string{
 	widgetPI:         {esi.SnapPlanets},
 	widgetTradeIdeas: {}, // stored model answer only; no character snapshots
 	widgetTraining:   {esi.SnapSkillqueue},
+	widgetIntelWatch: {}, // filed intel and stored kills only; no character snapshots
 	widgetPulse:      {}, // corp snapshots load per corporation, not via bundles
 	widgetWalletFlow: {esi.SnapWalletJournal},
 	widgetUpkeep:     {}, // corp snapshots load per corporation, not via bundles
@@ -629,6 +632,7 @@ type homeWidget struct {
 	Watchlist  *watchlistWidget
 	PI         *piWidget
 	Training   *trainingWidget
+	IntelWatch *intelWatchWidget
 	Pulse      *pulseWidget
 	WalletFlow *walletFlowWidget
 	TradeIdeas *ideas.Widget
@@ -1562,6 +1566,8 @@ func (app *Application) buildHome(ctx context.Context, customize bool) *homeView
 			w.TradeIdeas = ideas.Stored(ctx, app.queries, app.cfg.TradeIdeasConfigured())
 		case widgetTraining:
 			w.Training = app.buildTraining(ctx, bundles)
+		case widgetIntelWatch:
+			w.IntelWatch = app.buildIntelWatch(ctx, userID, gw, gh)
 		case widgetPulse:
 			w.Pulse = app.buildPulse(ctx, userID)
 		case widgetWalletFlow:

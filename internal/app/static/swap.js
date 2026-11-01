@@ -292,8 +292,6 @@
     window.history.scrollRestoration = "manual";
   } catch (e) { /* older engines: the swap still lands */ }
 
-  var reducedMotion = window.matchMedia &&
-    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
   // Fetched-page cache: prefetch fills it, history revisits read
   // it. Small and short-lived: at most 24 entries, 60 seconds each.
@@ -587,101 +585,13 @@
     }
   }
 
-  // ---------- swap motion ----------
+  // ---------- the swap itself ----------
 
-  // A forward swap moves the way the polished sites do: the new
-  // page's blocks draw in one after another while the content
-  // column eases from the old page's height to the new one's,
-  // so the footer rides to its new place instead of jumping
-  // there. Nothing is ever snapshotted, so the glass stays live
-  // and blurred for the whole move. History restores and
-  // reduced-motion readers swap instantly, as before.
-  var GLIDE_MS = 480;
-  var DRAW_MS = 210;
-  var DRAW_STAGGER_MS = 28;
-  var DRAW_MAX_DELAY_MS = 280;
-  var motionAnims = [];
-  var motionLock = false;
-
-  function stopMotion() {
-    for (var i = 0; i < motionAnims.length; i++) {
-      try { motionAnims[i].cancel(); } catch (e) { /* already gone */ }
-    }
-    motionAnims = [];
-    if (motionLock) {
-      motionLock = false;
-      main.style.height = "";
-      main.style.overflow = "";
-    }
-  }
-
-  // The blocks that draw in: the content's top-level elements.
-  // A page that wraps everything in one shell element draws in
-  // by the shell's children instead, so a wrapped page staggers
-  // the same way a flat one does.
-  function drawBlocks() {
-    var kids = [];
-    var i, el;
-    for (i = 0; i < main.children.length; i++) {
-      el = main.children[i];
-      if (el.tagName === "SCRIPT" || el.tagName === "STYLE" || el.tagName === "TEMPLATE") continue;
-      kids.push(el);
-    }
-    if (kids.length === 1 && kids[0].children.length >= 3) {
-      var inner = [];
-      for (i = 0; i < kids[0].children.length; i++) {
-        el = kids[0].children[i];
-        if (el.tagName === "SCRIPT" || el.tagName === "STYLE" || el.tagName === "TEMPLATE") continue;
-        inner.push(el);
-      }
-      if (inner.length >= 3) kids = inner;
-    }
-    return kids.slice(0, 12);
-  }
-
-  function trackMotion(anim, onfinish) {
-    motionAnims.push(anim);
-    anim.onfinish = function () {
-      if (onfinish) onfinish();
-      try { anim.cancel(); } catch (e) { /* already gone */ }
-    };
-  }
-
-  // startMotion(fromH): the new content is already painted.
-  // Ease the column from the outgoing page's height to the
-  // painted page's natural height while its blocks draw in.
-  // The height lock releases when the glide lands, so anything
-  // the page grows afterwards (a late widget) just takes its
-  // space instead of being clipped by a stale lock.
-  function startMotion(fromH) {
-    var toH = main.offsetHeight;
-    var blocks = drawBlocks();
-    var i, anim;
-    for (i = 0; i < blocks.length; i++) {
-      anim = blocks[i].animate(
-        [{ opacity: 0, transform: "translateY(14px)" }, { opacity: 1, transform: "translateY(0px)" }],
-        {
-          duration: DRAW_MS,
-          delay: Math.min(i * DRAW_STAGGER_MS, DRAW_MAX_DELAY_MS),
-          easing: "cubic-bezier(0.22, 0.8, 0.32, 1)",
-          fill: "both"
-        });
-      trackMotion(anim);
-    }
-    if (!fromH || Math.abs(toH - fromH) < 2) return;
-    motionLock = true;
-    main.style.height = fromH + "px";
-    main.style.overflow = "hidden";
-    void main.offsetHeight;
-    anim = main.animate(
-      [{ height: fromH + "px" }, { height: toH + "px" }],
-      { duration: GLIDE_MS, easing: "cubic-bezier(0.3, 0.7, 0.3, 1)", fill: "both" });
-    trackMotion(anim, function () {
-      motionLock = false;
-      main.style.height = "";
-      main.style.overflow = "";
-    });
-  }
+  // A swap paints the new page in a single frame: the content
+  // is replaced whole, with no draw-in, no fade and no height
+  // glide. Anything painted before its final state reads as a
+  // blink, and a fade is just a slower blink, so the page is
+  // simply there, the way a reactive app's view change is.
 
   function applySwapped(url, entry, push) {
     docURL = String(url).split("#")[0];
@@ -711,8 +621,8 @@
         window.scrollTo(0, push);
       }
     };
-    // applySwapped resolves once the new content is painted and
-    // its motion (if any) is under way. The content-ready
+    // applySwapped resolves once the new content is painted.
+    // The content-ready
     // dispatch is not its tail any more: performSwap fires it
     // after the page's scripts are adopted, so a page script is
     // listening (or has run) by the time widgets reboot — the
@@ -726,15 +636,7 @@
         }
         resolve();
       };
-      // A forward navigation (push "top") gets the motion. A
-      // history restore passes the saved scroll offset instead
-      // and lands instantly, exactly where the reader left it.
-      var motion = !reducedMotion && push === "top" &&
-        typeof main.animate === "function";
-      stopMotion();
-      var fromH = main.offsetHeight;
       paint();
-      if (motion) startMotion(fromH);
       after();
     });
   }
@@ -746,28 +648,9 @@
   // navigation to the browser instead of stranding a half-styled
   // or inert page. isCurrent() reports whether a newer navigation
   // has superseded this one; a superseded swap stops quietly.
-  // fontsSettled resolves once the document's fonts have loaded,
-  // or after a short cap. The swap measures the new page's
-  // height before its motion starts, so text caught mid font
-  // swap would be measured in the fallback face and pop (and
-  // shift the height) when the real face lands. The fonts are
-  // preloaded and cached, so ready is normally already settled
-  // and this costs nothing; the cap keeps a stalled font from
-  // holding a navigation hostage.
-  function fontsSettled() {
-    if (!document.fonts || !document.fonts.ready) return Promise.resolve();
-    return Promise.race([
-      document.fonts.ready,
-      new Promise(function (resolve) { setTimeout(resolve, 120); })
-    ]);
-  }
-
   function performSwap(url, entry, push, isCurrent) {
     var current = function () { return !isCurrent || isCurrent(); };
     return adoptStyles(entry.styles).then(function () {
-      if (!current()) return false;
-      return fontsSettled();
-    }).then(function () {
       if (!current()) return false;
       return applySwapped(url, entry, push);
     }).then(function (painted) {
@@ -921,6 +804,7 @@
   }
   document.addEventListener("mouseover", prefetchFromEvent);
   document.addEventListener("focusin", prefetchFromEvent);
+  document.addEventListener("touchstart", prefetchFromEvent, { passive: true });
 
   // Remember where this shell started: popping back past the first
   // swap restores it from here instead of reloading. Its assets

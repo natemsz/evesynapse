@@ -1339,10 +1339,8 @@ tbody tr:hover td, tbody tr:hover th { background: rgba(255, 106, 0, 0.045); }
   position: sticky;
   left: 0;
   z-index: 1;
-  background: var(--panel);
 }
-.tw tbody tr:hover td:first-child { background: color-mix(in srgb, var(--accent) 5%, var(--panel)); }
-.tw thead th:first-child { background: var(--panel); z-index: 2; }
+.tw thead th:first-child { z-index: 2; }
 
 /* --- alerts --- */
 .err {
@@ -5557,22 +5555,18 @@ html[data-theme="light"] .doctrine-fits li:last-child { border-color: #e3d9c6; }
   ::view-transition-old(main-content), ::view-transition-new(main-content) { animation: none; }
 }
 
-/* Per-page pass (2026-10-16): the pinned column read as a solid
-   slab beside the translucent rows, worst where the first column
-   is wide (corp members, the home fleet table). Any paint on the
-   cell layers OVER the row's own paint (cell backgrounds stack on
-   row backgrounds), so even the row color itself double-darkens.
-   The fix is no paint at all: the row shows through exactly. */
+/* Pinned first cells paint the panel glass and blur whatever
+   scrolls beneath them: legible mid-scroll, and at rest they read
+   as the same glass as the rows beside them, never a solid slab. */
 .tw tbody td:first-child, .tw tbody th:first-child,
-tbody td:first-child, tbody th:first-child {
-  background: transparent;
-}
-.tw tbody tr:nth-child(even) td:first-child, .tw tbody tr:nth-child(even) th:first-child,
-tbody tr:nth-child(even) th:first-child {
-  background: transparent;
+tbody td:first-child, tbody th:first-child,
+.tw thead th:first-child {
+  background: var(--glass);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(0.9);
+  backdrop-filter: blur(var(--glass-blur)) saturate(0.9);
 }
 .tw tbody tr:hover td:first-child, .tw tbody tr:hover th:first-child {
-  background: rgba(255, 106, 0, 0.045);
+  background: color-mix(in srgb, var(--accent) 5%, var(--glass));
 }
 
 /* Pill buttons (chips and the trade-ideas tabs),

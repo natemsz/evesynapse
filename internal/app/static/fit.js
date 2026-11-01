@@ -215,6 +215,15 @@ var FitGauges = (function () {
       var current = workbench();
       if (!fresh || !current) { simDone(); return; }
       current.replaceWith(fresh);
+      // The fresh fragment's slot positions ride data-left /
+      // data-top until app.js's geometry pass applies them; its
+      // MutationObserver runs after this handler, and the
+      // re-anchor below measures slot rects, so apply the pass
+      // here first or every fresh slot still sits at the
+      // visual's top-left corner when it is measured.
+      if (window.EveSynapseContent && window.EveSynapseContent.applyDataGeometry) {
+        window.EveSynapseContent.applyDataGeometry(fresh);
+      }
       var next = readState();
       if (next) {
         next.items = next.items || [];

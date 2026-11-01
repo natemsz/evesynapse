@@ -4461,6 +4461,12 @@
     root.querySelectorAll(GEOMETRY_SELECTOR).forEach(applyGeometry);
   }
 
+  // Code that swaps a fragment in and immediately measures the
+  // new elements (the fitting workbench's tooltip re-anchor does)
+  // cannot wait for the observer below, which runs after the
+  // current task; it applies the pass itself through this handle.
+  window.EveSynapseContent.applyDataGeometry = applyDataGeometry;
+
   applyDataGeometry(document.body);
   if (window.MutationObserver) {
     new MutationObserver(function (records) {

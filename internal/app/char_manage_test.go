@@ -170,7 +170,8 @@ func TestCharactersPageSwitcherAndTags(t *testing.T) {
 	}
 	mustContain(t, "/characters/", body,
 		"Fixture Ceo", "Second Pilot",
-		"Linked", "Re-link needed",
+		"Linked", "Sign in again",
+		"The saved EVE sign-in for this character stopped working",
 		"Switch Character", "Manage Characters",
 		"/characters/switch?character=",
 		"Characters", // nav menu entry

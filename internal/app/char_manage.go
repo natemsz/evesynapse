@@ -175,8 +175,8 @@ func (app *Application) managedCharacterRow(ctx context.Context, ch db.Character
 	}
 	switch ch.LinkState {
 	case linkStateTokenDead:
-		row.StateLabel = "Re-link needed"
-		row.StateDetail = "EVE rejected this character's saved login (revoked or expired). Sign the character in again to resume syncing."
+		row.StateLabel = "Sign in again"
+		row.StateDetail = "The saved EVE sign-in for this character stopped working. Sign the character in again to resume syncing."
 	case linkStateOwnerChanged:
 		row.StateLabel = "Re-link needed"
 		row.StateDetail = "This character changed EVE accounts since it was linked. Sign it in again to confirm you control it; syncing is paused until then."

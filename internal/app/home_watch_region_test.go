@@ -59,7 +59,7 @@ func TestHomeWatchlistGlobalTypeReadsGlobalRegion(t *testing.T) {
 	}
 
 	bundles := []*charSnaps{{ch: db.Character{CharacterID: 777, UserID: user.ID, Name: "Fixture"}}}
-	lines := app.briefingMarketLines(ctx, bundles, map[int64]bool{}, map[int64]string{}, shared)
+	lines := app.briefingMarketLines(ctx, bundles, map[int64]bool{}, map[int64]string{}, shared, now, 0, notifyPrefs{})
 	found := false
 	for _, l := range lines {
 		if strings.Contains(l.html, "in Global market") {

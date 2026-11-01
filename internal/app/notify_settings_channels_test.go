@@ -88,6 +88,7 @@ func TestNotificationSettingsChannelsAndTypes(t *testing.T) {
 	settings := func(dm bool) url.Values {
 		form := url.Values{
 			"channels_shown": {"1"}, "channel_inapp": {"1"}, "channel_desktop": {"1"},
+			"kinds_shown":   {"1"},
 			"discord_shown": {"1"},
 		}
 		for _, kind := range notifyKindList() {

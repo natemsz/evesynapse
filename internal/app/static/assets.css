@@ -1,0 +1,73 @@
+/* EveSynapse: the Assets page. Only what is unique to this page
+   lives here: the pane widths, the page head, the matrix rows and
+   the container cards. The shared patterns (three-pane shell,
+   directory rows, share bars, pill tabs, filter chips, scope
+   pills, loadout chips, the inspector pane) are in style.css.
+   Phone rules sit in the same 45rem query the site's phone layer
+   uses (phone.css): one column, the directory as a wrapping
+   selector, the inspector as a sheet under the matrix. */
+
+/* The page head: title and totals left, the search right. */
+.pagehead { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 1rem; margin-bottom: 0.8rem; }
+.pagehead-title { margin: 0; }
+.pagehead-sub { margin: 0.2rem 0 0; color: var(--muted); }
+.pagehead-actions { flex: 1 1 26rem; max-width: 38rem; }
+.assets-head .searchpanel { margin: 0; }
+
+/* The bars above the panes: scope and saved filters. */
+.assets-head + .scopepills { margin-bottom: 0.6rem; }
+.fchips { margin-bottom: 1rem; }
+
+/* Pane widths for this page's three columns. */
+.panes3.amx { grid-template-columns: 18rem minmax(0, 1fr); }
+.panes3.amx.has-insp { grid-template-columns: 18rem minmax(0, 1fr) 22rem; }
+.pane-dir #assets-dirfilter { width: 100%; margin-bottom: 0.6rem; }
+.dir-foot { margin-top: 0.8rem; }
+
+/* The matrix head: the place, its totals, and the sort. */
+.amx-mhead { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 0.6rem 1.5rem; margin-bottom: 0.7rem; }
+.amx-mhead h3 { margin: 0; }
+.amx-msub { margin: 0.15rem 0 0; color: var(--muted); font-size: 0.85rem; }
+.amx-crumb { margin: 0 0 0.3rem; }
+.amx-mhead-r { display: flex; flex-direction: column; align-items: flex-end; gap: 0.15rem; }
+.amx-total { color: var(--gold); font-size: 1.45rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+.amx-total small { font-size: 0.8rem; }
+.amx-sort { color: var(--muted); font-size: 0.82rem; }
+.amx-sort a { color: var(--muted); text-decoration: none; }
+.amx-sort a.on { color: var(--accent); font-weight: 700; }
+
+/* Container cards: a wrapping strip above the matrix. */
+.amx-cans { display: grid; grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr)); gap: 0.6rem; margin: 0.9rem 0 0.2rem; }
+.amx-can { display: block; padding: 0.7rem 0.8rem; border: 1px solid var(--box-edge); border-radius: var(--r-sm); background: var(--glass); color: var(--text); text-decoration: none; }
+.amx-can-name { display: block; font-weight: 700; }
+.amx-can-sub { display: block; margin-top: 0.2rem; color: var(--muted); font-size: 0.8rem; }
+.amx-cans-note { margin: 0.2rem 0 0.4rem; }
+
+/* Matrix rows: art, the stack and its chips, then its numbers. */
+.amx-rows { margin-top: 0.6rem; border-top: 1px solid var(--box-edge); }
+.amx-row { display: grid; grid-template-columns: 2rem minmax(0, 1fr) auto; gap: 0.8rem; align-items: center; padding: 0.55rem 0.4rem; border-bottom: 1px solid var(--box-edge); }
+.amx-row.on { background: var(--glass); box-shadow: inset 2px 0 0 var(--accent); }
+.amx-art img { display: block; border-radius: var(--r-xs); }
+.amx-main { display: flex; flex-direction: column; gap: 0.18rem; min-width: 0; }
+.amx-name { font-weight: 600; }
+.amx-name small { color: var(--muted); font-weight: 400; }
+.amx-sub { display: flex; flex-wrap: wrap; gap: 0.2rem 0.9rem; color: var(--muted); font-size: 0.78rem; }
+.amx-note { color: var(--unverified); font-size: 0.75rem; }
+.amx-nums { display: flex; flex-direction: column; align-items: flex-end; gap: 0.1rem; }
+.amx-val { color: var(--gold); font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.amx-meta { color: var(--muted); font-size: 0.78rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* Phone (the site's canon band, see phone.css): the panes stack,
+   the directory becomes a wrapping selector above the matrix, and
+   the inspector follows the matrix as a sheet. */
+@media (max-width: 45rem) {
+  .panes3.amx, .panes3.amx.has-insp { grid-template-columns: minmax(0, 1fr); }
+  .pane-dir .dirlist { flex-direction: row; flex-wrap: wrap; }
+  .pane-dir .diritem { flex: 1 1 10rem; }
+  .pane-dir .dir-foot { display: none; }
+  .amx-mhead-r { align-items: flex-start; }
+  .assets-head .assets-only { flex: 1 1 100%; white-space: nowrap; }
+  .amx-row { grid-template-columns: 2rem minmax(0, 1fr); }
+  .amx-nums { grid-column: 2; flex-direction: row; align-items: baseline; gap: 0.6rem; }
+  .pagehead-actions { flex-basis: 100%; max-width: none; }
+}

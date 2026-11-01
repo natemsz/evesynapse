@@ -1,82 +1,215 @@
 {{define "title"}}Assets{{end}}
 {{define "pagetitle"}}<h1><span class="gt">Assets</span></h1>{{end}}
 {{define "pagetabs"}}{{template "sectiontabs" .}}{{end}}
-{{define "asset-rows"}}{{range .}}
-        <tr><td>{{itemLink .TypeID .Name}}{{if .TypeName}} <small>{{.TypeName}}</small>{{end}}{{if .Where}} <small>in {{.Where}}</small>{{end}}</td><td>{{.Quantity}}</td><td>{{.Note}}</td></tr>
-        {{if .Children}}<tr class="asset-inside"><td colspan="3">
-          <details>
-            <summary>{{.Inside}} {{if eq .Inside 1}}stack{{else}}stacks{{end}} inside {{.Name}}</summary>
-            <table>
-              <tbody>{{template "asset-rows" .Children}}
-              </tbody>
-            </table>
-            {{if .MoreInside}}<p><small>+ {{.MoreInside}} more {{if eq .MoreInside 1}}stack{{else}}stacks{{end}} directly inside</small></p>{{end}}
-          </details>
-        </td></tr>{{end}}
-{{end}}{{end}}
+
+{{define "assets-diritem"}}
+<a class="diritem{{if .Selected}} on{{end}}" href="{{.Href}}" data-name="{{.Title}}">
+  <span class="dir-top">
+    {{if .SecKnown}}<span class="sec sec-{{.SecTier}} dir-sec">{{.SecText}}</span>{{end}}
+    <span class="dir-name">{{.Title}}</span>
+    {{if .HasValue}}<span class="dir-val">{{.ValueText}}</span>{{end}}
+  </span>
+  <span class="dir-sub">{{if .All}}All Locations · {{.Stacks}} Stacks{{else}}{{.Region}} · {{.Stacks}} Stacks{{if .Ships}} · {{.Ships}} Ships{{end}}{{end}}</span>
+  {{if not .All}}<span class="sharebar"><span class="fill {{.ShareClass}}"></span></span>{{end}}
+  {{if .Unpriced}}<span class="dir-note">{{.Unpriced}} unpriced</span>{{end}}
+</a>
+{{end}}
+
+{{define "assets-row"}}
+<div class="amx-row{{if .Selected}} on{{end}}">
+  <span class="amx-art"><img src="{{.IconURL}}" alt="" width="32" height="32" loading="lazy"></span>
+  <span class="amx-main">
+    <span class="amx-name">{{if .Assembled}}<a href="{{.ShipHref}}">{{.Name}}</a>{{else}}{{itemLink .TypeID .Name}}{{end}}{{if .TypeName}} <small>{{.TypeName}}</small>{{end}}{{if .Note}} <small>{{.Note}}</small>{{end}}</span>
+    <span class="amx-sub">
+      {{if .GroupName}}<span>{{.GroupName}}</span>{{end}}
+      {{if .Flag}}<span>{{.Flag}}</span>{{end}}
+      {{if .Where}}<span>in {{.Where}}</span>{{end}}
+      {{if .OwnerName}}<span>{{.OwnerName}}</span>{{end}}
+    </span>
+    {{if .HasLoadout}}
+    <span class="lchips">
+      <span class="lchip">⊞ {{.Inside}} inside</span>
+      {{if .Sub}}<span class="lchip">{{.Sub}} Sub</span>{{end}}
+      {{if .High}}<span class="lchip">{{.High}}H</span>{{end}}
+      {{if .Mid}}<span class="lchip">{{.Mid}}M</span>{{end}}
+      {{if .Low}}<span class="lchip">{{.Low}}L</span>{{end}}
+      {{if .Rig}}<span class="lchip">{{.Rig}} Rig</span>{{end}}
+      {{if .Cargo}}<span class="lchip cargo">+{{.Cargo}} Cargo</span>{{end}}
+    </span>
+    {{end}}
+    {{if .UnpricedNote}}<span class="amx-note">{{.UnpricedNote}}</span>{{end}}
+  </span>
+  <span class="amx-nums">
+    <span class="amx-val">{{if .ValueText}}{{.ValueText}}{{else}}<span class="muted">no price</span>{{end}}</span>
+    <span class="amx-meta">×{{.Quantity}} · {{.VolumeText}}</span>
+  </span>
+</div>
+{{end}}
+
+{{define "assets-slotsec"}}
+<div class="slotsec">
+  <h4>{{.Title}}{{if .Note}} <small>{{.Note}}</small>{{end}}</h4>
+  {{range .Rows}}
+  <div class="modrow">
+    <span class="modrow-name">{{if gt .Qty 1}}{{.Qty}}x {{end}}{{.Name}}{{if .Sub}} <small>{{.Sub}}</small>{{end}}</span>
+    <span class="modrow-val">{{.ValueText}}</span>
+  </div>
+  {{end}}
+</div>
+{{end}}
+
 {{define "content"}}
 
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
 
-{{template "charselector" .AssetsChars}}
-<form method="get" action="/assets/" id="assets-search" class="searchpanel">
-  <span class="searchwrap">
-    <input type="search" name="q" id="assets-q"{{if .AssetsSearch}} value="{{.AssetsSearch.Query}}"{{end}} placeholder="Find an item you own, e.g. Rifter" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="assets-suggest" aria-autocomplete="list" aria-label="Find an item on your characters">
-    <ul class="suggest" id="assets-suggest" role="listbox" hidden></ul>
-  </span>
-  <button type="submit">Search</button>
-  <label class="assets-only"><input type="checkbox" name="only" value="1" id="assets-only"{{if and .AssetsSearch .AssetsSearch.Only}} checked{{end}}> Only {{range .AssetsChars}}{{if .Active}}{{.Name}}{{end}}{{end}}</label>
-  {{if .AssetsSearch}}<a href="/assets/">Clear search</a>{{end}}
-</form>
-<p><small>The search covers every character on your account unless you tick the box.</small></p>
+{{with .Assets}}
+{{$v := .}}
+<div class="pagehead assets-head">
+  <div>
+    <h2 class="pagehead-title">Hangar Assets</h2>
+    <p class="pagehead-sub">{{.Stacks}} stacks · {{.TotalItems}} items · {{.Places}} locations</p>
+  </div>
+  <div class="pagehead-actions">
+    <form method="get" action="/assets/" id="assets-search" class="searchpanel">
+      <span class="searchwrap">
+        <input type="search" name="q" id="assets-q" value="{{.FormQuery}}" placeholder="Search items, ships, containers..." autocomplete="off" role="combobox" aria-expanded="false" aria-controls="assets-suggest" aria-autocomplete="list" aria-label="Find an item on your characters">
+        <ul class="suggest" id="assets-suggest" role="listbox" hidden></ul>
+      </span>
+      <button type="submit">Search</button>
+      <label class="assets-only"><input type="checkbox" name="only" value="1" id="assets-only"{{if not .ScopeAll}} checked{{end}}> Only {{.ActingName}}</label>
+      {{if .Search}}<a href="/assets/">Clear search</a>{{end}}
+      {{if ne .FormTab "all"}}<input type="hidden" name="tab" value="{{.FormTab}}">{{end}}
+      {{if ne .FormScope "all"}}<input type="hidden" name="scope" value="{{.FormScope}}">{{end}}
+    </form>
+  </div>
+</div>
 
-{{if .AssetsSearch}}
-  {{$v := .AssetsSearch}}
-  {{if $v.Results}}
-  <p><small>{{$v.TotalStacks}} {{if eq $v.TotalStacks 1}}stack{{else}}stacks{{end}} matching “{{$v.Query}}”{{if $v.Only}} on this character{{else}} across {{len $v.Results}} {{if eq (len $v.Results) 1}}character{{else}}characters{{end}}{{end}}</small></p>
-  {{range $v.Results}}
-    <h2><a href="/assets/?character={{.CharacterID}}">{{.CharacterName}}</a></h2>
-    {{range .Locations}}
-    <section class="foldable" data-fold="closed">
-    <h3>{{placeLink .Loc}}</h3>
-    <div class="tw">
-    <table>
-      <thead><tr><th>Item</th><th>Quantity</th><th>Note</th></tr></thead>
-      <tbody>{{template "asset-rows" .Items}}
-      </tbody>
-    </table>
+<div class="scopepills" role="group" aria-label="Character scope">
+  {{range .Scope}}
+  <a class="scopepill{{if .Active}} on{{end}}" href="{{.Href}}">{{if .Image}}<img src="{{.Image}}" alt="" width="22" height="22">{{end}}{{.Name}}</a>
+  {{end}}
+</div>
+
+<div class="fchips">
+  <span class="fchips-label">Quick Filters</span>
+  {{range .Filters}}
+  <span class="fchip-wrap">
+    <a class="fchip" href="{{.Href}}">{{.Name}}</a>
+    <form method="post" action="/assets/filters/delete" class="fchip-del">
+      <input type="hidden" name="name" value="{{.Name}}">
+      <input type="hidden" name="q" value="{{$v.FormQuery}}">
+      <input type="hidden" name="tab" value="{{$v.FormTab}}">
+      <input type="hidden" name="scope" value="{{$v.FormScope}}">
+      <button type="submit" aria-label="Delete filter {{.Name}}">×</button>
+    </form>
+  </span>
+  {{end}}
+  <form method="post" action="/assets/filters" class="fchip-form">
+    <input type="text" name="name" placeholder="Name this view..." maxlength="40" required aria-label="Filter name">
+    <input type="hidden" name="q" value="{{.FormQuery}}">
+    <input type="hidden" name="tab" value="{{.FormTab}}">
+    <input type="hidden" name="scope" value="{{.FormScope}}">
+    <button type="submit" class="fchip save">+ Save current view</button>
+  </form>
+</div>
+
+{{if .Syncing}}<p><small>Not included yet: still waiting on the first sync for {{range $i, $n := .Syncing}}{{if $i}}, {{end}}{{$n}}{{end}}.</small></p>{{end}}
+
+{{if .Warming}}
+  <p>Still syncing.{{if $.IsAdmin}} Progress is on the <a href="/admin/sync/">Sync page</a>.{{end}}</p>
+{{else if .Loaded}}
+<div class="panes3 amx{{with .Matrix}}{{if .Inspector}} has-insp{{end}}{{end}}">
+  <aside class="pane-dir">
+    <input id="assets-dirfilter" type="search" placeholder="Filter stations..." aria-label="Filter stations">
+    <nav class="dirlist" aria-label="Locations">
+      {{range .Directory}}{{template "assets-diritem" .}}{{end}}
+    </nav>
+    <p class="dir-foot"><small>Values use EveSynapse's own market data. A stack with no price yet counts as unpriced, never as zero.</small></p>
+  </aside>
+
+  <section class="pane-main">
+  {{with .Search}}
+    <div class="amx-mhead">
+      <h3>{{.TotalStacks}} {{if eq .TotalStacks 1}}stack{{else}}stacks{{end}} matching "{{.Query}}"{{if .Only}} on this character{{else}} across {{.Characters}} {{if eq .Characters 1}}character{{else}}characters{{end}}{{end}}</h3>
     </div>
-    {{if .MoreStacks}}<p><small>+ {{.MoreStacks}} more matching stacks</small></p>{{end}}
-    </section>
+    {{if .Rows}}
+    <div class="amx-rows">
+      {{range .Rows}}{{template "assets-row" .}}{{end}}
+    </div>
+    {{if .MoreRows}}<p><small>+ {{.MoreRows}} more stacks; the most valuable are shown.</small></p>{{end}}
+    {{else}}
+    <p>No stacks matching "{{.Query}}"{{if .Only}} on this character{{else}} on any character{{end}}.</p>
+    {{end}}
+  {{else with .Matrix}}
+    <div class="amx-mhead">
+      <div>
+        {{if .InCan}}<p class="amx-crumb"><a href="{{.CanBack}}">← Back</a></p>{{end}}
+        <h3>{{if .SecKnown}}<span class="sec sec-{{.SecTier}}">{{.SecText}}</span> {{end}}{{placeLink .Loc}}</h3>
+        <p class="amx-msub">{{.Stacks}} stacks · {{.VolumeText}}{{if .Region}} · {{.Region}}{{end}}</p>
+      </div>
+      <div class="amx-mhead-r">
+        {{if .ValueText}}<span class="amx-total">{{.ValueText}} <small>ISK</small></span>{{end}}
+        {{if .Unpriced}}<span class="amx-msub">{{.Unpriced}} stacks unpriced</span>{{end}}
+        <span class="amx-sort">Sort:
+          <a href="{{index .SortHrefs "value"}}"{{if eq .Sort "value"}} class="on"{{end}}>Value</a> ·
+          <a href="{{index .SortHrefs "name"}}"{{if eq .Sort "name"}} class="on"{{end}}>Name</a> ·
+          <a href="{{index .SortHrefs "volume"}}"{{if eq .Sort "volume"}} class="on"{{end}}>Volume</a> ·
+          <a href="{{index .SortHrefs "stacks"}}"{{if eq .Sort "stacks"}} class="on"{{end}}>Stacks inside</a>
+        </span>
+      </div>
+    </div>
+
+    <div class="pilltabs" role="group" aria-label="Hangar divisions">
+      {{range .Tabs}}<a class="pilltab{{if .Active}} on{{end}}" href="{{.Href}}">{{.Label}} <span class="cnt">{{.Count}}</span></a>{{end}}
+    </div>
+
+    {{if .Cans}}
+    <div class="amx-cans">
+      {{range .Cans}}
+      <a class="amx-can" href="{{.Href}}">
+        <span class="amx-can-name">{{.Name}}{{if .TypeName}} <small>{{.TypeName}}</small>{{end}}</span>
+        <span class="amx-can-sub">{{.Stacks}} {{if eq .Stacks 1}}stack{{else}}stacks{{end}} inside{{if .ValueText}} · {{.ValueText}}{{end}}</span>
+      </a>
+      {{end}}
+    </div>
+    <p class="amx-cans-note"><small>Contents of these containers are listed in the matrix below.</small></p>
+    {{end}}
+
+    {{if .Rows}}
+    <div class="amx-rows">
+      {{range .Rows}}{{template "assets-row" .}}{{end}}
+    </div>
+    {{if .MoreRows}}<p><small>+ {{.MoreRows}} more stacks; the most valuable are shown.</small></p>{{end}}
+    {{else}}
+    <p>Nothing here under this division.</p>
     {{end}}
   {{end}}
-  {{else}}
-  <p>No stacks matching “{{$v.Query}}” {{if $v.Only}}on this character{{else}}on any character{{end}}.</p>
-  {{end}}
-  {{if $v.Syncing}}<p><small>Not included yet: still waiting on the first sync for {{range $i, $n := $v.Syncing}}{{if $i}}, {{end}}{{$n}}{{end}}.</small></p>{{end}}
-{{else if .Assets}}
-  {{if .Assets.Loaded}}
-  <p><small>{{.Assets.Stacks}} stacks · {{.Assets.TotalItems}} items · {{len .Assets.Locations}} locations</small></p>
-  {{range .Assets.Locations}}
-    <section class="foldable" data-fold="closed">
-    <h3>{{placeLink .Loc}} <small>· {{.Stacks}} {{if eq .Stacks 1}}stack{{else}}stacks{{end}}</small></h3>
-    <div class="tw">
-    <table>
-      <thead><tr><th>Item</th><th>Quantity</th><th>Note</th></tr></thead>
-      <tbody>{{template "asset-rows" .Items}}
-      </tbody>
-    </table>
+  </section>
+
+  {{with .Matrix}}{{with .Inspector}}
+  <aside class="pane-insp insp" aria-label="Ship inspector">
+    <div class="insp-head">
+      <img src="{{.IconURL}}" alt="" width="72" height="72">
+      <div>
+        <h3>{{.Name}}</h3>
+        <p class="amx-msub">{{if .TypeName}}{{.TypeName}} · {{end}}{{.GroupName}}</p>
+        <p class="amx-msub">{{.OwnerName}} · {{.VolumeText}} packaged</p>
+      </div>
+      <a class="insp-x" href="{{.CloseHref}}" aria-label="Close inspector">✕</a>
     </div>
-    {{if .MoreStacks}}<p><small>+ {{.MoreStacks}} more stacks</small></p>{{end}}
-    </section>
-  {{end}}
-  {{else}}
-  {{if .Assets.Warming}}
-  <p>Still syncing.{{if .IsAdmin}} Progress is on the <a href="/admin/sync/">Sync page</a>.{{end}}</p>
-  {{else}}
-  <p><small>Assets couldn't be loaded. The server log has the details.</small></p>
-  {{end}}
-  {{end}}
+    <button type="button" class="btn insp-copy" data-copy data-copy-from="assets-eft">Copy EFT</button>
+    <pre id="assets-eft" hidden>{{.EFT}}</pre>
+    {{range .Sections}}{{template "assets-slotsec" .}}{{end}}
+    <div class="insp-total">
+      <span>Hull + fitted total</span>
+      <span>{{if .TotalText}}{{.TotalText}} ISK{{else}}no price{{end}}</span>
+    </div>
+    {{if .PricedNote}}<p><small>{{.PricedNote}}</small></p>{{end}}
+  </aside>
+  {{end}}{{end}}
+</div>
+{{end}}
+
 {{else}}
   <p>No assets to show yet. Link a character first.</p>
 {{end}}

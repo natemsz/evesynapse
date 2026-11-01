@@ -20,9 +20,10 @@ import (
 // is: a station, a structure, a system, or another asset (the ship or
 // container it is inside).
 //
-// Here every asset is filed under the place its outermost container
-// is in. The Loki is a row of the station's block, and what is inside
-// it opens beneath its row. Containers inside ships nest the same way.
+// The index below arranges one character's snapshot by that
+// containment: every asset knows the place its outermost container
+// sits in, which is what the matrix page (char_assets_matrix.go),
+// the value fold (char_assets_values.go) and the search all file by.
 // ---------------------------------------------------------------------------
 
 // assetNestMax bounds how deep containment is followed. EVE's own
@@ -104,13 +105,6 @@ func (ix *assetIndex) label(it esi.Asset) (name, typeName string) {
 	return ix.nameOf(it.TypeID), ""
 }
 
-// topLevel reports whether an asset sits directly in a place, not
-// inside another asset the character owns.
-func (ix *assetIndex) topLevel(it esi.Asset) bool {
-	_, inside := ix.byID[it.LocationID]
-	return !inside || it.LocationID == it.ItemID
-}
-
 // place finds where an asset really is: the location of its
 // outermost container. containers lists what it is inside, outermost
 // first (empty for a top-level asset).
@@ -137,171 +131,6 @@ func (ix *assetIndex) inside(it esi.Asset, depth int) int {
 		n += 1 + ix.inside(child, depth+1)
 	}
 	return n
-}
-
-// sortAssets orders a level: what holds other things first (the
-// fullest leading), then the biggest stacks, then by name. A ship is
-// a stack of one and would otherwise sink below every pile of ore.
-func (ix *assetIndex) sortAssets(list []esi.Asset) []esi.Asset {
-	sorted := append([]esi.Asset(nil), list...)
-	held := make(map[int64]int, len(sorted))
-	for _, it := range sorted {
-		held[it.ItemID] = ix.inside(it, 0)
-	}
-	sort.SliceStable(sorted, func(i, j int) bool {
-		a, b := sorted[i], sorted[j]
-		if held[a.ItemID] != held[b.ItemID] {
-			return held[a.ItemID] > held[b.ItemID]
-		}
-		if a.Quantity != b.Quantity {
-			return a.Quantity > b.Quantity
-		}
-		if na, nb := ix.nameOf(a.TypeID), ix.nameOf(b.TypeID); na != nb {
-			return na < nb
-		}
-		return a.ItemID < b.ItemID
-	})
-	return sorted
-}
-
-// rows builds the display rows for one level and, beneath each row,
-// whatever it contains. Each level is capped like the page always
-// was; more reports how many stacks at this level were left out.
-func (ix *assetIndex) rows(list []esi.Asset, depth int) (rows []assetRow, more int) {
-	sorted := ix.sortAssets(list)
-	if len(sorted) > maxAssetRowsPerLocation {
-		more = len(sorted) - maxAssetRowsPerLocation
-		sorted = sorted[:maxAssetRowsPerLocation]
-	}
-	for _, it := range sorted {
-		row := assetRow{
-			TypeID:   it.TypeID,
-			Quantity: esi.FormatInt(it.Quantity),
-			Note:     assetNote(it),
-		}
-		row.Name, row.TypeName = ix.label(it)
-		if kids := ix.children[it.ItemID]; len(kids) > 0 && depth+1 < assetNestMax {
-			row.Inside = ix.inside(it, depth)
-			row.Children, row.MoreInside = ix.rows(kids, depth+1)
-		}
-		rows = append(rows, row)
-	}
-	return rows, more
-}
-
-// buildNestedAssetLocations is the character Assets page's layout:
-// one block per place, each asset under the place its outermost
-// container is in, contents nested beneath their container.
-func (app *Application) buildNestedAssetLocations(ctx context.Context, items []esi.Asset) []assetLocation {
-	ix := app.newAssetIndex(ctx, items)
-
-	byLoc := map[int64][]esi.Asset{}
-	locType := map[int64]string{}
-	for _, it := range items {
-		if !ix.topLevel(it) {
-			continue
-		}
-		byLoc[it.LocationID] = append(byLoc[it.LocationID], it)
-		if _, ok := locType[it.LocationID]; !ok {
-			locType[it.LocationID] = it.LocationType
-		}
-	}
-
-	locations := make([]assetLocation, 0, len(byLoc))
-	placeMemo := make(map[int64]placeRef)
-	for locID, top := range byLoc {
-		loc := assetLocation{Title: app.assetLocationTitle(ctx, locID, locType[locID], nil, ix.nameOf, nil)}
-		loc.Loc = app.linkPlaceMemo(ctx, placeMemo, locID, loc.Title)
-		loc.Items, loc.MoreStacks = ix.rows(top, 0)
-		loc.Stacks = len(top)
-		for _, it := range top {
-			loc.Stacks += ix.inside(it, 0)
-		}
-		locations = append(locations, loc)
-	}
-	sort.Slice(locations, func(i, j int) bool {
-		if locations[i].Stacks != locations[j].Stacks {
-			return locations[i].Stacks > locations[j].Stacks
-		}
-		return locations[i].Title < locations[j].Title
-	})
-	return locations
-}
-
-// searchNestedAssets is one character's part of a search: the stacks
-// whose name contains needle, each filed under the place it really is
-// in, with what it is inside named beside it ("Loki" for cargo in a
-// docked Loki). Nil when nothing matches.
-func (app *Application) searchNestedAssets(ctx context.Context, items []esi.Asset, needle string) *assetSearchChar {
-	ix := app.newAssetIndex(ctx, items)
-
-	type found struct {
-		it    esi.Asset
-		where string
-	}
-	byLoc := map[int64][]found{}
-	locType := map[int64]string{}
-	stacks := 0
-	for _, it := range items {
-		// A hit is a match on what the thing is or on what its owner
-		// called it.
-		if !strings.Contains(strings.ToLower(ix.nameOf(it.TypeID)), needle) &&
-			!strings.Contains(strings.ToLower(ix.given[it.ItemID]), needle) {
-			continue
-		}
-		locID, kind, containers := ix.place(it)
-		names := make([]string, 0, len(containers))
-		for _, c := range containers {
-			name, _ := ix.label(c)
-			names = append(names, name)
-		}
-		byLoc[locID] = append(byLoc[locID], found{it: it, where: strings.Join(names, " › ")})
-		if _, ok := locType[locID]; !ok {
-			locType[locID] = kind
-		}
-		stacks++
-	}
-	if stacks == 0 {
-		return nil
-	}
-
-	locations := make([]assetLocation, 0, len(byLoc))
-	placeMemo := make(map[int64]placeRef)
-	for locID, hits := range byLoc {
-		loc := assetLocation{Title: app.assetLocationTitle(ctx, locID, locType[locID], nil, ix.nameOf, nil), Stacks: len(hits)}
-		loc.Loc = app.linkPlaceMemo(ctx, placeMemo, locID, loc.Title)
-		sort.SliceStable(hits, func(i, j int) bool {
-			if hits[i].it.Quantity != hits[j].it.Quantity {
-				return hits[i].it.Quantity > hits[j].it.Quantity
-			}
-			if na, nb := ix.nameOf(hits[i].it.TypeID), ix.nameOf(hits[j].it.TypeID); na != nb {
-				return na < nb
-			}
-			return hits[i].where < hits[j].where
-		})
-		if len(hits) > maxAssetRowsPerLocation {
-			loc.MoreStacks = len(hits) - maxAssetRowsPerLocation
-			hits = hits[:maxAssetRowsPerLocation]
-		}
-		for _, h := range hits {
-			row := assetRow{
-				TypeID:   h.it.TypeID,
-				Quantity: esi.FormatInt(h.it.Quantity),
-				Note:     assetNote(h.it),
-				Where:    h.where,
-			}
-			row.Name, row.TypeName = ix.label(h.it)
-			loc.Items = append(loc.Items, row)
-		}
-		locations = append(locations, loc)
-	}
-	sort.Slice(locations, func(i, j int) bool {
-		if locations[i].Stacks != locations[j].Stacks {
-			return locations[i].Stacks > locations[j].Stacks
-		}
-		return locations[i].Title < locations[j].Title
-	})
-	return &assetSearchChar{Locations: locations, Stacks: stacks}
 }
 
 // ---------------------------------------------------------------------------

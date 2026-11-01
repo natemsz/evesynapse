@@ -2375,6 +2375,21 @@
         });
     })();
 
+    // Assets: the station directory's filter box narrows the
+    // directory rows by place name, in place.
+    (function () {
+      var filter = root.querySelector("#assets-dirfilter");
+      if (!filter) return;
+      var items = root.querySelectorAll(".diritem");
+      filter.addEventListener("input", function () {
+        var needle = filter.value.trim().toLowerCase();
+        items.forEach(function (el) {
+          var name = (el.getAttribute("data-name") || "").toLowerCase();
+          el.hidden = needle !== "" && name.indexOf(needle) === -1;
+        });
+      });
+    })();
+
     // Assets: suggestions come from what the account actually owns
     // (each says whose it is), narrowed to the acting character when
     // the box is ticked. A pick fills the box and runs the search.

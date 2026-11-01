@@ -656,6 +656,11 @@ func (c *cycleState) refreshCharacter(ctx context.Context, ch db.Character) bool
 	// budget spent, no extra ESI calls.
 	app.sampleWalletHistory(ctx, ch, time.Now())
 
+	// Per-location asset values (schema 118): fold the asset
+	// snapshot just stored into the Assets page directory's
+	// rows, at the same house prices as the net worth sample.
+	app.refreshAssetLocationValues(ctx, ch)
+
 	// Profit ledger (schema 104): fold the journal, transaction and
 	// job snapshots just stored into the durable ledger and its
 	// attribution, after the day's net worth sample it reads.

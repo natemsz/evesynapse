@@ -711,6 +711,8 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 		r.Use(app.requireAuth)
 		r.Get("/", app.handleAssets)
 		r.Get("/suggest", app.handleAssetsSuggest)
+		r.Post("/filters", app.handleAssetsFilterSave)
+		r.Post("/filters/delete", app.handleAssetsFilterDelete)
 	})
 
 	r.Route("/planets", func(r chi.Router) {

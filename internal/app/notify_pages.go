@@ -291,6 +291,11 @@ type notifySettingRow struct {
 	ID    string
 	Title string
 	On    bool
+	// HasCard: the kind's news also appears as a briefing card, so
+	// the row carries a switch for the card beside the notification
+	// switch; CardOn is that switch.
+	HasCard bool
+	CardOn  bool
 	// Characters is who the kind can be switched for, one by one; nil
 	// for a kind that belongs to the account. Summary says how many of
 	// them it is on for ("On for 3 of 5 characters").
@@ -370,6 +375,9 @@ func notifySettingRows(prefs notifyPrefs, characters []db.Character) []notifySet
 	rows := make([]notifySettingRow, 0, len(notifyKindList()))
 	for _, kind := range notifyKindList() {
 		row := notifySettingRow{ID: kind.ID, Title: kind.Title, On: !prefs.off(kind.ID)}
+		if _, ok := briefingCardKindFor(kind.ID); ok {
+			row.HasCard, row.CardOn = true, !prefs.cardOff(kind.ID)
+		}
 		if kind.ID == notifyOpReminder {
 			row.Minutes = notifyMinutesOptions(prefs)
 		}
@@ -459,6 +467,18 @@ func (app *Application) handleNotificationSettingsSave(w http.ResponseWriter, r 
 	// (channels_shown) — a form without them changes nothing there.
 	prefs.PromptAnswered = before.PromptAnswered
 	prefs.OffChannels = before.OffChannels
+	// The briefing card switches follow the same rule as the
+	// channels: this form's boxes when it showed them
+	// (cards_shown), unchanged otherwise.
+	prefs.CardsOff = before.CardsOff
+	if r.Form.Get("cards_shown") == "1" {
+		prefs.CardsOff = nil
+		for _, kind := range notifyKindList() {
+			if _, ok := briefingCardKindFor(kind.ID); ok && r.Form.Get("card."+kind.ID) != "1" {
+				prefs.CardsOff = append(prefs.CardsOff, kind.ID)
+			}
+		}
+	}
 	if r.Form.Get("channels_shown") == "1" {
 		desktopOn := !before.channelOff(notifyChannelDesktop)
 		if app.push != nil {

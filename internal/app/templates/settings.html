@@ -10,10 +10,11 @@
 <section class="card page-card">
 
 {{with .NotifySettings}}
-<p><small>Choose what EveSynapse tells you about, and for which of your characters. Notifications show in the top bar; what you switch off is not shown, and switching it back on starts from then, not from what you missed.</small></p>
+<p><small>Choose what EveSynapse tells you about, and for which of your characters. Notifications show in the top bar and briefing cards show on the home page; the two switches are separate, so a kind can be a notification, a card, both, or neither. What you switch off is not shown, and switching it back on starts from then, not from what you missed.</small></p>
 
 <form method="post" action="/notifications/settings">
 <input type="hidden" name="channels_shown" value="1">
+<input type="hidden" name="cards_shown" value="1">
 <h2>Notification Channels</h2>
 <p class="notify-channels">
   <label><input type="checkbox" name="channel_inapp" value="1"{{if .InApp}} checked{{end}}> In EveSynapse <small>(the bell at the top of the page)</small></label>
@@ -24,12 +25,13 @@
 <div class="tw notify-settings-wrap">
 <table class="notify-settings" data-cards="off">
   <thead>
-    <tr><th>Notify me about</th><th>Works for</th></tr>
+    <tr><th>Notify me about</th><th>Briefing card</th><th>Works for</th></tr>
   </thead>
   <tbody>
     {{range .Rows}}
     <tr>
       <td><label><input type="checkbox" name="kind" value="{{.ID}}"{{if .On}} checked{{end}}> {{.Title}}</label>{{if .Minutes}} <label class="notify-minutes"><select name="op_reminder_minutes" aria-label="How long before an op starts to remind you">{{range .Minutes}}<option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>{{end}}</select> before it starts</label>{{end}}</td>
+      <td>{{if .HasCard}}<label><input type="checkbox" name="card.{{.ID}}" value="1"{{if .CardOn}} checked{{end}}> Show as a card</label>{{else}}<small>No card</small>{{end}}</td>
       <td>{{$kind := .ID}}{{if .Characters}}
         <div class="charselector checkselector" data-checkselector>
           <input type="text" class="charselector-input" placeholder="{{.Summary}}" autocomplete="off" aria-label="Characters for {{.Title}}: {{.Summary}}. Type to search.">

@@ -261,11 +261,48 @@ func TestNotificationSettings(t *testing.T) {
 	if len(prefs.Off) != 2 || !prefs.off(notifyMail) || !prefs.off(notifyKillmail) {
 		t.Fatalf("stored settings switch off %q, want mail and killmail", prefs.Off)
 	}
+	// That save showed no card switches, so the card settings are
+	// carried over untouched (still all on).
+	if len(prefs.CardsOff) != 0 {
+		t.Fatalf("a save without the card switches changed them: %q", prefs.CardsOff)
+	}
 	_, body = getPage(t, f.app, cookie, "/settings")
 	mustContain(t, "/settings", body,
 		"Notification settings saved.",
 		`<input type="checkbox" name="kind" value="mail"> New mail`,
 		`<input type="checkbox" name="kind" value="skill" checked> Skill complete`)
+
+	// Kinds that have a briefing card carry a card switch, on to
+	// begin with; kinds without one say so.
+	for _, kind := range notifyKindList() {
+		if _, ok := briefingCardKindFor(kind.ID); ok {
+			mustContain(t, "/settings cards", body,
+				`<input type="checkbox" name="card.`+kind.ID+`" value="1" checked> Show as a card`)
+		}
+	}
+	mustContain(t, "/settings cards", body, "<small>No card</small>")
+
+	// Switch off the mail card only: every kind stays on as a
+	// notification, every other card stays on.
+	form := url.Values{"cards_shown": {"1"}}
+	for _, kind := range notifyKindList() {
+		form.Add("kind", kind.ID)
+		if _, ok := briefingCardKindFor(kind.ID); ok && kind.ID != notifyMail {
+			form.Set("card."+kind.ID, "1")
+		}
+	}
+	if code, where := f.post(cookie, "/notifications/settings", form); code != http.StatusSeeOther || where != "/settings#notifications" {
+		t.Fatalf("card save: %d to %q", code, where)
+	}
+	prefs = f.app.notifyPrefsFor(f.ctx, f.userID)
+	if len(prefs.Off) != 0 || len(prefs.CardsOff) != 1 || !prefs.cardOff(notifyMail) {
+		t.Fatalf("stored settings: off %q, cards off %q; want none off and the mail card off", prefs.Off, prefs.CardsOff)
+	}
+	_, body = getPage(t, f.app, cookie, "/settings")
+	mustContain(t, "/settings cards", body,
+		`<input type="checkbox" name="kind" value="mail" checked> New mail`,
+		`<input type="checkbox" name="card.mail" value="1"> Show as a card`,
+		`<input type="checkbox" name="card.skill" value="1" checked> Show as a card`)
 
 	// Another account's settings are its own.
 	other, err := f.q.CreateUser(f.ctx)

@@ -621,3 +621,38 @@ func TestBriefingDismissedLines(t *testing.T) {
 		t.Error("dismissed list still offered after the restore")
 	}
 }
+
+// TestBriefingCardsOff: a kind whose briefing card is switched off
+// in the notification settings never reaches the deck, not even the
+// dismissed list, while the kinds left on still show. The switch is
+// the card one only; the kinds stay on as notifications.
+func TestBriefingCardsOff(t *testing.T) {
+	transport := &countingTransport{}
+	app, _, q := buildCorpTestApp(t, transport)
+	ctx := context.Background()
+	now := time.Now()
+
+	user, err := q.CreateUser(ctx)
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	seedCharacter(t, q, user.ID, fixtureCharA, "Fixture Alpha")
+	seedBriefingFixture(t, app, q, user.ID, now)
+	cookie := sessionCookie(t, app, user.ID, fixtureCharA, "Fixture Alpha")
+
+	_, body := getPage(t, app, cookie, "/")
+	section := briefingSection(t, body)
+	mustContain(t, "briefing before", section, ">Mail<", ">Skills<", ">Orders<")
+
+	if err := app.storeNotifyPrefs(ctx, user.ID, notifyPrefs{CardsOff: []string{notifyMail, notifySkill}}); err != nil {
+		t.Fatalf("store settings: %v", err)
+	}
+	_, body = getPage(t, app, cookie, "/")
+	section = briefingSection(t, body)
+	for _, gone := range []string{">Mail<", ">Skills<", "has 3 unread mail"} {
+		if strings.Contains(section, gone) {
+			t.Errorf("briefing still shows %q with its card switched off", gone)
+		}
+	}
+	mustContain(t, "briefing after", section, ">Orders<")
+}

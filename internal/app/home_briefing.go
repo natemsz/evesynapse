@@ -463,8 +463,27 @@ func (app *Application) buildBriefing(ctx context.Context, bundles []*charSnaps,
 			delete(dismissed, k)
 		}
 	}
+	// Kinds the account switched off as briefing cards (the card
+	// switches in the notification settings) never reach the deck.
+	// The drop sits after the dismissal bookkeeping above, which
+	// still sees every line, so a stored dismissal survives its
+	// kind's card being switched off and back on.
+	var cardsOff map[string]bool
+	if userID != 0 {
+		for _, id := range app.notifyPrefsFor(ctx, userID).CardsOff {
+			if cardKind, ok := briefingCardKindFor(id); ok {
+				if cardsOff == nil {
+					cardsOff = map[string]bool{}
+				}
+				cardsOff[cardKind] = true
+			}
+		}
+	}
 	var visible []briefingLine
 	for _, l := range lines {
+		if cardsOff[briefingKind(l.Rank)] {
+			continue
+		}
 		if l.key != "" && dismissed[l.key] {
 			w.Dismissed = append(w.Dismissed, briefingItemOf(l))
 			continue

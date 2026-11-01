@@ -437,6 +437,11 @@ type notifyPrefs struct {
 	// stops only that channel: the news is still recorded as seen,
 	// and the other channels still carry it.
 	OffChannels []string `json:"off_channels,omitempty"`
+	// CardsOff: kinds whose briefing card is switched off, for the
+	// kinds that have one (briefingCardKindFor). The notification
+	// switch and the card switch are independent: a kind can arrive
+	// as a notification, a card, both, or neither.
+	CardsOff []string `json:"cards_off,omitempty"`
 	// PromptAnswered: the account has answered the first-run prompt
 	// (notify_prompt.go), or waved it away. Either way the prompt is
 	// not shown unasked again; it stays one click away in the bell.
@@ -477,8 +482,65 @@ func parseNotifyPrefs(blob string) notifyPrefs {
 			prefs.OffChannels = append(prefs.OffChannels, id)
 		}
 	}
+	for _, id := range raw.CardsOff {
+		if _, ok := briefingCardKindFor(id); ok && !prefs.cardOff(id) {
+			prefs.CardsOff = append(prefs.CardsOff, id)
+		}
+	}
 	prefs.PromptAnswered = raw.PromptAnswered
 	return prefs
+}
+
+// briefingCardKindFor names the briefing card kind a notification
+// kind's news also appears as, for the kinds that have a card: the
+// settings page offers those kinds a briefing card switch beside
+// the notification one. Kinds not listed have no card today.
+func briefingCardKindFor(kind string) (string, bool) {
+	switch kind {
+	case notifyMail:
+		return "mail", true
+	case notifySkill:
+		return "skills", true
+	case notifyPI:
+		return "pi", true
+	case notifyIndustry:
+		return "industry", true
+	case notifyCalendar:
+		return "calendar", true
+	case notifyWatch:
+		return "market", true
+	}
+	return "", false
+}
+
+// notifyKindForBriefingCard is briefingCardKindFor read the other
+// way: the notification kind whose card switch gates a card kind.
+func notifyKindForBriefingCard(cardKind string) (string, bool) {
+	switch cardKind {
+	case "mail":
+		return notifyMail, true
+	case "skills":
+		return notifySkill, true
+	case "pi":
+		return notifyPI, true
+	case "industry":
+		return notifyIndustry, true
+	case "calendar":
+		return notifyCalendar, true
+	case "market":
+		return notifyWatch, true
+	}
+	return "", false
+}
+
+// cardOff reports whether a kind's briefing card is switched off.
+func (p notifyPrefs) cardOff(kind string) bool {
+	for _, id := range p.CardsOff {
+		if id == kind {
+			return true
+		}
+	}
+	return false
 }
 
 // channelOff reports whether a delivery channel is switched off.

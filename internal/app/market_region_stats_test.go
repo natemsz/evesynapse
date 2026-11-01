@@ -805,3 +805,82 @@ func TestRegionSweepDetectsMarketChanges(t *testing.T) {
 		t.Fatalf("changes = %+v, want one price_up for type 34 from 10 to 15", rows)
 	}
 }
+
+// TestRegionSweepStoresStationHeat: a sweep whose station bests
+// move against the book logs one beat per side (schema 118), and
+// the stored heat count follows; an unchanged book logs nothing.
+func TestRegionSweepStoresStationHeat(t *testing.T) {
+	transport := &regionBookTransport{books: map[int64][][]esi.MarketOrder{}}
+	app, conn, q := buildCorpTestApp(t, transport)
+	ctx := context.Background()
+	for _, region := range marketRegions {
+		if region.ID != 10000002 {
+			markRegionFresh(t, q, region.ID)
+		}
+	}
+	book := func(sell, buy float64) [][]esi.MarketOrder {
+		return [][]esi.MarketOrder{{
+			{OrderID: 1, TypeID: 34, LocationID: 60003760, IsBuyOrder: false, Price: sell, VolumeRemain: 100},
+			{OrderID: 2, TypeID: 34, LocationID: 60003760, IsBuyOrder: true, Price: buy, VolumeRemain: 50},
+		}}
+	}
+	beats := func() int64 {
+		t.Helper()
+		var n int64
+		if err := conn.QueryRow(`SELECT COUNT(*) FROM market_best_beats WHERE location_id = 60003760 AND type_id = 34`).Scan(&n); err != nil {
+			t.Fatalf("count beats: %v", err)
+		}
+		return n
+	}
+	heat := func(isBuy int64) int64 {
+		t.Helper()
+		var n int64
+		err := conn.QueryRow(`SELECT beats_12h FROM market_station_heat WHERE location_id = 60003760 AND type_id = 34 AND is_buy_order = $1`, isBuy).Scan(&n)
+		if err == sql.ErrNoRows {
+			return -1
+		}
+		if err != nil {
+			t.Fatalf("read heat: %v", err)
+		}
+		return n
+	}
+	resweep := func() {
+		t.Helper()
+		if err := q.UpsertMarketFetchState(ctx, db.UpsertMarketFetchStateParams{
+			Kind: regionSweepKind(10000002), State: fetchStateOK,
+			AttemptedAt: time.Now().Add(-2 * time.Hour).UTC(),
+		}); err != nil {
+			t.Fatalf("age sweep record: %v", err)
+		}
+		sweepUntilIdle(t, app)
+	}
+
+	// The first sweep sets the bests; nothing was there to beat.
+	transport.books[10000002] = book(5.0, 4.0)
+	sweepUntilIdle(t, app)
+	if got := beats(); got != 0 {
+		t.Fatalf("beats after the first sweep = %d, want 0", got)
+	}
+
+	// The best sell drops and the best buy rises: one beat a side.
+	transport.books[10000002] = book(4.5, 4.25)
+	resweep()
+	if got := beats(); got != 2 {
+		t.Fatalf("beats after the second sweep = %d, want 2", got)
+	}
+	if got := heat(0); got != 1 {
+		t.Fatalf("sell heat = %d, want 1", got)
+	}
+	if got := heat(1); got != 1 {
+		t.Fatalf("buy heat = %d, want 1", got)
+	}
+
+	// An unchanged book beats nothing new; the counts hold.
+	resweep()
+	if got := beats(); got != 2 {
+		t.Fatalf("beats after an unchanged sweep = %d, want 2", got)
+	}
+	if got := heat(0); got != 1 {
+		t.Fatalf("sell heat after an unchanged sweep = %d, want 1", got)
+	}
+}

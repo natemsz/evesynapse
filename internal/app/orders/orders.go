@@ -40,6 +40,15 @@ type orderRow struct {
 	// the Status text above is sell-only). Drives the inline
 	// highlight and the Beaten only filter.
 	Beaten bool
+	// LocID is the station the heat lookup keys on; not rendered.
+	LocID int64
+	// Heat: open rows only — how competitive the item is at this
+	// order's station, in heat words, from how often the station's
+	// best price on the order's side was beaten in the trailing
+	// 12 hours (schema 118). HeatNote is the count behind the
+	// word, for the cell's title.
+	Heat     string
+	HeatNote string
 }
 
 // ordersView is the Orders page body.
@@ -86,6 +95,39 @@ type orderLifecycleRow struct {
 	Filled       string // "sold 800 of 1,000" or "bought ..."
 	OpenDuration string // "3 days 4 hours"
 	Outcome      string // "Filled" | "Ended before filling"
+}
+
+// heatKey keys a stored heat count: one station, one item, one side.
+type heatKey struct {
+	locationID, typeID, isBuy int64
+}
+
+// heatWord names how competitive an item is at a station, from how
+// often the station's best price on that side was beaten in the
+// trailing 12 hours.
+func heatWord(beats int64) string {
+	switch {
+	case beats <= 0:
+		return "Quiet"
+	case beats <= 2:
+		return "Warm"
+	case beats <= 5:
+		return "Hot"
+	default:
+		return "Very hot"
+	}
+}
+
+// heatNote is the count behind the heat word, in plain words.
+func heatNote(beats int64) string {
+	switch beats {
+	case 0:
+		return "Best price not beaten in the last 12 hours"
+	case 1:
+		return "Best price beaten once in the last 12 hours"
+	default:
+		return fmt.Sprintf("Best price beaten %d times in the last 12 hours", beats)
+	}
 }
 
 // formatOpenDuration renders an order's time open the way the
@@ -261,6 +303,7 @@ func (app *mod) handleOrders(w http.ResponseWriter, r *http.Request) {
 			Price:  esi.FormatISK(o.Price),
 			Volume: fmt.Sprintf("%s / %s", esi.FormatInt(o.VolumeRemain), esi.FormatInt(o.VolumeTotal)),
 			Loc:    app.deps.LinkPlace(ctx, o.LocationID, app.deps.EconLocationTitle(ctx, o.LocationID)),
+			LocID:  o.LocationID,
 			Region: app.orderRegionName(ctx, regions, o.RegionID),
 			Range:  module.OrderRangeLabel(o.Range),
 			Issued: humanize.Finish(o.Issued),
@@ -322,6 +365,40 @@ func (app *mod) handleOrders(w http.ResponseWriter, r *http.Request) {
 			}
 			return view.OpenRows[i].Price < view.OpenRows[j].Price
 		})
+		// Competition at each order's station (schema 118): one
+		// stored read for the page's stations. A pair with no
+		// stored row had no beats in the trailing 12 hours and
+		// reads Quiet, so an order placed a minute ago carries
+		// its market's heat, not its own history.
+		locSet := make(map[int64]bool)
+		for _, row := range view.OpenRows {
+			if row.LocID > 0 {
+				locSet[row.LocID] = true
+			}
+		}
+		if len(locSet) > 0 {
+			locs := make([]int64, 0, len(locSet))
+			for id := range locSet {
+				locs = append(locs, id)
+			}
+			beats := make(map[heatKey]int64)
+			if heatRows, err := app.queries.ListMarketStationHeatByLocations(ctx, locs); err != nil {
+				logging.Errorf("orders: station heat: %v", err)
+			} else {
+				for _, h := range heatRows {
+					beats[heatKey{h.LocationID, h.TypeID, h.IsBuyOrder}] = h.Beats12h
+				}
+			}
+			for i := range view.OpenRows {
+				row := &view.OpenRows[i]
+				var isBuy int64
+				if row.Side == "Buy" {
+					isBuy = 1
+				}
+				n := beats[heatKey{row.LocID, row.TypeID, isBuy}]
+				row.Heat, row.HeatNote = heatWord(n), heatNote(n)
+			}
+		}
 	}
 
 	var history esi.CharOrderHistory

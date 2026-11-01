@@ -126,12 +126,20 @@ func TestEconomyPagesRenderFromSnapshots(t *testing.T) {
 		"1,234,567.89", "market transaction", "-5,500.00", "Tritanium",
 		"Member One", "Jita 4 - Moon 4 - Caldari Navy Assembly Plant", "Buy")
 
+	// Station heat (schema 118): the Rifter's buy book at Jita was
+	// beaten four times in the last 12 hours, so the open buy
+	// order's Competition cell reads Hot.
+	if _, err := conn.ExecContext(ctx, `INSERT INTO market_station_heat (location_id, region_id, type_id, is_buy_order, beats_12h, computed_at) VALUES (60003760, 10000002, 587, 1, 4, '2026-01-01T00:00:00Z')`); err != nil {
+		t.Fatalf("seed station heat: %v", err)
+	}
+
 	code, body = getPage(t, app, cookie, "/orders/?character=90000001")
 	if code != http.StatusOK {
 		t.Fatalf("orders page: status %d", code)
 	}
 	mustContain(t, "/orders/", body,
-		"Rifter", "300,000.00", "3 / 5", "The Forge", "Station", "Tritanium", "expired")
+		"Rifter", "300,000.00", "3 / 5", "The Forge", "Station", "Tritanium", "expired",
+		"Competition", `<span title="Best price beaten 4 times in the last 12 hours">Hot</span>`)
 
 	code, body = getPage(t, app, cookie, "/contracts/?character=90000001")
 	if code != http.StatusOK {

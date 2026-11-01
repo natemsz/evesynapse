@@ -2614,6 +2614,43 @@ func (q *Queries) ListMarketStationStatsByRegion(ctx context.Context, regionID i
 	return items, nil
 }
 
+const listMarketStationHeatByLocations = `-- name: ListMarketStationHeatByLocations :many
+SELECT location_id, region_id, type_id, is_buy_order, beats_12h, computed_at
+FROM market_station_heat
+WHERE location_id = ANY($1::bigint[])
+ORDER BY location_id, type_id, is_buy_order
+`
+
+func (q *Queries) ListMarketStationHeatByLocations(ctx context.Context, dollar_1 []int64) ([]MarketStationHeat, error) {
+	rows, err := q.db.QueryContext(ctx, listMarketStationHeatByLocations, pq.Array(dollar_1))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []MarketStationHeat
+	for rows.Next() {
+		var i MarketStationHeat
+		if err := rows.Scan(
+			&i.LocationID,
+			&i.RegionID,
+			&i.TypeID,
+			&i.IsBuyOrder,
+			&i.Beats12h,
+			&i.ComputedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listMarketStatsFallbackByType = `-- name: ListMarketStatsFallbackByType :many
 SELECT region_id, type_id, median_sell, fivepct_sell, median_buy, fivepct_buy, sell_orders, buy_orders, sell_volume, buy_volume, source, orderset_id, source_asof, fetched_at,
        wavg_sell, min_sell, max_sell, stddev_sell, wavg_buy, min_buy, max_buy, stddev_buy

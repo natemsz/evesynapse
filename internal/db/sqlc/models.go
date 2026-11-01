@@ -1136,6 +1136,15 @@ type MarketBasketValuesDaily struct {
 	ItemCount   int64   `json:"item_count"`
 }
 
+type MarketBestBeat struct {
+	ID         int64     `json:"id"`
+	LocationID int64     `json:"location_id"`
+	RegionID   int64     `json:"region_id"`
+	TypeID     int64     `json:"type_id"`
+	IsBuyOrder int64     `json:"is_buy_order"`
+	At         time.Time `json:"at"`
+}
+
 type MarketBookOrder struct {
 	RegionID     int64     `json:"region_id"`
 	TypeID       int64     `json:"type_id"`
@@ -1240,6 +1249,15 @@ type MarketRegionStatsDaily struct {
 	BuyMin      float64 `json:"buy_min"`
 	BuyP5       float64 `json:"buy_p5"`
 	BuyStddev   float64 `json:"buy_stddev"`
+}
+
+type MarketStationHeat struct {
+	LocationID int64     `json:"location_id"`
+	RegionID   int64     `json:"region_id"`
+	TypeID     int64     `json:"type_id"`
+	IsBuyOrder int64     `json:"is_buy_order"`
+	Beats12h   int64     `json:"beats_12h"`
+	ComputedAt time.Time `json:"computed_at"`
 }
 
 type MarketStationLeaderboard struct {

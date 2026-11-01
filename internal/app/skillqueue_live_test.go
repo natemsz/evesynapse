@@ -57,7 +57,7 @@ func TestSkillqueueFinishedEntriesAreTrained(t *testing.T) {
 	if code != http.StatusOK {
 		t.Fatalf("GET /character/: status %d", code)
 	}
-	mustContain(t, "/character/", body, "Currently training: <strong>Type #3301 II")
+	mustContain(t, "/character/", body, "Now training", `<span class="sk">Type #3301</span>`, "training to Level II")
 	for _, stale := range []string{"Type #3300 V", "(done)"} {
 		if strings.Contains(body, stale) {
 			t.Errorf("character page still shows the finished entry: %q", stale)

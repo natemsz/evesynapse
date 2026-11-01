@@ -1180,7 +1180,7 @@ func buildWaterfall(view *profitView, gross, ind, earned, covCost, uncovRev floa
 		Name:  "Where the ISK went",
 		Label: "ISK waterfall from gross in to net earned",
 		W:     w, H: h,
-		Title: fmt.Sprintf("Of %s ISK gross in, %s ISK stayed earned", pfShortISK(gross), pfShortISK(earned)),
+		Title: fmt.Sprintf("Of %s ISK gross in, %s ISK was kept as profit", pfShortISK(gross), pfShortISK(earned)),
 	}
 	wf.Sub = wf.Title + "."
 	wf.Info = "All the ISK that came in this span, taken apart: what went back out as the cost of what sold, what industry consumed, what fees and taxes took for good, and what stayed as profit. The steps are the By activity table's own figures, so they add up to Earned exactly."

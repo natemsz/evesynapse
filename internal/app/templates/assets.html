@@ -140,7 +140,7 @@
   {{else with .Matrix}}
     <nav class="crumbs" aria-label="Breadcrumb">
       <span>Assets</span><span class="crumb-sep">›</span>
-      {{if .InCan}}<a href="{{.CanBack}}">{{.CrumbLoc}}</a><span class="crumb-sep">›</span><span class="crumb-here">{{.InCan}}</span>{{else}}<span class="crumb-here">{{.CrumbLoc}}</span>{{end}}
+      {{if .InCan}}<a href="{{.CanBack}}">{{.CrumbLoc}}</a><span class="crumb-sep">›</span><span class="crumb-here">{{.InCan}}</span>{{else}}<span class="crumb-here">{{placeLink .Loc}}</span>{{end}}
       <span class="crumb-cap">{{if .InCan}}{{.Stacks}} stacks inside{{else}}Viewing root hangar level{{end}}</span>
     </nav>
     <div class="pilltabs" role="group" aria-label="Hangar division">

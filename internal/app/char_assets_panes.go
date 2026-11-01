@@ -25,6 +25,37 @@ type assetLookups struct {
 	volumeOf  func(int64) float64
 	shipTypes map[int64]bool
 	groupOf   func(int64) string
+	metaOf    func(int64) int // the SDE meta group (attribute 1692), 0 when unknown
+}
+
+// assetPip is the tech pip on a row's icon box, from the type's
+// SDE meta group; capital hulls read CAP, as the design draws
+// them. An empty label means no pip.
+func assetPip(lk assetLookups, typeID int64, groupName string) (string, string) {
+	switch groupName {
+	case "Dreadnought", "Carrier", "Supercarrier", "Titan", "Force Auxiliary", "Capital Industrial Ship":
+		return "CAP", "cap"
+	}
+	if lk.metaOf == nil {
+		return "", ""
+	}
+	switch lk.metaOf(typeID) {
+	case 2:
+		return "T2", "t2"
+	case 14:
+		return "T3", "t3"
+	case 4:
+		return "FAC", "fac"
+	case 6:
+		return "DS", "ds"
+	case 5:
+		return "OFF", "off"
+	case 3:
+		return "STORY", "story"
+	case 1:
+		return "T1", "t1"
+	}
+	return "", ""
 }
 
 // assetFlagFamily sorts an asset location flag into the slot
@@ -155,6 +186,26 @@ func (app *Application) buildAssetMatrix(ctx context.Context, datas []*assetChar
 			shipPlace, _, _ = cd.ix.place(it)
 		}
 	}
+	// A selected plain stack anchors the view the same way,
+	// unless it sits inside a ship (those ride the ship's row).
+	var itemCD *assetCharData
+	var itemSel esi.Asset
+	itemPlace := int64(0)
+	if st.item != 0 && shipCD == nil {
+		if cd, it, ok := find(st.item); ok {
+			place, _, containers := cd.ix.place(it)
+			insideShip := false
+			for _, c := range containers {
+				if lk.shipTypes[c.TypeID] {
+					insideShip = true
+				}
+			}
+			if !insideShip {
+				itemCD, itemSel = cd, it
+				itemPlace = place
+			}
+		}
+	}
 
 	global := false
 	var sel *assetDirEntry
@@ -163,6 +214,8 @@ func (app *Application) buildAssetMatrix(ctx context.Context, datas []*assetChar
 		sel = entries[canPlace]
 	case shipCD != nil && st.loc == "":
 		sel = entries[shipPlace]
+	case itemCD != nil && st.loc == "":
+		sel = entries[itemPlace]
 	case st.loc == "all":
 		global = true
 	case st.loc != "":
@@ -200,6 +253,7 @@ func (app *Application) buildAssetMatrix(ctx context.Context, datas []*assetChar
 	if sel != nil {
 		locFilter = sel.LocationID
 		m.Title = sel.Title
+		m.CrumbLoc = sel.Title
 		m.Loc = sel.Loc
 		m.SecKnown, m.SecText, m.SecTier, m.Region = sel.SecKnown, sel.SecText, sel.SecTier, sel.Region
 		m.Stacks, m.Unpriced = sel.Stacks, sel.Unpriced
@@ -209,6 +263,7 @@ func (app *Application) buildAssetMatrix(ctx context.Context, datas []*assetChar
 		}
 	} else if globalEntry != nil {
 		m.Title = "All Locations"
+		m.CrumbLoc = "All Locations"
 		m.Loc = globalEntry.Loc
 		m.Stacks, m.Unpriced = globalEntry.Stacks, globalEntry.Unpriced
 		m.VolumeText = assetVolume(globalEntry.volume)
@@ -226,6 +281,9 @@ func (app *Application) buildAssetMatrix(ctx context.Context, datas []*assetChar
 		cans = append(cans, c...)
 	}
 	sort.Slice(cans, func(i, j int) bool { return cans[i].Name < cans[j].Name })
+	for i := range cans {
+		cans[i].HueClass = fmt.Sprintf("can-h%d", i%4)
+	}
 	m.Cans = cans
 	for _, c := range cans {
 		m.CansStacks += c.Stacks
@@ -243,7 +301,7 @@ func (app *Application) buildAssetMatrix(ctx context.Context, datas []*assetChar
 		// container's contents, not the whole place.
 		name, _ := canCD.ix.label(canItem)
 		m.InCan = name
-		m.CanBack = st.href(map[string]string{"can": "", "ship": ""})
+		m.CanBack = st.href(map[string]string{"can": "", "ship": "", "item": ""})
 		m.Title = name
 		m.Loc = placeRef{Name: name}
 		m.Stacks = int64(total)
@@ -272,7 +330,7 @@ func (app *Application) buildAssetMatrix(ctx context.Context, datas []*assetChar
 		}
 		m.Tabs = append(m.Tabs, assetTab{
 			ID: t.id, Label: t.label, Count: n, Active: st.tab == t.id,
-			Href: st.href(map[string]string{"tab": t.id, "can": "", "ship": ""}),
+			Href: st.href(map[string]string{"tab": t.id, "can": "", "ship": "", "item": ""}),
 		})
 	}
 
@@ -297,6 +355,39 @@ func (app *Application) buildAssetMatrix(ctx context.Context, datas []*assetChar
 			if m.Rows[i].ItemID == shipItem.ItemID {
 				m.Rows[i].Selected = true
 			}
+		}
+	}
+
+	// A selected plain stack gets the summary panel: where it
+	// sits, how much of it there is, and what it is worth. It is
+	// built from the row itself, so the panel and the table can
+	// never disagree.
+	if itemCD != nil && m.Inspector == nil && (global || (sel != nil && itemPlace == sel.LocationID)) {
+		for i := range m.Rows {
+			if m.Rows[i].ItemID != itemSel.ItemID {
+				continue
+			}
+			m.Rows[i].Selected = true
+			row := m.Rows[i]
+			name, typeName := itemCD.ix.label(itemSel)
+			insp := &assetInspector{
+				Fallback:  true,
+				ItemID:    itemSel.ItemID,
+				Name:      name,
+				TypeName:  typeName,
+				GroupName: row.GroupName,
+				IconURL:   row.IconURL,
+				CloseHref: st.href(map[string]string{"item": ""}),
+				FlagText:  row.Flag,
+				ValueText: row.ValueText,
+			}
+			insp.Pip, insp.PipClass = assetPip(lk, itemSel.TypeID, row.GroupName)
+			if showOwner {
+				insp.OwnerName = itemCD.ch.Name
+			}
+			insp.QuantityText = esi.FormatInt(itemSel.Quantity)
+			insp.VolumeText = row.VolumeText
+			m.Inspector = insp
 		}
 	}
 	return m
@@ -352,7 +443,12 @@ func collectCharRows(cd *assetCharData, locFilter, canFilter int64, global bool,
 			GroupName: lk.groupOf(it.TypeID),
 			Quantity:  esi.FormatInt(it.Quantity),
 			Note:      assetNote(it),
+			ItemHref: st.href(map[string]string{
+				"item": strconv.FormatInt(it.ItemID, 10), "ship": "",
+				"loc": strconv.FormatInt(locID, 10),
+			}),
 		}
+		row.Pip, row.PipClass = assetPip(lk, it.TypeID, row.GroupName)
 		if lk.shipTypes[it.TypeID] {
 			row.IconURL = "https://images.evetech.net/types/" + strconv.FormatInt(it.TypeID, 10) + "/render?size=64"
 		} else {
@@ -526,8 +622,9 @@ func (app *Application) buildAssetInspector(ctx context.Context, cd *assetCharDa
 		GroupName: lk.groupOf(ship.TypeID),
 		IconURL:   "https://images.evetech.net/types/" + strconv.FormatInt(ship.TypeID, 10) + "/render?size=128",
 		OwnerName: cd.ch.Name,
-		CloseHref: st.href(map[string]string{"ship": ""}),
+		CloseHref: st.href(map[string]string{"ship": "", "item": ""}),
 	}
+	insp.Pip, insp.PipClass = assetPip(lk, ship.TypeID, insp.GroupName)
 	insp.VolumeText = assetVolume(lk.volumeOf(ship.TypeID))
 
 	total, priced, stacks := cd.ix.subtreeValue(ship, lk.priceOf)
@@ -585,6 +682,9 @@ func (app *Application) buildAssetInspector(ctx context.Context, cd *assetCharDa
 		sec := assetSlotSection{Title: fam.title, Note: fam.note}
 		if fam.id == "sub" {
 			sec.Title = fmt.Sprintf("Subsystem Slots (%d)", len(groups))
+		}
+		if fam.id == "cargo" {
+			sec.Note = fmt.Sprintf("%d Stacks", len(groups))
 		}
 		for _, g := range groups {
 			row := assetSlotRow{Name: cd.ix.nameOf(g.typeID), Qty: g.qty, Sub: g.sub}
@@ -659,7 +759,12 @@ func (app *Application) buildAssetSearch(ctx context.Context, datas []*assetChar
 				Quantity:  esi.FormatInt(it.Quantity),
 				Note:      assetNote(it),
 				Flag:      titles[locID],
+				ItemHref: st.href(map[string]string{
+					"item": strconv.FormatInt(it.ItemID, 10), "ship": "", "q": "",
+					"loc": strconv.FormatInt(locID, 10),
+				}),
 			}
+			row.Pip, row.PipClass = assetPip(lk, it.TypeID, row.GroupName)
 			if lk.shipTypes[it.TypeID] {
 				row.IconURL = "https://images.evetech.net/types/" + strconv.FormatInt(it.TypeID, 10) + "/render?size=64"
 			} else {

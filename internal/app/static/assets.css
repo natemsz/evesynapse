@@ -1,73 +1,140 @@
 /* EveSynapse: the Assets page. Only what is unique to this page
-   lives here: the pane widths, the page head, the matrix rows and
-   the container cards. The shared patterns (three-pane shell,
-   directory rows, share bars, pill tabs, filter chips, scope
-   pills, loadout chips, the inspector pane) are in style.css.
-   Phone rules sit in the same 45rem query the site's phone layer
-   uses (phone.css): one column, the directory as a wrapping
-   selector, the inspector as a sheet under the matrix. */
+   lives here: the console surface, the page head, the toolbar,
+   the container strip, the matrix table and the phone layout.
+   The shared patterns (three-pane shell, directory rows, share
+   bars, pill tabs, filter chips, scope pills, loadout chips,
+   tech pips, flag chips, breadcrumbs, the inspector pane and
+   its estimate bar) are in style.css. Phone rules sit in the
+   same 45rem band the site's phone layer uses. */
 
-/* The page head: title and totals left, the search right. */
-.pagehead { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 1rem; margin-bottom: 0.8rem; }
-.pagehead-title { margin: 0; }
-.pagehead-sub { margin: 0.2rem 0 0; color: var(--muted); }
-.pagehead-actions { flex: 1 1 26rem; max-width: 38rem; }
-.assets-head .searchpanel { margin: 0; }
+/* The page head: the summary line and scope pills left, the
+   account's total estimated value right with its label. */
+.assets-head { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 0.6rem 1.5rem; margin-bottom: 0.9rem; }
+.assets-count { margin: 0 0 0.55rem; color: var(--muted); }
+.assets-net { text-align: right; }
+.assets-net-v { display: block; color: var(--gold); font-size: 1.4rem; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1.15; }
+.assets-net-l { color: var(--muted); font-size: 0.68rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
 
-/* The bars above the panes: scope and saved filters. */
-.assets-head + .scopepills { margin-bottom: 0.6rem; }
-.fchips { margin-bottom: 1rem; }
-
-/* Pane widths for this page's three columns. */
-.panes3.amx { grid-template-columns: 18rem minmax(0, 1fr); }
+/* The console: one bordered surface, the panes flush against
+   hairline dividers instead of three separate cards. */
+.panes3.amx { gap: 0; border: 1px solid var(--box-edge); border-radius: var(--r-sm); background: var(--glass); overflow: hidden; grid-template-columns: 18rem minmax(0, 1fr); }
 .panes3.amx.has-insp { grid-template-columns: 18rem minmax(0, 1fr) 22rem; }
+.pane-dir { padding: 0.9rem; }
+.pane-main { padding: 0.9rem 1rem 1rem; border-left: 1px solid var(--box-edge); }
+.panes3.amx .pane-insp { border: 0; border-left: 1px solid var(--box-edge); border-radius: 0; background: none; }
+.pane-h { margin: 0 0 0.6rem; font-size: 0.95rem; }
+.pane-h span { color: var(--muted); font-size: 0.8rem; font-weight: 500; }
 .pane-dir #assets-dirfilter { width: 100%; margin-bottom: 0.6rem; }
-.dir-foot { margin-top: 0.8rem; }
+.dir-foot { margin: 0.8rem 0 0; color: var(--muted); font-size: 0.78rem; }
+.dirdrop { display: none; }
 
-/* The matrix head: the place, its totals, and the sort. */
-.amx-mhead { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 0.6rem 1.5rem; margin-bottom: 0.7rem; }
-.amx-mhead h3 { margin: 0; }
+/* The matrix pane's stacked controls: breadcrumb, hangar tabs,
+   saved filters, then the search and sort toolbar. */
+.pane-main .pilltabs { margin-top: 0.7rem; }
+.pane-main .fchips { margin-top: 0.7rem; }
+.fchip-save summary { list-style: none; }
+.fchip-save summary::-webkit-details-marker { display: none; }
+.fchip-save .fchip-form { margin-top: 0.5rem; }
+.fchip-save[open ] { flex: 1 1 100%; }
+.amx-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin-top: 0.7rem; }
+.amx-tools .searchwrap { flex: 1 1 13rem; }
+.amx-tools .check { display: inline-flex; align-items: center; gap: 0.4rem; white-space: nowrap; }
+.amx-sortsel { margin-left: auto; }
+.amx-h { margin: 0 0 0.2rem; font-size: 1.05rem; }
+.amx-h span { color: var(--muted); font-size: 0.85rem; font-weight: 500; }
 .amx-msub { margin: 0.15rem 0 0; color: var(--muted); font-size: 0.85rem; }
-.amx-crumb { margin: 0 0 0.3rem; }
-.amx-mhead-r { display: flex; flex-direction: column; align-items: flex-end; gap: 0.15rem; }
-.amx-total { color: var(--gold); font-size: 1.45rem; font-weight: 800; font-variant-numeric: tabular-nums; }
-.amx-total small { font-size: 0.8rem; }
-.amx-sort { color: var(--muted); font-size: 0.82rem; }
-.amx-sort a { color: var(--muted); text-decoration: none; }
-.amx-sort a.on { color: var(--accent); font-weight: 700; }
 
-/* Container cards: a wrapping strip above the matrix. */
-.amx-cans { display: grid; grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr)); gap: 0.6rem; margin: 0.9rem 0 0.2rem; }
-.amx-can { display: block; padding: 0.7rem 0.8rem; border: 1px solid var(--box-edge); border-radius: var(--r-sm); background: var(--glass); color: var(--text); text-decoration: none; }
-.amx-can-name { display: block; font-weight: 700; }
-.amx-can-sub { display: block; margin-top: 0.2rem; color: var(--muted); font-size: 0.8rem; }
-.amx-cans-note { margin: 0.2rem 0 0.4rem; }
+/* The container strip above the table: one card per can, its
+   icon box tinted by its place in the strip. */
+.canstrip { margin-top: 0.9rem; padding: 0.7rem 0.8rem; border: 1px solid var(--box-edge); border-radius: var(--r-sm); }
+.canstrip-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0.3rem 1rem; margin-bottom: 0.6rem; }
+.canstrip-t { font-size: 0.85rem; font-weight: 600; }
+.canstrip-n { color: var(--muted); font-size: 0.8rem; }
+.cangrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr)); gap: 0.6rem; }
+.amx-can { display: flex; align-items: center; gap: 0.6rem; padding: 0.55rem 0.65rem; border: 1px solid var(--box-edge); border-radius: var(--r-sm); color: var(--text); text-decoration: none; }
+.amx-can:hover { border-color: var(--accent); }
+.can-box { flex: none; display: grid; place-items: center; width: 2.1rem; height: 2.1rem; border-radius: var(--r-xs); font-size: 1.05rem; }
+.can-h0 .can-box { background: rgba(56, 132, 255, 0.16); color: #7db4ff; }
+.can-h1 .can-box { background: rgba(168, 85, 247, 0.16); color: #c99aff; }
+.can-h2 .can-box { background: rgba(34, 197, 94, 0.15); color: #7fe0a3; }
+.can-h3 .can-box { background: rgba(245, 158, 11, 0.16); color: #ffcf7d; }
+.can-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 0.1rem; }
+.can-name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.can-name small { color: var(--muted); font-weight: 400; }
+.can-sub { color: var(--muted); font-size: 0.78rem; font-variant-numeric: tabular-nums; }
+.can-go { flex: none; color: var(--muted); font-size: 1.15rem; }
 
-/* Matrix rows: art, the stack and its chips, then its numbers. */
-.amx-rows { margin-top: 0.6rem; border-top: 1px solid var(--box-edge); }
-.amx-row { display: grid; grid-template-columns: 2rem minmax(0, 1fr) auto; gap: 0.8rem; align-items: center; padding: 0.55rem 0.4rem; border-bottom: 1px solid var(--box-edge); }
-.amx-row.on { background: var(--glass); box-shadow: inset 2px 0 0 var(--accent); }
-.amx-art img { display: block; border-radius: var(--r-xs); }
-.amx-main { display: flex; flex-direction: column; gap: 0.18rem; min-width: 0; }
+/* The matrix table. */
+.amx-table { margin: 0.9rem 0 0; table-layout: fixed; }
+.amx-table th:nth-child(2) { width: 5.75rem; }
+.amx-table th:nth-child(3) { width: 7.25rem; }
+.amx-table th:nth-child(4) { width: 5.1rem; }
+.amx-table th:nth-child(5) { width: 6.25rem; }
+.amx-table th:nth-child(6) { width: 4.9rem; }
+.amx-table td { overflow: hidden; }
+.amx-table th.amx-r, .amx-table td.amx-c-num, .amx-table td.amx-c-val { text-align: right; }
+.amx-trow { cursor: pointer; }
+.amx-trow.on td { background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.amx-cell { display: flex; align-items: center; gap: 0.6rem; }
+.amx-art { position: relative; flex: none; display: inline-block; width: 2.25rem; height: 2.25rem; border-radius: var(--r-xs); overflow: hidden; background: rgba(127, 127, 127, 0.12); }
+.amx-art img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.amx-art.big { width: 4.5rem; height: 4.5rem; border-radius: var(--r-sm); }
+.amx-id { display: flex; flex-direction: column; gap: 0.12rem; min-width: 0; }
 .amx-name { font-weight: 600; }
 .amx-name small { color: var(--muted); font-weight: 400; }
-.amx-sub { display: flex; flex-wrap: wrap; gap: 0.2rem 0.9rem; color: var(--muted); font-size: 0.78rem; }
+.amx-sub { color: var(--muted); font-size: 0.78rem; }
+.asmbadge { padding: 0.05rem 0.32rem; border: 1px solid rgba(34, 197, 94, 0.45); border-radius: var(--r-xs); color: #7fe0a3; font-size: 0.62rem; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase; vertical-align: 0.14em; white-space: nowrap; }
+.amx-c-num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.amx-c-val { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.amx-c-val .amx-isk { color: var(--gold); font-weight: 700; }
+.amx-c-val small { display: block; color: var(--muted); font-size: 0.66rem; font-weight: 700; letter-spacing: 0.07em; }
 .amx-note { color: var(--unverified); font-size: 0.75rem; }
-.amx-nums { display: flex; flex-direction: column; align-items: flex-end; gap: 0.1rem; }
-.amx-val { color: var(--gold); font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.amx-meta { color: var(--muted); font-size: 0.78rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.amx-more { margin: 0.6rem 0 0; color: var(--muted); font-size: 0.85rem; }
 
-/* Phone (the site's canon band, see phone.css): the panes stack,
-   the directory becomes a wrapping selector above the matrix, and
-   the inspector follows the matrix as a sheet. */
-@media (max-width: 45rem) {
+/* The phone ships grid and the inspector's sheet form are
+   desktop-hidden. */
+.mships { display: none; }
+.insp-titles { min-width: 0; }
+
+/* Tablet: the panes stack; the inspector follows the matrix. */
+@media (max-width: 64rem) {
   .panes3.amx, .panes3.amx.has-insp { grid-template-columns: minmax(0, 1fr); }
-  .pane-dir .dirlist { flex-direction: row; flex-wrap: wrap; }
-  .pane-dir .diritem { flex: 1 1 10rem; }
-  .pane-dir .dir-foot { display: none; }
-  .amx-mhead-r { align-items: flex-start; }
-  .assets-head .assets-only { flex: 1 1 100%; white-space: nowrap; }
-  .amx-row { grid-template-columns: 2rem minmax(0, 1fr); }
-  .amx-nums { grid-column: 2; flex-direction: row; align-items: baseline; gap: 0.6rem; }
-  .pagehead-actions { flex-basis: 100%; max-width: none; }
+  .pane-main { border-left: 0; border-top: 1px solid var(--box-edge); }
+  .panes3.amx .pane-insp { border-left: 0; border-top: 1px solid var(--box-edge); }
+}
+
+/* Phone (the site's canon band): the directory becomes a
+   station selector bar, assembled ships become a card grid,
+   containers become full-width rows, the table keeps Item,
+   Qty and Value, and the inspector is a sheet under the
+   matrix. */
+@media (max-width: 45rem) {
+  .assets-net { text-align: left; }
+  .pane-dir .pane-h, .pane-dir #assets-dirfilter, .pane-dir .dirlist, .pane-dir .dir-foot { display: none; }
+  .pane-dir { padding: 0.7rem 0.9rem; }
+  .dirdrop { display: block; }
+  .dirdrop summary { display: flex; align-items: center; gap: 0.6rem; list-style: none; cursor: pointer; }
+  .dirdrop summary::-webkit-details-marker { display: none; }
+  .dirdrop-t { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+  .dirdrop-v { flex: none; color: var(--gold); font-weight: 700; font-variant-numeric: tabular-nums; }
+  .dirdrop-c { flex: none; color: var(--muted); }
+  .dirdrop .dirlist { display: flex; margin-top: 0.6rem; }
+  .dirdrop[open ] summary { margin-bottom: 0.2rem; }
+  .mships { display: block; margin-top: 0.9rem; }
+  .mships-h { margin: 0 0 0.5rem; font-size: 0.95rem; }
+  .mships-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; }
+  .mship { display: flex; flex-direction: column; gap: 0.12rem; padding: 0.6rem; border: 1px solid var(--box-edge); border-radius: var(--r-sm); color: var(--text); text-decoration: none; }
+  .mship img { border-radius: var(--r-xs); }
+  .mship-n { font-weight: 600; font-size: 0.88rem; }
+  .mship-t { color: var(--muted); font-size: 0.78rem; }
+  .mship-v { color: var(--gold); font-size: 0.82rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .cangrid { grid-template-columns: minmax(0, 1fr); }
+  .amx-table th:nth-child(2), .amx-table td.amx-c-flag,
+  .amx-table th:nth-child(3), .amx-table td.amx-c-load,
+  .amx-table th:nth-child(5), .amx-table td:nth-child(5) { display: none; }
+  .amx-table th:nth-child(4) { width: 5.25rem; }
+  .amx-table th:nth-child(6) { width: 5.5rem; }
+  .amx-tools .check { flex: 1 1 100%; }
+  #main-content .amx-tools .check input[type="checkbox"] { width: auto; flex: none; }
+  .amx-sortsel { flex: 1 1 100%; margin-left: 0; }
 }

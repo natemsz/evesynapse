@@ -169,6 +169,8 @@ func (s *demoSeed) resolve(ctx context.Context) error {
 	wanted := []string{
 		// Ships.
 		"Rifter", "Thrasher", "Merlin", "Punisher", "Drake", "Vexor", "Covetor",
+		// Station containers the asset seeds fill.
+		"Station Container", "Small Standard Container", "Station Warehouse Container",
 		// Modules and charges.
 		"Damage Control II", "Gyrostabilizer II", "Ballistic Control System II",
 		"1MN Afterburner II", "Medium Shield Extender II", "200mm AutoCannon II",
@@ -1021,11 +1023,42 @@ func (s *demoSeed) writePilotOneAssets(ctx context.Context) error {
 		{ItemID: demoItemBase + 7, TypeID: s.typeID("Vexor"), Quantity: 1, LocationID: s.dodixieStationID, LocationType: "station", LocationFlag: "Hangar"},
 		{ItemID: demoItemBase + 8, TypeID: s.typeID("Scourge Heavy Missile"), Quantity: 4000, LocationID: s.dodixieStationID, LocationType: "station", LocationFlag: "Hangar"},
 	}
+	// Two station cans in Jita with their contents inside, so the
+	// Assets matrix shows its container strip and drill-in. A can
+	// whose type this install's SDE does not know is skipped whole,
+	// contents and all.
+	canSpares := demoItemBase + 31
+	if t := s.typeID("Station Container"); t != 0 {
+		assets = append(assets,
+			esi.Asset{ItemID: canSpares, TypeID: t, Quantity: 1, LocationID: s.jitaStationID, LocationType: "station", LocationFlag: "Hangar", IsSingleton: true},
+			esi.Asset{ItemID: demoItemBase + 32, TypeID: s.typeID("Damage Control II"), Quantity: 6, LocationID: canSpares, LocationType: "item", LocationFlag: "Unlocked"},
+			esi.Asset{ItemID: demoItemBase + 33, TypeID: s.typeID("Gyrostabilizer II"), Quantity: 4, LocationID: canSpares, LocationType: "item", LocationFlag: "Unlocked"},
+			esi.Asset{ItemID: demoItemBase + 34, TypeID: s.typeID("Hobgoblin II"), Quantity: 10, LocationID: canSpares, LocationType: "item", LocationFlag: "Unlocked"},
+		)
+	}
+	canAmmo := demoItemBase + 35
+	if t := s.typeID("Small Standard Container"); t != 0 {
+		assets = append(assets,
+			esi.Asset{ItemID: canAmmo, TypeID: t, Quantity: 1, LocationID: s.jitaStationID, LocationType: "station", LocationFlag: "Hangar", IsSingleton: true},
+			esi.Asset{ItemID: demoItemBase + 36, TypeID: s.typeID("Republic Fleet EMP S"), Quantity: 2400, LocationID: canAmmo, LocationType: "item", LocationFlag: "Unlocked"},
+			esi.Asset{ItemID: demoItemBase + 37, TypeID: s.typeID("Scourge Heavy Missile"), Quantity: 1000, LocationID: canAmmo, LocationType: "item", LocationFlag: "Unlocked"},
+		)
+	}
 	if err := s.snap(ctx, id, esi.SnapAssets, assets); err != nil {
 		return err
 	}
 	if err := q.UpsertItemName(ctx, db.UpsertItemNameParams{ItemID: shipItem, Name: "Vale's Rifter"}); err != nil {
 		return err
+	}
+	if s.typeID("Station Container") != 0 {
+		if err := q.UpsertItemName(ctx, db.UpsertItemNameParams{ItemID: canSpares, Name: "Doctrine Spares"}); err != nil {
+			return err
+		}
+	}
+	if s.typeID("Small Standard Container") != 0 {
+		if err := q.UpsertItemName(ctx, db.UpsertItemNameParams{ItemID: canAmmo, Name: "Ammo Crate"}); err != nil {
+			return err
+		}
 	}
 	if err := s.snap(ctx, id, esi.SnapLocation, esi.Location{
 		SolarSystemID: s.jitaSystemID, StationID: s.jitaStationID,
@@ -1640,11 +1673,27 @@ func (s *demoSeed) writePilotTwo(ctx context.Context) error {
 		{ItemID: demoItemBase + 55, TypeID: s.typeID("Isogen"), Quantity: 12400, LocationID: s.amarrStationID, LocationType: "station", LocationFlag: "Hangar"},
 		{ItemID: demoItemBase + 56, TypeID: s.typeID("Vexor"), Quantity: 4, LocationID: s.amarrStationID, LocationType: "station", LocationFlag: "Hangar"},
 	}
+	// One station can in Amarr holding mining spares, so the
+	// default view of the Assets page carries a container too.
+	canMining := demoItemBase + 81
+	if t := s.typeID("Station Warehouse Container"); t != 0 {
+		assets = append(assets,
+			esi.Asset{ItemID: canMining, TypeID: t, Quantity: 1, LocationID: s.amarrStationID, LocationType: "station", LocationFlag: "Hangar", IsSingleton: true},
+			esi.Asset{ItemID: demoItemBase + 82, TypeID: s.typeID("Strip Miner I"), Quantity: 2, LocationID: canMining, LocationType: "item", LocationFlag: "Unlocked"},
+			esi.Asset{ItemID: demoItemBase + 83, TypeID: s.typeID("Mining Laser Upgrade II"), Quantity: 3, LocationID: canMining, LocationType: "item", LocationFlag: "Unlocked"},
+			esi.Asset{ItemID: demoItemBase + 84, TypeID: s.typeID("Isogen"), Quantity: 800, LocationID: canMining, LocationType: "item", LocationFlag: "Unlocked"},
+		)
+	}
 	if err := s.snap(ctx, id, esi.SnapAssets, assets); err != nil {
 		return err
 	}
 	if err := q.UpsertItemName(ctx, db.UpsertItemNameParams{ItemID: bargeItem, Name: "Juno's Digger"}); err != nil {
 		return err
+	}
+	if s.typeID("Station Warehouse Container") != 0 {
+		if err := q.UpsertItemName(ctx, db.UpsertItemNameParams{ItemID: canMining, Name: "Mining Spares"}); err != nil {
+			return err
+		}
 	}
 	if err := s.snap(ctx, id, esi.SnapLocation, esi.Location{
 		SolarSystemID: s.amarrSystemID, StationID: s.amarrStationID,

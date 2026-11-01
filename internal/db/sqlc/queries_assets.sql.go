@@ -111,6 +111,43 @@ func (q *Queries) ListAssetLocationValuesByUser(ctx context.Context, userID int6
 	return items, nil
 }
 
+const listAssetTypeMetaGroups = `-- name: ListAssetTypeMetaGroups :many
+SELECT type_id, value FROM sde_type_attributes
+WHERE attribute_id = 1692
+  AND type_id = ANY($1::bigint[])
+`
+
+type ListAssetTypeMetaGroupsRow struct {
+	TypeID int64   `json:"type_id"`
+	Value  float64 `json:"value"`
+}
+
+// The SDE meta group (dogma attribute 1692) of each of some
+// types, for the matrix rows' tech pips: 2 Tech II, 14 Tech III,
+// 4 faction, 6 deadspace, 5 officer, 3 storyline, 1 Tech I.
+func (q *Queries) ListAssetTypeMetaGroups(ctx context.Context, typeIds []int64) ([]ListAssetTypeMetaGroupsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listAssetTypeMetaGroups, pq.Array(typeIds))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListAssetTypeMetaGroupsRow
+	for rows.Next() {
+		var i ListAssetTypeMetaGroupsRow
+		if err := rows.Scan(&i.TypeID, &i.Value); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const upsertAssetLocationValue = `-- name: UpsertAssetLocationValue :exec
 
 INSERT INTO asset_location_values (

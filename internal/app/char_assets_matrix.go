@@ -85,6 +85,7 @@ type assetCanCard struct {
 	Stacks    int // stacks inside, at any depth
 	ValueText string
 	Href      string
+	HueClass  string // the card icon box's accent, by position in the strip
 }
 
 // assetMatrixRow is one stack line of the matrix.
@@ -97,8 +98,11 @@ type assetMatrixRow struct {
 	TypeID    int64
 	GroupName string
 	IconURL   string
+	Pip       string // the tech pip on the icon box (T2, FAC, CAP...), empty for none
+	PipClass  string
 	Assembled bool // an assembled ship: the row opens the inspector
 	ShipHref  string
+	ItemHref  string // a plain stack: the row selects it for the inspector's summary
 	Selected  bool
 	Flag      string // where the stack sits: a hangar, a container, a place
 	Where     string // search hits: the containment chain, outermost first
@@ -130,15 +134,19 @@ type assetSlotSection struct {
 	Rows  []assetSlotRow
 }
 
-// assetInspector is the right pane for one assembled ship: its fit
-// by slot family, each module priced, and the EFT of the fit built
-// by the fitting tool's own exporter.
+// assetInspector is the right pane for one selected row: for an
+// assembled ship, its fit by slot family, each module priced, and
+// the EFT of the fit built by the fitting tool's own exporter;
+// for anything else, the summary panel (Fallback): where the
+// stack sits, how much of it there is, and what it is worth.
 type assetInspector struct {
 	ItemID     int64
 	Name       string
 	TypeName   string
 	GroupName  string
 	IconURL    string
+	Pip        string
+	PipClass   string
 	OwnerName  string
 	TotalText  string
 	PricedNote string
@@ -146,6 +154,11 @@ type assetInspector struct {
 	EFT        string
 	CloseHref  string
 	VolumeText string
+	// The summary panel for a non-ship selection.
+	Fallback     bool
+	FlagText     string
+	QuantityText string
+	ValueText    string
 }
 
 // assetMatrix is the middle pane for one selected place (or for
@@ -153,6 +166,7 @@ type assetInspector struct {
 type assetMatrix struct {
 	Global     bool
 	Title      string
+	CrumbLoc   string // the selected place's name, for the breadcrumb (Title becomes the can's name inside one)
 	Loc        placeRef // Title classified for the link policy
 	SecKnown   bool
 	SecText    string
@@ -199,6 +213,8 @@ type assetsPageView struct {
 	Stacks     int64
 	TotalItems int64
 	Places     int
+	TotalText  string // the account's total estimated value, from the stored fold
+	HasTotal   bool
 	ActingName string
 	ScopeAll   bool
 	Scope      []assetScopeOption
@@ -220,6 +236,7 @@ type assetPageState struct {
 	tab      string
 	can      int64
 	ship     int64
+	item     int64 // a plain stack selected for the inspector's summary panel
 	query    string
 	sort     string
 }
@@ -264,6 +281,7 @@ func parseAssetPageState(q url.Values, characters []db.Character, active db.Char
 	}
 	st.can, _ = strconv.ParseInt(q.Get("can"), 10, 64)
 	st.ship, _ = strconv.ParseInt(q.Get("ship"), 10, 64)
+	st.item, _ = strconv.ParseInt(q.Get("item"), 10, 64)
 	st.query = strings.TrimSpace(q.Get("q"))
 	switch q.Get("sort") {
 	case "name", "volume", "stacks":
@@ -445,6 +463,15 @@ func (app *Application) buildAssetsPage(ctx context.Context, userID int64, chara
 	}
 	groupNames := app.esi.CachedGroupNames(ctx, uniqGroups)
 	lk.groupOf = func(typeID int64) string { return groupNames[groupIDs[typeID]] }
+	metaGroups := make(map[int64]int)
+	if rows, err := app.queries.ListAssetTypeMetaGroups(ctx, typeIDs); err != nil {
+		logging.Errorf("assets: meta groups: %v", err)
+	} else {
+		for _, row := range rows {
+			metaGroups[row.TypeID] = int(row.Value)
+		}
+	}
+	lk.metaOf = func(typeID int64) int { return metaGroups[typeID] }
 
 	// The directory, from the stored folds with a counts-only
 	// fallback for characters whose first fold has not landed.
@@ -452,6 +479,9 @@ func (app *Application) buildAssetsPage(ctx context.Context, userID int64, chara
 	for _, e := range view.Directory {
 		if e.All {
 			view.Stacks, view.TotalItems = e.Stacks, e.Items
+			if e.HasValue {
+				view.TotalText, view.HasTotal = e.ValueText, true
+			}
 		} else {
 			view.Places++
 		}
@@ -460,13 +490,13 @@ func (app *Application) buildAssetsPage(ctx context.Context, userID int64, chara
 	// Scope pills: all characters, then one per character.
 	view.Scope = append(view.Scope, assetScopeOption{
 		Name: "All characters", Active: st.scopeAll,
-		Href: st.href(map[string]string{"scope": "", "can": "", "ship": ""}),
+		Href: st.href(map[string]string{"scope": "", "can": "", "ship": "", "item": ""}),
 	})
 	for _, ch := range characters {
 		on := !st.scopeAll && st.scopeID == ch.CharacterID
 		view.Scope = append(view.Scope, assetScopeOption{
 			ID: ch.CharacterID, Name: ch.Name, Image: portraitURL(ch.CharacterID, 64), Active: on,
-			Href: st.href(map[string]string{"scope": strconv.FormatInt(ch.CharacterID, 10), "can": "", "ship": ""}),
+			Href: st.href(map[string]string{"scope": strconv.FormatInt(ch.CharacterID, 10), "can": "", "ship": "", "item": ""}),
 		})
 	}
 
@@ -603,12 +633,12 @@ func (app *Application) buildAssetDirectory(ctx context.Context, userID int64, d
 			entries[i].ShareClass = "pw-0"
 		}
 		entries[i].Href = st.href(map[string]string{
-			"loc": strconv.FormatInt(entries[i].LocationID, 10), "can": "", "ship": "", "q": "",
+			"loc": strconv.FormatInt(entries[i].LocationID, 10), "can": "", "ship": "", "item": "", "q": "",
 		})
 	}
 
 	// The global row leads: every place in scope, summed.
-	global := assetDirEntry{All: true, Title: "All Locations", Loc: placeRef{Name: "All Locations"}, Href: st.href(map[string]string{"loc": "all", "can": "", "ship": "", "q": ""})}
+	global := assetDirEntry{All: true, Title: "All Locations", Loc: placeRef{Name: "All Locations"}, Href: st.href(map[string]string{"loc": "all", "can": "", "ship": "", "item": "", "q": ""})}
 	for _, e := range entries {
 		global.Stacks += e.Stacks
 		global.Ships += e.Ships

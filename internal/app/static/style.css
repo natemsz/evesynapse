@@ -6123,3 +6123,50 @@ button.gn-title:hover .gn-more, button.gn-title:focus-visible .gn-more { color: 
 .modrow-name small { color: var(--muted); }
 .modrow-val { color: var(--gold); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .insp-total { display: flex; justify-content: space-between; gap: 1rem; margin-top: 1rem; padding-top: 0.7rem; border-top: 1px solid var(--box-edge); font-weight: 700; }
+
+/* Tech pips: the small corner badge on an item's icon box naming
+   its meta family (Tech I/II/III, faction, capital, deadspace,
+   officer, storyline). The icon box anchors it. */
+.pip { position: absolute; top: 0; left: 0; padding: 0.08rem 0.24rem; border-radius: 0 0 var(--r-xs) 0; font-size: 0.55rem; font-weight: 800; letter-spacing: 0.04em; line-height: 1.25; pointer-events: none; }
+.pip-t1 { background: #3d4756; color: #dbe4f0; }
+.pip-t2 { background: #b8860b; color: #fff7e0; }
+.pip-t3 { background: #7c3aed; color: #f1eaff; }
+.pip-fac { background: #0e7490; color: #e0f7ff; }
+.pip-cap { background: #b91c1c; color: #ffe4e0; }
+.pip-ds { background: #15803d; color: #e6ffe9; }
+.pip-off { background: #a21caf; color: #ffe9fd; }
+.pip-story { background: #0369a1; color: #e3f3ff; }
+
+/* Location flag chip: where a stack sits (Item Hangar, Ship
+   Hangar, a bay, a slot family), as a small outlined pill. */
+.flagchip { display: inline-block; padding: 0.12rem 0.45rem; border: 1px solid var(--box-edge); border-radius: 999px; color: var(--muted); font-size: 0.72rem; font-weight: 600; white-space: nowrap; }
+
+/* Breadcrumbs: the pane's place trail, with a quiet caption
+   riding the right end. */
+.crumbs { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.4rem; color: var(--muted); font-size: 0.85rem; }
+.crumbs a { color: var(--muted); }
+.crumb-sep { opacity: 0.6; }
+.crumb-here { color: var(--text-bright); font-weight: 700; }
+.crumb-cap { margin-left: auto; font-size: 0.76rem; }
+
+/* The inspector's estimate bar: the headline value of the
+   selection in a tinted band, with its action riding the right. */
+.estbar { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; margin: 0.8rem 0 0.2rem; padding: 0.55rem 0.7rem; border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent); border-radius: var(--r-sm); background: color-mix(in srgb, var(--accent) 9%, transparent); }
+.estbar-l { display: flex; flex-direction: column; gap: 0.05rem; min-width: 0; }
+.estbar-lab { color: var(--muted); font-size: 0.64rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+.estbar-v { color: var(--gold); font-size: 1.05rem; font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* Loadout chip accents: the slot letter reads in the accent,
+   and the subsystem pill reads violet. */
+.lchip i { font-style: normal; color: var(--accent); }
+.lchip.sub { color: #c99aff; border-color: color-mix(in srgb, #a855f7 45%, transparent); }
+
+/* Inspector facts and foot: the summary panel's label/value
+   lines and the snapshot reference at the pane's foot. */
+.insp-facts { margin: 0.9rem 0 0; }
+.insp-facts > div { display: flex; justify-content: space-between; gap: 1rem; padding: 0.35rem 0; border-bottom: 1px solid var(--box-edge); font-size: 0.88rem; }
+.insp-facts dt { color: var(--muted); }
+.insp-facts dd { margin: 0; font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; }
+.insp-foot { display: flex; justify-content: space-between; gap: 1rem; margin-top: 1rem; padding-top: 0.7rem; border-top: 1px solid var(--box-edge); color: var(--muted); font-size: 0.76rem; }
+.slotsec .modrow .mq { color: var(--accent); font-weight: 700; }
+.insp-note { margin-top: 0.6rem; color: var(--muted); font-size: 0.82rem; }

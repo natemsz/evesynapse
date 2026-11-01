@@ -42,6 +42,14 @@ WHERE user_id = sqlc.arg(user_id) AND character_id = sqlc.arg(character_id)
 ORDER BY computed_at DESC
 LIMIT 1;
 
+-- The SDE meta group (dogma attribute 1692) of each of some
+-- types, for the matrix rows' tech pips: 2 Tech II, 14 Tech III,
+-- 4 faction, 6 deadspace, 5 officer, 3 storyline, 1 Tech I.
+-- name: ListAssetTypeMetaGroups :many
+SELECT type_id, value FROM sde_type_attributes
+WHERE attribute_id = 1692
+  AND type_id = ANY(sqlc.arg(type_ids)::bigint[]);
+
 -- Places a character no longer holds anything in lose their row
 -- on the next fold; the fold upserts the current set first, then
 -- this sweep removes what it did not rewrite.

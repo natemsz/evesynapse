@@ -5477,4 +5477,28 @@
     if (e.key === "Escape" && !modal.hidden) close();
   });
   load();
+
+  // Assets: the sort select navigates to the href its options
+  // carry (the server renders each sort as a full state link).
+  (function () {
+    var sel = root.querySelector("#assets-sort");
+    if (!sel) return;
+    sel.addEventListener("change", function () {
+      if (sel.value) window.location.href = sel.value;
+    });
+  })();
+
+  // Assets: a matrix row selects its item (the name link does
+  // the same); clicks on real controls inside the row pass.
+  (function () {
+    var rows = root.querySelectorAll(".amx-trow[data-sel]");
+    if (!rows.length) return;
+    rows.forEach(function (row) {
+      row.addEventListener("click", function (ev) {
+        if (ev.target.closest("a, button, input, select, details, summary")) return;
+        var href = row.getAttribute("data-sel");
+        if (href) window.location.href = href;
+      });
+    });
+  })();
 })();

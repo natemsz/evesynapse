@@ -131,12 +131,12 @@ func TestAssetsMatrixFilesShipsAndCans(t *testing.T) {
 		"+2 Cargo",
 		// The top-level container is a card, and its Tritanium is
 		// a row that names the container it sits in.
-		"1 stack inside",
+		"1 stack · no price",
 		"Container: Small Secure Container",
 	)
 	// The ship comes before the loose stack it outweighs in the
 	// reading order (with no prices, the name breaks the tie).
-	loki, loose := strings.Index(body, ">Loki<"), strings.Index(body, "×5,000")
+	loki, loose := strings.Index(body, ">Loki<"), strings.Index(body, ">5,000<")
 	if loki < 0 || loose < 0 || loki > loose {
 		t.Fatalf("the Loki (at %d) should come before the loose Tritanium (at %d)", loki, loose)
 	}
@@ -149,7 +149,7 @@ func TestAssetsMatrixFilesShipsAndCans(t *testing.T) {
 	mustContain(t, "inspector", body,
 		"Scourge Heavy Missile",
 		"Cargo, Drone Bay and Fuel",
-		"Hull + fitted total",
+		"Hull + fitted estimate",
 		"Copy EFT",
 		"[Loki, Loki]",
 	)

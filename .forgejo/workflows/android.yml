@@ -7,8 +7,8 @@ name: android-wrapper
 # it is merged. The Forgejo port of
 # .github/workflows/android.yml; the job runs in the Gradle
 # image the GitLab job used, which carries Java 17 and
-# Gradle but no Android SDK, so the platform is installed
-# first.
+# Gradle but no Android SDK and no Node, so both are
+# installed first.
 on:
   workflow_dispatch:
     inputs:
@@ -28,6 +28,17 @@ jobs:
     runs-on: ubuntu-latest
     container: gradle:8.11.1-jdk17
     steps:
+      # The JavaScript actions (checkout, upload-artifact)
+      # run on Node, which the Gradle image does not carry;
+      # without it the job dies at checkout before Gradle
+      # ever runs. Installed the way the GitLab job installs
+      # it, before the first action step needs it.
+      - name: Install Node for the actions
+        run: |
+          apt-get update -qq && apt-get install -y -qq --no-install-recommends curl xz-utils >/dev/null
+          curl -fsSL "https://nodejs.org/dist/v22.14.0/node-v22.14.0-linux-$(uname -m | sed -e 's/aarch64/arm64/' -e 's/x86_64/x64/').tar.xz" | tar -xJ -C /usr/local --strip-components=1
+          node --version
+
       - name: Check out the source
         uses: actions/checkout@v4
 

@@ -20,10 +20,11 @@ import (
 //
 // How much shows follows the size the user picked for the widget,
 // the same stored size every widget reads: the smallest sizes show
-// the two headline figures, the default size adds the top item,
-// and a larger size adds the waterfall, drawn by the Profit page's
-// own chart builder (buildWaterfall) from the same span totals the
-// page's waterfall walks.
+// the two headline figures, the default size adds the top item and
+// a mini chart of kept profit per day, and a larger size adds the
+// waterfall instead, drawn by the Profit page's own chart builder
+// (buildWaterfall) from the same span totals the page's waterfall
+// walks.
 // ---------------------------------------------------------------------------
 
 type profitPulseWidget struct {
@@ -34,7 +35,55 @@ type profitPulseWidget struct {
 	TopItem      string // the period's top item name; "" when none, or the size does not show it
 	TopMargin    string // the top item's margin, signed
 	TopMarginDir string
-	Waterfall    *pfWaterfall // largest sizes only
+	Mini         *profitPulseMini // default size only: kept profit per day
+	Waterfall    *pfWaterfall     // largest sizes only
+}
+
+// profitPulseMini is the default size's mini chart: one bar per
+// day of the span, kept profit above the zero line, losses below.
+type profitPulseMini struct {
+	W, H  int
+	ZeroY float64
+	Bars  []profitPulseMiniBar
+}
+
+type profitPulseMiniBar struct {
+	X, Y, W, H float64
+	Class      string // sem-kept | sem-lost, the semantic fill tokens
+}
+
+// buildProfitPulseMini shapes per-day kept profit into mini bars
+// on a scale shared across the span, so the days compare. Days
+// with no kept profit draw no bar.
+func buildProfitPulseMini(nets []float64) *profitPulseMini {
+	maxAbs := 0.0
+	for _, v := range nets {
+		maxAbs = math.Max(maxAbs, math.Abs(v))
+	}
+	if maxAbs <= 0 {
+		return nil
+	}
+	const w, h = 288, 40
+	m := &profitPulseMini{W: w, H: h, ZeroY: h / 2}
+	band := float64(w) / float64(len(nets))
+	bw := band * 0.6
+	for i, v := range nets {
+		if v == 0 {
+			continue
+		}
+		bh := math.Max(math.Abs(v)/maxAbs*(h/2-2), 1)
+		bar := profitPulseMiniBar{X: float64(i)*band + (band-bw)/2, W: bw, H: bh, Class: "sem-kept"}
+		if v > 0 {
+			bar.Y = m.ZeroY - bh
+		} else {
+			bar.Y, bar.Class = m.ZeroY, "sem-lost"
+		}
+		m.Bars = append(m.Bars, bar)
+	}
+	if len(m.Bars) == 0 {
+		return nil
+	}
+	return m
 }
 
 // profitPulseDays is the widget's span: the Profit page's default.
@@ -115,6 +164,32 @@ func (app *Application) buildProfitPulse(ctx context.Context, userID int64, gw, 
 		w.TopMarginDir = dirOf(margin)
 	}
 	if area < 5 {
+		// The default size's mini chart: kept profit per day over
+		// the same span, from the same profit_daily rows the
+		// headline totals (the charts' own bucket query, the
+		// labeled activities only, so the bars sum to Kept).
+		buckets, err := app.queries.ListProfitBuckets(ctx, db.ListProfitBucketsParams{
+			Unit: "day", OwnerKind: ownerChar, OwnerIds: ids, FromDay: fromDay,
+		})
+		if err != nil {
+			logging.Errorf("profitpulse: daily buckets for user %d: %v", userID, err)
+			return w
+		}
+		days := pfBuckets(fromDay, "day", now)
+		dayIndex := make(map[string]int, len(days))
+		for i, d := range days {
+			dayIndex[d] = i
+		}
+		nets := make([]float64, len(days))
+		for _, r := range buckets {
+			if !labeled[r.Activity] {
+				continue
+			}
+			if i, ok := dayIndex[r.Bucket]; ok {
+				nets[i] += r.Income - r.Costs
+			}
+		}
+		w.Mini = buildProfitPulseMini(nets)
 		return w
 	}
 	cogs, err := app.queries.ListTradeCOGSBuckets(ctx, db.ListTradeCOGSBucketsParams{

@@ -480,6 +480,8 @@
     <div><dt>Kept as profit</dt><dd><strong class="{{if eq .KeptDir "up"}}sem-kept-tx{{else if eq .KeptDir "down"}}sem-lost-tx{{end}}">{{.Kept}} ISK</strong></dd></div>
   </dl>
   {{if .TopItem}}<p class="profitpulse-top">Top item: <strong>{{.TopItem}}</strong> <small>margin <span class="{{if eq .TopMarginDir "up"}}sem-kept-tx{{else if eq .TopMarginDir "down"}}sem-lost-tx{{end}}">{{.TopMargin}} ISK</span></small></p>{{end}}
+  {{with .Mini}}<p class="profitpulse-sub profitpulse-mini-cap"><small>Kept profit per day</small></p>
+  <svg class="profitpulse-mini" viewBox="0 0 {{.W}} {{.H}}" width="100%" height="{{.H}}" aria-hidden="true" preserveAspectRatio="none"><line class="profitpulse-mini-zero" x1="0" y1="{{.ZeroY}}" x2="{{.W}}" y2="{{.ZeroY}}"/>{{range .Bars}}<rect class="{{.Class}}" x="{{.X}}" y="{{.Y}}" width="{{.W}}" height="{{.H}}"/>{{end}}</svg>{{end}}
   {{with .Waterfall}}
   <figure class="pf-chart">
     <figcaption><strong>{{.Name}}</strong><br><small class="profitpulse-sub">{{.Sub}}</small></figcaption>

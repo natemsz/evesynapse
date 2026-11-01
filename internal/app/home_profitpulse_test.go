@@ -3,13 +3,15 @@ package app
 // Tests for the Profit pulse home widget: the headline figures
 // come from the stored profit_daily rows (the unattributed
 // remainder excluded, as on the Profit page), the top item from
-// the stored trade_item_window rows, and the waterfall from the
-// stored trade_item_daily cost rows, drawn by the Profit page's
-// own chart builder. How much shows follows the widget's stored
-// size: figures only at the smallest size, the top item added at
-// the default size, the waterfall added at a larger size. Same
-// hermetic contract as the other home suites: seeded stored state,
-// zero outbound calls.
+// the stored trade_item_window rows, the default size's mini
+// chart from the same profit_daily rows bucketed per day, and
+// the waterfall from the stored trade_item_daily cost rows,
+// drawn by the Profit page's own chart builder. How much shows
+// follows the widget's stored size: figures only at the smallest
+// size, the top item and the mini chart added at the default
+// size, the waterfall added (and the mini chart gone) at a
+// larger size. Same hermetic contract as the other home suites:
+// seeded stored state, zero outbound calls.
 
 import (
 	"context"
@@ -96,6 +98,24 @@ func TestProfitPulseWidgetSizes(t *testing.T) {
 	seedProfitPulse(t, app, q, fixtureCharA)
 	cookie := sessionCookie(t, app, user.ID, fixtureCharA, "Fixture Alpha")
 
+	// The mini chart's bars are the seeded days' kept profit:
+	// every seeded row sits on today, so the default size draws
+	// one bar, at full height, on the last day; the smallest
+	// size has no chart and the largest has the waterfall only.
+	if mid := app.buildProfitPulse(ctx, user.ID, 2, 2); mid.Mini == nil {
+		t.Fatalf("default-size widget has no mini chart")
+	} else if len(mid.Mini.Bars) != 1 {
+		t.Fatalf("mini chart has %d bars, want 1 (only today has kept profit)", len(mid.Mini.Bars))
+	} else if bar := mid.Mini.Bars[0]; bar.Class != "sem-kept" || bar.H != 18 || bar.X < 270 {
+		t.Errorf("mini bar = %+v, want a full-height sem-kept bar on the last day", bar)
+	}
+	if small := app.buildProfitPulse(ctx, user.ID, 1, 1); small.Mini != nil {
+		t.Errorf("smallest-size widget has a mini chart, want figures only")
+	}
+	if large := app.buildProfitPulse(ctx, user.ID, 3, 3); large.Mini != nil || large.Waterfall == nil {
+		t.Errorf("largest-size widget mini=%t waterfall=%t, want the waterfall only", large.Mini != nil, large.Waterfall != nil)
+	}
+
 	// Smallest size: the two headline figures only.
 	setHomeLayout(t, q, user.ID, `[{"id":"profitpulse","w":1,"h":1}]`)
 	code, body := getPage(t, app, cookie, "/")
@@ -106,13 +126,14 @@ func TestProfitPulseWidgetSizes(t *testing.T) {
 		`data-widget="profitpulse"`, "Profit pulse",
 		"Last 30 days", "Gross in", "1,300,000.00", "Kept as profit", "850,000.00",
 	)
-	for _, absent := range []string{"Top item", "Where the ISK went"} {
+	for _, absent := range []string{"Top item", "Kept profit per day", "Where the ISK went"} {
 		if strings.Contains(body, absent) {
 			t.Errorf("small widget shows %q, want figures only", absent)
 		}
 	}
 
-	// Default size (2x2): the top item joins the figures.
+	// Default size (2x2): the top item and the mini chart join
+	// the figures.
 	setHomeLayout(t, q, user.ID, `[{"id":"profitpulse"}]`)
 	code, body = getPage(t, app, cookie, "/")
 	if code != http.StatusOK {
@@ -120,6 +141,7 @@ func TestProfitPulseWidgetSizes(t *testing.T) {
 	}
 	mustContain(t, "/", body,
 		"Top item", "Tritanium", "185,000.00",
+		"Kept profit per day", `class="profitpulse-mini"`,
 	)
 	if strings.Contains(body, "Where the ISK went") {
 		t.Errorf("default-size widget shows the waterfall, want it only at a larger size")
@@ -140,6 +162,9 @@ func TestProfitPulseWidgetSizes(t *testing.T) {
 		// the Profit page; inline styles are blocked by the CSP.
 		"pf-x-", "pf-y-",
 	)
+	if strings.Contains(body, "Kept profit per day") {
+		t.Errorf("largest-size widget shows the mini chart, want the waterfall only")
+	}
 
 	if got := transport.calls.Load(); got != 0 {
 		t.Errorf("home render made %d outbound calls, want 0", got)

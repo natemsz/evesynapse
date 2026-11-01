@@ -2550,6 +2550,10 @@ tr.fleet-detail > td { background: #120d09; border-bottom: 1px solid color-mix(i
 .card[data-widget="profitpulse"] .profitpulse-figs dt { font-size: 0.72rem; color: var(--muted); }
 .card[data-widget="profitpulse"] .profitpulse-figs dd { margin: 0; font-size: 1.25rem; font-weight: 600; }
 .card[data-widget="profitpulse"] .profitpulse-top { margin: 0.25rem 0; }
+.card[data-widget="profitpulse"] .profitpulse-mini-cap { margin: 0.5rem 0 0.15rem; }
+.card[data-widget="profitpulse"] .profitpulse-mini { display: block; }
+.card[data-widget="profitpulse"] .profitpulse-mini rect { stroke: none; }
+.card[data-widget="profitpulse"] .profitpulse-mini-zero { stroke: var(--muted); stroke-opacity: 0.5; stroke-width: 1; }
 .card[data-widget="profitpulse"] .profitpulse-more { margin: 0.5rem 0 0; }
 .card[data-widget="profitpulse"] .pf-chart { margin: 0.5rem 0 0; }
 .card[data-widget="profitpulse"] .pf-chart svg { display: block; max-width: 100%; }

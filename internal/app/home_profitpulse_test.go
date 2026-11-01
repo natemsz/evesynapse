@@ -3,15 +3,16 @@ package app
 // Tests for the Profit pulse home widget: the headline figures
 // come from the stored profit_daily rows (the unattributed
 // remainder excluded, as on the Profit page), the top item from
-// the stored trade_item_window rows, the default size's mini
-// chart from the same profit_daily rows bucketed per day, and
-// the waterfall from the stored trade_item_daily cost rows,
-// drawn by the Profit page's own chart builder. How much shows
-// follows the widget's stored size: figures only at the smallest
-// size, the top item and the mini chart added at the default
-// size, the waterfall added (and the mini chart gone) at a
-// larger size. Same hermetic contract as the other home suites:
-// seeded stored state, zero outbound calls.
+// the stored trade_item_window rows, the mini chart from the
+// same profit_daily rows bucketed per day, and the waterfall
+// from the stored trade_item_daily cost rows, drawn by the
+// Profit page's own chart builder. How much shows follows the
+// widget's stored size: figures only below 2x2, the top item
+// and the mini chart added at 2x2, 2x3 and 3x2 (the chart
+// beside the figures where the shape is at least as wide as
+// tall, below them where it is taller), and the waterfall
+// instead of the chart at 3x3. Same hermetic contract as the
+// other home suites: seeded stored state, zero outbound calls.
 
 import (
 	"context"
@@ -99,15 +100,36 @@ func TestProfitPulseWidgetSizes(t *testing.T) {
 	cookie := sessionCookie(t, app, user.ID, fixtureCharA, "Fixture Alpha")
 
 	// The mini chart's bars are the seeded days' kept profit:
-	// every seeded row sits on today, so the default size draws
-	// one bar, at full height, on the last day; the smallest
-	// size has no chart and the largest has the waterfall only.
+	// every seeded row sits on today, so the chart draws one
+	// bar, at full height, on the last day. The chart belongs
+	// to 2x2, 3x2 and 2x3: beside the figures where the shape
+	// is at least as wide as tall (drawn tall and narrow),
+	// below them where it is taller (drawn wide). Below 2x2
+	// there is no chart, and at 3x3 the waterfall replaces it.
 	if mid := app.buildProfitPulse(ctx, user.ID, 2, 2); mid.Mini == nil {
-		t.Fatalf("default-size widget has no mini chart")
+		t.Fatalf("2x2 widget has no mini chart")
+	} else if !mid.MiniSide {
+		t.Errorf("2x2 mini chart placement = below, want beside the figures")
+	} else if mid.Mini.W != 144 || mid.Mini.H != 72 {
+		t.Errorf("2x2 mini chart viewBox = %dx%d, want 144x72 (tall and narrow)", mid.Mini.W, mid.Mini.H)
 	} else if len(mid.Mini.Bars) != 1 {
 		t.Fatalf("mini chart has %d bars, want 1 (only today has kept profit)", len(mid.Mini.Bars))
-	} else if bar := mid.Mini.Bars[0]; bar.Class != "sem-kept" || bar.H != 18 || bar.X < 270 {
+	} else if bar := mid.Mini.Bars[0]; bar.Class != "sem-kept" || bar.H != 34 || bar.X < 135 {
 		t.Errorf("mini bar = %+v, want a full-height sem-kept bar on the last day", bar)
+	}
+	if wide := app.buildProfitPulse(ctx, user.ID, 3, 2); wide.Mini == nil || !wide.MiniSide {
+		t.Errorf("3x2 widget mini=%t side=%t, want the mini chart beside the figures", wide.Mini != nil, wide.MiniSide)
+	}
+	if tall := app.buildProfitPulse(ctx, user.ID, 2, 3); tall.Mini == nil {
+		t.Fatalf("2x3 widget has no mini chart")
+	} else if tall.MiniSide {
+		t.Errorf("2x3 mini chart placement = beside, want below the figures")
+	} else if tall.Mini.W != 288 || tall.Mini.H != 72 {
+		t.Errorf("2x3 mini chart viewBox = %dx%d, want 288x72 (wide)", tall.Mini.W, tall.Mini.H)
+	} else if len(tall.Mini.Bars) != 1 {
+		t.Fatalf("2x3 mini chart has %d bars, want 1 (only today has kept profit)", len(tall.Mini.Bars))
+	} else if bar := tall.Mini.Bars[0]; bar.Class != "sem-kept" || bar.H != 34 || bar.X < 270 {
+		t.Errorf("2x3 mini bar = %+v, want a full-height sem-kept bar on the last day", bar)
 	}
 	if small := app.buildProfitPulse(ctx, user.ID, 1, 1); small.Mini != nil {
 		t.Errorf("smallest-size widget has a mini chart, want figures only")
@@ -133,7 +155,7 @@ func TestProfitPulseWidgetSizes(t *testing.T) {
 	}
 
 	// Default size (2x2): the top item and the mini chart join
-	// the figures.
+	// the figures, the chart beside them.
 	setHomeLayout(t, q, user.ID, `[{"id":"profitpulse"}]`)
 	code, body = getPage(t, app, cookie, "/")
 	if code != http.StatusOK {
@@ -141,10 +163,40 @@ func TestProfitPulseWidgetSizes(t *testing.T) {
 	}
 	mustContain(t, "/", body,
 		"Top item", "Tritanium", "185,000.00",
-		"Kept profit per day", `class="profitpulse-mini"`,
+		"Kept profit per day", `class="profitpulse-mini"`, "profitpulse-beside",
 	)
 	if strings.Contains(body, "Where the ISK went") {
 		t.Errorf("default-size widget shows the waterfall, want it only at a larger size")
+	}
+
+	// 3x2: the mini chart again, beside the figures, and no
+	// waterfall (at this size the chart replaces it).
+	setHomeLayout(t, q, user.ID, `[{"id":"profitpulse","w":3,"h":2}]`)
+	code, body = getPage(t, app, cookie, "/")
+	if code != http.StatusOK {
+		t.Fatalf("GET / (3x2): status %d", code)
+	}
+	mustContain(t, "/", body,
+		"Top item", "Kept profit per day", `class="profitpulse-mini"`, "profitpulse-beside",
+	)
+	if strings.Contains(body, "Where the ISK went") {
+		t.Errorf("3x2 widget shows the waterfall, want the mini chart instead")
+	}
+
+	// 2x3: the mini chart below the figures, and no waterfall.
+	setHomeLayout(t, q, user.ID, `[{"id":"profitpulse","w":2,"h":3}]`)
+	code, body = getPage(t, app, cookie, "/")
+	if code != http.StatusOK {
+		t.Fatalf("GET / (2x3): status %d", code)
+	}
+	mustContain(t, "/", body,
+		"Top item", "Kept profit per day", `class="profitpulse-mini"`,
+	)
+	if strings.Contains(body, "profitpulse-beside") {
+		t.Errorf("2x3 widget places the mini chart beside the figures, want it below")
+	}
+	if strings.Contains(body, "Where the ISK went") {
+		t.Errorf("2x3 widget shows the waterfall, want the mini chart instead")
 	}
 
 	// Largest size: the waterfall joins, drawn from the same span

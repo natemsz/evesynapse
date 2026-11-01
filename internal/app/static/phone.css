@@ -59,9 +59,17 @@
   }
   .btn:active, .chip:active, .seg > *:active, .phone-bar-item:active,
   .phone-sheet-action:active, .phone-sheet-section:active,
-  .phone-sheet-groups a:active, .foldbtn:active,
+  .phone-sheet-groups a:active,
   #main-content > .section-tabs a:active, #main-content > .section-subtabs a:active {
     transform: scale(0.96);
+    filter: brightness(1.18);
+  }
+  /* The fold button centers on its heading with translateY(-50%);
+     its press keeps that shift, where the shared scale alone
+     would drop the centering and the button would jump by half
+     its height on every tap. */
+  .foldbtn:active {
+    transform: translateY(-50%) scale(0.96);
     filter: brightness(1.18);
   }
   /* A tapped table row keeps the hover wash until the next tap
@@ -91,10 +99,11 @@
 @media ((hover: none), (pointer: coarse)) and (prefers-reduced-motion: reduce) {
   .btn:active, .chip:active, .seg > *:active, .phone-bar-item:active,
   .phone-sheet-action:active, .phone-sheet-section:active,
-  .phone-sheet-groups a:active, .foldbtn:active,
+  .phone-sheet-groups a:active,
   #main-content > .section-tabs a:active, #main-content > .section-subtabs a:active {
     transform: none;
   }
+  .foldbtn:active { transform: translateY(-50%); }
 }
 
 /* --- phone ---------------------------------------------------------- */

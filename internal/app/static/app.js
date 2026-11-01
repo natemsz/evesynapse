@@ -976,6 +976,136 @@
   onContentReady(initExpanders);
   initExpanders(document);
 
+  // --- Live table filters ----------------------------------------
+  // A .tbl-filter box narrows the table that follows it in the same
+  // section as the reader types: no submit, no reload. Matching is
+  // against one cell's text by default (an item name), or the whole
+  // row with data-filter-match="row". The suggestion list offers the
+  // distinct values of the data-filter-col column; picking one fills
+  // the box and applies it. A group row (data-sort-barrier) stays
+  // only while one of its rows does.
+  function initTableFilters(root) {
+    var boxes = root.querySelectorAll ? root.querySelectorAll("[data-table-filter]") : [];
+    for (var b = 0; b < boxes.length; b++) wireTableFilter(boxes[b]);
+  }
+  function wireTableFilter(box) {
+    if (box.hasAttribute("data-filter-on")) return;
+    var section = box.closest("section") || box.parentElement;
+    var table = section ? section.querySelector(".tw > table") : null;
+    var input = box.querySelector("[data-filter-input]");
+    if (!table || !input) return;
+    box.setAttribute("data-filter-on", "1");
+    var suggest = box.querySelector("[data-filter-suggest]");
+    var none = box.querySelector("[data-filter-none]");
+    var rowMode = box.getAttribute("data-filter-match") === "row";
+    var col = parseInt(box.getAttribute("data-filter-col") || "0", 10);
+    var rows = Array.prototype.slice.call(table.querySelectorAll("tbody > tr"));
+    var cellText = function (row, idx) {
+      var td = row.children[idx];
+      if (!td) return "";
+      var link = td.querySelector("a");
+      return (link ? link.textContent : td.textContent).trim();
+    };
+    var rowKey = function (row) {
+      return rowMode ? row.textContent.toLowerCase() : cellText(row, col).toLowerCase();
+    };
+    var names = [];
+    var seen = {};
+    rows.forEach(function (row) {
+      if (row.hasAttribute("data-sort-barrier")) return;
+      var n = cellText(row, col);
+      if (n && !seen[n]) { seen[n] = 1; names.push(n); }
+    });
+    var apply = function () {
+      var q = input.value.trim().toLowerCase();
+      var shown = 0;
+      var group = null;
+      var groupShown = false;
+      var settleGroup = function () {
+        if (group) group.style.display = groupShown ? "" : "none";
+      };
+      rows.forEach(function (row) {
+        if (row.hasAttribute("data-sort-barrier")) {
+          settleGroup();
+          group = row;
+          groupShown = false;
+          return;
+        }
+        var ok = !q || rowKey(row).indexOf(q) !== -1;
+        row.style.display = ok ? "" : "none";
+        if (ok) { shown++; groupShown = true; }
+      });
+      settleGroup();
+      if (none) none.hidden = shown > 0 || !q;
+      return shown;
+    };
+    var closeSuggest = function () {
+      if (suggest) { suggest.hidden = true; suggest.innerHTML = ""; }
+      input.removeAttribute("aria-activedescendant");
+    };
+    var pick = function (value) {
+      input.value = value;
+      apply();
+      closeSuggest();
+      input.focus();
+    };
+    var openSuggest = function () {
+      if (!suggest) return;
+      var q = input.value.trim().toLowerCase();
+      if (!q) { closeSuggest(); return; }
+      var hits = names.filter(function (n) { return n.toLowerCase().indexOf(q) !== -1; });
+      hits.sort(function (a, c) {
+        var ai = a.toLowerCase().indexOf(q);
+        var ci = c.toLowerCase().indexOf(q);
+        return ai - ci || (a < c ? -1 : 1);
+      });
+      hits = hits.slice(0, 8);
+      if (!hits.length) { closeSuggest(); return; }
+      suggest.innerHTML = "";
+      hits.forEach(function (n, i) {
+        var btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "tbl-filter-opt";
+        btn.id = "tfs-" + i;
+        btn.textContent = n;
+        btn.addEventListener("mousedown", function (ev) {
+          ev.preventDefault();
+          pick(n);
+        });
+        suggest.appendChild(btn);
+      });
+      suggest.hidden = false;
+    };
+    var activeOpt = function (dir) {
+      if (!suggest || suggest.hidden) { openSuggest(); return; }
+      var opts = suggest.querySelectorAll(".tbl-filter-opt");
+      if (!opts.length) return;
+      var cur = -1;
+      opts.forEach(function (o, i) { if (o.classList.contains("on")) cur = i; });
+      cur = (cur + dir + opts.length) % opts.length;
+      opts.forEach(function (o, i) {
+        o.classList.toggle("on", i === cur);
+        if (i === cur) input.setAttribute("aria-activedescendant", o.id);
+      });
+    };
+    input.addEventListener("input", function () { apply(); openSuggest(); });
+    input.addEventListener("focus", openSuggest);
+    input.addEventListener("blur", function () { setTimeout(closeSuggest, 120); });
+    input.addEventListener("keydown", function (ev) {
+      if (ev.key === "ArrowDown") { ev.preventDefault(); activeOpt(1); }
+      else if (ev.key === "ArrowUp") { ev.preventDefault(); activeOpt(-1); }
+      else if (ev.key === "Enter") {
+        var on = suggest && !suggest.hidden ? suggest.querySelector(".tbl-filter-opt.on") : null;
+        if (on) { ev.preventDefault(); pick(on.textContent); }
+      } else if (ev.key === "Escape") { closeSuggest(); }
+    });
+    var thead = table.querySelector("thead");
+    if (thead) thead.addEventListener("click", function () { setTimeout(apply, 30); });
+    apply();
+  }
+  onContentReady(initTableFilters);
+  initTableFilters(document);
+
   // --- Nav: Escape folds an open branch back up -----------------
   document.addEventListener("keydown", function (ev) {
     if (ev.key !== "Escape") return;

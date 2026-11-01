@@ -50,6 +50,11 @@
 {{else if .Wallet.Journal.Warming}}
 <p><small>Still syncing.{{if .IsAdmin}} Progress is on the <a href="/admin/sync/">Sync page</a>.{{end}}</small></p>
 {{else if .Wallet.JournalRows}}
+<div class="tbl-filter" data-table-filter data-filter-match="row" data-filter-col="1">
+<input type="search" data-filter-input placeholder="Search the journal" aria-label="Search the journal" autocomplete="off">
+<div class="tbl-filter-suggest" data-filter-suggest hidden></div>
+<p class="tbl-filter-none" data-filter-none hidden><small class="mt-reqs">No journal entries match.</small></p>
+</div>
 <div class="tw">
 <table>
   <thead><tr><th>Date</th><th>Type</th><th>Amount</th><th class="opt">Balance</th><th>Parties</th><th>Description</th></tr></thead>
@@ -73,6 +78,11 @@
 {{else if .Wallet.Txns.Warming}}
 <p><small>Still syncing.{{if .IsAdmin}} Progress is on the <a href="/admin/sync/">Sync page</a>.{{end}}</small></p>
 {{else if .Wallet.TxnRows}}
+<div class="tbl-filter" data-table-filter data-filter-match="row" data-filter-col="1">
+<input type="search" data-filter-input placeholder="Search transactions" aria-label="Search transactions" autocomplete="off">
+<div class="tbl-filter-suggest" data-filter-suggest hidden></div>
+<p class="tbl-filter-none" data-filter-none hidden><small class="mt-reqs">No transactions match.</small></p>
+</div>
 <div class="tw">
 <table>
   <thead><tr><th>Date</th><th>Item</th><th>Qty</th><th>Unit price</th><th>Total</th><th>Side</th><th class="opt">Location</th><th>Counterparty</th></tr></thead>

@@ -1342,6 +1342,34 @@ tbody tr:hover td, tbody tr:hover th { background: rgba(255, 106, 0, 0.045); }
 }
 .tw thead th:first-child { background: transparent; z-index: 2; }
 
+/* Live table filter (app.js): a search box over a table, with a
+   suggestion list drawn from the table's own values. */
+.tbl-filter { position: relative; max-width: 24rem; margin: 0 0 0.6rem; }
+.tbl-filter input[type="search"] {
+  width: 100%; padding: 0.45rem 0.6rem;
+  background: var(--input-bg); color: var(--text);
+  border: 1px solid var(--glass-edge); border-radius: var(--r-sm);
+  font: inherit; font-size: 0.9rem;
+}
+.tbl-filter input[type="search"]:focus { outline: none; border-color: var(--accent); }
+.tbl-filter-suggest {
+  position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 60;
+  background: var(--glass);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(0.95);
+  backdrop-filter: blur(var(--glass-blur)) saturate(0.95);
+  border: 1px solid var(--glass-edge); border-radius: var(--r-sm);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55);
+  padding: 0.25rem; max-height: 16rem; overflow-y: auto;
+}
+.tbl-filter-opt {
+  display: block; width: 100%; text-align: left;
+  background: none; border: 0; border-radius: var(--r-sm);
+  color: var(--text); font: inherit; font-size: 0.88rem;
+  padding: 0.35rem 0.5rem; cursor: pointer;
+}
+.tbl-filter-opt:hover, .tbl-filter-opt.on { background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.tbl-filter-none { margin: 0.4rem 0 0; }
+
 /* --- alerts --- */
 .err {
   background: rgba(120, 26, 6, 0.38);

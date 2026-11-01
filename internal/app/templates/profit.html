@@ -131,6 +131,11 @@
 {{end}}
 {{if .UncoveredRaw}}<p class="pf-note"><small>Showing only sales with no known cost{{.UncoveredWhen}}: the resolution queue. <a href="{{.ClearUncHref}}">Clear the filter</a></small></p>{{end}}
 {{if .Items}}
+<div class="tbl-filter" data-table-filter>
+<input type="search" data-filter-input placeholder="Filter items by name" aria-label="Filter items by name" autocomplete="off">
+<div class="tbl-filter-suggest" data-filter-suggest hidden></div>
+<p class="tbl-filter-none" data-filter-none hidden><small class="mt-reqs">No items match that name.</small></p>
+</div>
 <div class="tw">
 <table>
   <thead><tr><th>Item</th><th class="mt-num">Sold</th><th class="mt-num">Sold for</th><th class="mt-num">Margin</th><th class="mt-num">Margin %</th><th class="mt-num">vs before</th></tr></thead>

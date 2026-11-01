@@ -520,6 +520,17 @@ html[data-theme="light"] #main-content > .section-tabs a.active {
   color: var(--text-bright);
 }
 #main-content:has(> .section-subtabs) > .page-body { border-top: none; }
+/* On the Triglavian and Jove schemes the shared link color
+   (each scheme's core tone) sits too dark on the tab glass, so
+   the tab links take a lightened cut of the same tone. */
+html[data-scheme="triglavian"] #main-content > .section-tabs a,
+html[data-scheme="triglavian"] #main-content > .section-subtabs a {
+  color: color-mix(in srgb, var(--sch-hi) 62%, #ffffff);
+}
+html[data-scheme="jove"] #main-content > .section-tabs a,
+html[data-scheme="jove"] #main-content > .section-subtabs a {
+  color: color-mix(in srgb, var(--sch-core) 68%, #ffffff);
+}
 /* A page's quiet readout rides the subtab row's empty
    right side (the contract search's sweep telemetry):
    small, muted, one line, with a live-dot in the deal

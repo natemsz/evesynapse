@@ -218,7 +218,7 @@
   </table>
   </div>
   {{else}}
-  <p><small>No active jobs right now.</small></p>
+  <p class="wempty"><small>No active jobs right now. Start one from your <a href="/industry/">Blueprints</a>.</small></p>
   {{end}}
   {{end}}
   </div>
@@ -253,9 +253,9 @@
   </form>
   </div>
   {{if .ScopeEmpty}}
-  <p><small>{{.ScopeEmpty}}</small></p>
+  <p class="wempty"><small>{{.ScopeEmpty}}</small></p>
   {{else if not .AnyData}}
-  <p><small>Order data appears here once your characters have synced.</small></p>
+  <p class="wempty"><small>Order data appears here once your characters have synced.</small></p>
   {{else if .Open}}
   {{if ne .Merge "per-character"}}
   <p><strong>{{.Open}}</strong> open orders: {{.SellCount}} sell ({{.SellValue}} ISK) · {{.BuyCount}} buy ({{.BuyValue}} ISK in escrow)</p>
@@ -283,7 +283,7 @@
   {{end}}
   {{end}}
   {{else}}
-  <p><small>{{.EmptyOrders}}</small></p>
+  <p class="wempty"><small>{{.EmptyOrders}} Find your next trade in <a href="/market/ideas/">Trade Ideas</a> or the <a href="/market/scanner/">Spread Scanner</a>.</small></p>
   {{end}}
   {{end}}
   </div>

@@ -575,12 +575,13 @@ a:hover .pf-hero-gap, a:focus .pf-hero-gap { fill: color-mix(in srgb, var(--unve
 /* The waterfall's own tones: mixes of the recycled token, so
    the steps stay in the recycled family next to its pure tone
    on the COGS step. */
-.pf-wf-gross { fill: color-mix(in srgb, var(--recycled) 65%, var(--text)); background: color-mix(in srgb, var(--recycled) 65%, var(--text)); }
+.pf-wf-gross { fill: var(--text); background: var(--text); }
 .pf-wf-industry { fill: color-mix(in srgb, var(--recycled) 55%, var(--note)); background: color-mix(in srgb, var(--recycled) 55%, var(--note)); }
 .pf-wf-cap { fill: url(#pf-hatch); }
 .pf-wf-conn { stroke: var(--muted); stroke-opacity: 0.6; stroke-width: 1; stroke-dasharray: 4 3; fill: none; vector-effect: non-scaling-stroke; }
 .pf-wf-values { position: absolute; inset: 0; pointer-events: none; }
 .pf-wf-values span { position: absolute; transform: translateX(-50%); font-size: 0.68rem; line-height: 1; color: var(--text-bright); text-shadow: 0 1px 3px var(--panel); white-space: nowrap; }
+.pf-wf-values span:first-child { color: var(--panel); text-shadow: none; }
 
 /* Efficiency: the uncovered segment hatches, a loss bucket's
    overrun takes the lost outline above the sales marker. */

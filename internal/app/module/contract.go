@@ -1083,6 +1083,9 @@ type Deps interface {
 	// DefaultMarketRegion is the one a page starts on, MarketRegionName
 	// names any region the market knows.
 	MarketRegions() []RegionOption
+	// MarketHubStation is a hub region's main trade station:
+	// the one market an appraisal in that region centers on.
+	MarketHubStation(regionID int64) (int64, bool)
 	DefaultMarketRegion() int64
 	// GlobalMarketRegion is ESI's global market region, the
 	// one market that is not a place: global-market types

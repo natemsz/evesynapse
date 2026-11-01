@@ -792,16 +792,23 @@ type resultView struct {
 	BuyRatio     string // buy as a % of sell ("80.4%"), "" without both
 	CoverageSub  string // the coverage card's sub-line
 	Multisell    string // "<TypeName> <Price>" lines at this basis, for copying
-	HubStrip     []hubTotal
-	Basis        pricingBasis
-	Hubs         []hubOption // hub choices for the reprice form
-	RepriceURL   string      // where the reprice form posts, when offered
-	Created      string      // "Oct 17, 2026, 6:52 PM" for a stored snapshot
-	Shared       bool        // rendered from a share link
-	OwnID        int64       // the signed-in owner's appraisal id, when it is theirs
-	ShareURL     string
-	CanDelete    bool   // the viewer created this appraisal and may delete it
-	DeleteURL    string // where the delete form posts, when CanDelete
+	// The sell list: the priced lines at 0.01 under the cheapest
+	// sale order at the basis hub's station right now, for
+	// pasting into the client's MultiSell window as new orders.
+	SellItems        string
+	SellItemsStation string // the hub station's name, for the sell list's label
+	SellItemsNone    string // priced items with no sale order to undercut there, comma-joined
+
+	HubStrip   []hubTotal
+	Basis      pricingBasis
+	Hubs       []hubOption // hub choices for the reprice form
+	RepriceURL string      // where the reprice form posts, when offered
+	Created    string      // "Oct 17, 2026, 6:52 PM" for a stored snapshot
+	Shared     bool        // rendered from a share link
+	OwnID      int64       // the signed-in owner's appraisal id, when it is theirs
+	ShareURL   string
+	CanDelete  bool   // the viewer created this appraisal and may delete it
+	DeleteURL  string // where the delete form posts, when CanDelete
 }
 
 // appraiseView is the page body.
@@ -830,7 +837,7 @@ type savedRow struct {
 
 // buildResult shapes a snapshot for display. age is the deps'
 // age wording for a stale typical's as-of.
-func (app *page) buildResult(snap *snapshot) *resultView {
+func (app *page) buildResult(ctx context.Context, snap *snapshot) *resultView {
 	v := &resultView{
 		Unresolved: snap.Unresolved, Bad: snap.Bad, Notes: snap.Notes,
 		TotalValue: esi.FormatISK(snap.TotalValue),
@@ -907,6 +914,55 @@ func (app *page) buildResult(snap *snapshot) *resultView {
 		}
 	}
 	v.Multisell = strings.Join(ms, "\n")
+	// Sell these items: the priced lines at 0.01 under the
+	// cheapest sale order at the basis hub's station right now,
+	// ready to paste into the client's MultiSell window, which
+	// lists them as new orders. The prices are the station's
+	// own swept bests, read live rather than from the snapshot:
+	// the list is for selling now. An item with no sale order
+	// there has no price to undercut and is named, not listed.
+	if stationID, ok := app.deps.MarketHubStation(basis.RegionID); ok {
+		if name, ok := app.deps.CachedPlaceName(ctx, stationID); ok && name != "" {
+			v.SellItemsStation = name
+		} else {
+			v.SellItemsStation = "the hub station"
+		}
+		seen := make(map[int64]bool)
+		var typeIDs []int64
+		for _, ln := range snap.Lines {
+			if ln.Priced && !seen[ln.TypeID] {
+				seen[ln.TypeID] = true
+				typeIDs = append(typeIDs, ln.TypeID)
+			}
+		}
+		if len(typeIDs) > 0 {
+			rows, err := app.queries.ListMarketStationBestsByTypes(ctx, db.ListMarketStationBestsByTypesParams{
+				LocationID: stationID, TypeID: typeIDs,
+			})
+			if err != nil {
+				logging.Errorf("appraisal: station bests: %v", err)
+			} else {
+				bests := make(map[int64]float64, len(rows))
+				for _, r := range rows {
+					bests[r.TypeID] = r.BestSell
+				}
+				var sell, none []string
+				for _, ln := range snap.Lines {
+					if !ln.Priced {
+						continue
+					}
+					best, ok := bests[ln.TypeID]
+					if !ok || best <= 0.01 {
+						none = append(none, ln.Name)
+						continue
+					}
+					sell = append(sell, fmt.Sprintf("%s %s", ln.Name, strconv.FormatFloat(best-0.01, 'f', 2, 64)))
+				}
+				v.SellItems = strings.Join(sell, "\n")
+				v.SellItemsNone = strings.Join(none, ", ")
+			}
+		}
+	}
 	maxLine := 0.0
 	for _, ln := range snap.Lines {
 		if ln.LineValue > maxLine {
@@ -1112,12 +1168,12 @@ func storedSnapshot(row db.UserAppraisal) *snapshot {
 
 // storedResult rebuilds a stored row's result view: the
 // snapshot renders verbatim, never repriced.
-func (app *page) storedResult(row db.UserAppraisal) (*resultView, error) {
+func (app *page) storedResult(ctx context.Context, row db.UserAppraisal) (*resultView, error) {
 	var snap snapshot
 	if err := json.Unmarshal(row.Snapshot, &snap); err != nil {
 		return nil, err
 	}
-	v := app.buildResult(&snap)
+	v := app.buildResult(ctx, &snap)
 	v.Created = row.CreatedAt.Format("Jan 2, 2006, 3:04 PM")
 	return v, nil
 }
@@ -1224,7 +1280,7 @@ func (app *page) handleAppraisePage(w http.ResponseWriter, r *http.Request) {
 		if raw := r.URL.Query().Get("a"); raw != "" {
 			if id, err := strconv.ParseInt(raw, 10, 64); err == nil && id > 0 {
 				if row, err := app.queries.GetUserAppraisal(ctx, db.GetUserAppraisalParams{ID: id, UserID: userID}); err == nil {
-					if res, err := app.storedResult(row); err == nil {
+					if res, err := app.storedResult(ctx, row); err == nil {
 						app.attachHubStrip(ctx, storedSnapshot(row), res)
 						res.OwnID = row.ID
 						res.ShareURL = "/market/appraise/s/" + row.ShareToken + "/"
@@ -1300,7 +1356,7 @@ func (app *page) handleAppraiseSubmit(w http.ResponseWriter, r *http.Request) {
 			data.Error = "Your appraisal was priced, but it could not be saved."
 			view := app.consoleView(data, basis)
 			view.Input = input
-			view.Result = app.buildResult(snap)
+			view.Result = app.buildResult(ctx, snap)
 			data.Appraise = view
 			app.deps.Render(ctx, w, http.StatusOK, "market_appraise.html", data)
 			return
@@ -1316,7 +1372,7 @@ func (app *page) handleAppraiseSubmit(w http.ResponseWriter, r *http.Request) {
 		data.Error = "Your appraisal was priced, but it could not be saved."
 		view := app.consoleView(data, basis)
 		view.Input = input
-		view.Result = app.buildResult(snap)
+		view.Result = app.buildResult(ctx, snap)
 		data.Appraise = view
 		app.deps.Render(ctx, w, http.StatusOK, "market_appraise.html", data)
 		return
@@ -1328,7 +1384,7 @@ func (app *page) handleAppraiseSubmit(w http.ResponseWriter, r *http.Request) {
 		data.Error = "Your appraisal was priced, but it could not be saved."
 		view := app.consoleView(data, basis)
 		view.Input = input
-		view.Result = app.buildResult(snap)
+		view.Result = app.buildResult(ctx, snap)
 		data.Appraise = view
 		app.deps.Render(ctx, w, http.StatusOK, "market_appraise.html", data)
 		return
@@ -1357,7 +1413,7 @@ func (app *page) handleAppraiseShare(w http.ResponseWriter, r *http.Request) {
 		app.deps.Render(ctx, w, http.StatusNotFound, "market_appraise.html", data)
 		return
 	}
-	res, err := app.storedResult(row)
+	res, err := app.storedResult(ctx, row)
 	if err != nil {
 		logging.Errorf("appraisal: share snapshot: %v", err)
 		data.Error = "That shared appraisal could not be read."

@@ -183,6 +183,24 @@ Unknown Item XYZ x 3`}})
 	}
 }
 
+func TestAppraisalSellItemsUndercut(t *testing.T) {
+	tr := &countingTransport{}
+	app, conn, q := buildCorpTestApp(t, tr)
+	seedAppraisalTool(t, conn, q)
+	ctx := context.Background()
+	// Jita's current best sell for Tritanium is 6.40. Pyerite
+	// prices off its stored estimate in this fixture and has
+	// no sell orders at Jita.
+	if _, err := conn.ExecContext(ctx, `INSERT INTO market_station_stats (location_id, region_id, type_id, best_sell, best_buy, sell_orders, buy_orders, sell_volume, buy_volume, updated_at, typical_sell, typical_buy) VALUES (60003760, 10000002, 34, 6.40, 5.10, 3, 1, 1000, 100, $1, 6.40, 5.10)`, time.Now().UTC()); err != nil {
+		t.Fatalf("seed station stats: %v", err)
+	}
+	body, _, _ := postAnonAppraisal(t, app, url.Values{"items": {"Tritanium x 100\nPyerite x 10"}})
+	mustContain(t, "appraisal sell items", body,
+		"Sell these items: undercut the cheapest sale order",
+		"Tritanium 6.39",
+		"No sale order to undercut", "Pyerite")
+}
+
 func TestAppraisalToolBlueprintAndAbyssalLines(t *testing.T) {
 	tr := &countingTransport{}
 	app, conn, q := buildCorpTestApp(t, tr)

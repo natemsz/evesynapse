@@ -41,6 +41,16 @@ var marketRegions = []marketRegionOption{
 	{10000042, "Metropolis"},
 }
 
+// marketHubStations is each hub region's main trade station:
+// the market an appraisal in that region is centered on.
+var marketHubStations = map[int64]int64{
+	10000002: 60003760, // The Forge: Jita IV - Moon 4 - Caldari Navy Assembly Plant
+	10000043: 60008494, // Domain: Amarr VIII (Oris) - Emperor Family Academy
+	10000032: 60011866, // Sinq Laison: Dodixie IX - Moon 20 - Federation Navy Assembly Plant
+	10000030: 60004588, // Heimatar: Rens VI - Moon 8 - Brutor Tribe Treasury
+	10000042: 60005686, // Metropolis: Hek VIII - Moon 12 - Boundless Creation Factory
+}
+
 const defaultMarketRegion = int64(10000002)
 
 // topMarketOrders is how many orders per side the tables show.

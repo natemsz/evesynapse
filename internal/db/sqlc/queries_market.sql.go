@@ -2572,6 +2572,46 @@ func (q *Queries) ListMarketStationStatsByRegion(ctx context.Context, regionID i
 	return items, nil
 }
 
+const listMarketStationBestsByTypes = `-- name: ListMarketStationBestsByTypes :many
+SELECT type_id, best_sell
+FROM market_station_stats
+WHERE location_id = $1 AND type_id = ANY($2::bigint[])
+ORDER BY type_id
+`
+
+type ListMarketStationBestsByTypesParams struct {
+	LocationID int64   `json:"location_id"`
+	TypeID     []int64 `json:"type_id"`
+}
+
+type ListMarketStationBestsByTypesRow struct {
+	TypeID   int64   `json:"type_id"`
+	BestSell float64 `json:"best_sell"`
+}
+
+func (q *Queries) ListMarketStationBestsByTypes(ctx context.Context, arg ListMarketStationBestsByTypesParams) ([]ListMarketStationBestsByTypesRow, error) {
+	rows, err := q.db.QueryContext(ctx, listMarketStationBestsByTypes, arg.LocationID, pq.Array(arg.TypeID))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListMarketStationBestsByTypesRow
+	for rows.Next() {
+		var i ListMarketStationBestsByTypesRow
+		if err := rows.Scan(&i.TypeID, &i.BestSell); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listMarketStatsFallbackByType = `-- name: ListMarketStatsFallbackByType :many
 SELECT region_id, type_id, median_sell, fivepct_sell, median_buy, fivepct_buy, sell_orders, buy_orders, sell_volume, buy_volume, source, orderset_id, source_asof, fetched_at,
        wavg_sell, min_sell, max_sell, stddev_sell, wavg_buy, min_buy, max_buy, stddev_buy

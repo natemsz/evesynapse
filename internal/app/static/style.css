@@ -1339,8 +1339,10 @@ tbody tr:hover td, tbody tr:hover th { background: rgba(255, 106, 0, 0.045); }
   position: sticky;
   left: 0;
   z-index: 1;
+  background: var(--panel);
 }
-.tw thead th:first-child { background: transparent; z-index: 2; }
+.tw tbody tr:hover td:first-child { background: color-mix(in srgb, var(--accent) 5%, var(--panel)); }
+.tw thead th:first-child { background: var(--panel); z-index: 2; }
 
 /* --- alerts --- */
 .err {

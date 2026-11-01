@@ -3460,6 +3460,9 @@ tbody tr.order-beaten td { background: color-mix(in srgb, var(--danger) 10%, tra
   border: 1px solid color-mix(in srgb, var(--danger) 40%, transparent);
   vertical-align: -0.08rem;
 }
+/* The key sits apart from the Beaten only filter beside it, so the
+   two do not read as one legend entry. */
+.beaten-key { margin-left: 1.5rem; }
 @supports not ((-webkit-background-clip: text) or (background-clip: text)) {
   h2,
   h3,

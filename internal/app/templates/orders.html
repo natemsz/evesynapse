@@ -46,7 +46,7 @@
 {{else if .Orders.Open.Warming}}
 <p><small>Still syncing.{{if .IsAdmin}} Progress is on the <a href="/admin/sync/">Sync page</a>.{{end}}</small></p>
 {{else if .Orders.OpenRows}}
-{{if .Orders.HasBeaten}}<p><label><input type="checkbox" data-beaten-filter> <small>Beaten only</small></label> <span class="beaten-swatch" aria-hidden="true"></span> <small>Beaten at its station</small></p>{{end}}
+{{if .Orders.HasBeaten}}<p><label><input type="checkbox" data-beaten-filter> <small>Show beaten orders only</small></label><span class="beaten-key"><span class="beaten-swatch" aria-hidden="true"></span> <small>Beaten at its station</small></span></p>{{end}}
 <div class="tw">
 <table>
   <thead><tr><th>Item</th><th>Side</th><th>Price</th><th>Status</th><th>Volume</th><th>Location</th><th class="opt">Region</th><th class="opt">Range</th><th class="opt">Issued</th><th>Expires</th></tr></thead>

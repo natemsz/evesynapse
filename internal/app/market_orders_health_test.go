@@ -111,7 +111,7 @@ func TestOrdersPageOrderHealth(t *testing.T) {
 		t.Errorf("best-price lines = %d, want exactly 1 (open sell only)", n)
 	}
 	mustContain(t, "/orders/", body,
-		"data-beaten-filter", "Beaten only", "Beaten at its station",
+		"data-beaten-filter", "Show beaten orders only", "Beaten at its station",
 	)
 	if n := strings.Count(body, `<tr class="order-beaten" data-beaten="1">`); n != 2 {
 		t.Errorf("beaten open rows = %d, want exactly 2 (orders 700 and 703, both sides)", n)

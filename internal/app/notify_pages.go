@@ -172,14 +172,20 @@ func (app *Application) handleNotifications(w http.ResponseWriter, r *http.Reque
 }
 
 // handleNotificationsRead marks the account's notifications read:
-// all of them, or one kind when the form names it.
+// all of them, or one kind when the form names it. A same-site
+// return path in the form (the character sheet's banner dismiss)
+// sends the visitor back where they were instead of the list.
 func (app *Application) handleNotificationsRead(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	userID := app.userID(ctx)
+	target := "/notifications/"
 	if err := r.ParseForm(); err == nil && userID != 0 {
 		app.markNotificationsRead(ctx, userID, r.FormValue("kind"))
+		if ret := r.FormValue("return"); strings.HasPrefix(ret, "/") && !strings.HasPrefix(ret, "//") {
+			target = ret
+		}
 	}
-	http.Redirect(w, r, "/notifications/", http.StatusSeeOther)
+	http.Redirect(w, r, target, http.StatusSeeOther)
 }
 
 // handleNotificationsOpen is a row of the top-bar list being

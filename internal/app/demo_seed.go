@@ -96,9 +96,9 @@ type demoSeed struct {
 	ranks  map[int64]float64
 	skills []demoSkillType
 
-	jitaStationID, amarrStationID, dodixieStationID int64
-	jitaSystemID, amarrSystemID, tamaSystemID       int64
-	forgeRegionID, domainRegionID, sinqRegionID     int64
+	jitaStationID, amarrStationID, dodixieStationID, hekStationID int64
+	jitaSystemID, amarrSystemID, tamaSystemID                     int64
+	forgeRegionID, domainRegionID, sinqRegionID                   int64
 
 	// pendingColonies gathers each pilot's colonies while her
 	// writeColony calls run, for writeColonies to store.
@@ -185,13 +185,16 @@ func (s *demoSeed) resolve(ctx context.Context) error {
 		// Attribute implants, slots 1-5.
 		"Ocular Filter - Basic", "Memory Augmentation - Basic", "Neural Boost - Basic",
 		"Cybernetic Subprocessor - Basic", "Social Adaptation Chip - Basic",
+		// Skill hardwirings, slots 6-9 (the seeded Sable clone set).
+		"Zainou 'Gnome' Shield Upgrades SU-603", "Zainou 'Deadeye' Missile Bombardment MB-705",
+		"Zainou 'Deadeye' Guided Missile Precision GP-805", "Zainou 'Deadeye' Target Navigation Prediction TN-903",
 		// Planetary commodities and structures.
 		"Oxygen", "Water", "Bacteria", "Proteins", "Reactive Gas", "Precious Metals",
 		"Toxic Metals", "Electrolytes", "Micro Organisms", "Carbon Compounds",
 		"Aqueous Liquids", "Ionic Solutions", "Base Metals", "Suspended Plasma",
 		"Noble Gas", "Reactive Metals", "Plasmoids",
 		"Temperate Command Center", "Barren Command Center", "Gas Command Center",
-		"Lava Command Center", "Extractor Control Unit", "Storage Facility",
+		"Lava Command Center", "Plasma Command Center", "Extractor Control Unit", "Storage Facility",
 		"Launchpad", "Basic Industry Facility", "Advanced Industry Facility",
 		// The industry alt's trained skills and plan targets, resolved
 		// by name like everything else.
@@ -243,6 +246,7 @@ func (s *demoSeed) resolve(ctx context.Context) error {
 	s.jitaStationID = station("Jita IV - Moon 4 - Caldari Navy Assembly Plant")
 	s.amarrStationID = station("Amarr VIII (Oris) - Emperor Family Academy")
 	s.dodixieStationID = station("Dodixie IX - Moon 20 - Federation Navy Assembly Plant")
+	s.hekStationID = station("Hek VIII - Moon 12 - Boundless Creation Factory")
 
 	system := func(name string) (int64, int64) {
 		row, err := q.GetSDESystemByName(ctx, name)
@@ -1043,29 +1047,46 @@ func (s *demoSeed) writePilotOneAssets(ctx context.Context) error {
 		return err
 	}
 
-	implants := []int64{}
-	for _, name := range []string{
+	implantIDs := func(names ...string) []int64 {
+		out := []int64{}
+		for _, name := range names {
+			if t := s.typeID(name); t != 0 {
+				out = append(out, t)
+			}
+		}
+		return out
+	}
+	basics := implantIDs(
 		"Ocular Filter - Basic", "Memory Augmentation - Basic", "Neural Boost - Basic",
 		"Cybernetic Subprocessor - Basic", "Social Adaptation Chip - Basic",
-	} {
-		if t := s.typeID(name); t != 0 {
-			implants = append(implants, t)
-		}
-	}
+	)
+	// The active pod: the five attribute basics, then missile
+	// hardwirings in slots 6 to 9; slot 10 stays empty.
+	implants := append(append([]int64{}, basics...), implantIDs(
+		"Zainou 'Gnome' Shield Upgrades SU-603", "Zainou 'Deadeye' Missile Bombardment MB-705",
+		"Zainou 'Deadeye' Guided Missile Precision GP-805", "Zainou 'Deadeye' Target Navigation Prediction TN-903",
+	)...)
 	if err := s.snap(ctx, id, esi.SnapImplants, esi.Implants(implants)); err != nil {
 		return err
 	}
-	cloneImplants := []int64{}
-	if len(implants) >= 2 {
-		cloneImplants = implants[:2]
+	jumpClones := []esi.JumpClone{
+		{JumpCloneID: 1, LocationID: s.amarrStationID, LocationType: "station", Name: "Amarr Trade & Learning", Implants: basics},
+		{JumpCloneID: 2, LocationID: s.dodixieStationID, LocationType: "station", Name: "Clean Roam / Dictor Clone", Implants: implantIDs("Zainou 'Gnome' Shield Upgrades SU-603")},
+	}
+	if s.hekStationID != 0 {
+		jumpClones = append(jumpClones, esi.JumpClone{
+			JumpCloneID: 3, LocationID: s.hekStationID, LocationType: "station", Name: "",
+			Implants: implantIDs("Ocular Filter - Basic", "Memory Augmentation - Basic"),
+		})
 	}
 	clones := esi.Clones{
 		HomeLocation: esi.CloneHome{LocationID: s.jitaStationID, LocationType: "station"},
-		JumpClones: []esi.JumpClone{
-			{JumpCloneID: 1, LocationID: s.amarrStationID, LocationType: "station", Name: "Amarr staging", Implants: cloneImplants},
-			{JumpCloneID: 2, LocationID: s.dodixieStationID, LocationType: "station", Name: "", Implants: []int64{}},
-		},
-		LastCloneJumpDate: s.rfc(now.Add(-3 * day)),
+		JumpClones:   jumpClones,
+		// Five hours ago: the clone jump cooldown is still
+		// running on the sheet (24h less her Infomorph
+		// Synchronizing level), which is the timers card's
+		// live state.
+		LastCloneJumpDate: s.rfc(now.Add(-5 * hour)),
 	}
 	if err := s.snap(ctx, id, esi.SnapClones, clones); err != nil {
 		return err
@@ -1198,16 +1219,24 @@ type demoColony struct {
 	Extractor  string // the P0 commodity the extractor pulls
 	Product    string // the P1 commodity the factory makes
 	Schematic  int64
+	// Expiry is when the extractor program ends, relative to
+	// the seeding moment; zero keeps the default two days out.
+	// A negative value seeds an already-expired extractor.
+	Expiry time.Duration
 }
 
 func (s *demoSeed) writeColony(ctx context.Context, characterID int64, c demoColony) error {
 	now := s.now
 	hour := time.Hour
 	day := 24 * hour
+	expiry := now.Add(2 * day)
+	if c.Expiry != 0 {
+		expiry = now.Add(c.Expiry)
+	}
 	pins := []esi.PlanetPin{
 		{PinID: 1, TypeID: s.typeID(c.CCName), InstallTime: s.rfc(now.Add(-90 * day))},
 		{PinID: 2, TypeID: s.typeID("Extractor Control Unit"), InstallTime: s.rfc(now.Add(-2 * day)),
-			LastCycleStart: s.rfc(now.Add(-30 * time.Minute)), ExpiryTime: s.rfc(now.Add(2 * day)),
+			LastCycleStart: s.rfc(now.Add(-30 * time.Minute)), ExpiryTime: s.rfc(expiry),
 			ExtractorDetails: &esi.PlanetExtractor{
 				ProductTypeID: s.typeID(c.Extractor), CycleTime: 1800, QtyPerCycle: 850,
 				Heads: []esi.PlanetExtractorHead{
@@ -1280,6 +1309,16 @@ func (s *demoSeed) writePilotOneComms(ctx context.Context) error {
 		PlanetID: 40009079, PlanetName: "Jita VII", Type: "barren", SystemID: s.jitaSystemID,
 		Upgrade: 4, CCName: "Barren Command Center",
 		Extractor: "Base Metals", Product: "Reactive Metals", Schematic: 117,
+	}); err != nil {
+		return err
+	}
+	// The neglected one: its extractor program ended a day
+	// ago, which is the PI card's expired state.
+	if err := s.writeColony(ctx, id, demoColony{
+		PlanetID: 40009081, PlanetName: "Jita VI", Type: "plasma", SystemID: s.jitaSystemID,
+		Upgrade: 3, CCName: "Plasma Command Center",
+		Extractor: "Suspended Plasma", Product: "Plasmoids", Schematic: 119,
+		Expiry: -24 * hour,
 	}); err != nil {
 		return err
 	}
@@ -1932,6 +1971,26 @@ func (s *demoSeed) writeAccountRows(ctx context.Context) error {
 		if _, err := q.InsertNotification(ctx, db.InsertNotificationParams{
 			UserID: s.userID, CharacterID: demoCharacterID,
 			Kind: n.kind, Title: n.title, Url: n.url, CreatedAt: n.when,
+		}); err != nil {
+			return err
+		}
+	}
+	// Juno's finished training, in the skill notifier's own
+	// title format: the character sheet's trained banner reads
+	// these, and her queue (Advanced Mass Production IV is
+	// training now) is what she moved on to after them.
+	for _, n := range []struct {
+		title string
+		when  time.Time
+	}{
+		{fmt.Sprintf("%s finished training %s %s", demoChar2Name, "Astrogeology", "IV"), now.Add(-26 * hour)},
+		{fmt.Sprintf("%s finished training %s %s", demoChar2Name, "Reprocessing Efficiency", "IV"), now.Add(-2 * hour)},
+	} {
+		if _, err := q.InsertNotification(ctx, db.InsertNotificationParams{
+			UserID: s.userID, CharacterID: demoCharacter2ID,
+			Kind: notifySkill, Title: n.title,
+			Url:       fmt.Sprintf("/character/?character=%d&view=1", demoCharacter2ID),
+			CreatedAt: n.when,
 		}); err != nil {
 			return err
 		}

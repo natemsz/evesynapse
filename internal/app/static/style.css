@@ -6017,3 +6017,156 @@ button.gn-title:hover .gn-more, button.gn-title:focus-visible .gn-more { color: 
 .gn-post a { color: var(--accent); }
 .gn-post hr { border: 0; border-top: 1px solid var(--box-edge); }
 .gn-muted { color: var(--muted); }
+
+/* =====================================================================
+   Shared pane patterns (redesign pass). The classes below are the
+   general shapes the pass builds with, first used by the Assets
+   page: a three-pane shell (directory, main, inspector), directory
+   list rows with a value share bar, pill tabs, saved-filter chips,
+   character scope pills, loadout chips, and the inspector pane with
+   its slot sections. A later page uses these rather than growing
+   its own copies; page sheets keep only what is truly theirs.
+   Bar fills size through the .pw-N width utilities because the
+   CSP allows no inline styles. */
+
+.pw-0 { width: 0; } .pw-1 { width: 1%; } .pw-2 { width: 2%; } .pw-3 { width: 3%; } .pw-4 { width: 4%; }
+.pw-5 { width: 5%; } .pw-6 { width: 6%; } .pw-7 { width: 7%; } .pw-8 { width: 8%; } .pw-9 { width: 9%; }
+.pw-10 { width: 10%; } .pw-11 { width: 11%; } .pw-12 { width: 12%; } .pw-13 { width: 13%; } .pw-14 { width: 14%; }
+.pw-15 { width: 15%; } .pw-16 { width: 16%; } .pw-17 { width: 17%; } .pw-18 { width: 18%; } .pw-19 { width: 19%; }
+.pw-20 { width: 20%; } .pw-21 { width: 21%; } .pw-22 { width: 22%; } .pw-23 { width: 23%; } .pw-24 { width: 24%; }
+.pw-25 { width: 25%; } .pw-26 { width: 26%; } .pw-27 { width: 27%; } .pw-28 { width: 28%; } .pw-29 { width: 29%; }
+.pw-30 { width: 30%; } .pw-31 { width: 31%; } .pw-32 { width: 32%; } .pw-33 { width: 33%; } .pw-34 { width: 34%; }
+.pw-35 { width: 35%; } .pw-36 { width: 36%; } .pw-37 { width: 37%; } .pw-38 { width: 38%; } .pw-39 { width: 39%; }
+.pw-40 { width: 40%; } .pw-41 { width: 41%; } .pw-42 { width: 42%; } .pw-43 { width: 43%; } .pw-44 { width: 44%; }
+.pw-45 { width: 45%; } .pw-46 { width: 46%; } .pw-47 { width: 47%; } .pw-48 { width: 48%; } .pw-49 { width: 49%; }
+.pw-50 { width: 50%; } .pw-51 { width: 51%; } .pw-52 { width: 52%; } .pw-53 { width: 53%; } .pw-54 { width: 54%; }
+.pw-55 { width: 55%; } .pw-56 { width: 56%; } .pw-57 { width: 57%; } .pw-58 { width: 58%; } .pw-59 { width: 59%; }
+.pw-60 { width: 60%; } .pw-61 { width: 61%; } .pw-62 { width: 62%; } .pw-63 { width: 63%; } .pw-64 { width: 64%; }
+.pw-65 { width: 65%; } .pw-66 { width: 66%; } .pw-67 { width: 67%; } .pw-68 { width: 68%; } .pw-69 { width: 69%; }
+.pw-70 { width: 70%; } .pw-71 { width: 71%; } .pw-72 { width: 72%; } .pw-73 { width: 73%; } .pw-74 { width: 74%; }
+.pw-75 { width: 75%; } .pw-76 { width: 76%; } .pw-77 { width: 77%; } .pw-78 { width: 78%; } .pw-79 { width: 79%; }
+.pw-80 { width: 80%; } .pw-81 { width: 81%; } .pw-82 { width: 82%; } .pw-83 { width: 83%; } .pw-84 { width: 84%; }
+.pw-85 { width: 85%; } .pw-86 { width: 86%; } .pw-87 { width: 87%; } .pw-88 { width: 88%; } .pw-89 { width: 89%; }
+.pw-90 { width: 90%; } .pw-91 { width: 91%; } .pw-92 { width: 92%; } .pw-93 { width: 93%; } .pw-94 { width: 94%; }
+.pw-95 { width: 95%; } .pw-96 { width: 96%; } .pw-97 { width: 97%; } .pw-98 { width: 98%; } .pw-99 { width: 99%; }
+.pw-100 { width: 100%; }
+
+/* The three-pane shell: a directory column, the main column, and
+   an inspector column that exists only when a page opens one
+   (the .has-insp modifier adds the third track). Column widths
+   are the page's own choice, set in its sheet. */
+.panes3 { display: grid; gap: 1rem; align-items: start; }
+.panes3 > * { min-width: 0; }
+
+/* Directory list rows: one place per row, its security badge,
+   name and value on the first line, its facts under, and a share
+   bar showing its weight against the largest row. */
+.dirlist { display: flex; flex-direction: column; gap: 0.35rem; }
+.diritem { display: block; min-width: 0; padding: 0.55rem 0.7rem; border: 1px solid transparent; border-radius: var(--r-sm); color: var(--text); text-decoration: none; }
+.diritem:hover { background: var(--glass); }
+.diritem.on { background: var(--glass); border-color: var(--gold); }
+.dir-top { display: flex; align-items: center; gap: 0.5rem; }
+.dir-sec { flex: none; font-size: 0.75rem; padding: 0.05rem 0.3rem; border: 1px solid currentColor; border-radius: var(--r-xs); }
+.dir-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.dir-name a { color: inherit; text-decoration: none; }
+.dir-val { flex: none; color: var(--gold); font-weight: 700; font-variant-numeric: tabular-nums; }
+.dir-sub { display: block; margin-top: 0.15rem; color: var(--muted); font-size: 0.8rem; }
+.dir-note { display: block; margin-top: 0.2rem; color: var(--unverified); font-size: 0.75rem; }
+.sharebar { display: block; height: 3px; margin-top: 0.4rem; border-radius: 2px; background: var(--box-edge); overflow: hidden; }
+.sharebar .fill { display: block; height: 100%; background: var(--accent); }
+
+/* Pill tabs: a row of divisions with counts. */
+.pilltabs { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.pilltab { padding: 0.35rem 0.7rem; border: 1px solid var(--box-edge); border-radius: 999px; color: var(--muted); font-size: 0.85rem; font-weight: 600; text-decoration: none; }
+.pilltab:hover { color: var(--text); }
+.pilltab.on { background: var(--glass); border-color: var(--accent); color: var(--text-bright); }
+.pilltab .cnt { font-weight: 500; opacity: 0.75; }
+
+/* Saved-filter chips: the user's own named views, each with its
+   delete, plus the save form that names the current view. */
+.fchips { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; }
+.fchips-label { color: var(--muted); font-size: 0.78rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; }
+.fchip { padding: 0.3rem 0.65rem; border: 1px solid var(--box-edge); border-radius: 999px; background: none; color: var(--text); font-size: 0.85rem; text-decoration: none; cursor: pointer; }
+.fchip.save { border-style: dashed; color: var(--muted); }
+.fchip-wrap { display: inline-flex; align-items: center; gap: 0.1rem; }
+.fchip-del { display: inline-flex; }
+.fchip-del button { padding: 0 0.25rem; border: 0; background: none; color: var(--muted); font-size: 1rem; cursor: pointer; }
+.fchip-form { display: inline-flex; align-items: center; gap: 0.4rem; }
+.fchip-form input[type="text"] { width: 10rem; }
+
+/* Character scope pills: whose data the page is showing. */
+.scopepills { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.scopepill { display: inline-flex; align-items: center; gap: 0.45rem; padding: 0.3rem 0.7rem 0.3rem 0.35rem; border: 1px solid var(--box-edge); border-radius: 999px; color: var(--muted); font-weight: 600; text-decoration: none; }
+.scopepill img { border-radius: 50%; }
+.scopepill.on { background: var(--glass); border-color: var(--accent); color: var(--text-bright); }
+
+/* Loadout chips: the small counted badges on a fitted thing's
+   row (stacks inside, fitted counts by family, cargo). */
+.lchips { display: flex; flex-wrap: wrap; gap: 0.3rem; }
+.lchip { padding: 0.1rem 0.4rem; border: 1px solid var(--glass-edge); border-radius: var(--r-xs); background: var(--glass); color: var(--muted-2); font-size: 0.72rem; font-weight: 700; }
+.lchip.cargo { color: var(--gold); }
+
+/* The inspector pane: a detail column for one selected thing,
+   its slot sections grouped by family with a value per line, and
+   a total at the foot. */
+.insp { padding: 1rem; border: 1px solid var(--box-edge); border-radius: var(--r-sm); background: var(--glass); }
+.insp-head { display: flex; align-items: flex-start; gap: 0.8rem; }
+.insp-head img { border-radius: var(--r-sm); }
+.insp-head h3 { margin: 0; }
+.insp-x { margin-left: auto; color: var(--muted); text-decoration: none; }
+.insp-copy { width: 100%; margin: 0.8rem 0 0.2rem; }
+.slotsec { margin-top: 0.9rem; }
+.slotsec h4 { margin: 0 0 0.3rem; color: var(--muted); font-size: 0.78rem; letter-spacing: 0.05em; text-transform: uppercase; }
+.slotsec h4 small { letter-spacing: 0; text-transform: none; }
+.modrow { display: flex; justify-content: space-between; gap: 1rem; padding: 0.28rem 0; border-bottom: 1px solid var(--box-edge); font-size: 0.88rem; }
+.modrow:last-child { border-bottom: 0; }
+.modrow-name small { color: var(--muted); }
+.modrow-val { color: var(--gold); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.insp-total { display: flex; justify-content: space-between; gap: 1rem; margin-top: 1rem; padding-top: 0.7rem; border-top: 1px solid var(--box-edge); font-weight: 700; }
+
+/* Tech pips: the small corner badge on an item's icon box naming
+   its meta family (Tech I/II/III, faction, capital, deadspace,
+   officer, storyline). The icon box anchors it. */
+.pip { position: absolute; top: 0; left: 0; padding: 0.08rem 0.24rem; border-radius: 0 0 var(--r-xs) 0; font-size: 0.55rem; font-weight: 800; letter-spacing: 0.04em; line-height: 1.25; pointer-events: none; }
+.pip-t1 { background: #3d4756; color: #dbe4f0; }
+.pip-t2 { background: #b8860b; color: #fff7e0; }
+.pip-t3 { background: #7c3aed; color: #f1eaff; }
+.pip-fac { background: #0e7490; color: #e0f7ff; }
+.pip-cap { background: #b91c1c; color: #ffe4e0; }
+.pip-ds { background: #15803d; color: #e6ffe9; }
+.pip-off { background: #a21caf; color: #ffe9fd; }
+.pip-story { background: #0369a1; color: #e3f3ff; }
+
+/* Location flag chip: where a stack sits (Item Hangar, Ship
+   Hangar, a bay, a slot family), as a small outlined pill. */
+.flagchip { display: inline-block; padding: 0.12rem 0.45rem; border: 1px solid var(--box-edge); border-radius: 999px; color: var(--muted); font-size: 0.72rem; font-weight: 600; white-space: nowrap; }
+
+/* Breadcrumbs: the pane's place trail, with a quiet caption
+   riding the right end. */
+.crumbs { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.4rem; color: var(--muted); font-size: 0.85rem; }
+.crumbs a { color: var(--muted); }
+.crumb-sep { opacity: 0.6; }
+.crumb-here { color: var(--text-bright); font-weight: 700; }
+.crumb-cap { margin-left: auto; font-size: 0.76rem; }
+
+/* The inspector's estimate bar: the headline value of the
+   selection in a tinted band, with its action riding the right. */
+.estbar { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; margin: 0.8rem 0 0.2rem; padding: 0.55rem 0.7rem; border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent); border-radius: var(--r-sm); background: color-mix(in srgb, var(--accent) 9%, transparent); }
+.estbar-l { display: flex; flex-direction: column; gap: 0.05rem; min-width: 0; }
+.estbar-lab { color: var(--muted); font-size: 0.64rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+.estbar-v { color: var(--gold); font-size: 1.05rem; font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* Loadout chip accents: the slot letter reads in the accent,
+   and the subsystem pill reads violet. */
+.lchip i { font-style: normal; color: var(--accent); }
+.lchip.sub { color: #c99aff; border-color: color-mix(in srgb, #a855f7 45%, transparent); }
+
+/* Inspector facts and foot: the summary panel's label/value
+   lines and the snapshot reference at the pane's foot. */
+.insp-facts { margin: 0.9rem 0 0; }
+.insp-facts > div { display: flex; justify-content: space-between; gap: 1rem; padding: 0.35rem 0; border-bottom: 1px solid var(--box-edge); font-size: 0.88rem; }
+.insp-facts dt { color: var(--muted); }
+.insp-facts dd { margin: 0; font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; }
+.insp-foot { display: flex; justify-content: space-between; gap: 1rem; margin-top: 1rem; padding-top: 0.7rem; border-top: 1px solid var(--box-edge); color: var(--muted); font-size: 0.76rem; }
+.slotsec .modrow .mq { color: var(--accent); font-weight: 700; }
+.insp-note { margin-top: 0.6rem; color: var(--muted); font-size: 0.82rem; }

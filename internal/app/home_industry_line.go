@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"sort"
+	"strconv"
 	"time"
 
 	"evesynapse/internal/esi"
@@ -38,9 +39,11 @@ const (
 )
 
 type prodLineBuyRow struct {
-	Name   string
-	TypeID int64
-	Qty    string
+	Name        string
+	TypeID      int64
+	Qty         string
+	Art         string // the type's render on the EVE image server
+	ArtFallback string // the type's icon, swapped in when no render exists
 }
 
 type prodLineRow struct {
@@ -48,8 +51,44 @@ type prodLineRow struct {
 	ProductTypeID int64 // 0 when the SDE maps no product
 	State         string
 	Note          string // "Ready for delivery" / "Delivers in 5h" / "Needs a restart" / "healthy"
+	Chip          string // the state as a chip beside the product name: "Due" / "Needs a restart" / "healthy"
+	Art           string // the product's render on the EVE image server
+	ArtFallback   string // the product's icon, swapped in when no render exists
+	HasBar        bool   // the line's job has both a start and an end to measure against
+	BarPct        int    // the job's elapsed share of its start-to-end span, 0 to 100
+	BarLabel      string // the timing line under the bar: the note for a due line, "Ends in ..." for a healthy one
 	Runner        string // largest size: who runs the line's next job, and when it ends
 	Missing       []prodLineBuyRow
+}
+
+// typeArtURLs follows the item page's art pattern: the type's
+// render on the EVE image server first, its icon as the fallback
+// the templates swap in when the type has no render.
+func typeArtURLs(typeID int64, size int) (string, string) {
+	id := strconv.FormatInt(typeID, 10)
+	sz := strconv.Itoa(size)
+	return "https://images.evetech.net/types/" + id + "/render?size=" + sz,
+		"https://images.evetech.net/types/" + id + "/icon?size=" + sz
+}
+
+// prodLineBar fills the row's progress bar from a job's stored
+// start and end: the share of the span already elapsed by now.
+// A job missing either stamp, or with an end not after its
+// start, leaves the row without a bar.
+func prodLineBar(row *prodLineRow, startRaw, endRaw string, now time.Time) {
+	start, okS := parseRFC3339(startRaw)
+	end, okE := parseRFC3339(endRaw)
+	if !okS || !okE || !end.After(start) {
+		return
+	}
+	pct := int(now.Sub(start) * 100 / end.Sub(start))
+	if pct < 0 {
+		pct = 0
+	}
+	if pct > 100 {
+		pct = 100
+	}
+	row.HasBar, row.BarPct = true, pct
 }
 
 type prodLineWidget struct {
@@ -108,7 +147,8 @@ func (app *Application) buildProdLine(ctx context.Context, userID int64, bundles
 		bp := pin.BlueprintTypeID
 		var dueEnd time.Time
 		dueReady, running := false, false
-		runnerName, runnerEnds := "", ""
+		dueStart, readyStart, readyEnd := "", "", ""
+		runnerName, runnerEnds, runnerStart := "", "", ""
 		var runnerEnd time.Time
 		for _, b := range bundles {
 			if !b.jobsKnown {
@@ -123,21 +163,24 @@ func (app *Application) buildProdLine(ctx context.Context, userID int64, bundles
 				case "ready":
 					dueReady = true
 					running = true
+					if readyStart == "" {
+						readyStart, readyEnd = j.StartDate, j.EndDate
+					}
 				case "active":
 					running = true
 					if (j.ActivityID == 1 || j.ActivityID == 11) && !end.IsZero() &&
 						end.Sub(now) <= prodLineDueWithin {
 						if dueEnd.IsZero() || end.Before(dueEnd) {
-							dueEnd = end
+							dueEnd, dueStart = end, j.StartDate
 						}
 					}
 					if !end.IsZero() && (runnerEnd.IsZero() || end.Before(runnerEnd)) {
-						runnerEnd, runnerName, runnerEnds = end, b.ch.Name, j.EndDate
+						runnerEnd, runnerName, runnerEnds, runnerStart = end, b.ch.Name, j.EndDate, j.StartDate
 					}
 				case "paused":
 					running = true
 					if runnerEnd.IsZero() {
-						runnerEnd, runnerName, runnerEnds = end, b.ch.Name, j.EndDate
+						runnerEnd, runnerName, runnerEnds, runnerStart = end, b.ch.Name, j.EndDate, j.StartDate
 					}
 				}
 			}
@@ -157,6 +200,29 @@ func (app *Application) buildProdLine(ctx context.Context, userID int64, bundles
 			row.State, row.Note = prodLineHealthy, "healthy"
 		default:
 			row.State, row.Note = prodLineRestart, "Needs a restart"
+		}
+		// The face: the state as a chip, and a progress bar
+		// measured on the job that set the state, from its
+		// stored start and end. A due line's bar carries its
+		// note as the timing label; a healthy line's bar is
+		// labelled with the time left on its next job.
+		switch row.State {
+		case prodLineDue:
+			row.Chip = "Due"
+			row.BarLabel = row.Note
+			if dueReady {
+				prodLineBar(&row, readyStart, readyEnd, now)
+			} else {
+				prodLineBar(&row, dueStart, dueEnd.Format(time.RFC3339), now)
+			}
+		case prodLineHealthy:
+			row.Chip = "healthy"
+			prodLineBar(&row, runnerStart, runnerEnds, now)
+			if row.HasBar {
+				row.BarLabel = "Ends in " + humanDuration(time.Until(runnerEnd).Round(time.Minute))
+			}
+		default:
+			row.Chip = row.Note
 		}
 		if row.State != prodLineHealthy {
 			out.Attention++
@@ -187,6 +253,9 @@ func (app *Application) buildProdLine(ctx context.Context, userID int64, bundles
 			name = "Blueprint " + esi.FormatInt(judged[i].bp)
 		}
 		judged[i].row.Product = name
+		if judged[i].row.ProductTypeID != 0 {
+			judged[i].row.Art, judged[i].row.ArtFallback = typeArtURLs(judged[i].row.ProductTypeID, 64)
+		}
 	}
 
 	// Attention first: due lines by soonest delivery, then lines
@@ -258,7 +327,8 @@ func (app *Application) buildProdLine(ctx context.Context, userID int64, bundles
 						if name == "" {
 							name = "Item " + esi.FormatInt(id)
 						}
-						rows = append(rows, prodLineBuyRow{Name: name, TypeID: id, Qty: esi.FormatInt(left)})
+						art, artFallback := typeArtURLs(id, 64)
+						rows = append(rows, prodLineBuyRow{Name: name, TypeID: id, Qty: esi.FormatInt(left), Art: art, ArtFallback: artFallback})
 					}
 				}
 				return rows

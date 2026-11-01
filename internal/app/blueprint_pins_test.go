@@ -159,8 +159,8 @@ func TestProdLineWidgetSizes(t *testing.T) {
 		"Fixture Sprocket", "Needs a restart",
 		"Fixture Component", "healthy",
 		"Buy for the next run",
-		`<span>Fixture Component</span> <span class="prodline-qty">1</span>`,
-		`<span>Tritanium</span> <span class="prodline-qty">16</span>`,
+		`<span class="prodline-buyname">Fixture Component</span> <span class="prodline-qty">1</span>`,
+		`<span class="prodline-buyname">Tritanium</span> <span class="prodline-qty">16</span>`,
 	)
 	if strings.Contains(body, "Fixture Alpha · ends") {
 		t.Error("default size shows the runner detail, want it at the largest size only")
@@ -200,9 +200,9 @@ func TestProdLineWidgetSizes(t *testing.T) {
 		"Fixture Component", "healthy",
 		"Fixture Alpha · ends",
 		"prodline-missing",
-		`<li>Fixture Component <span class="prodline-qty">1</span></li>`,
-		`<li>Tritanium <span class="prodline-qty">6</span></li>`,
-		`<span>Tritanium</span> <span class="prodline-qty">16</span>`,
+		`<li class="prodline-buyrow"><img class="prodline-buyart" src="https://images.evetech.net/types/1002/render?size=64" data-fallback-src="https://images.evetech.net/types/1002/icon?size=64" alt="" width="24" height="24" loading="lazy"><span class="prodline-buyname">Fixture Component</span> <span class="prodline-qty">1</span></li>`,
+		`<li class="prodline-buyrow"><img class="prodline-buyart" src="https://images.evetech.net/types/34/render?size=64" data-fallback-src="https://images.evetech.net/types/34/icon?size=64" alt="" width="24" height="24" loading="lazy"><span class="prodline-buyname">Tritanium</span> <span class="prodline-qty">6</span></li>`,
+		`<span class="prodline-buyname">Tritanium</span> <span class="prodline-qty">16</span>`,
 	)
 }
 

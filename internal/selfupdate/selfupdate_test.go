@@ -1612,14 +1612,15 @@ func TestChainPicksNewestForge(t *testing.T) {
 	if binaryURL != glSrv.URL+"/evesynapse-arm64" {
 		t.Fatalf("chain picked binary %q, want GitLab's", binaryURL)
 	}
-	// The read-out names each forge as it is checked, in the
+	// The read-out names each source as it is checked, in the
 	// fallback list's order, at its endpoint, and what each
-	// one found.
+	// one found. The mirror is listed last, after the forges.
 	ghLine := strings.Index(out.String(), "github    https://api.github.com/repos/natemsz/evesynapse    no usable release")
 	glLine := strings.Index(out.String(), fmt.Sprintf("gitlab    %s/projects/natemsz%%2Fevesynapse    v9.9.9.9", glSrv.URL))
 	fjLine := strings.Index(out.String(), fmt.Sprintf("forgejo   %s/api/v1/repos/EveSynapse/evesynapse    v9.9.9.0", fjSrv.URL))
-	if ghLine < 0 || glLine < ghLine || fjLine < glLine {
-		t.Fatalf("read-out %q: want github (no usable release), then gitlab (v9.9.9.9), then forgejo (v9.9.9.0)", out.String())
+	mirrorLine := strings.Index(out.String(), "mirror    http://127.0.0.1:1    no usable release")
+	if ghLine < 0 || glLine < ghLine || fjLine < glLine || mirrorLine < fjLine {
+		t.Fatalf("read-out %q: want github (no usable release), then gitlab (v9.9.9.9), then forgejo (v9.9.9.0), then mirror (no usable release)", out.String())
 	}
 }
 

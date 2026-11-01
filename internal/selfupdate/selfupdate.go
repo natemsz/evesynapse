@@ -102,9 +102,8 @@ const (
 // version, the earlier-listed provider is the source, and the
 // manifest, its signature and the binary all come from that
 // one provider's release. An install that names none walks
-// an out-of-box fallback list — the three forges below, with
-// the mirror asked only when no forge produced a genuine
-// release:
+// an out-of-box fallback list — the three forges below, then
+// the mirror:
 //
 //	github: the repository's releases on GitHub — the stable
 //	    channel from its "latest" download address, the dev
@@ -116,8 +115,7 @@ const (
 //	mirror: a static mirror of the releases (the project's is
 //	    served from synap6.io), laid out as the channel pointer
 //	    manifests beside the binaries they describe. In the
-//	    fallback list it is asked only when no forge produced
-//	    a genuine manifest.
+//	    fallback list it is asked last, after the three forges.
 //
 // Whichever provider serves them, the updater reads its kind's
 // manifest, checks the signature, compares versions, and
@@ -834,30 +832,20 @@ func providerEndpoint(provider string) string {
 //
 // An install that names one or more providers walks those, in
 // the order named. An install that names none walks the
-// fallback list: GitHub, GitLab and Forgejo are each asked for
-// the channel's release, and the newest genuine manifest among
-// them wins. A source that has no such release, or cannot be
-// reached, is passed over; a source that answers with a
-// release whose signature does not check out stops the walk,
-// because that is not a source being down, it is a forgery
-// being offered. Only on the fallback list, and only when no
-// forge produces a genuine manifest, is the static mirror
-// asked, last.
+// fallback list: GitHub, GitLab, Forgejo and the static mirror
+// are each asked for the channel's release, in that order, and
+// the newest genuine manifest among them wins, so the mirror,
+// listed last, supplies the release only on a tie it cannot
+// win or when the forges produced nothing genuine. A source
+// that has no such release, or cannot be reached, is passed
+// over; a source that answers with a release whose signature
+// does not check out stops the walk, because that is not a
+// source being down, it is a forgery being offered.
 func fetchReleaseManifest(ctx context.Context, w io.Writer, arch string, dev bool) (releaseManifest, string, string, string, error) {
 	if providers := updateProviders(); len(providers) > 0 {
 		return walkProviders(ctx, w, providers, arch, dev)
 	}
-	m, provider, signer, binaryURL, err := walkProviders(ctx, w, []string{"github", "gitlab", "forgejo"}, arch, dev)
-	if err == nil {
-		return m, provider, signer, binaryURL, nil
-	}
-	var refused *refusal
-	if errors.As(err, &refused) {
-		return m, "", "", "", err
-	}
-	m, signer, binaryURL, err = fetchProviderManifest(ctx, "mirror", arch, dev)
-	reportProviderCheck(w, "mirror", m, err)
-	return m, "mirror", signer, binaryURL, err
+	return walkProviders(ctx, w, []string{"github", "gitlab", "forgejo", "mirror"}, arch, dev)
 }
 
 // walkProviders asks each named provider for the channel's

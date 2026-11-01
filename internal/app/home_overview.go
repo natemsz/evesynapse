@@ -36,19 +36,20 @@ import (
 // Widget ids. These strings are persisted in users.home_layout;
 // never rename one.
 const (
-	widgetBriefing   = "briefing"
-	widgetFleet      = "fleet"
-	widgetNetWorth   = "networth"
-	widgetIndustry   = "industry"
-	widgetMarket     = "market"
-	widgetWatchlist  = "watchlist"
-	widgetPI         = "pi"
-	widgetTradeIdeas = "tradeideas"
-	widgetTraining   = "training"
-	widgetPulse      = "pulse"
-	widgetWalletFlow = "walletflow"
-	widgetUpkeep     = "upkeep"
-	widgetGlance     = "glance"
+	widgetBriefing    = "briefing"
+	widgetFleet       = "fleet"
+	widgetNetWorth    = "networth"
+	widgetIndustry    = "industry"
+	widgetMarket      = "market"
+	widgetWatchlist   = "watchlist"
+	widgetPI          = "pi"
+	widgetTradeIdeas  = "tradeideas"
+	widgetTraining    = "training"
+	widgetPulse       = "pulse"
+	widgetWalletFlow  = "walletflow"
+	widgetUpkeep      = "upkeep"
+	widgetGlance      = "glance"
+	widgetProfitPulse = "profitpulse"
 	// "server" (the Tranquility module) is retired: the player count
 	// and ESI health ride the Overview bar now. A saved layout naming
 	// it drops the entry on load; never reuse the id. "attention"
@@ -95,6 +96,7 @@ var coreWidgetCatalog = []widgetDef{
 	{widgetPI, "Planetary Industry", "Colonies across your characters: extractor timers, expired heads, and the next planet needing a visit.", 1, 2, "planets"},
 	{widgetWatchlist, "Market Watchlist", "The items you're watching: latest prices, 7- and 30-day moves, and a flag when one crosses your alert line.", 1, 1, "market_public"},
 	{widgetTraining, "Training Horizon", "The next 10 skill finishes across every character, plus who is sitting idle.", 1, 2, "skills"},
+	{widgetProfitPulse, "Profit pulse", "The Profit Analysis headline for the last 30 days: what came in, what you kept, and the item that earned the most.", 2, 2, "market"},
 }
 
 // defaultHomeLayout is what accounts with no saved layout get, sized
@@ -308,19 +310,20 @@ func homeCap(h int) int { return 3 + 5*(h-1) }
 // ---------------------------------------------------------------------------
 
 var widgetSnapshotKinds = map[string][]string{
-	widgetBriefing:   {esi.SnapSkillqueue, esi.SnapSkills, esi.SnapIndustryJobs, esi.SnapContracts, esi.SnapOrders, esi.SnapOrdersHistory, esi.SnapPlanets, esi.SnapMail, esi.SnapMailLabels, esi.SnapCalendar},
-	widgetFleet:      {esi.SnapProfile, esi.SnapCorpInfo, esi.SnapLocation, esi.SnapShip, esi.SnapOnline, esi.SnapSkillqueue, esi.SnapWallet, esi.SnapMailLabels},
-	widgetNetWorth:   {esi.SnapWallet, esi.SnapAssets, esi.SnapOrders},
-	widgetIndustry:   {esi.SnapIndustryJobs},
-	widgetMarket:     {esi.SnapOrders},
-	widgetWatchlist:  {}, // watchlist + stored history only; no character snapshots
-	widgetPI:         {esi.SnapPlanets},
-	widgetTradeIdeas: {}, // stored model answer only; no character snapshots
-	widgetTraining:   {esi.SnapSkillqueue},
-	widgetPulse:      {}, // corp snapshots load per corporation, not via bundles
-	widgetWalletFlow: {esi.SnapWalletJournal},
-	widgetUpkeep:     {}, // corp snapshots load per corporation, not via bundles
-	widgetGlance:     {esi.SnapWallet, esi.SnapAssets, esi.SnapOrders, esi.SnapSkillqueue},
+	widgetBriefing:    {esi.SnapSkillqueue, esi.SnapSkills, esi.SnapIndustryJobs, esi.SnapContracts, esi.SnapOrders, esi.SnapOrdersHistory, esi.SnapPlanets, esi.SnapMail, esi.SnapMailLabels, esi.SnapCalendar},
+	widgetFleet:       {esi.SnapProfile, esi.SnapCorpInfo, esi.SnapLocation, esi.SnapShip, esi.SnapOnline, esi.SnapSkillqueue, esi.SnapWallet, esi.SnapMailLabels},
+	widgetNetWorth:    {esi.SnapWallet, esi.SnapAssets, esi.SnapOrders},
+	widgetIndustry:    {esi.SnapIndustryJobs},
+	widgetMarket:      {esi.SnapOrders},
+	widgetWatchlist:   {}, // watchlist + stored history only; no character snapshots
+	widgetPI:          {esi.SnapPlanets},
+	widgetTradeIdeas:  {}, // stored model answer only; no character snapshots
+	widgetTraining:    {esi.SnapSkillqueue},
+	widgetPulse:       {}, // corp snapshots load per corporation, not via bundles
+	widgetProfitPulse: {}, // stored profit tables only; no character snapshots
+	widgetWalletFlow:  {esi.SnapWalletJournal},
+	widgetUpkeep:      {}, // corp snapshots load per corporation, not via bundles
+	widgetGlance:      {esi.SnapWallet, esi.SnapAssets, esi.SnapOrders, esi.SnapSkillqueue},
 }
 
 // charSnaps is one character's decoded snapshot bundle. Fields
@@ -614,26 +617,27 @@ func queueState(queue esi.Skillqueue, now time.Time) (training bool, finishedAt 
 // ---------------------------------------------------------------------------
 
 type homeWidget struct {
-	ID         string
-	Title      string
-	W, H       int    // size in grid cells
-	MinW, MinH int    // the module's floor in grid cells (Customize refuses less)
-	SizeClass  string // gw1-3 gh1-3: the grid classes the CSS applies
-	Cap        int    // rows or items shown before More, by height
-	Customize  bool   // rendering under /?customize=1 (form return targets)
-	Fleet      *fleetWidget
-	Briefing   *briefingWidget
-	NetWorth   *netWorthWidget
-	Industry   *industryWidget
-	Market     *marketWidget
-	Watchlist  *watchlistWidget
-	PI         *piWidget
-	Training   *trainingWidget
-	Pulse      *pulseWidget
-	WalletFlow *walletFlowWidget
-	TradeIdeas *ideas.Widget
-	Upkeep     *upkeepWidget
-	Glance     *glanceWidget
+	ID          string
+	Title       string
+	W, H        int    // size in grid cells
+	MinW, MinH  int    // the module's floor in grid cells (Customize refuses less)
+	SizeClass   string // gw1-3 gh1-3: the grid classes the CSS applies
+	Cap         int    // rows or items shown before More, by height
+	Customize   bool   // rendering under /?customize=1 (form return targets)
+	Fleet       *fleetWidget
+	Briefing    *briefingWidget
+	NetWorth    *netWorthWidget
+	Industry    *industryWidget
+	Market      *marketWidget
+	Watchlist   *watchlistWidget
+	PI          *piWidget
+	Training    *trainingWidget
+	Pulse       *pulseWidget
+	WalletFlow  *walletFlowWidget
+	TradeIdeas  *ideas.Widget
+	Upkeep      *upkeepWidget
+	Glance      *glanceWidget
+	ProfitPulse *profitPulseWidget
 }
 
 // homeView is the signed-in Home body (pageData.Home).
@@ -1570,6 +1574,8 @@ func (app *Application) buildHome(ctx context.Context, customize bool) *homeView
 			w.Upkeep = app.buildUpkeep(ctx, userID)
 		case widgetGlance:
 			w.Glance = app.buildGlance(ctx, userID, bundles, sharedNetWorth())
+		case widgetProfitPulse:
+			w.ProfitPulse = app.buildProfitPulse(ctx, userID, gw, gh)
 		}
 		view.Widgets = append(view.Widgets, w)
 	}

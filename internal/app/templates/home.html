@@ -467,6 +467,43 @@
   </div>
 </section>
 {{end}}
+
+{{if eq .ID "profitpulse"}}
+<section class="card {{.SizeClass}}" data-widget="{{.ID}}" data-gw="{{.W}}" data-gh="{{.H}}"{{if gt .MinW 1}} data-minw="{{.MinW}}"{{end}}{{if gt .MinH 1}} data-minh="{{.MinH}}"{{end}}>{{$cap := .Cap}}
+  <h3>{{.Title}}</h3>
+  <div class="card-body">
+  {{with .ProfitPulse}}
+  {{if .HasData}}
+  <p class="profitpulse-sub"><small>Last 30 days · all your characters</small></p>
+  <dl class="profitpulse-figs">
+    <div><dt>Gross in</dt><dd>{{.GrossIn}} ISK</dd></div>
+    <div><dt>Kept as profit</dt><dd><strong class="{{if eq .KeptDir "up"}}sem-kept-tx{{else if eq .KeptDir "down"}}sem-lost-tx{{end}}">{{.Kept}} ISK</strong></dd></div>
+  </dl>
+  {{if .TopItem}}<p class="profitpulse-top">Top item: <strong>{{.TopItem}}</strong> <small>margin <span class="{{if eq .TopMarginDir "up"}}sem-kept-tx{{else if eq .TopMarginDir "down"}}sem-lost-tx{{end}}">{{.TopMargin}} ISK</span></small></p>{{end}}
+  {{with .Waterfall}}
+  <figure class="pf-chart">
+    <figcaption><strong>{{.Name}}</strong><br><small class="profitpulse-sub">{{.Sub}}</small></figcaption>
+    {{if .Legend}}<div class="chart-legend">{{range .Legend}}<span class="legend-item"><span class="legend-swatch {{.Class}}" aria-hidden="true"></span>{{.Label}}{{if .Value}} <small class="profitpulse-sub">{{.Value}}</small>{{end}}</span>{{end}}</div>{{end}}
+    <div class="pchart">
+      <svg viewBox="0 0 {{.W}} {{.H}}" width="100%" role="img" aria-label="{{.Label}}" preserveAspectRatio="none">
+        <defs><pattern id="pf-hatch-pp" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="7" height="7" class="pf-hatch-bg"/><line x1="0" y1="0" x2="0" y2="7" class="pf-hatch-line"/></pattern></defs>
+        {{range .Conns}}<line class="pf-wf-conn" x1="{{.X1}}" y1="{{.Y}}" x2="{{.X2}}" y2="{{.Y}}"/>{{end}}
+        {{range .Bars}}<rect class="{{.Class}}" x="{{.X}}" y="{{.Y}}" width="{{.W}}" height="{{.H}}"/>{{end}}
+        {{if .Cap}}<rect class="pf-wf-cap" x="{{.Cap.X}}" y="{{.Cap.Y}}" width="{{.Cap.W}}" height="{{.Cap.H}}"/>{{end}}
+      </svg>
+      <div class="profitpulse-wf-values" aria-hidden="true">{{range .Values}}<span class="pf-x-{{.XPos}} pf-y-{{.YPos}}">{{.Text}}</span>{{end}}</div>
+    </div>
+    <div class="profitpulse-wf-names" aria-hidden="true">{{range .Names}}<span class="{{.Class}} pf-x-{{.Pos}}">{{.Label}}</span>{{end}}</div>
+  </figure>
+  {{end}}
+  <p class="profitpulse-more"><small><a href="/profit/">Open Profit Analysis</a></small></p>
+  {{else}}
+  <p class="wempty">No profit yet. Once your characters' sales, jobs and other income have been folded into the ledger, the headline shows here.</p>
+  {{end}}
+  {{end}}
+  </div>
+</section>
+{{end}}
 {{end}}
 </div>
 

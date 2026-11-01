@@ -2512,6 +2512,27 @@ tr.fleet-detail > td { background: #120d09; border-bottom: 1px solid color-mix(i
 /* A home widget with nothing to show says so quietly, in the
    muted tone, with its way forward linked in the accent. */
 .wempty { color: var(--muted); }
+/* Production Lines widget: one line per pinned blueprint, its
+   state word in the state's colour; the buy list under the lines
+   at the bigger sizes, each line's own missing materials at the
+   largest. */
+.card[data-widget="prodline"] .prodline-lines { list-style: none; margin: 0; padding: 0; }
+.card[data-widget="prodline"] .prodline-lines > li { padding: 0.3rem 0; border-top: 1px solid rgba(255, 255, 255, 0.07); }
+.card[data-widget="prodline"] .prodline-lines > li:first-child { border-top: none; }
+.card[data-widget="prodline"] .prodline-prod { font-weight: 600; }
+.card[data-widget="prodline"] .prodline-state { font-size: 0.85em; }
+.card[data-widget="prodline"] .prodline-due { color: var(--accent); }
+.card[data-widget="prodline"] .prodline-restart { color: var(--danger); }
+.card[data-widget="prodline"] .prodline-healthy { color: var(--muted); }
+.card[data-widget="prodline"] .prodline-buy, .card[data-widget="prodline"] .prodline-missing { list-style: none; margin: 0.2rem 0 0; padding: 0; }
+.card[data-widget="prodline"] .prodline-missing { margin-left: 1rem; }
+.card[data-widget="prodline"] .prodline-qty { color: var(--muted-2); }
+/* The pin toggle on the Blueprints page: a quiet button that
+   fills in gold when its blueprint is pinned. */
+.bp-pin { margin: 0; }
+.bp-pin-btn { background: none; border: 1px solid rgba(255, 255, 255, 0.18); border-radius: var(--r-sm); color: var(--muted); cursor: pointer; font: inherit; font-size: 0.8rem; line-height: 1; padding: 0.22rem 0.5rem; }
+.bp-pin-btn:hover, .bp-pin-btn:focus-visible { color: var(--text); border-color: var(--accent); }
+.bp-pin-btn.on { color: var(--gold); border-color: var(--gold); }
 /* A fleet table taller than its module scrolls inside it, and the
    "Showing x of y" line stays pinned at the bottom. The line paints
    no surface of its own: the card's glass shows through it. A second

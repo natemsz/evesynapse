@@ -194,6 +194,12 @@ type BlueprintCopyMedian struct {
 	ComputedAt  time.Time `json:"computed_at"`
 }
 
+type BlueprintPin struct {
+	UserID          int64     `json:"user_id"`
+	BlueprintTypeID int64     `json:"blueprint_type_id"`
+	PinnedAt        time.Time `json:"pinned_at"`
+}
+
 type BlueprintResearchMedian struct {
 	TypeID      int64     `json:"type_id"`
 	Me          int64     `json:"me"`

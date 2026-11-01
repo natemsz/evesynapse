@@ -575,3 +575,17 @@ ON CONFLICT (kind, entity_id) DO UPDATE SET missed_at = excluded.missed_at;
 SELECT kind, entity_id
 FROM esi_name_misses
 WHERE missed_at >= sqlc.arg(since)::timestamptz;
+
+-- Blueprint pins (schema 118): the production lines an account
+-- has pinned from its Blueprints page.
+-- name: PinBlueprint :exec
+INSERT INTO blueprint_pins (user_id, blueprint_type_id)
+VALUES ($1, $2)
+ON CONFLICT (user_id, blueprint_type_id) DO NOTHING;
+-- name: UnpinBlueprint :exec
+DELETE FROM blueprint_pins
+WHERE user_id = $1 AND blueprint_type_id = $2;
+-- name: ListBlueprintPins :many
+SELECT blueprint_type_id, pinned_at FROM blueprint_pins
+WHERE user_id = $1
+ORDER BY blueprint_type_id;

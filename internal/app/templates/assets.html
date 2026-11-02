@@ -59,6 +59,7 @@
       <button type="submit" class="btn sm">Save</button>
     </form>
   </details>
+  {{if .HasTotal}}<div class="assets-net"><span class="assets-net-v">{{.TotalText}} ISK</span><span class="assets-net-l">Total estimated value</span></div>{{end}}
 </div>
 {{end}}
 
@@ -78,7 +79,6 @@
   </td>
   <td class="amx-c-load">
     {{if .HasLoadout}}<span class="lchips">{{if .Inside}}<span class="lchip">⊞ {{.Inside}} inside</span>{{end}}{{if .High}}<span class="lchip"><i>H</i> {{.High}}</span>{{end}}{{if .Mid}}<span class="lchip"><i>M</i> {{.Mid}}</span>{{end}}{{if .Low}}<span class="lchip"><i>L</i> {{.Low}}</span>{{end}}{{if .Sub}}<span class="lchip sub">Sub {{.Sub}}</span>{{end}}{{if .Cargo}}<span class="lchip cargo">+{{.Cargo}} Cargo</span>{{end}}</span>{{end}}
-    {{if .UnpricedNote}}<span class="amx-note">{{.UnpricedNote}}</span>{{end}}
   </td>
   <td class="amx-c-num">{{.Quantity}}</td>
   <td class="amx-c-num">{{.VolumeText}}</td>
@@ -98,10 +98,9 @@
 {{with .Assets}}
 <div class="pagehead assets-head">
   <div class="assets-head-l">
-    <p class="assets-count">{{.Stacks}} stacks · {{.TotalItems}} items · {{.Places}} locations</p>
+<p class="assets-count">{{.TotalItems}} items · {{.Places}} locations</p>
     {{template "charselectormulti" .Selector}}
   </div>
-  {{if .HasTotal}}<div class="assets-net"><span class="assets-net-v">{{.TotalText}} ISK</span><span class="assets-net-l">Total estimated value</span></div>{{end}}
 </div>
 {{if .Syncing}}<p><small>Not included yet: still waiting on the first sync for {{range $i, $n := .Syncing}}{{if $i}}, {{end}}{{$n}}{{end}}.</small></p>{{end}}
 {{if .Warming}}

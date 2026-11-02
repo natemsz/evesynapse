@@ -122,7 +122,7 @@ func TestAssetsMatrixFilesShipsAndCans(t *testing.T) {
 	}
 	mustContain(t, "/assets/", body,
 		"Jita IV - Moon 4 - Caldari Navy Assembly Plant",
-		"7 stacks · 6753 items · 1 locations",
+		"6753 items · 1 locations",
 		// No prices are seeded, so every stack says so instead of
 		// reading as worth zero.
 		"7 unpriced",

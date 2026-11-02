@@ -10,9 +10,10 @@
 
 /* The page head: the summary line and scope selector left, the
    account's total estimated value right with its label. */
-.assets-head { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 0.6rem 1.5rem; }
+.assets-head { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem 1.5rem; margin-bottom: 0; }
+.assets-head-l { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 1rem; }
 .assets-count { margin: 0; color: var(--muted); }
-.assets-net { text-align: right; }
+.assets-net { text-align: right; margin-left: auto; }
 .assets-net-v { display: block; color: var(--gold); font-size: 1.4rem; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1.15; }
 .assets-net-l { color: var(--muted); font-size: 0.68rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
 
@@ -147,7 +148,6 @@
 .amx-c-val { font-variant-numeric: tabular-nums; white-space: nowrap; }
 .amx-c-val .amx-isk { color: var(--gold); font-weight: 700; }
 .amx-c-val small { margin-left: 0.25rem; color: var(--muted); font-size: 0.66rem; font-weight: 700; letter-spacing: 0.07em; }
-.amx-note { color: var(--unverified); font-size: 0.75rem; }
 .amx-more { margin: 0.6rem 0 0; color: var(--muted); font-size: 0.85rem; }
 
 /* The phone ships grid and the inspector's sheet form are

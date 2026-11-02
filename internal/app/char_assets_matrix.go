@@ -130,7 +130,6 @@ type assetMatrixRow struct {
 	Quantity        string
 	VolumeText      string
 	ValueText       string // empty when no house price knows the stack
-	UnpricedNote    string // ships: "n of m stacks priced" when partial
 }
 
 // assetSlotRow is one grouped line of the inspector: a module type

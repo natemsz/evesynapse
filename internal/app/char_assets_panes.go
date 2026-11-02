@@ -564,13 +564,10 @@ func plainRowCand(it esi.Asset, division string, lk assetLookups, row assetMatri
 // hull-plus-contents value.
 func shipRowCand(cd *assetCharData, it esi.Asset, locID int64, st assetPageState, lk assetLookups, row assetMatrixRow) assetRowCand {
 	cand := assetRowCand{row: row, division: "ships"}
-	value, priced, total := cd.ix.subtreeValue(it, lk.priceOf)
+	value, priced, _ := cd.ix.subtreeValue(it, lk.priceOf)
 	if priced > 0 {
 		cand.value, cand.hasValue = value, true
 		cand.row.ValueText = assetISK(value)
-	}
-	if priced < total {
-		cand.row.UnpricedNote = fmt.Sprintf("%d of %d stacks priced", priced, total)
 	}
 	cand.volume = lk.volumeOf(it.TypeID) * float64(it.Quantity)
 	cand.row.VolumeText = assetVolume(cand.volume)

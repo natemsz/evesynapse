@@ -175,9 +175,9 @@
     width: min(24rem, 94vw);
     overflow-y: auto;
     border: 0; border-left: 1px solid var(--glass-edge); border-radius: 0;
-    background: linear-gradient(rgba(21, 21, 21, 0.94), rgba(17, 17, 17, 0.97)) padding-box;
-    -webkit-backdrop-filter: blur(18px);
-    backdrop-filter: blur(18px);
+    background: linear-gradient(color-mix(in srgb, var(--panel) 94%, transparent), color-mix(in srgb, var(--panel) 97%, transparent)) padding-box;
+    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(0.9);
+    backdrop-filter: blur(var(--glass-blur)) saturate(0.9);
     box-shadow: -18px 0 42px rgba(0, 0, 0, 0.55), 0 0 0 100vmax rgba(0, 0, 0, 0.45);
   }
   .amx-tools .searchwrap { flex: 1 1 100%; }

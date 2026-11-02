@@ -43,6 +43,10 @@ type overviewState struct {
 	Level   string // level filter: "all" | "v" | "mid" | "none"
 	PlanID  int64  // target plan for the staged plan's save
 	Stage   []stageItem
+	// Insp marks a deliberate inspector pick: at middle widths
+	// the inspector opens as an overlay sheet only for a pick,
+	// never for the default selection it otherwise follows.
+	Insp bool
 }
 
 // stageItem is one staged plan entry: a skill and the level it
@@ -65,7 +69,9 @@ func parseOverviewState(r *http.Request) overviewState {
 	st.SkillID, _ = strconv.ParseInt(q.Get("skill"), 10, 64)
 	if c := q.Get("clone"); c != "" {
 		st.Clone = c
+		st.Insp = true
 	}
+	st.Insp = st.Insp || q.Get("insp") != ""
 	st.Query = strings.TrimSpace(q.Get("q"))
 	switch q.Get("lvl") {
 	case "v", "mid", "none":
@@ -155,6 +161,9 @@ func (st overviewState) href(characterID int64) string {
 		}
 		v.Set("stage", strings.Join(parts, ","))
 	}
+	if st.Insp {
+		v.Set("insp", "1")
+	}
 	return "/character/?" + v.Encode()
 }
 
@@ -240,6 +249,13 @@ type overviewView struct {
 	SkillInsp *inspectorSkill
 	CloneInsp *cloneInspector
 	Staged    *stagedPlanView
+	// InspOpen: the URL carries a deliberate inspector pick
+	// (a skill, a clone, or a staged skill), so at middle
+	// widths the inspector opens as an overlay sheet.
+	InspOpen bool
+	// InspCloseHref: this page with the pick cleared; the
+	// overlay's backdrop and close control both point here.
+	InspCloseHref string
 
 	// Timers card: the clone jump cooldown (the fatigue rows
 	// ride the character view itself).
@@ -283,7 +299,8 @@ type ovChip struct {
 
 type queueChip struct {
 	Num   int
-	Label string // "Astrogeology → V"
+	Name  string // "Astrogeology"
+	Level string // target level, roman: "V"
 }
 
 // ovPip is one level box of a skill row: trained levels filled,
@@ -620,6 +637,13 @@ func (app *Application) fillOverview(ctx context.Context, ch db.Character, view 
 
 	ov.TotalSPCompact = compactSP(view.TotalSPRaw, 2)
 	ov.Hidden = st.hiddenFields(charID)
+	ov.InspOpen = st.Insp || st.SkillID != 0 || len(st.Stage) > 0
+	ov.InspCloseHref = st.with(func(c *overviewState) {
+		c.SkillID = 0
+		c.Stage = nil
+		c.Clone = "active"
+		c.Insp = false
+	}).href(charID)
 	if view.SystemSec != "" {
 		if sec, err := strconv.ParseFloat(view.SystemSec, 64); err == nil {
 			ov.SysSecClass = secChipClass(sec)
@@ -853,7 +877,7 @@ func (app *Application) ovTrainingStrip(view *characterView, ov *overviewView, c
 		}
 	}
 	for i, row := range view.Queue[1:] {
-		ov.QueueChips = append(ov.QueueChips, queueChip{Num: i + 1, Label: row.Skill + " → " + row.Level})
+		ov.QueueChips = append(ov.QueueChips, queueChip{Num: i + 1, Name: row.Skill, Level: row.Level})
 	}
 	ov.QueueAfter = len(view.Queue) - 1
 }
@@ -1075,6 +1099,7 @@ func (app *Application) ovImplantStrip(view *characterView, ov *overviewView) {
 			Href: st.with(func(c *overviewState) {
 				c.Surface = "clones"
 				c.Clone = "active"
+				c.Insp = true
 			}).href(view.CharacterID),
 		}
 		var names, empty []string
@@ -1313,6 +1338,7 @@ func (app *Application) ovClones(ctx context.Context, view *characterView, ov *o
 		Href: st.with(func(c *overviewState) {
 			c.Surface = "clones"
 			c.Clone = "active"
+			c.Insp = true
 		}).href(charID),
 	}
 	if view.SystemSec != "" {

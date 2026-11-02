@@ -1571,6 +1571,24 @@
     module.exports.homeSizeAllowed = homeSizeAllowed;
   }
 
+  // The resize frame's size: it starts exactly over the module —
+  // the module's real size, not the pointer's inset on the grip
+  // and not its nominal cells (a module can stand taller than its
+  // rows) — and follows the pointer's movement from there, held
+  // between half a cell and the module's ceiling, and never below
+  // the size it started at: taking the grip must not draw a frame
+  // smaller than the module being resized.
+  function homeResizeFrame(w0, h0, dx, dy, capW, capH, cellW, cellH) {
+    return {
+      w: Math.min(Math.max(w0 + dx, cellW * 0.5), Math.max(w0, capW)),
+      h: Math.min(Math.max(h0 + dy, cellH * 0.5), Math.max(h0, capH))
+    };
+  }
+
+  if (typeof module !== "undefined" && module.exports) {
+    module.exports.homeResizeFrame = homeResizeFrame;
+  }
+
   var homeTwoUp = window.matchMedia ? window.matchMedia("(min-width: 45.0625rem) and (max-width: 70rem)") : null;
 
   function layoutHomeFill(grid) {
@@ -1981,7 +1999,8 @@
     }
 
     // --- grip resize ---------------------------------------------
-    // The grip drags a frame that follows the pointer exactly; the
+    // The grip drags a frame that starts exactly over the module
+    // and follows the pointer from there; the
     // module underneath snaps to whole cells as the frame crosses
     // into them (with a little hysteresis, so a boundary never
     // flickers), and the modules after it glide out of the way. A
@@ -2027,7 +2046,7 @@
       var maxW = Math.max(1, Math.min(ceil.w, cols - colStart));
       var maxH = ceil.h;
       var lastX = ev.clientX, lastY = ev.clientY, under = false;
-      var startY = ev.clientY;
+      var startX = ev.clientX, startY = ev.clientY;
 
       var frame = document.createElement("div");
       frame.className = "resize-frame";
@@ -2045,12 +2064,16 @@
       // frame tracks the pointer with no frame of lag.
       function frameTick() {
         var r = card.getBoundingClientRect();
-        // Width from the pointer's offset (a module is exactly its
-        // columns wide). Height from how far the pointer has moved
-        // since the press, added to the rows the module had: a module
-        // standing taller than its rows (its content needs the room)
-        // must not jump to that height the moment the grip is taken.
-        var relX = lastX - r.left;
+        // The frame starts exactly over the module and follows the
+        // pointer's movement from there (homeResizeFrame), so it is
+        // never smaller than the module at the grab. The snapped
+        // size still comes from the module's cells: width from its
+        // real edge, height from how far the pointer has moved
+        // since the press, added to the rows the module had — a
+        // module standing taller than its rows (its content needs
+        // the room) must not jump to that height the moment the
+        // grip is taken.
+        var relX = r0.width + (lastX - startX);
         var relY = start.h * cellH - gapY + (lastY - startY);
         var w = snap((relX + gapX) / cellW, cur.w, maxW);
         var h = snap((relY + gapY) / cellH, cur.h, maxH);
@@ -2058,8 +2081,10 @@
         frame.classList.toggle("under", under);
         frame.style.left = r.left + "px";
         frame.style.top = r.top + "px";
-        frame.style.width = Math.max(cellW * 0.5, Math.min(relX, maxW * cellW - gapX)) + "px";
-        frame.style.height = Math.max(cellH * 0.5, Math.min(relY, maxH * cellH - gapY)) + "px";
+        var fs = homeResizeFrame(r0.width, r0.height, lastX - startX, lastY - startY,
+          maxW * cellW - gapX, maxH * cellH - gapY, cellW, cellH);
+        frame.style.width = fs.w + "px";
+        frame.style.height = fs.h + "px";
         w = Math.max(w, min.w);
         h = Math.max(h, min.h);
         if (w !== cur.w || h !== cur.h) {

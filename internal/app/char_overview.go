@@ -235,6 +235,10 @@ type overviewView struct {
 	QueueAfter   int
 	TrainingDone string // raw finish for the countdown
 
+	// Staged plan strip (sheet surface): what the staging
+	// session holds, shown under the Now Training card.
+	Staged *stagedPlanView
+
 	// The center table (sheet and browse surfaces).
 	Rows           []ovSkillRow
 	RowsNote       string // explains an empty table
@@ -248,10 +252,9 @@ type overviewView struct {
 	// Inspector.
 	SkillInsp *inspectorSkill
 	CloneInsp *cloneInspector
-	Staged    *stagedPlanView
 	// InspOpen: the URL carries a deliberate inspector pick
-	// (a skill, a clone, or a staged skill), so at middle
-	// widths the inspector opens as an overlay sheet.
+	// (a skill or a clone), so at middle widths the
+	// inspector opens as an overlay sheet.
 	InspOpen bool
 	// InspCloseHref: this page with the pick cleared; the
 	// overlay's backdrop and close control both point here.
@@ -384,6 +387,9 @@ type inspectorSkill struct {
 	StageLevel  int // next level the stage button stages, 0 = none
 	StageHref   string
 	StagedLevel int
+	// StagedDropHref unstages this skill alone, keeping the
+	// inspector on it; set only while the skill is staged.
+	StagedDropHref string
 }
 
 type milestoneRow struct {
@@ -417,7 +423,8 @@ type implantSlotRow struct {
 	Empty  bool
 }
 
-// stagedPlanView is the inspector's staged plan.
+// stagedPlanView is the staged plan strip under the Now
+// Training card.
 type stagedPlanView struct {
 	Items      []stagedItemView
 	TotalSP    string
@@ -659,7 +666,7 @@ func (app *Application) fillOverview(ctx context.Context, ch db.Character, view 
 
 	ov.TotalSPCompact = compactSP(view.TotalSPRaw, 2)
 	ov.Hidden = st.hiddenFields(charID)
-	ov.InspOpen = st.Insp || st.SkillID != 0 || len(st.Stage) > 0
+	ov.InspOpen = st.Insp || st.SkillID != 0
 	ov.InspCloseHref = st.with(func(c *overviewState) {
 		c.SkillID = 0
 		c.Stage = nil
@@ -691,8 +698,8 @@ func (app *Application) fillOverview(ctx context.Context, ch db.Character, view 
 	}
 
 	// The staged plan's computation runs first: the table's
-	// pips overlay reads its levels, and the inspector shows
-	// its outcome.
+	// pips overlay reads its levels, and the staged strip
+	// shows its outcome.
 	var outcome *skillplan.Outcome
 	if len(st.Stage) > 0 && view.SkillsKnown && !view.BrowseWarming {
 		targets := make([]skillplan.Target, 0, len(st.Stage))
@@ -1083,6 +1090,9 @@ func (app *Application) ovInspectorSkill(ctx context.Context, view *characterVie
 		insp.Milestones = append(insp.Milestones, m)
 	}
 	insp.StagedLevel = st.stageLevel(e.TypeID)
+	if insp.StagedLevel > 0 {
+		insp.StagedDropHref = st.with(func(c *overviewState) { c.stageDrop(e.TypeID) }).href(view.CharacterID)
+	}
 	next := level + 1
 	if insp.StagedLevel >= next {
 		next = insp.StagedLevel + 1
@@ -1146,7 +1156,7 @@ func (app *Application) ovImplantStrip(view *characterView, ov *overviewView) {
 }
 
 // ovStagedView renders the computed staged plan into the
-// inspector's staged section.
+// sheet's staged plan strip.
 func (app *Application) ovStagedView(ctx context.Context, view *characterView, ov *overviewView, outcome *skillplan.Outcome, catByID map[int64]skillCatalogEntry) {
 	st := view.State
 	if len(st.Stage) == 0 {

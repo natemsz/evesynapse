@@ -5239,7 +5239,6 @@
   var docWired = false;
 
   function closeRoot(root) {
-    if (root.resetPending) root.resetPending();
     var panel = root.querySelector("[data-assetscope-panel]");
     var btn = root.querySelector("[data-assetscope-btn]");
     if (panel) panel.hidden = true;
@@ -5255,102 +5254,20 @@
     var input = root.querySelector("[data-assetscope-q]");
     var none = root.querySelector("[data-assetscope-none]");
     if (!btn || !panel) return;
-    var allRow = root.querySelector("[data-assetscope-allrow]");
-    var bulk = root.querySelector("[data-assetscope-bulk]");
-    var bulkAll = root.querySelector("[data-assetscope-all]");
-    var bulkClear = root.querySelector("[data-assetscope-clear]");
-    var count = root.querySelector("[data-assetscope-count]");
-    var foot = root.querySelector("[data-assetscope-foot]");
-    var done = root.querySelector("[data-assetscope-done]");
-    var items = Array.prototype.slice.call(root.querySelectorAll(".asset-scope-rowwrap")).map(function (wrap) {
-      var row = wrap.querySelector(".asset-scope-row");
-      return {
-        wrap: wrap,
-        row: row,
-        box: row.querySelector(".asset-scope-box"),
-        id: row.getAttribute("data-id"),
-        committed: row.classList.contains("on"),
-        pending: row.classList.contains("on")
-      };
-    });
-    var committing = false;
+    var wraps = Array.prototype.slice.call(root.querySelectorAll(".asset-scope-rowwrap"));
 
-    function paint() {
-      var on = 0;
-      items.forEach(function (it) {
-        it.row.classList.toggle("on", it.pending);
-        if (it.box) it.box.classList.toggle("on", it.pending);
-        it.row.setAttribute("aria-checked", it.pending ? "true" : "false");
-        if (it.pending) on++;
-      });
-      if (allRow) {
-        var full = items.length > 0 && on === items.length;
-        allRow.classList.toggle("on", full);
-        var allBox = allRow.querySelector(".asset-scope-box");
-        if (allBox) allBox.classList.toggle("on", full);
-        allRow.setAttribute("aria-checked", full ? "true" : "false");
-      }
-      if (count) {
-        count.textContent = on === 0 ? "None selected"
-          : on + " of " + items.length + " selected";
-      }
-      if (done) done.disabled = on === 0;
-    }
-
-    root.resetPending = function () {
-      items.forEach(function (it) { it.pending = it.committed; });
-      paint();
-    };
-
-    items.forEach(function (it) {
-      it.row.setAttribute("role", "checkbox");
-      it.row.addEventListener("click", function (ev) {
-        ev.preventDefault();
-        it.pending = !it.pending;
-        paint();
-      });
-    });
-    if (allRow) {
-      allRow.setAttribute("role", "checkbox");
-      allRow.addEventListener("click", function (ev) {
-        if (committing) return;
-        ev.preventDefault();
-        items.forEach(function (it) { it.pending = true; });
-        paint();
-      });
-    }
-    if (bulkAll) bulkAll.addEventListener("click", function () {
-      items.forEach(function (it) { it.pending = true; });
-      paint();
-    });
-    if (bulkClear) bulkClear.addEventListener("click", function () {
-      items.forEach(function (it) { it.pending = false; });
-      paint();
-    });
-    if (done) done.addEventListener("click", function () {
-      var picked = items.filter(function (it) { return it.pending; })
-        .map(function (it) { return it.id; });
-      if (!picked.length || !allRow) return;
-      var url = allRow.getAttribute("href");
-      if (picked.length < items.length) {
-        url += (url.indexOf("?") === -1 ? "?" : "&") + "scope=" + picked.join(",");
-      }
-      committing = true;
-      allRow.href = url;
-      allRow.click();
-    });
-    if (bulk) bulk.hidden = false;
-    if (foot) foot.hidden = false;
-    paint();
-
+    // The rows are plain links that apply the moment they are
+    // picked; this wiring only runs the panel itself: opening
+    // and closing it, and the search filter over the rows.
     function filter() {
       var q = (input ? input.value : "").toLowerCase().trim();
       var shown = 0;
-      items.forEach(function (it) {
-        var name = (it.row.getAttribute("data-name") || "").toLowerCase();
-        var tags = (it.row.getAttribute("data-tags") || "").toLowerCase();
+      wraps.forEach(function (wrap) {
+        var row = wrap.querySelector(".asset-scope-row");
+        var name = (row.getAttribute("data-name") || "").toLowerCase();
+        var tags = (row.getAttribute("data-tags") || "").toLowerCase();
         var hit = !q || name.indexOf(q) !== -1 || tags.indexOf(q) !== -1;
-        it.wrap.hidden = !hit;
+        wrap.hidden = !hit;
         if (hit) shown++;
       });
       if (none) none.hidden = shown !== 0;
@@ -5367,9 +5284,7 @@
         closeRoot(root);
       }
     });
-    if (input) {
-      input.addEventListener("input", filter);
-    }
+    if (input) input.addEventListener("input", filter);
     root.addEventListener("keydown", function (ev) {
       if (ev.key === "Escape") {
         closeRoot(root);

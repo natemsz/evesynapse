@@ -10,7 +10,7 @@
 
 /* The page head: the summary line and scope selector left, the
    account's total estimated value right with its label. */
-.assets-head { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem 1.5rem; margin-bottom: 0; }
+.assets-head { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem 1.5rem; margin-bottom: 0.7rem; }
 .assets-head-l { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 1rem; flex: 1 1 auto; }
 .assets-count { margin: 0; color: var(--muted); }
 .assets-net { text-align: right; margin-left: auto; }
@@ -37,25 +37,13 @@
 .asset-scope-row.on .charselector-name, .asset-scope-all.on .charselector-name { color: var(--text-bright); font-weight: 600; }
 .asset-scope-portrait { flex: none; border-radius: 50%; }
 .asset-scope-main { display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; }
-.asset-scope-tags { display: flex; flex-wrap: wrap; gap: 0.25rem; }
-.asset-scope-tags .tagchip { padding: 0.05rem 0.35rem; border: 1px solid var(--glass-edge); border-radius: 999px; background: var(--glass); color: var(--muted); font-size: 0.68rem; font-weight: 600; }
 .asset-scope-none { margin: 0.4rem 0.2rem 0.2rem; color: var(--muted); font-size: 0.85rem; }
 .asset-scope-none[hidden] { display: none; }
-.asset-scope-bulk { position: sticky; top: -0.4rem; z-index: 1; display: flex; align-items: center; gap: 0.4rem; padding: 0.25rem 0; margin-bottom: 0.15rem; background: var(--input-bg); }
-.asset-scope-bulk[hidden] { display: none; }
-.asset-scope-bulkbtn { padding: 0.28rem 0.65rem; border: 1px solid var(--box-edge); border-radius: 999px; background: var(--glass); color: var(--text-bright); font: inherit; font-size: 0.8rem; font-weight: 600; cursor: pointer; }
-.asset-scope-bulkbtn:hover { border-color: var(--accent); }
-.asset-scope-count { margin-left: auto; color: var(--muted); font-size: 0.8rem; }
 .asset-scope-rowwrap { position: relative; }
 .asset-scope-rowwrap[hidden] { display: none; }
 .asset-scope-rowwrap .asset-scope-row { padding-right: 3rem; }
 .asset-scope-only { position: absolute; right: 0.45rem; top: 50%; transform: translateY(-50%); padding: 0.3rem 0.3rem; color: var(--muted); font-size: 0.75rem; font-weight: 600; text-decoration: none; }
 .asset-scope-only:hover { color: var(--accent); }
-.asset-scope-foot { position: sticky; bottom: -0.4rem; display: flex; justify-content: flex-end; padding-top: 0.4rem; background: var(--input-bg); }
-.asset-scope-foot[hidden] { display: none; }
-.asset-scope-done { padding: 0.42rem 0.9rem; border: 1px solid var(--box-edge); border-radius: 999px; background: var(--glass); color: var(--text-bright); font: inherit; font-weight: 600; cursor: pointer; }
-.asset-scope-done:hover:not(:disabled) { border-color: var(--accent); }
-.asset-scope-done:disabled { opacity: 0.45; cursor: default; }
 
 /* The console: one bordered surface, the panes flush against
    hairline dividers instead of three separate cards. The
@@ -63,7 +51,15 @@
    make the console the inspector's scroll container and its
    sticky pinning could never engage; clip keeps the same
    corner clipping without a scroll box. */
-.panes3.amx { gap: 0; border: 1px solid var(--glass-edge); border-radius: var(--r-sm); background: var(--glass); -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(0.9); backdrop-filter: blur(var(--glass-blur)) saturate(0.9); overflow: clip; grid-template-columns: 18rem minmax(0, 1fr); }
+.panes3.amx { gap: 0; border: 1px solid var(--glass-edge); border-radius: var(--r-sm); background: var(--glass); overflow: clip; grid-template-columns: 18rem minmax(0, 1fr); position: relative; }
+/* The console's blur rides a layer under the panes, not the
+   console itself: an element with a backdrop filter becomes
+   the anchor for fixed-position children, and the middle
+   band's inspector sheet would pin to the console's full
+   height instead of the screen. The layer paints the same
+   frosted glass; the panes lift above it. */
+.panes3.amx::before { content: ""; position: absolute; inset: 0; border-radius: inherit; -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(0.9); backdrop-filter: blur(var(--glass-blur)) saturate(0.9); pointer-events: none; }
+.panes3.amx > * { position: relative; z-index: 1; }
 .panes3.amx.has-insp { grid-template-columns: 18rem minmax(0, 1fr) 22rem; }
 .pane-dir { padding: 0.9rem; }
 .pane-main { padding: 0.9rem 1rem 1rem; border-left: 1px solid var(--box-edge); }
@@ -195,7 +191,7 @@
   .panes3.amx .pane-insp {
     position: fixed; top: 0; right: 0; bottom: 0; z-index: 95;
     width: min(24rem, 94vw);
-    overflow-y: auto;
+    overflow-y: auto; overscroll-behavior: contain;
     border: 0; border-left: 1px solid var(--glass-edge); border-radius: 0;
     background: var(--glass);
     -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(0.9);
@@ -203,6 +199,27 @@
     box-shadow: -18px 0 42px rgba(0, 0, 0, 0.55), 0 0 0 100vmax rgba(0, 0, 0, 0.45);
   }
   .amx-tools .searchwrap { flex: 1 1 100%; }
+  /* The matrix keeps its desktop column widths until this
+     band, and here they add up to more than the pane: the
+     fixed layout takes the difference out of the item column
+     and crushes the names to a few characters. This band
+     gives every column a share of the table instead, and the
+     loadout chips wrap inside their share. */
+  .amx-table th:nth-child(1) { width: 31%; }
+  .amx-table th:nth-child(2) { width: 30%; }
+  .amx-table th:nth-child(3) { width: 9%; }
+  .amx-table th:nth-child(4) { width: 14%; }
+  .amx-table th:nth-child(5) { width: 16%; }
+  .amx-table .lchips { flex-wrap: wrap; }
+  /* A fixed sheet inside a blurred surface takes that
+     surface as its frame, so while the inspector is up the
+     page glass gives up its blur and the sheet pins to the
+     screen; the tint stays. The phone band's .as-sheet rule
+     in phone.css is the same trade. */
+  .page-body:has(.panes3.amx.has-insp) {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
 }
 
 /* Tablet: the panes stack; the inspector stays the sheet
@@ -258,6 +275,7 @@
   .canstrip-toggle { min-height: 2.4rem; padding: 0.5rem 0.9rem; }
   .amx-table th:nth-child(2), .amx-table td.amx-c-load,
   .amx-table th:nth-child(4), .amx-table td:nth-child(4) { display: none; }
+  .amx-table th:nth-child(1) { width: auto; }
   .amx-table th:nth-child(3) { width: 5.25rem; }
   .amx-table th:nth-child(5) { width: 5.5rem; }
   .amx-tools .searchwrap { flex: 1 1 13rem; }

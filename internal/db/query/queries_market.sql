@@ -746,6 +746,13 @@ SELECT location_id, region_id, type_id, best_sell, best_buy, sell_orders, buy_or
 FROM market_station_stats
 WHERE region_id = $1
 ORDER BY location_id, type_id;
+-- One station's current best sell for each type asked about:
+-- the appraisal tool's sell list prices 0.01 under it.
+-- name: ListMarketStationBestsByTypes :many
+SELECT type_id, best_sell
+FROM market_station_stats
+WHERE location_id = $1 AND type_id = ANY($2::bigint[])
+ORDER BY type_id;
 -- name: ListScannerOpportunities :many
 -- The spread scanner's opportunities, computed and ranked in SQL:
 -- one bounded read of at most scannerRowCap rows instead of

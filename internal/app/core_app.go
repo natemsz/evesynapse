@@ -1404,6 +1404,11 @@ func (app *Application) MarketRegions() []module.RegionOption {
 	return out
 }
 
+func (app *Application) MarketHubStation(regionID int64) (int64, bool) {
+	id, ok := marketHubStations[regionID]
+	return id, ok
+}
+
 func (app *Application) DefaultMarketRegion() int64 { return defaultMarketRegion }
 
 func (app *Application) GlobalMarketRegion() int64 { return globalMarketRegion }

@@ -27,7 +27,7 @@ import (
 // Module is the Appraisal module's registration.
 var Module = module.Module{
 	ID:            "appraise",
-	Title:         "Appraisal",
+	Title:         "Appraisal / Multi-Sell",
 	Requires:      []string{},
 	Scopes:        []module.Scope{},
 	EnhanceScopes: []module.Scope{},
@@ -35,7 +35,7 @@ var Module = module.Module{
 	Nav: []module.NavSection{{
 		Section: "tools",
 		Entries: []module.NavEntry{
-			{Href: "/market/appraise/", Label: "Appraisal", Pages: []string{"market_appraise.html"}, After: "/items/"},
+			{Href: "/market/appraise/", Label: "Appraisal / Multi-Sell", Pages: []string{"market_appraise.html"}, After: "/items/"},
 		},
 	}},
 	Routes: func(r chi.Router, deps module.Deps) {

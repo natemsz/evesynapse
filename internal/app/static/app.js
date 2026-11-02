@@ -1530,9 +1530,23 @@
     module.exports.homeFillPlan = homeFillPlan;
   }
 
+  // A size is offerable when it sits inside the module's floor and
+  // ceiling both: below the floor the content breaks, above the
+  // ceiling it would only draw empty cells.
+  function homeSizeAllowed(w, h, min, max) {
+    return w >= min.w && w <= max.w && h >= min.h && h <= max.h;
+  }
+
+  if (typeof module !== "undefined" && module.exports) {
+    module.exports.homeSizeAllowed = homeSizeAllowed;
+  }
+
   var homeTwoUp = window.matchMedia ? window.matchMedia("(min-width: 45.0625rem) and (max-width: 70rem)") : null;
 
   function layoutHomeFill(grid) {
+    // Mid-resize the card under the grip owns its width; widening
+    // it from here too would fight the drag.
+    if (grid.querySelector(":scope > .card.resizing")) return;
     var cards = [], spans = [], i;
     for (i = 0; i < grid.children.length; i++) {
       var c = grid.children[i];
@@ -1761,6 +1775,12 @@
         h: parseInt(el.getAttribute("data-minh"), 10) || 1
       };
     }
+    function maxOf(el) {
+      return {
+        w: parseInt(el.getAttribute("data-maxw"), 10) || 3,
+        h: parseInt(el.getAttribute("data-maxh"), 10) || 3
+      };
+    }
     function sizeCard(el, w, h) {
       ["gw1", "gw2", "gw3", "gh1", "gh2", "gh3"].forEach(function (c) { el.classList.remove(c); });
       el.classList.add("gw" + w);
@@ -1830,9 +1850,17 @@
             cell.setAttribute("data-gh", String(h));
             cell.setAttribute("aria-label", w + " wide by " + h + " tall");
             cell.title = w + " × " + h;
+            if (!homeSizeAllowed(w, h, minOf(card), maxOf(card))) {
+              // Past the ceiling: this size would only draw
+              // empty cells, so it is not an option.
+              cell.disabled = true;
+              cell.classList.add("over");
+              cell.setAttribute("aria-label", w + " wide by " + h + " tall (more than this module can use)");
+            }
             cell.addEventListener("mouseenter", function () { paintPicker(w, h); });
             cell.addEventListener("focus", function () { paintPicker(w, h); });
             cell.addEventListener("click", function () {
+              if (!homeSizeAllowed(w, h, minOf(card), maxOf(card))) return;
               var min = minOf(card);
               if (w < min.w || h < min.h) {
                 // Under the module's floor: blink what was asked
@@ -1851,10 +1879,10 @@
         }
       }
       function paintPicker(w, h) {
-        var min = minOf(card);
+        var min = minOf(card), max = maxOf(card);
         cells.forEach(function (c) {
           var cw = +c.getAttribute("data-gw"), ch = +c.getAttribute("data-gh");
-          c.classList.toggle("on", cw <= w && ch <= h);
+          c.classList.toggle("on", cw <= w && ch <= h && homeSizeAllowed(cw, ch, min, max));
           c.classList.toggle("floor", cw <= min.w && ch <= min.h);
         });
       }
@@ -1935,21 +1963,39 @@
       if (ev.pointerType === "mouse" && ev.button !== 0) return;
       ev.preventDefault();
       stopMotion(card);
-      var start = sizeOf(card), cur = start, min = minOf(card);
+      var start = sizeOf(card), cur = start, min = minOf(card), ceil = maxOf(card);
       var r0 = card.getBoundingClientRect();
       var gcs = window.getComputedStyle(grid);
       var gapX = parseFloat(gcs.columnGap) || 0, gapY = parseFloat(gcs.rowGap) || 0;
-      var cellW = (r0.width - (start.w - 1) * gapX) / start.w + gapX;
-      // A row is the grid's row floor (--home-row): modules can stand
-      // taller than their cells when their content needs it, so the
-      // card's own height is not the measure.
-      var rowPx = parseFloat(gcs.getPropertyValue("--home-row")) *
-        parseFloat(window.getComputedStyle(document.documentElement).fontSize);
-      var cellH = (rowPx || 176) + gapY;
       var cols = (gcs.gridTemplateColumns || "").split(" ").filter(Boolean).length || 1;
-      var gridLeft = grid.getBoundingClientRect().left;
-      var colStart = Math.round((r0.left - gridLeft) / cellW);
-      var maxW = Math.max(1, Math.min(3, cols - colStart));
+      // The cell pitch is measured from the grid itself, never
+      // from the card under the grip: a card widened to fill its
+      // row stands a row wide whatever its drawn size says, and
+      // rows size by content, so their pitch is the step between
+      // the tops of the grid's cards.
+      var gridRect = grid.getBoundingClientRect();
+      var cellW = (gridRect.width + gapX) / cols;
+      var colStart = Math.max(0, Math.min(cols - 1, Math.round((r0.left - gridRect.left) / cellW)));
+      var cellH = 0;
+      (function () {
+        var tops = [], els = grid.querySelectorAll(":scope > .card");
+        for (var i = 0; i < els.length; i++) {
+          if (els[i].classList.contains("dragging")) continue;
+          tops.push(Math.round(els[i].getBoundingClientRect().top));
+        }
+        tops.sort(function (a, b) { return a - b; });
+        for (var j = 1; j < tops.length; j++) {
+          var d = tops[j] - tops[j - 1];
+          if (d > 24 && (!cellH || d < cellH)) cellH = d;
+        }
+        if (!cellH) {
+          var rowPx = parseFloat(gcs.getPropertyValue("--home-row")) *
+            parseFloat(window.getComputedStyle(document.documentElement).fontSize);
+          cellH = (rowPx || 176) + gapY;
+        }
+      })();
+      var maxW = Math.max(1, Math.min(ceil.w, cols - colStart));
+      var maxH = ceil.h;
       var lastX = ev.clientX, lastY = ev.clientY, under = false;
       var startY = ev.clientY;
 
@@ -1977,13 +2023,13 @@
         var relX = lastX - r.left;
         var relY = start.h * cellH - gapY + (lastY - startY);
         var w = snap((relX + gapX) / cellW, cur.w, maxW);
-        var h = snap((relY + gapY) / cellH, cur.h, 3);
+        var h = snap((relY + gapY) / cellH, cur.h, maxH);
         under = w < min.w || h < min.h;
         frame.classList.toggle("under", under);
         frame.style.left = r.left + "px";
         frame.style.top = r.top + "px";
         frame.style.width = Math.max(cellW * 0.5, Math.min(relX, maxW * cellW - gapX)) + "px";
-        frame.style.height = Math.max(cellH * 0.5, Math.min(relY, 3 * cellH - gapY)) + "px";
+        frame.style.height = Math.max(cellH * 0.5, Math.min(relY, maxH * cellH - gapY)) + "px";
         w = Math.max(w, min.w);
         h = Math.max(h, min.h);
         if (w !== cur.w || h !== cur.h) {

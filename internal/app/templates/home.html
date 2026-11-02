@@ -35,7 +35,7 @@
 <div class="grid home-grid{{if .Home.Customize}} home-custom{{end}}"{{if .Home.Customize}} id="home-grid" data-customize="1"{{end}}>
 {{range .Home.Widgets}}
 {{if eq .ID "glance"}}
-<section class="card {{.SizeClass}}" data-widget="{{.ID}}" data-gw="{{.W}}" data-gh="{{.H}}"{{if gt .MinW 1}} data-minw="{{.MinW}}"{{end}}{{if gt .MinH 1}} data-minh="{{.MinH}}"{{end}}>{{$cap := .Cap}}
+<section class="card {{.SizeClass}}" data-widget="{{.ID}}" data-gw="{{.W}}" data-gh="{{.H}}"{{if gt .MinW 1}} data-minw="{{.MinW}}"{{end}}{{if gt .MinH 1}} data-minh="{{.MinH}}"{{end}}{{if lt .MaxW 3}} data-maxw="{{.MaxW}}"{{end}}{{if lt .MaxH 3}} data-maxh="{{.MaxH}}"{{end}}>{{$cap := .Cap}}
   <h3>{{.Title}}</h3>
   <div class="card-body">
   {{with .Glance}}
@@ -75,7 +75,7 @@
 {{end}}
 
 {{if eq .ID "briefing"}}{{if or .Customize .Briefing.Items}}
-<section class="card {{.SizeClass}}" data-widget="{{.ID}}" data-gw="{{.W}}" data-gh="{{.H}}"{{if gt .MinW 1}} data-minw="{{.MinW}}"{{end}}{{if gt .MinH 1}} data-minh="{{.MinH}}"{{end}}>{{$cap := .Cap}}
+<section class="card {{.SizeClass}}" data-widget="{{.ID}}" data-gw="{{.W}}" data-gh="{{.H}}"{{if gt .MinW 1}} data-minw="{{.MinW}}"{{end}}{{if gt .MinH 1}} data-minh="{{.MinH}}"{{end}}{{if lt .MaxW 3}} data-maxw="{{.MaxW}}"{{end}}{{if lt .MaxH 3}} data-maxh="{{.MaxH}}"{{end}}>{{$cap := .Cap}}
   <h3>{{.Title}}</h3>
   <div class="card-body">
   {{with .Briefing}}
@@ -120,7 +120,7 @@
 {{end}}{{end}}
 
 {{if eq .ID "fleet"}}
-<section class="card {{.SizeClass}}" data-widget="{{.ID}}" data-gw="{{.W}}" data-gh="{{.H}}"{{if gt .MinW 1}} data-minw="{{.MinW}}"{{end}}{{if gt .MinH 1}} data-minh="{{.MinH}}"{{end}}>{{$cap := .Cap}}
+<section class="card {{.SizeClass}}" data-widget="{{.ID}}" data-gw="{{.W}}" data-gh="{{.H}}"{{if gt .MinW 1}} data-minw="{{.MinW}}"{{end}}{{if gt .MinH 1}} data-minh="{{.MinH}}"{{end}}{{if lt .MaxW 3}} data-maxw="{{.MaxW}}"{{end}}{{if lt .MaxH 3}} data-maxh="{{.MaxH}}"{{end}}>{{$cap := .Cap}}
   <h3>{{.Title}}</h3>
   <div class="card-body">
   {{with .Fleet}}
@@ -167,7 +167,7 @@
 {{end}}
 
 {{if eq .ID "networth"}}
-<section class="card {{.SizeClass}}" data-widget="{{.ID}}" data-gw="{{.W}}" data-gh="{{.H}}"{{if gt .MinW 1}} data-minw="{{.MinW}}"{{end}}{{if gt .MinH 1}} data-minh="{{.MinH}}"{{end}}>{{$cap := .Cap}}
+<section class="card {{.SizeClass}}" data-widget="{{.ID}}" data-gw="{{.W}}" data-gh="{{.H}}"{{if gt .MinW 1}} data-minw="{{.MinW}}"{{end}}{{if gt .MinH 1}} data-minh="{{.MinH}}"{{end}}{{if lt .MaxW 3}} data-maxw="{{.MaxW}}"{{end}}{{if lt .MaxH 3}} data-maxh="{{.MaxH}}"{{end}}>{{$cap := .Cap}}
   <h3>{{.Title}}</h3>
   <div class="card-body">
   {{/* Two rows high or more, the history chart is part of the summary;
@@ -203,7 +203,7 @@
 {{end}}
 
 {{if eq .ID "industry"}}
-<section class="card {{.SizeClass}}" data-widget="{{.ID}}" data-gw="{{.W}}" data-gh="{{.H}}"{{if gt .MinW 1}} data-minw="{{.MinW}}"{{end}}{{if gt .MinH 1}} data-minh="{{.MinH}}"{{end}}>{{$cap := .Cap}}
+<section class="card {{.SizeClass}}" data-widget="{{.ID}}" data-gw="{{.W}}" data-gh="{{.H}}"{{if gt .MinW 1}} data-minw="{{.MinW}}"{{end}}{{if gt .MinH 1}} data-minh="{{.MinH}}"{{end}}{{if lt .MaxW 3}} data-maxw="{{.MaxW}}"{{end}}{{if lt .MaxH 3}} data-maxh="{{.MaxH}}"{{end}}>{{$cap := .Cap}}
   <h3>{{.Title}}</h3>
   <div class="card-body">
   {{with .Industry}}
@@ -226,7 +226,7 @@
 {{end}}
 
 {{if eq .ID "market"}}
-<section class="card {{.SizeClass}}" data-widget="{{.ID}}" data-gw="{{.W}}" data-gh="{{.H}}"{{if gt .MinW 1}} data-minw="{{.MinW}}"{{end}}{{if gt .MinH 1}} data-minh="{{.MinH}}"{{end}}>{{$cap := .Cap}}
+<section class="card {{.SizeClass}}" data-widget="{{.ID}}" data-gw="{{.W}}" data-gh="{{.H}}"{{if gt .MinW 1}} data-minw="{{.MinW}}"{{end}}{{if gt .MinH 1}} data-minh="{{.MinH}}"{{end}}{{if lt .MaxW 3}} data-maxw="{{.MaxW}}"{{end}}{{if lt .MaxH 3}} data-maxh="{{.MaxH}}"{{end}}>{{$cap := .Cap}}
   <h3>{{.Title}}</h3>
   <div class="card-body">
   {{$customize := .Customize}}
@@ -291,7 +291,7 @@
 {{end}}
 
 {{if eq .ID "watchlist"}}
-<section class="card {{.SizeClass}}" data-widget="{{.ID}}" data-gw="{{.W}}" data-gh="{{.H}}"{{if gt .MinW 1}} data-minw="{{.MinW}}"{{end}}{{if gt .MinH 1}} data-minh="{{.MinH}}"{{end}}>{{$cap := .Cap}}
+<section class="card {{.SizeClass}}" data-widget="{{.ID}}" data-gw="{{.W}}" data-gh="{{.H}}"{{if gt .MinW 1}} data-minw="{{.MinW}}"{{end}}{{if gt .MinH 1}} data-minh="{{.MinH}}"{{end}}{{if lt .MaxW 3}} data-maxw="{{.MaxW}}"{{end}}{{if lt .MaxH 3}} data-maxh="{{.MaxH}}"{{end}}>{{$cap := .Cap}}
   <h3>{{.Title}}</h3>
   <div class="card-body">
   {{with .Watchlist}}
@@ -313,7 +313,7 @@
 {{end}}
 
 {{if eq .ID "pi"}}
-<section class="card {{.SizeClass}}" data-widget="{{.ID}}" data-gw="{{.W}}" data-gh="{{.H}}"{{if gt .MinW 1}} data-minw="{{.MinW}}"{{end}}{{if gt .MinH 1}} data-minh="{{.MinH}}"{{end}}>{{$cap := .Cap}}
+<section class="card {{.SizeClass}}" data-widget="{{.ID}}" data-gw="{{.W}}" data-gh="{{.H}}"{{if gt .MinW 1}} data-minw="{{.MinW}}"{{end}}{{if gt .MinH 1}} data-minh="{{.MinH}}"{{end}}{{if lt .MaxW 3}} data-maxw="{{.MaxW}}"{{end}}{{if lt .MaxH 3}} data-maxh="{{.MaxH}}"{{end}}>{{$cap := .Cap}}
   <h3>{{.Title}}</h3>
   <div class="card-body">
   {{with .PI}}
@@ -341,7 +341,7 @@
 {{end}}
 
 {{if eq .ID "tradeideas"}}
-<section class="card {{.SizeClass}}" data-widget="{{.ID}}" data-gw="{{.W}}" data-gh="{{.H}}"{{if gt .MinW 1}} data-minw="{{.MinW}}"{{end}}{{if gt .MinH 1}} data-minh="{{.MinH}}"{{end}}>{{$cap := .Cap}}
+<section class="card {{.SizeClass}}" data-widget="{{.ID}}" data-gw="{{.W}}" data-gh="{{.H}}"{{if gt .MinW 1}} data-minw="{{.MinW}}"{{end}}{{if gt .MinH 1}} data-minh="{{.MinH}}"{{end}}{{if lt .MaxW 3}} data-maxw="{{.MaxW}}"{{end}}{{if lt .MaxH 3}} data-maxh="{{.MaxH}}"{{end}}>{{$cap := .Cap}}
   <h3>{{.Title}}</h3>
   <div class="card-body">
   {{with .TradeIdeas}}
@@ -367,7 +367,7 @@
 </section>
 {{end}}
 {{if eq .ID "training"}}
-<section class="card {{.SizeClass}}" data-widget="{{.ID}}" data-gw="{{.W}}" data-gh="{{.H}}"{{if gt .MinW 1}} data-minw="{{.MinW}}"{{end}}{{if gt .MinH 1}} data-minh="{{.MinH}}"{{end}}>{{$cap := .Cap}}
+<section class="card {{.SizeClass}}" data-widget="{{.ID}}" data-gw="{{.W}}" data-gh="{{.H}}"{{if gt .MinW 1}} data-minw="{{.MinW}}"{{end}}{{if gt .MinH 1}} data-minh="{{.MinH}}"{{end}}{{if lt .MaxW 3}} data-maxw="{{.MaxW}}"{{end}}{{if lt .MaxH 3}} data-maxh="{{.MaxH}}"{{end}}>{{$cap := .Cap}}
   <h3>{{.Title}}</h3>
   <div class="card-body">
   {{$compact := eq .H 1}}
@@ -395,7 +395,7 @@
 {{end}}
 
 {{if eq .ID "pulse"}}
-<section class="card {{.SizeClass}}" data-widget="{{.ID}}" data-gw="{{.W}}" data-gh="{{.H}}"{{if gt .MinW 1}} data-minw="{{.MinW}}"{{end}}{{if gt .MinH 1}} data-minh="{{.MinH}}"{{end}}>{{$cap := .Cap}}
+<section class="card {{.SizeClass}}" data-widget="{{.ID}}" data-gw="{{.W}}" data-gh="{{.H}}"{{if gt .MinW 1}} data-minw="{{.MinW}}"{{end}}{{if gt .MinH 1}} data-minh="{{.MinH}}"{{end}}{{if lt .MaxW 3}} data-maxw="{{.MaxW}}"{{end}}{{if lt .MaxH 3}} data-maxh="{{.MaxH}}"{{end}}>{{$cap := .Cap}}
   <h3>{{.Title}}</h3>
   <div class="card-body">
   {{with .Pulse}}
@@ -421,7 +421,7 @@
 {{end}}
 
 {{if eq .ID "walletflow"}}
-<section class="card {{.SizeClass}}" data-widget="{{.ID}}" data-gw="{{.W}}" data-gh="{{.H}}"{{if gt .MinW 1}} data-minw="{{.MinW}}"{{end}}{{if gt .MinH 1}} data-minh="{{.MinH}}"{{end}}>{{$cap := .Cap}}
+<section class="card {{.SizeClass}}" data-widget="{{.ID}}" data-gw="{{.W}}" data-gh="{{.H}}"{{if gt .MinW 1}} data-minw="{{.MinW}}"{{end}}{{if gt .MinH 1}} data-minh="{{.MinH}}"{{end}}{{if lt .MaxW 3}} data-maxw="{{.MaxW}}"{{end}}{{if lt .MaxH 3}} data-maxh="{{.MaxH}}"{{end}}>{{$cap := .Cap}}
   <h3>{{.Title}}</h3>
   <div class="card-body">
   {{with .WalletFlow}}
@@ -450,7 +450,7 @@
 {{end}}
 
 {{if eq .ID "upkeep"}}
-<section class="card {{.SizeClass}}" data-widget="{{.ID}}" data-gw="{{.W}}" data-gh="{{.H}}"{{if gt .MinW 1}} data-minw="{{.MinW}}"{{end}}{{if gt .MinH 1}} data-minh="{{.MinH}}"{{end}}>{{$cap := .Cap}}
+<section class="card {{.SizeClass}}" data-widget="{{.ID}}" data-gw="{{.W}}" data-gh="{{.H}}"{{if gt .MinW 1}} data-minw="{{.MinW}}"{{end}}{{if gt .MinH 1}} data-minh="{{.MinH}}"{{end}}{{if lt .MaxW 3}} data-maxw="{{.MaxW}}"{{end}}{{if lt .MaxH 3}} data-maxh="{{.MaxH}}"{{end}}>{{$cap := .Cap}}
   <h3>{{.Title}}</h3>
   <div class="card-body">
   {{with .Upkeep}}

@@ -140,6 +140,49 @@ func widgetMin(id string) (w, h int) {
 	return 1, 1
 }
 
+// widgetMaxSize is the ceiling over a module's size, for the
+// modules whose content stops gaining from more cells: a band
+// that is one row however tall it stands, a KPI stack that is one
+// column however wide. Unlisted modules may use the whole grid.
+// Customize never offers a size above the ceiling, a stored one
+// is held down to it, and the dynamic part of the ceiling (the
+// heights a list's rows actually need) tightens further at
+// render: see capHeightFor.
+var widgetMaxSize = map[string]struct{ W, H int }{
+	widgetGlance:     {3, 1},
+	widgetBriefing:   {3, 1},
+	widgetNetWorth:   {1, 2},
+	widgetIndustry:   {2, 3},
+	widgetPI:         {2, 3},
+	widgetTradeIdeas: {2, 3},
+	widgetTraining:   {2, 3},
+	widgetPulse:      {3, 2},
+	widgetUpkeep:     {2, 3},
+}
+
+// widgetMax is a module's ceiling in grid cells (the whole grid
+// when it has none), never below its floor.
+func widgetMax(id string) (w, h int) {
+	w, h = homeGridMax, homeGridMax
+	if m, ok := widgetMaxSize[id]; ok {
+		w, h = m.W, m.H
+	}
+	minW, minH := widgetMin(id)
+	return max(w, minW), max(h, minH)
+}
+
+// capHeightFor is the smallest drawn height whose cap covers
+// total rows: a list with three rows gains nothing from a second
+// cell down, so the taller sizes are not offered for it.
+func capHeightFor(total int) int {
+	for h := 1; h <= homeGridMax; h++ {
+		if total <= homeCap(h) {
+			return h
+		}
+	}
+	return homeGridMax
+}
+
 // homeWidgetCatalog is every widget this build has: core's own, then the
 // ones the built-in modules declare, each after the widget it names.
 func homeWidgetCatalog() []widgetDef {
@@ -189,7 +232,8 @@ func widgetSize(item homeLayoutItem) (w, h int) {
 		h = item.H
 	}
 	minW, minH := widgetMin(item.ID)
-	return max(w, minW), max(h, minH)
+	maxW, maxH := widgetMax(item.ID)
+	return min(max(w, minW), maxW), min(max(h, minH), maxH)
 }
 
 // homeLayoutItem is one persisted layout entry: the widget and, once
@@ -621,6 +665,7 @@ type homeWidget struct {
 	Title       string
 	W, H        int    // size in grid cells
 	MinW, MinH  int    // the module's floor in grid cells (Customize refuses less)
+	MaxW, MaxH  int    // the module's ceiling for this render (Customize offers no more)
 	SizeClass   string // gw1-3 gh1-3: the grid classes the CSS applies
 	Cap         int    // rows or items shown before More, by height
 	Customize   bool   // rendering under /?customize=1 (form return targets)
@@ -1540,10 +1585,12 @@ func (app *Application) buildHome(ctx context.Context, customize bool) *homeView
 		def, _ := widgetDefFor(item.ID)
 		gw, gh := widgetSize(item)
 		minW, minH := widgetMin(item.ID)
+		maxW, maxH := widgetMax(item.ID)
 		w := homeWidget{
 			ID: item.ID, Title: def.Title,
 			W: gw, H: gh, SizeClass: fmt.Sprintf("gw%d gh%d", gw, gh),
 			MinW: minW, MinH: minH,
+			MaxW: maxW, MaxH: maxH,
 			Cap:       homeCap(gh),
 			Customize: customize,
 		}
@@ -1576,6 +1623,28 @@ func (app *Application) buildHome(ctx context.Context, customize bool) *homeView
 			w.Glance = app.buildGlance(ctx, userID, bundles, sharedNetWorth())
 		case widgetProfitPulse:
 			w.ProfitPulse = app.buildProfitPulse(ctx, userID, gw, gh)
+		}
+		// A list's offered heights stop where its rows do: with
+		// two rows standing, the taller sizes would only draw
+		// empty cells, so they are not offered.
+		listRows := -1
+		switch {
+		case w.Industry != nil:
+			listRows = len(w.Industry.Rows)
+		case w.Watchlist != nil:
+			listRows = len(w.Watchlist.Rows)
+		case w.PI != nil:
+			listRows = len(w.PI.Soonest)
+		case w.Training != nil:
+			listRows = len(w.Training.Events)
+		case w.TradeIdeas != nil:
+			listRows = 0
+			for _, g := range w.TradeIdeas.Groups {
+				listRows += len(g.Ideas)
+			}
+		}
+		if listRows >= 0 {
+			w.MaxH = min(w.MaxH, max(capHeightFor(listRows), minH))
 		}
 		view.Widgets = append(view.Widgets, w)
 	}
@@ -1729,11 +1798,16 @@ func (app *Application) handleHomeLayout(w http.ResponseWriter, r *http.Request)
 			app.saveHomeLayout(ctx, userID, next)
 		case "size":
 			// Resize one widget on the home; both sizes must be
-			// whole cells inside the grid, else nothing changes.
+			// whole cells inside the module's bounds (its floor
+			// and ceiling), else nothing changes — and a scripted
+			// caller is told so, so it can put the size back.
 			wv, werr := strconv.Atoi(r.FormValue("w"))
 			hv, herr := strconv.Atoi(r.FormValue("h"))
 			minW, minH := widgetMin(widget)
-			if known && werr == nil && herr == nil && wv >= minW && wv <= homeGridMax && hv >= minH && hv <= homeGridMax {
+			maxW, maxH := widgetMax(widget)
+			valid := known && werr == nil && herr == nil &&
+				wv >= minW && wv <= maxW && hv >= minH && hv <= maxH
+			if valid {
 				for i := range layout {
 					if layout[i].ID == widget {
 						layout[i].W, layout[i].H = wv, hv
@@ -1741,6 +1815,11 @@ func (app *Application) handleHomeLayout(w http.ResponseWriter, r *http.Request)
 						break
 					}
 				}
+			} else if r.Header.Get("X-Requested-With") == "XMLHttpRequest" {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusBadRequest)
+				_, _ = io.WriteString(w, `{"ok":false}`)
+				return
 			}
 		}
 	}

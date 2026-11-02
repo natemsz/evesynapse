@@ -439,7 +439,7 @@ func TestAppraisalToolPageAndBadShare(t *testing.T) {
 	// the Market strip no longer carries it.
 	tabs := sectionTabsBlock(t, body)
 	mustContain(t, "appraisal tools tabs", tabs,
-		`<a href="/market/appraise/" class="active" aria-current="page">Appraisal</a>`,
+		`<a href="/market/appraise/" class="active" aria-current="page">Appraisal / Multi-Sell</a>`,
 		`<a href="/items/">Item Browser</a>`)
 	if strings.Contains(tabs, "Contract Search") {
 		t.Error("appraisal page still carries the Market tab strip")

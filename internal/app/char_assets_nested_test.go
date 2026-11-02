@@ -122,7 +122,7 @@ func TestAssetsMatrixFilesShipsAndCans(t *testing.T) {
 	}
 	mustContain(t, "/assets/", body,
 		"Jita IV - Moon 4 - Caldari Navy Assembly Plant",
-		"7 stacks · 6753 items · 1 locations",
+		"6753 items · 1 locations",
 		// No prices are seeded, so every stack says so instead of
 		// reading as worth zero.
 		"7 unpriced",
@@ -131,13 +131,9 @@ func TestAssetsMatrixFilesShipsAndCans(t *testing.T) {
 		"⊞ 3 inside",
 		"+2 Cargo",
 		// The top-level container is a card, and its Tritanium is
-		// a row that names the container it sits in.
+		// a row in the matrix.
 		"1 stack · no price",
-		"Container: Small Secure Container",
-		// The strip's own filter and typeahead hooks: the box,
-		// the grid it narrows, and the name each card carries for
-		// the filter to match against.
-		`id="assets-canfilter"`,
+		// The strip's grid and the name each card carries.
 		`id="assets-cangrid"`,
 		`data-name="Small Secure Container`,
 		// The strip's expander control, labelled with the count;
@@ -162,7 +158,7 @@ func TestAssetsMatrixFilesShipsAndCans(t *testing.T) {
 		"Scourge Heavy Missile",
 		"Cargo, Drone Bay and Fuel",
 		"Hull + fitted estimate",
-		"Copy EFT",
+		"Open in fitting tool",
 		"[Loki, Loki]",
 	)
 }
@@ -269,7 +265,6 @@ func TestAssetSearchCoversTheAccountAndSaysWhere(t *testing.T) {
 		"in Loki › Small Secure Container",
 		"Jita IV - Moon 4 - Caldari Navy Assembly Plant",
 		"Amarr VIII (Oris) - Emperor Family Academy",
-		`id="assets-only"> Only Fixture Ceo`,
 	)
 	if strings.Contains(body, "Inside: ") {
 		t.Fatal("a search hit is filed under a ship instead of the station")
@@ -278,8 +273,7 @@ func TestAssetSearchCoversTheAccountAndSaysWhere(t *testing.T) {
 	// Ticked, the search is the acting character's alone.
 	_, body = getPage(t, f.app, cookie, "/assets/?q=trit&only=1")
 	mustContain(t, "search only", body,
-		`2 stacks matching "trit" on this character`,
-		`id="assets-only" checked> Only Fixture Ceo`)
+		`2 stacks matching "trit" on this character`)
 	if strings.Contains(body, "Amarr VIII") {
 		t.Fatal("the narrowed search still shows another character's assets")
 	}

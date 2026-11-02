@@ -2566,28 +2566,14 @@
       });
     })();
 
-    // Assets: the container strip's own filter. Typing narrows
-    // the can cards in place and offers the matching names as a
-    // typeahead; a pick follows the card's own drill-in link,
-    // exactly like clicking the card. Everything comes from the
-    // cards already on the page, so it reaches every container
-    // at the location with no extra requests.
+    // Assets: the container strip's expander. The toggle exists
+    // solely when the cans overflow the compact cap. The
+    // threshold is the compact layout itself, measured (content
+    // height against the capped grid), never a can count.
+    // Opening grows only the grid's own scroll area.
     (function () {
-      var input = root.querySelector("#assets-canfilter");
       var grid = root.querySelector("#assets-cangrid");
-      if (!input || !grid) return;
-      var list = root.querySelector("#assets-cansuggest");
-      var none = root.querySelector("#assets-cannone");
-      var cards = Array.prototype.slice.call(grid.querySelectorAll(".amx-can"));
-      var matches = [];
-      var selected = -1;
-
-      // The strip's expander, and only the strip's: the toggle
-      // exists solely when the cans overflow the compact cap.
-      // The threshold is the compact layout itself, measured
-      // (content height against the capped grid), never a can
-      // count. Opening grows only the grid's own scroll area;
-      // typing in the filter opens the strip so matches show.
+      if (!grid) return;
       var strip = grid.closest(".canstrip");
       var toggle = root.querySelector("#assets-cantoggle");
       var closedLabel = toggle ? toggle.textContent : "";
@@ -2607,8 +2593,6 @@
       }
       function refreshToggle() {
         if (!toggle || !strip) return;
-        if (input.value.trim() !== "") return; // mid-filter: the
-        // visible set is partial, so the overflow test would lie.
         var over = overflows();
         toggle.hidden = !over;
         if (!over) setOpen(false);
@@ -2633,106 +2617,69 @@
         });
       }
 
-      function close() {
-        if (list) list.hidden = true;
-        matches = [];
-        selected = -1;
-        input.setAttribute("aria-expanded", "false");
-        input.removeAttribute("aria-activedescendant");
-      }
-
-      function paint() {
-        if (!list) return;
-        list.innerHTML = "";
-        matches.forEach(function (card, idx) {
-          var li = document.createElement("li");
-          li.id = "assets-cansuggest-" + idx;
-          li.setAttribute("role", "option");
-          var name = document.createElement("span");
-          name.textContent = (card.getAttribute("data-name") || "").trim();
-          li.appendChild(name);
-          if (idx === selected) {
-            li.className = "sel";
-            input.setAttribute("aria-activedescendant", li.id);
-          }
-          // mousedown, not click: it fires before the input's
-          // blur, so the pick lands before anything can close.
-          li.addEventListener("mousedown", function (ev) {
-            ev.preventDefault();
-            pick(idx);
-          });
-          li.addEventListener("touchstart", function (ev) {
-            ev.preventDefault();
-            pick(idx);
-          }, { passive: false });
-          list.appendChild(li);
-        });
-        list.hidden = matches.length === 0;
-        input.setAttribute("aria-expanded", matches.length ? "true" : "false");
-      }
-
-      function pick(idx) {
-        var card = matches[idx];
-        if (!card) return;
-        close();
-        window.location.href = card.href;
-      }
-
-      input.addEventListener("input", function () {
-        var needle = input.value.trim().toLowerCase();
-        var shown = 0;
-        cards.forEach(function (card) {
-          var hit = needle === "" ||
-            (card.getAttribute("data-name") || "").toLowerCase().indexOf(needle) !== -1;
-          card.hidden = !hit;
-          if (hit) shown++;
-        });
-        if (none) none.hidden = shown !== 0;
-        if (needle === "") { close(); refreshToggle(); return; }
-        setOpen(true);
-        matches = cards.filter(function (card) { return !card.hidden; }).slice(0, 8);
-        selected = matches.length ? 0 : -1;
-        paint();
-      });
-
-      input.addEventListener("keydown", function (ev) {
-        if (!list || list.hidden) return;
-        if (ev.key === "ArrowDown" || ev.key === "ArrowUp") {
-          ev.preventDefault();
-          if (!matches.length) return;
-          selected = (selected + (ev.key === "ArrowDown" ? 1 : -1) + matches.length) % matches.length;
-          paint();
-        } else if (ev.key === "Enter") {
-          if (selected >= 0) {
-            ev.preventDefault();
-            pick(selected);
-          }
-        } else if (ev.key === "Escape") {
-          close();
-        }
-      });
-
-      input.addEventListener("blur", function () {
-        // Let a mousedown pick win the race, then close.
-        window.setTimeout(close, 120);
-      });
     })();
 
     // Assets: suggestions come from what the account actually owns
-    // (each says whose it is), narrowed to the acting character when
-    // the box is ticked. A pick fills the box and runs the search.
+    // (each says whose it is). A pick fills the box and runs the
+    // search.
     (function () {
-      var only = root.querySelector("#assets-only");
       attachSuggest(
         root.querySelector("#assets-q"),
         root.querySelector("#assets-suggest"),
         function (q) {
-          return "/assets/suggest?q=" + encodeURIComponent(q) + (only && only.checked ? "&only=1" : "");
+          return "/assets/suggest?q=" + encodeURIComponent(q);
         },
         function (it, input) {
           input.value = it.name;
-          if (input.form) input.form.submit();
+          if (input.form) {
+            if (input.form.requestSubmit) input.form.requestSubmit();
+            else input.form.submit();
+          }
         });
+    })();
+
+    // Assets: the search is live. Typing (debounced) and submitting
+    // both ride the shell's swap to the results URL, so the page
+    // never reloads; the shell keeps the scroll place, and when the
+    // swap lands the caret goes back into the box where it was.
+    (function () {
+      var form = root.querySelector("#assets-search");
+      var input = root.querySelector("#assets-q");
+      if (!form || !input) return;
+      var stash = window.__assetsLiveSearch;
+      if (stash && stash.q === input.value) {
+        window.__assetsLiveSearch = null;
+        try {
+          input.focus();
+          input.setSelectionRange(stash.caret, stash.caret);
+        } catch (e) { /* the box keeps the browser's default focus */ }
+      }
+      var last = input.value;
+      var timer = null;
+      function go() {
+        last = input.value;
+        var params = new URLSearchParams(new FormData(form));
+        window.__assetsLiveSearch = {
+          q: last,
+          caret: input.selectionStart == null ? last.length : input.selectionStart
+        };
+        var a = document.createElement("a");
+        a.href = form.action + "?" + params.toString();
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      }
+      input.addEventListener("input", function () {
+        if (timer) window.clearTimeout(timer);
+        timer = window.setTimeout(function () {
+          if (input.value !== last) go();
+        }, 250);
+      });
+      form.addEventListener("submit", function (ev) {
+        ev.preventDefault();
+        if (timer) window.clearTimeout(timer);
+        go();
+      });
     })();
 
     // Sync and Admin (administrators): find one character among all of
@@ -5994,16 +5941,6 @@
     if (e.key === "Escape" && !modal.hidden) close();
   });
   load();
-
-  // Assets: the sort select navigates to the href its options
-  // carry (the server renders each sort as a full state link).
-  (function () {
-    var sel = root.querySelector("#assets-sort");
-    if (!sel) return;
-    sel.addEventListener("change", function () {
-      if (sel.value) window.location.href = sel.value;
-    });
-  })();
 
   // Assets: a matrix row selects its item (the name link does
   // the same); clicks on real controls inside the row pass.

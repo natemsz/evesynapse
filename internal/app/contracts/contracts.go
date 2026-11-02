@@ -169,8 +169,6 @@ func (app *mod) handleContracts(w http.ResponseWriter, r *http.Request) {
 					note = "BPO"
 				case it.RawQuantity == -2:
 					note = "BPC"
-				case it.IsSingleton:
-					note = "singleton"
 				}
 				row.Items = append(row.Items, contractItemRow{
 					Name:   app.deps.TypeNameOrID(ctx, it.TypeID),

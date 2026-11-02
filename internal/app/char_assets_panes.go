@@ -396,7 +396,6 @@ func (app *Application) buildAssetMatrix(ctx context.Context, datas []*assetChar
 				GroupName: row.GroupName,
 				IconURL:   row.IconURL,
 				CloseHref: st.href(map[string]string{"item": ""}),
-				FlagText:  row.Flag,
 				ValueText: row.ValueText,
 			}
 			insp.Pip, insp.PipClass = assetPip(lk, itemSel.TypeID, row.GroupName)
@@ -533,31 +532,14 @@ func collectCharRows(cd *assetCharData, locFilter, canFilter int64, global bool,
 			if lk.shipTypes[it.TypeID] {
 				rows = append(rows, shipRowCand(cd, it, locID, st, lk, base(it, locID)))
 			} else {
-				flag := "Item Hangar"
-				if global {
-					flag = titles[locID]
-				}
-				rows = append(rows, plainRowCand(it, "items", flag, lk, base(it, locID)))
+				rows = append(rows, plainRowCand(it, "items", lk, base(it, locID)))
 			}
 		default:
 			outer := containers[0]
 			if lk.shipTypes[outer.TypeID] && canFilter == 0 {
 				continue // inside a ship: the ship's row carries it
 			}
-			flag := ""
-			switch {
-			case global:
-				flag = titles[locID]
-			case canFilter != 0:
-				if deepest := containers[len(containers)-1]; deepest.ItemID != canFilter {
-					name, _ := cd.ix.label(deepest)
-					flag = "Container: " + name
-				}
-			default:
-				name, _ := cd.ix.label(outer)
-				flag = "Container: " + name
-			}
-			rows = append(rows, plainRowCand(it, "cans", flag, lk, base(it, locID)))
+			rows = append(rows, plainRowCand(it, "cans", lk, base(it, locID)))
 		}
 	}
 	return rows, cans
@@ -565,8 +547,7 @@ func collectCharRows(cd *assetCharData, locFilter, canFilter int64, global bool,
 
 // plainRowCand values a plain stack: its own quantity at the
 // house price, its own volume.
-func plainRowCand(it esi.Asset, division, flag string, lk assetLookups, row assetMatrixRow) assetRowCand {
-	row.Flag = flag
+func plainRowCand(it esi.Asset, division string, lk assetLookups, row assetMatrixRow) assetRowCand {
 	cand := assetRowCand{row: row, division: division}
 	if unit, ok := lk.priceOf(it.TypeID); ok {
 		cand.value = unit * float64(it.Quantity)
@@ -583,14 +564,10 @@ func plainRowCand(it esi.Asset, division, flag string, lk assetLookups, row asse
 // hull-plus-contents value.
 func shipRowCand(cd *assetCharData, it esi.Asset, locID int64, st assetPageState, lk assetLookups, row assetMatrixRow) assetRowCand {
 	cand := assetRowCand{row: row, division: "ships"}
-	cand.row.Flag = "Ship Hangar"
-	value, priced, total := cd.ix.subtreeValue(it, lk.priceOf)
+	value, priced, _ := cd.ix.subtreeValue(it, lk.priceOf)
 	if priced > 0 {
 		cand.value, cand.hasValue = value, true
 		cand.row.ValueText = assetISK(value)
-	}
-	if priced < total {
-		cand.row.UnpricedNote = fmt.Sprintf("%d of %d stacks priced", priced, total)
 	}
 	cand.volume = lk.volumeOf(it.TypeID) * float64(it.Quantity)
 	cand.row.VolumeText = assetVolume(cand.volume)
@@ -659,11 +636,11 @@ func (app *Application) buildAssetInspector(ctx context.Context, cd *assetCharDa
 	families := []struct {
 		id, title, note string
 	}{
-		{"sub", "Subsystem Slots", "ESI: SubSystemSlot"},
-		{"high", "High Slots", "ESI: HiSlot0-7"},
-		{"mid", "Mid Slots", "ESI: MedSlot0-6"},
-		{"low", "Low Slots", "ESI: LoSlot0-6"},
-		{"rig", "Rig Slots", "ESI: RigSlot0-2"},
+		{"sub", "Subsystem Slots", ""},
+		{"high", "High Slots", ""},
+		{"mid", "Mid Slots", ""},
+		{"low", "Low Slots", ""},
+		{"rig", "Rig Slots", ""},
 		{"cargo", "Cargo, Drone Bay and Fuel", ""},
 	}
 	byFamily := make(map[string][]*group)
@@ -772,7 +749,6 @@ func (app *Application) buildAssetSearch(ctx context.Context, datas []*assetChar
 				GroupName: lk.groupOf(it.TypeID),
 				Quantity:  esi.FormatInt(it.Quantity),
 				Note:      assetNote(it),
-				Flag:      titles[locID],
 				ItemHref: st.href(map[string]string{
 					"item": strconv.FormatInt(it.ItemID, 10), "ship": "", "q": "",
 					"loc": strconv.FormatInt(locID, 10),

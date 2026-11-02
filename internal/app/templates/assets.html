@@ -28,14 +28,7 @@
     <ul class="suggest" id="assets-suggest" role="listbox" hidden></ul>
   </div>
   <button type="submit" class="btn">Search</button>
-  <label class="check"><input type="checkbox" name="only" value="1" id="assets-only"{{if not .ScopeAll}} checked{{end}}> Only {{.ActingName}}</label>
   {{if .Search}}<a href="/assets/">Clear search</a>{{end}}
-  {{if .Matrix}}{{with .Matrix}}<select id="assets-sort" class="amx-sortsel" aria-label="Sort the matrix">
-    <option value="{{index .SortHrefs "value"}}"{{if eq .Sort "value"}} selected{{end}}>Sort: Est. Value</option>
-    <option value="{{index .SortHrefs "stacks"}}"{{if eq .Sort "stacks"}} selected{{end}}>Sort: Stacks Inside</option>
-    <option value="{{index .SortHrefs "volume"}}"{{if eq .Sort "volume"}} selected{{end}}>Sort: Volume</option>
-    <option value="{{index .SortHrefs "name"}}"{{if eq .Sort "name"}} selected{{end}}>Sort: Name</option>
-  </select>{{end}}{{end}}
   <input type="hidden" name="tab" value="{{.FormTab}}">
   {{if ne .FormScope "all"}}<input type="hidden" name="scope" value="{{.FormScope}}">{{end}}
 </form>
@@ -59,6 +52,7 @@
       <button type="submit" class="btn sm">Save</button>
     </form>
   </details>
+  <div class="assets-net">{{if .HasTotal}}<span class="assets-net-v">{{.TotalText}} ISK</span><span class="assets-net-l">Total estimated value</span>{{end}}<p class="assets-count">{{.TotalItems}} items · {{.Places}} locations</p></div>
 </div>
 {{end}}
 
@@ -76,10 +70,8 @@
       </span>
     </span>
   </td>
-  <td class="amx-c-flag">{{if .Flag}}<span class="flagchip">{{.Flag}}</span>{{end}}</td>
   <td class="amx-c-load">
     {{if .HasLoadout}}<span class="lchips">{{if .Inside}}<span class="lchip">⊞ {{.Inside}} inside</span>{{end}}{{if .High}}<span class="lchip"><i>H</i> {{.High}}</span>{{end}}{{if .Mid}}<span class="lchip"><i>M</i> {{.Mid}}</span>{{end}}{{if .Low}}<span class="lchip"><i>L</i> {{.Low}}</span>{{end}}{{if .Sub}}<span class="lchip sub">Sub {{.Sub}}</span>{{end}}{{if .Cargo}}<span class="lchip cargo">+{{.Cargo}} Cargo</span>{{end}}</span>{{end}}
-    {{if .UnpricedNote}}<span class="amx-note">{{.UnpricedNote}}</span>{{end}}
   </td>
   <td class="amx-c-num">{{.Quantity}}</td>
   <td class="amx-c-num">{{.VolumeText}}</td>
@@ -99,10 +91,9 @@
 {{with .Assets}}
 <div class="pagehead assets-head">
   <div class="assets-head-l">
-    <p class="assets-count">{{.Stacks}} stacks · {{.TotalItems}} items · {{.Places}} locations</p>
+<p class="assets-count">{{.TotalItems}} items · {{.Places}} locations</p>
     {{template "charselectormulti" .Selector}}
   </div>
-  {{if .HasTotal}}<div class="assets-net"><span class="assets-net-v">{{.TotalText}} ISK</span><span class="assets-net-l">Total estimated value</span></div>{{end}}
 </div>
 {{if .Syncing}}<p><small>Not included yet: still waiting on the first sync for {{range $i, $n := .Syncing}}{{if $i}}, {{end}}{{$n}}{{end}}.</small></p>{{end}}
 {{if .Warming}}
@@ -130,7 +121,7 @@
     {{template "assets-tools" $.Assets}}
     {{if .Rows}}
     <table class="amx-table" data-nosort>
-      <thead><tr><th>Item / Hull</th><th>Location flag</th><th></th><th class="amx-r">Qty</th><th class="amx-r">Volume</th><th class="amx-r">Est. value</th></tr></thead>
+      <thead><tr><th>Item / Hull</th><th>Loadout / Contents</th><th class="amx-r">Qty</th><th class="amx-r">Volume</th><th class="amx-r">Est. value</th></tr></thead>
       <tbody>{{range .Rows}}{{template "assets-trow" .}}{{end}}</tbody>
     </table>
     {{if .MoreRows}}<p class="amx-more">+ {{.MoreRows}} more stacks; the most valuable are shown.</p>{{end}}
@@ -149,12 +140,7 @@
     {{if .Cans}}
     <div class="canstrip">
       <div class="canstrip-head">
-        <span class="canstrip-t">Station containers: click to drill down like a folder</span>
         <span class="canstrip-tools">
-          <span class="searchwrap canfilter-wrap">
-            <input type="search" id="assets-canfilter" placeholder="Filter containers..." autocomplete="off" role="combobox" aria-expanded="false" aria-controls="assets-cansuggest" aria-autocomplete="list" aria-label="Filter containers by name">
-            <ul class="suggest" id="assets-cansuggest" role="listbox" hidden></ul>
-          </span>
           <span class="canstrip-n">{{len .Cans}} containers · {{.CansStacks}} stacks inside</span>
           <button type="button" class="btn sm canstrip-toggle" id="assets-cantoggle" aria-expanded="false" aria-controls="assets-cangrid" hidden>Show all {{len .Cans}} {{if eq (len .Cans) 1}}container{{else}}containers{{end}}</button>
         </span>
@@ -162,7 +148,6 @@
       <div class="cangrid" id="assets-cangrid">
         {{range .Cans}}<a class="amx-can {{.HueClass}}" href="{{.Href}}" data-name="{{.Name}} {{.TypeName}}"><span class="can-box">▦</span><span class="can-main"><span class="can-name">{{.Name}}{{if .TypeName}} <small>{{.TypeName}}</small>{{end}}</span><span class="can-sub">{{.Stacks}} {{if eq .Stacks 1}}stack{{else}}stacks{{end}} · {{if .ValueText}}{{.ValueText}} ISK{{else}}no price{{end}}</span></span><span class="can-go">›</span></a>{{end}}
       </div>
-      <p class="can-none" id="assets-cannone" hidden>No containers here match that name.</p>
     </div>
     {{end}}
     {{$anyShip := false}}{{range .Rows}}{{if .Assembled}}{{$anyShip = true}}{{end}}{{end}}
@@ -176,7 +161,7 @@
     {{end}}
     {{if .Rows}}
     <table class="amx-table" data-nosort>
-      <thead><tr><th>Item / Hull</th><th>Location flag</th><th>Loadout / Contents</th><th class="amx-r">Qty</th><th class="amx-r">Volume</th><th class="amx-r">Est. value</th></tr></thead>
+      <thead><tr><th><a href="{{index .SortHrefs "name"}}"{{if eq .Sort "name"}} class="srt-on"{{end}}>Item / Hull</a></th><th><a href="{{index .SortHrefs "stacks"}}"{{if eq .Sort "stacks"}} class="srt-on"{{end}}>Loadout / Contents</a></th><th class="amx-r">Qty</th><th class="amx-r"><a href="{{index .SortHrefs "volume"}}"{{if eq .Sort "volume"}} class="srt-on"{{end}}>Volume</a></th><th class="amx-r"><a href="{{index .SortHrefs "value"}}"{{if eq .Sort "value"}} class="srt-on"{{end}}>Est. value</a></th></tr></thead>
       <tbody>{{range .Rows}}{{template "assets-trow" .}}{{end}}</tbody>
     </table>
     {{if .MoreRows}}<p class="amx-more">+ {{.MoreRows}} more stacks at this place; the most valuable are shown.</p>{{end}}
@@ -192,7 +177,6 @@
       <a class="insp-x" href="{{.CloseHref}}" aria-label="Close the inspector">✕</a>
     </div>
     <dl class="insp-facts">
-      <div><dt>Location flag</dt><dd>{{.FlagText}}</dd></div>
       <div><dt>Quantity</dt><dd>{{.QuantityText}} units</dd></div>
       <div><dt>Total stack volume</dt><dd>{{.VolumeText}}</dd></div>
       <div><dt>Estimated value</dt><dd>{{if .ValueText}}{{.ValueText}} ISK{{else}}no price{{end}}</dd></div>
@@ -206,9 +190,8 @@
     </div>
     <div class="estbar">
       <span class="estbar-l"><span class="estbar-lab">Hull + fitted estimate</span><span class="estbar-v">{{if .TotalText}}{{.TotalText}} ISK{{else}}no price{{end}}</span></span>
-      <button type="button" class="btn insp-eft" data-copy data-copy-from="assets-eft">Copy EFT</button>
+      <form method="post" action="/fittings/import/" class="insp-fitform"><textarea name="eft" hidden>{{.EFT}}</textarea><button type="submit" class="btn insp-eft">Open in fitting tool</button></form>
     </div>
-    <pre id="assets-eft" hidden>{{.EFT}}</pre>
     {{range .Sections}}{{template "assets-slotsec" .}}{{end}}
     {{if .PricedNote}}<p class="insp-note">{{.PricedNote}}</p>{{end}}
     <div class="insp-foot"><span>Item #{{.ItemID}} in your snapshot</span><span>Packaged: {{.VolumeText}}</span></div>

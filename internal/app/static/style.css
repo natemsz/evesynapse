@@ -5464,7 +5464,6 @@ html[data-theme="light"] .plan-item { border-top-color: #d9d2c2; }
 /* --- assets: what is inside a ship or container --- Contents open
    beneath the container's row, indented. */
 #assets-search { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin: 0 0 0.35rem; }
-.assets-only { display: inline-flex; align-items: center; gap: 0.35rem; }
 tr.asset-inside > td { padding: 0 0 0 1.25rem; border-top: 0; }
 tr.asset-inside details { margin: 0; }
 tr.asset-inside summary { cursor: pointer; padding: 0.3rem 0.6rem; color: var(--muted); }
@@ -6471,9 +6470,10 @@ button.gn-title:hover .gn-more, button.gn-title:focus-visible .gn-more { color: 
 .fchip-form input[type="text"] { width: 10rem; }
 
 /* Loadout chips: the small counted badges on a fitted thing's
-   row (stacks inside, fitted counts by family, cargo). */
-.lchips { display: flex; flex-wrap: wrap; gap: 0.3rem; }
-.lchip { padding: 0.1rem 0.4rem; border: 1px solid var(--glass-edge); border-radius: var(--r-xs); background: var(--glass); color: var(--muted-2); font-size: 0.72rem; font-weight: 700; }
+   row (stacks inside, fitted counts by family, cargo). The row
+   stays on one line: the badges never wrap. */
+.lchips { display: flex; flex-wrap: nowrap; gap: 0.3rem; }
+.lchip { padding: 0.1rem 0.4rem; border: 1px solid var(--glass-edge); border-radius: var(--r-xs); background: var(--glass); color: var(--muted-2); font-size: 0.72rem; font-weight: 700; white-space: nowrap; }
 .lchip.cargo { color: var(--gold); }
 
 /* The inspector pane: a detail column for one selected thing,
@@ -6507,10 +6507,6 @@ button.gn-title:hover .gn-more, button.gn-title:focus-visible .gn-more { color: 
 .pip-off { background: #a21caf; color: #ffe9fd; }
 .pip-story { background: #0369a1; color: #e3f3ff; }
 
-/* Location flag chip: where a stack sits (Item Hangar, Ship
-   Hangar, a bay, a slot family), as a small outlined pill. */
-.flagchip { display: inline-block; padding: 0.12rem 0.45rem; border: 1px solid var(--box-edge); border-radius: 999px; color: var(--muted); font-size: 0.72rem; font-weight: 600; white-space: nowrap; }
-
 /* Breadcrumbs: the pane's place trail, with a quiet caption
    riding the right end. */
 .crumbs { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.4rem; color: var(--muted); font-size: 0.85rem; }
@@ -6522,6 +6518,7 @@ button.gn-title:hover .gn-more, button.gn-title:focus-visible .gn-more { color: 
 /* The inspector's estimate bar: the headline value of the
    selection in a tinted band, with its action riding the right. */
 .estbar { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; margin: 0.8rem 0 0.2rem; padding: 0.55rem 0.7rem; border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent); border-radius: var(--r-sm); background: color-mix(in srgb, var(--accent) 9%, transparent); }
+.estbar form { margin: 0; }
 .estbar-l { display: flex; flex-direction: column; gap: 0.05rem; min-width: 0; }
 .estbar-lab { color: var(--muted); font-size: 0.64rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
 .estbar-v { color: var(--gold); font-size: 1.05rem; font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; }

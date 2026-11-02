@@ -184,7 +184,7 @@ type UpsertAssetLocationValueParams struct {
 }
 
 // ---------------------------------------------------------------------
-// Assets page location values (schema 118). The worker folds each
+// Assets page location values (schema 119). The worker folds each
 // character's stored asset snapshot into one row per place, priced
 // at the house order; the Assets page directory reads the rows.
 // ---------------------------------------------------------------------

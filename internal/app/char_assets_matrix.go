@@ -18,7 +18,7 @@ import (
 
 // ---------------------------------------------------------------------------
 // The Assets page as a three-pane matrix: a station directory on
-// the left (stored per-location values, schema 118), the selected
+// the left (stored per-location values, schema 119), the selected
 // place's stacks in the middle under the hangar divisions, and a
 // ship inspector on the right when an assembled ship is selected.
 //
@@ -34,7 +34,7 @@ import (
 const maxMatrixRows = 100
 
 // assetDirEntry is one row of the station directory: a place the
-// account holds things in, with its folded value (schema 118) or,
+// account holds things in, with its folded value (schema 119) or,
 // for a character whose first fold has not landed yet, counts
 // folded from the snapshot at render with no value claimed.
 type assetDirEntry struct {

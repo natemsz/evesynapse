@@ -1,6 +1,6 @@
 package app
 
-// The per-location value fold (schema 118): every stack files
+// The per-location value fold (schema 119): every stack files
 // under the place its outermost container sits in; value counts
 // everything a price can value, fitted modules and cargo
 // included; ships and volume count the top level only; a stack

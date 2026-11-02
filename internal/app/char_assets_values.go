@@ -13,7 +13,7 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// Per-location asset values (schema 118). The worker folds each
+// Per-location asset values (schema 119). The worker folds each
 // character's stored asset snapshot into one row per place the
 // character holds things in, priced the house way, so the Assets
 // page directory renders stored rows instead of repricing a

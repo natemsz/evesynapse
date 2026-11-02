@@ -717,11 +717,11 @@ var pgProfitFallbacksSchema string
 //go:embed schema_pg/117_profit_contracts_invention.sql
 var pgProfitContractsInventionSchema string
 
-// Step 118: per-location asset values for the Assets page
+// Step 119: per-location asset values for the Assets page
 // directory, folded from each character's asset snapshot at
 // ingest time.
 //
-//go:embed schema_pg/118_asset_location_values.sql
+//go:embed schema_pg/119_asset_location_values.sql
 var pgAssetLocationValuesSchema string
 
 // schemaStep is one numbered file in schema_pg. Steps apply in
@@ -870,7 +870,7 @@ func schemaSteps() []schemaStep {
 		{115, "intel_name_things", pgIntelNameThingsSchema, ""},
 		{116, "profit_fallbacks", pgProfitFallbacksSchema, ""},
 		{117, "profit_contracts_invention", pgProfitContractsInventionSchema, ""},
-		{118, "asset_location_values", pgAssetLocationValuesSchema, ""},
+		{119, "asset_location_values", pgAssetLocationValuesSchema, ""},
 	}
 }
 

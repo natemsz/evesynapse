@@ -70,6 +70,7 @@ type assetCharOption struct {
 	TagsText   string   // the stored tag string, for the search filter
 	Checked    bool
 	ToggleHref string
+	OnlyHref   string // the URL that scopes the page to this character alone
 }
 
 // assetScopeSelector is the character scope control: a button
@@ -582,6 +583,7 @@ func (app *Application) buildAssetsPage(ctx context.Context, userID int64, chara
 			ID: ch.CharacterID, Name: ch.Name, Image: portraitURL(ch.CharacterID, 64),
 			Tags: charTags, TagsText: ch.Tags, Checked: st.inScope(ch.CharacterID),
 			ToggleHref: st.href(map[string]string{"scope": param, "can": "", "ship": "", "item": ""}),
+			OnlyHref:   st.href(map[string]string{"scope": strconv.FormatInt(ch.CharacterID, 10), "can": "", "ship": "", "item": ""}),
 		})
 	}
 	switch {

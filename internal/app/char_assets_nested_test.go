@@ -195,10 +195,17 @@ func TestAssetsScopeSelectorChecklist(t *testing.T) {
 		`<span class="tagchip">indy</span>`,
 		`<span class="tagchip">scout</span>`,
 		// Toggling the CEO out of "all" leaves the other two.
-		`<a class="charselector-option asset-scope-row on" href="/assets/?scope=90000002,90000003" data-name="Fixture Ceo" data-tags="">`,
+		`<a class="charselector-option asset-scope-row on" href="/assets/?scope=90000002,90000003" data-name="Fixture Ceo" data-tags="" data-id="90000001">`,
 		// Toggling the third character out leaves CEO and alt
 		// (the set is written in account order: alt, CEO, third).
 		`href="/assets/?scope=90000002,90000001"`,
+		// The panel carries the bulk actions and the commit
+		// control, and each row's Only link scopes to that
+		// character alone.
+		`data-assetscope-all`,
+		`data-assetscope-clear`,
+		`data-assetscope-done`,
+		`<a class="asset-scope-only" href="/assets/?scope=90000002" data-assetscope-only>Only</a>`,
 	)
 	if strings.Contains(body, "scopepill") {
 		t.Fatal("the character scope pills are still rendered")
@@ -211,7 +218,7 @@ func TestAssetsScopeSelectorChecklist(t *testing.T) {
 	mustContain(t, "scope set", body,
 		`<span class="asset-scope-label">Fixture Alt, Fixture Ceo</span>`,
 		// The unticked row completes the set, which reads as all.
-		`<a class="charselector-option asset-scope-row" href="/assets/" data-name="Fixture Third" data-tags="">`,
+		`<a class="charselector-option asset-scope-row" href="/assets/" data-name="Fixture Third" data-tags="" data-id="90000003">`,
 		"Jita IV - Moon 4 - Caldari Navy Assembly Plant",
 	)
 	// A saved quick filter keeps the set it was saved under:

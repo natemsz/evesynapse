@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"evesynapse/internal/app/contracts"
 	"evesynapse/internal/esi"
 	"evesynapse/internal/fitview"
 )
@@ -21,11 +22,28 @@ import (
 // the house price of a type, its stored volume, whether it is a
 // ship, and its group name.
 type assetLookups struct {
-	priceOf   func(int64) (float64, bool)
-	volumeOf  func(int64) float64
-	shipTypes map[int64]bool
-	groupOf   func(int64) string
-	metaOf    func(int64) int // the SDE meta group (attribute 1692), 0 when unknown
+	priceOf    func(int64) (float64, bool)
+	volumeOf   func(int64) float64
+	shipTypes  map[int64]bool
+	groupOf    func(int64) string
+	metaOf     func(int64) int   // the SDE meta group (attribute 1692), 0 when unknown
+	categoryOf func(int64) int64 // the SDE category of a type, 0 when unknown
+}
+
+// assetRowIconURL is the picture for one asset row: a ship
+// leads with its render, and every other type resolves by SDE
+// category, which is what decides whether the image server
+// serves a picture at all (blueprints serve /bp, SKINs serve
+// nothing and get the placeholder).
+func assetRowIconURL(lk assetLookups, typeID int64) string {
+	if lk.shipTypes[typeID] {
+		return "https://images.evetech.net/types/" + strconv.FormatInt(typeID, 10) + "/render?size=64"
+	}
+	var categoryID int64
+	if lk.categoryOf != nil {
+		categoryID = lk.categoryOf(typeID)
+	}
+	return contracts.TypeCategoryIconURL(typeID, categoryID, 64)
 }
 
 // assetPip is the tech pip on a row's icon box, from the type's
@@ -449,11 +467,7 @@ func collectCharRows(cd *assetCharData, locFilter, canFilter int64, global bool,
 			}),
 		}
 		row.Pip, row.PipClass = assetPip(lk, it.TypeID, row.GroupName)
-		if lk.shipTypes[it.TypeID] {
-			row.IconURL = "https://images.evetech.net/types/" + strconv.FormatInt(it.TypeID, 10) + "/render?size=64"
-		} else {
-			row.IconURL = "https://images.evetech.net/types/" + strconv.FormatInt(it.TypeID, 10) + "/icon?size=64"
-		}
+		row.IconURL = assetRowIconURL(lk, it.TypeID)
 		if showOwner {
 			row.OwnerName = cd.ch.Name
 		}
@@ -765,11 +779,7 @@ func (app *Application) buildAssetSearch(ctx context.Context, datas []*assetChar
 				}),
 			}
 			row.Pip, row.PipClass = assetPip(lk, it.TypeID, row.GroupName)
-			if lk.shipTypes[it.TypeID] {
-				row.IconURL = "https://images.evetech.net/types/" + strconv.FormatInt(it.TypeID, 10) + "/render?size=64"
-			} else {
-				row.IconURL = "https://images.evetech.net/types/" + strconv.FormatInt(it.TypeID, 10) + "/icon?size=64"
-			}
+			row.IconURL = assetRowIconURL(lk, it.TypeID)
 			if len(containers) > 0 {
 				names := make([]string, 0, len(containers))
 				for _, c := range containers {

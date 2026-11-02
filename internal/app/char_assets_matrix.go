@@ -529,6 +529,15 @@ func (app *Application) buildAssetsPage(ctx context.Context, userID int64, chara
 		}
 	}
 	lk.metaOf = func(typeID int64) int { return metaGroups[typeID] }
+	categories := make(map[int64]int64)
+	if rows, err := app.queries.ListSDETypeCategories(ctx, typeIDs); err != nil {
+		logging.Errorf("assets: type categories: %v", err)
+	} else {
+		for _, row := range rows {
+			categories[row.TypeID] = row.CategoryID
+		}
+	}
+	lk.categoryOf = func(typeID int64) int64 { return categories[typeID] }
 
 	// The directory, from the stored folds with a counts-only
 	// fallback for characters whose first fold has not landed.

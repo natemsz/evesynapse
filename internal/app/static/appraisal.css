@@ -13,7 +13,7 @@
 .ap-ex {
   font-family: "JetBrains Mono", ui-monospace, monospace;
   font-size: 0.85rem; color: var(--text);
-  background: var(--row); border: 1px solid var(--box-edge);
+  background: var(--row-alt); border: 1px solid var(--box-edge);
   border-radius: var(--r-xs); padding: 0.45rem 0.6rem;
   margin: 0.4rem 0; white-space: pre-wrap;
 }

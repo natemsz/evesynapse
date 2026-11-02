@@ -72,7 +72,7 @@
 .ov-sec.neg { color: var(--danger); }
 
 /* ---- Three-pane workspace ---- */
-.panes3.ov { grid-template-columns: 15rem minmax(0, 1fr); border: 1px solid var(--glass-edge); border-radius: var(--r-sm); background: var(--glass); position: relative; }
+.panes3.ov { grid-template-columns: 15rem minmax(0, 1fr); border: 1px solid var(--glass-edge); border-radius: var(--r-sm); background: var(--glass); position: relative; padding: 0.9rem 1rem; }
 /* The console's blur rides a layer under the panes, not the
    console itself: an element with a backdrop filter becomes
    the anchor for fixed-position children, and the middle

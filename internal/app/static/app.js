@@ -206,6 +206,12 @@
       if (countedModal) { EveSynapseModal.open(countedModal); ev.preventDefault(); }
       return;
     }
+    var campOpener = t.closest && t.closest("[data-open-camp-modal]");
+    if (campOpener) {
+      var campModal = document.getElementById("camp-modal");
+      if (campModal) EveSynapseModal.open(campModal);
+      return;
+    }
     if (t.classList.contains("modal-backdrop")) { EveSynapseModal.close(t); return; }
     var closer = t.closest && t.closest("[data-close-modal]");
     var box = closer && closer.closest(".modal-backdrop");

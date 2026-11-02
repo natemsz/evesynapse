@@ -99,7 +99,7 @@
 {{if .Warming}}
 <p>Still syncing.{{if $.IsAdmin}} Progress is on the <a href="/admin/sync/">Sync page</a>.{{end}}</p>
 {{else if .Loaded}}
-<div class="panes3 p3 amx{{with .Matrix}}{{if .Inspector}} has-insp{{end}}{{end}}">
+<div class="panes3 p3 amx{{if .Deep}} amx-deep{{end}}{{with .Matrix}}{{if .Inspector}} has-insp{{end}}{{end}}">
   <aside class="pane-dir">
     <h2 class="pane-h">Station directory <span>{{.Places}} locations</span></h2>
     <input id="assets-dirfilter" type="search" placeholder="Filter stations..." aria-label="Filter the station directory">
@@ -128,7 +128,7 @@
     {{else}}<p>No stacks matching "{{.Query}}"{{if .Only}} on this character{{else}} on any character{{end}}.</p>{{end}}
   {{else with .Matrix}}
     <nav class="crumbs" aria-label="Breadcrumb">
-      <span>Assets</span><span class="crumb-sep">›</span>
+      {{if .ListHref}}<a href="{{.ListHref}}">Assets</a>{{else}}<span>Assets</span>{{end}}<span class="crumb-sep">›</span>
       {{if .InCan}}<a href="{{.CanBack}}">{{.CrumbLoc}}</a><span class="crumb-sep">›</span><span class="crumb-here">{{.InCan}}</span>{{else}}<span class="crumb-here">{{placeLink .Loc}}</span>{{end}}
       <span class="crumb-cap">{{if .InCan}}{{.Stacks}} stacks inside{{else}}Viewing root hangar level{{end}}</span>
     </nav>

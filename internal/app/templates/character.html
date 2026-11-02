@@ -123,7 +123,7 @@
   </div>
 
   {{if and $ov.InspOpen (or $ov.SkillInsp $ov.CloneInsp)}}<a class="ov-insp-bg" href="{{$ov.InspCloseHref}}" aria-hidden="true" tabindex="-1"></a>{{end}}
-  <div class="panes3 p3 ov{{if or $ov.SkillInsp $ov.CloneInsp}} has-insp{{end}}">
+  <div class="panes3 p3 ov{{if or $ov.SkillInsp $ov.CloneInsp}} has-insp{{end}}{{if eq $v.State.Surface "sheet"}} ov-sheet{{if $ov.GroupPicked}} ov-deep{{end}}{{end}}">
     <section class="ov-dir" aria-label="Skill directory and clone bay">
       {{if $v.SkillsKnown}}
       <h2 class="ov-h">Skill directory <span class="cnt">{{len $ov.DirGroups}} groups</span></h2>
@@ -155,7 +155,7 @@
     </section>
 
     <section class="ov-main" aria-label="Character sheet">
-      <div class="crumbs"><span>Character</span><span class="crumb-sep">&rsaquo;</span><span>{{$v.CharacterName}}</span><span class="crumb-sep">&rsaquo;</span><span class="crumb-here">{{if eq $v.State.Surface "clones"}}Clones &amp; implants{{else}}{{$ov.GroupName}}{{end}}</span><span class="crumb-cap">{{$ov.CrumbCap}}</span></div>
+      <div class="crumbs"><span>Character</span><span class="crumb-sep">&rsaquo;</span>{{if $ov.BackHref}}<a href="{{$ov.BackHref}}">{{$v.CharacterName}}</a>{{else}}<span>{{$v.CharacterName}}</span>{{end}}<span class="crumb-sep">&rsaquo;</span><span class="crumb-here">{{if eq $v.State.Surface "clones"}}Clones &amp; implants{{else}}{{$ov.GroupName}}{{end}}</span><span class="crumb-cap">{{$ov.CrumbCap}}</span></div>
       <div class="pilltabs" role="group" aria-label="Sheet surface">
         {{range $ov.Tabs}}<a class="pilltab{{if .On}} on{{end}}" href="{{.Href}}">{{.Label}} <span class="cnt">{{.Count}}</span></a>{{end}}
       </div>

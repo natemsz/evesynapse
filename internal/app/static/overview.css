@@ -191,6 +191,22 @@ html[data-theme="light"] .ov-pips i.train { background: #2b7fc4; border-color: #
 .ov-export pre { margin: 0.5rem 0 0; padding: 0.6rem 0.7rem; border: 1px solid var(--box-edge); border-radius: var(--r-sm); background: var(--input-bg); font-size: 0.82rem; white-space: pre-wrap; }
 .ov-staged-save { margin-top: 0.7rem; }
 
+/* ---- Inspector: pinned on the desktop three-pane band ----
+   Past 84rem the inspector is the third column: it pins
+   under the top bar at the offset the plan page's inspector
+   uses and scrolls internally when its content runs taller
+   than the space left under that offset. The middle band's
+   overlay sheet and the phone stack keep their own forms;
+   this band is the only place the rule exists. */
+@media (min-width: 84.01rem) {
+  .ov-insp {
+    position: sticky;
+    top: calc(var(--sticky-top) + 1px + 0.6rem);
+    max-height: calc(100dvh - var(--sticky-top) - 1px - 1.2rem);
+    overflow-y: auto;
+  }
+}
+
 /* ---- Colonies table ---- */
 .ov-colonies { margin-top: 1.1rem; padding: 0.9rem 1rem; border: 1px solid var(--box-edge); border-radius: var(--r-md); background: var(--row-alt); }
 .ov-colonies h3 { margin: 0 0 0.3rem; }

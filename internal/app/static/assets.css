@@ -11,7 +11,7 @@
 /* The page head: the summary line and scope selector left, the
    account's total estimated value right with its label. */
 .assets-head { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem 1.5rem; margin-bottom: 0; }
-.assets-head-l { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 1rem; }
+.assets-head-l { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 1rem; flex: 1 1 auto; }
 .assets-count { margin: 0; color: var(--muted); }
 .assets-net { text-align: right; margin-left: auto; }
 .assets-net .assets-count { margin-top: 0.2rem; }
@@ -26,8 +26,8 @@
    as chips. Rows toggle a pending set in place while the
    panel stays open; Done commits the set, and each row's
    Only link scopes the page to that character in one pick. */
-.asset-scope { margin: 0; max-width: 22rem; }
-.asset-scope-btn { display: inline-flex; align-items: center; gap: 0.5rem; max-width: 100%; padding: 0.42rem 0.75rem; border: 1px solid var(--box-edge); border-radius: 999px; background: var(--glass); color: var(--text-bright); font: inherit; font-weight: 600; cursor: pointer; }
+.asset-scope { margin: 0; max-width: none; flex: 1 1 auto; }
+.asset-scope-btn { display: flex; align-items: center; gap: 0.5rem; width: 100%; justify-content: space-between; padding: 0.42rem 0.75rem; border: 1px solid var(--box-edge); border-radius: 999px; background: var(--glass); color: var(--text-bright); font: inherit; font-weight: 600; cursor: pointer; }
 .asset-scope-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .asset-scope-caret { flex: none; color: var(--muted); font-size: 0.8rem; }
 .asset-scope-panel { padding: 0.4rem; }
@@ -150,7 +150,7 @@
 
 /* The matrix table. */
 .amx-table { margin: 0.9rem 0 0; table-layout: fixed; background: var(--row-alt); border: 1px solid var(--box-edge); }
-.amx-table th:nth-child(2) { width: 18rem; }
+.amx-table th:nth-child(2) { width: 22rem; }
 .amx-table th:nth-child(3) { width: 4.75rem; }
 .amx-table th:nth-child(4) { width: 5.5rem; }
 .amx-table th:nth-child(5) { width: 6rem; }

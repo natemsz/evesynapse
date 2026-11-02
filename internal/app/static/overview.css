@@ -128,6 +128,7 @@
 }
 .ov-ts-foot { margin: 0.5rem 0 0; color: var(--muted); font-size: 0.82rem; }
 .fchip.on { border-color: var(--accent); color: var(--text); background: var(--glass); }
+.ov-main .pilltabs { margin-top: 0.7rem; }
 .ov-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin: 0.8rem 0 0.4rem; }
 .ov-search { flex: 1 1 16rem; padding: 0.5rem 0.7rem; border: 1px solid var(--box-edge); border-radius: var(--r-sm); background: var(--input-bg); color: var(--text); }
 .ov-sbtn { padding: 0.5rem 0.9rem; }
@@ -161,6 +162,7 @@
 .ov-table .ov-tag { font-size: 0.62rem; padding: 0.02rem 0.32rem; }
 .ov-table .ov-pips i { width: 0.6rem; height: 0.6rem; }
 .ov-table th.r, .ov-table td.r { text-align: right; }
+.ov-table th:first-child, .ov-table th:last-child { text-align: center; }
 .ov-table tr.sel td { background: var(--glass); }
 .ov-cell { display: flex; align-items: center; gap: 0.6rem; color: var(--text); }
 .ov-cell:hover { text-decoration: none; }

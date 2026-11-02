@@ -156,6 +156,7 @@
 .amx-table th:nth-child(5) { width: 6rem; }
 .amx-table td { overflow: hidden; }
 .amx-table th.amx-r, .amx-table td.amx-c-num, .amx-table td.amx-c-val { text-align: right; }
+.amx-table th:first-child, .amx-table th:last-child { text-align: center; }
 .amx-trow { cursor: pointer; }
 .amx-trow.on td { background: color-mix(in srgb, var(--accent) 10%, transparent); }
 .amx-cell { display: flex; align-items: center; gap: 0.6rem; }

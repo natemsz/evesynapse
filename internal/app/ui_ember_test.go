@@ -39,7 +39,7 @@ func TestEmberGlassAndSkyRules(t *testing.T) {
 		"--row: rgba(16, 13, 10, 0.55)",
 		"--row-alt: rgba(255, 255, 255, 0.03)",
 		".chip:hover",
-		".tw tbody td:first-child, .tw tbody th:first-child,\ntbody td:first-child, tbody th:first-child,\n.tw thead th:first-child {\n  background: var(--panel);",
+		"thead th {\n  background: var(--panel);",
 		".kpi-spark-line { fill: none; stroke: var(--accent);",
 		// Briefing cards fill their row and cap at a third of
 		// the widget's content width; the fleet tag filters ride

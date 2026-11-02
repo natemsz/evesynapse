@@ -5920,17 +5920,11 @@ html[data-theme="light"] .doctrine-fits li:last-child { border-color: #e3d9c6; }
 .loadout-preview-cols { display: flex; flex-wrap: wrap; gap: 0.25rem 1.75rem; }
 .loadout-preview-group { flex: 0 1 15rem; min-width: 11rem; }
 .loadout-preview-group h5 { margin-top: 0; }
-/* Pinned first cells paint the panel solid, with a hairline at
-   the rail's edge: content scrolling beneath them never shows
-   through, and the rail reads as part of the panel. */
-.tw tbody td:first-child, .tw tbody th:first-child,
-tbody td:first-child, tbody th:first-child,
-.tw thead th:first-child {
+
+/* Header cells paint the panel solid across the full row;
+   body cells take the row's own surface, first column included. */
+thead th {
   background: var(--panel);
-  box-shadow: 1px 0 0 var(--glass-edge);
-}
-.tw tbody tr:hover td:first-child, .tw tbody tr:hover th:first-child {
-  background: color-mix(in srgb, var(--accent) 5%, var(--panel));
 }
 
 /* Pill buttons (chips and the trade-ideas tabs),

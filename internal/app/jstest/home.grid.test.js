@@ -127,6 +127,21 @@ test("homeSizeAllowed: an unbounded module takes the whole grid only", function 
   assert.equal(app.homeSizeAllowed(1, 4, min, max), false);
 });
 
+test("homeResizeFrame: at rest the frame is exactly the module", function () {
+  // A module standing taller than its rows (its content needs the
+  // room) and a grip pressed inside the corner: the frame that
+  // shows up must cover the module, not stop at the pointer or at
+  // the nominal cells.
+  assert.deepEqual(app.homeResizeFrame(200, 260, 0, 0, 294, 176, 100, 182), { w: 200, h: 260 });
+  assert.deepEqual(app.homeResizeFrame(300, 176, 0, 0, 294, 176, 100, 182), { w: 300, h: 176 }, "never below the size it started at");
+});
+
+test("homeResizeFrame: follows the pointer, held to the ceiling and half a cell", function () {
+  assert.deepEqual(app.homeResizeFrame(200, 176, 50, 40, 294, 358, 100, 182), { w: 250, h: 216 }, "movement tracks 1:1");
+  assert.deepEqual(app.homeResizeFrame(200, 176, 500, 500, 294, 358, 100, 182), { w: 294, h: 358 }, "the ceiling caps growth");
+  assert.deepEqual(app.homeResizeFrame(200, 176, -500, -500, 294, 358, 100, 182), { w: 50, h: 91 }, "half a cell is the floor");
+});
+
 test("homeFillPlan: the module closing a row short widens to finish it", function () {
   assert.deepEqual(app.homeFillPlan([1], 2), [0], "a lone cell fills its row");
   assert.deepEqual(app.homeFillPlan([1, 1], 2), [], "an exact row leaves nothing to fill");

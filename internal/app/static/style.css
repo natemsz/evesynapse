@@ -306,7 +306,6 @@ h1, h2, h3, h4 {
   letter-spacing: 0.08em;
   line-height: 1.2;
   color: var(--text);
-  text-shadow: 0 -1px 0 #000;
 }
 h1 { font-size: 1.5rem; font-weight: 700; letter-spacing: 0.1em; }
 h2, h3 {
@@ -389,7 +388,6 @@ header .topbar {
 header .who {
   margin-left: auto;
   color: var(--muted-2);
-  text-shadow: 0 1px 0 #000;
   text-align: right;
 }
 
@@ -405,7 +403,6 @@ header .mainnav .spacer { flex: 1; }
 header a.navlink,
 .branch > summary {
   color: var(--muted-2);
-  text-shadow: 0 1px 0 #000;
   padding: 0.3rem 0.6rem;
   white-space: nowrap;
 }
@@ -1326,7 +1323,6 @@ th, td {
 thead th {
   background: transparent;
   color: var(--text-bright);
-  text-shadow: 1px -1px 0 #000;
   border-bottom: 1px solid color-mix(in srgb, var(--accent) 14%, transparent);
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -1658,7 +1654,6 @@ footer {
   font-family: "JetBrains Mono", ui-monospace, monospace;
   text-align: center;
   font-size: 0.72rem;
-  text-shadow: 1px -1px 0 #000;
   padding: 1.4rem 1rem 1.6rem;
   margin-top: 2rem;
 }

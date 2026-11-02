@@ -1913,13 +1913,15 @@ html[data-theme="light"] .widget-scope select {
    modest minimum so a one-line module is not a sliver. Nothing scrolls inside a
    module, so the wheel always scrolls the page. Customize shows each
    module as the page shows it (summary only, More closed), so rows
-   size the same in both views. Modules sit in reading order with no
-   backfilling, so moving or resizing one never shuffles the others. */
+   size the same in both views. Placement backfills: a module that
+   fits a hole an earlier wide module left takes it (staying in
+   reading order otherwise), so no cell stands empty beside a
+   module that could fill it. */
 .grid.home-grid {
   --home-row: 11rem;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   grid-auto-rows: auto;
-  grid-auto-flow: row;
+  grid-auto-flow: row dense;
   align-items: stretch;
 }
 .grid.home-grid > .card {
@@ -2065,6 +2067,14 @@ html[data-theme="light"] .widget-scope select {
 /* A module's floor: the cells it can't go below, marked faintly. */
 .sizepick .sizecell.floor { border-style: dashed; }
 .sizepick .sizecell.on { background: rgba(255, 106, 26, 0.45); border-color: var(--accent); }
+/* Past the module's ceiling the size would only draw empty cells:
+   the picker offers no cell there. */
+.sizepick .sizecell.over { opacity: 0.25; cursor: not-allowed; }
+/* In Customize a drawn height stands at least its rows tall, so
+   taking a module taller visibly takes: the home view sizes rows
+   by content, the arranging view by the drawn size. */
+.home-custom > .card.gh2 { min-height: calc(var(--home-row) * 2); }
+.home-custom > .card.gh3 { min-height: calc(var(--home-row) * 3); }
 .sizepick .sizecell.refused { animation: cell-refuse 650ms ease-out; }
 @keyframes cell-refuse {
   0%, 40% { background: rgba(214, 48, 20, 0.75); border-color: #ff5a3c; }

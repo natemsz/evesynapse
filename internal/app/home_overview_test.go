@@ -678,3 +678,102 @@ func TestMigration010Reopen(t *testing.T) {
 	conn.Close()
 	pool.Close()
 }
+
+// TestWidgetSizeBounds: a stored size is held inside the
+// module's floor and ceiling alike — a band drawn 3 tall still
+// stands one row, a KPI stack drawn 3 wide still stands one
+// column — and every catalog module's ceiling clears its floor.
+func TestWidgetSizeBounds(t *testing.T) {
+	for _, c := range []struct {
+		item         homeLayoutItem
+		wantW, wantH int
+	}{
+		{homeLayoutItem{ID: widgetGlance, W: 3, H: 3}, 3, 1},   // a band is one row however tall it is drawn
+		{homeLayoutItem{ID: widgetNetWorth, W: 3, H: 3}, 1, 2}, // a KPI stack is one column however wide
+		{homeLayoutItem{ID: widgetIndustry, W: 3, H: 3}, 2, 3}, // width past the activity column gains nothing
+		{homeLayoutItem{ID: widgetFleet, W: 1, H: 1}, 2, 2},    // the floor still wins from below
+		{homeLayoutItem{ID: widgetFleet, W: 3, H: 3}, 3, 3},    // a table may use the whole grid
+		{homeLayoutItem{ID: widgetBriefing, W: 1, H: 2}, 2, 1}, // floor on width, ceiling on height
+	} {
+		if w, h := widgetSize(c.item); w != c.wantW || h != c.wantH {
+			t.Errorf("widgetSize(%+v) = %dx%d, want %dx%d", c.item, w, h, c.wantW, c.wantH)
+		}
+	}
+	for _, def := range homeWidgetCatalog() {
+		minW, minH := widgetMin(def.ID)
+		maxW, maxH := widgetMax(def.ID)
+		if maxW < minW || maxH < minH {
+			t.Errorf("widget %s: ceiling %dx%d below floor %dx%d", def.ID, maxW, maxH, minW, minH)
+		}
+		if maxW > homeGridMax || maxH > homeGridMax {
+			t.Errorf("widget %s: ceiling %dx%d past the grid", def.ID, maxW, maxH)
+		}
+	}
+	// The heights a list is offered stop where its rows do.
+	for _, c := range []struct{ total, want int }{
+		{0, 1}, {3, 1}, {4, 2}, {8, 2}, {9, 3}, {40, 3},
+	} {
+		if got := capHeightFor(c.total); got != c.want {
+			t.Errorf("capHeightFor(%d) = %d, want %d", c.total, got, c.want)
+		}
+	}
+}
+
+// TestHomeLayoutSizeCeiling: the size action takes a size at the
+// module's ceiling and refuses (in words the script can hear)
+// one past it, leaving the saved layout alone.
+func TestHomeLayoutSizeCeiling(t *testing.T) {
+	transport := &countingTransport{}
+	app, _, q := buildCorpTestApp(t, transport)
+	ctx := context.Background()
+
+	user, err := q.CreateUser(ctx)
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	seedCharacter(t, q, user.ID, fixtureCharA, "Fixture Alpha")
+	cookie := sessionCookie(t, app, user.ID, fixtureCharA, "Fixture Alpha")
+
+	postSize := func(widget, w, h string) (int, string) {
+		t.Helper()
+		form := url.Values{"action": {"size"}, "widget": {widget}, "w": {w}, "h": {h}}
+		req := httptest.NewRequest(http.MethodPost, "/home/layout", strings.NewReader(form.Encode()))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.Header.Set("X-Requested-With", "XMLHttpRequest")
+		req.AddCookie(cookie)
+		rec := httptest.NewRecorder()
+		app.Handler().ServeHTTP(rec, req)
+		return rec.Code, rec.Body.String()
+	}
+	saved := func() string {
+		t.Helper()
+		raw, err := q.GetUserHomeLayout(ctx, user.ID)
+		if err != nil {
+			t.Fatalf("read layout: %v", err)
+		}
+		return raw
+	}
+
+	// Net Worth is one column wide however it is drawn: w=3 is
+	// past its ceiling — refused, nothing saved.
+	if code, body := postSize(widgetNetWorth, "3", "1"); code != http.StatusBadRequest || !strings.Contains(body, `"ok":false`) {
+		t.Fatalf("oversize POST: status %d body %q, want 400 ok:false", code, body)
+	}
+	if got := saved(); got != "" {
+		t.Fatalf("oversize POST saved %q, want the layout untouched", got)
+	}
+	// At the ceiling it saves.
+	if code, _ := postSize(widgetNetWorth, "1", "2"); code != http.StatusOK {
+		t.Fatalf("at-ceiling POST: status %d, want 200", code)
+	}
+	if got := saved(); !strings.Contains(got, `"id":"networth","w":1,"h":2`) {
+		t.Fatalf("saved layout %q: want the networth size at its ceiling", got)
+	}
+	// The band is one row however tall it is drawn: h=2 refuses.
+	if code, _ := postSize(widgetGlance, "3", "2"); code != http.StatusBadRequest {
+		t.Fatalf("glance oversize POST: status %d, want 400", code)
+	}
+	if got := saved(); strings.Contains(got, `"id":"glance","w":3,"h":2`) {
+		t.Fatalf("saved layout %q: the refused glance size landed", got)
+	}
+}

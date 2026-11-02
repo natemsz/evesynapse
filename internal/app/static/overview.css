@@ -106,6 +106,10 @@
 .ov-ts-head { display: flex; justify-content: space-between; gap: 1rem; color: var(--muted); font-size: 0.74rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; }
 .ov-ts-head .cd { color: var(--gold); text-transform: none; letter-spacing: 0; font-weight: 600; }
 .ov-trainnow { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 0.8rem; margin-top: 0.4rem; }
+/* The header sub-line rule gives .ov-sub a bottom margin; in this
+   row the margin lifts the sub-line text off the shared center the
+   name and pips sit on, so the row's sub-lines carry no margin. */
+.ov-trainnow .ov-sub { margin-bottom: 0; }
 .ov-trainnow .sk { font-weight: 700; font-size: 1.05rem; }
 .ov-sub { color: var(--muted); font-size: 0.84rem; }
 .ov-qsum { margin: 0.55rem 0 0; color: var(--muted); font-size: 0.82rem; }
@@ -143,7 +147,7 @@
 .ov-table .ov-lvl { width: 1.35rem; height: 1.35rem; font-size: 0.8rem; }
 .ov-table .ov-nm { font-size: 0.92rem; }
 .ov-table .ov-tag { font-size: 0.62rem; padding: 0.02rem 0.32rem; }
-.ov-table .ov-pips i { width: 0.6rem; height: 0.45rem; }
+.ov-table .ov-pips i { width: 0.6rem; height: 0.6rem; }
 .ov-table th.r, .ov-table td.r { text-align: right; }
 .ov-table tr.sel td { background: var(--glass); }
 .ov-cell { display: flex; align-items: center; gap: 0.6rem; color: var(--text); }
@@ -155,7 +159,7 @@
 .ov-tag.mastered { background: color-mix(in srgb, var(--kept) 14%, transparent); color: var(--kept); border: 1px solid var(--kept); }
 .ov-tag.untrained { color: var(--muted); border: 1px solid var(--box-edge); }
 .ov-pips { display: inline-flex; gap: 0.18rem; }
-.ov-pips i { width: 0.85rem; height: 0.5rem; border: 1px solid var(--box-edge); border-radius: 2px; }
+.ov-pips i { width: 0.7rem; height: 0.7rem; border: 1px solid var(--box-edge); border-radius: 2px; }
 .ov-pips i.f { background: var(--gold); border-color: var(--gold); }
 .ov-pips i.plan { background: var(--accent); border-color: var(--accent); }
 /* The level in training blinks blue, the same pulse the level

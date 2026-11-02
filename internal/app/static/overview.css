@@ -128,7 +128,7 @@
 .ov-canstrip { margin: 0.8rem 0; padding: 0.7rem 0.85rem; border: 1px solid var(--box-edge); border-radius: var(--r-sm); background: var(--row-alt); }
 .ov-cs-head { display: flex; justify-content: space-between; gap: 1rem; margin-bottom: 0.55rem; color: var(--muted); font-size: 0.84rem; }
 .ov-cangrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr)); gap: 0.55rem; }
-.ov-can { display: flex; align-items: center; gap: 0.65rem; padding: 0.55rem 0.65rem; border: 1px solid var(--box-edge); border-radius: var(--r-sm); background: var(--glass); color: var(--text); }
+.ov-can { display: flex; align-items: center; gap: 0.65rem; padding: 0.55rem 0.65rem; border: 1px solid var(--box-edge); border-radius: var(--r-sm); background: var(--row-alt); color: var(--text); }
 .ov-can:hover { text-decoration: none; border-color: var(--accent); }
 .ov-can-box { flex: 0 0 auto; padding: 0.3rem 0.45rem; border: 1px solid var(--gold); border-radius: var(--r-sm); color: var(--gold); font-weight: 700; font-size: 0.8rem; }
 .ov-can-main { min-width: 0; }
@@ -137,6 +137,14 @@
 .ov-can-go { margin-left: auto; color: var(--muted); font-size: 1.1rem; }
 
 /* ---- Skill table ---- */
+/* The skill table's wrapper carries the light inset
+   recipe (the tint and box edge the page's cards and
+   strips use) rather than sitting flat on the pane, so
+   the table reads in the same light language as the
+   rest of the page. The colonies table's wrapper needs
+   no rule of its own: it sits inside the colonies
+   panel, which already carries that recipe. */
+.panes3.ov .ov-main > .tw { background: var(--row-alt); border: 1px solid var(--box-edge); }
 .ov-table { font-size: 0.88rem; }
 .ov-table th, .ov-table td { padding: 0.45rem 0.35rem; }
 .ov-table .ov-cell { gap: 0.45rem; }
@@ -235,7 +243,7 @@ html[data-theme="light"] .ov-pips i.train { background: #2b7fc4; border-color: #
     width: min(24rem, 94vw);
     overflow-y: auto; overscroll-behavior: contain;
     border-top: 0; border-right: 0; border-bottom: 0; border-left: 1px solid var(--glass-edge); border-radius: 0;
-    background: linear-gradient(color-mix(in srgb, var(--panel) 94%, transparent), color-mix(in srgb, var(--panel) 97%, transparent)) padding-box;
+    background: var(--glass);
     -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(0.9);
     backdrop-filter: blur(var(--glass-blur)) saturate(0.9);
     box-shadow: -16px 0 40px rgba(0, 0, 0, 0.5);

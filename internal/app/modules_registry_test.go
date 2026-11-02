@@ -221,7 +221,7 @@ func TestModuleDeclaredCatalogsKeepTheirOrder(t *testing.T) {
 	for _, w := range homeWidgetCatalog() {
 		widgets = append(widgets, w.ID)
 	}
-	wantWidgets := "glance briefing fleet networth industry pi market watchlist tradeideas training pulse walletflow upkeep"
+	wantWidgets := "glance briefing fleet networth industry pi market watchlist tradeideas training pulse intelwatch walletflow upkeep"
 	if got := strings.Join(widgets, " "); got != wantWidgets {
 		t.Errorf("widget catalog = %q, want %q", got, wantWidgets)
 	}

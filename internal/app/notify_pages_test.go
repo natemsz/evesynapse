@@ -249,7 +249,7 @@ func TestNotificationSettings(t *testing.T) {
 		`<input type="checkbox" name="card.undercut" value="1" checked> Show as a card`,
 		`<td><small>No card</small></td>`,
 		`name="undercut_digest_hours"`,
-		`name="camp_systems"`,
+		`data-open-watched-modal`,
 		`name="kinds_shown"`,
 		`name="cards_shown"`)
 	mustContain(t, "/settings", body,

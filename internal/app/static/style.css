@@ -2907,6 +2907,16 @@ html[data-theme="light"] .cardbtn { background: #fffdf9; border-color: #d9a77a; 
 .modal-item small { display: block; margin-top: 0.15rem; }
 .modal-empty { margin: 0.5rem 0 0; }
 
+/* Watched systems modal: one row per system, its remove form at
+   the row's end; the add form under the list. */
+.watched-row { display: flex; align-items: center; justify-content: space-between; gap: 1rem; cursor: default; }
+.watched-row form { margin: 0; }
+.watched-add { display: flex; align-items: flex-end; gap: 0.6rem; flex-wrap: wrap; margin-top: 0.9rem; }
+
+/* Intel watch widget: the gate states line under the reports. */
+.card[data-widget="intelwatch"] .intelwatch-gates { margin: 0.35rem 0; }
+.card[data-widget="intelwatch"] .intelwatch-ago { opacity: 0.75; }
+
 /* Live-region loading ring. Reduced motion leaves it still. */
 .loading-pulse {
   display: inline-block;

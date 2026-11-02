@@ -31,7 +31,7 @@
   <tbody>
     {{range .Rows}}
     <tr>
-      <td>{{if .DigestOnly}}{{.Title}} <small>Digest only</small>{{else}}<label><input type="checkbox" name="kind" value="{{.ID}}"{{if .On}} checked{{end}}> {{.Title}}</label>{{end}}{{if .Minutes}} <label class="notify-minutes"><select name="op_reminder_minutes" aria-label="How long before an op starts to remind you">{{range .Minutes}}<option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>{{end}}</select> before it starts</label>{{end}}{{if .Frequency}} <label class="notify-minutes"><select name="undercut_digest_hours" aria-label="How often the undercut digest may appear">{{range .Frequency}}<option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>{{end}}</select> at most</label>{{end}}{{if eq .ID "camp"}} <label class="notify-minutes">Systems to watch, one per line (up to 10):<br><textarea name="camp_systems" rows="3" cols="24" aria-label="Systems to watch for gate camps, one per line">{{.CampSystemsText}}</textarea></label> <small>Alerts fire only while one of your characters is online.</small>{{end}}</td>
+      <td>{{if .DigestOnly}}{{.Title}} <small>Digest only</small>{{else}}<label><input type="checkbox" name="kind" value="{{.ID}}"{{if .On}} checked{{end}}> {{.Title}}</label>{{end}}{{if .Minutes}} <label class="notify-minutes"><select name="op_reminder_minutes" aria-label="How long before an op starts to remind you">{{range .Minutes}}<option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>{{end}}</select> before it starts</label>{{end}}{{if .Frequency}} <label class="notify-minutes"><select name="undercut_digest_hours" aria-label="How often the undercut digest may appear">{{range .Frequency}}<option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>{{end}}</select> at most</label>{{end}}{{if eq .ID "camp"}} <span class="notify-minutes">Watched systems ({{.CampCount}} of 10): <button type="button" class="btn btn-quiet" data-open-watched-modal>Manage watched systems</button></span> <small>Alerts fire only while one of your characters is online.</small>{{end}}</td>
       <td>{{if .HasCard}}<label><input type="checkbox" name="card.{{.ID}}" value="1"{{if .CardOn}} checked{{end}}> Show as a card</label>{{else}}<small>No card</small>{{end}}</td>
       <td>{{$kind := .ID}}{{if .Characters}}
         <div class="charselector checkselector" data-checkselector>
@@ -63,6 +63,8 @@
 <div class="form-actions notify-save"><button type="submit">Save</button></div>
 {{range .ChannelSections}}{{.}}{{end}}
 </form>
+
+{{with .Watched}}{{template "watchedsystems" .}}{{end}}
 
 {{range .AccountSections}}{{.}}{{end}}
 

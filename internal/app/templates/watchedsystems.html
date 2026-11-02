@@ -1,0 +1,24 @@
+{{define "watchedsystems"}}
+<div class="modal-backdrop" id="watched-systems-modal" hidden>
+  <div class="modal watched-modal" role="dialog" aria-modal="true" aria-labelledby="watched-systems-title">
+    <div class="modal-head">
+      <h2 id="watched-systems-title">Watched systems</h2>
+      <button type="button" class="modal-close" data-close-modal aria-label="Close">&times;</button>
+    </div>
+    <p><small>The systems the gate camp alerts and the Intel watch widget follow, up to 10. Alerts fire only while one of your characters is online.</small></p>
+    {{if .Systems}}
+    <ul class="modal-list watched-list">
+      {{range .Systems}}<li class="modal-item watched-row"><span>{{.Name}}</span><form method="post" action="/settings/watched-systems"><input type="hidden" name="remove" value="{{.ID}}"><input type="hidden" name="return" value="{{$.Return}}"><button type="submit" class="btn btn-quiet">Remove</button></form></li>{{end}}
+    </ul>
+    {{else}}
+    <p><small>No systems watched yet. Add one below.</small></p>
+    {{end}}
+    <form method="post" action="/settings/watched-systems" class="watched-add">
+      <label>System name <input type="text" name="add_name" autocomplete="off" placeholder="e.g. Bosena"></label>
+      <input type="hidden" name="return" value="{{.Return}}">
+      <button type="submit" class="btn">Add system</button>
+    </form>
+    {{if .Full}}<p><small>The list is full at 10 systems. Remove one to add another.</small></p>{{end}}
+  </div>
+</div>
+{{end}}

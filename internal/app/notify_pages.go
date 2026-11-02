@@ -48,6 +48,10 @@ var notifyKindWording = map[string][2]string{
 	notifyIndustry:   {"industry job finished", "industry jobs finished"},
 	notifyOp:         {"new op", "new ops"},
 	notifyOpReminder: {"op starting soon", "ops starting soon"},
+	notifyCamp:       {"gate camp alert", "gate camp alerts"},
+	notifyContract:   {"contract event", "contract events"},
+	notifyRelink:     {"character needing re-login", "characters needing re-login"},
+	notifyUndercut:   {"undercut digest", "undercut digests"},
 	notifyNotice:     {"service notice", "service notices"},
 }
 
@@ -297,6 +301,14 @@ type notifySettingRow struct {
 	ID    string
 	Title string
 	On    bool
+	// DigestOnly: the kind never notifies; the row reads "Digest
+	// only" where the notification switch would be.
+	DigestOnly bool
+	// HasCard: the kind's news also appears as a briefing card, so
+	// the row carries a switch for the card beside the notification
+	// switch; CardOn is that switch.
+	HasCard bool
+	CardOn  bool
 	// Characters is who the kind can be switched for, one by one; nil
 	// for a kind that belongs to the account. Summary says how many of
 	// them it is on for ("On for 3 of 5 characters").
@@ -305,6 +317,41 @@ type notifySettingRow struct {
 	// Minutes is the choice of lead for the op reminder, with the
 	// current one marked; nil for every other kind.
 	Minutes []notifyMinutesOption
+	// Frequency is the undercut digest's maximum frequency, with the
+	// current one marked; nil for every other kind.
+	Frequency []notifyFrequencyOption
+	// CampSystemsText is the watched-systems box content, one system
+	// name per line; empty for every other kind.
+	CampSystemsText string
+}
+
+// notifyFrequencyOption is one cap the undercut digest can be set to.
+type notifyFrequencyOption struct {
+	Value    int
+	Label    string // "Every time", "At most daily"
+	Selected bool
+}
+
+// notifyFrequencyOptions lists the digest caps, the account's marked.
+func notifyFrequencyOptions(hours int) []notifyFrequencyOption {
+	current := hours
+	if !validUndercutDigestHours(current) {
+		current = 0
+	}
+	out := make([]notifyFrequencyOption, 0, len(undercutDigestHours))
+	for _, n := range undercutDigestHours {
+		label := "Every time"
+		switch n {
+		case 1:
+			label = "At most hourly"
+		case 6:
+			label = "At most every 6 hours"
+		case 24:
+			label = "At most daily"
+		}
+		out = append(out, notifyFrequencyOption{Value: n, Label: label, Selected: n == current})
+	}
+	return out
 }
 
 // notifyMinutesOption is one lead the op reminder can be set to.
@@ -375,9 +422,15 @@ func notifyCharactersSummary(options []notifyCharacterOption) string {
 func notifySettingRows(prefs notifyPrefs, characters []db.Character) []notifySettingRow {
 	rows := make([]notifySettingRow, 0, len(notifyKindList()))
 	for _, kind := range notifyKindList() {
-		row := notifySettingRow{ID: kind.ID, Title: kind.Title, On: !prefs.off(kind.ID)}
+		row := notifySettingRow{ID: kind.ID, Title: kind.Title, On: !prefs.off(kind.ID), DigestOnly: kind.DigestOnly}
+		if _, ok := briefingCardKindFor(kind.ID); ok {
+			row.HasCard, row.CardOn = true, !prefs.cardOff(kind.ID)
+		}
 		if kind.ID == notifyOpReminder {
 			row.Minutes = notifyMinutesOptions(prefs)
+		}
+		if kind.ID == notifyUndercut {
+			row.Frequency = notifyFrequencyOptions(prefs.UndercutDigestHours)
 		}
 		if !kind.Account && len(characters) > 0 {
 			module, scoped := moduleByID(kind.Module)
@@ -395,6 +448,45 @@ func notifySettingRows(prefs notifyPrefs, characters []db.Character) []notifySet
 		rows = append(rows, row)
 	}
 	return rows
+}
+
+// campSystemsText renders the watched-systems box: one system name
+// per line, in the stored order.
+func (app *Application) campSystemsText(ctx context.Context, systems []int64) string {
+	names := make([]string, 0, len(systems))
+	for _, id := range systems {
+		names = append(names, app.campSystemName(ctx, id))
+	}
+	return strings.Join(names, "\n")
+}
+
+// parseCampSystems reads the watched-systems box, one system name
+// per line, into system IDs in the typed order. Unknown names come
+// back for the settings page to report; at most campSystemsMax IDs
+// are kept.
+func (app *Application) parseCampSystems(ctx context.Context, raw string) (systems []int64, unknown []string) {
+	seen := map[string]bool{}
+	for _, line := range strings.Split(raw, "\n") {
+		name := strings.TrimSpace(line)
+		if name == "" {
+			continue
+		}
+		if lower := strings.ToLower(name); seen[lower] {
+			continue
+		} else {
+			seen[lower] = true
+		}
+		row, err := app.queries.GetSDESystemByName(ctx, name)
+		if err != nil || row.SystemID <= 0 {
+			unknown = append(unknown, name)
+			continue
+		}
+		systems = append(systems, row.SystemID)
+		if len(systems) >= campSystemsMax {
+			break
+		}
+	}
+	return systems, unknown
 }
 
 // settingsPath is the one settings page; its Notifications tab is
@@ -417,6 +509,11 @@ func (app *Application) handleSettings(w http.ResponseWriter, r *http.Request) {
 		Rows:    notifySettingRows(prefs, app.sessionCharacters(ctx)),
 		InApp:   !prefs.channelOff(notifyChannelInApp),
 		Desktop: !prefs.channelOff(notifyChannelDesktop),
+	}
+	for i := range view.Rows {
+		if view.Rows[i].ID == notifyCamp {
+			view.Rows[i].CampSystemsText = app.campSystemsText(ctx, prefs.CampSystems)
+		}
 	}
 	view.DiscordOffered, view.DiscordLinked, view.Discord, view.DiscordName = app.discordChannelState(ctx, userID)
 	if app.push != nil {
@@ -445,7 +542,10 @@ func (app *Application) handleSettings(w http.ResponseWriter, r *http.Request) {
 // the kinds that are ticked, and under each kind the characters that
 // are ticked; everything else is off. A character that could not be
 // ticked (it has not granted the access) is left as it was, so it does
-// not come back switched off once it has.
+// not come back switched off once it has. The kind switches are only
+// recomputed when the form showed them (kinds_shown): a form without
+// the switches leaves them alone, while a form with every box
+// unticked still saves as all off.
 func (app *Application) handleNotificationSettingsSave(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	userID := app.userID(ctx)
@@ -458,7 +558,14 @@ func (app *Application) handleNotificationSettingsSave(w http.ResponseWriter, r 
 		on[id] = true
 	}
 	before := app.notifyPrefsFor(ctx, userID)
-	prefs := notifyPrefs{OffFor: map[string][]int64{}, OpReminderMinutes: before.OpReminderMinutes}
+	prefs := notifyPrefs{
+		Off: before.Off, OffFor: before.OffFor,
+		OpReminderMinutes:   before.OpReminderMinutes,
+		UndercutDigestHours: before.UndercutDigestHours,
+		UndercutDigestShown: before.UndercutDigestShown,
+		CardsOff:            before.CardsOff,
+		CampSystems:         before.CampSystems,
+	}
 	// The prompt's answer and the channel switches are this form's
 	// to carry, not to reset: the answer is kept as it was, and the
 	// channels follow the form's own boxes when it showed them
@@ -475,21 +582,48 @@ func (app *Application) handleNotificationSettingsSave(w http.ResponseWriter, r 
 	if n, err := strconv.Atoi(r.Form.Get("op_reminder_minutes")); err == nil && validReminderMinutes(n) {
 		prefs.OpReminderMinutes = n
 	}
-	for _, row := range notifySettingRows(before, app.sessionCharacters(ctx)) {
-		if !on[row.ID] {
-			prefs.Off = append(prefs.Off, row.ID)
-		}
-		ticked := map[string]bool{}
-		for _, id := range r.Form["char."+row.ID] {
-			ticked[id] = true
-		}
-		for _, option := range row.Characters {
-			off := !ticked[strconv.FormatInt(option.ID, 10)]
-			if option.Locked {
-				off = before.offFor(row.ID, option.ID)
+	saved := "Notification settings saved."
+	if r.Form.Get("kinds_shown") == "1" {
+		prefs.Off = nil
+		prefs.OffFor = map[string][]int64{}
+		for _, row := range notifySettingRows(before, app.sessionCharacters(ctx)) {
+			if row.DigestOnly {
+				continue
 			}
-			if off {
-				prefs.OffFor[row.ID] = append(prefs.OffFor[row.ID], option.ID)
+			if !on[row.ID] {
+				prefs.Off = append(prefs.Off, row.ID)
+			}
+			ticked := map[string]bool{}
+			for _, id := range r.Form["char."+row.ID] {
+				ticked[id] = true
+			}
+			for _, option := range row.Characters {
+				off := !ticked[strconv.FormatInt(option.ID, 10)]
+				if option.Locked {
+					off = before.offFor(row.ID, option.ID)
+				}
+				if off {
+					prefs.OffFor[row.ID] = append(prefs.OffFor[row.ID], option.ID)
+				}
+			}
+		}
+		if n, err := strconv.Atoi(r.Form.Get("undercut_digest_hours")); err == nil && validUndercutDigestHours(n) {
+			prefs.UndercutDigestHours = n
+		}
+		systems, unknown := app.parseCampSystems(ctx, r.FormValue("camp_systems"))
+		prefs.CampSystems = systems
+		if len(unknown) > 0 {
+			saved = fmt.Sprintf("Notification settings saved. Unknown systems were left out: %s.", strings.Join(unknown, ", "))
+		}
+	}
+	// The briefing card switches follow the same rule as the
+	// channels: this form's boxes when it showed them
+	// (cards_shown), unchanged otherwise.
+	if r.Form.Get("cards_shown") == "1" {
+		prefs.CardsOff = nil
+		for _, kind := range notifyKindList() {
+			if _, ok := briefingCardKindFor(kind.ID); ok && r.Form.Get("card."+kind.ID) != "1" {
+				prefs.CardsOff = append(prefs.CardsOff, kind.ID)
 			}
 		}
 	}
@@ -505,7 +639,7 @@ func (app *Application) handleNotificationSettingsSave(w http.ResponseWriter, r 
 		logging.Errorf("notifications: save settings for user %d: %v", userID, err)
 		app.flash(ctx, "The settings could not be saved; check the server log.")
 	} else {
-		app.flash(ctx, "Notification settings saved.")
+		app.flash(ctx, saved)
 	}
 	http.Redirect(w, r, settingsPath, http.StatusSeeOther)
 }

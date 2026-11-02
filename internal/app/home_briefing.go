@@ -44,7 +44,11 @@ import (
 // the anchor, and neither does a Customize pass.
 // ---------------------------------------------------------------------------
 
-const briefingCap = 12
+// briefingCap bounds the deck: more lines than this render as a
+// "More" overflow. It grew from 12 when the contract-event and
+// gate-camp cards joined, so a full deck still shows the
+// informational tail instead of cutting it.
+const briefingCap = 14
 
 // briefingWindow bounds: how far back the digest looks on its
 // first-ever render, and how far back it ever looks.
@@ -72,6 +76,7 @@ const (
 	briefingExtractorDry
 	briefingWatchMove
 	briefingMail
+	briefingCamp
 )
 
 // briefingLine is one digest line. HTML is composed with the
@@ -169,6 +174,8 @@ func briefingKindTitle(kind string) string {
 		return "Calendar"
 	case "market":
 		return "Market"
+	case "camp":
+		return "Gate Camps"
 	case "link":
 		return "Character Links"
 	}
@@ -260,6 +267,8 @@ func briefingKind(rank int) string {
 		return "market"
 	case briefingMail:
 		return "mail"
+	case briefingCamp:
+		return "camp"
 	}
 	return "market"
 }
@@ -407,6 +416,7 @@ func (app *Application) buildBriefing(ctx context.Context, bundles []*charSnaps,
 		// What a module owns is told only where the module is built in.
 		if briefingTopicBuiltIn("contracts") {
 			bb.contractLines(b, prefix)
+			bb.contractEventLines(b, prefix)
 		}
 		if briefingTopicBuiltIn("calendar") {
 			bb.calendarLines(b, prefix)
@@ -417,11 +427,17 @@ func (app *Application) buildBriefing(ctx context.Context, bundles []*charSnaps,
 	}
 	bb.flushIdle()
 	lines := bb.lines
+	userID := app.userID(ctx)
+	prefs := notifyPrefs{}
+	if userID != 0 {
+		prefs = app.notifyPrefsFor(ctx, userID)
+	}
 
 	// --- Account-level market lines: undercut sell orders and
 	// watched-price moves, from the worker's stored verdicts and
 	// price history (the Needs-attention feed's own sources). ----
-	lines = append(lines, app.briefingMarketLines(ctx, bundles, viewer, names, shared)...)
+	lines = append(lines, app.briefingMarketLines(ctx, bundles, viewer, names, shared, now, userID, prefs)...)
+	lines = append(lines, app.briefingCampLines(ctx, userID, prefs, bundles, now)...)
 	lines = aggregateBriefing(lines)
 
 	sort.SliceStable(lines, func(i, j int) bool {
@@ -435,7 +451,6 @@ func (app *Application) buildBriefing(ctx context.Context, bundles []*charSnaps,
 	// not deleting, the line is recomputed on every render. A
 	// stored dismissal whose line no longer applies is pruned
 	// here, so the stored set only ever holds live hides.
-	userID := app.userID(ctx)
 	dismissed := map[string]bool{}
 	if userID != 0 {
 		keys, err := app.queries.ListBriefingDismissals(ctx, userID)
@@ -463,8 +478,25 @@ func (app *Application) buildBriefing(ctx context.Context, bundles []*charSnaps,
 			delete(dismissed, k)
 		}
 	}
+	// Kinds the account switched off as briefing cards (the card
+	// switches in the notification settings) never reach the deck.
+	// The drop sits after the dismissal bookkeeping above, which
+	// still sees every line, so a stored dismissal survives its
+	// kind's card being switched off and back on.
+	var cardsOff map[string]bool
+	for _, id := range prefs.CardsOff {
+		if cardKind, ok := briefingCardKindFor(id); ok {
+			if cardsOff == nil {
+				cardsOff = map[string]bool{}
+			}
+			cardsOff[cardKind] = true
+		}
+	}
 	var visible []briefingLine
 	for _, l := range lines {
+		if cardsOff[briefingKind(l.Rank)] {
+			continue
+		}
 		if l.key != "" && dismissed[l.key] {
 			w.Dismissed = append(w.Dismissed, briefingItemOf(l))
 			continue
@@ -990,6 +1022,103 @@ func (bb *briefingBuilder) contractLines(b *charSnaps, prefix string) {
 	}
 }
 
+// briefingCampLines: gate camps in the account's watched systems,
+// but only while one of its characters is online. The line stands
+// while the camp does; the notification's seen key carries the
+// camp's start, so a continuing camp does not notify twice.
+func (app *Application) briefingCampLines(ctx context.Context, userID int64, prefs notifyPrefs, bundles []*charSnaps, now time.Time) []briefingLine {
+	if len(prefs.CampSystems) == 0 {
+		return nil
+	}
+	online := false
+	for _, b := range bundles {
+		var on esi.Online
+		if at, ok := app.snapAt(ctx, b.ch.CharacterID, esi.SnapOnline, &on); ok && on.Online && now.Sub(at) <= campOnlineFresh {
+			online = true
+			break
+		}
+	}
+	if !online {
+		return nil
+	}
+	names := app.newKillNames(ctx)
+	var lines []briefingLine
+	for _, systemID := range prefs.CampSystems {
+		stream, err := app.queries.ListKillsBySystem(ctx, db.ListKillsBySystemParams{
+			SystemID: systemID, BeforeTime: now.Add(time.Hour), BeforeID: 1 << 62, MaxRows: systemKillsFetch,
+		})
+		if err != nil {
+			logging.Errorf("home: camp kills for system %d: %v", systemID, err)
+			continue
+		}
+		camp := app.mapSystemCamp(ctx, names, systemID, now, stream)
+		if camp == nil {
+			continue
+		}
+		name := app.campSystemName(ctx, systemID)
+		at := time.Unix(camp.Since, 0).UTC()
+		lines = append(lines, briefingLine{
+			html: string(template.HTML(fmt.Sprintf("Gate camp in <a href=\"/system/?system=%d\">%s</a>: %d kills in the last hour.",
+				systemID, template.HTMLEscapeString(name), camp.Kills))),
+			Rank: briefingCamp, At: at,
+			key:  fmt.Sprintf("camp|%d", systemID),
+			href: fmt.Sprintf("/system/?system=%d", systemID),
+		})
+	}
+	return lines
+}
+
+// contractEventLines: contracts the character is party to that
+// were accepted, finished or expired. An accepted line stands
+// while the contract is in progress; finished and expired lines
+// show while their date falls inside the digest window. Courier
+// contracts read the same way, by the same statuses.
+func (bb *briefingBuilder) contractEventLines(b *charSnaps, prefix string) {
+	if !b.contractsKnown {
+		return
+	}
+	id := b.ch.CharacterID
+	href := fmt.Sprintf("/contracts/?character=%d&view=1", id)
+	for _, c := range b.contracts {
+		if c.IssuerID != id && c.AcceptorID != id {
+			continue
+		}
+		name := contractName(c)
+		switch {
+		case c.Status == "in_progress":
+			at := bb.now
+			if accepted, ok := parseRFC3339(c.DateAccepted); ok {
+				at = accepted
+			}
+			bb.add(briefingKey(id, fmt.Sprintf("contract-%d-accepted", c.ContractID)), briefingContract, at,
+				template.HTML(fmt.Sprintf("%s: %s. <a href=\"/contracts/?character=%d&view=1\">Contracts</a>",
+					prefix, template.HTMLEscapeString(contractEventWhat(name, "was accepted")), id)),
+				href)
+		case contractFinished(c.Status):
+			done, ok := parseRFC3339(c.DateCompleted)
+			if !ok || done.Before(bb.since) {
+				continue
+			}
+			bb.add(briefingKey(id, fmt.Sprintf("contract-%d-finished", c.ContractID)), briefingContract, done,
+				template.HTML(fmt.Sprintf("%s: %s. <a href=\"/contracts/?character=%d&view=1\">Contracts</a>",
+					prefix, template.HTMLEscapeString(contractEventWhat(name, "finished")), id)),
+				href)
+		case c.Status == "failed" || contractLapsed(c, bb.now):
+			when, ok := parseRFC3339(c.DateCompleted)
+			if !ok {
+				when, ok = parseRFC3339(c.DateExpired)
+			}
+			if !ok || when.Before(bb.since) {
+				continue
+			}
+			bb.add(briefingKey(id, fmt.Sprintf("contract-%d-expired", c.ContractID)), briefingContract, when,
+				template.HTML(fmt.Sprintf("%s: %s. <a href=\"/contracts/?character=%d&view=1\">Contracts</a>",
+					prefix, template.HTMLEscapeString(contractEventWhat(name, "expired")), id)),
+				href)
+		}
+	}
+}
+
 // calendarLines: events inside the next day.
 func (bb *briefingBuilder) calendarLines(b *charSnaps, prefix string) {
 	now := bb.now
@@ -1039,7 +1168,32 @@ func (bb *briefingBuilder) mailLines(b *charSnaps, prefix string) {
 // undercut sell orders (one line per character, their worst
 // example named) and watchlist moves past the saved threshold
 // (one per watched item), from stored verdicts and history.
-func (app *Application) briefingMarketLines(ctx context.Context, bundles []*charSnaps, viewer map[int64]bool, names map[int64]string, shared *homeMarketShared) []briefingLine {
+// undercutDigestDue reports whether the undercut digest may appear
+// now: at most once per the account's chosen frequency. Zero hours
+// means every time.
+func (app *Application) undercutDigestDue(prefs notifyPrefs, now time.Time) bool {
+	if prefs.UndercutDigestHours <= 0 {
+		return true
+	}
+	window := time.Duration(prefs.UndercutDigestHours) * time.Hour
+	return now.Unix()-prefs.UndercutDigestShown >= int64(window.Seconds())
+}
+
+// markUndercutDigestShown records the digest shown now, so the next
+// render inside the frequency window skips it. Only a shown digest
+// writes, so a quiet account writes nothing.
+func (app *Application) markUndercutDigestShown(ctx context.Context, userID int64, now time.Time) {
+	if userID == 0 {
+		return
+	}
+	prefs := app.notifyPrefsFor(ctx, userID)
+	prefs.UndercutDigestShown = now.Unix()
+	if err := app.storeNotifyPrefs(ctx, userID, prefs); err != nil {
+		logging.Errorf("home: mark undercut digest for user %d: %v", userID, err)
+	}
+}
+
+func (app *Application) briefingMarketLines(ctx context.Context, bundles []*charSnaps, viewer map[int64]bool, names map[int64]string, shared *homeMarketShared, now time.Time, userID int64, prefs notifyPrefs) []briefingLine {
 	if len(bundles) == 0 {
 		return nil
 	}
@@ -1052,7 +1206,10 @@ func (app *Application) briefingMarketLines(ctx context.Context, bundles []*char
 	if briefingTopicBuiltIn("orders") {
 		health = shared.orderHealth(ctx)
 	}
-	if health != nil {
+	// The undercut digest shows at most once per the account's
+	// chosen frequency; the watch-move lines below are unaffected.
+	digestDue := app.undercutDigestDue(prefs, now)
+	if health != nil && digestDue {
 		perChar := map[int64]int{}
 		example := map[int64]db.OrderHealth{}
 		for _, h := range health {
@@ -1072,12 +1229,18 @@ func (app *Application) briefingMarketLines(ctx context.Context, bundles []*char
 		for _, id := range charIDs {
 			ex := example[id]
 			n := perChar[id]
-			line := template.HTML(fmt.Sprintf("%s has %d sell order%s undercut right now — %s is no longer the best price. <a href=\"/orders/?character=%d&view=1\">Orders</a>",
+			line := template.HTML(fmt.Sprintf("%s has %d sell order%s undercut right now. %s is no longer the best price. <a href=\"/orders/?character=%d&view=1\">Orders</a>",
 				string(briefCharLink(viewer, id, names[id])),
 				n, pluralSuffix(n),
 				string(itemLink(ex.TypeID, app.typeNameOrID(ctx, ex.TypeID))), id))
 			lines = append(lines, briefingLine{html: string(line), Rank: briefingUndercut, At: ex.ComputedAt,
 				key: briefingKey(id, "undercut"), href: fmt.Sprintf("/orders/?character=%d&view=1", id)})
+		}
+		// The digest appeared: stamp it, so the next render inside
+		// the frequency window skips it. Clicking it opens My
+		// Orders, where the beaten rows already live.
+		if len(charIDs) > 0 {
+			app.markUndercutDigestShown(ctx, userID, now)
 		}
 	}
 

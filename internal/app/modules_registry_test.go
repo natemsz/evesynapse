@@ -229,7 +229,7 @@ func TestModuleDeclaredCatalogsKeepTheirOrder(t *testing.T) {
 	for _, k := range notifyKindList() {
 		kinds = append(kinds, k.ID)
 	}
-	wantKinds := "watch market_change skill mail calendar op op_reminder srp_new srp_done killmail pi industry notice"
+	wantKinds := "watch market_change skill mail calendar op op_reminder srp_new srp_done killmail pi industry camp contract relogin undercut notice"
 	if got := strings.Join(kinds, " "); got != wantKinds {
 		t.Errorf("notification kinds = %q, want %q", got, wantKinds)
 	}

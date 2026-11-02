@@ -59,6 +59,18 @@ const (
 	notifyOpReminder = "op_reminder"
 	notifySRPNew     = "srp_new"
 	notifySRPDone    = "srp_done"
+	// notifyCamp fires while a chosen system shows a gate camp and
+	// one of the account's characters is online.
+	notifyCamp = "camp"
+	// notifyContract fires when a contract the character is party
+	// to is accepted, finished or expired.
+	notifyContract = "contract"
+	// notifyRelink fires when a character's saved sign-in stops
+	// working, once per transition to token-dead.
+	notifyRelink = "relogin"
+	// notifyUndercut is the undercut digest: a briefing card only,
+	// never one notification per beaten order.
+	notifyUndercut = "undercut"
 	// notifyNotice is an administrator's urgent global notice
 	// (notices.go); it is never produced by the worker pass.
 	notifyNotice = "notice"
@@ -75,6 +87,10 @@ type notifyKind struct {
 	// Account: the kind belongs to the account, not to one of its
 	// characters, so it cannot be switched per character.
 	Account bool
+	// DigestOnly: the kind never notifies; its row carries a
+	// briefing card switch (and its own settings) but no
+	// notification switch.
+	DigestOnly bool
 }
 
 // notifyKinds is every kind, in the order the settings page lists them.
@@ -90,6 +106,10 @@ var coreNotifyKinds = []notifyKind{
 	{ID: notifyKillmail, Title: "New killmail", Module: "killmails"},
 	{ID: notifyPI, Title: "Stopped planetary extractors", Module: "planets"},
 	{ID: notifyIndustry, Title: "Industry job complete", Module: "industry"},
+	{ID: notifyCamp, Title: "Gate camp alerts", Account: true},
+	{ID: notifyContract, Title: "Contract accepted, finished or expired", Module: "contracts"},
+	{ID: notifyRelink, Title: "Character needs re-login"},
+	{ID: notifyUndercut, Title: "Undercut digest", Account: true, DigestOnly: true},
 	// Urgent service notices from the EveSynapse team (notices.go).
 	{ID: notifyNotice, Title: "Urgent service notices", Account: true},
 }
@@ -195,9 +215,18 @@ func (app *Application) collectNotifyEvents(ctx context.Context, userID int64, b
 		app.notifyKillmailEvents(ctx, c, b)
 		app.notifyPIEvents(ctx, c, b, now)
 		app.notifyIndustryEvents(ctx, c, b, now)
+		if _, ok := notifyKindByID(notifyContract); ok {
+			app.notifyContractEvents(c, b, now)
+		}
+		if _, ok := notifyKindByID(notifyRelink); ok {
+			app.notifyRelinkEvents(c, b)
+		}
 	}
 	app.notifyWatchEvents(ctx, c, userID)
 	app.notifyMarketEvents(ctx, c, userID)
+	if _, ok := notifyKindByID(notifyCamp); ok {
+		app.notifyCampEvents(ctx, c, userID, bundles, now)
+	}
 	return c
 }
 
@@ -370,6 +399,178 @@ func (app *Application) notifyIndustryEvents(ctx context.Context, c *notifyColle
 	}
 }
 
+// contractFinished reports whether a contract status means done
+// from either side's point of view.
+func contractFinished(status string) bool {
+	switch status {
+	case "finished", "finished_issuer", "finished_contractor":
+		return true
+	}
+	return false
+}
+
+// contractName names a contract for a notification or digest line:
+// its title when it has one, "courier run" for an untitled
+// courier, otherwise its number.
+func contractName(c esi.Contract) string {
+	if title := strings.TrimSpace(c.Title); title != "" {
+		return title
+	}
+	if c.Type == "courier" {
+		return "courier run"
+	}
+	return fmt.Sprintf("contract %d", c.ContractID)
+}
+
+// contractEventWhat phrases one contract transition the same way
+// in a notification and on the digest card: the item's name and
+// what happened to it.
+func contractEventWhat(name, event string) string {
+	return name + " " + event
+}
+
+// notifyContractEvents: contracts the character is party to that
+// were accepted, finished or expired. A contract new to the pass is
+// its own baseline (its source unseen), so only transitions after
+// that announce once each: the key carries the contract and the
+// event, and repeat polls find the key already seen.
+func (app *Application) notifyContractEvents(c *notifyCollector, b *charSnaps, now time.Time) {
+	if !b.contractsKnown {
+		return
+	}
+	id := b.ch.CharacterID
+	for _, contract := range b.contracts {
+		if contract.IssuerID != id && contract.AcceptorID != id {
+			continue
+		}
+		src := c.source(notifyContract, id, contract.ContractID)
+		url := fmt.Sprintf("/contracts/?character=%d&view=1", id)
+		name := contractName(contract)
+		switch {
+		case contract.Status == "in_progress":
+			c.add(notifyEvent{
+				Kind: notifyContract, CharacterID: id, Source: src,
+				Key:   fmt.Sprintf("contract|%d|%d|accepted", id, contract.ContractID),
+				Title: fmt.Sprintf("%s: %s", b.ch.Name, contractEventWhat(name, "was accepted")),
+				URL:   url,
+			})
+		case contractFinished(contract.Status):
+			c.add(notifyEvent{
+				Kind: notifyContract, CharacterID: id, Source: src,
+				Key:   fmt.Sprintf("contract|%d|%d|finished", id, contract.ContractID),
+				Title: fmt.Sprintf("%s: %s", b.ch.Name, contractEventWhat(name, "finished")),
+				URL:   url,
+			})
+		case contract.Status == "failed" || contractLapsed(contract, now):
+			c.add(notifyEvent{
+				Kind: notifyContract, CharacterID: id, Source: src,
+				Key:   fmt.Sprintf("contract|%d|%d|expired", id, contract.ContractID),
+				Title: fmt.Sprintf("%s: %s", b.ch.Name, contractEventWhat(name, "expired")),
+				URL:   url,
+			})
+		}
+	}
+}
+
+// contractLapsed reports whether an outstanding contract with nobody
+// holding it has run past its expiry: the pass's "expired" for
+// contracts ESI leaves outstanding instead of closing.
+func contractLapsed(c esi.Contract, now time.Time) bool {
+	if c.Status != "outstanding" || c.AcceptorID != 0 {
+		return false
+	}
+	expired, ok := parseRFC3339(c.DateExpired)
+	return ok && !expired.After(now)
+}
+
+// notifyRelinkEvents: a character whose saved sign-in stopped
+// working. The key carries the moment it was parked, so the event
+// fires on the transition, not on every worker cycle.
+func (app *Application) notifyRelinkEvents(c *notifyCollector, b *charSnaps) {
+	id := b.ch.CharacterID
+	src := c.source(notifyRelink, id)
+	if b.ch.LinkState != linkStateTokenDead {
+		return
+	}
+	var parked int64
+	if b.ch.LinkStateAt.Valid {
+		parked = b.ch.LinkStateAt.Time.Unix()
+	}
+	c.add(notifyEvent{
+		Kind: notifyRelink, CharacterID: id, Source: src,
+		Key:   fmt.Sprintf("relogin|%d|%d", id, parked),
+		Title: fmt.Sprintf("%s needs to sign in again. The saved EVE sign-in stopped working.", b.ch.Name),
+		URL:   "/characters/",
+	})
+}
+
+// campOnlineFresh is how recently an online snapshot must have been
+// fetched to count the character as online for a camp alert: a stale
+// "online" from yesterday must not fire it.
+const campOnlineFresh = 30 * time.Minute
+
+// campSystemName names a watched system from the static data.
+func (app *Application) campSystemName(ctx context.Context, systemID int64) string {
+	if sys, err := app.queries.GetSDESystem(ctx, systemID); err == nil && sys.Name != "" {
+		return sys.Name
+	}
+	return fmt.Sprintf("system %d", systemID)
+}
+
+// notifyCampEvents: gate camps in the account's watched systems,
+// but only while one of its characters is online. A camp new to the
+// pass is baselined like any other source; a continuing camp keeps
+// its key, so it announces once, and a fresh camp after it announces
+// again.
+func (app *Application) notifyCampEvents(ctx context.Context, c *notifyCollector, userID int64, bundles []*charSnaps, now time.Time) {
+	prefs := app.notifyPrefsFor(ctx, userID)
+	if len(prefs.CampSystems) == 0 {
+		return
+	}
+	// Sources register before the online gate, so a camp that
+	// stood while the account was offline reads as known when a
+	// character comes online, and only a new camp announces.
+	for _, systemID := range prefs.CampSystems {
+		c.source(notifyCamp, systemID)
+	}
+	online := false
+	for _, b := range bundles {
+		var on esi.Online
+		if at, ok := app.snapAt(ctx, b.ch.CharacterID, esi.SnapOnline, &on); ok && on.Online && now.Sub(at) <= campOnlineFresh {
+			online = true
+			break
+		}
+	}
+	if !online {
+		return
+	}
+	names := app.newKillNames(ctx)
+	for _, systemID := range prefs.CampSystems {
+		// The source is registered on every pass, camp or not, so
+		// a camp that forms reads as a transition from a known
+		// past, not as history.
+		src := c.source(notifyCamp, systemID)
+		stream, err := app.queries.ListKillsBySystem(ctx, db.ListKillsBySystemParams{
+			SystemID: systemID, BeforeTime: now.Add(time.Hour), BeforeID: 1 << 62, MaxRows: systemKillsFetch,
+		})
+		if err != nil {
+			logging.Errorf("notify: camp kills for system %d: %v", systemID, err)
+			continue
+		}
+		camp := app.mapSystemCamp(ctx, names, systemID, now, stream)
+		if camp == nil {
+			continue
+		}
+		name := app.campSystemName(ctx, systemID)
+		c.add(notifyEvent{
+			Kind: notifyCamp, Source: src,
+			Key:   fmt.Sprintf("camp|%d|%d", systemID, camp.Since),
+			Title: fmt.Sprintf("Gate camp in %s: %d kills in the last hour", name, camp.Kills),
+			URL:   fmt.Sprintf("/system/?system=%d", systemID),
+		})
+	}
+}
+
 // notifyWatchEvents: watched prices past their threshold, the same
 // test the home briefing applies. A standing state: its key carries
 // the direction, and it is forgotten when the price comes back inside.
@@ -437,6 +638,23 @@ type notifyPrefs struct {
 	// stops only that channel: the news is still recorded as seen,
 	// and the other channels still carry it.
 	OffChannels []string `json:"off_channels,omitempty"`
+	// CardsOff: kinds whose briefing card is switched off, for the
+	// kinds that have one (briefingCardKindFor). The notification
+	// switch and the card switch are independent: a kind can arrive
+	// as a notification, a card, both, or neither.
+	CardsOff []string `json:"cards_off,omitempty"`
+	// CampSystems: the solar systems the gate camp alerts watch,
+	// chosen on the settings page, at most campSystemsMax.
+	CampSystems []int64 `json:"camp_systems,omitempty"`
+	// UndercutDigestHours: how often the undercut digest may appear
+	// at most, in hours; 0 means every time. One of
+	// undercutDigestHours.
+	UndercutDigestHours int `json:"undercut_digest_hours,omitempty"`
+	// UndercutDigestShown: when the undercut digest last appeared,
+	// unix seconds. The digest builder reads it to enforce the
+	// frequency above and writes it when the digest appears, at
+	// most once per frequency window.
+	UndercutDigestShown int64 `json:"undercut_digest_shown,omitempty"`
 	// PromptAnswered: the account has answered the first-run prompt
 	// (notify_prompt.go), or waved it away. Either way the prompt is
 	// not shown unasked again; it stays one click away in the bell.
@@ -477,8 +695,117 @@ func parseNotifyPrefs(blob string) notifyPrefs {
 			prefs.OffChannels = append(prefs.OffChannels, id)
 		}
 	}
+	for _, id := range raw.CardsOff {
+		if _, ok := briefingCardKindFor(id); ok && !prefs.cardOff(id) {
+			prefs.CardsOff = append(prefs.CardsOff, id)
+		}
+	}
+	for _, id := range raw.CampSystems {
+		if id > 0 && len(prefs.CampSystems) < campSystemsMax && !prefs.watchesCampSystem(id) {
+			prefs.CampSystems = append(prefs.CampSystems, id)
+		}
+	}
+	if validUndercutDigestHours(raw.UndercutDigestHours) {
+		prefs.UndercutDigestHours = raw.UndercutDigestHours
+	}
+	prefs.UndercutDigestShown = raw.UndercutDigestShown
 	prefs.PromptAnswered = raw.PromptAnswered
 	return prefs
+}
+
+// briefingCardKindFor names the briefing card kind a notification
+// kind's news also appears as, for the kinds that have a card: the
+// settings page offers those kinds a briefing card switch beside
+// the notification one. Kinds not listed have no card today.
+func briefingCardKindFor(kind string) (string, bool) {
+	switch kind {
+	case notifyMail:
+		return "mail", true
+	case notifySkill:
+		return "skills", true
+	case notifyPI:
+		return "pi", true
+	case notifyIndustry:
+		return "industry", true
+	case notifyCalendar:
+		return "calendar", true
+	case notifyWatch:
+		return "market", true
+	case notifyContract:
+		return "contract", true
+	case notifyRelink:
+		return "link", true
+	case notifyCamp:
+		return "camp", true
+	case notifyUndercut:
+		return "orders", true
+	}
+	return "", false
+}
+
+// notifyKindForBriefingCard is briefingCardKindFor read the other
+// way: the notification kind whose card switch gates a card kind.
+func notifyKindForBriefingCard(cardKind string) (string, bool) {
+	switch cardKind {
+	case "mail":
+		return notifyMail, true
+	case "skills":
+		return notifySkill, true
+	case "pi":
+		return notifyPI, true
+	case "industry":
+		return notifyIndustry, true
+	case "calendar":
+		return notifyCalendar, true
+	case "market":
+		return notifyWatch, true
+	case "contract":
+		return notifyContract, true
+	case "link":
+		return notifyRelink, true
+	case "camp":
+		return notifyCamp, true
+	case "orders":
+		return notifyUndercut, true
+	}
+	return "", false
+}
+
+// cardOff reports whether a kind's briefing card is switched off.
+func (p notifyPrefs) cardOff(kind string) bool {
+	for _, id := range p.CardsOff {
+		if id == kind {
+			return true
+		}
+	}
+	return false
+}
+
+// campSystemsMax bounds how many systems the gate camp alerts watch:
+// each watched system costs the pass its own bounded kill reads.
+const campSystemsMax = 10
+
+// watchesCampSystem reports whether a system is already watched.
+func (p notifyPrefs) watchesCampSystem(id int64) bool {
+	for _, watched := range p.CampSystems {
+		if watched == id {
+			return true
+		}
+	}
+	return false
+}
+
+// undercutDigestHours are the frequencies the undercut digest can
+// be capped at, in hours; 0 means every time.
+var undercutDigestHours = []int{0, 1, 6, 24}
+
+func validUndercutDigestHours(n int) bool {
+	for _, allowed := range undercutDigestHours {
+		if n == allowed {
+			return true
+		}
+	}
+	return false
 }
 
 // channelOff reports whether a delivery channel is switched off.

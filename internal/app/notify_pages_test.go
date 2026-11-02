@@ -232,11 +232,26 @@ func TestNotificationSettings(t *testing.T) {
 	if code != http.StatusOK {
 		t.Fatalf("GET settings = %d", code)
 	}
-	// Everything is on to begin with.
+	// Everything is on to begin with: notifying kinds carry a
+	// switch, the digest-only kind reads "Digest only" instead,
+	// and kinds with a card carry the card switch.
 	for _, kind := range notifyKindList() {
+		if kind.DigestOnly {
+			mustContain(t, "/settings", body, kind.Title+` <small>Digest only</small>`)
+			continue
+		}
 		mustContain(t, "/settings", body,
 			`<input type="checkbox" name="kind" value="`+kind.ID+`" checked> `+kind.Title)
 	}
+	mustContain(t, "/settings", body,
+		"Briefing card",
+		`<input type="checkbox" name="card.mail" value="1" checked> Show as a card`,
+		`<input type="checkbox" name="card.undercut" value="1" checked> Show as a card`,
+		`<td><small>No card</small></td>`,
+		`name="undercut_digest_hours"`,
+		`name="camp_systems"`,
+		`name="kinds_shown"`,
+		`name="cards_shown"`)
 	mustContain(t, "/settings", body,
 		`placeholder="On for 2 of 2 characters"`,                    // mail: both
 		`placeholder="On for 1 of 2 characters (1 without access)"`, // killmails: the alt has not granted it
@@ -254,7 +269,12 @@ func TestNotificationSettings(t *testing.T) {
 			keep = append(keep, kind.ID)
 		}
 	}
-	if code, where := f.post(cookie, "/notifications/settings", url.Values{"kind": append(keep, "no-such-kind")}); code != http.StatusSeeOther || where != "/settings#notifications" {
+	if code, where := f.post(cookie, "/notifications/settings", url.Values{
+		"kinds_shown":   {"1"},
+		"cards_shown":   {"1"},
+		"kind":          append(keep, "no-such-kind"),
+		"card.undercut": {"1"},
+	}); code != http.StatusSeeOther || where != "/settings#notifications" {
 		t.Fatalf("save: %d to %q", code, where)
 	}
 	prefs := f.app.notifyPrefsFor(f.ctx, f.userID)
@@ -274,6 +294,127 @@ func TestNotificationSettings(t *testing.T) {
 	}
 	if p := f.app.notifyPrefsFor(f.ctx, other.ID); len(p.Off) != 0 {
 		t.Fatalf("a second account inherited settings: %q", p.Off)
+	}
+}
+
+// TestNotificationSettingsAllOff: a settings form submitted with
+// every box unticked still saves as all off — the shown markers
+// tell an empty form apart from a form without the switches.
+func TestNotificationSettingsAllOff(t *testing.T) {
+	f := newNotifyFixture(t)
+	cookie := sessionCookie(t, f.app, f.userID, f.ch.CharacterID, f.ch.Name)
+	form := url.Values{
+		"channels_shown": {"1"},
+		"kinds_shown":    {"1"},
+		"cards_shown":    {"1"},
+	}
+	if code, _ := f.post(cookie, "/notifications/settings", form); code != http.StatusSeeOther {
+		t.Fatalf("save all-off: status %d, want %d", code, http.StatusSeeOther)
+	}
+	prefs := f.app.notifyPrefsFor(f.ctx, f.userID)
+	for _, kind := range notifyKindList() {
+		if kind.DigestOnly {
+			if prefs.off(kind.ID) {
+				t.Errorf("digest-only kind %q landed in the notification off list", kind.ID)
+			}
+			continue
+		}
+		if !prefs.off(kind.ID) {
+			t.Errorf("kind %q not off after submitting every box unticked", kind.ID)
+		}
+		if _, ok := briefingCardKindFor(kind.ID); ok && !prefs.cardOff(kind.ID) {
+			t.Errorf("card kind %q not off after submitting every box unticked", kind.ID)
+		}
+	}
+	// The desktop box is hidden without push configured, so only
+	// the shown box can switch.
+	if len(prefs.OffChannels) != 1 || prefs.OffChannels[0] != notifyChannelInApp {
+		t.Errorf("channels off = %q, want the shown box off", prefs.OffChannels)
+	}
+	_, body := getPage(t, f.app, cookie, "/settings")
+	mustContain(t, "/settings all off", body, "Notification settings saved.")
+}
+
+// TestNotificationSettingsHiddenSectionsStay: a form without the
+// shown markers — a module's own boxes, say — changes neither the
+// kind switches nor the card switches.
+func TestNotificationSettingsHiddenSectionsStay(t *testing.T) {
+	f := newNotifyFixture(t)
+	cookie := sessionCookie(t, f.app, f.userID, f.ch.CharacterID, f.ch.Name)
+	before := notifyPrefs{
+		Off: []string{notifyMail}, OffFor: map[string][]int64{},
+		CardsOff: []string{notifyMail}, UndercutDigestHours: 6, CampSystems: []int64{30000142},
+	}
+	if err := f.app.storeNotifyPrefs(f.ctx, f.userID, before); err != nil {
+		t.Fatalf("store prefs: %v", err)
+	}
+	form := url.Values{
+		"channels_shown": {"1"},
+		"channel_inapp":  {"1"},
+	}
+	if code, _ := f.post(cookie, "/notifications/settings", form); code != http.StatusSeeOther {
+		t.Fatalf("save: status %d, want %d", code, http.StatusSeeOther)
+	}
+	after := f.app.notifyPrefsFor(f.ctx, f.userID)
+	if len(after.Off) != 1 || !after.off(notifyMail) {
+		t.Fatalf("kinds changed without their marker: %q", after.Off)
+	}
+	if len(after.CardsOff) != 1 || !after.cardOff(notifyMail) {
+		t.Fatalf("cards changed without their marker: %q", after.CardsOff)
+	}
+	if after.UndercutDigestHours != 6 || len(after.CampSystems) != 1 {
+		t.Fatalf("digest frequency and watched systems changed without their marker: %+v", after)
+	}
+}
+
+// TestNotificationSettingsDigestAndCamp: the digest frequency and
+// the watched systems save; unknown systems are reported and the
+// stored list is kept.
+func TestNotificationSettingsDigestAndCamp(t *testing.T) {
+	f := newNotifyFixture(t)
+	cookie := sessionCookie(t, f.app, f.userID, f.ch.CharacterID, f.ch.Name)
+	if _, err := f.app.SQLDB().ExecContext(f.ctx,
+		`INSERT INTO sde_systems (system_id, name, region_id, security) VALUES (30000142, 'Jita', 10000002, 0.9) ON CONFLICT DO NOTHING`); err != nil {
+		t.Fatalf("seed system: %v", err)
+	}
+	form := url.Values{
+		"kinds_shown":           {"1"},
+		"undercut_digest_hours": {"6"},
+		"camp_systems":          {"Jita\nNo Such System"},
+		"card.undercut":         {"1"},
+		"card.camp":             {"1"},
+		"card.contract":         {"1"},
+		"card.relink":           {"1"},
+	}
+	for _, kind := range notifyKindList() {
+		if !kind.DigestOnly {
+			form.Add("kind", kind.ID)
+		}
+	}
+	if code, _ := f.post(cookie, "/notifications/settings", form); code != http.StatusSeeOther {
+		t.Fatalf("save: status %d, want %d", code, http.StatusSeeOther)
+	}
+	prefs := f.app.notifyPrefsFor(f.ctx, f.userID)
+	if prefs.UndercutDigestHours != 6 {
+		t.Fatalf("digest frequency = %d, want 6", prefs.UndercutDigestHours)
+	}
+	if len(prefs.CampSystems) != 1 || prefs.CampSystems[0] != 30000142 {
+		t.Fatalf("watched systems = %v, want [30000142]", prefs.CampSystems)
+	}
+	if prefs.cardOff(notifyUndercut) || prefs.cardOff(notifyCamp) {
+		t.Fatalf("ticked cards saved off: %q", prefs.CardsOff)
+	}
+	_, body := getPage(t, f.app, cookie, "/settings")
+	mustContain(t, "/settings", body, "Unknown systems were left out: No Such System.")
+
+	// An invalid frequency keeps the stored one.
+	form.Set("undercut_digest_hours", "5")
+	form.Set("camp_systems", "Jita")
+	if code, _ := f.post(cookie, "/notifications/settings", form); code != http.StatusSeeOther {
+		t.Fatalf("save invalid frequency: status %d, want %d", code, http.StatusSeeOther)
+	}
+	if prefs := f.app.notifyPrefsFor(f.ctx, f.userID); prefs.UndercutDigestHours != 6 {
+		t.Fatalf("invalid frequency overwrote the stored one: %d", prefs.UndercutDigestHours)
 	}
 }
 
@@ -298,8 +439,11 @@ func TestNotificationSettingsPerCharacter(t *testing.T) {
 
 	// Every kind on; mail only for the first character. The alt's
 	// killmail box cannot be ticked, so the form does not carry it.
-	form := url.Values{}
+	form := url.Values{"kinds_shown": {"1"}}
 	for _, kind := range notifyKindList() {
+		if kind.DigestOnly {
+			continue
+		}
 		form.Add("kind", kind.ID)
 		if !kind.Account {
 			form.Add("char."+kind.ID, a)
@@ -431,8 +575,11 @@ func TestNotifyNewOps(t *testing.T) {
 	// Switched off for the only character in the corporation: quiet,
 	// and still quiet about that op after switching back on.
 	cookie := sessionCookie(t, f.app, f.userID, f.ch.CharacterID, f.ch.Name)
-	form := url.Values{}
+	form := url.Values{"kinds_shown": {"1"}}
 	for _, kind := range notifyKindList() {
+		if kind.DigestOnly {
+			continue
+		}
 		form.Add("kind", kind.ID)
 		if !kind.Account && kind.ID != notifyOp {
 			form.Add("char."+kind.ID, "90000001")
@@ -547,8 +694,11 @@ func TestNotifyOpReminder(t *testing.T) {
 	mustContain(t, "settings", body,
 		`value="op_reminder" checked> Op starting soon</label>`,
 		`<select name="op_reminder_minutes"`, `<option value="30" selected>30 minutes</option>`, `<option value="120">2 hours</option>`)
-	form := url.Values{"op_reminder_minutes": {"120"}}
+	form := url.Values{"kinds_shown": {"1"}, "op_reminder_minutes": {"120"}}
 	for _, kind := range notifyKindList() {
+		if kind.DigestOnly {
+			continue
+		}
 		form.Add("kind", kind.ID)
 		if !kind.Account {
 			form.Add("char."+kind.ID, "90000001")

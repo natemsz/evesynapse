@@ -122,6 +122,7 @@
     {{end}}
   </div>
 
+  {{if and $ov.InspOpen (or $ov.SkillInsp $ov.CloneInsp)}}<a class="ov-insp-bg" href="{{$ov.InspCloseHref}}" aria-hidden="true" tabindex="-1"></a>{{end}}
   <div class="panes3 ov{{if or $ov.SkillInsp $ov.CloneInsp}} has-insp{{end}}">
     <section class="ov-dir" aria-label="Skill directory and clone bay">
       {{if $v.SkillsKnown}}
@@ -170,12 +171,45 @@
           <div class="ov-ts-head"><span>Now training</span>{{if $ov.TrainingDone}}<span class="cd">Finishes <span class="countdown" data-finish="{{$ov.TrainingDone}}"></span></span>{{end}}</div>
           <div class="ov-trainnow"><span class="sk">{{$ov.TrainName}}</span><span class="ov-sub">training to Level {{$ov.TrainToRoman}}</span><span class="ov-pips">{{range $ov.TrainPips}}<i{{if .Class}} class="{{.Class}}"{{end}}></i>{{end}}</span>{{if $ov.TrainSPHour}}<span class="ov-sub">{{$ov.TrainSPHour}}</span>{{end}}</div>
           {{if $ov.QueueChips}}
-          <div class="ov-qrow">
-            <span class="ov-qitem"><span class="qn">Queue</span>{{$ov.QueueAfter}} skill{{if ne $ov.QueueAfter 1}}s{{end}} after this one</span>
-            {{range $ov.QueueChips}}<span class="ov-qitem dim">{{.Num}} · {{.Label}}</span>{{end}}
-          </div>
+          <p class="ov-qsum"><b>Queue</b> · {{$ov.QueueAfter}} skill{{if ne $ov.QueueAfter 1}}s{{end}} after this one</p>
+          <ol class="ov-qlist">
+            {{range $ov.QueueChips}}<li class="ov-qline"><span class="qn">{{.Num}}</span><span class="qnm">{{.Name}}</span><span class="ov-pips" role="img" aria-label="Trains to level {{.Level}} of 5">{{range .Pips}}<i{{if .Class}} class="{{.Class}}"{{end}}></i>{{end}}</span></li>{{end}}
+          </ol>
           {{end}}
           {{if $v.CompletesAt}}<p class="ov-ts-foot">Queue completes {{$v.CompletesAt}}</p>{{end}}
+        </div>
+        {{end}}
+
+        {{with $ov.Staged}}
+        <div class="ov-stagedstrip slotsec">
+          <h4>Staged plan <small>not saved yet</small></h4>
+          {{range .Items}}
+          <div class="modrow">
+            <span class="modrow-name">{{.Name}} <small>to {{.Roman}}</small></span>
+            <span class="modrow-val">{{if .SP}}{{.SP}} · {{.Time}}{{else}}{{.Note}}{{end}}</span>
+            <a class="ov-unstage" href="{{.DropHref}}" aria-label="Remove {{.Name}} from the staged plan">&#10005;</a>
+          </div>
+          {{end}}
+          {{if .TotalSP}}<div class="insp-total"><span>Total</span><span>{{.TotalSP}} SP · {{.TotalTime}}</span></div>{{end}}
+          {{if .StartsNote}}<p class="insp-note">{{.StartsNote}}</p>{{end}}
+          {{if .PrereqNote}}<p class="insp-note">{{.PrereqNote}}</p>{{end}}
+          {{if .Export}}
+          <div class="ov-export">
+            <button type="button" class="btn" data-copy data-copy-from="ov-plan-text">Copy EVE plan</button>
+            <details>
+              <summary>Plan text, in the game's format</summary>
+              <pre id="ov-plan-text">{{.Export}}</pre>
+            </details>
+          </div>
+          {{end}}
+          {{if .SavePlanID}}
+          <form method="post" action="/skills/plans/items-add-bulk" class="ov-staged-save">
+            <input type="hidden" name="character" value="{{$v.CharacterID}}">
+            <input type="hidden" name="plan" value="{{.SavePlanID}}">
+            <input type="hidden" name="items" value="{{.ItemsField}}">
+            <button type="submit" class="btn">Save staged to {{$ov.PlanName}}</button>
+          </form>
+          {{end}}
         </div>
         {{end}}
 
@@ -233,8 +267,9 @@
       {{end}}
     </section>
 
-    {{if or $ov.SkillInsp $ov.CloneInsp $ov.Staged}}
-    <aside class="insp ov-insp" aria-label="Inspector">
+    {{if or $ov.SkillInsp $ov.CloneInsp}}
+    <aside class="insp ov-insp{{if $ov.InspOpen}} picked{{end}}" aria-label="Inspector">
+      <a class="insp-x ov-insp-x" href="{{$ov.InspCloseHref}}" aria-label="Close the inspector">&#10005;</a>
       {{if eq $v.State.Surface "clones"}}
         {{with $ov.CloneInsp}}
         <div class="insp-head">
@@ -276,9 +311,8 @@
         </div>
         <div class="estbar">
           <span class="estbar-l"><span class="estbar-lab">Trained skill points</span><span class="estbar-v">{{.SP}} SP</span></span>
-          {{if .StageLevel}}<a class="ov-eft" href="{{.StageHref}}">+ Plan lvl {{.StageLevel}}</a>{{else if .StagedLevel}}<span class="ov-staged">Staged at level {{.StagedLevel}}</span>{{end}}
+          {{if .StageLevel}}<a class="ov-eft" href="{{.StageHref}}">+ Plan lvl {{.StageLevel}}</a>{{else if .StagedLevel}}<span class="ov-staged">Staged at level {{.StagedLevel}}</span>{{if .StagedDropHref}}<a class="ov-unstage" href="{{.StagedDropHref}}" aria-label="Remove {{.Name}} from the staged plan">&#10005;</a>{{end}}{{end}}
         </div>
-        {{if $ov.PlanName}}<p class="insp-note">Plan target: <b>{{$ov.PlanName}}</b>, the plan picked in the toolbar above. Staged skills save into it.</p>{{end}}
         {{if .Description}}<p class="ov-idesc">{{.Description}}</p>{{end}}
         <div class="slotsec">
           <h4>Skill level milestones</h4>
@@ -292,39 +326,6 @@
         </div>
         <div class="insp-foot"><span>Inspector follows the selected row</span><span>Skills snapshot loaded</span></div>
         {{end}}
-      {{end}}
-
-      {{with $ov.Staged}}
-      <div class="slotsec ov-staged-sec">
-        <h4>Staged plan <small>not saved yet</small></h4>
-        {{range .Items}}
-        <div class="modrow">
-          <span class="modrow-name">{{.Name}} <small>to {{.Roman}}</small></span>
-          <span class="modrow-val">{{if .SP}}{{.SP}} · {{.Time}}{{else}}{{.Note}}{{end}}</span>
-          <a class="ov-unstage" href="{{.DropHref}}" aria-label="Remove {{.Name}} from the staged plan">&#10005;</a>
-        </div>
-        {{end}}
-        {{if .TotalSP}}<div class="insp-total"><span>Total</span><span>{{.TotalSP}} SP · {{.TotalTime}}</span></div>{{end}}
-        {{if .StartsNote}}<p class="insp-note">{{.StartsNote}}</p>{{end}}
-        {{if .PrereqNote}}<p class="insp-note">{{.PrereqNote}}</p>{{end}}
-        {{if .Export}}
-        <div class="ov-export">
-          <button type="button" class="btn" data-copy data-copy-from="ov-plan-text">Copy EVE plan</button>
-          <details>
-            <summary>Plan text, in the game's format</summary>
-            <pre id="ov-plan-text">{{.Export}}</pre>
-          </details>
-        </div>
-        {{end}}
-        {{if .SavePlanID}}
-        <form method="post" action="/skills/plans/items-add-bulk" class="ov-staged-save">
-          <input type="hidden" name="character" value="{{$v.CharacterID}}">
-          <input type="hidden" name="plan" value="{{.SavePlanID}}">
-          <input type="hidden" name="items" value="{{.ItemsField}}">
-          <button type="submit" class="btn">Save staged to {{$ov.PlanName}}</button>
-        </form>
-        {{end}}
-      </div>
       {{end}}
     </aside>
     {{end}}

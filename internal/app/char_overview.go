@@ -43,6 +43,10 @@ type overviewState struct {
 	Level   string // level filter: "all" | "v" | "mid" | "none"
 	PlanID  int64  // target plan for the staged plan's save
 	Stage   []stageItem
+	// Insp marks a deliberate inspector pick: at middle widths
+	// the inspector opens as an overlay sheet only for a pick,
+	// never for the default selection it otherwise follows.
+	Insp bool
 }
 
 // stageItem is one staged plan entry: a skill and the level it
@@ -65,7 +69,9 @@ func parseOverviewState(r *http.Request) overviewState {
 	st.SkillID, _ = strconv.ParseInt(q.Get("skill"), 10, 64)
 	if c := q.Get("clone"); c != "" {
 		st.Clone = c
+		st.Insp = true
 	}
+	st.Insp = st.Insp || q.Get("insp") != ""
 	st.Query = strings.TrimSpace(q.Get("q"))
 	switch q.Get("lvl") {
 	case "v", "mid", "none":
@@ -155,6 +161,9 @@ func (st overviewState) href(characterID int64) string {
 		}
 		v.Set("stage", strings.Join(parts, ","))
 	}
+	if st.Insp {
+		v.Set("insp", "1")
+	}
 	return "/character/?" + v.Encode()
 }
 
@@ -226,6 +235,10 @@ type overviewView struct {
 	QueueAfter   int
 	TrainingDone string // raw finish for the countdown
 
+	// Staged plan strip (sheet surface): what the staging
+	// session holds, shown under the Now Training card.
+	Staged *stagedPlanView
+
 	// The center table (sheet and browse surfaces).
 	Rows           []ovSkillRow
 	RowsNote       string // explains an empty table
@@ -239,7 +252,13 @@ type overviewView struct {
 	// Inspector.
 	SkillInsp *inspectorSkill
 	CloneInsp *cloneInspector
-	Staged    *stagedPlanView
+	// InspOpen: the URL carries a deliberate inspector pick
+	// (a skill or a clone), so at middle widths the
+	// inspector opens as an overlay sheet.
+	InspOpen bool
+	// InspCloseHref: this page with the pick cleared; the
+	// overlay's backdrop and close control both point here.
+	InspCloseHref string
 
 	// Timers card: the clone jump cooldown (the fatigue rows
 	// ride the character view itself).
@@ -283,7 +302,9 @@ type ovChip struct {
 
 type queueChip struct {
 	Num   int
-	Label string // "Astrogeology → V"
+	Name  string // "Astrogeology"
+	Level string // target level, roman: "V"
+	Pips  []ovPip
 }
 
 // ovPip is one level box of a skill row: trained levels filled,
@@ -366,6 +387,9 @@ type inspectorSkill struct {
 	StageLevel  int // next level the stage button stages, 0 = none
 	StageHref   string
 	StagedLevel int
+	// StagedDropHref unstages this skill alone, keeping the
+	// inspector on it; set only while the skill is staged.
+	StagedDropHref string
 }
 
 type milestoneRow struct {
@@ -399,7 +423,8 @@ type implantSlotRow struct {
 	Empty  bool
 }
 
-// stagedPlanView is the inspector's staged plan.
+// stagedPlanView is the staged plan strip under the Now
+// Training card.
 type stagedPlanView struct {
 	Items      []stagedItemView
 	TotalSP    string
@@ -497,6 +522,27 @@ func pipsFor(trained, coveredTo int) []ovPip {
 		case i <= trained:
 			p.Class = "f"
 		case i <= coveredTo:
+			p.Class = "plan"
+		}
+		pips = append(pips, p)
+	}
+	return pips
+}
+
+// trainPipsFor builds the Now Training strip's five level
+// boxes: trained levels filled, levels below the target in the
+// overlay color, and the level in training marked "train" so
+// its box blinks blue.
+func trainPipsFor(trained, target int) []ovPip {
+	pips := make([]ovPip, 0, 5)
+	for i := 1; i <= 5; i++ {
+		p := ovPip{}
+		switch {
+		case i <= trained:
+			p.Class = "f"
+		case i == target:
+			p.Class = "train"
+		case i < target:
 			p.Class = "plan"
 		}
 		pips = append(pips, p)
@@ -620,6 +666,13 @@ func (app *Application) fillOverview(ctx context.Context, ch db.Character, view 
 
 	ov.TotalSPCompact = compactSP(view.TotalSPRaw, 2)
 	ov.Hidden = st.hiddenFields(charID)
+	ov.InspOpen = st.Insp || st.SkillID != 0
+	ov.InspCloseHref = st.with(func(c *overviewState) {
+		c.SkillID = 0
+		c.Stage = nil
+		c.Clone = "active"
+		c.Insp = false
+	}).href(charID)
 	if view.SystemSec != "" {
 		if sec, err := strconv.ParseFloat(view.SystemSec, 64); err == nil {
 			ov.SysSecClass = secChipClass(sec)
@@ -645,8 +698,8 @@ func (app *Application) fillOverview(ctx context.Context, ch db.Character, view 
 	}
 
 	// The staged plan's computation runs first: the table's
-	// pips overlay reads its levels, and the inspector shows
-	// its outcome.
+	// pips overlay reads its levels, and the staged strip
+	// shows its outcome.
 	var outcome *skillplan.Outcome
 	if len(st.Stage) > 0 && view.SkillsKnown && !view.BrowseWarming {
 		targets := make([]skillplan.Target, 0, len(st.Stage))
@@ -843,7 +896,7 @@ func (app *Application) ovTrainingStrip(view *characterView, ov *overviewView, c
 	ov.ShowTraining = true
 	ov.TrainName = head.Skill
 	ov.TrainToRoman = head.Level
-	ov.TrainPips = pipsFor(head.TrainedLvl, head.LevelNum)
+	ov.TrainPips = trainPipsFor(head.TrainedLvl, head.LevelNum)
 	ov.TrainingDone = view.TrainingFinish
 	if e, ok := catByID[head.SkillID]; ok {
 		attrs, known := attrSetOf(view.Attrs, view.AttrsKnown)
@@ -853,7 +906,7 @@ func (app *Application) ovTrainingStrip(view *characterView, ov *overviewView, c
 		}
 	}
 	for i, row := range view.Queue[1:] {
-		ov.QueueChips = append(ov.QueueChips, queueChip{Num: i + 1, Label: row.Skill + " → " + row.Level})
+		ov.QueueChips = append(ov.QueueChips, queueChip{Num: i + 1, Name: row.Skill, Level: row.Level, Pips: pipsFor(row.TrainedLvl, row.LevelNum)})
 	}
 	ov.QueueAfter = len(view.Queue) - 1
 }
@@ -1037,6 +1090,9 @@ func (app *Application) ovInspectorSkill(ctx context.Context, view *characterVie
 		insp.Milestones = append(insp.Milestones, m)
 	}
 	insp.StagedLevel = st.stageLevel(e.TypeID)
+	if insp.StagedLevel > 0 {
+		insp.StagedDropHref = st.with(func(c *overviewState) { c.stageDrop(e.TypeID) }).href(view.CharacterID)
+	}
 	next := level + 1
 	if insp.StagedLevel >= next {
 		next = insp.StagedLevel + 1
@@ -1075,6 +1131,7 @@ func (app *Application) ovImplantStrip(view *characterView, ov *overviewView) {
 			Href: st.with(func(c *overviewState) {
 				c.Surface = "clones"
 				c.Clone = "active"
+				c.Insp = true
 			}).href(view.CharacterID),
 		}
 		var names, empty []string
@@ -1099,7 +1156,7 @@ func (app *Application) ovImplantStrip(view *characterView, ov *overviewView) {
 }
 
 // ovStagedView renders the computed staged plan into the
-// inspector's staged section.
+// sheet's staged plan strip.
 func (app *Application) ovStagedView(ctx context.Context, view *characterView, ov *overviewView, outcome *skillplan.Outcome, catByID map[int64]skillCatalogEntry) {
 	st := view.State
 	if len(st.Stage) == 0 {
@@ -1313,6 +1370,7 @@ func (app *Application) ovClones(ctx context.Context, view *characterView, ov *o
 		Href: st.with(func(c *overviewState) {
 			c.Surface = "clones"
 			c.Clone = "active"
+			c.Insp = true
 		}).href(charID),
 	}
 	if view.SystemSec != "" {

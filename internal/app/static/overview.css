@@ -110,12 +110,22 @@
 .ov-ts-head { display: flex; justify-content: space-between; gap: 1rem; color: var(--muted); font-size: 0.74rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; }
 .ov-ts-head .cd { color: var(--gold); text-transform: none; letter-spacing: 0; font-weight: 600; }
 .ov-trainnow { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 0.8rem; margin-top: 0.4rem; }
+/* The header sub-line rule gives .ov-sub a bottom margin; in this
+   row the margin lifts the sub-line text off the shared center the
+   name and pips sit on, so the row's sub-lines carry no margin. */
+.ov-trainnow .ov-sub { margin-bottom: 0; }
 .ov-trainnow .sk { font-weight: 700; font-size: 1.05rem; }
 .ov-sub { color: var(--muted); font-size: 0.84rem; }
-.ov-qrow { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.55rem; }
-.ov-qitem { padding: 0.16rem 0.5rem; border: 1px solid var(--box-edge); border-radius: 999px; font-size: 0.78rem; }
-.ov-qitem .qn { color: var(--gold); font-weight: 700; margin-right: 0.4rem; }
-.ov-qitem.dim { color: var(--muted); }
+.ov-qsum { margin: 0.55rem 0 0; color: var(--muted); font-size: 0.82rem; }
+.ov-qsum b { color: var(--gold); }
+.ov-qlist { list-style: none; margin: 0.4rem 0 0; padding: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.3rem 1.4rem; }
+.ov-qline { display: flex; align-items: baseline; gap: 0.5rem; min-width: 0; padding: 0.28rem 0.55rem; border: 1px solid var(--box-edge); border-radius: var(--r-sm); font-size: 0.84rem; }
+.ov-qline .qn { flex: none; color: var(--gold); font-weight: 700; font-variant-numeric: tabular-nums; }
+.ov-qline .qnm { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.ov-qline .ov-pips { flex: none; margin-left: auto; align-self: center; }
+@media (min-width: 45.01rem) {
+  .ov-qlist { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
 .ov-ts-foot { margin: 0.5rem 0 0; color: var(--muted); font-size: 0.82rem; }
 .fchip.on { border-color: var(--accent); color: var(--text); background: var(--glass); }
 .ov-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin: 0.8rem 0 0.4rem; }
@@ -141,7 +151,7 @@
 .ov-table .ov-lvl { width: 1.35rem; height: 1.35rem; font-size: 0.8rem; }
 .ov-table .ov-nm { font-size: 0.92rem; }
 .ov-table .ov-tag { font-size: 0.62rem; padding: 0.02rem 0.32rem; }
-.ov-table .ov-pips i { width: 0.6rem; height: 0.45rem; }
+.ov-table .ov-pips i { width: 0.6rem; height: 0.6rem; }
 .ov-table th.r, .ov-table td.r { text-align: right; }
 .ov-table tr.sel td { background: var(--glass); }
 .ov-cell { display: flex; align-items: center; gap: 0.6rem; color: var(--text); }
@@ -153,9 +163,13 @@
 .ov-tag.mastered { background: color-mix(in srgb, var(--kept) 14%, transparent); color: var(--kept); border: 1px solid var(--kept); }
 .ov-tag.untrained { color: var(--muted); border: 1px solid var(--box-edge); }
 .ov-pips { display: inline-flex; gap: 0.18rem; }
-.ov-pips i { width: 0.85rem; height: 0.5rem; border: 1px solid var(--box-edge); border-radius: 2px; }
+.ov-pips i { width: 0.7rem; height: 0.7rem; border: 1px solid var(--box-edge); border-radius: 2px; }
 .ov-pips i.f { background: var(--gold); border-color: var(--gold); }
 .ov-pips i.plan { background: var(--accent); border-color: var(--accent); }
+/* The level in training blinks blue, the same pulse the level
+   boxes use on the home page (lvl-pulse in style.css). */
+.ov-pips i.train { background: #3fa9f5; border-color: #3fa9f5; animation: lvl-pulse 1.2s ease-in-out infinite; }
+html[data-theme="light"] .ov-pips i.train { background: #2b7fc4; border-color: #2b7fc4; }
 .ov-rank { margin-top: 0.25rem; color: var(--muted); font-size: 0.78rem; }
 .ov-attr { color: var(--muted); font-size: 0.84rem; white-space: nowrap; }
 .ov-val small { display: block; color: var(--muted); font-weight: 400; }
@@ -176,7 +190,7 @@
 .ov-insp .modrow-val.done { color: var(--kept); }
 .ov-sn { display: inline-block; min-width: 1.9rem; color: var(--gold); font-weight: 700; font-size: 0.8rem; }
 .ov-empty { color: var(--muted); }
-.ov-staged-sec { border-top: 1px solid var(--box-edge); padding-top: 0.9rem; }
+.ov-stagedstrip { margin: 0 0 0.9rem; padding: 0.7rem 0.85rem; border: 1px solid var(--box-edge); border-radius: var(--r-sm); background: var(--panel); }
 .ov-unstage { color: var(--muted); padding: 0 0.2rem; }
 .ov-unstage:hover { color: var(--danger); text-decoration: none; }
 .ov-export { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; margin-top: 0.7rem; }
@@ -189,8 +203,54 @@
 .ov-colonies { margin-top: 1.1rem; padding: 0.9rem 1rem; border: 1px solid var(--box-edge); border-radius: var(--r-md); background: var(--panel); }
 .ov-colonies h3 { margin: 0 0 0.3rem; }
 
-/* ---- Responsive: panes stack, directory compacts ---- */
-@media (max-width: 1100px) {
+/* ---- Inspector overlay scaffolding: the backdrop and the
+   close control are in the markup whenever a pick is open,
+   but only the middle band turns them on. ---- */
+.ov-insp-bg { display: none; }
+.ov-insp-x { display: none; }
+
+/* ---- Middle band: two columns, a balanced 2 by 2 card row,
+   and the inspector as an overlay sheet. The three-pane
+   desktop layout only fits from about 84rem up: past that
+   point the center pane holds the skill table without
+   squeezing it and the four header cards sit in one row.
+   Below it the directory and the sheet share the width,
+   and a picked skill or clone opens the inspector as a
+   sheet over the page instead of a third column. ---- */
+@media (min-width: 45.01rem) and (max-width: 84rem) {
+  .ov-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .panes3.ov, .panes3.ov.has-insp { grid-template-columns: 15rem minmax(0, 1fr); }
+  .ov-insp { display: none; }
+  .ov-insp.picked {
+    display: block;
+    position: fixed; top: 0; right: 0; bottom: 0; z-index: 99;
+    width: min(24rem, 94vw);
+    overflow-y: auto; overscroll-behavior: contain;
+    border-top: 0; border-right: 0; border-bottom: 0; border-radius: 0;
+    background: var(--panel);
+    box-shadow: -16px 0 40px rgba(0, 0, 0, 0.5);
+    animation: ov-sheet-in 160ms ease-out;
+  }
+  .ov-insp.picked .ov-insp-x {
+    display: block;
+    position: absolute; top: 0.55rem; right: 0.75rem; z-index: 2;
+    padding: 0.2rem 0.35rem;
+    font-size: 1.05rem; line-height: 1;
+  }
+  .ov-insp-bg {
+    display: block;
+    position: fixed; inset: 0; z-index: 98;
+    background: rgba(0, 0, 0, 0.55);
+  }
+}
+@keyframes ov-sheet-in { from { transform: translateX(2rem); opacity: 0.4; } }
+@media (prefers-reduced-motion: reduce) {
+  .ov-insp.picked { animation: none; }
+  .ov-pips i.train { animation: none; }
+}
+
+/* ---- Phone: panes stack, directory compacts ---- */
+@media (max-width: 45rem) {
   .panes3.ov, .panes3.ov.has-insp { grid-template-columns: minmax(0, 1fr); }
   .ov-dir .dirlist { display: flex; flex-direction: column; gap: 0.35rem; overflow-x: visible; padding-bottom: 0; }
   .ov-dir .diritem { flex: 0 0 auto; }

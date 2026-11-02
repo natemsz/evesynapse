@@ -60,24 +60,25 @@ func TestVersionFileAndFooter(t *testing.T) {
 	cookie := sessionCookie(t, app, user.ID, fixtureCharA, "Fixture Ceo")
 
 	// The footer line also names the build serving the page.
-	// With an identity known, it carries the short commit linked
-	// to the full one and the truncated binary hash with the
-	// full hash in its title.
+	// The project name links to the project's Forgejo
+	// organization page, the version number links to that
+	// version's release page there, and a known build identity
+	// prints the binary hash's first nine characters in the
+	// line, with the full hash in its "view hash" pop-up.
 	savedBuild := runningBuild
 	defer func() { runningBuild = savedBuild }()
 	runningBuild = buildIdentity{
-		commit: "0123456789abcdef0123456789abcdef01234567",
-		hash:   "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210",
+		hash: "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210",
 	}
 	_, body := getPage(t, app, cookie, "/market/")
-	mustContain(t, "/market/ footer", body, `<a href="https://gitlab.com/natemsz/evesynapse" target="_blank" rel="noopener noreferrer">EveSynapse</a> <span class="version-number">`+appVersion+`</span> · commit <a href="https://gitlab.com/natemsz/evesynapse/-/commit/0123456789abcdef0123456789abcdef01234567" target="_blank" rel="noopener noreferrer">01234567</a> · binary hash <span title="SHA-256 of the running binary: fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210">fedcba987654…</span> · Made in Seattle, WA by <a href="https://natems.dev" target="_blank" rel="noopener noreferrer">natemsz</a>`)
+	mustContain(t, "/market/ footer", body, `<a href="https://natems.dev/EveSynapse" target="_blank" rel="noopener noreferrer">EveSynapse</a> <a class="version-number" href="https://natems.dev/EveSynapse/evesynapse/releases/tag/`+appVersion+`" target="_blank" rel="noopener noreferrer">`+appVersion+`</a> · binary hash <span class="binary-hash">fedcba987</span> <span class="hash-pop-wrap"><button type="button" class="hash-view" aria-expanded="false" aria-controls="build-hash-pop">view hash</button><span class="hash-pop" id="build-hash-pop" role="note" aria-label="Full binary hash" hidden>fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210</span></span> · Made in Seattle, WA by <a href="https://natems.dev" target="_blank" rel="noopener noreferrer">natemsz</a>`)
 	if strings.Contains(body, "0.2.0") {
 		t.Fatal("footer still shows the old hardcoded version")
 	}
 
-	// With no identity known, both halves are left out and the
-	// line is the version line alone.
+	// With no identity known, the hash is left out and the line
+	// is the version line alone.
 	runningBuild = buildIdentity{}
 	_, body = getPage(t, app, cookie, "/market/")
-	mustContain(t, "/market/ footer with no build identity", body, `<a href="https://gitlab.com/natemsz/evesynapse" target="_blank" rel="noopener noreferrer">EveSynapse</a> <span class="version-number">`+appVersion+`</span> · Made in Seattle, WA by <a href="https://natems.dev" target="_blank" rel="noopener noreferrer">natemsz</a>`)
+	mustContain(t, "/market/ footer with no build identity", body, `<a href="https://natems.dev/EveSynapse" target="_blank" rel="noopener noreferrer">EveSynapse</a> <a class="version-number" href="https://natems.dev/EveSynapse/evesynapse/releases/tag/`+appVersion+`" target="_blank" rel="noopener noreferrer">`+appVersion+`</a> · Made in Seattle, WA by <a href="https://natems.dev" target="_blank" rel="noopener noreferrer">natemsz</a>`)
 }

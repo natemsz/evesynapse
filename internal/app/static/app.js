@@ -224,6 +224,30 @@
     }
   });
 
+  // --- Footer build hash pop-up --------------------------------
+  // The footer version line prints the running binary hash's
+  // first nine characters; its "view hash" button opens a small
+  // pop-up holding the full hash as selectable text, for copying.
+  // The pop-up stays open until a click lands outside it (a
+  // click inside, e.g. selecting the hash, does not close it) or
+  // the button is clicked again. The footer is shell (swap.js
+  // never replaces it), so this binds once.
+  (function buildHashPop() {
+    var btn = document.querySelector(".hash-view");
+    var pop = document.getElementById("build-hash-pop");
+    if (!btn || !pop) return;
+    function set(open) {
+      pop.hidden = !open;
+      btn.setAttribute("aria-expanded", open ? "true" : "false");
+    }
+    document.addEventListener("click", function (ev) {
+      var t = ev.target;
+      if (!t || !t.closest) return;
+      if (t.closest(".hash-view") === btn) { set(pop.hidden); return; }
+      if (!pop.hidden && !pop.contains(t)) set(false);
+    });
+  })();
+
   // --- Section tabs --------------------------------------------
   // Below the fit width the tab strip (and a grouped section's
   // sub-row) is a sideways-scrolling rail; start with the current

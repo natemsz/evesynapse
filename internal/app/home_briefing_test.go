@@ -398,10 +398,10 @@ func TestBriefingFontPreloadAndFooter(t *testing.T) {
 		`<link rel="preload" as="font" type="font/woff2" href="/static/fonts/jetbrains-mono.woff2" crossorigin>`,
 		`<link rel="stylesheet" href="/static/style.css?v=`+staticAssetVersion()+`">`,
 		// The footer's version line: its ends are pinned here and
-		// its build-identity middle (commit, binary hash) is
-		// pinned in core_version_test.go, which controls the
-		// identity the line is rendered from.
-		`<a href="https://gitlab.com/natemsz/evesynapse" target="_blank" rel="noopener noreferrer">EveSynapse</a> <span class="version-number">`+appVersion+`</span>`,
+		// its build-identity middle (the binary hash) is pinned
+		// in core_version_test.go, which controls the identity
+		// the line is rendered from.
+		`<a href="https://natems.dev/EveSynapse" target="_blank" rel="noopener noreferrer">EveSynapse</a> <a class="version-number" href="https://natems.dev/EveSynapse/evesynapse/releases/tag/`+appVersion+`" target="_blank" rel="noopener noreferrer">`+appVersion+`</a>`,
 		`Made in Seattle, WA by <a href="https://natems.dev" target="_blank" rel="noopener noreferrer">natemsz</a>`,
 	)
 

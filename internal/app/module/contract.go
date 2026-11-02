@@ -894,11 +894,15 @@ type ShellData struct {
 	Version      string
 	AssetVersion string
 	// BuildHash is the SHA-256 of the running binary, the same
-	// hash the release's signed manifest publishes for it; the
-	// footer prints it in full. It is filled from the app's
-	// startup build identity (core_build.go); handlers never
-	// set it.
+	// hash the release's signed manifest publishes for it; it
+	// rides in the footer line's "view hash" pop-up. It is
+	// filled from the app's startup build identity
+	// (core_build.go); handlers never set it.
 	BuildHash string
+	// BuildHashShort is BuildHash's first nine characters, the
+	// part the footer line itself prints. Filled wherever
+	// BuildHash is.
+	BuildHashShort string
 	// StatusPage is the configured public status page's URL
 	// (STATUS_PAGE_ORIGIN), linked from the footer as Service
 	// Health. Empty when no status page is configured, and the

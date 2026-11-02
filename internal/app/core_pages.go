@@ -232,6 +232,9 @@ func (app *Application) fillShell(ctx context.Context, shell *module.ShellData, 
 	if shell.BuildHash == "" {
 		shell.BuildHash = runningBuild.hash
 	}
+	if shell.BuildHashShort == "" {
+		shell.BuildHashShort = buildHashShort(shell.BuildHash)
+	}
 	if shell.AssetVersion == "" {
 		shell.AssetVersion = staticAssetVersion()
 	}

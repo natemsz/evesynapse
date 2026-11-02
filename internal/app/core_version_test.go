@@ -63,14 +63,15 @@ func TestVersionFileAndFooter(t *testing.T) {
 	// The project name links to the project's Forgejo
 	// organization page, the version number links to that
 	// version's release page there, and a known build identity
-	// prints the binary hash in full.
+	// prints the binary hash's first nine characters in the
+	// line, with the full hash in its "view hash" pop-up.
 	savedBuild := runningBuild
 	defer func() { runningBuild = savedBuild }()
 	runningBuild = buildIdentity{
 		hash: "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210",
 	}
 	_, body := getPage(t, app, cookie, "/market/")
-	mustContain(t, "/market/ footer", body, `<a href="https://natems.dev/EveSynapse" target="_blank" rel="noopener noreferrer">EveSynapse</a> <a class="version-number" href="https://natems.dev/EveSynapse/evesynapse/releases/tag/`+appVersion+`" target="_blank" rel="noopener noreferrer">`+appVersion+`</a> · binary hash <span class="binary-hash">fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210</span> · Made in Seattle, WA by <a href="https://natems.dev" target="_blank" rel="noopener noreferrer">natemsz</a>`)
+	mustContain(t, "/market/ footer", body, `<a href="https://natems.dev/EveSynapse" target="_blank" rel="noopener noreferrer">EveSynapse</a> <a class="version-number" href="https://natems.dev/EveSynapse/evesynapse/releases/tag/`+appVersion+`" target="_blank" rel="noopener noreferrer">`+appVersion+`</a> · binary hash <span class="binary-hash">fedcba987</span> <span class="hash-pop-wrap"><button type="button" class="hash-view" aria-expanded="false" aria-controls="build-hash-pop">view hash</button><span class="hash-pop" id="build-hash-pop" role="note" aria-label="Full binary hash" hidden>fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210</span></span> · Made in Seattle, WA by <a href="https://natems.dev" target="_blank" rel="noopener noreferrer">natemsz</a>`)
 	if strings.Contains(body, "0.2.0") {
 		t.Fatal("footer still shows the old hardcoded version")
 	}

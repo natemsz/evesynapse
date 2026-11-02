@@ -2,9 +2,10 @@ package app
 
 // ---------------------------------------------------------------------------
 // The running build's identity: the SHA-256 of the binary
-// itself. The page footer prints it in full, so anyone can
-// check that the build serving them is the build the signed
-// release published: the release's signed manifests
+// itself. The page footer prints its first nine characters,
+// with the full hash in the "view hash" pop-up beside them, so
+// anyone can check that the build serving them is the build
+// the signed release published: the release's signed manifests
 // (latest-<arch>.json) carry the same SHA-256 for the raw
 // binary.
 //
@@ -25,6 +26,20 @@ import (
 // empty when it cannot be known.
 type buildIdentity struct {
 	hash string // the hex SHA-256 of the running executable
+}
+
+// hashDisplayLen is how much of the hash the footer line itself
+// prints; the full hash rides in the line's "view hash" pop-up.
+const hashDisplayLen = 9
+
+// buildHashShort returns the part of a build hash the footer
+// line prints: its first hashDisplayLen characters, or the
+// whole string when it is shorter than that.
+func buildHashShort(hash string) string {
+	if len(hash) > hashDisplayLen {
+		return hash[:hashDisplayLen]
+	}
+	return hash
 }
 
 // runningBuild is this process's identity, read once when the

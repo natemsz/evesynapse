@@ -1646,6 +1646,7 @@ footer {
   margin-top: 2rem;
 }
 footer .version {
+  position: relative;
   color: var(--muted);
   font-weight: 600;
   font-size: 0.72rem;
@@ -1660,10 +1661,42 @@ footer .version {
 footer .version-number {
   font-weight: 400;
 }
-/* The binary hash prints in full; at phone width it wraps inside
-   the line instead of pushing the footer sideways. */
-footer .binary-hash {
+/* The version line prints the binary hash's first nine
+   characters; the full hash sits in the "view hash" pop-up, so
+   the line stays short at every width. The pop-up wears the
+   same glass as the nav flyouts, and it centers on the version
+   line rather than on the button: centered on the button it
+   would spill off the screen edge on a phone, where the button
+   can sit near the line's start. */
+footer .hash-view {
+  font: inherit;
+  color: var(--accent);
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+footer .hash-view:hover {
+  color: var(--success);
+  text-decoration: underline;
+}
+footer .hash-pop {
+  position: absolute;
+  bottom: calc(100% + 0.5rem);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 40;
+  width: max-content;
+  max-width: min(21rem, 82vw);
+  padding: 0.5rem 0.65rem;
   overflow-wrap: anywhere;
+  color: var(--text-bright);
+  background: rgba(14, 11, 9, 0.82);
+  border: 1px solid rgba(255, 110, 0, 0.25);
+  border-radius: var(--r-md);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.65);
+  -webkit-backdrop-filter: blur(20px) saturate(1.25);
+  backdrop-filter: blur(20px) saturate(1.25);
 }
 
 /* --- small screens --- */

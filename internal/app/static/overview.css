@@ -218,8 +218,10 @@ html[data-theme="light"] .ov-pips i.train { background: #2b7fc4; border-color: #
     position: fixed; top: 0; right: 0; bottom: 0; z-index: 99;
     width: min(24rem, 94vw);
     overflow-y: auto; overscroll-behavior: contain;
-    border-top: 0; border-right: 0; border-bottom: 0; border-radius: 0;
-    background: var(--panel);
+    border-top: 0; border-right: 0; border-bottom: 0; border-left: 1px solid var(--glass-edge); border-radius: 0;
+    background: linear-gradient(color-mix(in srgb, var(--panel) 94%, transparent), color-mix(in srgb, var(--panel) 97%, transparent)) padding-box;
+    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(0.9);
+    backdrop-filter: blur(var(--glass-blur)) saturate(0.9);
     box-shadow: -16px 0 40px rgba(0, 0, 0, 0.5);
     animation: ov-sheet-in 160ms ease-out;
   }

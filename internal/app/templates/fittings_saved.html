@@ -33,10 +33,10 @@
     <div class="fit-card-body">
       {{if eq .Source "local"}}
       <h4><a href="/fittings/?local={{.LocalID}}#fit-editor">{{.Name}}</a></h4>
-      <p class="fit-card-line">{{itemLink .ShipTypeID .ShipType}} {{if .IsPublic}}<small>Public</small>{{else}}<small>EveSynapse</small>{{end}}</p>
+      <p class="fit-card-line">{{itemSublink .ShipTypeID .ShipType}} {{if .IsPublic}}<small>Public</small>{{else}}<small>EveSynapse</small>{{end}}</p>
       {{else}}
       <h4><a href="/fittings/?character={{$.Fittings.CharacterID}}&esi={{.FittingID}}#fit-editor">{{.Name}}</a></h4>
-      <p class="fit-card-line">{{itemLink .ShipTypeID .ShipType}} <small>EVE account</small></p>
+      <p class="fit-card-line">{{itemSublink .ShipTypeID .ShipType}} <small>EVE account</small></p>
       {{end}}
     </div>
     <div class="loadout-preview">

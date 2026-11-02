@@ -72,7 +72,7 @@
   {{if .ShipTypeID}}<img class="fit-card-ship" src="https://images.evetech.net/types/{{.ShipTypeID}}/render?size=64" width="64" height="64" alt="" loading="lazy">{{end}}
   <div class="fit-card-body">
     <h4><a href="{{.FitURL}}">{{.Name}}</a></h4>
-    <p class="fit-card-line">{{publicItemLink .ShipTypeID .Ship}}{{if .Hull}} <small>{{.Hull}}</small>{{end}}</p>
+    <p class="fit-card-line">{{publicItemSublink .ShipTypeID .Ship}}{{if .Hull}} <small>{{.Hull}}</small>{{end}}</p>
     <p class="fit-card-line">{{if .StarCount}}<span class="badge wait">{{printf "%.1f" .Stars}} ★ ({{.StarCount}})</span> {{end}}<small>{{.Views}} views</small>{{if .PriceKnown}} <small>{{.PriceLine}}</small>{{end}}{{if .Mine}} <small>Yours</small>{{else if .Author}} <small>by {{.Author}}</small>{{end}}</p>
     {{if .Tags}}<p class="tag-row">{{range .Tags}}<a href="/fittings/public/?tag={{.}}">#{{.}}</a> {{end}}</p>{{end}}
   </div>

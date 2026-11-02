@@ -17,7 +17,7 @@
   {{if .ShipTypeID}}<img class="fit-card-ship" src="https://images.evetech.net/types/{{.ShipTypeID}}/render?size=64" width="64" height="64" alt="" loading="lazy">{{end}}
   <div class="fit-card-body">
     <h4><a href="/fittings/?doctrine={{.ID}}#fit-editor">{{.Name}}</a></h4>
-    <p class="fit-card-line">{{itemLink .ShipTypeID .Ship}}</p>
+    <p class="fit-card-line">{{itemSublink .ShipTypeID .Ship}}</p>
     {{if or .Role .Note}}<p class="fit-card-line">{{if .Role}}<span class="badge wait">{{.Role}}</span> {{end}}{{.Note}}</p>{{end}}
   </div>
   {{if .EFT}}

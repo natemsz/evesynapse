@@ -175,6 +175,9 @@ body::after { content: ""; position: absolute; top: 0; left: 0; right: 0; height
    the bright sky behind the glass, with the critical chip's
    pulse off for the same reason. */
 .ld-main a:not(.ld-btn), .ld-footer a { text-decoration: underline; }
+/* The landing keeps the accent for its inline links; the
+   app's links use the secondary tone. */
+.ld-main a:not(.ld-btn) { color: var(--accent); }
 .ld-preview .brief-card .sev { background: rgba(26, 12, 7, 0.88); animation: none; }
 .ld-preview .brief-card.sev-critical .sev { color: #ffb3ab; }
 .ld-preview .brief-card.sev-warning .sev { color: #ffab5e; }

@@ -56,7 +56,7 @@
   {{if .ShipTypeID}}<img class="fit-card-ship" src="https://images.evetech.net/types/{{.ShipTypeID}}/render?size=64" width="64" height="64" alt="" loading="lazy">{{end}}
   <div class="fit-card-body">
     <h4><a href="{{.OpenURL}}">{{.Name}}</a></h4>
-    <p class="fit-card-line">{{itemLink .ShipTypeID .Ship}}{{if .Hull}} <small>{{.Hull}}</small>{{end}}</p>
+    <p class="fit-card-line">{{itemSublink .ShipTypeID .Ship}}{{if .Hull}} <small>{{.Hull}}</small>{{end}}</p>
     <p class="fit-card-line">{{if .Role}}<span class="badge wait">{{.Role}}</span> {{end}}{{if .Doctrine}}<a href="{{.DoctrineURL}}">{{.Doctrine}}</a>{{if .Category}} <small>{{.Category}}</small>{{end}}{{end}}{{if .Mine}}<small>Yours</small>{{else if .By}}<small>by {{.By}}</small>{{end}}</p>
     {{if .Tags}}<p class="tag-row">{{range .Tags}}<a href="{{.URL}}">#{{.Label}}</a> {{end}}</p>{{end}}
   </div>

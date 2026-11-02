@@ -32,7 +32,7 @@
 
 /* ---- Header cards ---- */
 .ov-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr)); gap: 0.9rem; margin-bottom: 1rem; }
-.ov-card { padding: 0.85rem 0.95rem; border: 1px solid var(--box-edge); border-radius: var(--r-md); background: var(--panel); }
+.ov-card { padding: 0.85rem 0.95rem; border: 1px solid var(--box-edge); border-radius: var(--r-md); background: var(--row-alt); }
 .ov-idrow { display: flex; gap: 0.8rem; }
 .ov-portrait { position: relative; flex: 0 0 auto; }
 .ov-portrait img { display: block; border-radius: var(--r-sm); }
@@ -81,7 +81,7 @@
 .ov-note { color: var(--muted); font-size: 0.9rem; }
 
 /* Clone cards (Clone Bay and the clones surface share these). */
-.ov-clone { margin-bottom: 0.55rem; border: 1px solid var(--box-edge); border-radius: var(--r-sm); background: var(--panel); }
+.ov-clone { margin-bottom: 0.55rem; border: 1px solid var(--box-edge); border-radius: var(--r-sm); background: var(--row-alt); }
 .ov-clone.sel { border-color: var(--accent); }
 .ov-clone-main { display: block; padding: 0.55rem 0.65rem; color: var(--text); }
 .ov-clone-main:hover { text-decoration: none; }
@@ -102,7 +102,7 @@
 .ov-clonelist { max-width: 44rem; }
 
 /* ---- Center: training strip, tools, implant strip ---- */
-.ov-trainstrip { margin: 0.9rem 0; padding: 0.7rem 0.85rem; border: 1px solid var(--box-edge); border-radius: var(--r-sm); background: var(--panel); }
+.ov-trainstrip { margin: 0.9rem 0; padding: 0.7rem 0.85rem; border: 1px solid var(--box-edge); border-radius: var(--r-sm); background: var(--row-alt); }
 .ov-ts-head { display: flex; justify-content: space-between; gap: 1rem; color: var(--muted); font-size: 0.74rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; }
 .ov-ts-head .cd { color: var(--gold); text-transform: none; letter-spacing: 0; font-weight: 600; }
 .ov-trainnow { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 0.8rem; margin-top: 0.4rem; }
@@ -125,7 +125,7 @@
 .ov-sbtn { padding: 0.5rem 0.9rem; }
 .ov-planpick { display: inline-flex; align-items: center; gap: 0.45rem; color: var(--muted); font-size: 0.88rem; }
 .ov-planpick select { padding: 0.42rem 0.5rem; border: 1px solid var(--box-edge); border-radius: var(--r-sm); background: var(--input-bg); color: var(--text); }
-.ov-canstrip { margin: 0.8rem 0; padding: 0.7rem 0.85rem; border: 1px solid var(--box-edge); border-radius: var(--r-sm); background: var(--panel); }
+.ov-canstrip { margin: 0.8rem 0; padding: 0.7rem 0.85rem; border: 1px solid var(--box-edge); border-radius: var(--r-sm); background: var(--row-alt); }
 .ov-cs-head { display: flex; justify-content: space-between; gap: 1rem; margin-bottom: 0.55rem; color: var(--muted); font-size: 0.84rem; }
 .ov-cangrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr)); gap: 0.55rem; }
 .ov-can { display: flex; align-items: center; gap: 0.65rem; padding: 0.55rem 0.65rem; border: 1px solid var(--box-edge); border-radius: var(--r-sm); background: var(--glass); color: var(--text); }
@@ -192,7 +192,7 @@ html[data-theme="light"] .ov-pips i.train { background: #2b7fc4; border-color: #
 .ov-staged-save { margin-top: 0.7rem; }
 
 /* ---- Colonies table ---- */
-.ov-colonies { margin-top: 1.1rem; padding: 0.9rem 1rem; border: 1px solid var(--box-edge); border-radius: var(--r-md); background: var(--panel); }
+.ov-colonies { margin-top: 1.1rem; padding: 0.9rem 1rem; border: 1px solid var(--box-edge); border-radius: var(--r-md); background: var(--row-alt); }
 .ov-colonies h3 { margin: 0 0 0.3rem; }
 
 /* ---- Inspector overlay scaffolding: the backdrop and the

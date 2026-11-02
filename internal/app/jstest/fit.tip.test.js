@@ -595,6 +595,53 @@ test("a state change re-anchors the open tooltip and leaves none orphaned", asyn
   assert.equal(env.tips().length, 0, "nothing is left stuck on screen after the pointer leaves");
 });
 
+test("a state change re-anchors onto the swapped workbench's real slot positions", async function () {
+  const env = makeEditorEnv();
+  // Production geometry: a swapped-in workbench's slots carry
+  // data-left / data-top and sit at the visual's top-left corner
+  // until the geometry pass applies them; the stub pass below
+  // restores each slot's ring position the way app.js does.
+  const real = new Map();
+  env.html.SIM = function () {
+    const wb = buildWorkbench(env, false);
+    for (const s of wb.querySelectorAll(".fit-vslot")) {
+      const key = s.getAttribute("data-tip-key") || s.getAttribute("data-v-index");
+      real.set(key, { left: s.rect.left, top: s.rect.top, width: s.rect.width, height: s.rect.height });
+      s.rect = { left: 0, top: 0, width: s.rect.width, height: s.rect.height };
+    }
+    return wb;
+  };
+  global.EveSynapseContent = {
+    applyDataGeometry(root) {
+      for (const s of root.querySelectorAll(".fit-vslot")) {
+        const r = real.get(s.getAttribute("data-tip-key") || s.getAttribute("data-v-index"));
+        if (r) s.rect = { left: r.left, top: r.top, width: r.width, height: r.height };
+      }
+    },
+  };
+  try {
+    env.hover(null, env.slot("Alpha Blaster"));
+    const overheat = env.tips()[0].querySelectorAll(".fit-tip-state").filter(function (b) {
+      return b.textContent === "Overheat";
+    })[0];
+    env.dispatch(overheat, "click");
+    await env.release();
+    assert.equal(env.tips().length, 1, "one tooltip after the re-render");
+    // Alpha's real position puts its tooltip above the slot:
+    // top edge at the slot's top minus the gap and the tip's
+    // height (the stub's 110 fallback). Measured against the
+    // un-geometried corner rect it would land far from there,
+    // at the workbench's top-left.
+    const placedTop = parseFloat(env.tips()[0].style.top);
+    const wantTop = Math.round(real.get("100:0").top - 8 - 110);
+    assert.ok(Math.abs(placedTop - wantTop) <= 1,
+      "the tooltip is placed from the slot's real position, got top " +
+      env.tips()[0].style.top + ", want about " + wantTop);
+  } finally {
+    delete global.EveSynapseContent;
+  }
+});
+
 function overlaps(a, b) {
   return a.left < b.left + b.width && b.left < a.left + a.width &&
     a.top < b.top + b.height && b.top < a.top + a.height;

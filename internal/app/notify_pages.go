@@ -301,8 +301,8 @@ type notifySettingRow struct {
 	ID    string
 	Title string
 	On    bool
-	// DigestOnly: the kind never notifies; the row reads "Digest
-	// only" where the notification switch would be.
+	// DigestOnly: the kind never notifies; its row carries no
+	// notification switch.
 	DigestOnly bool
 	// HasCard: the kind's news also appears as a briefing card, so
 	// the row carries a switch for the card beside the notification

@@ -233,11 +233,11 @@ func TestNotificationSettings(t *testing.T) {
 		t.Fatalf("GET settings = %d", code)
 	}
 	// Everything is on to begin with: notifying kinds carry a
-	// switch, the digest-only kind reads "Digest only" instead,
-	// and kinds with a card carry the card switch.
+	// switch, the digest-only kind carries none, and kinds with
+	// a card carry the card switch.
 	for _, kind := range notifyKindList() {
 		if kind.DigestOnly {
-			mustContain(t, "/settings", body, kind.Title+` <small>Digest only</small>`)
+			mustContain(t, "/settings", body, kind.Title+` <label class="notify-minutes"><select name="undercut_digest_hours"`)
 			continue
 		}
 		mustContain(t, "/settings", body,
@@ -250,8 +250,13 @@ func TestNotificationSettings(t *testing.T) {
 		`<td><small>No card</small></td>`,
 		`name="undercut_digest_hours"`,
 		`name="camp_systems"`,
+		`data-open-camp-modal`,
+		`id="camp-modal"`,
 		`name="kinds_shown"`,
 		`name="cards_shown"`)
+	if strings.Contains(body, "Digest only") {
+		t.Fatal("the digest-only kind still carries its label")
+	}
 	mustContain(t, "/settings", body,
 		`placeholder="On for 2 of 2 characters"`,                    // mail: both
 		`placeholder="On for 1 of 2 characters (1 without access)"`, // killmails: the alt has not granted it

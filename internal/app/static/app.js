@@ -2620,20 +2620,66 @@
     })();
 
     // Assets: suggestions come from what the account actually owns
-    // (each says whose it is), narrowed to the acting character when
-    // the box is ticked. A pick fills the box and runs the search.
+    // (each says whose it is). A pick fills the box and runs the
+    // search.
     (function () {
-      var only = root.querySelector("#assets-only");
       attachSuggest(
         root.querySelector("#assets-q"),
         root.querySelector("#assets-suggest"),
         function (q) {
-          return "/assets/suggest?q=" + encodeURIComponent(q) + (only && only.checked ? "&only=1" : "");
+          return "/assets/suggest?q=" + encodeURIComponent(q);
         },
         function (it, input) {
           input.value = it.name;
-          if (input.form) input.form.submit();
+          if (input.form) {
+            if (input.form.requestSubmit) input.form.requestSubmit();
+            else input.form.submit();
+          }
         });
+    })();
+
+    // Assets: the search is live. Typing (debounced) and submitting
+    // both ride the shell's swap to the results URL, so the page
+    // never reloads; the shell keeps the scroll place, and when the
+    // swap lands the caret goes back into the box where it was.
+    (function () {
+      var form = root.querySelector("#assets-search");
+      var input = root.querySelector("#assets-q");
+      if (!form || !input) return;
+      var stash = window.__assetsLiveSearch;
+      if (stash && stash.q === input.value) {
+        window.__assetsLiveSearch = null;
+        try {
+          input.focus();
+          input.setSelectionRange(stash.caret, stash.caret);
+        } catch (e) { /* the box keeps the browser's default focus */ }
+      }
+      var last = input.value;
+      var timer = null;
+      function go() {
+        last = input.value;
+        var params = new URLSearchParams(new FormData(form));
+        window.__assetsLiveSearch = {
+          q: last,
+          caret: input.selectionStart == null ? last.length : input.selectionStart
+        };
+        var a = document.createElement("a");
+        a.href = form.action + "?" + params.toString();
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      }
+      input.addEventListener("input", function () {
+        if (timer) window.clearTimeout(timer);
+        timer = window.setTimeout(function () {
+          if (input.value !== last) go();
+        }, 250);
+      });
+      form.addEventListener("submit", function (ev) {
+        ev.preventDefault();
+        if (timer) window.clearTimeout(timer);
+        go();
+      });
     })();
 
     // Sync and Admin (administrators): find one character among all of
@@ -5895,16 +5941,6 @@
     if (e.key === "Escape" && !modal.hidden) close();
   });
   load();
-
-  // Assets: the sort select navigates to the href its options
-  // carry (the server renders each sort as a full state link).
-  (function () {
-    var sel = root.querySelector("#assets-sort");
-    if (!sel) return;
-    sel.addEventListener("change", function () {
-      if (sel.value) window.location.href = sel.value;
-    });
-  })();
 
   // Assets: a matrix row selects its item (the name link does
   // the same); clicks on real controls inside the row pass.

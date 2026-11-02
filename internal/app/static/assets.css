@@ -14,6 +14,7 @@
 .assets-head-l { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 1rem; }
 .assets-count { margin: 0; color: var(--muted); }
 .assets-net { text-align: right; margin-left: auto; }
+.assets-net .assets-count { margin-top: 0.2rem; }
 .assets-net-v { display: block; color: var(--gold); font-size: 1.4rem; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1.15; }
 .assets-net-l { color: var(--muted); font-size: 0.68rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
 
@@ -82,8 +83,9 @@
 .fchip-save[open ] { flex: 1 1 100%; }
 .amx-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin-top: 0.7rem; }
 .amx-tools .searchwrap { flex: 1 1 13rem; }
-.amx-tools .check { display: inline-flex; align-items: center; gap: 0.4rem; white-space: nowrap; }
-.amx-sortsel { margin-left: auto; }
+.amx-table thead th a { color: inherit; text-decoration: none; }
+.amx-table thead th a:hover { color: var(--gold); }
+.amx-table thead th a.srt-on { color: var(--gold); }
 .amx-h { margin: 0 0 0.2rem; font-size: 1.05rem; }
 .amx-h span { color: var(--muted); font-size: 0.85rem; font-weight: 500; }
 .amx-msub { margin: 0.15rem 0 0; color: var(--muted); font-size: 0.85rem; }
@@ -200,7 +202,5 @@
   .amx-table th:nth-child(4), .amx-table td:nth-child(4) { display: none; }
   .amx-table th:nth-child(3) { width: 5.25rem; }
   .amx-table th:nth-child(5) { width: 5.5rem; }
-  .amx-tools .check { flex: 1 1 100%; }
-  #main-content .amx-tools .check input[type="checkbox"] { width: auto; flex: none; }
-  .amx-sortsel { flex: 1 1 100%; margin-left: 0; }
+
 }

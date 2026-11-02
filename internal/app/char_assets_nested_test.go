@@ -158,7 +158,7 @@ func TestAssetsMatrixFilesShipsAndCans(t *testing.T) {
 		"Scourge Heavy Missile",
 		"Cargo, Drone Bay and Fuel",
 		"Hull + fitted estimate",
-		"Copy EFT",
+		"Open in fitting tool",
 		"[Loki, Loki]",
 	)
 }
@@ -265,7 +265,6 @@ func TestAssetSearchCoversTheAccountAndSaysWhere(t *testing.T) {
 		"in Loki › Small Secure Container",
 		"Jita IV - Moon 4 - Caldari Navy Assembly Plant",
 		"Amarr VIII (Oris) - Emperor Family Academy",
-		`id="assets-only"> Only Fixture Ceo`,
 	)
 	if strings.Contains(body, "Inside: ") {
 		t.Fatal("a search hit is filed under a ship instead of the station")
@@ -274,8 +273,7 @@ func TestAssetSearchCoversTheAccountAndSaysWhere(t *testing.T) {
 	// Ticked, the search is the acting character's alone.
 	_, body = getPage(t, f.app, cookie, "/assets/?q=trit&only=1")
 	mustContain(t, "search only", body,
-		`2 stacks matching "trit" on this character`,
-		`id="assets-only" checked> Only Fixture Ceo`)
+		`2 stacks matching "trit" on this character`)
 	if strings.Contains(body, "Amarr VIII") {
 		t.Fatal("the narrowed search still shows another character's assets")
 	}

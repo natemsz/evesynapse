@@ -119,7 +119,7 @@ func TestHomeGridSizes(t *testing.T) {
 		`<section class="card gw3 gh2" data-widget="fleet" data-gw="3" data-gh="2" data-minw="2" data-minh="2">`,
 		// An old wide span is the full width now.
 		`<section class="card gw3 gh1" data-widget="market" data-gw="3" data-gh="1">`,
-		`<section class="card gw1 gh1" data-widget="watchlist" data-gw="1" data-gh="1">`)
+		`<section class="card gw1 gh1" data-widget="watchlist" data-gw="1" data-gh="1" data-maxh="1">`)
 
 	// Resize, as the picker's XHR: stored, rendered.
 	code, resp := doLayoutPost(t, app, url.Values{"action": {"size"}, "widget": {widgetWatchlist}, "w": {"2"}, "h": {"3"}}, cookie, true)
@@ -130,21 +130,27 @@ func TestHomeGridSizes(t *testing.T) {
 		t.Fatalf("saved layout = %q, want skills 2x3", got)
 	}
 	_, body = getPage(t, app, cookie, "/")
-	mustContain(t, "/ resized", body, `<section class="card gw2 gh3" data-widget="watchlist" data-gw="2" data-gh="3">`)
+	mustContain(t, "/ resized", body, `<section class="card gw2 gh3" data-widget="watchlist" data-gw="2" data-gh="3" data-maxh="1">`)
 
-	// Out of the grid, unparsable, or not on the home: no change.
+	// Out of bounds, unparsable, or under a floor: the scripted
+	// caller is refused with 400 so it can put the size back, and
+	// nothing changes. A size inside a module's bounds for a module
+	// that is not on this home is accepted and changes nothing.
 	before := saved()
-	for _, v := range []url.Values{
-		{"action": {"size"}, "widget": {widgetWatchlist}, "w": {"4"}, "h": {"1"}},
-		{"action": {"size"}, "widget": {widgetWatchlist}, "w": {"1"}, "h": {"0"}},
-		{"action": {"size"}, "widget": {widgetWatchlist}, "w": {"x"}, "h": {"1"}},
-		{"action": {"size"}, "widget": {widgetPI}, "w": {"2"}, "h": {"2"}},
+	for _, c := range []struct {
+		v    url.Values
+		want int
+	}{
+		{url.Values{"action": {"size"}, "widget": {widgetWatchlist}, "w": {"4"}, "h": {"1"}}, http.StatusBadRequest},
+		{url.Values{"action": {"size"}, "widget": {widgetWatchlist}, "w": {"1"}, "h": {"0"}}, http.StatusBadRequest},
+		{url.Values{"action": {"size"}, "widget": {widgetWatchlist}, "w": {"x"}, "h": {"1"}}, http.StatusBadRequest},
+		{url.Values{"action": {"size"}, "widget": {widgetPI}, "w": {"2"}, "h": {"2"}}, http.StatusOK},
 		// Under the fleet table's 2x2 floor.
-		{"action": {"size"}, "widget": {widgetFleet}, "w": {"1"}, "h": {"2"}},
-		{"action": {"size"}, "widget": {widgetFleet}, "w": {"3"}, "h": {"1"}},
+		{url.Values{"action": {"size"}, "widget": {widgetFleet}, "w": {"1"}, "h": {"2"}}, http.StatusBadRequest},
+		{url.Values{"action": {"size"}, "widget": {widgetFleet}, "w": {"3"}, "h": {"1"}}, http.StatusBadRequest},
 	} {
-		if code, _ := doLayoutPost(t, app, v, cookie, true); code != http.StatusOK {
-			t.Fatalf("size POST %v: status %d", v, code)
+		if code, _ := doLayoutPost(t, app, c.v, cookie, true); code != c.want {
+			t.Fatalf("size POST %v: status %d, want %d", c.v, code, c.want)
 		}
 	}
 	if got := saved(); got != before {

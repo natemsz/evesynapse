@@ -99,7 +99,19 @@ func (f *trainedBannerFixture) markSkillRead(at time.Time) {
 func (f *trainedBannerFixture) wantBanner(body, want string) {
 	f.t.Helper()
 	mustContain(f.t, "/character/", body,
-		`<p class="notice" role="status">Trained since your last visit: `+want+`</p>`)
+		`<span class="ov-bchip">Trained since your last visit</span>`)
+	// Each finish renders as its own banner item, in the order
+	// the skills completed: "<Skill> Level <roman>".
+	at := 0
+	for _, entry := range strings.Split(want, " · ") {
+		j := strings.LastIndexByte(entry, ' ')
+		frag := `<b>` + entry[:j] + `</b> <span class="lv">Level ` + entry[j+1:] + `</span>`
+		i := strings.Index(body[at:], frag)
+		if i < 0 {
+			f.t.Fatalf("GET /character/: banner item %q missing or out of order", frag)
+		}
+		at += i + len(frag)
+	}
 }
 
 func (f *trainedBannerFixture) wantNoBanner(body string) {

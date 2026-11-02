@@ -156,6 +156,18 @@ func spPerMinute(meta SkillMeta, attrs AttrSet) float64 {
 	return float64(attrs.value(meta.Primary)) + float64(attrs.value(meta.Secondary))/2
 }
 
+// SPPerMinute is the training speed of one skill under attrs:
+// primary attribute plus half the secondary, per minute.
+func SPPerMinute(meta SkillMeta, attrs AttrSet) float64 {
+	return spPerMinute(meta, attrs)
+}
+
+// TrainSeconds is how long spRemaining takes to train in one
+// skill under attrs; zero when the rate or the remainder is.
+func TrainSeconds(meta SkillMeta, attrs AttrSet, spRemaining int64) float64 {
+	return trainSeconds(meta, attrs, spRemaining)
+}
+
 // trainSeconds is how long spRemaining takes to train in one skill.
 func trainSeconds(meta SkillMeta, attrs AttrSet, spRemaining int64) float64 {
 	rate := spPerMinute(meta, attrs)

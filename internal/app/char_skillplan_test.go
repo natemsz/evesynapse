@@ -254,7 +254,15 @@ func TestSkillPlanPagesAndCRUD(t *testing.T) {
 	if code != 200 {
 		t.Fatalf("GET /character/ = %d", code)
 	}
-	mustContain(t, "/character/", body, "Browse skills", "Alpha Skill", "Test Gunnery", "2x")
+	mustContain(t, "/character/", body, "Skill browse", "Alpha Skill", "Test Gunnery")
+
+	// The catalog itself renders on the sheet's browse surface,
+	// with each skill's rank.
+	code, body = getPage(t, app, cookie, "/character/?character=90000001&surface=browse")
+	if code != 200 {
+		t.Fatalf("GET /character/?surface=browse = %d", code)
+	}
+	mustContain(t, "/character/?surface=browse", body, "Beta Skill", "Rank 2x")
 
 	// Create a plan through the form endpoint.
 	code, _ = post("/skills/plans/create", url.Values{

@@ -1,269 +1,356 @@
 {{define "title"}}Character{{end}}
 {{define "pagetitle"}}<h1><span class="gt">Character</span></h1>{{end}}
 {{define "pagetabs"}}{{template "sectiontabs" .}}{{end}}
+
+{{/* One Clone Bay card, used by the directory and by the clones
+     surface: name, security chip, location, implant count, the
+     active clone's slot badges, and the rename form. */}}
+{{define "ovclone"}}
+<div class="ov-clone{{if .Selected}} sel{{end}}">
+  <a class="ov-clone-main" href="{{.Href}}">
+    <span class="ov-clone-r1">{{if .Active}}<span class="ov-activedot" aria-hidden="true"></span>{{end}}<span class="ov-clone-nm">{{.Name}}</span>{{if .SystemSec}}<span class="sec-pill {{.SecClass}}">{{.SystemSec}}</span>{{end}}</span>
+    <span class="ov-clone-r2">{{if .SystemName}}<b>{{.SystemName}}</b> · {{end}}{{.Location}}<br>{{.ImplantCount}} implant{{if ne .ImplantCount 1}}s{{end}} installed</span>
+    {{if .SlotBadges}}<span class="ov-slotbadges">{{range .SlotBadges}}<i{{if not .Filled}} class="off"{{end}}>{{.Num}}</i>{{end}}</span>{{end}}
+  </a>
+  {{if .CloneID}}
+  <details class="ov-rename">
+    <summary>Rename</summary>
+    <form method="post" action="/character/clones/rename">
+      <input type="hidden" name="character" value="{{.CharacterID}}">
+      <input type="hidden" name="clone" value="{{.CloneID}}">
+      <input type="text" name="name" value="{{.CustomName}}" placeholder="Custom clone name" maxlength="60" aria-label="Custom name for {{.Name}}">
+      <button type="submit">Save</button>
+      <small>{{if .CustomName}}Named &ldquo;{{.CustomName}}&rdquo;. {{else if .ESIName}}ESI name &ldquo;{{.ESIName}}&rdquo;. {{end}}Empty clears the name.</small>
+    </form>
+  </details>
+  {{end}}
+</div>
+{{end}}
+
 {{define "content"}}
 
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
 
-{{template "charselector" .CharChars}}
-
 {{if .CharacterPage}}
   {{if .CharacterPage.Loaded}}
+  {{$v := .CharacterPage}}
+  {{$ov := .CharacterPage.Overview}}
 
-  {{if .CharacterPage.TrainedBanner}}<p class="notice" role="status">Trained since your last visit: {{.CharacterPage.TrainedBanner}}</p>{{end}}
-
-  {{if .CharacterPage.IdentityKnown}}
-  <div class="panel char-head">
-  <h2 class="char-hero"><img class="portrait" src="{{.CharacterPage.PortraitURL}}" alt=""><span class="char-name">{{.CharacterPage.CharacterName}}</span></h2>
-  {{if or .CharacterPage.CorpName .CharacterPage.Birthday}}<p class="char-sub"><small>{{if .CharacterPage.CorpName}}{{corpLink .CharacterPage.CorpID .CharacterPage.CorpName}}{{end}}{{if and .CharacterPage.CorpName .CharacterPage.Birthday}} · {{end}}{{if .CharacterPage.Birthday}}born {{.CharacterPage.Birthday}}{{end}}</small></p>{{end}}
-  </div>
-  {{/* The key figures as the overview's at-a-glance tiles. */}}
-  <div class="kpis kpis-small char-kpis">
-    {{if .CharacterPage.WalletKnown}}<div class="kpi">
-      <span class="kpi-k">Wallet</span>
-      <span class="kpi-v isk">{{.CharacterPage.ISK}} <small>ISK</small></span>
-    </div>{{end}}
-    {{if .CharacterPage.SkillsKnown}}<div class="kpi">
-      <span class="kpi-k">Skill points</span>
-      <span class="kpi-v">{{.CharacterPage.TotalSP}}</span>
-      <span class="kpi-sub">{{if .CharacterPage.UnallocatedSP}}{{.CharacterPage.UnallocatedSP}} unallocated · {{end}}{{.CharacterPage.SkillsCount}} skills · {{.CharacterPage.LevelVCount}} at V</span>
+  <div class="ov-head">
+    <div class="ov-head-main">
+      <p class="ov-sub">{{if $v.SkillsKnown}}{{$v.SkillsCount}} trained skills{{end}}{{if $v.ClonesKnown}} · {{len $v.JumpClones}} jump clones{{end}}{{if $v.PIKnown}} · {{$v.PIColonies}} colonies{{end}}{{if $v.CorpName}} · {{$v.CorpName}}{{if $v.CorpTicker}} [{{$v.CorpTicker}}]{{end}}{{end}}</p>
+      <div class="ov-picker">{{template "charselector" .CharChars}}</div>
     </div>
-    <div class="kpi">
-      <span class="kpi-k">Training</span>
-      <span class="kpi-v">{{if .CharacterPage.TrainingLeft}}<span class="countdown" data-finish="{{.CharacterPage.TrainingFinish}}">{{.CharacterPage.TrainingLeft}}</span>{{else if .CharacterPage.Training}}Paused{{else}}Idle{{end}}</span>
-      <span class="kpi-sub">{{if .CharacterPage.Training}}{{.CharacterPage.Training}}{{else}}Nothing in the queue{{end}}</span>
-    </div>{{end}}
-    {{if .CharacterPage.SecurityStatus}}<div class="kpi">
-      <span class="kpi-k">Security status</span>
-      <span class="kpi-v">{{.CharacterPage.SecurityStatus}}</span>
-    </div>{{end}}
-  </div>
-  {{end}}
-
-  {{if .CharacterPage.SkillsKnown}}
-  <section class="foldable" id="queue">
-  <h3>Training</h3>
-  {{if .CharacterPage.Training}}
-  <p>Currently training: <strong>{{.CharacterPage.Training}}</strong>{{if .CharacterPage.TrainingLeft}} (<span class="countdown" data-finish="{{.CharacterPage.TrainingFinish}}">{{.CharacterPage.TrainingLeft}}</span>){{end}}</p>
-  {{else}}
-  <p><small>Skill queue is paused or empty.</small></p>
-  {{end}}
-  {{if .CharacterPage.Queue}}
-  <div class="tw">
-  <table>
-    <thead><tr><th>#</th><th>Skill</th><th>Level</th><th>Finishes</th></tr></thead>
-    <tbody>
-    {{range .CharacterPage.Queue}}
-      <tr><td>{{.Num}}</td><td>{{itemLink .SkillID .Skill}}</td><td>{{skillLevel .TrainedLvl .LevelNum .State}}</td><td>{{.Finishes}}</td></tr>
+    {{if $v.SkillsKnown}}
+    <div class="ov-total">
+      <div class="ov-total-v">{{$ov.TotalSPCompact}} SP</div>
+      <div class="ov-total-l">Total skill points</div>
+      {{if $v.UnallocatedSP}}<div class="ov-total-u">{{$v.UnallocatedSP}} unallocated</div>{{end}}
+    </div>
     {{end}}
-    </tbody>
-  </table>
   </div>
-  {{if .CharacterPage.CompletesAt}}<p><small>Queue completes {{.CharacterPage.CompletesAt}}</small></p>{{end}}
-  {{end}}
-  </section>
-  {{end}}
 
-  {{if or .CharacterPage.PIKnown .CharacterPage.PINotEnabled}}
-  <section class="foldable">
-  {{if .CharacterPage.PIKnown}}
-  <h3>Planetary industry</h3>
-  <p><small>{{.CharacterPage.PIColonies}} colon{{if eq .CharacterPage.PIColonies 1}}y{{else}}ies{{end}}{{if .CharacterPage.PIExpired}} · {{.CharacterPage.PIExpired}} extractor{{if ne .CharacterPage.PIExpired 1}}s{{end}} expired{{end}}{{if .CharacterPage.PISoonest}} · next extractor expiry {{.CharacterPage.PISoonest}}{{if .CharacterPage.PISoonestIn}} ({{.CharacterPage.PISoonestIn}}){{end}}{{end}} · <a href="/planets/?character={{.CharacterPage.CharacterID}}">view colonies</a></small></p>
-  {{else if .CharacterPage.PINotEnabled}}
-  <h3>Planetary industry</h3>
-  <p><small>Not enabled for this character. <a href="/planets/?character={{.CharacterPage.CharacterID}}">Re-link it to enable</a>.</small></p>
-  {{end}}
-  </section>
-  {{end}}
-
-  {{if .CharacterPage.OnlineKnown}}
-  <section class="foldable">
-  <h3>Status</h3>
-  <div class="tw">
-  <table>
-    <tbody>
-      <tr><th>Online</th><td>{{if .CharacterPage.Online}}<span class="dot on"></span>Online now{{else}}<span class="dot off"></span>Offline{{end}}</td></tr>
-      {{if .CharacterPage.LastLogin}}<tr><th>Last login</th><td>{{.CharacterPage.LastLogin}}</td></tr>{{end}}
-      {{if .CharacterPage.LastLogout}}<tr><th>Last logout</th><td>{{.CharacterPage.LastLogout}}</td></tr>{{end}}
-      {{if .CharacterPage.Logins}}<tr><th>Total logins</th><td>{{.CharacterPage.Logins}}</td></tr>{{end}}
-    </tbody>
-  </table>
-  </div>
-  </section>
-  {{end}}
-
-  {{if .CharacterPage.LocationKnown}}
-  <section class="foldable">
-  <h3>Location</h3>
-  <div class="tw">
-  <table>
-    <tbody>
-      <tr><th>System</th><td>{{systemLink .CharacterPage.SystemID .CharacterPage.SystemName}}{{if .CharacterPage.SystemSec}} (security {{.CharacterPage.SystemSec}}){{end}}</td></tr>
-      {{if .CharacterPage.DockedAt}}<tr><th>Docked at</th><td>{{placeLink .CharacterPage.DockedRef}}</td></tr>{{end}}
-    </tbody>
-  </table>
-  </div>
-  </section>
-  {{end}}
-
-  {{if .CharacterPage.ShipKnown}}
-  <section class="foldable">
-  <h3>Ship</h3>
-  <div class="tw">
-  <table>
-    <tbody>
-      <tr><th>Active ship</th><td>{{itemLink .CharacterPage.ShipTypeID .CharacterPage.ShipTypeName}}{{if .CharacterPage.ShipName}} — &ldquo;{{.CharacterPage.ShipName}}&rdquo;{{end}}</td></tr>
-    </tbody>
-  </table>
-  </div>
-  </section>
-  {{end}}
-
-  {{if .CharacterPage.FatigueKnown}}
-  <section class="foldable">
-  <h3>Jump fatigue</h3>
-  <div class="tw">
-  <table>
-    <tbody>
-      {{if .CharacterPage.LastJump}}<tr><th>Last jump</th><td>{{.CharacterPage.LastJump}}</td></tr>{{end}}
-      {{if .CharacterPage.FatigueUntil}}<tr><th>Fatigue expires</th><td>{{.CharacterPage.FatigueUntil}}{{if .CharacterPage.FatigueLeft}} ({{.CharacterPage.FatigueLeft}}){{end}}</td></tr>{{end}}
-    </tbody>
-  </table>
-  </div>
-  </section>
-  {{end}}
-
-  {{if .CharacterPage.ImplantsKnown}}
-  <section class="foldable">
-  <h3>Active implants</h3>
-  {{if .CharacterPage.Implants}}
-  <div class="tw">
-  <table>
-    <thead><tr><th>Slot</th><th>Implant</th></tr></thead>
-    <tbody>
-    {{range .CharacterPage.Implants}}
-      <tr><td>{{.Slot}}</td><td>{{itemLink .TypeID .Name}}</td></tr>
+  {{if $v.TrainedEntries}}
+  <div class="ov-banner" role="status">
+    <span class="ov-bchip">Trained since your last visit</span>
+    {{range $v.TrainedEntries}}
+    <span class="ov-bitem"><b>{{.Skill}}</b> <span class="lv">Level {{.Level}}</span> <span class="when">({{.When}})</span>{{if .StageHref}} <a class="ov-badd" href="{{.StageHref}}">+ Plan L{{.NextLevel}}</a>{{end}}</span>
     {{end}}
-    </tbody>
-  </table>
-  </div>
-  {{else}}
-  <p><small>No implants plugged in.</small></p>
-  {{end}}
-  </section>
-  {{end}}
-
-  {{if .CharacterPage.ClonesKnown}}
-  <section class="foldable" id="clones">
-  <h3>Clones ({{len .CharacterPage.JumpClones}})</h3>
-  <div class="tw">
-  <table>
-    <tbody>
-      {{if .CharacterPage.HomeLocation}}<tr><th>Home clone</th><td>{{.CharacterPage.HomeLocation}}</td></tr>{{end}}
-      {{if .CharacterPage.LastCloneJump}}<tr><th>Last clone jump</th><td>{{.CharacterPage.LastCloneJump}}</td></tr>{{end}}
-    </tbody>
-  </table>
-  </div>
-  {{if .CharacterPage.JumpClones}}
-  {{range .CharacterPage.JumpClones}}
-  <section class="foldable" data-fold="closed">
-  <h3>{{.DisplayName}} <small>· {{.Location}}{{if .Implants}} · {{len .Implants}} implant{{if ne (len .Implants) 1}}s{{end}}{{end}}</small></h3>
-  <p><small>
-    {{if .CustomName}}Named &ldquo;{{.CustomName}}&rdquo;{{else if .Name}}ESI name &ldquo;{{.Name}}&rdquo;{{else}}Unnamed{{end}} ·
-    <details class="clone-rename"><summary>Rename</summary>
-    <form method="post" action="/character/clones/rename">
-      <input type="hidden" name="character" value="{{$.CharacterPage.CharacterID}}">
-      <input type="hidden" name="clone" value="{{.CloneID}}">
-      <input type="text" name="name" value="{{.CustomName}}" placeholder="Custom clone name" maxlength="60" aria-label="Custom name for {{.DisplayName}}">
-      <button type="submit">Save</button>
-      <small>Empty clears the name.</small>
+    <form class="ov-bx" method="post" action="/notifications/read">
+      <input type="hidden" name="kind" value="skill">
+      <input type="hidden" name="return" value="/character/?character={{$v.CharacterID}}">
+      <button type="submit" aria-label="Dismiss the trained banner">&#10005;</button>
     </form>
-    </details>
-  </small></p>
-  {{if .Implants}}
-  <div class="tw">
-  <table>
-    <thead><tr><th>Slot</th><th>Implant</th></tr></thead>
-    <tbody>
-    {{range .Implants}}
-      <tr><td>{{.Slot}}</td><td>{{itemLink .TypeID .Name}}</td></tr>
-    {{end}}
-    </tbody>
-  </table>
   </div>
-  {{else}}
-  <p><small>No implants in this clone.</small></p>
-  {{end}}
-  </section>
-  {{end}}
-  {{else}}
-  <p><small>No jump clones installed.</small></p>
-  {{end}}
-  </section>
   {{end}}
 
-  {{if .CharacterPage.SkillsKnown}}
-  <section class="foldable" id="skills">
-  <h3>Skills</h3>
-  <p>Total SP: <strong>{{.CharacterPage.TotalSP}}</strong>{{if .CharacterPage.UnallocatedSP}} · {{.CharacterPage.UnallocatedSP}} unallocated{{end}} · {{.CharacterPage.SkillsCount}} skills known · {{.CharacterPage.LevelVCount}} at level V</p>
-  {{range .CharacterPage.SkillGroups}}
-  <section class="foldable" data-fold="closed">
-  <h3>{{.Name}}</h3>
-  <div class="tw">
-  <table>
-    <thead><tr><th>Skill</th><th>Level</th><th>SP</th></tr></thead>
-    <tbody>
-    {{range .Skills}}
-      <tr><td>{{itemLink .TypeID .Name}}</td><td>{{skillLevel .TrainedLvl .NextLvl .NextState}}</td><td>{{.SP}}</td></tr>
+  <div class="ov-cards">
+    {{if $v.IdentityKnown}}
+    <div class="ov-card">
+      <div class="ov-idrow">
+        <span class="ov-portrait"><img src="{{$v.PortraitURL}}" alt="" width="56" height="56">{{if $v.SecurityStatus}}<span class="ov-secchip">{{$v.SecurityStatus}}</span>{{end}}</span>
+        <div class="ov-idmain">
+          <div class="ov-nm">{{$v.CharacterName}}</div>
+          {{if $v.CorpName}}<div class="ov-corp">{{corpLink $v.CorpID $v.CorpName}}{{if $v.CorpTicker}} [{{$v.CorpTicker}}]{{end}}</div>{{end}}
+          {{if $v.AllianceName}}<div class="ov-meta">{{$v.AllianceName}}</div>{{end}}
+          <div class="ov-meta">
+            {{if $v.Birthday}}Born {{$v.Birthday}} · {{end}}Security status {{$v.SecurityStatus}}<br>
+            {{if $v.OnlineKnown}}{{if $v.Online}}Online now{{else}}Offline{{if $v.LastLogin}} · Last login {{$v.LastLogin}}{{end}}{{end}} · {{$v.Logins}} logins<br>{{end}}
+            {{if $v.WalletKnown}}Wallet balance {{$v.ISK}} ISK{{end}}
+          </div>
+        </div>
+      </div>
+    </div>
     {{end}}
-    </tbody>
-  </table>
-  </div>
-  <p><small>Group total: {{.SubtotalSP}} SP</small></p>
-  </section>
-  {{end}}
 
-  <section class="foldable" id="browse" data-fold="closed">
-  <h3>Browse skills</h3>
-  {{if .CharacterPage.BrowseWarming}}
-  <p><small>Skill data is still loading. The full catalog appears when the static data import finishes{{if .IsAdmin}}; progress is on the <a href="/admin/sync/">Sync page</a>{{end}}.</small></p>
-  {{else}}
-  {{if and (moduleOn "skillplans") (not .CharacterPage.Plans)}}<p><small><a href="/skills/plans?character={{.CharacterPage.CharacterID}}">Create a skill plan</a> to add skills straight from this catalog.</small></p>{{end}}
-  {{range .CharacterPage.Browse}}
-  <section class="foldable" data-fold="closed">
-  <h3>{{.Name}}</h3>
-  <div class="tw">
-  <table>
-    <thead><tr><th>Skill</th><th>Level</th><th>SP</th><th>Rank</th><th>Trains on</th><th>Prereqs</th>{{if $.CharacterPage.Plans}}<th>Add to plan</th>{{end}}</tr></thead>
-    <tbody>
-    {{range .Skills}}
-      <tr>
-        <td>{{itemLink .TypeID .Name}}</td>
-        <td>{{skillLevel .TrainedLvl 0 ""}}</td>
-        <td>{{.SP}}</td>
-        <td>{{.Rank}}</td>
-        <td>{{.Primary}} / {{.Secondary}}</td>
-        <td>{{.Prereqs}}</td>
-        {{if $.CharacterPage.Plans}}
-        <td>
-          <form method="post" action="/skills/plans/item-add">
-            <input type="hidden" name="character" value="{{$.CharacterPage.CharacterID}}">
-            <input type="hidden" name="skill" value="{{.TypeID}}">
-            <input type="hidden" name="return" value="character">
-            <select name="plan">{{range $.CharacterPage.Plans}}<option value="{{.ID}}">{{.Name}}</option>{{end}}</select>
-            <select name="level"><option value="1">I</option><option value="2">II</option><option value="3">III</option><option value="4">IV</option><option value="5" selected>V</option></select>
-            <button type="submit">Add</button>
-          </form>
-        </td>
+    {{if or $v.LocationKnown $v.ShipKnown}}
+    <div class="ov-card">
+      <div class="ov-chead"><span>Current location &amp; active ship</span>{{if $v.DockedAt}}<span class="ov-live">Docked</span>{{else if $v.LocationKnown}}<span class="ov-live dim">In space</span>{{end}}</div>
+      {{if $v.LocationKnown}}<div class="ov-locline">{{if $v.SystemSec}}<span class="sec-pill {{$ov.SysSecClass}}">{{$v.SystemSec}}</span>{{end}}<span class="ov-sys">{{systemLink $v.SystemID $v.SystemName}}</span>{{if $v.DockedAt}}<span class="ov-stn">· {{placeLink $v.DockedRef}}</span>{{end}}</div>{{end}}
+      {{if $v.ShipKnown}}<div class="ov-shipline"><span>{{if $v.ShipName}}<span class="ov-sn">&ldquo;{{$v.ShipName}}&rdquo;</span> {{end}}<span class="ov-st">{{itemLink $v.ShipTypeID $v.ShipTypeName}}</span></span></div>{{end}}
+    </div>
+    {{end}}
+
+    {{if or $v.FatigueKnown $v.ClonesKnown}}
+    <div class="ov-card">
+      <div class="ov-chead"><span>Jump timers</span></div>
+      <div class="ov-trows">
+        {{if $v.FatigueKnown}}
+        <div class="tr"><span class="k">Fatigue left</span>{{if eq $v.FatigueLeft "ready"}}<span class="ok">None · ready</span>{{else}}<span class="warn">{{$v.FatigueLeft}}</span>{{end}}</div>
+        <div class="tr"><span class="k">Fatigue expires</span><span>{{if $v.FatigueUntil}}{{$v.FatigueUntil}}{{else}}-{{end}}</span></div>
+        <div class="tr"><span class="k">Last jump</span><span>{{if $v.LastJump}}{{$v.LastJump}}{{else}}-{{end}}</span></div>
         {{end}}
-      </tr>
+        {{if $v.ClonesKnown}}
+        <div class="tr"><span class="k">Clone jump</span>{{if eq $ov.CloneJumpLeft "ready"}}<span class="ok">Ready</span>{{else if $ov.CloneJumpLeft}}<span class="warn">Ready <span class="countdown" data-finish="{{$ov.CloneJumpRaw}}">{{$ov.CloneJumpLeft}}</span></span>{{else}}<span>-</span>{{end}}</div>
+        {{end}}
+        {{if $v.LastLogout}}<div class="tr"><span class="k">Last logout</span><span>{{$v.LastLogout}}</span></div>{{end}}
+      </div>
+    </div>
     {{end}}
-    </tbody>
-  </table>
+
+    {{if or $v.PIKnown $v.PINotEnabled}}
+    <div class="ov-card">
+      <div class="ov-chead"><span>Planetary industry{{if $v.PIKnown}} · {{$v.PIColonies}} colon{{if eq $v.PIColonies 1}}y{{else}}ies{{end}}{{end}}</span></div>
+      {{if $v.PIKnown}}
+      {{if $v.PISoonestIn}}<div class="ov-pibig">Soonest expiry {{$v.PISoonestIn}}</div>{{else if $v.PISoonest}}<div class="ov-pibig">Soonest expiry {{$v.PISoonest}}</div>{{end}}
+      <div class="ov-pisub">{{if $v.PIExpired}}<span class="bad">{{$v.PIExpired}} extractor{{if ne $v.PIExpired 1}}s{{end}} expired</span> · {{end}}Summary from your colony snapshots. Full detail is in the table below and on <a href="/planets/?character={{$v.CharacterID}}">My Colonies</a>.</div>
+      {{if $ov.ColonyPills}}<div class="ov-pipills">{{range $ov.ColonyPills}}<span class="ov-pipill {{.Class}}">{{.Planet}} · {{.Label}}</span>{{end}}</div>{{end}}
+      {{else}}
+      <div class="ov-pisub">Not enabled for this character. <a href="/planets/?character={{$v.CharacterID}}">Re-link it to enable</a>.</div>
+      {{end}}
+    </div>
+    {{end}}
   </div>
-  </section>
-  {{end}}
-  {{end}}
+
+  <div class="panes3 ov{{if or $ov.SkillInsp $ov.CloneInsp}} has-insp{{end}}">
+    <section class="ov-dir" aria-label="Skill directory and clone bay">
+      {{if $v.SkillsKnown}}
+      <h2 class="ov-h">Skill directory <span class="cnt">{{len $ov.DirGroups}} groups</span></h2>
+      <input class="ov-dirsearch" type="search" placeholder="Filter skill groups..." aria-label="Filter skill groups" data-ov-filter>
+      <div class="dirlist" data-ov-dirlist>
+        <a class="diritem{{if $ov.DirAll.Selected}} on{{end}}" href="{{$ov.DirAll.Href}}" data-name="all categories">
+          <span class="dir-top"><span class="dir-name">All categories</span><span class="dir-val">{{$ov.DirAll.SPCompact}}</span></span>
+          <span class="dir-sub"><span>{{$ov.DirAll.Trained}} trained · {{$ov.DirAll.Total}} in the catalog</span><span>{{$ov.DirAll.ShareLabel}}</span></span>
+          <span class="sharebar"><span class="fill pw-100"></span></span>
+        </a>
+        {{range $ov.DirGroups}}
+        <a class="diritem{{if .Selected}} on{{end}}" href="{{.Href}}" data-name="{{.Name}}">
+          <span class="dir-top"><span class="dir-name">{{.Name}}</span><span class="dir-val">{{.SPCompact}}</span></span>
+          <span class="dir-sub"><span>{{.Trained}} trained · {{.Total}} total</span><span>{{.ShareLabel}}</span></span>
+          <span class="sharebar"><span class="fill pw-{{.SharePct}}"></span></span>
+        </a>
+        {{end}}
+      </div>
+      {{end}}
+
+      {{if or $v.ClonesKnown $v.ImplantsKnown}}
+      <div class="ov-dirsec">
+        <h2 class="ov-h">Clone bay <span class="cnt">active + {{len $v.JumpClones}} jump</span></h2>
+        {{if $v.ClonesKnown}}<p class="ov-dirsub">Home location: {{$v.HomeLocation}}<br>Last clone jump: {{$v.LastCloneJump}}</p>{{end}}
+        {{range $ov.DirClones}}{{template "ovclone" .}}{{end}}
+      </div>
+      {{end}}
+      <p class="ov-dirfoot">Skills, clones and implants render from the character's stored snapshots. A section dims on its own while its snapshot is still warming.</p>
+    </section>
+
+    <section class="ov-main" aria-label="Character sheet">
+      <div class="crumbs"><span>Character</span><span class="crumb-sep">&rsaquo;</span><span>{{$v.CharacterName}}</span><span class="crumb-sep">&rsaquo;</span><span class="crumb-here">{{if eq $v.State.Surface "clones"}}Clones &amp; implants{{else}}{{$ov.GroupName}}{{end}}</span><span class="crumb-cap">{{$ov.CrumbCap}}</span></div>
+      <div class="pilltabs" role="group" aria-label="Sheet surface">
+        {{range $ov.Tabs}}<a class="pilltab{{if .On}} on{{end}}" href="{{.Href}}">{{.Label}} <span class="cnt">{{.Count}}</span></a>{{end}}
+      </div>
+
+      {{if eq $v.State.Surface "clones"}}
+        <div class="ov-clonelist">
+          {{range $ov.DirClones}}{{template "ovclone" .}}{{end}}
+        </div>
+        <p class="ov-note">Pick a clone in the list or the Clone Bay to inspect its implants. The active clone is the pod this character is in now; jump clones wait at their stations.</p>
+      {{else}}
+        {{if $ov.ShowTraining}}
+        <div class="ov-trainstrip">
+          <div class="ov-ts-head"><span>Now training</span>{{if $ov.TrainingDone}}<span class="cd">Finishes <span class="countdown" data-finish="{{$ov.TrainingDone}}"></span></span>{{end}}</div>
+          <div class="ov-trainnow"><span class="sk">{{$ov.TrainName}}</span><span class="ov-sub">training to Level {{$ov.TrainToRoman}}</span><span class="ov-pips">{{range $ov.TrainPips}}<i{{if .Class}} class="{{.Class}}"{{end}}></i>{{end}}</span>{{if $ov.TrainSPHour}}<span class="ov-sub">{{$ov.TrainSPHour}}</span>{{end}}</div>
+          {{if $ov.QueueChips}}
+          <div class="ov-qrow">
+            <span class="ov-qitem"><span class="qn">Queue</span>{{$ov.QueueAfter}} skill{{if ne $ov.QueueAfter 1}}s{{end}} after this one</span>
+            {{range $ov.QueueChips}}<span class="ov-qitem dim">{{.Num}} · {{.Label}}</span>{{end}}
+          </div>
+          {{end}}
+          {{if $v.CompletesAt}}<p class="ov-ts-foot">Queue completes {{$v.CompletesAt}}</p>{{end}}
+        </div>
+        {{end}}
+
+        <div class="fchips" role="group" aria-label="Skill level filters">
+          <span class="fchips-label">Skill filters</span>
+          {{range $ov.LevelChips}}<a class="fchip{{if .On}} on{{end}}" href="{{.Href}}">{{.Label}}</a>{{end}}
+        </div>
+
+        <form class="ov-tools" method="get" action="/character/">
+          {{range $ov.Hidden}}<input type="hidden" name="{{.Name}}" value="{{.Value}}">{{end}}
+          {{if ne $v.State.Level "all"}}<input type="hidden" name="lvl" value="{{$v.State.Level}}">{{end}}
+          <input class="ov-search" type="search" name="q" value="{{$v.State.Query}}" placeholder="Search skills in the sheet and the browse catalog..." aria-label="Search skills">
+          <button class="ov-sbtn" type="submit">Search</button>
+          {{if and (moduleOn "skillplans") $v.Plans}}
+          <label class="ov-planpick">Add to plan:
+            <select name="plan">{{range $v.Plans}}<option value="{{.ID}}"{{if eq .ID $ov.PlanID}} selected{{end}}>{{.Name}}</option>{{end}}</select>
+          </label>
+          {{end}}
+        </form>
+        {{if and (moduleOn "skillplans") (not $v.Plans)}}<p class="ov-note"><a href="/skills/plans?character={{$v.CharacterID}}">Create a skill plan</a> to stage skills from this page.</p>{{end}}
+
+        {{if $ov.ShowImplantStrip}}
+        <div class="ov-canstrip">
+          <div class="ov-cs-head"><span>Active clone implants: pick a slot range to inspect the pod</span><span class="tot">{{len $v.Implants}} of 10 slots filled{{if $v.DockedAt}} · {{$v.DockedAt}}{{end}}</span></div>
+          <div class="ov-cangrid">
+            {{range $ov.ImplantCards}}<a class="ov-can" href="{{.Href}}"><span class="ov-can-box">{{.Range}}</span><span class="ov-can-main"><span class="ov-can-nm">{{.Title}}</span><span class="ov-can-mt">{{if .Names}}{{.Names}}{{else}}No implants{{end}}{{if .Note}} · {{.Note}}{{end}}</span></span><span class="ov-can-go">&rsaquo;</span></a>{{end}}
+          </div>
+        </div>
+        {{end}}
+
+        {{if $ov.ShowBrowseNote}}
+        <p class="ov-note">Skill data is still loading. The full catalog appears when the static data import finishes{{if .IsAdmin}}; progress is on the <a href="/admin/sync/">Sync page</a>{{end}}.</p>
+        {{else if $ov.Rows}}
+        <div class="tw">
+        <table class="ov-table">
+          <thead><tr><th>Skill / Group</th><th>Level &amp; Rank</th><th>Attributes</th><th class="r">Skill points</th><th class="r">Plan</th></tr></thead>
+          <tbody>
+          {{range $ov.Rows}}
+          <tr{{if .Selected}} class="sel"{{end}}>
+            <td><a class="ov-cell" href="{{.SelectHref}}"><span class="ov-lvl{{if .Untrained}} zero{{end}}">{{.LevelTile}}</span><span class="ov-cell-main"><span class="ov-nm">{{.Name}}</span>{{if .Mastered}}<span class="ov-tag mastered">Mastered</span>{{else if .Untrained}}<span class="ov-tag untrained">Untrained</span>{{end}}<br><span class="ov-sub">{{.Group}}</span></span></a></td>
+            <td><span class="ov-pips">{{range .Pips}}<i{{if .Class}} class="{{.Class}}"{{end}}></i>{{end}}</span><div class="ov-rank">{{if .Rank}}Rank {{.Rank}}{{end}}</div></td>
+            <td>{{if .AttrPair}}<span class="ov-attr">{{.AttrPair}}</span>{{end}}</td>
+            <td class="r"><span class="ov-val">{{.SP}}{{if .MaxSP}}<small>of {{.MaxSP}} SP</small>{{end}}</span></td>
+            <td class="r">{{if .StagedLevel}}<a class="ov-staged" href="{{.SelectHref}}">Staged L{{.StagedLevel}}</a>{{else if .StageLevel}}<a class="ov-planbtn" href="{{.StageHref}}">+ Plan L{{.StageLevel}}</a>{{else}}<span class="ov-sub">-</span>{{end}}</td>
+          </tr>
+          {{end}}
+          </tbody>
+        </table>
+        </div>
+        {{else}}
+        <p class="ov-note">{{$ov.RowsNote}}</p>
+        {{end}}
+
+        {{range $ov.FoldedGroups}}<a class="ov-foldrow" href="{{.Href}}"><span class="fg">{{.Name}}</span> · {{.Trained}} trained · {{.SPCompact}} SP <span class="chev">&rsaquo; folded group, pick to open</span></a>{{end}}
+      {{end}}
+    </section>
+
+    {{if or $ov.SkillInsp $ov.CloneInsp $ov.Staged}}
+    <aside class="insp ov-insp" aria-label="Inspector">
+      {{if eq $v.State.Surface "clones"}}
+        {{with $ov.CloneInsp}}
+        <div class="insp-head">
+          <div>
+            <h3>{{.Title}}</h3>
+            <p class="ov-itype">{{if .SystemName}}<b>{{.SystemName}}</b> · {{end}}{{.Location}}</p>
+          </div>
+        </div>
+        <div class="slotsec">
+          <h4>Attribute enhancers · Slots 1-5</h4>
+          {{range .Enhancers}}<div class="modrow"><span class="modrow-name"><span class="ov-sn">S{{.Slot}}</span>{{if .Empty}}<span class="ov-empty">Empty slot</span>{{else}}{{itemLink .TypeID .Name}}{{end}}</span>{{if .Bonus}}<span class="modrow-val">{{.Bonus}}</span>{{end}}</div>{{end}}
+        </div>
+        <div class="slotsec">
+          <h4>Skill hardwirings · Slots 6-10</h4>
+          {{range .Hardwirings}}<div class="modrow"><span class="modrow-name"><span class="ov-sn">S{{.Slot}}</span>{{if .Empty}}<span class="ov-empty">Empty slot</span>{{else}}{{itemLink .TypeID .Name}}{{end}}</span>{{if .Bonus}}<span class="modrow-val">{{.Bonus}}</span>{{end}}</div>{{end}}
+        </div>
+        {{if .CloneID}}
+        <details class="ov-rename">
+          <summary>Rename this clone</summary>
+          <form method="post" action="/character/clones/rename">
+            <input type="hidden" name="character" value="{{$v.CharacterID}}">
+            <input type="hidden" name="clone" value="{{.CloneID}}">
+            <input type="text" name="name" value="{{.CustomName}}" placeholder="Custom clone name" maxlength="60" aria-label="Custom name for {{.Title}}">
+            <button type="submit">Save</button>
+            <small>Empty clears the name.</small>
+          </form>
+        </details>
+        {{end}}
+        <div class="insp-foot"><span>{{.ImplantCount}} implant{{if ne .ImplantCount 1}}s{{end}} installed</span><span>Clones snapshot loaded</span></div>
+        {{end}}
+      {{else}}
+        {{with $ov.SkillInsp}}
+        <div class="insp-head">
+          <span class="ov-ranktile"><span class="rl">Rank</span><span class="rv">{{.Rank}}</span></span>
+          <div>
+            <h3>{{itemLink .TypeID .Name}}</h3>
+            <p class="ov-itype">{{.Group}} · {{.LevelLabel}}</p>
+          </div>
+        </div>
+        <div class="estbar">
+          <span class="estbar-l"><span class="estbar-lab">Trained skill points</span><span class="estbar-v">{{.SP}} SP</span></span>
+          {{if .StageLevel}}<a class="ov-eft" href="{{.StageHref}}">+ Plan lvl {{.StageLevel}}</a>{{else if .StagedLevel}}<span class="ov-staged">Staged at level {{.StagedLevel}}</span>{{end}}
+        </div>
+        {{if $ov.PlanName}}<p class="insp-note">Plan target: <b>{{$ov.PlanName}}</b>, the plan picked in the toolbar above. Staged skills save into it.</p>{{end}}
+        {{if .Description}}<p class="ov-idesc">{{.Description}}</p>{{end}}
+        <div class="slotsec">
+          <h4>Skill level milestones</h4>
+          {{range .Milestones}}<div class="modrow"><span>{{.Label}}</span><span class="modrow-val{{if .Done}} done{{end}}">{{.State}}</span></div>{{end}}
+        </div>
+        <div class="slotsec">
+          <h4>Attributes</h4>
+          <div class="modrow"><span>Primary attribute</span><span class="modrow-val">{{.Primary}}</span></div>
+          <div class="modrow"><span>Secondary attribute</span><span class="modrow-val">{{.Secondary}}</span></div>
+          {{if .SPPerMinute}}<div class="modrow"><span>Training speed</span><span class="modrow-val">{{.SPPerMinute}} SP per minute</span></div>{{end}}
+        </div>
+        <div class="insp-foot"><span>Inspector follows the selected row</span><span>Skills snapshot loaded</span></div>
+        {{end}}
+      {{end}}
+
+      {{with $ov.Staged}}
+      <div class="slotsec ov-staged-sec">
+        <h4>Staged plan <small>not saved yet</small></h4>
+        {{range .Items}}
+        <div class="modrow">
+          <span class="modrow-name">{{.Name}} <small>to {{.Roman}}</small></span>
+          <span class="modrow-val">{{if .SP}}{{.SP}} · {{.Time}}{{else}}{{.Note}}{{end}}</span>
+          <a class="ov-unstage" href="{{.DropHref}}" aria-label="Remove {{.Name}} from the staged plan">&#10005;</a>
+        </div>
+        {{end}}
+        {{if .TotalSP}}<div class="insp-total"><span>Total</span><span>{{.TotalSP}} SP · {{.TotalTime}}</span></div>{{end}}
+        {{if .StartsNote}}<p class="insp-note">{{.StartsNote}}</p>{{end}}
+        {{if .PrereqNote}}<p class="insp-note">{{.PrereqNote}}</p>{{end}}
+        {{if .Export}}
+        <div class="ov-export">
+          <button type="button" class="btn" data-copy data-copy-from="ov-plan-text">Copy EVE plan</button>
+          <details>
+            <summary>Plan text, in the game's format</summary>
+            <pre id="ov-plan-text">{{.Export}}</pre>
+          </details>
+        </div>
+        {{end}}
+        {{if .SavePlanID}}
+        <form method="post" action="/skills/plans/items-add-bulk" class="ov-staged-save">
+          <input type="hidden" name="character" value="{{$v.CharacterID}}">
+          <input type="hidden" name="plan" value="{{.SavePlanID}}">
+          <input type="hidden" name="items" value="{{.ItemsField}}">
+          <button type="submit" class="btn">Save staged to {{$ov.PlanName}}</button>
+        </form>
+        {{end}}
+      </div>
+      {{end}}
+    </aside>
+    {{end}}
+  </div>
+
+  {{if $ov.Colonies}}
+  <section class="ov-colonies">
+    <h3>Colonies</h3>
+    <p class="ov-note">Per-colony detail from the stored colony snapshots, the same rows as <a href="/planets/?character={{$v.CharacterID}}">My Colonies</a>.</p>
+    <div class="tw">
+    <table class="ov-table">
+      <thead><tr><th>Colony</th><th>Output</th><th>Extractors</th><th>Factories</th><th>Extractor expiry</th><th>Updated</th></tr></thead>
+      <tbody>
+      {{range $ov.Colonies}}
+      <tr>
+        <td><b>{{.Planet}}</b><br><span class="ov-sub">{{.System}} · {{.Type}} · upgrade {{.Upgrade}} · {{.Pins}} pins</span></td>
+        <td>{{if .Outputs}}{{.Outputs}}{{else}}-{{end}}</td>
+        <td>{{.Extractors}}</td>
+        <td>{{.Factories}}</td>
+        <td>{{if .Warming}}Layout still warming{{else if .Expired}}<span class="bad">Expired</span>{{else if .Expiry}}{{.Expiry}}{{else}}-{{end}}</td>
+        <td>{{.Updated}}</td>
+      </tr>
+      {{end}}
+      </tbody>
+    </table>
+    </div>
   </section>
   {{end}}
 

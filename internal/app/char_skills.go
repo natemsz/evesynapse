@@ -31,6 +31,18 @@ type skillPlanSummary struct {
 	Character int64
 }
 
+// skillCatalogEntry is one SDE skill-catalog row in raw form:
+// the sheet's per-skill math (max SP, attribute pair, training
+// speed) reads ranks and attributes from here.
+type skillCatalogEntry struct {
+	TypeID    int64
+	Name      string
+	GroupName string
+	Rank      float64
+	Primary   int64 // dogma attribute ID
+	Secondary int64
+}
+
 type skillsView struct {
 	CharacterName string
 	CharacterID   int64
@@ -45,12 +57,19 @@ type skillsView struct {
 	CompletesAt   string // finish time of the last queue entry, "" when queue empty
 	Groups        []skillGroupSection
 
+	// SkillSP is the raw trained SP per skill, for surfaces
+	// that do their own per-skill math.
+	SkillSP map[int64]int64
+
 	// Browse: the full skill catalog from the SDE
 	// graph, with plan quick-add forms. BrowseWarming marks the
 	// pre-import state; BrowseGroups stay empty then.
 	Browse        []browseSkillGroup
 	BrowseWarming bool
 	Plans         []skillPlanSummary
+
+	// Catalog is the raw SDE catalog behind Browse.
+	Catalog []skillCatalogEntry
 }
 
 // browseSkillGroup is one catalog block of the Browse section.
@@ -146,6 +165,10 @@ func (app *Application) fillBrowse(ctx context.Context, view *skillsView, ch db.
 
 	var groups []browseSkillGroup
 	for _, row := range catalog {
+		view.Catalog = append(view.Catalog, skillCatalogEntry{
+			TypeID: row.TypeID, Name: row.Name, GroupName: row.GroupName,
+			Rank: row.Rank, Primary: row.PrimaryAttr, Secondary: row.SecondaryAttr,
+		})
 		if len(groups) == 0 || groups[len(groups)-1].Name != row.GroupName {
 			groups = append(groups, browseSkillGroup{Name: row.GroupName})
 		}
@@ -240,6 +263,10 @@ func (app *Application) fillSkillSections(ctx context.Context, view *skillsView,
 		view.UnallocatedSP = esi.FormatInt(skills.UnallocatedSP)
 	}
 	view.SkillsKnown = len(skills.Skills)
+	view.SkillSP = make(map[int64]int64, len(skills.Skills))
+	for _, s := range skills.Skills {
+		view.SkillSP[s.SkillID] = s.SkillpointsInSkill
+	}
 
 	ids := make([]int64, 0, len(skills.Skills))
 	for _, s := range skills.Skills {

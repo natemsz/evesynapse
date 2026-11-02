@@ -637,10 +637,10 @@ func TestCharacterSheetFromSnapshots(t *testing.T) {
 	mustContain(t, "/character/", body,
 		`<h1><span class="gt">Character</span></h1>`,
 		"Fixture Corp", "2009-12-24", "0.55",
-		"4,242.25",    // wallet from snapshot
-		"105,530,570", // total SP
-		"finishes",    // queue line's server-rendered finish
-		"<h3>Training</h3>",
+		"4,242.25",   // wallet from snapshot
+		"105.53M SP", // total SP, compact in the sheet head
+		"finishes",   // queue line's server-rendered finish
+		"Now training",
 	)
 	if !strings.Contains(strings.ToLower(body), "training") {
 		t.Error("character page lost the training section")

@@ -39,6 +39,7 @@ var Module = module.Module{
 		r.Get("/skills/plans/fit", h((*plans).handleSkillPlanFitPreview))
 		r.Post("/skills/plans/create", h((*plans).handleSkillPlanCreate))
 		r.Post("/skills/plans/item-add", h((*plans).handleSkillPlanItemAdd))
+		r.Post("/skills/plans/items-add-bulk", h((*plans).handleSkillPlanItemsAddBulk))
 		r.Post("/skills/plans/item-remove", h((*plans).handleSkillPlanItemRemove))
 		r.Post("/skills/plans/item-move", h((*plans).handleSkillPlanItemMove))
 		r.Post("/skills/plans/delete", h((*plans).handleSkillPlanDelete))

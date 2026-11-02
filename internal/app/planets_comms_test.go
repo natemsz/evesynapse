@@ -174,7 +174,7 @@ func TestPlanetsPagesRenderFromSnapshots(t *testing.T) {
 		t.Fatalf("character page: status %d", code)
 	}
 	mustContain(t, "/character/ (PI summary)", body,
-		"Planetary industry", "2 colonies", "1 extractor expired", "view colonies",
+		"Planetary industry", "2 colonies", "1 extractor expired", "My Colonies",
 	)
 
 	before := transport.calls.Load()

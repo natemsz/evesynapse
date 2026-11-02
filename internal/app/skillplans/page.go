@@ -852,6 +852,111 @@ func (app *plans) handleSkillPlanItemAdd(w http.ResponseWriter, r *http.Request)
 	skillPlansRedirect(w, r, characterID, planID)
 }
 
+// handleSkillPlanItemsAddBulk saves the character page's staged
+// plan into a chosen plan in one post: the items field carries
+// comma-joined "skill:level" pairs. Each item gets the single
+// add's guards (a real skill, not already trained to the level,
+// not already planned at the level or higher); the rest are
+// reported in the flash rather than failing the batch.
+func (app *plans) handleSkillPlanItemsAddBulk(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	userID := app.deps.UserID(ctx)
+	if err := r.ParseForm(); err != nil || userID == 0 {
+		http.Redirect(w, r, "/skills/plans", http.StatusSeeOther)
+		return
+	}
+	characterID, _ := strconv.ParseInt(r.FormValue("character"), 10, 64)
+	planID, _ := strconv.ParseInt(r.FormValue("plan"), 10, 64)
+	back := fmt.Sprintf("/character/?character=%d&plan=%d", characterID, planID)
+	plan, ok := app.ownedPlan(ctx, userID, characterID, planID)
+	if !ok {
+		http.Redirect(w, r, back, http.StatusSeeOther)
+		return
+	}
+	type staged struct {
+		id    int64
+		level int
+	}
+	var want []staged
+	seen := map[int64]int{}
+	for _, part := range strings.Split(r.FormValue("items"), ",") {
+		idText, levelText, ok := strings.Cut(part, ":")
+		if !ok {
+			continue
+		}
+		id, err1 := strconv.ParseInt(idText, 10, 64)
+		level, err2 := strconv.Atoi(levelText)
+		if err1 != nil || err2 != nil || id <= 0 || level < 1 || level > 5 {
+			continue
+		}
+		if prev, dup := seen[id]; dup {
+			if level > want[prev].level {
+				want[prev].level = level
+			}
+			continue
+		}
+		seen[id] = len(want)
+		want = append(want, staged{id: id, level: level})
+	}
+	if len(want) == 0 {
+		http.Redirect(w, r, back, http.StatusSeeOther)
+		return
+	}
+	graph := newSDESkillGraph(app, ctx)
+	ct, _, loaded := app.loadCharTraining(ctx, characterID)
+	existing, _ := app.queries.ListSkillPlanItems(ctx, planID)
+	existingLevel := map[int64]int64{}
+	for _, item := range existing {
+		existingLevel[item.SkillTypeID] = item.TargetLevel
+	}
+	nextPos, err := app.queries.NextSkillPlanPosition(ctx, planID)
+	if err != nil {
+		logging.Errorf("skill plans: next position for plan %d: %v", planID, err)
+		http.Redirect(w, r, back, http.StatusSeeOther)
+		return
+	}
+	var ids, levels, positions []int64
+	skipped := 0
+	for _, it := range want {
+		if _, ok := graph.Meta(it.id); !ok {
+			skipped++
+			continue
+		}
+		if loaded && it.level <= trainedLevel(graph, ct, it.id) {
+			skipped++
+			continue
+		}
+		if existingLevel[it.id] >= int64(it.level) {
+			skipped++
+			continue
+		}
+		ids = append(ids, it.id)
+		levels = append(levels, int64(it.level))
+		positions = append(positions, nextPos)
+		nextPos++
+	}
+	if len(ids) > 0 {
+		if err := app.queries.UpsertSkillPlanItems(ctx, db.UpsertSkillPlanItemsParams{
+			PlanID: planID, SkillTypeIds: ids, TargetLevels: levels, Positions: positions,
+		}); err != nil {
+			logging.Errorf("skill plans: bulk add to plan %d: %v", planID, err)
+		}
+	}
+	plural := "s"
+	if len(ids) == 1 {
+		plural = ""
+	}
+	switch {
+	case len(ids) == 0:
+		app.deps.Flash(ctx, fmt.Sprintf("Nothing new to save: every staged skill is already trained or already in %s.", plan.Name))
+	case skipped > 0:
+		app.deps.Flash(ctx, fmt.Sprintf("Saved %d staged skill%s to %s; %d skipped as already trained or planned.", len(ids), plural, plan.Name, skipped))
+	default:
+		app.deps.Flash(ctx, fmt.Sprintf("Saved %d staged skill%s to %s.", len(ids), plural, plan.Name))
+	}
+	http.Redirect(w, r, back, http.StatusSeeOther)
+}
+
 // planEditRequest is what the in-place edit endpoints (move, remove) have
 // in common: the signed-in user, the character and a plan they own.
 type planEditRequest struct {

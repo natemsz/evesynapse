@@ -139,6 +139,8 @@ type jumpCloneView struct {
 	CustomName  string       // pilot-given name from clone_names, "" when none
 	DisplayName string       // CustomName, else Name, else "Jump Clone N"
 	Location    string       // resolved location title
+	LocationID  int64        // ESI location id (station or structure)
+	LocType     string       // ESI location type ("station", "structure")
 	Implants    []implantRow // implants in slot order; empty = no implants
 }
 
@@ -165,6 +167,10 @@ type characterView struct {
 	// pre-joined for the banner at the top of the sheet. "" when
 	// nothing finished since the last visit.
 	TrainedBanner string
+	// TrainedEntries is the same news in structured form: the
+	// redesigned banner renders each finish with its own
+	// quick-add for the next level.
+	TrainedEntries []trainedBannerEntry
 
 	// Status (online snapshot).
 	OnlineKnown bool
@@ -192,12 +198,13 @@ type characterView struct {
 	FatigueLeft  string // human remaining, "ready" once expired
 
 	// Implants + clones snapshots.
-	ImplantsKnown bool
-	Implants      []implantRow // active implants in slot order
-	ClonesKnown   bool
-	HomeLocation  string
-	LastCloneJump string
-	JumpClones    []jumpCloneView
+	ImplantsKnown    bool
+	Implants         []implantRow // active implants in slot order
+	ClonesKnown      bool
+	HomeLocation     string
+	LastCloneJump    string
+	LastCloneJumpRaw string // RFC3339, for the cooldown math
+	JumpClones       []jumpCloneView
 
 	// Identity: name, birthday, security and corporation, from the
 	// worker-warmed profile snapshot, so this page — like every other
@@ -206,6 +213,8 @@ type characterView struct {
 	PortraitURL    string
 	CorpID         int64
 	CorpName       string
+	CorpTicker     string
+	AllianceName   string
 	Birthday       string
 	SecurityStatus string
 
@@ -220,9 +229,14 @@ type characterView struct {
 	SkillsKnown     bool
 	TotalSP         string
 	UnallocatedSP   string
+	TotalSPRaw      int64
+	UnallocatedRaw  int64
 	SkillsCount     int
 	LevelVCount     int
 	SkillGroups     []skillGroupSection
+	SkillSP         map[int64]int64 // raw trained SP per skill
+	SkillLevels     map[int64]int   // trained level per skill
+	Catalog         []skillCatalogEntry
 	QueueKnown      bool
 	Training        string // "Skill V — finishes …", "" = not training
 	TrainingFinish  string // raw finish, drives the live countdown
@@ -231,6 +245,7 @@ type characterView struct {
 	TrainingLevel   int   // level currently training
 	Queue           []skillQueueRow
 	CompletesAt     string // finish time of the last queue entry
+	QueueEndRaw     string // RFC3339 finish of the last live queue entry
 
 	// Browse (skill catalog from the SDE graph, with plan
 	// quick-add forms); BrowseWarming marks the pre-import state.
@@ -247,6 +262,31 @@ type characterView struct {
 	PIExpired    int
 	PISoonest    string // formatted soonest extractor expiry
 	PISoonestIn  string // "in 2d 3h" while it is still ahead
+
+	// Attributes snapshot: the five training attributes, the
+	// input to every training-speed figure on the page.
+	AttrsKnown bool
+	Attrs      esi.Attributes
+
+	// State is the redesigned page's view state parsed from
+	// the URL (surface, group, selection, filters, staged
+	// plan); Overview is the assembled workspace the template
+	// renders. Both are built by char_overview.go.
+	State    overviewState
+	Overview *overviewView
+}
+
+// trainedBannerEntry is one finished-training announcement in
+// structured form: the skill and level that finished, when, and
+// the next level the banner's quick-add stages (0 at level V).
+type trainedBannerEntry struct {
+	Skill     string
+	SkillID   int64  // SDE type id, 0 when the name does not resolve
+	Level     string // roman
+	LevelNum  int
+	When      string // "finished 2h ago"
+	NextLevel int    // LevelNum+1, 0 when already at V
+	StageHref string // stages NextLevel, built by fillOverview
 }
 
 // handleCharacter renders the Character page for one of the
@@ -271,6 +311,7 @@ func (app *Application) handleCharacter(w http.ResponseWriter, r *http.Request) 
 	app.foresightOpened(ctx, app.userID(ctx), foresightSkillsView(active.CharacterID))
 	view := &characterView{CharacterID: active.CharacterID, CharacterName: active.Name}
 	view.PortraitURL = portraitURL(active.CharacterID, 128)
+	view.State = parseOverviewState(r)
 	data.CharacterPage = view
 	app.fillCharacterView(ctx, active, view)
 
@@ -294,6 +335,8 @@ func (app *Application) fillCharacterView(ctx context.Context, ch db.Character, 
 	app.fillCharacterQueue(ctx, ch, view, trainedByID)
 	app.fillCharacterTrained(ctx, ch, view, userID)
 	app.fillCharacterPI(ctx, ch, view)
+	app.fillCharacterAttrs(ctx, ch, view)
+	app.fillOverview(ctx, ch, view)
 	app.fillCharacterLoaded(ctx, ch, view)
 }
 
@@ -405,6 +448,7 @@ func (app *Application) fillCharacterImplantsAndClones(ctx context.Context, ch d
 		view.ClonesKnown = true
 		view.HomeLocation = app.locationTitle(ctx, clones.HomeLocation.LocationID, clones.HomeLocation.LocationType)
 		view.LastCloneJump = formatFinish(clones.LastCloneJumpDate)
+		view.LastCloneJumpRaw = clones.LastCloneJumpDate
 		// Pilot-given clone names (ESI has no naming API).
 		customNames := map[int64]string{}
 		if userID != 0 {
@@ -418,10 +462,12 @@ func (app *Application) fillCharacterImplantsAndClones(ctx context.Context, ch d
 		}
 		for i, jc := range clones.JumpClones {
 			jcv := jumpCloneView{
-				CloneID:  jc.JumpCloneID,
-				Num:      i + 1,
-				Name:     jc.Name,
-				Location: app.locationTitle(ctx, jc.LocationID, jc.LocationType),
+				CloneID:    jc.JumpCloneID,
+				Num:        i + 1,
+				Name:       jc.Name,
+				Location:   app.locationTitle(ctx, jc.LocationID, jc.LocationType),
+				LocationID: jc.LocationID,
+				LocType:    jc.LocationType,
 			}
 			if cn, ok := customNames[jc.JumpCloneID]; ok && cn != "" {
 				jcv.CustomName = cn
@@ -469,8 +515,14 @@ func (app *Application) fillCharacterIdentity(ctx context.Context, ch db.Charact
 			var info esi.Corporation
 			if app.loadCorpSnapshot(ctx, ch.CharacterID, esi.SnapCorpInfo, &info) && info.Name != "" {
 				view.CorpName = info.Name
+				view.CorpTicker = info.Ticker
 			} else {
 				view.CorpName = fmt.Sprintf("Corporation #%d", corpID)
+			}
+		}
+		if profile.AllianceID > 0 {
+			if name, ok := app.resolvedAllianceName(ctx, profile.AllianceID); ok {
+				view.AllianceName = name
 			}
 		}
 	}
@@ -502,12 +554,16 @@ func (app *Application) fillCharacterSkills(ctx context.Context, ch db.Character
 		view.SkillsKnown = true
 		view.TotalSP = sv.TotalSP
 		view.UnallocatedSP = sv.UnallocatedSP
+		view.TotalSPRaw = skills.TotalSP
+		view.UnallocatedRaw = skills.UnallocatedSP
 		view.SkillsCount = sv.SkillsKnown
 		view.LevelVCount = sv.LevelVCount
 		view.SkillGroups = sv.Groups
+		view.SkillSP = sv.SkillSP
 		for _, s := range skills.Skills {
 			trainedByID[s.SkillID] = s.TrainedSkillLevel
 		}
+		view.SkillLevels = trainedByID
 		// Browse catalog (plan quick-add) rides along when the
 		// user is known.
 		if userID != 0 {
@@ -516,6 +572,7 @@ func (app *Application) fillCharacterSkills(ctx context.Context, ch db.Character
 			view.Browse = bv.Browse
 			view.BrowseWarming = bv.BrowseWarming
 			view.Plans = bv.Plans
+			view.Catalog = bv.Catalog
 		}
 	}
 	return trainedByID
@@ -599,6 +656,9 @@ func (app *Application) fillCharacterQueue(ctx context.Context, ch db.Character,
 				view.TrainingLeft = "in " + humanDuration(t.Sub(now))
 			}
 		}
+		if live := liveSkillqueue(queue, now); len(live) > 0 {
+			view.QueueEndRaw = live[len(live)-1].FinishDate
+		}
 	}
 }
 
@@ -628,6 +688,7 @@ func (app *Application) fillCharacterTrained(ctx context.Context, ch db.Characte
 	// announced twice (re-announced after ageing out) shows once.
 	seen := map[string]bool{}
 	entries := make([]string, 0, len(rows))
+	now := time.Now()
 	for i := len(rows) - 1; i >= 0; i-- {
 		entry, ok := trainedEntry(ch.Name, rows[i].Title)
 		if !ok || seen[entry] {
@@ -635,8 +696,55 @@ func (app *Application) fillCharacterTrained(ctx context.Context, ch db.Characte
 		}
 		seen[entry] = true
 		entries = append(entries, entry)
+		// The structured twin: skill name and level split back
+		// out of the pinned "<skill> <level>" entry, the finish
+		// time from the notification's own clock, and the SDE id
+		// resolved against the catalog for the quick-add.
+		be := trainedBannerEntry{When: "finished " + agoLabel(now.Sub(rows[i].CreatedAt))}
+		if j := strings.LastIndexByte(entry, ' '); j > 0 {
+			be.Skill = entry[:j]
+			be.Level = entry[j+1:]
+			be.LevelNum = romanLevelNum(be.Level)
+		}
+		if be.LevelNum > 0 && be.LevelNum < 5 {
+			be.NextLevel = be.LevelNum + 1
+		}
+		for _, cat := range view.Catalog {
+			if cat.Name == be.Skill {
+				be.SkillID = cat.TypeID
+				break
+			}
+		}
+		view.TrainedEntries = append(view.TrainedEntries, be)
 	}
 	view.TrainedBanner = strings.Join(entries, " · ")
+}
+
+// agoLabel renders how long ago a finish landed, the banner's
+// "(finished 2h ago)" phrasing: "just now" inside a minute.
+func agoLabel(d time.Duration) string {
+	if d < time.Minute {
+		return "just now"
+	}
+	return humanDuration(d) + " ago"
+}
+
+// romanLevelNum reads a roman skill level (I..V) back to its
+// number; 0 for anything else.
+func romanLevelNum(s string) int {
+	switch s {
+	case "I":
+		return 1
+	case "II":
+		return 2
+	case "III":
+		return 3
+	case "IV":
+		return 4
+	case "V":
+		return 5
+	}
+	return 0
 }
 
 // trainedEntry reads one skill notification's title, in the
@@ -659,6 +767,16 @@ func trainedEntry(charName, title string) (string, bool) {
 		return rest, true
 	}
 	return "", false
+}
+
+// fillCharacterAttrs: the character's five training attributes,
+// the input to the page's training-speed figures.
+func (app *Application) fillCharacterAttrs(ctx context.Context, ch db.Character, view *characterView) {
+	var attrs esi.Attributes
+	if app.loadCorpSnapshot(ctx, ch.CharacterID, esi.SnapAttributes, &attrs) {
+		view.AttrsKnown = true
+		view.Attrs = attrs
+	}
 }
 
 // fillCharacterPI: the planetary industry summary.
@@ -757,7 +875,7 @@ func (app *Application) handleCloneRename(w http.ResponseWriter, r *http.Request
 	} else {
 		logging.Errorf("character: rename clone list characters for user %d: %v", userID, err)
 	}
-	back := fmt.Sprintf("/character/?character=%d#clones", characterID)
+	back := fmt.Sprintf("/character/?character=%d&surface=clones&clone=%d", characterID, cloneID)
 	if !owned || characterID == 0 || cloneID == 0 {
 		http.Redirect(w, r, back, http.StatusSeeOther)
 		return

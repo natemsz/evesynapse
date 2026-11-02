@@ -2,7 +2,8 @@ package app
 
 // The footer version comes from version.txt alone: the embedded
 // file parses, appVersion carries it, and every rendered page
-// shows it.
+// shows it. The same footer line names the running build
+// (core_build.go) whenever its identity is known.
 
 import (
 	"context"
@@ -58,9 +59,25 @@ func TestVersionFileAndFooter(t *testing.T) {
 	seedCharacter(t, q, user.ID, fixtureCharA, "Fixture Ceo")
 	cookie := sessionCookie(t, app, user.ID, fixtureCharA, "Fixture Ceo")
 
+	// The footer line also names the build serving the page.
+	// With an identity known, it carries the short commit linked
+	// to the full one and the truncated binary hash with the
+	// full hash in its title.
+	savedBuild := runningBuild
+	defer func() { runningBuild = savedBuild }()
+	runningBuild = buildIdentity{
+		commit: "0123456789abcdef0123456789abcdef01234567",
+		hash:   "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210",
+	}
 	_, body := getPage(t, app, cookie, "/market/")
-	mustContain(t, "/market/ footer", body, `<a href="https://gitlab.com/natemsz/evesynapse" target="_blank" rel="noopener noreferrer">EveSynapse</a> <span class="version-number">`+appVersion+`</span> · Made in Seattle, WA by <a href="https://natems.dev" target="_blank" rel="noopener noreferrer">natemsz</a>`)
+	mustContain(t, "/market/ footer", body, `<a href="https://gitlab.com/natemsz/evesynapse" target="_blank" rel="noopener noreferrer">EveSynapse</a> <span class="version-number">`+appVersion+`</span> · commit <a href="https://gitlab.com/natemsz/evesynapse/-/commit/0123456789abcdef0123456789abcdef01234567" target="_blank" rel="noopener noreferrer">01234567</a> · binary hash <span title="SHA-256 of the running binary: fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210">fedcba987654…</span> · Made in Seattle, WA by <a href="https://natems.dev" target="_blank" rel="noopener noreferrer">natemsz</a>`)
 	if strings.Contains(body, "0.2.0") {
 		t.Fatal("footer still shows the old hardcoded version")
 	}
+
+	// With no identity known, both halves are left out and the
+	// line is the version line alone.
+	runningBuild = buildIdentity{}
+	_, body = getPage(t, app, cookie, "/market/")
+	mustContain(t, "/market/ footer with no build identity", body, `<a href="https://gitlab.com/natemsz/evesynapse" target="_blank" rel="noopener noreferrer">EveSynapse</a> <span class="version-number">`+appVersion+`</span> · Made in Seattle, WA by <a href="https://natems.dev" target="_blank" rel="noopener noreferrer">natemsz</a>`)
 }

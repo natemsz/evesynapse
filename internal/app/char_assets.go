@@ -169,14 +169,11 @@ func (app *Application) assetLocationTitle(ctx context.Context, locID int64, loc
 	}
 }
 
-// assetNote labels the special stack states worth a glance: blueprint
-// copies and one-off singletons (fitted ships, assembled hulls).
+// assetNote labels the special stack states worth a glance:
+// blueprint copies.
 func assetNote(it esi.Asset) string {
-	switch {
-	case it.IsBlueprintCopy:
+	if it.IsBlueprintCopy {
 		return "BPC"
-	case it.IsSingleton && it.Quantity == 1:
-		return "singleton"
 	}
 	return ""
 }

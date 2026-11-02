@@ -2566,28 +2566,14 @@
       });
     })();
 
-    // Assets: the container strip's own filter. Typing narrows
-    // the can cards in place and offers the matching names as a
-    // typeahead; a pick follows the card's own drill-in link,
-    // exactly like clicking the card. Everything comes from the
-    // cards already on the page, so it reaches every container
-    // at the location with no extra requests.
+    // Assets: the container strip's expander. The toggle exists
+    // solely when the cans overflow the compact cap. The
+    // threshold is the compact layout itself, measured (content
+    // height against the capped grid), never a can count.
+    // Opening grows only the grid's own scroll area.
     (function () {
-      var input = root.querySelector("#assets-canfilter");
       var grid = root.querySelector("#assets-cangrid");
-      if (!input || !grid) return;
-      var list = root.querySelector("#assets-cansuggest");
-      var none = root.querySelector("#assets-cannone");
-      var cards = Array.prototype.slice.call(grid.querySelectorAll(".amx-can"));
-      var matches = [];
-      var selected = -1;
-
-      // The strip's expander, and only the strip's: the toggle
-      // exists solely when the cans overflow the compact cap.
-      // The threshold is the compact layout itself, measured
-      // (content height against the capped grid), never a can
-      // count. Opening grows only the grid's own scroll area;
-      // typing in the filter opens the strip so matches show.
+      if (!grid) return;
       var strip = grid.closest(".canstrip");
       var toggle = root.querySelector("#assets-cantoggle");
       var closedLabel = toggle ? toggle.textContent : "";
@@ -2607,8 +2593,6 @@
       }
       function refreshToggle() {
         if (!toggle || !strip) return;
-        if (input.value.trim() !== "") return; // mid-filter: the
-        // visible set is partial, so the overflow test would lie.
         var over = overflows();
         toggle.hidden = !over;
         if (!over) setOpen(false);
@@ -2633,89 +2617,6 @@
         });
       }
 
-      function close() {
-        if (list) list.hidden = true;
-        matches = [];
-        selected = -1;
-        input.setAttribute("aria-expanded", "false");
-        input.removeAttribute("aria-activedescendant");
-      }
-
-      function paint() {
-        if (!list) return;
-        list.innerHTML = "";
-        matches.forEach(function (card, idx) {
-          var li = document.createElement("li");
-          li.id = "assets-cansuggest-" + idx;
-          li.setAttribute("role", "option");
-          var name = document.createElement("span");
-          name.textContent = (card.getAttribute("data-name") || "").trim();
-          li.appendChild(name);
-          if (idx === selected) {
-            li.className = "sel";
-            input.setAttribute("aria-activedescendant", li.id);
-          }
-          // mousedown, not click: it fires before the input's
-          // blur, so the pick lands before anything can close.
-          li.addEventListener("mousedown", function (ev) {
-            ev.preventDefault();
-            pick(idx);
-          });
-          li.addEventListener("touchstart", function (ev) {
-            ev.preventDefault();
-            pick(idx);
-          }, { passive: false });
-          list.appendChild(li);
-        });
-        list.hidden = matches.length === 0;
-        input.setAttribute("aria-expanded", matches.length ? "true" : "false");
-      }
-
-      function pick(idx) {
-        var card = matches[idx];
-        if (!card) return;
-        close();
-        window.location.href = card.href;
-      }
-
-      input.addEventListener("input", function () {
-        var needle = input.value.trim().toLowerCase();
-        var shown = 0;
-        cards.forEach(function (card) {
-          var hit = needle === "" ||
-            (card.getAttribute("data-name") || "").toLowerCase().indexOf(needle) !== -1;
-          card.hidden = !hit;
-          if (hit) shown++;
-        });
-        if (none) none.hidden = shown !== 0;
-        if (needle === "") { close(); refreshToggle(); return; }
-        setOpen(true);
-        matches = cards.filter(function (card) { return !card.hidden; }).slice(0, 8);
-        selected = matches.length ? 0 : -1;
-        paint();
-      });
-
-      input.addEventListener("keydown", function (ev) {
-        if (!list || list.hidden) return;
-        if (ev.key === "ArrowDown" || ev.key === "ArrowUp") {
-          ev.preventDefault();
-          if (!matches.length) return;
-          selected = (selected + (ev.key === "ArrowDown" ? 1 : -1) + matches.length) % matches.length;
-          paint();
-        } else if (ev.key === "Enter") {
-          if (selected >= 0) {
-            ev.preventDefault();
-            pick(selected);
-          }
-        } else if (ev.key === "Escape") {
-          close();
-        }
-      });
-
-      input.addEventListener("blur", function () {
-        // Let a mousedown pick win the race, then close.
-        window.setTimeout(close, 120);
-      });
     })();
 
     // Assets: suggestions come from what the account actually owns

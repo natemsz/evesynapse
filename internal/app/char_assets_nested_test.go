@@ -131,13 +131,9 @@ func TestAssetsMatrixFilesShipsAndCans(t *testing.T) {
 		"⊞ 3 inside",
 		"+2 Cargo",
 		// The top-level container is a card, and its Tritanium is
-		// a row that names the container it sits in.
+		// a row in the matrix.
 		"1 stack · no price",
-		"Container: Small Secure Container",
-		// The strip's own filter and typeahead hooks: the box,
-		// the grid it narrows, and the name each card carries for
-		// the filter to match against.
-		`id="assets-canfilter"`,
+		// The strip's grid and the name each card carries.
 		`id="assets-cangrid"`,
 		`data-name="Small Secure Container`,
 		// The strip's expander control, labelled with the count;

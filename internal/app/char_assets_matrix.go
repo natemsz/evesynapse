@@ -120,7 +120,6 @@ type assetMatrixRow struct {
 	ShipHref  string
 	ItemHref  string // a plain stack: the row selects it for the inspector's summary
 	Selected  bool
-	Flag      string // where the stack sits: a hangar, a container, a place
 	Where     string // search hits: the containment chain, outermost first
 	Note      string // BPC
 	// Loadout chips, for ships holding anything.
@@ -172,7 +171,6 @@ type assetInspector struct {
 	VolumeText string
 	// The summary panel for a non-ship selection.
 	Fallback     bool
-	FlagText     string
 	QuantityText string
 	ValueText    string
 }

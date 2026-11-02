@@ -76,7 +76,6 @@
       </span>
     </span>
   </td>
-  <td class="amx-c-flag">{{if .Flag}}<span class="flagchip">{{.Flag}}</span>{{end}}</td>
   <td class="amx-c-load">
     {{if .HasLoadout}}<span class="lchips">{{if .Inside}}<span class="lchip">⊞ {{.Inside}} inside</span>{{end}}{{if .High}}<span class="lchip"><i>H</i> {{.High}}</span>{{end}}{{if .Mid}}<span class="lchip"><i>M</i> {{.Mid}}</span>{{end}}{{if .Low}}<span class="lchip"><i>L</i> {{.Low}}</span>{{end}}{{if .Sub}}<span class="lchip sub">Sub {{.Sub}}</span>{{end}}{{if .Cargo}}<span class="lchip cargo">+{{.Cargo}} Cargo</span>{{end}}</span>{{end}}
     {{if .UnpricedNote}}<span class="amx-note">{{.UnpricedNote}}</span>{{end}}
@@ -149,12 +148,7 @@
     {{if .Cans}}
     <div class="canstrip">
       <div class="canstrip-head">
-        <span class="canstrip-t">Station containers: click to drill down like a folder</span>
         <span class="canstrip-tools">
-          <span class="searchwrap canfilter-wrap">
-            <input type="search" id="assets-canfilter" placeholder="Filter containers..." autocomplete="off" role="combobox" aria-expanded="false" aria-controls="assets-cansuggest" aria-autocomplete="list" aria-label="Filter containers by name">
-            <ul class="suggest" id="assets-cansuggest" role="listbox" hidden></ul>
-          </span>
           <span class="canstrip-n">{{len .Cans}} containers · {{.CansStacks}} stacks inside</span>
           <button type="button" class="btn sm canstrip-toggle" id="assets-cantoggle" aria-expanded="false" aria-controls="assets-cangrid" hidden>Show all {{len .Cans}} {{if eq (len .Cans) 1}}container{{else}}containers{{end}}</button>
         </span>
@@ -162,7 +156,6 @@
       <div class="cangrid" id="assets-cangrid">
         {{range .Cans}}<a class="amx-can {{.HueClass}}" href="{{.Href}}" data-name="{{.Name}} {{.TypeName}}"><span class="can-box">▦</span><span class="can-main"><span class="can-name">{{.Name}}{{if .TypeName}} <small>{{.TypeName}}</small>{{end}}</span><span class="can-sub">{{.Stacks}} {{if eq .Stacks 1}}stack{{else}}stacks{{end}} · {{if .ValueText}}{{.ValueText}} ISK{{else}}no price{{end}}</span></span><span class="can-go">›</span></a>{{end}}
       </div>
-      <p class="can-none" id="assets-cannone" hidden>No containers here match that name.</p>
     </div>
     {{end}}
     {{$anyShip := false}}{{range .Rows}}{{if .Assembled}}{{$anyShip = true}}{{end}}{{end}}
@@ -176,7 +169,7 @@
     {{end}}
     {{if .Rows}}
     <table class="amx-table" data-nosort>
-      <thead><tr><th>Item / Hull</th><th>Location flag</th><th>Loadout / Contents</th><th class="amx-r">Qty</th><th class="amx-r">Volume</th><th class="amx-r">Est. value</th></tr></thead>
+      <thead><tr><th>Item / Hull</th><th>Loadout / Contents</th><th class="amx-r">Qty</th><th class="amx-r">Volume</th><th class="amx-r">Est. value</th></tr></thead>
       <tbody>{{range .Rows}}{{template "assets-trow" .}}{{end}}</tbody>
     </table>
     {{if .MoreRows}}<p class="amx-more">+ {{.MoreRows}} more stacks at this place; the most valuable are shown.</p>{{end}}
@@ -192,7 +185,6 @@
       <a class="insp-x" href="{{.CloseHref}}" aria-label="Close the inspector">✕</a>
     </div>
     <dl class="insp-facts">
-      <div><dt>Location flag</dt><dd>{{.FlagText}}</dd></div>
       <div><dt>Quantity</dt><dd>{{.QuantityText}} units</dd></div>
       <div><dt>Total stack volume</dt><dd>{{.VolumeText}}</dd></div>
       <div><dt>Estimated value</dt><dd>{{if .ValueText}}{{.ValueText}} ISK{{else}}no price{{end}}</dd></div>

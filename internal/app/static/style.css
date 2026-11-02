@@ -6471,9 +6471,10 @@ button.gn-title:hover .gn-more, button.gn-title:focus-visible .gn-more { color: 
 .fchip-form input[type="text"] { width: 10rem; }
 
 /* Loadout chips: the small counted badges on a fitted thing's
-   row (stacks inside, fitted counts by family, cargo). */
-.lchips { display: flex; flex-wrap: wrap; gap: 0.3rem; }
-.lchip { padding: 0.1rem 0.4rem; border: 1px solid var(--glass-edge); border-radius: var(--r-xs); background: var(--glass); color: var(--muted-2); font-size: 0.72rem; font-weight: 700; }
+   row (stacks inside, fitted counts by family, cargo). The row
+   stays on one line: the badges never wrap. */
+.lchips { display: flex; flex-wrap: nowrap; gap: 0.3rem; }
+.lchip { padding: 0.1rem 0.4rem; border: 1px solid var(--glass-edge); border-radius: var(--r-xs); background: var(--glass); color: var(--muted-2); font-size: 0.72rem; font-weight: 700; white-space: nowrap; }
 .lchip.cargo { color: var(--gold); }
 
 /* The inspector pane: a detail column for one selected thing,
@@ -6506,10 +6507,6 @@ button.gn-title:hover .gn-more, button.gn-title:focus-visible .gn-more { color: 
 .pip-ds { background: #15803d; color: #e6ffe9; }
 .pip-off { background: #a21caf; color: #ffe9fd; }
 .pip-story { background: #0369a1; color: #e3f3ff; }
-
-/* Location flag chip: where a stack sits (Item Hangar, Ship
-   Hangar, a bay, a slot family), as a small outlined pill. */
-.flagchip { display: inline-block; padding: 0.12rem 0.45rem; border: 1px solid var(--box-edge); border-radius: 999px; color: var(--muted); font-size: 0.72rem; font-weight: 600; white-space: nowrap; }
 
 /* Breadcrumbs: the pane's place trail, with a quiet caption
    riding the right end. */

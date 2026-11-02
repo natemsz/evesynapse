@@ -1354,6 +1354,11 @@ tbody tr:hover td, tbody tr:hover th { background: rgba(255, 106, 0, 0.045); }
 }
 .tw thead th:first-child { z-index: 2; }
 
+/* A category header cell spans the whole table, so it has no room to
+   travel and the pinned-column rule cannot hold its label in view.
+   The label pins inside the cell instead and rides the scroll. */
+.bp-cat-header td strong { position: sticky; left: 0.6rem; display: inline-block; }
+
 /* Live table filter (app.js): a search box over a table, with a
    suggestion list drawn from the table's own values. */
 .tbl-filter { position: relative; max-width: 24rem; margin: 0 0 0.6rem; }

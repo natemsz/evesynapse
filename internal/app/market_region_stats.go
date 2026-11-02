@@ -620,6 +620,34 @@ func (app *Application) storeRegionSweep(ctx context.Context, regionID int64) (t
 	defer tx.Rollback()
 	qtx := app.queries.WithTx(tx)
 
+	// Station heat (schema 120): the station bests this sweep is
+	// about to replace, read before the delete below, so the fresh
+	// pass can log each best that moved against the book.
+	oldBests := make(map[stationKey]stationAccum)
+	oldRows, err := tx.QueryContext(ctx, `
+		SELECT location_id, type_id, best_sell, best_buy
+		FROM market_station_stats
+		WHERE region_id = $1
+	`, regionID)
+	if err != nil {
+		return 0, 0, err
+	}
+	for oldRows.Next() {
+		var loc, typ int64
+		var acc stationAccum
+		if err := oldRows.Scan(&loc, &typ, &acc.BestSell, &acc.BestBuy); err != nil {
+			oldRows.Close()
+			return 0, 0, err
+		}
+		oldBests[stationKey{LocationID: loc, TypeID: typ}] = acc
+	}
+	if err := oldRows.Close(); err != nil {
+		return 0, 0, err
+	}
+	if err := oldRows.Err(); err != nil {
+		return 0, 0, err
+	}
+
 	// Sold per day per type, distilled from market_history in one
 	// aggregate pass and stored on the region rows below -- the 7-day
 	// average the scanner and tradefinder read. Types with no recorded
@@ -841,6 +869,49 @@ func (app *Application) storeRegionSweep(ctx context.Context, regionID int64) (t
 			pq.Array(sellVols), pq.Array(buyVols), now); err != nil {
 			return 0, 0, err
 		}
+	}
+	// Station heat (schema 120): a station's fresh best sell below
+	// the best it replaces, or its fresh best buy above it, is one
+	// beat against the book there. Log this pass's beats, restate
+	// the region's trailing 12 hour counts from the log, and prune
+	// log rows a day old, all inside the sweep transaction.
+	var beatLocs, beatTypes, beatBuys []int64
+	for _, k := range stationKeys {
+		old, ok := oldBests[k]
+		if !ok {
+			continue
+		}
+		acc := stations[k]
+		if acc.BestSell > 0 && old.BestSell > 0 && acc.BestSell < old.BestSell {
+			beatLocs, beatTypes, beatBuys = append(beatLocs, k.LocationID), append(beatTypes, k.TypeID), append(beatBuys, 0)
+		}
+		if acc.BestBuy > 0 && old.BestBuy > 0 && acc.BestBuy > old.BestBuy {
+			beatLocs, beatTypes, beatBuys = append(beatLocs, k.LocationID), append(beatTypes, k.TypeID), append(beatBuys, 1)
+		}
+	}
+	if len(beatLocs) > 0 {
+		if _, err := tx.ExecContext(ctx, `
+			INSERT INTO market_best_beats (location_id, region_id, type_id, is_buy_order, at)
+			SELECT unnest($1::bigint[]), $2, unnest($3::bigint[]), unnest($4::bigint[]), $5
+		`, pq.Array(beatLocs), regionID, pq.Array(beatTypes), pq.Array(beatBuys), now); err != nil {
+			return 0, 0, err
+		}
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM market_station_heat WHERE region_id = $1`, regionID); err != nil {
+		return 0, 0, err
+	}
+	if _, err := tx.ExecContext(ctx, `
+		INSERT INTO market_station_heat (location_id, region_id, type_id, is_buy_order, beats_12h, computed_at)
+		SELECT location_id, region_id, type_id, is_buy_order, COUNT(*), $3
+		FROM market_best_beats
+		WHERE region_id = $1 AND at >= $2
+		GROUP BY location_id, region_id, type_id, is_buy_order
+	`, regionID, now.Add(-12*time.Hour), now); err != nil {
+		return 0, 0, err
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM market_best_beats WHERE region_id = $1 AND at < $2`,
+		regionID, now.Add(-24*time.Hour)); err != nil {
+		return 0, 0, err
 	}
 	// The stored book replaces wholesale in the same transaction:
 	// the region's snapshot rows go, then each type's top orders

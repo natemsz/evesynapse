@@ -753,6 +753,17 @@ SELECT type_id, best_sell
 FROM market_station_stats
 WHERE location_id = $1 AND type_id = ANY($2::bigint[])
 ORDER BY type_id;
+
+-- Station heat (schema 120): the trailing 12 hour count of times
+-- the best price at a station was beaten, per item and side,
+-- restated by every sweep of the region. The My Orders page reads
+-- the rows for its orders' stations in one bounded read; a pair
+-- with no row had no beats in the window.
+-- name: ListMarketStationHeatByLocations :many
+SELECT location_id, region_id, type_id, is_buy_order, beats_12h, computed_at
+FROM market_station_heat
+WHERE location_id = ANY($1::bigint[])
+ORDER BY location_id, type_id, is_buy_order;
 -- name: ListScannerOpportunities :many
 -- The spread scanner's opportunities, computed and ranked in SQL:
 -- one bounded read of at most scannerRowCap rows instead of

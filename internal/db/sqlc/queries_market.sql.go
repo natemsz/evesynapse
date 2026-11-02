@@ -2533,6 +2533,48 @@ func (q *Queries) ListMarketStationBestsByTypes(ctx context.Context, arg ListMar
 	return items, nil
 }
 
+const listMarketStationHeatByLocations = `-- name: ListMarketStationHeatByLocations :many
+SELECT location_id, region_id, type_id, is_buy_order, beats_12h, computed_at
+FROM market_station_heat
+WHERE location_id = ANY($1::bigint[])
+ORDER BY location_id, type_id, is_buy_order
+`
+
+// Station heat (schema 120): the trailing 12 hour count of times
+// the best price at a station was beaten, per item and side,
+// restated by every sweep of the region. The My Orders page reads
+// the rows for its orders' stations in one bounded read; a pair
+// with no row had no beats in the window.
+func (q *Queries) ListMarketStationHeatByLocations(ctx context.Context, dollar_1 []int64) ([]MarketStationHeat, error) {
+	rows, err := q.db.QueryContext(ctx, listMarketStationHeatByLocations, pq.Array(dollar_1))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []MarketStationHeat
+	for rows.Next() {
+		var i MarketStationHeat
+		if err := rows.Scan(
+			&i.LocationID,
+			&i.RegionID,
+			&i.TypeID,
+			&i.IsBuyOrder,
+			&i.Beats12h,
+			&i.ComputedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listMarketStationLeaderboard = `-- name: ListMarketStationLeaderboard :many
 SELECT region_id, location_id, sell_orders, buy_orders, sell_value, buy_value, updated_at
 FROM market_station_leaderboard

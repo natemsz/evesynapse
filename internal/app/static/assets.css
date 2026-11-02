@@ -157,11 +157,37 @@
 .mships { display: none; }
 .insp-titles { min-width: 0; }
 
-/* Tablet: the panes stack; the inspector follows the matrix. */
+/* Middle widths (the foldable band): the console drops its
+   third column well before the three panes would squeeze the
+   matrix. The directory and the matrix sit side by side where
+   they fit and stack where they do not; either way the
+   inspector leaves the grid and opens as a sheet over the
+   page, in the phone sheet's surface language (dark glass,
+   blurred backdrop, a dim veil over the page), and its close
+   link dismisses it as it does in every other band. The
+   toolbar's search takes a row of its own here, so its
+   placeholder never truncates against the sort select and
+   the button and the Only box stop crowding it. */
+@media (max-width: 80rem) {
+  .panes3.amx.has-insp { grid-template-columns: 18rem minmax(0, 1fr); }
+  .panes3.amx .pane-insp {
+    position: fixed; top: 0; right: 0; bottom: 0; z-index: 95;
+    width: min(24rem, 94vw);
+    overflow-y: auto;
+    border: 0; border-left: 1px solid var(--glass-edge); border-radius: 0;
+    background: linear-gradient(rgba(21, 21, 21, 0.94), rgba(17, 17, 17, 0.97)) padding-box;
+    -webkit-backdrop-filter: blur(18px);
+    backdrop-filter: blur(18px);
+    box-shadow: -18px 0 42px rgba(0, 0, 0, 0.55), 0 0 0 100vmax rgba(0, 0, 0, 0.45);
+  }
+  .amx-tools .searchwrap { flex: 1 1 100%; }
+}
+
+/* Tablet: the panes stack; the inspector stays the sheet
+   the middle band makes of it. */
 @media (max-width: 64rem) {
   .panes3.amx, .panes3.amx.has-insp { grid-template-columns: minmax(0, 1fr); }
   .pane-main { border-left: 0; border-top: 1px solid var(--box-edge); }
-  .panes3.amx .pane-insp { border-left: 0; border-top: 1px solid var(--box-edge); }
 }
 
 /* Phone (the site's canon band): the directory becomes a
@@ -170,6 +196,16 @@
    Qty and Value, and the inspector is a sheet under the
    matrix. */
 @media (max-width: 45rem) {
+  /* The inspector is a sheet under the matrix here, not the
+     middle band's overlay: undo the overlay form in full. */
+  .panes3.amx .pane-insp {
+    position: static; width: auto; overflow: visible;
+    border: 0; border-top: 1px solid var(--box-edge); border-radius: 0;
+    background: none;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    box-shadow: none;
+  }
   .assets-net { text-align: left; }
   .asset-scope { max-width: none; }
   .asset-scope-btn { min-height: 2.4rem; }
@@ -202,5 +238,5 @@
   .amx-table th:nth-child(4), .amx-table td:nth-child(4) { display: none; }
   .amx-table th:nth-child(3) { width: 5.25rem; }
   .amx-table th:nth-child(5) { width: 5.5rem; }
-
+  .amx-tools .searchwrap { flex: 1 1 13rem; }
 }

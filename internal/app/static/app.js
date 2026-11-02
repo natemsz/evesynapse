@@ -2505,6 +2505,173 @@
         });
     })();
 
+    // Assets: the station directory's filter box narrows the
+    // directory rows by place name, in place.
+    (function () {
+      var filter = root.querySelector("#assets-dirfilter");
+      if (!filter) return;
+      var items = root.querySelectorAll(".diritem");
+      filter.addEventListener("input", function () {
+        var needle = filter.value.trim().toLowerCase();
+        items.forEach(function (el) {
+          var name = (el.getAttribute("data-name") || "").toLowerCase();
+          el.hidden = needle !== "" && name.indexOf(needle) === -1;
+        });
+      });
+    })();
+
+    // Assets: the container strip's own filter. Typing narrows
+    // the can cards in place and offers the matching names as a
+    // typeahead; a pick follows the card's own drill-in link,
+    // exactly like clicking the card. Everything comes from the
+    // cards already on the page, so it reaches every container
+    // at the location with no extra requests.
+    (function () {
+      var input = root.querySelector("#assets-canfilter");
+      var grid = root.querySelector("#assets-cangrid");
+      if (!input || !grid) return;
+      var list = root.querySelector("#assets-cansuggest");
+      var none = root.querySelector("#assets-cannone");
+      var cards = Array.prototype.slice.call(grid.querySelectorAll(".amx-can"));
+      var matches = [];
+      var selected = -1;
+
+      // The strip's expander, and only the strip's: the toggle
+      // exists solely when the cans overflow the compact cap.
+      // The threshold is the compact layout itself, measured
+      // (content height against the capped grid), never a can
+      // count. Opening grows only the grid's own scroll area;
+      // typing in the filter opens the strip so matches show.
+      var strip = grid.closest(".canstrip");
+      var toggle = root.querySelector("#assets-cantoggle");
+      var closedLabel = toggle ? toggle.textContent : "";
+      function setOpen(open) {
+        if (!strip || !toggle) return;
+        strip.classList.toggle("open", open);
+        toggle.setAttribute("aria-expanded", open ? "true" : "false");
+        toggle.textContent = open ? "Show fewer" : closedLabel;
+      }
+      function overflows() {
+        if (!strip) return false;
+        var wasOpen = strip.classList.contains("open");
+        if (wasOpen) strip.classList.add("measuring");
+        var over = grid.scrollHeight > grid.clientHeight + 1;
+        if (wasOpen) strip.classList.remove("measuring");
+        return over;
+      }
+      function refreshToggle() {
+        if (!toggle || !strip) return;
+        if (input.value.trim() !== "") return; // mid-filter: the
+        // visible set is partial, so the overflow test would lie.
+        var over = overflows();
+        toggle.hidden = !over;
+        if (!over) setOpen(false);
+      }
+      if (toggle) {
+        toggle.addEventListener("click", function () {
+          setOpen(!strip.classList.contains("open"));
+        });
+      }
+      refreshToggle();
+      // One resize listener however often the page swaps: it
+      // always calls the newest strip's refresh.
+      window.__canRefresh = refreshToggle;
+      if (!window.__canResizeBound) {
+        window.__canResizeBound = true;
+        var resizeTimer = null;
+        window.addEventListener("resize", function () {
+          if (resizeTimer) window.clearTimeout(resizeTimer);
+          resizeTimer = window.setTimeout(function () {
+            if (window.__canRefresh) window.__canRefresh();
+          }, 150);
+        });
+      }
+
+      function close() {
+        if (list) list.hidden = true;
+        matches = [];
+        selected = -1;
+        input.setAttribute("aria-expanded", "false");
+        input.removeAttribute("aria-activedescendant");
+      }
+
+      function paint() {
+        if (!list) return;
+        list.innerHTML = "";
+        matches.forEach(function (card, idx) {
+          var li = document.createElement("li");
+          li.id = "assets-cansuggest-" + idx;
+          li.setAttribute("role", "option");
+          var name = document.createElement("span");
+          name.textContent = (card.getAttribute("data-name") || "").trim();
+          li.appendChild(name);
+          if (idx === selected) {
+            li.className = "sel";
+            input.setAttribute("aria-activedescendant", li.id);
+          }
+          // mousedown, not click: it fires before the input's
+          // blur, so the pick lands before anything can close.
+          li.addEventListener("mousedown", function (ev) {
+            ev.preventDefault();
+            pick(idx);
+          });
+          li.addEventListener("touchstart", function (ev) {
+            ev.preventDefault();
+            pick(idx);
+          }, { passive: false });
+          list.appendChild(li);
+        });
+        list.hidden = matches.length === 0;
+        input.setAttribute("aria-expanded", matches.length ? "true" : "false");
+      }
+
+      function pick(idx) {
+        var card = matches[idx];
+        if (!card) return;
+        close();
+        window.location.href = card.href;
+      }
+
+      input.addEventListener("input", function () {
+        var needle = input.value.trim().toLowerCase();
+        var shown = 0;
+        cards.forEach(function (card) {
+          var hit = needle === "" ||
+            (card.getAttribute("data-name") || "").toLowerCase().indexOf(needle) !== -1;
+          card.hidden = !hit;
+          if (hit) shown++;
+        });
+        if (none) none.hidden = shown !== 0;
+        if (needle === "") { close(); refreshToggle(); return; }
+        setOpen(true);
+        matches = cards.filter(function (card) { return !card.hidden; }).slice(0, 8);
+        selected = matches.length ? 0 : -1;
+        paint();
+      });
+
+      input.addEventListener("keydown", function (ev) {
+        if (!list || list.hidden) return;
+        if (ev.key === "ArrowDown" || ev.key === "ArrowUp") {
+          ev.preventDefault();
+          if (!matches.length) return;
+          selected = (selected + (ev.key === "ArrowDown" ? 1 : -1) + matches.length) % matches.length;
+          paint();
+        } else if (ev.key === "Enter") {
+          if (selected >= 0) {
+            ev.preventDefault();
+            pick(selected);
+          }
+        } else if (ev.key === "Escape") {
+          close();
+        }
+      });
+
+      input.addEventListener("blur", function () {
+        // Let a mousedown pick win the race, then close.
+        window.setTimeout(close, 120);
+      });
+    })();
+
     // Assets: suggestions come from what the account actually owns
     // (each says whose it is), narrowed to the acting character when
     // the box is ticked. A pick fills the box and runs the search.
@@ -5012,6 +5179,94 @@
   wireCheckSelectors();
 })();
 
+// Assets: the character scope selector. The button opens a
+// checklist panel; the search field narrows the rows by the
+// character's name or by its custom tags (each row carries both
+// in its data attributes, the same match the character selector
+// uses). Rows are links that toggle the character in the scope,
+// so a pick reloads the page with the new set and the panel
+// starts shut. The panel closes on a click elsewhere or Escape.
+(function () {
+  "use strict";
+  var openRoots = [];
+  var docWired = false;
+
+  function closeRoot(root) {
+    var panel = root.querySelector("[data-assetscope-panel]");
+    var btn = root.querySelector("[data-assetscope-btn]");
+    if (panel) panel.hidden = true;
+    if (btn) btn.setAttribute("aria-expanded", "false");
+    openRoots = openRoots.filter(function (r) { return r !== root; });
+  }
+
+  function wireAssetScope(root) {
+    if (root.getAttribute("data-assetscope-wired") === "1") return;
+    root.setAttribute("data-assetscope-wired", "1");
+    var btn = root.querySelector("[data-assetscope-btn]");
+    var panel = root.querySelector("[data-assetscope-panel]");
+    var input = root.querySelector("[data-assetscope-q]");
+    var none = root.querySelector("[data-assetscope-none]");
+    if (!btn || !panel) return;
+    var rows = Array.prototype.slice.call(root.querySelectorAll(".asset-scope-row"));
+
+    function filter() {
+      var q = (input ? input.value : "").toLowerCase().trim();
+      var shown = 0;
+      rows.forEach(function (row) {
+        var name = (row.getAttribute("data-name") || "").toLowerCase();
+        var tags = (row.getAttribute("data-tags") || "").toLowerCase();
+        var hit = !q || name.indexOf(q) !== -1 || tags.indexOf(q) !== -1;
+        row.hidden = !hit;
+        if (hit) shown++;
+      });
+      if (none) none.hidden = shown !== 0;
+    }
+
+    btn.addEventListener("click", function () {
+      if (panel.hidden) {
+        openRoots.slice().forEach(closeRoot);
+        panel.hidden = false;
+        btn.setAttribute("aria-expanded", "true");
+        openRoots.push(root);
+        if (input) input.focus();
+      } else {
+        closeRoot(root);
+      }
+    });
+    if (input) {
+      input.addEventListener("input", filter);
+    }
+    root.addEventListener("keydown", function (ev) {
+      if (ev.key === "Escape") {
+        closeRoot(root);
+        btn.focus();
+      }
+    });
+  }
+
+  function wireAssetScopes(scope) {
+    var roots = (scope || document).querySelectorAll("[data-assetscope]");
+    for (var i = 0; i < roots.length; i++) wireAssetScope(roots[i]);
+    if (!docWired) {
+      docWired = true;
+      document.addEventListener("click", function (ev) {
+        openRoots = openRoots.filter(function (r) { return document.contains(r); });
+        openRoots.slice().forEach(function (root) {
+          if (!root.contains(ev.target)) closeRoot(root);
+        });
+      });
+      document.addEventListener("evesynapse:content-will-swap", function () {
+        openRoots.slice().forEach(closeRoot);
+      });
+    }
+  }
+
+  if (window.EveSynapseContent && window.EveSynapseContent.onReady) {
+    window.EveSynapseContent.onReady(wireAssetScopes);
+  }
+  wireAssetScopes(document);
+})();
+
 // The character switcher in the top bar: like the notification list,
 // it closes on a click or tap anywhere else and on Escape, and opens
 // and closes with the navigation's motion (the CSS transition on
@@ -5598,4 +5853,28 @@
     if (e.key === "Escape" && !modal.hidden) close();
   });
   load();
+
+  // Assets: the sort select navigates to the href its options
+  // carry (the server renders each sort as a full state link).
+  (function () {
+    var sel = root.querySelector("#assets-sort");
+    if (!sel) return;
+    sel.addEventListener("change", function () {
+      if (sel.value) window.location.href = sel.value;
+    });
+  })();
+
+  // Assets: a matrix row selects its item (the name link does
+  // the same); clicks on real controls inside the row pass.
+  (function () {
+    var rows = root.querySelectorAll(".amx-trow[data-sel]");
+    if (!rows.length) return;
+    rows.forEach(function (row) {
+      row.addEventListener("click", function (ev) {
+        if (ev.target.closest("a, button, input, select, details, summary")) return;
+        var href = row.getAttribute("data-sel");
+        if (href) window.location.href = href;
+      });
+    });
+  })();
 })();

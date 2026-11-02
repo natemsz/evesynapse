@@ -150,6 +150,21 @@ func secRound(sec float64) (text string, tier int) {
 // map's legend, whose swatches the canvas reads its colors from.
 func mapSecTiers() []int { return []int{10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0} }
 
+// pctWidthClass maps a 0..1 fraction to the shared pw-N width
+// class (the .pw-0 to .pw-100 utilities in style.css). Bar fills
+// use it because the CSP allows no inline styles: any bar on any
+// page sizes its fill this way.
+func pctWidthClass(frac float64) string {
+	n := int(math.Round(frac * 100))
+	if n < 0 {
+		n = 0
+	}
+	if n > 100 {
+		n = 100
+	}
+	return fmt.Sprintf("pw-%d", n)
+}
+
 // secStatus renders a security status in its in-game color.
 func secStatus(sec float64) template.HTML {
 	text, tier := secRound(sec)

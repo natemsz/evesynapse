@@ -26,9 +26,8 @@ type pageData struct {
 	Corps           []corpView
 	CorpOptions     []corpOption // the corporations the Corporation page can show
 	CorpChars       []assetCharLink
-	Assets          *assetsView
+	Assets          *assetsPageView
 	AssetsChars     []assetCharLink
-	AssetsSearch    *assetsSearchView
 	Planets         *planetsView
 	PlanetsChars    []assetCharLink
 	Market          *marketView

@@ -1,83 +1,240 @@
 {{define "title"}}Assets{{end}}
 {{define "pagetitle"}}<h1><span class="gt">Assets</span></h1>{{end}}
 {{define "pagetabs"}}{{template "sectiontabs" .}}{{end}}
-{{define "asset-rows"}}{{range .}}
-        <tr><td>{{itemLink .TypeID .Name}}{{if .TypeName}} <small>{{.TypeName}}</small>{{end}}{{if .Where}} <small>in {{.Where}}</small>{{end}}</td><td>{{.Quantity}}</td><td>{{.Note}}</td></tr>
-        {{if .Children}}<tr class="asset-inside"><td colspan="3">
-          <details>
-            <summary>{{.Inside}} {{if eq .Inside 1}}stack{{else}}stacks{{end}} inside {{.Name}}</summary>
-            <table>
-              <tbody>{{template "asset-rows" .Children}}
-              </tbody>
-            </table>
-            {{if .MoreInside}}<p><small>+ {{.MoreInside}} more {{if eq .MoreInside 1}}stack{{else}}stacks{{end}} directly inside</small></p>{{end}}
-          </details>
-        </td></tr>{{end}}
-{{end}}{{end}}
-{{define "content"}}
 
-{{if .Error}}<p class="err">{{.Error}}</p>{{end}}
-
-{{template "charselector" .AssetsChars}}
-<form method="get" action="/assets/" id="assets-search" class="searchpanel">
-  <span class="searchwrap">
-    <input type="search" name="q" id="assets-q"{{if .AssetsSearch}} value="{{.AssetsSearch.Query}}"{{end}} placeholder="Find an item you own, e.g. Rifter" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="assets-suggest" aria-autocomplete="list" aria-label="Find an item on your characters">
-    <ul class="suggest" id="assets-suggest" role="listbox" hidden></ul>
+{{/* One directory entry, shared by the desktop list and the
+     mobile station selector: a station row whose value bar
+     rides the stored fold, with its security badge. */}}
+{{define "assets-diritem"}}
+<a class="diritem{{if .Selected}} on{{end}}" href="{{.Href}}" data-name="{{.Title}}">
+  <span class="dir-top">
+    {{if .SecKnown}}<span class="sec sec-{{.SecTier}} dir-sec">{{.SecText}}</span>{{end}}
+    <span class="dir-name">{{.Title}}</span>
+    {{if .HasValue}}<span class="dir-val">{{.ValueText}}</span>{{end}}
   </span>
-  <button type="submit">Search</button>
-  <label class="assets-only"><input type="checkbox" name="only" value="1" id="assets-only"{{if and .AssetsSearch .AssetsSearch.Only}} checked{{end}}> Only {{range .AssetsChars}}{{if .Active}}{{.Name}}{{end}}{{end}}</label>
-  {{if .AssetsSearch}}<a href="/assets/">Clear search</a>{{end}}
-</form>
-<p><small>The search covers every character on your account unless you tick the box.</small></p>
+  <span class="dir-sub">{{if .All}}All Locations · {{.Stacks}} Stacks{{else}}{{.Region}} · {{.Stacks}} Stacks{{if .Ships}} · {{.Ships}} Ships{{end}}{{end}}</span>
+  {{if not .All}}<span class="sharebar"><span class="fill {{.ShareClass}}"></span></span>{{end}}
+  {{if .Unpriced}}<span class="dir-note">{{.Unpriced}} unpriced</span>{{end}}
+</a>
+{{end}}
 
-{{if .AssetsSearch}}
-  {{$v := .AssetsSearch}}
-  {{if $v.Results}}
-  <p><small>{{$v.TotalStacks}} {{if eq $v.TotalStacks 1}}stack{{else}}stacks{{end}} matching “{{$v.Query}}”{{if $v.Only}} on this character{{else}} across {{len $v.Results}} {{if eq (len $v.Results) 1}}character{{else}}characters{{end}}{{end}}</small></p>
-  {{range $v.Results}}
-    <h2><a href="/assets/?character={{.CharacterID}}">{{.CharacterName}}</a></h2>
-    {{range .Locations}}
-    <section class="foldable" data-fold="closed">
-    <h3>{{placeLink .Loc}}</h3>
-    <div class="tw">
-    <table>
-      <thead><tr><th>Item</th><th>Quantity</th><th>Note</th></tr></thead>
-      <tbody>{{template "asset-rows" .Items}}
-      </tbody>
-    </table>
+{{/* The toolbar: the account search and the sort, both living
+     in the matrix pane. The suggest list and the only-this-seller
+     checkbox are shared with the search route. */}}
+{{define "assets-tools"}}
+<form class="amx-tools" method="get" action="/assets/" id="assets-search" autocomplete="off">
+  <div class="searchwrap">
+    <input type="search" id="assets-q" name="q" value="{{.FormQuery}}" placeholder="Search items, ships, containers..." autocomplete="off" role="combobox" aria-expanded="false" aria-controls="assets-suggest" aria-autocomplete="list" aria-label="Find an item on your characters">
+    <ul class="suggest" id="assets-suggest" role="listbox" hidden></ul>
+  </div>
+  <button type="submit" class="btn">Search</button>
+  <label class="check"><input type="checkbox" name="only" value="1" id="assets-only"{{if not .ScopeAll}} checked{{end}}> Only {{.ActingName}}</label>
+  {{if .Search}}<a href="/assets/">Clear search</a>{{end}}
+  {{if .Matrix}}{{with .Matrix}}<select id="assets-sort" class="amx-sortsel" aria-label="Sort the matrix">
+    <option value="{{index .SortHrefs "value"}}"{{if eq .Sort "value"}} selected{{end}}>Sort: Est. Value</option>
+    <option value="{{index .SortHrefs "stacks"}}"{{if eq .Sort "stacks"}} selected{{end}}>Sort: Stacks Inside</option>
+    <option value="{{index .SortHrefs "volume"}}"{{if eq .Sort "volume"}} selected{{end}}>Sort: Volume</option>
+    <option value="{{index .SortHrefs "name"}}"{{if eq .Sort "name"}} selected{{end}}>Sort: Name</option>
+  </select>{{end}}{{end}}
+  <input type="hidden" name="tab" value="{{.FormTab}}">
+  {{if ne .FormScope "all"}}<input type="hidden" name="scope" value="{{.FormScope}}">{{end}}
+</form>
+{{end}}
+
+{{/* The saved quick filters: chips in a labeled row, and saving
+     is a chip that reveals the name field. */}}
+{{define "assets-fchips"}}
+<div class="fchips">
+  <span class="fchips-label">My filters</span>
+  {{range .Filters}}
+  <span class="fchip-wrap"><a class="fchip" href="{{.Href}}">{{.Name}}</a><form method="post" action="/assets/filters/delete" class="fchip-del"><input type="hidden" name="name" value="{{.Name}}"><button type="submit" aria-label="Delete the filter {{.Name}}">×</button></form></span>
+  {{end}}
+  <details class="fchip-save">
+    <summary class="fchip save">+ Save current view</summary>
+    <form method="post" action="/assets/filters" class="fchip-form">
+      <input type="text" name="name" placeholder="Name this view..." maxlength="40" required aria-label="Filter name">
+      <input type="hidden" name="q" value="{{.FormQuery}}">
+      <input type="hidden" name="tab" value="{{.FormTab}}">
+      {{if ne .FormScope "all"}}<input type="hidden" name="scope" value="{{.FormScope}}">{{end}}
+      <button type="submit" class="btn sm">Save</button>
+    </form>
+  </details>
+</div>
+{{end}}
+
+{{/* One matrix row: icon box with its tech pip, the given name
+     over the type name, the location flag chip, the loadout
+     chips, and the value with its ISK subline. */}}
+{{define "assets-trow"}}
+<tr class="amx-trow{{if .Selected}} on{{end}}" data-sel="{{if .Assembled}}{{.ShipHref}}{{else}}{{.ItemHref}}{{end}}">
+  <td class="amx-c-item">
+    <span class="amx-cell">
+      <span class="amx-art"><img src="{{.IconURL}}" alt="" width="36" height="36" loading="lazy" data-fallback-src="/static/img/item.svg">{{if .Pip}}<span class="pip pip-{{.PipClass}}">{{.Pip}}</span>{{end}}</span>
+      <span class="amx-id">
+        <span class="amx-name">{{if .Assembled}}<a href="{{.ShipHref}}">{{.Name}}</a>{{else if .ItemHref}}<a href="{{.ItemHref}}">{{.Name}}</a>{{else}}{{itemLink .TypeID .Name}}{{end}}{{if .TypeName}} <small>{{.TypeName}}</small>{{end}}{{if .Note}} <small>{{.Note}}</small>{{end}}{{if .Assembled}} <span class="asmbadge">Assembled</span>{{end}}</span>
+        <span class="amx-sub">{{.GroupName}}{{if .Where}} · in {{.Where}}{{end}}{{if .OwnerName}} · {{.OwnerName}}{{end}}</span>
+      </span>
+    </span>
+  </td>
+  <td class="amx-c-flag">{{if .Flag}}<span class="flagchip">{{.Flag}}</span>{{end}}</td>
+  <td class="amx-c-load">
+    {{if .HasLoadout}}<span class="lchips">{{if .Inside}}<span class="lchip">⊞ {{.Inside}} inside</span>{{end}}{{if .High}}<span class="lchip"><i>H</i> {{.High}}</span>{{end}}{{if .Mid}}<span class="lchip"><i>M</i> {{.Mid}}</span>{{end}}{{if .Low}}<span class="lchip"><i>L</i> {{.Low}}</span>{{end}}{{if .Sub}}<span class="lchip sub">Sub {{.Sub}}</span>{{end}}{{if .Cargo}}<span class="lchip cargo">+{{.Cargo}} Cargo</span>{{end}}</span>{{end}}
+    {{if .UnpricedNote}}<span class="amx-note">{{.UnpricedNote}}</span>{{end}}
+  </td>
+  <td class="amx-c-num">{{.Quantity}}</td>
+  <td class="amx-c-num">{{.VolumeText}}</td>
+  <td class="amx-c-val">{{if .ValueText}}<span class="amx-isk">{{.ValueText}}</span><small>ISK</small>{{else}}<span class="muted">no price</span>{{end}}</td>
+</tr>
+{{end}}
+
+{{define "assets-slotsec"}}
+<div class="slotsec">
+  <h4>{{.Title}}{{if .Note}} <small>{{.Note}}</small>{{end}}</h4>
+  {{range .Rows}}<div class="modrow"><span class="modrow-name">{{if gt .Qty 1}}<span class="mq">{{.Qty}} ×</span> {{end}}{{.Name}}{{if .Sub}} <small>{{.Sub}}</small>{{end}}</span><span class="modrow-val">{{if .ValueText}}{{.ValueText}} ISK{{else}}<span class="muted">no price</span>{{end}}</span></div>{{end}}
+</div>
+{{end}}
+
+{{define "content"}}
+{{if .Error}}<p class="err">{{.Error}}</p>{{end}}
+{{with .Assets}}
+<div class="pagehead assets-head">
+  <div class="assets-head-l">
+    <p class="assets-count">{{.Stacks}} stacks · {{.TotalItems}} items · {{.Places}} locations</p>
+    {{with .Selector}}
+    <div class="charselector asset-scope" data-assetscope>
+      <button type="button" class="asset-scope-btn" data-assetscope-btn aria-haspopup="true" aria-expanded="false" aria-controls="assets-scope-panel">
+        <span class="asset-scope-label">{{.Label}}</span>
+        <span class="asset-scope-caret" aria-hidden="true">▾</span>
+      </button>
+      <div class="charselector-dropdown asset-scope-panel" id="assets-scope-panel" data-assetscope-panel hidden>
+        <input type="search" class="charselector-input asset-scope-search" data-assetscope-q placeholder="Search names or tags..." autocomplete="off" aria-label="Search characters by name or tag">
+        <a class="charselector-option asset-scope-all{{if .All}} on{{end}}" href="{{.AllHref}}"><span class="asset-scope-box{{if .All}} on{{end}}" aria-hidden="true">✓</span><span class="charselector-name">All characters</span></a>
+        {{range .Chars}}
+        <a class="charselector-option asset-scope-row{{if .Checked}} on{{end}}" href="{{.ToggleHref}}" data-name="{{.Name}}" data-tags="{{.TagsText}}">
+          <span class="asset-scope-box{{if .Checked}} on{{end}}" aria-hidden="true">✓</span>
+          {{if .Image}}<img class="asset-scope-portrait" src="{{.Image}}" alt="" width="26" height="26" loading="lazy">{{end}}
+          <span class="asset-scope-main"><span class="charselector-name">{{.Name}}</span>{{if .Tags}}<span class="asset-scope-tags">{{range .Tags}}<span class="tagchip">{{.}}</span>{{end}}</span>{{end}}</span>
+        </a>
+        {{end}}
+        <p class="asset-scope-none" data-assetscope-none hidden>No characters match that search.</p>
+      </div>
     </div>
-    {{if .MoreStacks}}<p><small>+ {{.MoreStacks}} more matching stacks</small></p>{{end}}
-    </section>
     {{end}}
-  {{end}}
-  {{else}}
-  <p>No stacks matching “{{$v.Query}}” {{if $v.Only}}on this character{{else}}on any character{{end}}.</p>
-  {{end}}
-  {{if $v.Syncing}}<p><small>Not included yet: still waiting on the first sync for {{range $i, $n := $v.Syncing}}{{if $i}}, {{end}}{{$n}}{{end}}.</small></p>{{end}}
-{{else if .Assets}}
-  {{if .Assets.Loaded}}
-  <p><small>{{.Assets.Stacks}} stacks · {{.Assets.TotalItems}} items · {{len .Assets.Locations}} locations</small></p>
-  {{range .Assets.Locations}}
-    <section class="foldable" data-fold="closed">
-    <h3>{{placeLink .Loc}} <small>· {{.Stacks}} {{if eq .Stacks 1}}stack{{else}}stacks{{end}}</small></h3>
-    <div class="tw">
-    <table>
-      <thead><tr><th>Item</th><th>Quantity</th><th>Note</th></tr></thead>
-      <tbody>{{template "asset-rows" .Items}}
-      </tbody>
+  </div>
+  {{if .HasTotal}}<div class="assets-net"><span class="assets-net-v">{{.TotalText}} ISK</span><span class="assets-net-l">Total estimated value</span></div>{{end}}
+</div>
+{{if .Syncing}}<p><small>Not included yet: still waiting on the first sync for {{range $i, $n := .Syncing}}{{if $i}}, {{end}}{{$n}}{{end}}.</small></p>{{end}}
+{{if .Warming}}
+<p>Still syncing.{{if $.IsAdmin}} Progress is on the <a href="/admin/sync/">Sync page</a>.{{end}}</p>
+{{else if .Loaded}}
+<div class="panes3 amx{{with .Matrix}}{{if .Inspector}} has-insp{{end}}{{end}}">
+  <aside class="pane-dir">
+    <h2 class="pane-h">Station directory <span>{{.Places}} locations</span></h2>
+    <input id="assets-dirfilter" type="search" placeholder="Filter stations..." aria-label="Filter the station directory">
+    <nav class="dirlist">
+      {{range .Directory}}{{template "assets-diritem" .}}{{end}}
+    </nav>
+    <p class="dir-foot">Values are stored estimates from each character's last asset snapshot, priced at the house order. Unpriced stacks count as unpriced, never as zero value.</p>
+    <details class="dirdrop">
+      <summary>{{range .Directory}}{{if .Selected}}<span class="dirdrop-t">{{.Title}}</span>{{if .HasValue}}<span class="dirdrop-v">{{.ValueText}} ISK</span>{{end}}{{end}}{{end}}<span class="dirdrop-c">▾</span></summary>
+      <nav class="dirlist">
+        {{range .Directory}}{{template "assets-diritem" .}}{{end}}
+      </nav>
+    </details>
+  </aside>
+  <section class="pane-main">
+  {{with .Search}}
+    <h2 class="amx-h">{{.TotalStacks}} {{if eq .TotalStacks 1}}stack{{else}}stacks{{end}} matching "{{.Query}}"{{if .Only}} on this character{{else}} across {{.Characters}} {{if eq .Characters 1}}character{{else}}characters{{end}}{{end}}</h2>
+    {{template "assets-fchips" $.Assets}}
+    {{template "assets-tools" $.Assets}}
+    {{if .Rows}}
+    <table class="amx-table" data-nosort>
+      <thead><tr><th>Item / Hull</th><th>Location flag</th><th></th><th class="amx-r">Qty</th><th class="amx-r">Volume</th><th class="amx-r">Est. value</th></tr></thead>
+      <tbody>{{range .Rows}}{{template "assets-trow" .}}{{end}}</tbody>
     </table>
+    {{if .MoreRows}}<p class="amx-more">+ {{.MoreRows}} more stacks; the most valuable are shown.</p>{{end}}
+    {{else}}<p>No stacks matching "{{.Query}}"{{if .Only}} on this character{{else}} on any character{{end}}.</p>{{end}}
+  {{else with .Matrix}}
+    <nav class="crumbs" aria-label="Breadcrumb">
+      <span>Assets</span><span class="crumb-sep">›</span>
+      {{if .InCan}}<a href="{{.CanBack}}">{{.CrumbLoc}}</a><span class="crumb-sep">›</span><span class="crumb-here">{{.InCan}}</span>{{else}}<span class="crumb-here">{{placeLink .Loc}}</span>{{end}}
+      <span class="crumb-cap">{{if .InCan}}{{.Stacks}} stacks inside{{else}}Viewing root hangar level{{end}}</span>
+    </nav>
+    <div class="pilltabs" role="group" aria-label="Hangar division">
+      {{range .Tabs}}<a class="pilltab{{if .Active}} on{{end}}" href="{{.Href}}">{{.Label}} <span class="cnt">{{.Count}}</span></a>{{end}}
     </div>
-    {{if .MoreStacks}}<p><small>+ {{.MoreStacks}} more stacks</small></p>{{end}}
-    </section>
+    {{template "assets-fchips" $.Assets}}
+    {{template "assets-tools" $.Assets}}
+    {{if .Cans}}
+    <div class="canstrip">
+      <div class="canstrip-head">
+        <span class="canstrip-t">Station containers: click to drill down like a folder</span>
+        <span class="canstrip-tools">
+          <span class="searchwrap canfilter-wrap">
+            <input type="search" id="assets-canfilter" placeholder="Filter containers..." autocomplete="off" role="combobox" aria-expanded="false" aria-controls="assets-cansuggest" aria-autocomplete="list" aria-label="Filter containers by name">
+            <ul class="suggest" id="assets-cansuggest" role="listbox" hidden></ul>
+          </span>
+          <span class="canstrip-n">{{len .Cans}} containers · {{.CansStacks}} stacks inside</span>
+          <button type="button" class="btn sm canstrip-toggle" id="assets-cantoggle" aria-expanded="false" aria-controls="assets-cangrid" hidden>Show all {{len .Cans}} {{if eq (len .Cans) 1}}container{{else}}containers{{end}}</button>
+        </span>
+      </div>
+      <div class="cangrid" id="assets-cangrid">
+        {{range .Cans}}<a class="amx-can {{.HueClass}}" href="{{.Href}}" data-name="{{.Name}} {{.TypeName}}"><span class="can-box">▦</span><span class="can-main"><span class="can-name">{{.Name}}{{if .TypeName}} <small>{{.TypeName}}</small>{{end}}</span><span class="can-sub">{{.Stacks}} {{if eq .Stacks 1}}stack{{else}}stacks{{end}} · {{if .ValueText}}{{.ValueText}} ISK{{else}}no price{{end}}</span></span><span class="can-go">›</span></a>{{end}}
+      </div>
+      <p class="can-none" id="assets-cannone" hidden>No containers here match that name.</p>
+    </div>
+    {{end}}
+    {{$anyShip := false}}{{range .Rows}}{{if .Assembled}}{{$anyShip = true}}{{end}}{{end}}
+    {{if $anyShip}}
+    <div class="mships">
+      <h3 class="mships-h">Assembled ships</h3>
+      <div class="mships-grid">
+        {{range .Rows}}{{if .Assembled}}<a class="mship" href="{{.ShipHref}}"><img src="{{.IconURL}}" alt="" width="56" height="56" loading="lazy" data-fallback-src="/static/img/item.svg"><span class="mship-n">{{.Name}}</span><span class="mship-t">{{if .TypeName}}{{.TypeName}}{{else}}{{.GroupName}}{{end}}</span>{{if .ValueText}}<span class="mship-v">{{.ValueText}} ISK</span>{{end}}</a>{{end}}{{end}}
+      </div>
+    </div>
+    {{end}}
+    {{if .Rows}}
+    <table class="amx-table" data-nosort>
+      <thead><tr><th>Item / Hull</th><th>Location flag</th><th>Loadout / Contents</th><th class="amx-r">Qty</th><th class="amx-r">Volume</th><th class="amx-r">Est. value</th></tr></thead>
+      <tbody>{{range .Rows}}{{template "assets-trow" .}}{{end}}</tbody>
+    </table>
+    {{if .MoreRows}}<p class="amx-more">+ {{.MoreRows}} more stacks at this place; the most valuable are shown.</p>{{end}}
+    {{else}}<p>Nothing here under this division.</p>{{end}}
   {{end}}
-  {{else}}
-  {{if .Assets.Warming}}
-  <p>Still syncing.{{if .IsAdmin}} Progress is on the <a href="/admin/sync/">Sync page</a>.{{end}}</p>
-  {{else}}
-  <p><small>Assets couldn't be loaded. The server log has the details.</small></p>
-  {{end}}
-  {{end}}
-{{else}}
-  <p>No assets to show yet. Link a character first.</p>
+  </section>
+  {{with .Matrix}}{{with .Inspector}}
+  <aside class="pane-insp insp" aria-label="Inspector">
+    {{if .Fallback}}
+    <div class="insp-head">
+      <span class="amx-art big"><img src="{{.IconURL}}" alt="" width="72" height="72" loading="lazy" data-fallback-src="/static/img/item.svg">{{if .Pip}}<span class="pip pip-{{.PipClass}}">{{.Pip}}</span>{{end}}</span>
+      <div class="insp-titles"><h3>{{.Name}}</h3><p class="amx-msub">{{if .TypeName}}{{.TypeName}} · {{end}}{{.GroupName}}</p>{{if .OwnerName}}<p class="amx-msub">{{.OwnerName}}</p>{{end}}</div>
+      <a class="insp-x" href="{{.CloseHref}}" aria-label="Close the inspector">✕</a>
+    </div>
+    <dl class="insp-facts">
+      <div><dt>Location flag</dt><dd>{{.FlagText}}</dd></div>
+      <div><dt>Quantity</dt><dd>{{.QuantityText}} units</dd></div>
+      <div><dt>Total stack volume</dt><dd>{{.VolumeText}}</dd></div>
+      <div><dt>Estimated value</dt><dd>{{if .ValueText}}{{.ValueText}} ISK{{else}}no price{{end}}</dd></div>
+    </dl>
+    <div class="insp-foot"><span>Item #{{.ItemID}} in your snapshot</span><span>Packaged: {{.VolumeText}}</span></div>
+    {{else}}
+    <div class="insp-head">
+      <span class="amx-art big"><img src="{{.IconURL}}" alt="" width="72" height="72" loading="lazy" data-fallback-src="/static/img/item.svg">{{if .Pip}}<span class="pip pip-{{.PipClass}}">{{.Pip}}</span>{{end}}</span>
+      <div class="insp-titles"><h3>{{.Name}}</h3><p class="amx-msub">{{if .TypeName}}{{.TypeName}} · {{end}}{{.GroupName}}</p><p class="amx-msub">{{.OwnerName}} · {{.VolumeText}} packaged</p></div>
+      <a class="insp-x" href="{{.CloseHref}}" aria-label="Close the inspector">✕</a>
+    </div>
+    <div class="estbar">
+      <span class="estbar-l"><span class="estbar-lab">Hull + fitted estimate</span><span class="estbar-v">{{if .TotalText}}{{.TotalText}} ISK{{else}}no price{{end}}</span></span>
+      <button type="button" class="btn insp-eft" data-copy data-copy-from="assets-eft">Copy EFT</button>
+    </div>
+    <pre id="assets-eft" hidden>{{.EFT}}</pre>
+    {{range .Sections}}{{template "assets-slotsec" .}}{{end}}
+    {{if .PricedNote}}<p class="insp-note">{{.PricedNote}}</p>{{end}}
+    <div class="insp-foot"><span>Item #{{.ItemID}} in your snapshot</span><span>Packaged: {{.VolumeText}}</span></div>
+    {{end}}
+  </aside>
+  {{end}}{{end}}
+</div>
+{{end}}
 {{end}}
 {{end}}

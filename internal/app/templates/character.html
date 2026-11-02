@@ -222,7 +222,7 @@
           {{range $ov.Hidden}}<input type="hidden" name="{{.Name}}" value="{{.Value}}">{{end}}
           {{if ne $v.State.Level "all"}}<input type="hidden" name="lvl" value="{{$v.State.Level}}">{{end}}
           <input class="ov-search" type="search" name="q" value="{{$v.State.Query}}" placeholder="Search skills in the sheet and the browse catalog..." aria-label="Search skills">
-          <button class="btn ov-sbtn" type="submit">Search</button>
+          <button class="btn" type="submit">Search</button>
           {{if and (moduleOn "skillplans") $v.Plans}}
           <label class="ov-planpick">Add to plan:
             <select name="plan">{{range $v.Plans}}<option value="{{.ID}}"{{if eq .ID $ov.PlanID}} selected{{end}}>{{.Name}}</option>{{end}}</select>

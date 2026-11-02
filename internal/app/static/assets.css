@@ -58,12 +58,32 @@
 .asset-scope-done:disabled { opacity: 0.45; cursor: default; }
 
 /* The console: one bordered surface, the panes flush against
-   hairline dividers instead of three separate cards. */
-.panes3.amx { gap: 0; border: 1px solid var(--box-edge); border-radius: var(--r-sm); background: var(--glass); overflow: hidden; grid-template-columns: 18rem minmax(0, 1fr); }
+   hairline dividers instead of three separate cards. The
+   overflow clips rather than hides: a hidden overflow would
+   make the console the inspector's scroll container and its
+   sticky pinning could never engage; clip keeps the same
+   corner clipping without a scroll box. */
+.panes3.amx { gap: 0; border: 1px solid var(--glass-edge); border-radius: var(--r-sm); background: var(--glass); -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(0.9); backdrop-filter: blur(var(--glass-blur)) saturate(0.9); overflow: clip; grid-template-columns: 18rem minmax(0, 1fr); }
 .panes3.amx.has-insp { grid-template-columns: 18rem minmax(0, 1fr) 22rem; }
 .pane-dir { padding: 0.9rem; }
 .pane-main { padding: 0.9rem 1rem 1rem; border-left: 1px solid var(--box-edge); }
 .panes3.amx .pane-insp { border: 0; border-left: 1px solid var(--box-edge); border-radius: 0; background: none; }
+
+/* The inspector pinned on the desktop console: past 80rem
+   it is the third column, so it pins under the top bar at
+   the offset the plan page's inspector uses and scrolls
+   internally when its content runs taller than the space
+   left under that offset. The middle band's sheet and the
+   phone sheet keep their own forms; this band is the only
+   place the rule exists. */
+@media (min-width: 80.01rem) {
+  .panes3.amx .pane-insp {
+    position: sticky;
+    top: calc(var(--sticky-top) + 1px + 0.6rem);
+    max-height: calc(100dvh - var(--sticky-top) - 1px - 1.2rem);
+    overflow-y: auto;
+  }
+}
 .pane-h { margin: 0 0 0.6rem; font-size: 0.95rem; }
 .pane-h span { color: var(--muted); font-size: 0.8rem; font-weight: 500; }
 .pane-dir #assets-dirfilter { width: 100%; margin-bottom: 0.6rem; }
@@ -92,7 +112,7 @@
 
 /* The container strip above the table: one card per can, its
    icon box tinted by its place in the strip. */
-.canstrip { margin-top: 0.9rem; padding: 0.7rem 0.8rem; border: 1px solid var(--box-edge); border-radius: var(--r-sm); }
+.canstrip { margin-top: 0.9rem; padding: 0.7rem 0.8rem; background: var(--row-alt); border: 1px solid var(--box-edge); border-radius: var(--r-sm); }
 .canstrip-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.3rem 1rem; margin-bottom: 0.6rem; }
 .canstrip-n { color: var(--muted); font-size: 0.8rem; }
 .canstrip-tools { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 0.8rem; }
@@ -114,7 +134,8 @@
 @media (prefers-reduced-motion: reduce) {
   .cangrid { transition: none; }
 }
-.amx-can { display: flex; align-items: center; gap: 0.6rem; padding: 0.55rem 0.65rem; border: 1px solid var(--box-edge); border-radius: var(--r-sm); color: var(--text); text-decoration: none; }
+.can-none { margin: 0.2rem 0 0; color: var(--muted); font-size: 0.85rem; }
+.amx-can { display: flex; align-items: center; gap: 0.6rem; padding: 0.55rem 0.65rem; background: var(--row-alt); border: 1px solid var(--box-edge); border-radius: var(--r-sm); color: var(--text); text-decoration: none; }
 .amx-can:hover { border-color: var(--accent); }
 .can-box { flex: none; display: grid; place-items: center; width: 2.1rem; height: 2.1rem; border-radius: var(--r-xs); font-size: 1.05rem; }
 .can-h0 .can-box { background: rgba(56, 132, 255, 0.16); color: #7db4ff; }
@@ -128,7 +149,7 @@
 .can-go { flex: none; color: var(--muted); font-size: 1.15rem; }
 
 /* The matrix table. */
-.amx-table { margin: 0.9rem 0 0; table-layout: fixed; }
+.amx-table { margin: 0.9rem 0 0; table-layout: fixed; background: var(--row-alt); border: 1px solid var(--box-edge); }
 .amx-table th:nth-child(2) { width: 18rem; }
 .amx-table th:nth-child(3) { width: 4.75rem; }
 .amx-table th:nth-child(4) { width: 5.5rem; }
@@ -175,9 +196,9 @@
     width: min(24rem, 94vw);
     overflow-y: auto;
     border: 0; border-left: 1px solid var(--glass-edge); border-radius: 0;
-    background: linear-gradient(rgba(21, 21, 21, 0.94), rgba(17, 17, 17, 0.97)) padding-box;
-    -webkit-backdrop-filter: blur(18px);
-    backdrop-filter: blur(18px);
+    background: var(--glass);
+    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(0.9);
+    backdrop-filter: blur(var(--glass-blur)) saturate(0.9);
     box-shadow: -18px 0 42px rgba(0, 0, 0, 0.55), 0 0 0 100vmax rgba(0, 0, 0, 0.45);
   }
   .amx-tools .searchwrap { flex: 1 1 100%; }
@@ -224,7 +245,7 @@
   .mships { display: block; margin-top: 0.9rem; }
   .mships-h { margin: 0 0 0.5rem; font-size: 0.95rem; }
   .mships-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; }
-  .mship { display: flex; flex-direction: column; gap: 0.12rem; padding: 0.6rem; border: 1px solid var(--box-edge); border-radius: var(--r-sm); color: var(--text); text-decoration: none; }
+  .mship { display: flex; flex-direction: column; gap: 0.12rem; padding: 0.6rem; background: var(--row-alt); border: 1px solid var(--box-edge); border-radius: var(--r-sm); color: var(--text); text-decoration: none; }
   .mship img { border-radius: var(--r-xs); }
   .mship-n { font-weight: 600; font-size: 0.88rem; }
   .mship-t { color: var(--muted); font-size: 0.78rem; }

@@ -5769,7 +5769,7 @@ a.badge { text-decoration: none; }
 .facet { display: flex; align-items: baseline; gap: 0.75rem; min-width: 0; }
 .facet-title { flex: 0 0 6.5rem; font-size: 0.75rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
 .facet-chips { display: flex; flex-wrap: wrap; gap: 0.35rem; min-width: 0; }
-a.chip { display: inline-flex; align-items: baseline; gap: 0.35rem; color: var(--text); text-decoration: none; white-space: nowrap; }
+a.chip { display: inline-flex; align-items: center; gap: 0.35rem; color: var(--text); text-decoration: none; white-space: nowrap; }
 a.chip.on { color: var(--accent); background: rgba(255, 106, 26, 0.12); }
 a.chip small { color: var(--muted); }
 a.chip:hover { border-color: var(--accent); }

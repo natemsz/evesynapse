@@ -505,7 +505,6 @@ html[data-theme="light"] #main-content > .section-tabs a.active {
   border-radius: var(--r-sm);
   background: rgba(23, 17, 13, 0.55);
   padding: 0.35rem 0.8rem;
-  font-size: 0.92rem;
   text-decoration: none;
   transition: background-color 150ms ease, border-color 150ms ease, filter 150ms ease;
 }
@@ -602,7 +601,6 @@ html[data-theme="light"] #main-content > .section-subtabs a.active {
   border-radius: var(--r-sm);
   background: rgba(23, 17, 13, 0.55);
   padding: 0.35rem 0.8rem;
-  font-size: 0.92rem;
   text-decoration: none;
   cursor: pointer;
   transition: background-color 150ms ease, border-color 150ms ease, filter 150ms ease;

@@ -8,7 +8,6 @@
 {{template "charselector" .CorpChars}}
 
 {{if .CorpMembers}}
-<section class="card page-card">
 <h2>{{corpLink .CorpMembers.CorpID .CorpMembers.CorpTitle}}{{if .CorpMembers.MemberCount}} · {{.CorpMembers.MemberCount}} members{{end}}</h2>
 
   {{if .CorpMembers.Forbidden}}
@@ -62,7 +61,6 @@
   {{end}}
   <p><small>Login, ship and location columns come from member tracking, which needs the Director role in-game.</small></p>
   {{end}}
-</section>
 {{else}}
   <p>No corporation to show yet. <a href="/auth/link">Link a character</a> first.</p>
 {{end}}

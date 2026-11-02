@@ -185,7 +185,7 @@
    glass, so the fixed layer and its blur paint right), with
    the panel docked to the right edge instead of centered. */
 .wb-shade { justify-content: flex-end; padding: 0; }
-.wb-drawer { height: 100%; width: min(26rem, 94vw); background: var(--panel); border-left: 1px solid var(--glass-edge); padding: 1.1rem 1.2rem; overflow-y: auto; box-shadow: -0.5rem 0 2rem rgba(0, 0, 0, 0.45); }
+.wb-drawer { height: 100%; width: min(26rem, 94vw); background: var(--glass); border-left: 1px solid var(--glass-edge); padding: 1.1rem 1.2rem; overflow-y: auto; box-shadow: -0.5rem 0 2rem rgba(0, 0, 0, 0.45); }
 .wb-drawer-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 0.8rem; }
 .wb-drawer-head h3 { margin: 0.1rem 0 0; font-family: 'Rajdhani', sans-serif; font-size: 1.4rem; font-weight: 700; color: var(--text-bright); }
 .wb-x { background: none; border: 1px solid var(--box-edge); border-radius: var(--r-xs); color: var(--muted); font: inherit; padding: 0.15rem 0.5rem; cursor: pointer; flex: none; }

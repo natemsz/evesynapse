@@ -1015,6 +1015,17 @@ html[data-scheme] {
   --success: var(--sch-hi);
   --glass: color-mix(in srgb, var(--panel) 90%, transparent);
 }
+/* The muted tier art is baked dark (brightness 0.42, saturate
+   0.30), so at the scheme glass strength of 90% almost nothing
+   behind a panel is left to read through it: the tint paints
+   but the glass reads solid, where the minimalistic tier glow
+   shows through the same mix. The muted tier takes the flyout
+   glass strength instead, the mix this file already proves
+   reads as frosted glass, so the translucency and the blur
+   have something to show in every tier. */
+html[data-scheme][data-tier="muted"] {
+  --glass: color-mix(in srgb, var(--panel) 55%, transparent);
+}
 /* Neutral chrome borders and text-box effects whose base rules
    carry a literal ember value take the scheme colour at the
    alpha the base rule already uses. The default look keeps the

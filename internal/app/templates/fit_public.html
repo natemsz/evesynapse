@@ -5,7 +5,6 @@
 
 {{with .PublicFit}}
 {{if not .Shared}}<p class="browse-back"><a href="/fittings/public/">← Public fits</a></p>{{end}}
-<section class="card page-card">
 <div class="fit-pubhead">
   <div class="fit-pubmeta">
     <p class="lede">{{publicItemLink .Card.ShipTypeID .Card.Ship}}{{if .Card.Author}} by {{.Card.Author}}{{end}} · {{.Card.Views}} views{{if .Card.PriceKnown}} · {{.Card.PriceLine}}{{end}}</p>
@@ -64,6 +63,5 @@
 {{if .EFT}}<pre id="fit-eft">{{.EFT}}</pre>{{end}}
 
 {{if .Shared}}<p class="hint">This fit was shared by link and is read-only here.</p>{{else if .Card.Mine}}<p class="hint">This is your fit. Open it in the <a href="/fittings/?local={{.Card.ID}}#fit-editor">fitting tool</a> to edit it; saving updates this page.</p>{{else}}<p class="hint">Open in the <a href="/fittings/?public={{.Card.ID}}#fit-editor">fitting tool</a> to simulate it with your skills or make your own copy.</p>{{end}}
-</section>
 {{end}}
 {{end}}

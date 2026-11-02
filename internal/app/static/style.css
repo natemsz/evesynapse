@@ -3336,9 +3336,10 @@ html[data-nav="rail"] .sidebar .branch .menu a { white-space: nowrap; }
   html[data-nav="rail"] .sidebar .branch .menu .nav-flyout-head + .nav-group-label { margin-top: 0.85rem; }
 }
 /* The Settings footer's menu flies out to the side like the
-   categories'; the upward opening of the wide sidebar does
-   not apply here. */
-html[data-nav="rail"] .sidebar .branch.sidebar-settings .menu { bottom: auto; }
+   categories', but anchored to the bottom of the gear row so
+   it grows upward: the footer sits at the rail's foot, and a
+   menu opening downward runs off the bottom of the page. */
+html[data-nav="rail"] .sidebar .branch.sidebar-settings .menu { top: auto; bottom: 0; }
 /* In the rail a closed category paints no panel, and only the current
    page's category gets the active pill; an open flyout gets a faint
    wash. Wide screens only. */

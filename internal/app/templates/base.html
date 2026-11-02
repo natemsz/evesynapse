@@ -250,9 +250,15 @@
       {{if .IsAdmin}}<li><a href="/admin/sync/">Sync</a></li>
       <li><a href="/admin/">Admin</a></li>{{end}}
     </ul>
+    <p class="phone-sheet-who">Settings</p>
+    <ul class="phone-sheet-links">
+      <li><a href="/settings#api">API</a></li>
+      <li><a href="/settings#interface">Interface</a></li>
+      <li><a href="/settings#notifications">Notifications</a></li>
+      <li><a href="/settings#security">Security</a></li>
+    </ul>
     <div class="phone-sheet-actions">
       <button type="button" class="phone-sheet-action" data-install-app hidden>Install App</button>
-      <a class="phone-sheet-action" href="/settings">Settings</a>
       <form class="sidebar-signout-form" method="post" action="/auth/logout"><button class="phone-sheet-action" type="submit">Sign Out</button></form>
     </div>
     {{else}}

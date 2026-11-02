@@ -100,26 +100,7 @@
 <div class="pagehead assets-head">
   <div class="assets-head-l">
     <p class="assets-count">{{.Stacks}} stacks · {{.TotalItems}} items · {{.Places}} locations</p>
-    {{with .Selector}}
-    <div class="charselector asset-scope" data-assetscope>
-      <button type="button" class="asset-scope-btn" data-assetscope-btn aria-haspopup="true" aria-expanded="false" aria-controls="assets-scope-panel">
-        <span class="asset-scope-label">{{.Label}}</span>
-        <span class="asset-scope-caret" aria-hidden="true">▾</span>
-      </button>
-      <div class="charselector-dropdown asset-scope-panel" id="assets-scope-panel" data-assetscope-panel hidden>
-        <input type="search" class="charselector-input asset-scope-search" data-assetscope-q placeholder="Search names or tags..." autocomplete="off" aria-label="Search characters by name or tag">
-        <a class="charselector-option asset-scope-all{{if .All}} on{{end}}" href="{{.AllHref}}"><span class="asset-scope-box{{if .All}} on{{end}}" aria-hidden="true">✓</span><span class="charselector-name">All characters</span></a>
-        {{range .Chars}}
-        <a class="charselector-option asset-scope-row{{if .Checked}} on{{end}}" href="{{.ToggleHref}}" data-name="{{.Name}}" data-tags="{{.TagsText}}">
-          <span class="asset-scope-box{{if .Checked}} on{{end}}" aria-hidden="true">✓</span>
-          {{if .Image}}<img class="asset-scope-portrait" src="{{.Image}}" alt="" width="26" height="26" loading="lazy">{{end}}
-          <span class="asset-scope-main"><span class="charselector-name">{{.Name}}</span>{{if .Tags}}<span class="asset-scope-tags">{{range .Tags}}<span class="tagchip">{{.}}</span>{{end}}</span>{{end}}</span>
-        </a>
-        {{end}}
-        <p class="asset-scope-none" data-assetscope-none hidden>No characters match that search.</p>
-      </div>
-    </div>
-    {{end}}
+    {{template "charselectormulti" .Selector}}
   </div>
   {{if .HasTotal}}<div class="assets-net"><span class="assets-net-v">{{.TotalText}} ISK</span><span class="assets-net-l">Total estimated value</span></div>{{end}}
 </div>

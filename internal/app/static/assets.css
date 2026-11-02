@@ -18,10 +18,12 @@
 
 /* The character scope selector: a button naming the current
    selection; its panel is the shared character selector's
-   dropdown holding a search field, the all-characters reset
+   dropdown (the charselectormulti template) holding a search
+   field, bulk All and None actions, the all-characters row
    and one checklist row per character with its custom tags
-   as chips. Each row is a link that toggles the character
-   in or out of the scope. */
+   as chips. Rows toggle a pending set in place while the
+   panel stays open; Done commits the set, and each row's
+   Only link scopes the page to that character in one pick. */
 .asset-scope { margin: 0; max-width: 22rem; }
 .asset-scope-btn { display: inline-flex; align-items: center; gap: 0.5rem; max-width: 100%; padding: 0.42rem 0.75rem; border: 1px solid var(--box-edge); border-radius: 999px; background: var(--glass); color: var(--text-bright); font: inherit; font-weight: 600; cursor: pointer; }
 .asset-scope-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -37,6 +39,21 @@
 .asset-scope-tags .tagchip { padding: 0.05rem 0.35rem; border: 1px solid var(--glass-edge); border-radius: 999px; background: var(--glass); color: var(--muted); font-size: 0.68rem; font-weight: 600; }
 .asset-scope-none { margin: 0.4rem 0.2rem 0.2rem; color: var(--muted); font-size: 0.85rem; }
 .asset-scope-none[hidden] { display: none; }
+.asset-scope-bulk { position: sticky; top: -0.4rem; z-index: 1; display: flex; align-items: center; gap: 0.4rem; padding: 0.25rem 0; margin-bottom: 0.15rem; background: var(--input-bg); }
+.asset-scope-bulk[hidden] { display: none; }
+.asset-scope-bulkbtn { padding: 0.28rem 0.65rem; border: 1px solid var(--box-edge); border-radius: 999px; background: var(--glass); color: var(--text-bright); font: inherit; font-size: 0.8rem; font-weight: 600; cursor: pointer; }
+.asset-scope-bulkbtn:hover { border-color: var(--accent); }
+.asset-scope-count { margin-left: auto; color: var(--muted); font-size: 0.8rem; }
+.asset-scope-rowwrap { position: relative; }
+.asset-scope-rowwrap[hidden] { display: none; }
+.asset-scope-rowwrap .asset-scope-row { padding-right: 3rem; }
+.asset-scope-only { position: absolute; right: 0.45rem; top: 50%; transform: translateY(-50%); padding: 0.3rem 0.3rem; color: var(--muted); font-size: 0.75rem; font-weight: 600; text-decoration: none; }
+.asset-scope-only:hover { color: var(--accent); }
+.asset-scope-foot { position: sticky; bottom: -0.4rem; display: flex; justify-content: flex-end; padding-top: 0.4rem; background: var(--input-bg); }
+.asset-scope-foot[hidden] { display: none; }
+.asset-scope-done { padding: 0.42rem 0.9rem; border: 1px solid var(--box-edge); border-radius: 999px; background: var(--glass); color: var(--text-bright); font: inherit; font-weight: 600; cursor: pointer; }
+.asset-scope-done:hover:not(:disabled) { border-color: var(--accent); }
+.asset-scope-done:disabled { opacity: 0.45; cursor: default; }
 
 /* The console: one bordered surface, the panes flush against
    hairline dividers instead of three separate cards. */
@@ -162,6 +179,7 @@
   .asset-scope { max-width: none; }
   .asset-scope-btn { min-height: 2.4rem; }
   .asset-scope-row, .asset-scope-all { min-height: 2.6rem; }
+  .asset-scope-only { padding: 0.65rem 0.35rem; }
   .pane-dir .pane-h, .pane-dir #assets-dirfilter, .pane-dir .dirlist, .pane-dir .dir-foot { display: none; }
   .pane-dir { padding: 0.7rem 0.9rem; }
   .dirdrop { display: block; }

@@ -27,7 +27,11 @@
 .ov-bitem .when { color: var(--muted); font-size: 0.82rem; }
 .ov-badd { font-weight: 600; }
 .ov-bx { margin-left: auto; }
-.ov-bx button { padding: 0.15rem 0.45rem; border: 0; background: transparent; color: var(--muted); font-size: 1rem; cursor: pointer; }
+/* The dismiss is a bare glyph, not a standard control: without
+   the min-height reset it inherits the shared button rule's
+   control-height floor (style.css), and that floor, not the
+   banner's content, sets the whole strip's height. */
+.ov-bx button { min-height: 0; padding: 0.15rem 0.45rem; border: 0; background: transparent; color: var(--muted); font-size: 1rem; cursor: pointer; }
 .ov-bx button:hover { color: var(--text); }
 
 /* ---- Header cards ---- */

@@ -2,7 +2,6 @@
 {{define "pagetitle"}}{{with .OpForm}}<h1><span class="gt">{{if .ID}}Change op{{else}}New op{{end}}</span></h1>{{end}}{{end}}
 {{define "content"}}
 {{with .OpForm}}
-<section class="card page-card">
 
 {{range .Errors}}<p class="err">{{.}}</p>{{end}}
 
@@ -48,6 +47,5 @@
     <a href="{{if .ID}}/ops/{{.ID}}{{else}}/calendar/{{end}}">Cancel</a>
   </div>
 </form>
-</section>
 {{end}}
 {{end}}

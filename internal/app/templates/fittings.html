@@ -6,7 +6,7 @@
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
 
 {{if .FitEditor}}
-<section class="foldable" id="fit-editor">
+<div id="fit-editor">
 <h3>Build a fitting</h3>
 {{if .FitEditor.Anonymous}}<p class="hint">Fitting with All-V skills. <a href="/auth/link">Sign in with EVE SSO</a> to save fits and use your characters' real skills and inventory.</p>
 <p class="hint"><button type="button" class="btn" id="fit-share-anon">Share this fit by link</button> <span id="fit-share-link"></span></p>
@@ -130,6 +130,6 @@
   </form>
 </div>
 
-</section>
+</div>
 {{end}}
 {{end}}

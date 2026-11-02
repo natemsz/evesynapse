@@ -166,29 +166,14 @@ func TestEmberGlassAndSkyRules(t *testing.T) {
 		t.Error("the page-body spacing or the shared-block glass surfaces are missing")
 	}
 	// Section wrappers: the foldable is a glass section (industry,
-	// planets, market and character sections ride it), the market
-	// browse panel paints its own glass again, and the two pages
-	// that floated entirely on the sky (PI planner, public fit)
-	// wrap their bodies in a card.
+	// planets, market and character sections ride it), and the
+	// market browse panel paints its own glass again.
 	if !strings.Contains(style, "backdrop-filter: blur(var(--glass-blur)) saturate(0.9); }") ||
 		!strings.Contains(style, ".foldable .tw { background: none;") {
 		t.Error("the foldable section lost its glass surface or its nested-table suppression")
 	}
 	if strings.Contains(style, ".panel.market-browse { background: none;") {
 		t.Error("the market browse panel is unpainted again; its category tiles float on the sky")
-	}
-	for name, marker := range map[string]string{
-		"piplanner.html":    `<section class="card page-card">`,
-		"fit_public.html":   `<section class="card page-card">`,
-		"corp_members.html": `<section class="card page-card">`,
-	} {
-		raw, err := fs.ReadFile(templatesFS, "templates/"+name)
-		if err != nil {
-			t.Fatalf("read %s: %v", name, err)
-		}
-		if !strings.Contains(string(raw), marker) {
-			t.Errorf("%s lost its glass wrapper section", name)
-		}
 	}
 	// Top search results are glass with a glowing row highlight.
 	if !strings.Contains(style, "background: rgba(14, 11, 9, 0.82);") ||

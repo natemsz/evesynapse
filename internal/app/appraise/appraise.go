@@ -792,9 +792,10 @@ type resultView struct {
 	BuyRatio     string // buy as a % of sell ("80.4%"), "" without both
 	CoverageSub  string // the coverage card's sub-line
 	Multisell    string // "<TypeName> <Price>" lines at this basis, for copying
-	// The sell list: the priced lines at 0.01 under the cheapest
-	// sale order at the basis hub's station right now, for
-	// pasting into the client's MultiSell window as new orders.
+	// The sell list: the priced lines one tick under the
+	// cheapest sale order at the basis hub's station right now,
+	// for pasting into the client's MultiSell window as new
+	// orders.
 	SellItems        string
 	SellItemsStation string // the hub station's name, for the sell list's label
 	SellItemsNone    string // priced items with no sale order to undercut there, comma-joined
@@ -837,6 +838,39 @@ type savedRow struct {
 
 // buildResult shapes a snapshot for display. age is the deps'
 // age wording for a stale typical's as-of.
+// tickDown returns the highest valid market price below best.
+// Order prices carry at most four significant figures, so the
+// step below a price grows with the price: 0.01 under 6.40,
+// 0.1 under 123.40, 100 under 1,000,000 (999,900). A best that
+// is not itself on the grid (a legacy order) rounds down to the
+// grid first. ok is false when no valid price sits below best.
+func tickDown(best float64) (under float64, ok bool) {
+	if best <= 0.01 {
+		return 0, false
+	}
+	mag := 1.0
+	for best/mag >= 10 {
+		mag *= 10
+	}
+	tick := mag / 1000
+	if tick < 0.01 {
+		tick = 0.01
+	}
+	if floored := math.Floor(best/tick+1e-9) * tick; floored < best {
+		return math.Round(floored*100) / 100, floored > 0
+	}
+	// best sits on the grid: step one tick down, with the finer
+	// tick of the decade below when best is a power of ten.
+	if best == mag {
+		tick = mag / 10000
+		if tick < 0.01 {
+			tick = 0.01
+		}
+	}
+	under = math.Round((best-tick)*100) / 100
+	return under, under > 0
+}
+
 func (app *page) buildResult(ctx context.Context, snap *snapshot) *resultView {
 	v := &resultView{
 		Unresolved: snap.Unresolved, Bad: snap.Bad, Notes: snap.Notes,
@@ -914,7 +948,7 @@ func (app *page) buildResult(ctx context.Context, snap *snapshot) *resultView {
 		}
 	}
 	v.Multisell = strings.Join(ms, "\n")
-	// Sell these items: the priced lines at 0.01 under the
+	// Sell these items: the priced lines one tick under the
 	// cheapest sale order at the basis hub's station right now,
 	// ready to paste into the client's MultiSell window, which
 	// lists them as new orders. The prices are the station's
@@ -952,11 +986,12 @@ func (app *page) buildResult(ctx context.Context, snap *snapshot) *resultView {
 						continue
 					}
 					best, ok := bests[ln.TypeID]
-					if !ok || best <= 0.01 {
+					under, underOK := tickDown(best)
+					if !ok || !underOK {
 						none = append(none, ln.Name)
 						continue
 					}
-					sell = append(sell, fmt.Sprintf("%s %s", ln.Name, strconv.FormatFloat(best-0.01, 'f', 2, 64)))
+					sell = append(sell, fmt.Sprintf("%s %s", ln.Name, strconv.FormatFloat(under, 'f', 2, 64)))
 				}
 				v.SellItems = strings.Join(sell, "\n")
 				v.SellItemsNone = strings.Join(none, ", ")

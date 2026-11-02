@@ -240,7 +240,7 @@ Pyerite 250000</pre>
   </div>
   <div id="ap-panel-multisell" role="tabpanel" aria-labelledby="ap-tab-multisell">
   {{if $r.Multisell}}<p><small>Multi-sell format, one <em>name price</em> line per priced item at this basis:</small> <button class="btn small" type="button" data-copy-from="ap-multisell">Copy multi-sell list</button></p><pre id="ap-multisell">{{$r.Multisell}}</pre>{{else}}<p><small>No priced lines to export.</small></p>{{end}}
-  {{if $r.SellItems}}<p><small>Sell these items: undercut the cheapest sale order at {{$r.SellItemsStation}} by 0.01. Paste into the MultiSell window in game to list them as new orders:</small> <button class="btn small" type="button" data-copy-from="ap-sellitems">Copy sell list</button></p><pre id="ap-sellitems">{{$r.SellItems}}</pre>{{end}}
+  {{if $r.SellItems}}<p><small>Sell these items: undercut the cheapest sale order at {{$r.SellItemsStation}} by one tick. Paste into the MultiSell window in game to list them as new orders:</small> <button class="btn small" type="button" data-copy-from="ap-sellitems">Copy sell list</button></p><pre id="ap-sellitems">{{$r.SellItems}}</pre>{{end}}
   {{if $r.SellItemsNone}}<p><small>No sale order to undercut at {{$r.SellItemsStation}} for: {{$r.SellItemsNone}}.</small></p>{{end}}
   </div>
 </section>

@@ -173,7 +173,7 @@
           {{if $ov.QueueChips}}
           <p class="ov-qsum"><b>Queue</b> · {{$ov.QueueAfter}} skill{{if ne $ov.QueueAfter 1}}s{{end}} after this one</p>
           <ol class="ov-qlist">
-            {{range $ov.QueueChips}}<li class="ov-qline"><span class="qn">{{.Num}}</span><span class="qnm">{{.Name}}</span><span class="qlv">&rarr; {{.Level}}</span></li>{{end}}
+            {{range $ov.QueueChips}}<li class="ov-qline"><span class="qn">{{.Num}}</span><span class="qnm">{{.Name}}</span><span class="ov-pips" role="img" aria-label="Trains to level {{.Level}} of 5">{{range .Pips}}<i{{if .Class}} class="{{.Class}}"{{end}}></i>{{end}}</span></li>{{end}}
           </ol>
           {{end}}
           {{if $v.CompletesAt}}<p class="ov-ts-foot">Queue completes {{$v.CompletesAt}}</p>{{end}}

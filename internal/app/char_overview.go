@@ -301,6 +301,7 @@ type queueChip struct {
 	Num   int
 	Name  string // "Astrogeology"
 	Level string // target level, roman: "V"
+	Pips  []ovPip
 }
 
 // ovPip is one level box of a skill row: trained levels filled,
@@ -514,6 +515,27 @@ func pipsFor(trained, coveredTo int) []ovPip {
 		case i <= trained:
 			p.Class = "f"
 		case i <= coveredTo:
+			p.Class = "plan"
+		}
+		pips = append(pips, p)
+	}
+	return pips
+}
+
+// trainPipsFor builds the Now Training strip's five level
+// boxes: trained levels filled, levels below the target in the
+// overlay color, and the level in training marked "train" so
+// its box blinks blue.
+func trainPipsFor(trained, target int) []ovPip {
+	pips := make([]ovPip, 0, 5)
+	for i := 1; i <= 5; i++ {
+		p := ovPip{}
+		switch {
+		case i <= trained:
+			p.Class = "f"
+		case i == target:
+			p.Class = "train"
+		case i < target:
 			p.Class = "plan"
 		}
 		pips = append(pips, p)
@@ -867,7 +889,7 @@ func (app *Application) ovTrainingStrip(view *characterView, ov *overviewView, c
 	ov.ShowTraining = true
 	ov.TrainName = head.Skill
 	ov.TrainToRoman = head.Level
-	ov.TrainPips = pipsFor(head.TrainedLvl, head.LevelNum)
+	ov.TrainPips = trainPipsFor(head.TrainedLvl, head.LevelNum)
 	ov.TrainingDone = view.TrainingFinish
 	if e, ok := catByID[head.SkillID]; ok {
 		attrs, known := attrSetOf(view.Attrs, view.AttrsKnown)
@@ -877,7 +899,7 @@ func (app *Application) ovTrainingStrip(view *characterView, ov *overviewView, c
 		}
 	}
 	for i, row := range view.Queue[1:] {
-		ov.QueueChips = append(ov.QueueChips, queueChip{Num: i + 1, Name: row.Skill, Level: row.Level})
+		ov.QueueChips = append(ov.QueueChips, queueChip{Num: i + 1, Name: row.Skill, Level: row.Level, Pips: pipsFor(row.TrainedLvl, row.LevelNum)})
 	}
 	ov.QueueAfter = len(view.Queue) - 1
 }

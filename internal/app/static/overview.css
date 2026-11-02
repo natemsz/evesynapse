@@ -114,7 +114,7 @@
 .ov-qline { display: flex; align-items: baseline; gap: 0.5rem; min-width: 0; padding: 0.28rem 0.55rem; border: 1px solid var(--box-edge); border-radius: var(--r-sm); font-size: 0.84rem; }
 .ov-qline .qn { flex: none; color: var(--gold); font-weight: 700; font-variant-numeric: tabular-nums; }
 .ov-qline .qnm { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
-.ov-qline .qlv { flex: none; margin-left: auto; color: var(--muted); white-space: nowrap; }
+.ov-qline .ov-pips { flex: none; margin-left: auto; align-self: center; }
 @media (min-width: 45.01rem) {
   .ov-qlist { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
@@ -158,6 +158,10 @@
 .ov-pips i { width: 0.85rem; height: 0.5rem; border: 1px solid var(--box-edge); border-radius: 2px; }
 .ov-pips i.f { background: var(--gold); border-color: var(--gold); }
 .ov-pips i.plan { background: var(--accent); border-color: var(--accent); }
+/* The level in training blinks blue, the same pulse the level
+   boxes use on the home page (lvl-pulse in style.css). */
+.ov-pips i.train { background: #3fa9f5; border-color: #3fa9f5; animation: lvl-pulse 1.2s ease-in-out infinite; }
+html[data-theme="light"] .ov-pips i.train { background: #2b7fc4; border-color: #2b7fc4; }
 .ov-rank { margin-top: 0.25rem; color: var(--muted); font-size: 0.78rem; }
 .ov-attr { color: var(--muted); font-size: 0.84rem; white-space: nowrap; }
 .ov-val small { display: block; color: var(--muted); font-weight: 400; }
@@ -234,6 +238,7 @@
 @keyframes ov-sheet-in { from { transform: translateX(2rem); opacity: 0.4; } }
 @media (prefers-reduced-motion: reduce) {
   .ov-insp.picked { animation: none; }
+  .ov-pips i.train { animation: none; }
 }
 
 /* ---- Phone: panes stack, directory compacts ---- */

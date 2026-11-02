@@ -893,6 +893,19 @@ type BottomSection struct {
 type ShellData struct {
 	Version      string
 	AssetVersion string
+	// BuildCommit is the source commit the running binary was
+	// built from, empty when the build carries no VCS stamp;
+	// the footer links BuildCommitShort (its short form) to
+	// that commit in the public repo. BuildHash is the SHA-256
+	// of the running binary, the same hash the release's signed
+	// manifest publishes for it; the footer shows
+	// BuildHashShort with the full hash in its title. All four
+	// are filled from the app's startup build identity
+	// (core_build.go); handlers set none of them.
+	BuildCommit      string
+	BuildCommitShort string
+	BuildHash        string
+	BuildHashShort   string
 	// StatusPage is the configured public status page's URL
 	// (STATUS_PAGE_ORIGIN), linked from the footer as Service
 	// Health. Empty when no status page is configured, and the
@@ -1083,6 +1096,9 @@ type Deps interface {
 	// DefaultMarketRegion is the one a page starts on, MarketRegionName
 	// names any region the market knows.
 	MarketRegions() []RegionOption
+	// MarketHubStation is a hub region's main trade station:
+	// the one market an appraisal in that region centers on.
+	MarketHubStation(regionID int64) (int64, bool)
 	DefaultMarketRegion() int64
 	// GlobalMarketRegion is ESI's global market region, the
 	// one market that is not a place: global-market types

@@ -22,6 +22,8 @@ import (
 
 // beatenRow is one beaten order, display-ready.
 type beatenRow struct {
+	CharacterID  int64
+	OrderID      int64
 	Character    string
 	Item         string
 	TypeID       int64
@@ -57,16 +59,18 @@ func (app *mod) buildBeatenOrders(ctx context.Context, userID int64) []beatenRow
 	for _, r := range rows {
 		buy := r.IsBuyOrder == 1
 		row := beatenRow{
-			Character:  r.CharacterName,
-			Item:       app.deps.TypeNameOrID(ctx, r.TypeID),
-			TypeID:     r.TypeID,
-			Side:       "Sell",
-			Loc:        app.deps.LinkPlace(ctx, r.LocationID, app.deps.EconLocationTitle(ctx, r.LocationID)),
-			MyPrice:    esi.FormatISK(r.ListedPrice),
-			Beating:    esi.FormatISK(r.BeatingPrice),
-			BeatingQty: esi.FormatInt(r.BeatingVolume),
-			Remaining:  esi.FormatInt(r.VolumeRemainLast),
-			Times:      r.OutbidEvents,
+			CharacterID: r.CharacterID,
+			OrderID:     r.OrderID,
+			Character:   r.CharacterName,
+			Item:        app.deps.TypeNameOrID(ctx, r.TypeID),
+			TypeID:      r.TypeID,
+			Side:        "Sell",
+			Loc:         app.deps.LinkPlace(ctx, r.LocationID, app.deps.EconLocationTitle(ctx, r.LocationID)),
+			MyPrice:     esi.FormatISK(r.ListedPrice),
+			Beating:     esi.FormatISK(r.BeatingPrice),
+			BeatingQty:  esi.FormatInt(r.BeatingVolume),
+			Remaining:   esi.FormatInt(r.VolumeRemainLast),
+			Times:       r.OutbidEvents,
 		}
 		if buy {
 			row.Side = "Buy"

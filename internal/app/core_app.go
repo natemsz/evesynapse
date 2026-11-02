@@ -711,6 +711,8 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 		r.Use(app.requireAuth)
 		r.Get("/", app.handleAssets)
 		r.Get("/suggest", app.handleAssetsSuggest)
+		r.Post("/filters", app.handleAssetsFilterSave)
+		r.Post("/filters/delete", app.handleAssetsFilterDelete)
 	})
 
 	r.Route("/planets", func(r chi.Router) {
@@ -1402,6 +1404,11 @@ func (app *Application) MarketRegions() []module.RegionOption {
 		out = append(out, module.RegionOption{ID: r.ID, Name: r.Name})
 	}
 	return out
+}
+
+func (app *Application) MarketHubStation(regionID int64) (int64, bool) {
+	id, ok := marketHubStations[regionID]
+	return id, ok
 }
 
 func (app *Application) DefaultMarketRegion() int64 { return defaultMarketRegion }

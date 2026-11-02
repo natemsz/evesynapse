@@ -2,18 +2,11 @@ package app
 
 import (
 	"context"
-	"database/sql"
-	"errors"
 	"fmt"
-	"net/http"
 	"sort"
-	"strconv"
-	"strings"
 
 	"evesynapse/internal/app/module"
-	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
-	"evesynapse/internal/logging"
 )
 
 // assetCharLink is one entry of the Assets page character switcher.
@@ -25,21 +18,9 @@ type assetRow struct {
 	TypeID   int64
 	Quantity string // thousands-separated
 	Note     string // "BPC", "singleton", or ""
-
-	// Children are the stacks directly inside this one (a ship's
-	// cargo, a container's contents), Inside how many stacks it holds
-	// at any depth, MoreInside how many of its direct ones were left
-	// out by the per-level cap. Character Assets page only.
-	Children   []assetRow
-	Inside     int
-	MoreInside int
 	// TypeName is what kind of thing it is, set when Name is the name
 	// its owner gave it ("Zoom Zoom", a Loki).
 	TypeName string
-	// Where names what a search hit is inside, outermost first
-	// ("Loki › Small Secure Container"); empty when it sits
-	// directly in the place.
-	Where string
 }
 
 // assetLocation is one location block: its resolved title plus the
@@ -49,128 +30,18 @@ type assetLocation struct {
 	Loc        placeRef // Title classified for the link policy
 	Items      []assetRow
 	MoreStacks int // stacks hidden past the per-location cap
-	Stacks     int // every stack in the place, nested ones included (character page)
-}
-
-// assetsView is the Assets page body for one character. Loaded is
-// false when the snapshot could not be produced at all; Warming
-// marks the cold-start case (no snapshot yet — the worker is still
-// importing), which gets friendlier copy than a hard failure.
-type assetsView struct {
-	CharacterName string
-	Loaded        bool
-	Warming       bool
-	Stacks        int
-	TotalItems    int64
-	Locations     []assetLocation
+	Stacks     int // every stack in the place, nested ones included
 }
 
 // maxAssetRowsPerLocation caps each location table so a hangar with
 // thousands of stacks stays a page, not a scroll marathon.
 const maxAssetRowsPerLocation = 25
 
-// handleAssets renders the Assets page for one of the signed-in
-// user's characters (switchable via ?character=). Asset data comes
-// through the snapshot cache, and every name is resolved from local
-// caches only — the worker pre-warms snapshots and names, so this
-// page never waits on ESI name lookups.
-func (app *Application) handleAssets(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-	data := app.page(ctx)
-
-	userID := app.userID(ctx)
-	if userID == 0 {
-		// Dev-login sessions carry no user; nothing to show.
-		app.render(ctx, w, http.StatusOK, "assets.html", data)
-		return
-	}
-
-	characters, err := app.queries.ListCharactersByUser(ctx, userID)
-	if err != nil {
-		logging.Errorf("assets: list characters for user %d: %v", userID, err)
-		data.Error = "Could not load asset data; check the server log."
-		app.render(ctx, w, http.StatusOK, "assets.html", data)
-		return
-	}
-	if len(characters) == 0 {
-		app.render(ctx, w, http.StatusOK, "assets.html", data)
-		return
-	}
-
-	// Active character: an explicit ?character= the user owns wins,
-	// then the session character, then the first linked character.
-	active := characters[0]
-	pick := func(id int64) bool {
-		for _, ch := range characters {
-			if ch.CharacterID == id {
-				active = ch
-				return true
-			}
-		}
-		return false
-	}
-	if want, _ := strconv.ParseInt(r.URL.Query().Get("character"), 10, 64); want != 0 && pick(want) {
-		// An explicit pick becomes the session's acting
-		// character (see pickCharacter in char_pages.go); a
-		// view pick (?view=1) renders without moving the pin.
-		if !viewPick(r) {
-			app.pinSessionCharacter(ctx, active.CharacterID, active.Name)
-		}
-	} else if sid := sessionCharID(app.sessions, ctx); sid == 0 || !pick(sid) {
-		active = characters[0]
-	}
-	for _, ch := range characters {
-		data.AssetsChars = append(data.AssetsChars, assetCharLink{
-			ID:     ch.CharacterID,
-			Name:   ch.Name,
-			Active: ch.CharacterID == active.CharacterID,
-			Image:  portraitURL(ch.CharacterID, 64),
-		})
-	}
-
-	// A ?q= search runs across every linked character instead of
-	// rendering one character's hangars.
-	if q := strings.TrimSpace(r.URL.Query().Get("q")); q != "" {
-		// "Only <character>" narrows the search to the acting one.
-		searched, only := characters, r.URL.Query().Get("only") == "1"
-		if only {
-			searched = []db.Character{active}
-		}
-		data.AssetsSearch = app.searchAssets(ctx, searched, q)
-		data.AssetsSearch.Only = only
-		app.render(ctx, w, http.StatusOK, "assets.html", data)
-		return
-	}
-
-	view := &assetsView{CharacterName: active.Name}
-	data.Assets = view
-
-	var items []esi.Asset
-	if err := app.storedSnapshot(ctx, active, esi.SnapAssets, &items); err != nil {
-		logging.Errorf("assets: load for character %d: %v", active.CharacterID, err)
-		// No snapshot row at all = cold start: the worker is still
-		// importing this character, which the Sync page shows live.
-		if _, serr := app.queries.GetSnapshot(ctx, db.GetSnapshotParams{CharacterID: active.CharacterID, Kind: esi.SnapAssets}); errors.Is(serr, sql.ErrNoRows) {
-			view.Warming = true
-		}
-		app.render(ctx, w, http.StatusOK, "assets.html", data)
-		return
-	}
-
-	view.Loaded = true
-	view.Stacks = len(items)
-	for _, it := range items {
-		view.TotalItems += it.Quantity
-	}
-	view.Locations = app.buildNestedAssetLocations(ctx, items)
-
-	app.render(ctx, w, http.StatusOK, "assets.html", data)
-}
-
 // buildAssetLocationsWith groups asset stacks by location, resolves
 // type and location names, and sorts biggest-first at both levels.
 // It is the corporation assets page's flat layout (the character
-// page nests instead: char_assets_tree.go), with two additions for it:
+// page's matrix lives in char_assets_matrix.go and
+// char_assets_panes.go), with two additions for it:
 //   - extraTitles names locations from outside the place cache —
 //     the corp's own structures, which the corp assets endpoint
 //     reports as location_type "item"/"other" with no structure
@@ -308,60 +179,4 @@ func assetNote(it esi.Asset) string {
 		return "singleton"
 	}
 	return ""
-}
-
-// assetSearchChar is one character's slice of a cross-character
-// search: the location blocks holding that character's matching
-// stacks.
-type assetSearchChar struct {
-	CharacterID   int64
-	CharacterName string
-	Locations     []assetLocation
-	Stacks        int // matching stacks across all locations
-}
-
-// assetsSearchView is the Assets page's cross-character search
-// result. Syncing names the characters whose first asset sync
-// has not landed yet — they are reported as not included, never
-// silently absent from the answer.
-type assetsSearchView struct {
-	Query       string
-	Only        bool // the search was narrowed to the acting character
-	Results     []assetSearchChar
-	TotalStacks int
-	Syncing     []string
-}
-
-// searchAssets answers "which of my characters has an X, and
-// where is it": it scans every linked character's cached asset
-// snapshot for stacks whose item name contains the query
-// (case-insensitive) and groups the matches by character and
-// location. It reads snapshot rows directly and never fetches —
-// a character whose first sync has not landed is reported as
-// not included rather than fetched on the spot.
-func (app *Application) searchAssets(ctx context.Context, characters []db.Character, query string) *assetsSearchView {
-	view := &assetsSearchView{Query: query}
-	needle := strings.ToLower(query)
-	for _, ch := range characters {
-		items, ok := app.characterAssets(ctx, ch)
-		if !ok {
-			view.Syncing = append(view.Syncing, ch.Name)
-			continue
-		}
-		found := app.searchNestedAssets(ctx, items, needle)
-		if found == nil {
-			continue
-		}
-		found.CharacterID = ch.CharacterID
-		found.CharacterName = ch.Name
-		view.Results = append(view.Results, *found)
-		view.TotalStacks += found.Stacks
-	}
-	sort.Slice(view.Results, func(i, j int) bool {
-		if view.Results[i].Stacks != view.Results[j].Stacks {
-			return view.Results[i].Stacks > view.Results[j].Stacks
-		}
-		return view.Results[i].CharacterName < view.Results[j].CharacterName
-	})
-	return view
 }

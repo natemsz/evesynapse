@@ -7,8 +7,8 @@ name: android-wrapper
 # it is merged. The Forgejo port of
 # .github/workflows/android.yml; the job runs in the Gradle
 # image the GitLab job used, which carries Java 17 and
-# Gradle but no Android SDK, so the platform is installed
-# first.
+# Gradle but no Android SDK and no Node, so both are
+# installed first.
 on:
   workflow_dispatch:
     inputs:
@@ -27,7 +27,25 @@ jobs:
   build:
     runs-on: ubuntu-latest
     container: gradle:8.11.1-jdk17
+    # The SDK step installs the platform here; the location
+    # is job-level state because a step's own exports do not
+    # reach the steps after it, and the build step's Gradle
+    # looks for the SDK at ANDROID_HOME.
+    env:
+      ANDROID_HOME: /opt/android-sdk
+      ANDROID_SDK_ROOT: /opt/android-sdk
     steps:
+      # The JavaScript actions (checkout, upload-artifact)
+      # run on Node, which the Gradle image does not carry;
+      # without it the job dies at checkout before Gradle
+      # ever runs. Installed the way the GitLab job installs
+      # it, before the first action step needs it.
+      - name: Install Node for the actions
+        run: |
+          apt-get update -qq && apt-get install -y -qq --no-install-recommends curl xz-utils >/dev/null
+          curl -fsSL "https://nodejs.org/dist/v22.14.0/node-v22.14.0-linux-$(uname -m | sed -e 's/aarch64/arm64/' -e 's/x86_64/x64/').tar.xz" | tar -xJ -C /usr/local --strip-components=1
+          node --version
+
       - name: Check out the source
         uses: actions/checkout@v4
 
@@ -44,6 +62,36 @@ jobs:
           mv "$ANDROID_HOME/cmdline-tools/cmdline-tools" "$ANDROID_HOME/cmdline-tools/latest"
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null 2>&1 || true
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36" "build-tools;36.0.0" "platform-tools"
+
+      # Google ships the SDK's native tools (aapt2, aidl,
+      # zipalign) as x86_64 binaries only, with no ARM build
+      # at any version, so on an ARM runner they cannot run
+      # at all. The runner host carries a qemu registration
+      # for x86_64, which runs them emulated once qemu can
+      # find their loader and libraries: lay down an amd64
+      # runtime root and point qemu at it for the steps
+      # after this one. A no-op on x86_64 runners, where
+      # the tools run natively.
+      - name: Provide an x86_64 runtime for the SDK tools on ARM
+        run: |
+          if [ "$(uname -m)" != "aarch64" ]; then
+            echo "Not an ARM runner: the SDK tools run natively, nothing to do."
+            exit 0
+          fi
+          sed -i 's/^deb /deb [arch=arm64] /' /etc/apt/sources.list
+          printf 'deb [arch=amd64] http://archive.ubuntu.com/ubuntu/ jammy main restricted universe\ndeb [arch=amd64] http://archive.ubuntu.com/ubuntu/ jammy-updates main restricted universe\n' >> /etc/apt/sources.list
+          dpkg --add-architecture amd64
+          apt-get update -qq
+          mkdir -p /tmp/x86debs /opt/x86_64-root
+          (cd /tmp/x86debs && apt-get download libc6:amd64 libstdc++6:amd64 libgcc-s1:amd64 zlib1g:amd64)
+          for d in /tmp/x86debs/*.deb; do dpkg-deb -x "$d" /opt/x86_64-root; done
+          # The package's loader path is an absolute symlink
+          # out of the root, which qemu follows to the host's
+          # root and finds nothing. Give the root a real
+          # loader file at that path instead.
+          rm /opt/x86_64-root/lib64/ld-linux-x86-64.so.2
+          cp /opt/x86_64-root/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2 /opt/x86_64-root/lib64/ld-linux-x86-64.so.2
+          echo "QEMU_LD_PREFIX=/opt/x86_64-root" >> "$GITHUB_ENV"
 
       # The signing key is used only for a build somebody
       # asked for by hand, never for a pull request's. The

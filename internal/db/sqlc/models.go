@@ -172,6 +172,20 @@ type AppraisalCookieSecret struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
+type AssetLocationValue struct {
+	UserID       int64     `json:"user_id"`
+	CharacterID  int64     `json:"character_id"`
+	LocationID   int64     `json:"location_id"`
+	LocationType string    `json:"location_type"`
+	EstValue     float64   `json:"est_value"`
+	PricedStacks int64     `json:"priced_stacks"`
+	TotalStacks  int64     `json:"total_stacks"`
+	TotalItems   int64     `json:"total_items"`
+	Ships        int64     `json:"ships"`
+	Volume       float64   `json:"volume"`
+	ComputedAt   time.Time `json:"computed_at"`
+}
+
 type BlueprintCopyMedian struct {
 	TypeID      int64     `json:"type_id"`
 	Runs        int64     `json:"runs"`

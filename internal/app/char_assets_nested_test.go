@@ -1,15 +1,18 @@
 package app
 
-// The character Assets page: a ship's cargo is filed under the
-// station the ship is docked in, nested beneath the ship; the search
-// covers the whole account and says whose each hit is and what it is
-// inside; and the search box suggests only what the account owns.
+// The character Assets page: a ship's contents ride the ship's row
+// and its inspector rather than filing as rows of their own; a
+// container's contents are matrix rows that say which container
+// they are in; the search covers the whole account and says whose
+// each hit is and what it is inside; and the search box suggests
+// only what the account owns.
 
 import (
 	"context"
 	"encoding/json"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -48,6 +51,18 @@ func newAssetsFixture(t *testing.T) *assetsFixture {
 		ch: seedCharacter(t, q, user.ID, fixtureCharA, "Fixture Ceo")}
 }
 
+// seedAssetGroups gives the fixture types their SDE groups, the
+// ship detection among them (category 6).
+func seedAssetGroups(t *testing.T, f *assetsFixture) {
+	t.Helper()
+	if _, err := f.app.db.ExecContext(context.Background(),
+		`INSERT INTO sde_groups (group_id, name, category_id) VALUES
+			(963, 'Strategic Cruiser', 6), (340, 'Secure Cargo Container', 2),
+			(18, 'Mineral', 4), (385, 'Heavy Missile', 8), (25, 'Frigate', 6)`); err != nil {
+		t.Fatalf("seed groups: %v", err)
+	}
+}
+
 // seedNestedAssets gives Fixture Ceo a Loki docked in Jita holding
 // ammunition and a container (which holds Tritanium), plus loose
 // Tritanium in the same station; and Fixture Alt a Rifter and some
@@ -77,44 +92,156 @@ func seedNestedAssets(t *testing.T, f *assetsFixture) {
 	})
 }
 
-func TestAssetsNestUnderWhereTheShipIsDocked(t *testing.T) {
+func TestAssetsMatrixFilesShipsAndCans(t *testing.T) {
 	f := newAssetsFixture(t)
 	seedNestedAssets(t, f)
+	seedAssetGroups(t, f)
+	// One more container, this one top-level in the same station,
+	// holding Tritanium: the card and drill-in case. (The seeded
+	// container sits in the Loki's cargo, so it is ship's cargo,
+	// not a station can.)
+	seedSnapshot(t, f.q, fixtureCharA, esi.SnapAssets, []esi.Asset{
+		{ItemID: 104, TypeID: typeTrit, Quantity: 5000, LocationID: nestStation, LocationType: "station", LocationFlag: "Hangar"},
+		{ItemID: 100, TypeID: typeLoki, Quantity: 1, IsSingleton: true, LocationID: nestStation, LocationType: "station", LocationFlag: "Hangar"},
+		{ItemID: 101, TypeID: typeAmmo, Quantity: 500, LocationID: 100, LocationType: "item", LocationFlag: "Cargo"},
+		{ItemID: 102, TypeID: typeBox, Quantity: 1, IsSingleton: true, LocationID: 100, LocationType: "item", LocationFlag: "Cargo"},
+		{ItemID: 103, TypeID: typeTrit, Quantity: 1000, LocationID: 102, LocationType: "item", LocationFlag: "Unlocked"},
+		{ItemID: 105, TypeID: typeBox, Quantity: 1, IsSingleton: true, LocationID: nestStation, LocationType: "station", LocationFlag: "Hangar"},
+		{ItemID: 106, TypeID: typeTrit, Quantity: 250, LocationID: 105, LocationType: "item", LocationFlag: "Unlocked"},
+	})
 	cookie := sessionCookie(t, f.app, f.userID, f.ch.CharacterID, f.ch.Name)
 
-	code, body := getPage(t, f.app, cookie, "/assets/?character=90000001")
+	code, body := getPage(t, f.app, cookie, "/assets/?character=90000001&scope=90000001")
 	if code != http.StatusOK {
 		t.Fatalf("GET /assets/ = %d", code)
 	}
-	// One place: the station. The ship is not a place of its own.
+	// One place: the station. No place is named for a ship or a
+	// container of its own.
 	if strings.Contains(body, "Inside: ") {
 		t.Fatal("a ship or container is still shown as a location of its own")
 	}
-	if n := strings.Count(body, `<section class="foldable"`); n != 1 {
-		t.Fatalf("%d location blocks, want 1 (everything is in the one station)", n)
-	}
 	mustContain(t, "/assets/", body,
 		"Jita IV - Moon 4 - Caldari Navy Assembly Plant",
-		"· 5 stacks",
-		"<summary>3 stacks inside Loki</summary>",
-		"<summary>1 stack inside Small Secure Container</summary>",
-		"5 stacks · 6502 items · 1 locations",
+		"7 stacks · 6753 items · 1 locations",
+		// No prices are seeded, so every stack says so instead of
+		// reading as worth zero.
+		"7 unpriced",
+		// The Loki's loadout chips: everything inside it, and its
+		// two cargo stacks (the ammunition and the container).
+		"⊞ 3 inside",
+		"+2 Cargo",
+		// The top-level container is a card, and its Tritanium is
+		// a row that names the container it sits in.
+		"1 stack · no price",
+		"Container: Small Secure Container",
+		// The strip's own filter and typeahead hooks: the box,
+		// the grid it narrows, and the name each card carries for
+		// the filter to match against.
+		`id="assets-canfilter"`,
+		`id="assets-cangrid"`,
+		`data-name="Small Secure Container`,
+		// The strip's expander control, labelled with the count;
+		// the script only reveals it when the cans overflow the
+		// compact strip.
+		`id="assets-cantoggle"`,
+		"Show all 1 container",
 	)
-	// What holds things comes first: the Loki above the loose
-	// Tritanium, though that is the bigger stack.
-	loki, loose := strings.Index(body, ">Loki<"), strings.Index(body, "<td>5,000</td>")
+	// The ship comes before the loose stack it outweighs in the
+	// reading order (with no prices, the name breaks the tie).
+	loki, loose := strings.Index(body, ">Loki<"), strings.Index(body, ">5,000<")
 	if loki < 0 || loose < 0 || loki > loose {
 		t.Fatalf("the Loki (at %d) should come before the loose Tritanium (at %d)", loki, loose)
 	}
-	// And its contents are inside its row's block, the container's
-	// inside that.
-	open := strings.Index(body, "<summary>3 stacks inside Loki</summary>")
-	ammo := strings.Index(body, "Scourge Heavy Missile")
-	box := strings.Index(body, "<summary>1 stack inside Small Secure Container</summary>")
-	inner := strings.Index(body, "<td>1,000</td>")
-	if !(open < ammo && open < box && box < inner) {
-		t.Fatalf("nesting order wrong: Loki opens at %d, ammo %d, container opens at %d, its Tritanium %d", open, ammo, box, inner)
+	// What is inside the ship is not a matrix row: the ammunition
+	// rides the ship's row, and shows in its inspector instead.
+	if strings.Contains(body, "Scourge Heavy Missile") {
+		t.Fatal("a ship's cargo is listed as a matrix row of its own")
 	}
+	_, body = getPage(t, f.app, cookie, "/assets/?scope=90000001&ship=100")
+	mustContain(t, "inspector", body,
+		"Scourge Heavy Missile",
+		"Cargo, Drone Bay and Fuel",
+		"Hull + fitted estimate",
+		"Copy EFT",
+		"[Loki, Loki]",
+	)
+}
+
+// TestAssetsScopeSelectorChecklist pins the character scope
+// control: a button naming the current selection over a
+// checklist panel whose search field (in app.js) matches each
+// row's data-name or data-tags; every row carries the
+// character's custom tags as chips and links to the scope with
+// that character toggled; the scope parameter is a set of
+// character IDs.
+func TestAssetsScopeSelectorChecklist(t *testing.T) {
+	f := newAssetsFixture(t)
+	seedNestedAssets(t, f)
+	seedAssetGroups(t, f)
+	// A third character, so a two-character set is a real subset.
+	seedCharacter(t, f.q, f.userID, 90000003, "Fixture Third")
+	setCharTags(t, f.app, fixtureCharB, "indy, scout")
+	cookie := sessionCookie(t, f.app, f.userID, f.ch.CharacterID, f.ch.Name)
+
+	// The default view: all characters, every row ticked, the
+	// alt's tags on its row, and each row toggling itself out.
+	_, body := getPage(t, f.app, cookie, "/assets/")
+	mustContain(t, "scope selector", body,
+		`data-assetscope`,
+		`<span class="asset-scope-label">All characters</span>`,
+		`data-assetscope-q`,
+		`data-name="Fixture Ceo"`,
+		`data-name="Fixture Alt" data-tags="indy, scout"`,
+		`<span class="tagchip">indy</span>`,
+		`<span class="tagchip">scout</span>`,
+		// Toggling the CEO out of "all" leaves the other two.
+		`<a class="charselector-option asset-scope-row on" href="/assets/?scope=90000002,90000003" data-name="Fixture Ceo" data-tags="">`,
+		// Toggling the third character out leaves CEO and alt
+		// (the set is written in account order: alt, CEO, third).
+		`href="/assets/?scope=90000002,90000001"`,
+	)
+	if strings.Contains(body, "scopepill") {
+		t.Fatal("the character scope pills are still rendered")
+	}
+
+	// A set scope: the button names the pair, the page shows
+	// only their places, and the unticked row's link completes
+	// the set back to all.
+	_, body = getPage(t, f.app, cookie, "/assets/?scope=90000001,90000002")
+	mustContain(t, "scope set", body,
+		`<span class="asset-scope-label">Fixture Alt, Fixture Ceo</span>`,
+		// The unticked row completes the set, which reads as all.
+		`<a class="charselector-option asset-scope-row" href="/assets/" data-name="Fixture Third" data-tags="">`,
+		"Jita IV - Moon 4 - Caldari Navy Assembly Plant",
+	)
+	// A saved quick filter keeps the set it was saved under:
+	// its chip links back to the same scope.
+	code, _, _ := doReq(t, f.app, http.MethodPost, "/assets/filters", url.Values{
+		"name":  {"Pair"},
+		"scope": {"90000001,90000002"},
+	}, cookie)
+	if code != http.StatusSeeOther {
+		t.Fatalf("save filter = %d", code)
+	}
+	_, body = getPage(t, f.app, cookie, "/assets/")
+	mustContain(t, "saved filter scope", body,
+		`<a class="fchip" href="/assets/?scope=90000002,90000001">Pair</a>`)
+
+	// One character: the button names them, and only their
+	// place is on the page.
+	_, body = getPage(t, f.app, cookie, "/assets/?scope=90000002")
+	mustContain(t, "scope one", body,
+		`<span class="asset-scope-label">Fixture Alt</span>`,
+		"Amarr VIII (Oris) - Emperor Family Academy",
+	)
+	if strings.Contains(body, "Jita IV - Moon 4") {
+		t.Fatal("a one-character scope still shows another character's place")
+	}
+
+	// A set naming the whole account reads back as all.
+	_, body = getPage(t, f.app, cookie, "/assets/?scope=90000001,90000002,90000003")
+	mustContain(t, "scope full set", body,
+		`<span class="asset-scope-label">All characters</span>`)
 }
 
 func TestAssetSearchCoversTheAccountAndSaysWhere(t *testing.T) {
@@ -127,12 +254,12 @@ func TestAssetSearchCoversTheAccountAndSaysWhere(t *testing.T) {
 		t.Fatalf("search = %d", code)
 	}
 	mustContain(t, "search", body,
-		"3 stacks matching “trit” across 2 characters",
-		`<a href="/assets/?character=90000001">Fixture Ceo</a>`,
-		`<a href="/assets/?character=90000002">Fixture Alt</a>`,
-		// The Tritanium in the container in the Loki is listed under
-		// the station, and says what it is inside.
-		"<small>in Loki › Small Secure Container</small>",
+		`3 stacks matching "trit" across 2 characters`,
+		// Each hit says whose it is, where it is, and what it is
+		// inside: the Tritanium in the container in the Loki is
+		// filed under the station.
+		"Fixture Alt",
+		"in Loki › Small Secure Container",
 		"Jita IV - Moon 4 - Caldari Navy Assembly Plant",
 		"Amarr VIII (Oris) - Emperor Family Academy",
 		`id="assets-only"> Only Fixture Ceo`,
@@ -144,13 +271,13 @@ func TestAssetSearchCoversTheAccountAndSaysWhere(t *testing.T) {
 	// Ticked, the search is the acting character's alone.
 	_, body = getPage(t, f.app, cookie, "/assets/?q=trit&only=1")
 	mustContain(t, "search only", body,
-		"2 stacks matching “trit” on this character",
+		`2 stacks matching "trit" on this character`,
 		`id="assets-only" checked> Only Fixture Ceo`)
-	if strings.Contains(body, `<h2><a href="/assets/?character=90000002">`) || strings.Contains(body, "Amarr VIII") {
+	if strings.Contains(body, "Amarr VIII") {
 		t.Fatal("the narrowed search still shows another character's assets")
 	}
 	_, body = getPage(t, f.app, cookie, "/assets/?q=rifter&only=1")
-	mustContain(t, "search only, no hit", body, "No stacks matching “rifter” on this character.")
+	mustContain(t, "search only, no hit", body, `No stacks matching "rifter" on this character.`)
 }
 
 func TestAssetSuggestionsAreWhatTheAccountOwns(t *testing.T) {
@@ -282,16 +409,18 @@ func TestShipsShowTheNamesTheirOwnersGaveThem(t *testing.T) {
 	_, body := getPage(t, app, cookie, "/assets/?character=90000001")
 	mustContain(t, "/assets/", body,
 		">Zoom Zoom</a> <small>Loki</small>",
-		"<summary>3 stacks inside Zoom Zoom</summary>",
-		// The unnamed container keeps its type name.
-		"<summary>1 stack inside Small Secure Container</summary>")
+		"⊞ 3 inside")
+	// The unnamed container keeps its type name: it rides the
+	// ship's cargo, so it shows in the ship's inspector.
+	_, body = getPage(t, app, cookie, "/assets/?ship=100")
+	mustContain(t, "inspector", body, "Small Secure Container")
 
 	// Searching by the given name finds the ship; a hit inside it
 	// says so by that name.
 	_, body = getPage(t, app, cookie, "/assets/?q=zoom")
-	mustContain(t, "search zoom", body, "1 stack matching “zoom”", ">Zoom Zoom</a> <small>Loki</small>")
+	mustContain(t, "search zoom", body, `1 stack matching "zoom"`, ">Zoom Zoom</a> <small>Loki</small>")
 	_, body = getPage(t, app, cookie, "/assets/?q=trit&only=1")
-	mustContain(t, "search trit", body, "<small>in Zoom Zoom › Small Secure Container</small>")
+	mustContain(t, "search trit", body, "in Zoom Zoom › Small Secure Container")
 
 	_, body = getPage(t, app, cookie, "/assets/suggest?q=zoo")
 	var rows []suggestItem
@@ -324,8 +453,62 @@ func TestAssetNamesBackOffAfterAFailure(t *testing.T) {
 	if len(names.asked) != 1 {
 		t.Fatalf("ESI was asked %d times after refusing; want once, then a wait", len(names.asked))
 	}
-	// The page is unaffected: type names, as before.
+	// The page is unaffected: the assets render under their type
+	// names, and no given name appears.
 	cookie := sessionCookie(t, app, f.userID, f.ch.CharacterID, f.ch.Name)
 	_, body := getPage(t, app, cookie, "/assets/?character=90000001")
-	mustContain(t, "/assets/", body, "<summary>3 stacks inside Loki</summary>")
+	mustContain(t, "/assets/", body, "Loki", "Scourge Heavy Missile")
+	if strings.Contains(body, "Zoom Zoom") {
+		t.Fatal("a name ESI refused is shown on the page")
+	}
+}
+
+// TestAssetInspectorEFTComesFromTheShipsFit: the inspector's EFT
+// is the fitting tool's export of the fit read from the asset
+// tree: the ship's given name in the header, its fitted modules,
+// drones and cargo from the snapshot's flags.
+func TestAssetInspectorEFTComesFromTheShipsFit(t *testing.T) {
+	f := newAssetsFixture(t)
+	ctx := context.Background()
+	if _, err := f.app.db.ExecContext(ctx,
+		`INSERT INTO sde_types (type_id, name, group_id) VALUES
+			(587, 'Rifter', 25), (7001, '200mm AutoCannon II', 55),
+			(7002, '1MN Afterburner II', 46), (7003, 'Hobgoblin II', 549),
+			(7004, 'Republic Fleet EMP S', 3142)`); err != nil {
+		t.Fatalf("seed types: %v", err)
+	}
+	if _, err := f.app.db.ExecContext(ctx,
+		`INSERT INTO sde_groups (group_id, name, category_id) VALUES (25, 'Frigate', 6)`); err != nil {
+		t.Fatalf("seed groups: %v", err)
+	}
+	f.app.esi.StorePlaceName(nestStation, "Jita IV - Moon 4 - Caldari Navy Assembly Plant")
+	seedSnapshot(t, f.q, fixtureCharA, esi.SnapAssets, []esi.Asset{
+		{ItemID: 100, TypeID: typeRifter, Quantity: 1, IsSingleton: true, LocationID: nestStation, LocationType: "station", LocationFlag: "Hangar"},
+		{ItemID: 101, TypeID: 7001, Quantity: 1, IsSingleton: true, LocationID: 100, LocationType: "item", LocationFlag: "HiSlot0"},
+		{ItemID: 102, TypeID: 7001, Quantity: 1, IsSingleton: true, LocationID: 100, LocationType: "item", LocationFlag: "HiSlot1"},
+		{ItemID: 103, TypeID: 7002, Quantity: 1, IsSingleton: true, LocationID: 100, LocationType: "item", LocationFlag: "MedSlot0"},
+		{ItemID: 104, TypeID: 7003, Quantity: 2, LocationID: 100, LocationType: "item", LocationFlag: "DroneBay"},
+		{ItemID: 105, TypeID: 7004, Quantity: 300, LocationID: 100, LocationType: "item", LocationFlag: "Cargo"},
+	})
+	if err := f.q.UpsertItemName(ctx, db.UpsertItemNameParams{ItemID: 100, Name: "Vale's Rifter"}); err != nil {
+		t.Fatalf("seed item name: %v", err)
+	}
+
+	cookie := sessionCookie(t, f.app, f.userID, f.ch.CharacterID, f.ch.Name)
+	code, body := getPage(t, f.app, cookie, "/assets/?ship=100")
+	if code != http.StatusOK {
+		t.Fatalf("GET inspector = %d", code)
+	}
+	mustContain(t, "inspector", body,
+		// The slot sections group by the snapshot's flags.
+		"High Slots",
+		"Mid Slots",
+		// The EFT block: the exporter's header names the ship by
+		// the name its owner gave it, and its lines are the fit.
+		// (The apostrophe is HTML-escaped in the page source; the
+		// browser and the clipboard both read it as written.)
+		"[Rifter, Vale&#39;s Rifter]",
+		"200mm AutoCannon II",
+		"Hobgoblin II x2",
+	)
 }

@@ -346,7 +346,7 @@ func (app *page) handleAppraiseReprocess(w http.ResponseWriter, r *http.Request)
 		app.deps.Render(ctx, w, http.StatusNotFound, "market_appraise.html", data)
 		return
 	}
-	res, err := app.storedResult(row)
+	res, err := app.storedResult(ctx, row)
 	if err != nil {
 		logging.Errorf("appraisal: reprocess snapshot: %v", err)
 		data.Error = "That shared appraisal could not be read."

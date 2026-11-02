@@ -26,9 +26,8 @@ type pageData struct {
 	Corps           []corpView
 	CorpOptions     []corpOption // the corporations the Corporation page can show
 	CorpChars       []assetCharLink
-	Assets          *assetsView
+	Assets          *assetsPageView
 	AssetsChars     []assetCharLink
-	AssetsSearch    *assetsSearchView
 	Planets         *planetsView
 	PlanetsChars    []assetCharLink
 	Market          *marketView
@@ -229,6 +228,14 @@ type shellProvider interface {
 func (app *Application) fillShell(ctx context.Context, shell *module.ShellData, page string) {
 	if shell.Version == "" {
 		shell.Version = appVersion
+	}
+	if shell.BuildCommit == "" {
+		shell.BuildCommit = runningBuild.commit
+		shell.BuildCommitShort = shortCommit(runningBuild.commit)
+	}
+	if shell.BuildHash == "" {
+		shell.BuildHash = runningBuild.hash
+		shell.BuildHashShort = shortHash(runningBuild.hash)
 	}
 	if shell.AssetVersion == "" {
 		shell.AssetVersion = staticAssetVersion()

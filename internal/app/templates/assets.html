@@ -99,7 +99,7 @@
 {{if .Warming}}
 <p>Still syncing.{{if $.IsAdmin}} Progress is on the <a href="/admin/sync/">Sync page</a>.{{end}}</p>
 {{else if .Loaded}}
-<div class="panes3 amx{{with .Matrix}}{{if .Inspector}} has-insp{{end}}{{end}}">
+<div class="panes3 p3 amx{{with .Matrix}}{{if .Inspector}} has-insp{{end}}{{end}}">
   <aside class="pane-dir">
     <h2 class="pane-h">Station directory <span>{{.Places}} locations</span></h2>
     <input id="assets-dirfilter" type="search" placeholder="Filter stations..." aria-label="Filter the station directory">
@@ -169,7 +169,7 @@
   {{end}}
   </section>
   {{with .Matrix}}{{with .Inspector}}
-  <aside class="pane-insp insp" aria-label="Inspector">
+  <aside class="pane-insp insp p3-insp" aria-label="Inspector">
     {{if .Fallback}}
     <div class="insp-head">
       <span class="amx-art big"><img src="{{.IconURL}}" alt="" width="72" height="72" loading="lazy" data-fallback-src="/static/img/item.svg">{{if .Pip}}<span class="pip pip-{{.PipClass}}">{{.Pip}}</span>{{end}}</span>

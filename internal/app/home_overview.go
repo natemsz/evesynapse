@@ -40,6 +40,7 @@ const (
 	widgetFleet       = "fleet"
 	widgetNetWorth    = "networth"
 	widgetIndustry    = "industry"
+	widgetProdLine    = "prodline"
 	widgetMarket      = "market"
 	widgetWatchlist   = "watchlist"
 	widgetPI          = "pi"
@@ -93,6 +94,7 @@ var coreWidgetCatalog = []widgetDef{
 	{widgetFleet, "Fleet Overview", "Every linked character at a glance: where they are, what they're flying, what they're training.", 3, 2, "fleet"},
 	{widgetNetWorth, "Net Worth", "Wallets, assets and open-order escrow across all characters, at market prices. An estimate.", 1, 2, "networth"},
 	{widgetIndustry, "Industry", "Active industry jobs across characters, soonest delivery first.", 1, 1, "industry"},
+	{widgetProdLine, "Production Lines", "Your pinned production lines: what is due, what needs a restart, and what to buy for the next run.", 2, 2, "industry"},
 	{widgetPI, "Planetary Industry", "Colonies across your characters: extractor timers, expired heads, and the next planet needing a visit.", 1, 2, "planets"},
 	{widgetWatchlist, "Market Watchlist", "The items you're watching: latest prices, 7- and 30-day moves, and a flag when one crosses your alert line.", 1, 1, "market_public"},
 	{widgetTraining, "Training Horizon", "The next 10 skill finishes across every character, plus who is sitting idle.", 1, 2, "skills"},
@@ -314,6 +316,7 @@ var widgetSnapshotKinds = map[string][]string{
 	widgetFleet:       {esi.SnapProfile, esi.SnapCorpInfo, esi.SnapLocation, esi.SnapShip, esi.SnapOnline, esi.SnapSkillqueue, esi.SnapWallet, esi.SnapMailLabels},
 	widgetNetWorth:    {esi.SnapWallet, esi.SnapAssets, esi.SnapOrders},
 	widgetIndustry:    {esi.SnapIndustryJobs},
+	widgetProdLine:    {esi.SnapIndustryJobs, esi.SnapAssets},
 	widgetMarket:      {esi.SnapOrders},
 	widgetWatchlist:   {}, // watchlist + stored history only; no character snapshots
 	widgetPI:          {esi.SnapPlanets},
@@ -628,6 +631,7 @@ type homeWidget struct {
 	Briefing    *briefingWidget
 	NetWorth    *netWorthWidget
 	Industry    *industryWidget
+	ProdLine    *prodLineWidget
 	Market      *marketWidget
 	Watchlist   *watchlistWidget
 	PI          *piWidget
@@ -1556,6 +1560,8 @@ func (app *Application) buildHome(ctx context.Context, customize bool) *homeView
 			w.NetWorth = sharedNetWorth()
 		case widgetIndustry:
 			w.Industry = app.buildIndustry(ctx, bundles)
+		case widgetProdLine:
+			w.ProdLine = app.buildProdLine(ctx, userID, bundles, gw, gh)
 		case widgetMarket:
 			w.Market = app.buildMarket(ctx, bundles, app.ordersConfigFor(ctx, userID), marketShared)
 		case widgetWatchlist:

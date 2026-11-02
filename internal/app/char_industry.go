@@ -69,6 +69,7 @@ type blueprintRow struct {
 	ProductName     string // what the blueprint produces
 	ProductTypeID   int64  // product type, when the SDE maps one (links to the build planner)
 	ProductCategory string // category of the produced item
+	Pinned          bool   // the account has pinned this blueprint as a production line
 }
 
 // miningRow is one mining-ledger line.
@@ -84,6 +85,7 @@ type miningRow struct {
 // each handler fills only its own section's fields.
 type industryView struct {
 	CharacterName string
+	CharacterID   int64
 	Jobs          econSectionState
 	JobRows       []industryJobRow
 	JobsCut       int
@@ -117,10 +119,10 @@ func (app *Application) handleIndustry(w http.ResponseWriter, r *http.Request) {
 	}
 	data.IndustryChars = links
 
-	view := &industryView{CharacterName: active.Name}
+	view := &industryView{CharacterName: active.Name, CharacterID: active.CharacterID}
 	data.Industry = view
 
-	app.fillBlueprints(ctx, active.CharacterID, view)
+	app.fillBlueprints(ctx, active.CharacterID, view, app.blueprintPinSet(ctx, app.userID(ctx)))
 
 	app.render(ctx, w, http.StatusOK, "industry.html", data)
 }
@@ -241,7 +243,11 @@ func (app *Application) fillIndustryJobs(ctx context.Context, characterID int64,
 	view.JobRows = rows
 }
 
-func (app *Application) fillBlueprints(ctx context.Context, characterID int64, view *industryView) {
+// fillBlueprints loads the blueprint library snapshot and shapes
+// every row, walking the stored product map (sde_blueprints) for
+// the produced item and its category. pins is the account's pin
+// set, marking which rows carry a production-line pin.
+func (app *Application) fillBlueprints(ctx context.Context, characterID int64, view *industryView, pins map[int64]bool) {
 	var blueprints esi.Blueprints
 	view.Blueprints = app.econSection(ctx, characterID, esi.SnapBlueprints, &blueprints)
 	if !view.Blueprints.Loaded {
@@ -274,6 +280,7 @@ func (app *Application) fillBlueprints(ctx context.Context, characterID int64, v
 				}
 			}
 		}
+		row.Pinned = pins[bp.TypeID]
 		// ESI semantics: quantity -1 marks an original (runs -1 =
 		// unlimited), -2 a copy; anything else is a stack count.
 		switch {

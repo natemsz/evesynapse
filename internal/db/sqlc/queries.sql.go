@@ -962,6 +962,40 @@ func (q *Queries) ListAllCorporationIDs(ctx context.Context) ([]int64, error) {
 	return items, nil
 }
 
+const listBlueprintPins = `-- name: ListBlueprintPins :many
+SELECT blueprint_type_id, pinned_at FROM blueprint_pins
+WHERE user_id = $1
+ORDER BY blueprint_type_id
+`
+
+type ListBlueprintPinsRow struct {
+	BlueprintTypeID int64     `json:"blueprint_type_id"`
+	PinnedAt        time.Time `json:"pinned_at"`
+}
+
+func (q *Queries) ListBlueprintPins(ctx context.Context, userID int64) ([]ListBlueprintPinsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listBlueprintPins, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListBlueprintPinsRow
+	for rows.Next() {
+		var i ListBlueprintPinsRow
+		if err := rows.Scan(&i.BlueprintTypeID, &i.PinnedAt); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listCharacterCorporations = `-- name: ListCharacterCorporations :many
 SELECT character_id, corporation_id FROM character_corporations
 WHERE character_id = ANY($1::bigint[])
@@ -2164,6 +2198,24 @@ func (q *Queries) NextSkillPlanPosition(ctx context.Context, planID int64) (int6
 	return column_1, err
 }
 
+const pinBlueprint = `-- name: PinBlueprint :exec
+INSERT INTO blueprint_pins (user_id, blueprint_type_id)
+VALUES ($1, $2)
+ON CONFLICT (user_id, blueprint_type_id) DO NOTHING
+`
+
+type PinBlueprintParams struct {
+	UserID          int64 `json:"user_id"`
+	BlueprintTypeID int64 `json:"blueprint_type_id"`
+}
+
+// Blueprint pins (schema 118): the production lines an account
+// has pinned from its Blueprints page.
+func (q *Queries) PinBlueprint(ctx context.Context, arg PinBlueprintParams) error {
+	_, err := q.db.ExecContext(ctx, pinBlueprint, arg.UserID, arg.BlueprintTypeID)
+	return err
+}
+
 const searchLocalFittings = `-- name: SearchLocalFittings :many
 SELECT lf.id, lf.user_id, lf.name, lf.ship_type_id, lf.items_json, lf.is_public, lf.is_draft, lf.created_at, lf.updated_at,
        COALESCE(NULLIF(st.name, ''), tn.name, '') AS ship_name
@@ -2430,6 +2482,21 @@ type TouchUserSeenParams struct {
 // The account was seen (worker_tiers.go writes this at most hourly).
 func (q *Queries) TouchUserSeen(ctx context.Context, arg TouchUserSeenParams) error {
 	_, err := q.db.ExecContext(ctx, touchUserSeen, arg.ID, arg.LastSeenAt)
+	return err
+}
+
+const unpinBlueprint = `-- name: UnpinBlueprint :exec
+DELETE FROM blueprint_pins
+WHERE user_id = $1 AND blueprint_type_id = $2
+`
+
+type UnpinBlueprintParams struct {
+	UserID          int64 `json:"user_id"`
+	BlueprintTypeID int64 `json:"blueprint_type_id"`
+}
+
+func (q *Queries) UnpinBlueprint(ctx context.Context, arg UnpinBlueprintParams) error {
+	_, err := q.db.ExecContext(ctx, unpinBlueprint, arg.UserID, arg.BlueprintTypeID)
 	return err
 }
 

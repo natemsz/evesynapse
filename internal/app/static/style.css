@@ -2556,6 +2556,39 @@ tr.fleet-detail > td { background: #120d09; border-bottom: 1px solid color-mix(i
 /* A home widget with nothing to show says so quietly, in the
    muted tone, with its way forward linked in the accent. */
 .wempty { color: var(--muted); }
+/* Production Lines widget: one line per pinned blueprint, led
+   by the product's art, its state as a chip in the state's
+   colour, and a progress bar over its running job; the buy
+   list under the lines at the bigger sizes, each line's own
+   missing materials at the largest. */
+.card[data-widget="prodline"] .prodline-lines { list-style: none; margin: 0; padding: 0; }
+.card[data-widget="prodline"] .prodline-lines > li { padding: 0.45rem 0; border-top: 1px solid rgba(255, 255, 255, 0.07); }
+.card[data-widget="prodline"] .prodline-lines > li:first-child { border-top: none; }
+.card[data-widget="prodline"] .prodline-line { display: flex; gap: 0.6rem; align-items: flex-start; }
+.card[data-widget="prodline"] .prodline-art { width: 40px; height: 40px; border-radius: var(--r-sm); border: 1px solid var(--box-edge); background: rgba(0, 0, 0, 0.35); flex: none; }
+.card[data-widget="prodline"] .prodline-main { flex: 1; min-width: 0; }
+.card[data-widget="prodline"] .prodline-top { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+.card[data-widget="prodline"] .prodline-prod { font-weight: 600; }
+.card[data-widget="prodline"] .prodline-chip { font-size: 0.7rem; letter-spacing: 0.08em; padding: 0.1em 0.5em; border-radius: var(--r-sm); border: 1px solid; white-space: nowrap; }
+.card[data-widget="prodline"] .prodline-due { color: var(--accent); border-color: var(--accent); background: rgba(255, 106, 26, 0.12); }
+.card[data-widget="prodline"] .prodline-restart { color: #ffab8f; border-color: var(--danger); background: rgba(120, 26, 6, 0.38); }
+.card[data-widget="prodline"] .prodline-healthy { color: var(--kept); border-color: var(--kept); background: color-mix(in srgb, var(--kept) 12%, transparent); }
+.card[data-widget="prodline"] .prodline-meter { max-width: none; height: 6px; margin-top: 0.35rem; border-radius: var(--r-xs); overflow: hidden; }
+.card[data-widget="prodline"] .prodline-meter > span { height: 6px; }
+.card[data-widget="prodline"] .prodline-meter-healthy > span { background: linear-gradient(90deg, color-mix(in srgb, var(--kept) 45%, #0b2921), var(--kept)); }
+.card[data-widget="prodline"] .prodline-barlabel { font-size: 0.85em; color: var(--muted-2); margin-top: 0.15rem; }
+.card[data-widget="prodline"] .prodline-runner { display: block; margin-top: 0.1rem; }
+.card[data-widget="prodline"] .prodline-buy, .card[data-widget="prodline"] .prodline-missing { list-style: none; margin: 0.2rem 0 0; padding: 0; }
+.card[data-widget="prodline"] .prodline-buyrow { display: flex; align-items: center; gap: 0.45rem; padding: 0.18rem 0; }
+.card[data-widget="prodline"] .prodline-buyart { width: 24px; height: 24px; border-radius: var(--r-xs); border: 1px solid var(--box-edge); background: rgba(0, 0, 0, 0.35); flex: none; }
+.card[data-widget="prodline"] .prodline-buyname { flex: 1; min-width: 0; }
+.card[data-widget="prodline"] .prodline-qty { color: var(--muted-2); font-variant-numeric: tabular-nums; }
+/* The pin toggle on the Blueprints page: a quiet button that
+   fills in gold when its blueprint is pinned. */
+.bp-pin { margin: 0; }
+.bp-pin-btn { background: none; border: 1px solid rgba(255, 255, 255, 0.18); border-radius: var(--r-sm); color: var(--muted); cursor: pointer; font: inherit; font-size: 0.8rem; line-height: 1; padding: 0.22rem 0.5rem; }
+.bp-pin-btn:hover, .bp-pin-btn:focus-visible { color: var(--text); border-color: var(--accent); }
+.bp-pin-btn.on { color: var(--gold); border-color: var(--gold); }
 /* A fleet table taller than its module scrolls inside it, and the
    "Showing x of y" line stays pinned at the bottom. The line paints
    no surface of its own: the card's glass shows through it. A second

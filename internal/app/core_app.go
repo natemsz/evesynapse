@@ -993,6 +993,7 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 		r.With(app.requireAuth).Get("/", app.handleIndustry)
 		r.With(app.requireAuth).Get("/jobs/", app.handleIndustryJobs)
 		r.With(app.requireAuth).Get("/mining/", app.handleIndustryMining)
+		r.With(app.requireAuth).Post("/pin/", app.handleBlueprintPin)
 	})
 
 	r.Route("/sync", func(r chi.Router) {

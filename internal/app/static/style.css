@@ -1809,9 +1809,10 @@ html[data-theme="light"] .card[data-widget="briefing"] .brief-card:hover, html[d
 .home-grid .brief-card a { color: inherit; font-weight: inherit; }
 /* In-page section anchors land clear of the sticky top bar. */
 .card[id] { scroll-margin-top: 4.5rem; }
-/* Section tabs and strategy tabs read as controls: Rajdhani
-   capitals at 12px, medium weight, regular letter spacing. */
-.section-tabs a, .section-tabs .tabs-more-btn, .ti-tabs button {
+/* Section tabs, sub-tabs and strategy tabs read as controls:
+   Rajdhani capitals at 12px, medium weight, regular letter
+   spacing. */
+.section-tabs a, .section-tabs .tabs-more-btn, .section-subtabs a, .section-subtabs .tabs-more-btn, .ti-tabs button {
   font-family: "Rajdhani", "Segoe UI", sans-serif;
   font-weight: 500;
   text-transform: uppercase;

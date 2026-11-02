@@ -10,8 +10,8 @@
 
 /* The page head: the summary line and scope selector left, the
    account's total estimated value right with its label. */
-.assets-head { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 0.6rem 1.5rem; margin-bottom: 0.9rem; }
-.assets-count { margin: 0 0 0.55rem; color: var(--muted); }
+.assets-head { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 0.6rem 1.5rem; }
+.assets-count { margin: 0; color: var(--muted); }
 .assets-net { text-align: right; }
 .assets-net-v { display: block; color: var(--gold); font-size: 1.4rem; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1.15; }
 .assets-net-l { color: var(--muted); font-size: 0.68rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }

@@ -38,16 +38,17 @@ func TestMenuTextIsAllCapsRajdhani(t *testing.T) {
 }
 
 // TestTabNavTypeSpec pins the tab-navigation face: every tab bar
-// on the Rajdhani capitals treatment (section tabs, the strategy
-// tabs, the contract spec tabs, the fitting view tabs) reads at
-// 12px, weight 500, regular letter spacing. Filter chips keep
-// their own heavier control treatment.
+// on the Rajdhani capitals treatment (section tabs, the section
+// sub-tabs, the strategy tabs, the contract spec tabs, the
+// fitting view tabs) reads at 12px, weight 500, regular letter
+// spacing. Filter chips keep their own heavier control
+// treatment.
 func TestTabNavTypeSpec(t *testing.T) {
 	style := readStatic(t, "style.css")
 	for _, want := range []string{
-		// Section tabs and strategy tabs share the tab rule; the
-		// chip is not a tab and keeps its own rule.
-		".section-tabs a, .section-tabs .tabs-more-btn, .ti-tabs button {\n  font-family: \"Rajdhani\", \"Segoe UI\", sans-serif;\n  font-weight: 500;\n  text-transform: uppercase;\n  letter-spacing: normal;\n  font-size: 0.75rem;\n}",
+		// Section tabs, sub-tabs and strategy tabs share the tab
+		// rule; the chip is not a tab and keeps its own rule.
+		".section-tabs a, .section-tabs .tabs-more-btn, .section-subtabs a, .section-subtabs .tabs-more-btn, .ti-tabs button {\n  font-family: \"Rajdhani\", \"Segoe UI\", sans-serif;\n  font-weight: 500;\n  text-transform: uppercase;\n  letter-spacing: normal;\n  font-size: 0.75rem;\n}",
 		".chip {\n  font-family: \"Rajdhani\", \"Segoe UI\", sans-serif;\n  font-weight: 600;\n  text-transform: uppercase;\n  letter-spacing: 0.06em;\n}",
 		// The strategy tabs' pill paint block states the same spec.
 		".ti-tabs button {\n  font-family: Rajdhani, sans-serif;\n  font-weight: 500;\n  text-transform: uppercase;\n  letter-spacing: normal;\n  font-size: 0.75rem;",

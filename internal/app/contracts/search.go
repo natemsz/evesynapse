@@ -584,6 +584,16 @@ func blueprintSuffix(it db.PubContractItem) string {
 // live in; reaction formulas are in it too.
 const BlueprintCategoryID = 9
 
+// SkinCategoryID is the SDE category permanent SKIN types
+// live in.
+const SkinCategoryID = 91
+
+// ItemPlaceholderPath is the app-served picture that stands in
+// for a type the image server has no picture of at all. The
+// assets templates name it as their data-fallback-src, so a
+// picture that fails for any other reason lands here too.
+const ItemPlaceholderPath = "/static/img/item.svg"
+
 // TypeIconURL is the image-server URL of one contract line's
 // item picture. Blueprint-category types have no /icon asset
 // on the image server (it answers 400 for them, formulas
@@ -598,6 +608,27 @@ func TypeIconURL(typeID int64, blueprintClass, copy bool, size int) string {
 		}
 	}
 	return fmt.Sprintf("https://images.evetech.net/types/%d/%s?size=%d", typeID, variant, size)
+}
+
+// TypeCategoryIconURL is the picture URL of one type on the
+// surfaces that know the type's SDE category but hold no
+// contract line (asset rows, LP store requirements, and the
+// like). The category decides what the image server actually
+// serves: blueprint-category types serve /bp, SKIN-category
+// types serve nothing at all (no /icon, /render, /bp or /bpc),
+// so the app placeholder stands in, and every other type
+// serves /icon. The app stores no skin-to-hull mapping, so a
+// SKIN never borrows its hull's picture. Callers that lead
+// with a ship /render keep doing so; this is the URL for
+// everything that is not a ship render.
+func TypeCategoryIconURL(typeID, categoryID int64, size int) string {
+	switch categoryID {
+	case BlueprintCategoryID:
+		return fmt.Sprintf("https://images.evetech.net/types/%d/bp?size=%d", typeID, size)
+	case SkinCategoryID:
+		return ItemPlaceholderPath
+	}
+	return fmt.Sprintf("https://images.evetech.net/types/%d/icon?size=%d", typeID, size)
 }
 
 // blueprintNote words a line's blueprint facts, "" for a plain

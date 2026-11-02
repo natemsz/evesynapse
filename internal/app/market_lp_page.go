@@ -18,6 +18,7 @@ import (
 	"strings"
 	"time"
 
+	"evesynapse/internal/app/contracts"
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
 	"evesynapse/internal/logging"
@@ -175,6 +176,7 @@ func (app *Application) buildMarketLPView(ctx context.Context, q map[string][]st
 	}
 	type offerKey struct{ corp, offer int64 }
 	reqs := map[offerKey][]marketLPRequirement{}
+	reqCategories := map[int64]int64{}
 	if len(rows) > 0 {
 		reqRows, err := app.queries.ListLPOfferRequirementsFor(ctx, db.ListLPOfferRequirementsForParams{
 			CorporationIds: corpIDs, OfferIds: offerIDs,
@@ -205,6 +207,16 @@ func (app *Application) buildMarketLPView(ctx context.Context, q map[string][]st
 			} else {
 				logging.Errorf("lp store: requirement prices: %v", err)
 			}
+			// The requirement icons resolve by SDE category:
+			// the image server serves no /icon for blueprint
+			// types and no picture at all for SKIN types.
+			if catRows, err := app.queries.ListSDETypeCategories(ctx, ids); err == nil {
+				for _, r := range catRows {
+					reqCategories[r.TypeID] = r.CategoryID
+				}
+			} else {
+				logging.Errorf("lp store: requirement categories: %v", err)
+			}
 		}
 		for _, q := range reqRows {
 			k := offerKey{q.CorporationID, q.OfferID}
@@ -212,7 +224,7 @@ func (app *Application) buildMarketLPView(ctx context.Context, q map[string][]st
 				TypeID:   q.TypeID,
 				Name:     app.typeNameOrID(ctx, q.TypeID),
 				Quantity: esi.FormatInt(q.Quantity),
-				IconURL:  "https://images.evetech.net/types/" + strconv.FormatInt(q.TypeID, 10) + "/icon?size=32",
+				IconURL:  contracts.TypeCategoryIconURL(q.TypeID, reqCategories[q.TypeID], 32),
 				Href:     "/market/?type=" + strconv.FormatInt(q.TypeID, 10) + "&region=" + strconv.FormatInt(view.RegionID, 10),
 			}
 			sell, buy := "no market", "no market"

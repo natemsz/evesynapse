@@ -651,11 +651,17 @@ func (app *Application) buildItemTypeDetail(ctx context.Context, t db.SdeType) *
 	// blueprint category (blueprints, reaction formulas),
 	// which has neither asset and serves /bp instead. The
 	// item page shows the type itself, never a copy, so the
-	// /bpc variant does not apply here.
+	// /bpc variant does not apply here. The SKIN category
+	// serves no asset in any variant, so the placeholder
+	// stands in for the art outright.
 	detail.ArtURL = "https://images.evetech.net/types/" + strconv.FormatInt(typeID, 10) + "/render?size=128"
 	detail.ArtFallback = "https://images.evetech.net/types/" + strconv.FormatInt(typeID, 10) + "/icon?size=128"
 	if detail.Category != nil && detail.Category.ID == contracts.BlueprintCategoryID {
 		detail.ArtURL = contracts.TypeIconURL(typeID, true, false, 128)
+		detail.ArtFallback = ""
+	}
+	if detail.Category != nil && detail.Category.ID == contracts.SkinCategoryID {
+		detail.ArtURL = contracts.ItemPlaceholderPath
 		detail.ArtFallback = ""
 	}
 

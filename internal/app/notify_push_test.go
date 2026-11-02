@@ -235,7 +235,7 @@ func TestWorkerPushesNewNotifications(t *testing.T) {
 	}
 
 	// A kind that is switched off is neither shown nor pushed.
-	f.post(cookie, "/notifications/settings", map[string][]string{"kind": {notifySkill}})
+	f.post(cookie, "/notifications/settings", map[string][]string{"kinds_shown": {"1"}, "kind": {notifySkill}})
 	f.seed(esi.SnapKillmails, []esi.KillmailRef{{KillmailID: 3}, {KillmailID: 2}, {KillmailID: 1}})
 	if n := f.pass(now.Add(5 * time.Minute)); n != 0 || service.count() != 4 {
 		t.Fatalf("a switched-off kind: %d notification(s), %d push(es) in total", n, service.count())

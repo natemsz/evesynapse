@@ -2540,7 +2540,7 @@ WHERE location_id = ANY($1::bigint[])
 ORDER BY location_id, type_id, is_buy_order
 `
 
-// Station heat (schema 118): the trailing 12 hour count of times
+// Station heat (schema 120): the trailing 12 hour count of times
 // the best price at a station was beaten, per item and side,
 // restated by every sweep of the region. The My Orders page reads
 // the rows for its orders' stations in one bounded read; a pair

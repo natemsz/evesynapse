@@ -620,7 +620,7 @@ func (app *Application) storeRegionSweep(ctx context.Context, regionID int64) (t
 	defer tx.Rollback()
 	qtx := app.queries.WithTx(tx)
 
-	// Station heat (schema 118): the station bests this sweep is
+	// Station heat (schema 120): the station bests this sweep is
 	// about to replace, read before the delete below, so the fresh
 	// pass can log each best that moved against the book.
 	oldBests := make(map[stationKey]stationAccum)
@@ -870,7 +870,7 @@ func (app *Application) storeRegionSweep(ctx context.Context, regionID int64) (t
 			return 0, 0, err
 		}
 	}
-	// Station heat (schema 118): a station's fresh best sell below
+	// Station heat (schema 120): a station's fresh best sell below
 	// the best it replaces, or its fresh best buy above it, is one
 	// beat against the book there. Log this pass's beats, restate
 	// the region's trailing 12 hour counts from the log, and prune

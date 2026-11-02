@@ -754,7 +754,7 @@ FROM market_station_stats
 WHERE location_id = $1 AND type_id = ANY($2::bigint[])
 ORDER BY type_id;
 
--- Station heat (schema 118): the trailing 12 hour count of times
+-- Station heat (schema 120): the trailing 12 hour count of times
 -- the best price at a station was beaten, per item and side,
 -- restated by every sweep of the region. The My Orders page reads
 -- the rows for its orders' stations in one bounded read; a pair

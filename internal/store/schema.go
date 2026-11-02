@@ -717,11 +717,11 @@ var pgProfitFallbacksSchema string
 //go:embed schema_pg/117_profit_contracts_invention.sql
 var pgProfitContractsInventionSchema string
 
-// Step 118: market station heat: the sweep worker's log of a
+// Step 120: market station heat: the sweep worker's log of a
 // station's best price being beaten, and the trailing 12 hour
 // count per (station, item, side) the My Orders page reads.
 //
-//go:embed schema_pg/118_market_station_heat.sql
+//go:embed schema_pg/120_market_station_heat.sql
 var pgMarketStationHeatSchema string
 
 // Step 119: per-location asset values for the Assets page
@@ -877,8 +877,8 @@ func schemaSteps() []schemaStep {
 		{115, "intel_name_things", pgIntelNameThingsSchema, ""},
 		{116, "profit_fallbacks", pgProfitFallbacksSchema, ""},
 		{117, "profit_contracts_invention", pgProfitContractsInventionSchema, ""},
-		{118, "market_station_heat", pgMarketStationHeatSchema, ""},
 		{119, "asset_location_values", pgAssetLocationValuesSchema, ""},
+		{120, "market_station_heat", pgMarketStationHeatSchema, ""},
 	}
 }
 

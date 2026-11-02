@@ -807,7 +807,7 @@ func TestRegionSweepDetectsMarketChanges(t *testing.T) {
 }
 
 // TestRegionSweepStoresStationHeat: a sweep whose station bests
-// move against the book logs one beat per side (schema 118), and
+// move against the book logs one beat per side (schema 120), and
 // the stored heat count follows; an unchanged book logs nothing.
 func TestRegionSweepStoresStationHeat(t *testing.T) {
 	transport := &regionBookTransport{books: map[int64][][]esi.MarketOrder{}}

@@ -45,7 +45,7 @@ type orderRow struct {
 	// Heat: open rows only — how competitive the item is at this
 	// order's station, in heat words, from how often the station's
 	// best price on the order's side was beaten in the trailing
-	// 12 hours (schema 118). HeatNote is the count behind the
+	// 12 hours (schema 120). HeatNote is the count behind the
 	// word, for the cell's title.
 	Heat     string
 	HeatNote string
@@ -365,7 +365,7 @@ func (app *mod) handleOrders(w http.ResponseWriter, r *http.Request) {
 			}
 			return view.OpenRows[i].Price < view.OpenRows[j].Price
 		})
-		// Competition at each order's station (schema 118): one
+		// Competition at each order's station (schema 120): one
 		// stored read for the page's stations. A pair with no
 		// stored row had no beats in the trailing 12 hours and
 		// reads Quiet, so an order placed a minute ago carries

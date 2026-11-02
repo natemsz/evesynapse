@@ -1235,6 +1235,28 @@
   onContentReady(initFleetFilter);
   initFleetFilter(document);
 
+  // --- Beaten only filter (My Orders) ----------------------------
+  // The open-orders table marks rows beaten at their station
+  // server-side (data-beaten); this checkbox just hides the
+  // unmarked rows in place. No fetch, no reload: unticking
+  // restores every row. No JS: every row is simply visible.
+  function initBeatenFilter(root) {
+    var box = root.querySelector("[data-beaten-filter]");
+    if (!box || box.hasAttribute("data-beaten-ready")) return;
+    box.setAttribute("data-beaten-ready", "1");
+    var section = box.closest("section");
+    if (!section) return;
+    var rows = section.querySelectorAll("tbody tr");
+    box.addEventListener("change", function () {
+      for (var i = 0; i < rows.length; i++) {
+        var beaten = rows[i].hasAttribute("data-beaten");
+        rows[i].style.display = box.checked && !beaten ? "none" : "";
+      }
+    });
+  }
+  onContentReady(initBeatenFilter);
+  initBeatenFilter(document);
+
   // --- Briefing severity tabs ------------------------------------
   // All / Critical / Warning / Info swap which cards show; a deck
   // whose cards are all filtered out hides with them.

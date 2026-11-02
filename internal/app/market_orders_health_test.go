@@ -66,6 +66,33 @@ func TestOrdersPageOrderHealth(t *testing.T) {
 			t.Fatalf("seed health: %v", err)
 		}
 	}
+	// Lifecycle verdicts: orders 700 (sell) and 703 (buy) are
+	// beaten at their station, so their open-orders rows carry
+	// the inline highlight and the filter/key render.
+	for _, b := range []struct {
+		orderID   int64
+		isBuy     int64
+		price     float64
+		remain    int64
+		beating   float64
+		suggested float64
+	}{
+		{700, 0, 1000000, 3, 990000, 989900},
+		{703, 1, 900000, 5, 910000, 910100},
+	} {
+		if err := q.UpsertOrderLifecycle(ctx, db.UpsertOrderLifecycleParams{
+			CharacterID: fixtureCharA, OrderID: b.orderID, TypeID: 587,
+			LocationID: 60003760, RegionID: 10000002, IsBuyOrder: b.isBuy,
+			ListedPrice: b.price, VolumeTotal: 5, VolumeRemainLast: b.remain,
+			FirstSeenAt: now, LastSeenAt: now,
+		}); err != nil {
+			t.Fatalf("seed beaten lifecycle %d: %v", b.orderID, err)
+		}
+		if _, err := conn.ExecContext(ctx, `UPDATE order_lifecycle SET beaten_now = 1, outbid_events = 1, beaten_at = $1, beating_price = $2, beating_volume = 10, suggested_price = $3 WHERE character_id = $4 AND order_id = $5`,
+			now, b.beating, b.suggested, fixtureCharA, b.orderID); err != nil {
+			t.Fatalf("mark beaten %d: %v", b.orderID, err)
+		}
+	}
 
 	cookie := sessionCookie(t, app, user.ID, fixtureCharA, "Fixture Ceo")
 	code, body := getPage(t, app, cookie, "/orders/?character=90000001")
@@ -82,6 +109,12 @@ func TestOrdersPageOrderHealth(t *testing.T) {
 	}
 	if n := strings.Count(body, "Best price here"); n != 1 {
 		t.Errorf("best-price lines = %d, want exactly 1 (open sell only)", n)
+	}
+	mustContain(t, "/orders/", body,
+		"data-beaten-filter", "Show beaten orders only", "Beaten at its station",
+	)
+	if n := strings.Count(body, `<tr class="order-beaten" data-beaten="1">`); n != 2 {
+		t.Errorf("beaten open rows = %d, want exactly 2 (orders 700 and 703, both sides)", n)
 	}
 	if got := transport.calls.Load(); got != 0 {
 		t.Errorf("handler made %d outbound calls, want 0 (cache-only)", got)

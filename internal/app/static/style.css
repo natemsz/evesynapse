@@ -6444,6 +6444,59 @@ button.gn-title:hover .gn-more, button.gn-title:focus-visible .gn-more { color: 
 .panes3 { display: grid; gap: 1rem; align-items: start; }
 .panes3 > * { min-width: 0; }
 
+/* The three column console: one bordered frosted surface holding
+   the directory, the main pane and the inspector. A page using it
+   sets only its two column widths (--p3-dir and --p3-insp, and
+   --p3-gap when its panes sit flush) and marks its inspector
+   .p3-insp; the frame, the blur layer, the column pattern and
+   the band forms below are shared by every console, so a fix to
+   any of them lands on all of them at once. On the desktop band
+   each page pins its inspector in its own sheet, at the width
+   where its three columns still fit. */
+.panes3.p3 {
+  --p3-dir: 18rem;
+  --p3-insp: 22rem;
+  gap: var(--p3-gap, 1rem);
+  border: 1px solid var(--glass-edge);
+  border-radius: var(--r-sm);
+  background: var(--glass);
+  position: relative;
+  grid-template-columns: var(--p3-dir) minmax(0, 1fr);
+}
+.panes3.p3.has-insp { grid-template-columns: var(--p3-dir) minmax(0, 1fr) var(--p3-insp); }
+/* The console's blur rides a layer under the panes, not the
+   console itself: an element with a backdrop filter becomes the
+   anchor for fixed-position children, and the middle band's
+   inspector sheet would pin to the console's full height instead
+   of the screen. The layer paints the same frosted glass; the
+   panes lift above it. */
+.panes3.p3::before { content: ""; position: absolute; inset: 0; border-radius: inherit; -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(0.9); backdrop-filter: blur(var(--glass-blur)) saturate(0.9); pointer-events: none; }
+.panes3.p3 > * { position: relative; z-index: 1; }
+
+/* The middle band: the third column drops out of the grid and
+   the inspector opens as a sheet over the page's right edge, in
+   the phone sheet's surface language. A page whose inspector is
+   only present when picked keeps its own show and hide rules;
+   the sheet's shape is the shared part. */
+@media (min-width: 45.01rem) and (max-width: 80rem) {
+  .panes3.p3.has-insp { grid-template-columns: var(--p3-dir) minmax(0, 1fr); }
+  .panes3.p3 .p3-insp {
+    position: fixed; top: 0; right: 0; bottom: 0; z-index: 95;
+    width: min(24rem, 94vw);
+    overflow-y: auto; overscroll-behavior: contain;
+    border: 0; border-left: 1px solid var(--glass-edge); border-radius: 0;
+    background: var(--glass);
+    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(0.9);
+    backdrop-filter: blur(var(--glass-blur)) saturate(0.9);
+    box-shadow: -18px 0 42px rgba(0, 0, 0, 0.55);
+  }
+}
+
+/* Tablet and phone: the panes stack in one column. */
+@media (max-width: 64rem) {
+  .panes3.p3, .panes3.p3.has-insp { grid-template-columns: minmax(0, 1fr); }
+}
+
 /* Directory list rows: one place per row, its security badge,
    name and value on the first line, its facts under, and a share
    bar showing its weight against the largest row. */

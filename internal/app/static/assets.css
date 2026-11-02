@@ -45,22 +45,14 @@
 .asset-scope-only { position: absolute; right: 0.45rem; top: 50%; transform: translateY(-50%); padding: 0.3rem 0.3rem; color: var(--muted); font-size: 0.75rem; font-weight: 600; text-decoration: none; }
 .asset-scope-only:hover { color: var(--accent); }
 
-/* The console: one bordered surface, the panes flush against
-   hairline dividers instead of three separate cards. The
-   overflow clips rather than hides: a hidden overflow would
-   make the console the inspector's scroll container and its
-   sticky pinning could never engage; clip keeps the same
-   corner clipping without a scroll box. */
-.panes3.amx { gap: 0; border: 1px solid var(--glass-edge); border-radius: var(--r-sm); background: var(--glass); overflow: clip; grid-template-columns: 18rem minmax(0, 1fr); position: relative; }
-/* The console's blur rides a layer under the panes, not the
-   console itself: an element with a backdrop filter becomes
-   the anchor for fixed-position children, and the middle
-   band's inspector sheet would pin to the console's full
-   height instead of the screen. The layer paints the same
-   frosted glass; the panes lift above it. */
-.panes3.amx::before { content: ""; position: absolute; inset: 0; border-radius: inherit; -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(0.9); backdrop-filter: blur(var(--glass-blur)) saturate(0.9); pointer-events: none; }
-.panes3.amx > * { position: relative; z-index: 1; }
-.panes3.amx.has-insp { grid-template-columns: 18rem minmax(0, 1fr) 22rem; }
+/* The console is the shared three column class (.p3 in
+   style.css): this page sets its column widths and keeps its
+   panes flush against hairline dividers. The overflow clips
+   rather than hides: a hidden overflow would make the console
+   the inspector's scroll container and its sticky pinning could
+   never engage; clip keeps the same corner clipping without a
+   scroll box. */
+.panes3.amx { --p3-dir: 18rem; --p3-insp: 22rem; --p3-gap: 0; overflow: clip; }
 .pane-dir { padding: 0.9rem; }
 .pane-main { padding: 0.9rem 1rem 1rem; border-left: 1px solid var(--box-edge); }
 .panes3.amx .pane-insp { border: 0; border-left: 1px solid var(--box-edge); border-radius: 0; background: none; }
@@ -146,10 +138,17 @@
 
 /* The matrix table. */
 .amx-table { margin: 0.9rem 0 0; table-layout: fixed; background: var(--row-alt); border: 1px solid var(--box-edge); }
-.amx-table th:nth-child(2) { width: 22rem; }
-.amx-table th:nth-child(3) { width: 4.75rem; }
-.amx-table th:nth-child(4) { width: 5.5rem; }
-.amx-table th:nth-child(5) { width: 6rem; }
+/* Every column takes a share of the table: fixed widths add up
+   to more than the middle pane whenever the inspector column is
+   open at ordinary widths, and the fixed layout takes the
+   difference out of the item column, crushing the names. The
+   loadout chips wrap inside their share. */
+.amx-table th:nth-child(1) { width: 31%; }
+.amx-table th:nth-child(2) { width: 30%; }
+.amx-table th:nth-child(3) { width: 9%; }
+.amx-table th:nth-child(4) { width: 14%; }
+.amx-table th:nth-child(5) { width: 16%; }
+.amx-table .lchips { flex-wrap: wrap; }
 .amx-table td { overflow: hidden; }
 .amx-table th.amx-r, .amx-table td.amx-c-num, .amx-table td.amx-c-val { text-align: right; }
 .amx-table th:first-child, .amx-table th:last-child { text-align: center; }
@@ -187,30 +186,13 @@
    placeholder never truncates against the sort select and
    the button and the Only box stop crowding it. */
 @media (max-width: 80rem) {
-  .panes3.amx.has-insp { grid-template-columns: 18rem minmax(0, 1fr); }
+  /* The middle band's sheet form itself is the shared class's;
+     this page dims the page behind the sheet with a shadow
+     layer, where the character sheet uses its own backdrop. */
   .panes3.amx .pane-insp {
-    position: fixed; top: 0; right: 0; bottom: 0; z-index: 95;
-    width: min(24rem, 94vw);
-    overflow-y: auto; overscroll-behavior: contain;
-    border: 0; border-left: 1px solid var(--glass-edge); border-radius: 0;
-    background: var(--glass);
-    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(0.9);
-    backdrop-filter: blur(var(--glass-blur)) saturate(0.9);
-    box-shadow: -18px 0 42px rgba(0, 0, 0, 0.55), 0 0 0 100vmax rgba(0, 0, 0, 0.45);
+    box-shadow: -18px 0 42px rgba(0, 0, 0, 0.55), 0 0 0 100vmax rgba(0, 0, 0, 0.35);
   }
   .amx-tools .searchwrap { flex: 1 1 100%; }
-  /* The matrix keeps its desktop column widths until this
-     band, and here they add up to more than the pane: the
-     fixed layout takes the difference out of the item column
-     and crushes the names to a few characters. This band
-     gives every column a share of the table instead, and the
-     loadout chips wrap inside their share. */
-  .amx-table th:nth-child(1) { width: 31%; }
-  .amx-table th:nth-child(2) { width: 30%; }
-  .amx-table th:nth-child(3) { width: 9%; }
-  .amx-table th:nth-child(4) { width: 14%; }
-  .amx-table th:nth-child(5) { width: 16%; }
-  .amx-table .lchips { flex-wrap: wrap; }
   /* A fixed sheet inside a blurred surface takes that
      surface as its frame, so while the inspector is up the
      page glass gives up its blur and the sheet pins to the
@@ -222,10 +204,9 @@
   }
 }
 
-/* Tablet: the panes stack; the inspector stays the sheet
-   the middle band makes of it. */
+/* Tablet: the shared class stacks the panes; this page's
+   divider moves from the main pane's left edge to its top. */
 @media (max-width: 64rem) {
-  .panes3.amx, .panes3.amx.has-insp { grid-template-columns: minmax(0, 1fr); }
   .pane-main { border-left: 0; border-top: 1px solid var(--box-edge); }
 }
 
@@ -235,15 +216,12 @@
    Qty and Value, and the inspector is a sheet under the
    matrix. */
 @media (max-width: 45rem) {
-  /* The inspector is a sheet under the matrix here, not the
-     middle band's overlay: undo the overlay form in full. */
+  /* The inspector sits in the stack under the matrix here,
+     divided from it by a top border. */
   .panes3.amx .pane-insp {
-    position: static; width: auto; overflow: visible;
+    position: static;
     border: 0; border-top: 1px solid var(--box-edge); border-radius: 0;
     background: none;
-    -webkit-backdrop-filter: none;
-    backdrop-filter: none;
-    box-shadow: none;
   }
   .assets-net { text-align: left; }
   .asset-scope { max-width: none; }

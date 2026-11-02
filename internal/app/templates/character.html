@@ -123,7 +123,7 @@
   </div>
 
   {{if and $ov.InspOpen (or $ov.SkillInsp $ov.CloneInsp)}}<a class="ov-insp-bg" href="{{$ov.InspCloseHref}}" aria-hidden="true" tabindex="-1"></a>{{end}}
-  <div class="panes3 ov{{if or $ov.SkillInsp $ov.CloneInsp}} has-insp{{end}}">
+  <div class="panes3 p3 ov{{if or $ov.SkillInsp $ov.CloneInsp}} has-insp{{end}}">
     <section class="ov-dir" aria-label="Skill directory and clone bay">
       {{if $v.SkillsKnown}}
       <h2 class="ov-h">Skill directory <span class="cnt">{{len $ov.DirGroups}} groups</span></h2>
@@ -267,7 +267,7 @@
     </section>
 
     {{if or $ov.SkillInsp $ov.CloneInsp}}
-    <aside class="insp ov-insp{{if $ov.InspOpen}} picked{{end}}" aria-label="Inspector">
+    <aside class="insp ov-insp p3-insp{{if $ov.InspOpen}} picked{{end}}" aria-label="Inspector">
       <a class="insp-x ov-insp-x" href="{{$ov.InspCloseHref}}" aria-label="Close the inspector">&#10005;</a>
       {{if eq $v.State.Surface "clones"}}
         {{with $ov.CloneInsp}}

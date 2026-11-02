@@ -223,7 +223,7 @@
   <p>EVE Online and all associated material are the intellectual property of CCP Games hf and are used with permission.<br>
   No official affiliation or endorsement by CCP Games hf is stated or implied.</p>
   <p><a href="/about/#about">About</a> · <a href="/about/#contact">Contact</a> · <a href="/about/#privacy">Privacy Policy</a> &middot; <a href="/license/">License</a> &middot; <a href="/report/">Report a bug</a>{{if .StatusPage}} &middot; <a href="{{.StatusPage}}">Service Health</a>{{end}}</p>
-  <p class="version"><a href="https://gitlab.com/natemsz/evesynapse" target="_blank" rel="noopener noreferrer">EveSynapse</a> <span class="version-number">{{.Version}}</span>{{if .BuildCommit}} · commit <a href="https://gitlab.com/natemsz/evesynapse/-/commit/{{.BuildCommit}}" target="_blank" rel="noopener noreferrer">{{.BuildCommitShort}}</a>{{end}}{{if .BuildHash}} · binary hash <span title="SHA-256 of the running binary: {{.BuildHash}}">{{.BuildHashShort}}</span>{{end}} · Made in Seattle, WA by <a href="https://natems.dev" target="_blank" rel="noopener noreferrer">natemsz</a></p>
+  <p class="version"><a href="https://natems.dev/EveSynapse" target="_blank" rel="noopener noreferrer">EveSynapse</a> <a class="version-number" href="https://natems.dev/EveSynapse/evesynapse/releases/tag/{{.Version}}" target="_blank" rel="noopener noreferrer">{{.Version}}</a>{{if .BuildHash}} · binary hash <span class="binary-hash">{{.BuildHash}}</span>{{end}} · Made in Seattle, WA by <a href="https://natems.dev" target="_blank" rel="noopener noreferrer">natemsz</a></p>
 </footer>
 </div>
 {{if .BottomNav}}

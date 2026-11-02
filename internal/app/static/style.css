@@ -1660,6 +1660,11 @@ footer .version {
 footer .version-number {
   font-weight: 400;
 }
+/* The binary hash prints in full; at phone width it wraps inside
+   the line instead of pushing the footer sideways. */
+footer .binary-hash {
+  overflow-wrap: anywhere;
+}
 
 /* --- small screens --- */
 @media (max-width: 640px) {

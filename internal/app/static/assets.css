@@ -59,7 +59,7 @@
 
 /* The console: one bordered surface, the panes flush against
    hairline dividers instead of three separate cards. */
-.panes3.amx { gap: 0; border: 1px solid var(--box-edge); border-radius: var(--r-sm); background: var(--glass); overflow: hidden; grid-template-columns: 18rem minmax(0, 1fr); }
+.panes3.amx { gap: 0; border: 1px solid var(--glass-edge); border-radius: var(--r-sm); background: var(--glass); -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(0.9); backdrop-filter: blur(var(--glass-blur)) saturate(0.9); overflow: hidden; grid-template-columns: 18rem minmax(0, 1fr); }
 .panes3.amx.has-insp { grid-template-columns: 18rem minmax(0, 1fr) 22rem; }
 .pane-dir { padding: 0.9rem; }
 .pane-main { padding: 0.9rem 1rem 1rem; border-left: 1px solid var(--box-edge); }

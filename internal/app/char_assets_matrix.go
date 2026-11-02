@@ -277,8 +277,15 @@ func joinIDList(ids []int64) string {
 	return strings.Join(parts, ",")
 }
 
-// scopeParam is the scope parameter's value for the current set.
-func (st assetPageState) scopeParam() string { return joinIDList(st.scopeIDs) }
+// scopeParam is the scope parameter's value for the current
+// set. The explicit empty scope (nothing selected) spells
+// itself "none", so links built from it keep the state.
+func (st assetPageState) scopeParam() string {
+	if !st.scopeAll && len(st.scopeIDs) == 0 {
+		return "none"
+	}
+	return joinIDList(st.scopeIDs)
+}
 
 var assetTabs = []struct{ id, label string }{
 	{"all", "All Assets"},
@@ -300,7 +307,12 @@ func validAssetTab(id string) bool {
 // defaulting anything unrecognized to the plain view.
 func parseAssetPageState(q url.Values, characters []db.Character, active db.Character) assetPageState {
 	st := assetPageState{tab: "all", sort: "value", scopeAll: true}
-	if s := q.Get("scope"); s != "" && s != "all" {
+	if s := q.Get("scope"); s == "none" {
+		// An explicit empty scope: every character unselected.
+		// The selector's All row unselects into it, and it is a
+		// real state of its own; an absent scope means all.
+		st.scopeAll, st.scopeIDs = false, []int64{}
+	} else if s != "" && s != "all" {
 		// The scope is a set of character IDs, comma-separated;
 		// a lone ID is the one-character case the pills used to
 		// link to. Unknown IDs drop out, and a set covering the
@@ -554,10 +566,16 @@ func (app *Application) buildAssetsPage(ctx context.Context, userID int64, chara
 	// The scope selector: a reset row plus one checklist row per
 	// character, each row's link toggling that character in or
 	// out of the scope. Toggling from "all characters" starts
-	// from the whole account; an empty or complete set reads
-	// back as all.
+	// from the whole account; a complete set reads back as all,
+	// and an empty one is the explicit none scope.
 	view.Selector.All = st.scopeAll
-	view.Selector.AllHref = st.href(map[string]string{"scope": "", "can": "", "ship": "", "item": ""})
+	// The All row is a toggle: from all characters it unselects
+	// into the empty scope; from anything else it resets to all.
+	allScope := ""
+	if st.scopeAll {
+		allScope = "none"
+	}
+	view.Selector.AllHref = st.href(map[string]string{"scope": allScope, "can": "", "ship": "", "item": ""})
 	for _, ch := range characters {
 		set := make(map[int64]bool)
 		if st.scopeAll {
@@ -581,7 +599,10 @@ func (app *Application) buildAssetsPage(ctx context.Context, userID int64, chara
 			}
 		}
 		param := ""
-		if len(next) > 0 && len(next) < len(characters) {
+		switch {
+		case len(next) == 0:
+			param = "none"
+		case len(next) < len(characters):
 			param = joinIDList(next)
 		}
 		charTags := tags.Split(ch.Tags)
@@ -595,6 +616,8 @@ func (app *Application) buildAssetsPage(ctx context.Context, userID int64, chara
 	switch {
 	case st.scopeAll:
 		view.Selector.Label = "All characters"
+	case len(scopeChars) == 0:
+		view.Selector.Label = "No characters"
 	case len(scopeChars) <= 2:
 		names := make([]string, len(scopeChars))
 		for i, ch := range scopeChars {

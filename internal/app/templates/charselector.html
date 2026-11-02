@@ -21,26 +21,18 @@
   </button>
   <div class="charselector-dropdown asset-scope-panel" id="assets-scope-panel" data-assetscope-panel hidden>
     <input type="search" class="charselector-input asset-scope-search" data-assetscope-q placeholder="Search names or tags..." autocomplete="off" aria-label="Search characters by name or tag">
-    <div class="asset-scope-bulk" data-assetscope-bulk hidden>
-      <button type="button" class="asset-scope-bulkbtn" data-assetscope-all>All</button>
-      <button type="button" class="asset-scope-bulkbtn" data-assetscope-clear>None</button>
-      <span class="asset-scope-count" data-assetscope-count></span>
-    </div>
     <a class="charselector-option asset-scope-all{{if .All}} on{{end}}" href="{{.AllHref}}" data-assetscope-allrow><span class="asset-scope-box{{if .All}} on{{end}}" aria-hidden="true">✓</span><span class="charselector-name">All characters</span></a>
     {{range .Chars}}
     <div class="asset-scope-rowwrap">
       <a class="charselector-option asset-scope-row{{if .Checked}} on{{end}}" href="{{.ToggleHref}}" data-name="{{.Name}}" data-tags="{{.TagsText}}" data-id="{{.ID}}">
         <span class="asset-scope-box{{if .Checked}} on{{end}}" aria-hidden="true">✓</span>
         {{if .Image}}<img class="asset-scope-portrait" src="{{.Image}}" alt="" width="26" height="26" loading="lazy">{{end}}
-        <span class="asset-scope-main"><span class="charselector-name">{{.Name}}</span>{{if .Tags}}<span class="asset-scope-tags">{{range .Tags}}<span class="tagchip">{{.}}</span>{{end}}</span>{{end}}</span>
+        <span class="asset-scope-main"><span class="charselector-name">{{.Name}}</span></span>
       </a>
       <a class="asset-scope-only" href="{{.OnlyHref}}" data-assetscope-only>Only</a>
     </div>
     {{end}}
     <p class="asset-scope-none" data-assetscope-none hidden>No characters match that search.</p>
-    <div class="asset-scope-foot" data-assetscope-foot hidden>
-      <button type="button" class="asset-scope-done" data-assetscope-done>Done</button>
-    </div>
   </div>
 </div>
 {{end}}

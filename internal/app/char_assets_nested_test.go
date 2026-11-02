@@ -166,10 +166,10 @@ func TestAssetsMatrixFilesShipsAndCans(t *testing.T) {
 // TestAssetsScopeSelectorChecklist pins the character scope
 // control: a button naming the current selection over a
 // checklist panel whose search field (in app.js) matches each
-// row's data-name or data-tags; every row carries the
-// character's custom tags as chips and links to the scope with
-// that character toggled; the scope parameter is a set of
-// character IDs.
+// row's data-name or data-tags; every row is a link to the
+// scope with that character toggled, so a pick applies at
+// once; the scope parameter is a set of character IDs, or
+// none for the empty scope.
 func TestAssetsScopeSelectorChecklist(t *testing.T) {
 	f := newAssetsFixture(t)
 	seedNestedAssets(t, f)
@@ -188,23 +188,25 @@ func TestAssetsScopeSelectorChecklist(t *testing.T) {
 		`data-assetscope-q`,
 		`data-name="Fixture Ceo"`,
 		`data-name="Fixture Alt" data-tags="indy, scout"`,
-		`<span class="tagchip">indy</span>`,
-		`<span class="tagchip">scout</span>`,
 		// Toggling the CEO out of "all" leaves the other two.
 		`<a class="charselector-option asset-scope-row on" href="/assets/?scope=90000002,90000003" data-name="Fixture Ceo" data-tags="" data-id="90000001">`,
 		// Toggling the third character out leaves CEO and alt
 		// (the set is written in account order: alt, CEO, third).
 		`href="/assets/?scope=90000002,90000001"`,
-		// The panel carries the bulk actions and the commit
-		// control, and each row's Only link scopes to that
-		// character alone.
-		`data-assetscope-all`,
-		`data-assetscope-clear`,
-		`data-assetscope-done`,
+		// The All row is a link like the rest: from all
+		// characters it unselects into the empty scope. Each
+		// row's Only link scopes to that character alone.
+		`<a class="charselector-option asset-scope-all on" href="/assets/?scope=none" data-assetscope-allrow>`,
 		`<a class="asset-scope-only" href="/assets/?scope=90000002" data-assetscope-only>Only</a>`,
 	)
 	if strings.Contains(body, "scopepill") {
 		t.Fatal("the character scope pills are still rendered")
+	}
+	if strings.Contains(body, `<span class="tagchip">`) {
+		t.Fatal("the selector rows still carry tag chips")
+	}
+	if strings.Contains(body, "data-assetscope-done") || strings.Contains(body, "data-assetscope-clear") {
+		t.Fatal("the selector still carries the commit controls; its rows apply live")
 	}
 
 	// A set scope: the button names the pair, the page shows
@@ -245,6 +247,16 @@ func TestAssetsScopeSelectorChecklist(t *testing.T) {
 	_, body = getPage(t, f.app, cookie, "/assets/?scope=90000001,90000002,90000003")
 	mustContain(t, "scope full set", body,
 		`<span class="asset-scope-label">All characters</span>`)
+
+	// The empty scope: nobody is ticked, the button says so,
+	// the All row links back to all, and toggling one row out
+	// of empty scopes to that character alone.
+	_, body = getPage(t, f.app, cookie, "/assets/?scope=none")
+	mustContain(t, "scope none", body,
+		`<span class="asset-scope-label">No characters</span>`,
+		`<a class="charselector-option asset-scope-all" href="/assets/" data-assetscope-allrow>`,
+		`<a class="charselector-option asset-scope-row" href="/assets/?scope=90000001" data-name="Fixture Ceo" data-tags="" data-id="90000001">`,
+	)
 }
 
 func TestAssetSearchCoversTheAccountAndSaysWhere(t *testing.T) {

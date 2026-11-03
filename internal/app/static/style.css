@@ -1341,12 +1341,20 @@ tbody tr { background: transparent; }
 tbody tr:hover td, tbody tr:hover th { background: rgba(255, 106, 0, 0.045); }
 
 /* Inside a .tw scroll container the first column stays pinned.
-   Backgrounds are restated per cell: a pinned cell cannot rely on the
-   row's. */
+   Backgrounds are restated per cell: a pinned cell cannot rely on
+   the row's, and the rows are transparent by design, so without a
+   paint of its own the pinned cell lets the columns scrolling
+   under it show through and the two texts overlap. The solid
+   panel color stands in for the glass the table sits on, with
+   the hover wash mixed in on hover like the rest of the row. */
 .tw th:first-child, .tw td:first-child {
   position: sticky;
   left: 0;
   z-index: 1;
+  background: var(--panel);
+}
+.tw tbody tr:hover td:first-child {
+  background: color-mix(in srgb, var(--panel) 95%, var(--accent));
 }
 .tw thead th:first-child { z-index: 2; }
 

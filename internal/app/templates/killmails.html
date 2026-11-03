@@ -5,14 +5,18 @@
 
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
 
-{{template "charselector" .KillmailChars}}
+<div class="l-page">
+<div class="l-head">
+  <div class="l-head-pick">{{template "charselector" .KillmailChars}}</div>
+</div>
 
 {{if .Killmails}}
   {{if .Killmails.Loaded}}
   {{if .Killmails.Rows}}
+  <section class="l-panel km-list">
   <div class="tw">
-  <table>
-    <thead><tr><th>Time</th><th>System</th><th>Result</th><th>Victim</th><th>Ship</th><th>Final blow</th><th>Involved</th><th>Est. value</th><th></th></tr></thead>
+  <table class="km-table">
+    <thead><tr><th>Time</th><th>System</th><th>Result</th><th>Victim</th><th class="card-title">Ship</th><th>Final blow</th><th>Involved</th><th>Est. value</th><th></th></tr></thead>
     <tbody>
     {{range .Killmails.Rows}}
       <tr>
@@ -30,7 +34,8 @@
     </tbody>
   </table>
   </div>
-  <p><small>Estimated value covers destroyed and dropped items at CCP average prices.</small></p>
+  <p class="km-note"><small>Estimated value covers destroyed and dropped items at CCP average prices.</small></p>
+  </section>
   {{else}}
   <p><small>No recent killmails for {{.Killmails.Subject}}.</small></p>
   {{end}}
@@ -46,4 +51,5 @@
 {{else}}
   <p>No killmails to show yet. Link a character first.</p>
 {{end}}
+</div>
 {{end}}

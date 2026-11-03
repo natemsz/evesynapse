@@ -6111,6 +6111,31 @@ html[data-theme="light"] .suggest li:not(.sug-kind):not(.sug-empty):hover, html[
   .gn-tag { order: 1; }
   .gn-dismiss { order: 2; margin-left: auto; }
 }
+/* Cross-document view transitions: same-origin page loads may
+   animate, but the only animation defined is the phone slide
+   between a three column console's directory and its picked
+   place or group. Everywhere else the swap stays instant, and
+   reduced motion turns the slide off. The direction type is
+   set by the pagereveal hook in app.js from the state the new
+   page renders: arriving at a pick slides forward, arriving
+   back at a directory slides back, for link taps, breadcrumb
+   taps and the back button alike. */
+@view-transition { navigation: auto; }
+::view-transition-old(root), ::view-transition-new(root) { animation: none; }
+@keyframes vt-out-left { to { transform: translateX(-100%); } }
+@keyframes vt-in-right { from { transform: translateX(100%); } }
+@keyframes vt-out-right { to { transform: translateX(100%); } }
+@keyframes vt-in-left { from { transform: translateX(-100%); } }
+@media (max-width: 45rem) {
+  html:active-view-transition-type(vt-deep) ::view-transition-old(root) { animation: vt-out-left 0.22s ease-out; }
+  html:active-view-transition-type(vt-deep) ::view-transition-new(root) { animation: vt-in-right 0.22s ease-out; }
+  html:active-view-transition-type(vt-list) ::view-transition-old(root) { animation: vt-out-right 0.22s ease-out; }
+  html:active-view-transition-type(vt-list) ::view-transition-new(root) { animation: vt-in-left 0.22s ease-out; }
+}
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(root), ::view-transition-new(root) { animation: none !important; }
+}
+
 @media (max-width: 45rem) {
   :root { --phone-bar-h: 3.6rem; }
   .nav-hamburger { display: none; }
@@ -6602,27 +6627,3 @@ button.gn-title:hover .gn-more, button.gn-title:focus-visible .gn-more { color: 
 .slotsec .modrow .mq { color: var(--accent); font-weight: 700; }
 .insp-note { margin-top: 0.6rem; color: var(--muted); font-size: 0.82rem; }
 
-/* Cross-document view transitions: same-origin page loads may
-   animate, but the only animation defined is the phone slide
-   between a three column console's directory and its picked
-   place or group. Everywhere else the swap stays instant, and
-   reduced motion turns the slide off. The direction type is
-   set by the pagereveal hook in app.js from the state the new
-   page renders: arriving at a pick slides forward, arriving
-   back at a directory slides back, for link taps, breadcrumb
-   taps and the back button alike. */
-@view-transition { navigation: auto; }
-::view-transition-old(root), ::view-transition-new(root) { animation: none; }
-@keyframes vt-out-left { to { transform: translateX(-100%); } }
-@keyframes vt-in-right { from { transform: translateX(100%); } }
-@keyframes vt-out-right { to { transform: translateX(100%); } }
-@keyframes vt-in-left { from { transform: translateX(-100%); } }
-@media (max-width: 45rem) {
-  html:active-view-transition-type(vt-deep) ::view-transition-old(root) { animation: vt-out-left 0.22s ease-out; }
-  html:active-view-transition-type(vt-deep) ::view-transition-new(root) { animation: vt-in-right 0.22s ease-out; }
-  html:active-view-transition-type(vt-list) ::view-transition-old(root) { animation: vt-out-right 0.22s ease-out; }
-  html:active-view-transition-type(vt-list) ::view-transition-new(root) { animation: vt-in-left 0.22s ease-out; }
-}
-@media (prefers-reduced-motion: reduce) {
-  ::view-transition-old(root), ::view-transition-new(root) { animation: none !important; }
-}

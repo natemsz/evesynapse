@@ -142,6 +142,31 @@ test("homeResizeFrame: follows the pointer, held to the ceiling and half a cell"
   assert.deepEqual(app.homeResizeFrame(200, 176, -500, -500, 294, 358, 100, 182), { w: 50, h: 91 }, "half a cell is the floor");
 });
 
+test("homeRowPitch: the resized module's own row step, not the smallest on the page", function () {
+  // Rows size by content: the first row stands 400 tall, the
+  // resized module's row 160. The old measure took the smallest
+  // step on the page, so a drag in the tall row committed cells
+  // the frame never covered.
+  const tops = [0, 400, 560, 720];
+  assert.equal(app.homeRowPitch(tops, 400, 182), 160, "the step out of the module's own row");
+  assert.equal(app.homeRowPitch(tops, 0, 182), 400, "the first row steps to the second");
+  assert.equal(app.homeRowPitch(tops, 720, 182), 160, "the last row reads the step into it");
+  assert.equal(app.homeRowPitch([0, 0, 400, 400], 400, 182), 400, "cards sharing a row top collapse to one row");
+  assert.equal(app.homeRowPitch([120], 120, 182), 182, "a single row falls back");
+});
+
+test("homeSnapCommit: release commits the cells the frame covered", function () {
+  // The drag's hysteresis holds the starting cell until the
+  // pointer is 62% across the next one; on release the committed
+  // size is the frame's covered cells, rounded plainly, so the
+  // size stored is the size the frame showed.
+  assert.equal(app.homeSnapCommit(2, 100, 180, 3), 3, "past halfway into the next cell commits it");
+  assert.equal(app.homeSnapCommit(2, -100, 180, 3), 1, "past halfway back commits the smaller size");
+  assert.equal(app.homeSnapCommit(2, 40, 180, 3), 2, "a short drag keeps the size");
+  assert.equal(app.homeSnapCommit(2, 9999, 180, 3), 3, "the ceiling clamps the commit");
+  assert.equal(app.homeSnapCommit(2, -9999, 180, 3), 1, "one cell is the commit floor");
+});
+
 test("homeFillPlan: the module closing a row short widens to finish it", function () {
   assert.deepEqual(app.homeFillPlan([1], 2), [0], "a lone cell fills its row");
   assert.deepEqual(app.homeFillPlan([1, 1], 2), [], "an exact row leaves nothing to fill");

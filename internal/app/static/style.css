@@ -2065,11 +2065,6 @@ html[data-theme="light"] .widget-scope select {
 /* Past the module's ceiling the size would only draw empty cells:
    the picker offers no cell there. */
 .sizepick .sizecell.over { opacity: 0.25; cursor: not-allowed; }
-/* In Customize a drawn height stands at least its rows tall, so
-   taking a module taller visibly takes: the home view sizes rows
-   by content, the arranging view by the drawn size. */
-.home-custom > .card.gh2 { min-height: calc(var(--home-row) * 2); }
-.home-custom > .card.gh3 { min-height: calc(var(--home-row) * 3); }
 .sizepick .sizecell.refused { animation: cell-refuse 650ms ease-out; }
 @keyframes cell-refuse {
   0%, 40% { background: rgba(214, 48, 20, 0.75); border-color: #ff5a3c; }

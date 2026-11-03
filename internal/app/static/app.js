@@ -1589,6 +1589,49 @@
     module.exports.homeResizeFrame = homeResizeFrame;
   }
 
+  // The height of one grid row where the resized module stands:
+  // the step from its row's tops to the next row's, or from the
+  // previous row when it stands in the last one, or the fallback
+  // when the grid has a single row. Rows size by content, so the
+  // smallest step anywhere on the page (the old measure) commits
+  // cells the frame never covered whenever the module's own row
+  // stands taller.
+  function homeRowPitch(tops, ownTop, fallback) {
+    var rows = [];
+    for (var i = 0; i < tops.length; i++) {
+      var t = Math.round(tops[i]);
+      if (rows.indexOf(t) < 0) rows.push(t);
+    }
+    rows.sort(function (a, b) { return a - b; });
+    var at = rows.indexOf(Math.round(ownTop));
+    if (at >= 0 && at + 1 < rows.length) return rows[at + 1] - rows[at];
+    if (at > 0) return rows[at] - rows[at - 1];
+    var best = 0;
+    for (var j = 1; j < rows.length; j++) {
+      var d = rows[j] - rows[j - 1];
+      if (d > 0 && (!best || d < best)) best = d;
+    }
+    return best || fallback;
+  }
+
+  if (typeof module !== "undefined" && module.exports) {
+    module.exports.homeRowPitch = homeRowPitch;
+  }
+
+  // The cells a released resize commits: the start cells plus the
+  // whole cells the pointer covered, rounded plainly. The drag's
+  // hysteresis holds the card's cells steady mid-drag, but the
+  // release commits exactly what the frame showed, so no cell is
+  // lost or gained between frame, commit and stored layout.
+  function homeSnapCommit(startCells, deltaPx, pitch, hi) {
+    var n = Math.round(startCells + deltaPx / pitch);
+    return Math.max(1, Math.min(hi, n));
+  }
+
+  if (typeof module !== "undefined" && module.exports) {
+    module.exports.homeSnapCommit = homeSnapCommit;
+  }
+
   var homeTwoUp = window.matchMedia ? window.matchMedia("(min-width: 45.0625rem) and (max-width: 70rem)") : null;
 
   function layoutHomeFill(grid) {
@@ -1693,6 +1736,30 @@
         if (resp.ok) document.dispatchEvent(new CustomEvent("evesynapse:content-mutated"));
         return resp.ok;
       }, function () { return false; });
+    }
+
+    // A size decides more than a card's outline: modules draw
+    // different content at different sizes (Profit Pulse's chart
+    // bands, Production Lines' rows). Once a size save lands, swap
+    // the card for the server's fresh render of it at the saved
+    // size, so the card on screen shows the saved form and no
+    // feature appears or disappears across the save.
+    function refreshCard(card) {
+      var id = card.getAttribute("data-widget");
+      return fetch("/?customize=1", {
+        headers: { "X-Requested-With": "XMLHttpRequest" },
+        cache: "no-store"
+      }).then(function (resp) {
+        return resp.ok ? resp.text() : "";
+      }, function () { return ""; }).then(function (html) {
+        if (!html || !card.parentNode) return;
+        var box = document.createElement("div");
+        box.innerHTML = html;
+        var fresh = box.querySelector('.card[data-widget="' + id + '"]');
+        if (!fresh) return;
+        card.replaceWith(fresh);
+        enhanceCard(fresh);
+      });
     }
 
     function moduleCards() {
@@ -1838,12 +1905,15 @@
     }
     // One resize, wherever it came from (picker or grip): apply it at
     // once, save it, and put the old size back if the save fails.
+    // A landed save re-renders the card at its new size
+    // (refreshCard), so what the user sees is the saved form.
     function resizeCard(card, w, h) {
       var was = sizeOf(card);
       if (was.w === w && was.h === h) return;
       flip(function () { sizeCard(card, w, h); });
       postLayout({ action: "size", widget: card.getAttribute("data-widget"), w: w, h: h }).then(function (ok) {
         if (!ok) flip(function () { sizeCard(card, was.w, was.h); });
+        else refreshCard(card);
       });
     }
     function saveOrder() {
@@ -2020,29 +2090,20 @@
       // The cell pitch is measured from the grid itself, never
       // from the card under the grip: a card widened to fill its
       // row stands a row wide whatever its drawn size says, and
-      // rows size by content, so their pitch is the step between
-      // the tops of the grid's cards.
+      // rows size by content, so the row pitch is the step out of
+      // the row the module stands in (homeRowPitch).
       var gridRect = grid.getBoundingClientRect();
       var cellW = (gridRect.width + gapX) / cols;
       var colStart = Math.max(0, Math.min(cols - 1, Math.round((r0.left - gridRect.left) / cellW)));
-      var cellH = 0;
-      (function () {
-        var tops = [], els = grid.querySelectorAll(":scope > .card");
-        for (var i = 0; i < els.length; i++) {
-          if (els[i].classList.contains("dragging")) continue;
-          tops.push(Math.round(els[i].getBoundingClientRect().top));
-        }
-        tops.sort(function (a, b) { return a - b; });
-        for (var j = 1; j < tops.length; j++) {
-          var d = tops[j] - tops[j - 1];
-          if (d > 24 && (!cellH || d < cellH)) cellH = d;
-        }
-        if (!cellH) {
-          var rowPx = parseFloat(gcs.getPropertyValue("--home-row")) *
-            parseFloat(window.getComputedStyle(document.documentElement).fontSize);
-          cellH = (rowPx || 176) + gapY;
-        }
-      })();
+      var tops = [], els = grid.querySelectorAll(":scope > .card");
+      for (var i = 0; i < els.length; i++) {
+        if (els[i].classList.contains("dragging")) continue;
+        tops.push(els[i].getBoundingClientRect().top);
+      }
+      var rowPx = parseFloat(gcs.getPropertyValue("--home-row")) *
+        parseFloat(window.getComputedStyle(document.documentElement).fontSize);
+      var cellH = homeRowPitch(tops, r0.top, (rowPx || 176) + gapY);
+      if (!(cellH > 24)) cellH = (rowPx || 176) + gapY;
       var maxW = Math.max(1, Math.min(ceil.w, cols - colStart));
       var maxH = ceil.h;
       var lastX = ev.clientX, lastY = ev.clientY, under = false;
@@ -2104,12 +2165,25 @@
         card.classList.remove("resizing");
         document.body.classList.remove("resize-active");
         frame.remove();
+        // The released size is the size the frame showed: the
+        // start cells plus the whole cells the pointer covered,
+        // without the drag's hysteresis, so the stored size is
+        // the frame's final size.
+        var rawW = homeSnapCommit(start.w, lastX - startX, cellW, maxW);
+        var rawH = homeSnapCommit(start.h, lastY - startY, cellH, maxH);
+        under = rawW < min.w || rawH < min.h;
+        cur = { w: Math.max(rawW, min.w), h: Math.max(rawH, min.h) };
         if (under) refuse(card);
+        var now = sizeOf(card);
+        if (now.w !== cur.w || now.h !== cur.h) {
+          flip(function () { sizeCard(card, cur.w, cur.h); }, card);
+        }
         if (cur.w === start.w && cur.h === start.h) return;
         // The module already stands at its new size; save it, and a
         // failed save puts back the size it started at.
         postLayout({ action: "size", widget: card.getAttribute("data-widget"), w: cur.w, h: cur.h }).then(function (ok) {
           if (!ok) flip(function () { sizeCard(card, start.w, start.h); });
+          else refreshCard(card);
         });
       }
       grip.addEventListener("pointermove", onMove);

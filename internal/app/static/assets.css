@@ -57,6 +57,19 @@
 .pane-main { padding: 0.9rem 1rem 1rem; border-left: 1px solid var(--box-edge); }
 .panes3.amx .pane-insp { border: 0; border-left: 1px solid var(--box-edge); border-radius: 0; background: none; }
 
+/* The inspector's scrim: in the sheet bands it covers the
+   page under the sheet, dims it, and takes the click that
+   dismisses the sheet, following the same close link as the
+   sheet's own close button. In the column band and the phone
+   stack the inspector is in flow and the scrim never shows. */
+.insp-scrim { display: none; }
+@media (min-width: 45.01rem) and (max-width: 80rem) {
+  .panes3.amx > .insp-scrim {
+    display: block; position: fixed; inset: 0; z-index: 94;
+    background: rgba(0, 0, 0, 0.35);
+  }
+}
+
 /* The inspector pinned on the desktop console: past 80rem
    it is the third column, so it pins under the top bar at
    the offset the plan page's inspector uses and scrolls
@@ -209,10 +222,11 @@
    the button and the Only box stop crowding it. */
 @media (max-width: 80rem) {
   /* The middle band's sheet form itself is the shared class's;
-     this page dims the page behind the sheet with a shadow
-     layer, where the character sheet uses its own backdrop. */
+     the scrim above dims the page behind the sheet and takes
+     the dismissing click, where the character sheet uses its
+     own backdrop. */
   .panes3.amx .pane-insp {
-    box-shadow: -18px 0 42px rgba(0, 0, 0, 0.55), 0 0 0 100vmax rgba(0, 0, 0, 0.35);
+    box-shadow: -18px 0 42px rgba(0, 0, 0, 0.55);
   }
   .amx-tools .searchwrap { flex: 1 1 100%; }
   /* A fixed sheet inside a blurred surface takes that

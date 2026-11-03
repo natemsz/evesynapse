@@ -356,6 +356,18 @@ func parseAssetPageState(q url.Values, characters []db.Character, active db.Char
 	return st
 }
 
+// viewLoc names the place the view is showing the way a
+// selection link must carry it: opening a ship or a stack
+// swaps the inspector only and never moves the view, so the
+// link repeats the current place, with the bare address
+// (which shows every location) spelled as the all place.
+func (st assetPageState) viewLoc() string {
+	if st.loc == "" {
+		return "all"
+	}
+	return st.loc
+}
+
 // href builds a page URL from the state's canonical parameters
 // with mutations applied (a key set to "" is dropped).
 func (st assetPageState) href(mut map[string]string) string {

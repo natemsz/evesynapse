@@ -204,7 +204,7 @@ func TestKillboardPages(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, id := range []int64{700001, 700002} {
-		if _, err := app.ingestKill(ctx, json.RawMessage(killJSON(id)), "h", &killZKB{TotalValue: 2e9, Solo: id == 700002}, "zkill", true); err != nil {
+		if _, err := app.ingestKill(ctx, json.RawMessage(killJSON(id)), "h", &killZKB{Solo: id == 700002}, "zkill", true); err != nil {
 			t.Fatal(err)
 		}
 	}

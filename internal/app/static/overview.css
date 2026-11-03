@@ -164,6 +164,8 @@
 .ov-table th, .ov-table td { padding: 0.45rem 0.35rem; }
 .ov-table .ov-cell { gap: 0.45rem; }
 .ov-table .ov-lvl { width: 1.35rem; height: 1.35rem; font-size: 0.8rem; }
+.ov-table .ov-cell-main { min-width: 0; }
+.ov-table .ov-nmline { display: flex; align-items: center; min-width: 0; }
 .ov-table .ov-nm { font-size: 0.92rem; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ov-table .ov-tag { flex: none; }
 .ov-table .ov-tag { font-size: 0.62rem; padding: 0.02rem 0.32rem; }

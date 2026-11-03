@@ -180,6 +180,7 @@ type assetMatrix struct {
 	Global     bool
 	Title      string
 	CrumbLoc   string   // the selected place's name, for the breadcrumb (Title becomes the can's name inside one)
+	ListHref   string   // back to the directory state: no place, container or search picked
 	Loc        placeRef // Title classified for the link policy
 	SecKnown   bool
 	SecText    string
@@ -221,6 +222,7 @@ type assetFilterChip struct {
 // assetsPageView is the Assets page body.
 type assetsPageView struct {
 	Loaded     bool
+	Deep       bool // a place, container or search is picked, so a phone shows the main pane instead of the directory
 	Warming    bool
 	Syncing    []string // characters in scope whose first sync has not landed
 	Stacks     int64
@@ -459,7 +461,7 @@ func (app *Application) handleAssets(w http.ResponseWriter, r *http.Request) {
 // buildAssetsPage assembles the whole page body for one state.
 func (app *Application) buildAssetsPage(ctx context.Context, userID int64, characters []db.Character, active db.Character, q url.Values) *assetsPageView {
 	st := parseAssetPageState(q, characters, active)
-	view := &assetsPageView{ActingName: active.Name, ScopeAll: st.scopeAll}
+	view := &assetsPageView{ActingName: active.Name, ScopeAll: st.scopeAll, Deep: st.loc != "" || st.can != 0 || st.ship != 0 || st.item != 0 || st.query != ""}
 
 	// The characters in scope, in account order.
 	var scopeChars []db.Character

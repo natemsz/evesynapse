@@ -217,6 +217,9 @@ type overviewView struct {
 	DirGroups []dirGroup
 	DirClones []dirCloneCard
 
+	GroupPicked bool   // a skill group was picked in the URL, so a phone shows the sheet instead of the directory
+	BackHref    string // back to the directory state: no group picked
+
 	Tabs       []ovTab
 	GroupName  string // the open group
 	CrumbCap   string
@@ -847,6 +850,13 @@ func (app *Application) ovDirectory(ctx context.Context, view *characterView, ov
 		c.Group = "all"
 		c.SkillID = 0
 	}).href(view.CharacterID)
+	if st.Group != "" {
+		ov.GroupPicked = true
+		ov.BackHref = st.with(func(c *overviewState) {
+			c.Group = ""
+			c.SkillID = 0
+		}).href(view.CharacterID)
+	}
 	ov.GroupName = selected
 	if st.AllGroups() {
 		ov.GroupName = "All categories"

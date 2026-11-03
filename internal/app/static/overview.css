@@ -307,6 +307,12 @@ html[data-theme="light"] .ov-pips i.train { background: #2b7fc4; border-color: #
 
 /* ---- Phone: panes stack, directory compacts ---- */
 @media (max-width: 45rem) {
+  /* List first on the sheet surface: until a skill group is
+     picked the phone shows the directory alone; once one is
+     picked it shows the sheet alone, and the breadcrumb's
+     character link returns to the directory. */
+  .panes3.ov.ov-sheet:not(.ov-deep) .ov-main, .panes3.ov.ov-sheet:not(.ov-deep) .p3-insp { display: none; }
+  .panes3.ov.ov-sheet.ov-deep .ov-dir { display: none; }
   .ov-dir .dirlist { display: flex; flex-direction: column; gap: 0.35rem; overflow-x: visible; padding-bottom: 0; }
   .ov-dir .diritem { flex: 0 0 auto; }
   .ov-head { flex-direction: column; }

@@ -238,6 +238,16 @@
   .dirdrop-c { flex: none; color: var(--muted); }
   .dirdrop .dirlist { display: flex; margin-top: 0.6rem; }
   .dirdrop[open ] summary { margin-bottom: 0.2rem; }
+  /* List first: until a place is picked the phone shows the
+     full directory and nothing else; once one is picked it
+     shows the main pane alone, and the breadcrumb's Assets
+     link returns to the directory. */
+  .amx:not(.amx-deep) .pane-main { display: none; }
+  .amx:not(.amx-deep) .dirdrop { display: none; }
+  .amx:not(.amx-deep) .pane-dir .pane-h, .amx:not(.amx-deep) .pane-dir .dir-foot { display: block; }
+  .amx:not(.amx-deep) .pane-dir #assets-dirfilter { display: block; }
+  .amx:not(.amx-deep) .pane-dir .dirlist { display: flex; }
+  .amx.amx-deep .pane-dir { display: none; }
   .mships { display: block; margin-top: 0.9rem; }
   .mships-h { margin: 0 0 0.5rem; font-size: 0.95rem; }
   .mships-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; }

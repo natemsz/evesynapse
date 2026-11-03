@@ -267,6 +267,8 @@ func (app *Application) buildAssetMatrix(ctx context.Context, datas []*assetChar
 		m.SortHrefs[key] = st.href(mut)
 	}
 
+	m.ListHref = st.href(map[string]string{"loc": "", "can": "", "ship": "", "item": "", "q": ""})
+
 	locFilter := int64(0)
 	if sel != nil {
 		locFilter = sel.LocationID

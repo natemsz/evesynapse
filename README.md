@@ -15,7 +15,14 @@ While there is a hosted version (https://evesynapse.app) you are welcome to inst
 Contact: nate@synap6.io or in-game 'Burzrujat'
 
 ## AI Use Disclosure and Policy
-- AI is used in this project purely for security auditing, hardening, and performance improvements, writing tests, certain UI elements such as icons and glyphs (I'm no artist), and to assist with simplifying repetitive tasks. This is a human-built project built for other humans, and a labor of love. 
+- AI is used in this project purely for security auditing, hardening, and performance improvements, writing tests, certain UI elements such as icons and glyphs (I'm no artist), and to assist with simplifying repetitive tasks. AI is a force multiplier, never a primary un-reviewed author. If you wish to contribute code to the project you must:
+
+1. Understand the code you are submitting. Your name is on it, you are responsible for it.
+2. Reviewed it adequately with your own brain. Mistakes are okay, but give it your best effort.
+3. Never re-make what can be re-used. Familiarize yourself with the existing code-base first.
+4. Keep it consistent. Respect conventions. They are there for a reason. If you think something can be improved and wish to make a large change, please explain why. AI is terrible with this and code submitted this way without explanation will be assumed to be breaking rules 1-3.
+
+This is a human-built project built for other humans, and a labor of love. 
 
 ## Stack
 

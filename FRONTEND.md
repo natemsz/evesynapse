@@ -308,6 +308,10 @@ on the markup:
 
 - `class="opt"` on a header cell keeps that column off the
   cards (the same low-priority mark the home modules use).
+- `class="card-title"` on a header cell makes that column the
+  card's title in place of the first cell (Killmails titles each
+  card with the victim's ship, not the time). A cell with nothing
+  in it stays off its card.
 - `data-cards="on"` forces cards; `data-cards="off"` keeps a
   table that scrolls sideways inside its own wrapper (on phones its
   text columns wrap). Use "off" only for grids whose point is
@@ -431,7 +435,8 @@ properties as knobs and no media queries:
 ### Page parts
 
 - `.l-page`: the page's container. Everything below measures it.
-- `.l-head`: the page head under the title. `.l-head-sum` is the
+- `.l-head`: the page head under the title. `.l-head-pick` holds
+  the page's character or scope picker, `.l-head-sum` is the
   one-line summary, `.l-head-act` holds the scope control and the
   primary action at the far end.
 - `.l-tiles`: a row of stat tiles that steps 4, 2, 1 (or 3, 1, or

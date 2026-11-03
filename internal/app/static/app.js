@@ -4562,13 +4562,14 @@
   function labelCardCells(table) {
     var head = table.tHead && table.tHead.rows.length ? table.tHead.rows[table.tHead.rows.length - 1] : null;
     if (!head) return false;
-    var texts = [], spans = [], opts = [], i, r, c;
+    var texts = [], spans = [], opts = [], titles = [], i, r, c;
     for (i = 0; i < head.cells.length; i++) {
       texts.push(head.cells[i].textContent.trim());
       spans.push(head.cells[i].colSpan);
       opts.push(head.cells[i].classList.contains("opt") ? "1" : "");
+      titles.push(head.cells[i].classList.contains("card-title") ? "1" : "");
     }
-    var labels = cardLabels(texts, spans), optional = cardLabels(opts, spans);
+    var labels = cardLabels(texts, spans), optional = cardLabels(opts, spans), titled = cardLabels(titles, spans);
     for (r = 0; r < table.tBodies.length; r++) {
       var rows = table.tBodies[r].rows;
       for (i = 0; i < rows.length; i++) {
@@ -4577,10 +4578,17 @@
           var cell = rows[i].cells[c];
           var ctl = cell.colSpan === 1 && isControlCell(cell);
           cell.classList.toggle("card-ctl", ctl);
+          // A cell with nothing in it (a row without the column's
+          // control) is no figure: it stays off the card entirely.
+          cell.classList.toggle("card-blank", !ctl && !cell.textContent.trim() && !cell.querySelector("img, svg, input, select, button"));
           if (labels[idx] && cell.colSpan === 1 && !ctl) cell.setAttribute("data-label", labels[idx]);
           // A column the header marks .opt (the site's "first to
           // go when narrow" mark) stays off the card.
           if (optional[idx] && cell.colSpan === 1) cell.classList.add("opt");
+          // A column the header marks .card-title heads the card in
+          // place of the first cell, with no label of its own.
+          cell.classList.toggle("card-title", !!titled[idx] && cell.colSpan === 1);
+          if (titled[idx]) cell.removeAttribute("data-label");
           idx += cell.colSpan;
         }
       }

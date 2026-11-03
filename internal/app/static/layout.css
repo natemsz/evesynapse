@@ -285,6 +285,9 @@ html[data-theme="light"] .subnav { background: color-mix(in srgb, var(--panel) 8
 .l-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-4); }
 .l-head-sum { flex: 1 1 20rem; min-width: 0; margin: 0; color: var(--muted); }
 .l-head-sum b { color: var(--text); font-weight: 600; }
+/* The page's character or scope picker, leading the head. */
+.l-head-pick { flex: 0 1 26rem; min-width: 0; }
+.l-head-pick .charselector { width: 100%; margin: 0; max-width: none; }
 .l-head-act { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin-left: auto; }
 
 /* Tiles: a row of stat tiles that steps 4 → 2 → 1 (3 → 1, 6 → 3 →
@@ -582,7 +585,22 @@ html[data-theme="light"] .subnav { background: color-mix(in srgb, var(--panel) 8
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
-#main-content table.cards-on > tbody > tr > td:is(:empty, .opt) { display: none; }
+#main-content table.cards-on > tbody > tr > td:is(:empty, .opt, .card-blank) { display: none; }
+/* A column the header marks .card-title heads the card; the first
+   cell then reads as an ordinary figure. */
+#main-content table.cards-on > tbody > tr > td.card-title {
+  order: -1;
+  grid-column: 1 / -1;
+  font-size: 1.05em;
+  font-weight: 600;
+  color: var(--text-bright);
+}
+#main-content table.cards-on > tbody > tr:has(> td.card-title) > :is(td, th):first-child:not(.card-title) {
+  grid-column: auto;
+  font-size: inherit;
+  font-weight: inherit;
+  color: inherit;
+}
 /* Action-only cells (app.js marks them .card-ctl) gather on the
    card's bottom row, the last one at the right edge; when the
    row leads with one (move arrows), the next cell titles the
@@ -593,11 +611,11 @@ html[data-theme="light"] .subnav { background: color-mix(in srgb, var(--panel) 8
   font-size: inherit; font-weight: inherit;
 }
 #main-content table.cards-on > tbody > tr > td.card-ctl:last-child { justify-self: end; }
-#main-content table.cards-on > tbody > tr > td.card-ctl:first-child + td {
+#main-content table.cards-on > tbody > tr > td:is(.card-ctl, .card-blank):first-child + td {
   grid-column: 1 / -1;
   font-size: 1.05em; font-weight: 600; color: var(--text-bright);
 }
-#main-content table.cards-on > tbody > tr > td.card-ctl:first-child + td::before { display: none; }
+#main-content table.cards-on > tbody > tr > td:is(.card-ctl, .card-blank):first-child + td::before { display: none; }
 .cards-sort {
   display: flex; align-items: center; gap: 0.5rem;
   margin: 0 0 0.3rem;
@@ -645,6 +663,8 @@ tbody tr.yours > td:first-child { box-shadow: inset 3px 0 0 var(--sel-edge); }
   .subnav > .section-tabs:has(+ .section-subtabs) { display: none; }
   .subnav .section-subtabs > a { min-height: var(--tap); }
   .l-panes { border-radius: 0; border-left: 0; border-right: 0; }
-  .page-body:has(> .l-page) { padding-left: 0; padding-right: 0; border-left: 0; border-right: 0; border-radius: 0; margin-left: 0; margin-right: 0; }
-  .page-body:has(> .l-page) .l-head { padding: 0 var(--space-4); }
+  /* A console page runs its panes edge to edge; other framework
+     pages keep the page body's own inset. */
+  .page-body:has(> .l-page > .l-console) { padding-left: 0; padding-right: 0; border-left: 0; border-right: 0; border-radius: 0; margin-left: 0; margin-right: 0; }
+  .page-body:has(> .l-page > .l-console) .l-page > :not(.l-console) { margin-left: var(--space-4); margin-right: var(--space-4); }
 }

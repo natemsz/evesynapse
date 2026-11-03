@@ -244,12 +244,12 @@
         <p class="ov-note">Skill data is still loading. The full catalog appears when the static data import finishes{{if .IsAdmin}}; progress is on the <a href="/admin/sync/">Sync page</a>{{end}}.</p>
         {{else if $ov.Rows}}
         <div class="tw">
-        <table class="ov-table">
+        <table class="ov-table ov-skills">
           <thead><tr><th>Skill / Group</th><th>Level &amp; Rank</th><th>Attributes</th><th class="r">Skill points</th><th class="r">Plan</th></tr></thead>
           <tbody>
           {{range $ov.Rows}}
           <tr{{if .Selected}} class="sel"{{end}}>
-            <td><a class="ov-cell" href="{{.SelectHref}}"><span class="ov-lvl{{if .Untrained}} zero{{end}}">{{.LevelTile}}</span><span class="ov-cell-main"><span class="ov-nm">{{.Name}}</span>{{if .Mastered}}<span class="ov-tag mastered">Mastered</span>{{else if .Untrained}}<span class="ov-tag untrained">Untrained</span>{{end}}<br><span class="ov-sub">{{.Group}}</span></span></a></td>
+            <td><a class="ov-cell" href="{{.SelectHref}}"><span class="ov-lvl{{if .Untrained}} zero{{end}}">{{.LevelTile}}</span><span class="ov-cell-main"><span class="ov-nmline"><span class="ov-nm">{{.Name}}</span>{{if .Mastered}}<span class="ov-tag mastered">Mastered</span>{{else if .Untrained}}<span class="ov-tag untrained">Untrained</span>{{end}}</span><br><span class="ov-sub">{{.Group}}</span></span></a></td>
             <td><span class="ov-pips">{{range .Pips}}<i{{if .Class}} class="{{.Class}}"{{end}}></i>{{end}}</span><div class="ov-rank">{{if .Rank}}Rank {{.Rank}}{{end}}</div></td>
             <td>{{if .AttrPair}}<span class="ov-attr">{{.AttrPair}}</span>{{end}}</td>
             <td class="r"><span class="ov-val">{{.SP}}{{if .MaxSP}}<small>of {{.MaxSP}} SP</small>{{end}}</span></td>

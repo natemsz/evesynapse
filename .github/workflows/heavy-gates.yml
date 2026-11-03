@@ -96,6 +96,7 @@ jobs:
           internal/app/jstest/map.test.js
           internal/app/jstest/dashboard.test.js
           internal/app/jstest/home.grid.test.js
+          internal/app/jstest/assets.rows.test.js
       - name: Report the result to Forgejo
         if: always()
         continue-on-error: true

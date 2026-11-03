@@ -57,6 +57,7 @@ class El {
     return Object.prototype.hasOwnProperty.call(this.attrs, k) ? this.attrs[k] : null;
   }
   removeAttribute(k) { delete this.attrs[k]; }
+  getBoundingClientRect() { return { width: Math.max(this.offsetWidth, this.clientWidth) }; }
   appendChild(c) {
     if (c.parentNode) c.parentNode.removeChild(c);
     c.parentNode = this;

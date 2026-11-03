@@ -35,6 +35,7 @@
   {{if .CharacterPage.Loaded}}
   {{$v := .CharacterPage}}
   {{$ov := .CharacterPage.Overview}}
+  <div class="l-page">
 
   <div class="ov-head">
     <div class="ov-head-main">
@@ -51,7 +52,7 @@
   </div>
 
   {{if $v.TrainedEntries}}
-  <div class="ov-banner" role="status">
+  <div class="ov-banner l-root" role="status">
     <span class="ov-bchip">Trained since your last visit</span>
     {{range $v.TrainedEntries}}
     <span class="ov-bitem"><b>{{.Skill}}</b> <span class="lv">Level {{.Level}}</span> <span class="when">({{.When}})</span>{{if .StageHref}} <a class="ov-badd" href="{{.StageHref}}">+ Plan L{{.NextLevel}}</a>{{end}}</span>
@@ -64,7 +65,7 @@
   </div>
   {{end}}
 
-  <div class="ov-cards">
+  <div class="l-tiles ov-cards l-root">
     {{if $v.IdentityKnown}}
     <div class="ov-card">
       <div class="ov-idrow">
@@ -122,20 +123,23 @@
     {{end}}
   </div>
 
-  {{if and $ov.InspOpen (or $ov.SkillInsp $ov.CloneInsp)}}<a class="ov-insp-bg" href="{{$ov.InspCloseHref}}" aria-hidden="true" tabindex="-1"></a>{{end}}
-  <div class="panes3 p3 ov{{if or $ov.SkillInsp $ov.CloneInsp}} has-insp{{end}}{{if eq $v.State.Surface "sheet"}} ov-sheet{{if $ov.GroupPicked}} ov-deep{{end}}{{end}}">
-    <section class="ov-dir" aria-label="Skill directory and clone bay">
+  {{$depth := 0}}{{if or (ne $v.State.Surface "sheet") $ov.GroupPicked}}{{$depth = 1}}{{end}}{{if and $ov.InspOpen (or $ov.SkillInsp $ov.CloneInsp)}}{{$depth = 2}}{{end}}
+  <div class="l-console ov" data-depth="{{$depth}}"{{if or $ov.SkillInsp $ov.CloneInsp}} data-insp="ambient"{{end}} data-land-top>
+  <div class="l-panes">
+    <section class="l-pane l-pane--dir ov-dir" aria-label="Skill directory and clone bay">
       {{if $v.SkillsKnown}}
-      <h2 class="ov-h">Skill directory <span class="cnt">{{len $ov.DirGroups}} groups</span></h2>
-      <input class="ov-dirsearch" type="search" placeholder="Filter skill groups..." aria-label="Filter skill groups" data-ov-filter>
+      <div class="l-pane-bar">
+        <h2 class="l-pane-title ov-h">Skill directory <span class="cnt">{{len $ov.DirGroups}} groups</span></h2>
+        <input class="ov-dirsearch" type="search" placeholder="Filter skill groups..." aria-label="Filter skill groups" data-ov-filter>
+      </div>
       <div class="dirlist" data-ov-dirlist>
-        <a class="diritem{{if $ov.DirAll.Selected}} on{{end}}" href="{{$ov.DirAll.Href}}" data-name="all categories">
+        <a class="diritem{{if $ov.DirAll.Selected}} on{{end}}" href="{{$ov.DirAll.Href}}" data-name="all categories" data-l-step="in">
           <span class="dir-top"><span class="dir-name">All categories</span><span class="dir-val">{{$ov.DirAll.SPCompact}}</span></span>
           <span class="dir-sub"><span>{{$ov.DirAll.Trained}} trained · {{$ov.DirAll.Total}} in the catalog</span><span>{{$ov.DirAll.ShareLabel}}</span></span>
           <span class="sharebar"><span class="fill pw-100"></span></span>
         </a>
         {{range $ov.DirGroups}}
-        <a class="diritem{{if .Selected}} on{{end}}" href="{{.Href}}" data-name="{{.Name}}">
+        <a class="diritem{{if .Selected}} on{{end}}" href="{{.Href}}" data-name="{{.Name}}" data-l-step="in">
           <span class="dir-top"><span class="dir-name">{{.Name}}</span><span class="dir-val">{{.SPCompact}}</span></span>
           <span class="dir-sub"><span>{{.Trained}} trained · {{.Total}} total</span><span>{{.ShareLabel}}</span></span>
           <span class="sharebar"><span class="fill pw-{{.SharePct}}"></span></span>
@@ -154,7 +158,8 @@
       <p class="ov-dirfoot">Skills, clones and implants render from the character's stored snapshots. A section dims on its own while its snapshot is still warming.</p>
     </section>
 
-    <section class="ov-main" aria-label="Character sheet" data-land-top>
+    <section class="l-pane l-pane--main ov-main" aria-label="Character sheet">
+      <div class="l-pane-bar"><a class="l-back" data-l-step="out" href="{{if $ov.BackHref}}{{$ov.BackHref}}{{else}}/character/?character={{$v.CharacterID}}{{end}}">Skill directory</a></div>
       <div class="crumbs"><span>Character</span><span class="crumb-sep">&rsaquo;</span>{{if $ov.BackHref}}<a href="{{$ov.BackHref}}">{{$v.CharacterName}}</a>{{else}}<span>{{$v.CharacterName}}</span>{{end}}<span class="crumb-sep">&rsaquo;</span><span class="crumb-here">{{if eq $v.State.Surface "clones"}}Clones &amp; implants{{else}}{{$ov.GroupName}}{{end}}</span><span class="crumb-cap">{{$ov.CrumbCap}}</span></div>
       <div class="pilltabs" role="group" aria-label="Sheet surface">
         {{range $ov.Tabs}}<a class="pilltab{{if .On}} on{{end}}" href="{{.Href}}">{{.Label}} <span class="cnt">{{.Count}}</span></a>{{end}}
@@ -267,8 +272,8 @@
     </section>
 
     {{if or $ov.SkillInsp $ov.CloneInsp}}
-    <aside class="insp ov-insp p3-insp{{if $ov.InspOpen}} picked{{end}}" aria-label="Inspector">
-      <a class="insp-x ov-insp-x" href="{{$ov.InspCloseHref}}" aria-label="Close the inspector">&#10005;</a>
+    <aside class="l-pane l-pane--insp insp ov-insp{{if $ov.InspOpen}} picked{{end}}" aria-label="Inspector">
+      <div class="l-pane-bar"><a class="l-back" data-l-step="out" href="{{$ov.InspCloseHref}}">Character sheet</a>{{if $ov.InspOpen}}<a class="l-close" href="{{$ov.InspCloseHref}}" aria-label="Close the inspector">&#10005;</a>{{end}}</div>
       {{if eq $v.State.Surface "clones"}}
         {{with $ov.CloneInsp}}
         <div class="insp-head">
@@ -327,11 +332,13 @@
         {{end}}
       {{end}}
     </aside>
+    {{if $ov.InspOpen}}<a class="l-scrim" href="{{$ov.InspCloseHref}}" aria-label="Close the inspector" tabindex="-1"></a>{{end}}
     {{end}}
+  </div>
   </div>
 
   {{if $ov.Colonies}}
-  <section class="ov-colonies">
+  <section class="ov-colonies l-root">
     <h3>Colonies</h3>
     <p class="ov-note">Per-colony detail from the stored colony snapshots, the same rows as <a href="/planets/?character={{$v.CharacterID}}">My Colonies</a>.</p>
     <div class="tw">
@@ -353,6 +360,7 @@
     </div>
   </section>
   {{end}}
+  </div>
 
   {{else}}
   {{if .CharacterPage.Warming}}

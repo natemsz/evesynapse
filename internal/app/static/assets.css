@@ -1,12 +1,11 @@
 /* EveSynapse: the Assets page. Only what is unique to this page
-   lives here: the console surface, the page head, the toolbar,
-   the container strip, the matrix table and the phone layout.
-   The shared patterns (three-pane shell, directory rows, share
-   bars, pill tabs, filter chips, the character selector's
-   dropdown and rows, loadout chips, tech pips, flag chips,
-   breadcrumbs, the inspector pane and its estimate bar) are
-   in style.css. Phone rules sit in the same 45rem band the
-   site's phone layer uses. */
+   lives here: the page head, the toolbar, the container strip, the
+   matrix table and the narrow-console content forms. Where the
+   panes go and when they collapse is the layout framework's
+   console (layout.css); the shared row patterns (directory rows,
+   share bars, pill tabs, filter chips, the character selector,
+   loadout chips, tech pips, breadcrumbs, the inspector's slot
+   sections and its estimate bar) are in style.css. */
 
 /* The page head: the summary line and scope selector left, the
    account's total estimated value right with its label. */
@@ -45,73 +44,11 @@
 .asset-scope-only { position: absolute; right: 0.45rem; top: 50%; transform: translateY(-50%); padding: 0.3rem 0.3rem; color: var(--muted); font-size: 0.75rem; font-weight: 600; text-decoration: none; }
 .asset-scope-only:hover { color: var(--accent); }
 
-/* The console is the shared three column class (.p3 in
-   style.css): this page sets its column widths and keeps its
-   panes flush against hairline dividers. The overflow clips
-   rather than hides: a hidden overflow would make the console
-   the inspector's scroll container and its sticky pinning could
-   never engage; clip keeps the same corner clipping without a
-   scroll box. */
-.panes3.amx { --p3-dir: 18rem; --p3-insp: 22rem; --p3-gap: 0; overflow: clip; }
-.pane-dir { padding: 0.9rem; }
-.pane-main { padding: 0.9rem 1rem 1rem; border-left: 1px solid var(--box-edge); }
-.panes3.amx .pane-insp { border: 0; border-left: 1px solid var(--box-edge); border-radius: 0; background: none; }
-
-/* The inspector's scrim: in the sheet bands it covers the
-   page under the sheet, dims it, and takes the click that
-   dismisses the sheet, following the same close link as the
-   sheet's own close button. In the column band and the phone
-   stack the inspector is in flow and the scrim never shows. */
-.insp-scrim { display: none; }
-@media (min-width: 45.01rem) and (max-width: 80rem) {
-  .panes3.amx > .insp-scrim {
-    display: block; position: fixed; inset: 0; z-index: 94;
-    background: rgba(0, 0, 0, 0.35);
-  }
-}
-
-/* The inspector pinned on the desktop console: past 80rem
-   it is the third column, so it pins under the top bar at
-   the offset the plan page's inspector uses and scrolls
-   internally when its content runs taller than the space
-   left under that offset. The middle band's sheet and the
-   phone sheet keep their own forms; this band is the only
-   place the rule exists. */
-@media (min-width: 80.01rem) {
-  .panes3.amx .pane-insp {
-    position: sticky;
-    top: calc(var(--sticky-top) + 1px + 0.6rem);
-    max-height: calc(100dvh - var(--sticky-top) - 1px - 1.2rem);
-    overflow-y: auto;
-  }
-}
-
-/* The station directory pinned beside the matrix wherever the
-   panes sit side by side: it grows with its list up to the
-   space under the top bar and no further, so a long directory
-   never stretches the page; past that cap the list scrolls
-   inside the pane while the heading, the filter and the foot
-   note stay put. While the matrix runs long, the pinned
-   directory keeps the full height the cap allows. */
-@media (min-width: 64.01rem) {
-  .panes3.amx .pane-dir {
-    display: flex;
-    flex-direction: column;
-    position: sticky;
-    top: calc(var(--sticky-top) + 1px + 0.6rem);
-    max-height: calc(100dvh - var(--sticky-top) - 1px - 1.2rem);
-  }
-  .panes3.amx .pane-dir .dirlist {
-    flex: 1 1 auto;
-    min-height: 0;
-    overflow-y: auto;
-  }
-}
-.pane-h { margin: 0 0 0.6rem; font-size: 0.95rem; }
-.pane-h span { color: var(--muted); font-size: 0.8rem; font-weight: 500; }
-.pane-dir #assets-dirfilter { width: 100%; margin-bottom: 0.6rem; }
+/* The console's panes: this page keeps them flush against
+   hairline dividers and sets its column widths. */
+.amx .l-panes { --l-dir: 18rem; --l-insp: 22rem; }
+.pane-dir #assets-dirfilter { flex: 1 1 100%; width: 100%; }
 .dir-foot { margin: 0.8rem 0 0; color: var(--muted); font-size: 0.78rem; }
-.dirdrop { display: none; }
 
 /* The matrix pane's stacked controls: breadcrumb, hangar tabs,
    saved filters, then the search and sort toolbar. */
@@ -124,7 +61,7 @@
 .fchip-save summary::-webkit-details-marker { display: none; }
 .fchip-save .fchip-form { margin-top: 0.5rem; }
 .fchip-save[open ] { flex: 1 1 100%; }
-.amx-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin-top: 0.7rem; }
+.amx-tools { display: flex; flex-wrap: nowrap; align-items: center; gap: 0.5rem; flex: 1 1 16rem; min-width: 0; margin: 0; }
 .amx-tools .searchwrap { flex: 1 1 13rem; }
 .amx-table thead th a { color: inherit; text-decoration: none; }
 .amx-table thead th a:hover { color: var(--gold); }
@@ -204,86 +141,13 @@
 .amx-c-val small { margin-left: 0.25rem; color: var(--muted); font-size: 0.66rem; font-weight: 700; letter-spacing: 0.07em; }
 .amx-more { margin: 0.6rem 0 0; color: var(--muted); font-size: 0.85rem; }
 
-/* The phone ships grid and the inspector's sheet form are
-   desktop-hidden. */
 .mships { display: none; }
 .insp-titles { min-width: 0; }
 
-/* Middle widths (the foldable band): the console drops its
-   third column well before the three panes would squeeze the
-   matrix. The directory and the matrix sit side by side where
-   they fit and stack where they do not; either way the
-   inspector leaves the grid and opens as a sheet over the
-   page, in the phone sheet's surface language (dark glass,
-   blurred backdrop, a dim veil over the page), and its close
-   link dismisses it as it does in every other band. The
-   toolbar's search takes a row of its own here, so its
-   placeholder never truncates against the sort select and
-   the button and the Only box stop crowding it. */
-@media (max-width: 80rem) {
-  /* The middle band's sheet form itself is the shared class's;
-     the scrim above dims the page behind the sheet and takes
-     the dismissing click, where the character sheet uses its
-     own backdrop. */
-  .panes3.amx .pane-insp {
-    box-shadow: -18px 0 42px rgba(0, 0, 0, 0.55);
-  }
-  .amx-tools .searchwrap { flex: 1 1 100%; }
-  /* A fixed sheet inside a blurred surface takes that
-     surface as its frame, so while the inspector is up the
-     page glass gives up its blur and the sheet pins to the
-     screen; the tint stays. The phone band's .as-sheet rule
-     in phone.css is the same trade. */
-  .page-body:has(.panes3.amx.has-insp) {
-    -webkit-backdrop-filter: none;
-    backdrop-filter: none;
-  }
-}
-
-/* Tablet: the shared class stacks the panes; this page's
-   divider moves from the main pane's left edge to its top. */
-@media (max-width: 64rem) {
-  .pane-main { border-left: 0; border-top: 1px solid var(--box-edge); }
-}
-
-/* Phone (the site's canon band): the directory becomes a
-   station selector bar, assembled ships become a card grid,
-   containers become full-width rows, the table keeps Item,
-   Qty and Value, and the inspector is a sheet under the
-   matrix. */
-@media (max-width: 45rem) {
-  /* The inspector sits in the stack under the matrix here,
-     divided from it by a top border. */
-  .panes3.amx .pane-insp {
-    position: static;
-    border: 0; border-top: 1px solid var(--box-edge); border-radius: 0;
-    background: none;
-  }
-  .assets-net { text-align: left; }
-  .asset-scope { max-width: none; }
-  .asset-scope-btn { min-height: 2.4rem; }
-  .asset-scope-row, .asset-scope-all { min-height: 2.6rem; }
-  .asset-scope-only { padding: 0.65rem 0.35rem; }
-  .pane-dir .pane-h, .pane-dir #assets-dirfilter, .pane-dir .dirlist, .pane-dir .dir-foot { display: none; }
-  .pane-dir { padding: 0.7rem 0.9rem; }
-  .dirdrop { display: block; }
-  .dirdrop summary { display: flex; align-items: center; gap: 0.6rem; list-style: none; cursor: pointer; }
-  .dirdrop summary::-webkit-details-marker { display: none; }
-  .dirdrop-t { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
-  .dirdrop-v { flex: none; color: var(--gold); font-weight: 700; font-variant-numeric: tabular-nums; }
-  .dirdrop-c { flex: none; color: var(--muted); }
-  .dirdrop .dirlist { display: flex; margin-top: 0.6rem; }
-  .dirdrop[open ] summary { margin-bottom: 0.2rem; }
-  /* List first: until a place is picked the phone shows the
-     full directory and nothing else; once one is picked it
-     shows the main pane alone, and the breadcrumb's Assets
-     link returns to the directory. */
-  .amx:not(.amx-deep) .pane-main { display: none; }
-  .amx:not(.amx-deep) .dirdrop { display: none; }
-  .amx:not(.amx-deep) .pane-dir .pane-h, .amx:not(.amx-deep) .pane-dir .dir-foot { display: block; }
-  .amx:not(.amx-deep) .pane-dir #assets-dirfilter { display: block; }
-  .amx:not(.amx-deep) .pane-dir .dirlist { display: flex; }
-  .amx.amx-deep .pane-dir { display: none; }
+/* The narrow console (one pane at a time): assembled ships read as
+   a card grid above the table, containers as full-width rows, and
+   the table keeps Item, Qty and Value. */
+@container console (width < 46rem) {
   .mships { display: block; margin-top: 0.9rem; }
   .mships-h { margin: 0 0 0.5rem; font-size: 0.95rem; }
   .mships-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; }
@@ -296,11 +160,18 @@
   .canstrip.open .cangrid { max-height: 60vh; }
   .canstrip.measuring .cangrid { max-height: 14rem; }
   .canstrip-tools { flex: 1 1 100%; }
-  .canstrip-toggle { min-height: 2.4rem; padding: 0.5rem 0.9rem; }
+  .canstrip-toggle { min-height: var(--tap); padding: 0.5rem 0.9rem; }
   .amx-table th:nth-child(2), .amx-table td.amx-c-load,
   .amx-table th:nth-child(4), .amx-table td:nth-child(4) { display: none; }
   .amx-table th:nth-child(1) { width: auto; }
   .amx-table th:nth-child(3) { width: 5.25rem; }
   .amx-table th:nth-child(5) { width: 5.5rem; }
-  .amx-tools .searchwrap { flex: 1 1 13rem; }
+  .assets-net { text-align: left; margin-left: 0; }
+  .amx-trow td { padding-top: 0.6rem; padding-bottom: 0.6rem; }
+}
+/* Touch-sized scope controls wherever the pointer is coarse. */
+@media (pointer: coarse) {
+  .asset-scope-btn { min-height: 2.4rem; }
+  .asset-scope-row, .asset-scope-all { min-height: 2.6rem; }
+  .asset-scope-only { padding: 0.65rem 0.35rem; }
 }

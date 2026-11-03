@@ -62,15 +62,15 @@ try {
 } catch (e) {}
 
 // Tags a cross-document view transition with the direction of
-// travel between a three column console's directory and its
-// picked place or group, read from the state this page renders
-// in. The slide itself is CSS (style.css); browsers without
+// travel between a console's directory and its picked place or
+// group, read from the depth this page renders at (layout.css). The slide itself is CSS (style.css); browsers without
 // cross-document transitions ignore this and swap instantly.
 // Runs from boot.js so the hook is registered before reveal.
 window.addEventListener('pagereveal', function (e) {
   if (!e.viewTransition) return;
-  if (!document.querySelector('.panes3.amx, .panes3.ov')) return;
-  var deep = document.querySelector('.amx-deep, .ov-deep');
+  var c = document.querySelector('.l-console[data-depth]');
+  if (!c) return;
+  var deep = c.getAttribute('data-depth') !== '0';
   e.viewTransition.types.add(deep ? 'vt-deep' : 'vt-list');
   document.documentElement.dataset.vt = deep ? 'vt-deep' : 'vt-list';
 });

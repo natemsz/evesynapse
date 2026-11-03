@@ -9,7 +9,7 @@ import (
 )
 
 // TestTabsMoreWrapperGuard pins the More wrapper's own [hidden]
-// guard in bg.css. The wrapper is a flex item carrying an author
+// guard in layout.css. The wrapper is a flex item carrying an author
 // display of its own (its measuring state), and in some engines
 // that display wins over the UA's [hidden] rule — a visible More
 // button with an empty panel behind it, whose tap does nothing.
@@ -17,10 +17,10 @@ import (
 // with the measuring state carved out (measuring a hidden
 // wrapper is the one moment it must lay out).
 func TestTabsMoreWrapperGuard(t *testing.T) {
-	css := readStatic(t, "bg.css")
-	guard := "#main-content .tabs-more[hidden]:not(.tabs-more-measuring) { display: none; }"
+	css := readStatic(t, "layout.css")
+	guard := ".subnav .tabs-more[hidden]:not(.tabs-more-measuring) { display: none; }"
 	if !strings.Contains(css, guard) {
-		t.Error("bg.css lost the tabs-more wrapper's [hidden] guard; in some engines the More button renders with an empty panel when every tab fits")
+		t.Error("layout.css lost the tabs-more wrapper's [hidden] guard; in some engines the More button renders with an empty panel when every tab fits")
 	}
 }
 
@@ -61,10 +61,10 @@ func TestPhoneShellStatic(t *testing.T) {
 		t.Error("the appraisal dock no longer floats over the phone bar")
 	}
 
-	bg := readStatic(t, "bg.css")
-	bgBlock := mediaBlock(t, bg, "@media (max-width: 45rem)")
-	if !strings.Contains(bgBlock, "#main-content:has(> .section-subtabs) > .section-tabs { display: none; }") {
-		t.Error("bg.css no longer stands the folder strip down in the phone band where a sub-row remains")
+	layout := readStatic(t, "layout.css")
+	layoutBlock := mediaBlock(t, layout, "@media (max-width: 45rem)")
+	if !strings.Contains(layoutBlock, ".subnav > .section-tabs:has(+ .section-subtabs) { display: none; }") {
+		t.Error("layout.css no longer stands the group tabs down in the phone band where a page row remains")
 	}
 
 	rawBase, err := fs.ReadFile(templatesFS, "templates/base.html")

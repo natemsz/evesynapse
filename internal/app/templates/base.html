@@ -24,6 +24,7 @@
 <link rel="preload" as="font" type="font/woff2" href="/static/fonts/rajdhani-600.woff2" crossorigin>
 <link rel="stylesheet" href="/static/style.css?v={{.AssetVersion}}">
 <link rel="stylesheet" href="/static/bg.css?v={{.AssetVersion}}">
+<link rel="stylesheet" href="/static/layout.css?v={{.AssetVersion}}">
 {{if or (eq .NavPage "planner.html") (eq .NavPage "piplanner.html") (eq .NavPage "industry.html")}}<link rel="stylesheet" href="/static/plan.css?v={{.AssetVersion}}">{{end}}
 {{if eq .NavPage "character.html"}}<link rel="stylesheet" href="/static/overview.css?v={{.AssetVersion}}">{{end}}
 {{if or (eq .NavPage "contract_search.html") (eq .NavPage "contract_detail.html")}}<link rel="stylesheet" href="/static/contracts.css?v={{.AssetVersion}}">{{end}}
@@ -211,8 +212,8 @@
 </header>
 <div class="page-shell">
 <main id="main-content">
+<div class="subnav">{{template "pagetabs" .}}</div>
 {{template "pagetitle" .}}
-{{template "pagetabs" .}}
   <div class="page-body">
 {{with .Banners}}{{template "noticebanners" .}}{{end}}
 {{if .Notice}}<p class="notice" role="status">{{.Notice}}</p>{{end}}

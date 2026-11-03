@@ -327,6 +327,18 @@
     module.exports = { planTabFold: planTabFold, tabMoreState: tabMoreState };
   }
 
+  // The width a strip's More button takes, measured shown but
+  // invisible when it is hidden.
+  function moreReserve(strip) {
+    var wrap = strip.querySelector(".tabs-more"), btn = wrap && wrap.querySelector(".tabs-more-btn");
+    if (!btn) return 0;
+    if (!wrap.hidden) return btn.getBoundingClientRect().width;
+    wrap.classList.add("tabs-more-measuring");
+    var w = btn.getBoundingClientRect().width;
+    wrap.classList.remove("tabs-more-measuring");
+    return w;
+  }
+
   var tabOverflowStrips = [];
 
   function tabStripParts(strip) {
@@ -375,20 +387,41 @@
     }
     var cs = window.getComputedStyle(strip);
     var gap = parseFloat(cs.columnGap) || parseFloat(cs.gap) || 0;
-    var avail = strip.clientWidth -
-      (parseFloat(cs.paddingLeft) || 0) - (parseFloat(cs.paddingRight) || 0);
+    // Fractional widths throughout: a strip sized to its own tabs
+    // (the sub-nav's group strip) measures exactly its content, and
+    // whole-pixel rounding would fold a tab that fits. The half
+    // pixel absorbs what rounding is left in the layout itself.
+    var avail = strip.getBoundingClientRect().width -
+      (parseFloat(cs.borderLeftWidth) || 0) - (parseFloat(cs.borderRightWidth) || 0) -
+      (parseFloat(cs.paddingLeft) || 0) - (parseFloat(cs.paddingRight) || 0) + 0.5;
     // Anything else sharing the row (the sub-row's note) keeps
     // its room; only what is left is the tabs' to fit into.
     for (var c = 0; c < strip.children.length; c++) {
       var child = strip.children[c];
       if (child === st.wrap || child.tagName === "A" || child.hidden) continue;
-      avail -= child.offsetWidth + gap;
+      avail -= child.getBoundingClientRect().width + gap;
+    }
+    // The sub-nav's group strip sits at its natural width beside the
+    // page strip, so its own width says nothing about the room it
+    // could have: its room is the bar's, less what the page strip
+    // needs to stay usable (its current tab and its More button).
+    var bar = strip.parentNode;
+    var pages = strip.nextElementSibling;
+    if (bar && bar.classList && bar.classList.contains("subnav") && pages && pages.classList.contains("section-subtabs")) {
+      var bcs = window.getComputedStyle(bar);
+      var cur = pages.querySelector("a.active");
+      var pagesMin = (cur ? cur.getBoundingClientRect().width : 0) + moreReserve(pages);
+      avail = bar.getBoundingClientRect().width -
+        (parseFloat(bcs.paddingLeft) || 0) - (parseFloat(bcs.paddingRight) || 0) -
+        (parseFloat(bcs.columnGap) || 0) - pagesMin -
+        (parseFloat(cs.paddingLeft) || 0) - (parseFloat(cs.paddingRight) || 0) -
+        (parseFloat(cs.borderRightWidth) || 0) + 0.5;
     }
     var labels = [];
     // Folded tabs have no layout box, so their width is the last
     // one measured in the row; visible tabs re-measure each pass.
     for (i = 0; i < st.tabs.length; i++) {
-      if (st.tabs[i].parentNode === strip) st.widths[i] = st.tabs[i].offsetWidth;
+      if (st.tabs[i].parentNode === strip) st.widths[i] = st.tabs[i].getBoundingClientRect().width;
       labels.push(st.tabs[i].textContent);
     }
     // A hidden More wrapper has no width either; measure it
@@ -396,10 +429,10 @@
     var moreWidth;
     if (st.wrap.hidden) {
       st.wrap.classList.add("tabs-more-measuring");
-      moreWidth = st.btn.offsetWidth;
+      moreWidth = st.btn.getBoundingClientRect().width;
       st.wrap.classList.remove("tabs-more-measuring");
     } else {
-      moreWidth = st.btn.offsetWidth;
+      moreWidth = st.btn.getBoundingClientRect().width;
     }
     var plan = planTabFold(st.widths, st.active, avail, moreWidth, gap);
     var inPanel = {};
@@ -4475,9 +4508,9 @@
     th.setAttribute("aria-sort", dir === 1 ? "ascending" : "descending");
   });
 
-  // --- Table cards (phone band) ---------------------------------
-  // In the phone band (phone.css) a data table that would scroll
-  // sideways reads as a list of cards instead: each row a card,
+  // --- Table cards ---------------------------------------------
+  // At any width, a data table that would scroll sideways reads as
+  // a list of cards instead: each row a card,
   // its first cell the card's title, every other cell a figure
   // under its column's label. The labels come from the table's
   // own header row (copied onto the cells as data-label), so no
@@ -4491,9 +4524,11 @@
   // clicks the header the desktop reader would (the one sort
   // implementation, above). A header cell marked .opt (the
   // site's low-priority column mark, as in the home modules)
-  // keeps its column off the cards. Without JS, or off the band,
+  // keeps its column off the cards. The fit is re-measured
+  // whenever a table's box changes width (the window, the
+  // sidebar opening or closing, a pane appearing beside it), so a
+  // table is a table exactly while its columns fit. Without JS
   // tables render exactly as before.
-  var cardsBandQuery = window.matchMedia ? window.matchMedia("(max-width: 45rem)") : null;
 
   // Pure: the label for each column index of a header row, with
   // colspans expanded so a cell's index finds its header.
@@ -4527,13 +4562,14 @@
   function labelCardCells(table) {
     var head = table.tHead && table.tHead.rows.length ? table.tHead.rows[table.tHead.rows.length - 1] : null;
     if (!head) return false;
-    var texts = [], spans = [], opts = [], i, r, c;
+    var texts = [], spans = [], opts = [], titles = [], i, r, c;
     for (i = 0; i < head.cells.length; i++) {
       texts.push(head.cells[i].textContent.trim());
       spans.push(head.cells[i].colSpan);
       opts.push(head.cells[i].classList.contains("opt") ? "1" : "");
+      titles.push(head.cells[i].classList.contains("card-title") ? "1" : "");
     }
-    var labels = cardLabels(texts, spans), optional = cardLabels(opts, spans);
+    var labels = cardLabels(texts, spans), optional = cardLabels(opts, spans), titled = cardLabels(titles, spans);
     for (r = 0; r < table.tBodies.length; r++) {
       var rows = table.tBodies[r].rows;
       for (i = 0; i < rows.length; i++) {
@@ -4542,10 +4578,17 @@
           var cell = rows[i].cells[c];
           var ctl = cell.colSpan === 1 && isControlCell(cell);
           cell.classList.toggle("card-ctl", ctl);
+          // A cell with nothing in it (a row without the column's
+          // control) is no figure: it stays off the card entirely.
+          cell.classList.toggle("card-blank", !ctl && !cell.textContent.trim() && !cell.querySelector("img, svg, input, select, button"));
           if (labels[idx] && cell.colSpan === 1 && !ctl) cell.setAttribute("data-label", labels[idx]);
           // A column the header marks .opt (the site's "first to
           // go when narrow" mark) stays off the card.
           if (optional[idx] && cell.colSpan === 1) cell.classList.add("opt");
+          // A column the header marks .card-title heads the card in
+          // place of the first cell, with no label of its own.
+          cell.classList.toggle("card-title", !!titled[idx] && cell.colSpan === 1);
+          if (titled[idx]) cell.removeAttribute("data-label");
           idx += cell.colSpan;
         }
       }
@@ -4554,7 +4597,10 @@
   }
 
   function cardSortPicker(table) {
-    var prev = table.previousElementSibling;
+    // The picker sits before the table's scroll wrapper, so that is
+    // where an earlier layout left it.
+    var anchor = table.parentNode && table.parentNode.classList.contains("tw") ? table.parentNode : table;
+    var prev = anchor.previousElementSibling;
     if (prev && prev.classList.contains("cards-sort")) return prev;
     // A short list needs no sort; the picker earns its row at four.
     if (table.hasAttribute("data-nosort") || !table.tBodies[0] || table.tBodies[0].rows.length < 4) return null;
@@ -4585,24 +4631,18 @@
     label.appendChild(cap);
     label.appendChild(sel);
     // The picker sits outside the table's scroll wrapper.
-    var anchor = table.parentNode && table.parentNode.classList.contains("tw") ? table.parentNode : table;
     anchor.parentNode.insertBefore(label, anchor);
     return label;
   }
 
   function layoutTableCards(root) {
     var tables = (root || document).querySelectorAll("#main-content table, table");
-    var on = cardsBandQuery && cardsBandQuery.matches, i;
+    var i;
     var measure = [];
     for (i = 0; i < tables.length; i++) {
       var t = tables[i], mode = t.getAttribute("data-cards");
       if (!t.closest("#main-content") || !t.tHead || mode === "off") continue;
-      var picker = t.parentNode && t.parentNode.classList.contains("tw") ? t.parentNode.previousElementSibling : t.previousElementSibling;
-      if (!on) {
-        t.classList.remove("cards-on");
-        if (picker && picker.classList.contains("cards-sort")) picker.hidden = true;
-        continue;
-      }
+      watchTableBox(t);
       if (mode === "on") { measure.push([t, true]); continue; }
       t.classList.remove("cards-on");
       measure.push([t, null]);
@@ -4616,21 +4656,44 @@
     }
     for (i = 0; i < measure.length; i++) {
       var table = measure[i][0];
-      if (!measure[i][1] || !labelCardCells(table)) continue;
+      var picker = table.parentNode && table.parentNode.classList.contains("tw") ? table.parentNode.previousElementSibling : table.previousElementSibling;
+      if (!measure[i][1] || !labelCardCells(table)) {
+        if (picker && picker.classList.contains("cards-sort")) picker.hidden = true;
+        continue;
+      }
       table.classList.add("cards-on");
       var p = cardSortPicker(table);
       if (p) p.hidden = false;
     }
   }
+  // One observer for every table's box: a width change schedules
+  // one re-layout on the next frame. Boxes swapped out with their
+  // page drop out of the observer when it is rebuilt on swap.
+  var cardsObserver = null, cardsFrame = 0, cardsWidths = typeof WeakMap === "function" ? new WeakMap() : null;
+  function watchTableBox(table) {
+    if (!cardsObserver || !cardsWidths) return;
+    var box = table.parentNode;
+    if (!box || cardsWidths.has(box)) return;
+    cardsWidths.set(box, -1);
+    cardsObserver.observe(box);
+  }
+  if (typeof ResizeObserver === "function" && cardsWidths) {
+    cardsObserver = new ResizeObserver(function (entries) {
+      var changed = false;
+      for (var e = 0; e < entries.length; e++) {
+        var w = Math.round(entries[e].contentRect.width);
+        if (cardsWidths.get(entries[e].target) !== w) { cardsWidths.set(entries[e].target, w); changed = true; }
+      }
+      if (!changed || cardsFrame) return;
+      cardsFrame = window.requestAnimationFrame(function () { cardsFrame = 0; layoutTableCards(document); });
+    });
+    document.addEventListener("evesynapse:content-will-swap", function () {
+      cardsObserver.disconnect();
+      cardsWidths = new WeakMap();
+    });
+  }
   window.EveSynapseContent.onReady(layoutTableCards);
   layoutTableCards(document);
-  if (cardsBandQuery && cardsBandQuery.addEventListener) {
-    cardsBandQuery.addEventListener("change", function () { layoutTableCards(document); });
-  }
-  // A phone turning on its side may now fit a table it could not.
-  window.addEventListener("orientationchange", function () {
-    if (window.requestAnimationFrame) window.requestAnimationFrame(function () { layoutTableCards(document); });
-  });
 
   // --- Filters that apply as they change -----------------------
   // A control marked data-autosubmit (the Item Database search's

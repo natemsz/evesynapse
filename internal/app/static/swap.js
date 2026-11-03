@@ -809,22 +809,25 @@
     // A link that only changes this page's query (a mode, span or
     // filter switch) is a view change, not a trip to a new page:
     // the reader keeps their place instead of landing at the top.
-    // On the assets page, picking a different station, container or
-    // ship changes what the list shows, so it lands at the top like
-    // a new page; search, sort and filter changes keep the scroll.
+    // On the assets page, picking a different station changes
+    // which place the list shows, so it lands at the top like a
+    // new page; picking a container, ship or item only changes
+    // the selection, so it keeps the reader's place like search,
+    // sort and filter changes do.
     var samePage = false;
     try {
       var target = new URL(url, window.location.href);
       samePage = target.pathname === window.location.pathname;
       if (samePage && window.location.pathname.replace(/\/$/, "") === "/assets") {
         var from = new URL(window.location.href).searchParams;
-        var keys = ["loc", "can", "ship"];
-        for (var i = 0; i < keys.length; i++) {
-          if ((from.get(keys[i]) || "") !== (target.searchParams.get(keys[i]) || "")) {
-            samePage = false;
-            break;
-          }
-        }
+        // The current place is spelled two ways: no loc at all,
+        // or loc=0 in the hrefs a page hands out. Both are the
+        // same place, so they compare equal here.
+        var placeOf = function (params) {
+          var v = params.get("loc") || "";
+          return v === "0" ? "" : v;
+        };
+        if (placeOf(from) !== placeOf(target.searchParams)) samePage = false;
       }
     } catch (e) { /* an unparseable target navigates normally */ }
     var landScroll = samePage ? window.scrollY : "top";

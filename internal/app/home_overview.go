@@ -1520,6 +1520,17 @@ func (s *homeMarketShared) watchlist(ctx context.Context) []db.MarketWatchlist {
 	return s.watch
 }
 
+// effectiveHomeLayout is the layout a home render or a layout
+// change works from: the account's own preset when nothing is
+// saved, the saved layout otherwise. A saved empty array stays
+// empty.
+func (app *Application) effectiveHomeLayout(ctx context.Context, userID int64, raw string) []homeLayoutItem {
+	if strings.TrimSpace(raw) == "" {
+		return app.defaultLayoutFor(ctx, userID)
+	}
+	return parseHomeLayout(raw)
+}
+
 func (app *Application) buildHome(ctx context.Context, customize bool) *homeView {
 	view := &homeView{}
 	userID := app.userID(ctx)
@@ -1540,12 +1551,7 @@ func (app *Application) buildHome(ctx context.Context, customize bool) *homeView
 	if err != nil {
 		raw = ""
 	}
-	var layout []homeLayoutItem
-	if strings.TrimSpace(raw) == "" {
-		layout = app.defaultLayoutFor(ctx, userID)
-	} else {
-		layout = parseHomeLayout(raw)
-	}
+	layout := app.effectiveHomeLayout(ctx, userID, raw)
 
 	if customize {
 		view.Customize = buildCustomizeView(layout)
@@ -1741,7 +1747,11 @@ func (app *Application) handleHomeLayout(w http.ResponseWriter, r *http.Request)
 	if err != nil {
 		raw = ""
 	}
-	layout := parseHomeLayout(raw)
+	// The change applies to the layout the account's home actually
+	// shows: with nothing saved that is the account's preset, so a
+	// widget standing only through the preset is found and resized
+	// here instead of the change silently going nowhere.
+	layout := app.effectiveHomeLayout(ctx, userID, raw)
 
 	if err := r.ParseForm(); err == nil {
 		action := r.FormValue("action")

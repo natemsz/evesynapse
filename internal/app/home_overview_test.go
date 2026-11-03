@@ -669,6 +669,55 @@ func TestHomeLayoutPlaystylePresets(t *testing.T) {
 	}
 }
 
+// TestHomeLayoutSizeOnPreset: resizing a widget that stands on
+// the home only through the account's preset (nothing saved yet)
+// stores the committed size against the preset. The layout POST
+// used to start from the generic default, where the widget is
+// absent, and answer ok without storing anything.
+func TestHomeLayoutSizeOnPreset(t *testing.T) {
+	transport := &countingTransport{}
+	app, _, q := buildCorpTestApp(t, transport)
+	ctx := context.Background()
+
+	user, err := q.CreateUser(ctx)
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	seedCharacter(t, q, user.ID, fixtureCharA, "Fixture Alpha")
+	if err := q.SetLinkChoice(ctx, db.SetLinkChoiceParams{
+		UserID: user.ID, Choice: `{"activities":["market"]}`, UpdatedAt: time.Now().UTC(),
+	}); err != nil {
+		t.Fatalf("set link choice: %v", err)
+	}
+	cookie := sessionCookie(t, app, user.ID, fixtureCharA, "Fixture Alpha")
+
+	code, body := doLayoutPost(t, app, url.Values{
+		"action": {"size"}, "widget": {widgetWatchlist}, "w": {"1"}, "h": {"1"},
+	}, cookie, true)
+	if code != http.StatusOK {
+		t.Fatalf("size POST on a preset widget: status %d (body %q)", code, body)
+	}
+	raw, err := q.GetUserHomeLayout(ctx, user.ID)
+	if err != nil {
+		t.Fatalf("read layout: %v", err)
+	}
+	if !strings.Contains(raw, `{"id":"watchlist","w":1,"h":1}`) {
+		t.Errorf("stored layout = %q, want the committed watchlist 1x1 in it", raw)
+	}
+	if !strings.Contains(raw, `"tradeideas"`) {
+		t.Errorf("stored layout = %q, want the market preset it resized, tradeideas included", raw)
+	}
+	code, page := getPage(t, app, cookie, "/")
+	if code != http.StatusOK {
+		t.Fatalf("GET /: status %d", code)
+	}
+	mustContain(t, "/", page, `data-widget="watchlist" data-gw="1" data-gh="1"`)
+
+	if got := transport.calls.Load(); got != 0 {
+		t.Fatalf("handlers made %d outbound calls, want 0", got)
+	}
+}
+
 // layoutTilesGrid reports whether a layout covers the three-wide
 // grid with no gaps, under the grid's dense placement.
 func layoutTilesGrid(items []homeLayoutItem) bool {

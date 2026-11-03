@@ -5341,10 +5341,32 @@
     }
   }
 
+  // A matrix row selects its item (the name link does the
+  // same); clicks on real controls inside the row pass. Wired on
+  // load and on every content swap, each row at most once.
+  function initMatrixRows(root) {
+    var rows = root.querySelectorAll(".amx-trow[data-sel]");
+    rows.forEach(function (row) {
+      if (row.hasAttribute("data-sel-ready")) return;
+      row.setAttribute("data-sel-ready", "1");
+      row.addEventListener("click", function (ev) {
+        if (ev.target.closest("a, button, input, select, details, summary")) return;
+        var href = row.getAttribute("data-sel");
+        if (href) window.location.href = href;
+      });
+    });
+  }
+
   if (window.EveSynapseContent && window.EveSynapseContent.onReady) {
     window.EveSynapseContent.onReady(wireAssetScopes);
+    window.EveSynapseContent.onReady(initMatrixRows);
   }
   wireAssetScopes(document);
+  initMatrixRows(document);
+
+  if (typeof module !== "undefined" && module.exports) {
+    module.exports.initMatrixRows = initMatrixRows;
+  }
 })();
 
 // The character switcher in the top bar: like the notification list,
@@ -5933,18 +5955,4 @@
     if (e.key === "Escape" && !modal.hidden) close();
   });
   load();
-
-  // Assets: a matrix row selects its item (the name link does
-  // the same); clicks on real controls inside the row pass.
-  (function () {
-    var rows = root.querySelectorAll(".amx-trow[data-sel]");
-    if (!rows.length) return;
-    rows.forEach(function (row) {
-      row.addEventListener("click", function (ev) {
-        if (ev.target.closest("a, button, input, select, details, summary")) return;
-        var href = row.getAttribute("data-sel");
-        if (href) window.location.href = href;
-      });
-    });
-  })();
 })();

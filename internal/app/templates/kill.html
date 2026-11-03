@@ -37,7 +37,7 @@
       <p class="kp-value-v">{{.ValueFull}} <small>ISK</small></p>
       <meter class="kp-split" min="0" max="100" value="{{.DroppedPct}}" aria-label="Share of the value that dropped">{{.DroppedPct}}% dropped</meter>
       <p class="kp-split-key"><span class="kp-drop">Dropped {{.DroppedFull}}</span> <span class="kp-dest">Destroyed {{.DestroyedFull}}</span></p>
-      <p class="kp-note">Priced by EveSynapse{{if lt .Coverage 100}} ({{.Coverage}}% of lines priced){{end}}.{{with .ZkillValue}} zKillboard: {{.}}.{{end}}</p>
+      <p class="kp-note">Priced by EveSynapse{{if lt .Coverage 100}} ({{.Coverage}}% of lines priced){{end}}.</p>
       {{else}}
       <p class="kp-value-l">Value</p>
       <p class="kp-note">Being priced. It shows within a minute.</p>

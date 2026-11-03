@@ -673,9 +673,9 @@ func planRow(n *buildplan.Node, nameOf func(int64) string) planRowView {
 			row.UnitPrice = "no price data"
 		}
 		if n.Cycle {
-			row.Note = "part of a build cycle — buy it"
+			row.Note = "part of a build cycle, buy it"
 		} else if n.DepthCapped {
-			row.Note = "chain cut off here — buy it"
+			row.Note = "chain cut off here, buy it"
 		}
 	}
 	return row
@@ -1022,14 +1022,14 @@ func scopeStockNote(scope judgeScope, data plannerScopeData) string {
 		if data.AssetsLoaded > 0 {
 			return ""
 		}
-		return fmt.Sprintf("%s's hangars haven't synced yet — everything counts as to-buy for now.", scope.Chars[0].Name)
+		return fmt.Sprintf("%s's hangars haven't synced yet, so everything counts as to-buy for now.", scope.Chars[0].Name)
 	case "tag":
 		n := len(scope.Chars)
 		if data.AssetsLoaded == 0 {
-			return fmt.Sprintf("None of your %q characters have hangar data yet — everything counts as to-buy for now.", scope.Tag)
+			return fmt.Sprintf("None of your %q characters have hangar data yet, so everything counts as to-buy for now.", scope.Tag)
 		}
 		if data.AssetsLoaded < n {
-			return fmt.Sprintf("Hangar data is in for %d of %d of your %q characters so far — the rest counts as to-buy.", data.AssetsLoaded, n, scope.Tag)
+			return fmt.Sprintf("Hangar data is in for %d of %d of your %q characters so far. The rest counts as to-buy.", data.AssetsLoaded, n, scope.Tag)
 		}
 	}
 	return ""
@@ -1078,9 +1078,9 @@ func judgeSkills(scope judgeScope, data plannerScopeData, reqs map[int64]int64, 
 	if loaded == 0 {
 		switch scope.Kind {
 		case "char":
-			judge.Note = fmt.Sprintf("Skills haven't synced for %s yet — once they land, this says what they can build.", scope.Chars[0].Name)
+			judge.Note = fmt.Sprintf("Skills haven't synced for %s yet. Once they land, this says what they can build.", scope.Chars[0].Name)
 		default:
-			judge.Note = "Skills haven't synced for anyone with this tag yet — once they land, this says what they can build."
+			judge.Note = "Skills haven't synced for anyone with this tag yet. Once they land, this says what they can build."
 		}
 		judge.Tip = judge.Note
 		return judge
@@ -1140,7 +1140,7 @@ func judgeSkills(scope judgeScope, data plannerScopeData, reqs map[int64]int64, 
 	case judge.CanBuild:
 		judge.Summary = "Every skill in the chain is covered."
 	default:
-		judge.Summary = "Not yet — the short skills are listed above."
+		judge.Summary = "Not yet. The short skills are listed above."
 	}
 	switch {
 	case !judge.Known:
@@ -1170,7 +1170,7 @@ func planVerdictFor(res *buildplan.Result, prices map[int64]esi.MarketPrice, pro
 		verdict.Cost = isk(root.LineCost)
 	} else if res.UnpricedLines > 0 {
 		verdict.Incomplete = true
-		notes = append(notes, fmt.Sprintf("Prices incomplete — %d shopping items have no price yet, so a profit figure would be a guess.", res.UnpricedLines))
+		notes = append(notes, fmt.Sprintf("Prices incomplete: %d shopping items have no price yet, so a profit figure would be a guess.", res.UnpricedLines))
 	}
 
 	if p, ok := buildplan.UnitPrice(prices, productID); ok {

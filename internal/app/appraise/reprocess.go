@@ -289,7 +289,7 @@ func (app *page) computeReprocess(ctx context.Context, snap *snapshot, s refineS
 		}
 		rl.Outputs = strings.Join(parts, " · ")
 		if pruned {
-			rl.Note = "Below one refine batch — pruned."
+			rl.Note = "Below one refine batch, pruned."
 		} else if portion > 1 && ln.Qty%portion != 0 {
 			rl.Note = fmt.Sprintf("Only full %s-unit batches reprocess; the rest is left over.", esi.FormatInt(portion))
 		}

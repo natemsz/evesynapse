@@ -174,7 +174,7 @@ func (app *Application) recoverSDEPanic(op string) {
 	if r := recover(); r != nil {
 		logging.Errorf("sde: PANIC in %s (recovered): %v\n%s", op, r, debug.Stack())
 		app.updateSDEStatus(func(s *sdeStatus) {
-			s.LastError = "internal error during " + op + " — see the server log"
+			s.LastError = "internal error during " + op + "; see the server log"
 		})
 	}
 }
@@ -227,7 +227,7 @@ func (app *Application) startSDECheck(reason string) bool {
 			logging.Infof("sde: static data up to date (checked %s)", reason)
 			app.updateSDEStatus(func(s *sdeStatus) {
 				s.LastError = ""
-				s.Message = "Up to date — remote dump unchanged (checked " + now + ")"
+				s.Message = "Up to date: remote dump unchanged (checked " + now + ")"
 			})
 			return
 		}
@@ -252,7 +252,7 @@ func (app *Application) sdeMaintenance(ctx context.Context) {
 		return
 	}
 	if count == 0 {
-		logging.Infof("sde: no static data yet — starting initial import")
+		logging.Infof("sde: no static data yet, starting initial import")
 		app.startSDEImport("initial")
 		return
 	}
@@ -277,7 +277,7 @@ func (app *Application) sdeMaintenance(ctx context.Context) {
 	// lands). Retries on later ticks while an import keeps
 	// failing.
 	if ver, _ := app.sdeMeta(ctx, "sde_import_version"); ver != sdeImportVersion {
-		logging.Infof("sde: static data predates current columns — re-importing to backfill")
+		logging.Infof("sde: static data predates current columns, re-importing to backfill")
 		app.startSDEImport("schema-029 backfill")
 		return
 	}
@@ -285,12 +285,12 @@ func (app *Application) sdeMaintenance(ctx context.Context) {
 	// tables were cleared by hand) refills here rather than
 	// waiting for the daily tick.
 	if n, err := app.queries.CountSDEBlueprints(ctx); err == nil && n == 0 {
-		logging.Infof("sde: planner tables empty — importing industry data")
+		logging.Infof("sde: planner tables empty, importing industry data")
 		app.startSDEImport("planner backfill")
 		return
 	}
 	if n, err := app.queries.CountSDESkillMeta(ctx); err == nil && n == 0 {
-		logging.Infof("sde: skill graph tables empty — importing dogma data")
+		logging.Infof("sde: skill graph tables empty, importing dogma data")
 		app.startSDEImport("skill graph backfill")
 		return
 	}

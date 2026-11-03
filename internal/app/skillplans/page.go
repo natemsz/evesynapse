@@ -196,6 +196,81 @@ type skillPlanRow struct {
 	DownWhy  string
 }
 
+// planTimeline is the plan's training order drawn to scale: one
+// segment per row, its length the row's share of the plan's total
+// time, and tick marks at a step that keeps them readable. Segment
+// geometry is in a 1000-unit wide SVG viewBox; tick positions are
+// percentages for the data-left geometry attribute.
+type planTimeline struct {
+	Segments []planSegment
+	Ticks    []planTick
+	Total    string // the plan's total training time
+}
+
+type planSegment struct {
+	X, W   string // viewBox units, one decimal
+	Direct bool   // a plan skill (false: a prerequisite pulled in)
+	Title  string // "Amarr Battleship IV, 2d 4h"
+}
+
+type planTick struct {
+	Left  string // percent of the strip's width
+	Label string // "2d", "6h"
+}
+
+// timelineStep picks a tick step for a total span: whole days when
+// the plan runs past two days, hours below that, never more than
+// about eight ticks.
+func timelineStep(total time.Duration) time.Duration {
+	steps := []time.Duration{time.Hour, 2 * time.Hour, 6 * time.Hour, 12 * time.Hour,
+		24 * time.Hour, 48 * time.Hour, 7 * 24 * time.Hour, 14 * 24 * time.Hour, 30 * 24 * time.Hour}
+	for _, st := range steps {
+		if total/st <= 8 {
+			return st
+		}
+	}
+	return 60 * 24 * time.Hour
+}
+
+func tickLabel(d time.Duration) string {
+	if d%(24*time.Hour) == 0 {
+		return fmt.Sprintf("%dd", int(d/(24*time.Hour)))
+	}
+	return fmt.Sprintf("%dh", int(d/time.Hour))
+}
+
+// buildTimeline draws the steps the table shows, in the same order.
+func buildTimeline(steps []skillplan.Step, rows []skillPlanRow, total string) *planTimeline {
+	var sum float64
+	for _, st := range steps {
+		sum += st.Seconds
+	}
+	if sum <= 0 || len(rows) != len(steps) {
+		return nil
+	}
+	tl := &planTimeline{Total: total}
+	var at float64
+	for i, st := range steps {
+		w := st.Seconds / sum * 1000
+		tl.Segments = append(tl.Segments, planSegment{
+			X:      strconv.FormatFloat(at, 'f', 1, 64),
+			W:      strconv.FormatFloat(w, 'f', 1, 64),
+			Direct: rows[i].Direct,
+			Title:  fmt.Sprintf("%s %s, %s", rows[i].Skill, rows[i].FromTo, rows[i].Time),
+		})
+		at += w
+	}
+	span := time.Duration(sum * float64(time.Second))
+	step := timelineStep(span)
+	for t := step; t < span; t += step {
+		tl.Ticks = append(tl.Ticks, planTick{
+			Left:  strconv.FormatFloat(float64(t)/float64(span)*100, 'f', 2, 64),
+			Label: tickLabel(t),
+		})
+	}
+	return tl
+}
+
 // skillPlansView is the /skills/plans page body.
 type skillPlansView struct {
 	CharacterID   int64
@@ -205,6 +280,7 @@ type skillPlansView struct {
 	PlanQuery     string           // the picker's search, when the page was loaded with one
 	PlanTotal     int              // plans the character has, before the search narrows the list
 	Plan          *skillPlanDetail // selected plan, nil when none selected
+	PlanPicked    bool             // the reader opened Plan (?plan=); false when it is the default first plan
 	FitPreview    *fitPreview      // plan-from-fit preview state
 	SearchQuery   string
 	SearchResults []skillSearchRow
@@ -225,6 +301,7 @@ type skillPlanDetail struct {
 	AttrsNote       string
 	AttrsLine       string
 	UnallocatedNote string
+	Timeline        *planTimeline // the training order drawn to scale; nil when nothing is left to train
 	Remap           *remapView
 	ConfirmDelete   bool
 
@@ -341,7 +418,8 @@ func (app *plans) handleSkillPlans(w http.ResponseWriter, r *http.Request) {
 
 	// Selected plan: ?plan= wins, else the first plan.
 	var selected *db.SkillPlan
-	if want, _ := strconv.ParseInt(r.URL.Query().Get("plan"), 10, 64); want > 0 {
+	want, _ := strconv.ParseInt(r.URL.Query().Get("plan"), 10, 64)
+	if want > 0 {
 		if p, err := app.queries.GetSkillPlan(ctx, db.GetSkillPlanParams{ID: want, UserID: userID}); err == nil && p.CharacterID == active.CharacterID {
 			pp := p
 			selected = &pp
@@ -351,6 +429,7 @@ func (app *plans) handleSkillPlans(w http.ResponseWriter, r *http.Request) {
 		p := plans[0]
 		selected = &p
 	}
+	view.PlanPicked = selected != nil && want > 0 && selected.ID == want
 	if selected != nil {
 		view.Plan = app.buildPlanDetailEnv(ctx, env, active, *selected, r.URL.Query().Get("confirm") == "delete")
 	}
@@ -667,15 +746,16 @@ func (app *plans) buildPlanDetailEnv(ctx context.Context, env *planBuildEnv, ch 
 	if len(outcome.Steps) > 0 {
 		detail.TotalSP = esi.FormatInt(outcome.TotalSP)
 		detail.TotalTime = humanize.Duration(time.Duration(outcome.TotalSecond * float64(time.Second)))
+		detail.Timeline = buildTimeline(outcome.Steps, detail.Rows, detail.TotalTime)
 		if ct.QueueEnd.After(time.Now()) {
 			detail.StartsNote = fmt.Sprintf("Plan timing starts when your current queue finishes (%s).",
 				ct.QueueEnd.UTC().Format("2006-01-02 15:04 UTC"))
 		} else {
-			detail.StartsNote = "Plan timing starts now — your queue is empty."
+			detail.StartsNote = "Plan timing starts now: your queue is empty."
 		}
 	}
 	if attrsKnown {
-		detail.AttrsLine = fmt.Sprintf("Your attributes — Charisma %d · Intelligence %d · Memory %d · Perception %d · Willpower %d",
+		detail.AttrsLine = fmt.Sprintf("Your attributes: Charisma %d · Intelligence %d · Memory %d · Perception %d · Willpower %d",
 			attrs.Charisma, attrs.Intelligence, attrs.Memory, attrs.Perception, attrs.Willpower)
 		advice := skillplan.AdviseRemap(graph, outcome.Steps, attrs)
 		rv := &remapView{

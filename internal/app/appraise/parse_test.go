@@ -283,7 +283,7 @@ func TestAggregateAndNotes(t *testing.T) {
 	if agg[1].Note != "BPC · ME 10 · TE 20 · 5 runs" {
 		t.Errorf("bpc note = %q", agg[1].Note)
 	}
-	if agg[2].Note != "Blueprint — priced as an original" {
+	if agg[2].Note != "Blueprint, priced as an original" {
 		t.Errorf("bare blueprint note = %q", agg[2].Note)
 	}
 	note := lineNote(resolvedLine{TypeID: 30001, Name: "Damage Control II", AbyssalBase: true})
@@ -317,7 +317,7 @@ func TestAggregateKeepsUniqueItemsApart(t *testing.T) {
 		t.Errorf("abyssal estimate note = %q", agg[0].Note)
 	}
 	note := lineNote(resolvedLine{TypeID: 30001, Name: "Damage Control II", LinkMiss: true})
-	if note != "Base item price — this item's rolls are not in our records" {
+	if note != "Base item price: this item's rolls are not in our records" {
 		t.Errorf("link miss note = %q", note)
 	}
 }

@@ -131,7 +131,7 @@ func TestBriefingDigestRules(t *testing.T) {
 		"sell order undercut right now",
 		"finishes", "queue runs dry after that",
 		"1 contract waiting for your answer",
-		"courier: Haul fast is due in",
+		"courier Haul fast is due in",
 		"“Fleet op” starts in",
 		"has 3 unread mail",
 		"newest from <a href=\"/pilot/?character=90000111\">Sender One</a>",

@@ -107,7 +107,7 @@ func TestEconomyPagesRenderFromSnapshots(t *testing.T) {
 		CharacterID: fixtureCharB,
 		Kind:        esi.SnapWalletJournal,
 		State:       fetchStateError,
-		Detail:      forbiddenDetailPrefix + " — this character's login predates the current scope list; sign in again to re-grant scopes.",
+		Detail:      forbiddenDetailPrefix + ": this character's login predates the current scope list. Sign in again to re-grant scopes.",
 		AttemptedAt: now,
 	}); err != nil {
 		t.Fatalf("seed fetch state: %v", err)
@@ -188,7 +188,7 @@ func TestEconomyPagesRenderFromSnapshots(t *testing.T) {
 	if code != http.StatusOK {
 		t.Fatalf("wallet page (B): status %d", code)
 	}
-	mustContain(t, "/wallet/ (B)", body, "ESI refused (403)", "sign in again")
+	mustContain(t, "/wallet/ (B)", body, "ESI refused (403)", "Sign in again")
 
 	code, body = getPage(t, app, cookie, "/contracts/?character=90000002")
 	if code != http.StatusOK {

@@ -270,7 +270,7 @@ func (app *Application) handleItems(w http.ResponseWriter, r *http.Request) {
 	rows, err := app.queries.ListSDECategoriesWithCounts(ctx)
 	if err != nil {
 		logging.Errorf("items: list categories: %v", err)
-		data.Error = "Item database unavailable right now — check the server log."
+		data.Error = "Item database unavailable right now. Check the server log."
 	} else {
 		for _, row := range rows {
 			view.Categories = append(view.Categories, itemCategoryRow{
@@ -345,7 +345,7 @@ func (app *Application) handleItemsSearch(w http.ResponseWriter, r *http.Request
 	})
 	if err != nil {
 		logging.Errorf("items: count search %q: %v", view.SearchQuery, err)
-		data.Error = "Item database unavailable right now — check the server log."
+		data.Error = "Item database unavailable right now. Check the server log."
 		data.Items = view
 		app.render(ctx, w, http.StatusOK, "items.html", data)
 		return
@@ -369,7 +369,7 @@ func (app *Application) handleItemsSearch(w http.ResponseWriter, r *http.Request
 	})
 	if err != nil {
 		logging.Errorf("items: search %q: %v", view.SearchQuery, err)
-		data.Error = "Item database unavailable right now — check the server log."
+		data.Error = "Item database unavailable right now. Check the server log."
 	} else {
 		for _, row := range rows {
 			view.SearchResults = append(view.SearchResults, itemSearchRow{
@@ -408,7 +408,7 @@ func (app *Application) handleItemsCategory(w http.ResponseWriter, r *http.Reque
 	grows, gerr := app.queries.ListSDEGroupsInCategory(ctx, categoryID)
 	if gerr != nil {
 		logging.Errorf("items: list groups of category %d: %v", categoryID, gerr)
-		data.Error = "Item database unavailable right now — check the server log."
+		data.Error = "Item database unavailable right now. Check the server log."
 	} else {
 		for _, row := range grows {
 			view.Groups = append(view.Groups, itemGroupRow{
@@ -455,7 +455,7 @@ func (app *Application) handleItemsGroup(w http.ResponseWriter, r *http.Request)
 		db.CountSDETypesInGroupParams{GroupID: groupID, Lower: view.Query})
 	if err != nil {
 		logging.Errorf("items: count types of group %d: %v", groupID, err)
-		data.Error = "Item database unavailable right now — check the server log."
+		data.Error = "Item database unavailable right now. Check the server log."
 		data.Items = view
 		app.render(ctx, w, http.StatusOK, "items.html", data)
 		return
@@ -482,7 +482,7 @@ func (app *Application) handleItemsGroup(w http.ResponseWriter, r *http.Request)
 		})
 	if err != nil {
 		logging.Errorf("items: list types of group %d: %v", groupID, err)
-		data.Error = "Item database unavailable right now — check the server log."
+		data.Error = "Item database unavailable right now. Check the server log."
 	} else {
 		for _, row := range rows {
 			view.Types = append(view.Types, itemTypeRow{

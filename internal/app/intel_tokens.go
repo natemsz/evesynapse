@@ -191,7 +191,7 @@ func (app *Application) handlePairingCodeCreate(w http.ResponseWriter, r *http.R
 	}
 	if err != nil {
 		logging.Errorf("channels: create pairing code: %v", err)
-		back("That did not go through — please try again.")
+		back("That did not go through. Please try again.")
 		return
 	}
 	data := app.publicPage(ctx)

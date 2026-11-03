@@ -111,7 +111,7 @@ func (app *Application) fetchPlanetsKind(ctx context.Context, ch db.Character, a
 			return corpFetchLimited
 		case piScopeRefusal(err):
 			code, _ := esi.StatusCode(err)
-			detail := piScopeDetail + " — sign in again to re-link and grant the planetary scope."
+			detail := piScopeDetail + ". Sign in again to re-link and grant the planetary scope."
 			app.recordCorpFetchState(ctx, ch.CharacterID, esi.SnapPlanets, fetchStateError, detail)
 			logging.Infof("worker: %s for character %d refused by ESI (%d); planetary scope not granted on this login", esi.SnapPlanets, ch.CharacterID, code)
 			return corpFetchFailed
@@ -172,7 +172,7 @@ func (app *Application) warmPlanetLayouts(ctx context.Context, ch db.Character, 
 				return fetched, true
 			case piScopeRefusal(err):
 				code, _ := esi.StatusCode(err)
-				detail := piScopeDetail + " — sign in again to re-link and grant the planetary scope."
+				detail := piScopeDetail + ". Sign in again to re-link and grant the planetary scope."
 				app.recordCorpFetchState(ctx, ch.CharacterID, kind, fetchStateError, detail)
 				logging.Infof("worker: %s for character %d refused by ESI (%d); planetary scope not granted on this login", kind, ch.CharacterID, code)
 			default:

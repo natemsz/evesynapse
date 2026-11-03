@@ -110,7 +110,7 @@ type esiHealthView struct {
 func (app *Application) esiHealth(ctx context.Context) *esiHealthView {
 	snap, err := app.queries.GetGlobalSnapshot(ctx, esi.GlobalStatus)
 	if err != nil {
-		return &esiHealthView{State: "pending", Label: "ESI", Title: "Checking ESI — the first status check has not landed yet."}
+		return &esiHealthView{State: "pending", Label: "ESI", Title: "Checking ESI. The first status check has not landed yet."}
 	}
 	if time.Since(snap.FetchedAt) > esiDownAfter {
 		return &esiHealthView{State: "down", Label: "ESI down",

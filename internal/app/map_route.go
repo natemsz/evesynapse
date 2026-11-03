@@ -122,29 +122,29 @@ func (app *Application) handleMapRoute(w http.ResponseWriter, r *http.Request) {
 	chars, err := app.queries.ListCharactersByUser(ctx, userID)
 	if err != nil {
 		logging.Errorf("waypoint: characters for user %d: %v", userID, err)
-		writeRouteJSON(w, http.StatusInternalServerError, mapRouteResponse{Message: "That did not go through — please try again."})
+		writeRouteJSON(w, http.StatusInternalServerError, mapRouteResponse{Message: "That did not go through. Please try again."})
 		return
 	}
 	ch := waypointCharacter(chars, app.SessionCharacterID(ctx))
 	if ch == nil {
-		writeRouteJSON(w, http.StatusForbidden, mapRouteResponse{Message: "None of your characters can set routes yet — sign in again and allow EveSynapse to set your autopilot waypoints."})
+		writeRouteJSON(w, http.StatusForbidden, mapRouteResponse{Message: "None of your characters can set routes yet. Sign in again and allow EveSynapse to set your autopilot waypoints."})
 		return
 	}
 	token, err := app.AccessToken(ctx, *ch)
 	if err != nil {
 		logging.Errorf("waypoint: token for character %d: %v", ch.CharacterID, err)
-		writeRouteJSON(w, http.StatusBadGateway, mapRouteResponse{Message: "That did not go through — please try again."})
+		writeRouteJSON(w, http.StatusBadGateway, mapRouteResponse{Message: "That did not go through. Please try again."})
 		return
 	}
 	for i, path := range paths {
 		if err := app.esi.PostAuthedNoContent(ctx, token, path, nil); err != nil {
-			res := mapRouteResponse{Sent: i, Message: "The game did not answer — the route was not set."}
+			res := mapRouteResponse{Sent: i, Message: "The game did not answer. The route was not set."}
 			if i > 0 {
 				res.Message = fmt.Sprintf("The game stopped answering after %d of %d waypoints.", i, len(paths))
 			}
 			var se *esi.StatusError
 			if errors.As(err, &se) && se.Code == http.StatusForbidden {
-				res.Message = ch.Name + " has not allowed EveSynapse to set waypoints — sign in again to grant it."
+				res.Message = ch.Name + " has not allowed EveSynapse to set waypoints. Sign in again to grant it."
 			} else {
 				logging.Errorf("waypoint: %s as %d: %v", path, ch.CharacterID, err)
 			}

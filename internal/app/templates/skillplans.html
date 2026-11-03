@@ -5,7 +5,10 @@
 
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
 
-{{template "charselector" .SkillsChars}}
+<div class="l-page">
+<div class="l-head sp-head">
+  <div class="sp-picker">{{template "charselector" .SkillsChars}}</div>
+</div>
 
 {{if .SkillPlans}}
 {{with .SkillPlans}}
@@ -14,48 +17,36 @@
 <p>Skill data is still loading. Plans appear when the static data import finishes{{if $.IsAdmin}}; progress is on the <a href="/admin/sync/">Sync page</a>{{end}}.</p>
 {{else}}
 
-{{if .FitPreview}}
-{{with .FitPreview}}
-<section class="foldable">
-<h3>Training plan for “{{.FitName}}”</h3>
-<p><small>{{itemLink .ShipTypeID .ShipName}} · {{.ToTrain}} skill(s) to train · {{.AlreadyMet}} already covered{{if .MissingData}} · {{.MissingData}} without training data (left out){{end}}</small></p>
-<div class="tw">
-<table>
-  <thead><tr><th>Skill</th><th>Level</th><th>Status</th></tr></thead>
-  <tbody>
-  {{range .Rows}}
-    <tr><td>{{itemLink .SkillID .Skill}}</td><td>{{.Level}}</td><td>{{.Status}}</td></tr>
-  {{end}}
-  </tbody>
-</table>
-</div>
-<form method="post" action="/skills/plans/from-fit">
-  <input type="hidden" name="character" value="{{$.SkillPlans.CharacterID}}">
-  {{if .LocalID}}<input type="hidden" name="local" value="{{.LocalID}}">{{else}}<input type="hidden" name="fitting" value="{{.FittingID}}">{{end}}
-  <button type="submit">Create this plan</button>
-</form>
-<p><small><a href="/fittings/?character={{$.SkillPlans.CharacterID}}">Back to fittings</a></small></p>
-</section>
-{{end}}
-{{end}}
+{{$depth := 0}}{{if or .PlanPicked .FitPreview $.SkillPlans.SearchQuery}}{{$depth = 1}}{{end}}
+<div class="l-console sp" data-depth="{{$depth}}" data-land-top>
+<div class="l-panes">
 
-<section class="foldable plan-picker" data-plan-picker>
-<h3>Your plans{{if .PlanTotal}} <small>({{.PlanTotal}})</small>{{end}}</h3>
-{{if .PlanTotal}}
-{{if gt .PlanTotal 1}}
-<form method="get" action="/skills/plans" class="plan-find" role="search">
+<section class="l-pane l-pane--dir plan-picker" data-plan-picker aria-label="Your plans">
+<div class="l-pane-bar">
+  <h2 class="l-pane-title">Your plans{{if .PlanTotal}} <small>({{.PlanTotal}})</small>{{end}}</h2>
+  {{if gt .PlanTotal 1}}
+  <form method="get" action="/skills/plans" class="plan-find" role="search">
+    <input type="hidden" name="character" value="{{.CharacterID}}">
+    {{if .Plan}}<input type="hidden" name="plan" value="{{.Plan.ID}}">{{end}}
+    <span class="searchwrap">
+      <input type="search" name="pq" value="{{.PlanQuery}}" placeholder="Search your plans" aria-label="Search your plans" autocomplete="off" data-plan-filter>
+    </span>
+    <button type="submit">Search</button>
+  </form>
+  {{end}}
+</div>
+
+<form method="post" action="/skills/plans/create" class="plan-create">
   <input type="hidden" name="character" value="{{.CharacterID}}">
-  {{if .Plan}}<input type="hidden" name="plan" value="{{.Plan.ID}}">{{end}}
-  <span class="searchwrap">
-    <input type="search" name="pq" value="{{.PlanQuery}}" placeholder="Search your plans" aria-label="Search your plans" autocomplete="off" data-plan-filter>
-  </span>
-  <button type="submit">Search</button>
+  <label>New plan <input type="text" name="name" maxlength="80" placeholder="Plan name"></label>
+  <button type="submit">Create plan</button>
 </form>
-{{end}}
+
+{{if .PlanTotal}}
 <ul class="plan-list" data-plan-list>
 {{range .Plans}}
   <li class="plan-item{{if .Selected}} is-current{{end}}" data-name="{{.Name}}">
-    <a class="plan-open" href="/skills/plans?character={{$.SkillPlans.CharacterID}}&plan={{.ID}}"{{if .Selected}} aria-current="page"{{end}}>
+    <a class="plan-open" href="/skills/plans?character={{$.SkillPlans.CharacterID}}&plan={{.ID}}" data-l-step="in"{{if .Selected}} aria-current="page"{{end}}>
       <span class="plan-name">{{.Name}}</span>
       <small class="plan-meta">{{.Items}} skill(s){{if .Left}} · {{.Left}}{{end}}</small>
     </a>
@@ -74,24 +65,50 @@
 {{else}}
 <p><small>No plans yet for this character.</small></p>
 {{end}}
-
-<form method="post" action="/skills/plans/create">
-  <input type="hidden" name="character" value="{{.CharacterID}}">
-  <label>New plan <input type="text" name="name" maxlength="80" placeholder="Plan name"></label>
-  <button type="submit">Create plan</button>
-</form>
-
 </section>
 
+<section class="l-pane l-pane--main sp-main" aria-label="Plan">
+{{if .FitPreview}}
+{{with .FitPreview}}
+<div class="l-pane-bar"><a class="l-back" data-l-step="out" href="/skills/plans?character={{$.SkillPlans.CharacterID}}">Your plans</a></div>
+<div class="sp-fit">
+<h2 class="sp-title">Training plan for “{{.FitName}}”</h2>
+<p><small>{{itemLink .ShipTypeID .ShipName}} · {{.ToTrain}} skill(s) to train · {{.AlreadyMet}} already covered{{if .MissingData}} · {{.MissingData}} without training data (left out){{end}}</small></p>
+<div class="tw">
+<table>
+  <thead><tr><th>Skill</th><th>Level</th><th>Status</th></tr></thead>
+  <tbody>
+  {{range .Rows}}
+    <tr><td>{{itemLink .SkillID .Skill}}</td><td>{{.Level}}</td><td>{{.Status}}</td></tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+<form method="post" action="/skills/plans/from-fit">
+  <input type="hidden" name="character" value="{{$.SkillPlans.CharacterID}}">
+  {{if .LocalID}}<input type="hidden" name="local" value="{{.LocalID}}">{{else}}<input type="hidden" name="fitting" value="{{.FittingID}}">{{end}}
+  <button type="submit">Create this plan</button>
+</form>
+<p><small><a href="/fittings/?character={{$.SkillPlans.CharacterID}}">Back to fittings</a></small></p>
+</div>
+{{end}}
+{{end}}
 {{if .Plan}}
 {{template "plan-editor" .}}
+{{else if not .FitPreview}}
+<p class="sp-empty"><small>{{if .PlanTotal}}Open a plan to see its training order.{{else}}Create a plan to start.{{end}}</small></p>
 {{end}}
+</section>
+
+</div>
+</div>
 
 {{end}}
 {{end}}
 {{else}}
   <p>No skill plans to show yet. Link a character first.</p>
 {{end}}
+</div>
 {{end}}
 
 {{/* The unified planner. plan-editor is the whole plan section on the page;
@@ -101,17 +118,9 @@
      skillPlansView in both. */}}
 {{define "plan-editor"}}
 {{with .Plan}}
-<section class="foldable plan-editor" id="plan-editor" data-plan-editor data-character="{{$.CharacterID}}" data-plan="{{.ID}}">
-<h3>{{.Name}}</h3>
-
-{{if .ConfirmDelete}}
-<form method="post" action="/skills/plans/delete">
-  <input type="hidden" name="character" value="{{$.CharacterID}}">
-  <input type="hidden" name="plan" value="{{.ID}}">
-  <p>Delete the plan “{{.Name}}”? This cannot be undone. <button type="submit" class="btn btn-danger">Delete plan</button> <a href="/skills/plans?character={{$.CharacterID}}&plan={{.ID}}">Keep it</a></p>
-</form>
-{{end}}
-
+<div class="plan-editor" id="plan-editor" data-plan-editor data-character="{{$.CharacterID}}" data-plan="{{.ID}}">
+<div class="l-pane-bar">
+<a class="l-back" data-l-step="out" href="/skills/plans?character={{$.CharacterID}}">Your plans</a>
 <form method="get" action="/skills/plans" class="plan-add">
   <input type="hidden" name="character" value="{{$.CharacterID}}">
   <input type="hidden" name="plan" value="{{.ID}}">
@@ -123,8 +132,22 @@
   </label>
   <button type="submit">Search</button>
 </form>
+</div>
+<div class="sp-titlerow">
+<h2 class="sp-title">{{.Name}}</h2>
+{{if not .ConfirmDelete}}<a class="btn btn-quiet sp-delete" href="/skills/plans?character={{$.CharacterID}}&plan={{.ID}}&confirm=delete">Delete plan</a>{{end}}
+</div>
+
+{{if .ConfirmDelete}}
+<form method="post" action="/skills/plans/delete">
+  <input type="hidden" name="character" value="{{$.CharacterID}}">
+  <input type="hidden" name="plan" value="{{.ID}}">
+  <p>Delete the plan “{{.Name}}”? This cannot be undone. <button type="submit" class="btn btn-danger">Delete plan</button> <a href="/skills/plans?character={{$.CharacterID}}&plan={{.ID}}">Keep it</a></p>
+</form>
+{{end}}
+
 {{if $.SearchResults}}
-<div class="tw">
+<div class="tw sp-results">
 <table>
   <thead><tr><th>Skill</th><th>Rank</th><th>Target</th><th></th></tr></thead>
   <tbody>
@@ -155,13 +178,20 @@
 
 <div class="plan-live" role="status" aria-live="polite"></div>
 {{template "plan-body" $}}
-</section>
+</div>
 {{end}}
 {{end}}
 
 {{define "plan-body"}}
 {{with .Plan}}
 <div id="plan-body" data-plan-body data-message="{{$.Message}}" tabindex="-1">
+{{with .Timeline}}
+<figure class="sp-timeline">
+  <svg class="sp-tl-bar" viewBox="0 0 1000 18" preserveAspectRatio="none" aria-hidden="true">{{range .Segments}}<rect class="sp-seg{{if not .Direct}} pre{{end}}" x="{{.X}}" y="0" width="{{.W}}" height="18"><title>{{.Title}}</title></rect>{{end}}</svg>
+  <div class="sp-tl-ticks" aria-hidden="true">{{range .Ticks}}<span class="sp-tick" data-left="{{.Left}}">{{.Label}}</span>{{end}}</div>
+  <figcaption class="visually-hidden">The plan's training order drawn to scale, {{.Total}} in all.</figcaption>
+</figure>
+{{end}}
 <p class="plan-summary"><small>{{.Count}} skill(s) in this plan{{if .TotalSP}} · {{.TotalSP}} SP · {{.TotalTime}} to train{{end}}</small></p>
 {{if .StartsNote}}<p><small>{{.StartsNote}}</small></p>{{end}}
 {{if .AttrsNote}}<p><small>{{.AttrsNote}}</small></p>{{end}}

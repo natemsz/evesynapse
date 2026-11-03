@@ -1293,7 +1293,7 @@ func systemNotes(shipKills24h, npcKills24h int64, subjects int) string {
 		notes += fmt.Sprintf("; system hot: %d kills in the last 24 hours", shipKills24h)
 	}
 	if npcKills24h >= 200 && shipKills24h < 5 && subjects > 0 {
-		notes += fmt.Sprintf("; %d NPC kills in the last 24 hours — likely ratting traffic", npcKills24h)
+		notes += fmt.Sprintf("; %d NPC kills in the last 24 hours, likely ratting traffic", npcKills24h)
 	}
 	return notes
 }
@@ -1386,7 +1386,7 @@ func pairText(pairs []shipPair) string {
 		}
 		parts = append(parts, pr.pilot+" in the "+pr.hull)
 	}
-	return " — " + strings.Join(parts, ", ")
+	return "; " + strings.Join(parts, ", ")
 }
 
 // dscanSentence synthesises a d-scan: anchored on its structures,
@@ -1588,7 +1588,7 @@ func localSentence(l *localReading, systemID, posterID int64, now time.Time,
 			s += fmt.Sprintf(" (%d hostile names ≈ %d pilots)", counts[bucketHostile], counts[bucketHostile]-altCut)
 		}
 	}
-	s += " — no scan attached, ships unknown"
+	s += ", no scan attached, ships unknown"
 	s += killedHereNotes(flagged)
 	s += systemNotes(shipKills24h, npcKills24h, counts[bucketNeutral]+counts[bucketUnknown]+len(l.Unknown))
 	// The split a stats bar shows folds the roster's unresolved
@@ -1635,7 +1635,7 @@ func fleetSentence(f *fleetReading, sysName string,
 	if sysName != "" {
 		b.WriteString("In " + sysName + ": ")
 	}
-	b.WriteString(fmt.Sprintf("fleet of %d — ", len(f.Members)))
+	b.WriteString(fmt.Sprintf("fleet of %d with ", len(f.Members)))
 	b.WriteString(standingText(counts, hulls, "unclassified pilot", "unclassified pilots"))
 	b.WriteString(pairText(pairs))
 	b.WriteString(killedHereNotes(flagged))
@@ -2597,12 +2597,12 @@ func (app *Application) handleScanSystem(w http.ResponseWriter, r *http.Request)
 	res.SystemID = sys.SystemID
 	body, err := json.Marshal(res)
 	if err != nil {
-		back("That did not go through — please try again.")
+		back("That did not go through. Please try again.")
 		return
 	}
 	if err := app.queries.UpdateScanSystem(ctx, db.UpdateScanSystemParams{ID: id, SystemID: sys.SystemID, Result: string(body)}); err != nil {
 		logging.Errorf("scans: correct system: %v", err)
-		back("That did not go through — please try again.")
+		back("That did not go through. Please try again.")
 		return
 	}
 	back("System set to " + sys.Name + ".")

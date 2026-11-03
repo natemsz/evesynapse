@@ -204,7 +204,7 @@ func buildNetWorthChart(days []netWorthDay) (balancechart.BalanceChart, bool) {
 			Balance: esi.FormatISK(d.Total()),
 			ISK:     esi.FormatISK(d.ISK),
 			Assets:  esi.FormatISK(d.Assets),
-			Title: fmt.Sprintf("%s: %s ISK in total — %s ISK on hand, %s ISK in assets and orders",
+			Title: fmt.Sprintf("%s: %s ISK in total, %s ISK on hand and %s ISK in assets and orders",
 				d.At.Format(markethistory.DateLayout), esi.FormatISK(d.Total()), esi.FormatISK(d.ISK), esi.FormatISK(d.Assets)),
 		})
 	}

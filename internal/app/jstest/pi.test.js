@@ -130,7 +130,7 @@ test("coverage verdict and missing flags follow the checkboxes live", function (
   const { tiles, boxes, verdict } = install();
   // Boot state: Barren ticked, Temperate not — Autotrophs (Temperate
   // only) is missing, and its P1 child flags with it.
-  assert.match(verdict.textContent, /^Not covered — 0 of 1 raw resources available\. Missing: Autotrophs$/);
+  assert.match(verdict.textContent, /^Not covered: 0 of 1 raw resources available\. Missing: Autotrophs$/);
   assert.strictEqual(verdict.className, "pi-coverage neg");
   assert.ok(tiles["Autotrophs"].classes.has("missing"), "raw flags missing");
   assert.ok(tiles["Oxygen"].classes.has("missing"), "P1 flags with its raw");
@@ -138,7 +138,7 @@ test("coverage verdict and missing flags follow the checkboxes live", function (
   // Tick Temperate: verdict flips to covered, flags clear.
   boxes[1].checked = true;
   boxes[1].fire();
-  assert.match(verdict.textContent, /^Covered — your 2 selected planet type\(s\) supply all 1 raw resources\.$/);
+  assert.match(verdict.textContent, /^Covered: your 2 selected planet type\(s\) supply all 1 raw resources\.$/);
   assert.strictEqual(verdict.className, "pi-coverage pos");
   assert.ok(!tiles["Autotrophs"].classes.has("missing"), "raw flag clears");
   assert.ok(!tiles["Oxygen"].classes.has("missing"), "P1 flag clears");

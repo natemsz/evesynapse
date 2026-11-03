@@ -1096,7 +1096,7 @@ func (app *Application) buildNetWorth(ctx context.Context, userID int64, bundles
 		w.Assets = esi.FormatISK(assetSum)
 		w.AssetsKnown = true
 		if totalItems > 0 && pricedItems < totalItems {
-			w.AssetsNote = fmt.Sprintf("Includes everything we could price — %d of %d items priced.", pricedItems, totalItems)
+			w.AssetsNote = fmt.Sprintf("Includes everything we could price: %d of %d items priced.", pricedItems, totalItems)
 		}
 	}
 	if escrowOK {

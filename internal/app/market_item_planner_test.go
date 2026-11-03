@@ -342,7 +342,7 @@ func TestPlannerJudgeCharacterNoSkillsYet(t *testing.T) {
 	_, body := getPage(t, app, cookie, path)
 	mustContain(t, path, body,
 		`plan-skillglyph bad`,
-		"Skills haven&#39;t synced for Fixture Ceo yet — once they land, this says what they can build.",
+		"Skills haven&#39;t synced for Fixture Ceo yet. Once they land, this says what they can build.",
 		`aria-label="Can Fixture Ceo build this? Some skills missing."`,
 		"Fixture Ceo&#39;s hangars haven&#39;t synced yet",
 	)

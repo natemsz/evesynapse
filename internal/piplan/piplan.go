@@ -584,7 +584,7 @@ func PlanFor(target string, amount int64, s Settings, prices map[string]float64)
 		return nil, fmt.Errorf("unknown PI commodity %q", target)
 	}
 	if TierOf(target) == TierRaw {
-		return nil, fmt.Errorf("%s is a raw resource — pick a P1–P4 product", target)
+		return nil, fmt.Errorf("%s is a raw resource; pick a P1 to P4 product", target)
 	}
 	if amount < 1 {
 		amount = 1
@@ -873,7 +873,7 @@ func suggestColonies(target string, plan *Plan, s Settings, cc CommandCenter) []
 		out = append(out, ColonyPlan{
 			Role: "Factory", Planet: factPlanet,
 			Title:   fmt.Sprintf("Factory ×%d planets", n),
-			Detail:  fmt.Sprintf("Combined factory load exceeds one level-%d command center — split across %d factory planets (e.g. P2 on one, P3/P4 on another).", cc.Level, n),
+			Detail:  fmt.Sprintf("Combined factory load exceeds one level-%d command center. Split across %d factory planets (e.g. P2 on one, P3/P4 on another).", cc.Level, n),
 			CPUUsed: fcpu, PGUsed: fpg, CPUCap: cc.CPU * int64(n), PGCap: cc.PG * int64(n),
 			Fits: true, Breakdown: fparts,
 		})

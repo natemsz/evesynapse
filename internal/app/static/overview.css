@@ -166,7 +166,6 @@
 .ov-table .ov-lvl { width: 1.35rem; height: 1.35rem; font-size: 0.8rem; }
 .ov-table .ov-nm { font-size: 0.92rem; }
 .ov-table .ov-tag { font-size: 0.62rem; padding: 0.02rem 0.32rem; }
-.ov-table .ov-pips i { width: 0.6rem; height: 0.6rem; }
 .ov-table th.r, .ov-table td.r { text-align: right; }
 .ov-table th:first-child, .ov-table th:last-child { text-align: center; }
 .ov-table tr.sel td { background: var(--glass); }
@@ -179,7 +178,7 @@
 .ov-tag.mastered { background: color-mix(in srgb, var(--kept) 14%, transparent); color: var(--kept); border: 1px solid var(--kept); }
 .ov-tag.untrained { color: var(--muted); border: 1px solid var(--box-edge); }
 .ov-pips { display: inline-flex; gap: 0.18rem; }
-.ov-pips i { width: 0.7rem; height: 0.7rem; border: 1px solid var(--box-edge); border-radius: 2px; }
+.ov-pips i { flex: none; width: 0.7rem; height: 0.7rem; border: 1px solid var(--box-edge); border-radius: 2px; }
 .ov-pips i.f { background: var(--gold); border-color: var(--gold); }
 .ov-pips i.plan { background: var(--accent); border-color: var(--accent); }
 /* The level in training blinks blue, the same pulse the level

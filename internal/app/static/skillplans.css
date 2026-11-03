@@ -1,0 +1,68 @@
+/* EveSynapse: the Skill Plans page. Where the panes go and how they
+   collapse is the layout framework's console (layout.css): the plan
+   list is its directory, the open plan its main pane. This sheet
+   holds what is the page's own: the plan rows, the plan's title row,
+   the add-skill bar and the training timeline. The plan table, its
+   move and remove buttons and the level boxes keep their shared
+   rules in style.css. */
+
+.sp .l-panes { --l-dir: 19rem; }
+.sp-head { justify-content: flex-start; }
+.sp-picker { flex: 0 1 26rem; min-width: 0; }
+.sp-picker .charselector { margin: 0; max-width: none; }
+
+/* ---- The plan list (the directory) ---- */
+.plan-picker .plan-find { flex: 1 1 100%; margin: 0; }
+.plan-picker .plan-find .searchwrap { max-width: none; }
+.plan-create { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--space-2); margin: 0 0 var(--space-3); }
+.plan-create label { display: flex; flex-direction: column; gap: 0.25rem; flex: 1 1 10rem; min-width: 0; color: var(--muted); font-size: 0.85rem; }
+.plan-create input[type="text"] { width: 100%; }
+.plan-picker .plan-list { display: flex; flex-direction: column; gap: 0.35rem; margin: 0; border: 0; background: none; }
+.plan-picker .plan-item,
+.plan-picker .plan-item:nth-child(even) {
+  min-height: var(--tap);
+  padding: 0.45rem 0.45rem 0.45rem 0.75rem;
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
+  background: none;
+}
+.plan-picker .plan-item:hover { background: var(--row-hover); }
+.plan-picker .plan-item.is-current { background: var(--sel-bg); border-color: var(--sel-edge); box-shadow: none; }
+.plan-picker .plan-item.is-current .plan-name { color: var(--text-bright); }
+.plan-picker .plan-open { flex-direction: column; align-items: flex-start; gap: 0.1rem; }
+.plan-picker .plan-name { font-weight: 600; }
+.plan-picker .plan-meta { font-size: 0.8rem; }
+
+/* ---- The open plan ---- */
+.plan-editor .plan-add { display: flex; flex-wrap: nowrap; align-items: center; gap: var(--space-2); flex: 1 1 16rem; min-width: 0; margin: 0; }
+.plan-editor .plan-add label { display: flex; align-items: center; gap: var(--space-2); flex: 1 1 auto; min-width: 0; color: var(--muted); font-size: 0.85rem; white-space: nowrap; }
+.plan-editor .plan-add .searchwrap { flex: 1 1 auto; min-width: 0; }
+.plan-editor .plan-add input[type="search"] { width: 100%; }
+.sp-titlerow { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: var(--space-2) var(--space-4); margin: 0 0 var(--space-3); }
+.sp-title { margin: 0; min-width: 0; font-size: 1.25rem; overflow-wrap: anywhere; }
+.sp-delete { flex: none; }
+.sp-results { margin: 0 0 var(--space-4); }
+.sp-empty { margin: var(--space-4) 0; color: var(--muted); }
+
+/* ---- The training timeline ----
+   The plan drawn to scale, left to right in training order: each
+   segment one row of the table, its length that row's share of the
+   time. Plan skills are the ember; prerequisites the plan pulled in
+   sit quieter. A hairline in the pane's colour parts the segments so
+   short ones still read as their own. */
+.sp-timeline { margin: 0 0 var(--space-4); }
+.sp-tl-bar { display: block; width: 100%; height: 0.9rem; border-radius: var(--r-xs); background: var(--surface-inset); overflow: hidden; }
+.sp-seg { fill: color-mix(in srgb, var(--accent) 78%, var(--gold)); stroke: var(--surface-pane); stroke-width: 2px; vector-effect: non-scaling-stroke; }
+.sp-seg.pre { fill: color-mix(in srgb, var(--accent) 34%, var(--surface-inset)); }
+.sp-seg:hover { fill: var(--gold); }
+.sp-tl-ticks { position: relative; height: 1.1rem; margin-top: 0.25rem; }
+.sp-tick { position: absolute; top: 0; transform: translateX(-50%); color: var(--muted); font-size: 0.72rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.sp-tick::before { content: ""; position: absolute; left: 50%; top: -0.35rem; width: 1px; height: 0.25rem; background: var(--hairline); }
+
+/* ---- The plan table ----
+   The skill cell wraps, its "for …" note under the name, so the
+   table fits the pane as a table at desktop widths; it reads as
+   cards only when the pane is narrow. */
+.plan-editor .plan-table { width: 100%; }
+.plan-editor .plan-table td:nth-child(2) { white-space: normal; }
+.plan-editor .plan-table .plan-for { display: block; margin: 0.1rem 0 0; font-size: 0.8rem; }

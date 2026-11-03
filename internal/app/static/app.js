@@ -4811,6 +4811,10 @@
         }
       }
       body.replaceWith(fresh);
+      // The fresh body gets what any new content gets (its timeline
+      // ticks placed, its table measured for cards); initializers are
+      // root-scoped and idempotent.
+      document.dispatchEvent(new CustomEvent("evesynapse:content-ready", { detail: { root: fresh } }));
       // Keep the keyboard where it was: the same button on the same
       // skill, else the other move button; after a remove, the table.
       var target = null;

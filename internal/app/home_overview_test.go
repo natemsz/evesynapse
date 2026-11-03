@@ -519,6 +519,300 @@ func TestHomeLayoutToggleRoundTrips(t *testing.T) {
 	}
 }
 
+// renderedWidgetIDs extracts the home's widget ids in render order.
+func renderedWidgetIDs(body string) []string {
+	var ids []string
+	rest := body
+	for {
+		i := strings.Index(rest, `data-widget="`)
+		if i < 0 {
+			return ids
+		}
+		rest = rest[i+len(`data-widget="`):]
+		j := strings.Index(rest, `"`)
+		if j < 0 {
+			return ids
+		}
+		ids = append(ids, rest[:j])
+		rest = rest[j:]
+	}
+}
+
+func indexOfWidget(ids []string, want string) int {
+	for i, id := range ids {
+		if id == want {
+			return i
+		}
+	}
+	return -1
+}
+
+// TestHomeLayoutPlaystylePresets: an account with no saved layout
+// gets the preset for its stored link choice, a saved layout wins
+// over the preset, a saved "[]" stays empty, a multi-activity choice
+// blends with the universal widgets ahead of the specialists, and
+// the demo account gets its showcase preset. Customize's reset
+// restores the account's own preset.
+func TestHomeLayoutPlaystylePresets(t *testing.T) {
+	transport := &countingTransport{}
+	app, _, q := buildCorpTestApp(t, transport)
+	ctx := context.Background()
+
+	// The demo account first: the app caches its id on first use.
+	demoUser, err := q.CreateUser(ctx)
+	if err != nil {
+		t.Fatalf("create demo user: %v", err)
+	}
+	if err := q.MarkUserDemo(ctx, demoUser.ID); err != nil {
+		t.Fatalf("mark demo user: %v", err)
+	}
+	seedCharacter(t, q, demoUser.ID, 90000105, "Fixture Demo")
+
+	newAccount := func(charID int64, choice string) (db.User, *http.Cookie) {
+		t.Helper()
+		user, err := q.CreateUser(ctx)
+		if err != nil {
+			t.Fatalf("create user: %v", err)
+		}
+		seedCharacter(t, q, user.ID, charID, "Fixture Alpha")
+		if choice != "" {
+			if err := q.SetLinkChoice(ctx, db.SetLinkChoiceParams{
+				UserID: user.ID, Choice: choice, UpdatedAt: time.Now().UTC(),
+			}); err != nil {
+				t.Fatalf("set link choice: %v", err)
+			}
+		}
+		return user, sessionCookie(t, app, user.ID, charID, "Fixture Alpha")
+	}
+	homeIDs := func(cookie *http.Cookie) []string {
+		t.Helper()
+		code, body := getPage(t, app, cookie, "/")
+		if code != http.StatusOK {
+			t.Fatalf("GET /: status %d", code)
+		}
+		return renderedWidgetIDs(body)
+	}
+
+	// A stored market choice with no saved layout yields the
+	// market preset under the fixed head. The briefing section
+	// renders only when it has items, so a bare account's render
+	// starts at At a Glance; the tiling test pins the head itself.
+	_, cookie := newAccount(90000101, `{"activities":["market"]}`)
+	wantMarket := []string{"glance", "fleet", "tradeideas", "networth", "profitpulse", "walletflow", "watchlist", "market"}
+	if got := homeIDs(cookie); strings.Join(got, ",") != strings.Join(wantMarket, ",") {
+		t.Errorf("market preset = %v, want %v", got, wantMarket)
+	}
+
+	// Customize's reset stores the account's own preset.
+	code, _ := doLayoutPost(t, app, url.Values{"action": {"reset"}}, cookie, false)
+	if code != http.StatusSeeOther {
+		t.Fatalf("reset POST: status %d, want 303", code)
+	}
+	if got := homeIDs(cookie); strings.Join(got, ",") != strings.Join(wantMarket, ",") {
+		t.Errorf("home after reset = %v, want the market preset %v", got, wantMarket)
+	}
+
+	// A saved layout wins over the preset.
+	savedUser, savedCookie := newAccount(90000102, `{"activities":["market"]}`)
+	if err := q.SetUserHomeLayout(ctx, db.SetUserHomeLayoutParams{
+		HomeLayout: `[{"id":"fleet","w":3,"h":2}]`, ID: savedUser.ID,
+	}); err != nil {
+		t.Fatalf("save layout: %v", err)
+	}
+	if got := homeIDs(savedCookie); strings.Join(got, ",") != "fleet" {
+		t.Errorf("saved layout home = %v, want [fleet] only", got)
+	}
+
+	// A saved "[]" stays deliberately empty.
+	emptyUser, emptyCookie := newAccount(90000103, `{"activities":["market"]}`)
+	if err := q.SetUserHomeLayout(ctx, db.SetUserHomeLayoutParams{
+		HomeLayout: `[]`, ID: emptyUser.ID,
+	}); err != nil {
+		t.Fatalf("save empty layout: %v", err)
+	}
+	if got := homeIDs(emptyCookie); len(got) != 0 {
+		t.Errorf("empty saved layout home = %v, want no widgets", got)
+	}
+
+	// A multi-activity choice blends: the universal widgets stand
+	// ahead of the single-playstyle specialists.
+	_, blendCookie := newAccount(90000104, `{"activities":["industry","corporation"]}`)
+	blend := homeIDs(blendCookie)
+	for _, specialist := range []string{"prodline", "pulse", "upkeep"} {
+		if indexOfWidget(blend, specialist) < 0 {
+			t.Errorf("blend %v is missing specialist %q", blend, specialist)
+		}
+		for _, universal := range []string{"networth", "training"} {
+			if indexOfWidget(blend, universal) > indexOfWidget(blend, specialist) {
+				t.Errorf("blend %v: universal %q should stand ahead of specialist %q", blend, universal, specialist)
+			}
+		}
+	}
+
+	// The demo account gets its showcase preset: filled widgets
+	// only, no upkeep (the seed holds no structures) and no trade
+	// ideas (the seed holds no stored answer).
+	demoIDs := homeIDs(sessionCookie(t, app, demoUser.ID, 90000105, "Fixture Demo"))
+	for _, want := range []string{"glance", "fleet", "walletflow", "networth", "prodline", "pi", "profitpulse", "industry", "market", "training", "watchlist", "pulse"} {
+		if indexOfWidget(demoIDs, want) < 0 {
+			t.Errorf("demo preset %v is missing %q", demoIDs, want)
+		}
+	}
+	for _, gone := range []string{"upkeep", "tradeideas"} {
+		if indexOfWidget(demoIDs, gone) >= 0 {
+			t.Errorf("demo preset %v carries %q, which the demo seed does not fill", demoIDs, gone)
+		}
+	}
+
+	if got := transport.calls.Load(); got != 0 {
+		t.Fatalf("handlers made %d outbound calls, want 0", got)
+	}
+}
+
+// layoutTilesGrid reports whether a layout covers the three-wide
+// grid with no gaps, under the grid's dense placement.
+func layoutTilesGrid(items []homeLayoutItem) bool {
+	type cell struct{ r, c int }
+	occ := make(map[cell]bool)
+	maxRow := 0
+	for _, item := range items {
+		placed := false
+		for r := 0; !placed; r++ {
+			for c := 0; c+item.W <= homeGridMax && !placed; c++ {
+				free := true
+				for dr := 0; dr < item.H && free; dr++ {
+					for dc := 0; dc < item.W; dc++ {
+						if occ[cell{r + dr, c + dc}] {
+							free = false
+						}
+					}
+				}
+				if free {
+					for dr := 0; dr < item.H; dr++ {
+						for dc := 0; dc < item.W; dc++ {
+							occ[cell{r + dr, c + dc}] = true
+						}
+					}
+					if r+item.H > maxRow {
+						maxRow = r + item.H
+					}
+					placed = true
+				}
+			}
+		}
+	}
+	for r := 0; r < maxRow; r++ {
+		for c := 0; c < homeGridMax; c++ {
+			if !occ[cell{r, c}] {
+				return false
+			}
+		}
+	}
+	return len(items) > 0
+}
+
+// TestHomePresetLayoutsTile: every preset, singles, blends, the
+// everything choice and the demo layout, starts with the fixed head
+// at its fixed sizes, stays inside every widget's size bounds, and
+// tiles the grid with no gaps. Single-playstyle specialists stand
+// expanded past their catalog size (Net Worth is already at its
+// maximum catalog size), and fills stand at catalog size.
+func TestHomePresetLayoutsTile(t *testing.T) {
+	activities := []string{"pilots", "market", "industry", "corporation", "fitting"}
+	var choices [][]string
+	for _, a := range activities {
+		choices = append(choices, []string{a})
+	}
+	for mask := 0; mask < 1<<len(activities); mask++ {
+		var combo []string
+		for i, a := range activities {
+			if mask&(1<<i) != 0 {
+				combo = append(combo, a)
+			}
+		}
+		if len(combo) >= 2 {
+			choices = append(choices, combo)
+		}
+	}
+	choices = append(choices, []string{activityEverything})
+
+	check := func(name string, layout []homeLayoutItem) {
+		t.Helper()
+		if len(layout) < 3 {
+			t.Fatalf("%s preset = %v, want the fixed head plus a body", name, layoutIDs(layout))
+		}
+		head := []homeLayoutItem{
+			{ID: widgetBriefing, W: 3, H: 1},
+			{ID: widgetGlance, W: 3, H: 1},
+			{ID: widgetFleet, W: 3, H: 2},
+		}
+		for i, want := range head {
+			if layout[i] != want {
+				t.Errorf("%s preset head[%d] = %v, want %v", name, i, layout[i], want)
+			}
+		}
+		seen := make(map[string]bool)
+		for _, item := range layout {
+			if seen[item.ID] {
+				t.Errorf("%s preset repeats %q", name, item.ID)
+			}
+			seen[item.ID] = true
+			if w, h := widgetSize(item); w != item.W || h != item.H {
+				t.Errorf("%s preset sizes %q at %dx%d, outside its bounds", name, item.ID, item.W, item.H)
+			}
+		}
+		if !layoutTilesGrid(layout) {
+			t.Errorf("%s preset does not tile the grid: %v", name, layout)
+		}
+	}
+
+	for _, choice := range choices {
+		layout, ok := presetForActivities(choice)
+		if !ok {
+			t.Fatalf("presetForActivities(%v) not ok", choice)
+		}
+		check(strings.Join(choice, "+"), layout)
+	}
+	check("demo", presetWithHead(demoHomeBody))
+
+	for activity, pw := range playstyleWidgetsByActivity {
+		layout, ok := presetForActivities([]string{activity})
+		if !ok {
+			t.Fatalf("presetForActivities([%s]) not ok", activity)
+		}
+		byID := make(map[string]homeLayoutItem, len(layout))
+		for _, item := range layout {
+			byID[item.ID] = item
+		}
+		for _, id := range pw.Specialists {
+			item, present := byID[id]
+			if !present {
+				t.Errorf("%s preset is missing specialist %q", activity, id)
+				continue
+			}
+			def, _ := widgetDefFor(id)
+			if id == widgetNetWorth {
+				if item.W != def.W || item.H != def.H {
+					t.Errorf("%s preset sizes networth at %dx%d, want its maximum %dx%d", activity, item.W, item.H, def.W, def.H)
+				}
+			} else if item.W*item.H <= def.W*def.H {
+				t.Errorf("%s preset sizes specialist %q at catalog size %dx%d, want expanded", activity, id, item.W, item.H)
+			}
+		}
+		for _, id := range pw.Fill {
+			item, present := byID[id]
+			if !present {
+				t.Errorf("%s preset is missing fill %q", activity, id)
+				continue
+			}
+			def, _ := widgetDefFor(id)
+			if item.W != def.W || item.H != def.H {
+				t.Errorf("%s preset sizes fill %q at %dx%d, want catalog %dx%d", activity, id, item.W, item.H, def.W, def.H)
+			}
+		}
+	}
+}
+
 // TestHomeCustomizeSurface: customize mode renders the live
 // widget grid (draggable cards, add-module pop-up) on top of the
 // plain no-JS module list, with end-user copy only — the old

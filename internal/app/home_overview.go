@@ -1540,7 +1540,12 @@ func (app *Application) buildHome(ctx context.Context, customize bool) *homeView
 	if err != nil {
 		raw = ""
 	}
-	layout := parseHomeLayout(raw)
+	var layout []homeLayoutItem
+	if strings.TrimSpace(raw) == "" {
+		layout = app.defaultLayoutFor(ctx, userID)
+	} else {
+		layout = parseHomeLayout(raw)
+	}
 
 	if customize {
 		view.Customize = buildCustomizeView(layout)
@@ -1744,9 +1749,9 @@ func (app *Application) handleHomeLayout(w http.ResponseWriter, r *http.Request)
 		_, known := widgetDefFor(widget)
 		switch action {
 		case "reset":
-			// Store the canonical default rather than "": the
+			// Store the account's own preset rather than "": the
 			// intent (default set, auto spans) stays explicit.
-			app.saveHomeLayout(ctx, userID, defaultHomeLayoutItems())
+			app.saveHomeLayout(ctx, userID, app.defaultLayoutFor(ctx, userID))
 		case "toggle":
 			if known {
 				found := -1

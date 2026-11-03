@@ -154,7 +154,7 @@
       <p class="ov-dirfoot">Skills, clones and implants render from the character's stored snapshots. A section dims on its own while its snapshot is still warming.</p>
     </section>
 
-    <section class="ov-main" aria-label="Character sheet">
+    <section class="ov-main" aria-label="Character sheet" data-land-top>
       <div class="crumbs"><span>Character</span><span class="crumb-sep">&rsaquo;</span>{{if $ov.BackHref}}<a href="{{$ov.BackHref}}">{{$v.CharacterName}}</a>{{else}}<span>{{$v.CharacterName}}</span>{{end}}<span class="crumb-sep">&rsaquo;</span><span class="crumb-here">{{if eq $v.State.Surface "clones"}}Clones &amp; implants{{else}}{{$ov.GroupName}}{{end}}</span><span class="crumb-cap">{{$ov.CrumbCap}}</span></div>
       <div class="pilltabs" role="group" aria-label="Sheet surface">
         {{range $ov.Tabs}}<a class="pilltab{{if .On}} on{{end}}" href="{{.Href}}">{{.Label}} <span class="cnt">{{.Count}}</span></a>{{end}}

@@ -330,7 +330,7 @@
    Their colors stay their own. */
 .cs-fbox .box-title, .cs-region-quick, .cs-field, .cs-drawer-label {
   font-family: "Saira Semi Condensed", "Inter", "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif;
-  font-size: 0.69rem; font-weight: 600; letter-spacing: 0.04em;
+  font-size: 0.72rem; font-weight: 600; letter-spacing: 0.04em;
   text-transform: uppercase;
 }
 
@@ -344,7 +344,7 @@
   display: flex; justify-content: space-between; align-items: center;
   gap: 1rem; flex-wrap: wrap; margin: 1rem 0.15rem 0.6rem;
 }
-.cs-count { margin: 0; font-size: 0.75rem; }
+.cs-count { margin: 0; font-size: 0.78rem; }
 /* The count itself prints black on its orange pill; the
    rest of the count line keeps the pill's own color. */
 .cs-count strong { color: #000; }
@@ -353,7 +353,7 @@
    for, on the squared 8px radius; the spec tabs' count
    badges keep the shared .cs-count pill above. */
 .cs-countbar .cs-count { padding: 0.25rem 0.52rem; font-weight: 500; border-radius: 8px; }
-.cs-counthint { margin: 0; font-size: 0.69rem; color: var(--muted); }
+.cs-counthint { margin: 0; font-size: 0.74rem; color: var(--muted); }
 .cs-results { padding: 0 0 0.4rem; }
 .cs-none { margin: 0; padding: 0.7rem 0.85rem 0.6rem; }
 .cs-active { display: flex; flex-wrap: wrap; gap: 0.35rem; padding: 0.7rem 0.85rem 0; }
@@ -403,12 +403,16 @@
   background: rgba(34, 22, 14, 0.55);
   box-shadow: inset 2px 0 0 var(--accent);
 }
+html[data-theme="light"] .cs-table tbody tr.cs-row:hover,
+html[data-theme="light"] .cs-table tbody tr.cs-row.open {
+  background: var(--row-hover);
+}
 /* The type label sits in a fixed-width slot so the deal
    badge starts at the same x on every row, however long
    the type text runs. */
 .cs-type {
   display: inline-block; width: 6.6rem; vertical-align: middle;
-  font-size: 0.69rem; font-weight: 600; letter-spacing: 0.04em;
+  font-size: 0.73rem; font-weight: 600; letter-spacing: 0.04em;
   text-transform: uppercase;
 }
 .cs-type.t-exchange { color: var(--accent); }
@@ -416,31 +420,31 @@
 .cs-type.t-courier { color: #34d399; }
 .cs-deal {
   display: inline-flex; align-items: center; gap: 0.2rem; vertical-align: middle;
-  padding: 0.1rem 0.4rem; font-size: 0.625rem; font-weight: 700;
+  padding: 0.1rem 0.4rem; font-size: 0.7rem; font-weight: 700;
   font-family: "Rajdhani", "Segoe UI", sans-serif;
   text-transform: uppercase; letter-spacing: 0.04em;
   color: #6ee7a8; background: rgba(6, 40, 24, 0.55);
   border: 1px solid rgba(52, 211, 153, 0.5); border-radius: 0.25rem;
 }
 .cs-row-title {
-  color: var(--text-bright); font-weight: 500; font-size: 0.75rem;
+  color: var(--text-bright); font-weight: 500; font-size: 0.84rem;
   margin-top: 0.25rem; white-space: nowrap; overflow: hidden;
   text-overflow: ellipsis; max-width: 16.25rem;
 }
 .cs-row-meta {
   display: flex; gap: 0.4rem; align-items: center; margin-top: 0.25rem;
-  font-size: 0.69rem; color: var(--muted);
+  font-size: 0.75rem; line-height: 1.38; color: var(--muted);
 }
 /* The issuer line renders only in the phone card form
    (see the 45rem block below); the desktop row's head
    cell has no room for it and stays as it was. */
 .cs-row-issuer { display: none; }
-.cs-itemline { display: flex; align-items: center; gap: 0.5rem; font-size: 0.75rem; margin-bottom: 0.25rem; }
+.cs-itemline { display: flex; align-items: center; gap: 0.5rem; font-size: 0.81rem; line-height: 1.4; margin-bottom: 0.25rem; }
 .cs-itemline:last-child { margin-bottom: 0; }
 .cs-line-name { color: var(--text-bright); font-weight: 500; }
 .cs-qty { color: #ff9848; }
 .cs-wants {
-  color: var(--muted); font-weight: 700; font-size: 0.69rem;
+  color: var(--muted); font-weight: 700; font-size: 0.72rem;
   text-transform: uppercase; letter-spacing: 0.05em;
 }
 /* The contents cap's overflow line: a quiet text button
@@ -448,7 +452,7 @@
    drawer, where the full contents list. */
 .cs-morelines {
   display: block; background: none; border: 0; padding: 0; cursor: pointer;
-  font: inherit; font-size: 0.75rem; color: var(--muted); margin-bottom: 0.25rem;
+  font: inherit; font-size: 0.78rem; color: var(--muted); margin-bottom: 0.25rem;
 }
 .cs-morelines:hover { color: var(--accent); }
 /* One specialized pill under a row's contents: the
@@ -456,29 +460,31 @@
    or the courier's volume and rate. */
 .cs-pill {
   display: inline-flex; align-items: center; gap: 0.5rem; margin-top: 0.5rem;
-  padding: 0.1rem 0.5rem; border-radius: 0.25rem; font-size: 0.69rem;
+  padding: 0.1rem 0.5rem; border-radius: 0.25rem; font-size: 0.73rem;
 }
 .cs-pill.ab { background: rgba(8, 47, 73, 0.5); border: 1px solid rgba(34, 211, 238, 0.3); color: #a5f3fc; }
 .cs-pill.bp { background: rgba(69, 26, 3, 0.5); border: 1px solid rgba(245, 158, 11, 0.3); color: #fcd34d; }
 .cs-pill.co { background: rgba(6, 40, 24, 0.5); border: 1px solid rgba(52, 211, 153, 0.3); color: #a7f3d0; }
-.cs-cell-label { font-size: 0.69rem; color: var(--muted); }
+.cs-cell-label { font-size: 0.72rem; color: var(--muted); }
 .cs-cell-value {
-  font-weight: 700; font-size: 0.875rem; color: var(--text-bright);
+  font-family: "Synapse Numerals", "Saira Semi Condensed", "Inter", "Segoe UI", sans-serif;
+  font-weight: 700; font-size: 0.9rem; color: var(--text-bright);
+  font-variant-numeric: tabular-nums;
   white-space: nowrap; margin-top: 0.15rem;
 }
-.cs-psub { font-size: 0.69rem; margin-top: 0.15rem; }
+.cs-psub { font-size: 0.74rem; margin-top: 0.15rem; }
 .cs-psub.amber { color: #fbbf24; }
 .cs-psub.gray { color: var(--muted); }
-.cs-priced { font-size: 0.69rem; color: var(--muted); margin-top: 0.15rem; }
-.cs-spread { font-size: 0.69rem; color: #34d399; margin-top: 0.15rem; }
+.cs-priced { font-size: 0.74rem; color: var(--muted); margin-top: 0.15rem; }
+.cs-spread { font-size: 0.74rem; color: #34d399; margin-top: 0.15rem; }
 .cs-spread.neg { color: var(--neg); }
 .cs-c5 .sec-pill { margin-left: 0; border-radius: var(--r-xs); }
 .cs-place {
   display: inline-block; max-width: calc(100% - 62px); vertical-align: bottom;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  font-weight: 500; font-size: 0.75rem;
+  font-weight: 500; font-size: 0.8rem;
 }
-.cs-expires { font-size: 0.69rem; color: var(--muted); margin-top: 0.25rem; }
+.cs-expires { font-size: 0.74rem; color: var(--muted); margin-top: 0.25rem; }
 .cs-copy {
   background: var(--row-alt); border: 1px solid var(--glass-edge);
   color: var(--muted); border-radius: var(--r-xs);
@@ -517,16 +523,16 @@
   border-bottom: 1px solid color-mix(in srgb, var(--glass-edge) 40%, transparent);
 }
 .cs-dhead-t {
-  font-size: 0.69rem; font-weight: 600; letter-spacing: 0.06em;
+  font-size: 0.74rem; font-weight: 600; letter-spacing: 0.06em;
   text-transform: uppercase; color: #ff882e;
 }
 .cs-dhead-t.cy { color: #22d3ee; }
 .cs-dhead-t.dim { color: var(--muted); }
-.cs-dhead-id { font-size: 0.69rem; color: var(--muted-2); }
-.cs-dnote { margin: 0 0 0.4rem; color: var(--muted); font-size: 0.75rem; }
+.cs-dhead-id { font-size: 0.74rem; color: var(--muted-2); }
+.cs-dnote { margin: 0 0 0.4rem; color: var(--muted); font-size: 0.78rem; }
 .cs-aline {
   display: flex; align-items: center; justify-content: space-between; gap: 1rem;
-  padding: 0.25rem 0; font-size: 0.75rem;
+  padding: 0.25rem 0; font-size: 0.81rem;
   border-bottom: 1px solid rgba(255, 180, 120, 0.05);
 }
 .cs-aline:last-child { border-bottom: 0; }
@@ -540,19 +546,23 @@
 }
 .cs-aline-l { min-width: 0; }
 .cs-gchip {
-  padding: 0.1rem 0.4rem; font-size: 0.625rem; border-radius: 0.25rem;
+  padding: 0.1rem 0.4rem; font-size: 0.68rem; border-radius: 0.25rem;
   background: rgba(255, 240, 220, 0.09); color: #d8c6b2;
 }
 .cs-aq { color: #ff882e; }
-.cs-tp { font-size: 0.69rem; color: #34d399; text-align: right; flex: none; }
+.cs-tp { font-size: 0.73rem; color: #34d399; text-align: right; flex: none; }
 .cs-tp.un { color: #fbbf24; }
-.cs-tnote { display: block; color: var(--muted); font-size: 0.63rem; }
+.cs-tnote { display: block; color: var(--muted); font-size: 0.72rem; line-height: 1.4; }
 .cs-srow {
   display: flex; justify-content: space-between; gap: 1rem;
-  font-size: 0.75rem; padding: 0.2rem 0;
+  font-size: 0.81rem; padding: 0.2rem 0;
 }
 .cs-sk { color: var(--muted); }
-.cs-sv { color: var(--text-bright); }
+.cs-sv {
+  font-family: "Synapse Numerals", "Saira Semi Condensed", "Inter", "Segoe UI", sans-serif;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-bright);
+}
 .cs-srow.sp {
   border-top: 1px solid color-mix(in srgb, var(--glass-edge) 40%, transparent);
   padding-top: 0.35rem; margin-top: 0.2rem;
@@ -565,13 +575,13 @@
   padding-top: 0.5rem; display: flex; align-items: center;
   justify-content: space-between; gap: 1rem;
 }
-.cs-dfoot-note { font-size: 0.625rem; color: var(--muted); }
+.cs-dfoot-note { font-size: 0.72rem; line-height: 1.45; color: var(--muted); }
 /* Telemetry attributes: the name and its figure over a
    6px band bar filled to the roll's percentile. */
 .cs-attr { margin-bottom: 0.5rem; }
 .cs-attr-r {
   display: flex; justify-content: space-between; gap: 1rem;
-  font-size: 0.69rem; margin-bottom: 0.15rem;
+  font-size: 0.74rem; margin-bottom: 0.15rem;
 }
 .cs-attr-n { color: var(--text); }
 .cs-attr-v { font-weight: 600; }
@@ -657,25 +667,6 @@
   .cs-table { min-width: 46rem; }
   .cs-pgrid { grid-template-columns: minmax(0, 1fr); }
 }
-@media (max-width: 42rem) {
-  /* The band stacks: search full width, then the type
-     segments and the deals box as full-width rows of their
-     own; the filter boxes and spec fields go one column. */
-  .cs-filters { grid-template-columns: minmax(0, 1fr); }
-  .cs-searchbox { flex-basis: 100%; }
-  .cs-types { width: 100%; }
-  .cs-types > * { flex: 1; justify-content: center; }
-  .cs-deals { width: 100%; justify-content: space-between; }
-  .cs-intro { flex-direction: column; }
-  .cs-drawer-grid { grid-template-columns: minmax(0, 1fr); }
-  .cs-rollgrid { grid-template-columns: minmax(0, 1fr); }
-  .cs-drawer-grid > .cs-field,
-  [data-drawer-panel="abyssal"] .cs-drawer-grid > :nth-child(2),
-  [data-drawer-panel="couriers"] .cs-drawer-grid > :nth-child(1) { grid-column: span 1; }
-  .cs-region-pop { position: static; width: auto; grid-template-columns: 1fr; margin-top: 0.4rem; }
-  .cs-actions { margin-left: 0; }
-  .cs-roll { grid-template-columns: minmax(0, 1fr) auto 4.5rem 2.4rem; }
-}
 
 /* ---- abyssal lines: picker, item ID, full page ----
    A contract with several abyssal lines carries a telemetry card
@@ -756,6 +747,23 @@
    the sealed wrap, no spread), so its card reads in those
    terms with no second shape to build. */
 @media (max-width: 45rem) {
+  /* The band stacks: search full width, then the type
+     segments and the deals box as full-width rows of their
+     own; the filter boxes and spec fields go one column. */
+  .cs-filters { grid-template-columns: minmax(0, 1fr); }
+  .cs-searchbox { flex-basis: 100%; }
+  .cs-types { width: 100%; }
+  .cs-types > * { flex: 1; justify-content: center; }
+  .cs-deals { width: 100%; justify-content: space-between; }
+  .cs-intro { flex-direction: column; }
+  .cs-drawer-grid { grid-template-columns: minmax(0, 1fr); }
+  .cs-rollgrid { grid-template-columns: minmax(0, 1fr); }
+  .cs-drawer-grid > .cs-field,
+  [data-drawer-panel="abyssal"] .cs-drawer-grid > :nth-child(2),
+  [data-drawer-panel="couriers"] .cs-drawer-grid > :nth-child(1) { grid-column: span 1; }
+  .cs-region-pop { position: static; width: auto; grid-template-columns: 1fr; margin-top: 0.4rem; }
+  .cs-actions { margin-left: 0; }
+  .cs-roll { grid-template-columns: minmax(0, 1fr) auto 4.5rem 2.4rem; }
   .cs-results { overflow-x: visible; }
   .cs-table { display: block; min-width: 0; }
   .cs-table colgroup { display: none; }

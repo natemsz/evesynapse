@@ -12,7 +12,7 @@
 .ch-paste { margin: 0 0 1rem; }
 .ch-paste > summary { cursor: pointer; color: var(--muted); font-size: 0.9rem; }
 .ch-paste[open] > summary { margin-bottom: 0.6rem; }
-.ch-paste textarea { width: 100%; box-sizing: border-box; font: 0.82rem/1.4 ui-monospace, "Cascadia Mono", Consolas, monospace; resize: vertical; }
+.ch-paste textarea { width: 100%; box-sizing: border-box; font: 0.82rem/1.4 "JetBrains Mono", ui-monospace, monospace; resize: vertical; }
 
 /* --- The feed --- */
 [data-ch-live]::before { content: ""; display: inline-block; width: 0.4rem; height: 0.4rem; margin-right: 0.3rem; border-radius: 50%; background: currentColor; vertical-align: 0.05rem; animation: ch-pulse 2s ease-in-out infinite; }
@@ -81,7 +81,7 @@ a.ch-tag:hover { border-color: var(--accent); }
 
 /* --- EveSynapse Axon --- */
 .ch-code { margin: 0 0 1rem; border-color: var(--accent); }
-.ch-code-v { margin: 0.2rem 0 0.4rem; font: 700 1.8rem/1.2 ui-monospace, "Cascadia Mono", Consolas, monospace; letter-spacing: 0.15em; color: var(--text-bright); user-select: all; }
+.ch-code-v { margin: 0.2rem 0 0.4rem; font: 700 1.8rem/1.2 "JetBrains Mono", ui-monospace, monospace; letter-spacing: 0.15em; color: var(--text-bright); user-select: all; }
 .ch-steps { margin: 0 0 1rem; padding-left: 1.4rem; }
 .ch-steps > li { padding: 0.35rem 0; }
 .ch-steps .hint { margin: 0.4rem 0 0; }

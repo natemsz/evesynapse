@@ -3,9 +3,11 @@
 {{define "content"}}
 
 {{with .SecurityCodes}}
+<div class="prose">
   <h2>{{.Title}}</h2>
   <p><small>Write these down now. This page shows them once. Each code signs you in once, then burns.</small></p>
   <ol>{{range .Codes}}<li><code>{{.}}</code></li>{{end}}</ol>
   <p><a href="/settings#security">Back to settings</a></p>
+</div>
 {{end}}
 {{end}}

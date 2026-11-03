@@ -23,7 +23,7 @@ html[data-theme="light"] .pi { --pi-loss: #b0302a; }
 .pi-stat { display: flex; flex-direction: column; gap: 0.1rem; color: inherit; text-decoration: none; }
 a.pi-stat:hover { border-color: var(--accent); }
 .pi-seen { grid-column: span 2; }
-.pi-v { font-size: 1.3rem; font-weight: 700; color: var(--text-bright); font-variant-numeric: tabular-nums; line-height: 1.15; }
+.pi-v { font-family: "Synapse Numerals", "Saira Semi Condensed", "Inter", "Segoe UI", sans-serif; font-size: 1.3rem; font-weight: 700; color: var(--text-bright); font-variant-numeric: tabular-nums; line-height: 1.15; }
 .pi-l { font-size: 0.78rem; color: var(--muted-2); }
 
 .pi-cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.8rem; align-items: start; }
@@ -86,11 +86,11 @@ a.pi-stat:hover { border-color: var(--accent); }
 .pilot-layout-rail .pilot-record { grid-area: record; min-width: 0; }
 .pilot-layout-rail .pilot-employment { grid-area: history; min-width: 0; }
 .pilot-layout-rail > .pi { grid-area: rail; min-width: 0; margin-top: 0; }
-@media (min-width: 64rem) {
+@media (min-width: 70.01rem) {
   /* The rail is too narrow for the section's side-by-side panels. */
   .pilot-layout-rail .pi-cols { grid-template-columns: minmax(0, 1fr); }
 }
-@media (max-width: 64rem) {
+@media (max-width: 70rem) {
   .pilot-layout-rail { display: block; }
   .pilot-layout-rail > .pi { margin-top: 1.4rem; }
 }

@@ -118,7 +118,7 @@ html[data-backdrop="glow"] body::before {
 }
 .legal-text {
   white-space: pre-wrap;
-  font-family: var(--font-mono, monospace);
+  font-family: "JetBrains Mono", ui-monospace, monospace;
   font-size: 0.82rem;
   line-height: 1.55;
   margin: 0;
@@ -857,7 +857,7 @@ html[data-theme="light"] #main-content > .section-tabs .tabs-more.has-active .ta
 .fit-charge-list { display: flex; flex-wrap: wrap; gap: 0.35rem; }
 .fit-charge-opt {
   display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.25rem 0.55rem;
-  border: 1px solid #333; border-radius: var(--r-sm); background: transparent;
+  border: 1px solid var(--box-edge); border-radius: var(--r-sm); background: transparent;
   color: inherit; font-size: 0.85rem; cursor: pointer;
 }
 .fit-charge-opt img { width: 20px; height: 20px; display: block; }

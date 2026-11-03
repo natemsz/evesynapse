@@ -176,7 +176,7 @@
 .ov-table .ov-nmline { display: flex; align-items: center; min-width: 0; }
 .ov-table .ov-nm { font-size: 0.92rem; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ov-table .ov-tag { flex: none; }
-.ov-table .ov-tag { font-size: 0.62rem; padding: 0.02rem 0.32rem; }
+.ov-table .ov-tag { font-size: 0.68rem; padding: 0.02rem 0.35rem; }
 .ov-table th.r, .ov-table td.r { text-align: right; }
 .ov-table th:first-child, .ov-table th:last-child { text-align: center; }
 .ov-table tr.sel td { background: var(--glass); }
@@ -204,7 +204,7 @@ html[data-theme="light"] .ov-pips i.train { background: #2b7fc4; border-color: #
 
 /* ---- Inspector ---- */
 .ov-ranktile { flex: 0 0 auto; display: flex; flex-direction: column; align-items: center; justify-content: center; width: 3.2rem; height: 3.2rem; border: 1px solid var(--gold); border-radius: var(--r-sm); }
-.ov-ranktile .rl { color: var(--muted); font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.08em; }
+.ov-ranktile .rl { color: var(--muted); font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.08em; }
 .ov-ranktile .rv { font-family: 'Rajdhani', sans-serif; font-weight: 700; font-size: 1.15rem; color: var(--gold); }
 .ov-itype { margin: 0.2rem 0 0; color: var(--muted); font-size: 0.84rem; }
 .ov-eft { padding: 0.35rem 0.6rem; border: 1px solid var(--box-edge); border-radius: var(--r-sm); font-weight: 600; white-space: nowrap; }

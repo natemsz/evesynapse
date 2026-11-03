@@ -38,7 +38,7 @@ html[data-theme="light"] .sc { --sc-hot: #b0302a; }
   border-radius: var(--r-md);
   background: var(--row-alt);
   color: var(--text);
-  font: 0.85rem/1.4 ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font: 0.85rem/1.4 "JetBrains Mono", ui-monospace, monospace;
   resize: vertical;
   box-sizing: border-box;
 }
@@ -112,7 +112,7 @@ html[data-theme="light"] .sc { --sc-hot: #b0302a; }
   border-radius: var(--r-xs);
   background: var(--row-alt);
   color: var(--muted);
-  font: 0.8rem ui-monospace, Consolas, monospace;
+  font: 0.8rem "JetBrains Mono", ui-monospace, monospace;
 }
 
 .sc-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); gap: 0.6rem; }
@@ -231,7 +231,7 @@ details > .sc-pilots { margin-left: 2.2rem; }
 .sc-table td { padding: 0.35rem 0.5rem; border-bottom: 1px solid var(--box-edge); white-space: nowrap; }
 .sc-table tr:last-child td { border-bottom: 0; }
 .sc-num { text-align: right; font-variant-numeric: tabular-nums; }
-.sc-sig-id { font-family: ui-monospace, Consolas, monospace; color: var(--text-bright); }
+.sc-sig-id { font-family: "JetBrains Mono", ui-monospace, monospace; color: var(--text-bright); }
 .sc-sigs tr.partial td { color: var(--muted); }
 .sc-signal {
   position: relative;
@@ -275,7 +275,7 @@ details > .sc-pilots { margin-left: 2.2rem; }
 /* --- Step 3: the group/related rail and compare --- */
 .sc-layout { display: grid; grid-template-columns: minmax(0, 1fr) 21rem; gap: 0.9rem; align-items: start; }
 .sc-main, .sc-rail { display: flex; flex-direction: column; gap: 0.9rem; min-width: 0; }
-@media (max-width: 64rem) { .sc-layout { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 70rem) { .sc-layout { grid-template-columns: minmax(0, 1fr); } }
 .sc-pair { margin: 0 0 0.4rem; font-size: 0.88rem; color: var(--text); }
 .sc-timeline, .sc-related { margin: 0; padding: 0; list-style: none; }
 .sc-timeline li, .sc-related li {
@@ -299,7 +299,7 @@ details > .sc-pilots { margin-left: 2.2rem; }
   border-radius: var(--r-md);
   background: var(--row-alt);
   color: var(--text);
-  font: 0.85rem/1.4 ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font: 0.85rem/1.4 "JetBrains Mono", ui-monospace, monospace;
   resize: vertical;
   box-sizing: border-box;
 }

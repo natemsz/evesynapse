@@ -326,7 +326,7 @@ a.kp-a-name:hover, .kp-a-org a:hover { color: var(--accent); }
 .kp-a-dmg meter::-moz-meter-bar { background: var(--accent); border-radius: 0.2rem; }
 
 /* --- Narrow screens --- */
-@media (max-width: 64rem) {
+@media (max-width: 70rem) {
   .kb-layout { grid-template-columns: minmax(0, 1fr); }
   .kb-side { position: static; display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); }
   .kp-hero { grid-template-columns: auto minmax(0, 1fr); }

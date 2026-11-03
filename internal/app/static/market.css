@@ -135,12 +135,9 @@ td.mt-reqs { max-width: 12rem; }
 .mb-sorthead.on { color: var(--text-bright); }
 .mb-sorthead.on .mb-sortchev { color: var(--accent); }
 
-@media (max-width: 48rem) {
+@media (max-width: 45rem) {
   .mb-layout { grid-template-columns: minmax(0, 1fr); }
   .mb-tree { max-height: 16rem; border-right: 0; border-bottom: 1px solid var(--box-edge); padding: 0 0 0.5rem; }
-}
-
-@media (max-width: 40rem) {
   .mt-chart svg { height: 120px; }
   .mt-chart svg.mt-book { height: auto; }
 }
@@ -266,7 +263,7 @@ td.mt-reqs { max-width: 12rem; }
 
 /* Phones: the plots keep a readable height instead of their desktop
    proportions, and the legends wrap tighter. */
-@media (max-width: 640px) {
+@media (max-width: 45rem) {
   .pf-chart .pchart svg { height: 150px; }
   .pf-chart .pchart svg.pf-short { height: 75px; }
   .pf-chart .chart-legend { gap: 0.15rem 0.6rem; font-size: 0.72rem; }
@@ -279,7 +276,7 @@ td.mt-reqs { max-width: 12rem; }
    with a swatch per row. */
 .pf-charts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.25rem 1.75rem; }
 .pf-charts > .pf-cell:last-child:nth-child(odd) { grid-column: 1 / -1; }
-@media (max-width: 1100px) { .pf-charts { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 70rem) { .pf-charts { grid-template-columns: minmax(0, 1fr); } }
 .pf-modes-grain { margin-top: -0.3rem; }
 /* The profit module's head rows: the character selector with the
    counted-rules gear at its right, lined up with it; the span and
@@ -312,13 +309,9 @@ td.mt-reqs { max-width: 12rem; }
 .ctip .ctip-sw { width: 0.6rem; height: 0.6rem; border-radius: 2px; flex: none; }
 .ctip .ctip-val { margin-left: auto; padding-left: 0.9rem; font-variant-numeric: tabular-nums; }
 .pf-act-grid { display: grid; grid-template-columns: minmax(0, 1fr) 18.75rem; gap: 1rem 1.5rem; align-items: start; }
-@media (max-width: 900px) { .pf-act-grid { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 70rem) { .pf-act-grid { grid-template-columns: minmax(0, 1fr); } }
 .pf-card { background: var(--panel); border: 1px solid var(--box-edge); border-radius: var(--r-md); padding: 0.8rem 0.9rem; }
 .pf-card h4 { margin: 0 0 0.5rem; font-size: 0.9rem; }
-@media (max-width: 640px) {
-  .pf-chart .pchart svg { height: 150px; }
-  .pf-chart .pchart svg.pf-short { height: 75px; }
-}
 .pf-y-0 { top: 0%; }
 .pf-y-1 { top: 1%; }
 .pf-y-2 { top: 2%; }
@@ -552,7 +545,7 @@ td.mt-reqs { max-width: 12rem; }
    efficiency panel and the small multiples around them. Colours
    come from the theme tokens only, the semantic four first. */
 .pf-hero svg { height: 208px; }
-@media (max-width: 640px) { .pf-hero svg { height: 168px; } }
+@media (max-width: 45rem) { .pf-hero svg { height: 168px; } }
 .pf-hero .viz-head { flex-wrap: wrap; row-gap: 0.35rem; }
 .pf-hero-modes { display: flex; gap: 0.4rem; flex-wrap: wrap; justify-content: flex-end; margin-left: auto; }
 .pf-hero-modes .mt-modes { margin: 0; }

@@ -15,8 +15,8 @@
 .assets-count { margin: 0; color: var(--muted); }
 .assets-net { text-align: right; margin-left: auto; }
 .assets-net .assets-count { margin-top: 0.2rem; }
-.assets-net-v { display: block; color: var(--gold); font-size: 1.4rem; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1.15; }
-.assets-net-l { color: var(--muted); font-size: 0.68rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+.assets-net-v { display: block; font-family: "Synapse Numerals", "Saira Semi Condensed", "Inter", "Segoe UI", sans-serif; color: var(--gold); font-size: 1.4rem; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1.15; }
+.assets-net-l { color: var(--muted); font-size: 0.72rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
 
 /* The character scope selector: a button naming the current
    selection; its panel is the shared character selector's
@@ -197,11 +197,11 @@
 .amx-name { font-weight: 600; }
 .amx-name small { color: var(--muted); font-weight: 400; }
 .amx-sub { color: var(--muted); font-size: 0.78rem; }
-.asmbadge { padding: 0.05rem 0.32rem; border: 1px solid rgba(34, 197, 94, 0.45); border-radius: var(--r-xs); color: #7fe0a3; font-size: 0.62rem; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase; vertical-align: 0.14em; white-space: nowrap; }
+.asmbadge { padding: 0.05rem 0.32rem; border: 1px solid rgba(34, 197, 94, 0.45); border-radius: var(--r-xs); color: #7fe0a3; font-size: 0.68rem; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase; vertical-align: 0.14em; white-space: nowrap; }
 .amx-c-num { font-variant-numeric: tabular-nums; white-space: nowrap; }
-.amx-c-val { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.amx-c-val { font-family: "Synapse Numerals", "Saira Semi Condensed", "Inter", "Segoe UI", sans-serif; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .amx-c-val .amx-isk { color: var(--gold); font-weight: 700; }
-.amx-c-val small { margin-left: 0.25rem; color: var(--muted); font-size: 0.66rem; font-weight: 700; letter-spacing: 0.07em; }
+.amx-c-val small { margin-left: 0.25rem; color: var(--muted); font-size: 0.72rem; font-weight: 700; letter-spacing: 0.07em; }
 .amx-more { margin: 0.6rem 0 0; color: var(--muted); font-size: 0.85rem; }
 
 /* The phone ships grid and the inspector's sheet form are

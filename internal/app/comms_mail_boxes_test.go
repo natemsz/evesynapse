@@ -50,15 +50,15 @@ func TestMailBoxViews(t *testing.T) {
 	}
 
 	// Landing (no box param) is the inbox: received mail only,
-	// the received unread one bold, the Inbox chip active.
+	// the received unread one bold, the Inbox mailbox current.
 	code, body := getPage(t, app, cookie, "/mail/?character=90000001")
 	if code != http.StatusOK {
 		t.Fatalf("mail page: status %d", code)
 	}
 	mustContain(t, "/mail/", body,
 		"Received unread", "Received read",
-		`<strong><a href="/mail/?character=90000001&amp;box=inbox&amp;mail=21">Received unread</a></strong>`,
-		`<a class="chip active" href="/mail/?character=90000001&amp;box=inbox">Inbox</a>`,
+		`<strong><a href="/mail/?character=90000001&amp;box=inbox&amp;mail=21" data-l-step="in">Received unread</a></strong>`,
+		`<a class="diritem on" href="/mail/?character=90000001&amp;box=inbox" data-l-step="in"><span class="dir-top"><span class="dir-name">Inbox</span>`,
 	)
 	mustNotContain("/mail/", body, "Own sent list mail")
 
@@ -72,12 +72,12 @@ func TestMailBoxViews(t *testing.T) {
 	mustContain(t, "/mail/?box=sent", body,
 		"Own sent list mail", "Corp List", "<th>To</th>",
 		`<span class="badge wait">SENT</span>`,
-		`<a class="chip active" href="/mail/?character=90000001&amp;box=sent">Sent</a>`,
+		`<a class="diritem on" href="/mail/?character=90000001&amp;box=sent" data-l-step="in"><span class="dir-top"><span class="dir-name">Sent</span>`,
 		`box=sent&amp;label=4`,
 	)
 	mustNotContain("/mail/?box=sent", body,
 		"Received unread", "Received read",
-		`<strong><a href="/mail/?character=90000001&amp;box=sent&amp;mail=22">`,
+		`<strong><a href="/mail/?character=90000001&amp;box=sent&amp;mail=22"`,
 	)
 
 	// All mail: everything, the sent row still not bold and still
@@ -88,9 +88,9 @@ func TestMailBoxViews(t *testing.T) {
 	}
 	mustContain(t, "/mail/?box=all", body,
 		"Received unread", "Own sent list mail", "Received read",
-		`<strong><a href="/mail/?character=90000001&amp;box=all&amp;mail=21">Received unread</a></strong>`,
+		`<strong><a href="/mail/?character=90000001&amp;box=all&amp;mail=21" data-l-step="in">Received unread</a></strong>`,
 		`<span class="badge wait">SENT</span>`,
-		`<a class="chip active" href="/mail/?character=90000001&amp;box=all">All mail</a>`,
+		`<a class="diritem on" href="/mail/?character=90000001&amp;box=all" data-l-step="in"><span class="dir-top"><span class="dir-name">All mail</span>`,
 	)
 	mustNotContain("/mail/?box=all", body,
 		`<strong><a href="/mail/?character=90000001&amp;box=all&amp;mail=22">`,

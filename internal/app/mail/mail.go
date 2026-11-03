@@ -70,6 +70,7 @@ type mailView struct {
 	DetailID      int64 // open mail's ID, for the mark-as-read form
 	DetailWarming bool  // body snapshot has not warmed yet
 	CanMarkRead   bool  // the character granted mail-organize access (esi-mail.organize_mail.v1)
+	BoxesView     bool  // ?boxes=1: the reader asked for the mailbox list itself (a phone's top level)
 }
 
 func (app *mod) handleMail(w http.ResponseWriter, r *http.Request) {
@@ -103,6 +104,7 @@ func (app *mod) handleMail(w http.ResponseWriter, r *http.Request) {
 		box = "inbox"
 	}
 	view.Box = box
+	view.BoxesView = r.URL.Query().Get("boxes") == "1"
 
 	// Label set: names for header chips + the total unread count.
 	labelNames := make(map[int64]string)

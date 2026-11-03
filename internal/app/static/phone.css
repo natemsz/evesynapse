@@ -268,39 +268,6 @@
     color: var(--muted);
   }
 
-  /* The calendar month grid reads as an agenda: seven columns
-     cannot fit a phone, so only today and the days carrying ops
-     or events show, one row each — the weekday over the date on
-     the left, the day's entries stacked on the right. The
-     upcoming list under it is unchanged. */
-  .cal-wrap { overflow: visible; }
-  table.cal, table.cal > tbody, table.cal > tbody > tr { display: block; min-width: 0; }
-  table.cal > thead { display: none; }
-  table.cal td.cal-day { display: none; }
-  table.cal td.cal-day:not(.cal-out):is(.cal-today, :has(.cal-entry)) {
-    display: grid;
-    grid-template-columns: 3.2rem minmax(0, 1fr) auto;
-    align-items: start;
-    gap: 0.3rem 0.6rem;
-    height: auto;
-    padding: 0.6rem 0.2rem;
-    border: 0;
-    border-bottom: 1px solid var(--box-edge);
-  }
-  table.cal .cal-num { grid-column: 1; grid-row: 1 / span 20; font-size: 1.35rem; line-height: 1.1; text-align: center; }
-  table.cal .cal-num::before {
-    content: attr(data-wd);
-    display: block;
-    font-size: 0.66rem; letter-spacing: 0.08em; text-transform: uppercase;
-  }
-  table.cal .cal-entry { grid-column: 2; margin: 0; white-space: normal; }
-  table.cal .cal-add {
-    grid-column: 3; grid-row: 1;
-    position: static; opacity: 1;
-    min-width: 2.5rem; min-height: 2.5rem;
-    display: inline-flex; align-items: center; justify-content: center;
-  }
-
   /* The footer: the same lines, set compact. */
   footer { margin-top: 1rem; padding: 1rem 0.9rem 1.1rem; font-size: 0.66rem; }
   footer p { margin: 0.35rem 0; }

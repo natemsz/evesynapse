@@ -449,8 +449,9 @@ properties as knobs and no media queries:
 - `.l-panel`: the standard solid block on the page.
 - `.l-root`: page content that belongs to the top level (summary
   cards, overview tables, banners). On a narrow page it steps
-  aside once the reader goes into the console, so the deeper
-  screen starts under the page head.
+  aside once the reader goes below the console's top level (the
+  directory, or the list when the console has no directory), so
+  the deeper screen starts under the page head.
 
 ### The console
 

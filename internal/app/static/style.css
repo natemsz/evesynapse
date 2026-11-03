@@ -5571,8 +5571,6 @@ html[data-theme="light"] .notify-all { border-top-color: #e4dac6; }
    ember edge; in-game events a quieter one. */
 .cal-head { display: flex; align-items: center; gap: 0.5rem; margin: 0.75rem 0 0.5rem; }
 .cal-title { min-width: 9rem; text-align: center; font-size: 1.05rem; }
-.cal-new { margin-left: auto; }
-.cal-head > .cal-paps:nth-child(4) { margin-left: auto; }
 .cal-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 table.cal { table-layout: fixed; min-width: 44rem; margin-bottom: 0.5rem; }
 table.cal th { text-align: center; }
@@ -5583,6 +5581,8 @@ td.cal-today { box-shadow: inset 0 0 0 1px var(--accent); }
 .cal-today .cal-num { color: var(--accent); font-weight: 700; }
 .cal-add { position: absolute; top: 0.15rem; right: 0.3rem; padding: 0 0.3rem; color: var(--muted); text-decoration: none; opacity: 0; }
 td.cal-day:hover .cal-add, .cal-add:focus-visible { opacity: 1; }
+/* Touch screens have no hover: the add control is always there. */
+@media (hover: none) { .cal-add { opacity: 1; } }
 .cal-entry {
   display: block;
   margin: 0.15rem 0 0;
@@ -5599,6 +5599,49 @@ td.cal-day:hover .cal-add, .cal-add:focus-visible { opacity: 1; }
 .cal-entry:hover { background: var(--row-hover); text-decoration: none; }
 .cal-entry.cal-op { border-left-color: var(--accent); }
 .cal-entry.cal-cancelled { text-decoration: line-through; opacity: 0.6; }
+/* The month beside the event list while the month keeps room for its
+   full grid; under it otherwise. */
+.cal-split { --l-side: 26rem; --l-main-min: 46rem; align-items: flex-start; }
+.cal-month { container: calmonth / inline-size; }
+@container calmonth (width < 46rem) {
+  /* The month grid reads as an agenda once its panel is too narrow
+     for seven readable columns (a phone, or a narrow column beside the
+     event list): only today and the days carrying ops or events show, one row each — the weekday over the date on
+     the left, the day's entries stacked on the right. The
+     upcoming list under it is unchanged. */
+  .cal-wrap { overflow: visible; }
+  table.cal, table.cal > tbody, table.cal > tbody > tr { display: block; min-width: 0; }
+  table.cal > thead { display: none; }
+  table.cal td.cal-day { display: none; }
+  table.cal td.cal-day:not(.cal-out):is(.cal-today, :has(.cal-entry)) {
+    display: grid;
+    grid-template-columns: 3.2rem minmax(0, 1fr) auto;
+    align-items: start;
+    /* No row gap: the date spans the cell's implicit rows, and their
+       gaps would stack up into empty height on a day with nothing
+       in it. Entries space themselves. */
+    gap: 0 0.6rem;
+    height: auto;
+    padding: 0.6rem 0.2rem;
+    border: 0;
+    border-bottom: 1px solid var(--box-edge);
+  }
+  table.cal .cal-num { grid-column: 1; grid-row: 1 / span 20; font-size: 1.35rem; line-height: 1.1; text-align: center; }
+  table.cal .cal-num::before {
+    content: attr(data-wd);
+    display: block;
+    font-size: 0.66rem; letter-spacing: 0.08em; text-transform: uppercase;
+  }
+  table.cal .cal-entry { grid-column: 2; margin: 0; white-space: normal; }
+  table.cal .cal-entry + .cal-entry { margin-top: 0.3rem; }
+  table.cal .cal-add {
+    grid-column: 3; grid-row: 1;
+    position: static; opacity: 1;
+    min-width: 2.5rem; min-height: 2.5rem;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+}
+}
 .cal-time { color: var(--muted); font-variant-numeric: tabular-nums; }
 .cal-key { padding: 0 0.3rem; border-left: 2px solid #3a3a3a; }
 .cal-key.cal-op { border-left-color: var(--accent); }

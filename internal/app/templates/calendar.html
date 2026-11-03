@@ -5,18 +5,21 @@
 
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
 
-{{template "charselector" .CalendarChars}}
+<div class="l-page">
+<div class="l-head">
+  <div class="l-head-pick">{{template "charselector" .CalendarChars}}</div>
+  {{if .Calendar}}<p class="l-head-sum"><b>{{.Calendar.CharacterName}}</b></p>
+  <div class="l-head-act">{{if .Calendar.CanCreate}}<a class="btn cal-new" href="/ops/new">New op</a>{{end}}<a class="cal-paps" href="/ops/paps">Attendance</a></div>{{end}}
+</div>
 
 {{if .Calendar}}
-<h2>{{.Calendar.CharacterName}}</h2>
-
+<div class="l-sidebar l-sidebar--end cal-split">
+<section class="l-panel cal-month l-root">
 {{with .Calendar.Month}}
 <div class="cal-head">
   <a class="btn" href="/calendar/?character={{$.Calendar.CharacterID}}&amp;month={{.Prev}}" aria-label="Previous month">‹</a>
   <strong class="cal-title">{{.Title}}</strong>
   <a class="btn" href="/calendar/?character={{$.Calendar.CharacterID}}&amp;month={{.Next}}" aria-label="Next month">›</a>
-  {{if $.Calendar.CanCreate}}<a class="btn cal-new" href="/ops/new">New op</a>{{end}}
-  <a class="cal-paps" href="/ops/paps">Attendance</a>
 </div>
 <div class="cal-wrap">
 <table class="cal" data-cards="off">
@@ -34,9 +37,35 @@
 </div>
 <p><small>Times are EVE time. <span class="cal-key cal-op">Ops</span> are your corporation's, planned here and open to sign up to. <span class="cal-key cal-event">Events</span> come from the in-game calendar.</small></p>
 {{end}}
+</section>
 
+{{$depth := 1}}{{if .Calendar.Detail}}{{$depth = 2}}{{end}}
+<div class="l-console cal" data-depth="{{$depth}}" data-land-top>
+<div class="l-panes">
+<section class="l-pane l-pane--main cal-events" aria-label="Upcoming events">
+{{if .Calendar.Events.Note}}
+<p><small>{{.Calendar.Events.Note}}</small></p>
+{{else if .Calendar.Events.Warming}}
+<p><small>Still syncing.{{if .IsAdmin}} Progress is on the <a href="/admin/sync/">Sync page</a>.{{end}}</small></p>
+{{else if .Calendar.Rows}}
+<div class="tw">
+<table class="cal-list">
+  <thead><tr><th>Date</th><th class="card-title">Event</th><th>Your response</th><th></th></tr></thead>
+  <tbody>
+  {{range .Calendar.Rows}}
+    <tr{{if $.Calendar.Detail}}{{if eq .ID $.Calendar.Detail.EventID}} class="yours"{{end}}{{end}}><td>{{.Date}}</td><td><a href="/calendar/?character={{$.Calendar.CharacterID}}&amp;event={{.ID}}" data-l-step="in">{{.Title}}</a></td><td>{{.Response}}</td><td>{{if .Important}}<strong>Important</strong>{{end}}</td></tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+<p><small>Upcoming events. Open one to answer it.</small></p>
+{{else}}
+<p><small>No upcoming events in the latest snapshot.</small></p>
+{{end}}
+</section>
 {{if .Calendar.Detail}}
-<section class="foldable">
+<article class="l-pane l-pane--insp cal-detail" aria-label="Event">
+<div class="l-pane-bar"><a class="l-back" data-l-step="out" href="/calendar/?character={{$.Calendar.CharacterID}}&amp;month={{$.Calendar.Month.Month}}">Back to upcoming events</a><a class="l-close" href="/calendar/?character={{$.Calendar.CharacterID}}&amp;month={{$.Calendar.Month.Month}}" aria-label="Close the event">&#10005;</a></div>
 {{if .Calendar.Detail.Warming}}
 <h3>{{if .Calendar.Detail.Title}}{{.Calendar.Detail.Title}}{{else}}Event{{end}}</h3>
 <p><small>Event details are still loading. Check back shortly.</small></p>
@@ -81,29 +110,14 @@
 {{end}}
 {{end}}
 <p><a href="/calendar/?character={{$.Calendar.CharacterID}}&amp;month={{$.Calendar.Month.Month}}">Back to upcoming events</a></p>
-</section>
+</article>
+<a class="l-scrim" href="/calendar/?character={{$.Calendar.CharacterID}}&amp;month={{$.Calendar.Month.Month}}" aria-label="Close the event" tabindex="-1"></a>
 {{end}}
-
-{{if .Calendar.Events.Note}}
-<p><small>{{.Calendar.Events.Note}}</small></p>
-{{else if .Calendar.Events.Warming}}
-<p><small>Still syncing.{{if .IsAdmin}} Progress is on the <a href="/admin/sync/">Sync page</a>.{{end}}</small></p>
-{{else if .Calendar.Rows}}
-<div class="tw">
-<table>
-  <thead><tr><th>Date</th><th>Event</th><th>Your response</th><th></th></tr></thead>
-  <tbody>
-  {{range .Calendar.Rows}}
-    <tr><td>{{.Date}}</td><td><a href="/calendar/?character={{$.Calendar.CharacterID}}&amp;event={{.ID}}">{{.Title}}</a></td><td>{{.Response}}</td><td>{{if .Important}}<strong>Important</strong>{{end}}</td></tr>
-  {{end}}
-  </tbody>
-</table>
 </div>
-<p><small>Upcoming events. Open one to answer it.</small></p>
-{{else}}
-<p><small>No upcoming events in the latest snapshot.</small></p>
-{{end}}
+</div>
+</div>
 {{else}}
 <p>No character to show yet. Link a character first.</p>
 {{end}}
+</div>
 {{end}}

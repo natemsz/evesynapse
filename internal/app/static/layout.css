@@ -277,7 +277,8 @@ html[data-theme="light"] .subnav { background: color-mix(in srgb, var(--panel) 8
    instead of under everything the top level shows. Wider pages,
    where the console's panes sit side by side, keep them. */
 @container page (width < 46rem) {
-  .l-page:has(.l-console:not([data-depth="0"])) .l-root { display: none; }
+  .l-page:has(.l-console:not([data-depth="0"]):has(.l-pane--dir)) .l-root,
+  .l-page:has(.l-console[data-depth="2"]) .l-root { display: none; }
 }
 
 /* Page head: the summary line, the scope control and the page's
@@ -495,6 +496,21 @@ html[data-theme="light"] .subnav { background: color-mix(in srgb, var(--panel) 8
   .l-pane--dir { grid-column: 1; grid-row: 1; }
   .l-pane--main { grid-column: 2; grid-row: 1; border-left: 1px solid var(--hairline); }
   .l-pane--insp { grid-column: 3; grid-row: 1; border-left: 1px solid var(--hairline); }
+}
+
+/* A console without a directory (a list and its reader, like the
+   calendar's events): the list takes the directory's room, and the
+   reader opens beside it (wide) or over it (medium). */
+@container console (46rem <= width < 70rem) {
+  .l-console .l-panes:not(:has(> .l-pane--dir)) { grid-template-columns: minmax(0, 1fr); }
+  .l-panes:not(:has(> .l-pane--dir)) > :is(.l-pane--main, .l-pane--insp, .l-scrim) { grid-column: 1; }
+  .l-panes:not(:has(> .l-pane--dir)) > .l-pane--main { border-left: 0; }
+}
+@container console (width >= 70rem) {
+  .l-console .l-panes:not(:has(> .l-pane--dir)) { grid-template-columns: minmax(0, 1fr); }
+  .l-console:is([data-depth="2"], [data-insp="ambient"]) .l-panes:not(:has(> .l-pane--dir)) { grid-template-columns: minmax(0, 1fr) var(--l-insp); }
+  .l-panes:not(:has(> .l-pane--dir)) > .l-pane--main { grid-column: 1; border-left: 0; }
+  .l-panes:not(:has(> .l-pane--dir)) > .l-pane--insp { grid-column: 2; }
 }
 
 /* Side panes in the wider forms pin under the sub-nav and scroll

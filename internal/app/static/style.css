@@ -1358,6 +1358,16 @@ tbody tr:hover td, tbody tr:hover th { background: rgba(255, 106, 0, 0.045); }
 }
 .tw thead th:first-child { z-index: 2; }
 
+/* Home widgets do not take the shared scroll-table treatment:
+   their tables are not pinned, and neither the first column nor
+   the header cells carry a fill of their own. */
+.home-grid .tw th:first-child, .home-grid .tw td:first-child {
+  position: static;
+  background: transparent;
+}
+.home-grid .tw thead th { background: transparent; }
+.home-grid .tw tbody tr:hover td:first-child { background: rgba(255, 106, 0, 0.045); }
+
 /* A category header cell spans the whole table, so it has no room to
    travel and the pinned-column rule cannot hold its label in view.
    The label pins inside the cell instead and rides the scroll. */

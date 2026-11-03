@@ -5,10 +5,13 @@
 
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
 
-{{template "charselector" .IndustryChars}}
+<div class="l-page">
+<div class="l-head">
+  <div class="l-head-pick">{{template "charselector" .IndustryChars}}</div>
+  {{if .Industry}}<p class="l-head-sum"><b>{{.Industry.CharacterName}}</b></p>{{end}}
+</div>
 
 {{if .Industry}}
-<h2>{{.Industry.CharacterName}}</h2>
 
 <section class="foldable">
 <h3>Blueprints</h3>
@@ -20,7 +23,7 @@
 <p><input type="search" id="bp-search" placeholder="Search blueprints..." aria-label="Search blueprints" data-table-filter="bp-table" data-row-class="bp-row" data-header-class="bp-cat-header"></p>
 <div class="tw">
 <table id="bp-table">
-  <thead><tr><th>Pin</th><th>Blueprint</th><th>Produces</th><th>Category</th><th>Kind</th><th>ME</th><th>TE</th><th>Runs</th><th>Location</th></tr></thead>
+  <thead><tr><th>Pin</th><th class="card-title">Blueprint</th><th>Produces</th><th>Category</th><th>Kind</th><th>ME</th><th>TE</th><th>Runs</th><th>Location</th></tr></thead>
   <tbody>
   {{$lastCat := ""}}
   {{range .Industry.BlueprintRows}}
@@ -41,4 +44,5 @@
 {{else}}
 <p>No character to show yet. Link a character first.</p>
 {{end}}
+</div>
 {{end}}

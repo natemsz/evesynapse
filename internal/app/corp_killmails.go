@@ -68,17 +68,12 @@ func (app *Application) handleCorpKillmails(w http.ResponseWriter, r *http.Reque
 		refs = refs[:maxKillmailsShown]
 	}
 
-	// Values read the price guide wherever the app holds it
-	// (see handleKillmails); with none anywhere, the view notes
-	// the durable guide-price want so the worker fills it in.
-	prices := app.valuationPrices(ctx)
-	if prices == nil {
-		app.notePageWant(ctx, pageWantGuidePrices, 1, 0)
-	}
+	// Values are the killboard's stored prices (see handleKillmails).
+	values := app.killBoardValues(ctx, refs)
 	viewer := killmailViewer{corporationID: sel.Base.CorpID}
 	placeMemo := make(map[int64]placeRef)
 	for _, ref := range refs {
-		view.Rows = append(view.Rows, app.killmailRow(ctx, viewer, ref, prices, placeMemo))
+		view.Rows = append(view.Rows, app.killmailRow(ctx, viewer, ref, values, placeMemo))
 	}
 
 	app.render(ctx, w, http.StatusOK, "killmails.html", data)

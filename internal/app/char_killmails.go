@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
@@ -40,7 +41,7 @@ type killmailRow struct {
 	FinalBlow   string // final-blow attacker display
 	FinalBlowID int64
 	Involved    string // attacker count, "—" while warming
-	Value       string // estimated destroyed+dropped value, bare number; "—" when unpriced
+	Value       string // the killboard's stored value for the kill, bare number; "—" while the board has not priced it
 	Warming     bool
 }
 
@@ -104,25 +105,54 @@ func (app *Application) handleKillmails(w http.ResponseWriter, r *http.Request) 
 		refs = refs[:maxKillmailsShown]
 	}
 
-	// Estimated values read the price guide wherever the app
-	// holds it — the live in-memory guide from a Market visit,
-	// else the worker's stored mirror; nothing here fetches.
-	// With no guide anywhere yet, viewing kill content notes a
-	// durable want (schema 027) so the worker refreshes the
-	// stored guide and values fill in on the next render
-	// instead of waiting on a Market visit.
-	prices := app.valuationPrices(ctx)
-	if prices == nil {
-		app.notePageWant(ctx, pageWantGuidePrices, 1, 0)
-	}
+	// Values are the killboard's stored prices for these kills:
+	// the board appraises every kill at ingest, and this page
+	// reads that figure instead of pricing at render.
+	values := app.killBoardValues(ctx, refs)
 
 	viewer := killmailViewer{characterID: active.CharacterID}
 	placeMemo := make(map[int64]placeRef)
 	for _, ref := range refs {
-		view.Rows = append(view.Rows, app.killmailRow(ctx, viewer, ref, prices, placeMemo))
+		view.Rows = append(view.Rows, app.killmailRow(ctx, viewer, ref, values, placeMemo))
 	}
 
 	app.render(ctx, w, http.StatusOK, "killmails.html", data)
+}
+
+// killBoardValues reads the killboard's stored value for each
+// of a page's kills in one bounded query. The board prices every
+// kill at ingest through the house price order; kills it has not
+// priced yet are absent from the map and their rows show "—".
+func (app *Application) killBoardValues(ctx context.Context, refs []esi.KillmailRef) map[int64]float64 {
+	out := make(map[int64]float64, len(refs))
+	if len(refs) == 0 || app.db == nil {
+		return out
+	}
+	var b strings.Builder
+	b.WriteString("SELECT killmail_id, value_ours FROM kills WHERE value_ours IS NOT NULL AND killmail_id IN (")
+	args := make([]any, 0, len(refs))
+	for i, ref := range refs {
+		if i > 0 {
+			b.WriteString(", ")
+		}
+		fmt.Fprintf(&b, "$%d", i+1)
+		args = append(args, ref.KillmailID)
+	}
+	b.WriteString(")")
+	rows, err := app.db.QueryContext(ctx, b.String(), args...)
+	if err != nil {
+		logging.Errorf("killmails: read board values: %v", err)
+		return out
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id int64
+		var value float64
+		if rows.Scan(&id, &value) == nil {
+			out[id] = value
+		}
+	}
+	return out
 }
 
 // killmailViewer decides a row's KILL/LOSS badge: the character
@@ -139,7 +169,7 @@ type killmailViewer struct {
 // killmailRow builds one list line from the stored detail. A
 // missing detail (worker has not warmed it yet) yields the
 // warming placeholder row.
-func (app *Application) killmailRow(ctx context.Context, viewer killmailViewer, ref esi.KillmailRef, prices map[int64]esi.MarketPrice, placeMemo map[int64]placeRef) killmailRow {
+func (app *Application) killmailRow(ctx context.Context, viewer killmailViewer, ref esi.KillmailRef, values map[int64]float64, placeMemo map[int64]placeRef) killmailRow {
 	row := killmailRow{
 		KillmailID: ref.KillmailID,
 		Time:       "—",
@@ -190,25 +220,10 @@ func (app *Application) killmailRow(ctx context.Context, viewer killmailViewer, 
 		}
 	}
 
-	// Estimated value: destroyed + dropped quantities at CCP's
-	// average prices, over the victim's item list. Items without a
-	// known price are skipped; nothing priced → "—".
-	if prices != nil {
-		var total float64
-		priced := false
-		for _, it := range km.Victim.Items {
-			qty := it.QuantityDestroyed + it.QuantityDropped
-			if qty <= 0 {
-				continue
-			}
-			if p, ok := prices[it.ItemTypeID]; ok && p.AveragePrice > 0 {
-				total += float64(qty) * p.AveragePrice
-				priced = true
-			}
-		}
-		if priced {
-			row.Value = esi.FormatISK(total)
-		}
+	// The killboard's stored price for this kill, or "—" while
+	// the board has not priced it.
+	if v, ok := values[ref.KillmailID]; ok {
+		row.Value = esi.FormatISK(v)
 	}
 	return row
 }

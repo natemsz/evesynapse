@@ -464,7 +464,7 @@ func collectCharRows(cd *assetCharData, locFilter, canFilter int64, global bool,
 			Note:      assetNote(it),
 			ItemHref: st.href(map[string]string{
 				"item": strconv.FormatInt(it.ItemID, 10), "ship": "",
-				"loc": strconv.FormatInt(locID, 10),
+				"loc": st.viewLoc(),
 			}),
 		}
 		row.Pip, row.PipClass = assetPip(lk, it.TypeID, row.GroupName)
@@ -577,7 +577,7 @@ func shipRowCand(cd *assetCharData, it esi.Asset, locID int64, st assetPageState
 		cand.row.Assembled = true
 		cand.row.ShipHref = st.href(map[string]string{
 			"ship": strconv.FormatInt(it.ItemID, 10),
-			"loc":  strconv.FormatInt(locID, 10), "can": "",
+			"loc":  st.viewLoc(), "can": "",
 		})
 	}
 	if kids := cd.ix.children[it.ItemID]; len(kids) > 0 {
@@ -743,7 +743,7 @@ func (app *Application) buildAssetSearch(ctx context.Context, datas []*assetChar
 				continue
 			}
 			hitChars[cd.ch.CharacterID] = true
-			locID, _, containers := cd.ix.place(it)
+			_, _, containers := cd.ix.place(it)
 			name, typeName := cd.ix.label(it)
 			row := assetMatrixRow{
 				ItemID: it.ItemID, OwnerID: cd.ch.CharacterID, OwnerName: cd.ch.Name,
@@ -753,7 +753,7 @@ func (app *Application) buildAssetSearch(ctx context.Context, datas []*assetChar
 				Note:      assetNote(it),
 				ItemHref: st.href(map[string]string{
 					"item": strconv.FormatInt(it.ItemID, 10), "ship": "", "q": "",
-					"loc": strconv.FormatInt(locID, 10),
+					"loc": st.viewLoc(),
 				}),
 			}
 			row.Pip, row.PipClass = assetPip(lk, it.TypeID, row.GroupName)
@@ -777,7 +777,7 @@ func (app *Application) buildAssetSearch(ctx context.Context, datas []*assetChar
 					cand.row.Assembled = true
 					cand.row.ShipHref = st.href(map[string]string{
 						"ship": strconv.FormatInt(it.ItemID, 10), "q": "",
-						"loc": strconv.FormatInt(locID, 10),
+						"loc": st.viewLoc(),
 					})
 				}
 			} else if unit, ok := lk.priceOf(it.TypeID); ok {

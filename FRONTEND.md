@@ -48,7 +48,9 @@ bearing ones.
   and subscribes with `onReady` for later swaps (`plan.js` and
   `map.js` show the shape).
 - `sw.js` — the service worker.
-- CSS: `style.css` (the core; it is at the practical size ceiling,
+- CSS: `layout.css` (the layout framework: where page regions go
+  and how they collapse; see "Layout" below), `style.css` (the
+  core; it is at the practical size ceiling,
   so a feature with substantial styles gets its own file, linked
   in base.html after `plan.css` — see `plan.css`,
   `tradeideas.css`), `bg.css` (wallpaper). Both themes are one
@@ -151,30 +153,29 @@ buttons are added per node by app.js, so fresh swapped content
 folds the same way. Fold at the smallest sensible unit on the
 page, not around whole pages.
 
-### Section tabs
+### Section tabs (the sub-nav)
 
-The strip under a page's H1 is `{{template "sectiontabs" .}}`.
-It renders the current section's links from `sectionNav`
-(nav.go) — the same list the sidebar menus render from — and
-appears only on the section's own pages, only when the section
-has more than one page and one of them is active. Never
-hand-write a tab strip in a page template. When a strip's tabs
-stop fitting their row, app.js folds the ones that don't fit
-into the strip's More disclosure (rendered empty and hidden
-by the template): the fit is measured, the active tab never
-folds, and widening restores — so a strip whose tabs fit
-renders exactly as it did without the disclosure.
+A page's section tabs are `{{template "sectiontabs" .}}` in its
+`pagetabs` block. base.html renders that block inside the sub-nav
+bar (`.subnav`), first in main, so it docks under the top bar and
+rides with it. The bar carries the section's category navigation
+on one row: the groups as inverted folder tabs hanging from the top
+bar's edge, then the active group's pages. It renders the current
+section's links from `sectionNav` (nav.go), the same list the
+sidebar menus render from, and appears only on the section's own
+pages. Never hand-write a tab strip in a page body. When tabs stop
+fitting their row, app.js folds the ones that don't fit into the
+strip's More disclosure: the fit is measured, the active tab never
+folds, and widening restores.
 
-In the phone band (max-width: 45rem) the shell navigates from
-a fixed bottom bar instead: Home, the `bottomBarSlots` sections
-(nav.go) and a Sections button opening a sheet with every
-section, its groups, the character switcher and the account
-actions — all derived from the same `sectionNav`. Where a page
-keeps its sub-tab row, the folder strip above it stands down,
-so a phone page carries one in-page nav row. The bar and sheet
-live in the shell (base.html); app.js re-marks their active
-section after each swap from the sidebar state swap.js just
-synced.
+In the phone band (max-width: 45rem) the shell navigates from a
+fixed bottom bar instead: Home, the `bottomBarSlots` sections
+(nav.go) and a Sections button opening a sheet with every section,
+its groups, the character switcher and the account actions, all
+derived from the same `sectionNav`. The sub-nav keeps one row
+there: the group tabs step aside and the page tabs swipe sideways.
+The bar and sheet live in the shell (base.html); app.js re-marks
+their active section after each swap.
 
 ### Search boxes
 
@@ -291,26 +292,31 @@ reduced-motion readers, and dies on swap-away — swaps *onto*
 an auto-refresh page fall back to a full load, so the chain
 only ever starts on first paint. Sync is the worked example.
 
-### Tables on phones
+### Tables
 
-A data table with a header row needs nothing to work on a
-phone. In the phone band, app.js measures each one: a table
-whose columns fit stays a table, and a table that would scroll
-sideways reads as cards. Each row becomes a card, its first cell
-the title and every other cell a figure under its column's label.
-The labels are copied from the header row (`data-label`), so no
-template carries them twice, and a sortable table keeps a Sort
-picker that drives the header-click sort. Three levers on the
-markup:
+A data table with a header row fits its box at every width with
+nothing extra. app.js measures each one, and re-measures whenever
+its box changes width (the window, the sidebar, a pane beside it):
+a table whose columns fit stays a table, and a table that would
+scroll sideways reads as cards. Each row becomes a card, its first
+cell the title and every other cell a figure under its column's
+label. The labels are copied from the header row (`data-label`), so
+no template carries them twice, and a sortable table keeps a Sort
+picker that drives the header-click sort. A table's wrapper never
+grows past its container, so the measure is always honest. Levers
+on the markup:
 
 - `class="opt"` on a header cell keeps that column off the
   cards (the same low-priority mark the home modules use).
 - `data-cards="on"` forces cards; `data-cards="off"` keeps a
-  table and lets its text columns wrap. Use "off" for grids whose
-  point is comparing columns: order books, price history, the
-  calendar.
+  table that scrolls sideways inside its own wrapper (on phones its
+  text columns wrap). Use "off" only for grids whose point is
+  comparing columns: order books, price history, the calendar.
 - Key/value tables (`th` + `td` rows, no header row) wrap their
   values on phones on their own.
+- A highlighted row (`tr.yours`) takes the theme's selection
+  paint, the pinned first cell included; as a card the highlight is
+  the card's own.
 
 ### Phone sheets
 
@@ -335,8 +341,8 @@ it. It is split into bands (touch, phone, short landscape),
 each with its own query. Shared phone treatment goes there, in
 the band it belongs to. A page with substantial phone styles
 keeps them in its own sheet inside the same 45rem query.
-Sticky in-page bars offset from `--sticky-top`, never a literal
-header height. On short landscape screens the top bar scrolls
+Sticky in-page bars offset from `--l-top` (or `--sticky-top` on a
+page without a sub-nav), never a literal header height. On short landscape screens the top bar scrolls
 away, and the token follows it.
 
 ### Geometry through data attributes
@@ -357,6 +363,148 @@ positioned by the shell's styles. Rich content tooltips (fit
 modules, market chart points) are surface code (fit.js, the
 chart code in app.js) with their own anchoring rules; don't
 stretch `data-tip` into one of those.
+
+## Layout
+
+`layout.css` owns where a page's regions go and how they collapse.
+A page composes from its parts; its own sheet styles what the
+content looks like, never where it goes or when it stacks. That
+is the whole rule, and `TestFrameworkPageSheetsMeasureTheirOwnSpace`
+holds it for every page on the framework.
+
+### Three rules
+
+1. **Measure the space you have, not the window.** A framework page
+   wraps its content in `.l-page`, and the console measures itself.
+   Both are size containers. Use the parts below, or a container
+   query (`@container page (…)` or `@container console (…)`), when
+   something must change with width. Never a window-width
+   `@media` in a page sheet: the sidebar opens, collapses and hides,
+   so the window says nothing about the page's room.
+2. **Collapse into something usable.** Fitting is not enough. When a
+   page runs out of room it shows fewer things, never a longer
+   stack of everything: one level of a console at a time, the
+   pane's search and filters at its top, an obvious way back.
+3. **Nothing fixed inside a page.** A size container is the
+   containing block for fixed children. Overlays inside `.l-page`
+   use the console drawer or the top layer (the modal, the sheets).
+
+### The frame
+
+- The top bar, the sidebar and the bottom bar are the shell
+  (base.html). They are glass.
+- The sub-nav (`.subnav`) docks under the top bar: the section's
+  tabs (see "Section tabs"). Glass.
+- The page body is solid (`--surface-page`): dense text and tables
+  sit on an opaque ground. Glass is for the frame and for things
+  that float (menus, sheets, drawers).
+- In-page sticky bars park on `--l-top` (under the top bar and the
+  sub-nav), never on a literal height.
+
+### Tokens
+
+- Spacing: `--space-1` to `--space-6` and `--gutter`, each fluid
+  between a floor and a ceiling. Use them for gaps and padding
+  instead of fixed rem values that jump at breakpoints.
+- Surfaces: `--surface-page` (the body), `--surface-pane` (a
+  console), `--surface-float` (drawers, bars, anything over
+  content), `--surface-inset` (a box inside a pane), `--hairline`.
+- Selection: `--sel-bg`, `--sel-edge` and `--sel-row`, all from the
+  theme's accent, so every scheme and the light theme highlight in
+  their own colour. Never a fixed colour for "selected".
+- `--tap`: the smallest touch target (2.75rem).
+
+### Arrangement patterns
+
+Each arranges its children from the space it has, with custom
+properties as knobs and no media queries:
+
+- `.l-stack`: a column with one gap (`--l-gap`).
+- `.l-cluster`: a wrapping row of controls or chips; `.l-push`
+  sends one to the far end.
+- `.l-switcher`: side by side while each child gets `--l-min`,
+  all stacked once one would not. Never a ragged split.
+- `.l-sidebar`: a side of `--l-side` beside a main that wraps under
+  when it would drop below `--l-main-min`. `.l-sidebar--end` puts
+  the side on the right.
+
+### Page parts
+
+- `.l-page`: the page's container. Everything below measures it.
+- `.l-head`: the page head under the title. `.l-head-sum` is the
+  one-line summary, `.l-head-act` holds the scope control and the
+  primary action at the far end.
+- `.l-tiles`: a row of stat tiles that steps 4, 2, 1 (or 3, 1, or
+  6, 3, 1). It counts its own tiles, so conditional tiles need
+  nothing extra, and a row never splits 3 and 1.
+- `.l-grid`: the 12-track grid (Home's widget grid, generalized).
+  Cells take `.s3` to `.s9` (full width otherwise); under 52rem it
+  is 6 tracks with every cell at least half, under 34rem one
+  column.
+- `.l-panel`: the standard solid block on the page.
+- `.l-root`: page content that belongs to the top level (summary
+  cards, overview tables, banners). On a narrow page it steps
+  aside once the reader goes into the console, so the deeper
+  screen starts under the page head.
+
+### The console
+
+The master-detail page: a directory, a main pane and an inspector.
+Assets and the Character overview are the worked examples.
+
+```html
+<div class="l-console" data-depth="1" data-land-top>
+  <div class="l-panes">
+    <nav class="l-pane l-pane--dir">
+      <div class="l-pane-bar"><h2 class="l-pane-title">…</h2> …filter…</div>
+      … entries, each <a … data-l-step="in"> …
+    </nav>
+    <section class="l-pane l-pane--main">
+      <div class="l-pane-bar"><a class="l-back" data-l-step="out" href="…">Directory</a> …search…</div>
+      …
+    </section>
+    <aside class="l-pane l-pane--insp">…</aside>
+    <a class="l-scrim" href="…close…" aria-label="Close" tabindex="-1"></a>
+  </div>
+</div>
+```
+
+- **Depth comes from the URL.** The page renders `data-depth`: 0
+  with nothing picked (the directory is the reader's place), 1 with
+  a directory entry open, 2 with a row open in the inspector. The
+  server already knows this from the query; no script decides it.
+- **The console shows as many panes as fit, always the deepest.**
+  70rem and up: all three side by side (the inspector's column
+  opens with it). 46 to 70rem: directory and main, and an open
+  inspector is a drawer over the main pane with a scrim that closes
+  it. Under 46rem: one pane, the reader's own level.
+- **Every pane has a bar.** `.l-pane-bar` is its top: sticky, and
+  the home of the pane's search and filters, so they stay at the
+  top in every form. `.l-back` in the bar returns one level; it
+  shows only while the pane it returns to is off screen, so it is
+  the native back control on a phone and invisible on a desktop.
+  `.l-close` closes a drawer.
+- **Level links carry `data-l-step`** (`in` or `out`). With one
+  pane showing they land at the console's top like a new screen;
+  side by side they keep the reader's place (swap.js).
+- **An ambient inspector** (`data-insp="ambient"` on the console)
+  is one that shows a default detail before anything is picked. It
+  takes the third column in the wide form and stays out of the way
+  in the others until a pick opens it.
+- Column widths are the page's: set `--l-dir` and `--l-insp` on
+  its `.l-panes`.
+- Without JS every level is a plain link and the server renders
+  the right one.
+
+### Checking a page
+
+A page is done when it is right at every width, not at three.
+Sweep it from 320 to 1600px in 20px steps, with the sidebar open,
+collapsed and hidden: zero page-level sideways overflow, zero
+panels or tables painting outside their box. Then walk it on a
+phone width as a reader would: the first screen answers the page's
+question, every pick opens a screen that starts at its top, back
+returns, and search is where the thumb expects it.
 
 ## Components are Go partials
 

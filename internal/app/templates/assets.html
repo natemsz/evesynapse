@@ -6,7 +6,7 @@
      mobile station selector: a station row whose value bar
      rides the stored fold, with its security badge. */}}
 {{define "assets-diritem"}}
-<a class="diritem{{if .Selected}} on{{end}}" href="{{.Href}}" data-name="{{.Title}}">
+<a class="diritem{{if .Selected}} on{{end}}" href="{{.Href}}" data-name="{{.Title}}" data-l-step="in"{{if .Selected}} aria-current="true"{{end}}>
   <span class="dir-top">
     {{if .SecKnown}}<span class="sec sec-{{.SecTier}} dir-sec">{{.SecText}}</span>{{end}}
     <span class="dir-name">{{.Title}}</span>
@@ -89,36 +89,36 @@
 {{define "content"}}
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
 {{with .Assets}}
-<div class="pagehead assets-head">
-  <div class="assets-head-l">
-<p class="assets-count">{{.TotalItems}} items · {{.Places}} locations</p>
-    {{template "charselectormulti" .Selector}}
-  </div>
+<div class="l-page">
+<div class="l-head assets-head">
+  <p class="l-head-sum assets-count">{{.TotalItems}} items · {{.Places}} locations</p>
+  <div class="l-head-act">{{template "charselectormulti" .Selector}}</div>
 </div>
 {{if .Syncing}}<p><small>Not included yet: still waiting on the first sync for {{range $i, $n := .Syncing}}{{if $i}}, {{end}}{{$n}}{{end}}.</small></p>{{end}}
 {{if .Warming}}
 <p>Still syncing.{{if $.IsAdmin}} Progress is on the <a href="/admin/sync/">Sync page</a>.{{end}}</p>
 {{else if .Loaded}}
-<div class="panes3 p3 amx{{if .Deep}} amx-deep{{end}}{{with .Matrix}}{{if .Inspector}} has-insp{{end}}{{end}}">
-  <aside class="pane-dir">
-    <h2 class="pane-h">Station directory <span>{{.Places}} locations</span></h2>
-    <input id="assets-dirfilter" type="search" placeholder="Filter stations..." aria-label="Filter the station directory">
-    <nav class="dirlist">
+{{$depth := 0}}{{if .Deep}}{{$depth = 1}}{{end}}{{with .Matrix}}{{if .Inspector}}{{$depth = 2}}{{end}}{{end}}
+<div class="l-console amx" data-depth="{{$depth}}" data-land-top>
+<div class="l-panes">
+  <nav class="l-pane l-pane--dir pane-dir" aria-label="Station directory">
+    <div class="l-pane-bar">
+      <h2 class="l-pane-title pane-h">Station directory <small>{{.Places}} locations</small></h2>
+      <input id="assets-dirfilter" type="search" placeholder="Filter stations..." aria-label="Filter the station directory">
+    </div>
+    <div class="dirlist">
       {{range .Directory}}{{template "assets-diritem" .}}{{end}}
-    </nav>
+    </div>
     <p class="dir-foot">Values are stored estimates from each character's last asset snapshot, priced at the house order. Unpriced stacks count as unpriced, never as zero value.</p>
-    <details class="dirdrop">
-      <summary>{{range .Directory}}{{if .Selected}}<span class="dirdrop-t">{{.Title}}</span>{{if .HasValue}}<span class="dirdrop-v">{{.ValueText}} ISK</span>{{end}}{{end}}{{end}}<span class="dirdrop-c">▾</span></summary>
-      <nav class="dirlist">
-        {{range .Directory}}{{template "assets-diritem" .}}{{end}}
-      </nav>
-    </details>
-  </aside>
-  <section class="pane-main">
+  </nav>
+  <section class="l-pane l-pane--main pane-main" aria-label="Assets at the picked place">
+  <div class="l-pane-bar">
+    <a class="l-back" data-l-step="out" href="{{with .Matrix}}{{if .ListHref}}{{.ListHref}}{{else}}/assets/{{end}}{{else}}/assets/{{end}}">Stations</a>
+    {{template "assets-tools" $.Assets}}
+  </div>
   {{with .Search}}
     <h2 class="amx-h">{{.TotalStacks}} {{if eq .TotalStacks 1}}stack{{else}}stacks{{end}} matching "{{.Query}}"{{if .Only}} on this character{{else}} across {{.Characters}} {{if eq .Characters 1}}character{{else}}characters{{end}}{{end}}</h2>
     {{template "assets-fchips" $.Assets}}
-    {{template "assets-tools" $.Assets}}
     {{if .Rows}}
     <table class="amx-table" data-nosort>
       <thead><tr><th>Item / Hull</th><th>Loadout / Contents</th><th class="amx-r">Qty</th><th class="amx-r">Volume</th><th class="amx-r">Est. value</th></tr></thead>
@@ -136,7 +136,6 @@
       {{range .Tabs}}<a class="pilltab{{if .Active}} on{{end}}" href="{{.Href}}">{{.Label}} <span class="cnt">{{.Count}}</span></a>{{end}}
     </div>
     {{template "assets-fchips" $.Assets}}
-    {{template "assets-tools" $.Assets}}
     {{if .Cans}}
     <div class="canstrip">
       <div class="canstrip-head">
@@ -168,9 +167,9 @@
     {{else}}<p>Nothing here under this division.</p>{{end}}
   {{end}}
   </section>
-  {{with .Matrix}}{{with .Inspector}}
-  <a class="insp-scrim" href="{{.CloseHref}}" aria-label="Close the inspector"></a>
-  <aside class="pane-insp insp p3-insp" aria-label="Inspector">
+  {{with .Matrix}}{{$place := .CrumbLoc}}{{with .Inspector}}
+  <aside class="l-pane l-pane--insp pane-insp insp" aria-label="Inspector">
+    <div class="l-pane-bar"><a class="l-back" data-l-step="out" href="{{.CloseHref}}">{{if $place}}{{$place}}{{else}}Back{{end}}</a></div>
     {{if .Fallback}}
     <div class="insp-head">
       <span class="amx-art big"><img src="{{.IconURL}}" alt="" width="72" height="72" loading="lazy" data-fallback-src="/static/img/item.svg">{{if .Pip}}<span class="pip pip-{{.PipClass}}">{{.Pip}}</span>{{end}}</span>
@@ -198,8 +197,11 @@
     <div class="insp-foot"><span>Item #{{.ItemID}} in your snapshot</span><span>Packaged: {{.VolumeText}}</span></div>
     {{end}}
   </aside>
+  <a class="l-scrim" href="{{.CloseHref}}" aria-label="Close the inspector" tabindex="-1"></a>
   {{end}}{{end}}
 </div>
+</div>
 {{end}}
+</div>
 {{end}}
 {{end}}

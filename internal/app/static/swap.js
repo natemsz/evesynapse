@@ -855,6 +855,14 @@
     return "keep";
   }
 
+  // consoleMode reports how many panes the page's console shows
+  // right now (layout.css sets --l-mode per width), 0 without one.
+  function consoleMode() {
+    var panes = main && main.querySelector(".l-console .l-panes");
+    if (!panes) return 0;
+    return parseInt(window.getComputedStyle(panes).getPropertyValue("--l-mode"), 10) || 1;
+  }
+
   function navigate(url, opts) {
     opts = opts || {};
     if (navController && navController.abort) navController.abort();
@@ -872,6 +880,10 @@
         var landing = landingFor(window.location.pathname,
           new URL(window.location.href).searchParams,
           target.searchParams);
+        // A link between console levels (data-l-step) opens a new
+        // screen while the console shows one pane: it lands at the
+        // console's top. Side by side, the page's own rule holds.
+        if (opts.step && consoleMode() === 1) landing = "region";
         landScroll = landing === "keep" ? window.scrollY : landing;
         if (landing === "top") samePage = false;
       }
@@ -969,7 +981,7 @@
     var d = describeAnchor(a, ev);
     if (!d || !d.verdict) return;
     ev.preventDefault();
-    navigate(d.url.href, { push: true });
+    navigate(d.url.href, { push: true, step: a.getAttribute("data-l-step") });
   });
 
   function prefetchFromEvent(ev) {

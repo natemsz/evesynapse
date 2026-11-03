@@ -84,63 +84,19 @@ func TestEmberGlassAndSkyRules(t *testing.T) {
 	if !strings.Contains(base, `<div class="page-body">`) || strings.Contains(base, `<div class="panel">`) {
 		t.Error("base.html must wrap content in .page-body, not an enclosing .panel")
 	}
-	// The section tab nav renders outside the glass with the title:
-	// base.html invokes each page's pagetabs block between the
-	// pagetitle and .page-body, and carries an empty default.
-	if !strings.Contains(base, "{{template \"pagetitle\" .}}\n{{template \"pagetabs\" .}}\n  <div class=\"page-body\">") ||
+	// The section tabs ride the sub-nav bar: base.html invokes each
+	// page's pagetabs block inside .subnav, first in main and above
+	// the title and .page-body, and carries an empty default.
+	if !strings.Contains(base, "<div class=\"subnav\">{{template \"pagetabs\" .}}</div>\n{{template \"pagetitle\" .}}\n  <div class=\"page-body\">") ||
 		!strings.Contains(base, "{{define \"pagetabs\"}}{{end}}") {
-		t.Error("base.html lost the pagetabs invocation above .page-body or its empty default")
+		t.Error("base.html lost the sub-nav's pagetabs invocation above .page-body or its empty default")
 	}
-	// The tabs are actual folder tabs on the panel's top edge, and
-	// hover is the owner's spec: background removed, saturate(1.5),
-	// 150ms. The active tab's only orange is its top stripe.
 	for _, want := range []string{
-		"#main-content > .section-tabs a.active",
-		"border-top: 3px solid var(--accent);",
-		"border-bottom: none;",
-		"#main-content > .section-tabs a:hover",
-		"filter: saturate(1.5);",
-		"transition: background-color 150ms ease, border-color 150ms ease, filter 150ms ease;",
-		"#main-content:has(> .section-tabs) > .page-body { margin-top: 0; }",
-		// A tabbed panel squares its top corners: the rounded
-		// corner curves away under the tab row and notches the
-		// active tab's merge into the panel.
-		"#main-content:has(> .section-tabs) > .page-body { border-top-left-radius: 0; border-top-right-radius: 0; }",
 		".item-lead { display: flex;",
 		".item-desc {",
 	} {
 		if !strings.Contains(bg, want) {
-			t.Errorf("bg.css is missing the tab/item-lead rule %q", want)
-		}
-	}
-	// Below the widest flat strip's wrap point (the market
-	// strip, ~1,279px viewport; corporation is grouped and no
-	// longer sets it) the folder strip becomes a detached glass
-	// rail: one row of pills on the panel's glass, scrolling
-	// sideways with the scrollbar hidden and both ends faded by
-	// a mask gradient, the panel's top border and rounded top
-	// corners restored under it, and the active pill carrying
-	// the accent fill and edge instead of the stripe. A grouped
-	// section's sub-row sits joined to the panel under the
-	// strip at full width and rails the same way below it.
-	for _, want := range []string{
-		"@media (max-width: 1313px) {",
-		"flex-wrap: nowrap;",
-		"overflow-x: auto;",
-		"scrollbar-width: none;",
-		"#main-content > .section-tabs::-webkit-scrollbar { display: none; }",
-		"#main-content > .section-subtabs::-webkit-scrollbar { display: none; }",
-		"mask-image: linear-gradient(to right,",
-		"border-top: 1px solid var(--glass-edge);",
-		"border-top-left-radius: var(--r-lg);",
-		"border-top: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);",
-		"border-bottom: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);",
-		"#main-content > .section-subtabs {",
-		"#main-content > .section-subtabs a.active {",
-		"#main-content:has(> .section-subtabs) > .page-body { border-top: none; }",
-	} {
-		if !strings.Contains(bg, want) {
-			t.Errorf("bg.css is missing the tab rail rule %q", want)
+			t.Errorf("bg.css is missing the item-lead rule %q", want)
 		}
 	}
 	// The backdrop's two painted states ride the art
@@ -431,36 +387,34 @@ func TestLandingStarTileStaysTiny(t *testing.T) {
 	}
 }
 
-// TestCharactersActiveRowTint pins the Characters page's active-row
-// treatment: one translucent ember tint over every cell of the
-// active character's row, the pinned name cell included. In
-// style.css the row's translucent tint is overridden by a later
-// solid #2a2015 and the name cell carries that solid as its own
-// rule, so the active row read as an opaque muddy band with a
-// dark name cell; the fix lives in bg.css (which loads after
-// style.css), scoped by the table's own class so no other table's
-// .yours rows change. If either rule drops out, the row silently
-// goes back to mud — this says so instead.
+// TestCharactersActiveRowTint pins the highlighted-row paint (the
+// active character on the Characters page, the reader's own wars):
+// every cell of the row, the pinned name cell included, takes one
+// selection paint made from the theme's accent over the solid
+// panel, so the row follows every scheme and the light theme and
+// the pinned cell is as opaque as any other row's. A fixed colour
+// here is the regression: the row would ignore the account's scheme.
 func TestCharactersActiveRowTint(t *testing.T) {
-	raw, err := fs.ReadFile(staticFS, "static/bg.css")
+	raw, err := fs.ReadFile(staticFS, "static/layout.css")
 	if err != nil {
-		t.Fatalf("read bg.css: %v", err)
+		t.Fatalf("read layout.css: %v", err)
 	}
-	bg := string(raw)
+	css := string(raw)
 	for _, want := range []string{
-		".chars-table tbody tr.yours td { background: rgba(255, 110, 0, 0.16); }",
-		".chars-table tbody tr.yours td:first-child { background: rgba(255, 110, 0, 0.16); }",
+		"--sel-bg: color-mix(in srgb, var(--accent) 13%, transparent);",
+		":root { --sel-row: linear-gradient(var(--sel-bg), var(--sel-bg)), var(--surface-float); }",
+		"tbody tr.yours > td,\n.tw tbody tr.yours > td:first-child { background: var(--sel-row); }",
 	} {
-		if !strings.Contains(bg, want) {
-			t.Errorf("bg.css is missing the characters active-row rule %q", want)
+		if !strings.Contains(css, want) {
+			t.Errorf("layout.css is missing the highlighted-row rule %q", want)
 		}
 	}
 	tpl, err := fs.ReadFile(templatesFS, "templates/characters.html")
 	if err != nil {
 		t.Fatalf("read characters.html: %v", err)
 	}
-	if !strings.Contains(string(tpl), `<table class="chars-table">`) {
-		t.Error("characters.html lost the chars-table scope class; the bg.css active-row tint has nothing to land on")
+	if !strings.Contains(string(tpl), `class="yours"`) && !strings.Contains(string(tpl), ` yours`) {
+		t.Error("characters.html no longer marks the active character's row .yours")
 	}
 }
 
@@ -494,12 +448,6 @@ func TestNoNestedBlurInsidePageGlass(t *testing.T) {
 	if !strings.Contains(style, ".page-body:not(:has(.home-grid)) .ok,") ||
 		!strings.Contains(style, ".page-body:not(:has(.home-grid)) .notice {") {
 		t.Error("style.css lost the alert-bar flatten rule inside the page panel")
-	}
-	if !strings.Contains(style, "tbody tr.yours td { background-color: #2a2015; }") {
-		t.Error("style.css lost the solid rule that paints highlighted rows")
-	}
-	if !strings.Contains(style, ".tw tbody tr.yours td:first-child { background: #2a2015; }") {
-		t.Error("style.css lost the pinned-cell variant of the highlighted row")
 	}
 	plan := read("plan.css")
 	i := strings.Index(plan, "#pi-form button[type=\"submit\"] {")
@@ -550,80 +498,5 @@ func TestPIPlannerColoniesAndControls(t *testing.T) {
 	}
 	if !strings.Contains(string(tpl), `<section class="foldable pi-colony" data-fold="never">`) {
 		t.Error("piplanner.html lost the pi-colony scope class on the suggested colonies")
-	}
-}
-
-// TestSubtabBarSharesPanelGlass pins the subtab slab as one piece
-// of the panel's own glass: the same 1640px column margins as the
-// tab strip and .page-body, the shared --glass-blur (a hardcoded
-// blur of its own makes the slab a different material from the
-// panel it joins borderlessly), no backdrop filter on the pills
-// over the slab's already-blurred glass, and rail-mode end
-// padding that keeps the first and last pills clear of the fade.
-func TestSubtabBarSharesPanelGlass(t *testing.T) {
-	raw, err := fs.ReadFile(staticFS, "static/bg.css")
-	if err != nil {
-		t.Fatalf("read bg.css: %v", err)
-	}
-	bg := string(raw)
-	block := func(selector string, from int) (string, int) {
-		i := strings.Index(bg[from:], selector)
-		if i < 0 {
-			return "", from
-		}
-		start := from + i
-		end := strings.Index(bg[start:], "}")
-		if end < 0 {
-			return "", from
-		}
-		return bg[start : start+end+1], start + end + 1
-	}
-	slab, next := block("#main-content > .section-subtabs {", 0)
-	if slab == "" {
-		t.Fatal("bg.css lost the section-subtabs slab rule")
-	}
-	if !strings.Contains(slab, "margin: 0 max(1.25rem, calc((100% - 1640px) / 2));") {
-		t.Error("the subtab slab no longer shares the 1640px column margins with the tab strip and panel")
-	}
-	if !strings.Contains(slab, "backdrop-filter: blur(var(--glass-blur)) saturate(0.9);") {
-		t.Error("the subtab slab no longer blurs with the panel's shared --glass-blur")
-	}
-	if strings.Contains(slab, "blur(25px)") {
-		t.Error("the subtab slab hardcodes its own blur again; the join to the panel will seam")
-	}
-	// The slab's top edge is the page body's top edge on a grouped
-	// page: the slab must keep its top border (suppressing it leaves
-	// the whole glass unit open at the top — the panel's own top
-	// border is given up at the seam), and the tab strip must paint
-	// above the slab (the strip carries z-index 1) so the border
-	// line passes behind the tabs and the active tab still merges.
-	if strings.Contains(slab, "border-top: none") {
-		t.Error("the subtab slab suppresses its top border again; a grouped page's glass unit has no top border line")
-	}
-	if !strings.Contains(slab, "border: 1px solid var(--glass-edge);") {
-		t.Error("the subtab slab lost the shared glass-edge border that closes the unit's outline")
-	}
-	if strings.Contains(slab, "z-index") {
-		t.Error("the subtab slab asserts its own stacking again; it would paint over the tab strip's merge row")
-	}
-	rail, _ := block("#main-content > .section-subtabs {", next)
-	if rail == "" {
-		t.Fatal("bg.css lost the railed section-subtabs rule")
-	}
-	if !strings.Contains(rail, "padding: 0.55rem 1.5rem;") ||
-		!strings.Contains(rail, "scroll-padding-inline: 1.5rem;") {
-		t.Error("the railed subtab bar's end pills no longer rest clear of the mask fade")
-	}
-	// Every pill rule (base, light theme, rail) stays free of a
-	// backdrop filter: the slab behind them is already blurred.
-	for from := 0; ; {
-		var pill string
-		pill, from = block("#main-content > .section-subtabs a {", from)
-		if pill == "" {
-			break
-		}
-		if strings.Contains(pill, "backdrop-filter") {
-			t.Errorf("a subtab pill rule carries its own backdrop filter again: %q", pill)
-		}
 	}
 }

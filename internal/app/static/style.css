@@ -1653,10 +1653,9 @@ input[type="search"]:not(.topsearch input),
 .badge.demo { color: var(--accent); border-color: var(--accent); background: rgba(255, 106, 26, 0.12); text-transform: uppercase; }
 .countdown { font-variant-numeric: tabular-nums; color: var(--accent); }
 
-/* --- intel: wars involving one of the user's corporations --- */
-/* The pinned first cell of a highlighted row needs the tint
-   solid, or scrolled columns would show through it. */
-.tw tbody tr.yours td:first-child { background: #2a2015; }
+/* --- intel: wars involving one of the user's corporations ---
+   Highlighted rows (tr.yours) take the theme's selection paint
+   from layout.css, the pinned first cell included. */
 
 /* --- footer --- */
 footer {
@@ -3823,7 +3822,6 @@ html[data-nav="rail"] { --nav-axis: calc(2.5rem - 0.5px); }
 .badge.kill { background: #2a1c08; }
 .badge.loss { background: #3d1409; }
 .suggest li.sel { background: #2a1a0c; }
-tbody tr.yours td { background-color: #2a2015; }
 /* My Orders: an open order beaten at its station carries a quiet
    danger tint, restated per cell like tr.yours so the pinned first
    column in .tw shows it too. The key swatch above the table uses
@@ -5109,8 +5107,6 @@ html[data-theme="light"] table { border-color: #d9cfba; }
 html[data-theme="light"] th,
 html[data-theme="light"] td { border-top-color: #e4d9c2; border-bottom-color: #d9cfba; }
 html[data-theme="light"] thead th { border-bottom-color: #d9cfba; }
-html[data-theme="light"] tbody tr.yours td { background-color: #f3e3bd; }
-html[data-theme="light"] .tw tbody tr.yours td:first-child { background: #f3e3bd; }
 /* Alerts: light tints, dark text. */
 html[data-theme="light"] .err { background: rgba(198, 47, 16, 0.08); color: #7a1e08; }
 html[data-theme="light"] .ok { background: rgba(255, 184, 77, 0.2); color: #7a5410; }
@@ -5729,8 +5725,18 @@ html[data-theme="light"] .btn.btn-discord:hover { color: #fff; }
 /* --- notification settings: a kind's characters --- The charselector
    look with a tick box per character. Without script the list is shown
    in full. */
+/* The wrapper does not scroll: each kind's character list drops
+   down below its row, and a scrolling wrapper would clip it. The
+   table never needs to scroll, because it fits by construction:
+   its cells wrap, and the shared table cards (layout.css) turn it
+   into one card per kind the moment its columns stop fitting. */
 .tw.notify-settings-wrap { overflow: visible; }
-table.notify-settings td { vertical-align: middle; }
+.tw table.notify-settings { width: 100%; }
+table.notify-settings td { vertical-align: middle; white-space: normal; }
+table.notify-settings.cards-on .notify-minutes,
+table.notify-settings.cards-on .notify-extra { display: block; margin-top: 0.35rem; white-space: normal; }
+table.notify-settings.cards-on .notify-extra small { display: block; margin-top: 0.3rem; }
+table.notify-settings.cards-on .checkselector { max-width: none; min-width: 0; }
 /* The settings form saves everything above it, so its Save closes the
    form from the right end of its row. */
 .notify-save { justify-content: flex-end; }
@@ -5748,29 +5754,6 @@ html:not(.js) .checkselector .charselector-dropdown[hidden] {
   max-height: none;
   box-shadow: none;
 }
-/* Phones: the table cannot scroll sideways (its wrapper lets the
-   character lists hang out of it), so each kind becomes a block. */
-@media (max-width: 860px) {
-  table.notify-settings,
-  table.notify-settings tbody,
-  table.notify-settings tr,
-  table.notify-settings td { display: block; }
-  table.notify-settings thead { display: none; }
-  table.notify-settings tr { padding: 0.55rem 0.6rem; border-bottom: 1px solid #141414; }
-  table.notify-settings tr:last-child { border-bottom: 0; }
-  table.notify-settings td,
-  .tw table.notify-settings td:first-child {
-    position: static;
-    padding: 0.2rem 0;
-    border: 0;
-    white-space: normal;
-  }
-  table.notify-settings .notify-minutes { display: block; margin: 0.35rem 0 0; white-space: normal; }
-  table.notify-settings .notify-extra { display: block; margin-top: 0.35rem; }
-  table.notify-settings .notify-extra small { display: block; margin-top: 0.3rem; }
-  .checkselector { max-width: none; min-width: 0; }
-}
-
 /* --- settings pages: fields, cards and rows (ops, Discord servers, groups) --- */
 .lede { color: var(--muted); max-width: 62rem; margin: 0 0 1rem; }
 .hint { color: var(--muted); font-size: 0.92em; margin: 0.3rem 0 0.75rem; }
@@ -6127,10 +6110,10 @@ html[data-theme="light"] .suggest li:not(.sug-kind):not(.sug-empty):hover, html[
 }
 /* Cross-document view transitions: same-origin page loads may
    animate, but the only animation defined is the phone slide
-   between a three column console's directory and its picked
-   place or group. Everywhere else the swap stays instant, and
+   between a console's directory and its picked place or group
+   (layout.css). Everywhere else the swap stays instant, and
    reduced motion turns the slide off. The direction type is
-   set by the pagereveal hook in app.js from the state the new
+   set by the pagereveal hook in boot.js from the depth the new
    page renders: arriving at a pick slides forward, arriving
    back at a directory slides back, for link taps, breadcrumb
    taps and the back button alike. */
@@ -6446,10 +6429,11 @@ button.gn-title:hover .gn-more, button.gn-title:focus-visible .gn-more { color: 
 /* =====================================================================
    Shared pane patterns (redesign pass). The classes below are the
    general shapes the pass builds with, first used by the Assets
-   page: a three-pane shell (directory, main, inspector), directory
+   page: directory
    list rows with a value share bar, pill tabs, saved-filter chips,
    character scope pills, loadout chips, and the inspector pane with
-   its slot sections. A later page uses these rather than growing
+   its slot sections. Where the panes go is the layout framework's
+   console (layout.css). A later page uses these rather than growing
    its own copies; page sheets keep only what is truly theirs.
    Bar fills size through the .pw-N width utilities because the
    CSP allows no inline styles. */
@@ -6475,66 +6459,6 @@ button.gn-title:hover .gn-more, button.gn-title:focus-visible .gn-more { color: 
 .pw-90 { width: 90%; } .pw-91 { width: 91%; } .pw-92 { width: 92%; } .pw-93 { width: 93%; } .pw-94 { width: 94%; }
 .pw-95 { width: 95%; } .pw-96 { width: 96%; } .pw-97 { width: 97%; } .pw-98 { width: 98%; } .pw-99 { width: 99%; }
 .pw-100 { width: 100%; }
-
-/* The three-pane shell: a directory column, the main column, and
-   an inspector column that exists only when a page opens one
-   (the .has-insp modifier adds the third track). Column widths
-   are the page's own choice, set in its sheet. */
-.panes3 { display: grid; gap: 1rem; align-items: start; }
-.panes3 > * { min-width: 0; }
-
-/* The three column console: one bordered frosted surface holding
-   the directory, the main pane and the inspector. A page using it
-   sets only its two column widths (--p3-dir and --p3-insp, and
-   --p3-gap when its panes sit flush) and marks its inspector
-   .p3-insp; the frame, the blur layer, the column pattern and
-   the band forms below are shared by every console, so a fix to
-   any of them lands on all of them at once. On the desktop band
-   each page pins its inspector in its own sheet, at the width
-   where its three columns still fit. */
-.panes3.p3 {
-  --p3-dir: 18rem;
-  --p3-insp: 22rem;
-  gap: var(--p3-gap, 1rem);
-  border: 1px solid var(--glass-edge);
-  border-radius: var(--r-sm);
-  background: var(--glass);
-  position: relative;
-  grid-template-columns: var(--p3-dir) minmax(0, 1fr);
-}
-.panes3.p3.has-insp { grid-template-columns: var(--p3-dir) minmax(0, 1fr) var(--p3-insp); }
-/* The console's blur rides a layer under the panes, not the
-   console itself: an element with a backdrop filter becomes the
-   anchor for fixed-position children, and the middle band's
-   inspector sheet would pin to the console's full height instead
-   of the screen. The layer paints the same frosted glass; the
-   panes lift above it. */
-.panes3.p3::before { content: ""; position: absolute; inset: 0; border-radius: inherit; -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(0.9); backdrop-filter: blur(var(--glass-blur)) saturate(0.9); pointer-events: none; }
-.panes3.p3 > * { position: relative; z-index: 1; }
-
-/* The middle band: the third column drops out of the grid and
-   the inspector opens as a sheet over the page's right edge, in
-   the phone sheet's surface language. A page whose inspector is
-   only present when picked keeps its own show and hide rules;
-   the sheet's shape is the shared part. */
-@media (min-width: 45.01rem) and (max-width: 80rem) {
-  .panes3.p3.has-insp { grid-template-columns: var(--p3-dir) minmax(0, 1fr); }
-  .panes3.p3 .p3-insp {
-    position: fixed; top: 0; right: 0; bottom: 0; z-index: 95;
-    width: min(24rem, 94vw);
-    overflow-y: auto; overscroll-behavior: contain;
-    border: 0; border-left: 1px solid var(--glass-edge); border-radius: 0;
-    background: var(--glass);
-    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(0.9);
-    backdrop-filter: blur(var(--glass-blur)) saturate(0.9);
-    box-shadow: -18px 0 42px rgba(0, 0, 0, 0.55);
-  }
-}
-
-/* Tablet and phone: the panes stack in one column. */
-@media (max-width: 64rem) {
-  .panes3.p3, .panes3.p3.has-insp { grid-template-columns: minmax(0, 1fr); }
-}
 
 /* Directory list rows: one place per row, its security badge,
    name and value on the first line, its facts under, and a share

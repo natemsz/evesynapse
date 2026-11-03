@@ -445,7 +445,7 @@ func (app *Application) handleScanCompare(w http.ResponseWriter, r *http.Request
 	case !aOK || !bOK:
 		v.Error = "One of those scans does not exist, or it is more than 90 days old."
 	case aRes.Kind != bRes.Kind:
-		v.Error = "Those are different kinds of scan — a comparison needs two of the same kind."
+		v.Error = "Those are different kinds of scan. A comparison needs two of the same kind."
 	default:
 		v.A, v.B = aSide, bSide
 		v.KindLabel = scanKindLabels[string(aRes.Kind)]

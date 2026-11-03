@@ -28,7 +28,7 @@
       <p class="sc-cmp-head">{{.Headline}}</p>
     </section>{{end}}
   </div>
-  {{if .SystemMismatch}}<p class="sc-warn">These scans name different systems — {{.A.SysName}} and {{.B.SysName}}. The difference may just be the move between them.</p>{{end}}
+  {{if .SystemMismatch}}<p class="sc-warn">These scans name different systems: {{.A.SysName}} and {{.B.SysName}}. The difference may just be the move between them.</p>{{end}}
 
   {{with .DScan}}
   <section class="sc-stats" aria-label="Summary">

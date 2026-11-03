@@ -28,7 +28,7 @@ func TestDscanSentence(t *testing.T) {
 	}
 	got, split := dscanSentence(&dscanReading{}, rows, cats, "Teonusude",
 		func(int64) int { return bucketUnknown }, pilotOf, func(int64) bool { return false }, 0, 0)
-	want := "At the Moon 1 station in Teonusude: 0 hostiles, 0 friendly, 0 neutral, 2 unclassified ships (Ibis, Velator), 0 on grid — BlackCatRus in the Ibis, LegendMysticDragon in the Velator."
+	want := "At the Moon 1 station in Teonusude: 0 hostiles, 0 friendly, 0 neutral, 2 unclassified ships (Ibis, Velator), 0 on grid; BlackCatRus in the Ibis, LegendMysticDragon in the Velator."
 	if got != want {
 		t.Errorf("got  %q\nwant %q", got, want)
 	}
@@ -68,7 +68,7 @@ func TestLocalSentence(t *testing.T) {
 		}
 	}
 	got, _ := localSentence(l, 55, 7, time.Now(), standingOf, 0, 0)
-	want := "27 in local: 6 hostiles, 4 friendly (incl. you), 17 neutral; clusters: Zux ×3, Stevi/Stevinio/Stevo Ka (6 hostile names ≈ 4 pilots) — no scan attached, ships unknown."
+	want := "27 in local: 6 hostiles, 4 friendly (incl. you), 17 neutral; clusters: Zux ×3, Stevi/Stevinio/Stevo Ka (6 hostile names ≈ 4 pilots), no scan attached, ships unknown."
 	if got != want {
 		t.Errorf("got  %q\nwant %q", got, want)
 	}
@@ -89,7 +89,7 @@ func TestLocalSentenceFlagsKiller(t *testing.T) {
 		return bucketNeutral
 	}
 	got, _ := localSentence(l, 55, 0, now, standingOf, 0, 0)
-	want := "2 in local: 1 hostile, 0 friendly, 1 neutral — no scan attached, ships unknown; Quiet Rat killed here this week."
+	want := "2 in local: 1 hostile, 0 friendly, 1 neutral, no scan attached, ships unknown; Quiet Rat killed here this week."
 	if got != want {
 		t.Errorf("got  %q\nwant %q", got, want)
 	}
@@ -115,7 +115,7 @@ func TestFleetSentence(t *testing.T) {
 	}
 	got, _ := fleetSentence(f, "Teonusude",
 		func(int64) int { return bucketHostile }, pilotOf, func(int64) bool { return false })
-	want := "In Teonusude: fleet of 3 — 2 hostiles (Vexor ×2), 0 friendly, 0 neutral, 1 unclassified pilot (Sabre) — Ann Ace in the Vexor, Bob Bee in the Vexor, Cid Cee in the Sabre."
+	want := "In Teonusude: fleet of 3 with 2 hostiles (Vexor ×2), 0 friendly, 0 neutral, 1 unclassified pilot (Sabre); Ann Ace in the Vexor, Bob Bee in the Vexor, Cid Cee in the Sabre."
 	if got != want {
 		t.Errorf("got  %q\nwant %q", got, want)
 	}

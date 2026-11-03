@@ -544,7 +544,7 @@ func fitESIFittingBody(name string, doc *fitview.FitDoc, familyOf map[int64]stri
 	for _, ff := range fitESIFlagFamilies {
 		ids := byFamily[ff.family]
 		if len(ids) > ff.slots {
-			return body, fmt.Errorf("%d %s modules don't fit in %d %s slots — remove %d first",
+			return body, fmt.Errorf("%d %s modules don't fit in %d %s slots; remove %d first",
 				len(ids), ff.label, ff.slots, ff.label, len(ids)-ff.slots)
 		}
 		for i, id := range ids {
@@ -580,7 +580,7 @@ func esiSaveToEVEHint(err error) string {
 	if errors.As(err, &se) {
 		switch se.Code {
 		case http.StatusBadRequest:
-			return "EVE rejected the fitting as sent — or the character's fitting list is full"
+			return "EVE rejected the fitting as sent, or the character's fitting list is full"
 		case http.StatusForbidden:
 			return "this character hasn't granted fitting write access"
 		case http.StatusUnprocessableEntity:
@@ -668,7 +668,7 @@ func (app *tool) handleFitSaveToEVE(w http.ResponseWriter, r *http.Request) {
 	if err := app.deps.PostESI(ctx, token, path, esiBody, &created); err != nil {
 		var se *esi.StatusError
 		if errors.As(err, &se) && se.Code == http.StatusForbidden {
-			fail(charName+" was linked before EveSynapse asked for fitting write access — sign in again to grant it, then save once more.", true)
+			fail(charName+" was linked before EveSynapse asked for fitting write access. Sign in again to grant it, then save once more.", true)
 			return
 		}
 		logging.Errorf("fittings save-to-eve: ESI POST %s: %v", path, err)

@@ -211,8 +211,8 @@ Rifter Blueprint
 Abyssal Damage Control II`}})
 	mustContain(t, "blueprint and abyssal lines", body,
 		"BPC · ME 10 · TE 20 · 5 runs",
-		"Blueprint — priced as an original",
-		"Base item price — this mutated item was pasted without its link, so its own rolls were not priced",
+		"Blueprint, priced as an original",
+		"Base item price: this mutated item was pasted without its link, so its own rolls were not priced",
 		"150,000.00")
 	if strings.Contains(body, "prices from its rolls in Contract Search") {
 		t.Error("mutated line still implies it cannot be appraised here")
@@ -940,7 +940,7 @@ func TestAppraisalToolReprocessAndVolume(t *testing.T) {
 	body, _, share2 := postAnonAppraisal(t, app, url.Values{"items": {"Test Ore x 50"}})
 	_ = body
 	_, body = getAnon(t, app, share2+"reprocess")
-	mustContain(t, "pruned ore", body, "Below one refine batch — pruned.", "Total reprocess value")
+	mustContain(t, "pruned ore", body, "Below one refine batch, pruned.", "Total reprocess value")
 	if strings.Contains(body, "Tritanium × 350") {
 		t.Error("a pruned stack still yielded")
 	}

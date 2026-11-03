@@ -415,7 +415,7 @@ var FitGauges = (function () {
         if ((familyOfType(state.items[i].typeId) || "") === fam) count += state.items[i].qty || 1;
       }
       if (max > 0 && count >= max) {
-        fitNotice("No free " + fitFamLabels[fam] + " slots — remove something first.", true, false);
+        fitNotice("No free " + fitFamLabels[fam] + " slots. Remove something first.", true, false);
         return;
       }
     }
@@ -786,7 +786,7 @@ var FitGauges = (function () {
       if (!any) {
         var li = document.createElement("li");
         li.className = "sug-empty";
-        li.textContent = "Nothing found — try a different search.";
+        li.textContent = "Nothing found. Try a different search.";
         list.appendChild(li);
       }
       input.setAttribute("aria-expanded", any ? "true" : "false");
@@ -1166,7 +1166,7 @@ var FitGauges = (function () {
       out.appendChild(apply);
       var note = document.createElement("div");
       note.className = "fit-solve-note";
-      note.textContent = "Simulation only — your clone isn't changed.";
+      note.textContent = "Simulation only: your clone isn't changed.";
       out.appendChild(note);
     }).catch(function () {
       out.textContent = "Couldn't check implants just now.";
@@ -1440,7 +1440,7 @@ var FitGauges = (function () {
       });
       if (!rows || rows.length === 0) {
         var li = document.createElement("li");
-        li.textContent = "Nothing found — try a different search.";
+        li.textContent = "Nothing found. Try a different search.";
         pickerList.appendChild(li);
       }
       if (pickerHint) {
@@ -2163,7 +2163,7 @@ var FitGauges = (function () {
       }).then(function (row) {
         saveEveBtn.disabled = false;
         if (row && row.ok) {
-          fitNotice("Saved \u201c" + row.name + "\u201d to EVE — loading your in-game fitting…", false, false);
+          fitNotice("Saved \u201c" + row.name + "\u201d to EVE. Loading your in-game fitting…", false, false);
           window.setTimeout(function () {
             window.location.href = "/fittings/?character=" + row.characterId + "&esi=" + row.fittingId + "#fit-editor";
           }, 1200);

@@ -99,7 +99,7 @@ func TestIntelChannels(t *testing.T) {
 	for _, r := range feed.Reports {
 		bySource[r.Source] = append(bySource[r.Source], r)
 	}
-	if f := bySource["scan"]; len(f) != 1 || f[0].SystemName != "Jita" || f[0].Hostiles != 3 || f[0].Reporter != "Corp Mate" || f[0].Text != "1 in local: 0 hostiles, 0 friendly, 1 neutral — no scan attached, ships unknown." {
+	if f := bySource["scan"]; len(f) != 1 || f[0].SystemName != "Jita" || f[0].Hostiles != 3 || f[0].Reporter != "Corp Mate" || f[0].Text != "1 in local: 0 hostiles, 0 friendly, 1 neutral, no scan attached, ships unknown." {
 		t.Errorf("the form report: %+v", f)
 	}
 	if c := bySource["chat"]; len(c) != 2 || c[1].Reporter != "Scout" || c[1].Hostiles != 2 || c[1].At >= c[0].At {
@@ -220,7 +220,7 @@ func TestIntelFeedAccess(t *testing.T) {
 		}
 		return d.Reports
 	}
-	if rs := feed(mate); len(rs) != 1 || rs[0].Text != "1 in local: 0 hostiles, 0 friendly, 0 neutral, 1 unresolved — no scan attached, ships unknown." || rs[0].ChName != "Home intel" {
+	if rs := feed(mate); len(rs) != 1 || rs[0].Text != "1 in local: 0 hostiles, 0 friendly, 0 neutral, 1 unresolved, no scan attached, ships unknown." || rs[0].ChName != "Home intel" {
 		t.Errorf("the mate's feed carries only the granted channel, named: %+v", rs)
 	} else if len(rs[0].Split) != 1 || rs[0].Split[0].Class != "unclassified" || rs[0].Split[0].N != 1 {
 		t.Errorf("the mate's feed report carries its stored standing split for the bar: %+v", rs[0].Split)
@@ -231,7 +231,7 @@ func TestIntelFeedAccess(t *testing.T) {
 	if rs := feed(stranger); len(rs) != 0 {
 		t.Errorf("a stranger's feed is empty: %+v", rs)
 	}
-	if code, body := getPage(t, app, mate, "/intel/feed/"); code != http.StatusOK || !strings.Contains(body, "1 in local: 0 hostiles, 0 friendly, 0 neutral, 1 unresolved — no scan attached, ships unknown.") || strings.Contains(body, "Secret Guy") || !strings.Contains(body, "section-tabs") {
+	if code, body := getPage(t, app, mate, "/intel/feed/"); code != http.StatusOK || !strings.Contains(body, "1 in local: 0 hostiles, 0 friendly, 0 neutral, 1 unresolved, no scan attached, ships unknown.") || strings.Contains(body, "Secret Guy") || !strings.Contains(body, "section-tabs") {
 		t.Errorf("the mate's feed page: %d, shows the granted channel's report only, under the intel section tabs", code)
 	}
 	req := httptest.NewRequest(http.MethodGet, "/intel/feed/", nil)

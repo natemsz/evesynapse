@@ -196,7 +196,7 @@ func (app *Mod) SwarmCounterMap(ctx context.Context) map[string]int64 {
 func (app *Mod) LoadSwarmMetrics(ctx context.Context) *SwarmMetricsView {
 	view := &SwarmMetricsView{}
 	if !app.Cfg.Enabled() {
-		view.Status = "Off — this instance fetches everything itself (SHARED_CACHE)."
+		view.Status = "Off: this instance fetches everything itself (SHARED_CACHE)."
 		return view
 	}
 	view.Enabled = true

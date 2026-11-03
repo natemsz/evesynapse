@@ -119,7 +119,7 @@ func TestMailSend(t *testing.T) {
 	// with what was typed still in it.
 	transport.mailStatus, transport.mailBody = http.StatusForbidden, `{"error":"token is not valid for scope"}`
 	page = send("90000001", "Member One", "Second try", "Still there?")
-	mustContain(t, "/mail/send/ (no scope)", page, "sign in again", "Second try", "Still there?")
+	mustContain(t, "/mail/send/ (no scope)", page, "Sign in again", "Second try", "Still there?")
 	if strings.Contains(page, "Mail sent.") {
 		t.Fatal("a refused mail was reported as sent")
 	}

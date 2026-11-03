@@ -373,7 +373,7 @@ Rifter Blueprint`}})
 		"Our copy median", "42,000.00",
 		"BPC · ME 10 · TE 20 · 5 runs · median of 12 copy listings",
 		"1,000,000.00", "Our Forge typical",
-		"Blueprint — priced as an original",
+		"Blueprint, priced as an original",
 		"Priced 2 of 2 lines", "1,042,000.00")
 
 	// No median at 9 runs: the copy is not priced, and its

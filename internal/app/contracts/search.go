@@ -2436,7 +2436,7 @@ func (app *mod) buildDetailView(ctx context.Context, contractID int64) (*detailV
 	// Lines and appraisal.
 	switch c.ItemsState {
 	case "private":
-		v.StateNote = "Courier cargo is private — the game does not publish what a courier contract carries, so there is no contents list to show."
+		v.StateNote = "Courier cargo is private. The game does not publish what a courier contract carries, so there is no contents list to show."
 	case "pending":
 		v.StateNote = "Our sweep has the contract but has not gathered its contents yet."
 	case "parked":
@@ -2922,7 +2922,7 @@ func (app *mod) handleOpenContractInGame(w http.ResponseWriter, r *http.Request)
 	chars, err := app.queries.ListCharactersByUser(ctx, userID)
 	if err != nil {
 		logging.Errorf("openwindow: characters for user %d: %v", userID, err)
-		app.deps.FlashBack(w, r, "That did not go through — please try again.")
+		app.deps.FlashBack(w, r, "That did not go through. Please try again.")
 		return
 	}
 	var chosen *db.Character
@@ -2939,24 +2939,24 @@ func (app *mod) handleOpenContractInGame(w http.ResponseWriter, r *http.Request)
 		}
 	}
 	if chosen == nil {
-		app.deps.FlashBack(w, r, "None of your linked characters can open contracts in the game yet — sign in again to grant EveSynapse permission to open windows in your game client.")
+		app.deps.FlashBack(w, r, "None of your linked characters can open contracts in the game yet. Sign in again to grant EveSynapse permission to open windows in your game client.")
 		http.Redirect(w, r, detailURL, http.StatusSeeOther)
 		return
 	}
 	token, err := app.deps.AccessToken(ctx, *chosen)
 	if err != nil {
 		logging.Errorf("openwindow: token for character %d: %v", chosen.CharacterID, err)
-		app.deps.FlashBack(w, r, "That did not go through — please try again.")
+		app.deps.FlashBack(w, r, "That did not go through. Please try again.")
 		return
 	}
 	path := fmt.Sprintf("/ui/openwindow/contract/?contract_id=%d", id)
 	if err := app.deps.PostESINoContent(ctx, token, path, nil); err != nil {
 		var se *esi.StatusError
 		if errors.As(err, &se) && se.Code == http.StatusForbidden {
-			app.deps.FlashBack(w, r, "The game says this character cannot open windows for EveSynapse — sign in again to grant that permission.")
+			app.deps.FlashBack(w, r, "The game says this character cannot open windows for EveSynapse. Sign in again to grant that permission.")
 		} else {
 			logging.Errorf("openwindow: contract %d as %d: %v", id, chosen.CharacterID, err)
-			app.deps.FlashBack(w, r, "The game did not answer — the contract was not opened.")
+			app.deps.FlashBack(w, r, "The game did not answer. The contract was not opened.")
 		}
 		http.Redirect(w, r, detailURL, http.StatusSeeOther)
 		return

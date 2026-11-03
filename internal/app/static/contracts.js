@@ -431,7 +431,7 @@
       applyMeters(slot);
       initAbPick(slot);
     }).catch(function () {
-      slot.innerHTML = '<p class="muted cs-panel-loading">Could not load the appraisal — the contract page carries the same detail.</p>';
+      slot.innerHTML = '<p class="muted cs-panel-loading">Could not load the appraisal. The contract page carries the same detail.</p>';
     });
   }
   document.querySelectorAll(".cs-row").forEach(function (row) {

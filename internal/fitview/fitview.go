@@ -1227,7 +1227,7 @@ func (app *Builder) FitPilotLevels(ctx context.Context, pilotID int64, snap *fit
 	}
 	var skills esi.Skills
 	if !app.env.LoadSnapshot(ctx, pilotID, esi.SnapSkills, &skills) {
-		return map[int64]int{}, "This pilot's skills are still on their way in — the fit below is calculated with no skills applied."
+		return map[int64]int{}, "This pilot's skills are still on their way in. The fit below is calculated with no skills applied."
 	}
 	return ActiveSkillLevels(skills), ""
 }
@@ -1249,9 +1249,9 @@ func (app *Builder) FitPilotImplants(ctx context.Context, pilotID, cloneID int64
 	clonesOK := app.env.LoadSnapshot(ctx, pilotID, esi.SnapClones, &jc)
 	if !activeOK || !clonesOK {
 		if app.env.SnapshotRoleMissing(ctx, pilotID, esi.SnapImplants) {
-			return nil, 0, nil, "This character was linked before EveSynapse asked for clone access — sign in again to enable implants."
+			return nil, 0, nil, "This character was linked before EveSynapse asked for clone access. Sign in again to enable implants."
 		}
-		return nil, 0, nil, "This pilot's implant data is still on its way in — the fit below is calculated with no implants applied."
+		return nil, 0, nil, "This pilot's implant data is still on its way in. The fit below is calculated with no implants applied."
 	}
 	// Names the pilot gave their clones on the character sheet
 	// (ESI has no naming API), so the dropdown reads the same.
@@ -1339,11 +1339,11 @@ func (app *Builder) BuildFitSimView(ctx context.Context, doc *FitDoc, pilotID in
 	snap, err := fit.LoadSnapshot(ctx, app.queries, typeIDs)
 	if err != nil {
 		logging.Errorf("fittings sim: load snapshot for ship %d: %v", doc.ShipTypeID, err)
-		view.DataNote = "Something went wrong reading the ship data — check the server log."
+		view.DataNote = "Something went wrong reading the ship data. Check the server log."
 		return view
 	}
 	if len(snap.Attrs[doc.ShipTypeID]) == 0 {
-		view.DataNote = "The ship and module data is still downloading — give it a little while and try again."
+		view.DataNote = "The ship and module data is still downloading. Give it a little while and try again."
 		return view
 	}
 	view.HasShip = true
@@ -1778,9 +1778,9 @@ func FitPlainNotes(raw []string) []string {
 	for _, s := range raw {
 		switch {
 		case strings.Contains(s, "has no charge selected"):
-			add("Damage from turrets with no ammunition picked isn't counted yet — pick an ammo type to include it.")
+			add("Damage from turrets with no ammunition picked isn't counted yet. Pick an ammo type to include it.")
 		case strings.Contains(s, "has no missile selected"):
-			add("Damage from launchers with no missiles picked isn't counted yet — pick a missile type to include it.")
+			add("Damage from launchers with no missiles picked isn't counted yet. Pick a missile type to include it.")
 		default:
 			add("A few effects on this fit aren't fully calculated yet, so some bonuses may be missing.")
 		}
@@ -2201,7 +2201,7 @@ func (app *Builder) ParseEFT(ctx context.Context, text string) (*FitDoc, []strin
 		}
 		m := EftHeaderRe.FindStringSubmatch(line)
 		if m == nil {
-			notes = append(notes, "That doesn't look like an EFT fit — the first line should read [Ship name, Fit name].")
+			notes = append(notes, "That doesn't look like an EFT fit. The first line should read [Ship name, Fit name].")
 			return doc, notes
 		}
 		shipName := strings.TrimSpace(m[1])

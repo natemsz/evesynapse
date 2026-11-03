@@ -271,13 +271,13 @@ func HandlePIPlanner(deps module.Deps) http.HandlerFunc {
 		// Coverage summary.
 		cov := piplan.CoverageFor(target, selList)
 		if cov.Complete {
-			view.CoverageText = fmt.Sprintf("Covered — your %d selected planet type(s) supply all %d raw resources.", len(selList), len(cov.Required))
+			view.CoverageText = fmt.Sprintf("Covered: your %d selected planet type(s) supply all %d raw resources.", len(selList), len(cov.Required))
 			view.CoverageClass = "pos"
 		} else if len(selList) == 0 {
-			view.CoverageText = "No planet types selected — tick planets above to check coverage."
+			view.CoverageText = "No planet types selected. Tick planets above to check coverage."
 			view.CoverageClass = ""
 		} else {
-			view.CoverageText = fmt.Sprintf("Not covered — %d of %d raw resources available.", len(cov.Covered), len(cov.Required))
+			view.CoverageText = fmt.Sprintf("Not covered: %d of %d raw resources available.", len(cov.Covered), len(cov.Required))
 			view.CoverageClass = "neg"
 		}
 		if len(cov.Missing) > 0 {
@@ -298,7 +298,7 @@ func piOwnedPlanetTypes(ctx context.Context, deps module.Deps, ch db.Character) 
 	var colonies esi.Colonies
 	if !deps.LoadCorpSnapshot(ctx, ch.CharacterID, esi.SnapPlanets, &colonies) {
 		if deps.PINotEnabled(ctx, ch) {
-			return nil, "Planetary scope not enabled for this character yet — re-link to pre-fill from your colonies. You can still plan standalone."
+			return nil, "Planetary scope not enabled for this character yet. Re-link to pre-fill from your colonies. You can still plan standalone."
 		}
 		return nil, "Your colonies are still syncing. Plan without them for now, or check back after the next sync."
 	}
@@ -313,7 +313,7 @@ func piOwnedPlanetTypes(ctx context.Context, deps module.Deps, ch db.Character) 
 	}
 	sort.Strings(out)
 	if len(out) == 0 {
-		return nil, "No colonies yet for this character — plan standalone below."
+		return nil, "No colonies yet for this character. Plan standalone below."
 	}
 	return out, fmt.Sprintf("Pre-filled from %s's colonies (%s). Tick/untick to what-if other planets.", ch.Name, strings.Join(out, ", "))
 }
@@ -366,12 +366,12 @@ func piPricesByName(ctx context.Context, deps module.Deps) (map[string]float64, 
 	out := map[string]float64{}
 	guide := deps.ValuationPrices(ctx)
 	if guide == nil {
-		return out, "No market guide yet — prices land with the first market refresh; quantities, factories and taxes already work."
+		return out, "No market guide yet. Prices land with the first market refresh; quantities, factories and taxes already work."
 	}
 	rows, err := deps.DB().ListSDETypesByNames(ctx, names)
 	if err != nil {
 		logging.Errorf("piplanner: resolve type IDs: %v", err)
-		return out, "Prices unavailable — type lookup failed; quantities, factories and taxes already work."
+		return out, "Prices unavailable: type lookup failed. Quantities, factories and taxes already work."
 	}
 	byID := map[int64]string{}
 	for _, row := range rows {
@@ -393,7 +393,7 @@ func piPricesByName(ctx context.Context, deps module.Deps) (map[string]float64, 
 		}
 	}
 	if priced == 0 {
-		return out, "Market guide has no PI prices yet — quantities, factories and taxes already work."
+		return out, "Market guide has no PI prices yet. Quantities, factories and taxes already work."
 	}
 	return out, fmt.Sprintf("Prices: cluster guide average for %d of %d PI commodities. Missing prices show as —, never zero-filled.", priced, len(names))
 }

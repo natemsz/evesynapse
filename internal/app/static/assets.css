@@ -72,6 +72,28 @@
     overflow-y: auto;
   }
 }
+
+/* The station directory pinned beside the matrix wherever the
+   panes sit side by side: it grows with its list up to the
+   space under the top bar and no further, so a long directory
+   never stretches the page; past that cap the list scrolls
+   inside the pane while the heading, the filter and the foot
+   note stay put. While the matrix runs long, the pinned
+   directory keeps the full height the cap allows. */
+@media (min-width: 64.01rem) {
+  .panes3.amx .pane-dir {
+    display: flex;
+    flex-direction: column;
+    position: sticky;
+    top: calc(var(--sticky-top) + 1px + 0.6rem);
+    max-height: calc(100dvh - var(--sticky-top) - 1px - 1.2rem);
+  }
+  .panes3.amx .pane-dir .dirlist {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+  }
+}
 .pane-h { margin: 0 0 0.6rem; font-size: 0.95rem; }
 .pane-h span { color: var(--muted); font-size: 0.8rem; font-weight: 500; }
 .pane-dir #assets-dirfilter { width: 100%; margin-bottom: 0.6rem; }

@@ -5315,14 +5315,15 @@ html[data-theme="light"] .sidebar-account {
    queued, dark for untrained. */
 .lvl {
   display: inline-flex;
-  gap: 2px;
+  gap: 0.18rem;
   vertical-align: middle;
   white-space: nowrap;
 }
 .lvl i {
-  width: 10px;
-  height: 13px;
-  border-radius: 1px;
+  flex: none;
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 2px;
   background: #232323;
   border: 1px solid #3a3a3a;
 }

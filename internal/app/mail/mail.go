@@ -264,7 +264,7 @@ func (app *mod) handleMailMarkRead(w http.ResponseWriter, r *http.Request) {
 	if err := app.deps.PutESI(ctx, token, path, map[string]bool{"read": true}); err != nil {
 		var se *esi.StatusError
 		if errors.As(err, &se) && se.Code == http.StatusForbidden {
-			http.Error(w, ch.Name+" was linked before EveSynapse asked for mail organize access — sign in again to grant it.", http.StatusForbidden)
+			http.Error(w, ch.Name+" was linked before EveSynapse asked for mail organize access. Sign in again to grant it.", http.StatusForbidden)
 			return
 		}
 		logging.Errorf("mail mark-read: ESI PUT %s: %v", path, err)
@@ -408,7 +408,7 @@ func (app *mod) handleMailSend(w http.ResponseWriter, r *http.Request) {
 		}
 		var se *esi.StatusError
 		if errors.As(err, &se) && se.Code == http.StatusForbidden {
-			fail(ch.Name + " was linked before EveSynapse asked for mail send access — sign in again to grant it.")
+			fail(ch.Name + " was linked before EveSynapse asked for mail send access. Sign in again to grant it.")
 			return
 		}
 		logging.Errorf("mail send: character %d: %v", charID, err)

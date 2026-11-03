@@ -103,7 +103,7 @@ Pyerite 250000</pre>
 <div class="ap-right">
 {{if or $r.Created $r.Shared}}
 <div class="box ap-linkbar">
-  <div class="ap-linkmain">{{if $r.Shared}}<span class="ap-priced">Shared appraisal — priced {{$r.Created}}. Prices are the ones stored when it was run; they are not recomputed here.</span>{{else}}<span class="ap-priced">Priced {{$r.Created}}</span> <span class="ap-sharebox"><a class="ap-shareurl" href="{{$r.ShareURL}}">{{$r.ShareURL}}</a><button class="btn small" type="button" data-copy data-copy-text="{{$r.ShareURL}}">Copy link</button></span>{{end}}</div>
+  <div class="ap-linkmain">{{if $r.Shared}}<span class="ap-priced">Shared appraisal, priced {{$r.Created}}. Prices are the ones stored when it was run; they are not recomputed here.</span>{{else}}<span class="ap-priced">Priced {{$r.Created}}</span> <span class="ap-sharebox"><a class="ap-shareurl" href="{{$r.ShareURL}}">{{$r.ShareURL}}</a><button class="btn small" type="button" data-copy data-copy-text="{{$r.ShareURL}}">Copy link</button></span>{{end}}</div>
   <div class="ap-linkacts">
     {{if $r.RepriceURL}}<form class="ap-reprice" method="post" action="{{$r.RepriceURL}}">
       <input type="hidden" name="hub" value="{{$r.Basis.RegionID}}">

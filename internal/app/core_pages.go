@@ -372,7 +372,7 @@ func friendlyLoginError(code string) string {
 	case "denied":
 		return "EVE login was cancelled or denied. You can try again whenever you're ready."
 	case "state":
-		return "That login attempt couldn't be verified — it may have expired. Please try logging in again."
+		return "That login attempt couldn't be verified. It may have expired. Please try logging in again."
 	case "exchange", "verify":
 		return "EVE login failed while completing sign-in. Please try again."
 	case "save":

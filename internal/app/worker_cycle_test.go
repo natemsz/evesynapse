@@ -73,7 +73,7 @@ func TestRefreshCycleStopsAtTheErrorLimit(t *testing.T) {
 	}
 	// One failed fetch (the first character's first dataset), and
 	// nothing stored.
-	if got, want := app.snapshotWorkerStatus().Summary, "1 failure(s), ESI error limit — backing off"; got != want {
+	if got, want := app.snapshotWorkerStatus().Summary, "1 failure(s), ESI error limit, backing off"; got != want {
 		t.Errorf("summary = %q, want %q", got, want)
 	}
 	if app.snapshotWorkerStatus().Warming {
@@ -117,7 +117,7 @@ func TestRefreshCycleSkipsACharacterWithNoUsableToken(t *testing.T) {
 	}
 	// Two failures: Alpha's token, then Beta's first fetch, which
 	// is only attempted if the cycle moved on past Alpha.
-	if got, want := app.snapshotWorkerStatus().Summary, "2 failure(s), ESI error limit — backing off"; got != want {
+	if got, want := app.snapshotWorkerStatus().Summary, "2 failure(s), ESI error limit, backing off"; got != want {
 		t.Errorf("summary = %q, want %q", got, want)
 	}
 }

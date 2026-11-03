@@ -358,7 +358,7 @@ func (app *Application) handleChannelCreate(w http.ResponseWriter, r *http.Reque
 		CreatedAt: time.Now().UTC(), OwnerKind: org.Kind, OwnerID: org.ID})
 	if err != nil {
 		logging.Errorf("channels: create: %v", err)
-		back("That did not go through — please try again.")
+		back("That did not go through. Please try again.")
 		return
 	}
 	if isOrg {
@@ -796,7 +796,7 @@ func (app *Application) handleChannelReport(w http.ResponseWriter, r *http.Reque
 				}
 			default:
 				logging.Errorf("channels: insert report: %v", err)
-				reply(http.StatusInternalServerError, "That did not go through — please try again.", 0)
+				reply(http.StatusInternalServerError, "That did not go through. Please try again.", 0)
 				return
 			}
 			reply(http.StatusOK, "Reported.", 1)
@@ -811,7 +811,7 @@ func (app *Application) handleChannelReport(w http.ResponseWriter, r *http.Reque
 		postedReportID = id
 	} else if !errors.Is(err, errIntelDuplicate) {
 		logging.Errorf("channels: insert report: %v", err)
-		reply(http.StatusInternalServerError, "That did not go through — please try again.", 0)
+		reply(http.StatusInternalServerError, "That did not go through. Please try again.", 0)
 		return
 	}
 	reply(http.StatusOK, "Reported.", 1)
@@ -998,7 +998,7 @@ func (app *Application) readingReportOf(ctx context.Context, base db.InsertIntel
 	if fromPoster {
 		// The system came from the reporter's own location,
 		// not the paste: the sentence says so, quietly.
-		text = strings.TrimSuffix(text, ".") + " — system from the reporter's current location."
+		text = strings.TrimSuffix(text, ".") + ", system from the reporter's current location."
 	}
 	out.Text = text
 	counts := &intelanalyze.StandingCounts{Hostile: split[bucketHostile], Friendly: split[bucketFriendly], Neutral: split[bucketNeutral], Unclassified: split[bucketUnknown]}
@@ -1278,7 +1278,7 @@ func (app *Application) rescueRosterLine(ctx context.Context, base db.InsertInte
 	p.Source = source
 	p.SystemID = sysID
 	p.ScanID = scanID
-	p.Text = strings.TrimSuffix(roster.sentence, ".") + " — system from the reporter's current location."
+	p.Text = strings.TrimSuffix(roster.sentence, ".") + ", system from the reporter's current location."
 	p.Pilots = p.Text
 	if p.Hostiles == 0 {
 		p.Hostiles = scanHostiles(roster.result)
@@ -1326,7 +1326,7 @@ func (app *Application) storeVerifiedRosterLine(ctx context.Context, base db.Ins
 	p := base
 	p.Source = source
 	p.SystemID = sysID
-	p.Text = nr.Raw + " — system from the reporter's current location."
+	p.Text = nr.Raw + ", system from the reporter's current location."
 	p.Pilots = p.Text
 	p.Clear = false
 	if nr.Speaker != "" {
@@ -1398,7 +1398,7 @@ func (app *Application) handleScanPost(w http.ResponseWriter, r *http.Request) {
 	p.Hostiles = scanHostiles(res)
 	if _, err := app.insertIntelReport(ctx, p, false, counts); err != nil && !errors.Is(err, errIntelDuplicate) {
 		logging.Errorf("channels: insert scan report: %v", err)
-		back("That did not go through — please try again.")
+		back("That did not go through. Please try again.")
 		return
 	}
 	back("Posted to " + c.Name + ".")
@@ -1424,7 +1424,7 @@ func (app *Application) handleReportDelete(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	if err := app.queries.DeleteIntelReport(ctx, rid); err != nil {
-		back("That did not go through — please try again.")
+		back("That did not go through. Please try again.")
 		return
 	}
 	// The group the report belonged to recomputes without it.
@@ -1462,7 +1462,7 @@ func (app *Application) handleChannelEdit(w http.ResponseWriter, r *http.Request
 		return
 	}
 	if err := app.queries.UpdateIntelChannel(ctx, db.UpdateIntelChannelParams{ID: c.ID, Name: name, Description: desc}); err != nil {
-		back("That did not go through — please try again.")
+		back("That did not go through. Please try again.")
 		return
 	}
 	back("Saved.")
@@ -1480,7 +1480,7 @@ func (app *Application) handleChannelDelete(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	if err := app.queries.DeleteIntelChannel(ctx, c.ID); err != nil {
-		app.flashBack(w, r, fmt.Sprintf("/intel/channels/%d/", c.ID))("That did not go through — please try again.")
+		app.flashBack(w, r, fmt.Sprintf("/intel/channels/%d/", c.ID))("That did not go through. Please try again.")
 		return
 	}
 	app.flashBack(w, r, "/intel/channels/")("Deleted " + c.Name + ".")
@@ -1549,7 +1549,7 @@ func (app *Application) handleGrantAdd(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if err := app.queries.UpsertIntelChannelGrant(ctx, db.UpsertIntelChannelGrantParams{ChannelID: c.ID, Kind: kind, TargetID: target, CanPost: canPost, CreatedAt: time.Now().UTC()}); err != nil {
-		back("That did not go through — please try again.")
+		back("That did not go through. Please try again.")
 		return
 	}
 	how := "can read"
@@ -1582,7 +1582,7 @@ func (app *Application) resolveGrantName(ctx context.Context, kind, name string)
 	}
 	if err := app.esi.PostJSON(ctx, "/universe/ids/", []string{name}, &ids); err != nil {
 		logging.Warnf("channels: resolve %s %q: %v", kind, name, err)
-		return 0, "", "EVE's servers did not answer — try again in a moment."
+		return 0, "", "EVE's servers did not answer. Try again in a moment."
 	}
 	var list []struct {
 		ID   int64
@@ -1623,7 +1623,7 @@ func (app *Application) handleGrantRemove(w http.ResponseWriter, r *http.Request
 	if r.PostFormValue("kind") == "rule" {
 		kind, ref, _ := strings.Cut(r.PostFormValue("who"), ":")
 		if err := app.queries.DeleteIntelChannelRule(ctx, db.DeleteIntelChannelRuleParams{ChannelID: c.ID, RuleKind: kind, RuleRef: ref}); err != nil {
-			back("That did not go through — please try again.")
+			back("That did not go through. Please try again.")
 			return
 		}
 		back("Access removed.")
@@ -1631,7 +1631,7 @@ func (app *Application) handleGrantRemove(w http.ResponseWriter, r *http.Request
 	}
 	target, _ := strconv.ParseInt(r.PostFormValue("target"), 10, 64)
 	if err := app.queries.DeleteIntelChannelGrant(ctx, db.DeleteIntelChannelGrantParams{ChannelID: c.ID, Kind: r.PostFormValue("kind"), TargetID: target}); err != nil {
-		back("That did not go through — please try again.")
+		back("That did not go through. Please try again.")
 		return
 	}
 	back("Access removed.")

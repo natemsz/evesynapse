@@ -128,16 +128,16 @@ func (app *Application) recordFetchRefusal(ctx context.Context, characterID int6
 	var detail, reason string
 	switch {
 	case code == http.StatusUnauthorized && scopeNamed:
-		detail = unauthorizedDetailPrefix + " — this character's login does not grant the scope this data needs; sign in again to re-grant scopes."
+		detail = unauthorizedDetailPrefix + ": this character's login does not grant the scope this data needs. Sign in again to re-grant scopes."
 		reason = "the scope is not granted on this login"
 	case code == http.StatusUnauthorized:
-		detail = unauthorizedDetailPrefix + " — the character's token was rejected; sign in again to re-link the character."
+		detail = unauthorizedDetailPrefix + ": the character's token was rejected. Sign in again to re-link the character."
 		reason = "the token was rejected"
 	case scopeNamed:
-		detail = forbiddenDetailPrefix + " — this character's login predates the current scope list; sign in again to re-grant scopes."
+		detail = forbiddenDetailPrefix + ": this character's login predates the current scope list. Sign in again to re-grant scopes."
 		reason = "the scope is not granted on this login"
 	default:
-		detail = forbiddenDetailPrefix + " — ESI refused this data for the character's login; sign in again to re-grant scopes."
+		detail = forbiddenDetailPrefix + ": ESI refused this data for the character's login. Sign in again to re-grant scopes."
 		reason = "the login was refused"
 	}
 	app.recordCorpFetchState(ctx, characterID, kind, fetchStateError, detail)

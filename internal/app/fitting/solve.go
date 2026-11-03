@@ -61,7 +61,7 @@ func (app *tool) handleFitSolveImplants(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	if len(snap.Attrs[doc.ShipTypeID]) == 0 {
-		writeFitJSON(w, map[string]any{"ok": false, "error": "The ship and module data is still downloading — give it a little while and try again."})
+		writeFitJSON(w, map[string]any{"ok": false, "error": "The ship and module data is still downloading. Give it a little while and try again."})
 		return
 	}
 	// Bound the document's fitted quantities before the
@@ -89,7 +89,7 @@ func (app *tool) handleFitSolveImplants(w http.ResponseWriter, r *http.Request) 
 	overPG := baseRes.PowergridUsed > baseRes.PowergridMax+1e-6
 	if !overCPU && !overPG {
 		writeFitJSON(w, map[string]any{"ok": true, "solved": false,
-			"note": "This fit already fits — no implant needed."})
+			"note": "This fit already fits. No implant needed."})
 		return
 	}
 

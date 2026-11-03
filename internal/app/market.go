@@ -399,7 +399,7 @@ func (app *Application) handleMarket(w http.ResponseWriter, r *http.Request) {
 		item, err := app.loadMarketItem(ctx, typeID, view.Region, anon)
 		if err != nil {
 			logging.Errorf("market: load type %d in region %d: %v", typeID, view.Region, err)
-			data.Error = "Market data unavailable right now — please try again shortly."
+			data.Error = "Market data unavailable right now. Please try again shortly."
 		} else {
 			view.Item = item
 		}
@@ -1471,7 +1471,7 @@ func orderHealthText(myPrice float64, status string, stationBest, regionBest flo
 	case "best_region_cheaper":
 		text := "Best price here"
 		if regionBest > 0 {
-			text += fmt.Sprintf(" — cheaper in the region (best %s ISK)", esi.FormatISK(regionBest))
+			text += fmt.Sprintf(", cheaper in the region (best %s ISK)", esi.FormatISK(regionBest))
 		}
 		return text, false
 	default: // "best"

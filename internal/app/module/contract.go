@@ -304,7 +304,7 @@ var ErrMailToken = errors.New("mail: no usable token")
 // RelinkNotice is what a reader is told when a character lacks the scope
 // an action needs.
 func RelinkNotice(name, what string) string {
-	return name + " was linked before EveSynapse asked for permission to " + what + " — sign in again to grant it."
+	return name + " was linked before EveSynapse asked for permission to " + what + ". Sign in again to grant it."
 }
 
 // ParseRFC3339 reads an ESI timestamp; false when it is empty or not one.

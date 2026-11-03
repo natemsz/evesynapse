@@ -2770,11 +2770,11 @@
         headers: { "Content-Type": "application/json", "X-Requested-With": "XMLHttpRequest" },
         body: JSON.stringify({ mode: kind, systems: systems })
       }).then(function (r) {
-        return r.json().catch(function () { return { ok: false, message: "The server did not answer — try again." }; });
+        return r.json().catch(function () { return { ok: false, message: "The server did not answer. Try again." }; });
       }).then(function (res) {
         routeNote(res.message || (res.ok ? "Sent." : "That did not go through."));
       }).catch(function () {
-        routeNote("The server could not be reached — try again.");
+        routeNote("The server could not be reached. Try again.");
       }).then(function () {
         sending = false;
         if (el.isConnected) renderRoute();
@@ -3045,7 +3045,7 @@
       }).then(function (r) { return r.json(); }).then(function (res) {
         msg.textContent = res.message || "";
         if (res.ok) { f.elements.text.value = ""; f.elements.hostiles.value = ""; fetchIntel(); }
-      }).catch(function () { msg.textContent = "That did not go through — try again."; });
+      }).catch(function () { msg.textContent = "That did not go through. Try again."; });
     }
     if (reportForm) reportForm.addEventListener("submit", onReport);
 

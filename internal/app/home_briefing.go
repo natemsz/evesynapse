@@ -567,7 +567,7 @@ func (app *Application) briefingDismissal(w http.ResponseWriter, r *http.Request
 func briefingAggSummary(rule string, total int) (string, bool) {
 	switch rule {
 	case "pi-stopped":
-		return fmt.Sprintf("%d extractor%s have stopped", total, pluralSuffix(total)) +
+		return fmt.Sprintf("%d extractor%s %s stopped", total, pluralSuffix(total), hasHave(total)) +
 			`. <a href="/planets/">Colonies</a>: `, true
 	case "mail":
 		return fmt.Sprintf("%d unread mail%s", total, pluralSuffix(total)) +
@@ -725,13 +725,13 @@ func (bb *briefingBuilder) flushIdle() {
 			}
 		}
 		bb.addCounted("not-training-group", briefingNotTraining, latest,
-			template.HTML(fmt.Sprintf("%d skill queues empty — %s. <a href=\"/characters/\">Characters</a>", len(bb.idle), strings.Join(names, ", "))),
+			template.HTML(fmt.Sprintf("%d skill queues empty: %s. <a href=\"/characters/\">Characters</a>", len(bb.idle), strings.Join(names, ", "))),
 			fmt.Sprintf("%d Pilots", len(bb.idle)), "/characters/")
 		return
 	}
 	for _, l := range bb.idle {
 		bb.add(briefingKey(l.id, "not-training"), briefingNotTraining, l.at,
-			template.HTML(fmt.Sprintf("%s isn't training — the skill queue is empty. <a href=\"/character/?character=%d&view=1#skills\">Skills</a>", l.prefix, l.id)),
+			template.HTML(fmt.Sprintf("%s isn't training. The skill queue is empty. <a href=\"/character/?character=%d&view=1#skills\">Skills</a>", l.prefix, l.id)),
 			fmt.Sprintf("/character/?character=%d&view=1#skills", l.id))
 	}
 }
@@ -774,13 +774,13 @@ func (bb *briefingBuilder) linkLines(ctx context.Context, b *charSnaps, prefix s
 			reason = "the character changed accounts"
 		}
 		bb.add(briefingKey(b.ch.CharacterID, "relink"), briefingRelink, time.Time{},
-			template.HTML(fmt.Sprintf("%s needs re-linking — %s. <a href=\"/characters/\">Characters</a>", prefix, reason)),
+			template.HTML(fmt.Sprintf("%s needs re-linking: %s. <a href=\"/characters/\">Characters</a>", prefix, reason)),
 			"/characters/")
 	} else if app.piNotEnabled(ctx, b.ch) {
 		// A healthy link whose login predates the planetary
 		// scope: colonies stay dark until a fresh sign-in.
 		bb.add(briefingKey(b.ch.CharacterID, "pi-scope"), briefingRelink, time.Time{},
-			template.HTML(fmt.Sprintf("%s — planetary industry stays off until they sign in again. <a href=\"/planets/?character=%d&view=1\">Planets</a>", prefix, b.ch.CharacterID)),
+			template.HTML(fmt.Sprintf("%s: planetary industry stays off until they sign in again. <a href=\"/planets/?character=%d&view=1\">Planets</a>", prefix, b.ch.CharacterID)),
 			fmt.Sprintf("/planets/?character=%d&view=1", b.ch.CharacterID))
 	}
 }
@@ -799,7 +799,7 @@ func (bb *briefingBuilder) skillLines(ctx context.Context, b *charSnaps, prefix 
 					skillID := head.SkillID
 					skillName := app.typeNameOrID(ctx, skillID)
 					bb.add(briefingKey(b.ch.CharacterID, "queue-ending"), briefingSkillEnding, finish,
-						template.HTML(fmt.Sprintf("%s finishes %s %s in %s — queue runs dry after that. <a href=\"/character/?character=%d&view=1#skills\">Skills</a>",
+						template.HTML(fmt.Sprintf("%s finishes %s %s in %s, and the queue runs dry after that. <a href=\"/character/?character=%d&view=1#skills\">Skills</a>",
 							prefix, string(itemLink(skillID, skillName)), esi.RomanLevel(head.FinishedLevel),
 							humanDuration(time.Until(finish)), b.ch.CharacterID)),
 						fmt.Sprintf("/character/?character=%d&view=1#skills", b.ch.CharacterID))
@@ -844,7 +844,7 @@ func (bb *briefingBuilder) industryLines(ctx context.Context, b *charSnaps, pref
 		if readyN > 0 {
 			line := template.HTML(fmt.Sprintf("%s has %d industry job%s finished and waiting for delivery", prefix, readyN, pluralSuffix(readyN)))
 			if readyItem != "" {
-				line += template.HTML(fmt.Sprintf(" — first up: %s", string(readyItem)))
+				line += template.HTML(fmt.Sprintf(", first up: %s", string(readyItem)))
 			}
 			line += template.HTML(fmt.Sprintf(". <a href=\"/industry/jobs/?character=%d&view=1\">My Jobs</a>", b.ch.CharacterID))
 			bb.addAgg(briefingKey(b.ch.CharacterID, "job-ready"), briefingJobReady, readyAt, line, "job-ready", readyN, 0, prefix,
@@ -892,9 +892,9 @@ func (bb *briefingBuilder) orderLines(ctx context.Context, b *charSnaps, prefix 
 			}
 		}
 		if expiredN > 0 {
-			line := template.HTML(fmt.Sprintf("%s — %d market order%s expired since you last looked", prefix, expiredN, pluralSuffix(expiredN)))
+			line := template.HTML(fmt.Sprintf("%s: %d market order%s expired since you last looked", prefix, expiredN, pluralSuffix(expiredN)))
 			if expiredItem != "" {
-				line += template.HTML(fmt.Sprintf(" — most recently %s", string(expiredItem)))
+				line += template.HTML(fmt.Sprintf(", most recently %s", string(expiredItem)))
 			}
 			line += template.HTML(fmt.Sprintf(". <a href=\"/orders/?character=%d&view=1\">Orders</a>", b.ch.CharacterID))
 			bb.addAgg(briefingKey(b.ch.CharacterID, "order-expired"), briefingOrderExpired, expiredAt, line, "order-expired", expiredN, 0, prefix,
@@ -917,9 +917,9 @@ func (bb *briefingBuilder) orderLines(ctx context.Context, b *charSnaps, prefix 
 			}
 		}
 		if expiringN > 0 {
-			line := template.HTML(fmt.Sprintf("%s — %d market order%s expire%s within a day", prefix, expiringN, pluralSuffix(expiringN), pluralVerb(expiringN)))
+			line := template.HTML(fmt.Sprintf("%s: %d market order%s expire%s within a day", prefix, expiringN, pluralSuffix(expiringN), pluralVerb(expiringN)))
 			if expiringItem != "" {
-				line += template.HTML(fmt.Sprintf(" — soonest: %s in %s", string(expiringItem), humanDuration(time.Until(expiringAt))))
+				line += template.HTML(fmt.Sprintf(", soonest %s in %s", string(expiringItem), humanDuration(time.Until(expiringAt))))
 			}
 			line += template.HTML(fmt.Sprintf(". <a href=\"/orders/?character=%d&view=1\">Orders</a>", b.ch.CharacterID))
 			bb.addAgg(briefingKey(b.ch.CharacterID, "order-expiring"), briefingOrderExpiring, expiringAt, line, "order-expiring", expiringN, 0, prefix,
@@ -965,14 +965,14 @@ func (bb *briefingBuilder) planetLines(ctx context.Context, b *charSnaps, prefix
 		}
 		if stoppedN > 0 {
 			bb.addAgg(briefingKey(b.ch.CharacterID, "pi-stopped"), briefingStoppedExtractor, time.Time{},
-				template.HTML(fmt.Sprintf("%s — %d extractor%s have stopped across %d planet%s. <a href=\"/planets/?character=%d&view=1\">Colonies</a>",
-					prefix, stoppedN, pluralSuffix(stoppedN), stoppedPlanets, pluralSuffix(stoppedPlanets), b.ch.CharacterID)),
+				template.HTML(fmt.Sprintf("%s: %d extractor%s %s stopped across %d planet%s. <a href=\"/planets/?character=%d&view=1\">Colonies</a>",
+					prefix, stoppedN, pluralSuffix(stoppedN), hasHave(stoppedN), stoppedPlanets, pluralSuffix(stoppedPlanets), b.ch.CharacterID)),
 				"pi-stopped", stoppedN, stoppedPlanets, prefix,
 				b.ch.Name, fmt.Sprintf("/planets/?character=%d&view=1", b.ch.CharacterID))
 		}
 		if dryN > 0 {
 			bb.add(briefingKey(b.ch.CharacterID, "pi-dry"), briefingExtractorDry, dryAt,
-				template.HTML(fmt.Sprintf("%s — an extractor on %s runs dry in %s. <a href=\"/planets/?character=%d&view=1\">Colonies</a>",
+				template.HTML(fmt.Sprintf("%s: an extractor on %s runs dry in %s. <a href=\"/planets/?character=%d&view=1\">Colonies</a>",
 					prefix, template.HTMLEscapeString(dryPlanet), humanDuration(time.Until(dryAt)), b.ch.CharacterID)),
 				fmt.Sprintf("/planets/?character=%d&view=1", b.ch.CharacterID))
 		}
@@ -1007,14 +1007,14 @@ func (bb *briefingBuilder) contractLines(b *charSnaps, prefix string) {
 					title = "courier run"
 				}
 				bb.add(briefingKey(b.ch.CharacterID, fmt.Sprintf("courier-%d", c.ContractID)), briefingCourier, deadline,
-					template.HTML(fmt.Sprintf("%s — courier: %s is %s. <a href=\"/contracts/?character=%d&view=1\">Contracts</a>",
+					template.HTML(fmt.Sprintf("%s: courier %s is %s. <a href=\"/contracts/?character=%d&view=1\">Contracts</a>",
 						prefix, template.HTMLEscapeString(title), when, b.ch.CharacterID)),
 					fmt.Sprintf("/contracts/?character=%d&view=1", b.ch.CharacterID))
 			}
 		}
 		if waitingN > 0 {
 			bb.addAgg(briefingKey(b.ch.CharacterID, "contract-waiting"), briefingContract, waitingAt,
-				template.HTML(fmt.Sprintf("%s — %d contract%s waiting for your answer. <a href=\"/contracts/?character=%d&view=1\">Contracts</a>",
+				template.HTML(fmt.Sprintf("%s: %d contract%s waiting for your answer. <a href=\"/contracts/?character=%d&view=1\">Contracts</a>",
 					prefix, waitingN, pluralSuffix(waitingN), b.ch.CharacterID)),
 				"contract-waiting", waitingN, 0, prefix,
 				b.ch.Name, fmt.Sprintf("/contracts/?character=%d&view=1", b.ch.CharacterID))
@@ -1132,10 +1132,10 @@ func (bb *briefingBuilder) calendarLines(b *charSnaps, prefix string) {
 			if title == "" {
 				title = "Calendar event"
 			}
-			line := template.HTML(fmt.Sprintf("%s — “%s” starts in %s. <a href=\"/calendar/?character=%d&view=1\">Calendar</a>",
+			line := template.HTML(fmt.Sprintf("%s: “%s” starts in %s. <a href=\"/calendar/?character=%d&view=1\">Calendar</a>",
 				prefix, template.HTMLEscapeString(title), humanDuration(time.Until(at)), b.ch.CharacterID))
 			if at.Before(now) {
-				line = template.HTML(fmt.Sprintf("%s — “%s” has started. <a href=\"/calendar/?character=%d&view=1\">Calendar</a>",
+				line = template.HTML(fmt.Sprintf("%s: “%s” has started. <a href=\"/calendar/?character=%d&view=1\">Calendar</a>",
 					prefix, template.HTMLEscapeString(title), b.ch.CharacterID))
 			}
 			bb.add(briefingKey(b.ch.CharacterID, fmt.Sprintf("calendar-%d", ev.EventID)), briefingCalendar, at, line,
@@ -1153,7 +1153,7 @@ func (bb *briefingBuilder) mailLines(b *charSnaps, prefix string) {
 		if b.mailKnown {
 			if hdr, ok := newestUnreadHeader(b.mail); ok {
 				if sender, found := app.esi.CachedCharacterName(hdr.From); found && sender != "" {
-					line = template.HTML(fmt.Sprintf("%s has %d unread mail%s — newest from %s. <a href=\"/mail/?character=%d&view=1\">Mail</a>",
+					line = template.HTML(fmt.Sprintf("%s has %d unread mail%s, newest from %s. <a href=\"/mail/?character=%d&view=1\">Mail</a>",
 						prefix, b.mailLabels.TotalUnreadCount, pluralSuffix(int(b.mailLabels.TotalUnreadCount)),
 						string(briefCharLink(viewer, hdr.From, sender)), b.ch.CharacterID))
 				}
@@ -1250,7 +1250,7 @@ func (app *Application) briefingMarketLines(ctx context.Context, bundles []*char
 		if !ok || absFloat(pct) < e.ThresholdPct {
 			continue
 		}
-		line := template.HTML(fmt.Sprintf("%s moved %s over 7 days in %s — past your %s watch. <a href=\"/market/\">Watchlist</a>",
+		line := template.HTML(fmt.Sprintf("%s moved %s over 7 days in %s, past your %s watch. <a href=\"/market/\">Watchlist</a>",
 			string(itemLink(e.TypeID, app.typeNameOrID(ctx, e.TypeID))),
 			markethistory.ChangeDirection(pct),
 			template.HTMLEscapeString(app.marketRegionLabel(ctx, marketRegionForType(e.TypeID, e.RegionID))),
@@ -1349,6 +1349,14 @@ func newestUnreadHeader(headers esi.MailHeaders) (esi.MailHeader, bool) {
 
 // pluralSuffix: "" for one, "s" otherwise ("3 extractors").
 func pluralSuffix(n int) string { return humanize.PluralSuffix(n) }
+
+// hasHave: "has" for one, "have" otherwise ("1 extractor has stopped").
+func hasHave(n int) string {
+	if n == 1 {
+		return "has"
+	}
+	return "have"
+}
 
 // pluralVerb: "s" for one, "" otherwise ("1 order expires").
 func pluralVerb(n int) string {

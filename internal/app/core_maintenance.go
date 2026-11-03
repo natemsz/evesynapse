@@ -65,7 +65,7 @@ func RunRefresh(args []string, cfg Config, stdout, stderr io.Writer) int {
 	if err != nil {
 		// Without a resolvable pidfile there is no live-server
 		// check to make; say so and carry on rather than fail.
-		fmt.Fprintln(stdout, "(Couldn't check whether EveSynapse is running — continuing anyway.)")
+		fmt.Fprintln(stdout, "(Couldn't check whether EveSynapse is running. Continuing anyway.)")
 	} else if pid, live, ok := pidfile.FindLive(pidfile.Candidates(filepath.Dir(exe))); ok && pidfile.ProcessCheck(pid, exe) {
 		// Hand runRefresh the pidfile that names a running server,
 		// so it refuses; with none found there is nothing to check.
@@ -97,7 +97,7 @@ func runRefresh(cfg Config, pidPath string, stdout, stderr io.Writer) int {
 		return 1
 	}
 
-	fmt.Fprintln(stdout, "Refresh ready — EveSynapse will fetch fresh copies of everything when it next starts:")
+	fmt.Fprintln(stdout, "Refresh ready. EveSynapse will fetch fresh copies of everything when it next starts:")
 	for _, step := range steps {
 		fmt.Fprintf(stdout, "  • %s\n", step)
 	}

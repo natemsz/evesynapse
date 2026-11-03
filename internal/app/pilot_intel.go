@@ -382,7 +382,7 @@ func (app *Application) handlePilotWatch(w http.ResponseWriter, r *http.Request)
 	}
 	if r.PostFormValue("remove") != "" {
 		if err := app.queries.RemoveIntelWatch(ctx, db.RemoveIntelWatchParams{ChannelID: c.ID, CharacterID: id}); err != nil {
-			flash("That did not go through — please try again.")
+			flash("That did not go through. Please try again.")
 			return
 		}
 		flash("Off " + c.Name + "'s known hostiles.")
@@ -395,7 +395,7 @@ func (app *Application) handlePilotWatch(w http.ResponseWriter, r *http.Request)
 	note := clipRunes(strings.TrimSpace(r.PostFormValue("note")), 140)
 	if err := app.queries.AddIntelWatch(ctx, db.AddIntelWatchParams{ChannelID: c.ID, CharacterID: id, Note: note, AddedBy: ident.userID, AddedAt: time.Now().UTC()}); err != nil {
 		logging.Errorf("pilot watch: %v", err)
-		flash("That did not go through — please try again.")
+		flash("That did not go through. Please try again.")
 		return
 	}
 	flash("On " + c.Name + "'s known hostiles.")

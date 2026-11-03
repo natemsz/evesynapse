@@ -35,7 +35,7 @@ func Register(r chi.Router, a *app.Application) {
 		return
 	}
 	// Loud on purpose.
-	logging.Warnf("DEV_LOGIN=1 — /dev-login is ENABLED. Never run like this in production.")
+	logging.Warnf("DEV_LOGIN=1: /dev-login is ENABLED. Never run like this in production.")
 	r.Get("/dev-login", func(w http.ResponseWriter, r *http.Request) {
 		app.DevSignIn(r.Context(), a)
 		http.Redirect(w, r, "/", http.StatusSeeOther)

@@ -671,11 +671,11 @@ func (app *plans) buildPlanDetailEnv(ctx context.Context, env *planBuildEnv, ch 
 			detail.StartsNote = fmt.Sprintf("Plan timing starts when your current queue finishes (%s).",
 				ct.QueueEnd.UTC().Format("2006-01-02 15:04 UTC"))
 		} else {
-			detail.StartsNote = "Plan timing starts now — your queue is empty."
+			detail.StartsNote = "Plan timing starts now: your queue is empty."
 		}
 	}
 	if attrsKnown {
-		detail.AttrsLine = fmt.Sprintf("Your attributes — Charisma %d · Intelligence %d · Memory %d · Perception %d · Willpower %d",
+		detail.AttrsLine = fmt.Sprintf("Your attributes: Charisma %d · Intelligence %d · Memory %d · Perception %d · Willpower %d",
 			attrs.Charisma, attrs.Intelligence, attrs.Memory, attrs.Perception, attrs.Willpower)
 		advice := skillplan.AdviseRemap(graph, outcome.Steps, attrs)
 		rv := &remapView{

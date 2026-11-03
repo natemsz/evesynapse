@@ -114,7 +114,7 @@ retunes, and the root carries fit-ro for the read-only tooltips. */}}
         {{else}}
         <span class="fit-chip fit-imp{{if not $loaded.ID}} fit-imp-empty{{end}}">
           <img class="fit-imp-icon" src="https://images.evetech.net/types/{{if $loaded.ID}}{{$loaded.ID}}{{else}}{{.WeaponID}}{{end}}/icon?size=32" alt="" draggable="false">
-          <input type="text" class="fit-imp-input" data-fit-ammo-for="{{.WeaponID}}" data-fit-ammo-ids="{{.OptionIDs}}" data-fit-ammo-weapon="{{.WeaponName}}" value="{{$loaded.Name}}" placeholder="No ammunition — search" autocomplete="off" role="combobox" aria-expanded="false" aria-autocomplete="list" aria-label="{{.WeaponName}} ammunition">
+          <input type="text" class="fit-imp-input" data-fit-ammo-for="{{.WeaponID}}" data-fit-ammo-ids="{{.OptionIDs}}" data-fit-ammo-weapon="{{.WeaponName}}" value="{{$loaded.Name}}" placeholder="No ammunition: search" autocomplete="off" role="combobox" aria-expanded="false" aria-autocomplete="list" aria-label="{{.WeaponName}} ammunition">
           {{if $loaded.ID}}<button type="button" class="fit-chip-btn" data-fit-ammo-clear="{{.WeaponID}}" title="Unload">×</button>{{end}}
           <span class="fit-chip-sub">{{.WeaponName}}</span>
         </span>

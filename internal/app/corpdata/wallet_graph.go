@@ -31,5 +31,5 @@ func corpWalletGraph(journal esi.CorpJournal, balance float64, balanceKnown bool
 	if len(points) == 1 {
 		return nil, "Balance history has started: one point so far (" + esi.FormatISK(points[0].Balance) + " ISK). The graph appears once the journal has a second."
 	}
-	return nil, "No wallet activity in this division's journal yet — the graph starts with its first entries."
+	return nil, "No wallet activity in this division's journal yet. The graph starts with its first entries."
 }

@@ -908,7 +908,7 @@ func TestIntelRosterRescueVerifiedNames(t *testing.T) {
 	if row.SystemID != sysID || row.Reporter != "Burzrujat" || row.Kind != intelanalyze.KindLocal || row.ScanID != "" {
 		t.Errorf("stored report: system %d reporter %q kind %q scan %q, want a scanless local on the speaker's system", row.SystemID, row.Reporter, row.Kind, row.ScanID)
 	}
-	if want := miniBlob + " — system from the reporter's current location."; row.Text != want {
+	if want := miniBlob + ", system from the reporter's current location."; row.Text != want {
 		t.Errorf("stored report text:\n got %q\nwant %q", row.Text, want)
 	}
 	var a intelanalyze.Analysis

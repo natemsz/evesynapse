@@ -57,7 +57,7 @@ func (app *Application) guardedCycle(ctx context.Context, cycle func(context.Con
 			logging.Errorf("worker: PANIC in refresh cycle (recovered; the next cycle retries): %v\n%s", r, debug.Stack())
 			app.updateWorkerStatus(func(s *workerStatus) {
 				s.Warming = false
-				s.Summary = "cycle stopped by an internal error — see the server log"
+				s.Summary = "cycle stopped by an internal error; see the server log"
 			})
 		}
 	}()
@@ -938,7 +938,7 @@ func cycleSummary(refreshed, namesResolved, failed int, limited bool, parked, de
 		parts = append(parts, "idle")
 	}
 	if limited {
-		parts = append(parts, "ESI error limit — backing off")
+		parts = append(parts, "ESI error limit, backing off")
 	}
 	out := parts[0]
 	for _, p := range parts[1:] {

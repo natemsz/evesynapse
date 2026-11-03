@@ -211,15 +211,15 @@
       var box = document.getElementById("pi-coverage");
       if (!box) return;
       if (nChecked === 0) {
-        box.textContent = "No planet types selected — tick planets above to check coverage.";
+        box.textContent = "No planet types selected. Tick planets above to check coverage.";
         box.className = "pi-coverage";
       } else if (missing.length === 0) {
-        box.textContent = "Covered — your " + nChecked + " selected planet type(s) supply all " +
+        box.textContent = "Covered: your " + nChecked + " selected planet type(s) supply all " +
           raws.length + " raw resources.";
         box.className = "pi-coverage pos";
       } else {
         missing.sort();
-        box.textContent = "Not covered — " + (raws.length - missing.length) + " of " + raws.length +
+        box.textContent = "Not covered: " + (raws.length - missing.length) + " of " + raws.length +
           " raw resources available. Missing: " + missing.join(", ");
         box.className = "pi-coverage neg";
       }

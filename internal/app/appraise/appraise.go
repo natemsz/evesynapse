@@ -658,7 +658,7 @@ func lineNote(ln resolvedLine) string {
 		}
 		parts = append(parts, note)
 	case strings.HasSuffix(ln.Name, " Blueprint"):
-		parts = append(parts, "Blueprint — priced as an original")
+		parts = append(parts, "Blueprint, priced as an original")
 	}
 	switch {
 	case ln.Abyssal != nil:
@@ -666,14 +666,14 @@ func lineNote(ln resolvedLine) string {
 			parts = append(parts, note)
 		}
 	case ln.NoEstimate:
-		parts = append(parts, "Base item price — we hold this item's rolls but have no estimate for it yet")
+		parts = append(parts, "Base item price: we hold this item's rolls but have no estimate for it yet")
 	case ln.LinkMiss:
-		parts = append(parts, "Base item price — this item's rolls are not in our records")
+		parts = append(parts, "Base item price: this item's rolls are not in our records")
 	case ln.AbyssalBase:
-		parts = append(parts, "Base item price — this mutated item was pasted without its link, so its own rolls were not priced")
+		parts = append(parts, "Base item price: this mutated item was pasted without its link, so its own rolls were not priced")
 	default:
 		if _, mutated := mutationBase(ln.Name); mutated {
-			parts = append(parts, "Base item price — this mutated item was pasted without its link, so its own rolls were not priced")
+			parts = append(parts, "Base item price: this mutated item was pasted without its link, so its own rolls were not priced")
 		}
 	}
 	return strings.Join(parts, " · ")

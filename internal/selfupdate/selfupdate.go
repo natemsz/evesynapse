@@ -962,7 +962,7 @@ func runReleaseUpdate(current, target, arch string, stdout, stderr io.Writer, de
 		return 0
 	}
 	if compareVersions(m.Version, current) <= 0 {
-		fmt.Fprintf(stdout, "You're up to date — %s is the latest version.\n", current)
+		fmt.Fprintf(stdout, "You're up to date: %s is the latest version.\n", current)
 		return 0
 	}
 	fmt.Fprintf(stdout, "A new version is available: %s.\n", latest)
@@ -1046,7 +1046,7 @@ func runUpdate(current, target string, args []string, stdout, stderr io.Writer) 
 	if len(args) == 2 {
 		wantHash = strings.ToLower(strings.TrimSpace(args[1]))
 		if _, err := hex.DecodeString(wantHash); err != nil || len(wantHash) != sha256.Size*2 {
-			fmt.Fprintln(stderr, "That checksum doesn't look right — it should be 64 characters of 0-9 and a-f. Nothing was changed.")
+			fmt.Fprintln(stderr, "That checksum doesn't look right. It should be 64 characters of 0-9 and a-f. Nothing was changed.")
 			return 2
 		}
 	}
@@ -1200,7 +1200,7 @@ func installUpdate(target, source, wantHash string, wantMachine uint16, stdout, 
 		return 1
 	}
 	if info.Size() < updateMinBytes {
-		fmt.Fprintln(stderr, "The download is too small to be the EveSynapse program — it may not have downloaded properly. Nothing was changed.")
+		fmt.Fprintln(stderr, "The download is too small to be the EveSynapse program. It may not have downloaded properly. Nothing was changed.")
 		return 1
 	}
 	if err := verifyExecutableMachine(tmpPath, wantMachine); err != nil {
@@ -1214,7 +1214,7 @@ func installUpdate(target, source, wantHash string, wantMachine uint16, stdout, 
 			return 1
 		}
 		if gotHash != wantHash {
-			fmt.Fprintln(stderr, "The downloaded file doesn't match the checksum that came with it — it may have been damaged on the way. Nothing was changed.")
+			fmt.Fprintln(stderr, "The downloaded file doesn't match the checksum that came with it. It may have been damaged on the way. Nothing was changed.")
 			return 1
 		}
 		fmt.Fprintln(stdout, "Download verified against its checksum.")
@@ -1240,11 +1240,11 @@ func installUpdate(target, source, wantHash string, wantMachine uint16, stdout, 
 		if pidfile.SignalRestart(pid, pidPath, updateRestartWait) {
 			fmt.Fprintln(stdout, "EveSynapse is restarting on the new version.")
 		} else {
-			fmt.Fprintln(stdout, "EveSynapse is still finishing up — it will pick up the new version when it next restarts.")
+			fmt.Fprintln(stdout, "EveSynapse is still finishing up. It will pick up the new version when it next restarts.")
 		}
 		return 0
 	}
-	fmt.Fprintln(stdout, "Update installed. EveSynapse isn't running right now — the new version will be in place next time it starts.")
+	fmt.Fprintln(stdout, "Update installed. EveSynapse isn't running right now. The new version will be in place next time it starts.")
 	return 0
 }
 
@@ -1334,7 +1334,7 @@ func verifyExecutableMachine(path string, wantMachine uint16) error {
 		return errors.New("the download isn't a complete program file")
 	}
 	if hdr[0] != 0x7f || hdr[1] != 'E' || hdr[2] != 'L' || hdr[3] != 'F' {
-		return errors.New("the download isn't an EveSynapse program — it may be an error page instead of the update")
+		return errors.New("the download isn't an EveSynapse program; it may be an error page instead of the update")
 	}
 	if machine := binary.LittleEndian.Uint16(hdr[18:20]); machine != wantMachine {
 		return errors.New("the download was built for a different kind of computer, so it wouldn't run here")

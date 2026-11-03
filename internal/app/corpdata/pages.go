@@ -99,9 +99,9 @@ func (app *mod) handleCorpMembers(w http.ResponseWriter, r *http.Request) {
 		}
 	} else if trackingState.Forbidden {
 		if trackingState.RoleMissing != "" {
-			view.TrackingNote = fmt.Sprintf("Member tracking needs the %s role in-game — %s doesn't hold it, so only the roster is shown.", trackingState.RoleMissing, sel.Active.Name)
+			view.TrackingNote = fmt.Sprintf("Member tracking needs the %s role in-game. %s doesn't hold it, so only the roster is shown.", trackingState.RoleMissing, sel.Active.Name)
 		} else {
-			view.TrackingNote = "Member tracking was refused by ESI (403) — only the roster is shown."
+			view.TrackingNote = "Member tracking was refused by ESI (403), so only the roster is shown."
 		}
 	} else {
 		view.TrackingNote = "Member tracking is still syncing. Only the roster is shown for now."
@@ -262,7 +262,7 @@ func (app *mod) handleCorpWallets(w http.ResponseWriter, r *http.Request) {
 		}
 	case journalState.Forbidden:
 		if journalState.RoleMissing != "" {
-			view.LedgerNote = fmt.Sprintf("Wallet ledgers need the %s role in-game — %s doesn't hold it.", journalState.RoleMissing, sel.Active.Name)
+			view.LedgerNote = fmt.Sprintf("Wallet ledgers need the %s role in-game. %s doesn't hold it.", journalState.RoleMissing, sel.Active.Name)
 		} else {
 			view.LedgerNote = "Wallet ledgers were refused by ESI (403)."
 		}

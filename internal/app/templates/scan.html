@@ -57,7 +57,7 @@
   {{if $.Scan.TypeValues}}<section class="sc-panel">
     <h2>Hull value</h2>
     <ul class="sc-list">{{range $.Scan.TypeValues}}<li><img src="https://images.evetech.net/types/{{.ID}}/icon?size=32" alt="" width="20" height="20" loading="lazy"><span>{{.Name}} <span class="muted">{{.Class}} · {{.N}} × {{.UnitText}} · {{.TierLabel}}{{if .AsOf}} · {{.AsOf}}{{end}}</span></span><span class="sc-bar-c">{{.LineText}} ISK</span></li>{{end}}</ul>
-    <p class="sc-note muted">Priced {{.PricedShips}} of {{.Ships}} ships, valued when the scan was pasted. Hulls only — a d-scan never shows fittings. An estimated price carries its date; a hull with no price at any tier is not in the total.</p>
+    <p class="sc-note muted">Priced {{.PricedShips}} of {{.Ships}} ships, valued when the scan was pasted. Hulls only: a d-scan never shows fittings. An estimated price carries its date; a hull with no price at any tier is not in the total.</p>
   </section>{{end}}
   <div class="sc-cols">
     <section class="sc-panel">

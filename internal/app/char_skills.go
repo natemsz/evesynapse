@@ -239,7 +239,7 @@ func (app *Application) fillQueue(ctx context.Context, view *skillsView, queue e
 		if i == 0 {
 			line := fmt.Sprintf("%s %s", nameFor(entry.SkillID), esi.RomanLevel(entry.FinishedLevel))
 			if f := formatFinish(entry.FinishDate); f != "" {
-				line += " — finishes " + f
+				line += ", finishes " + f
 			}
 			view.Training = line
 		}

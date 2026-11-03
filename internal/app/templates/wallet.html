@@ -5,7 +5,10 @@
 
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
 
-{{template "charselector" .WalletChars}}
+<div class="l-page">
+<div class="l-head">
+  <div class="l-head-pick">{{template "charselector" .WalletChars}}</div>
+</div>
 
 {{if .Wallet}}
 <h2>{{.Wallet.CharacterName}}</h2>
@@ -14,11 +17,10 @@
 <span class="kpi-v isk">{{.Wallet.Balance}} <small>ISK</small></span>
 </section>{{end}}
 
-{{/* Two columns on a wide screen: the charts on the left (balance
-     history, then cumulative net flow, the same size), the flow's
-     figures on the right; one column on a narrow screen. */}}
-<div class="wallet-top">
-<div class="wallet-col">
+{{/* The charts (balance history, then cumulative net flow) beside
+     the flow's figures while both have room, stacked when not. */}}
+<div class="l-grid wl-top">
+<div class="s7 l-stack wl-charts">
 {{if .Wallet.Graph}}
 <section class="foldable">
 <h3>Balance history</h3>
@@ -33,7 +35,7 @@
 {{end}}{{end}}
 </div>
 {{with .Wallet.Flow}}{{if .Any}}
-<div class="wallet-col">
+<div class="s5 wl-flow">
 <section class="foldable">
 <h3>Wallet flow</h3>
 {{template "wallet-flow-figures" .}}
@@ -43,8 +45,16 @@
 {{end}}{{end}}
 </div>
 
-<section class="foldable">
-<h3>Recent journal</h3>
+{{/* The two ledgers share one place: a segmented switch between them
+     (the shared tabs, app.js), both stacked under their headings
+     without script. */}}
+<div class="wl-ledgers">
+<div class="l-seg" role="tablist" aria-label="Ledgers" data-tabs hidden>
+  <button type="button" role="tab" id="wl-journal-tab" aria-controls="wl-journal" aria-selected="true">Recent journal</button>
+  <button type="button" role="tab" id="wl-txns-tab" aria-controls="wl-txns" aria-selected="false">Recent transactions</button>
+</div>
+<section class="foldable" role="tabpanel" id="wl-journal" aria-labelledby="wl-journal-tab">
+<h3 class="l-tab-h">Recent journal</h3>
 {{if .Wallet.Journal.Note}}
 <p><small>{{.Wallet.Journal.Note}}</small></p>
 {{else if .Wallet.Journal.Warming}}
@@ -71,8 +81,8 @@
 {{end}}
 </section>
 
-<section class="foldable">
-<h3>Recent transactions</h3>
+<section class="foldable" role="tabpanel" id="wl-txns" aria-labelledby="wl-txns-tab">
+<h3 class="l-tab-h">Recent transactions</h3>
 {{if .Wallet.Txns.Note}}
 <p><small>{{.Wallet.Txns.Note}}</small></p>
 {{else if .Wallet.Txns.Warming}}
@@ -98,9 +108,11 @@
 <p><small>No transactions in the latest snapshot.</small></p>
 {{end}}
 </section>
+</div>
 {{else}}
 <p>No character to show yet. Link a character first.</p>
 {{end}}
+</div>
 {{end}}
 
 {{define "wallet-graph"}}

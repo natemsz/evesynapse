@@ -1466,16 +1466,10 @@ img.portrait {
    not a control, so it shows no focus ring (a keyboard shortcut that
    navigated would otherwise outline the whole panel). */
 #main-content:focus { outline: none; }
-/* Wallet page: balance history beside wallet flow, each about half
-   the width, so the chart is a readable size rather than the whole
-   page; one above the other on a narrow screen. */
-.wallet-top {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 28rem), 1fr));
-  gap: 0 1.25rem;
-  align-items: start;
-}
-.wallet-top > .wallet-col { min-width: 0; }
+/* Wallet page: its regions are the layout framework's grid and
+   segmented tabs (layout.css). */
+.wl-top { align-items: start; }
+.wl-top .foldable { margin-bottom: 0; }
 
 /* --- form inputs + market search suggestions --- */
 /* Fields share one look and one height (--control-h) with the buttons

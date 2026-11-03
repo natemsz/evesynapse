@@ -244,7 +244,7 @@
         <p class="ov-note">Skill data is still loading. The full catalog appears when the static data import finishes{{if .IsAdmin}}; progress is on the <a href="/admin/sync/">Sync page</a>{{end}}.</p>
         {{else if $ov.Rows}}
         <div class="tw">
-        <table class="ov-table">
+        <table class="ov-table ov-skills">
           <thead><tr><th>Skill / Group</th><th>Level &amp; Rank</th><th>Attributes</th><th class="r">Skill points</th><th class="r">Plan</th></tr></thead>
           <tbody>
           {{range $ov.Rows}}

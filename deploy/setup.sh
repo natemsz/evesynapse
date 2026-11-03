@@ -15,10 +15,18 @@
 # (it only appends a DATABASE_URL that isn't there yet).
 #
 # Usage:
-#   sudo bash deploy/setup.sh
+#   sudo bash setup.sh                            # install the latest release (recommended)
+#   sudo bash deploy/setup.sh                     # the same, run from a checkout
+#   sudo bash deploy/setup.sh --build             # production install, built from this checkout
+#   sudo bash deploy/setup.sh --build-dev         # provision + build + run the dev server here (local testing only)
 #   sudo EVESYNAPSE_UPDATE_PROJECT=you/evesynapse bash deploy/setup.sh   # install from your fork
 #   sudo EVESYNAPSE_BINARY=./bin/evesynapse bash deploy/setup.sh      # install a build you made
 #   sudo EVESYNAPSE_TUNE_POSTGRES=0 bash deploy/setup.sh             # leave PostgreSQL's memory settings alone
+#
+# This script ships as a file on every release (setup.sh next to
+# the builds), so the recommended install downloads just it from
+# the latest release and runs it on its own: no checkout needed.
+# Only the two build modes need the checkout they run from.
 #
 # A release is checked against the release key in the checkout this
 # script is run from (internal/releasesig/trusted_keys.pem), so to
@@ -43,6 +51,29 @@ LINK=/usr/bin/evesynapse
 
 die() { echo "setup: $*" >&2; exit 1; }
 
+# --- Mode ---
+# The default installs the latest signed release and needs no
+# checkout. --build builds this checkout instead and installs
+# that build the production way. --build-dev provisions a local
+# database and a dev .env in this checkout, builds the dev
+# server and runs it: local testing only.
+MODE=release
+for arg in "$@"; do
+  case "$arg" in
+    --build) MODE=build ;;
+    --build-dev) MODE=build-dev ;;
+    -h|--help)
+      cat <<'EOF'
+Usage:
+  sudo bash setup.sh              install the latest release (recommended)
+  sudo bash deploy/setup.sh --build      production install, built from this checkout
+  sudo bash deploy/setup.sh --build-dev  provision, build and run the dev server in this checkout (local testing only)
+EOF
+      exit 0 ;;
+    *) die "unknown option: $arg (the modes are --build and --build-dev)" ;;
+  esac
+done
+
 [ "$(id -u)" -eq 0 ] || die "run this with sudo: sudo bash $0"
 command -v curl >/dev/null || die "curl is required (it downloads the build and checks it)"
 
@@ -56,6 +87,133 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(dirname "$SCRIPT_DIR")"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
+
+# --- Building from this checkout (--build, --build-dev) ---
+
+require_checkout() {
+  [ -f "$REPO_ROOT/go.mod" ] && [ -f "$REPO_ROOT/Makefile" ] \
+    || die "--$MODE builds from source, so run this script from a checkout of the repo (deploy/setup.sh inside it). Run on its own, with no flag, it installs the latest release instead."
+}
+
+# go_ok: is a Go new enough for this tree on PATH? go.mod names
+# the version the tree needs.
+go_ok() {
+  command -v go >/dev/null || return 1
+  local want have
+  want="$(sed -n 's/^go \([0-9][0-9.]*\).*/\1/p' "$REPO_ROOT/go.mod" | head -1)"
+  have="$(go env GOVERSION 2>/dev/null | sed 's/^go//')"
+  [ -n "$want" ] && [ -n "$have" ] || return 1
+  [ "$(printf '%s\n%s\n' "$want" "$have" | sort -V | head -1)" = "$want" ]
+}
+
+# ensure_build_tools: install Go and make from the distro's
+# packages when the machine lacks them (or the Go it has is too
+# old for this tree).
+ensure_build_tools() {
+  if ! go_ok; then
+    echo "Installing Go (this tree needs $(sed -n 's/^go \([0-9][0-9.]*\).*/\1/p' "$REPO_ROOT/go.mod" | head -1) or newer)..."
+    if command -v dnf >/dev/null; then dnf install -y golang >/dev/null || die "could not install golang; install Go by hand (https://go.dev/dl/) and run this again"
+    elif command -v pacman >/dev/null; then pacman -S --needed --noconfirm go >/dev/null || die "could not install go; install Go by hand (https://go.dev/dl/) and run this again"
+    else die "no Go on this machine and no package manager this script knows; install Go (https://go.dev/dl/) and run this again"; fi
+    go_ok || die "the Go this machine now has is still too old for this tree; install a newer one (https://go.dev/dl/) and run this again"
+  fi
+  if ! command -v make >/dev/null; then
+    if command -v dnf >/dev/null; then dnf install -y make >/dev/null || die "could not install make"
+    elif command -v pacman >/dev/null; then pacman -S --needed --noconfirm make >/dev/null || die "could not install make"
+    else die "make is required to build; install it and run this again"; fi
+  fi
+}
+
+# dev_postgres: make sure a local PostgreSQL is installed and
+# running, then that the evesynapse role and database exist;
+# sets DEV_PG_PASSWORD to the role's password. Mirrors step 2b,
+# plus the pacman install path the production step leaves to
+# the operator, which is the path a dev laptop usually takes.
+dev_postgres() {
+  if ! command -v psql >/dev/null; then
+    echo "Installing PostgreSQL..."
+    if command -v dnf >/dev/null; then dnf install -y postgresql-server >/dev/null || die "could not install postgresql-server"
+    elif command -v pacman >/dev/null; then pacman -S --needed --noconfirm postgresql >/dev/null || die "could not install postgresql"
+    else die "no PostgreSQL on this machine and no package manager this script knows; install PostgreSQL 16 and run this again"; fi
+  fi
+  if command -v postgresql-setup >/dev/null && [ ! -f /var/lib/pgsql/data/PG_VERSION ]; then
+    postgresql-setup --initdb >/dev/null || die "postgresql-setup --initdb failed"
+  fi
+  if [ -d /var/lib/postgres ] && [ ! -f /var/lib/postgres/data/PG_VERSION ]; then
+    install -d -o postgres -g postgres /var/lib/postgres/data 2>/dev/null || true
+    su postgres -c "initdb -D /var/lib/postgres/data" >/dev/null || die "initdb failed"
+  fi
+  if command -v systemctl >/dev/null; then
+    systemctl enable --now postgresql >/dev/null 2>&1 || die "could not enable+start postgresql"
+  fi
+  DEV_PG_PASSWORD="$(head -c 24 /dev/urandom | od -An -tx1 | tr -d ' \n')"
+  su postgres -c "psql -v ON_ERROR_STOP=1 -q" >/dev/null <<SQL || die "could not create the evesynapse database role"
+DO \$\$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'evesynapse') THEN
+    CREATE ROLE evesynapse LOGIN PASSWORD '$DEV_PG_PASSWORD';
+  ELSE
+    ALTER ROLE evesynapse PASSWORD '$DEV_PG_PASSWORD';
+  END IF;
+END
+\$\$;
+SQL
+  su postgres -c "psql -tAc \"SELECT 1 FROM pg_database WHERE datname = 'evesynapse'\"" | grep -q 1 \
+    || su postgres -c "createdb -O evesynapse evesynapse" || die "could not create the evesynapse database"
+}
+
+# run_dev_mode: provision a database and a dev .env in this
+# checkout, build the dev server and run it. Local testing
+# only: the .env carries DEV_LOGIN=1, which registers the
+# /dev-login route on the dev build.
+run_dev_mode() {
+  require_checkout
+  ensure_build_tools
+  cd "$REPO_ROOT"
+  if [ -f .env ] && grep -q '^DATABASE_URL=' .env; then
+    echo "Keeping this checkout's .env (it already names a database)."
+  else
+    dev_postgres
+    if [ ! -f .env ]; then
+      cat > .env <<EOF
+# Local dev environment, written by setup.sh --build-dev.
+# Local testing only: DEV_LOGIN registers the /dev-login route.
+DATABASE_URL=postgres://evesynapse:$DEV_PG_PASSWORD@localhost:5432/evesynapse?sslmode=disable
+DEV_LOGIN=1
+EVE_CLIENT_ID=
+EVE_CLIENT_SECRET=
+<redacted>
+TOKEN_ENCRYPTION_KEY=$(head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n')
+ESI_CONTACT=nate@evesynapse.app
+LOG_LEVEL=debug
+EOF
+      echo "Wrote this checkout's .env for local testing."
+    else
+      printf '\nDATABASE_URL=postgres://evesynapse:%s@localhost:5432/evesynapse?sslmode=disable\n' "$DEV_PG_PASSWORD" >> .env
+      echo "Appended DATABASE_URL to this checkout's .env."
+    fi
+  fi
+  echo "Building the dev server..."
+  make assets
+  make build-dev
+  echo
+  echo "Starting the dev server: http://localhost:8080 (sign in at http://localhost:8080/dev-login)."
+  echo "Local testing only; stop it with Ctrl-C."
+  exec ./bin/evesynapse-dev
+}
+
+if [ "$MODE" = "build-dev" ]; then
+  run_dev_mode
+fi
+if [ "$MODE" = "build" ]; then
+  require_checkout
+  [ -z "${EVESYNAPSE_BINARY:-}" ] || die "--build builds this checkout; it cannot be combined with EVESYNAPSE_BINARY"
+  ensure_build_tools
+  echo "Building this checkout..."
+  (cd "$REPO_ROOT" && make assets && make build)
+  EVESYNAPSE_BINARY="$REPO_ROOT/bin/evesynapse"
+  export EVESYNAPSE_BINARY
+fi
 
 # --- Release signatures ---
 # A release's manifest (its version and the checksum of the build) is
@@ -297,7 +455,7 @@ Three modes (TOKEN_KEY_PROVIDER in .env):
      fetched at startup, so no usable key is stored on this
      machine at all. A free reference key service (a Cloudflare
      Worker you run in your own account) is at:
-       https://github.com/natemsz/cloudflare-kms
+       https://gitlab.com/natemsz/cloudflare-kms
 EOF
 }
 

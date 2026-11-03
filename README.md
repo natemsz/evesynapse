@@ -10,9 +10,9 @@ Special thanks to Sahir and ado for helping me fix my own mistakes and answering
 
 This project is dedicated to EVE Online, the game and community that I have loved for over two decades. To its pilots and its developers, past, present, and future; and to all those who we have lost over the years o7.
 
-While there is a hosted version (https://evesynapse.app) you are welcome to install this on your local machine or as a corporation/alliance service (see below on how to restrict sign-ups). If you have suggestions, concerns, questions or complaints, feel free to shoot me an email.
+While there is a hosted version (https://evesynapse.app) you are welcome to install this on your local machine or as a corporation/alliance service (see below on how to restrict sign-ups). If you have suggestions, concerns, questions or complaints, feel free to shoot us an email.
 
-Contact: nate@synap6.io or in-game 'Burzrujat'
+Contact: admin@evesynapse.app (the team), nate@evesynapse.app (Nate, or in-game 'Burzrujat'), miko@evesynapse.app (Miko). Bugs, issues and security reports go to bugs@evesynapse.app (see SECURITY.md).
 
 ## AI Use Disclosure and Policy
 - AI is used in this project purely for security auditing, hardening, and performance improvements, writing tests, certain UI elements such as icons and glyphs (I'm no artist), and to assist with simplifying repetitive tasks. AI is a force multiplier, never a primary un-reviewed author. If you wish to contribute code to the project you must:
@@ -203,6 +203,13 @@ development there is also a dev build (`make build-dev`, binary
 `bin/evesynapse-dev`, entrypoint `cmd/evesynapse-dev`) that
 additionally registers `/dev-login` when started with `DEV_LOGIN=1`;
 see "Dev login" below. Never deploy the dev build.
+
+For local testing there is a simpler option that does all of
+the above in one command: from a checkout,
+`sudo bash deploy/setup.sh --build-dev` installs Go and
+PostgreSQL when they are missing, provisions the database,
+writes a dev `.env` (with `DEV_LOGIN=1`), builds the dev
+server and runs it. Local testing only.
 
 The app auto-loads `./.env` at startup (keys already set in the real
 environment win). Then open <http://localhost:8080>:
@@ -487,10 +494,11 @@ registration for sign-in ("EVE SSO flow" below). Then:
 2. **Run the setup script** from a checkout of this repo:
 
    ```sh
-   sudo bash deploy/setup.sh
+   sudo bash setup.sh
    ```
 
-   It downloads the latest build for your machine, checks the
+   Run on its own like this, it downloads the latest build for
+   your machine, checks the
    release's signature and verifies the build against the checksum
    in its signed manifest ("Release signing" below; on a machine
    whose OpenSSL is older than 3.0 it can check only the checksum,
@@ -556,6 +564,17 @@ registration for sign-in ("EVE SSO flow" below). Then:
    Run the fork form from a checkout of the fork: the script checks
    the release against the release key in the checkout it is run
    from, and a fork's releases are signed with the fork's own key.
+
+   **Production from source:** in a checkout,
+   `sudo bash deploy/setup.sh --build` installs the build tools
+   it needs, provisions the same way, but builds the program
+   from the checkout instead of downloading a release, and
+   installs that build.
+
+   **Local testing only:** in a checkout,
+   `sudo bash deploy/setup.sh --build-dev` provisions a local
+   database and a dev `.env`, builds the dev server and runs
+   it (see "Run" above). Never deploy the dev build.
 
 3. **Fill in `/opt/evesynapse/.env`** with your EVE app's client
    ID, secret, and callback URL, then start it:
@@ -1009,7 +1028,14 @@ go run ./cmd/modbuild -all -write                     # back to the default, eve
 
 `-core-only` is the empty selection (`go build -tags core_only` compiles none regardless of the file). CI checks that the default file is the all-modules selection and that each module builds on its own with what it requires.
 
-Install your build with:
+Install your build with the setup script's `--build` mode,
+which does the build above and the install in one go:
+
+```sh
+sudo bash deploy/setup.sh --build
+```
+
+Or install a build you already made:
 
 ```sh
 sudo EVESYNAPSE_BINARY=$PWD/bin/evesynapse bash deploy/setup.sh
@@ -1031,6 +1057,12 @@ mirror (a Cloudflare R2 bucket served from
 last; the mirror job needs the `R2_ACCOUNT_ID`,
 `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` and `R2_BUCKET`
 CI/CD variables, and skips without them.
+
+That mirror is also the archive of versions: every published
+version's files are kept under
+<https://cdn.synap6.io/evesynapse/>, one folder per version
+(`evesynapse/v<version>/`, for example
+`evesynapse/v0.7.2.1/`).
 
 The updater reads releases from the sources
 `EVESYNAPSE_UPDATE_PROVIDER` lists, and checks them in the
@@ -1700,7 +1732,7 @@ endpoint speaking the two-call protocol — `POST {"wrapped": …}` →
 to wrap — can serve, so nothing ties this to one vendor's KMS. A
 complete reference service ships as a Cloudflare Worker you deploy
 to your own account, free, in a few minutes:
-**[natemsz/cloudflare-kms](https://github.com/natemsz/cloudflare-kms)**.
+**[natemsz/cloudflare-kms](https://gitlab.com/natemsz/cloudflare-kms)**.
 
 On Oracle Cloud there is a second shape, `TOKEN_KEY_PROVIDER=oci`:
 the key is wrapped by a master key in an OCI Vault — create it

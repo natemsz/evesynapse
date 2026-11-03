@@ -12,7 +12,7 @@
 # signed with RELEASE_SIGNING_KEY (a protected CI/CD
 # variable), and `evesynapse -update` installs nothing whose
 # manifest is not signed by a release key compiled into it.
-# The six release files go to the Generic Package Registry
+# The seven release files go to the Generic Package Registry
 # first and the Release object is created last, so a release
 # the updater can see is always complete.
 
@@ -260,6 +260,7 @@ release:
       mkdir -p dist
       CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o dist/evesynapse-arm64 ./cmd/evesynapse
       CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o dist/evesynapse-amd64 ./cmd/evesynapse
+      cp deploy/setup.sh dist/setup.sh
       cd dist
       for a in arm64 amd64; do
         sha=$(sha256sum "evesynapse-$a" | cut -d' ' -f1)
@@ -382,7 +383,7 @@ release:
           [ -n "$fname" ] && have["$fname"]="$fsha"
         done < <(printf '%s' "$files" | python3 -c 'import json,sys; [print(f["file_name"]+"="+f["file_sha256"]) for f in json.load(sys.stdin)]')
       fi
-      for f in evesynapse-arm64 evesynapse-amd64 latest-arm64.json latest-amd64.json latest-arm64.json.sig latest-amd64.json.sig; do
+      for f in evesynapse-arm64 evesynapse-amd64 latest-arm64.json latest-amd64.json latest-arm64.json.sig latest-amd64.json.sig setup.sh; do
         sha="$(sha256sum "dist/$f" | cut -d' ' -f1)"
         if [ "${have[$f]:-}" = "$sha" ]; then
           echo "$f: already in the registry under the same hash; skipping."
@@ -403,7 +404,8 @@ release:
       version = os.environ["VERSION"]
       files = ["evesynapse-arm64", "evesynapse-amd64",
                "latest-arm64.json", "latest-amd64.json",
-               "latest-arm64.json.sig", "latest-amd64.json.sig"]
+               "latest-arm64.json.sig", "latest-amd64.json.sig",
+               "setup.sh"]
       body = {
           "tag_name": "v" + version,
           "ref": os.environ["CI_COMMIT_SHA"],
@@ -467,7 +469,7 @@ mirror:
       fi
       export AWS_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID" AWS_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY"
       EP="https://$R2_ACCOUNT_ID.r2.cloudflarestorage.com"
-      FILES="evesynapse-arm64 evesynapse-amd64 latest-arm64.json latest-amd64.json latest-arm64.json.sig latest-amd64.json.sig"
+      FILES="evesynapse-arm64 evesynapse-amd64 latest-arm64.json latest-amd64.json latest-arm64.json.sig latest-amd64.json.sig setup.sh"
       for f in $FILES; do
         aws s3 cp "dist/$f" "s3://$R2_BUCKET/evesynapse/v$VERSION/$f" --endpoint-url "$EP"
       done

@@ -12,7 +12,7 @@
 # version (0.4.1.4-dev) publishes from the dev branch and is
 # reached with `evesynapse -update -dev`; nothing publishes
 # unsigned. The release object is the commit point the
-# updater reads: it is created as a draft, the six assets are
+# updater reads: it is created as a draft, the seven assets are
 # uploaded to it, and only then is it published, so no reader
 # ever sees a release whose files are not all there.
 #
@@ -86,6 +86,7 @@ jobs:
           mkdir -p dist
           CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o dist/evesynapse-arm64 ./cmd/evesynapse
           CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o dist/evesynapse-amd64 ./cmd/evesynapse
+          cp deploy/setup.sh dist/setup.sh
           cd dist
           for a in arm64 amd64; do
             sha=$(sha256sum "evesynapse-$a" | cut -d' ' -f1)
@@ -195,7 +196,7 @@ jobs:
               with open("release-notes.md", "a") as fh:
                   fh.write("\n## What's Changed\n\n" + "\n".join(notes))
           PYEOF
-      # The release is created as a draft, the six files are
+      # The release is created as a draft, the seven files are
       # uploaded to it, and then it is published: the publish
       # is the commit point, and the updater skips drafts, so
       # no reader can see a half-uploaded release.
@@ -264,7 +265,7 @@ jobs:
           print("Draft release v%s created (id %s)." % (version, rel["id"]))
           PYEOF
           REL_ID="$(cat release-id.txt)"
-          for f in evesynapse-arm64 evesynapse-amd64 latest-arm64.json latest-amd64.json latest-arm64.json.sig latest-amd64.json.sig; do
+          for f in evesynapse-arm64 evesynapse-amd64 latest-arm64.json latest-amd64.json latest-arm64.json.sig latest-amd64.json.sig setup.sh; do
             curl -fsS --header "Authorization: token $FORGEJO_TOKEN" \
               -F "attachment=@dist/$f" \
               "$FORGEJO_API/releases/$REL_ID/assets?name=$f" > /dev/null
@@ -337,7 +338,7 @@ jobs:
           fi
           export AWS_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID" AWS_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY"
           EP="https://$R2_ACCOUNT_ID.r2.cloudflarestorage.com"
-          FILES="evesynapse-arm64 evesynapse-amd64 latest-arm64.json latest-amd64.json latest-arm64.json.sig latest-amd64.json.sig"
+          FILES="evesynapse-arm64 evesynapse-amd64 latest-arm64.json latest-amd64.json latest-arm64.json.sig latest-amd64.json.sig setup.sh"
           for f in $FILES; do
             aws s3 cp "dist/$f" "s3://$R2_BUCKET/evesynapse/v$VERSION/$f" --endpoint-url "$EP"
           done
@@ -353,8 +354,8 @@ jobs:
 
   # Every published release is also created on GitLab, under
   # the signed tag the push mirrors already carried there,
-  # with the same release notes and the same six signed
-  # files, so the updater finds the same release whichever
+  # with the same release notes and the same files, so the
+  # updater finds the same release whichever
   # forge it asks. The GitLab leg uploads the files to the
   # project's Generic Package Registry first and creates the
   # Release last, the shape .gitlab-ci.yml's release job
@@ -415,7 +416,7 @@ jobs:
               [ -n "$fname" ] && have["$fname"]="$fsha"
             done < <(printf '%s' "$files_json" | python3 -c 'import json,sys; [print(f["file_name"]+"="+f["file_sha256"]) for f in json.load(sys.stdin)]')
           fi
-          for f in evesynapse-arm64 evesynapse-amd64 latest-arm64.json latest-amd64.json latest-arm64.json.sig latest-amd64.json.sig; do
+          for f in evesynapse-arm64 evesynapse-amd64 latest-arm64.json latest-amd64.json latest-arm64.json.sig latest-amd64.json.sig setup.sh; do
             sha="$(sha256sum "dist/$f" | cut -d' ' -f1)"
             if [ "${have[$f]:-}" = "$sha" ]; then
               echo "$f: already in the GitLab registry under the same hash; skipping."
@@ -434,7 +435,8 @@ jobs:
           version = os.environ["VERSION"]
           files = ["evesynapse-arm64", "evesynapse-amd64",
                    "latest-arm64.json", "latest-amd64.json",
-                   "latest-arm64.json.sig", "latest-amd64.json.sig"]
+                   "latest-arm64.json.sig", "latest-amd64.json.sig",
+                   "setup.sh"]
           api = os.environ["GL_API"]
           project = os.environ["GL_PROJECT"]
           body = {

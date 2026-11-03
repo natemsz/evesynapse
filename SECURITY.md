@@ -10,5 +10,5 @@
 
 ## Reporting a Vulnerability
 
-Vulnerabilities: admin@synap6.io
-General questions and concerns: nate@synap6.io
+Vulnerabilities: bugs@evesynapse.app
+General questions and concerns: admin@evesynapse.app

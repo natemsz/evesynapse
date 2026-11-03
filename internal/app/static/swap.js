@@ -226,7 +226,8 @@
       applyImgFallback: applyImgFallback,
       imgSettledFailed: imgSettledFailed,
       deniedTarget: deniedTarget,
-      deniedPrefetch: deniedPrefetch
+      deniedPrefetch: deniedPrefetch,
+      landingFor: landingFor
     };
   }
 
@@ -707,6 +708,22 @@
       syncActiveNav(new URL(url, window.location.href).pathname);
       if (push === "top") {
         window.scrollTo(0, 0);
+      } else if (push === "region") {
+        // The new view starts at the top of its window: the
+        // marked element scrolls to its margin line under the
+        // sticky bar. The history entry pushed for this
+        // navigation still holds the old offset, so restate it
+        // with the landed one for back and forward.
+        var anchor = main.querySelector("[data-land-top]");
+        if (anchor) {
+          anchor.scrollIntoView({ block: "start" });
+          try {
+            window.history.replaceState(
+              { esSwap: 1, scroll: window.scrollY }, "", url);
+          } catch (e) { /* private mode: the landing still holds */ }
+        } else {
+          window.scrollTo(0, 0);
+        }
       } else if (typeof push === "number") {
         window.scrollTo(0, push);
       }
@@ -801,36 +818,64 @@
     } catch (e) { /* the page still shows */ }
   }
 
+  // landingFor(pathname, from, to) decides where a same-page
+  // state change lands: "keep" holds the reader's scroll, "top"
+  // starts the new view at the page top, and "region" starts it
+  // at the top of the window the view renders into (the new
+  // content's [data-land-top] element). from and to are the
+  // current and target query strings as URLSearchParams.
+  function landingFor(pathname, from, to) {
+    var path = (pathname || "").replace(/\/$/, "");
+    if (path === "/assets") {
+      // Picking a different station changes which place the
+      // list shows, so it lands at the top like a new page. The
+      // current place is spelled two ways: no loc at all, or
+      // loc=0 in the hrefs a page hands out; both are the same
+      // place, so they compare equal here. Picking a container,
+      // ship or item only changes the selection, so it keeps
+      // the reader's place like search, sort and filter
+      // changes do.
+      var placeOf = function (params) {
+        var v = params.get("loc") || "";
+        return v === "0" ? "" : v;
+      };
+      return placeOf(from) !== placeOf(to) ? "top" : "keep";
+    }
+    if (path === "/character") {
+      // The sheet's surfaces (trained skills, skill browse,
+      // clones and implants) are views of one window: switching
+      // surface starts that window at its top, wherever the
+      // link was clicked from. Picks inside a surface (a skill
+      // group, a clone) keep the reader's place.
+      var surfOf = function (params) {
+        return params.get("surface") || "sheet";
+      };
+      return surfOf(from) !== surfOf(to) ? "region" : "keep";
+    }
+    return "keep";
+  }
+
   function navigate(url, opts) {
     opts = opts || {};
     if (navController && navController.abort) navController.abort();
     var mySeq = ++navSeq;
     var isCurrent = function () { return mySeq === navSeq; };
-    // A link that only changes this page's query (a mode, span or
-    // filter switch) is a view change, not a trip to a new page:
-    // the reader keeps their place instead of landing at the top.
-    // On the assets page, picking a different station changes
-    // which place the list shows, so it lands at the top like a
-    // new page; picking a container, ship or item only changes
-    // the selection, so it keeps the reader's place like search,
-    // sort and filter changes do.
+    // A link that only changes this page's query (a mode, span
+    // or filter switch) is a view change, not a trip to a new
+    // page: where it lands is landingFor's call.
     var samePage = false;
+    var landScroll = "top";
     try {
       var target = new URL(url, window.location.href);
       samePage = target.pathname === window.location.pathname;
-      if (samePage && window.location.pathname.replace(/\/$/, "") === "/assets") {
-        var from = new URL(window.location.href).searchParams;
-        // The current place is spelled two ways: no loc at all,
-        // or loc=0 in the hrefs a page hands out. Both are the
-        // same place, so they compare equal here.
-        var placeOf = function (params) {
-          var v = params.get("loc") || "";
-          return v === "0" ? "" : v;
-        };
-        if (placeOf(from) !== placeOf(target.searchParams)) samePage = false;
+      if (samePage) {
+        var landing = landingFor(window.location.pathname,
+          new URL(window.location.href).searchParams,
+          target.searchParams);
+        landScroll = landing === "keep" ? window.scrollY : landing;
+        if (landing === "top") samePage = false;
       }
     } catch (e) { /* an unparseable target navigates normally */ }
-    var landScroll = samePage ? window.scrollY : "top";
     var hit = cacheGet(url);
     if (hit) {
       if (hit.prefetched) {

@@ -72,6 +72,25 @@ test("content pages qualify, including public fits and query strings", function 
   }
 });
 
+function params(s) { return new URLSearchParams(s); }
+
+test("landingFor: an assets station pick lands at the top, a selection keeps the place", function () {
+  assert.equal(swap.landingFor("/assets/", params(""), params("loc=5")), "top");
+  assert.equal(swap.landingFor("/assets/", params("loc=5"), params("loc=0")), "top");
+  assert.equal(swap.landingFor("/assets/", params("loc=5"), params("loc=5&ship=9")), "keep");
+  // No loc and loc=0 spell the same place.
+  assert.equal(swap.landingFor("/assets/", params(""), params("loc=0&ship=9")), "keep");
+  assert.equal(swap.landingFor("/assets/", params("loc=0"), params("ship=9")), "keep");
+});
+
+test("landingFor: a character surface switch lands at the window top, picks inside keep the place", function () {
+  assert.equal(swap.landingFor("/character/", params(""), params("surface=clones")), "region");
+  assert.equal(swap.landingFor("/character/", params("surface=clones"), params("")), "region");
+  assert.equal(swap.landingFor("/character/", params("surface=clones"), params("surface=clones&clone=3")), "keep");
+  assert.equal(swap.landingFor("/character/", params("group=2"), params("group=5")), "keep");
+  assert.equal(swap.landingFor("/market/", params(""), params("type=34")), "keep");
+});
+
 test("deniedTarget covers the full-navigation pages", function () {
   assert.equal(swap.deniedTarget("/fittings/"), true);
   assert.equal(swap.deniedTarget("/fittings"), true);

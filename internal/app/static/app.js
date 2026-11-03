@@ -5426,7 +5426,18 @@
       row.addEventListener("click", function (ev) {
         if (ev.target.closest("a, button, input, select, details, summary")) return;
         var href = row.getAttribute("data-sel");
-        if (href) window.location.href = href;
+        if (!href) return;
+        // The row's name link carries the same target; going
+        // through it lets the content swap answer the click,
+        // where naming the location directly reloads the page.
+        var links = row.querySelectorAll("a[href]");
+        for (var i = 0; i < links.length; i++) {
+          if (links[i].getAttribute("href") === href) {
+            links[i].click();
+            return;
+          }
+        }
+        window.location.href = href;
       });
     });
   }

@@ -447,7 +447,6 @@ type killPageView struct {
 	DroppedFull   string
 	DestroyedFull string
 	DroppedPct    int
-	ZkillValue    string
 	Coverage      int // percent of lines our appraisal priced, 100 when full
 	Priced        bool
 	Slots         []killSlotGroup
@@ -516,9 +515,6 @@ func (app *Application) handleKillPage(w http.ResponseWriter, r *http.Request) {
 			v.DroppedPct = int(k.ValueDroppedOurs.Float64/k.ValueOurs.Float64*100 + 0.5)
 		}
 		v.Coverage = int(float64(k.ValueCoverage.Float64)*100 + 0.5)
-	}
-	if k.ValueZkill.Valid {
-		v.ZkillValue = formatISKShort(k.ValueZkill.Float64)
 	}
 	if g, err := app.queries.ListTypeGroupNames(ctx, []int64{k.ShipTypeID}); err == nil && len(g) == 1 {
 		v.ShipGroup = g[0].Name

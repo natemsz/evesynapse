@@ -86,12 +86,11 @@ func TestKillfeedFollowsStream(t *testing.T) {
 
 	var n int
 	var public bool
-	var zkill sql.NullFloat64
-	if err := app.db.QueryRow(`SELECT COUNT(*), bool_and(public), max(value_zkill) FROM kills`).Scan(&n, &public, &zkill); err != nil {
+	if err := app.db.QueryRow(`SELECT COUNT(*), bool_and(public) FROM kills`).Scan(&n, &public); err != nil {
 		t.Fatal(err)
 	}
-	if n != 2 || !public || zkill.Float64 != 2500000 {
-		t.Errorf("stream kills: %d stored, public %v, zkill %v", n, public, zkill)
+	if n != 2 || !public {
+		t.Errorf("stream kills: %d stored, public %v", n, public)
 	}
 	var attackers int
 	_ = app.db.QueryRow(`SELECT COUNT(*) FROM kill_attackers WHERE killmail_id = 500002`).Scan(&attackers)
@@ -160,15 +159,14 @@ func TestKillboardMergeAndPrice(t *testing.T) {
 		t.Errorf("stored line prices: %v, want hull 400000 and gun 50000", byType)
 	}
 
-	// The stream carries it: now public, zKillboard's figures added.
+	// The stream carries it: now public, with zKillboard's flags.
 	if err := app.ingestKillPackage(ctx, []byte(killPackageJSON(600001, 1))); err != nil {
 		t.Fatal(err)
 	}
 	var solo bool
-	var zkill sql.NullFloat64
-	_ = conn.QueryRow(`SELECT public, source, solo, value_zkill FROM kills WHERE killmail_id = 600001`).Scan(&public, &source, &solo, &zkill)
-	if !public || source != "zkill" || !solo || zkill.Float64 != 2500000 {
-		t.Errorf("after the stream: public %v source %s solo %v zkill %v", public, source, solo, zkill)
+	_ = conn.QueryRow(`SELECT public, source, solo FROM kills WHERE killmail_id = 600001`).Scan(&public, &source, &solo)
+	if !public || source != "zkill" || !solo {
+		t.Errorf("after the stream: public %v source %s solo %v", public, source, solo)
 	}
 }
 

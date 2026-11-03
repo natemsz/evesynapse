@@ -23,8 +23,9 @@ package app
 // Every kill is priced by our own appraisal (priceKills): the hull,
 // every fitted, cargo and nested container line, destroyed and
 // dropped, through the same house price order the rest of the site
-// uses; blueprint copies count as nothing. zKillboard's figure is
-// kept beside ours. Attackers and the full killmail are kept a year;
+// uses; blueprint copies count as nothing. zKillboard's own figure
+// is never read or kept: the price on a kill is ours or nothing.
+// Attackers and the full killmail are kept a year;
 // the summary row forever.
 // ---------------------------------------------------------------------------
 
@@ -32,7 +33,6 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
-	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -76,13 +76,14 @@ type killPackage struct {
 }
 
 // killZKB is zKillboard's metadata on a kill (the fields kept).
+// Its totalValue is never read: a kill's price is EveSynapse's own
+// appraisal or nothing.
 type killZKB struct {
-	LocationID int64   `json:"locationID"`
-	TotalValue float64 `json:"totalValue"`
-	Points     int32   `json:"points"`
-	NPC        bool    `json:"npc"`
-	Solo       bool    `json:"solo"`
-	Awox       bool    `json:"awox"`
+	LocationID int64 `json:"locationID"`
+	Points     int32 `json:"points"`
+	NPC        bool  `json:"npc"`
+	Solo       bool  `json:"solo"`
+	Awox       bool  `json:"awox"`
 }
 
 // killmailFull is the ESI killmail, every field the board keeps.
@@ -314,9 +315,6 @@ func (app *Application) ingestKill(ctx context.Context, raw json.RawMessage, has
 	if z != nil {
 		p.LocationID, p.Points = z.LocationID, z.Points
 		p.Npc, p.Solo, p.Awox = z.NPC, z.Solo, z.Awox
-		if z.TotalValue > 0 {
-			p.ValueZkill = sql.NullFloat64{Float64: z.TotalValue, Valid: true}
-		}
 	} else {
 		// Our own reading of what zKillboard flags: every attacker
 		// an NPC, or a lone attacker.

@@ -112,9 +112,9 @@ var coreWidgetCatalog = []widgetDef{
 // module's catalog size (what Add a module gives it) differs.
 // Accounts with a saved layout keep theirs.
 var defaultHomeLayout = []homeLayoutItem{
+	{ID: widgetBriefing, W: 3, H: 1},
 	{ID: widgetGlance, W: 3, H: 1},
 	{ID: widgetFleet, W: 3, H: 2},
-	{ID: widgetBriefing, W: 3, H: 1},
 	{ID: widgetTraining, W: 1, H: 2},
 	{ID: widgetPI, W: 1, H: 2},
 	{ID: widgetNetWorth, W: 1, H: 2},

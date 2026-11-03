@@ -124,12 +124,47 @@ ensure_build_tools() {
   fi
 }
 
-# dev_postgres: make sure a local PostgreSQL is installed and
-# running, then that the evesynapse role and database exist;
-# sets DEV_PG_PASSWORD to the role's password. Mirrors step 2b,
-# plus the pacman install path the production step leaves to
-# the operator, which is the path a dev laptop usually takes.
+# unexpire_postgres_account: the postgres account some distro
+# packages create (Arch's, for one) is expired, and su refuses
+# an expired account, which would kill every su postgres call
+# in this script. Clear the expiry; an account without one is
+# left exactly as it is.
+unexpire_postgres_account() {
+  chage -E -1 postgres >/dev/null 2>&1 || true
+}
+
+# parse_db_url URL: take a postgres:// or postgresql:// URL
+# apart into DB_URL_USER, DB_URL_PASSWORD, DB_URL_HOST and
+# DB_URL_DB. The password comes back percent-decoded, the way
+# the app reads it. Returns non-zero when the URL does not
+# parse: no postgres scheme, no user, no host, or no database.
+parse_db_url() {
+  local rest
+  rest="$(printf '%s' "$1" | sed -n 's|^postgres\(ql\)\?://||p')"
+  [ -n "$rest" ] || return 1
+  rest="${rest%%\?*}" # a query string rides after the database name; it is not part of it
+  DB_URL_USER="$(printf '%s' "$rest" | sed -n 's|^\([^:@/]*\).*$|\1|p')"
+  DB_URL_PASSWORD="$(printf '%s' "$rest" | sed -n 's|^[^:@/]*:\([^@/]*\)@.*$|\1|p')"
+  DB_URL_HOST="$(printf '%s' "$rest" | sed -n 's|^[^@/]*@\[\([^]]*\)\].*$|\1|p')"
+  if [ -z "$DB_URL_HOST" ]; then
+    DB_URL_HOST="$(printf '%s' "$rest" | sed -n 's|^[^@/]*@\([^:/]*\).*$|\1|p')"
+  fi
+  DB_URL_DB="$(printf '%s' "$rest" | sed -n 's|^[^/]*/\([^/]*\).*$|\1|p')"
+  if [ -n "$DB_URL_PASSWORD" ]; then
+    DB_URL_PASSWORD="$(printf '%b' "$(printf '%s' "$DB_URL_PASSWORD" | sed 's/%\([0-9A-Fa-f][0-9A-Fa-f]\)/\\x\1/g')")"
+  fi
+  [ -n "$DB_URL_USER" ] && [ -n "$DB_URL_HOST" ] && [ -n "$DB_URL_DB" ]
+}
+
+# dev_postgres ROLE PASSWORD DATABASE: make sure a local
+# PostgreSQL is installed and running, then that ROLE and
+# DATABASE exist with PASSWORD as the role's password. Mirrors
+# step 2b, plus the pacman install path the production step
+# leaves to the operator, which is the path a dev laptop
+# usually takes.
 dev_postgres() {
+  local role="$1" password="$2" dbname="$3"
+  unexpire_postgres_account
   if ! command -v psql >/dev/null; then
     echo "Installing PostgreSQL..."
     if command -v dnf >/dev/null; then dnf install -y postgresql-server >/dev/null || die "could not install postgresql-server"
@@ -146,20 +181,19 @@ dev_postgres() {
   if command -v systemctl >/dev/null; then
     systemctl enable --now postgresql >/dev/null 2>&1 || die "could not enable+start postgresql"
   fi
-  DEV_PG_PASSWORD="$(head -c 24 /dev/urandom | od -An -tx1 | tr -d ' \n')"
-  su postgres -c "psql -v ON_ERROR_STOP=1 -q" >/dev/null <<SQL || die "could not create the evesynapse database role"
+  su postgres -c "psql -v ON_ERROR_STOP=1 -q" >/dev/null <<SQL || die "could not create the $role database role"
 DO \$\$
 BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'evesynapse') THEN
-    CREATE ROLE evesynapse LOGIN PASSWORD '$DEV_PG_PASSWORD';
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '$role') THEN
+    CREATE ROLE $role LOGIN PASSWORD '$password';
   ELSE
-    ALTER ROLE evesynapse PASSWORD '$DEV_PG_PASSWORD';
+    ALTER ROLE $role PASSWORD '$password';
   END IF;
 END
 \$\$;
 SQL
-  su postgres -c "psql -tAc \"SELECT 1 FROM pg_database WHERE datname = 'evesynapse'\"" | grep -q 1 \
-    || su postgres -c "createdb -O evesynapse evesynapse" || die "could not create the evesynapse database"
+  su postgres -c "psql -tAc \"SELECT 1 FROM pg_database WHERE datname = '$dbname'\"" | grep -q 1 \
+    || su postgres -c "createdb -O $role $dbname" || die "could not create the $dbname database"
 }
 
 # run_dev_mode: provision a database and a dev .env in this
@@ -171,9 +205,38 @@ run_dev_mode() {
   ensure_build_tools
   cd "$REPO_ROOT"
   if [ -f .env ] && grep -q '^DATABASE_URL=' .env; then
-    echo "Keeping this checkout's .env (it already names a database)."
+    # The .env itself is never touched. A database it names on
+    # this machine is still provisioned to match it, so the
+    # dev server finds the role and database it connects to;
+    # a database on another machine is that machine's business.
+    local url
+    url="$(sed -n 's/^DATABASE_URL=//p' .env | head -1)"
+    url="${url%\"}"; url="${url#\"}"; url="${url%\'}"; url="${url#\'}"
+    parse_db_url "$url" \
+      || die "could not take apart the DATABASE_URL in this checkout's .env; it should look like postgres://user:password@localhost:5432/database"
+    case "$DB_URL_HOST" in
+      localhost|127.0.0.1|::1)
+        case "$DB_URL_USER" in
+          *[!A-Za-z0-9_]*|"") die "the DATABASE_URL in this checkout's .env names the user '$DB_URL_USER', which this script cannot create a role for; use letters, digits and underscores" ;;
+        esac
+        case "$DB_URL_DB" in
+          *[!A-Za-z0-9_]*|"") die "the DATABASE_URL in this checkout's .env names the database '$DB_URL_DB', which this script cannot create; use letters, digits and underscores" ;;
+        esac
+        [ -n "$DB_URL_PASSWORD" ] \
+          || die "the DATABASE_URL in this checkout's .env names the local database '$DB_URL_DB' as '$DB_URL_USER' without a password; add one to the URL and run this again"
+        case "$DB_URL_PASSWORD" in
+          *\'*) die "the password in this checkout's .env DATABASE_URL contains a single quote, which this script cannot use in its SQL; change the password and run this again" ;;
+        esac
+        dev_postgres "$DB_URL_USER" "$DB_URL_PASSWORD" "$DB_URL_DB"
+        echo "Provisioned the local database '$DB_URL_DB' for role '$DB_URL_USER', as this checkout's .env names it; the file itself is unchanged."
+        ;;
+      *)
+        echo "This checkout's .env names a database on $DB_URL_HOST, not on this machine, so no local database was provisioned for it."
+        ;;
+    esac
   else
-    dev_postgres
+    DEV_PG_PASSWORD="$(head -c 24 /dev/urandom | od -An -tx1 | tr -d ' \n')"
+    dev_postgres evesynapse "$DEV_PG_PASSWORD" evesynapse
     if [ ! -f .env ]; then
       cat > .env <<EOF
 # Local dev environment, written by setup.sh --build-dev.
@@ -410,6 +473,7 @@ if ! grep -qs '^DATABASE_URL=' "$INSTALL_DIR/.env" 2>/dev/null; then
       systemctl enable --now postgresql >/dev/null 2>&1 || die "could not enable+start postgresql"
     fi
     PG_PASSWORD="$(head -c 24 /dev/urandom | od -An -tx1 | tr -d ' \n')"
+    unexpire_postgres_account
     # Create the role when missing; when it already exists (a
     # re-run of setup whose .env lost its DATABASE_URL), reset
     # the password to the fresh one so the .env about to be
@@ -562,6 +626,7 @@ tune_postgres() {
     && ! grep -qsE '^DATABASE_URL=[^#]*@(localhost|127\.0\.0\.1|\[::1\])[:/]' "$INSTALL_DIR/.env"; then
     return 0 # the database is on another machine
   fi
+  unexpire_postgres_account
   echo 'SELECT 1' | pg_sql >/dev/null || return 0 # no local server this script can administer
 
   local mem_mb plan buffers_mb cache_mb changed="" data_dir pending

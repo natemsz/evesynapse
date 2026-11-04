@@ -52,7 +52,7 @@
   --gutter: var(--space-4);
   /* The smallest comfortable touch target. */
   --tap: 2.75rem;
-  --surface-page: color-mix(in srgb, var(--panel) 93%, transparent);
+  --surface-page: color-mix(in srgb, var(--panel) 96%, transparent);
   --surface-pane: color-mix(in srgb, var(--panel) 97%, transparent);
   --surface-float: var(--panel);
   --surface-inset: var(--row-alt);
@@ -77,10 +77,12 @@ html[data-theme="light"] {
 
 /* ---- The frame: glass dosage ----
    The page body is a solid surface: the sky shows around it, not
-   through it. Dropping the body's blur also stops it from being
-   the containing block for fixed children, which the sheets used
-   to work around page by page. Home keeps its open field of
-   widget cards. */
+   through it. --surface-page sits at 96% panel, one step under the
+   consoles' --surface-pane (97%), so a console reads as part of the
+   page instead of a darker slab on it. No blur: a backdrop filter
+   would make the body the containing block for fixed children,
+   which the sheets used to work around page by page, and repaint
+   under every scroll. Home keeps its open field of widget cards. */
 .page-body {
   background: var(--surface-page);
   -webkit-backdrop-filter: none;

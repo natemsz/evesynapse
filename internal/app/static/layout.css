@@ -410,7 +410,7 @@ a.l-stat:hover { border-color: color-mix(in srgb, var(--accent) 45%, transparent
 
 /* Local time: the reader's own time beside an EVE time, written in
    by app.js; empty (and out of the way) without JS. */
-.l-local { color: var(--muted); font-size: 0.85em; }
+.l-local { color: var(--muted); font-size: var(--fs-2xs); }
 .l-local:not(.on) { display: none; }
 
 /* Panel: the standard solid block on the page. */
@@ -669,7 +669,7 @@ a.l-stat:hover { border-color: color-mix(in srgb, var(--accent) 45%, transparent
   grid-column: 1 / -1;
 }
 #main-content table.cards-on > tbody > tr > :is(td, th):first-child {
-  font-size: 1.05em;
+  font-size: var(--fs-sm);
   font-weight: 600;
   color: var(--text-bright);
 }
@@ -695,7 +695,7 @@ a.l-stat:hover { border-color: color-mix(in srgb, var(--accent) 45%, transparent
 #main-content table.cards-on > tbody > tr > td.card-title {
   order: -1;
   grid-column: 1 / -1;
-  font-size: 1.05em;
+  font-size: var(--fs-sm);
   font-weight: 600;
   color: var(--text-bright);
 }
@@ -717,7 +717,7 @@ a.l-stat:hover { border-color: color-mix(in srgb, var(--accent) 45%, transparent
 #main-content table.cards-on > tbody > tr > td.card-ctl:last-child { justify-self: end; }
 #main-content table.cards-on > tbody > tr > td:is(.card-ctl, .card-blank):first-child + td {
   grid-column: 1 / -1;
-  font-size: 1.05em; font-weight: 600; color: var(--text-bright);
+  font-size: var(--fs-sm); font-weight: 600; color: var(--text-bright);
 }
 #main-content table.cards-on > tbody > tr > td:is(.card-ctl, .card-blank):first-child + td::before { display: none; }
 .cards-sort {

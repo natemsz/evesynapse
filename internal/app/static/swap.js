@@ -715,7 +715,8 @@
     var paint = function () {
       dropHoistedModals();
       main.innerHTML = entry.main;
-      var bar = document.querySelector(".page-shell > .subnav");
+      var bars = document.querySelectorAll(".page-shell > .subnav");
+      var bar = bars && bars.length ? bars[0] : null;
       if (bar && entry.subnav != null) bar.innerHTML = entry.subnav;
       hoistModals(main);
       if (entry.title) document.title = entry.title;

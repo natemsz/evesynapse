@@ -1,18 +1,34 @@
 {{define "title"}}Intel Feed{{end}}
-{{define "pagetitle"}}<h1><span class="gt">Intel feed</span></h1>{{end}}
+{{define "pagetitle"}}<h1><span class="gt">Intel Feed</span></h1>{{end}}
 {{define "pagetabs"}}{{template "sectiontabs" .}}{{end}}
 {{define "content"}}
 {{with .IntelFeed}}
 {{/* The cross-channel feed (channels.go): the newest reports from
      every channel the reader can reach, each card naming its
      channel. channels.js polls feed.json for what is new, as it
-     does on a channel's own page. */}}
-  <p class="lede prose">The newest reports from {{if eq .Channels 1}}your intel channel{{else}}all {{.Channels}} of your intel channels{{end}}, newest first. To report, open the channel it belongs to.</p>
-  {{if gt (len .Systems) 1}}<ul class="ch-hot" aria-label="Systems in these reports">{{range .Systems}}<li><a href="/map/?system={{.ID}}"><span class="sec sec-{{.SecTier}}">{{.SecText}}</span> {{.Name}}</a> <span class="muted">{{.Reports}} {{if eq .Reports 1}}report{{else}}reports{{end}}{{if .Hostiles}} · up to {{.Hostiles}} hostiles{{end}} · {{.Ago}}</span></li>{{end}}</ul>{{end}}
-  <h2>Reports <span class="badge kill" data-ch-live hidden>Live</span></h2>
-  <ol class="ch-feed" data-ch-feed="/intel/feed.json" data-ch-after="{{.LastID}}">
-    {{range .Reports}}{{template "ch-report" .}}{{else}}<li class="ch-empty hint" data-ch-empty>{{if eq .Channels 0}}You are not in any intel channels yet. <a href="/intel/channels/">Make one or ask for a grant</a> and its reports will gather here.{{else}}No reports yet. When your channels hear something, it lands here.{{end}}</li>{{end}}
-  </ol>
-  {{if .Older}}<p><a href="{{.Older}}">Older reports</a></p>{{end}}
+     does on a channel's own page. The systems the reports name sit
+     beside the feed on a wide page and above it, as a strip, on a
+     narrow one. */}}
+<div class="l-page ch">
+  <div class="l-head">
+    <p class="l-head-sum">{{if eq .Channels 0}}Reports from every intel channel you are in gather here, newest first.{{else}}The newest reports from {{if eq .Channels 1}}your intel channel{{else}}all <b>{{.Channels}}</b> of your intel channels{{end}}, newest first. To report, open the channel it belongs to.{{end}}</p>
+    <div class="l-head-act"><a class="btn btn-quiet" href="/intel/channels/">Your channels</a></div>
+  </div>
+
+  <div class="ch-feedpage{{if gt (len .Systems) 1}} has-hot{{end}}">
+    {{if gt (len .Systems) 1}}<section class="l-panel ch-hotpanel" aria-labelledby="ch-hot-h">
+      <h2 id="ch-hot-h">Systems in these reports</h2>
+      <ul class="ch-hot">{{range .Systems}}<li><a href="/map/?system={{.ID}}"><span class="sec sec-{{.SecTier}}">{{.SecText}}</span> {{.Name}}</a> <span class="ch-dim">{{.Reports}} {{if eq .Reports 1}}report{{else}}reports{{end}}{{if .Hostiles}} · up to {{.Hostiles}} hostiles{{end}} · {{.Ago}}</span></li>{{end}}</ul>
+    </section>{{end}}
+
+    <section class="l-panel ch-main">
+      <h2>Reports <span class="badge kill" data-ch-live hidden>Live</span></h2>
+      <ol class="ch-feed" data-ch-feed="/intel/feed.json" data-ch-after="{{.LastID}}">
+        {{range .Reports}}{{template "ch-report" .}}{{else}}<li class="ch-empty ch-hint" data-ch-empty>{{if eq .Channels 0}}You are not in any intel channels yet. <a href="/intel/channels/">Make one or ask for a grant</a> and its reports will gather here.{{else}}No reports yet. When your channels hear something, it lands here.{{end}}</li>{{end}}
+      </ol>
+      {{if .Older}}<p class="ch-p"><a href="{{.Older}}">Older reports</a></p>{{end}}
+    </section>
+  </div>
+</div>
 {{end}}
 {{end}}

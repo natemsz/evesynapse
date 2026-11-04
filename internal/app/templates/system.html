@@ -1,5 +1,6 @@
 {{define "title"}}{{if and .System .System.Name}}{{.System.Name}}{{else}}Solar system{{end}}{{end}}
 {{define "content"}}
+<div class="l-page">
 {{if .System}}
 {{if eq .System.State "missing"}}
 <h1><span class="gt">Solar system</span></h1>
@@ -82,4 +83,5 @@
 
 {{end}}
 {{end}}
+</div>
 {{end}}

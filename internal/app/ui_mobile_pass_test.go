@@ -124,7 +124,7 @@ func TestCoarsePointerTapFloor(t *testing.T) {
 func TestAppraisalBandLayout(t *testing.T) {
 	css := readStatic(t, "appraisal.css")
 	if !strings.Contains(css, ".ap-card { min-width: 0; container-type: inline-size; }") ||
-		!strings.Contains(css, "font-size: clamp(var(--fs-xs), 8cqw, var(--fs-xl));") {
+		!strings.Contains(css, "font-size: clamp(var(--fs-2xs), 8cqw, var(--fs-lg));") {
 		t.Error(".ap-cv no longer sizes to its own card; summary figures can collide again")
 	}
 	block := mediaBlock(t, css, "@container page (width < 45rem) {\n  /* Phone widths: the fixed-layout reprocess table")

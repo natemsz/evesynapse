@@ -21,7 +21,7 @@
 .bpl-verdict h3 { margin-top: 0; }
 .bpl-sub { margin: -0.3rem 0 var(--space-2); color: var(--muted); }
 .plan-verdictrow { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
-.plan-verdict { font-size: var(--fs-2xl); font-weight: 700; margin: 0.45rem 0 0; }
+.plan-verdict { font-size: var(--fs-lg); font-weight: 700; margin: 0.45rem 0 0; }
 .plan-verdict.build { color: var(--plan-build); }
 .plan-verdict.buy { color: var(--plan-buy); }
 .plan-nodehint { color: var(--muted); margin: 0.45rem 0 0; }
@@ -93,8 +93,8 @@ it, inactive tabs recessed and muted. */
    same presentation as the Blueprint ME modal's cells. */
 .plan-setnote { margin: 0 0 0.7rem; color: var(--muted); }
 .plan-setgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(12.5rem, 1fr)); gap: 0.6rem 1rem; }
-.plan-setcell { display: flex; flex-direction: column; gap: 0.25rem; position: relative; font-size: var(--fs-lg); }
-.plan-setcell > span:first-child { color: var(--muted); font-size: var(--fs-md); }
+.plan-setcell { display: flex; flex-direction: column; gap: 0.25rem; position: relative; font-size: var(--fs-sm); }
+.plan-setcell > span:first-child { color: var(--muted); font-size: var(--fs-xs); }
 .plan-setcell input, .plan-setcell select { width: 100%; box-sizing: border-box; }
 .plan-setcell .market-wrap, .plan-setcell .sys-wrap { position: relative; display: block; }
 .plan-setactions { margin: 0.9rem 0 0; text-align: right; }
@@ -114,7 +114,7 @@ the rail tooltip treatment. */
   padding: 0 0.2rem;
   border-radius: 999px;
   color: #fff;
-  font-size: var(--fs-xs);
+  font-size: var(--fs-2xs);
   line-height: 1rem;
   text-align: center;
 }
@@ -135,7 +135,7 @@ skills as a list for the skillbook. */
   border: 1px solid rgba(255, 210, 122, 0.35);
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5);
   color: #ffd27a;
-  font-size: var(--fs-md);
+  font-size: var(--fs-xs);
   line-height: 1.45;
   text-align: left;
   pointer-events: none;
@@ -239,7 +239,7 @@ button[data-active="1"] { outline: 2px solid var(--accent); outline-offset: 1px;
 }
 /* The origin line: where an unbuildable card comes from, with
    the PI planner one click away for PI commodities. */
-.plan-origin { margin-top: 0.2rem; font-size: var(--fs-sm); color: var(--muted); }
+.plan-origin { margin-top: 0.2rem; font-size: var(--fs-xs); color: var(--muted); }
 .plan-origin-link { color: var(--accent); text-decoration: none; white-space: nowrap; }
 .plan-origin-link:hover { text-decoration: underline; }
 /* Fitting is driven by vertical room: as the viewport gets
@@ -247,7 +247,7 @@ button[data-active="1"] { outline: 2px solid var(--accent); outline-offset: 1px;
    any stage has to scroll. */
 @media (max-height: 52rem) {
   .plan-stage-cards .plan-node { padding: 0.35rem 0.5rem; }
-  .plan-stage-cards .plan-cost { font-size: var(--fs-lg); }
+  .plan-stage-cards .plan-cost { font-size: var(--fs-md); }
   .plan-stage-cards .plan-node .plan-bar { height: 0.5rem; margin-top: 0.25rem; }
 }
 @media (max-height: 40rem) {
@@ -269,7 +269,7 @@ button[data-active="1"] { outline: 2px solid var(--accent); outline-offset: 1px;
 }
 .plan-node.plan-onpath { border-color: #7a5326; background: rgba(255, 106, 26, 0.07); }
 .plan-stage-dense .plan-node { padding: 0.3rem 0.45rem; }
-.plan-stage-dense .plan-cost { font-size: var(--fs-lg); }
+.plan-stage-dense .plan-cost { font-size: var(--fs-sm); }
 .plan-stage-dense .plan-node .plan-bar { height: 0.5rem; margin-top: 0.25rem; }
 /* Decision-map cards: state chip + bottleneck flag on the top
 row, cost and branch facts on the meta line, and a full-width
@@ -279,7 +279,7 @@ proportional bar under the text, colored by the decision. */
   display: inline-block;
   padding: 0.08rem 0.5rem;
   border-radius: 999px;
-  font-size: var(--fs-xs);
+  font-size: var(--fs-2xs);
   font-weight: 700;
   letter-spacing: 0.07em;
   white-space: nowrap;
@@ -289,7 +289,7 @@ proportional bar under the text, colored by the decision. */
 .plan-have .plan-chip { color: var(--muted); border: 1px solid #3a3a3a; }
 .plan-flag { color: #ff8a75; border: 1px solid var(--plan-risk); background: rgba(214, 60, 20, 0.16); }
 .plan-node-meta { margin-top: 0.15rem; }
-.plan-cost { font-size: var(--fs-xl); font-weight: 700; }
+.plan-cost { font-size: var(--fs-lg); font-weight: 700; }
 .plan-node .plan-bar { height: 0.7rem; margin: 0.4rem 0 0.1rem; }
 .plan-fill.plan-risk { background: var(--plan-risk); }
 .me-wrap { display: inline; }

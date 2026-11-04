@@ -14,6 +14,10 @@ While there is a hosted version (https://evesynapse.app) you are welcome to inst
 
 Contact: admin@evesynapse.app (the team), nate@evesynapse.app (Nate, or in-game 'Burzrujat'), miko@evesynapse.app (Miko). Bugs, issues and security reports go to bugs@evesynapse.app (see SECURITY.md).
 
+## Repository
+
+The project's main home is on Forgejo at [natems.dev/EveSynapse/evesynapse](https://natems.dev/EveSynapse/evesynapse). Development, issues, and pull requests happen there. The project is mirrored at [GitHub](https://github.com/natemsz/evesynapse) and [GitLab](https://gitlab.com/natemsz/evesynapse); the mirrors are read-only copies and may lag the main home.
+
 ## AI Use Disclosure and Policy
 - AI is used in this project purely for security auditing, hardening, and performance improvements, writing tests, certain UI elements such as icons and glyphs (I'm no artist), and to assist with simplifying repetitive tasks. AI is a force multiplier, never a primary un-reviewed author. If you wish to contribute code to the project you must:
 

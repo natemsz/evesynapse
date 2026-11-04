@@ -4471,7 +4471,11 @@ html[data-theme="light"] .page-body:not(:has(.home-grid)) .fit-modsearch {
   align-items: center;
   margin: 0.6rem 0;
 }
-.fit-famchips { display: flex; flex-wrap: wrap; gap: 0.3rem; }
+/* The slot filter is one row: the chips share it evenly and only
+   scroll sideways when they cannot fit, so no chip strands alone
+   on a second line. */
+.fit-famchips { display: flex; flex-wrap: nowrap; gap: 0.25rem; overflow-x: auto; scrollbar-width: none; }
+.fit-famchips::-webkit-scrollbar { display: none; }
 .fit-famchips button {
   background: #141414;
   border: 1px solid #2c2c2c;
@@ -4485,7 +4489,9 @@ html[data-theme="light"] .page-body:not(:has(.home-grid)) .fit-modsearch {
   font-size: var(--fs-xs);
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  padding: 0.25rem 0.7rem;
+  padding: 0.25rem 0.45rem;
+  flex: 1 0 auto;
+  white-space: nowrap;
   touch-action: manipulation;
 }
 .fit-famchips button.on {
@@ -6204,7 +6210,7 @@ button.gn-title:hover .gn-more, button.gn-title:focus-visible .gn-more { color: 
    panel stays open; Done commits the set, and each row's
    Only link scopes the page to that character in one pick. */
 .asset-scope { margin: 0; max-width: none; flex: 1 1 auto; }
-.asset-scope-btn { display: flex; align-items: center; gap: 0.5rem; width: 100%; justify-content: space-between; padding: 0.42rem 0.75rem; border: 1px solid var(--box-edge); border-radius: 999px; background: var(--glass); color: var(--text-bright); font: inherit; font-weight: 600; cursor: pointer; }
+.asset-scope-btn { display: flex; align-items: center; gap: 0.5rem; width: 100%; white-space: nowrap; justify-content: space-between; padding: 0.42rem 0.75rem; border: 1px solid var(--box-edge); border-radius: 999px; background: var(--glass); color: var(--text-bright); font: inherit; font-weight: 600; cursor: pointer; }
 .asset-scope-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .asset-scope-caret { flex: none; color: var(--muted); font-size: var(--fs-xs); }
 .asset-scope-panel { padding: 0.4rem; }
@@ -6333,3 +6339,9 @@ button.gn-title:hover .gn-more, button.gn-title:focus-visible .gn-more { color: 
 .slotsec .modrow .mq { color: var(--accent); font-weight: 700; }
 .insp-note { margin-top: 0.6rem; color: var(--muted); font-size: var(--fs-xs); }
 
+
+/* Characters page: a pilot's tag field and its Save share one row,
+   and on a card the pair takes the card's full width. */
+.chars-table form { display: flex; align-items: center; gap: var(--space-2); margin: 0; }
+.chars-table form input[name="tags"] { flex: 1 1 8rem; min-width: 0; width: auto; }
+#main-content table.cards-on.chars-table > tbody > tr > td:has(> form) { grid-column: 1 / -1; }

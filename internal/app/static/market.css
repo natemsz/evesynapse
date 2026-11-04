@@ -132,6 +132,12 @@ td.mt-reqs { max-width: 12rem; }
 .mb-searchform .searchwrap > input { width: 100%; }
 .mb-filters { display: flex; align-items: center; gap: 0.5rem; margin-left: auto; }
 .mb-minvol { display: inline-flex; align-items: center; gap: 0.45rem; }
+.mb-minvol > span { color: var(--muted); font-family: var(--font-display); font-weight: 600; font-size: var(--fs-xs); letter-spacing: 0.06em; text-transform: uppercase; white-space: nowrap; }
+.mb-minvol input { width: 6rem; }
+/* On a phone the trades filter is one row: the labelled field, then
+   Apply beside it rather than under it. */
+#main-content form.mb-filters { flex-wrap: nowrap !important; align-items: flex-end; margin-left: 0; }
+#main-content form.mb-filters > .btn[type="submit"] { flex: none !important; }
 .mb-filter-note { margin: 0.2rem 0 0.6rem; }
 /* The filter row no longer sits above the table, so the header
    row takes back its breathing room: the gap between the table

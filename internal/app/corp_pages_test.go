@@ -467,7 +467,7 @@ func TestCorpPagesRenderFromSnapshots(t *testing.T) {
 		t.Fatalf("corp killmails page: status %d", code)
 	}
 	mustContain(t, "/corporations/killmails/", body,
-		"Fixture Corp [FXC] — Killmails", "LOSS", "KILL", "Member One", "Victim EightyEight")
+		"Corporation Killmails", "LOSS", "KILL", "Member One", "Victim EightyEight")
 
 	// The cluster-1 character view renders the same stored details
 	// (both kills from this character's point of view).
@@ -475,7 +475,7 @@ func TestCorpPagesRenderFromSnapshots(t *testing.T) {
 	if code != http.StatusOK {
 		t.Fatalf("character killmails page: status %d", code)
 	}
-	mustContain(t, "/killmails/", body, "Fixture Ceo — Killmails", "KILL", "Member One")
+	mustContain(t, "/killmails/", body, "<span class=\"gt\">Killmails</span>", "KILL", "Member One")
 	if strings.Contains(body, "LOSS") {
 		t.Error("character killmails view shows a LOSS badge for mails the character only won")
 	}

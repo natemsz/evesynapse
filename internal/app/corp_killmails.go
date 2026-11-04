@@ -42,7 +42,7 @@ func (app *Application) handleCorpKillmails(w http.ResponseWriter, r *http.Reque
 
 	view := &killmailsView{
 		CharacterName: sel.Active.Name,
-		Title:         sel.Base.CorpTitle + " — Killmails",
+		Title:         "Corporation Killmails",
 		BasePath:      "/corporations/killmails/",
 		Subject:       "this corporation",
 		CorpID:        sel.Base.CorpID,

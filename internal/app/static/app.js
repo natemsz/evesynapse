@@ -4753,8 +4753,11 @@
       titles.push(head.cells[i].classList.contains("card-title") ? "1" : "");
     }
     var labels = cardLabels(texts, spans), optional = cardLabels(opts, spans), titled = cardLabels(titles, spans);
-    for (r = 0; r < table.tBodies.length; r++) {
-      var rows = table.tBodies[r].rows;
+    // A footer (a Total row) becomes a card like the body rows.
+    var groups = Array.prototype.slice.call(table.tBodies);
+    if (table.tFoot) groups.push(table.tFoot);
+    for (r = 0; r < groups.length; r++) {
+      var rows = groups[r].rows;
       for (i = 0; i < rows.length; i++) {
         var idx = 0;
         for (c = 0; c < rows[i].cells.length; c++) {

@@ -1,18 +1,82 @@
-/* channels.css -- intel channels: the list (channels.html) and one
- * channel (channel.html). The pages use the site's cards, forms, row
- * lists and badges; this only adds what those lack: the live report
- * feed, the pairing code, Axon's set-up steps and its questions. A
- * report that just arrived glows briefly. */
+/* channels.css -- intel channels on the layout framework: the list
+ * (channels.html), one channel (channel.html) and the cross-channel
+ * feed (feed.html); the workbench and a system's page show the same
+ * report cards. Page parts (head, panels, sidebar, switcher) come
+ * from layout.css; this sheet styles the report feed, the channel
+ * rows, the forms' arrangement, the pairing code, Axon's steps and
+ * its folded questions. Every face is a framework token: one reading
+ * face for prose, labels and forms alike. Width decisions measure the
+ * page (@container page), never the window. A report that just
+ * arrived glows briefly. */
+
+.ch h2 { margin: 0 0 var(--space-3); }
+.ch h3 { margin: var(--space-4) 0 var(--space-2); font-size: var(--fs-md); }
+.ch-p { margin: 0 0 var(--space-3); }
+.ch-hint { margin: var(--space-2) 0 0; color: var(--muted); font-size: var(--fs-md); }
+.ch-dim { display: block; color: var(--muted); font-size: var(--fs-sm); }
+.ch-cnt { margin-left: 0.3rem; color: var(--muted); font-weight: 500; }
+.ch code { padding: 0 0.3rem; border: 1px solid var(--hairline); border-radius: var(--r-xs); background: var(--surface-page); font-family: var(--font-body); font-size: 0.95em; }
+
+/* The page's top: the main block beside its side panel. */
+.ch-top { --l-side: 20rem; --l-main-min: 60%; align-items: start; }
+
+/* Forms: fields stack, full width, the submit under them. */
+/* nowrap is !important: phone.css lays out any #main-content form
+   that holds a labelled field as a wrapping row, and its id outranks
+   this sheet; a column form that wraps throws its button off the
+   card. */
+.ch-form { display: flex; flex-direction: column; flex-wrap: nowrap !important; align-items: stretch; gap: var(--space-2); margin: 0; }
+.ch .btn { max-width: 100%; white-space: normal; }
+.ch-form h2, .ch-form h3 { margin: 0 0 var(--space-1); }
+.ch-form .field, .ch-form .field input, .ch-form .field select, .ch-form .field textarea { width: 100%; max-width: none; margin: 0; }
+.ch-form > .btn { align-self: flex-start; }
+.ch-danger { border-color: color-mix(in srgb, var(--danger) 40%, var(--hairline)); }
+.ch-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 19rem), 1fr)); gap: var(--space-3); }
+
+/* Channel rows. */
+.ch-chans, .ch-tokens, .ch-grants, .ch-watch { margin: 0; padding: 0; list-style: none; }
+.ch-chans li, .ch-tokens li, .ch-grants li, .ch-watch li { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-2) 0; border-top: 1px solid var(--hairline); }
+.ch-chans li:first-child, .ch-tokens li:first-child, .ch-grants li:first-child, .ch-watch li:first-child { border-top: 0; }
+.ch-chan { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; text-decoration: none; }
+.ch-chan-n { color: var(--text-bright); font-weight: 600; }
+.ch-chan:hover .ch-chan-n { color: var(--accent); }
+.ch-chan-d { color: var(--muted); font-size: var(--fs-sm); overflow-wrap: anywhere; }
+.ch-token, .ch-grant, .ch-watch-main { flex: 1 1 auto; min-width: 0; }
+.ch-watch-main > a { font-weight: 600; }
+.ch-grant .ch-dim { display: inline; }
+
+/* Reporting: system, count and words on one row while they fit. */
+.ch-report { margin: 0 0 var(--space-3); }
+.ch-report h2 { margin-bottom: var(--space-2); }
+.ch-report-row { display: grid; grid-template-columns: minmax(0, 1fr) 6.5rem; gap: var(--space-2); }
+.ch-report-row .ch-what { grid-column: 1 / -1; }
+.ch-report .field { display: flex; flex-direction: column; margin: 0; }
+.ch-report .field input { width: 100%; max-width: none; }
+@container page (min-width: 40rem) {
+  .ch-report-row { grid-template-columns: minmax(8rem, 1fr) 6.5rem minmax(0, 2fr); }
+  .ch-report-row .ch-what { grid-column: auto; }
+}
+.ch-report-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2); margin-top: var(--space-2); }
+.ch-report-foot .check-row { margin: 0; }
+
+/* The feed page: the systems strip above the reports on a narrow
+   page, a column beside them on a wide one. */
+.ch-feedpage { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-4); align-items: start; }
+@container page (min-width: 60rem) {
+  .ch-feedpage.has-hot { grid-template-columns: minmax(0, 1fr) 18rem; }
+  .ch-feedpage.has-hot .ch-hotpanel { order: 2; position: sticky; top: calc(var(--l-top) + var(--space-3)); }
+  .ch-hotpanel .ch-hot { flex-direction: column; flex-wrap: nowrap; overflow: visible; }
+}
+.ch-hotpanel h2 { font-size: var(--fs-md); }
 
 .ch-face { border-radius: var(--r-xs); vertical-align: middle; }
 .ch-row-end { display: inline-flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 0.5rem; }
-.ch-list li > span:first-child { min-width: 0; }
 
 /* --- Reporting --- */
 .ch-paste { margin: 0 0 1rem; }
-.ch-paste > summary { cursor: pointer; color: var(--muted); font-size: var(--fs-sm); }
+.ch-paste > summary { cursor: pointer; color: var(--muted); font-size: var(--fs-md); }
 .ch-paste[open] > summary { margin-bottom: 0.6rem; }
-.ch-paste textarea { width: 100%; box-sizing: border-box; font: var(--fs-xs)/1.4 ui-monospace, "Cascadia Mono", Consolas, monospace; resize: vertical; }
+.ch-paste textarea { width: 100%; box-sizing: border-box; font: var(--fs-md)/1.4 var(--font-body); resize: vertical; }
 
 /* --- The feed --- */
 [data-ch-live]::before { content: ""; display: inline-block; width: 0.4rem; height: 0.4rem; margin-right: 0.3rem; border-radius: 50%; background: currentColor; vertical-align: 0.05rem; animation: ch-pulse 2s ease-in-out infinite; }
@@ -24,7 +88,7 @@
   align-items: baseline;
   gap: 0.2rem 0.8rem;
   padding: 0.45rem 0.3rem;
-  border-top: 1px solid var(--box-edge);
+  border-top: 1px solid var(--hairline);
 }
 .ch-rep:first-child { border-top: 0; }
 .ch-rep.new { animation: ch-new 2.4s ease-out; }
@@ -71,7 +135,8 @@ a.ch-tag:hover { border-color: var(--accent); }
 .ch-rep-doors a { color: var(--muted); }
 .ch-rep-doors a:hover { color: var(--text); }
 /* The feed's systems at a glance. */
-.ch-hot { display: flex; flex-wrap: wrap; gap: 0.3rem 1.2rem; margin: 0 0 0.5rem; padding: 0; list-style: none; font-size: var(--fs-sm); }
+.ch-hot { display: flex; flex-wrap: nowrap; gap: var(--space-2) var(--space-4); margin: 0; padding: 0; list-style: none; font-size: var(--fs-sm); overflow-x: auto; scrollbar-width: thin; }
+.ch-hot li { flex: none; min-width: 0; }
 .ch-hot a { font-weight: 600; }
 .ch-rep-meta { display: inline-flex; align-items: center; gap: 0.3rem; font-size: var(--fs-xs); color: var(--muted); white-space: nowrap; }
 .ch-x { width: 1.6rem; height: 1.6rem; border: 0; border-radius: 50%; background: none; color: var(--muted); font-size: var(--fs-lg); line-height: 1; cursor: pointer; }
@@ -80,20 +145,26 @@ a.ch-tag:hover { border-color: var(--accent); }
 @media (prefers-reduced-motion: reduce) { [data-ch-live]::before, .ch-rep.new { animation: none !important; } }
 
 /* --- EveSynapse Axon --- */
-.ch-code { margin: 0 0 1rem; border-color: var(--accent); }
-.ch-code-v { margin: 0.2rem 0 0.4rem; font: 700 var(--fs-5xl)/1.2 ui-monospace, "Cascadia Mono", Consolas, monospace; letter-spacing: 0.15em; color: var(--text-bright); user-select: all; }
-.ch-steps { margin: 0 0 1rem; padding-left: 1.4rem; }
+.ch-axon-cols { --l-min: 46rem; --l-gap: var(--space-5); }
+.ch-axon-cols h3:first-child { margin-top: 0; }
+.ch-code { margin: 0 0 var(--space-3); padding: var(--space-3); border: 1px solid var(--accent); border-radius: var(--r-md); background: var(--surface-page); }
+.ch-code h3 { margin: 0; }
+.ch-code-v { margin: 0.2rem 0 0.4rem; font: 700 var(--fs-5xl)/1.2 var(--font-num); letter-spacing: 0.15em; color: var(--text-bright); user-select: all; }
+.ch-steps { margin: 0; padding-left: 1.4rem; }
 .ch-steps > li { padding: 0.35rem 0; }
-.ch-steps .hint { margin: 0.4rem 0 0; }
+.ch-steps strong { color: var(--text-bright); }
 .ch-dl { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.5rem; }
-.ch-faq { margin: 0 0 1rem; }
-.ch-faq dt { margin-top: 0.7rem; font-weight: 600; color: var(--text-bright); }
-.ch-faq dd { margin: 0.2rem 0 0; color: var(--muted); }
+.ch-pair .ch-form { margin-top: var(--space-3); }
+.ch-faq { display: flex; flex-direction: column; }
+.ch-faq details { border-top: 1px solid var(--hairline); }
+.ch-faq details:first-child { border-top: 0; }
+.ch-faq summary { padding: var(--space-2) 0; cursor: pointer; color: var(--text-bright); font-weight: 600; }
+.ch-faq p { margin: 0 0 var(--space-3); color: var(--muted); }
 
-/* --- Phones: a report folds to two lines --- */
-@media (max-width: 45rem) {
-  .ch-rep { grid-template-columns: minmax(0, 1fr) auto; }
-  .ch-rep-what { grid-column: 1 / -1; grid-row: 2; }
-  .ch-rep-meta { grid-column: 2; grid-row: 1; }
+/* --- Narrow pages: a report stacks: system, what was seen, who and when --- */
+@container page (width < 45rem) {
+  .ch-rep { grid-template-columns: minmax(0, 1fr); gap: 0.15rem; }
+  .ch-rep-what { grid-row: 2; }
+  .ch-rep-meta { grid-row: 3; white-space: normal; flex-wrap: wrap; }
   .ch-dl .btn { flex: 1 1 100%; text-align: center; }
 }

@@ -7,9 +7,10 @@
      them, the open report broken down below, and the feed as the
      activity log at the bottom. dashboard.js opens a row's report in
      place; without JS each Details loads this page with it open. */}}
+<div class="l-page">
 <div class="wbd" data-wbd data-wbd-threads-url="/intel/threads.json" data-wbd-recent="{{with .IntelDashboard}}{{.RecentSec}}{{end}}">
 {{with .IntelDashboard}}{{template "wbd-threads" .}}
-{{with .Map}}<section class="card wbd-map" data-map-compact aria-label="Map">{{template "mapview" .}}</section>{{end}}{{end}}
+{{with .Map}}<section class="l-panel wbd-map" data-map-compact aria-label="Map">{{template "mapview" .}}</section>{{end}}{{end}}
 <div class="wbd-main" data-wbd-main>
 {{with .Workbench}}
 {{/* One report (or, through the scan door, one scan) opened up:
@@ -20,7 +21,7 @@
      speaks for is left out. */}}
 <div class="wb">
 {{if .Error}}
-  <p class="wb-missing prose">{{.Error}}</p>
+  <p class="wb-missing">{{.Error}}</p>
 {{else}}
   {{/* The verdict: how many, what, where and how fresh, in one
        line before any breakdown. Each figure stands only when a
@@ -49,7 +50,7 @@
         {{else if .Reporter}}<span>· Reported by {{.Reporter}}</span>{{end}}
         {{if .ChannelName}}<span>· <a href="/intel/channels/{{.ChannelID}}/">{{.ChannelName}}</a></span>{{end}}
       </p>
-      {{if .Headline}}<p class="wb-headline prose">{{.Headline}}</p>{{end}}
+      {{if .Headline}}<p class="wb-headline">{{.Headline}}</p>{{end}}
       {{if .GangTracked}}<div class="wb-gang{{if .GangStale}} stale{{end}}">
         <p class="wb-gang-line"><strong>{{if .GangStale}}Gang gone quiet{{else}}Tracked gang{{end}}</strong>{{if .GangComp}} · {{.GangComp}}{{end}}{{if .GangDoctrine}} · {{.GangDoctrine}}{{end}}</p>
         <p class="wb-gang-meta">{{.GangSeen}} · confidence {{.GangConf}}%{{if .GangTrail}} · sighted in {{.GangTrail}}{{end}}</p>
@@ -294,7 +295,7 @@
       {{if .Sensor}}<div><dt>Sensor</dt><dd>{{.Sensor}}</dd></div>{{end}}
     </dl>{{end}}
     {{if .Caps}}<h4 class="wb-sub-h">Capabilities</h4><ul class="wb-caps">{{range .Caps}}<li>{{.}}</li>{{end}}</ul>{{end}}
-    {{if .Desc}}<p class="wb-desc prose">{{.Desc}}</p>{{end}}
+    {{if .Desc}}<p class="wb-desc">{{.Desc}}</p>{{end}}
     {{if .Instances}}<h4 class="wb-sub-h">Instances in this scan</h4><ul class="wb-instances">{{range .Instances}}<li><span>{{.Name}}</span><span>{{.Dist}}{{if .On}} · on grid{{end}}</span></li>{{end}}</ul>{{end}}
   </aside>
   </div>
@@ -343,13 +344,14 @@
 {{end}}
 </div>
 {{with .IntelDashboard}}
-<section class="card wbd-log" data-fold="never">
+<section class="l-panel wbd-log">
   <h2>Activity <span class="badge kill" data-ch-live hidden>Live</span></h2>
   <ol class="ch-feed wbd-feed" data-ch-feed="/intel/feed.json" data-ch-after="{{.LastID}}">
     {{range .Reports}}{{template "ch-report" .}}{{else}}<li class="ch-empty hint" data-ch-empty>No reports yet.</li>{{end}}
   </ol>
 </section>
 {{end}}
+</div>
 </div>
 {{end}}
 
@@ -365,7 +367,7 @@
      open report's thread is marked. dashboard.js builds the same
      row from /intel/threads.json (rowEl). */}}
 {{define "wbd-threads"}}
-<section class="card wbd-threads" data-fold="never">
+<section class="l-panel wbd-threads">
   <h2>Threads</h2>
   <ol class="wbd-list" data-wbd-list>
     {{range .Threads}}

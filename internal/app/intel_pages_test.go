@@ -156,9 +156,9 @@ func TestIntelPagesRenderFromStore(t *testing.T) {
 	}
 	mustContain(t, "/intel/wars/", body,
 		"#9002", "Aggressor Corp", "Fixture Corp", "Your corporation",
-		"Open for allies", "Active", "3 ships", "1,500,000.50",
-		"#9001", "Aggressor Alliance", "Defender Corp", "Ally Corp", "Ended", "Mutual",
-		"#9003", "loading details")
+		"open for allies", "Active", "<b>3</b> ships", "1,500,000.50",
+		"#9001", "Aggressor Alliance", "Defender Corp", "Ally Corp", "Ended", "mutual",
+		"#9003", "Loading details")
 
 	code, body = getPage(t, app, cookie, "/intel/incursions/")
 	if code != http.StatusOK {
@@ -166,7 +166,7 @@ func TestIntelPagesRenderFromStore(t *testing.T) {
 	}
 	mustContain(t, "/intel/incursions/", body,
 		"Kimotoro", "Jita", "Perimeter", "Established", "Sansha&#39;s Nation",
-		"73%", `data-w="73"`, "final-encounter boss")
+		"73%", `width="73"`, "final-encounter boss")
 
 	code, body = getPage(t, app, cookie, "/intel/fw/")
 	if code != http.StatusOK {
@@ -175,7 +175,7 @@ func TestIntelPagesRenderFromStore(t *testing.T) {
 	mustContain(t, "/intel/fw/", body,
 		"Caldari State", "Minmatar Republic", "20", "1,200", "42",
 		"Jita", "50%", "10%",
-		"<th>Region</th>", "The Forge", "Domain")
+		`<th class="opt">Region</th>`, "The Forge", "Domain")
 
 	// The systems table's default order is region-major (system
 	// name within a region): Domain's Urlen leads, then The

@@ -2357,14 +2357,35 @@ td.pos, .pos { color: #28c76f; }
 .chip.sev-critical { border-color: rgba(198, 47, 16, 0.6); }
 .chip.sev-warning { border-color: rgba(255, 106, 26, 0.5); }
 .chip.sev-critical.on { color: #ff7a5c; border-color: #ff7a5c; }
+/* One row only: the decks ride a horizontal pager (buttons or a
+   swipe scroll to the next set) instead of wrapping into a wall.
+   How many decks a view shows follows the container steps on
+   .brief-deck below. */
+.brief-pager { position: relative; }
 ul.brief-cards {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 0.75rem;
-  padding: 0;
+  padding: 0 0.65rem 0.65rem 0;
   margin: 0 0 0.5rem;
   list-style: none;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scroll-behavior: smooth;
+  scrollbar-width: none;
 }
+ul.brief-cards::-webkit-scrollbar { display: none; }
+@media (prefers-reduced-motion: reduce) { ul.brief-cards { scroll-behavior: auto; } }
+.brief-page-btn {
+  position: absolute; top: 50%; transform: translateY(-50%); z-index: 4;
+  width: 2rem; height: 2rem; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--box-edge); background: var(--panel); color: var(--text-bright);
+  font-size: var(--fs-2xl); line-height: 1; display: grid; place-items: center;
+}
+.brief-page-btn[data-brief-page="-1"] { left: -0.4rem; }
+.brief-page-btn[data-brief-page="1"] { right: -0.4rem; }
+.brief-page-btn:hover, .brief-page-btn:focus-visible { border-color: var(--accent); color: var(--accent); }
+.brief-page-btn[disabled] { opacity: 0.35; cursor: default; }
 .brief-card {
   display: flex;
   flex-direction: column;
@@ -2439,7 +2460,7 @@ html[data-theme="light"] .brief-card.sev-info { --brief-tint: #b2cddd; }
    above the overlay. Flipping (the more button, or a swipe)
    folds the face edge-on and swaps it under the fold; see
    app.js. */
-.brief-deck { position: relative; flex: 1 1 0; min-width: min(100%, 22rem); max-width: calc((100% - 1.5rem) / 3); touch-action: pan-y; }
+.brief-deck { position: relative; flex: 0 0 auto; scroll-snap-align: start; min-width: min(100%, 22rem); width: calc((100% - 1.5rem) / 3); max-width: calc((100% - 1.5rem) / 3); touch-action: pan-y; }
 .brief-deck .brief-card { flex: none; min-width: 0; max-width: none; width: 100%; }
 /* The cap follows how many decks a row can actually hold at the
    22rem floor: a third where three fit, a half where two do, the
@@ -2448,8 +2469,8 @@ html[data-theme="light"] .brief-card.sev-info { --brief-tint: #b2cddd; }
    steps land on the decks, the flex items, after their base rule
    so they win at equal specificity; the card inside a deck always
    fills it. */
-@container (max-width: 67.5rem) { .brief-deck { max-width: calc((100% - 0.75rem) / 2); } }
-@container (max-width: 44.75rem) { .brief-deck { max-width: none; } }
+@container (max-width: 67.5rem) { .brief-deck { width: calc((100% - 0.75rem) / 2); max-width: calc((100% - 0.75rem) / 2); } }
+@container (max-width: 44.75rem) { .brief-deck { width: 100%; max-width: none; } }
 .brief-flip-card { transition: transform 360ms ease, opacity 360ms ease; }
 .brief-flip-card[data-pos="0"] { position: relative; z-index: 3; height: 100%; transform-origin: center; backface-visibility: hidden; }
 .brief-flip-card:not([data-pos="0"]) { display: none; }
@@ -4255,19 +4276,12 @@ html[data-theme="light"] .fit-head select {
 }
 .fit-stats > h4:first-child { margin-top: 0; color: var(--success); }
 /* Stats come in small panels (fitting, capacitor, defense,
-   navigation, drones), side by side when the column is wide enough,
-   so a change to the fit reads without scrolling. */
-.fit-stats { container-type: inline-size; }
+   navigation, drones), stacked in the stats column. */
 .fit-panel { border: 1px solid rgba(255, 110, 0, 0.14); border-radius: var(--r-md); background: rgba(255, 255, 255, 0.02); padding: 0.55rem 0.75rem 0.6rem; margin: 0 0 0.6rem; }
 .fit-panel h5 { display: flex; align-items: baseline; gap: 0.6rem; margin: 0 0 0.5rem; font-size: var(--fs-xs); letter-spacing: 0.1em; text-transform: uppercase; color: var(--accent); }
 .fit-panel-side { margin-left: auto; font-size: var(--fs-xs); letter-spacing: 0; text-transform: none; color: var(--muted); }
 .fit-panel-side abbr { text-decoration: none; }
 .fit-ehp { font-size: var(--fs-xl); font-weight: 700; color: var(--text-bright); font-variant-numeric: tabular-nums; }
-@container (min-width: 34rem) {
-  .fit-stats { display: grid; grid-template-columns: 1fr 1fr; column-gap: 0.6rem; align-items: start; }
-  .fit-stats > h4, .fit-stats > .fit-headline, .fit-stats > .fit-kv-drain,
-  .fit-stats > .fit-panel[aria-label="Defense"], .fit-stats > .fit-missing, .fit-stats > .fit-notes { grid-column: 1 / -1; }
-}
 .fit-kv { display: grid; grid-template-columns: 1fr; gap: 0.15rem 1rem; margin: 0.35rem 0 0; }
 .fit-kv-2 { grid-template-columns: repeat(auto-fill, minmax(min(100%, 12rem), 1fr)); }
 .fit-kv-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
@@ -4969,40 +4983,8 @@ html[data-theme="light"] .page-body:not(:has(.home-grid)) .fit-modsearch {
 }
 #fit-undo:disabled, #fit-redo:disabled { opacity: 0.35; cursor: default; }
 
-/* --- wide-screen fitting workbench --- At >=1100px a 3-column grid:
-   module lists, ship ring, stats. .fit-cols flattens via display:
-   contents so its children join the grid; with no ship picked, the
-   lists and stats take columns 1 and 3. */
-@media (min-width: 1100px) {
-  .fit-wb {
-    display: grid;
-    /* The ring takes a share of the viewport, capped at its full
-       size. The module lists and the stats share the rest, the
-       stats a little more (their rows run three across), so
-       neither side towers over the other on a wide screen. */
-    grid-template-columns: minmax(14rem, 1fr) clamp(20rem, 30vw - 2rem, 34rem) minmax(21rem, 1.25fr);
-    gap: 1.25rem;
-    align-items: start;
-  }
-  .fit-wb > .fit-cols { display: contents; }
-  /* Notes and the doesn't-fit banner take the first row across all
-     three columns; the lists, ring and stats sit in the row below. */
-  .fit-wb > .fit-top { grid-column: 1 / -1; grid-row: 1; }
-  .fit-wb > .fit-center { grid-column: 2; grid-row: 1; }
-  .fit-wb > .fit-center > .fit-visual { width: 100%; margin: 0; }
-  /* The slot list and the stats each span two rows; the ring takes
-     the first of the middle column and the bays (drones, cargo,
-     ammunition) sit straight under it. */
-  .fit-wb > .fit-cols > .fit-slots { grid-column: 1; grid-row: 1 / span 2; }
-  .fit-wb > .fit-cols > .fit-stats { grid-column: 3; grid-row: 1 / span 2; }
-  .fit-wb > .fit-cols > .fit-bays { grid-column: 2; grid-row: 2; }
-  .fit-wb:has(> .fit-top) > .fit-center { grid-row: 2; }
-  .fit-wb:has(> .fit-top) > .fit-cols > .fit-slots,
-  .fit-wb:has(> .fit-top) > .fit-cols > .fit-stats { grid-row: 2 / span 2; }
-  .fit-wb:has(> .fit-top) > .fit-cols > .fit-bays { grid-row: 3; }
-  /* No ship picked: the stats panel spans columns 2-3. */
-  .fit-wb:not(:has(> .fit-center)) > .fit-cols > .fit-stats { grid-column: 2 / 4; }
-}
+/* The wide workbench grid lives in fitting.css: it measures the
+   page (.l-page), not the window. */
 
 /* --- light theme --- A re-skin of the :root variables plus overrides
    for surfaces painted with hardcoded dark colours. The toggle

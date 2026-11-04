@@ -170,7 +170,7 @@ func TestPrefetchIsNotAView(t *testing.T) {
 	if n := app.fitViews.peek(row.ID); n != 0 {
 		t.Errorf("three prefetches counted %d views, want 0", n)
 	}
-	if rec := get(false); !strings.Contains(rec.Body.String(), "1 views") {
+	if rec := get(false); !strings.Contains(rec.Body.String(), "<dt>Views</dt><dd>1</dd>") {
 		t.Error("the opened page does not show its one view")
 	}
 	if n := app.fitViews.peek(row.ID); n != 1 {

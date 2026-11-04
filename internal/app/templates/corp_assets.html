@@ -5,43 +5,75 @@
 
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
 
-{{template "charselector" .CorpChars}}
+<div class="l-page">
+<div class="l-head">
+  <div class="l-head-pick">{{template "charselector" .CorpChars}}</div>
+  {{with .CorpAssets}}<p class="l-head-sum"><b>{{corpLink .CorpID .CorpTitle}}</b>{{if .Loaded}} · {{.Stacks}} stacks · {{.ItemsText}} items · {{len .Locations}} locations{{end}}</p>{{end}}
+</div>
 
-{{if .CorpAssets}}
-<h2>{{corpLink .CorpAssets.CorpID .CorpAssets.CorpTitle}}</h2>
-<p><small><a href="/corporations/">Overview</a> · <a href="/corporations/members/?character={{.CorpAssets.CharacterID}}">Members</a> · <a href="/corporations/wallets/?character={{.CorpAssets.CharacterID}}">Wallets</a> · <a href="/corporations/orders/?character={{.CorpAssets.CharacterID}}">Orders</a> · Assets · <a href="/corporations/structures/?character={{.CorpAssets.CharacterID}}">Structures</a> · <a href="/corporations/killmails/?character={{.CorpAssets.CharacterID}}">Killmails</a></small></p>
-
-  {{if .CorpAssets.Forbidden}}
-  {{if .CorpAssets.RoleMissing}}
-  <p>Needs the <b>{{.CorpAssets.RoleMissing}}</b> role in game. {{.CorpAssets.CharacterName}} doesn't hold it, so ESI won't share this corporation's assets. They appear here once they do.</p>
+{{with .CorpAssets}}
+  {{if .Forbidden}}
+  <div class="l-panel co-gate">
+  {{if .RoleMissing}}
+  <p>Needs the <b>{{.RoleMissing}}</b> role in game. {{.CharacterName}} doesn't hold it, so ESI won't share this corporation's assets. They appear here once they do.</p>
   {{else}}
-  <p>Assets were refused by ESI (403). They'll appear here once {{.CorpAssets.CharacterName}} holds the Director role in this corporation.</p>
+  <p>Assets were refused by ESI (403). They'll appear here once {{.CharacterName}} holds the Director role in this corporation.</p>
   {{end}}
-  {{else if .CorpAssets.NoFeeder}}
-  <p>{{.CorpAssets.CharacterName}} hasn't granted the corporation permissions that feed the corporation assets, so nobody is sharing this corporation's data with EveSynapse yet. <a href="{{.CorpAssets.AddScopesURL}}">Add the corporation permissions</a>. EVE asks for them on top of what is already granted.</p>
-  {{else if .CorpAssets.Warming}}
-  <p>Still syncing.{{if .IsAdmin}} Progress is on the <a href="/admin/sync/">Sync page</a>.{{end}}</p>
-  {{else if .CorpAssets.Loaded}}
-  <p><small>{{.CorpAssets.Stacks}} stacks · {{.CorpAssets.TotalItems}} items · {{len .CorpAssets.Locations}} locations</small></p>
-  {{range .CorpAssets.Locations}}
-    <section class="foldable" data-fold="closed">
-    <h3>{{.Title}}</h3>
-    <div class="tw">
-    <table>
-      <thead><tr><th>Item</th><th>Quantity</th><th>Note</th></tr></thead>
-      <tbody>
-      {{range .Items}}
-        <tr><td>{{itemLink .TypeID .Name}}</td><td>{{.Quantity}}</td><td>{{.Note}}</td></tr>
-      {{end}}
-      </tbody>
-    </table>
-    </div>
-    {{if .MoreStacks}}<p><small>+ {{.MoreStacks}} more stacks</small></p>{{end}}
+  </div>
+  {{else if .NoFeeder}}
+  <div class="l-panel co-gate"><p>{{.CharacterName}} hasn't granted the corporation permissions that feed the corporation assets, so nobody is sharing this corporation's data with EveSynapse yet. <a href="{{.AddScopesURL}}">Add the corporation permissions</a>. EVE asks for them on top of what is already granted.</p></div>
+  {{else if .Warming}}
+  <div class="l-panel co-gate"><p>Still syncing.{{if $.IsAdmin}} Progress is on the <a href="/admin/sync/">Sync page</a>.{{end}}</p></div>
+  {{else if .Loaded}}
+  {{$ca := .}}
+  {{$pick := .Pick}}{{if not $pick}}{{range $i, $l := .Locations}}{{if eq $i 0}}{{$pick = $l.ID}}{{end}}{{end}}{{end}}
+  {{if .Locations}}
+  <div class="l-console co-assets" data-depth="{{.Depth}}" data-land-top>
+  <div class="l-panes">
+    <nav class="l-pane l-pane--dir" aria-label="Locations">
+      <div class="l-pane-bar">
+        <h2 class="l-pane-title">Locations <small>{{len .Locations}}</small></h2>
+        <input type="search" data-dir-filter placeholder="Filter locations..." aria-label="Filter the locations">
+      </div>
+      <div class="dirlist">
+        {{range .Locations}}
+        <a class="diritem{{if eq .ID $pick}} on{{end}}" href="/corporations/assets/?character={{$ca.CharacterID}}&amp;loc={{.ID}}" data-name="{{.Title}}" data-l-step="in"{{if eq .ID $pick}} aria-current="true"{{end}}>
+          <span class="dir-top"><span class="dir-name">{{.Title}}</span></span>
+          <span class="dir-sub">{{.Stacks}} {{if eq .Stacks 1}}stack{{else}}stacks{{end}}</span>
+          <span class="sharebar"><span class="fill" data-w="{{.Share}}"></span></span>
+        </a>
+        {{end}}
+      </div>
+    </nav>
+    <section class="l-pane l-pane--main" aria-label="Assets at the picked location">
+      {{range .Locations}}{{if eq .ID $pick}}
+      <div class="l-pane-bar">
+        <a class="l-back" data-l-step="out" href="/corporations/assets/?character={{$ca.CharacterID}}">Locations</a>
+        <h2 class="l-pane-title">{{placeLink .Loc}} <small>{{.Stacks}} {{if eq .Stacks 1}}stack{{else}}stacks{{end}}</small></h2>
+        <input type="search" class="co-filter" data-table-filter="ca-table" data-row-class="ca-row" placeholder="Filter items here" aria-label="Filter the items at this location">
+      </div>
+      <div class="tw">
+      <table id="ca-table">
+        <thead><tr><th class="card-title">Item</th><th class="mt-num">Quantity</th><th>Note</th></tr></thead>
+        <tbody>
+        {{range .Items}}
+          <tr class="ca-row" data-search="{{.Name}} {{.TypeName}}"><td><span class="co-item"><img src="https://images.evetech.net/types/{{.TypeID}}/icon?size=32" alt="" width="32" height="32" loading="lazy" data-fallback-src="/static/img/item.svg"> {{itemLink .TypeID .Name}}</span></td><td class="mt-num">{{.Quantity}}</td><td>{{.Note}}</td></tr>
+        {{end}}
+        </tbody>
+      </table>
+      </div>
+      {{if .MoreStacks}}<p class="co-note"><small>+ {{.MoreStacks}} more stacks here; the largest are shown.</small></p>{{end}}
+      {{end}}{{end}}
+      <p class="co-note"><small>Ships and renamed containers show their player-given names once the worker has resolved them; other items show their type names.</small></p>
     </section>
+  </div>
+  </div>
+  {{else}}
+  <div class="l-panel co-gate"><p>This corporation owns no assets in its latest snapshot.</p></div>
   {{end}}
-  <p><small>Ships and renamed containers show their player-given names once the worker has resolved them; other items show their type names.</small></p>
   {{end}}
 {{else}}
   <p>No corporation to show yet. <a href="/auth/link">Link a character</a> first.</p>
 {{end}}
+</div>
 {{end}}

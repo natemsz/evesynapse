@@ -1975,6 +1975,21 @@ var FitGauges = (function () {
     var wb = workbench();
     return wb ? wb.querySelector("[data-fit-search-btn]") : null;
   }
+  // The open panel rides the top layer (a manual popover) where
+  // the browser has one: the page is a size container, so a fixed
+  // box inside it would pin to the page, not the screen. Without
+  // popover support it stays in place and scrolls into view.
+  var searchLayer = typeof HTMLElement !== "undefined" && HTMLElement.prototype.hasOwnProperty("popover");
+  function showSearchLayer(ms, open) {
+    if (!searchLayer) return;
+    if (open) {
+      if (!ms.hasAttribute("popover")) ms.setAttribute("popover", "manual");
+      if (!ms.matches(":popover-open")) ms.showPopover();
+    } else if (ms.hasAttribute("popover")) {
+      if (ms.matches(":popover-open")) ms.hidePopover();
+      ms.removeAttribute("popover");
+    }
+  }
   function syncSearchChrome() {
     var ms = document.getElementById("fit-modsearch");
     if (!ms) return;
@@ -1982,9 +1997,11 @@ var FitGauges = (function () {
     if (phoneOn() && btn) {
       ms.classList.add("fit-collapsible");
       ms.classList.toggle("open", searchOpen);
+      showSearchLayer(ms, searchOpen);
       btn.setAttribute("aria-expanded", searchOpen ? "true" : "false");
       btn.classList.toggle("on", searchOpen);
     } else {
+      showSearchLayer(ms, false);
       // Above the band, or no tab bar to toggle it (no ship
       // picked yet): the search is the plain in-flow panel it is
       // on desktop, always reachable.
@@ -2000,11 +2017,11 @@ var FitGauges = (function () {
     searchOpen = !!open;
     syncSearchChrome();
     if (searchOpen) {
-      // The panel pins to the page body (see fit.css): when it
-      // opens from the tab bar pinned deep in the page, bring it
-      // on screen before focus goes into the field.
+      // Without the top layer the panel pins to the page (see
+      // fit.css): when it opens from the tab bar pinned deep in
+      // the page, bring it on screen before focus goes in.
       var ms = document.getElementById("fit-modsearch");
-      if (ms && ms.scrollIntoView) ms.scrollIntoView({ block: "start" });
+      if (!searchLayer && ms && ms.scrollIntoView) ms.scrollIntoView({ block: "start" });
       if (focus !== false && modInput) {
         try { modInput.focus({ preventScroll: true }); } catch (e) { modInput.focus(); }
       }
@@ -2297,6 +2314,7 @@ var FitGauges = (function () {
     var incTerm = inc ? inc.value.trim().toLowerCase() : "";
     var excTerm = exc ? exc.value.trim().toLowerCase() : "";
     var secs = Array.prototype.slice.call(list.querySelectorAll(":scope > [data-fit-name]"));
+    var shown = 0;
     secs.forEach(function (s) {
       var name = (s.getAttribute("data-fit-name") || "").toLowerCase();
       var ship = (s.getAttribute("data-fit-ship") || "").toLowerCase();
@@ -2305,7 +2323,10 @@ var FitGauges = (function () {
       if (hit && incTerm) hit = items.indexOf(incTerm) >= 0;
       if (hit && excTerm) hit = items.indexOf(excTerm) < 0;
       s.style.display = hit ? "" : "none";
+      if (hit) shown++;
     });
+    var none = document.getElementById("fit-esi-none");
+    if (none) none.hidden = shown > 0;
     var mode = sortSel.value;
     var desc = mode.slice(-4) === "desc";
     var byShip = mode.indexOf("ship") === 0;

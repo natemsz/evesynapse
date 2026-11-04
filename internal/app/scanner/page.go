@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"math"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -32,6 +33,23 @@ type scannerRow struct {
 	SpreadPct   string // "12.3%"
 	DailyVolume string // esi.FormatInt, sold per day in the region
 	DailyProfit string // esi.FormatISK, estimated daily profit
+	// The station system's security, for the badge (SecKnown false
+	// when the SDE has no row for it).
+	SecText  string
+	SecTier  int
+	SecKnown bool
+	// SpreadW and ProfitW fill the row's meters: the spread and the
+	// daily profit as a percent of the best on the page.
+	SpreadW int
+	ProfitW int
+	// Rank is the row's place in the list (1 is the best daily
+	// profit); PickHref opens it in the inspector, Picked marks the
+	// open one.
+	Rank     int
+	PickHref string
+	Picked   bool
+
+	spread, profit float64
 }
 
 // scannerView is the /market/scanner/ page body.
@@ -45,6 +63,12 @@ type scannerView struct {
 	AsOf       string // "Prices as of Oct 4, 3:04 PM", HasData only
 	Age        string // "12 minutes ago", HasData only
 	Rows       []scannerRow
+	// Pick is the opportunity open in the inspector (?pick=<rank>),
+	// nil for none; Depth is the console level it puts the page at.
+	// CloseHref returns to the list with the same filters.
+	Pick      *scannerRow
+	Depth     int
+	CloseHref string
 }
 
 // handleMarketScanner renders the spread scanner from stored
@@ -196,10 +220,20 @@ func (app *page) buildScannerView(ctx context.Context, q map[string][]string) *s
 			size = float64(s.BuyVolume)
 		}
 		profit := (s.TypicalSell - s.TypicalBuy) * size
+		station := app.deps.StationRef(ctx, stationMemo, s.LocationID)
+		secText, secTier, secKnown := "", 0, false
+		if station.SystemID != 0 {
+			secText, secTier, secKnown = app.deps.SystemSecurity(ctx, station.SystemID)
+		}
 		view.Rows = append(view.Rows, scannerRow{
+			SecText:     secText,
+			SecTier:     secTier,
+			SecKnown:    secKnown,
+			spread:      spreadPct,
+			profit:      profit,
 			TypeID:      s.TypeID,
 			ItemName:    itemNameFor(s.TypeID),
-			Station:     app.deps.StationRef(ctx, stationMemo, s.LocationID),
+			Station:     station,
 			TypicalBuy:  esi.FormatISK(s.TypicalBuy),
 			TypicalSell: esi.FormatISK(s.TypicalSell),
 			SpreadPct:   fmt.Sprintf("%.1f%%", spreadPct),
@@ -207,5 +241,49 @@ func (app *page) buildScannerView(ctx context.Context, q map[string][]string) *s
 			DailyProfit: esi.FormatISK(profit),
 		})
 	}
+	scannerMeters(view, q)
 	return view
+}
+
+// scannerMeters fills each row's meters against the page's best spread
+// and best daily profit, numbers the rows, and opens the one ?pick=
+// names in the inspector. The pick and close links keep the filters.
+func scannerMeters(view *scannerView, q map[string][]string) {
+	bestSpread, bestProfit := 0.0, 0.0
+	for _, row := range view.Rows {
+		bestSpread = max(bestSpread, row.spread)
+		bestProfit = max(bestProfit, row.profit)
+	}
+	base := url.Values{}
+	base.Set("region", strconv.FormatInt(view.RegionID, 10))
+	base.Set("minvol", strconv.FormatInt(view.MinVolume, 10))
+	base.Set("minspread", view.MinSpread)
+	view.CloseHref = "/market/scanner/?" + base.Encode()
+	pick, _ := strconv.Atoi(module.QueryValue(q, "pick"))
+	view.Depth = 1 // the list is the top level: there is no directory
+	for i := range view.Rows {
+		row := &view.Rows[i]
+		row.Rank = i + 1
+		// Both meters measure against the page's best. A joke order or
+		// a thin book can quote a spread in the thousands and leave the
+		// other spread meters near empty; filtering those orders out
+		// belongs upstream, in the sweep, not in the meter.
+		if bestSpread > 0 {
+			row.SpreadW = int(math.Round(row.spread / bestSpread * 100))
+		}
+		if bestProfit > 0 {
+			row.ProfitW = int(math.Round(row.profit / bestProfit * 100))
+		}
+		v := url.Values{}
+		for k, vals := range base {
+			v[k] = vals
+		}
+		v.Set("pick", strconv.Itoa(row.Rank))
+		row.PickHref = "/market/scanner/?" + v.Encode()
+		if row.Rank == pick {
+			row.Picked = true
+			view.Pick = row
+			view.Depth = 2
+		}
+	}
 }

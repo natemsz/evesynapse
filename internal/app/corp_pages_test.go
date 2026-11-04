@@ -460,7 +460,7 @@ func TestCorpPagesRenderFromSnapshots(t *testing.T) {
 		t.Fatalf("structures page: status %d", code)
 	}
 	mustContain(t, "/corporations/structures/", body,
-		"Fixture Astra", "Astrahus", "Jita", "shield full", "Market (online)")
+		"Fixture Astra", "Astrahus", "Jita", "shield full", `<li class="co-svc">Market <small>online</small></li>`)
 
 	code, body = getPage(t, app, cookie, "/corporations/killmails/?character=90000001")
 	if code != http.StatusOK {

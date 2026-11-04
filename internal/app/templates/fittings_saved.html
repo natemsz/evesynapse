@@ -6,36 +6,44 @@
 
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
 
+<div class="l-page lo">
 {{if .Fittings}}
-  <div class="facet-chips">
-    <a class="chip{{if eq .Fittings.Source "all"}} on{{end}}" href="/fittings/saved/?source=all{{if .Fittings.CharacterID}}&amp;character={{.Fittings.CharacterID}}{{end}}">All <small>{{.Fittings.CountAll}}</small></a>
-    <a class="chip{{if eq .Fittings.Source "public"}} on{{end}}" href="/fittings/saved/?source=public{{if .Fittings.CharacterID}}&amp;character={{.Fittings.CharacterID}}{{end}}">Public <small>{{.Fittings.CountPublic}}</small></a>
-    <a class="chip{{if eq .Fittings.Source "evesynapse"}} on{{end}}" href="/fittings/saved/?source=evesynapse{{if .Fittings.CharacterID}}&amp;character={{.Fittings.CharacterID}}{{end}}">EveSynapse <small>{{.Fittings.CountLocal}}</small></a>
-    <a class="chip{{if eq .Fittings.Source "eve"}} on{{end}}" href="/fittings/saved/?source=eve{{if .Fittings.CharacterID}}&amp;character={{.Fittings.CharacterID}}{{end}}">EVE account <small>{{.Fittings.CountEVE}}</small></a>
-  </div>
+{{$q := ""}}{{if .Fittings.CharacterID}}{{$q = printf "&character=%d" .Fittings.CharacterID}}{{end}}
+<div class="l-head">
+  <p class="l-head-sum"><b>{{.Fittings.CountAll}}</b> loadout{{if ne .Fittings.CountAll 1}}s{{end}}: fits saved in EveSynapse{{if .Fittings.CharacterName}} and <b>{{.Fittings.CharacterName}}</b>'s in-game fittings{{end}}.</p>
+  <div class="l-head-act"><a class="btn" href="/fittings/">New fit</a></div>
+</div>
+<nav class="l-tiles lo-tiles" aria-label="Show">
+  <a class="l-stat{{if eq .Fittings.Source "all"}} on{{end}}" href="/fittings/saved/?source=all{{$q}}"{{if eq .Fittings.Source "all"}} aria-current="true"{{end}}><span class="l-stat-label">All</span><span class="l-stat-value">{{.Fittings.CountAll}}</span><span class="l-stat-sub">Every loadout</span></a>
+  <a class="l-stat{{if eq .Fittings.Source "public"}} on{{end}}" href="/fittings/saved/?source=public{{$q}}"{{if eq .Fittings.Source "public"}} aria-current="true"{{end}}><span class="l-stat-label">Public</span><span class="l-stat-value">{{.Fittings.CountPublic}}</span><span class="l-stat-sub">Listed in the browser</span></a>
+  <a class="l-stat{{if eq .Fittings.Source "evesynapse"}} on{{end}}" href="/fittings/saved/?source=evesynapse{{$q}}"{{if eq .Fittings.Source "evesynapse"}} aria-current="true"{{end}}><span class="l-stat-label">EveSynapse</span><span class="l-stat-value">{{.Fittings.CountLocal}}</span><span class="l-stat-sub">Saved here</span></a>
+  <a class="l-stat{{if eq .Fittings.Source "eve"}} on{{end}}" href="/fittings/saved/?source=eve{{$q}}"{{if eq .Fittings.Source "eve"}} aria-current="true"{{end}}><span class="l-stat-label">EVE account</span><span class="l-stat-value">{{.Fittings.CountEVE}}</span><span class="l-stat-sub">{{if .Fittings.Warming}}Still syncing{{else}}In-game fittings{{end}}</span></a>
+</nav>
   {{if .Fittings.Fittings}}
-  <div class="fit-esi-controls searchpanel">
+  <div class="l-panel lo-filter fit-esi-controls">
     <span class="searchwrap"><input type="search" id="fit-esi-q" placeholder="Search by fit or ship name…" autocomplete="off" aria-label="Search fittings"></span>
-    <select id="fit-esi-sort" aria-label="Sort fittings">
+    <label>Sort <select id="fit-esi-sort" aria-label="Sort fittings">
       <option value="name-asc">Name A–Z</option>
       <option value="name-desc">Name Z–A</option>
       <option value="ship-asc">Ship A–Z</option>
       <option value="ship-desc">Ship Z–A</option>
-    </select>
+    </select></label>
     <label>With module <input type="search" id="fit-esi-include" placeholder="Module name" autocomplete="off"></label>
     <label>Without module <input type="search" id="fit-esi-exclude" placeholder="Module name" autocomplete="off"></label>
   </div>
-  <div id="fit-esi-list" class="fit-cards">
+  <div id="fit-esi-list" class="fit-cards lo-cards">
   {{range .Fittings.Fittings}}
-  <article class="fit-card" data-fit-name="{{.Name}}" data-fit-ship="{{.ShipType}}" data-fit-items="{{range .Groups}}{{range .Items}}{{.Name}},{{end}}{{end}}">
+  <article class="fit-card lo-card" data-fit-name="{{.Name}}" data-fit-ship="{{.ShipType}}" data-fit-items="{{range .Groups}}{{range .Items}}{{.Name}},{{end}}{{end}}">
     {{if .ShipTypeID}}<img class="fit-card-ship" src="https://images.evetech.net/types/{{.ShipTypeID}}/render?size=64" width="64" height="64" alt="" loading="lazy">{{end}}
     <div class="fit-card-body">
       {{if eq .Source "local"}}
       <h4><a href="/fittings/?local={{.LocalID}}#fit-editor">{{.Name}}</a></h4>
-      <p class="fit-card-line">{{itemSublink .ShipTypeID .ShipType}} {{if .IsPublic}}<small>Public</small>{{else}}<small>EveSynapse</small>{{end}}</p>
+      <p class="fit-card-line">{{itemSublink .ShipTypeID .ShipType}}</p>
+      <p class="fit-card-line">{{if .IsPublic}}<span class="lo-src lo-src-public">Public</span>{{else}}<span class="lo-src">EveSynapse</span>{{end}}</p>
       {{else}}
       <h4><a href="/fittings/?character={{$.Fittings.CharacterID}}&esi={{.FittingID}}#fit-editor">{{.Name}}</a></h4>
-      <p class="fit-card-line">{{itemSublink .ShipTypeID .ShipType}} <small>EVE account</small></p>
+      <p class="fit-card-line">{{itemSublink .ShipTypeID .ShipType}}</p>
+      <p class="fit-card-line"><span class="lo-src lo-src-eve">EVE account</span></p>
       {{end}}
     </div>
     <div class="loadout-preview">
@@ -57,6 +65,7 @@
     <div class="fit-card-actions">
       {{if eq .Source "local"}}
       <a class="btn" href="/fittings/?local={{.LocalID}}#fit-editor">Open in fitting tool</a>
+      <a href="/fittings/shopping/{{.LocalID}}/">Shopping list</a>
       {{if .IsPublic}}<a href="/fittings/public/fit/{{.LocalID}}/">Public page</a>{{end}}
       {{if and (moduleOn "skillplans") $.Fittings.CharacterID}}<a class="fit-plan-icon" href="/skills/plans/fit?character={{$.Fittings.CharacterID}}&amp;local={{.LocalID}}" title="Training plan for this fit" aria-label="Training plan for this fit">{{template "fitplanicon"}}</a>{{end}}
       {{else}}
@@ -67,25 +76,29 @@
   </article>
   {{end}}
   </div>
-  {{if .Fittings.Warming}}<p><small>EVE fittings are still syncing.{{if .IsAdmin}} Progress is on the <a href="/admin/sync/">Sync page</a>.{{end}}</small></p>{{end}}
+  <p class="lo-none" id="fit-esi-none" hidden>No loadout matches. Clear the search or the module filters.</p>
+  {{if .Fittings.Warming}}<p class="lo-hint">EVE fittings are still syncing.{{if .IsAdmin}} Progress is on the <a href="/admin/sync/">Sync page</a>.{{end}}</p>{{end}}
   {{else}}
+  <div class="l-panel lo-empty">
   {{if eq .Fittings.Source "public"}}
-  <p><small>No public fits yet. Open one of your EveSynapse fits in the fitting tool and turn on Make Public to publish it here.</small></p>
+  <p>No public fits yet. Open one of your EveSynapse fits in the fitting tool and turn on Make public to list it in the public browser.</p>
   {{else if eq .Fittings.Source "evesynapse"}}
-  <p><small>No EveSynapse fits yet. Build one in the <a href="/fittings/">fitting tool</a> and save it.</small></p>
+  <p>No EveSynapse fits yet. Build one in the <a href="/fittings/">fitting tool</a> and save it.</p>
   {{else if eq .Fittings.Source "eve"}}
   {{if .Fittings.Warming}}
   <p>Still syncing.{{if .IsAdmin}} Progress is on the <a href="/admin/sync/">Sync page</a>.{{end}}</p>
   {{else}}
-  <p><small>No saved fittings for this character in EVE.</small></p>
+  <p>No saved fittings for this character in EVE.</p>
   {{end}}
   {{else if .Fittings.Warming}}
   <p>Still syncing.{{if .IsAdmin}} Progress is on the <a href="/admin/sync/">Sync page</a>.{{end}}</p>
   {{else}}
-  <p><small>No loadouts yet. Save a fit in the <a href="/fittings/">fitting tool</a>, or link a character to see its EVE fittings here.</small></p>
+  <p>No loadouts yet. Save a fit in the <a href="/fittings/">fitting tool</a>, or link a character to see its EVE fittings here.</p>
   {{end}}
+  </div>
   {{end}}
 {{else}}
-  <p>No fittings to show yet. Link a character first.</p>
+  <div class="l-panel lo-empty"><p>No fittings to show yet. Link a character first.</p></div>
 {{end}}
+</div>
 {{end}}

@@ -100,7 +100,7 @@ function fakeRow(href) {
 function rootWith(rows) {
   return {
     querySelectorAll(sel) {
-      return sel === ".amx-trow[data-sel]" ? rows : [];
+      return sel.split(", ").indexOf(".amx-trow[data-sel]") >= 0 ? rows : [];
     },
   };
 }

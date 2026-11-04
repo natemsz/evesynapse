@@ -5,19 +5,21 @@
 
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
 
+<div class="l-page">
 {{with .Doctrines}}
 {{if not .Corp}}
-<p>None of your characters is in a player corporation EveSynapse knows of yet, so there are no doctrines to show.</p>
+<div class="l-panel co-gate"><p>None of your characters is in a player corporation EveSynapse knows of yet, so there are no doctrines to show.</p></div>
 {{else}}
 {{$corp := .Corp}}
-{{template "corpselector" .CorpOptions}}
-<h2>{{$corp.Name}}</h2>
-<p><small>Doctrines · <a href="/doctrines/fits/?corporation={{$corp.ID}}">Fits</a> · <a href="/srp/?corporation={{$corp.ID}}">Ship Replacement</a>{{if $corp.Directs}} · <a href="/corporations/settings/?corporation={{$corp.ID}}">Settings</a>{{end}}</small></p>
+<div class="l-head">
+  <div class="l-head-pick">{{template "corpselector" .CorpOptions}}</div>
+  <p class="l-head-sum"><b>{{$corp.Name}}</b>{{if $corp.Total}} · {{$corp.Total}} {{if eq $corp.Total 1}}doctrine{{else}}doctrines{{end}}{{end}}</p>
+</div>
 
-<p class="lede">A doctrine is a set of fits for a kind of fleet. An op can name one, and every fit opens in the <a href="/fittings/">fitting tool</a>.</p>
+<p class="co-lede">A doctrine is a set of fits for a kind of fleet. An op can name one, and every fit opens in the <a href="/fittings/">fitting tool</a>.</p>
 
 {{if $corp.Total}}
-<form method="get" action="/doctrines/" class="lookup-form">
+<form method="get" action="/doctrines/" class="l-panel co-search">
   <input type="hidden" name="corporation" value="{{$corp.ID}}">
   <span class="searchwrap">
     <input type="search" name="q" id="doctrine-q" value="{{.Q}}" placeholder="Search doctrines, fits and ships…" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="doctrine-suggest" aria-autocomplete="list" aria-label="Search doctrines" data-suggest="/doctrines/suggest?corporation={{$corp.ID}}">
@@ -31,33 +33,33 @@
 {{end}}
 
 {{if $corp.Doctrines}}
-<div class="settings-grid">
+<div class="co-cards">
 {{range $corp.Doctrines}}
-<section class="setting">
-  <div class="setting-head"><h4><a href="/doctrines/{{.ID}}">{{.Name}}</a></h4>{{if .Category}}<a class="badge wait" href="/doctrines/?corporation={{$corp.ID}}&amp;category={{.Category}}">{{.Category}}</a>{{end}}</div>
-  {{if .Description}}<p class="hint doctrine-clip">{{.Description}}</p>{{end}}
+<section class="l-panel co-card">
+  <div class="co-card-head"><h3><a href="/doctrines/{{.ID}}">{{.Name}}</a></h3>{{if .Category}}<a class="badge wait" href="/doctrines/?corporation={{$corp.ID}}&amp;category={{.Category}}">{{.Category}}</a>{{end}}</div>
+  {{if .Description}}<p class="co-dim doctrine-clip">{{.Description}}</p>{{end}}
   {{if .Fits}}
   <ul class="row-list doctrine-fits">
     {{range .Fits}}<li><span><a href="/fittings/?doctrine={{.ID}}#fit-editor">{{.Name}}</a> <small>{{.Ship}}</small></span>{{if .Role}}<small>{{.Role}}</small>{{end}}</li>
     {{end}}
   </ul>
   {{else}}
-  <p class="hint">No fits yet.</p>
+  <p class="co-dim">No fits yet.</p>
   {{end}}
   {{if .Tags}}<p class="tag-row">{{range .Tags}}<a href="/doctrines/?corporation={{$corp.ID}}&amp;tag={{.}}">#{{.}}</a> {{end}}</p>{{end}}
 </section>
 {{end}}
 </div>
 {{else if $corp.Total}}
-<p class="hint">No doctrine matches. <a href="/doctrines/?corporation={{$corp.ID}}">Clear the search</a>.</p>
+<p class="co-note">No doctrine matches. <a href="/doctrines/?corporation={{$corp.ID}}">Clear the search</a>.</p>
 {{else}}
-<p class="hint">No doctrines yet.{{if not $corp.Manages}} They are kept by the corporation's directors, and whoever they hand it to.{{end}}</p>
+<p class="co-note">No doctrines yet.{{if not $corp.Manages}} They are kept by the corporation's directors, and whoever they hand it to.{{end}}</p>
 {{end}}
 
 {{if $corp.Manages}}
-<form method="post" action="/doctrines/create" class="op-form setting form-card">
+<form method="post" action="/doctrines/create" class="l-panel co-card op-form form-card">
   <input type="hidden" name="corporation" value="{{$corp.ID}}">
-  <h4>New doctrine</h4>
+  <h3>New doctrine</h3>
   <div class="form-grid">
     <label class="field"><span class="field-label">Name</span>
       <input type="text" name="name" maxlength="80" required placeholder="e.g. Shield Lokis"></label>
@@ -77,4 +79,5 @@
 {{end}}
 {{end}}
 {{end}}
+</div>
 {{end}}

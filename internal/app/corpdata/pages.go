@@ -58,6 +58,11 @@ type corpMembersView struct {
 	Rows         []corpMemberRow
 	CanGroup     bool // the reader is a director here: may put members in groups
 	Groups       []groupChoice
+	// Tracked counts the rows member tracking filled in (last login
+	// known); Linked counts the members linked on EveSynapse, known
+	// only to a director (CanGroup).
+	Tracked int
+	Linked  int
 }
 
 func (app *mod) handleCorpMembers(w http.ResponseWriter, r *http.Request) {
@@ -123,10 +128,18 @@ func (app *mod) handleCorpMembers(w http.ResponseWriter, r *http.Request) {
 				row.Location = app.deps.CorpLocationTitle(ctx, t.LocationID, structureNames)
 			}
 		}
+		if row.LastSeen != "" {
+			view.Tracked++
+		}
 		view.Rows = append(view.Rows, row)
 	}
 	sort.Slice(view.Rows, func(i, j int) bool { return view.Rows[i].Name < view.Rows[j].Name })
 	app.memberGroups(ctx, app.deps.UserID(ctx), view)
+	for _, row := range view.Rows {
+		if row.Linked {
+			view.Linked++
+		}
+	}
 
 	app.deps.Render(ctx, w, http.StatusOK, "corp_members.html", data)
 }
@@ -142,6 +155,7 @@ type corpWalletDivisionRow struct {
 	Label    string
 	Balance  string // esi.FormatISK, bare number
 	Active   bool
+	Share    int // percent of the corporation's total, for the directory bar
 }
 
 // corpJournalRow is one journal line of the selected division.
@@ -151,6 +165,7 @@ type corpJournalRow struct {
 	Amount  string // signed, esi.FormatISK
 	Balance string
 	Desc    string
+	In      bool // money into the division
 }
 
 // corpTxnRow is one transaction line of the selected division.
@@ -183,6 +198,20 @@ type corpWalletsView struct {
 	LedgerNote string                     // why journal/transactions are absent ("" when shown)
 	Graph      *balancechart.BalanceChart // the division's balance over time; nil when there is nothing to draw
 	GraphNote  string                     // why Graph is absent ("" when it is drawn)
+	// Total is every division's balance summed; DivisionLabel and
+	// DivisionBalance name the selected one.
+	Total           string
+	DivisionLabel   string
+	DivisionBalance string
+	// Income and Spend sum the division's journal snapshot, in and
+	// out, over JournalSpan (the dates its entries cover); empty when
+	// the journal is not loaded.
+	Income      string
+	Spend       string
+	JournalSpan string
+	// Depth is the console level: 0 with no division asked for (the
+	// directory is the reader's place on a phone), 1 with one.
+	Depth int
 }
 
 // maxLedgerRows caps the journal/transaction tables; the snapshot
@@ -220,19 +249,29 @@ func (app *mod) handleCorpWallets(w http.ResponseWriter, r *http.Request) {
 	division := int64(1)
 	if d, err := strconv.ParseInt(r.URL.Query().Get("division"), 10, 64); err == nil && d >= 1 && d <= module.WalletDivisionCount {
 		division = d
+		view.Depth = 1
 	}
 	view.Division = division
 
 	balances := make(map[int64]float64, len(wallets))
+	total := 0.0
 	for _, div := range wallets {
 		balances[div.Division] = div.Balance
+		total += div.Balance
 	}
+	view.Total = esi.FormatISK(total)
 	for d := int64(1); d <= module.WalletDivisionCount; d++ {
 		row := corpWalletDivisionRow{
 			Division: d,
 			Label:    module.WalletDivisionLabel(d),
 			Balance:  esi.FormatISK(balances[d]),
 			Active:   d == division,
+		}
+		if total > 0 && balances[d] > 0 {
+			row.Share = int(balances[d] / total * 100)
+		}
+		if row.Active {
+			view.DivisionLabel, view.DivisionBalance = row.Label, row.Balance
 		}
 		view.Divisions = append(view.Divisions, row)
 	}
@@ -247,6 +286,27 @@ func (app *mod) handleCorpWallets(w http.ResponseWriter, r *http.Request) {
 
 	switch {
 	case journalState.Loaded:
+		in, out := 0.0, 0.0
+		first, last := "", ""
+		for _, e := range journal {
+			if e.Amount > 0 {
+				in += e.Amount
+			} else {
+				out -= e.Amount
+			}
+			if len(e.Date) >= 10 {
+				if first == "" || e.Date[:10] < first {
+					first = e.Date[:10]
+				}
+				if e.Date[:10] > last {
+					last = e.Date[:10]
+				}
+			}
+		}
+		view.Income, view.Spend = esi.FormatISK(in), esi.FormatISK(out)
+		if first != "" {
+			view.JournalSpan = first + " to " + last
+		}
 		for _, e := range journal {
 			if len(view.Journal) >= maxLedgerRows {
 				view.JournalCut++
@@ -258,6 +318,7 @@ func (app *mod) handleCorpWallets(w http.ResponseWriter, r *http.Request) {
 				Amount:  esi.FormatISK(e.Amount),
 				Balance: esi.FormatISK(e.Balance),
 				Desc:    e.Description,
+				In:      e.Amount > 0,
 			})
 		}
 	case journalState.Forbidden:
@@ -345,6 +406,15 @@ type corpOrdersView struct {
 	module.CorpViewBase
 	module.CorpSectionState
 	Rows []corpOrderRow
+	// SellRows and BuyRows are Rows split by side, one tab each.
+	SellRows, BuyRows []corpOrderRow
+	// The tiles: how many orders on each side, what the sell orders
+	// still list (price x volume left), the ISK held in escrow for the
+	// buy orders, and how many orders the health check says are beaten.
+	Sells, Buys int
+	SellValue   string
+	BuyEscrow   string
+	Beaten      int
 }
 
 func (app *mod) handleCorpOrders(w http.ResponseWriter, r *http.Request) {
@@ -417,10 +487,16 @@ func (app *mod) handleCorpOrders(w http.ResponseWriter, r *http.Request) {
 
 	rows := make([]corpOrderRow, 0, len(orders))
 	placeMemo := make(map[int64]module.PlaceRef)
+	sellValue, buyEscrow := 0.0, 0.0
 	for _, o := range orders {
 		side := "Sell"
 		if o.IsBuyOrder {
 			side = "Buy"
+			view.Buys++
+			buyEscrow += o.Escrow
+		} else {
+			view.Sells++
+			sellValue += o.Price * float64(o.VolumeRemain)
 		}
 		expires := ""
 		if t, err := time.Parse(time.RFC3339, o.Issued); err == nil && o.Duration > 0 {
@@ -445,8 +521,12 @@ func (app *mod) handleCorpOrders(w http.ResponseWriter, r *http.Request) {
 				row.Status = "Not checked against the order book yet"
 			}
 		}
+		if row.Bad {
+			view.Beaten++
+		}
 		rows = append(rows, row)
 	}
+	view.SellValue, view.BuyEscrow = esi.FormatISK(sellValue), esi.FormatISK(buyEscrow)
 	sort.Slice(rows, func(i, j int) bool {
 		if rows[i].Item != rows[j].Item {
 			return rows[i].Item < rows[j].Item
@@ -457,6 +537,13 @@ func (app *mod) handleCorpOrders(w http.ResponseWriter, r *http.Request) {
 		return rows[i].Price < rows[j].Price
 	})
 	view.Rows = rows
+	for _, row := range rows {
+		if row.Side == "Buy" {
+			view.BuyRows = append(view.BuyRows, row)
+		} else {
+			view.SellRows = append(view.SellRows, row)
+		}
+	}
 
 	app.deps.Render(ctx, w, http.StatusOK, "corp_orders.html", data)
 }
@@ -472,7 +559,13 @@ type corpAssetsView struct {
 	module.CorpSectionState
 	Stacks     int
 	TotalItems int64
+	ItemsText  string // TotalItems, thousands-separated
 	Locations  any
+	// Pick is the location asked for (?loc=), 0 for none: the main
+	// pane then shows the biggest place, and on a phone the directory
+	// is the reader's place (Depth 0).
+	Pick  int64
+	Depth int
 }
 
 func (app *mod) handleCorpAssets(w http.ResponseWriter, r *http.Request) {
@@ -505,6 +598,10 @@ func (app *mod) handleCorpAssets(w http.ResponseWriter, r *http.Request) {
 	view.Stacks = len(items)
 	for _, it := range items {
 		view.TotalItems += it.Quantity
+	}
+	view.ItemsText = esi.FormatInt(view.TotalItems)
+	if loc, err := strconv.ParseInt(r.URL.Query().Get("loc"), 10, 64); err == nil && loc > 0 {
+		view.Pick, view.Depth = loc, 1
 	}
 
 	// Player-given singleton names (worker-warmed) override type
@@ -546,8 +643,24 @@ type corpStructureRow struct {
 	Fuel     string // formatted expiry ("" when unfuelled/unreported)
 	FuelLeft string // "in 3d 4h", "" when expired/unknown
 	Timer    string // state-timer end, shown for reinforce states
-	Services []string
+	Services []corpStructureService
 	Reinf    string // reinforce window note
+	// FuelPct fills the fuel bar: days left against a 30-day tank.
+	// FuelTone is "bad" under 3 days (or expired), "warn" under 7.
+	FuelPct  int
+	FuelTone string
+	// StateTone is "bad" while reinforced or anchoring away, "warn"
+	// in any other state but full shield, "" when all is well.
+	StateTone string
+	TimerAt   string // RFC3339 end of the reinforce timer, for the countdown
+	Unanchors string // when it finishes unanchoring, "" when it is not
+}
+
+// corpStructureService is one service module and whether it runs.
+type corpStructureService struct {
+	Name   string
+	State  string
+	Online bool
 }
 
 // corpStructuresView is the Corporation Structures page body.
@@ -555,6 +668,11 @@ type corpStructuresView struct {
 	module.CorpViewBase
 	module.CorpSectionState
 	Rows []corpStructureRow
+	// The tiles: structures low on fuel (under 7 days), under a
+	// reinforce timer, and service modules not online.
+	LowFuel    int
+	Reinforced int
+	Offline    int
 }
 
 func (app *mod) handleCorpStructures(w http.ResponseWriter, r *http.Request) {
@@ -606,21 +724,51 @@ func (app *mod) handleCorpStructures(w http.ResponseWriter, r *http.Request) {
 		if s.FuelExpires != "" {
 			row.Fuel = humanize.Finish(s.FuelExpires)
 			if t, err := time.Parse(time.RFC3339, s.FuelExpires); err == nil {
-				if left := time.Until(t); left > 0 {
+				left := time.Until(t)
+				if left > 0 {
 					row.FuelLeft = "in " + humanize.Duration(left)
 				} else {
 					row.FuelLeft = "expired"
 				}
+				row.FuelPct = min(100, max(0, int(left.Hours()/(30*24)*100)))
+				switch {
+				case left < 3*24*time.Hour:
+					row.FuelTone = "bad"
+				case left < 7*24*time.Hour:
+					row.FuelTone = "warn"
+				}
+				if row.FuelTone != "" {
+					view.LowFuel++
+				}
 			}
 		}
-		if strings.HasSuffix(s.State, "_reinforce") && s.StateTimerEnd != "" {
+		reinforced := strings.HasSuffix(s.State, "_reinforce")
+		if reinforced && s.StateTimerEnd != "" {
 			row.Timer = humanize.Finish(s.StateTimerEnd)
+			row.TimerAt = s.StateTimerEnd
+		}
+		switch {
+		case reinforced || strings.Contains(s.State, "unanchor"):
+			row.StateTone = "bad"
+		case s.State != "shield_vulnerable" && s.State != "shield_full" && s.State != "":
+			row.StateTone = "warn"
+		}
+		if reinforced {
+			view.Reinforced++
+		}
+		if s.UnanchorsAt != "" {
+			row.Unanchors = humanize.Finish(s.UnanchorsAt)
+			row.StateTone = "bad"
 		}
 		if s.ReinforceHour != nil {
-			row.Reinf = fmt.Sprintf("Reinforce window around %02d:00 UTC", *s.ReinforceHour)
+			row.Reinf = fmt.Sprintf("Around %02d:00 UTC", *s.ReinforceHour)
 		}
 		for _, svc := range s.Services {
-			row.Services = append(row.Services, fmt.Sprintf("%s (%s)", svc.Name, svc.State))
+			on := svc.State == "online"
+			if !on {
+				view.Offline++
+			}
+			row.Services = append(row.Services, corpStructureService{Name: svc.Name, State: svc.State, Online: on})
 		}
 		rows = append(rows, row)
 	}

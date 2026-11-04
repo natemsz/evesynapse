@@ -48,14 +48,19 @@
 {{if eq .NavPage "planets.html"}}<link rel="stylesheet" href="/static/colonies.css?v={{.AssetVersion}}">{{end}}
 {{if eq .NavPage "piplanner.html"}}<link rel="stylesheet" href="/static/pi.css?v={{.AssetVersion}}">{{end}}
 {{if eq .NavPage "wallet.html"}}<link rel="stylesheet" href="/static/wallet.css?v={{.AssetVersion}}">{{end}}
+{{if eq .NavPage "corporations.html"}}<link rel="stylesheet" href="/static/overview.css?v={{.AssetVersion}}">{{end}}
+{{if eq .NavPage "corp_orders.html"}}<link rel="stylesheet" href="/static/finances.css?v={{.AssetVersion}}">{{end}}
+{{if or (eq .NavPage "corporations.html") (eq .NavPage "corp_members.html") (eq .NavPage "corp_wallets.html") (eq .NavPage "corp_orders.html") (eq .NavPage "corp_assets.html") (eq .NavPage "corp_structures.html") (eq .NavPage "corp_settings.html") (eq .NavPage "corp_fits.html") (eq .NavPage "groups.html") (eq .NavPage "doctrines.html") (eq .NavPage "doctrine.html") (eq .NavPage "srp.html") (eq .NavPage "discord_servers.html")}}<link rel="stylesheet" href="/static/corp.css?v={{.AssetVersion}}">{{end}}
 {{if eq .NavPage "skillplans.html"}}<link rel="stylesheet" href="/static/skillplans.css?v={{.AssetVersion}}">{{end}}
 {{if eq .NavPage "fittings.html"}}<link rel="stylesheet" href="/static/fit.css?v={{.AssetVersion}}">{{end}}
+{{if or (eq .NavPage "fittings.html") (eq .NavPage "fittings_saved.html") (eq .NavPage "fittings_public.html") (eq .NavPage "fit_public.html") (eq .NavPage "fit_shopping.html")}}<link rel="stylesheet" href="/static/fitting.css?v={{.AssetVersion}}">{{end}}
 {{if or (eq .NavPage "map.html") (eq .NavPage "intel_workbench.html")}}<link rel="stylesheet" href="/static/map.css?v={{.AssetVersion}}">{{end}}{{if eq .NavPage "intel_workbench.html"}}<link rel="stylesheet" href="/static/dashboard.css?v={{.AssetVersion}}">{{end}}
 {{if or (eq .NavPage "killboard.html") (eq .NavPage "kill.html") (eq .NavPage "killmails.html")}}<link rel="stylesheet" href="/static/killboard.css?v={{.AssetVersion}}">{{end}}
 {{if or (eq .NavPage "kill.html") (eq .NavPage "killmails.html")}}<link rel="stylesheet" href="/static/kill.css?v={{.AssetVersion}}">{{end}}
 {{if eq .NavPage "killmails.html"}}<link rel="stylesheet" href="/static/killmails.css?v={{.AssetVersion}}">{{end}}
 {{if or (eq .NavPage "scans.html") (eq .NavPage "scan.html") (eq .NavPage "scan_compare.html")}}<link rel="stylesheet" href="/static/scans.css?v={{.AssetVersion}}">{{end}}{{if eq .NavPage "intel_workbench.html"}}<link rel="stylesheet" href="/static/workbench.css?v={{.AssetVersion}}">{{end}}
 {{if eq .NavPage "pilot.html"}}<link rel="stylesheet" href="/static/pilot.css?v={{.AssetVersion}}">{{end}}
+{{if or (eq .NavPage "intel_wars.html") (eq .NavPage "intel_incursions.html") (eq .NavPage "intel_fw.html")}}<link rel="stylesheet" href="/static/intel.css?v={{.AssetVersion}}">{{end}}
 {{if or (eq .NavPage "channels.html") (eq .NavPage "channel.html") (eq .NavPage "system.html") (eq .NavPage "feed.html") (eq .NavPage "intel_workbench.html")}}<link rel="stylesheet" href="/static/channels.css?v={{.AssetVersion}}">{{end}}
 <link rel="stylesheet" href="/static/phone.css?v={{.AssetVersion}}" media="(max-width: 45rem), (hover: none), (pointer: coarse)">
 </head>

@@ -8,46 +8,154 @@
 <div class="l-page">
 <div class="l-head">
   <div class="l-head-pick">{{template "charselector" .KillmailChars}}</div>
+  {{with .Killmails}}{{if and .Loaded .Total}}<p class="l-head-sum">Last <b>{{.Total}}</b> killmails</p>
+  <div class="l-head-act fchips km-range" role="group" aria-label="Time range">{{range .Ranges}}<a class="fchip{{if .On}} on{{end}}" href="{{.Href}}">{{.Label}}</a>{{end}}</div>{{end}}{{end}}
 </div>
 
 {{if .Killmails}}
-  {{if .Killmails.Loaded}}
-  {{if .Killmails.Rows}}
-  <section class="l-panel km-list">
-  <div class="tw">
-  <table class="km-table">
-    <thead><tr><th>Time</th><th>System</th><th>Result</th><th>Victim</th><th class="card-title">Ship</th><th>Final blow</th><th>Involved</th><th>Est. value</th><th></th></tr></thead>
-    <tbody>
-    {{range .Killmails.Rows}}
-      <tr>
-        <td>{{.Time}}</td>
-        <td>{{placeLink .System}}</td>
-        <td>{{if .Warming}}<small>details warming</small>{{else if .Loss}}<span class="badge loss">LOSS</span>{{else}}<span class="badge kill">KILL</span>{{end}}</td>
-        <td>{{killCharLink $.ViewerChars .VictimID .Victim}}</td>
-        <td>{{itemLink .ShipTypeID .Ship}}</td>
-        <td>{{killCharLink $.ViewerChars .FinalBlowID .FinalBlow}}</td>
-        <td>{{.Involved}}</td>
-        <td>{{if eq .Value "—"}}—{{else}}{{.Value}} ISK{{end}}</td>
-        <td><small>{{killPageLink .KillmailID}}</small></td>
-      </tr>
-    {{end}}
-    </tbody>
-  </table>
+{{with .Killmails}}
+  {{if .Loaded}}
+  {{if .Total}}
+  <div class="l-tiles km-tiles l-root">
+    {{range .Tiles}}{{if .Href}}<a class="l-stat km-stat-{{.Tone}}{{if .On}} on{{end}}" href="{{.Href}}">{{else}}<div class="l-stat">{{end}}<span class="l-stat-label">{{.Label}}</span><span class="l-stat-value">{{.Value}}</span><span class="l-stat-sub">{{.Sub}}</span>{{if .Href}}</a>{{else}}</div>{{end}}{{end}}
   </div>
-  <p class="km-note"><small>Value is the killboard's own pricing of the kill: destroyed and dropped items at EveSynapse prices.</small></p>
+
+  <div class="l-grid km-panels l-root">
+    <section class="l-panel km-pulse {{if .CharView}}s3{{else}}s6{{end}}" aria-labelledby="km-pulse-h">
+      <h2 id="km-pulse-h">ISK flow, last 14 days</h2>
+      {{with .Pulse}}
+      <p class="km-key"><span class="km-key-k">Destroyed {{.Destroyed}}</span> <span class="km-key-l">Lost {{.Lost}}</span>{{if .Peak}} <span class="muted">Busiest day {{.Peak}}</span>{{end}}</p>
+      <svg class="km-chart" viewBox="0 0 {{.Width}} 78" role="img" aria-label="ISK destroyed and lost per day for the last 14 days">
+        <line class="km-axis" x1="0" x2="{{.Width}}" y1="32" y2="32"></line>
+        {{range .Days}}<g class="km-day"><title>{{.Title}}</title><rect class="km-hit" x="{{.X}}" y="0" width="16" height="64"></rect>{{if .KillH}}<rect class="km-bar-k" x="{{.X}}" y="{{.KillY}}" width="12" height="{{.KillH}}" rx="2"></rect>{{end}}{{if .LossH}}<rect class="km-bar-l" x="{{.X}}" y="33" width="12" height="{{.LossH}}" rx="2"></rect>{{end}}{{if .Tick}}<text class="km-tick" x="{{.X}}" y="76">{{.Label}}</text>{{end}}</g>{{end}}
+      </svg>
+      {{else}}
+      <p class="muted">No fights in the last 14 days.</p>
+      {{end}}
+    </section>
+
+    <section class="l-panel km-spots {{if .CharView}}s3{{else}}s6{{end}}" aria-labelledby="km-spots-h">
+      <div class="km-ph"><h2 id="km-spots-h">Where you fight</h2>{{if .SystemClear}}<a class="km-reset" href="{{.SystemClear}}">Show all systems</a>{{end}}</div>
+      <ul class="km-plist">
+        {{range .Hotspots}}<li><a class="km-pitem{{if .On}} on{{end}}" href="{{.Href}}"><span class="km-pname">{{.Name}} <span class="sec sec-{{.SecTier}}">{{.SecText}}</span></span><span class="km-pval"><span class="km-k">{{.Kills}} K</span> <span class="km-l">{{.Losses}} L</span></span></a></li>{{else}}<li class="muted">No systems yet.</li>{{end}}
+      </ul>
+    </section>
+
+    {{if .CharView}}
+    <section class="l-panel km-hulls s3" aria-labelledby="km-hulls-h">
+      <div class="km-ph"><h2 id="km-hulls-h">Your hulls</h2>{{if .HullClear}}<a class="km-reset" href="{{.HullClear}}">Show all hulls</a>{{end}}</div>
+      <ul class="km-plist">
+        {{range .Hulls}}<li><a class="km-pitem km-hull{{if .On}} on{{end}}" href="{{.Href}}"><img src="https://images.evetech.net/types/{{.TypeID}}/icon?size=32" alt="" width="28" height="28" loading="lazy"><span class="km-pname">{{.Name}}<small>{{.Record}}</small></span><span class="km-pval">{{.Eff}}%<span class="km-eff"><span class="km-eff-fill {{.EffClass}}"></span></span></span></a></li>{{else}}<li class="muted">No hulls on record yet.</li>{{end}}
+      </ul>
+      <p class="km-note">Efficiency is ISK destroyed over ISK destroyed and lost in that hull.</p>
+    </section>
+
+    <section class="l-panel km-wing s3" aria-labelledby="km-wing-h">
+      <h2 id="km-wing-h">Who you fly with</h2>
+      <ul class="km-plist">
+        {{range .Wing}}<li><a class="km-pitem km-pilot" href="{{.Href}}"><img src="https://images.evetech.net/characters/{{.ID}}/portrait?size=64" alt="" width="28" height="28" loading="lazy"><span class="km-pname">{{.Name}}<small>{{.Shared}}</small></span><span class="km-pval">{{.ISK}}</span></a></li>{{else}}<li class="muted">No shared kills yet.</li>{{end}}
+      </ul>
+    </section>
+    {{end}}
+  </div>
+
+  <div class="l-console kmc" data-depth="{{.Depth}}" data-land-top>
+  <div class="l-panes">
+  <section class="l-pane l-pane--main km-main" aria-label="Killmails">
+    <div class="l-pane-bar">
+      <input type="search" class="km-filter" placeholder="Search pilots, ships, systems..." aria-label="Search killmails" data-table-filter="km-table" data-row-class="km-row">
+    </div>
+    <div class="fchips km-chips" role="group" aria-label="Show">{{range .Filters}}<a class="fchip{{if .On}} on{{end}}" href="{{.Href}}">{{.Label}} {{.Count}}</a>{{end}}{{if .Filtered}}<a class="fchip km-clear" href="{{.ClearHref}}">Clear filters</a>{{end}}</div>
+    {{if .Rows}}
+    <div class="tw">
+    <table class="km-table" id="km-table">
+      <thead><tr><th>Time</th><th>System</th><th>Result</th><th>Victim</th><th class="card-title">Ship</th><th>Final blow</th><th>Involved</th><th>Est. value</th><th class="opt"></th></tr></thead>
+      <tbody>
+      {{range .Rows}}
+        <tr class="km-row{{if .Loss}} km-loss{{else if not .Warming}} km-kill{{end}}{{if .On}} on{{end}}" data-search="{{.Victim}} {{.Ship}} {{.System.Name}} {{.FinalBlow}}">
+          <td data-sort="{{if .Warming}}0{{else}}{{.At.Unix}}{{end}}">{{if .Warming}}{{.Time}}{{else}}<a class="km-open" href="{{.Href}}" data-l-step="in" title="Show this kill">{{.Time}}</a>{{end}}</td>
+          <td>{{placeLink .System}}</td>
+          <td>{{if .Warming}}<small>details warming</small>{{else if .Loss}}<span class="badge loss">LOSS</span>{{else}}<span class="badge kill">KILL</span>{{end}}{{if .Solo}} <span class="kb-tag">solo</span>{{end}}</td>
+          <td>{{killCharLink $.ViewerChars .VictimID .Victim}}</td>
+          <td>{{itemLink .ShipTypeID .Ship}}</td>
+          <td>{{killCharLink $.ViewerChars .FinalBlowID .FinalBlow}}{{if .YourBlow}} <span class="km-blow" title="Your final blow" aria-label="Your final blow">&#9733;</span>{{end}}</td>
+          <td>{{.Involved}}</td>
+          <td class="num" data-sort="{{.ISK}}">{{if eq .Value "—"}}—{{else}}{{.Value}} ISK{{end}}</td>
+          <td><small>{{killPageLink .KillmailID}}</small></td>
+        </tr>
+      {{end}}
+      </tbody>
+    </table>
+    </div>
+    <p class="km-note">Showing {{len .Rows}} of {{.Total}}: <span class="km-k">{{.ShownDestroyed}} ISK destroyed</span>, <span class="km-l">{{.ShownLost}} ISK lost</span>. Values are the killboard's own pricing: destroyed and dropped items at EveSynapse prices.</p>
+    {{else}}
+    <p><small>No killmails match these filters.{{if .Filtered}} <a href="{{.ClearHref}}">Clear filters</a>{{end}}</small></p>
+    {{end}}
   </section>
+
+  {{with .Insp}}
+  <aside class="l-pane l-pane--insp insp km-insp" aria-label="Kill">
+    <div class="l-pane-bar"><a class="l-back" data-l-step="out" href="{{.CloseHref}}">Killmails</a><a class="l-close" href="{{.CloseHref}}" aria-label="Close the kill">&#10005;</a></div>
+    <div class="insp-head">
+      <span class="amx-art big"><img src="https://images.evetech.net/types/{{.Row.ShipTypeID}}/render?size=128" alt="" width="72" height="72" loading="lazy"></span>
+      <div class="insp-titles"><h3>{{itemLink .Row.ShipTypeID .Row.Ship}}</h3><p class="amx-msub">{{if .Row.Loss}}<span class="badge loss">LOSS</span>{{else}}<span class="badge kill">KILL</span>{{end}} {{with .Page}}{{if .ShipGroup}}{{.ShipGroup}} · {{end}}{{end}}{{.Row.Time}}</p></div>
+    </div>
+    {{with .Page}}
+    {{if .Priced}}
+    <div class="km-value">
+      <p class="km-value-v">{{.ValueFull}} <small>ISK</small></p>
+      <meter class="kp-split" min="0" max="100" value="{{.DroppedPct}}" aria-label="Share of the value that dropped">{{.DroppedPct}}% dropped</meter>
+      <p class="kp-split-key"><span class="kp-drop">Dropped {{.DroppedFull}}</span> <span class="kp-dest">Destroyed {{.DestroyedFull}}</span></p>
+    </div>
+    {{end}}
+    <dl class="insp-facts">
+      <div><dt>Victim</dt><dd>{{if .Row.VictimIsStructure}}{{.Row.CorpName}}{{else}}{{killCharLink $.ViewerChars .Row.VictimID .Row.VictimName}}{{end}}</dd></div>
+      {{if and .Row.CorpName (not .Row.VictimIsStructure)}}<div><dt>Corporation</dt><dd>{{.Row.CorpName}}</dd></div>{{end}}
+      <div><dt>Where</dt><dd><span class="sec sec-{{.Row.SecTier}}">{{.Row.SecText}}</span> {{.Row.SystemName}}{{if .Row.RegionName}}, {{.Row.RegionName}}{{end}}</dd></div>
+      <div><dt>Damage taken</dt><dd>{{.Damage}}</dd></div>
+      <div><dt>Attackers</dt><dd>{{.Row.Attackers}}{{if .Row.FinalName}}, final blow {{.Row.FinalName}}{{end}}</dd></div>
+    </dl>
+    <div class="km-acts">
+      {{if .Fit}}<button type="button" class="btn small" data-copy data-copy-text="{{.Fit}}">Copy fit</button>{{end}}
+      {{if $.Killmails.Insp.PageHref}}<a class="btn small" href="{{$.Killmails.Insp.PageHref}}">Open kill page</a>{{end}}
+      <a class="btn small" href="/map/?system={{.Row.SystemID}}">On the map</a>
+    </div>
+    {{if .Slots}}
+    <h4 class="km-h">Fitting and cargo <small class="muted"><span class="kp-drop">dropped</span>, <span class="kp-dest">destroyed</span></small></h4>
+    {{range .Slots}}
+    <p class="km-slot">{{.Label}}</p>
+    <ul class="km-items">
+      {{range .Items}}<li class="kp-item {{if .Dropped}}dropped{{else}}destroyed{{end}}{{if .Depth}} nested{{end}}"><img src="https://images.evetech.net/types/{{.TypeID}}/icon?size=32" alt="" width="24" height="24" loading="lazy"><span class="kp-item-n">{{.Name}}{{if .Copy}} <small class="muted">(copy)</small>{{end}}</span><span class="kp-item-q">{{if gt .Qty 1}}× {{.Qty}}{{end}}</span><span class="kp-item-v">{{.Value}}</span></li>{{end}}
+    </ul>
+    {{end}}
+    {{end}}
+    {{if .Attackers}}
+    <h4 class="km-h">Attackers <small class="muted">{{len .Attackers}}</small></h4>
+    <ol class="km-atk">
+      {{range .Attackers}}<li class="km-a{{if .FinalBlow}} fb{{end}}"><span class="km-a-name">{{.Name}}{{if .FinalBlow}} <span class="kb-tag">final blow</span>{{end}}<small>{{.ShipName}}{{if and .WeaponName (ne .WeaponTypeID .ShipTypeID)}}, {{.WeaponName}}{{end}}</small></span><span class="km-a-dmg">{{.Damage}}<small>{{.Share}}%</small></span></li>{{end}}
+    </ol>
+    {{end}}
+    {{else}}
+    <p class="insp-note">The killboard hasn't stored this kill yet, so its fitting and value aren't here. It lands within a few minutes.</p>
+    {{end}}
+  </aside>
+  <a class="l-scrim" href="{{.CloseHref}}" aria-label="Close the kill" tabindex="-1"></a>
+  {{end}}
+  </div>
+  </div>
   {{else}}
-  <p><small>No recent killmails for {{.Killmails.Subject}}.</small></p>
+  <p><small>No recent killmails for {{.Subject}}.</small></p>
   {{end}}
   {{else}}
-  {{if .Killmails.RoleMissing}}
-  <p>Needs the <b>{{.Killmails.RoleMissing}}</b> role in game. {{.Killmails.CharacterName}} doesn't hold it, so ESI won't share {{.Killmails.Subject}}'s recent killmails. The list appears here once they do.</p>
-  {{else if .Killmails.Warming}}
-  <p>Still syncing.{{if .IsAdmin}} Progress is on the <a href="/admin/sync/">Sync page</a>.{{end}}</p>
+  {{if .RoleMissing}}
+  <p>Needs the <b>{{.RoleMissing}}</b> role in game. {{.CharacterName}} doesn't hold it, so ESI won't share {{.Subject}}'s recent killmails. The list appears here once they do.</p>
+  {{else if .Warming}}
+  <p>Still syncing.{{if $.IsAdmin}} Progress is on the <a href="/admin/sync/">Sync page</a>.{{end}}</p>
   {{else}}
   <p><small>Killmails couldn't be loaded. The server log has the details.</small></p>
   {{end}}
   {{end}}
+{{end}}
 {{else}}
   <p>No killmails to show yet. Link a character first.</p>
 {{end}}

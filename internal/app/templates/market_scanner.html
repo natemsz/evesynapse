@@ -7,53 +7,57 @@
 
 {{if .MarketScanner}}
 {{$s := .MarketScanner}}
-<p><small>Find items where buying low and selling high at the same station leaves a wide gap. Prices come from each region's latest sweep: buy at the highest buy price, sell at the lowest sell price, and the gap between them is your margin before fees.</small></p>
+<div class="l-page">
+<div class="l-head">
+  <p class="l-head-sum">Items where buying low and selling high at the same station leaves a wide gap. Buy at the highest buy price, sell at the lowest sell price; the gap is your margin before fees.</p>
+  {{if and $s.HasData $s.Rows}}<div class="l-head-act"><a class="btn btn-quiet" href="#" id="csv-export">Export CSV</a></div>{{end}}
+</div>
 
-<form method="get" action="/market/scanner/">
+<form method="get" action="/market/scanner/" class="l-panel mk-filters">
   <label><small>Region</small>
     <select name="region">
       {{range $s.Regions}}<option value="{{.ID}}"{{if .Active}} selected{{end}}>{{.Name}}</option>{{end}}
     </select>
   </label>
   <label><small>At least sold per day</small>
-    <input type="number" name="minvol" min="0" step="1" value="{{$s.MinVolume}}" size="6">
+    <input type="number" name="minvol" min="0" step="1" value="{{$s.MinVolume}}">
   </label>
   <label><small>At least spread %</small>
-    <input type="number" name="minspread" min="0" step="any" value="{{$s.MinSpread}}" size="6">
+    <input type="number" name="minspread" min="0" step="any" value="{{$s.MinSpread}}">
   </label>
   <button class="btn" type="submit">Scan</button>
 </form>
 
 {{if $s.HasData}}
-<p><small>{{$s.AsOf}}{{if $s.Age}} ({{$s.Age}}){{end}} · Region: <strong>{{$s.RegionName}}</strong> · Showing up to 100 opportunities, best estimated daily profit first. · <a href="#" id="csv-export">Export CSV</a></small></p>
-
-{{if $s.Rows}}
-<div class="tw">
-<table>
-  <thead><tr><th>Item</th><th>Station</th><th>Typical buy price</th><th>Typical sell price</th><th>Spread</th><th>Sold per day in {{$s.RegionName}}</th><th>Estimated daily profit</th></tr></thead>
-  <tbody>
-  {{range $s.Rows}}
-    <tr>
-      <td><a href="/market/?type={{.TypeID}}&amp;region={{$s.RegionID}}">{{.ItemName}}</a></td>
-      <td>{{placeLink .Station}}</td>
-      <td>{{.TypicalBuy}} ISK</td>
-      <td>{{.TypicalSell}} ISK</td>
-      <td>{{.SpreadPct}}</td>
-      <td>{{.DailyVolume}}</td>
-      <td><strong>{{.DailyProfit}} ISK</strong></td>
-    </tr>
+<section class="l-panel mk-results">
+  <div class="mk-bar"><h2 class="mk-title">{{$s.RegionName}} <small>{{$s.AsOf}}{{if $s.Age}} ({{$s.Age}}){{end}} · up to 100, best daily profit first</small></h2></div>
+  {{if $s.Rows}}
+  <div class="tw">
+  <table class="mk-table" data-rank="7">
+    <thead><tr><th class="card-title">Item</th><th>Station</th><th class="mt-num">Typical buy</th><th class="mt-num">Typical sell</th><th class="mt-num">Spread</th><th class="mt-num">Sold per day in {{$s.RegionName}}</th><th class="mt-num">Estimated daily profit</th></tr></thead>
+    <tbody>
+    {{range $s.Rows}}
+      <tr>
+        <td><span class="mk-item"><img src="https://images.evetech.net/types/{{.TypeID}}/icon?size=32" alt="" width="28" height="28" loading="lazy" data-fallback-src="/static/img/item.svg"><a href="/market/?type={{.TypeID}}&amp;region={{$s.RegionID}}">{{.ItemName}}</a></span></td>
+        <td>{{placeLink .Station}}</td>
+        <td class="mt-num">{{.TypicalBuy}}</td>
+        <td class="mt-num">{{.TypicalSell}}</td>
+        <td class="mt-num">{{.SpreadPct}}</td>
+        <td class="mt-num">{{.DailyVolume}}</td>
+        <td class="mt-num mk-gold">{{.DailyProfit}}</td>
+      </tr>
+    {{end}}
+    </tbody>
+  </table>
+  </div>
+  <p class="mk-note"><small>Prices in ISK. Sold per day is the average daily amount that actually traded in {{$s.RegionName}} over the last seven recorded days. Estimated daily profit is the gap between the typical (median) sell and buy prices at that station, times whichever runs out first: what trades each day, what sellers hold there, or what buyers want there. Before broker fees and sales tax.</small></p>
+  {{else}}
+  <p>No opportunities in {{$s.RegionName}} clear those filters right now. Try a lower minimum spread or fewer sold per day.</p>
   {{end}}
-  </tbody>
-</table>
-</div>
-<p><small>Sold per day is the average daily amount that actually traded in {{$s.RegionName}} over the last seven recorded days. Estimated daily profit is the gap between the typical (median) sell and buy prices at that station, times whichever runs out first: what trades each day, what sellers hold there, or what buyers want there. Before broker fees and sales tax.</small></p>
-{{else}}
-<p>No opportunities in {{$s.RegionName}} clear those filters right now. Try a lower minimum spread or fewer sold per day.</p>
-{{end}}
-
+</section>
 {{else}}
 <p>Still gathering prices for {{$s.RegionName}}. The scanner fills in after the first sweep of this region's stations.</p>
 {{end}}
-
+</div>
 {{end}}
 {{end}}

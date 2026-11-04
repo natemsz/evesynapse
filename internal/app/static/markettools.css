@@ -1,0 +1,41 @@
+/* EveSynapse: the market's smaller tools (Spread Scanner, Trade
+   Finder, Restock Planner, Top Stations, Trade Ideas). Each is a
+   filter panel over a results panel, built from the layout
+   framework's parts (layout.css) the way Market Trends is. This
+   sheet holds what the tools share: the filter row, the results
+   bar, the ranked column's highlight and the item cells. */
+
+.l-page > * + * { margin-top: var(--space-4); }
+
+.mk-filters { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--space-2) var(--space-3); }
+.mk-filters > label { display: flex; flex-direction: column; gap: 0.3rem; flex: 1 1 10rem; min-width: 0; }
+.mk-filters > label :is(input:not([type="checkbox"]), select) { width: 100%; min-height: var(--tap); }
+.mk-filters > label.mk-wide { flex: 3 1 16rem; }
+.mk-filters > label.mk-check { flex-direction: row; align-items: center; gap: 0.45rem; flex: 1 1 100%; }
+.mk-filters > .btn { flex: 0 0 auto; min-height: var(--tap); margin-left: auto; }
+.mk-filters .searchwrap { position: relative; display: block; width: 100%; max-width: none; }
+
+.mk-bar { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-1) var(--space-3); margin: 0 0 var(--space-3); }
+.mk-title { margin: 0; color: var(--gold); font-family: var(--font-display); font-size: 0.95rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+.mk-title small { color: var(--muted); font-family: var(--font-body); font-size: 0.8rem; font-weight: 500; letter-spacing: 0; text-transform: none; }
+.mk-note { margin: var(--space-3) 0 0; color: var(--muted); }
+.mk-lead { margin: 0 0 var(--space-3); color: var(--muted); }
+.mk-gold { color: var(--gold); font-weight: 600; }
+
+.mk-table td:first-child { white-space: normal; min-width: 11rem; }
+.mk-item { display: inline-flex; align-items: center; gap: 0.55rem; min-width: 0; }
+.mk-item > img { flex: none; border-radius: var(--r-xs); }
+.mk-item a { font-weight: 600; }
+.mk-item-text { display: flex; flex-direction: column; gap: 0.1rem; min-width: 0; }
+.mk-item-text small { color: var(--muted); font-family: var(--font-body); font-size: 0.78rem; font-weight: 400; line-height: 1.35; }
+
+/* The column a table is ranked by reads in the highlight. */
+.mk-table[data-rank="3"] :is(th, td):nth-child(3),
+.mk-table[data-rank="4"] :is(th, td):nth-child(4),
+.mk-table[data-rank="7"] :is(th, td):nth-child(7) { background: var(--sel-row); }
+
+/* Top Stations: the rank leads the station, and a bar sets it
+   against the top one. */
+.mk-station { display: inline-flex; align-items: baseline; gap: 0.55rem; }
+.mk-rank-in { min-width: 1.6rem; color: var(--muted); font-family: var(--font-num); font-size: 0.8rem; font-variant-numeric: tabular-nums; text-align: right; }
+.mk-meter { max-width: 12rem; margin: 0.35rem 0 0 2.15rem; }

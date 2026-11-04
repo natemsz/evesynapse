@@ -611,6 +611,12 @@ a.l-stat:hover { border-color: color-mix(in srgb, var(--accent) 45%, transparent
    minimum would otherwise be the table's own width, and the
    measured fit would compare the table with itself. */
 .tw { min-width: 0; max-width: 100%; }
+/* The table itself stops at its wrapper too: a collapsed-border
+   table at width: 100% can lay out a few pixels past its box, which
+   the measured fit would read as columns that do not fit. Columns
+   that really do not fit still push past it (a table never shrinks
+   below its content), so the fit still sees them. */
+.tw > table { max-width: 100%; }
 /* Key/value tables (th + td rows, no header row) inside a pane wrap
    their values in the column, the way they do on phones: a fact
    list never scrolls sideways. */
@@ -745,6 +751,9 @@ tbody tr.yours > td:first-child { box-shadow: inset 3px 0 0 var(--sel-edge); }
   .subnav a { flex: none; scroll-snap-align: start; }
   .subnav .tabs-more { display: none; }
   .subnav > .section-tabs:has(+ .section-subtabs) { display: none; }
+  /* The sub-nav is one row of tabs here: a page's note steps out
+     of it (a page that has one repeats it in its own body). */
+  .subnav .subtab-note { display: none; }
   .subnav .section-subtabs > a { min-height: var(--tap); }
   .l-panes { border-radius: 0; border-left: 0; border-right: 0; }
   /* A console page runs its panes edge to edge; other framework

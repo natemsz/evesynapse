@@ -217,7 +217,7 @@ func TestPlannerRendersFromLocalData(t *testing.T) {
 		t.Fatalf("planner bare page: status %d", code)
 	}
 	mustContain(t, "/planner/ (blank)", body,
-		"Nothing planned yet", "plan-stats", "Landed cost")
+		"Nothing planned yet", "l-tiles", "Landed cost")
 
 	code, body = getPage(t, app, cookie, "/planner/?product=1001&runs=1")
 	if code != http.StatusOK {

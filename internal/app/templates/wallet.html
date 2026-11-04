@@ -8,38 +8,53 @@
 <div class="l-page">
 <div class="l-head">
   <div class="l-head-pick">{{template "charselector" .WalletChars}}</div>
+  {{with .Wallet}}<p class="l-head-sum"><b>{{.CharacterName}}</b> <a class="wl-profit" href="/profit/?character={{.CharacterID}}">Profit Analysis</a></p>
+  <div class="l-head-act wl-head-act">
+    <div class="fchips" role="group" aria-label="Time range">{{range .Ranges}}<a class="fchip{{if .On}} on{{end}}" href="{{.Href}}">{{.Label}}</a>{{end}}</div>
+    <a class="fchip wl-fmt" href="{{.FormatHref}}" title="Show ISK amounts in the other form">{{.FormatLabel}}</a>
+  </div>{{end}}
 </div>
 
 {{if .Wallet}}
-<h2>{{.Wallet.CharacterName}}</h2>
-{{if .Wallet.BalanceOK}}<section class="foldable" data-fold="never">
-<h3>Balance <a class="head-link" href="/profit/?character={{.Wallet.CharacterID}}">Profit Analysis</a></h3>
-<span class="kpi-v isk">{{.Wallet.Balance}} <small>ISK</small></span>
-</section>{{end}}
+{{with .Wallet}}
+{{if .Tiles}}
+<div class="l-tiles wl-tiles l-root">
+  {{range .Tiles}}<div class="l-stat{{if .Tone}} wl-{{.Tone}}{{end}}"><span class="l-stat-label">{{.Label}}</span><span class="l-stat-value">{{.Value}}</span><span class="l-stat-sub">{{.Sub}}</span></div>{{end}}
+</div>
+{{end}}
 
 {{/* The charts (balance history, then cumulative net flow) beside
      the flow's figures while both have room, stacked when not. */}}
-<div class="l-grid wl-top">
+<div class="l-grid wl-top l-root">
 <div class="s7 l-stack wl-charts">
-{{if .Wallet.Graph}}
+{{if .Graph}}
 <section class="foldable">
 <h3>Balance history</h3>
-{{template "wallet-graph" .Wallet.Graph}}
+{{template "wallet-graph" .Graph}}
 </section>
 {{end}}
-{{with .Wallet.Flow}}{{if and .Any .HasChart}}
+{{with .Flow}}{{if and .Any .HasChart}}
 <section class="foldable">
 <h3>Net flow</h3>
 {{template "wallet-flow-chart" .}}
 </section>
 {{end}}{{end}}
 </div>
-{{with .Wallet.Flow}}{{if .Any}}
+{{with .Flow}}{{if .Any}}
 <div class="s5 wl-flow">
 <section class="foldable">
 <h3>Wallet flow</h3>
 {{template "wallet-flow-figures" .}}
-{{template "wallet-flow-refs" .}}
+{{with $.Wallet}}
+{{if or .Sources .Sinks}}
+<p class="wl-flow-hint"><small>Pick a source or sink to show only its journal entries.</small></p>
+{{if .Sources}}<h4 class="wl-h">Where it came from <span class="wl-in">{{.InTotal}}</span></h4>
+<ul class="wl-flist">{{range .Sources}}<li><a class="wl-fitem{{if .On}} on{{end}}" href="{{.Href}}"><span class="wl-fname">{{.Label}}</span><span class="wl-fval wl-in">{{.Total}} <small>{{.Pct}}%</small></span><span class="wl-fbar"><span class="wl-fbar-in {{.PctClass}}"></span></span></a></li>{{end}}</ul>{{end}}
+{{if .Sinks}}<h4 class="wl-h">Where it went <span class="wl-out">{{.OutTotal}}</span></h4>
+<ul class="wl-flist">{{range .Sinks}}<li><a class="wl-fitem{{if .On}} on{{end}}" href="{{.Href}}"><span class="wl-fname">{{.Label}}</span><span class="wl-fval wl-out">{{.Total}} <small>{{.Pct}}%</small></span><span class="wl-fbar"><span class="wl-fbar-out {{.PctClass}}"></span></span></a></li>{{end}}</ul>{{end}}
+<p class="wl-note">{{if .Kept}}{{.Kept}}.{{end}}{{if .BestSeller}} Best seller: {{itemLink .BestSellerID .BestSeller}} ({{.BestSellerISK}}).{{end}}</p>
+{{end}}
+{{end}}
 </section>
 </div>
 {{end}}{{end}}
@@ -47,19 +62,27 @@
 
 {{/* The two ledgers share one place: a segmented switch between them
      (the shared tabs, app.js), both stacked under their headings
-     without script. */}}
-<div class="wl-ledgers">
+     without script. A trade opens beside them as the console's
+     inspector. */}}
+<div class="l-console wlc" data-depth="{{.Depth}}" data-land-top>
+<div class="l-panes">
+<section class="l-pane l-pane--main wl-ledgers" aria-label="Ledgers">
 <div class="l-seg" role="tablist" aria-label="Ledgers" data-tabs hidden>
   <button type="button" role="tab" id="wl-journal-tab" aria-controls="wl-journal" aria-selected="true">Recent journal</button>
   <button type="button" role="tab" id="wl-txns-tab" aria-controls="wl-txns" aria-selected="false">Recent transactions</button>
 </div>
-<section class="foldable" role="tabpanel" id="wl-journal" aria-labelledby="wl-journal-tab">
+<section class="foldable wl-journal" role="tabpanel" id="wl-journal" aria-labelledby="wl-journal-tab">
 <h3 class="l-tab-h">Recent journal</h3>
-{{if .Wallet.Journal.Note}}
-<p><small>{{.Wallet.Journal.Note}}</small></p>
-{{else if .Wallet.Journal.Warming}}
-<p><small>Still syncing.{{if .IsAdmin}} Progress is on the <a href="/admin/sync/">Sync page</a>.{{end}}</small></p>
-{{else if .Wallet.JournalRows}}
+{{if .Journal.Note}}
+<p><small>{{.Journal.Note}}</small></p>
+{{else if .Journal.Warming}}
+<p><small>Still syncing.{{if $.IsAdmin}} Progress is on the <a href="/admin/sync/">Sync page</a>.{{end}}</small></p>
+{{else}}
+<div class="wl-bar">
+<div class="fchips wl-chips" role="group" aria-label="Show">{{range .Chips}}<a class="fchip{{if .On}} on{{end}}" href="{{.Href}}">{{.Label}} {{.Count}}</a>{{end}}{{if .RefLabel}}<a class="fchip on wl-ref" href="{{.RefClear}}" aria-label="Stop showing only {{.RefLabel}}">{{.RefLabel}} &#10005;</a>{{end}}</div>
+<a class="btn small" href="{{.JournalCSV}}" download>Export CSV</a>
+</div>
+{{if .JournalRows}}
 <div class="tbl-filter" data-table-filter data-filter-match="row" data-filter-col="1">
 <input type="search" data-filter-input placeholder="Search the journal" aria-label="Search the journal" autocomplete="off">
 <div class="tbl-filter-suggest" data-filter-suggest hidden></div>
@@ -69,25 +92,30 @@
 <table>
   <thead><tr><th>Date</th><th>Type</th><th>Amount</th><th class="opt">Balance</th><th>Parties</th><th>Description</th></tr></thead>
   <tbody>
-  {{range .Wallet.JournalRows}}
+  {{range .JournalRows}}
     <tr><td>{{.Date}}</td><td>{{.Type}}</td><td>{{.Amount}} ISK</td><td>{{.Balance}} ISK</td><td>{{if .ShowParties}}{{if eq .FromKind "character"}}{{charLink $.ViewerChars .FromID .FromName}}{{else if eq .FromKind "corporation"}}{{corpLink .FromID .FromName}}{{else if eq .FromKind "alliance"}}{{allianceLink .FromID .FromName}}{{else}}{{.FromName}}{{end}} → {{if eq .ToKind "character"}}{{charLink $.ViewerChars .ToID .ToName}}{{else if eq .ToKind "corporation"}}{{corpLink .ToID .ToName}}{{else if eq .ToKind "alliance"}}{{allianceLink .ToID .ToName}}{{else}}{{.ToName}}{{end}}{{end}}</td><td>{{.Desc}}</td></tr>
   {{end}}
   </tbody>
 </table>
 </div>
-{{if .Wallet.JournalCut}}<p><small>+ {{.Wallet.JournalCut}} older entries in this snapshot.</small></p>{{end}}
+{{if .JournalCut}}<p><small>+ {{.JournalCut}} older entries in this snapshot. The CSV has all of them.</small></p>{{end}}
 {{else}}
-<p><small>No journal entries in the latest snapshot.</small></p>
+<p><small>{{if .Filtered}}No journal entries match these filters. <a href="{{.ClearHref}}">Clear filters</a>{{else}}No journal entries in this range.{{end}}</small></p>
+{{end}}
 {{end}}
 </section>
 
 <section class="foldable" role="tabpanel" id="wl-txns" aria-labelledby="wl-txns-tab">
 <h3 class="l-tab-h">Recent transactions</h3>
-{{if .Wallet.Txns.Note}}
-<p><small>{{.Wallet.Txns.Note}}</small></p>
-{{else if .Wallet.Txns.Warming}}
-<p><small>Still syncing.{{if .IsAdmin}} Progress is on the <a href="/admin/sync/">Sync page</a>.{{end}}</small></p>
-{{else if .Wallet.TxnRows}}
+{{if .Txns.Note}}
+<p><small>{{.Txns.Note}}</small></p>
+{{else if .Txns.Warming}}
+<p><small>Still syncing.{{if $.IsAdmin}} Progress is on the <a href="/admin/sync/">Sync page</a>.{{end}}</small></p>
+{{else if .TxnRows}}
+<div class="wl-bar">
+<p class="wl-hint"><small>Pick a trade's date to see what it netted.</small></p>
+<a class="btn small" href="{{.TxnsCSV}}" download>Export CSV</a>
+</div>
 <div class="tbl-filter" data-table-filter data-filter-match="row" data-filter-col="1">
 <input type="search" data-filter-input placeholder="Search transactions" aria-label="Search transactions" autocomplete="off">
 <div class="tbl-filter-suggest" data-filter-suggest hidden></div>
@@ -95,20 +123,59 @@
 </div>
 <div class="tw">
 <table>
-  <thead><tr><th>Date</th><th>Item</th><th>Qty</th><th>Unit price</th><th>Total</th><th>Side</th><th class="opt">Location</th><th>Counterparty</th></tr></thead>
+  <thead><tr><th>Date</th><th class="card-title">Item</th><th>Qty</th><th>Unit price</th><th>Total</th><th>Side</th><th class="opt">Location</th><th>Counterparty</th></tr></thead>
   <tbody>
-  {{range .Wallet.TxnRows}}
-    <tr><td>{{.Date}}</td><td>{{itemLink .TypeID .Item}}</td><td>{{.Qty}}</td><td>{{.Unit}} ISK</td><td>{{.Total}} ISK</td><td>{{.Side}}</td><td>{{placeLink .Loc}}</td><td>{{if .ClientIsChar}}{{charLink $.ViewerChars .ClientID .With}}{{else if .ClientIsCorp}}{{corpLink .ClientID .With}}{{else}}{{.With}}{{end}}</td></tr>
+  {{range .TxnRows}}
+    <tr class="wl-trow{{if .On}} on{{end}}"><td><a class="wl-open" href="{{.Href}}" data-l-step="in" title="Show this trade">{{.Date}}</a></td><td>{{itemLink .TypeID .Item}}</td><td>{{.Qty}}</td><td>{{.Unit}} ISK</td><td>{{.Total}} ISK</td><td>{{.Side}}</td><td>{{placeLink .Loc}}</td><td>{{if .ClientIsChar}}{{charLink $.ViewerChars .ClientID .With}}{{else if .ClientIsCorp}}{{corpLink .ClientID .With}}{{else}}{{.With}}{{end}}</td></tr>
   {{end}}
   </tbody>
 </table>
 </div>
-{{if .Wallet.TxnsCut}}<p><small>+ {{.Wallet.TxnsCut}} older transactions in this snapshot.</small></p>{{end}}
+{{if .TxnsCut}}<p><small>+ {{.TxnsCut}} older transactions in this snapshot. The CSV has all of them.</small></p>{{end}}
 {{else}}
-<p><small>No transactions in the latest snapshot.</small></p>
+<p><small>No transactions in this range.</small></p>
 {{end}}
 </section>
+</section>
+
+{{with .Trade}}
+<aside class="l-pane l-pane--insp insp wl-insp" aria-label="Trade">
+  <div class="l-pane-bar"><a class="l-back" data-l-step="out" href="{{.CloseHref}}">Ledgers</a><a class="l-close" href="{{.CloseHref}}" aria-label="Close the trade">&#10005;</a></div>
+  <div class="insp-head">
+    <span class="amx-art big"><img src="https://images.evetech.net/types/{{.Row.TypeID}}/icon?size=64" alt="" width="64" height="64" loading="lazy" data-fallback-src="/static/img/item.svg"></span>
+    <div class="insp-titles"><h3>{{itemLink .Row.TypeID .Row.Item}}</h3><p class="amx-msub"><span class="wl-side wl-side-{{.Row.Side}}">{{.Row.Side}}</span> {{.Row.Qty}} at {{.Row.Unit}} ISK</p></div>
+  </div>
+  <div class="wl-net">
+    <p class="wl-net-l">{{.NetLabel}}</p>
+    <p class="wl-net-v">{{.Net}}</p>
+    {{if .TaxNote}}<p class="wl-net-s">{{if .Tax}}Sales tax {{.Tax}}, {{end}}{{.TaxNote}}</p>{{end}}
+  </div>
+  <dl class="insp-facts">
+    <div><dt>Total</dt><dd>{{.Row.Total}} ISK</dd></div>
+    <div><dt>When</dt><dd>{{.Date}}</dd></div>
+    <div><dt>Where</dt><dd>{{placeLink .Row.Loc}}</dd></div>
+    <div><dt>With</dt><dd>{{if .Row.ClientIsChar}}{{charLink $.ViewerChars .Row.ClientID .Row.With}}{{else if .Row.ClientIsCorp}}{{corpLink .Row.ClientID .Row.With}}{{else}}{{.Row.With}}{{end}}</dd></div>
+    {{if .BalanceAt}}<div><dt>Balance after</dt><dd>{{.BalanceAt}}</dd></div>{{end}}
+  </dl>
+  <h4 class="wl-h">This item, recent trades</h4>
+  <dl class="insp-facts">
+    {{if .ItemBuys}}<div><dt>Bought</dt><dd>{{.ItemBuys}}</dd></div>{{end}}
+    {{if .ItemSells}}<div><dt>Sold</dt><dd>{{.ItemSells}}</dd></div>{{end}}
+    {{if .Spread}}<div><dt>Average sale over average buy</dt><dd>{{.Spread}}</dd></div>{{end}}
+    {{if .WithTrades}}<div><dt>With this counterparty</dt><dd>{{.WithTrades}}</dd></div>{{end}}
+  </dl>
+  <p class="insp-note">Broker fees are charged when an order is placed or changed, not on each fill, so they aren't taken off here. Profit Analysis works out margins with them.</p>
+  <div class="wl-acts">
+    <button type="button" class="btn small" data-copy data-copy-text="{{.Copy}}">Copy summary</button>
+    <a class="btn small" href="/profit/?character={{$.Wallet.CharacterID}}">Profit Analysis</a>
+    <a class="btn small" href="/market/?type={{.Row.TypeID}}">Market</a>
+  </div>
+</aside>
+<a class="l-scrim" href="{{.CloseHref}}" aria-label="Close the trade" tabindex="-1"></a>
+{{end}}
 </div>
+</div>
+{{end}}
 {{else}}
 <p>No character to show yet. Link a character first.</p>
 {{end}}

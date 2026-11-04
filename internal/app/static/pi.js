@@ -3,6 +3,8 @@
 // factories and taxes always come from the server render: a pick or
 // a Recalculate fetches the page for the new settings and swaps the
 // planner region (#pi-wrap), so nothing on the page ever reloads.
+// The swap re-fires content-ready on that region, so the shell's
+// widgets inside it re-arm and the reader keeps their tab.
 // One formula is mirrored, on purpose: the coverage verdict and
 // tinting recompute piplan.CoverageFor (internal/piplan/piplan.go)
 // live, so ticking planets never leaves the page arguing with
@@ -22,14 +24,24 @@
       var fresh = doc.getElementById("pi-wrap");
       var host = document.getElementById("pi-wrap");
       if (!fresh || !host) throw new Error("recalc unavailable");
+      // The view the reader is on (Plan or Production map) survives
+      // the swap, and rides the address so a reload keeps it.
+      var tab = host.querySelector('[role="tab"][aria-selected="true"]');
+      var view = tab ? tab.getAttribute("aria-controls") : "";
       host.innerHTML = fresh.innerHTML;
       // The address keeps the settings, not the one-off "cover"
       // request: a reload shows the planets now ticked.
       params.delete("cover");
       if (window.history && window.history.replaceState) {
-        window.history.replaceState(null, "", "/industry/pi/?" + params.toString());
+        window.history.replaceState(null, "", "/industry/pi/?" + params.toString() +
+          (view && view !== "pi-plan" ? "#" + view : ""));
       }
-      boot();
+      // The shell's widgets (tabs, the settings sheet, table cards)
+      // arm on the fresh region the way they do after a swap; this
+      // file's own boot listens for the same event.
+      document.dispatchEvent(new CustomEvent("evesynapse:content-ready", { detail: { root: host } }));
+      var again = view ? host.querySelector('[role="tab"][aria-controls="' + view + '"]') : null;
+      if (again && again.getAttribute("aria-selected") !== "true") again.click();
     }).catch(function () {
       window.location.href = url;
     });

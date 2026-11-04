@@ -1345,7 +1345,6 @@ h3 + .tw > table, h3 + table {
   -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(0.9);
   backdrop-filter: blur(var(--glass-blur)) saturate(0.9);
 }
-.card .pi-controls { background: none; border: 0; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; padding: 0; }
 .card .foldable, .panel .foldable { background: none; border: 0; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; padding: 0; }
 .card .tw, .panel .tw, .foldable .tw { background: none; border: none; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
 table {

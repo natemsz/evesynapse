@@ -108,9 +108,9 @@ func TestOpenProseReadsInInter(t *testing.T) {
 // a selected node is marked by its border and background alone, at
 // the node's normal text weight, like its sibling states.
 func TestPlanNodeSelectionWeight(t *testing.T) {
-	plan := readStatic(t, "plan.css")
-	want := ".pi-node.selected { border-color: #ffd27a; background: var(--row-hover); }"
-	if !strings.Contains(plan, want) {
-		t.Errorf("plan.css missing selection rule %q", want)
+	pi := readStatic(t, "pi.css")
+	want := ".pi-node.selected { border-color: var(--gold); background: var(--sel-bg); }"
+	if !strings.Contains(pi, want) {
+		t.Errorf("pi.css missing selection rule %q", want)
 	}
 }

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
@@ -43,6 +44,19 @@ type killmailRow struct {
 	Involved    string // attacker count, "—" while warming
 	Value       string // the killboard's stored value for the kill, bare number; "—" while the board has not priced it
 	Warming     bool
+
+	// Facts the summary, the panels and the filters read.
+	At         time.Time
+	SystemID   int64
+	ISK        float64 // the stored value, 0 while unpriced
+	Priced     bool
+	Solo       bool  // one player on the attacking side
+	YourBlow   bool  // the viewer landed the final blow
+	Pod        bool  // the victim was in a capsule
+	YourShipID int64 // the viewer's hull: the victim ship on a loss, the attacking ship on a kill
+	Wing       []int64
+	Href       string // opens this kill in the inspector
+	On         bool
 }
 
 // killmailsView is the killmails page body; one shape serves both
@@ -59,6 +73,28 @@ type killmailsView struct {
 	Warming       bool   // no recent-list snapshot yet at all
 	RoleMissing   string // in-game role label when ESI refused the list (corp view only)
 	Rows          []killmailRow
+
+	// The summary, panels and filters (killmails_shape.go).
+	CharView       bool // the character view: hulls, wingmen and final blows read its pilot
+	Tiles          []jobTile
+	Ranges         []jobFilter
+	Filters        []jobFilter
+	Pulse          *kmPulse
+	Hotspots       []kmSpot
+	SystemClear    string
+	Hulls          []kmHull
+	HullClear      string
+	Wing           []kmWing
+	DestroyedAll   string
+	LostAll        string
+	Total          int // rows in the recent list before any filter
+	ShownDestroyed string
+	ShownLost      string
+	Filtered       bool
+	ClearHref      string
+	ListHref       string // the list with the inspector closed
+	Insp           *killmailInspector
+	Depth          int // console level: 1 the list, 2 one kill
 }
 
 // handleKillmails renders the Killmails page for one of the
@@ -115,6 +151,7 @@ func (app *Application) handleKillmails(w http.ResponseWriter, r *http.Request) 
 	for _, ref := range refs {
 		view.Rows = append(view.Rows, app.killmailRow(ctx, viewer, ref, values, placeMemo))
 	}
+	app.shapeKillmails(ctx, r, view, viewer)
 
 	app.render(ctx, w, http.StatusOK, "killmails.html", data)
 }
@@ -212,18 +249,42 @@ func (app *Application) killmailRow(ctx context.Context, viewer killmailViewer, 
 	row.Ship = app.typeNameOrID(ctx, km.Victim.ShipTypeID)
 	row.ShipTypeID = km.Victim.ShipTypeID
 	row.Involved = fmt.Sprintf("%d", len(km.Attackers))
+	if t, err := time.Parse(time.RFC3339, km.KillmailTime); err == nil {
+		row.At = t
+	}
+	row.SystemID = km.SolarSystemID
+	row.Pod = km.Victim.ShipTypeID == 670 || km.Victim.ShipTypeID == 33328
+	if row.Loss {
+		row.YourShipID = km.Victim.ShipTypeID
+	}
+	players := 0
 	for _, a := range km.Attackers {
+		if a.CharacterID > 0 {
+			players++
+		}
+		mine := viewer.characterID > 0 && a.CharacterID == viewer.characterID ||
+			viewer.corporationID > 0 && a.CorporationID == viewer.corporationID
 		if a.FinalBlow {
 			row.FinalBlow = app.displayCharacter(ctx, a.CharacterID)
 			row.FinalBlowID = a.CharacterID
-			break
+			row.YourBlow = mine && !row.Loss
+		}
+		if row.Kill && viewer.characterID > 0 {
+			if a.CharacterID == viewer.characterID {
+				row.YourShipID = a.ShipTypeID
+			} else if a.CharacterID > 0 {
+				row.Wing = append(row.Wing, a.CharacterID)
+			}
 		}
 	}
+	row.Solo = row.Kill && players == 1
 
 	// The killboard's stored price for this kill, or "—" while
 	// the board has not priced it.
 	if v, ok := values[ref.KillmailID]; ok {
 		row.Value = esi.FormatISK(v)
+		row.ISK = v
+		row.Priced = true
 	}
 	return row
 }

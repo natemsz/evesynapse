@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
@@ -24,8 +25,9 @@ import (
 // under the Industry hub. Pick a P1–P4
 // product, set how much to make, and get the whole chain — raw
 // needs, factory counts, extractor colonies, CPU/Power fit,
-// POCO taxes and market economics. Prices come from the stored
-// market guide (valuationPrices); colonies pre-fill planet types.
+// POCO taxes and market economics. Prices follow the house order:
+// The Forge's swept typical sell, then the stored estimated sell,
+// then unpriced (piPricesByName); colonies pre-fill planet types.
 //
 // The engine (internal/piplan) is pure. This handler resolves
 // type IDs for pricing, reads the acting character's colonies
@@ -58,7 +60,11 @@ type piGraphCol struct {
 
 type piLineRow struct {
 	Name      string
+	TypeID    int64 // 0 when the SDE has no row for the name
 	Tier      string
+	TierKey   string // r0, p1 ... p4: the tier badge's colour
+	Target    bool
+	FactPct   int // factories against the plan's largest count, for the meter
 	Needed    string
 	PerHour   string
 	Factories string
@@ -80,6 +86,8 @@ type piColonyRow struct {
 type piProfitRow struct {
 	Name      string
 	URL       string
+	On        bool // the product being planned
+	BarPct    int  // margin against the best margin listed, for the bar
 	Margin    string
 	MarginVal float64
 	Profit    string
@@ -121,6 +129,10 @@ type piPlannerView struct {
 	ExportTax      string
 	ImportTax      string
 	PricesNote     string
+	PriceLine      string // the strip's provenance: where prices come from and how fresh
+	TargetTier     string
+	TargetTierKey  string
+	PlanetsText    string // the planet types ticked, for the summary strip
 	Profitable     []piProfitRow
 	FacilityNote   string
 }
@@ -250,8 +262,11 @@ func HandlePIPlanner(deps module.Deps) http.HandlerFunc {
 			}
 		}
 
-		prices, priceNote := piPricesByName(ctx, deps)
-		view.PricesNote = priceNote
+		prices, ids, priceLine, priceNote := piPricesByName(ctx, deps, time.Now())
+		view.PriceLine, view.PricesNote = priceLine, priceNote
+		view.TargetTier = string(piplan.TierOf(target))
+		view.TargetTierKey = strings.ToLower(view.TargetTier)
+		view.PlanetsText = strings.Join(selList, ", ")
 
 		settings := piplan.Settings{
 			CCLevel: view.CCLevel, HeadsPerECU: view.Heads,
@@ -266,7 +281,7 @@ func HandlePIPlanner(deps module.Deps) http.HandlerFunc {
 		}
 		view.HasPlan = true
 		view.PlanTarget = target
-		fillPIPlanDisplay(view, plan, prices)
+		fillPIPlanDisplay(view, plan, ids)
 		view.Graph, view.GraphJSON = buildPIGraph(target, selList, prices)
 		// Coverage summary.
 		cov := piplan.CoverageFor(target, selList)
@@ -287,8 +302,8 @@ func HandlePIPlanner(deps module.Deps) http.HandlerFunc {
 		if one, ok := piplan.SinglePlanet(target); ok {
 			view.SingleText = "Single-planet possible on " + one + "."
 		}
-		view.Profitable = piProfitableChains(prices, settings)
-		view.FacilityNote = "High-Tech (P4) only on Barren/Temperate · Advanced anywhere · Basic on the extractor planet. Taxes use CCP taxable values (R0 5 · P1 400 · P2 7,200 · P3 60,000 · P4 1,200,000 ISK); import at half the export rate."
+		view.Profitable = piProfitableChains(prices, settings, target)
+		view.FacilityNote = "High-Tech (P4) only on Barren or Temperate, Advanced anywhere, Basic on the extractor planet. Taxes use CCP's taxable values (R0 5, P1 400, P2 7,200, P3 60,000, P4 1,200,000 ISK); import is taxed at half the export rate."
 
 		deps.Render(ctx, w, http.StatusOK, "piplanner.html", &data)
 	}
@@ -354,56 +369,117 @@ func VolumesByName(ctx context.Context, deps module.Deps) map[string]float64 {
 	return out
 }
 
-// piPricesByName resolves guide prices for every PI commodity.
-// Names resolve to type IDs through the SDE; the guide map then
-// prices them. Missing SDE rows simply stay unpriced.
-func piPricesByName(ctx context.Context, deps module.Deps) (map[string]float64, string) {
+// piForgeRegionID is The Forge, whose swept book is the first
+// tier of the house price order.
+const piForgeRegionID = 10000002
+
+// piPricesByName prices every PI commodity in the house order: The
+// Forge's swept typical sell, then the stored estimated sell (only
+// where an evidence tier stands behind it), then unpriced. The
+// guide's average prices nothing. Names resolve to type IDs through
+// the SDE; both reads are bounded to the PI catalogue (about 80
+// types). It returns the prices, the type IDs by name (the
+// material links), the strip's provenance line and a note on gaps.
+func piPricesByName(ctx context.Context, deps module.Deps, now time.Time) (map[string]float64, map[string]int64, string, string) {
 	names := make([]string, 0, len(piplan.AllCommodities))
 	for n := range piplan.AllCommodities {
 		names = append(names, n)
 	}
 	sort.Strings(names)
 	out := map[string]float64{}
-	guide := deps.ValuationPrices(ctx)
-	if guide == nil {
-		return out, "No market guide yet. Prices land with the first market refresh; quantities, factories and taxes already work."
-	}
+	idByName := map[string]int64{}
 	rows, err := deps.DB().ListSDETypesByNames(ctx, names)
 	if err != nil {
 		logging.Errorf("piplanner: resolve type IDs: %v", err)
-		return out, "Prices unavailable: type lookup failed. Quantities, factories and taxes already work."
+		return out, idByName, "Prices unavailable", "The item lookup failed, so nothing is priced. Quantities, factories and taxes still work."
 	}
-	byID := map[int64]string{}
+	nameByID := map[int64]string{}
+	ids := make([]int64, 0, len(rows))
 	for _, row := range rows {
-		byID[row.TypeID] = row.Name
+		nameByID[row.TypeID] = row.Name
+		idByName[row.Name] = row.TypeID
+		ids = append(ids, row.TypeID)
 	}
-	priced := 0
-	for id, name := range byID {
-		p, hit := guide[id]
-		if !hit {
-			continue
-		}
-		v := p.AveragePrice
-		if v <= 0 {
-			v = p.AdjustedPrice
-		}
-		if v > 0 {
-			out[name] = v
-			priced++
+	var newest time.Time
+	fromForge := 0
+	if stats, err := deps.DB().ListMarketRegionStatsForTypes(ctx, db.ListMarketRegionStatsForTypesParams{RegionID: piForgeRegionID, Column2: ids}); err != nil {
+		logging.Errorf("piplanner: forge stats: %v", err)
+	} else {
+		for _, row := range stats {
+			if row.TypicalSell > 0 {
+				out[nameByID[row.TypeID]] = row.TypicalSell
+				fromForge++
+				if row.UpdatedAt.After(newest) {
+					newest = row.UpdatedAt
+				}
+			}
 		}
 	}
+	estimated := 0
+	if tvs, err := deps.DB().ListTrueValuesForTypes(ctx, ids); err != nil {
+		logging.Errorf("piplanner: stored estimates: %v", err)
+	} else {
+		for _, row := range tvs {
+			name := nameByID[row.TypeID]
+			if _, priced := out[name]; priced {
+				continue
+			}
+			if row.EstSell.Valid && row.EstSell.Float64 > 0 && row.SellSource != "" {
+				out[name] = row.EstSell.Float64
+				estimated++
+			}
+		}
+	}
+	priced := fromForge + estimated
 	if priced == 0 {
-		return out, "Market guide has no PI prices yet. Quantities, factories and taxes already work."
+		return out, idByName, "No prices yet", "No PI commodity has a Forge sell price or a stored estimate yet. Quantities, factories and taxes already work."
 	}
-	return out, fmt.Sprintf("Prices: cluster guide average for %d of %d PI commodities. Missing prices show as —, never zero-filled.", priced, len(names))
+	line := "Prices from The Forge"
+	if !newest.IsZero() {
+		line += ", updated " + piAgo(now.Sub(newest))
+	}
+	note := ""
+	if estimated > 0 {
+		note = fmt.Sprintf("%d of %d PI commodities price at The Forge's typical sell; %d with no Forge price use the stored estimated sell.", fromForge, len(names), estimated)
+	}
+	if missing := len(names) - priced; missing > 0 {
+		if note != "" {
+			note += " "
+		}
+		note += fmt.Sprintf("%d have no price yet and show a dash, never a zero.", missing)
+	}
+	return out, idByName, line, note
 }
 
-func fillPIPlanDisplay(view *piPlannerView, plan *piplan.Plan, prices map[string]float64) {
+// piAgo says how long ago a price row landed, in the strip's words.
+func piAgo(d time.Duration) string {
+	switch {
+	case d < time.Minute:
+		return "just now"
+	case d < time.Hour:
+		return plural(int(d/time.Minute), "minute") + " ago"
+	case d < 48*time.Hour:
+		return plural(int(d/time.Hour), "hour") + " ago"
+	}
+	return plural(int(d/(24*time.Hour)), "day") + " ago"
+}
+
+func plural(n int, unit string) string {
+	if n == 1 {
+		return "1 " + unit
+	}
+	return strconv.Itoa(n) + " " + unit + "s"
+}
+
+func fillPIPlanDisplay(view *piPlannerView, plan *piplan.Plan, ids map[string]int64) {
+	// The summary figures read in whole ISK: they sit on stat tiles
+	// and in prose, where cents only crowd the number. The table
+	// keeps them.
 	isk := func(f float64, known bool) string {
 		if !known {
 			return "—"
 		}
-		return esi.FormatISK(f)
+		return esi.FormatInt(int64(math.Round(f)))
 	}
 	// Lines already ordered target-first by the engine call site;
 	// re-sort display: tier descending, target first within tier.
@@ -421,9 +497,16 @@ func fillPIPlanDisplay(view *piPlannerView, plan *piplan.Plan, prices map[string
 		}
 		return lines[i].Name < lines[j].Name
 	})
+	maxFact := 1
+	for _, ln := range lines {
+		if ln.Tier != piplan.TierRaw && ln.Factories > maxFact {
+			maxFact = ln.Factories
+		}
+	}
 	for _, ln := range lines {
 		row := piLineRow{
-			Name: ln.Name, Tier: string(ln.Tier),
+			Name: ln.Name, TypeID: ids[ln.Name], Tier: string(ln.Tier),
+			TierKey: strings.ToLower(string(ln.Tier)), Target: ln.Name == plan.Target,
 			Needed: formatQty(ln.Needed), PerHour: formatQty(ln.PerHour),
 			Volume: fmt.Sprintf("%.1f m³", ln.Volume),
 		}
@@ -432,6 +515,7 @@ func fillPIPlanDisplay(view *piPlannerView, plan *piplan.Plan, prices map[string
 			row.Facility = "Extractor"
 		} else {
 			row.Factories = strconv.Itoa(ln.Factories)
+			row.FactPct = ln.Factories * 100 / maxFact
 			row.Facility = string(ln.Facility)
 		}
 		if ln.PriceKnown {
@@ -467,8 +551,8 @@ func fillPIPlanDisplay(view *piPlannerView, plan *piplan.Plan, prices map[string
 	if plan.RevenueKnown && plan.StepCostKnown {
 		view.MarginStep = fmt.Sprintf("%+.1f%%", plan.MarginStep)
 	}
-	view.ExportTax = esi.FormatISK(plan.ExportTax)
-	view.ImportTax = esi.FormatISK(plan.ImportTax)
+	view.ExportTax = isk(plan.ExportTax, true)
+	view.ImportTax = isk(plan.ImportTax, true)
 }
 
 func formatQty(f float64) string {
@@ -600,7 +684,7 @@ func buildPIGraph(target string, selected []string, prices map[string]float64) (
 	return cols, string(blob)
 }
 
-func piProfitableChains(prices map[string]float64, s piplan.Settings) []piProfitRow {
+func piProfitableChains(prices map[string]float64, s piplan.Settings, target string) []piProfitRow {
 	var rows []piProfitRow
 	for _, tier := range []piplan.Tier{piplan.TierP4, piplan.TierP3} {
 		for _, name := range piplan.ByTier(tier) {
@@ -624,9 +708,18 @@ func piProfitableChains(prices map[string]float64, s piplan.Settings) []piProfit
 	if len(rows) > 8 {
 		rows = rows[:8]
 	}
-	// Attach URLs preserving nothing but the pick.
+	// Attach URLs preserving nothing but the pick; bars run against
+	// the best margin listed, and a loss draws no bar.
+	best := 0.0
+	if len(rows) > 0 {
+		best = rows[0].MarginVal
+	}
 	for i := range rows {
 		rows[i].URL = "/industry/pi/?product=" + strings.ReplaceAll(rows[i].Name, " ", "+")
+		rows[i].On = rows[i].Name == target
+		if best > 0 && rows[i].MarginVal > 0 {
+			rows[i].BarPct = int(math.Round(rows[i].MarginVal / best * 100))
+		}
 	}
 	return rows
 }

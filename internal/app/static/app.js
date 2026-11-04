@@ -954,6 +954,16 @@
   }
   onContentReady(initTabs);
   initTabs(document);
+  // A same-page link to a panel (a stat tile pointing at its
+  // section) opens that panel too. Shell code: app.js runs once, so
+  // this binds once, and it looks the tab up at the time, so
+  // swapped-in pages need nothing.
+  window.addEventListener("hashchange", function () {
+    var id = window.location.hash ? window.location.hash.slice(1) : "";
+    if (!id) return;
+    var tab = document.querySelector('[data-tabs] [role="tab"][aria-controls="' + id.replace(/"/g, "") + '"]');
+    if (tab) tab.click();
+  });
 
   // --- Expanders -------------------------------------------------
   // One mechanism for every summary/detail pair. A detail block

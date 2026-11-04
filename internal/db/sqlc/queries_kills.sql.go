@@ -68,6 +68,49 @@ func (q *Queries) GetBiggestKill(ctx context.Context, since time.Time) (Kill, er
 	return i, err
 }
 
+const getKill = `-- name: GetKill :one
+SELECT killmail_id, hash, killmail_time, system_id, region_id, location_id, victim_character_id, victim_corporation_id, victim_alliance_id, victim_faction_id, ship_type_id, damage_taken, attacker_count, fb_character_id, fb_corporation_id, fb_alliance_id, fb_ship_type_id, npc, solo, awox, points, value_zkill, value_ours, value_dropped_ours, value_coverage, priced_at, source, public, ingested_at FROM kills WHERE killmail_id = $1
+`
+
+// One kill whether or not it is public: our own characters' kills
+// and losses, for pages that already know the viewer owns it.
+func (q *Queries) GetKill(ctx context.Context, killmailID int64) (Kill, error) {
+	row := q.db.QueryRowContext(ctx, getKill, killmailID)
+	var i Kill
+	err := row.Scan(
+		&i.KillmailID,
+		&i.Hash,
+		&i.KillmailTime,
+		&i.SystemID,
+		&i.RegionID,
+		&i.LocationID,
+		&i.VictimCharacterID,
+		&i.VictimCorporationID,
+		&i.VictimAllianceID,
+		&i.VictimFactionID,
+		&i.ShipTypeID,
+		&i.DamageTaken,
+		&i.AttackerCount,
+		&i.FbCharacterID,
+		&i.FbCorporationID,
+		&i.FbAllianceID,
+		&i.FbShipTypeID,
+		&i.Npc,
+		&i.Solo,
+		&i.Awox,
+		&i.Points,
+		&i.ValueZkill,
+		&i.ValueOurs,
+		&i.ValueDroppedOurs,
+		&i.ValueCoverage,
+		&i.PricedAt,
+		&i.Source,
+		&i.Public,
+		&i.IngestedAt,
+	)
+	return i, err
+}
+
 const getKillDetail = `-- name: GetKillDetail :one
 SELECT payload FROM kill_details WHERE killmail_id = $1
 `

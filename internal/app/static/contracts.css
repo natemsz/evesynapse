@@ -21,7 +21,7 @@
    controls, each with its small glyph. */
 .cs-intro { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: 0.6rem 1.5rem; margin-bottom: 1rem; }
 .cs-intro > p { margin: 0; max-width: 32rem; }
-.cs-hunts { display: flex; flex-wrap: wrap; align-items: center; gap: 0.45rem; flex: none; padding-top: 0.1rem; }
+.cs-hunts { display: flex; flex-wrap: wrap; align-items: center; gap: 0.45rem; flex: 0 1 auto; min-width: 0; padding-top: 0.1rem; }
 .cs-hunts-label { color: var(--gold); font-weight: 600; }
 .cs-hunt {
   display: inline-flex; align-items: center; gap: 0.4rem;
@@ -642,8 +642,11 @@
 .cd-abbasis { display: block; color: var(--muted); font-size: var(--fs-sm); }
 .cd-abcap { color: var(--gold); }
 
-/* ---- narrow screens ---- */
-@media (max-width: 72rem) {
+/* ---- narrow pages ----
+   Both pages sit on the layout framework, so their layout steps
+   read the page's own width (the sidebar can take or give back
+   room without the window changing). */
+@container page (width < 72rem) {
   .cs-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .cs-drawer-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .cs-drawer-grid > .cs-field { grid-column: span 1; }
@@ -657,7 +660,7 @@
   .cs-table { min-width: 46rem; }
   .cs-pgrid { grid-template-columns: minmax(0, 1fr); }
 }
-@media (max-width: 42rem) {
+@container page (width < 42rem) {
   /* The band stacks: search full width, then the type
      segments and the deals box as full-width rows of their
      own; the filter boxes and spec fields go one column. */
@@ -755,7 +758,7 @@
    cells already carry courier terms (reward, collateral,
    the sealed wrap, no spread), so its card reads in those
    terms with no second shape to build. */
-@media (max-width: 45rem) {
+@container page (width < 45rem) {
   .cs-results { overflow-x: visible; }
   .cs-table { display: block; min-width: 0; }
   .cs-table colgroup { display: none; }
@@ -802,6 +805,10 @@
   .cs-table tbody tr.cs-drow { display: block; margin: -0.25rem 0 0.6rem; }
   .cs-table tbody tr.cs-drow:has(.cs-panel-slot[hidden]) { display: none; }
   .cs-drow > td { display: block; }
+}
+@media (max-width: 45rem) {
+  /* The phone band: what rides the shell (the bottom bar, the
+     filter sheet) reads the window like the shell does. */
   /* The abyssal pricing explainer docks above the bottom bar. */
   .ab-howto-tip, .cs-tp .ab-howto-tip, .cd-tier .ab-howto-tip {
     position: fixed; z-index: 95;
@@ -842,3 +849,12 @@
   .cs-fchip, .cs-pager a { display: inline-flex; align-items: center; }
   .cs-copy { min-width: 2.5rem; min-height: 2.5rem; }
 }
+
+/* The Filters trigger renders hidden; nothing above may show it
+   until the phone band does. */
+.cs-more-btn[hidden] { display: none; }
+
+/* The sweep note lives in the sub-nav; in the phone band, where the
+   sub-nav drops it, it shows over the results instead. */
+.cs-sweepnote { display: none; margin: 0.2rem 0 0; color: var(--muted); font-size: 0.78rem; }
+@media (max-width: 45rem) { .cs-sweepnote { display: block; } }

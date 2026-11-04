@@ -270,7 +270,7 @@
       {{end}}
     </ul>
     {{if .LoggedIn}}<ul class="phone-sheet-list">
-      <li><button type="button" class="phone-sheet-row" data-status-open><span class="phone-sheet-icon"><span class="status-dot is-pending" data-status-dot></span></span><span class="phone-sheet-label">ESI Status</span></button></li>
+      <li><button type="button" class="phone-sheet-row" data-status-open><span class="phone-sheet-icon"><span class="status-dot is-pending" data-status-dot></span></span><span class="phone-sheet-text"><span class="phone-sheet-label">Status</span><small data-status-label>Checking ESI</small></span></button></li>
       <li><a class="phone-sheet-row" href="/settings" data-pane-open="settings"><svg class="phone-sheet-icon" aria-hidden="true"><use href="#ico-settings"/></svg><span class="phone-sheet-label">Settings</span><svg class="phone-sheet-chev" aria-hidden="true"><use href="#ico-chevron"/></svg></a></li>
       {{if .IsAdmin}}<li><a class="phone-sheet-row" href="/admin/sync/"><svg class="phone-sheet-icon" aria-hidden="true"><use href="#ico-sync"/></svg><span class="phone-sheet-label">Sync</span></a></li>
       <li><a class="phone-sheet-row" href="/admin/"><svg class="phone-sheet-icon" aria-hidden="true"><use href="#ico-admin"/></svg><span class="phone-sheet-label">Admin</span></a></li>{{end}}

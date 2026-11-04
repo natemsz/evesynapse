@@ -6253,7 +6253,10 @@
     el.className = "status-dot is-" + (state === "ok" || state === "limited" || state === "down" || state === "ours-lagging" || state === "ours-down" ? state : "pending");
   }
 
+  // The phone menu's status row: its dot, and its state in words
+  // (a phone has no hover for the sidebar button's tooltip).
   var extraDots = document.querySelectorAll("[data-status-dot]");
+  var extraLabels = document.querySelectorAll("[data-status-label]");
   var opener = openBtn;
 
   function load() {
@@ -6273,6 +6276,7 @@
         };
         openBtn.setAttribute("data-tip", tips[data.esi.state] || "Checking ESI. Click for detailed stats.");
         esiLabel.textContent = data.esi.label;
+        for (var l = 0; l < extraLabels.length; l++) extraLabels[l].textContent = data.esi.label;
         esiTq.textContent = data.esi.players ? "Tranquility " + data.esi.players + " online" : "";
         rowsBody.innerHTML = "";
         (data.rows || []).forEach(function (row) {

@@ -41,6 +41,7 @@
 {{if eq .NavPage "market_lp.html"}}<link rel="stylesheet" href="/static/lp.css?v={{.AssetVersion}}">{{end}}
 {{if eq .NavPage "market_trends.html"}}<link rel="stylesheet" href="/static/trends.css?v={{.AssetVersion}}">{{end}}
 {{if or (eq .NavPage "market_baskets.html") (eq .NavPage "market_basket.html")}}<link rel="stylesheet" href="/static/baskets.css?v={{.AssetVersion}}">{{end}}
+{{if or (eq .NavPage "market_scanner.html") (eq .NavPage "market_tradefinder.html") (eq .NavPage "market_restock.html") (eq .NavPage "market_leaderboard.html") (eq .NavPage "market_tradeideas.html")}}<link rel="stylesheet" href="/static/markettools.css?v={{.AssetVersion}}">{{end}}
 {{if eq .NavPage "industry_mining.html"}}<link rel="stylesheet" href="/static/mining.css?v={{.AssetVersion}}">{{end}}
 {{if eq .NavPage "planets.html"}}<link rel="stylesheet" href="/static/colonies.css?v={{.AssetVersion}}">{{end}}
 {{if eq .NavPage "skillplans.html"}}<link rel="stylesheet" href="/static/skillplans.css?v={{.AssetVersion}}">{{end}}

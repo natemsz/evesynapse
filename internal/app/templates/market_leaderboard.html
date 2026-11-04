@@ -7,9 +7,13 @@
 
 {{if .MarketLeaderboard}}
 {{$s := .MarketLeaderboard}}
-<p><small>The busiest stations and structures across the hub regions: how many orders are open at each, and how much ISK is sitting on them. The figures update after each region sweep.</small></p>
+<div class="l-page">
+<div class="l-head">
+  <p class="l-head-sum">The busiest stations and structures across the hub regions: how many orders are open at each, and how much ISK is sitting on them. The figures update after each region sweep.</p>
+  {{if $s.HasData}}<div class="l-head-act"><a class="btn btn-quiet" href="#" id="csv-export">Export CSV</a></div>{{end}}
+</div>
 
-<form method="get" action="/market/leaderboard/">
+<form method="get" action="/market/leaderboard/" class="l-panel mk-filters">
   <label><small>Region</small>
     <select name="region">
       {{range $s.Regions}}<option value="{{.ID}}"{{if .Active}} selected{{end}}>{{.Name}}</option>{{end}}
@@ -25,28 +29,28 @@
 </form>
 
 {{if $s.HasData}}
-<p><small>{{if $s.AsOf}}{{$s.AsOf}} · {{end}}Showing up to 100 stations, busiest first. · <a href="#" id="csv-export">Export CSV</a></small></p>
-
-<div class="tw">
-<table>
-  <thead><tr><th>#</th><th>Station</th><th>Region</th><th>Open orders</th><th>ISK on orders</th></tr></thead>
-  <tbody>
-  {{range $s.Rows}}
-    <tr>
-      <td>{{.Rank}}</td>
-      <td>{{placeLink .Station}}</td>
-      <td>{{.RegionName}}</td>
-      <td>{{.Orders}}</td>
-      <td>{{.OpenValue}} ISK</td>
-    </tr>
-  {{end}}
-  </tbody>
-</table>
-</div>
-
-<p><small>Open orders counts every open buy and sell order the latest sweep saw at the station; ISK on orders is the value still open on those orders (price times remaining volume). Visit a station to see its best prices and the spreads traders are working there.</small></p>
+<section class="l-panel mk-results">
+  <div class="mk-bar"><h2 class="mk-title">Busiest stations <small>{{if $s.AsOf}}{{$s.AsOf}} · {{end}}up to 100, ranked by {{if eq $s.Sort "orders"}}open orders{{else}}ISK on orders{{end}}</small></h2></div>
+  <div class="tw">
+  <table class="mk-table" data-rank="{{if eq $s.Sort "orders"}}3{{else}}4{{end}}">
+    <thead><tr><th class="card-title">Station</th><th>Region</th><th class="mt-num">Open orders</th><th class="mt-num">ISK on orders</th></tr></thead>
+    <tbody>
+    {{range $s.Rows}}
+      <tr>
+        <td><span class="mk-station"><span class="mk-rank-in" aria-hidden="true">{{.Rank}}</span>{{placeLink .Station}}</span><svg class="l-meter mk-meter" viewBox="0 0 100 4" preserveAspectRatio="none" aria-hidden="true"><rect x="0" y="0" width="{{.SharePct}}" height="4"/></svg></td>
+        <td>{{.RegionName}}</td>
+        <td class="mt-num">{{.Orders}}</td>
+        <td class="mt-num">{{.OpenValue}}</td>
+      </tr>
+    {{end}}
+    </tbody>
+  </table>
+  </div>
+  <p class="mk-note"><small>ISK. Open orders counts every open buy and sell order the latest sweep saw at the station; ISK on orders is the value still open on those orders (price times remaining volume). The bar sets each station against the top one. Visit a station to see its best prices and the spreads traders are working there.</small></p>
+</section>
 {{else}}
 <p>Still gathering prices. The leaderboard fills in after the first region sweeps finish.</p>
 {{end}}
+</div>
 {{end}}
 {{end}}

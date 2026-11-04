@@ -7,52 +7,65 @@
 
 {{if .Restock}}
 {{$s := .Restock}}
-<p><small>Set target stock levels for the items you trade. The planner compares each target against your open sell orders, shows the shortfall, and estimates the restock cost at current market sell prices.</small></p>
-
-<div class="foldable" data-fold="never">
-<h3>Add a target</h3>
-<form method="post" action="/market/restock/save/">
-  <p>
-    <label>Type ID <input type="number" name="type_id" min="1" required size="10" placeholder="e.g. 34"></label>
-    <label>Target qty <input type="number" name="target_qty" min="0" value="0" size="10"></label>
-    <label title="Reserved for future margin alerts">Min margin % <input type="number" name="min_margin_pct" min="0" step="0.1" value="0" size="6"></label>
-    <button class="btn" type="submit">Save target</button>
-  </p>
-  <p><small>Tip: an item's type ID is in the URL of its <a href="/items/">Item Browser</a> page (/items/type/&lt;id&gt;/).</small></p>
-</form>
+<div class="l-page">
+<div class="l-head">
+  <p class="l-head-sum">Set target stock levels for the items you trade. The planner compares each target against your open sell orders, shows the shortfall, and estimates the restock cost at current market sell prices.</p>
 </div>
 
 {{if $s.HasData}}
-<p><small>Showing {{len $s.Rows}} targets, largest shortfall first. Total estimated restock cost: <strong>{{$s.TotalCost}}</strong>.</small></p>
-
-<div class="tw">
-<table>
-  <thead><tr><th>Item</th><th>Target</th><th>Listed</th><th>Shortfall</th><th>Unit price</th><th>Est. cost</th><th></th></tr></thead>
-  <tbody>
-  {{range $s.Rows}}
-    <tr>
-      <td><a href="{{.URL}}">{{.Name}}</a></td>
-      <td>{{.TargetQty}}</td>
-      <td>{{.ListedQty}}</td>
-      <td>{{.Shortfall}}</td>
-      <td>{{.UnitPrice}}</td>
-      <td>{{.EstCost}}</td>
-      <td>
-        <form method="post" action="/market/restock/delete/" class="inline-form">
-          <input type="hidden" name="type_id" value="{{.TypeID}}">
-          <button class="btn btn-danger" type="submit" title="Remove target">×</button>
-        </form>
-      </td>
-    </tr>
-  {{end}}
-  </tbody>
-</table>
-</div>
-{{else}}
-<div class="card">
-  <h3>No targets yet</h3>
-  <p>Add your first restock target above, for example the ammo or modules you sell regularly. The planner tracks your open sell orders against each target and shows what needs restocking.</p>
+<div class="l-tiles mk-tiles">
+  <div class="l-stat"><span class="l-stat-label">Targets</span><span class="l-stat-value">{{len $s.Rows}}</span><span class="l-stat-sub">Items you keep stocked</span></div>
+  <div class="l-stat{{if $s.Short}} warn{{else}} ok{{end}}"><span class="l-stat-label">Running short</span><span class="l-stat-value">{{$s.Short}}</span><span class="l-stat-sub">{{if $s.Short}}Listed below their target{{else}}Every target is listed{{end}}</span></div>
+  <div class="l-stat"><span class="l-stat-label">Restock cost</span><span class="l-stat-value text">{{$s.TotalCost}}</span><span class="l-stat-sub">At current market sell prices</span></div>
 </div>
 {{end}}
+
+<form method="post" action="/market/restock/save/" class="l-panel mk-filters mk-add">
+  <label class="mk-wide"><small>Item</small>
+    <span class="searchwrap">
+      <input type="search" name="item" id="restock-item" required placeholder="Item name, e.g. Tritanium" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="restock-suggest" aria-autocomplete="list" data-suggest="/market/suggest" data-suggest-target="restock-type">
+      <ul class="suggest" id="restock-suggest" role="listbox" hidden></ul>
+    </span>
+  </label>
+  <input type="hidden" name="type_id" id="restock-type">
+  <label><small>Target quantity</small> <input type="number" name="target_qty" min="0" value="0"></label>
+  <label title="Kept for margin alerts to come"><small>Min margin %</small> <input type="number" name="min_margin_pct" min="0" step="0.1" value="0"></label>
+  <button class="btn" type="submit">Save target</button>
+</form>
+
+{{if $s.HasData}}
+<section class="l-panel mk-results">
+  <div class="mk-bar"><h2 class="mk-title">Targets <small>largest shortfall first</small></h2></div>
+  <div class="tw">
+  <table class="mk-table" data-rank="4">
+    <thead><tr><th class="card-title">Item</th><th class="mt-num">Target</th><th class="mt-num">Listed</th><th class="mt-num">Shortfall</th><th class="mt-num">Unit price</th><th class="mt-num">Est. cost</th><th class="opt"><span class="visually-hidden">Remove</span></th></tr></thead>
+    <tbody>
+    {{range $s.Rows}}
+      <tr>
+        <td><span class="mk-item"><img src="https://images.evetech.net/types/{{.TypeID}}/icon?size=32" alt="" width="28" height="28" loading="lazy" data-fallback-src="/static/img/item.svg"><a href="{{.URL}}">{{.Name}}</a></span></td>
+        <td class="mt-num">{{.TargetQty}}</td>
+        <td class="mt-num">{{.ListedQty}}</td>
+        <td class="mt-num">{{.Shortfall}}</td>
+        <td class="mt-num">{{.UnitPrice}}</td>
+        <td class="mt-num mk-gold">{{.EstCost}}</td>
+        <td class="mt-num">
+          <form method="post" action="/market/restock/delete/" class="inline-form">
+            <input type="hidden" name="type_id" value="{{.TypeID}}">
+            <button class="btn btn-quiet" type="submit" aria-label="Remove the target for {{.Name}}">Remove</button>
+          </form>
+        </td>
+      </tr>
+    {{end}}
+    </tbody>
+  </table>
+  </div>
+</section>
+{{else}}
+<section class="l-panel mk-results">
+  <h2 class="mk-title">No targets yet</h2>
+  <p>Add your first restock target above, for example the ammo or modules you sell regularly. The planner tracks your open sell orders against each target and shows what needs restocking.</p>
+</section>
+{{end}}
+</div>
 {{end}}
 {{end}}

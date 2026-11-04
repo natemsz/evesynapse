@@ -47,6 +47,23 @@ func (q *Queries) DeleteAssetLocationValuesForCharacter(ctx context.Context, arg
 	return err
 }
 
+const deleteBlueprintBuildableOlder = `-- name: DeleteBlueprintBuildableOlder :exec
+DELETE FROM blueprint_buildable
+WHERE user_id = $1 AND computed_at < $2
+`
+
+type DeleteBlueprintBuildableOlderParams struct {
+	UserID int64     `json:"user_id"`
+	FoldAt time.Time `json:"fold_at"`
+}
+
+// Drops the account's verdicts the latest fold did not write: the
+// blueprints its characters no longer own.
+func (q *Queries) DeleteBlueprintBuildableOlder(ctx context.Context, arg DeleteBlueprintBuildableOlderParams) error {
+	_, err := q.db.ExecContext(ctx, deleteBlueprintBuildableOlder, arg.UserID, arg.FoldAt)
+	return err
+}
+
 const getAssetLocationValueLatest = `-- name: GetAssetLocationValueLatest :one
 SELECT computed_at FROM asset_location_values
 WHERE user_id = $1 AND character_id = $2
@@ -66,6 +83,27 @@ func (q *Queries) GetAssetLocationValueLatest(ctx context.Context, arg GetAssetL
 	var computed_at time.Time
 	err := row.Scan(&computed_at)
 	return computed_at, err
+}
+
+const getBlueprintBuildableFold = `-- name: GetBlueprintBuildableFold :one
+
+SELECT characters, computed_at FROM blueprint_buildable_folds
+WHERE user_id = $1
+`
+
+type GetBlueprintBuildableFoldRow struct {
+	Characters string    `json:"characters"`
+	ComputedAt time.Time `json:"computed_at"`
+}
+
+// ---------------------------------------------------------------------
+// Blueprint buildability (schema 122): per owned blueprint, folded by
+// the worker from an account's blueprint, asset and skill snapshots.
+func (q *Queries) GetBlueprintBuildableFold(ctx context.Context, userID int64) (GetBlueprintBuildableFoldRow, error) {
+	row := q.db.QueryRowContext(ctx, getBlueprintBuildableFold, userID)
+	var i GetBlueprintBuildableFoldRow
+	err := row.Scan(&i.Characters, &i.ComputedAt)
+	return i, err
 }
 
 const listAssetLocationValuesByUser = `-- name: ListAssetLocationValuesByUser :many
@@ -148,6 +186,108 @@ func (q *Queries) ListAssetTypeMetaGroups(ctx context.Context, typeIds []int64) 
 	return items, nil
 }
 
+const listBlueprintBuildable = `-- name: ListBlueprintBuildable :many
+SELECT item_id, total_materials,
+       has_skills, has_materials, missing_skills, short_materials,
+       any_skills, any_materials, any_missing_skills, any_short_materials
+FROM blueprint_buildable
+WHERE user_id = $1 AND item_id = ANY($2::bigint[])
+`
+
+type ListBlueprintBuildableParams struct {
+	UserID  int64   `json:"user_id"`
+	ItemIds []int64 `json:"item_ids"`
+}
+
+type ListBlueprintBuildableRow struct {
+	ItemID            int64  `json:"item_id"`
+	TotalMaterials    int64  `json:"total_materials"`
+	HasSkills         bool   `json:"has_skills"`
+	HasMaterials      bool   `json:"has_materials"`
+	MissingSkills     string `json:"missing_skills"`
+	ShortMaterials    int64  `json:"short_materials"`
+	AnySkills         bool   `json:"any_skills"`
+	AnyMaterials      bool   `json:"any_materials"`
+	AnyMissingSkills  string `json:"any_missing_skills"`
+	AnyShortMaterials int64  `json:"any_short_materials"`
+}
+
+// The stored verdicts for the blueprints a page shows.
+func (q *Queries) ListBlueprintBuildable(ctx context.Context, arg ListBlueprintBuildableParams) ([]ListBlueprintBuildableRow, error) {
+	rows, err := q.db.QueryContext(ctx, listBlueprintBuildable, arg.UserID, pq.Array(arg.ItemIds))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListBlueprintBuildableRow
+	for rows.Next() {
+		var i ListBlueprintBuildableRow
+		if err := rows.Scan(
+			&i.ItemID,
+			&i.TotalMaterials,
+			&i.HasSkills,
+			&i.HasMaterials,
+			&i.MissingSkills,
+			&i.ShortMaterials,
+			&i.AnySkills,
+			&i.AnyMaterials,
+			&i.AnyMissingSkills,
+			&i.AnyShortMaterials,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSnapshotStamps = `-- name: ListSnapshotStamps :many
+SELECT character_id, kind, fetched_at FROM character_snapshots
+WHERE character_id = ANY($1::bigint[]) AND kind = ANY($2::text[])
+`
+
+type ListSnapshotStampsParams struct {
+	CharacterIds []int64  `json:"character_ids"`
+	Kinds        []string `json:"kinds"`
+}
+
+type ListSnapshotStampsRow struct {
+	CharacterID int64     `json:"character_id"`
+	Kind        string    `json:"kind"`
+	FetchedAt   time.Time `json:"fetched_at"`
+}
+
+// When each of some characters' snapshots of some kinds was last
+// fetched, without their payloads: a fold's watermark check.
+func (q *Queries) ListSnapshotStamps(ctx context.Context, arg ListSnapshotStampsParams) ([]ListSnapshotStampsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listSnapshotStamps, pq.Array(arg.CharacterIds), pq.Array(arg.Kinds))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListSnapshotStampsRow
+	for rows.Next() {
+		var i ListSnapshotStampsRow
+		if err := rows.Scan(&i.CharacterID, &i.Kind, &i.FetchedAt); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const upsertAssetLocationValue = `-- name: UpsertAssetLocationValue :exec
 
 INSERT INTO asset_location_values (
@@ -202,5 +342,83 @@ func (q *Queries) UpsertAssetLocationValue(ctx context.Context, arg UpsertAssetL
 		arg.Volume,
 		arg.ComputedAt,
 	)
+	return err
+}
+
+const upsertBlueprintBuildable = `-- name: UpsertBlueprintBuildable :exec
+INSERT INTO blueprint_buildable (
+    user_id, character_id, item_id, blueprint_type, total_materials,
+    has_skills, has_materials, missing_skills, short_materials,
+    any_skills, any_materials, any_missing_skills, any_short_materials,
+    computed_at
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+ON CONFLICT (character_id, item_id) DO UPDATE SET
+    user_id             = excluded.user_id,
+    blueprint_type      = excluded.blueprint_type,
+    total_materials     = excluded.total_materials,
+    has_skills          = excluded.has_skills,
+    has_materials       = excluded.has_materials,
+    missing_skills      = excluded.missing_skills,
+    short_materials     = excluded.short_materials,
+    any_skills          = excluded.any_skills,
+    any_materials       = excluded.any_materials,
+    any_missing_skills  = excluded.any_missing_skills,
+    any_short_materials = excluded.any_short_materials,
+    computed_at         = excluded.computed_at
+`
+
+type UpsertBlueprintBuildableParams struct {
+	UserID            int64     `json:"user_id"`
+	CharacterID       int64     `json:"character_id"`
+	ItemID            int64     `json:"item_id"`
+	BlueprintType     int64     `json:"blueprint_type"`
+	TotalMaterials    int64     `json:"total_materials"`
+	HasSkills         bool      `json:"has_skills"`
+	HasMaterials      bool      `json:"has_materials"`
+	MissingSkills     string    `json:"missing_skills"`
+	ShortMaterials    int64     `json:"short_materials"`
+	AnySkills         bool      `json:"any_skills"`
+	AnyMaterials      bool      `json:"any_materials"`
+	AnyMissingSkills  string    `json:"any_missing_skills"`
+	AnyShortMaterials int64     `json:"any_short_materials"`
+	ComputedAt        time.Time `json:"computed_at"`
+}
+
+func (q *Queries) UpsertBlueprintBuildable(ctx context.Context, arg UpsertBlueprintBuildableParams) error {
+	_, err := q.db.ExecContext(ctx, upsertBlueprintBuildable,
+		arg.UserID,
+		arg.CharacterID,
+		arg.ItemID,
+		arg.BlueprintType,
+		arg.TotalMaterials,
+		arg.HasSkills,
+		arg.HasMaterials,
+		arg.MissingSkills,
+		arg.ShortMaterials,
+		arg.AnySkills,
+		arg.AnyMaterials,
+		arg.AnyMissingSkills,
+		arg.AnyShortMaterials,
+		arg.ComputedAt,
+	)
+	return err
+}
+
+const upsertBlueprintBuildableFold = `-- name: UpsertBlueprintBuildableFold :exec
+INSERT INTO blueprint_buildable_folds (user_id, characters, computed_at)
+VALUES ($1, $2, $3)
+ON CONFLICT (user_id) DO UPDATE SET
+    characters  = excluded.characters,
+    computed_at = excluded.computed_at
+`
+
+type UpsertBlueprintBuildableFoldParams struct {
+	UserID     int64     `json:"user_id"`
+	Characters string    `json:"characters"`
+	ComputedAt time.Time `json:"computed_at"`
+}
+
+func (q *Queries) UpsertBlueprintBuildableFold(ctx context.Context, arg UpsertBlueprintBuildableFoldParams) error {
+	_, err := q.db.ExecContext(ctx, upsertBlueprintBuildableFold, arg.UserID, arg.Characters, arg.ComputedAt)
 	return err
 }

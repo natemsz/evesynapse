@@ -41,15 +41,15 @@
   {{if .BlueprintRows}}
   <div class="tw">
   <table id="bp-table">
-    <thead><tr><th>Pin</th><th class="card-title">Blueprint</th><th>Produces</th><th>Category</th><th>Kind</th><th>ME</th><th>TE</th><th>Runs</th><th>Location</th></tr></thead>
+    <thead><tr><th>Pin</th><th class="bp-build-h">Build</th><th class="card-title">Blueprint</th><th>Produces</th><th>Category</th><th>Kind</th><th>ME</th><th>TE</th><th>Runs</th><th>Location</th></tr></thead>
     <tbody>
     {{$lastCat := ""}}
     {{range .BlueprintRows}}
       {{if and .ProductCategory (ne .ProductCategory $lastCat)}}
-      <tr class="bp-cat-header"><td colspan="9"><strong>{{.ProductCategory}}</strong></td></tr>
+      <tr class="bp-cat-header"><td colspan="10"><strong>{{.ProductCategory}}</strong></td></tr>
       {{$lastCat = .ProductCategory}}
       {{end}}
-    <tr class="bp-row{{if .On}} yours{{end}}" data-search="{{.Name}} {{.ProductName}} {{.ProductCategory}}"><td><form class="bp-pin" method="post" action="/industry/pin/"><input type="hidden" name="blueprint" value="{{.TypeID}}"><input type="hidden" name="character" value="{{$.Industry.CharacterID}}"><input type="hidden" name="pinned" value="{{if .Pinned}}0{{else}}1{{end}}"><button type="submit" class="bp-pin-btn{{if .Pinned}} on{{end}}" aria-pressed="{{if .Pinned}}true{{else}}false{{end}}" title="{{if .Pinned}}Pinned as a production line. Unpin{{else}}Pin as a production line, shown on the home page{{end}}">{{if .Pinned}}Pinned{{else}}Pin{{end}}</button></form></td><td><a href="{{.Href}}" data-l-step="in">{{.Name}}</a></td><td>{{if .ProductTypeID}}<a href="/planner/?product={{.ProductTypeID}}" title="open in build planner" aria-label="Open {{.ProductName}} in the build planner">{{.ProductName}} <svg class="plan-glyph plan-glyph-sm" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="url(#nav-glyph-gradient)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a4.5 4.5 0 0 0-6 6L3 18l3 3 5.7-5.7a4.5 4.5 0 0 0 6-6L14 13l-3-3 3.7-3.7Z"/></g></svg></a>{{else if .ProductName}}{{.ProductName}}{{else}}—{{end}}</td><td>{{if .ProductCategory}}{{.ProductCategory}}{{else}}—{{end}}</td><td>{{.Kind}}</td><td>{{.ME}}</td><td>{{.TE}}</td><td>{{.Runs}}</td><td>{{placeLink .Location}}</td></tr>
+    <tr class="bp-row{{if .On}} yours{{end}}{{if eq .Build "ready"}} bp-ready{{end}}" data-search="{{.Name}} {{.ProductName}} {{.ProductCategory}}"><td><form class="bp-pin" method="post" action="/industry/pin/"><input type="hidden" name="blueprint" value="{{.TypeID}}"><input type="hidden" name="character" value="{{if $.Industry.All}}all{{else}}{{$.Industry.CharacterID}}{{end}}"><input type="hidden" name="pinned" value="{{if .Pinned}}0{{else}}1{{end}}"><button type="submit" class="bp-pin-btn{{if .Pinned}} on{{end}}" aria-pressed="{{if .Pinned}}true{{else}}false{{end}}" title="{{if .Pinned}}Pinned as a production line. Unpin{{else}}Pin as a production line, shown on the home page{{end}}">{{if .Pinned}}Pinned{{else}}Pin{{end}}</button></form></td><td class="bp-build">{{if eq .Build "ready"}}<span class="bp-can" title="{{.BuildNote}}"><span aria-hidden="true">✓</span><span class="visually-hidden">{{.BuildNote}}</span></span>{{else if .Build}}<span class="bp-cannot" title="{{.BuildNote}}">{{if eq .Build "skills"}}Skills{{else}}Materials{{end}}<span class="visually-hidden">: {{.BuildNote}}</span></span>{{end}}</td><td><a href="{{.Href}}" data-l-step="in">{{.Name}}</a>{{if .OwnerName}}<small class="bp-owner">{{.OwnerName}}</small>{{end}}</td><td>{{if .ProductTypeID}}<a href="/planner/?product={{.ProductTypeID}}" title="open in build planner" aria-label="Open {{.ProductName}} in the build planner">{{.ProductName}} <svg class="plan-glyph plan-glyph-sm" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="url(#nav-glyph-gradient)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a4.5 4.5 0 0 0-6 6L3 18l3 3 5.7-5.7a4.5 4.5 0 0 0 6-6L14 13l-3-3 3.7-3.7Z"/></g></svg></a>{{else if .ProductName}}{{.ProductName}}{{else}}—{{end}}</td><td>{{if .ProductCategory}}{{.ProductCategory}}{{else}}—{{end}}</td><td>{{.Kind}}</td><td>{{.ME}}</td><td>{{.TE}}</td><td>{{.Runs}}</td><td>{{placeLink .Location}}</td></tr>
     {{end}}
     </tbody>
   </table>
@@ -73,6 +73,8 @@
     {{if .Makes}}<div><dt>Makes</dt><dd>{{.Makes}}</dd></div>{{end}}
     {{if .TimePerRun}}<div><dt>Time per run</dt><dd>{{.TimePerRun}} <small class="muted">(base {{.BaseTime}})</small></dd></div>{{end}}
     {{if .Row.Location.Name}}<div><dt>Kept at</dt><dd>{{placeLink .Row.Location}}</dd></div>{{end}}
+    {{if .Row.OwnerName}}<div><dt>Owned by</dt><dd>{{.Row.OwnerName}}</dd></div>{{end}}
+    {{if .Row.Build}}<div><dt>Can build</dt><dd class="{{if eq .Row.Build "ready"}}bp-can{{else}}bp-cannot{{end}}">{{if eq .Row.Build "ready"}}Yes. {{end}}{{.Row.BuildNote}}</dd></div>{{end}}
   </dl>
   {{if .Materials}}
   <h4 class="bp-h">Materials per run</h4>

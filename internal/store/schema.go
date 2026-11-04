@@ -745,6 +745,13 @@ var pgMarketStationHeatSchema string
 //go:embed schema_pg/121_market_stat_sparks.sql
 var pgMarketStatSparksSchema string
 
+// Step 122: per owned blueprint, whether its owner can build one run
+// now (skills, and one run's materials in their hangars), folded by
+// the worker from the blueprint, asset and skill snapshots.
+//
+//go:embed schema_pg/122_blueprint_buildable.sql
+var pgBlueprintBuildableSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -895,6 +902,7 @@ func schemaSteps() []schemaStep {
 		{119, "asset_location_values", pgAssetLocationValuesSchema, ""},
 		{120, "market_station_heat", pgMarketStationHeatSchema, ""},
 		{121, "market_stat_sparks", pgMarketStatSparksSchema, ""},
+		{122, "blueprint_buildable", pgBlueprintBuildableSchema, ""},
 	}
 }
 

@@ -55,11 +55,14 @@
 .wbd-map .map-shot,
 .wbd-map .map-mark { display: none !important; }
 .wbd-map .map-stage { height: clamp(16rem, 34dvh, 26rem); }
+/* The full map page bleeds the map past its frame; in the panel it
+   sits inside the box. */
+.wbd-map .map { margin: 0; }
 
 /* --- The activity log: the feed, scrolling in its own box --- */
 .wbd-feed { max-height: 24rem; overflow-y: auto; overscroll-behavior: contain; }
 
-@media (max-width: 45rem) {
+@container page (width < 45rem) {
   .wbd { grid-template-columns: minmax(0, 1fr); grid-template-areas: "threads" "main" "map" "log"; }
   .wbd-details { margin-left: 0; }
   .wbd-sep { display: none; }

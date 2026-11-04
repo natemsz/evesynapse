@@ -6,47 +6,42 @@ import (
 	"testing"
 )
 
-// TestScanSurfacesCarryTheFullGlass pins the scan tool's glass:
-// its panels and stat cards carry the same recipe the site's
-// cards and panels carry (the --glass tint, the glass-edge
-// border, the deepened shadow, and the blur with its saturate),
-// the stat figures read in the mono KPI face, and a scan that
-// cannot be read lands on a glass panel of its own instead of
-// bare text. The reading's standing notes are open prose.
+// TestScanSurfacesCarryTheFullGlass pins the scan tool's surfaces on
+// the layout framework: its panels and stat cards are solid page
+// panels (the --surface-inset ground and its hairline) with no glass
+// of their own, the stat figures read in the numeral face, and every
+// scan page measures its own space inside .l-page. A scan that
+// cannot be read lands on a panel of its own instead of bare text.
 func TestScanSurfacesCarryTheFullGlass(t *testing.T) {
 	scans := readStatic(t, "scans.css")
+	if strings.Contains(scans, "var(--glass)") || strings.Contains(scans, "backdrop-filter") {
+		t.Errorf("scans.css still paints glass; its panels are the framework's solid panels")
+	}
 	for _, want := range []string{
-		// The panel group: paste box, own-scans list, reading
-		// head, breakdown panels, and the unreadable-scan state.
 		".sc-panel, .sc-paste, .sc-own, .sc-head, .sc-missing {",
-		"background: var(--glass);",
-		"box-shadow: 0 4px 18px rgba(0, 0, 0, 0.6);",
-		"backdrop-filter: blur(var(--glass-blur)) saturate(0.9);",
-		// The stat cards carry the glass too, blur included.
 		".sc-stat {",
-		// Stat figures read in the mono face at the KPI weight.
-		`.sc-stat-v { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: var(--fs-3xl); font-weight: 600;`,
+		`.sc-stat-v { font-family: var(--font-num); font-size: var(--fs-3xl); font-weight: 600;`,
 	} {
 		if !strings.Contains(scans, want) {
-			t.Errorf("scans.css missing glass rule %q", want)
+			t.Errorf("scans.css missing rule %q", want)
 		}
 	}
-	// The stat card's own block carries the backdrop, not just
-	// the tint: the flat .sc-stat block is the one a reader's eye
-	// lands on first.
-	stat := scans[strings.Index(scans, ".sc-stat {"):]
-	stat = stat[:strings.Index(stat, "}")]
-	if !strings.Contains(stat, "backdrop-filter: blur(var(--glass-blur)) saturate(0.9);") {
-		t.Errorf(".sc-stat block lacks the glass backdrop: %s", stat)
+	for _, sel := range []string{".sc-panel, .sc-paste, .sc-own, .sc-head, .sc-missing {", ".sc-stat {"} {
+		block := scans[strings.Index(scans, sel):]
+		block = block[:strings.Index(block, "}")]
+		for _, want := range []string{"border: 1px solid var(--hairline);", "background: var(--surface-inset);"} {
+			if !strings.Contains(block, want) {
+				t.Errorf("%s block lacks %q: %s", sel, want, block)
+			}
+		}
 	}
-
-	raw, err := fs.ReadFile(templatesFS, "templates/scan.html")
-	if err != nil {
-		t.Fatalf("read scan.html: %v", err)
-	}
-	for _, mark := range []string{`class="sc-missing prose"`, `class="sc-note muted prose"`} {
-		if !strings.Contains(string(raw), mark) {
-			t.Errorf("scan.html missing mark %q", mark)
+	for _, name := range []string{"scans.html", "scan.html", "scan_compare.html"} {
+		raw, err := fs.ReadFile(templatesFS, "templates/"+name)
+		if err != nil {
+			t.Fatalf("read %s: %v", name, err)
+		}
+		if !strings.Contains(string(raw), `<div class="l-page sc">`) {
+			t.Errorf("%s is not on the layout framework (no .l-page)", name)
 		}
 	}
 }

@@ -3,6 +3,9 @@
    theme tokens only, so every theme (dark default and light)
    carries them unchanged. */
 
+/* The item page's details button sits at the row's right edge. */
+.mkt-item-actions { display: flex; justify-content: flex-end; }
+
 .mt-chg { font-variant-numeric: tabular-nums; white-space: nowrap; }
 .mt-chg.up { color: var(--success); }
 .mt-chg.down { color: var(--danger); }

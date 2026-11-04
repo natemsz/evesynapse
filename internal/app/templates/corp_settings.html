@@ -5,21 +5,22 @@
 
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
 
+<div class="l-page">
 {{with .CorpSettings}}
 {{if not .ID}}
-<p>None of your characters is a director or the CEO of a corporation, so there are no settings for you to change.</p>
+<div class="l-panel co-gate"><p>None of your characters is a director or the CEO of a corporation, so there are no settings for you to change.</p></div>
 {{else}}
-{{template "corpselector" .CorpOptions}}
-<h2>{{.Name}}</h2>
-<p><small>{{if moduleOn "doctrines"}}<a href="/doctrines/?corporation={{.ID}}">Doctrines</a> · <a href="/doctrines/fits/?corporation={{.ID}}">Fits</a> · {{end}}{{if moduleOn "srp"}}<a href="/srp/?corporation={{.ID}}">Ship Replacement</a> · {{end}}Settings</small></p>
+<div class="l-head">
+  <div class="l-head-pick">{{template "corpselector" .CorpOptions}}</div>
+  <p class="l-head-sum"><b>{{.Name}}</b></p>
+</div>
+<p class="co-lede">How {{.Name}} runs on EveSynapse. Directors and the CEO can always do everything here; these settings say who else can.</p>
 
-<p class="lede">How {{.Name}} runs on EveSynapse. Directors and the CEO can always do everything here; these settings say who else can.</p>
-
-<form method="post" action="/corporations/settings/save" class="op-form">
+<form method="post" action="/corporations/settings/save" class="op-form co-form">
   <input type="hidden" name="corporation" value="{{.ID}}">
-  <div class="settings-grid">
-    <section class="setting">
-      <h4>Ship Replacement</h4>
+  <div class="co-cards">
+    <section class="l-panel co-card">
+      <h3>Ship Replacement</h3>
       <label class="field"><span class="field-label">Who handles requests, besides directors and the CEO</span>
         <select name="srp_who">{{range .SRPWho}}<option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>{{end}}</select>
         <span class="field-hint">They see every request, mark it paid or deny it</span></label>
@@ -27,22 +28,22 @@
         <textarea name="srp_policy" rows="5" maxlength="2000" placeholder="e.g. Doctrine ships on stratops are replaced in full; everything else at the handler's judgement.">{{.SRPPolicy}}</textarea></label>
     </section>
 
-    <section class="setting">
-      <h4>Doctrines</h4>
+    <section class="l-panel co-card">
+      <h3>Doctrines</h3>
       <label class="field"><span class="field-label">Who keeps doctrines, besides directors and the CEO</span>
         <select name="doctrines_who">{{range .DoctrinesWho}}<option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>{{end}}</select>
         <span class="field-hint">They make, change and delete doctrines and their fits. Every member can read them.</span></label>
     </section>
 
-    <section class="setting">
-      <h4>Intel channels</h4>
+    <section class="l-panel co-card">
+      <h3>Intel channels</h3>
       <label class="field"><span class="field-label">Who runs the corporation's intel channels, besides directors and the CEO</span>
         <select name="intel_who">{{range .IntelWho}}<option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>{{end}}</select>
         <span class="field-hint">They make the corporation's <a href="/intel/channels/">intel channels</a>, rename and delete them, and choose who can read and post.</span></label>
     </section>
 
-    <section class="setting">
-      <h4>Groups and Discord</h4>
+    <section class="l-panel co-card">
+      <h3>Groups and Discord</h3>
       <p class="hint">Each setting above can be an in-game role or one of the corporation's groups. Groups, and the corporation's Discord server, have pages of their own.</p>
       <div class="form-actions">{{if moduleOn "groups"}}<a class="btn" href="/groups/?owner=corporation:{{.ID}}">Groups</a>{{end}}{{if moduleOn "discord"}}<a class="btn" href="/discord/servers?owner=corporation:{{.ID}}">Discord Server</a>{{end}}</div>
     </section>
@@ -51,4 +52,5 @@
 </form>
 {{end}}
 {{end}}
+</div>
 {{end}}

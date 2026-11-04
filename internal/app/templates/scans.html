@@ -6,7 +6,8 @@
 {{/* The paste box (scans.go). One box takes all four pastes; the
      kind is told from the text. A reading lands at its own unlisted
      link; the reader's own scans are listed below. */}}
-<div class="sc">
+<div class="l-page sc">
+  <div class="{{if .Own}}l-sidebar l-sidebar--end {{end}}sc-top">
   <form class="sc-paste" method="post" action="/intel/scan/">
     <label class="sc-label" for="sc-text">Paste a scan</label>
     <textarea id="sc-text" name="scan" rows="10" spellcheck="false" autocomplete="off" required autofocus
@@ -34,6 +35,7 @@
       {{range .Own}}<li><a href="/intel/scan/{{.ID}}/"><span class="sc-own-k">{{.Title}}</span>{{if .System}}<span class="sc-own-sys"><span class="sec sec-{{.SecTier}}">{{.SecText}}</span> {{.System}}</span>{{end}}<time datetime="{{rfc3339 .At}}">{{.Ago}}</time></a></li>{{end}}
     </ol>
   </section>{{end}}
+  </div>
 </div>
 {{end}}
 {{end}}

@@ -2,39 +2,49 @@
 {{define "pagetitle"}}<h1><span class="gt">Incursions</span></h1>{{end}}
 {{define "pagetabs"}}{{template "sectiontabs" .}}{{end}}
 {{define "content"}}
-
+{{/* Incursions (intel.go): one card per active incursion. A fleet
+     looking for sites wants the staging system first, then the phase,
+     the influence on the constellation and whether the final boss is
+     up; the infested systems close the card. */}}
+<div class="l-page iw">
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
 
-{{if .IntelIncursions}}
-  {{if .IntelIncursions.Warming}}
-  <p class="prose">Not loaded yet. The public incursion list is fetched on a regular cycle{{if .IsAdmin}}; progress is on the <a href="/admin/sync/">Sync page</a>{{end}}.</p>
-  {{else}}
-  {{if .IntelIncursions.Rows}}
-  <div class="grid">
-  {{range .IntelIncursions.Rows}}
-  <section class="card">
-  <h2>{{.Constellation}}</h2>
-  <div class="tw">
-  <table>
-    <tbody>
-      <tr><th>Staging</th><td>{{placeLink .Staging}}{{if .StagingSecKnown}}<span class="sec-pill sec-{{.StagingSecTier}}">{{.StagingSecText}}</span>{{end}}</td></tr>
-      <tr><th>State</th><td>{{.State}}{{if .Boss}} · final-encounter boss is up{{end}}</td></tr>
-      <tr><th>Faction</th><td>{{.FactionName}}</td></tr>
-      <tr><th>Influence</th><td>{{.InfluencePct}}%
-        <div class="meter"><span data-w="{{.InfluencePct}}"></span></div>
-      </td></tr>
-      <tr><th>Affected systems</th><td>{{range $i, $s := .Systems}}{{if $i}}, {{end}}{{placeLink $s}}{{end}}</td></tr>
-    </tbody>
-  </table>
+{{with .IntelIncursions}}
+  {{if .Warming}}
+  <div class="l-panel"><p class="iw-note">Not loaded yet. The public incursion list is fetched on a regular cycle{{if $.IsAdmin}}; progress is on the <a href="/admin/sync/">Sync page</a>{{end}}.</p></div>
+  {{else if .Rows}}
+  <div class="l-tiles iw-tiles">
+    <div class="l-stat"><span class="l-stat-label">Incursions</span><span class="l-stat-value">{{len .Rows}}</span><span class="l-stat-sub">Active across New Eden</span></div>
+    <div class="l-stat{{if .Bosses}} warn{{end}}"><span class="l-stat-label">Boss up</span><span class="l-stat-value">{{.Bosses}}</span><span class="l-stat-sub">The final encounter has spawned</span></div>
+    <div class="l-stat"><span class="l-stat-label">Mobilizing</span><span class="l-stat-value">{{.Mobilizing}}</span><span class="l-stat-sub">Influence near its peak</span></div>
+    <div class="l-stat"><span class="l-stat-label">Withdrawing</span><span class="l-stat-value">{{.Withdrawing}}</span><span class="l-stat-sub">About to leave</span></div>
   </div>
-  </section>
+
+  <div class="iw-cards">
+  {{range .Rows}}
+  <article class="l-panel iw-inc{{if .Boss}} boss{{end}}">
+    <div class="iw-inc-head">
+      <h2>{{.Constellation}}</h2>
+      <span class="iw-state iw-{{.StateKey}}">{{.State}}</span>
+    </div>
+    <p class="iw-staging"><span class="iw-role">Staging</span> <span class="iw-staging-sys">{{placeLink .Staging}}{{if .StagingSecKnown}}<span class="sec-pill sec-{{.StagingSecTier}}">{{.StagingSecText}}</span>{{end}}</span></p>
+    <div class="iw-infl">
+      <span class="iw-role">Influence</span><span class="iw-infl-v">{{.InfluencePct}}%</span>
+      <svg class="l-meter{{if ge .InfluencePct 100}} full{{end}}" viewBox="0 0 100 4" preserveAspectRatio="none" aria-hidden="true"><rect x="0" y="0" width="{{.InfluencePct}}" height="4"/></svg>
+    </div>
+    <p class="iw-dim">{{.FactionName}}{{if .Boss}} · <b class="iw-boss">final-encounter boss is up</b>{{end}}</p>
+    {{if .Systems}}<div>
+      <span class="iw-role">Affected systems ({{len .Systems}})</span>
+      <ul class="iw-chips">{{range .Systems}}<li>{{placeLink .}}</li>{{end}}</ul>
+    </div>{{end}}
+  </article>
   {{end}}
   </div>
   {{else}}
-  <p class="prose"><small>No active incursions right now.</small></p>
-  {{end}}
+  <div class="l-panel"><p class="iw-note">No active incursions right now.</p></div>
   {{end}}
 {{else}}
-  <p class="prose">No intel to show yet.</p>
+  <div class="l-panel"><p class="iw-note">No intel to show yet.</p></div>
 {{end}}
+</div>
 {{end}}

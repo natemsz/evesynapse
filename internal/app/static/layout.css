@@ -61,7 +61,7 @@ html[data-theme="light"] {
   --sel-bg: color-mix(in srgb, var(--accent) 11%, var(--panel));
 }
 /* A page with no sub-nav parks its sticky bars under the top bar. */
-#main-content:not(:has(> .subnav nav)) { --l-top: var(--sticky-top); }
+.page-shell:not(:has(> .subnav nav)) #main-content { --l-top: var(--sticky-top); }
 /* A page without section tabs renders the bar empty: it takes no
    room at all. */
 .subnav:not(:has(nav)) { display: none; }
@@ -86,7 +86,15 @@ html[data-theme="light"] {
    bar, its accent stripe at the bottom), and the active group's
    pages follow as quieter tabs on the same row. The markup is the
    sectiontabs partial; app.js folds tabs that stop fitting into
-   the More disclosure, so the bar is always one row. */
+   the More disclosure, so the bar is always one row.
+   The bar is a child of the page shell, not of main: main caps
+   at 1720px and centers, which used to stop the bar's background
+   at the cap's edge on wide screens, and as main's child the bar
+   lost its sticky footing whenever a swap glide locked main's
+   overflow. In the shell it spans the full column beside the
+   sidebar at every width, and swap.js transplants it on a swap
+   like it re-marks the sidebar. */
+.page-shell:has(> .subnav nav) { grid-template-rows: auto minmax(0, 1fr) auto; }
 .subnav {
   position: sticky;
   top: var(--sticky-top);
@@ -96,7 +104,9 @@ html[data-theme="light"] {
   gap: var(--space-3);
   min-height: var(--subnav-h);
   margin: 0 0 var(--space-3);
-  padding: 0 max(var(--gutter), calc((100% - 1640px) / 2));
+  /* The tabs keep the content column's alignment: the 1640px cap
+     plus main's two 1rem side paddings the bar no longer sits in. */
+  padding: 0 max(var(--gutter), calc((100% - 1672px) / 2));
   background: color-mix(in srgb, var(--panel) 72%, transparent);
   -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(0.9);
   backdrop-filter: blur(var(--glass-blur)) saturate(0.9);
@@ -104,14 +114,14 @@ html[data-theme="light"] {
 }
 /* Anchor jumps clear the bar: existing scroll margins already
    allow for the top bar, so a page with a sub-nav adds its height. */
-html:has(#main-content > .subnav nav) { scroll-padding-top: var(--subnav-h); }
-/* The sub-nav runs edge to edge under the top bar: main's own
-   side padding and top margin step back for it. */
-.page-shell > main:has(> .subnav nav) { margin-top: 0; }
-/* main pads its sides 1rem on wide screens and not at all from
-   860px down (style.css); the bar steps out by exactly that. */
-#main-content > .subnav { margin-left: -1rem; margin-right: -1rem; }
-@media (max-width: 860px) { #main-content > .subnav { margin-left: 0; margin-right: 0; } }
+html:has(.page-shell > .subnav nav) { scroll-padding-top: var(--subnav-h); }
+/* Main's top margin steps back when the bar rides above it. */
+.page-shell:has(> .subnav nav) > main { margin-top: 0; }
+/* The bar's own bottom margin is the one gap under it: the first
+   thing in main gives up its top margin, which used to collapse
+   with the bar's when both lived inside main. */
+.page-shell:has(> .subnav nav) #main-content > h1 { margin-top: 0; }
+.page-shell:has(> .subnav nav) > main:not(:has(> h1)) > .page-body { margin-top: 0; }
 .subnav > .section-tabs,
 .subnav > .section-subtabs {
   display: flex;
@@ -233,7 +243,7 @@ html:has(#main-content > .subnav nav) { scroll-padding-top: var(--subnav-h); }
 html[data-scheme] .subnav a.active { color: var(--sch-hi); }
 html[data-theme="light"] .subnav { background: color-mix(in srgb, var(--panel) 86%, transparent); }
 /* The page body follows the sub-nav directly: no folder merge. */
-#main-content:has(> .subnav nav) > .page-body {
+.page-shell:has(> .subnav nav) > main > .page-body {
   margin-top: var(--space-3);
   border-top-left-radius: var(--r-lg);
   border-top-right-radius: var(--r-lg);

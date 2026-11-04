@@ -15,15 +15,17 @@
    the feature sheets' own values); they migrate to the canon when
    their block is next touched, not by flag-day rewrite. */
 
-/* Every face is free (SIL Open Font License) and self-hosted
-   (font-src 'self'; ci-assets/fonts holds them and their notices).
-   Body text: Saira Semi Condensed, a squared, compact techno sans.
+/* Faces are self-hosted (font-src 'self'; ci-assets/fonts holds
+   them and their notices). Rajdhani, Inter and JetBrains Mono are
+   SIL Open Font License; Eve Sans Neue is EVE Online's interface
+   typeface, used with permission (see its notice).
+   Body text: Eve Sans Neue, drawn for legibility at small sizes.
    Figures: JetBrains Mono, through a face that covers only the
    digits and their separators. It is opt-in, for figures that stand
    on their own (table cells, stat values, KPIs, ISK amounts): a
    figure followed by its unit reads well, but one in the middle of
-   a sentence looks pasted in, so running text keeps Saira's digits
-   (and .prose-figs opts a value cell back out). */
+   a sentence looks pasted in, so running text keeps Eve Sans Neue's
+   digits (and .prose-figs opts a value cell back out). */
 @font-face {
   font-family: 'Synapse Numerals';
   font-style: normal;
@@ -39,33 +41,50 @@
   font-display: swap;
   src: url('/static/fonts/jetbrains-mono.woff2') format('woff2');
 }
+/* The UI face: Eve Sans Neue, EVE Online's interface typeface,
+   drawn for legibility at small sizes. The family carries two
+   weights; the 500 slot rides on Regular and the 600 slot on Bold. */
 @font-face {
-  font-family: 'Saira Semi Condensed';
+  font-family: 'Eve Sans Neue';
   font-style: normal;
   font-weight: 400;
   font-display: swap;
-  src: url('/static/fonts/saira-sc-400.woff2') format('woff2');
+  src: url('/static/fonts/evesansneue-regular.woff2') format('woff2');
 }
 @font-face {
-  font-family: 'Saira Semi Condensed';
+  font-family: 'Eve Sans Neue';
   font-style: normal;
   font-weight: 500;
   font-display: swap;
-  src: url('/static/fonts/saira-sc-500.woff2') format('woff2');
+  src: url('/static/fonts/evesansneue-regular.woff2') format('woff2');
 }
 @font-face {
-  font-family: 'Saira Semi Condensed';
+  font-family: 'Eve Sans Neue';
   font-style: normal;
   font-weight: 600;
   font-display: swap;
-  src: url('/static/fonts/saira-sc-600.woff2') format('woff2');
+  src: url('/static/fonts/evesansneue-bold.woff2') format('woff2');
 }
 @font-face {
-  font-family: 'Saira Semi Condensed';
+  font-family: 'Eve Sans Neue';
   font-style: normal;
   font-weight: 700;
   font-display: swap;
-  src: url('/static/fonts/saira-sc-700.woff2') format('woff2');
+  src: url('/static/fonts/evesansneue-bold.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Eve Sans Neue';
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/static/fonts/evesansneue-italic.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Eve Sans Neue';
+  font-style: italic;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/static/fonts/evesansneue-bolditalic.woff2') format('woff2');
 }
 /* The heading face: Rajdhani SemiBold (and Bold), set in capitals.
    Regular rides along for the dropdown menu items. SIL Open Font
@@ -208,7 +227,7 @@ body {
      composites one background surface. */
   background: #0d0503;
   color: var(--text);
-  font-family: "Saira Semi Condensed", "Inter", "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-family: "Eve Sans Neue", "Inter", "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif;
   font-weight: 400;
   font-size: 13px;
   line-height: 1.4;
@@ -2205,10 +2224,10 @@ body.resize-active { user-select: none; -webkit-user-select: none; cursor: nwse-
 }
 .kpi-k { font-size: 0.7rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
 td, dd, .kpi-v, .fit-headline-num, .fit-bar-nums, .fit-count, .fit-chip-qty, .fit-res > b, .sec {
-  /* Standalone figures: monospaced digits, Saira for any letters. */
-  font-family: "Synapse Numerals", "Saira Semi Condensed", "Inter", "Segoe UI", sans-serif;
+  /* Standalone figures: monospaced digits, Eve Sans Neue for any letters. */
+  font-family: "Synapse Numerals", "Eve Sans Neue", "Inter", "Segoe UI", sans-serif;
 }
-.prose-figs { font-family: "Saira Semi Condensed", "Inter", "Segoe UI", sans-serif; }
+.prose-figs { font-family: "Eve Sans Neue", "Inter", "Segoe UI", sans-serif; }
 /* Money in and out: losses soft red, gains muted green. */
 td.neg, .neg { color: #ff4d4d; }
 td.pos, .pos { color: #28c76f; }
@@ -6462,7 +6481,7 @@ button.gn-title:hover .gn-more, button.gn-title:focus-visible .gn-more { color: 
 .gn-post { font-family: 'Inter', sans-serif; line-height: 1.55; overflow-wrap: anywhere; }
 .gn-post > :first-child { margin-top: 0; }
 .gn-post > :last-child { margin-bottom: 0; }
-.gn-post h3, .gn-post h4, .gn-post h5 { margin: 1rem 0 0.4rem; font-family: 'Saira Semi Condensed', sans-serif; }
+.gn-post h3, .gn-post h4, .gn-post h5 { margin: 1rem 0 0.4rem; font-family: 'Eve Sans Neue', sans-serif; }
 .gn-post blockquote { margin: 0.6rem 0; padding: 0.1rem 0 0.1rem 0.8rem; border-left: 2px solid var(--box-edge); color: var(--muted); }
 .gn-post pre { white-space: pre-wrap; font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; padding: 0.6rem 0.75rem; background: var(--input-bg); border: 1px solid var(--box-edge); border-radius: var(--r-sm); }
 .gn-post a { color: var(--accent); }

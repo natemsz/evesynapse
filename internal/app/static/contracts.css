@@ -329,7 +329,7 @@
    face, weight, size, spacing and uppercase treatment.
    Their colors stay their own. */
 .cs-fbox .box-title, .cs-region-quick, .cs-field, .cs-drawer-label {
-  font-family: "Saira Semi Condensed", "Inter", "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-family: "Eve Sans Neue", "Inter", "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif;
   font-size: 0.69rem; font-weight: 600; letter-spacing: 0.04em;
   text-transform: uppercase;
 }

@@ -174,12 +174,12 @@
      step here. Dense data sits in the middle steps; display type
      takes the top ones. */
   --fs-2xs: 0.625rem;
-  --fs-xs: 0.7rem;
-  --fs-sm: 0.78rem;
-  --fs-md: 0.85rem;
-  --fs-lg: 0.92rem;
-  --fs-xl: 1rem;
-  --fs-2xl: 1.12rem;
+  --fs-xs: 0.8rem;
+  --fs-sm: 0.9rem;
+  --fs-md: 0.96rem;
+  --fs-lg: 1.04rem;
+  --fs-xl: 1.12rem;
+  --fs-2xl: 1.22rem;
   --fs-3xl: 1.3rem;
   --fs-4xl: 1.55rem;
   --fs-5xl: 1.85rem;

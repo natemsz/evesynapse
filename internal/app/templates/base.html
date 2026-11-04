@@ -35,6 +35,7 @@
 {{if eq .NavPage "market_appraise.html"}}<link rel="stylesheet" href="/static/appraisal.css?v={{.AssetVersion}}">{{end}}
 {{if eq .NavPage "assets.html"}}<link rel="stylesheet" href="/static/assets.css?v={{.AssetVersion}}">{{end}}
 {{if eq .NavPage "industry_jobs.html"}}<link rel="stylesheet" href="/static/jobs.css?v={{.AssetVersion}}">{{end}}
+{{if or (eq .NavPage "mail.html") (eq .NavPage "compose.html")}}<link rel="stylesheet" href="/static/mail.css?v={{.AssetVersion}}">{{end}}
 {{if eq .NavPage "industry_mining.html"}}<link rel="stylesheet" href="/static/mining.css?v={{.AssetVersion}}">{{end}}
 {{if eq .NavPage "planets.html"}}<link rel="stylesheet" href="/static/colonies.css?v={{.AssetVersion}}">{{end}}
 {{if eq .NavPage "skillplans.html"}}<link rel="stylesheet" href="/static/skillplans.css?v={{.AssetVersion}}">{{end}}

@@ -214,3 +214,22 @@ func TestSanitizeUTF8AndCloseTagBoundary(t *testing.T) {
 		})
 	}
 }
+
+// A mapped in-app link is written only as a same-site path: a mapper
+// answering with another host, a scheme or a protocol-relative URL
+// leaves the text bare, so a game link can never send the reader off
+// the site.
+func TestSanitizeLinkedWritesOnlySameSitePaths(t *testing.T) {
+	mapTo := func(path string) func(string) (string, bool) {
+		return func(string) (string, bool) { return path, true }
+	}
+	in := `<a href="showinfo:5//30000142">Jita</a>`
+	if got := string(SanitizeLinked(in, mapTo("/system/?system=30000142"))); !strings.Contains(got, `<a class="mail-in" href="/system/?system=30000142">Jita</a>`) {
+		t.Errorf("same-site path: got %q", got)
+	}
+	for _, bad := range []string{"//evil.example/x", "https://evil.example/", "javascript:alert(1)", "system"} {
+		if got := string(SanitizeLinked(in, mapTo(bad))); strings.Contains(got, "<a") {
+			t.Errorf("mapped %q: got a link %q", bad, got)
+		}
+	}
+}

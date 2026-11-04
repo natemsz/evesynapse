@@ -32,7 +32,7 @@ var Module = module.Module{
 	Nav: []module.NavSection{{
 		Section: "pilot",
 		Entries: []module.NavEntry{
-			{Href: "/mail/", Label: "Mail", Pages: []string{"mail.html"}, After: "/wallet/"},
+			{Href: "/mail/", Label: "Mail", Pages: []string{"mail.html", "compose.html"}, After: "/wallet/"},
 		},
 	}},
 	Routes: func(r chi.Router, deps module.Deps) {
@@ -47,7 +47,7 @@ var Module = module.Module{
 	},
 	Pages: []module.Page{
 		{Template: "mail.html", Section: "pilot"},
-		{Template: "mail_compose.html", Section: "pilot"},
+		{Template: "compose.html", Section: "pilot"},
 	},
 }
 

@@ -14,11 +14,11 @@
 .tr-modes { --l-gap: var(--space-2); }
 .tr-modes .pilltabs { margin: 0; }
 
-.tr-chip { cursor: default; font-size: 0.78rem; color: var(--muted); }
+.tr-chip { cursor: default; font-size: var(--fs-sm); color: var(--muted); }
 .tr-item { display: inline-flex; align-items: center; gap: 0.55rem; min-width: 0; }
 .tr-item img { flex: none; border-radius: var(--r-xs); }
 .tr-item a { font-weight: 600; }
-.tr-rank { flex: none; min-width: 1.6rem; color: var(--muted); font-family: var(--font-num); font-size: 0.8rem; font-variant-numeric: tabular-nums; text-align: right; }
+.tr-rank { flex: none; min-width: 1.6rem; color: var(--muted); font-family: var(--font-num); font-size: var(--fs-sm); font-variant-numeric: tabular-nums; text-align: right; }
 .tr-table td:first-child { white-space: normal; min-width: 11rem; }
 
 /* The column the ranking sorts by reads in the highlight. */
@@ -36,11 +36,11 @@
 .tr-changes .tr-note { margin-bottom: 0; }
 
 /* The inspector. */
-.tr-msub { margin: 0.15rem 0 0; color: var(--muted); font-size: 0.85rem; }
+.tr-msub { margin: 0.15rem 0 0; color: var(--muted); font-size: var(--fs-md); }
 .tr-kpis { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2); margin: var(--space-3) 0 0; }
-.tr-kpis .l-stat-value { font-size: 1.3rem; }
+.tr-kpis .l-stat-value { font-size: var(--fs-3xl); font-size: clamp(var(--fs-sm), 9cqw, var(--fs-3xl)); }
 .tr-kpis .l-stat-sub { overflow-wrap: anywhere; }
 .tr-open { margin: var(--space-3) 0 0; }
 .tr-open .btn { width: 100%; justify-content: center; }
-.tr-h { margin: var(--space-4) 0 var(--space-2); color: var(--muted); font-family: var(--font-display); font-size: 0.85rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
+.tr-h { margin: var(--space-4) 0 var(--space-2); color: var(--muted); font-family: var(--font-display); font-size: var(--fs-md); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
 .tr-meter { margin: var(--space-2) 0 0; }

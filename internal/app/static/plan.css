@@ -13,7 +13,7 @@
 .bpl-matches { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 16rem), 1fr)); gap: 0.2rem var(--space-4); margin: 0; padding: 0; list-style: none; }
 .bpl-matches a { display: block; padding: 0.3rem 0; }
 .bpl-tiles { margin-bottom: var(--space-2); }
-.bpl-tiles .l-stat-value { font-size: 1.4rem; }
+.bpl-tiles .l-stat-value { font-size: var(--fs-3xl); font-size: clamp(var(--fs-sm), 9cqw, var(--fs-3xl)); }
 #plan .l-stat-value.pos, #plan .l-stat-sub.pos { color: var(--plan-build); }
 #plan .l-stat-value.neg, #plan .l-stat-sub.neg { color: var(--plan-risk); }
 .plan-basis { margin: 0 0 0.3rem; color: var(--muted); font-style: italic; }

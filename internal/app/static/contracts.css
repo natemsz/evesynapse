@@ -856,5 +856,5 @@
 
 /* The sweep note lives in the sub-nav; in the phone band, where the
    sub-nav drops it, it shows over the results instead. */
-.cs-sweepnote { display: none; margin: 0.2rem 0 0; color: var(--muted); font-size: 0.78rem; }
+.cs-sweepnote { display: none; margin: 0.2rem 0 0; color: var(--muted); font-size: var(--fs-sm); }
 @media (max-width: 45rem) { .cs-sweepnote { display: block; } }

@@ -5,14 +5,57 @@
 
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
 
-{{template "charselector" .MailChars}}
+<div class="l-page">
+<div class="l-head">
+  <div class="l-head-pick">{{template "charselector" .MailChars}}</div>
+  {{if .Mail}}<p class="l-head-sum"><b>{{.Mail.CharacterName}}</b>{{if .Mail.UnreadKnown}} · {{.Mail.UnreadCount}} unread{{end}}</p>
+  <div class="l-head-act"><a class="btn" href="/mail/compose/?character={{.Mail.CharacterID}}">Compose</a></div>{{end}}
+</div>
 
 {{if .Mail}}
-<h2>{{.Mail.CharacterName}}{{if .Mail.UnreadKnown}} <small>· {{.Mail.UnreadCount}} unread</small>{{end}}</h2>
-<p><a class="btn" href="/mail/compose/?character={{.Mail.CharacterID}}">Compose</a></p>
+{{$depth := 1}}{{if .Mail.BoxesView}}{{$depth = 0}}{{end}}{{if .Mail.Selected}}{{$depth = 2}}{{end}}
+<div class="l-console ml" data-depth="{{$depth}}" data-land-top>
+<div class="l-panes">
+
+<nav class="l-pane l-pane--dir ml-boxes" aria-label="Mailboxes">
+  <div class="l-pane-bar"><h2 class="l-pane-title">Mailboxes</h2></div>
+  <div class="dirlist">
+    <a class="diritem{{if and (eq .Mail.Box "inbox") (not .Mail.LabelFilter)}} on{{end}}" href="/mail/?character={{.Mail.CharacterID}}&amp;box=inbox" data-l-step="in"><span class="dir-top"><span class="dir-name">Inbox</span>{{if .Mail.UnreadKnown}}{{if .Mail.UnreadCount}}<span class="dir-val">{{.Mail.UnreadCount}}</span>{{end}}{{end}}</span></a>
+    <a class="diritem{{if and (eq .Mail.Box "sent") (not .Mail.LabelFilter)}} on{{end}}" href="/mail/?character={{.Mail.CharacterID}}&amp;box=sent" data-l-step="in"><span class="dir-top"><span class="dir-name">Sent</span></span></a>
+    <a class="diritem{{if and (eq .Mail.Box "all") (not .Mail.LabelFilter)}} on{{end}}" href="/mail/?character={{.Mail.CharacterID}}&amp;box=all" data-l-step="in"><span class="dir-top"><span class="dir-name">All mail</span></span></a>
+    {{range .Mail.LabelChips}}<a class="diritem{{if eq $.Mail.LabelFilter .ID}} on{{end}}" href="/mail/?character={{$.Mail.CharacterID}}&amp;box={{$.Mail.Box}}&amp;label={{.ID}}" data-l-step="in"><span class="dir-top"><span class="dir-name">{{.Name}}</span>{{if .Unread}}<span class="dir-val">{{.Unread}}</span>{{end}}</span></a>{{end}}
+  </div>
+</nav>
+
+<section class="l-pane l-pane--main ml-list" aria-label="Messages">
+<div class="l-pane-bar">
+  <a class="l-back" data-l-step="out" href="/mail/?character={{.Mail.CharacterID}}&amp;boxes=1">Mailboxes</a>
+  <h2 class="l-pane-title">{{if .Mail.LabelFilter}}{{range .Mail.LabelChips}}{{if eq $.Mail.LabelFilter .ID}}{{.Name}}{{end}}{{end}}{{else if eq .Mail.Box "sent"}}Sent{{else if eq .Mail.Box "all"}}All mail{{else}}Inbox{{end}}</h2>
+</div>
+{{if .Mail.Headers.Note}}
+<p><small>{{.Mail.Headers.Note}}</small></p>
+{{else if .Mail.Headers.Warming}}
+<p><small>Still syncing.{{if .IsAdmin}} Progress is on the <a href="/admin/sync/">Sync page</a>.{{end}}</small></p>
+{{else if .Mail.Rows}}
+<div class="tw">
+<table class="ml-table">
+  <thead><tr><th class="card-title">Subject</th><th>{{if eq .Mail.Box "sent"}}To{{else}}From{{end}}</th><th>Date</th><th>Labels</th></tr></thead>
+  <tbody>
+  {{range .Mail.Rows}}
+    <tr{{if eq .ID $.Mail.DetailID}} class="yours"{{end}}><td>{{if .Unread}}<strong><a href="/mail/?character={{$.Mail.CharacterID}}&amp;box={{$.Mail.Box}}{{if $.Mail.LabelFilter}}&amp;label={{$.Mail.LabelFilter}}{{end}}&amp;mail={{.ID}}" data-l-step="in">{{.Subject}}</a></strong>{{else}}<a href="/mail/?character={{$.Mail.CharacterID}}&amp;box={{$.Mail.Box}}{{if $.Mail.LabelFilter}}&amp;label={{$.Mail.LabelFilter}}{{end}}&amp;mail={{.ID}}" data-l-step="in">{{.Subject}}</a>{{end}}</td><td>{{if and .Sent .To (eq $.Mail.Box "sent")}}{{range $i, $t := .To}}{{if $i}}, {{end}}{{if eq $t.Kind "character"}}{{charLink $.ViewerChars $t.ID $t.Name}}{{else if eq $t.Kind "corporation"}}{{corpLink $t.ID $t.Name}}{{else if eq $t.Kind "alliance"}}{{allianceLink $t.ID $t.Name}}{{else}}{{$t.Name}}{{end}}{{end}}{{else}}{{charLink $.ViewerChars .FromID .From}}{{end}}</td><td>{{.Date}}</td><td>{{if .Sent}}<span class="badge wait">SENT</span>{{if .Labels}} {{end}}{{end}}{{range $i, $l := .Labels}}{{if $i}}, {{end}}{{$l}}{{end}}</td></tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+<p><small>The 50 most recent mails. Use “Mark as read” on an open mail to clear it in-game too.</small></p>
+{{else}}
+<p><small>No {{if eq .Mail.Box "sent"}}sent {{else if eq .Mail.Box "inbox"}}received {{end}}mail in the latest snapshot{{if .Mail.LabelFilter}} with that label{{end}}.</small></p>
+{{end}}
+</section>
 
 {{if .Mail.Selected}}
-<section class="foldable">
+<article class="l-pane l-pane--insp ml-reader" aria-label="Open mail">
+<div class="l-pane-bar"><a class="l-back" data-l-step="out" href="/mail/?character={{.Mail.CharacterID}}&amp;box={{.Mail.Box}}{{if .Mail.LabelFilter}}&amp;label={{.Mail.LabelFilter}}{{end}}">{{if .Mail.LabelFilter}}{{range .Mail.LabelChips}}{{if eq $.Mail.LabelFilter .ID}}{{.Name}}{{end}}{{end}}{{else if eq .Mail.Box "sent"}}Sent{{else if eq .Mail.Box "all"}}All mail{{else}}Inbox{{end}}</a><a class="l-close" href="/mail/?character={{.Mail.CharacterID}}&amp;box={{.Mail.Box}}{{if .Mail.LabelFilter}}&amp;label={{.Mail.LabelFilter}}{{end}}" aria-label="Close the mail">&#10005;</a></div>
 {{if .Mail.DetailWarming}}
 <h3>Mail</h3>
 <p><small>This mail's body is still loading. Check back shortly.</small></p>
@@ -38,36 +81,14 @@
 </form>{{else}}<a class="btn" href="/auth/eve" title="{{$.Mail.CharacterName}} was linked before EveSynapse asked for permission to mark mail read">Sign in again to mark mail read</a>{{end}} <a href="/mail/?character={{$.Mail.CharacterID}}">Back to the inbox</a></p>
 {{end}}
 {{end}}
-</section>
+</article>
+<a class="l-scrim" href="/mail/?character={{.Mail.CharacterID}}&amp;box={{.Mail.Box}}{{if .Mail.LabelFilter}}&amp;label={{.Mail.LabelFilter}}{{end}}" aria-label="Close the mail" tabindex="-1"></a>
 {{end}}
 
-<p class="fleet-tools">
-  <a class="chip{{if and (eq .Mail.Box "inbox") (not .Mail.LabelFilter)}} active{{end}}" href="/mail/?character={{.Mail.CharacterID}}&amp;box=inbox">Inbox</a>
-  <a class="chip{{if and (eq .Mail.Box "sent") (not .Mail.LabelFilter)}} active{{end}}" href="/mail/?character={{.Mail.CharacterID}}&amp;box=sent">Sent</a>
-  <a class="chip{{if and (eq .Mail.Box "all") (not .Mail.LabelFilter)}} active{{end}}" href="/mail/?character={{.Mail.CharacterID}}&amp;box=all">All mail</a>
-  {{range .Mail.LabelChips}}<a class="chip{{if eq $.Mail.LabelFilter .ID}} active{{end}}" href="/mail/?character={{$.Mail.CharacterID}}&amp;box={{$.Mail.Box}}&amp;label={{.ID}}">{{.Name}}{{if .Unread}} ({{.Unread}}){{end}}</a>{{end}}
-</p>
-
-{{if .Mail.Headers.Note}}
-<p><small>{{.Mail.Headers.Note}}</small></p>
-{{else if .Mail.Headers.Warming}}
-<p><small>Still syncing.{{if .IsAdmin}} Progress is on the <a href="/admin/sync/">Sync page</a>.{{end}}</small></p>
-{{else if .Mail.Rows}}
-<div class="tw">
-<table>
-  <thead><tr><th>Subject</th><th>{{if eq .Mail.Box "sent"}}To{{else}}From{{end}}</th><th>Date</th><th>Labels</th></tr></thead>
-  <tbody>
-  {{range .Mail.Rows}}
-    <tr><td>{{if .Unread}}<strong><a href="/mail/?character={{$.Mail.CharacterID}}&amp;box={{$.Mail.Box}}&amp;mail={{.ID}}">{{.Subject}}</a></strong>{{else}}<a href="/mail/?character={{$.Mail.CharacterID}}&amp;box={{$.Mail.Box}}&amp;mail={{.ID}}">{{.Subject}}</a>{{end}}</td><td>{{if and .Sent .To (eq $.Mail.Box "sent")}}{{range $i, $t := .To}}{{if $i}}, {{end}}{{if eq $t.Kind "character"}}{{charLink $.ViewerChars $t.ID $t.Name}}{{else if eq $t.Kind "corporation"}}{{corpLink $t.ID $t.Name}}{{else if eq $t.Kind "alliance"}}{{allianceLink $t.ID $t.Name}}{{else}}{{$t.Name}}{{end}}{{end}}{{else}}{{charLink $.ViewerChars .FromID .From}}{{end}}</td><td>{{.Date}}</td><td>{{if .Sent}}<span class="badge wait">SENT</span>{{if .Labels}} {{end}}{{end}}{{range $i, $l := .Labels}}{{if $i}}, {{end}}{{$l}}{{end}}</td></tr>
-  {{end}}
-  </tbody>
-</table>
 </div>
-<p><small>The 50 most recent mails. Use “Mark as read” on an open mail to clear it in-game too.</small></p>
-{{else}}
-<p><small>No {{if eq .Mail.Box "sent"}}sent {{else if eq .Mail.Box "inbox"}}received {{end}}mail in the latest snapshot{{if .Mail.LabelFilter}} with that label{{end}}.</small></p>
-{{end}}
+</div>
 {{else}}
 <p>No character to show yet. Link a character first.</p>
 {{end}}
+</div>
 {{end}}

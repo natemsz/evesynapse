@@ -129,14 +129,19 @@ type skillsJudge struct {
 
 // planVerdict is the worth-making economics of a scoped plan.
 type planVerdict struct {
-	Heading      string // "Worth it? — judged as …"
-	Cost         string // net buy cost after stock, "" when unpriceable
-	SellValue    string // expected value of the output, "" when unknown
-	Profit       string // whole plan, "" unless both sides known
-	ProfitPerRun string
-	MarginPct    string
-	Incomplete   bool // some input price is missing
-	Note         string
+	Heading   string // "Worth it? — judged as …"
+	Cost      string // net buy cost after stock, "" when unpriceable
+	SellValue string // expected value of the output, "" when unknown
+	Profit    string // whole plan before job fees, "" unless both sides known
+	Fees      string // job fees of every build in the tree, "" when any is unknown
+	// ProfitAfterFees is the profit less the job fees, "" unless
+	// the profit and every fee are known; AfterFeesCls colours it.
+	ProfitAfterFees string
+	AfterFeesCls    string
+	ProfitPerRun    string
+	MarginPct       string
+	Incomplete      bool // some input price is missing
+	Note            string
 }
 
 // planRowView is one display row of the plan tree (or, with fewer
@@ -1165,6 +1170,9 @@ func planVerdictFor(res *buildplan.Result, prices map[int64]esi.MarketPrice, pro
 	verdict := &planVerdict{Heading: "Profit Analysis"}
 	var notes []string
 
+	if fees, ok := planJobFees(root); ok {
+		verdict.Fees = isk(fees)
+	}
 	costKnown := root.CostComplete && res.UnpricedLines == 0
 	if costKnown {
 		verdict.Cost = isk(root.LineCost)
@@ -1179,14 +1187,45 @@ func planVerdictFor(res *buildplan.Result, prices map[int64]esi.MarketPrice, pro
 		if costKnown && value > 0 {
 			profit := value - root.LineCost
 			verdict.Profit = isk(profit)
-			if root.Runs > 0 {
-				verdict.ProfitPerRun = isk(profit / float64(root.Runs))
+			// Per run and the margin follow the profit after fees
+			// when every fee is known, before fees otherwise.
+			net := profit
+			if fees, ok := planJobFees(root); ok {
+				net = profit - fees
+				verdict.ProfitAfterFees = isk(net)
+				switch {
+				case net > 0:
+					verdict.AfterFeesCls = "pos"
+				case net < 0:
+					verdict.AfterFeesCls = "neg"
+				}
 			}
-			verdict.MarginPct = fmt.Sprintf("%.1f%% of the sell value", profit/value*100)
+			if root.Runs > 0 {
+				verdict.ProfitPerRun = isk(net / float64(root.Runs))
+			}
+			verdict.MarginPct = fmt.Sprintf("%.1f%% of the sell value", net/value*100)
 		}
 	} else {
 		notes = append(notes, "No market price for the finished item yet, so there's no sell value to judge against.")
 	}
 	verdict.Note = strings.Join(notes, " ")
 	return verdict
+}
+
+// planJobFees sums the installation fee of every build in the tree
+// (the full build the cash view describes). ok is false when any
+// build's fee is unknown: a partial sum would read as a real total.
+func planJobFees(root *buildplan.Node) (float64, bool) {
+	total, ok := 0.0, true
+	buildplan.Walk(root, func(n *buildplan.Node) {
+		if n.Blueprint == nil || n.Cycle || n.Runs <= 0 {
+			return
+		}
+		if !n.JobKnown {
+			ok = false
+			return
+		}
+		total += n.JobCost
+	})
+	return total, ok
 }

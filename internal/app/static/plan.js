@@ -69,11 +69,24 @@ var collapsed = {};       // path -> true
 var pathAnc = {};         // paths on the selected node's ancestor chain
 var pathDesc = {};        // paths under the selected node
 var revealPath = null;    // a card to scroll into view after this render
-// The columnar map needs width; on narrow screens the tree keeps
-// the classic indented card stack instead.
-var narrowMQ = (typeof window !== "undefined" && window.matchMedia)
-  ? window.matchMedia("(max-width: 60rem)") : null;
-function listMode() { return !!(narrowMQ && narrowMQ.matches); }
+// The columnar map needs width; in a narrow plan the tree keeps the
+// classic indented card stack instead. The measure is the plan's
+// own box, not the window (the layout framework's first rule): the
+// sidebar opening or closing changes the room the map has.
+var LIST_BELOW_REM = 60;
+function remPx() {
+  try {
+    return parseFloat(window.getComputedStyle(document.documentElement).fontSize) || 16;
+  } catch (e) { return 16; }
+}
+function listMode() {
+  var box = section || (typeof document !== "undefined" && document.getElementById ? document.getElementById("plan") : null);
+  var w = box ? box.clientWidth : 0;
+  if (typeof w === "number" && w > 0) return w < LIST_BELOW_REM * remPx();
+  // Not laid out (a test, a hidden tab): fall back to the window.
+  return !!(typeof window !== "undefined" && window.matchMedia &&
+    window.matchMedia("(max-width: " + LIST_BELOW_REM + "rem)").matches);
+}
 var selected = "0";       // path
 var serverMode = false;   // cross-check failed: server figures only
 var judgeDocWired = false; // one outside-click closer for every reboot
@@ -347,9 +360,10 @@ function renderHeader(t) {
     setText("plan-margin", "—");
     setText("plan-margin-sub", "needs full prices");
   }
-  ["plan-margin", "plan-margin-sub"].forEach(function (id) {
-    var el = $(id);
-    if (el) el.className = marginCls;
+  // The tile keeps its own class; the margin colour rides beside it.
+  [["plan-margin", "l-stat-value"], ["plan-margin-sub", "l-stat-sub"]].forEach(function (pair) {
+    var el = $(pair[0]);
+    if (el) el.className = pair[1] + (marginCls ? " " + marginCls : "");
   });
   // Mirrors Go planVerdictLine. A scenario that buys the finished
   // product states no saving: it says to buy, and why when the
@@ -684,6 +698,7 @@ function wireMap(host) {
       selected = el.getAttribute("data-path");
       renderMap(currentTotals());
       renderInspector(currentTotals());
+      openInspectorSheet();
     }
     el.addEventListener("click", pick);
     el.addEventListener("dblclick", function (ev) {
@@ -713,6 +728,15 @@ function wireMap(host) {
 }
 
 // --- inspector ---
+// On a phone the inspector is a bottom sheet (the shell's phone
+// sheets): a pick opens it where the reader is, instead of updating
+// a pane far below the tree. Off the phone band its trigger stays
+// hidden and the inspector sits beside or under the tree.
+function openInspectorSheet() {
+  var trigger = document.querySelector ? document.querySelector('[data-sheet-open="plan-insp-sheet"]') : null;
+  if (trigger && !trigger.hidden && trigger.click) trigger.click();
+}
+
 function renderInspector(t) {
   var host = $("plan-inspector");
   if (!host) return;
@@ -1233,17 +1257,26 @@ function wireJudge() {
   }
 }
 
-var narrowWired = false;
+// Re-lay the tree when the plan's box crosses the list threshold.
+// One observer per plan section; a swap brings a new section.
+var sizeWatched = null;
+var lastListMode = null;
+function watchSize() {
+  if (sizeWatched === section || typeof ResizeObserver === "undefined") return;
+  sizeWatched = section;
+  lastListMode = listMode();
+  new ResizeObserver(function () {
+    var now = listMode();
+    if (now === lastListMode) return;
+    lastListMode = now;
+    if (P) renderMap(currentTotals());
+  }).observe(section);
+}
 function init() {
   section = document.getElementById("plan");
   if (!section) return;
   wireStatic();
-  if (!narrowWired && narrowMQ && narrowMQ.addEventListener) {
-    narrowWired = true;
-    narrowMQ.addEventListener("change", function () {
-      if (P) renderMap(currentTotals());
-    });
-  }
+  watchSize();
   loadJSON().catch(function () {
     fail("The interactive views need the plan data; the figures above are current.");
   });

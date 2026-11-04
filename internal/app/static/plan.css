@@ -3,10 +3,23 @@
    hues (build green, buy blue, risk red, critical ember) so the
    coding survives both themes; surfaces reuse theme variables. */
 #plan { --plan-build: #3fce7a; --plan-buy: #5eb8ff; --plan-risk: #ff5a4e; --plan-fee: #ffd27a; }
-.plan-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: rgba(255, 110, 0, 0.14); border: 1px solid color-mix(in srgb, var(--accent) 14%, transparent); border-radius: 0.5rem; overflow: hidden; margin-bottom: 0.6rem; }
-.plan-stats > div { background: var(--row-alt); padding: 0.6rem 0.8rem; }
-.plan-stats .plan-k { display: block; font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
-.plan-stats .plan-basis { color: var(--muted); font-style: italic; }
+/* The planner page sits on the layout framework (layout.css): the
+   search in the page head, the plan's figures on stat tiles. Width
+   decisions here measure the page (@container page), never the
+   window; the two height rules below compact the tree to the
+   screen's vertical room, which is the viewport's to say. */
+.bpl-search { flex: 1 1 28rem; min-width: 0; }
+.bpl-h { margin: 0 0 var(--space-2); font-size: 1rem; }
+.bpl-matches { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 16rem), 1fr)); gap: 0.2rem var(--space-4); margin: 0; padding: 0; list-style: none; }
+.bpl-matches a { display: block; padding: 0.3rem 0; }
+.bpl-tiles { margin-bottom: var(--space-2); }
+.bpl-tiles .l-stat-value { font-size: 1.4rem; }
+#plan .l-stat-value.pos, #plan .l-stat-sub.pos { color: var(--plan-build); }
+#plan .l-stat-value.neg, #plan .l-stat-sub.neg { color: var(--plan-risk); }
+.plan-basis { margin: 0 0 0.3rem; color: var(--muted); font-style: italic; }
+.plan-head .plan-title { margin-top: 0; }
+.bpl-verdict h3 { margin-top: 0; }
+.bpl-sub { margin: -0.3rem 0 var(--space-2); color: var(--muted); }
 .plan-verdictrow { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
 .plan-verdict { font-size: 1.08rem; font-weight: 700; margin: 0.45rem 0 0; }
 .plan-verdict.build { color: var(--plan-build); }
@@ -22,7 +35,6 @@
 .plan-searchwrap { flex: 2 1 20rem; width: auto; }
 .plan-csvbtn { display: inline-block; line-height: 0; }
 .plan-csvbtn .plan-glyph { width: 1.45rem; height: 1.45rem; vertical-align: -0.4rem; }
-.plan-stats strong { font-size: 1.4rem; font-weight: 700; }
 .plan-presets, .plan-tabs { display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap; margin: 0.5rem 0; }
 .plan-tools { display: flex; justify-content: flex-end; margin: 0.5rem 0 0; }
 /* Tab strip: the views read as tabs on the panel below, not
@@ -154,14 +166,11 @@ skills as a list for the skillbook. */
 two pair-columns wide, one narrow. Long names truncate into
 the title tooltip instead of pushing the input off. */
 #me-modal .modal { width: min(52rem, 100%); }
-.me-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr)); gap: 0.3rem 1rem; }
+.me-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 15rem), 1fr)); gap: 0.3rem 1rem; }
 .me-cell { display: flex; align-items: center; gap: 0.35rem; min-width: 0; white-space: nowrap; }
 .me-cell .me-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .me-cell input { flex: none; }
 .me-summary { color: var(--muted); }
-@media (max-width: 40rem) {
-  .me-grid { grid-template-columns: 1fr; }
-}
 .plan-legend { margin-left: auto; color: var(--muted); }
 .plan-dot { display: inline-block; width: 0.6rem; height: 0.6rem; border-radius: 50%; margin: 0 0.15rem 0 0.5rem; }
 .plan-dot.plan-build { background: var(--plan-build); }
@@ -290,7 +299,14 @@ proportional bar under the text, colored by the decision. */
 .plan-fill { background: var(--plan-build); height: 100%; }
 .plan-buy .plan-fill, .plan-fill.plan-buy { background: var(--plan-buy); }
 .plan-node small, .plan-cols small { color: var(--muted); }
-#plan-inspector { position: sticky; top: calc(var(--sticky-top) + 1px + 0.6rem); }
+/* The inspector rides beside the tree while the reader scrolls; on a
+   phone it is a bottom sheet (data-sheet) that a pick opens, and its
+   own heading gives way to the sheet's. */
+.plan-insp { position: sticky; top: calc(var(--l-top) + 0.6rem); min-width: 0; }
+.plan-treecols:has(> .as-sheet) { grid-template-columns: minmax(0, 1fr); }
+.as-sheet #plan-inspector > h4:first-child { display: none; }
+.plan-tools { gap: 0.5rem; align-items: center; }
+.plan-tools [data-sheet-open][hidden] { display: none; }
 #plan-inspector h4, #plan-hubsplit h4 { margin: 0 0 0.4rem; }
 .plan-buytable th.num, .plan-buytable td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .plan-buytable tfoot td { font-weight: 700; border-top: 2px solid #262626; }
@@ -308,23 +324,21 @@ proportional bar under the text, colored by the decision. */
 .plan-fname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .plan-ftrack { position: relative; height: 1.1rem; background: var(--row); border-radius: 3px; }
 .plan-fbar { position: absolute; top: 0; bottom: 0; border-radius: 3px; }
-@media (max-width: 60rem) {
-  .plan-stats { grid-template-columns: 1fr 1fr; }
+@container page (max-width: 60rem) {
   .plan-cols { grid-template-columns: 1fr; }
-  .plan-treecols { grid-template-columns: 1fr; }
+  .plan-treecols { grid-template-columns: minmax(0, 1fr) 15rem; }
   .plan-frow { grid-template-columns: 1fr; gap: 0.15rem; }
   .plan-grow { grid-template-columns: 1fr; }
 }
-/* The planner search sits in the shared panel: its row needs no
-   margin of its own inside it. */
-.searchpanel .plan-searchrow { margin: 0; }
+@container page (max-width: 36rem) {
+  .plan-treecols { grid-template-columns: minmax(0, 1fr); }
+  .plan-insp { position: static; }
+}
 
-/* --- phones (mobile pass 4) ------------------------------------------
-   Build planner: the product search keeps field and button on one
-   row, the view tabs scroll as one row instead of wrapping to two,
-   and the inspector, which sits under the tree in the one-column
-   layout, stops being sticky. */
-@media (max-width: 45rem) {
+/* --- narrow pages ---------------------------------------------------
+   The product search keeps field and button on one row and the view
+   tabs scroll as one row instead of wrapping to two. */
+@container page (max-width: 45rem) {
   .plan-searchrow { flex-wrap: nowrap; align-items: center; }
   .plan-searchwrap { flex: 1 1 auto; min-width: 0; }
   .plan-tabs {
@@ -333,5 +347,4 @@ proportional bar under the text, colored by the decision. */
   }
   .plan-tabs::-webkit-scrollbar { display: none; }
   .plan-tabs > * { flex: none; }
-  #plan-inspector { position: static; }
 }

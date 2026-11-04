@@ -68,7 +68,7 @@ func TestMyLoadoutsSourcesAndOwnerEdit(t *testing.T) {
 	_, body := apptest.GetPage(t, rig, cookie, "/fittings/saved/")
 	apptest.MustContain(t, "/fittings/saved/", body,
 		"Harbor Public Rifter", "Harbor Private Rifter", "Alpha Rifter",
-		"Public <small>1</small>", "EveSynapse <small>2</small>", "EVE account <small>1</small>",
+		`<span class="l-stat-label">Public</span><span class="l-stat-value">1</span>`, `<span class="l-stat-label">EveSynapse</span><span class="l-stat-value">2</span>`, `<span class="l-stat-label">EVE account</span><span class="l-stat-value">1</span>`,
 		fmt.Sprintf("/fittings/?local=%d#fit-editor", publicFit.ID),
 		fmt.Sprintf("/fittings/public/fit/%d/", publicFit.ID),
 		// The training-plan glyph rides on both fit sources.

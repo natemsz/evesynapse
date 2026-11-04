@@ -30,7 +30,7 @@
   }
   .fit-mhead-id { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.15rem 0.6rem; }
   .fit-mhead-name {
-    font-family: "Rajdhani", "Segoe UI", sans-serif;
+    font-family: var(--font-display);
     font-weight: 700; font-size: var(--fs-2xl); color: var(--text-bright);
     min-width: 0; overflow-wrap: anywhere;
   }
@@ -66,7 +66,7 @@
     flex: 1 1 0; display: inline-flex; align-items: center; justify-content: center;
     padding: 0.55rem 0.3rem; min-height: 2.5rem;
     background: none; border: 0; cursor: pointer;
-    color: var(--muted); font-family: "Rajdhani", "Segoe UI", sans-serif;
+    color: var(--muted); font-family: var(--font-display);
     font-weight: 500; text-transform: uppercase; letter-spacing: normal;
     font-size: var(--fs-sm); white-space: nowrap;
   }
@@ -86,12 +86,13 @@
   #fit-modsearch.fit-collapsible { display: none; }
   #fit-modsearch.fit-collapsible.open {
     display: block;
-    /* The page body's glass is a backdrop-filter, which makes
-       it the containing block for fixed descendants: the panel
-       pins to the page body just under the site header (beside
-       its home slot, above the workbench), and fit.js scrolls
-       it into view when it opens from the pinned tab bar. */
-    position: fixed; top: 3.9rem; left: 0.6rem; right: 0.6rem;
+    /* fit.js lifts the open panel into the top layer (a manual
+       popover), so it pins to the screen just under the site
+       header wherever the reader is. Where the browser has no
+       popover it pins to the page and fit.js scrolls it into
+       view instead. */
+    position: fixed; top: 3.9rem; left: 0.6rem; right: 0.6rem; bottom: auto;
+    width: auto; height: auto; color: var(--text);
     z-index: 60; margin: 0;
     max-height: calc(100dvh - 4.6rem); overflow-y: auto;
     scroll-margin-top: 4.2rem;
@@ -99,7 +100,7 @@
   #fit-modsearch.open .fit-modsearch-bar {
     display: flex; align-items: center; justify-content: space-between;
     margin-bottom: 0.45rem;
-    font-family: "Rajdhani", "Segoe UI", sans-serif; font-weight: 600;
+    font-family: var(--font-display); font-weight: 600;
     text-transform: uppercase; letter-spacing: 0.05em; font-size: var(--fs-md);
     color: var(--muted);
   }
@@ -120,7 +121,7 @@
     flex: 1 1 100%; min-height: 2.5rem; padding: 0.45rem 0.6rem;
     background: none; border: 1px solid var(--box-edge); border-radius: var(--r-sm);
     color: var(--muted); cursor: pointer;
-    font-family: "Rajdhani", "Segoe UI", sans-serif; font-weight: 600;
+    font-family: var(--font-display); font-weight: 600;
     text-transform: uppercase; letter-spacing: 0.05em; font-size: var(--fs-md);
   }
   #fit-editor.fit-armed .fit-head:not(.fit-open) .fit-head-sec { display: none; }

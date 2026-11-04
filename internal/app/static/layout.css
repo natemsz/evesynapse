@@ -52,7 +52,7 @@
   --gutter: var(--space-4);
   /* The smallest comfortable touch target. */
   --tap: 2.75rem;
-  --surface-page: color-mix(in srgb, var(--panel) 93%, transparent);
+  --surface-page: color-mix(in srgb, var(--panel) 96%, transparent);
   --surface-pane: color-mix(in srgb, var(--panel) 97%, transparent);
   --surface-float: var(--panel);
   --surface-inset: var(--row-alt);
@@ -77,10 +77,12 @@ html[data-theme="light"] {
 
 /* ---- The frame: glass dosage ----
    The page body is a solid surface: the sky shows around it, not
-   through it. Dropping the body's blur also stops it from being
-   the containing block for fixed children, which the sheets used
-   to work around page by page. Home keeps its open field of
-   widget cards. */
+   through it. --surface-page sits at 96% panel, one step under the
+   consoles' --surface-pane (97%), so a console reads as part of the
+   page instead of a darker slab on it. No blur: a backdrop filter
+   would make the body the containing block for fixed children,
+   which the sheets used to work around page by page, and repaint
+   under every scroll. Home keeps its open field of widget cards. */
 .page-body {
   background: var(--surface-page);
   -webkit-backdrop-filter: none;
@@ -297,11 +299,14 @@ html[data-theme="light"] .subnav { background: color-mix(in srgb, var(--panel) 8
    where the console's panes sit side by side, keep them. */
 /* Two rules, not one list: :has() cannot nest, so the directory
    test runs down the console's own structure instead. */
+/* The hide is !important: stepping aside is the framework's call, and
+   it must win over a part's own display (phone.css lays filter forms
+   out from #main-content, which outranks any class). */
 @container page (width < 46rem) {
-  .l-page:has(.l-console:not([data-depth="0"]) > .l-panes > .l-pane--dir) .l-root { display: none; }
+  .l-page:has(.l-console:not([data-depth="0"]) > .l-panes > .l-pane--dir) .l-root { display: none !important; }
 }
 @container page (width < 46rem) {
-  .l-page:has(.l-console[data-depth="2"]) .l-root { display: none; }
+  .l-page:has(.l-console[data-depth="2"]) .l-root { display: none !important; }
 }
 
 /* Page head: the summary line, the scope control and the page's
@@ -311,6 +316,8 @@ html[data-theme="light"] .subnav { background: color-mix(in srgb, var(--panel) 8
 .l-head-sum b { color: var(--text); font-weight: 600; }
 /* The page's character or scope picker, leading the head. */
 .l-head-pick { flex: 0 1 26rem; min-width: 0; }
+/* A picker with one choice renders nothing: its slot steps aside. */
+.l-head-pick:not(:has(*)) { display: none; }
 .l-head-pick .charselector { width: 100%; margin: 0; max-width: none; }
 .l-head-act { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin-left: auto; }
 

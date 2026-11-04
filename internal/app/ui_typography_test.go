@@ -2,6 +2,7 @@ package app
 
 import (
 	"io/fs"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -68,9 +69,10 @@ func TestTabNavTypeSpec(t *testing.T) {
 }
 
 // TestOpenProseReadsInInter pins the prose role: the shared sheet
-// carries the Inter prose rule, and the intel pages mark their
-// standalone explanatory blocks with it. Widget, card and table
-// text stays on the condensed face.
+// carries the Inter prose rule for the few blocks that still use it.
+// The Intel pages left it when they moved onto the layout framework:
+// like every framework page, their explanations, labels and forms
+// read in the one body face, so none of them marks prose.
 func TestOpenProseReadsInInter(t *testing.T) {
 	style := readStatic(t, "style.css")
 	for _, want := range []string{
@@ -89,17 +91,9 @@ func TestOpenProseReadsInInter(t *testing.T) {
 		}
 		return string(raw)
 	}
-	for name, marks := range map[string][]string{
-		"channels.html":   {`class="lede prose"`, `class="ch-steps prose"`, `class="ch-faq prose"`},
-		"channel.html":    {`class="hint prose"`},
-		"intel_fw.html":   {`class="prose"`},
-		"intel_wars.html": {`class="prose"`},
-	} {
-		tpl := readTpl(name)
-		for _, mark := range marks {
-			if !strings.Contains(tpl, mark) {
-				t.Errorf("%s missing prose mark %q", name, mark)
-			}
+	for _, name := range []string{"channels.html", "channel.html", "feed.html", "intel_fw.html", "intel_wars.html", "intel_incursions.html", "intel_workbench.html", "killboard.html", "kill.html", "scans.html", "scan.html", "scan_compare.html"} {
+		if regexp.MustCompile(`class="(?:[^"]* )?prose(?: [^"]*)?"`).MatchString(readTpl(name)) {
+			t.Errorf("%s marks prose; Intel pages read in the framework's one body face", name)
 		}
 	}
 }

@@ -1,0 +1,101 @@
+/* EveSynapse: the public intel pages, Wars, Incursions and Faction
+   Warfare (intel_wars.html, intel_incursions.html, intel_fw.html).
+   They sit on the layout framework: the page head, stat tiles, panels
+   and meters come from layout.css, and this sheet styles only what is
+   theirs: the war cards that set one side against the other, the
+   incursion and militia cards, the state chips and the contested
+   table's meters. Width decisions measure the page (@container page),
+   never the window. Every face is a framework token. */
+
+.iw-note { margin: 0; color: var(--muted); font-size: var(--fs-md); }
+.iw-dim { color: var(--muted); font-size: var(--fs-md); }
+.iw-role { display: block; color: var(--muted); font-family: var(--font-display); font-size: var(--fs-xs); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
+
+/* State chips: active and established read as live (accent),
+   pending and mobilizing as rising (gold), ended and withdrawing as
+   done (muted). */
+.iw-state { display: inline-block; padding: 0.1rem 0.55rem; border: 1px solid currentColor; border-radius: 999px; font-family: var(--font-display); font-size: var(--fs-xs); font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; white-space: nowrap; color: var(--muted); }
+.iw-active, .iw-established { color: var(--accent); }
+.iw-pending, .iw-mobilizing { color: var(--gold); }
+.iw-ended, .iw-withdrawing { color: var(--muted); }
+
+/* Tiles on a narrow page: two to a row, without their sub-lines, so
+   the list starts on the first screen. Wider pages keep the
+   framework's steps. */
+@container page (width < 34rem) {
+  .iw-tiles { --l-cols: 2; }
+  .iw-tiles .l-stat-sub { display: none; }
+}
+
+/* ---- Wars ----
+   A war is a card in three columns: the aggressor, the state between
+   them, the defender. On a narrow page the sides stack with the state
+   on top. */
+.iw-wars { display: flex; flex-direction: column; gap: var(--space-2); margin: 0; padding: 0; list-style: none; }
+.iw-war { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-2); padding: var(--space-3) var(--space-4); border-left-width: 3px; }
+.iw-war.yours { border-color: var(--sel-edge); background: var(--sel-bg); }
+.iw-side { display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; }
+.iw-org { font-size: var(--fs-lg); font-weight: 600; color: var(--text-bright); overflow-wrap: anywhere; }
+.iw-rec { color: var(--muted); font-size: var(--fs-md); }
+.iw-rec b { color: var(--text); font-family: var(--font-num); font-weight: 600; font-variant-numeric: tabular-nums; }
+.iw-allies { color: var(--muted); font-size: var(--fs-md); overflow-wrap: anywhere; }
+.iw-flag { margin-left: 0.3rem; color: var(--gold); letter-spacing: 0.04em; }
+.iw-mid { display: flex; flex-wrap: wrap; align-items: center; gap: 0.25rem 0.6rem; order: -1; min-width: 0; }
+.iw-vs { display: none; color: var(--muted); font-family: var(--font-display); font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; }
+.iw-meta { color: var(--muted); font-size: var(--fs-sm); font-family: var(--font-num); font-variant-numeric: tabular-nums; }
+.iw-meta .iw-when { white-space: nowrap; }
+.iw-meta b { color: var(--text); font-family: var(--font-body); font-weight: 600; }
+@container page (min-width: 46rem) {
+  .iw-war { grid-template-columns: minmax(0, 1fr) minmax(12rem, 16rem) minmax(0, 1fr); align-items: center; gap: var(--space-4); padding-block: var(--space-2); }
+  .iw-mid { order: 0; flex-direction: column; gap: 0.15rem; text-align: center; }
+  .iw-vs { display: none; }
+  .iw-def { text-align: right; }
+}
+
+/* ---- Cards: incursions and militias ----
+   Each card takes at least 19rem; the row fills from the space it
+   has. */
+.iw-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 19rem), 1fr)); gap: var(--space-3); }
+.iw-cards > .l-panel { display: flex; flex-direction: column; gap: var(--space-3); }
+.iw-cards h2 { margin: 0; font-size: var(--fs-xl); overflow-wrap: anywhere; }
+
+/* Incursions. A card with the final boss up wears a gold edge. */
+.iw-inc { border-left-width: 3px; }
+.iw-inc.boss { border-left-color: var(--gold); }
+.iw-inc-head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-2); }
+.iw-staging { margin: 0; }
+.iw-staging-sys { font-size: var(--fs-xl); font-weight: 600; }
+.iw-infl { display: grid; grid-template-columns: 1fr auto; align-items: baseline; gap: 0.25rem var(--space-2); }
+.iw-infl .l-meter { grid-column: 1 / -1; height: 0.45rem; }
+.iw-infl-v { font-family: var(--font-num); font-weight: 600; font-variant-numeric: tabular-nums; color: var(--text-bright); }
+.iw-boss { color: var(--gold); font-weight: 600; }
+.iw-inc .iw-dim { margin: 0; }
+.iw-chips { display: flex; flex-wrap: wrap; gap: 0.3rem; margin: 0.35rem 0 0; padding: 0; list-style: none; }
+.iw-chips li { padding: 0.1rem 0.5rem; border: 1px solid var(--hairline); border-radius: 999px; font-size: var(--fs-md); }
+
+/* Militias: the systems held lead, large, over the share meter. */
+.iw-fac-held { display: grid; grid-template-columns: auto 1fr; align-items: baseline; gap: 0.2rem var(--space-2); }
+.iw-fac-n { font-family: var(--font-num); font-size: var(--fs-4xl); font-weight: 700; line-height: 1.05; color: var(--text-bright); font-variant-numeric: tabular-nums; }
+.iw-fac-pct { grid-column: 1 / -1; color: var(--muted); font-size: var(--fs-sm); }
+.iw-fac-held .l-meter { grid-column: 1 / -1; }
+.iw-facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-2) var(--space-3); margin: 0; }
+.iw-facts > div { min-width: 0; }
+.iw-facts dt { color: var(--muted); font-size: var(--fs-sm); }
+.iw-facts dd { margin: 0; color: var(--text-bright); font-weight: 600; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.iw-facts dd.iw-wk { color: var(--muted); font-size: var(--fs-sm); font-weight: 400; }
+.iw-fac-foot { margin: 0; font-size: var(--fs-sm); }
+
+/* ---- The front: contested systems ---- */
+.iw-front > * + * { margin-top: var(--space-3); }
+.iw-bar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); }
+.iw-bar h2 { margin: 0; }
+.iw-filter { flex: 1 1 14rem; min-width: 0; max-width: 24rem; min-height: var(--tap); margin-left: auto; }
+.iw-hot { color: var(--danger); }
+.iw-warm { color: var(--gold); }
+.iw-contest { min-width: 7rem; }
+.iw-contest-v { display: block; font-variant-numeric: tabular-nums; }
+.iw-contest .l-meter { margin-top: 0.2rem; max-width: 9rem; }
+.iw-row.iw-close .l-meter rect { fill: var(--gold); }
+.iw-row.iw-close .iw-contest-v { color: var(--gold); }
+.iw-row.iw-vulnerable .l-meter rect { fill: var(--danger); }
+.iw-row.iw-vulnerable .iw-contest-v { color: var(--danger); font-weight: 600; }

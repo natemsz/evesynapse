@@ -1,44 +1,82 @@
 {{define "title"}}Corporation Orders{{end}}
 {{define "pagetitle"}}<h1><span class="gt">Corporation Orders</span></h1>{{end}}
 {{define "pagetabs"}}{{template "sectiontabs" .}}{{end}}
+
 {{define "content"}}
 
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
 
-{{template "charselector" .CorpChars}}
+<div class="l-page">
+<div class="l-head">
+  <div class="l-head-pick">{{template "charselector" .CorpChars}}</div>
+  {{with .CorpOrders}}<p class="l-head-sum"><b>{{corpLink .CorpID .CorpTitle}}</b> · the corporation's open market orders</p>{{end}}
+</div>
 
-{{if .CorpOrders}}
-<h2>{{corpLink .CorpOrders.CorpID .CorpOrders.CorpTitle}}</h2>
-<p><small><a href="/corporations/">Overview</a> · <a href="/corporations/members/?character={{.CorpOrders.CharacterID}}">Members</a> · <a href="/corporations/wallets/?character={{.CorpOrders.CharacterID}}">Wallets</a> · Orders · <a href="/corporations/assets/?character={{.CorpOrders.CharacterID}}">Assets</a> · <a href="/corporations/structures/?character={{.CorpOrders.CharacterID}}">Structures</a> · <a href="/corporations/killmails/?character={{.CorpOrders.CharacterID}}">Killmails</a></small></p>
-
-  {{if .CorpOrders.Forbidden}}
-  {{if .CorpOrders.RoleMissing}}
-  <p>Needs the <b>{{.CorpOrders.RoleMissing}}</b> role in game. {{.CorpOrders.CharacterName}} doesn't hold it, so ESI won't share this corporation's open orders. They appear here once they do.</p>
+{{with .CorpOrders}}
+  {{if .Forbidden}}
+  <div class="l-panel co-gate">
+  {{if .RoleMissing}}
+  <p>Needs the <b>{{.RoleMissing}}</b> role in game. {{.CharacterName}} doesn't hold it, so ESI won't share this corporation's open orders. They appear here once they do.</p>
   {{else}}
-  <p>Open orders were refused by ESI (403). They'll appear here once {{.CorpOrders.CharacterName}} holds a market role in this corporation.</p>
+  <p>Open orders were refused by ESI (403). They'll appear here once {{.CharacterName}} holds a market role in this corporation.</p>
   {{end}}
-  {{else if .CorpOrders.NoFeeder}}
-  <p>{{.CorpOrders.CharacterName}} hasn't granted the corporation permissions that feed the open orders, so nobody is sharing this corporation's data with EveSynapse yet. <a href="{{.CorpOrders.AddScopesURL}}">Add the corporation permissions</a>. EVE asks for them on top of what is already granted.</p>
-  {{else if .CorpOrders.Warming}}
-  <p>Still syncing.{{if .IsAdmin}} Progress is on the <a href="/admin/sync/">Sync page</a>.{{end}}</p>
-  {{else if .CorpOrders.Loaded}}
-  {{if .CorpOrders.Rows}}
-  <p><small>{{len .CorpOrders.Rows}} open orders</small></p>
-  <div class="tw">
-  <table>
-    <thead><tr><th>Item</th><th>Side</th><th>Price</th><th>Status</th><th>Volume left</th><th>Location</th><th>Region</th><th>Expires</th><th>Issued by</th></tr></thead>
-    <tbody>
-    {{range .CorpOrders.Rows}}
-      <tr><td>{{itemLink .TypeID .Item}}</td><td>{{.Side}}</td><td>{{.Price}} ISK</td><td>{{if .Status}}{{if .Bad}}<strong>{{.Status}}</strong>{{else}}{{.Status}}{{end}}{{end}}</td><td>{{.Volume}}</td><td>{{placeLink .Location}}</td><td>{{.Region}}</td><td>{{.Expires}}</td><td>{{charLink $.ViewerChars .IssuedByID .IssuedBy}}</td></tr>
-    {{end}}
-    </tbody>
-  </table>
   </div>
+  {{else if .NoFeeder}}
+  <div class="l-panel co-gate"><p>{{.CharacterName}} hasn't granted the corporation permissions that feed the open orders, so nobody is sharing this corporation's data with EveSynapse yet. <a href="{{.AddScopesURL}}">Add the corporation permissions</a>. EVE asks for them on top of what is already granted.</p></div>
+  {{else if .Warming}}
+  <div class="l-panel co-gate"><p>Still syncing.{{if $.IsAdmin}} Progress is on the <a href="/admin/sync/">Sync page</a>.{{end}}</p></div>
+  {{else if .Loaded}}
+  <div class="l-tiles">
+    <a class="l-stat" href="#co-sell"><span class="l-stat-label">Sell orders</span><span class="l-stat-value">{{.Sells}}</span><span class="l-stat-sub">{{.SellValue}} ISK still listed</span></a>
+    <a class="l-stat" href="#co-buy"><span class="l-stat-label">Buy orders</span><span class="l-stat-value">{{.Buys}}</span><span class="l-stat-sub">{{.BuyEscrow}} ISK in escrow</span></a>
+    <div class="l-stat{{if .Beaten}} warn{{else}} ok{{end}}"><span class="l-stat-label">Beaten</span><span class="l-stat-value">{{.Beaten}}</span><span class="l-stat-sub">{{if .Beaten}}Another player is ahead at the station{{else}}Nothing beaten that we check{{end}}</span></div>
+  </div>
+
+  {{if .Rows}}
+  <div class="l-panel fo-tabs">
+    <div class="co-bar">
+      <div class="pilltabs fo-tablist" role="tablist" aria-label="Orders" data-tabs hidden>
+        <button type="button" role="tab" class="pilltab" id="co-sell-tab" aria-controls="co-sell" aria-selected="true">Sell <span class="cnt">{{.Sells}}</span></button>
+        <button type="button" role="tab" class="pilltab" id="co-buy-tab" aria-controls="co-buy" aria-selected="false">Buy <span class="cnt">{{.Buys}}</span></button>
+      </div>
+      <input type="search" class="co-filter" data-table-filter="co-orders" data-row-class="co-orow" placeholder="Filter by item, place or pilot" aria-label="Filter the orders">
+    </div>
+    <div id="co-orders">
+    <section role="tabpanel" id="co-sell" aria-labelledby="co-sell-tab" class="fo-panel">
+      <h3 class="fo-h">Sell orders</h3>
+      {{if .Sells}}<div class="tw">
+<table class="fo-table">
+  <thead><tr><th class="card-title">Item</th><th class="mt-num">Price</th><th>Status</th><th class="mt-num">Volume left</th><th>Location</th><th>Expires</th><th>Issued by</th></tr></thead>
+  <tbody>
+  {{range .SellRows}}
+    <tr class="co-orow{{if .Bad}} order-beaten{{end}}" data-search="{{.Item}} {{.Location.Name}} {{.Region}} {{.IssuedBy}}"><td>{{itemLink .TypeID .Item}}</td><td class="mt-num">{{.Price}}</td><td>{{if .Status}}<span class="fo-status">{{if .Bad}}<strong>{{.Status}}</strong>{{else}}{{.Status}}{{end}}</span>{{end}}</td><td class="mt-num">{{.Volume}}</td><td>{{placeLink .Location}}<small class="fo-sub">{{.Region}}</small></td><td>{{.Expires}}</td><td>{{charLink $.ViewerChars .IssuedByID .IssuedBy}}</td></tr>
+  {{end}}
+  </tbody>
+</table>
+</div>{{else}}<p class="co-note"><small>No open sell orders.</small></p>{{end}}
+    </section>
+    <section role="tabpanel" id="co-buy" aria-labelledby="co-buy-tab" class="fo-panel">
+      <h3 class="fo-h">Buy orders</h3>
+      {{if .Buys}}<div class="tw">
+<table class="fo-table">
+  <thead><tr><th class="card-title">Item</th><th class="mt-num">Price</th><th>Status</th><th class="mt-num">Volume left</th><th>Location</th><th>Expires</th><th>Issued by</th></tr></thead>
+  <tbody>
+  {{range .BuyRows}}
+    <tr class="co-orow{{if .Bad}} order-beaten{{end}}" data-search="{{.Item}} {{.Location.Name}} {{.Region}} {{.IssuedBy}}"><td>{{itemLink .TypeID .Item}}</td><td class="mt-num">{{.Price}}</td><td>{{if .Status}}<span class="fo-status">{{if .Bad}}<strong>{{.Status}}</strong>{{else}}{{.Status}}{{end}}</span>{{end}}</td><td class="mt-num">{{.Volume}}</td><td>{{placeLink .Location}}<small class="fo-sub">{{.Region}}</small></td><td>{{.Expires}}</td><td>{{charLink $.ViewerChars .IssuedByID .IssuedBy}}</td></tr>
+  {{end}}
+  </tbody>
+</table>
+</div>{{else}}<p class="co-note"><small>No open buy orders.</small></p>{{end}}
+    </section>
+    </div>
+  </div>
+  <p class="co-note"><small>Prices in ISK. The status line covers orders one of your own characters placed for the corporation: the order book check runs on what they sync.</small></p>
   {{else}}
-  <p><small>No open corporation orders.</small></p>
+  <div class="l-panel co-gate"><p>No open corporation orders.</p></div>
   {{end}}
   {{end}}
 {{else}}
   <p>No corporation to show yet. <a href="/auth/link">Link a character</a> first.</p>
 {{end}}
+</div>
 {{end}}

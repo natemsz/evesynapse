@@ -5,27 +5,39 @@
 
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
 
+<div class="l-page">
 {{with .SRP}}
 {{if not .Corp}}
-<p>None of your characters is in a player corporation EveSynapse knows of yet, so there is nothing to claim or handle.</p>
+<div class="l-panel co-gate"><p>None of your characters is in a player corporation EveSynapse knows of yet, so there is nothing to claim or handle.</p></div>
 {{else}}
 {{$corp := .Corp}}
-{{template "corpselector" .CorpOptions}}
-<h2>{{$corp.Name}}</h2>
-<p><small><a href="/doctrines/?corporation={{$corp.ID}}">Doctrines</a> · <a href="/doctrines/fits/?corporation={{$corp.ID}}">Fits</a> · Ship Replacement{{if $corp.Directs}} · <a href="/corporations/settings/?corporation={{$corp.ID}}">Settings</a>{{end}}</small></p>
+<div class="l-head">
+  <div class="l-head-pick">{{template "corpselector" .CorpOptions}}</div>
+  <p class="l-head-sum"><b>{{$corp.Name}}</b></p>
+</div>
 
-<p class="lede">Lost a ship on one of {{$corp.Name}}'s ops? Ask for it to be replaced here. A request names the killmail and the op it happened on, and whoever handles replacement sees whether the fleet recorded you there.</p>
+{{if $corp.Handles}}
+<div class="l-tiles">
+  <a class="l-stat{{if $corp.Open}} warn{{else}} ok{{end}}" href="#srp-handle"><span class="l-stat-label">Open requests</span><span class="l-stat-value">{{len $corp.Open}}</span><span class="l-stat-sub">Waiting on a handler</span></a>
+  <div class="l-stat"><span class="l-stat-label">Open estimate</span><span class="l-stat-value">{{if $corp.OpenValue}}{{$corp.OpenValue}}{{else}}0{{end}}</span><span class="l-stat-sub">What the open losses are worth</span></div>
+  <div class="l-stat"><span class="l-stat-label">Paid, 30 days</span><span class="l-stat-value">{{$corp.PaidCount}}</span><span class="l-stat-sub">{{if $corp.PaidValue}}{{$corp.PaidValue}} paid out{{else}}Nothing paid yet{{end}}</span></div>
+  {{if .Mine}}<a class="l-stat" href="#srp-mine"><span class="l-stat-label">Your requests</span><span class="l-stat-value">{{len .Mine}}</span><span class="l-stat-sub">Asked by your characters</span></a>{{end}}
+</div>
+{{end}}
 
+<p class="co-lede">Lost a ship on one of {{$corp.Name}}'s ops? Ask for it to be replaced here. A request names the killmail and the op it happened on, and whoever handles replacement sees whether the fleet recorded you there.</p>
+
+<div class="co-cards">
 {{if $corp.Policy}}
-<section class="setting form-card">
-  <h4>Replacement policy</h4>
+<section class="l-panel co-card">
+  <h3>Replacement policy</h3>
   <p class="srp-policy">{{$corp.Policy}}</p>
 </section>
 {{end}}
 
-<form method="post" action="/srp/request" class="op-form setting form-card">
+<form method="post" action="/srp/request" class="l-panel co-card op-form">
   <input type="hidden" name="corporation" value="{{$corp.ID}}">
-  <h4>Request a replacement</h4>
+  <h3>Request a replacement</h3>
   {{if .Losses}}
   <div class="form-grid">
     <label class="field wide"><span class="field-label">Loss</span>
@@ -40,9 +52,11 @@
   {{end}}
   {{if .Outside}}<p class="hint">{{.Outside}} other recent loss{{if ne .Outside 1}}es were{{else}} was{{end}} not during an op and cannot be claimed here.</p>{{end}}
 </form>
+</div>
 
 {{if .Mine}}
-<h3>Your requests</h3>
+<section class="l-panel" id="srp-mine">
+<h2 class="co-h2">Your requests</h2>
 <div class="tw">
 <table>
   <thead><tr><th>Lost</th><th>Pilot</th><th>Ship</th><th>Op</th><th>Estimate</th><th>Answer</th><th></th></tr></thead>
@@ -55,16 +69,16 @@
   </tbody>
 </table>
 </div>
+</section>
 {{end}}
 
 {{if $corp.Handles}}
-<h3>Requests to handle</h3>
-<p class="srp-sum"><span><strong>{{len $corp.Open}}</strong> open{{if $corp.OpenValue}}, estimated at <strong>{{$corp.OpenValue}}</strong>{{end}}</span><span><strong>{{$corp.PaidCount}}</strong> paid in the last 30 days{{if $corp.PaidValue}}: <strong>{{$corp.PaidValue}}</strong>{{end}}</span></p>
+<div class="co-sec" id="srp-handle"><h2>Requests to handle</h2></div>
 
 {{if $corp.Open}}
-<form method="post" action="/srp/paylist" class="op-form setting form-card">
+<form method="post" action="/srp/paylist" class="l-panel co-card op-form form-card">
   <input type="hidden" name="corporation" value="{{$corp.ID}}">
-  <h4>Pay in game</h4>
+  <h3>Pay in game</h3>
   <p class="hint">EVE has no way for a site to give ISK, so paying is done in game. The pay list is one EVE mail listing every open request: each pilot's name opens their information window, where ISK is given, and each ship opens its kill report.</p>
   {{if $corp.Mailers}}
   <div class="form-grid">
@@ -77,12 +91,12 @@
   {{end}}
 </form>
 
-<div class="settings-grid">
+<div class="co-cards">
 {{range $corp.Open}}
-<section class="setting">
-  <div class="setting-head"><h4>{{.Pilot}} · {{.Ship}}</h4>{{if .Value}}<span class="field-hint">est. {{.Value}}</span>{{end}}</div>
+<section class="l-panel co-card">
+  <div class="co-card-head"><h3>{{.Pilot}} · {{.Ship}}</h3>{{if .Value}}<span class="field-hint">est. {{.Value}}</span>{{end}}</div>
   <p class="hint">Lost {{.LostAt}} in {{.System}} on <a href="{{.OpURL}}">{{.Op}}</a>. {{killPageLink .KillmailID}}</p>
-  <p class="srp-facts"><span class="badge kill">KILLMAIL</span><span class="badge kill">DURING THE OP</span>{{if .Attended}}<span class="badge kill">ATTENDED</span> {{.Attendance}}{{else}}<span class="badge loss">NOT ON ATTENDANCE</span> The op's attendance does not have this pilot. It can be ticked by hand on the op's page.{{end}}{{if .Doctrine}} {{if .DoctrineShip}}<span class="badge kill">DOCTRINE SHIP</span>{{else}}<span class="badge loss">NOT A DOCTRINE SHIP</span>{{end}} The op flew {{.Doctrine}}.{{end}}</p>
+  <p class="srp-facts co-badges"><span class="badge kill">KILLMAIL</span><span class="badge kill">DURING THE OP</span>{{if .Attended}}<span class="badge kill">ATTENDED</span> {{.Attendance}}{{else}}<span class="badge loss">NOT ON ATTENDANCE</span> The op's attendance does not have this pilot. It can be ticked by hand on the op's page.{{end}}{{if .Doctrine}} {{if .DoctrineShip}}<span class="badge kill">DOCTRINE SHIP</span>{{else}}<span class="badge loss">NOT A DOCTRINE SHIP</span>{{end}} The op flew {{.Doctrine}}.{{end}}</p>
   {{if .Note}}<p class="hint">Pilot's note: {{.Note}}</p>{{end}}
   <form method="post" action="/srp/{{.ID}}/decide" class="op-form">
     <input type="hidden" name="corporation" value="{{$corp.ID}}">
@@ -102,11 +116,12 @@
 {{end}}
 </div>
 {{else}}
-<p class="hint">No open requests.</p>
+<div class="l-panel co-gate"><p>No open requests.</p></div>
 {{end}}
 
 {{if $corp.Handled}}
-<h3>Answered</h3>
+<section class="l-panel">
+<h2 class="co-h2">Answered</h2>
 <div class="tw">
 <table>
   <thead><tr><th>Answered</th><th>Pilot</th><th>Ship</th><th>Op</th><th>Answer</th><th>By</th><th></th></tr></thead>
@@ -120,9 +135,11 @@
   </tbody>
 </table>
 </div>
+</section>
 {{end}}
-{{if $corp.Directs}}<p class="hint">Who handles requests, and the policy pilots see, are set in <a href="/corporations/settings/?corporation={{$corp.ID}}">corporation settings</a>.</p>{{end}}
+{{if $corp.Directs}}<p class="co-note">Who handles requests, and the policy pilots see, are set in <a href="/corporations/settings/?corporation={{$corp.ID}}">corporation settings</a>.</p>{{end}}
 {{end}}
 {{end}}
 {{end}}
+</div>
 {{end}}

@@ -18,6 +18,7 @@ import (
 
 	"evesynapse/internal/app/module"
 	"evesynapse/internal/esi"
+	"evesynapse/internal/humanize"
 	"evesynapse/internal/logging"
 )
 
@@ -115,13 +116,16 @@ type warRow struct {
 	Defender   template.HTML
 	Allies     []template.HTML // allied defenders, "" when none
 	State      string          // Active | Retracted … | Ended …
+	Tone       string          // active | pending | ended: the state chip's paint and the filter key
 	Declared   string
 	Mutual     bool
 	OpenAllies bool
-	AggKills   string // "12 ships · 1,234,567.89 ISK destroyed"
-	DefKills   string
-	Yours      bool // aggressor/defender/ally is one of the user's corporations
-	Warming    bool
+	// Each side's record: ships killed and ISK destroyed, the ISK
+	// compact ("1.2B") for the card and exact for its title.
+	AggShips, AggISK, AggISKExact string
+	DefShips, DefISK, DefISKExact string
+	Yours                         bool // aggressor/defender/ally is one of the user's corporations
+	Warming                       bool
 }
 
 // warsView is the Wars page body.
@@ -130,6 +134,12 @@ type warsView struct {
 	Warming bool // no war list snapshot yet
 	Rows    []warRow
 	Total   int // wars in the stored list (before the cap)
+	// Shown is how many of the newest wars the page reads (the
+	// detail window); the tiles count over those, and Show is the
+	// tile filter in force ("" for all of them).
+	Shown                            int
+	Show                             string
+	Active, Yours, OpenAllies, Ended int
 }
 
 // handleWars renders the Wars page from the stored war ID list joined
@@ -160,8 +170,27 @@ func handleWars(deps module.Deps) http.HandlerFunc {
 		}
 
 		yourCorps := deps.UserCorporationIDs(ctx, deps.UserID(ctx))
+		if show := r.URL.Query().Get("show"); warFilters[show] {
+			view.Show = show
+		}
+		view.Shown = len(ids)
 		for _, id := range ids {
-			view.Rows = append(view.Rows, buildWarRow(ctx, deps, id, yourCorps))
+			row := buildWarRow(ctx, deps, id, yourCorps)
+			if warMatches(row, "active") {
+				view.Active++
+			}
+			if row.Yours {
+				view.Yours++
+			}
+			if row.OpenAllies {
+				view.OpenAllies++
+			}
+			if row.Tone == "ended" {
+				view.Ended++
+			}
+			if warMatches(row, view.Show) {
+				view.Rows = append(view.Rows, row)
+			}
 		}
 
 		deps.Render(ctx, w, http.StatusOK, "intel_wars.html", &data)
@@ -187,20 +216,20 @@ func buildWarRow(ctx context.Context, deps module.Deps, warID int64, yourCorps m
 
 	row.Aggressor = deps.OrgLink(ctx, war.Aggressor.CorporationID, war.Aggressor.AllianceID)
 	row.Defender = deps.OrgLink(ctx, war.Defender.CorporationID, war.Defender.AllianceID)
-	row.AggKills = warPartyRecord(war.Aggressor)
-	row.DefKills = warPartyRecord(war.Defender)
+	row.AggShips, row.AggISK, row.AggISKExact = esi.FormatInt(war.Aggressor.ShipsKilled), humanize.ISKCompact(war.Aggressor.ISKDestroyed), esi.FormatISK(war.Aggressor.ISKDestroyed)
+	row.DefShips, row.DefISK, row.DefISKExact = esi.FormatInt(war.Defender.ShipsKilled), humanize.ISKCompact(war.Defender.ISKDestroyed), esi.FormatISK(war.Defender.ISKDestroyed)
 	row.Declared = deps.FormatFinish(war.Declared)
 	row.Mutual = war.Mutual
 	row.OpenAllies = war.OpenForAllies
 	switch {
 	case war.Finished != "":
-		row.State = "Ended " + deps.FormatFinish(war.Finished)
+		row.State, row.Tone = "Ended "+deps.FormatFinish(war.Finished), "ended"
 	case war.Retracted != "":
-		row.State = "Retracted " + deps.FormatFinish(war.Retracted)
+		row.State, row.Tone = "Retracted "+deps.FormatFinish(war.Retracted), "ended"
 	case war.Started != "":
-		row.State = "Active"
+		row.State, row.Tone = "Active", "active"
 	default:
-		row.State = "Pending start" // declared; the 24h warm-up is still running
+		row.State, row.Tone = "Pending start", "pending" // declared; the 24h warm-up is still running
 	}
 
 	var allies []template.HTML
@@ -217,6 +246,24 @@ func buildWarRow(ctx context.Context, deps module.Deps, warID int64, yourCorps m
 func warPartyRecord(p esi.WarParty) string {
 	return fmt.Sprintf("%s ships · %s ISK destroyed",
 		esi.FormatInt(p.ShipsKilled), esi.FormatISK(p.ISKDestroyed))
+}
+
+// warFilters are the Wars page's tile filters (?show=).
+var warFilters = map[string]bool{"active": true, "yours": true, "allies": true, "ended": true}
+
+// warMatches reports whether a row belongs under a tile filter.
+func warMatches(row warRow, show string) bool {
+	switch show {
+	case "active":
+		return row.Tone == "active" || row.Tone == "pending"
+	case "yours":
+		return row.Yours
+	case "allies":
+		return row.OpenAllies
+	case "ended":
+		return row.Tone == "ended"
+	}
+	return true
 }
 
 // warInvolves reports whether any party of the war (aggressor,
@@ -252,6 +299,7 @@ type incursionRow struct {
 	StagingSecText  string
 	StagingSecTier  int
 	State           string // humanized
+	StateKey        string // ESI's state: mobilizing | established | withdrawing (the chip's paint)
 	InfluencePct    int    // 0..100, drives the bar
 	Boss            bool   // final-encounter boss present
 	FactionName     string
@@ -263,6 +311,9 @@ type incursionsView struct {
 	Loaded  bool
 	Warming bool // no incursions snapshot yet
 	Rows    []incursionRow
+	// The tiles: how many incursions show the final-encounter boss,
+	// and how many sit in each phase.
+	Bosses, Established, Mobilizing, Withdrawing int
 }
 
 // handleIncursions renders the Incursions page from the stored
@@ -291,6 +342,7 @@ func handleIncursions(deps module.Deps) http.HandlerFunc {
 				Constellation: fmt.Sprintf("Constellation #%d", inc.ConstellationID),
 				Staging:       deps.SystemRef(ctx, inc.StagingSystemID),
 				State:         humanizeState(deps, inc.State),
+				StateKey:      strings.ToLower(inc.State),
 				Boss:          inc.HasBoss,
 				FactionName:   factionDisplay(factions, inc.FactionID),
 			}
@@ -308,6 +360,17 @@ func handleIncursions(deps module.Deps) http.HandlerFunc {
 			row.InfluencePct = pct
 			for _, systemID := range inc.InfestedSystems {
 				row.Systems = append(row.Systems, deps.SystemRef(ctx, systemID))
+			}
+			if row.Boss {
+				view.Bosses++
+			}
+			switch row.StateKey {
+			case "established":
+				view.Established++
+			case "mobilizing":
+				view.Mobilizing++
+			case "withdrawing":
+				view.Withdrawing++
 			}
 			view.Rows = append(view.Rows, row)
 		}
@@ -340,6 +403,7 @@ const maxFWSystemsShown = 50
 type fwFactionCard struct {
 	Name             string
 	Systems          string // systems controlled
+	SystemsShare     int    // share of every militia-held system, 0..100 (the card's meter)
 	Pilots           string
 	KillsYesterday   string
 	KillsLastWeek    string
@@ -355,6 +419,7 @@ type fwSystemRow struct {
 	Owner    string
 	State    string // humanized contested label
 	Percent  int    // contested %, -1 when the state has no live contest
+	Tone     string // vulnerable (at or past the threshold) | close (75% and up) | "" (the row's paint)
 	// The system's security pill (the fleet overview's badge),
 	// resolved after the row cap so lookups stay bounded by the
 	// rows actually rendered.
@@ -370,6 +435,9 @@ type fwView struct {
 	Factions []fwFactionCard
 	Systems  []fwSystemRow
 	Total    int // systems in the stored list (before the cap)
+	// Close counts the shown systems at 75% contested or more;
+	// Vulnerable those at or past the flip threshold.
+	Close, Vulnerable int
 }
 
 // handleFW renders the Faction Warfare page: faction summary cards from
@@ -402,10 +470,19 @@ func handleFW(deps module.Deps) http.HandlerFunc {
 			sort.SliceStable(sorted, func(i, j int) bool {
 				return sorted[i].SystemsControlled > sorted[j].SystemsControlled
 			})
+			var held int64
 			for _, s := range sorted {
+				held += int64(s.SystemsControlled)
+			}
+			for _, s := range sorted {
+				share := 0
+				if held > 0 {
+					share = int((int64(s.SystemsControlled)*100 + held/2) / held)
+				}
 				view.Factions = append(view.Factions, fwFactionCard{
 					Name:             factionDisplay(factions, s.FactionID),
 					Systems:          esi.FormatInt(s.SystemsControlled),
+					SystemsShare:     share,
 					Pilots:           esi.FormatInt(s.Pilots),
 					KillsYesterday:   esi.FormatInt(s.Kills.Yesterday),
 					KillsLastWeek:    esi.FormatInt(s.Kills.LastWeek),
@@ -439,6 +516,14 @@ func handleFW(deps module.Deps) http.HandlerFunc {
 				rows = rows[:maxFWSystemsShown]
 			}
 			for i := range rows {
+				switch {
+				case rows[i].Percent >= 100 || strings.HasPrefix(strings.ToLower(rows[i].State), "vulnerable"):
+					rows[i].Tone = "vulnerable"
+					view.Vulnerable++
+				case rows[i].Percent >= 75:
+					rows[i].Tone = "close"
+					view.Close++
+				}
 				rows[i].SecText, rows[i].SecTier, rows[i].SecKnown = deps.SystemSecurity(ctx, rows[i].System.SystemID)
 				rows[i].Region, _ = deps.SystemRegion(ctx, rows[i].System.SystemID)
 			}

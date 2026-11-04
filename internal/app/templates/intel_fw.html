@@ -2,58 +2,67 @@
 {{define "pagetitle"}}<h1><span class="gt">Faction Warfare</span></h1>{{end}}
 {{define "pagetabs"}}{{template "sectiontabs" .}}{{end}}
 {{define "content"}}
-
+{{/* Faction Warfare (intel.go): each militia as a card (the systems it
+     holds and its share of the front, pilots, kills and victory
+     points), then the front-line systems closest to flipping, each
+     with its contest as a meter. */}}
+<div class="l-page iw">
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
 
-{{if .IntelFW}}
-  {{if .IntelFW.Warming}}
-  <p class="prose">Not loaded yet. The public faction-warfare data is fetched on a regular cycle{{if .IsAdmin}}; progress is on the <a href="/admin/sync/">Sync page</a>{{end}}.</p>
+{{with .IntelFW}}
+  {{if .Warming}}
+  <div class="l-panel"><p class="iw-note">Not loaded yet. The public faction-warfare data is fetched on a regular cycle{{if $.IsAdmin}}; progress is on the <a href="/admin/sync/">Sync page</a>{{end}}.</p></div>
   {{else}}
-  {{if .IntelFW.Factions}}
-  <div class="tw">
-  <table>
-    <thead><tr><th>Faction</th><th>Systems held</th><th>Pilots</th><th>Kills yesterday</th><th>Kills last week</th><th>VP yesterday</th><th>VP last week</th></tr></thead>
-    <tbody>
-    {{range .IntelFW.Factions}}
-      <tr>
-        <td>{{.Name}}</td>
-        <td>{{.Systems}}</td>
-        <td>{{.Pilots}}</td>
-        <td>{{.KillsYesterday}}</td>
-        <td>{{.KillsLastWeek}}</td>
-        <td>{{.VictoryYesterday}}</td>
-        <td>{{.VictoryLastWeek}}</td>
-      </tr>
+  {{if .Factions}}
+  <div class="iw-cards iw-factions">
+    {{range .Factions}}
+    <article class="l-panel iw-fac">
+      <h2>{{.Name}}</h2>
+      <div class="iw-fac-held">
+        <span class="iw-fac-n">{{.Systems}}</span><span class="iw-dim">systems held</span>
+        <span class="iw-fac-pct">{{.SystemsShare}}% of the front</span>
+        <svg class="l-meter" viewBox="0 0 100 4" preserveAspectRatio="none" aria-hidden="true"><rect x="0" y="0" width="{{.SystemsShare}}" height="4"/></svg>
+      </div>
+      <dl class="iw-facts">
+        <div><dt>Pilots</dt><dd>{{.Pilots}}</dd></div>
+        <div><dt>Kills</dt><dd>{{.KillsYesterday}}</dd><dd class="iw-wk">Week {{.KillsLastWeek}}</dd></div>
+        <div><dt>Victory points</dt><dd>{{.VictoryYesterday}}</dd><dd class="iw-wk">Week {{.VictoryLastWeek}}</dd></div>
+      </dl>
+      <p class="iw-dim iw-fac-foot">Large figures are yesterday's; Week is the last seven days.</p>
+    </article>
     {{end}}
-    </tbody>
-  </table>
   </div>
   {{end}}
-  {{if .IntelFW.Systems}}
-  <section class="foldable">
-  <h2>Contested systems</h2>
-  <div class="tw">
-  <table>
-    <thead><tr><th>System</th><th>Region</th><th>Occupier</th><th>Owner</th><th>State</th><th>Contested</th></tr></thead>
-    <tbody>
-    {{range .IntelFW.Systems}}
-      <tr>
-        <td>{{placeLink .System}}{{if .SecKnown}}<span class="sec-pill sec-{{.SecTier}}">{{.SecText}}</span>{{end}}</td>
-        <td>{{if .Region}}{{.Region}}{{else}}—{{end}}</td>
-        <td>{{.Occupier}}</td>
-        <td>{{.Owner}}</td>
-        <td>{{.State}}</td>
-        <td>{{if ge .Percent 0}}{{.Percent}}%{{else}}—{{end}}</td>
-      </tr>
-    {{end}}
-    </tbody>
-  </table>
-  </div>
-  <p class="prose"><small>Contested % is victory points divided by the flip threshold, the same figure the game shows.{{if gt .IntelFW.Total (len .IntelFW.Systems)}} Showing the {{len .IntelFW.Systems}} most contested of {{.IntelFW.Total}} front-line systems.{{end}}</small></p>
+
+  {{if .Systems}}
+  <section class="l-panel iw-front">
+    <div class="iw-bar">
+      <h2>Contested systems</h2>
+      <span class="iw-dim">{{if .Vulnerable}}<b class="iw-hot">{{.Vulnerable}}</b> vulnerable · {{end}}{{if .Close}}<b class="iw-warm">{{.Close}}</b> at 75% or more · {{end}}{{len .Systems}} shown</span>
+      <input class="iw-filter" type="search" placeholder="Filter by system, region or faction" aria-label="Filter contested systems" data-table-filter="iw-front-t" data-row-class="iw-row">
+    </div>
+    <div class="tw">
+    <table id="iw-front-t">
+      <thead><tr><th>System</th><th class="opt">Region</th><th>Occupier</th><th class="opt">Owner</th><th>Contested</th></tr></thead>
+      <tbody>
+      {{range .Systems}}
+        <tr class="iw-row{{if .Tone}} iw-{{.Tone}}{{end}}" data-search="{{.System.Name}} {{.Region}} {{.Occupier}} {{.Owner}} {{.State}}">
+          <td>{{placeLink .System}}{{if .SecKnown}}<span class="sec-pill sec-{{.SecTier}}">{{.SecText}}</span>{{end}}</td>
+          <td>{{if .Region}}{{.Region}}{{else}}—{{end}}</td>
+          <td>{{.Occupier}}</td>
+          <td>{{.Owner}}</td>
+          <td class="iw-contest" data-sort="{{.Percent}}">{{if ge .Percent 0}}<span class="iw-contest-v">{{.Percent}}%</span><svg class="l-meter{{if eq .Tone "vulnerable"}} full{{end}}" viewBox="0 0 100 4" preserveAspectRatio="none" aria-hidden="true"><rect x="0" y="0" width="{{.Percent}}" height="4"/></svg>{{else}}<span class="iw-dim">{{.State}}</span>{{end}}</td>
+        </tr>
+      {{end}}
+      </tbody>
+    </table>
+    </div>
+    <p class="iw-note">Contested is victory points against the flip threshold, the same figure the game shows. A system at 100% is vulnerable and flips when the militia takes its infrastructure hub.{{if gt .Total (len .Systems)}} Showing the {{len .Systems}} most contested of {{.Total}} front-line systems.{{end}}</p>
   </section>
   {{end}}
   {{end}}
 {{else}}
-  <p class="prose">No intel to show yet.</p>
+  <div class="l-panel"><p class="iw-note">No intel to show yet.</p></div>
 {{end}}
+</div>
 {{end}}

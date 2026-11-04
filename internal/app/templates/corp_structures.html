@@ -5,47 +5,74 @@
 
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
 
-{{template "charselector" .CorpChars}}
+<div class="l-page">
+<div class="l-head">
+  <div class="l-head-pick">{{template "charselector" .CorpChars}}</div>
+  {{with .CorpStructs}}<p class="l-head-sum"><b>{{corpLink .CorpID .CorpTitle}}</b></p>{{end}}
+</div>
 
-{{if .CorpStructs}}
-<h2>{{corpLink .CorpStructs.CorpID .CorpStructs.CorpTitle}}</h2>
-<p><small><a href="/corporations/">Overview</a> · <a href="/corporations/members/?character={{.CorpStructs.CharacterID}}">Members</a> · <a href="/corporations/wallets/?character={{.CorpStructs.CharacterID}}">Wallets</a> · <a href="/corporations/orders/?character={{.CorpStructs.CharacterID}}">Orders</a> · <a href="/corporations/assets/?character={{.CorpStructs.CharacterID}}">Assets</a> · Structures · <a href="/corporations/killmails/?character={{.CorpStructs.CharacterID}}">Killmails</a></small></p>
-
-  {{if .CorpStructs.Forbidden}}
-  {{if .CorpStructs.RoleMissing}}
-  <p>Needs the <b>{{.CorpStructs.RoleMissing}}</b> role in game. {{.CorpStructs.CharacterName}} doesn't hold it, so ESI won't share this corporation's structures. They appear here once they do.</p>
+{{with .CorpStructs}}
+  {{if .Forbidden}}
+  <div class="l-panel co-gate">
+  {{if .RoleMissing}}
+  <p>Needs the <b>{{.RoleMissing}}</b> role in game. {{.CharacterName}} doesn't hold it, so ESI won't share this corporation's structures. They appear here once they do.</p>
   {{else}}
-  <p>Structures were refused by ESI (403). They'll appear here once {{.CorpStructs.CharacterName}} holds the Station Manager role in this corporation.</p>
+  <p>Structures were refused by ESI (403). They'll appear here once {{.CharacterName}} holds the Station Manager role in this corporation.</p>
   {{end}}
-  {{else if .CorpStructs.NoFeeder}}
-  <p>{{.CorpStructs.CharacterName}} hasn't granted the corporation permissions that feed the structures, so nobody is sharing this corporation's data with EveSynapse yet. <a href="{{.CorpStructs.AddScopesURL}}">Add the corporation permissions</a>. EVE asks for them on top of what is already granted.</p>
-  {{else if .CorpStructs.Warming}}
-  <p>Still syncing.{{if .IsAdmin}} Progress is on the <a href="/admin/sync/">Sync page</a>.{{end}}</p>
-  {{else if .CorpStructs.Loaded}}
-  {{if .CorpStructs.Rows}}
-  {{range .CorpStructs.Rows}}
-    <section class="foldable">
-    <h3>{{structureLink .LinkID .Name}}</h3>
-    <div class="tw">
-    <table>
-      <tbody>
-        <tr><th>Type</th><td>{{itemLink .TypeID .Type}}</td></tr>
-        <tr><th>System</th><td>{{.System}}</td></tr>
-        <tr><th>State</th><td>{{.State}}</td></tr>
-        {{if .Fuel}}<tr><th>Fuel expires</th><td>{{.Fuel}}{{if .FuelLeft}} ({{.FuelLeft}}){{end}}</td></tr>{{end}}
-        {{if .Timer}}<tr><th>Reinforce ends</th><td>{{.Timer}}</td></tr>{{end}}
-        {{if .Reinf}}<tr><th>Reinforce window</th><td>{{.Reinf}}</td></tr>{{end}}
-        {{if .Services}}<tr><th>Services</th><td>{{range $i, $s := .Services}}{{if $i}}<br>{{end}}{{$s}}{{end}}</td></tr>{{end}}
-      </tbody>
-    </table>
+  </div>
+  {{else if .NoFeeder}}
+  <div class="l-panel co-gate"><p>{{.CharacterName}} hasn't granted the corporation permissions that feed the structures, so nobody is sharing this corporation's data with EveSynapse yet. <a href="{{.AddScopesURL}}">Add the corporation permissions</a>. EVE asks for them on top of what is already granted.</p></div>
+  {{else if .Warming}}
+  <div class="l-panel co-gate"><p>Still syncing.{{if $.IsAdmin}} Progress is on the <a href="/admin/sync/">Sync page</a>.{{end}}</p></div>
+  {{else if .Loaded}}
+  {{if .Rows}}
+  <div class="l-tiles">
+    <div class="l-stat"><span class="l-stat-label">Structures</span><span class="l-stat-value">{{len .Rows}}</span><span class="l-stat-sub">Upwell structures the corporation owns</span></div>
+    <div class="l-stat{{if .LowFuel}} warn{{else}} ok{{end}}"><span class="l-stat-label">Low on fuel</span><span class="l-stat-value">{{.LowFuel}}</span><span class="l-stat-sub">Under 7 days left</span></div>
+    <div class="l-stat{{if .Reinforced}} warn{{else}} ok{{end}}"><span class="l-stat-label">Reinforced</span><span class="l-stat-value">{{.Reinforced}}</span><span class="l-stat-sub">Under a timer now</span></div>
+    <div class="l-stat{{if .Offline}} warn{{else}} ok{{end}}"><span class="l-stat-label">Services offline</span><span class="l-stat-value">{{.Offline}}</span><span class="l-stat-sub">Service modules not running</span></div>
+  </div>
+
+  <div class="co-cards">
+  {{range .Rows}}
+  {{$tone := .StateTone}}{{if not $tone}}{{$tone = .FuelTone}}{{end}}
+  <article class="l-panel co-struct{{if $tone}} co-{{$tone}}{{end}}">
+    <div class="co-struct-head">
+      <img src="https://images.evetech.net/types/{{.TypeID}}/render?size=64" alt="" width="56" height="56" loading="lazy" data-fallback-src="/static/img/item.svg">
+      <div class="co-struct-id">
+        <h3>{{structureLink .LinkID .Name}}</h3>
+        <p class="co-dim">{{itemLink .TypeID .Type}} · {{.System}}</p>
+      </div>
+      <span class="co-state{{if .StateTone}} co-{{.StateTone}}{{end}}">{{.State}}</span>
     </div>
-    </section>
+    {{if .Fuel}}
+    <div class="co-fuel{{if .FuelTone}} co-{{.FuelTone}}{{end}}">
+      <span class="co-fuel-l">Fuel</span><span class="co-fuel-v">{{if .FuelLeft}}{{.FuelLeft}}{{end}}</span>
+      <span class="sharebar"><span class="fill" data-w="{{.FuelPct}}"></span></span>
+      <small class="co-dim">Runs out {{.Fuel}}</small>
+    </div>
+    {{else}}
+    <p class="co-dim"><small>No fuel reported: the structure runs without service modules, or ESI did not say.</small></p>
+    {{end}}
+    <dl class="co-facts">
+      {{if .Timer}}<div><dt>Reinforce ends</dt><dd>{{if .TimerAt}}<span data-finish="{{.TimerAt}}">{{.Timer}}</span>{{else}}{{.Timer}}{{end}}</dd></div>{{end}}
+      {{if .Unanchors}}<div><dt>Unanchors</dt><dd>{{.Unanchors}}</dd></div>{{end}}
+      {{if .Reinf}}<div><dt>Reinforce window</dt><dd>{{.Reinf}}</dd></div>{{end}}
+    </dl>
+    {{if .Services}}
+    <ul class="co-svcs" aria-label="Services">
+      {{range .Services}}<li class="co-svc{{if not .Online}} off{{end}}">{{.Name}} <small>{{.State}}</small></li>{{end}}
+    </ul>
+    {{end}}
+  </article>
   {{end}}
+  </div>
   {{else}}
-  <p><small>This corporation owns no Upwell structures.</small></p>
+  <div class="l-panel co-gate"><p>This corporation owns no Upwell structures.</p></div>
   {{end}}
   {{end}}
 {{else}}
   <p>No corporation to show yet. <a href="/auth/link">Link a character</a> first.</p>
 {{end}}
+</div>
 {{end}}

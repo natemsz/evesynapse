@@ -21,7 +21,7 @@
      names, panel titles, and the picker chips. The canvas reads
      --map-font-display back for its display labels. */
   --map-font-display: "Rajdhani", "Segoe UI", sans-serif;
-  font-family: "Saira Semi Condensed", "Inter", "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-family: "Eve Sans Neue", "Inter", "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif;
   --map-gate: rgba(255, 178, 120, 0.2);
   --map-gate-inter: rgba(255, 128, 64, 0.42);
   --map-gate-hot: #ff8a3d;

@@ -99,7 +99,7 @@
         <td class="mt-num">{{.LPCost}}</td>
         <td class="mt-num" title="{{.ISKCost}} ISK">{{.ISKCostShort}}</td>
         <td class="mt-reqs">{{template "reqicons" .Requirements}}</td>
-        <td class="mt-num lp-worth" title="{{.Value}} ISK">{{.ValueShort}}</td>
+        <td class="mt-num lp-worth" title="{{.Value}} ISK" data-sort="{{.Value}}">{{sparkFig .ValueShort .Spark}}</td>
         <td class="mt-num lp-per" data-sort="{{.ISKPerLP}}">{{if .ISKPerLPDir}}<span class="mt-chg {{.ISKPerLPDir}}"><strong>{{.ISKPerLP}}</strong></span>{{else}}<strong>{{.ISKPerLP}}</strong>{{end}}<svg class="l-meter lp-meter" viewBox="0 0 100 4" preserveAspectRatio="none" aria-hidden="true"><rect x="0" y="0" width="{{.MeterPct}}" height="4"/></svg></td>
         <td class="mt-num">{{.TradedDay}}</td>
       </tr>

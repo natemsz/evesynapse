@@ -33,6 +33,17 @@ type publicHubPrice struct {
 	Region   string
 	BestSell string
 	BestBuy  string
+
+	// Spread is the hub's buy-to-sell margin, the gap as a share
+	// of the best sell ("" unless both sides have an order).
+	// CheapestSell and TopBuy mark the hub to buy from and the hub
+	// to sell to among the hubs listed (only when two or more
+	// hubs quote that side).
+	Spread       string
+	CheapestSell bool
+	TopBuy       bool
+
+	sell, buy float64
 }
 
 // publicShipView is one /ships/ page: the shared SDE detail, hub
@@ -115,7 +126,10 @@ func (app *Application) publicTypeMarket(ctx context.Context, typeID int64) (hub
 		if !want[region] {
 			continue
 		}
-		hub := publicHubPrice{Region: region}
+		hub := publicHubPrice{Region: region, sell: row.BestSell, buy: row.BestBuy}
+		if row.BestSell > 0 && row.BestBuy > 0 {
+			hub.Spread = strconv.FormatFloat((row.BestSell-row.BestBuy)/row.BestSell*100, 'f', 1, 64) + "%"
+		}
 		if row.BestSell > 0 {
 			hub.BestSell = esi.FormatISK(row.BestSell)
 		}
@@ -129,7 +143,37 @@ func (app *Application) publicTypeMarket(ctx context.Context, typeID int64) (hub
 	if forgeRegion == 0 && len(rows) > 0 {
 		forgeRegion = rows[0].RegionID
 	}
+	markBestHubs(hubs)
 	return hubs, forgeRegion
+}
+
+// markBestHubs flags the cheapest sell and the highest buy among
+// the listed hubs: where to buy the item and where to sell it.
+// A side quoted by fewer than two hubs has nothing to compare, so
+// it stays unmarked.
+func markBestHubs(hubs []publicHubPrice) {
+	sellAt, buyAt := -1, -1
+	sells, buys := 0, 0
+	for i, h := range hubs {
+		if h.sell > 0 {
+			sells++
+			if sellAt < 0 || h.sell < hubs[sellAt].sell {
+				sellAt = i
+			}
+		}
+		if h.buy > 0 {
+			buys++
+			if buyAt < 0 || h.buy > hubs[buyAt].buy {
+				buyAt = i
+			}
+		}
+	}
+	if sells > 1 {
+		hubs[sellAt].CheapestSell = true
+	}
+	if buys > 1 {
+		hubs[buyAt].TopBuy = true
+	}
 }
 
 // publicHistorySparkline draws one region's newest recorded

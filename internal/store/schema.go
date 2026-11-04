@@ -738,6 +738,13 @@ var pgAssetLocationValuesSchema string
 //go:embed schema_pg/120_market_station_heat.sql
 var pgMarketStationHeatSchema string
 
+// Step 121: the stat pack's 30-day price line (typical sell points,
+// low, high, mean), written per sweep beside the trend figures and
+// read by every price hover card.
+//
+//go:embed schema_pg/121_market_stat_sparks.sql
+var pgMarketStatSparksSchema string
+
 // Step 122: per owned blueprint, whether its owner can build one run
 // now (skills, and one run's materials in their hangars), folded by
 // the worker from the blueprint, asset and skill snapshots.
@@ -894,6 +901,7 @@ func schemaSteps() []schemaStep {
 		{118, "blueprint_pins", pgBlueprintPinsSchema, ""},
 		{119, "asset_location_values", pgAssetLocationValuesSchema, ""},
 		{120, "market_station_heat", pgMarketStationHeatSchema, ""},
+		{121, "market_stat_sparks", pgMarketStatSparksSchema, ""},
 		{122, "blueprint_buildable", pgBlueprintBuildableSchema, ""},
 	}
 }

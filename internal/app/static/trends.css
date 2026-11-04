@@ -44,3 +44,11 @@
 .tr-open .btn { width: 100%; justify-content: center; }
 .tr-h { margin: var(--space-4) 0 var(--space-2); color: var(--muted); font-family: var(--font-display); font-size: var(--fs-xs); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
 .tr-meter { margin: var(--space-2) 0 0; }
+
+/* The trend column: each item's stored 30-day typical sell line,
+   coloured by its 30-day direction. It sorts by the 30-day change. */
+.tr-trend { width: 1%; padding-inline: 0.9rem; white-space: nowrap; }
+.tr-line { display: block; width: 5rem; height: 1.4rem; }
+.tr-line polyline { fill: none; stroke: var(--muted); stroke-width: 1.4; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+.tr-line.up polyline { stroke: var(--success); }
+.tr-line.down polyline { stroke: var(--danger); }

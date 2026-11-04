@@ -451,7 +451,8 @@ const getMarketRegionStat = `-- name: GetMarketRegionStat :one
 SELECT region_id, type_id, best_sell, typical_sell, sell_band, best_buy, typical_buy, buy_band, sell_orders, buy_orders, sell_volume, buy_volume, updated_at, avg_daily_volume,
        sell_avg, sell_max, sell_p5, sell_stddev, buy_avg, buy_min, buy_p5, buy_stddev,
        sell_chg_1d, sell_chg_7d, sell_chg_30d, buy_chg_1d, buy_chg_7d, buy_chg_30d,
-       volatility_30d, history_days, avg_daily_volume_30d
+       volatility_30d, history_days, avg_daily_volume_30d,
+       sell_spark_30d, sell_low_30d, sell_high_30d, sell_mean_30d
 FROM market_region_stats
 WHERE region_id = $1 AND type_id = $2
 `
@@ -496,6 +497,10 @@ func (q *Queries) GetMarketRegionStat(ctx context.Context, arg GetMarketRegionSt
 		&i.Volatility30d,
 		&i.HistoryDays,
 		&i.AvgDailyVolume30d,
+		&i.SellSpark30d,
+		&i.SellLow30d,
+		&i.SellHigh30d,
+		&i.SellMean30d,
 	)
 	return i, err
 }
@@ -2170,7 +2175,8 @@ const listMarketRegionStatsByRegion = `-- name: ListMarketRegionStatsByRegion :m
 SELECT region_id, type_id, best_sell, typical_sell, sell_band, best_buy, typical_buy, buy_band, sell_orders, buy_orders, sell_volume, buy_volume, updated_at, avg_daily_volume,
        sell_avg, sell_max, sell_p5, sell_stddev, buy_avg, buy_min, buy_p5, buy_stddev,
        sell_chg_1d, sell_chg_7d, sell_chg_30d, buy_chg_1d, buy_chg_7d, buy_chg_30d,
-       volatility_30d, history_days, avg_daily_volume_30d
+       volatility_30d, history_days, avg_daily_volume_30d,
+       sell_spark_30d, sell_low_30d, sell_high_30d, sell_mean_30d
 FROM market_region_stats
 WHERE region_id = $1
 ORDER BY type_id
@@ -2217,6 +2223,10 @@ func (q *Queries) ListMarketRegionStatsByRegion(ctx context.Context, regionID in
 			&i.Volatility30d,
 			&i.HistoryDays,
 			&i.AvgDailyVolume30d,
+			&i.SellSpark30d,
+			&i.SellLow30d,
+			&i.SellHigh30d,
+			&i.SellMean30d,
 		); err != nil {
 			return nil, err
 		}
@@ -2235,7 +2245,8 @@ const listMarketRegionStatsByType = `-- name: ListMarketRegionStatsByType :many
 SELECT region_id, type_id, best_sell, typical_sell, sell_band, best_buy, typical_buy, buy_band, sell_orders, buy_orders, sell_volume, buy_volume, updated_at, avg_daily_volume,
        sell_avg, sell_max, sell_p5, sell_stddev, buy_avg, buy_min, buy_p5, buy_stddev,
        sell_chg_1d, sell_chg_7d, sell_chg_30d, buy_chg_1d, buy_chg_7d, buy_chg_30d,
-       volatility_30d, history_days, avg_daily_volume_30d
+       volatility_30d, history_days, avg_daily_volume_30d,
+       sell_spark_30d, sell_low_30d, sell_high_30d, sell_mean_30d
 FROM market_region_stats
 WHERE type_id = $1
 ORDER BY region_id
@@ -2282,6 +2293,10 @@ func (q *Queries) ListMarketRegionStatsByType(ctx context.Context, typeID int64)
 			&i.Volatility30d,
 			&i.HistoryDays,
 			&i.AvgDailyVolume30d,
+			&i.SellSpark30d,
+			&i.SellLow30d,
+			&i.SellHigh30d,
+			&i.SellMean30d,
 		); err != nil {
 			return nil, err
 		}
@@ -2426,7 +2441,8 @@ const listMarketRegionStatsForTypes = `-- name: ListMarketRegionStatsForTypes :m
 SELECT region_id, type_id, best_sell, typical_sell, sell_band, best_buy, typical_buy, buy_band, sell_orders, buy_orders, sell_volume, buy_volume, updated_at, avg_daily_volume,
        sell_avg, sell_max, sell_p5, sell_stddev, buy_avg, buy_min, buy_p5, buy_stddev,
        sell_chg_1d, sell_chg_7d, sell_chg_30d, buy_chg_1d, buy_chg_7d, buy_chg_30d,
-       volatility_30d, history_days, avg_daily_volume_30d
+       volatility_30d, history_days, avg_daily_volume_30d,
+       sell_spark_30d, sell_low_30d, sell_high_30d, sell_mean_30d
 FROM market_region_stats
 WHERE region_id = $1 AND type_id = ANY($2::bigint[])
 `
@@ -2477,6 +2493,62 @@ func (q *Queries) ListMarketRegionStatsForTypes(ctx context.Context, arg ListMar
 			&i.Volatility30d,
 			&i.HistoryDays,
 			&i.AvgDailyVolume30d,
+			&i.SellSpark30d,
+			&i.SellLow30d,
+			&i.SellHigh30d,
+			&i.SellMean30d,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listMarketStatSparks = `-- name: ListMarketStatSparks :many
+SELECT type_id, sell_spark_30d, sell_low_30d, sell_high_30d, sell_mean_30d
+FROM market_region_stats
+WHERE region_id = $1 AND type_id = ANY($2::bigint[])
+  AND sell_spark_30d <> ''
+`
+
+type ListMarketStatSparksParams struct {
+	RegionID int64   `json:"region_id"`
+	TypeIds  []int64 `json:"type_ids"`
+}
+
+type ListMarketStatSparksRow struct {
+	TypeID       int64   `json:"type_id"`
+	SellSpark30d string  `json:"sell_spark_30d"`
+	SellLow30d   float64 `json:"sell_low_30d"`
+	SellHigh30d  float64 `json:"sell_high_30d"`
+	SellMean30d  float64 `json:"sell_mean_30d"`
+}
+
+// The stored 30-day price lines for the types a page lists, in one
+// region: one bounded read per region for a whole table's hover
+// cards.
+func (q *Queries) ListMarketStatSparks(ctx context.Context, arg ListMarketStatSparksParams) ([]ListMarketStatSparksRow, error) {
+	rows, err := q.db.QueryContext(ctx, listMarketStatSparks, arg.RegionID, pq.Array(arg.TypeIds))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListMarketStatSparksRow
+	for rows.Next() {
+		var i ListMarketStatSparksRow
+		if err := rows.Scan(
+			&i.TypeID,
+			&i.SellSpark30d,
+			&i.SellLow30d,
+			&i.SellHigh30d,
+			&i.SellMean30d,
 		); err != nil {
 			return nil, err
 		}
@@ -2958,9 +3030,10 @@ func (q *Queries) ListMarketSweepTypeOrders(ctx context.Context, arg ListMarketS
 
 const listMarketTrendTypes = `-- name: ListMarketTrendTypes :many
 SELECT type_id, typical_sell, typical_buy, sell_orders, avg_daily_volume_30d,
-       sell_chg_1d, sell_chg_7d, sell_chg_30d, volatility_30d, history_days, updated_at
+       sell_chg_1d, sell_chg_7d, sell_chg_30d, volatility_30d, history_days, updated_at,
+       sell_spark_30d, sell_low_30d, sell_high_30d, sell_mean_30d
 FROM (
-    SELECT s.region_id, s.type_id, s.best_sell, s.typical_sell, s.sell_band, s.best_buy, s.typical_buy, s.buy_band, s.sell_orders, s.buy_orders, s.sell_volume, s.buy_volume, s.updated_at, s.avg_daily_volume, s.sell_avg, s.sell_max, s.sell_p5, s.sell_stddev, s.buy_avg, s.buy_min, s.buy_p5, s.buy_stddev, s.sell_chg_1d, s.sell_chg_7d, s.sell_chg_30d, s.buy_chg_1d, s.buy_chg_7d, s.buy_chg_30d, s.volatility_30d, s.history_days, s.avg_daily_volume_30d,
+    SELECT s.region_id, s.type_id, s.best_sell, s.typical_sell, s.sell_band, s.best_buy, s.typical_buy, s.buy_band, s.sell_orders, s.buy_orders, s.sell_volume, s.buy_volume, s.updated_at, s.avg_daily_volume, s.sell_avg, s.sell_max, s.sell_p5, s.sell_stddev, s.buy_avg, s.buy_min, s.buy_p5, s.buy_stddev, s.sell_chg_1d, s.sell_chg_7d, s.sell_chg_30d, s.buy_chg_1d, s.buy_chg_7d, s.buy_chg_30d, s.volatility_30d, s.history_days, s.avg_daily_volume_30d, s.sell_spark_30d, s.sell_low_30d, s.sell_high_30d, s.sell_mean_30d,
            CASE $1::text
                WHEN 'volatile' THEN s.volatility_30d
                WHEN 'rising' THEN CASE $2::int WHEN 1 THEN s.sell_chg_1d WHEN 30 THEN s.sell_chg_30d ELSE s.sell_chg_7d END
@@ -2998,6 +3071,10 @@ type ListMarketTrendTypesRow struct {
 	Volatility30d     sql.NullFloat64 `json:"volatility_30d"`
 	HistoryDays       int64           `json:"history_days"`
 	UpdatedAt         time.Time       `json:"updated_at"`
+	SellSpark30d      string          `json:"sell_spark_30d"`
+	SellLow30d        float64         `json:"sell_low_30d"`
+	SellHigh30d       float64         `json:"sell_high_30d"`
+	SellMean30d       float64         `json:"sell_mean_30d"`
 }
 
 // The Trends screen, ranked in SQL over the stat pack: the most
@@ -3034,6 +3111,10 @@ func (q *Queries) ListMarketTrendTypes(ctx context.Context, arg ListMarketTrendT
 			&i.Volatility30d,
 			&i.HistoryDays,
 			&i.UpdatedAt,
+			&i.SellSpark30d,
+			&i.SellLow30d,
+			&i.SellHigh30d,
+			&i.SellMean30d,
 		); err != nil {
 			return nil, err
 		}
@@ -4158,6 +4239,61 @@ type RefreshMarketRegionStatAvgVolumesParams struct {
 // but whose sold-per-day figure has not caught up.
 func (q *Queries) RefreshMarketRegionStatAvgVolumes(ctx context.Context, arg RefreshMarketRegionStatAvgVolumesParams) (int64, error) {
 	result, err := q.db.ExecContext(ctx, refreshMarketRegionStatAvgVolumes, arg.RegionID, pq.Array(arg.TypeIds))
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const refreshMarketStatPackSparks = `-- name: RefreshMarketStatPackSparks :execrows
+UPDATE market_region_stats s SET
+    sell_spark_30d = COALESCE(t.pts, ''),
+    sell_low_30d   = COALESCE(t.lo, 0),
+    sell_high_30d  = COALESCE(t.hi, 0),
+    sell_mean_30d  = COALESCE(t.mean, 0)
+FROM (
+    SELECT r.type_id, p.pts, p.lo, p.hi, p.mean
+    FROM market_region_stats r
+    LEFT JOIN (
+        SELECT x.type_id,
+               MIN(x.lo) AS lo, MIN(x.hi) AS hi, AVG(x.v) AS mean,
+               string_agg(
+                   to_char(2 + x.rn * 96.0 / (x.n - 1), 'FM9990.0') || ',' ||
+                   to_char(CASE WHEN x.hi > x.lo THEN 26 - (x.v - x.lo) / (x.hi - x.lo) * 24 ELSE 14 END, 'FM9990.0'),
+                   ' ' ORDER BY x.rn) AS pts
+        FROM (
+            SELECT dd.type_id, dd.typical_sell AS v,
+                   ROW_NUMBER() OVER w - 1 AS rn,
+                   COUNT(*) OVER (PARTITION BY dd.type_id) AS n,
+                   MIN(dd.typical_sell) OVER (PARTITION BY dd.type_id) AS lo,
+                   MAX(dd.typical_sell) OVER (PARTITION BY dd.type_id) AS hi
+            FROM market_region_stats_daily dd
+            WHERE dd.region_id = $1
+              AND dd.day > to_char($2::date - 30, 'YYYY-MM-DD')
+              AND dd.typical_sell > 0
+            WINDOW w AS (PARTITION BY dd.type_id ORDER BY dd.day)
+        ) x
+        WHERE x.n >= 2
+        GROUP BY x.type_id
+    ) p ON p.type_id = r.type_id
+    WHERE r.region_id = $1
+) t
+WHERE s.region_id = $1 AND s.type_id = t.type_id
+`
+
+type RefreshMarketStatPackSparksParams struct {
+	RegionID int64     `json:"region_id"`
+	Today    time.Time `json:"today"`
+}
+
+// The stat pack's 30-day price line (schema 121), derived for one
+// region inside the sweep's transaction right after the trend
+// figures: the typical sell of the daily rows from the last 30
+// days as polyline points in the 100 by 28 sparkline box (2 units
+// of padding, flat lines at mid height), with their low, high and
+// mean. A type with under two such days gets an empty line.
+func (q *Queries) RefreshMarketStatPackSparks(ctx context.Context, arg RefreshMarketStatPackSparksParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, refreshMarketStatPackSparks, arg.RegionID, arg.Today)
 	if err != nil {
 		return 0, err
 	}

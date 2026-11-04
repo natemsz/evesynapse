@@ -15,7 +15,7 @@
 .ch-hint { margin: var(--space-2) 0 0; color: var(--muted); font-size: var(--fs-md); }
 .ch-dim { display: block; color: var(--muted); font-size: var(--fs-sm); }
 .ch-cnt { margin-left: 0.3rem; color: var(--muted); font-weight: 500; }
-.ch code { padding: 0 0.3rem; border: 1px solid var(--hairline); border-radius: var(--r-xs); background: var(--surface-page); font-family: var(--font-body); font-size: 0.95em; }
+.ch code { padding: 0 0.3rem; border: 1px solid var(--hairline); border-radius: var(--r-xs); background: var(--surface-page); font-family: var(--font-body); font-size: var(--fs-rel-small); }
 
 /* The page's top: the main block beside its side panel. */
 .ch-top { --l-side: 20rem; --l-main-min: 60%; align-items: start; }

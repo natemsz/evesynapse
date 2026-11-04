@@ -48,8 +48,8 @@
     {{range $s.Rows}}
       <tr>
         <td><span class="mk-item"><img src="https://images.evetech.net/types/{{.TypeID}}/icon?size=32" alt="" width="28" height="28" loading="lazy" data-fallback-src="/static/img/item.svg"><span class="mk-item-text"><a href="/market/?type={{.TypeID}}&amp;region={{$s.DestID}}">{{.ItemName}}</a>{{if .OriginBest}}<small>Cheapest at {{placeLink .OriginStation}} ({{.OriginBest}} ISK)</small>{{end}}{{if .DestBest}}<small>Best buyer at {{placeLink .DestStation}} ({{.DestBest}} ISK)</small>{{end}}</span></span></td>
-        <td class="mt-num">{{.BuyTypical}}</td>
-        <td class="mt-num">{{.SellTypical}}</td>
+        <td class="mt-num">{{sparkFig .BuyTypical .BuySpark}}</td>
+        <td class="mt-num">{{sparkFig .SellTypical .SellSpark}}</td>
         <td class="mt-num">{{.ProfitItem}}</td>
         <td class="mt-num">{{.MarginPct}}</td>
         <td class="mt-num">{{.SoldPerDay}}</td>
@@ -77,8 +77,8 @@
     {{range $s.Pending}}
       <tr>
         <td><span class="mk-item"><img src="https://images.evetech.net/types/{{.TypeID}}/icon?size=32" alt="" width="28" height="28" loading="lazy" data-fallback-src="/static/img/item.svg"><a href="/market/?type={{.TypeID}}&amp;region={{$s.DestID}}">{{.ItemName}}</a></span></td>
-        <td class="mt-num">{{.BuyTypical}}</td>
-        <td class="mt-num">{{.SellTypical}}</td>
+        <td class="mt-num">{{sparkFig .BuyTypical .BuySpark}}</td>
+        <td class="mt-num">{{sparkFig .SellTypical .SellSpark}}</td>
         <td class="mt-num">{{.ProfitItem}}</td>
         <td class="mt-num">{{.MarginPct}}</td>
       </tr>

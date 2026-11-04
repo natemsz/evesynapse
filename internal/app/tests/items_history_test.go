@@ -40,7 +40,7 @@ func TestItemPageHistoryChart(t *testing.T) {
 		t.Fatalf("item page status = %d", code)
 	}
 	apptest.MustContain(t, "/items/type/34/ (chart)", body,
-		"Price history — The Forge",
+		"Price history, The Forge",
 		`class="pchart"`,
 		`data-chart-scrub="true"`,
 		"<polyline",
@@ -59,19 +59,15 @@ func TestItemPageHistoryChart(t *testing.T) {
 	if strings.Contains(body, `class="spark"`) {
 		t.Error("item page still renders the old bare sparkline")
 	}
-	// Per the owner's mock, the price history sits on the page
-	// glass below the item card, not inside it: the history
-	// heading follows the card's close, while Hub prices stays
-	// inside the card.
-	cardAt := strings.Index(body, `<section class="card">`)
-	cardEnd := cardAt + strings.Index(body[cardAt:], "</section>")
+	// The page reads as a fact sheet: the hub prices panel, then
+	// the price history in its own panel below it.
 	hubAt := strings.Index(body, "<h3>Hub prices</h3>")
-	histAt := strings.Index(body, "<h3>Price history")
-	if cardAt < 0 || hubAt < cardAt || hubAt > cardEnd {
-		t.Error("hub prices no longer inside the item card")
+	histAt := strings.Index(body, `<section class="l-panel ib-history">`)
+	if hubAt < 0 || histAt < 0 {
+		t.Fatal("item page lacks the hub prices or price history panel")
 	}
-	if histAt < cardEnd {
-		t.Error("price history renders inside the item card; the mock puts it on the glass below the card")
+	if histAt < hubAt {
+		t.Error("price history renders above the hub prices; it belongs below them")
 	}
 }
 
@@ -106,7 +102,7 @@ func TestItemPageHistoryPendingQueuesWant(t *testing.T) {
 	// state — it names the shared fragment it will poll until the
 	// chart swaps in, without the reader going anywhere.
 	apptest.MustContain(t, "/items/type/34/ (pending)", body,
-		"Price history — The Forge",
+		"Price history, The Forge",
 		`data-poll-state="pending"`,
 		`data-poll-url="/market/history-fragment?region=10000002&amp;type=34&amp;range=3m"`,
 		"This item is queued",

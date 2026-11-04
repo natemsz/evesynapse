@@ -5,6 +5,7 @@ import (
 	"evesynapse/internal/app/module"
 	"evesynapse/internal/humanize"
 	"fmt"
+	"html/template"
 	"net/http"
 	"sort"
 	"time"
@@ -23,8 +24,12 @@ type orderRow struct {
 	Volume string // "remain / total"
 	Loc    module.PlaceRef
 	Region string
-	Range  string
-	Issued string
+	// RegionID keys the price hover card; Spark is that card (the
+	// stat pack's stored 30-day line), empty when there is none.
+	RegionID int64
+	Spark    template.HTML
+	Range    string
+	Issued   string
 	// Expires: open orders ("" for history rows).
 	Expires string
 	// Status: open sell rows only — the same order-health
@@ -297,17 +302,18 @@ func (app *mod) handleOrders(w http.ResponseWriter, r *http.Request) {
 			side = "Buy"
 		}
 		return orderRow{
-			Item:   app.deps.TypeNameOrID(ctx, o.TypeID),
-			TypeID: o.TypeID,
-			Side:   side,
-			Price:  esi.FormatISK(o.Price),
-			Volume: fmt.Sprintf("%s / %s", esi.FormatInt(o.VolumeRemain), esi.FormatInt(o.VolumeTotal)),
-			Loc:    app.deps.LinkPlace(ctx, o.LocationID, app.deps.EconLocationTitle(ctx, o.LocationID)),
-			LocID:  o.LocationID,
-			Region: app.orderRegionName(ctx, regions, o.RegionID),
-			Range:  module.OrderRangeLabel(o.Range),
-			Issued: humanize.Finish(o.Issued),
-			Corp:   o.IsCorporation,
+			Item:     app.deps.TypeNameOrID(ctx, o.TypeID),
+			TypeID:   o.TypeID,
+			Side:     side,
+			Price:    esi.FormatISK(o.Price),
+			Volume:   fmt.Sprintf("%s / %s", esi.FormatInt(o.VolumeRemain), esi.FormatInt(o.VolumeTotal)),
+			Loc:      app.deps.LinkPlace(ctx, o.LocationID, app.deps.EconLocationTitle(ctx, o.LocationID)),
+			LocID:    o.LocationID,
+			Region:   app.orderRegionName(ctx, regions, o.RegionID),
+			RegionID: o.RegionID,
+			Range:    module.OrderRangeLabel(o.Range),
+			Issued:   humanize.Finish(o.Issued),
+			Corp:     o.IsCorporation,
 		}
 	}
 
@@ -426,6 +432,22 @@ func (app *mod) handleOrders(w http.ResponseWriter, r *http.Request) {
 	// Order history: stored lifecycle rows for the active
 	// character (see buildOrderLifecycle -- cache-only).
 	view.LifecycleSummary, view.LifecycleRows = app.buildOrderLifecycle(ctx, active.CharacterID)
+
+	// Price hover cards for the open and closed rows: one stored
+	// read per region for the whole page.
+	var keys []module.SparkKey
+	for _, rows := range [][]orderRow{view.OpenRows, view.HistoryRows} {
+		for _, r := range rows {
+			keys = append(keys, module.SparkKey{RegionID: r.RegionID, TypeID: r.TypeID})
+		}
+	}
+	if cards := app.deps.PriceSparks(ctx, keys); len(cards) > 0 {
+		for _, rows := range [][]orderRow{view.OpenRows, view.HistoryRows} {
+			for i := range rows {
+				rows[i].Spark = cards[module.SparkKey{RegionID: rows[i].RegionID, TypeID: rows[i].TypeID}]
+			}
+		}
+	}
 
 	app.deps.Render(ctx, w, http.StatusOK, "orders.html", data)
 }

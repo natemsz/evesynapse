@@ -171,9 +171,9 @@
      minor controls, where the panel radius reads over-round. */
   --r-xs: 0.35rem;
   /* The one type scale: every font-size in every sheet names a
-     step here. Dense data sits in the middle steps; display type
-     takes the top ones. */
-  --fs-2xs: 0.625rem;
+     step here, or one of the relative steps after it. Dense data
+     sits in the middle steps; display type takes the top ones. */
+  --fs-2xs: 0.7rem;
   --fs-xs: 0.8rem;
   --fs-sm: 0.9rem;
   --fs-md: 0.96rem;
@@ -185,6 +185,14 @@
   --fs-5xl: 1.85rem;
   --fs-6xl: 2.5rem;
   --fs-7xl: 3.75rem;
+  /* Relative steps, for text sized against its own parent rather
+     than the page: a <small> inside any line, glyphs riding on a
+     label (sort arrows, chevrons, carets), the security pill inside
+     a system name, and an ISK figure's decimals. */
+  --fs-rel-small: 0.95em;
+  --fs-rel-pill: 0.85em;
+  --fs-rel-glyph: 0.75em;
+  --fs-rel-dec: 0.56em;
   color-scheme: dark;
   /* The extra text-tone variables below exist so the light theme can
      re-tone them. */
@@ -364,8 +372,8 @@ h4 { font-size: var(--fs-sm); }
 
 /* Secondary text: quieter in colour, nearly the size of the text around
    it (the browser's own "smaller" is under 11px here). */
-small { color: var(--muted); font-size: var(--fs-md); }
-footer small { font-size: smaller; }
+small { color: var(--muted); font-size: var(--fs-rel-small); }
+footer small { font-size: var(--fs-rel-small); }
 
 /* --- top bar --- */
 header {
@@ -447,7 +455,7 @@ header a.navlink.active,
   color: var(--text-bright);
   box-shadow: inset 0 -2px 0 var(--accent);
 }
-header a.navlink.utility { font-size: var(--fs-sm); color: var(--muted); }
+header a.navlink.utility { font-size: var(--fs-xs); color: var(--muted); }
 .branch { position: relative; }
 .branch > summary {
   cursor: pointer;
@@ -463,7 +471,7 @@ header a.navlink.utility { font-size: var(--fs-sm); color: var(--muted); }
   content: "▾";
   display: inline-block;
   margin-left: 0.35em;
-  font-size: var(--fs-xs);
+  font-size: var(--fs-rel-glyph);
   transition: transform 0.15s ease;
 }
 .branch[open] > summary { color: var(--text-bright); }
@@ -682,407 +690,7 @@ main {
   background: var(--row-alt);
   border-block: 1px solid var(--box-edge);
 }
-/* --- appraisal page ----------------------------------------------
-   The split workbench: a paste console on the left, and on the
-   right the permalink bar, four telemetry cards, the hub
-   comparison pills and the tabbed results panel; the saved
-   list closes the page. Money figures share one mono size and
-   never wrap mid-figure. No glows: the standard glass .box
-   panels, buttons and segmented control carry the page. */
-.ap-head {
-  display: flex; align-items: flex-end; justify-content: space-between;
-  gap: 1rem; flex-wrap: wrap; margin-bottom: 1rem;
-}
-.ap-intro { margin: 0; max-width: 62rem; }
-.ap-samples { display: flex; align-items: center; gap: 0.45rem; flex-wrap: wrap; }
-.ap-samples-lbl {
-  font-family: "JetBrains Mono", ui-monospace, monospace;
-  font-size: var(--fs-xs); color: var(--muted);
-}
-.ap-samplebtn {
-  font: inherit; font-size: var(--fs-xs); color: var(--text); cursor: pointer;
-  background: var(--row); border: 1px solid var(--box-edge);
-  border-radius: var(--r-xs); padding: 0.3rem 0.6rem;
-}
-.ap-samplebtn:hover { background: var(--row-hover); }
-.ap-bench {
-  display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 11fr);
-  gap: 1.2rem; align-items: start; margin-bottom: 1rem;
-}
-.ap-bench.solo { grid-template-columns: minmax(0, 1fr); }
-.ap-bench.solo .ap-form { max-width: 64rem; }
-.ap-right { display: flex; flex-direction: column; gap: 0.9rem; min-width: 0; }
-.ap-label {
-  font-size: var(--fs-xs); font-weight: 700; letter-spacing: 0.06em;
-  text-transform: uppercase; color: var(--muted);
-}
-.ap-chips {
-  display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center;
-  padding-bottom: 0.7rem; border-bottom: 1px solid var(--box-edge);
-}
-.ap-chip {
-  font-family: "JetBrains Mono", ui-monospace, monospace;
-  font-size: var(--fs-2xs); text-transform: uppercase; letter-spacing: 0.04em;
-  color: var(--muted); background: var(--row);
-  border: 1px solid var(--box-edge); border-radius: var(--r-xs);
-  padding: 0.22rem 0.5rem;
-}
-.ap-chip.cy { color: #7dd3fc; }
-.ap-chip.ro { color: #fda4af; }
-.ap-chip.am { color: #fcd34d; }
-.ap-rules { margin-top: 0.6rem; }
-.ap-rules summary {
-  cursor: pointer; font-size: var(--fs-xs); font-weight: 600;
-  color: var(--note);
-}
-.ap-fld-head {
-  display: flex; align-items: center; justify-content: space-between;
-  gap: 0.6rem; margin: 0.85rem 0 0.35rem;
-}
-.ap-fld-tools { display: inline-flex; align-items: center; gap: 0.6rem; }
-.ap-count {
-  font-family: "JetBrains Mono", ui-monospace, monospace;
-  font-size: var(--fs-xs); color: var(--muted); background: var(--row);
-  border: 1px solid var(--box-edge); border-radius: var(--r-xs);
-  padding: 0.14rem 0.45rem; white-space: nowrap;
-}
-.ap-clearlink {
-  font-family: "JetBrains Mono", ui-monospace, monospace;
-  font-size: var(--fs-xs); color: var(--muted);
-  background: none; border: none; padding: 0; cursor: pointer;
-}
-.ap-clearlink:hover { color: var(--text-bright); }
-.ap-field { display: flex; flex-direction: column; gap: 0.3rem; }
-.ap-field textarea {
-  width: 100%; resize: vertical;
-  font-family: "JetBrains Mono", ui-monospace, monospace; font-size: var(--fs-xs);
-}
-.ap-drawer {
-  margin-top: 0.9rem; background: var(--row);
-  border: 1px solid var(--box-edge); border-radius: var(--r-sm);
-}
-.ap-drawer summary {
-  display: flex; align-items: center; justify-content: space-between;
-  gap: 0.6rem; padding: 0.55rem 0.8rem; cursor: pointer;
-  font-family: "JetBrains Mono", ui-monospace, monospace;
-  font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: 0.05em;
-  color: var(--muted); list-style: none;
-}
-.ap-drawer summary::-webkit-details-marker { display: none; }
-.ap-badge {
-  background: var(--accent); color: #16100b; font-weight: 700;
-  border-radius: var(--r-xs); padding: 0.1rem 0.45rem;
-  font-size: var(--fs-2xs); letter-spacing: 0.06em;
-}
-.ap-drawer-body { padding: 0 0.8rem 0.8rem; }
-.ap-params {
-  margin-top: 0.9rem; background: var(--row);
-  border: 1px solid var(--box-edge); border-radius: var(--r-sm);
-  padding: 0.8rem;
-}
-.ap-pgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.8rem; }
-.ap-pfield { display: flex; flex-direction: column; gap: 0.3rem; min-width: 0; }
-.ap-pfield select, .ap-pfield input { width: 100%; }
-.ap-lrow {
-  display: flex; align-items: center; justify-content: space-between;
-  gap: 0.5rem; flex-wrap: wrap;
-}
-.ap-presets { display: inline-flex; gap: 0.3rem; }
-.ap-preset {
-  font-family: "JetBrains Mono", ui-monospace, monospace;
-  font-size: var(--fs-2xs); color: var(--muted); cursor: pointer;
-  background: var(--row-alt); border: 1px solid var(--box-edge);
-  border-radius: var(--r-xs); padding: 0.14rem 0.45rem;
-}
-.ap-preset.on {
-  background: var(--accent); border-color: var(--accent);
-  color: #16100b; font-weight: 700;
-}
-.ap-actions { display: flex; gap: 0.7rem; margin: 1rem 0 0; }
-.ap-actions .ap-appraise { flex: 1; }
-.ap-linkbar {
-  display: flex; align-items: center; justify-content: space-between;
-  gap: 0.8rem; flex-wrap: wrap;
-}
-.ap-linkmain { display: inline-flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
-.ap-priced {
-  font-family: "JetBrains Mono", ui-monospace, monospace;
-  font-size: var(--fs-xs); color: var(--muted);
-}
-.ap-sharebox {
-  display: inline-flex; align-items: center; gap: 0.5rem;
-  background: var(--input-bg); border: 1px solid var(--box-edge);
-  border-radius: var(--r-xs); padding: 0.2rem 0.25rem 0.2rem 0.6rem;
-}
-.ap-shareurl {
-  font-family: "JetBrains Mono", ui-monospace, monospace;
-  font-size: var(--fs-xs); color: var(--note); text-decoration: none;
-  white-space: nowrap;
-}
-.ap-linkacts { display: inline-flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
-.ap-reprice { display: inline-flex; align-items: center; gap: 0.4rem; }
-.ap-reprice input[type="number"] { width: 4.5rem; }
-.ap-delform { display: inline-flex; }
-.ap-delbtn {
-  font: inherit; color: var(--danger); cursor: pointer;
-  background: var(--row); border: 1px solid var(--box-edge);
-  border-radius: var(--r-xs); padding: 0.35rem 0.5rem;
-  display: inline-flex; align-items: center;
-}
-.ap-delbtn:hover { background: var(--row-hover); }
-/* The summary cards size to their figures: each card keeps at
-   least 13rem, so the nowrap .ap-cv value always fits inside its
-   own card, and the row rewraps as whole cards below that —
-   four across on a wide bench, two across in the band. */
-.ap-hud { display: grid; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); gap: 0.8rem; }
-.ap-card { min-width: 0; }
-.ap-card.hero { border-color: color-mix(in srgb, var(--accent) 55%, transparent); }
-.ap-ck {
-  display: flex; align-items: center; justify-content: space-between;
-  gap: 0.5rem;
-  font-family: "JetBrains Mono", ui-monospace, monospace;
-  font-size: var(--fs-2xs); text-transform: uppercase; letter-spacing: 0.05em;
-  color: var(--muted);
-}
-.ap-copybtn {
-  color: var(--muted); background: none; border: none; padding: 0;
-  cursor: pointer; display: inline-flex; align-items: center;
-}
-.ap-copybtn:hover { color: var(--text-bright); }
-.ap-cv {
-  font-family: "JetBrains Mono", ui-monospace, monospace;
-  font-size: var(--fs-lg); font-weight: 700; color: var(--text-bright);
-  white-space: nowrap; margin-top: 0.3rem;
-}
-.ap-cs {
-  font-family: "JetBrains Mono", ui-monospace, monospace;
-  font-size: var(--fs-xs); color: var(--muted); margin-top: 0.3rem;
-  display: flex; justify-content: space-between; gap: 0.5rem;
-}
-.ap-accent { color: var(--success); }
-.ap-pctflag { color: var(--note); }
-.ap-good { color: #6ee7b7; }
-.ap-warn { color: #fcd34d; }
-.ap-coverage { margin: 0; }
-.ap-hubpanel {
-  display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap;
-}
-.ap-hubstrip-label {
-  font-family: "JetBrains Mono", ui-monospace, monospace;
-  font-size: var(--fs-2xs); text-transform: uppercase; letter-spacing: 0.05em;
-  color: var(--muted);
-}
-.ap-hubs { margin-left: auto; display: flex; gap: 0.45rem; flex-wrap: wrap; }
-.ap-hubform { display: inline-flex; }
-.ap-hub {
-  font-family: "JetBrains Mono", ui-monospace, monospace;
-  font-size: var(--fs-xs); white-space: nowrap; cursor: pointer;
-  color: var(--muted); background: var(--row);
-  border: 1px solid var(--box-edge); border-radius: var(--r-xs);
-  padding: 0.32rem 0.6rem;
-}
-.ap-hub:hover { background: var(--row-hover); }
-.ap-hub.on {
-  color: var(--text-bright); border-color: var(--accent);
-  background: var(--row-hover);
-}
-.ap-hub-delta { font-size: var(--fs-2xs); color: var(--muted-2); }
-.ap-reshead {
-  display: flex; align-items: center; justify-content: space-between;
-  gap: 0.8rem; flex-wrap: wrap;
-  margin: -0.7rem -0.85rem 0.75rem; padding: 0.55rem 0.85rem;
-  background: var(--row-alt); border-bottom: 1px solid var(--box-edge);
-  border-radius: var(--r-xs) var(--r-xs) 0 0;
-}
-.ap-vtabs > * { background: var(--row-alt); }
-.ap-vtabs > *:hover { background: var(--row-hover); }
-.ap-vtabs > .on, .ap-vtabs > [aria-selected="true"] { background: var(--accent); color: #16100b; }
-.ap-vtabs > .on:hover, .ap-vtabs > [aria-selected="true"]:hover { background: var(--accent); }
-.ap-result th.ap-r, .ap-result td.ap-r,
-.ap-saved td.ap-r, .ap-saved th.ap-r { text-align: right; }
-.ap-num {
-  font-family: "JetBrains Mono", ui-monospace, monospace;
-  font-size: var(--fs-xs); white-space: nowrap;
-}
-/* The results tables lay out fixed inside the panel, so the
-   figures' columns hold their width and the item column
-   takes what is left: no sideways scroll at desktop widths. */
-#ap-panel-items table, .ap-reprocess table { table-layout: fixed; width: 100%; }
-#ap-panel-items th:nth-child(2) { width: 3rem; }
-#ap-panel-items th:nth-child(3) { width: 8rem; }
-#ap-panel-items th:nth-child(4) { width: 8.5rem; }
-#ap-panel-items th:nth-child(5) { width: 5.5rem; }
-#ap-panel-items th:nth-child(6) { width: 9.5rem; }
-#ap-panel-items th:nth-child(7) { width: 6.8rem; }
-.ap-reprocess th:nth-child(2) { width: 3rem; }
-.ap-reprocess th:nth-child(4), .ap-reprocess th:nth-child(5) { width: 9rem; }
-.ap-num.strong { font-weight: 700; color: var(--text-bright); }
-.ap-bar {
-  height: 3px; border-radius: 2px; margin-top: 0.3rem;
-  background: linear-gradient(90deg, #e05500, #ffb84d);
-}
-.ap-total {
-  display: flex; align-items: baseline; justify-content: flex-end;
-  gap: 1rem; border-top: 1px solid var(--box-edge);
-  margin-top: 0.7rem; padding-top: 0.6rem;
-}
-.ap-vol {
-  margin-right: auto;
-  font-family: "JetBrains Mono", ui-monospace, monospace;
-  font-size: var(--fs-xs); color: var(--muted); white-space: nowrap;
-}
-.ap-total-label {
-  font-size: var(--fs-xs); font-weight: 700; letter-spacing: 0.08em;
-  text-transform: uppercase; color: var(--muted);
-}
-.ap-total-fig {
-  font-family: "JetBrains Mono", ui-monospace, monospace;
-  font-size: var(--fs-lg); font-weight: 700; color: var(--text-bright);
-  white-space: nowrap;
-}
-.ap-saved { margin-bottom: 1rem; }
-.ap-saved-head {
-  display: flex; align-items: center; justify-content: space-between;
-  gap: 0.6rem; flex-wrap: wrap; margin-bottom: 0.5rem;
-}
-.ap-saved-title {
-  margin: 0; font-family: "Rajdhani", "Segoe UI", sans-serif;
-  font-size: var(--fs-lg); font-weight: 700; text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-.ap-hidefailed {
-  display: inline-flex; align-items: center; gap: 0.45rem;
-  font-size: var(--fs-sm); color: var(--muted); cursor: pointer;
-}
-.ap-when {
-  font-family: "JetBrains Mono", ui-monospace, monospace;
-  font-size: var(--fs-xs); color: var(--gold);
-}
-.ap-cov {
-  display: inline-block; white-space: nowrap;
-  font-family: "JetBrains Mono", ui-monospace, monospace;
-  font-size: var(--fs-2xs); color: #6ee7b7;
-  border: 1px solid rgba(16, 185, 129, 0.45);
-  background: rgba(2, 44, 34, 0.5);
-  border-radius: var(--r-xs); padding: 0.16rem 0.5rem;
-}
-.ap-cov.part {
-  color: #fcd34d; border-color: rgba(245, 158, 11, 0.45);
-  background: rgba(69, 26, 3, 0.5);
-}
-.ap-inlineform { display: inline-flex; }
-@media (max-width: 70rem) {
-  .ap-bench { grid-template-columns: minmax(0, 1fr); }
-  .ap-hud { grid-template-columns: repeat(2, 1fr); }
-}
-@media (max-width: 640px) {
-  .ap-pgrid { grid-template-columns: 1fr; }
-}
 @media (max-width: 45rem) {
-  /* Phone widths: the fixed-layout reprocess table holds its
-     column widths and scrolls sideways inside its .tw wrapper
-     instead of crushing its columns. The itemized table gets
-     the stacked-card treatment in the pass-2 block below. */
-  .ap-reprocess table { min-width: 42rem; }
-}
-/* --- appraisal on phones (mobile pass 2) -------------------------
-   Phone widths turn the appraisal bench into a native-feeling
-   two-view surface: a sticky segmented switch (Paste Input /
-   Valuation, wired in app.js — both render hidden and stay
-   display:none until it unhides them, so without JavaScript the
-   page is the stacked bench it always was), the summary cards
-   as a compact 2x2 grid whose hero leads with its compact
-   figure, the itemized results as stacked cards, and a fixed
-   bottom dock re-surfacing actions the page already has. */
-.ap-switch, .ap-dock { display: none; }
-@media (max-width: 45rem) {
-  .ap-switch:not([hidden]) {
-    display: flex; position: sticky; top: var(--sticky-top); z-index: 30;
-    width: 100%; margin-bottom: 0.9rem;
-  }
-  .ap-switch > * { flex: 1 1 0; justify-content: center; }
-  .ap-bench { scroll-margin-top: 8.5rem; }
-  .ap-bench.ap-switched[data-ap-view="input"] > .ap-right { display: none; }
-  .ap-bench.ap-switched[data-ap-view="result"] > .ap-form { display: none; }
-  /* The sample pastes become one swipeable strip. */
-  .ap-samples { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 0.3rem; }
-  .ap-samples > * { flex: none; }
-  /* The summary grid stays two across; the hero card leads with
-     its compact figure and demotes the exact figure beneath it
-     (both are already in the markup). The clamp keeps every
-     card's exact figure inside its half-width cell. */
-  .ap-hud { gap: 0.6rem; }
-  .ap-hud .ap-cv { font-size: clamp(var(--fs-2xs), 3.4vw, var(--fs-lg)); }
-  .ap-card.hero { display: flex; flex-direction: column; }
-  .ap-card.hero .ap-cs { display: contents; }
-  .ap-card.hero .ap-cs > span:first-child {
-    order: 1; margin-top: 0.3rem;
-    font-family: "JetBrains Mono", ui-monospace, monospace;
-    font-size: var(--fs-lg); font-weight: 700; color: var(--text-bright);
-  }
-  .ap-card.hero .ap-cv {
-    order: 2; font-size: var(--fs-xs); font-weight: 400; color: var(--muted);
-  }
-  .ap-card.hero .ap-pctflag { order: 3; margin-top: 0.3rem; }
-  /* The itemized results as stacked cards: the name (with its
-     note and value-share bar) heads the card; the figures sit
-     under their column labels; basis and as-of close it. */
-  #ap-panel-items .tw { overflow-x: visible; }
-  #ap-panel-items table {
-    display: block; width: 100%; min-width: 0; table-layout: auto;
-  }
-  #ap-panel-items thead { display: none; }
-  #ap-panel-items tbody { display: block; }
-  #ap-panel-items tr {
-    display: grid; grid-template-columns: minmax(0, 1fr) auto;
-    grid-template-areas:
-      "name name"
-      "qty total"
-      "vol unit"
-      "tier asof";
-    gap: 0.3rem 0.8rem; align-items: baseline;
-    background: var(--row); border: 1px solid var(--box-edge);
-    border-radius: var(--r-sm); padding: 0.55rem 0.7rem;
-    margin-bottom: 0.5rem;
-  }
-  #ap-panel-items td {
-    display: block; position: static; padding: 0;
-    border: none; background: transparent; text-align: left;
-  }
-  #ap-panel-items td:nth-child(1) { grid-area: name; }
-  #ap-panel-items td:nth-child(2) { grid-area: qty; }
-  #ap-panel-items td:nth-child(3) { grid-area: unit; text-align: right; }
-  #ap-panel-items td:nth-child(4) { grid-area: total; text-align: right; }
-  #ap-panel-items td:nth-child(5) { grid-area: vol; }
-  #ap-panel-items td:nth-child(6) { grid-area: tier; font-size: var(--fs-xs); }
-  #ap-panel-items td:nth-child(7) {
-    grid-area: asof; text-align: right; font-size: var(--fs-xs); color: var(--muted);
-  }
-  #ap-panel-items td[data-th]::before {
-    content: attr(data-th); display: block;
-    font-family: "JetBrains Mono", ui-monospace, monospace;
-    font-size: var(--fs-2xs); text-transform: uppercase; letter-spacing: 0.05em;
-    color: var(--muted); margin-bottom: 0.1rem;
-  }
-  #ap-panel-items td:nth-child(6)::before,
-  #ap-panel-items td:nth-child(7)::before { display: none; }
-  .ap-total { flex-wrap: wrap; row-gap: 0.3rem; }
-  /* The bottom action dock: fixed, thumb-zone, only the actions
-     the result already offers (edit the paste, copy the
-     multi-sell list, copy the share link). It floats over the
-     phone bottom bar (mobile pass 3), so its rest position and
-     the room the page makes for it both grow by the bar's
-     height. */
-  .ap-dock:not([hidden]) {
-    display: flex; gap: 0.5rem;
-    position: fixed; left: 0; right: 0; z-index: 40;
-    bottom: calc(var(--phone-bar-h, 0px) + env(safe-area-inset-bottom, 0px));
-    padding: 0.5rem 0.7rem calc(0.5rem + env(safe-area-inset-bottom, 0px));
-    background: linear-gradient(to top, rgba(24, 24, 24, 0.94), rgba(11, 11, 11, 0.94));
-    border-top: 1px solid var(--box-edge);
-  }
-  .ap-dock .btn { flex: 1 1 0; }
-  .page-body:has(.ap-dock:not([hidden])) { padding-bottom: calc(4.25rem + var(--phone-bar-h, 0px) + env(safe-area-inset-bottom, 0px)); }
   /* Home KPI rider: the exact figure line the compact swap in
      app.js sets under a compacted headline figure. */
   .kpi-exact {
@@ -1292,7 +900,7 @@ h3 + .tw > table, h3 + table {
 .btn.small {
   min-height: 0;
   padding: 0.1rem 0.5rem;
-  font-size: var(--fs-xs);
+  font-size: var(--fs-2xs);
 }
 .btn:hover,
 :where(button:not([class]), input[type="submit"]:not([class]), input[type="button"]:not([class])):hover:not(:disabled) {
@@ -1370,8 +978,8 @@ thead th {
 td, .isk, dd, .kpi-v, .kpi-sub, .fleet-foot, .flow-figs { font-variant-numeric: tabular-nums; }
 /* Sortable headers (app.js): a pointer, and the direction once sorted. */
 #main-content table:not([data-nosort]) > thead th:not(:empty) { cursor: pointer; user-select: none; }
-#main-content table > thead th[aria-sort="ascending"]::after { content: " ▲"; font-size: var(--fs-xs); }
-#main-content table > thead th[aria-sort="descending"]::after { content: " ▼"; font-size: var(--fs-xs); }
+#main-content table > thead th[aria-sort="ascending"]::after { content: " ▲"; font-size: var(--fs-rel-glyph); }
+#main-content table > thead th[aria-sort="descending"]::after { content: " ▼"; font-size: var(--fs-rel-glyph); }
 /* Tables sit directly on the glass: no zebra striping (the
    alternating paints fight the translucency), one hairline
    ember border between rows, and the glow mockup's hover wash
@@ -1625,7 +1233,7 @@ body:has(main .suggest:not([hidden])) main { position: relative; z-index: 70; }
   padding: 0 0.35em;
   border: 1px solid currentColor;
   border-radius: var(--r-sm);
-  font-size: var(--fs-xs);
+  font-size: var(--fs-rel-pill);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   vertical-align: 0.12em;
@@ -1807,7 +1415,7 @@ footer .hash-pop {
    and wrap. Customize mode clears the band for the widget's own
    controls (the move buttons sit at the title's right). */
 .fleet-tags { position: absolute; top: 0; right: 1rem; height: 2.94rem; display: flex; align-items: center; gap: 0.4rem; margin: 0; }
-.fleet-tags-label { font-size: var(--fs-xs); font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); margin-right: 0.15rem; }
+.fleet-tags-label { font-family: "Rajdhani", "Segoe UI", sans-serif; font-synthesis-weight: none; font-size: var(--fs-xs); font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); margin-right: 0.15rem; }
 @media (max-width: 70rem) {
   .fleet-tags { position: static; height: auto; padding-top: 0.1rem; flex-wrap: wrap; }
 }
@@ -2236,7 +1844,9 @@ body.resize-active { user-select: none; -webkit-user-select: none; cursor: nwse-
   border: 1px solid rgba(255, 110, 0, 0.16);
   border-radius: var(--r-md);
 }
-.kpi-k { font-size: var(--fs-2xs); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+/* KPI titles read as UI labels, like table headers: Rajdhani
+   SemiBold in small spaced capitals, bright enough to read on glass. */
+.kpi-k { font-family: "Rajdhani", "Segoe UI", sans-serif; font-weight: 600; font-synthesis-weight: none; font-size: var(--fs-2xs); letter-spacing: 0.08em; text-transform: uppercase; color: var(--text); }
 td, dd, .kpi-v, .fit-headline-num, .fit-bar-nums, .fit-count, .fit-chip-qty, .fit-res > b, .sec {
   /* Standalone figures: monospaced digits, Eve Sans Neue for any letters. */
   font-family: "Synapse Numerals", "Eve Sans Neue", "Inter", "Segoe UI", sans-serif;
@@ -2248,7 +1858,7 @@ td.pos, .pos { color: #28c76f; }
 .watch-matches td:last-child, .watch-matches th:last-child { width: 1%; white-space: nowrap; text-align: right; }
 .flow-figs td { text-align: right; white-space: nowrap; }
 .flow-figs thead th { text-align: right; }
-.flow-figs thead small { color: var(--accent); font-size: var(--fs-2xs); }
+.flow-figs thead small { color: var(--accent); font-size: inherit; }
 .kpi-v {
   font-size: var(--fs-3xl);
   font-weight: 600;
@@ -2261,8 +1871,8 @@ td.pos, .pos { color: #28c76f; }
   overflow-wrap: normal;
 }
 .kpis-small .kpi-v { font-size: var(--fs-md); overflow-wrap: normal; white-space: nowrap; }
-.kpi-v small { font-size: var(--fs-2xs); color: var(--accent); font-weight: 400; }
-.kpi-trend { font-size: var(--fs-2xs); vertical-align: 0.15em; cursor: default; }
+.kpi-v small { font-size: var(--fs-xs); color: var(--accent); font-weight: 400; }
+.kpi-trend { font-size: var(--fs-xs); vertical-align: 0.15em; cursor: default; }
 .kpi-trend.up { color: var(--success); }
 .kpi-trend.down { color: var(--danger); }
 /* The house money figure: the grouped integer at full size with
@@ -2271,7 +1881,7 @@ td.pos, .pos { color: #28c76f; }
    size as its integer grows, so it always fits its card; the
    surface's plain size is the baseline for ordinary figures. */
 .iskfig { white-space: nowrap; font-variant-numeric: tabular-nums; }
-.iskfig .dec { font-size: var(--fs-2xs); line-height: 0; vertical-align: 0.34em; margin-left: 0.02em; }
+.iskfig .dec { font-size: var(--fs-rel-dec); line-height: 0; vertical-align: 0.34em; margin-left: 0.02em; }
 .kpi-v .iskhero.l1 { font-size: var(--fs-2xl); }
 .kpi-v .iskhero.l2 { font-size: var(--fs-lg); }
 .kpi-v .iskhero.l3 { font-size: var(--fs-md); }
@@ -2311,6 +1921,11 @@ td.pos, .pos { color: #28c76f; }
    the spark_hover viz switch, which stops the server rendering the
    card at all. */
 .spark-hover { border-bottom: 1px dotted var(--muted); cursor: help; }
+/* A fallback hover (data-spark-fallback) is a plain figure while its
+   row shows the line in a column of its own, and a hover only once
+   the table reads as cards and drops that column (app.js agrees). */
+.spark-hover[data-spark-fallback] { border-bottom: 0; cursor: inherit; }
+table.cards-on .spark-hover[data-spark-fallback] { border-bottom: 1px dotted var(--muted); cursor: help; }
 .spark-pop { display: none; }
 #spark-layer {
   position: fixed; z-index: 60; width: 10.5rem; padding: 0.45rem 0.55rem 0.5rem;
@@ -2541,7 +2156,8 @@ html[data-theme="light"] .brief-card:hover, html[data-theme="light"] .brief-card
   padding: 0.14rem 0.45rem;
   border: 1px solid var(--muted);
   border-radius: var(--r-sm);
-  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-family: var(--font-display);
+  font-synthesis-weight: none;
   font-size: var(--fs-2xs);
   font-weight: 600;
   letter-spacing: 0.1em;
@@ -2583,7 +2199,10 @@ html[data-theme="light"] .brief-card:hover, html[data-theme="light"] .brief-card
   .brief-count { font-size: var(--fs-2xs); }
 }
 
-.fleet-table td { vertical-align: middle; }
+/* One body size across the fleet table: names, the corporation,
+   station and ship lines under them, and every figure. */
+.fleet-table td { vertical-align: middle; font-size: var(--fs-sm); }
+.fleet-table td small, .fleet-table td .countdown { font-size: inherit; }
 /* The header row's breathing room lives in the cells' own padding,
    symmetric top and bottom, so the header text centres between the
    search row's rule above and the header rule below (the search
@@ -2647,7 +2266,7 @@ tr.fleet-detail > td { background: #120d09; border-bottom: 1px solid color-mix(i
 .card[data-widget="prodline"] .prodline-meter { max-width: none; height: 6px; margin-top: 0.35rem; border-radius: var(--r-xs); overflow: hidden; }
 .card[data-widget="prodline"] .prodline-meter > span { height: 6px; }
 .card[data-widget="prodline"] .prodline-meter-healthy > span { background: linear-gradient(90deg, color-mix(in srgb, var(--kept) 45%, #0b2921), var(--kept)); }
-.card[data-widget="prodline"] .prodline-barlabel { font-size: var(--fs-xs); color: var(--muted-2); margin-top: 0.15rem; }
+.card[data-widget="prodline"] .prodline-barlabel { font-size: var(--fs-2xs); color: var(--muted-2); margin-top: 0.15rem; }
 .card[data-widget="prodline"] .prodline-runner { display: block; margin-top: 0.1rem; }
 .card[data-widget="prodline"] .prodline-buy, .card[data-widget="prodline"] .prodline-missing { list-style: none; margin: 0.2rem 0 0; padding: 0; }
 .card[data-widget="prodline"] .prodline-buyrow { display: flex; align-items: center; gap: 0.45rem; padding: 0.18rem 0; }
@@ -2657,7 +2276,7 @@ tr.fleet-detail > td { background: #120d09; border-bottom: 1px solid color-mix(i
 /* The pin toggle on the Blueprints page: a quiet button that
    fills in gold when its blueprint is pinned. */
 .bp-pin { margin: 0; }
-.bp-pin-btn { background: none; border: 1px solid rgba(255, 255, 255, 0.18); border-radius: var(--r-sm); color: var(--muted); cursor: pointer; font: inherit; font-size: var(--fs-xs); line-height: 1; padding: 0.22rem 0.5rem; }
+.bp-pin-btn { background: none; border: 1px solid rgba(255, 255, 255, 0.18); border-radius: var(--r-sm); color: var(--muted); cursor: pointer; font: inherit; font-family: var(--font-display); font-synthesis-weight: none; font-weight: 600; font-size: var(--fs-2xs); text-transform: uppercase; letter-spacing: 0.06em; line-height: 1; padding: 0.22rem 0.5rem; }
 .bp-pin-btn:hover, .bp-pin-btn:focus-visible { color: var(--text); border-color: var(--accent); }
 .bp-pin-btn.on { color: var(--gold); border-color: var(--gold); }
 /* A fleet table taller than its module scrolls inside it, and the
@@ -2683,7 +2302,7 @@ tr.fleet-detail > td { background: #120d09; border-bottom: 1px solid color-mix(i
 .flow-pie path { stroke: var(--panel); stroke-width: 0.8; }
 .flow-pie .pie-c { font-size: var(--fs-2xs); fill: var(--muted); text-anchor: middle; letter-spacing: 0.08em; text-transform: uppercase; }
 .flow-pie figcaption { min-width: 0; font-size: var(--fs-xs); }
-.pie-head { display: block; margin-bottom: 0.25rem; font-size: var(--fs-2xs); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+.pie-head { display: block; margin-bottom: 0.25rem; font-family: var(--font-display); font-synthesis-weight: none; font-weight: 600; font-size: var(--fs-2xs); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
 .pie-legend { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.15rem; }
 .pie-legend li { display: flex; align-items: center; gap: 0.35rem; min-width: 0; }
 .pie-legend .pie-l { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -4731,8 +4350,8 @@ select.flash { animation: fit-flash 0.7s ease-out; }
 .fit-tip-v.res-th { color: #ff7a5c; }
 .fit-tip-v.res-kin { color: #c9c2b8; }
 .fit-tip-v.res-exp { color: #ffc266; }
-.fit-tip-v.good[class*="res-"]::after { content: " \25B2"; font-size: var(--fs-2xs); color: #7dc96f; }
-.fit-tip-v.bad[class*="res-"]::after { content: " \25BC"; font-size: var(--fs-2xs); color: #ff7a6b; }
+.fit-tip-v.good[class*="res-"]::after { content: " \25B2"; font-size: var(--fs-rel-glyph); color: #7dc96f; }
+.fit-tip-v.bad[class*="res-"]::after { content: " \25BC"; font-size: var(--fs-rel-glyph); color: #ff7a6b; }
 .fit-tip-x {
   position: absolute;
   top: 0.1rem;
@@ -4855,7 +4474,12 @@ html[data-theme="light"] .page-body:not(:has(.home-grid)) .fit-modsearch {
   color: var(--muted);
   cursor: pointer;
   font: inherit;
+  font-family: var(--font-display);
+  font-synthesis-weight: none;
+  font-weight: 600;
   font-size: var(--fs-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
   padding: 0.25rem 0.7rem;
   touch-action: manipulation;
 }
@@ -5320,7 +4944,7 @@ html[data-scheme="soe"] .searchwrap input[type="text"] { background-image: url("
 .charselector-option[hidden] { display: none; }
 button.charselector-option { background: none; border: none; width: 100%; text-align: left; font: inherit; cursor: pointer; }
 .charselector-tags {
-  font-size: var(--fs-xs);
+  font-size: var(--fs-2xs);
   color: var(--muted);
   margin-left: 0.4rem;
 }
@@ -5822,7 +5446,7 @@ html:not(.js) .checkselector .charselector-dropdown[hidden] {
 }
 /* --- settings pages: fields, cards and rows (ops, Discord servers, groups) --- */
 .lede { color: var(--muted); max-width: 62rem; margin: 0 0 1rem; }
-.hint { color: var(--muted); font-size: var(--fs-sm); margin: 0.3rem 0 0.75rem; }
+.hint { color: var(--muted); font-size: var(--fs-xs); margin: 0.3rem 0 0.75rem; }
 /* Open prose: standalone explanatory text that sits outside any
    widget or table (a page's how-to paragraphs, footnotes, empty-state
    lines) reads in Inter. The condensed face stays on table data and
@@ -5852,12 +5476,15 @@ html:not(.js) .checkselector .charselector-dropdown[hidden] {
 .field.wide { grid-column: 1 / -1; }
 .field-label {
   display: block;
-  font-size: var(--fs-xs);
+  font-family: var(--font-display);
+  font-synthesis-weight: none;
+  font-weight: 600;
+  font-size: var(--fs-2xs);
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--muted);
+  color: var(--muted-2);
 }
-.field-hint { font-size: var(--fs-sm); color: var(--muted); }
+.field-hint { font-size: var(--fs-xs); color: var(--muted); }
 .field-static { display: flex; align-items: center; min-height: var(--control-h); color: var(--text-bright); }
 .field input[type="text"], .field input[type="number"], .field input[type="datetime-local"],
 .field select, .field textarea { display: block; width: 100%; }
@@ -5924,7 +5551,7 @@ html[data-theme="light"] .setting h4 { color: var(--accent); }
 .srp-policy { white-space: pre-wrap; max-width: 62rem; margin: 0; }
 .srp-sum { display: flex; flex-wrap: wrap; gap: 0.4rem 1.5rem; margin: 0 0 0.75rem; color: var(--muted); }
 .srp-sum strong { color: var(--text-bright); }
-.tag-row { margin: 0.4rem 0 0; font-size: var(--fs-sm); }
+.tag-row { margin: 0.4rem 0 0; font-size: var(--fs-xs); }
 .tag-row a { margin-right: 0.35rem; white-space: nowrap; }
 .doctrine-clip { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .doctrine-eft { margin-top: 0.75rem; }
@@ -5985,7 +5612,7 @@ html[data-theme="light"] .doctrine-fits li:last-child { border-color: #e3d9c6; }
    of flow, so the card and the page keep their height. Groups
    lay out side by side and wrap, using the horizontal space. */
 .loadout-preview { position: relative; grid-column: 1 / -1; }
-.loadout-preview-btn { background: none; border: 0; padding: 0; font: inherit; color: var(--muted); cursor: pointer; }
+.loadout-preview-btn { background: none; border: 0; padding: 0; font: inherit; font-family: var(--font-display); font-synthesis-weight: none; font-weight: 600; font-size: var(--fs-2xs); text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); cursor: pointer; }
 .loadout-preview-btn::before { content: "▸"; display: inline-block; margin-right: 0.35rem; transition: transform 0.12s ease; }
 .loadout-preview-btn[aria-expanded="true"]::before { transform: rotate(90deg); }
 .loadout-preview-btn:hover { color: var(--text); }
@@ -6579,7 +6206,7 @@ button.gn-title:hover .gn-more, button.gn-title:focus-visible .gn-more { color: 
 
 /* Pill tabs: a row of divisions with counts. */
 .pilltabs { display: flex; flex-wrap: wrap; gap: 0.4rem; }
-.pilltab { padding: 0.35rem 0.7rem; border: 1px solid var(--box-edge); border-radius: 999px; color: var(--muted); font-size: var(--fs-xs); font-weight: 600; text-decoration: none; }
+.pilltab { padding: 0.35rem 0.7rem; border: 1px solid var(--box-edge); border-radius: 999px; color: var(--muted); font-family: var(--font-display); font-synthesis-weight: none; font-size: var(--fs-xs); font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; text-decoration: none; }
 .pilltab:hover { color: var(--text); }
 .pilltab.on { background: var(--glass); border-color: var(--accent); color: var(--text-bright); }
 .pilltab .cnt { font-weight: 500; opacity: 0.75; }
@@ -6587,7 +6214,7 @@ button.gn-title:hover .gn-more, button.gn-title:focus-visible .gn-more { color: 
 /* Saved-filter chips: the user's own named views, each with its
    delete, plus the save form that names the current view. */
 .fchips { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; }
-.fchips-label { color: var(--muted); font-size: var(--fs-xs); font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; }
+.fchips-label { font-family: var(--font-display); font-synthesis-weight: none; color: var(--muted-2); font-size: var(--fs-2xs); font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; }
 .fchip { padding: 0.3rem 0.65rem; border: 1px solid var(--box-edge); border-radius: 999px; background: none; color: var(--text); font-size: var(--fs-xs); text-decoration: none; cursor: pointer; }
 .fchip.save { border-style: dashed; color: var(--muted); }
 .fchip-wrap { display: inline-flex; align-items: center; gap: 0.1rem; }
@@ -6647,7 +6274,7 @@ button.gn-title:hover .gn-more, button.gn-title:focus-visible .gn-more { color: 
 .estbar { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; margin: 0.8rem 0 0.2rem; padding: 0.55rem 0.7rem; border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent); border-radius: var(--r-sm); background: color-mix(in srgb, var(--accent) 9%, transparent); }
 .estbar form { margin: 0; }
 .estbar-l { display: flex; flex-direction: column; gap: 0.05rem; min-width: 0; }
-.estbar-lab { color: var(--muted); font-size: var(--fs-2xs); font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+.estbar-lab { font-family: var(--font-display); font-synthesis-weight: none; color: var(--muted-2); font-size: var(--fs-2xs); font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; }
 .estbar-v { color: var(--gold); font-size: var(--fs-lg); font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; }
 
 /* Loadout chip accents: the slot letter reads in the accent,

@@ -23,9 +23,11 @@
 .bk-table td:first-child { white-space: normal; }
 .bk-name { font-weight: 600; }
 tr.bk-own td:first-child { box-shadow: inset 2px 0 0 var(--accent); }
-.bk-worth { display: inline-flex; align-items: center; gap: 0.55rem; }
 .bk-worth > span { color: var(--gold); font-weight: 600; }
-.bk-line { flex: none; }
+/* The trend column: the 30-day worth line on its own, centred in a
+   column sized to it. It sorts by the 30-day change (data-sort). */
+.bk-trend { width: 1%; padding-inline: 0.9rem; white-space: nowrap; }
+.bk-line { display: block; width: 4.5rem; height: 1.2rem; }
 .bk-line polyline { fill: none; stroke: var(--muted); stroke-width: 1.4; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
 .bk-line.up polyline { stroke: var(--success); }
 .bk-line.down polyline { stroke: var(--danger); }

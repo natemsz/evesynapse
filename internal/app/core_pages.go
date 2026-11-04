@@ -277,7 +277,7 @@ func (app *Application) fillShell(ctx context.Context, shell *module.ShellData, 
 	if len(shell.SectionTabs) == 0 {
 		shell.SectionTabs, shell.SectionSubTabs = sectionTabsGrouped(shell.NavLinks, shell.Section)
 	}
-	shell.BottomNav, shell.BottomSections = bottomNavFor(shell.NavLinks, shell.Section)
+	shell.BottomNav, shell.BottomSections = bottomNavFor(shell.NavLinks, shell.NavGroups, shell.Section)
 	if len(shell.Scripts) == 0 {
 		if p, ok := registeredPages[page]; ok {
 			shell.Scripts = p.Scripts

@@ -24,7 +24,7 @@
     <input type="hidden" name="region" value="{{.Region}}">
     {{if .Query}}<input type="hidden" name="bq" value="{{.Query}}">{{end}}
     {{if ne .Sort "name"}}<input type="hidden" name="sort" value="{{.Sort}}">{{end}}
-    <label class="mb-minvol"><small>&gt; Trades per day</small> <input type="number" name="minvol" min="0" step="1" value="{{if .MinVolume}}{{.MinVolume}}{{end}}" size="6"></label>
+    <label class="mb-minvol"><span>At least traded per day</span> <input type="number" name="minvol" min="0" step="1" value="{{if .MinVolume}}{{.MinVolume}}{{end}}" size="6"></label>
     <button class="btn" type="submit">Apply</button>
   </form>
   {{end}}

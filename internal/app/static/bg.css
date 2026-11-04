@@ -621,11 +621,6 @@ html[data-scheme] .branch > summary:focus-visible { box-shadow: 0 0 8px color-mi
 html[data-scheme] .sidebar .branch > summary:focus-visible { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 35%, transparent); }
 html[data-scheme] .cardbtn:hover, html[data-scheme] .cardbtn:focus-visible { box-shadow: 0 0 8px color-mix(in srgb, var(--accent) 40%, transparent); }
 html[data-scheme] .grid.home-grid > .card[data-widget="fleet"] .fleet-foot { border-top-color: color-mix(in srgb, var(--accent) 14%, transparent); }
-html[data-scheme] .phone-sheet-groups a { border-color: color-mix(in srgb, var(--accent) 22%, transparent); }
-html[data-scheme] .phone-sheet-groups a.active { border-color: color-mix(in srgb, var(--accent) 40%, transparent); }
-html[data-scheme] .phone-sheet-switch a { border-color: color-mix(in srgb, var(--accent) 16%, transparent); }
-html[data-scheme] .phone-sheet-switch a.active { border-color: color-mix(in srgb, var(--accent) 40%, transparent); }
-html[data-scheme] .phone-sheet-action { border-color: color-mix(in srgb, var(--accent) 22%, transparent); }
 html[data-scheme] .cs-dcard { border-color: color-mix(in srgb, var(--accent) 22%, transparent); }
 html[data-scheme] .cs-aline { border-bottom-color: color-mix(in srgb, var(--accent) 5%, transparent); }
 html[data-scheme] .plan-tip { border-color: color-mix(in srgb, var(--accent) 35%, transparent); }

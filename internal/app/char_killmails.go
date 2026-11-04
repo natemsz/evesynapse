@@ -118,7 +118,7 @@ func (app *Application) handleKillmails(w http.ResponseWriter, r *http.Request) 
 
 	view := &killmailsView{
 		CharacterName: active.Name,
-		Title:         active.Name + " — Killmails",
+		Title:         "Killmails",
 		BasePath:      "/killmails/",
 		Subject:       "this character",
 	}

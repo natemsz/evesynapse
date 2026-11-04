@@ -591,19 +591,63 @@
     module.exports.phoneSectionState = phoneSectionState;
   }
 
-  var phoneBar = null; // { btn, sheet, backdrop, closeBtn } once bound
+  // The menu is a stack of screens (base.html): the root lists the
+  // pilot, every section and the account rows; each section, the
+  // pilot switcher and Settings has a screen of its own. A row
+  // carrying data-pane-open="<key>" drills into that screen (its
+  // href is the no-JS target), the head's back control climbs to
+  // the root, and anything else chosen navigates and closes the
+  // menu. The sheet locks its height at the root's on open, so
+  // drilling never resizes it; a taller screen scrolls inside.
+  var phoneBar = null; // { btn, sheet, backdrop, closeBtn, back, title, head } once bound
+  var phoneMotion = !(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+
+  function phonePane(key) {
+    return phoneBar ? phoneBar.sheet.querySelector('.phone-sheet-pane[data-pane="' + key + '"]') : null;
+  }
+
+  function showPhonePane(key, dir) {
+    var next = phonePane(key);
+    if (!next) return false;
+    var panes = phoneBar.sheet.querySelectorAll(".phone-sheet-pane"), i;
+    for (i = 0; i < panes.length; i++) {
+      var p = panes[i];
+      p.classList.remove("pane-in-fwd", "pane-in-back");
+      if (p !== next) p.hidden = true;
+    }
+    next.hidden = false;
+    next.scrollTop = 0;
+    if (dir && phoneMotion) {
+      void next.offsetWidth;
+      next.classList.add(dir === "back" ? "pane-in-back" : "pane-in-fwd");
+    }
+    var root = key === "root";
+    phoneBar.sheet.setAttribute("data-level", root ? "root" : "deep");
+    phoneBar.back.hidden = root;
+    phoneBar.title.textContent = next.getAttribute("data-title") || "Menu";
+    return true;
+  }
 
   function setPhoneSheetOpen(open, refocus) {
     if (!phoneBar) return;
-    phoneBar.sheet.hidden = !open;
+    var sheet = phoneBar.sheet;
+    if (open) {
+      showPhonePane("root", "");
+      sheet.style.height = "";
+      sheet.style.transform = "";
+    }
+    sheet.hidden = !open;
     phoneBar.backdrop.hidden = !open;
+    document.documentElement.classList.toggle("sheet-lock", open);
     phoneBar.btn.setAttribute("aria-expanded", open ? "true" : "false");
     if (open) {
+      sheet.style.height = sheet.offsetHeight + "px";
       if (phoneBar.closeBtn && phoneBar.closeBtn.focus) {
         phoneBar.closeBtn.focus({ preventScroll: true });
       }
-    } else if (refocus && phoneBar.btn.focus) {
-      phoneBar.btn.focus({ preventScroll: true });
+    } else {
+      sheet.style.height = "";
+      if (refocus && phoneBar.btn.focus) phoneBar.btn.focus({ preventScroll: true });
     }
   }
 
@@ -640,6 +684,11 @@
     }
   }
 
+  function phonePath(href) {
+    var at = (href || "").search(/[?#]/);
+    return at < 0 ? (href || "") : href.slice(0, at);
+  }
+
   function syncPhoneBar() {
     var section = phoneCurrentSection();
     var state = phoneSectionState(
@@ -655,14 +704,47 @@
     for (i = 0; i < els.length; i++) {
       markPhoneActive(els[i], els[i].getAttribute("data-section") === section);
     }
-    // A grouped section's group rows mark the group the sidebar
-    // marks: the current page's own menu link.
+    // A section screen's rows mark the page the sidebar marks:
+    // the current page's own menu link, by path.
     var page = document.querySelector(".sidenav .menu a.active");
-    var pageHref = page ? page.getAttribute("href") : null;
-    els = document.querySelectorAll(".phone-sheet-groups a");
+    var pagePath = page ? phonePath(page.getAttribute("href")) : null;
+    els = document.querySelectorAll('.phone-sheet-pane[data-pane="' + section + '"] a.phone-sheet-row');
+    var all = document.querySelectorAll(".phone-sheet-pane:not([data-pane=root]):not([data-pane=pilots]) a.phone-sheet-row");
+    for (i = 0; i < all.length; i++) markPhoneActive(all[i], false);
     for (i = 0; i < els.length; i++) {
-      els[i].classList.toggle("active", !!pageHref && els[i].getAttribute("href") === pageHref);
+      markPhoneActive(els[i], !!pagePath && phonePath(els[i].getAttribute("href")) === pagePath);
     }
+  }
+
+  // Dragging the head down follows the finger and, past a third of
+  // the sheet (or a quick flick), closes the menu; short of that it
+  // springs back.
+  function bindPhoneSheetDrag(sheet, head) {
+    var startY = null, startT = 0, dy = 0;
+    head.addEventListener("pointerdown", function (ev) {
+      if (ev.pointerType === "mouse" || (ev.target.closest && ev.target.closest("button"))) return;
+      startY = ev.clientY; startT = Date.now(); dy = 0;
+      sheet.classList.add("dragging");
+      if (head.setPointerCapture) head.setPointerCapture(ev.pointerId);
+    });
+    head.addEventListener("pointermove", function (ev) {
+      if (startY === null) return;
+      dy = Math.max(0, ev.clientY - startY);
+      sheet.style.transform = "translateY(" + dy + "px)";
+    });
+    function end() {
+      if (startY === null) return;
+      startY = null;
+      sheet.classList.remove("dragging");
+      var fast = dy > 40 && Date.now() - startT < 250;
+      if (fast || dy > sheet.offsetHeight / 3) {
+        setPhoneSheetOpen(false, true);
+      } else {
+        sheet.style.transform = "";
+      }
+    }
+    head.addEventListener("pointerup", end);
+    head.addEventListener("pointercancel", end);
   }
 
   function initPhoneBar() {
@@ -672,7 +754,10 @@
     if (!btn || !sheet || !backdrop) return;
     phoneBar = {
       btn: btn, sheet: sheet, backdrop: backdrop,
-      closeBtn: document.getElementById("phone-sheet-close")
+      closeBtn: document.getElementById("phone-sheet-close"),
+      back: document.getElementById("phone-sheet-back"),
+      title: document.getElementById("phone-sheet-title"),
+      head: document.getElementById("phone-sheet-head")
     };
     btn.addEventListener("click", function () {
       setPhoneSheetOpen(sheet.hidden, false);
@@ -682,12 +767,27 @@
         setPhoneSheetOpen(false, true);
       });
     }
+    if (phoneBar.back) {
+      phoneBar.back.addEventListener("click", function () {
+        showPhonePane("root", "back");
+      });
+    }
+    if (phoneBar.head) bindPhoneSheetDrag(sheet, phoneBar.head);
     backdrop.addEventListener("click", function () {
       setPhoneSheetOpen(false, true);
     });
-    // Choosing anything in the sheet navigates; the sheet's work
-    // is done, so it closes behind the tap.
     sheet.addEventListener("click", function (ev) {
+      var drill = ev.target.closest ? ev.target.closest("[data-pane-open]") : null;
+      if (drill && sheet.contains(drill) && !ev.metaKey && !ev.ctrlKey && !ev.shiftKey) {
+        if (showPhonePane(drill.getAttribute("data-pane-open"), "fwd")) {
+          ev.preventDefault();
+          if (phoneBar.back && phoneBar.back.focus) phoneBar.back.focus({ preventScroll: true });
+          return;
+        }
+      }
+      // Choosing anything else navigates; the menu's work is
+      // done, so it closes behind the tap.
+      if (phoneBar.head && phoneBar.head.contains(ev.target)) return;
       var el = ev.target;
       while (el && el !== sheet) {
         if (el.tagName === "A" || el.tagName === "BUTTON" || el.tagName === "FORM") {
@@ -698,9 +798,14 @@
       }
     });
     document.addEventListener("keydown", function (ev) {
-      if (ev.key === "Escape" && phoneBar && !phoneBar.sheet.hidden) {
-        setPhoneSheetOpen(false, true);
-      }
+      if (ev.key !== "Escape" || !phoneBar || phoneBar.sheet.hidden) return;
+      if (phoneBar.sheet.getAttribute("data-level") === "deep") showPhonePane("root", "back");
+      else setPhoneSheetOpen(false, true);
+    });
+    // A swap that starts while the menu is open (Back, a shortcut)
+    // never leaves it over the incoming page.
+    document.addEventListener("evesynapse:content-will-swap", function () {
+      if (phoneBar && !phoneBar.sheet.hidden) setPhoneSheetOpen(false, false);
     });
     onContentReady(syncPhoneBar);
     syncPhoneBar();
@@ -3829,19 +3934,16 @@
       });
     })(hoverBranches[hoverIndex]);
   }
-  // The Settings gear: hover and focus keep the flyout with its
-  // Interface and Notifications jumps, but a click on the gear
-  // itself goes to the Settings page, in the wide sidebar and in
-  // the rail alike. The listener sits on the summary, so clicks
-  // on the menu's own links keep their targets.
+  // The Settings menu opens at the foot of the wide sidebar: bring
+  // its links into view as it opens. (The rail's flyout grows
+  // upward on its own.)
   if (settingsBranch) {
-    var settingsSummary = settingsBranch.querySelector("summary");
-    if (settingsSummary) {
-      settingsSummary.addEventListener("click", function (e) {
-        e.preventDefault();
-        window.location.assign("/settings");
-      });
-    }
+    settingsBranch.addEventListener("toggle", function () {
+      var menu = settingsBranch.querySelector(".menu");
+      if (settingsBranch.open && !railActive() && menu && menu.scrollIntoView) {
+        menu.scrollIntoView({ block: "nearest" });
+      }
+    });
   }
   if (collapseButton) {
     collapseButton.addEventListener("click", function () {
@@ -4651,8 +4753,11 @@
       titles.push(head.cells[i].classList.contains("card-title") ? "1" : "");
     }
     var labels = cardLabels(texts, spans), optional = cardLabels(opts, spans), titled = cardLabels(titles, spans);
-    for (r = 0; r < table.tBodies.length; r++) {
-      var rows = table.tBodies[r].rows;
+    // A footer (a Total row) becomes a card like the body rows.
+    var groups = Array.prototype.slice.call(table.tBodies);
+    if (table.tFoot) groups.push(table.tFoot);
+    for (r = 0; r < groups.length; r++) {
+      var rows = groups[r].rows;
       for (i = 0; i < rows.length; i++) {
         var idx = 0;
         for (c = 0; c < rows[i].cells.length; c++) {
@@ -6145,8 +6250,14 @@
 
   function paintDot(el, state) {
     if (!el) return;
-    el.className = "status-dot is-" + (state === "ok" || state === "limited" || state === "down" ? state : "pending");
+    el.className = "status-dot is-" + (state === "ok" || state === "limited" || state === "down" || state === "ours-lagging" || state === "ours-down" ? state : "pending");
   }
+
+  // The phone menu's status row: its dot, and its state in words
+  // (a phone has no hover for the sidebar button's tooltip).
+  var extraDots = document.querySelectorAll("[data-status-dot]");
+  var extraLabels = document.querySelectorAll("[data-status-label]");
+  var opener = openBtn;
 
   function load() {
     return fetch("/status/freshness", { credentials: "same-origin" })
@@ -6155,13 +6266,17 @@
         if (!data) return;
         paintDot(dot, data.esi.state);
         paintDot(modalDot, data.esi.state);
+        for (var d = 0; d < extraDots.length; d++) paintDot(extraDots[d], data.esi.state);
         var tips = {
           ok: "ESI is answering normally. Click for detailed stats.",
           limited: "ESI is answering slowly. Click for detailed stats.",
-          down: "ESI is not answering. Click for detailed stats."
+          down: "ESI is not answering. Click for detailed stats.",
+          "ours-lagging": "Sync is behind on this server. Click for detailed stats.",
+          "ours-down": "Sync has stalled on this server. Click for detailed stats."
         };
         openBtn.setAttribute("data-tip", tips[data.esi.state] || "Checking ESI. Click for detailed stats.");
         esiLabel.textContent = data.esi.label;
+        for (var l = 0; l < extraLabels.length; l++) extraLabels[l].textContent = data.esi.label;
         esiTq.textContent = data.esi.players ? "Tranquility " + data.esi.players + " online" : "";
         rowsBody.innerHTML = "";
         (data.rows || []).forEach(function (row) {
@@ -6186,9 +6301,21 @@
     load();
     if (closeBtn) closeBtn.focus();
   }
-  function close() { modal.hidden = true; openBtn.focus(); }
+  function close() {
+    modal.hidden = true;
+    if (opener && opener.offsetParent !== null) opener.focus();
+    opener = openBtn;
+  }
 
   openBtn.addEventListener("click", open);
+  // The phone menu's ESI row opens the same modal.
+  var extraOpeners = document.querySelectorAll("[data-status-open]");
+  for (var o = 0; o < extraOpeners.length; o++) {
+    extraOpeners[o].addEventListener("click", function () {
+      opener = document.getElementById("phone-sections-btn") || openBtn;
+      open();
+    });
+  }
   if (closeBtn) closeBtn.addEventListener("click", close);
   modal.addEventListener("click", function (e) { if (e.target === modal) close(); });
   document.addEventListener("keydown", function (e) {

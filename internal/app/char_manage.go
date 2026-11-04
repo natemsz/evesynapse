@@ -45,7 +45,7 @@ type managedCharacter struct {
 	Since        string // link_state_at, when parked
 	Snapshots    int    // stored snapshot rows
 	Fresh        int    // of those, inside their cache window
-	Newest       string // newest fetched_at, "—" when none
+	Newest       string // newest fetched_at as an age ("5m ago"), empty when none
 	Active       bool   // the session's acting character
 }
 
@@ -216,7 +216,7 @@ func (app *Application) managedCharacterRow(ctx context.Context, ch db.Character
 			}
 		}
 		if !newest.IsZero() {
-			row.Newest = rfc3339(newest)
+			row.Newest = agoLabel(time.Since(newest))
 		}
 	}
 	return row

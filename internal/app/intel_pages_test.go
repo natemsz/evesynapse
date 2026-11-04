@@ -200,7 +200,11 @@ func TestIntelPagesRenderFromStore(t *testing.T) {
 	if strings.Contains(body, "esi-tq") {
 		t.Error("ESI down pill still shows a player count")
 	}
-	// A fresh status: healthy, with the player count.
+	// A fresh status: healthy, with the player count. The pill
+	// reads our side too, so the market and the worker read
+	// healthy here as well.
+	seedPillMarket(t, q, time.Now())
+	app.updateWorkerStatus(func(s *workerStatus) { s.LastRunAt = time.Now() })
 	if err := q.UpsertGlobalSnapshot(ctx, db.UpsertGlobalSnapshotParams{
 		Kind:        esi.GlobalStatus,
 		Payload:     `{"players":23456,"server_version":"1132976","start_time":"2026-10-01T11:00:00Z","vip":false}`,

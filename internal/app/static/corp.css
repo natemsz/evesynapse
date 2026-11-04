@@ -98,6 +98,10 @@
 .co-sec h2, .co-h2 { margin: 0; font-size: var(--fs-xl); }
 .co-h2 { margin-bottom: var(--space-3); }
 .co-card { display: flex; flex-direction: column; gap: var(--space-2); }
+/* A card form stays one column on phones: phone.css wraps forms
+   into rows, which in a column card would split it into columns. */
+form.co-card { flex-wrap: nowrap !important; align-items: stretch !important; }
+form.co-card > label { flex: none !important; }
 .co-card > * { margin: 0; }
 .co-card h3 { margin: 0; color: var(--gold); font-size: var(--fs-lg); letter-spacing: 0.05em; text-transform: uppercase; }
 .co-card h3 a { color: inherit; }

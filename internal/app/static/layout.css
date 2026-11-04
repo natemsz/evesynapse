@@ -320,12 +320,30 @@ html[data-theme="light"] .subnav { background: color-mix(in srgb, var(--panel) 8
 .l-head-pick:not(:has(*)) { display: none; }
 .l-head-pick .charselector { width: 100%; margin: 0; max-width: none; }
 .l-head-act { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin-left: auto; }
+/* On a narrow page the head reads like a phone screen's: the picker
+   and the page's action share the first row, the summary runs under
+   them, and with no picker the action follows the summary from the
+   start edge instead of floating alone at the far one. */
+@container page (width < 34rem) {
+  .l-head:has(> .l-head-pick > *):has(> .l-head-act) { display: grid; grid-template-columns: minmax(0, 1fr) auto; }
+  .l-head:has(> .l-head-pick > *) > * { grid-column: 1 / -1; }
+  .l-head:has(> .l-head-pick > *) > .l-head-pick { grid-column: 1; grid-row: 1; }
+  .l-head:has(> .l-head-pick > *) > .l-head-act { grid-column: 2; grid-row: 1; margin-left: 0; flex-wrap: nowrap; }
+  .l-head:not(:has(> .l-head-pick > *)) > .l-head-act { margin-left: 0; }
+}
 
-/* Tiles: a row of stat tiles that steps 4 → 2 → 1 (3 → 1, 6 → 3 →
-   1, 2 → 1) so a row never splits unevenly. The row counts its own
-   tiles, so a template that renders some of them conditionally
-   needs nothing extra. */
+/* Tiles: a row of stat tiles that steps 4 → 2 (3 → 1 + 2, 6 → 3 →
+   2, 5 → 1 + 2 + 2) so a row never splits unevenly: on a phone an
+   odd count leads with one full-width tile over pairs, and only a
+   page too narrow for pairs stacks them one by one. The row counts
+   its own tiles, so a template that renders some of them
+   conditionally needs nothing extra. */
 .l-tiles { --l-n: 1; display: grid; gap: var(--space-3); grid-template-columns: repeat(var(--l-cols, 1), minmax(0, 1fr)); }
+@container page (min-width: 19rem) {
+  .l-tiles:not(:has(> :only-child)) { --l-cols: 2; }
+  .l-tiles:has(> :nth-child(3):last-child) > :first-child,
+  .l-tiles:has(> :nth-child(5):last-child) > :first-child { grid-column: 1 / -1; }
+}
 .l-tiles > * { min-width: 0; }
 .l-tiles:has(> :nth-child(2):last-child) { --l-n: 2; }
 .l-tiles:has(> :nth-child(3):last-child) { --l-n: 3; }
@@ -339,6 +357,7 @@ html[data-theme="light"] .subnav { background: color-mix(in srgb, var(--panel) 8
 }
 @container page (min-width: 44rem) {
   .l-tiles:has(> :nth-child(3):last-child) { --l-cols: 3; }
+  .l-tiles:has(> :nth-child(3):last-child) > :first-child { grid-column: auto; }
 }
 @container page (min-width: 58rem) {
   .l-tiles:has(> :nth-child(2):last-child),
@@ -346,6 +365,7 @@ html[data-theme="light"] .subnav { background: color-mix(in srgb, var(--panel) 8
   .l-tiles:has(> :nth-child(4):last-child),
   .l-tiles:has(> :nth-child(5):last-child),
   .l-tiles:has(> :nth-child(6):last-child) { --l-cols: var(--l-n); }
+  .l-tiles:has(> :nth-child(5):last-child) > :first-child { grid-column: auto; }
 }
 
 /* Grid: the 12-track content grid, generalized from Home's widget
@@ -644,8 +664,8 @@ a.l-stat:hover { border-color: color-mix(in srgb, var(--accent) 45%, transparent
    rows stay hidden; the pinned first column unpins. */
 #main-content table.cards-on { width: 100%; min-width: 0; margin-bottom: 0.6rem; }
 #main-content table.cards-on > thead { display: none; }
-#main-content table.cards-on > tbody { display: block; }
-#main-content table.cards-on > tbody > tr:not([hidden]) {
+#main-content table.cards-on > :is(tbody, tfoot) { display: block; }
+#main-content table.cards-on > :is(tbody, tfoot) > tr:not([hidden]) {
   display: grid;
   /* Two figures across on a phone, as many as fit on a wider card. */
   grid-template-columns: repeat(auto-fill, minmax(min(50% - 0.5rem, 11rem), 1fr));
@@ -653,7 +673,7 @@ a.l-stat:hover { border-color: color-mix(in srgb, var(--accent) 45%, transparent
   padding: 0.7rem 0.15rem;
   border-bottom: 1px solid var(--box-edge);
 }
-#main-content table.cards-on > tbody > tr > :is(td, th) {
+#main-content table.cards-on > :is(tbody, tfoot) > tr > :is(td, th) {
   display: block;
   position: static;
   min-width: 0;
@@ -664,22 +684,22 @@ a.l-stat:hover { border-color: color-mix(in srgb, var(--accent) 45%, transparent
   white-space: normal;
   overflow-wrap: anywhere;
 }
-#main-content table.cards-on > tbody > tr > :is(td, th):first-child,
-#main-content table.cards-on > tbody > tr > :is(td, th)[colspan] {
+#main-content table.cards-on > :is(tbody, tfoot) > tr > :is(td, th):first-child,
+#main-content table.cards-on > :is(tbody, tfoot) > tr > :is(td, th)[colspan] {
   grid-column: 1 / -1;
 }
-#main-content table.cards-on > tbody > tr > :is(td, th):first-child {
+#main-content table.cards-on > :is(tbody, tfoot) > tr > :is(td, th):first-child {
   font-size: var(--fs-sm);
   font-weight: 600;
   color: var(--text-bright);
 }
 /* A numeric cell is a figure, not a two-up fact: it takes the
    card's full width and never wraps its unit onto a second line. */
-#main-content table.cards-on > tbody > tr > td.num {
+#main-content table.cards-on > :is(tbody, tfoot) > tr > td.num {
   grid-column: 1 / -1;
   white-space: nowrap;
 }
-#main-content table.cards-on > tbody > tr > td[data-label]:not(:first-child)::before {
+#main-content table.cards-on > :is(tbody, tfoot) > tr > td[data-label]:not(:first-child)::before {
   content: attr(data-label);
   display: block;
   margin-bottom: 0.1rem;
@@ -689,17 +709,17 @@ a.l-stat:hover { border-color: color-mix(in srgb, var(--accent) 45%, transparent
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
-#main-content table.cards-on > tbody > tr > td:is(:empty, .opt, .card-blank) { display: none; }
+#main-content table.cards-on > :is(tbody, tfoot) > tr > td:is(:empty, .opt, .card-blank) { display: none; }
 /* A column the header marks .card-title heads the card; the first
    cell then reads as an ordinary figure. */
-#main-content table.cards-on > tbody > tr > td.card-title {
+#main-content table.cards-on > :is(tbody, tfoot) > tr > td.card-title {
   order: -1;
   grid-column: 1 / -1;
   font-size: var(--fs-sm);
   font-weight: 600;
   color: var(--text-bright);
 }
-#main-content table.cards-on > tbody > tr:has(> td.card-title) > :is(td, th):first-child:not(.card-title) {
+#main-content table.cards-on > :is(tbody, tfoot) > tr:has(> td.card-title) > :is(td, th):first-child:not(.card-title) {
   grid-column: auto;
   font-size: inherit;
   font-weight: inherit;
@@ -709,17 +729,17 @@ a.l-stat:hover { border-color: color-mix(in srgb, var(--accent) 45%, transparent
    card's bottom row, the last one at the right edge; when the
    row leads with one (move arrows), the next cell titles the
    card instead. */
-#main-content table.cards-on > tbody > tr > td.card-ctl {
+#main-content table.cards-on > :is(tbody, tfoot) > tr > td.card-ctl {
   order: 99; width: auto;
   grid-column: auto; justify-self: start;
   font-size: inherit; font-weight: inherit;
 }
-#main-content table.cards-on > tbody > tr > td.card-ctl:last-child { justify-self: end; }
-#main-content table.cards-on > tbody > tr > td:is(.card-ctl, .card-blank):first-child + td {
+#main-content table.cards-on > :is(tbody, tfoot) > tr > td.card-ctl:last-child { justify-self: end; }
+#main-content table.cards-on > :is(tbody, tfoot) > tr > td:is(.card-ctl, .card-blank):first-child + td {
   grid-column: 1 / -1;
   font-size: var(--fs-sm); font-weight: 600; color: var(--text-bright);
 }
-#main-content table.cards-on > tbody > tr > td:is(.card-ctl, .card-blank):first-child + td::before { display: none; }
+#main-content table.cards-on > :is(tbody, tfoot) > tr > td:is(.card-ctl, .card-blank):first-child + td::before { display: none; }
 .cards-sort {
   display: flex; align-items: center; gap: 0.5rem;
   margin: 0 0 0.3rem;
@@ -740,8 +760,8 @@ tbody tr.yours:hover > td,
 .tw tbody tr.yours:hover > td:first-child { background: linear-gradient(var(--row-hover), var(--row-hover)), var(--sel-row); }
 tbody tr.yours > td:first-child { box-shadow: inset 3px 0 0 var(--sel-edge); }
 /* As a card, the highlight is the card's own. */
-#main-content table.cards-on > tbody > tr.yours { padding-left: 0.6rem; padding-right: 0.6rem; background: var(--sel-row); box-shadow: inset 3px 0 0 var(--sel-edge); border-radius: var(--r-sm); }
-#main-content table.cards-on > tbody > tr.yours > td:first-child { box-shadow: none; }
+#main-content table.cards-on > :is(tbody, tfoot) > tr.yours { padding-left: 0.6rem; padding-right: 0.6rem; background: var(--sel-row); box-shadow: inset 3px 0 0 var(--sel-edge); border-radius: var(--r-sm); }
+#main-content table.cards-on > :is(tbody, tfoot) > tr.yours > td:first-child { box-shadow: none; }
 
 /* ---- Phone frame ----
    On a phone the sub-nav keeps one row and scrolls sideways

@@ -5,56 +5,93 @@
 
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
 
-{{template "charselector" .PlanetsChars}}
-
-{{if .Planets}}
-<h2>{{.Planets.CharacterName}}</h2>
-
-{{if .Planets.Colonies.Note}}
-<p>{{.Planets.Colonies.Note}}</p>
-{{else if .Planets.Colonies.Warming}}
-<p><small>Still syncing.{{if .IsAdmin}} Progress is on the <a href="/admin/sync/">Sync page</a>.{{end}}</small></p>
-{{else if .Planets.Rows}}
-{{range .Planets.Rows}}
-<section class="foldable">
-<h3>{{.Planet}} <small>· {{placeLink .SystemRef}} · {{.Type}} · command center upgrades {{.Upgrade}} · {{.Pins}} pins{{if .Updated}} · updated {{.Updated}}{{end}}</small></h3>
-{{if .LayoutWarming}}
-<p><small>Colony layout is still loading.</small></p>
-{{else}}
-{{if .Extractors}}
-<div class="tw">
-<table>
-  <thead><tr><th>Extractor product</th><th>Per cycle</th><th>Cycle</th><th>Heads</th><th>Program ends</th><th></th></tr></thead>
-  <tbody>
-  {{range .Extractors}}
-    <tr><td>{{itemLink .ProductTypeID .Product}}</td><td>{{.Qty}}</td><td>{{.Cycle}}</td><td>{{.Heads}}</td><td>{{.Expires}}</td><td>{{if .Expired}}<strong>Expired</strong>{{else if .Left}}<span class="countdown" data-finish="{{.FinishRaw}}">{{.Left}}</span>{{end}}</td></tr>
-  {{end}}
-  </tbody>
-</table>
+<div class="l-page">
+{{with .Planets}}
+<div class="l-head">
+  <div class="l-head-pick">{{template "charselectormulti" .Selector}}</div>
+  {{if .Rows}}<p class="l-head-sum"><b>{{len .Rows}}</b> {{if eq (len .Rows) 1}}colony{{else}}colonies{{end}}{{if .Expired}} · <span class="bad">{{.Expired}} {{if eq .Expired 1}}extractor{{else}}extractors{{end}} stopped</span>{{end}}{{if .Ending}} · <span class="warn">{{.Ending}} ending within a day</span>{{end}}</p>{{end}}
+  <div class="l-head-act"><a class="btn btn-quiet" href="/industry/pi/">PI Planner</a></div>
 </div>
-{{end}}
-{{if .Factories}}
-<div class="tw">
-<table>
-  <thead><tr><th>Factory schematic</th><th>Pin</th><th>Cycle</th></tr></thead>
-  <tbody>
-  {{range .Factories}}
-    <tr><td>{{.Schematic}}</td><td>{{itemLink .PinTypeID .PinType}}</td><td>{{.Cycle}}</td></tr>
+{{range .Notes}}<p class="notice"><small>{{.}}</small></p>{{end}}
+{{if .Warming}}<p><small>Still syncing colonies for {{range $i, $n := .Warming}}{{if $i}}, {{end}}{{$n}}{{end}}.{{if $.IsAdmin}} Progress is on the <a href="/admin/sync/">Sync page</a>.{{end}}</small></p>{{end}}
+
+{{if .Rows}}
+<div class="l-console pc" data-depth="{{.Depth}}" data-land-top>
+<div class="l-panes">
+<section class="l-pane l-pane--main pc-main" aria-label="Colonies">
+  <div class="pc-grid">
+  {{range .Rows}}
+  <a class="pc-card{{if .On}} on{{end}}{{if .Soonest}}{{if .Soonest.Expired}} stopped{{end}}{{end}}" href="{{.Href}}" data-l-step="in">
+    <span class="pc-top">
+      {{if .Image}}<img class="pc-orb" src="{{.Image}}" alt="" width="40" height="40" loading="lazy">{{end}}
+      <span class="pc-id"><span class="pc-name">{{.Planet}}</span><span class="pc-sub">{{if $.Planets.Multi}}{{.Owner}} · {{end}}{{.System}}</span></span>
+      <span class="pc-type pc-{{.TypeKey}}">{{.Type}}</span>
+    </span>
+    {{if .LayoutWarming}}<span class="pc-note">Colony layout is still loading.</span>
+    {{else if .Soonest}}<span class="pc-extract">
+      <span class="pc-ex-l"><span class="pc-lab">Extracting</span><span class="pc-ex-v">{{.Soonest.Product}} · {{.Soonest.Qty}} per cycle</span></span>
+      <span class="pc-ex-r"><span class="pc-lab">Program ends</span><span class="pc-ex-v">{{if .Soonest.Expired}}<span class="bad">Stopped</span>{{else if .Soonest.FinishRaw}}<span class="countdown" data-finish="{{.Soonest.FinishRaw}}">{{.Soonest.Left}}</span>{{else}}unknown{{end}}</span></span>
+    </span>
+    <span class="pc-chips"><span class="lchip">{{len .Extractors}} {{if eq (len .Extractors) 1}}extractor{{else}}extractors{{end}} · {{.Soonest.Heads}} heads · {{.Soonest.Cycle}}</span>{{if .Schematics}}<span class="lchip">{{len .Factories}} {{if eq (len .Factories) 1}}factory{{else}}factories{{end}} · {{.Schematics}}</span>{{end}}</span>
+    {{else if .Factories}}<span class="pc-chips"><span class="lchip">{{len .Factories}} {{if eq (len .Factories) 1}}factory{{else}}factories{{end}} · {{.Schematics}}</span></span>
+    {{else}}<span class="pc-note">No extractors or factories on this colony.</span>{{end}}
+  </a>
   {{end}}
-  </tbody>
-</table>
-</div>
-{{end}}
-{{if .Others}}<p><small>Also on this planet: {{.Others}}.</small></p>{{end}}
-{{if and (not .Extractors) (not .Factories) (not .Others)}}<p><small>No pins reported for this colony.</small></p>{{end}}
-{{end}}
+  </div>
+  <p><small>Extractor timers (end time, per-cycle yield, head count) are fixed when a program is installed, so the countdowns above are exact. Stored commodity amounts are not shown: EVE only recalculates them when you open the colony in-game, so any number shown here would be out of date.</small></p>
 </section>
+
+{{with .Insp}}
+<aside class="l-pane l-pane--insp insp pc-insp" aria-label="Colony">
+  <div class="l-pane-bar"><a class="l-back" data-l-step="out" href="{{$.Planets.CloseHref}}">Colonies</a><a class="l-close" href="{{$.Planets.CloseHref}}" aria-label="Close the colony">&#10005;</a></div>
+  <div class="insp-head">
+    {{if .Image}}<img class="pc-orb big" src="{{.Image}}" alt="" width="64" height="64">{{end}}
+    <div class="insp-titles"><h3>{{.Planet}}</h3><p class="amx-msub">{{.Owner}} · {{placeLink .SystemRef}} · {{.Type}}</p></div>
+  </div>
+  <dl class="insp-facts">
+    <div><dt>Command center upgrades</dt><dd>{{.Upgrade}}</dd></div>
+    <div><dt>Pins</dt><dd>{{.Pins}}</dd></div>
+    {{if .Updated}}<div><dt>Updated</dt><dd>{{.Updated}}</dd></div>{{end}}
+  </dl>
+  {{if .LayoutWarming}}<p class="insp-note">Colony layout is still loading.</p>{{else}}
+  {{if .Extractors}}
+  <h4 class="pc-h">Extractors</h4>
+  <div class="tw">
+  <table>
+    <thead><tr><th class="card-title">Extractor product</th><th>Per cycle</th><th>Cycle</th><th>Heads</th><th>Program ends</th><th></th></tr></thead>
+    <tbody>
+    {{range .Extractors}}
+      <tr><td>{{itemLink .ProductTypeID .Product}}</td><td>{{.Qty}}</td><td>{{.Cycle}}</td><td>{{.Heads}}</td><td>{{.Expires}}</td><td>{{if .Expired}}<strong>Expired</strong>{{else if .Left}}<span class="countdown" data-finish="{{.FinishRaw}}">{{.Left}}</span>{{end}}</td></tr>
+    {{end}}
+    </tbody>
+  </table>
+  </div>
+  {{end}}
+  {{if .Factories}}
+  <h4 class="pc-h">Factories</h4>
+  <div class="tw">
+  <table>
+    <thead><tr><th class="card-title">Factory schematic</th><th>Pin</th><th>Cycle</th></tr></thead>
+    <tbody>
+    {{range .Factories}}
+      <tr><td>{{.Schematic}}</td><td>{{itemLink .PinTypeID .PinType}}</td><td>{{.Cycle}}</td></tr>
+    {{end}}
+    </tbody>
+  </table>
+  </div>
+  {{end}}
+  {{if .Others}}<p class="insp-note">Also on this planet: {{.Others}}.</p>{{end}}
+  {{end}}
+</aside>
+<a class="l-scrim" href="{{$.Planets.CloseHref}}" aria-label="Close the colony" tabindex="-1"></a>
 {{end}}
-<p><small>Extractor timers (end time, per-cycle yield, head count) are fixed when a program is installed, so the countdowns above are exact. Stored commodity amounts are not shown: EVE only recalculates them when you open the colony in-game, so any number shown here would be out of date.</small></p>
-{{else}}
-<p><small>No colonies for this character in the latest snapshot.</small></p>
+</div>
+</div>
+{{else if and (not .Warming) (not .Notes)}}
+<p><small>No colonies for these characters in the latest snapshot.</small></p>
 {{end}}
 {{else}}
 <p>No character to show yet. Link a character first.</p>
 {{end}}
+</div>
 {{end}}

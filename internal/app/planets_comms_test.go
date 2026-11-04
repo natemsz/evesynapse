@@ -155,11 +155,21 @@ func TestPlanetsPagesRenderFromSnapshots(t *testing.T) {
 		t.Fatalf("planets page: status %d", code)
 	}
 	mustContain(t, "/planets/", body,
-		"Jita I", "Jita II", "Jita", "Temperate", "command center upgrades 3",
-		"Tritanium", "1,200", "30m", "Expired",
-		"Fixture Widgets", "Fixture Storage ×2",
+		"Jita I", "Jita II", "Jita", "Temperate",
+		"Tritanium", "1,200", "Stopped",
+		"Fixture Widgets",
 		"Colony layout is still loading", // planet B
 		"Stored commodity amounts are not shown",
+	)
+	// One colony open: its full layout in the inspector.
+	code, body = getPage(t, app, cookie, fmt.Sprintf("/planets/?colony=%d-%d", fixtureCharA, fixturePlanetA))
+	if code != http.StatusOK {
+		t.Fatalf("colony detail: status %d", code)
+	}
+	mustContain(t, "/planets/?colony=", body,
+		"Command center upgrades", "<dd>3</dd>",
+		"Tritanium", "1,200", "30m", "Expired",
+		"Fixture Widgets", "Fixture Storage ×2",
 	)
 	if got := transport.calls.Load(); got != 0 {
 		t.Fatalf("planets render made %d outbound calls, want 0", got)

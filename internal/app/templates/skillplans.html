@@ -192,7 +192,10 @@
   <figcaption class="visually-hidden">The plan's training order drawn to scale, {{.Total}} in all.</figcaption>
 </figure>
 {{end}}
-<p class="plan-summary"><small>{{.Count}} skill(s) in this plan{{if .TotalSP}} · {{.TotalSP}} SP · {{.TotalTime}} to train{{end}}</small></p>
+<div class="sp-sumrow">
+<p class="plan-summary"><small>{{.Count}} skill(s) in this plan{{if .TotalSP}} · {{.TotalSP}} SP · {{.TotalTime}} to train{{end}}{{if .Finish}} · finishes {{.Finish}}{{end}}</small></p>
+{{if .EVEText}}<button type="button" class="btn small" data-copy data-copy-text="{{.EVEText}}" title="Copies the plan for the game's skill plan import (Import from clipboard in the Skill Plans window)">Copy for EVE</button>{{end}}
+</div>
 {{if .StartsNote}}<p><small>{{.StartsNote}}</small></p>{{end}}
 {{if .AttrsNote}}<p><small>{{.AttrsNote}}</small></p>{{end}}
 {{if .AttrsLine}}<p><small>{{.AttrsLine}}</small></p>{{end}}

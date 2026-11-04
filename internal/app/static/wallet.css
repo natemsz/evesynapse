@@ -1,0 +1,65 @@
+/* EveSynapse: the Wallet page. The tiles and charts sit on the
+   layout framework's grid; the two ledgers are its console's main
+   pane, and one trade its inspector (layout.css). Income reads in
+   the site's success token and spend in its danger token. */
+
+.wlc .l-panes { --l-insp: 23rem; }
+.wl-head-act { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--space-2); }
+.wl-ok .l-stat-value { color: var(--success); }
+.wl-warn .l-stat-value { color: var(--danger); }
+.wl-tiles { margin-bottom: var(--space-4); }
+.wl-top { margin-bottom: var(--space-4); }
+
+.wl-h {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin: var(--space-4) 0 var(--space-2);
+  color: var(--muted);
+  font-family: var(--font-display);
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.wl-h span { font-family: var(--font-num); letter-spacing: 0; }
+.wl-in { color: var(--success); }
+.wl-out { color: var(--danger); }
+.wl-flow-hint { margin: var(--space-3) 0 0; color: var(--muted-2); }
+.wl-flist { margin: 0; padding: 0; list-style: none; }
+.wl-fitem {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.15rem var(--space-2);
+  padding: 0.35rem 0.4rem;
+  border-left: 2px solid transparent;
+  border-radius: var(--r-xs);
+  color: var(--text);
+  text-decoration: none;
+}
+.wl-fitem:hover { background: var(--row-hover); }
+.wl-fitem.on { border-left-color: var(--sel-edge); background: var(--sel-bg); }
+.wl-fname { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.88rem; }
+.wl-fval { font-family: var(--font-num); font-size: 0.85rem; font-variant-numeric: tabular-nums; text-align: right; }
+.wl-fval small { color: var(--muted-2); }
+.wl-fbar { grid-column: 1 / -1; display: block; height: 0.2rem; border-radius: 0.2rem; background: var(--hairline); overflow: hidden; }
+.wl-fbar > span { display: block; height: 100%; }
+.wl-fbar-in { background: var(--success); }
+.wl-fbar-out { background: var(--danger); }
+.wl-note { margin: var(--space-3) 0 0; color: var(--muted-2); font-size: 0.82rem; }
+
+.wl-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2); margin: 0 0 var(--space-3); }
+.wl-chips { flex: 1 1 auto; }
+.wl-hint { margin: 0; color: var(--muted-2); }
+.wl-profit { margin-left: var(--space-2); font-size: 0.85rem; }
+.wl-trow.on > td { background: var(--sel-row); }
+
+.wl-side { padding: 0.05rem 0.4rem; border: 1px solid currentColor; border-radius: var(--r-xs); font-size: 0.75rem; text-transform: uppercase; }
+.wl-side-Sell { color: var(--success); }
+.wl-side-Buy { color: var(--accent); }
+.wl-net { margin: var(--space-3) 0 0; padding: var(--space-3); border: 1px solid var(--hairline); border-radius: var(--r-md); background: var(--surface-inset); }
+.wl-net p { margin: 0; }
+.wl-net-l { color: var(--muted-2); font-size: 0.8rem; }
+.wl-net-v { color: var(--gold); font-family: var(--font-num); font-size: 1.3rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+.wl-net-s { margin-top: 0.2rem !important; color: var(--muted-2); font-size: 0.8rem; }
+.wl-acts { display: flex; flex-wrap: wrap; gap: var(--space-2); margin: var(--space-3) 0; }

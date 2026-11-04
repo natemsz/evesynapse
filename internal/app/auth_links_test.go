@@ -497,6 +497,27 @@ func TestKillmailAndWalletLinks(t *testing.T) {
 	if strings.Contains(body, "zkillboard.com") {
 		t.Error("the kill page links off-site to zKillboard")
 	}
+	// The filters keep the character, and each kill opens in the
+	// inspector on this page.
+	mustContain(t, "/killmails/", body,
+		`href="/killmails/?character=90000001&amp;f=losses"`,
+		`href="/killmails/?character=90000001&amp;kill=7001"`,
+		`Your final blows 1`,
+	)
+
+	// One kill in the inspector; a kill not on the viewer's own
+	// list never opens there.
+	_, body = getPage(t, app, cookie, "/killmails/?character=90000001&kill=7001")
+	mustContain(t, "/killmails/?kill=7001", body, `class="l-pane l-pane--insp insp km-insp"`, `data-depth="2"`)
+	_, body = getPage(t, app, cookie, "/killmails/?character=90000001&kill=999")
+	if strings.Contains(body, "km-insp") {
+		t.Error("a kill outside the viewer's list opened in the inspector")
+	}
+	// Losses only.
+	_, body = getPage(t, app, cookie, "/killmails/?character=90000001&f=losses")
+	if strings.Contains(body, `href="/killmails/?character=90000001&amp;f=losses&amp;kill=7001"`) {
+		t.Error("the losses filter kept a kill")
+	}
 
 	// Wallet: the same item name, the same item-details target,
 	// and the counterparty character to the pilot page.

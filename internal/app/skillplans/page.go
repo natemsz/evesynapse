@@ -302,6 +302,8 @@ type skillPlanDetail struct {
 	AttrsLine       string
 	UnallocatedNote string
 	Timeline        *planTimeline // the training order drawn to scale; nil when nothing is left to train
+	Finish          string        // when the last skill finishes, UTC; "" when nothing is left
+	EVEText         string        // the plan as EVE's skill plan import reads it: one "Skill Name 4" line a level
 	Remap           *remapView
 	ConfirmDelete   bool
 
@@ -747,6 +749,8 @@ func (app *plans) buildPlanDetailEnv(ctx context.Context, env *planBuildEnv, ch 
 		detail.TotalSP = esi.FormatInt(outcome.TotalSP)
 		detail.TotalTime = humanize.Duration(time.Duration(outcome.TotalSecond * float64(time.Second)))
 		detail.Timeline = buildTimeline(outcome.Steps, detail.Rows, detail.TotalTime)
+		detail.Finish = outcome.Steps[len(outcome.Steps)-1].Finish.UTC().Format("2006-01-02 15:04 UTC")
+		detail.EVEText = eveImportText(outcome.Steps, names)
 		if ct.QueueEnd.After(time.Now()) {
 			detail.StartsNote = fmt.Sprintf("Plan timing starts when your current queue finishes (%s).",
 				ct.QueueEnd.UTC().Format("2006-01-02 15:04 UTC"))
@@ -1581,4 +1585,18 @@ func planLevels(from, to int) template.HTML {
 	}
 	b.WriteString(`</span>`)
 	return template.HTML(b.String())
+}
+
+// eveImportText writes the plan's training order the way the game's
+// skill plan import reads it from the clipboard: one line a level,
+// "Skill Name 4", prerequisites in their place. ESI has no way to
+// write a skill queue, so this is how a plan reaches the game.
+func eveImportText(steps []skillplan.Step, names map[int64]string) string {
+	var b strings.Builder
+	for _, s := range steps {
+		for lv := s.FromLevel + 1; lv <= s.ToLevel; lv++ {
+			fmt.Fprintf(&b, "%s %d\n", nameOrID(names, s.SkillID), lv)
+		}
+	}
+	return b.String()
 }

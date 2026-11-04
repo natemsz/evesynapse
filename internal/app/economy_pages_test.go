@@ -125,6 +125,17 @@ func TestEconomyPagesRenderFromSnapshots(t *testing.T) {
 	mustContain(t, "/wallet/", body,
 		"1,234,567.89", "market transaction", "-5,500.00", "Tritanium",
 		"Member One", "Jita 4 - Moon 4 - Caldari Navy Assembly Plant", "Buy")
+	// The summary, the filters and the exports.
+	mustContain(t, "/wallet/ summary", body,
+		"Net flow, 30 days", "Fees and taxes, 30 days", "Compact ISK",
+		`href="/wallet/journal.csv?character=90000001"`, `href="/wallet/transactions.csv?character=90000001"`)
+
+	// The journal export: every stored entry in range, a header row
+	// first, served as a download.
+	code, body = getPage(t, app, cookie, "/wallet/journal.csv?character=90000001")
+	if code != http.StatusOK || !strings.HasPrefix(body, "Date,Type,Amount,Balance,") || !strings.Contains(body, "market_transaction") {
+		t.Errorf("journal.csv: status %d, body %.200q", code, body)
+	}
 
 	// Station heat (schema 120): the Rifter's buy book at Jita was
 	// beaten four times in the last 12 hours, so the open buy

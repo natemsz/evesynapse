@@ -26,12 +26,17 @@ func TestKillboardSurfacesCarryTheFullGlass(t *testing.T) {
 
 	// Each panel surface's own block carries the full recipe,
 	// not just the tint and the edge.
+	kp := readStatic(t, "kill.css")
 	for _, sel := range []string{".kb-stat {", ".kb-list {", ".kb-top {", ".kp-hero {", ".kp-panel {", ".kp-missing {"} {
-		i := strings.Index(kb, sel)
-		if i < 0 {
-			t.Fatalf("killboard.css missing rule %q", sel)
+		sheet, name := kb, "killboard.css"
+		if strings.HasPrefix(sel, ".kp-") {
+			sheet, name = kp, "kill.css"
 		}
-		block := kb[i:]
+		i := strings.Index(sheet, sel)
+		if i < 0 {
+			t.Fatalf("%s missing rule %q", name, sel)
+		}
+		block := sheet[i:]
 		block = block[:strings.Index(block, "}")]
 		for _, want := range []string{
 			"border: 1px solid var(--glass-edge);",
@@ -50,11 +55,13 @@ func TestKillboardSurfacesCarryTheFullGlass(t *testing.T) {
 	// weight: the feed's stat tiles and the kill page's value.
 	for _, want := range []string{
 		`.kb-stat-v { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 1.35rem; font-weight: 600;`,
-		`.kp-value-v { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 1.7rem; font-weight: 600;`,
 	} {
 		if !strings.Contains(kb, want) {
 			t.Errorf("killboard.css missing figure rule %q", want)
 		}
+	}
+	if want := `.kp-value-v { font-family: var(--font-num); font-size: 1.7rem; font-weight: 600;`; !strings.Contains(kp, want) {
+		t.Errorf("kill.css missing figure rule %q", want)
 	}
 
 	raw, err := fs.ReadFile(templatesFS, "templates/kill.html")

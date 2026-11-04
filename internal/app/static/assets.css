@@ -30,7 +30,7 @@
 .pane-main .fchips { margin-top: 0.7rem; }
 /* The filter pucks carry the matrix headers' text: the same
    family, weight and size as the table's th cells. */
-.fchip { font-family: "Rajdhani", "Segoe UI", sans-serif; font-size: 0.7rem; font-weight: 600; }
+.fchip { font-family: var(--font-display); font-size: 0.7rem; font-weight: 600; }
 .fchip-save summary { list-style: none; }
 .fchip-save summary::-webkit-details-marker { display: none; }
 .fchip-save .fchip-form { margin-top: 0.5rem; }

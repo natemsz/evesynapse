@@ -272,7 +272,7 @@ func TestKillViewReadsBoardValue(t *testing.T) {
 
 	// The board prices the kill (its stored appraisal lands): the
 	// same render now shows that figure.
-	if _, err := conn.ExecContext(ctx, `INSERT INTO kills (killmail_id, killmail_time, system_id, value_ours) VALUES (7001, $1, 30000142, 550)`, recently); err != nil {
+	if _, err := conn.ExecContext(ctx, `INSERT INTO kills (killmail_id, killmail_time, system_id, value_ours, source, ingested_at) VALUES (7001, $1, 30000142, 550, 'esi', $1)`, recently); err != nil {
 		t.Fatalf("seed board kill: %v", err)
 	}
 	code, body = getPage(t, app, cookie, "/killmails/")

@@ -96,3 +96,6 @@
 .pi-chains td:first-child { overflow-wrap: anywhere; }
 .pi-chains .pi-margin .l-meter { width: 2.5rem; }
 .pi-chains :is(th, td) { padding-left: 0.4rem; padding-right: 0.4rem; }
+/* In the side column the bar stacks under its figure, so the three
+   columns fit the column at every width without scrolling. */
+.pi-chains .pi-margin { flex-direction: column; align-items: flex-end; gap: 0.2rem; }

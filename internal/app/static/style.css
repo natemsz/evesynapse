@@ -2717,7 +2717,7 @@ tr.fleet-detail > td { background: #120d09; border-bottom: 1px solid color-mix(i
   color: var(--note);
   font-family: "Rajdhani", sans-serif;
   font-weight: 600;
-  font-size: 0.95em;
+  font-size: var(--fs-md);
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
@@ -3027,7 +3027,7 @@ tr.fleet-detail > td { background: #120d09; border-bottom: 1px solid color-mix(i
   border: 1px solid #4a2408;
   border-radius: var(--r-sm);
   padding: 0.35rem 0.55rem;
-  font-size: 0.95em;
+  font-size: var(--fs-md);
   line-height: 1.45;
   white-space: nowrap;
   transform: translate(-50%, -115%);

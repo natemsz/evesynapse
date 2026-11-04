@@ -131,9 +131,12 @@
     var path = svg ? svg.querySelector("path") : null;
     if (!svg || !path) return;
     var navR = nav.getBoundingClientRect();
-    svg.setAttribute("width", nav.scrollWidth);
+    // The guides are vertical lines along the left edge: the tree's
+    // visible width is enough, and its scroll width would count the
+    // svg itself, which then never shrinks back.
+    svg.setAttribute("width", nav.clientWidth);
     svg.setAttribute("height", nav.scrollHeight);
-    svg.setAttribute("viewBox", "0 0 " + nav.scrollWidth + " " + nav.scrollHeight);
+    svg.setAttribute("viewBox", "0 0 " + nav.clientWidth + " " + nav.scrollHeight);
     var stops = [];
     var rows = nav.querySelectorAll(".mb-row");
     for (var i = 0; i < rows.length; i++) {

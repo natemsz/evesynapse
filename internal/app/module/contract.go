@@ -877,15 +877,17 @@ type BottomNavItem struct {
 	Sheet   bool
 }
 
-// BottomSection is one row of the phone sections sheet: the
-// section's landing link and, for a grouped section, its group
-// landings under it.
+// BottomSection is one section row of the phone menu: the
+// section's landing link (the row's no-JS target) and a one-line
+// summary of what the section holds. A Direct section has one page,
+// so its row goes there instead of opening a screen of one row.
 type BottomSection struct {
 	Label   string
 	Href    string
 	Section string
 	Active  bool
-	Groups  []NavLink
+	Summary string
+	Direct  bool
 }
 
 // ShellData holds all the layout, session, nav, and shell state

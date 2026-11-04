@@ -52,14 +52,12 @@
   /* Press feedback: hover never fires on touch, so controls
      answer the finger directly — a brief dip in scale and a lift
      in brightness, the same on every control family. */
-  .btn, .chip, .seg > *, .phone-bar-item, .phone-sheet-action,
-  .phone-sheet-section, .phone-sheet-groups a, .foldbtn,
+  .btn, .chip, .seg > *, .phone-bar-item, .foldbtn,
   .subnav a {
     transition: transform 90ms ease, filter 90ms ease, background-color 150ms ease, border-color 150ms ease;
   }
   .btn:active, .chip:active, .seg > *:active, .phone-bar-item:active,
-  .phone-sheet-action:active, .phone-sheet-section:active,
-  .phone-sheet-groups a:active, .foldbtn:active,
+  .foldbtn:active,
   .subnav a:active {
     transform: scale(0.96);
     filter: brightness(1.18);
@@ -90,8 +88,7 @@
 }
 @media ((hover: none), (pointer: coarse)) and (prefers-reduced-motion: reduce) {
   .btn:active, .chip:active, .seg > *:active, .phone-bar-item:active,
-  .phone-sheet-action:active, .phone-sheet-section:active,
-  .phone-sheet-groups a:active, .foldbtn:active,
+  .foldbtn:active,
   .subnav a:active {
     transform: none;
   }

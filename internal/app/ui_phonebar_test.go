@@ -124,26 +124,26 @@ func phoneBarBlock(t *testing.T, body string) string {
 	return body[start : start+end]
 }
 
-// phoneSheetBlock returns a rendered page's sections sheet markup.
+// phoneSheetBlock returns a rendered page's phone menu markup.
 func phoneSheetBlock(t *testing.T, body string) string {
 	t.Helper()
 	start := strings.Index(body, `<section class="phone-sheet"`)
 	if start < 0 {
-		t.Fatal("rendered page has no sections sheet")
+		t.Fatal("rendered page has no phone menu")
 	}
 	end := strings.Index(body[start:], `</section>`)
 	if end < 0 {
-		t.Fatal("the sections sheet never closes")
+		t.Fatal("rendered page has no phone menu")
 	}
 	return body[start : start+end]
 }
 
 // TestPhoneBottomBarRenders: the bar carries Home, the slotted
-// sections and the Sections button; the sheet lists every
-// primary section with its landing (and a grouped section's
-// groups); the current section is marked in the bar when it has
-// a slot, on the Sections button when it lives only in the
-// sheet, and in the sheet either way.
+// sections and the Menu button; the menu lists every primary
+// section with its landing and a screen of the section's pages;
+// the current section is marked in the bar when it has a slot,
+// on the Menu button when it lives only in the menu, and in the
+// menu either way.
 func TestPhoneBottomBarRenders(t *testing.T) {
 	transport := &countingTransport{}
 	app, _, q := buildCorpTestApp(t, transport)
@@ -171,16 +171,16 @@ func TestPhoneBottomBarRenders(t *testing.T) {
 	}
 	sheet := phoneSheetBlock(t, body)
 	for _, want := range []string{
-		`<a class="phone-sheet-section" href="/character/" data-section="pilot">Pilot</a>`,
-		`<a class="phone-sheet-section" href="/fittings/" data-section="fitting">Fitting</a>`,
-		`<a class="phone-sheet-section" href="/industry/" data-section="industry">Industry</a>`,
-		`<a class="phone-sheet-section active" href="/market/" data-section="market" aria-current="page">Market</a>`,
-		`<a href="/market/trends/" class="active">Tools &amp; Analysis</a>`,
-		`<a href="/orders/">My Finances</a>`,
-		`<a class="phone-sheet-section" href="/corporations/" data-section="corporation">Corporation</a>`,
-		`<a class="phone-sheet-section" href="/intel/kills/" data-section="intel">Intel</a>`,
-		`<a class="phone-sheet-section" href="/items/" data-section="tools">Tools</a>`,
-		`<a href="/characters/">Manage Characters</a>`,
+		`<a class="phone-sheet-section" href="/character/" data-section="pilot" data-pane-open="pilot">`,
+		`<a class="phone-sheet-section" href="/fittings/" data-section="fitting" data-pane-open="fitting">`,
+		`<a class="phone-sheet-section" href="/industry/" data-section="industry" data-pane-open="industry">`,
+		`<a class="phone-sheet-section active" href="/market/" data-section="market" data-pane-open="market" aria-current="page">`,
+		`<a class="phone-sheet-section" href="/corporations/" data-section="corporation" data-pane-open="corporation">`,
+		`<a class="phone-sheet-section" href="/intel/kills/" data-section="intel" data-pane-open="intel">`,
+		`<a class="phone-sheet-section" href="/items/" data-section="tools" data-pane-open="tools">`,
+		`<div class="phone-sheet-pane" data-pane="market" data-title="Market" hidden>`,
+		`<a class="phone-sheet-row" href="/orders/"><span class="phone-sheet-label">My Orders</span></a>`,
+		`Manage Characters</span>`,
 		`action="/auth/logout"`,
 	} {
 		if !strings.Contains(sheet, want) {
@@ -199,7 +199,7 @@ func TestPhoneBottomBarRenders(t *testing.T) {
 		t.Error("on a sheet-only section no bar link should be active")
 	}
 	sheet = phoneSheetBlock(t, body)
-	if !strings.Contains(sheet, `<a class="phone-sheet-section active" href="/items/" data-section="tools" aria-current="page">Tools</a>`) {
+	if !strings.Contains(sheet, `<a class="phone-sheet-section active" href="/items/" data-section="tools" data-pane-open="tools" aria-current="page">`) {
 		t.Error("the sheet should mark the Tools row on the item browser")
 	}
 
@@ -210,19 +210,26 @@ func TestPhoneBottomBarRenders(t *testing.T) {
 		t.Error("home should mark the Home slot")
 	}
 
-	// A grouped section's other groups ride the sheet: from a
-	// pilot page, Assets & Money and Comms are one tap away even
-	// though the folder strip is stood down on phones.
+	// A grouped section's screen carries every group's pages under
+	// its group headings: from a pilot page, Assets and Mail are
+	// one tap away though the folder strip is stood down on phones.
 	_, body = getPage(t, app, cookie, "/character/")
 	sheet = phoneSheetBlock(t, body)
 	for _, want := range []string{
-		`<a class="phone-sheet-section active" href="/character/" data-section="pilot" aria-current="page">Pilot</a>`,
-		`<a href="/assets/">Assets &amp; Money</a>`,
-		`<a href="/mail/">Comms</a>`,
+		`<a class="phone-sheet-section active" href="/character/" data-section="pilot" data-pane-open="pilot" aria-current="page">`,
+		`<div class="phone-sheet-pane" data-pane="pilot" data-title="Pilot" hidden>`,
+		`Assets &amp; Money</p>`,
+		`<a class="phone-sheet-row" href="/assets/`,
+		`<a class="phone-sheet-row" href="/mail/`,
 	} {
 		if !strings.Contains(sheet, want) {
-			t.Errorf("character sections sheet is missing %q", want)
+			t.Errorf("character phone menu is missing %q", want)
 		}
+	}
+	// A one-page section's row goes straight to its page.
+	if !strings.Contains(sheet, `<a class="phone-sheet-section" href="/map/" data-section="map">`) ||
+		strings.Contains(sheet, `data-pane="map"`) {
+		t.Error("the Map row should link straight to the map, with no screen of its own")
 	}
 	if code, _ := getPage(t, app, cookie, "/market/leaderboard/"); code != http.StatusOK {
 		t.Errorf("GET /market/leaderboard/: status %d", code)
@@ -272,10 +279,10 @@ func TestPhoneSheetSwitcherGrid(t *testing.T) {
 	if n := strings.Count(sheet, `href="/characters/switch?character=`); n != 5 {
 		t.Errorf("8-pilot sheet shows %d switch links, want 5 beside the tile", n)
 	}
-	if !strings.Contains(sheet, `<a class="phone-sheet-more" href="/characters/">+3 more</a>`) {
+	if !strings.Contains(sheet, `<a class="phone-sheet-row phone-sheet-more" href="/characters/"><span class="phone-sheet-label">+3 more</span>`) {
 		t.Error("8-pilot sheet is missing the +3 more tile to Manage Characters")
 	}
-	if !strings.Contains(sheet, `<a href="/characters/">Manage Characters</a>`) {
+	if !strings.Contains(sheet, `Manage Characters</span>`) {
 		t.Error("8-pilot sheet is missing the Manage Characters utility link")
 	}
 

@@ -300,7 +300,7 @@ a:active { color: color-mix(in srgb, var(--gold) 80%, #ffffff); }
 
 /* Headers, nav category labels, buttons, badges and table headers are
    Rajdhani SemiBold in spaced capitals. Synthetic bold is off. Menu
-   items (below) are Rajdhani Medium in their labels' own case; only
+   items (below) are Rajdhani SemiBold in their labels' own case; only
    the menus' group labels are capitals. */
 h1, h2, h3, h4, .wordmark, .btn, thead th, .badge,
 :where(button:not([class]), input[type="submit"]:not([class]), input[type="button"]:not([class])),
@@ -327,12 +327,12 @@ header a.navlink {
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
-/* Dropdown menu items: Rajdhani Medium in the labels' own case,
-   a step under the SemiBold category and group titles above
+/* Dropdown menu items: Rajdhani SemiBold in the labels' own case,
+   under the capitals of the category and group titles above
    them. The group labels carry the capitals; the items do not. */
 .branch .menu a, .switcher .menu a, .switcher-menu a {
   font-family: "Rajdhani", "Segoe UI", sans-serif;
-  font-weight: 500;
+  font-weight: 600;
   font-synthesis-weight: none;
   text-transform: none;
   letter-spacing: 0.03em;
@@ -529,10 +529,9 @@ header a.navlink.utility { font-size: var(--fs-xs); color: var(--muted); }
   background: color-mix(in srgb, var(--gold) 32%, transparent);
 }
 .branch .menu .nav-group-label ~ a, .switcher-menu .nav-group-label ~ a { padding-left: 0.95rem; }
-.sidebar .branch .menu .nav-group-label ~ a { padding-left: 0.8rem; }
 .branch .menu .nav-group-label:first-child, .branch .menu .nav-flyout-head + .nav-group-label, .switcher-menu .nav-group-label:first-child { margin-top: 0; padding-top: 0.1rem; }
 .nav-flyout-head { display: none; }
-.sidebar .branch .menu .nav-group-label { padding-left: 0.45rem; padding-right: 0.45rem; }
+.sidebar .branch .menu .nav-group-label { padding-left: 0; padding-right: 0.45rem; }
 
 /* --- layout + panels --- */
 /* Fluid width, capped at 1720px. */
@@ -2735,6 +2734,13 @@ tr.fleet-detail > td { background: #120d09; border-bottom: 1px solid color-mix(i
 .status-rows li { display: flex; justify-content: space-between; gap: 1rem; padding: 0.4rem 0.2rem; border-bottom: 1px solid color-mix(in srgb, var(--accent) 7%, transparent); }
 .status-row-name { min-width: 0; }
 .status-rows-state { text-align: right; min-width: 0; }
+/* In a narrow panel each row reads as two lines, the dataset over
+   its age, instead of two columns that wrap word by word. */
+.status-panel { container: status / inline-size; }
+@container status (max-width: 28rem) {
+  .status-rows li { flex-direction: column; gap: 0.1rem; }
+  .status-rows-state { text-align: left; font-size: var(--fs-xs); }
+}
 .status-rows .st-ok { color: var(--success); }
 .status-rows .st-warn { color: var(--gold); }
 .status-rows .st-bad { color: #f87171; }
@@ -3180,11 +3186,14 @@ html[data-nav="rail"] #nav-collapse .nav-control-svg { transform: scaleX(-1); }
   flex: none;
   margin-left: auto;
 }
+/* An open category's pages hang off a rail under the category's
+   icon, their text a short step in from the category's own label:
+   nested, not pushed across the sidebar. */
 .sidebar .branch .menu {
   position: static;
   min-width: 0;
-  margin: 0.15rem 0 0.35rem 2.55rem;
-  padding: 0.15rem 0 0.15rem 0.4rem;
+  margin: 0.15rem 0 0.35rem 1.25rem;
+  padding: 0.15rem 0 0.15rem 0.45rem;
   background: transparent;
   border: 0;
   border-left: 1px solid #2a2a2a;
@@ -3193,7 +3202,7 @@ html[data-nav="rail"] #nav-collapse .nav-control-svg { transform: scaleX(-1); }
 }
 .sidebar .branch .menu a {
   display: block;
-  padding: 0.32rem 0.45rem;
+  padding: 0.32rem 0.45rem 0.32rem 1.3rem;
   border-radius: var(--r-sm);
 }
 .sidebar .branch .menu a.active {
@@ -3347,6 +3356,9 @@ html[data-nav="rail"] .sidebar .branch .menu a { white-space: nowrap; }
     margin-bottom: 0.6rem;
   }
   html[data-nav="rail"] .sidebar .branch .menu .nav-flyout-head + .nav-group-label { margin-top: 0.85rem; }
+  html[data-nav="rail"] .sidebar .branch .menu a { padding-left: 0.6rem; }
+  html[data-nav="rail"] .sidebar .branch .menu .nav-group-label { padding-left: 0.45rem; }
+  html[data-nav="rail"] .sidebar .branch .menu .nav-group-label ~ a { padding-left: 0.95rem; }
 }
 /* The Settings footer's menu flies out to the side like the
    categories', but anchored to the bottom of the gear row so
@@ -3586,8 +3598,8 @@ tbody tr.order-beaten td { background: color-mix(in srgb, var(--danger) 10%, tra
   html[data-nav="rail"] .sidebar .branch .menu {
     position: static;
     min-width: 0;
-    margin: 0.15rem 0 0.35rem 2.55rem;
-    padding: 0.15rem 0 0.15rem 0.4rem;
+    margin: 0.15rem 0 0.35rem 1.25rem;
+    padding: 0.15rem 0 0.15rem 0.45rem;
     background: transparent;
     border: 0;
     border-left: 1px solid #2a2a2a;
@@ -4827,10 +4839,8 @@ html[data-theme="light"] .fit-tip-stats { color: #b39a7d; }
   border: none;
   border-radius: 0.4rem;
   color: var(--gold);
-  font-size: var(--fs-md);
   line-height: 1;
   cursor: pointer;
-  font-family: inherit;
   text-align: left;
 }
 #install-app:hover { color: var(--text-bright); background: rgba(255,255,255,0.04); }
@@ -4844,7 +4854,6 @@ html[data-theme="light"] .fit-tip-stats { color: #b39a7d; }
   border: none;
   border-radius: 0.4rem;
   cursor: pointer;
-  font-family: inherit;
   text-align: left;
 }
 #status-open:hover { color: var(--text-bright); background: rgba(255,255,255,0.04); }
@@ -5871,148 +5880,187 @@ html[data-theme="light"] .suggest li:not(.sug-kind):not(.sug-empty):hover, html[
   .phone-sheet-backdrop:not([hidden]) {
     display: block;
     position: fixed; inset: 0; z-index: 98;
-    background: rgba(0, 0, 0, 0.66);
+    background: rgba(0, 0, 0, 0.6);
+    animation: phone-fade 0.2s ease-out;
   }
+  /* The menu: a sheet of stacked screens over the bar's glass. Its
+     height is locked at the root screen's on open (app.js), capped
+     under the top bar, so drilling in never resizes it; each screen
+     scrolls on its own. */
   .phone-sheet:not([hidden]) {
     display: flex; flex-direction: column;
     position: fixed; left: 0; right: 0; bottom: 0; z-index: 99;
-    /* The sheet sizes to its content and never scrolls: the
-       one unbounded input, the character list, is capped to a
-       two-column grid (base.html + sheetSwitcherCap), so the
-       whole menu fits a portrait phone. The 92dvh rail only
-       guards extreme cases (short landscape viewports). */
-    max-height: 92vh;
-    max-height: 92dvh;
+    max-height: calc(100vh - 2.5rem);
+    max-height: calc(100dvh - 2.5rem - env(safe-area-inset-top, 0px));
     overflow: hidden;
-    padding: 0.8rem 1rem calc(1rem + env(safe-area-inset-bottom, 0px));
-    background: linear-gradient(rgba(21, 21, 21, 0.94), rgba(17, 17, 17, 0.97)) padding-box;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    background: linear-gradient(rgba(21, 21, 21, 0.92), rgba(15, 15, 15, 0.97)) padding-box;
     -webkit-backdrop-filter: blur(18px);
     backdrop-filter: blur(18px);
     border-top: 1px solid var(--glass-edge);
     border-radius: var(--r-lg) var(--r-lg) 0 0;
+    box-shadow: 0 -12px 32px rgba(0, 0, 0, 0.55);
+    animation: phone-sheet-rise 0.26s cubic-bezier(0.2, 0.9, 0.25, 1);
+    transition: transform 0.2s ease-out;
   }
+  .phone-sheet.dragging { transition: none; }
+  @keyframes phone-sheet-rise { from { transform: translateY(100%); } }
+  @keyframes phone-fade { from { opacity: 0; } }
   .phone-sheet-head {
     flex: none;
-    display: flex; align-items: center; justify-content: space-between;
-    margin-bottom: 0.3rem;
+    position: relative;
+    display: grid; grid-template-columns: 1fr auto 1fr; align-items: center;
+    min-height: calc(var(--tap) + 0.6rem);
+    padding: 0.6rem var(--space-3) 0;
+    touch-action: none;
   }
-  .phone-sheet-head h2 { margin: 0; font-size: var(--fs-lg); }
+  .phone-sheet-grab {
+    position: absolute; top: 0.4rem; left: 50%;
+    width: 2.25rem; height: 0.25rem; margin-left: -1.125rem;
+    border-radius: 1rem;
+    background: color-mix(in srgb, var(--text) 30%, transparent);
+  }
+  .phone-sheet-head h2 {
+    grid-column: 2;
+    margin: 0;
+    font-size: var(--fs-md);
+    letter-spacing: 0.1em;
+    white-space: nowrap;
+  }
+  .phone-sheet-back {
+    grid-column: 1; justify-self: start;
+    display: inline-flex; align-items: center; gap: 0.15rem;
+    min-height: var(--tap);
+    padding: 0 0.6rem 0 0.1rem;
+    color: var(--gold);
+    background: transparent; border: 0;
+    font-family: var(--font-display); font-weight: 600;
+    font-size: var(--fs-sm); letter-spacing: 0.06em; text-transform: uppercase;
+    cursor: pointer;
+  }
+  .phone-sheet-back[hidden] { display: none; }
+  .phone-sheet-back-icon { width: 1.25rem; height: 1.25rem; transform: scaleX(-1); }
   .phone-sheet-close {
+    grid-column: 3; justify-self: end;
     display: inline-flex; align-items: center; justify-content: center;
-    min-width: 2.2rem; min-height: 2.2rem;
+    width: var(--tap); height: var(--tap);
     color: var(--gold);
     background: transparent;
-    border: 1px solid transparent; border-radius: var(--r-sm);
+    border: 0; border-radius: 50%;
     cursor: pointer;
   }
+  .phone-sheet-close .nav-control-svg { width: 1.25rem; height: 1.25rem; }
+  .phone-sheet-stage {
+    flex: 1 1 auto; min-height: 0;
+    display: grid;
+    overflow: hidden;
+  }
+  .phone-sheet-pane {
+    grid-area: 1 / 1;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: var(--space-2) var(--space-3) var(--space-4);
+  }
+  .phone-sheet-pane[hidden] { display: none; }
+  .phone-sheet-pane.pane-in-fwd { animation: phone-pane-fwd 0.24s cubic-bezier(0.2, 0.9, 0.25, 1); }
+  .phone-sheet-pane.pane-in-back { animation: phone-pane-back 0.24s cubic-bezier(0.2, 0.9, 0.25, 1); }
+  @keyframes phone-pane-fwd { from { transform: translateX(40%); opacity: 0; } }
+  @keyframes phone-pane-back { from { transform: translateX(-40%); opacity: 0; } }
+  /* Grouped lists: one inset block per group, rows split by a
+     hairline that starts at the text, the way native settings
+     lists read. */
   .phone-sheet-list {
-    list-style: none; margin: 0; padding: 0;
-    flex: none;
+    list-style: none;
+    margin: 0 0 var(--space-3); padding: 0;
+    background: var(--surface-inset);
+    border: 1px solid var(--hairline);
+    border-radius: var(--r-md);
+    overflow: hidden;
   }
-  .phone-sheet-row {
-    display: flex; align-items: center; flex-wrap: wrap;
-    column-gap: 0.6rem;
-    border-top: 1px solid #262626; padding: 0.32rem 0;
-  }
-  .phone-sheet-row:first-child { border-top: 0; }
-  .phone-sheet-section {
-    display: block;
-    padding: 0.3rem 0.55rem;
-    border-left: 3px solid transparent;
-    font-family: "Rajdhani", sans-serif; font-weight: 600;
-    font-size: var(--fs-md); letter-spacing: 0.04em; text-transform: uppercase;
-    color: var(--text);
-    text-decoration: none;
-  }
-  .phone-sheet-section.active {
-    border-left-color: var(--accent);
+  .phone-sheet-list > li + li { border-top: 1px solid var(--hairline); }
+  .phone-sheet-list form { display: contents; }
+  .phone-sheet-list li:has(> [hidden]) { display: none; }
+  .phone-sheet-section, .phone-sheet-row, .phone-sheet-pilot-card {
+    display: flex; align-items: center; gap: 0.8rem;
+    width: 100%;
+    min-height: calc(var(--tap) + 0.25rem);
+    padding: 0.45rem 0.6rem 0.45rem 0.85rem;
     color: var(--text-bright);
-  }
-  .phone-sheet-groups {
-    display: flex; flex-wrap: wrap; gap: 0.35rem;
-  }
-  .phone-sheet-groups a {
-    border: 1px solid rgba(255, 110, 0, 0.22);
-    border-radius: var(--r-sm);
-    background: rgba(23, 17, 13, 0.55);
-    padding: 0.3rem 0.7rem;
-    font-size: var(--fs-sm);
-    color: var(--text);
-    text-decoration: none;
-  }
-  .phone-sheet-groups a.active {
-    background: rgba(255, 106, 0, 0.20);
-    border-color: rgba(255, 106, 0, 0.40);
-    color: var(--text-bright);
-  }
-  .phone-sheet-account {
-    flex: none;
-    border-top: 1px solid #262626;
-    margin-top: 0.4rem; padding-top: 0.6rem;
-  }
-  .phone-sheet-who { color: var(--muted); margin: 0 0 0.4rem; }
-  /* The character switcher is a two-column grid of compact
-     cells (portrait, name, its tag line) capped by the model,
-     so eight linked pilots take the room three took as a list. */
-  .phone-sheet-switch {
-    list-style: none; margin: 0 0 0.5rem; padding: 0;
-    display: grid; grid-template-columns: 1fr 1fr; gap: 0.4rem;
-  }
-  .phone-sheet-switch li { min-width: 0; }
-  .phone-sheet-switch a {
-    display: flex; align-items: center; gap: 0.45rem;
-    height: 100%; min-height: 2.75rem;
-    padding: 0.3rem 0.45rem;
-    border: 1px solid rgba(255, 110, 0, 0.16);
-    border-radius: var(--r-sm);
-    background: rgba(23, 17, 13, 0.45);
-    color: var(--text);
-    text-decoration: none;
-  }
-  .phone-sheet-switch a.active {
-    color: var(--text-bright);
-    border-color: rgba(255, 106, 0, 0.40);
-  }
-  .phone-sheet-pilot {
-    display: flex; flex-direction: column;
-    min-width: 0; line-height: 1.25;
-  }
-  .phone-sheet-pilot-name {
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  }
-  .phone-sheet-pilot small {
-    color: var(--muted); font-size: var(--fs-xs);
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  }
-  .phone-sheet-switch a.phone-sheet-more {
-    justify-content: center;
-    font-family: "Rajdhani", sans-serif; font-weight: 600;
-    font-size: var(--fs-md);
-    color: var(--gold);
-  }
-  .phone-sheet-links {
-    list-style: none; margin: 0 0 0.55rem; padding: 0;
-    display: flex; flex-wrap: wrap; gap: 0.2rem 1.1rem;
-  }
-  .phone-sheet-links a {
-    display: inline-block;
-    padding: 0.35rem 0;
-    color: var(--text);
-    text-decoration: none;
-  }
-  .phone-sheet-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
-  .phone-sheet-action {
-    flex: 1 1 auto;
-    display: inline-flex; align-items: center; justify-content: center;
-    padding: 0.55rem 0.8rem;
-    border: 1px solid rgba(255, 110, 0, 0.22); border-radius: var(--r-sm);
-    background: rgba(23, 17, 13, 0.55);
-    color: var(--text);
-    font: inherit;
-    text-align: center; text-decoration: none;
+    background: transparent;
+    border: 0;
+    font-family: var(--font-display); font-weight: 600;
+    font-size: var(--fs-md); letter-spacing: 0.03em;
+    text-align: left; text-decoration: none;
     cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
   }
+  .phone-sheet-section:hover, .phone-sheet-row:hover, .phone-sheet-pilot-card:hover { color: var(--text-bright); text-decoration: none; }
+  .phone-sheet-signout:hover { color: var(--danger); }
+  .phone-sheet-section .phone-sheet-label { text-transform: uppercase; letter-spacing: 0.06em; }
+  .phone-sheet-section.active, .phone-sheet-row.active {
+    background: var(--sel-bg);
+    box-shadow: inset 3px 0 0 var(--sel-edge);
+  }
+  .phone-sheet-section:active, .phone-sheet-row:active, .phone-sheet-pilot-card:active {
+    background: var(--row-hover);
+  }
+  .phone-sheet-icon {
+    flex: none;
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 1.35rem; height: 1.35rem;
+  }
+  .phone-sheet-text {
+    flex: 1 1 auto; min-width: 0;
+    display: flex; flex-direction: column; gap: 0.1rem;
+  }
+  .phone-sheet-label { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .phone-sheet-text small {
+    font-family: var(--font-body); font-weight: 400;
+    font-size: var(--fs-xs); letter-spacing: 0;
+    color: var(--muted);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .phone-sheet-chev {
+    flex: none; margin-left: auto;
+    width: 1.1rem; height: 1.1rem;
+    color: color-mix(in srgb, var(--text) 55%, transparent);
+  }
+  .phone-sheet-signout { color: var(--danger); }
+  /* The signed-in pilot heads the root: portrait, name, and the
+     way into the switcher. */
+  .phone-sheet-pilot-card {
+    margin: 0 0 var(--space-3);
+    padding: 0.6rem 0.6rem 0.6rem 0.7rem;
+    background: var(--surface-inset);
+    border: 1px solid var(--hairline);
+    border-radius: var(--r-md);
+  }
+  .phone-sheet-pilot-card .portrait,
+  .phone-sheet-switch .portrait { flex: none; border-radius: 50%; }
+  .phone-sheet-pilot-card .portrait { width: 2.75rem; height: 2.75rem; }
+  .phone-sheet-switch .portrait { width: 2rem; height: 2rem; }
+  .phone-sheet-who {
+    display: flex; align-items: center; gap: 0.5rem;
+    font-size: var(--fs-lg);
+    overflow: hidden; white-space: nowrap;
+  }
+  .phone-sheet-more { color: var(--gold); }
+  /* A section screen's group heading: small capitals over its
+     block, its icon beside it. */
+  .phone-sheet-group {
+    display: flex; align-items: center; gap: 0.45rem;
+    margin: var(--space-2) 0 0.4rem 0.85rem;
+    font-family: var(--font-display); font-weight: 600;
+    font-size: var(--fs-xs); letter-spacing: 0.1em; text-transform: uppercase;
+    color: color-mix(in srgb, var(--gold) 70%, var(--text));
+  }
+  .phone-sheet-group svg { width: 0.85rem; height: 0.85rem; flex: none; }
+  .phone-sheet-pane > .phone-sheet-group:first-child { margin-top: 0; }
 }
+@media (prefers-reduced-motion: reduce) {
+  .phone-sheet:not([hidden]), .phone-sheet-backdrop:not([hidden]) { animation: none; transition: none; }
+}}
 
 /* Axon's site panel: the window controls the panel's frame would
    carry, at the end of the top bar (base.html, app.js). Drawn in the

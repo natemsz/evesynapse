@@ -294,7 +294,11 @@ func TestMarketBasketGroupSuggestAndTypes(t *testing.T) {
 	types := map[int64]bool{}
 	for i := range rows {
 		if rows[i].Kind == "group" {
-			group = &rows[i]
+			// Both test groups match; which sorts first depends on
+			// the database collation, so pick the parent by id.
+			if rows[i].ID == 9100 {
+				group = &rows[i]
+			}
 		} else {
 			types[rows[i].ID] = true
 		}

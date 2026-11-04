@@ -40,6 +40,7 @@
 {{if or (eq .NavPage "mail.html") (eq .NavPage "compose.html")}}<link rel="stylesheet" href="/static/mail.css?v={{.AssetVersion}}">{{end}}
 {{if eq .NavPage "market_lp.html"}}<link rel="stylesheet" href="/static/lp.css?v={{.AssetVersion}}">{{end}}
 {{if eq .NavPage "market_trends.html"}}<link rel="stylesheet" href="/static/trends.css?v={{.AssetVersion}}">{{end}}
+{{if or (eq .NavPage "market_baskets.html") (eq .NavPage "market_basket.html")}}<link rel="stylesheet" href="/static/baskets.css?v={{.AssetVersion}}">{{end}}
 {{if eq .NavPage "industry_mining.html"}}<link rel="stylesheet" href="/static/mining.css?v={{.AssetVersion}}">{{end}}
 {{if eq .NavPage "planets.html"}}<link rel="stylesheet" href="/static/colonies.css?v={{.AssetVersion}}">{{end}}
 {{if eq .NavPage "skillplans.html"}}<link rel="stylesheet" href="/static/skillplans.css?v={{.AssetVersion}}">{{end}}

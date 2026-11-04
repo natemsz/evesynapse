@@ -38,21 +38,25 @@ type marketBasketListRow struct {
 	Chg1       trendFigure
 	Chg7       trendFigure
 	Spark      template.HTML // hover card for the Value figure, when the reader's hover sparklines are on
+	Line       template.HTML // the inline 30-day value line beside the figure
+	ValueShort string
 }
 
 type marketBasketItemRow struct {
-	TypeID   int64
-	Name     string
-	Quantity string
-	Unit     string
-	Value    string
-	Share    string // of the basket's value
-	Chg      trendFigure
-	Impact   string // ISK the item moved the basket over the period
-	ImpactUp bool
-	impact   float64
-	value    float64
-	priced   bool
+	TypeID                             int64
+	Name                               string
+	Quantity                           string
+	Unit                               string
+	Value                              string
+	Share                              string // of the basket's value
+	SharePct                           string // the same, 0 to 100, for its meter
+	UnitShort, ValueShort, ImpactShort string
+	Chg                                trendFigure
+	Impact                             string // ISK the item moved the basket over the period
+	ImpactUp                           bool
+	impact                             float64
+	value                              float64
+	priced                             bool
 }
 
 type marketBasketMover struct {
@@ -61,6 +65,7 @@ type marketBasketMover struct {
 	Unit   string
 	Chg    trendFigure
 	Impact string // inside the basket: ISK effect; outside: ""
+	Qty    string // inside the basket: the quantity held
 }
 
 type marketBasketView struct {
@@ -71,24 +76,29 @@ type marketBasketView struct {
 	Regions  []marketRegionChoice
 
 	// detail
-	Basket     *marketBasketListRow
-	Own        bool
-	RegionID   int64
-	Period     int
-	Periods    []marketTrendChoice
-	Value      string
-	ValueBuy   string
-	Chg1       trendFigure
-	Chg7       trendFigure
-	Chg30      trendFigure
-	Chart      *bookTrendChart
-	Items      []marketBasketItemRow
-	YourOrders []yourOrderRow
-	Unpriced   int
-	MoversUp   []marketBasketMover
-	MoversDown []marketBasketMover
-	Outside    []marketBasketMover
-	EditText   string
+	Basket        *marketBasketListRow
+	Own           bool
+	RegionID      int64
+	Period        int
+	Periods       []marketTrendChoice
+	Value         string
+	ValueBuy      string
+	Chg1          trendFigure
+	Chg7          trendFigure
+	Chg30         trendFigure
+	Delta1        string // the ISK behind each change, signed and compact
+	Delta7        string
+	Delta30       string
+	ValueShort    string
+	ValueBuyShort string
+	Chart         *bookTrendChart
+	Items         []marketBasketItemRow
+	YourOrders    []yourOrderRow
+	Unpriced      int
+	MoversUp      []marketBasketMover
+	MoversDown    []marketBasketMover
+	Outside       []marketBasketMover
+	EditText      string
 }
 
 func (app *Application) handleMarketBaskets(w http.ResponseWriter, r *http.Request) {
@@ -108,6 +118,7 @@ func (app *Application) handleMarketBaskets(w http.ResponseWriter, r *http.Reque
 		row := basketListRow(b.ID, b.Name, b.RegionID, !b.UserID.Valid, b.ItemCount)
 		if b.ValueDay != "" {
 			row.Value = esi.FormatISK(b.ValueSell)
+			row.ValueShort = formatISKShort(b.ValueSell)
 			row.Partial = b.PricedItems < b.ItemCount
 		}
 		if b.UserID.Valid {
@@ -125,14 +136,10 @@ func (app *Application) handleMarketBaskets(w http.ResponseWriter, r *http.Reque
 		}
 	}
 	if len(valued) > 0 {
-		// The hover sparkline reads the same stored series over
-		// its 30-day window; with the switch off the read stays
-		// at the change figures' 14 days.
+		// The inline value line and the hover sparkline read the
+		// same stored series over a 30-day window.
 		sparkOn := userID != 0 && app.vizPrefsFor(ctx, userID).SparkHover
-		window := -14
-		if sparkOn {
-			window = -31
-		}
+		window := -31
 		series, err := app.queries.ListMarketBasketValuesForBaskets(ctx, db.ListMarketBasketValuesForBasketsParams{
 			BasketIds: valued, Since: basketDay(time.Now().AddDate(0, 0, window)),
 		})
@@ -150,6 +157,7 @@ func (app *Application) handleMarketBaskets(w http.ResponseWriter, r *http.Reque
 				if s := byBasket[view.List[i].ID]; len(s) > 0 {
 					view.List[i].Chg1 = basketChange(s, 1)
 					view.List[i].Chg7 = basketChange(s, 7)
+					view.List[i].Line = basketLine30(s)
 					if sparkOn {
 						view.List[i].Spark = basketSpark(s)
 					}
@@ -249,6 +257,11 @@ func (app *Application) buildBasketView(ctx context.Context, b db.MarketBasket, 
 		view.Chg1 = basketChange(values, 1)
 		view.Chg7 = basketChange(values, 7)
 		view.Chg30 = basketChange(values, 30)
+		view.Delta1 = basketDelta(values, 1)
+		view.Delta7 = basketDelta(values, 7)
+		view.Delta30 = basketDelta(values, 30)
+		view.ValueShort = formatISKShort(last.ValueSell)
+		view.ValueBuyShort = formatISKShort(last.ValueBuy)
 		daily := make([]db.ListMarketRegionStatsDailyRecentRow, 0, n)
 		for _, v := range values {
 			daily = append(daily, db.ListMarketRegionStatsDailyRecentRow{Day: v.Day, TypicalSell: v.ValueSell, TypicalBuy: v.ValueBuy})
@@ -279,6 +292,8 @@ func (app *Application) buildBasketView(ctx context.Context, b db.MarketBasket, 
 			line.value = unit * float64(it.Quantity)
 			line.Unit = esi.FormatISK(unit)
 			line.Value = esi.FormatISK(line.value)
+			line.UnitShort = formatISKShort(unit)
+			line.ValueShort = formatISKShort(line.value)
 			chg := periodChange(p.Own, view.Period)
 			line.Chg = newTrendFigure(chg)
 			if chg.Valid && chg.Float64 > -100 {
@@ -287,6 +302,7 @@ func (app *Application) buildBasketView(ctx context.Context, b db.MarketBasket, 
 				line.impact = line.value - then
 				line.Impact = esi.FormatISK(math.Abs(line.impact))
 				line.ImpactUp = line.impact >= 0
+				line.ImpactShort = formatISKShort(math.Abs(line.impact))
 			}
 			total += line.value
 		} else {
@@ -297,6 +313,7 @@ func (app *Application) buildBasketView(ctx context.Context, b db.MarketBasket, 
 	for i := range lines {
 		if lines[i].priced && total > 0 {
 			lines[i].Share = fmt.Sprintf("%.1f%%", lines[i].value/total*100)
+			lines[i].SharePct = strconv.FormatFloat(math.Round(lines[i].value/total*100), 'f', 0, 64)
 		}
 	}
 	sort.SliceStable(lines, func(i, j int) bool { return lines[i].value > lines[j].value })
@@ -312,12 +329,12 @@ func (app *Application) buildBasketView(ctx context.Context, b db.MarketBasket, 
 	sort.Slice(movers, func(i, j int) bool { return movers[i].impact > movers[j].impact })
 	for _, m := range movers {
 		if m.impact > 0 && len(view.MoversUp) < 5 {
-			view.MoversUp = append(view.MoversUp, marketBasketMover{TypeID: m.TypeID, Name: m.Name, Unit: m.Unit, Chg: m.Chg, Impact: m.Impact})
+			view.MoversUp = append(view.MoversUp, marketBasketMover{TypeID: m.TypeID, Name: m.Name, Unit: m.Unit, Chg: m.Chg, Impact: m.ImpactShort, Qty: m.Quantity})
 		}
 	}
 	for i := len(movers) - 1; i >= 0; i-- {
 		if m := movers[i]; m.impact < 0 && len(view.MoversDown) < 5 {
-			view.MoversDown = append(view.MoversDown, marketBasketMover{TypeID: m.TypeID, Name: m.Name, Unit: m.Unit, Chg: m.Chg, Impact: m.Impact})
+			view.MoversDown = append(view.MoversDown, marketBasketMover{TypeID: m.TypeID, Name: m.Name, Unit: m.Unit, Chg: m.Chg, Impact: m.ImpactShort, Qty: m.Quantity})
 		}
 	}
 
@@ -360,15 +377,43 @@ func periodChange(s *db.MarketRegionStat, days int) sql.NullFloat64 {
 // basketChange compares the newest stored value with the newest one at
 // least days older (within three extra days), over complete days only.
 func basketChange(values []db.ListMarketBasketValuesRow, days int) trendFigure {
-	last := values[len(values)-1]
-	if last.PricedItems < last.ItemCount || last.ValueSell <= 0 {
+	last, then, ok := basketChangeBase(values, days)
+	if !ok {
 		return trendFigure{}
 	}
-	end, err := time.Parse("2006-01-02", last.Day)
+	return newTrendFigure(sql.NullFloat64{Float64: (last - then) / then * 100, Valid: true})
+}
+
+// basketDelta is the ISK behind basketChange: the worth now less the
+// worth then, signed and compact, "" where the change has no base.
+func basketDelta(values []db.ListMarketBasketValuesRow, days int) string {
+	last, then, ok := basketChangeBase(values, days)
+	if !ok {
+		return ""
+	}
+	d := last - then
+	if d < 0 {
+		return "−" + formatISKShort(-d)
+	}
+	return "+" + formatISKShort(d)
+}
+
+// basketChangeBase finds the two worths a change compares: the
+// latest, and a fully priced day of the same basket within three
+// days before the period's start.
+func basketChangeBase(values []db.ListMarketBasketValuesRow, days int) (last, then float64, ok bool) {
+	if len(values) == 0 {
+		return 0, 0, false
+	}
+	end := values[len(values)-1]
+	if end.PricedItems < end.ItemCount || end.ValueSell <= 0 {
+		return 0, 0, false
+	}
+	endDay, err := time.Parse("2006-01-02", end.Day)
 	if err != nil {
-		return trendFigure{}
+		return 0, 0, false
 	}
-	from, to := basketDay(end.AddDate(0, 0, -days-3)), basketDay(end.AddDate(0, 0, -days))
+	from, to := basketDay(endDay.AddDate(0, 0, -days-3)), basketDay(endDay.AddDate(0, 0, -days))
 	for i := len(values) - 2; i >= 0; i-- {
 		v := values[i]
 		if v.Day > to {
@@ -377,11 +422,11 @@ func basketChange(values []db.ListMarketBasketValuesRow, days int) trendFigure {
 		if v.Day < from {
 			break
 		}
-		if v.PricedItems == v.ItemCount && v.ItemCount == last.ItemCount && v.ValueSell > 0 {
-			return newTrendFigure(sql.NullFloat64{Float64: (last.ValueSell - v.ValueSell) / v.ValueSell * 100, Valid: true})
+		if v.PricedItems == v.ItemCount && v.ItemCount == end.ItemCount && v.ValueSell > 0 {
+			return end.ValueSell, v.ValueSell, true
 		}
 	}
-	return trendFigure{}
+	return 0, 0, false
 }
 
 // handleMarketBasketCreate makes a basket from the form, or copies

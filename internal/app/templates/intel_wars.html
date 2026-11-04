@@ -2,39 +2,57 @@
 {{define "pagetitle"}}<h1><span class="gt">Wars</span></h1>{{end}}
 {{define "pagetabs"}}{{template "sectiontabs" .}}{{end}}
 {{define "content"}}
-
+{{/* Wars (intel.go): the newest declared wars, each a card that sets
+     the aggressor against the defender with what each side has
+     destroyed. The tiles count over the wars the page reads and
+     filter the list (?show=). */}}
+<div class="l-page iw">
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
 
-{{if .IntelWars}}
-  {{if .IntelWars.Warming}}
-  <p class="prose">Not loaded yet. The public war list is fetched on a regular cycle{{if .IsAdmin}}; progress is on the <a href="/admin/sync/">Sync page</a>{{end}}.</p>
+{{with .IntelWars}}
+  {{if .Warming}}
+  <div class="l-panel"><p class="iw-note">Not loaded yet. The public war list is fetched on a regular cycle{{if $.IsAdmin}}; progress is on the <a href="/admin/sync/">Sync page</a>{{end}}.</p></div>
   {{else}}
-  {{if .IntelWars.Rows}}
-  <div class="tw">
-  <table>
-    <thead><tr><th>War</th><th>Aggressor</th><th>Defender</th><th>State</th><th>Declared</th><th>Aggressor record</th><th>Defender record</th></tr></thead>
-    <tbody>
-    {{range .IntelWars.Rows}}
-      <tr{{if .Yours}} class="yours"{{end}}>
-        <td>#{{.ID}}{{if .Yours}}<br><span class="badge kill">Your corporation</span>{{end}}</td>
-        <td>{{.Aggressor}}{{if .OpenAllies}}<br><span class="badge loss">Open for allies</span>{{end}}{{if .Mutual}}<br><small>Mutual</small>{{end}}</td>
-        <td>{{.Defender}}{{if .Allies}}<br><small>Allies: {{range $i, $a := .Allies}}{{if $i}}, {{end}}{{$a}}{{end}}</small>{{end}}</td>
-        <td>{{if .Warming}}<small>loading details</small>{{else}}{{.State}}{{end}}</td>
-        <td>{{.Declared}}</td>
-        <td>{{.AggKills}}</td>
-        <td>{{.DefKills}}</td>
-      </tr>
-    {{end}}
-    </tbody>
-  </table>
+  <div class="l-head">
+    <p class="l-head-sum">The <b>{{.Shown}}</b> newest of <b>{{.Total}}</b> wars on record. Wars that involve one of your characters' corporations are marked.</p>
   </div>
-  {{if gt .IntelWars.Total (len .IntelWars.Rows)}}<p class="prose"><small>Showing the {{len .IntelWars.Rows}} most recent of {{.IntelWars.Total}} wars.</small></p>{{end}}
-  <p class="prose"><small>Wars involving one of your characters' corporations are flagged. Records cover ships killed and ISK destroyed on each side.</small></p>
+
+  <nav class="l-tiles iw-tiles" aria-label="Show">
+    <a class="l-stat{{if eq .Show "active"}} on{{end}}" href="/intel/wars/{{if ne .Show "active"}}?show=active{{end}}"{{if eq .Show "active"}} aria-current="true"{{end}}><span class="l-stat-label">Active</span><span class="l-stat-value">{{.Active}}</span><span class="l-stat-sub">Running or about to start</span></a>
+    <a class="l-stat{{if eq .Show "yours"}} on{{end}}{{if .Yours}} warn{{end}}" href="/intel/wars/{{if ne .Show "yours"}}?show=yours{{end}}"{{if eq .Show "yours"}} aria-current="true"{{end}}><span class="l-stat-label">Your wars</span><span class="l-stat-value">{{.Yours}}</span><span class="l-stat-sub">Your corporations are in them</span></a>
+    <a class="l-stat{{if eq .Show "allies"}} on{{end}}" href="/intel/wars/{{if ne .Show "allies"}}?show=allies{{end}}"{{if eq .Show "allies"}} aria-current="true"{{end}}><span class="l-stat-label">Open for allies</span><span class="l-stat-value">{{.OpenAllies}}</span><span class="l-stat-sub">The defender takes help</span></a>
+    <a class="l-stat{{if eq .Show "ended"}} on{{end}}" href="/intel/wars/{{if ne .Show "ended"}}?show=ended{{end}}"{{if eq .Show "ended"}} aria-current="true"{{end}}><span class="l-stat-label">Ended</span><span class="l-stat-value">{{.Ended}}</span><span class="l-stat-sub">Finished or retracted</span></a>
+  </nav>
+
+  {{if .Rows}}
+  <ol class="iw-wars">
+    {{range .Rows}}
+    <li class="l-panel iw-war{{if .Yours}} yours{{end}}">
+      <div class="iw-side iw-agg">
+        <span class="iw-role">Aggressor{{if .OpenAllies}} <span class="iw-flag">open for allies</span>{{end}}</span>
+        <span class="iw-org">{{.Aggressor}}</span>
+        {{if not .Warming}}<span class="iw-rec"><b>{{.AggShips}}</b> ships · <b title="{{.AggISKExact}} ISK">{{.AggISK}}</b> ISK destroyed</span>{{end}}
+      </div>
+      <div class="iw-mid">
+        <span class="iw-state iw-{{if .Warming}}pending{{else}}{{.Tone}}{{end}}">{{if .Warming}}Loading details{{else}}{{.State}}{{end}}</span>
+        <span class="iw-vs" aria-hidden="true">vs</span>
+        <span class="iw-meta">#{{.ID}}{{if .Declared}} · <span class="iw-when">declared {{.Declared}}</span>{{end}}{{if .Mutual}} · mutual{{end}}{{if .Yours}} · <b>your corporation</b>{{end}}</span>
+      </div>
+      <div class="iw-side iw-def">
+        <span class="iw-role">Defender</span>
+        <span class="iw-org">{{.Defender}}</span>
+        {{if not .Warming}}<span class="iw-rec"><b>{{.DefShips}}</b> ships · <b title="{{.DefISKExact}} ISK">{{.DefISK}}</b> ISK destroyed</span>{{end}}
+        {{if .Allies}}<span class="iw-allies">With {{range $i, $a := .Allies}}{{if $i}}, {{end}}{{$a}}{{end}}</span>{{end}}
+      </div>
+    </li>
+    {{end}}
+  </ol>
   {{else}}
-  <p class="prose"><small>No wars on record right now.</small></p>
+  <div class="l-panel"><p class="iw-note">{{if .Show}}None of the {{.Shown}} newest wars fit this filter. <a href="/intel/wars/">Show every war</a>.{{else}}No wars on record right now.{{end}}</p></div>
   {{end}}
   {{end}}
 {{else}}
-  <p class="prose">No intel to show yet.</p>
+  <div class="l-panel"><p class="iw-note">No intel to show yet.</p></div>
 {{end}}
+</div>
 {{end}}

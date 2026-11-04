@@ -5,7 +5,7 @@
 {{with .ScanCompare}}
 {{/* Two scans diffed (scans_compare.go). The first is "before",
      the second "after"; links or bare ids both work. */}}
-<div class="sc">
+<div class="l-page sc">
   <form class="sc-panel sc-cmp-form" method="get" action="/intel/scan/compare/">
     <label class="sc-sys"><span>First scan <span class="muted">(before)</span></span><input type="text" name="a" value="{{.AID}}" placeholder="Scan link or id" autocomplete="off" spellcheck="false"></label>
     <label class="sc-sys"><span>Second scan <span class="muted">(after)</span></span><input type="text" name="b" value="{{.BID}}" placeholder="Scan link or id" autocomplete="off" spellcheck="false"></label>
@@ -62,7 +62,7 @@
       <tbody>{{range .Classes}}<tr><td>{{.Name}}{{if .State}} <span class="sc-state {{.State}}">{{.State}}</span>{{end}}</td><td class="sc-num">{{.Before}}</td><td class="sc-num">{{.After}}</td><td class="sc-num">{{.DeltaText}}</td><td class="sc-num">{{.GridBefore}} → {{.GridAfter}}</td></tr>{{end}}</tbody>
     </table></div>
   </section>{{end}}
-  {{if and (not .Types) (not .Classes) (not .Moves) (not .NotableArrived) (not .NotableLeft)}}<p class="sc-note muted prose">The two readings agree: same ships, same grid split, same notables.</p>{{end}}
+  {{if and (not .Types) (not .Classes) (not .Moves) (not .NotableArrived) (not .NotableLeft)}}<p class="sc-note muted">The two readings agree: same ships, same grid split, same notables.</p>{{end}}
   {{end}}
 
   {{with .Local}}

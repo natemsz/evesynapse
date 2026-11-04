@@ -21,7 +21,7 @@
    controls, each with its small glyph. */
 .cs-intro { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: 0.6rem 1.5rem; margin-bottom: 1rem; }
 .cs-intro > p { margin: 0; max-width: 32rem; }
-.cs-hunts { display: flex; flex-wrap: wrap; align-items: center; gap: 0.45rem; flex: none; padding-top: 0.1rem; }
+.cs-hunts { display: flex; flex-wrap: wrap; align-items: center; gap: 0.45rem; flex: 0 1 auto; min-width: 0; padding-top: 0.1rem; }
 .cs-hunts-label { color: var(--gold); font-weight: 600; }
 .cs-hunt {
   display: inline-flex; align-items: center; gap: 0.4rem;

@@ -92,7 +92,7 @@ td.mt-reqs { max-width: 12rem; }
 .mb-tree { scrollbar-width: thin; scrollbar-color: var(--muted) transparent; }
 /* The guide lines anchor on the tree: beside the items the pane is
    sticky (positioned already); alone it needs a position of its own. */
-@container console (width < 46rem) { .mb-tree { position: relative; } }
+@container console (width < 46rem) { .mb-tree { position: relative; overflow-x: clip; } }
 .mb-guides { position: absolute; top: 0; left: 0; pointer-events: none; }
 .mb-guides path { fill: none; stroke: var(--gold); opacity: 0.26; stroke-width: 1; }
 .mb-tree::-webkit-scrollbar { width: 0.45rem; }

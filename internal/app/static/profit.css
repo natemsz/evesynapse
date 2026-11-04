@@ -9,3 +9,12 @@
 .pf-chiprows { align-items: flex-start; }
 .pf-chiprows .mt-modes { justify-content: flex-start; }
 .pf-tiles .kpi-spark { margin-top: auto; }
+
+/* On a narrow page an info tip's card spans its heading or tile
+   rather than centring on a trigger that may sit near the edge. */
+@container page (width < 40rem) {
+  .l-page :is(.l-stat, h3, h4, figcaption) { position: relative; }
+  .l-page .info-tip { position: static; }
+  .l-page .info-tip .info-tip-pop,
+  .l-page .info-tip:is(:hover, :focus-visible, :focus-within) .info-tip-pop { left: 0; right: 0; width: auto; max-width: none; transform: none; }
+}

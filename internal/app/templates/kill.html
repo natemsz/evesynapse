@@ -2,6 +2,7 @@
 {{define "pagetitle"}}<h1><span class="gt">Kill</span></h1>{{end}}
 {{define "pagetabs"}}{{template "sectiontabs" .}}{{end}}
 {{define "content"}}
+<div class="l-page">
 {{with .KillPage}}
 {{if not .Row.ID}}
 <p class="kp-missing prose">This kill isn't on the killboard. It may not have been posted publicly yet, or the link is wrong. <a href="/intel/kills/">Back to the killboard</a></p>
@@ -43,6 +44,7 @@
       <p class="kp-note">Being priced. It shows within a minute.</p>
       {{end}}
       <div class="kp-actions">
+        {{if .Fit}}<button type="button" class="btn small" data-copy data-copy-text="{{.Fit}}">Copy fit</button>{{end}}
         <a class="btn small" href="/map/?system={{.Row.SystemID}}">On the map</a>
       </div>
     </div>
@@ -85,4 +87,5 @@
 </div>
 {{end}}
 {{end}}
+</div>
 {{end}}

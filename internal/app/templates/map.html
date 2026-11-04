@@ -2,6 +2,7 @@
 {{define "pagetitle"}}<h1><span class="gt">Map</span></h1>{{end}}
 {{define "content"}}
 {{with .Map}}
+<div class="l-page map-page">
 {{/* The universe map. The server renders the frame and a region
      index that works on its own; map.js draws the canvas from the
      stored payload (data-src, content-hashed and cached for good)
@@ -11,11 +12,12 @@
      figure on the site, in either theme. */}}
 {{template "mapview" .}}
 
-<details class="map-index"{{if not .Ready}} open{{end}}>
+<details class="map-index l-panel"{{if not .Ready}} open{{end}}>
   <summary>All regions ({{len .Regions}})</summary>
   <ul class="map-index-list">
     {{range .Regions}}<li><a href="/region/?region={{.ID}}" data-map-region="{{.ID}}">{{.Name}}</a></li>{{end}}
   </ul>
 </details>
+</div>
 {{end}}
 {{end}}

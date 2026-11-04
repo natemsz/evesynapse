@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"time"
 
+	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
 	"evesynapse/internal/logging"
 )
@@ -79,6 +80,16 @@ type blueprintRow struct {
 	Original        bool
 	Href            string // opens it in the inspector
 	On              bool
+	// Build is the stored verdict (schema 122): "ready" when the
+	// owner has the skills and one run's materials on hand,
+	// "materials" when only materials are short, "skills" when a
+	// skill is missing, "" with no verdict. BuildNote says why.
+	Build     string
+	BuildNote string
+	// OwnerID and OwnerName name the owning character; the name is
+	// shown in the all-characters view.
+	OwnerID   int64
+	OwnerName string
 }
 
 // blueprintMaterial is one input per run at the blueprint's ME.
@@ -105,6 +116,7 @@ type blueprintInspector struct {
 type industryView struct {
 	CharacterName string
 	CharacterID   int64
+	All           bool // every character's blueprints, judged for the account
 	Blueprints    econSectionState
 	BlueprintRows []blueprintRow
 	BPTiles       []jobTile
@@ -128,7 +140,7 @@ func (app *Application) handleIndustry(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	data := app.page(ctx)
 
-	_, active, links, err := app.pickCharacter(ctx, r, "/industry/")
+	characters, active, links, err := app.pickCharacter(ctx, r, "/industry/")
 	if err != nil {
 		logging.Errorf("industry: list characters: %v", err)
 		data.Error = "Could not load industry data; check the server log."
@@ -141,10 +153,22 @@ func (app *Application) handleIndustry(w http.ResponseWriter, r *http.Request) {
 	}
 	data.IndustryChars = links
 
+	// "All characters" lists every character's blueprints, and its
+	// build verdicts are the account's (any character's skills,
+	// every hangar's materials); one character reads its own.
 	view := &industryView{CharacterName: active.Name, CharacterID: active.CharacterID}
+	owners := []db.Character{active}
+	if r.URL.Query().Get("character") == "all" {
+		view.All, view.CharacterName = true, "All characters"
+		owners = characters
+		for i := range links {
+			links[i].Active = false
+		}
+	}
+	data.IndustryChars = append([]assetCharLink{{Name: "All characters", Href: "/industry/?character=all", Active: view.All}}, links...)
 	data.Industry = view
 
-	app.fillBlueprints(ctx, r, active.CharacterID, view, app.blueprintPinSet(ctx, app.userID(ctx)))
+	app.fillBlueprints(ctx, r, owners, view, app.blueprintPinSet(ctx, app.userID(ctx)))
 
 	app.render(ctx, w, http.StatusOK, "industry.html", data)
 }
@@ -201,9 +225,23 @@ func (app *Application) handleIndustryMining(w http.ResponseWriter, r *http.Requ
 // every row, walking the stored product map (sde_blueprints) for
 // the produced item and its category. pins is the account's pin
 // set, marking which rows carry a production-line pin.
-func (app *Application) fillBlueprints(ctx context.Context, r *http.Request, characterID int64, view *industryView, pins map[int64]bool) {
+func (app *Application) fillBlueprints(ctx context.Context, r *http.Request, owners []db.Character, view *industryView, pins map[int64]bool) {
 	var blueprints esi.Blueprints
-	view.Blueprints = app.econSection(ctx, characterID, esi.SnapBlueprints, &blueprints)
+	ownerOf := map[int64]db.Character{} // by item id
+	for i, ch := range owners {
+		var bps esi.Blueprints
+		st := app.econSection(ctx, ch.CharacterID, esi.SnapBlueprints, &bps)
+		if i == 0 || (st.Loaded && !view.Blueprints.Loaded) {
+			view.Blueprints = st
+		}
+		if !st.Loaded {
+			continue
+		}
+		for _, bp := range bps {
+			ownerOf[bp.ItemID] = ch
+		}
+		blueprints = append(blueprints, bps...)
+	}
 	if !view.Blueprints.Loaded {
 		return
 	}
@@ -253,6 +291,10 @@ func (app *Application) fillBlueprints(ctx context.Context, r *http.Request, cha
 			}
 		}
 		row.Pinned = pins[bp.TypeID]
+		row.OwnerID = ownerOf[bp.ItemID].CharacterID
+		if view.All {
+			row.OwnerName = ownerOf[bp.ItemID].Name
+		}
 		row.ItemID, row.MEValue, row.TEValue = bp.ItemID, bp.MaterialEfficiency, bp.TimeEfficiency
 		row.Original = bp.Quantity == -1
 		// ESI semantics: quantity -1 marks an original (runs -1 =
@@ -279,18 +321,22 @@ func (app *Application) fillBlueprints(ctx context.Context, r *http.Request, cha
 		}
 		return rows[i].Name < rows[j].Name
 	})
-	app.shapeBlueprints(ctx, r, characterID, view, rows)
+	scope := strconv.FormatInt(view.CharacterID, 10)
+	if view.All {
+		scope = "all"
+	}
+	app.shapeBlueprints(ctx, r, scope, view, rows)
 }
 
 // shapeBlueprints builds the library's tiles, directory and filters
 // over every blueprint, then the filtered list and the inspector.
-func (app *Application) shapeBlueprints(ctx context.Context, r *http.Request, characterID int64, view *industryView, rows []blueprintRow) {
+func (app *Application) shapeBlueprints(ctx context.Context, r *http.Request, scope string, view *industryView, rows []blueprintRow) {
 	q := r.URL.Query()
 	cat, kind := q.Get("cat"), q.Get("kind")
 	pick, _ := strconv.ParseInt(q.Get("bp"), 10, 64)
 	href := func(c, k string, bp int64, list bool) string {
 		v := url.Values{}
-		v.Set("character", strconv.FormatInt(characterID, 10))
+		v.Set("character", scope)
 		if list {
 			v.Set("list", "1")
 		}
@@ -362,6 +408,7 @@ func (app *Application) shapeBlueprints(ctx context.Context, r *http.Request, ch
 		view.BlueprintsCut = len(picked) - maxIndustryRows
 		picked = picked[:maxIndustryRows]
 	}
+	app.attachBlueprintBuild(ctx, view.All, picked)
 	view.BlueprintRows = picked
 	view.BPDepth = 1
 	if q.Get("list") != "1" && cat == "" && kind == "" {
@@ -373,6 +420,9 @@ func (app *Application) shapeBlueprints(ctx context.Context, r *http.Request, ch
 				continue
 			}
 			row.Href = href(cat, kind, row.ItemID, true)
+			one := []blueprintRow{row}
+			app.attachBlueprintBuild(ctx, view.All, one)
+			row = one[0]
 			view.BPInsp = app.blueprintInspectorFor(ctx, row, href(cat, kind, 0, true))
 			view.BPDepth = 2
 			break
@@ -405,4 +455,54 @@ func (app *Application) blueprintInspectorFor(ctx context.Context, row blueprint
 		}
 	}
 	return in
+}
+
+// attachBlueprintBuild reads the stored build verdicts for the rows
+// a page shows (bounded by the table cap) and words them: the
+// owner's verdict for one character, the account's for all.
+func (app *Application) attachBlueprintBuild(ctx context.Context, all bool, rows []blueprintRow) {
+	userID := app.userID(ctx)
+	if len(rows) == 0 || userID == 0 {
+		return
+	}
+	ids := make([]int64, len(rows))
+	for i, r := range rows {
+		ids[i] = r.ItemID
+	}
+	verdicts, err := app.queries.ListBlueprintBuildable(ctx, db.ListBlueprintBuildableParams{UserID: userID, ItemIds: ids})
+	if err != nil {
+		logging.Errorf("industry: build verdicts for user %d: %v", userID, err)
+		return
+	}
+	byItem := make(map[int64]db.ListBlueprintBuildableRow, len(verdicts))
+	for _, v := range verdicts {
+		byItem[v.ItemID] = v
+	}
+	for i := range rows {
+		v, ok := byItem[rows[i].ItemID]
+		if !ok {
+			continue
+		}
+		skills, mats, missing, short := v.HasSkills, v.HasMaterials, v.MissingSkills, v.ShortMaterials
+		if all {
+			skills, mats, missing, short = v.AnySkills, v.AnyMaterials, v.AnyMissingSkills, v.AnyShortMaterials
+		}
+		switch {
+		case !skills:
+			rows[i].Build, rows[i].BuildNote = "skills", "Needs "+missing
+		case !mats && all:
+			rows[i].Build = "materials"
+			rows[i].BuildNote = fmt.Sprintf("A character has the skills. Short %d of %d materials for one run across your hangars", short, v.TotalMaterials)
+		case !mats:
+			rows[i].Build = "materials"
+			rows[i].BuildNote = fmt.Sprintf("Skills trained. Short %d of %d materials for one run in this character's hangars", short, v.TotalMaterials)
+		default:
+			rows[i].Build = "ready"
+			if all {
+				rows[i].BuildNote = "A character has the skills, and one run's materials are across your hangars"
+			} else {
+				rows[i].BuildNote = "Skills trained and one run's materials on hand"
+			}
+		}
+	}
 }

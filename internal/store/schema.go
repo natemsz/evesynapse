@@ -745,6 +745,13 @@ var pgMarketStationHeatSchema string
 //go:embed schema_pg/121_market_stat_sparks.sql
 var pgMarketStatSparksSchema string
 
+// Step 122: per owned blueprint, whether its owner can build one run
+// now (skills, and one run's materials in their hangars), folded by
+// the worker from the blueprint, asset and skill snapshots.
+//
+//go:embed schema_pg/122_blueprint_buildable.sql
+var pgBlueprintBuildableSchema string
+
 // Step 123: each basket's stored figures (worth, changes, 30-day
 // line) and its items' (unit, worth, share, change, impact), derived
 // where the basket's values are written.
@@ -902,6 +909,7 @@ func schemaSteps() []schemaStep {
 		{119, "asset_location_values", pgAssetLocationValuesSchema, ""},
 		{120, "market_station_heat", pgMarketStationHeatSchema, ""},
 		{121, "market_stat_sparks", pgMarketStatSparksSchema, ""},
+		{122, "blueprint_buildable", pgBlueprintBuildableSchema, ""},
 		{123, "market_basket_summary", pgMarketBasketSummarySchema, ""},
 	}
 }

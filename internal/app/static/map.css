@@ -1,7 +1,12 @@
 /* map.css -- the universe map (map.html, map.js).
  *
- * The map is one glass frame: a bar (where you are, find, zoom) over
- * a deep-space stage the canvas fills. The canvas reads its colors
+ * The map is one solid frame on the page: a bar (where you are, find,
+ * zoom, the reader's menus, the layer picker) over a deep-space stage
+ * the canvas fills; only what floats over the stage is glass. The
+ * frame is a size container (map), and the stage another (stage), so
+ * the bar and the overlays answer to the map's own room, never the
+ * window: it sits in a page whose sidebar opens and closes, and in
+ * the intel workbench's narrow column. The canvas reads its colors
  * from here (the --map-* tokens below, both themes) and from the
  * legend's .sec-N swatches, so nothing about the map's palette lives
  * in script. The system card docks top right on a wide screen and
@@ -16,12 +21,13 @@
 }
 
 .map {
-  /* Type: the body face for names and figures, the display face
-     (Rajdhani, as the site's headings) for region and holder
-     names, panel titles, and the picker chips. The canvas reads
-     --map-font-display back for its display labels. */
-  --map-font-display: "Rajdhani", "Segoe UI", sans-serif;
-  font-family: "Eve Sans Neue", "Inter", "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  /* Type: the body face for names, the display face for region and
+     holder names, panel titles, and the picker chips, the numerals
+     face for figures. The canvas reads --map-font-display back for
+     its display labels. */
+  --map-font-display: var(--font-display);
+  container: map / inline-size;
+  font-family: var(--font-body);
   --map-gate: rgba(255, 178, 120, 0.2);
   --map-gate-inter: rgba(255, 128, 64, 0.42);
   --map-gate-hot: #ff8a3d;
@@ -72,11 +78,9 @@
     #070504;
   display: flex;
   flex-direction: column;
-  border: 1px solid var(--glass-edge);
+  border: 1px solid var(--hairline);
   border-radius: var(--r-lg);
-  background: var(--glass);
-  -webkit-backdrop-filter: blur(var(--glass-blur));
-  backdrop-filter: blur(var(--glass-blur));
+  background: var(--surface-pane);
   overflow: hidden;
 }
 html[data-theme="light"] .map {
@@ -184,22 +188,19 @@ html[data-theme="light"] .map {
 .map-find-list small { color: var(--muted); }
 .map-zoom { display: flex; gap: 0.3rem; }
 .map-zoom .btn { min-width: var(--control-h); }
-.map-pref {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-  color: var(--muted);
-  font-size: var(--fs-xs);
-  white-space: nowrap;
-  cursor: pointer;
-}
-.map-pref:hover { color: var(--text); }
-.map-pref input { accent-color: var(--accent); margin: 0; }
+/* The reader's menus: View, Intel, Data. */
+.map-tools { display: flex; align-items: center; gap: 0.4rem; }
+.map-view-menu label { font-weight: 600; color: var(--text); }
+.map-view-menu .map-data-note { margin: 0 0 0.5rem 1.65rem; }
+.map-view-menu .map-data-note:last-child { margin-bottom: 0.1rem; }
 
 /* --- The stage --- */
 .map-stage {
   position: relative;
-  height: max(26rem, calc(100dvh - var(--sticky-top) - 10.5rem));
+  container: stage / size;
+  /* The screen under the bars, but never so tall on a short screen
+     that the bar scrolls away. */
+  height: max(min(26rem, calc(100dvh - var(--sticky-top) - 5rem)), calc(100dvh - var(--sticky-top) - 10.5rem));
   background: var(--map-space);
 }
 .map-canvas {
@@ -312,7 +313,7 @@ html[data-theme="light"] .map {
   pointer-events: none;
 }
 .map-legend li { display: flex; flex-direction: column; align-items: center; gap: 0.2rem; min-width: 0.95rem; }
-.map-legend-v { height: 0.8rem; line-height: 0.8rem; white-space: nowrap; }
+.map-legend-v { font-family: var(--font-num); height: 0.8rem; line-height: 0.8rem; white-space: nowrap; }
 
 /* --- The layer picker: one swipeable row of chips --- */
 .map-layers {
@@ -377,7 +378,7 @@ html[data-theme="light"] .map {
 .map-card-live > div { display: flex; justify-content: space-between; gap: 0.75rem; padding: 0.15rem 0; border-top: 1px solid var(--box-edge); }
 .map-card-live > div:first-child { border-top: 0; }
 .map-card-live dt { color: var(--muted-2); white-space: nowrap; }
-.map-card-live dd { margin: 0; text-align: right; color: var(--text); }
+.map-card-live dd { margin: 0; text-align: right; color: var(--text); font-family: var(--font-num); }
 .map-swatch {
   display: block;
   width: 0.7rem;
@@ -556,7 +557,7 @@ html[data-theme="light"] .map {
   box-shadow: inset 0 -2px 0 var(--accent);
 }
 .map-route-sum { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.2rem 0.6rem; margin: 0 0 0.35rem; color: var(--text); }
-.map-route-sum strong { font-size: var(--fs-lg); color: var(--text-bright); }
+.map-route-sum strong { font-family: var(--font-num); font-size: var(--fs-lg); color: var(--text-bright); }
 .map-route-band { font-size: var(--fs-xs); font-variant-numeric: tabular-nums; }
 /* The route at a glance: a segment a jump, in its security color. */
 .map-route-strip { display: flex; gap: 1px; height: 0.45rem; margin: 0 0 0.5rem; border-radius: 0.25rem; overflow: hidden; }
@@ -600,14 +601,26 @@ html[data-theme="light"] .map {
 }
 .map-index-list li { padding: 0.12rem 0; break-inside: avoid; }
 
-/* --- Phones: the map takes the screen; the card rises from below --- */
-@media (max-width: 45rem) {
-  .map { border-radius: var(--r-md); margin: 0 -0.3rem; }
+/* --- A narrow map: three rows (where you are and the menus; find
+   and zoom; the layers); the side column rises from below --- */
+@container map (max-width: 45rem) {
   .map-bar { padding: 0.45rem 0.5rem; gap: 0.4rem; }
-  .map-find { order: 3; flex-basis: 100%; max-width: none; margin-left: 0; }
-  .map-zoom { margin-left: auto; }
-  .map-stage { height: max(20rem, calc(100dvh - var(--sticky-top) - var(--phone-bar-h, 3.6rem) - 9.5rem)); }
+  .map-crumbs { flex: 1 1 auto; }
+  .map-tools { order: 1; }
+  .map-find { order: 2; flex: 1 1 9rem; max-width: none; margin-left: 0; }
+  .map-find { flex-basis: 7.5rem; }
+  /* Zoom as one joined control, so it shares a row with find. */
+  .map-zoom { order: 3; margin-left: auto; gap: 0; }
+  .map-zoom .btn { min-width: 2.35rem; padding-inline: 0.4rem; border-radius: 0; }
+  .map-zoom .btn + .btn { margin-left: -1px; }
+  .map-zoom .btn:first-child { border-radius: var(--r-xs) 0 0 var(--r-xs); }
+  .map-zoom .btn:last-child { border-radius: 0 var(--r-xs) var(--r-xs) 0; }
+  .map-stage { height: max(min(20rem, calc(100dvh - var(--sticky-top) - 5rem)), calc(100dvh - var(--sticky-top) - var(--phone-bar-h, 3.6rem) - 9.5rem)); }
+}
+@container stage (max-width: 45rem) {
   .map-legend, .map-layer-legend { left: 0.5rem; bottom: 0.5rem; }
+}
+@container map (max-width: 45rem) {
   .map-layers { order: 4; -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 1.25rem), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 1.25rem), transparent); }
   .map-layers button { padding: 0.4rem 0.75rem; }
   /* The side column is one sheet rising from the bottom, the
@@ -634,24 +647,24 @@ html[data-theme="light"] .map {
   .map-stage .map-shot { right: 0.5rem; bottom: 0.5rem; }
   .map-stage .map-share { right: 2.85rem; bottom: 0.5rem; }
 }
-/* Short landscape phones: the bar stays one line; the side column
-   docks right, full height. */
-@media (max-height: 30rem) and (orientation: landscape) and (pointer: coarse) {
-  .map-find { order: 0; flex: 1 1 10rem; }
-  .map-stage { height: calc(100dvh - var(--sticky-top) - 5rem); }
-  .map-side { top: 0.5rem; bottom: 0.5rem; left: auto; right: 0.5rem; width: min(18rem, 45%); max-height: none; }
+/* A short, wide stage (a landscape phone): the side column docks
+   right, full height, instead of rising over half of it. */
+@container stage (max-height: 22rem) and (min-width: 30rem) {
+  .map-stage .map-side { top: 0.5rem; bottom: 0.5rem; left: auto; right: 0.5rem; width: min(18rem, 45%); max-height: none; }
 }
 
-/* --- Full screen: the frame over everything, the stage filling it --- */
+/* --- Full screen: the frame over everything, the stage filling it.
+   The browser's full screen or, without it, a popover in the top
+   layer (map.js) places the frame; this sizes and dresses it. --- */
 html.map-full-open { overflow: hidden; }
-/* A backdrop filter on an ancestor would become the fixed frame's
-   containing block (and stacking context): off while full screen. */
-html.map-full-open .page-body { -webkit-backdrop-filter: none; backdrop-filter: none; }
 .map.map-full {
-  position: fixed;
   inset: 0;
-  z-index: 1000;
+  width: auto;
+  height: auto;
+  max-width: none;
+  max-height: none;
   margin: 0;
+  color: var(--text);
   border: 0;
   border-radius: 0;
   padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
@@ -680,7 +693,7 @@ html.map-full-open .page-body { -webkit-backdrop-filter: none; backdrop-filter: 
 .map-mark-word .wordmark-svg { display: block; height: 1.2em; width: auto; }
 .map-mark-tld {
   margin-left: 0.15em;
-  font-family: "Rajdhani", "Segoe UI", sans-serif;
+  font-family: var(--font-display);
   font-size: var(--fs-2xs);
   font-weight: 600;
   letter-spacing: 0.06em;
@@ -868,7 +881,7 @@ html.map-full-open .page-body { -webkit-backdrop-filter: none; backdrop-filter: 
   top: calc(100% + 0.35rem);
   left: 0;
   z-index: 6;
-  width: min(17rem, calc(100vw - 2rem));
+  width: min(17rem, calc(100cqi - 1rem));
   overflow-y: auto;
   overscroll-behavior: contain;
   padding: 0.6rem 0.7rem 0.5rem;

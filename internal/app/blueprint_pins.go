@@ -45,7 +45,9 @@ func (app *Application) handleBlueprintPin(w http.ResponseWriter, r *http.Reques
 	userID := app.userID(ctx)
 	back := "/industry/"
 	if err := r.ParseForm(); err == nil && userID != 0 {
-		if ch, err := strconv.ParseInt(r.FormValue("character"), 10, 64); err == nil && ch > 0 {
+		if r.FormValue("character") == "all" {
+			back = "/industry/?character=all"
+		} else if ch, err := strconv.ParseInt(r.FormValue("character"), 10, 64); err == nil && ch > 0 {
 			back = "/industry/?character=" + strconv.FormatInt(ch, 10)
 		}
 		if bp, err := strconv.ParseInt(r.FormValue("blueprint"), 10, 64); err == nil && bp > 0 {

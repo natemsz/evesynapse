@@ -536,13 +536,6 @@ header a.navlink.utility { font-size: var(--fs-xs); color: var(--muted); }
 
 /* --- layout + panels --- */
 /* Fluid width, capped at 1720px. */
-/* A safety net, not a fit: the clip stops a stray box from making
-   the whole page scroll sideways, but it hides that overflow rather
-   than preventing it. Pages fit on their own (layout.css); the width
-   sweep measures with this clip lifted, so it never counts as a pass.
-   It stays while pages not yet on the framework still overflow at
-   some widths, and comes out once none does. */
-html, body { overflow-x: clip; }
 main {
   max-width: 1720px;
   margin: 1.5rem auto 2rem;

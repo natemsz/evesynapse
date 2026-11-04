@@ -76,18 +76,19 @@ html[data-theme="light"] {
 .subnav:not(:has(nav)) { display: none; }
 
 /* ---- The frame: glass dosage ----
-   The page body is a frosted surface: a 12px blur over the sky,
-   at the --surface-page strength, so the sky tints it without
-   showing through. The blur makes the body the containing block
-   for fixed children; sheets that need viewport-fixed elements
-   place them outside it. Home keeps its open field of widget
-   cards, unfrosted. */
+   The page body is a solid surface: the sky shows around it, not
+   through it. --surface-page sits at 96% panel, one step under the
+   consoles' --surface-pane (97%), so a console reads as part of the
+   page instead of a darker slab on it. No blur: a backdrop filter
+   would make the body the containing block for fixed children,
+   which the sheets used to work around page by page, and repaint
+   under every scroll. Home keeps its open field of widget cards. */
 .page-body {
   background: var(--surface-page);
-  -webkit-backdrop-filter: blur(12px) saturate(0.9);
-  backdrop-filter: blur(12px) saturate(0.9);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
 }
-.page-body:has(.home-grid) { background: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
+.page-body:has(.home-grid) { background: none; }
 
 /* ---- Sub-nav ----
    The section's category navigation, docked under the top bar

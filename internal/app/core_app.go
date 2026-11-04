@@ -189,6 +189,14 @@ type Application struct {
 	// restart resumes from the staged cursor.
 	sweepMu sync.Mutex
 
+	// sweepPaceMu guards sweepPace, the per-region failure
+	// backoff and adaptive page-window state for the region
+	// sweep (market_region_stats.go). In memory only by design
+	// for this hotfix: a restart forgets the backoff and grants
+	// each region one fresh attempt, which is harmless.
+	sweepPaceMu sync.Mutex
+	sweepPace   map[int64]*sweepRegionPace
+
 	// pubContractMu serializes public-contract sweep passes
 	// (pub_contracts.go): one pass walks every region's cursor,
 	// and passes never overlap.
@@ -424,6 +432,7 @@ func New(cfg Config) (*Application, error) {
 		tokens:        tokens,
 	}
 	app.esi = esi.New(esi.NewHTTPClient(), app.queries, app.validAccessToken)
+	app.esi.SetBulkHTTPClient(esi.NewBulkHTTPClient())
 	app.esi.SetUserAgent(cfg.esiUserAgent())
 	// Every stored name is in memory before the first request, and
 	// every name learned from here on is kept (entity_names.go).

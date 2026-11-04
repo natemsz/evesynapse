@@ -32,7 +32,7 @@ func TestRateLimitIsOneCharacters(t *testing.T) {
 	now := time.Now()
 
 	ctx := WithCharacter(context.Background(), 90000001)
-	_, _, status, err := c.send(ctx, http.MethodGet, "", "/characters/90000001/wallet/", nil, "", http.StatusOK)
+	_, _, status, err := c.send(ctx, c.http, http.MethodGet, "", "/characters/90000001/wallet/", nil, "", http.StatusOK)
 	if status != http.StatusTooManyRequests || !errors.Is(err, ErrRateLimited) || !errors.Is(err, ErrErrorLimit) {
 		t.Fatalf("429: status %d, err %v; want it to be both a rate limit and a limit", status, err)
 	}
@@ -50,19 +50,19 @@ func TestRateLimitIsOneCharacters(t *testing.T) {
 
 	// No Retry-After: a minute. A silly one: no more than the window.
 	transport.header = http.Header{}
-	_, _, _, _ = c.send(WithCharacter(context.Background(), 7), http.MethodGet, "", "/x/", nil, "", http.StatusOK)
+	_, _, _, _ = c.send(WithCharacter(context.Background(), 7), c.http, http.MethodGet, "", "/x/", nil, "", http.StatusOK)
 	if wait := c.RateLimitedUntil(7, now).Sub(now); wait < 55*time.Second || wait > 65*time.Second {
 		t.Fatalf("with no Retry-After: held for %v, want a minute", wait)
 	}
 	transport.header = http.Header{"Retry-After": {"86400"}}
-	_, _, _, _ = c.send(WithCharacter(context.Background(), 8), http.MethodGet, "", "/x/", nil, "", http.StatusOK)
+	_, _, _, _ = c.send(WithCharacter(context.Background(), 8), c.http, http.MethodGet, "", "/x/", nil, "", http.StatusOK)
 	if wait := c.RateLimitedUntil(8, now).Sub(now); wait > 16*time.Minute {
 		t.Fatalf("a day-long Retry-After was honoured: %v", wait)
 	}
 
 	// 420 is the error limit: a limit, but not a character's.
 	transport.status, transport.header = 420, http.Header{}
-	_, _, _, err = c.send(WithCharacter(context.Background(), 9), http.MethodGet, "", "/x/", nil, "", http.StatusOK)
+	_, _, _, err = c.send(WithCharacter(context.Background(), 9), c.http, http.MethodGet, "", "/x/", nil, "", http.StatusOK)
 	if !errors.Is(err, ErrErrorLimit) || errors.Is(err, ErrRateLimited) {
 		t.Fatalf("420: %v; want the error limit and not a rate limit", err)
 	}
@@ -86,7 +86,7 @@ func TestRateBudgets(t *testing.T) {
 			transport.header.Set("X-Ratelimit-Limit", limit)
 			transport.header.Set("X-Ratelimit-Group", group)
 		}
-		if _, _, _, err := c.send(WithCharacter(context.Background(), character), http.MethodGet, "", "/x/", nil, "", http.StatusOK); err != nil {
+		if _, _, _, err := c.send(WithCharacter(context.Background(), character), c.http, http.MethodGet, "", "/x/", nil, "", http.StatusOK); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -135,7 +135,7 @@ func TestLowBudgetEasesOff(t *testing.T) {
 	c := New(&http.Client{Transport: transport}, nil, nil)
 	get := func(character int64, remaining string) {
 		transport.header = http.Header{"X-Ratelimit-Remaining": {remaining}, "X-Ratelimit-Limit": {"30/15m"}, "X-Ratelimit-Group": {"corp-killmail"}}
-		if _, _, _, err := c.send(WithCharacter(context.Background(), character), http.MethodGet, "", "/x/", nil, "", http.StatusOK); err != nil {
+		if _, _, _, err := c.send(WithCharacter(context.Background(), character), c.http, http.MethodGet, "", "/x/", nil, "", http.StatusOK); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -168,11 +168,11 @@ func TestPreflightHoldsAtReserve(t *testing.T) {
 	}}
 	c := New(&http.Client{Transport: transport}, nil, nil)
 	ctx := WithCharacter(context.Background(), 1)
-	if _, _, _, err := c.send(ctx, http.MethodGet, "", "/characters/1/wallet/", nil, "", http.StatusOK); err != nil {
+	if _, _, _, err := c.send(ctx, c.http, http.MethodGet, "", "/characters/1/wallet/", nil, "", http.StatusOK); err != nil {
 		t.Fatalf("first request: %v", err)
 	}
 	before := c.CallsTotal()
-	_, _, _, err := c.send(ctx, http.MethodGet, "", "/characters/1/wallet/", nil, "", http.StatusOK)
+	_, _, _, err := c.send(ctx, c.http, http.MethodGet, "", "/characters/1/wallet/", nil, "", http.StatusOK)
 	if !errors.Is(err, ErrRateLimited) || !errors.Is(err, ErrErrorLimit) {
 		t.Fatalf("at the reserve (12 of 150, reserve 15): %v; want a rate limit", err)
 	}
@@ -180,12 +180,12 @@ func TestPreflightHoldsAtReserve(t *testing.T) {
 		t.Fatal("a request at the reserve still reached ESI")
 	}
 	// Another character's bucket is its own.
-	if _, _, _, err := c.send(WithCharacter(context.Background(), 2), http.MethodGet, "", "/characters/2/wallet/", nil, "", http.StatusOK); err != nil {
+	if _, _, _, err := c.send(WithCharacter(context.Background(), 2), c.http, http.MethodGet, "", "/characters/2/wallet/", nil, "", http.StatusOK); err != nil {
 		t.Fatalf("another character: %v", err)
 	}
 	// A route with no group stated is never held.
 	transport.header = http.Header{}
-	if _, _, _, err := c.send(context.Background(), http.MethodGet, "", "/corporations/98000001/", nil, "", http.StatusOK); err != nil {
+	if _, _, _, err := c.send(context.Background(), c.http, http.MethodGet, "", "/corporations/98000001/", nil, "", http.StatusOK); err != nil {
 		t.Fatalf("ungrouped route: %v", err)
 	}
 

@@ -85,9 +85,9 @@ func TestEmberGlassAndSkyRules(t *testing.T) {
 		t.Error("base.html must wrap content in .page-body, not an enclosing .panel")
 	}
 	// The section tabs ride the sub-nav bar: base.html invokes each
-	// page's pagetabs block inside .subnav, first in main and above
-	// the title and .page-body, and carries an empty default.
-	if !strings.Contains(base, "<div class=\"subnav\">{{template \"pagetabs\" .}}</div>\n{{template \"pagetitle\" .}}\n  <div class=\"page-body\">") ||
+	// page's pagetabs block inside .subnav, in the page shell above
+	// main, the title and .page-body, and carries an empty default.
+	if !strings.Contains(base, "<div class=\"subnav\">{{template \"pagetabs\" .}}</div>\n<main id=\"main-content\">\n{{template \"pagetitle\" .}}") ||
 		!strings.Contains(base, "{{define \"pagetabs\"}}{{end}}") {
 		t.Error("base.html lost the sub-nav's pagetabs invocation above .page-body or its empty default")
 	}

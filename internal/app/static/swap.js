@@ -349,6 +349,17 @@
     return out;
   }
 
+  // The sub-nav bar lives in the page shell, outside the swapped
+  // main, so a swap carries the incoming page's bar with it and
+  // transplants it beside the sidebar re-marking. A document with
+  // no bar at all (an error page's shape) reports null and the
+  // current bar stays.
+  function subnavHTML(doc) {
+    if (!doc || !doc.querySelector) return null;
+    var bar = doc.querySelector(".page-shell > .subnav");
+    return bar ? bar.innerHTML : null;
+  }
+
   // A document's stylesheet links as { href, path, media }, in
   // document order — the page assets a <main>-only swap would
   // otherwise throw away with the fetched <head>.
@@ -552,6 +563,7 @@
         var titleEl = doc.querySelector("title");
         return {
           main: next.innerHTML,
+          subnav: subnavHTML(doc),
           title: titleEl ? titleEl.textContent : "",
           styles: pageStyles(doc),
           scripts: pageScripts(doc)
@@ -703,6 +715,9 @@
     var paint = function () {
       dropHoistedModals();
       main.innerHTML = entry.main;
+      var bars = document.querySelectorAll(".page-shell > .subnav");
+      var bar = bars && bars.length ? bars[0] : null;
+      if (bar && entry.subnav != null) bar.innerHTML = entry.subnav;
       hoistModals(main);
       if (entry.title) document.title = entry.title;
       syncActiveNav(new URL(url, window.location.href).pathname);
@@ -1005,6 +1020,7 @@
   // had left main would restore a page with no modals at all.
   cachePut(window.location.href, {
     main: main.innerHTML,
+    subnav: subnavHTML(document),
     title: document.title,
     styles: pageStyles(document),
     scripts: pageScripts(document)

@@ -1589,8 +1589,8 @@ func (app *Application) MarkMailReadLocally(ctx context.Context, characterID, ma
 	app.markMailReadLocally(ctx, characterID, mailID)
 }
 
-func (app *Application) AttachWalletGraph(ctx context.Context, userID, characterID int64, journal esi.WalletJournal, journalLoaded bool) any {
-	return app.attachWalletGraph(ctx, userID, characterID, journal, journalLoaded)
+func (app *Application) AttachWalletGraph(ctx context.Context, userID, characterID int64, journal esi.WalletJournal, journalLoaded bool, rangeKey string) any {
+	return app.attachWalletGraph(ctx, userID, characterID, journal, journalLoaded, rangeKey)
 }
 
 func (app *Application) EmptyWalletGraph() any { return &walletGraphView{State: walletGraphEmpty} }

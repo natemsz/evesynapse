@@ -165,7 +165,7 @@ func TestWalletGraphStatesAndFragment(t *testing.T) {
 	// One sampled day, journal settled-empty: the "few" state.
 	seedSnapshot(t, q, fixtureCharA, esi.SnapWalletJournal, esi.WalletJournal{})
 	seedWalletSample(t, q, user.ID, fixtureCharA, "2026-03-01", 1234, sql.NullFloat64{})
-	g := app.attachWalletGraph(ctx, user.ID, fixtureCharA, nil, true)
+	g := app.attachWalletGraph(ctx, user.ID, fixtureCharA, nil, true, "")
 	if g.State != walletGraphFew {
 		t.Fatalf("one settled point: state = %q, want few", g.State)
 	}
@@ -178,7 +178,7 @@ func TestWalletGraphStatesAndFragment(t *testing.T) {
 	}
 	seedCharacter(t, q2, user2.ID, fixtureCharB, "Second Pilot")
 	seedSnapshot(t, q2, fixtureCharB, esi.SnapWalletJournal, esi.WalletJournal{})
-	g = app2.attachWalletGraph(ctx, user2.ID, fixtureCharB, nil, true)
+	g = app2.attachWalletGraph(ctx, user2.ID, fixtureCharB, nil, true, "")
 	if g.State != walletGraphEmpty {
 		t.Fatalf("settled bare: state = %q, want empty", g.State)
 	}
@@ -197,6 +197,17 @@ func TestWalletGraphStatesAndFragment(t *testing.T) {
 		`data-poll-state="chart"`, `class="pchart"`, "data-balance=")
 	if got := transport.calls.Load(); got != 0 {
 		t.Fatalf("wallet graph rendering made %d outbound calls, want 0", got)
+	}
+
+	// Ranges window the same stored rows: the March points fall
+	// outside a 30-day window at render time, so the ranged graph
+	// settles empty instead of drawing them.
+	g = app.attachWalletGraph(ctx, user.ID, fixtureCharA, nil, true, "30d")
+	if g.State != walletGraphEmpty || g.Points != 0 {
+		t.Fatalf("30d range over March points: state = %q points = %d, want empty/0", g.State, g.Points)
+	}
+	if g.Range != "30d" || len(g.Ranges) != 4 {
+		t.Fatalf("range wiring: range = %q choices = %d, want 30d/4", g.Range, len(g.Ranges))
 	}
 }
 

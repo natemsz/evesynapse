@@ -1218,7 +1218,7 @@ type Deps interface {
 	// AttachWalletGraph and WalletFlow build the wallet page’s balance
 	// history and the home wallet-flow cells for one character; the results
 	// are read by the wallet template only.
-	AttachWalletGraph(ctx context.Context, userID, characterID int64, journal esi.WalletJournal, journalLoaded bool) any
+	AttachWalletGraph(ctx context.Context, userID, characterID int64, journal esi.WalletJournal, journalLoaded bool, rangeKey string) any
 	WalletFlow(ctx context.Context, ch db.Character) any
 	// EmptyWalletGraph is the settled-empty balance history.
 	EmptyWalletGraph() any

@@ -117,6 +117,7 @@
 
 {{define "wallet-graph"}}
 <div class="wallet-graph-body" data-poll-state="{{.State}}"{{if eq .State "pending"}} data-live-region data-poll-url="{{.PollURL}}"{{end}}>
+  {{if .Ranges}}<div class="facet-chips" role="group" aria-label="Balance history range">{{range .Ranges}}<a class="chip{{if .On}} on{{end}}" href="{{.Href}}">{{.Label}}</a>{{end}}</div>{{end}}
   {{if eq .State "chart"}}
   {{template "balance-chart" .Chart}}
   <p><small>Balance from {{.Chart.From}} to {{.Chart.To}}: every journal entry for recent days, daily samples further back.</small></p>

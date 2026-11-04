@@ -6,44 +6,48 @@
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
 
 {{if .Planner}}
+<div class="l-page bpl">
 {{if .Planner.Warming}}
 <p>The planner's build data isn't loaded yet. It arrives with the static data import{{if .IsAdmin}}; <a href="/admin/sync/">Sync</a> shows progress{{end}}.</p>
 {{else}}
 
-<div class="foldable" data-fold="never">
-<h3>Find something to build</h3>
-<form method="get" action="/planner/" class="searchpanel">
+<div class="l-head bpl-head">
+<form method="get" action="/planner/" class="bpl-search" role="search" aria-label="Find something to build">
   {{/* A div, not a p: the suggestion list is a ul, which a p cannot
-       hold — the parser would close the p early and the list would
-       drop below the whole panel. */}}
+       hold; the parser would close the p early and the list would
+       drop below the whole form. */}}
   <div class="plan-searchrow">
     <span class="searchwrap plan-searchwrap">
-      <input type="text" name="q" id="planner-q" value="{{.Planner.Query}}" placeholder="Product name, e.g. Rifter" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="planner-suggest" aria-autocomplete="list">
+      <input type="text" name="q" id="planner-q" value="{{.Planner.Query}}" placeholder="Find something to build, e.g. Rifter" aria-label="Product to build" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="planner-suggest" aria-autocomplete="list">
       <ul class="suggest" id="planner-suggest" role="listbox" hidden></ul>
     </span>
     <button type="submit">Search</button>
   </div>
 </form>
+<div class="l-head-act"><a class="btn btn-quiet" href="/industry/">Blueprints</a></div>
+</div>
 {{if .Planner.Searched}}
+<section class="l-panel bpl-results" aria-label="Matches">
 {{if .Planner.Results}}
-<ul>
+<h2 class="bpl-h">Matches <small>{{len .Planner.Results}}</small></h2>
+<ul class="bpl-matches">
 {{range .Planner.Results}}<li><a href="{{.URL}}">{{.Name}}</a></li>{{end}}
 </ul>
 {{else}}
 <p><small>No manufacturable products match that name.</small></p>
 {{end}}
+</section>
 {{end}}
-</div>
 
 {{if .Planner.Notice}}<p>{{.Planner.Notice}}</p>{{end}}
 
 {{if not .Planner.Plan}}
-<section class="card">
-  <div class="plan-stats">
-    <div><span class="plan-k">Landed cost</span><strong>—</strong></div>
-    <div><span class="plan-k">Market value</span><strong>—</strong></div>
-    <div><span class="plan-k">Projected margin</span><strong>—</strong></div>
-    <div><span class="plan-k">Elapsed time</span><strong>—</strong></div>
+<section class="l-panel bpl-empty">
+  <div class="l-tiles">
+    <div class="l-stat"><span class="l-stat-label">Landed cost</span><span class="l-stat-value">—</span></div>
+    <div class="l-stat"><span class="l-stat-label">Market value</span><span class="l-stat-value">—</span></div>
+    <div class="l-stat"><span class="l-stat-label">Projected margin</span><span class="l-stat-value">—</span></div>
+    <div class="l-stat"><span class="l-stat-label">Elapsed time</span><span class="l-stat-value">—</span></div>
   </div>
   <div class="plan-tabs" role="tablist" aria-label="Plan views">
     <button type="button" role="tab" aria-selected="true" data-active="1">Build tree</button>
@@ -51,13 +55,13 @@
     <button type="button" role="tab" aria-selected="false">Buy list</button>
     <button type="button" role="tab" aria-selected="false">Cost flow</button>
   </div>
-  <p><small>Nothing planned yet. Search for a product above to see its build tree, timeline and buy list.</small></p>
+  <p><small>Nothing planned yet. Search for a product above to see its build tree, timeline and buy list, or start from a blueprint you own on the <a href="/industry/">Blueprints</a> page.</small></p>
 </section>
 {{end}}
 
 {{with .Planner.Plan}}
-<div id="plan-wrap">
-<div class="foldable plan-head" data-fold="never">
+<div id="plan-wrap" class="l-stack">
+<section class="l-panel plan-head">
 <h2 class="plan-title">{{.ProductName}}</h2>
 <div class="plan-fromrow">
 <p class="plan-from"><small>From <strong>{{.BlueprintName}}</strong>: builds {{.ProducedLine}}.{{if .MaxRunNote}} {{.MaxRunNote}}.{{end}}</small></p>
@@ -68,7 +72,7 @@
 {{with .SkillsJudge}}<span class="plan-skillglyph {{if and .Known .CanBuild}}ok{{else}}bad{{end}} plan-has-tip" role="img" aria-label="{{.Heading}} {{if and .Known .CanBuild}}All skills covered.{{else}}Some skills missing.{{end}}" tabindex="0"><svg class="plan-glyph" width="21" height="21" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="url(#nav-glyph-gradient)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 6.2C10.1 4.4 7.1 3.7 4.3 4.1v13.6c2.8-.4 5.8.3 7.7 2.1 1.9-1.8 4.9-2.5 7.7-2.1V4.1c-2.8-.4-5.8.3-7.7 2.1Z"/><path d="M12 6.2v13.6"/></g></svg><span class="plan-skillbadge" aria-hidden="true">{{if and .Known .CanBuild}}✓{{else}}✕{{end}}</span><span class="plan-tip" aria-hidden="true">{{if not .Known}}<span class="plan-tip-note">{{.Note}}</span>{{else if .CanBuild}}<span class="plan-tip-note">{{.Tip}}</span>{{else}}{{if .Note}}<span class="plan-tip-note">{{.Note}}</span>{{end}}<span class="plan-tip-head">Missing skills</span><ul>{{range .Lines}}{{if not .OK}}<li>{{.Text}}</li>{{end}}{{end}}</ul>{{end}}</span></span>{{end}}
 </span>
 </div>
-{{if .StockNote}}<p><small>{{.StockNote}}</small></p>{{end}}
+{{if .StockNote}}<p class="plan-stocknote"><small>{{.StockNote}}</small></p>{{end}}
 
 <form method="get" action="/planner/" id="plan-form">
   {{/* The shell lifts .modal-backdrop dialogs to the body, out of
@@ -120,16 +124,17 @@
     </div>
   </div>{{end}}
 </form>
-</div>
+</section>
 
 {{if .Meta}}
-<section class="card spanall" id="plan" data-plan="1">
-<div class="plan-stats">
-  <div><span class="plan-k">Landed cost</span><strong id="plan-landed">{{.HdrLanded}}</strong><br><small id="plan-landed-sub">{{.HdrLandedSub}}</small><br><small class="plan-basis">{{.Meta.PricesNote}}</small></div>
-  <div><span class="plan-k">Market value</span><strong id="plan-value">{{.HdrValue}}</strong><br><small>reference sell price</small></div>
-  <div><span class="plan-k">Projected margin</span><strong id="plan-margin"{{if .HdrProfitCls}} class="{{.HdrProfitCls}}"{{end}}>{{.HdrMargin}}</strong><br><small id="plan-margin-sub"{{if .HdrProfitCls}} class="{{.HdrProfitCls}}"{{end}}>{{.HdrMarginSub}}</small></div>
-  <div><span class="plan-k">Elapsed time</span><strong id="plan-elapsed">{{.HdrElapsed}}</strong><br><small id="plan-elapsed-sub">{{.HdrElapsedSub}}</small></div>
+<section class="l-panel bpl-plan" id="plan" data-plan="1">
+<div class="l-tiles bpl-tiles">
+  <div class="l-stat"><span class="l-stat-label">Landed cost</span><span class="l-stat-value" id="plan-landed">{{.HdrLanded}}</span><span class="l-stat-sub" id="plan-landed-sub">{{.HdrLandedSub}}</span></div>
+  <div class="l-stat"><span class="l-stat-label">Market value</span><span class="l-stat-value" id="plan-value">{{.HdrValue}}</span><span class="l-stat-sub">reference sell price</span></div>
+  <div class="l-stat"><span class="l-stat-label">Projected margin</span><span class="l-stat-value{{if .HdrProfitCls}} {{.HdrProfitCls}}{{end}}" id="plan-margin">{{.HdrMargin}}</span><span class="l-stat-sub{{if .HdrProfitCls}} {{.HdrProfitCls}}{{end}}" id="plan-margin-sub">{{.HdrMarginSub}}</span></div>
+  <div class="l-stat"><span class="l-stat-label">Elapsed time</span><span class="l-stat-value" id="plan-elapsed">{{.HdrElapsed}}</span><span class="l-stat-sub" id="plan-elapsed-sub">{{.HdrElapsedSub}}</span></div>
 </div>
+<p class="plan-basis"><small>{{.Meta.PricesNote}}</small></p>
 <p><small id="plan-badges">Market {{.MarketName}} · Build system {{.SystemName}}{{if .FacilityNote}} · Building in {{.FacilityNote}}{{end}} · Index {{.IndexLine}}{{if .FeeTerms}} · {{.FeeTerms}}{{end}} · {{.SlotsLine}} · {{.TimeFactorNote}}{{if .OwnerNote}} · {{.OwnerNote}}{{end}}</small>
 <span id="plan-serverflag" hidden><small> · server totals shown</small></span></p>
 <div class="plan-verdictrow"><p class="plan-verdict {{.VerdictCls}}" id="plan-verdict">{{.VerdictText}}</p><p class="plan-nodehint"><small>Double-click to expand/collapse a node</small></p></div>
@@ -138,7 +143,7 @@
   <button type="button" data-plan-preset="full" aria-pressed="false">Full build</button>
   <button type="button" data-plan-preset="buycomp" aria-pressed="false">Buy components</button>
 </div>
-<div class="plan-tools"><span class="plan-expand"><button type="button" data-plan-expand-all>Expand all</button> <button type="button" data-plan-collapse-all>Collapse all</button></span></div>
+<div class="plan-tools"><button type="button" class="btn btn-quiet" data-sheet-open="plan-insp-sheet" hidden>Inspector</button><span class="plan-expand"><button type="button" data-plan-expand-all>Expand all</button> <button type="button" data-plan-collapse-all>Collapse all</button></span></div>
 <div class="plan-tabs" role="tablist" aria-label="Plan views">
   <button type="button" role="tab" data-plan-tab="tree" aria-selected="true">Build tree</button>
   <button type="button" role="tab" data-plan-tab="time" aria-selected="false">Timeline</button>
@@ -146,7 +151,7 @@
   <button type="button" role="tab" data-plan-tab="cost" aria-selected="false">Cost flow</button>
   <span class="plan-legend"><small><i class="plan-dot plan-build"></i> build <i class="plan-dot plan-buy"></i> buy <i class="plan-dot plan-risk"></i> bottleneck <i class="plan-dot plan-crit"></i> selected / critical</small></span>
 </div>
-<div id="plan-tab-tree" role="tabpanel"><div class="plan-treecols"><div id="plan-map"><p><small>Loading the decision map…</small></p></div><aside id="plan-inspector" aria-live="polite"></aside></div></div>
+<div id="plan-tab-tree" role="tabpanel"><div class="plan-treecols"><div id="plan-map"><p><small>Loading the decision map…</small></p></div><aside class="plan-insp" id="plan-insp-sheet" data-sheet data-sheet-title="Node inspector"><div id="plan-inspector" aria-live="polite"></div></aside></div></div>
 <div id="plan-tab-time" role="tabpanel" hidden><div id="plan-gantt"><p><small>Loading the schedule…</small></p></div></div>
 <div id="plan-tab-buy" role="tabpanel" hidden><div id="plan-buylist"></div><div id="plan-hubsplit"></div></div>
 <div id="plan-tab-cost" role="tabpanel" hidden><div id="plan-fall"></div></div>
@@ -156,23 +161,27 @@
 {{end}}
 
 {{with .Verdict}}
-<div class="foldable" data-fold="never">
+<section class="l-panel bpl-verdict">
 <h3>{{.Heading}}</h3>
+<p class="bpl-sub"><small>Cash view of the full build: every buildable part built, stock on hand used first. The figures above follow the scenario you pick.</small></p>
 <table>
   <tbody>
-    <tr><th>To buy (after stock on hand)</th><td>{{if .Cost}}{{.Cost}}{{else}}—{{end}}</td></tr>
+    <tr><th>Materials to buy (after stock on hand)</th><td>{{if .Cost}}{{.Cost}}{{else}}—{{end}}</td></tr>
+    <tr><th>Job fees</th><td>{{if .Fees}}{{.Fees}}{{else}}—{{end}}</td></tr>
     <tr><th>Sell value of what comes out</th><td>{{if .SellValue}}{{.SellValue}}{{else}}—{{end}}</td></tr>
-    {{if .Profit}}<tr><th>Profit</th><td>{{.Profit}}</td></tr>{{end}}
+    {{if .Profit}}<tr><th>Profit before fees</th><td>{{.Profit}}</td></tr>{{end}}
+    {{if .ProfitAfterFees}}<tr><th>Profit after fees</th><td class="{{.AfterFeesCls}}">{{.ProfitAfterFees}}</td></tr>{{end}}
     {{if .ProfitPerRun}}<tr><th>Profit per run</th><td>{{.ProfitPerRun}}{{if .MarginPct}} ({{.MarginPct}}){{end}}</td></tr>{{end}}
   </tbody>
 </table>
 {{if .Note}}<p><small>{{.Note}}</small></p>
 {{end}}
-</div>
+</section>
 {{end}}
 </div>
 
 {{end}}
 {{end}}
+</div>
 {{end}}
 {{end}}

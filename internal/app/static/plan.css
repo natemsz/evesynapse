@@ -3,10 +3,23 @@
    hues (build green, buy blue, risk red, critical ember) so the
    coding survives both themes; surfaces reuse theme variables. */
 #plan { --plan-build: #3fce7a; --plan-buy: #5eb8ff; --plan-risk: #ff5a4e; --plan-fee: #ffd27a; }
-.plan-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: rgba(255, 110, 0, 0.14); border: 1px solid color-mix(in srgb, var(--accent) 14%, transparent); border-radius: 0.5rem; overflow: hidden; margin-bottom: 0.6rem; }
-.plan-stats > div { background: var(--row-alt); padding: 0.6rem 0.8rem; }
-.plan-stats .plan-k { display: block; font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
-.plan-stats .plan-basis { color: var(--muted); font-style: italic; }
+/* The planner page sits on the layout framework (layout.css): the
+   search in the page head, the plan's figures on stat tiles. Width
+   decisions here measure the page (@container page), never the
+   window; the two height rules below compact the tree to the
+   screen's vertical room, which is the viewport's to say. */
+.bpl-search { flex: 1 1 28rem; min-width: 0; }
+.bpl-h { margin: 0 0 var(--space-2); font-size: 1rem; }
+.bpl-matches { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 16rem), 1fr)); gap: 0.2rem var(--space-4); margin: 0; padding: 0; list-style: none; }
+.bpl-matches a { display: block; padding: 0.3rem 0; }
+.bpl-tiles { margin-bottom: var(--space-2); }
+.bpl-tiles .l-stat-value { font-size: 1.4rem; }
+#plan .l-stat-value.pos, #plan .l-stat-sub.pos { color: var(--plan-build); }
+#plan .l-stat-value.neg, #plan .l-stat-sub.neg { color: var(--plan-risk); }
+.plan-basis { margin: 0 0 0.3rem; color: var(--muted); font-style: italic; }
+.plan-head .plan-title { margin-top: 0; }
+.bpl-verdict h3 { margin-top: 0; }
+.bpl-sub { margin: -0.3rem 0 var(--space-2); color: var(--muted); }
 .plan-verdictrow { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
 .plan-verdict { font-size: 1.08rem; font-weight: 700; margin: 0.45rem 0 0; }
 .plan-verdict.build { color: var(--plan-build); }
@@ -22,7 +35,6 @@
 .plan-searchwrap { flex: 2 1 20rem; width: auto; }
 .plan-csvbtn { display: inline-block; line-height: 0; }
 .plan-csvbtn .plan-glyph { width: 1.45rem; height: 1.45rem; vertical-align: -0.4rem; }
-.plan-stats strong { font-size: 1.4rem; font-weight: 700; }
 .plan-presets, .plan-tabs { display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap; margin: 0.5rem 0; }
 .plan-tools { display: flex; justify-content: flex-end; margin: 0.5rem 0 0; }
 /* Tab strip: the views read as tabs on the panel below, not
@@ -154,14 +166,11 @@ skills as a list for the skillbook. */
 two pair-columns wide, one narrow. Long names truncate into
 the title tooltip instead of pushing the input off. */
 #me-modal .modal { width: min(52rem, 100%); }
-.me-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr)); gap: 0.3rem 1rem; }
+.me-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 15rem), 1fr)); gap: 0.3rem 1rem; }
 .me-cell { display: flex; align-items: center; gap: 0.35rem; min-width: 0; white-space: nowrap; }
 .me-cell .me-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .me-cell input { flex: none; }
 .me-summary { color: var(--muted); }
-@media (max-width: 40rem) {
-  .me-grid { grid-template-columns: 1fr; }
-}
 .plan-legend { margin-left: auto; color: var(--muted); }
 .plan-dot { display: inline-block; width: 0.6rem; height: 0.6rem; border-radius: 50%; margin: 0 0.15rem 0 0.5rem; }
 .plan-dot.plan-build { background: var(--plan-build); }
@@ -290,7 +299,14 @@ proportional bar under the text, colored by the decision. */
 .plan-fill { background: var(--plan-build); height: 100%; }
 .plan-buy .plan-fill, .plan-fill.plan-buy { background: var(--plan-buy); }
 .plan-node small, .plan-cols small { color: var(--muted); }
-#plan-inspector { position: sticky; top: calc(var(--sticky-top) + 1px + 0.6rem); }
+/* The inspector rides beside the tree while the reader scrolls; on a
+   phone it is a bottom sheet (data-sheet) that a pick opens, and its
+   own heading gives way to the sheet's. */
+.plan-insp { position: sticky; top: calc(var(--l-top) + 0.6rem); min-width: 0; }
+.plan-treecols:has(> .as-sheet) { grid-template-columns: minmax(0, 1fr); }
+.as-sheet #plan-inspector > h4:first-child { display: none; }
+.plan-tools { gap: 0.5rem; align-items: center; }
+.plan-tools [data-sheet-open][hidden] { display: none; }
 #plan-inspector h4, #plan-hubsplit h4 { margin: 0 0 0.4rem; }
 .plan-buytable th.num, .plan-buytable td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .plan-buytable tfoot td { font-weight: 700; border-top: 2px solid #262626; }
@@ -308,109 +324,21 @@ proportional bar under the text, colored by the decision. */
 .plan-fname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .plan-ftrack { position: relative; height: 1.1rem; background: var(--row); border-radius: 3px; }
 .plan-fbar { position: absolute; top: 0; bottom: 0; border-radius: 3px; }
-@media (max-width: 60rem) {
-  .plan-stats { grid-template-columns: 1fr 1fr; }
+@container page (max-width: 60rem) {
   .plan-cols { grid-template-columns: 1fr; }
-  .plan-treecols { grid-template-columns: 1fr; }
+  .plan-treecols { grid-template-columns: minmax(0, 1fr) 15rem; }
   .plan-frow { grid-template-columns: 1fr; gap: 0.15rem; }
   .plan-grow { grid-template-columns: 1fr; }
 }
-/* --- PI Planner (/industry/pi/) --- */
-.pi-controls label { margin-right: 1rem; white-space: nowrap; }
-.pi-planets { border: 1px solid var(--glass-edge); border-radius: var(--r-sm); margin: 0.6rem 0; padding: 0.55rem 0.8rem 0.7rem; }
-.pi-planet { white-space: nowrap; margin-right: 0.8rem; }
-.pi-coverage.pos { color: #3fce7a; font-weight: 600; }
-.pi-coverage.neg { color: #ff5a4e; font-weight: 600; }
-.pi-graph { display: flex; gap: 0.6rem; overflow-x: auto; padding-bottom: 0.5rem; }
-.pi-col { min-width: 11rem; flex: 1 0 11rem; }
-.pi-col h4 { margin: 0 0 0.4rem; font-size: 0.8rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
-.pi-node { display: block; width: 100%; text-align: left; margin-bottom: 0.3rem; padding: 0.35rem 0.5rem; border: 1px solid var(--border, #333); border-radius: 4px; background: color-mix(in srgb, var(--row) 85%, transparent); cursor: pointer; font: inherit; }
-.pi-node small { display: block; color: var(--muted); }
-.pi-node .pi-on { color: var(--gold, #ffd27a); font-size: 0.72rem; }
-.pi-node.dimmed { opacity: 0.45; }
-.pi-node.input { border-color: #3fce7a; }
-.pi-node.input.missing { border-color: #ff5a4e; border-style: dashed; }
-.pi-node.selected { border-color: #ffd27a; background: var(--row-hover); }
-.pi-node.output { border-color: #5eb8ff; }
-.pi-node.covered { border-color: #3fce7a; background: var(--row-hover); }
-.pi-node.source, .pi-node.dimmed.can-supply { opacity: 1; border-color: #c9a06a; border-style: dashed; }
-@media (max-width: 60rem) { .pi-col { min-width: 9rem; flex-basis: 9rem; } }
-/* Controls card: the generic nested-card rule flattens it
-   (padding 0), so the form rows sat on the page card's edge.
-   Restore the foldable padding rhythm, scoped to this page. */
-#pi-wrap .pi-controls { padding: 0.9rem 1rem 1rem; }
-/* Fields in the controls card: number inputs arrive with a flat
-   #2a2a2a border and selects with no site styling at all. Give
-   both the shared field shape with the warm glass edge the glow
-   rounds standardized on, instead of the greys. */
-#pi-wrap .pi-controls select {
-  background: var(--input-bg);
-  border: 1px solid var(--glass-edge);
-  border-radius: var(--r-sm);
-  color: var(--text);
-  box-sizing: border-box;
-  min-height: var(--control-h);
-  padding: 0.2rem 0.6rem;
-  font: inherit;
+@container page (max-width: 36rem) {
+  .plan-treecols { grid-template-columns: minmax(0, 1fr); }
+  .plan-insp { position: static; }
 }
-#pi-wrap .pi-controls input[type="number"] { border-color: var(--glass-edge); }
-#pi-wrap .pi-controls select:focus,
-#pi-wrap .pi-controls input[type="number"]:focus { border-color: var(--accent); }
-html[data-theme="light"] #pi-wrap .pi-controls select,
-html[data-theme="light"] #pi-wrap .pi-controls input[type="number"] { border-color: #d8cdb8; }
-/* Recalculate is a plain <button>, so it wore the default loud
-   orange gradient slab. Restyle it as a quiet glass pill — the
-   .btn-quiet recipe: warm translucent fill, ember edge; the
-   accent stays in the border and the hover. The form sits
-   inside the panel's glass, so the pill carries no backdrop
-   blur of its own. */
-#pi-form button[type="submit"] {
-  background: rgba(23, 17, 13, 0.55);
-  border: 1px solid color-mix(in srgb, var(--accent) 22%, transparent);
-  color: var(--text);
-  text-shadow: none;
-}
-#pi-form button[type="submit"]:hover:not(:disabled) {
-  background: rgba(23, 17, 13, 0.55);
-  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
-  color: var(--text-bright);
-}
-html[data-theme="light"] #pi-form button[type="submit"] {
-  background: rgba(253, 251, 246, 0.72);
-  border-color: #d3c7ae;
-}
-/* Suggested colonies: the nested-foldable rule flattens them
-   (padding 0, no border, no background), so the sections ran
-   together as one unbroken text block. Give each colony its box
-   back on the foldable rhythm — same padding, same separation,
-   warm glass edge; the backdrop filter stays off inside the
-   card's own glass. */
-#pi-wrap .pi-colony {
-  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.30), rgba(0, 0, 0, 0) 55%), var(--glass);
-  border: 1px solid var(--glass-edge);
-  border-radius: var(--r-lg);
-  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.6);
-  padding: 0.9rem 1rem 1rem;
-  margin-bottom: 1.25rem;
-}
-html[data-theme="light"] #pi-wrap .pi-colony { background: #fdfbf6; border-color: #ddd2bd; box-shadow: none; }
-/* The planner search sits in the shared panel: its row needs no
-   margin of its own inside it. */
-.searchpanel .plan-searchrow { margin: 0; }
 
-/* --- phones (mobile pass 4) ------------------------------------------
-   Build planner: the product search keeps field and button on one
-   row, the view tabs scroll as one row instead of wrapping to two,
-   and the inspector, which sits under the tree in the one-column
-   layout, stops being sticky.
-   PI planner: the controls stack through the shared labelled-form
-   rule (phone.css); the planet
-   checks become two columns of finger-sized rows; the production
-   map swipes through its tiers two columns at a time, snapping to
-   a column edge. The materials table reads as cards through the
-   shared table contract (Per hour and Volume are its .opt
-   columns). */
-@media (max-width: 45rem) {
+/* --- narrow pages ---------------------------------------------------
+   The product search keeps field and button on one row and the view
+   tabs scroll as one row instead of wrapping to two. */
+@container page (max-width: 45rem) {
   .plan-searchrow { flex-wrap: nowrap; align-items: center; }
   .plan-searchwrap { flex: 1 1 auto; min-width: 0; }
   .plan-tabs {
@@ -419,26 +347,4 @@ html[data-theme="light"] #pi-wrap .pi-colony { background: #fdfbf6; border-color
   }
   .plan-tabs::-webkit-scrollbar { display: none; }
   .plan-tabs > * { flex: none; }
-  #plan-inspector { position: static; }
-
-  #pi-wrap .pi-controls { padding: 0.8rem 0.75rem 0.9rem; }
-  #pi-form .pi-controls > p { margin: 0 0 0.7rem; }
-  .pi-planets {
-    display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 0 0.5rem; padding: 0.5rem 0.6rem 0.6rem;
-  }
-  .pi-planets > small { grid-column: 1 / -1; margin-top: 0.3rem; }
-  .pi-planet {
-    display: flex; align-items: center; gap: 0.45rem;
-    min-height: 2.5rem; margin: 0; white-space: normal;
-  }
-  .pi-graph {
-    gap: 0.5rem;
-    scroll-snap-type: x mandatory;
-    overscroll-behavior-x: contain;
-    margin: 0 -0.7rem; padding: 0 0.7rem 0.5rem;
-    scroll-padding-left: 0.7rem;
-  }
-  .pi-col { flex: 0 0 calc(50% - 0.6rem); min-width: 0; scroll-snap-align: start; }
-  .pi-node { min-height: 2.5rem; }
 }

@@ -21,6 +21,7 @@ type pageData struct {
 	KillmailChars   []assetCharLink
 	Industry        *industryView
 	IndustryChars   []assetCharLink
+	JobsPage        *jobsView // My Jobs: every job across the characters in scope
 	ServerStatus    *serverStatusView
 	ESIHealth       *esiHealthView // Overview bar: ESI health and Tranquility players (signed-in Home only)
 	Corps           []corpView

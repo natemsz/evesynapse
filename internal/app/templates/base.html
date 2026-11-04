@@ -34,6 +34,7 @@
 {{if eq .NavPage "link.html"}}<link rel="stylesheet" href="/static/link.css?v={{.AssetVersion}}">{{end}}
 {{if eq .NavPage "market_appraise.html"}}<link rel="stylesheet" href="/static/appraisal.css?v={{.AssetVersion}}">{{end}}
 {{if eq .NavPage "assets.html"}}<link rel="stylesheet" href="/static/assets.css?v={{.AssetVersion}}">{{end}}
+{{if eq .NavPage "industry_jobs.html"}}<link rel="stylesheet" href="/static/jobs.css?v={{.AssetVersion}}">{{end}}
 {{if eq .NavPage "skillplans.html"}}<link rel="stylesheet" href="/static/skillplans.css?v={{.AssetVersion}}">{{end}}
 {{if eq .NavPage "fittings.html"}}<link rel="stylesheet" href="/static/fit.css?v={{.AssetVersion}}">{{end}}
 {{if or (eq .NavPage "map.html") (eq .NavPage "intel_workbench.html")}}<link rel="stylesheet" href="/static/map.css?v={{.AssetVersion}}">{{end}}{{if eq .NavPage "intel_workbench.html"}}<link rel="stylesheet" href="/static/dashboard.css?v={{.AssetVersion}}">{{end}}
@@ -212,8 +213,8 @@
   </nav>
 </header>
 <div class="page-shell">
-<main id="main-content">
 <div class="subnav">{{template "pagetabs" .}}</div>
+<main id="main-content">
 {{template "pagetitle" .}}
   <div class="page-body">
 {{with .Banners}}{{template "noticebanners" .}}{{end}}

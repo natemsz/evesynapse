@@ -5,33 +5,110 @@
 
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
 
-{{template "charselector" .IndustryChars}}
-
-{{if .Industry}}
-<h2>{{.Industry.CharacterName}}</h2>
-
-<section class="foldable">
-<h3>Jobs</h3>
-{{if .Industry.Jobs.Note}}
-<p><small>{{.Industry.Jobs.Note}}</small></p>
-{{else if .Industry.Jobs.Warming}}
-<p><small>Still syncing.{{if .IsAdmin}} Progress is on the <a href="/admin/sync/">Sync page</a>.{{end}}</small></p>
-{{else if .Industry.JobRows}}
-<div class="tw">
-<table>
-  <thead><tr><th>Activity</th><th>Blueprint</th><th>Product</th><th class="opt">Installer</th><th>Facility</th><th>Runs</th><th>Status</th><th>Ends</th><th>Cost</th></tr></thead>
-  <tbody>
-  {{range .Industry.JobRows}}
-    <tr><td>{{.Activity}}</td><td>{{itemLink .BlueprintTypeID .Blueprint}}</td><td>{{if .Product}}{{itemLink .ProductTypeID .Product}}{{end}}</td><td>{{charLink $.ViewerChars .InstallerID .Installer}}</td><td>{{placeLink .Facility}}</td><td>{{.Runs}}</td><td>{{.Status}}</td><td>{{.Ends}}</td><td>{{.Cost}} ISK</td></tr>
-  {{end}}
-  </tbody>
-</table>
+{{with .JobsPage}}
+<div class="l-page">
+<div class="l-head">
+  <div class="l-head-pick">{{template "charselectormulti" .Selector}}</div>
+  <div class="l-head-act"><a class="btn btn-quiet" href="/planner/">Build planner</a></div>
 </div>
-{{if .Industry.JobsCut}}<p><small>+ {{.Industry.JobsCut}} older jobs in this snapshot.</small></p>{{end}}
-{{else}}
-<p><small>No industry jobs in the latest snapshot.</small></p>
-{{end}}
+{{range .Notes}}<p class="notice"><small>{{.}}</small></p>{{end}}
+{{if .Warming}}<p><small>Still syncing jobs for {{range $i, $n := .Warming}}{{if $i}}, {{end}}{{$n}}{{end}}.{{if $.IsAdmin}} Progress is on the <a href="/admin/sync/">Sync page</a>.{{end}}</small></p>{{end}}
+
+{{if .Any}}
+<div class="l-tiles jb-tiles l-root">
+  {{range .Tiles}}{{if .Href}}<a class="l-stat{{if .On}} on{{end}}{{if .Tone}} {{.Tone}}{{end}}" href="{{.Href}}" data-l-step="in">{{else}}<div class="l-stat{{if .Tone}} {{.Tone}}{{end}}">{{end}}
+    <span class="l-stat-label">{{.Label}}</span>
+    <span class="l-stat-value{{if .Until}} text{{end}}">{{.Value}}</span>
+    <span class="l-stat-sub">{{.Sub}}{{if .Until}} · <span class="countdown" data-finish="{{.Until}}"></span>{{end}}</span>
+  {{if .Href}}</a>{{else}}</div>{{end}}{{end}}
+</div>
+
+<div class="l-console jb" data-depth="{{.Depth}}" data-land-top>
+<div class="l-panes">
+
+<nav class="l-pane l-pane--dir jb-dir" aria-label="Facilities">
+  <div class="l-pane-bar"><h2 class="l-pane-title">Facilities <small>{{len .Facilities}}</small></h2></div>
+  <div class="dirlist">
+    <a class="diritem{{if .AllOn}} on{{end}}" href="{{.AllHref}}" data-l-step="in"><span class="dir-top"><span class="dir-name">All facilities</span></span></a>
+    {{range .Facilities}}<a class="diritem{{if .On}} on{{end}}" href="{{.Href}}" data-l-step="in">
+      <span class="dir-top"><span class="dir-name">{{.Title}}</span><span class="dir-val">{{.CostText}}</span></span>
+      <span class="dir-sub">{{.Jobs}} {{if eq .Jobs 1}}job{{else}}jobs{{end}}{{if .Running}} · {{.Running}} running{{end}}{{if .Ready}} · {{.Ready}} ready{{end}}</span>
+    </a>{{end}}
+  </div>
+  <h3 class="jb-h">Slots by pilot</h3>
+  <ul class="jb-pilots">
+    {{range .Pilots}}<li>
+      <span class="jb-pilot">{{.Name}}</span>
+      {{range .Slots}}<span class="jb-slot{{if .Full}} full{{end}}"><span class="jb-slot-l">{{.Label}}</span><span class="jb-slot-v">{{.Used}}{{if .MaxKnown}} / {{.Max}}{{end}}</span>{{if .MaxKnown}}<svg class="l-meter{{if .Full}} full{{end}}" viewBox="0 0 100 4" preserveAspectRatio="none" aria-hidden="true"><rect x="0" y="0" width="{{.Pct}}" height="4"/></svg>{{end}}</span>{{end}}
+    </li>{{end}}
+  </ul>
+  <p class="dir-foot">Slots come from each pilot's stored skills: one of each, plus a slot per level of Mass Production, Laboratory Operation and Mass Reactions and their advanced skills.</p>
+</nav>
+
+<section class="l-pane l-pane--main jb-main" aria-label="Jobs">
+  <div class="l-pane-bar">
+    <a class="l-back" data-l-step="out" href="{{.DirHref}}">Facilities</a>
+    <h2 class="l-pane-title">{{.ListTitle}}</h2>
+  </div>
+  <div class="pilltabs jb-acts" role="group" aria-label="Activity">
+    {{range .Activities}}<a class="pilltab{{if .On}} on{{end}}" href="{{.Href}}">{{.Label}} <span class="cnt">{{.Count}}</span></a>{{end}}
+  </div>
+  <div class="fchips jb-states" role="group" aria-label="State">
+    {{range .States}}<a class="fchip{{if .On}} on{{end}}" href="{{.Href}}">{{.Label}} {{.Count}}</a>{{end}}
+  </div>
+  {{if .Rows}}
+  <div class="tw">
+  <table class="jb-table">
+    <thead><tr><th>Activity</th><th class="card-title">Blueprint</th><th>Product</th><th class="opt">Installer</th><th>Facility</th><th>Runs</th><th>State</th><th>Ends</th><th>Cost</th></tr></thead>
+    <tbody>
+    {{range .Rows}}
+      <tr class="jb-{{.State}}{{if .On}} yours{{end}}"><td>{{.Activity}}</td><td><a href="{{.Href}}" data-l-step="in">{{.Blueprint}}</a></td><td>{{if .Product}}{{itemLink .ProductTypeID .Product}}{{end}}</td><td>{{charLink $.ViewerChars .InstallerID .Installer}}</td><td>{{placeLink .Facility}}</td><td>{{.Runs}}</td><td><span class="jb-state">{{.StateText}}</span></td><td>{{.Ends}}</td><td>{{.Cost}} ISK</td></tr>
+    {{end}}
+    </tbody>
+  </table>
+  </div>
+  {{if .Cut}}<p><small>+ {{.Cut}} more jobs match; the first 100 are shown.</small></p>{{end}}
+  {{else}}
+  <p><small>No jobs match these filters.</small></p>
+  {{end}}
 </section>
+
+{{with .Insp}}
+<aside class="l-pane l-pane--insp insp jb-insp" aria-label="Job">
+  <div class="l-pane-bar"><a class="l-back" data-l-step="out" href="{{.CloseHref}}">Jobs</a><a class="l-close" href="{{.CloseHref}}" aria-label="Close the job">&#10005;</a></div>
+  <div class="insp-head">
+    <div class="insp-titles"><h3>{{itemLink .Row.BlueprintTypeID .Row.Blueprint}}</h3><p class="amx-msub">{{.Row.Activity}}{{if .Row.Product}} · {{itemLink .Row.ProductTypeID .Row.Product}}{{end}}</p></div>
+  </div>
+  <div class="jb-progress">
+    <div class="jb-progress-top"><span class="jb-state">{{.Row.StateText}}</span>{{if .Progress}}<span>{{.Progress}}</span>{{end}}</div>
+    {{if .ProgressPct}}<svg class="l-meter jb-bar" viewBox="0 0 100 4" preserveAspectRatio="none" aria-hidden="true"><rect x="0" y="0" width="{{.ProgressPct}}" height="4"/></svg>{{end}}
+    {{if eq .Row.State "active"}}<p class="jb-left">Finishes in <span class="countdown" data-finish="{{.EndRaw}}"></span></p>{{end}}
+  </div>
+  <dl class="insp-facts">
+    <div><dt>Installer</dt><dd>{{charLink $.ViewerChars .Row.InstallerID .Row.Installer}}</dd></div>
+    {{if .Row.Facility.Name}}<div><dt>Facility</dt><dd>{{placeLink .Row.Facility}}</dd></div>{{end}}
+    <div><dt>Runs</dt><dd>{{.Row.Runs}}</dd></div>
+    {{if .Licensed}}<div><dt>Licensed runs</dt><dd>{{.Licensed}}</dd></div>{{end}}
+    {{if .Successful}}<div><dt>Successful runs</dt><dd>{{.Successful}}</dd></div>{{end}}
+    {{if .Probability}}<div><dt>Success chance</dt><dd>{{.Probability}}</dd></div>{{end}}
+    <div><dt>Started</dt><dd>{{.Start}}</dd></div>
+    <div><dt>Ends</dt><dd>{{.End}}</dd></div>
+    <div><dt>Duration</dt><dd>{{.Duration}}</dd></div>
+    <div><dt>Install cost</dt><dd>{{.Row.Cost}} ISK</dd></div>
+    {{if .BlueprintAt.Name}}<div><dt>Blueprint kept at</dt><dd>{{placeLink .BlueprintAt}}</dd></div>{{end}}
+    {{if .OutputAt.Name}}<div><dt>Output goes to</dt><dd>{{placeLink .OutputAt}}</dd></div>{{end}}
+  </dl>
+  {{if .Row.ProductTypeID}}<p class="insp-note"><a href="/planner/?product={{.Row.ProductTypeID}}">Plan this build</a></p>{{end}}
+</aside>
+<a class="l-scrim" href="{{.CloseHref}}" aria-label="Close the job" tabindex="-1"></a>
+{{end}}
+
+</div>
+</div>
+{{else if not .Warming}}
+<p><small>No industry jobs in the latest snapshots.</small></p>
+{{end}}
+</div>
 {{else}}
 <p>No character to show yet. Link a character first.</p>
 {{end}}

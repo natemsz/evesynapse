@@ -346,7 +346,7 @@ func TestLandingMockupFidelity(t *testing.T) {
 		".ld-footer a { color: var(--ld-dim); }",
 		// The footer is JetBrains Mono, like every other
 		// footer on the site.
-		".ld-footer { border-top: 1px solid rgba(255, 255, 255, 0.07); padding: 22px 0 30px; color: var(--faint, #8a7a66); font-size: 13.5px; font-family: \"JetBrains Mono\", monospace; }",
+		".ld-footer { border-top: 1px solid rgba(255, 255, 255, 0.07); padding: 22px 0 30px; color: var(--faint, #8a7a66); font-size: var(--fs-md); font-family: \"JetBrains Mono\", monospace; }",
 		// The preview's borrowed markup carries no glass or
 		// backdrop blur of its own inside the landing.
 		".ld-preview .kpis { grid-template-columns: repeat(2, 1fr); gap: 14px; padding: 0; background: none; border: none; border-radius: 0; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }",

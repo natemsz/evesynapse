@@ -35,14 +35,14 @@
    theme get a highlight in their own colour. */
 :root {
   /* Type roles, one name each (the stacks the core sheet uses):
-     Saira Semi Condensed for UI and table data, Rajdhani for
+     Eve Sans Neue for UI and table data, Rajdhani for
      display and menu text, Inter for open prose, JetBrains Mono for
      data spots, Synapse Numerals for big figures. */
-  --font-body: "Saira Semi Condensed", "Inter", "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-body: "Eve Sans Neue", "Inter", "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif;
   --font-display: "Rajdhani", "Segoe UI", sans-serif;
   --font-prose: "Inter", "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, monospace;
-  --font-num: "Synapse Numerals", "Saira Semi Condensed", "Inter", "Segoe UI", sans-serif;
+  --font-num: "Synapse Numerals", "Eve Sans Neue", "Inter", "Segoe UI", sans-serif;
   --space-1: clamp(0.25rem, 0.2rem + 0.15vw, 0.35rem);
   --space-2: clamp(0.4rem, 0.32rem + 0.25vw, 0.6rem);
   --space-3: clamp(0.6rem, 0.48rem + 0.4vw, 0.9rem);

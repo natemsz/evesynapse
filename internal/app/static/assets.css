@@ -17,32 +17,6 @@
 .assets-net-v { display: block; color: var(--gold); font-size: 1.4rem; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1.15; }
 .assets-net-l { color: var(--muted); font-size: 0.68rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
 
-/* The character scope selector: a button naming the current
-   selection; its panel is the shared character selector's
-   dropdown (the charselectormulti template) holding a search
-   field, bulk All and None actions, the all-characters row
-   and one checklist row per character with its custom tags
-   as chips. Rows toggle a pending set in place while the
-   panel stays open; Done commits the set, and each row's
-   Only link scopes the page to that character in one pick. */
-.asset-scope { margin: 0; max-width: none; flex: 1 1 auto; }
-.asset-scope-btn { display: flex; align-items: center; gap: 0.5rem; width: 100%; justify-content: space-between; padding: 0.42rem 0.75rem; border: 1px solid var(--box-edge); border-radius: 999px; background: var(--glass); color: var(--text-bright); font: inherit; font-weight: 600; cursor: pointer; }
-.asset-scope-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.asset-scope-caret { flex: none; color: var(--muted); font-size: 0.8rem; }
-.asset-scope-panel { padding: 0.4rem; }
-.asset-scope-search { margin-bottom: 0.4rem; }
-.asset-scope-box { flex: none; display: grid; place-items: center; width: 1.05rem; height: 1.05rem; border: 1px solid var(--box-edge); border-radius: var(--r-xs); color: transparent; font-size: 0.72rem; line-height: 1; }
-.asset-scope-box.on { background: var(--accent); border-color: var(--accent); color: #fff; }
-.asset-scope-row.on .charselector-name, .asset-scope-all.on .charselector-name { color: var(--text-bright); font-weight: 600; }
-.asset-scope-portrait { flex: none; border-radius: 50%; }
-.asset-scope-main { display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; }
-.asset-scope-none { margin: 0.4rem 0.2rem 0.2rem; color: var(--muted); font-size: 0.85rem; }
-.asset-scope-none[hidden] { display: none; }
-.asset-scope-rowwrap { position: relative; }
-.asset-scope-rowwrap[hidden] { display: none; }
-.asset-scope-rowwrap .asset-scope-row { padding-right: 3rem; }
-.asset-scope-only { position: absolute; right: 0.45rem; top: 50%; transform: translateY(-50%); padding: 0.3rem 0.3rem; color: var(--muted); font-size: 0.75rem; font-weight: 600; text-decoration: none; }
-.asset-scope-only:hover { color: var(--accent); }
 
 /* The console's panes: this page keeps them flush against
    hairline dividers and sets its column widths. */
@@ -168,10 +142,4 @@
   .amx-table th:nth-child(5) { width: 5.5rem; }
   .assets-net { text-align: left; margin-left: 0; }
   .amx-trow td { padding-top: 0.6rem; padding-bottom: 0.6rem; }
-}
-/* Touch-sized scope controls wherever the pointer is coarse. */
-@media (pointer: coarse) {
-  .asset-scope-btn { min-height: 2.4rem; }
-  .asset-scope-row, .asset-scope-all { min-height: 2.6rem; }
-  .asset-scope-only { padding: 0.65rem 0.35rem; }
 }

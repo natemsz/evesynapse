@@ -249,8 +249,9 @@ func (app *page) buildScannerView(ctx context.Context, q map[string][]string) *s
 // and best daily profit, numbers the rows, and opens the one ?pick=
 // names in the inspector. The pick and close links keep the filters.
 func scannerMeters(view *scannerView, q map[string][]string) {
-	bestProfit := 0.0
+	bestSpread, bestProfit := 0.0, 0.0
 	for _, row := range view.Rows {
+		bestSpread = max(bestSpread, row.spread)
 		bestProfit = max(bestProfit, row.profit)
 	}
 	base := url.Values{}
@@ -263,10 +264,13 @@ func scannerMeters(view *scannerView, q map[string][]string) {
 	for i := range view.Rows {
 		row := &view.Rows[i]
 		row.Rank = i + 1
-		// The spread meter fills at a 100% spread: a few thin books
-		// quote spreads in the thousands, and measured against those
-		// every ordinary row would read as empty.
-		row.SpreadW = int(math.Round(min(row.spread, 100)))
+		// Both meters measure against the page's best. A joke order or
+		// a thin book can quote a spread in the thousands and leave the
+		// other spread meters near empty; filtering those orders out
+		// belongs upstream, in the sweep, not in the meter.
+		if bestSpread > 0 {
+			row.SpreadW = int(math.Round(row.spread / bestSpread * 100))
+		}
 		if bestProfit > 0 {
 			row.ProfitW = int(math.Round(row.profit / bestProfit * 100))
 		}

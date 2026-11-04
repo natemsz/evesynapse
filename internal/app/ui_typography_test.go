@@ -58,7 +58,7 @@ func TestTabNavTypeSpec(t *testing.T) {
 		}
 	}
 	contracts := readStatic(t, "contracts.css")
-	if want := "font-weight: 500; text-transform: uppercase; letter-spacing: normal; font-size: var(--fs-sm);"; !strings.Contains(contracts, want) {
+	if want := "font-weight: 600; text-transform: uppercase; letter-spacing: normal; font-size: var(--fs-sm);"; !strings.Contains(contracts, want) {
 		t.Errorf("contracts.css .cs-tab missing tab spec %q", want)
 	}
 	fit := readStatic(t, "fit.css")

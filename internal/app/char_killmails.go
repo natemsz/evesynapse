@@ -56,6 +56,7 @@ type killmailRow struct {
 	YourShipID int64 // the viewer's hull: the victim ship on a loss, the attacking ship on a kill
 	Wing       []int64
 	Href       string // opens this kill in the inspector
+	BattleHref string // the viewer's battle report this mail belongs to, if any
 	On         bool
 }
 
@@ -148,8 +149,16 @@ func (app *Application) handleKillmails(w http.ResponseWriter, r *http.Request) 
 
 	viewer := killmailViewer{characterID: active.CharacterID}
 	placeMemo := make(map[int64]placeRef)
+	ids := make([]int64, 0, len(refs))
 	for _, ref := range refs {
 		view.Rows = append(view.Rows, app.killmailRow(ctx, viewer, ref, values, placeMemo))
+		ids = append(ids, ref.KillmailID)
+	}
+	// Mails that fall inside one of the account's recorded fights
+	// open its battle report (battle_pages.go).
+	battles := app.battleLinks(ctx, app.userID(ctx), ids)
+	for i := range view.Rows {
+		view.Rows[i].BattleHref = battles[view.Rows[i].KillmailID]
 	}
 	app.shapeKillmails(ctx, r, view, viewer)
 

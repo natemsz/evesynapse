@@ -37,6 +37,8 @@ var Module = module.Module{
 			// serve in every build, and lead this section's menu
 			// when the section exists.
 			{Href: "/intel/kills/", Label: "Killboard", Pages: []string{"killboard.html", "kill.html"}},
+			// Battle reports are core too (battle_pages.go).
+			{Href: "/intel/battles/", Label: "Battle Reports", Pages: []string{"battles.html", "battle.html"}},
 			{Href: "/intel/scan/", Label: "D-Scan Parser", Pages: []string{"scans.html", "scan.html", "scan_compare.html"}},
 			{Href: "/intel/channels/", Label: "Intel Channels", Pages: []string{"channels.html", "channel.html"}},
 			{Href: "/intel/workbench/", Label: "Intel Workbench", Pages: []string{"intel_workbench.html"}},

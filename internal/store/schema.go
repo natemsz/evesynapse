@@ -759,6 +759,12 @@ var pgBlueprintBuildableSchema string
 //go:embed schema_pg/123_market_basket_summary.sql
 var pgMarketBasketSummarySchema string
 
+// Step 124: battle reports: fights Axon posts from the game logs,
+// their series, parties, weapons, matched kills and findings.
+//
+//go:embed schema_pg/124_battle_reports.sql
+var pgBattleReportsSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -911,6 +917,7 @@ func schemaSteps() []schemaStep {
 		{121, "market_stat_sparks", pgMarketStatSparksSchema, ""},
 		{122, "blueprint_buildable", pgBlueprintBuildableSchema, ""},
 		{123, "market_basket_summary", pgMarketBasketSummarySchema, ""},
+		{124, "battle_reports", pgBattleReportsSchema, ""},
 	}
 }
 

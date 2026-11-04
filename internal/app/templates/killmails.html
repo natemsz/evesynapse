@@ -81,7 +81,7 @@
           <td>{{killCharLink $.ViewerChars .FinalBlowID .FinalBlow}}{{if .YourBlow}} <span class="km-blow" title="Your final blow" aria-label="Your final blow">&#9733;</span>{{end}}</td>
           <td>{{.Involved}}</td>
           <td class="num" data-sort="{{.ISK}}">{{if eq .Value "—"}}—{{else}}{{.Value}} ISK{{end}}</td>
-          <td><small>{{killPageLink .KillmailID}}</small></td>
+          <td><small>{{killPageLink .KillmailID}}{{if .BattleHref}}<br><a href="{{.BattleHref}}">Battle report</a>{{end}}</small></td>
         </tr>
       {{end}}
       </tbody>
@@ -118,6 +118,7 @@
     <div class="km-acts">
       {{if .Fit}}<button type="button" class="btn small" data-copy data-copy-text="{{.Fit}}">Copy fit</button>{{end}}
       {{if $.Killmails.Insp.PageHref}}<a class="btn small" href="{{$.Killmails.Insp.PageHref}}">Open kill page</a>{{end}}
+      {{if $.Killmails.Insp.Row.BattleHref}}<a class="btn small" href="{{$.Killmails.Insp.Row.BattleHref}}">Battle report</a>{{end}}
       <a class="btn small" href="/map/?system={{.Row.SystemID}}">On the map</a>
     </div>
     {{if .Slots}}

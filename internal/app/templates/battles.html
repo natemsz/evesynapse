@@ -1,0 +1,50 @@
+{{define "title"}}Battle Reports{{end}}
+{{define "pagetitle"}}<h1><span class="gt">Battle Reports</span></h1>{{end}}
+{{define "pagetabs"}}{{template "sectiontabs" .}}{{end}}
+{{define "content"}}
+{{with .Battles}}
+{{/* The account's fights (battle_pages.go): what Axon read from the
+     game logs, newest first, each matched to its killmails. Each row
+     opens its report; the trend column is the fight's damage out and
+     in over its length, the same lines the report's chart draws. */}}
+<div class="l-page bt">
+  <div class="l-head">
+    <p class="l-head-sum">Fights Axon read from your game logs, matched to their killmails.</p>
+  </div>
+  {{if .Tiles}}
+  <div class="l-tiles bt-tiles">
+    {{range .Tiles}}<div class="l-stat bt-stat-{{.Tone}}"><span class="l-stat-label">{{.Label}}</span><span class="l-stat-value">{{.Value}}</span><span class="l-stat-sub">{{.Sub}}</span></div>{{end}}
+  </div>
+  <section class="l-panel bt-list">
+    <div class="tw">
+    <table class="bt-index">
+      <thead><tr>
+        <th>When (EVE)</th><th class="card-title">System</th><th>Pilot</th><th>Length</th><th>Result</th><th class="num">Destroyed</th><th class="num">Lost</th><th class="opt bt-trend-h">Activity</th>
+      </tr></thead>
+      <tbody>
+      {{range .Rows}}
+      <tr>
+        <td><a href="{{.Href}}"><time datetime="{{rfc3339 .At}}">{{.When}}</time></a></td>
+        <td>{{if .SystemName}}{{systemLink .SystemID .SystemName}}{{else}}<span class="bt-dim">Unplaced</span>{{end}}</td>
+        <td>{{charLink $.Battles.Viewer .CharacterID .Listener}}</td>
+        <td class="num">{{.Length}}</td>
+        <td><a class="bt-result bt-result-{{.Outcome}}" href="{{.Href}}">{{.OutcomeText}}</a>{{if or .Kills .Losses}} <span class="bt-dim">{{.Kills}} / {{.Losses}}</span>{{end}}</td>
+        <td class="num">{{if .Destroyed}}<span class="bt-pos">{{.Destroyed}}</span>{{end}}</td>
+        <td class="num">{{if .Lost}}<span class="bt-neg">{{.Lost}}</span>{{end}}</td>
+        <td class="opt bt-trend">{{if .SparkOut}}<svg class="bt-spark" viewBox="0 0 80 20" preserveAspectRatio="none" role="img" aria-label="Damage out and in over the fight"><polyline class="bt-ln-in" points="{{.SparkIn}}"/><polyline class="bt-ln-out" points="{{.SparkOut}}"/></svg>{{end}}</td>
+      </tr>
+      {{end}}
+      </tbody>
+    </table>
+    </div>
+  </section>
+  {{else}}
+  <section class="l-panel bt-empty">
+    <h2>No fights yet</h2>
+    <p>Axon reads your game logs while it runs. When a fight with another player ends, it sends this page a summary: damage, repairs, energy warfare and tackle, second by second. The log itself stays on your computer.</p>
+    <p><a class="btn" href="/intel/channels/#axon">Set up Axon</a></p>
+  </section>
+  {{end}}
+</div>
+{{end}}
+{{end}}

@@ -1,0 +1,313 @@
+/* EveSynapse: Battle Reports (battles.html, battle.html), on the
+ * layout framework: tiles, panels, switchers and the sidebar pair are
+ * its parts (layout.css); width decisions measure the page (@container
+ * page), never the window.
+ *
+ * The report's one loud element is the strip: the damage chart and the
+ * timeline lanes under it share a time axis, and the picked moment's
+ * window lights across both. Every colour is a theme token, so the
+ * faction schemes recolour the page with the rest of the site:
+ *
+ *   damage out      --accent      the pilot's own fire
+ *   damage in       --danger      what hit the pilot
+ *   repairs         --kept        repairs either way
+ *   energy warfare  --bt-cap      a cool slate from --recycled, the one
+ *                                 cold tone on a warm page: capacitor
+ *                                 drained is a different kind of harm
+ *   kills           --success     losses wear --danger, as badges do
+ *   tackle          --text-bright hollow: an attempt, not damage
+ */
+
+.bt {
+  --bt-out: var(--accent);
+  --bt-in: var(--danger);
+  --bt-rep: var(--kept);
+  --bt-cap: color-mix(in srgb, var(--recycled) 55%, var(--text));
+  --bt-kill: var(--success);
+  --bt-loss: var(--danger);
+  --bt-tackle: var(--text-bright);
+  --bt-gut: 5.75rem;
+}
+
+/* --- Shared type: panel headings and secondary text --- */
+.bt-h,
+.bt .l-panel > h2:not(.bt-mtitle) {
+  margin: 0 0 var(--space-3);
+  color: var(--muted);
+  font-family: var(--font-display);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  background: none;
+  -webkit-text-fill-color: currentColor;
+}
+.bt-sub { margin: 0 0 var(--space-2); color: var(--text); font-family: var(--font-display); font-size: var(--fs-sm); font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; }
+.bt-sub .bt-dim { margin-left: 0.4rem; font-family: var(--font-body); font-size: var(--fs-xs); font-weight: 400; letter-spacing: 0; text-transform: none; }
+.bt-dim { color: var(--muted); }
+.bt-note { margin: var(--space-2) 0 0; color: var(--muted); font-size: var(--fs-xs); }
+.bt-pos { color: var(--bt-kill); }
+.bt-neg { color: var(--bt-loss); }
+.bt-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.bt .l-panel,
+.bt .l-tiles,
+.bt-pair,
+.bt-whole { margin-bottom: var(--space-4); }
+
+/* --- Tiles: each figure wears its line's colour --- */
+.bt-stat-out .l-stat-value { color: var(--bt-out); }
+.bt-stat-in .l-stat-value,
+.bt-stat-neg .l-stat-value { color: var(--bt-in); }
+.bt-stat-rep .l-stat-value { color: var(--bt-rep); }
+.bt-stat-cap .l-stat-value { color: var(--bt-cap); }
+.bt-stat-pos .l-stat-value { color: var(--bt-kill); }
+
+/* --- Result pill (index rows, report head) --- */
+.bt-result {
+  display: inline-block;
+  padding: 0.05rem 0.5rem;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  font-family: var(--font-display);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  text-decoration: none;
+  vertical-align: 0.08em;
+}
+.bt-result:hover { text-decoration: none; background: color-mix(in srgb, currentColor 12%, transparent); }
+.bt-result-kill { color: var(--bt-kill); }
+.bt-result-loss { color: var(--bt-loss); }
+.bt-result-nokill { color: var(--muted-2); }
+
+/* --- The list --- */
+.bt-index { font-size: var(--fs-sm); }
+.bt-trend { width: 6.5rem; }
+.bt-spark { display: block; width: 6rem; height: 1.4rem; }
+.bt-empty p { max-width: 62ch; color: var(--muted-2); }
+.bt-empty h2 { margin-bottom: var(--space-2); }
+
+/* Lines: the chart, the moment's sparkline and the list's trend
+   share these strokes. */
+.bt-ln-out,
+.bt-ln-in,
+.bt-ln-repin,
+.bt-ln-repout { fill: none; stroke-width: 1.6; stroke-linejoin: round; stroke-linecap: round; }
+.bt-ln-out { stroke: var(--bt-out); }
+.bt-ln-in { stroke: var(--bt-in); }
+.bt-ln-repin { stroke: var(--bt-rep); }
+.bt-ln-repout { stroke: color-mix(in srgb, var(--bt-rep) 60%, transparent); stroke-dasharray: 4 3; }
+
+/* --- The strip: chart, lanes and the time axis on one grid --- */
+.bt-strip-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: var(--space-2) var(--space-4); margin-bottom: var(--space-3); }
+.bt-strip-head .bt-h { margin: 0; }
+.bt-key,
+.bt-qkey { display: flex; flex-wrap: wrap; gap: 0.3rem var(--space-3); margin: 0; padding: 0; list-style: none; color: var(--muted-2); font-size: var(--fs-xs); }
+.bt-key li::before { content: ""; display: inline-block; width: 0.9rem; height: 2px; margin-right: 0.4rem; vertical-align: middle; background: currentColor; }
+.bt-key-out::before { color: var(--bt-out); }
+.bt-key-in::before { color: var(--bt-in); }
+.bt-key-repin::before { color: var(--bt-rep); }
+.bt-key-repout::before { color: color-mix(in srgb, var(--bt-rep) 60%, transparent); }
+
+.bt-plot { display: grid; grid-template-columns: var(--bt-gut) minmax(0, 1fr); align-items: stretch; }
+.bt-y { display: flex; flex-direction: column; justify-content: space-between; padding-right: var(--space-2); color: var(--muted); font-family: var(--font-num); font-size: var(--fs-xs); font-variant-numeric: tabular-nums; text-align: right; }
+.bt-y span { line-height: 1; }
+.bt-chart { display: block; width: 100%; height: clamp(8.5rem, 24cqi, 15rem); overflow: visible; }
+.bt-grid { stroke: var(--hairline); stroke-width: 1; }
+.bt-grid-base { stroke: color-mix(in srgb, var(--muted) 45%, transparent); }
+.bt-band { fill: var(--sel-bg); stroke: var(--sel-edge); stroke-width: 1; vector-effect: non-scaling-stroke; transition: x 0.25s ease, width 0.25s ease; }
+.bt-mk { stroke: var(--bt-kill); stroke-width: 1.5; stroke-dasharray: 3 3; }
+.bt-mk-loss { stroke: var(--bt-loss); stroke-dasharray: none; stroke-width: 2; }
+
+.bt-lanes { display: grid; gap: 0.3rem; margin-top: var(--space-3); padding-top: var(--space-3); border-top: 1px solid var(--hairline); }
+.bt-lane { display: grid; grid-template-columns: var(--bt-gut) minmax(0, 1fr); align-items: center; min-height: 1.75rem; }
+.bt-lane-label { padding-right: var(--space-2); color: var(--muted); font-family: var(--font-display); font-size: var(--fs-2xs); font-weight: 600; letter-spacing: 0.06em; text-align: right; text-transform: uppercase; }
+.bt-lane-track { position: relative; height: 1.75rem; border-radius: var(--r-xs); background: var(--row-alt); }
+
+/* An event: a pill over its window, never thinner than a tap can
+   find. Hollow kinds are attempts; filled kinds did something. */
+.bt-ev {
+  position: absolute;
+  top: 50%;
+  min-width: 0.8rem;
+  height: 0.8rem;
+  margin-top: -0.4rem;
+  border: 2px solid var(--bt-c, var(--muted-2));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--bt-c, var(--muted-2)) 70%, transparent);
+  translate: -0.4rem 0;
+}
+.bt-ev::after { content: ""; position: absolute; inset: -0.5rem -0.3rem; }
+.bt-ev:hover { background: var(--bt-c); }
+.bt-ev:focus-visible { outline: 2px solid var(--text-bright); outline-offset: 2px; }
+.bt-ev.on { z-index: 1; border-color: var(--text-bright); background: var(--bt-c); box-shadow: 0 0 0 3px color-mix(in srgb, var(--bt-c) 35%, transparent); }
+.bt-ev-kill { --bt-c: var(--bt-kill); }
+.bt-ev-loss { --bt-c: var(--bt-loss); height: 1.1rem; margin-top: -0.55rem; }
+.bt-ev-tackle { --bt-c: var(--bt-tackle); background: transparent; }
+.bt-ev-pressure { --bt-c: var(--bt-in); }
+.bt-ev-focus { --bt-c: var(--bt-in); background: transparent; }
+.bt-ev-contact { --bt-c: var(--bt-out); background: transparent; }
+.bt-ev-target { --bt-c: var(--bt-out); }
+.bt-ev-energy { --bt-c: var(--bt-cap); }
+.bt-ev-repairs { --bt-c: var(--bt-rep); }
+
+.bt-x { display: flex; justify-content: space-between; margin: var(--space-2) 0 0 var(--bt-gut); color: var(--muted); font-family: var(--font-num); font-size: var(--fs-xs); font-variant-numeric: tabular-nums; }
+
+@container page (width < 34rem) {
+  .bt { --bt-gut: 4.25rem; }
+  .bt-key { gap: 0.2rem var(--space-2); }
+}
+
+/* --- The moment panel and the findings beside it --- */
+.bt-pair { --l-side: 21rem; --l-main-min: 58%; align-items: flex-start; }
+.bt-moment { scroll-margin-top: calc(var(--l-top, var(--sticky-top)) + var(--space-3)); transition: opacity 0.15s ease; }
+.bt-moment[aria-busy="true"] { opacity: 0.55; }
+.bt-mhead { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); }
+.bt-chip {
+  padding: 0.1rem 0.55rem;
+  border: 1px solid var(--bt-c, var(--muted-2));
+  border-radius: 999px;
+  color: var(--bt-c, var(--muted-2));
+  background: color-mix(in srgb, var(--bt-c, var(--muted-2)) 12%, transparent);
+  font-family: var(--font-display);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.bt-chip-kill { --bt-c: var(--bt-kill); }
+.bt-chip-loss { --bt-c: var(--bt-loss); }
+.bt-chip-tackle { --bt-c: var(--bt-tackle); }
+.bt-chip-pressure,
+.bt-chip-focus { --bt-c: var(--bt-in); }
+.bt-chip-contact,
+.bt-chip-target { --bt-c: var(--bt-out); }
+.bt-chip-energy { --bt-c: var(--bt-cap); }
+.bt-chip-repairs { --bt-c: var(--bt-rep); }
+.bt-mwin { color: var(--muted-2); font-family: var(--font-num); font-size: var(--fs-sm); font-variant-numeric: tabular-nums; }
+.bt-mnav { display: flex; align-items: center; gap: var(--space-2); margin-left: auto; }
+.bt-mnav .btn { min-width: var(--tap); justify-content: center; font-size: var(--fs-lg); }
+.bt-mpos { color: var(--muted); font-size: var(--fs-xs); white-space: nowrap; }
+.bt-mtitle { margin: var(--space-3) 0 var(--space-1); color: var(--text-bright); font-family: var(--font-body); font-size: var(--fs-2xl); font-weight: 600; letter-spacing: 0; line-height: 1.25; text-transform: none; background: none; -webkit-text-fill-color: currentColor; }
+.bt-msum { max-width: 70ch; margin: 0 0 var(--space-3); color: var(--muted-2); font-size: var(--fs-sm); }
+
+.bt-mfig { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3) var(--space-4); margin-bottom: var(--space-3); padding: var(--space-3); border: 1px solid var(--box-edge); border-radius: var(--r-md); background: var(--row-alt); }
+.bt-mspark { flex: 1 1 10rem; height: 3rem; min-width: 8rem; }
+.bt-mspan { fill: var(--sel-bg); }
+.bt-mnums { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-4); margin: 0; }
+.bt-mnum dt { color: var(--muted); font-family: var(--font-display); font-size: var(--fs-2xs); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
+.bt-mnum dd { margin: 0; font-family: var(--font-num); font-size: var(--fs-xl); font-weight: 700; font-variant-numeric: tabular-nums; }
+.bt-tone-out dd { color: var(--bt-out); }
+.bt-tone-in dd { color: var(--bt-in); }
+.bt-tone-rep dd { color: var(--bt-rep); }
+.bt-tone-cap dd { color: var(--bt-cap); }
+
+/* The moment's tables sit two up when the panel has room for two,
+   from the panel's own width. */
+.bt-mtables { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 19rem), 1fr)); gap: var(--space-2) var(--space-4); margin-bottom: var(--space-2); }
+.bt-mtables .bt-h { margin: var(--space-2) 0; }
+.bt-mkills { display: flex; flex-wrap: wrap; gap: var(--space-2); margin: 0 0 var(--space-3); padding: 0; list-style: none; }
+.bt-mkills li { display: flex; align-items: center; gap: var(--space-2); padding: 0.25rem 0.6rem 0.25rem 0.3rem; border: 1px solid var(--bt-c); border-radius: var(--r-sm); background: color-mix(in srgb, var(--bt-c) 10%, transparent); font-size: var(--fs-sm); }
+.bt-mkills li.kill { --bt-c: var(--bt-kill); }
+.bt-mkills li.loss { --bt-c: var(--bt-loss); }
+.bt-mkills img { border-radius: var(--r-xs); }
+
+.bt-findings ul { margin: 0; padding: 0; list-style: none; }
+.bt-findings li { padding: 0.15rem 0 0.15rem var(--space-3); border-left: 2px solid var(--bt-c, var(--hairline)); }
+.bt-findings li + li { margin-top: 0.15rem; }
+.bt-findings li.first:not(:first-child) { margin-top: var(--space-3); }
+.bt-findings p { margin: 0.15rem 0 0; color: var(--text); font-size: var(--fs-sm); }
+.bt-find-k { color: var(--bt-c, var(--muted)); font-family: var(--font-display); font-size: var(--fs-2xs); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
+.bt-find-focus,
+.bt-find-tank { --bt-c: var(--bt-in); }
+.bt-find-application,
+.bt-find-wasted,
+.bt-find-contribution { --bt-c: var(--bt-out); }
+.bt-find-cap { --bt-c: var(--bt-cap); }
+.bt-find-tackle { --bt-c: var(--bt-tackle); }
+
+/* --- Party tables: who, a share bar, the amount --- */
+.bt-ptable,
+.bt-wtable,
+.bt-mails table { width: 100%; font-size: var(--fs-sm); }
+.bt-who { display: inline-flex; align-items: center; gap: var(--space-2); min-width: 0; }
+.bt-who img { flex: none; border-radius: var(--r-xs); }
+.bt-who-dot { flex: none; width: 22px; height: 22px; border: 1px dashed var(--hairline); border-radius: var(--r-xs); }
+.bt-who-t { display: flex; flex-direction: column; min-width: 0; line-height: 1.25; }
+.bt-who-n { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bt-who-s { color: var(--muted); font-size: var(--fs-xs); white-space: nowrap; }
+.bt-share-h { width: 34%; }
+.bt-share { white-space: nowrap; }
+.bt-bar { display: inline-block; width: calc(100% - 3rem); max-width: 10rem; height: 0.4rem; margin-right: var(--space-2); overflow: hidden; border-radius: 999px; background: var(--row-alt); vertical-align: middle; }
+.bt-bar-fill { display: block; height: 100%; border-radius: inherit; background: var(--bt-c, var(--accent)); }
+.bt-share-n { color: var(--muted-2); font-family: var(--font-num); font-variant-numeric: tabular-nums; }
+.bt-whole { --l-min: 30rem; }
+.bt-whole > .l-panel { margin-bottom: 0; }
+
+/* Each table's bars take the colour of what it counts. */
+[aria-labelledby="bt-in-h"] { --bt-c: var(--bt-in); }
+[aria-labelledby="bt-out-h"] { --bt-c: var(--bt-out); }
+[aria-labelledby="bt-rep-h"] { --bt-c: var(--bt-rep); }
+[aria-labelledby="bt-neut-h"] { --bt-c: var(--bt-cap); }
+.bt-mtables > .bt-m-in { --bt-c: var(--bt-in); }
+.bt-mtables > .bt-m-out { --bt-c: var(--bt-out); }
+.bt-mtables > .bt-m-rep { --bt-c: var(--bt-rep); }
+.bt-mtables > .bt-m-cap { --bt-c: var(--bt-cap); }
+
+/* --- Who was there --- */
+.bt-sides-pair { --l-min: 28rem; }
+.bt-side { padding: var(--space-3); border: 1px solid var(--box-edge); border-top: 2px solid var(--bt-c); border-radius: var(--r-md); background: var(--row-alt); }
+.bt-side-hostile { --bt-c: var(--bt-in); }
+.bt-side-friendly { --bt-c: var(--bt-rep); }
+.bt-hulls { display: grid; grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr)); gap: var(--space-2); margin: 0; padding: 0; list-style: none; }
+.bt-hulls li { display: flex; align-items: center; gap: var(--space-2); min-width: 0; font-size: var(--fs-sm); }
+.bt-hulls img { flex: none; border-radius: var(--r-xs); }
+.bt-hull-n { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bt-hull-c { flex: none; font-family: var(--font-num); font-variant-numeric: tabular-nums; }
+.bt-tickers { display: flex; flex-wrap: wrap; gap: 0.3rem; margin: var(--space-3) 0 0; }
+.bt-tickers span { padding: 0.05rem 0.45rem; border: 1px solid var(--hairline); border-radius: var(--r-xs); color: var(--muted-2); font-size: var(--fs-xs); }
+
+/* --- Application: hit quality, worst to best, cold to hot --- */
+.bt-app { --q-miss: color-mix(in srgb, var(--muted) 45%, transparent); --q-graze: color-mix(in srgb, var(--bt-cap) 80%, transparent); --q-glance: var(--recycled); --q-hit: color-mix(in srgb, var(--success) 55%, var(--muted)); --q-pen: var(--success); --q-smash: var(--gold); --q-wreck: var(--text-bright); }
+.bt-q-h { width: 28%; }
+.bt-qbar { display: block; width: 100%; min-width: 6rem; height: 0.55rem; border-radius: 999px; overflow: hidden; }
+.bt-qbar .q-miss,
+.bt-qkey .q-miss::before { fill: var(--q-miss); background: var(--q-miss); }
+.bt-qbar .q-graze,
+.bt-qkey .q-graze::before { fill: var(--q-graze); background: var(--q-graze); }
+.bt-qbar .q-glance,
+.bt-qkey .q-glance::before { fill: var(--q-glance); background: var(--q-glance); }
+.bt-qbar .q-hit,
+.bt-qkey .q-hit::before { fill: var(--q-hit); background: var(--q-hit); }
+.bt-qbar .q-pen,
+.bt-qkey .q-pen::before { fill: var(--q-pen); background: var(--q-pen); }
+.bt-qbar .q-smash,
+.bt-qkey .q-smash::before { fill: var(--q-smash); background: var(--q-smash); }
+.bt-qbar .q-wreck,
+.bt-qkey .q-wreck::before { fill: var(--q-wreck); background: var(--q-wreck); }
+.bt-qkey li::before { content: ""; display: inline-block; width: 0.6rem; height: 0.6rem; margin-right: 0.3rem; border-radius: 2px; vertical-align: baseline; }
+
+/* --- Tackle lists --- */
+.bt-tlist { display: grid; gap: 0.3rem; margin: 0; padding: 0; list-style: none; font-size: var(--fs-sm); }
+.bt-tlist li { padding: 0.2rem 0 0.2rem var(--space-2); border-left: 2px solid var(--hairline); }
+.bt-tlist li.mine { border-left-color: var(--bt-tackle); }
+.bt-tk { color: var(--muted-2); font-family: var(--font-display); font-size: var(--fs-2xs); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
+.bt-tlist + .bt-note { margin-top: var(--space-3); }
+.bt-tlist + .bt-tlist { margin-top: 0.3rem; }
+
+.bt-coverage { max-width: 80ch; }
+
+@media (prefers-reduced-motion: reduce) {
+  .bt-band,
+  .bt-moment { transition: none; }
+}
+
+/* --- Show all: a long table's rest, and the control that opens it --- */
+.bt-more { margin-top: var(--space-2); }
+.bt-more[aria-expanded="true"] .bt-more-c,
+.bt-more:not([aria-expanded="true"]) .bt-more-o { display: none; }
+.bt-more:not([data-expand-bound]) { display: none; }
+/* Card-mode tables give their bodies a display of their own; a
+   closed Show all body stays closed. */
+.bt [data-wmore][hidden] { display: none !important; }

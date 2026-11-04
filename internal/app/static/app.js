@@ -4134,6 +4134,7 @@
     { name: "Groups", url: "/groups/" },
     { name: "Corporation Settings", url: "/corporations/settings/" },
     { name: "Killboard", url: "/intel/kills/" },
+    { name: "Battle Reports", url: "/intel/battles/" },
     { name: "D-Scan Parser", url: "/intel/scan/" },
     { name: "Intel Channels", url: "/intel/channels/" },
     { name: "Intel Workbench", url: "/intel/workbench/" },

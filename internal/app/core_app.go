@@ -894,6 +894,14 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	// beside the Intel module's /intel routes.
 	r.With(anonPages).Get("/intel/kills/", app.handleKillboard)
 	r.With(anonPages).Get("/intel/kill/{id}/", app.handleKillPage)
+	// Battle reports (battle_pages.go): the account's own, and a
+	// shared one at its unlisted link.
+	r.With(app.requireAuth).Get("/intel/battles/", app.handleBattles)
+	r.With(app.requireAuth).Get("/intel/battle/{id}/", app.handleBattle)
+	r.With(app.requireAuth).Get("/intel/battle/{id}/moment/{seq}/", app.handleBattleMoment)
+	r.With(app.requireAuth).Post("/intel/battle/{id}/share", app.handleBattleShare)
+	r.With(anonPages).Get("/intel/battle/s/{token}/", app.handleBattleShared)
+	r.With(anonPages).Get("/intel/battle/s/{token}/moment/{seq}/", app.handleBattleSharedMoment)
 	// Scans (scans.go): the paste box, and each reading at its
 	// unlisted link. Anyone may paste, throttled like the pages.
 	r.With(anonPages).Get("/intel/scan/", app.handleScanForm)
@@ -934,14 +942,19 @@ func (app *Application) Handler(hooks ...RouteHook) http.Handler {
 	// per-address anonymous throttle like the public pages.
 	r.With(anonPages).Post("/api/intel/v1/pair", app.handleAPIPair)
 	r.Route("/api/intel/v1", func(r chi.Router) {
-		r.Use(app.intelTokenAuth)
-		r.Get("/channels", app.handleAPIChannels)
-		r.Post("/channels/{channelID}/lines", app.handleAPILines)
-		r.Post("/preview", app.handleAPIPreview)
-		// Axon's intel windows (intel_api.go).
-		r.Get("/threads", app.handleAPIThreads)
-		r.Get("/feed", app.handleAPIFeed)
-		r.Get("/reports/{reportID}", app.handleAPIReport)
+		r.Group(func(r chi.Router) {
+			r.Use(app.intelTokenAuth)
+			r.Get("/channels", app.handleAPIChannels)
+			r.Post("/channels/{channelID}/lines", app.handleAPILines)
+			r.Post("/preview", app.handleAPIPreview)
+			// Axon's intel windows (intel_api.go).
+			r.Get("/threads", app.handleAPIThreads)
+			r.Get("/feed", app.handleAPIFeed)
+			r.Get("/reports/{reportID}", app.handleAPIReport)
+		})
+		// Battle reports (battle_ingest.go): one fight a post,
+		// larger than a paste.
+		r.With(app.intelTokenAuthLimit(battleMaxBody)).Post("/fights", app.handleAPIFight)
 	})
 
 	r.Route("/map", func(r chi.Router) {

@@ -2745,12 +2745,14 @@
         });
     })();
 
-    // Assets: the station directory's filter box narrows the
-    // directory rows by place name, in place.
+    // A console directory's filter box (Assets' station list, or any
+    // box marked data-dir-filter) narrows its directory rows by name,
+    // in place.
     (function () {
-      var filter = root.querySelector("#assets-dirfilter");
+      var filter = root.querySelector("#assets-dirfilter, [data-dir-filter]");
       if (!filter) return;
-      var items = root.querySelectorAll(".diritem");
+      var pane = filter.closest(".l-pane") || root;
+      var items = pane.querySelectorAll(".diritem");
       filter.addEventListener("input", function () {
         var needle = filter.value.trim().toLowerCase();
         items.forEach(function (el) {

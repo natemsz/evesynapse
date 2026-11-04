@@ -26,11 +26,13 @@ type assetRow struct {
 // assetLocation is one location block: its resolved title plus the
 // largest stacks parked there.
 type assetLocation struct {
+	ID         int64 // the location's id: the place's key in page links
 	Title      string
 	Loc        placeRef // Title classified for the link policy
 	Items      []assetRow
 	MoreStacks int // stacks hidden past the per-location cap
 	Stacks     int // every stack in the place, nested ones included
+	Share      int // Stacks as a percent of the largest place's, for the directory bar
 }
 
 // maxAssetRowsPerLocation caps each location table so a hangar with
@@ -93,8 +95,9 @@ func (app *Application) buildAssetLocationsWith(ctx context.Context, items []esi
 	locations := make([]assetLocation, 0, len(byLoc))
 	placeMemo := make(map[int64]placeRef)
 	for locID, entries := range byLoc {
-		loc := assetLocation{Title: app.assetLocationTitle(ctx, locID, locType[locID], itemType, nameOf, extraTitles)}
+		loc := assetLocation{ID: locID, Title: app.assetLocationTitle(ctx, locID, locType[locID], itemType, nameOf, extraTitles)}
 		loc.Loc = app.linkPlaceMemo(ctx, placeMemo, locID, loc.Title)
+		loc.Stacks = len(entries)
 
 		sorted := append([]esi.Asset(nil), entries...)
 		sort.Slice(sorted, func(i, j int) bool {
@@ -130,6 +133,11 @@ func (app *Application) buildAssetLocationsWith(ctx context.Context, items []esi
 		}
 		return locations[i].Title < locations[j].Title
 	})
+	if len(locations) > 0 && locations[0].Stacks > 0 {
+		for i := range locations {
+			locations[i].Share = locations[i].Stacks * 100 / locations[0].Stacks
+		}
+	}
 	return locations
 }
 

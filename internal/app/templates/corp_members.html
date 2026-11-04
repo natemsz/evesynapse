@@ -5,63 +5,74 @@
 
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
 
-{{template "charselector" .CorpChars}}
+<div class="l-page">
+<div class="l-head">
+  <div class="l-head-pick">{{template "charselector" .CorpChars}}</div>
+  {{with .CorpMembers}}<p class="l-head-sum"><b>{{corpLink .CorpID .CorpTitle}}</b>{{if .MemberCount}} · {{.MemberCount}} members{{end}}</p>{{end}}
+</div>
 
-{{if .CorpMembers}}
-<h2>{{corpLink .CorpMembers.CorpID .CorpMembers.CorpTitle}}{{if .CorpMembers.MemberCount}} · {{.CorpMembers.MemberCount}} members{{end}}</h2>
-
-  {{if .CorpMembers.Forbidden}}
-  {{if .CorpMembers.RoleMissing}}
-  <p>Needs the <b>{{.CorpMembers.RoleMissing}}</b> role in game. {{.CorpMembers.CharacterName}} doesn't hold it, so ESI won't share this corporation's member list. It appears here once they do.</p>
+{{with .CorpMembers}}
+  {{if .Forbidden}}
+  <div class="l-panel co-gate">
+  {{if .RoleMissing}}
+  <p>Needs the <b>{{.RoleMissing}}</b> role in game. {{.CharacterName}} doesn't hold it, so ESI won't share this corporation's member list. It appears here once they do.</p>
   {{else}}
-  <p>Membership was refused by ESI (403). This list appears once {{.CorpMembers.CharacterName}} is a member of this corporation again.</p>
+  <p>Membership was refused by ESI (403). This list appears once {{.CharacterName}} is a member of this corporation again.</p>
   {{end}}
-  {{else if .CorpMembers.NoFeeder}}
-  <p>{{.CorpMembers.CharacterName}} hasn't granted the corporation permissions that feed the member list, so nobody is sharing this corporation's data with EveSynapse yet. <a href="{{.CorpMembers.AddScopesURL}}">Add the corporation permissions</a>. EVE asks for them on top of what is already granted.</p>
-  {{else if .CorpMembers.Warming}}
-  <p>Still syncing.{{if .IsAdmin}} Progress is on the <a href="/admin/sync/">Sync page</a>.{{end}}</p>
-  {{else if .CorpMembers.Loaded}}
-  {{if .CorpMembers.TrackingNote}}<p><small>{{.CorpMembers.TrackingNote}}</small></p>{{end}}
-  {{if .CorpMembers.CanGroup}}
-  <form method="post" action="/corporations/members/group" class="op-form">
-  <input type="hidden" name="as" value="{{.CorpMembers.CharacterID}}">
-  {{if .CorpMembers.Groups}}
-  <div class="add-row member-pick">
-    <label class="field"><span class="field-label">Add the ticked members to</span>
-      <select name="group">{{range .CorpMembers.Groups}}<option value="{{.ID}}">{{.Name}}</option>{{end}}</select></label>
-    <button type="submit">Add to group</button>
-    <a href="/groups/">Manage groups</a>
   </div>
-  {{else}}
-  <p class="hint">This corporation has no groups yet. <a class="btn" href="/groups/">Create groups</a></p>
+  {{else if .NoFeeder}}
+  <div class="l-panel co-gate"><p>{{.CharacterName}} hasn't granted the corporation permissions that feed the member list, so nobody is sharing this corporation's data with EveSynapse yet. <a href="{{.AddScopesURL}}">Add the corporation permissions</a>. EVE asks for them on top of what is already granted.</p></div>
+  {{else if .Warming}}
+  <div class="l-panel co-gate"><p>Still syncing.{{if $.IsAdmin}} Progress is on the <a href="/admin/sync/">Sync page</a>.{{end}}</p></div>
+  {{else if .Loaded}}
+  <div class="l-tiles">
+    <div class="l-stat"><span class="l-stat-label">Members</span><span class="l-stat-value">{{len .Rows}}</span><span class="l-stat-sub">On the roster</span></div>
+    <div class="l-stat"><span class="l-stat-label">Tracked</span><span class="l-stat-value">{{.Tracked}}</span><span class="l-stat-sub">{{if .TrackingNote}}Member tracking is off{{else}}Last login, ship and place known{{end}}</span></div>
+    {{if .CanGroup}}
+    <div class="l-stat"><span class="l-stat-label">On EveSynapse</span><span class="l-stat-value">{{.Linked}}</span><span class="l-stat-sub">Linked, so they can join a group</span></div>
+    <a class="l-stat" href="/groups/?owner=corporation:{{.CorpID}}"><span class="l-stat-label">Groups</span><span class="l-stat-value">{{len .Groups}}</span><span class="l-stat-sub">Manage groups</span></a>
+    {{end}}
+  </div>
+
+  {{if .TrackingNote}}<p class="co-note"><small>{{.TrackingNote}}</small></p>{{end}}
+
+  <section class="l-panel co-roster">
+  {{if .CanGroup}}
+  <form method="post" action="/corporations/members/group" id="cm-form">
+  <input type="hidden" name="as" value="{{.CharacterID}}">
   {{end}}
+  <div class="co-bar">
+    <input type="search" class="co-filter" data-table-filter="cm-table" data-row-class="cm-row" placeholder="Filter by name, ship or place" aria-label="Filter the members">
+    {{if .CanGroup}}
+    {{if .Groups}}
+    <label class="co-pick"><span>Add the ticked members to</span>
+      <select name="group">{{range .Groups}}<option value="{{.ID}}">{{.Name}}</option>{{end}}</select></label>
+    <button type="submit" class="btn">Add to group</button>
+    {{else}}
+    <span class="co-hint">This corporation has no groups yet. <a href="/groups/">Create groups</a></span>
+    {{end}}
+    {{end}}
+  </div>
   <div class="tw">
-  <table>
-    <thead><tr><th>Member</th><th>Groups</th><th>Joined</th><th>Last login</th><th>Current ship</th><th>Location</th></tr></thead>
+  <table id="cm-table">
+    <thead><tr><th class="card-title">Member</th>{{if .CanGroup}}<th>Groups</th>{{end}}<th>Joined</th><th>Last login</th><th>Current ship</th><th>Location</th></tr></thead>
     <tbody>
-    {{range .CorpMembers.Rows}}
-      <tr><td>{{if .Linked}}<label class="check-row"><input type="checkbox" name="character" value="{{.ID}}"> <span>{{charLink $.ViewerChars .ID .Name}}</span></label>{{else}}{{charLink $.ViewerChars .ID .Name}}{{end}}</td><td>{{if .Linked}}{{.Groups}}{{else}}<small>not on EveSynapse</small>{{end}}</td><td>{{.Joined}}</td><td>{{.LastSeen}}</td><td>{{itemLink .ShipTypeID .Ship}}</td><td>{{.Location}}</td></tr>
+    {{range .Rows}}
+      <tr class="cm-row" data-search="{{.Name}} {{.Ship}} {{.Location}} {{.Groups}}">
+        <td>{{if and $.CorpMembers.CanGroup .Linked}}<label class="check-row"><input type="checkbox" name="character" value="{{.ID}}"> <span>{{charLink $.ViewerChars .ID .Name}}</span></label>{{else}}{{charLink $.ViewerChars .ID .Name}}{{end}}</td>
+        {{if $.CorpMembers.CanGroup}}<td>{{if .Linked}}{{.Groups}}{{else}}<small class="co-dim">not on EveSynapse</small>{{end}}</td>{{end}}
+        <td>{{.Joined}}</td><td>{{.LastSeen}}</td><td>{{itemLink .ShipTypeID .Ship}}</td><td>{{.Location}}</td>
+      </tr>
     {{end}}
     </tbody>
   </table>
   </div>
-  </form>
-  <p class="hint">Only members who have linked their character to EveSynapse can be put in a group. In-game roles cannot be changed from here: EVE's API lets an app read them, not set them.</p>
-  {{else}}
-  <div class="tw">
-  <table>
-    <thead><tr><th>Member</th><th>Joined</th><th>Last login</th><th>Current ship</th><th>Location</th></tr></thead>
-    <tbody>
-    {{range .CorpMembers.Rows}}
-      <tr><td>{{charLink $.ViewerChars .ID .Name}}</td><td>{{.Joined}}</td><td>{{.LastSeen}}</td><td>{{itemLink .ShipTypeID .Ship}}</td><td>{{.Location}}</td></tr>
-    {{end}}
-    </tbody>
-  </table>
-  </div>
-  {{end}}
-  <p><small>Login, ship and location columns come from member tracking, which needs the Director role in-game.</small></p>
+  {{if .CanGroup}}</form>{{end}}
+  </section>
+  <p class="co-note"><small>Login, ship and location columns come from member tracking, which needs the Director role in game.{{if .CanGroup}} Only members who have linked their character to EveSynapse can be put in a group. In-game roles cannot be changed from here: EVE's API lets an app read them, not set them.{{end}}</small></p>
   {{end}}
 {{else}}
   <p>No corporation to show yet. <a href="/auth/link">Link a character</a> first.</p>
 {{end}}
+</div>
 {{end}}

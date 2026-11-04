@@ -1972,7 +1972,18 @@ func (s *demoSeed) writeCorpSnapshots(ctx context.Context, viewerID int64) error
 	if err := s.snap(ctx, viewerID, esi.SnapCorpAssets, corpAssets); err != nil {
 		return err
 	}
-	if err := s.snap(ctx, viewerID, esi.SnapCorpStructures, esi.CorpStructures{}); err != nil {
+	// Two structures so the Structures page shows its states: a
+	// healthy Astrahus, and a Raitaru low on fuel with a service off.
+	reinforceHour := int64(19)
+	corpStructures := esi.CorpStructures{
+		{StructureID: 1035000000101, TypeID: s.typeID("Astrahus"), SystemID: s.tamaSystemID, CorporationID: demoCorpID,
+			Name: "Tama - TPC Staging", State: "shield_vulnerable", FuelExpires: s.rfc(now.Add(23 * day)), ReinforceHour: &reinforceHour,
+			Services: []esi.CorpStructureService{{Name: "Clone Bay", State: "online"}, {Name: "Market Hub", State: "online"}}},
+		{StructureID: 1035000000102, TypeID: s.typeID("Raitaru"), SystemID: s.jitaSystemID, CorporationID: demoCorpID,
+			Name: "Jita - TPC Workshop", State: "shield_vulnerable", FuelExpires: s.rfc(now.Add(4*day + 6*hour)), ReinforceHour: &reinforceHour,
+			Services: []esi.CorpStructureService{{Name: "Manufacturing (Standard)", State: "online"}, {Name: "Invention", State: "offline"}}},
+	}
+	if err := s.snap(ctx, viewerID, esi.SnapCorpStructures, corpStructures); err != nil {
 		return err
 	}
 	if err := s.snap(ctx, viewerID, esi.SnapCorpKillmails, []esi.KillmailRef{

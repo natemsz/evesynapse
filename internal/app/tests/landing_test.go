@@ -48,7 +48,7 @@ func TestLandingAnonymous(t *testing.T) {
 		"Developed in Seattle, WA by",
 		"BSD-3-Clause-Clear",
 		"© 2026 Synap6.io LLC, dba Synap6",
-		"intellectual property of CCP Games hf",
+		"intellectual property of Fenris Creations",
 		"Ship Replacement",
 		"Prices come from EveSynapse's own swept market data, and every price shows its source.",
 		"accurately prices items that aren't in market data, like abyssals, capital ships, and blueprints",

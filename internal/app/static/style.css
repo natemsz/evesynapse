@@ -1701,7 +1701,7 @@ footer {
   backdrop-filter: blur(18px);
   border-top: 1px solid #262626;
   color: var(--muted);
-  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-family: "Eve Sans Neue", "Inter", "Segoe UI", sans-serif;
   text-align: center;
   font-size: var(--fs-xs);
   padding: 1.4rem 1rem 1.6rem;

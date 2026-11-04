@@ -1,14 +1,19 @@
 {{define "title"}}{{.Op.Title}}{{end}}
 {{define "pagetitle"}}{{with .Op}}<h1><span class="gt">{{.Title}}</span></h1>{{end}}{{end}}
+{{define "pagetabs"}}{{template "sectiontabs" .}}{{end}}
 {{define "content"}}
 {{with .Op}}
+<div class="l-page">
 
 {{if .Cancelled}}<p class="err">This op was cancelled.</p>{{end}}
 
+<div class="l-sidebar l-sidebar--end op-split">
+<div class="l-stack op-main">
+<section class="l-panel">
 <div class="tw">
 <table>
   <tbody>
-    <tr><th>When</th><td>{{.When}}</td></tr>
+    <tr><th>When</th><td>{{.When}} <span class="l-local" data-local-time="{{.WhenRaw}}"></span>{{if and .WhenRaw (not .Over) (not .Cancelled)}} · <span class="countdown" data-finish="{{.WhenRaw}}"></span>{{end}}</td></tr>
     <tr><th>Length</th><td>{{.Length}}</td></tr>
     <tr><th>Corporation</th><td>{{.Corporation}}</td></tr>
     <tr><th>Fleet commander</th><td>{{charLink $.ViewerChars .FCID .FC}}</td></tr>
@@ -19,6 +24,7 @@
 </table>
 </div>
 {{if .Description}}<p class="op-description">{{.Description}}</p>{{end}}
+</section>
 
 {{if .CanManage}}
 <form method="post" action="/ops/{{.ID}}/cancel" class="op-manage">
@@ -27,6 +33,7 @@
 </form>
 {{end}}
 
+<section class="l-panel">
 <h2>Your sign-up</h2>
 {{if .Cancelled}}
 <p><small>Sign-ups are closed: the op was cancelled.</small></p>
@@ -46,7 +53,11 @@
   <p><button type="submit">{{if .Mine}}Update sign-up{{else}}Sign up{{end}}</button>{{if .Mine}} <small>This character has answered: {{.Mine}}.</small>{{end}}</p>
 </form>
 {{end}}
+</section>
+</div>
 
+<aside class="l-stack op-roster" aria-label="Who is coming">
+<section class="l-panel">
 <h2>Coming <small>· {{len .Yes}}</small></h2>
 {{if .RoleCounts}}<p><small>{{range $i, $c := .RoleCounts}}{{if $i}} · {{end}}{{$c.Count}} {{$c.Role}}{{end}}</small></p>{{end}}
 {{if .Yes}}<div class="tw">
@@ -88,7 +99,12 @@
 </div>
 {{end}}
 
+</section>
+</aside>
+</div>
+
 {{with .Attendance}}
+<section class="l-panel">
 <h2>Attendance <small>· {{len .Rows}}</small></h2>
 <p><small>{{.Capture}}</small></p>
 {{if .Rows}}
@@ -119,8 +135,10 @@
 {{end}}
 </section>
 {{end}}
+</section>
 {{end}}
 
 <p><a href="/calendar/">Back to the calendar</a> · <a href="/ops/paps">Attendance totals</a></p>
+</div>
 {{end}}
 {{end}}

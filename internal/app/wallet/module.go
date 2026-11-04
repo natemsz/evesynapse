@@ -39,6 +39,8 @@ var Module = module.Module{
 		auth := r.With(deps.RequireAuth())
 		auth.Get("/wallet/", h((*mod).handleWallet))
 		auth.Get("/wallet/graph-fragment", h((*mod).handleWalletGraphFragment))
+		auth.Get("/wallet/journal.csv", h((*mod).handleJournalCSV))
+		auth.Get("/wallet/transactions.csv", h((*mod).handleTxnsCSV))
 	},
 	Pages: []module.Page{
 		{Template: "wallet.html", Section: "pilot"},

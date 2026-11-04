@@ -229,6 +229,11 @@ LIMIT sqlc.arg(max_rows)::bigint;
 -- name: GetPublicKill :one
 SELECT * FROM kills WHERE killmail_id = $1 AND public;
 
+-- One kill whether or not it is public: our own characters' kills
+-- and losses, for pages that already know the viewer owns it.
+-- name: GetKill :one
+SELECT * FROM kills WHERE killmail_id = $1;
+
 -- name: GetKillDetail :one
 SELECT payload FROM kill_details WHERE killmail_id = $1;
 

@@ -4508,6 +4508,28 @@
     th.setAttribute("aria-sort", dir === 1 ? "ascending" : "descending");
   });
 
+  // --- Local time ----------------------------------------------
+  // EVE time is the server's render; an element carrying
+  // data-local-time="<RFC3339>" also shows the reader's own local
+  // time for the same moment, written in by the browser (which is
+  // the only side that knows the reader's zone). Without JS the
+  // element stays empty and hidden by its own CSS.
+  function fillLocalTimes(root) {
+    var els = (root || document).querySelectorAll("[data-local-time]");
+    for (var i = 0; i < els.length; i++) {
+      var el = els[i], t = new Date(el.getAttribute("data-local-time"));
+      if (isNaN(t.getTime())) continue;
+      try {
+        el.textContent = t.toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) + " local";
+      } catch (e) {
+        el.textContent = t.toLocaleString() + " local";
+      }
+      el.classList.add("on");
+    }
+  }
+  window.EveSynapseContent.onReady(fillLocalTimes);
+  fillLocalTimes(document);
+
   // --- Table cards ---------------------------------------------
   // At any width, a data table that would scroll sideways reads as
   // a list of cards instead: each row a card,

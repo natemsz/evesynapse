@@ -8,7 +8,7 @@
 <div class="l-page">
 <div class="l-head">
   <div class="l-head-pick">{{template "charselector" .CalendarChars}}</div>
-  {{if .Calendar}}<p class="l-head-sum"><b>{{.Calendar.CharacterName}}</b></p>
+  {{if .Calendar}}<p class="l-head-sum"><b>{{.Calendar.CharacterName}}</b>{{with .Calendar.Next}} · next: <b>{{.Title}}</b> <span class="countdown" data-finish="{{.DateRaw}}"></span>{{end}}{{if .Calendar.Awaiting}} · <span class="warn">{{.Calendar.Awaiting}} waiting for your answer</span>{{end}}</p>
   <div class="l-head-act">{{if .Calendar.CanCreate}}<a class="btn cal-new" href="/ops/new">New op</a>{{end}}<a class="cal-paps" href="/ops/paps">Attendance</a></div>{{end}}
 </div>
 
@@ -43,6 +43,7 @@
 <div class="l-console cal" data-depth="{{$depth}}" data-land-top>
 <div class="l-panes">
 <section class="l-pane l-pane--main cal-events" aria-label="Upcoming events">
+{{if gt (len .Calendar.Filters) 1}}<div class="fchips cal-filters" role="group" aria-label="Your response">{{range .Calendar.Filters}}<a class="fchip{{if .On}} on{{end}}" href="{{.Href}}">{{.Label}} {{.Count}}</a>{{end}}</div>{{end}}
 {{if .Calendar.Events.Note}}
 <p><small>{{.Calendar.Events.Note}}</small></p>
 {{else if .Calendar.Events.Warming}}
@@ -50,10 +51,10 @@
 {{else if .Calendar.Rows}}
 <div class="tw">
 <table class="cal-list">
-  <thead><tr><th>Date</th><th class="card-title">Event</th><th>Your response</th><th></th></tr></thead>
+  <thead><tr><th>Date</th><th class="card-title">Event</th><th>Starts in</th><th>Your response</th><th></th></tr></thead>
   <tbody>
   {{range .Calendar.Rows}}
-    <tr{{if $.Calendar.Detail}}{{if eq .ID $.Calendar.Detail.EventID}} class="yours"{{end}}{{end}}><td>{{.Date}}</td><td><a href="/calendar/?character={{$.Calendar.CharacterID}}&amp;event={{.ID}}" data-l-step="in">{{.Title}}</a></td><td>{{.Response}}</td><td>{{if .Important}}<strong>Important</strong>{{end}}</td></tr>
+    <tr{{if $.Calendar.Detail}}{{if eq .ID $.Calendar.Detail.EventID}} class="yours"{{end}}{{end}}><td>{{.Date}} <span class="l-local" data-local-time="{{.DateRaw}}"></span></td><td><a href="/calendar/?character={{$.Calendar.CharacterID}}&amp;event={{.ID}}" data-l-step="in">{{.Title}}</a></td><td><span class="countdown" data-finish="{{.DateRaw}}"></span></td><td><span class="cal-resp cal-resp-{{.RespKey}}">{{.Response}}</span></td><td>{{if .Important}}<strong>Important</strong>{{end}}</td></tr>
   {{end}}
   </tbody>
 </table>
@@ -75,7 +76,7 @@
 <div class="tw">
 <table>
   <tbody>
-    <tr><th>Starts</th><td>{{.Date}}</td></tr>
+    <tr><th>Starts</th><td>{{.Date}} <span class="l-local" data-local-time="{{.DateRaw}}"></span>{{if .DateRaw}} · <span class="countdown" data-finish="{{.DateRaw}}"></span>{{end}}</td></tr>
     {{if .Duration}}<tr><th>Duration</th><td>{{.Duration}}</td></tr>{{end}}
     {{if .Owner}}<tr><th>Owner</th><td>{{if .OwnerIsChar}}{{charLink $.ViewerChars .OwnerID .Owner}}{{else}}{{.Owner}}{{end}}</td></tr>{{end}}
   </tbody>

@@ -186,6 +186,29 @@ type AssetLocationValue struct {
 	ComputedAt   time.Time `json:"computed_at"`
 }
 
+type BlueprintBuildable struct {
+	UserID            int64     `json:"user_id"`
+	CharacterID       int64     `json:"character_id"`
+	ItemID            int64     `json:"item_id"`
+	BlueprintType     int64     `json:"blueprint_type"`
+	TotalMaterials    int64     `json:"total_materials"`
+	HasSkills         bool      `json:"has_skills"`
+	HasMaterials      bool      `json:"has_materials"`
+	MissingSkills     string    `json:"missing_skills"`
+	ShortMaterials    int64     `json:"short_materials"`
+	AnySkills         bool      `json:"any_skills"`
+	AnyMaterials      bool      `json:"any_materials"`
+	AnyMissingSkills  string    `json:"any_missing_skills"`
+	AnyShortMaterials int64     `json:"any_short_materials"`
+	ComputedAt        time.Time `json:"computed_at"`
+}
+
+type BlueprintBuildableFold struct {
+	UserID     int64     `json:"user_id"`
+	Characters string    `json:"characters"`
+	ComputedAt time.Time `json:"computed_at"`
+}
+
 type BlueprintCopyMedian struct {
 	TypeID      int64     `json:"type_id"`
 	Runs        int64     `json:"runs"`

@@ -661,6 +661,10 @@ func (c *cycleState) refreshCharacter(ctx context.Context, ch db.Character) bool
 	// rows, at the same house prices as the net worth sample.
 	app.refreshAssetLocationValues(ctx, ch)
 
+	// Blueprint buildability (schema 122): judge each owned
+	// blueprint against the skill and asset snapshots just stored.
+	app.refreshBlueprintBuildable(ctx, ch)
+
 	// Profit ledger (schema 104): fold the journal, transaction and
 	// job snapshots just stored into the durable ledger and its
 	// attribution, after the day's net worth sample it reads.

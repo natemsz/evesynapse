@@ -2212,6 +2212,7 @@ func (s *demoSeed) writeDemoWalletHistory(ctx context.Context, ch db.Character) 
 	// seeded snapshots at the seeded prices, like the worker
 	// would on its next cycle.
 	s.app.refreshAssetLocationValues(ctx, ch)
+	s.app.refreshBlueprintBuildable(ctx, ch)
 	today := s.now.UTC().Truncate(24 * time.Hour)
 	sample, err := q.GetWalletHistorySample(ctx, db.GetWalletHistorySampleParams{
 		UserID: s.userID, CharacterID: ch.CharacterID, Day: today.Format("2006-01-02"),

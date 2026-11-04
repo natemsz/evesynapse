@@ -8,3 +8,12 @@
 .bp-kinds { margin: 0 0 var(--space-3); }
 .bp-h { margin: var(--space-4) 0 var(--space-2); color: var(--muted); font-family: var(--font-display); font-size: var(--fs-xs); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
 .bp-mats td.num { font-family: var(--font-num); font-variant-numeric: tabular-nums; text-align: right; }
+
+/* Can build (schema 122, stored at sync): a check, and a green edge
+   on the row, when the skills and one run's materials are there; a
+   muted word saying which is missing otherwise, its reason on hover. */
+.bp-build-h, .bp-build { width: 1%; white-space: nowrap; text-align: center; }
+.bp-can { color: var(--kept); font-family: var(--font-display); font-weight: 700; }
+.bp-cannot { color: var(--muted); font-family: var(--font-display); font-size: var(--fs-2xs); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
+tr.bp-ready > td:first-child { box-shadow: inset 2px 0 0 var(--kept); }
+.bp-owner { display: block; color: var(--muted); font-size: var(--fs-xs); }

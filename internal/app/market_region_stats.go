@@ -824,7 +824,7 @@ func (app *Application) storeRegionSweep(ctx context.Context, regionID int64) (t
 	}
 	// Basket values (schema 103): today's value of every basket
 	// priced in this region, from the same rows.
-	if err := refreshBasketValues(ctx, qtx, regionID, day); err != nil {
+	if err := refreshBasketValues(ctx, tx, regionID, day); err != nil {
 		return 0, 0, fmt.Errorf("basket values: %w", err)
 	}
 	for start := 0; start < len(stationKeys); start += sweepBatchSize {

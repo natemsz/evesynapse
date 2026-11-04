@@ -40,6 +40,20 @@ func TestStatusFreshnessEndpoint(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("seed status snapshot: %v", err)
 	}
+	// The pill reads our side too: every other swept region is
+	// freshly swept and the worker ran just now, so this server
+	// reads healthy.
+	for _, region := range sweptRegions {
+		if region.ID == 10000002 {
+			continue
+		}
+		if err := q.UpsertMarketFetchState(ctx, db.UpsertMarketFetchStateParams{
+			Kind: regionSweepKind(region.ID), State: "ok", AttemptedAt: now,
+		}); err != nil {
+			t.Fatalf("seed fetch state %d: %v", region.ID, err)
+		}
+	}
+	app.updateWorkerStatus(func(s *workerStatus) { s.LastRunAt = now })
 
 	get := func(cookie *http.Cookie) *httptest.ResponseRecorder {
 		req := httptest.NewRequest(http.MethodGet, "/status/freshness", nil)

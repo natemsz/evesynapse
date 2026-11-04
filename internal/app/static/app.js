@@ -6145,7 +6145,7 @@
 
   function paintDot(el, state) {
     if (!el) return;
-    el.className = "status-dot is-" + (state === "ok" || state === "limited" || state === "down" ? state : "pending");
+    el.className = "status-dot is-" + (state === "ok" || state === "limited" || state === "down" || state === "ours-lagging" || state === "ours-down" ? state : "pending");
   }
 
   function load() {
@@ -6158,7 +6158,9 @@
         var tips = {
           ok: "ESI is answering normally. Click for detailed stats.",
           limited: "ESI is answering slowly. Click for detailed stats.",
-          down: "ESI is not answering. Click for detailed stats."
+          down: "ESI is not answering. Click for detailed stats.",
+          "ours-lagging": "Sync is behind on this server. Click for detailed stats.",
+          "ours-down": "Sync has stalled on this server. Click for detailed stats."
         };
         openBtn.setAttribute("data-tip", tips[data.esi.state] || "Checking ESI. Click for detailed stats.");
         esiLabel.textContent = data.esi.label;

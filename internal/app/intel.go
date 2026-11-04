@@ -3,7 +3,9 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"html/template"
+	"strings"
 	"time"
 
 	"evesynapse/internal/esi"
@@ -95,10 +97,11 @@ func (app *Application) loadServerStatus(ctx context.Context) (*serverStatusView
 // (daily downtime, an outage), not a slow cycle.
 const esiDownAfter = 10 * time.Minute
 
-// esiHealthView is the Overview bar's status pill: ESI's health and,
-// while it is up, Tranquility's player count.
+// esiHealthView is the Overview bar's status pill: the combined
+// ESI and our-side health and, while ESI is up, Tranquility's
+// player count.
 type esiHealthView struct {
-	State   string // "ok", "limited", "down" or "pending" (nothing stored yet)
+	State   string // "ok", "limited", "down", "ours-lagging", "ours-down", or "pending" (nothing stored yet)
 	Label   string // the pill's words
 	Players string // formatted player count; empty while down or unknown
 	Title   string // the hover text: what the state means
@@ -106,7 +109,13 @@ type esiHealthView struct {
 
 // esiHealth reads the pill's state from what is already held: the
 // stored status snapshot's age (a fetch that keeps failing leaves
-// it to age) and the in-memory ESI error budget. DB only, no ESI.
+// it to age), the in-memory ESI error budget, and this server's
+// own pipeline states (ourSideState). DB only, no ESI.
+//
+// One combined state, blame attributed correctly: ESI down first
+// (our lag then is ESI's fault), then ours-down, then
+// ours-lagging, then ESI limited, then healthy. The player count
+// shows whenever ESI is answering, our-side states included.
 func (app *Application) esiHealth(ctx context.Context) *esiHealthView {
 	snap, err := app.queries.GetGlobalSnapshot(ctx, esi.GlobalStatus)
 	if err != nil {
@@ -116,17 +125,90 @@ func (app *Application) esiHealth(ctx context.Context) *esiHealthView {
 		return &esiHealthView{State: "down", Label: "ESI down",
 			Title: "ESI has not answered since " + snap.FetchedAt.UTC().Format("15:04") + " UTC. Figures here are the last ones stored."}
 	}
+	now := time.Now()
 	view := &esiHealthView{State: "ok", Label: "ESI healthy", Title: "ESI is answering normally."}
 	var status esi.ServerStatus
+	vip := false
 	if json.Unmarshal([]byte(snap.Payload), &status) == nil {
 		view.Players = esi.FormatInt(status.Players)
-		if status.VIP {
-			view.Title = "ESI is answering; Tranquility is in VIP mode (developers only)."
-		}
+		vip = status.VIP
 	}
-	if app.esi != nil && app.esi.ErrorBudgetLow() {
+	limited := app.esi != nil && app.esi.ErrorBudgetLow()
+	if state, problem := app.ourSideState(ctx, now); state != "" {
+		view.State = state
+		view.Label = "Sync behind"
+		if state == "ours-down" {
+			view.Label = "Sync stalled"
+		}
+		view.Title = problem
+		if limited {
+			view.Title += " ESI is answering, but this server is close to its error limit, so syncing is paused briefly."
+		} else {
+			view.Title += " ESI itself is answering normally."
+		}
+		return view
+	}
+	if limited {
 		view.State, view.Label = "limited", "ESI limited"
 		view.Title = "ESI is answering, but this server is close to its error limit, so syncing is paused briefly."
+		return view
+	}
+	if vip {
+		view.Title = "ESI is answering; Tranquility is in VIP mode (developers only)."
 	}
 	return view
+}
+
+// ourSideState evaluates this server's own pipelines for the pill:
+// the market sweeps and the worker, read by the same computations
+// and thresholds the admin status page uses (statusMarket and
+// statusWorker in core_status.go). No new probes, no new
+// thresholds. It returns the pill's our-side state ("ours-down"
+// when the market is down or the worker is stalled, "ours-lagging"
+// when the market is lagging or the worker is lagging, "" when
+// both are fine) and a sentence naming what is behind and by how
+// much.
+func (app *Application) ourSideState(ctx context.Context, now time.Time) (string, string) {
+	market, marketSince := app.statusMarket(ctx, now, true)
+	worker, workerSince := app.statusWorker(now)
+	state := ""
+	switch {
+	case market == statusDown || worker == statusDown:
+		state = "ours-down"
+	case market == statusDegraded || worker == statusDegraded:
+		state = "ours-lagging"
+	default:
+		return "", ""
+	}
+	var parts []string
+	if market != statusOK {
+		if marketSince.IsZero() {
+			parts = append(parts, "Market orders have not been swept yet.")
+		} else {
+			parts = append(parts, "Market orders are "+pillAge(now.Sub(marketSince))+" old.")
+		}
+	}
+	if worker != statusOK {
+		from := workerSince
+		if from.IsZero() {
+			from = app.startedAt
+		}
+		parts = append(parts, "The worker has not started a cycle for "+pillAge(now.Sub(from))+".")
+	}
+	return state, strings.Join(parts, " ")
+}
+
+// pillAge writes an age the way the pill's hover text uses it:
+// "5h12m", "42m", "30s".
+func pillAge(d time.Duration) string {
+	if d < 0 {
+		d = 0
+	}
+	switch {
+	case d >= time.Hour:
+		return fmt.Sprintf("%dh%02dm", int(d.Hours()), int(d.Minutes())%60)
+	case d >= time.Minute:
+		return fmt.Sprintf("%dm", int(d.Minutes()))
+	}
+	return fmt.Sprintf("%ds", int(d.Seconds()))
 }

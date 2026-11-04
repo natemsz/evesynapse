@@ -3,8 +3,12 @@ package app
 import (
 	"context"
 	"fmt"
+	"math"
 	"net/http"
+	"net/url"
 	"sort"
+	"strconv"
+	"time"
 
 	"evesynapse/internal/esi"
 	"evesynapse/internal/logging"
@@ -69,6 +73,31 @@ type blueprintRow struct {
 	ProductTypeID   int64  // product type, when the SDE maps one (links to the build planner)
 	ProductCategory string // category of the produced item
 	Pinned          bool   // the account has pinned this blueprint as a production line
+	ItemID          int64
+	MEValue         int64
+	TEValue         int64
+	Original        bool
+	Href            string // opens it in the inspector
+	On              bool
+}
+
+// blueprintMaterial is one input per run at the blueprint's ME.
+type blueprintMaterial struct {
+	TypeID int64
+	Name   string
+	Base   string // the blueprint's own figure, before ME
+	PerRun string // after this blueprint's ME
+}
+
+// blueprintInspector is the open blueprint: its own facts, what one
+// run takes and makes at its research levels, and the way to plan it.
+type blueprintInspector struct {
+	Row        blueprintRow
+	Makes      string // "1 Rifter per run"
+	TimePerRun string // at this blueprint's TE
+	BaseTime   string
+	Materials  []blueprintMaterial
+	CloseHref  string
 }
 
 // industryView is the shared body of the three Industry pages:
@@ -78,6 +107,15 @@ type industryView struct {
 	CharacterID   int64
 	Blueprints    econSectionState
 	BlueprintRows []blueprintRow
+	BPTiles       []jobTile
+	BPCats        []jobFilter // product categories, the directory
+	BPKinds       []jobFilter // originals, copies
+	BPInsp        *blueprintInspector
+	BPDepth       int
+	BPDirHref     string
+	BPAllOn       bool
+	BPAllHref     string
+	BPTotal       int
 	BlueprintsCut int
 }
 
@@ -106,7 +144,7 @@ func (app *Application) handleIndustry(w http.ResponseWriter, r *http.Request) {
 	view := &industryView{CharacterName: active.Name, CharacterID: active.CharacterID}
 	data.Industry = view
 
-	app.fillBlueprints(ctx, active.CharacterID, view, app.blueprintPinSet(ctx, app.userID(ctx)))
+	app.fillBlueprints(ctx, r, active.CharacterID, view, app.blueprintPinSet(ctx, app.userID(ctx)))
 
 	app.render(ctx, w, http.StatusOK, "industry.html", data)
 }
@@ -163,7 +201,7 @@ func (app *Application) handleIndustryMining(w http.ResponseWriter, r *http.Requ
 // every row, walking the stored product map (sde_blueprints) for
 // the produced item and its category. pins is the account's pin
 // set, marking which rows carry a production-line pin.
-func (app *Application) fillBlueprints(ctx context.Context, characterID int64, view *industryView, pins map[int64]bool) {
+func (app *Application) fillBlueprints(ctx context.Context, r *http.Request, characterID int64, view *industryView, pins map[int64]bool) {
 	var blueprints esi.Blueprints
 	view.Blueprints = app.econSection(ctx, characterID, esi.SnapBlueprints, &blueprints)
 	if !view.Blueprints.Loaded {
@@ -177,6 +215,8 @@ func (app *Application) fillBlueprints(ctx context.Context, characterID int64, v
 		}
 	}
 
+	// Product categories: one lookup per product group, not per row.
+	groupOf := map[int64]string{}
 	rows := make([]blueprintRow, 0, len(blueprints))
 	for _, bp := range blueprints {
 		row := blueprintRow{
@@ -191,12 +231,19 @@ func (app *Application) fillBlueprints(ctx context.Context, characterID int64, v
 			row.ProductName = app.typeNameOrID(ctx, productID)
 			// Get product group for categorization
 			if sdeType, err := app.queries.GetSDEType(ctx, productID); err == nil {
-				if group, err := app.queries.GetSDEGroup(ctx, sdeType.GroupID); err == nil {
-					row.ProductCategory = group.Name
+				name, ok := groupOf[sdeType.GroupID]
+				if !ok {
+					if group, err := app.queries.GetSDEGroup(ctx, sdeType.GroupID); err == nil {
+						name = group.Name
+					}
+					groupOf[sdeType.GroupID] = name
 				}
+				row.ProductCategory = name
 			}
 		}
 		row.Pinned = pins[bp.TypeID]
+		row.ItemID, row.MEValue, row.TEValue = bp.ItemID, bp.MaterialEfficiency, bp.TimeEfficiency
+		row.Original = bp.Quantity == -1
 		// ESI semantics: quantity -1 marks an original (runs -1 =
 		// unlimited), -2 a copy; anything else is a stack count.
 		switch {
@@ -221,9 +268,130 @@ func (app *Application) fillBlueprints(ctx context.Context, characterID int64, v
 		}
 		return rows[i].Name < rows[j].Name
 	})
-	if len(rows) > maxIndustryRows {
-		view.BlueprintsCut = len(rows) - maxIndustryRows
-		rows = rows[:maxIndustryRows]
+	app.shapeBlueprints(ctx, r, characterID, view, rows)
+}
+
+// shapeBlueprints builds the library's tiles, directory and filters
+// over every blueprint, then the filtered list and the inspector.
+func (app *Application) shapeBlueprints(ctx context.Context, r *http.Request, characterID int64, view *industryView, rows []blueprintRow) {
+	q := r.URL.Query()
+	cat, kind := q.Get("cat"), q.Get("kind")
+	pick, _ := strconv.ParseInt(q.Get("bp"), 10, 64)
+	href := func(c, k string, bp int64, list bool) string {
+		v := url.Values{}
+		v.Set("character", strconv.FormatInt(characterID, 10))
+		if list {
+			v.Set("list", "1")
+		}
+		v.Set("cat", c)
+		v.Set("kind", k)
+		if bp != 0 {
+			v.Set("bp", strconv.FormatInt(bp, 10))
+		}
+		return withQuery("/industry/", v)
 	}
-	view.BlueprintRows = rows
+	originals, copies, researched := 0, 0, 0
+	catCount := map[string]int{}
+	var catOrder []string
+	for _, row := range rows {
+		if row.Original {
+			originals++
+			if row.MEValue >= 10 && row.TEValue >= 20 {
+				researched++
+			}
+		} else {
+			copies++
+		}
+		key := row.ProductCategory
+		if _, seen := catCount[key]; !seen {
+			catOrder = append(catOrder, key)
+		}
+		catCount[key]++
+	}
+	view.BPTotal = len(rows)
+	view.BPTiles = []jobTile{
+		{Label: "Originals", Value: strconv.Itoa(originals), Sub: "unlimited runs", Href: href(cat, "bpo", 0, true), On: kind == "bpo"},
+		{Label: "Copies", Value: strconv.Itoa(copies), Sub: "limited runs", Href: href(cat, "bpc", 0, true), On: kind == "bpc"},
+		{Label: "Fully researched", Value: strconv.Itoa(researched), Sub: "originals at ME 10 and TE 20"},
+		{Label: "Product groups", Value: strconv.Itoa(len(catOrder)), Sub: "what the library builds"},
+	}
+	view.BPAllOn = cat == ""
+	view.BPAllHref = href("", kind, 0, true)
+	view.BPDirHref = href("", "", 0, false)
+	for _, c := range catOrder {
+		label := c
+		if label == "" {
+			label = "Other"
+		}
+		key := c
+		if key == "" {
+			key = "-"
+		}
+		view.BPCats = append(view.BPCats, jobFilter{Label: label, Count: catCount[c], Href: href(key, kind, 0, true), On: cat == key})
+	}
+	view.BPKinds = []jobFilter{
+		{Label: "All", Count: len(rows), Href: href(cat, "", 0, true), On: kind == ""},
+		{Label: "Originals", Count: originals, Href: href(cat, "bpo", 0, true), On: kind == "bpo"},
+		{Label: "Copies", Count: copies, Href: href(cat, "bpc", 0, true), On: kind == "bpc"},
+	}
+	var picked []blueprintRow
+	for _, row := range rows {
+		rc := row.ProductCategory
+		if rc == "" {
+			rc = "-"
+		}
+		if (cat != "" && rc != cat) || (kind == "bpo" && !row.Original) || (kind == "bpc" && row.Original) {
+			continue
+		}
+		row.Href = href(cat, kind, row.ItemID, true)
+		row.On = row.ItemID == pick
+		picked = append(picked, row)
+	}
+	if len(picked) > maxIndustryRows {
+		view.BlueprintsCut = len(picked) - maxIndustryRows
+		picked = picked[:maxIndustryRows]
+	}
+	view.BlueprintRows = picked
+	view.BPDepth = 1
+	if q.Get("list") != "1" && cat == "" && kind == "" {
+		view.BPDepth = 0
+	}
+	if pick != 0 {
+		for _, row := range rows {
+			if row.ItemID != pick {
+				continue
+			}
+			row.Href = href(cat, kind, row.ItemID, true)
+			view.BPInsp = app.blueprintInspectorFor(ctx, row, href(cat, kind, 0, true))
+			view.BPDepth = 2
+			break
+		}
+	}
+}
+
+// blueprintInspectorFor reads what one run takes and makes from the
+// static data (bounded: one blueprint), at this blueprint's ME and TE,
+// before any structure, rig or skill bonus.
+func (app *Application) blueprintInspectorFor(ctx context.Context, row blueprintRow, closeHref string) *blueprintInspector {
+	in := &blueprintInspector{Row: row, CloseHref: closeHref}
+	if bp, err := app.queries.GetSDEBlueprint(ctx, row.TypeID); err == nil {
+		if row.ProductName != "" {
+			in.Makes = fmt.Sprintf("%s %s per run", esi.FormatInt(bp.ProductQuantity), row.ProductName)
+		}
+		if bp.ManufacturingTimeSeconds > 0 {
+			base := time.Duration(bp.ManufacturingTimeSeconds) * time.Second
+			in.BaseTime = humanDuration(base)
+			in.TimePerRun = humanDuration(time.Duration(float64(base) * (1 - float64(row.TEValue)/100)))
+		}
+	}
+	if mats, err := app.queries.ListSDEBlueprintMaterials(ctx, row.TypeID); err == nil {
+		for _, m := range mats {
+			per := int64(math.Ceil(float64(m.Quantity) * (1 - float64(row.MEValue)/100)))
+			if per < 1 {
+				per = 1
+			}
+			in.Materials = append(in.Materials, blueprintMaterial{TypeID: m.MaterialTypeID, Name: app.typeNameOrID(ctx, m.MaterialTypeID), Base: esi.FormatInt(m.Quantity), PerRun: esi.FormatInt(per)})
+		}
+	}
+	return in
 }

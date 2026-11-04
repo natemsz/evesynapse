@@ -12,35 +12,88 @@
 </div>
 
 {{if .Industry}}
-
-<section class="foldable">
-<h3>Blueprints</h3>
-{{if .Industry.Blueprints.Note}}
-<p><small>{{.Industry.Blueprints.Note}}</small></p>
-{{else if .Industry.Blueprints.Warming}}
-<p><small>Still syncing.{{if .IsAdmin}} Progress is on the <a href="/admin/sync/">Sync page</a>.{{end}}</small></p>
-{{else if .Industry.BlueprintRows}}
-<p><input type="search" id="bp-search" placeholder="Search blueprints..." aria-label="Search blueprints" data-table-filter="bp-table" data-row-class="bp-row" data-header-class="bp-cat-header"></p>
-<div class="tw">
-<table id="bp-table">
-  <thead><tr><th>Pin</th><th class="card-title">Blueprint</th><th>Produces</th><th>Category</th><th>Kind</th><th>ME</th><th>TE</th><th>Runs</th><th>Location</th></tr></thead>
-  <tbody>
-  {{$lastCat := ""}}
-  {{range .Industry.BlueprintRows}}
-    {{if and .ProductCategory (ne .ProductCategory $lastCat)}}
-    <tr class="bp-cat-header"><td colspan="9"><strong>{{.ProductCategory}}</strong></td></tr>
-    {{$lastCat = .ProductCategory}}
-    {{end}}
-    <tr class="bp-row" data-search="{{.Name}} {{.ProductName}} {{.ProductCategory}}"><td><form class="bp-pin" method="post" action="/industry/pin/"><input type="hidden" name="blueprint" value="{{.TypeID}}"><input type="hidden" name="character" value="{{$.Industry.CharacterID}}"><input type="hidden" name="pinned" value="{{if .Pinned}}0{{else}}1{{end}}"><button type="submit" class="bp-pin-btn{{if .Pinned}} on{{end}}" aria-pressed="{{if .Pinned}}true{{else}}false{{end}}" title="{{if .Pinned}}Pinned as a production line. Unpin{{else}}Pin as a production line, shown on the home page{{end}}">{{if .Pinned}}Pinned{{else}}Pin{{end}}</button></form></td><td>{{itemLink .TypeID .Name}}</td><td>{{if .ProductTypeID}}<a href="/planner/?product={{.ProductTypeID}}" title="open in build planner" aria-label="{{.ProductName}} — open in build planner">{{.ProductName}} <svg class="plan-glyph plan-glyph-sm" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="url(#nav-glyph-gradient)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a4.5 4.5 0 0 0-6 6L3 18l3 3 5.7-5.7a4.5 4.5 0 0 0 6-6L14 13l-3-3 3.7-3.7Z"/></g></svg></a>{{else if .ProductName}}{{.ProductName}}{{else}}—{{end}}</td><td>{{if .ProductCategory}}{{.ProductCategory}}{{else}}—{{end}}</td><td>{{.Kind}}</td><td>{{.ME}}</td><td>{{.TE}}</td><td>{{.Runs}}</td><td>{{placeLink .Location}}</td></tr>
-  {{end}}
-  </tbody>
-</table>
+{{with .Industry}}
+{{if .Blueprints.Note}}
+<p><small>{{.Blueprints.Note}}</small></p>
+{{else if .Blueprints.Warming}}
+<p><small>Still syncing.{{if $.IsAdmin}} Progress is on the <a href="/admin/sync/">Sync page</a>.{{end}}</small></p>
+{{else if .BPTotal}}
+<div class="l-tiles bp-tiles l-root">
+  {{range .BPTiles}}{{if .Href}}<a class="l-stat{{if .On}} on{{end}}" href="{{.Href}}" data-l-step="in">{{else}}<div class="l-stat">{{end}}<span class="l-stat-label">{{.Label}}</span><span class="l-stat-value">{{.Value}}</span><span class="l-stat-sub">{{.Sub}}</span>{{if .Href}}</a>{{else}}</div>{{end}}{{end}}
 </div>
-{{if .Industry.BlueprintsCut}}<p><small>+ {{.Industry.BlueprintsCut}} more blueprints in this snapshot.</small></p>{{end}}
+
+<div class="l-console bpc" data-depth="{{.BPDepth}}" data-land-top>
+<div class="l-panes">
+<nav class="l-pane l-pane--dir bp-dir" aria-label="Product groups">
+  <div class="l-pane-bar"><h2 class="l-pane-title">Product groups <small>{{len .BPCats}}</small></h2></div>
+  <div class="dirlist">
+    <a class="diritem{{if .BPAllOn}} on{{end}}" href="{{.BPAllHref}}" data-l-step="in"><span class="dir-top"><span class="dir-name">All blueprints</span><span class="dir-val">{{.BPTotal}}</span></span></a>
+    {{range .BPCats}}<a class="diritem{{if .On}} on{{end}}" href="{{.Href}}" data-l-step="in"><span class="dir-top"><span class="dir-name">{{.Label}}</span><span class="dir-val">{{.Count}}</span></span></a>{{end}}
+  </div>
+</nav>
+
+<section class="l-pane l-pane--main bp-main" aria-label="Blueprints">
+  <div class="l-pane-bar">
+    <a class="l-back" data-l-step="out" href="{{.BPDirHref}}">Product groups</a>
+    <input type="search" id="bp-search" class="bp-filter" placeholder="Search blueprints..." aria-label="Search blueprints" data-table-filter="bp-table" data-row-class="bp-row" data-header-class="bp-cat-header">
+  </div>
+  <div class="fchips bp-kinds" role="group" aria-label="Kind">{{range .BPKinds}}<a class="fchip{{if .On}} on{{end}}" href="{{.Href}}">{{.Label}} {{.Count}}</a>{{end}}</div>
+  {{if .BlueprintRows}}
+  <div class="tw">
+  <table id="bp-table">
+    <thead><tr><th>Pin</th><th class="card-title">Blueprint</th><th>Produces</th><th>Category</th><th>Kind</th><th>ME</th><th>TE</th><th>Runs</th><th>Location</th></tr></thead>
+    <tbody>
+    {{$lastCat := ""}}
+    {{range .BlueprintRows}}
+      {{if and .ProductCategory (ne .ProductCategory $lastCat)}}
+      <tr class="bp-cat-header"><td colspan="9"><strong>{{.ProductCategory}}</strong></td></tr>
+      {{$lastCat = .ProductCategory}}
+      {{end}}
+    <tr class="bp-row{{if .On}} yours{{end}}" data-search="{{.Name}} {{.ProductName}} {{.ProductCategory}}"><td><form class="bp-pin" method="post" action="/industry/pin/"><input type="hidden" name="blueprint" value="{{.TypeID}}"><input type="hidden" name="character" value="{{$.Industry.CharacterID}}"><input type="hidden" name="pinned" value="{{if .Pinned}}0{{else}}1{{end}}"><button type="submit" class="bp-pin-btn{{if .Pinned}} on{{end}}" aria-pressed="{{if .Pinned}}true{{else}}false{{end}}" title="{{if .Pinned}}Pinned as a production line. Unpin{{else}}Pin as a production line, shown on the home page{{end}}">{{if .Pinned}}Pinned{{else}}Pin{{end}}</button></form></td><td><a href="{{.Href}}" data-l-step="in">{{.Name}}</a></td><td>{{if .ProductTypeID}}<a href="/planner/?product={{.ProductTypeID}}" title="open in build planner" aria-label="Open {{.ProductName}} in the build planner">{{.ProductName}} <svg class="plan-glyph plan-glyph-sm" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="url(#nav-glyph-gradient)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a4.5 4.5 0 0 0-6 6L3 18l3 3 5.7-5.7a4.5 4.5 0 0 0 6-6L14 13l-3-3 3.7-3.7Z"/></g></svg></a>{{else if .ProductName}}{{.ProductName}}{{else}}—{{end}}</td><td>{{if .ProductCategory}}{{.ProductCategory}}{{else}}—{{end}}</td><td>{{.Kind}}</td><td>{{.ME}}</td><td>{{.TE}}</td><td>{{.Runs}}</td><td>{{placeLink .Location}}</td></tr>
+    {{end}}
+    </tbody>
+  </table>
+  </div>
+  {{if .BlueprintsCut}}<p><small>+ {{.BlueprintsCut}} more blueprints in this snapshot.</small></p>{{end}}
+  {{else}}
+  <p><small>No blueprints match these filters.</small></p>
+  {{end}}
+</section>
+
+{{with .BPInsp}}
+<aside class="l-pane l-pane--insp insp bp-insp" aria-label="Blueprint">
+  <div class="l-pane-bar"><a class="l-back" data-l-step="out" href="{{.CloseHref}}">Blueprints</a><a class="l-close" href="{{.CloseHref}}" aria-label="Close the blueprint">&#10005;</a></div>
+  <div class="insp-head">
+    <span class="amx-art big"><img src="https://images.evetech.net/types/{{.Row.TypeID}}/{{if .Row.Original}}bp{{else}}bpc{{end}}?size=64" alt="" width="72" height="72" loading="lazy" data-fallback-src="/static/img/item.svg"></span>
+    <div class="insp-titles"><h3>{{itemLink .Row.TypeID .Row.Name}}</h3><p class="amx-msub">{{if .Row.Original}}Original{{else}}Copy, {{.Row.Runs}} runs left{{end}}{{if .Row.ProductCategory}} · {{.Row.ProductCategory}}{{end}}</p></div>
+  </div>
+  <dl class="insp-facts">
+    <div><dt>Material efficiency</dt><dd>{{.Row.ME}}</dd></div>
+    <div><dt>Time efficiency</dt><dd>{{.Row.TE}}</dd></div>
+    {{if .Makes}}<div><dt>Makes</dt><dd>{{.Makes}}</dd></div>{{end}}
+    {{if .TimePerRun}}<div><dt>Time per run</dt><dd>{{.TimePerRun}} <small class="muted">(base {{.BaseTime}})</small></dd></div>{{end}}
+    {{if .Row.Location.Name}}<div><dt>Kept at</dt><dd>{{placeLink .Row.Location}}</dd></div>{{end}}
+  </dl>
+  {{if .Materials}}
+  <h4 class="bp-h">Materials per run</h4>
+  <div class="tw">
+  <table class="bp-mats">
+    <thead><tr><th class="card-title">Material</th><th>At ME {{.Row.MEValue}}</th><th class="opt">Base</th></tr></thead>
+    <tbody>{{range .Materials}}<tr><td>{{itemLink .TypeID .Name}}</td><td class="num">{{.PerRun}}</td><td class="num">{{.Base}}</td></tr>{{end}}</tbody>
+  </table>
+  </div>
+  <p class="insp-note">Before structure, rig and skill bonuses. The build planner works out a full run with your hangars, what is missing and what it costs.</p>
+  {{end}}
+  {{if .Row.ProductTypeID}}<p><a class="btn" href="/planner/?product={{.Row.ProductTypeID}}">Plan this build</a></p>{{end}}
+</aside>
+<a class="l-scrim" href="{{.CloseHref}}" aria-label="Close the blueprint" tabindex="-1"></a>
+{{end}}
+</div>
+</div>
 {{else}}
 <p><small>No blueprints in the latest snapshot.</small></p>
 {{end}}
-</section>
+{{end}}
 {{else}}
 <p>No character to show yet. Link a character first.</p>
 {{end}}

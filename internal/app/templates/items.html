@@ -1,175 +1,207 @@
 {{define "title"}}{{if and .Items .Items.TypeDetail}}{{.Items.TypeDetail.Name}}{{else}}Item Database{{end}}{{end}}
 {{define "pagetitle"}}<h1><span class="gt">Item Database</span></h1>{{end}}
+{{define "pagetabs"}}{{template "sectiontabs" .}}{{end}}
 {{define "content"}}
-
+<div class="l-page ib">
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
 
-{{if .Items}}
-{{$v := .Items}}
+{{with .Items}}
+{{$v := .}}
+{{if eq $v.Mode "type"}}{{template "items-type" $v.TypeDetail}}{{else}}
 
-{{if eq $v.Mode "categories"}}
-{{template "items-search-form" $v}}
-<p><small>Browse every item category in the local static data. Pick a category to see its groups, then a group to see its types. Each type links to its details page.</small></p>
-{{if $v.Categories}}
-<div class="tw">
-<table>
-  <thead><tr><th>Category</th><th>Types</th></tr></thead>
-  <tbody>
-  {{range $v.Categories}}
-    <tr data-pubcount="{{.Published}}"{{if and $v.PublishedOnly (eq .Published 0)}} hidden{{end}}><td><a href="/items/category/{{.ID}}/{{if $v.PublishedOnly}}?published=1{{end}}">{{.Name}}</a></td><td data-count data-total="{{.Types}}" data-pub="{{.PublishedTypes}}">{{if $v.PublishedOnly}}{{.PublishedTypes}}{{else}}{{.Types}}{{end}}</td></tr>
-  {{end}}
-  </tbody>
-</table>
+{{/* The head: what the database holds, and the search that
+     reaches every item from any level. It stays on top. */}}
+<div class="l-head ib-head">
+  {{if $v.AllTypes}}<p class="l-head-sum l-root"><b>{{$v.AllTypes}}</b> item types in <b>{{len $v.Categories}}</b> categories, <b>{{$v.AllPublished}}</b> of them published in the game. Search by name, or browse a category.</p>{{end}}
+  {{template "items-search-form" $v}}
 </div>
-{{else}}
-<p><small>No static data yet. The item database fills in when the static data import finishes{{if .IsAdmin}}; progress is on the <a href="/admin/sync/">Sync page</a>{{end}}.</small></p>
-{{end}}
+
+{{$sel := $v.DirCategoryID}}
+<div class="l-console ib-console" data-depth="{{$v.Depth}}" data-land-top>
+<div class="l-panes">
+
+<nav class="l-pane l-pane--dir" aria-label="Item categories">
+  <div class="l-pane-bar"><h2 class="l-pane-title">Categories <small>{{len $v.Categories}}</small></h2></div>
+  {{if $v.Categories}}
+  <div class="ib-dir">
+  {{range $v.Categories}}<a class="diritem ib-dirent{{if eq .ID $sel}} on{{end}}" href="/items/category/{{.ID}}/{{if $v.PublishedOnly}}?published=1{{end}}" data-l-step="in" data-pubcount="{{.Published}}"{{if and $v.PublishedOnly (eq .Published 0)}} hidden{{end}}{{if eq .ID $sel}} aria-current="true"{{end}}><span class="ib-dirname">{{.Name}}</span><span class="ib-count" data-count data-total="{{.Types}}" data-pub="{{.PublishedTypes}}">{{if $v.PublishedOnly}}{{.PublishedTypes}}{{else}}{{.Types}}{{end}}</span></a>
+  {{end}}
+  </div>
+  {{else}}
+  <p class="ib-empty">No static data yet. The item database fills in when the static data import finishes{{if $.IsAdmin}}; progress is on the <a href="/admin/sync/">Sync page</a>{{end}}.</p>
+  {{end}}
+</nav>
+
+<section class="l-pane l-pane--main">
+{{if eq $v.Mode "categories"}}
+  <div class="l-pane-bar"><h2 class="l-pane-title">Start here</h2></div>
+  <p class="ib-lede">Pick a category to see its groups, then a group to see its items. Every item opens its own page with prices, history and what it is used in.</p>
+  {{if $v.Featured}}
+  <h3 class="ib-sub">Most used</h3>
+  <div class="ib-cards">
+  {{range $v.Featured}}<a class="ib-card" href="/items/category/{{.ID}}/{{if $v.PublishedOnly}}?published=1{{end}}" data-l-step="in" data-pubcount="{{.Published}}"{{if and $v.PublishedOnly (eq .Published 0)}} hidden{{end}}><span class="ib-card-name">{{.Name}}</span><span class="ib-count" data-count data-total="{{.Types}}" data-pub="{{.PublishedTypes}}">{{if $v.PublishedOnly}}{{.PublishedTypes}}{{else}}{{.Types}}{{end}}</span></a>
+  {{end}}
+  </div>
+  {{end}}
 {{end}}
 
 {{if eq $v.Mode "category"}}
-<p><small><a href="/items/{{if $v.PublishedOnly}}?published=1{{end}}">Item Database</a> › {{$v.Category.Name}}</small></p>
-<h2>{{$v.Category.Name}}</h2>
-<form method="get" action="/items/category/{{$v.Category.ID}}/">
-  <label><small><input type="checkbox" name="published" value="1" data-published-toggle{{if $v.PublishedOnly}} checked{{end}}> Published items only</small></label>
-  <button class="btn" type="submit">Filter</button>
-</form>
-{{if $v.Groups}}
-<div class="tw">
-<table>
-  <thead><tr><th>Group</th><th>Types</th></tr></thead>
-  <tbody>
-  {{range $v.Groups}}
-    <tr data-pubcount="{{.Published}}"{{if and $v.PublishedOnly (eq .Published 0)}} hidden{{end}}><td><a href="/items/group/{{.ID}}/{{if $v.PublishedOnly}}?published=1{{end}}">{{.Name}}</a></td><td data-count data-total="{{.Types}}" data-pub="{{.PublishedTypes}}">{{if $v.PublishedOnly}}{{.PublishedTypes}}{{else}}{{.Types}}{{end}}</td></tr>
+  <div class="l-pane-bar">
+    <a class="l-back" data-l-step="out" href="/items/{{if $v.PublishedOnly}}?published=1{{end}}">Categories</a>
+    <h2 class="l-pane-title">{{$v.Category.Name}} <small>{{len $v.Groups}} groups</small></h2>
+  </div>
+  {{if $v.Groups}}
+  <div class="ib-cards">
+  {{range $v.Groups}}<a class="ib-card" href="/items/group/{{.ID}}/{{if $v.PublishedOnly}}?published=1{{end}}" data-l-step="in" data-pubcount="{{.Published}}"{{if and $v.PublishedOnly (eq .Published 0)}} hidden{{end}}><span class="ib-card-name">{{.Name}}</span><span class="ib-count" data-count data-total="{{.Types}}" data-pub="{{.PublishedTypes}}">{{if $v.PublishedOnly}}{{.PublishedTypes}}{{else}}{{.Types}}{{end}}</span></a>
   {{end}}
-  </tbody>
-</table>
-</div>
-{{else}}
-<p><small>No groups in this category.</small></p>
-{{end}}
-{{end}}
-
-{{if eq $v.Mode "search"}}
-{{template "items-search-form" $v}}
-{{if $v.SearchResults}}
-{{range $v.SearchSections}}
-<h3 class="item-section">{{if .CategoryID}}<a href="/items/category/{{.CategoryID}}/{{if $v.PublishedOnly}}?published=1{{end}}">{{.CategoryName}}</a>{{else}}<small>No category</small>{{end}}{{if .GroupID}} › <a href="/items/group/{{.GroupID}}/{{if $v.PublishedOnly}}?published=1{{end}}">{{.GroupName}}</a>{{end}}</h3>
-<div class="tw">
-<table>
-  <thead><tr><th>Item</th><th>Market</th></tr></thead>
-  <tbody>
-  {{range .Rows}}
-    <tr>
-      <td>{{itemLink .ID .Name}}</td>
-      <td>{{if .OnMarket}}<small>on market</small>{{else}}<small>—</small>{{end}}</td>
-    </tr>
+  </div>
+  {{else}}
+  <p class="ib-empty">No groups in this category.</p>
   {{end}}
-  </tbody>
-</table>
-</div>
-{{end}}
-<p><small>{{$v.TotalTypes}} items{{if $v.SearchQuery}} matching "{{$v.SearchQuery}}"{{end}}{{if $v.PublishedOnly}}, published only{{end}} · page {{$v.Page}} of {{$v.TotalPages}}</small>
-{{if $v.HasPrev}} · <a href="/items/?q={{$v.SearchQuery}}{{if $v.PublishedOnly}}&published=1{{end}}{{if $v.CategoryID}}&category={{$v.CategoryID}}{{end}}{{if $v.GroupID}}&group={{$v.GroupID}}{{end}}&page={{$v.PrevPage}}">← Prev</a>{{end}}
-{{if $v.HasNext}} · <a href="/items/?q={{$v.SearchQuery}}{{if $v.PublishedOnly}}&published=1{{end}}{{if $v.CategoryID}}&category={{$v.CategoryID}}{{end}}{{if $v.GroupID}}&group={{$v.GroupID}}{{end}}&page={{$v.NextPage}}">Next →</a>{{end}}</p>
-{{else}}
-<p><small>No items{{if $v.SearchQuery}} matching "{{$v.SearchQuery}}"{{end}}{{if $v.PublishedOnly}} published{{end}} in the local static data.{{if $v.PublishedOnly}} Try turning off “Published items only”: many items in the static data are unpublished.{{end}}</small></p>
-{{end}}
 {{end}}
 
 {{if eq $v.Mode "group"}}
-<p><small><a href="/items/{{if $v.PublishedOnly}}?published=1{{end}}">Item Database</a>{{if $v.Category}} › <a href="/items/category/{{$v.Category.ID}}/{{if $v.PublishedOnly}}?published=1{{end}}">{{$v.Category.Name}}</a>{{end}} › {{$v.Group.Name}}</small></p>
-<h2>{{$v.Group.Name}}</h2>
-<form method="get" action="/items/group/{{$v.Group.ID}}/">
-  <input type="search" name="q" value="{{$v.Query}}" placeholder="Filter types in this group">
-  <label><small><input type="checkbox" name="published" value="1" data-published-toggle{{if $v.PublishedOnly}} checked{{end}}> Published items only</small></label>
-  <button class="btn" type="submit">Filter</button>
-</form>
-{{if $v.Types}}
-<div class="tw">
-<table>
-  <thead><tr><th>Type</th><th>Market</th></tr></thead>
-  <tbody>
-  {{range $v.Types}}
-    <tr data-published="{{if .Published}}1{{else}}0{{end}}"{{if and $v.PublishedOnly (not .Published)}} hidden{{end}}><td>{{itemLink .ID .Name}}</td><td>{{if .OnMarket}}<small>on market</small>{{else}}<small>—</small>{{end}}</td></tr>
+  <div class="l-pane-bar">
+    {{if $v.Category}}<a class="l-back" data-l-step="out" href="/items/category/{{$v.Category.ID}}/{{if $v.PublishedOnly}}?published=1{{end}}">{{$v.Category.Name}}</a>{{end}}
+    <h2 class="l-pane-title">{{$v.Group.Name}} <small>{{$v.TotalTypes}} types</small></h2>
+    <form class="ib-filter" method="get" action="/items/group/{{$v.Group.ID}}/" role="search">
+      <input type="search" name="q" value="{{$v.Query}}" placeholder="Filter this group" aria-label="Filter the items in {{$v.Group.Name}}">
+      {{if $v.PublishedOnly}}<input type="hidden" name="published" value="1">{{end}}
+      <button class="btn" type="submit">Filter</button>
+    </form>
+  </div>
+  {{if $v.Category}}<p class="ib-crumbs"><a href="/items/{{if $v.PublishedOnly}}?published=1{{end}}">Item Database</a> › <a href="/items/category/{{$v.Category.ID}}/{{if $v.PublishedOnly}}?published=1{{end}}">{{$v.Category.Name}}</a> › {{$v.Group.Name}}</p>{{end}}
+  {{if $v.Types}}
+  <ul class="ib-list">
+  {{range $v.Types}}{{template "items-row" .}}{{end}}
+  </ul>
+  <nav class="ib-pager" aria-label="Pages">
+    <span>{{$v.TotalTypes}} types{{if $v.Query}} matching "{{$v.Query}}"{{end}} · page {{$v.Page}} of {{$v.TotalPages}}</span>
+    {{if $v.HasPrev}}<a class="btn small" href="/items/group/{{$v.Group.ID}}/?page={{$v.PrevPage}}{{if $v.Query}}&q={{$v.Query}}{{end}}{{if $v.PublishedOnly}}&published=1{{end}}">Previous</a>{{end}}
+    {{if $v.HasNext}}<a class="btn small" href="/items/group/{{$v.Group.ID}}/?page={{$v.NextPage}}{{if $v.Query}}&q={{$v.Query}}{{end}}{{if $v.PublishedOnly}}&published=1{{end}}">Next</a>{{end}}
+  </nav>
+  {{else}}
+  <p class="ib-empty">No types{{if $v.Query}} matching "{{$v.Query}}"{{end}} in this group.</p>
   {{end}}
-  </tbody>
-</table>
-</div>
-<p><small>{{$v.TotalTypes}} types{{if $v.Query}} matching "{{$v.Query}}"{{end}} · page {{$v.Page}} of {{$v.TotalPages}}</small>
-{{if $v.HasPrev}} · <a href="/items/group/{{$v.Group.ID}}/?page={{$v.PrevPage}}{{if $v.Query}}&q={{$v.Query}}{{end}}{{if $v.PublishedOnly}}&published=1{{end}}">← Prev</a>{{end}}
-{{if $v.HasNext}} · <a href="/items/group/{{$v.Group.ID}}/?page={{$v.NextPage}}{{if $v.Query}}&q={{$v.Query}}{{end}}{{if $v.PublishedOnly}}&published=1{{end}}">Next →</a>{{end}}</p>
-{{else}}
-<p><small>No types{{if $v.Query}} matching "{{$v.Query}}"{{end}} in this group.</small></p>
-{{end}}
 {{end}}
 
-{{if eq $v.Mode "type"}}
-{{$d := $v.TypeDetail}}
-<p><small><a href="/items/">Item Database</a>{{if $d.Category}} › <a href="/items/category/{{$d.Category.ID}}/">{{$d.Category.Name}}</a>{{end}}{{if $d.Group}} › <a href="/items/group/{{$d.Group.ID}}/">{{$d.Group.Name}}</a>{{end}}</small></p>
-<section class="card">
-<h2>{{$d.Name}}</h2>
-
-<div class="item-lead">
-  <div class="item-art"><img src="{{$d.ArtURL}}"{{if $d.ArtFallback}} data-fallback-src="{{$d.ArtFallback}}"{{end}} alt="" loading="lazy"></div>
-  {{if or (eq $d.DescState "ready") (eq $d.DescState "pending")}}<div class="item-desc">
-    <span class="k">Description</span>
-    {{template "type-description" $d}}
-  </div>{{end}}
-</div>
-
-<div class="tw">
-<table>
-  <tbody>
-    {{if $d.Group}}<tr><th>Group</th><td>{{$d.Group.Name}}</td></tr>{{end}}
-    {{if $d.Category}}<tr><th>Category</th><td>{{$d.Category.Name}}</td></tr>{{end}}
-    <tr><th>Market</th><td>{{if $d.OnMarket}}Traded on the market{{else}}Not traded on the market{{end}}</td></tr>
-    {{if $d.AveragePrice}}<tr><th>Average price</th><td>{{$d.AveragePrice}} ISK</td></tr>{{end}}
-    {{if $d.AdjustedPrice}}<tr><th>Adjusted price</th><td>{{$d.AdjustedPrice}} ISK</td></tr>{{end}}
-    {{if $d.BuildCost}}<tr><th>Build cost</th><td>{{$d.BuildCost}} ISK</td></tr>{{end}}
-    {{if $d.EstimatedSell}}<tr><th>Estimated sell</th><td>{{$d.EstimatedSell}} ISK ({{$d.EstimatedSellNote}})</td></tr>{{end}}
-  </tbody>
-</table>
-</div>
-
-<p>
-{{if $d.OnMarket}}<a href="/market/?type={{$d.ID}}">Orders &amp; price history</a> · {{end}}<a href="{{$d.ContractSearchURL}}">Find contracts for this item</a>{{if $d.BlueprintID}} · <a href="/planner/?product={{$d.ID}}">Plan manufacturing</a>{{end}}
-</p>
-
-{{if $d.Hubs}}
-<h3>Hub prices</h3>
-<div class="tw">
-<table>
-  <thead><tr><th>Hub</th><th>Best sell</th><th>Best buy</th></tr></thead>
-  <tbody>
-  {{range $d.Hubs}}<tr><td>{{.Region}}</td><td>{{if .BestSell}}{{.BestSell}} ISK{{else}}—{{end}}</td><td>{{if .BestBuy}}{{.BestBuy}} ISK{{else}}—{{end}}</td></tr>{{end}}
-  </tbody>
-</table>
-</div>
+{{if eq $v.Mode "search"}}
+  <div class="l-pane-bar">
+    <a class="l-back" data-l-step="out" href="/items/{{if $v.PublishedOnly}}?published=1{{end}}">Categories</a>
+    <h2 class="l-pane-title">{{if $v.SearchQuery}}Results for "{{$v.SearchQuery}}"{{else}}Items{{end}} <small>{{$v.TotalTypes}}</small></h2>
+  </div>
+  {{if $v.SearchResults}}
+  {{range $v.SearchSections}}
+  <h3 class="item-section ib-sub">{{if .CategoryID}}<a href="/items/category/{{.CategoryID}}/{{if $v.PublishedOnly}}?published=1{{end}}">{{.CategoryName}}</a>{{else}}No category{{end}}{{if .GroupID}} › <a href="/items/group/{{.GroupID}}/{{if $v.PublishedOnly}}?published=1{{end}}">{{.GroupName}}</a>{{end}}</h3>
+  <ul class="ib-list">
+  {{range .Rows}}{{template "items-row" .}}{{end}}
+  </ul>
+  {{end}}
+  <nav class="ib-pager" aria-label="Pages">
+    <span>{{$v.TotalTypes}} items{{if $v.SearchQuery}} matching "{{$v.SearchQuery}}"{{end}}{{if $v.PublishedOnly}}, published only{{end}} · page {{$v.Page}} of {{$v.TotalPages}}</span>
+    {{if $v.HasPrev}}<a class="btn small" href="/items/?q={{$v.SearchQuery}}{{if $v.PublishedOnly}}&published=1{{end}}{{if $v.CategoryID}}&category={{$v.CategoryID}}{{end}}{{if $v.GroupID}}&group={{$v.GroupID}}{{end}}&page={{$v.PrevPage}}">Previous</a>{{end}}
+    {{if $v.HasNext}}<a class="btn small" href="/items/?q={{$v.SearchQuery}}{{if $v.PublishedOnly}}&published=1{{end}}{{if $v.CategoryID}}&category={{$v.CategoryID}}{{end}}{{if $v.GroupID}}&group={{$v.GroupID}}{{end}}&page={{$v.NextPage}}">Next</a>{{end}}
+  </nav>
+  {{else}}
+  <p class="ib-empty">No items{{if $v.SearchQuery}} matching "{{$v.SearchQuery}}"{{end}}{{if $v.PublishedOnly}} published{{end}} in the local static data.{{if $v.PublishedOnly}} Try turning off "Published items only": many items in the static data are unpublished.{{end}}</p>
+  {{end}}
 {{end}}
-
 </section>
 
+</div>
+</div>
+{{end}}
+{{end}}
+</div>
+{{end}}
+
+{{/* One item row in a group or a search: its picture, its name
+     (the link to its page) and whether the market trades it. */}}
+{{define "items-row"}}
+<li class="ib-row" data-published="{{if .Published}}1{{else}}0{{end}}"{{if .Hidden}} hidden{{end}}>
+  <img class="ib-icon" src="{{.IconURL}}" alt="" width="32" height="32" loading="lazy" data-fallback-src="/static/img/item.svg">
+  <a class="ib-name" href="/items/type/{{.ID}}/">{{.Name}}</a>
+  <span class="ib-flags">{{if not .Published}}<span class="ib-tag">Unpublished</span>{{end}}{{if .OnMarket}}<span class="ib-tag ok">On market</span>{{end}}</span>
+</li>
+{{end}}
+
+{{/* The item page: who it is, what it costs where, how its price
+     moved, and what it goes into. */}}
+{{define "items-type"}}
+{{$d := .}}
+<p class="ib-crumbs"><a href="/items/">Item Database</a>{{if $d.Category}} › <a href="/items/category/{{$d.Category.ID}}/">{{$d.Category.Name}}</a>{{end}}{{if $d.Group}} › <a href="/items/group/{{$d.Group.ID}}/">{{$d.Group.Name}}</a>{{end}}</p>
+
+<section class="l-panel ib-hero">
+  <div class="item-art"><img src="{{$d.ArtURL}}"{{if $d.ArtFallback}} data-fallback-src="{{$d.ArtFallback}}"{{end}} alt="" width="128" height="128" loading="lazy"></div>
+  <div class="ib-id">
+    <h2 class="ib-title">{{$d.Name}}</h2>
+    <div class="l-cluster ib-tags">
+      {{if $d.Group}}<span class="ib-tag">{{$d.Group.Name}}</span>{{end}}
+      {{if $d.Category}}<span class="ib-tag">{{$d.Category.Name}}</span>{{end}}
+      <span class="ib-tag{{if $d.OnMarket}} ok{{end}}">{{if $d.OnMarket}}Traded on the market{{else}}Not traded on the market{{end}}</span>
+    </div>
+    <div class="l-cluster ib-acts">
+      {{if $d.OnMarket}}<a href="/market/?type={{$d.ID}}">Orders &amp; price history</a>{{end}}
+      <a href="{{$d.ContractSearchURL}}">Find contracts for this item</a>
+      {{if $d.BlueprintID}}<a href="/planner/?product={{$d.ID}}">Plan manufacturing</a>{{end}}
+    </div>
+  </div>
+</section>
+
+{{if or $d.BuyAt $d.SellAt $d.AveragePrice $d.AdjustedPrice $d.BuildCost $d.EstimatedSell}}
+<div class="l-tiles">
+  {{with $d.BuyAt}}<div class="l-stat"><span class="l-stat-label">Lowest sell</span><span class="l-stat-value">{{.BestSell}}</span><span class="l-stat-sub">ISK, buy it in {{.Region}}</span></div>{{end}}
+  {{with $d.SellAt}}<div class="l-stat"><span class="l-stat-label">Highest buy</span><span class="l-stat-value">{{.BestBuy}}</span><span class="l-stat-sub">ISK, sell it in {{.Region}}</span></div>{{end}}
+  {{if $d.AveragePrice}}<div class="l-stat"><span class="l-stat-label">Average price</span><span class="l-stat-value">{{$d.AveragePrice}}</span><span class="l-stat-sub">ISK, the game's guide average</span></div>{{end}}
+  {{if $d.AdjustedPrice}}<div class="l-stat"><span class="l-stat-label">Adjusted price</span><span class="l-stat-value">{{$d.AdjustedPrice}}</span><span class="l-stat-sub">ISK, the basis for industry fees</span></div>{{end}}
+  {{if $d.BuildCost}}<div class="l-stat"><span class="l-stat-label">Build cost</span><span class="l-stat-value">{{$d.BuildCost}}</span><span class="l-stat-sub">ISK in materials</span></div>{{end}}
+  {{if $d.EstimatedSell}}<div class="l-stat"><span class="l-stat-label">Estimated sell</span><span class="l-stat-value">{{$d.EstimatedSell}}</span><span class="l-stat-sub">ISK, {{$d.EstimatedSellNote}}</span></div>{{end}}
+</div>
+{{end}}
+
+{{$desc := or (eq $d.DescState "ready") (eq $d.DescState "pending")}}
+{{if or $desc $d.Hubs}}
+<div class="l-grid">
+  {{if $desc}}<section class="l-panel ib-desc{{if $d.Hubs}} s5{{end}}">
+    <h3>Description</h3>
+    {{template "type-description" $d}}
+  </section>{{end}}
+  {{if $d.Hubs}}<section class="l-panel{{if $desc}} s7{{end}}">
+    <h3>Hub prices</h3>
+    <div class="tw">
+    <table class="ib-hubs">
+      <thead><tr><th>Hub</th><th class="num">Best sell</th><th class="num">Best buy</th><th class="num">Spread</th></tr></thead>
+      <tbody>
+      {{range $d.Hubs}}<tr>
+        <td>{{.Region}}</td>
+        <td class="num">{{if .BestSell}}{{.BestSell}}{{if .CheapestSell}} <span class="ib-tag ok">Lowest</span>{{end}}{{else}}—{{end}}</td>
+        <td class="num">{{if .BestBuy}}{{.BestBuy}}{{if .TopBuy}} <span class="ib-tag ok">Highest</span>{{end}}{{else}}—{{end}}</td>
+        <td class="num">{{if .Spread}}{{.Spread}}{{else}}—{{end}}</td>
+      </tr>{{end}}
+      </tbody>
+    </table>
+    </div>
+    <p class="ib-note">Best orders in each hub region, in ISK. Spread is the gap between them as a share of the sell.</p>
+  </section>{{end}}
+</div>
+{{end}}
+
 {{if $d.HistoryView}}
-<h3>Price history — {{$d.HistoryView.RegionName}}</h3>
-{{template "history-section" $d.HistoryView}}
+<section class="l-panel ib-history">
+  <h3>Price history, {{$d.HistoryView.RegionName}}</h3>
+  {{template "history-section" $d.HistoryView}}
+</section>
 {{end}}
 
 {{if $d.UsedIn}}
-<h3>Used in</h3>
-<div class="tw">
-<table>
-  <thead><tr><th>Product</th><th>Per run</th></tr></thead>
-  <tbody>
-  {{range $d.UsedIn}}
-    <tr><td>{{itemLink .ProductID .ProductName}}</td><td>{{.PerRun}}</td></tr>
+<section class="l-panel">
+  <h3>Used in <small>{{len $d.UsedIn}}{{if $d.UsedInMore}}+{{end}} products</small></h3>
+  <ul class="ib-uses">
+  {{range $d.UsedIn}}<li><img class="ib-icon" src="https://images.evetech.net/types/{{.ProductID}}/icon?size=32" alt="" width="32" height="32" loading="lazy" data-fallback-src="/static/img/item.svg"><a class="ib-name" href="/items/type/{{.ProductID}}/">{{.ProductName}}</a><span class="ib-qty">{{.PerRun}} per run</span></li>
   {{end}}
-  </tbody>
-</table>
-</div>
-{{if $d.UsedInMore}}<p class="hint">Showing the first 50; bulk materials feed many more.</p>{{end}}
-{{end}}
-{{end}}
-
+  </ul>
+  {{if $d.UsedInMore}}<p class="ib-note">Showing the first 50; bulk materials feed many more.</p>{{end}}
+</section>
 {{end}}
 {{end}}
 
@@ -179,22 +211,24 @@
 {{end}}{{end}}
 
 {{define "items-search-form"}}
-<form method="get" action="/items/" role="search">
+<form class="ib-search" method="get" action="/items/" role="search">
   <span class="searchwrap">
-    <input type="search" name="q" id="items-q" value="{{.SearchQuery}}" placeholder="Search every item by name" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="items-suggest" aria-autocomplete="list">
+    <input type="search" name="q" id="items-q" value="{{.SearchQuery}}" placeholder="Search every item by name" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="items-suggest" aria-autocomplete="list" aria-label="Search every item by name">
     <ul class="suggest" id="items-suggest" role="listbox" hidden></ul>
   </span>
-  <label><small><input type="checkbox" name="published" value="1" {{if eq .Mode "search"}}data-autosubmit{{else}}data-published-toggle{{end}}{{if .PublishedOnly}} checked{{end}}> Published items only</small></label>
-  <label><small>Category
+  {{if eq .Mode "search"}}
+  <label class="ib-sel"><span>Category</span>
     <select name="category" data-autosubmit>
       <option value="">All categories</option>
-      {{range .Categories}}<option value="{{.ID}}"{{if eq .ID $.CategoryID}} selected{{end}}>{{.Name}}</option>{{end}}
-    </select></small></label>
-  {{if .CategoryID}}<label><small>Group
+      {{range .Categories}}<option value="{{.ID}}"{{if and $.CategoryID (eq .ID $.CategoryID)}} selected{{end}}>{{.Name}}</option>{{end}}
+    </select></label>
+  {{if .CategoryID}}<label class="ib-sel"><span>Group</span>
     <select name="group" data-autosubmit>
       <option value="">All groups</option>
-      {{range .Groups}}<option value="{{.ID}}"{{if eq .ID $.GroupID}} selected{{end}}>{{.Name}}</option>{{end}}
-    </select></small></label>{{end}}
+      {{range .Groups}}<option value="{{.ID}}"{{if and $.GroupID (eq .ID $.GroupID)}} selected{{end}}>{{.Name}}</option>{{end}}
+    </select></label>{{end}}
+  {{end}}
+  <label class="ib-check"><input type="checkbox" name="published" value="1" {{if eq .Mode "search"}}data-autosubmit{{else}}data-published-toggle{{end}}{{if .PublishedOnly}} checked{{end}}> Published items only</label>
   <button class="btn" type="submit">Search</button>
 </form>
 {{end}}

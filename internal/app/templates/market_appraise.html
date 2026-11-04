@@ -5,8 +5,9 @@
 
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
 
+<div class="l-page ap">
 {{with .Appraise}}
-<div class="ap-head">
+<div class="l-head ap-head">
   <p class="ap-intro"><small>Paste a list of items (a fit, a cargo scan, an asset window, a loot haul) and every line is priced from The Forge's swept prices and EveSynapse's own stored estimates. Each price says where it came from and when it was current. Lines that cannot be priced say so; nothing is filled in with a guess. Up to 1,000 lines at a time.</small></p>
   <div class="ap-samples">
     <span class="ap-samples-lbl">Load a sample paste:</span>
@@ -23,7 +24,7 @@
 </div>
 {{end}}
 <div class="ap-bench{{if and (not .Result) (not .Reprocess)}} solo{{end}}"{{if .Result}} data-ap-view="result"{{end}}>
-<section class="box ap-form">
+<section class="l-panel ap-form">
   <form method="post" action="/market/appraise/">
     <div class="ap-chips" aria-hidden="true">
       <span class="ap-chip">Cargo / Assets</span>
@@ -102,7 +103,7 @@ Pyerite 250000</pre>
 {{$r := .Result}}
 <div class="ap-right">
 {{if or $r.Created $r.Shared}}
-<div class="box ap-linkbar">
+<div class="l-panel ap-linkbar">
   <div class="ap-linkmain">{{if $r.Shared}}<span class="ap-priced">Shared appraisal, priced {{$r.Created}}. Prices are the ones stored when it was run; they are not recomputed here.</span>{{else}}<span class="ap-priced">Priced {{$r.Created}}</span> <span class="ap-sharebox"><a class="ap-shareurl" href="{{$r.ShareURL}}">{{$r.ShareURL}}</a><button class="btn small" type="button" data-copy data-copy-text="{{$r.ShareURL}}">Copy link</button></span>{{end}}</div>
   <div class="ap-linkacts">
     {{if $r.RepriceURL}}<form class="ap-reprice" method="post" action="{{$r.RepriceURL}}">
@@ -117,22 +118,22 @@ Pyerite 250000</pre>
 {{end}}
 
 <div class="ap-hud">
-  <div class="box ap-card hero">
+  <div class="l-panel ap-card hero">
     <div class="ap-ck"><span>{{$r.BasisLabel}}</span><button class="ap-copybtn" type="button" data-copy data-copy-text="{{$r.TotalRaw}}" title="Copy total" aria-label="Copy total"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg></button></div>
     <div class="ap-cv">{{$r.TotalValue}} ISK</div>
     <div class="ap-cs"><span>{{$r.CompactTotal}} ISK</span>{{if ne $r.Basis.Percent 100.0}}<span class="ap-pctflag">@ {{$r.Basis.Percent}}% basis</span>{{end}}</div>
   </div>
-  <div class="box ap-card"{{if $r.BuyRaw}} data-ap-buy-raw="{{$r.BuyRaw}}"{{end}}>
+  <div class="l-panel ap-card"{{if $r.BuyRaw}} data-ap-buy-raw="{{$r.BuyRaw}}"{{end}}>
     <div class="ap-ck"><span>Typical buy value</span>{{if $r.BuyRaw}}<button class="ap-copybtn" type="button" data-copy data-copy-text="{{$r.BuyRaw}}" title="Copy buy total" aria-label="Copy buy total"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg></button>{{end}}</div>
     <div class="ap-cv">{{if $r.BuyValue}}{{$r.BuyValue}} ISK{{else}}—{{end}}</div>
     <div class="ap-cs">{{if $r.BuyRatio}}Buy/Sell ratio: <span class="ap-accent">{{$r.BuyRatio}}</span>{{else if not $r.BuyValue}}No typical buys on the priced lines{{end}}</div>
   </div>
-  <div class="box ap-card">
+  <div class="l-panel ap-card">
     <div class="ap-ck"><span>Total cargo volume</span></div>
     <div class="ap-cv">{{if $r.TotalVol}}{{$r.TotalVol}} m³{{else}}—{{end}}</div>
     <div class="ap-cs">{{if $r.ISKPerM3}}<span class="ap-accent">{{$r.ISKPerM3}} ISK/m³</span>{{end}}</div>
   </div>
-  <div class="box ap-card">
+  <div class="l-panel ap-card">
     <div class="ap-ck"><span>Line coverage</span></div>
     <div class="ap-cv">{{if eq $r.Priced $r.Total}}<span class="ap-good">✓</span>{{else}}<span class="ap-warn">⚠</span>{{end}} {{$r.Priced}} of {{$r.Total}} lines</div>
     <div class="ap-cs">{{$r.CoverageSub}}</div>
@@ -142,7 +143,7 @@ Pyerite 250000</pre>
 <p class="ap-coverage">Priced {{$r.Priced}} of {{$r.Total}} lines{{if $r.TierMix}} · {{$r.TierMix}}{{end}}{{if $r.BasisText}}<br><small>{{$r.BasisText}}</small>{{end}}{{if $r.BuyValue}}<br><small>Buying those lines at {{$r.Basis.HubName}}'s typical buy prices comes to {{$r.BuyValue}} ISK (typical buys on {{$r.BuyLines}} of the priced lines).</small>{{end}}</p>
 
 {{if $r.HubStrip}}
-<div class="box ap-hubpanel">
+<div class="l-panel ap-hubpanel">
   <span class="ap-hubstrip-label">At each hub's typical sell:</span>
   <div class="ap-hubs">{{range $r.HubStrip}}<form class="ap-hubform" method="post" action="{{$r.RepriceURL}}"><input type="hidden" name="hub" value="{{.RegionID}}"><button class="{{.BtnClass}}" type="submit">{{.Hub}} {{.Total}} ISK{{if .Delta}} <span class="ap-hub-delta">({{.Delta}})</span>{{end}}</button></form>{{end}}</div>
 </div>
@@ -150,7 +151,7 @@ Pyerite 250000</pre>
 
 {{if .Reprocess}}
 {{with $rp := .Reprocess}}
-<section class="box ap-result ap-reprocess">
+<section class="l-panel ap-result ap-reprocess">
   <div class="ap-reshead">
     <div class="seg ap-vtabs">
       <a href="{{$rp.BackURL}}">Itemized appraisal</a>
@@ -192,7 +193,7 @@ Pyerite 250000</pre>
 </section>
 {{end}}
 {{else}}
-<section class="box ap-result">
+<section class="l-panel ap-result">
   <div class="ap-reshead">
     <div class="seg ap-vtabs" role="tablist" aria-label="Result views" data-tabs hidden>
       <button type="button" role="tab" id="ap-tab-items" aria-controls="ap-panel-items" aria-selected="true">Itemized appraisal ({{len $r.Lines}})</button>
@@ -226,7 +227,7 @@ Pyerite 250000</pre>
   <p><strong>These lines could not be priced:</strong></p>
   <ul class="ap-unresolved">
   {{range $r.Unresolved}}
-    <li>{{.Text}}{{if gt .Qty 1}} × {{.Qty}}{{end}} — {{.Reason}}{{if .Suggestion}} Did you mean <em>{{.Suggestion}}</em>?{{end}}</li>
+    <li>{{.Text}}{{if gt .Qty 1}} × {{.Qty}}{{end}}: {{.Reason}}{{if .Suggestion}} Did you mean <em>{{.Suggestion}}</em>?{{end}}</li>
   {{end}}
   </ul>
   {{end}}
@@ -255,7 +256,7 @@ Pyerite 250000</pre>
 </div>
 
 {{if .Saved}}
-<section class="box ap-saved">
+<section class="l-panel ap-saved">
   <div class="ap-saved-head">
     <h3 class="ap-saved-title">{{if .SignedIn}}Your appraisals{{else}}Your recent appraisals{{end}} ({{len .Saved}} stored)</h3>
     <label class="ap-hidefailed"><input type="checkbox" data-ap-hidefailed> Hide 0.00 ISK failed pastes</label>
@@ -281,4 +282,5 @@ Pyerite 250000</pre>
 {{end}}
 
 {{end}}
+</div>
 {{end}}

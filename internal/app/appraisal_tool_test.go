@@ -170,8 +170,8 @@ Unknown Item XYZ x 3`}})
 	// The form rides the shared box kit with its label above the
 	// textarea.
 	mustContain(t, "anonymous appraisal form", body,
-		`<section class="box ap-form">`, `<label class="ap-label" for="ap-items">Items to appraise</label>`,
-		`<section class="box ap-result">`)
+		`<section class="l-panel ap-form">`, `<label class="ap-label" for="ap-items">Items to appraise</label>`,
+		`<section class="l-panel ap-result">`)
 	// The workbench's telemetry cards carry the same figures:
 	// the hero at the appraisal's basis, the buy total with its
 	// ratio, volume and coverage.

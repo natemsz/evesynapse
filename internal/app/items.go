@@ -55,6 +55,8 @@ type itemTypeRow struct {
 	Name      string
 	OnMarket  bool
 	Published bool
+	IconURL   string // the type's picture, by its category
+	Hidden    bool   // unpublished under the published-only switch
 }
 
 // itemSearchRow is one global-search hit: the type plus where
@@ -68,6 +70,8 @@ type itemSearchRow struct {
 	CategoryName string
 	OnMarket     bool
 	Published    bool
+	IconURL      string // the type's picture, by its category
+	Hidden       bool   // never: the search filters on the server
 }
 
 // itemSearchSection is one Category › Group heading with the matching
@@ -104,7 +108,17 @@ func groupSearchRows(rows []itemSearchRow) []itemSearchSection {
 type itemsView struct {
 	Mode string // "categories" | "category" | "group" | "type" | "search"
 
-	Categories []itemCategoryRow
+	// Categories is the browse tree's top level, with counts: the
+	// console's directory on every browse and search view.
+	// AllTypes and AllPublished total it for the page head.
+	Categories   []itemCategoryRow
+	AllTypes     string
+	AllPublished string
+
+	// Featured is the top level's shortcut row on a wide page:
+	// the categories players open most, in that order, those the
+	// static data has.
+	Featured []itemCategoryRow
 
 	Category *itemCategoryRow
 	Groups   []itemGroupRow
@@ -133,6 +147,26 @@ type itemsView struct {
 	// TypeDetail is the Mode "type" body: one item's details
 	// page, the target of every item link in the app.
 	TypeDetail *itemTypeDetail
+}
+
+// DirCategoryID is the category the console's directory marks:
+// the open category, the open group's category, or the search's
+// category filter (0 for none).
+func (v *itemsView) DirCategoryID() int64 {
+	if v.Category != nil {
+		return v.Category.ID
+	}
+	return v.CategoryID
+}
+
+// Depth is the console depth the page renders: the category list
+// alone is the top level (0); a category, a group or a search is
+// one level in (1).
+func (v *itemsView) Depth() int {
+	if v.Mode == "categories" {
+		return 0
+	}
+	return 1
 }
 
 // itemTypeDetail is one item's details page: identity, guide
@@ -189,6 +223,12 @@ type itemTypeDetail struct {
 	// and warm the same way.
 	Hubs        []publicHubPrice
 	HistoryView *marketItem
+
+	// BuyAt and SellAt are the hubs with the lowest best sell (where
+	// to buy) and the highest best buy (where to sell), nil when no
+	// hub quotes that side.
+	BuyAt  *publicHubPrice
+	SellAt *publicHubPrice
 }
 
 type itemUsedInRow struct {
@@ -266,23 +306,51 @@ func (app *Application) handleItems(w http.ResponseWriter, r *http.Request) {
 	data := app.itemsPageData(r)
 	view := &itemsView{Mode: "categories"}
 	view.PublishedOnly = publishedOnlyParam(q)
-
-	rows, err := app.queries.ListSDECategoriesWithCounts(ctx)
-	if err != nil {
-		logging.Errorf("items: list categories: %v", err)
+	if err := app.loadItemCategories(ctx, view); err != nil {
 		data.Error = "Item database unavailable right now. Check the server log."
-	} else {
-		for _, row := range rows {
-			view.Categories = append(view.Categories, itemCategoryRow{
-				ID: row.CategoryID, Name: row.Name, Types: esi.FormatInt(row.TypeCount),
-				Published: row.PublishedCount, PublishedTypes: esi.FormatInt(row.PublishedCount),
-			})
-		}
 	}
 	data.Items = view
 	data.HeadMeta = app.itemsHeadMeta(view)
 	app.render(ctx, w, http.StatusOK, "items.html", data)
 }
+
+// loadItemCategories fills the browse tree's top level, with its
+// counts and their totals, into the view: the console directory
+// every browse and search view shows.
+func (app *Application) loadItemCategories(ctx context.Context, view *itemsView) error {
+	rows, err := app.queries.ListSDECategoriesWithCounts(ctx)
+	if err != nil {
+		logging.Errorf("items: list categories: %v", err)
+		return err
+	}
+	var all, pub int64
+	for _, row := range rows {
+		view.Categories = append(view.Categories, itemCategoryRow{
+			ID: row.CategoryID, Name: row.Name, Types: esi.FormatInt(row.TypeCount),
+			Published: row.PublishedCount, PublishedTypes: esi.FormatInt(row.PublishedCount),
+		})
+		all += row.TypeCount
+		pub += row.PublishedCount
+	}
+	view.AllTypes = esi.FormatInt(all)
+	view.AllPublished = esi.FormatInt(pub)
+	if view.Mode == "categories" {
+		byName := make(map[string]itemCategoryRow, len(view.Categories))
+		for _, c := range view.Categories {
+			byName[c.Name] = c
+		}
+		for _, name := range featuredItemCategories {
+			if c, ok := byName[name]; ok {
+				view.Featured = append(view.Featured, c)
+			}
+		}
+	}
+	return nil
+}
+
+// featuredItemCategories are the categories the browser's top
+// level offers first, by SDE name.
+var featuredItemCategories = []string{"Ship", "Module", "Charge", "Drone", "Implant", "Skill", "Blueprint", "Material", "Commodity", "Planetary Commodities", "Structure", "Deployable"}
 
 // handleItemsSearch renders the global item search: a name
 // substring over the whole local type table, narrowable to
@@ -316,16 +384,9 @@ func (app *Application) handleItemsSearch(w http.ResponseWriter, r *http.Request
 		view.Page = p
 	}
 
-	// Filter options: every category, and the chosen category's
-	// groups. Counts ride along from the browse queries; the
-	// selects only need names.
-	if rows, err := app.queries.ListSDECategoriesWithCounts(ctx); err == nil {
-		for _, row := range rows {
-			view.Categories = append(view.Categories, itemCategoryRow{ID: row.CategoryID, Name: row.Name})
-		}
-	} else {
-		logging.Errorf("items: search categories: %v", err)
-	}
+	// Filter options and the console directory: every category
+	// (with its counts), and the chosen category's groups.
+	_ = app.loadItemCategories(ctx, view)
 	if view.CategoryID > 0 {
 		if rows, err := app.queries.ListSDEGroupsInCategory(ctx, view.CategoryID); err == nil {
 			for _, row := range rows {
@@ -377,6 +438,7 @@ func (app *Application) handleItemsSearch(w http.ResponseWriter, r *http.Request
 				GroupID: row.GroupID, GroupName: row.GroupName,
 				CategoryID: row.CategoryID, CategoryName: row.CategoryName,
 				OnMarket: row.MarketGroupID > 0, Published: row.Published > 0,
+				IconURL: contracts.TypeCategoryIconURL(row.TypeID, row.CategoryID, 64),
 			})
 		}
 		view.SearchSections = groupSearchRows(view.SearchResults)
@@ -404,6 +466,7 @@ func (app *Application) handleItemsCategory(w http.ResponseWriter, r *http.Reque
 	}
 	view.Category = &itemCategoryRow{ID: cat.CategoryID, Name: cat.Name}
 	view.PublishedOnly = publishedOnlyParam(r.URL.Query())
+	_ = app.loadItemCategories(ctx, view)
 
 	grows, gerr := app.queries.ListSDEGroupsInCategory(ctx, categoryID)
 	if gerr != nil {
@@ -443,6 +506,7 @@ func (app *Application) handleItemsGroup(w http.ResponseWriter, r *http.Request)
 	if cat, err := app.queries.GetSDECategory(ctx, grp.CategoryID); err == nil {
 		view.Category = &itemCategoryRow{ID: cat.CategoryID, Name: cat.Name}
 	}
+	_ = app.loadItemCategories(ctx, view)
 
 	q := r.URL.Query()
 	view.Query = q.Get("q")
@@ -487,6 +551,8 @@ func (app *Application) handleItemsGroup(w http.ResponseWriter, r *http.Request)
 		for _, row := range rows {
 			view.Types = append(view.Types, itemTypeRow{
 				ID: row.TypeID, Name: row.Name, OnMarket: row.MarketGroupID > 0, Published: row.Published > 0,
+				IconURL: contracts.TypeCategoryIconURL(row.TypeID, grp.CategoryID, 64),
+				Hidden:  view.PublishedOnly && row.Published == 0,
 			})
 		}
 	}
@@ -591,6 +657,15 @@ func (app *Application) handleItemType(w http.ResponseWriter, r *http.Request) {
 	if detail.OnMarket {
 		hubs, forge := app.publicTypeMarket(ctx, typeID)
 		detail.Hubs = hubs
+		for i := range hubs {
+			h := &hubs[i]
+			if h.sell > 0 && (detail.BuyAt == nil || h.sell < detail.BuyAt.sell) {
+				detail.BuyAt = h
+			}
+			if h.buy > 0 && (detail.SellAt == nil || h.buy > detail.SellAt.buy) {
+				detail.SellAt = h
+			}
+		}
 		if forge <= 0 {
 			// No swept stats anywhere yet: chart the default
 			// region like the Market page does, so the section

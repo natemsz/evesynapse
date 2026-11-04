@@ -58,7 +58,7 @@ func TestItemsSearchKeepsCategorisation(t *testing.T) {
 	// One heading per group, categories alphabetical (Far Category
 	// before Fixture Category), groups alphabetical within.
 	order := []string{
-		`<h3 class="item-section"><a href="/items/category/901/">Far Category</a> › <a href="/items/group/930/">Far Group</a></h3>`,
+		`<h3 class="item-section ib-sub"><a href="/items/category/901/">Far Category</a> › <a href="/items/group/930/">Far Group</a></h3>`,
 		`<a href="/items/category/900/">Fixture Category</a> › <a href="/items/group/910/">Fixture Minerals</a></h3>`,
 		`<a href="/items/category/900/">Fixture Category</a> › <a href="/items/group/920/">Fixture Ores</a></h3>`,
 	}

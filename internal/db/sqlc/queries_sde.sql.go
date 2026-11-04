@@ -1172,6 +1172,40 @@ func (q *Queries) ListSDEBlueprintProducts(ctx context.Context) ([]ListSDEBluepr
 	return items, nil
 }
 
+const listSDEBlueprintProductsForBlueprints = `-- name: ListSDEBlueprintProductsForBlueprints :many
+SELECT blueprint_type_id, product_type_id FROM sde_blueprints
+WHERE blueprint_type_id = ANY($1::bigint[])
+ORDER BY blueprint_type_id
+`
+
+type ListSDEBlueprintProductsForBlueprintsRow struct {
+	BlueprintTypeID int64 `json:"blueprint_type_id"`
+	ProductTypeID   int64 `json:"product_type_id"`
+}
+
+func (q *Queries) ListSDEBlueprintProductsForBlueprints(ctx context.Context, blueprintIds []int64) ([]ListSDEBlueprintProductsForBlueprintsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listSDEBlueprintProductsForBlueprints, pq.Array(blueprintIds))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListSDEBlueprintProductsForBlueprintsRow
+	for rows.Next() {
+		var i ListSDEBlueprintProductsForBlueprintsRow
+		if err := rows.Scan(&i.BlueprintTypeID, &i.ProductTypeID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listSDEBlueprintSkills = `-- name: ListSDEBlueprintSkills :many
 SELECT skill_type_id, level FROM sde_blueprint_skills
 WHERE blueprint_type_id = $1

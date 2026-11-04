@@ -361,6 +361,10 @@ LIMIT 100;
 SELECT COUNT(*) FROM sde_blueprints;
 -- name: ListSDEBlueprintProducts :many
 SELECT blueprint_type_id, product_type_id FROM sde_blueprints;
+-- name: ListSDEBlueprintProductsForBlueprints :many
+SELECT blueprint_type_id, product_type_id FROM sde_blueprints
+WHERE blueprint_type_id = ANY(sqlc.arg(blueprint_ids)::bigint[])
+ORDER BY blueprint_type_id;
 -- name: GetSDEBlueprintForProduct :one
 SELECT blueprint_type_id, product_type_id, product_quantity, max_production_limit, manufacturing_time_seconds
 FROM sde_blueprints

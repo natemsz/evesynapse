@@ -5,19 +5,23 @@
 
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
 
-{{template "charselector" .ContactsChars}}
+<div class="l-page">
+<div class="l-head">
+  <div class="l-head-pick">{{template "charselector" .ContactsChars}}</div>
+  {{if .Contacts}}<p class="l-head-sum"><b>{{.Contacts.CharacterName}}</b></p>{{end}}
+</div>
 
 {{if .Contacts}}
-<h2>{{.Contacts.CharacterName}}</h2>
 
 {{if .Contacts.Contacts.Note}}
 <p><small>{{.Contacts.Contacts.Note}}</small></p>
 {{else if .Contacts.Contacts.Warming}}
 <p><small>Still syncing.{{if .IsAdmin}} Progress is on the <a href="/admin/sync/">Sync page</a>.{{end}}</small></p>
 {{else if .Contacts.Rows}}
+<section class="l-panel ct-list">
 <div class="tw">
-<table>
-  <thead><tr><th>Contact</th><th>Kind</th><th>Standing</th><th></th></tr></thead>
+<table class="ct-table">
+  <thead><tr><th class="card-title">Contact</th><th>Kind</th><th>Standing</th><th></th></tr></thead>
   <tbody>
   {{range .Contacts.Rows}}
     <tr><td>{{if .IsChar}}{{if .NamePending}}<span data-live-region data-poll-url="{{.PollURL}}" data-poll-state="pending"><span class="loading-pulse" aria-hidden="true"></span> Loading name for {{.Name}}…</span>{{else}}{{charLink $.ViewerChars .ID .Name}}{{end}}{{else if eq .Kind "corporation"}}{{corpLink .ID .Name}}{{else if eq .Kind "alliance"}}{{allianceLink .ID .Name}}{{else}}{{.Name}}{{end}}</td><td>{{.Type}}</td><td>{{.Standing}}</td><td>{{if .Blocked}}Blocked{{else if .Watched}}Watched{{end}}</td></tr>
@@ -26,10 +30,12 @@
 </table>
 </div>
 <p><small>Standings run −10.0 (terrible) to +10.0 (excellent). EveSynapse only reads your contacts; change them in game.</small></p>
+</section>
 {{else}}
 <p><small>No contacts in the latest snapshot.</small></p>
 {{end}}
 {{else}}
 <p>No character to show yet. Link a character first.</p>
 {{end}}
+</div>
 {{end}}

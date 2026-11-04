@@ -215,6 +215,7 @@
   background: var(--row-alt); border-bottom: 1px solid var(--box-edge);
   border-radius: var(--r-md) var(--r-md) 0 0;
 }
+.ap-vtabs { flex-wrap: wrap; max-width: 100%; }
 .ap-vtabs > * { background: var(--row-alt); }
 .ap-vtabs > *:hover { background: var(--row-hover); }
 .ap-vtabs > .on, .ap-vtabs > [aria-selected="true"] { background: var(--accent); color: #16100b; }

@@ -60,7 +60,7 @@ func TestKillboardSurfacesCarryTheFullGlass(t *testing.T) {
 			t.Errorf("killboard.css missing figure rule %q", want)
 		}
 	}
-	if want := `.kp-value-v { font-family: var(--font-num); font-size: 1.7rem; font-weight: 600;`; !strings.Contains(kp, want) {
+	if want := `.kp-value-v { font-family: var(--font-num); font-size: var(--fs-4xl); font-weight: 600;`; !strings.Contains(kp, want) {
 		t.Errorf("kill.css missing figure rule %q", want)
 	}
 

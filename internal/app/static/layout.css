@@ -382,12 +382,15 @@ html[data-theme="light"] .subnav { background: color-mix(in srgb, var(--panel) 8
 /* Stat tile: a labelled figure with a line under it. A tile that
    links filters the page; .on marks the filter in force. Rows of
    them sit in .l-tiles. */
-.l-stat { display: flex; flex-direction: column; gap: 0.2rem; min-width: 0; padding: var(--space-3) var(--space-4); border: 1px solid var(--hairline); border-radius: var(--r-md); background: var(--surface-inset); color: var(--text); text-decoration: none; }
+.l-stat { display: flex; flex-direction: column; gap: 0.2rem; min-width: 0; padding: var(--space-3) var(--space-4); border: 1px solid var(--hairline); border-radius: var(--r-md); background: var(--surface-inset); color: var(--text); text-decoration: none; container-type: inline-size; }
 a.l-stat:hover { border-color: color-mix(in srgb, var(--accent) 45%, transparent); text-decoration: none; }
 .l-stat.on { border-color: var(--sel-edge); background: var(--sel-bg); }
 .l-stat-label { color: var(--muted); font-family: var(--font-display); font-size: var(--fs-sm); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
-.l-stat-value { font-family: var(--font-num); font-size: var(--fs-4xl); font-weight: 700; line-height: 1.1; color: var(--text-bright); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
-.l-stat-value.text { font-family: var(--font-body); font-size: var(--fs-2xl); }
+/* Amounts size relative to their tile (cqw against the .l-stat
+   container above), capped at the display step: a bigger figure
+   shrinks to stay on one line instead of wrapping. */
+.l-stat-value { font-family: var(--font-num); font-size: var(--fs-4xl); font-size: clamp(var(--fs-sm), 9cqw, var(--fs-4xl)); font-weight: 700; line-height: 1.1; color: var(--text-bright); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.l-stat-value.text { font-family: var(--font-body); font-size: var(--fs-2xl); white-space: normal; }
 .l-stat-sub { color: var(--muted); font-size: var(--fs-md); }
 .l-stat.warn .l-stat-value { color: var(--gold); }
 .l-stat.ok .l-stat-value { color: var(--kept); }

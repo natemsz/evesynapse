@@ -3064,7 +3064,8 @@
     };
     var DATA_KEY = "evesynapse-map-data";
     var dataOn = {}, MINE = null, mineTimer = 0;
-    var dataBtn = el.querySelector("[data-map-data]"), dataMenu = el.querySelector(".map-data-menu");
+    var dataBtn = el.querySelector("[data-map-data]"), dataMenu = el.querySelector(".map-mine .map-data-menu");
+    var viewBtn = el.querySelector("[data-map-view]"), viewMenu = el.querySelector(".map-view-menu");
     (function () {
       var want = startQuery.get("data");
       if (want === null) { try { want = localStorage.getItem(DATA_KEY) || ""; } catch (e) { want = ""; } }
@@ -3502,29 +3503,37 @@
         schedule();
       }
     }
-    function toggleDataMenu(open) {
-      if (!dataMenu) return;
-      var show = open === undefined ? dataMenu.hidden : open;
-      dataMenu.hidden = !show;
-      dataBtn.setAttribute("aria-expanded", show ? "true" : "false");
-      // The map box clips what spills past it, so the menu opens
-      // toward the side with room (leftward when its button sits at
-      // the right end of the bar), and is never taller than the room
-      // left below its button; it scrolls instead.
+    // The bar's drop-down menus (Data, View): one open at a time.
+    // The map box clips what spills past it, so a menu opens toward
+    // the side with room (leftward when its button sits at the right
+    // end of the bar), and is never taller than the room left below
+    // its button; it scrolls instead.
+    function toggleMenu(btn, menu, open) {
+      if (!menu || !btn) return;
+      var show = open === undefined ? menu.hidden : open;
+      if (show) {
+        if (menu !== dataMenu) toggleDataMenu(false);
+        if (menu !== viewMenu) toggleViewMenu(false);
+      }
+      menu.hidden = !show;
+      btn.setAttribute("aria-expanded", show ? "true" : "false");
       if (show) {
         var box = el.getBoundingClientRect();
-        dataMenu.style.left = "0";
-        dataMenu.style.right = "auto";
-        if (dataMenu.getBoundingClientRect().right > box.right - 8) {
-          dataMenu.style.left = "auto";
-          dataMenu.style.right = "0";
+        menu.style.left = "0";
+        menu.style.right = "auto";
+        if (menu.getBoundingClientRect().right > box.right - 8) {
+          menu.style.left = "auto";
+          menu.style.right = "0";
         }
-        var room = Math.min(el.getBoundingClientRect().bottom, window.innerHeight) - dataMenu.getBoundingClientRect().top - 8;
-        dataMenu.style.maxHeight = Math.max(160, room) + "px";
+        var room = Math.min(el.getBoundingClientRect().bottom, window.innerHeight) - menu.getBoundingClientRect().top - 8;
+        menu.style.maxHeight = Math.max(160, room) + "px";
       }
     }
+    function toggleDataMenu(open) { toggleMenu(dataBtn, dataMenu, open); }
+    function toggleViewMenu(open) { toggleMenu(viewBtn, viewMenu, open); }
     function onDataOutside(e) {
-      if (dataMenu && !dataMenu.hidden && !e.target.closest(".map-data")) toggleDataMenu(false);
+      if (dataMenu && !dataMenu.hidden && !e.target.closest(".map-mine")) toggleDataMenu(false);
+      if (viewMenu && !viewMenu.hidden && !e.target.closest(".map-view")) toggleViewMenu(false);
     }
     // The route panel's pickers: ship, pilot, jump bridges.
     routeEl.addEventListener("change", function (e) {
@@ -3547,8 +3556,8 @@
       dataMenu.addEventListener("change", function (e) {
         if (e.target.type === "checkbox") setData(e.target.value, e.target.checked);
       });
-      root.addEventListener("click", onDataOutside);
     }
+    if (dataMenu || viewMenu) root.addEventListener("click", onDataOutside);
 
     // --- Search ---
     var hits = [], hitAt = -1;
@@ -3783,9 +3792,11 @@
 
     // --- Full screen ---
     // The map frame takes the whole screen: through the Fullscreen
-    // API where the browser has it for an element, and as a fixed
-    // frame over the page where it does not (iPhone Safari). Either
-    // way the frame wears .map-full, and the canvas follows its size.
+    // API where the browser has it for an element, and where it does
+    // not (iPhone Safari), as a manual popover in the top layer over
+    // the page. The page is a size container, so a fixed frame inside
+    // it would cover the page, not the screen. Either way the frame
+    // wears .map-full, and the canvas follows its size.
     var fullBtn = el.querySelector("[data-map-full]"), fullViaAPI = false;
     function fullscreenElement() { return root.fullscreenElement || root.webkitFullscreenElement || null; }
     function setFullClass(on) {
@@ -3797,19 +3808,30 @@
         fullBtn.title = on ? "Leave full screen (Shift F)" : "Full screen (Shift F)";
       }
     }
+    function topLayer(on) {
+      if (!el.showPopover) return;
+      if (on) {
+        if (!el.classList.contains("map-full")) return;
+        el.setAttribute("popover", "manual");
+        try { el.showPopover(); } catch (e) { /* already showing */ }
+      } else if (el.hasAttribute("popover")) {
+        try { el.hidePopover(); } catch (e) { /* already hidden */ }
+        el.removeAttribute("popover");
+      }
+    }
     function toggleFull(force) {
       var on = force === undefined ? !el.classList.contains("map-full") : force;
       setFullClass(on);
       if (on) {
         var req = el.requestFullscreen || el.webkitRequestFullscreen;
-        if (req) {
-          try {
-            var pr = req.call(el);
-            if (pr && pr.catch) pr.catch(function () { /* the fixed frame stands in */ });
-          } catch (e) { /* the fixed frame stands in */ }
-        }
-      } else if (fullscreenElement() === el) {
-        (root.exitFullscreen || root.webkitExitFullscreen).call(root);
+        if (!req) { topLayer(true); return; }
+        try {
+          var pr = req.call(el);
+          if (pr && pr.catch) pr.catch(function () { topLayer(true); });
+        } catch (e) { topLayer(true); }
+      } else {
+        topLayer(false);
+        if (fullscreenElement() === el) (root.exitFullscreen || root.webkitExitFullscreen).call(root);
       }
     }
     function onFullChange() {
@@ -4017,6 +4039,7 @@
       }
       if (t.closest("[data-map-full]")) { toggleFull(); return; }
       if (t.closest("[data-map-data]")) { toggleDataMenu(); return; }
+      if (t.closest("[data-map-view]")) { toggleViewMenu(); return; }
       if (t.closest(".map-data-menu")) return;
       if (t.closest("[data-map-shot]")) { takeShot(); return; }
       if (t.closest("[data-map-share]")) { shareMap(); return; }

@@ -20,8 +20,10 @@
       <button type="button" class="btn small map-full-btn" data-map-full aria-label="Full screen" aria-pressed="false" title="Full screen (Shift F)" disabled><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false"><path d="M2 6V2h4M10 2h4v4M14 10v4h-4M6 14H2v-4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
       <button type="button" class="btn small map-keys-btn" data-map-keys aria-label="Map controls" aria-expanded="false" aria-controls="map-keys" disabled>?</button>
     </div>
-    <label class="map-pref" title="When on, zooming deep into a region opens its tactical view. When off, click a region's name instead."><input type="checkbox" data-map-zoom-tactical disabled> Zoom to tactical</label>
-    <label class="map-pref" title="The universe in the game's own 2D layout, as the in-game map draws it. Turn it off for true 3D positions. Remembered until you change it."><input type="checkbox" data-map-proj disabled> Improved projection</label>
+    {{/* The map's own toggles, out of the bar's way: the reader's
+         view preferences (View), their channels' intel and their
+         own data. They sit beside the place crumbs on a narrow map. */}}
+    <div class="map-tools">
     {{/* The intel overlay: the reader's channels' reports over any
          layer. map.js shows it once it knows the reader has a
          channel; the badge counts systems with hostiles. */}}
@@ -30,7 +32,7 @@
          anything, and heat layers, one at a time, that color the
          systems in place of the layer picker. Signed-in readers only;
          map.js enables what applies and greys out what conflicts. */}}
-    {{if .Route.SignedIn}}<div class="map-data">
+    {{if .Route.SignedIn}}<div class="map-data map-mine">
       <button type="button" class="map-data-btn" data-map-data aria-expanded="false" aria-controls="map-data-menu">Data <span data-map-data-n></span></button>
       <div class="map-data-menu" id="map-data-menu" role="group" aria-label="Your data on the map" hidden>
         <fieldset>
@@ -56,6 +58,16 @@
         <p class="map-data-note muted">Heat layers color the systems, one at a time, in place of the layers above. Pins combine with everything.</p>
       </div>
     </div>{{end}}
+    <div class="map-data map-view">
+      <button type="button" class="map-data-btn" data-map-view aria-expanded="false" aria-controls="map-view-menu">View</button>
+      <div class="map-data-menu map-view-menu" id="map-view-menu" role="group" aria-label="Map view" hidden>
+        <label><input type="checkbox" data-map-zoom-tactical disabled> Zoom to tactical</label>
+        <p class="map-data-note muted">Zooming deep into a region opens its tactical view. Off: click the region's name instead.</p>
+        <label><input type="checkbox" data-map-proj disabled> Improved projection</label>
+        <p class="map-data-note muted">The game's own 2D layout, as the in-game map draws it. Off: true 3D positions.</p>
+      </div>
+    </div>
+    </div>
     {{/* The layer picker: what the map colors by. Security needs
          no live data; the rest unlock once the layers payload has
          loaded (map.js). */}}

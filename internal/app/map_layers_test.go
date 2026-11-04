@@ -108,6 +108,14 @@ func TestMapPageNamesLayers(t *testing.T) {
 	if body := page(); strings.Contains(body, "data-layers=") || !strings.Contains(body, `data-map-layer="sov"`) {
 		t.Errorf("before layers: no URL, picker present")
 	}
+	// The page is on the layout framework, and the view preferences
+	// live in the bar's View menu.
+	body := page()
+	for _, want := range []string{`class="l-page map-page"`, `data-map-view`, `id="map-view-menu"`, `data-map-zoom-tactical`, `data-map-proj`, `class="map-index l-panel"`} {
+		if !strings.Contains(body, want) {
+			t.Errorf("the map page must render %s", want)
+		}
+	}
 	if err := q.UpsertGlobalSnapshot(ctx, db.UpsertGlobalSnapshotParams{
 		Kind: esi.GlobalSystemJumps, Payload: `[{"system_id":30000142,"ship_jumps":10}]`,
 		FetchedAt: time.Now().UTC(), CachedUntil: time.Now().UTC().Add(time.Hour),

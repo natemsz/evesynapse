@@ -4,7 +4,11 @@
 {{define "content"}}
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
 {{with .ProfitBlueprint}}
-<p><small><a href="{{.Back}}">Back to Profit Analysis</a>. Each delivered job, what it made and what became of it. Sales are matched to a job's output oldest first; where that isn't right, say what happened.</small></p>
+<div class="l-page">
+<div class="l-head">
+  <p class="l-head-sum"><a href="{{.Back}}">Back to Profit Analysis</a></p>
+</div>
+<p><small>Each delivered job, what it made and what became of it. Sales are matched to a job's output oldest first; where that isn't right, say what happened.</small></p>
 {{if .KillLost}}<p class="pf-note"><small>Your killmails show {{.KillLost}} of this item lost since these jobs delivered; {{.KillMarked}} are marked lost here. Mark any that were from these jobs below.</small></p>{{end}}
 {{if .Jobs}}
 <div class="tw">
@@ -60,5 +64,6 @@
 {{else}}
 <p><small>No delivered jobs for this blueprint in these books.</small></p>
 {{end}}
+</div>
 {{end}}
 {{end}}

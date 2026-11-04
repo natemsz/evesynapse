@@ -264,9 +264,10 @@ td.mt-reqs { max-width: 12rem; }
 .pf-sw.pf-roll { background: var(--accent); height: 3px; }
 .pf-sw.pf-gap { background: repeating-linear-gradient(45deg, var(--unverified) 0 2px, transparent 2px 5px); }
 
-/* Phones: the plots keep a readable height instead of their desktop
-   proportions, and the legends wrap tighter. */
-@media (max-width: 640px) {
+/* Narrow pages: the plots keep a readable height instead of their
+   desktop proportions, and the legends wrap tighter. Profit sits on
+   the layout framework, so these read the page's own width. */
+@container page (width < 40rem) {
   .pf-chart .pchart svg { height: 150px; }
   .pf-chart .pchart svg.pf-short { height: 75px; }
   .pf-chart .chart-legend { gap: 0.15rem 0.6rem; font-size: 0.72rem; }
@@ -279,7 +280,7 @@ td.mt-reqs { max-width: 12rem; }
    with a swatch per row. */
 .pf-charts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.25rem 1.75rem; }
 .pf-charts > .pf-cell:last-child:nth-child(odd) { grid-column: 1 / -1; }
-@media (max-width: 1100px) { .pf-charts { grid-template-columns: minmax(0, 1fr); } }
+@container page (width < 62rem) { .pf-charts { grid-template-columns: minmax(0, 1fr); } }
 .pf-modes-grain { margin-top: -0.3rem; }
 /* The profit module's head rows: the character selector with the
    counted-rules gear at its right, lined up with it; the span and
@@ -312,10 +313,10 @@ td.mt-reqs { max-width: 12rem; }
 .ctip .ctip-sw { width: 0.6rem; height: 0.6rem; border-radius: 2px; flex: none; }
 .ctip .ctip-val { margin-left: auto; padding-left: 0.9rem; font-variant-numeric: tabular-nums; }
 .pf-act-grid { display: grid; grid-template-columns: minmax(0, 1fr) 18.75rem; gap: 1rem 1.5rem; align-items: start; }
-@media (max-width: 900px) { .pf-act-grid { grid-template-columns: minmax(0, 1fr); } }
+@container page (width < 52rem) { .pf-act-grid { grid-template-columns: minmax(0, 1fr); } }
 .pf-card { background: var(--panel); border: 1px solid var(--box-edge); border-radius: var(--r-md); padding: 0.8rem 0.9rem; }
 .pf-card h4 { margin: 0 0 0.5rem; font-size: 0.9rem; }
-@media (max-width: 640px) {
+@container page (width < 40rem) {
   .pf-chart .pchart svg { height: 150px; }
   .pf-chart .pchart svg.pf-short { height: 75px; }
 }
@@ -552,7 +553,7 @@ td.mt-reqs { max-width: 12rem; }
    efficiency panel and the small multiples around them. Colours
    come from the theme tokens only, the semantic four first. */
 .pf-hero svg { height: 208px; }
-@media (max-width: 640px) { .pf-hero svg { height: 168px; } }
+@container page (width < 40rem) { .pf-hero svg { height: 168px; } }
 .pf-hero .viz-head { flex-wrap: wrap; row-gap: 0.35rem; }
 .pf-hero-modes { display: flex; gap: 0.4rem; flex-wrap: wrap; justify-content: flex-end; margin-left: auto; }
 .pf-hero-modes .mt-modes { margin: 0; }

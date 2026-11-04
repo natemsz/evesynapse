@@ -21,7 +21,11 @@
 .ch-top { --l-side: 20rem; --l-main-min: 60%; align-items: start; }
 
 /* Forms: fields stack, full width, the submit under them. */
-.ch-form { display: flex; flex-direction: column; flex-wrap: nowrap; align-items: stretch; gap: var(--space-2); margin: 0; }
+/* nowrap is !important: phone.css lays out any #main-content form
+   that holds a labelled field as a wrapping row, and its id outranks
+   this sheet; a column form that wraps throws its button off the
+   card. */
+.ch-form { display: flex; flex-direction: column; flex-wrap: nowrap !important; align-items: stretch; gap: var(--space-2); margin: 0; }
 .ch .btn { max-width: 100%; white-space: normal; }
 .ch-form h2, .ch-form h3 { margin: 0 0 var(--space-1); }
 .ch-form .field, .ch-form .field input, .ch-form .field select, .ch-form .field textarea { width: 100%; max-width: none; margin: 0; }

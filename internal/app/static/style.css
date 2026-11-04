@@ -3943,6 +3943,8 @@ tbody tr.order-beaten td { background: color-mix(in srgb, var(--danger) 10%, tra
     min-height: 3.2rem;
     padding: 0.45rem 0.6rem;
   }
+  /* The sticky parking line follows the shorter phone bar. */
+  :root { --sticky-top: calc(3.2rem + env(safe-area-inset-top, 0px)); }
   .nav-hamburger {
     align-self: center;
     margin: 0;

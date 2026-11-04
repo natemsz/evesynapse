@@ -297,11 +297,14 @@ html[data-theme="light"] .subnav { background: color-mix(in srgb, var(--panel) 8
    where the console's panes sit side by side, keep them. */
 /* Two rules, not one list: :has() cannot nest, so the directory
    test runs down the console's own structure instead. */
+/* The hide is !important: stepping aside is the framework's call, and
+   it must win over a part's own display (phone.css lays filter forms
+   out from #main-content, which outranks any class). */
 @container page (width < 46rem) {
-  .l-page:has(.l-console:not([data-depth="0"]) > .l-panes > .l-pane--dir) .l-root { display: none; }
+  .l-page:has(.l-console:not([data-depth="0"]) > .l-panes > .l-pane--dir) .l-root { display: none !important; }
 }
 @container page (width < 46rem) {
-  .l-page:has(.l-console[data-depth="2"]) .l-root { display: none; }
+  .l-page:has(.l-console[data-depth="2"]) .l-root { display: none !important; }
 }
 
 /* Page head: the summary line, the scope control and the page's

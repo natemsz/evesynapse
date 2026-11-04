@@ -5517,10 +5517,12 @@
   }
 
   // A matrix row selects its item (the name link does the
-  // same); clicks on real controls inside the row pass. Wired on
-  // load and on every content swap, each row at most once.
+  // same); clicks on real controls inside the row pass. Any table
+  // row marked data-row-sel works the same way (the Spread
+  // Scanner's opportunities). Wired on load and on every content
+  // swap, each row at most once.
   function initMatrixRows(root) {
-    var rows = root.querySelectorAll(".amx-trow[data-sel]");
+    var rows = root.querySelectorAll(".amx-trow[data-sel], tr[data-row-sel][data-sel]");
     rows.forEach(function (row) {
       if (row.hasAttribute("data-sel-ready")) return;
       row.setAttribute("data-sel-ready", "1");

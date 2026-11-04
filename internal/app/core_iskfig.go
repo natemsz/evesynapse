@@ -4,6 +4,8 @@ import (
 	"html/template"
 	"strconv"
 	"strings"
+
+	"evesynapse/internal/humanize"
 )
 
 // The house money figure (the owner's format, 2026-10-30): a
@@ -91,27 +93,6 @@ func iskHero(formatted string) template.HTML { return iskFigure(formatted, true)
 
 // iskCompact writes an ISK amount short for tiles and directory
 // values: "312.4M", "1.27B", "940K". Pages built on the layout
-// framework use this one form.
-func iskCompact(v float64) string {
-	neg := v < 0
-	if neg {
-		v = -v
-	}
-	out := strconv.FormatFloat(v, 'f', 0, 64)
-	for _, u := range []struct {
-		div    float64
-		suffix string
-	}{{1e12, "T"}, {1e9, "B"}, {1e6, "M"}, {1e3, "K"}} {
-		if v >= u.div {
-			out = strconv.FormatFloat(v/u.div, 'f', 1, 64) + u.suffix
-			if v/u.div >= 100 {
-				out = strconv.FormatFloat(v/u.div, 'f', 0, 64) + u.suffix
-			}
-			break
-		}
-	}
-	if neg {
-		return "-" + out
-	}
-	return out
-}
+// framework use this one form (humanize.ISKCompact, shared with
+// the modules).
+func iskCompact(v float64) string { return humanize.ISKCompact(v) }

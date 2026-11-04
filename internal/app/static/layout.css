@@ -611,6 +611,12 @@ a.l-stat:hover { border-color: color-mix(in srgb, var(--accent) 45%, transparent
    minimum would otherwise be the table's own width, and the
    measured fit would compare the table with itself. */
 .tw { min-width: 0; max-width: 100%; }
+/* The table itself stops at its wrapper too: a collapsed-border
+   table at width: 100% can lay out a few pixels past its box, which
+   the measured fit would read as columns that do not fit. Columns
+   that really do not fit still push past it (a table never shrinks
+   below its content), so the fit still sees them. */
+.tw > table { max-width: 100%; }
 /* Key/value tables (th + td rows, no header row) inside a pane wrap
    their values in the column, the way they do on phones: a fact
    list never scrolls sideways. */

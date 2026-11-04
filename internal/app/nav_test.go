@@ -146,11 +146,12 @@ func TestSectionTabs(t *testing.T) {
 	mustContain(t, "character tabs", tabs, `href="/assets/?character=`+strconv.FormatInt(fixtureCharA, 10)+`"`)
 	mustContain(t, "sidebar", body, `<a href="/market/scanner/">Spread Scanner</a>`)
 
-	// A one-page section has no choice to offer: no tabs.
+	// Tools holds two pages, the Item Browser and Appraisal, and
+	// each page's strip offers the other.
 	_, body = getPage(t, app, cookie, "/items/")
-	if strings.Contains(body, `class="section-tabs"`) {
-		t.Error("the Item Browser shows section tabs")
-	}
+	tabs = sectionTabsBlock(t, body)
+	mustContain(t, "item browser tabs", tabs, `<a href="/items/" class="active" aria-current="page">Item Browser</a>`)
+	mustContain(t, "item browser tabs", tabs, `<a href="/market/appraise/">Appraisal / Multi-Sell</a>`)
 }
 
 // sectionTabsBlock returns a page's section tab strip.

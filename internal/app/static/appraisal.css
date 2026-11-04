@@ -16,7 +16,8 @@
   font-size: var(--fs-xs); color: var(--muted);
 }
 .ap-samplebtn {
-  font: inherit; font-size: var(--fs-xs); color: var(--text); cursor: pointer;
+  font: inherit; font-family: var(--font-display); font-synthesis-weight: none; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.06em; font-size: var(--fs-xs); color: var(--text); cursor: pointer;
   background: var(--row); border: 1px solid var(--box-edge);
   border-radius: var(--r-xs); padding: 0.3rem 0.6rem;
 }
@@ -32,7 +33,8 @@
    column its pricing fields stack one per row. */
 .ap-form { container: apform / inline-size; }
 .ap-label {
-  font-size: var(--fs-xs); font-weight: 700; letter-spacing: 0.06em;
+  font-family: var(--font-display); font-synthesis-weight: none; font-weight: 600;
+  font-size: var(--fs-2xs); letter-spacing: 0.06em;
   text-transform: uppercase; color: var(--muted);
 }
 .ap-chips {
@@ -40,7 +42,7 @@
   padding-bottom: 0.7rem; border-bottom: 1px solid var(--box-edge);
 }
 .ap-chip {
-  font-family: var(--font-num);
+  font-family: var(--font-display); font-synthesis-weight: none; font-weight: 600;
   font-size: var(--fs-2xs); text-transform: uppercase; letter-spacing: 0.04em;
   color: var(--muted); background: var(--row);
   border: 1px solid var(--box-edge); border-radius: var(--r-xs);
@@ -66,8 +68,8 @@
   padding: 0.14rem 0.45rem; white-space: nowrap;
 }
 .ap-clearlink {
-  font-family: var(--font-num);
-  font-size: var(--fs-xs); color: var(--muted);
+  font-family: var(--font-display); font-synthesis-weight: none; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.06em; font-size: var(--fs-2xs); color: var(--muted);
   background: none; border: none; padding: 0; cursor: pointer;
 }
 .ap-clearlink:hover { color: var(--text-bright); }
@@ -83,7 +85,7 @@
 .ap-drawer summary {
   display: flex; align-items: center; justify-content: space-between;
   gap: 0.6rem; padding: 0.55rem 0.8rem; cursor: pointer;
-  font-family: var(--font-num);
+  font-family: var(--font-display); font-synthesis-weight: none; font-weight: 600;
   font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: 0.05em;
   color: var(--muted); list-style: none;
 }
@@ -108,8 +110,8 @@
 }
 .ap-presets { display: inline-flex; flex-wrap: wrap; gap: 0.3rem; }
 .ap-preset {
-  font-family: var(--font-num);
-  font-size: var(--fs-2xs); color: var(--muted); cursor: pointer;
+  font-family: var(--font-display); font-synthesis-weight: none; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.04em; font-size: var(--fs-2xs); color: var(--muted); cursor: pointer;
   background: var(--row-alt); border: 1px solid var(--box-edge);
   border-radius: var(--r-xs); padding: 0.14rem 0.45rem;
 }

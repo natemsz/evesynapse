@@ -798,10 +798,10 @@ func TestPublicItemAndShipPages(t *testing.T) {
 		"The Rifter is a frigate.",
 		"Hub prices",
 		"The Forge", "Domain",
-		"Price history — The Forge",
+		"Price history, The Forge",
 		`<div class="pchart" data-chart-scrub="true">`,
 		`class="chart-line"`,
-		`class="item-lead"`,
+		`class="l-panel ib-desc`,
 		// The art tile leads with the type's render; the icon is
 		// named as the fallback for types that have no render.
 		"https://images.evetech.net/types/587/render?size=128",

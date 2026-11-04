@@ -1084,7 +1084,7 @@ func (app *Application) refreshGuidePrices(ctx context.Context) (stored bool, li
 		return false, false // still inside ESI's cache window
 	}
 
-	body, header, err := app.esi.FetchRaw(ctx, "", "/markets/prices/")
+	body, header, err := app.esi.FetchRawLong(ctx, "", "/markets/prices/")
 	if err != nil {
 		if errors.Is(err, esi.ErrErrorLimit) {
 			return false, true

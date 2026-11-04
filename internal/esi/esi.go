@@ -1859,9 +1859,10 @@ func (c *Client) FetchRaw(ctx context.Context, accessToken, path string) ([]byte
 // FetchRawLong is FetchRaw for bulk reads: the same request, error
 // budget and retry contract, but riding the bulk client
 // (SetBulkHTTPClient) so a large page on a slow route gets the long
-// bulk deadline instead of the shared client's 10s fast failure.
-// Small calls must keep FetchRaw; this path is for the region
-// sweep's whole-book pages.
+// bulk deadline and its own connections instead of the shared
+// client's 10s fast failure. Small calls must keep FetchRaw; this
+// path is for the large bodies: the region sweep's whole-book pages
+// and the /markets/prices/ guide.
 func (c *Client) FetchRawLong(ctx context.Context, accessToken, path string) ([]byte, http.Header, error) {
 	return c.requestLong(ctx, http.MethodGet, accessToken, path, nil, http.StatusOK)
 }

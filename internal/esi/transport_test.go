@@ -34,8 +34,15 @@ func (d *deadlineTransport) RoundTrip(req *http.Request) (*http.Response, error)
 // deadline, while an ordinary FetchRaw keeps the shared client's
 // 10s deadline.
 func TestFetchRawLongCarriesTheBulkDeadline(t *testing.T) {
-	if got := NewBulkHTTPClient().Timeout; got != 45*time.Second {
+	bulkClient := NewBulkHTTPClient()
+	if got := bulkClient.Timeout; got != 45*time.Second {
 		t.Errorf("bulk client timeout = %v, want 45s", got)
+	}
+	// ESI paces each connection on its own: bulk pages over one
+	// HTTP/2 connection queue behind each other until they time out,
+	// so the bulk transport stays on an HTTP/1.1 pool.
+	if tr, ok := bulkClient.Transport.(*http.Transport); !ok || tr.ForceAttemptHTTP2 || tr.TLSNextProto == nil || tr.MaxConnsPerHost != bulkMaxConns {
+		t.Error("bulk client must ride an HTTP/1.1 connection pool capped at bulkMaxConns")
 	}
 	if got := NewHTTPClient().Timeout; got != 10*time.Second {
 		t.Errorf("shared client timeout = %v, want 10s", got)

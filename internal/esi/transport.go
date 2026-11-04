@@ -1,6 +1,7 @@
 package esi
 
 import (
+	"crypto/tls"
 	"net"
 	"net/http"
 	"time"
@@ -47,16 +48,36 @@ func NewHTTPClient() *http.Client {
 }
 
 // bulkRequestTimeout is the overall deadline for a bulk read
-// (FetchRawLong): a whole-region market page is a few hundred KB,
-// and on a slow route several parallel pages share the link, so a
-// page legitimately needs far longer than the shared client's 10s
-// fast failure. Small calls keep the 10s deadline; only the bulk
-// read gets this one.
+// (FetchRawLong): a whole-region market page is a few hundred KB
+// before compression, and a slow route can stretch one well past the
+// shared client's 10s fast failure. Small calls keep the 10s
+// deadline; only the bulk read gets this one.
 const bulkRequestTimeout = 45 * time.Second
 
+// bulkMaxConns caps the bulk client's connections to ESI: the
+// region sweep's page windows across the hub regions (5 regions at
+// up to sweepPageWindow pages) plus the guide-price read, with room
+// to spare and no more.
+const bulkMaxConns = 32
+
 // NewBulkHTTPClient builds the HTTP client bulk ESI reads ride: the
-// same tuned transport as NewHTTPClient, with the long bulk
-// deadline (bulkRequestTimeout) in place of the 10s one.
+// tuned transport of NewHTTPClient on HTTP/1.1 with a pool of up to
+// bulkMaxConns connections, and the long bulk deadline
+// (bulkRequestTimeout) in place of the 10s one. ESI paces each
+// connection on its own (measured from the app host: 30 whole-book
+// pages over one HTTP/2 connection took 17s together, 29 of them
+// past 10s; over a pool, 2 to 3s with none past 10s), so parallel
+// pages need parallel connections. Bulk reads on their own
+// connections also stop starving the shared client's small calls.
 func NewBulkHTTPClient() *http.Client {
-	return &http.Client{Timeout: bulkRequestTimeout, Transport: newESITransport()}
+	transport := newESITransport()
+	// HTTP/1.1, one connection per request in flight: ESI paces
+	// each connection on its own, and over HTTP/2 every bulk page
+	// shares one connection's pace. An empty TLSNextProto keeps
+	// the transport off HTTP/2 even where the server offers it.
+	transport.ForceAttemptHTTP2 = false
+	transport.TLSNextProto = map[string]func(string, *tls.Conn) http.RoundTripper{}
+	transport.MaxConnsPerHost = bulkMaxConns
+	transport.MaxIdleConnsPerHost = bulkMaxConns
+	return &http.Client{Timeout: bulkRequestTimeout, Transport: transport}
 }

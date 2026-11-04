@@ -53,6 +53,24 @@ const (
 	defaultUserAgent = "EveSynapse (+https://github.com/natemsz/evesynapse)"
 )
 
+// SetBulkHTTPClient installs the HTTP client bulk reads
+// (FetchRawLong) ride: the same tuned transport as the shared
+// client, with the long bulk deadline (see NewBulkHTTPClient).
+// Without one, bulk reads ride the shared client and its fast
+// deadline. Call it once, before the client is used.
+func (c *Client) SetBulkHTTPClient(client *http.Client) {
+	c.bulkHTTP = client
+}
+
+// bulkClient is the HTTP client a bulk read rides: the installed
+// bulk client, or the shared one when none was installed.
+func (c *Client) bulkClient() *http.Client {
+	if c.bulkHTTP != nil {
+		return c.bulkHTTP
+	}
+	return c.http
+}
+
 // SetUserAgent sets the User-Agent sent with every ESI request.
 // CCP asks third-party applications to say what they are and how
 // to reach whoever runs them, so that a misbehaving client gets a
@@ -302,10 +320,11 @@ type Client struct {
 	// no sleeping.
 	RetryBackoffs []time.Duration
 
-	http    *http.Client
-	queries *db.Queries
-	tokens  TokenFunc
-	ua      string // User-Agent; see SetUserAgent
+	http     *http.Client
+	bulkHTTP *http.Client // bulk reads only (FetchRawLong); see SetBulkHTTPClient
+	queries  *db.Queries
+	tokens   TokenFunc
+	ua       string // User-Agent; see SetUserAgent
 
 	// ESI calls in the trailing day, for the Sync page's
 	// calls-per-pilot metric. Buckets by Unix hour; pruned
@@ -1598,7 +1617,15 @@ func (c *Client) Get(ctx context.Context, accessToken, path string, out any) err
 // header. Token values are never logged; errors carry the method,
 // path and status only.
 func (c *Client) request(ctx context.Context, method, accessToken, path string, payload any, want ...int) ([]byte, http.Header, error) {
-	body, header, _, err := c.send(ctx, method, accessToken, path, payload, "", want...)
+	body, header, _, err := c.send(ctx, c.http, method, accessToken, path, payload, "", want...)
+	return body, header, err
+}
+
+// requestLong is request on the bulk client (FetchRawLong's path):
+// the same send, at the bulk deadline instead of the shared
+// client's fast one.
+func (c *Client) requestLong(ctx context.Context, method, accessToken, path string, payload any, want ...int) ([]byte, http.Header, error) {
+	body, header, _, err := c.send(ctx, c.bulkClient(), method, accessToken, path, payload, "", want...)
 	return body, header, err
 }
 
@@ -1613,7 +1640,7 @@ func (c *Client) request(ctx context.Context, method, accessToken, path string, 
 // repeated POST could send a mail twice), and neither are 420/429:
 // those wrap ErrErrorLimit, and the worker backs off until the next
 // cycle on those by contract.
-func (c *Client) send(ctx context.Context, method, accessToken, path string, payload any, ifNoneMatch string, want ...int) (body []byte, header http.Header, status int, err error) {
+func (c *Client) send(ctx context.Context, hc *http.Client, method, accessToken, path string, payload any, ifNoneMatch string, want ...int) (body []byte, header http.Header, status int, err error) {
 	var raw []byte
 	if payload != nil {
 		raw, err = json.Marshal(payload)
@@ -1628,7 +1655,7 @@ func (c *Client) send(ctx context.Context, method, accessToken, path string, pay
 	}
 	var attempt int
 	for {
-		body, header, status, err = c.sendOnce(ctx, method, accessToken, path, raw, ifNoneMatch, want)
+		body, header, status, err = c.sendOnce(ctx, hc, method, accessToken, path, raw, ifNoneMatch, want)
 		if err == nil || !retryable || attempt >= len(backoffs) {
 			return body, header, status, err
 		}
@@ -1715,7 +1742,7 @@ func parseRetryAfter(value string) (time.Duration, bool) {
 // sendOnce makes one ESI request and reads its answer the one way:
 // 420/429 wrap ErrErrorLimit, a status outside want is a StatusError,
 // anything else is the body.
-func (c *Client) sendOnce(ctx context.Context, method, accessToken, path string, raw []byte, ifNoneMatch string, want []int) (body []byte, header http.Header, status int, err error) {
+func (c *Client) sendOnce(ctx context.Context, hc *http.Client, method, accessToken, path string, raw []byte, ifNoneMatch string, want []int) (body []byte, header http.Header, status int, err error) {
 	// ESI's limits, seen coming (ratelimit.go): refused here rather
 	// than by ESI.
 	if err := c.preflight(ctx, method, path, time.Now()); err != nil {
@@ -1742,7 +1769,7 @@ func (c *Client) sendOnce(ctx context.Context, method, accessToken, path string,
 	if ifNoneMatch != "" {
 		req.Header.Set("If-None-Match", ifNoneMatch)
 	}
-	resp, err := c.http.Do(req)
+	resp, err := hc.Do(req)
 	if err != nil {
 		return nil, nil, 0, fmt.Errorf("ESI %s %s: %w", method, path, err)
 	}
@@ -1801,7 +1828,7 @@ func (c *Client) fetchIfChanged(ctx context.Context, accessToken, path, etag str
 	if etag != "" {
 		want = append(want, http.StatusNotModified)
 	}
-	body, header, status, err := c.send(ctx, http.MethodGet, accessToken, path, nil, etag, want...)
+	body, header, status, err := c.send(ctx, c.http, http.MethodGet, accessToken, path, nil, etag, want...)
 	if err != nil {
 		return nil, header, false, err
 	}
@@ -1827,6 +1854,17 @@ func cacheWindowEnd(header http.Header) time.Time {
 // errors; 420/429 wrap ErrErrorLimit.
 func (c *Client) FetchRaw(ctx context.Context, accessToken, path string) ([]byte, http.Header, error) {
 	return c.request(ctx, http.MethodGet, accessToken, path, nil, http.StatusOK)
+}
+
+// FetchRawLong is FetchRaw for bulk reads: the same request, error
+// budget and retry contract, but riding the bulk client
+// (SetBulkHTTPClient) so a large page on a slow route gets the long
+// bulk deadline and its own connections instead of the shared
+// client's 10s fast failure. Small calls must keep FetchRaw; this
+// path is for the large bodies: the region sweep's whole-book pages
+// and the /markets/prices/ guide.
+func (c *Client) FetchRawLong(ctx context.Context, accessToken, path string) ([]byte, http.Header, error) {
+	return c.requestLong(ctx, http.MethodGet, accessToken, path, nil, http.StatusOK)
 }
 
 // trackErrorBudget records ESI's X-Esi-Error-Limit-Remain/Reset

@@ -1,10 +1,84 @@
 package esi
 
 import (
+	"context"
+	"io"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 )
+
+// deadlineTransport answers 200 and records the deadline each
+// request's context carried, so a test can see which client's
+// overall timeout a read rode.
+type deadlineTransport struct {
+	calls       int
+	hasDeadline bool
+	deadline    time.Time
+}
+
+func (d *deadlineTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	d.calls++
+	d.deadline, d.hasDeadline = req.Context().Deadline()
+	return &http.Response{
+		StatusCode: http.StatusOK,
+		Header:     http.Header{"Content-Type": []string{"application/json"}},
+		Body:       io.NopCloser(strings.NewReader(`[]`)),
+		Request:    req,
+	}, nil
+}
+
+// TestFetchRawLongCarriesTheBulkDeadline: the sweep's bulk page
+// read goes through FetchRawLong and carries the long bulk
+// deadline, while an ordinary FetchRaw keeps the shared client's
+// 10s deadline.
+func TestFetchRawLongCarriesTheBulkDeadline(t *testing.T) {
+	bulkClient := NewBulkHTTPClient()
+	if got := bulkClient.Timeout; got != 45*time.Second {
+		t.Errorf("bulk client timeout = %v, want 45s", got)
+	}
+	// ESI paces each connection on its own: bulk pages over one
+	// HTTP/2 connection queue behind each other until they time out,
+	// so the bulk transport stays on an HTTP/1.1 pool.
+	if tr, ok := bulkClient.Transport.(*http.Transport); !ok || tr.ForceAttemptHTTP2 || tr.TLSNextProto == nil || tr.MaxConnsPerHost != bulkMaxConns {
+		t.Error("bulk client must ride an HTTP/1.1 connection pool capped at bulkMaxConns")
+	}
+	if got := NewHTTPClient().Timeout; got != 10*time.Second {
+		t.Errorf("shared client timeout = %v, want 10s", got)
+	}
+
+	shared, bulk := &deadlineTransport{}, &deadlineTransport{}
+	client := New(&http.Client{Timeout: 10 * time.Second, Transport: shared}, nil, nil)
+	client.SetBulkHTTPClient(&http.Client{Timeout: bulkRequestTimeout, Transport: bulk})
+	ctx := context.Background()
+
+	if _, _, err := client.FetchRaw(ctx, "", "/markets/10000002/orders/"); err != nil {
+		t.Fatalf("FetchRaw: %v", err)
+	}
+	if shared.calls != 1 || bulk.calls != 0 {
+		t.Fatalf("FetchRaw rode shared %d times and bulk %d times, want 1 and 0", shared.calls, bulk.calls)
+	}
+	if !shared.hasDeadline {
+		t.Fatal("FetchRaw carried no deadline")
+	}
+	if until := time.Until(shared.deadline); until <= 5*time.Second || until > 11*time.Second {
+		t.Errorf("FetchRaw deadline is %v out, want about 10s", until)
+	}
+
+	if _, _, err := client.FetchRawLong(ctx, "", "/markets/10000002/orders/"); err != nil {
+		t.Fatalf("FetchRawLong: %v", err)
+	}
+	if bulk.calls != 1 || shared.calls != 1 {
+		t.Fatalf("FetchRawLong rode bulk %d times and shared %d times, want 1 and 1", bulk.calls, shared.calls)
+	}
+	if !bulk.hasDeadline {
+		t.Fatal("FetchRawLong carried no deadline")
+	}
+	if until := time.Until(bulk.deadline); until <= 40*time.Second || until > 46*time.Second {
+		t.Errorf("FetchRawLong deadline is %v out, want about 45s", until)
+	}
+}
 
 // TestNewHTTPClientIsTuned: the production ESI client gets its own
 // tuned transport (the bare login client left it at Go's default of

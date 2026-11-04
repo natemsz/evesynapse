@@ -834,7 +834,7 @@ func (app *Application) marketPrices(ctx context.Context) (map[int64]esi.MarketP
 	stale := app.prices
 	app.pricesMu.Unlock()
 
-	body, header, err := app.esi.FetchRaw(ctx, "", "/markets/prices/")
+	body, header, err := app.esi.FetchRawLong(ctx, "", "/markets/prices/")
 	if err != nil {
 		if len(stale) > 0 {
 			logging.Warnf("market: refresh prices failed (%v); serving stale cache", err)

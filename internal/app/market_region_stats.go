@@ -199,6 +199,14 @@ func (app *Application) advanceRegionSweep(ctx context.Context, regionID int64, 
 		return out
 	}
 
+	// A region whose last page fetch failed waits out its
+	// backoff before trying again: it spends no fetch allowance
+	// here and stays silent (the failure already logged its one
+	// line when the backoff was entered).
+	if app.sweepBackedOff(regionID, time.Now()) {
+		return out
+	}
+
 pageLoop:
 	for out.pages < maxRegionSweepPagesPerCycle {
 		if ctx.Err() != nil || limitHit.Load() {
@@ -206,9 +214,12 @@ pageLoop:
 		}
 		// The next few pages are read at once and staged in page
 		// order, so a book of hundreds of pages is not hundreds of
-		// round trips one after another.
-		pages := make([]sweepPage, 0, sweepPageWindow)
-		for n := 0; n < sweepPageCount(state, maxRegionSweepPagesPerCycle-out.pages) && allowance.take(); n++ {
+		// round trips one after another. The window is the
+		// region's current one: a region that just lost a page
+		// reads one at a time until a full window lands clean.
+		window := app.sweepWindow(regionID)
+		pages := make([]sweepPage, 0, window)
+		for n := 0; n < sweepPageCount(state, maxRegionSweepPagesPerCycle-out.pages, window) && allowance.take(); n++ {
 			pages = append(pages, sweepPage{page: int(state.NextPage) + n})
 		}
 		if len(pages) == 0 {
@@ -235,9 +246,13 @@ pageLoop:
 					return out
 				}
 				// Transient failure: the pages staged before it
-				// stay staged, the cursor stops at it, and it is
-				// retried next cycle; nothing after it is stored.
-				logging.Warnf("worker: region sweep: %s page %d unavailable: %v", marketRegionLabel(regionID), p.page, p.err)
+				// stay staged, the cursor stops at it, and nothing
+				// after it is stored. The region then backs off
+				// (and drops to a one-page window) instead of
+				// retrying the same page every cycle; this log
+				// line is the only one the backoff produces.
+				delay := app.noteSweepPageFailure(regionID, time.Now())
+				logging.Warnf("worker: region sweep: %s page %d unavailable: %v (backing off %s)", marketRegionLabel(regionID), p.page, p.err, delay)
 				break pageLoop
 			}
 			if int64(p.totalPages) > state.PagesTotal {
@@ -248,6 +263,7 @@ pageLoop:
 				logging.Errorf("worker: region sweep: stage %s page %d: %v", marketRegionLabel(regionID), p.page, err)
 				break pageLoop
 			}
+			app.noteSweepPageSuccess(regionID)
 			out.pages++
 			if sweepBookStaged(state) {
 				break pageLoop
@@ -257,6 +273,10 @@ pageLoop:
 				break pageLoop
 			}
 		}
+		// The whole window landed clean (any failure above
+		// breaks out of the page loop): a region on a reduced
+		// window steps one page back toward the full window.
+		app.noteSweepWindowClean(regionID)
 	}
 	if sweepBookStaged(state) || state.NextPage > maxRegionSweepPagesTotal {
 		app.completeRegionSweep(ctx, state)
@@ -269,6 +289,111 @@ pageLoop:
 // dozen requests in flight; ESI's rate budgets, seen coming in the
 // client (esi/ratelimit.go), still refuse any that would overdraw.
 const sweepPageWindow = 6
+
+const (
+	// sweepBackoffBase is a region's wait after its first failed
+	// page; consecutive failures double it up to sweepBackoffMax.
+	sweepBackoffBase = 5 * time.Minute
+	sweepBackoffMax  = 30 * time.Minute
+)
+
+// sweepRegionPace is one region's in-memory pacing state: its
+// failure backoff and its current page window. It lives on the
+// Application (sweepPace) in memory only, by design for this
+// hotfix: a restart forgets it and grants each region one fresh
+// attempt, which is harmless (the staged cursor on disk is what
+// protects progress).
+type sweepRegionPace struct {
+	failures    int       // consecutive failed pages since the last success
+	nextAttempt time.Time // no fetch before this while failures > 0
+	window      int       // current page window; 0 means sweepPageWindow
+}
+
+// sweepBackoffDelay is the wait after failures consecutive failed
+// pages: sweepBackoffBase, doubling, capped at sweepBackoffMax.
+func sweepBackoffDelay(failures int) time.Duration {
+	delay := sweepBackoffBase
+	for i := 1; i < failures && delay < sweepBackoffMax; i++ {
+		delay *= 2
+	}
+	if delay > sweepBackoffMax {
+		delay = sweepBackoffMax
+	}
+	return delay
+}
+
+// sweepPaceOf returns the region's pace, creating it on first use.
+// The caller must hold sweepPaceMu.
+func (app *Application) sweepPaceOf(regionID int64) *sweepRegionPace {
+	if app.sweepPace == nil {
+		app.sweepPace = make(map[int64]*sweepRegionPace)
+	}
+	pace, ok := app.sweepPace[regionID]
+	if !ok {
+		pace = &sweepRegionPace{}
+		app.sweepPace[regionID] = pace
+	}
+	return pace
+}
+
+// sweepBackedOff reports whether the region is still waiting out
+// the backoff from its last failed page at now.
+func (app *Application) sweepBackedOff(regionID int64, now time.Time) bool {
+	app.sweepPaceMu.Lock()
+	defer app.sweepPaceMu.Unlock()
+	pace := app.sweepPace[regionID]
+	return pace != nil && now.Before(pace.nextAttempt)
+}
+
+// noteSweepPageFailure records a failed page for the region: the
+// consecutive-failure count grows, the next attempt waits out the
+// backoff, and the page window drops to one page until a full
+// window lands clean. It returns the wait now in force. ESI
+// error-limit stops never reach here; those stay global.
+func (app *Application) noteSweepPageFailure(regionID int64, now time.Time) time.Duration {
+	app.sweepPaceMu.Lock()
+	defer app.sweepPaceMu.Unlock()
+	pace := app.sweepPaceOf(regionID)
+	pace.failures++
+	pace.window = 1
+	delay := sweepBackoffDelay(pace.failures)
+	pace.nextAttempt = now.Add(delay)
+	return delay
+}
+
+// noteSweepPageSuccess records a landed page for the region: any
+// failure backoff resets, so a route that recovers sweeps at full
+// pace again.
+func (app *Application) noteSweepPageSuccess(regionID int64) {
+	app.sweepPaceMu.Lock()
+	defer app.sweepPaceMu.Unlock()
+	if pace := app.sweepPace[regionID]; pace != nil {
+		pace.failures = 0
+		pace.nextAttempt = time.Time{}
+	}
+}
+
+// sweepWindow is the region's current page window: the full
+// sweepPageWindow, or the reduced one a failed page left it on.
+func (app *Application) sweepWindow(regionID int64) int {
+	app.sweepPaceMu.Lock()
+	defer app.sweepPaceMu.Unlock()
+	if pace := app.sweepPace[regionID]; pace != nil && pace.window > 0 {
+		return pace.window
+	}
+	return sweepPageWindow
+}
+
+// noteSweepWindowClean records a window that landed every page: a
+// region on a reduced window steps one page back toward the full
+// window.
+func (app *Application) noteSweepWindowClean(regionID int64) {
+	app.sweepPaceMu.Lock()
+	defer app.sweepPaceMu.Unlock()
+	if pace := app.sweepPace[regionID]; pace != nil && pace.window > 0 && pace.window < sweepPageWindow {
+		pace.window++
+	}
+}
 
 // sweepPage is one book page read in a window: the page asked for
 // and its answer.
@@ -285,13 +410,14 @@ var errSweepPageLost = errors.New("page read did not finish")
 
 // sweepPageCount is how many pages the next window asks for: one
 // while the book's size is unknown (page 1 tells it), then up to
-// sweepPageWindow, never past the book's end, the safety stop, or
-// the left pages of this cycle's per-region budget.
-func sweepPageCount(state db.MarketSweepState, left int) int {
+// the region's current window, never past the book's end, the
+// safety stop, or the left pages of this cycle's per-region
+// budget.
+func sweepPageCount(state db.MarketSweepState, left, window int) int {
 	if state.PagesTotal == 0 {
 		return min(1, left)
 	}
-	n := min(sweepPageWindow, left, int(state.PagesTotal-state.NextPage+1), int(maxRegionSweepPagesTotal-state.NextPage+1))
+	n := min(window, left, int(state.PagesTotal-state.NextPage+1), int(maxRegionSweepPagesTotal-state.NextPage+1))
 	return max(n, 1)
 }
 
@@ -372,10 +498,12 @@ func (app *Application) completeRegionSweep(ctx context.Context, state db.Market
 // fetchRegionBookPage reads one page of a region's whole book
 // (no type filter) and reports the total page count from the
 // X-Pages header. Auth-free public data, like the per-type book
-// fetches.
+// fetches. The read rides the ESI client's bulk path: a whole-book
+// page is the one payload large enough that a slow route needs
+// the long deadline, not the shared client's fast failure.
 func (app *Application) fetchRegionBookPage(ctx context.Context, regionID int64, page int) ([]esi.MarketOrder, int, error) {
 	path := fmt.Sprintf("/markets/%d/orders/?order_type=all&page=%d", regionID, page)
-	body, header, err := app.esi.FetchRaw(ctx, "", path)
+	body, header, err := app.esi.FetchRawLong(ctx, "", path)
 	if err != nil {
 		return nil, 0, err
 	}

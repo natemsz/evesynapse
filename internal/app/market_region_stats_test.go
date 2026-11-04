@@ -90,10 +90,17 @@ func markRegionFresh(t *testing.T, q *db.Queries, regionID int64) {
 // sweepUntilIdle drives sweepRegionStats until no region has a
 // sweep in progress. Sweep progress lives in market_sweep_state
 // now (schema 034), so idleness is a database question, not a
-// memory one.
+// memory one. A region that lost a page is in backoff for
+// minutes; the driver fast-forwards that wait (the backoff hold
+// itself is pinned by its own tests).
 func sweepUntilIdle(t *testing.T, app *Application) {
 	t.Helper()
 	for i := 0; i < 10; i++ {
+		app.sweepPaceMu.Lock()
+		for _, pace := range app.sweepPace {
+			pace.nextAttempt = time.Time{}
+		}
+		app.sweepPaceMu.Unlock()
 		if _, limited := app.sweepRegionStats(context.Background(), &fetchBudget{left: 1000}); limited {
 			t.Fatal("sweep hit the error limit on a healthy stub")
 		}
@@ -882,5 +889,166 @@ func TestRegionSweepStoresStationHeat(t *testing.T) {
 	}
 	if got := heat(0); got != 1 {
 		t.Fatalf("sell heat after an unchanged sweep = %d, want 1", got)
+	}
+}
+
+// expireSweepBackoff moves a region's in-memory backoff expiry
+// into the past, so a test can watch the region try again without
+// waiting out the real wait.
+func expireSweepBackoff(app *Application, regionID int64) {
+	app.sweepPaceMu.Lock()
+	defer app.sweepPaceMu.Unlock()
+	if pace := app.sweepPace[regionID]; pace != nil {
+		pace.nextAttempt = time.Now().Add(-time.Minute)
+	}
+}
+
+// A region whose page fails is not fetched again until its
+// backoff expires, spends no fetch allowance while it waits, and
+// is fetched (and clears its backoff) once the wait is over.
+func TestRegionSweepBackoffHoldsRegionUntilExpiry(t *testing.T) {
+	transport := &regionBookTransport{books: map[int64][][]esi.MarketOrder{}, failWith: 500}
+	app, _, q := buildCorpTestApp(t, transport)
+	ctx := context.Background()
+	for _, region := range sweptRegions {
+		if region.ID != 10000002 {
+			markRegionFresh(t, q, region.ID)
+		}
+	}
+	transport.books[10000002] = [][]esi.MarketOrder{
+		{{OrderID: 1, TypeID: 34, IsBuyOrder: false, Price: 5.0, VolumeRemain: 1}},
+	}
+
+	if stored, limited := app.sweepRegionStats(ctx, &fetchBudget{left: 1000}); stored != 0 || limited {
+		t.Fatalf("failing sweep: stored=%d limited=%v, want 0/false", stored, limited)
+	}
+	if !app.sweepBackedOff(10000002, time.Now()) {
+		t.Fatal("region is not in backoff after a failed page")
+	}
+	calls := transport.calls.Load()
+	if calls == 0 {
+		t.Fatal("failing sweep made no fetch at all")
+	}
+
+	// Still inside the backoff: no fetch, no allowance spent.
+	budget := &fetchBudget{left: 100}
+	if stored, limited := app.sweepRegionStats(ctx, budget); stored != 0 || limited {
+		t.Fatalf("backed-off sweep: stored=%d limited=%v, want 0/false", stored, limited)
+	}
+	if got := transport.calls.Load(); got != calls {
+		t.Fatalf("backed-off region was fetched again: calls %d -> %d", calls, got)
+	}
+	if budget.left != 100 {
+		t.Fatalf("backed-off region spent fetch allowance: left=%d, want 100", budget.left)
+	}
+
+	// The route recovers and the wait expires: the region is
+	// fetched, completes, and its backoff is cleared.
+	transport.failWith = 0
+	expireSweepBackoff(app, 10000002)
+	sweepUntilIdle(t, app)
+	if got := transport.calls.Load(); got <= calls {
+		t.Fatalf("region was not fetched after its backoff expired: calls stuck at %d", got)
+	}
+	if app.sweepBackedOff(10000002, time.Now()) {
+		t.Fatal("region is still in backoff after a successful page")
+	}
+	rows, err := q.ListMarketRegionStatsByType(ctx, 34)
+	if err != nil || len(rows) != 1 || rows[0].BestSell != 5.0 {
+		t.Fatalf("stats after backoff recovery: %+v err=%v, want best sell 5", rows, err)
+	}
+}
+
+// Consecutive failures lengthen the wait (doubling from five
+// minutes, capped at thirty) and a successful page resets it.
+func TestRegionSweepBackoffDoublesAndResets(t *testing.T) {
+	want := []time.Duration{5 * time.Minute, 10 * time.Minute, 20 * time.Minute, 30 * time.Minute, 30 * time.Minute}
+	for failures, w := range want {
+		if got := sweepBackoffDelay(failures + 1); got != w {
+			t.Errorf("sweepBackoffDelay(%d) = %v, want %v", failures+1, got, w)
+		}
+	}
+
+	app := &Application{}
+	now := time.Now()
+	if got := app.noteSweepPageFailure(10000002, now); got != 5*time.Minute {
+		t.Fatalf("first failure waits %v, want 5m", got)
+	}
+	if got := app.noteSweepPageFailure(10000002, now); got != 10*time.Minute {
+		t.Fatalf("second failure waits %v, want 10m", got)
+	}
+	if !app.sweepBackedOff(10000002, now.Add(9*time.Minute)) {
+		t.Error("region is not backed off 9m after its second failure")
+	}
+	if app.sweepBackedOff(10000002, now.Add(11*time.Minute)) {
+		t.Error("region is still backed off 11m after its second failure")
+	}
+	app.noteSweepPageSuccess(10000002)
+	if app.sweepBackedOff(10000002, now) {
+		t.Error("region is still backed off after a successful page")
+	}
+	if got := app.noteSweepPageFailure(10000002, now); got != 5*time.Minute {
+		t.Fatalf("failure after a success waits %v, want the 5m base again", got)
+	}
+}
+
+// After a failed page the region's window drops to one page, and
+// a window that lands clean steps it back toward the full window.
+func TestRegionSweepWindowDropsAndRecovers(t *testing.T) {
+	if got := (&Application{}).sweepWindow(10000002); got != sweepPageWindow {
+		t.Fatalf("untouched region window = %d, want %d", got, sweepPageWindow)
+	}
+	app := &Application{}
+	app.noteSweepPageFailure(10000002, time.Now())
+	if got := app.sweepWindow(10000002); got != 1 {
+		t.Fatalf("window after a failed page = %d, want 1", got)
+	}
+	app.noteSweepWindowClean(10000002)
+	if got := app.sweepWindow(10000002); got != 2 {
+		t.Fatalf("window after a clean window = %d, want 2 (stepping back toward %d)", got, sweepPageWindow)
+	}
+	for app.sweepWindow(10000002) < sweepPageWindow {
+		app.noteSweepWindowClean(10000002)
+	}
+	app.noteSweepWindowClean(10000002)
+	if got := app.sweepWindow(10000002); got != sweepPageWindow {
+		t.Fatalf("window grew past the full window: %d, want %d", got, sweepPageWindow)
+	}
+
+	// The same drop happens on the real sweep path: a book whose
+	// fifth page fails once leaves the region on a one-page
+	// window, and the resumed sweep climbs back above it.
+	transport := &regionBookTransport{books: map[int64][][]esi.MarketOrder{}}
+	live, _, q := buildCorpTestApp(t, transport)
+	ctx := context.Background()
+	for _, region := range marketRegions {
+		if region.ID != 10000002 {
+			markRegionFresh(t, q, region.ID)
+		}
+	}
+	var book [][]esi.MarketOrder
+	for i := int64(0); i < 10; i++ {
+		book = append(book, []esi.MarketOrder{{OrderID: 1 + i, TypeID: 1000 + i, Price: 5, VolumeRemain: 1, LocationID: 60003760, SystemID: 30000142}})
+	}
+	transport.books[10000002] = book
+	transport.failOnce.Store(5)
+
+	if _, limited := live.sweepRegionStats(ctx, &fetchBudget{left: 1000}); limited {
+		t.Fatal("limited on a 404")
+	}
+	if got := live.sweepWindow(10000002); got != 1 {
+		t.Fatalf("window after the failed page = %d, want 1", got)
+	}
+	expireSweepBackoff(live, 10000002)
+	sweepUntilIdle(t, live)
+	if got := live.sweepWindow(10000002); got <= 1 || got > sweepPageWindow {
+		t.Fatalf("window after the clean resume = %d, want between 2 and %d", got, sweepPageWindow)
+	}
+	var types int
+	if err := live.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM market_region_stats WHERE region_id = 10000002`).Scan(&types); err != nil {
+		t.Fatal(err)
+	}
+	if types != 10 {
+		t.Fatalf("stored %d types, want all 10 pages' types", types)
 	}
 }

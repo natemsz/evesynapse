@@ -72,7 +72,7 @@ func TestSendRetriesReads(t *testing.T) {
 	}}
 	c := New(&http.Client{Transport: transport}, nil, nil)
 
-	body, _, status, err := c.send(context.Background(), http.MethodGet, "", "/x/", nil, "", http.StatusOK)
+	body, _, status, err := c.send(context.Background(), c.http, http.MethodGet, "", "/x/", nil, "", http.StatusOK)
 	if err != nil {
 		t.Fatalf("GET after two 503s: %v", err)
 	}
@@ -92,7 +92,7 @@ func TestSendRetryLimit(t *testing.T) {
 		{status: http.StatusServiceUnavailable, body: `{}`},
 	}}
 	c := New(&http.Client{Transport: transport}, nil, nil)
-	_, _, status, err := c.send(context.Background(), http.MethodGet, "", "/x/", nil, "", http.StatusOK)
+	_, _, status, err := c.send(context.Background(), c.http, http.MethodGet, "", "/x/", nil, "", http.StatusOK)
 	var se *StatusError
 	if !errors.As(err, &se) || status != http.StatusServiceUnavailable {
 		t.Fatalf("persistent 503 = %d, %v; want 503 StatusError", status, err)
@@ -105,7 +105,7 @@ func TestSendRetryLimit(t *testing.T) {
 		{status: http.StatusNotFound, body: `{}`},
 	}}
 	c404 := New(&http.Client{Transport: transport404}, nil, nil)
-	if _, _, _, err := c404.send(context.Background(), http.MethodGet, "", "/x/", nil, "", http.StatusOK); err == nil {
+	if _, _, _, err := c404.send(context.Background(), c404.http, http.MethodGet, "", "/x/", nil, "", http.StatusOK); err == nil {
 		t.Fatal("404 unexpectedly succeeded")
 	}
 	if got := transport404.calls.Load(); got != 1 {
@@ -122,7 +122,7 @@ func TestSendNeverRetriesWrites(t *testing.T) {
 		{status: http.StatusOK, body: `{"ok":true}`},
 	}}
 	c := New(&http.Client{Transport: transport}, nil, nil)
-	if _, _, _, err := c.send(context.Background(), http.MethodPost, "", "/x/", map[string]string{"a": "b"}, "", http.StatusOK); err == nil {
+	if _, _, _, err := c.send(context.Background(), c.http, http.MethodPost, "", "/x/", map[string]string{"a": "b"}, "", http.StatusOK); err == nil {
 		t.Fatal("POST 500 unexpectedly succeeded")
 	}
 	if got := transport.calls.Load(); got != 1 {
@@ -141,7 +141,7 @@ func TestSendHonorsRetryAfter(t *testing.T) {
 		{status: http.StatusOK, body: `{"ok":true}`},
 	}}
 	c := New(&http.Client{Transport: transport}, nil, nil)
-	if _, _, _, err := c.send(context.Background(), http.MethodGet, "", "/x/", nil, "", http.StatusOK); err != nil {
+	if _, _, _, err := c.send(context.Background(), c.http, http.MethodGet, "", "/x/", nil, "", http.StatusOK); err != nil {
 		t.Fatalf("GET with Retry-After: %v", err)
 	}
 	if got := transport.calls.Load(); got != 2 {
@@ -153,7 +153,7 @@ func TestSendHonorsRetryAfter(t *testing.T) {
 		{status: http.StatusOK, body: `{"ok":true}`},
 	}}
 	cl := New(&http.Client{Transport: limited}, nil, nil)
-	if _, _, _, err := cl.send(context.Background(), http.MethodGet, "", "/x/", nil, "", http.StatusOK); !errors.Is(err, ErrErrorLimit) {
+	if _, _, _, err := cl.send(context.Background(), cl.http, http.MethodGet, "", "/x/", nil, "", http.StatusOK); !errors.Is(err, ErrErrorLimit) {
 		t.Fatalf("429 = %v, want ErrErrorLimit", err)
 	}
 	if got := limited.calls.Load(); got != 1 {
@@ -198,7 +198,7 @@ func TestStatusErrorCarriesESIText(t *testing.T) {
 		{status: http.StatusBadRequest, body: `{"error":"recipient is not a valid mail target"}`},
 	}}
 	c := New(&http.Client{Transport: transport}, nil, nil)
-	_, _, _, err := c.send(context.Background(), http.MethodPost, "tok", "/characters/1/mail/", map[string]int{"x": 1}, "", http.StatusCreated)
+	_, _, _, err := c.send(context.Background(), c.http, http.MethodPost, "tok", "/characters/1/mail/", map[string]int{"x": 1}, "", http.StatusCreated)
 	var se *StatusError
 	if !errors.As(err, &se) || se.Code != http.StatusBadRequest || se.Detail != "recipient is not a valid mail target" {
 		t.Fatalf("err = %v (%#v), want a 400 StatusError carrying ESI's text", err, se)
@@ -209,7 +209,7 @@ func TestStatusErrorCarriesESIText(t *testing.T) {
 
 	plain := &scriptedTransport{steps: []scriptedStep{{status: http.StatusNotFound, body: `<html>nope</html>`}}}
 	c2 := New(&http.Client{Transport: plain}, nil, nil)
-	_, _, _, err = c2.send(context.Background(), http.MethodGet, "", "/x/", nil, "", http.StatusOK)
+	_, _, _, err = c2.send(context.Background(), c2.http, http.MethodGet, "", "/x/", nil, "", http.StatusOK)
 	if want := "ESI GET /x/: status 404"; err == nil || err.Error() != want {
 		t.Fatalf("non-JSON error answer: %v, want %q", err, want)
 	}

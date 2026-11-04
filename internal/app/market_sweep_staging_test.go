@@ -280,10 +280,12 @@ func TestSweepTransientErrorKeepsStagedProgress(t *testing.T) {
 		t.Fatalf("transient failure stored %d stats rows, want 0", live)
 	}
 
-	// ESI heals: the next pass retries page 3, finishes the
-	// book, and the stats cover all four pages.
+	// ESI heals: once the region's failure backoff runs out, the
+	// next pass retries page 3, finishes the book, and the stats
+	// cover all four pages.
 	transport.clearFailures()
 	transport.drainRequests()
+	expireSweepBackoff(app, 10000002)
 	stored, limited = app.sweepRegionStats(ctx, &fetchBudget{left: 1000})
 	if limited || stored != 2 {
 		t.Fatalf("recovery pass: stored=%d limited=%v, want 2/false", stored, limited)

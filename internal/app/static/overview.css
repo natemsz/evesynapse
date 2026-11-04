@@ -17,7 +17,7 @@
 .ov-picker .charselector { margin: 0; max-width: none; }
 .ov-total { text-align: right; }
 .ov-total-v { font-family: 'Rajdhani', sans-serif; font-weight: 700; font-size: var(--fs-4xl); line-height: 1.1; color: var(--accent); }
-.ov-total-l { color: var(--muted); font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: 0.06em; }
+.ov-total-l { font-family: var(--font-display); font-synthesis-weight: none; font-weight: 600; color: var(--muted-2); font-size: var(--fs-2xs); text-transform: uppercase; letter-spacing: 0.06em; }
 .ov-total-u { margin-top: 0.15rem; font-size: var(--fs-xs); color: var(--gold); }
 
 /* ---- Trained banner ---- */
@@ -45,7 +45,7 @@
 .ov-nm { font-family: 'Rajdhani', sans-serif; font-weight: 700; font-size: var(--fs-2xl); line-height: 1.15; }
 .ov-corp { font-weight: 600; }
 .ov-meta { color: var(--muted); font-size: var(--fs-xs); line-height: 1.5; }
-.ov-chead { display: flex; justify-content: space-between; align-items: center; gap: 0.6rem; margin-bottom: 0.5rem; color: var(--muted); font-size: var(--fs-xs); font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; }
+.ov-chead { display: flex; justify-content: space-between; align-items: center; gap: 0.6rem; margin-bottom: 0.5rem; color: var(--muted-2); font-family: var(--font-display); font-synthesis-weight: none; font-size: var(--fs-2xs); font-weight: 600; text-transform: uppercase; letter-spacing: 0.07em; }
 .ov-live { color: var(--success); text-transform: none; letter-spacing: 0; font-size: var(--fs-xs); }
 .ov-live.dim { color: var(--muted); }
 .ov-locline { display: flex; align-items: center; gap: 0.45rem; font-size: var(--fs-md); margin-bottom: 0.45rem; }
@@ -184,7 +184,7 @@
 .ov-lvl { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; width: 1.7rem; height: 1.7rem; border-radius: var(--r-sm); background: var(--glass); border: 1px solid var(--box-edge); font-family: 'Rajdhani', sans-serif; font-weight: 700; }
 .ov-lvl.zero { color: var(--muted); }
 .ov-nm { font-weight: 600; }
-.ov-tag { margin-left: 0.45rem; padding: 0.05rem 0.4rem; border-radius: 999px; font-size: var(--fs-2xs); font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; }
+.ov-tag { margin-left: 0.45rem; padding: 0.05rem 0.4rem; border-radius: 999px; font-family: var(--font-display); font-synthesis-weight: none; font-size: var(--fs-2xs); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
 .ov-tag.mastered { background: color-mix(in srgb, var(--kept) 14%, transparent); color: var(--kept); border: 1px solid var(--kept); }
 .ov-tag.untrained { color: var(--muted); border: 1px solid var(--box-edge); }
 .ov-pips { display: inline-flex; gap: 0.18rem; }
@@ -203,7 +203,7 @@ html[data-theme="light"] .ov-pips i.train { background: #2b7fc4; border-color: #
 
 /* ---- Inspector ---- */
 .ov-ranktile { flex: 0 0 auto; display: flex; flex-direction: column; align-items: center; justify-content: center; width: 3.2rem; height: 3.2rem; border: 1px solid var(--gold); border-radius: var(--r-sm); }
-.ov-ranktile .rl { color: var(--muted); font-size: var(--fs-2xs); text-transform: uppercase; letter-spacing: 0.08em; }
+.ov-ranktile .rl { font-family: var(--font-display); font-synthesis-weight: none; font-weight: 600; color: var(--muted-2); font-size: var(--fs-2xs); text-transform: uppercase; letter-spacing: 0.08em; }
 .ov-ranktile .rv { font-family: 'Rajdhani', sans-serif; font-weight: 700; font-size: var(--fs-xl); color: var(--gold); }
 .ov-itype { margin: 0.2rem 0 0; color: var(--muted); font-size: var(--fs-xs); }
 .ov-eft { padding: 0.35rem 0.6rem; border: 1px solid var(--box-edge); border-radius: var(--r-sm); font-weight: 600; white-space: nowrap; }

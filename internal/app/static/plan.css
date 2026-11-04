@@ -53,6 +53,12 @@ it, inactive tabs recessed and muted. */
   color: var(--muted);
   cursor: pointer;
   font: inherit;
+  font-family: var(--font-display);
+  font-synthesis-weight: none;
+  font-weight: 600;
+  font-size: var(--fs-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
   margin-bottom: -1px;
   padding: 0.4rem 0.9rem;
 }

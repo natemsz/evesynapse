@@ -7,11 +7,11 @@
 .jb .l-panes { --l-dir: 19rem; --l-insp: 22rem; }
 
 /* Slots by pilot: three queues each, used against the maximum. */
-.jb-h { margin: var(--space-4) 0 var(--space-2); color: var(--muted); font-family: var(--font-display); font-size: var(--fs-md); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
+.jb-h { margin: var(--space-4) 0 var(--space-2); color: var(--muted); font-family: var(--font-display); font-size: var(--fs-xs); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
 .jb-pilots { display: flex; flex-direction: column; gap: var(--space-3); margin: 0; padding: 0; list-style: none; }
 .jb-pilots > li { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.25rem 0.6rem; }
 .jb-pilot { grid-column: 1 / -1; font-weight: 600; }
-.jb-slot { display: grid; grid-template-columns: 1fr auto; gap: 0.15rem 0.3rem; align-items: baseline; min-width: 0; font-size: var(--fs-sm); }
+.jb-slot { display: grid; grid-template-columns: 1fr auto; gap: 0.15rem 0.3rem; align-items: baseline; min-width: 0; font-size: var(--fs-xs); }
 .jb-slot-l { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .jb-slot-v { font-family: var(--font-num); font-variant-numeric: tabular-nums; }
 .jb-slot.full .jb-slot-v { color: var(--gold); }
@@ -31,4 +31,4 @@
 .jb-progress { margin: var(--space-3) 0; padding: var(--space-3); border: 1px solid var(--hairline); border-radius: var(--r-sm); background: var(--surface-inset); }
 .jb-progress-top { display: flex; justify-content: space-between; gap: 1rem; margin-bottom: 0.4rem; font-family: var(--font-num); font-variant-numeric: tabular-nums; }
 .jb-bar { height: 0.5rem; }
-.jb-left { margin: 0.45rem 0 0; color: var(--muted); font-size: var(--fs-md); }
+.jb-left { margin: 0.45rem 0 0; color: var(--muted); font-size: var(--fs-xs); }

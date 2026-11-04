@@ -15,7 +15,7 @@
 .plan-picker .plan-find { flex: 1 1 100%; margin: 0; }
 .plan-picker .plan-find .searchwrap { max-width: none; }
 .plan-create { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--space-2); margin: 0 0 var(--space-3); }
-.plan-create label { display: flex; flex-direction: column; gap: 0.25rem; flex: 1 1 10rem; min-width: 0; color: var(--muted); font-size: var(--fs-md); }
+.plan-create label { display: flex; flex-direction: column; gap: 0.25rem; flex: 1 1 10rem; min-width: 0; color: var(--muted); font-size: var(--fs-xs); }
 .plan-create input[type="text"] { width: 100%; }
 .plan-picker .plan-list { display: flex; flex-direction: column; gap: 0.35rem; margin: 0; border: 0; background: none; }
 .plan-picker .plan-item,
@@ -31,15 +31,15 @@
 .plan-picker .plan-item.is-current .plan-name { color: var(--text-bright); }
 .plan-picker .plan-open { flex-direction: column; align-items: flex-start; gap: 0.1rem; }
 .plan-picker .plan-name { font-weight: 600; }
-.plan-picker .plan-meta { font-size: var(--fs-sm); }
+.plan-picker .plan-meta { font-size: var(--fs-xs); }
 
 /* ---- The open plan ---- */
 .plan-editor .plan-add { display: flex; flex-wrap: nowrap; align-items: center; gap: var(--space-2); flex: 1 1 16rem; min-width: 0; margin: 0; }
-.plan-editor .plan-add label { display: flex; align-items: center; gap: var(--space-2); flex: 1 1 auto; min-width: 0; color: var(--muted); font-size: var(--fs-md); white-space: nowrap; }
+.plan-editor .plan-add label { display: flex; align-items: center; gap: var(--space-2); flex: 1 1 auto; min-width: 0; color: var(--muted); font-size: var(--fs-xs); white-space: nowrap; }
 .plan-editor .plan-add .searchwrap { flex: 1 1 auto; min-width: 0; }
 .plan-editor .plan-add input[type="search"] { width: 100%; }
 .sp-titlerow { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: var(--space-2) var(--space-4); margin: 0 0 var(--space-3); }
-.sp-title { margin: 0; min-width: 0; font-size: var(--fs-3xl); overflow-wrap: anywhere; }
+.sp-title { margin: 0; min-width: 0; font-size: var(--fs-2xl); overflow-wrap: anywhere; }
 .sp-delete { flex: none; }
 .sp-results { margin: 0 0 var(--space-4); }
 .sp-empty { margin: var(--space-4) 0; color: var(--muted); }
@@ -65,7 +65,7 @@
    cards only when the pane is narrow. */
 .plan-editor .plan-table { width: 100%; }
 .plan-editor .plan-table td:nth-child(2) { white-space: normal; }
-.plan-editor .plan-table .plan-for { display: block; margin: 0.1rem 0 0; font-size: var(--fs-sm); }
+.plan-editor .plan-table .plan-for { display: block; margin: 0.1rem 0 0; font-size: var(--fs-xs); }
 /* The plan's totals beside its copy for the game's import. */
 .sp-sumrow { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2); }
 .sp-sumrow .plan-summary { margin: 0; }

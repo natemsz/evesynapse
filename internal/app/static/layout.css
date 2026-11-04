@@ -167,7 +167,7 @@ html:has(.page-shell > .subnav nav) { scroll-padding-top: var(--subnav-h); }
   backdrop-filter: none;
   color: var(--muted);
   font-family: var(--font-display);
-  font-size: var(--fs-md);
+  font-size: var(--fs-xs);
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -194,7 +194,7 @@ html:has(.page-shell > .subnav nav) { scroll-padding-top: var(--subnav-h); }
   border-radius: var(--r-xs);
   background: none;
   color: var(--muted);
-  font-size: var(--fs-lg);
+  font-size: var(--fs-sm);
   font-weight: 600;
   text-decoration: none;
   white-space: nowrap;
@@ -385,13 +385,13 @@ html[data-theme="light"] .subnav { background: color-mix(in srgb, var(--panel) 8
 .l-stat { display: flex; flex-direction: column; gap: 0.2rem; min-width: 0; padding: var(--space-3) var(--space-4); border: 1px solid var(--hairline); border-radius: var(--r-md); background: var(--surface-inset); color: var(--text); text-decoration: none; container-type: inline-size; }
 a.l-stat:hover { border-color: color-mix(in srgb, var(--accent) 45%, transparent); text-decoration: none; }
 .l-stat.on { border-color: var(--sel-edge); background: var(--sel-bg); }
-.l-stat-label { color: var(--muted); font-family: var(--font-display); font-size: var(--fs-sm); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
+.l-stat-label { color: var(--muted); font-family: var(--font-display); font-size: var(--fs-xs); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
 /* Amounts size relative to their tile (cqw against the .l-stat
    container above), capped at the display step: a bigger figure
    shrinks to stay on one line instead of wrapping. */
 .l-stat-value { font-family: var(--font-num); font-size: var(--fs-4xl); font-size: clamp(var(--fs-sm), 9cqw, var(--fs-4xl)); font-weight: 700; line-height: 1.1; color: var(--text-bright); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .l-stat-value.text { font-family: var(--font-body); font-size: var(--fs-2xl); white-space: normal; }
-.l-stat-sub { color: var(--muted); font-size: var(--fs-md); }
+.l-stat-sub { color: var(--muted); font-size: var(--fs-xs); }
 .l-stat.warn .l-stat-value { color: var(--gold); }
 .l-stat.ok .l-stat-value { color: var(--kept); }
 
@@ -403,7 +403,7 @@ a.l-stat:hover { border-color: color-mix(in srgb, var(--accent) 45%, transparent
 
 /* Local time: the reader's own time beside an EVE time, written in
    by app.js; empty (and out of the way) without JS. */
-.l-local { color: var(--muted); font-size: var(--fs-md); }
+.l-local { color: var(--muted); font-size: var(--fs-xs); }
 .l-local:not(.on) { display: none; }
 
 /* Panel: the standard solid block on the page. */
@@ -479,8 +479,8 @@ a.l-stat:hover { border-color: color-mix(in srgb, var(--accent) 45%, transparent
   border-bottom: 1px solid transparent;
 }
 .l-pane-bar > .searchwrap, .l-pane-bar > form, .l-pane-bar > input[type="search"] { flex: 1 1 14rem; min-width: 0; }
-.l-pane-title { flex: 1 1 auto; min-width: 0; margin: 0; font-size: var(--fs-lg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.l-pane-title small { color: var(--muted); font-size: var(--fs-sm); font-weight: 500; }
+.l-pane-title { flex: 1 1 auto; min-width: 0; margin: 0; font-size: var(--fs-md); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.l-pane-title small { color: var(--muted); font-size: var(--fs-xs); font-weight: 500; }
 
 /* Back: shown only when the pane it returns to is off screen. */
 .l-back {
@@ -658,7 +658,7 @@ a.l-stat:hover { border-color: color-mix(in srgb, var(--accent) 45%, transparent
   grid-column: 1 / -1;
 }
 #main-content table.cards-on > tbody > tr > :is(td, th):first-child {
-  font-size: var(--fs-xl);
+  font-size: var(--fs-lg);
   font-weight: 600;
   color: var(--text-bright);
 }
@@ -673,7 +673,7 @@ a.l-stat:hover { border-color: color-mix(in srgb, var(--accent) 45%, transparent
   display: block;
   margin-bottom: 0.1rem;
   color: var(--muted);
-  font-size: var(--fs-xs);
+  font-size: var(--fs-2xs);
   font-weight: 500;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -684,7 +684,7 @@ a.l-stat:hover { border-color: color-mix(in srgb, var(--accent) 45%, transparent
 #main-content table.cards-on > tbody > tr > td.card-title {
   order: -1;
   grid-column: 1 / -1;
-  font-size: var(--fs-xl);
+  font-size: var(--fs-lg);
   font-weight: 600;
   color: var(--text-bright);
 }
@@ -706,7 +706,7 @@ a.l-stat:hover { border-color: color-mix(in srgb, var(--accent) 45%, transparent
 #main-content table.cards-on > tbody > tr > td.card-ctl:last-child { justify-self: end; }
 #main-content table.cards-on > tbody > tr > td:is(.card-ctl, .card-blank):first-child + td {
   grid-column: 1 / -1;
-  font-size: var(--fs-xl); font-weight: 600; color: var(--text-bright);
+  font-size: var(--fs-lg); font-weight: 600; color: var(--text-bright);
 }
 #main-content table.cards-on > tbody > tr > td:is(.card-ctl, .card-blank):first-child + td::before { display: none; }
 .cards-sort {

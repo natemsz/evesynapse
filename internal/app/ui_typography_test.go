@@ -25,7 +25,7 @@ func TestMenuTextIsAllCapsRajdhani(t *testing.T) {
 		".menu-pop-body a, .menu-pop-body button {\n  display: block;\n  width: 100%;\n  text-align: left;\n  padding: 0.45rem 0.6rem;\n  font-family: \"Rajdhani\", \"Segoe UI\", sans-serif;\n  font-weight: 600;\n  text-transform: uppercase;",
 		// The sidenav layout rule carries no casing of its own: the
 		// menu rule above is the only casing menu rows get.
-		".sidenav a.navlink,\n.sidebar .branch > summary {\n  display: flex;\n  align-items: center;\n  gap: 0.6rem;\n  min-height: 2.35rem;\n  padding: 0.42rem 0.55rem;\n  border-radius: var(--r-sm);\n  color: var(--text);\n  font-size: var(--fs-xl);\n  letter-spacing: 0.04em;\n  cursor: pointer;\n}",
+		".sidenav a.navlink,\n.sidebar .branch > summary {\n  display: flex;\n  align-items: center;\n  gap: 0.6rem;\n  min-height: 2.35rem;\n  padding: 0.42rem 0.55rem;\n  border-radius: var(--r-sm);\n  color: var(--text);\n  font-size: var(--fs-md);\n  letter-spacing: 0.04em;\n  cursor: pointer;\n}",
 	} {
 		if !strings.Contains(style, want) {
 			t.Errorf("style.css missing menu rule %q", want)
@@ -48,21 +48,21 @@ func TestTabNavTypeSpec(t *testing.T) {
 	for _, want := range []string{
 		// Section tabs, sub-tabs and strategy tabs share the tab
 		// rule; the chip is not a tab and keeps its own rule.
-		".section-tabs a, .section-tabs .tabs-more-btn, .section-subtabs a, .section-subtabs .tabs-more-btn, .ti-tabs button {\n  font-family: \"Rajdhani\", \"Segoe UI\", sans-serif;\n  font-weight: 500;\n  text-transform: uppercase;\n  letter-spacing: normal;\n  font-size: var(--fs-sm);\n}",
+		".section-tabs a, .section-tabs .tabs-more-btn, .section-subtabs a, .section-subtabs .tabs-more-btn, .ti-tabs button {\n  font-family: \"Rajdhani\", \"Segoe UI\", sans-serif;\n  font-weight: 500;\n  text-transform: uppercase;\n  letter-spacing: normal;\n  font-size: var(--fs-xs);\n}",
 		".chip {\n  font-family: \"Rajdhani\", \"Segoe UI\", sans-serif;\n  font-weight: 600;\n  text-transform: uppercase;\n  letter-spacing: 0.06em;\n}",
 		// The strategy tabs' pill paint block states the same spec.
-		".ti-tabs button {\n  font-family: Rajdhani, sans-serif;\n  font-weight: 500;\n  text-transform: uppercase;\n  letter-spacing: normal;\n  font-size: var(--fs-sm);",
+		".ti-tabs button {\n  font-family: Rajdhani, sans-serif;\n  font-weight: 500;\n  text-transform: uppercase;\n  letter-spacing: normal;\n  font-size: var(--fs-xs);",
 	} {
 		if !strings.Contains(style, want) {
 			t.Errorf("style.css missing tab rule %q", want)
 		}
 	}
 	contracts := readStatic(t, "contracts.css")
-	if want := "font-weight: 600; text-transform: uppercase; letter-spacing: normal; font-size: var(--fs-sm);"; !strings.Contains(contracts, want) {
+	if want := "font-weight: 600; text-transform: uppercase; letter-spacing: normal; font-size: var(--fs-xs);"; !strings.Contains(contracts, want) {
 		t.Errorf("contracts.css .cs-tab missing tab spec %q", want)
 	}
 	fit := readStatic(t, "fit.css")
-	if want := "font-weight: 500; text-transform: uppercase; letter-spacing: normal;\n    font-size: var(--fs-sm);"; !strings.Contains(fit, want) {
+	if want := "font-weight: 500; text-transform: uppercase; letter-spacing: normal;\n    font-size: var(--fs-xs);"; !strings.Contains(fit, want) {
 		t.Errorf("fit.css .fit-mtabs button missing tab spec %q", want)
 	}
 }

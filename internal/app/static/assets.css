@@ -15,14 +15,14 @@
 .assets-net { text-align: right; margin-left: auto; }
 .assets-net .assets-count { margin-top: 0.2rem; }
 .assets-net-v { display: block; color: var(--gold); font-size: var(--fs-3xl); font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1.15; }
-.assets-net-l { color: var(--muted); font-size: var(--fs-xs); font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+.assets-net-l { color: var(--muted); font-size: var(--fs-2xs); font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
 
 
 /* The console's panes: this page keeps them flush against
    hairline dividers and sets its column widths. */
 .amx .l-panes { --l-dir: 18rem; --l-insp: 22rem; }
 .pane-dir #assets-dirfilter { flex: 1 1 100%; width: 100%; }
-.dir-foot { margin: 0.8rem 0 0; color: var(--muted); font-size: var(--fs-sm); }
+.dir-foot { margin: 0.8rem 0 0; color: var(--muted); font-size: var(--fs-xs); }
 
 /* The matrix pane's stacked controls: breadcrumb, hangar tabs,
    saved filters, then the search and sort toolbar. */
@@ -40,15 +40,15 @@
 .amx-table thead th a { color: inherit; text-decoration: none; }
 .amx-table thead th a:hover { color: var(--gold); }
 .amx-table thead th a.srt-on { color: var(--gold); }
-.amx-h { margin: 0 0 0.2rem; font-size: var(--fs-xl); }
-.amx-h span { color: var(--muted); font-size: var(--fs-md); font-weight: 500; }
-.amx-msub { margin: 0.15rem 0 0; color: var(--muted); font-size: var(--fs-md); }
+.amx-h { margin: 0 0 0.2rem; font-size: var(--fs-lg); }
+.amx-h span { color: var(--muted); font-size: var(--fs-xs); font-weight: 500; }
+.amx-msub { margin: 0.15rem 0 0; color: var(--muted); font-size: var(--fs-xs); }
 
 /* The container strip above the table: one card per can, its
    icon box tinted by its place in the strip. */
 .canstrip { margin-top: 0.9rem; padding: 0.7rem 0.8rem; background: var(--row-alt); border: 1px solid var(--box-edge); border-radius: var(--r-sm); }
 .canstrip-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.3rem 1rem; margin-bottom: 0.6rem; }
-.canstrip-n { color: var(--muted); font-size: var(--fs-sm); }
+.canstrip-n { color: var(--muted); font-size: var(--fs-xs); }
 .canstrip-tools { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 0.8rem; }
 /* The grid is capped and scrolls: a location can hold hundreds
    of cans, and the strip must never push the matrix off the
@@ -68,10 +68,10 @@
 @media (prefers-reduced-motion: reduce) {
   .cangrid { transition: none; }
 }
-.can-none { margin: 0.2rem 0 0; color: var(--muted); font-size: var(--fs-md); }
+.can-none { margin: 0.2rem 0 0; color: var(--muted); font-size: var(--fs-xs); }
 .amx-can { display: flex; align-items: center; gap: 0.6rem; padding: 0.55rem 0.65rem; background: var(--row-alt); border: 1px solid var(--box-edge); border-radius: var(--r-sm); color: var(--text); text-decoration: none; }
 .amx-can:hover { border-color: var(--accent); }
-.can-box { flex: none; display: grid; place-items: center; width: 2.1rem; height: 2.1rem; border-radius: var(--r-xs); font-size: var(--fs-xl); }
+.can-box { flex: none; display: grid; place-items: center; width: 2.1rem; height: 2.1rem; border-radius: var(--r-xs); font-size: var(--fs-lg); }
 .can-h0 .can-box { background: rgba(56, 132, 255, 0.16); color: #7db4ff; }
 .can-h1 .can-box { background: rgba(168, 85, 247, 0.16); color: #c99aff; }
 .can-h2 .can-box { background: rgba(34, 197, 94, 0.15); color: #7fe0a3; }
@@ -79,8 +79,8 @@
 .can-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 0.1rem; }
 .can-name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .can-name small { color: var(--muted); font-weight: 400; }
-.can-sub { color: var(--muted); font-size: var(--fs-sm); font-variant-numeric: tabular-nums; }
-.can-go { flex: none; color: var(--muted); font-size: var(--fs-2xl); }
+.can-sub { color: var(--muted); font-size: var(--fs-xs); font-variant-numeric: tabular-nums; }
+.can-go { flex: none; color: var(--muted); font-size: var(--fs-xl); }
 
 /* The matrix table. */
 .amx-table { margin: 0.9rem 0 0; table-layout: fixed; background: var(--row-alt); border: 1px solid var(--box-edge); }
@@ -107,13 +107,13 @@
 .amx-id { display: flex; flex-direction: column; gap: 0.12rem; min-width: 0; }
 .amx-name { font-weight: 600; }
 .amx-name small { color: var(--muted); font-weight: 400; }
-.amx-sub { color: var(--muted); font-size: var(--fs-sm); }
+.amx-sub { color: var(--muted); font-size: var(--fs-xs); }
 .asmbadge { padding: 0.05rem 0.32rem; border: 1px solid rgba(34, 197, 94, 0.45); border-radius: var(--r-xs); color: #7fe0a3; font-size: var(--fs-2xs); font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase; vertical-align: 0.14em; white-space: nowrap; }
 .amx-c-num { font-variant-numeric: tabular-nums; white-space: nowrap; }
 .amx-c-val { font-variant-numeric: tabular-nums; white-space: nowrap; }
 .amx-c-val .amx-isk { color: var(--gold); font-weight: 700; }
 .amx-c-val small { margin-left: 0.25rem; color: var(--muted); font-size: var(--fs-2xs); font-weight: 700; letter-spacing: 0.07em; }
-.amx-more { margin: 0.6rem 0 0; color: var(--muted); font-size: var(--fs-md); }
+.amx-more { margin: 0.6rem 0 0; color: var(--muted); font-size: var(--fs-xs); }
 
 .mships { display: none; }
 .insp-titles { min-width: 0; }
@@ -123,13 +123,13 @@
    the table keeps Item, Qty and Value. */
 @container console (width < 46rem) {
   .mships { display: block; margin-top: 0.9rem; }
-  .mships-h { margin: 0 0 0.5rem; font-size: var(--fs-lg); }
+  .mships-h { margin: 0 0 0.5rem; font-size: var(--fs-md); }
   .mships-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; }
   .mship { display: flex; flex-direction: column; gap: 0.12rem; padding: 0.6rem; background: var(--row-alt); border: 1px solid var(--box-edge); border-radius: var(--r-sm); color: var(--text); text-decoration: none; }
   .mship img { border-radius: var(--r-xs); }
-  .mship-n { font-weight: 600; font-size: var(--fs-md); }
+  .mship-n { font-weight: 600; font-size: var(--fs-xs); }
   .mship-t { color: var(--muted); font-size: var(--fs-sm); }
-  .mship-v { color: var(--gold); font-size: var(--fs-md); font-weight: 700; font-variant-numeric: tabular-nums; }
+  .mship-v { color: var(--gold); font-size: var(--fs-xs); font-weight: 700; font-variant-numeric: tabular-nums; }
   .cangrid { grid-template-columns: minmax(0, 1fr); max-height: 14rem; }
   .canstrip.open .cangrid { max-height: 60vh; }
   .canstrip.measuring .cangrid { max-height: 14rem; }

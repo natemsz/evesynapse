@@ -31,7 +31,7 @@
   .fit-mhead-id { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.15rem 0.6rem; }
   .fit-mhead-name {
     font-family: "Rajdhani", "Segoe UI", sans-serif;
-    font-weight: 700; font-size: var(--fs-2xl); color: var(--text-bright);
+    font-weight: 700; font-size: var(--fs-xl); color: var(--text-bright);
     min-width: 0; overflow-wrap: anywhere;
   }
   .fit-mhead-ship { color: var(--accent); font-weight: 600; }
@@ -42,11 +42,11 @@
     border-radius: var(--r-sm); padding: 0.3rem 0.55rem;
   }
   .fit-mchip strong {
-    font-size: var(--fs-3xl); line-height: 1.1; color: var(--accent);
+    font-size: var(--fs-2xl); line-height: 1.1; color: var(--accent);
     font-variant-numeric: tabular-nums;
   }
   .fit-mchip span {
-    font-size: var(--fs-xs); letter-spacing: 0.08em; text-transform: uppercase;
+    font-size: var(--fs-2xs); letter-spacing: 0.08em; text-transform: uppercase;
     color: var(--muted);
   }
   .fit-mhead-bars { margin-top: 0.55rem; }
@@ -68,7 +68,7 @@
     background: none; border: 0; cursor: pointer;
     color: var(--muted); font-family: "Rajdhani", "Segoe UI", sans-serif;
     font-weight: 500; text-transform: uppercase; letter-spacing: normal;
-    font-size: var(--fs-sm); white-space: nowrap;
+    font-size: var(--fs-xs); white-space: nowrap;
   }
   .fit-mtabs > button + button { border-left: 1px solid var(--box-edge); }
   .fit-mtabs > button.on { background: var(--accent); color: #16100b; }
@@ -100,7 +100,7 @@
     display: flex; align-items: center; justify-content: space-between;
     margin-bottom: 0.45rem;
     font-family: "Rajdhani", "Segoe UI", sans-serif; font-weight: 600;
-    text-transform: uppercase; letter-spacing: 0.05em; font-size: var(--fs-md);
+    text-transform: uppercase; letter-spacing: 0.05em; font-size: var(--fs-xs);
     color: var(--muted);
   }
   #fit-modsearch.open .fit-modsearch-close {
@@ -121,7 +121,7 @@
     background: none; border: 1px solid var(--box-edge); border-radius: var(--r-sm);
     color: var(--muted); cursor: pointer;
     font-family: "Rajdhani", "Segoe UI", sans-serif; font-weight: 600;
-    text-transform: uppercase; letter-spacing: 0.05em; font-size: var(--fs-md);
+    text-transform: uppercase; letter-spacing: 0.05em; font-size: var(--fs-xs);
   }
   #fit-editor.fit-armed .fit-head:not(.fit-open) .fit-head-sec { display: none; }
   #fit-editor .fit-head { row-gap: 0.5rem; }
@@ -138,11 +138,11 @@
     border-color: var(--box-edge);
     margin-bottom: 0.4rem;
   }
-  .fit-slots .fit-chip-name, .fit-bays .fit-chip-name { font-size: var(--fs-lg); }
+  .fit-slots .fit-chip-name, .fit-bays .fit-chip-name { font-size: var(--fs-md); }
   .fit-slots .fit-chip-state, .fit-bays .fit-chip-state {
     font-size: var(--fs-xs); padding: 0.1rem 0.45rem;
   }
-  .fit-slots .fit-chip-sub, .fit-bays .fit-chip-sub { font-size: var(--fs-sm); }
+  .fit-slots .fit-chip-sub, .fit-bays .fit-chip-sub { font-size: var(--fs-xs); }
   .fit-slots .fit-chip-btn, .fit-bays .fit-chip-btn {
     min-width: 2.25rem; min-height: 2.25rem;
   }

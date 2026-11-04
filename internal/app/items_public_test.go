@@ -30,7 +30,7 @@ func TestPublicToolsAnonymous(t *testing.T) {
 		`<main id="main-content">`,
 		"Item Database",
 		"Fixture Category",
-		`<a href="/items/category/900/">`,
+		`href="/items/category/900/" data-l-step="in"`,
 	)
 
 	// Search mode is browse data too.

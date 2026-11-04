@@ -1,0 +1,96 @@
+/* --- Item Database ------------------------------------------------
+   The reference lookup: a console whose directory is the item
+   categories and whose main pane is the level the reader is on
+   (a category's groups, a group's items, or a search), with the
+   name search on top of the page at every level; and the item
+   page, a fact sheet of identity, prices, history and uses.
+   Layout comes from layout.css; this sheet styles content and
+   measures only its own container. */
+
+/* The head: the summary, then the search across the full width. */
+.ib-head .l-head-sum { flex-basis: 100%; }
+.ib-search { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); flex: 1 1 100%; min-width: 0; }
+.ib-search .searchwrap { flex: 1 1 18rem; min-width: 0; position: relative; }
+.ib-search .searchwrap > input { width: 100%; }
+.ib-sel { display: inline-flex; align-items: center; gap: var(--space-2); min-width: 0; color: var(--muted); }
+.ib-sel select { max-width: 16rem; }
+.l-pane-bar > .ib-filter { display: flex; gap: var(--space-2); flex: 1 1 100%; min-width: 0; }
+.ib-filter > input { flex: 1 1 auto; min-width: 0; }
+.ib-check { display: inline-flex; align-items: center; gap: 0.4rem; color: var(--muted); white-space: nowrap; }
+
+/* The directory: one row per category, its count at the end. */
+.ib-console .l-panes { --l-dir: 16rem; }
+.ib-dir { display: flex; flex-direction: column; gap: 1px; }
+.ib-dirent { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
+.ib-dirent[hidden], .ib-card[hidden], .ib-row[hidden] { display: none; }
+.ib-dirname { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ib-count { flex: none; color: var(--muted); font-family: var(--font-num); font-size: var(--fs-sm); font-variant-numeric: tabular-nums; }
+
+/* The main pane's text. */
+.ib-lede { margin: 0 0 var(--space-3); color: var(--muted); max-width: 46rem; }
+.ib-sub { margin: var(--space-4) 0 var(--space-2); font-family: var(--font-display); font-size: var(--fs-md); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.ib-sub:first-of-type { margin-top: 0; }
+.ib-sub a { color: var(--text); }
+.ib-empty { color: var(--muted); }
+.ib-note { margin: var(--space-2) 0 0; color: var(--muted); font-size: var(--fs-sm); }
+.ib-crumbs { margin: 0 0 var(--space-3); color: var(--muted); font-size: var(--fs-sm); }
+
+/* Cards: a category's groups (and the top level's shortcuts), as
+   many across as fit the pane. */
+.ib-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 14rem), 1fr)); gap: var(--space-2); }
+.ib-card {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--space-2);
+  min-height: var(--tap); padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--hairline); border-radius: var(--r-sm);
+  background: var(--surface-inset); color: var(--text); text-decoration: none;
+}
+.ib-card:hover { border-color: var(--sel-edge); background: var(--row-hover); text-decoration: none; }
+.ib-card-name { min-width: 0; overflow-wrap: anywhere; }
+
+/* Item rows: picture, name, flags. Two columns once the pane has
+   the room, so a 50-item page is half as tall. */
+.ib-list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 1px var(--space-3); }
+@container console (width >= 52rem) {
+  .ib-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+.ib-row, .ib-uses > li {
+  display: flex; align-items: center; gap: var(--space-3); min-width: 0;
+  min-height: var(--tap); padding: 0.3rem var(--space-2);
+  border-bottom: 1px solid var(--hairline);
+}
+.ib-row:hover, .ib-uses > li:hover { background: var(--row-hover); }
+.ib-icon { flex: none; width: 32px; height: 32px; border-radius: var(--r-xs); background: rgba(0, 0, 0, 0.3); }
+.ib-name { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+.ib-flags { flex: none; display: inline-flex; gap: 0.3rem; }
+.ib-qty { flex: none; color: var(--muted); font-family: var(--font-num); font-size: var(--fs-sm); white-space: nowrap; }
+
+/* Small labels: a group, a category, a market state, a best hub. */
+.ib-tag {
+  display: inline-block; padding: 0.1rem 0.45rem;
+  border: 1px solid var(--hairline); border-radius: var(--r-xs);
+  color: var(--muted); font-size: var(--fs-xs); white-space: nowrap;
+}
+.ib-tag.ok { color: var(--kept); border-color: color-mix(in srgb, var(--kept) 40%, transparent); }
+
+/* Paging. */
+.ib-pager { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin-top: var(--space-3); color: var(--muted); font-size: var(--fs-sm); }
+.ib-pager > span { margin-right: auto; }
+
+/* --- The item page ----------------------------------------------- */
+.ib-hero { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-4); }
+.item-art {
+  flex: none; width: 128px; height: 128px; overflow: hidden;
+  display: flex; align-items: center; justify-content: center;
+  border: 1px solid var(--hairline); border-radius: var(--r-md); background: rgba(0, 0, 0, 0.35);
+}
+.item-art img { display: block; width: 128px; height: 128px; }
+.ib-id { flex: 1 1 18rem; min-width: 0; display: flex; flex-direction: column; gap: var(--space-2); }
+.ib-title { margin: 0; font-size: var(--fs-3xl); overflow-wrap: anywhere; }
+.ib-acts { --l-gap: var(--space-2) var(--space-4); }
+.ib-acts a { font-weight: 600; }
+.ib-desc .mailbody p { margin: 0 0 0.55rem; line-height: 1.55; }
+.ib-desc .mailbody p:last-child { margin-bottom: 0; }
+.ib-hubs { width: 100%; }
+.ib-hubs .num { text-align: right; font-family: var(--font-num); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ib-uses { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 20rem), 1fr)); gap: 0 var(--space-3); }
+.l-panel h3 small { color: var(--muted); font-size: var(--fs-sm); font-weight: 500; letter-spacing: 0; text-transform: none; }

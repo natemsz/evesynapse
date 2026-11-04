@@ -208,14 +208,14 @@ func TestItemsGlobalSearchAndPublishedOnly(t *testing.T) {
 
 // TestItemsPublishedToggleWiring pins the in-place half of the
 // published-only switch: the app.js handler that prunes the
-// rendered tree, and the display rule that keeps a hidden table
-// row hidden.
+// rendered tree (directory entries, cards and item rows alike),
+// and the display rules that keep a hidden entry hidden.
 func TestItemsPublishedToggleWiring(t *testing.T) {
 	appJS, err := fs.ReadFile(staticFS, "static/app.js")
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"data-published-toggle", `querySelectorAll("tr[data-pubcount]")`, `querySelectorAll("tr[data-published]")`} {
+	for _, want := range []string{"data-published-toggle", `querySelectorAll("[data-pubcount]")`, `querySelectorAll("[data-published]")`} {
 		if !strings.Contains(string(appJS), want) {
 			t.Errorf("app.js: in-place published filter missing %s", want)
 		}
@@ -226,6 +226,13 @@ func TestItemsPublishedToggleWiring(t *testing.T) {
 	}
 	if !strings.Contains(string(bg), ".tw tr[hidden]") {
 		t.Error("bg.css: hidden tree rows need the display rule")
+	}
+	items, err := fs.ReadFile(staticFS, "static/items.css")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(items), ".ib-dirent[hidden], .ib-card[hidden], .ib-row[hidden] { display: none; }") {
+		t.Error("items.css: hidden directory entries, cards and rows need the display rule")
 	}
 }
 

@@ -4746,8 +4746,8 @@
   });
 
   // --- Item Database: published-only, applied in place --------
-  // On the browse tree (the category list, a category's groups,
-  // a group's types) the "Published items only" box carries
+  // On the browse tree (the category directory and cards, a
+  // category's groups, a group's types) the "Published items only" box carries
   // data-published-toggle instead: flipping it prunes the rows
   // already on the page rather than navigating. Branches with
   // no published types disappear, counts read as published
@@ -4759,13 +4759,13 @@
     var box = ev.target && ev.target.closest ? ev.target.closest("[data-published-toggle]") : null;
     if (!box) return;
     var on = box.checked;
-    Array.prototype.forEach.call(document.querySelectorAll("tr[data-pubcount]"), function (row) {
+    Array.prototype.forEach.call(document.querySelectorAll("[data-pubcount]"), function (row) {
       row.hidden = on && row.getAttribute("data-pubcount") === "0";
     });
     Array.prototype.forEach.call(document.querySelectorAll("[data-count]"), function (cell) {
       cell.textContent = on ? cell.getAttribute("data-pub") : cell.getAttribute("data-total");
     });
-    Array.prototype.forEach.call(document.querySelectorAll("tr[data-published]"), function (row) {
+    Array.prototype.forEach.call(document.querySelectorAll("[data-published]"), function (row) {
       row.hidden = on && row.getAttribute("data-published") === "0";
     });
     Array.prototype.forEach.call(document.querySelectorAll('a[href^="/items/"]'), function (a) {

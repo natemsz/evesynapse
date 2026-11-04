@@ -57,8 +57,8 @@ func TestPhoneShellStatic(t *testing.T) {
 			t.Errorf("the style.css phone-shell block is missing %q", want)
 		}
 	}
-	if !strings.Contains(css, "bottom: calc(var(--phone-bar-h, 0px) + env(safe-area-inset-bottom, 0px));") {
-		t.Error("the appraisal dock no longer floats over the phone bar")
+	if !strings.Contains(readStatic(t, "appraisal.css"), "bottom: calc(var(--phone-bar-h, 0px) + env(safe-area-inset-bottom, 0px));") {
+		t.Error("the appraisal dock no longer sits above the phone bar")
 	}
 
 	layout := readStatic(t, "layout.css")
@@ -128,11 +128,14 @@ func phoneBarBlock(t *testing.T, body string) string {
 func phoneSheetBlock(t *testing.T, body string) string {
 	t.Helper()
 	start := strings.Index(body, `<section class="phone-sheet"`)
-	end := strings.Index(body, `</section>`)
-	if start < 0 || end < start {
+	if start < 0 {
 		t.Fatal("rendered page has no sections sheet")
 	}
-	return body[start:end]
+	end := strings.Index(body[start:], `</section>`)
+	if end < 0 {
+		t.Fatal("the sections sheet never closes")
+	}
+	return body[start : start+end]
 }
 
 // TestPhoneBottomBarRenders: the bar carries Home, the slotted

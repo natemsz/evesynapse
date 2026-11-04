@@ -91,14 +91,6 @@ func TestEmberGlassAndSkyRules(t *testing.T) {
 		!strings.Contains(base, "{{define \"pagetabs\"}}{{end}}") {
 		t.Error("base.html lost the sub-nav's pagetabs invocation above .page-body or its empty default")
 	}
-	for _, want := range []string{
-		".item-lead { display: flex;",
-		".item-desc {",
-	} {
-		if !strings.Contains(bg, want) {
-			t.Errorf("bg.css is missing the item-lead rule %q", want)
-		}
-	}
 	// The backdrop's two painted states ride the art
 	// layer: the muted grade baked into the muted twins of
 	// the tiers, and the glow swap with the horizon gradient

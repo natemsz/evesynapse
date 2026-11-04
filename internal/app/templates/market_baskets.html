@@ -13,17 +13,18 @@
 </div>
 
 <section class="l-panel bk-list">
-<div class="bk-head"><h2 class="bk-title">All baskets</h2><small>The line beside each worth is its last 30 days. Open a basket for its detail.</small></div>
+<div class="bk-head"><h2 class="bk-title">All baskets</h2><small>Trend charts each basket's worth over its last 30 days. Open a basket for its detail.</small></div>
 <div class="tw">
 <table class="bk-table">
-  <thead><tr><th class="card-title">Basket</th><th>Region</th><th class="mt-num">Items</th><th class="mt-num">Worth now</th><th class="mt-num">1 day</th><th class="mt-num">7 days</th><th>Kind</th><th class="opt"><span class="visually-hidden">Actions</span></th></tr></thead>
+  <thead><tr><th class="card-title">Basket</th><th>Region</th><th class="mt-num">Items</th><th class="mt-num">Worth now</th><th>Trend, 30 days</th><th class="mt-num">1 day</th><th class="mt-num">7 days</th><th>Kind</th><th class="opt"><span class="visually-hidden">Actions</span></th></tr></thead>
   <tbody id="mbk-tbody">
   {{range .List}}
     <tr data-mbk-row="{{.ID}}"{{if not .Preset}} class="bk-own"{{end}}>
       <td><a class="bk-name" href="/market/baskets/{{.ID}}/">{{.Name}}</a></td>
       <td>{{.RegionName}}</td>
       <td class="mt-num" data-mbk-count>{{.Items}}</td>
-      <td class="mt-num" data-sort="{{.Value}}">{{if .Value}}<span class="bk-worth">{{.Line}}{{if .Spark}}<span class="spark-hover" tabindex="0" title="{{.Value}} ISK">{{.ValueShort}} ISK<span class="spark-pop">{{.Spark}}</span></span>{{else}}<span title="{{.Value}} ISK">{{.ValueShort}} ISK</span>{{end}}</span>{{if .Partial}} <small class="bk-partial">some unpriced</small>{{end}}{{else}}—{{end}}</td>
+      <td class="mt-num" data-sort="{{.Value}}">{{if .Value}}<span class="bk-worth">{{if .Spark}}<span class="spark-hover" data-spark-fallback tabindex="0" title="{{.Value}} ISK">{{.ValueShort}} ISK<span class="spark-pop">{{.Spark}}</span></span>{{else}}<span title="{{.Value}} ISK">{{.ValueShort}} ISK</span>{{end}}</span>{{if .Partial}} <small class="bk-partial">some unpriced</small>{{end}}{{else}}—{{end}}</td>
+      <td class="bk-trend opt" data-sort="{{.Chg30.Text}}">{{if .Line}}{{.Line}}{{if .Chg30.Text}}<span class="visually-hidden">{{.Chg30.Text}} over 30 days</span>{{end}}{{end}}</td>
       <td class="mt-num">{{if .Chg1.Text}}<span class="mt-chg {{.Chg1.Dir}}">{{.Chg1.Text}}</span>{{else}}—{{end}}</td>
       <td class="mt-num">{{if .Chg7.Text}}<span class="mt-chg {{.Chg7.Dir}}">{{.Chg7.Text}}</span>{{else}}—{{end}}</td>
       <td>{{if .Preset}}<span class="bk-badge preset">Preset</span>{{else}}<span class="bk-badge yours">Yours</span>{{end}}</td>

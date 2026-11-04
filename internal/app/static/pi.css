@@ -10,10 +10,10 @@
 .pi-strip { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-3) var(--space-4); padding: var(--space-3) var(--space-4); border: 1px solid var(--hairline); border-left: 3px solid var(--accent); border-radius: var(--r-md); background: var(--surface-inset); }
 .pi-strip-text { flex: 1 1 22rem; min-width: 0; }
 .pi-strip-text p { margin: 0; }
-.pi-strip-line { font-size: 1.02rem; }
-.pi-strip-text .pi-coverage { margin-top: 0.3rem; font-size: 0.9rem; }
+.pi-strip-line { font-size: var(--fs-xl); }
+.pi-strip-text .pi-coverage { margin-top: 0.3rem; font-size: var(--fs-lg); }
 .pi-strip-act { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); min-width: 0; }
-.pi-prov { color: var(--muted); font-size: 0.85rem; }
+.pi-prov { color: var(--muted); font-size: var(--fs-md); }
 .pi-coverage.pos { color: var(--kept); font-weight: 600; }
 .pi-coverage.neg { color: var(--danger); font-weight: 600; }
 .pi-note { margin: 0; }
@@ -21,7 +21,7 @@
 
 /* Tier badges: one colour per tier, the same in the table, the
    strip and the map. */
-.pi-tier { display: inline-block; padding: 0.02rem 0.4rem; border: 1px solid currentColor; border-radius: var(--r-xs); font-family: var(--font-num); font-size: 0.74rem; font-weight: 700; line-height: 1.4; vertical-align: 0.08em; }
+.pi-tier { display: inline-block; padding: 0.02rem 0.4rem; border: 1px solid currentColor; border-radius: var(--r-xs); font-family: var(--font-num); font-size: var(--fs-xs); font-weight: 700; line-height: 1.4; vertical-align: 0.08em; }
 .pi-t-r0 { color: var(--muted); }
 .pi-t-p1 { color: #6fb6e8; }
 .pi-t-p2 { color: var(--gold); }
@@ -36,12 +36,12 @@
 
 /* Settings: labelled fields on a two-up grid that folds to one. */
 .pi-field { display: flex; flex-direction: column; gap: 0.2rem; min-width: 0; }
-.pi-field > span { color: var(--muted); font-size: 0.8rem; }
+.pi-field > span { color: var(--muted); font-size: var(--fs-sm); }
 .pi-field :is(select, input) { width: 100%; min-width: 0; box-sizing: border-box; min-height: var(--control-h); padding: 0.2rem 0.6rem; border: 1px solid var(--hairline); border-radius: var(--r-sm); background: var(--input-bg); color: var(--text); font: inherit; }
 .pi-field :is(select, input):focus { border-color: var(--accent); }
 .pi-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 9rem), 1fr)); gap: var(--space-2) var(--space-3); margin: var(--space-3) 0; }
 .pi-planets { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 7.5rem), 1fr)); gap: 0.15rem 0.5rem; margin: 0; padding: var(--space-2) var(--space-3); border: 1px solid var(--hairline); border-radius: var(--r-sm); }
-.pi-planets legend { padding: 0 0.3rem; color: var(--muted); font-size: 0.8rem; }
+.pi-planets legend { padding: 0 0.3rem; color: var(--muted); font-size: var(--fs-sm); }
 .pi-planet { display: flex; align-items: center; gap: 0.4rem; min-height: 2rem; }
 .pi-planet small { color: var(--gold); }
 .pi-help { margin: var(--space-2) 0; }
@@ -57,7 +57,7 @@
 .pi-colony-planet { color: var(--muted); }
 .pi-colony-top .lchip { margin-left: auto; }
 .pi-colony.over .lchip { color: var(--gold); }
-.pi-colony-more summary { color: var(--muted); font-size: 0.85rem; cursor: pointer; }
+.pi-colony-more summary { color: var(--muted); font-size: var(--fs-md); cursor: pointer; }
 .pi-colony-more ul { margin: 0.3rem 0 0; padding-left: 1.1rem; }
 
 /* The production map: tiers side by side, scrolling inside its own
@@ -65,10 +65,10 @@
    a time and snaps to a tier's edge. */
 .pi-graph { display: flex; gap: 0.6rem; overflow-x: auto; overscroll-behavior-x: contain; padding-bottom: 0.5rem; }
 .pi-col { flex: 1 0 10rem; min-width: 10rem; }
-.pi-col h4 { margin: 0 0 0.4rem; color: var(--muted); font-family: var(--font-display); font-size: 0.8rem; letter-spacing: 0.06em; text-transform: uppercase; }
+.pi-col h4 { margin: 0 0 0.4rem; color: var(--muted); font-family: var(--font-display); font-size: var(--fs-sm); letter-spacing: 0.06em; text-transform: uppercase; }
 .pi-node { display: block; width: 100%; min-height: 2.25rem; margin-bottom: 0.3rem; padding: 0.35rem 0.5rem; border: 1px solid var(--hairline); border-radius: var(--r-xs); background: var(--surface-pane); color: var(--text); text-align: left; font: inherit; cursor: pointer; }
 .pi-node small { display: block; color: var(--muted); font-family: var(--font-num); }
-.pi-node .pi-on { color: var(--gold); font-family: var(--font-body); font-size: 0.72rem; }
+.pi-node .pi-on { color: var(--gold); font-family: var(--font-body); font-size: var(--fs-xs); }
 .pi-node.dimmed { opacity: 0.45; }
 .pi-node.input { border-color: var(--kept); }
 .pi-node.input.missing { border-color: var(--danger); border-style: dashed; }
@@ -87,8 +87,8 @@
    settings sit inline and the trigger stays hidden. */
 .pi-strip [data-sheet-open][hidden] { display: none; }
 
-/* Summary figures stay on one line. */
-.pi .l-stat-value { font-size: 1.35rem; white-space: nowrap; }
+/* Summary figures stay on one line (shared relative sizing). */
+.pi .l-stat-value { font-size: var(--fs-3xl); font-size: clamp(var(--fs-sm), 9cqw, var(--fs-3xl)); }
 .pi .l-stat-sub { overflow-wrap: anywhere; }
 
 /* Profitable chains stay a three-column table in the side column:

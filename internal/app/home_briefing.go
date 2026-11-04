@@ -403,6 +403,7 @@ func (app *Application) buildBriefing(ctx context.Context, bundles []*charSnaps,
 		// resolved from the local static data by name (type IDs are
 		// CCP's to change; names are how the skill catalog speaks).
 		slotSkillIDs: app.slotSkillIDs(ctx),
+		groupAt:      briefingGroupThreshold(len(bundles)),
 	}
 	for _, b := range bundles {
 		prefix := string(briefCharLink(viewer, b.ch.CharacterID, b.ch.Name))
@@ -438,7 +439,7 @@ func (app *Application) buildBriefing(ctx context.Context, bundles []*charSnaps,
 	// price history (the Needs-attention feed's own sources). ----
 	lines = append(lines, app.briefingMarketLines(ctx, bundles, viewer, names, shared, now, userID, prefs)...)
 	lines = append(lines, app.briefingCampLines(ctx, userID, prefs, bundles, now)...)
-	lines = aggregateBriefing(lines)
+	lines = aggregateBriefing(lines, briefingGroupThreshold(len(bundles)))
 
 	sort.SliceStable(lines, func(i, j int) bool {
 		if lines[i].Rank != lines[j].Rank {
@@ -612,7 +613,10 @@ func briefingAggHref(rule string) string {
 // into "and N others", their counts already inside the total).
 // Smaller spreads keep their detailed per-character lines, the same
 // threshold flushIdle uses for empty skill queues.
-func aggregateBriefing(lines []briefingLine) []briefingLine {
+func aggregateBriefing(lines []briefingLine, groupAt int) []briefingLine {
+	if groupAt < 2 {
+		groupAt = briefingGroupAt
+	}
 	groups := map[string][]int{}
 	for i, l := range lines {
 		if l.aggRule != "" {
@@ -622,7 +626,7 @@ func aggregateBriefing(lines []briefingLine) []briefingLine {
 	drop := map[int]bool{}
 	merged := map[int]briefingLine{}
 	for rule, idxs := range groups {
-		if len(idxs) < briefingGroupAt {
+		if len(idxs) < groupAt {
 			continue
 		}
 		if _, ok := briefingAggSummary(rule, 0); !ok {
@@ -699,6 +703,10 @@ type briefingBuilder struct {
 	// idle holds the characters with an empty skill queue until every
 	// character is seen: three or more become one grouped line.
 	idle []idleLine
+
+	// groupAt is this account's collapse threshold (see
+	// briefingGroupThreshold); zero means the standing briefingGroupAt.
+	groupAt int
 }
 
 // idleLine is one character with nothing training.
@@ -712,10 +720,26 @@ type idleLine struct {
 // briefingGroupAt is how many of the same alert collapse into one line.
 const briefingGroupAt = 3
 
+// briefingGroupThreshold is the collapse threshold for one account:
+// the standing briefingGroupAt, except that an account with fewer
+// characters than that could never reach it, so for a two-character
+// account the pair already collapses. One character keeps the
+// standing threshold (its single detailed line is the card).
+func briefingGroupThreshold(accountChars int) int {
+	if accountChars >= 2 && accountChars < briefingGroupAt {
+		return accountChars
+	}
+	return briefingGroupAt
+}
+
 // flushIdle writes the empty-queue lines: one per character, or one
 // line naming them all once there are briefingGroupAt or more.
 func (bb *briefingBuilder) flushIdle() {
-	if len(bb.idle) >= briefingGroupAt {
+	groupAt := bb.groupAt
+	if groupAt < 2 {
+		groupAt = briefingGroupAt
+	}
+	if len(bb.idle) >= groupAt {
 		names := make([]string, 0, len(bb.idle))
 		latest := time.Time{}
 		for _, l := range bb.idle {

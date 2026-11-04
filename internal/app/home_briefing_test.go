@@ -496,7 +496,7 @@ func TestBriefingAggregatesAcrossCharacters(t *testing.T) {
 		mk("mail", 122, "Pinkamena"),
 		mk("pi-stopped", 12, "Pinkamena"),
 	}
-	out := aggregateBriefing(lines)
+	out := aggregateBriefing(lines, briefingGroupAt)
 	pi, mail := 0, 0
 	for _, l := range out {
 		if strings.Contains(l.html, "extractors have stopped") {
@@ -522,10 +522,24 @@ func TestBriefingAggregatesAcrossCharacters(t *testing.T) {
 	for i, n := range []int{1, 2, 3, 4, 5} {
 		five = append(five, mk("mail", n, fmt.Sprintf("Char%d", i)))
 	}
-	out = aggregateBriefing(five)
+	out = aggregateBriefing(five, briefingGroupAt)
 	if len(out) != 1 || !strings.Contains(out[0].html, "15 unread mails") ||
 		!strings.Contains(out[0].html, "and 1 more") || strings.Contains(out[0].html, "Char4") {
 		t.Errorf("five-way mail spread did not fold into one card: %+v", out)
+	}
+
+	// A two-character account collapses at its own threshold: the
+	// pair above, at the two-character threshold, is one card.
+	pair := []briefingLine{mk("mail", 3, "Khastira"), mk("mail", 122, "Pinkamena")}
+	out = aggregateBriefing(pair, briefingGroupThreshold(2))
+	if len(out) != 1 || !strings.Contains(out[0].html, "125 unread mails") {
+		t.Errorf("two-character account mail did not fold into one card: %+v", out)
+	}
+	if got := briefingGroupThreshold(1); got != briefingGroupAt {
+		t.Errorf("one-character threshold = %d, want %d", got, briefingGroupAt)
+	}
+	if got := briefingGroupThreshold(9); got != briefingGroupAt {
+		t.Errorf("nine-character threshold = %d, want %d", got, briefingGroupAt)
 	}
 }
 
@@ -545,7 +559,7 @@ func TestBriefingAggregatesDeepLinks(t *testing.T) {
 		mk("mail", 6, "Bravo", "/mail/?character=22"),
 		mk("mail", 7, "Charlie", "/mail/?character=33"),
 	}
-	out := aggregateBriefing(lines)
+	out := aggregateBriefing(lines, briefingGroupAt)
 	if len(out) != 2 {
 		t.Fatalf("aggregated lines = %d, want 2 combined cards: %+v", len(out), out)
 	}

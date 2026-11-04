@@ -2357,14 +2357,35 @@ td.pos, .pos { color: #28c76f; }
 .chip.sev-critical { border-color: rgba(198, 47, 16, 0.6); }
 .chip.sev-warning { border-color: rgba(255, 106, 26, 0.5); }
 .chip.sev-critical.on { color: #ff7a5c; border-color: #ff7a5c; }
+/* One row only: the decks ride a horizontal pager (buttons or a
+   swipe scroll to the next set) instead of wrapping into a wall.
+   How many decks a view shows follows the container steps on
+   .brief-deck below. */
+.brief-pager { position: relative; }
 ul.brief-cards {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 0.75rem;
-  padding: 0;
+  padding: 0 0.65rem 0.65rem 0;
   margin: 0 0 0.5rem;
   list-style: none;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scroll-behavior: smooth;
+  scrollbar-width: none;
 }
+ul.brief-cards::-webkit-scrollbar { display: none; }
+@media (prefers-reduced-motion: reduce) { ul.brief-cards { scroll-behavior: auto; } }
+.brief-page-btn {
+  position: absolute; top: 50%; transform: translateY(-50%); z-index: 4;
+  width: 2rem; height: 2rem; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--box-edge); background: var(--panel); color: var(--text-bright);
+  font-size: var(--fs-2xl); line-height: 1; display: grid; place-items: center;
+}
+.brief-page-btn[data-brief-page="-1"] { left: -0.4rem; }
+.brief-page-btn[data-brief-page="1"] { right: -0.4rem; }
+.brief-page-btn:hover, .brief-page-btn:focus-visible { border-color: var(--accent); color: var(--accent); }
+.brief-page-btn[disabled] { opacity: 0.35; cursor: default; }
 .brief-card {
   display: flex;
   flex-direction: column;
@@ -2439,7 +2460,7 @@ html[data-theme="light"] .brief-card.sev-info { --brief-tint: #b2cddd; }
    above the overlay. Flipping (the more button, or a swipe)
    folds the face edge-on and swaps it under the fold; see
    app.js. */
-.brief-deck { position: relative; flex: 1 1 0; min-width: min(100%, 22rem); max-width: calc((100% - 1.5rem) / 3); touch-action: pan-y; }
+.brief-deck { position: relative; flex: 0 0 auto; scroll-snap-align: start; min-width: min(100%, 22rem); width: calc((100% - 1.5rem) / 3); max-width: calc((100% - 1.5rem) / 3); touch-action: pan-y; }
 .brief-deck .brief-card { flex: none; min-width: 0; max-width: none; width: 100%; }
 /* The cap follows how many decks a row can actually hold at the
    22rem floor: a third where three fit, a half where two do, the
@@ -2448,8 +2469,8 @@ html[data-theme="light"] .brief-card.sev-info { --brief-tint: #b2cddd; }
    steps land on the decks, the flex items, after their base rule
    so they win at equal specificity; the card inside a deck always
    fills it. */
-@container (max-width: 67.5rem) { .brief-deck { max-width: calc((100% - 0.75rem) / 2); } }
-@container (max-width: 44.75rem) { .brief-deck { max-width: none; } }
+@container (max-width: 67.5rem) { .brief-deck { width: calc((100% - 0.75rem) / 2); max-width: calc((100% - 0.75rem) / 2); } }
+@container (max-width: 44.75rem) { .brief-deck { width: 100%; max-width: none; } }
 .brief-flip-card { transition: transform 360ms ease, opacity 360ms ease; }
 .brief-flip-card[data-pos="0"] { position: relative; z-index: 3; height: 100%; transform-origin: center; backface-visibility: hidden; }
 .brief-flip-card:not([data-pos="0"]) { display: none; }

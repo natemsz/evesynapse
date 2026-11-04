@@ -1360,6 +1360,50 @@
   onContentReady(initBriefTabs);
   initBriefTabs(document);
 
+  // --- Briefing one-row pager --------------------------------------
+  // The decks sit in one row; the edge buttons smooth-scroll the
+  // row by a full view (the CSS scroll-behavior animates it, and
+  // touch swipes scroll the row natively). Buttons show only
+  // while the row actually overflows, and grey out at the ends.
+  function initBriefPager(root) {
+    var lists = root.querySelectorAll(".brief-pager .brief-cards");
+    for (var n = 0; n < lists.length; n++) {
+      (function (list) {
+        if (list.dataset.briefPagerWired) return;
+        list.dataset.briefPagerWired = "1";
+        var pager = list.closest(".brief-pager");
+        if (!pager) return;
+        var prev = pager.querySelector("[data-brief-page=\"-1\"]");
+        var next = pager.querySelector("[data-brief-page=\"1\"]");
+        if (!prev || !next) return;
+        var update = function () {
+          var over = list.scrollWidth - list.clientWidth > 4;
+          prev.hidden = !over;
+          next.hidden = !over;
+          if (!over) return;
+          prev.disabled = list.scrollLeft <= 4;
+          next.disabled = list.scrollLeft >= list.scrollWidth - list.clientWidth - 4;
+        };
+        var page = function (dir) {
+          var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+          list.scrollBy({ left: dir * list.clientWidth, behavior: reduce ? "auto" : "smooth" });
+        };
+        prev.addEventListener("click", function () { page(-1); });
+        next.addEventListener("click", function () { page(1); });
+        list.addEventListener("scroll", update, { passive: true });
+        window.addEventListener("resize", update);
+        var tabs = root.querySelectorAll("[data-brief]");
+        for (var t = 0; t < tabs.length; t++) {
+          tabs[t].addEventListener("click", function () { setTimeout(update, 60); });
+        }
+        update();
+        setTimeout(update, 300);
+      })(lists[n]);
+    }
+  }
+  onContentReady(initBriefPager);
+  initBriefPager(document);
+
   // --- Briefing deck flip ------------------------------------------
   // Each kind is a deck with one painted card: the face, over two
   // empty shells that suggest the stack behind it. The more button

@@ -86,6 +86,8 @@
     {{if .Counts.Warning}}<button type="button" class="chip sev-warning" data-brief="warning" aria-pressed="false">Warning ({{.Counts.Warning}})</button>{{end}}
     {{if .Counts.Info}}<button type="button" class="chip sev-info" data-brief="info" aria-pressed="false">Info ({{.Counts.Info}})</button>{{end}}
   </div>
+  <div class="brief-pager">
+  <button type="button" class="brief-page-btn" data-brief-page="-1" aria-label="Show the previous briefing cards" hidden>&#8249;</button>
   <ul class="briefing brief-cards">
   {{/* One deck per kind: every line is a full card, the face card
        in front and the rest stacked behind it. Each line can be
@@ -98,6 +100,8 @@
     </div>{{end}}
   </li>{{end}}
   </ul>
+  <button type="button" class="brief-page-btn" data-brief-page="1" aria-label="Show the next briefing cards" hidden>&#8250;</button>
+  </div>
   {{if .More}}<p><small>+{{.More}} more need{{if eq .More 1}}s{{end}} your attention.</small></p>{{end}}
   <p><small>Since {{.SinceLabel}}</small>{{if .Dismissed}} · <button type="button" class="brief-dismissed-open" data-open-brief-dismissed>Dismissed ({{len .Dismissed}})</button>{{end}}</p>
   {{if .Dismissed}}

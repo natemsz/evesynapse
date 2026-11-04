@@ -1,32 +1,49 @@
-{{define "title"}}Shopping List — {{.Shopping.FitName}}{{end}}
-{{define "pagetitle"}}<h1>Shopping List</h1>{{end}}
+{{define "title"}}Shopping List: {{.Shopping.FitName}}{{end}}
+{{define "pagetitle"}}<h1><span class="gt">Shopping List</span></h1>{{end}}
+{{define "pagetabs"}}{{template "sectiontabs" .}}{{end}}
 {{define "content"}}
-<p>For fit: <strong>{{.Shopping.FitName}}</strong></p>
+<div class="l-page sl">
+<p class="browse-back"><a href="/fittings/saved/">← My Loadouts</a></p>
 
-{{if .Error}}<p class="error">{{.Error}}</p>{{end}}
+{{if .Error}}<p class="err">{{.Error}}</p>{{end}}
 
-{{if .Shopping.Lines}}
+{{with .Shopping}}
+<div class="l-head">
+  <p class="l-head-sum">Everything to buy for <b>{{.FitName}}</b>, priced at the market.</p>
+  {{if .FitID}}<div class="l-head-act"><a class="btn" href="/fittings/?local={{.FitID}}#fit-editor">Open in fitting tool</a></div>{{end}}
+</div>
+
+{{if .Lines}}
+<div class="l-tiles sl-tiles">
+  <div class="l-stat"><span class="l-stat-label">Total cost</span><span class="l-stat-value">{{.TotalCost}}</span><span class="l-stat-sub">{{if .Unpriced}}Without the unpriced items{{else}}Every line priced{{end}}</span></div>
+  <div class="l-stat"><span class="l-stat-label">Lines</span><span class="l-stat-value">{{len .Lines}}</span><span class="l-stat-sub">Hull, modules and cargo</span></div>
+  <div class="l-stat{{if .Unpriced}} warn{{else}} ok{{end}}"><span class="l-stat-label">Unpriced</span><span class="l-stat-value">{{.Unpriced}}</span><span class="l-stat-sub">{{if .Unpriced}}No price data yet{{else}}All have a price{{end}}</span></div>
+</div>
+
+<section class="l-panel sl-list" aria-label="Items">
 <div class="tw">
-<table>
-  <thead><tr><th>Item</th><th>Qty</th><th>Unit price</th><th>Line cost</th></tr></thead>
+<table class="sl-table">
+  <thead><tr><th>Item</th><th class="num">Qty</th><th class="num">Unit price</th><th class="num">Line cost</th></tr></thead>
   <tbody>
-  {{range .Shopping.Lines}}
+  {{range .Lines}}
     <tr>
       <td><a href="{{.URL}}">{{.Name}}</a></td>
-      <td>{{.Quantity}}</td>
-      <td>{{if .PriceKnown}}{{.UnitPrice}}{{else}}<em>no price data</em>{{end}}</td>
-      <td>{{if .PriceKnown}}{{.LineCost}}{{else}}—{{end}}</td>
+      <td class="num">{{.Quantity}}</td>
+      <td class="num">{{if .PriceKnown}}{{.UnitPrice}}{{else}}<em>No price data</em>{{end}}</td>
+      <td class="num">{{if .PriceKnown}}{{.LineCost}}{{else}}—{{end}}</td>
     </tr>
   {{end}}
   </tbody>
   <tfoot>
-    <tr><td colspan="3"><strong>Total</strong></td><td><strong>{{.Shopping.TotalCost}}</strong></td></tr>
+    <tr><th scope="row" colspan="3">Total</th><td class="num"><strong>{{.TotalCost}}</strong></td></tr>
   </tfoot>
 </table>
 </div>
-{{if .Shopping.Unpriced}}<p><em>{{.Shopping.Unpriced}} items have no price data.</em></p>{{end}}
-<p><small>Charges default to 1,000 per type. Adjust as needed.</small></p>
+<p class="sl-hint">Charges count 1,000 per type. Adjust as needed.</p>
+</section>
 {{else}}
-<p>No items in this fit.</p>
+<div class="l-panel"><p>No items in this fit.</p></div>
 {{end}}
+{{end}}
+</div>
 {{end}}

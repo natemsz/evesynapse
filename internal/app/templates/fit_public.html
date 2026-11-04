@@ -1,17 +1,26 @@
 {{define "title"}}{{with .PublicFit}}{{.Card.Name}}{{else}}Public Fit{{end}}{{end}}
 {{define "pagetitle"}}{{with .PublicFit}}<h1><span class="gt">{{.Card.Name}}</span></h1>{{end}}{{end}}
+{{define "pagetabs"}}{{with .PublicFit}}{{if not .Shared}}{{template "sectiontabs" $}}{{end}}{{end}}{{end}}
 {{define "content"}}
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
 
+<div class="l-page fp">
 {{with .PublicFit}}
 {{if not .Shared}}<p class="browse-back"><a href="/fittings/public/">← Public fits</a></p>{{end}}
 <div class="fit-pubhead">
-  <div class="fit-pubmeta">
-    <p class="lede">{{publicItemLink .Card.ShipTypeID .Card.Ship}}{{if .Card.Author}} by {{.Card.Author}}{{end}} · {{.Card.Views}} views{{if .Card.PriceKnown}} · {{.Card.PriceLine}}{{end}}</p>
-    {{if .Description}}<p>{{.Description}}</p>{{end}}
-    {{if .Card.Tags}}<p class="tag-row">{{range .Card.Tags}}<a href="/fittings/public/?tag={{.}}">#{{.}}</a> {{end}}</p>{{end}}
-  </div>
-  <div class="fit-pubrate">
+  <section class="l-panel fit-pubmeta" aria-label="About this fit">
+    {{if .Card.ShipTypeID}}<img class="fp-ship" src="https://images.evetech.net/types/{{.Card.ShipTypeID}}/render?size=128" width="96" height="96" alt="">{{end}}
+    <div class="fp-id">
+      <p class="fp-ship-line">{{publicItemLink .Card.ShipTypeID .Card.Ship}}{{if .Card.Hull}} <small>{{.Card.Hull}}</small>{{end}}{{if .Card.Author}} <span class="fp-by">by {{.Card.Author}}</span>{{end}}</p>
+      {{if .Description}}<p class="fp-desc">{{.Description}}</p>{{end}}
+      {{if .Card.Tags}}<p class="tag-row">{{range .Card.Tags}}<a href="/fittings/public/?tag={{.}}">#{{.}}</a> {{end}}</p>{{end}}
+      <dl class="pb-nums">
+        <div><dt>Views</dt><dd>{{.Card.Views}}</dd></div>
+        {{if .Card.PriceKnown}}<div><dt>Price</dt><dd>{{.Card.PriceLine}}</dd></div>{{end}}
+      </dl>
+    </div>
+  </section>
+  <section class="l-panel fit-pubrate" aria-label="Rating">
     {{if .StarCount}}<p class="fit-pubstars"><span class="fit-pubstars-num">{{printf "%.1f" .AvgStars}} ★</span> <small>{{.StarCount}} rating{{if ne .StarCount 1}}s{{end}}{{if .MyStars}} · you rated {{.MyStars}}★{{end}}</small></p>{{else}}<p class="fit-pubstars"><small>No ratings yet.</small></p>{{end}}
     {{if .Shared}}
     <p class="hint">Shared by link. Anyone with the link can view this fit; it is not listed in the public browser.</p>
@@ -30,7 +39,7 @@
     {{else}}
     <p class="hint"><a href="/auth/link">Sign in with EVE SSO</a> to rate this fit.</p>
     {{end}}
-  </div>
+  </section>
 </div>
 
 {{$pub := .}}
@@ -39,7 +48,8 @@
 {{if .HasShip}}
 {{template "fit-workbench" .}}
 {{else}}
-<h3>Modules</h3>
+<section class="l-panel fp-mods" aria-labelledby="fp-mods-h">
+<h2 id="fp-mods-h">Modules</h2>
 {{if $pub.Sections}}
 {{range $pub.Sections}}
 <h4>{{.Label}}</h4>
@@ -50,10 +60,12 @@
 {{else}}
 <p class="hint">No modules listed.</p>
 {{end}}
+</section>
 {{end}}
 {{end}}
 
-<h3>Share</h3>
+<section class="l-panel fp-share" aria-labelledby="fp-share-h">
+<h2 id="fp-share-h">Share</h2>
 <p class="share-row">
   {{if .PageURL}}<button type="button" data-copy data-copy-text="{{.PageURL}}">Copy link</button>{{end}}
   {{if .EFT}}<button type="button" data-copy data-copy-from="fit-eft">Copy EFT</button>{{end}}
@@ -62,6 +74,9 @@
 </p>
 {{if .EFT}}<pre id="fit-eft">{{.EFT}}</pre>{{end}}
 
+</section>
+
 {{if .Shared}}<p class="hint">This fit was shared by link and is read-only here.</p>{{else if .Card.Mine}}<p class="hint">This is your fit. Open it in the <a href="/fittings/?local={{.Card.ID}}#fit-editor">fitting tool</a> to edit it; saving updates this page.</p>{{else}}<p class="hint">Open in the <a href="/fittings/?public={{.Card.ID}}#fit-editor">fitting tool</a> to simulate it with your skills or make your own copy.</p>{{end}}
 {{end}}
+</div>
 {{end}}

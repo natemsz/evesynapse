@@ -17,18 +17,28 @@
 <p><small>{{.Contacts.Contacts.Note}}</small></p>
 {{else if .Contacts.Contacts.Warming}}
 <p><small>Still syncing.{{if .IsAdmin}} Progress is on the <a href="/admin/sync/">Sync page</a>.{{end}}</small></p>
-{{else if .Contacts.Rows}}
+{{else if .Contacts.Total}}
 <section class="l-panel ct-list">
+{{with .Contacts.Bar}}<figure class="ct-bar">
+  <svg class="ct-bar-svg" viewBox="0 0 1000 14" preserveAspectRatio="none" aria-hidden="true">{{range .}}<rect class="ct-seg ct-{{.Tier}}" x="{{.X}}" y="0" width="{{.W}}" height="14"><title>{{.Label}}: {{.Count}}</title></rect>{{end}}</svg>
+  <figcaption class="ct-legend">{{range .}}<span><i class="ct-dot ct-{{.Tier}}"></i>{{.Label}} {{.Count}}</span>{{end}}</figcaption>
+</figure>{{end}}
+<div class="pilltabs ct-tabs" role="group" aria-label="Standing">{{range .Contacts.Tabs}}<a class="pilltab{{if .On}} on{{end}}" href="{{.Href}}">{{.Label}} <span class="cnt">{{.Count}}</span></a>{{end}}</div>
+{{if gt (len .Contacts.Kinds) 2}}<div class="fchips ct-kinds" role="group" aria-label="Kind">{{range .Contacts.Kinds}}<a class="fchip{{if .On}} on{{end}}" href="{{.Href}}">{{.Label}} {{.Count}}</a>{{end}}</div>{{end}}
+{{if .Contacts.Rows}}
 <div class="tw">
 <table class="ct-table">
   <thead><tr><th class="card-title">Contact</th><th>Kind</th><th>Standing</th><th></th></tr></thead>
   <tbody>
   {{range .Contacts.Rows}}
-    <tr><td>{{if .IsChar}}{{if .NamePending}}<span data-live-region data-poll-url="{{.PollURL}}" data-poll-state="pending"><span class="loading-pulse" aria-hidden="true"></span> Loading name for {{.Name}}…</span>{{else}}{{charLink $.ViewerChars .ID .Name}}{{end}}{{else if eq .Kind "corporation"}}{{corpLink .ID .Name}}{{else if eq .Kind "alliance"}}{{allianceLink .ID .Name}}{{else}}{{.Name}}{{end}}</td><td>{{.Type}}</td><td>{{.Standing}}</td><td>{{if .Blocked}}Blocked{{else if .Watched}}Watched{{end}}</td></tr>
+    <tr><td>{{if .IsChar}}{{if .NamePending}}<span data-live-region data-poll-url="{{.PollURL}}" data-poll-state="pending"><span class="loading-pulse" aria-hidden="true"></span> Loading name for {{.Name}}…</span>{{else}}{{charLink $.ViewerChars .ID .Name}}{{end}}{{else if eq .Kind "corporation"}}{{corpLink .ID .Name}}{{else if eq .Kind "alliance"}}{{allianceLink .ID .Name}}{{else}}{{.Name}}{{end}}</td><td>{{.Type}}</td><td><span class="ct-standing ct-{{.Tier}}" title="{{.TierLabel}}">{{.Standing}}</span></td><td>{{if .Blocked}}<span class="ct-flag ct-blocked">Blocked</span>{{else if .Watched}}<span class="ct-flag ct-watched"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 8s2.4-4.5 6.5-4.5S14.5 8 14.5 8 12.1 12.5 8 12.5 1.5 8 1.5 8Z" fill="none" stroke="currentColor" stroke-width="1.4"/><circle cx="8" cy="8" r="2" fill="currentColor"/></svg>Watched</span>{{end}}</td></tr>
   {{end}}
   </tbody>
 </table>
 </div>
+{{else}}
+<p><small>No contacts match these filters.</small></p>
+{{end}}
 <p><small>Standings run −10.0 (terrible) to +10.0 (excellent). EveSynapse only reads your contacts; change them in game.</small></p>
 </section>
 {{else}}

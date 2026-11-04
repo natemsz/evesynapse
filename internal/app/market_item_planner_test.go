@@ -513,7 +513,7 @@ func TestIndustryBlueprintPlannerLink(t *testing.T) {
 	mustContain(t, "/industry/", body,
 		`/planner/?product=1001`,
 		`title="open in build planner"`,
-		`aria-label="Fixture Widget — open in build planner"`,
+		`aria-label="Open Fixture Widget in the build planner"`,
 		`plan-glyph-sm`,
 	)
 }

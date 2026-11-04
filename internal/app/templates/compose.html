@@ -1,41 +1,48 @@
 {{define "title"}}Compose Mail{{end}}
 {{define "pagetitle"}}<h1><span class="gt">Compose Mail</span></h1>{{end}}
+{{define "pagetabs"}}{{template "sectiontabs" .}}{{end}}
 {{define "content"}}
 
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
 
-{{template "charselector" .MailChars}}
+<div class="l-page">
+<div class="l-head">
+  <div class="l-head-pick">{{template "charselector" .MailChars}}</div>
+  {{with .MailCompose}}<p class="l-head-sum">From <b>{{.CharacterName}}</b></p>{{end}}
+</div>
 
 {{if .MailCompose}}
 {{$c := .MailCompose}}
-<h2>From: {{$c.CharacterName}}</h2>
-
+<section class="l-panel mc">
 {{if $c.Sent}}
-<p class="ok">Mail sent.</p>
+<p class="ok" role="status">Mail sent.</p>
 <p><a href="/mail/?character={{$c.CharacterID}}">Back to the inbox</a> · <a href="/mail/compose/?character={{$c.CharacterID}}">Write another</a></p>
 {{else}}
 {{if $c.Error}}<p class="err">{{$c.Error}}</p>{{end}}
 {{if $c.NeedsRelink}}
 <p><a class="btn" href="/auth/eve">Sign in again</a> <small>to let EveSynapse send mail as {{$c.CharacterName}}. Reading mail is unaffected.</small></p>
 {{else}}
-<form method="post" action="/mail/send/">
+<form method="post" action="/mail/send/" class="l-stack mc-form">
   <input type="hidden" name="character" value="{{$c.CharacterID}}">
-  <p><label>To (character, corporation, or alliance name)<br>
-    <input type="text" name="to" value="{{$c.To}}" size="40" required autocomplete="off">
-  </label></p>
-  <p><label>Subject<br>
-    <input type="text" name="subject" value="{{$c.Subject}}" size="60" maxlength="100" required>
-  </label></p>
-  <p><label>Message<br>
-    <textarea name="body" rows="12" cols="70" required>{{$c.Body}}</textarea>
-  </label></p>
-  <p><button class="btn" type="submit">Send mail</button>
-  <a href="/mail/?character={{$c.CharacterID}}">Cancel</a></p>
+  {{if $c.Back}}<input type="hidden" name="back" value="{{$c.Back}}">{{end}}
+  <label class="mc-field">To (character, corporation, or alliance name)
+    <input type="text" name="to" value="{{$c.To}}" required autocomplete="off">
+  </label>
+  <label class="mc-field">Subject
+    <input type="text" name="subject" value="{{$c.Subject}}" maxlength="100" required>
+  </label>
+  <label class="mc-field">Message
+    <textarea name="body" rows="14" required>{{$c.Body}}</textarea>
+  </label>
+  <div class="l-cluster mc-actions"><button class="btn" type="submit">Send mail</button>
+  <a href="{{if $c.Back}}{{$c.Back}}{{else}}/mail/?character={{$c.CharacterID}}{{end}}">Cancel</a>
+  <small class="l-push">Sending mail costs a small in-game fee. The recipient name must match exactly.</small></div>
 </form>
-<p><small>Sending mail costs a small in-game fee. The recipient name must match exactly.</small></p>
 {{end}}
 {{end}}
+</section>
 {{else}}
 <p>No character to send from yet. Link a character first.</p>
 {{end}}
+</div>
 {{end}}

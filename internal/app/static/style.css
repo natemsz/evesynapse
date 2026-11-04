@@ -5671,6 +5671,10 @@ td.cal-day:hover .cal-add, .cal-add:focus-visible { opacity: 1; }
 .op-form textarea { display: block; width: min(40rem, 100%); }
 .op-form input[type="text"] { width: min(26rem, 100%); }
 .op-description { white-space: pre-wrap; max-width: 48rem; }
+/* The op page: the op and your sign-up beside who is coming, while
+   the details keep 30rem; the roster under them otherwise. */
+.op-split { --l-side: 24rem; --l-main-min: 30rem; align-items: flex-start; }
+.op-split .l-panel > h2:first-child { margin-top: 0; }
 .op-manage { display: flex; gap: 0.5rem; margin: 0.5rem 0 1rem; }
 .op-answers label { margin-right: 1rem; }
 

@@ -171,3 +171,9 @@
    sheet; .btn's display must not bring it back before that. */
 .pb-filters [data-sheet-open][hidden] { display: none; }
 .lo-card .fit-card-actions { gap: var(--space-2) var(--space-4); }
+/* Bar rows (powergrid, CPU, calibration): when the column is too
+   narrow for label, bar and figures on one line, the figures wrap
+   under the bar, right-aligned, instead of running out of it. */
+.l-page .fit-bar-row { flex-wrap: wrap; row-gap: 0.15rem; }
+.l-page .fit-bar-row .fit-bar { flex: 1 1 4rem; min-width: 4rem; }
+.l-page .fit-bar-row .fit-bar-nums { flex: 0 1 auto; margin-left: auto; text-align: right; white-space: normal; }

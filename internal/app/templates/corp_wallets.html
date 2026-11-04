@@ -5,85 +5,121 @@
 
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
 
-{{template "charselector" .CorpChars}}
+<div class="l-page">
+<div class="l-head">
+  <div class="l-head-pick">{{template "charselector" .CorpChars}}</div>
+  {{with .CorpWallets}}<p class="l-head-sum"><b>{{corpLink .CorpID .CorpTitle}}</b></p>{{end}}
+</div>
 
-{{if .CorpWallets}}
-<h2>{{corpLink .CorpWallets.CorpID .CorpWallets.CorpTitle}}</h2>
-<p><small><a href="/corporations/">Overview</a> · <a href="/corporations/members/?character={{.CorpWallets.CharacterID}}">Members</a> · Wallets · <a href="/corporations/orders/?character={{.CorpWallets.CharacterID}}">Orders</a> · <a href="/corporations/assets/?character={{.CorpWallets.CharacterID}}">Assets</a> · <a href="/corporations/structures/?character={{.CorpWallets.CharacterID}}">Structures</a> · <a href="/corporations/killmails/?character={{.CorpWallets.CharacterID}}">Killmails</a></small></p>
-
-  {{if .CorpWallets.Forbidden}}
-  {{if .CorpWallets.RoleMissing}}
-  <p>Needs the <b>{{.CorpWallets.RoleMissing}}</b> role in game. {{.CorpWallets.CharacterName}} doesn't hold it, so ESI won't share this corporation's wallet balances. They appear here once they do.</p>
+{{with .CorpWallets}}
+  {{if .Forbidden}}
+  <div class="l-panel co-gate">
+  {{if .RoleMissing}}
+  <p>Needs the <b>{{.RoleMissing}}</b> role in game. {{.CharacterName}} doesn't hold it, so ESI won't share this corporation's wallet balances. They appear here once they do.</p>
   {{else}}
-  <p>Wallet balances were refused by ESI (403). They'll appear here once {{.CorpWallets.CharacterName}} holds an accounting role in this corporation.</p>
+  <p>Wallet balances were refused by ESI (403). They'll appear here once {{.CharacterName}} holds an accounting role in this corporation.</p>
   {{end}}
-  {{else if .CorpWallets.NoFeeder}}
-  <p>{{.CorpWallets.CharacterName}} hasn't granted the corporation permissions that feed the wallet balances, so nobody is sharing this corporation's data with EveSynapse yet. <a href="{{.CorpWallets.AddScopesURL}}">Add the corporation permissions</a>. EVE asks for them on top of what is already granted.</p>
-  {{else if .CorpWallets.Warming}}
-  <p>Still syncing.{{if .IsAdmin}} Progress is on the <a href="/admin/sync/">Sync page</a>.{{end}}</p>
-  {{else if .CorpWallets.Loaded}}
-  <div class="tw">
-  <table>
-    <thead><tr><th>Division</th><th>Balance</th><th></th></tr></thead>
-    <tbody>
-    {{range .CorpWallets.Divisions}}
-      <tr><td>{{.Label}}</td><td>{{.Balance}} ISK</td><td>{{if .Active}}<strong>viewing</strong>{{else}}<a href="/corporations/wallets/?character={{$.CorpWallets.CharacterID}}&amp;division={{.Division}}">view ledger</a>{{end}}</td></tr>
+  </div>
+  {{else if .NoFeeder}}
+  <div class="l-panel co-gate"><p>{{.CharacterName}} hasn't granted the corporation permissions that feed the wallet balances, so nobody is sharing this corporation's data with EveSynapse yet. <a href="{{.AddScopesURL}}">Add the corporation permissions</a>. EVE asks for them on top of what is already granted.</p></div>
+  {{else if .Warming}}
+  <div class="l-panel co-gate"><p>Still syncing.{{if $.IsAdmin}} Progress is on the <a href="/admin/sync/">Sync page</a>.{{end}}</p></div>
+  {{else if .Loaded}}
+  {{$cw := .}}
+  <div class="l-tiles l-root">
+    <div class="l-stat"><span class="l-stat-label">All divisions</span><span class="l-stat-value">{{.Total}}</span><span class="l-stat-sub">ISK across the seven wallets</span></div>
+    <div class="l-stat"><span class="l-stat-label">{{.DivisionLabel}}</span><span class="l-stat-value">{{.DivisionBalance}}</span><span class="l-stat-sub">ISK in the division shown</span></div>
+    {{if .Income}}
+    <div class="l-stat co-in"><span class="l-stat-label">In</span><span class="l-stat-value">{{.Income}}</span><span class="l-stat-sub">{{if .JournalSpan}}{{.JournalSpan}}{{else}}This journal snapshot{{end}}</span></div>
+    <div class="l-stat co-out"><span class="l-stat-label">Out</span><span class="l-stat-value">{{.Spend}}</span><span class="l-stat-sub">{{if .JournalSpan}}{{.JournalSpan}}{{else}}This journal snapshot{{end}}</span></div>
     {{end}}
-    </tbody>
-  </table>
   </div>
 
-  <section class="foldable">
-  <h3>{{if eq .CorpWallets.Division 1}}Master Wallet{{else}}Division {{.CorpWallets.Division}}{{end}} — balance over time</h3>
-  {{if .CorpWallets.Graph}}
-  {{template "balance-chart" .CorpWallets.Graph}}
-  <p><small>Balance from {{.CorpWallets.Graph.From}} to {{.CorpWallets.Graph.To}}: every journal entry in this division's latest snapshot, ending at its current balance. ESI keeps about a month of a corporation wallet's journal, so that is how far back the line goes.</small></p>
-  {{else if .CorpWallets.GraphNote}}
-  <p><small>{{.CorpWallets.GraphNote}}</small></p>
-  {{end}}
-  </section>
+  <div class="l-console co-wallets" data-depth="{{.Depth}}" data-land-top>
+  <div class="l-panes">
+    <nav class="l-pane l-pane--dir" aria-label="Wallet divisions">
+      <div class="l-pane-bar"><h2 class="l-pane-title">Divisions <small>7 wallets</small></h2></div>
+      <div class="dirlist">
+        {{range .Divisions}}
+        <a class="diritem{{if .Active}} on{{end}}" href="/corporations/wallets/?character={{$cw.CharacterID}}&amp;division={{.Division}}" data-l-step="in"{{if .Active}} aria-current="true"{{end}}>
+          <span class="dir-top"><span class="dir-name">{{.Label}}</span><span class="dir-val">{{.Balance}}</span></span>
+          {{if .Share}}<span class="dir-sub">{{.Share}}% of the corporation's ISK</span>{{end}}
+          <span class="sharebar"><span class="fill" data-w="{{.Share}}"></span></span>
+        </a>
+        {{end}}
+      </div>
+    </nav>
 
-  <section class="foldable">
-  <h3>{{if eq .CorpWallets.Division 1}}Master Wallet{{else}}Division {{.CorpWallets.Division}}{{end}} — recent journal</h3>
-  {{if .CorpWallets.LedgerNote}}
-  <p><small>{{.CorpWallets.LedgerNote}}</small></p>
-  {{else if .CorpWallets.Journal}}
-  <div class="tw">
-  <table>
-    <thead><tr><th>Date</th><th>Type</th><th>Amount</th><th>Balance</th><th>Description</th></tr></thead>
-    <tbody>
-    {{range .CorpWallets.Journal}}
-      <tr><td>{{.Date}}</td><td>{{.Type}}</td><td>{{.Amount}} ISK</td><td>{{.Balance}} ISK</td><td>{{.Desc}}</td></tr>
-    {{end}}
-    </tbody>
-  </table>
-  </div>
-  {{if .CorpWallets.JournalCut}}<p><small>+ {{.CorpWallets.JournalCut}} older entries in this snapshot.</small></p>{{end}}
-  {{else}}
-  <p><small>No journal entries in this division's latest snapshot.</small></p>
-  {{end}}
-  </section>
+    <section class="l-pane l-pane--main" aria-label="{{.DivisionLabel}}">
+      <div class="l-pane-bar">
+        <a class="l-back" data-l-step="out" href="/corporations/wallets/?character={{.CharacterID}}">Divisions</a>
+        <h2 class="l-pane-title">{{.DivisionLabel}} <small>{{.DivisionBalance}} ISK</small></h2>
+      </div>
 
-  <section class="foldable">
-  <h3>{{if eq .CorpWallets.Division 1}}Master Wallet{{else}}Division {{.CorpWallets.Division}}{{end}} — recent transactions</h3>
-  {{if .CorpWallets.Txns}}
-  <div class="tw">
-  <table>
-    <thead><tr><th>Date</th><th>Item</th><th>Qty</th><th>Unit price</th><th>Total</th><th>Side</th><th>Counterparty</th></tr></thead>
-    <tbody>
-    {{range .CorpWallets.Txns}}
-      <tr><td>{{.Date}}</td><td>{{itemLink .TypeID .Item}}</td><td>{{.Qty}}</td><td>{{.Unit}} ISK</td><td>{{.Total}} ISK</td><td>{{.Side}}</td><td>{{if .ClientIsChar}}{{charLink $.ViewerChars .ClientID .With}}{{else if .ClientIsCorp}}{{corpLink .ClientID .With}}{{else}}{{.With}}{{end}}</td></tr>
-    {{end}}
-    </tbody>
-  </table>
+      <section class="foldable">
+      <h3>Balance history</h3>
+      {{if .Graph}}
+      {{template "balance-chart" .Graph}}
+      <p class="co-note"><small>Balance from {{.Graph.From}} to {{.Graph.To}}: every journal entry in this division's latest snapshot, ending at its current balance. ESI keeps about a month of a corporation wallet's journal, so that is how far back the line goes.</small></p>
+      {{else if .GraphNote}}
+      <p class="co-note"><small>{{.GraphNote}}</small></p>
+      {{end}}
+      </section>
+
+      {{if .LedgerNote}}
+      <p class="co-note"><small>{{.LedgerNote}}</small></p>
+      {{else}}
+      <div class="co-ledgers">
+      <div class="l-seg" role="tablist" aria-label="Ledgers" data-tabs hidden>
+        <button type="button" role="tab" id="cw-journal-tab" aria-controls="cw-journal" aria-selected="true">Journal <span class="co-cnt">{{len .Journal}}</span></button>
+        <button type="button" role="tab" id="cw-txns-tab" aria-controls="cw-txns" aria-selected="false">Transactions <span class="co-cnt">{{len .Txns}}</span></button>
+      </div>
+      <section role="tabpanel" id="cw-journal" aria-labelledby="cw-journal-tab">
+        <h3 class="l-tab-h">Recent journal</h3>
+        {{if .Journal}}
+        <input type="search" class="co-filter" data-table-filter="cw-jtable" data-row-class="cw-jrow" placeholder="Filter the journal" aria-label="Filter the journal">
+        <div class="tw">
+        <table id="cw-jtable">
+          <thead><tr><th>Date</th><th>Type</th><th class="mt-num">Amount</th><th class="mt-num opt">Balance</th><th>Description</th></tr></thead>
+          <tbody>
+          {{range .Journal}}
+            <tr class="cw-jrow" data-search="{{.Type}} {{.Desc}}"><td>{{.Date}}</td><td>{{.Type}}</td><td class="mt-num {{if .In}}co-in{{else}}co-out{{end}}">{{.Amount}} ISK</td><td class="mt-num">{{.Balance}} ISK</td><td>{{.Desc}}</td></tr>
+          {{end}}
+          </tbody>
+        </table>
+        </div>
+        {{if .JournalCut}}<p class="co-note"><small>+ {{.JournalCut}} older entries in this snapshot.</small></p>{{end}}
+        {{else}}
+        <p class="co-note"><small>No journal entries in this division's latest snapshot.</small></p>
+        {{end}}
+      </section>
+      <section role="tabpanel" id="cw-txns" aria-labelledby="cw-txns-tab">
+        <h3 class="l-tab-h">Recent transactions</h3>
+        {{if .Txns}}
+        <input type="search" class="co-filter" data-table-filter="cw-ttable" data-row-class="cw-trow" placeholder="Filter transactions" aria-label="Filter transactions">
+        <div class="tw">
+        <table id="cw-ttable">
+          <thead><tr><th>Date</th><th class="card-title">Item</th><th class="mt-num">Qty</th><th class="mt-num opt">Unit price</th><th class="mt-num">Total</th><th>Side</th><th>Counterparty</th></tr></thead>
+          <tbody>
+          {{range .Txns}}
+            <tr class="cw-trow" data-search="{{.Item}} {{.With}}"><td>{{.Date}}</td><td>{{itemLink .TypeID .Item}}</td><td class="mt-num">{{.Qty}}</td><td class="mt-num">{{.Unit}} ISK</td><td class="mt-num">{{.Total}} ISK</td><td><span class="co-side co-side-{{.Side}}">{{.Side}}</span></td><td>{{if .ClientIsChar}}{{charLink $.ViewerChars .ClientID .With}}{{else if .ClientIsCorp}}{{corpLink .ClientID .With}}{{else}}{{.With}}{{end}}</td></tr>
+          {{end}}
+          </tbody>
+        </table>
+        </div>
+        {{if .TxnsCut}}<p class="co-note"><small>+ {{.TxnsCut}} older transactions in this snapshot.</small></p>{{end}}
+        {{else}}
+        <p class="co-note"><small>No transactions in this division's latest snapshot.</small></p>
+        {{end}}
+      </section>
+      </div>
+      {{end}}
+    </section>
   </div>
-  {{if .CorpWallets.TxnsCut}}<p><small>+ {{.CorpWallets.TxnsCut}} older transactions in this snapshot.</small></p>{{end}}
-  {{else if not .CorpWallets.LedgerNote}}
-  <p><small>No transactions in this division's latest snapshot.</small></p>
-  {{end}}
-  </section>
+  </div>
   {{end}}
 {{else}}
   <p>No corporation to show yet. <a href="/auth/link">Link a character</a> first.</p>
 {{end}}
+</div>
 {{end}}

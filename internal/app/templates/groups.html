@@ -5,48 +5,35 @@
 
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
 
+<div class="l-page">
 {{with .Groups}}
-<p class="lede">A group is a list of characters that a corporation's or alliance's directors keep by hand: a special interest group, the fleet commanders, a logistics wing. A <a href="/discord/servers">Discord server's</a> rules can give everyone in a group a role.</p>
+<div class="l-head">
+  <div class="l-head-pick">{{template "corpselector" .OwnerOptions}}</div>
+  {{with .Owner}}<p class="l-head-sum"><b>{{.Name}}</b> · {{.Kind}} · {{len .Groups}} {{if eq (len .Groups) 1}}group{{else}}groups{{end}}</p>{{end}}
+</div>
+<p class="co-lede">A group is a list of characters that a corporation's or alliance's directors keep by hand: a special interest group, the fleet commanders, a logistics wing. A <a href="/discord/servers">Discord server's</a> rules can give everyone in a group a role.</p>
 
 {{if not .Owner}}
-<p>None of your characters is a director, so there are no groups for you to keep.</p>
+<div class="l-panel co-gate"><p>None of your characters is a director, so there are no groups for you to keep.</p></div>
 {{end}}
 
-{{template "corpselector" .OwnerOptions}}
 {{with .Owner}}
 {{$owner := .}}
-<h2>{{.Name}} <small>· {{.Kind}}</small></h2>
-
-<form method="post" action="/groups/create" class="op-form setting">
-  <input type="hidden" name="owner" value="{{.Key}}">
-  <h4>New group</h4>
-  <div class="form-grid">
-    <label class="field"><span class="field-label">Name</span>
-      <input type="text" name="name" maxlength="60" required placeholder="e.g. Logistics wing"></label>
-    <label class="field"><span class="field-label">What it is for</span>
-      <input type="text" name="description" maxlength="200" placeholder="Optional"></label>
-  </div>
-  <div class="form-actions">
-    <button type="submit">Create group</button>
-    <span class="field-hint">Only characters linked to EveSynapse and in the {{.Kind}} can be added{{if not .Candidates}}; none are yet{{end}}.</span>
-  </div>
-</form>
-
-<div class="settings-grid">
+<div class="co-cards">
 {{range .Groups}}
-<section class="setting group">
+<section class="l-panel co-card">
   {{$group := .ID}}
-  <div class="setting-head"><h4>{{.Name}}</h4><span class="field-hint">{{len .Members}} member{{if ne (len .Members) 1}}s{{end}}</span></div>
-  {{if .Description}}<p class="hint">{{.Description}}</p>{{end}}
+  <div class="co-card-head"><h3>{{.Name}}</h3><span class="co-hint">{{len .Members}} member{{if ne (len .Members) 1}}s{{end}}</span></div>
+  {{if .Description}}<p class="co-dim">{{.Description}}</p>{{end}}
   {{if .Members}}
   <ul class="row-list">
     {{range .Members}}
     <li><span>{{.Name}}{{if .Outside}} <small>no longer in the {{$owner.Kind}}, or not linked: counts for nothing until it is back</small>{{end}}</span>
-      <form method="post" action="/groups/{{$group}}/members/remove" class="inline-form"><input type="hidden" name="owner" value="{{$owner.Key}}"><input type="hidden" name="character" value="{{.CharacterID}}"><button type="submit" class="btn">Remove</button></form></li>
+      <form method="post" action="/groups/{{$group}}/members/remove" class="inline-form"><input type="hidden" name="owner" value="{{$owner.Key}}"><input type="hidden" name="character" value="{{.CharacterID}}"><button type="submit" class="btn btn-quiet">Remove</button></form></li>
     {{end}}
   </ul>
   {{else}}
-  <p class="hint">Nobody in this group yet.</p>
+  <p class="co-dim">Nobody in this group yet.</p>
   {{end}}
   {{if .Addable}}
   <form method="post" action="/groups/{{.ID}}/members/add" class="add-row">
@@ -61,16 +48,28 @@
     <button type="submit">Add</button>
   </form>
   {{else}}
-  <p class="hint">Every linked character of the {{$owner.Kind}} is already in this group.</p>
+  <p class="co-dim"><small>Every linked character of the {{$owner.Kind}} is already in this group.</small></p>
   {{end}}
-  <div class="setting-foot">
-    <form method="post" action="/groups/{{.ID}}/delete" class="inline-form"><input type="hidden" name="owner" value="{{$owner.Key}}"><button type="submit" class="btn btn-danger">Delete this group</button></form>
+  <div class="co-card-foot">
+    <form method="post" action="/groups/{{.ID}}/delete" class="inline-form" data-confirm="Delete the group {{.Name}}?"><input type="hidden" name="owner" value="{{$owner.Key}}"><button type="submit" class="btn btn-danger">Delete this group</button></form>
   </div>
 </section>
-{{else}}
-<p class="hint">No groups yet.</p>
 {{end}}
+
+<form method="post" action="/groups/create" class="l-panel co-card op-form">
+  <input type="hidden" name="owner" value="{{.Key}}">
+  <h3>New group</h3>
+  <label class="field"><span class="field-label">Name</span>
+    <input type="text" name="name" maxlength="60" required placeholder="e.g. Logistics wing"></label>
+  <label class="field"><span class="field-label">What it is for</span>
+    <input type="text" name="description" maxlength="200" placeholder="Optional"></label>
+  <div class="form-actions">
+    <button type="submit">Create group</button>
+  </div>
+  <p class="co-dim"><small>Only characters linked to EveSynapse and in the {{.Kind}} can be added{{if not .Candidates}}; none are yet{{end}}.</small></p>
+</form>
 </div>
 {{end}}
 {{end}}
+</div>
 {{end}}

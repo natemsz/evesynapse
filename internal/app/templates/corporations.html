@@ -5,29 +5,58 @@
 
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
 
-{{template "corpselector" .CorpOptions}}
-
+<div class="l-page">
 {{range .Corps}}
-  <section class="foldable">
-  <h2>{{corpLink .ID .Name}}{{if .Ticker}} [{{.Ticker}}]{{end}}</h2>
-  {{if .Pending}}<p><small>This corporation's details are still syncing. They fill in within a minute or so; reload to see them.</small></p>{{end}}
-  <p><img class="portrait" src="{{.LogoURL}}" alt="Logo of {{.Name}}" width="128" height="128"></p>
-  <div class="tw">
-  <table>
-    <tbody>
-      <tr><th>Members</th><td>{{.MemberCount}}</td></tr>
-      <tr><th>CEO</th><td>{{if .CEOName}}<img src="{{.CEOPortraitURL}}" alt="Portrait of {{.CEOName}}" width="32" height="32"> {{charLink $.ViewerChars .CEOID .CEOName}}{{else}}—{{end}}</td></tr>
-      <tr><th>Alliance</th><td>{{if .AllianceID}}{{allianceLink .AllianceID .Alliance}}{{else}}{{.Alliance}}{{end}}</td></tr>
-      <tr><th>Tax rate</th><td>{{.TaxRate}}</td></tr>
-      <tr><th>Founded</th><td>{{.Founded}}</td></tr>
-      <tr><th>Home station</th><td>{{.HomeStation}}</td></tr>
-      <tr><th>Your characters</th><td>{{range $i, $c := .Characters}}{{if $i}}, {{end}}{{charLink $.ViewerChars $c.ID $c.Name}}{{end}}</td></tr>
-    </tbody>
-  </table>
+{{if gt (len $.CorpOptions) 1}}
+<div class="l-head">
+  <div class="l-head-pick">{{template "corpselector" $.CorpOptions}}</div>
+</div>
+{{end}}
+{{if .Pending}}<p class="co-note"><small>This corporation's details are still syncing. They fill in within a minute or so; reload to see them.</small></p>{{end}}
+
+<div class="l-tiles ov-cards">
+  <div class="ov-card">
+    <div class="ov-idrow">
+      <span class="ov-portrait"><img src="{{.LogoURL}}" alt="Logo of {{.Name}}" width="64" height="64"></span>
+      <div class="ov-idmain">
+        <div class="ov-nm">{{corpLink .ID .Name}}</div>
+        {{if .Ticker}}<div class="ov-corp">[{{.Ticker}}]</div>{{end}}
+        <div class="ov-meta">{{if .AllianceID}}{{allianceLink .AllianceID .Alliance}}{{else if .Alliance}}{{.Alliance}}{{else}}Not in an alliance{{end}}</div>
+      </div>
+    </div>
   </div>
-  {{if .Description}}<h3>About</h3><p class="corp-desc">{{.Description}}</p>{{end}}
-  </section>
+
+  <div class="ov-card">
+    <div class="ov-chead"><span>Leadership</span></div>
+    {{if .CEOName}}<div class="co-ceo"><img src="{{.CEOPortraitURL}}" alt="" width="40" height="40"><span><small class="co-dim">CEO</small><br>{{charLink $.ViewerChars .CEOID .CEOName}}</span></div>{{else}}<p class="co-dim">CEO not known yet</p>{{end}}
+  </div>
+
+  <div class="ov-card">
+    <div class="ov-chead"><span>Corporation</span></div>
+    <div class="ov-trows">
+      <div class="tr"><span class="k">Members</span><span>{{if .MemberCount}}{{.MemberCount}}{{else}}—{{end}}</span></div>
+      <div class="tr"><span class="k">Tax rate</span><span>{{if .TaxRate}}{{.TaxRate}}{{else}}—{{end}}</span></div>
+      <div class="tr"><span class="k">Founded</span><span>{{if .Founded}}{{.Founded}}{{else}}—{{end}}</span></div>
+    </div>
+  </div>
+
+  <div class="ov-card">
+    <div class="ov-chead"><span>Home and your pilots</span></div>
+    <div class="ov-trows">
+      <div class="tr"><span class="k">Home station</span><span>{{if .HomeStation}}{{.HomeStation}}{{else}}—{{end}}</span></div>
+    </div>
+    <p class="co-chars">{{range $i, $c := .Characters}}{{if $i}}, {{end}}{{charLink $.ViewerChars $c.ID $c.Name}}{{end}}</p>
+  </div>
+</div>
+
+{{if .Description}}
+<section class="l-panel co-about">
+  <h2>About</h2>
+  <p class="corp-desc">{{.Description}}</p>
+</section>
+{{end}}
 {{else}}
   <p>No corporations to show yet. Link a character first.</p>
 {{end}}
+</div>
 {{end}}

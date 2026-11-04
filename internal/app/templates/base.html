@@ -48,6 +48,9 @@
 {{if eq .NavPage "planets.html"}}<link rel="stylesheet" href="/static/colonies.css?v={{.AssetVersion}}">{{end}}
 {{if eq .NavPage "piplanner.html"}}<link rel="stylesheet" href="/static/pi.css?v={{.AssetVersion}}">{{end}}
 {{if eq .NavPage "wallet.html"}}<link rel="stylesheet" href="/static/wallet.css?v={{.AssetVersion}}">{{end}}
+{{if eq .NavPage "corporations.html"}}<link rel="stylesheet" href="/static/overview.css?v={{.AssetVersion}}">{{end}}
+{{if eq .NavPage "corp_orders.html"}}<link rel="stylesheet" href="/static/finances.css?v={{.AssetVersion}}">{{end}}
+{{if or (eq .NavPage "corporations.html") (eq .NavPage "corp_members.html") (eq .NavPage "corp_wallets.html") (eq .NavPage "corp_orders.html") (eq .NavPage "corp_assets.html") (eq .NavPage "corp_structures.html") (eq .NavPage "corp_settings.html") (eq .NavPage "corp_fits.html") (eq .NavPage "groups.html") (eq .NavPage "doctrines.html") (eq .NavPage "doctrine.html") (eq .NavPage "srp.html") (eq .NavPage "discord_servers.html")}}<link rel="stylesheet" href="/static/corp.css?v={{.AssetVersion}}">{{end}}
 {{if eq .NavPage "skillplans.html"}}<link rel="stylesheet" href="/static/skillplans.css?v={{.AssetVersion}}">{{end}}
 {{if eq .NavPage "fittings.html"}}<link rel="stylesheet" href="/static/fit.css?v={{.AssetVersion}}">{{end}}
 {{if or (eq .NavPage "map.html") (eq .NavPage "intel_workbench.html")}}<link rel="stylesheet" href="/static/map.css?v={{.AssetVersion}}">{{end}}{{if eq .NavPage "intel_workbench.html"}}<link rel="stylesheet" href="/static/dashboard.css?v={{.AssetVersion}}">{{end}}

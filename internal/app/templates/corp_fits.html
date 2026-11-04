@@ -5,15 +5,18 @@
 
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
 
+<div class="l-page">
 {{with .CorpFits}}
 {{if not .CorpID}}
-<p>None of your characters is in a player corporation EveSynapse knows of yet, so there are no corporate fits to show.</p>
+<div class="l-panel co-gate"><p>None of your characters is in a player corporation EveSynapse knows of yet, so there are no corporate fits to show.</p></div>
 {{else}}
-{{template "corpselector" .CorpOptions}}
-<h2>{{.CorpName}}</h2>
-<p><small><a href="/doctrines/?corporation={{.CorpID}}">Doctrines</a> · Fits · <a href="/srp/?corporation={{.CorpID}}">Ship Replacement</a>{{if .Directs}} · <a href="/corporations/settings/?corporation={{.CorpID}}">Settings</a>{{end}}</small></p>
+<div class="l-head">
+  <div class="l-head-pick">{{template "corpselector" .CorpOptions}}</div>
+  <p class="l-head-sum"><b>{{.CorpName}}</b></p>
+</div>
 
 {{template "fitbrowser" .Browser}}
 {{end}}
 {{end}}
+</div>
 {{end}}

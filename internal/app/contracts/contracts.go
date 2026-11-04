@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"net/http"
 	"sort"
+	"strconv"
 
 	"evesynapse/internal/esi"
 	"evesynapse/internal/logging"
@@ -62,6 +63,11 @@ type contractRow struct {
 	Expires         string
 	Items           []contractItemRow
 	ItemsNote       string // "details warming" while the store lacks the list
+
+	ID   int64
+	Href string // this contract in the inspector
+	On   bool
+	Tone string // "live" while outstanding or in progress, "done" when finished, "" otherwise
 }
 
 // contractsView is the Contracts page body.
@@ -70,6 +76,12 @@ type contractsView struct {
 	Contracts     module.EconSectionState
 	Rows          []contractRow
 	Cut           int
+
+	// The framework console: the contracts are its main pane and
+	// ?contract= opens one in the inspector (depth 2).
+	Depth    int
+	ListHref string
+	Insp     *contractRow
 }
 
 // maxContractsShown caps the contract list; details warm into the
@@ -93,7 +105,9 @@ func (app *mod) handleContracts(w http.ResponseWriter, r *http.Request) {
 	}
 	data.ContractsChars = links
 
-	view := &contractsView{CharacterName: active.Name}
+	view := &contractsView{CharacterName: active.Name, Depth: 1}
+	view.ListHref = "/contracts/?character=" + strconv.FormatInt(active.CharacterID, 10)
+	picked, _ := strconv.ParseInt(r.URL.Query().Get("contract"), 10, 64)
 	data.Contracts = view
 
 	var contracts esi.Contracts
@@ -121,6 +135,15 @@ func (app *mod) handleContracts(w http.ResponseWriter, r *http.Request) {
 			Collateral: esi.FormatISK(c.Collateral),
 			Issued:     humanize.Finish(c.DateIssued),
 			Expires:    humanize.Finish(c.DateExpired),
+			ID:         c.ContractID,
+			Href:       view.ListHref + "&contract=" + strconv.FormatInt(c.ContractID, 10),
+			On:         picked > 0 && c.ContractID == picked,
+		}
+		switch c.Status {
+		case "outstanding", "in_progress":
+			row.Tone = "live"
+		case "finished", "finished_issuer", "finished_contractor":
+			row.Tone = "done"
 		}
 		row.Issuer, row.IssuerPending = app.contractCharLabel(ctx, c.IssuerID)
 		if row.Title == "" {
@@ -181,6 +204,12 @@ func (app *mod) handleContracts(w http.ResponseWriter, r *http.Request) {
 			row.ItemsNote = "Item details are still loading."
 		}
 		view.Rows = append(view.Rows, row)
+	}
+	for i := range view.Rows {
+		if view.Rows[i].On {
+			view.Insp = &view.Rows[i]
+			view.Depth = 2
+		}
 	}
 
 	app.deps.Render(ctx, w, http.StatusOK, "contracts.html", data)

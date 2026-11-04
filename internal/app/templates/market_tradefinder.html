@@ -7,9 +7,13 @@
 
 {{if .MarketTradefinder}}
 {{$s := .MarketTradefinder}}
-<p><small>Find items that are cheap to buy in one region and sell for more in another. Prices are the typical (middle) prices from the latest sweep of each region, so one joke order cannot make a route look good.</small></p>
+<div class="l-page">
+<div class="l-head">
+  <p class="l-head-sum">Items that are cheap to buy in one region and sell for more in another. Prices are the typical (middle) prices from the latest sweep of each region, so one joke order cannot make a route look good.</p>
+  {{if and $s.HasData $s.Rows (not $s.SameRegion)}}<div class="l-head-act"><a class="btn btn-quiet" href="#" id="csv-export">Export CSV</a></div>{{end}}
+</div>
 
-<form method="get" action="/market/tradefinder/">
+<form method="get" action="/market/tradefinder/" class="l-panel mk-filters">
   <label><small>Buy in</small>
     <select name="origin">
       {{range $s.Regions}}<option value="{{.ID}}"{{if eq .ID $s.OriginID}} selected{{end}}>{{.Name}}</option>{{end}}
@@ -21,70 +25,75 @@
     </select>
   </label>
   <label><small>At least margin %</small>
-    <input type="number" name="minmargin" min="0" step="any" value="{{$s.MinMargin}}" size="6">
+    <input type="number" name="minmargin" min="0" step="any" value="{{$s.MinMargin}}">
   </label>
   <label><small>At least sold per day in {{$s.DestName}}</small>
-    <input type="number" name="minvol" min="0" step="1" value="{{$s.MinVolume}}" size="6">
+    <input type="number" name="minvol" min="0" step="1" value="{{$s.MinVolume}}">
   </label>
-  <label><small><input type="checkbox" name="lowball" value="1"{{if $s.Lowball}} checked{{end}}> Include long shots (selling for over ten times the buy price)</small></label>
+  <label class="mk-check"><input type="checkbox" name="lowball" value="1"{{if $s.Lowball}} checked{{end}}> <small>Include long shots (selling for over ten times the buy price)</small></label>
   <button class="btn" type="submit">Find routes</button>
 </form>
 
 {{if $s.HasData}}
-<p><small>{{$s.OriginName}} {{$s.OriginAsOf}} · {{$s.DestName}} {{$s.DestAsOf}} · Figures older than 3 days are left out. Showing up to 100 routes, best estimated daily profit first. · <a href="#" id="csv-export">Export CSV</a></small></p>
-
 {{if $s.SameRegion}}
 <p>Pick two different regions. For buying and selling in the same region, use the <a href="/market/scanner/">Spread Scanner</a>.</p>
-{{else if $s.Rows}}
-<div class="tw">
-<table>
-  <thead><tr><th>Item</th><th>Buy in {{$s.OriginName}} (typical)</th><th>Sell in {{$s.DestName}} (typical)</th><th>Profit per item</th><th>Margin</th><th>Sold per day in {{$s.DestName}}</th><th>Estimated profit per day</th></tr></thead>
-  <tbody>
-  {{range $s.Rows}}
-    <tr>
-      <td><a href="/market/?type={{.TypeID}}&amp;region={{$s.DestID}}">{{.ItemName}}</a>{{if .OriginBest}}<br><small>Cheapest at {{placeLink .OriginStation}} ({{.OriginBest}} ISK)</small>{{end}}{{if .DestBest}}<br><small>Best buyer at {{placeLink .DestStation}} ({{.DestBest}} ISK)</small>{{end}}</td>
-      <td>{{.BuyTypical}} ISK</td>
-      <td>{{.SellTypical}} ISK</td>
-      <td>{{.ProfitItem}} ISK</td>
-      <td>{{.MarginPct}}</td>
-      <td>{{.SoldPerDay}}</td>
-      <td><strong>{{.ProfitDay}} ISK</strong></td>
-    </tr>
-  {{end}}
-  </tbody>
-</table>
-</div>
-<p><small>A route buys from sell orders in {{$s.OriginName}} and lists the items for sale in {{$s.DestName}}. Profit per item is the typical sell price in {{$s.DestName}} minus the typical sell price in {{$s.OriginName}}. Sold per day is the average daily amount that actually traded in {{$s.DestName}} over the last seven recorded days. Estimated profit per day is the profit per item times whichever runs out first: what {{$s.DestName}} sells each day, or the stock on sale in {{$s.OriginName}}. Before broker fees, sales tax and hauling.</small></p>
 {{else}}
-{{if $s.Pending}}<p>No route has sales figures in {{$s.DestName}} yet. The candidates are listed below while their figures are fetched.</p>
-{{else}}<p>No profitable routes between these regions right now. Try a lower minimum margin or fewer sold per day{{if not $s.Lowball}}, or include long shots{{end}}.</p>{{end}}
-{{end}}
-{{if and (not $s.SameRegion) $s.Pending}}
-<h3>Waiting on sales figures</h3>
-<p><small>These routes clear the price rules, but {{$s.DestName}} has no recorded sales for them yet, so there is no sold-per-day figure to rank them by. Their sales history is being fetched; each one moves into the table above once it arrives.</small></p>
-<div class="tw">
-<table>
-  <thead><tr><th>Item</th><th>Buy in {{$s.OriginName}} (typical)</th><th>Sell in {{$s.DestName}} (typical)</th><th>Profit per item</th><th>Margin</th></tr></thead>
-  <tbody>
-  {{range $s.Pending}}
-    <tr>
-      <td><a href="/market/?type={{.TypeID}}&amp;region={{$s.DestID}}">{{.ItemName}}</a></td>
-      <td>{{.BuyTypical}} ISK</td>
-      <td>{{.SellTypical}} ISK</td>
-      <td>{{.ProfitItem}} ISK</td>
-      <td>{{.MarginPct}}</td>
-    </tr>
+<section class="l-panel mk-results">
+  <div class="mk-bar"><h2 class="mk-title">{{$s.OriginName}} to {{$s.DestName}} <small>{{$s.OriginName}} {{$s.OriginAsOf}} · {{$s.DestName}} {{$s.DestAsOf}} · Figures older than 3 days are left out. Up to 100 routes, best daily profit first.</small></h2></div>
+  {{if $s.Rows}}
+  <div class="tw">
+  <table class="mk-table" data-rank="7">
+    <thead><tr><th class="card-title">Item</th><th class="mt-num">Buy in {{$s.OriginName}}</th><th class="mt-num">Sell in {{$s.DestName}}</th><th class="mt-num">Profit per item</th><th class="mt-num">Margin</th><th class="mt-num">Sold per day in {{$s.DestName}}</th><th class="mt-num">Estimated profit per day</th></tr></thead>
+    <tbody>
+    {{range $s.Rows}}
+      <tr>
+        <td><span class="mk-item"><img src="https://images.evetech.net/types/{{.TypeID}}/icon?size=32" alt="" width="28" height="28" loading="lazy" data-fallback-src="/static/img/item.svg"><span class="mk-item-text"><a href="/market/?type={{.TypeID}}&amp;region={{$s.DestID}}">{{.ItemName}}</a>{{if .OriginBest}}<small>Cheapest at {{placeLink .OriginStation}} ({{.OriginBest}} ISK)</small>{{end}}{{if .DestBest}}<small>Best buyer at {{placeLink .DestStation}} ({{.DestBest}} ISK)</small>{{end}}</span></span></td>
+        <td class="mt-num">{{.BuyTypical}}</td>
+        <td class="mt-num">{{.SellTypical}}</td>
+        <td class="mt-num">{{.ProfitItem}}</td>
+        <td class="mt-num">{{.MarginPct}}</td>
+        <td class="mt-num">{{.SoldPerDay}}</td>
+        <td class="mt-num mk-gold">{{.ProfitDay}}</td>
+      </tr>
+    {{end}}
+    </tbody>
+  </table>
+  </div>
+  <p class="mk-note"><small>Prices in ISK. A route buys from sell orders in {{$s.OriginName}} and lists the items for sale in {{$s.DestName}}. Profit per item is the typical sell price in {{$s.DestName}} minus the typical sell price in {{$s.OriginName}}. Sold per day is the average daily amount that actually traded in {{$s.DestName}} over the last seven recorded days. Estimated profit per day is the profit per item times whichever runs out first: what {{$s.DestName}} sells each day, or the stock on sale in {{$s.OriginName}}. Before broker fees, sales tax and hauling.</small></p>
+  {{else if $s.Pending}}
+  <p>No route has sales figures in {{$s.DestName}} yet. The candidates are listed below while their figures are fetched.</p>
+  {{else}}
+  <p>No profitable routes between these regions right now. Try a lower minimum margin or fewer sold per day{{if not $s.Lowball}}, or include long shots{{end}}.</p>
   {{end}}
-  </tbody>
-</table>
-</div>
+</section>
+{{if $s.Pending}}
+<section class="l-panel mk-results">
+  <div class="mk-bar"><h2 class="mk-title">Waiting on sales figures <small>{{len $s.Pending}}</small></h2></div>
+  <p class="mk-lead"><small>These routes clear the price rules, but {{$s.DestName}} has no recorded sales for them yet, so there is no sold-per-day figure to rank them by. Their sales history is being fetched; each one moves into the table above once it arrives.</small></p>
+  <div class="tw">
+  <table class="mk-table">
+    <thead><tr><th class="card-title">Item</th><th class="mt-num">Buy in {{$s.OriginName}}</th><th class="mt-num">Sell in {{$s.DestName}}</th><th class="mt-num">Profit per item</th><th class="mt-num">Margin</th></tr></thead>
+    <tbody>
+    {{range $s.Pending}}
+      <tr>
+        <td><span class="mk-item"><img src="https://images.evetech.net/types/{{.TypeID}}/icon?size=32" alt="" width="28" height="28" loading="lazy" data-fallback-src="/static/img/item.svg"><a href="/market/?type={{.TypeID}}&amp;region={{$s.DestID}}">{{.ItemName}}</a></span></td>
+        <td class="mt-num">{{.BuyTypical}}</td>
+        <td class="mt-num">{{.SellTypical}}</td>
+        <td class="mt-num">{{.ProfitItem}}</td>
+        <td class="mt-num">{{.MarginPct}}</td>
+      </tr>
+    {{end}}
+    </tbody>
+  </table>
+  </div>
+</section>
 {{end}}
-
+{{end}}
 {{else if $s.SameRegion}}
 <p>Pick two different regions. For buying and selling in the same region, use the <a href="/market/scanner/">Spread Scanner</a>.</p>
 {{else}}
 <p>Still gathering prices. The Trade Finder fills in after the first sweep of each region.</p>
 {{end}}
-
+</div>
 {{end}}
 {{end}}

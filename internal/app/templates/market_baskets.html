@@ -6,27 +6,34 @@
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
 
 {{with .MarketBaskets}}
-<p><small>A basket is a list of items priced together in one hub region, tracked day by day.</small></p>
+<div class="l-page">
+<div class="l-head">
+  <p class="l-head-sum">A basket is a list of items priced together in one hub region, tracked day by day.</p>
+  {{if and .SignedIn (not .AtLimit)}}<div class="l-head-act"><button class="btn" type="button" id="mbk-new">New basket</button></div>{{end}}
+</div>
 
+<section class="l-panel bk-list">
+<div class="bk-head"><h2 class="bk-title">All baskets</h2><small>The line beside each worth is its last 30 days. Open a basket for its detail.</small></div>
 <div class="tw">
-<table>
-  <thead><tr><th>Basket</th><th>Region</th><th class="mt-num">Items</th><th class="mt-num">Worth now</th><th class="mt-num">1 day</th><th class="mt-num">7 days</th><th></th><th></th></tr></thead>
+<table class="bk-table">
+  <thead><tr><th class="card-title">Basket</th><th>Region</th><th class="mt-num">Items</th><th class="mt-num">Worth now</th><th class="mt-num">1 day</th><th class="mt-num">7 days</th><th>Kind</th><th class="opt"><span class="visually-hidden">Actions</span></th></tr></thead>
   <tbody id="mbk-tbody">
   {{range .List}}
-    <tr data-mbk-row="{{.ID}}">
-      <td><a href="/market/baskets/{{.ID}}/">{{.Name}}</a></td>
+    <tr data-mbk-row="{{.ID}}"{{if not .Preset}} class="bk-own"{{end}}>
+      <td><a class="bk-name" href="/market/baskets/{{.ID}}/">{{.Name}}</a></td>
       <td>{{.RegionName}}</td>
       <td class="mt-num" data-mbk-count>{{.Items}}</td>
-      <td class="mt-num">{{if .Value}}{{if .Spark}}<span class="spark-hover" tabindex="0">{{.Value}} ISK<span class="spark-pop">{{.Spark}}</span></span>{{else}}{{.Value}} ISK{{end}}{{if .Partial}} <small>(some unpriced)</small>{{end}}{{else}}—{{end}}</td>
+      <td class="mt-num" data-sort="{{.Value}}">{{if .Value}}<span class="bk-worth">{{.Line}}{{if .Spark}}<span class="spark-hover" tabindex="0" title="{{.Value}} ISK">{{.ValueShort}} ISK<span class="spark-pop">{{.Spark}}</span></span>{{else}}<span title="{{.Value}} ISK">{{.ValueShort}} ISK</span>{{end}}</span>{{if .Partial}} <small class="bk-partial">some unpriced</small>{{end}}{{else}}—{{end}}</td>
       <td class="mt-num">{{if .Chg1.Text}}<span class="mt-chg {{.Chg1.Dir}}">{{.Chg1.Text}}</span>{{else}}—{{end}}</td>
       <td class="mt-num">{{if .Chg7.Text}}<span class="mt-chg {{.Chg7.Dir}}">{{.Chg7.Text}}</span>{{else}}—{{end}}</td>
-      <td><small>{{if .Preset}}Preset{{else}}Yours{{end}}</small></td>
+      <td>{{if .Preset}}<span class="bk-badge preset">Preset</span>{{else}}<span class="bk-badge yours">Yours</span>{{end}}</td>
       <td class="mt-num">{{if and $.MarketBaskets.SignedIn (not .Preset)}}<button type="button" class="mbk-edit-btn" data-mbk-edit="{{.ID}}" aria-label="Edit {{.Name}}" title="Edit basket"><svg class="glyph" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="url(#nav-glyph-gradient)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.8 2.8 0 1 1 4 4L8 20l-5 1 1-5Z"/><path d="M15 5l4 4"/></g></svg></button>{{end}}</td>
     </tr>
   {{end}}
   </tbody>
 </table>
 </div>
+</section>
 
 {{if .SignedIn}}
 <template id="mbk-editor-template">
@@ -54,10 +61,9 @@
 </template>
 
 {{if .AtLimit}}
-<p><small>You have the most baskets one player can keep. Delete one to make another.</small></p>
+<p class="bk-note"><small>You have the most baskets one player can keep. Delete one to make another.</small></p>
 {{else}}
-<p><button class="btn" type="button" id="mbk-new">New basket</button></p>
-<div class="mbk-builder" id="mbk-builder" hidden>
+<div class="l-panel mbk-builder" id="mbk-builder" hidden>
   <div class="mbk-pickrow">
     <label><small>Priced in</small>
       <select id="mbk-region">{{range .Regions}}<option value="{{.ID}}"{{if .Active}} selected{{end}}>{{.Name}}</option>{{end}}</select>
@@ -95,7 +101,8 @@
 </div>
 {{end}}
 {{else}}
-<p><small>Sign in to keep baskets of your own.</small></p>
+<p class="bk-note"><small><a href="/auth/login">Sign in</a> to keep baskets of your own.</small></p>
 {{end}}
+</div>
 {{end}}
 {{end}}

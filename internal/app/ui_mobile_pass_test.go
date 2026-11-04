@@ -234,7 +234,10 @@ func TestContractsPhoneCards(t *testing.T) {
 	if !strings.Contains(css, ".cs-row-issuer { display: none; }") {
 		t.Error("the issuer line is not held back from the desktop row")
 	}
-	block := mediaBlock(t, css, "@media (max-width: 45rem)")
+	// The cards key on the page's own width (the page sits on the
+	// layout framework), so an open sidebar on a tablet gets them
+	// as surely as a phone does.
+	block := mediaBlock(t, css, "@container page (width < 45rem)")
 	for _, want := range []string{
 		".cs-results { overflow-x: visible; }",
 		".cs-table { display: block; min-width: 0; }",
@@ -257,7 +260,7 @@ func TestContractsPhoneCards(t *testing.T) {
 	}
 	// The mid band is unchanged: the table keeps its five
 	// columns and scrolls inside its panel there.
-	mid := mediaBlock(t, css, "@media (max-width: 72rem)")
+	mid := mediaBlock(t, css, "@container page (width < 72rem)")
 	if !strings.Contains(mid, ".cs-table { min-width: 46rem; }") {
 		t.Error("the mid band lost the scrolling table form")
 	}

@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"sort"
 	"strconv"
+	"strings"
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
@@ -39,6 +40,7 @@ type restockView struct {
 	Rows      []restockRow
 	HasData   bool
 	TotalCost string
+	Short     int // targets with a shortfall
 }
 
 func (app *page) handleRestock(w http.ResponseWriter, r *http.Request) {
@@ -112,6 +114,11 @@ func (app *page) buildRestockView(ctx context.Context, r *http.Request) *restock
 
 	view.HasData = true
 	view.TotalCost = esi.FormatISK(totalCost)
+	for _, row := range view.Rows {
+		if row.shortfallRaw > 0 {
+			view.Short++
+		}
+	}
 	return view
 }
 
@@ -151,6 +158,9 @@ func (app *page) handleRestockSave(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	typeID, _ := strconv.ParseInt(r.Form.Get("type_id"), 10, 64)
+	if typeID <= 0 {
+		typeID = app.restockTypeByName(ctx, r.Form.Get("item"))
+	}
 	targetQty, _ := strconv.ParseInt(r.Form.Get("target_qty"), 10, 64)
 	marginPct, _ := strconv.ParseFloat(r.Form.Get("min_margin_pct"), 64)
 	if typeID <= 0 || targetQty < 0 {
@@ -166,6 +176,29 @@ func (app *page) handleRestockSave(w http.ResponseWriter, r *http.Request) {
 		logging.Errorf("restock: upsert target user %d type %d: %v", userID, typeID, err)
 	}
 	http.Redirect(w, r, "/market/restock/", http.StatusSeeOther)
+}
+
+// restockTypeByName resolves the add form's item box when no pick
+// filled the type (no script, or a name typed in full): a number is
+// a type id, a name takes its exact match, else the first suggestion.
+func (app *page) restockTypeByName(ctx context.Context, raw string) int64 {
+	raw = strings.TrimSpace(raw)
+	if id, err := strconv.ParseInt(raw, 10, 64); err == nil {
+		return id
+	}
+	if len(raw) < 2 {
+		return 0
+	}
+	found, err := app.queries.SuggestSDETypes(ctx, raw)
+	if err != nil || len(found) == 0 {
+		return 0
+	}
+	for _, f := range found {
+		if strings.EqualFold(f.Name, raw) {
+			return f.TypeID
+		}
+	}
+	return found[0].TypeID
 }
 
 func (app *page) handleRestockDelete(w http.ResponseWriter, r *http.Request) {

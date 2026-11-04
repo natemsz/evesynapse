@@ -10,6 +10,7 @@ package leaderboard
 import (
 	"context"
 	"fmt"
+	"math"
 	"net/http"
 	"net/url"
 	"sort"
@@ -33,6 +34,7 @@ type leaderboardRow struct {
 	RegionName string
 	Orders     string // esi.FormatInt
 	OpenValue  string // esi.FormatISK
+	SharePct   string // the ranked figure against the top station's, 0 to 100
 	locationID int64
 	ordersRaw  int64
 	valueRaw   float64
@@ -145,8 +147,24 @@ func (app *page) buildLeaderboardView(ctx context.Context, q url.Values) *leader
 	if len(view.Rows) > leaderboardRowCap {
 		view.Rows = view.Rows[:leaderboardRowCap]
 	}
+	var top float64
+	if len(view.Rows) > 0 {
+		top = view.Rows[0].valueRaw
+		if view.Sort == "orders" {
+			top = float64(view.Rows[0].ordersRaw)
+		}
+	}
 	for i := range view.Rows {
 		view.Rows[i].Rank = i + 1
+		v := view.Rows[i].valueRaw
+		if view.Sort == "orders" {
+			v = float64(view.Rows[i].ordersRaw)
+		}
+		pct := 0.0
+		if top > 0 {
+			pct = math.Round(v * 100 / top)
+		}
+		view.Rows[i].SharePct = strconv.FormatFloat(pct, 'f', 0, 64)
 	}
 	return view
 }

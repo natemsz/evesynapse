@@ -6,31 +6,39 @@
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
 
 {{with .MarketTrends}}
-<p><small>Items whose typical sell price swings the most, moved the most, or changed sharply in a hub region. Figures come from each sweep of the whole regional book.</small></p>
+<div class="l-page">
+<div class="l-head">
+  <p class="l-head-sum">Items whose typical sell price swings the most, moved the most, or changed sharply in a hub region. Figures come from each sweep of the whole regional book.</p>
+</div>
 
-<form method="get" action="/market/trends/" class="mt-filters">
+<div class="l-stack tr-controls l-root">
+<form method="get" action="/market/trends/" class="l-panel tr-filters">
   <input type="hidden" name="mode" value="{{.Mode}}">
   <input type="hidden" name="period" value="{{.Period}}">
+  {{if .Kind}}<input type="hidden" name="kind" value="{{.Kind}}">{{end}}
   <label><small>Region</small>
     <select name="region">
       {{range .Regions}}<option value="{{.ID}}"{{if .Active}} selected{{end}}>{{.Name}}</option>{{end}}
     </select>
   </label>
   <label><small>At least traded per day</small>
-    <input type="number" name="minvol" min="0" step="1" value="{{.MinVolume}}" size="6">
+    <input type="number" name="minvol" min="0" step="1" value="{{.MinVolume}}">
   </label>
   <label><small>At least sell orders</small>
-    <input type="number" name="minorders" min="1" step="1" value="{{.MinOrders}}" size="4">
+    <input type="number" name="minorders" min="1" step="1" value="{{.MinOrders}}">
   </label>
   <button class="btn" type="submit">Show</button>
 </form>
 
-<nav class="mt-modes" aria-label="Ranking">{{range .Modes}}<a href="{{.Href}}"{{if .Active}} class="active" aria-current="true"{{end}}>{{.Label}}</a>{{end}}</nav>
-{{if ne .Mode "volatile"}}<nav class="mt-modes" aria-label="Period">{{range .Periods}}<a href="{{.Href}}"{{if .Active}} class="active" aria-current="true"{{end}}>{{.Label}}</a>{{end}}</nav>{{end}}
-
-{{if eq .Mode "changes"}}<nav class="mt-modes" aria-label="Kind of change">{{range .Kinds}}<a href="{{.Href}}"{{if .Active}} class="active" aria-current="true"{{end}}>{{.Label}}</a>{{end}}</nav>{{end}}
+<div class="l-cluster tr-modes">
+  <nav class="pilltabs" aria-label="Ranking">{{range .Modes}}<a class="pilltab{{if .Active}} on{{end}}" href="{{.Href}}"{{if .Active}} aria-current="true"{{end}}>{{.Label}}</a>{{end}}</nav>
+  {{if ne .Mode "volatile"}}<nav class="pilltabs" aria-label="Period">{{range .Periods}}<a class="pilltab{{if .Active}} on{{end}}" href="{{.Href}}"{{if .Active}} aria-current="true"{{end}}>{{.Label}}</a>{{end}}</nav>{{end}}
+  {{if eq .Mode "changes"}}<nav class="pilltabs" aria-label="Kind of change">{{range .Kinds}}<a class="pilltab{{if .Active}} on{{end}}" href="{{.Href}}"{{if .Active}} aria-current="true"{{end}}>{{.Label}}</a>{{end}}</nav>{{end}}
+</div>
+</div>
 
 {{if eq .Mode "changes"}}
+<section class="l-panel tr-changes">
 {{if .Changes}}
 <div class="tw">
 <table>
@@ -47,39 +55,83 @@
   </tbody>
 </table>
 </div>
-<p><small>What each sweep finds against the day before, kept for 30 days. A price move counts at 10% or more, and at three times the item's usual daily swing. Only books with at least five sell orders and recorded trade count. Watch an item to be told when it changes.</small></p>
+<p class="tr-note"><small>What each sweep finds against the day before, kept for 30 days. A price move counts at 10% or more, and at three times the item's usual daily swing. Only books with at least five sell orders and recorded trade count. Watch an item to be told when it changes.</small></p>
 {{else}}
 <p>Nothing in {{.RegionName}} changed enough to list in that span.</p>
 {{end}}
+</section>
 {{else if .HasData}}
-<p><small>{{.RegionName}} · updated {{.Age}} · up to 100 items.</small></p>
-{{if .Rows}}
-<div class="tw">
-<table>
-  <thead><tr><th>Item</th><th class="mt-num">Typical sell</th><th class="mt-num">Typical buy</th><th class="mt-num">1 day</th><th class="mt-num">7 days</th><th class="mt-num">30 days</th><th class="mt-num">Daily swing</th><th class="mt-num">Sell orders</th><th class="mt-num">Traded per day</th></tr></thead>
-  <tbody>
-  {{range .Rows}}
-    <tr>
-      <td><a href="/market/?type={{.TypeID}}&amp;region={{$.MarketTrends.RegionID}}">{{.Name}}</a></td>
-      <td class="mt-num">{{.TypicalSell}}</td>
-      <td class="mt-num">{{if .TypicalBuy}}{{.TypicalBuy}}{{else}}—{{end}}</td>
-      <td class="mt-num">{{if .Chg1.Text}}<span class="mt-chg {{.Chg1.Dir}}">{{.Chg1.Text}}</span>{{else}}—{{end}}</td>
-      <td class="mt-num">{{if .Chg7.Text}}<span class="mt-chg {{.Chg7.Dir}}">{{.Chg7.Text}}</span>{{else}}—{{end}}</td>
-      <td class="mt-num">{{if .Chg30.Text}}<span class="mt-chg {{.Chg30.Dir}}">{{.Chg30.Text}}</span>{{else}}—{{end}}</td>
-      <td class="mt-num">{{if .Volatility}}{{.Volatility}}{{else}}—{{end}}</td>
-      <td class="mt-num">{{.Orders}}</td>
-      <td class="mt-num">{{.TradedDay}}</td>
-    </tr>
+<div class="l-console tr" data-depth="{{.Depth}}" data-land-top>
+<div class="l-panes">
+
+<section class="l-pane l-pane--main tr-main" aria-label="Ranked items">
+  <div class="l-pane-bar">
+    <h2 class="l-pane-title">{{.RegionName}} <small>updated {{.Age}} · up to 100 items</small></h2>
+    <span class="fchip tr-chip">{{.ModeLabel}}{{if ne .Mode "volatile"}}, {{.Period}} {{if eq .Period 1}}day{{else}}days{{end}}{{end}}</span>
+    <span class="fchip tr-chip">Traded per day ≥ {{.MinVolume}} · Sell orders ≥ {{.MinOrders}}</span>
+  </div>
+  {{if .Rows}}
+  <div class="tw">
+  <table class="tr-table" data-rank="{{.RankCol}}">
+    <thead><tr><th class="card-title">Item</th><th class="mt-num">Typical sell</th><th class="mt-num opt">Typical buy</th><th class="mt-num tr-chg1{{if ne .RankCol "chg1"}} opt{{end}}">1 day</th><th class="mt-num tr-chg7">7 days</th><th class="mt-num tr-chg30{{if ne .RankCol "chg30"}} opt{{end}}">30 days</th><th class="mt-num tr-swing">Daily swing</th><th class="mt-num">Sell orders</th><th class="mt-num">Traded per day</th></tr></thead>
+    <tbody>
+    {{range .Rows}}
+      <tr{{if .On}} class="yours"{{end}}>
+        <td><span class="tr-item"><span class="tr-rank">{{.Rank}}</span><img src="{{.IconURL}}" alt="" width="28" height="28" loading="lazy" data-fallback-src="/static/img/item.svg"><a href="{{.Href}}" data-l-step="in">{{.Name}}</a></span></td>
+        <td class="mt-num" title="{{.TypicalSell}} ISK">{{.SellShort}}</td>
+        <td class="mt-num"{{if .TypicalBuy}} title="{{.TypicalBuy}} ISK"{{end}}>{{if .BuyShort}}{{.BuyShort}}{{else}}—{{end}}</td>
+        <td class="mt-num tr-chg1">{{if .Chg1.Text}}<span class="mt-chg {{.Chg1.Dir}}">{{.Chg1.Text}}</span>{{else}}—{{end}}</td>
+        <td class="mt-num tr-chg7">{{if .Chg7.Text}}<span class="mt-chg {{.Chg7.Dir}}">{{.Chg7.Text}}</span>{{else}}—{{end}}</td>
+        <td class="mt-num tr-chg30">{{if .Chg30.Text}}<span class="mt-chg {{.Chg30.Dir}}">{{.Chg30.Text}}</span>{{else}}—{{end}}</td>
+        <td class="mt-num tr-swing">{{if .Volatility}}{{.Volatility}}{{else}}—{{end}}</td>
+        <td class="mt-num">{{.Orders}}</td>
+        <td class="mt-num">{{.TradedDay}}</td>
+      </tr>
+    {{end}}
+    </tbody>
+  </table>
+  </div>
+  <p class="tr-note"><small>Prices in ISK. Daily swing is how far the typical sell moves from one day to the next, on average over the last 30 days. A change shows only when a stored day sits in its window.</small></p>
+  {{else}}
+  <p>Nothing in {{.RegionName}} clears those filters. Try a lower traded-per-day or order count.</p>
   {{end}}
-  </tbody>
-</table>
-</div>
-<p><small>Prices in ISK. Daily swing is how far the typical sell moves from one day to the next, on average over the last 30 days. A change shows only when a stored day sits in its window.</small></p>
-{{else}}
-<p>Nothing in {{.RegionName}} clears those filters. Try a lower traded-per-day or order count.</p>
+</section>
+
+{{with .Insp}}
+<aside class="l-pane l-pane--insp insp tr-insp" aria-label="Selected item">
+  <div class="l-pane-bar"><a class="l-back" data-l-step="out" href="{{$.MarketTrends.ListHref}}">Ranking</a><a class="l-close" href="{{$.MarketTrends.ListHref}}" aria-label="Close the item">&#10005;</a></div>
+  <div class="insp-head">
+    <img src="{{.IconURL}}" alt="" width="48" height="48" loading="lazy" data-fallback-src="/static/img/item.svg">
+    <div class="insp-titles"><h3>{{itemLink .TypeID .Name}}</h3><p class="tr-msub">{{$.MarketTrends.RegionName}} · #{{.Rank}} {{$.MarketTrends.ModeLabel}}</p></div>
+  </div>
+  <div class="tr-kpis">
+    <div class="l-stat"><span class="l-stat-label">Typical sell</span><span class="l-stat-value">{{.SellShort}}</span><span class="l-stat-sub">{{.TypicalSell}} ISK</span></div>
+    <div class="l-stat"><span class="l-stat-label">Typical buy</span><span class="l-stat-value">{{if .BuyShort}}{{.BuyShort}}{{else}}none{{end}}</span>{{if .TypicalBuy}}<span class="l-stat-sub">{{.TypicalBuy}} ISK</span>{{end}}</div>
+  </div>
+  <p class="tr-open"><a class="btn" href="/market/?type={{.TypeID}}&amp;region={{$.MarketTrends.RegionID}}">Open in Market ({{$.MarketTrends.RegionName}})</a></p>
+  <h4 class="tr-h">Price moves and swing</h4>
+  <dl class="insp-facts">
+    <div><dt>1 day</dt><dd>{{if .Chg1.Text}}<span class="mt-chg {{.Chg1.Dir}}">{{.Chg1.Text}}</span>{{else}}no comparison day{{end}}</dd></div>
+    <div><dt>7 days</dt><dd>{{if .Chg7.Text}}<span class="mt-chg {{.Chg7.Dir}}">{{.Chg7.Text}}</span>{{else}}no comparison day{{end}}</dd></div>
+    <div><dt>30 days</dt><dd>{{if .Chg30.Text}}<span class="mt-chg {{.Chg30.Dir}}">{{.Chg30.Text}}</span>{{else}}no comparison day{{end}}</dd></div>
+    <div><dt>Daily swing</dt><dd>{{if .Volatility}}{{.Volatility}}{{else}}not enough days yet{{end}}</dd></div>
+  </dl>
+  {{if .Volatility}}<svg class="l-meter tr-meter" viewBox="0 0 100 4" preserveAspectRatio="none" role="img" aria-label="Daily swing against the widest in this ranking"><rect x="0" y="0" width="{{.SwingPct}}" height="4"/></svg>{{end}}
+  <h4 class="tr-h">Book depth and activity</h4>
+  <dl class="insp-facts">
+    <div><dt>Sell orders</dt><dd>{{.Orders}}</dd></div>
+    <div><dt>Traded per day, 30-day average</dt><dd>{{.TradedDay}}</dd></div>
+  </dl>
+  <p class="insp-note">Figures come from each sweep of the whole regional book in {{$.MarketTrends.RegionName}}. The meter sets this item's swing against the widest in the ranking.</p>
+</aside>
+<a class="l-scrim" href="{{$.MarketTrends.ListHref}}" aria-label="Close the item" tabindex="-1"></a>
 {{end}}
+
+</div>
+</div>
 {{else}}
 <p>Still building price history for {{.RegionName}}. Changes appear once a day of sweeps is stored, swings after a week.</p>
 {{end}}
+</div>
 {{end}}
 {{end}}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"html/template"
+	"strings"
 	"time"
 
 	db "evesynapse/internal/db/sqlc"
@@ -96,4 +97,42 @@ func basketSpark(series []db.ListMarketBasketValuesRow) template.HTML {
 		}
 	}
 	return sparkPop(values, "Basket value at typical sell, 30 days", esi.FormatISK(lo), esi.FormatISK(hi))
+}
+
+// basketLine30 is a basket's 30-day worth as a small inline line
+// for the list, coloured by its direction over the window; "" with
+// fewer than two valued days.
+func basketLine30(series []db.ListMarketBasketValuesRow) template.HTML {
+	values := make([]float64, 0, len(series))
+	for _, v := range series {
+		if v.ValueSell > 0 {
+			values = append(values, v.ValueSell)
+		}
+	}
+	if len(values) < 2 {
+		return ""
+	}
+	lo, hi := values[0], values[0]
+	for _, v := range values {
+		lo, hi = min(lo, v), max(hi, v)
+	}
+	var b strings.Builder
+	for i, v := range values {
+		x := float64(i) * 60 / float64(len(values)-1)
+		y := 8.0
+		if hi > lo {
+			y = 14 - (v-lo)/(hi-lo)*12
+		}
+		if i > 0 {
+			b.WriteByte(' ')
+		}
+		fmt.Fprintf(&b, "%.1f,%.1f", x, y)
+	}
+	dir := "flat"
+	if last, first := values[len(values)-1], values[0]; last > first {
+		dir = "up"
+	} else if last < first {
+		dir = "down"
+	}
+	return template.HTML(`<svg class="bk-line ` + dir + `" viewBox="0 0 60 16" width="60" height="16" aria-hidden="true"><polyline points="` + b.String() + `"/></svg>`)
 }

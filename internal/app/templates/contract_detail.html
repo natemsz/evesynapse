@@ -2,6 +2,7 @@
 {{define "pagetitle"}}<h1><span class="gt">Contract</span></h1>{{end}}
 {{define "pagetabs"}}{{template "sectiontabs" .}}{{end}}
 {{define "content"}}
+<div class="l-page">
 
 {{if .ContractDetail}}
 {{$d := .ContractDetail}}
@@ -76,4 +77,5 @@
 {{end}}
 
 {{end}}
+</div>
 {{end}}

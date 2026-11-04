@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"evesynapse/internal/esi"
 	"math"
 	"strings"
 	"testing"
@@ -146,5 +147,31 @@ func TestMarketLPFiltersAndExports(t *testing.T) {
 	code, body = getPage(t, app, cookie, "/market/lp/export.json?item=Ammo")
 	if code != 200 || !strings.Contains(body, `"isk_per_lp": 3`) || !strings.Contains(body, "Store Two") {
 		t.Fatalf("json export: code %d body %.300q", code, body)
+	}
+
+	// The console: the reader's LP per store sums over their pilots,
+	// picking an offer opens it in the inspector with the redemptions
+	// that LP covers, and an active filter shows as a chip that drops it.
+	seedCharacter(t, q, user.ID, 9101, "Pilot One")
+	seedCharacter(t, q, user.ID, 9102, "Pilot Two")
+	seedSnapshot(t, q, 9101, esi.SnapLoyalty, `[{"corporation_id":1,"loyalty_points":2500},{"corporation_id":77,"loyalty_points":900}]`)
+	seedSnapshot(t, q, 9102, esi.SnapLoyalty, `[{"corporation_id":1,"loyalty_points":1200}]`)
+	code, body = getPage(t, app, cookie, "/market/lp/?minisklp=1&offer=1-1")
+	if code != 200 {
+		t.Fatalf("lp page: code %d", code)
+	}
+	for _, want := range []string{
+		`class="l-console lp" data-depth="2"`,
+		`<span class="dir-val">3,700 LP</span>`,
+		`Pilot One 2,500 · Pilot Two 1,200`,
+		`<dt>Redemptions it covers</dt><dd>3</dd>`,
+		`ISK per LP ≥ 1`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("lp page lacks %q", want)
+		}
+	}
+	if strings.Contains(body, "Corporation 77") {
+		t.Errorf("lp page lists LP with a corporation that runs no store")
 	}
 }

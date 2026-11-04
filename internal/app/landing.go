@@ -3,6 +3,7 @@ package app
 import (
 	"bytes"
 	"context"
+	"evesynapse/internal/esi"
 	"fmt"
 	"net/http"
 
@@ -32,7 +33,7 @@ func formatISKShort(v float64) string {
 	case v >= 10_000:
 		return fmt.Sprintf("%.1fK", v/1_000)
 	default:
-		return fmt.Sprintf("%.2f", v)
+		return esi.FormatISK(v)
 	}
 }
 

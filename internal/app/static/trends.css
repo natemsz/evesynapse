@@ -1,0 +1,46 @@
+/* EveSynapse: Market Trends. Where the panes go is the layout
+   framework's console (layout.css): the ranked items are its main
+   pane, one item its inspector. The filters and ranking modes sit
+   above it at the page's top level. This sheet holds what is the
+   page's own: the filter row, the ranked column's highlight, the
+   rank badges and the inspector's figures. */
+
+.tr .l-panes { --l-insp: 21rem; }
+
+.tr-filters { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--space-2) var(--space-3); }
+.tr-filters > label { display: flex; flex-direction: column; gap: 0.3rem; flex: 1 1 10rem; min-width: 0; }
+.tr-filters > label :is(input, select) { width: 100%; min-height: var(--tap); }
+.tr-filters > .btn { flex: 0 0 auto; min-height: var(--tap); margin-left: auto; }
+.tr-modes { --l-gap: var(--space-2); }
+.tr-modes .pilltabs { margin: 0; }
+
+.tr-chip { cursor: default; font-size: 0.78rem; color: var(--muted); }
+.tr-item { display: inline-flex; align-items: center; gap: 0.55rem; min-width: 0; }
+.tr-item img { flex: none; border-radius: var(--r-xs); }
+.tr-item a { font-weight: 600; }
+.tr-rank { flex: none; min-width: 1.6rem; color: var(--muted); font-family: var(--font-num); font-size: 0.8rem; font-variant-numeric: tabular-nums; text-align: right; }
+.tr-table td:first-child { white-space: normal; min-width: 11rem; }
+
+/* The column the ranking sorts by reads in the highlight. */
+.tr-table[data-rank="swing"] .tr-swing,
+.tr-table[data-rank="chg1"] .tr-chg1,
+.tr-table[data-rank="chg7"] .tr-chg7,
+.tr-table[data-rank="chg30"] .tr-chg30 { background: var(--sel-row); font-weight: 700; }
+.tr-table[data-rank="swing"] td.tr-swing { color: var(--gold); }
+
+/* With an item open beside the list, the columns its inspector
+   repeats (typical buy, sell orders, traded per day) step out. */
+.l-console.tr[data-depth="2"] .tr-table :is(th, td):is(:nth-child(3), :nth-child(8), :nth-child(9)) { display: none; }
+
+.tr-note { margin: var(--space-3) 0 0; color: var(--muted); }
+.tr-changes .tr-note { margin-bottom: 0; }
+
+/* The inspector. */
+.tr-msub { margin: 0.15rem 0 0; color: var(--muted); font-size: 0.85rem; }
+.tr-kpis { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2); margin: var(--space-3) 0 0; }
+.tr-kpis .l-stat-value { font-size: 1.3rem; }
+.tr-kpis .l-stat-sub { overflow-wrap: anywhere; }
+.tr-open { margin: var(--space-3) 0 0; }
+.tr-open .btn { width: 100%; justify-content: center; }
+.tr-h { margin: var(--space-4) 0 var(--space-2); color: var(--muted); font-family: var(--font-display); font-size: 0.85rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
+.tr-meter { margin: var(--space-2) 0 0; }

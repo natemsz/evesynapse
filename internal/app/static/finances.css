@@ -1,0 +1,47 @@
+/* EveSynapse: My Orders and My Contracts. The regions are the
+   layout framework's parts (layout.css): the page head with the
+   pilot picker, stat tiles, and for contracts the console (the list
+   its main pane, one contract its inspector). This sheet holds what
+   is the pages' own: the order tabs, the contract status tones and
+   the inspector's item list. */
+
+.l-page > * + * { margin-top: var(--space-4); }
+
+/* My Orders: one section at a time under the tabs; without script
+   every section shows under its own heading. */
+.fo-tablist { margin: 0 0 var(--space-3); }
+.fo-tablist button.pilltab { appearance: none; background: none; font: inherit; cursor: pointer; min-height: var(--tap); }
+.fo-tablist .pilltab[aria-selected="true"] { background: var(--glass); border-color: var(--accent); color: var(--text-bright); }
+.fo-h { margin: 0 0 var(--space-3); color: var(--gold); font-family: var(--font-display); font-size: 0.95rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+.fo-panel + .fo-panel { margin-top: var(--space-5); }
+.tabs-on .fo-h { display: none; }
+.tabs-on .fo-panel + .fo-panel { margin-top: 0; }
+.fo-lead { margin: 0 0 var(--space-3); color: var(--muted); }
+.fo-key { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-4); margin: 0 0 var(--space-3); }
+.fo-table td { white-space: normal; }
+.fo-table td.mt-num { white-space: nowrap; }
+.fo-table td:first-child { min-width: 10rem; }
+
+/* My Contracts. */
+.ct .l-panes { --l-insp: 22rem; }
+.ct-filter { min-height: var(--tap); }
+.ct-table td:first-child { white-space: normal; min-width: 12rem; }
+.ct-title { font-weight: 600; }
+.ct-sub { display: block; margin-top: 0.2rem; color: var(--muted); font-family: var(--font-body); font-size: 0.78rem; font-weight: 400; line-height: 1.35; }
+.ct-status { white-space: nowrap; }
+.ct-status.live { color: var(--gold); font-weight: 600; }
+.ct-status.done { color: var(--kept); }
+.ct-note { margin: var(--space-3) 0 0; color: var(--muted); }
+
+/* With a contract open beside the list, the columns its inspector
+   repeats step out so the rest stays a table. */
+.l-console.ct[data-depth="2"] .ct-table :is(th, td):is(:nth-child(4), :nth-child(5), :nth-child(7), :nth-child(8), :nth-child(9)) { display: none; }
+
+.ct-msub { margin: 0.15rem 0 0; color: var(--muted); font-size: 0.85rem; }
+.ct-h { margin: var(--space-4) 0 var(--space-2); color: var(--muted); font-family: var(--font-display); font-size: 0.85rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
+.ct-h small { font-weight: 500; }
+.ct-items { margin: 0; padding: 0; list-style: none; }
+.ct-items li { display: flex; justify-content: space-between; gap: 1rem; padding: 0.35rem 0; border-bottom: 1px solid var(--hairline); font-size: 0.88rem; }
+.ct-qty { flex: none; font-family: var(--font-num); font-variant-numeric: tabular-nums; }
+.fo-sub { display: block; margin-top: 0.15rem; color: var(--muted); font-family: var(--font-body); font-size: 0.76rem; font-weight: 400; }
+.fo-status { display: inline-block; max-width: 14rem; }

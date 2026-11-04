@@ -745,6 +745,9 @@ tbody tr.yours > td:first-child { box-shadow: inset 3px 0 0 var(--sel-edge); }
   .subnav a { flex: none; scroll-snap-align: start; }
   .subnav .tabs-more { display: none; }
   .subnav > .section-tabs:has(+ .section-subtabs) { display: none; }
+  /* The sub-nav is one row of tabs here: a page's note steps out
+     of it (a page that has one repeats it in its own body). */
+  .subnav .subtab-note { display: none; }
   .subnav .section-subtabs > a { min-height: var(--tap); }
   .l-panes { border-radius: 0; border-left: 0; border-right: 0; }
   /* A console page runs its panes edge to edge; other framework

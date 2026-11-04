@@ -4,6 +4,7 @@
 {{define "content"}}
 {{with .ContractSearch}}
 {{$s := .}}
+<div class="l-page">
 <div class="cs-intro">
 <p class="muted">Every public contract our sweeps see across New Eden, compared against our swept typicals pricing model.</p>
 
@@ -192,6 +193,7 @@
 
 <div class="cs-countbar">
   <p class="cs-count"><strong>{{$s.TotalText}}</strong> contracts match • Page {{$s.Page}} of {{$s.Pages}}</p>
+  {{with $.SubTabNote}}<p class="cs-sweepnote">{{.}}</p>{{end}}
   <p class="cs-counthint">Click any row to inspect line-by-line Forge appraisal &amp; mutaplasmid stats</p>
 </div>
 
@@ -247,6 +249,7 @@
 <p class="cs-none">No public contracts match those filters right now. Our sweepers cover every region on the game's own cadence, so newly listed contracts appear within the hour.</p>
 {{end}}
 </section>
+</div>
 
 {{end}}
 {{end}}

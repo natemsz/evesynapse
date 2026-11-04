@@ -284,19 +284,30 @@ func TestDemoSeedIsCompleteAndIdempotent(t *testing.T) {
 			charts.Hero != nil, charts.Waterfall != nil, charts.Efficiency != nil)
 	}
 
-	// Seeding again lands on exactly the same state.
-	if err := app.seedDemoData(ctx, time.Now()); err != nil {
+	// Seeding again lands on exactly the same state. The two
+	// seeds compared here run off one captured time, so the
+	// comparison covers the seed's own determinism: the first
+	// seed above ran inside ensureDemoAccount on its own clock,
+	// and a seed anchored to a different time is a different
+	// fixture, not a replay.
+	seedNow := time.Now()
+	if err := app.seedDemoData(ctx, seedNow); err != nil {
 		t.Fatalf("second seed: %v", err)
 	}
+	snapsSeeded, fitsSeeded := counts()
+	daysSeeded, incomeSeeded := profitDays()
+	if err := app.seedDemoData(ctx, seedNow); err != nil {
+		t.Fatalf("third seed: %v", err)
+	}
 	snapsAfter, fitsAfter := counts()
-	if snapsAfter != snapsBefore || fitsAfter != fitsBefore {
+	if snapsAfter != snapsSeeded || fitsAfter != fitsSeeded {
 		t.Errorf("second seed changed the state: snapshots %d -> %d, fits %d -> %d",
-			snapsBefore, snapsAfter, fitsBefore, fitsAfter)
+			snapsSeeded, snapsAfter, fitsSeeded, fitsAfter)
 	}
 	daysAfter, incomeAfter := profitDays()
-	if daysAfter != daysBefore || incomeAfter != incomeBefore {
-		t.Errorf("second seed changed the profit ledger: days %d -> %d, income %.0f -> %.0f",
-			daysBefore, daysAfter, incomeBefore, incomeAfter)
+	if daysAfter != daysSeeded || incomeAfter != incomeSeeded {
+		t.Errorf("second seed changed the profit ledger: days %d -> %d, income %v -> %v",
+			daysSeeded, daysAfter, incomeSeeded, incomeAfter)
 	}
 }
 

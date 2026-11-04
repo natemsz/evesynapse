@@ -57,6 +57,15 @@ func (q *Queries) DeleteMarketBasket(ctx context.Context, arg DeleteMarketBasket
 	return err
 }
 
+const deleteMarketBasketItemStats = `-- name: DeleteMarketBasketItemStats :exec
+DELETE FROM market_basket_item_stats WHERE basket_id = ANY($1::bigint[])
+`
+
+func (q *Queries) DeleteMarketBasketItemStats(ctx context.Context, basketIds []int64) error {
+	_, err := q.db.ExecContext(ctx, deleteMarketBasketItemStats, pq.Array(basketIds))
+	return err
+}
+
 const deleteMarketBasketItems = `-- name: DeleteMarketBasketItems :exec
 DELETE FROM market_basket_items WHERE basket_id = $1
 `
@@ -128,6 +137,95 @@ func (q *Queries) InsertMarketBasketItem(ctx context.Context, arg InsertMarketBa
 	return err
 }
 
+const listMarketBasketIDsForRegion = `-- name: ListMarketBasketIDsForRegion :many
+
+SELECT id FROM market_baskets WHERE region_id = $1 ORDER BY id
+`
+
+// ---------------------------------------------------------------------
+// Stored basket figures (schema 123), derived where values are written.
+func (q *Queries) ListMarketBasketIDsForRegion(ctx context.Context, regionID int64) ([]int64, error) {
+	rows, err := q.db.QueryContext(ctx, listMarketBasketIDsForRegion, regionID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listMarketBasketItemStats = `-- name: ListMarketBasketItemStats :many
+SELECT type_id, priced, unit, value, share_pct,
+       chg_1d, chg_7d, chg_30d, impact_1d, impact_7d, impact_30d
+FROM market_basket_item_stats
+WHERE basket_id = $1
+ORDER BY value DESC, type_id
+LIMIT 500
+`
+
+type ListMarketBasketItemStatsRow struct {
+	TypeID    int64           `json:"type_id"`
+	Priced    bool            `json:"priced"`
+	Unit      float64         `json:"unit"`
+	Value     float64         `json:"value"`
+	SharePct  float64         `json:"share_pct"`
+	Chg1d     sql.NullFloat64 `json:"chg_1d"`
+	Chg7d     sql.NullFloat64 `json:"chg_7d"`
+	Chg30d    sql.NullFloat64 `json:"chg_30d"`
+	Impact1d  sql.NullFloat64 `json:"impact_1d"`
+	Impact7d  sql.NullFloat64 `json:"impact_7d"`
+	Impact30d sql.NullFloat64 `json:"impact_30d"`
+}
+
+// One basket's items, worth first (bounded by the basket item cap).
+func (q *Queries) ListMarketBasketItemStats(ctx context.Context, basketID int64) ([]ListMarketBasketItemStatsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listMarketBasketItemStats, basketID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListMarketBasketItemStatsRow
+	for rows.Next() {
+		var i ListMarketBasketItemStatsRow
+		if err := rows.Scan(
+			&i.TypeID,
+			&i.Priced,
+			&i.Unit,
+			&i.Value,
+			&i.SharePct,
+			&i.Chg1d,
+			&i.Chg7d,
+			&i.Chg30d,
+			&i.Impact1d,
+			&i.Impact7d,
+			&i.Impact30d,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listMarketBasketItems = `-- name: ListMarketBasketItems :many
 SELECT type_id, quantity FROM market_basket_items
 WHERE basket_id = $1
@@ -150,6 +248,89 @@ func (q *Queries) ListMarketBasketItems(ctx context.Context, basketID int64) ([]
 	for rows.Next() {
 		var i ListMarketBasketItemsRow
 		if err := rows.Scan(&i.TypeID, &i.Quantity); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listMarketBasketItemsForBaskets = `-- name: ListMarketBasketItemsForBaskets :many
+SELECT basket_id, type_id, quantity FROM market_basket_items
+WHERE basket_id = ANY($1::bigint[])
+ORDER BY basket_id, type_id
+`
+
+func (q *Queries) ListMarketBasketItemsForBaskets(ctx context.Context, basketIds []int64) ([]MarketBasketItem, error) {
+	rows, err := q.db.QueryContext(ctx, listMarketBasketItemsForBaskets, pq.Array(basketIds))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []MarketBasketItem
+	for rows.Next() {
+		var i MarketBasketItem
+		if err := rows.Scan(&i.BasketID, &i.TypeID, &i.Quantity); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listMarketBasketMovers = `-- name: ListMarketBasketMovers :many
+SELECT type_id, unit,
+       COALESCE(CASE $1::int WHEN 1 THEN chg_1d WHEN 30 THEN chg_30d ELSE chg_7d END, 'NaN')::float8 AS chg,
+       COALESCE(CASE $1::int WHEN 1 THEN impact_1d WHEN 30 THEN impact_30d ELSE impact_7d END, 0)::float8 AS impact
+FROM market_basket_item_stats
+WHERE basket_id = $2
+  AND $3::int * (CASE $1::int WHEN 1 THEN impact_1d WHEN 30 THEN impact_30d ELSE impact_7d END) > 0
+ORDER BY $3::int * (CASE $1::int WHEN 1 THEN impact_1d WHEN 30 THEN impact_30d ELSE impact_7d END) DESC
+LIMIT 5
+`
+
+type ListMarketBasketMoversParams struct {
+	Period   int32 `json:"period"`
+	BasketID int64 `json:"basket_id"`
+	Sign     int32 `json:"sign"`
+}
+
+type ListMarketBasketMoversRow struct {
+	TypeID int64   `json:"type_id"`
+	Unit   float64 `json:"unit"`
+	Chg    float64 `json:"chg"`
+	Impact float64 `json:"impact"`
+}
+
+// The items that moved the basket most over a period, up (sign 1) or
+// down (sign -1), ranked by the ISK they moved it.
+func (q *Queries) ListMarketBasketMovers(ctx context.Context, arg ListMarketBasketMoversParams) ([]ListMarketBasketMoversRow, error) {
+	rows, err := q.db.QueryContext(ctx, listMarketBasketMovers, arg.Period, arg.BasketID, arg.Sign)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListMarketBasketMoversRow
+	for rows.Next() {
+		var i ListMarketBasketMoversRow
+		if err := rows.Scan(
+			&i.TypeID,
+			&i.Unit,
+			&i.Chg,
+			&i.Impact,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -214,6 +395,107 @@ func (q *Queries) ListMarketBasketOutsideMovers(ctx context.Context, arg ListMar
 			&i.SellChg7d,
 			&i.SellChg30d,
 			&i.AvgDailyVolume30d,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listMarketBasketRegions = `-- name: ListMarketBasketRegions :many
+SELECT id, region_id FROM market_baskets WHERE id = ANY($1::bigint[])
+`
+
+type ListMarketBasketRegionsRow struct {
+	ID       int64 `json:"id"`
+	RegionID int64 `json:"region_id"`
+}
+
+func (q *Queries) ListMarketBasketRegions(ctx context.Context, basketIds []int64) ([]ListMarketBasketRegionsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listMarketBasketRegions, pq.Array(basketIds))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListMarketBasketRegionsRow
+	for rows.Next() {
+		var i ListMarketBasketRegionsRow
+		if err := rows.Scan(&i.ID, &i.RegionID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listMarketBasketSummaries = `-- name: ListMarketBasketSummaries :many
+SELECT basket_id, value_sell, value_buy, priced_items, item_count,
+       chg_1d, chg_7d, chg_30d, delta_1d, delta_7d, delta_30d,
+       line_30d, line_dir, spark_30d, low_30d, high_30d, mean_30d
+FROM market_basket_summary
+WHERE basket_id = ANY($1::bigint[])
+`
+
+type ListMarketBasketSummariesRow struct {
+	BasketID    int64           `json:"basket_id"`
+	ValueSell   float64         `json:"value_sell"`
+	ValueBuy    float64         `json:"value_buy"`
+	PricedItems int64           `json:"priced_items"`
+	ItemCount   int64           `json:"item_count"`
+	Chg1d       sql.NullFloat64 `json:"chg_1d"`
+	Chg7d       sql.NullFloat64 `json:"chg_7d"`
+	Chg30d      sql.NullFloat64 `json:"chg_30d"`
+	Delta1d     sql.NullFloat64 `json:"delta_1d"`
+	Delta7d     sql.NullFloat64 `json:"delta_7d"`
+	Delta30d    sql.NullFloat64 `json:"delta_30d"`
+	Line30d     string          `json:"line_30d"`
+	LineDir     string          `json:"line_dir"`
+	Spark30d    string          `json:"spark_30d"`
+	Low30d      float64         `json:"low_30d"`
+	High30d     float64         `json:"high_30d"`
+	Mean30d     float64         `json:"mean_30d"`
+}
+
+func (q *Queries) ListMarketBasketSummaries(ctx context.Context, basketIds []int64) ([]ListMarketBasketSummariesRow, error) {
+	rows, err := q.db.QueryContext(ctx, listMarketBasketSummaries, pq.Array(basketIds))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListMarketBasketSummariesRow
+	for rows.Next() {
+		var i ListMarketBasketSummariesRow
+		if err := rows.Scan(
+			&i.BasketID,
+			&i.ValueSell,
+			&i.ValueBuy,
+			&i.PricedItems,
+			&i.ItemCount,
+			&i.Chg1d,
+			&i.Chg7d,
+			&i.Chg30d,
+			&i.Delta1d,
+			&i.Delta7d,
+			&i.Delta30d,
+			&i.Line30d,
+			&i.LineDir,
+			&i.Spark30d,
+			&i.Low30d,
+			&i.High30d,
+			&i.Mean30d,
 		); err != nil {
 			return nil, err
 		}

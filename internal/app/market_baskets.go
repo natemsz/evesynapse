@@ -32,8 +32,11 @@ const (
 
 // refreshBasketValues writes today's value for every basket priced in
 // regionID, first rebuilding the history of any basket that has none.
-// q is the sweep transaction's queries.
-func refreshBasketValues(ctx context.Context, q *db.Queries, regionID int64, day string) error {
+// tx is the sweep's transaction. The baskets' stored figures (schema
+// 123) are derived from the values just written, in the same
+// transaction.
+func refreshBasketValues(ctx context.Context, tx db.DBTX, regionID int64, day string) error {
+	q := db.New(tx)
 	fresh, err := q.ListMarketBasketsWithoutHistory(ctx, regionID)
 	if err != nil {
 		return err
@@ -47,8 +50,14 @@ func refreshBasketValues(ctx context.Context, q *db.Queries, regionID int64, day
 			return err
 		}
 	}
-	_, err = q.RefreshMarketBasketValuesForRegion(ctx, db.RefreshMarketBasketValuesForRegionParams{RegionID: regionID, Day: day})
-	return err
+	if _, err := q.RefreshMarketBasketValuesForRegion(ctx, db.RefreshMarketBasketValuesForRegionParams{RegionID: regionID, Day: day}); err != nil {
+		return err
+	}
+	ids, err := q.ListMarketBasketIDsForRegion(ctx, regionID)
+	if err != nil {
+		return err
+	}
+	return storeBasketFigures(ctx, tx, ids, time.Now().UTC())
 }
 
 // basketLine is one pasted line resolved or not.
@@ -186,8 +195,32 @@ func (app *Application) replaceBasketItems(ctx context.Context, basketID int64, 
 	if _, err := qtx.RebuildMarketBasketValues(ctx, db.RebuildMarketBasketValuesParams{BasketID: basketID, Since: basketDay(time.Now().AddDate(0, 0, -bookTrendDays))}); err != nil {
 		return err
 	}
+	if err := storeBasketFigures(ctx, tx, []int64{basketID}, time.Now().UTC()); err != nil {
+		return err
+	}
 	return tx.Commit()
 }
 
 // basketDay is the stored day key for t.
 func basketDay(t time.Time) string { return t.UTC().Format("2006-01-02") }
+
+// rebuildBasketValues replaces one basket's value history and its
+// stored figures from its region's stored rows, in one transaction.
+func (app *Application) rebuildBasketValues(ctx context.Context, basketID int64) error {
+	tx, err := app.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	qtx := app.queries.WithTx(tx)
+	if err := qtx.DeleteMarketBasketValues(ctx, basketID); err != nil {
+		return err
+	}
+	if _, err := qtx.RebuildMarketBasketValues(ctx, db.RebuildMarketBasketValuesParams{BasketID: basketID, Since: basketDay(time.Now().AddDate(0, 0, -bookTrendDays))}); err != nil {
+		return err
+	}
+	if err := storeBasketFigures(ctx, tx, []int64{basketID}, time.Now().UTC()); err != nil {
+		return err
+	}
+	return tx.Commit()
+}

@@ -283,7 +283,7 @@ type watchlistRow struct {
 	RegionID  int64
 	Region    string
 	Current   string        // latest daily average, "—" when unknown
-	Spark     template.HTML // hover card for Current (sparkPop), empty renders plain
+	Spark     template.HTML // hover card for Current (storedSparkCard), empty renders plain
 	Change7   string        // "+8.2%", "—" when not computable
 	Change30  string
 	Moving    bool   // currently past the user's threshold
@@ -1247,8 +1247,23 @@ func (app *Application) buildWatchlistView(ctx context.Context, userID int64, wa
 // daily totals. Each basket's values read once, bounded to the
 // recent window the two changes need.
 func (app *Application) watchlistBasketRows(ctx context.Context, watched []db.ListWatchlistBasketsByUserRow) []watchlistBasketRow {
+	// Each basket's stored figures (schema 123): one read for the
+	// list, the changes the Baskets pages show.
+	ids := make([]int64, len(watched))
+	for i, wb := range watched {
+		ids[i] = wb.BasketID
+	}
+	figs := make(map[int64]db.ListMarketBasketSummariesRow, len(ids))
+	if len(ids) > 0 {
+		if sums, err := app.queries.ListMarketBasketSummaries(ctx, ids); err != nil {
+			logging.Errorf("market: basket watch figures: %v", err)
+		} else {
+			for _, s := range sums {
+				figs[s.BasketID] = s
+			}
+		}
+	}
 	var out []watchlistBasketRow
-	since := basketDay(time.Now().AddDate(0, 0, -40))
 	for _, wb := range watched {
 		row := watchlistBasketRow{
 			BasketID:  wb.BasketID,
@@ -1260,59 +1275,22 @@ func (app *Application) watchlistBasketRows(ctx context.Context, watched []db.Li
 			Change30:  "—",
 			Threshold: fmt.Sprintf("%g", wb.ThresholdPct),
 		}
-		values, err := app.queries.ListMarketBasketValues(ctx, db.ListMarketBasketValuesParams{BasketID: wb.BasketID, Since: since})
-		if err != nil {
-			logging.Errorf("market: basket watch values for basket %d: %v", wb.BasketID, err)
-			out = append(out, row)
-			continue
-		}
-		if n := len(values); n > 0 {
-			latest := values[n-1]
-			if latest.ItemCount > 0 && latest.PricedItems == latest.ItemCount {
-				row.Current = esi.FormatISK(latest.ValueSell)
-				if chg, ok := basketValueChange(values, 7); ok {
-					row.Change7 = markethistory.FormatChangePct(chg)
-					if math.Abs(chg) >= wb.ThresholdPct {
-						row.Moving = true
-						row.MoveText = markethistory.ChangeDirection(chg) + " over 7 days"
-					}
+		if s, ok := figs[wb.BasketID]; ok && s.ItemCount > 0 && s.PricedItems == s.ItemCount {
+			row.Current = esi.FormatISK(s.ValueSell)
+			if s.Chg7d.Valid {
+				row.Change7 = markethistory.FormatChangePct(s.Chg7d.Float64)
+				if math.Abs(s.Chg7d.Float64) >= wb.ThresholdPct {
+					row.Moving = true
+					row.MoveText = markethistory.ChangeDirection(s.Chg7d.Float64) + " over 7 days"
 				}
-				if chg, ok := basketValueChange(values, 30); ok {
-					row.Change30 = markethistory.FormatChangePct(chg)
-				}
+			}
+			if s.Chg30d.Valid {
+				row.Change30 = markethistory.FormatChangePct(s.Chg30d.Float64)
 			}
 		}
 		out = append(out, row)
 	}
 	return out
-}
-
-// basketValueChange is the percent move of a basket's stored total
-// against the newest fully priced day at least daysBack before the
-// latest one. False when either end is missing, partially priced,
-// or priced a different set of items.
-func basketValueChange(values []db.ListMarketBasketValuesRow, daysBack int) (float64, bool) {
-	latest := values[len(values)-1]
-	if latest.ValueSell <= 0 {
-		return 0, false
-	}
-	latestDay, err := time.Parse("2006-01-02", latest.Day)
-	if err != nil {
-		return 0, false
-	}
-	target := latestDay.AddDate(0, 0, -daysBack)
-	for i := len(values) - 2; i >= 0; i-- {
-		v := values[i]
-		day, err := time.Parse("2006-01-02", v.Day)
-		if err != nil || day.After(target) {
-			continue
-		}
-		if v.PricedItems != v.ItemCount || v.ItemCount != latest.ItemCount || v.ValueSell <= 0 {
-			return 0, false
-		}
-		return (latest.ValueSell - v.ValueSell) / v.ValueSell * 100, true
-	}
-	return 0, false
 }
 
 // watchlistRows renders stored watchlist entries: latest

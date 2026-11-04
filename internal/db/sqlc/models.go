@@ -1156,6 +1156,42 @@ type MarketBasketItem struct {
 	Quantity int64 `json:"quantity"`
 }
 
+type MarketBasketItemStat struct {
+	BasketID  int64           `json:"basket_id"`
+	TypeID    int64           `json:"type_id"`
+	Priced    bool            `json:"priced"`
+	Unit      float64         `json:"unit"`
+	Value     float64         `json:"value"`
+	SharePct  float64         `json:"share_pct"`
+	Chg1d     sql.NullFloat64 `json:"chg_1d"`
+	Chg7d     sql.NullFloat64 `json:"chg_7d"`
+	Chg30d    sql.NullFloat64 `json:"chg_30d"`
+	Impact1d  sql.NullFloat64 `json:"impact_1d"`
+	Impact7d  sql.NullFloat64 `json:"impact_7d"`
+	Impact30d sql.NullFloat64 `json:"impact_30d"`
+}
+
+type MarketBasketSummary struct {
+	BasketID    int64           `json:"basket_id"`
+	ValueSell   float64         `json:"value_sell"`
+	ValueBuy    float64         `json:"value_buy"`
+	PricedItems int64           `json:"priced_items"`
+	ItemCount   int64           `json:"item_count"`
+	Chg1d       sql.NullFloat64 `json:"chg_1d"`
+	Chg7d       sql.NullFloat64 `json:"chg_7d"`
+	Chg30d      sql.NullFloat64 `json:"chg_30d"`
+	Delta1d     sql.NullFloat64 `json:"delta_1d"`
+	Delta7d     sql.NullFloat64 `json:"delta_7d"`
+	Delta30d    sql.NullFloat64 `json:"delta_30d"`
+	Line30d     string          `json:"line_30d"`
+	LineDir     string          `json:"line_dir"`
+	Spark30d    string          `json:"spark_30d"`
+	Low30d      float64         `json:"low_30d"`
+	High30d     float64         `json:"high_30d"`
+	Mean30d     float64         `json:"mean_30d"`
+	UpdatedAt   time.Time       `json:"updated_at"`
+}
+
 type MarketBasketValuesDaily struct {
 	BasketID    int64   `json:"basket_id"`
 	Day         string  `json:"day"`

@@ -752,6 +752,13 @@ var pgMarketStatSparksSchema string
 //go:embed schema_pg/122_blueprint_buildable.sql
 var pgBlueprintBuildableSchema string
 
+// Step 123: each basket's stored figures (worth, changes, 30-day
+// line) and its items' (unit, worth, share, change, impact), derived
+// where the basket's values are written.
+//
+//go:embed schema_pg/123_market_basket_summary.sql
+var pgMarketBasketSummarySchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -903,6 +910,7 @@ func schemaSteps() []schemaStep {
 		{120, "market_station_heat", pgMarketStationHeatSchema, ""},
 		{121, "market_stat_sparks", pgMarketStatSparksSchema, ""},
 		{122, "blueprint_buildable", pgBlueprintBuildableSchema, ""},
+		{123, "market_basket_summary", pgMarketBasketSummarySchema, ""},
 	}
 }
 

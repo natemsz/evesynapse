@@ -172,3 +172,48 @@ JOIN market_baskets b ON b.id = w.basket_id
 WHERE w.user_id = $1
   AND (b.user_id IS NULL OR b.user_id = $1)
 ORDER BY b.name, w.basket_id;
+
+-- ---------------------------------------------------------------------
+-- Stored basket figures (schema 123), derived where values are written.
+
+-- name: ListMarketBasketIDsForRegion :many
+SELECT id FROM market_baskets WHERE region_id = $1 ORDER BY id;
+
+-- name: ListMarketBasketItemsForBaskets :many
+SELECT basket_id, type_id, quantity FROM market_basket_items
+WHERE basket_id = ANY(sqlc.arg(basket_ids)::bigint[])
+ORDER BY basket_id, type_id;
+
+-- name: ListMarketBasketRegions :many
+SELECT id, region_id FROM market_baskets WHERE id = ANY(sqlc.arg(basket_ids)::bigint[]);
+
+-- name: DeleteMarketBasketItemStats :exec
+DELETE FROM market_basket_item_stats WHERE basket_id = ANY(sqlc.arg(basket_ids)::bigint[]);
+
+-- name: ListMarketBasketSummaries :many
+SELECT basket_id, value_sell, value_buy, priced_items, item_count,
+       chg_1d, chg_7d, chg_30d, delta_1d, delta_7d, delta_30d,
+       line_30d, line_dir, spark_30d, low_30d, high_30d, mean_30d
+FROM market_basket_summary
+WHERE basket_id = ANY(sqlc.arg(basket_ids)::bigint[]);
+
+-- name: ListMarketBasketItemStats :many
+-- One basket's items, worth first (bounded by the basket item cap).
+SELECT type_id, priced, unit, value, share_pct,
+       chg_1d, chg_7d, chg_30d, impact_1d, impact_7d, impact_30d
+FROM market_basket_item_stats
+WHERE basket_id = $1
+ORDER BY value DESC, type_id
+LIMIT 500;
+
+-- name: ListMarketBasketMovers :many
+-- The items that moved the basket most over a period, up (sign 1) or
+-- down (sign -1), ranked by the ISK they moved it.
+SELECT type_id, unit,
+       COALESCE(CASE sqlc.arg(period)::int WHEN 1 THEN chg_1d WHEN 30 THEN chg_30d ELSE chg_7d END, 'NaN')::float8 AS chg,
+       COALESCE(CASE sqlc.arg(period)::int WHEN 1 THEN impact_1d WHEN 30 THEN impact_30d ELSE impact_7d END, 0)::float8 AS impact
+FROM market_basket_item_stats
+WHERE basket_id = sqlc.arg(basket_id)
+  AND sqlc.arg(sign)::int * (CASE sqlc.arg(period)::int WHEN 1 THEN impact_1d WHEN 30 THEN impact_30d ELSE impact_7d END) > 0
+ORDER BY sqlc.arg(sign)::int * (CASE sqlc.arg(period)::int WHEN 1 THEN impact_1d WHEN 30 THEN impact_30d ELSE impact_7d END) DESC
+LIMIT 5;

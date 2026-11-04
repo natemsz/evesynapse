@@ -199,6 +199,10 @@ func TestWatchlistBasket(t *testing.T) {
 			t.Fatalf("seed value: %v", err)
 		}
 	}
+	// The figures the pages read are derived where values are written.
+	if err := storeBasketFigures(ctx, app.db, []int64{basketID}, time.Now().UTC()); err != nil {
+		t.Fatalf("store figures: %v", err)
+	}
 
 	view := app.buildWatchlistView(ctx, owner.ID, "watch target")
 	if len(view.BasketMatches) != 1 || view.BasketMatches[0].ID != basketID || view.BasketMatches[0].Watched {

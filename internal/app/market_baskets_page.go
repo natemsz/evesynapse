@@ -14,7 +14,6 @@ import (
 	"html/template"
 	"math"
 	"net/http"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -127,9 +126,8 @@ func (app *Application) handleMarketBaskets(w http.ResponseWriter, r *http.Reque
 		}
 		view.List = append(view.List, row)
 	}
-	// The basic stats: each basket's 1-day and 7-day change, from
-	// the same stored daily values and the same change rule the
-	// basket page's figures use.
+	// Each basket's stored figures (schema 123): its changes, the
+	// trend column's line and the worth's hover card.
 	var valued []int64
 	for _, row := range view.List {
 		if row.Value != "" {
@@ -137,33 +135,24 @@ func (app *Application) handleMarketBaskets(w http.ResponseWriter, r *http.Reque
 		}
 	}
 	if len(valued) > 0 {
-		// The inline value line and the hover sparkline read the
-		// same stored series over a 30-day window.
-		sparkOn := userID != 0 && app.vizPrefsFor(ctx, userID).SparkHover
-		window := -31
-		series, err := app.queries.ListMarketBasketValuesForBaskets(ctx, db.ListMarketBasketValuesForBasketsParams{
-			BasketIds: valued, Since: basketDay(time.Now().AddDate(0, 0, window)),
-		})
+		sums, err := app.queries.ListMarketBasketSummaries(ctx, valued)
 		if err != nil {
-			logging.Errorf("baskets: list values: %v", err)
-		} else {
-			byBasket := make(map[int64][]db.ListMarketBasketValuesRow, len(valued))
-			for _, v := range series {
-				byBasket[v.BasketID] = append(byBasket[v.BasketID], db.ListMarketBasketValuesRow{
-					Day: v.Day, ValueSell: v.ValueSell, ValueBuy: v.ValueBuy,
-					PricedItems: v.PricedItems, ItemCount: v.ItemCount,
-				})
+			logging.Errorf("baskets: list figures: %v", err)
+		}
+		byBasket := make(map[int64]db.ListMarketBasketSummariesRow, len(sums))
+		for _, s := range sums {
+			byBasket[s.BasketID] = s
+		}
+		sparkOn := app.sparksOn(ctx, userID)
+		for i := range view.List {
+			s, ok := byBasket[view.List[i].ID]
+			if !ok {
+				continue
 			}
-			for i := range view.List {
-				if s := byBasket[view.List[i].ID]; len(s) > 0 {
-					view.List[i].Chg1 = basketChange(s, 1)
-					view.List[i].Chg7 = basketChange(s, 7)
-					view.List[i].Chg30 = basketChange(s, 30)
-					view.List[i].Line = basketLine30(s)
-					if sparkOn {
-						view.List[i].Spark = basketSpark(s)
-					}
-				}
+			view.List[i].Chg1, view.List[i].Chg7, view.List[i].Chg30 = newTrendFigure(s.Chg1d), newTrendFigure(s.Chg7d), newTrendFigure(s.Chg30d)
+			view.List[i].Line = basketLineSVG(s.Line30d, s.LineDir)
+			if sparkOn {
+				view.List[i].Spark = basketSparkCard(s.Spark30d, s.Low30d, s.High30d, s.Mean30d)
 			}
 		}
 	}
@@ -244,99 +233,87 @@ func (app *Application) buildBasketView(ctx context.Context, b db.MarketBasket, 
 	row := basketListRow(b.ID, b.Name, b.RegionID, !b.UserID.Valid, int64(len(items)))
 	view.Basket = &row
 
-	// Value over time: the stored daily values.
+	// The stored figures (schema 123): worth, changes and deltas.
+	if sums, err := app.queries.ListMarketBasketSummaries(ctx, []int64{b.ID}); err != nil {
+		logging.Errorf("baskets: figures of %d: %v", b.ID, err)
+	} else if len(sums) == 1 && sums[0].ItemCount > 0 {
+		s := sums[0]
+		view.Value, view.ValueBuy = esi.FormatISK(s.ValueSell), esi.FormatISK(s.ValueBuy)
+		view.ValueShort, view.ValueBuyShort = formatISKShort(s.ValueSell), formatISKShort(s.ValueBuy)
+		row.Partial = s.PricedItems < s.ItemCount
+		view.Chg1, view.Chg7, view.Chg30 = newTrendFigure(s.Chg1d), newTrendFigure(s.Chg7d), newTrendFigure(s.Chg30d)
+		view.Delta1, view.Delta7, view.Delta30 = signedISKShort(s.Delta1d), signedISKShort(s.Delta7d), signedISKShort(s.Delta30d)
+	}
+	// The value chart plots the stored daily values.
 	values, err := app.queries.ListMarketBasketValues(ctx, db.ListMarketBasketValuesParams{
 		BasketID: b.ID, Since: basketDay(time.Now().AddDate(0, 0, -bookTrendDays)),
 	})
 	if err != nil {
 		logging.Errorf("baskets: values of %d: %v", b.ID, err)
 	}
-	if n := len(values); n > 0 {
-		last := values[n-1]
-		view.Value = esi.FormatISK(last.ValueSell)
-		view.ValueBuy = esi.FormatISK(last.ValueBuy)
-		row.Partial = last.PricedItems < last.ItemCount
-		view.Chg1 = basketChange(values, 1)
-		view.Chg7 = basketChange(values, 7)
-		view.Chg30 = basketChange(values, 30)
-		view.Delta1 = basketDelta(values, 1)
-		view.Delta7 = basketDelta(values, 7)
-		view.Delta30 = basketDelta(values, 30)
-		view.ValueShort = formatISKShort(last.ValueSell)
-		view.ValueBuyShort = formatISKShort(last.ValueBuy)
-		daily := make([]db.ListMarketRegionStatsDailyRecentRow, 0, n)
+	if len(values) > 0 {
+		daily := make([]db.ListMarketRegionStatsDailyRecentRow, 0, len(values))
 		for _, v := range values {
 			daily = append(daily, db.ListMarketRegionStatsDailyRecentRow{Day: v.Day, TypicalSell: v.ValueSell, TypicalBuy: v.ValueBuy})
 		}
 		view.Chart = buildBookTrendChart(daily)
 	}
 
-	// Items and movers in: the stat pack for the basket's items.
-	ids := make([]int64, 0, len(items))
-	for _, it := range items {
-		ids = append(ids, it.TypeID)
-	}
-	packs, err := app.loadStatPacks(ctx, b.RegionID, ids)
-	if err != nil {
-		logging.Errorf("baskets: stat pack for %d: %v", b.ID, err)
-		packs = statPackSet{}
-	}
-	var total float64
-	var lines []marketBasketItemRow
+	// Items, worth first, and the movers in: their stored figures.
+	qty := make(map[int64]int64, len(items))
 	var editLines []string
 	for _, it := range items {
-		name := app.typeNameOrID(ctx, it.TypeID)
-		editLines = append(editLines, fmt.Sprintf("%s %d", name, it.Quantity))
-		line := marketBasketItemRow{TypeID: it.TypeID, Name: name, Quantity: esi.FormatInt(it.Quantity)}
-		if p := packs[it.TypeID]; p != nil && p.Own != nil && p.Own.TypicalSell > 0 {
-			unit := p.Own.TypicalSell
-			line.priced = true
-			line.value = unit * float64(it.Quantity)
-			line.Unit = esi.FormatISK(unit)
-			line.Value = esi.FormatISK(line.value)
-			line.UnitShort = formatISKShort(unit)
-			line.ValueShort = formatISKShort(line.value)
-			chg := periodChange(p.Own, view.Period)
-			line.Chg = newTrendFigure(chg)
-			if chg.Valid && chg.Float64 > -100 {
-				// ISK the item moved the basket: now less then.
-				then := line.value / (1 + chg.Float64/100)
-				line.impact = line.value - then
-				line.Impact = esi.FormatISK(math.Abs(line.impact))
-				line.ImpactUp = line.impact >= 0
-				line.ImpactShort = formatISKShort(math.Abs(line.impact))
+		qty[it.TypeID] = it.Quantity
+		editLines = append(editLines, fmt.Sprintf("%s %d", app.typeNameOrID(ctx, it.TypeID), it.Quantity))
+	}
+	view.EditText = strings.Join(editLines, "\n")
+	stats, err := app.queries.ListMarketBasketItemStats(ctx, b.ID)
+	if err != nil {
+		logging.Errorf("baskets: item figures of %d: %v", b.ID, err)
+	}
+	pick := func(c1, c7, c30 sql.NullFloat64) sql.NullFloat64 {
+		switch view.Period {
+		case 1:
+			return c1
+		case 30:
+			return c30
+		}
+		return c7
+	}
+	for _, s := range stats {
+		line := marketBasketItemRow{TypeID: s.TypeID, Name: app.typeNameOrID(ctx, s.TypeID), Quantity: esi.FormatInt(qty[s.TypeID])}
+		if s.Priced {
+			line.priced, line.value = true, s.Value
+			line.Unit, line.Value = esi.FormatISK(s.Unit), esi.FormatISK(s.Value)
+			line.UnitShort, line.ValueShort = formatISKShort(s.Unit), formatISKShort(s.Value)
+			line.Share = fmt.Sprintf("%.1f%%", s.SharePct)
+			line.SharePct = strconv.FormatFloat(math.Round(s.SharePct), 'f', 0, 64)
+			line.Chg = newTrendFigure(pick(s.Chg1d, s.Chg7d, s.Chg30d))
+			if imp := pick(s.Impact1d, s.Impact7d, s.Impact30d); imp.Valid {
+				line.impact = imp.Float64
+				line.Impact = esi.FormatISK(math.Abs(imp.Float64))
+				line.ImpactUp = imp.Float64 >= 0
+				line.ImpactShort = formatISKShort(math.Abs(imp.Float64))
 			}
-			total += line.value
 		} else {
 			view.Unpriced++
 		}
-		lines = append(lines, line)
+		view.Items = append(view.Items, line)
 	}
-	for i := range lines {
-		if lines[i].priced && total > 0 {
-			lines[i].Share = fmt.Sprintf("%.1f%%", lines[i].value/total*100)
-			lines[i].SharePct = strconv.FormatFloat(math.Round(lines[i].value/total*100), 'f', 0, 64)
+	for _, sign := range []int32{1, -1} {
+		movers, err := app.queries.ListMarketBasketMovers(ctx, db.ListMarketBasketMoversParams{BasketID: b.ID, Period: int32(view.Period), Sign: sign})
+		if err != nil {
+			logging.Errorf("baskets: movers of %d: %v", b.ID, err)
+			continue
 		}
-	}
-	sort.SliceStable(lines, func(i, j int) bool { return lines[i].value > lines[j].value })
-	view.Items = lines
-	view.EditText = strings.Join(editLines, "\n")
-
-	movers := make([]marketBasketItemRow, 0, len(lines))
-	for _, l := range lines {
-		if l.Impact != "" {
-			movers = append(movers, l)
-		}
-	}
-	sort.Slice(movers, func(i, j int) bool { return movers[i].impact > movers[j].impact })
-	for _, m := range movers {
-		if m.impact > 0 && len(view.MoversUp) < 5 {
-			view.MoversUp = append(view.MoversUp, marketBasketMover{TypeID: m.TypeID, Name: m.Name, Unit: m.Unit, Chg: m.Chg, Impact: m.ImpactShort, Qty: m.Quantity})
-		}
-	}
-	for i := len(movers) - 1; i >= 0; i-- {
-		if m := movers[i]; m.impact < 0 && len(view.MoversDown) < 5 {
-			view.MoversDown = append(view.MoversDown, marketBasketMover{TypeID: m.TypeID, Name: m.Name, Unit: m.Unit, Chg: m.Chg, Impact: m.ImpactShort, Qty: m.Quantity})
+		for _, m := range movers {
+			mv := marketBasketMover{TypeID: m.TypeID, Name: app.typeNameOrID(ctx, m.TypeID), Unit: esi.FormatISK(m.Unit), Chg: newTrendFigure(sql.NullFloat64{Float64: m.Chg, Valid: !math.IsNaN(m.Chg)}),
+				Impact: formatISKShort(math.Abs(m.Impact)), Qty: esi.FormatInt(qty[m.TypeID])}
+			if sign > 0 {
+				view.MoversUp = append(view.MoversUp, mv)
+			} else {
+				view.MoversDown = append(view.MoversDown, mv)
+			}
 		}
 	}
 
@@ -386,18 +363,16 @@ func basketChange(values []db.ListMarketBasketValuesRow, days int) trendFigure {
 	return newTrendFigure(sql.NullFloat64{Float64: (last - then) / then * 100, Valid: true})
 }
 
-// basketDelta is the ISK behind basketChange: the worth now less the
-// worth then, signed and compact, "" where the change has no base.
-func basketDelta(values []db.ListMarketBasketValuesRow, days int) string {
-	last, then, ok := basketChangeBase(values, days)
-	if !ok {
+// signedISKShort is a stored ISK change, signed and compact, "" where
+// the change has no base.
+func signedISKShort(d sql.NullFloat64) string {
+	if !d.Valid {
 		return ""
 	}
-	d := last - then
-	if d < 0 {
-		return "−" + formatISKShort(-d)
+	if d.Float64 < 0 {
+		return "−" + formatISKShort(-d.Float64)
 	}
-	return "+" + formatISKShort(d)
+	return "+" + formatISKShort(d.Float64)
 }
 
 // basketChangeBase finds the two worths a change compares: the
@@ -532,6 +507,13 @@ func (app *Application) handleMarketBasketEdit(w http.ResponseWriter, r *http.Re
 		return
 	}
 	if !hasItems {
+		// A new region reprices the basket: its values and figures
+		// are rebuilt from that region's stored rows.
+		if region := basketRegion(r.Form.Get("region")); region != b.RegionID {
+			if err := app.rebuildBasketValues(ctx, b.ID); err != nil {
+				logging.Errorf("baskets: reprice %d: %v", b.ID, err)
+			}
+		}
 		back("Saved.")
 		return
 	}

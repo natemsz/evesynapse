@@ -451,7 +451,8 @@ type killPageView struct {
 	Priced        bool
 	Slots         []killSlotGroup
 	Attackers     []killAttackerRow
-	Detailed      bool // the full killmail is still held (a year)
+	Detailed      bool   // the full killmail is still held (a year)
+	Fit           string // the lost fitting as EFT text, "" without the full killmail
 }
 
 // killSlot names the slot group an inventory flag belongs to, and
@@ -504,6 +505,24 @@ func (app *Application) handleKillPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	names := app.newKillNames(ctx)
+	v := app.killPageFor(ctx, names, k)
+	data.KillPage = v
+	title := v.Row.ShipName
+	if !v.Row.VictimIsStructure {
+		title = v.Row.VictimName + " · " + v.Row.ShipName
+	}
+	desc := fmt.Sprintf("%s lost in %s, %s.", v.Row.ShipName, v.Row.SystemName, v.Row.RegionName)
+	if v.ValueFull != "" {
+		desc = fmt.Sprintf("%s lost in %s, %s: %s ISK.", v.Row.ShipName, v.Row.SystemName, v.Row.RegionName, v.ValueFull)
+	}
+	data.HeadMeta = app.HeadMeta(module.PageMeta{Title: title, Description: desc, CanonicalPath: fmt.Sprintf("/intel/kill/%d/", id)})
+	app.render(ctx, w, http.StatusOK, "kill.html", data)
+}
+
+// killPageFor builds one kill's view from its board row: the value
+// split, the ship group, and the fitting and attackers while the full
+// killmail is held. The kill page and the Killmails inspector share it.
+func (app *Application) killPageFor(ctx context.Context, names *killNames, k db.Kill) *killPageView {
 	v := &killPageView{Row: names.row(k), Points: k.Points}
 	v.Damage = esi.FormatInt(k.DamageTaken)
 	if k.ValueOurs.Valid {
@@ -519,23 +538,60 @@ func (app *Application) handleKillPage(w http.ResponseWriter, r *http.Request) {
 	if g, err := app.queries.ListTypeGroupNames(ctx, []int64{k.ShipTypeID}); err == nil && len(g) == 1 {
 		v.ShipGroup = g[0].Name
 	}
-	if payload, err := app.queries.GetKillDetail(ctx, id); err == nil {
+	if payload, err := app.queries.GetKillDetail(ctx, k.KillmailID); err == nil {
 		if km, ok := decodeKillDetail(payload); ok {
 			v.Detailed = true
 			app.fillKillDetail(ctx, names, v, km, k.DamageTaken)
+			v.Fit = killFitEFT(names, v.Row.ShipName, km.Victim.Items)
 		}
 	}
-	data.KillPage = v
-	title := v.Row.ShipName
-	if !v.Row.VictimIsStructure {
-		title = v.Row.VictimName + " · " + v.Row.ShipName
+	return v
+}
+
+// killFitEFT writes the lost fitting as EFT text, the format the
+// fitting tool and the game's own import read: low, mid and high
+// slots, rigs and subsystems, then drones and cargo with counts. A
+// slot's module comes first and its loaded charge after a comma.
+func killFitEFT(names *killNames, ship string, items []killItem) string {
+	type line struct {
+		id  int64
+		qty int64
 	}
-	desc := fmt.Sprintf("%s lost in %s, %s.", v.Row.ShipName, v.Row.SystemName, v.Row.RegionName)
-	if v.ValueFull != "" {
-		desc = fmt.Sprintf("%s lost in %s, %s: %s ISK.", v.Row.ShipName, v.Row.SystemName, v.Row.RegionName, v.ValueFull)
+	byFlag := map[int64][]line{}
+	for _, it := range items {
+		byFlag[it.Flag] = append(byFlag[it.Flag], line{it.ItemTypeID, it.QuantityDestroyed + it.QuantityDropped})
 	}
-	data.HeadMeta = app.HeadMeta(module.PageMeta{Title: title, Description: desc, CanonicalPath: fmt.Sprintf("/intel/kill/%d/", id)})
-	app.render(ctx, w, http.StatusOK, "kill.html", data)
+	var b strings.Builder
+	fmt.Fprintf(&b, "[%s, Lost %s]\n", ship, ship)
+	racks := [][2]int64{{11, 18}, {19, 26}, {27, 34}, {92, 99}, {125, 132}}
+	for i, rack := range racks {
+		if i > 0 {
+			b.WriteString("\n")
+		}
+		for f := rack[0]; f <= rack[1]; f++ {
+			ls := byFlag[f]
+			if len(ls) == 0 {
+				continue
+			}
+			sort.SliceStable(ls, func(a, c int) bool { return ls[a].qty < ls[c].qty })
+			b.WriteString(names.typeName(ls[0].id))
+			if len(ls) > 1 {
+				b.WriteString(", " + names.typeName(ls[1].id))
+			}
+			b.WriteString("\n")
+		}
+	}
+	for _, f := range []int64{87, 5} {
+		ls := byFlag[f]
+		if len(ls) == 0 {
+			continue
+		}
+		b.WriteString("\n")
+		for _, l := range ls {
+			fmt.Fprintf(&b, "%s x%d\n", names.typeName(l.id), l.qty)
+		}
+	}
+	return b.String()
 }
 
 func decodeKillDetail(gz []byte) (killmailFull, bool) {

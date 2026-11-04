@@ -9,7 +9,7 @@ import (
 // frameworkPageSheets are the page stylesheets whose pages are
 // built on the layout framework (layout.css). A page joins the list
 // when it migrates.
-var frameworkPageSheets = []string{"assets.css", "overview.css", "skillplans.css", "jobs.css", "mining.css", "colonies.css"}
+var frameworkPageSheets = []string{"assets.css", "overview.css", "skillplans.css", "jobs.css", "mining.css", "colonies.css", "kill.css", "killmails.css"}
 
 // TestFrameworkPageSheetsMeasureTheirOwnSpace holds the layout
 // framework's first rule on every migrated page: a page's own sheet

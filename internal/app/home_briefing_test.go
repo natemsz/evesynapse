@@ -394,7 +394,7 @@ func TestBriefingFontPreloadAndFooter(t *testing.T) {
 		t.Fatalf("GET /: status %d", code)
 	}
 	mustContain(t, "home head", body,
-		`<link rel="preload" as="font" type="font/woff2" href="/static/fonts/saira-sc-400.woff2" crossorigin>`,
+		`<link rel="preload" as="font" type="font/woff2" href="/static/fonts/evesansneue-regular.woff2" crossorigin>`,
 		`<link rel="preload" as="font" type="font/woff2" href="/static/fonts/jetbrains-mono.woff2" crossorigin>`,
 		`<link rel="stylesheet" href="/static/style.css?v=`+staticAssetVersion()+`">`,
 		// The footer's version line: its ends are pinned here and
@@ -406,7 +406,7 @@ func TestBriefingFontPreloadAndFooter(t *testing.T) {
 	)
 
 	// The font file itself rides the immutable cache header.
-	req := httptest.NewRequest(http.MethodGet, "/static/fonts/saira-sc-400.woff2", nil)
+	req := httptest.NewRequest(http.MethodGet, "/static/fonts/evesansneue-regular.woff2", nil)
 	rec := httptest.NewRecorder()
 	app.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {

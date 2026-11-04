@@ -32,7 +32,7 @@ var Module = module.Module{
 	Nav: []module.NavSection{{
 		Section: "pilot",
 		Entries: []module.NavEntry{
-			{Href: "/calendar/", Label: "Calendar", Pages: []string{"calendar.html"}, After: "/mail/"},
+			{Href: "/calendar/", Label: "Calendar", Pages: []string{"calendar.html", "op.html", "op_form.html", "op_paps.html"}, After: "/mail/"},
 		},
 	}},
 	Routes: func(r chi.Router, deps module.Deps) {

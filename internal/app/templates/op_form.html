@@ -1,5 +1,6 @@
 {{define "title"}}{{if .OpForm.ID}}Change op{{else}}New op{{end}}{{end}}
 {{define "pagetitle"}}{{with .OpForm}}<h1><span class="gt">{{if .ID}}Change op{{else}}New op{{end}}</span></h1>{{end}}{{end}}
+{{define "pagetabs"}}{{template "sectiontabs" .}}{{end}}
 {{define "content"}}
 {{with .OpForm}}
 

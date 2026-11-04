@@ -55,7 +55,16 @@ const MailMaxDepth = 64
 // around it, or at the end — and a close tag with nothing open to
 // match is dropped. A hostile body therefore cannot close the
 // page's own containers and draw outside the box it is shown in.
-func Sanitize(raw string) template.HTML {
+func Sanitize(raw string) template.HTML { return SanitizeLinked(raw, nil) }
+
+// SanitizeLinked is Sanitize with in-app links: an <a> whose href is
+// not a usable web link (EVE's showinfo:, killReport:, fitting:) is
+// offered to inApp, which may answer with a same-site path (the
+// system, pilot, item or kill page the game link names). Only a path
+// that starts with one slash is written, so a mapping can never point
+// the reader off the site; anything else leaves the link text bare,
+// exactly as Sanitize does.
+func SanitizeLinked(raw string, inApp func(href string) (string, bool)) template.HTML {
 	var out strings.Builder
 
 	// open is the stack of elements currently open in the output.
@@ -192,8 +201,16 @@ func Sanitize(raw string) template.HTML {
 		case name == "a":
 			// An unusable href leaves the link text bare; the
 			// unwritten entry swallows its close tag too.
-			href, ok := MailHref(attrs)
-			openTagAs("a", `<a href="`+html.EscapeString(href)+`" rel="nofollow noopener noreferrer" target="_blank">`, ok)
+			if href, ok := MailHref(attrs); ok {
+				openTagAs("a", `<a href="`+html.EscapeString(href)+`" rel="nofollow noopener noreferrer" target="_blank">`, true)
+				break
+			}
+			path, ok := "", false
+			if inApp != nil {
+				path, ok = inApp(mailHrefValue(attrs))
+				ok = ok && strings.HasPrefix(path, "/") && !strings.HasPrefix(path, "//") && !strings.ContainsAny(path, "\\\n\r\t")
+			}
+			openTagAs("a", `<a class="mail-in" href="`+html.EscapeString(path)+`">`, ok)
 		default:
 			openTagAs(name, "<"+name+">", true)
 		}
@@ -289,6 +306,23 @@ func IndexMailCloseTag(s string, from int, name string) int {
 // attribute text: only absolute http(s) URLs with a host survive
 // (EVE's showinfo:/javascript:/relative links do not).
 func MailHref(attrs string) (string, bool) {
+	value := mailHrefValue(attrs)
+	if value == "" {
+		return "", false
+	}
+	u, err := url.Parse(value)
+	if err != nil || u.Host == "" {
+		return "", false
+	}
+	if scheme := strings.ToLower(u.Scheme); scheme != "http" && scheme != "https" {
+		return "", false
+	}
+	return value, true
+}
+
+// mailHrefValue is an <a> tag's href value, entities decoded and
+// trimmed, whatever its scheme; "" when the tag has none.
+func mailHrefValue(attrs string) string {
 	for search := 0; search+4 <= len(attrs); {
 		if !hasPrefixASCIICase(attrs[search:], "href") {
 			search++
@@ -318,15 +352,7 @@ func MailHref(attrs string) (string, bool) {
 		} else {
 			value = rest
 		}
-		value = html.UnescapeString(strings.TrimSpace(value))
-		u, err := url.Parse(value)
-		if err != nil || u.Host == "" {
-			return "", false
-		}
-		if scheme := strings.ToLower(u.Scheme); scheme != "http" && scheme != "https" {
-			return "", false
-		}
-		return value, true
+		return html.UnescapeString(strings.TrimSpace(value))
 	}
-	return "", false
+	return ""
 }

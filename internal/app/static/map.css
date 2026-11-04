@@ -681,7 +681,7 @@ html.map-full-open .page-body { -webkit-backdrop-filter: none; backdrop-filter: 
 .map-mark-tld {
   margin-left: 0.15em;
   font-family: "Rajdhani", "Segoe UI", sans-serif;
-  font-size: var(--fs-2xs);
+  font-size: 0.7em;
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;

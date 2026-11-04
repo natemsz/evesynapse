@@ -173,7 +173,7 @@
   /* The one type scale: every font-size in every sheet names a
      step here. Dense data sits in the middle steps; display type
      takes the top ones. */
-  --fs-2xs: 0.625rem;
+  --fs-2xs: 0.7rem;
   --fs-xs: 0.8rem;
   --fs-sm: 0.9rem;
   --fs-md: 0.96rem;
@@ -364,7 +364,7 @@ h4 { font-size: var(--fs-sm); }
 
 /* Secondary text: quieter in colour, nearly the size of the text around
    it (the browser's own "smaller" is under 11px here). */
-small { color: var(--muted); font-size: var(--fs-md); }
+small { color: var(--muted); font-size: 0.95em; }
 footer small { font-size: smaller; }
 
 /* --- top bar --- */
@@ -447,7 +447,7 @@ header a.navlink.active,
   color: var(--text-bright);
   box-shadow: inset 0 -2px 0 var(--accent);
 }
-header a.navlink.utility { font-size: var(--fs-sm); color: var(--muted); }
+header a.navlink.utility { font-size: 0.9em; color: var(--muted); }
 .branch { position: relative; }
 .branch > summary {
   cursor: pointer;
@@ -463,7 +463,7 @@ header a.navlink.utility { font-size: var(--fs-sm); color: var(--muted); }
   content: "▾";
   display: inline-block;
   margin-left: 0.35em;
-  font-size: var(--fs-xs);
+  font-size: 0.8em;
   transition: transform 0.15s ease;
 }
 .branch[open] > summary { color: var(--text-bright); }
@@ -1292,7 +1292,7 @@ h3 + .tw > table, h3 + table {
 .btn.small {
   min-height: 0;
   padding: 0.1rem 0.5rem;
-  font-size: var(--fs-xs);
+  font-size: var(--fs-2xs);
 }
 .btn:hover,
 :where(button:not([class]), input[type="submit"]:not([class]), input[type="button"]:not([class])):hover:not(:disabled) {
@@ -1370,8 +1370,8 @@ thead th {
 td, .isk, dd, .kpi-v, .kpi-sub, .fleet-foot, .flow-figs { font-variant-numeric: tabular-nums; }
 /* Sortable headers (app.js): a pointer, and the direction once sorted. */
 #main-content table:not([data-nosort]) > thead th:not(:empty) { cursor: pointer; user-select: none; }
-#main-content table > thead th[aria-sort="ascending"]::after { content: " ▲"; font-size: var(--fs-xs); }
-#main-content table > thead th[aria-sort="descending"]::after { content: " ▼"; font-size: var(--fs-xs); }
+#main-content table > thead th[aria-sort="ascending"]::after { content: " ▲"; font-size: 0.75em; }
+#main-content table > thead th[aria-sort="descending"]::after { content: " ▼"; font-size: 0.75em; }
 /* Tables sit directly on the glass: no zebra striping (the
    alternating paints fight the translucency), one hairline
    ember border between rows, and the glow mockup's hover wash
@@ -1625,7 +1625,7 @@ body:has(main .suggest:not([hidden])) main { position: relative; z-index: 70; }
   padding: 0 0.35em;
   border: 1px solid currentColor;
   border-radius: var(--r-sm);
-  font-size: var(--fs-xs);
+  font-size: 0.85em;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   vertical-align: 0.12em;
@@ -1807,7 +1807,7 @@ footer .hash-pop {
    and wrap. Customize mode clears the band for the widget's own
    controls (the move buttons sit at the title's right). */
 .fleet-tags { position: absolute; top: 0; right: 1rem; height: 2.94rem; display: flex; align-items: center; gap: 0.4rem; margin: 0; }
-.fleet-tags-label { font-size: var(--fs-xs); font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); margin-right: 0.15rem; }
+.fleet-tags-label { font-family: "Rajdhani", "Segoe UI", sans-serif; font-synthesis-weight: none; font-size: var(--fs-xs); font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); margin-right: 0.15rem; }
 @media (max-width: 70rem) {
   .fleet-tags { position: static; height: auto; padding-top: 0.1rem; flex-wrap: wrap; }
 }
@@ -2236,7 +2236,9 @@ body.resize-active { user-select: none; -webkit-user-select: none; cursor: nwse-
   border: 1px solid rgba(255, 110, 0, 0.16);
   border-radius: var(--r-md);
 }
-.kpi-k { font-size: var(--fs-2xs); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+/* KPI titles read as UI labels, like table headers: Rajdhani
+   SemiBold in small spaced capitals, bright enough to read on glass. */
+.kpi-k { font-family: "Rajdhani", "Segoe UI", sans-serif; font-weight: 600; font-synthesis-weight: none; font-size: var(--fs-2xs); letter-spacing: 0.08em; text-transform: uppercase; color: var(--text); }
 td, dd, .kpi-v, .fit-headline-num, .fit-bar-nums, .fit-count, .fit-chip-qty, .fit-res > b, .sec {
   /* Standalone figures: monospaced digits, Eve Sans Neue for any letters. */
   font-family: "Synapse Numerals", "Eve Sans Neue", "Inter", "Segoe UI", sans-serif;
@@ -2248,7 +2250,7 @@ td.pos, .pos { color: #28c76f; }
 .watch-matches td:last-child, .watch-matches th:last-child { width: 1%; white-space: nowrap; text-align: right; }
 .flow-figs td { text-align: right; white-space: nowrap; }
 .flow-figs thead th { text-align: right; }
-.flow-figs thead small { color: var(--accent); font-size: var(--fs-2xs); }
+.flow-figs thead small { color: var(--accent); font-size: 1em; }
 .kpi-v {
   font-size: var(--fs-3xl);
   font-weight: 600;
@@ -2261,8 +2263,8 @@ td.pos, .pos { color: #28c76f; }
   overflow-wrap: normal;
 }
 .kpis-small .kpi-v { font-size: var(--fs-md); overflow-wrap: normal; white-space: nowrap; }
-.kpi-v small { font-size: var(--fs-2xs); color: var(--accent); font-weight: 400; }
-.kpi-trend { font-size: var(--fs-2xs); vertical-align: 0.15em; cursor: default; }
+.kpi-v small { font-size: var(--fs-xs); color: var(--accent); font-weight: 400; }
+.kpi-trend { font-size: var(--fs-xs); vertical-align: 0.15em; cursor: default; }
 .kpi-trend.up { color: var(--success); }
 .kpi-trend.down { color: var(--danger); }
 /* The house money figure: the grouped integer at full size with
@@ -2271,7 +2273,7 @@ td.pos, .pos { color: #28c76f; }
    size as its integer grows, so it always fits its card; the
    surface's plain size is the baseline for ordinary figures. */
 .iskfig { white-space: nowrap; font-variant-numeric: tabular-nums; }
-.iskfig .dec { font-size: var(--fs-2xs); line-height: 0; vertical-align: 0.34em; margin-left: 0.02em; }
+.iskfig .dec { font-size: 0.56em; line-height: 0; vertical-align: 0.34em; margin-left: 0.02em; }
 .kpi-v .iskhero.l1 { font-size: var(--fs-2xl); }
 .kpi-v .iskhero.l2 { font-size: var(--fs-lg); }
 .kpi-v .iskhero.l3 { font-size: var(--fs-md); }
@@ -2541,7 +2543,8 @@ html[data-theme="light"] .brief-card:hover, html[data-theme="light"] .brief-card
   padding: 0.14rem 0.45rem;
   border: 1px solid var(--muted);
   border-radius: var(--r-sm);
-  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-family: var(--font-display);
+  font-synthesis-weight: none;
   font-size: var(--fs-2xs);
   font-weight: 600;
   letter-spacing: 0.1em;
@@ -2583,7 +2586,10 @@ html[data-theme="light"] .brief-card:hover, html[data-theme="light"] .brief-card
   .brief-count { font-size: var(--fs-2xs); }
 }
 
-.fleet-table td { vertical-align: middle; }
+/* One body size across the fleet table: names, the corporation,
+   station and ship lines under them, and every figure. */
+.fleet-table td { vertical-align: middle; font-size: var(--fs-sm); }
+.fleet-table td small, .fleet-table td .countdown { font-size: 1em; }
 /* The header row's breathing room lives in the cells' own padding,
    symmetric top and bottom, so the header text centres between the
    search row's rule above and the header rule below (the search
@@ -2647,7 +2653,7 @@ tr.fleet-detail > td { background: #120d09; border-bottom: 1px solid color-mix(i
 .card[data-widget="prodline"] .prodline-meter { max-width: none; height: 6px; margin-top: 0.35rem; border-radius: var(--r-xs); overflow: hidden; }
 .card[data-widget="prodline"] .prodline-meter > span { height: 6px; }
 .card[data-widget="prodline"] .prodline-meter-healthy > span { background: linear-gradient(90deg, color-mix(in srgb, var(--kept) 45%, #0b2921), var(--kept)); }
-.card[data-widget="prodline"] .prodline-barlabel { font-size: var(--fs-xs); color: var(--muted-2); margin-top: 0.15rem; }
+.card[data-widget="prodline"] .prodline-barlabel { font-size: 0.85em; color: var(--muted-2); margin-top: 0.15rem; }
 .card[data-widget="prodline"] .prodline-runner { display: block; margin-top: 0.1rem; }
 .card[data-widget="prodline"] .prodline-buy, .card[data-widget="prodline"] .prodline-missing { list-style: none; margin: 0.2rem 0 0; padding: 0; }
 .card[data-widget="prodline"] .prodline-buyrow { display: flex; align-items: center; gap: 0.45rem; padding: 0.18rem 0; }
@@ -2657,7 +2663,7 @@ tr.fleet-detail > td { background: #120d09; border-bottom: 1px solid color-mix(i
 /* The pin toggle on the Blueprints page: a quiet button that
    fills in gold when its blueprint is pinned. */
 .bp-pin { margin: 0; }
-.bp-pin-btn { background: none; border: 1px solid rgba(255, 255, 255, 0.18); border-radius: var(--r-sm); color: var(--muted); cursor: pointer; font: inherit; font-size: var(--fs-xs); line-height: 1; padding: 0.22rem 0.5rem; }
+.bp-pin-btn { background: none; border: 1px solid rgba(255, 255, 255, 0.18); border-radius: var(--r-sm); color: var(--muted); cursor: pointer; font: inherit; font-family: var(--font-display); font-synthesis-weight: none; font-weight: 600; font-size: var(--fs-2xs); text-transform: uppercase; letter-spacing: 0.06em; line-height: 1; padding: 0.22rem 0.5rem; }
 .bp-pin-btn:hover, .bp-pin-btn:focus-visible { color: var(--text); border-color: var(--accent); }
 .bp-pin-btn.on { color: var(--gold); border-color: var(--gold); }
 /* A fleet table taller than its module scrolls inside it, and the
@@ -2683,7 +2689,7 @@ tr.fleet-detail > td { background: #120d09; border-bottom: 1px solid color-mix(i
 .flow-pie path { stroke: var(--panel); stroke-width: 0.8; }
 .flow-pie .pie-c { font-size: var(--fs-2xs); fill: var(--muted); text-anchor: middle; letter-spacing: 0.08em; text-transform: uppercase; }
 .flow-pie figcaption { min-width: 0; font-size: var(--fs-xs); }
-.pie-head { display: block; margin-bottom: 0.25rem; font-size: var(--fs-2xs); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+.pie-head { display: block; margin-bottom: 0.25rem; font-family: var(--font-display); font-synthesis-weight: none; font-weight: 600; font-size: var(--fs-2xs); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
 .pie-legend { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.15rem; }
 .pie-legend li { display: flex; align-items: center; gap: 0.35rem; min-width: 0; }
 .pie-legend .pie-l { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -2711,7 +2717,7 @@ tr.fleet-detail > td { background: #120d09; border-bottom: 1px solid color-mix(i
   color: var(--note);
   font-family: "Rajdhani", sans-serif;
   font-weight: 600;
-  font-size: var(--fs-md);
+  font-size: 0.95em;
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
@@ -3021,7 +3027,7 @@ tr.fleet-detail > td { background: #120d09; border-bottom: 1px solid color-mix(i
   border: 1px solid #4a2408;
   border-radius: var(--r-sm);
   padding: 0.35rem 0.55rem;
-  font-size: var(--fs-md);
+  font-size: 0.95em;
   line-height: 1.45;
   white-space: nowrap;
   transform: translate(-50%, -115%);
@@ -3361,7 +3367,7 @@ html[data-theme="light"] .cardbtn { background: #fffdf9; border-color: #d9a77a; 
   display: inline-flex;
   align-items: center;
   margin-left: auto;
-  font-size: var(--fs-xs);
+  font-size: 0.85em;
   white-space: nowrap;
 }
 .page-sync[hidden] { display: none; }
@@ -4731,8 +4737,8 @@ select.flash { animation: fit-flash 0.7s ease-out; }
 .fit-tip-v.res-th { color: #ff7a5c; }
 .fit-tip-v.res-kin { color: #c9c2b8; }
 .fit-tip-v.res-exp { color: #ffc266; }
-.fit-tip-v.good[class*="res-"]::after { content: " \25B2"; font-size: var(--fs-2xs); color: #7dc96f; }
-.fit-tip-v.bad[class*="res-"]::after { content: " \25BC"; font-size: var(--fs-2xs); color: #ff7a6b; }
+.fit-tip-v.good[class*="res-"]::after { content: " \25B2"; font-size: 0.7em; color: #7dc96f; }
+.fit-tip-v.bad[class*="res-"]::after { content: " \25BC"; font-size: 0.7em; color: #ff7a6b; }
 .fit-tip-x {
   position: absolute;
   top: 0.1rem;
@@ -4855,7 +4861,12 @@ html[data-theme="light"] .page-body:not(:has(.home-grid)) .fit-modsearch {
   color: var(--muted);
   cursor: pointer;
   font: inherit;
+  font-family: var(--font-display);
+  font-synthesis-weight: none;
+  font-weight: 600;
   font-size: var(--fs-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
   padding: 0.25rem 0.7rem;
   touch-action: manipulation;
 }
@@ -5320,7 +5331,7 @@ html[data-scheme="soe"] .searchwrap input[type="text"] { background-image: url("
 .charselector-option[hidden] { display: none; }
 button.charselector-option { background: none; border: none; width: 100%; text-align: left; font: inherit; cursor: pointer; }
 .charselector-tags {
-  font-size: var(--fs-xs);
+  font-size: 0.8em;
   color: var(--muted);
   margin-left: 0.4rem;
 }
@@ -5770,7 +5781,7 @@ table.stat-table td { vertical-align: top; }
 .lookup-matches { margin: 0 0 0.9rem; padding-left: 1.2rem; }
 .lookup-matches li { margin: 0.15rem 0; }
 .scope-details summary { cursor: pointer; white-space: nowrap; }
-.scope-list { margin: 0.3rem 0 0; padding-left: 1.1rem; font-size: var(--fs-xs); color: var(--muted); }
+.scope-list { margin: 0.3rem 0 0; padding-left: 1.1rem; font-size: 0.85em; color: var(--muted); }
 /* "Connect Discord": Discord's colour and mark on the standard button. */
 .btn.btn-discord {
   gap: 0.5rem;
@@ -5822,7 +5833,7 @@ html:not(.js) .checkselector .charselector-dropdown[hidden] {
 }
 /* --- settings pages: fields, cards and rows (ops, Discord servers, groups) --- */
 .lede { color: var(--muted); max-width: 62rem; margin: 0 0 1rem; }
-.hint { color: var(--muted); font-size: var(--fs-sm); margin: 0.3rem 0 0.75rem; }
+.hint { color: var(--muted); font-size: 0.92em; margin: 0.3rem 0 0.75rem; }
 /* Open prose: standalone explanatory text that sits outside any
    widget or table (a page's how-to paragraphs, footnotes, empty-state
    lines) reads in Inter. The condensed face stays on table data and
@@ -5852,12 +5863,15 @@ html:not(.js) .checkselector .charselector-dropdown[hidden] {
 .field.wide { grid-column: 1 / -1; }
 .field-label {
   display: block;
-  font-size: var(--fs-xs);
+  font-family: var(--font-display);
+  font-synthesis-weight: none;
+  font-weight: 600;
+  font-size: var(--fs-2xs);
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--muted);
+  color: var(--muted-2);
 }
-.field-hint { font-size: var(--fs-sm); color: var(--muted); }
+.field-hint { font-size: 0.9em; color: var(--muted); }
 .field-static { display: flex; align-items: center; min-height: var(--control-h); color: var(--text-bright); }
 .field input[type="text"], .field input[type="number"], .field input[type="datetime-local"],
 .field select, .field textarea { display: block; width: 100%; }
@@ -5924,12 +5938,12 @@ html[data-theme="light"] .setting h4 { color: var(--accent); }
 .srp-policy { white-space: pre-wrap; max-width: 62rem; margin: 0; }
 .srp-sum { display: flex; flex-wrap: wrap; gap: 0.4rem 1.5rem; margin: 0 0 0.75rem; color: var(--muted); }
 .srp-sum strong { color: var(--text-bright); }
-.tag-row { margin: 0.4rem 0 0; font-size: var(--fs-sm); }
+.tag-row { margin: 0.4rem 0 0; font-size: 0.9em; }
 .tag-row a { margin-right: 0.35rem; white-space: nowrap; }
 .doctrine-clip { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .doctrine-eft { margin-top: 0.75rem; }
 .doctrine-eft summary { cursor: pointer; color: var(--muted); }
-.doctrine-eft pre { margin: 0.5rem 0 0; padding: 0.6rem; max-height: 22rem; overflow: auto; white-space: pre-wrap; background: rgba(0, 0, 0, 0.25); border: 1px solid #2a2a2a; border-radius: var(--r-sm); font-size: var(--fs-xs); }
+.doctrine-eft pre { margin: 0.5rem 0 0; padding: 0.6rem; max-height: 22rem; overflow: auto; white-space: pre-wrap; background: rgba(0, 0, 0, 0.25); border: 1px solid #2a2a2a; border-radius: var(--r-sm); font-size: 0.85em; }
 a.badge { text-decoration: none; }
 .lookup-form input[name="tag"] { width: 9rem; }
 .field .searchwrap { display: block; width: 100%; }
@@ -5985,7 +5999,7 @@ html[data-theme="light"] .doctrine-fits li:last-child { border-color: #e3d9c6; }
    of flow, so the card and the page keep their height. Groups
    lay out side by side and wrap, using the horizontal space. */
 .loadout-preview { position: relative; grid-column: 1 / -1; }
-.loadout-preview-btn { background: none; border: 0; padding: 0; font: inherit; color: var(--muted); cursor: pointer; }
+.loadout-preview-btn { background: none; border: 0; padding: 0; font: inherit; font-family: var(--font-display); font-synthesis-weight: none; font-weight: 600; font-size: var(--fs-2xs); text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); cursor: pointer; }
 .loadout-preview-btn::before { content: "▸"; display: inline-block; margin-right: 0.35rem; transition: transform 0.12s ease; }
 .loadout-preview-btn[aria-expanded="true"]::before { transform: rotate(90deg); }
 .loadout-preview-btn:hover { color: var(--text); }
@@ -6579,7 +6593,7 @@ button.gn-title:hover .gn-more, button.gn-title:focus-visible .gn-more { color: 
 
 /* Pill tabs: a row of divisions with counts. */
 .pilltabs { display: flex; flex-wrap: wrap; gap: 0.4rem; }
-.pilltab { padding: 0.35rem 0.7rem; border: 1px solid var(--box-edge); border-radius: 999px; color: var(--muted); font-size: var(--fs-xs); font-weight: 600; text-decoration: none; }
+.pilltab { padding: 0.35rem 0.7rem; border: 1px solid var(--box-edge); border-radius: 999px; color: var(--muted); font-family: var(--font-display); font-synthesis-weight: none; font-size: var(--fs-xs); font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; text-decoration: none; }
 .pilltab:hover { color: var(--text); }
 .pilltab.on { background: var(--glass); border-color: var(--accent); color: var(--text-bright); }
 .pilltab .cnt { font-weight: 500; opacity: 0.75; }
@@ -6587,7 +6601,7 @@ button.gn-title:hover .gn-more, button.gn-title:focus-visible .gn-more { color: 
 /* Saved-filter chips: the user's own named views, each with its
    delete, plus the save form that names the current view. */
 .fchips { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; }
-.fchips-label { color: var(--muted); font-size: var(--fs-xs); font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; }
+.fchips-label { font-family: var(--font-display); font-synthesis-weight: none; color: var(--muted-2); font-size: var(--fs-2xs); font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; }
 .fchip { padding: 0.3rem 0.65rem; border: 1px solid var(--box-edge); border-radius: 999px; background: none; color: var(--text); font-size: var(--fs-xs); text-decoration: none; cursor: pointer; }
 .fchip.save { border-style: dashed; color: var(--muted); }
 .fchip-wrap { display: inline-flex; align-items: center; gap: 0.1rem; }
@@ -6647,7 +6661,7 @@ button.gn-title:hover .gn-more, button.gn-title:focus-visible .gn-more { color: 
 .estbar { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; margin: 0.8rem 0 0.2rem; padding: 0.55rem 0.7rem; border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent); border-radius: var(--r-sm); background: color-mix(in srgb, var(--accent) 9%, transparent); }
 .estbar form { margin: 0; }
 .estbar-l { display: flex; flex-direction: column; gap: 0.05rem; min-width: 0; }
-.estbar-lab { color: var(--muted); font-size: var(--fs-2xs); font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+.estbar-lab { font-family: var(--font-display); font-synthesis-weight: none; color: var(--muted-2); font-size: var(--fs-2xs); font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; }
 .estbar-v { color: var(--gold); font-size: var(--fs-lg); font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; }
 
 /* Loadout chip accents: the slot letter reads in the accent,

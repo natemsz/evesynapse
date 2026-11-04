@@ -71,15 +71,6 @@ type blueprintRow struct {
 	Pinned          bool   // the account has pinned this blueprint as a production line
 }
 
-// miningRow is one mining-ledger line.
-type miningRow struct {
-	Date   string
-	Ore    string
-	TypeID int64
-	Qty    string
-	System placeRef
-}
-
 // industryView is the shared body of the three Industry pages:
 // each handler fills only its own section's fields.
 type industryView struct {
@@ -88,9 +79,6 @@ type industryView struct {
 	Blueprints    econSectionState
 	BlueprintRows []blueprintRow
 	BlueprintsCut int
-	Mining        econSectionState
-	MiningRows    []miningRow
-	MiningCut     int
 }
 
 // maxIndustryRows caps each section table (corp-ledger precedent).
@@ -153,7 +141,7 @@ func (app *Application) handleIndustryMining(w http.ResponseWriter, r *http.Requ
 	ctx := r.Context()
 	data := app.page(ctx)
 
-	_, active, links, err := app.pickCharacter(ctx, r, "/industry/mining/")
+	characters, _, links, err := app.pickCharacter(ctx, r, "/industry/mining/")
 	if err != nil {
 		logging.Errorf("industry mining: list characters: %v", err)
 		data.Error = "Could not load industry data; check the server log."
@@ -166,10 +154,7 @@ func (app *Application) handleIndustryMining(w http.ResponseWriter, r *http.Requ
 	}
 	data.IndustryChars = links
 
-	view := &industryView{CharacterName: active.Name}
-	data.Industry = view
-
-	app.fillMining(ctx, active.CharacterID, view)
+	data.MiningPage = app.buildMiningView(ctx, r, characters)
 
 	app.render(ctx, w, http.StatusOK, "industry_mining.html", data)
 }
@@ -241,33 +226,4 @@ func (app *Application) fillBlueprints(ctx context.Context, characterID int64, v
 		rows = rows[:maxIndustryRows]
 	}
 	view.BlueprintRows = rows
-}
-
-func (app *Application) fillMining(ctx context.Context, characterID int64, view *industryView) {
-	var ledger esi.MiningLedger
-	view.Mining = app.econSection(ctx, characterID, esi.SnapMining, &ledger)
-	if !view.Mining.Loaded {
-		return
-	}
-	rows := make([]miningRow, 0, len(ledger))
-	for _, m := range ledger {
-		rows = append(rows, miningRow{
-			Date:   m.Date,
-			Ore:    app.typeNameOrID(ctx, m.TypeID),
-			TypeID: m.TypeID,
-			Qty:    esi.FormatInt(m.Quantity),
-			System: app.linkPlace(ctx, m.SolarSystemID, app.locationTitle(ctx, m.SolarSystemID, "solar_system")),
-		})
-	}
-	sort.SliceStable(rows, func(i, j int) bool {
-		if rows[i].Date != rows[j].Date {
-			return rows[i].Date > rows[j].Date // dates are YYYY-MM-DD
-		}
-		return rows[i].Ore < rows[j].Ore
-	})
-	if len(rows) > maxIndustryRows {
-		view.MiningCut = len(rows) - maxIndustryRows
-		rows = rows[:maxIndustryRows]
-	}
-	view.MiningRows = rows
 }

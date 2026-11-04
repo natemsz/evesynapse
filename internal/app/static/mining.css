@@ -1,0 +1,15 @@
+/* EveSynapse: the Mining Ledger page. Where the panes go is the
+   layout framework's console (layout.css): the pilots are its
+   directory, the ledger its main pane, one entry its inspector.
+   This sheet holds what is the page's own: portraits, ore icons and
+   the search box in the ledger's bar. */
+
+.mn .l-panes { --l-dir: 18rem; --l-insp: 20rem; }
+.mn-portrait { flex: none; border-radius: 50%; }
+.mn-dir .diritem .l-meter { margin-top: 0.4rem; }
+.mn-filter { flex: 1 1 12rem; min-width: 0; }
+.mn-ore { display: inline-flex; align-items: center; gap: 0.5rem; min-width: 0; }
+.mn-ore img { flex: none; border-radius: var(--r-xs); background: rgba(127, 127, 127, 0.12); }
+.mn-table td.num { font-family: var(--font-num); font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+.mn-table th:nth-last-child(-n+4):not(:last-child) { text-align: right; }
+.mn-h { margin: var(--space-4) 0 0; color: var(--muted); font-family: var(--font-display); font-size: 0.85rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }

@@ -11,6 +11,7 @@ package app
 
 import (
 	"context"
+	"fmt"
 	"html/template"
 	"net/http"
 	"strings"
@@ -276,7 +277,9 @@ func TestColoniesLinkSystem(t *testing.T) {
 		{PlanetID: fixturePlanetA, SolarSystemID: 30000142, PlanetType: "temperate", NumPins: 4, UpgradeLevel: 3, LastUpdate: rfc(now.Add(-time.Hour))},
 	})
 
-	code, body := getPage(t, app, cookie, "/planets/?character=90000001")
+	// The colony's system links from its inspector (a card is itself
+	// the link that opens it).
+	code, body := getPage(t, app, cookie, fmt.Sprintf("/planets/?colony=%d-%d", fixtureCharA, fixturePlanetA))
 	if code != http.StatusOK {
 		t.Fatalf("GET /planets/: status %d", code)
 	}

@@ -1,0 +1,30 @@
+/* EveSynapse: the My Colonies page. Where the panes go is the layout
+   framework's console (layout.css): the colony cards are its main
+   pane and one colony its inspector. This sheet holds the cards. */
+
+.pc .l-panes { --l-insp: 26rem; }
+.pc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 19rem), 1fr)); gap: var(--space-3); }
+.pc-card { display: flex; flex-direction: column; gap: var(--space-2); min-width: 0; padding: var(--space-3); border: 1px solid var(--hairline); border-radius: var(--r-md); background: var(--surface-inset); color: var(--text); text-decoration: none; }
+.pc-card:hover { border-color: color-mix(in srgb, var(--accent) 45%, transparent); text-decoration: none; }
+.pc-card.on { border-color: var(--sel-edge); background: var(--sel-bg); }
+.pc-card.stopped { box-shadow: inset 3px 0 0 var(--danger); }
+.pc-top { display: flex; align-items: center; gap: var(--space-2); min-width: 0; }
+.pc-orb { flex: none; border-radius: 50%; }
+.pc-orb.big { width: 4rem; height: 4rem; }
+.pc-id { display: flex; flex-direction: column; flex: 1 1 auto; min-width: 0; }
+.pc-name { font-family: var(--font-display); font-size: 1.05rem; font-weight: 700; letter-spacing: 0.04em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pc-sub { color: var(--muted); font-size: 0.8rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pc-type { flex: none; padding: 0.08rem 0.4rem; border: 1px solid currentColor; border-radius: var(--r-xs); color: var(--muted); font-family: var(--font-display); font-size: 0.72rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
+.pc-lava { color: #f27a4a; } .pc-plasma { color: #ef6d97; } .pc-gas { color: #b79cff; } .pc-oceanic { color: #5fc6e8; }
+.pc-ice { color: #a9d8f0; } .pc-temperate { color: #79d18f; } .pc-barren { color: #d1b48a; } .pc-storm { color: #8fa4c8; }
+.pc-extract { display: flex; justify-content: space-between; gap: var(--space-3); padding: var(--space-2) var(--space-3); border-radius: var(--r-sm); background: var(--surface-pane); }
+.pc-ex-l, .pc-ex-r { display: flex; flex-direction: column; gap: 0.1rem; min-width: 0; }
+.pc-ex-r { text-align: right; flex: none; }
+.pc-lab { color: var(--muted); font-size: 0.72rem; }
+.pc-ex-v { font-weight: 600; }
+.pc-ex-v .countdown { font-family: var(--font-num); }
+.pc-chips { display: flex; flex-wrap: wrap; gap: 0.3rem; }
+.pc-chips .lchip { white-space: normal; }
+.pc-note { color: var(--muted); font-size: 0.85rem; }
+.pc-h { margin: var(--space-4) 0 var(--space-2); color: var(--muted); font-family: var(--font-display); font-size: 0.85rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
+.pc-main > p { margin-top: var(--space-4); }

@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"net/url"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -172,6 +174,16 @@ type colonyRow struct {
 	Extractors    []extractorRow
 	Factories     []factoryRow
 	Others        string // tally of the remaining pins by type
+	// The colony card and its inspector (My Colonies):
+	Key        string // "owner-planet", the inspector's ?colony= value
+	Owner      string
+	OwnerID    int64
+	TypeKey    string // lowercase planet type, for the badge's tone
+	Image      string // the planet type's image
+	Href       string
+	On         bool
+	Soonest    *extractorRow // the extractor whose program ends first
+	Schematics string        // what the factories make, joined
 }
 
 // planetsView is the Planets page body for one character.
@@ -179,13 +191,22 @@ type planetsView struct {
 	CharacterName string
 	Colonies      econSectionState
 	Rows          []colonyRow
+	Selector      assetScopeSelector
+	Notes         []string
+	Warming       []string
+	Insp          *colonyRow
+	CloseHref     string
+	Depth         int
+	Multi         bool // several characters in scope: cards name the owner
+	Expired       int  // extractors whose program has ended
+	Ending        int  // extractors ending within a day
 }
 
 func (app *Application) handlePlanets(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	data := app.page(ctx)
 
-	_, active, links, err := app.pickCharacter(ctx, r, "/planets/")
+	characters, active, links, err := app.pickCharacter(ctx, r, "/planets/")
 	if err != nil {
 		logging.Errorf("planets: list characters: %v", err)
 		data.Error = "Could not load planetary industry data; check the server log."
@@ -197,60 +218,141 @@ func (app *Application) handlePlanets(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	data.PlanetsChars = links
+	_ = active
 
-	view := &planetsView{CharacterName: active.Name}
+	q := r.URL.Query()
+	scope := parseCharScope(q.Get("scope"), characters)
+	pick := q.Get("colony")
+	href := func(scope charScope, colony string) string {
+		v := url.Values{}
+		v.Set("scope", scope.param())
+		v.Set("colony", colony)
+		return withQuery("/planets/", v)
+	}
+	view := &planetsView{}
 	data.Planets = view
-
-	var colonies esi.Colonies
-	if app.loadCorpSnapshot(ctx, active.CharacterID, esi.SnapPlanets, &colonies) {
-		view.Colonies = econSectionState{Loaded: true}
-	} else if app.piNotEnabled(ctx, active) {
-		view.Colonies = econSectionState{Note: "Planetary industry is not enabled for this character yet. Sign in again to re-link and approve the planetary scope. EVE's consent screen calls it “manage your planetary installations”; EveSynapse only ever reads your colonies."}
-	} else if state, _, found := app.corpKindState(ctx, active.CharacterID, esi.SnapPlanets); found && state == fetchStateError {
-		note := "Colony data could not be loaded."
-		if app.isAdmin(ctx) {
-			note = "Colony data could not be loaded. See the Sync page for status."
+	view.Selector = buildScopeSelector(characters, scope, func(raw string) string { return href(parseCharScope(raw, characters), "") })
+	now := time.Now()
+	scoped := 0
+	for _, ch := range characters {
+		if !scope.has(ch.CharacterID) {
+			continue
 		}
-		view.Colonies = econSectionState{Note: note}
-	} else {
+		scoped++
+		state, rows := app.colonyRowsFor(ctx, ch, now)
+		switch {
+		case state.Note != "":
+			view.Notes = append(view.Notes, ch.Name+": "+state.Note)
+		case state.Warming:
+			view.Warming = append(view.Warming, ch.Name)
+		}
+		for _, row := range rows {
+			row.Href = href(scope, row.Key)
+			row.On = row.Key == pick
+			for _, ex := range row.Extractors {
+				if ex.Expired {
+					view.Expired++
+				} else if ex.FinishRaw != "" {
+					if t, err := time.Parse(time.RFC3339, ex.FinishRaw); err == nil && t.Sub(now) < 24*time.Hour {
+						view.Ending++
+					}
+				}
+			}
+			view.Rows = append(view.Rows, row)
+		}
+	}
+	view.Multi = scoped > 1
+	if len(view.Rows) > 0 || scoped == 0 {
+		view.Colonies = econSectionState{Loaded: true}
+	} else if len(view.Notes) == 0 && len(view.Warming) > 0 {
 		view.Colonies = econSectionState{Warming: true}
 	}
-	if !view.Colonies.Loaded {
-		app.render(ctx, w, http.StatusOK, "planets.html", data)
-		return
+	// System, then planet: the way a pilot scans a PI alt.
+	sort.SliceStable(view.Rows, func(i, j int) bool {
+		if view.Rows[i].System != view.Rows[j].System {
+			return view.Rows[i].System < view.Rows[j].System
+		}
+		return view.Rows[i].Planet < view.Rows[j].Planet
+	})
+	view.Depth = 1
+	view.CloseHref = href(scope, "")
+	for i := range view.Rows {
+		if view.Rows[i].On {
+			view.Insp = &view.Rows[i]
+			view.Depth = 2
+		}
 	}
 
-	now := time.Now()
+	app.render(ctx, w, http.StatusOK, "planets.html", data)
+}
+
+// planetTypeIDs maps ESI's planet type enum to the planet's item
+// type, for its image.
+var planetTypeIDs = map[string]int64{
+	"temperate": 11, "ice": 12, "gas": 13, "oceanic": 2014,
+	"lava": 2015, "barren": 2016, "storm": 2017, "plasma": 2063,
+}
+
+// colonyRowsFor reads one character's colonies (and each colony's
+// stored layout) into display rows, and says why when it cannot.
+func (app *Application) colonyRowsFor(ctx context.Context, ch db.Character, now time.Time) (econSectionState, []colonyRow) {
+	var colonies esi.Colonies
+	if !app.loadCorpSnapshot(ctx, ch.CharacterID, esi.SnapPlanets, &colonies) {
+		if app.piNotEnabled(ctx, ch) {
+			return econSectionState{Note: "Planetary industry is not enabled for this character yet. Sign in again to re-link and approve the planetary scope. EVE's consent screen calls it “manage your planetary installations”; EveSynapse only ever reads your colonies."}, nil
+		}
+		if state, _, found := app.corpKindState(ctx, ch.CharacterID, esi.SnapPlanets); found && state == fetchStateError {
+			note := "Colony data could not be loaded."
+			if app.isAdmin(ctx) {
+				note = "Colony data could not be loaded. See the Sync page for status."
+			}
+			return econSectionState{Note: note}, nil
+		}
+		return econSectionState{Warming: true}, nil
+	}
 	rows := make([]colonyRow, 0, len(colonies))
 	for _, colony := range colonies {
 		row := colonyRow{
 			Planet:  app.planetDisplayName(ctx, colony.PlanetID),
 			System:  app.locationTitle(ctx, colony.SolarSystemID, "solar_system"),
 			Type:    displayPlanetType(colony.PlanetType),
+			TypeKey: colony.PlanetType,
 			Upgrade: colony.UpgradeLevel,
 			Pins:    colony.NumPins,
 			Updated: formatFinish(colony.LastUpdate),
+			Owner:   ch.Name,
+			OwnerID: ch.CharacterID,
+			Key:     strconv.FormatInt(ch.CharacterID, 10) + "-" + strconv.FormatInt(colony.PlanetID, 10),
+		}
+		if id, ok := planetTypeIDs[colony.PlanetType]; ok {
+			row.Image = "https://images.evetech.net/types/" + strconv.FormatInt(id, 10) + "/icon?size=64"
 		}
 		row.SystemRef = app.linkPlace(ctx, colony.SolarSystemID, row.System)
-		layout, ok := app.loadPlanetLayout(ctx, active.CharacterID, colony.PlanetID)
+		layout, ok := app.loadPlanetLayout(ctx, ch.CharacterID, colony.PlanetID)
 		if !ok {
 			row.LayoutWarming = true
 			rows = append(rows, row)
 			continue
 		}
 		row.Extractors, row.Factories, row.Others = app.colonyLayoutRows(ctx, layout, now)
+		for i := range row.Extractors {
+			ex := &row.Extractors[i]
+			if row.Soonest == nil || (ex.FinishRaw != "" && (row.Soonest.FinishRaw == "" || ex.FinishRaw < row.Soonest.FinishRaw)) {
+				row.Soonest = ex
+			}
+		}
+		var made []string
+		seen := map[string]bool{}
+		for _, f := range row.Factories {
+			if !seen[f.Schematic] {
+				seen[f.Schematic] = true
+				made = append(made, f.Schematic)
+			}
+		}
+		row.Schematics = strings.Join(made, ", ")
 		rows = append(rows, row)
 	}
-	// System, then planet: the way a pilot scans a PI alt.
-	sort.SliceStable(rows, func(i, j int) bool {
-		if rows[i].System != rows[j].System {
-			return rows[i].System < rows[j].System
-		}
-		return rows[i].Planet < rows[j].Planet
-	})
-	view.Rows = rows
-
-	app.render(ctx, w, http.StatusOK, "planets.html", data)
+	return econSectionState{Loaded: true}, rows
 }
 
 // colonyLayoutRows distills one layout into display rows: the

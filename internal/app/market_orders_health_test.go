@@ -3,15 +3,17 @@ package app
 // Consolidation tests: the character Orders page carries
 // the same order-health verdicts as the Market page's "Your
 // orders" section (and the corporation orders page where the
-// stored rows cover the issuer), killmail values warm on view
-// through the durable guide-price want (schema 027), and the
+// stored rows cover the issuer), killmail values read the
+// killboard's stored appraisal, and the
 // place-link stragglers from the pass (killmail system
 // lines, industry locations, intel systems, corp orders
 // locations) link exactly when the SDE knows the place.
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 	"testing"
@@ -198,12 +200,12 @@ func TestCorpOrdersHealthAndLocation(t *testing.T) {
 	}
 }
 
-// TestKillViewNotesGuidePriceWant renders kill content with no
-// price guide anywhere: the values show the dash, the
-// view leaves the durable guide-price want behind (schema 027),
-// and once the worker-stored guide exists the same render prices
-// the mail — all with zero outbound calls from the handler.
-func TestKillViewNotesGuidePriceWant(t *testing.T) {
+// TestKillViewReadsBoardValue renders the killmails page with a
+// stored kill detail: while the killboard has not priced the kill
+// the value shows the dash and no guide-price want is noted; once
+// the board's stored value exists the same render shows it, all
+// with zero outbound calls from the handler.
+func TestKillViewReadsBoardValue(t *testing.T) {
 	transport := &countingTransport{}
 	app, conn, q := buildCorpTestApp(t, transport)
 	ctx := context.Background()
@@ -249,7 +251,7 @@ func TestKillViewNotesGuidePriceWant(t *testing.T) {
 	app.esi.StoreCharacterName(fixtureCharA, "Fixture Ceo")
 	app.esi.StoreCharacterName(fixtureMember, "Member One")
 
-	cookie := sessionCookie(t, app, user.ID, fixtureCharA, "Fixture Ceo")
+	cookie := sessionCookie(t, app, user.ID)
 	code, body := getPage(t, app, cookie, "/killmails/")
 	if code != http.StatusOK {
 		t.Fatalf("GET /killmails/: status %d", code)
@@ -259,33 +261,25 @@ func TestKillViewNotesGuidePriceWant(t *testing.T) {
 	// The would-be value renders as the cell "550.00 ISK"; the bare
 	// digits alone also occur inside the wordmark's outlined paths.
 	if strings.Contains(body, "550.00 ISK") {
-		t.Error("value rendered before any price guide exists")
+		t.Error("value rendered before the board priced the kill")
 	}
-	if _, err := q.GetGuidePriceWant(ctx); err != nil {
-		t.Errorf("guide-price want not noted after a priceless kill view: %v", err)
+	if _, err := q.GetGuidePriceWant(ctx); !errors.Is(err, sql.ErrNoRows) {
+		t.Errorf("guide-price want noted by a kill view: %v", err)
 	}
 	if got := transport.calls.Load(); got != 0 {
 		t.Fatalf("handler made %d outbound calls, want 0 (cache-only)", got)
 	}
 
-	// The stored guide lands (the worker's answer to the want):
-	// the same render now prices the mail — 100 destroyed at an
-	// average of 5.50.
-	if err := q.UpsertGuidePrice(ctx, db.UpsertGuidePriceParams{
-		TypeID: 34, AdjustedPrice: 5, AveragePrice: 5.5,
-	}); err != nil {
-		t.Fatalf("seed guide price: %v", err)
-	}
-	if err := q.UpsertGuidePricesMeta(ctx, db.UpsertGuidePricesMetaParams{
-		FetchedAt: now, CachedUntil: mustTime("2999-01-01T00:00:00Z"),
-	}); err != nil {
-		t.Fatalf("seed guide meta: %v", err)
+	// The board prices the kill (its stored appraisal lands): the
+	// same render now shows that figure.
+	if _, err := conn.ExecContext(ctx, `INSERT INTO kills (killmail_id, killmail_time, system_id, value_ours) VALUES (7001, $1, 30000142, 550)`, recently); err != nil {
+		t.Fatalf("seed board kill: %v", err)
 	}
 	code, body = getPage(t, app, cookie, "/killmails/")
 	if code != http.StatusOK {
-		t.Fatalf("GET /killmails/ (guided): status %d", code)
+		t.Fatalf("GET /killmails/ (board-priced): status %d", code)
 	}
-	mustContain(t, "/killmails/ (guided)", body, "550.00")
+	mustContain(t, "/killmails/ (board-priced)", body, "550.00")
 	if got := transport.calls.Load(); got != 0 {
 		t.Errorf("handler made %d outbound calls across renders, want 0", got)
 	}

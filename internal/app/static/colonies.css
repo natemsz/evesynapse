@@ -12,19 +12,19 @@
 .pc-orb { flex: none; border-radius: 50%; }
 .pc-orb.big { width: 4rem; height: 4rem; }
 .pc-id { display: flex; flex-direction: column; flex: 1 1 auto; min-width: 0; }
-.pc-name { font-family: var(--font-display); font-size: 1.05rem; font-weight: 700; letter-spacing: 0.04em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.pc-sub { color: var(--muted); font-size: 0.8rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.pc-type { flex: none; padding: 0.08rem 0.4rem; border: 1px solid currentColor; border-radius: var(--r-xs); color: var(--muted); font-family: var(--font-display); font-size: 0.72rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
+.pc-name { font-family: var(--font-display); font-size: var(--fs-xl); font-weight: 700; letter-spacing: 0.04em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pc-sub { color: var(--muted); font-size: var(--fs-sm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pc-type { flex: none; padding: 0.08rem 0.4rem; border: 1px solid currentColor; border-radius: var(--r-xs); color: var(--muted); font-family: var(--font-display); font-size: var(--fs-xs); font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
 .pc-lava { color: #f27a4a; } .pc-plasma { color: #ef6d97; } .pc-gas { color: #b79cff; } .pc-oceanic { color: #5fc6e8; }
 .pc-ice { color: #a9d8f0; } .pc-temperate { color: #79d18f; } .pc-barren { color: #d1b48a; } .pc-storm { color: #8fa4c8; }
 .pc-extract { display: flex; justify-content: space-between; gap: var(--space-3); padding: var(--space-2) var(--space-3); border-radius: var(--r-sm); background: var(--surface-pane); }
 .pc-ex-l, .pc-ex-r { display: flex; flex-direction: column; gap: 0.1rem; min-width: 0; }
 .pc-ex-r { text-align: right; flex: none; }
-.pc-lab { color: var(--muted); font-size: 0.72rem; }
+.pc-lab { color: var(--muted); font-size: var(--fs-xs); }
 .pc-ex-v { font-weight: 600; }
 .pc-ex-v .countdown { font-family: var(--font-num); }
 .pc-chips { display: flex; flex-wrap: wrap; gap: 0.3rem; }
 .pc-chips .lchip { white-space: normal; }
-.pc-note { color: var(--muted); font-size: 0.85rem; }
-.pc-h { margin: var(--space-4) 0 var(--space-2); color: var(--muted); font-family: var(--font-display); font-size: 0.85rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
+.pc-note { color: var(--muted); font-size: var(--fs-md); }
+.pc-h { margin: var(--space-4) 0 var(--space-2); color: var(--muted); font-family: var(--font-display); font-size: var(--fs-md); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
 .pc-main > p { margin-top: var(--space-4); }

@@ -2153,6 +2153,49 @@ func (q *Queries) ListWalletHistorySamples(ctx context.Context, arg ListWalletHi
 	return items, nil
 }
 
+const listWalletHistorySamplesSince = `-- name: ListWalletHistorySamplesSince :many
+SELECT user_id, character_id, day, balance, net_worth, sampled_at
+FROM wallet_history
+WHERE user_id = $1 AND character_id = $2 AND day >= $3
+ORDER BY day
+`
+
+type ListWalletHistorySamplesSinceParams struct {
+	UserID      int64  `json:"user_id"`
+	CharacterID int64  `json:"character_id"`
+	Day         string `json:"day"`
+}
+
+func (q *Queries) ListWalletHistorySamplesSince(ctx context.Context, arg ListWalletHistorySamplesSinceParams) ([]WalletHistory, error) {
+	rows, err := q.db.QueryContext(ctx, listWalletHistorySamplesSince, arg.UserID, arg.CharacterID, arg.Day)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []WalletHistory
+	for rows.Next() {
+		var i WalletHistory
+		if err := rows.Scan(
+			&i.UserID,
+			&i.CharacterID,
+			&i.Day,
+			&i.Balance,
+			&i.NetWorth,
+			&i.SampledAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listWidgetConfigsByUser = `-- name: ListWidgetConfigsByUser :many
 SELECT user_id, widget_id, config, updated_at FROM widget_configs
 WHERE user_id = $1

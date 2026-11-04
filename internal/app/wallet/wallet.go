@@ -221,7 +221,7 @@ func (app *mod) handleWallet(w http.ResponseWriter, r *http.Request) {
 	// Balance history rides the same stored rows: the decoded
 	// journal above, the daily samples, and the wallet snapshot
 	// the header balance came from.
-	view.Graph = app.deps.AttachWalletGraph(ctx, active.UserID, active.CharacterID, journal, view.Journal.Loaded)
+	view.Graph = app.deps.AttachWalletGraph(ctx, active.UserID, active.CharacterID, journal, view.Journal.Loaded, r.URL.Query().Get("range"))
 	// Wallet flow, as the home module reads it, for this character:
 	// the same stored journal window, one bundle.
 	view.Flow = app.deps.WalletFlow(ctx, active)
@@ -274,7 +274,7 @@ func (app *mod) handleWalletGraphFragment(w http.ResponseWriter, r *http.Request
 		journal = nil
 	}
 	app.deps.RenderFragment(w, "wallet.html", "wallet-graph",
-		app.deps.AttachWalletGraph(ctx, active.UserID, active.CharacterID, journal, loaded))
+		app.deps.AttachWalletGraph(ctx, active.UserID, active.CharacterID, journal, loaded, r.URL.Query().Get("range")))
 }
 
 // maxLedgerRows caps the journal and transaction tables; the snapshot

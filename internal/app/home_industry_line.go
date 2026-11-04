@@ -128,9 +128,15 @@ func (app *Application) buildProdLine(ctx context.Context, userID int64, bundles
 
 	// Products for the pinned blueprints.
 	products := map[int64]int64{}
-	if rows, err := app.queries.ListSDEBlueprintProducts(ctx); err == nil {
-		for _, r := range rows {
-			products[r.BlueprintTypeID] = r.ProductTypeID
+	pinIDs := make([]int64, 0, len(pinRows))
+	for _, pin := range pinRows {
+		pinIDs = append(pinIDs, pin.BlueprintTypeID)
+	}
+	if len(pinIDs) > 0 {
+		if rows, err := app.queries.ListSDEBlueprintProductsForBlueprints(ctx, pinIDs); err == nil {
+			for _, r := range rows {
+				products[r.BlueprintTypeID] = r.ProductTypeID
+			}
 		}
 	}
 

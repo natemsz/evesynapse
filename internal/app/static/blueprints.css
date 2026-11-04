@@ -6,5 +6,5 @@
 .bpc .l-panes { --l-dir: 17rem; --l-insp: 22rem; }
 .bp-filter { flex: 1 1 12rem; min-width: 0; }
 .bp-kinds { margin: 0 0 var(--space-3); }
-.bp-h { margin: var(--space-4) 0 var(--space-2); color: var(--muted); font-family: var(--font-display); font-size: 0.85rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
+.bp-h { margin: var(--space-4) 0 var(--space-2); color: var(--muted); font-family: var(--font-display); font-size: var(--fs-md); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
 .bp-mats td.num { font-family: var(--font-num); font-variant-numeric: tabular-nums; text-align: right; }

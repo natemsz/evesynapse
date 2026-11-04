@@ -207,11 +207,22 @@ func (app *Application) fillBlueprints(ctx context.Context, r *http.Request, cha
 	if !view.Blueprints.Loaded {
 		return
 	}
-	// Blueprint products for categorization
+	// Blueprint products for categorization, bounded to the
+	// blueprints this character actually owns.
 	bpProducts := map[int64]int64{}
-	if prodRows, err := app.queries.ListSDEBlueprintProducts(ctx); err == nil {
-		for _, pr := range prodRows {
-			bpProducts[pr.BlueprintTypeID] = pr.ProductTypeID
+	ownedIDs := make([]int64, 0, len(blueprints))
+	seenBP := map[int64]bool{}
+	for _, bp := range blueprints {
+		if !seenBP[bp.TypeID] {
+			seenBP[bp.TypeID] = true
+			ownedIDs = append(ownedIDs, bp.TypeID)
+		}
+	}
+	if len(ownedIDs) > 0 {
+		if prodRows, err := app.queries.ListSDEBlueprintProductsForBlueprints(ctx, ownedIDs); err == nil {
+			for _, pr := range prodRows {
+				bpProducts[pr.BlueprintTypeID] = pr.ProductTypeID
+			}
 		}
 	}
 

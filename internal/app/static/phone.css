@@ -43,7 +43,7 @@
   input[type="text"], input[type="search"], input[type="number"],
   input[type="email"], input[type="url"], input[type="password"],
   input[type="tel"], select, textarea {
-    font-size: max(16px, 1em);
+    font-size: max(var(--fs-xl), 1em);
   }
 
   /* No double-tap-zoom wait on controls; a tap is a tap. */
@@ -101,13 +101,13 @@
 @media (max-width: 45rem) {
   /* Reading size: the condensed body face at 12.5px (style.css's
      small-screen block) reads small held at arm's length. */
-  body { font-size: 14px; }
+  body { font-size: var(--fs-md); }
 
   /* Flatter surfaces: one glass sheet per page, close to the
      screen edge, instead of a frame inside a margin inside a
      frame. The sections inside keep their whisper fills and
      hairlines, on tighter insets. */
-  #main-content > h1 { margin: 0.2rem 0.85rem 0; font-size: 1.45rem; }
+  #main-content > h1 { margin: 0.2rem 0.85rem 0; font-size: var(--fs-4xl); }
   .page-body {
     margin: 0.6rem 0.4rem 0.75rem;
     padding: 0.85rem 0.7rem 1rem;
@@ -223,13 +223,13 @@
     background: inherit;
     border-bottom: 1px solid var(--box-edge);
   }
-  .as-sheet.open > .sheet-head h2 { margin: 0; font-size: 1.05rem; }
+  .as-sheet.open > .sheet-head h2 { margin: 0; font-size: var(--fs-xl); }
   .sheet-close {
     min-width: 2.5rem; min-height: 2.5rem;
     color: var(--gold);
     background: transparent;
     border: 1px solid transparent; border-radius: var(--r-sm);
-    font-size: 1.5rem; line-height: 1;
+    font-size: var(--fs-4xl); line-height: 1;
     cursor: pointer;
   }
   .as-sheet.open .sheet-only { display: revert; }
@@ -263,13 +263,13 @@
     display: block;
     margin-top: 0.2rem;
     font-family: inherit;
-    font-size: 0.78rem; font-weight: 400;
+    font-size: var(--fs-sm); font-weight: 400;
     letter-spacing: 0; text-transform: none;
     color: var(--muted);
   }
 
   /* The footer: the same lines, set compact. */
-  footer { margin-top: 1rem; padding: 1rem 0.9rem 1.1rem; font-size: 0.66rem; }
+  footer { margin-top: 1rem; padding: 1rem 0.9rem 1.1rem; font-size: var(--fs-2xs); }
   footer p { margin: 0.35rem 0; }
   footer br { display: none; }
 
@@ -296,7 +296,7 @@
      park at the top edge instead (--sticky-top). */
   :root { --sticky-top: env(safe-area-inset-top, 0px); }
   header { position: absolute; left: 0; right: 0; }
-  #main-content > h1 { margin-top: 0; font-size: 1.35rem; }
+  #main-content > h1 { margin-top: 0; font-size: var(--fs-3xl); }
   .page-body { margin-top: 0.5rem; }
 }
 @media (max-height: 30rem) and (orientation: landscape) and (pointer: coarse) and (max-width: 860px) {

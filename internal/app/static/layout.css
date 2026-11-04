@@ -167,7 +167,7 @@ html:has(.page-shell > .subnav nav) { scroll-padding-top: var(--subnav-h); }
   backdrop-filter: none;
   color: var(--muted);
   font-family: var(--font-display);
-  font-size: 0.82rem;
+  font-size: var(--fs-md);
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -194,7 +194,7 @@ html:has(.page-shell > .subnav nav) { scroll-padding-top: var(--subnav-h); }
   border-radius: var(--r-xs);
   background: none;
   color: var(--muted);
-  font-size: 0.9rem;
+  font-size: var(--fs-lg);
   font-weight: 600;
   text-decoration: none;
   white-space: nowrap;
@@ -385,10 +385,10 @@ html[data-theme="light"] .subnav { background: color-mix(in srgb, var(--panel) 8
 .l-stat { display: flex; flex-direction: column; gap: 0.2rem; min-width: 0; padding: var(--space-3) var(--space-4); border: 1px solid var(--hairline); border-radius: var(--r-md); background: var(--surface-inset); color: var(--text); text-decoration: none; }
 a.l-stat:hover { border-color: color-mix(in srgb, var(--accent) 45%, transparent); text-decoration: none; }
 .l-stat.on { border-color: var(--sel-edge); background: var(--sel-bg); }
-.l-stat-label { color: var(--muted); font-family: var(--font-display); font-size: 0.8rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
-.l-stat-value { font-family: var(--font-num); font-size: 1.6rem; font-weight: 700; line-height: 1.1; color: var(--text-bright); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
-.l-stat-value.text { font-family: var(--font-body); font-size: 1.15rem; }
-.l-stat-sub { color: var(--muted); font-size: 0.82rem; }
+.l-stat-label { color: var(--muted); font-family: var(--font-display); font-size: var(--fs-sm); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
+.l-stat-value { font-family: var(--font-num); font-size: var(--fs-4xl); font-weight: 700; line-height: 1.1; color: var(--text-bright); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.l-stat-value.text { font-family: var(--font-body); font-size: var(--fs-2xl); }
+.l-stat-sub { color: var(--muted); font-size: var(--fs-md); }
 .l-stat.warn .l-stat-value { color: var(--gold); }
 .l-stat.ok .l-stat-value { color: var(--kept); }
 
@@ -400,7 +400,7 @@ a.l-stat:hover { border-color: color-mix(in srgb, var(--accent) 45%, transparent
 
 /* Local time: the reader's own time beside an EVE time, written in
    by app.js; empty (and out of the way) without JS. */
-.l-local { color: var(--muted); font-size: 0.85em; }
+.l-local { color: var(--muted); font-size: var(--fs-md); }
 .l-local:not(.on) { display: none; }
 
 /* Panel: the standard solid block on the page. */
@@ -476,8 +476,8 @@ a.l-stat:hover { border-color: color-mix(in srgb, var(--accent) 45%, transparent
   border-bottom: 1px solid transparent;
 }
 .l-pane-bar > .searchwrap, .l-pane-bar > form, .l-pane-bar > input[type="search"] { flex: 1 1 14rem; min-width: 0; }
-.l-pane-title { flex: 1 1 auto; min-width: 0; margin: 0; font-size: 0.95rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.l-pane-title small { color: var(--muted); font-size: 0.8rem; font-weight: 500; }
+.l-pane-title { flex: 1 1 auto; min-width: 0; margin: 0; font-size: var(--fs-lg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.l-pane-title small { color: var(--muted); font-size: var(--fs-sm); font-weight: 500; }
 
 /* Back: shown only when the pane it returns to is off screen. */
 .l-back {
@@ -584,7 +584,7 @@ a.l-stat:hover { border-color: color-mix(in srgb, var(--accent) 45%, transparent
   margin: calc(-1 * var(--space-2)) calc(-1 * var(--space-2)) calc(-1 * var(--space-2)) auto;
   border-radius: var(--r-sm);
   color: var(--muted);
-  font-size: 1.4rem;
+  font-size: var(--fs-3xl);
   text-decoration: none;
 }
 .l-close:hover { color: var(--text); background: var(--row-hover); }
@@ -655,7 +655,7 @@ a.l-stat:hover { border-color: color-mix(in srgb, var(--accent) 45%, transparent
   grid-column: 1 / -1;
 }
 #main-content table.cards-on > tbody > tr > :is(td, th):first-child {
-  font-size: 1.05em;
+  font-size: var(--fs-xl);
   font-weight: 600;
   color: var(--text-bright);
 }
@@ -670,7 +670,7 @@ a.l-stat:hover { border-color: color-mix(in srgb, var(--accent) 45%, transparent
   display: block;
   margin-bottom: 0.1rem;
   color: var(--muted);
-  font-size: 0.68rem;
+  font-size: var(--fs-xs);
   font-weight: 500;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -681,7 +681,7 @@ a.l-stat:hover { border-color: color-mix(in srgb, var(--accent) 45%, transparent
 #main-content table.cards-on > tbody > tr > td.card-title {
   order: -1;
   grid-column: 1 / -1;
-  font-size: 1.05em;
+  font-size: var(--fs-xl);
   font-weight: 600;
   color: var(--text-bright);
 }
@@ -703,7 +703,7 @@ a.l-stat:hover { border-color: color-mix(in srgb, var(--accent) 45%, transparent
 #main-content table.cards-on > tbody > tr > td.card-ctl:last-child { justify-self: end; }
 #main-content table.cards-on > tbody > tr > td:is(.card-ctl, .card-blank):first-child + td {
   grid-column: 1 / -1;
-  font-size: 1.05em; font-weight: 600; color: var(--text-bright);
+  font-size: var(--fs-xl); font-weight: 600; color: var(--text-bright);
 }
 #main-content table.cards-on > tbody > tr > td:is(.card-ctl, .card-blank):first-child + td::before { display: none; }
 .cards-sort {

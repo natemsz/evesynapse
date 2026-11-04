@@ -29,10 +29,10 @@ func TestBalanceChartTextStaysReadable(t *testing.T) {
 	for _, want := range []string{
 		// Base axis/tick size in style.css (the fallback where
 		// container queries are unavailable).
-		".pchart text {\n  font-family: \"JetBrains Mono\", ui-monospace, monospace;\n  font-size: 12px;\n}",
+		".pchart text {\n  font-family: \"JetBrains Mono\", ui-monospace, monospace;\n  font-size: var(--fs-sm);\n}",
 		// Legend and scrub tooltip sit on the site's small scale.
-		"font-weight: 600;\n  font-size: 0.95em;",
-		"font-size: 0.95em;\n  line-height: 1.45;",
+		"font-weight: 600;\n  font-size: var(--fs-lg);",
+		"font-size: var(--fs-lg);\n  line-height: 1.45;",
 	} {
 		if !strings.Contains(style, want) {
 			t.Errorf("style.css missing chart text rule %q", want)
@@ -40,11 +40,11 @@ func TestBalanceChartTextStaysReadable(t *testing.T) {
 	}
 	for _, want := range []string{
 		".pchart { container-type: inline-size; }",
-		".pchart text { font-size: 27px; }", // box up to 360px
-		".pchart text { font-size: 21px; }", // 361–520px
-		".pchart text { font-size: 15px; }", // 521–800px
-		".pchart text { font-size: 10px; }", // 801–1150px
-		".pchart text { font-size: 7px; }",  // 1151px and up
+		".pchart text { font-size: var(--fs-4xl); }", // box up to 360px
+		".pchart text { font-size: var(--fs-3xl); }", // 361–520px
+		".pchart text { font-size: var(--fs-lg); }",  // 521–800px
+		".pchart text { font-size: var(--fs-2xs); }", // 801–1150px
+		".pchart text { font-size: var(--fs-2xs); }", // 1151px and up
 	} {
 		if !strings.Contains(bg, want) {
 			t.Errorf("bg.css missing chart text rule %q", want)

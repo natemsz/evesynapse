@@ -1,0 +1,173 @@
+/* Fitting category on the layout framework: the Ship Workbench
+   page (.fw), My Loadouts (.lo), the public browser (.pb), a
+   public fit's page (.fp) and a fit's shopping list (.sl). Every
+   width decision measures the page (.l-page), never the window.
+   The workbench's phone views (tab bar, ship header, module search
+   popup) stay in fit.css: fit.js switches them on the shared 45rem
+   window band, so they live in that band's query. */
+
+/* --- shared bits --- */
+.fw-hint, .lo-hint, .sl-hint { margin: 0; color: var(--muted); font-size: var(--fs-sm); }
+.l-page .browse-back { margin: 0; }
+.l-page .l-panel h2 {
+  margin: 0 0 var(--space-3);
+  font-family: var(--font-display); font-size: var(--fs-lg); font-weight: 600;
+  letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted);
+}
+/* A fit's numbers (rating, views, price) as small labelled
+   figures: cards on the browser and the fit page's head. */
+.pb-nums { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-4); margin: var(--space-2) 0 0; }
+.pb-nums > div { display: flex; flex-direction: column; gap: 0.1rem; min-width: 0; }
+.pb-nums dt {
+  color: var(--muted); font-family: var(--font-display); font-size: var(--fs-xs);
+  font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
+}
+.pb-nums dd {
+  margin: 0; color: var(--text-bright); font-family: var(--font-num);
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.pb-nums dd small { color: var(--muted); font-family: var(--font-body); }
+.pb-stars { color: var(--gold); font-weight: 700; }
+
+/* Fit cards on the framework pages: one column per 19rem of
+   room, solid panels, the actions on a hairline. */
+.l-page .fit-cards { grid-template-columns: repeat(auto-fill, minmax(min(100%, 19rem), 1fr)); gap: var(--space-3); }
+.l-page .fit-card { background: var(--surface-inset); border-color: var(--hairline); border-radius: var(--r-md); }
+.l-page .fit-card:hover { border-color: color-mix(in srgb, var(--accent) 45%, transparent); }
+.l-page .fit-card-actions { border-top-color: var(--hairline); }
+.l-page .fit-card h4 { font-family: var(--font-body); font-weight: 600; }
+
+/* --- Ship Workbench --- */
+.fw-editor { --l-gap: var(--space-3); }
+/* The fit bar: ship, pilot, clone, name and save on the first
+   rows, the fit's description and tags under them, then opening
+   a saved fit on a hairline. */
+.fw-bar { display: flex; flex-direction: column; gap: var(--space-3); }
+.fw-bar .fit-head { margin: 0; gap: var(--space-2) var(--space-3); }
+.fw-bar .fit-head .fit-searchwrap { flex: 1 1 100%; max-width: none; }
+.fw-bar .fit-head label:has(> #fit-name) { flex: 1 1 12rem; min-width: 0; }
+.fw-bar .fit-head #fit-name { width: 100%; }
+.fw-bar .fit-meta { flex: 1 1 100%; margin: 0; }
+.fw-bar .fit-yourfits {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3);
+  margin: 0; padding: var(--space-3) 0 0; border: 0; border-top: 1px solid var(--hairline);
+  border-radius: 0; background: none;
+}
+.fw-bar .fit-yourfitswrap { flex: 1 1 16rem; min-width: 0; }
+.fw-anon { display: flex; flex-direction: column; gap: var(--space-2); }
+.fw-anon > p { margin: 0; }
+.fw-anonlist { list-style: none; margin: 0 0 var(--space-2); padding: 0; }
+.fw-anonlist li {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+  gap: var(--space-2); padding: var(--space-2) 0; border-bottom: 1px solid var(--hairline);
+}
+.fw-anon-name { min-width: 0; overflow-wrap: anywhere; }
+.fw-anonlist form { margin: 0; }
+/* Export and import side by side while each gets 26rem. */
+.fw-eft { --l-min: 52rem; }
+.fw-eft .fit-eft { margin: 0; }
+.fw-eft .fit-eft > p, .fw-eft .fit-eft form > p { margin: 0 0 var(--space-2); }
+.fw-eft textarea { width: 100%; }
+
+/* The workbench grid: the module lists, the ship ring and the stats
+   in three columns once the page has room for all of them. The
+   ring takes a share of the page, capped at its full size; the
+   lists and the stats share the rest, the stats a little more
+   (their rows run three across). .fit-cols flattens so its
+   children join the grid; with no ship picked the lists and stats
+   take columns 1 and 3. */
+@container page (min-width: 60rem) {
+  .fit-wb {
+    display: grid;
+    grid-template-columns: minmax(14rem, 1fr) clamp(20rem, 32cqi, 34rem) minmax(21rem, 1.25fr);
+    gap: var(--space-4);
+    align-items: start;
+  }
+  .fit-wb > .fit-cols { display: contents; }
+  /* Notes and the doesn't-fit banner take the first row across all
+     three columns; the lists, ring and stats sit in the row below. */
+  .fit-wb > .fit-top { grid-column: 1 / -1; grid-row: 1; }
+  .fit-wb > .fit-center { grid-column: 2; grid-row: 1; }
+  .fit-wb > .fit-center > .fit-visual { width: 100%; margin: 0; }
+  /* The slot list and the stats each span two rows; the ring takes
+     the first of the middle column and the bays (drones, cargo,
+     ammunition) sit straight under it. */
+  .fit-wb > .fit-cols > .fit-slots { grid-column: 1; grid-row: 1 / span 2; }
+  .fit-wb > .fit-cols > .fit-stats { grid-column: 3; grid-row: 1 / span 2; }
+  .fit-wb > .fit-cols > .fit-bays { grid-column: 2; grid-row: 2; }
+  .fit-wb:has(> .fit-top) > .fit-center { grid-row: 2; }
+  .fit-wb:has(> .fit-top) > .fit-cols > .fit-slots,
+  .fit-wb:has(> .fit-top) > .fit-cols > .fit-stats { grid-row: 2 / span 2; }
+  .fit-wb:has(> .fit-top) > .fit-cols > .fit-bays { grid-row: 3; }
+  /* No ship picked: the stats panel spans columns 2-3. */
+  .fit-wb:not(:has(> .fit-center)) > .fit-cols > .fit-stats { grid-column: 2 / 4; }
+}
+/* The stats column is a solid panel like the rest of the page. */
+.l-page .fit-stats { background: var(--surface-inset); border-color: var(--hairline); }
+
+/* --- My Loadouts --- */
+.lo { --l-gap: var(--space-3); }
+.lo-filter { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); margin: 0; }
+.lo-filter .searchwrap { flex: 2 1 16rem; max-width: none; }
+.lo-filter label { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); min-width: 0; color: var(--muted); }
+.lo-filter label input { flex: 1 1 9rem; min-width: 0; }
+.lo-src {
+  display: inline-block; padding: 0.05rem 0.45rem; border: 1px solid var(--hairline);
+  border-radius: var(--r-sm); color: var(--muted); font-size: var(--fs-sm);
+}
+.lo-src-public { color: var(--gold); border-color: color-mix(in srgb, var(--gold) 40%, transparent); }
+.lo-src-eve { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 40%, transparent); }
+.lo-card .fit-card-line + .fit-card-line { margin-top: var(--space-1); }
+.lo-none { margin: 0; color: var(--muted); }
+.lo-empty > p { margin: 0; }
+
+/* --- Public Loadouts Browser ---
+   The filters are a side panel beside the results, wrapping above
+   them when the page is narrow; on a phone they step into a sheet
+   (data-sheet) and the panel keeps only the search box. */
+.pb-layout { --l-side: 17rem; --l-main-min: 60%; align-items: flex-start; }
+.pb-filters { display: flex; flex-direction: column; gap: var(--space-3); margin: 0; }
+.pb-filters .searchwrap { display: block; width: 100%; max-width: none; }
+.pb-filters .searchwrap input { width: 100%; }
+.pb-fields { display: flex; flex-direction: column; gap: var(--space-2); }
+.pb-fields > label { display: flex; flex-direction: column; gap: 0.2rem; min-width: 0; color: var(--muted); font-size: var(--fs-sm); }
+.pb-fields > label :is(select, input[type="search"], input[type="text"]) { width: 100%; min-width: 0; }
+.pb-fields > label.pb-check { flex-direction: row; align-items: center; gap: var(--space-2); }
+.pb-go { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); margin: 0; }
+.pb-main { --l-gap: var(--space-3); min-width: 0; }
+.pb-main > * { margin: 0; }
+.pb-main .facets { background: var(--surface-inset); border-color: var(--hairline); }
+.pb-none { margin: 0; }
+
+/* --- a public fit's page --- */
+.fp { --l-gap: var(--space-3); }
+.fp .fit-pubhead { gap: var(--space-3); margin: 0; align-items: stretch; }
+.fp .fit-pubmeta { display: flex; flex-wrap: wrap; gap: var(--space-3) var(--space-4); align-items: flex-start; }
+.fp-ship {
+  flex: none; width: 96px; height: 96px; border-radius: var(--r-md);
+  border: 1px solid var(--hairline); background: var(--surface-pane);
+}
+.fp-id { flex: 1 1 16rem; min-width: 0; }
+.fp-id > * { margin: 0 0 var(--space-2); }
+.fp-id > :last-child { margin-bottom: 0; }
+.fp-ship-line { font-size: var(--fs-xl); overflow-wrap: anywhere; }
+.fp-ship-line small, .fp-by { color: var(--muted); font-size: var(--fs-md); }
+.fp-desc { color: var(--text); }
+.fp .fit-pubrate { background: var(--surface-inset); border-color: var(--hairline); border-left: 3px solid var(--accent); }
+.fp-mods ul { margin: 0 0 var(--space-3); }
+.fp-share .share-row { display: flex; flex-wrap: wrap; gap: var(--space-2); margin: 0 0 var(--space-3); }
+.fp-share pre {
+  max-width: 100%; max-height: 22rem; overflow: auto; margin: 0;
+  padding: var(--space-3); border: 1px solid var(--hairline); border-radius: var(--r-sm);
+  background: var(--surface-pane); font-family: var(--font-body); font-size: var(--fs-md);
+}
+
+/* --- shopping list --- */
+.sl { --l-gap: var(--space-3); }
+.sl-table .num { text-align: right; font-family: var(--font-num); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.sl-table tfoot th { text-align: left; }
+.sl-list .tw { margin: 0 0 var(--space-3); }
+/* The sheet trigger shows only once app.js makes the filters a
+   sheet; .btn's display must not bring it back before that. */
+.pb-filters [data-sheet-open][hidden] { display: none; }
+.lo-card .fit-card-actions { gap: var(--space-2) var(--space-4); }

@@ -5,18 +5,22 @@
 
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
 
+<div class="l-page pb">
 {{with .PublicFits}}
-<p class="lede">The fits people here have made public. Each has its own page with modules, EFT and ratings.</p>
+<div class="l-head">
+  <p class="l-head-sum"><b>{{.Total}}</b> public fit{{if ne .Total 1}}s{{end}}, shared by pilots here. Each has its own page with modules, stats, EFT and ratings.</p>
+</div>
 {{if .For}}<p class="browse-for"><strong>Choosing fits for <a href="/doctrines/{{.For.ID}}">{{.For.Name}}</a>.</strong> Each one added is copied into the doctrine.</p>{{end}}
 
-<form method="get" action="/fittings/public/" class="lookup-form searchpanel">
+<div class="l-sidebar pb-layout">
+<form method="get" action="/fittings/public/" class="l-panel pb-filters">
   {{if ne .Filters.Sort .DefaultSort}}<input type="hidden" name="sort" value="{{.Filters.Sort}}">{{end}}
   <span class="searchwrap">
     <input type="search" name="q" id="fit-browse-q" value="{{.Filters.Q}}" placeholder="Search fits, ships and authors…" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="fit-browse-suggest" aria-autocomplete="list" aria-label="Search fits" data-suggest="{{.SuggestURL}}">
     <ul class="suggest" id="fit-browse-suggest" role="listbox" hidden></ul>
   </span>
   <button type="button" class="btn btn-quiet" data-sheet-open="fit-filters" hidden>Filters</button>
-  <div class="lookup-more" id="fit-filters" data-sheet data-sheet-title="Filters">
+  <div class="lookup-more pb-fields" id="fit-filters" data-sheet data-sheet-title="Filters">
   <label>Role <select name="role">
     <option value="">Any role</option>
     {{range .Roles}}<option value="{{.}}"{{if eq $.PublicFits.Filters.Role .}} selected{{end}}>{{.}}</option>{{end}}
@@ -43,12 +47,12 @@
     <option value="none"{{if eq $.PublicFits.Filters.Faction "none"}} selected{{end}}>No faction modules</option>
   </select></label>
   <label>Max price <input type="text" name="maxprice" value="{{if gt $.PublicFits.Filters.MaxPrice 0.0}}{{$.PublicFits.Filters.MaxPrice}}{{end}}" placeholder="ISK" size="10" inputmode="decimal"></label>
-  <label><input type="checkbox" name="alpha" value="1"{{if .Filters.Alpha}} checked{{end}}> Alpha-friendly</label>
+  <label class="pb-check"><input type="checkbox" name="alpha" value="1"{{if .Filters.Alpha}} checked{{end}}> Alpha-friendly</label>
   <div class="sheet-foot sheet-only"><a href="{{.FirstURL}}">Clear all</a><button class="btn" type="submit">Show fits</button></div>
   </div>
-  <button type="submit">Search</button>
-  <a href="{{.FirstURL}}">Clear all</a>
+  <p class="pb-go"><button type="submit">Search</button> <a href="{{.FirstURL}}">Clear all</a></p>
 </form>
+<div class="pb-main l-stack">
 {{if .Filters.Note}}<p class="hint">{{.Filters.Note}}</p>{{end}}
 
 {{if .Tags}}
@@ -65,14 +69,19 @@
 </div>
 
 {{if .Cards}}
-<div class="fit-cards">
+<div class="fit-cards pb-cards">
 {{range .Cards}}
-<article class="fit-card">
+<article class="fit-card pb-card">
   {{if .ShipTypeID}}<img class="fit-card-ship" src="https://images.evetech.net/types/{{.ShipTypeID}}/render?size=64" width="64" height="64" alt="" loading="lazy">{{end}}
   <div class="fit-card-body">
     <h4><a href="{{.FitURL}}">{{.Name}}</a></h4>
     <p class="fit-card-line">{{publicItemSublink .ShipTypeID .Ship}}{{if .Hull}} <small>{{.Hull}}</small>{{end}}</p>
-    <p class="fit-card-line">{{if .StarCount}}<span class="badge wait">{{printf "%.1f" .Stars}} ★ ({{.StarCount}})</span> {{end}}<small>{{.Views}} views</small>{{if .PriceKnown}} <small>{{.PriceLine}}</small>{{end}}{{if .Mine}} <small>Yours</small>{{else if .Author}} <small>by {{.Author}}</small>{{end}}</p>
+    <p class="fit-card-line">{{if .Mine}}Yours{{else if .Author}}by {{.Author}}{{end}}</p>
+    <dl class="pb-nums">
+      <div><dt>Rating</dt><dd>{{if .StarCount}}<span class="pb-stars">{{printf "%.1f" .Stars}} ★</span> <small>({{.StarCount}})</small>{{else}}<small>None yet</small>{{end}}</dd></div>
+      <div><dt>Views</dt><dd>{{.Views}}</dd></div>
+      {{if .PriceKnown}}<div><dt>Price</dt><dd>{{.PriceLine}}</dd></div>{{end}}
+    </dl>
     {{if .Tags}}<p class="tag-row">{{range .Tags}}<a href="/fittings/public/?tag={{.}}">#{{.}}</a> {{end}}</p>{{end}}
   </div>
   <div class="fit-card-actions">
@@ -92,7 +101,10 @@
 </div>
 {{if or .HasPrev .HasNext}}<p class="browse-pages">{{if .HasPrev}}<a class="btn" href="{{.PrevURL}}">← Newer</a>{{end}} {{if .HasNext}}<a class="btn" href="{{.NextURL}}">Older →</a>{{end}}</p>{{end}}
 {{else}}
-<p class="hint">No fit matches. <a href="{{.FirstURL}}">Clear the search and filters</a>.</p>
+<p class="l-panel pb-none">No fit matches. <a href="{{.FirstURL}}">Clear the search and filters</a>.</p>
 {{end}}
+</div>
+</div>
 {{end}}
+</div>
 {{end}}

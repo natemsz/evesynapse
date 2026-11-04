@@ -6,18 +6,23 @@
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
 
 {{if .FitEditor}}
-<div id="fit-editor">
-<h3>Build a fitting</h3>
-{{if .FitEditor.Anonymous}}<p class="hint">Fitting with All-V skills. <a href="/auth/link">Sign in with EVE SSO</a> to save fits and use your characters' real skills and inventory.</p>
-<p class="hint"><button type="button" class="btn" id="fit-share-anon">Share this fit by link</button> <span id="fit-share-link"></span></p>
-{{if .FitEditor.AnonFits}}<div class="fit-anonfits"><h4>Your shared fits</h4><ul>
-{{range .FitEditor.AnonFits}}<li><a href="{{.ShareURL}}">{{.Name}}</a> <small>{{.ShipName}} · {{.Updated}}</small> <form method="post" action="{{.DeleteURL}}" class="inline"><button type="submit" class="btn small">Delete</button></form></li>
-{{end}}</ul><p><small>Fits you share while signed out are kept for 180 days after they were last viewed, then deleted.</small></p></div>{{end}}
+<div class="l-page fw">
+<div id="fit-editor" class="l-stack fw-editor">
+{{if .FitEditor.Anonymous}}
+<section class="l-panel fw-anon" aria-label="Signed out">
+  <p class="fw-anon-lead">Fitting with All-V skills. <a href="/auth/link">Sign in with EVE SSO</a> to save fits and use your characters' real skills and inventory.</p>
+  <p class="l-cluster"><button type="button" class="btn" id="fit-share-anon">Share this fit by link</button> <span id="fit-share-link"></span></p>
+  {{if .FitEditor.AnonFits}}<div class="fit-anonfits"><h2>Your shared fits</h2><ul class="fw-anonlist">
+  {{range .FitEditor.AnonFits}}<li><span class="fw-anon-name"><a href="{{.ShareURL}}">{{.Name}}</a> <small>{{.ShipName}} · {{.Updated}}</small></span> <form method="post" action="{{.DeleteURL}}" class="inline"><button type="submit" class="btn small">Delete</button></form></li>
+  {{end}}</ul><p class="fw-hint">Fits you share while signed out are kept for 180 days after they were last viewed, then deleted.</p></div>{{end}}
+</section>
 {{end}}
-<div class="fit-head searchpanel" id="fit-head">
+<section class="l-panel fw-bar" aria-labelledby="fw-bar-h">
+<h2 class="visually-hidden" id="fw-bar-h">Build a fitting</h2>
+<div class="fit-head" id="fit-head">
   <button type="button" class="fit-head-toggle" data-fit-head-toggle aria-expanded="false" aria-controls="fit-head">Fit details</button>
   <span class="searchwrap fit-searchwrap">
-    <input type="text" id="fit-ship-search" value="{{.FitEditor.Sim.ShipName}}" placeholder="Search ships…" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="fit-ship-suggest" aria-autocomplete="list">
+    <input type="text" id="fit-ship-search" value="{{.FitEditor.Sim.ShipName}}" placeholder="Search ships…" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="fit-ship-suggest" aria-autocomplete="list" aria-label="Ship">
     <ul class="suggest" id="fit-ship-suggest" role="listbox" hidden></ul>
   </span>
   <label class="fit-head-sec">Pilot
@@ -43,16 +48,25 @@
   <button type="button" class="btn fit-head-sec" id="fit-save-eve" data-fit-eve-char="{{.FitEditor.EVECharID}}" title="Save this fit to {{.FitEditor.EVECharName}}'s in-game fittings">Save to EVE</button>
   {{end}}
   <span class="fit-saved" id="fit-saved-at" hidden></span>
+  <div class="fit-meta fit-head-sec">
+    <label class="fit-meta-desc">Description
+      <input type="text" id="fit-desc" value="{{.FitEditor.Description}}" placeholder="What is this fit for?" autocomplete="off" maxlength="280">
+    </label>
+    <label class="fit-meta-tags">Tags
+      <input type="text" id="fit-tags" value="{{.FitEditor.Tags}}" placeholder="pvp, kiting, …" autocomplete="off">
+    </label>
+  </div>
 </div>
-{{if not .FitEditor.Anonymous}}<div class="fit-yourfits searchpanel">
+{{if not .FitEditor.Anonymous}}<div class="fit-yourfits">
   <span class="searchwrap fit-yourfitswrap">
-    <input type="text" id="fit-yourfits-search" placeholder="Search your loadouts" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="fit-yourfits-suggest" aria-autocomplete="list">
+    <input type="text" id="fit-yourfits-search" placeholder="Open a saved fit" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="fit-yourfits-suggest" aria-autocomplete="list" aria-label="Search your loadouts">
     <ul class="suggest" id="fit-yourfits-suggest" role="listbox" hidden></ul>
   </span>
   <label class="fit-check"><input type="checkbox" id="fit-community"> Include community fits</label>
-  <button type="button" class="btn" id="fit-loadouts-btn" data-href="/fittings/saved/">My Loadouts</button>
-</div>{{end}}
-<p><small>Fits you save are stored in EveSynapse. Your in-game fittings are only read, never changed, unless you press Save to EVE.</small></p>
+  <button type="button" class="btn btn-quiet" id="fit-loadouts-btn" data-href="/fittings/saved/">My Loadouts</button>
+</div>
+<p class="fw-hint">Fits you save are stored in EveSynapse. Your in-game fittings are only read, never changed, unless you press Save to EVE.</p>{{end}}
+</section>
 {{if .FitEditor.Notes}}
 <ul class="fit-notes">
   {{range .FitEditor.Notes}}<li>{{.}}</li>{{end}}
@@ -87,15 +101,6 @@
 </div>
 {{template "fit-workbench" .FitEditor.Sim}}
 
-<div class="fit-meta">
-  <label class="fit-meta-desc">Description
-    <input type="text" id="fit-desc" value="{{.FitEditor.Description}}" placeholder="What is this fit for?" autocomplete="off" maxlength="280">
-  </label>
-  <label class="fit-meta-tags">Tags
-    <input type="text" id="fit-tags" value="{{.FitEditor.Tags}}" placeholder="pvp, kiting, …" autocomplete="off">
-  </label>
-</div>
-
 <div class="modal-backdrop" id="fit-picker" hidden>
   <div class="modal fit-picker-modal" role="dialog" aria-modal="true" aria-labelledby="fit-picker-title">
     <div class="modal-head">
@@ -119,17 +124,24 @@
   </div>
 </div>
 
-<div class="fit-eft">
-  <h4>Share this fit</h4>
-  <p><button type="button" class="btn" id="fit-export-btn">Show as EFT</button></p>
-  <textarea id="fit-eft-out" rows="9" readonly placeholder="The EFT text appears here, ready to paste into EVE or any fitting tool."></textarea>
-  <form method="post" action="/fittings/import/">
-    <p><label for="fit-eft-in">Import a fit from EFT text</label></p>
-    <textarea id="fit-eft-in" name="eft" rows="9" placeholder="[Rifter, My fit]&#10;Damage Control II&#10;..."></textarea>
-    <p><button type="submit" class="btn">Import</button></p>
-  </form>
+<div class="l-switcher fw-eft">
+  <section class="l-panel fit-eft" aria-labelledby="fw-export-h">
+    <h2 id="fw-export-h">Export</h2>
+    <p class="fw-hint">The fit as EFT text, ready to paste into EVE or any fitting tool.</p>
+    <p><button type="button" class="btn" id="fit-export-btn">Show as EFT</button></p>
+    <textarea id="fit-eft-out" rows="8" readonly aria-label="EFT text" placeholder="Press Show as EFT."></textarea>
+  </section>
+  <section class="l-panel fit-eft" aria-labelledby="fw-import-h">
+    <h2 id="fw-import-h">Import</h2>
+    <form method="post" action="/fittings/import/">
+      <p class="fw-hint"><label for="fit-eft-in">Paste a fit in EFT text to open it here.</label></p>
+      <textarea id="fit-eft-in" name="eft" rows="8" placeholder="[Rifter, My fit]&#10;Damage Control II&#10;..."></textarea>
+      <p><button type="submit" class="btn">Import</button></p>
+    </form>
+  </section>
 </div>
 
+</div>
 </div>
 {{end}}
 {{end}}

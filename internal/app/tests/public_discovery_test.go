@@ -464,7 +464,7 @@ func TestPublicFitPage(t *testing.T) {
 	// are counted in memory (a view writes nothing) and written by
 	// the worker in one batch.
 	_, body = apptest.GetPage(t, rig, nil, fmt.Sprintf("/fittings/public/fit/%d/", fleetID))
-	apptest.MustContain(t, "fourth view", body, "4 views")
+	apptest.MustContain(t, "fourth view", body, "<dt>Views</dt><dd>4</dd>")
 	// The worker run above wrote the first view; the three since wait.
 	if got, _ := q.GetPublicFitting(ctx, fleetID); got.ViewCount != 1 {
 		t.Errorf("stored views before the worker ran again = %d, want 1", got.ViewCount)
@@ -474,7 +474,7 @@ func TestPublicFitPage(t *testing.T) {
 		t.Errorf("stored views after the worker ran = %d, want 4", got.ViewCount)
 	}
 	_, body = apptest.GetPage(t, rig, nil, fmt.Sprintf("/fittings/public/fit/%d/", fleetID))
-	apptest.MustContain(t, "fifth view", body, "5 views")
+	apptest.MustContain(t, "fifth view", body, "<dt>Views</dt><dd>5</dd>")
 
 	// An edit makes the stored page out of date: the page says so
 	// until the worker builds it again, and never shows the old one.

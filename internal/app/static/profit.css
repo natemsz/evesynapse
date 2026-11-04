@@ -1,0 +1,20 @@
+/* EveSynapse: Profit Analysis and its per-blueprint page. The page
+   sits on the layout framework (layout.css): the head with the
+   owner picker and the counting rules, stat tiles, and the
+   sections. The charts and tables keep their styles in market.css,
+   where their width rules read the page's own width (@container
+   page). This sheet holds the page-level spacing only. */
+
+.l-page > * + * { margin-top: var(--space-4); }
+.pf-chiprows { align-items: flex-start; }
+.pf-chiprows .mt-modes { justify-content: flex-start; }
+.pf-tiles .kpi-spark { margin-top: auto; }
+
+/* On a narrow page an info tip's card spans its heading or tile
+   rather than centring on a trigger that may sit near the edge. */
+@container page (width < 40rem) {
+  .l-page :is(.l-stat, h3, h4, figcaption) { position: relative; }
+  .l-page .info-tip { position: static; }
+  .l-page .info-tip .info-tip-pop,
+  .l-page .info-tip:is(:hover, :focus-visible, :focus-within) .info-tip-pop { left: 0; right: 0; width: auto; max-width: none; transform: none; }
+}

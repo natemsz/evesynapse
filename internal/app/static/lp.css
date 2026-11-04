@@ -1,0 +1,58 @@
+/* EveSynapse: the LP Store. Where the panes go is the layout
+   framework's console (layout.css): the filters and the reader's LP
+   are its directory, the offers its main pane, one offer its
+   inspector. This sheet holds what is the page's own: the filter
+   form, the balance list, the ISK per LP meters and the inspector's
+   figures. The one layout call it makes is the phone form of the
+   mock: on a narrow console the filters ride above the offers
+   instead of standing as a level of their own. */
+
+.lp .l-panes { --l-dir: 17rem; --l-insp: 21rem; }
+
+@container console (width < 46rem) {
+  .l-console.lp[data-depth="1"] > .l-panes > .l-pane--dir { display: block; border-bottom: 1px solid var(--hairline); }
+}
+
+/* The filter block folds: open by default, a tap hides it. */
+.lp-fold-head { display: flex; align-items: center; gap: var(--space-2); min-height: var(--tap); margin: calc(-1 * var(--space-2)) 0 var(--space-2); list-style: none; cursor: pointer; }
+.lp-fold-head::-webkit-details-marker { display: none; }
+.lp-fold-hint { color: var(--muted); font-size: 0.78rem; font-family: var(--font-display); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
+.lp-fold-hint::after { content: "Hide"; }
+.lp-fold:not([open]) .lp-fold-hint::after { content: "Show"; }
+
+/* Fields share a row two-up where it has room (a phone, as the mock
+   lays them out) and stand one to a line in the desktop column. */
+.lp-form { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--space-3) var(--space-2); }
+.lp-field { display: flex; flex-direction: column; gap: 0.3rem; flex: 1 1 8.5rem; min-width: 0; }
+.lp-field--wide, .lp-pair, .lp-form > .btn { flex: 1 1 100%; }
+.lp-field > span { color: var(--muted); font-family: var(--font-display); font-size: 0.78rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
+.lp-field :is(input, select) { width: 100%; min-width: 0; min-height: var(--tap); }
+.lp-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2); align-items: end; }
+.lp-form > .btn { width: 100%; min-height: var(--tap); }
+
+.lp-h { margin: var(--space-4) 0 var(--space-2); color: var(--muted); font-family: var(--font-display); font-size: 0.85rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
+.lp-bal .l-meter { margin-top: 0.4rem; }
+
+/* The offers. */
+.lp-chips { margin: 0 0 var(--space-3); }
+.lp-chip span { color: var(--muted); margin-left: 0.2rem; }
+.lp-chip:hover { border-color: var(--accent); }
+.lp-item { display: inline-flex; align-items: center; gap: 0.55rem; min-width: 0; }
+.lp-item img { flex: none; border-radius: var(--r-xs); }
+.lp-item a { font-weight: 600; }
+.lp-worth { color: var(--gold); font-weight: 600; }
+.lp-per .lp-meter { width: 4.5rem; margin: 0.3rem 0 0 auto; }
+.lp-note { margin: var(--space-3) 0 0; color: var(--muted); }
+
+/* The inspector. */
+.lp-msub { margin: 0.15rem 0 0; color: var(--muted); font-size: 0.85rem; }
+.lp-kpis { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2); margin: var(--space-3) 0 0; }
+.lp-kpis .l-stat-value { font-size: 1.3rem; }
+.lp-insp .insp-facts dt a { color: inherit; }
+.lp-links { margin: var(--space-4) 0 0; }
+.lp-table td:first-child { white-space: normal; min-width: 9rem; }
+
+/* With an offer open beside the list, the columns its inspector
+   repeats (store, what it also needs, sold per day) step out, so
+   the rest stays a table in the narrower main pane. */
+.l-console.lp[data-depth="2"] .lp-table :is(th, td):is(:nth-child(2), :nth-child(6), :nth-child(9)) { display: none; }

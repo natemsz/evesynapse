@@ -322,6 +322,11 @@ SELECT user_id, character_id, day, balance, net_worth, sampled_at
 FROM wallet_history
 WHERE user_id = $1 AND character_id = $2
 ORDER BY day;
+-- name: ListWalletHistorySamplesSince :many
+SELECT user_id, character_id, day, balance, net_worth, sampled_at
+FROM wallet_history
+WHERE user_id = $1 AND character_id = $2 AND day >= $3
+ORDER BY day;
 -- name: ListUserWalletHistory :many
 SELECT user_id, character_id, day, balance, net_worth, sampled_at
 FROM wallet_history

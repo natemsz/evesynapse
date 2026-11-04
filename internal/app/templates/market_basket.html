@@ -7,18 +7,26 @@
 
 {{with .MarketBaskets}}
 {{$v := .}}
-<p><small><a href="/market/baskets/">All baskets</a> · {{.Basket.Items}} items priced in {{.Basket.RegionName}}{{if .Basket.Preset}} · preset{{end}}</small></p>
-
-<div class="kpis kpis-small">
-  <div class="kpi"><span class="kpi-k">Worth now</span><span class="kpi-v">{{if .Value}}{{.Value}} <small>ISK</small>{{else}}—{{end}}</span><span class="kpi-sub">At typical sell{{if .Basket.Partial}}, some items unpriced{{end}}</span></div>
-  <div class="kpi"><span class="kpi-k">Sell now</span><span class="kpi-v">{{if .ValueBuy}}{{.ValueBuy}} <small>ISK</small>{{else}}—{{end}}</span><span class="kpi-sub">At typical buy</span></div>
-  <div class="kpi"><span class="kpi-k">1 day</span><span class="kpi-v">{{if .Chg1.Text}}<span class="mt-chg {{.Chg1.Dir}}">{{.Chg1.Text}}</span>{{else}}—{{end}}</span></div>
-  <div class="kpi"><span class="kpi-k">7 days</span><span class="kpi-v">{{if .Chg7.Text}}<span class="mt-chg {{.Chg7.Dir}}">{{.Chg7.Text}}</span>{{else}}—{{end}}</span></div>
-  <div class="kpi"><span class="kpi-k">30 days</span><span class="kpi-v">{{if .Chg30.Text}}<span class="mt-chg {{.Chg30.Dir}}">{{.Chg30.Text}}</span>{{else}}—{{end}}</span></div>
+<div class="l-page">
+<div class="l-head">
+  <p class="l-head-sum"><a href="/market/baskets/">All baskets</a> · {{.Basket.Items}} items priced in {{.Basket.RegionName}} {{if .Basket.Preset}}<span class="bk-badge preset">Preset</span>{{else}}<span class="bk-badge yours">Yours</span>{{end}}</p>
+  {{if .Own}}<div class="l-head-act"><a class="btn btn-quiet" href="#bk-edit">Edit basket</a></div>{{else if .SignedIn}}<div class="l-head-act"><form method="post" action="/market/baskets/"><input type="hidden" name="from" value="{{.Basket.ID}}"><button class="btn" type="submit">Copy to my baskets</button></form></div>{{end}}
 </div>
 
-<section class="foldable">
-<h3>Value over time</h3>
+<div class="l-tiles bk-tiles">
+  <div class="l-stat"><span class="l-stat-label">Worth now</span><span class="l-stat-value bk-gold"{{if .Value}} title="{{.Value}} ISK"{{end}}>{{if .Value}}{{.ValueShort}} <small>ISK</small>{{else}}—{{end}}</span><span class="l-stat-sub">At typical sell{{if .Basket.Partial}}, some items unpriced{{end}}</span></div>
+  <div class="l-stat"><span class="l-stat-label">Sell now</span><span class="l-stat-value"{{if .ValueBuy}} title="{{.ValueBuy}} ISK"{{end}}>{{if .ValueBuy}}{{.ValueBuyShort}} <small>ISK</small>{{else}}—{{end}}</span><span class="l-stat-sub">At typical buy, selling to buy orders in {{.Basket.RegionName}}</span></div>
+  <div class="l-stat bk-chg"><span class="l-stat-label">Change</span>
+    <dl class="bk-chg-list">
+      <div><dt>1 day</dt><dd>{{if .Chg1.Text}}<span class="mt-chg {{.Chg1.Dir}}">{{.Chg1.Text}}</span> <small>{{.Delta1}} ISK</small>{{else}}<small>no full day yet</small>{{end}}</dd></div>
+      <div><dt>7 days</dt><dd>{{if .Chg7.Text}}<span class="mt-chg {{.Chg7.Dir}}">{{.Chg7.Text}}</span> <small>{{.Delta7}} ISK</small>{{else}}<small>no full day yet</small>{{end}}</dd></div>
+      <div><dt>30 days</dt><dd>{{if .Chg30.Text}}<span class="mt-chg {{.Chg30.Dir}}">{{.Chg30.Text}}</span> <small>{{.Delta30}} ISK</small>{{else}}<small>no full day yet</small>{{end}}</dd></div>
+    </dl>
+  </div>
+</div>
+
+<section class="l-panel bk-chart">
+<div class="bk-head"><h2 class="bk-title">Value over time</h2></div>
 {{with .Chart}}
 <div class="mt-chart">
   <div class="chart-legend">
@@ -32,61 +40,68 @@
   </svg>
   <div class="mt-chart-dates"><small>{{.First}}</small><small>{{.Last}}</small></div>
 </div>
+<p class="bk-note"><small>Daily basket worth at the typical (median) sell and buy in {{$v.Basket.RegionName}}. The history fills in one point a day.</small></p>
 {{else}}
 <p><small>The value history fills in as {{.Basket.RegionName}} is swept, one point a day.</small></p>
 {{end}}
 </section>
 
-<nav class="mt-modes" aria-label="Period">{{range .Periods}}<a href="{{.Href}}"{{if .Active}} class="active" aria-current="true"{{end}}>{{.Label}}</a>{{end}}</nav>
-
-<div class="mt-movers">
-  <section>
-    <h3>Pushing it up</h3>
-    {{if .MoversUp}}<ul>{{range .MoversUp}}<li><a href="/market/?type={{.TypeID}}&amp;region={{$v.RegionID}}">{{.Name}}</a> <span class="mt-chg {{.Chg.Dir}}">{{.Chg.Text}}</span> <small>+{{.Impact}} ISK</small></li>{{end}}</ul>{{else}}<p><small>Nothing in the basket rose.</small></p>{{end}}
+<div class="bk-head bk-movers-head">
+  <h2 class="bk-title">Movers and basket effect</h2>
+  <nav class="pilltabs" aria-label="Period">{{range .Periods}}<a class="pilltab{{if .Active}} on{{end}}" href="{{.Href}}"{{if .Active}} aria-current="true"{{end}}>{{.Label}}</a>{{end}}</nav>
+</div>
+<div class="l-grid bk-movers">
+  <section class="l-panel s4">
+    <h3 class="bk-sub">Pushing it up</h3>
+    {{if .MoversUp}}<ul class="bk-mv">{{range .MoversUp}}<li><span class="bk-mv-name"><a href="/market/?type={{.TypeID}}&amp;region={{$v.RegionID}}">{{.Name}}</a> <small>×{{.Qty}}</small></span><span class="mt-chg {{.Chg.Dir}}">{{.Chg.Text}}</span><span class="mt-chg up">+{{.Impact}}</span></li>{{end}}</ul>{{else}}<p><small>Nothing in the basket rose over the period.</small></p>{{end}}
   </section>
-  <section>
-    <h3>Dragging it down</h3>
-    {{if .MoversDown}}<ul>{{range .MoversDown}}<li><a href="/market/?type={{.TypeID}}&amp;region={{$v.RegionID}}">{{.Name}}</a> <span class="mt-chg {{.Chg.Dir}}">{{.Chg.Text}}</span> <small>-{{.Impact}} ISK</small></li>{{end}}</ul>{{else}}<p><small>Nothing in the basket fell.</small></p>{{end}}
+  <section class="l-panel s4">
+    <h3 class="bk-sub">Dragging it down</h3>
+    {{if .MoversDown}}<ul class="bk-mv">{{range .MoversDown}}<li><span class="bk-mv-name"><a href="/market/?type={{.TypeID}}&amp;region={{$v.RegionID}}">{{.Name}}</a> <small>×{{.Qty}}</small></span><span class="mt-chg {{.Chg.Dir}}">{{.Chg.Text}}</span><span class="mt-chg down">−{{.Impact}}</span></li>{{end}}</ul>{{else}}<p><small>Nothing in the basket fell over the period.</small></p>{{end}}
   </section>
-  <section>
-    <h3>Moving outside it</h3>
-    {{if .Outside}}<ul>{{range .Outside}}<li><a href="/market/?type={{.TypeID}}&amp;region={{$v.RegionID}}">{{.Name}}</a> <span class="mt-chg {{.Chg.Dir}}">{{.Chg.Text}}</span> <small>{{.Unit}} ISK</small>{{if $v.Own}} <form method="post" action="/market/baskets/{{$v.Basket.ID}}/add" class="mbk-add-form"><input type="hidden" name="type" value="{{.TypeID}}"><button class="btn btn-quiet" type="submit">Add</button></form>{{end}}</li>{{end}}</ul><p><small>Similar items not in the basket, biggest moves first.</small></p>{{else}}<p><small>No similar items moved enough to show.</small></p>{{end}}
+  <section class="l-panel s4">
+    <h3 class="bk-sub">Moving outside it</h3>
+    {{if .Outside}}<ul class="bk-mv">{{range .Outside}}<li><span class="bk-mv-name"><a href="/market/?type={{.TypeID}}&amp;region={{$v.RegionID}}">{{.Name}}</a> <small>unit {{.Unit}} ISK</small></span><span class="mt-chg {{.Chg.Dir}}">{{.Chg.Text}}</span>{{if $v.Own}}<form method="post" action="/market/baskets/{{$v.Basket.ID}}/add" class="mbk-add-form"><input type="hidden" name="type" value="{{.TypeID}}"><button class="btn btn-quiet" type="submit">Add</button></form>{{end}}</li>{{end}}</ul><p class="bk-note"><small>Similar items not in the basket, biggest moves first.</small></p>{{else}}<p><small>No similar items outside the basket moved enough to show.</small></p>{{end}}
   </section>
 </div>
 
-<section class="foldable">
-<h3>Items</h3>
+<section class="l-panel bk-items">
+<div class="bk-head"><h2 class="bk-title">Basket items <small>{{len .Items}}</small></h2></div>
 <div class="tw">
-<table>
-  <thead><tr><th>Item</th><th class="mt-num">Qty</th><th class="mt-num">Typical sell</th><th class="mt-num">Worth</th><th class="mt-num">Share</th><th class="mt-num">Change</th><th class="mt-num">Effect</th></tr></thead>
+<table class="bk-table">
+  <thead><tr><th class="card-title">Item</th><th class="mt-num">Qty</th><th class="mt-num opt">Typical sell</th><th class="mt-num">Worth</th><th class="mt-num">Share</th><th class="mt-num">Change</th><th class="mt-num">Effect</th></tr></thead>
   <tbody>
   {{range .Items}}
     <tr>
       <td><a href="/market/?type={{.TypeID}}&amp;region={{$v.RegionID}}">{{.Name}}</a></td>
       <td class="mt-num">{{.Quantity}}</td>
-      <td class="mt-num">{{if .Unit}}{{.Unit}}{{else}}—{{end}}</td>
-      <td class="mt-num">{{if .Value}}{{.Value}}{{else}}<small>No price</small>{{end}}</td>
-      <td class="mt-num">{{if .Share}}{{.Share}}{{else}}—{{end}}</td>
+      <td class="mt-num"{{if .Unit}} title="{{.Unit}} ISK"{{end}}>{{if .Unit}}{{.UnitShort}}{{else}}—{{end}}</td>
+      <td class="mt-num bk-gold"{{if .Value}} title="{{.Value}} ISK"{{end}}>{{if .Value}}{{.ValueShort}}{{else}}<small>No price</small>{{end}}</td>
+      <td class="mt-num" data-sort="{{.Share}}">{{if .Share}}<span class="bk-share">{{.Share}}<svg class="l-meter" viewBox="0 0 100 4" preserveAspectRatio="none" aria-hidden="true"><rect x="0" y="0" width="{{.SharePct}}" height="4"/></svg></span>{{else}}—{{end}}</td>
       <td class="mt-num">{{if .Chg.Text}}<span class="mt-chg {{.Chg.Dir}}">{{.Chg.Text}}</span>{{else}}—{{end}}</td>
-      <td class="mt-num">{{if .Impact}}{{if .ImpactUp}}+{{else}}-{{end}}{{.Impact}}{{else}}—{{end}}</td>
+      <td class="mt-num" data-sort="{{if .Impact}}{{if not .ImpactUp}}-{{end}}{{.Impact}}{{end}}">{{if .Impact}}<span class="mt-chg {{if .ImpactUp}}up{{else}}down{{end}}" title="{{.Impact}} ISK">{{if .ImpactUp}}+{{else}}−{{end}}{{.ImpactShort}}</span>{{else}}—{{end}}</td>
     </tr>
   {{end}}
   </tbody>
 </table>
 </div>
-<p><small>Prices in ISK, typical (median) sell in {{.Basket.RegionName}}. Effect is how much each item moved the basket's worth over the period.{{if .Unpriced}} {{.Unpriced}} {{if eq .Unpriced 1}}item has{{else}}items have{{end}} no price there yet.{{end}}</small></p>
+<p class="bk-note"><small>Prices in ISK, typical (median) sell in {{.Basket.RegionName}}. Effect is how much each item moved the basket's worth over the period.{{if .Unpriced}} {{.Unpriced}} {{if eq .Unpriced 1}}item has{{else}}items have{{end}} no price there yet.{{end}}</small></p>
 </section>
 
+{{template "your-orders" $.BasketOrdersBlock}}
+
 {{if .Own}}
-<section class="foldable">
-<h3>Edit</h3>
-<form method="post" action="/market/baskets/{{.Basket.ID}}/edit" class="mt-basket-form">
+<section class="l-panel bk-edit" id="bk-edit">
+<div class="bk-head"><h2 class="bk-title">Edit basket</h2><small>Rename it, change its hub region, or change its items.</small></div>
+<div class="l-sidebar bk-edit-cols">
+<form method="post" action="/market/baskets/{{.Basket.ID}}/edit" class="mt-basket-form bk-rename">
   <label><small>Name</small> <input type="text" name="name" maxlength="60" value="{{.Basket.Name}}" required></label>
   <label><small>Priced in</small>
     <select name="region">{{range .Regions}}<option value="{{.ID}}"{{if .Active}} selected{{end}}>{{.Name}}</option>{{end}}</select>
   </label>
   <button class="btn" type="submit">Save</button>
 </form>
+<div class="bk-items-edit">
 <template id="mbk-editor-template">
   <div class="mbk-editor">
     <span class="searchwrap mbk-searchwrap">
@@ -111,16 +126,13 @@
   </div>
 </template>
 <div id="mbk-detail-editor" data-mbk-basket="{{.Basket.ID}}"></div>
-<form method="post" action="/market/baskets/{{.Basket.ID}}/delete">
-  <button class="btn btn-quiet" type="submit">Delete basket</button>
+</div>
+</div>
+<form method="post" action="/market/baskets/{{.Basket.ID}}/delete" class="bk-delete" data-confirm="Delete this basket? Its value history goes with it.">
+  <button class="btn btn-danger" type="submit">Delete basket</button>
 </form>
 </section>
-{{else if .SignedIn}}
-<form method="post" action="/market/baskets/">
-  <input type="hidden" name="from" value="{{.Basket.ID}}">
-  <button class="btn" type="submit">Copy to my baskets</button>
-</form>
 {{end}}
-{{template "your-orders" $.BasketOrdersBlock}}
+</div>
 {{end}}
 {{end}}

@@ -6,9 +6,11 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"evesynapse/internal/app/apptest"
 	"evesynapse/internal/app/piplanner"
+	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
 	"evesynapse/internal/pgtest"
 	"evesynapse/internal/piplan"
@@ -154,4 +156,49 @@ func TestPIPlannerVolumesComeFromTheSDE(t *testing.T) {
 	}
 	// 240 Coolant at the SDE's 2 m3; 1,920 Water at the built-in 0.19.
 	apptest.MustContain(t, "/industry/pi/", body, "480.0 m³", "364.8 m³")
+}
+
+// TestPIPlannerPricesInTheHouseOrder: a PI commodity prices at The
+// Forge's swept typical sell, never at the guide's average, and the
+// strip says where the prices come from and how fresh they are.
+func TestPIPlannerPricesInTheHouseOrder(t *testing.T) {
+	transport := &apptest.CountingTransport{}
+	app, conn, q := apptest.BuildCorpTestApp(t, transport)
+	ctx := context.Background()
+	user, err := q.CreateUser(ctx)
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	apptest.SeedCharacter(t, q, user.ID, apptest.FixtureCharA, "Fixture Ceo")
+	if _, err := conn.ExecContext(ctx, `INSERT INTO sde_types (type_id, name) VALUES (9832, 'Coolant') ON CONFLICT (type_id) DO UPDATE SET name = excluded.name`); err != nil {
+		t.Fatalf("seed SDE: %v", err)
+	}
+	// The guide's average says 9,999; the Forge sweep says 7,777.
+	if err := q.UpsertGuidePrice(ctx, db.UpsertGuidePriceParams{TypeID: 9832, AdjustedPrice: 9999, AveragePrice: 9999}); err != nil {
+		t.Fatalf("seed guide price: %v", err)
+	}
+	if err := q.UpsertGuidePricesMeta(ctx, db.UpsertGuidePricesMetaParams{FetchedAt: time.Now().UTC(), CachedUntil: time.Now().Add(24 * time.Hour).UTC()}); err != nil {
+		t.Fatalf("seed guide meta: %v", err)
+	}
+	cookie := apptest.SessionCookie(t, app, user.ID, apptest.FixtureCharA, "Fixture Ceo")
+	_, body := apptest.GetPage(t, app.Handler(), cookie, "/industry/pi/?product=Coolant&amount=10")
+	if strings.Contains(body, "9,999") {
+		t.Error("PI planner priced Coolant at the guide's average")
+	}
+	apptest.MustContain(t, "/industry/pi/ guide only", body, "No prices yet")
+
+	if err := q.UpsertMarketRegionStat(ctx, db.UpsertMarketRegionStatParams{
+		RegionID: 10000002, TypeID: 9832, BestSell: 7777, TypicalSell: 7777, SellOrders: 5, SellVolume: 1000,
+		UpdatedAt: time.Now().Add(-12 * time.Minute),
+	}); err != nil {
+		t.Fatalf("seed forge stat: %v", err)
+	}
+	code, body := apptest.GetPage(t, app.Handler(), cookie, "/industry/pi/?product=Coolant&amount=10")
+	if code != http.StatusOK {
+		t.Fatalf("pi planner: status %d", code)
+	}
+	apptest.MustContain(t, "/industry/pi/ forge", body, "7,777", "Prices from The Forge, updated 12 minutes ago")
+	if strings.Contains(body, "9,999") {
+		t.Error("PI planner priced Coolant at the guide's average with a Forge price on file")
+	}
 }

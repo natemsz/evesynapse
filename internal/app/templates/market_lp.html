@@ -6,80 +6,158 @@
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
 
 {{with .MarketLP}}
-<p><small>What each loyalty point turns into, offer by offer, priced from the latest sweep of a hub region.</small></p>
-
-<form method="get" action="/market/lp/" class="box lp-filters">
-  <div class="box-head"><h3 class="box-title">Filters</h3></div>
-  <div class="mt-filters">
-  <label class="lp-search"><small>Find stores for an item</small>
-    <input type="text" name="item" value="{{.Item}}" size="18" placeholder="Item name">
-  </label>
-  <label><small>Sell in</small>
-    <select name="region">
-      {{range .Regions}}<option value="{{.ID}}"{{if .Active}} selected{{end}}>{{.Name}}</option>{{end}}
-    </select>
-  </label>
-  <label><small>Store</small>
-    <select name="corp">
-      <option value="0"{{if eq .StoreID 0}} selected{{end}}>Every store</option>
-      {{range .Stores}}<option value="{{.ID}}"{{if .Active}} selected{{end}}>{{.Name}}</option>{{end}}
-    </select>
-  </label>
-  <label><small>Sell by</small>
-    <select name="side">
-      <option value="sell"{{if not .Instant}} selected{{end}}>Listing a sell order</option>
-      <option value="buy"{{if .Instant}} selected{{end}}>Selling to buy orders now</option>
-    </select>
-  </label>
-  <label><small>At least sold per day</small>
-    <input type="number" name="minvol" min="0" step="1" value="{{.MinVolume}}" size="6">
-  </label>
-  <label><small>ISK per LP, at least</small>
-    <input type="number" name="minisklp" min="0" step="any" value="{{if .MinISKPerLP}}{{.MinISKPerLP}}{{end}}" size="7">
-  </label>
-  <label><small>ISK per LP, at most</small>
-    <input type="number" name="maxisklp" min="0" step="any" value="{{if .MaxISKPerLP}}{{.MaxISKPerLP}}{{end}}" size="7">
-  </label>
-  <label><small>LP cost, at least</small>
-    <input type="number" name="minlp" min="0" step="1" value="{{if .MinLP}}{{.MinLP}}{{end}}" size="7">
-  </label>
-  <label><small>LP cost, at most</small>
-    <input type="number" name="maxlp" min="0" step="1" value="{{if .MaxLP}}{{.MaxLP}}{{end}}" size="7">
-  </label>
-  <button class="btn" type="submit">Show</button>
-  </div>
-</form>
+<div class="l-page">
+<div class="l-head">
+  <p class="l-head-sum">What each loyalty point turns into, offer by offer, priced from the latest sweep of {{.RegionName}}.</p>
+  {{if .Rows}}<div class="l-head-act"><a class="btn btn-quiet" href="/market/lp/export.csv?{{.ExportQuery}}">CSV</a><a class="btn btn-quiet" href="/market/lp/export.json?{{.ExportQuery}}">JSON</a></div>{{end}}
+</div>
 
 {{if .HasStores}}
-{{if .Rows}}
-<div class="tw">
-<table>
-  <thead><tr><th>Item</th><th>Store</th><th class="mt-num">Qty</th><th class="mt-num">LP</th><th class="mt-num">ISK</th><th>Also needs</th><th class="mt-num">Worth</th><th class="mt-num">ISK per LP</th><th class="mt-num">Sold per day</th><th class="mt-num">7 days</th></tr></thead>
-  <tbody>
-  {{range .Rows}}
-    <tr>
-      <td><a href="/market/?type={{.TypeID}}&amp;region={{$.MarketLP.RegionID}}">{{.Name}}</a></td>
-      <td><a href="/market/lp/?region={{$.MarketLP.RegionID}}&amp;corp={{.StoreID}}">{{.Store}}</a></td>
-      <td class="mt-num">{{.Quantity}}</td>
-      <td class="mt-num">{{.LPCost}}</td>
-      <td class="mt-num">{{.ISKCost}}</td>
-      <td class="mt-reqs">{{template "reqicons" .Requirements}}</td>
-      <td class="mt-num">{{.Value}}</td>
-      <td class="mt-num">{{if .ISKPerLPDir}}<span class="mt-chg {{.ISKPerLPDir}}"><strong>{{.ISKPerLP}}</strong></span>{{else}}<strong>{{.ISKPerLP}}</strong>{{end}}</td>
-      <td class="mt-num">{{.TradedDay}}</td>
-      <td class="mt-num">{{if .Chg7.Text}}<span class="mt-chg {{.Chg7.Dir}}">{{.Chg7.Text}}</span>{{else}}—{{end}}</td>
-    </tr>
+<div class="l-console lp" data-depth="{{.Depth}}" data-land-top>
+<div class="l-panes">
+
+<nav class="l-pane l-pane--dir lp-dir" aria-label="Filters and your LP">
+  <details class="lp-fold" open>
+  <summary class="lp-fold-head"><h2 class="l-pane-title">Filters</h2><span class="lp-fold-hint" aria-hidden="true"></span></summary>
+  <form method="get" action="/market/lp/" class="lp-form">
+    <label class="lp-field lp-field--wide"><span>Find stores for an item</span>
+      <input type="search" name="item" value="{{.Item}}" placeholder="Item name" autocomplete="off">
+    </label>
+    <label class="lp-field"><span>Store</span>
+      <select name="corp">
+        <option value="0"{{if eq .StoreID 0}} selected{{end}}>Every store</option>
+        {{range .Stores}}<option value="{{.ID}}"{{if .Active}} selected{{end}}>{{.Name}}</option>{{end}}
+      </select>
+    </label>
+    <label class="lp-field"><span>Sell in</span>
+      <select name="region">
+        {{range .Regions}}<option value="{{.ID}}"{{if .Active}} selected{{end}}>{{.Name}}</option>{{end}}
+      </select>
+    </label>
+    <label class="lp-field"><span>Sell by</span>
+      <select name="side">
+        <option value="sell"{{if not .Instant}} selected{{end}}>Listing a sell order</option>
+        <option value="buy"{{if .Instant}} selected{{end}}>Selling to buy orders now</option>
+      </select>
+    </label>
+    <label class="lp-field"><span>At least sold per day</span>
+      <input type="number" name="minvol" min="0" step="1" value="{{.MinVolume}}">
+    </label>
+    <div class="lp-pair">
+      <label class="lp-field"><span>ISK per LP, at least</span>
+        <input type="number" name="minisklp" min="0" step="any" value="{{if .MinISKPerLP}}{{.MinISKPerLP}}{{end}}">
+      </label>
+      <label class="lp-field"><span>at most</span>
+        <input type="number" name="maxisklp" min="0" step="any" value="{{if .MaxISKPerLP}}{{.MaxISKPerLP}}{{end}}">
+      </label>
+    </div>
+    <div class="lp-pair">
+      <label class="lp-field"><span>LP cost, at least</span>
+        <input type="number" name="minlp" min="0" step="1" value="{{if .MinLP}}{{.MinLP}}{{end}}">
+      </label>
+      <label class="lp-field"><span>at most</span>
+        <input type="number" name="maxlp" min="0" step="1" value="{{if .MaxLP}}{{.MaxLP}}{{end}}">
+      </label>
+    </div>
+    <button class="btn" type="submit">Show offers</button>
+  </form>
+  </details>
+
+  <h3 class="lp-h">Your LP</h3>
+  {{if .Balances}}
+  <div class="dirlist lp-bal">
+    {{range .Balances}}<a class="diritem{{if .On}} on{{end}}" href="{{.Href}}" title="{{if .On}}Show every store{{else}}Show only {{.Store}}{{end}}">
+      <span class="dir-top"><span class="dir-name">{{.Store}}</span><span class="dir-val">{{.Points}} LP</span></span>
+      {{if gt (len .Pilots) 1}}<span class="dir-sub">{{range $i, $p := .Pilots}}{{if $i}} · {{end}}{{$p.Name}} {{$p.Points}}{{end}}</span>{{else}}{{range .Pilots}}<span class="dir-sub">{{.Name}}</span>{{end}}{{end}}
+      <svg class="l-meter" viewBox="0 0 100 4" preserveAspectRatio="none" aria-hidden="true"><rect x="0" y="0" width="{{.MeterPct}}" height="4"/></svg>
+    </a>{{end}}
+  </div>
+  {{else if .SignedIn}}
+  <p class="dir-foot">No LP with these stores on your pilots yet, or their loyalty points have not synced.</p>
+  {{else}}
+  <p class="dir-foot"><a href="/auth/login">Sign in</a> to see your pilots' LP here and how many of each offer it covers.</p>
   {{end}}
-  </tbody>
-</table>
-</div>
-<p><small>Export this view: <a href="/market/lp/export.csv?{{.ExportQuery}}">CSV</a> · <a href="/market/lp/export.json?{{.ExportQuery}}">JSON</a></small></p>
-<p><small>Prices in ISK, typical (median) prices in {{.RegionName}}{{with index .Rows 0}}{{if .Age}}, as of {{.Age}}{{end}}{{end}}. ISK per LP is what the items sell for, less the ISK cost and the items the offer also needs (bought at their typical sell), divided by the LP. Before broker fees and sales tax. Showing up to 100 offers.{{if .Unpriced}} {{.Unpriced}} {{if eq .Unpriced 1}}offer has{{else}}offers have{{end}} no price here: blueprint copies, or an item with no market in {{.RegionName}}.{{end}}</small></p>
-{{else}}
-<p>No priced offers clear those filters in {{.RegionName}}.{{if .Item}} No store in this view sells “{{.Item}}”, or its price is missing here.{{else}} Try a lower sold-per-day.{{end}}</p>
+</nav>
+
+<section class="l-pane l-pane--main lp-main" aria-label="Offers">
+  <div class="l-pane-bar">
+    <h2 class="l-pane-title">Offers worth your LP <small>{{len .Rows}} shown</small></h2>
+  </div>
+  {{if .Chips}}<div class="fchips lp-chips" role="group" aria-label="Active filters">
+    {{range .Chips}}<a class="fchip lp-chip" href="{{.Href}}" title="Remove this filter">{{.Label}} <span aria-hidden="true">&#10005;</span></a>{{end}}
+  </div>{{end}}
+  {{if .Rows}}
+  <div class="tw">
+  <table class="lp-table">
+    <thead><tr><th class="card-title">Item</th><th>Store</th><th class="mt-num">Qty</th><th class="mt-num">LP</th><th class="mt-num">ISK</th><th class="opt">Also needs</th><th class="mt-num">Worth</th><th class="mt-num">ISK per LP</th><th class="mt-num">Sold per day</th></tr></thead>
+    <tbody>
+    {{range .Rows}}
+      <tr{{if .On}} class="yours"{{end}}>
+        <td><span class="lp-item"><img src="{{.IconURL}}" alt="" width="28" height="28" loading="lazy" data-fallback-src="/static/img/item.svg"><a href="{{.Href}}" data-l-step="in">{{.Name}}</a></span></td>
+        <td><a href="/market/lp/?region={{$.MarketLP.RegionID}}&amp;corp={{.StoreID}}">{{.Store}}</a></td>
+        <td class="mt-num">{{.Quantity}}</td>
+        <td class="mt-num">{{.LPCost}}</td>
+        <td class="mt-num" title="{{.ISKCost}} ISK">{{.ISKCostShort}}</td>
+        <td class="mt-reqs">{{template "reqicons" .Requirements}}</td>
+        <td class="mt-num lp-worth" title="{{.Value}} ISK">{{.ValueShort}}</td>
+        <td class="mt-num lp-per" data-sort="{{.ISKPerLP}}">{{if .ISKPerLPDir}}<span class="mt-chg {{.ISKPerLPDir}}"><strong>{{.ISKPerLP}}</strong></span>{{else}}<strong>{{.ISKPerLP}}</strong>{{end}}<svg class="l-meter lp-meter" viewBox="0 0 100 4" preserveAspectRatio="none" aria-hidden="true"><rect x="0" y="0" width="{{.MeterPct}}" height="4"/></svg></td>
+        <td class="mt-num">{{.TradedDay}}</td>
+      </tr>
+    {{end}}
+    </tbody>
+  </table>
+  </div>
+  <p class="lp-note"><small>Prices in ISK, typical (median) prices in {{.RegionName}}{{with index .Rows 0}}{{if .Age}}, as of {{.Age}}{{end}}{{end}}. ISK per LP is what the items sell for, less the ISK cost and the items the offer also needs (bought at their typical sell), divided by the LP. Before broker fees and sales tax. Showing up to 100 offers.{{if .Unpriced}} {{.Unpriced}} {{if eq .Unpriced 1}}offer has{{else}}offers have{{end}} no price here: blueprint copies, or an item with no market in {{.RegionName}}.{{end}}</small></p>
+  {{else}}
+  <p>No priced offers clear those filters in {{.RegionName}}.{{if .Item}} No store in this view sells “{{.Item}}”, or its price is missing here.{{else}} Try a lower sold-per-day.{{end}}</p>
+  {{end}}
+</section>
+
+{{with .Insp}}
+<aside class="l-pane l-pane--insp insp lp-insp" aria-label="Selected offer">
+  <div class="l-pane-bar"><a class="l-back" data-l-step="out" href="{{$.MarketLP.ListHref}}">Offers</a><a class="l-close" href="{{$.MarketLP.ListHref}}" aria-label="Close the offer">&#10005;</a></div>
+  <div class="insp-head">
+    <img src="{{.IconURL}}" alt="" width="48" height="48" loading="lazy" data-fallback-src="/static/img/item.svg">
+    <div class="insp-titles"><h3>{{itemLink .TypeID .Name}}</h3><p class="lp-msub">{{.Store}} · Qty {{.Quantity}}</p></div>
+  </div>
+  <div class="lp-kpis">
+    <div class="l-stat{{if eq .ISKPerLPDir "up"}} ok{{end}}"><span class="l-stat-label">ISK per LP</span><span class="l-stat-value">{{.ISKPerLP}}</span></div>
+    <div class="l-stat"><span class="l-stat-label">Worth</span><span class="l-stat-value" title="{{.Value}} ISK">{{.ValueShort}}</span></div>
+  </div>
+  <h4 class="lp-h">Each redemption costs</h4>
+  <dl class="insp-facts">
+    <div><dt>LP</dt><dd>{{.LPCost}}</dd></div>
+    <div><dt>ISK</dt><dd>{{.ISKCost}}</dd></div>
+    {{range .Requirements}}<div><dt><a href="{{.Href}}">{{.Name}}</a> × {{.Quantity}}</dt><dd>{{.Sell}} each</dd></div>{{else}}<div><dt>Also needs</dt><dd>nothing</dd></div>{{end}}
+    {{if .RequiredCost}}<div><dt>Items it also needs, total</dt><dd>{{.RequiredCost}}</dd></div>{{end}}
+  </dl>
+  <h4 class="lp-h">Market</h4>
+  <dl class="insp-facts">
+    <div><dt>Sold per day</dt><dd>{{.TradedDay}}</dd></div>
+    <div><dt>Sell price, 7 days</dt><dd>{{if .Chg7.Text}}<span class="mt-chg {{.Chg7.Dir}}">{{.Chg7.Text}}</span>{{else}}no comparison yet{{end}}</dd></div>
+    {{if .Age}}<div><dt>Priced</dt><dd>{{.Age}}</dd></div>{{end}}
+  </dl>
+  {{if $.MarketLP.SignedIn}}
+  <h4 class="lp-h">Your LP with {{.Store}}</h4>
+  {{if $.MarketLP.InspLP}}
+  <dl class="insp-facts">
+    {{range $.MarketLP.InspLP}}<div><dt>{{.Name}}</dt><dd>{{.Points}} LP</dd></div>{{end}}
+    <div><dt>Redemptions it covers</dt><dd>{{$.MarketLP.InspAfford}}</dd></div>
+  </dl>
+  {{else}}
+  <p class="insp-note">None of your pilots holds LP with this store.</p>
+  {{end}}
+  {{end}}
+  <p class="lp-links"><a class="btn btn-quiet" href="/market/?type={{.TypeID}}&amp;region={{$.MarketLP.RegionID}}">Market for {{.Name}}</a></p>
+</aside>
+<a class="l-scrim" href="{{$.MarketLP.ListHref}}" aria-label="Close the offer" tabindex="-1"></a>
 {{end}}
+
+</div>
+</div>
 {{else}}
 <p>Still reading the loyalty stores. They fill in over the next few minutes.</p>
 {{end}}
+</div>
 {{end}}
 {{end}}

@@ -330,8 +330,8 @@ test("verdict line, margin color and node chip toggles render", async function (
   assert.strictEqual(els["plan-verdict"].textContent, "Building saves 450.00 ISK");
   assert.strictEqual(els["plan-verdict"].className, "plan-verdict build");
   // Positive profit colors the margin (and its ISK/hour sub).
-  assert.strictEqual(els["plan-margin"].className, "pos");
-  assert.strictEqual(els["plan-margin-sub"].className, "pos");
+  assert.strictEqual(els["plan-margin"].className, "l-stat-value pos");
+  assert.strictEqual(els["plan-margin-sub"].className, "l-stat-sub pos");
   // Buildable non-root nodes get a chip BUTTON that swaps the
   // node's build/buy decision; the root keeps a plain chip.
   const map = els["plan-map"].innerHTML;

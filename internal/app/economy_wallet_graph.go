@@ -50,6 +50,47 @@ type walletGraphView struct {
 	Latest  string // newest balance, formatted (few state)
 	CharID  int64
 	PollURL string // set only while pending
+	Range   string // the active range key ("" = all recorded history)
+	Ranges  []walletGraphRange
+}
+
+// walletGraphRange is one range choice on the balance-history chart.
+type walletGraphRange struct {
+	Key   string
+	Label string
+	Href  string
+	On    bool
+}
+
+// walletRangeCutoff resolves a range key to its window start;
+// ok=false means all recorded history. Unknown keys are the
+// default (all), so a stale or hand-typed range never errors.
+func walletRangeCutoff(key string, now time.Time) (time.Time, bool) {
+	switch key {
+	case "30d":
+		return now.Add(-30 * 24 * time.Hour), true
+	case "12w":
+		return now.Add(-12 * 7 * 24 * time.Hour), true
+	case "ytd":
+		return time.Date(now.Year(), time.January, 1, 0, 0, 0, 0, time.UTC), true
+	}
+	return time.Time{}, false
+}
+
+func walletGraphRanges(characterID int64, active string) []walletGraphRange {
+	href := func(key string) string {
+		if key == "" {
+			return fmt.Sprintf("/wallet/?character=%d", characterID)
+		}
+		return fmt.Sprintf("/wallet/?character=%d&range=%s", characterID, key)
+	}
+	out := make([]walletGraphRange, 0, 4)
+	for _, r := range []struct{ key, label string }{
+		{"30d", "30 days"}, {"12w", "12 weeks"}, {"ytd", "Year to date"}, {"", "All"},
+	} {
+		out = append(out, walletGraphRange{Key: r.key, Label: r.label, Href: href(r.key), On: r.key == active})
+	}
+	return out
 }
 
 // attachWalletGraph builds the section from stored rows: the
@@ -58,25 +99,37 @@ type walletGraphView struct {
 // point. journalLoaded says the journal snapshot itself landed;
 // a recorded journal fetch failure also settles the section (the
 // pending state must not poll forever behind a dead scope).
-func (app *Application) attachWalletGraph(ctx context.Context, userID, characterID int64, journal esi.WalletJournal, journalLoaded bool) *walletGraphView {
-	g := &walletGraphView{CharID: characterID}
+func (app *Application) attachWalletGraph(ctx context.Context, userID, characterID int64, journal esi.WalletJournal, journalLoaded bool, rangeKey string) *walletGraphView {
+	now := time.Now()
+	cutoff, bounded := walletRangeCutoff(rangeKey, now)
+	if !bounded {
+		rangeKey = ""
+	}
+	g := &walletGraphView{CharID: characterID, Range: rangeKey, Ranges: walletGraphRanges(characterID, rangeKey)}
 
 	var samples []db.WalletHistory
-	if rows, err := app.queries.ListWalletHistorySamples(ctx, db.ListWalletHistorySamplesParams{
-		UserID: userID, CharacterID: characterID,
-	}); err != nil {
-		logging.Errorf("wallet graph: samples for character %d: %v", characterID, err)
+	var err error
+	if bounded {
+		samples, err = app.queries.ListWalletHistorySamplesSince(ctx, db.ListWalletHistorySamplesSinceParams{
+			UserID: userID, CharacterID: characterID, Day: cutoff.Format("2006-01-02"),
+		})
 	} else {
-		samples = rows
+		samples, err = app.queries.ListWalletHistorySamples(ctx, db.ListWalletHistorySamplesParams{
+			UserID: userID, CharacterID: characterID,
+		})
+	}
+	if err != nil {
+		logging.Errorf("wallet graph: samples for character %d: %v", characterID, err)
+		samples = nil
 	}
 
-	var now *balancechart.BalancePoint
+	var nowPoint *balancechart.BalancePoint
 	if snap, err := app.queries.GetSnapshot(ctx, db.GetSnapshotParams{
 		CharacterID: characterID, Kind: esi.SnapWallet,
 	}); err == nil {
 		var bal float64
 		if json.Unmarshal([]byte(snap.Payload), &bal) == nil {
-			now = &balancechart.BalancePoint{At: snap.FetchedAt, Balance: bal}
+			nowPoint = &balancechart.BalancePoint{At: snap.FetchedAt, Balance: bal}
 		}
 	}
 
@@ -88,7 +141,16 @@ func (app *Application) attachWalletGraph(ctx context.Context, userID, character
 		}
 	}
 
-	points := balancechart.BuildBalanceSeries(journal, samples, now)
+	points := balancechart.BuildBalanceSeries(journal, samples, nowPoint)
+	if bounded {
+		kept := points[:0]
+		for _, p := range points {
+			if !p.At.Before(cutoff) {
+				kept = append(kept, p)
+			}
+		}
+		points = kept
+	}
 	g.Points = len(points)
 	switch {
 	case len(points) >= 2:
@@ -108,6 +170,9 @@ func (app *Application) attachWalletGraph(ctx context.Context, userID, character
 	default:
 		g.State = walletGraphPending
 		g.PollURL = fmt.Sprintf("/wallet/graph-fragment?character=%d", characterID)
+		if rangeKey != "" {
+			g.PollURL += "&range=" + rangeKey
+		}
 	}
 	return g
 }

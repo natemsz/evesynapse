@@ -40,6 +40,7 @@ function makeBox(value, checked) {
 }
 
 function install(opts) {
+  opts = opts || {};
   const tiles = [
     makeTile("Barren", "Planet"),
     makeTile("Temperate", "Planet"),
@@ -79,8 +80,19 @@ function install(opts) {
       return [];
     }
   };
-  const wrap = { innerHTML: "OLD" };
-  const net = { fetches: [], replaced: [], navigated: [] };
+  // The planner region; its tabs say which view the reader is on.
+  const mapTab = { selected: opts.mapTab ? "true" : "false", clicks: 0,
+    getAttribute(n) { return n === "aria-controls" ? "pi-map" : n === "aria-selected" ? this.selected : null; },
+    click() { this.clicks++; this.selected = "true"; } };
+  const wrap = {
+    innerHTML: "OLD",
+    querySelector(sel) {
+      if (sel === '[role="tab"][aria-selected="true"]') return opts.mapTab ? mapTab : null;
+      if (sel === '[role="tab"][aria-controls="pi-map"]') { mapTab.selected = "false"; return mapTab; }
+      return null;
+    }
+  };
+  const net = { fetches: [], replaced: [], navigated: [], ready: [] };
   global.document = {
     addEventListener(type, fn) { handlers["doc:" + type] = fn; },
     getElementById(id) {
@@ -97,8 +109,10 @@ function install(opts) {
       if (sel === 'input[name="planets"]:checked') return boxes.filter(b => b.checked);
       return [];
     },
-    querySelector() { return null; }
+    querySelector() { return null; },
+    dispatchEvent(ev) { net.ready.push(ev); }
   };
+  global.CustomEvent = class { constructor(type, init) { this.type = type; this.detail = init && init.detail; } };
   global.window = {
     location: {
       search: "",
@@ -123,7 +137,7 @@ function install(opts) {
   const resolved = require.resolve("../static/pi.js");
   delete require.cache[resolved];
   require("../static/pi.js");
-  return { tiles: byName, boxes, verdict, handlers, wrap, net };
+  return { tiles: byName, boxes, verdict, handlers, wrap, net, mapTab };
 }
 
 test("coverage verdict and missing flags follow the checkboxes live", function () {
@@ -181,6 +195,17 @@ test("Recalculate recalculates in place with the planets as ticked", async funct
   assert.ok(!url.searchParams.has("cover"));
   assert.strictEqual(wrap.innerHTML, "NEW");
   assert.deepStrictEqual(net.navigated, [], "no navigation, no reload");
+});
+
+test("a recalculation re-arms the swapped region and keeps the reader's view", async function () {
+  const { handlers, wrap, net, mapTab } = install({ mapTab: true });
+  handlers["form:submit"]({ preventDefault() {} });
+  await flush();
+  assert.strictEqual(net.ready.length, 1, "content-ready fires once for the swapped region");
+  assert.strictEqual(net.ready[0].type, "evesynapse:content-ready");
+  assert.strictEqual(net.ready[0].detail.root, wrap, "scoped to the planner region");
+  assert.strictEqual(mapTab.clicks, 1, "the production map stays open");
+  assert.ok(/#pi-map$/.test(net.replaced[0]), "the address names the open view");
 });
 
 test("an in-page swap onto the planner rewires the map", function () {

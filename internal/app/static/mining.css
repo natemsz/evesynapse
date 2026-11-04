@@ -12,4 +12,4 @@
 .mn-ore img { flex: none; border-radius: var(--r-xs); background: rgba(127, 127, 127, 0.12); }
 .mn-table td.num { font-family: var(--font-num); font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
 .mn-table th:nth-last-child(-n+4):not(:last-child) { text-align: right; }
-.mn-h { margin: var(--space-4) 0 0; color: var(--muted); font-family: var(--font-display); font-size: 0.85rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
+.mn-h { margin: var(--space-4) 0 0; color: var(--muted); font-family: var(--font-display); font-size: var(--fs-md); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }

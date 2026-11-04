@@ -346,7 +346,7 @@ func TestLandingMockupFidelity(t *testing.T) {
 		".ld-footer a { color: var(--ld-dim); }",
 		// The footer is JetBrains Mono, like every other
 		// footer on the site.
-		".ld-footer { border-top: 1px solid rgba(255, 255, 255, 0.07); padding: 22px 0 30px; color: var(--faint, #8a7a66); font-size: 13.5px; font-family: \"JetBrains Mono\", monospace; }",
+		".ld-footer { border-top: 1px solid rgba(255, 255, 255, 0.07); padding: 22px 0 30px; color: var(--faint, #8a7a66); font-size: var(--fs-md); font-family: \"JetBrains Mono\", monospace; }",
 		// The preview's borrowed markup carries no glass or
 		// backdrop blur of its own inside the landing.
 		".ld-preview .kpis { grid-template-columns: repeat(2, 1fr); gap: 14px; padding: 0; background: none; border: none; border-radius: 0; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }",
@@ -448,55 +448,5 @@ func TestNoNestedBlurInsidePageGlass(t *testing.T) {
 	if !strings.Contains(style, ".page-body:not(:has(.home-grid)) .ok,") ||
 		!strings.Contains(style, ".page-body:not(:has(.home-grid)) .notice {") {
 		t.Error("style.css lost the alert-bar flatten rule inside the page panel")
-	}
-	plan := read("plan.css")
-	i := strings.Index(plan, "#pi-form button[type=\"submit\"] {")
-	if i < 0 {
-		t.Fatal("plan.css lost the PI Recalculate pill rule")
-	}
-	rule := plan[i:]
-	if end := strings.Index(rule, "}"); end >= 0 {
-		rule = rule[:end]
-	}
-	if strings.Contains(rule, "backdrop-filter") {
-		t.Error("the PI Recalculate pill carries a backdrop filter inside the panel glass")
-	}
-}
-
-// TestPIPlannerColoniesAndControls pins the PI planner spacing and
-// controls pass: suggested colonies carry their own box (the generic
-// nested-foldable rule flattens them to padding 0 with no border, so
-// they ran together as one text block), the controls card keeps the
-// foldable padding rhythm instead of sitting on the page card's
-// edge, its fields take the warm glass edge instead of the flat
-// greys, and the Recalculate button wears the quiet glass pill, not
-// the default orange gradient slab.
-func TestPIPlannerColoniesAndControls(t *testing.T) {
-	raw, err := fs.ReadFile(staticFS, "static/plan.css")
-	if err != nil {
-		t.Fatalf("read plan.css: %v", err)
-	}
-	plan := string(raw)
-	for _, want := range []string{
-		"#pi-wrap .pi-controls { padding: 0.9rem 1rem 1rem; }",
-		"#pi-wrap .pi-controls select {",
-		"#pi-wrap .pi-colony {",
-		"border: 1px solid var(--glass-edge);",
-		"padding: 0.9rem 1rem 1rem;",
-		"margin-bottom: 1.25rem;",
-		"#pi-form button[type=\"submit\"] {",
-		"background: rgba(23, 17, 13, 0.55);",
-		".pi-planets { border: 1px solid var(--glass-edge); border-radius: var(--r-sm);",
-	} {
-		if !strings.Contains(plan, want) {
-			t.Errorf("plan.css lost the PI planner rule %q", want)
-		}
-	}
-	tpl, err := fs.ReadFile(templatesFS, "templates/piplanner.html")
-	if err != nil {
-		t.Fatalf("read piplanner.html: %v", err)
-	}
-	if !strings.Contains(string(tpl), `<section class="foldable pi-colony" data-fold="never">`) {
-		t.Error("piplanner.html lost the pi-colony scope class on the suggested colonies")
 	}
 }

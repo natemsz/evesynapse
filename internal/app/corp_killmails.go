@@ -75,6 +75,7 @@ func (app *Application) handleCorpKillmails(w http.ResponseWriter, r *http.Reque
 	for _, ref := range refs {
 		view.Rows = append(view.Rows, app.killmailRow(ctx, viewer, ref, values, placeMemo))
 	}
+	app.shapeKillmails(ctx, r, view, viewer)
 
 	app.render(ctx, w, http.StatusOK, "killmails.html", data)
 }

@@ -7,6 +7,7 @@ package app
 // the page formats at most marketLPRowCap rows.
 
 import (
+	"cmp"
 	"context"
 	"database/sql"
 	"encoding/csv"
@@ -14,6 +15,7 @@ import (
 	"math"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -33,6 +35,7 @@ type marketLPRequirement struct {
 	IconURL  string // the item's icon on the EVE image server
 	Href     string // the item's market page, in the view's region
 	TipLines string // tooltip rows for the shared tooltip builder
+	Sell     string // the stored sell figure per unit, for the inspector
 }
 
 type marketLPRow struct {
@@ -45,11 +48,23 @@ type marketLPRow struct {
 	ISKCost      string
 	Requirements []marketLPRequirement
 	Value        string // product value at the chosen side
+	ValueShort   string // the same, compact for the table (14.8M)
+	ISKCostShort string
 	ISKPerLP     string
 	ISKPerLPDir  string // "up" when the offer pays, "down" when it loses
 	TradedDay    string
 	Chg7         trendFigure
 	Age          string
+	RequiredCost string // what the also-needs items cost at their sell, "" with none
+
+	IconURL  string // the product icon, by SDE category (blueprints and SKINs differ)
+	OfferID  int64
+	Href     string // this offer in the inspector, the view's filters kept
+	On       bool   // the offer open in the inspector
+	MeterPct string // ISK per LP against the view's best, 0 to 100
+	lpCost   int64
+	iskPerLP float64
+	priced   bool
 }
 
 type marketLPStore struct {
@@ -75,12 +90,59 @@ type marketLPView struct {
 	HasStores   bool
 	Unpriced    int64
 	Rows        []marketLPRow
+
+	// The framework console: the filters and the reader's LP are
+	// its directory, the offers its main pane, one offer its
+	// inspector. Depth comes from the URL: 1 for the offers, 2 with
+	// ?offer=<corp>-<offer> open. The directory never stands alone:
+	// on a narrow page it rides above the offers (lp.css), the way
+	// the phone mock stacks the filters over the list.
+	Depth      int
+	Offer      string // the open offer's key, "" with none
+	ListHref   string // the view with no offer open
+	Chips      []marketLPChip
+	Balances   []marketLPBalance
+	SignedIn   bool
+	Insp       *marketLPRow
+	InspLP     []marketLPPilotLP // the reader's pilots' LP with the open offer's store
+	InspAfford string            // redemptions that LP covers, "" when unknown
+}
+
+// marketLPChip is one active filter above the offers, with a link
+// that drops it.
+type marketLPChip struct {
+	Label string
+	Href  string
+}
+
+// marketLPBalance is the reader's LP with one store, summed over
+// their pilots; picking it filters the offers to that store.
+type marketLPBalance struct {
+	StoreID  int64
+	Store    string
+	Points   string
+	Pilots   []marketLPPilotLP
+	Href     string
+	On       bool
+	MeterPct string
+	points   int64
+}
+
+type marketLPPilotLP struct {
+	Name   string
+	Points string
+	points int64
 }
 
 func (app *Application) handleMarketLP(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	data := app.publicPage(ctx) // public: stored market data only
-	data.MarketLP = app.buildMarketLPView(ctx, r.URL.Query())
+	view := app.buildMarketLPView(ctx, r.URL.Query())
+	if view.HasStores {
+		app.attachLPBalances(ctx, view, app.userID(ctx))
+	}
+	view.finishConsole(r.URL.Query())
+	data.MarketLP = view
 	app.render(ctx, w, http.StatusOK, "market_lp.html", data)
 }
 
@@ -237,7 +299,24 @@ func (app *Application) buildMarketLPView(ctx context.Context, q map[string][]st
 				}
 			}
 			req.TipLines = "Needs|" + req.Quantity + ";Avg sell|" + sell + ";Avg buy|" + buy
+			req.Sell = sell
 			reqs[k] = append(reqs[k], req)
+		}
+	}
+	// The product icons resolve by SDE category, as the
+	// requirement icons do.
+	rowCategories := map[int64]int64{}
+	if len(rows) > 0 {
+		ids := make([]int64, 0, len(rows))
+		for _, r := range rows {
+			ids = append(ids, r.TypeID)
+		}
+		if catRows, err := app.queries.ListSDETypeCategories(ctx, ids); err == nil {
+			for _, c := range catRows {
+				rowCategories[c.TypeID] = c.CategoryID
+			}
+		} else {
+			logging.Errorf("lp store: offer categories: %v", err)
 		}
 	}
 	now := time.Now()
@@ -257,9 +336,16 @@ func (app *Application) buildMarketLPView(ctx context.Context, q map[string][]st
 			ISKCost:      esi.FormatISK(r.IskCost),
 			Requirements: reqs[offerKey{r.CorporationID, r.OfferID}],
 			Value:        esi.FormatISK(unit * float64(r.Quantity)),
+			ValueShort:   formatISKShort(unit * float64(r.Quantity)),
+			ISKCostShort: formatISKShort(r.IskCost),
 			ISKPerLP:     esi.FormatISK(perLP.Float64),
 			TradedDay:    esi.FormatInt(int64(math.Round(r.DailyVolume))),
 			Chg7:         newTrendFigure(r.SellChg7d),
+			OfferID:      r.OfferID,
+			IconURL:      contracts.TypeCategoryIconURL(r.TypeID, rowCategories[r.TypeID], 32),
+			lpCost:       r.LpCost,
+			iskPerLP:     perLP.Float64,
+			priced:       perLP.Valid,
 		}
 		if perLP.Valid && perLP.Float64 > 0 {
 			row.ISKPerLPDir = "up"
@@ -268,6 +354,7 @@ func (app *Application) buildMarketLPView(ctx context.Context, q map[string][]st
 		}
 		if r.RequiredCost > 0 {
 			total := esi.FormatISK(r.RequiredCost)
+			row.RequiredCost = total
 			for i := range row.Requirements {
 				row.Requirements[i].TipLines += ";Items total|" + total
 			}
@@ -278,6 +365,176 @@ func (app *Application) buildMarketLPView(ctx context.Context, q map[string][]st
 		view.Rows = append(view.Rows, row)
 	}
 	return view
+}
+
+// lpOfferKey names one offer in the URL: the store, then the offer.
+func lpOfferKey(corp, offer int64) string {
+	return strconv.FormatInt(corp, 10) + "-" + strconv.FormatInt(offer, 10)
+}
+
+// attachLPBalances reads the signed-in reader's stored LP balances
+// (the loyalty snapshot each pilot syncs) for the stores the
+// browser knows, summed per store, largest first. Nobody signed in,
+// or no pilot with the scope, leaves the list empty.
+func (app *Application) attachLPBalances(ctx context.Context, view *marketLPView, userID int64) {
+	if userID == 0 {
+		return
+	}
+	view.SignedIn = true
+	chars, err := app.queries.ListCharactersByUser(ctx, userID)
+	if err != nil {
+		logging.Errorf("lp store: characters: %v", err)
+		return
+	}
+	names := map[int64]string{}
+	for _, s := range view.Stores {
+		names[s.ID] = s.Name
+	}
+	byStore := map[int64]*marketLPBalance{}
+	for _, ch := range chars {
+		snap, err := app.queries.GetSnapshot(ctx, db.GetSnapshotParams{CharacterID: ch.CharacterID, Kind: esi.SnapLoyalty})
+		if err != nil {
+			continue
+		}
+		var balances esi.LoyaltyBalances
+		if json.Unmarshal([]byte(snap.Payload), &balances) != nil {
+			continue
+		}
+		for _, b := range balances {
+			name, ok := names[b.CorporationID]
+			if !ok || b.LoyaltyPoints <= 0 {
+				continue
+			}
+			bal := byStore[b.CorporationID]
+			if bal == nil {
+				bal = &marketLPBalance{StoreID: b.CorporationID, Store: name}
+				byStore[b.CorporationID] = bal
+			}
+			bal.points += b.LoyaltyPoints
+			bal.Pilots = append(bal.Pilots, marketLPPilotLP{Name: ch.Name, Points: esi.FormatInt(b.LoyaltyPoints), points: b.LoyaltyPoints})
+		}
+	}
+	var top int64
+	for _, bal := range byStore {
+		bal.Points = esi.FormatInt(bal.points)
+		slices.SortFunc(bal.Pilots, func(a, b marketLPPilotLP) int { return cmp.Compare(b.points, a.points) })
+		view.Balances = append(view.Balances, *bal)
+		top = max(top, bal.points)
+	}
+	slices.SortFunc(view.Balances, func(a, b marketLPBalance) int {
+		if c := cmp.Compare(b.points, a.points); c != 0 {
+			return c
+		}
+		return strings.Compare(a.Store, b.Store)
+	})
+	for i := range view.Balances {
+		b := &view.Balances[i]
+		b.On = b.StoreID == view.StoreID
+		if top > 0 {
+			b.MeterPct = strconv.FormatInt(b.points*100/top, 10)
+		}
+	}
+}
+
+// finishConsole places the reader in the console from the URL and
+// fills the links that move between its levels and drop filters.
+func (v *marketLPView) finishConsole(q url.Values) {
+	base := url.Values{}
+	if v.HasStores {
+		base, _ = url.ParseQuery(lpExportQuery(v))
+	}
+	href := func(vals url.Values) string {
+		if e := vals.Encode(); e != "" {
+			return "/market/lp/?" + e
+		}
+		return "/market/lp/"
+	}
+	with := func(k, val string) string {
+		vals := url.Values{}
+		for key, vs := range base {
+			vals[key] = vs
+		}
+		if val == "" {
+			vals.Del(k)
+		} else {
+			vals.Set(k, val)
+		}
+		return href(vals)
+	}
+	v.ListHref = href(base)
+	v.Depth = 1
+	v.Offer = strings.TrimSpace(q.Get("offer"))
+	var best float64
+	for _, r := range v.Rows {
+		best = max(best, r.iskPerLP)
+	}
+	for i := range v.Rows {
+		r := &v.Rows[i]
+		key := lpOfferKey(r.StoreID, r.OfferID)
+		r.Href = with("offer", key)
+		if best > 0 && r.priced && r.iskPerLP > 0 {
+			r.MeterPct = strconv.FormatInt(int64(math.Round(r.iskPerLP*100/best)), 10)
+		} else {
+			r.MeterPct = "0"
+		}
+		if v.Offer != "" && key == v.Offer {
+			r.On = true
+			v.Insp = r
+		}
+	}
+	if v.Insp != nil {
+		v.Depth = 2
+		for _, b := range v.Balances {
+			if b.StoreID != v.Insp.StoreID {
+				continue
+			}
+			v.InspLP = b.Pilots
+			if v.Insp.lpCost > 0 {
+				var n int64
+				for _, p := range b.Pilots {
+					n += p.points / v.Insp.lpCost
+				}
+				v.InspAfford = esi.FormatInt(n)
+			}
+		}
+	} else {
+		v.Offer = ""
+	}
+	for i := range v.Balances {
+		b := &v.Balances[i]
+		if b.On {
+			b.Href = with("corp", "")
+		} else {
+			b.Href = with("corp", strconv.FormatInt(b.StoreID, 10))
+		}
+	}
+	// The active filters, each with a link that drops it.
+	for _, s := range v.Stores {
+		if s.Active {
+			v.Chips = append(v.Chips, marketLPChip{Label: "Store: " + s.Name, Href: with("corp", "")})
+		}
+	}
+	if v.Item != "" {
+		v.Chips = append(v.Chips, marketLPChip{Label: "Item: " + v.Item, Href: with("item", "")})
+	}
+	if v.Instant {
+		v.Chips = append(v.Chips, marketLPChip{Label: "Selling to buy orders", Href: with("side", "")})
+	}
+	if v.MinVolume != 10 {
+		v.Chips = append(v.Chips, marketLPChip{Label: "Sold per day ≥ " + esi.FormatInt(v.MinVolume), Href: with("minvol", "")})
+	}
+	if v.MinISKPerLP > 0 {
+		v.Chips = append(v.Chips, marketLPChip{Label: "ISK per LP ≥ " + strconv.FormatFloat(v.MinISKPerLP, 'f', -1, 64), Href: with("minisklp", "")})
+	}
+	if v.MaxISKPerLP > 0 {
+		v.Chips = append(v.Chips, marketLPChip{Label: "ISK per LP ≤ " + strconv.FormatFloat(v.MaxISKPerLP, 'f', -1, 64), Href: with("maxisklp", "")})
+	}
+	if v.MinLP > 0 {
+		v.Chips = append(v.Chips, marketLPChip{Label: "LP ≥ " + esi.FormatInt(v.MinLP), Href: with("minlp", "")})
+	}
+	if v.MaxLP > 0 {
+		v.Chips = append(v.Chips, marketLPChip{Label: "LP ≤ " + esi.FormatInt(v.MaxLP), Href: with("maxlp", "")})
+	}
 }
 
 // firstStoredPrice is the first usable figure of a stored pair:

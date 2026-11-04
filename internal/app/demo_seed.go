@@ -993,6 +993,13 @@ func (s *demoSeed) writePilotOneIndustry(ctx context.Context) error {
 	if err := s.snap(ctx, id, esi.SnapMining, esi.MiningLedger(mining)); err != nil {
 		return err
 	}
+	// LP from mission running, for the LP Store's balances.
+	if err := s.snap(ctx, id, esi.SnapLoyalty, esi.LoyaltyBalances{
+		{CorporationID: 1000035, LoyaltyPoints: 412850}, // Caldari Navy
+		{CorporationID: 1000120, LoyaltyPoints: 96200},  // Federation Navy
+	}); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -1536,6 +1543,12 @@ func (s *demoSeed) writePilotTwo(ctx context.Context) error {
 	hour := time.Hour
 	day := 24 * hour
 	q := s.app.queries
+
+	if err := s.snap(ctx, id, esi.SnapLoyalty, esi.LoyaltyBalances{
+		{CorporationID: 1000035, LoyaltyPoints: 61400}, // Caldari Navy
+	}); err != nil {
+		return err
+	}
 
 	if err := s.snap(ctx, id, esi.SnapProfile, esi.Character{
 		Name: demoChar2Name, CorporationID: demoCorpID,

@@ -4,6 +4,7 @@ package humanize
 
 import (
 	"fmt"
+	"strconv"
 	"time"
 )
 
@@ -71,4 +72,31 @@ func Plural(n int, word string) string {
 		return fmt.Sprintf("%d %s", n, word)
 	}
 	return fmt.Sprintf("%d %ss", n, word)
+}
+
+// ISKCompact writes an ISK amount short for tiles and directory
+// values: "312.4M", "1.27B", "940K"; under 1,000 it is the whole
+// number. Pages built on the layout framework use this one form.
+func ISKCompact(v float64) string {
+	neg := v < 0
+	if neg {
+		v = -v
+	}
+	out := strconv.FormatFloat(v, 'f', 0, 64)
+	for _, u := range []struct {
+		div    float64
+		suffix string
+	}{{1e12, "T"}, {1e9, "B"}, {1e6, "M"}, {1e3, "K"}} {
+		if v >= u.div {
+			out = strconv.FormatFloat(v/u.div, 'f', 1, 64) + u.suffix
+			if v/u.div >= 100 {
+				out = strconv.FormatFloat(v/u.div, 'f', 0, 64) + u.suffix
+			}
+			break
+		}
+	}
+	if neg {
+		return "-" + out
+	}
+	return out
 }

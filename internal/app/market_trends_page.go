@@ -11,9 +11,11 @@ import (
 	"math"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
 	"time"
 
+	"evesynapse/internal/app/contracts"
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
 	"evesynapse/internal/logging"
@@ -27,12 +29,21 @@ type marketTrendRow struct {
 	Name        string
 	TypicalSell string
 	TypicalBuy  string
+	SellShort   string // compact figures for the table (4.82M)
+	BuyShort    string
 	Orders      string
 	TradedDay   string
 	Chg1        trendFigure
 	Chg7        trendFigure
 	Chg30       trendFigure
 	Volatility  string
+
+	Rank     int
+	IconURL  string
+	Href     string // this item in the inspector, the view's filters kept
+	On       bool
+	SwingPct string // the daily swing against the view's widest, 0 to 100
+	swing    float64
 }
 
 // marketTrendChoice is one mode or period link.
@@ -58,6 +69,14 @@ type marketTrendsView struct {
 	Changes []marketChangeRow
 	Kind    string
 	Kinds   []marketTrendChoice
+
+	// The framework console: the ranked items are its main pane and
+	// ?type= opens one in the inspector (depth 2).
+	ListHref  string
+	ModeLabel string
+	RankCol   string // the column the ranking sorts by: swing, chg1, chg7 or chg30
+	Depth     int
+	Insp      *marketTrendRow
 }
 
 // marketRegionChoice is a hub region as a filter shows it.
@@ -70,7 +89,7 @@ type marketRegionChoice struct {
 func (app *Application) handleMarketTrends(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	data := app.publicPage(ctx) // public: stored market data only
-	data.MarketTrends = app.buildMarketTrendsView(ctx, r.URL.Query())
+	data.MarketTrends = app.buildMarketTrendsView(ctx, r.URL.Query()).withSelection(r.URL.Query().Get("type"))
 	app.render(ctx, w, http.StatusOK, "market_trends.html", data)
 }
 
@@ -81,7 +100,15 @@ var marketTrendsCache = newViewCache[marketTrendsView](30*time.Second, 128)
 // pure function of the query over stored rows, so a built view is
 // reused for a few seconds.
 func (app *Application) buildMarketTrendsView(ctx context.Context, q map[string][]string) *marketTrendsView {
-	key := url.Values(q).Encode()
+	// The open item is not part of the ranking: the cache keys on
+	// the ranking's own query, and the selection lands on a copy.
+	vals := url.Values{}
+	for k, v := range q {
+		if k != "type" {
+			vals[k] = v
+		}
+	}
+	key := vals.Encode()
 	if view, ok := marketTrendsCache.get(key); ok {
 		return view
 	}
@@ -132,6 +159,14 @@ func (app *Application) buildMarketTrendsViewFresh(ctx context.Context, q map[st
 	}
 	for _, m := range []struct{ key, label string }{{"volatile", "Most volatile"}, {"rising", "Rising"}, {"falling", "Falling"}, {"changes", "What changed"}} {
 		view.Modes = append(view.Modes, marketTrendChoice{Label: m.label, Href: href(m.key, view.Period), Active: m.key == view.Mode})
+		if m.key == view.Mode {
+			view.ModeLabel = m.label
+		}
+	}
+	view.ListHref = href(view.Mode, view.Period)
+	view.RankCol = "swing"
+	if view.Mode == "rising" || view.Mode == "falling" {
+		view.RankCol = "chg" + strconv.Itoa(view.Period)
 	}
 	for _, p := range []struct {
 		days  int
@@ -178,20 +213,66 @@ func (app *Application) buildMarketTrendsViewFresh(ctx context.Context, q map[st
 		logging.Errorf("market trends: list for region %d: %v", view.RegionID, err)
 		return view
 	}
-	for _, r := range rows {
+	categories := map[int64]int64{}
+	if len(rows) > 0 {
+		ids := make([]int64, 0, len(rows))
+		for _, r := range rows {
+			ids = append(ids, r.TypeID)
+		}
+		if catRows, err := app.queries.ListSDETypeCategories(ctx, ids); err == nil {
+			for _, c := range catRows {
+				categories[c.TypeID] = c.CategoryID
+			}
+		}
+	}
+	var widest float64
+	for i, r := range rows {
 		row := marketTrendRow{
+			Rank: i + 1, IconURL: contracts.TypeCategoryIconURL(r.TypeID, categories[r.TypeID], 32),
+			Href:   view.ListHref + "&type=" + strconv.FormatInt(r.TypeID, 10),
 			TypeID: r.TypeID, Name: app.typeNameOrID(ctx, r.TypeID),
 			TypicalSell: esi.FormatISK(r.TypicalSell), Orders: esi.FormatInt(r.SellOrders),
 			TradedDay: esi.FormatInt(int64(math.Round(r.AvgDailyVolume30d))),
 			Chg1:      newTrendFigure(r.SellChg1d), Chg7: newTrendFigure(r.SellChg7d), Chg30: newTrendFigure(r.SellChg30d),
 		}
+		row.SellShort = formatISKShort(r.TypicalSell)
 		if r.TypicalBuy > 0 {
 			row.TypicalBuy = esi.FormatISK(r.TypicalBuy)
+			row.BuyShort = formatISKShort(r.TypicalBuy)
 		}
 		if r.Volatility30d.Valid {
 			row.Volatility = strconv.FormatFloat(r.Volatility30d.Float64, 'f', 1, 64) + "%"
+			row.swing = r.Volatility30d.Float64
+			widest = max(widest, row.swing)
 		}
 		view.Rows = append(view.Rows, row)
 	}
+	for i := range view.Rows {
+		pct := 0.0
+		if widest > 0 {
+			pct = math.Round(view.Rows[i].swing * 100 / widest)
+		}
+		view.Rows[i].SwingPct = strconv.FormatFloat(pct, 'f', 0, 64)
+	}
 	return view
+}
+
+// withSelection is the view with one ranked item open in the
+// inspector: a copy, since the ranking itself is cached and shared.
+func (v *marketTrendsView) withSelection(typeParam string) *marketTrendsView {
+	out := *v
+	out.Depth = 1
+	id, err := strconv.ParseInt(typeParam, 10, 64)
+	if err != nil || id <= 0 || len(v.Rows) == 0 {
+		return &out
+	}
+	out.Rows = slices.Clone(v.Rows)
+	for i := range out.Rows {
+		if out.Rows[i].TypeID == id {
+			out.Rows[i].On = true
+			out.Insp = &out.Rows[i]
+			out.Depth = 2
+		}
+	}
+	return &out
 }

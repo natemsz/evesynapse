@@ -5,6 +5,8 @@ import (
 	"evesynapse/internal/app/module"
 	"evesynapse/internal/humanize"
 	"net/http"
+	"strconv"
+	"time"
 
 	"evesynapse/internal/esi"
 	"evesynapse/internal/logging"
@@ -30,6 +32,9 @@ type walletJournalRow struct {
 
 // walletTxnRow is one transaction line.
 type walletTxnRow struct {
+	ID           int64
+	Href         string // opens this trade in the inspector
+	On           bool
 	Date         string
 	Item         string
 	TypeID       int64
@@ -58,6 +63,30 @@ type walletView struct {
 	Txns          module.EconSectionState
 	TxnRows       []walletTxnRow
 	TxnsCut       int
+
+	// The summary, the flow, the filters and the open trade
+	// (shape.go).
+	Tiles         []walletTile
+	Ranges        []walletChip
+	FormatHref    string
+	FormatLabel   string
+	Sources       []walletFlowLine
+	Sinks         []walletFlowLine
+	InTotal       string
+	OutTotal      string
+	Kept          string
+	BestSeller    string
+	BestSellerID  int64
+	BestSellerISK string
+	Chips         []walletChip
+	RefLabel      string
+	RefClear      string
+	Filtered      bool
+	ClearHref     string
+	JournalCSV    string
+	TxnsCSV       string
+	Trade         *walletTrade
+	Depth         int // ledger console: 1 the ledgers, 2 one trade
 }
 
 func (app *mod) handleWallet(w http.ResponseWriter, r *http.Request) {
@@ -77,8 +106,12 @@ func (app *mod) handleWallet(w http.ResponseWriter, r *http.Request) {
 	}
 	data.WalletChars = links
 
-	view := &walletView{CharacterName: active.Name, CharacterID: active.CharacterID}
+	view := &walletView{CharacterName: active.Name, CharacterID: active.CharacterID, Depth: 1}
 	data.Wallet = view
+	choice := parseWalletChoice(r, time.Now().UTC())
+	if choice.character == "" {
+		choice.character = strconv.FormatInt(active.CharacterID, 10)
+	}
 
 	// Balance header reuses the existing wallet snapshot.
 	var balance float64
@@ -91,6 +124,9 @@ func (app *mod) handleWallet(w http.ResponseWriter, r *http.Request) {
 	view.Journal = app.deps.EconSection(ctx, active.CharacterID, esi.SnapWalletJournal, &journal)
 	if view.Journal.Loaded {
 		for _, e := range journal {
+			if !inRange(e.Date, choice.cutoff) || !journalMatches(e, choice.cat, choice.ref) {
+				continue
+			}
 			if len(view.JournalRows) >= maxLedgerRows {
 				view.JournalCut++
 				continue
@@ -98,8 +134,8 @@ func (app *mod) handleWallet(w http.ResponseWriter, r *http.Request) {
 			row := walletJournalRow{
 				Date:    humanize.Finish(e.Date),
 				Type:    app.deps.HumanizeEnum(e.RefType),
-				Amount:  esi.FormatISK(e.Amount),
-				Balance: esi.FormatISK(e.Balance),
+				Amount:  choice.isk(e.Amount),
+				Balance: choice.isk(e.Balance),
 			}
 			if e.FirstPartyID > 0 || e.SecondPartyID > 0 {
 				row.ShowParties = true
@@ -124,6 +160,9 @@ func (app *mod) handleWallet(w http.ResponseWriter, r *http.Request) {
 	view.Txns = app.deps.EconSection(ctx, active.CharacterID, esi.SnapWalletTxns, &txns)
 	if view.Txns.Loaded {
 		for _, t := range txns {
+			if !inRange(t.Date, choice.cutoff) || choice.cat == "big" && t.UnitPrice*float64(t.Quantity) < walletBigISK {
+				continue
+			}
 			if len(view.TxnRows) >= maxLedgerRows {
 				view.TxnsCut++
 				continue
@@ -133,27 +172,56 @@ func (app *mod) handleWallet(w http.ResponseWriter, r *http.Request) {
 				side = "Buy"
 			}
 			with, clientIsChar, clientIsCorp := app.deps.TxnCounterparty(ctx, t.ClientID)
-			view.TxnRows = append(view.TxnRows, walletTxnRow{
+			row := walletTxnRow{
+				ID:           t.TransactionID,
+				Href:         choice.href("/wallet/", map[string]string{"txn": strconv.FormatInt(t.TransactionID, 10)}) + "#wl-txns",
+				On:           t.TransactionID == choice.txn,
 				Date:         humanize.Finish(t.Date),
 				Item:         app.deps.TypeNameOrID(ctx, t.TypeID),
 				TypeID:       t.TypeID,
 				Qty:          esi.FormatInt(t.Quantity),
-				Unit:         esi.FormatISK(t.UnitPrice),
-				Total:        esi.FormatISK(t.UnitPrice * float64(t.Quantity)),
+				Unit:         choice.isk(t.UnitPrice),
+				Total:        choice.isk(t.UnitPrice * float64(t.Quantity)),
 				Side:         side,
 				Loc:          app.deps.LinkPlace(ctx, t.LocationID, app.deps.EconLocationTitle(ctx, t.LocationID)),
 				With:         with,
 				ClientID:     t.ClientID,
 				ClientIsChar: clientIsChar,
 				ClientIsCorp: clientIsCorp,
-			})
+			}
+			view.TxnRows = append(view.TxnRows, row)
+			if row.On {
+				app.shapeTrade(view, choice, journal, txns, row, t)
+			}
 		}
+	}
+
+	// The account's total across characters, from each wallet
+	// snapshot (one read per character on the account).
+	var total float64
+	for _, l := range links {
+		if l.ID == active.CharacterID {
+			total += balance
+			continue
+		}
+		var b float64
+		if app.deps.LoadCorpSnapshot(ctx, l.ID, esi.SnapWallet, &b) {
+			total += b
+		}
+	}
+	if view.Journal.Loaded {
+		app.shapeTiles(view, choice, journal, balance, view.BalanceOK, total, len(links))
+		app.shapeFlow(ctx, view, choice, journal, txns)
+		app.shapeChips(view, choice, journal)
+	} else {
+		app.shapeTiles(view, choice, nil, balance, view.BalanceOK, total, len(links))
+		app.shapeChips(view, choice, nil)
 	}
 
 	// Balance history rides the same stored rows: the decoded
 	// journal above, the daily samples, and the wallet snapshot
 	// the header balance came from.
-	view.Graph = app.deps.AttachWalletGraph(ctx, active.UserID, active.CharacterID, journal, view.Journal.Loaded)
+	view.Graph = app.deps.AttachWalletGraph(ctx, active.UserID, active.CharacterID, journal, view.Journal.Loaded, r.URL.Query().Get("range"))
 	// Wallet flow, as the home module reads it, for this character:
 	// the same stored journal window, one bundle.
 	view.Flow = app.deps.WalletFlow(ctx, active)
@@ -206,7 +274,7 @@ func (app *mod) handleWalletGraphFragment(w http.ResponseWriter, r *http.Request
 		journal = nil
 	}
 	app.deps.RenderFragment(w, "wallet.html", "wallet-graph",
-		app.deps.AttachWalletGraph(ctx, active.UserID, active.CharacterID, journal, loaded))
+		app.deps.AttachWalletGraph(ctx, active.UserID, active.CharacterID, journal, loaded, r.URL.Query().Get("range")))
 }
 
 // maxLedgerRows caps the journal and transaction tables; the snapshot

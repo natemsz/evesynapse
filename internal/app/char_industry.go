@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net/http"
 	"sort"
-	"time"
 
 	"evesynapse/internal/esi"
 	"evesynapse/internal/logging"
@@ -86,9 +85,6 @@ type miningRow struct {
 type industryView struct {
 	CharacterName string
 	CharacterID   int64
-	Jobs          econSectionState
-	JobRows       []industryJobRow
-	JobsCut       int
 	Blueprints    econSectionState
 	BlueprintRows []blueprintRow
 	BlueprintsCut int
@@ -133,7 +129,7 @@ func (app *Application) handleIndustryJobs(w http.ResponseWriter, r *http.Reques
 	ctx := r.Context()
 	data := app.page(ctx)
 
-	_, active, links, err := app.pickCharacter(ctx, r, "/industry/jobs/")
+	characters, _, links, err := app.pickCharacter(ctx, r, "/industry/jobs/")
 	if err != nil {
 		logging.Errorf("industry jobs: list characters: %v", err)
 		data.Error = "Could not load industry data; check the server log."
@@ -146,10 +142,7 @@ func (app *Application) handleIndustryJobs(w http.ResponseWriter, r *http.Reques
 	}
 	data.IndustryChars = links
 
-	view := &industryView{CharacterName: active.Name}
-	data.Industry = view
-
-	app.fillIndustryJobs(ctx, active.CharacterID, view)
+	data.JobsPage = app.buildJobsView(ctx, r, characters)
 
 	app.render(ctx, w, http.StatusOK, "industry_jobs.html", data)
 }
@@ -179,68 +172,6 @@ func (app *Application) handleIndustryMining(w http.ResponseWriter, r *http.Requ
 	app.fillMining(ctx, active.CharacterID, view)
 
 	app.render(ctx, w, http.StatusOK, "industry_mining.html", data)
-}
-
-func (app *Application) fillIndustryJobs(ctx context.Context, characterID int64, view *industryView) {
-	var jobs esi.IndustryJobs
-	view.Jobs = app.econSection(ctx, characterID, esi.SnapIndustryJobs, &jobs)
-	if !view.Jobs.Loaded {
-		return
-	}
-	rows := make([]industryJobRow, 0, len(jobs))
-	for _, j := range jobs {
-		row := industryJobRow{
-			Activity:        industryActivityLabel(j.ActivityID),
-			Blueprint:       app.typeNameOrID(ctx, j.BlueprintTypeID),
-			BlueprintTypeID: j.BlueprintTypeID,
-			ProductTypeID:   j.ProductTypeID,
-			Installer:       app.displayCharacter(ctx, j.InstallerID),
-			InstallerID:     j.InstallerID,
-			Status:          humanizeEnum(j.Status),
-			Cost:            esi.FormatISK(j.Cost),
-		}
-		if j.ProductTypeID > 0 {
-			row.Product = app.typeNameOrID(ctx, j.ProductTypeID)
-		}
-		facilityID := j.FacilityID
-		if facilityID == 0 {
-			facilityID = j.StationID
-		}
-		if facilityID > 0 {
-			row.Facility = app.linkPlace(ctx, facilityID, app.econLocationTitle(ctx, facilityID))
-		}
-		if j.SuccessfulRuns > 0 || j.Status == "delivered" {
-			row.Runs = fmt.Sprintf("%d / %s", j.SuccessfulRuns, esi.FormatInt(j.Runs))
-		} else {
-			row.Runs = esi.FormatInt(j.Runs)
-		}
-		row.Ends = formatFinish(j.EndDate)
-		if j.Status == "active" || j.Status == "paused" {
-			if t, err := time.Parse(time.RFC3339, j.EndDate); err == nil {
-				if left := time.Until(t); left > 0 {
-					row.Ends += " (in " + humanDuration(left) + ")"
-				} else {
-					row.Ends += " (ready)"
-				}
-			}
-		}
-		rows = append(rows, row)
-	}
-	// Active jobs first (by end date), then the rest newest-ended
-	// first: the slice is small, so a stable sort on a computed
-	// key string is enough.
-	sort.SliceStable(rows, func(i, j int) bool {
-		ai, aj := rows[i].Status == "active", rows[j].Status == "active"
-		if ai != aj {
-			return ai
-		}
-		return rows[i].Ends > rows[j].Ends
-	})
-	if len(rows) > maxIndustryRows {
-		view.JobsCut = len(rows) - maxIndustryRows
-		rows = rows[:maxIndustryRows]
-	}
-	view.JobRows = rows
 }
 
 // fillBlueprints loads the blueprint library snapshot and shapes

@@ -13,7 +13,6 @@ import (
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
 	"evesynapse/internal/logging"
-	"evesynapse/internal/tags"
 )
 
 // ---------------------------------------------------------------------------
@@ -582,65 +581,9 @@ func (app *Application) buildAssetsPage(ctx context.Context, userID int64, chara
 	// out of the scope. Toggling from "all characters" starts
 	// from the whole account; a complete set reads back as all,
 	// and an empty one is the explicit none scope.
-	view.Selector.All = st.scopeAll
-	// The All row is a toggle: from all characters it unselects
-	// into the empty scope; from anything else it resets to all.
-	allScope := ""
-	if st.scopeAll {
-		allScope = "none"
-	}
-	view.Selector.AllHref = st.href(map[string]string{"scope": allScope, "can": "", "ship": "", "item": ""})
-	for _, ch := range characters {
-		set := make(map[int64]bool)
-		if st.scopeAll {
-			for _, other := range characters {
-				set[other.CharacterID] = true
-			}
-		} else {
-			for _, id := range st.scopeIDs {
-				set[id] = true
-			}
-		}
-		if set[ch.CharacterID] {
-			delete(set, ch.CharacterID)
-		} else {
-			set[ch.CharacterID] = true
-		}
-		var next []int64
-		for _, other := range characters {
-			if set[other.CharacterID] {
-				next = append(next, other.CharacterID)
-			}
-		}
-		param := ""
-		switch {
-		case len(next) == 0:
-			param = "none"
-		case len(next) < len(characters):
-			param = joinIDList(next)
-		}
-		charTags := tags.Split(ch.Tags)
-		view.Selector.Chars = append(view.Selector.Chars, assetCharOption{
-			ID: ch.CharacterID, Name: ch.Name, Image: portraitURL(ch.CharacterID, 64),
-			Tags: charTags, TagsText: ch.Tags, Checked: st.inScope(ch.CharacterID),
-			ToggleHref: st.href(map[string]string{"scope": param, "can": "", "ship": "", "item": ""}),
-			OnlyHref:   st.href(map[string]string{"scope": strconv.FormatInt(ch.CharacterID, 10), "can": "", "ship": "", "item": ""}),
-		})
-	}
-	switch {
-	case st.scopeAll:
-		view.Selector.Label = "All characters"
-	case len(scopeChars) == 0:
-		view.Selector.Label = "No characters"
-	case len(scopeChars) <= 2:
-		names := make([]string, len(scopeChars))
-		for i, ch := range scopeChars {
-			names[i] = ch.Name
-		}
-		view.Selector.Label = strings.Join(names, ", ")
-	default:
-		view.Selector.Label = fmt.Sprintf("%d characters", len(scopeChars))
-	}
+	view.Selector = buildScopeSelector(characters, charScope{all: st.scopeAll, ids: st.scopeIDs}, func(scope string) string {
+		return st.href(map[string]string{"scope": scope, "can": "", "ship": "", "item": ""})
+	})
 
 	// Saved quick filters.
 	for _, f := range app.assetFiltersFor(ctx, userID) {

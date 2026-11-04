@@ -34,6 +34,15 @@
    reads from the theme's accent, so every scheme and the light
    theme get a highlight in their own colour. */
 :root {
+  /* Type roles, one name each (the stacks the core sheet uses):
+     Saira Semi Condensed for UI and table data, Rajdhani for
+     display and menu text, Inter for open prose, JetBrains Mono for
+     data spots, Synapse Numerals for big figures. */
+  --font-body: "Saira Semi Condensed", "Inter", "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-display: "Rajdhani", "Segoe UI", sans-serif;
+  --font-prose: "Inter", "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+  --font-num: "Synapse Numerals", "Saira Semi Condensed", "Inter", "Segoe UI", sans-serif;
   --space-1: clamp(0.25rem, 0.2rem + 0.15vw, 0.35rem);
   --space-2: clamp(0.4rem, 0.32rem + 0.25vw, 0.6rem);
   --space-3: clamp(0.6rem, 0.48rem + 0.4vw, 0.9rem);
@@ -286,8 +295,12 @@ html[data-theme="light"] .subnav { background: color-mix(in srgb, var(--panel) 8
    aside, so the deeper screen starts right under the page head
    instead of under everything the top level shows. Wider pages,
    where the console's panes sit side by side, keep them. */
+/* Two rules, not one list: :has() cannot nest, so the directory
+   test runs down the console's own structure instead. */
 @container page (width < 46rem) {
-  .l-page:has(.l-console:not([data-depth="0"]):has(.l-pane--dir)) .l-root,
+  .l-page:has(.l-console:not([data-depth="0"]) > .l-panes > .l-pane--dir) .l-root { display: none; }
+}
+@container page (width < 46rem) {
   .l-page:has(.l-console[data-depth="2"]) .l-root { display: none; }
 }
 
@@ -365,6 +378,25 @@ html[data-theme="light"] .subnav { background: color-mix(in srgb, var(--panel) 8
 .l-seg > [role="tab"]:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .tabs-on > [role="tabpanel"] > .l-tab-h { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .tabs-on > [role="tabpanel"][hidden] { display: none; }
+
+/* Stat tile: a labelled figure with a line under it. A tile that
+   links filters the page; .on marks the filter in force. Rows of
+   them sit in .l-tiles. */
+.l-stat { display: flex; flex-direction: column; gap: 0.2rem; min-width: 0; padding: var(--space-3) var(--space-4); border: 1px solid var(--hairline); border-radius: var(--r-md); background: var(--surface-inset); color: var(--text); text-decoration: none; }
+a.l-stat:hover { border-color: color-mix(in srgb, var(--accent) 45%, transparent); text-decoration: none; }
+.l-stat.on { border-color: var(--sel-edge); background: var(--sel-bg); }
+.l-stat-label { color: var(--muted); font-family: var(--font-display); font-size: 0.8rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
+.l-stat-value { font-family: var(--font-num); font-size: 1.6rem; font-weight: 700; line-height: 1.1; color: var(--text-bright); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.l-stat-value.text { font-family: var(--font-body); font-size: 1.15rem; }
+.l-stat-sub { color: var(--muted); font-size: 0.82rem; }
+.l-stat.warn .l-stat-value { color: var(--gold); }
+.l-stat.ok .l-stat-value { color: var(--kept); }
+
+/* Meter: a used-of-max bar, its fill as SVG geometry (a 100-unit
+   viewBox, the CSP allows no inline widths). */
+.l-meter { display: block; width: 100%; height: 0.4rem; border-radius: 999px; background: var(--hairline); overflow: hidden; }
+.l-meter rect { fill: var(--accent); }
+.l-meter.full rect { fill: var(--gold); }
 
 /* Panel: the standard solid block on the page. */
 .l-panel { min-width: 0; padding: var(--space-4); border: 1px solid var(--hairline); border-radius: var(--r-md); background: var(--surface-inset); }

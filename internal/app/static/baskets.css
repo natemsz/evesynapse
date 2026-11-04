@@ -7,9 +7,9 @@
 
 .bk-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: var(--space-1) var(--space-3); margin: 0 0 var(--space-3); }
 .bk-head > small { color: var(--muted); }
-.bk-title { margin: 0; color: var(--gold); font-family: var(--font-display); font-size: var(--fs-lg); font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+.bk-title { margin: 0; color: var(--gold); font-family: var(--font-display); font-size: var(--fs-md); font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
 .bk-title small { color: var(--muted); font-weight: 500; letter-spacing: 0; }
-.bk-sub { margin: 0 0 var(--space-2); color: var(--muted); font-family: var(--font-display); font-size: var(--fs-md); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
+.bk-sub { margin: 0 0 var(--space-2); color: var(--muted); font-family: var(--font-display); font-size: var(--fs-xs); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
 .bk-note { margin: var(--space-3) 0 0; color: var(--muted); }
 .bk-gold { color: var(--gold); }
 .l-page > * + * { margin-top: var(--space-4); }
@@ -32,12 +32,12 @@ tr.bk-own td:first-child { box-shadow: inset 2px 0 0 var(--accent); }
 .bk-partial { color: var(--muted); }
 
 /* One basket. */
-.bk-tiles .l-stat-value small { font-size: var(--fs-xs); color: var(--muted); }
+.bk-tiles .l-stat-value small { font-size: var(--fs-2xs); color: var(--muted); }
 .bk-chg-list { margin: 0.2rem 0 0; }
 .bk-chg-list > div { display: flex; justify-content: space-between; align-items: baseline; gap: 0.6rem; padding: 0.15rem 0; }
-.bk-chg-list dt { color: var(--muted); font-size: var(--fs-md); }
-.bk-chg-list dd { margin: 0; font-family: var(--font-num); font-size: var(--fs-xl); font-weight: 700; font-variant-numeric: tabular-nums; text-align: right; }
-.bk-chg-list dd small { color: var(--muted); font-size: var(--fs-sm); font-weight: 500; }
+.bk-chg-list dt { color: var(--muted); font-size: var(--fs-xs); }
+.bk-chg-list dd { margin: 0; font-family: var(--font-num); font-size: var(--fs-lg); font-weight: 700; font-variant-numeric: tabular-nums; text-align: right; }
+.bk-chg-list dd small { color: var(--muted); font-size: var(--fs-xs); font-weight: 500; }
 .bk-movers-head { margin-bottom: 0; }
 .bk-movers-head .pilltabs { margin: 0; }
 .bk-mv { margin: 0; padding: 0; list-style: none; }

@@ -101,7 +101,7 @@
 @media (max-width: 45rem) {
   /* Reading size: the condensed body face at 12.5px (style.css's
      small-screen block) reads small held at arm's length. */
-  body { font-size: var(--fs-md); }
+  body { font-size: var(--fs-sm); }
 
   /* Flatter surfaces: one glass sheet per page, close to the
      screen edge, instead of a frame inside a margin inside a
@@ -223,7 +223,7 @@
     background: inherit;
     border-bottom: 1px solid var(--box-edge);
   }
-  .as-sheet.open > .sheet-head h2 { margin: 0; font-size: var(--fs-xl); }
+  .as-sheet.open > .sheet-head h2 { margin: 0; font-size: var(--fs-lg); }
   .sheet-close {
     min-width: 2.5rem; min-height: 2.5rem;
     color: var(--gold);
@@ -263,7 +263,7 @@
     display: block;
     margin-top: 0.2rem;
     font-family: inherit;
-    font-size: var(--fs-sm); font-weight: 400;
+    font-size: var(--fs-xs); font-weight: 400;
     letter-spacing: 0; text-transform: none;
     color: var(--muted);
   }

@@ -2,6 +2,8 @@ package restock
 
 import (
 	"context"
+	"evesynapse/internal/app/module"
+	"html/template"
 	"net/http"
 	"sort"
 	"strconv"
@@ -31,6 +33,9 @@ type restockRow struct {
 	UnitPrice  string
 	EstCost    string
 	PriceKnown bool
+	// Spark is the unit price's hover card: The Forge's stored
+	// 30-day line, the region the unit price reads.
+	Spark template.HTML
 	// Raw values for sorting.
 	shortfallRaw int64
 	costRaw      float64
@@ -47,6 +52,17 @@ func (app *page) handleRestock(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	data := &PageData{ShellData: app.deps.PageShell(ctx)}
 	data.Restock = app.buildRestockView(ctx, r)
+	if v := data.Restock; len(v.Rows) > 0 {
+		keys := make([]module.SparkKey, len(v.Rows))
+		for i, row := range v.Rows {
+			keys[i] = module.SparkKey{RegionID: module.TheForgeRegionID, TypeID: row.TypeID}
+		}
+		if cards := app.deps.PriceSparks(ctx, keys); len(cards) > 0 {
+			for i := range v.Rows {
+				v.Rows[i].Spark = cards[keys[i]]
+			}
+		}
+	}
 	app.deps.Render(ctx, w, http.StatusOK, "market_restock.html", data)
 }
 
@@ -70,8 +86,11 @@ func (app *page) buildRestockView(ctx context.Context, r *http.Request) *restock
 	// compute listed quantities per type.
 	listedByType := app.restockListedQty(ctx, r)
 
-	// Market sell prices from the guide cache.
-	prices, _ := app.deps.MarketPrices(ctx)
+	// The house price order: the swept typical sell (The Forge's
+	// book), then the stored true-value estimate; never CCP's
+	// guide average.
+	typical := app.deps.TypicalSells(ctx)
+	estimates := app.deps.TrueValues(ctx)
 
 	var totalCost float64
 	for _, t := range targets {
@@ -90,10 +109,14 @@ func (app *page) buildRestockView(ctx context.Context, r *http.Request) *restock
 		row.Shortfall = esi.FormatInt(shortfall)
 		row.shortfallRaw = shortfall
 
-		if mp, ok := prices[t.TypeID]; ok && mp.AveragePrice > 0 {
+		unit := typical[t.TypeID]
+		if unit <= 0 {
+			unit = estimates[t.TypeID]
+		}
+		if unit > 0 {
 			row.PriceKnown = true
-			row.UnitPrice = esi.FormatISK(mp.AveragePrice)
-			cost := mp.AveragePrice * float64(shortfall)
+			row.UnitPrice = esi.FormatISK(unit)
+			cost := unit * float64(shortfall)
 			row.EstCost = esi.FormatISK(cost)
 			row.costRaw = cost
 			totalCost += cost

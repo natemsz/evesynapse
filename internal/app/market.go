@@ -1349,10 +1349,21 @@ func (app *Application) watchlistRows(ctx context.Context, entries []db.MarketWa
 		if m.Has30 {
 			row.Change30 = markethistory.FormatChangePct(m.Chg30)
 		}
-		if sparkOn && m.Has {
-			row.Spark = app.watchSpark(ctx, e.TypeID, marketRegionForType(e.TypeID, e.RegionID))
-		}
 		out = append(out, row)
+	}
+	// Hover cards read the stat pack's stored 30-day lines, one
+	// read per region for the whole list.
+	if sparkOn {
+		keys := make([]sparkKey, len(out))
+		for i, r := range out {
+			keys[i] = sparkKey{RegionID: r.RegionID, TypeID: r.TypeID}
+		}
+		cards := app.priceSparks(ctx, keys)
+		for i := range out {
+			if out[i].Current != "—" {
+				out[i].Spark = cards[keys[i]]
+			}
+		}
 	}
 	return out
 }

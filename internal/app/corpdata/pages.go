@@ -7,6 +7,7 @@ import (
 	"evesynapse/internal/humanize"
 	"evesynapse/internal/standing"
 	"fmt"
+	"html/template"
 	"net/http"
 	"sort"
 	"strconv"
@@ -399,6 +400,10 @@ type corpOrderRow struct {
 	Bad        bool // Status is a needs-attention verdict (undercut)
 	IssuedBy   string
 	IssuedByID int64
+	// RegionID keys Spark, the price hover card (the order region's
+	// stored 30-day line).
+	RegionID int64
+	Spark    template.HTML
 }
 
 // corpOrdersView is the Corporation Orders page body.
@@ -513,6 +518,7 @@ func (app *mod) handleCorpOrders(w http.ResponseWriter, r *http.Request) {
 			Expires:    expires,
 			IssuedBy:   app.deps.DisplayCharacter(ctx, o.IssuedBy),
 			IssuedByID: o.IssuedBy,
+			RegionID:   o.RegionID,
 		}
 		if !o.IsBuyOrder {
 			if h, ok := health[o.OrderID]; ok && h.CharacterID == o.IssuedBy {
@@ -536,6 +542,15 @@ func (app *mod) handleCorpOrders(w http.ResponseWriter, r *http.Request) {
 		}
 		return rows[i].Price < rows[j].Price
 	})
+	keys := make([]module.SparkKey, len(rows))
+	for i, r := range rows {
+		keys[i] = module.SparkKey{RegionID: r.RegionID, TypeID: r.TypeID}
+	}
+	if cards := app.deps.PriceSparks(ctx, keys); len(cards) > 0 {
+		for i := range rows {
+			rows[i].Spark = cards[keys[i]]
+		}
+	}
 	view.Rows = rows
 	for _, row := range rows {
 		if row.Side == "Buy" {

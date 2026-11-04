@@ -29,7 +29,7 @@
     <tr>
       <td><a href="{{.URL}}">{{.Name}}</a></td>
       <td class="num">{{.Quantity}}</td>
-      <td class="num">{{if .PriceKnown}}{{.UnitPrice}}{{else}}<em>No price data</em>{{end}}</td>
+      <td class="num">{{if .PriceKnown}}{{sparkFig .UnitPrice .Spark}}{{else}}<em>No price data</em>{{end}}</td>
       <td class="num">{{if .PriceKnown}}{{.LineCost}}{{else}}—{{end}}</td>
     </tr>
   {{end}}

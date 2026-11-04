@@ -183,7 +183,7 @@
       <td><a href="/market/?type={{.TypeID}}">{{.Name}}</a>{{if .Source}} <small class="mt-reqs">({{.Source}})</small>{{end}}</td>
       <td class="mt-num">{{.Quantity}}</td>
       <td class="mt-num">{{.Cost}}</td>
-      <td class="mt-num">{{if .Value}}{{.Value}}<br><svg class="pf-sharebar" viewBox="0 0 90 6" width="90" height="6" aria-hidden="true"><rect class="pf-share-track" x="0" y="0" width="90" height="6"/><rect class="pf-share-fill" x="0" y="0" width="{{printf "%.1f" .ShareW}}" height="6"/></svg>{{else}}<small>No price</small>{{end}}</td>
+      <td class="mt-num">{{if .Value}}{{sparkFig .Value .Spark}}<br><svg class="pf-sharebar" viewBox="0 0 90 6" width="90" height="6" aria-hidden="true"><rect class="pf-share-track" x="0" y="0" width="90" height="6"/><rect class="pf-share-fill" x="0" y="0" width="{{printf "%.1f" .ShareW}}" height="6"/></svg>{{else}}<small>No price</small>{{end}}</td>
       <td class="mt-num">{{if .Unrealized}}<span class="mt-chg {{.Dir}}">{{.Unrealized}}</span>{{else}}—{{end}}</td>
     </tr>
   {{end}}

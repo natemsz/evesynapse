@@ -73,16 +73,17 @@
   {{if .Rows}}
   <div class="tw">
   <table class="tr-table" data-rank="{{.RankCol}}">
-    <thead><tr><th class="card-title">Item</th><th class="mt-num">Typical sell</th><th class="mt-num opt">Typical buy</th><th class="mt-num tr-chg1{{if ne .RankCol "chg1"}} opt{{end}}">1 day</th><th class="mt-num tr-chg7">7 days</th><th class="mt-num tr-chg30{{if ne .RankCol "chg30"}} opt{{end}}">30 days</th><th class="mt-num tr-swing">Daily swing</th><th class="mt-num">Sell orders</th><th class="mt-num">Traded per day</th></tr></thead>
+    <thead><tr><th class="card-title">Item</th><th class="mt-num">Typical sell</th><th class="mt-num opt">Typical buy</th><th class="mt-num tr-chg1{{if ne .RankCol "chg1"}} opt{{end}}">1 day</th><th class="mt-num tr-chg7">7 days</th><th class="mt-num tr-chg30{{if ne .RankCol "chg30"}} opt{{end}}">30 days</th><th class="tr-trend opt">Trend, 30 days</th><th class="mt-num tr-swing">Daily swing</th><th class="mt-num">Sell orders</th><th class="mt-num">Traded per day</th></tr></thead>
     <tbody>
     {{range .Rows}}
       <tr{{if .On}} class="yours"{{end}}>
         <td><span class="tr-item"><span class="tr-rank">{{.Rank}}</span><img src="{{.IconURL}}" alt="" width="28" height="28" loading="lazy" data-fallback-src="/static/img/item.svg"><a href="{{.Href}}" data-l-step="in">{{.Name}}</a></span></td>
-        <td class="mt-num" title="{{.TypicalSell}} ISK">{{.SellShort}}</td>
+        <td class="mt-num" title="{{.TypicalSell}} ISK" data-sort="{{.TypicalSell}}">{{sparkFigFallback .SellShort .Spark}}</td>
         <td class="mt-num"{{if .TypicalBuy}} title="{{.TypicalBuy}} ISK"{{end}}>{{if .BuyShort}}{{.BuyShort}}{{else}}—{{end}}</td>
         <td class="mt-num tr-chg1">{{if .Chg1.Text}}<span class="mt-chg {{.Chg1.Dir}}">{{.Chg1.Text}}</span>{{else}}—{{end}}</td>
         <td class="mt-num tr-chg7">{{if .Chg7.Text}}<span class="mt-chg {{.Chg7.Dir}}">{{.Chg7.Text}}</span>{{else}}—{{end}}</td>
         <td class="mt-num tr-chg30">{{if .Chg30.Text}}<span class="mt-chg {{.Chg30.Dir}}">{{.Chg30.Text}}</span>{{else}}—{{end}}</td>
+        <td class="tr-trend opt" data-sort="{{.Chg30.Text}}">{{.Line}}</td>
         <td class="mt-num tr-swing">{{if .Volatility}}{{.Volatility}}{{else}}—{{end}}</td>
         <td class="mt-num">{{.Orders}}</td>
         <td class="mt-num">{{.TradedDay}}</td>

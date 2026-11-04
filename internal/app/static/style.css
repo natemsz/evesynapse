@@ -1921,6 +1921,11 @@ td.pos, .pos { color: #28c76f; }
    the spark_hover viz switch, which stops the server rendering the
    card at all. */
 .spark-hover { border-bottom: 1px dotted var(--muted); cursor: help; }
+/* A fallback hover (data-spark-fallback) is a plain figure while its
+   row shows the line in a column of its own, and a hover only once
+   the table reads as cards and drops that column (app.js agrees). */
+.spark-hover[data-spark-fallback] { border-bottom: 0; cursor: inherit; }
+table.cards-on .spark-hover[data-spark-fallback] { border-bottom: 1px dotted var(--muted); cursor: help; }
 .spark-pop { display: none; }
 #spark-layer {
   position: fixed; z-index: 60; width: 10.5rem; padding: 0.45rem 0.55rem 0.5rem;

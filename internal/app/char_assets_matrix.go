@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"fmt"
+	"html/template"
 	"math"
 	"net/http"
 	"net/url"
@@ -129,6 +130,9 @@ type assetMatrixRow struct {
 	Quantity        string
 	VolumeText      string
 	ValueText       string // empty when no house price knows the stack
+	// Spark is the value's hover card: the unit price's stored
+	// 30-day line in The Forge, the house price region.
+	Spark template.HTML
 }
 
 // assetSlotRow is one grouped line of the inspector: a module type
@@ -466,6 +470,7 @@ func (app *Application) handleAssets(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data.Assets = app.buildAssetsPage(ctx, userID, characters, active, r.URL.Query())
+	app.attachAssetSparks(ctx, data.Assets)
 	app.render(ctx, w, http.StatusOK, "assets.html", data)
 }
 
@@ -784,4 +789,39 @@ func assetVolume(v float64) string {
 		return fmt.Sprintf("%.1f m³", v)
 	}
 	return esi.FormatInt(int64(math.Round(v))) + " m³"
+}
+
+// attachAssetSparks gives each priced stack on the page its value's
+// hover card, from the stored 30-day lines: one read for the rows
+// the page shows (the matrix or the search, each capped).
+func (app *Application) attachAssetSparks(ctx context.Context, v *assetsPageView) {
+	if v == nil {
+		return
+	}
+	var lists [][]assetMatrixRow
+	if v.Matrix != nil {
+		lists = append(lists, v.Matrix.Rows)
+	}
+	if v.Search != nil {
+		lists = append(lists, v.Search.Rows)
+	}
+	var keys []sparkKey
+	for _, rows := range lists {
+		for _, r := range rows {
+			if r.ValueText != "" {
+				keys = append(keys, sparkKey{RegionID: defaultMarketRegion, TypeID: r.TypeID})
+			}
+		}
+	}
+	cards := app.PriceSparks(ctx, keys)
+	if len(cards) == 0 {
+		return
+	}
+	for _, rows := range lists {
+		for i := range rows {
+			if rows[i].ValueText != "" {
+				rows[i].Spark = cards[sparkKey{RegionID: defaultMarketRegion, TypeID: rows[i].TypeID}]
+			}
+		}
+	}
 }

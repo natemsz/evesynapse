@@ -46,7 +46,7 @@
         <td class="mt-num">{{.TargetQty}}</td>
         <td class="mt-num">{{.ListedQty}}</td>
         <td class="mt-num">{{.Shortfall}}</td>
-        <td class="mt-num">{{.UnitPrice}}</td>
+        <td class="mt-num">{{sparkFig .UnitPrice .Spark}}</td>
         <td class="mt-num mk-gold">{{.EstCost}}</td>
         <td class="mt-num">
           <form method="post" action="/market/restock/delete/" class="inline-form">

@@ -12,6 +12,7 @@ import (
 	"database/sql"
 	"encoding/csv"
 	"encoding/json"
+	"html/template"
 	"math"
 	"net/http"
 	"net/url"
@@ -47,8 +48,9 @@ type marketLPRow struct {
 	LPCost       string
 	ISKCost      string
 	Requirements []marketLPRequirement
-	Value        string // product value at the chosen side
-	ValueShort   string // the same, compact for the table (14.8M)
+	Value        string        // product value at the chosen side
+	ValueShort   string        // the same, compact for the table (14.8M)
+	Spark        template.HTML // the product's price hover card (stored 30-day line)
 	ISKCostShort string
 	ISKPerLP     string
 	ISKPerLPDir  string // "up" when the offer pays, "down" when it loses
@@ -142,6 +144,11 @@ func (app *Application) handleMarketLP(w http.ResponseWriter, r *http.Request) {
 		app.attachLPBalances(ctx, view, app.userID(ctx))
 	}
 	view.finishConsole(r.URL.Query())
+	if cards := app.PriceSparks(ctx, lpSparkKeys(view)); len(cards) > 0 {
+		for i := range view.Rows {
+			view.Rows[i].Spark = cards[sparkKey{RegionID: view.RegionID, TypeID: view.Rows[i].TypeID}]
+		}
+	}
 	data.MarketLP = view
 	app.render(ctx, w, http.StatusOK, "market_lp.html", data)
 }
@@ -708,4 +715,14 @@ func (app *Application) handleMarketLPExportJSON(w http.ResponseWriter, r *http.
 		"side":      map[bool]string{true: "buy", false: "sell"}[view.Instant],
 		"offers":    out,
 	})
+}
+
+// lpSparkKeys names each listed offer's product in the view's region
+// for its price hover card.
+func lpSparkKeys(v *marketLPView) []sparkKey {
+	keys := make([]sparkKey, len(v.Rows))
+	for i, r := range v.Rows {
+		keys[i] = sparkKey{RegionID: v.RegionID, TypeID: r.TypeID}
+	}
+	return keys
 }

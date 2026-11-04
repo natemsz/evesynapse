@@ -1231,6 +1231,10 @@ type MarketRegionStat struct {
 	Volatility30d     sql.NullFloat64 `json:"volatility_30d"`
 	HistoryDays       int64           `json:"history_days"`
 	AvgDailyVolume30d float64         `json:"avg_daily_volume_30d"`
+	SellSpark30d      string          `json:"sell_spark_30d"`
+	SellLow30d        float64         `json:"sell_low_30d"`
+	SellHigh30d       float64         `json:"sell_high_30d"`
+	SellMean30d       float64         `json:"sell_mean_30d"`
 }
 
 type MarketRegionStatsDaily struct {

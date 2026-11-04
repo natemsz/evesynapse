@@ -323,6 +323,10 @@ func linkFuncMap() template.FuncMap {
 		// format (see core_iskfig.go).
 		"iskFig":  iskFig,
 		"iskHero": iskHero,
+		// Not a link: a listed price wrapped in its hover card
+		// (sparkline.go) when it has one, the bare figure otherwise.
+		"sparkFig":         sparkFig,
+		"sparkFigFallback": sparkFigFallback,
 		// Not a link: an amount's sign as a class, "neg" or "pos".
 		"signClass": signClass,
 		// Not a link: how a stored time is written out (core_timestamps.go).

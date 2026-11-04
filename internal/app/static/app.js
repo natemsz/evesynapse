@@ -4497,7 +4497,10 @@
   // sorting happens inside each group it bounds. data-nosort opts a
   // table out; empty headers do nothing.
   function sortKey(cell) {
-    var raw = (cell ? (cell.getAttribute("data-sort") || cell.textContent) : "").trim();
+    // A price hover card's hidden text is not part of the figure.
+    var pop = cell && cell.querySelector(".spark-pop");
+    var text = cell ? (pop ? cell.textContent.replace(pop.textContent, "") : cell.textContent) : "";
+    var raw = (cell ? (cell.getAttribute("data-sort") || text) : "").trim();
     var m = raw.replace(/ISK|,|\s|%|\+|×/g, "").replace(/^[−–]/, "-").match(/^(-?\d+(?:\.\d+)?)([KMBT]?)$/i);
     if (m) {
       var mult = { "": 1, k: 1e3, m: 1e6, b: 1e9, t: 1e12 }[m[2].toLowerCase()];
@@ -4792,8 +4795,8 @@
   });
 
   // --- Item Database: published-only, applied in place --------
-  // On the browse tree (the category list, a category's groups,
-  // a group's types) the "Published items only" box carries
+  // On the browse tree (the category directory and cards, a
+  // category's groups, a group's types) the "Published items only" box carries
   // data-published-toggle instead: flipping it prunes the rows
   // already on the page rather than navigating. Branches with
   // no published types disappear, counts read as published
@@ -4805,13 +4808,13 @@
     var box = ev.target && ev.target.closest ? ev.target.closest("[data-published-toggle]") : null;
     if (!box) return;
     var on = box.checked;
-    Array.prototype.forEach.call(document.querySelectorAll("tr[data-pubcount]"), function (row) {
+    Array.prototype.forEach.call(document.querySelectorAll("[data-pubcount]"), function (row) {
       row.hidden = on && row.getAttribute("data-pubcount") === "0";
     });
     Array.prototype.forEach.call(document.querySelectorAll("[data-count]"), function (cell) {
       cell.textContent = on ? cell.getAttribute("data-pub") : cell.getAttribute("data-total");
     });
-    Array.prototype.forEach.call(document.querySelectorAll("tr[data-published]"), function (row) {
+    Array.prototype.forEach.call(document.querySelectorAll("[data-published]"), function (row) {
       row.hidden = on && row.getAttribute("data-published") === "0";
     });
     Array.prototype.forEach.call(document.querySelectorAll('a[href^="/items/"]'), function (a) {
@@ -6098,8 +6101,13 @@
     l.style.top = y + "px";
     owner = fig;
   }
+  // A figure marked data-spark-fallback has its line in a column
+  // of its own; the hover only stands in for that column where the
+  // table has dropped it (a table read as cards).
   function figOf(e) {
-    return e.target && e.target.closest ? e.target.closest(".spark-hover") : null;
+    var fig = e.target && e.target.closest ? e.target.closest(".spark-hover") : null;
+    if (fig && fig.hasAttribute("data-spark-fallback") && !fig.closest("table.cards-on")) return null;
+    return fig;
   }
   document.addEventListener("mouseover", function (e) {
     var fig = figOf(e);

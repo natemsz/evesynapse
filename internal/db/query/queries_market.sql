@@ -535,14 +535,16 @@ ON CONFLICT (region_id, type_id) DO UPDATE SET
 SELECT region_id, type_id, best_sell, typical_sell, sell_band, best_buy, typical_buy, buy_band, sell_orders, buy_orders, sell_volume, buy_volume, updated_at, avg_daily_volume,
        sell_avg, sell_max, sell_p5, sell_stddev, buy_avg, buy_min, buy_p5, buy_stddev,
        sell_chg_1d, sell_chg_7d, sell_chg_30d, buy_chg_1d, buy_chg_7d, buy_chg_30d,
-       volatility_30d, history_days, avg_daily_volume_30d
+       volatility_30d, history_days, avg_daily_volume_30d,
+       sell_spark_30d, sell_low_30d, sell_high_30d, sell_mean_30d
 FROM market_region_stats
 WHERE region_id = $1 AND type_id = $2;
 -- name: ListMarketRegionStatsByType :many
 SELECT region_id, type_id, best_sell, typical_sell, sell_band, best_buy, typical_buy, buy_band, sell_orders, buy_orders, sell_volume, buy_volume, updated_at, avg_daily_volume,
        sell_avg, sell_max, sell_p5, sell_stddev, buy_avg, buy_min, buy_p5, buy_stddev,
        sell_chg_1d, sell_chg_7d, sell_chg_30d, buy_chg_1d, buy_chg_7d, buy_chg_30d,
-       volatility_30d, history_days, avg_daily_volume_30d
+       volatility_30d, history_days, avg_daily_volume_30d,
+       sell_spark_30d, sell_low_30d, sell_high_30d, sell_mean_30d
 FROM market_region_stats
 WHERE type_id = $1
 ORDER BY region_id;
@@ -587,7 +589,8 @@ ON CONFLICT (id) DO UPDATE SET
 SELECT region_id, type_id, best_sell, typical_sell, sell_band, best_buy, typical_buy, buy_band, sell_orders, buy_orders, sell_volume, buy_volume, updated_at, avg_daily_volume,
        sell_avg, sell_max, sell_p5, sell_stddev, buy_avg, buy_min, buy_p5, buy_stddev,
        sell_chg_1d, sell_chg_7d, sell_chg_30d, buy_chg_1d, buy_chg_7d, buy_chg_30d,
-       volatility_30d, history_days, avg_daily_volume_30d
+       volatility_30d, history_days, avg_daily_volume_30d,
+       sell_spark_30d, sell_low_30d, sell_high_30d, sell_mean_30d
 FROM market_region_stats
 WHERE region_id = $1
 ORDER BY type_id;
@@ -595,7 +598,8 @@ ORDER BY type_id;
 SELECT region_id, type_id, best_sell, typical_sell, sell_band, best_buy, typical_buy, buy_band, sell_orders, buy_orders, sell_volume, buy_volume, updated_at, avg_daily_volume,
        sell_avg, sell_max, sell_p5, sell_stddev, buy_avg, buy_min, buy_p5, buy_stddev,
        sell_chg_1d, sell_chg_7d, sell_chg_30d, buy_chg_1d, buy_chg_7d, buy_chg_30d,
-       volatility_30d, history_days, avg_daily_volume_30d
+       volatility_30d, history_days, avg_daily_volume_30d,
+       sell_spark_30d, sell_low_30d, sell_high_30d, sell_mean_30d
 FROM market_region_stats
 WHERE region_id = $1 AND type_id = ANY($2::bigint[]);
 -- name: ListMarketAvgDailyVolumes :many
@@ -638,6 +642,56 @@ SELECT region_id, type_id, day, best_sell, typical_sell, sell_band, best_buy, ty
 FROM market_region_stats_daily
 WHERE region_id = $1 AND type_id = $2
 ORDER BY day;
+-- name: RefreshMarketStatPackSparks :execrows
+-- The stat pack's 30-day price line (schema 121), derived for one
+-- region inside the sweep's transaction right after the trend
+-- figures: the typical sell of the daily rows from the last 30
+-- days as polyline points in the 100 by 28 sparkline box (2 units
+-- of padding, flat lines at mid height), with their low, high and
+-- mean. A type with under two such days gets an empty line.
+UPDATE market_region_stats s SET
+    sell_spark_30d = COALESCE(t.pts, ''),
+    sell_low_30d   = COALESCE(t.lo, 0),
+    sell_high_30d  = COALESCE(t.hi, 0),
+    sell_mean_30d  = COALESCE(t.mean, 0)
+FROM (
+    SELECT r.type_id, p.pts, p.lo, p.hi, p.mean
+    FROM market_region_stats r
+    LEFT JOIN (
+        SELECT x.type_id,
+               MIN(x.lo) AS lo, MIN(x.hi) AS hi, AVG(x.v) AS mean,
+               string_agg(
+                   to_char(2 + x.rn * 96.0 / (x.n - 1), 'FM9990.0') || ',' ||
+                   to_char(CASE WHEN x.hi > x.lo THEN 26 - (x.v - x.lo) / (x.hi - x.lo) * 24 ELSE 14 END, 'FM9990.0'),
+                   ' ' ORDER BY x.rn) AS pts
+        FROM (
+            SELECT dd.type_id, dd.typical_sell AS v,
+                   ROW_NUMBER() OVER w - 1 AS rn,
+                   COUNT(*) OVER (PARTITION BY dd.type_id) AS n,
+                   MIN(dd.typical_sell) OVER (PARTITION BY dd.type_id) AS lo,
+                   MAX(dd.typical_sell) OVER (PARTITION BY dd.type_id) AS hi
+            FROM market_region_stats_daily dd
+            WHERE dd.region_id = sqlc.arg(region_id)
+              AND dd.day > to_char(sqlc.arg(today)::date - 30, 'YYYY-MM-DD')
+              AND dd.typical_sell > 0
+            WINDOW w AS (PARTITION BY dd.type_id ORDER BY dd.day)
+        ) x
+        WHERE x.n >= 2
+        GROUP BY x.type_id
+    ) p ON p.type_id = r.type_id
+    WHERE r.region_id = sqlc.arg(region_id)
+) t
+WHERE s.region_id = sqlc.arg(region_id) AND s.type_id = t.type_id;
+
+-- name: ListMarketStatSparks :many
+-- The stored 30-day price lines for the types a page lists, in one
+-- region: one bounded read per region for a whole table's hover
+-- cards.
+SELECT type_id, sell_spark_30d, sell_low_30d, sell_high_30d, sell_mean_30d
+FROM market_region_stats
+WHERE region_id = sqlc.arg(region_id) AND type_id = ANY(sqlc.arg(type_ids)::bigint[])
+  AND sell_spark_30d <> '';
+
 -- name: RefreshMarketStatPackTrends :execrows
 -- The stat pack's trend figures (schema 101), derived for one
 -- region inside the sweep's own transaction, right after today's
@@ -1234,7 +1288,8 @@ LIMIT sqlc.arg(row_limit);
 -- orders) and real trade (30-day traded volume floor), so a
 -- one-order book's swing never tops the screen.
 SELECT type_id, typical_sell, typical_buy, sell_orders, avg_daily_volume_30d,
-       sell_chg_1d, sell_chg_7d, sell_chg_30d, volatility_30d, history_days, updated_at
+       sell_chg_1d, sell_chg_7d, sell_chg_30d, volatility_30d, history_days, updated_at,
+       sell_spark_30d, sell_low_30d, sell_high_30d, sell_mean_30d
 FROM (
     SELECT s.*,
            CASE sqlc.arg(mode)::text

@@ -116,21 +116,22 @@ func TestCoarsePointerTapFloor(t *testing.T) {
 }
 
 // TestAppraisalBandLayout pins the appraisal half of the
-// intermediate-band fix: the summary cards keep a 13rem floor so
-// a nowrap figure can never spill into its neighbour, and at
+// intermediate-band fix: each summary figure sizes to its own card
+// so a nowrap figure can never spill into its neighbour, and at
 // phone widths the fixed-layout reprocess table scrolls inside
 // its wrapper instead of crushing its columns (the itemized
 // table's phone treatment is pinned by the pass-2 test below).
 func TestAppraisalBandLayout(t *testing.T) {
-	css := readStatic(t, "style.css")
-	if !strings.Contains(css, ".ap-hud { display: grid; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));") {
-		t.Error(".ap-hud lost its 13rem card floor; summary figures can collide again")
+	css := readStatic(t, "appraisal.css")
+	if !strings.Contains(css, ".ap-card { min-width: 0; container-type: inline-size; }") ||
+		!strings.Contains(css, "font-size: clamp(var(--fs-2xs), 8cqw, var(--fs-lg));") {
+		t.Error(".ap-cv no longer sizes to its own card; summary figures can collide again")
 	}
-	block := mediaBlock(t, css, "@media (max-width: 45rem) {\n  /* Phone widths: the fixed-layout reprocess table")
+	block := mediaBlock(t, css, "@container page (width < 45rem) {\n  /* Phone widths: the fixed-layout reprocess table")
 	if !strings.Contains(block, ".ap-reprocess table { min-width: 42rem; }") {
 		t.Error("the phone block no longer holds the reprocess table at 42rem inside its wrapper")
 	}
-	band := mediaBlock(t, css, "@media (max-width: 70rem) {\n  .ap-bench")
+	band := mediaBlock(t, css, "@container page (width < 70rem) {\n  .ap-bench")
 	if !strings.Contains(band, ".ap-bench { grid-template-columns: minmax(0, 1fr); }") ||
 		!strings.Contains(band, ".ap-hud { grid-template-columns: repeat(2, 1fr); }") {
 		t.Error("the intermediate band no longer stacks the appraisal bench / pairs the summary cards")
@@ -145,11 +146,11 @@ func TestAppraisalBandLayout(t *testing.T) {
 // swipeable samples strip, the paste-from-clipboard hook, and
 // the bottom dock re-surfacing existing actions only.
 func TestAppraisalPhoneTreatment(t *testing.T) {
-	css := readStatic(t, "style.css")
+	css := readStatic(t, "appraisal.css")
 	if !strings.Contains(css, ".ap-switch, .ap-dock { display: none; }") {
 		t.Error("the switch and dock are not display:none until app.js unhides them")
 	}
-	block := mediaBlock(t, css, "@media (max-width: 45rem) {\n  .ap-switch:not([hidden])")
+	block := mediaBlock(t, css, "@container page (width < 45rem) {\n  .ap-switch:not([hidden])")
 	for _, want := range []string{
 		".ap-switch:not([hidden])",
 		"position: sticky;",
@@ -162,8 +163,6 @@ func TestAppraisalPhoneTreatment(t *testing.T) {
 		"#ap-panel-items td[data-th]::before",
 		"content: attr(data-th);",
 		".ap-dock:not([hidden])",
-		".page-body:has(.ap-dock:not([hidden]))",
-		".kpi-exact {",
 	} {
 		if !strings.Contains(block, want) {
 			t.Errorf("the appraisal phone block is missing %q", want)

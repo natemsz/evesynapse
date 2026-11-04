@@ -8,14 +8,21 @@ import (
 
 // TestNoButtonStylesInTemplates: a button gets its look from the
 // stylesheet. A template that styles one inline (the CSP forbids it
-// anyway) or reaches for a class the stylesheet does not know would
+// anyway) or reaches for a class no stylesheet knows would
 // quietly drop out of the shared style.
 func TestNoUnknownButtonClassesInTemplates(t *testing.T) {
-	raw, err := fs.ReadFile(staticFS, "static/style.css")
-	if err != nil {
-		t.Fatalf("read style.css: %v", err)
+	// Feature sheets own their pages' button classes (appraisal.css
+	// holds the ap- rules), so the check reads every stylesheet.
+	sheets, _ := fs.Glob(staticFS, "static/*.css")
+	var all strings.Builder
+	for _, name := range sheets {
+		raw, err := fs.ReadFile(staticFS, name)
+		if err != nil {
+			t.Fatalf("read %s: %v", name, err)
+		}
+		all.Write(raw)
 	}
-	css := string(raw)
+	css := all.String()
 	templates, _ := fs.Glob(templatesFS, "templates/*.html")
 	for _, name := range templates {
 		src, err := fs.ReadFile(templatesFS, name)
@@ -34,7 +41,7 @@ func TestNoUnknownButtonClassesInTemplates(t *testing.T) {
 					continue
 				}
 				if !strings.Contains(css, "."+c) && !strings.Contains(string(src), `"`+c+`"`) {
-					t.Errorf("%s: button class %q is not in style.css", name, c)
+					t.Errorf("%s: button class %q is in no stylesheet", name, c)
 				}
 			}
 		}

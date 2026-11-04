@@ -15,7 +15,7 @@
 .assets-net { text-align: right; margin-left: auto; }
 .assets-net .assets-count { margin-top: 0.2rem; }
 .assets-net-v { display: block; color: var(--gold); font-size: var(--fs-3xl); font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1.15; }
-.assets-net-l { color: var(--muted); font-size: var(--fs-2xs); font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+.assets-net-l { font-family: var(--font-display); font-synthesis-weight: none; color: var(--muted-2); font-size: var(--fs-2xs); font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; }
 
 
 /* The console's panes: this page keeps them flush against
@@ -108,7 +108,7 @@
 .amx-name { font-weight: 600; }
 .amx-name small { color: var(--muted); font-weight: 400; }
 .amx-sub { color: var(--muted); font-size: var(--fs-xs); }
-.asmbadge { padding: 0.05rem 0.32rem; border: 1px solid rgba(34, 197, 94, 0.45); border-radius: var(--r-xs); color: #7fe0a3; font-size: var(--fs-2xs); font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase; vertical-align: 0.14em; white-space: nowrap; }
+.asmbadge { padding: 0.05rem 0.32rem; border: 1px solid rgba(34, 197, 94, 0.45); border-radius: var(--r-xs); color: #7fe0a3; font-family: var(--font-display); font-synthesis-weight: none; font-size: var(--fs-2xs); font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; vertical-align: 0.14em; white-space: nowrap; }
 .amx-c-num { font-variant-numeric: tabular-nums; white-space: nowrap; }
 .amx-c-val { font-variant-numeric: tabular-nums; white-space: nowrap; }
 .amx-c-val .amx-isk { color: var(--gold); font-weight: 700; }

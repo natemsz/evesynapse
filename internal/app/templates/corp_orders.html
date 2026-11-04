@@ -49,7 +49,7 @@
   <thead><tr><th class="card-title">Item</th><th class="mt-num">Price</th><th>Status</th><th class="mt-num">Volume left</th><th>Location</th><th>Expires</th><th>Issued by</th></tr></thead>
   <tbody>
   {{range .SellRows}}
-    <tr class="co-orow{{if .Bad}} order-beaten{{end}}" data-search="{{.Item}} {{.Location.Name}} {{.Region}} {{.IssuedBy}}"><td>{{itemLink .TypeID .Item}}</td><td class="mt-num">{{.Price}}</td><td>{{if .Status}}<span class="fo-status">{{if .Bad}}<strong>{{.Status}}</strong>{{else}}{{.Status}}{{end}}</span>{{end}}</td><td class="mt-num">{{.Volume}}</td><td>{{placeLink .Location}}<small class="fo-sub">{{.Region}}</small></td><td>{{.Expires}}</td><td>{{charLink $.ViewerChars .IssuedByID .IssuedBy}}</td></tr>
+    <tr class="co-orow{{if .Bad}} order-beaten{{end}}" data-search="{{.Item}} {{.Location.Name}} {{.Region}} {{.IssuedBy}}"><td>{{itemLink .TypeID .Item}}</td><td class="mt-num">{{sparkFig .Price .Spark}}</td><td>{{if .Status}}<span class="fo-status">{{if .Bad}}<strong>{{.Status}}</strong>{{else}}{{.Status}}{{end}}</span>{{end}}</td><td class="mt-num">{{.Volume}}</td><td>{{placeLink .Location}}<small class="fo-sub">{{.Region}}</small></td><td>{{.Expires}}</td><td>{{charLink $.ViewerChars .IssuedByID .IssuedBy}}</td></tr>
   {{end}}
   </tbody>
 </table>
@@ -62,7 +62,7 @@
   <thead><tr><th class="card-title">Item</th><th class="mt-num">Price</th><th>Status</th><th class="mt-num">Volume left</th><th>Location</th><th>Expires</th><th>Issued by</th></tr></thead>
   <tbody>
   {{range .BuyRows}}
-    <tr class="co-orow{{if .Bad}} order-beaten{{end}}" data-search="{{.Item}} {{.Location.Name}} {{.Region}} {{.IssuedBy}}"><td>{{itemLink .TypeID .Item}}</td><td class="mt-num">{{.Price}}</td><td>{{if .Status}}<span class="fo-status">{{if .Bad}}<strong>{{.Status}}</strong>{{else}}{{.Status}}{{end}}</span>{{end}}</td><td class="mt-num">{{.Volume}}</td><td>{{placeLink .Location}}<small class="fo-sub">{{.Region}}</small></td><td>{{.Expires}}</td><td>{{charLink $.ViewerChars .IssuedByID .IssuedBy}}</td></tr>
+    <tr class="co-orow{{if .Bad}} order-beaten{{end}}" data-search="{{.Item}} {{.Location.Name}} {{.Region}} {{.IssuedBy}}"><td>{{itemLink .TypeID .Item}}</td><td class="mt-num">{{sparkFig .Price .Spark}}</td><td>{{if .Status}}<span class="fo-status">{{if .Bad}}<strong>{{.Status}}</strong>{{else}}{{.Status}}{{end}}</span>{{end}}</td><td class="mt-num">{{.Volume}}</td><td>{{placeLink .Location}}<small class="fo-sub">{{.Region}}</small></td><td>{{.Expires}}</td><td>{{charLink $.ViewerChars .IssuedByID .IssuedBy}}</td></tr>
   {{end}}
   </tbody>
 </table>

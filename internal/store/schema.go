@@ -738,6 +738,13 @@ var pgAssetLocationValuesSchema string
 //go:embed schema_pg/120_market_station_heat.sql
 var pgMarketStationHeatSchema string
 
+// Step 121: the stat pack's 30-day price line (typical sell points,
+// low, high, mean), written per sweep beside the trend figures and
+// read by every price hover card.
+//
+//go:embed schema_pg/121_market_stat_sparks.sql
+var pgMarketStatSparksSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -887,6 +894,7 @@ func schemaSteps() []schemaStep {
 		{118, "blueprint_pins", pgBlueprintPinsSchema, ""},
 		{119, "asset_location_values", pgAssetLocationValuesSchema, ""},
 		{120, "market_station_heat", pgMarketStationHeatSchema, ""},
+		{121, "market_stat_sparks", pgMarketStatSparksSchema, ""},
 	}
 }
 

@@ -387,7 +387,7 @@
   display: inline-flex; align-items: baseline; gap: 0.35rem;
 }
 .cs-sorthead:hover { color: var(--accent); }
-.cs-sorthead .cs-sortchev { color: var(--muted-2); font-size: var(--fs-xs); }
+.cs-sorthead .cs-sortchev { color: var(--muted-2); font-size: var(--fs-rel-glyph); }
 .cs-sorthead.on { color: var(--text-bright); }
 .cs-sorthead.on .cs-sortchev { color: var(--accent); }
 .cs-table td { vertical-align: top; padding: 0.875rem 0.75rem; }

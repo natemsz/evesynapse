@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"html/template"
 	"math"
 	"net/http"
 	"sort"
@@ -72,6 +73,7 @@ type piLineRow struct {
 	Volume    string
 	Price     string
 	Value     string
+	Spark     template.HTML // the unit price's hover card (The Forge's stored 30-day line)
 }
 
 type piColonyRow struct {
@@ -303,6 +305,15 @@ func HandlePIPlanner(deps module.Deps) http.HandlerFunc {
 			view.SingleText = "Single-planet possible on " + one + "."
 		}
 		view.Profitable = piProfitableChains(prices, settings, target)
+		keys := make([]module.SparkKey, len(view.Lines))
+		for i, l := range view.Lines {
+			keys[i] = module.SparkKey{RegionID: piForgeRegionID, TypeID: l.TypeID}
+		}
+		if cards := deps.PriceSparks(ctx, keys); len(cards) > 0 {
+			for i := range view.Lines {
+				view.Lines[i].Spark = cards[keys[i]]
+			}
+		}
 		view.FacilityNote = "High-Tech (P4) only on Barren or Temperate, Advanced anywhere, Basic on the extractor planet. Taxes use CCP's taxable values (R0 5, P1 400, P2 7,200, P3 60,000, P4 1,200,000 ISK); import is taxed at half the export rate."
 
 		deps.Render(ctx, w, http.StatusOK, "piplanner.html", &data)

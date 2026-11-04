@@ -55,7 +55,7 @@
       <thead><tr><th>Material</th><th>Tier</th><th>Needed (batch)</th><th class="opt">Per hour</th><th>Factories</th><th>Facility</th><th class="opt">Volume</th><th>Unit price</th><th>Line value</th></tr></thead>
       <tbody>
       {{range .Lines}}
-        <tr{{if .Target}} class="yours"{{end}}><td>{{if .TypeID}}{{itemLink .TypeID .Name}}{{else}}{{.Name}}{{end}}</td><td><span class="pi-tier pi-t-{{.TierKey}}">{{.Tier}}</span></td><td>{{.Needed}}</td><td>{{.PerHour}}</td><td><span class="pi-fact">{{if .FactPct}}<svg class="l-meter" viewBox="0 0 100 4" preserveAspectRatio="none" aria-hidden="true"><rect x="0" y="0" width="{{.FactPct}}" height="4"/></svg>{{end}}<span>{{.Factories}}</span></span></td><td>{{.Facility}}</td><td>{{.Volume}}</td><td>{{.Price}}</td><td>{{.Value}}</td></tr>
+        <tr{{if .Target}} class="yours"{{end}}><td>{{if .TypeID}}{{itemLink .TypeID .Name}}{{else}}{{.Name}}{{end}}</td><td><span class="pi-tier pi-t-{{.TierKey}}">{{.Tier}}</span></td><td>{{.Needed}}</td><td>{{.PerHour}}</td><td><span class="pi-fact">{{if .FactPct}}<svg class="l-meter" viewBox="0 0 100 4" preserveAspectRatio="none" aria-hidden="true"><rect x="0" y="0" width="{{.FactPct}}" height="4"/></svg>{{end}}<span>{{.Factories}}</span></span></td><td>{{.Facility}}</td><td>{{.Volume}}</td><td>{{sparkFig .Price .Spark}}</td><td>{{.Value}}</td></tr>
       {{end}}
       </tbody>
     </table>

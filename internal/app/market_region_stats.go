@@ -788,6 +788,13 @@ func (app *Application) storeRegionSweep(ctx context.Context, regionID int64) (t
 	}); err != nil {
 		return 0, 0, fmt.Errorf("stat pack trends: %w", err)
 	}
+	// The 30-day price line every hover card reads (schema 121),
+	// from the same daily rows, in the same transaction.
+	if _, err := qtx.RefreshMarketStatPackSparks(ctx, db.RefreshMarketStatPackSparksParams{
+		RegionID: regionID, Today: now,
+	}); err != nil {
+		return 0, 0, fmt.Errorf("stat pack sparks: %w", err)
+	}
 	// The change feed (schema 106) compares the rows just written
 	// with their last stored day, and forgets what is a month old.
 	if _, err := qtx.DetectMarketChanges(ctx, db.DetectMarketChangesParams{

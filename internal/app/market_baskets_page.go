@@ -37,8 +37,9 @@ type marketBasketListRow struct {
 	Partial    bool   // the latest value misses some items' prices
 	Chg1       trendFigure
 	Chg7       trendFigure
-	Spark      template.HTML // hover card for the Value figure, when the reader's hover sparklines are on
-	Line       template.HTML // the inline 30-day value line beside the figure
+	Chg30      trendFigure   // the change across the line's window: the trend column's sort key
+	Spark      template.HTML // hover card for the Value figure, when the reader's hover sparklines are on; it stands in for the line where the line's column is dropped
+	Line       template.HTML // the 30-day value line, in its own column
 	ValueShort string
 }
 
@@ -157,6 +158,7 @@ func (app *Application) handleMarketBaskets(w http.ResponseWriter, r *http.Reque
 				if s := byBasket[view.List[i].ID]; len(s) > 0 {
 					view.List[i].Chg1 = basketChange(s, 1)
 					view.List[i].Chg7 = basketChange(s, 7)
+					view.List[i].Chg30 = basketChange(s, 30)
 					view.List[i].Line = basketLine30(s)
 					if sparkOn {
 						view.List[i].Spark = basketSpark(s)

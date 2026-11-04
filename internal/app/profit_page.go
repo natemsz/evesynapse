@@ -10,6 +10,7 @@ package app
 import (
 	"context"
 	"fmt"
+	"html/template"
 	"math"
 	"net/http"
 	"net/url"
@@ -86,9 +87,10 @@ type profitPositionRow struct {
 	Quantity, Cost    string
 	Value, Unrealized string
 	Dir               string
-	Source            string  // price tier note when not our own swept price
-	Share             float64 // worth now as a percent of the table's total worth
-	ShareW            float64 // the same share as a bar width in a 90-wide plot
+	Source            string        // price tier note when not our own swept price
+	Spark             template.HTML // the unit price's hover card (the house region's stored 30-day line)
+	Share             float64       // worth now as a percent of the table's total worth
+	ShareW            float64       // the same share as a bar width in a 90-wide plot
 	qty               int64
 	value             float64
 }
@@ -255,6 +257,17 @@ func (app *Application) handleProfit(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		logging.Errorf("profit: user %d: %v", userID, err)
 		data.Error = "Profit figures are unavailable right now. Try again shortly."
+	}
+	if view != nil && len(view.Positions) > 0 {
+		keys := make([]sparkKey, len(view.Positions))
+		for i, p := range view.Positions {
+			keys[i] = sparkKey{RegionID: defaultMarketRegion, TypeID: p.TypeID}
+		}
+		if cards := app.PriceSparks(ctx, keys); len(cards) > 0 {
+			for i := range view.Positions {
+				view.Positions[i].Spark = cards[keys[i]]
+			}
+		}
 	}
 	data.Profit = view
 	app.render(ctx, w, http.StatusOK, "profit.html", data)

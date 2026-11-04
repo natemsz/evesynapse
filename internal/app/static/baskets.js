@@ -323,6 +323,7 @@
                 var tbody = document.getElementById("mbk-tbody");
                 var tr = document.createElement("tr");
                 tr.setAttribute("data-mbk-row", data.id);
+                tr.className = "bk-own";
                 var nameTd = document.createElement("td");
                 var a = document.createElement("a");
                 a.href = "/market/baskets/" + data.id + "/";
@@ -337,6 +338,10 @@
                 var worthTd = document.createElement("td");
                 worthTd.className = "mt-num";
                 worthTd.textContent = "—";
+                // The trend line arrives with the basket's first stored
+                // values; until then its column cell is empty.
+                var trendTd = document.createElement("td");
+                trendTd.className = "bk-trend opt";
                 var chg1Td = document.createElement("td");
                 chg1Td.className = "mt-num";
                 chg1Td.textContent = "—";
@@ -344,11 +349,12 @@
                 chg7Td.className = "mt-num";
                 chg7Td.textContent = "—";
                 var yoursTd = document.createElement("td");
-                yoursTd.innerHTML = "<small>Yours</small>";
+                yoursTd.innerHTML = '<span class="bk-badge yours">Yours</span>';
                 tr.appendChild(nameTd);
                 tr.appendChild(regionTd);
                 tr.appendChild(countTd);
                 tr.appendChild(worthTd);
+                tr.appendChild(trendTd);
                 tr.appendChild(chg1Td);
                 tr.appendChild(chg7Td);
                 tr.appendChild(yoursTd);

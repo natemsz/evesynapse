@@ -421,10 +421,10 @@ func TestOrdersPageLifecycleRender(t *testing.T) {
 	}
 	mustContain(t, "/orders/", body,
 		"Your order history",
-		"Orders tracked: 4",
+		"Of 4 orders tracked",
 		"66% (2 of 3)",
 		"1 day 12 hours",
-		"Times beaten at your station: 3",
+		"Beaten at your station 3 times",
 		"Tritanium",
 		"Rifter",
 		"Jita 4 - Moon 4 - Caldari Navy Assembly Plant",

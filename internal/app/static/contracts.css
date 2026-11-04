@@ -247,17 +247,17 @@
 .cs-drawer-bar {
   display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem 1rem;
 }
-.cs-drawer-label { font-size: var(--fs-sm); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+.cs-drawer-label { font-size: var(--fs-sm); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted-2); font-weight: 700; }
 .cs-tabs { display: flex; flex-wrap: wrap; gap: 0.4rem; }
 .cs-tab {
   border: 1px solid var(--box-edge); background: transparent;
-  color: var(--muted); border-radius: var(--r-xs); padding: 0.3rem 0.7rem;
+  color: var(--muted-2); border-radius: var(--r-xs); padding: 0.3rem 0.7rem;
   cursor: pointer; font-family: "Rajdhani", "Segoe UI", sans-serif;
-  font-weight: 500; text-transform: uppercase; letter-spacing: normal; font-size: var(--fs-sm);
+  font-weight: 600; text-transform: uppercase; letter-spacing: normal; font-size: var(--fs-sm);
   display: inline-flex; align-items: center; gap: 0.45rem;
 }
 .cs-tab svg { width: 0.95rem; height: 0.95rem; flex: none; }
-.cs-tab:hover { color: var(--text-bright); border-color: var(--accent); }
+.cs-tab:hover { color: var(--text-bright); border-color: var(--accent); background: var(--row-alt); }
 .cs-tab .cs-chev::after { content: "▾"; color: var(--muted); }
 /* Active follows the site's tab conventions: the .ti-tabs
    selected paint (bright text on the row-hover tint) plus

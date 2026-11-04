@@ -7,6 +7,7 @@
 
 {{if .Market}}
 {{$m := .Market}}
+<div class="l-page">
 {{if $m.Browse}}
 <div class="searchpanel mb-toprow">
   <form method="get" action="/market/" id="market-search" class="mb-searchform">
@@ -435,6 +436,7 @@
 {{end}}
 
 {{template "your-orders" $.YourOrdersBlock}}
+</div>
 {{end}}
 {{end}}
 
@@ -466,18 +468,21 @@
      time from /market/browse-children); only the item list swaps,
      from /market/browse-fragment. */}}
 {{define "market-browse"}}
-<div class="panel market-browse" id="market-browse" data-browse-root>
+<div class="market-browse" id="market-browse" data-browse-root>
 {{if .Tree}}
-<div class="mb-layout">
-  <nav class="mb-tree" aria-label="Market categories">
+<div class="l-console mb-console" data-depth="{{if .AwaitingPick}}0{{else}}1{{end}}" data-land-top>
+<div class="l-panes">
+  <nav class="l-pane l-pane--dir mb-tree" aria-label="Market categories">
+    <div class="l-pane-bar"><h2 class="l-pane-title">Categories</h2></div>
     <svg class="mb-guides" aria-hidden="true"><path></path></svg>
     <ul>
     {{range .Tree}}{{template "mb-node" .}}{{end}}
     </ul>
   </nav>
-  <div class="mb-items" data-browse-items>
+  <section class="l-pane l-pane--main mb-items" data-browse-items aria-label="Items">
     {{template "market-browse-items" .}}
-  </div>
+  </section>
+</div>
 </div>
 {{else}}
 <h3>Browse categories</h3>
@@ -500,11 +505,10 @@
 {{/* The item list column: heading, the volume filter, and the
      items. Sorting runs from the table headers. */}}
 {{define "market-browse-items"}}
+<div class="l-pane-bar"><a class="l-back" data-l-step="out" href="/market/">Categories</a><h2 class="l-pane-title">{{if .Current}}{{.Current.Name}}{{else if .Query}}Matching “{{.Query}}”{{else}}Browse categories{{end}}</h2></div>
+{{if .AwaitingPick}}<span data-awaiting-pick hidden></span>{{end}}
 {{if .Current}}
 <p class="market-crumbs"><small><a href="/market/" data-browse-link>Market</a>{{range .Breadcrumbs}} › <a href="/market/?group={{.ID}}&region={{$.Region}}" data-browse-link>{{.Name}}</a>{{end}} › {{.Current.Name}}</small></p>
-<h3>{{.Current.Name}}</h3>
-{{else}}
-<h3>Browse categories</h3>
 {{end}}
 {{if .Query}}<p class="mb-filter-note"><small>Matching “{{.Query}}”</small> <a href="{{.ClearQueryHref}}" data-browse-link><small>Clear</small></a></p>{{end}}
 {{if .AwaitingPick}}

@@ -57,8 +57,24 @@
         }
         markChosen(url.searchParams.get("group"));
         syncChrome(url);
+        // The console's level follows the list: a pick (or a name
+        // search) opens the items, and where only one pane shows
+        // they land at the console's top like a new screen.
+        var con = box.closest(".l-console");
+        if (con) {
+          var depth = box.querySelector("[data-awaiting-pick]") ? "0" : "1";
+          var moved = con.getAttribute("data-depth") !== depth;
+          con.setAttribute("data-depth", depth);
+          if (moved && con.clientWidth < 46 * parseFloat(getComputedStyle(document.documentElement).fontSize)) {
+            con.scrollIntoView({ block: "start" });
+          }
+        }
         if (push === "replace") history.replaceState({ esSwap: 1, scroll: window.scrollY }, "", url.pathname + url.search);
         else if (push) history.pushState({ esSwap: 1, scroll: window.scrollY }, "", url.pathname + url.search);
+        // The swapped list is new content: the shared widgets (the
+        // table's phone cards, its sort) set it up as they do a page,
+        // once the URL names the new list.
+        document.dispatchEvent(new CustomEvent("evesynapse:content-ready", { detail: { root: box } }));
       })
       .catch(function (err) {
         if (err && err.name === "AbortError") return;

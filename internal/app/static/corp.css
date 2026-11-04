@@ -1,0 +1,128 @@
+/* EveSynapse: the Corporation pages. They mirror the Pilot pages in a
+   corporate context: the Overview reuses the character sheet's header
+   cards (overview.css), Orders the My Orders tabs (finances.css), and
+   Wallets and Assets the console with its directory rows (layout.css,
+   style.css). This sheet holds only what is the corporation pages' own:
+   the gate notes, the filter bar, the wallet tones, structure cards,
+   and the cards the admin pages (groups, doctrines, ship replacement,
+   Discord, settings) lay out in. */
+
+.l-page > * + * { margin-top: var(--space-4); }
+
+/* Notes and gates. A gate is the panel that stands in for a page's
+   data when a role, a scope or a sync is missing. */
+.co-gate p { margin: 0; }
+.co-gate p + p { margin-top: var(--space-2); }
+.co-note { margin: var(--space-2) 0 0; color: var(--muted); font-size: var(--fs-sm); }
+.co-note small { font-size: inherit; }
+.co-dim { color: var(--muted); }
+.co-hint { color: var(--muted); font-size: var(--fs-md); }
+.co-cnt { margin-left: 0.25rem; color: var(--muted); font-weight: 500; }
+
+/* The bar over a table: its filter box, and the controls that act on
+   the table (tabs, the add-to-group picker). It wraps on a narrow page,
+   filter first. */
+.co-bar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); margin: 0 0 var(--space-3); }
+.co-filter { flex: 1 1 14rem; min-width: 0; max-width: 24rem; min-height: var(--tap); }
+.co-bar .fo-tablist { margin: 0; }
+.co-bar.tabs-on ~ * .fo-h { display: none; }
+.co-bar.tabs-on ~ * .fo-panel + .fo-panel { margin-top: 0; }
+.co-roster small, .co-card small { font-size: var(--fs-sm); }
+.co-pick { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); color: var(--muted); font-size: var(--fs-md); }
+.co-pick select { min-height: var(--tap); }
+.co-roster td { white-space: normal; }
+.co-roster td:first-child { min-width: 10rem; }
+
+/* Wallets. In reads in the success token and out in the danger one. */
+.co-wallets .l-panes { --l-dir: 19rem; }
+.co-in .l-stat-value, td.co-in { color: var(--success); }
+.co-out .l-stat-value, td.co-out { color: var(--danger); }
+.co-ledgers { margin-top: var(--space-4); }
+.co-ledgers .co-filter { display: block; width: 100%; margin: 0 0 var(--space-3); }
+.co-side { padding: 0.05rem 0.4rem; border: 1px solid currentColor; border-radius: var(--r-xs); font-size: var(--fs-xs); text-transform: uppercase; }
+.co-side-Sell { color: var(--success); }
+.co-side-Buy { color: var(--accent); }
+
+/* Assets. */
+.co-assets .l-panes { --l-dir: 20rem; }
+.co-assets .l-pane-bar .co-filter { flex-basis: 12rem; }
+.co-item { display: inline-flex; align-items: center; gap: var(--space-2); }
+.co-item img { flex: none; border-radius: var(--r-xs); }
+
+/* Card grids: structures, groups, doctrines, requests. Each card takes
+   at least 20rem and the row fills from the space it has. */
+.co-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 20rem), 1fr)); gap: var(--space-3); }
+.co-cards > * { margin: 0; }
+
+/* Structures. A card's edge takes its state's tone. */
+.co-struct { display: flex; flex-direction: column; gap: var(--space-3); border-left-width: 3px; }
+.co-struct.co-warn { border-left-color: var(--gold); }
+.co-struct.co-bad { border-left-color: var(--danger); }
+.co-struct-head { display: flex; align-items: flex-start; gap: var(--space-3); }
+.co-struct-head img { flex: none; border-radius: var(--r-sm); }
+.co-struct-id { flex: 1 1 auto; min-width: 0; }
+.co-struct-id h3 { margin: 0; font-size: var(--fs-xl); overflow-wrap: anywhere; }
+.co-struct-id p { margin: 0.15rem 0 0; font-size: var(--fs-md); }
+.co-state { flex: none; padding: 0.1rem 0.5rem; border: 1px solid var(--hairline); border-radius: 999px; color: var(--kept); font-size: var(--fs-xs); font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
+.co-state.co-warn { color: var(--gold); border-color: currentColor; }
+.co-state.co-bad { color: var(--danger); border-color: currentColor; }
+.co-fuel { display: grid; grid-template-columns: auto 1fr; gap: 0.2rem var(--space-2); align-items: baseline; }
+.co-fuel .sharebar, .co-fuel small { grid-column: 1 / -1; }
+.co-fuel .sharebar { margin-top: 0.2rem; height: 0.35rem; }
+.co-fuel-l { color: var(--muted); font-size: var(--fs-xs); font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; }
+.co-fuel-v { justify-self: end; font-family: var(--font-num); font-weight: 600; font-variant-numeric: tabular-nums; }
+.co-fuel .fill { background: var(--kept); }
+.co-fuel.co-warn .fill { background: var(--gold); }
+.co-fuel.co-warn .co-fuel-v { color: var(--gold); }
+.co-fuel.co-bad .fill { background: var(--danger); }
+.co-fuel.co-bad .co-fuel-v { color: var(--danger); }
+.co-facts { display: grid; gap: 0.3rem; margin: 0; }
+.co-facts:empty { display: none; }
+.co-facts > div { display: flex; justify-content: space-between; gap: var(--space-3); font-size: var(--fs-md); }
+.co-facts dt { color: var(--muted); }
+.co-facts dd { margin: 0; text-align: right; }
+.co-svcs { display: flex; flex-wrap: wrap; gap: 0.35rem; margin: 0; padding: 0; list-style: none; }
+.co-svc { padding: 0.15rem 0.55rem; border: 1px solid var(--hairline); border-radius: 999px; font-size: var(--fs-sm); }
+.co-svc small { color: var(--kept); }
+.co-svc.off small { color: var(--danger); }
+
+/* Overview. */
+.co-ceo { display: flex; align-items: center; gap: var(--space-3); }
+.co-ceo img { border-radius: var(--r-sm); }
+.co-chars { margin: var(--space-2) 0 0; font-size: var(--fs-md); line-height: 1.6; }
+.co-about h2 { margin: 0 0 var(--space-2); font-size: var(--fs-xl); }
+.co-about .corp-desc { margin: 0; white-space: pre-line; }
+
+/* The admin pages: a section heading over a card grid, and the cards. */
+.co-sec { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: var(--space-2); margin: var(--space-5) 0 var(--space-3); }
+.co-sec h2, .co-h2 { margin: 0; font-size: var(--fs-xl); }
+.co-h2 { margin-bottom: var(--space-3); }
+.co-card { display: flex; flex-direction: column; gap: var(--space-2); }
+.co-card > * { margin: 0; }
+.co-card h3 { margin: 0; color: var(--gold); font-size: var(--fs-lg); letter-spacing: 0.05em; text-transform: uppercase; }
+.co-card h3 a { color: inherit; }
+.co-card-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-2); }
+.co-card-foot { margin-top: auto; padding-top: var(--space-2); border-top: 1px solid var(--hairline); }
+.co-lede { margin: 0; color: var(--muted); max-width: 70ch; }
+.co-search { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.co-search .searchwrap { flex: 1 1 16rem; min-width: 0; }
+.co-search .searchwrap input { width: 100%; }
+.co-form .form-grid { margin-bottom: var(--space-3); }
+
+/* Ship replacement: the evidence badges on a request. */
+.co-badges { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem; font-size: var(--fs-md); }
+
+/* A fit on the doctrine page. */
+.co-fit { flex-direction: row; flex-wrap: wrap; align-items: flex-start; gap: var(--space-3); }
+.co-fit > img { flex: none; border-radius: var(--r-sm); }
+.co-fit .co-fit-body { flex: 1 1 10rem; min-width: 0; }
+.co-fit .co-fit-body > * { margin: 0 0 0.25rem; }
+.co-fit details, .co-fit .co-card-foot { flex: 1 1 100%; }
+.co-fit pre { max-width: 100%; overflow-x: auto; font-size: var(--fs-sm); }
+
+/* On a narrow page the bar's controls take the full row. */
+@container page (max-width: 34rem) {
+  .co-filter { max-width: none; flex-basis: 100%; }
+  .co-bar .btn, .co-pick { flex: 1 1 100%; }
+  .co-pick select { flex: 1 1 auto; }
+}

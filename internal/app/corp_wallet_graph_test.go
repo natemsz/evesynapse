@@ -95,22 +95,22 @@ func TestCorpWalletsPageShowsTheGraph(t *testing.T) {
 		t.Fatalf("wallets page: status %d", code)
 	}
 	mustContain(t, "/corporations/wallets/", body,
-		"Master Wallet — balance over time", `aria-label="Division balance over time"`, "<polyline",
+		"Balance history", "Master Wallet", `aria-label="Division balance over time"`, "<polyline",
 		"ending at its current balance")
-	if strings.Index(body, "balance over time") > strings.Index(body, "recent journal") {
+	if strings.Index(body, "Balance history") > strings.Index(body, "Recent journal") {
 		t.Error("the graph should sit above the journal")
 	}
 
 	// A division with a single point says it is building.
 	_, body = getPage(t, app, cookie, "/corporations/wallets/?character=90000001&division=2")
-	mustContain(t, "/corporations/wallets/ (division 2)", body, "Division 2 — balance over time", "Balance history has started")
+	mustContain(t, "/corporations/wallets/ (division 2)", body, "Balance history", "Balance history has started")
 	if strings.Contains(body, "<polyline") {
 		t.Error("a one-point division drew a line")
 	}
 
 	// A refused ledger explains itself in the graph's place too.
 	_, body = getPage(t, app, cookie, "/corporations/wallets/?character=90000002")
-	mustContain(t, "/corporations/wallets/ (B)", body, "balance over time", "Wallet ledgers need the Accountant or Junior Accountant role")
+	mustContain(t, "/corporations/wallets/ (B)", body, "Balance history", "Wallet ledgers need the Accountant or Junior Accountant role")
 	if strings.Contains(body, "<polyline") {
 		t.Error("a refused ledger drew a line")
 	}

@@ -5,34 +5,88 @@
 
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
 
-{{template "charselector" .IndustryChars}}
-
-{{if .Industry}}
-<h2>{{.Industry.CharacterName}}</h2>
-
-<section class="foldable" data-fold="never">
-<h3>Mining ledger</h3>
-{{if .Industry.Mining.Note}}
-<p><small>{{.Industry.Mining.Note}}</small></p>
-{{else if .Industry.Mining.Warming}}
-<p><small>Still syncing.{{if .IsAdmin}} Progress is on the <a href="/admin/sync/">Sync page</a>.{{end}}</small></p>
-{{else if .Industry.MiningRows}}
-<p><input type="search" id="mining-search" placeholder="Search mining ledger..." aria-label="Search mining ledger" data-table-filter="mining-table" data-row-class="mining-row"></p>
-<div class="tw">
-<table id="mining-table">
-  <thead><tr><th>Date</th><th>Ore</th><th>Quantity</th><th>System</th></tr></thead>
-  <tbody>
-  {{range .Industry.MiningRows}}
-    <tr class="mining-row" data-search="{{.Ore}} {{.System}}"><td>{{.Date}}</td><td>{{itemLink .TypeID .Ore}}</td><td>{{.Qty}}</td><td>{{placeLink .System}}</td></tr>
-  {{end}}
-  </tbody>
-</table>
+{{with .MiningPage}}
+<div class="l-page">
+<div class="l-head">
+  <div class="l-head-pick">{{template "charselectormulti" .Selector}}</div>
 </div>
-{{if .Industry.MiningCut}}<p><small>+ {{.Industry.MiningCut}} older entries in this snapshot.</small></p>{{end}}
-{{else}}
-<p><small>No mining entries in the latest snapshot.</small></p>
-{{end}}
+{{range .Notes}}<p class="notice"><small>{{.}}</small></p>{{end}}
+{{if .Warming}}<p><small>Still syncing the mining ledger for {{range $i, $n := .Warming}}{{if $i}}, {{end}}{{$n}}{{end}}.{{if $.IsAdmin}} Progress is on the <a href="/admin/sync/">Sync page</a>.{{end}}</small></p>{{end}}
+
+{{if .Any}}
+<div class="l-tiles mn-tiles l-root">
+  {{range .Tiles}}<div class="l-stat"><span class="l-stat-label">{{.Label}}</span><span class="l-stat-value">{{.Value}}</span><span class="l-stat-sub">{{.Sub}}</span></div>{{end}}
+</div>
+
+<div class="l-console mn" data-depth="{{.Depth}}" data-land-top>
+<div class="l-panes">
+
+<nav class="l-pane l-pane--dir mn-dir" aria-label="Pilots">
+  <div class="l-pane-bar"><h2 class="l-pane-title">Pilots <small>30 days</small></h2></div>
+  <div class="dirlist">
+    {{if .Multi}}<a class="diritem{{if .AllOn}} on{{end}}" href="{{.AllHref}}" data-l-step="in"><span class="dir-top"><span class="dir-name">All pilots</span></span></a>{{end}}
+    {{range .Pilots}}<a class="diritem{{if .On}} on{{end}}" href="{{.Href}}" data-l-step="in">
+      <span class="dir-top"><img class="mn-portrait" src="{{.Image}}" alt="" width="24" height="24" loading="lazy"><span class="dir-name">{{.Name}}</span><span class="dir-val">{{.Volume}}</span></span>
+      <span class="dir-sub">{{.Value}} ISK · {{.Systems}} {{if eq .Systems 1}}system{{else}}systems{{end}}</span>
+      <svg class="l-meter" viewBox="0 0 100 4" preserveAspectRatio="none" aria-hidden="true"><rect x="0" y="0" width="{{.SharePct}}" height="4"/></svg>
+    </a>{{end}}
+  </div>
+  <p class="dir-foot">{{.PriceNote}}</p>
+</nav>
+
+<section class="l-pane l-pane--main mn-main" aria-label="Mining ledger">
+  <div class="l-pane-bar">
+    <a class="l-back" data-l-step="out" href="{{.DirHref}}">Pilots</a>
+    <h2 class="l-pane-title">{{.ListTitle}}</h2>
+    <input type="search" class="mn-filter" placeholder="Search ore or system" aria-label="Search the ledger by ore or system" data-table-filter="mining-table" data-row-class="mining-row">
+  </div>
+  {{if .Rows}}
+  <div class="tw">
+  <table id="mining-table" class="mn-table">
+    <thead><tr><th>Date</th><th class="card-title">Ore</th>{{if .ShowPilot}}<th>Pilot</th>{{end}}<th>Quantity</th><th>Volume</th><th>Est. value</th><th>System</th></tr></thead>
+    <tbody>
+    {{range .Rows}}
+      <tr class="mining-row{{if .On}} yours{{end}}" data-search="{{.Ore}} {{.System.Name}}"><td>{{.Date}}</td><td><span class="mn-ore"><img src="{{.Icon}}" alt="" width="28" height="28" loading="lazy" data-fallback-src="/static/img/item.svg"><a href="{{.Href}}" data-l-step="in">{{.Ore}}</a></span></td>{{if $.MiningPage.ShowPilot}}<td>{{.Pilot}}</td>{{end}}<td class="num">{{.Qty}}</td><td class="num">{{.Volume}}</td><td class="num">{{if .Value}}{{.Value}}{{else}}<span class="muted">no price</span>{{end}}</td><td>{{placeLink .System}}</td></tr>
+    {{end}}
+    </tbody>
+  </table>
+  </div>
+  {{if .Cut}}<p><small>+ {{.Cut}} older entries; the newest 100 are shown.</small></p>{{end}}
+  {{else}}
+  <p><small>No mining entries for this pilot in the last 30 days.</small></p>
+  {{end}}
 </section>
+
+{{with .Insp}}
+<aside class="l-pane l-pane--insp insp mn-insp" aria-label="Ledger entry">
+  <div class="l-pane-bar"><a class="l-back" data-l-step="out" href="{{.CloseHref}}">Ledger</a><a class="l-close" href="{{.CloseHref}}" aria-label="Close the entry">&#10005;</a></div>
+  <div class="insp-head">
+    <span class="amx-art big"><img src="{{.Row.Icon}}" alt="" width="72" height="72" loading="lazy" data-fallback-src="/static/img/item.svg"></span>
+    <div class="insp-titles"><h3>{{itemLink .Row.TypeID .Row.Ore}}</h3><p class="amx-msub">{{.Row.Pilot}} · {{.Row.Date}}</p></div>
+  </div>
+  <dl class="insp-facts">
+    <div><dt>Quantity</dt><dd>{{.Row.Qty}} units</dd></div>
+    <div><dt>Volume</dt><dd>{{.Row.Volume}}</dd></div>
+    <div><dt>Estimated value</dt><dd>{{if .Row.Value}}{{.Row.Value}}{{else}}no price{{end}}</dd></div>
+    <div><dt>System</dt><dd>{{placeLink .Row.System}}</dd></div>
+    <div><dt>Date</dt><dd>{{.Row.DateISO}}</dd></div>
+  </dl>
+  <h4 class="mn-h">{{.Row.Pilot}}, last 30 days</h4>
+  <dl class="insp-facts">
+    <div><dt>Volume mined</dt><dd>{{.PilotVolume}}</dd></div>
+    <div><dt>Estimated value</dt><dd>{{.PilotValue}}</dd></div>
+    <div><dt>Systems mined in</dt><dd>{{.PilotSys}}</dd></div>
+  </dl>
+</aside>
+<a class="l-scrim" href="{{.CloseHref}}" aria-label="Close the entry" tabindex="-1"></a>
+{{end}}
+
+</div>
+</div>
+{{else if not .Warming}}
+<p><small>No mining entries in the latest snapshots.</small></p>
+{{end}}
+</div>
 {{else}}
 <p>No character to show yet. Link a character first.</p>
 {{end}}

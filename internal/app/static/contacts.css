@@ -1,0 +1,27 @@
+/* EveSynapse: the Contacts page. The list renders inside the layout
+   framework's page (layout.css); this sheet holds the standings bar
+   and the tier colours, EVE's own: excellent and good in blue, bad
+   and terrible in orange and red, neutral grey. */
+
+.ct-list { --ct-excellent: #2f6fe0; --ct-good: #5fb2f0; --ct-neutral: #8a8f98; --ct-bad: #f08a3a; --ct-terrible: #e0483e; }
+.ct-bar { margin: 0 0 var(--space-3); }
+.ct-bar-svg { display: block; width: 100%; height: 0.6rem; border-radius: 999px; overflow: hidden; background: var(--hairline); }
+.ct-seg { stroke: var(--surface-page); stroke-width: 2px; vector-effect: non-scaling-stroke; }
+rect.ct-excellent, .ct-dot.ct-excellent { fill: var(--ct-excellent); background: var(--ct-excellent); }
+rect.ct-good, .ct-dot.ct-good { fill: var(--ct-good); background: var(--ct-good); }
+rect.ct-neutral, .ct-dot.ct-neutral { fill: var(--ct-neutral); background: var(--ct-neutral); }
+rect.ct-bad, .ct-dot.ct-bad { fill: var(--ct-bad); background: var(--ct-bad); }
+rect.ct-terrible, .ct-dot.ct-terrible { fill: var(--ct-terrible); background: var(--ct-terrible); }
+.ct-legend { display: flex; flex-wrap: wrap; gap: 0.3rem 1rem; margin-top: 0.45rem; color: var(--muted); font-size: 0.82rem; }
+.ct-dot { display: inline-block; width: 0.6rem; height: 0.6rem; margin-right: 0.35rem; border-radius: 2px; vertical-align: 0.02em; }
+.ct-tabs, .ct-kinds { margin: 0 0 var(--space-3); }
+.ct-standing { font-family: var(--font-num); font-variant-numeric: tabular-nums; font-weight: 700; }
+.ct-standing.ct-excellent { color: var(--ct-excellent); }
+.ct-standing.ct-good { color: var(--ct-good); }
+.ct-standing.ct-neutral { color: var(--ct-neutral); }
+.ct-standing.ct-bad { color: var(--ct-bad); }
+.ct-standing.ct-terrible { color: var(--ct-terrible); }
+.ct-flag { display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.85rem; font-weight: 600; }
+.ct-flag svg { width: 1rem; height: 1rem; }
+.ct-watched { color: var(--gold); }
+.ct-blocked { color: var(--danger); }

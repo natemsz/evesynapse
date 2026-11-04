@@ -32,12 +32,55 @@ type contactRow struct {
 	Standing    string // signed, one decimal
 	Watched     bool
 	Blocked     bool
+	Tier        string // EVE's standing band: excellent | good | neutral | bad | terrible
+	TierLabel   string
+}
+
+// standingTier is EVE's own banding of a standing.
+func standingTier(s float64) (key, label string) {
+	switch {
+	case s > 5:
+		return "excellent", "Excellent"
+	case s > 0:
+		return "good", "Good"
+	case s == 0:
+		return "neutral", "Neutral"
+	case s >= -5:
+		return "bad", "Bad"
+	default:
+		return "terrible", "Terrible"
+	}
+}
+
+var contactTiers = []struct{ key, label string }{
+	{"excellent", "Excellent"}, {"good", "Good"}, {"neutral", "Neutral"}, {"bad", "Bad"}, {"terrible", "Terrible"},
+}
+
+type contactFilter struct {
+	Key   string
+	Label string
+	Count int
+	Href  string
+	On    bool
+}
+
+// contactSegment is one tier's share of the standings bar, in a
+// 1000-unit viewBox.
+type contactSegment struct {
+	Tier  string
+	Label string
+	Count int
+	X, W  string
 }
 
 type contactsView struct {
 	CharacterName string
 	Contacts      module.EconSectionState
 	Rows          []contactRow
+	Total         int
+	Tabs          []contactFilter // standing tiers, watched, blocked
+	Kinds         []contactFilter // characters, corporations, alliances, factions
+	Bar           []contactSegment
 }
 
 func (app *mod) handleContacts(w http.ResponseWriter, r *http.Request) {
@@ -106,7 +149,67 @@ func (app *mod) handleContacts(w http.ResponseWriter, r *http.Request) {
 			}
 			return pending[i].row.Name < pending[j].row.Name
 		})
+		// Tiers, kinds and the standings bar, counted over every
+		// contact; then the filters in force narrow the list.
+		q := r.URL.Query()
+		tab, kind := q.Get("tier"), q.Get("kind")
+		base := "/contacts/?character=" + strconv.FormatInt(active.CharacterID, 10)
+		href := func(t, k string) string {
+			h := base
+			if t != "" {
+				h += "&tier=" + t
+			}
+			if k != "" {
+				h += "&kind=" + k
+			}
+			return h
+		}
+		tierCount, kindCount := map[string]int{}, map[string]int{}
+		watched, blocked := 0, 0
+		for i := range pending {
+			p := &pending[i]
+			p.row.Tier, p.row.TierLabel = standingTier(p.standing)
+			tierCount[p.row.Tier]++
+			kindCount[p.row.Kind]++
+			if p.row.Watched {
+				watched++
+			}
+			if p.row.Blocked {
+				blocked++
+			}
+		}
+		view.Total = len(pending)
+		view.Tabs = append(view.Tabs, contactFilter{Key: "", Label: "All", Count: len(pending), Href: href("", kind), On: tab == ""})
+		var at float64
+		for _, t := range contactTiers {
+			n := tierCount[t.key]
+			view.Tabs = append(view.Tabs, contactFilter{Key: t.key, Label: t.label, Count: n, Href: href(t.key, kind), On: tab == t.key})
+			if n > 0 && len(pending) > 0 {
+				w := float64(n) / float64(len(pending)) * 1000
+				view.Bar = append(view.Bar, contactSegment{Tier: t.key, Label: t.label, Count: n, X: strconv.FormatFloat(at, 'f', 1, 64), W: strconv.FormatFloat(w, 'f', 1, 64)})
+				at += w
+			}
+		}
+		view.Tabs = append(view.Tabs, contactFilter{Key: "watched", Label: "Watched", Count: watched, Href: href("watched", kind), On: tab == "watched"})
+		if blocked > 0 || tab == "blocked" {
+			view.Tabs = append(view.Tabs, contactFilter{Key: "blocked", Label: "Blocked", Count: blocked, Href: href("blocked", kind), On: tab == "blocked"})
+		}
+		view.Kinds = append(view.Kinds, contactFilter{Label: "All kinds", Count: len(pending), Href: href(tab, ""), On: kind == ""})
+		for _, k := range []struct{ key, label string }{{"character", "Characters"}, {"corporation", "Corporations"}, {"alliance", "Alliances"}, {"faction", "Factions"}} {
+			if kindCount[k.key] == 0 && kind != k.key {
+				continue
+			}
+			view.Kinds = append(view.Kinds, contactFilter{Key: k.key, Label: k.label, Count: kindCount[k.key], Href: href(tab, k.key), On: kind == k.key})
+		}
 		for _, p := range pending {
+			switch {
+			case tab == "watched" && !p.row.Watched, tab == "blocked" && !p.row.Blocked:
+				continue
+			case tab != "" && tab != "watched" && tab != "blocked" && p.row.Tier != tab:
+				continue
+			case kind != "" && p.row.Kind != kind:
+				continue
+			}
 			view.Rows = append(view.Rows, p.row)
 		}
 	}
